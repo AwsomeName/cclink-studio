@@ -25,10 +25,10 @@ import {
   withExe,
   DEFAULT_AVD_NAME,
   DEFAULT_API_LEVEL,
-} from './android-platform'
+} from '../../src/main/android/android-platform'
 import { resolveEmulator, resolveSystemImage } from './sdk-repository'
 
-export { getAdbPath } from './android-platform'
+export { getAdbPath } from '../../src/main/android/android-platform'
 
 /**
  * Android SDK 自动安装器（跨平台：macOS / Windows / Linux）

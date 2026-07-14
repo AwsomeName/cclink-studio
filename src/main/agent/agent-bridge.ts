@@ -10,15 +10,19 @@
 import type { BrowserWindow } from 'electron'
 import type { PermissionManager } from '../mcp/permission'
 import type { IAgentBackend, BackendConfig } from './backend/types'
-import { AgentRuntime, DEFAULT_CONVERSATION_ID, type AgentRuntimeEvent } from 'core-agent/runtime/agent-runtime'
+import {
+  AgentRuntime,
+  DEFAULT_CONVERSATION_ID,
+  type AgentRuntimeEvent,
+} from 'core-agent/runtime/agent-runtime'
 import type { McpToolHost } from '../mcp/tool-host'
 import type { McpClientManager } from '../mcp/client-manager'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
-import type { EmulatorManager } from '../android/emulator-manager'
 import type { AdbBridge } from '../android/adb-bridge'
 import type { BrowserManager } from '../browser/browser-manager'
 import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
 import type { AgentScope } from './scope'
+import { buildAgentMessageWithContext, type AgentSendMessageContext } from './message-context'
 
 export interface AgentBridgeOptions {
   backendType?: 'claude-code' | 'http-api'
@@ -54,7 +58,6 @@ export class AgentBridge {
     playwrightBridge: PlaywrightBridge
     toolHost: McpToolHost
     mcpClientMgr: McpClientManager
-    emulatorManager: EmulatorManager
     adbBridge: AdbBridge
     agentDeviceAvailable?: () => boolean
     browserManager?: BrowserManager
@@ -67,7 +70,6 @@ export class AgentBridge {
     toolHost: McpToolHost,
     permissionManager: PermissionManager,
     mcpClientMgr: McpClientManager,
-    emulatorManager: EmulatorManager,
     adbBridge: AdbBridge,
     options?: AgentBridgeOptions,
   ) {
@@ -77,7 +79,6 @@ export class AgentBridge {
       playwrightBridge,
       toolHost,
       mcpClientMgr,
-      emulatorManager,
       adbBridge,
       agentDeviceAvailable: options?.agentDeviceAvailable,
       browserManager: options?.browserManager,
@@ -142,10 +143,14 @@ export class AgentBridge {
   }
 
   /** 发送用户消息 */
-  async sendMessage(message: string, conversationId = DEFAULT_CONVERSATION_ID): Promise<void> {
+  async sendMessage(
+    message: string,
+    conversationId = DEFAULT_CONVERSATION_ID,
+    context?: AgentSendMessageContext,
+  ): Promise<void> {
     this.startBrowserTaskIfNeeded(conversationId, message)
     try {
-      await this.runtime.sendMessage(message, conversationId)
+      await this.runtime.sendMessage(buildAgentMessageWithContext(message, context), conversationId)
     } catch (error) {
       this.failActiveBrowserTask(conversationId, error)
       throw error
@@ -159,7 +164,10 @@ export class AgentBridge {
   }
 
   /** 获取后端状态 */
-  getStatus(conversationId = DEFAULT_CONVERSATION_ID): { connected: boolean; sessionId: string | null } {
+  getStatus(conversationId = DEFAULT_CONVERSATION_ID): {
+    connected: boolean
+    sessionId: string | null
+  } {
     return this.runtime.getStatus(conversationId)
   }
 
@@ -196,10 +204,14 @@ export class AgentBridge {
    */
   setScope(scope: AgentScope, conversationId = DEFAULT_CONVERSATION_ID): boolean {
     if (this.isBusy(conversationId)) {
-      this.forwardToRenderer('error', {
-        type: 'error',
-        message: 'AI 正在响应中，请等待完成后再切换操作目标',
-      }, conversationId)
+      this.forwardToRenderer(
+        'error',
+        {
+          type: 'error',
+          message: 'AI 正在响应中，请等待完成后再切换操作目标',
+        },
+        conversationId,
+      )
       return false
     }
 
@@ -209,7 +221,10 @@ export class AgentBridge {
       bridge.switchToPage(scope.instanceId).catch((err: Error) => {
         // Phase 1：实例尚未在 PlaywrightBridge 登记（claimPageForView 在 Phase 2 接线）
         // 不阻断收窄——工具表/allowedTools 仍按 browser 收窄，Agent 用当前活跃页
-        console.warn(`[AgentBridge] switchToPage(${scope.instanceId}) 失败，降级用当前活跃页:`, err.message)
+        console.warn(
+          `[AgentBridge] switchToPage(${scope.instanceId}) 失败，降级用当前活跃页:`,
+          err.message,
+        )
       })
       try {
         this.deps.browserManager?.setActive(scope.instanceId)
@@ -219,7 +234,9 @@ export class AgentBridge {
     }
 
     this.runtime.setScope(scope, conversationId)
-    console.log(`[AgentBridge] 操作作用域已切换: kind=${scope.kind}${scope.kind === 'browser' ? ` instance=${scope.instanceId}` : ''}`)
+    console.log(
+      `[AgentBridge] 操作作用域已切换: kind=${scope.kind}${scope.kind === 'browser' ? ` instance=${scope.instanceId}` : ''}`,
+    )
     return true
   }
 
@@ -237,11 +254,15 @@ export class AgentBridge {
       const scope = this.runtime.getScope(conversationId)
       if (scope.kind === 'browser' && scope.instanceId === instanceId) {
         this.runtime.setScope({ kind: 'all' }, conversationId)
-        this.forwardToRenderer('system', {
-          type: 'system',
-          subtype: 'scope-invalidated',
-          message: `操作目标浏览器实例 ${instanceId} 已关闭，作用域已切回「全部」`,
-        }, conversationId)
+        this.forwardToRenderer(
+          'system',
+          {
+            type: 'system',
+            subtype: 'scope-invalidated',
+            message: `操作目标浏览器实例 ${instanceId} 已关闭，作用域已切回「全部」`,
+          },
+          conversationId,
+        )
         console.log(`[AgentBridge] browser scope 失效，降级回 all: ${instanceId}`)
       }
     }
@@ -339,9 +360,11 @@ export class AgentBridge {
   }
 
   private isErrorResult(data: unknown): boolean {
-    return typeof data === 'object'
-      && data !== null
-      && (data as { is_error?: unknown }).is_error === true
+    return (
+      typeof data === 'object' &&
+      data !== null &&
+      (data as { is_error?: unknown }).is_error === true
+    )
   }
 
   private extractErrorMessage(error: unknown): string {
@@ -353,7 +376,11 @@ export class AgentBridge {
   }
 
   /** 将后端事件转发到渲染进程 */
-  private forwardToRenderer(type: string, data: unknown, conversationId = DEFAULT_CONVERSATION_ID): void {
+  private forwardToRenderer(
+    type: string,
+    data: unknown,
+    conversationId = DEFAULT_CONVERSATION_ID,
+  ): void {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return
 
     // 映射后端事件类型到 IPC channel
@@ -366,9 +393,10 @@ export class AgentBridge {
 
     const channel = channelMap[type]
     if (channel) {
-      const payload = typeof data === 'object' && data !== null
-        ? { ...(data as Record<string, unknown>), conversationId }
-        : { value: data, conversationId }
+      const payload =
+        typeof data === 'object' && data !== null
+          ? { ...(data as Record<string, unknown>), conversationId }
+          : { value: data, conversationId }
       this.mainWindow.webContents.send(channel, payload)
     }
   }

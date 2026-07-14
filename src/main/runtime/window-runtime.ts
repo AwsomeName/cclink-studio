@@ -7,7 +7,6 @@ import { registerDialogIpc } from '../ipc/dialog-ipc'
 import { registerWindowIpc } from '../ipc/window-ipc'
 import { registerAndroidIpc } from '../ipc/android-ipc'
 import { AdbBridge } from '../android/adb-bridge'
-import { EmulatorManager } from '../android/emulator-manager'
 import { ActiveDeviceManager } from '../android/active-device-manager'
 import { PhysicalDeviceManager } from '../android/physical-device-manager'
 import { ScrcpyBridge } from '../android/scrcpy-bridge'
@@ -88,16 +87,14 @@ export function createWindowRuntime(runtime: DeepInkRuntimeState, options: Creat
 
   runtime.adbBridge = new AdbBridge()
   runtime.scrcpyBridge = new ScrcpyBridge(runtime.mainWindow)
-  runtime.emulatorManager = new EmulatorManager(runtime.mainWindow, runtime.adbBridge, runtime.scrcpyBridge)
-  runtime.activeDeviceManager = new ActiveDeviceManager(runtime.emulatorManager)
+  runtime.activeDeviceManager = new ActiveDeviceManager()
   runtime.physicalDeviceManager = new PhysicalDeviceManager(runtime.adbBridge, runtime.activeDeviceManager)
   registerAndroidIpc(
-    runtime.emulatorManager,
     runtime.adbBridge,
     runtime.mainWindow,
     runtime.scrcpyBridge,
     runtime.activeDeviceManager,
     runtime.physicalDeviceManager,
   )
-  console.log('[DeepInk] Android 模块已注册（模拟器 + 物理真机）')
+  console.log('[DeepInk] Android 模块已注册（模拟器路径已封存，仅真机连接可用）')
 }

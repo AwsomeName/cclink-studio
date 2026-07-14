@@ -182,8 +182,8 @@ const SETTINGS_SEARCH_INDEX = [
   {
     sectionId: 'devices',
     label: 'Android 设备',
-    description: 'Android Tab、模拟器和物理设备能力',
-    keywords: ['android', 'device', 'adb', 'emulator', '设备', '模拟器'],
+    description: 'Android 真机连接；模拟器和云手机已封存',
+    keywords: ['android', 'device', 'adb', 'phone', 'usb', 'wifi', '设备', '真机'],
   },
   // 浏览器
   {
@@ -370,14 +370,16 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   const settings = useSettingsStore((s) => s.settings)
   const loadSubscriptionStatus = useSubscriptionStore((s) => s.loadStatus)
   const user = useAuthStore((s) => s.user)
+  const loggedIn = useAuthStore((s) => s.loggedIn)
+  const localIdentity = useAuthStore((s) => s.localIdentity)
   const loadCclink = useCclinkStore((s) => s.load)
 
-  // 首次挂载时加载设置 + 订阅状态 + 远程身份状态
+  // 首次挂载时加载设置 + 远程身份状态；订阅状态需要云账号。
   useEffect(() => {
     loadSettings()
-    loadSubscriptionStatus()
+    if (loggedIn) loadSubscriptionStatus()
     void loadCclink()
-  }, [loadSettings, loadSubscriptionStatus, loadCclink])
+  }, [loggedIn, loadSettings, loadSubscriptionStatus, loadCclink])
 
   useEffect(() => {
     if (!initialSection) return
@@ -579,12 +581,18 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
         {/* 底部操作 */}
         <div className="settings-nav-footer">
           <div className="settings-account-mini">
-            <span>{user?.nickname || user?.phone || '当前账号'}</span>
-            {user?.phone && <small>{user.phone}</small>}
+            <span>{loggedIn ? user?.nickname || user?.phone || '云账号' : '本机工作台'}</span>
+            <small>
+              {loggedIn
+                ? user?.phone || '已登录'
+                : localIdentity?.localId.slice(0, 14) || '本地身份'}
+            </small>
           </div>
-          <button className="settings-logout-btn" onClick={() => void handleLogout()}>
-            退出登录
-          </button>
+          {loggedIn && (
+            <button className="settings-logout-btn" onClick={() => void handleLogout()}>
+              退出登录
+            </button>
+          )}
           <button className="settings-reset-btn" onClick={handleReset}>
             恢复默认设置
           </button>
@@ -679,6 +687,11 @@ function maskSecret(value?: string | null): string {
   return `${value.slice(0, 4)}••••${value.slice(-4)}`
 }
 
+function shortId(value?: string | null): string {
+  if (!value) return '—'
+  return value.length > 18 ? `${value.slice(0, 14)}…` : value
+}
+
 function AccountInfoRow({
   label,
   value,
@@ -692,6 +705,146 @@ function AccountInfoRow({
     <div className="settings-account-row">
       <span className="settings-account-row-label">{label}</span>
       <span className={`settings-account-row-value ${muted ? 'muted' : ''}`}>{value}</span>
+    </div>
+  )
+}
+
+function CloudLoginInline(): React.ReactElement {
+  const phoneInput = useAuthStore((s) => s.phoneInput)
+  const codeInput = useAuthStore((s) => s.codeInput)
+  const codeCountdown = useAuthStore((s) => s.codeCountdown)
+  const loading = useAuthStore((s) => s.loading)
+  const error = useAuthStore((s) => s.error)
+  const setPhoneInput = useAuthStore((s) => s.setPhoneInput)
+  const setCodeInput = useAuthStore((s) => s.setCodeInput)
+  const setCodeCountdown = useAuthStore((s) => s.setCodeCountdown)
+  const setLoading = useAuthStore((s) => s.setLoading)
+  const setError = useAuthStore((s) => s.setError)
+  const [serviceConfigured, setServiceConfigured] = useState(true)
+
+  useEffect(() => {
+    window.deepink.auth
+      .getServiceStatus()
+      .then((status) => {
+        setServiceConfigured(status.configured)
+        if (!status.configured) setError(status.message || '登录服务未配置')
+      })
+      .catch(() => {
+        setServiceConfigured(false)
+        setError('登录服务状态不可用')
+      })
+  }, [setError])
+
+  useEffect(() => {
+    if (codeCountdown <= 0) return
+    const timer = window.setInterval(() => {
+      const current = useAuthStore.getState().codeCountdown
+      setCodeCountdown(Math.max(0, current - 1))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [codeCountdown, setCodeCountdown])
+
+  const handleSendCode = async (): Promise<void> => {
+    if (!/^1[3-9]\d{9}$/.test(phoneInput)) {
+      setError('请输入正确的 11 位手机号')
+      return
+    }
+    if (!serviceConfigured) {
+      setError('登录服务未配置，请检查后端地址')
+      return
+    }
+    if (codeCountdown > 0) return
+
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await window.deepink.auth.phoneSendCode(phoneInput)
+      if (result.success) {
+        setCodeCountdown(60)
+      } else {
+        setError(result.error || '发送验证码失败')
+      }
+    } catch {
+      setError('网络错误，请检查网络连接')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePhoneLogin = async (): Promise<void> => {
+    if (!/^1[3-9]\d{9}$/.test(phoneInput)) {
+      setError('请输入正确的 11 位手机号')
+      return
+    }
+    if (!codeInput || codeInput.length < 4) {
+      setError('请输入验证码')
+      return
+    }
+    if (!serviceConfigured) {
+      setError('登录服务未配置，请检查后端地址')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await window.deepink.auth.phoneLogin(phoneInput, codeInput)
+      if (!result.success) {
+        setError(result.error || '登录失败')
+        setLoading(false)
+      }
+    } catch {
+      setError('网络错误，请检查网络连接')
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="settings-account-login">
+      <div className="settings-description">
+        当前使用本机身份保存工作现场。登录后可启用订阅、CCLink 远程连接和跨设备账号能力。
+      </div>
+      <div className="settings-account-row">
+        <span className="settings-account-row-label">手机号</span>
+        <input
+          className="settings-input"
+          type="tel"
+          maxLength={11}
+          value={phoneInput}
+          onChange={(event) => setPhoneInput(event.target.value.replace(/\D/g, ''))}
+          disabled={loading || !serviceConfigured}
+          placeholder="请输入手机号"
+        />
+      </div>
+      <div className="settings-account-row">
+        <span className="settings-account-row-label">验证码</span>
+        <input
+          className="settings-input"
+          type="text"
+          maxLength={6}
+          value={codeInput}
+          onChange={(event) => setCodeInput(event.target.value.replace(/\D/g, ''))}
+          disabled={loading || !serviceConfigured}
+          placeholder="请输入验证码"
+        />
+      </div>
+      {error && <div className="settings-account-error">{error}</div>}
+      <div className="settings-account-actions">
+        <button
+          className="sync-btn-secondary"
+          onClick={() => void handleSendCode()}
+          disabled={!serviceConfigured || loading || codeCountdown > 0 || phoneInput.length !== 11}
+        >
+          {codeCountdown > 0 ? `${codeCountdown}s` : '获取验证码'}
+        </button>
+        <button
+          className="sync-btn-primary"
+          onClick={() => void handlePhoneLogin()}
+          disabled={!serviceConfigured || loading || !phoneInput || !codeInput}
+        >
+          {loading ? '登录中...' : '登录云账号'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -733,49 +886,16 @@ function RemoteConnectionSettings(): React.ReactElement {
 /** 设备设置 */
 function DeviceSettings(): React.ReactElement {
   const openTab = useTabStore((s) => s.openTab)
-  const emulatorState = useAndroidStore((s) => s.emulatorState)
-  const setEmulatorState = useAndroidStore((s) => s.setEmulatorState)
   const deviceMode = useAndroidStore((s) => s.deviceMode)
   const setDeviceMode = useAndroidStore((s) => s.setDeviceMode)
   const setDeviceInfo = useAndroidStore((s) => s.setDeviceInfo)
   const physicalDevices = useAndroidStore((s) => s.physicalDevices)
   const setPhysicalDevices = useAndroidStore((s) => s.setPhysicalDevices)
-  const [avdList, setAvdList] = useState<string[]>([])
-  const [selectedAvd, setSelectedAvd] = useState('')
-  const [setupReady, setSetupReady] = useState<boolean | null>(null)
-  const [loading, setLoading] = useState(false)
   const [deviceLoading, setDeviceLoading] = useState(false)
   const [connectingSerial, setConnectingSerial] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const refreshAndroidState = useCallback(async (): Promise<void> => {
-    setLoading(true)
-    setError(null)
-    try {
-      const [setupStatus, state, avds] = await Promise.all([
-        window.deepink.android.getSetupStatus(),
-        window.deepink.android.getState(),
-        window.deepink.android.listAvds(),
-      ])
-      setSetupReady(setupStatus.ready)
-      setEmulatorState(state)
-      setAvdList(avds)
-      setSelectedAvd((current) => current || avds[0] || '')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '刷新 Android 设备状态失败')
-    } finally {
-      setLoading(false)
-    }
-  }, [setEmulatorState])
-
   useEffect(() => {
-    void refreshAndroidState()
-  }, [refreshAndroidState])
-
-  useEffect(() => {
-    const offState = window.deepink.android.onStateChanged((state) => {
-      setEmulatorState(state)
-    })
     const offConnected = window.deepink.android.onPhysicalConnected((data) => {
       setDeviceMode('physical')
       setDeviceInfo(data.deviceInfo)
@@ -785,45 +905,10 @@ function DeviceSettings(): React.ReactElement {
       setDeviceInfo(null)
     })
     return () => {
-      offState()
       offConnected()
       offDisconnected()
     }
-  }, [setDeviceInfo, setDeviceMode, setEmulatorState])
-
-  const launchEmulator = async (): Promise<void> => {
-    const avdName = selectedAvd || avdList[0]
-    if (!avdName) {
-      setError('未检测到 Android 虚拟设备，请先打开 Android Tab 执行一键设置。')
-      return
-    }
-    setLoading(true)
-    setError(null)
-    try {
-      await window.deepink.android.launch(avdName)
-      setDeviceMode('emulator')
-      setEmulatorState('booting')
-      openTab({ type: 'android', title: 'Android', icon: '📱' })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '启动 Android 模拟器失败')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const stopEmulator = async (): Promise<void> => {
-    setLoading(true)
-    setError(null)
-    try {
-      await window.deepink.android.terminate()
-      setDeviceMode(null)
-      setEmulatorState('stopped')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '停止 Android 模拟器失败')
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [setDeviceInfo, setDeviceMode])
 
   const scanPhysicalDevices = async (): Promise<void> => {
     setDeviceLoading(true)
@@ -845,7 +930,6 @@ function DeviceSettings(): React.ReactElement {
       const result = await window.deepink.android.connectPhysical(device.serial)
       setDeviceMode('physical')
       setDeviceInfo(result.deviceInfo)
-      setEmulatorState('stopped')
       openTab({ type: 'android', title: 'Android', icon: '📱' })
     } catch (err) {
       setError(err instanceof Error ? err.message : '连接物理真机失败')
@@ -868,81 +952,21 @@ function DeviceSettings(): React.ReactElement {
     }
   }
 
-  const emulatorStateLabel =
-    emulatorState === 'running'
-      ? '运行中'
-      : emulatorState === 'booting'
-        ? '启动中'
-        : emulatorState === 'error'
-          ? '异常'
-          : '未启动'
-
   return (
     <div className="settings-section">
       <h2>设备</h2>
       <div className="settings-account-grid">
         <SettingsInfoCard
           title="Android"
-          description="Android 是工作台 Tab 能力，和浏览器页类似；SDK、模拟器、物理设备和诊断配置后续归到这里。"
-        >
-          <div className="settings-account-actions">
-            <button
-              className="sync-btn-primary"
-              onClick={() => openTab({ type: 'android', title: 'Android', icon: '📱' })}
-            >
-              打开 Android Tab
-            </button>
-            <button
-              className="sync-btn-secondary"
-              onClick={() => void refreshAndroidState()}
-              disabled={loading}
-            >
-              刷新状态
-            </button>
-          </div>
-        </SettingsInfoCard>
+          description="Android 模拟器、SDK 一键安装和云手机路线已封存。后续只支持用户自有 Android 真机，通过 USB 或 Wi-Fi ADB 主动连接后才启用 Android Tab 和 Agent 工具。"
+        />
         <section className="settings-account-card">
-          <div className="settings-account-card-title">模拟器</div>
-          <AccountInfoRow
-            label="环境"
-            value={setupReady === null ? '检查中' : setupReady ? '已就绪' : '未设置'}
-          />
-          <AccountInfoRow label="状态" value={emulatorStateLabel} />
-          <AccountInfoRow label="当前设备" value={deviceMode === 'emulator' ? '模拟器' : '—'} />
-          {avdList.length > 0 && (
-            <div className="settings-device-select-row">
-              <span>AVD</span>
-              <select
-                value={selectedAvd}
-                onChange={(event) => setSelectedAvd(event.target.value)}
-                disabled={loading || emulatorState !== 'stopped'}
-              >
-                {avdList.map((avd) => (
-                  <option key={avd} value={avd}>
-                    {avd}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          <div className="settings-account-actions">
-            {emulatorState === 'running' || emulatorState === 'booting' ? (
-              <button
-                className="sync-btn-secondary"
-                onClick={() => void stopEmulator()}
-                disabled={loading}
-              >
-                停止模拟器
-              </button>
-            ) : (
-              <button
-                className="sync-btn-primary"
-                onClick={() => void launchEmulator()}
-                disabled={loading || setupReady === false}
-              >
-                启动模拟器
-              </button>
-            )}
+          <div className="settings-account-card-title">模拟器 / SDK</div>
+          <AccountInfoRow label="状态" value="已封存" />
+          <AccountInfoRow label="当前设备" value="—" />
+          <div className="settings-device-hint">
+            DeepInk 不再下载 Android SDK、系统镜像或创建 AVD，也不会启动 emulator。你可以清理本机
+            Android SDK / AVD 占用空间；保留一个可用的 adb 即可继续连接真机。
           </div>
         </section>
 
@@ -1034,6 +1058,7 @@ function AccountSettings({ onLogout }: { onLogout: () => Promise<void> }): React
   const [logoutError, setLogoutError] = useState<string | null>(null)
   const loggedIn = useAuthStore((s) => s.loggedIn)
   const user = useAuthStore((s) => s.user)
+  const localIdentity = useAuthStore((s) => s.localIdentity)
   const identity = useCclinkStore((s) => s.identity)
   const identityLoading = useCclinkStore((s) => s.identityLoading)
   const cclinkError = useCclinkStore((s) => s.error)
@@ -1043,7 +1068,7 @@ function AccountSettings({ onLogout }: { onLogout: () => Promise<void> }): React
   const subscriptionStatus = useSubscriptionStore((s) => s.status)
   const subscriptionPeriodEnd = useSubscriptionStore((s) => s.periodEnd)
 
-  const displayName = user?.nickname || user?.phone || 'DeepInk 用户'
+  const displayName = loggedIn ? user?.nickname || user?.phone || 'DeepInk 用户' : '本机工作台'
   const tierLabel = subscriptionTier === 'pro' ? 'Pro' : 'Free'
   const statusLabel = subscriptionStatus === 'active' ? '有效' : '未激活'
   const cclinkReady = Boolean(
@@ -1076,7 +1101,9 @@ function AccountSettings({ onLogout }: { onLogout: () => Promise<void> }): React
         <div className="settings-account-hero-main">
           <div className="settings-account-name">{displayName}</div>
           <div className="settings-account-subtitle">
-            {loggedIn ? `${maskPhone(user?.phone)} · 手机号登录` : '当前未登录'}
+            {loggedIn
+              ? `${maskPhone(user?.phone)} · 手机号登录`
+              : `本地身份 · ${shortId(localIdentity?.localId)}`}
           </div>
         </div>
         <span className={`settings-account-badge ${subscriptionTier === 'pro' ? 'pro' : ''}`}>
@@ -1086,48 +1113,69 @@ function AccountSettings({ onLogout }: { onLogout: () => Promise<void> }): React
 
       <div className="settings-account-grid">
         <section className="settings-account-card">
-          <div className="settings-account-card-title">DeepInk 账号</div>
-          <AccountInfoRow label="手机号" value={maskPhone(user?.phone)} />
-          <AccountInfoRow label="用户 ID" value={user?.id ?? '—'} muted />
-          <AccountInfoRow
-            label="登录方式"
-            value={
-              user?.loginMethod === 'phone'
-                ? '手机号验证码'
-                : user?.loginMethod === 'wechat'
-                  ? '微信登录'
-                  : '—'
-            }
-          />
-          <AccountInfoRow label="最近登录" value={formatDateTime(user?.lastLoginAt)} />
-          <AccountInfoRow label="订阅状态" value={`${tierLabel} · ${statusLabel}`} />
-          <AccountInfoRow
-            label="订阅到期"
-            value={formatDateTime(user?.subscriptionExpiresAt ?? subscriptionPeriodEnd)}
-          />
-          {logoutError && <div className="settings-account-error">{logoutError}</div>}
-          <div className="settings-account-actions">
-            <button
-              className="settings-logout-btn inline"
-              onClick={() => void handleLogoutClick()}
-              disabled={logoutLoading}
-            >
-              {logoutLoading ? '退出中...' : logoutConfirming ? '确认退出' : '退出登录'}
-            </button>
-            {logoutConfirming && !logoutLoading && (
-              <button className="sync-btn-secondary" onClick={() => setLogoutConfirming(false)}>
-                取消
-              </button>
-            )}
+          <div className="settings-account-card-title">本机身份</div>
+          <div className="settings-description">
+            未登录也会使用本机身份保存工作现场、草稿、Tab 和布局；之后绑定云账号时再做迁移。
           </div>
+          <AccountInfoRow label="本地 ID" value={localIdentity?.localId ?? '初始化中'} muted />
+          <AccountInfoRow label="设备 ID" value={localIdentity?.deviceId ?? '初始化中'} muted />
+          <AccountInfoRow label="设备名" value={localIdentity?.deviceName ?? '—'} />
+          <AccountInfoRow label="创建时间" value={formatDateTime(localIdentity?.createdAt)} />
+          <AccountInfoRow label="更新时间" value={formatDateTime(localIdentity?.updatedAt)} />
+          <AccountInfoRow label="绑定云账号" value={localIdentity?.boundCloudUserId ?? '未绑定'} />
+        </section>
+
+        <section className="settings-account-card">
+          <div className="settings-account-card-title">DeepInk 账号</div>
+          {loggedIn ? (
+            <>
+              <AccountInfoRow label="手机号" value={maskPhone(user?.phone)} />
+              <AccountInfoRow label="用户 ID" value={user?.id ?? '—'} muted />
+              <AccountInfoRow
+                label="登录方式"
+                value={
+                  user?.loginMethod === 'phone'
+                    ? '手机号验证码'
+                    : user?.loginMethod === 'wechat'
+                      ? '微信登录'
+                      : '—'
+                }
+              />
+              <AccountInfoRow label="最近登录" value={formatDateTime(user?.lastLoginAt)} />
+              <AccountInfoRow label="订阅状态" value={`${tierLabel} · ${statusLabel}`} />
+              <AccountInfoRow
+                label="订阅到期"
+                value={formatDateTime(user?.subscriptionExpiresAt ?? subscriptionPeriodEnd)}
+              />
+              {logoutError && <div className="settings-account-error">{logoutError}</div>}
+              <div className="settings-account-actions">
+                <button
+                  className="settings-logout-btn inline"
+                  onClick={() => void handleLogoutClick()}
+                  disabled={logoutLoading}
+                >
+                  {logoutLoading ? '退出中...' : logoutConfirming ? '确认退出' : '退出登录'}
+                </button>
+                {logoutConfirming && !logoutLoading && (
+                  <button className="sync-btn-secondary" onClick={() => setLogoutConfirming(false)}>
+                    取消
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <CloudLoginInline />
+          )}
         </section>
 
         <section className="settings-account-card">
           <div className="settings-account-card-title">远程连接 / CCLink 身份</div>
           <div className={`settings-account-status ${cclinkReady ? 'ok' : 'warn'}`}>
-            {cclinkReady
-              ? '已就绪，可用于远程连接链路'
-              : '尚未创建 DeepInk CCLink/TIM 身份；旧账号请到“远程连接”设置导入'}
+            {!loggedIn
+              ? '登录 DeepInk 云账号后可创建或导入 CCLink/TIM 身份'
+              : cclinkReady
+                ? '已就绪，可用于远程连接链路'
+                : '尚未创建 DeepInk CCLink/TIM 身份；旧账号请到“远程连接”设置导入'}
           </div>
           <AccountInfoRow label="账号用户 ID" value={identity?.accountUserId ?? '—'} muted />
           <AccountInfoRow label="TIM 用户 ID" value={identity?.clientImUserId ?? '—'} muted />
@@ -1147,6 +1195,7 @@ function AccountSettings({ onLogout }: { onLogout: () => Promise<void> }): React
               className="sync-btn-primary"
               disabled={identityLoading || !loggedIn}
               onClick={() => void ensureIdentity()}
+              title={loggedIn ? undefined : '登录 DeepInk 云账号后可用'}
             >
               {identityLoading
                 ? '处理中...'
@@ -1167,7 +1216,6 @@ function AccountSettings({ onLogout }: { onLogout: () => Promise<void> }): React
     </div>
   )
 }
-
 /** 外观设置 */
 function AppearanceSettings({
   onReset,

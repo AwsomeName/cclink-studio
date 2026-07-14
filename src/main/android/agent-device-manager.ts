@@ -5,7 +5,7 @@
  * 是 DeepInk 本地 Android 自动化的「UI 感知层」，补强现有 AdbBridge.dumpUi
  * （裸 uiautomator dump，常漏元素）。
  *
- * 职责（类比 EmulatorManager，更薄）：
+ * 职责：
  *  - 持有 agent-device client + 当前 session + serial 绑定
  *  - lazy 建立 session（第一次工具调用时），随活跃设备变化联动
  *  - daemon 的 Electron 适配（首次 spawn 临时注入 ELECTRON_RUN_AS_NODE）

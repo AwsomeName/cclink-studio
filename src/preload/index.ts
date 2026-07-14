@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { AgentSendMessageInput } from '../shared/ipc/agent'
 import type { CclinkFileReadRequest, CclinkFileTreeRequest } from '../shared/ipc/cclink'
 
 contextBridge.exposeInMainWorld('deepink', {
@@ -31,6 +32,7 @@ contextBridge.exposeInMainWorld('deepink', {
           history?: string[]
           historyIndex?: number
         }
+        profileId?: string | null
       },
     ) => ipcRenderer.invoke('browser:createView', tabId, initialUrl, opts),
     /** 销毁浏览器视图 */
@@ -172,12 +174,20 @@ contextBridge.exposeInMainWorld('deepink', {
     },
   },
 
+  // 本地优先身份：不登录也应存在稳定本机身份。
+  identity: {
+    getLocalIdentity: () => ipcRenderer.invoke('identity:getLocalIdentity'),
+  },
+
   // Agent / Playwright / AI 后端
   agent: {
     // ─── AI 对话 ────────────────────────────────
     // ─── AI 对话 ────────────────────────────────
     /** 发送用户消息给 Claude Code（非阻塞，流式结果通过 onStreamEvent 接收） */
-    sendMessage: (conversationIdOrMessage: string, maybeMessage?: string) =>
+    sendMessage: (
+      conversationIdOrMessage: string | AgentSendMessageInput,
+      maybeMessage?: AgentSendMessageInput,
+    ) =>
       maybeMessage === undefined
         ? ipcRenderer.invoke('agent:sendMessage', conversationIdOrMessage)
         : ipcRenderer.invoke('agent:sendMessage', conversationIdOrMessage, maybeMessage),
@@ -319,6 +329,18 @@ contextBridge.exposeInMainWorld('deepink', {
     openPath: (path: string) => ipcRenderer.invoke('fs:openPath', path),
   },
 
+  // 项目内运营助手：项目账号配置、文案草稿和发布记录。
+  projectOps: {
+    getAccounts: (workspacePath: string) =>
+      ipcRenderer.invoke('projectOps:getAccounts', workspacePath),
+    createAccountsTemplate: (workspacePath: string) =>
+      ipcRenderer.invoke('projectOps:createAccountsTemplate', workspacePath),
+    createCopyDraft: (workspacePath: string, input?: unknown) =>
+      ipcRenderer.invoke('projectOps:createCopyDraft', workspacePath, input),
+    appendPublicationRecord: (workspacePath: string, input: unknown) =>
+      ipcRenderer.invoke('projectOps:appendPublicationRecord', workspacePath, input),
+  },
+
   // 对话框（文件选择、保存）
   dialog: {
     /** 打开文件选择对话框（selectDirectory=true 时改为选择文件夹） */
@@ -385,33 +407,33 @@ contextBridge.exposeInMainWorld('deepink', {
       ipcRenderer.invoke('editor:saveResult', id, success, error),
   },
 
-  // Android 模拟器控制
+  // Android 设备控制（SDK/AVD/模拟器路径已封存，保留 IPC 兼容旧快照）
   android: {
-    // ─── SDK 设置（一键安装） ───
-    /** 获取安装状态 */
+    // ─── 已封存：SDK 设置（一键安装） ───
+    /** 获取安装状态（返回 archived=true） */
     getSetupStatus: () => ipcRenderer.invoke('android:getSetupStatus'),
-    /** 获取需同意的 Android SDK License 正文 */
+    /** 获取封存说明 */
     getLicense: () => ipcRenderer.invoke('android:getLicense'),
-    /** 记录用户已接受 License */
+    /** 兼容旧调用：不再接受 SDK License */
     acceptLicense: () => ipcRenderer.invoke('android:acceptLicense'),
-    /** 一键安装：下载 adb + emulator + 系统镜像 + 创建默认 AVD */
+    /** 兼容旧调用：不再下载 adb/emulator/系统镜像或创建 AVD */
     setup: () => ipcRenderer.invoke('android:setup'),
-    /** 监听安装进度 */
+    /** 兼容旧调用：不会再收到安装进度 */
     onSetupProgress: (callback: (data: { step: string; progress: any }) => void) => {
       ipcRenderer.removeAllListeners('android:setupProgress')
       ipcRenderer.on('android:setupProgress', (_event, data) => callback(data))
     },
 
-    // ─── 模拟器生命周期 ───
-    /** 列出可用 AVD */
+    // ─── 已封存：模拟器生命周期 ───
+    /** 兼容旧调用：始终返回空 AVD 列表 */
     listAvds: () => ipcRenderer.invoke('android:listAvds'),
-    /** 启动 AVD 模拟器 */
+    /** 兼容旧调用：始终拒绝启动 AVD 模拟器 */
     launch: (avdName: string) => ipcRenderer.invoke('android:launch', avdName),
-    /** 停止模拟器 */
+    /** 兼容旧调用：不再控制模拟器进程 */
     terminate: () => ipcRenderer.invoke('android:terminate'),
-    /** 获取模拟器状态 */
+    /** 兼容旧调用：始终返回 stopped */
     getState: () => ipcRenderer.invoke('android:getState'),
-    /** 监听模拟器状态变化 */
+    /** 兼容旧调用：不会再有模拟器状态变化 */
     onStateChanged: (callback: (state: string) => void) => {
       const handler = (_event: unknown, state: string) => callback(state)
       ipcRenderer.on('android:stateChanged', handler)
@@ -433,7 +455,7 @@ contextBridge.exposeInMainWorld('deepink', {
     // ─── 物理真机 ───
     /** 发现物理真机（含 unauthorized 便于 UI 引导授权） */
     listPhysicalDevices: () => ipcRenderer.invoke('android:listPhysicalDevices'),
-    /** 连接物理真机（互斥：会先停止正在运行的模拟器） */
+    /** 连接物理真机 */
     connectPhysical: (serial: string) => ipcRenderer.invoke('android:connectPhysical', serial),
     /** 断开物理真机 */
     disconnectPhysical: () => ipcRenderer.invoke('android:disconnectPhysical'),
@@ -584,12 +606,17 @@ contextBridge.exposeInMainWorld('deepink', {
     },
   },
 
-  // Terminal 命令确认与受限提交（不执行 shell）
+  // Terminal 命令确认、执行事件与受限提交
   terminal: {
     onRequestCommandConfirmation: (callback: (request: any) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, request: any): void => callback(request)
       ipcRenderer.on('terminal:requestCommandConfirmation', handler)
       return () => ipcRenderer.removeListener('terminal:requestCommandConfirmation', handler)
+    },
+    onExecutionEvent: (callback: (event: any) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, event: any): void => callback(event)
+      ipcRenderer.on('terminal:executionEvent', handler)
+      return () => ipcRenderer.removeListener('terminal:executionEvent', handler)
     },
     resolveCommandConfirmation: (id: string, approved: boolean) =>
       ipcRenderer.invoke('terminal:resolveCommandConfirmation', id, approved),
@@ -618,13 +645,18 @@ contextBridge.exposeInMainWorld('deepink', {
   // 工作台状态（逐步替代 renderer localStorage）
   workspaceState: {
     /** 获取指定工作区的持久化工作台状态；空路径表示全局状态 */
-    get: (workspacePath?: string | null) => ipcRenderer.invoke('workspaceState:get', workspacePath),
+    get: (workspacePath?: string | null, ownerKey?: string | null) =>
+      ipcRenderer.invoke('workspaceState:get', workspacePath, ownerKey),
     /** 写入一个状态分区，例如 tabs/browserTabs/layout */
-    setSection: (workspacePath: string | null | undefined, section: string, value: unknown) =>
-      ipcRenderer.invoke('workspaceState:setSection', workspacePath, section, value),
+    setSection: (
+      workspacePath: string | null | undefined,
+      section: string,
+      value: unknown,
+      ownerKey?: string | null,
+    ) => ipcRenderer.invoke('workspaceState:setSection', workspacePath, section, value, ownerKey),
     /** 清空指定工作区的工作台状态；空路径表示全局状态 */
-    clear: (workspacePath?: string | null) =>
-      ipcRenderer.invoke('workspaceState:clear', workspacePath),
+    clear: (workspacePath?: string | null, ownerKey?: string | null) =>
+      ipcRenderer.invoke('workspaceState:clear', workspacePath, ownerKey),
   },
 
   // Meshy 3D 资产生成

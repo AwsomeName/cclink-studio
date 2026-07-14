@@ -1,7 +1,7 @@
 # Terminal Tab 模型与权限审计
 
-> 状态：M6 第一版约束稿；已落共享类型、Tab 快照模型、Session 状态机、本地审计存储、确认 UI、设置页审计入口和 no-op 执行适配器，尚未接真实 shell  
-> 最后更新：2026-07-13  
+> 状态：M6 第一版可测试闭环；已接本地 shell、CCLink 单命令远程执行、输出事件、权限确认和审计
+> 最后更新：2026-07-14
 > 关联文档：`docs/features/product-milestones.md`、`docs/features/product-experience-pages.md`、`docs/features/remote-error-model.md`
 
 ## 结论
@@ -17,7 +17,7 @@ Terminal Tab
 └─ auditLogId：命令、审批、输出、退出和错误的审计线索
 ```
 
-第一版只允许落模型，不开放真实 shell。真实执行必须等权限、审计、关闭语义和远程错误模型都接上后再做。
+第一版已开放受控执行：本地 Terminal 通过 Node shell 进程执行；CCLink 远程 Terminal 通过 `terminal_command/terminal_output` 做单命令执行。它仍不是完整 PTY，交互式全屏程序和 Direct Remote 尚未完成。
 
 ## 产品定位
 
@@ -27,7 +27,7 @@ Terminal 的用户心智：
 - 远程工作空间打开的是远端 Terminal。
 - 本地和远程只差 `runtime`，不差入口模型。
 - Terminal 跟 Markdown、Browser、Android、Conversation 一样，是当前工作空间的工作现场。
-- 当前新建菜单可以创建 Terminal 占位 Tab；它只展示 runtime / 权限 / 关闭策略，不启动真实 shell。
+- 当前新建菜单可以创建 Terminal 受控 Tab；它展示 runtime / 权限 / 关闭策略，并允许命令进入权限、确认、审计和执行链路。
 
 它不应该成为：
 
@@ -149,7 +149,7 @@ permissionPolicy
 - `idle / exited / error` 状态的 Terminal 关闭 Tab 不弹确认。
 - `starting / running / blocked` 且 `terminate-process` 的 Terminal 关闭前弹出“结束并关闭 / 取消”。
 - `starting / running / blocked` 且 `keep-running` 的 Terminal 关闭前弹出“关闭视图 / 取消”。
-- 真实 shell 尚未接入，所以当前确认只固定关闭语义，不真正终止或后台保留进程。
+- 本地 shell 会执行真实终止；CCLink 单命令远程当前只清理 DeepInk 侧 session，不代表远端存在持久 PTY 被终止。
 
 ## Session 状态机与执行边界
 
@@ -163,12 +163,15 @@ Terminal 的 UI Tab、审计事件、真实进程不能混成一个概念：
 
 - `src/main/terminal/terminal-session-state.ts`：创建 session 快照，校验状态迁移。
 - `src/main/terminal/terminal-session-registry.ts`：登记、查询、迁移、移除内存 session。
-- `src/main/terminal/terminal-command-orchestrator.ts`：串起权限判定、确认请求、审计写入和 session 状态迁移；当前只返回“真实执行尚未接入”。
+- `src/main/terminal/terminal-command-orchestrator.ts`：串起权限判定、确认请求、审计写入、session 状态迁移和真实/远程执行 adapter 派发。
 - `src/main/terminal/terminal-execution-adapter.ts`：定义未来本地 shell、远程 shell、Codex/custom backend 的执行适配器接口。
-- `src/main/terminal/terminal-noop-execution-adapter.ts`：第一版 no-op 执行适配器，所有 `start / write / resize / terminate` 都会发出结构化错误并拒绝，明确“当前没有真实 shell”。
+- `src/main/terminal/terminal-local-shell-adapter.ts`：本地 shell adapter，使用 `child_process.spawn` 启动本地 shell，转发 stdout/stderr/exit/error 事件。
+- `src/main/terminal/terminal-cclink-execution-adapter.ts`：CCLink 远程 adapter，发送 `terminal_command`，等待 `terminal_output`，用于单命令远程维护。
+- `src/main/terminal/terminal-composite-execution-adapter.ts`：按 runtime 路由到 local / cclink adapter。
+- `src/main/terminal/terminal-noop-execution-adapter.ts`：保留为测试和未来后端未接入时的结构化错误适配器。
 - `src/main/ipc/terminal-ipc.ts`：`terminal:recordLifecycleEvent` 写入审计时同步 Registry；`created` 带 runtime 时登记 session，`closed` 移除 session，`terminated` 尝试迁移为 `exited` 后移除 session。
 - `terminal:listSessions`：只读返回当前内存 session 快照，用于设置页诊断；不能启动、写入、终止或恢复 session。
-- `terminal:submitCommand`：受限命令提交边界，先做输入规整，再进入空执行编排器；成功结果仍固定为 `execution: not-started`。
+- `terminal:submitCommand`：受限命令提交边界，先做输入规整，再进入执行编排器；本地/CCLink 成功派发时返回 `execution: started`。
 
 允许的第一版状态迁移：
 
@@ -197,14 +200,14 @@ idle
 
 - `exited / error` 是终态，不能恢复为 `running`。
 - 同状态迁移允许，用于刷新 `processId / lastCommand / updatedAt` 等元信息。
-- `idle -> blocked -> idle` 只用于“真实 shell 尚未启动前先请求命令确认”的路径。
-- 关闭 Tab 只写 `closed / terminated` 审计；真实进程终止要等执行适配器接入后再由 session 状态变为 `exited`。
-- 当前 `terminated` 的 `exited` 迁移只是内存 session 收口，不代表已经杀掉真实进程；因为真实进程还不存在。
-- 执行适配器接口只定义 `start / write / resize / terminate / onEvent`；当前只有 no-op 实现，不会启动本机 shell，也不会连接远端 shell。
+- `idle -> blocked -> idle` 只用于“shell 进程尚未启动前先请求命令确认”的路径。
+- 关闭 Tab 写 `closed / terminated` 审计；`terminated` 会调用执行 adapter 的 `terminate`。
+- 本地 shell 终止会杀掉本机子进程；CCLink 单命令远程 session 当前只清理 DeepInk 侧运行态，不代表远端有持久 PTY 被杀掉。
+- 执行适配器接口定义 `start / write / resize / terminate / onEvent`；本地 shell 和 CCLink 单命令远程已接，Direct Remote 和完整 PTY 尚未接。
 
-### 空执行编排器
+### 执行编排器
 
-当前 `TerminalCommandOrchestrator` 已落主进程并接入受限 IPC，但尚未接 Terminal 输入 UI，也尚未接真实 shell。它的职责是把未来的命令提交路径先压成一个可测试闭环：
+当前 `TerminalCommandOrchestrator` 已落主进程、接入受限 IPC，并已有 Terminal Tab 内的受控命令输入 UI。它的职责是把命令提交路径压成一个可测试闭环：
 
 ```text
 submitCommand
@@ -214,27 +217,30 @@ submitCommand
 ├─ confirm：session -> blocked，发确认请求，确认后恢复原状态
 ├─ allow / approved：写 command-submitted 审计
 ├─ 尝试派发到 executionAdapter
-├─ no-op / adapter 失败：写 error 审计，保留 execution: not-started
-└─ 返回 execution: not-started
+├─ adapter 成功：返回 execution: started，并通过 executionEvent 推送输出
+├─ adapter 失败：写 error 审计，返回 execution: not-started
+└─ renderer 保存输出并同步 Terminal Tab 状态
 ```
 
 关键边界：
 
-- `accepted` 只代表权限链路通过，不代表命令已经执行。
+- `accepted + execution: started` 代表命令已提交到执行后端；输出和退出仍以后续 executionEvent 为准。
+- `accepted + execution: not-started` 代表权限链路通过，但执行后端未接入或启动失败。
 - `command-submitted` 当前代表“已提交到待执行边界”，不是 shell 输出。
-- `error` 当前可能代表 no-op execution adapter 明确拒绝执行，不代表用户命令已经产生副作用。
-- `blocked` 只表示等待用户确认；没有真实 PTY，所以不会有真实进程阻塞。
+- `error` 可能代表本地进程启动失败、CCLink transport 失败、远端 agent 拒绝或后端未接入。
+- `blocked` 只表示等待用户确认，不代表 shell 进程一定阻塞。
 - 如果 session 不存在，或处于 `blocked / starting / exited / error` 等不可提交状态，会在权限判定前拒绝。
 
 当前受限 IPC 已补：
 
 - `terminal:submitCommand` 只接受 `terminalSessionId / command / actor / permissionPolicy / workspaceKey`。
 - 非法 actor、空命令、非法权限模式会直接返回 `rejected`。
-- 成功返回也固定包含 `execution: not-started`。
-- 当前主进程已接入 no-op adapter：`idle` session 会尝试 `start`，`running` session 会尝试 `write`；失败会写入结构化 `error` 审计。
-- preload 已暴露 `window.deepink.terminal.submitCommand`，但 UI 尚未接入口。
+- 成功返回包含 `execution: started | not-started`。
+- 当前主进程已接入 composite adapter：本地走 `LocalShellExecutionAdapter`，CCLink 远程走 `CclinkTerminalExecutionAdapter`。
+- preload 已暴露 `window.deepink.terminal.submitCommand`，Workbench Terminal Tab 已接入受控命令输入入口。
+- preload 已暴露 `window.deepink.terminal.onExecutionEvent`，renderer 会持久保存当前 session 输出并更新 Tab 运行态。
 
-拷问：这里虽然已经有 IPC，但还不能给用户做成真正的 Terminal 输入框。原因很简单——输入框暗示“会执行”，而当前只是在验证提交前链路。
+拷问：当前仍不是完整 PTY。`vim/top/ssh` 这类交互式全屏命令不应作为验收标准；第一版验收应看 `pwd/ls/git status/pnpm build` 这类维护命令、权限确认、输出和关闭终止。
 
 拷问：如果没有这层状态机，未来“关闭 Tab”“断开远程连接”“命令等待确认”“进程退出”会全部挤在一个布尔值里，最后又会出现看起来在线、实际无进程，或者 UI 关了但远端命令还在跑的混乱。
 
@@ -280,7 +286,7 @@ error
 
 - `terminal:recordLifecycleEvent`：仅允许记录 `created / closed / terminated` 这类 session 生命周期事件。
 - `terminal:listSessions`：只读列出当前主进程内存 session，用于诊断 Registry 是否和 Tab 生命周期对齐。
-- `terminal:submitCommand`：受限命令提交边界，执行权限/确认/审计/状态迁移闭环，但成功结果仍为 `execution: not-started`。
+- `terminal:submitCommand`：受限命令提交边界，执行权限/确认/审计/状态迁移闭环；执行后端成功接收时返回 `execution: started`。
 - `terminal:listAuditEvents`：按 `terminalSessionId / workspaceKey / limit` 查询。
 - `terminal:clearAuditSession`：清理单个 Terminal session 的审计。
 - `terminal:clearAuditEvents`：清理全部 Terminal 审计。
@@ -292,7 +298,7 @@ error
 - 展示最近 30 条 Terminal 审计事件。
 - 支持手动刷新。
 - 支持清空全部 Terminal 审计。
-- 当前展示生命周期、确认、审批、拒绝、超时等已存在事件；真实 shell 接入前不会有完整输出流和退出码历史。
+- 当前展示生命周期、确认、审批、拒绝、超时、输出、退出和错误事件；完整 PTY 输出历史仍需继续增强。
 - 当前 session 快照是只读诊断信息，不提供终止、恢复、重启等操作入口。
 
 已支持：
@@ -316,7 +322,7 @@ Terminal 错误复用 `RemoteError`：
 | 权限拒绝 | `execution-backend` | `REMOTE_PERMISSION_DENIED` |
 | 协议不兼容 | `remote-agent` | `REMOTE_PROTOCOL_INCOMPATIBLE` |
 
-`REMOTE_PERMISSION_DENIED` 目前还未进入共享通用码表；Terminal 接真实执行前需要补入。
+`REMOTE_PERMISSION_DENIED` 目前还未进入共享通用码表；接更多远程 provider 前需要补入。
 
 ## 当前落地状态
 
@@ -326,7 +332,7 @@ Terminal 错误复用 `RemoteError`：
 - 新增 `src/main/terminal/terminal-audit-store.ts`，持久化 Terminal 审计事件。
 - 新增 `src/main/terminal/terminal-session-state.ts`，提供 Terminal session 状态机与非法迁移拦截。
 - 新增 `src/main/terminal/terminal-session-registry.ts`，提供主进程内存 session 登记、查询、迁移和移除边界。
-- 新增 `src/main/terminal/terminal-command-orchestrator.ts`，提供权限判定、确认、审计和状态迁移的空执行编排器；当前不启动 shell。
+- 新增 `src/main/terminal/terminal-command-orchestrator.ts`，提供权限判定、确认、审计、状态迁移和 execution adapter 派发。
 - 新增 `src/main/terminal/terminal-execution-adapter.ts`，定义未来本地/远程执行 backend 的适配器接口。
 - 新增 `src/main/terminal/terminal-noop-execution-adapter.ts`，提供不会执行 shell 的 no-op 适配器；所有执行操作都会 emit `error` 并抛出 `REMOTE_EXECUTION_BACKEND_UNAVAILABLE`。
 - 新增 `src/main/terminal/terminal-permission.ts`，提供命令风险分类和权限判定。
@@ -337,15 +343,20 @@ Terminal 错误复用 `RemoteError`：
 - 新增 `src/renderer/src/utils/terminal-confirmation.ts`，集中维护 Terminal 风险、来源、运行位置和超时显示。
 - 新增 `src/renderer/src/utils/terminal-tab.ts`，集中生成本地 / 远程 / 未归档工作空间的 Terminal Tab 占位 runtime 和权限策略。
 - 新增 `src/renderer/src/utils/terminal-lifecycle.ts`，把 Terminal 创建、关闭、终止语义和 runtime 通过受限 IPC 写入审计，并供主进程同步 session registry。
+- 新增 `src/renderer/src/utils/terminal-command.ts`，把 Terminal Tab 的用户命令提交到受限 IPC，并在恢复后的 session 缺失时重新登记生命周期后重试一次。
+- 新增 `src/main/terminal/terminal-local-shell-adapter.ts`，接入本地 shell 执行。
+- 新增 `src/main/terminal/terminal-cclink-execution-adapter.ts`，接入 CCLink 单命令远程执行。
+- 新增 `src/main/terminal/terminal-composite-execution-adapter.ts`，按 runtime 路由执行后端。
 - `terminal:recordLifecycleEvent` 已接入 `TerminalSessionRegistry`：创建时登记，关闭/终止时移除，终止时对活跃 session 先收口到 `exited`。
 - `terminal:listSessions` 已提供只读 session 快照，设置页能显示当前 Registry 状态。
-- `terminal:submitCommand` 已接入空执行编排器，并做 actor、命令、权限策略输入规整；当前没有 UI 入口。
-- `terminal:submitCommand` 权限通过后会触达 no-op execution adapter，并把 `REMOTE_EXECUTION_BACKEND_UNAVAILABLE` 写入 `error` 审计，明确没有真实 shell。
+- `terminal:submitCommand` 已接入执行编排器，并做 actor、命令、权限策略输入规整；当前 Workbench Terminal Tab 已提供受控 UI 入口。
+- `terminal:submitCommand` 权限通过后会触达 composite execution adapter，并把输出/退出/错误事件推给 renderer。
+- renderer `terminal-store` 已按 session 缓存输出；Terminal Tab 可显示 stdout/stderr/system/error 行并清空输出。
 - `src/renderer/src/utils/close-tab.ts` 已识别 Terminal 活跃状态与 `closePolicy`，活跃 Terminal 关闭前必须确认。
 - 设置页 `Agent` 分组新增 `Terminal 审计`，可查看当前 session 快照、最近审计事件、刷新和清空全部审计。
 - `TabType` 新增 `terminal`。
 - `Tab` 新增 `terminal?: TerminalTabRef`。
-- Workbench 新建菜单已提供 `Terminal` 项，对 `terminal` Tab 显示“尚未接入真实 shell”的受控占位页，不再空白。
+- Workbench 新建菜单已提供 `Terminal` 项；`terminal` Tab 已从纯占位升级为受控命令入口和输出面板。
 - Tab store 能保存和恢复 Terminal Tab 快照。
 - 已补 `terminal-audit-store.test.ts`，覆盖审计写入、重载、过滤、limit 和清理。
 - 已补 `terminal-permission.test.ts`，覆盖读、写、网络、破坏、提权、unknown、allowlist、denylist 和四种策略模式。
@@ -355,11 +366,15 @@ Terminal 错误复用 `RemoteError`：
 - 已补 `terminal-session-state.test.ts` 和 `terminal-session-registry.test.ts`，覆盖 session 创建、合法生命周期、终态拦截、重复登记、未知 session 和移除清理。
 - 已补 `terminal-command-orchestrator.test.ts`，覆盖低风险命令直通、风险命令确认、确认拒绝、只读策略拒绝、缺失/忙碌 session 拒绝、idle session 触发 adapter start、running session 触发 adapter write，并确认所有路径都不启动真实执行。
 - 已补 `terminal-noop-execution-adapter.test.ts`，覆盖 no-op backend 的结构化错误、事件派发、取消监听和操作级上下文。
+- 已补 `terminal-local-shell-adapter.test.ts`，覆盖本地 shell 启动、stdout/stderr、写入和终止。
+- 已补 `terminal-cclink-execution-adapter.test.ts`，覆盖 CCLink terminal_command、terminal_output 和离线远端结构化错误。
+- 已补 `terminal-command.test.ts`，覆盖命令提交、空命令拦截、恢复后 session 缺失时重新登记并重试。
 
 未落地：
 
-- 没有真实 shell、PTY、远程执行或命令发送。
-- 空执行编排器尚未接 Terminal 输入 UI；当前只作为下一步接真实执行前的主进程边界和 no-op 执行边界。
+- 没有完整 PTY；本地 shell 基于 `child_process.spawn`，不支持 resize 和全屏交互式程序。
+- CCLink 远程执行是单命令请求/响应，不是持久远程 PTY。
+- Direct Remote 尚未接入。
 - 没有完整诊断页或按工作空间/session 深筛的审计页面。
 - 没有真实进程生命周期管理；目前只有状态机、内存登记表和 Tab 层关闭确认语义。
 

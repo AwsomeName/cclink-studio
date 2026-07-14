@@ -1,14 +1,10 @@
 /**
  * PhysicalDeviceManager —— 物理真机的发现与连接管理
  *
- * 对标 EmulatorManager（管理 AVD 进程），本类管理通过 USB ADB 连接的物理真机。
- * 不持有进程，只负责：发现设备、把真机 serial 注入 AdbBridge + 注册为活跃设备、
+ * 本类管理通过 USB ADB 连接的物理真机。不持有进程，只负责：
+ * 发现设备、把真机 serial 注入 AdbBridge + 注册为活跃设备、
  * 断开。设备在线/离线由物理连接决定，本类不做定时 reconcile（MVP 靠 scrcpy 断开
  * 事件 + 手动重连；定时探活留后）。
- *
- * 互斥：连接真机前，调用方（IPC 层）应先停止模拟器（emulatorManager.terminate）。
- * ActiveDeviceManager 的 stopped 联动有 source 守卫，即使 terminate 的 stopped
- * 事件晚到也不会误清真机。
  *
  * MVP 范围：仅 USB。WiFi ADB（adb tcpip + connect）留后。
  */

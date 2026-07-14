@@ -148,6 +148,7 @@ export interface ChatccQuestionAnswerMessage extends ChatccEnvelope, ChatccSessi
 export interface ChatccTerminalCommandMessage extends ChatccEnvelope, ChatccSessionScoped {
   cc_type: 'terminal_command'
   content: string
+  cwd?: string
 }
 
 export interface ChatccTerminalOutputMessage extends ChatccEnvelope, ChatccSessionScoped {

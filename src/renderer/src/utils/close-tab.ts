@@ -145,7 +145,7 @@ async function closeTerminalView(tab: Tab): Promise<void> {
       title: '关闭 Terminal 视图',
       message: '这个 Terminal 仍在运行。要只关闭视图并保留后台进程吗？',
       detail:
-        '当前版本还没有完整进程恢复列表；真实 shell 接入前，这里只确认关闭语义，不会启动或管理真实进程。',
+        '当前版本还没有完整进程恢复列表；只关闭视图后，后台进程仍可能继续运行。',
       buttons: ['关闭视图', '取消'],
       defaultId: 0,
       cancelId: 1,
@@ -161,8 +161,7 @@ async function closeTerminalView(tab: Tab): Promise<void> {
     type: 'warning',
     title: '结束 Terminal',
     message: '这个 Terminal 仍在运行。关闭 Tab 将结束进程。',
-    detail:
-      '当前版本还没有接入真实 shell；真实执行接入后，这里会先请求终止本机或远端进程，再关闭 Tab。',
+    detail: '本地 shell 会收到终止请求；远程 shell 后端接入后也会复用同一关闭语义。',
     buttons: ['结束并关闭', '取消'],
     defaultId: 1,
     cancelId: 1,

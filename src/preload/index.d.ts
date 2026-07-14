@@ -6,7 +6,9 @@ import type { CclinkApiContract } from '../shared/ipc/cclink'
 import type { DialogApiContract } from '../shared/ipc/dialog'
 import type { EditorApiContract } from '../shared/ipc/editor'
 import type { FsApiContract } from '../shared/ipc/fs'
+import type { IdentityApiContract } from '../shared/ipc/identity'
 import type { MeshyApiContract } from '../shared/ipc/meshy'
+import type { ProjectOpsApiContract } from '../shared/ipc/project-ops'
 import type { SettingsApiContract } from '../shared/ipc/settings'
 import type { SubscriptionApiContract } from '../shared/ipc/subscription'
 import type { SyncApiContract } from '../shared/ipc/sync'
@@ -30,6 +32,8 @@ export interface DeepinkAPI {
 
   auth: AuthApiContract
 
+  identity: IdentityApiContract
+
   agent: AgentApiContract
 
   cclink: CclinkApiContract
@@ -37,6 +41,8 @@ export interface DeepinkAPI {
   android: AndroidApiContract
 
   fs: FsApiContract
+
+  projectOps: ProjectOpsApiContract
 
   dialog: DialogApiContract
 

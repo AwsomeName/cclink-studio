@@ -10,9 +10,9 @@ import type { PermissionManager } from '../mcp/permission'
 import type { McpClientManager } from '../mcp/client-manager'
 import type { TokenManager } from '../auth/token-manager'
 import type { AuthService } from '../auth/auth-service'
+import type { LocalIdentityService } from '../identity/local-identity-service'
 import type { EditorToolModule } from '../mcp/modules/editor'
 import type { AdbBridge } from '../android/adb-bridge'
-import type { EmulatorManager } from '../android/emulator-manager'
 import type { AgentDeviceManager } from '../android/agent-device-manager'
 import type { ActiveDeviceManager } from '../android/active-device-manager'
 import type { PhysicalDeviceManager } from '../android/physical-device-manager'
@@ -23,6 +23,7 @@ import type { SubscriptionService } from '../subscription/subscription-service'
 import type { SettingsService } from '../settings/settings-service'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 import type { MeshyService } from '../meshy/meshy-service'
+import type { ProjectOpsService } from '../project-ops/project-ops-service'
 import type { CclinkStore } from '../cclink/cclink-store'
 import type { CclinkIdentityStore } from '../cclink/cclink-identity-store'
 import type { CclinkIdentityService } from '../cclink/cclink-identity-service'
@@ -51,9 +52,9 @@ export interface DeepInkRuntimeState {
   mcpClientMgr: McpClientManager | null
   tokenManager: TokenManager | null
   authService: AuthService | null
+  localIdentityService: LocalIdentityService | null
   editorModule: EditorToolModule | null
   adbBridge: AdbBridge | null
-  emulatorManager: EmulatorManager | null
   activeDeviceManager: ActiveDeviceManager | null
   physicalDeviceManager: PhysicalDeviceManager | null
   agentDeviceManager: AgentDeviceManager | null
@@ -64,6 +65,7 @@ export interface DeepInkRuntimeState {
   settingsService: SettingsService | null
   workspaceStateService: WorkspaceStateService | null
   meshyService: MeshyService | null
+  projectOpsService: ProjectOpsService | null
   cclinkStore: CclinkStore | null
   cclinkIdentityStore: CclinkIdentityStore | null
   cclinkIdentityService: CclinkIdentityService | null
@@ -94,9 +96,9 @@ export function createRuntimeState(isDev: boolean): DeepInkRuntimeState {
     mcpClientMgr: null,
     tokenManager: null,
     authService: null,
+    localIdentityService: null,
     editorModule: null,
     adbBridge: null,
-    emulatorManager: null,
     activeDeviceManager: null,
     physicalDeviceManager: null,
     agentDeviceManager: null,
@@ -107,6 +109,7 @@ export function createRuntimeState(isDev: boolean): DeepInkRuntimeState {
     settingsService: null,
     workspaceStateService: null,
     meshyService: null,
+    projectOpsService: null,
     cclinkStore: null,
     cclinkIdentityStore: null,
     cclinkIdentityService: null,

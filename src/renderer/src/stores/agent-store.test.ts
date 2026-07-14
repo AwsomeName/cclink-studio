@@ -394,6 +394,82 @@ describe('useAgentStore', () => {
       expect(useAgentStore.getState().conversations[id]).toBeUndefined()
       expect(useAgentStore.getState().conversationOrder).not.toContain(id)
     })
+
+    it('挂载资源时按会话去重并支持移除', () => {
+      const id = useAgentStore.getState().createConversation()
+
+      useAgentStore.getState().addMountedResource(
+        {
+          id: 'file:/Users/apple/project/README.md',
+          kind: 'file',
+          label: 'README.md',
+          detail: '/Users/apple/project/README.md',
+          ref: { type: 'file', path: '/Users/apple/project/README.md' },
+        },
+        id,
+      )
+      useAgentStore.getState().addMountedResource(
+        {
+          id: 'file:/Users/apple/project/README.md',
+          kind: 'file',
+          label: 'README.md',
+          detail: '更新后的路径说明',
+          ref: { type: 'file', path: '/Users/apple/project/README.md' },
+        },
+        id,
+      )
+
+      expect(useAgentStore.getState().conversations[id].mountedResources).toEqual([
+        {
+          id: 'file:/Users/apple/project/README.md',
+          kind: 'file',
+          label: 'README.md',
+          detail: '更新后的路径说明',
+          ref: { type: 'file', path: '/Users/apple/project/README.md' },
+        },
+      ])
+
+      useAgentStore.getState().removeMountedResource('file:/Users/apple/project/README.md', id)
+      expect(useAgentStore.getState().conversations[id].mountedResources).toEqual([])
+    })
+
+    it('挂载 Skill 时按会话去重并支持移除', () => {
+      const id = useAgentStore.getState().createConversation()
+
+      useAgentStore.getState().addMountedSkill(
+        {
+          id: 'grill-me',
+          name: 'grill-me',
+          label: 'grill-me',
+          description: '拷问方案',
+          source: 'user',
+        },
+        id,
+      )
+      useAgentStore.getState().addMountedSkill(
+        {
+          id: 'grill-me',
+          name: 'grill-me',
+          label: 'grill-me',
+          description: '更新后的拷问方案',
+          source: 'user',
+        },
+        id,
+      )
+
+      expect(useAgentStore.getState().conversations[id].mountedSkills).toEqual([
+        {
+          id: 'grill-me',
+          name: 'grill-me',
+          label: 'grill-me',
+          description: '更新后的拷问方案',
+          source: 'user',
+        },
+      ])
+
+      useAgentStore.getState().removeMountedSkill('grill-me', id)
+      expect(useAgentStore.getState().conversations[id].mountedSkills).toEqual([])
+    })
   })
 
   describe('权限管理', () => {

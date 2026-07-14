@@ -4,7 +4,6 @@ import {
   IconClose,
   IconFile,
   IconGlobe,
-  IconMobile,
   IconPlus,
   IconRobot,
   IconTerminal,
@@ -31,7 +30,6 @@ interface TabBarProps {
   onReorder: (fromId: string, toId: string) => void
   onNewDocument: () => void
   onNewBrowser: () => void
-  onNewAndroid: () => void
   onNewConversation: () => void
   onNewTerminal: () => void
   onShowMenu: (tabId: string, x: number, y: number) => void
@@ -45,7 +43,6 @@ export function TabBar({
   onReorder,
   onNewDocument,
   onNewBrowser,
-  onNewAndroid,
   onNewConversation,
   onNewTerminal,
   onShowMenu,
@@ -176,13 +173,6 @@ export function TabBar({
               <span className="tab-create-menu-main">
                 <span>浏览器页</span>
                 <span>网页浏览和自动化</span>
-              </span>
-            </button>
-            <button onClick={() => runCreateAction(onNewAndroid)}>
-              <IconMobile size={13} />
-              <span className="tab-create-menu-main">
-                <span>Android 页</span>
-                <span>手机应用自动化</span>
               </span>
             </button>
             <button onClick={() => runCreateAction(onNewConversation)}>

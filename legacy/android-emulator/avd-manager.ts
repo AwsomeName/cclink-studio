@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
 import { existsSync } from 'fs'
 import { join } from 'path'
-import { getExternalSdkRoots, withExe } from './android-platform'
+import { getExternalSdkRoots, withExe } from '../../src/main/android/android-platform'
 
 /**
  * AVD（Android Virtual Device）管理器

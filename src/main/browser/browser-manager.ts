@@ -1,4 +1,4 @@
-import { BrowserWindow, WebContentsView } from 'electron'
+import { BrowserWindow, WebContentsView, session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
 import type { BrowserInstanceStore } from '../persistence/browser-instance-store'
@@ -16,6 +16,7 @@ const MAX_ZOOM = 3
 const ZOOM_STEP = 0.1
 /** 默认首页 */
 const DEFAULT_URL = 'https://www.baidu.com'
+const PROFILE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/
 
 /** 设备模式：桌面 / 移动 */
 export type ViewMode = BrowserViewModeType
@@ -53,6 +54,8 @@ interface ViewEntry {
   history: string[]
   historyIndex: number
   pendingHistoryDirection: 'back' | 'forward' | null
+  /** 项目运营平台 Profile；为空时使用默认 session。 */
+  profileId: string | null
 }
 
 /**
@@ -139,7 +142,10 @@ export class BrowserManager {
   createView(
     tabId: string,
     initialUrl?: string,
-    opts?: { restore?: { viewMode: ViewMode; zoomMode: ZoomMode; manualZoom: number; history?: string[]; historyIndex?: number } },
+    opts?: {
+      restore?: { viewMode: ViewMode; zoomMode: ZoomMode; manualZoom: number; history?: string[]; historyIndex?: number }
+      profileId?: string | null
+    },
   ): void {
     const existing = this.views.get(tabId)
     if (existing) {
@@ -166,10 +172,15 @@ export class BrowserManager {
     }
     if (!this.win()) return
 
+    const profileId = this.normalizeProfileId(opts?.profileId)
+    const viewSession = profileId
+      ? session.fromPartition(`persist:deepink-profile-${profileId}`)
+      : undefined
     const view = new WebContentsView({
       webPreferences: {
         sandbox: true,
         contextIsolation: true,
+        ...(viewSession ? { session: viewSession } : {}),
       },
     })
 
@@ -201,6 +212,7 @@ export class BrowserManager {
         ? Math.min(Math.max(opts.restore.historyIndex, 0), Math.max((opts.restore.history?.length ?? 1) - 1, 0))
         : 0,
       pendingHistoryDirection: null,
+      profileId,
     }
 
     // 监听导航事件（闭包捕获 tabId，发出的事件携带 tabId）
@@ -227,6 +239,12 @@ export class BrowserManager {
     if (this.activeViewId === tabId) {
       this.ensureLoaded(tabId)
     }
+  }
+
+  private normalizeProfileId(profileId?: string | null): string | null {
+    if (!profileId) return null
+    const normalized = profileId.trim()
+    return PROFILE_ID_PATTERN.test(normalized) ? normalized : null
   }
 
   /** 导航事件：记录 URL 并同步给渲染进程 */

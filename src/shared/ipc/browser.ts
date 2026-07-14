@@ -17,6 +17,7 @@ export interface BrowserCreateViewRestoreOptions {
 
 export interface BrowserCreateViewOptions {
   restore?: BrowserCreateViewRestoreOptions
+  profileId?: string | null
 }
 
 /** 浏览器实例快照（关闭时落盘，重启「恢复上次会话」重建用）。 */

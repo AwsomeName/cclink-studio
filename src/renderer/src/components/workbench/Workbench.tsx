@@ -56,10 +56,6 @@ export function Workbench(): React.ReactElement {
     openTab({ type: 'browser', title: '浏览器', icon: '🌐', forceNew: true })
   }, [openTab])
 
-  const openNewAndroid = useCallback((): void => {
-    openTab({ type: 'android', title: 'Android', icon: '📱' })
-  }, [openTab])
-
   const openNewConversation = useCallback((): void => {
     const conversationId = createConversation({
       surface: 'workbench-tab',
@@ -141,7 +137,6 @@ export function Workbench(): React.ReactElement {
         onReorder={reorderTabs}
         onNewDocument={openNewDocument}
         onNewBrowser={openNewBrowser}
-        onNewAndroid={openNewAndroid}
         onNewConversation={openNewConversation}
         onNewTerminal={openNewTerminal}
         onShowMenu={showTabMenu}

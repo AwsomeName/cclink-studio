@@ -1,32 +1,76 @@
 # DeepInk 产品与架构里程碑
 
-> 状态：里程碑验收稿  
-> 最后更新：2026-07-12  
-> 关联文档：`docs/features/product-experience-pages.md`、`docs/features/ui-entry-migration-audit.md`、`docs/features/remote-error-model.md`
+> 状态：里程碑验收稿
+> 最后更新：2026-07-14
+> 关联文档：`docs/features/product-experience-pages.md`、`docs/features/ui-entry-migration-audit.md`、`docs/features/remote-error-model.md`、`docs/features/founder-operations-workbench.md`、`docs/features/local-first-identity.md`、`docs/features/project-operations-assistant.md`
 
 ## 结论
 
-当前迁移不再用“继续优化”描述，而拆成 6 个可验收里程碑：
+当前迁移不再用“继续优化”描述，而拆成 8 个可验收里程碑：
 
 ```text
 M0 产品骨架定稿
+M0.5 本地优先身份
 M1 入口清理
 M2 工作空间模型统一
 M3 Tab 与工作现场统一
 M4 会话模型统一
 M5 远程能力闭环
 M6 Terminal 与执行权限
+M7 项目内运营助手
 ```
 
 当前判断：
 
 - **M0 基本完成**：产品骨架已经明确为“工作空间 + Tab + 设置 + 右侧即时助手”。
+- **M0.5 已实现，待人工体验验收**：本地身份、未登录进入工作台、workspace owner 和云能力门控已完成第一版。
 - **M1 基本完成**：Activity Bar 已收敛，CCLink / Android / 同步配置不再作为一级日常入口。
 - **M2 已打底**：本地/远程工作空间平铺，远程 transport 已从 CCLink 中解耦。
-- **M3 部分完成**：Markdown、Browser、Android、Conversation、Remote File 已进入 Tab 体系；Terminal 未进入。
+- **M3 部分完成**：Markdown、Browser、Android、Conversation、Remote File 和 Terminal 已进入 Tab 体系；Terminal 已有受控命令入口，但真实执行未接入。
 - **M4 第一段完成**：会话已有即时助手会话 / 工作会话两类 surface，但生命周期还没收口。
 - **M5 只完成 CCLink 设备发现链路**：能同步服务器不等于远程工作空间闭环完成。
-- **M6 未开始**：Terminal 必须先做权限和审计设计，不能直接接 shell。
+- **M6 第一版受控执行已可测**：Terminal 已有 Tab、受控命令入口、权限、审计、本地 shell、CCLink 单命令远程执行和输出面板；完整 PTY、Direct Remote 尚未完成。
+- **M7 已实现到 M7.5，待人工验收**：项目内运营助手以“项目文档 + `deepink-accounts.json` + 文案会话 + 平台操作会话 + 发布记录”为第一版，不做独立运营平台。
+
+## 2026-07-14 优先级重排：先服务真实项目运营
+
+新的近期目标不是继续泛化“全能 AI 桌面”，而是让 DeepInk 支持创始人自己的真实项目：
+
+- CCLink 上线、内测、宣发、账号备注、站点运营和评论反馈维护。
+- 在项目目录内保存平台入口、账号备注和浏览器 profile 配置。
+- Markdown 文案生产，并通过浏览器提交到对应平台。
+- AI 眼镜、硬件 PCB、游戏资产等项目的资料整理和网页操作。
+- 多个远程服务器项目的调试、维护、日志查看和受控执行。
+
+优先级调整：
+
+| 能力                            | 新优先级 | 原因                                                                                                |
+| ------------------------------- | -------- | --------------------------------------------------------------------------------------------------- |
+| 远程项目支持                    | P0       | 这是当前最急的真实需求；需要远程工作空间、远程文件、远程 Terminal / Agent 执行闭环                  |
+| 项目内运营助手                  | P0       | 直接服务 CCLink 上线、内测、宣发和平台维护；第一版只做项目文件、Markdown、浏览器 profile 和确认提交 |
+| 本地优先身份                    | P0 前置  | 不登录也必须进入工作台并恢复本机工作现场；登录只解锁云能力                                          |
+| 平台浏览器 Profile              | P0/P1    | 平台登录态要能按项目配置复用；不做密码库和全自动登录                                                |
+| Android 真机连接                | P2       | 只保留用户自有手机 USB / Wi-Fi 连接，不再推进模拟器或云手机                                         |
+| IM / 记忆 / 云盘 / 垂直行业集成 | P2+      | 重要但不应抢近期可用闭环                                                                            |
+
+Android 新决策：
+
+- 不再推进本地 Android 模拟器。
+- 不再考虑云手机。
+- 现有 Android 代码进入抽离、封存、可选能力状态。
+- 后续只考虑用户自己的真实手机，通过 USB 或 Wi-Fi ADB 连接。
+
+新的近期验收主线：
+
+1. **远程项目维护闭环**：添加远程工作空间、浏览文件、打开文件、打开远程 Terminal、执行受控命令、错误可定位。
+2. **项目内运营闭环**：Markdown 写文案、项目内保存平台账号配置、浏览器保持登录态、Agent 可见操作网页、提交内容、保存发布结果和反馈。
+3. **本地工作台恢复闭环**：未登录也能进入工作台，重启后恢复本机工作现场，登录/登出不清本地状态。
+
+拷问：
+
+如果 DeepInk 不能帮你完成一次真实 CCLink 宣发，或者不能维护一个真实远程项目，那么它还没有达到“可用”。Android、IM、云盘、记忆系统都可以晚一点；远程项目和浏览器文案流不能再晚。
+
+补一刀：如果不登录就不能进入工作台，DeepInk 也还没有达到桌面软件的基本可用。登录应该解锁云能力，而不是拦截本地工作。
 
 ## M0：产品骨架定稿
 
@@ -60,6 +104,73 @@ Settings：管理账号、连接、设备、诊断
 ### 拷问
 
 如果一个新能力无法归入这四类之一，优先怀疑产品模型，而不是立刻新增一个 Activity Bar 入口。
+
+## M0.5：本地优先身份
+
+### 解决什么问题
+
+DeepInk 现在仍是“未登录只显示 LoginPage”。这导致本地工作台、工作现场恢复、Markdown 草稿、本地 Terminal 和浏览器状态都被云登录挡住。
+
+这不符合桌面工作台心智。用户第一次打开 App，应该立即进入本机工作现场；登录只影响云同步、订阅、CCLink/TIM、跨设备和好友协作。
+
+### 方案
+
+新增本地身份作为产品底座：
+
+```text
+LocalIdentity
+├─ localId: local_xxx
+├─ deviceId
+├─ deviceName
+├─ createdAt
+├─ updatedAt
+└─ boundCloudUserId?
+```
+
+运行时始终存在 `localIdentity`，登录后额外存在 `cloudIdentity`：
+
+```text
+EffectiveIdentity = LocalIdentity + optional CloudIdentity
+```
+
+工作台状态按本地身份和工作空间归属恢复：
+
+```text
+ownerKey = local:${localId}
+workspaceKey = null | localPath | cclink://... | direct://...
+```
+
+阶段拆分：
+
+1. `L1 本地身份服务`：主进程生成/读取 `userData/local-identity.json`，暴露 IPC。
+2. `L2 登录守卫重构`：未登录也进入 `MainLayout`；登录页变成可选入口。
+3. `L3 状态恢复接入身份`：旧 workspace state 迁移到当前 local identity，未登录重启可恢复。
+4. `L4 云能力门控`：CCLink、同步、订阅等需要 cloud session；登出不清本地工作台。
+
+详见 `docs/features/local-first-identity.md`。
+
+### 验收标准
+
+- 无 token、无网络、未配置 `DEEPINK_API_URL` 时仍能进入主工作台。
+- 首次启动生成稳定 `localId`，重启后不变。
+- 未登录打开 Tab、Markdown 草稿、浏览器页、本地工作空间后，重启能恢复。
+- 登录成功不覆盖本地工作现场。
+- 登出只清云 token、CCLink identity 和云能力状态，不清 tabs/drafts/workspace state。
+- CCLink、订阅、云同步等云能力入口在未登录时提示登录，而不是让主工作台不可用。
+
+### 当前状态
+
+L1-L4 已实现，进入人工体验验收：
+
+- 主进程已生成/读取 `userData/local-identity.json`，并通过 `window.deepink.identity.getLocalIdentity()` 暴露。
+- `App.tsx` 已移除云登录硬守卫，未登录也进入 `MainLayout`。
+- `WorkspaceStateSnapshot.ownerKey` 已接入 `local:${localId}`，并兼容旧无 owner 快照。
+- 设置页账户区已区分“本机身份”和“DeepInk 账号”，CCLink 云能力在未登录时提示登录并禁用关键操作。
+- 验证：`pnpm test -- --run`、`pnpm build`、`git diff --check` 均通过。
+
+### 拷问
+
+如果这一步不做，后续所有“恢复工作现场”“运营账号环境”“本地项目维护”都会依赖登录状态，产品会被云账号绑架。先把本地身份打稳，再做账号绑定和云同步。
 
 ## M1：入口清理
 
@@ -169,7 +280,7 @@ Tab 栏 `+` 是“新建 Tab 菜单”，不是“新建 Markdown”。
 
 ### 当前状态
 
-部分完成。`conversation`、`remote-file` 和 `terminal` 已进入 Tab 类型；其中 `terminal` 仍只有模型、占位、权限/审计内核，未接真实执行。
+部分完成。`conversation`、`remote-file` 和 `terminal` 已进入 Tab 类型；其中 `terminal` 已有受控命令入口和权限/审计内核，但未接真实执行。
 
 ### 拷问
 
@@ -183,10 +294,12 @@ Tab 栏 `+` 是“新建 Tab 菜单”，不是“新建 Markdown”。
 
 ### 方案
 
-会话按“是否是可恢复工作现场”分为两类：
+会话按项目归属组织。只要当前有激活项目，新会话就挂靠当前项目；没有激活项目时，新会话挂靠默认项目 / 未归档。
+
+会话展示形态分为两类：
 
 ```text
-即时助手会话：右侧 Agent Panel，轻量、跟随当前工作
+即时助手会话：右侧 Agent Panel，属于当前项目，轻量协作
 工作会话：Workbench conversation Tab，归属工作空间，可恢复、可长期保存
 ```
 
@@ -195,7 +308,7 @@ Tab 栏 `+` 是“新建 Tab 菜单”，不是“新建 Markdown”。
 ```text
 conversation
 ├─ surface: assistant-panel | workbench-tab
-├─ workspaceRef
+├─ workspaceRef / projectRef
 ├─ runtime
 │  ├─ location: local | remote
 │  ├─ transport: local | direct | cclink
@@ -203,12 +316,37 @@ conversation
 └─ sessionId / messages / artifacts / status
 ```
 
+右侧 Agent Panel 内部布局：
+
+```text
+主对话区 | 会话列表窄列
+```
+
+会话列表窄列必须在主对话区右边，只展示当前项目的激活会话；底部展开已关闭历史。
+
+输入增强规则：
+
+```text
+/ 挂 Skill
+@ 挂资源：项目文件、文档 Tab、浏览器 Tab、Android/设备 Tab、任务产物等
+```
+
+会话顶端展示当前会话已挂载资源横列；输入区底部选择 Agent 框架、模型和推理模式。Skill、模型、Provider、API Key、默认模式等长期配置全部进入设置页。
+
 ### 验收标准
 
-- 右侧“新会话”创建即时助手会话，不自动占用主工作区 Tab。
+- 有激活项目时，右侧“新会话”创建当前项目即时助手会话，不自动占用主工作区 Tab。
+- 无激活项目时，右侧“新会话”创建默认项目 / 未归档即时助手会话。
+- 右侧 Agent Panel 的会话列表窄列在主对话区右边。
+- 会话列表窄列只展示当前项目激活会话。
+- 会话列表底部能展开当前项目已关闭历史并恢复会话。
+- 会话顶端展示已挂载资源横列。
+- 输入框 `/` 能挂 Skill。
+- 输入框 `@` 能挂资源。
+- 输入区底部能选择 Agent 框架、模型、推理模式。
+- Skill、模型、Provider 等长期配置不出现在 Agent Panel 中，只在设置页。
 - 工作空间里的“新建工作会话”创建 `conversation` Tab。
 - 远程会话不叫 CCLink 会话，只显示运行位置和连接通道。
-- 工作空间侧栏只展示当前工作空间绑定的工作会话，不混入右侧即时助手最近会话。
 - 关闭工作会话 Tab 只关闭视图，不删除会话；删除必须是显式动作。
 - 隐藏右侧面板、切换布局、关闭某个 Tab，不导致消息流丢失。
 
@@ -453,9 +591,12 @@ Terminal Tab
 - 新增 `src/main/terminal/terminal-audit-store.ts`，本地持久化 Terminal 审计事件。
 - 新增 `src/main/terminal/terminal-session-state.ts`，提供 Terminal session 状态机，拦截非法生命周期迁移。
 - 新增 `src/main/terminal/terminal-session-registry.ts`，提供主进程内存 session 登记、查询、状态迁移和移除边界。
-- 新增 `src/main/terminal/terminal-command-orchestrator.ts`，把命令提交前的权限判定、确认请求、审计写入、session 状态迁移和 execution adapter 派发串成可测试闭环；当前返回 `execution: not-started`，不启动 shell。
+- 新增 `src/main/terminal/terminal-command-orchestrator.ts`，把命令提交前的权限判定、确认请求、审计写入、session 状态迁移和 execution adapter 派发串成可测试闭环；执行后端成功接收时返回 `execution: started`。
 - 新增 `src/main/terminal/terminal-execution-adapter.ts`，定义未来本地 shell、远程 shell、Codex/custom backend 的统一执行适配器接口。
-- 新增 `src/main/terminal/terminal-noop-execution-adapter.ts`，提供不会执行 shell 的 no-op backend；所有执行操作都会 emit 结构化 `RemoteError` 并抛出 `REMOTE_EXECUTION_BACKEND_UNAVAILABLE`。
+- 新增 `src/main/terminal/terminal-local-shell-adapter.ts`，用本地 shell 子进程执行本地 Terminal 命令。
+- 新增 `src/main/terminal/terminal-cclink-execution-adapter.ts`，通过 CCLink `terminal_command/terminal_output` 执行远程单命令。
+- 新增 `src/main/terminal/terminal-composite-execution-adapter.ts`，按 runtime 路由 local / cclink 执行后端。
+- 新增 `src/main/terminal/terminal-noop-execution-adapter.ts`，保留不会执行 shell 的 no-op backend，用于未接后端的结构化错误测试。
 - 新增 `src/main/terminal/terminal-permission.ts`，提供命令风险分类和 `allow/confirm/deny` 权限判定。
 - 新增 `src/main/terminal/terminal-confirmation-service.ts`，提供 Terminal 命令确认请求、60 秒超时拒绝、窗口销毁拒绝、发送失败拒绝和审计写入。
 - 新增 `src/main/ipc/terminal-ipc.ts`、`src/shared/ipc/terminal.ts`、preload `terminal` API，把 Terminal 确认请求/响应、审计查询/清理接入 IPC 边界。
@@ -464,45 +605,234 @@ Terminal Tab
 - 新增 `src/renderer/src/utils/terminal-confirmation.ts`，集中维护 Terminal 风险/来源/运行位置/超时显示。
 - 新增 `src/renderer/src/utils/terminal-tab.ts`，集中生成本地 / 远程 / 未归档工作空间的 Terminal Tab 占位 runtime 和权限策略。
 - 新增 `src/renderer/src/utils/terminal-lifecycle.ts`，把 Terminal 创建、关闭、终止语义通过受限 IPC 写入审计。
+- 新增 `src/renderer/src/utils/terminal-command.ts`，把 Terminal Tab 的用户命令提交到受限 IPC，并在恢复后的 session 缺失时重新登记生命周期后重试一次。
 - `terminal:recordLifecycleEvent` 已接入 `TerminalSessionRegistry`：`created` 带 runtime 时登记 session，`closed` 移除 session，`terminated` 对可迁移 session 收口到 `exited` 后移除。
 - `terminal:listSessions` 已提供只读 session 快照查询，用于设置页诊断 Registry 与 Tab 生命周期是否对齐。
-- `terminal:submitCommand` 已提供受限提交 IPC，输入会先做 actor、命令和权限策略规整，成功结果仍固定为 `execution: not-started`；权限通过后会触达 no-op adapter 并把未接入 backend 写入结构化 error 审计。
+- `terminal:submitCommand` 已提供受限提交 IPC，输入会先做 actor、命令和权限策略规整；权限通过后会触达 composite execution adapter，把输出、退出和错误事件推给 renderer，并写入审计。
+- `terminal:executionEvent` 已通过 preload 暴露给 renderer，Terminal Tab 输出面板可显示 stdout/stderr/system/error。
 - `src/renderer/src/utils/close-tab.ts` 已识别 Terminal 活跃状态与 `closePolicy`；活跃 Terminal 关闭前需要确认结束进程或只关闭视图。
 - 设置页 `Agent` 分组新增 `Terminal 审计`，可查看当前 Terminal session 快照、最近 30 条审计事件、刷新和清空全部审计。
 - `TabType` 已新增 `terminal`，`Tab` 已新增 `terminal?: TerminalTabRef`。
-- Workbench 新建菜单已提供 `Terminal` 项；Terminal Tab 有明确“尚未接入真实 shell”占位，避免创建或快照恢复后出现空白工作区。
+- Workbench 新建菜单已提供 `Terminal` 项；Terminal Tab 已有受控命令入口和输出面板，避免创建或快照恢复后出现空白工作区。
 - Tab store 已支持 Terminal Tab 快照恢复，能保留 `workspaceRef/runtime/permissionPolicy/closePolicy/auditLogId`。
 - Terminal 审计测试已覆盖写入、重载、按 session/workspace 过滤、limit 和清理。
 - Terminal 权限测试已覆盖只读、写入、网络、破坏、提权、unknown、allowlist/denylist 和四种策略模式。
 - Terminal 确认服务测试已覆盖请求结构、允许/拒绝、超时、窗口销毁、发送失败、服务销毁和审计失败不阻塞确认。
 - Terminal IPC / 前端状态测试已覆盖确认结果回传、受限命令提交、session 快照查询、审计查询/清理、生命周期事件同步 registry、未命中 pending、队列添加、去重和移除。
 - Terminal UI 辅助测试已覆盖风险/来源标签、运行位置和超时显示。
+- Terminal 命令提交辅助测试已覆盖正常提交、空命令拦截、恢复后 session 缺失时重新登记并重试。
+- Terminal 本地 shell adapter 测试已覆盖启动、stdout/stderr、写入和终止。
+- Terminal CCLink 远程 adapter 测试已覆盖 `terminal_command`、`terminal_output` 和远端离线结构化错误。
 - Terminal session 状态测试已覆盖创建、`idle -> starting -> running -> blocked -> running -> exited` 生命周期、终态拦截、重复登记、未知 session 和移除清理。
-- Terminal 空执行编排测试已覆盖低风险命令直通、风险命令确认、确认拒绝、只读策略拒绝、缺失/忙碌 session 拒绝、adapter start/write 派发失败审计；所有成功结果都明确为 `execution: not-started`。
+- Terminal 执行编排测试已覆盖低风险命令直通、风险命令确认、确认拒绝、只读策略拒绝、缺失/忙碌 session 拒绝、adapter start/write 派发失败审计；adapter 成功时返回 `execution: started`，失败时返回 `execution: not-started`。
 - Terminal no-op 执行适配器测试已覆盖 start/write/resize/terminate 的结构化错误、事件派发和监听取消。
 
-仍未接入真实 shell、PTY 和远程 Terminal transport。当前只能创建受控占位 Terminal Tab、通过受限 IPC 走一遍权限/确认/审计链路、查看只读 session 诊断与最小审计入口、确认活跃 Terminal 关闭语义，记录 created/closed/terminated 生命周期审计，并在主进程内用状态机、Registry、空执行编排器和 no-op 执行适配器约束 session/命令提交生命周期；还没有真实执行输出、退出码和真实进程管理。
+仍未接入完整 PTY 和 Direct Remote。当前能创建受控 Terminal Tab、从 Tab 内提交命令到权限/确认/审计/执行链路、显示本地 shell 输出、通过 CCLink 发送远程单命令、查看只读 session 诊断与最小审计入口、确认活跃 Terminal 关闭语义，并在主进程内用状态机、Registry、执行编排器和 adapter 约束 session/命令生命周期。
 
 ### 拷问
 
 Terminal 不应该作为“顺手加个 Tab 类型”实现。它是权限系统、远程执行、审计、进程生命周期的交汇点。
 
+## M7：项目内运营助手
+
+### 解决什么问题
+
+DeepInk 需要先服务真实项目的宣发、上线、内测和账号运营，但第一版不能做成复杂的社媒管理平台。
+
+用户真正需要的是：
+
+```text
+在项目目录里写文案、保存平台信息、打开平台页面、让 Agent 填内容、发布前确认、结果写回项目文档。
+```
+
+工作区仍然是项目目录。平台不是工作区，平台只是项目里的配置；会话负责完成文案或网页操作任务。
+
+### 方案
+
+项目目录约定：
+
+```text
+项目目录
+├─ README.md
+├─ docs/
+│  ├─ 宣发方案.md
+│  ├─ 公众号首发稿.md
+│  ├─ 知乎版本.md
+│  └─ 发布记录.md
+└─ deepink-accounts.json
+```
+
+`deepink-accounts.json` 只保存平台入口和账号备注，不存密码：
+
+```json
+{
+  "version": 1,
+  "platforms": [
+    {
+      "id": "wechat-mp",
+      "name": "微信公众号",
+      "url": "https://mp.weixin.qq.com",
+      "account": "DeepInk",
+      "notes": "扫码登录；发布前必须人工确认。",
+      "browserProfile": "wechat-mp"
+    }
+  ]
+}
+```
+
+密码、Token、恢复码等秘密信息不进入项目可见文件；后续如果接入密码能力，只在文件里保存加密凭据引用。
+
+会话拆成两类任务形态：
+
+- **文案会话**：读取项目资料，写/改 Markdown，产物保存到项目文件。
+- **平台操作会话**：读取平台配置和文案文件，打开浏览器 profile，填表、上传、截图，提交前确认。
+
+详见 `docs/features/project-operations-assistant.md`。
+
+### 阶段拆分
+
+1. `M7.1 项目账号配置文件`
+2. `M7.2 文案会话写入项目文档`
+3. `M7.3 平台浏览器 Profile`
+4. `M7.4 平台操作会话`
+5. `M7.5 发布记录`
+
+### M7.1：项目账号配置文件
+
+目标：让项目目录声明平台入口和账号备注。
+
+方案：
+
+- 定义 `deepink-accounts.json` schema。
+- 提供读取和校验工具。
+- 在当前工作空间上下文中暴露平台列表。
+- 缺失文件时给出可创建的模板。
+
+验收：
+
+- 能读取 `id/name/url/account/notes/browserProfile`。
+- JSON 错误能定位字段和路径。
+- 缺少配置时不影响普通项目使用。
+- 不存密码，不要求用户先接入密码库。
+
+### M7.2：文案会话写入项目文档
+
+目标：让 Agent 根据当前项目资料生成和改写 Markdown 文案。
+
+方案：
+
+- 文案会话读取 README、docs、发布记录等项目资料。
+- 复用现有 Markdown 编辑器和 editor MCP 工具写入文件。
+- 用户指定目标路径，例如 `docs/公众号首发稿.md`。
+
+验收：
+
+- 能根据项目资料生成一篇宣发稿。
+- 能把同一稿件改写成不同平台版本。
+- 所有产物都落在当前项目目录。
+- 关闭和重启后文案仍能从项目文件恢复。
+
+### M7.3：平台浏览器 Profile
+
+目标：让平台登录态跟平台配置关联。
+
+方案：
+
+- `browserProfile` 映射到独立浏览器持久化上下文。
+- 打开平台时按 profile 恢复 Cookie 和站点状态。
+- UI 显示当前页面使用的 profile。
+
+验收：
+
+- 微信公众号和知乎可以使用不同 profile。
+- 手动登录后，重启 DeepInk 仍能恢复登录态。
+- 同一项目内不同平台不会串 Cookie。
+- 未登录时清楚提示用户手动登录，不尝试绕过验证码或 2FA。
+
+### M7.4：平台操作会话
+
+目标：让 Agent 打开平台并把项目文案填到网页中。
+
+方案：
+
+- Agent 读取 `deepink-accounts.json`。
+- Agent 读取目标 Markdown 文件。
+- Browser tab 使用对应 profile 打开平台。
+- Agent 可见地填标题、正文、素材和必要字段。
+- 高风险动作走确认卡片。
+
+验收：
+
+- 能打开配置中的平台 URL。
+- 能把指定 Markdown 填入页面编辑器。
+- 发布、提交、删除、修改资料前必须确认。
+- 失败时保留页面现场、错误说明和下一步建议。
+
+### M7.5：发布记录
+
+目标：把运营结果写回项目文件。
+
+方案：
+
+- 发布成功或用户标记成功后，追加 `docs/发布记录.md`。
+- 记录平台、账号备注、文案文件、URL、时间、状态和备注。
+- 取消、失败和待审核也能记录。
+
+验收：
+
+- 同一文案多平台发布能形成多条记录。
+- 发布失败或取消不会丢失上下文。
+- 后续打开项目能看到历史发布记录。
+
+### 当前状态
+
+M7.1-M7.5 已实现，进入人工验收：
+
+- 新增 `src/main/project-ops/project-ops-service.ts` 和 IPC，支持项目账号配置、文案草稿、发布记录。
+- preload 暴露 `window.deepink.projectOps`。
+- 工作空间侧栏新增“项目运营”区。
+- 可创建 `deepink-accounts.json` 模板。
+- 兼容读取旧 `.deepink/accounts.json`，但新建和文档约定统一使用项目根目录可见文件。
+- 可按平台创建文案草稿和文案工作会话。
+- 可按平台打开浏览器并创建平台操作会话。
+- 浏览器 Tab 支持 `browserProfile`，主进程使用独立持久化 partition 隔离平台登录态。
+- 可追加 `docs/发布记录.md`。
+- 验证：`pnpm test -- --run`、`pnpm build` 通过。
+
+缺口：
+
+- 平台操作会话第一版是“创建会话并预填明确任务”，不是全自动发布流水线。
+- 发布确认依赖 Agent 执行过程中的权限/确认语义和用户人工判断；尚未做平台级专用确认卡片。
+- 还没有评论定时维护，只支持打开页面后由会话读取、总结和写回。
+
+### 拷问
+
+如果 M7 做成“账号管理器”，会立刻进入密码、2FA、风控和合规深水区，拖慢真实宣发。
+
+如果 M7 做成“社媒运营平台”，会绕开 DeepInk 已有的浏览器和 Markdown 优势，重复造壳。
+
+第一版只验收一件事：能不能在一个真实项目里写一篇文案、打开一个真实平台、填好内容、确认提交、把结果写回项目文档。
+
 ## 推进顺序
 
 当前最合理顺序：
 
-1. **先验收 M1/M2/M3**：确认入口、工作空间、Tab 归属没有继续跑偏。
-2. **再收口 M4**：统一本地/远程 conversation shell，补关闭、删除、归档、恢复语义。
-3. **再推进 M5**：把 CCLink provider 和未来 Direct provider 放进统一远程能力层。
-4. **最后推进 M6**：Terminal 先做权限和生命周期，再做真实 shell。
+1. **先验收 M0.5**：确认未登录工作台、本机身份、工作现场恢复没有阻塞。
+2. **并行推进 M7 与 M5/M6**：M7 服务宣发运营；M5/M6 服务远程项目维护。
+3. **M7 先打真实任务闭环**：项目配置、Markdown 文案、浏览器 profile、提交确认、发布记录。
+4. **M5/M6 继续补远程闭环**：Direct Remote、完整 PTY、远程错误和执行体验。
 
 暂时不做：
 
 - 不新增远程 Agent 面板。
 - 不新增 CCLink Activity Bar。
 - 不把 Android 管理恢复成一级入口。
+- 不继续推进本地 Android 模拟器。
+- 不继续推进云手机。
 - 不先做 Terminal 真 shell。
 - 不把 Word/PPT 做成无闭环假 Tab。
+- 不把项目运营做成独立社媒管理平台。
+- 不做密码库和全自动登录。
 
 ## 2026-07-11 代码级验收记录
 
@@ -571,8 +901,8 @@ Terminal 不应该作为“顺手加个 Tab 类型”实现。它是权限系统
 - 右侧 Agent Panel 的会话 `×` 已改为“归档会话”，并新增“已归档 N”最小恢复入口；归档列表内的删除才会真正清除本地会话。
 - 已归档的本地工作会话即使仍有 Workbench Tab 打开，也会进入只读状态；必须先恢复，才能继续发送消息。
 - 已补启动恢复组合测试，证明工作会话 Tab 与对应本地会话数据可从同一工作空间快照中一起恢复。
-- 右侧 Agent Panel 会话列表只展示即时助手会话；新建工作会话不会抢占右侧 active，会话“移到工作空间”后会自动创建新的即时助手会话承接右侧入口。
-- 右侧会话栏补充“即时助手”标签，与工作空间侧栏里的“工作会话”文案形成区分。
+- 右侧 Agent Panel 后续口径已调整为“当前项目会话工作区”：会话列表窄列在主对话区右边，只展示当前项目激活会话；新建工作会话不会抢占右侧 active。
+- 右侧会话栏不再作为全局历史中心；已关闭历史从会话列表底部展开。
 - CCLink 远程会话新增 DeepInk 本地归档覆盖层：归档只影响当前桌面端侧栏显示，不删除远端历史；恢复后可重新显示和打开。
 - Agent 流式事件写入已从 `AgentPanel` 挂载状态中解耦；即使右侧面板隐藏，后端 stream / complete / error 事件仍会写入对应会话。
 
@@ -646,6 +976,25 @@ Terminal 不应该作为“顺手加个 Tab 类型”实现。它是权限系统
 - [x] Terminal 接入真实 shell 前有命令风险分类和权限判定器。
 - [x] Terminal 接入真实 shell 前有权限确认 UI 和审计可视化入口。
 - [x] Terminal 接入真实 shell 前能从工作区 Tab 菜单创建受控占位 Tab。
+- [x] Terminal 接入真实 shell 前能从 Tab 内提交命令到权限、确认和审计链路。
 - [x] Terminal 接入真实 shell 前活跃 Tab 关闭会按 `closePolicy` 二次确认。
 - [x] Terminal 接入真实 shell 前创建/关闭/终止语义能写入审计链路。
 - [x] Terminal 接入真实 shell 前有 no-op 执行适配器和结构化“未接入 backend”错误。
+- [x] Terminal 本地工作空间可执行受控本地 shell 命令并显示输出。
+- [x] Terminal CCLink 远程工作空间可通过 `terminal_command/terminal_output` 执行单命令并显示输出。
+- [ ] Terminal 完整 PTY、resize、交互式程序支持。
+- [ ] Direct Remote Terminal provider。
+
+### M7 验收
+
+- [x] 当前项目可读取 `deepink-accounts.json`。
+- [x] 缺少项目账号配置时，能给出最小模板建议。
+- [x] 文案会话能根据项目资料生成 Markdown 并保存到项目目录。
+- [x] 文案会话能把同一稿件改写为不同平台版本。
+- [x] 平台配置能声明并使用 `browserProfile`。
+- [x] 不同平台 profile 登录态互不串扰，重启后可恢复。
+- [x] 平台操作会话能读取平台配置和目标 Markdown。
+- [x] Agent 能打开平台页面并把 Markdown 填入网页编辑器。
+- [x] 发布、提交、删除、修改账号资料前必须确认。
+- [x] 发布成功、失败、取消都能追加到 `docs/发布记录.md`。
+- [x] 第一版不存密码，不做全自动登录，不做独立社媒管理后台。

@@ -34,8 +34,8 @@ describe('useUIStore', () => {
 
     it('点击不同面板 → 展开侧栏并切换', () => {
       const { setActivePanel } = useUIStore.getState()
-      setActivePanel('search')
-      expect(useUIStore.getState().activePanel).toBe('search')
+      setActivePanel('operations')
+      expect(useUIStore.getState().activePanel).toBe('operations')
       expect(useUIStore.getState().sidebarVisible).toBe(true)
     })
 

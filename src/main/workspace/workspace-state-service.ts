@@ -11,6 +11,7 @@ interface WorkspaceStateFile {
 
 const CURRENT_FILE_VERSION = 1
 const GLOBAL_WORKSPACE_ID = 'global'
+const LEGACY_OWNER_KEY: string | null = null
 
 /**
  * 文件级 migration 注册表：key 为源版本号，value 为「该版本 → 下一版本」的升级函数。
@@ -44,15 +45,27 @@ function migrateWorkspaceStateFile(raw: unknown): WorkspaceStateFile {
   }
 }
 
-function getWorkspaceId(workspaceKey?: string | null): string {
+function getLegacyWorkspaceId(workspaceKey?: string | null): string {
   if (!workspaceKey) return GLOBAL_WORKSPACE_ID
   return createHash('sha256').update(workspaceKey).digest('hex').slice(0, 16)
 }
 
-function createEmptySnapshot(workspaceKey?: string | null): WorkspaceStateSnapshot {
+function getWorkspaceId(workspaceKey?: string | null, ownerKey?: string | null): string {
+  if (!ownerKey) return getLegacyWorkspaceId(workspaceKey)
+  return createHash('sha256')
+    .update(`${ownerKey}\0${workspaceKey || GLOBAL_WORKSPACE_ID}`)
+    .digest('hex')
+    .slice(0, 16)
+}
+
+function createEmptySnapshot(
+  workspaceKey?: string | null,
+  ownerKey?: string | null,
+): WorkspaceStateSnapshot {
   return {
     version: 1,
-    workspaceId: getWorkspaceId(workspaceKey),
+    workspaceId: getWorkspaceId(workspaceKey, ownerKey),
+    ownerKey: ownerKey || LEGACY_OWNER_KEY,
     workspaceKey: workspaceKey || null,
     workspacePath: workspaceKey || null,
     updatedAt: Date.now(),
@@ -60,12 +73,18 @@ function createEmptySnapshot(workspaceKey?: string | null): WorkspaceStateSnapsh
   }
 }
 
-function normalizeSnapshot(snapshot: WorkspaceStateSnapshot): WorkspaceStateSnapshot {
+function normalizeSnapshot(
+  snapshot: WorkspaceStateSnapshot,
+  ownerKey?: string | null,
+  workspaceKeyOverride?: string | null,
+): WorkspaceStateSnapshot {
   const workspaceKey = snapshot.workspaceKey ?? snapshot.workspacePath ?? null
   return {
     ...snapshot,
-    workspaceKey,
-    workspacePath: snapshot.workspacePath ?? workspaceKey,
+    workspaceId: getWorkspaceId(workspaceKeyOverride ?? workspaceKey, ownerKey ?? snapshot.ownerKey),
+    ownerKey: ownerKey ?? snapshot.ownerKey ?? LEGACY_OWNER_KEY,
+    workspaceKey: workspaceKeyOverride ?? workspaceKey,
+    workspacePath: workspaceKeyOverride ?? snapshot.workspacePath ?? workspaceKey,
     sections: { ...snapshot.sections },
   }
 }
@@ -94,17 +113,32 @@ export class WorkspaceStateService {
     }
   }
 
-  getSnapshot(workspaceKey?: string | null): WorkspaceStateSnapshot {
-    const id = getWorkspaceId(workspaceKey)
+  getSnapshot(workspaceKey?: string | null, ownerKey?: string | null): WorkspaceStateSnapshot {
+    const id = getWorkspaceId(workspaceKey, ownerKey)
     const snapshot = this.state.workspaces[id]
-    if (snapshot) return normalizeSnapshot(snapshot)
-    return createEmptySnapshot(workspaceKey)
+    if (snapshot) return normalizeSnapshot(snapshot, ownerKey, workspaceKey)
+
+    if (ownerKey) {
+      const legacySnapshot = this.state.workspaces[getLegacyWorkspaceId(workspaceKey)]
+      if (legacySnapshot) {
+        return normalizeSnapshot(legacySnapshot, ownerKey, workspaceKey)
+      }
+    }
+
+    return createEmptySnapshot(workspaceKey, ownerKey)
   }
 
-  async setSection(workspaceKey: string | null | undefined, section: string, value: unknown): Promise<WorkspaceStateSnapshot> {
-    const current = this.getSnapshot(workspaceKey)
+  async setSection(
+    workspaceKey: string | null | undefined,
+    section: string,
+    value: unknown,
+    ownerKey?: string | null,
+  ): Promise<WorkspaceStateSnapshot> {
+    const current = this.getSnapshot(workspaceKey, ownerKey)
     const next: WorkspaceStateSnapshot = {
       ...current,
+      workspaceId: getWorkspaceId(workspaceKey, ownerKey),
+      ownerKey: ownerKey || LEGACY_OWNER_KEY,
       workspaceKey: workspaceKey || null,
       workspacePath: workspaceKey || null,
       updatedAt: Date.now(),
@@ -118,8 +152,8 @@ export class WorkspaceStateService {
     return { ...next, sections: { ...next.sections } }
   }
 
-  async clear(workspaceKey?: string | null): Promise<void> {
-    delete this.state.workspaces[getWorkspaceId(workspaceKey)]
+  async clear(workspaceKey?: string | null, ownerKey?: string | null): Promise<void> {
+    delete this.state.workspaces[getWorkspaceId(workspaceKey, ownerKey)]
     await this.saveState()
   }
 

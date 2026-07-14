@@ -6,13 +6,17 @@
  */
 
 import { create } from 'zustand'
-import type { UserProfile } from '../types'
+import type { LocalIdentity, UserProfile } from '../types'
 
 interface AuthState {
-  /** 是否已登录 */
+  /** 是否已登录云账号；未登录也可以使用本机工作台。 */
   loggedIn: boolean
   /** 当前用户资料 */
   user: UserProfile | null
+  /** 本机默认身份，用于未登录状态下归属本地工作现场。 */
+  localIdentity: LocalIdentity | null
+  /** 本机身份是否已初始化。 */
+  identityReady: boolean
   /** 是否正在检查登录状态（启动时为 true） */
   checking: boolean
   /** 手机号输入 */
@@ -27,6 +31,8 @@ interface AuthState {
   error: string | null
 
   // --- Actions ---
+  /** 设置本机身份 */
+  setLocalIdentity: (identity: LocalIdentity) => void
   /** 设置登录状态（checkSession / 登录成功 / 登出时调用） */
   setLoggedIn: (loggedIn: boolean, user: UserProfile | null) => void
   /** 设置 checking 状态 */
@@ -50,12 +56,17 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   loggedIn: false,
   user: null,
+  localIdentity: null,
+  identityReady: false,
   checking: true,
   phoneInput: '',
   codeInput: '',
   codeCountdown: 0,
   loading: false,
   error: null,
+
+  setLocalIdentity: (localIdentity) =>
+    set({ localIdentity, identityReady: true }),
 
   setLoggedIn: (loggedIn, user) =>
     set({ loggedIn, user, checking: false, loading: false, error: null }),
@@ -78,6 +89,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   skipLogin: () =>
     set({
       loggedIn: true,
+      identityReady: true,
       checking: false,
       loading: false,
       user: {

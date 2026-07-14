@@ -37,7 +37,6 @@ describe('bootstrap command modules', () => {
     const ids = new Set(createAllCommands().map((command) => command.id))
     expect(ids).toContain('workbench.newTab')
     expect(ids).toContain('browser.newTab')
-    expect(ids).toContain('android.newTab')
     expect(ids).toContain('workbench.closeTab')
     expect(ids).toContain('workbench.focusAgentPanel')
     expect(ids).toContain('agent.newConversation')

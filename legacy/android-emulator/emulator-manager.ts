@@ -1,24 +1,24 @@
 import { spawn, execFile, type ChildProcess } from 'child_process'
-import type { ScrcpyBridge } from './scrcpy-bridge'
+import type { ScrcpyBridge } from '../../src/main/android/scrcpy-bridge'
 import { promisify } from 'util'
 import { existsSync, unlinkSync, statSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { BrowserWindow } from 'electron'
-import { AdbBridge } from './adb-bridge'
-import { ensureStoreInstalled } from './store-installer'
-import type { EmulatorState } from '../../shared/ipc/android'
+import { AdbBridge } from '../../src/main/android/adb-bridge'
+import { ensureStoreInstalled } from '../../src/main/android/store-installer'
+import type { EmulatorState } from '../../src/shared/ipc/android'
 import {
   getEmulatorPath as getBundledEmulatorPath,
   getExternalSdkRoots,
   getSdkRoot,
   withExe,
   isWindows,
-} from './android-platform'
+} from '../../src/main/android/android-platform'
 
 const execFileAsync = promisify(execFile)
 
-export type { EmulatorState } from '../../shared/ipc/android'
+export type { EmulatorState } from '../../src/shared/ipc/android'
 
 /**
  * Android 模拟器管理器

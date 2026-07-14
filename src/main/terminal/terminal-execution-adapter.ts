@@ -1,10 +1,10 @@
 import type {
   TerminalBackend,
   TerminalCommandActor,
+  TerminalExecutionEvent,
   TerminalRuntimeRef,
   TerminalStatus,
 } from '../../shared/terminal'
-import type { RemoteError } from '../../shared/remote-error'
 
 export interface TerminalSize {
   columns: number
@@ -29,43 +29,6 @@ export interface TerminalStartResult {
   status: Extract<TerminalStatus, 'running' | 'blocked'>
   processId?: string | number
 }
-
-export type TerminalExecutionEvent =
-  | {
-      kind: 'started'
-      sessionId: string
-      processId?: string | number
-      timestamp: number
-    }
-  | {
-      kind: 'output'
-      sessionId: string
-      data: string
-      stream: 'stdout' | 'stderr'
-      timestamp: number
-    }
-  | {
-      kind: 'blocked'
-      sessionId: string
-      command: string
-      reason: string
-      actor: TerminalCommandActor
-      timestamp: number
-    }
-  | {
-      kind: 'exit'
-      sessionId: string
-      exitCode?: number
-      signal?: string
-      timestamp: number
-    }
-  | {
-      kind: 'error'
-      sessionId: string
-      message: string
-      remoteError?: RemoteError
-      timestamp: number
-    }
 
 export type TerminalExecutionEventListener = (event: TerminalExecutionEvent) => void
 

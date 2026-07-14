@@ -14,7 +14,6 @@ export async function shutdownRuntime(runtime: DeepInkRuntimeState): Promise<voi
   registry.register({ name: 'ActiveDeviceManager', stop: () => runtime.activeDeviceManager?.destroy() })
   registry.register({ name: 'AgentDeviceManager', stop: () => runtime.agentDeviceManager?.destroy() })
   registry.register({ name: 'PhysicalDeviceManager', stop: () => runtime.physicalDeviceManager?.disconnect() })
-  registry.register({ name: 'EmulatorManager', stop: () => runtime.emulatorManager?.destroy() })
   registry.register({ name: 'EditorModule', stop: () => runtime.editorModule?.destroy() })
   registry.register({ name: 'PermissionManager', stop: () => runtime.permissionManager?.destroy() })
   registry.register({ name: 'TerminalConfirmationService', stop: () => runtime.terminalConfirmationService?.destroy() })

@@ -5,6 +5,8 @@ beforeEach(() => {
   useAuthStore.setState({
     loggedIn: false,
     user: null,
+    localIdentity: null,
+    identityReady: false,
     checking: true,
     phoneInput: '',
     codeInput: '',
@@ -15,6 +17,24 @@ beforeEach(() => {
 })
 
 describe('useAuthStore', () => {
+  describe('setLocalIdentity', () => {
+    it('设置本机身份并标记初始化完成', () => {
+      const identity = {
+        localId: 'local_1',
+        deviceId: 'device_1',
+        deviceName: 'Mac',
+        createdAt: 1,
+        updatedAt: 1,
+        boundCloudUserId: null,
+      }
+
+      useAuthStore.getState().setLocalIdentity(identity)
+
+      expect(useAuthStore.getState().localIdentity).toEqual(identity)
+      expect(useAuthStore.getState().identityReady).toBe(true)
+    })
+  })
+
   describe('setLoggedIn', () => {
     it('登录成功：设置用户并清理 checking/loading/error', () => {
       const user = {

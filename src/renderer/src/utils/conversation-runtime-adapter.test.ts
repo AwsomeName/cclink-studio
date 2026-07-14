@@ -27,6 +27,8 @@ function localConversation(
     streamingMessageId: null,
     lastCost: null,
     scope: { kind: 'all' },
+    mountedResources: [],
+    mountedSkills: [],
     createdAt: 1,
     updatedAt: 1,
     archivedAt: null,

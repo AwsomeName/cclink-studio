@@ -48,7 +48,12 @@ const UI_DEFAULTS = {
 }
 
 const UI_STORAGE_KEY = 'deepink-ui-state'
-const VISIBLE_ACTIVITY_PANELS = new Set<ActivityPanel>(['files', 'search', 'browser'])
+const VISIBLE_ACTIVITY_PANELS = new Set<ActivityPanel>([
+  'browser',
+  'files',
+  'operations',
+  'sessions',
+])
 
 function normalizeActivityPanel(panel: unknown): ActivityPanel {
   return typeof panel === 'string' && VISIBLE_ACTIVITY_PANELS.has(panel as ActivityPanel)

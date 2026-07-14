@@ -12,6 +12,7 @@ function snapshot(
   return {
     version: 1,
     workspaceId: workspacePath ?? 'global',
+    ownerKey: null,
     workspaceKey: workspacePath,
     workspacePath,
     updatedAt: 1,

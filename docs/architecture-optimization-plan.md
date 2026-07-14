@@ -410,6 +410,126 @@ pnpm build
 pnpm verify
 ```
 
+## Phase 7：本地优先身份与未登录工作台
+
+目标：DeepInk 不登录也能进入本地工作台，并按本地身份恢复工作现场。登录只作为云能力开关。
+
+关联规格：`docs/features/local-first-identity.md`。
+
+### 7.1 主进程本地身份服务
+
+新增：
+
+```text
+src/main/identity/
+├── local-identity-service.ts
+└── local-identity-service.test.ts
+```
+
+职责：
+
+- 启动时生成或读取 `userData/local-identity.json`。
+- 生成稳定 `localId`、`deviceId`、`deviceName`。
+- 损坏文件可恢复，不阻塞 App 启动。
+
+IPC：
+
+```text
+identity:getLocalIdentity
+```
+
+preload：
+
+```ts
+window.deepink.identity.getLocalIdentity()
+```
+
+验收：
+
+- 首次启动生成本地身份。
+- 重启后 ID 不变。
+- 删除/损坏文件后可重新生成。
+
+### 7.2 认证 Store 语义重构
+
+当前：
+
+```text
+loggedIn: boolean
+user: UserProfile | null
+```
+
+目标：
+
+```text
+localIdentity: LocalIdentity | null
+cloudUser: UserProfile | null
+cloudLoggedIn: boolean
+identityReady: boolean
+```
+
+兼容期可保留 `loggedIn`，但语义必须只代表 cloud session，不能再决定 App 是否挂载主工作台。
+
+验收：
+
+- 无 token 时 `identityReady = true`，`cloudLoggedIn = false`。
+- 有 token 时本地身份和云用户同时存在。
+- 登出只清云用户，不清本地身份。
+
+### 7.3 App 登录守卫重构
+
+当前：
+
+```text
+checking -> Loading
+!loggedIn -> LoginPage
+loggedIn -> MainLayout
+```
+
+目标：
+
+```text
+identityChecking -> Loading
+identityReady -> MainLayout
+LoginPage -> Settings/Account 或可选 modal
+```
+
+验收：
+
+- 未配置 `DEEPINK_API_URL` 仍进入工作台。
+- 无网络仍进入工作台。
+- 登录入口仍可从设置页打开。
+
+### 7.4 WorkspaceState ownerKey
+
+目标：工作台状态归属本地身份。
+
+新增/调整：
+
+- `WorkspaceStateSnapshot.ownerKey?: string`。
+- `WorkspaceStateService.getSnapshot(ownerKey, workspaceKey)` 或等价请求结构。
+- 旧无 owner 数据迁移到当前 `local:${localId}`。
+
+验收：
+
+- 未登录重启恢复 tabs、browserTabs、editorDrafts、agentConversations。
+- 登录/登出不清状态。
+- 旧 `workspace-state.json` 升级不丢状态。
+
+### 7.5 云能力门控
+
+需要云身份的功能：
+
+- CCLink identity / TIM 实时连接。
+- 订阅与支付。
+- 云同步和云存储。
+- IM、好友协作、跨设备。
+
+验收：
+
+- 未登录点击云能力入口提示登录，不影响主工作台。
+- 设置页能同时显示“本机身份”和“云账号”。
+
 ## 推荐执行顺序
 
 1. Phase 0：启动顺序、typecheck 脚本、设置热重载、Agent IPC 优雅降级。
@@ -419,3 +539,4 @@ pnpm verify
 5. Phase 4：WorkspaceStateService。
 6. Phase 5：Renderer 瘦身。
 7. Phase 6：补体系化测试和 CI 门禁。
+8. Phase 7：本地优先身份与未登录工作台。

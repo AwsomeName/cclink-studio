@@ -6,7 +6,7 @@ export type { EmulatorState } from '@shared/ipc/android'
 /** 应用商店引导安装阶段 */
 export type StoreInstallPhase = 'idle' | 'installing' | 'done' | 'failed'
 
-/** 当前活跃设备类型（emulator=模拟器 / physical=物理真机 / null=无活跃设备） */
+/** 当前活跃设备类型（emulator 为历史快照兼容值，当前只主动连接 physical 真机） */
 export type DeviceMode = 'emulator' | 'physical' | null
 
 /** 发现的物理真机（adb，含 unauthorized 便于 UI 引导授权） */
@@ -15,7 +15,7 @@ export type PhysicalDeviceInfo = PhysicalDevice
 /**
  * Android Store
  *
- * 管理 Android 模拟器状态，对标 browser-store.ts。
+ * 管理 Android 设备状态。模拟器字段保留用于历史快照兼容，当前主流程只连接物理真机。
  */
 interface AndroidState {
   /** 模拟器状态 */

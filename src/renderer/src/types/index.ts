@@ -8,11 +8,12 @@ import type { TerminalCommandConfirmationRequest, TerminalTabRef } from '@shared
 // ─── 认证类型 ──────────────────────────────────────
 
 export type { UserProfile, AuthResult, AuthSession } from '@shared/ipc/auth'
+export type { LocalIdentity } from '@shared/ipc/identity'
 
 // ─── UI 类型 ───────────────────────────────────────
 
 /** Activity Bar 面板类型 */
-export type ActivityPanel = 'files' | 'search' | 'browser'
+export type ActivityPanel = 'browser' | 'files' | 'operations' | 'sessions'
 
 /** Workbench Tab 类型 */
 export type TabType =
@@ -34,6 +35,38 @@ export type ConversationRuntimeLocation = 'local' | 'remote'
 export type ConversationTransport = 'local' | RemoteWorkspaceTransport
 
 export type ConversationBackend = 'deepink-agent' | 'codex' | 'claude-code' | 'custom'
+
+export type AgentMountedResourceKind =
+  | 'file'
+  | 'tab'
+  | 'browser'
+  | 'android'
+  | 'terminal'
+  | 'artifact'
+  | 'project'
+
+/** 会话已挂载资源：M3 先作为前端会话状态，M5 再进入发送协议。 */
+export interface AgentMountedResource {
+  id: string
+  kind: AgentMountedResourceKind
+  label: string
+  detail?: string
+  ref: {
+    type: AgentMountedResourceKind
+    path?: string
+    tabId?: string
+    workspaceKey?: string | null
+  }
+}
+
+/** 会话已挂载 Skill：当前会话/当前消息使用的流程能力，长期配置仍归设置页。 */
+export interface AgentMountedSkill {
+  id: string
+  name: string
+  label: string
+  description?: string
+  source?: 'builtin' | 'user' | 'workspace'
+}
 
 /** 会话运行环境：同一类 conversation，可运行在本地或远端。 */
 export type ConversationRuntimeRef = {
@@ -73,6 +106,8 @@ export interface Tab {
   initialContent?: string
   /** 新建/复制浏览器 Tab 时的初始 URL（仅激活创建时消费一次） */
   initialUrl?: string
+  /** 浏览器持久化 Profile，用于隔离平台登录态。 */
+  browserProfile?: string | null
   /** 从快照重建时的视图模式/缩放（仅激活创建时消费一次） */
   restore?: {
     viewMode: 'desktop' | 'mobile'

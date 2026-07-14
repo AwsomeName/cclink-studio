@@ -1,15 +1,16 @@
 import { useUIStore, useTabStore } from '../../stores'
 import type { ActivityPanel } from '../../types'
-import { IconFiles, IconSearch, IconGlobe, IconSettings } from '../common/Icons'
+import { IconFiles, IconGlobe, IconRobot, IconSettings, IconSparkle } from '../common/Icons'
 
 const MAIN_ICONS: Array<{
   id: ActivityPanel
   Icon: React.ComponentType<{ size?: number }>
   label: string
 }> = [
-  { id: 'files', Icon: IconFiles, label: '工作空间' },
-  { id: 'search', Icon: IconSearch, label: '搜索' },
   { id: 'browser', Icon: IconGlobe, label: '浏览器' },
+  { id: 'files', Icon: IconFiles, label: '文件' },
+  { id: 'operations', Icon: IconSparkle, label: '运营' },
+  { id: 'sessions', Icon: IconRobot, label: '会话' },
 ]
 
 export function ActivityBar(): React.ReactElement {

@@ -49,6 +49,7 @@ DeepInk 设置页（VSCode 风格，在主工作区 Tab 中打开）
 **BYOK — 用户自带 Key：**
 
 无论哪种模式，DeepInk 都不提供 AI 服务：
+
 - **Claude Code 模式**：用户在自己终端执行 `claude config set apiKey` 或在 DeepInk 设置页中配置（底层调用 Claude Code 的配置命令）
 - **直连 API 模式**：用户在 DeepInk 设置页中填写 Key，存 macOS Keychain
 
@@ -62,6 +63,23 @@ DeepInk 设置页（VSCode 风格，在主工作区 Tab 中打开）
 2. **透明可观测** — 用户能看到 Agent 的每一步推理和操作
 3. **可中断** — 用户随时可以暂停或取消 Agent 操作
 4. **上下文感知** — Agent 知道用户当前打开的文件、浏览的页面
+
+## Agent Panel 产品模型
+
+Agent Panel 的详细产品模型见 `docs/features/agent-panel-product-model.md`。这里记录 Agent 系统必须遵守的核心规则：
+
+- 有激活项目时，新会话自动归属当前项目。
+- 无激活项目时，新会话归属默认项目 / 未归档。
+- 右侧 Agent Panel 内部采用“主对话区 + 会话列表窄列”布局，**会话列表窄列在主对话区右边**。
+- 会话列表窄列只展示当前项目的激活会话。
+- 会话列表底部提供已关闭历史展开入口。
+- 会话顶端用一行横列展示当前会话已挂载资源。
+- 输入框 `/` 挂 Skill。
+- 输入框 `@` 挂资源，包括项目文件、打开的文档 Tab、浏览器 Tab、Android/设备 Tab、任务产物等。
+- 输入区底部选择 Agent 框架、模型和推理模式。
+- Skill、模型、Provider、API Key、默认模式等长期配置只放设置页。
+
+Agent Panel 负责当前项目会话的使用体验，不负责全局历史管理和复杂配置。
 
 ## 系统架构
 
@@ -145,13 +163,13 @@ const browserTools = {
   browser_navigate: {
     description: '导航到指定 URL',
     parameters: { url: { type: 'string', description: '目标 URL' } },
-    requiresConfirmation: false,  // 只读不修改
+    requiresConfirmation: false, // 只读不修改
     mode: 'async',
   },
   browser_click: {
     description: '点击页面元素',
     parameters: { selector: { type: 'string', description: 'CSS 选择器' } },
-    requiresConfirmation: true,   // 可能触发表单提交
+    requiresConfirmation: true, // 可能触发表单提交
   },
   browser_fill: {
     description: '填写表单字段',
@@ -159,12 +177,12 @@ const browserTools = {
       selector: { type: 'string' },
       value: { type: 'string' },
     },
-    requiresConfirmation: true,   // 写入操作
+    requiresConfirmation: true, // 写入操作
   },
   browser_screenshot: {
     description: '截取当前页面截图',
     parameters: {},
-    requiresConfirmation: false,  // 只读
+    requiresConfirmation: false, // 只读
   },
   browser_extract: {
     description: '提取页面文本内容',
@@ -206,7 +224,11 @@ const browserTools = {
 const editorTools = {
   editor_write: {
     description: '将 Markdown 写入编辑器（替换全部内容），无 Tab 时自动创建',
-    parameters: { content: { type: 'string' }, filePath: { type: 'string' }, title: { type: 'string' } },
+    parameters: {
+      content: { type: 'string' },
+      filePath: { type: 'string' },
+      title: { type: 'string' },
+    },
     requiresConfirmation: false,
   },
   editor_append: {
@@ -283,12 +305,12 @@ const fileTools = {
 
 ### 操作分类
 
-| 类别 | 示例 | 需要确认 |
-|------|------|----------|
-| 只读 | 截图、读取内容、搜索 | ❌ 自动执行 |
-| 轻微修改 | 滚动、导航 | ❌ 自动执行 |
-| 内容修改 | 填写表单、编辑文档 | ✅ 需要确认 |
-| 不可逆操作 | 提交表单、删除文件 | ✅ 需要确认 + 二次确认 |
+| 类别       | 示例                 | 需要确认               |
+| ---------- | -------------------- | ---------------------- |
+| 只读       | 截图、读取内容、搜索 | ❌ 自动执行            |
+| 轻微修改   | 滚动、导航           | ❌ 自动执行            |
+| 内容修改   | 填写表单、编辑文档   | ✅ 需要确认            |
+| 不可逆操作 | 提交表单、删除文件   | ✅ 需要确认 + 二次确认 |
 
 ### 确认 UI
 
@@ -337,7 +359,7 @@ interface AgentContext {
     path: string
     name: string
     type: 'markdown' | 'docx' | 'xlsx' | 'pptx' | 'text'
-    content: string          // 当前编辑器内容
+    content: string // 当前编辑器内容
     selection: string | null // 当前选中的文本
   } | null
 
@@ -345,7 +367,7 @@ interface AgentContext {
   browser: {
     url: string | null
     title: string | null
-    screenshot: string | null  // base64 截图
+    screenshot: string | null // base64 截图
   }
 
   // 当前工作区
@@ -367,9 +389,9 @@ Agent 默认由本地 Claude Code 驱动。Claude Code 自身有完整的 AI 配
 
 ```typescript
 // 主进程启动 Claude Code 子进程
-const claudeProcess = spawn('claude', [
-  '--output-format', 'stream-json',
-], { stdio: ['pipe', 'pipe', 'pipe'] })
+const claudeProcess = spawn('claude', ['--output-format', 'stream-json'], {
+  stdio: ['pipe', 'pipe', 'pipe'],
+})
 
 // AI 服务配置由 Claude Code 管理
 // 用户可在终端运行:
@@ -379,6 +401,7 @@ const claudeProcess = spawn('claude', [
 ```
 
 **Claude Code 的 AI 配置能力**：
+
 - 模型选择（Sonnet / Opus / Haiku，或 OpenAI 兼容模型）
 - API Key 管理
 - 自定义 API 端点（支持 Ollama、vLLM、DeepSeek 等）
@@ -473,7 +496,7 @@ export class DirectAPIBackend implements IAgentBackend { ... }
 ```typescript
 interface Conversation {
   id: string
-  title: string            // 自动生成
+  title: string // 自动生成
   messages: Message[]
   createdAt: number
   updatedAt: number
@@ -531,8 +554,8 @@ interface Message {
 - [ ] stdin/stdout JSON 消息协议
 - [ ] Claude Code 事件流 → UI 渲染
 - [ ] 用户确认 → 工具执行 → 结果回传
-- [ ] 浏览器工具桥接（browser_* → Playwright → BrowserView）
-- [ ] 编辑器工具桥接（editor_* → Tiptap）
+- [ ] 浏览器工具桥接（browser\_\* → Playwright → BrowserView）
+- [ ] 编辑器工具桥接（editor\_\* → Tiptap）
 - [ ] 上下文注入（当前文件、浏览器状态）
 
 ### P2 — 增强

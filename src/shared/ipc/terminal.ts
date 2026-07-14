@@ -3,6 +3,7 @@ import type {
   TerminalAuditEventKind,
   TerminalCommandActor,
   TerminalCommandConfirmationRequest,
+  TerminalExecutionEvent,
   TerminalPermissionPolicy,
   TerminalPermissionRisk,
   TerminalRuntimeRef,
@@ -57,7 +58,7 @@ export interface TerminalSubmitCommandAcceptedResult {
   success: true
   status: 'accepted'
   risk: TerminalPermissionRisk
-  execution: 'not-started'
+  execution: 'started' | 'not-started'
   message: string
 }
 
@@ -76,6 +77,7 @@ export interface TerminalApiContract {
   onRequestCommandConfirmation(
     callback: (request: TerminalCommandConfirmationRequest) => void,
   ): () => void
+  onExecutionEvent(callback: (event: TerminalExecutionEvent) => void): () => void
   resolveCommandConfirmation(id: string, approved: boolean): Promise<{ success: boolean }>
   recordLifecycleEvent(input: TerminalLifecycleAuditInput): Promise<TerminalOperationResult>
   submitCommand(input: TerminalSubmitCommandInput): Promise<TerminalSubmitCommandResult>

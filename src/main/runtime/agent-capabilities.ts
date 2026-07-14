@@ -24,8 +24,11 @@ export function getAgentCapabilities(runtime: DeepInkRuntimeState): AgentCapabil
     {
       name: 'android',
       label: 'Android',
-      available: Boolean(runtime.adbBridge && runtime.emulatorManager),
-      reason: runtime.adbBridge && runtime.emulatorManager ? undefined : 'Android runtime 未初始化',
+      available: runtime.activeDeviceManager?.getSource() === 'physical',
+      reason:
+        runtime.activeDeviceManager?.getSource() === 'physical'
+          ? undefined
+          : '未连接用户真机；模拟器与云手机已封存',
     },
     {
       name: 'agent-device',

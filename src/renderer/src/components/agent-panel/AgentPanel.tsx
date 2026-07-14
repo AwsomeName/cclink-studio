@@ -3,6 +3,8 @@ import {
   useAgentStore,
   useBrowserDownloadStore,
   useBrowserTaskStore,
+  useEditorStore,
+  useFsStore,
   useTabStore,
   useWorkspaceStore,
 } from '../../stores'
@@ -11,9 +13,25 @@ import {
   workspaceRefLabel,
   workspaceRefSourceLabel,
 } from '../../../../shared/workspace-ref'
-import type { PermissionMode, AgentScope } from '../../types'
-import type { AgentCapabilityStatus } from '@shared/ipc/agent'
+import { MountedResourceBar } from '../../features/agent-conversations/mounted-resource-bar'
+import { MountedSkillStrip } from '../../features/agent-conversations/mounted-skill-strip'
+import {
+  buildResourceCandidates,
+  buildSkillCandidates,
+  buildProjectAssistantSessions,
+  createConversationRuntimeForWorkspace,
+  type AgentResourceCandidate,
+  type AgentSkillCandidate,
+} from '../../features/agent-conversations/view-model'
+import type {
+  AgentMountedResource,
+  AgentMountedResourceKind,
+  AgentMountedSkill,
+  PermissionMode,
+  AgentScope,
+} from '../../types'
 import type { BrowserActionLog, BrowserDownloadRecord, BrowserTaskRun } from '@shared/ipc/browser'
+import type { AgentSendResource, AgentSendSkill } from '@shared/ipc/agent'
 import { ConversationMessageRenderer } from '../common/ConversationMessageRenderer'
 import { TerminalConfirmationCards } from './TerminalConfirmationCards'
 import {
@@ -31,8 +49,8 @@ import {
   IconFile,
   IconRobot,
   IconPlus,
-  IconHistory,
-  IconClose,
+  IconSearch,
+  IconTerminal,
 } from '../common/Icons'
 
 interface AgentPanelProps {
@@ -57,15 +75,17 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const cancelStreaming = useAgentStore((s) => s.cancelStreaming)
   const removePendingConfirmation = useAgentStore((s) => s.removePendingConfirmation)
   const setPermissionMode = useAgentStore((s) => s.setPermissionMode)
+  const addMountedResource = useAgentStore((s) => s.addMountedResource)
+  const removeMountedResource = useAgentStore((s) => s.removeMountedResource)
+  const addMountedSkill = useAgentStore((s) => s.addMountedSkill)
+  const removeMountedSkill = useAgentStore((s) => s.removeMountedSkill)
   const scope = useAgentStore((s) => s.scope)
   const setScopeState = useAgentStore((s) => s.setScope)
   const createConversation = useAgentStore((s) => s.createConversation)
   const switchConversation = useAgentStore((s) => s.switchConversation)
-  const archiveConversation = useAgentStore((s) => s.archiveConversation)
-  const restoreArchivedConversation = useAgentStore((s) => s.restoreArchivedConversation)
-  const deleteConversation = useAgentStore((s) => s.deleteConversation)
-  const markAsWorkConversation = useAgentStore((s) => s.markAsWorkConversation)
-  const openTab = useTabStore((s) => s.openTab)
+  const tabs = useTabStore((s) => s.tabs)
+  const editorFiles = useEditorStore((s) => s.files)
+  const selectedPath = useFsStore((s) => s.selectedPath)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const browserTasks = useBrowserTaskStore((s) => s.tasks)
   const browserActionLogs = useBrowserTaskStore((s) => s.actionLogs)
@@ -79,20 +99,8 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const restoredConversationIdsRef = useRef<Set<string>>(new Set())
   /** 中止重入守卫：防止快速连点产生重复的中止提示 */
   const abortingRef = useRef(false)
-  const [capabilities, setCapabilities] = useState<AgentCapabilityStatus[]>([])
-  const [showArchivedConversations, setShowArchivedConversations] = useState(false)
-
-  useEffect(() => {
-    const loadCapabilities = (): void => {
-      window.deepink.agent
-        .getCapabilities()
-        .then(setCapabilities)
-        .catch(() => setCapabilities([]))
-    }
-    loadCapabilities()
-    const capabilityTimer = window.setInterval(loadCapabilities, 5000)
-    return () => window.clearInterval(capabilityTimer)
-  }, [])
+  const [resourceQuery, setResourceQuery] = useState<string | null>(null)
+  const [skillQuery, setSkillQuery] = useState<string | null>(null)
 
   useEffect(() => {
     void refreshBrowserTasks()
@@ -127,13 +135,70 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     if (!text) return
     const conversationId = activeConversationId
     setInput('', conversationId)
+    setResourceQuery(null)
+    setSkillQuery(null)
     addUserMessage(text, conversationId)
     try {
-      await window.deepink.agent.sendMessage(conversationId, text)
+      const conversation = useAgentStore.getState().conversations[conversationId]
+      const resources = conversation?.mountedResources ?? []
+      const skills = conversation?.mountedSkills ?? []
+      await window.deepink.agent.sendMessage(conversationId, {
+        message: text,
+        resources: toSendResources(resources),
+        skills: toSendSkills(skills),
+      })
     } catch (err) {
       addSystemMessage(`发送失败: ${String(err)}`, conversationId)
     }
-  }, [activeConversationId, input, setInput, addUserMessage, addSystemMessage])
+  }, [activeConversationId, addSystemMessage, addUserMessage, input, setInput])
+
+  const updateMentionQueryFromInput = useCallback((text: string) => {
+    const match = /(?:^|\s)([@/])([^\s@/]*)$/.exec(text)
+    setResourceQuery(match?.[1] === '@' ? match[2] : null)
+    setSkillQuery(match?.[1] === '/' ? match[2] : null)
+  }, [])
+
+  const handleInputChange = useCallback(
+    (text: string) => {
+      setInput(text, activeConversationId)
+      updateMentionQueryFromInput(text)
+    },
+    [activeConversationId, setInput, updateMentionQueryFromInput],
+  )
+
+  const handleMountResource = useCallback(
+    (resource: AgentResourceCandidate) => {
+      addMountedResource(toMountedResource(resource), activeConversationId)
+      setInput(stripTrailingMentionToken(input), activeConversationId)
+      setResourceQuery(null)
+      setSkillQuery(null)
+    },
+    [activeConversationId, addMountedResource, input, setInput],
+  )
+
+  const handleRemoveMountedResource = useCallback(
+    (resourceId: string) => {
+      removeMountedResource(resourceId, activeConversationId)
+    },
+    [activeConversationId, removeMountedResource],
+  )
+
+  const handleMountSkill = useCallback(
+    (skill: AgentSkillCandidate) => {
+      addMountedSkill(toMountedSkill(skill), activeConversationId)
+      setInput(stripTrailingMentionToken(input), activeConversationId)
+      setResourceQuery(null)
+      setSkillQuery(null)
+    },
+    [activeConversationId, addMountedSkill, input, setInput],
+  )
+
+  const handleRemoveMountedSkill = useCallback(
+    (skillId: string) => {
+      removeMountedSkill(skillId, activeConversationId)
+    },
+    [activeConversationId, removeMountedSkill],
+  )
 
   // 中止（带重入守卫，避免连点产生重复提示）
   const handleAbort = useCallback(async () => {
@@ -192,54 +257,10 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   )
 
   const handleNewConversation = useCallback(() => {
-    createConversation()
-  }, [createConversation])
-
-  const handleArchiveConversation = useCallback(
-    (conversationId: string) => {
-      archiveConversation(conversationId)
-    },
-    [archiveConversation],
-  )
-
-  const handleRestoreConversation = useCallback(
-    (conversationId: string) => {
-      restoreArchivedConversation(conversationId)
-      setShowArchivedConversations(false)
-    },
-    [restoreArchivedConversation],
-  )
-
-  const handleDeleteArchivedConversation = useCallback(
-    (conversationId: string) => {
-      deleteConversation(conversationId)
-      void window.deepink.agent.closeConversation(conversationId)
-    },
-    [deleteConversation],
-  )
-
-  const handleOpenAsWorkConversation = useCallback(
-    (conversationId: string) => {
-      const conversation = conversations[conversationId]
-      if (!conversation) return
-      const runtime = {
-        ...conversation.runtime,
-        workspaceRef: activeWorkspaceRef,
-      }
-      markAsWorkConversation(conversation.id, runtime)
-      openTab({
-        type: 'conversation',
-        title: conversation.title === '新会话' ? '新工作会话' : conversation.title,
-        icon: '🤖',
-        conversation: {
-          surface: 'workbench-tab',
-          runtime,
-          sessionId: conversation.id,
-        },
-      })
-    },
-    [activeWorkspaceRef, conversations, markAsWorkConversation, openTab],
-  )
+    createConversation({
+      runtime: createConversationRuntimeForWorkspace(activeWorkspaceRef),
+    })
+  }, [activeWorkspaceRef, createConversation])
 
   const orderedConversations = useMemo(
     () =>
@@ -253,17 +274,15 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
       }),
     [conversationOrder, conversations],
   )
-  const archivedConversations = useMemo(
+  const projectSessions = useMemo(
     () =>
-      conversationOrder
-        .flatMap((id) => {
-          const conversation = conversations[id]
-          return conversation?.surface === 'assistant-panel' && conversation.archivedAt
-            ? [conversation]
-            : []
-        })
-        .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0)),
-    [conversationOrder, conversations],
+      buildProjectAssistantSessions({
+        conversations,
+        conversationOrder,
+        activeConversationId,
+        activeWorkspaceRef,
+      }),
+    [activeConversationId, activeWorkspaceRef, conversationOrder, conversations],
   )
 
   useEffect(() => {
@@ -274,6 +293,26 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
       void window.deepink.agent.restoreConversation(conversation.id, conversation.sessionId)
     }
   }, [orderedConversations])
+
+  useEffect(() => {
+    if (variant !== 'side') return
+    if (projectSessions.active.some((session) => session.id === activeConversationId)) return
+    const fallback = projectSessions.active[0]
+    if (fallback) {
+      switchConversation(fallback.id)
+      return
+    }
+    createConversation({
+      runtime: createConversationRuntimeForWorkspace(activeWorkspaceRef),
+    })
+  }, [
+    activeConversationId,
+    activeWorkspaceRef,
+    createConversation,
+    projectSessions.active,
+    switchConversation,
+    variant,
+  ])
 
   // 键盘事件（需跳过 IME 组合中的 Enter — 中文输入法确认单词）
   const handleKeyDown = useCallback(
@@ -347,6 +386,20 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const workspaceName = useMemo(() => workspaceRefLabel(activeWorkspaceRef), [activeWorkspaceRef])
   const workspaceTitle = workspaceRefKey(activeWorkspaceRef) ?? '系统工作空间：未归档'
   const workspaceMeta = workspaceRefSourceLabel(activeWorkspaceRef)
+  const activeConversation = conversations[activeConversationId]
+  const mountedResources = activeConversation?.mountedResources ?? []
+  const mountedSkills = activeConversation?.mountedSkills ?? []
+  const resourceCandidates = useMemo(
+    () =>
+      buildResourceCandidates({
+        tabs,
+        editorFiles,
+        selectedPath,
+        query: resourceQuery ?? '',
+      }),
+    [editorFiles, resourceQuery, selectedPath, tabs],
+  )
+  const skillCandidates = useMemo(() => buildSkillCandidates(skillQuery ?? ''), [skillQuery])
   const isStartConversation =
     messages.every((msg) => msg.id === 'welcome') &&
     pendingConfirmations.length === 0 &&
@@ -375,7 +428,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
             <textarea
               className="agent-start-input"
               value={input}
-              onChange={(e) => setInput(e.target.value, activeConversationId)}
+              onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="随心输入"
               disabled={loading}
@@ -429,250 +482,308 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
 
   return (
     <div className={`agent-panel agent-panel-${variant}`}>
-      {/* 头部 */}
-      <div className="agent-header">
-        <span className="agent-header-icon">
-          <IconSparkle size={14} />
-        </span>
-        <span>Agent</span>
-        <span className="agent-status-dot">
-          <IconCircle
-            size={10}
-            filled
-            color={statusColor[backendState]}
-            className={isStreaming ? 'animate-pulse' : ''}
+      <div className="agent-conversation-main">
+        <MountedResourceBar resources={mountedResources} onRemove={handleRemoveMountedResource} />
+
+        {activeBrowserTask && (
+          <BrowserTaskCard
+            task={activeBrowserTask}
+            logs={activeBrowserTaskLogs}
+            downloads={activeBrowserTaskDownloads}
+            onPause={() => {
+              void window.deepink.browser.pauseTask(activeBrowserTask.id)
+            }}
+            onResume={() => {
+              void window.deepink.browser.resumeTask(activeBrowserTask.id)
+            }}
+            onCancel={() => {
+              void window.deepink.browser.cancelTask(activeBrowserTask.id)
+            }}
           />
-        </span>
-        <span className="agent-status-text">{statusText[backendState]}</span>
-        {sessionId && (
-          <span className="agent-session-id" title={sessionId}>
-            {sessionId.slice(0, 8)}
-          </span>
         )}
-        {/* 操作作用域选择器 */}
-        <ScopeSelector value={scope} onChange={handleChangeScope} />
-        {/* 权限模式切换 */}
-        <button
-          className="agent-mode-btn"
-          onClick={cyclePermissionMode}
-          title={`权限模式: ${modeLabel[permissionMode]}（点击切换）`}
-        >
-          <IconCircle size={8} filled color={modeColor[permissionMode]} />
-          {modeLabel[permissionMode]}
-        </button>
-      </div>
 
-      <CapabilityStrip capabilities={capabilities} />
+        {/* 消息列表 */}
+        <div className="agent-messages">
+          {messages.map((msg) => (
+            <ConversationMessageRenderer key={msg.id} message={msg} />
+          ))}
 
-      <div className="agent-session-list">
-        <span className="agent-session-scope-label" title="右侧轻量对话，不自动占用主工作区">
-          即时助手
-        </span>
-        <button
-          className="agent-session-new"
-          onClick={handleNewConversation}
-          title="新建即时助手会话"
-        >
-          <IconPlus size={12} />
-        </button>
-        <div className="agent-session-scroll" title="即时助手历史会话">
-          {orderedConversations.map((conversation) => (
-            <button
-              key={conversation.id}
-              className={`agent-session-tab ${conversation.id === activeConversationId ? 'active' : ''}`}
-              onClick={() => switchConversation(conversation.id)}
-              title={conversation.sessionId ?? conversation.title}
-            >
-              <IconHistory size={11} />
-              <span className="agent-session-title">{conversation.title}</span>
-              {conversation.loading && <span className="agent-session-busy" />}
-              <span
-                className="agent-session-open-work"
-                role="button"
-                tabIndex={0}
-                title="移到当前工作空间，作为可恢复的工作会话打开"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleOpenAsWorkConversation(conversation.id)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    handleOpenAsWorkConversation(conversation.id)
-                  }
-                }}
-              >
-                <IconFile size={10} />
-              </span>
-              {orderedConversations.length > 1 && (
-                <span
-                  className="agent-session-close"
-                  role="button"
-                  tabIndex={0}
-                  title="归档会话"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleArchiveConversation(conversation.id)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      handleArchiveConversation(conversation.id)
-                    }
-                  }}
+          {/* 工具确认卡片（支持并发多个） */}
+          {pendingConfirmations.map((req) => (
+            <div key={req.id} className="tool-confirmation-card">
+              <div className="confirmation-header">
+                <IconTool size={14} />
+                请求执行操作
+              </div>
+              <div className="confirmation-body">
+                <div className="confirmation-row">
+                  <span className="confirmation-label">操作:</span>
+                  <span className="confirmation-value">{req.toolName}</span>
+                </div>
+                <div className="confirmation-row">
+                  <span className="confirmation-label">参数:</span>
+                  <span className="confirmation-value confirmation-params">
+                    {Object.entries(req.params)
+                      .map(([k, v]) => `${k}="${String(v)}"`)
+                      .join(', ')}
+                  </span>
+                </div>
+                <div className="confirmation-row">
+                  <span className="confirmation-label">风险:</span>
+                  <span className="confirmation-value" style={{ color: riskColor[req.riskLevel] }}>
+                    {riskLabel[req.riskLevel]}
+                  </span>
+                </div>
+              </div>
+              <div className="confirmation-actions">
+                <button
+                  className="confirm-approve-btn"
+                  onClick={() => handleConfirmApprove(req.id, false)}
                 >
-                  <IconClose size={10} />
-                </span>
-              )}
-            </button>
+                  <IconCheck size={12} />
+                  允许
+                </button>
+                <button
+                  className="confirm-always-btn"
+                  onClick={() => handleConfirmApprove(req.id, true)}
+                >
+                  始终允许
+                </button>
+                <button className="confirm-reject-btn" onClick={() => handleConfirmReject(req.id)}>
+                  <IconError size={12} />
+                  拒绝
+                </button>
+              </div>
+            </div>
           ))}
-          {archivedConversations.length > 0 && (
-            <button
-              className={`agent-session-archive-toggle ${showArchivedConversations ? 'active' : ''}`}
-              onClick={() => setShowArchivedConversations((value) => !value)}
-              title="查看已归档会话"
-            >
-              已归档 {archivedConversations.length}
-            </button>
+
+          <TerminalConfirmationCards />
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* 费用显示 */}
+        {lastCost !== null && (
+          <div className="agent-cost">
+            <IconDollar size={10} />${lastCost.toFixed(4)}
+          </div>
+        )}
+
+        {/* 输入区域 */}
+        <div className="agent-composer-wrap">
+          {resourceQuery !== null && (
+            <ResourceCandidateMenu candidates={resourceCandidates} onPick={handleMountResource} />
           )}
-        </div>
-      </div>
-
-      {showArchivedConversations && archivedConversations.length > 0 && (
-        <div className="agent-archive-list">
-          {archivedConversations.map((conversation) => (
-            <div key={conversation.id} className="agent-archive-row">
-              <button
-                className="agent-archive-main"
-                onClick={() => handleRestoreConversation(conversation.id)}
-                title="恢复会话"
-              >
-                <IconHistory size={11} />
-                <span>{conversation.title}</span>
-              </button>
-              <button
-                className="agent-archive-delete"
-                onClick={() => handleDeleteArchivedConversation(conversation.id)}
-                title="永久删除会话"
-              >
-                <IconClose size={10} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {activeBrowserTask && (
-        <BrowserTaskCard
-          task={activeBrowserTask}
-          logs={activeBrowserTaskLogs}
-          downloads={activeBrowserTaskDownloads}
-          onPause={() => {
-            void window.deepink.browser.pauseTask(activeBrowserTask.id)
-          }}
-          onResume={() => {
-            void window.deepink.browser.resumeTask(activeBrowserTask.id)
-          }}
-          onCancel={() => {
-            void window.deepink.browser.cancelTask(activeBrowserTask.id)
-          }}
-        />
-      )}
-
-      {/* 消息列表 */}
-      <div className="agent-messages">
-        {messages.map((msg) => (
-          <ConversationMessageRenderer key={msg.id} message={msg} />
-        ))}
-
-        {/* 工具确认卡片（支持并发多个） */}
-        {pendingConfirmations.map((req) => (
-          <div key={req.id} className="tool-confirmation-card">
-            <div className="confirmation-header">
-              <IconTool size={14} />
-              请求执行操作
-            </div>
-            <div className="confirmation-body">
-              <div className="confirmation-row">
-                <span className="confirmation-label">操作:</span>
-                <span className="confirmation-value">{req.toolName}</span>
+          {skillQuery !== null && (
+            <SkillCandidateMenu candidates={skillCandidates} onPick={handleMountSkill} />
+          )}
+          <MountedSkillStrip skills={mountedSkills} onRemove={handleRemoveMountedSkill} />
+          <div className="agent-input-card">
+            <textarea
+              className="agent-input"
+              value={input}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="输入消息，@ 挂资源，/ 挂技能..."
+              disabled={loading}
+              rows={2}
+            />
+            <div className="agent-composer-toolbar">
+              <div className="agent-composer-tools">
+                <button className="agent-composer-icon-btn" title="添加资源或 Skill">
+                  <IconPlus size={16} />
+                </button>
+                <button
+                  className="agent-mode-btn"
+                  onClick={cyclePermissionMode}
+                  title={`权限模式: ${modeLabel[permissionMode]}（点击切换）`}
+                >
+                  <IconCircle size={8} filled color={modeColor[permissionMode]} />
+                  {modeLabel[permissionMode]}
+                  <IconChevronDown size={12} />
+                </button>
+                <ScopeSelector value={scope} onChange={handleChangeScope} />
               </div>
-              <div className="confirmation-row">
-                <span className="confirmation-label">参数:</span>
-                <span className="confirmation-value confirmation-params">
-                  {Object.entries(req.params)
-                    .map(([k, v]) => `${k}="${String(v)}"`)
-                    .join(', ')}
-                </span>
+              <div className="agent-composer-tools">
+                <button className="agent-model-btn" title="模型与推理模式">
+                  5.5
+                  <span>高</span>
+                  <IconChevronDown size={12} />
+                </button>
+                {loading ? (
+                  <button className="agent-abort-btn" onClick={handleAbort} title="中止">
+                    <IconStop size={15} />
+                  </button>
+                ) : (
+                  <button
+                    className="agent-send-btn"
+                    onClick={handleSend}
+                    disabled={!input.trim()}
+                    title="发送"
+                  >
+                    <IconSend size={17} />
+                  </button>
+                )}
               </div>
-              <div className="confirmation-row">
-                <span className="confirmation-label">风险:</span>
-                <span className="confirmation-value" style={{ color: riskColor[req.riskLevel] }}>
-                  {riskLabel[req.riskLevel]}
-                </span>
-              </div>
-            </div>
-            <div className="confirmation-actions">
-              <button
-                className="confirm-approve-btn"
-                onClick={() => handleConfirmApprove(req.id, false)}
-              >
-                <IconCheck size={12} />
-                允许
-              </button>
-              <button
-                className="confirm-always-btn"
-                onClick={() => handleConfirmApprove(req.id, true)}
-              >
-                始终允许
-              </button>
-              <button className="confirm-reject-btn" onClick={() => handleConfirmReject(req.id)}>
-                <IconError size={12} />
-                拒绝
-              </button>
             </div>
           </div>
-        ))}
-
-        <TerminalConfirmationCards />
-
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* 费用显示 */}
-      {lastCost !== null && (
-        <div className="agent-cost">
-          <IconDollar size={10} />${lastCost.toFixed(4)}
         </div>
-      )}
-
-      {/* 输入区域 */}
-      <div className="agent-input-area">
-        <textarea
-          className="agent-input"
-          value={input}
-          onChange={(e) => setInput(e.target.value, activeConversationId)}
-          onKeyDown={handleKeyDown}
-          placeholder="输入消息与 AI 对话..."
-          disabled={loading}
-          rows={2}
-        />
-        {loading ? (
-          <button className="agent-abort-btn" onClick={handleAbort}>
-            <IconStop size={14} />
-            中止
-          </button>
-        ) : (
-          <button className="agent-send-btn" onClick={handleSend} disabled={!input.trim()}>
-            <IconSend size={14} />
-            发送
-          </button>
-        )}
       </div>
     </div>
   )
+}
+
+function ResourceCandidateMenu({
+  candidates,
+  onPick,
+}: {
+  candidates: AgentResourceCandidate[]
+  onPick: (candidate: AgentResourceCandidate) => void
+}): React.ReactElement {
+  return (
+    <div className="agent-resource-menu">
+      {candidates.length === 0 ? (
+        <div className="agent-resource-menu-empty">
+          <IconSearch size={13} />
+          没有匹配资源
+        </div>
+      ) : (
+        candidates.map((candidate) => (
+          <button
+            key={candidate.id}
+            className="agent-resource-menu-row"
+            onMouseDown={(event) => {
+              event.preventDefault()
+              onPick(candidate)
+            }}
+            title={candidate.detail}
+          >
+            {resourceMenuIcon(candidate.kind)}
+            <span>{candidate.label}</span>
+            <em>{resourceSourceLabel(candidate)}</em>
+          </button>
+        ))
+      )}
+    </div>
+  )
+}
+
+function SkillCandidateMenu({
+  candidates,
+  onPick,
+}: {
+  candidates: AgentSkillCandidate[]
+  onPick: (candidate: AgentSkillCandidate) => void
+}): React.ReactElement {
+  return (
+    <div className="agent-resource-menu agent-skill-menu">
+      {candidates.length === 0 ? (
+        <div className="agent-resource-menu-empty">
+          <IconSearch size={13} />
+          没有匹配 Skill
+        </div>
+      ) : (
+        candidates.map((candidate) => (
+          <button
+            key={candidate.id}
+            className="agent-resource-menu-row"
+            onMouseDown={(event) => {
+              event.preventDefault()
+              onPick(candidate)
+            }}
+            title={candidate.description}
+          >
+            <IconSparkle size={13} />
+            <span>/{candidate.label}</span>
+            <em>{skillSourceLabel(candidate)}</em>
+          </button>
+        ))
+      )}
+    </div>
+  )
+}
+
+function resourceMenuIcon(kind: AgentMountedResourceKind): React.ReactElement {
+  switch (kind) {
+    case 'browser':
+      return <IconGlobe size={13} />
+    case 'android':
+      return <IconMobile size={13} />
+    case 'terminal':
+      return <IconTerminal size={13} />
+    case 'file':
+    case 'tab':
+    case 'artifact':
+    case 'project':
+      return <IconFile size={13} />
+  }
+}
+
+function skillSourceLabel(candidate: AgentSkillCandidate): string {
+  switch (candidate.source) {
+    case 'builtin':
+      return '内置'
+    case 'workspace':
+      return '项目'
+    case 'user':
+    default:
+      return '用户 Skill'
+  }
+}
+
+function resourceSourceLabel(candidate: AgentResourceCandidate): string {
+  switch (candidate.source) {
+    case 'selected-file':
+      return '当前文件'
+    case 'open-tab':
+      return candidate.kind === 'browser' ? '浏览器 Tab' : '打开 Tab'
+    case 'draft':
+      return '草稿'
+  }
+}
+
+function toMountedResource(resource: AgentResourceCandidate): AgentMountedResource {
+  return {
+    id: resource.id,
+    kind: resource.kind,
+    label: resource.label,
+    detail: resource.detail,
+    ref: resource.ref,
+  }
+}
+
+function toMountedSkill(skill: AgentSkillCandidate): AgentMountedSkill {
+  return {
+    id: skill.id,
+    name: skill.name,
+    label: skill.label,
+    description: skill.description,
+    source: skill.source,
+  }
+}
+
+function toSendResources(resources: AgentMountedResource[]): AgentSendResource[] {
+  return resources.map((resource) => ({
+    id: resource.id,
+    kind: resource.kind,
+    label: resource.label,
+    detail: resource.detail,
+    ref: resource.ref,
+  }))
+}
+
+function toSendSkills(skills: AgentMountedSkill[]): AgentSendSkill[] {
+  return skills.map((skill) => ({
+    id: skill.id,
+    name: skill.name,
+    label: skill.label,
+    description: skill.description,
+    source: skill.source,
+  }))
+}
+
+function stripTrailingMentionToken(text: string): string {
+  return text.replace(/(^|\s)([@/])([^\s@/]*)$/, '$1').trimEnd()
 }
 
 function BrowserTaskCard({
@@ -837,32 +948,6 @@ function downloadStatusLabel(download: BrowserDownloadRecord): string {
   }
 }
 
-function CapabilityStrip({
-  capabilities,
-}: {
-  capabilities: AgentCapabilityStatus[]
-}): React.ReactElement | null {
-  if (capabilities.length === 0) return null
-  return (
-    <div className="agent-capability-strip" title="Agent 可用能力">
-      {capabilities.map((capability) => (
-        <span
-          key={capability.name}
-          className={`agent-capability-pill ${capability.available ? 'available' : 'degraded'}`}
-          title={
-            capability.available
-              ? `${capability.label}: 可用`
-              : `${capability.label}: ${capability.reason ?? '不可用'}`
-          }
-        >
-          <span className="agent-capability-dot" />
-          {capability.label}
-        </span>
-      ))}
-    </div>
-  )
-}
-
 function isFinalBrowserTaskStatus(status: BrowserTaskRun['status']): boolean {
   return status === 'completed' || status === 'failed' || status === 'cancelled'
 }
@@ -998,7 +1083,7 @@ function ScopeSelector({
             onClick={() => pick({ kind: 'android' })}
           >
             <IconMobile size={12} />
-            <span className="agent-scope-opt-label">Android 模拟器</span>
+            <span className="agent-scope-opt-label">Android 真机</span>
             {isSelected({ kind: 'android' }) && <IconCheck size={11} />}
           </button>
           <button

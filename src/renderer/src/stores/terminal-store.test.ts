@@ -28,6 +28,7 @@ function createRequest(id: string, command = 'rm -rf dist'): TerminalCommandConf
 
 beforeEach(() => {
   useTerminalStore.getState().clearPendingConfirmations()
+  useTerminalStore.getState().clearOutput('terminal-1')
 })
 
 describe('useTerminalStore', () => {
@@ -49,5 +50,35 @@ describe('useTerminalStore', () => {
 
     expect(useTerminalStore.getState().pendingConfirmations).toHaveLength(1)
     expect(useTerminalStore.getState().pendingConfirmations[0].command).toBe('sudo reboot')
+  })
+
+  it('appends terminal output lines from execution events', () => {
+    const store = useTerminalStore.getState()
+
+    store.appendOutputLine({
+      sessionId: 'terminal-1',
+      kind: 'command',
+      text: '$ pwd\n',
+      timestamp: 1000,
+    })
+    store.appendExecutionEvent({
+      kind: 'output',
+      sessionId: 'terminal-1',
+      data: '/workspace\n',
+      stream: 'stdout',
+      timestamp: 1001,
+    })
+    store.appendExecutionEvent({
+      kind: 'exit',
+      sessionId: 'terminal-1',
+      exitCode: 0,
+      timestamp: 1002,
+    })
+
+    expect(useTerminalStore.getState().outputBySessionId['terminal-1']).toMatchObject([
+      { kind: 'command', text: '$ pwd\n' },
+      { kind: 'stdout', text: '/workspace\n' },
+      { kind: 'system', text: '\nTerminal 进程已退出，退出码 0\n' },
+    ])
   })
 })

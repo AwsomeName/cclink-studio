@@ -1,10 +1,14 @@
 import { TokenManager } from '../auth/token-manager'
 import { AuthService } from '../auth/auth-service'
 import { registerAuthIpc } from '../auth/auth-ipc'
+import { LocalIdentityService } from '../identity/local-identity-service'
+import { registerIdentityIpc } from '../identity/identity-ipc'
 import { SubscriptionService } from '../subscription/subscription-service'
 import { registerSubscriptionIpc } from '../subscription/subscription-ipc'
 import { FileService } from '../fs/file-service'
 import { registerFsIpc } from '../fs/fs-ipc'
+import { ProjectOpsService } from '../project-ops/project-ops-service'
+import { registerProjectOpsIpc } from '../project-ops/project-ops-ipc'
 import { MeshyService } from '../meshy/meshy-service'
 import { registerMeshyIpc } from '../meshy/meshy-ipc'
 import { registerWechatIPC } from '../ipc/wechat-ipc'
@@ -23,7 +27,9 @@ import { TerminalAuditStore } from '../terminal/terminal-audit-store'
 import { TerminalConfirmationService } from '../terminal/terminal-confirmation-service'
 import { TerminalSessionRegistry } from '../terminal/terminal-session-registry'
 import { TerminalCommandOrchestrator } from '../terminal/terminal-command-orchestrator'
-import { NoopTerminalExecutionAdapter } from '../terminal/terminal-noop-execution-adapter'
+import { LocalShellExecutionAdapter } from '../terminal/terminal-local-shell-adapter'
+import { CclinkTerminalExecutionAdapter } from '../terminal/terminal-cclink-execution-adapter'
+import { CompositeTerminalExecutionAdapter } from '../terminal/terminal-composite-execution-adapter'
 import { registerTerminalIpc } from '../ipc/terminal-ipc'
 import { getAgentCapabilities } from './agent-capabilities'
 import type { DeepInkRuntimeState } from './app-runtime'
@@ -47,6 +53,10 @@ export async function bootstrapMainProcessServices(runtime: DeepInkRuntimeState)
   runtime.tokenManager = new TokenManager()
   await runtime.tokenManager.load()
   runtime.authService = new AuthService()
+  runtime.localIdentityService = new LocalIdentityService()
+  await runtime.localIdentityService.ensureIdentity()
+  registerIdentityIpc(runtime.localIdentityService)
+  console.log('[DeepInk] 本地身份系统已初始化')
   registerAuthIpc(runtime.mainWindow, runtime.tokenManager, runtime.authService)
   console.log('[DeepInk] Auth 系统已初始化')
 
@@ -57,6 +67,10 @@ export async function bootstrapMainProcessServices(runtime: DeepInkRuntimeState)
   const fileService = new FileService()
   registerFsIpc(fileService, runtime.settingsService)
   console.log('[DeepInk] 文件系统 IPC 已注册')
+
+  runtime.projectOpsService = new ProjectOpsService()
+  registerProjectOpsIpc(runtime.projectOpsService)
+  console.log('[DeepInk] 项目运营 IPC 已注册')
 
   runtime.meshyService = new MeshyService(() => runtime.settingsService!.getAll())
   registerMeshyIpc(runtime.meshyService)
@@ -81,7 +95,15 @@ export async function bootstrapMainProcessServices(runtime: DeepInkRuntimeState)
     auditStore: runtime.terminalAuditStore,
   })
   runtime.terminalSessionRegistry = new TerminalSessionRegistry()
-  const terminalExecutionAdapter = new NoopTerminalExecutionAdapter()
+  const localTerminalExecutionAdapter = new LocalShellExecutionAdapter()
+  const cclinkTerminalExecutionAdapter =
+    runtime.cclinkStore && runtime.cclinkRequestRouter
+      ? new CclinkTerminalExecutionAdapter(runtime.cclinkStore, runtime.cclinkRequestRouter)
+      : undefined
+  const terminalExecutionAdapter = new CompositeTerminalExecutionAdapter({
+    local: localTerminalExecutionAdapter,
+    cclink: cclinkTerminalExecutionAdapter,
+  })
   runtime.terminalCommandOrchestrator = new TerminalCommandOrchestrator({
     sessionRegistry: runtime.terminalSessionRegistry,
     confirmationService: runtime.terminalConfirmationService,
@@ -93,6 +115,8 @@ export async function bootstrapMainProcessServices(runtime: DeepInkRuntimeState)
     runtime.terminalAuditStore,
     runtime.terminalSessionRegistry,
     runtime.terminalCommandOrchestrator,
+    terminalExecutionAdapter,
+    runtime.mainWindow.webContents,
   )
   console.log('[DeepInk] Terminal 确认 IPC 已注册')
 

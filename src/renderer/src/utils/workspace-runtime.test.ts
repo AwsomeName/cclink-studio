@@ -64,6 +64,7 @@ describe('workspace-runtime', () => {
     hydrateRuntimeSections({
       version: 1,
       workspaceId: '/workspace/b',
+      ownerKey: null,
       workspaceKey: '/workspace/b',
       workspacePath: '/workspace/b',
       sections: {

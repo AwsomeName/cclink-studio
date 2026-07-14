@@ -113,7 +113,7 @@ export class TerminalCommandOrchestrator {
       approved: true,
       message: 'Terminal 命令已通过权限检查；真实执行尚未接入',
     })
-    await this.dispatchToExecutionAdapter(
+    const executionStarted = await this.dispatchToExecutionAdapter(
       input,
       this.sessionRegistry.get(input.terminalSessionId) ?? session,
     )
@@ -122,19 +122,25 @@ export class TerminalCommandOrchestrator {
       success: true,
       status: 'accepted',
       risk: decision.risk,
-      execution: 'not-started',
-      message: 'Terminal 命令已通过权限检查；真实执行尚未接入',
+      execution: executionStarted ? 'started' : 'not-started',
+      message: executionStarted
+        ? 'Terminal 命令已通过权限检查并提交到执行后端'
+        : 'Terminal 命令已通过权限检查；真实执行尚未接入',
     }
   }
 
   private async dispatchToExecutionAdapter(
     input: TerminalSubmitCommandInput,
     session: TerminalSessionState,
-  ): Promise<void> {
-    if (!this.executionAdapter) return
+  ): Promise<boolean> {
+    if (!this.executionAdapter) return false
 
     try {
       if (session.status === 'idle') {
+        this.sessionRegistry.transition(input.terminalSessionId, 'starting', {
+          lastCommand: input.command,
+          now: this.now(),
+        })
         await this.executionAdapter.start({
           sessionId: input.terminalSessionId,
           runtime: session.runtime,
@@ -146,8 +152,11 @@ export class TerminalCommandOrchestrator {
         data: `${input.command}\n`,
         actor: input.actor,
       })
+      return true
     } catch (error) {
       await this.recordExecutionErrorAudit(input, session, error)
+      this.transitionSessionToError(input.terminalSessionId, input.command, error)
+      return false
     }
   }
 
@@ -206,6 +215,20 @@ export class TerminalCommandOrchestrator {
       command: input.command,
       message,
       remoteError,
+    })
+  }
+
+  private transitionSessionToError(
+    terminalSessionId: string,
+    command: string,
+    error: unknown,
+  ): void {
+    const current = this.sessionRegistry.get(terminalSessionId)
+    if (!current || current.status === 'exited' || current.status === 'error') return
+    this.sessionRegistry.transition(terminalSessionId, 'error', {
+      lastCommand: command,
+      errorMessage: getErrorMessage(error),
+      now: this.now(),
     })
   }
 

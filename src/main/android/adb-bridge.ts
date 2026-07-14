@@ -27,15 +27,15 @@ export type DeviceInfo = AndroidDeviceInfo
  */
 export class AdbBridge {
   private adbPath: string | null = null
-  /** 绑定的设备 serial（由 EmulatorManager 下发，不再自己发现） */
+  /** 绑定的设备 serial（由 PhysicalDeviceManager 下发，不再自己发现） */
   private serial: string | null = null
-  /** 当前 AVD 名称（self-heal 重绑需要） */
+  /** 历史字段：模拟器封存前用于 AVD self-heal 重绑 */
   private avdName: string | null = null
   /** ADB 是否已连接到设备 */
   private connected = false
   /** @yume-chan adb 客户端（懒初始化，用于 getDevices 等设备列表操作） */
   private adbClient: AdbServerClient | null = null
-  /** serial 被 self-heal 重绑时的监听器列表（EmulatorManager / AgentDeviceManager 等注册） */
+  /** serial 被重绑时的监听器列表（AgentDeviceManager 等注册） */
   private serialReboundListeners: Array<(newSerial: string) => void> = []
 
   /** 注册 serial 重绑监听器，返回取消注册函数 */
@@ -106,7 +106,7 @@ export class AdbBridge {
     }
   }
 
-  // ─── serial 管理（由 EmulatorManager 持有并下发） ───
+  // ─── serial 管理（由 PhysicalDeviceManager 持有并下发） ───
 
   /** 设置绑定的 serial + AVD 名称 */
   setSerial(serial: string | null, avdName: string | null): void {

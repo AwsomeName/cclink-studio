@@ -1,103 +1,80 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { EmulatorManager } from '../android/emulator-manager'
 import { AdbBridge } from '../android/adb-bridge'
 import { ScrcpyBridge } from '../android/scrcpy-bridge'
 import { ActiveDeviceManager } from '../android/active-device-manager'
 import { PhysicalDeviceManager } from '../android/physical-device-manager'
-import {
-  getSetupStatus,
-  fullSetup,
-  isAdbInstalled,
-  getAdbPath,
-  getLicense,
-  isLicenseAccepted,
-  acceptLicense,
-} from '../android/sdk-setup'
 import { executeAndroidAction } from '../android/android-actions'
 import { ensureStoreInstalled } from '../android/store-installer'
 
+const ANDROID_EMULATOR_ARCHIVED_MESSAGE =
+  'Android 模拟器 / SDK 一键安装已封存。DeepInk 后续只支持用户自有真机的 USB 或 Wi-Fi ADB 连接。'
+
 /**
- * 注册 Android 相关的 IPC 处理器（模拟器 + 物理真机）
+ * 注册 Android 相关的 IPC 处理器。
+ *
+ * 2026-07-14 起，SDK/AVD/模拟器路径封存：IPC 仍保留兼容旧前端和历史快照，
+ * 但不会下载 SDK、创建 AVD 或启动 emulator。Android 只保留真机连接与操控。
  * 对标 ipc/browser-ipc.ts
  */
 export function registerAndroidIpc(
-  emulatorManager: EmulatorManager,
   adbBridge: AdbBridge,
   mainWindow: BrowserWindow,
   scrcpyBridge: ScrcpyBridge,
   activeDeviceManager: ActiveDeviceManager,
   physicalDeviceManager: PhysicalDeviceManager,
 ): void {
-  // ─── SDK 设置（一键安装） ───
+  // ─── 已封存：SDK 设置 / AVD / 模拟器生命周期 ───
 
   /** 获取安装状态 */
   ipcMain.handle('android:getSetupStatus', () => {
-    return getSetupStatus()
+    return {
+      adb: false,
+      emulator: false,
+      systemImage: false,
+      avd: false,
+      licenseAccepted: false,
+      ready: false,
+      archived: true,
+      message: ANDROID_EMULATOR_ARCHIVED_MESSAGE,
+    }
   })
 
   /** 获取需用户同意的 Android SDK License 正文 */
-  ipcMain.handle('android:getLicense', async () => {
-    try {
-      return await getLicense()
-    } catch (err: any) {
-      return { id: 'android-sdk-license', text: `无法获取协议正文：${err.message}` }
+  ipcMain.handle('android:getLicense', () => {
+    return {
+      id: 'android-emulator-archived',
+      text: ANDROID_EMULATOR_ARCHIVED_MESSAGE,
     }
   })
 
   /** 记录用户已接受 License */
   ipcMain.handle('android:acceptLicense', () => {
-    acceptLicense()
-    return { success: true }
+    return { success: false, error: ANDROID_EMULATOR_ARCHIVED_MESSAGE }
   })
 
   /** 一键安装：下载 adb + emulator + 系统镜像 + 创建默认 AVD */
   ipcMain.handle('android:setup', async () => {
-    // 安装前必须已接受 License（emulator/系统镜像受其约束）
-    if (!isLicenseAccepted()) {
-      return { success: false, error: '请先阅读并同意 Android SDK 许可协议' }
-    }
-    try {
-      const result = await fullSetup({
-        onProgress: (step, progress) => {
-          // 通过 IPC 推送进度到渲染进程
-          if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('android:setupProgress', { step, progress })
-          }
-        },
-      })
-
-      // 安装完成后，让 AdbBridge 使用新安装的 adb
-      if (isAdbInstalled()) {
-        adbBridge.setAdbPath(getAdbPath())
-      }
-
-      return { success: true, adbPath: result.adbPath, avdName: result.avdName }
-    } catch (err: any) {
-      console.error('[AndroidIpc] 设置失败:', err)
-      return { success: false, error: err.message }
-    }
+    return { success: false, error: ANDROID_EMULATOR_ARCHIVED_MESSAGE }
   })
-
-  // ─── 模拟器生命周期 ───
 
   /** 列出可用 AVD */
   ipcMain.handle('android:listAvds', async () => {
-    return await emulatorManager.listAvds()
+    return []
   })
 
   /** 启动 AVD */
   ipcMain.handle('android:launch', async (_event, avdName: string) => {
-    await emulatorManager.launch(avdName)
+    throw new Error(`${ANDROID_EMULATOR_ARCHIVED_MESSAGE} 已忽略启动请求：${avdName}`)
   })
 
   /** 停止模拟器 */
   ipcMain.handle('android:terminate', async () => {
-    await emulatorManager.terminate()
+    return
   })
 
   /** 获取模拟器状态 */
   ipcMain.handle('android:getState', () => {
-    return emulatorManager.getState()
+    return 'stopped'
   })
 
   // ─── ADB 操控（通过共享 Action Executor） ───
@@ -165,10 +142,6 @@ export function registerAndroidIpc(
    * 返回最终结果（渲染进程据此更新提示）。
    */
   ipcMain.handle('android:retryStoreInstall', async () => {
-    // 后台自检仍在进行时不允许并发重试
-    if (emulatorManager.isStoreBootstrapInProgress()) {
-      return { status: 'failed' as const, storeId: '', displayName: '', message: '商店安装正在进行中，请稍候' }
-    }
     return ensureStoreInstalled(adbBridge, (msg) => {
       if (!mainWindow.isDestroyed()) {
         mainWindow.webContents.send('android:storeInstallProgress', msg)
@@ -199,16 +172,10 @@ export function registerAndroidIpc(
   })
 
   /**
-   * 连接物理真机
-   *
-   * 互斥：若模拟器正在运行/启动，先停止（释放 serial + 进程），再连接真机。
+   * 连接物理真机。
    * 连接后 activeDeviceManager 切到 physical，AgentDeviceManager / scrcpy 联动。
    */
   ipcMain.handle('android:connectPhysical', async (_event, serial: string) => {
-    const state = emulatorManager.getState()
-    if (state === 'running' || state === 'booting') {
-      await emulatorManager.terminate()
-    }
     const { deviceInfo } = await physicalDeviceManager.connect(serial)
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send('android:physicalConnected', { serial, deviceInfo })
@@ -228,25 +195,12 @@ export function registerAndroidIpc(
   // ─── Scrcpy 投屏 ───
 
   /**
-   * 重连：按当前活跃设备 source 走对应重连，再 scrcpy connect
-   *
-   * emulator：reconcileNow 自愈重绑（AVD 可能换端口）→ 从 emulatorManager 取最新 serial 并同步到 activeDeviceManager
-   * physical：serial 不变，直接取（真机无 AVD 重绑概念）
+   * 重连当前物理真机，再 scrcpy connect。
    */
   ipcMain.handle('android:reconnect', async () => {
-    const source = activeDeviceManager.getSource()
-    let serial: string | null
-    if (source === 'emulator') {
-      await emulatorManager.reconcileNow()
-      serial = emulatorManager.getSerial()
-      if (serial) {
-        activeDeviceManager.set(serial, 'emulator', { avdName: emulatorManager.getAvdName() ?? undefined })
-      }
-    } else {
-      serial = activeDeviceManager.getSerial()
-    }
+    const serial = activeDeviceManager.getSerial()
     if (!serial) {
-      throw new Error(source === 'physical' ? '真机未连接，请重新连接设备' : '设备不可用，请重启模拟器')
+      throw new Error('真机未连接，请到设置页扫描并连接 USB 或 Wi-Fi ADB 设备')
     }
     await scrcpyBridge.connect(serial)
   })

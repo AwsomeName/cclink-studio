@@ -3,6 +3,16 @@ import type { WorkspaceRef } from '../../../shared/workspace-ref'
 import { workspaceRefKey } from '../../../shared/workspace-ref'
 
 let activeWorkspaceKey: string | null = null
+let activeOwnerKey: string | null = null
+
+/** 设置后续 WorkspaceState 镜像写入的默认身份 key。 */
+export function setWorkspaceStateOwnerKey(ownerKey: string | null | undefined): void {
+  activeOwnerKey = ownerKey || null
+}
+
+export function getWorkspaceStateOwnerKey(): string | null {
+  return activeOwnerKey
+}
 
 /** 设置后续 WorkspaceState 镜像写入的默认工作空间 key。null 表示未归档/全局状态。 */
 export function setWorkspaceStateKey(workspaceKey: string | null | undefined): void {
@@ -33,10 +43,13 @@ export function persistWorkspaceSection(
   section: WorkspaceStateSection,
   value: unknown,
   workspaceKey?: string | null,
+  ownerKey?: string | null,
 ): void {
   try {
     if (typeof window === 'undefined' || !window.deepink?.workspaceState) return
-    void window.deepink.workspaceState.setSection(workspaceKey ?? activeWorkspaceKey, section, value).catch(() => {})
+    void window.deepink.workspaceState
+      .setSection(workspaceKey ?? activeWorkspaceKey, section, value, ownerKey ?? activeOwnerKey)
+      .catch(() => {})
   } catch {
     // 主进程状态镜像失败不应影响用户当前操作。
   }

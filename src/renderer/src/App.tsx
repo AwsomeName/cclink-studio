@@ -8,6 +8,12 @@ import { Workbench } from './components/workbench/Workbench'
 import { AgentPanel } from './components/agent-panel/AgentPanel'
 import { StatusBar } from './components/status-bar/StatusBar'
 import { ResizeHandle } from './components/common/ResizeHandle'
+import {
+  IconArrowLeft,
+  IconArrowRight,
+  IconPanelLeft,
+  IconPanelRight,
+} from './components/common/Icons'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { PanelErrorFallback } from './components/common/ErrorFallback'
 import { CommandPalette } from './components/command-palette/CommandPalette'
@@ -15,7 +21,6 @@ import { ContextMenu } from './components/common/ContextMenu'
 import { TabContextMenu } from './components/common/TabContextMenu'
 import { Toast } from './components/common/Toast'
 import LoadingScreen from './components/loading/LoadingScreen'
-import LoginPage from './components/login/LoginPage'
 import { useAgentWorkContext } from './bootstrap/use-agent-work-context'
 import { useAgentStreamEvents } from './bootstrap/use-agent-stream-events'
 import { useAppSession } from './bootstrap/use-app-session'
@@ -34,6 +39,8 @@ function MainLayout(): React.ReactElement {
   const agentPanelWidth = useUIStore((s) => s.agentPanelWidth)
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth)
   const setAgentPanelWidth = useUIStore((s) => s.setAgentPanelWidth)
+  const toggleSidebar = useUIStore((s) => s.toggleSidebar)
+  const setAgentPanelMode = useUIStore((s) => s.setAgentPanelMode)
   const agentInCenter = agentPanelMode === 'center'
   const agentInRight = agentPanelMode === 'right'
 
@@ -61,13 +68,43 @@ function MainLayout(): React.ReactElement {
     [agentPanelWidth, setAgentPanelWidth],
   )
 
+  const toggleRightAgentPanel = useCallback(() => {
+    setAgentPanelMode(agentInRight ? 'hidden' : 'right', 'user')
+  }, [agentInRight, setAgentPanelMode])
+
   if (!workspaceReady) {
     return <LoadingScreen />
   }
 
   return (
     <div className="main-window">
-      <div className="title-area" />
+      <div className="app-topbar">
+        <div className="app-topbar-left">
+          <button
+            className={`app-topbar-icon ${sidebarVisible ? 'active' : ''}`}
+            onClick={toggleSidebar}
+            title={sidebarVisible ? '收起左侧栏' : '展开左侧栏'}
+          >
+            <IconPanelLeft size={15} />
+          </button>
+          <button className="app-topbar-icon muted" disabled title="后退">
+            <IconArrowLeft size={14} />
+          </button>
+          <button className="app-topbar-icon muted" disabled title="前进">
+            <IconArrowRight size={14} />
+          </button>
+          <span className="app-topbar-title">DeepInk</span>
+        </div>
+        <div className="app-topbar-right">
+          <button
+            className={`app-topbar-icon ${agentInRight ? 'active' : ''}`}
+            onClick={toggleRightAgentPanel}
+            title={agentInRight ? '收起右侧 Agent 面板' : '展开右侧 Agent 面板'}
+          >
+            <IconPanelRight size={15} />
+          </button>
+        </div>
+      </div>
 
       <div className="main-area">
         <ActivityBar />
@@ -146,9 +183,9 @@ function MainLayout(): React.ReactElement {
 
 /** 根组件：认证守卫。 */
 function App(): React.ReactElement {
-  const loggedIn = useAuthStore((s) => s.loggedIn)
   const checking = useAuthStore((s) => s.checking)
-  const deepinkApiAvailable = typeof window !== 'undefined' && Boolean(window.deepink?.auth)
+  const deepinkApiAvailable =
+    typeof window !== 'undefined' && Boolean(window.deepink?.auth && window.deepink?.identity)
 
   useAppSession(deepinkApiAvailable)
 
@@ -168,16 +205,6 @@ function App(): React.ReactElement {
 
   if (checking) {
     return <LoadingScreen />
-  }
-
-  if (!loggedIn) {
-    return (
-      <ErrorBoundary
-        fallback={(e, retry) => <PanelErrorFallback error={e} retry={retry} title="登录页" />}
-      >
-        <LoginPage />
-      </ErrorBoundary>
-    )
   }
 
   return <MainLayout />

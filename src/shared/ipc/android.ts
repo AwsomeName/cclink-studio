@@ -7,6 +7,8 @@ export interface AndroidSetupStatus {
   avd: boolean
   licenseAccepted: boolean
   ready: boolean
+  archived?: boolean
+  message?: string
 }
 
 export interface AndroidLicense {
@@ -55,6 +57,7 @@ export interface AndroidPhysicalConnectResult extends AndroidPhysicalConnectedPa
 
 export interface AndroidActionSuccess {
   success: boolean
+  error?: string
 }
 
 export interface AndroidTypeTextResult extends AndroidActionSuccess {

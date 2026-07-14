@@ -116,7 +116,9 @@ export function CclinkPanel(): React.ReactElement {
               ? `${identity.clientImUserId} · SDKAppID ${identity.sdkAppId}`
               : cachedPhone
                 ? '没有旧 CCLink 服务器时可创建 DeepInk 新身份；已有旧服务器请用下方“导入旧 CCLink 账号”。'
-                : '当前 DeepInk 账号没有手机号，无法创建或导入 CCLink 身份。'}
+                : loggedIn
+                  ? '当前 DeepInk 账号没有手机号，无法创建或导入 CCLink 身份。'
+                  : '当前为本机工作台模式；登录 DeepInk 云账号后可创建或导入 CCLink 身份。'}
           </div>
         </div>
         <div className="cclink-identity-actions">
@@ -146,7 +148,9 @@ export function CclinkPanel(): React.ReactElement {
             ? `云端预检确认当前 token 手机号为 ${verifiedLegacyPhone}；发送验证码前如已有本地身份，会先自动移除。`
             : cachedPhone
               ? `本地缓存手机号为 ${cachedPhone}；发送验证码前会先向云端 /auth/me 复核。`
-              : '当前 DeepInk 账号没有手机号，需先用旧 CCLink 手机号登录 DeepInk。'}
+              : loggedIn
+                ? '当前 DeepInk 账号没有手机号，需先用旧 CCLink 手机号登录 DeepInk。'
+                : '需先登录 DeepInk 云账号，再导入旧 CCLink 账号。'}
         </div>
         <div
           className={`cclink-preflight ${legacyPreflight?.ok ? 'ready' : legacyPreflight ? 'blocked' : ''}`}
@@ -177,7 +181,7 @@ export function CclinkPanel(): React.ReactElement {
           <button
             className="cclink-btn"
             onClick={() => void preflightLegacyImport()}
-            disabled={preflightLoading || identityLoading}
+            disabled={preflightLoading || identityLoading || !loggedIn}
           >
             {preflightLoading ? '检查中' : '预检'}
           </button>

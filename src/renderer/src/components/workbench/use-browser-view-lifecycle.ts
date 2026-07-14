@@ -32,7 +32,10 @@ export function useBrowserViewLifecycle(activeTab: Tab | undefined, tabs: Tab[])
         }
 
         if (!state.ready) {
-          await window.deepink.browser.createView(activeTabId, state.url, restore ? { restore } : undefined)
+          await window.deepink.browser.createView(activeTabId, state.url, {
+            ...(restore ? { restore } : {}),
+            profileId: currentTab?.browserProfile ?? null,
+          })
           if (cancelled) return
           setBrowserTabReady(activeTabId)
         }

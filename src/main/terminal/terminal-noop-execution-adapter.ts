@@ -1,8 +1,7 @@
-import type { TerminalBackend } from '../../shared/terminal'
+import type { TerminalBackend, TerminalExecutionEvent } from '../../shared/terminal'
 import { REMOTE_ERROR_CODE, type RemoteError } from '../../shared/remote-error'
 import type {
   TerminalExecutionAdapter,
-  TerminalExecutionEvent,
   TerminalExecutionEventListener,
   TerminalSize,
   TerminalStartInput,

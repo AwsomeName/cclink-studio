@@ -33,6 +33,7 @@ describe('WorkspaceStateService', () => {
 
     expect(snapshot.version).toBe(1)
     expect(snapshot.workspaceId).toBe('global')
+    expect(snapshot.ownerKey).toBeNull()
     expect(snapshot.workspaceKey).toBeNull()
     expect(snapshot.workspacePath).toBeNull()
     expect(snapshot.sections).toEqual({})
@@ -58,6 +59,34 @@ describe('WorkspaceStateService', () => {
 
     expect(service.getSnapshot('/tmp/a').sections.fileTree).toEqual({ selectedPath: '/tmp/a/one.md' })
     expect(service.getSnapshot('/tmp/b').sections.fileTree).toEqual({ selectedPath: '/tmp/b/two.md' })
+  })
+
+  it('keeps owner scoped state isolated for the same workspace', async () => {
+    const service = new WorkspaceStateService()
+    await service.loadState()
+
+    await service.setSection('/tmp/a', 'tabs', { activeTabId: 'owner-a' }, 'local:a')
+    await service.setSection('/tmp/a', 'tabs', { activeTabId: 'owner-b' }, 'local:b')
+
+    expect(service.getSnapshot('/tmp/a', 'local:a').sections.tabs).toEqual({
+      activeTabId: 'owner-a',
+    })
+    expect(service.getSnapshot('/tmp/a', 'local:b').sections.tabs).toEqual({
+      activeTabId: 'owner-b',
+    })
+  })
+
+  it('reads legacy snapshots when first entering an owner scoped workspace', async () => {
+    const service = new WorkspaceStateService()
+    await service.loadState()
+
+    await service.setSection('/tmp/a', 'layout', { activePanel: 'files' })
+
+    const migrated = service.getSnapshot('/tmp/a', 'local:new')
+
+    expect(migrated.ownerKey).toBe('local:new')
+    expect(migrated.workspaceKey).toBe('/tmp/a')
+    expect(migrated.sections.layout).toEqual({ activePanel: 'files' })
   })
 
   it('keeps remote workspace keys isolated from local paths', async () => {
@@ -118,6 +147,7 @@ describe('WorkspaceStateService', () => {
     const futureSnapshot = {
       version: 1,
       workspaceId: 'global',
+      ownerKey: null,
       workspaceKey: null,
       workspacePath: null,
       updatedAt: 0,
@@ -148,6 +178,7 @@ describe('WorkspaceStateService', () => {
           global: {
             version: 1,
             workspaceId: 'global',
+            ownerKey: null,
             workspaceKey: null,
             workspacePath: null,
             updatedAt: 0,

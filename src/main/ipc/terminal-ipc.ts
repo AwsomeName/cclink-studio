@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, type WebContents } from 'electron'
 import type {
   TerminalAuditListFilter,
   TerminalLifecycleAuditInput,
@@ -8,6 +8,7 @@ import type {
 } from '../../shared/ipc/terminal'
 import type {
   TerminalCommandActor,
+  TerminalExecutionEvent,
   TerminalPermissionMode,
   TerminalPermissionPolicy,
   TerminalPermissionRisk,
@@ -16,6 +17,7 @@ import type {
 import type { TerminalAuditStore } from '../terminal/terminal-audit-store'
 import type { TerminalCommandOrchestrator } from '../terminal/terminal-command-orchestrator'
 import type { TerminalConfirmationService } from '../terminal/terminal-confirmation-service'
+import type { TerminalExecutionAdapter } from '../terminal/terminal-execution-adapter'
 import type { TerminalSessionRegistry } from '../terminal/terminal-session-registry'
 import { canTransitionTerminalStatus } from '../terminal/terminal-session-state'
 
@@ -24,7 +26,16 @@ export function registerTerminalIpc(
   terminalAuditStore?: TerminalAuditStore,
   terminalSessionRegistry?: TerminalSessionRegistry,
   terminalCommandOrchestrator?: TerminalCommandOrchestrator,
+  terminalExecutionAdapter?: TerminalExecutionAdapter,
+  webContents?: WebContents,
 ): void {
+  if (terminalExecutionAdapter) {
+    terminalExecutionAdapter.onEvent((event) => {
+      webContents?.send('terminal:executionEvent', event)
+      void syncTerminalExecutionEvent(event, terminalSessionRegistry, terminalAuditStore)
+    })
+  }
+
   ipcMain.handle(
     'terminal:resolveCommandConfirmation',
     (_event, id: string, approved: boolean) => {
@@ -40,7 +51,11 @@ export function registerTerminalIpc(
     if (!normalized) {
       return { success: false, error: 'Terminal 生命周期审计事件无效' }
     }
-    const registryResult = syncTerminalSessionRegistry(input, terminalSessionRegistry)
+    const registryResult = await syncTerminalSessionRegistry(
+      input,
+      terminalSessionRegistry,
+      terminalExecutionAdapter,
+    )
     if (!registryResult.success) return registryResult
     await terminalAuditStore.recordEvent(normalized)
     return { success: true }
@@ -189,10 +204,11 @@ function normalizeStringRules(rules?: string[]): string[] | undefined {
   return normalized.length > 0 ? [...new Set(normalized)].slice(0, 50) : undefined
 }
 
-function syncTerminalSessionRegistry(
+async function syncTerminalSessionRegistry(
   input: TerminalLifecycleAuditInput | undefined,
   terminalSessionRegistry?: TerminalSessionRegistry,
-): { success: true } | { success: false; error: string } {
+  terminalExecutionAdapter?: TerminalExecutionAdapter,
+): Promise<{ success: true } | { success: false; error: string }> {
   if (!terminalSessionRegistry || !input) return { success: true }
 
   try {
@@ -213,6 +229,7 @@ function syncTerminalSessionRegistry(
     }
 
     if (input.kind === 'terminated') {
+      await terminalExecutionAdapter?.terminate(input.terminalSessionId).catch(() => undefined)
       const session = terminalSessionRegistry.get(input.terminalSessionId)
       if (session && canTransitionTerminalStatus(session.status, 'exited')) {
         terminalSessionRegistry.transition(input.terminalSessionId, 'exited', {
@@ -230,6 +247,102 @@ function syncTerminalSessionRegistry(
       success: false,
       error: `Terminal session 生命周期同步失败：${(error as Error).message}`,
     }
+  }
+}
+
+async function syncTerminalExecutionEvent(
+  event: TerminalExecutionEvent,
+  terminalSessionRegistry?: TerminalSessionRegistry,
+  terminalAuditStore?: TerminalAuditStore,
+): Promise<void> {
+  try {
+    syncTerminalExecutionRegistry(event, terminalSessionRegistry)
+    await recordTerminalExecutionAudit(event, terminalAuditStore)
+  } catch (error) {
+    console.warn('[TerminalIPC] 执行事件同步失败:', (error as Error).message)
+  }
+}
+
+function syncTerminalExecutionRegistry(
+  event: TerminalExecutionEvent,
+  terminalSessionRegistry?: TerminalSessionRegistry,
+): void {
+  if (!terminalSessionRegistry) return
+  const session = terminalSessionRegistry.get(event.sessionId)
+  if (!session) return
+
+  if (event.kind === 'started') {
+    if (session.status === 'idle' && canTransitionTerminalStatus('idle', 'starting')) {
+      terminalSessionRegistry.transition(event.sessionId, 'starting', { now: event.timestamp })
+    }
+    const current = terminalSessionRegistry.get(event.sessionId)
+    if (current && canTransitionTerminalStatus(current.status, 'running')) {
+      terminalSessionRegistry.transition(event.sessionId, 'running', {
+        now: event.timestamp,
+        processId: event.processId,
+      })
+    }
+    return
+  }
+
+  if (event.kind === 'exit' && canTransitionTerminalStatus(session.status, 'exited')) {
+    terminalSessionRegistry.transition(event.sessionId, 'exited', {
+      now: event.timestamp,
+      exitCode: event.exitCode,
+      errorMessage: event.signal ? `signal: ${event.signal}` : undefined,
+    })
+    return
+  }
+
+  if (event.kind === 'error' && canTransitionTerminalStatus(session.status, 'error')) {
+    terminalSessionRegistry.transition(event.sessionId, 'error', {
+      now: event.timestamp,
+      errorMessage: event.message,
+    })
+  }
+}
+
+async function recordTerminalExecutionAudit(
+  event: TerminalExecutionEvent,
+  terminalAuditStore?: TerminalAuditStore,
+): Promise<void> {
+  if (!terminalAuditStore) return
+  if (event.kind === 'started') {
+    await terminalAuditStore.recordEvent({
+      terminalSessionId: event.sessionId,
+      timestamp: event.timestamp,
+      kind: 'output',
+      message: `Terminal 进程已启动${event.processId ? `：${event.processId}` : ''}`,
+    })
+    return
+  }
+  if (event.kind === 'output') {
+    await terminalAuditStore.recordEvent({
+      terminalSessionId: event.sessionId,
+      timestamp: event.timestamp,
+      kind: 'output',
+      message: event.data.slice(0, 4000),
+    })
+    return
+  }
+  if (event.kind === 'exit') {
+    await terminalAuditStore.recordEvent({
+      terminalSessionId: event.sessionId,
+      timestamp: event.timestamp,
+      kind: 'exit',
+      exitCode: event.exitCode,
+      message: event.signal ? `Terminal 进程退出：${event.signal}` : 'Terminal 进程已退出',
+    })
+    return
+  }
+  if (event.kind === 'error') {
+    await terminalAuditStore.recordEvent({
+      terminalSessionId: event.sessionId,
+      timestamp: event.timestamp,
+      kind: 'error',
+      message: event.message,
+      remoteError: event.remoteError,
+    })
   }
 }
 

@@ -8,7 +8,6 @@ export function bootstrapAgentRuntime(runtime: DeepInkRuntimeState): void {
     runtime.toolHost &&
     runtime.permissionManager &&
     runtime.mcpClientMgr &&
-    runtime.emulatorManager &&
     runtime.adbBridge &&
     runtime.settingsService
   ) {
@@ -19,7 +18,6 @@ export function bootstrapAgentRuntime(runtime: DeepInkRuntimeState): void {
       runtime.toolHost,
       runtime.permissionManager,
       runtime.mcpClientMgr,
-      runtime.emulatorManager,
       runtime.adbBridge,
       {
         backendType: settings.backendType,

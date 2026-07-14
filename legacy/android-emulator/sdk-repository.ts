@@ -1,6 +1,6 @@
 import * as https from 'https'
 import { XMLParser } from 'fast-xml-parser'
-import { getHostOs, getAbi, type Abi, type HostOs } from './android-platform'
+import { getHostOs, getAbi, type Abi, type HostOs } from '../../src/main/android/android-platform'
 
 /**
  * Google Android SDK 仓库 manifest 解析

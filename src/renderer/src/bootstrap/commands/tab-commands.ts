@@ -23,13 +23,6 @@ export function createTabCommands(): Command[] {
           .openTab({ type: 'browser', title: '浏览器', icon: '🌐', forceNew: true }),
     },
     {
-      id: 'android.newTab',
-      label: '新建 Android 页',
-      category: '设备',
-      action: () =>
-        useTabStore.getState().openTab({ type: 'android', title: 'Android', icon: '📱' }),
-    },
-    {
       id: 'workbench.closeTab',
       label: '关闭当前 Tab',
       shortcut: '⌘ W',

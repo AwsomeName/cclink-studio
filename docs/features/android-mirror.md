@@ -2,6 +2,19 @@
 
 ## 概述
 
+> 状态：2026-07-14 起封存为历史技术调研。
+> 新决策：DeepInk 后续不再推进本地 Android 虚拟机 / Google AVD / QEMU 模拟器，也不再把模拟器作为近期产品支柱。Android 方向只保留“用户自有真实手机通过 USB 或 Wi-Fi 连接”的可能性。
+
+本文档保留原有模拟器嵌入调研结论，供之后复盘 scrcpy / ADB 技术细节使用。它不再代表当前产品路线。
+
+当前产品约束：
+
+- 不再默认安装 Android SDK、下载系统镜像或创建 AVD。
+- 不再由 Agent 自动启动本地模拟器。
+- 现有模拟器生命周期代码应抽离、封存或降级为 legacy 能力。
+- Android capability 默认不可用；只有用户明确连接自己的真实设备后才可启用。
+- 真实设备方向可以继续复用 ADB、scrcpy 投屏和工具权限模型，但目标设备不是虚拟机。
+
 DeepInk 已通过 `WebContentsView` 成功内嵌 Chromium 浏览器，用户操作零延迟，AI 通过 Playwright + CDP 操控。下一步目标是在同一 workbench 区域嵌入 Android 模拟器（Google AVD / QEMU），让用户在窗口内直接看到和操作 Android 应用，AI 通过 ADB 操控。
 
 本文档记录方案调研结论：**跨进程 `NSWindow.addChildWindow` 不可行**；推荐 **scrcpy 式流式投屏 + WebCodecs 内嵌渲染**。
@@ -184,20 +197,56 @@ scrcpy  # 对着已启动的 AVD 验证延迟、中文输入、触控流畅度
 
 ---
 
-## 决策与后续
+## 原决策与后续
 
-### 已决策
+以下是历史调研阶段的原决策，不再作为当前产品路线执行。
+
+### 原已决策
 
 1. **放弃方案 C** — `addChildWindow` 跨进程为死路；绕过后仍会在 z-order、全屏 Space、输入法、对齐抖动上持续踩坑
 2. **采用 scrcpy 协议流式嵌入** — 在 workbench 内用 WebCodecs 渲染，而非操控外部窗口
 
-### 待实施
+### 原待实施
 
 - [ ] 本地验证：`scrcpy` 对接 DeepInk 使用的 AVD，测量延迟与中文输入
 - [ ] 主进程：ADB 管理、scrcpy server 推送与 socket 隧道
 - [ ] 渲染进程：`VideoDecoder` + canvas 组件，坐标映射与触控事件转发
 - [ ] Agent：ADB 工具模块（与现有 browser MCP 工具并列）
 - [ ] 文档：与 `docs/features/browser-automation.md` 对齐的 IPC / 生命周期设计
+
+### 当前后续
+
+- [x] 梳理 `src/main/android/`、`src/main/mcp/modules/android/`、`src/renderer/src/components/workbench/Android*` 的调用边界。
+- [x] 将模拟器安装、创建、启动、停止相关入口标记为 legacy 或隐藏。
+- [ ] 保留真机 ADB 检测、连接、截图、UI dump、基础输入等可复用能力。
+- [x] Android capability 文案改为“真实设备未连接”而不是“模拟器未启动”。
+- [x] 只有用户主动选择 USB / Wi-Fi 设备后，Agent 才能调用 Android 工具。
+
+### 2026-07-14 代码封存记录
+
+本次封存目标是让开发机器可以释放 Android SDK / AVD 空间，同时保留未来真机连接复用空间。
+
+已完成：
+
+- 主进程 `android:setup` 不再下载 adb / emulator / system image，也不再创建默认 AVD。
+- 主进程 `android:listAvds` 始终返回空列表，`android:launch` 始终拒绝启动模拟器，`android:getState` 固定返回 `stopped`。
+- `android:connectPhysical` 不再先停止模拟器，避免任何 emulator 进程操作。
+- `AndroidDisplay` 不再显示 SDK License、一键设置、AVD 选择或启动模拟器，只在连接真机后投屏。
+- Tab 新建菜单和命令面板移除“新建 Android 页”；只有设置页连接真机成功后才打开 Android Tab。
+- 设置页设备分组改为“模拟器 / SDK 已封存 + 物理真机扫描连接”。
+- 运行时不再构造 `EmulatorManager`，Agent 后端不再依赖模拟器初始化。
+- 历史模拟器 / SDK / AVD 实现已移动到 `legacy/android-emulator/`，主流程不再 import，也不参与构建。
+- `coreAgent` 的 Android prompt 已从“模拟器”改为“用户主动连接的 Android 真机”。
+
+可清理的本机空间：
+
+- DeepInk 自管理 SDK：Electron `userData/android-sdk`，macOS 通常位于 `~/Library/Application Support/<DeepInk app name>/android-sdk`。
+- DeepInk 默认 AVD：`~/.android/avd/DeepInk_Phone.avd` 和 `~/.android/avd/DeepInk_Phone.ini`。
+- 如果你不再使用 Android Studio，可另行评估 `~/Library/Android/sdk/system-images`、`~/Library/Android/sdk/emulator` 等系统级 SDK 目录。
+
+保留建议：
+
+- 真机连接仍需要一个可用的 `adb`。可以保留轻量 `platform-tools`，或通过 Homebrew / Android Studio 提供 `adb`。
 
 ---
 

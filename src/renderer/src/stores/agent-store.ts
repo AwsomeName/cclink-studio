@@ -8,6 +8,8 @@ import type {
   ToolConfirmationRequest,
   PermissionMode,
   AgentScope,
+  AgentMountedResource,
+  AgentMountedSkill,
   ConversationRuntimeRef,
   ConversationSurface,
 } from '../types'
@@ -26,6 +28,8 @@ export interface AgentConversationState {
   streamingMessageId: string | null
   lastCost: number | null
   scope: AgentScope
+  mountedResources: AgentMountedResource[]
+  mountedSkills: AgentMountedSkill[]
   createdAt: number
   updatedAt: number
   archivedAt: number | null
@@ -88,6 +92,10 @@ interface AgentState {
   clearPendingConfirmations: () => void
   setPermissionMode: (mode: PermissionMode) => void
   setScope: (scope: AgentScope, conversationId?: string) => void
+  addMountedResource: (resource: AgentMountedResource, conversationId?: string) => void
+  removeMountedResource: (resourceId: string, conversationId?: string) => void
+  addMountedSkill: (skill: AgentMountedSkill, conversationId?: string) => void
+  removeMountedSkill: (skillId: string, conversationId?: string) => void
   hydrateFromWorkspaceState: (value: unknown) => void
 }
 
@@ -136,6 +144,8 @@ function createConversation(
     streamingMessageId: null,
     lastCost: null,
     scope: { kind: 'all' },
+    mountedResources: [],
+    mountedSkills: [],
     createdAt: now,
     updatedAt: now,
     archivedAt: null,
@@ -325,6 +335,10 @@ function normalizeConversationSnapshot(
         backend: 'deepink-agent',
       },
       archivedAt: conversation.archivedAt ?? null,
+      mountedResources: Array.isArray(conversation.mountedResources)
+        ? conversation.mountedResources
+        : [],
+      mountedSkills: Array.isArray(conversation.mountedSkills) ? conversation.mountedSkills : [],
       loading: false,
       backendState: 'disconnected',
       streamingMessageId: null,
@@ -762,6 +776,54 @@ export const useAgentStore = create<AgentState>((set) => ({
       updateConversation(state, conversationId, (conversation) => ({
         ...conversation,
         scope,
+        updatedAt: Date.now(),
+      })),
+    ),
+
+  addMountedResource: (resource, conversationId) =>
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => {
+        const existing = conversation.mountedResources.some((item) => item.id === resource.id)
+        return {
+          ...conversation,
+          mountedResources: existing
+            ? conversation.mountedResources.map((item) =>
+                item.id === resource.id ? resource : item,
+              )
+            : [...conversation.mountedResources, resource],
+          updatedAt: Date.now(),
+        }
+      }),
+    ),
+
+  removeMountedResource: (resourceId, conversationId) =>
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        mountedResources: conversation.mountedResources.filter((item) => item.id !== resourceId),
+        updatedAt: Date.now(),
+      })),
+    ),
+
+  addMountedSkill: (skill, conversationId) =>
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => {
+        const existing = conversation.mountedSkills.some((item) => item.id === skill.id)
+        return {
+          ...conversation,
+          mountedSkills: existing
+            ? conversation.mountedSkills.map((item) => (item.id === skill.id ? skill : item))
+            : [...conversation.mountedSkills, skill],
+          updatedAt: Date.now(),
+        }
+      }),
+    ),
+
+  removeMountedSkill: (skillId, conversationId) =>
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        mountedSkills: conversation.mountedSkills.filter((item) => item.id !== skillId),
         updatedAt: Date.now(),
       })),
     ),

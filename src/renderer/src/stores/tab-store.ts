@@ -150,6 +150,8 @@ interface OpenTabOptions {
   initialContent?: string
   /** 新建/复制浏览器 Tab 时的初始 URL（仅激活创建时消费一次） */
   initialUrl?: string
+  /** 浏览器持久化 Profile，用于隔离平台登录态。 */
+  browserProfile?: string | null
   /** 从快照重建时的视图模式/缩放（仅激活创建时消费一次） */
   restore?: {
     viewMode: 'desktop' | 'mobile'
@@ -191,6 +193,8 @@ interface TabState {
   updateTabTitle: (id: string, title: string) => void
   /** 更新 Tab dirty 状态 */
   updateTabDirty: (id: string, dirty: boolean) => void
+  /** 更新 Terminal Tab 的运行态 */
+  updateTabTerminal: (id: string, terminal: NonNullable<Tab['terminal']>) => void
   /** 更新 Tab 关联的文件路径（Save-As 后回填） */
   updateTabFilePath: (id: string, filePath: string) => void
   /** 复制 Tab（浏览器克隆 URL；编辑器克隆内容为未命名副本） */
@@ -214,6 +218,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     filePath,
     initialContent,
     initialUrl,
+    browserProfile,
     restore,
     cclinkSessionId,
     conversation,
@@ -297,6 +302,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         filePath,
         initialContent,
         initialUrl,
+        browserProfile,
         restore,
         cclinkSessionId,
         conversation,
@@ -346,6 +352,11 @@ export const useTabStore = create<TabState>((set, get) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, dirty } : t)),
     })),
 
+  updateTabTerminal: (id, terminal) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) => (t.id === id ? { ...t, terminal } : t)),
+    })),
+
   updateTabFilePath: (id, filePath) =>
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, filePath } : t)),
@@ -364,6 +375,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         icon: '🌐',
         forceNew: true,
         initialUrl: url,
+        browserProfile: tab.browserProfile ?? null,
       })
     } else if (tab.type === 'editor') {
       // 编辑器：克隆当前内容为可编辑未命名副本
