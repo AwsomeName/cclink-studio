@@ -175,4 +175,50 @@ describe('fs-store workspace switching', () => {
       recentWorkspacePaths: [oldWorkspacePath],
     })
   })
+
+  it('clears stale project runtime when the last workspace path no longer opens', async () => {
+    const missingWorkspacePath = '/Users/apple/missing-project'
+    const staleConversationId = useAgentStore.getState().createConversation({ activate: true })
+    useBrowserStore.getState().ensureTab('stale-browser', 'https://stale.example')
+    useTabStore.getState().openTab({ type: 'browser', title: 'Stale', icon: '🌐' })
+    useEditorStore.getState().initVirtualFile('virtual:stale', 'stale draft')
+    setWorkspaceStatePath(missingWorkspacePath)
+
+    const getAll = window.deepink.settings.getAll as ReturnType<typeof vi.fn>
+    getAll.mockResolvedValue({
+      lastWorkspacePath: missingWorkspacePath,
+      recentWorkspacePaths: [missingWorkspacePath],
+    })
+    const readDir = window.deepink.fs.readDir as ReturnType<typeof vi.fn>
+    readDir.mockRejectedValue(new Error('ENOENT'))
+    const getWorkspaceState = window.deepink.workspaceState.get as ReturnType<typeof vi.fn>
+    getWorkspaceState.mockImplementation((key: string | null) => {
+      if (key === null) {
+        return Promise.resolve(snapshot(null, {
+          tabs: { tabs: [], activeTabId: null },
+          browserTabs: { tabs: {} },
+          editorDrafts: { files: {} },
+          agentConversations: {
+            conversations: {},
+            conversationOrder: [],
+            activeConversationId: null,
+          },
+          fileTree: { expandedPaths: [], selectedPath: null },
+        }))
+      }
+      return Promise.resolve(snapshot(key, {
+        fileTree: { expandedPaths: [missingWorkspacePath], selectedPath: missingWorkspacePath },
+      }))
+    })
+
+    await useFsStore.getState().initWorkspace()
+
+    expect(useWorkspaceStore.getState().activeWorkspaceRef).toEqual({ kind: 'global' })
+    expect(useFsStore.getState().workspacePath).toBeNull()
+    expect(useTabStore.getState().tabs).toEqual([])
+    expect(useBrowserStore.getState().tabs).toEqual({})
+    expect(useEditorStore.getState().files).toEqual({})
+    expect(useAgentStore.getState().activeConversationId).not.toBe(staleConversationId)
+    expect(window.deepink.settings.set).toHaveBeenCalledWith({ lastWorkspacePath: '' })
+  })
 })
