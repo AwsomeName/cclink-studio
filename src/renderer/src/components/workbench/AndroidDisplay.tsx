@@ -252,7 +252,7 @@ export function AndroidDisplay(): React.JSX.Element {
       <CenterMessage>
         <div style={{ marginBottom: '12px' }}>Android 模拟器已封存</div>
         <div style={{ fontSize: '12px', color: '#888', maxWidth: '420px', lineHeight: 1.6 }}>
-          DeepInk 不再安装或启动 Android SDK / AVD / 模拟器。请在设置页的“设备”中扫描并连接自己的
+          CCLink Studio 不再安装或启动 Android SDK / AVD / 模拟器。请在设置页扫描并连接自己的
           USB 或 Wi-Fi ADB 真机。
         </div>
       </CenterMessage>

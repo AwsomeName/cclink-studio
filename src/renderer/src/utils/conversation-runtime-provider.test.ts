@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  createCclinkConversationProvider,
-  createLocalAgentConversationProvider,
-} from './conversation-runtime-provider'
+import { createLocalAgentConversationProvider } from './conversation-runtime-provider'
 
 describe('conversation-runtime-provider', () => {
   it('本地 Agent provider 发送消息时写入用户消息并调用后端', async () => {
@@ -84,45 +81,4 @@ describe('conversation-runtime-provider', () => {
     expect(addSystemMessage).toHaveBeenCalledWith('已手动中止当前任务', 'agent-1')
   })
 
-  it('CCLink provider 加载会话并发送消息', async () => {
-    const load = vi.fn().mockResolvedValue(undefined)
-    const loadMessages = vi.fn().mockResolvedValue(undefined)
-    const sendLocalMessage = vi.fn().mockResolvedValue(undefined)
-    const provider = createCclinkConversationProvider({
-      sessionId: 'remote-1',
-      load,
-      loadMessages,
-      sendLocalMessage,
-    })
-
-    await provider.load?.()
-    await expect(provider.send('  远程你好  ')).resolves.toBe(true)
-    await expect(provider.send('   ')).resolves.toBe(false)
-
-    expect(load).toHaveBeenCalled()
-    expect(loadMessages).toHaveBeenCalledWith('remote-1')
-    expect(sendLocalMessage).toHaveBeenCalledWith('remote-1', '远程你好')
-  })
-
-  it('CCLink provider 发送失败时返回 false', async () => {
-    const provider = createCclinkConversationProvider({
-      sessionId: 'remote-1',
-      load: vi.fn(),
-      loadMessages: vi.fn(),
-      sendLocalMessage: vi.fn().mockRejectedValue(new Error('remote send failed')),
-    })
-
-    await expect(provider.send('远程你好')).resolves.toBe(false)
-  })
-
-  it('CCLink provider 加载失败时不打断页面渲染', async () => {
-    const provider = createCclinkConversationProvider({
-      sessionId: 'remote-1',
-      load: vi.fn().mockResolvedValue(undefined),
-      loadMessages: vi.fn().mockRejectedValue(new Error('remote load failed')),
-      sendLocalMessage: vi.fn(),
-    })
-
-    await expect(provider.load?.()).resolves.toBeUndefined()
-  })
 })

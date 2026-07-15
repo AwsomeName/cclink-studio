@@ -1,7 +1,7 @@
 import type { AgentCapabilityStatus } from '../../shared/ipc/agent'
-import type { DeepInkRuntimeState } from './app-runtime'
+import type { CclinkStudioRuntimeState } from './app-runtime'
 
-export function getAgentCapabilities(runtime: DeepInkRuntimeState): AgentCapabilityStatus[] {
+export function getAgentCapabilities(runtime: CclinkStudioRuntimeState): AgentCapabilityStatus[] {
   return [
     {
       name: 'agent-backend',
@@ -41,12 +41,6 @@ export function getAgentCapabilities(runtime: DeepInkRuntimeState): AgentCapabil
       label: 'Meshy',
       available: Boolean(runtime.meshyService),
       reason: runtime.meshyService ? undefined : 'Meshy 服务未初始化',
-    },
-    {
-      name: 'cclink',
-      label: 'CCLink',
-      available: Boolean(runtime.cclinkStore && runtime.cclinkIdentityService),
-      reason: runtime.cclinkStore && runtime.cclinkIdentityService ? undefined : 'CCLink 本地状态未初始化',
     },
     {
       name: 'mcp',

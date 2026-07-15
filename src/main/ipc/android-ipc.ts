@@ -7,7 +7,7 @@ import { executeAndroidAction } from '../android/android-actions'
 import { ensureStoreInstalled } from '../android/store-installer'
 
 const ANDROID_EMULATOR_ARCHIVED_MESSAGE =
-  'Android 模拟器 / SDK 一键安装已封存。DeepInk 后续只支持用户自有真机的 USB 或 Wi-Fi ADB 连接。'
+  'Android 模拟器 / SDK 一键安装已封存。CCLink Studio 后续只支持用户自有真机的 USB 或 Wi-Fi ADB 连接。'
 
 /**
  * 注册 Android 相关的 IPC 处理器。

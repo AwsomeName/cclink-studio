@@ -1,3 +1,9 @@
+# Historical: 云文件同步方案
+
+> 当前状态：历史/商业能力材料，不属于 CCLink Studio OSS 默认能力。
+>
+> 开源 Studio 当前不内置 WebDAV 云同步、官方云存储、账号绑定或同步凭证管理。若后续恢复云同步，应通过 `cclink-dev/commercial` 或明确的插件/overlay 注入，不应把依赖和默认入口重新放回 OSS 壳。
+
 # 云文件同步方案
 
 > 状态：📋 方案设计中

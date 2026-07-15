@@ -529,7 +529,7 @@ async function recordTerminalExecutionAudit(
       timestamp: event.timestamp,
       kind: 'error',
       message: event.message,
-      remoteError: event.remoteError,
+      executionError: event.executionError,
     })
   }
 }

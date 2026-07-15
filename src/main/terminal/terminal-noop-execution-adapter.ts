@@ -1,5 +1,4 @@
-import type { TerminalBackend, TerminalExecutionEvent } from '../../shared/terminal'
-import { REMOTE_ERROR_CODE, type RemoteError } from '../../shared/remote-error'
+import type { TerminalBackend, TerminalExecutionErrorInfo, TerminalExecutionEvent } from '../../shared/terminal'
 import type {
   TerminalExecutionAdapter,
   TerminalExecutionEventListener,
@@ -10,12 +9,12 @@ import type {
 } from './terminal-execution-adapter'
 
 export class TerminalExecutionAdapterUnavailableError extends Error {
-  readonly remoteError: RemoteError
+  readonly executionError: TerminalExecutionErrorInfo
 
-  constructor(remoteError: RemoteError) {
-    super(remoteError.message)
+  constructor(executionError: TerminalExecutionErrorInfo) {
+    super(executionError.message)
     this.name = 'TerminalExecutionAdapterUnavailableError'
-    this.remoteError = remoteError
+    this.executionError = executionError
   }
 }
 
@@ -59,9 +58,9 @@ export class NoopTerminalExecutionAdapter implements TerminalExecutionAdapter {
   }
 
   private createUnavailableError(sessionId: string, operation: string): TerminalExecutionAdapterUnavailableError {
-    const remoteError: RemoteError = {
+    const executionError: TerminalExecutionErrorInfo = {
       layer: 'execution-backend',
-      code: REMOTE_ERROR_CODE.EXECUTION_BACKEND_UNAVAILABLE,
+      code: 'EXECUTION_BACKEND_UNAVAILABLE',
       message: 'Terminal 执行适配器尚未接入真实 shell',
       retryable: false,
       context: {
@@ -74,12 +73,12 @@ export class NoopTerminalExecutionAdapter implements TerminalExecutionAdapter {
     this.emit({
       kind: 'error',
       sessionId,
-      message: remoteError.message,
-      remoteError,
+      message: executionError.message,
+      executionError,
       timestamp: this.now(),
     })
 
-    return new TerminalExecutionAdapterUnavailableError(remoteError)
+    return new TerminalExecutionAdapterUnavailableError(executionError)
   }
 
   private emit(event: TerminalExecutionEvent): void {

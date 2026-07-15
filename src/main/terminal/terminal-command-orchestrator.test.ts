@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TerminalPermissionPolicy, TerminalRuntimeRef } from '../../shared/terminal'
-import { REMOTE_ERROR_CODE } from '../../shared/remote-error'
 import { TerminalSessionRegistry } from './terminal-session-registry'
 import { TerminalCommandOrchestrator } from './terminal-command-orchestrator'
 import { NoopTerminalExecutionAdapter } from './terminal-noop-execution-adapter'
@@ -242,9 +241,9 @@ describe('TerminalCommandOrchestrator', () => {
         actor: 'user',
         command: 'pwd',
         message: 'Terminal 执行适配器尚未接入真实 shell',
-        remoteError: {
+        executionError: {
           layer: 'execution-backend',
-          code: REMOTE_ERROR_CODE.EXECUTION_BACKEND_UNAVAILABLE,
+          code: 'EXECUTION_BACKEND_UNAVAILABLE',
           message: 'Terminal 执行适配器尚未接入真实 shell',
           retryable: false,
           context: {
@@ -295,7 +294,7 @@ describe('TerminalCommandOrchestrator', () => {
         actor: 'agent',
         command: 'git status --short',
         message: 'write failed',
-        remoteError: undefined,
+        executionError: undefined,
       }),
     )
   })

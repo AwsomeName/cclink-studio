@@ -101,7 +101,7 @@ export class PlaywrightBridge {
             !p.url().startsWith('chrome://'),
         ) ?? pages[0]
 
-      console.log(`[DeepInk] 发现 ${pages.length} 个页面:`)
+      console.log(`[CCLink Studio] 发现 ${pages.length} 个页面:`)
       for (const p of pages) {
         console.log(`  - ${p.url()}`)
       }
@@ -118,7 +118,7 @@ export class PlaywrightBridge {
       const initialTabId = 'browser'
       this.pages.set(initialTabId, this.page)
       this.activeTabId = initialTabId
-      console.log(`[DeepInk] 初始页面已注册: tabId=${initialTabId}`)
+      console.log(`[CCLink Studio] 初始页面已注册: tabId=${initialTabId}`)
 
       await this.installStealthInitScript(this.page)
 
@@ -133,7 +133,7 @@ export class PlaywrightBridge {
         // 避免 on('page') 为同一页面分配新 randomUUID，造成种子 key 失效/重复。
         for (const existing of this.pages.values()) {
           if (existing === newPage) {
-            console.log(`[DeepInk] 新页面已在注册表，跳过自动注册: url=${newPage.url()}`)
+            console.log(`[CCLink Studio] 新页面已在注册表，跳过自动注册: url=${newPage.url()}`)
             return
           }
         }
@@ -141,7 +141,7 @@ export class PlaywrightBridge {
         this.pages.set(tabId, newPage)
         void this.installStealthInitScript(newPage)
         this.setupPageListeners(newPage)
-        console.log(`[DeepInk] 新页面自动注册: tabId=${tabId}, url=${newPage.url()}`)
+        console.log(`[CCLink Studio] 新页面自动注册: tabId=${tabId}, url=${newPage.url()}`)
 
         // 页面关闭时清理
         newPage.on('close', () => {
@@ -231,7 +231,7 @@ export class PlaywrightBridge {
     // 对话框自动处理
     page.on('dialog', async (dialog) => {
       if (this.dialogAutoAction) {
-        console.log(`[DeepInk] 自动处理对话框: type=${dialog.type()}, message=${dialog.message()}`)
+        console.log(`[CCLink Studio] 自动处理对话框: type=${dialog.type()}, message=${dialog.message()}`)
         if (this.dialogAutoAction === 'accept') {
           await dialog.accept(this.dialogAutoText ?? undefined)
         } else {
@@ -251,7 +251,7 @@ export class PlaywrightBridge {
     const tabId = this.getTabIdForPage(page) ?? this.activeTabId ?? 'browser'
     const task = this.browserTaskRuntime?.getActiveTaskForTab(tabId)
 
-    console.log(`[DeepInk] 下载已捕获: id=${downloadId}, filename=${download.suggestedFilename()}`)
+    console.log(`[CCLink Studio] 下载已捕获: id=${downloadId}, filename=${download.suggestedFilename()}`)
 
     if (!this.browserDownloadStore) {
       return downloadId
@@ -283,7 +283,7 @@ export class PlaywrightBridge {
     try {
       await target.addInitScript(BROWSER_STEALTH_INIT_SCRIPT)
     } catch (err) {
-      console.warn('[DeepInk] 浏览器兼容脚本注入失败:', (err as Error).message)
+      console.warn('[CCLink Studio] 浏览器兼容脚本注入失败:', (err as Error).message)
     }
   }
 
@@ -420,7 +420,7 @@ export class PlaywrightBridge {
 
     // 用 tabId 注册（覆盖旧 key），监听 + 关闭清理由 registerPage 负责
     this.registerPage(page, tabId)
-    console.log(`[DeepInk] view 已 claim 为 Playwright Page: tabId=${tabId}, url=${page.url()}`)
+    console.log(`[CCLink Studio] view 已 claim 为 Playwright Page: tabId=${tabId}, url=${page.url()}`)
     return page
   }
 

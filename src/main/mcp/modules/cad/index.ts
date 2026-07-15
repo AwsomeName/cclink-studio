@@ -54,7 +54,7 @@ const CAD_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'cad_clear_cache',
-    description: '清理 CAD 转换缓存。只删除 DeepInk 生成的预览缓存，不删除用户源文件。',
+    description: '清理 CAD 转换缓存。只删除 CCLink Studio 生成的预览缓存，不删除用户源文件。',
     inputSchema: {
       type: 'object',
       properties: {},

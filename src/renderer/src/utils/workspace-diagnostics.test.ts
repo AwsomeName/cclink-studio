@@ -25,7 +25,7 @@ describe('workspace diagnostics formatter', () => {
       },
     })
 
-    expect(markdown).toContain('# DeepInk 工作台诊断')
+    expect(markdown).toContain('# CCLink Studio 工作台诊断')
     expect(markdown).toContain('- workspaceCount：3')
     expect(markdown).toContain('### /legacy/Electron')
     expect(markdown).toContain('- migrated：settings.json')

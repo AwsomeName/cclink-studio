@@ -1,3 +1,9 @@
+# Historical: 远程 Codex 工作空间方案计划
+
+> 当前状态：历史商业/远程能力方案，不属于 CCLink Studio OSS 当前事实源。
+>
+> 本文仍保留 DeepInk Remote、private-serv、chatcc-agent、付费 Remote、entitlement gate 等旧表述。当前开源 Studio 默认不包含远程工作区、CCLink/TIM transport、商业 feature gate 或远程 provider。后续若恢复官方远程能力，应在 `/Users/apple/Desktop/cclink-dev`、`/Users/apple/Desktop/chat-cc/deploy` 和 `/Users/apple/Desktop/chat-cc/Agent` 分别维护。
+
 # 远程 Codex 工作空间方案计划
 
 > 状态：方案设计

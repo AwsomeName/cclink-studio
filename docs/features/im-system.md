@@ -1,3 +1,9 @@
+# Historical: 即时通讯系统 — 功能规格
+
+> 当前状态：历史/商业能力规格，不属于 CCLink Studio OSS 默认路径。
+>
+> TIM SDK、UserSig、好友关系、消息路由、多端同步和官方账号体系属于 CCLink 网络与商业 overlay。开源 Studio 不应默认集成 TIM SDK 或暴露 IM 登录/消息入口。
+
 # DeepInk 即时通讯系统 — 功能规格
 
 > 状态：📋 规划中

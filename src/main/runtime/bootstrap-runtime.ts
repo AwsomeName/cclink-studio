@@ -1,4 +1,4 @@
-import type { DeepInkRuntimeState } from './app-runtime'
+import type { CclinkStudioRuntimeState } from './app-runtime'
 import { ServiceRegistry } from './service-registry'
 import { createWindowRuntime } from './window-runtime'
 import { bootstrapStateServices, bootstrapMainProcessServices } from './core-services'
@@ -11,7 +11,7 @@ export interface RuntimeWindowOptions {
   rendererHtmlPath: string
 }
 
-export async function bootstrapRuntime(runtime: DeepInkRuntimeState, windowOptions: RuntimeWindowOptions): Promise<void> {
+export async function bootstrapRuntime(runtime: CclinkStudioRuntimeState, windowOptions: RuntimeWindowOptions): Promise<void> {
   const registry = new ServiceRegistry()
   registry.register({ name: 'state-services', start: () => bootstrapStateServices(runtime) })
   registry.register({ name: 'window-runtime', start: () => createWindowRuntime(runtime, windowOptions) })

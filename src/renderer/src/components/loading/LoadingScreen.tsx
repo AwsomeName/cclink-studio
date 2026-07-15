@@ -1,7 +1,7 @@
 /**
  * LoadingScreen — 启动加载画面
  *
- * 在 checkSession 完成之前显示，居中展示 DeepInk Logo + 加载指示器。
+ * 在桌面运行时初始化期间显示，居中展示应用标识 + 加载指示器。
  */
 
 function LoadingScreen(): React.ReactElement {
@@ -19,7 +19,7 @@ function LoadingScreen(): React.ReactElement {
             <circle cx="24" cy="24" r="4" fill="#0078d4" />
           </svg>
         </div>
-        <div className="loading-title">DeepInk</div>
+        <div className="loading-title">CCLink Studio</div>
         <div className="loading-spinner">
           <div className="spinner" />
         </div>

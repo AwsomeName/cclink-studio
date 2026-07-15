@@ -22,7 +22,7 @@ export interface BrowserTabState {
   zoomMode: ZoomMode
   /** 当前生效的缩放系数 */
   zoomFactor: number
-  /** DeepInk 维护的导航栈（重启后恢复后退/前进） */
+  /** CCLink Studio 维护的导航栈（重启后恢复后退/前进） */
   history: string[]
   historyIndex: number
   /** 主进程视图是否已创建 */

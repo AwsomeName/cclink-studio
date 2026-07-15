@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# package.sh — DeepInk 一键打包脚本
+# package.sh — CCLink Studio 本地打包脚本
 #
 # 用法:
 #   bash scripts/package.sh                  # 当前宿主架构（Apple Silicon → arm64）
@@ -12,20 +12,19 @@
 #   bash scripts/package.sh --no-install     # 跳过 pnpm install
 #   bash scripts/package.sh --dev            # 不压缩 (compression=store)，打包更快但体积更大
 #   bash scripts/package.sh --open           # 打包后打开产物所在文件夹
-#   bash scripts/package.sh --no-upload      # 跳过上传 COS（仅本地打包）
 #   bash scripts/package.sh --help
 #
 # 说明: out/ 与 dist/ 均在 .gitignore 中，清理是安全的（可重新生成）。
-#       打包后会自动上传更新产物到腾讯云 COS（凭证从项目根 .env 读取）。
+#       开源壳只生成本地产物；官方发布、签名、公证和上传由 cclink-dev overlay 承接。
 
 set -e
 
 # ── 颜色 & helper ────────────────────────────────────────
 CYAN='\033[36m'; GREEN='\033[32m'; RED='\033[31m'; YELLOW='\033[33m'; BOLD='\033[1m'; RESET='\033[0m'
-info() { echo -e "${CYAN}[DeepInk]${RESET} $1"; }
-ok()   { echo -e "${GREEN}[DeepInk ✓]${RESET} $1"; }
-warn() { echo -e "${YELLOW}[DeepInk !]${RESET} $1"; }
-die()  { echo -e "${RED}[DeepInk ✗]${RESET} $1"; exit 1; }
+info() { echo -e "${CYAN}[CCLink Studio]${RESET} $1"; }
+ok()   { echo -e "${GREEN}[CCLink Studio ✓]${RESET} $1"; }
+warn() { echo -e "${YELLOW}[CCLink Studio !]${RESET} $1"; }
+die()  { echo -e "${RED}[CCLink Studio ✗]${RESET} $1"; exit 1; }
 
 # ── 参数解析 ──────────────────────────────────────────────
 ARCH=""
@@ -35,7 +34,6 @@ CLEAN=1
 INSTALL=1
 COMPRESSION=""
 OPEN_FINDER=0
-NO_UPLOAD=0
 
 usage() {
   sed -n '3,19p' "$0" | sed 's/^# \{0,1\}//'
@@ -53,7 +51,6 @@ while [ $# -gt 0 ]; do
     --no-install) INSTALL=0; shift ;;
     --dev)      COMPRESSION="store"; shift ;;
     --open)     OPEN_FINDER=1; shift ;;
-    --no-upload) NO_UPLOAD=1; shift ;;
     -h|--help)  usage ;;
     *)          die "未知参数: $1（用 --help 查看用法）" ;;
   esac
@@ -62,13 +59,6 @@ done
 # ── 预检：必须在项目根目录 ────────────────────────────────
 [ -f package.json ] && [ -f electron-builder.yml ] \
   || die "请在项目根目录运行（需要 package.json + electron-builder.yml）"
-
-# ── 加载 COS 凭证（项目根 .env，已 gitignore；不影响缺凭证时的本地打包）──
-if [ -f .env ]; then
-  set -a
-  . ./.env
-  set +a
-fi
 
 # ── 自动检测架构 ──────────────────────────────────────────
 if [ -z "$ARCH" ]; then
@@ -115,7 +105,7 @@ fi
 
 # ── 4. 构建（electron-vite build） ────────────────────────
 info "构建（pnpm build → electron-vite build）..."
-pnpm build > /tmp/deepink-build.log 2>&1 || { tail -30 /tmp/deepink-build.log; die "构建失败，详见 /tmp/deepink-build.log"; }
+pnpm build > /tmp/cclink-studio-build.log 2>&1 || { tail -30 /tmp/cclink-studio-build.log; die "构建失败，详见 /tmp/cclink-studio-build.log"; }
 ok "构建完成"
 
 # ── 5. 打包（electron-builder） ───────────────────────────
@@ -128,20 +118,9 @@ esac
 [ -n "$COMPRESSION" ] && EB_ARGS+=("--config.compression=$COMPRESSION")
 
 info "打包（electron-builder ${EB_ARGS[*]}）..."
-npx electron-builder "${EB_ARGS[@]}" > /tmp/deepink-package.log 2>&1 \
-  || { tail -40 /tmp/deepink-package.log; die "打包失败，详见 /tmp/deepink-package.log"; }
+npx electron-builder "${EB_ARGS[@]}" > /tmp/cclink-studio-package.log 2>&1 \
+  || { tail -40 /tmp/cclink-studio-package.log; die "打包失败，详见 /tmp/cclink-studio-package.log"; }
 ok "打包完成"
-
-# ── 5.5 上传更新产物到 COS（有凭证且未指定 --no-upload 才上传） ──
-if [ "$NO_UPLOAD" -ne 1 ]; then
-  if [ -n "$COS_SECRET_ID" ] && [ -n "$COS_SECRET_KEY" ] && [ -n "$COS_BUCKET" ] && [ -n "$COS_REGION" ]; then
-    info "上传更新产物到 COS ..."
-    node scripts/upload-cos.mjs || warn "COS 上传失败（不影响本地产物，详见上方报错）"
-    ok "COS 上传完成"
-  else
-    warn "未配置 COS_* 凭证（.env 缺失），跳过上传 — 产物在 dist/，可手动上传"
-  fi
-fi
 
 # ── 6. 结果摘要 ───────────────────────────────────────────
 echo ""
@@ -151,7 +130,7 @@ info "产物清单:"
 ls -lh dist/*.dmg dist/*.zip 2>/dev/null | awk '{printf "    %s  %s\n", $5, $9}' || true
 echo ""
 echo -e "${CYAN}搬到另一台 Mac 的提示:${RESET}"
-echo -e "  • 默认未签名 → 目标机安装后执行:  ${BOLD}xattr -cr /Applications/DeepInk.app${RESET}"
+echo -e "  • 默认未签名 → 目标机安装后执行:  ${BOLD}xattr -cr /Applications/CCLink\\ Studio.app${RESET}"
 echo -e "  • Intel Mac 需另行用 ${BOLD}--x64${RESET} 打包；当前产物仅适用于 ${BOLD}$ARCH${RESET}"
 echo -e "  • Agent 用 http-api 后端（国内模型 / OpenAI 兼容）零外部依赖；claude-code 后端需目标机装 claude CLI"
 echo -e "  • 内嵌浏览器用 Electron 自带 Chromium，无需额外下载"

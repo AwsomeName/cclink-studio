@@ -108,11 +108,11 @@ function createWelcomeMessage(): AgentMessage {
     content: [
       {
         type: 'text',
-        text: '你好！我是 DeepInk AI 助手，由 Claude Code 驱动。\n\n你可以用自然语言和我对话，我会帮你完成浏览器自动化、网页信息提取等任务。\n\n试着说：「帮我打开百度搜索一下 DeepInk」',
+        text: '你好！我是 CCLink Studio 的本地 Agent，由 Claude Code 驱动。\n\n你可以用自然语言和我对话，我会帮你完成浏览器自动化、网页信息提取、文档编辑和本地工作区操作。\n\n试着说：「帮我打开浏览器搜索一下 CCLink Studio」',
       },
     ],
     rawText:
-      '你好！我是 DeepInk AI 助手，由 Claude Code 驱动。\n\n你可以用自然语言和我对话，我会帮你完成浏览器自动化、网页信息提取等任务。\n\n试着说：「帮我打开百度搜索一下 DeepInk」',
+      '你好！我是 CCLink Studio 的本地 Agent，由 Claude Code 驱动。\n\n你可以用自然语言和我对话，我会帮你完成浏览器自动化、网页信息提取、文档编辑和本地工作区操作。\n\n试着说：「帮我打开浏览器搜索一下 CCLink Studio」',
     timestamp: Date.now(),
   }
 }

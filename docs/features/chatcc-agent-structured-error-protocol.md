@@ -1,3 +1,9 @@
+# Historical: chatcc-agent 结构化错误协议改造说明
+
+> 当前状态：历史 Remote 协议材料，不属于 CCLink Studio OSS 当前事实源。
+>
+> 对应的 Studio 侧 RemoteError/shared remote contracts 已从 OSS 默认路径移出。若继续推进 CCLink Agent 结构化错误，应在 `/Users/apple/Desktop/chat-cc/Agent` 和官方 commercial overlay 中重新定义。
+
 # chatcc-agent 结构化错误协议改造说明
 
 > 状态：DeepInk 侧已兼容接收；待 chatcc-agent 侧实现发送  

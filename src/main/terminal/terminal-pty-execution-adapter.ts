@@ -1,8 +1,7 @@
 import { existsSync } from 'node:fs'
 import type { IPty, IPtyForkOptions } from 'node-pty'
 import * as pty from 'node-pty'
-import { REMOTE_ERROR_CODE, type RemoteError } from '../../shared/remote-error'
-import type { TerminalBackend, TerminalExecutionEvent } from '../../shared/terminal'
+import type { TerminalBackend, TerminalExecutionErrorInfo, TerminalExecutionEvent } from '../../shared/terminal'
 import type {
   TerminalExecutionAdapter,
   TerminalExecutionEventListener,
@@ -47,12 +46,12 @@ export interface PtyExecutionAdapterOptions {
 }
 
 export class TerminalPtyError extends Error {
-  readonly remoteError: RemoteError
+  readonly executionError: TerminalExecutionErrorInfo
 
-  constructor(remoteError: RemoteError) {
-    super(remoteError.message)
+  constructor(executionError: TerminalExecutionErrorInfo) {
+    super(executionError.message)
     this.name = 'TerminalPtyError'
-    this.remoteError = remoteError
+    this.executionError = executionError
   }
 }
 
@@ -225,9 +224,9 @@ export class PtyExecutionAdapter implements TerminalExecutionAdapter {
     message: string,
     retryable = true,
   ): TerminalPtyError {
-    const remoteError: RemoteError = {
+    const executionError: TerminalExecutionErrorInfo = {
       layer: 'execution-backend',
-      code: REMOTE_ERROR_CODE.EXECUTION_BACKEND_UNAVAILABLE,
+      code: 'EXECUTION_BACKEND_UNAVAILABLE',
       message,
       retryable,
       context: {
@@ -241,11 +240,11 @@ export class PtyExecutionAdapter implements TerminalExecutionAdapter {
       kind: 'error',
       sessionId,
       message,
-      remoteError,
+      executionError,
       timestamp: this.now(),
     })
 
-    return new TerminalPtyError(remoteError)
+    return new TerminalPtyError(executionError)
   }
 
   private emit(event: TerminalExecutionEvent): void {

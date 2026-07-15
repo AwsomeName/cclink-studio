@@ -1,3 +1,11 @@
+# Historical: CCLink 功能融入 DeepInk 设计方案
+
+> 当前状态：历史设计，不再作为 CCLink Studio 的产品/架构事实源。
+>
+> 本文的核心假设是“CCLink 功能融入 DeepInk”。当前决策已经反转：产品是 **CCLink Studio**，原 DeepInk 战略上并入 CCLink，成为 CCLink 的桌面工作台端。Studio 开源壳不默认内置账号、TIM、配对、远程工作区和商业发布链路。
+>
+> 真实边界见 `docs/architecture.md` 与 `docs/cclink-studio-boundary-and-migration.md`。本文下方内容只用于历史追溯和迁移排查。
+
 # CCLink 功能融入 DeepInk 设计方案
 
 > 状态：账户身份、TIM 实时链路、已配对 Agent 同步、远程文件请求链路、远程工作空间列表和远程只读文件预览已接入；下一步补远程会话实时发送与权限工具卡片闭环

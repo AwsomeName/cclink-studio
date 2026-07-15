@@ -51,7 +51,7 @@ describe('cleanupTerminalOrphans', () => {
     const summary = await cleanupTerminalOrphans(store, {
       now: () => 500,
       isProcessAlive: vi.fn().mockResolvedValue(true),
-      isDeepInkTerminalProcess: vi.fn().mockResolvedValue(true),
+      isStudioTerminalProcess: vi.fn().mockResolvedValue(true),
       killProcess,
       wait: async () => undefined,
       graceMs: 0,
@@ -70,11 +70,11 @@ describe('cleanupTerminalOrphans', () => {
       status: 'exited',
       attachable: false,
       exitedAt: 500,
-      errorMessage: 'DeepInk 启动时已清理上次残留 Terminal 进程',
+      errorMessage: 'CCLink Studio 启动时已清理上次残留 Terminal 进程',
     })
   })
 
-  it('does not kill alive processes that cannot be verified as DeepInk terminals', async () => {
+  it('does not kill alive processes that cannot be verified as CCLink Studio terminals', async () => {
     const store = new TerminalSessionStore()
     const killProcess = vi.fn()
 
@@ -90,7 +90,7 @@ describe('cleanupTerminalOrphans', () => {
     const summary = await cleanupTerminalOrphans(store, {
       now: () => 500,
       isProcessAlive: vi.fn().mockResolvedValue(true),
-      isDeepInkTerminalProcess: vi.fn().mockResolvedValue(false),
+      isStudioTerminalProcess: vi.fn().mockResolvedValue(false),
       killProcess,
       wait: async () => undefined,
     })
@@ -120,7 +120,7 @@ describe('cleanupTerminalOrphans', () => {
     const summary = await cleanupTerminalOrphans(store, {
       now: () => 500,
       isProcessAlive: vi.fn().mockResolvedValue(false),
-      isDeepInkTerminalProcess: vi.fn().mockResolvedValue(false),
+      isStudioTerminalProcess: vi.fn().mockResolvedValue(false),
       wait: async () => undefined,
     })
 

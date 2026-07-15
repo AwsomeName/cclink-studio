@@ -1,8 +1,11 @@
-import { useAgentStore, useTabStore, useBrowserStore, useSyncStore, useUpdateStore, useWorkspaceStore } from '../../stores'
-import { IconLink, IconRobot, IconCircle, IconCloud, IconSync, IconCloudCheck } from '../common/Icons'
-import { ProBadge } from '../subscription/ProBadge'
-import { SYNC_PHASE_LABEL } from '../../constants/sync-labels'
-import type { SyncPhase } from '@shared/ipc/sync'
+import {
+  useAgentStore,
+  useTabStore,
+  useBrowserStore,
+  useUpdateStore,
+  useWorkspaceStore,
+} from '../../stores'
+import { IconLink, IconRobot, IconCircle } from '../common/Icons'
 import { workspaceRefKey, workspaceRefLabel, workspaceRefSourceLabel } from '../../../../shared/workspace-ref'
 
 /** Agent 状态 → 显示文本 */
@@ -29,15 +32,11 @@ export function StatusBar(): React.ReactElement {
   const currentUrl = useBrowserStore((s) =>
     activeTab?.type === 'browser' ? s.tabs[activeTab.id]?.url : undefined,
   )
-  const syncConfig = useSyncStore((s) => s.config)
-  const syncStatus = useSyncStore((s) => s.status)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const { hasUpdate, latestVersion, downloading, setDownloading, clear } = useUpdateStore()
 
   const agentStatus = AGENT_STATUS_MAP[backendState] ?? AGENT_STATUS_MAP.disconnected
   const tabLabel = activeTab ? TAB_TYPE_LABEL[activeTab.type] ?? activeTab.title : ''
-
-  const isSyncing = ['connecting', 'scanning-local', 'scanning-remote', 'comparing', 'syncing'].includes(syncStatus.phase)
 
   const handleDownloadUpdate = async (): Promise<void> => {
     setDownloading(true)
@@ -57,20 +56,6 @@ export function StatusBar(): React.ReactElement {
         {agentStatus.text}
         <IconCircle size={6} filled color={agentStatus.color} />
       </span>
-
-      {/* 同步状态（仅配置后显示） */}
-      {syncConfig && (
-        <span className="status-bar-item" title={syncStatus.message || SYNC_PHASE_LABEL[syncStatus.phase]}>
-          {isSyncing ? (
-            <IconSync size={12} className="animate-spin" />
-          ) : syncStatus.phase === 'error' ? (
-            <IconCloud size={12} />
-          ) : (
-            <IconCloudCheck size={12} />
-          )}
-          {SYNC_PHASE_LABEL[syncStatus.phase]}
-        </span>
-      )}
 
       {/* 活跃 Tab 信息 */}
       {tabLabel && (
@@ -104,10 +89,9 @@ export function StatusBar(): React.ReactElement {
         </button>
       )}
 
-      {/* 右侧：Pro 徽章 + 版本 */}
-      <ProBadge />
+      {/* 右侧：版本 */}
       <span className="status-bar-item">
-        DeepInk v0.1.0
+        CCLink Studio v0.1.0
       </span>
     </div>
   )

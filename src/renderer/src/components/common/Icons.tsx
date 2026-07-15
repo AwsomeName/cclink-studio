@@ -1,5 +1,5 @@
 /**
- * DeepInk SVG 图标库
+ * CCLink Studio SVG 图标库
  *
  * 灵感来自 VSCode Codicons，统一 16x16 视口，stroke-based 风格。
  * 用法：<IconFiles size={20} />

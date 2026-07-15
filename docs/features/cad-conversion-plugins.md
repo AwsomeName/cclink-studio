@@ -6,14 +6,14 @@
 
 ## 结论
 
-STEP/STP 支持不应作为 DeepInk 默认内置功能直接打包。
+STEP/STP 支持不应作为 CCLink Studio 默认内置功能直接打包。
 
 正确产品形态是：
 
 ```text
 默认内置轻量 3D 预览
 → 用户在设置页启用 CAD 转换能力
-→ DeepInk 检测或下载转换后端
+→ CCLink Studio 检测或下载转换后端
 → STEP/STP 转为可预览 mesh
 → ModelViewer 继续负责交互式渲染
 ```
@@ -27,7 +27,7 @@ STEP/STP 支持不应作为 DeepInk 默认内置功能直接打包。
 
 ## 产品目标
 
-让 DeepInk 在硬件项目中逐步支持结构件文件：
+让 CCLink Studio 在硬件项目中逐步支持结构件文件：
 
 - 默认能打开 STL、3MF、GLB、GLTF、FBX 等 mesh 格式。
 - 启用 CAD 转换插件后能预览 STEP/STP。
@@ -83,7 +83,7 @@ STEP/STP 支持不应作为 DeepInk 默认内置功能直接打包。
    ├─ CAD 转换后端
    │  ├─ 关闭
    │  ├─ 使用本机 FreeCAD
-   │  ├─ 下载 DeepInk 托管转换器
+   │  ├─ 下载 CCLink Studio 托管转换器
    │  └─ 高级：OpenCascade 实验后端
    ├─ FreeCAD 路径
    ├─ 检测后端
@@ -203,13 +203,13 @@ FreeCADCmd / FreeCAD --console
 → 执行受控 Python 脚本
 → Import STEP
 → Mesh/Part 导出 STL 或 OBJ
-→ DeepInk 读取导出文件并交给 ModelViewer
+→ CCLink Studio 读取导出文件并交给 ModelViewer
 ```
 
 要求：
 
 - 不执行用户项目目录里的任意脚本。
-- 转换脚本由 DeepInk 内置生成。
+- 转换脚本由 CCLink Studio 内置生成。
 - 输入输出路径必须经过 allowlist 校验。
 - 超时可取消。
 - stdout/stderr 写入诊断日志。
@@ -259,7 +259,7 @@ FreeCADCmd / FreeCAD --console
 - `CAD-M4.1` 已打底：CAD IPC 增加 `getModelSupport`、`getCacheStatus`、`clearCache`，设置页可查看缓存占用、缓存目录并清理缓存。
 - `CAD-M5` 已打底：`hardware_scan_project` 和 `hardware_inspect_production_package` 会返回 `structuralArtifacts`，让结构件预览状态、缓存命中和尺寸 metadata 进入硬件项目上下文。
 - `CAD-M6` 已打底第一段：ModelViewer 会展示预览 mesh 的包围盒尺寸；STEP/STP 转换成功后会在 `metadata.json` 中持久化包围盒、单位置信度、预览路径和源文件 hash。
-- `CAD-M6.1` 已打底：新增 CAD MCP 只读诊断工具，Agent 可查询 CAD 后端状态、模型支持情况、已缓存结构 metadata 和缓存状态；清缓存工具只删除 DeepInk 生成的预览缓存。
+- `CAD-M6.1` 已打底：新增 CAD MCP 只读诊断工具，Agent 可查询 CAD 后端状态、模型支持情况、已缓存结构 metadata 和缓存状态；清缓存工具只删除 CCLink Studio 生成的预览缓存。
 
 尚未完成：
 
@@ -289,7 +289,7 @@ FreeCADCmd / FreeCAD --console
 
 ### CAD-M1：设置模型与能力状态
 
-目标：让 DeepInk 有“CAD 转换能力”的配置和状态。
+目标：让 CCLink Studio 有“CAD 转换能力”的配置和状态。
 
 怎么做：
 
@@ -548,7 +548,7 @@ AI 必须知道：
 
 ```text
 用户本机装了 FreeCAD
-→ DeepInk 设置页检测到
+→ CCLink Studio 设置页检测到
 → 打开真实 STEP
 → 转换成 mesh
 → ModelViewer 能看

@@ -19,7 +19,7 @@ export class ServiceRegistry {
       try {
         await service.start()
       } catch (error) {
-        console.error(`[DeepInk] ${service.name} 启动失败:`, error)
+        console.error(`[CCLink Studio] ${service.name} 启动失败:`, error)
         throw error
       }
     }

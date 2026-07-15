@@ -39,5 +39,5 @@ export function registerEditorIpc(editorModule: EditorToolModule): void {
     },
   )
 
-  console.log('[DeepInk] 编辑器 IPC 已注册')
+  console.log('[CCLink Studio] 编辑器 IPC 已注册')
 }

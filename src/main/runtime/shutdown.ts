@@ -3,6 +3,6 @@ export async function runShutdownStep(label: string, cleanup: () => void | Promi
   try {
     await cleanup()
   } catch (error) {
-    console.warn(`[DeepInk] ${label} 清理出错:`, error)
+    console.warn(`[CCLink Studio] ${label} 清理出错:`, error)
   }
 }

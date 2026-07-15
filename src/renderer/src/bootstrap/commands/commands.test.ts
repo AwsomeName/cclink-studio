@@ -5,7 +5,6 @@ import { createBrowserCommands } from './browser-commands'
 import { createDiagnosticsCommands } from './diagnostics-commands'
 import { createFileCommands } from './file-commands'
 import { createSettingsCommands } from './settings-commands'
-import { createSyncCommands } from './sync-commands'
 import { createTabCommands } from './tab-commands'
 import { createViewCommands } from './view-commands'
 import { createWindowCommands } from './window-commands'
@@ -21,7 +20,6 @@ function createAllCommands(): Command[] {
     ...createTabCommands(),
     ...createFileCommands(),
     ...createSettingsCommands(),
-    ...createSyncCommands(),
     ...createAgentCommands(),
     ...createBrowserCommands(),
     ...createDiagnosticsCommands(),

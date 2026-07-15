@@ -7,19 +7,11 @@ const LEGACY_USER_DATA_DIR_NAMES = ['Electron', 'electron', 'deepink', 'DeepInk-
 const MIGRATED_USER_DATA_FILES = [
   'settings.json',
   'workspace-state.json',
-  'auth.json',
-  'user.json',
   'local-identity.json',
-  'sync-store.json',
-  'sync-credentials.json',
-  'sync-history.json',
   'browser-snapshots.json',
   'browser-history.json',
   'browser-downloads.json',
   'mcp-servers.json',
-  'cclink-state.json',
-  'cclink-device.json',
-  'cclink-identity.json',
   'terminal-sessions.json',
   'terminal-audit-log.json',
   'data-source/connections.json',
@@ -154,7 +146,7 @@ export function getUserDataMigrationDiagnostics(): UserDataMigrationDiagnostics 
 }
 
 /**
- * 固定 DeepInk 的本机数据目录，避免 dev/package/appName 差异造成状态分裂。
+ * 固定历史本机数据目录，避免 dev/package/appName 差异造成状态分裂。
  *
  * 必须在任何服务读取 app.getPath('userData') 前调用。
  */
@@ -184,7 +176,7 @@ export function configureFixedUserDataPath(app: App): string {
       candidates: candidateResults,
     }
   } catch (error) {
-    console.warn('[DeepInk] 迁移旧 userData 目录失败，将继续使用固定目录:', error)
+    console.warn('[CCLink Studio] 迁移旧 userData 目录失败，将继续使用固定目录:', error)
     mkdirSync(fixedUserDataPath, { recursive: true })
     lastMigrationDiagnostics = {
       fixedUserDataPath,

@@ -1,3 +1,9 @@
+# Historical: 架构优化方案
+
+> 当前状态：历史优化计划，不再作为 CCLink Studio 当前事实源。
+>
+> 本文写于商业模块迁出前，包含 auth、subscription、sync、CCLink runtime 等旧架构目标。当前事实源见 `docs/architecture.md`、`docs/development.md` 和 `docs/cclink-studio-boundary-and-migration.md`。
+
 # DeepInk 架构优化方案
 
 本文档描述 DeepInk 从“快速功能集成期”进入“平台内核整理期”的架构优化路线。

@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { REMOTE_ERROR_CODE } from '../../shared/remote-error'
 import type { TerminalRuntimeRef } from '../../shared/terminal'
 import {
   NoopTerminalExecutionAdapter,
@@ -34,9 +33,9 @@ describe('NoopTerminalExecutionAdapter', () => {
       kind: 'error',
       sessionId: 'terminal-1',
       message: 'Terminal 执行适配器尚未接入真实 shell',
-      remoteError: {
+      executionError: {
         layer: 'execution-backend',
-        code: REMOTE_ERROR_CODE.EXECUTION_BACKEND_UNAVAILABLE,
+        code: 'EXECUTION_BACKEND_UNAVAILABLE',
         message: 'Terminal 执行适配器尚未接入真实 shell',
         retryable: false,
         context: {
@@ -49,13 +48,13 @@ describe('NoopTerminalExecutionAdapter', () => {
     })
   })
 
-  it('preserves the remote error on rejected operations', async () => {
+  it('preserves the execution error on rejected operations', async () => {
     const adapter = new NoopTerminalExecutionAdapter({ backend: 'remote-shell' })
 
     await expect(adapter.write({ sessionId: 'terminal-2', data: 'pwd', actor: 'user' })).rejects.toMatchObject({
-      remoteError: {
+      executionError: {
         layer: 'execution-backend',
-        code: REMOTE_ERROR_CODE.EXECUTION_BACKEND_UNAVAILABLE,
+        code: 'EXECUTION_BACKEND_UNAVAILABLE',
         retryable: false,
         context: {
           backend: 'remote-shell',
@@ -70,7 +69,7 @@ describe('NoopTerminalExecutionAdapter', () => {
     const adapter = new NoopTerminalExecutionAdapter()
 
     await expect(adapter.resize('terminal-3', { columns: 120, rows: 32 })).rejects.toMatchObject({
-      remoteError: {
+      executionError: {
         context: {
           backend: 'custom',
           operation: 'terminal.resize',
@@ -79,7 +78,7 @@ describe('NoopTerminalExecutionAdapter', () => {
       },
     })
     await expect(adapter.terminate('terminal-3')).rejects.toMatchObject({
-      remoteError: {
+      executionError: {
         context: {
           backend: 'custom',
           operation: 'terminal.terminate',

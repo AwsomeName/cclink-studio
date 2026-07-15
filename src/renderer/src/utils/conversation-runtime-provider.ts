@@ -1,6 +1,6 @@
 import type { AgentSendMessageInput } from '@shared/ipc/agent'
 
-export type ConversationRuntimeProviderKind = 'local-agent' | 'remote-cclink'
+export type ConversationRuntimeProviderKind = 'local-agent'
 
 export interface ConversationRuntimeProvider {
   kind: ConversationRuntimeProviderKind
@@ -19,13 +19,6 @@ interface LocalAgentConversationProviderOptions {
   buildSendInput?: (content: string) => AgentSendMessageInput
   sendMessage: (conversationId: string, content: AgentSendMessageInput) => Promise<unknown>
   abortMessage: (conversationId: string) => Promise<void>
-}
-
-interface CclinkConversationProviderOptions {
-  sessionId: string
-  load: () => Promise<void>
-  loadMessages: (sessionId: string) => Promise<void>
-  sendLocalMessage: (sessionId: string, content: string) => Promise<void>
 }
 
 export function createLocalAgentConversationProvider({
@@ -59,34 +52,6 @@ export function createLocalAgentConversationProvider({
       cancelStreaming(conversationId)
       addSystemMessage('已手动中止当前任务', conversationId)
       return true
-    },
-  }
-}
-
-export function createCclinkConversationProvider({
-  sessionId,
-  load,
-  loadMessages,
-  sendLocalMessage,
-}: CclinkConversationProviderOptions): ConversationRuntimeProvider {
-  return {
-    kind: 'remote-cclink',
-    load: async () => {
-      try {
-        await Promise.all([load(), loadMessages(sessionId)])
-      } catch {
-        return
-      }
-    },
-    send: async (content) => {
-      const text = content.trim()
-      if (!text) return false
-      try {
-        await sendLocalMessage(sessionId, text)
-        return true
-      } catch {
-        return false
-      }
     },
   }
 }

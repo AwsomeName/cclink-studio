@@ -20,13 +20,13 @@ describe('buildAgentMessageWithContext', () => {
         {
           id: 'browser:tab-1',
           kind: 'browser',
-          label: 'DeepInk 官网',
+          label: 'CCLink Studio 官网',
           ref: { type: 'browser', tabId: 'tab-1' },
         },
       ],
     })
 
-    expect(message).toContain('DeepInk 会话上下文')
+    expect(message).toContain('CCLink Studio 会话上下文')
     expect(message).toContain('不要把资源索引当作资源正文')
     expect(message).toContain('"label": "README.md"')
     expect(message).toContain('"tabId": "tab-1"')

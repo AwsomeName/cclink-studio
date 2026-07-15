@@ -2,13 +2,13 @@
 
 ## 概述
 
-DeepInk 的 Agent 是一个基于 AI 的智能助手，能够理解自然语言指令并调用工具完成复杂任务。Agent 不是简单的聊天机器人，而是能够操作浏览器、编辑文档、搜索网络的"数字助手"。
+CCLink Studio 的 Agent 是本地工作台里的 AI 协作入口，能够理解自然语言指令并调用工具完成复杂任务。Agent 不是简单的聊天机器人，而是能够操作浏览器、编辑文档、搜索网络的本地工作助手。
 
-> **DeepInk 不提供 AI 模型服务，不代理任何 API 调用。**
+> **CCLink Studio OSS 默认不提供 AI 模型服务，不代理任何官方 API 调用。**
 
 ### Agent 后端：本地 Claude Code
 
-Agent 由本地 Claude Code 驱动。Claude Code 自身有完整的 AI 服务配置能力（模型选择、API Key、自定义端点等），DeepInk 不需要自建 AI 调用层。
+Agent 由本地 Claude Code 驱动。Claude Code 自身有完整的 AI 服务配置能力（模型选择、API Key、自定义端点等），CCLink Studio OSS 不需要自建 AI 调用层。
 
 ```
 ┌──────────┐    IPC    ┌────────────┐   stdin/stdout   ┌──────────────┐
@@ -26,7 +26,7 @@ Agent 由本地 Claude Code 驱动。Claude Code 自身有完整的 AI 服务配
 **M9 当前配置层级：**
 
 ```
-DeepInk 设置页（VSCode 风格，在主工作区 Tab 中打开）
+CCLink Studio 设置页（VSCode 风格，在主工作区 Tab 中打开）
 │
 ├── Agent 引擎：Local Claude Code
 ├── Claude Code CLI 路径：自动检测 / 手动填写
@@ -34,7 +34,7 @@ DeepInk 设置页（VSCode 风格，在主工作区 Tab 中打开）
 └── 预算上限：--max-budget-usd
 ```
 
-DeepInk 不保存模型 API Key。模型选择、登录、自定义端点等由本机 Claude Code 自己管理：
+CCLink Studio 不保存模型 API Key。模型选择、登录、自定义端点等由本机 Claude Code 自己管理：
 
 ```bash
 claude login
@@ -378,7 +378,7 @@ interface AgentContext {
 
 ### 当前方案：本机 Claude Code 集成
 
-Agent 由本地 Claude Code 驱动。DeepInk 不直接保存模型 API Key，也不代理模型服务：
+Agent 由本地 Claude Code 驱动。CCLink Studio 不直接保存模型 API Key，也不代理模型服务：
 
 ```typescript
 // 主进程启动 Claude Code 子进程
@@ -392,7 +392,7 @@ const claudeProcess = spawn(claudeCodePath || 'claude', ['-p', '--output-format'
 // 或按 Claude Code 自身文档配置模型、Key、端点
 ```
 
-DeepInk 设置页只负责：
+CCLink Studio 设置页只负责：
 
 - 检测常见 `claude` 路径。
 - 允许用户手动填写 Claude Code CLI 绝对路径。
@@ -422,7 +422,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend { ... }
 ### System Prompt
 
 ```
-你是 DeepInk 的 AI 助手，运行在用户的 Mac 桌面上。
+你是 CCLink Studio 的 AI 助手，运行在用户的 Mac 桌面上。
 
 你可以通过以下工具帮助用户：
 - 浏览器操作：导航网页、填写表单、提取内容
@@ -442,7 +442,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend { ... }
 
 ### 模型选择
 
-- **Claude Code 模式**：用户通过 `claude config` 或 DeepInk 设置页配置模型
+- **Claude Code 模式**：用户通过 `claude config` 或 CCLink Studio 设置页配置模型
 - **直连 API 模式**：用户在设置页选择服务商 + 具体模型
 - 流式输出：所有模式均支持
 

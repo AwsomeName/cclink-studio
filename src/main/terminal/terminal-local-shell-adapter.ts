@@ -1,7 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { REMOTE_ERROR_CODE, type RemoteError } from '../../shared/remote-error'
-import type { TerminalBackend, TerminalExecutionEvent } from '../../shared/terminal'
+import type { TerminalBackend, TerminalExecutionErrorInfo, TerminalExecutionEvent } from '../../shared/terminal'
 import type {
   TerminalExecutionAdapter,
   TerminalExecutionEventListener,
@@ -26,12 +25,12 @@ export interface LocalShellExecutionAdapterOptions {
 }
 
 export class TerminalLocalShellError extends Error {
-  readonly remoteError: RemoteError
+  readonly executionError: TerminalExecutionErrorInfo
 
-  constructor(remoteError: RemoteError) {
-    super(remoteError.message)
+  constructor(executionError: TerminalExecutionErrorInfo) {
+    super(executionError.message)
     this.name = 'TerminalLocalShellError'
-    this.remoteError = remoteError
+    this.executionError = executionError
   }
 }
 
@@ -166,9 +165,9 @@ export class LocalShellExecutionAdapter implements TerminalExecutionAdapter {
     message: string,
     retryable = true,
   ): TerminalLocalShellError {
-    const remoteError: RemoteError = {
+    const executionError: TerminalExecutionErrorInfo = {
       layer: 'execution-backend',
-      code: REMOTE_ERROR_CODE.EXECUTION_BACKEND_UNAVAILABLE,
+      code: 'EXECUTION_BACKEND_UNAVAILABLE',
       message,
       retryable,
       context: {
@@ -182,11 +181,11 @@ export class LocalShellExecutionAdapter implements TerminalExecutionAdapter {
       kind: 'error',
       sessionId,
       message,
-      remoteError,
+      executionError,
       timestamp: this.now(),
     })
 
-    return new TerminalLocalShellError(remoteError)
+    return new TerminalLocalShellError(executionError)
   }
 
   private emit(event: TerminalExecutionEvent): void {

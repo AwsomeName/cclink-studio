@@ -1,6 +1,10 @@
 # CloudBase Deployment
 
-CloudBase deployment documentation has moved to `../../private-serv/docs/deployment-cloudbase.md`.
+CloudBase deployment is no longer documented as `private-serv` work.
 
-DeepInk keeps only the desktop client. Cloud functions, deployment artifacts,
-payment handlers, and server-side operations belong to `private-serv`.
+CCLink Studio keeps only the desktop client shell. Cloud functions, deployment
+artifacts, account operations, payment handlers, TIM UserSig, entitlement,
+quota, pairing, and message routing belong to `/Users/apple/Desktop/chat-cc/deploy`.
+
+The current project boundary and migration assessment lives in
+[`cclink-studio-boundary-and-migration.md`](cclink-studio-boundary-and-migration.md).

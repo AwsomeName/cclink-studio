@@ -1,4 +1,4 @@
-# DeepInk 数据源系统 — 开发者实施计划
+# CCLink Studio 数据源系统 — 开发者实施计划
 
 > 状态：🔧 分阶段落地中
 > 关联方案：`docs/features/data-sources.md`
@@ -6,7 +6,7 @@
 
 ## 结论
 
-数据源系统第一版只做一件事：**把远程 Elasticsearch 里的采集资料，以只读、可追溯、可授权的方式接入 DeepInk，并让查询结果可以挂载给 Agent 写作。**
+数据源系统第一版只做一件事：**把远程 Elasticsearch 里的采集资料，以只读、可追溯、可授权的方式接入 CCLink Studio，并让查询结果可以挂载给 Agent 写作。**
 
 不要把它做成数据库管理器。开发顺序必须先安全边界，再主进程能力，再 IPC，再 UI，再 Agent。任何阶段只要出现“Renderer 拿到明文凭证”“Agent 静默扫库”“查询结果无限塞上下文”，都要停下来修边界。
 
@@ -247,7 +247,7 @@ DATA_SOURCE_INTERNAL_ERROR
 └── secrets.enc
 
 macOS Keychain:
-└── DeepInk data-source:<sourceId>
+└── data-source:<sourceId>
 ```
 
 ### 涉及文件
@@ -263,6 +263,8 @@ macOS Keychain:
 - 更新凭证不会改变 source id。
 - 删除数据源会删除凭证引用。
 - `rg "password|apiKey|token" ~/Library/Application Support/DeepInk/data-source` 不应搜到真实 secret。
+
+说明：`Application Support/DeepInk` 是当前兼容保留的 Electron `userData` 目录，不随产品名机械替换。
 - 单测覆盖 create/update/delete/list 和 secret 缺失。
 
 ### 拷问
@@ -658,7 +660,7 @@ data_source.run_saved_query
 
 ### 拷问
 
-如果每次写文章前都要人工解释字段含义，DeepInk 没有降低工作成本。
+如果每次写文章前都要人工解释字段含义，CCLink Studio 没有降低工作成本。
 
 ## D12：真实 ES 验收与发布门槛
 
@@ -737,4 +739,4 @@ data_source.run_saved_query
 
 ## 最后一刀
 
-这个功能真正的价值不是“DeepInk 能连数据库”，而是“用户写文章时，远程采集数据可以被可信、可追溯、可授权地使用”。任何不能服务这句话的功能，都先不要做。
+这个功能真正的价值不是“CCLink Studio 能连数据库”，而是“用户写文章时，远程采集数据可以被可信、可追溯、可授权地使用”。任何不能服务这句话的功能，都先不要做。

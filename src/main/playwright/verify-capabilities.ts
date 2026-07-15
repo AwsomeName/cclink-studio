@@ -31,7 +31,7 @@ export async function verifyAllCapabilities(page: Page): Promise<VerificationRes
       : join(__dirname, 'test-page.html')
     await page.goto('file://' + testPagePath)
     const title = await page.title()
-    if (!title.includes('DeepInk')) throw new Error(`标题不匹配: ${title}`)
+    if (!title.includes('CCLink Studio')) throw new Error(`标题不匹配: ${title}`)
   })
 
   // 2. 元素点击
@@ -65,7 +65,7 @@ export async function verifyAllCapabilities(page: Page): Promise<VerificationRes
   // 6. DOM 提取
   await test('page.textContent', async () => {
     const text = await page.textContent('h1')
-    if (!text?.includes('DeepInk')) throw new Error(`提取内容不匹配: ${text}`)
+    if (!text?.includes('CCLink Studio')) throw new Error(`提取内容不匹配: ${text}`)
   })
 
   // 7. 网络拦截

@@ -200,7 +200,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
 
     if (options?.resourceContext) {
       sections.push(
-        '### DeepInk 资源事实包',
+        '### CCLink Studio 资源事实包',
         '以下 JSON 是宿主采样的真实运行态。判断页面、目录、配置和任务目标时，以这里的 URL/host/workspace/config/task 为准；不要用搜索结果摘要或页面文案脑补已经进入目标站点。',
         '```json',
         JSON.stringify(options.resourceContext, null, 2),
@@ -225,7 +225,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         '### 使用建议',
         ...(forceVisibleBrowser
           ? [
-              '- 用户已显式 @ 绑定浏览器 Tab 或选择浏览器 scope：必须操作 DeepInk 左侧可视浏览器页',
+              '- 用户已显式 @ 绑定浏览器 Tab 或选择浏览器 scope：必须操作 CCLink Studio 左侧可视浏览器页',
               '- 默认不要新开 Tab：先用 browser_navigate 在当前可视页打开目标 URL，再用 browser_fill / browser_click / browser_press 操作页面',
               '- 访问站点后必须用 browser_get_tab_info 或 browser_title 验证当前 URL/标题；只有 URL host 已匹配目标站点时，才能声称已经打开该站点或登录页',
               '- 如果当前 URL 仍是搜索引擎结果页，不要把搜索结果摘要、AI 摘要或页面文本当作目标站点内容；应继续直接 browser_navigate 到目标 URL、点击官方结果，或明确说明导航失败',

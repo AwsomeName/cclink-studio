@@ -12,7 +12,6 @@ import { resolveConversationTab } from '../../utils/conversation-tab'
 import { getUnsupportedConversationMeta } from '../../utils/conversation-runtime-adapter'
 import { submitTerminalCommand } from '../../utils/terminal-command'
 import { buildTerminalTabDraft } from '../../utils/terminal-tab'
-import { CclinkConversation } from '../cclink/CclinkConversation'
 import { ErrorBoundary } from '../common/ErrorBoundary'
 import { PanelErrorFallback } from '../common/ErrorFallback'
 import { DataSourceQueryTab } from '../data-sources/DataSourceQueryTab'
@@ -21,7 +20,6 @@ import { AndroidDisplay } from './AndroidDisplay'
 import { GerberLayerPreview } from './GerberLayerPreview'
 import { MarkdownEditor } from './MarkdownEditor'
 import { ModelViewer } from './ModelViewer'
-import { RemoteFileViewer } from './RemoteFileViewer'
 import { WorkbenchAgentConversation } from './WorkbenchAgentConversation'
 import { WeChatPreview } from './wechat/WeChatPreview'
 import type { TerminalOutputLine } from '../../stores/terminal-store'
@@ -67,12 +65,6 @@ export function WorkbenchContent({
             {activeTab.type === 'model' && activeTab.filePath && (
               <ModelViewer key={activeTab.filePath} filePath={activeTab.filePath} />
             )}
-            {conversationTarget?.kind === 'remote-cclink' && (
-              <CclinkConversation
-                key={conversationTarget.sessionId}
-                sessionId={conversationTarget.sessionId}
-              />
-            )}
             {conversationTarget?.kind === 'local-agent' && (
               <WorkbenchAgentConversation
                 key={conversationTarget.conversationId}
@@ -83,11 +75,8 @@ export function WorkbenchContent({
             {conversationTarget?.kind === 'unsupported' && (
               <UnsupportedConversationTab reason={conversationTarget.reason} />
             )}
-            {activeTab.type === 'remote-file' && activeTab.remoteFile && (
-              <RemoteFileViewer
-                key={`${activeTab.remoteFile.serverId}:${activeTab.remoteFile.workspaceId}:${activeTab.remoteFile.path}`}
-                remoteFile={activeTab.remoteFile}
-              />
+            {activeTab.type === 'remote-file' && (
+              <UnsupportedCommercialTab title="远程文件不可用" />
             )}
             {activeTab.type === 'hardware-gerber' && activeTab.hardwareGerber && (
               <GerberLayerPreview
@@ -103,6 +92,19 @@ export function WorkbenchContent({
           </>
         )}
       </ErrorBoundary>
+    </div>
+  )
+}
+
+function UnsupportedCommercialTab({ title }: { title: string }): React.ReactElement {
+  return (
+    <div className="conversation-shell local">
+      <div className="terminal-placeholder">
+        <div className="terminal-placeholder-title">{title}</div>
+        <div className="terminal-placeholder-desc">
+          该能力属于商业远程工作区模块，开源壳不加载对应实现。
+        </div>
+      </div>
     </div>
   )
 }

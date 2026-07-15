@@ -1,3 +1,9 @@
+# Historical: Remote Integration Matrix
+
+> 当前状态：历史能力矩阵，不再作为 `cclink-studio` 当前事实源。
+>
+> 本文列出的 Remote contracts、provider、IPC、UI 和 entitlement adapter 已迁出 Studio OSS 默认路径。保留本文只为审计“哪些商业/远程能力曾经存在”，不要据此把已删除文件加回开源壳。
+
 # Remote Integration Matrix
 
 > 状态：跨项目能力矩阵

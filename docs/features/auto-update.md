@@ -1,3 +1,9 @@
+# Historical: 自动更新方案（腾讯云 COS）
+
+> 当前状态：历史发布方案，不属于 CCLink Studio OSS 默认路径。
+>
+> COS 上传脚本、官方更新源、签名、公证和商业发布链路已经迁到 `/Users/apple/Desktop/cclink-dev` 的 commercial/release 基线。开源 Studio 只保留中性 updater shell，不应默认包含 COS SDK、COS 上传脚本、官方 feed URL 或生产发布凭证。
+
 # DeepInk 自动更新方案（腾讯云 COS）
 
 > 适用场景：个人项目、Mac 优先、App **未签名**、国内用户、低成本、快接入、稳定可靠。

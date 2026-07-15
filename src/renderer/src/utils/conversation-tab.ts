@@ -7,12 +7,6 @@ export type ResolvedConversationTab =
       conversationId: string
     }
   | {
-      kind: 'remote-cclink'
-      tabId: string
-      sessionId: string
-      legacy: boolean
-    }
-  | {
       kind: 'unsupported'
       tabId: string
       reason: string
@@ -33,15 +27,6 @@ function resolveConversationRef(
       }
     }
 
-    if (runtime.location === 'remote' && runtime.transport === 'cclink') {
-      return {
-        kind: 'remote-cclink',
-        tabId,
-        sessionId,
-        legacy: false,
-      }
-    }
-
     return {
       kind: 'unsupported',
       tabId,
@@ -51,10 +36,9 @@ function resolveConversationRef(
 
   if (conversation.kind === 'remote' && conversation.transport === 'cclink') {
     return {
-      kind: 'remote-cclink',
+      kind: 'unsupported',
       tabId,
-      sessionId: conversation.sessionId,
-      legacy: true,
+      reason: '开源壳不加载 CCLink 远程会话模块',
     }
   }
 
@@ -72,10 +56,9 @@ export function resolveConversationTab(tab: Tab): ResolvedConversationTab | null
 
   if (tab.type === 'cclink' && tab.cclinkSessionId) {
     return {
-      kind: 'remote-cclink',
+      kind: 'unsupported',
       tabId: tab.id,
-      sessionId: tab.cclinkSessionId,
-      legacy: true,
+      reason: '开源壳不加载旧 CCLink 会话模块',
     }
   }
 

@@ -1,139 +1,102 @@
-# DeepInk
+# CCLink Studio
 
-**An open-source AI-powered desktop workspace — embedded browser, document editor, and AI agent, all in one.**
+**CCLink 的开源桌面工作台端：本地 Agent、内嵌浏览器、文档编辑、文件工作区和设备自动化外壳。**
 
 [![GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](https://github.com/<org>/deepink)
+[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](https://github.com/AwsomeName/cclink-studio)
 [![Electron](https://img.shields.io/badge/Electron-^35.7-47848F)](https://www.electronjs.org/)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](CONTRIBUTING.md)
 
-DeepInk 是面向 AI 时代的一站式桌面工作台。它将内嵌浏览器、文档编辑器、AI Agent 融为一体——让 AI 真正成为用户的"数字双手"：不仅会对话，还能看见网页、编辑文档、操控应用，并且一切都在用户的掌控之中。
+CCLink Studio 是 CCLink 的桌面工作台端。这个仓库只承载可以从源码直接运行的开源桌面壳：本地项目、文件、浏览器自动化、Markdown 编辑、Agent 面板、终端、数据源查询和设备连接能力。
 
----
+官方账号、设备注册、配对、消息路由、TIM UserSig、订阅、配额、官方更新源、签名、公证和发布上传不在本仓库默认路径中。它们分别由 `cclink-dev` 官方构建工作区和 `/Users/apple/Desktop/chat-cc` 中的 CCLink deploy / Agent 侧实现承接。
 
-## ✨ 特性一览
+## 能力边界
 
-| 特性                              | 状态             | 说明                                              |
-| --------------------------------- | ---------------- | ------------------------------------------------- |
-| 🖥️ 内嵌浏览器 + Playwright 自动化 | ✅ OSS Core      | Electron 窗口内运行完整 Chrome，AI 可直接操控网页 |
-| 📝 所见即所得文档编辑器           | ✅ OSS Core      | Tiptap/ProseMirror 富文本编辑，支持 Markdown      |
-| 🤖 AI Agent 对话                  | ✅ OSS Core      | 本机 Claude Code CLI + DeepInk MCP 工具           |
-| 📱 Android 设备操控               | 🔧 OSS Core      | ADB + scrcpy 投屏，AI 操控手机 App                |
-| 📁 项目与文件管理                 | ✅ OSS Core      | 本地项目文件夹浏览、文件读写、项目状态恢复        |
-| 🔄 WebDAV 云同步                  | ✅ OSS Core      | 支持坚果云等，用户选择自己的同步服务器            |
-| 🎨 VSCode 风格布局                | ✅ OSS Core      | Activity Bar + Sidebar + Workbench + Panel        |
-| 🔐 手机认证登录                   | ✅ Cloud Service | 短信验证码登录，需云服务后端                      |
-| ⭐ Pro 订阅 / 支付                | ✅ Cloud Service | 微信支付 / Apple IAP，需云服务后端                |
+| 能力 | 开源壳状态 | 说明 |
+| ---- | ---------- | ---- |
+| 内嵌浏览器 + Playwright 自动化 | 保留 | Electron 内嵌 Chromium，Agent 可在用户监视下操作网页。 |
+| Markdown 编辑器 | 保留 | Tiptap/ProseMirror，本地文件读写。 |
+| 本地 Agent 面板 | 保留 | 面向本机 Claude Code / 用户自配 API 的桌面壳能力。 |
+| 本地文件和项目工作区 | 保留 | 本地目录浏览、文件读写、workspace state 恢复。 |
+| Terminal | 保留 | 本地 shell 和审计；远程执行链路已从开源壳默认路径移除。 |
+| 数据源只读查询 | 保留 | 本地配置用户自有数据源，不内置官方云。 |
+| Android 真机连接 | 保留本地能力 | 不再默认安装或启动官方托管模拟器/云手机。 |
+| CCLink Account / Device / Message 网络 | 不在本仓库默认路径 | 由 `/Users/apple/Desktop/chat-cc/deploy` 和 `/Users/apple/Desktop/chat-cc/Agent` 承接。 |
+| 订阅、配额、支付、官方发布 | 不在本仓库默认路径 | 由 `cclink-dev` overlay 和 CCLink 服务端承接。 |
 
-> **开源核心（OSS Core）**：从源码完整可运行，无需任何云服务。云服务功能降级后应用仍正常使用。
-
----
-
-## 🚀 快速开始
+## 快速开始
 
 ```bash
-git clone https://github.com/<org>/deepink.git
-cd deepink
+git clone https://github.com/AwsomeName/cclink-studio.git
+cd cclink-studio
 pnpm install
 pnpm dev
 ```
 
 ### 系统要求
 
-- macOS 13+ (Ventura 及以上)
+- macOS 13+
 - Node.js 20+
 - pnpm 9+
 
-### Agent — 本机 Claude Code
+### Agent
 
-DeepInk **不提供** AI 模型服务。开源版第一条完整 Agent 路线依赖用户本机 Claude Code：
+CCLink Studio 不提供模型服务。开源壳可以连接用户本机或用户自有的 Agent 后端；当前主线优先支持本机 Claude Code：
 
 ```bash
-# 安装 Claude Code
 npm install -g @anthropic-ai/claude-code
-
-# 登录或配置 Claude Code
 claude login
 ```
 
-DeepInk 会在 `设置 > Agent` 中检测 `claude` 路径；如果从 Finder 启动后找不到 PATH，可手动填写 `/opt/homebrew/bin/claude` 或实际路径。
+在 `设置 > Agent` 中可以配置 `claude` 路径、模型提供商、API 地址和 API Key。密钥只保存于本机设置。
 
-HTTP API / OpenAI 兼容直连后续作为纯对话或工具 Agent 能力再接入；M9 第一版不把它作为完整自动化 Agent。
+## 项目结构
 
----
-
-## 🧭 产品定位
-
-DeepInk 不是代码编辑器，不是聊天机器人，不是传统办公套件。
-
-它是**一个全功能的 AI 工作入口**——把浏览器自动化、文档编辑、AI 对话、设备操控整合在一个遵循 VSCode 设计精神的桌面应用中。
-
-产品组织方式：
-
-- **Home**：总入口，展示继续工作、最近项目、未归档草稿和待确认任务。
-- **项目区**：由现有文件区升级而来，管理项目列表、当前项目文件、草稿和会话。
-- **标签页工作区**：当前项目内打开的浏览器、Markdown、Android、预览和会话。
-- **Agent Panel**：当前会话的即时协作区，承载消息流、待确认操作、`/` Skill 和 `@` 资源挂载；不再承载会话历史列表。
-- **系统项目**：隐藏的默认项目，用于承接未归档内容、临时草稿和用户长期记忆。
-
-```
-┌──────────┬─────────────────────┬────────────────────────┐
-│          │                     │ Agent Panel            │
-│  Activity│   主工作区            │ 当前对话 / 待确认操作   │
-│  Bar     │   (浏览器 / 编辑器    │ / Skill / @ 资源       │
-│  + 侧栏  │    / Android / 设置)  │ 模型与权限快捷选择      │
-│ 会话列表 │                     │                        │
-└──────────┴─────────────────────┴────────────────────────┘
+```text
+cclink-studio/
+├── docs/                  # 开源壳架构、功能和迁移边界文档
+├── scripts/               # 本地开发和本地打包脚本
+├── src/
+│   ├── main/              # Electron 主进程与本地服务
+│   ├── preload/           # contextBridge 白名单 API
+│   ├── renderer/          # React 工作台 UI
+│   └── shared/            # 跨进程共享 contract
+├── electron-builder.yml   # 开源本地打包配置，不包含官方发布源
+└── package.json
 ```
 
----
+## 私有/官方实现位置
 
-## 🔧 技术栈
+当前不存在独立的 `cclink-cloud` 或 `cclink-agent` 项目；`private-serv` 是废弃旧项目。
 
-| 层级           | 技术                                         |
-| -------------- | -------------------------------------------- |
-| 桌面框架       | Electron ^35.7                               |
-| 前端           | React ^19 + TypeScript ^5.9（严格模式）      |
-| 构建           | electron-vite ^5（Vite ^6）                  |
-| 状态管理       | Zustand ^5（19 个 Store）                    |
-| 浏览器自动化   | Playwright ^1.52（内嵌 CDP，46 个 MCP 工具） |
-| Android 自动化 | @yume-chan/adb + scrcpy（15 个 MCP 工具）    |
-| 文档编辑       | Tiptap / ProseMirror ^3（5 个 MCP 工具）     |
-| MCP 工具系统   | @modelcontextprotocol/sdk ^1.29              |
-| Schema         | Zod ^4                                       |
-| 样式           | 纯 CSS（CSS 变量 + 暗色/亮色主题）           |
+- `cclink-dev`：闭源官方构建工作区，负责 release overlay、签名、公证、生产 API 注入、多仓库集成脚本。
+- `/Users/apple/Desktop/chat-cc/deploy`：CCLink 云函数和账号体系。
+- `/Users/apple/Desktop/chat-cc/Agent`：CCLink Agent runtime。
 
----
+## 文档
 
-## 📖 文档
-
+- [CCLink Studio 边界与迁移复查](docs/cclink-studio-boundary-and-migration.md)
 - [架构设计](docs/architecture.md)
 - [开发指南](docs/development.md)
-- [贡献指南](CONTRIBUTING.md)
-- 功能规格：
-  - [内嵌浏览器 & Playwright 自动化](docs/features/browser-automation.md)
-  - [AI 工作浏览器路线](docs/features/ai-work-browser.md)
-  - [Agent 对话系统](docs/features/agent-system.md)
-  - [项目系统与 Home](docs/features/project-system.md)
-  - [所见即所得编辑器](docs/features/document-editor.md)
-  - [Android 设备操控](docs/features/android-mirror.md)
-  - [云同步](docs/features/cloud-sync.md)
+- [浏览器自动化](docs/features/browser-automation.md)
+- [Agent 系统](docs/features/agent-system.md)
+- [文档编辑器](docs/features/document-editor.md)
+- [数据源](docs/features/data-sources.md)
 
----
+部分历史规划文档仍保留旧 DeepInk 命名，用于追溯设计演进；它们不是当前开源壳边界的事实来源。以 `README.md`、`AGENTS.md` 和 `docs/cclink-studio-boundary-and-migration.md` 为准。
 
-## 🤝 贡献
+## 兼容命名
 
-欢迎贡献！请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发流程和代码规范。
+为避免破坏历史数据和插件调用，本阶段暂不机械替换以下运行时兼容名：
 
----
+- `window.deepink`
+- `appId: com.deepink.app`
+- userData 目录 `DeepInk`
+- `deepink-*` localStorage key
+- 历史 workspace/tab snapshot 中的 `cclink` / `remote-file` 类型
 
-## 📄 许可证
+这些会在后续兼容迁移阶段通过显式迁移方案处理。
 
-**DeepInk 核心代码** © DeepInk Contributors，使用 [GPL v3](LICENSE) 许可证。
+## 许可证
 
-**云服务**（认证、订阅、支付）的后端实现在独立的私有仓库中维护。客户端 HTTP 调用代码已开源，并设计为优雅降级——云服务不可用时，核心功能不受影响。
-
----
-
-> **告诉世人的方式不是大张旗鼓的宣传，而是创作出足够优秀的东西。**
-> — Linus Torvalds
+CCLink Studio 开源桌面壳使用 [GPL v3](LICENSE) 许可证。

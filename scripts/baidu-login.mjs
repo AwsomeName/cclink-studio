@@ -136,7 +136,7 @@ async function main() {
   console.log('📸 截图 step5 已保存');
 
   console.log('\n==========================================');
-  console.log('⏳ 请查看 DeepInk 应用中的百度登录页面');
+  console.log('⏳ 请查看 CCLink Studio 应用中的百度登录页面');
   console.log('📱 如需短信验证码，请检查手机');
   console.log('==========================================');
 

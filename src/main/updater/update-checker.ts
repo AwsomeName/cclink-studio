@@ -1,7 +1,7 @@
 /**
  * update-checker — 轻量更新检查器（不依赖 electron-updater，适配未签名 Mac）
  *
- * 原理：fetch COS 上的 latest-mac.yml → 解析 version → 对比 app.getVersion()。
+ * 原理：fetch 配置更新源上的 latest-mac.yml → 解析 version → 对比 app.getVersion()。
  * 有新版本则通过 startPeriodicCheck 的回调通知调用方（IPC 层 → 渲染进程状态栏）。
  *
  * 设计取舍：未签名 Mac App 的 electron-updater 全自动更新不稳定，
@@ -11,14 +11,15 @@
 import { app, net } from 'electron'
 import { compareVersions, parseLatestMacYml, type UpdateInfo } from './update-utils'
 import type { UpdateCheckResult } from '../../shared/ipc/update'
-import { normalizeServiceUrl } from '../config/private-service-config'
 export type { UpdateCheckResult } from '../../shared/ipc/update'
 
 /**
  * 更新源基础地址（公开 URL，无密钥）。
- * 开源版不内置 DeepInk 产品更新源；闭源产品构建由环境注入。
+ * 开源版不内置 CCLink Studio 官方更新源；闭源产品构建由环境注入。
  */
-const UPDATE_BASE_URL = normalizeServiceUrl(process.env['DEEPINK_UPDATE_BASE_URL'])
+const UPDATE_BASE_URL = normalizeUpdateBaseUrl(
+  process.env['CCLINK_STUDIO_UPDATE_BASE_URL'] ?? process.env['DEEPINK_UPDATE_BASE_URL'],
+)
 
 /** 检查间隔：6 小时 */
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -81,4 +82,10 @@ function fetchText(url: string): Promise<string> {
     request.on('error', reject)
     request.end()
   })
+}
+
+function normalizeUpdateBaseUrl(value: string | undefined): string | null {
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+  return trimmed.replace(/\/+$/, '')
 }

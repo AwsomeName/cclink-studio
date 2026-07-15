@@ -68,11 +68,11 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
   const timeline = buildTimeline(input).slice(-MAX_TIMELINE_ITEMS)
 
   return [
-    '# DeepInk 诊断日志',
+    '# CCLink Studio 诊断日志',
     '',
     '## 元信息',
     `- 生成时间：${formatDateTime(generatedAt)}`,
-    `- DeepInk 版本：${redactText(input.appVersion ?? 'unknown')}`,
+    `- CCLink Studio 版本：${redactText(input.appVersion ?? 'unknown')}`,
     `- 平台：${redactText(input.platform ?? 'unknown')}`,
     `- 工作区：${redactText(workspaceSource)} · ${redactText(workspaceName)}`,
     `- 工作区 Key：${redactText(workspaceKey ?? '未绑定')}`,

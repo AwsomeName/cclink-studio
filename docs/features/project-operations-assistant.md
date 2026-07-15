@@ -8,7 +8,7 @@
 
 项目运营第一版不做独立的“运营平台”、不做“每个平台一个工作区”、不做完整账号管理器。
 
-DeepInk 只需要把现有能力组织成一个简单闭环：
+CCLink Studio 只需要把现有能力组织成一个简单闭环：
 
 ```text
 项目目录
@@ -22,7 +22,7 @@ DeepInk 只需要把现有能力组织成一个简单闭环：
 
 ## 用户故事
 
-用户打开 `cclink` 项目后，可以对 DeepInk 说：
+用户打开 `cclink` 项目后，可以对 CCLink Studio 说：
 
 ```text
 根据项目资料写一版公众号内测宣发稿，保存到 docs/公众号首发稿.md。
@@ -34,7 +34,7 @@ DeepInk 只需要把现有能力组织成一个简单闭环：
 打开微信公众号后台，把 docs/公众号首发稿.md 填到文章编辑器里，发布前让我确认。
 ```
 
-DeepInk 需要：
+CCLink Studio 需要：
 
 - 从当前项目读取资料和草稿。
 - 从 `deepink-accounts.json` 读取平台入口、账号备注和浏览器 profile。
@@ -62,7 +62,7 @@ deepink-accounts.json
       "id": "wechat-mp",
       "name": "微信公众号",
       "url": "https://mp.weixin.qq.com",
-      "account": "DeepInk",
+      "account": "CCLink Studio",
       "notes": "扫码登录；发布前必须人工确认。",
       "browserProfile": "wechat-mp"
     },
@@ -70,7 +70,7 @@ deepink-accounts.json
       "id": "zhihu",
       "name": "知乎",
       "url": "https://www.zhihu.com",
-      "account": "DeepInk",
+      "account": "CCLink Studio",
       "notes": "用于专栏文章和问答。",
       "browserProfile": "zhihu"
     }
@@ -267,7 +267,7 @@ deepink-accounts.json
 
 ## /grilling
 
-结论先说：这条线可以很快变成 DeepInk 的真实可用场景，但前提是保持简单。
+结论先说：这条线可以很快变成 CCLink Studio 的真实可用场景，但前提是保持简单。
 
 如果第一版把“平台”做成工作区，会污染工作空间模型；平台只是项目里的配置。
 
@@ -283,4 +283,4 @@ deepink-accounts.json
 4. 用户确认提交。
 5. 发布结果写回项目文档。
 
-这五步跑通，DeepInk 就开始真正服务项目运营；跑不通，再漂亮的平台模型都没意义。
+这五步跑通，CCLink Studio 就开始真正服务项目运营；跑不通，再漂亮的平台模型都没意义。

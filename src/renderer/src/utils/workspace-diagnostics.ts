@@ -8,7 +8,7 @@ export function formatWorkspaceDiagnosticsMarkdown(
   diagnostics: WorkspaceStateDiagnostics,
 ): string {
   const lines = [
-    '# DeepInk 工作台诊断',
+    '# CCLink Studio 工作台诊断',
     '',
     '## 状态文件',
     `- userData：${diagnostics.userDataPath}`,

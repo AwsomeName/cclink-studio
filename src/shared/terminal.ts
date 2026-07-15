@@ -1,5 +1,12 @@
-import type { RemoteError } from './remote-error'
 import type { RemoteWorkspaceTransport, WorkspaceRef } from './workspace-ref'
+
+export interface TerminalExecutionErrorInfo {
+  layer: 'execution-backend' | 'permission' | 'workspace' | 'unknown'
+  code: string
+  message: string
+  retryable: boolean
+  context?: Record<string, unknown>
+}
 
 export type TerminalRuntimeLocation = 'local' | 'remote'
 
@@ -100,7 +107,7 @@ export type TerminalExecutionEvent =
       kind: 'error'
       sessionId: string
       message: string
-      remoteError?: RemoteError
+      executionError?: TerminalExecutionErrorInfo
       timestamp: number
     }
 
@@ -139,5 +146,5 @@ export interface TerminalAuditEvent {
   approved?: boolean
   exitCode?: number
   message?: string
-  remoteError?: RemoteError
+  executionError?: TerminalExecutionErrorInfo
 }

@@ -1,6 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AgentSendMessageInput } from '../shared/ipc/agent'
-import type { CclinkFileReadRequest, CclinkFileTreeRequest } from '../shared/ipc/cclink'
 import type {
   CreateDataSourceInput,
   GetRecordInput,
@@ -8,15 +7,6 @@ import type {
   SaveDataQueryInput,
   UpdateDataSourceInput,
 } from '../shared/ipc/data-source'
-import type {
-  RemoteAgentMessageRequest,
-  RemoteFileCreateRequest,
-  RemoteFileDeleteRequest,
-  RemoteFileReadRequest,
-  RemoteFileRenameRequest,
-  RemoteFileTreeRequest,
-  RemoteFileWriteRequest,
-} from '../shared/remote-protocol'
 
 contextBridge.exposeInMainWorld('deepink', {
   // 工作区坐标上报（供 WebContentsView 定位）
@@ -139,74 +129,6 @@ contextBridge.exposeInMainWorld('deepink', {
       const handler = (_event: Electron.IpcRendererEvent, state: any) => callback(state)
       ipcRenderer.on('browser:viewStateChanged', handler)
       return () => ipcRenderer.removeListener('browser:viewStateChanged', handler)
-    },
-  },
-
-  // CCLink 远程连接客户端（DeepInk 作为 chatcc-agent 的桌面工作台）
-  cclink: {
-    getState: () => ipcRenderer.invoke('cclink:getState'),
-    getIdentity: () => ipcRenderer.invoke('cclink:getIdentity'),
-    preflightLegacyImport: () => ipcRenderer.invoke('cclink:preflightLegacyImport'),
-    ensureIdentity: () => ipcRenderer.invoke('cclink:ensureIdentity'),
-    sendLegacySmsCode: () => ipcRenderer.invoke('cclink:sendLegacySmsCode'),
-    importLegacyIdentity: (smsCode: string) =>
-      ipcRenderer.invoke('cclink:importLegacyIdentity', smsCode),
-    clearIdentity: () => ipcRenderer.invoke('cclink:clearIdentity'),
-    listServers: () => ipcRenderer.invoke('cclink:listServers'),
-    removeServer: (serverId: string) => ipcRenderer.invoke('cclink:removeServer', serverId),
-    listSessions: (serverId?: string) => ipcRenderer.invoke('cclink:listSessions', serverId),
-    syncPairedAgents: () => ipcRenderer.invoke('cclink:syncPairedAgents'),
-    removeSession: (sessionId: string) => ipcRenderer.invoke('cclink:removeSession', sessionId),
-    listMessages: (sessionId: string) => ipcRenderer.invoke('cclink:listMessages', sessionId),
-    sendLocalMessage: (sessionId: string, content: string) =>
-      ipcRenderer.invoke('cclink:sendLocalMessage', sessionId, content),
-    listFileTree: (request: CclinkFileTreeRequest) =>
-      ipcRenderer.invoke('cclink:listFileTree', request),
-    readFile: (request: CclinkFileReadRequest) => ipcRenderer.invoke('cclink:readFile', request),
-    getRealtimeStatus: () => ipcRenderer.invoke('cclink:getRealtimeStatus'),
-    connectRealtime: () => ipcRenderer.invoke('cclink:connectRealtime'),
-    disconnectRealtime: () => ipcRenderer.invoke('cclink:disconnectRealtime'),
-    clearLocalData: () => ipcRenderer.invoke('cclink:clearLocalData'),
-    seedDemoData: () => ipcRenderer.invoke('cclink:seedDemoData'),
-  },
-
-  // Remote 工作空间统一入口。CCLink/Direct 都应从这里向 renderer 暴露能力。
-  remote: {
-    getStatus: (ref: RemoteFileTreeRequest['ref']) => ipcRenderer.invoke('remote:getStatus', ref),
-    getDiagnostics: (ref: RemoteFileTreeRequest['ref']) =>
-      ipcRenderer.invoke('remote:getDiagnostics', ref),
-    listFileTree: (request: RemoteFileTreeRequest) =>
-      ipcRenderer.invoke('remote:listFileTree', request),
-    readFile: (request: RemoteFileReadRequest) => ipcRenderer.invoke('remote:readFile', request),
-    writeFile: (request: RemoteFileWriteRequest) => ipcRenderer.invoke('remote:writeFile', request),
-    createFile: (request: RemoteFileCreateRequest) =>
-      ipcRenderer.invoke('remote:createFile', request),
-    renameFile: (request: RemoteFileRenameRequest) =>
-      ipcRenderer.invoke('remote:renameFile', request),
-    deleteFile: (request: RemoteFileDeleteRequest) =>
-      ipcRenderer.invoke('remote:deleteFile', request),
-    sendAgentMessage: (request: RemoteAgentMessageRequest) =>
-      ipcRenderer.invoke('remote:sendAgentMessage', request),
-  },
-
-  // 认证系统
-  auth: {
-    /** 查询私有认证服务是否已通过 DEEPINK_API_URL 配置 */
-    getServiceStatus: () => ipcRenderer.invoke('auth:getServiceStatus'),
-    /** 发送手机验证码 */
-    phoneSendCode: (phone: string) => ipcRenderer.invoke('auth:phoneSendCode', phone),
-    /** 手机号 + 验证码登录 */
-    phoneLogin: (phone: string, code: string) => ipcRenderer.invoke('auth:phoneLogin', phone, code),
-    /** 检查本地登录状态（启动时调用） */
-    checkSession: () => ipcRenderer.invoke('auth:checkSession'),
-    /** 获取缓存的用户资料 */
-    getProfile: () => ipcRenderer.invoke('auth:getProfile'),
-    /** 登出（清除本地 token + 通知后端吊销） */
-    logout: () => ipcRenderer.invoke('auth:logout'),
-    /** 监听登录状态变化 */
-    onSessionChanged: (callback: (session: { loggedIn: boolean; user: any | null }) => void) => {
-      ipcRenderer.removeAllListeners('auth:sessionChanged')
-      ipcRenderer.on('auth:sessionChanged', (_event, session) => callback(session))
     },
   },
 
@@ -627,47 +549,6 @@ contextBridge.exposeInMainWorld('deepink', {
     },
   },
 
-  // 云同步
-  sync: {
-    /** 获取同步状态 */
-    getStatus: () => ipcRenderer.invoke('sync:getStatus'),
-    /** 获取同步配置 */
-    getConfig: () => ipcRenderer.invoke('sync:getConfig'),
-    /** 保存配置 + 密码（password 可选） */
-    saveConfig: (config: any, password?: string) =>
-      ipcRenderer.invoke('sync:saveConfig', config, password),
-    /** 删除配置 */
-    deleteConfig: () => ipcRenderer.invoke('sync:deleteConfig'),
-    /** 测试连接 */
-    testConnection: (config: any, password: string) =>
-      ipcRenderer.invoke('sync:testConnection', config, password),
-    /** 触发同步 */
-    triggerSync: (workspacePath: string) => ipcRenderer.invoke('sync:triggerSync', workspacePath),
-    /** 启动自动同步（定时 + 文件监听） */
-    startAutoSync: (workspacePath: string) =>
-      ipcRenderer.invoke('sync:startAutoSync', workspacePath),
-    /** 停止自动同步 */
-    stopAutoSync: () => ipcRenderer.invoke('sync:stopAutoSync'),
-    /** 获取同步历史 */
-    getHistory: (limit?: number) => ipcRenderer.invoke('sync:getHistory', limit),
-    /** 清空同步历史 */
-    clearHistory: () => ipcRenderer.invoke('sync:clearHistory'),
-    /** 监听同步状态更新，返回取消订阅函数 */
-    onStatusChanged: (callback: (status: any) => void) => {
-      const handler = (_event: any, data: any): void => callback(data)
-      ipcRenderer.removeAllListeners('sync:statusChanged')
-      ipcRenderer.on('sync:statusChanged', handler)
-      return () => ipcRenderer.removeListener('sync:statusChanged', handler)
-    },
-    /** 监听同步完成，返回取消订阅函数 */
-    onSyncComplete: (callback: (data: any) => void) => {
-      const handler = (_event: any, data: any): void => callback(data)
-      ipcRenderer.removeAllListeners('sync:syncComplete')
-      ipcRenderer.on('sync:syncComplete', handler)
-      return () => ipcRenderer.removeListener('sync:syncComplete', handler)
-    },
-  },
-
   // 数据源：远程 ES/数据库资料的只读接入。Renderer 只能走白名单 IPC，不接触明文凭证。
   dataSource: {
     listSources: () => ipcRenderer.invoke('data-source:list'),
@@ -758,29 +639,6 @@ contextBridge.exposeInMainWorld('deepink', {
     saveAsset: (options: any) => ipcRenderer.invoke('meshy:saveAsset', options),
     /** 从 prompt 生成、等待并保存模型资产 */
     generateAndSave: (options: any) => ipcRenderer.invoke('meshy:generateAndSave', options),
-  },
-
-  // 订阅系统
-  subscription: {
-    /** 获取可用套餐列表 */
-    getPlans: () => ipcRenderer.invoke('subscription:getPlans'),
-    /** 获取当前用户订阅状态 */
-    getStatus: () => ipcRenderer.invoke('subscription:getStatus'),
-    /** 创建支付订单 */
-    createOrder: (planCode: string, channel: string) =>
-      ipcRenderer.invoke('subscription:createOrder', planCode, channel),
-    /** 轮询订单状态 */
-    checkOrder: (orderNo: string) => ipcRenderer.invoke('subscription:checkOrder', orderNo),
-    /** Apple IAP 凭据验证 */
-    verifyAppleIap: (orderNo: string, receiptData: string) =>
-      ipcRenderer.invoke('subscription:verifyAppleIap', orderNo, receiptData),
-    /** 取消订阅 */
-    cancel: () => ipcRenderer.invoke('subscription:cancel'),
-    /** 监听订阅状态变化 */
-    onStatusChanged: (callback: (status: any) => void) => {
-      ipcRenderer.removeAllListeners('subscription:statusChanged')
-      ipcRenderer.on('subscription:statusChanged', (_event, status) => callback(status))
-    },
   },
 
   // 自动更新（检查 + 下载 dmg）

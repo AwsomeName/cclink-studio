@@ -70,7 +70,7 @@ export function withExe(name: string): string {
 
 // ─── 目录布局 ───────────────────────────────────────
 
-/** DeepInk 自管理的 Android SDK 根目录 */
+/** CCLink Studio 自管理的 Android SDK 根目录 */
 export function getSdkRoot(): string {
   return join(app.getPath('userData'), 'android-sdk')
 }
@@ -113,7 +113,7 @@ export function getAvdDir(): string {
 // ─── 常量 ───────────────────────────────────────────
 
 /** 默认 AVD 名称 */
-export const DEFAULT_AVD_NAME = 'DeepInk_Phone'
+export const DEFAULT_AVD_NAME = 'CCLink_Studio_Phone'
 
 /** 默认目标 API 级别（Android 14） */
 export const DEFAULT_API_LEVEL = 34

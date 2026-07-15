@@ -1,19 +1,26 @@
-# private-serv Remote Requirements
+# Deprecated: private-serv Remote Requirements
 
-> 用途：复制到 private-serv 项目
+> 状态：废弃历史文档
+> 新目标：`/Users/apple/Desktop/chat-cc/deploy`
 > 最后更新：2026-07-15
 
 ## 总结
 
-DeepInk Remote 是 DeepInk 的付费工作空间能力。private-serv 需要作为账号、订阅、entitlement、agent 绑定、pairing 授权和 remote token 的真相源，不承担远端文件、shell、Codex 或 Claude Code 的实际执行。
+本文档记录的是旧 `private-serv` 方向下的 Remote 要求。该方向已废弃。
 
-chatcc-agent 不判断套餐、不处理订单、不知道价格。agent 只验证 private-serv 签发的短期 remote session token。
+新的边界是：CCLink Studio 是桌面客户端；`/Users/apple/Desktop/chat-cc/deploy`
+作为账号、订阅、entitlement、agent 绑定、pairing 授权和 remote token 的真相源；
+`/Users/apple/Desktop/chat-cc/Agent` 承担远端文件、shell、Codex 或 Claude Code 的实际执行。
+
+后续更新应迁到 deploy requirements，而不是继续扩展 private-serv 文档。
+
+CCLink Agent 不判断套餐、不处理订单、不知道价格。Agent 只验证 deploy 签发的短期 remote session token。
 
 ## 必须提供的能力
 
 ### 1. Entitlement 查询
 
-DeepInk Desktop 需要能查询当前用户：
+CCLink Studio 商业 overlay 需要能查询当前用户：
 
 - remote_workspace
 - remote_pairing
@@ -58,7 +65,7 @@ Token scope 至少包含：
 
 - token 有效期要短。
 - agent 只验证 token 和 scope，不判断套餐。
-- DeepInk 不把长期敏感凭证交给 agent。
+- CCLink Studio 不把长期敏感凭证交给 agent。
 
 ### 4. TIM / Relay Token
 
@@ -70,7 +77,7 @@ CCLink 首发需要：
 
 Direct 后续需要决策：
 
-- 是否仍由 private-serv 签发 remote token。
+- 是否仍由 deploy 签发 remote token。
 - 是否需要 gateway。
 - 如何授权设备和 workspace scope。
 
@@ -96,7 +103,7 @@ Direct 后续需要决策：
 
 dev/staging 环境需要：
 
-- DeepInk Desktop 可指向 dev/staging API。
+- CCLink Studio 官方构建可指向 dev/staging API。
 - 测试用户快速开通 Remote entitlement。
 - 测试用户快速撤销 Remote entitlement。
 - 可查看 agent binding。
@@ -116,7 +123,6 @@ dev/staging 环境需要：
 
 ## 拷问
 
-private-serv 不要实现远端执行，也不要让套餐逻辑散到 DeepInk 和 agent。
+deploy 不要实现远端执行，也不要让套餐逻辑散到 Studio 和 Agent。
 
 它的核心价值是控制面：谁有权、哪个 agent 属于谁、这个 token 能干什么、失败时后台能不能查到原因。
-

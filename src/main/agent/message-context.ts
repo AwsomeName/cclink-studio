@@ -21,8 +21,8 @@ export function buildAgentMessageWithContext(
   if (resources.length === 0 && skills.length === 0 && !resourceContext) return message
 
   return [
-    'DeepInk 会话上下文:',
-    '以下是 DeepInk 当前资源事实包、用户显式挂载到当前会话的资源索引和 Skill。资源事实包是真实运行态快照；不要把资源索引当作资源正文。需要读取文件、查看网页或操作 Tab 时，必须使用可用工具并遵守权限确认。Skill 表示用户希望本轮遵循的流程风格，不代表可以执行未授权代码。',
+    'CCLink Studio 会话上下文:',
+    '以下是 CCLink Studio 当前资源事实包、用户显式挂载到当前会话的资源索引和 Skill。资源事实包是真实运行态快照；不要把资源索引当作资源正文。需要读取文件、查看网页或操作 Tab 时，必须使用可用工具并遵守权限确认。Skill 表示用户希望本轮遵循的流程风格，不代表可以执行未授权代码。',
     JSON.stringify({
       activeResourceContext: resourceContext,
       mountedResources: resources,

@@ -69,7 +69,7 @@ import Mesh
 input_path = sys.argv[1]
 output_path = sys.argv[2]
 metadata_path = sys.argv[3]
-doc = App.newDocument("DeepInkCadConversion")
+doc = App.newDocument("CCLinkStudioCadConversion")
 Import.insert(input_path, doc.Name)
 App.ActiveDocument.recompute()
 objects = []

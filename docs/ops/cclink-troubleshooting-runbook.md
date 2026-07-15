@@ -1,7 +1,15 @@
 # CCLink Troubleshooting Runbook
 
-The private CCLink cloud troubleshooting runbook has moved to `../../../private-serv/docs/ops/`.
+> 当前状态：占位说明，不属于 CCLink Studio OSS 默认能力。
 
-Open-source DeepInk does not include product CloudBase environment IDs, private service URLs,
-deployment commands, or database operations. Configure `DEEPINK_API_URL` and, only when needed
-for legacy account migration, `CCLINK_LEGACY_API_URL` from your own environment.
+Open-source CCLink Studio does not include product CloudBase environment IDs,
+private service URLs, deployment commands, database operations, TIM UserSig
+operations, pairing operations, or entitlement tooling.
+
+Current ownership:
+
+- CCLink cloud functions/account system: `/Users/apple/Desktop/chat-cc/deploy`
+- Official commercial build/operations overlay: `/Users/apple/Desktop/cclink-dev`
+- Deprecated legacy project: `private-serv`
+
+Do not add private cloud troubleshooting commands back to the desktop shell.

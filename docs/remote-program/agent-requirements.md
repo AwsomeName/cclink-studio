@@ -1,3 +1,9 @@
+# Historical: chatcc-agent Remote Requirements
+
+> 当前状态：历史需求包，不再作为 `cclink-studio` 当前事实源。
+>
+> 当前真实位置是 `/Users/apple/Desktop/chat-cc/Agent`，当前命名应按 CCLink Agent runtime 处理。本文仍保留旧 `chatcc-agent` / `private-serv` / `DeepInk Remote` 表述，用于迁移审计；后续若继续推进远端 runtime 协议，应迁到 `/Users/apple/Desktop/chat-cc/Agent` 侧维护。
+
 # chatcc-agent Remote Requirements
 
 > 用途：复制到 chatcc-agent 项目
@@ -130,4 +136,3 @@ agent dev/staging 需要支持：
 agent 不要知道套餐，也不要判断价格。
 
 agent 的职责是“我能不能在这台机器、这个 workspace、这个 scope 下安全执行这个请求”。商业判断必须留给 private-serv 和 DeepInk entitlement gate。
-

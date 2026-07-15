@@ -270,7 +270,7 @@ export class MeshyService {
   private resolveOutputDir(outputDir?: string): string {
     const workspacePath = this.getSettings().lastWorkspacePath
     const candidate = outputDir?.trim()
-      || (workspacePath ? join(workspacePath, 'assets', 'meshy') : join(app.getPath('desktop'), 'DeepInk Meshy Assets'))
+      || (workspacePath ? join(workspacePath, 'assets', 'meshy') : join(app.getPath('desktop'), 'CCLink Studio Meshy Assets'))
     return this.validateWritablePath(candidate)
   }
 

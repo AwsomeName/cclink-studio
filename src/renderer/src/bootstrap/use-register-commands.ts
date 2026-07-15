@@ -6,7 +6,6 @@ import { createBrowserCommands } from './commands/browser-commands'
 import { createDiagnosticsCommands } from './commands/diagnostics-commands'
 import { createFileCommands } from './commands/file-commands'
 import { createSettingsCommands } from './commands/settings-commands'
-import { createSyncCommands } from './commands/sync-commands'
 import { createTabCommands } from './commands/tab-commands'
 import { createViewCommands } from './commands/view-commands'
 import { createWindowCommands } from './commands/window-commands'
@@ -30,7 +29,6 @@ export function useRegisterCommands(): void {
       ...createTabCommands(),
       ...createFileCommands(),
       ...createSettingsCommands(),
-      ...createSyncCommands(),
       ...createAgentCommands(),
       ...createBrowserCommands(),
       ...createDiagnosticsCommands(),

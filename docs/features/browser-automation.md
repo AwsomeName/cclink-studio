@@ -2,9 +2,9 @@
 
 ## 概述
 
-DeepInk 在应用窗口内嵌入一个完整的 Chrome 浏览器，支持通过 Playwright 进行自动化操作。这是与"打开外部浏览器"或"调用 headless Chrome"完全不同的方案——浏览器渲染在窗口内部，用户可以实时看到并参与操作。
+CCLink Studio 在应用窗口内嵌入一个完整的 Chrome 浏览器，支持通过 Playwright 进行自动化操作。这是与"打开外部浏览器"或"调用 headless Chrome"完全不同的方案——浏览器渲染在窗口内部，用户可以实时看到并参与操作。
 
-> ✅ **已实现。** WebContentsView 已在窗口内正确嵌入，Playwright 通过 CDP 连接后支持 46 个 MCP 工具（见 `src/main/mcp/modules/browser/index.ts`）。这是 DeepInk 的 Web 自动化支柱。
+> ✅ **已实现。** WebContentsView 已在窗口内正确嵌入，Playwright 通过 CDP 连接后支持 46 个 MCP 工具（见 `src/main/mcp/modules/browser/index.ts`）。这是 CCLink Studio 的 Web 自动化支柱。
 
 ## 设计原则
 

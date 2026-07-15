@@ -291,7 +291,7 @@ export function ModelViewer({ filePath }: ModelViewerProps): React.ReactElement 
           const cadApi = window.deepink.cad
           if (!cadApi?.convertModel || !cadApi.getModelSupport) {
             throw new Error(
-              'CAD 转换能力尚未加载。请重启 DeepInk 让主进程和 preload 生效，然后在设置 > 硬件与 CAD 启用本机 FreeCAD。',
+              'CAD 转换能力尚未加载。请重启 CCLink Studio 让主进程和 preload 生效，然后在设置中启用本机 FreeCAD。',
             )
           }
 

@@ -25,7 +25,7 @@ export function RootErrorFallback(
         <circle cx="24" cy="24" r="4" fill="#0078d4" />
       </svg>
       <h2 style={{ margin: '0 0 8px', color: '#fff', fontSize: 20, fontWeight: 600 }}>
-        DeepInk 遇到了问题
+        CCLink Studio 遇到了问题
       </h2>
       <p style={{ margin: '0 0 12px', color: '#999', fontSize: 13 }}>
         应用发生了意外错误，请尝试重新加载。

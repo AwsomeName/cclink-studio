@@ -1,5 +1,5 @@
 appId: com.deepink.app
-productName: DeepInk
+productName: CCLink Studio
 directories:
   buildResources: resources
   output: dist
@@ -37,8 +37,4 @@ mac:
     - zip
   category: public.app-category.productivity
   identity: null
-# 自动更新发布源（generic = 任意 HTTPS 静态服务器）。
-# 开源配置不内置 DeepInk 产品更新源；闭源产品构建可通过专用配置覆盖。
-publish:
-  provider: generic
-  url: https://updates.example.com/deepink
+# 开源壳不内置发布源；官方更新源、签名和公证由 cclink-dev overlay 注入。

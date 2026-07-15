@@ -1,7 +1,7 @@
 import { AgentBridge } from '../agent/agent-bridge'
-import type { DeepInkRuntimeState } from './app-runtime'
+import type { CclinkStudioRuntimeState } from './app-runtime'
 
-export function bootstrapAgentRuntime(runtime: DeepInkRuntimeState): void {
+export function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): void {
   if (
     runtime.mainWindow &&
     runtime.playwrightBridge &&
@@ -39,9 +39,9 @@ export function bootstrapAgentRuntime(runtime: DeepInkRuntimeState): void {
     if (runtime.browserManager) {
       runtime.browserManager.onViewDestroyed((tabId) => runtime.agentBridge!.invalidateBrowserScope(tabId))
     }
-    console.log(`[DeepInk] Agent 后端就绪 (${settings.agentEngine})`)
+    console.log(`[CCLink Studio] Agent 后端就绪 (${settings.agentEngine})`)
     return
   }
 
-  console.warn('[DeepInk] Agent 后端未就绪：Playwright/MCP runtime 初始化失败，Agent IPC 将保持降级状态')
+  console.warn('[CCLink Studio] Agent 后端未就绪：Playwright/MCP runtime 初始化失败，Agent IPC 将保持降级状态')
 }

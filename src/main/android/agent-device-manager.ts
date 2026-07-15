@@ -2,7 +2,7 @@
  * AgentDeviceManager —— agent-device 库的会话管理与降级封装
  *
  * agent-device（Callstack）提供 Android 无障碍树语义快照 + ref 定位操作，
- * 是 DeepInk 本地 Android 自动化的「UI 感知层」，补强现有 AdbBridge.dumpUi
+ * 是 CCLink Studio 本地 Android 自动化的「UI 感知层」，补强现有 AdbBridge.dumpUi
  * （裸 uiautomator dump，常漏元素）。
  *
  * 职责：
@@ -12,7 +12,7 @@
  *  - 全链路降级：import 失败 / daemon 起不来 / 超时 → 返回 null/false，
  *    上层（ToolModule）据此提示 Agent 退回 android_dump_ui / android_tap
  *
- * agent-device 是纯 ESM 包，DeepInk 主进程是 CJS → 必须【动态 import】。
+ * agent-device 是纯 ESM 包，CCLink Studio 主进程是 CJS → 必须【动态 import】。
  * 类型用 import type（编译期，不产生运行时 require）。
  *
  * 详见 docs/与 plan：/Users/apple/.claude/plans/jazzy-doodling-dijkstra.md
@@ -73,7 +73,7 @@ export class AgentDeviceManager {
    * 任何环节失败都仅置 available=false，不抛错（保证不阻塞主进程启动）。
    */
   async init(): Promise<void> {
-    // 1. 注入 adb 路径到 PATH / ANDROID_HOME，让 daemon 能找到 DeepInk 自管理的 adb
+    // 1. 注入 adb 路径到 PATH / ANDROID_HOME，让 daemon 能找到 CCLink Studio 自管理的 adb
     await this.injectAdbEnv()
 
     // 2. 动态 import agent-device（ESM），失败则全量降级
@@ -310,14 +310,14 @@ export class AgentDeviceManager {
 
   // ─── 工具 ───
 
-  /** 注入 DeepInk 自管理 adb 到 PATH / ANDROID_HOME，让 daemon 能定位 adb 二进制 */
+  /** 注入 CCLink Studio 自管理 adb 到 PATH / ANDROID_HOME，让 daemon 能定位 adb 二进制 */
   private async injectAdbEnv(): Promise<void> {
     try {
       const adbPath = await this.adbBridge.discoverAdb()
       if (!adbPath) return
       const platformToolsDir = path.dirname(adbPath)
       const sdkRoot = path.dirname(platformToolsDir)
-      // 前置 platform-tools，让 agent-device 的 runCmd('adb') 命中 DeepInk 的 adb
+      // 前置 platform-tools，让 agent-device 的 runCmd('adb') 命中 CCLink Studio 的 adb
       process.env.PATH = `${platformToolsDir}${path.delimiter}${process.env.PATH ?? ''}`
       process.env.ANDROID_HOME = process.env.ANDROID_HOME ?? sdkRoot
       process.env.ANDROID_SDK_ROOT = process.env.ANDROID_SDK_ROOT ?? sdkRoot

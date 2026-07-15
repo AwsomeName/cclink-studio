@@ -10,17 +10,8 @@ import { AdbBridge } from '../android/adb-bridge'
 import { ActiveDeviceManager } from '../android/active-device-manager'
 import { PhysicalDeviceManager } from '../android/physical-device-manager'
 import { ScrcpyBridge } from '../android/scrcpy-bridge'
-import { CclinkStore } from '../cclink/cclink-store'
-import { CclinkFileService } from '../cclink/cclink-file-service'
-import { CclinkProtocolRouter } from '../cclink/cclink-protocol-router'
-import { CclinkRealtimeService } from '../cclink/cclink-realtime-service'
-import { CclinkRequestRouter } from '../cclink/cclink-request-router'
-import { CclinkIdentityStore } from '../cclink/cclink-identity-store'
-import { CclinkIdentityService } from '../cclink/cclink-identity-service'
-import { registerCclinkIpc } from '../ipc/cclink-ipc'
 import { createMainWindow } from './main-window'
-import { refreshAccessToken } from './auth-refresh'
-import type { DeepInkRuntimeState } from './app-runtime'
+import type { CclinkStudioRuntimeState } from './app-runtime'
 
 interface CreateWindowRuntimeOptions {
   preloadPath: string
@@ -28,7 +19,7 @@ interface CreateWindowRuntimeOptions {
   rendererHtmlPath: string
 }
 
-export function createWindowRuntime(runtime: DeepInkRuntimeState, options: CreateWindowRuntimeOptions): void {
+export function createWindowRuntime(runtime: CclinkStudioRuntimeState, options: CreateWindowRuntimeOptions): void {
   runtime.mainWindow = createMainWindow({
     isDev: runtime.isDev,
     preloadPath: options.preloadPath,
@@ -66,28 +57,6 @@ export function createWindowRuntime(runtime: DeepInkRuntimeState, options: Creat
     () => runtime.playwrightBridge,
   )
 
-  runtime.cclinkStore = new CclinkStore()
-  void runtime.cclinkStore.load()
-  runtime.cclinkRequestRouter = new CclinkRequestRouter()
-  runtime.cclinkProtocolRouter = new CclinkProtocolRouter(runtime.cclinkStore)
-  runtime.cclinkFileService = new CclinkFileService(runtime.cclinkStore, runtime.cclinkRequestRouter)
-  runtime.cclinkIdentityStore = new CclinkIdentityStore()
-  void runtime.cclinkIdentityStore.load()
-  runtime.cclinkIdentityService = new CclinkIdentityService(runtime.cclinkIdentityStore, () => runtime.tokenManager, {
-    refreshAccessToken: () => refreshAccessToken(runtime),
-  })
-  runtime.cclinkRealtimeService = new CclinkRealtimeService(
-    runtime.cclinkIdentityService,
-    runtime.cclinkRequestRouter,
-    runtime.cclinkProtocolRouter,
-  )
-  registerCclinkIpc(
-    runtime.cclinkStore,
-    runtime.cclinkIdentityService,
-    runtime.cclinkFileService,
-    runtime.cclinkRealtimeService,
-  )
-
   registerDialogIpc(runtime.mainWindow)
   registerWindowIpc(runtime.mainWindow)
 
@@ -102,5 +71,5 @@ export function createWindowRuntime(runtime: DeepInkRuntimeState, options: Creat
     runtime.activeDeviceManager,
     runtime.physicalDeviceManager,
   )
-  console.log('[DeepInk] Android 模块已注册（模拟器路径已封存，仅真机连接可用）')
+  console.log('[CCLink Studio] Android 模块已注册（模拟器路径已封存，仅真机连接可用）')
 }

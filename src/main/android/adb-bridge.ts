@@ -48,7 +48,7 @@ export class AdbBridge {
 
   /**
    * 发现 adb 二进制路径（跨平台）
-   * 优先级：DeepInk 自管理 SDK → 用户已有 SDK（ANDROID_HOME 等）→ PATH
+   * 优先级：CCLink Studio 自管理 SDK → 用户已有 SDK（ANDROID_HOME 等）→ PATH
    */
   async discoverAdb(): Promise<string> {
     if (this.adbPath) return this.adbPath

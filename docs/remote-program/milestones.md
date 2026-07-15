@@ -1,3 +1,9 @@
+# Historical: Remote Program Milestones
+
+> 当前状态：历史推进计划，不再作为 `cclink-studio` 当前事实源。
+>
+> 本文的 DeepInk / private-serv / chatcc-agent 三方计划已被 CCLink Studio 新边界取代。官方商业推进应在 `/Users/apple/Desktop/cclink-dev` 协调；云函数在 `/Users/apple/Desktop/chat-cc/deploy`；Agent runtime 在 `/Users/apple/Desktop/chat-cc/Agent`。
+
 # Remote Program Milestones
 
 > 状态：跨项目推进计划
@@ -189,4 +195,3 @@ chatcc-agent：
 P1-P5 没闭环前，不建议开 P6。
 
 Direct 很诱人，但它会放大协议债。如果 CCLink 下的 runtime 协议都没统一，Direct 会把问题复制一遍。
-

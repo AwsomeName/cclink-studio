@@ -50,7 +50,7 @@ interface ViewEntry {
   pendingUrl: string
   /** 当前 URL */
   url: string
-  /** DeepInk 维护的导航栈（用于重启恢复和原生栈不可用时兜底） */
+  /** CCLink Studio 维护的导航栈（用于重启恢复和原生栈不可用时兜底） */
   history: string[]
   historyIndex: number
   pendingHistoryDirection: 'back' | 'forward' | null

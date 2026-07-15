@@ -40,7 +40,7 @@ export interface AgentBridgeOptions {
   apiKey?: string
   /** 模型名称 */
   modelName?: string
-  /** 获取当前工作区路径（Claude Code 后端据此绑定 Agent 的 cwd，仅 DeepInk 进程内生效） */
+  /** 获取当前工作区路径（Claude Code 后端据此绑定 Agent 的 cwd，仅 CCLink Studio 进程内生效） */
   getWorkspacePath?: () => string
   /** 获取当前设置快照，用于构建 Agent 资源事实包。 */
   getSettingsSnapshot?: () => AppSettings
@@ -116,9 +116,9 @@ export class AgentBridge {
         maxBudgetUsd: options?.maxBudgetUsd,
         getWorkspacePath: this.getWorkspacePath,
         hostContext: {
-          hostName: 'DeepInk',
+          hostName: 'CCLink Studio',
           mcpServerName: 'deepink',
-          androidControllerName: 'DeepInk',
+          androidControllerName: 'CCLink Studio',
         },
       },
     }

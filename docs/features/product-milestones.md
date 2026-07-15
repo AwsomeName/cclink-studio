@@ -1,3 +1,9 @@
+# Historical: 产品与架构里程碑
+
+> 当前状态：历史里程碑记录，不再作为 CCLink Studio 当前路线事实源。
+>
+> 本文包含大量迁移前的 Remote、CCLink、subscription、sync、DeepInk 命名和商业能力里程碑。当前阶段计划以 `../architecture.md`、`../development.md`、`../cclink-studio-boundary-and-migration.md` 和后续新的 CCLink Studio roadmap 为准。
+
 # DeepInk 产品与架构里程碑
 
 > 状态：里程碑验收稿

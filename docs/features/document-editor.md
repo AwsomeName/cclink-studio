@@ -1,4 +1,4 @@
-# DeepInk 文档编辑器 — 功能规格
+# CCLink Studio 文档编辑器 — 功能规格
 
 > 状态：✅ 已实现（第一阶段：Tiptap 编辑器 + Agent↔编辑器双向通信 + 微信公众号转换）
 > 优先级：Phase 5（第一阶段已完成）
@@ -11,7 +11,7 @@ AI 驱动的文档编辑器：
 - **写文档**：Markdown / 富文本 / AI 辅助写作
 - **看文档**：PDF / Word / Excel / PPT 预览
 - **做文档**：AI 生成、改写、翻译、排版
-- **发文档**：一键通过 IM 分享给好友
+- **发文档**：本地导出；通过 IM 分享由 CCLink 网络或商业 overlay 提供
 
 **核心差异化**：不是"编辑器 + AI 插件"，而是 AI 和编辑器深度集成——你跟 AI 说"帮我写一份产品方案"，AI 直接在编辑器里生成，你可以实时看到、实时干预。
 
@@ -28,17 +28,17 @@ Tiptap 编辑器
 │   ├── 协同编辑预留（Yjs）
 │   └── 撤销/重做
 │
-├── AI 扩展（DeepInk 自定义 Tiptap Extension）
+├── AI 扩展（CCLink Studio 自定义 Tiptap Extension）
 │   ├── AI 续写（光标处触发 AI 生成）
 │   ├── AI 改写（选中文字 → AI 改写/翻译/总结）
 │   ├── AI 格式化（一键排版）
 │   ├── AI 生成大纲（输入主题 → AI 生成文档大纲）
 │   └── AI 对话批注（在文档中插入 AI 对话气泡）
 │
-└── DeepInk 集成
-    ├── 保存到本地 / 云存储
+└── CCLink Studio 集成
+    ├── 保存到本地（云存储由商业 overlay 或插件提供）
     ├── 导出为 PDF / DOCX
-    ├── 通过 IM 分享（自定义消息类型）
+    ├── 导出 / 分享（IM 自定义消息由 CCLink 网络或商业 overlay 提供）
     └── Agent 可操作（MCP EditorToolModule）
 ```
 
@@ -72,7 +72,7 @@ Tiptap 编辑器
 │   ├── 文件读写（本地文件系统）
 │   ├── 格式转换（MD ↔ DOCX ↔ ProseMirror JSON）
 │   ├── 自动保存（定时保存 + 失焦保存）
-│   └── 云同步（触发云存储上传）
+│   └── 本地保存（云同步由商业 overlay 或插件提供）
 │
 └── MCP EditorToolModule（5 个工具）
     ├── editor_write — Agent 写入 Markdown（替换全部，无 Tab 自动创建）

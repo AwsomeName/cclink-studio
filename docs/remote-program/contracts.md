@@ -1,3 +1,9 @@
+# Historical: Remote Program Contracts
+
+> 当前状态：历史契约草案，不再作为 `cclink-studio` 当前事实源。
+>
+> 本文引用的 Remote shared contracts、IPC、provider、entitlement gate 和 `private-serv` 边界已经从 Studio OSS 默认路径移出。当前边界见 `../architecture.md` 与 `../cclink-studio-boundary-and-migration.md`。
+
 # Remote Program Contracts
 
 > 状态：跨项目契约草案
@@ -172,4 +178,3 @@ Remote 错误必须落入这些层：
 1. 用户有没有权调用？
 2. 远端当前能不能执行？
 3. 失败时去哪一层查？
-

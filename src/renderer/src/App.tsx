@@ -1,7 +1,6 @@
 import { useCallback } from 'react'
 import { useFsStore, useUIStore, useWorkspaceStore } from './stores'
 import { useThemeStore } from './stores/theme-store'
-import { useAuthStore } from './stores/auth-store'
 import { ActivityBar } from './components/activity-bar/ActivityBar'
 import { Sidebar } from './components/sidebar/Sidebar'
 import { Workbench } from './components/workbench/Workbench'
@@ -41,7 +40,7 @@ function getWorkspaceTitleDetail(
   return '临时草稿与全局会话'
 }
 
-/** 主布局（已登录后显示） */
+/** 主布局。 */
 function MainLayout(): React.ReactElement {
   const workspaceReady = useWorkspaceBootstrap()
   const sidebarVisible = useUIStore((s) => s.sidebarVisible)
@@ -201,11 +200,10 @@ function MainLayout(): React.ReactElement {
   )
 }
 
-/** 根组件：认证守卫。 */
+/** 根组件：开源壳只要求桌面 preload 可用，不要求 CCLink 登录态。 */
 function App(): React.ReactElement {
-  const checking = useAuthStore((s) => s.checking)
   const deepinkApiAvailable =
-    typeof window !== 'undefined' && Boolean(window.deepink?.auth && window.deepink?.identity)
+    typeof window !== 'undefined' && Boolean(window.deepink?.identity && window.deepink?.settings)
 
   useAppSession(deepinkApiAvailable)
 
@@ -213,18 +211,14 @@ function App(): React.ReactElement {
     return (
       <div className="runtime-unavailable">
         <div className="runtime-unavailable-card">
-          <h1>DeepInk 需要在桌面运行时中打开</h1>
+          <h1>CCLink Studio 需要在桌面运行时中打开</h1>
           <p>
-            当前页面缺少 Electron preload API。请通过 DeepInk 桌面应用或 `pnpm dev` 启动的 Electron
-            窗口访问。
+            当前页面缺少 Electron preload API。请通过 CCLink Studio 桌面应用或 `pnpm dev`
+            启动的 Electron 窗口访问。
           </p>
         </div>
       </div>
     )
-  }
-
-  if (checking) {
-    return <LoadingScreen />
   }
 
   return <MainLayout />

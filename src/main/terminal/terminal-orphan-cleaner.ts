@@ -18,7 +18,7 @@ export interface TerminalOrphanCleanupSummary {
 export interface TerminalOrphanCleanerOptions {
   now?: () => number
   isProcessAlive?: (pid: number) => boolean | Promise<boolean>
-  isDeepInkTerminalProcess?: (pid: number, sessionId: string) => boolean | Promise<boolean>
+  isStudioTerminalProcess?: (pid: number, sessionId: string) => boolean | Promise<boolean>
   killProcess?: (pid: number, signal: NodeJS.Signals) => void
   wait?: (ms: number) => Promise<void>
   graceMs?: number
@@ -30,7 +30,7 @@ export async function cleanupTerminalOrphans(
 ): Promise<TerminalOrphanCleanupSummary> {
   const now = options.now ?? Date.now
   const isProcessAlive = options.isProcessAlive ?? defaultIsProcessAlive
-  const isDeepInkTerminalProcess = options.isDeepInkTerminalProcess ?? defaultIsDeepInkTerminalProcess
+  const isStudioTerminalProcess = options.isStudioTerminalProcess ?? defaultIsStudioTerminalProcess
   const killProcess = options.killProcess ?? defaultKillProcess
   const wait = options.wait ?? delay
   const graceMs = options.graceMs ?? 500
@@ -48,18 +48,18 @@ export async function cleanupTerminalOrphans(
     const pid = normalizePid(session.processId)
     if (!pid) {
       summary.missing += 1
-      await markUnrecoverable(store, session.sessionId, now(), 'DeepInk 已重启，原 Terminal 进程不可恢复')
+      await markUnrecoverable(store, session.sessionId, now(), 'CCLink Studio 已重启，原 Terminal 进程不可恢复')
       continue
     }
 
     const alive = await isProcessAlive(pid)
     if (!alive) {
       summary.missing += 1
-      await markUnrecoverable(store, session.sessionId, now(), 'DeepInk 已重启，原 Terminal 进程不可恢复')
+      await markUnrecoverable(store, session.sessionId, now(), 'CCLink Studio 已重启，原 Terminal 进程不可恢复')
       continue
     }
 
-    const verified = await isDeepInkTerminalProcess(pid, session.sessionId)
+    const verified = await isStudioTerminalProcess(pid, session.sessionId)
     if (!verified) {
       summary.skipped += 1
       await markSkipped(
@@ -78,7 +78,7 @@ export async function cleanupTerminalOrphans(
         store,
         session.sessionId,
         now(),
-        'DeepInk 启动时已清理上次残留 Terminal 进程',
+        'CCLink Studio 启动时已清理上次残留 Terminal 进程',
       )
     } catch (error) {
       summary.failed += 1
@@ -184,7 +184,7 @@ function defaultIsProcessAlive(pid: number): boolean {
   }
 }
 
-async function defaultIsDeepInkTerminalProcess(pid: number, sessionId: string): Promise<boolean> {
+async function defaultIsStudioTerminalProcess(pid: number, sessionId: string): Promise<boolean> {
   const command = await readProcessCommandWithEnv(pid)
   return (
     command.includes(`DEEPINK_TERMINAL_SESSION_ID=${sessionId}`) ||

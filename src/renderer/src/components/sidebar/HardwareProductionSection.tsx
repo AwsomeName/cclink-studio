@@ -85,7 +85,7 @@ function buildFpcShapeAgentPrompt(workspacePath: string, context: FpcShapeContex
     '',
     `工作空间：${workspacePath}`,
     '',
-    '你已经拿到 DeepInk 生成的只读 FPC 改形状上下文摘要：',
+    '你已经拿到 CCLink Studio 生成的只读 FPC 改形状上下文摘要：',
     '',
     summarizeFpcShapeContext(context),
     '',

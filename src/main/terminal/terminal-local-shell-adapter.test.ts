@@ -1,7 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { REMOTE_ERROR_CODE } from '../../shared/remote-error'
 import type { TerminalRuntimeRef } from '../../shared/terminal'
 import {
   LocalShellExecutionAdapter,
@@ -122,9 +121,9 @@ describe('LocalShellExecutionAdapter', () => {
     await expect(
       adapter.start({ sessionId: 'terminal-3', runtime: remoteRuntime }),
     ).rejects.toMatchObject({
-      remoteError: {
+      executionError: {
         layer: 'execution-backend',
-        code: REMOTE_ERROR_CODE.EXECUTION_BACKEND_UNAVAILABLE,
+        code: 'EXECUTION_BACKEND_UNAVAILABLE',
         message: '远程 Terminal 执行后端尚未接入',
         retryable: true,
       },

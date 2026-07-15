@@ -1,4 +1,4 @@
-/* DeepInk 全局样式 — VSCode 主题配色 */
+/* CCLink Studio 全局样式 — VSCode 主题配色 */
 
 /* ====== 深色主题（默认）====== */
 :root {
@@ -6882,7 +6882,7 @@ button.file-tree-item {
   font-size: 13px;
 }
 
-/* ====== 云同步 ====== */
+/* ====== 历史云同步样式（商业模块已迁出，待后续 CSS 清理） ====== */
 
 /* Spin 动画 */
 @keyframes spin {
@@ -7087,7 +7087,7 @@ button.file-tree-item {
   color: #ef4444;
 }
 
-/* ====== CCLink 远程连接设置 ====== */
+/* ====== 历史 CCLink 远程连接设置样式（商业模块已迁出，待后续 CSS 清理） ====== */
 
 .cclink-panel {
   padding: 8px 12px 16px;

@@ -16,9 +16,9 @@ export interface UpdateInfo {
  * 解析 electron-builder 生成的 latest-mac.yml（节选）：
  *   version: 0.1.2
  *   files:
- *     - url: DeepInk-0.1.2-arm64-mac.zip
+ *     - url: CCLink-Studio-0.1.2-arm64-mac.zip
  *       ...
- *     - url: DeepInk-0.1.2-arm64.dmg
+ *     - url: CCLink-Studio-0.1.2-arm64.dmg
  *       ...
  */
 export function parseLatestMacYml(yml: string): UpdateInfo {

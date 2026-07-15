@@ -7,13 +7,13 @@ interface CreateMainWindowOptions {
   rendererHtmlPath: string
 }
 
-/** 创建 DeepInk 主窗口并加载 renderer，不负责业务 runtime 装配。 */
+/** 创建 CCLink Studio 主窗口并加载 renderer，不负责业务 runtime 装配。 */
 export function createMainWindow(options: CreateMainWindowOptions): BrowserWindow {
   const window = new BrowserWindow({
     width: 1400,
     height: 900,
     show: false,
-    title: 'DeepInk',
+    title: 'CCLink Studio',
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: options.preloadPath,

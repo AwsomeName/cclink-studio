@@ -1,4 +1,4 @@
-/** DeepInk 工作空间引用。产品侧称“工作空间”，工程侧继续使用 workspace。 */
+/** CCLink Studio 工作空间引用。产品侧称“工作空间”，工程侧继续使用 workspace。 */
 export type WorkspaceRef = LocalWorkspaceRef | RemoteWorkspaceRef | GlobalWorkspaceRef
 
 export type RemoteWorkspaceTransport = 'cclink' | 'direct'

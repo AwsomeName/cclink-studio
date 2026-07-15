@@ -20,10 +20,10 @@ export function ensureSingleInstance(app: App): boolean {
 /** 注册兜底异常日志，避免未捕获异常完全静默。 */
 export function registerProcessErrorHandlers(): void {
   process.on('uncaughtException', (error) => {
-    console.error('[DeepInk] 未捕获异常:', error)
+    console.error('[CCLink Studio] 未捕获异常:', error)
   })
 
   process.on('unhandledRejection', (reason) => {
-    console.error('[DeepInk] 未处理的 Promise rejection:', reason)
+    console.error('[CCLink Studio] 未处理的 Promise rejection:', reason)
   })
 }

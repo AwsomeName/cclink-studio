@@ -1,3 +1,9 @@
+# Historical: 产品体验页面定义
+
+> 当前状态：历史产品形态草案，不能直接作为 CCLink Studio OSS 当前事实源。
+>
+> 本文中的工作台布局、Tab、Settings、Agent Panel 思路仍可参考；账号、CCLink、Remote、同步、订阅、旧账号导入和远程诊断相关内容已经过期。当前事实源见 `../architecture.md`。
+
 # DeepInk 产品体验页面定义
 
 > 状态：产品形态共识稿

@@ -173,7 +173,7 @@ describe('agent diagnostic report', () => {
       pendingConfirmationCount: 0,
     })
 
-    expect(markdown).toContain('# DeepInk 诊断日志')
+    expect(markdown).toContain('# CCLink Studio 诊断日志')
     expect(markdown).toContain('browser_action_fail')
     expect(markdown).toContain('https://www.zhihu.com/signin?token=[redacted]')
     expect(markdown).toContain('疑似挑战：auth_required, captcha_or_bot_check')

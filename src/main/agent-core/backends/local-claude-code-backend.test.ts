@@ -82,9 +82,9 @@ function createBackendFixture(): {
     {
       claudeCodePath: '/usr/local/bin/claude',
       hostContext: {
-        hostName: 'DeepInk',
+        hostName: 'CCLink Studio',
         mcpServerName: 'deepink',
-        androidControllerName: 'DeepInk',
+        androidControllerName: 'CCLink Studio',
       },
     },
   )
@@ -202,7 +202,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     })
 
     const prompt = getPrompt(getLastSpawnArgs())
-    expect(prompt).toContain('### DeepInk 资源事实包')
+    expect(prompt).toContain('### CCLink Studio 资源事实包')
     expect(prompt).toContain('"host": "www.baidu.com"')
     expect(prompt).toContain('"expectedHosts"')
     expect(prompt).toContain('以这里的 URL/host/workspace/config/task 为准')

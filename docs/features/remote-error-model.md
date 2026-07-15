@@ -1,3 +1,9 @@
+# Historical: 远程错误模型
+
+> 当前状态：历史 Remote 错误模型，不属于 CCLink Studio OSS 当前事实源。
+>
+> 对应的 `src/shared/remote-error.ts`、`RemoteErrorNotice`、remote IPC/provider 等默认路径已迁出或删除。Studio 开源壳当前使用中性的 terminal execution error 模型；官方 Remote 错误模型后续应在 commercial/CCLink runtime 侧重新落地。
+
 # DeepInk 远程错误模型
 
 > 状态：M5 远程能力闭环约束稿  

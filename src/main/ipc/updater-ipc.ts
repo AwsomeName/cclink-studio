@@ -44,7 +44,7 @@ export function registerUpdaterIpc(mainWindow: BrowserWindow): void {
       return { success: false, error: '无可用更新' }
     }
     const url = latestResult.downloadUrl
-    const dmgName = url.split('/').pop() ?? 'DeepInk.dmg'
+    const dmgName = url.split('/').pop() ?? 'CCLink-Studio.dmg'
     const savePath = join(app.getPath('downloads'), dmgName)
 
     try {

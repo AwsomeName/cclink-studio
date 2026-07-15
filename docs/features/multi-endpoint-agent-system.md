@@ -1,3 +1,9 @@
+# Historical: 多端 Agent 系统设计
+
+> 当前状态：历史设计草案，不属于 CCLink Studio OSS 当前事实源。
+>
+> 本文中的多 endpoint、ChatCC、远程 Agent、IM 和云端协作内容属于旧方向或商业/CCLink 项目侧能力。Studio 开源壳当前只保留本地工作台、本地 Agent/MCP 和可扩展边界。
+
 # DeepInk 多端 Agent 系统设计
 
 > 状态：设计中

@@ -155,7 +155,7 @@
 
 - 不新增“远程 Agent 面板”。
 - 不在工作空间列表外再套“服务器”一级目录。
-- 不把 Codex、Claude Code、DeepInk Agent 做成工作空间类型。
+- 不把 Codex、Claude Code、CCLink Studio Agent 做成工作空间类型。
 - 不把 CCLink 运维台塞回日常侧栏。
 - 不为了直连 Remote 先大改所有远程协议；先把 UI 和数据模型留好口子。
 

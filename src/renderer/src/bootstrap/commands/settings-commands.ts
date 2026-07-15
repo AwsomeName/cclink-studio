@@ -23,26 +23,5 @@ export function createSettingsCommands(): Command[] {
           .getState()
           .openTab({ type: 'settings', title: '快捷键', icon: '⚙️', settingsSection: 'shortcuts' }),
     },
-    {
-      id: 'devices.openSettings',
-      label: '设备：打开设备设置',
-      category: '设备',
-      action: () =>
-        useTabStore
-          .getState()
-          .openTab({ type: 'settings', title: '设备', icon: '⚙️', settingsSection: 'devices' }),
-    },
-    {
-      id: 'remoteConnections.openSettings',
-      label: '远程连接：打开远程连接设置',
-      category: '远程连接',
-      action: () =>
-        useTabStore.getState().openTab({
-          type: 'settings',
-          title: '远程连接',
-          icon: '⚙️',
-          settingsSection: 'remote-connections',
-        }),
-    },
   ]
 }

@@ -27,7 +27,7 @@ describe('resolveConversationTab', () => {
     })
   })
 
-  it('解析 CCLink 远程会话 Tab', () => {
+  it('将 CCLink 远程会话 Tab 降级为 unsupported', () => {
     const tab: Tab = {
       id: 'tab-cclink',
       type: 'conversation',
@@ -45,14 +45,13 @@ describe('resolveConversationTab', () => {
     }
 
     expect(resolveConversationTab(tab)).toEqual({
-      kind: 'remote-cclink',
+      kind: 'unsupported',
       tabId: 'tab-cclink',
-      sessionId: 'remote-1',
-      legacy: false,
+      reason: '暂不支持 remote/cclink 会话 Tab',
     })
   })
 
-  it('兼容旧 cclink Tab', () => {
+  it('将旧 cclink Tab 降级为 unsupported', () => {
     const tab: Tab = {
       id: 'tab-legacy',
       type: 'cclink',
@@ -62,10 +61,9 @@ describe('resolveConversationTab', () => {
     }
 
     expect(resolveConversationTab(tab)).toEqual({
-      kind: 'remote-cclink',
+      kind: 'unsupported',
       tabId: 'tab-legacy',
-      sessionId: 'legacy-1',
-      legacy: true,
+      reason: '开源壳不加载旧 CCLink 会话模块',
     })
   })
 

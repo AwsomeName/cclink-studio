@@ -63,7 +63,7 @@ export class McpToolHost {
   private readonly toolToModule: Map<string, string> = new Map()
   /** 权限管理器 */
   private readonly permissionManager: ToolPermissionController
-  /** 单轮 Agent 进程 → DeepInk 会话的短期映射 */
+  /** 单轮 Agent 进程 → CCLink Studio 会话的短期映射 */
   private readonly toolSessions = new Map<string, string>()
 
   constructor(permissionManager: ToolPermissionController) {

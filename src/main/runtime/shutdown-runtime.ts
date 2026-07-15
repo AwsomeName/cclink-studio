@@ -1,13 +1,12 @@
 import { cleanupIpcHandlers } from '../ipc/ipc-cleanup'
-import type { DeepInkRuntimeState } from './app-runtime'
+import type { CclinkStudioRuntimeState } from './app-runtime'
 import { ServiceRegistry } from './service-registry'
 
-export async function shutdownRuntime(runtime: DeepInkRuntimeState): Promise<void> {
+export async function shutdownRuntime(runtime: CclinkStudioRuntimeState): Promise<void> {
   runtime.mainWindow = null
 
   const registry = new ServiceRegistry()
   registry.register({ name: 'BrowserManager', stop: () => runtime.browserManager?.destroy() })
-  registry.register({ name: 'SyncService', stop: () => runtime.syncService?.destroy() })
   registry.register({ name: 'PlaywrightBridge', stop: () => runtime.playwrightBridge?.disconnect() })
   registry.register({ name: 'McpToolHost', stop: () => runtime.toolHost?.stop() })
   registry.register({ name: 'ScrcpyBridge', stop: () => runtime.scrcpyBridge?.disconnect() })
@@ -26,10 +25,6 @@ export async function shutdownRuntime(runtime: DeepInkRuntimeState): Promise<voi
   })
   registry.register({ name: 'TerminalSessionRegistry', stop: () => runtime.terminalSessionRegistry?.clear() })
   registry.register({ name: 'AgentBridge', stop: () => runtime.agentBridge?.destroy() })
-  registry.register({ name: 'CCLinkRealtimeService', stop: () => runtime.cclinkRealtimeService?.destroy() })
-  registry.register({ name: 'CCLinkRealtimeBridge', stop: () => runtime.cclinkRealtimeBridge?.destroy() })
-  registry.register({ name: 'CCLinkRequestRouter', stop: () => runtime.cclinkRequestRouter?.destroy() })
-  registry.register({ name: 'CCLinkTimTransport', stop: () => runtime.cclinkTimTransport?.destroy() })
   registry.register({ name: 'IPC', stop: () => cleanupIpcHandlers() })
 
   await registry.stopAll()

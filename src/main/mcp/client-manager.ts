@@ -2,7 +2,7 @@
  * McpClientManager — 外部 MCP Server 配置管理
  *
  * 管理用户配置的外部 MCP server 列表。
- * DeepInk 不做 MCP 代理——CLI 直连外部 server，
+ * CCLink Studio 不做 MCP 代理——CLI 直连外部 server，
  * 这里只负责读取配置并合成 --mcp-config。
  *
  * 配置文件：{userData}/mcp-servers.json

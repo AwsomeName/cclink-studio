@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { TerminalPermissionRisk, TerminalStatus } from '../../shared/terminal'
+import type { TerminalExecutionErrorInfo, TerminalPermissionRisk, TerminalStatus } from '../../shared/terminal'
 import type {
   TerminalSubmitCommandInput,
   TerminalSubmitCommandResult,
@@ -11,7 +11,6 @@ import type { TerminalExecutionAdapter } from './terminal-execution-adapter'
 import { evaluateTerminalPermission } from './terminal-permission'
 import type { TerminalSessionRegistry } from './terminal-session-registry'
 import type { TerminalSessionState } from './terminal-session-state'
-import type { RemoteError } from '../../shared/remote-error'
 
 export interface TerminalCommandOrchestratorOptions {
   sessionRegistry: Pick<TerminalSessionRegistry, 'get' | 'transition'>
@@ -202,8 +201,8 @@ export class TerminalCommandOrchestrator {
   ): Promise<void> {
     if (!this.auditStore) return
 
-    const remoteError = getRemoteErrorFromUnknown(error)
-    const message = remoteError?.message ?? getErrorMessage(error)
+    const executionError = getExecutionErrorFromUnknown(error)
+    const message = executionError?.message ?? getErrorMessage(error)
 
     await this.auditStore.recordEvent({
       id: this.idFactory(),
@@ -214,7 +213,7 @@ export class TerminalCommandOrchestrator {
       actor: input.actor,
       command: input.command,
       message,
-      remoteError,
+      executionError,
     })
   }
 
@@ -240,11 +239,11 @@ export class TerminalCommandOrchestrator {
   }
 }
 
-function getRemoteErrorFromUnknown(error: unknown): RemoteError | undefined {
-  if (!error || typeof error !== 'object' || !('remoteError' in error)) return undefined
-  const remoteError = (error as { remoteError?: unknown }).remoteError
-  if (!remoteError || typeof remoteError !== 'object') return undefined
-  const candidate = remoteError as Partial<RemoteError>
+function getExecutionErrorFromUnknown(error: unknown): TerminalExecutionErrorInfo | undefined {
+  if (!error || typeof error !== 'object' || !('executionError' in error)) return undefined
+  const executionError = (error as { executionError?: unknown }).executionError
+  if (!executionError || typeof executionError !== 'object') return undefined
+  const candidate = executionError as Partial<TerminalExecutionErrorInfo>
   if (
     typeof candidate.layer !== 'string' ||
     typeof candidate.code !== 'string' ||
@@ -253,7 +252,7 @@ function getRemoteErrorFromUnknown(error: unknown): RemoteError | undefined {
   ) {
     return undefined
   }
-  return candidate as RemoteError
+  return candidate as TerminalExecutionErrorInfo
 }
 
 function getErrorMessage(error: unknown): string {

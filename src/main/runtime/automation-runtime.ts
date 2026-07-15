@@ -11,23 +11,23 @@ import { AndroidToolModule } from '../mcp/modules/android'
 import { AgentDeviceManager } from '../android/agent-device-manager'
 import { AgentDeviceToolModule } from '../mcp/modules/agent-device'
 import { DataSourceToolModule } from '../mcp/modules/data-source'
-import type { DeepInkRuntimeState } from './app-runtime'
+import type { CclinkStudioRuntimeState } from './app-runtime'
 
-export async function bootstrapAutomationRuntime(runtime: DeepInkRuntimeState): Promise<void> {
+export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeState): Promise<void> {
   if (!runtime.mainWindow || !runtime.permissionManager) {
     throw new Error('自动化 runtime 依赖的窗口或权限系统尚未初始化')
   }
 
   try {
     const cdpPort = await discoverCdpPort()
-    console.log(`[DeepInk] CDP 端口: ${cdpPort}`)
+    console.log(`[CCLink Studio] CDP 端口: ${cdpPort}`)
 
     runtime.playwrightBridge = new PlaywrightBridge(
       runtime.browserDownloadStore,
       runtime.browserTaskRuntime,
     )
     await runtime.playwrightBridge.connect(cdpPort)
-    console.log('[DeepInk] Playwright 已连接')
+    console.log('[CCLink Studio] Playwright 已连接')
 
     if (runtime.browserManager) {
       runtime.browserManager.attachPlaywright(runtime.playwrightBridge)
@@ -43,21 +43,21 @@ export async function bootstrapAutomationRuntime(runtime: DeepInkRuntimeState): 
     registerEditorIpc(runtime.editorModule)
 
     runtime.toolHost.registerModule(new MeshyToolModule(runtime.meshyService!))
-    console.log('[DeepInk] Meshy MCP 工具模块已注册')
+    console.log('[CCLink Studio] Meshy MCP 工具模块已注册')
 
     runtime.toolHost.registerModule(new HardwareToolModule(runtime.hardwareService!))
-    console.log('[DeepInk] 硬件 MCP 工具模块已注册')
+    console.log('[CCLink Studio] 硬件 MCP 工具模块已注册')
 
     runtime.toolHost.registerModule(new CadToolModule(runtime.cadConversionService!))
-    console.log('[DeepInk] CAD MCP 工具模块已注册')
+    console.log('[CCLink Studio] CAD MCP 工具模块已注册')
 
     runtime.toolHost.registerModule(new DataSourceToolModule(runtime.dataSourceService!))
-    console.log('[DeepInk] 数据源 MCP 工具模块已注册')
+    console.log('[CCLink Studio] 数据源 MCP 工具模块已注册')
 
     runtime.toolHost.registerModule(
       new AndroidToolModule(runtime.adbBridge!, runtime.scrcpyBridge!),
     )
-    console.log('[DeepInk] Android MCP 工具模块已注册')
+    console.log('[CCLink Studio] Android MCP 工具模块已注册')
 
     runtime.agentDeviceManager = new AgentDeviceManager(
       runtime.activeDeviceManager!,
@@ -66,12 +66,12 @@ export async function bootstrapAutomationRuntime(runtime: DeepInkRuntimeState): 
     await runtime.agentDeviceManager.init()
     runtime.toolHost.registerModule(new AgentDeviceToolModule(runtime.agentDeviceManager))
     console.log(
-      `[DeepInk] agent-device 工具模块已注册 (available=${runtime.agentDeviceManager.isAvailable()})`,
+      `[CCLink Studio] agent-device 工具模块已注册 (available=${runtime.agentDeviceManager.isAvailable()})`,
     )
 
     const mcpPort = await runtime.toolHost.start()
-    console.log(`[DeepInk] MCP server 已启动 (端口: ${mcpPort})`)
+    console.log(`[CCLink Studio] MCP server 已启动 (端口: ${mcpPort})`)
   } catch (error) {
-    console.error('[DeepInk] CDP/Playwright 初始化失败:', error)
+    console.error('[CCLink Studio] CDP/Playwright 初始化失败:', error)
   }
 }

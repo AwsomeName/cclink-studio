@@ -4,15 +4,15 @@
 >
 > 本文档由 deep-research 工作流多源检索 + 对抗式核验生成,共 5 个搜索角度、抓取 20 个来源、提取 90 条论断、核验 25 条(23 条通过 3 票核验,2 条被推翻)。
 
-> 2026-07-14 产品决策：云手机方向封存，不再作为 DeepInk 近期或中期路线推进。本文档仅保留为历史调研资料。DeepInk 后续 Android 方向只考虑用户自有真实手机通过 USB 或 Wi-Fi 连接。
+> 2026-07-14 产品决策：云手机方向封存，不再作为 CCLink Studio 近期或中期路线推进。本文档仅保留为历史调研资料。CCLink Studio 后续 Android 方向只考虑用户自有真实手机通过 USB 或 Wi-Fi 连接。
 
 ## 当前决策
 
-DeepInk 不再推进云手机，原因不是云手机技术不可行，而是它不服务当前最急的产品目标：
+CCLink Studio 不再推进云手机，原因不是云手机技术不可行，而是它不服务当前最急的产品目标：
 
 - 当前最急需求是远程项目支持、浏览器账号运营和 Markdown 文案发布。
 - 云手机会引入额外账号、计费、合规、实例生命周期和厂商 SDK 风险。
-- 云手机会继续放大 Android 方向的产品复杂度，稀释 DeepInk 的近期可用闭环。
+- 云手机会继续放大 Android 方向的产品复杂度，稀释 CCLink Studio 的近期可用闭环。
 
 因此：
 
@@ -23,7 +23,7 @@ DeepInk 不再推进云手机，原因不是云手机技术不可行，而是它
 
 ## 概述
 
-DeepInk 当前已有**本地 Android 实例**方案(`src/main/android/`,ADB + Scrcpy,详见 [android-mirror.md](./android-mirror.md))。本地方案的痛点在于:模拟器(Google AVD / QEMU)启动慢、资源占用高、ARM 翻译损耗、不同机器环境差异大,且 AI Agent 想批量调度多设备时本地几乎不可行。
+CCLink Studio 当前已有**本地 Android 实例**方案(`src/main/android/`,ADB + Scrcpy,详见 [android-mirror.md](./android-mirror.md))。本地方案的痛点在于:模拟器(Google AVD / QEMU)启动慢、资源占用高、ARM 翻译损耗、不同机器环境差异大,且 AI Agent 想批量调度多设备时本地几乎不可行。
 
 本文档原本调研**云端手机**作为远程 Android 实例方案。以下是历史调研前提，已被 2026-07-14 的产品决策废弃:
 
@@ -253,7 +253,7 @@ src/main/android/
 
 ## 历史决策与后续
 
-以下是 2026-06 调研阶段的历史决策，已被 2026-07-14 的产品决策废弃。当前 DeepInk 不推进云手机。
+以下是 2026-06 调研阶段的历史决策，已被 2026-07-14 的产品决策废弃。当前 CCLink Studio 不推进云手机。
 
 ### 原已决策（已废弃）
 

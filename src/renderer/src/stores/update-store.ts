@@ -3,7 +3,7 @@ import { create } from 'zustand'
 /**
  * update-store — 自动更新状态（半自动方案：检查 + 通知 + 下载 dmg）
  *
- * 主进程周期性检查 COS 上的 latest-mac.yml，发现新版本时推送，
+ * 主进程周期性检查配置更新源上的 latest-mac.yml，发现新版本时推送，
  * App.tsx 监听后写入本 store，StatusBar 据此显示更新提示。
  */
 interface UpdateState {

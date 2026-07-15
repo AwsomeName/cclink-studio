@@ -1,38 +1,20 @@
 import { useEffect } from 'react'
-import { useAuthStore } from '../stores/auth-store'
-import { useSubscriptionStore } from '../stores/subscription-store'
 import { setWorkspaceStateOwnerKey } from '../utils/workspace-state'
 
-/** 初始化认证 session，并监听主进程 session 变化。 */
+/** 初始化本地身份；开源壳不依赖 CCLink 登录/订阅 session。 */
 export function useAppSession(deepinkApiAvailable: boolean): void {
   useEffect(() => {
     if (!deepinkApiAvailable) return
 
-    async function bootstrapSession(): Promise<void> {
+    async function bootstrapLocalIdentity(): Promise<void> {
       try {
         const localIdentity = await window.deepink.identity.getLocalIdentity()
-        useAuthStore.getState().setLocalIdentity(localIdentity)
         setWorkspaceStateOwnerKey(`local:${localIdentity.localId}`)
-
-        const session = await window.deepink.auth
-          .checkSession()
-          .catch(() => ({ loggedIn: false, user: null }))
-        useAuthStore.getState().setLoggedIn(session.loggedIn, session.user)
-        if (session.loggedIn) {
-          useSubscriptionStore.getState().loadStatus()
-        }
-      } catch {
-        useAuthStore.getState().setChecking(false)
+      } catch (error) {
+        console.warn('[AppSession] 初始化本地身份失败:', error)
       }
     }
 
-    void bootstrapSession()
-
-    window.deepink.auth.onSessionChanged((session) => {
-      useAuthStore.getState().setLoggedIn(session.loggedIn, session.user)
-      if (session.loggedIn) {
-        useSubscriptionStore.getState().loadStatus()
-      }
-    })
+    void bootstrapLocalIdentity()
   }, [deepinkApiAvailable])
 }

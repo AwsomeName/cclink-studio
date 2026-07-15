@@ -1,11 +1,13 @@
 # 平台自动化 — 路径选型与合规边界
 
-> 本文档界定 DeepInk Agent 操作各类外部平台(电商 / 内容 / IM)时的**路径选择、合规边界与禁区**。
+> 本文档界定 CCLink Studio Agent 操作各类外部平台(电商 / 内容 / IM)时的**路径选择、合规边界与禁区**。
+>
+> 当前 OSS 边界：本文可作为本地浏览器/Agent 自动化合规参考；TIM、自建 IM、官方账号和消息网络属于 CCLink/commercial 侧，不是 Studio 开源壳默认能力。
 > 与 [cloud-phone.md](./cloud-phone.md) 配套:cloud-phone 解决「远程 Android 实例怎么接」,本文档解决「哪些平台该用什么方式自动化」。
 
 ## 概述
 
-DeepInk Agent 要替用户操作各种平台,存在两条路径:
+CCLink Studio Agent 要替用户操作各种平台,存在两条路径:
 
 | 路径 | 机制 | 合规 | 稳定性 | 适用 |
 |------|------|------|--------|------|
@@ -16,7 +18,7 @@ DeepInk Agent 要替用户操作各种平台,存在两条路径:
 
 ## 平台合规地图
 
-| 平台 | 类型 | 官方 API | UI 操控封号风险 | DeepInk 路径 |
+| 平台 | 类型 | 官方 API | UI 操控封号风险 | CCLink Studio 路径 |
 |------|------|----------|-----------------|--------------|
 | 京东 | 电商 | ✅ 京东开放平台 | 低(浏览/搜索) | API(商品/订单);云手机仅做无 API 的浏览采集 |
 | B 站 | 内容 | ✅ 开放平台(投稿等) | 中(自动化发布检测) | API(投稿/数据);UI 仅兜底 |
@@ -34,7 +36,7 @@ DeepInk Agent 要替用户操作各种平台,存在两条路径:
 
 ## 分层策略
 
-DeepInk 的 Agent 工具体系按此分层(MCP 工具模块):
+CCLink Studio 的 Agent 工具体系按此分层(MCP 工具模块):
 
 1. **官方 API 类(优先,默认)** —— 各平台开放平台 SDK 封装为 MCP 工具
    - 钉钉 / 企业微信 / 飞书:消息收发、群管理、机器人
@@ -45,8 +47,8 @@ DeepInk 的 Agent 工具体系按此分层(MCP 工具模块):
    - 仅用于**浏览 / 搜索 / 采集**等低风险、非登录态敏感动作
    - **绝不碰个人社交 IM(微信/QQ)、绝不碰批量多账号营销**
 
-3. **自建通道(无 API 的高敏感场景)** —— 腾讯 IM SDK
-   - 微信场景的合规替代:DeepInk 自建 IM(走腾讯 TIM SDK),不操控个人微信号客户端
+3. **自建通道(无 API 的高敏感场景)** —— CCLink/commercial 消息网络
+   - 微信场景的合规替代应走官方 CCLink 消息网络或商业 overlay，不操控个人微信号客户端；OSS 默认不内置 TIM SDK。
 
 ## 各平台 API 入口
 
@@ -57,7 +59,7 @@ DeepInk 的 Agent 工具体系按此分层(MCP 工具模块):
 | 飞书 | [open.feishu.cn](https://open.feishu.cn) | Lark/Feishu Open Platform:消息、机器人、多维表、事件订阅 |
 | 京东 | [open.jd.com](https://open.jd.com) | 京东开放平台:商品、订单、物流 |
 | B 站 | 搜索「bilibili 开放平台」 | 投稿、内容、数据 |
-| 腾讯 IM(微信替代) | [cloud.tencent.com/document/product/269](https://cloud.tencent.com/document/product/269) | 即时通信 IM,DeepInk 自建消息通道 |
+| CCLink/commercial 消息网络 | 由官方 CCLink 项目侧维护 | OSS 默认不内置 TIM SDK、UserSig 或消息路由 |
 
 > ⚠️ 上述入口为平台通用开放平台,具体 API 能力 / 配额 / 资质要求(企业认证等)以各平台实时文档为准。本文档为路径选型指导,不替代各平台 API 详细接入设计。
 
@@ -78,7 +80,7 @@ DeepInk 的 Agent 工具体系按此分层(MCP 工具模块):
    - 有 → 用 API(钉钉/企微/飞书/京东/B 站)。**结束。**
    - 无 → 继续。
 2. **该平台是个人社交 IM(微信/QQ)吗?**
-   - 是 → **禁区**,不提供 UI 操控工具;引导走自建 IM(腾讯 SDK)。
+   - 是 → **禁区**,不提供 UI 操控工具；如需消息能力，应由 CCLink/commercial 消息网络承接。
    - 否 → 继续。
 3. **该任务是低风险浏览/采集,还是登录态敏感/批量营销?**
    - 低风险浏览/采集 → 云手机 UI 操控兜底。

@@ -1,3 +1,9 @@
+# Historical: Remote Debug Playbook
+
+> 当前状态：历史联调手册，不再作为 `cclink-studio` 当前事实源。
+>
+> 本文描述的是旧 Remote / entitlement / private-serv / chatcc-agent 三方联调路径。Studio OSS 当前不内置远程工作区、商业账号、TIM、entitlement 或远程诊断入口。后续官方联调手册应放在 `/Users/apple/Desktop/cclink-dev` 或 `/Users/apple/Desktop/chat-cc` 对应目录。
+
 # Remote Debug Playbook
 
 > 状态：联调排查手册
@@ -157,4 +163,3 @@ remoteError.code:
 没有 traceId 的失败，不要靠聊天记录排查。
 
 Remote 是跨项目系统，靠“我本地复现不了”会浪费大量时间。必须让每次失败都能被三边日志串起来。
-

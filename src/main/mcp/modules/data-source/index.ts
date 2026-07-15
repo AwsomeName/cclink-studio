@@ -9,7 +9,7 @@ const MAX_TOOL_LIMIT = 100
 const DATA_SOURCE_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'data_source_list_sources',
-    description: '列出 DeepInk 已配置的数据源。只返回非敏感连接摘要，不返回凭证。',
+    description: '列出 CCLink Studio 已配置的数据源。只返回非敏感连接摘要，不返回凭证。',
     inputSchema: { type: 'object', properties: {} },
     annotations: { readOnlyHint: true, destructiveHint: false },
   },

@@ -1,3 +1,11 @@
+# Historical: DeepInk Remote Program
+
+> 当前状态：历史项目空间，不再作为 CCLink Studio OSS 架构事实源。
+>
+> 这份文档记录的是旧 DeepInk Remote / private-serv / chatcc-agent 三项目协作假设。当前决策已经调整为：CCLink Studio 是开源桌面壳；商业 overlay 在 `/Users/apple/Desktop/cclink-dev`；CCLink 云函数在 `/Users/apple/Desktop/chat-cc/deploy`；CCLink Agent runtime 在 `/Users/apple/Desktop/chat-cc/Agent`；`private-serv` 废弃。
+>
+> 不存在独立的 `cclink-cloud` 或 `cclink-agent` 项目。本文下方内容仅供迁移审计和历史追溯，不能作为新实现依据。
+
 # DeepInk Remote Program
 
 > 状态：总控项目空间
@@ -85,4 +93,3 @@ DeepInk 侧已完成：
 现在最危险的不是“还没做 Direct”，而是 CCLink Remote 还没完全闭环。
 
 Direct 必须等 CCLink 跑通同一套 runtime 协议后再做。否则会产生两套 agent、两套错误模型、两套诊断链路，后面很难收拾。
-

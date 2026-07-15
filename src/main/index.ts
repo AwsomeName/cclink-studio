@@ -24,7 +24,7 @@ app.whenReady().then(async () => {
   await bootstrapRuntime(runtime, windowOptions)
 
   app.on('activate', () => {
-    // macOS: 点击 Dock 图标时触发。DeepInk 当前 window-all-closed 会退出，通常不会走到这里。
+    // macOS: 点击 Dock 图标时触发。CCLink Studio 当前 window-all-closed 会退出，通常不会走到这里。
     if (BrowserWindow.getAllWindows().length === 0) {
       cleanupIpcHandlers()
       createWindowRuntime(runtime, windowOptions)
@@ -49,9 +49,9 @@ async function gracefulShutdown(): Promise<void> {
   if (shutdownStarted) return
   shutdownStarted = true
 
-  console.log('[DeepInk] 开始优雅退出...')
+  console.log('[CCLink Studio] 开始优雅退出...')
   await shutdownRuntime(runtime)
-  console.log('[DeepInk] 优雅退出完成')
+  console.log('[CCLink Studio] 优雅退出完成')
 }
 
 app.on('will-quit', async (event) => {
@@ -59,7 +59,7 @@ app.on('will-quit', async (event) => {
   try {
     await gracefulShutdown()
   } catch (error) {
-    console.error('[DeepInk] 优雅退出失败:', error)
+    console.error('[CCLink Studio] 优雅退出失败:', error)
   }
   app.exit(0)
 })

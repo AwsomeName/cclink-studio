@@ -1,9 +1,7 @@
 import type { AgentApiContract } from '../shared/ipc/agent'
 import type { AndroidApiContract } from '../shared/ipc/android'
-import type { AuthApiContract } from '../shared/ipc/auth'
 import type { BrowserApiContract } from '../shared/ipc/browser'
 import type { CadApiContract } from '../shared/ipc/cad'
-import type { CclinkApiContract } from '../shared/ipc/cclink'
 import type { DataSourceApiContract } from '../shared/ipc/data-source'
 import type { DialogApiContract } from '../shared/ipc/dialog'
 import type { EditorApiContract } from '../shared/ipc/editor'
@@ -12,10 +10,7 @@ import type { HardwareApiContract } from '../shared/ipc/hardware'
 import type { IdentityApiContract } from '../shared/ipc/identity'
 import type { MeshyApiContract } from '../shared/ipc/meshy'
 import type { ProjectOpsApiContract } from '../shared/ipc/project-ops'
-import type { RemoteApiContract } from '../shared/ipc/remote'
 import type { SettingsApiContract } from '../shared/ipc/settings'
-import type { SubscriptionApiContract } from '../shared/ipc/subscription'
-import type { SyncApiContract } from '../shared/ipc/sync'
 import type { TerminalApiContract } from '../shared/ipc/terminal'
 import type { UpdateApiContract } from '../shared/ipc/update'
 import type { WechatApiContract } from '../shared/ipc/wechat'
@@ -33,15 +28,9 @@ export interface DeepinkAPI {
 
   dataSource: DataSourceApiContract
 
-  auth: AuthApiContract
-
   identity: IdentityApiContract
 
   agent: AgentApiContract
-
-  cclink: CclinkApiContract
-
-  remote: RemoteApiContract
 
   android: AndroidApiContract
 
@@ -55,8 +44,6 @@ export interface DeepinkAPI {
 
   editor: EditorApiContract
 
-  sync: SyncApiContract
-
   terminal: TerminalApiContract
 
   settings: SettingsApiContract
@@ -64,8 +51,6 @@ export interface DeepinkAPI {
   workspaceState: WorkspaceStateApiContract
 
   meshy: MeshyApiContract
-
-  subscription: SubscriptionApiContract
 
   wechat: WechatApiContract
 

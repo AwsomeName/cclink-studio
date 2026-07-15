@@ -1,14 +1,11 @@
 /**
- * DeepInk 全局类型定义
+ * CCLink Studio 全局类型定义
  */
 
 import type { RemoteWorkspaceTransport, WorkspaceRef } from '@shared/workspace-ref'
 import type { TerminalSessionSnapshot } from '@shared/ipc/terminal'
 import type { TerminalCommandConfirmationRequest, TerminalTabRef } from '@shared/terminal'
 
-// ─── 认证类型 ──────────────────────────────────────
-
-export type { UserProfile, AuthResult, AuthSession } from '@shared/ipc/auth'
 export type { LocalIdentity } from '@shared/ipc/identity'
 
 // ─── UI 类型 ───────────────────────────────────────
@@ -247,23 +244,6 @@ export interface AgentMessage {
   /** 是否仍在流式接收中 */
   isStreaming?: boolean
 }
-
-// ─── 权限系统类型 ──────────────────────────────────
-
-// ─── 订阅系统类型 ──────────────────────────────────
-
-export type {
-  SubscriptionTier,
-  SubscriptionStatus,
-  PaymentChannel,
-  OrderStatus,
-  Entitlement,
-  EntitlementGrant,
-  SubscriptionPlan,
-  UserSubscription,
-  CreateOrderResult,
-  OrderCheckResult,
-} from '@shared/ipc/subscription'
 
 export type {
   AgentScope,
