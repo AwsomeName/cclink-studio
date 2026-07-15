@@ -73,6 +73,8 @@ export interface AgentSendOptions {
    * true 时强制走宿主可视浏览器：禁用 Claude Code 内置工具，避免 WebSearch/WebFetch 绕过 UI。
    */
   forceVisibleBrowser?: boolean
+  /** 宿主采样的结构化资源事实包，供后端 prompt 和诊断使用。 */
+  resourceContext?: import('../../../shared/agent-resource-context').AgentResourceContextSnapshot
 }
 
 /** 后端配置 */

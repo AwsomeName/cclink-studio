@@ -58,8 +58,16 @@ describe('PtyExecutionAdapter', () => {
         rows: 31,
         shell: expect.any(String),
         cwd: '/tmp',
+        env: expect.objectContaining({
+          DEEPINK_TERMINAL_SESSION_ID: 'terminal-1',
+          DEEPINK_TERMINAL_RUNTIME: 'local',
+        }),
       }),
     )
+    if (process.platform !== 'win32') {
+      expect(spawnPty.mock.calls[0]?.[0].args?.join(' ')).toContain('DEEPINK_TERMINAL_SESSION_ID')
+      expect(spawnPty.mock.calls[0]?.[0].args?.join(' ')).toContain('terminal-1')
+    }
     expect(events).toContainEqual({
       kind: 'started',
       sessionId: 'terminal-1',
@@ -79,7 +87,12 @@ describe('PtyExecutionAdapter', () => {
 
   it('writes, resizes, and terminates an existing PTY session', async () => {
     const mockPty = createMockPty()
-    const adapter = new PtyExecutionAdapter({ spawnPty: () => mockPty })
+    const adapter = new PtyExecutionAdapter({
+      spawnPty: () => mockPty,
+      wait: async () => undefined,
+      terminateGraceMs: 0,
+      terminateForceGraceMs: 0,
+    })
 
     await adapter.start({ sessionId: 'terminal-1', runtime: createRuntime() })
     await adapter.write({ sessionId: 'terminal-1', data: 'pwd\r', actor: 'user' })
@@ -88,7 +101,8 @@ describe('PtyExecutionAdapter', () => {
 
     expect(mockPty.write).toHaveBeenCalledWith('pwd\r')
     expect(mockPty.resize).toHaveBeenCalledWith(99, 22)
-    expect(mockPty.kill).toHaveBeenCalled()
+    expect(mockPty.kill).toHaveBeenCalledWith(process.platform === 'win32' ? undefined : 'SIGHUP')
+    expect(mockPty.kill).toHaveBeenCalledWith(process.platform === 'win32' ? undefined : 'SIGKILL')
   })
 
   it('rejects remote runtimes in the local PTY adapter', async () => {

@@ -28,10 +28,53 @@ function describeError(err: unknown): string {
 }
 
 const FS_STORAGE_KEY = 'deepink-fs-state'
+const RECENT_WORKSPACES_STORAGE_KEY = 'deepink-recent-workspaces'
 const MAX_RECENT_WORKSPACES = 8
 
+function normalizeWorkspacePath(path: unknown): string | null {
+  if (typeof path !== 'string') return null
+  const normalized = path.trim()
+  return normalized.length > 0 ? normalized : null
+}
+
+function mergeRecentWorkspacePaths(...sources: unknown[]): string[] {
+  const result: string[] = []
+  const push = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(push)
+      return
+    }
+    const path = normalizeWorkspacePath(value)
+    if (!path || result.includes(path)) return
+    result.push(path)
+  }
+  sources.forEach(push)
+  return result.slice(0, MAX_RECENT_WORKSPACES)
+}
+
 function updateRecentWorkspacePaths(paths: string[], path: string): string[] {
-  return [path, ...paths.filter((item) => item !== path)].slice(0, MAX_RECENT_WORKSPACES)
+  return mergeRecentWorkspacePaths(path, paths)
+}
+
+function loadRecentWorkspaceFallback(): string[] {
+  try {
+    if (typeof localStorage === 'undefined') return []
+    return mergeRecentWorkspacePaths(JSON.parse(localStorage.getItem(RECENT_WORKSPACES_STORAGE_KEY) ?? '[]'))
+  } catch {
+    return []
+  }
+}
+
+function saveRecentWorkspaceFallback(paths: string[]): void {
+  try {
+    if (typeof localStorage === 'undefined') return
+    localStorage.setItem(
+      RECENT_WORKSPACES_STORAGE_KEY,
+      JSON.stringify(mergeRecentWorkspacePaths(paths)),
+    )
+  } catch {
+    // 最近项目 fallback 写入失败不影响当前工作区。
+  }
 }
 
 function hasUnsavedEditorDrafts(): boolean {
@@ -62,6 +105,17 @@ function loadFsPanelState(): { expandedPaths: string[]; selectedPath: string | n
   } catch {
     return { expandedPaths: [], selectedPath: null }
   }
+}
+
+function getRecentWorkspacePathsFromSettings(settings: {
+  recentWorkspacePaths?: unknown
+  lastWorkspacePath?: unknown
+}): string[] {
+  return mergeRecentWorkspacePaths(
+    settings.recentWorkspacePaths,
+    settings.lastWorkspacePath,
+    loadRecentWorkspaceFallback(),
+  )
 }
 
 function normalizeFileTreeState(value: unknown): { expandedPaths: string[]; selectedPath: string | null } | null {
@@ -208,6 +262,7 @@ export const useFsStore = create<FsState>((set, get) => ({
         loading: false,
         recentWorkspacePaths: updateRecentWorkspacePaths(state.recentWorkspacePaths, path),
       }))
+      saveRecentWorkspaceFallback(get().recentWorkspacePaths)
       saveFsPanelState({ expandedPaths: get().expandedPaths, selectedPath: get().selectedPath }, path)
       await restoreExpandedDirs(path, get, set)
       return true
@@ -227,7 +282,15 @@ export const useFsStore = create<FsState>((set, get) => ({
   initWorkspace: async () => {
     try {
       const settings = await window.deepink.settings.getAll()
-      set({ recentWorkspacePaths: Array.isArray(settings.recentWorkspacePaths) ? settings.recentWorkspacePaths.filter(Boolean) : [] })
+      const recentWorkspacePaths = getRecentWorkspacePathsFromSettings(settings)
+      set({ recentWorkspacePaths })
+      saveRecentWorkspaceFallback(recentWorkspacePaths)
+      if (
+        JSON.stringify(recentWorkspacePaths) !==
+        JSON.stringify(Array.isArray(settings.recentWorkspacePaths) ? settings.recentWorkspacePaths : [])
+      ) {
+        void window.deepink.settings.set({ recentWorkspacePaths }).catch(() => {})
+      }
       const last = settings.lastWorkspacePath
       if (!last) return
       const snapshot = await window.deepink.workspaceState
@@ -266,6 +329,7 @@ export const useFsStore = create<FsState>((set, get) => ({
         hydrateRuntimeSections(snapshot)
         setWorkspaceStatePath(path)
         const recentWorkspacePaths = get().recentWorkspacePaths
+        saveRecentWorkspaceFallback(recentWorkspacePaths)
         const r = await window.deepink.settings.set({ lastWorkspacePath: path, recentWorkspacePaths })
         // 持久化失败不阻断当前会话（workspacePath 已生效），仅提示下次不会记住
         if (!r.success) {
@@ -292,6 +356,7 @@ export const useFsStore = create<FsState>((set, get) => ({
     if (ok) {
       hydrateRuntimeSections(snapshot)
       const recentWorkspacePaths = get().recentWorkspacePaths
+      saveRecentWorkspaceFallback(recentWorkspacePaths)
       await window.deepink.settings.set({ lastWorkspacePath: path, recentWorkspacePaths }).catch(() => {})
     }
   },
@@ -320,6 +385,7 @@ export const useFsStore = create<FsState>((set, get) => ({
         newFolderParent: null,
       })
       saveFsPanelState({ expandedPaths: get().expandedPaths, selectedPath: get().selectedPath }, null)
+      saveRecentWorkspaceFallback(get().recentWorkspacePaths)
       await window.deepink.settings.set({
         lastWorkspacePath: '',
         recentWorkspacePaths: get().recentWorkspacePaths,

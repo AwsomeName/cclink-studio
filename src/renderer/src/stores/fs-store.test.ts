@@ -24,7 +24,10 @@ function snapshot(
 }
 
 describe('fs-store workspace switching', () => {
+  const localStorageData = new Map<string, string>()
+
   beforeEach(() => {
+    localStorageData.clear()
     vi.stubGlobal('window', {
       deepink: {
         fs: {
@@ -35,9 +38,20 @@ describe('fs-store workspace switching', () => {
           setSection: vi.fn().mockResolvedValue({ success: true }),
         },
         settings: {
+          getAll: vi.fn().mockResolvedValue({ lastWorkspacePath: '', recentWorkspacePaths: [] }),
           set: vi.fn().mockResolvedValue({ success: true }),
         },
       },
+    })
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn((key: string) => localStorageData.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        localStorageData.set(key, value)
+      }),
+      removeItem: vi.fn((key: string) => {
+        localStorageData.delete(key)
+      }),
+      clear: vi.fn(() => localStorageData.clear()),
     })
     useAgentStore.setState(useAgentStore.getInitialState(), true)
     useBrowserStore.setState(useBrowserStore.getInitialState(), true)
@@ -120,5 +134,33 @@ describe('fs-store workspace switching', () => {
     })
     expect(useAgentStore.getState().activeConversationId).toBe(conversationId)
     expect(useAgentStore.getState().messages.at(-1)?.rawText).toBe('恢复项目里的这条消息')
+  })
+
+  it('restores recent projects from last workspace and local fallback after restart', async () => {
+    const lastWorkspacePath = '/Users/apple/current-project'
+    const oldWorkspacePath = '/Users/apple/old-project'
+    localStorageData.set('deepink-recent-workspaces', JSON.stringify([oldWorkspacePath]))
+
+    const getAll = window.deepink.settings.getAll as ReturnType<typeof vi.fn>
+    getAll.mockResolvedValue({
+      lastWorkspacePath,
+      recentWorkspacePaths: [],
+    })
+    const getWorkspaceState = window.deepink.workspaceState.get as ReturnType<typeof vi.fn>
+    getWorkspaceState.mockResolvedValue(snapshot(lastWorkspacePath, {}))
+
+    await useFsStore.getState().initWorkspace()
+
+    expect(useFsStore.getState().recentWorkspacePaths).toEqual([
+      lastWorkspacePath,
+      oldWorkspacePath,
+    ])
+    expect(window.deepink.settings.set).toHaveBeenCalledWith({
+      recentWorkspacePaths: [lastWorkspacePath, oldWorkspacePath],
+    })
+    expect(localStorage.setItem).toHaveBeenCalledWith(
+      'deepink-recent-workspaces',
+      JSON.stringify([lastWorkspacePath, oldWorkspacePath]),
+    )
   })
 })

@@ -29,6 +29,7 @@ export function bootstrapAgentRuntime(runtime: DeepInkRuntimeState): void {
         apiKey: settings.apiKey,
         modelName: settings.modelName,
         getWorkspacePath: () => runtime.settingsService!.getAll().lastWorkspacePath,
+        getSettingsSnapshot: () => runtime.settingsService!.getAll(),
         agentDeviceAvailable: () => runtime.agentDeviceManager?.isAvailable() ?? false,
         browserManager: runtime.browserManager ?? undefined,
         browserTaskRuntime: runtime.browserTaskRuntime ?? undefined,

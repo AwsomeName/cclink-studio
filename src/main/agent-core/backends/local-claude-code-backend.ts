@@ -198,6 +198,17 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       '',
     ]
 
+    if (options?.resourceContext) {
+      sections.push(
+        '### DeepInk 资源事实包',
+        '以下 JSON 是宿主采样的真实运行态。判断页面、目录、配置和任务目标时，以这里的 URL/host/workspace/config/task 为准；不要用搜索结果摘要或页面文案脑补已经进入目标站点。',
+        '```json',
+        JSON.stringify(options.resourceContext, null, 2),
+        '```',
+        '',
+      )
+    }
+
     // 浏览器状态 + 约定（browser / all）
     if (scope.kind === 'all' || scope.kind === 'browser') {
       sections.push(

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 
 interface ModelViewerProps {
   filePath: string
@@ -13,6 +15,11 @@ interface ModelInfo {
   triangles: number
   objects: number
   animations: number
+}
+
+type STLGeometryWithColor = THREE.BufferGeometry & {
+  hasColors?: boolean
+  alpha?: number
 }
 
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
@@ -32,6 +39,27 @@ function getExtension(filePath: string): string {
 
 function getFileName(filePath: string): string {
   return filePath.split('/').pop() ?? filePath
+}
+
+function createSTLModel(arrayBuffer: ArrayBuffer, fileName: string): THREE.Mesh {
+  const geometry = new STLLoader().parse(arrayBuffer) as STLGeometryWithColor
+  if (!geometry.getAttribute('normal')) {
+    geometry.computeVertexNormals()
+  }
+
+  const alpha = geometry.alpha ?? 1
+  const material = new THREE.MeshStandardMaterial({
+    color: geometry.hasColors ? 0xffffff : 0x8dd5ff,
+    vertexColors: geometry.hasColors === true,
+    roughness: 0.58,
+    metalness: 0.08,
+    transparent: alpha < 1,
+    opacity: alpha,
+  })
+
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.name = fileName
+  return mesh
 }
 
 function walkObjects(root: THREE.Object3D, visitor: (object: THREE.Object3D) => void): void {
@@ -229,10 +257,16 @@ export function ModelViewer({ filePath }: ModelViewerProps): React.ReactElement 
         setError('')
         setModelInfo(null)
 
+        const extension = getExtension(filePath)
+        if (extension === '.step' || extension === '.stp') {
+          throw new Error(
+            'STEP/STP 是 CAD B-Rep 格式，需要接入 OpenCascade/FreeCAD 转换后才能可靠预览。当前先识别为模型文件，但暂不直接渲染。',
+          )
+        }
+
         const result = await window.deepink.fs.readFile(filePath)
         const content = typeof result === 'string' ? result : result.content
         const arrayBuffer = base64ToArrayBuffer(content)
-        const extension = getExtension(filePath)
 
         let model: THREE.Object3D
         let animations: THREE.AnimationClip[] = []
@@ -241,11 +275,17 @@ export function ModelViewer({ filePath }: ModelViewerProps): React.ReactElement 
           model = new FBXLoader().parse(arrayBuffer, '')
           animations = model.animations
         } else if (extension === '.glb' || extension === '.gltf') {
-          const gltf = await new Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>((resolve, reject) => {
-            new GLTFLoader().parse(arrayBuffer, '', resolve, reject)
-          })
+          const gltf = await new Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>(
+            (resolve, reject) => {
+              new GLTFLoader().parse(arrayBuffer, '', resolve, reject)
+            },
+          )
           model = gltf.scene
           animations = gltf.animations
+        } else if (extension === '.stl') {
+          model = createSTLModel(arrayBuffer, getFileName(filePath))
+        } else if (extension === '.3mf') {
+          model = new ThreeMFLoader().parse(arrayBuffer)
         } else {
           throw new Error(`暂不支持的 3D 模型格式: ${extension || 'unknown'}`)
         }
@@ -329,13 +369,16 @@ export function ModelViewer({ filePath }: ModelViewerProps): React.ReactElement 
           <span className="model-viewer-file">{getFileName(filePath)}</span>
           {modelInfo && (
             <span className="model-viewer-meta">
-              {modelInfo.objects} objects · {modelInfo.vertices.toLocaleString()} vertices · {modelInfo.triangles.toLocaleString()} tris
+              {modelInfo.objects} objects · {modelInfo.vertices.toLocaleString()} vertices ·{' '}
+              {modelInfo.triangles.toLocaleString()} tris
               {modelInfo.animations > 0 ? ` · ${modelInfo.animations} animations` : ''}
             </span>
           )}
         </div>
         <div className="model-viewer-actions">
-          <button onClick={resetCamera} title="重置视角">重置视角</button>
+          <button onClick={resetCamera} title="重置视角">
+            重置视角
+          </button>
           <button
             className={showGrid ? 'active' : ''}
             onClick={() => setShowGrid((value) => !value)}

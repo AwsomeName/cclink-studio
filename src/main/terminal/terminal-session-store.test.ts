@@ -64,13 +64,12 @@ describe('TerminalSessionStore', () => {
     expect(sessions).toHaveLength(1)
     expect(sessions[0]).toMatchObject({
       sessionId: 'terminal-1',
-      status: 'exited',
-      attachable: false,
+      status: 'running',
+      attachable: true,
       processId: 123,
       workspaceKey: '/Users/apple/project',
     })
     expect(sessions[0].outputBuffer.map((line) => line.text)).toContain('hello\n')
-    expect(sessions[0].errorMessage).toContain('不可恢复')
   })
 
   it('extracts command records from user input chunks', async () => {

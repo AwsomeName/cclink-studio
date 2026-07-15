@@ -21,8 +21,10 @@ import type { PlaywrightBridge } from '../playwright/playwright-bridge'
 import type { AdbBridge } from '../android/adb-bridge'
 import type { BrowserManager } from '../browser/browser-manager'
 import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
+import { DEFAULT_SETTINGS, type AppSettings } from '../settings/types'
 import type { AgentScope } from './scope'
 import { buildAgentMessageWithContext, type AgentSendMessageContext } from './message-context'
+import { buildAgentResourceContext } from './resource-context'
 
 export interface AgentBridgeOptions {
   agentEngine?: 'local-claude-code'
@@ -40,6 +42,8 @@ export interface AgentBridgeOptions {
   modelName?: string
   /** 获取当前工作区路径（Claude Code 后端据此绑定 Agent 的 cwd，仅 DeepInk 进程内生效） */
   getWorkspacePath?: () => string
+  /** 获取当前设置快照，用于构建 Agent 资源事实包。 */
+  getSettingsSnapshot?: () => AppSettings
   /** agent-device 语义层是否可用（透传给后端，用于工具上下文 prompt） */
   agentDeviceAvailable?: () => boolean
   /**
@@ -65,6 +69,7 @@ export class AgentBridge {
     agentDeviceAvailable?: () => boolean
     browserManager?: BrowserManager
     browserTaskRuntime?: BrowserTaskRuntime
+    getSettingsSnapshot?: () => AppSettings
   }
   private readonly getWorkspacePath?: () => string
   constructor(
@@ -86,6 +91,7 @@ export class AgentBridge {
       agentDeviceAvailable: options?.agentDeviceAvailable,
       browserManager: options?.browserManager,
       browserTaskRuntime: options?.browserTaskRuntime,
+      getSettingsSnapshot: options?.getSettingsSnapshot,
     }
     this.getWorkspacePath = options?.getWorkspacePath
 
@@ -128,12 +134,21 @@ export class AgentBridge {
     if (sendPlan.options.forceVisibleBrowser) {
       await this.syncVisibleBrowserPage(sendPlan.browserTabId)
     }
+    const resourceContext = await buildAgentResourceContext({
+      message,
+      scope: this.runtime.getScope(conversationId),
+      browserTabId: sendPlan.browserTabId,
+      context,
+      browserManager: this.deps.browserManager,
+      playwrightBridge: this.deps.playwrightBridge,
+      settings: this.deps.getSettingsSnapshot?.() ?? DEFAULT_SETTINGS,
+    })
     this.startBrowserTaskIfNeeded(conversationId, message, sendPlan.browserTabId)
     try {
       await this.runtime.sendMessage(
-        buildAgentMessageWithContext(message, context),
+        buildAgentMessageWithContext(message, { ...context, resourceContext }),
         conversationId,
-        sendPlan.options,
+        { ...sendPlan.options, resourceContext },
       )
     } catch (error) {
       this.failActiveBrowserTask(conversationId, error)

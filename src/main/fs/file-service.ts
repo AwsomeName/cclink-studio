@@ -2,6 +2,7 @@ import { readdir, readFile, writeFile, stat, mkdir, rename, unlink } from 'fs/pr
 import { watch } from 'fs'
 import { join, resolve, extname, dirname, parse, sep } from 'path'
 import { app } from 'electron'
+import { isBinaryFileExtension } from '../../shared/file-types'
 
 /**
  * 文件系统操作服务
@@ -62,13 +63,8 @@ export class FileService {
     const buffer = await readFile(safe)
     const ext = extname(safe).toLowerCase()
 
-    // 二进制文件检测
-    const binaryExts = [
-      '.png', '.jpg', '.jpeg', '.gif', '.ico',
-      '.pdf', '.zip', '.exe', '.dmg',
-      '.fbx', '.glb', '.gltf', '.obj', '.mtl',
-    ]
-    if (binaryExts.includes(ext)) {
+    // 二进制文件返回 base64，避免编辑器把模型/压缩包当 UTF-8 文本解析。
+    if (isBinaryFileExtension(ext)) {
       return { content: buffer.toString('base64'), encoding: 'base64' }
     }
 

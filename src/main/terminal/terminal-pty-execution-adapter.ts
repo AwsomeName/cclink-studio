@@ -15,6 +15,9 @@ import type {
 interface PtySession {
   process: PtyProcess
   runtimeCwd?: string
+  exited: boolean
+  exitPromise: Promise<void>
+  resolveExit: () => void
 }
 
 interface PtyProcess {
@@ -28,6 +31,7 @@ interface PtyProcess {
 
 export interface PtySpawnInput {
   shell: string
+  args?: string[]
   cwd?: string
   env: NodeJS.ProcessEnv
   columns: number
@@ -37,6 +41,9 @@ export interface PtySpawnInput {
 export interface PtyExecutionAdapterOptions {
   now?: () => number
   spawnPty?: (input: PtySpawnInput) => PtyProcess
+  wait?: (ms: number) => Promise<void>
+  terminateGraceMs?: number
+  terminateForceGraceMs?: number
 }
 
 export class TerminalPtyError extends Error {
@@ -56,10 +63,16 @@ export class PtyExecutionAdapter implements TerminalExecutionAdapter {
   private readonly listeners = new Set<TerminalExecutionEventListener>()
   private readonly now: () => number
   private readonly spawnPty: NonNullable<PtyExecutionAdapterOptions['spawnPty']>
+  private readonly wait: NonNullable<PtyExecutionAdapterOptions['wait']>
+  private readonly terminateGraceMs: number
+  private readonly terminateForceGraceMs: number
 
   constructor(options: PtyExecutionAdapterOptions = {}) {
     this.now = options.now ?? Date.now
     this.spawnPty = options.spawnPty ?? defaultSpawnPty
+    this.wait = options.wait ?? delay
+    this.terminateGraceMs = options.terminateGraceMs ?? 800
+    this.terminateForceGraceMs = options.terminateForceGraceMs ?? 400
   }
 
   async start(input: TerminalStartInput): Promise<TerminalStartResult> {
@@ -82,21 +95,39 @@ export class PtyExecutionAdapter implements TerminalExecutionAdapter {
 
     const cwd = normalizeCwd(input.runtime.cwd)
     const size = normalizeTerminalSize(input.size)
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      ...input.env,
+      TERM: process.env.TERM || 'xterm-256color',
+      COLORTERM: process.env.COLORTERM || 'truecolor',
+      DEEPINK_TERMINAL_SESSION_ID: input.sessionId,
+      DEEPINK_TERMINAL_PARENT_PID: String(process.pid),
+      DEEPINK_TERMINAL_RUNTIME: input.runtime.location,
+    }
+    if (cwd) env.DEEPINK_TERMINAL_CWD = cwd
+    const launch = createPtyLaunch(input.runtime.shell || getDefaultShell(), input.sessionId)
     const child = this.spawnPty({
-      shell: input.runtime.shell || getDefaultShell(),
+      shell: launch.shell,
+      args: launch.args,
       cwd,
-      env: {
-        ...process.env,
-        ...input.env,
-        TERM: process.env.TERM || 'xterm-256color',
-        COLORTERM: process.env.COLORTERM || 'truecolor',
-      },
+      env,
       columns: size.columns,
       rows: size.rows,
     })
 
-    this.sessions.set(input.sessionId, { process: child, runtimeCwd: cwd })
-    this.bindPtyProcess(input.sessionId, child)
+    let resolveExit = (): void => undefined
+    const exitPromise = new Promise<void>((resolve) => {
+      resolveExit = resolve
+    })
+    const session: PtySession = {
+      process: child,
+      runtimeCwd: cwd,
+      exited: false,
+      exitPromise,
+      resolveExit,
+    }
+    this.sessions.set(input.sessionId, session)
+    this.bindPtyProcess(input.sessionId, session)
     this.emit({
       kind: 'started',
       sessionId: input.sessionId,
@@ -134,7 +165,13 @@ export class PtyExecutionAdapter implements TerminalExecutionAdapter {
   async terminate(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId)
     if (!session) return
-    session.process.kill()
+    session.process.kill(getGracefulSignal())
+    await this.waitForExit(session, this.terminateGraceMs)
+    if (session.exited || !this.sessions.has(sessionId)) return
+
+    session.process.kill(getForceSignal())
+    await this.waitForExit(session, this.terminateForceGraceMs)
+    if (!session.exited) this.sessions.delete(sessionId)
   }
 
   onEvent(listener: TerminalExecutionEventListener): () => void {
@@ -152,8 +189,8 @@ export class PtyExecutionAdapter implements TerminalExecutionAdapter {
     this.listeners.clear()
   }
 
-  private bindPtyProcess(sessionId: string, child: PtyProcess): void {
-    child.onData((data) => {
+  private bindPtyProcess(sessionId: string, session: PtySession): void {
+    session.process.onData((data) => {
       this.emit({
         kind: 'output',
         sessionId,
@@ -162,7 +199,9 @@ export class PtyExecutionAdapter implements TerminalExecutionAdapter {
         timestamp: this.now(),
       })
     })
-    child.onExit((event) => {
+    session.process.onExit((event) => {
+      session.exited = true
+      session.resolveExit()
       this.sessions.delete(sessionId)
       this.emit({
         kind: 'exit',
@@ -172,6 +211,12 @@ export class PtyExecutionAdapter implements TerminalExecutionAdapter {
         timestamp: this.now(),
       })
     })
+  }
+
+  private async waitForExit(session: PtySession, timeoutMs: number): Promise<void> {
+    if (session.exited) return
+    if (timeoutMs <= 0) return
+    await Promise.race([session.exitPromise, this.wait(timeoutMs)])
   }
 
   private createUnavailableError(
@@ -208,6 +253,20 @@ export class PtyExecutionAdapter implements TerminalExecutionAdapter {
   }
 }
 
+function getGracefulSignal(): string | undefined {
+  if (process.platform === 'win32') return undefined
+  return 'SIGHUP'
+}
+
+function getForceSignal(): string | undefined {
+  if (process.platform === 'win32') return undefined
+  return 'SIGKILL'
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function defaultSpawnPty(input: PtySpawnInput): IPty {
   const options: IPtyForkOptions = {
     name: 'xterm-256color',
@@ -216,7 +275,22 @@ function defaultSpawnPty(input: PtySpawnInput): IPty {
     cwd: input.cwd,
     env: input.env,
   }
-  return pty.spawn(input.shell, [], options)
+  return pty.spawn(input.shell, input.args ?? [], options)
+}
+
+function createPtyLaunch(shell: string, sessionId: string): { shell: string; args?: string[] } {
+  if (process.platform === 'win32') return { shell }
+  return {
+    shell: '/bin/sh',
+    args: [
+      '-lc',
+      `DEEPINK_TERMINAL_SESSION_ID=${shellQuote(sessionId)} ${shellQuote(shell)} -i`,
+    ],
+  }
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
 function getDefaultShell(): string {

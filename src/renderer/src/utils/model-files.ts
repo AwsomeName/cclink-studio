@@ -1,9 +1,8 @@
 import type { TabType } from '../types'
-
-const MODEL_EXTENSIONS = new Set(['.fbx', '.glb', '.gltf'])
+import { isModelFileExtension as isSharedModelFileExtension } from '@shared/file-types'
 
 export function isModelFileExtension(extension?: string): boolean {
-  return MODEL_EXTENSIONS.has((extension ?? '').toLowerCase())
+  return isSharedModelFileExtension(extension)
 }
 
 export function getTabTypeForFile(extension?: string): TabType {
@@ -17,6 +16,13 @@ export function getModelFileIcon(extension?: string): string {
     case '.glb':
     case '.gltf':
       return '⬢'
+    case '.stl':
+      return '△'
+    case '.3mf':
+      return '▣'
+    case '.step':
+    case '.stp':
+      return '⚙'
     default:
       return '📦'
   }

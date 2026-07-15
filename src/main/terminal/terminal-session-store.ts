@@ -80,15 +80,9 @@ function isTerminalSessionRecord(value: unknown): value is TerminalSessionRecord
 }
 
 function normalizeLoadedRecord(record: TerminalSessionRecord): TerminalSessionRecord {
-  const wasLive = record.status === 'running' || record.status === 'starting' || record.status === 'blocked'
   return {
     ...record,
-    status: wasLive ? 'exited' : record.status,
-    attachable: false,
-    errorMessage: wasLive
-      ? (record.errorMessage ?? 'DeepInk 已重启，原 Terminal 进程不可恢复')
-      : record.errorMessage,
-    exitedAt: wasLive ? (record.exitedAt ?? Date.now()) : record.exitedAt,
+    attachable: Boolean(record.attachable),
     workspaceKey: record.workspaceKey ?? workspaceRefKey(record.runtime.workspaceRef),
     outputBuffer: Array.isArray(record.outputBuffer) ? record.outputBuffer : [],
     commandHistory: Array.isArray(record.commandHistory) ? record.commandHistory : [],

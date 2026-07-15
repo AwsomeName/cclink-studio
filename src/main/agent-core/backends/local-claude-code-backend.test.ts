@@ -157,4 +157,54 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     proc.emit('exit', 0, null)
     expect(releaseToolSession).toHaveBeenCalledWith('mcp-session-1')
   })
+
+  it('injects the host resource context into the system prompt', async () => {
+    await createBackend().sendMessage('登录我的知乎', {
+      resourceContext: {
+        version: 1,
+        generatedAt: 1,
+        scope: { kind: 'all' },
+        activeBrowser: {
+          tabId: 'tab-1',
+          isVisible: true,
+          url: 'https://www.baidu.com/s?wd=知乎',
+          host: 'www.baidu.com',
+          title: '知乎_百度搜索',
+          profile: 'default',
+          viewState: { viewMode: 'desktop', zoomMode: 'fit', zoomFactor: 1 },
+          suspectedChallenges: [],
+          consoleIssueCount: 0,
+          networkIssueCount: 0,
+        },
+        workspace: {
+          ref: { kind: 'local', path: '/Users/apple/Desktop/woniu-forward' },
+          key: '/Users/apple/Desktop/woniu-forward',
+          rootPath: '/Users/apple/Desktop/woniu-forward',
+          writable: true,
+        },
+        config: {
+          permissionMode: 'auto',
+          agentEngine: 'local-claude-code',
+          defaultBrowserViewMode: 'desktop',
+          defaultBrowserZoomMode: 'fit',
+        },
+        task: {
+          kind: 'browser_login',
+          confidence: 'high',
+          targetSite: 'zhihu',
+          expectedHosts: ['www.zhihu.com', 'zhihu.com'],
+          preferredUrl: 'https://www.zhihu.com/signin',
+          reason: '用户要求登录 zhihu',
+        },
+        mountedResourceIds: [],
+        notes: ['当前浏览器 host 与任务目标 host 不一致；禁止声称已经打开目标站点。'],
+      },
+    })
+
+    const prompt = getPrompt(getLastSpawnArgs())
+    expect(prompt).toContain('### DeepInk 资源事实包')
+    expect(prompt).toContain('"host": "www.baidu.com"')
+    expect(prompt).toContain('"expectedHosts"')
+    expect(prompt).toContain('以这里的 URL/host/workspace/config/task 为准')
+  })
 })

@@ -29,6 +29,7 @@ import { TerminalAuditStore } from '../terminal/terminal-audit-store'
 import { TerminalConfirmationService } from '../terminal/terminal-confirmation-service'
 import { TerminalSessionRegistry } from '../terminal/terminal-session-registry'
 import { TerminalSessionStore } from '../terminal/terminal-session-store'
+import { cleanupTerminalOrphans } from '../terminal/terminal-orphan-cleaner'
 import { TerminalCommandOrchestrator } from '../terminal/terminal-command-orchestrator'
 import { PtyExecutionAdapter } from '../terminal/terminal-pty-execution-adapter'
 import { CclinkTerminalExecutionAdapter } from '../terminal/terminal-cclink-execution-adapter'
@@ -118,6 +119,12 @@ export async function bootstrapMainProcessServices(runtime: DeepInkRuntimeState)
   await runtime.terminalAuditStore.load()
   runtime.terminalSessionStore = new TerminalSessionStore()
   await runtime.terminalSessionStore.load()
+  const terminalOrphanSummary = await cleanupTerminalOrphans(runtime.terminalSessionStore)
+  if (terminalOrphanSummary.scanned > 0) {
+    console.log(
+      `[DeepInk] Terminal 残留进程清理完成: scanned=${terminalOrphanSummary.scanned}, killed=${terminalOrphanSummary.killed}, missing=${terminalOrphanSummary.missing}, skipped=${terminalOrphanSummary.skipped}, failed=${terminalOrphanSummary.failed}`,
+    )
+  }
   runtime.terminalConfirmationService = new TerminalConfirmationService(runtime.mainWindow, {
     auditStore: runtime.terminalAuditStore,
   })
