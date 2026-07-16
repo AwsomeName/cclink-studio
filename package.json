@@ -17,6 +17,13 @@
   "scripts": {
     "start": "bash scripts/restart.sh start",
     "stop": "bash scripts/restart.sh stop",
+    "studio": "bash scripts/studio.sh",
+    "studio:start": "bash scripts/studio.sh start",
+    "studio:status": "bash scripts/studio.sh status",
+    "studio:logs": "bash scripts/studio.sh logs",
+    "studio:stop": "bash scripts/studio.sh stop",
+    "studio:smoke": "bash scripts/studio.sh smoke",
+    "studio:package": "bash scripts/studio.sh package",
     "dev": "ELECTRON_RUN_AS_NODE= electron-vite dev",
     "build": "pnpm typecheck && electron-vite build",
     "preview": "electron-vite preview",

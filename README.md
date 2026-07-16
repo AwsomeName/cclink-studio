@@ -36,9 +36,23 @@ pnpm dev
 也可以使用项目脚本独立启动/重启后台开发进程：
 
 ```bash
-bash scripts/restart.sh restart
-bash scripts/restart.sh status
+pnpm studio:start
+pnpm studio:status
+pnpm studio:logs
+pnpm studio:stop
 ```
+
+`pnpm studio:start` 是本地实测入口，会在缺少 `node_modules` 时先安装依赖，然后重启后台开发进程并输出状态。等价脚本入口是 `bash scripts/studio.sh start`。
+
+本地打包入口：
+
+```bash
+pnpm studio:package
+bash scripts/studio.sh package:arm64
+bash scripts/studio.sh package:x64
+```
+
+开源壳本地打包只生成 `dist/` 下的 macOS 安装产物，不包含官方签名、公证、上传或生产 API 注入。
 
 本仓库默认启动不依赖 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent`。这些目录只参与官方账号、官方运行时和发布集成。
 

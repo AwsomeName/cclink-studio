@@ -22,11 +22,25 @@ pnpm dev
 后台独立启动：
 
 ```bash
-bash scripts/restart.sh restart
-bash scripts/restart.sh status
+pnpm studio:start
+pnpm studio:status
+pnpm studio:logs
+pnpm studio:stop
 ```
 
+`pnpm studio:start` 是本地实测入口，会在缺少 `node_modules` 时先安装依赖，然后重启后台开发进程并输出状态。底层进程控制仍由 `scripts/restart.sh` 承接。
+
 启动成功后，renderer dev server 默认在 `http://localhost:5173/`。本仓库默认启动不依赖 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent`。
+
+本地打包：
+
+```bash
+pnpm studio:package
+bash scripts/studio.sh package:arm64
+bash scripts/studio.sh package:x64
+```
+
+本地打包只生成开源壳产物；官方签名、公证、上传和生产 API 注入不在本仓库默认路径。
 
 常用验证：
 
@@ -64,6 +78,7 @@ cclink-studio/
 │   ├── ui-smoke.mjs
 │   ├── workflow-smoke.mjs
 │   ├── restore-smoke.mjs
+│   ├── studio.sh
 │   ├── verify-oss-boundary.mjs
 │   ├── package.sh
 │   ├── restart.sh
