@@ -9,19 +9,21 @@ notarization.
 ```bash
 pnpm smoke:local
 pnpm smoke:ui
+pnpm smoke:workflow
 ```
 
 The scripts start CCLink Studio with `scripts/restart.sh start` when needed, connect to the Electron
 renderer through CDP, run the checks below, and stop the app again unless it was already running.
 
 `smoke:local` verifies the real preload API. `smoke:ui` verifies the visible workbench entry points
-by clicking the actual UI.
+by clicking the actual UI. `smoke:workflow` verifies a local workspace task loop.
 
 Use this variant when you want to keep the app open after the smoke check:
 
 ```bash
 pnpm smoke:local -- --keep-running
 pnpm smoke:ui -- --keep-running
+pnpm smoke:workflow -- --keep-running
 ```
 
 ## What `smoke:local` Proves
@@ -46,6 +48,14 @@ pnpm smoke:ui -- --keep-running
 - The tab create menu can open Markdown, browser, and Terminal tabs.
 - Paid/account UI copy does not appear during the smoke path.
 
+## What `smoke:workflow` Proves
+
+- A temporary local workspace can be opened from recent projects.
+- The file tree can open a Markdown file from that workspace.
+- The Markdown editor can save changes back to disk.
+- Browser workbench state remains available during the local workflow.
+- Terminal execution can run in the local workspace cwd and produce output.
+
 ## Current Passing Result
 
 Latest local run:
@@ -53,11 +63,15 @@ Latest local run:
 ```text
 Local smoke passed: 9/9
 UI smoke passed: 5/5
+Workflow smoke passed: 5/5
 ```
 
 The filesystem test intentionally writes under the user's home directory, because the app's file
 service blocks arbitrary system temporary paths. The script removes its hidden temporary workspace
 after the run.
+
+`smoke:workflow` temporarily updates the recent workspace settings, then restores the previous
+values and deletes its temporary workspace.
 
 ## Failure Policy
 
@@ -66,6 +80,7 @@ Treat a failure here as a Studio-side blocker when it affects standalone local u
 - The app requires CCLink account login before the workbench loads.
 - Browser, editor, terminal, settings, or local filesystem APIs fail in the open source shell.
 - First-screen UI, Activity Bar, settings, or tab creation cannot be used without login.
+- A local workspace cannot be opened from recent projects, edited, saved, or used as Terminal cwd.
 - Official account, paid feature, message, quota, or release capabilities appear in the default
   preload surface.
 - Missing ADB or missing official integration stops startup instead of degrading.

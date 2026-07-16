@@ -1,0 +1,304 @@
+#!/usr/bin/env node
+import { execFileSync } from 'node:child_process'
+import { rmSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { basename } from 'node:path'
+import { chromium } from 'playwright-core'
+
+const rootDir = new URL('..', import.meta.url).pathname.replace(/\/$/, '')
+const logFile = process.env.CCLINK_STUDIO_LOG_FILE || '/tmp/cclink-studio-dev/cclink-studio-dev.log'
+const keepRunning = process.argv.includes('--keep-running')
+const results = []
+let startedBySmoke = false
+let workspaceDir = null
+let originalWorkspaceSettings = null
+let pageRef = null
+
+function pass(name, detail = '') {
+  results.push({ name, status: 'pass', detail })
+  console.log(`PASS ${name}${detail ? ` - ${detail}` : ''}`)
+}
+
+function fail(name, error) {
+  results.push({ name, status: 'fail', detail: error.message || String(error) })
+  console.error(`FAIL ${name} - ${error.message || String(error)}`)
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message)
+}
+
+function runRestart(action) {
+  return execFileSync('bash', ['scripts/restart.sh', action], {
+    cwd: rootDir,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+}
+
+async function readLog() {
+  return readFile(logFile, 'utf8').catch(() => '')
+}
+
+async function waitForCdpPort(timeoutMs = 30_000) {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < timeoutMs) {
+    const log = await readLog()
+    const portMatch =
+      log.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//) ||
+      log.match(/\[CCLink Studio\] CDP .*?:\s*(\d+)/)
+    if (portMatch) return portMatch[1]
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  throw new Error(`CDP port not found in ${logFile}`)
+}
+
+async function findRendererPage(browser) {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < 20_000) {
+    const pages = browser.contexts().flatMap((context) => context.pages())
+    const page = pages.find((candidate) => candidate.url().startsWith('http://localhost:5173/'))
+    if (page) return page
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  throw new Error('Renderer page http://localhost:5173/ not found')
+}
+
+async function runCheck(name, fn) {
+  try {
+    const detail = await fn()
+    pass(name, detail)
+  } catch (error) {
+    fail(name, error)
+  }
+}
+
+async function clickByTitle(page, title) {
+  await page.locator(`[title="${title}"]`).first().click()
+}
+
+async function ensureSidebarVisible(page) {
+  const expandButton = page.locator('[title="展开左侧栏"]').first()
+  if ((await expandButton.count()) > 0) {
+    await expandButton.click()
+    await page.waitForTimeout(350)
+  }
+}
+
+async function createTabFromMenu(page, label) {
+  await page.locator('.tab-new-button').first().click()
+  const menu = page.locator('.tab-create-menu')
+  await menu.waitFor({ timeout: 10_000 })
+  await menu.locator('button', { hasText: label }).first().click()
+}
+
+async function restoreWorkspaceSettings() {
+  if (!pageRef || !originalWorkspaceSettings) return
+  await pageRef.evaluate((settings) => window.cclinkStudio.settings.set(settings), {
+    lastWorkspacePath: originalWorkspaceSettings.lastWorkspacePath,
+    recentWorkspacePaths: originalWorkspaceSettings.recentWorkspacePaths,
+  })
+}
+
+function cleanupWorkspaceDir() {
+  if (workspaceDir) rmSync(workspaceDir, { recursive: true, force: true })
+}
+
+async function main() {
+  const statusOutput = runRestart('status')
+  const wasRunning = statusOutput.includes('CCLink Studio is running')
+  if (!wasRunning) {
+    runRestart('start')
+    startedBySmoke = true
+  }
+
+  const cdpPort = await waitForCdpPort()
+  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`)
+  const page = await findRendererPage(browser)
+  pageRef = page
+  await page.setViewportSize({ width: 1440, height: 920 })
+  await page.waitForLoadState('domcontentloaded')
+  await page.waitForSelector('.main-window', { timeout: 15_000 })
+
+  let markdownPath = null
+  let workspaceName = null
+
+  await runCheck('prepare temporary local workspace', async () => {
+    const setup = await page.evaluate(async () => {
+      const settings = await window.cclinkStudio.settings.getAll()
+      const home = await window.cclinkStudio.fs.getHomePath()
+      const workspacePath = `${home}/.cclink-studio-workflow-smoke-${Date.now()}`
+      const markdownPath = `${workspacePath}/notes.md`
+      await window.cclinkStudio.fs.mkdir(workspacePath)
+      await window.cclinkStudio.fs.writeFile(markdownPath, '# Workflow Smoke\n\ninitial')
+      await window.cclinkStudio.fs.writeFile(`${workspacePath}/todo.txt`, 'todo')
+      const recentWorkspacePaths = [
+        workspacePath,
+        ...settings.recentWorkspacePaths.filter((path) => path !== workspacePath),
+      ].slice(0, 8)
+      const result = await window.cclinkStudio.settings.set({
+        lastWorkspacePath: '',
+        recentWorkspacePaths,
+      })
+      return {
+        result,
+        workspacePath,
+        markdownPath,
+        original: {
+          lastWorkspacePath: /cclink-studio-(workflow-)?smoke/.test(settings.lastWorkspacePath)
+            ? ''
+            : settings.lastWorkspacePath,
+          recentWorkspacePaths: settings.recentWorkspacePaths.filter(
+            (path) => !/cclink-studio-(workflow-)?smoke/.test(path),
+          ),
+        },
+      }
+    })
+    assert(setup.result.success, setup.result.error || 'failed to persist smoke workspace setting')
+    workspaceDir = setup.workspacePath
+    markdownPath = setup.markdownPath
+    workspaceName = basename(workspaceDir)
+    originalWorkspaceSettings = setup.original
+    return workspaceName
+  })
+
+  await runCheck('recent project opens the local workspace', async () => {
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.main-window', { timeout: 15_000 })
+    await ensureSidebarVisible(page)
+    await clickByTitle(page, '项目')
+    const projectItem = page.locator(`.project-panel-project-item[title="${workspaceDir}"]`).first()
+    await projectItem.waitFor({ timeout: 10_000 })
+    await projectItem.evaluate((element) => element.click())
+    await page.waitForFunction(
+      (name) =>
+        document.querySelector('.app-topbar-title')?.textContent?.includes(name) &&
+        document.body.innerText.includes('notes.md'),
+      workspaceName,
+      { timeout: 20_000 },
+    )
+    return workspaceName
+  })
+
+  await runCheck('file tree opens markdown and editor saves changes', async () => {
+    await ensureSidebarVisible(page)
+    await clickByTitle(page, '文件')
+    const fileItem = page.locator('.file-tree-item.file', { hasText: 'notes.md' }).first()
+    await fileItem.waitFor({ timeout: 10_000 })
+    await fileItem.evaluate((element) => element.click())
+    await page.waitForSelector('.markdown-editor-wrapper', { timeout: 15_000 })
+    const editor = page.locator('.tiptap').first()
+    await editor.click()
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A')
+    await page.keyboard.type('# Workflow Smoke\n\nsaved through editor')
+    await page.locator('.toolbar-save').click()
+    await page.waitForFunction(
+      () => document.querySelector('.toolbar-save')?.textContent?.includes('已保存'),
+      null,
+      { timeout: 10_000 },
+    )
+    const file = await page.evaluate((path) => window.cclinkStudio.fs.readFile(path), markdownPath)
+    assert(
+      file.content.includes('saved through editor'),
+      'saved markdown content not found on disk',
+    )
+    return 'notes.md saved'
+  })
+
+  await runCheck('browser tab is available from the workbench', async () => {
+    await page.locator('.tab-new-browser-button').click()
+    await page.waitForSelector('.browser-toolbar .url-input', { timeout: 15_000 })
+    const url = await page.evaluate(() => window.cclinkStudio.browser.getCurrentURL('browser'))
+    assert(typeof url === 'string', 'browser current URL should be readable')
+    return url || 'blank'
+  })
+
+  await runCheck('terminal can execute a command in the local workspace', async () => {
+    const result = await page.evaluate(async (workspacePath) => {
+      const sessionId = `workflow-terminal-${Date.now()}`
+      const runtime = {
+        location: 'local',
+        transport: 'local',
+        backend: 'local-shell',
+        workspaceRef: { kind: 'local', path: workspacePath },
+        cwd: workspacePath,
+      }
+      const events = []
+      const off = window.cclinkStudio.terminal.onExecutionEvent((event) => {
+        if (event.sessionId === sessionId) events.push(event)
+      })
+      const started = await window.cclinkStudio.terminal.startPty({
+        terminalSessionId: sessionId,
+        runtime,
+        size: { columns: 80, rows: 24 },
+      })
+      if (started.success) {
+        const startedAt = Date.now()
+        while (Date.now() - startedAt < 5000 && !events.some((event) => event.kind === 'started')) {
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+        const promptStartedAt = Date.now()
+        while (
+          Date.now() - promptStartedAt < 5000 &&
+          !events.some((event) => event.kind === 'output')
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+        await window.cclinkStudio.terminal.writePty({
+          terminalSessionId: sessionId,
+          data: 'pwd\rprintf "workflow-smoke-terminal\\n"\rexit\r',
+        })
+      }
+      const startedAt = Date.now()
+      while (Date.now() - startedAt < 5000) {
+        const output = events
+          .filter((event) => event.kind === 'output')
+          .map((event) => event.data)
+          .join('')
+        if (output.includes('workflow-smoke-terminal')) break
+        await new Promise((resolve) => setTimeout(resolve, 250))
+      }
+      await window.cclinkStudio.terminal.terminatePty(sessionId)
+      off()
+      return { started, events }
+    }, workspaceDir)
+    assert(result.started.success, result.started.error || 'terminal failed to start')
+    const output = result.events
+      .filter((event) => event.kind === 'output')
+      .map((event) => event.data)
+      .join('')
+    assert(output.includes('workflow-smoke-terminal'), 'terminal output missing marker')
+    assert(output.includes(workspaceDir), `terminal did not run in smoke workspace: ${output}`)
+    return `pid=${result.started.processId ?? 'unknown'}`
+  })
+
+  await restoreWorkspaceSettings()
+  cleanupWorkspaceDir()
+  await browser.close()
+
+  const failed = results.filter((result) => result.status === 'fail')
+  if (startedBySmoke && !keepRunning) runRestart('stop')
+  if (failed.length > 0) {
+    console.error(`\nWorkflow smoke failed: ${failed.length}/${results.length}`)
+    process.exit(1)
+  }
+  console.log(`\nWorkflow smoke passed: ${results.length}/${results.length}`)
+}
+
+main().catch(async (error) => {
+  try {
+    await restoreWorkspaceSettings()
+  } catch {
+    // best effort restore
+  }
+  cleanupWorkspaceDir()
+  if (startedBySmoke && !keepRunning) {
+    try {
+      runRestart('stop')
+    } catch {
+      // best effort cleanup
+    }
+  }
+  console.error(error)
+  process.exit(1)
+})

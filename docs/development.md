@@ -38,10 +38,11 @@ pnpm build
 pnpm verify
 pnpm smoke:local
 pnpm smoke:ui
+pnpm smoke:workflow
 git diff --check
 ```
 
-`pnpm verify` 是无 GUI 的代码质量门禁；`pnpm smoke:local` 是 Electron preload/API 本地冒烟；`pnpm smoke:ui` 是真实 UI 点击冒烟。两者会启动真实桌面壳并验证无登录状态下的核心本地能力。冒烟说明见 `docs/ops/local-smoke-check.md`。
+`pnpm verify` 是无 GUI 的代码质量门禁；`pnpm smoke:local` 是 Electron preload/API 本地冒烟；`pnpm smoke:ui` 是真实 UI 点击冒烟；`pnpm smoke:workflow` 是本地工作流闭环冒烟。三者会启动真实桌面壳并验证无登录状态下的核心本地能力。冒烟说明见 `docs/ops/local-smoke-check.md`。
 
 ## 项目结构
 
@@ -59,6 +60,7 @@ cclink-studio/
 ├── scripts/
 │   ├── local-smoke.mjs
 │   ├── ui-smoke.mjs
+│   ├── workflow-smoke.mjs
 │   ├── verify-oss-boundary.mjs
 │   ├── package.sh
 │   ├── restart.sh

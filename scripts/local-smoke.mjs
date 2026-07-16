@@ -225,23 +225,42 @@ async function main() {
         size: { columns: 80, rows: 24 },
       })
       if (started.success) {
+        const startedAt = Date.now()
+        while (Date.now() - startedAt < 5000 && !events.some((event) => event.kind === 'started')) {
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+        const promptStartedAt = Date.now()
+        while (
+          Date.now() - promptStartedAt < 5000 &&
+          !events.some((event) => event.kind === 'output')
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
         await window.cclinkStudio.terminal.writePty({
           terminalSessionId: sessionId,
-          data: 'printf cclink-studio-smoke\\n; exit\\n',
+          data: 'pwd\rprintf "cclink-studio-smoke\\n"\rexit\r',
         })
       }
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      const outputStartedAt = Date.now()
+      while (Date.now() - outputStartedAt < 5000) {
+        const output = events
+          .filter((event) => event.kind === 'output')
+          .map((event) => event.data)
+          .join('')
+        if (output.includes('cclink-studio-smoke')) break
+        await new Promise((resolve) => setTimeout(resolve, 250))
+      }
       const terminated = await window.cclinkStudio.terminal.terminatePty(sessionId)
       off()
       return { started, terminated, events }
     })
     assert(result.started.success, result.started.error || 'terminal failed to start')
-    assert(
-      result.events.some(
-        (event) => event.kind === 'output' && event.data.includes('cclink-studio-smoke'),
-      ),
-      'terminal output was not observed',
-    )
+    const output = result.events
+      .filter((event) => event.kind === 'output')
+      .map((event) => event.data)
+      .join('')
+    assert(output.includes('cclink-studio-smoke'), 'terminal output marker was not observed')
+    assert(output.includes('/tmp'), `terminal did not execute in /tmp: ${output}`)
     return `pid=${result.started.processId ?? 'unknown'}`
   })
 

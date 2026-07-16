@@ -47,9 +47,10 @@ bash scripts/restart.sh status
 ```bash
 pnpm smoke:local
 pnpm smoke:ui
+pnpm smoke:workflow
 ```
 
-冒烟检查会启动 Electron、连接真实 renderer，并验证无登录状态下的本地身份、设置、文件系统、浏览器、Agent 状态、Terminal、Android 降级路径，以及首屏、Activity Bar、设置页和新建 Tab 的基础 UI 入口。
+冒烟检查会启动 Electron、连接真实 renderer，并验证无登录状态下的本地身份、设置、文件系统、浏览器、Agent 状态、Terminal、Android 降级路径、基础 UI 入口，以及本地工作区、Markdown 保存和 Terminal cwd 的闭环。
 
 ### 系统要求
 
