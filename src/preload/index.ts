@@ -63,6 +63,8 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
     getDiagnostics: (tabId: string) => ipcRenderer.invoke('browser:getDiagnostics', tabId),
     getRuntimeDiagnostics: (tabId: string) =>
       ipcRenderer.invoke('browser:getRuntimeDiagnostics', tabId),
+    getSessionDiagnostics: (request: { url: string; profileId?: string | null }) =>
+      ipcRenderer.invoke('browser:getSessionDiagnostics', request),
     onUrlChanged: (callback: (payload: { tabId: string; url: string }) => void) => {
       const handler = (
         _event: Electron.IpcRendererEvent,
@@ -81,7 +83,6 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
       ipcRenderer.on('browser:requestOpenTab', handler)
       return () => ipcRenderer.removeListener('browser:requestOpenTab', handler)
     },
-
     // ─── 缩放控制 ───
     zoomIn: (tabId: string) => ipcRenderer.invoke('browser:zoomIn', tabId),
     zoomOut: (tabId: string) => ipcRenderer.invoke('browser:zoomOut', tabId),

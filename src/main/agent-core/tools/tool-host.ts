@@ -25,6 +25,8 @@ export interface ToolConfirmationInput {
   toolName: string
   params: Record<string, unknown>
   riskLevel: 'read' | 'write' | 'destructive'
+  reason?: string
+  allowAlways?: boolean
 }
 
 export interface ToolPermissionController {
@@ -302,13 +304,20 @@ export class McpToolHost {
       // 权限检查
       const toolDef = module.tools.find((t) => t.name === toolName)
       const annotations: ToolAnnotations | undefined = toolDef?.annotations
+      const executionPolicy = await module.getExecutionPolicy?.(toolName, args, context)
+      const confirmationRequired =
+        executionPolicy?.requireConfirmation === true ||
+        this.permissionManager.needsConfirmation(toolName, annotations)
+      let confirmationGranted = false
 
-      if (this.permissionManager.needsConfirmation(toolName, annotations)) {
+      if (confirmationRequired) {
         const approved = await this.permissionManager.requestConfirmation({
           conversationId: context.conversationId,
           toolName,
           params: args,
-          riskLevel: getRiskLevel(annotations),
+          riskLevel: executionPolicy?.riskLevel ?? getRiskLevel(annotations),
+          ...(executionPolicy?.reason ? { reason: executionPolicy.reason } : {}),
+          ...(executionPolicy?.allowAlways === false ? { allowAlways: false } : {}),
         })
 
         if (!approved) {
@@ -317,10 +326,15 @@ export class McpToolHost {
             isError: true,
           }
         }
+        confirmationGranted = true
       }
 
       // 执行工具
-      const result = await module.execute(toolName, args, context)
+      const result = await module.execute(
+        toolName,
+        args,
+        confirmationGranted ? { ...context, confirmationGranted: true } : context,
+      )
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
       }

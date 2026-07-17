@@ -45,6 +45,21 @@ describe('ProjectOpsService', () => {
 
     expect(created.exists).toBe(true)
     expect(loaded.config?.platforms.map((platform) => platform.id)).toContain('wechat-mp')
+    expect(loaded.config?.platforms.map((platform) => platform.id)).toContain('v2ex')
+  })
+
+  it('reads the former root-level DeepInk accounts file', async () => {
+    const service = new ProjectOpsService()
+    await service.createAccountsTemplate(workspacePath)
+    const current = await readFile(join(workspacePath, 'cclink-accounts.json'), 'utf-8')
+    await rm(join(workspacePath, 'cclink-accounts.json'))
+    await writeFile(join(workspacePath, 'deepink-accounts.json'), current, 'utf-8')
+
+    const loaded = await service.getAccounts(workspacePath)
+
+    expect(loaded.exists).toBe(true)
+    expect(loaded.filePath).toBe(join(workspacePath, 'deepink-accounts.json'))
+    expect(loaded.config?.platforms.map((platform) => platform.id)).toContain('zhihu')
   })
 
   it('reports invalid JSON with a validation issue', async () => {

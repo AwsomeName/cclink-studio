@@ -81,6 +81,55 @@ describe('BrowserToolModule 工具定义', () => {
 })
 
 describe('BrowserToolModule 可视浏览器同步', () => {
+  it('forces one-time confirmation for a V2EX final publish control', async () => {
+    const page = {
+      url: () => 'https://www.v2ex.com/new/create',
+      evaluate: vi.fn().mockResolvedValue({ sensitive: true, label: '创建主题' }),
+      click: vi.fn().mockResolvedValue(undefined),
+    }
+    const bridge = {
+      getPage: () => page,
+      getActiveTabId: () => 'v2ex-tab',
+      switchToPage: vi.fn().mockResolvedValue(undefined),
+    }
+    const browserManager = {
+      waitForActiveView: vi.fn().mockResolvedValue('v2ex-tab'),
+      getActiveViewId: () => 'v2ex-tab',
+      setActive: vi.fn(),
+      getCurrentURL: () => 'https://www.v2ex.com/new/create',
+    }
+    const module = new BrowserToolModule(bridge as any, null, browserManager as any)
+
+    await expect(
+      module.getExecutionPolicy('browser_click', { selector: '#submit' }),
+    ).resolves.toEqual({
+      requireConfirmation: true,
+      riskLevel: 'destructive',
+      reason: 'V2EX 最终发布动作（创建主题）',
+      allowAlways: false,
+    })
+    await expect(module.execute('browser_click', { selector: '#submit' })).rejects.toThrow(
+      '必须先取得本次用户确认',
+    )
+    await expect(
+      module.getExecutionPolicy('browser_evaluate', {
+        expression: 'fetch("/t/1", {method:"POST"})',
+      }),
+    ).resolves.toEqual({
+      requireConfirmation: true,
+      riskLevel: 'destructive',
+      reason: 'V2EX 发布页面脚本执行（可能绕过可见提交控件）',
+      allowAlways: false,
+    })
+    await expect(
+      module.execute('browser_evaluate', { expression: 'document.title' }),
+    ).rejects.toThrow('必须先取得本次用户确认')
+    await expect(
+      module.execute('browser_click', { selector: '#submit' }, { confirmationGranted: true }),
+    ).resolves.toEqual({ clicked: '#submit' })
+    expect(page.click).toHaveBeenCalledTimes(1)
+  })
+
   it('navigate uses the visible BrowserManager view instead of a hidden Playwright page', async () => {
     const bridge = {
       getPage: () => null,
@@ -239,5 +288,33 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     expect(browserManager.setActive).not.toHaveBeenCalled()
     expect(bridge.switchToPage).toHaveBeenCalledWith('project-a-tab')
     expect(browserManager.navigate).toHaveBeenCalledWith('project-a-tab', 'https://a.example/next')
+  })
+
+  it('rejects switching to a tab owned by another project', async () => {
+    const bridge = {
+      getPage: () => ({ url: () => 'https://a.example' }),
+      getActiveTabId: () => 'project-a-tab',
+      switchToPage: vi.fn().mockResolvedValue(undefined),
+    }
+    const browserManager = {
+      waitForActiveViewForWorkspace: vi.fn().mockResolvedValue('project-a-tab'),
+      getViewIdForWorkspace: vi.fn().mockReturnValue('project-a-tab'),
+      getViewWorkspaceKey: vi.fn((tabId: string) =>
+        tabId === 'project-a-tab' ? '/workspace/a' : '/workspace/b',
+      ),
+      isWorkspaceActive: vi.fn().mockReturnValue(false),
+      setActive: vi.fn(),
+      getCurrentURL: vi.fn().mockReturnValue('https://a.example'),
+    }
+    const module = new BrowserToolModule(bridge as any, null, browserManager as any)
+
+    await expect(
+      module.execute(
+        'browser_switch_tab',
+        { tabId: 'project-b-tab' },
+        { conversationId: 'project-a-conversation', workspaceKey: '/workspace/a' },
+      ),
+    ).rejects.toThrow('目标浏览器 Tab 不属于任务项目')
+    expect(bridge.switchToPage).not.toHaveBeenCalledWith('project-b-tab')
   })
 })

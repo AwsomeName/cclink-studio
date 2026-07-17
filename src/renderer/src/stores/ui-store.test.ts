@@ -38,6 +38,11 @@ describe('useUIStore', () => {
       expect(useUIStore.getState().activePanel).toBe('files')
     })
 
+    it('停用的会话入口会转到文件侧栏', () => {
+      useUIStore.getState().setActivePanel('sessions')
+      expect(useUIStore.getState().activePanel).toBe('files')
+    })
+
     it('点击不同面板 → 展开侧栏并切换', () => {
       const { setActivePanel } = useUIStore.getState()
       setActivePanel('operations')

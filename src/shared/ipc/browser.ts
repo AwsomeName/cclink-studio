@@ -165,7 +165,15 @@ export interface BrowserCookieDiagnosticEntry {
 export interface BrowserCookieChangeDiagnosticEntry extends BrowserCookieDiagnosticEntry {
   timestamp: number
   removed: boolean
-  cause: 'explicit' | 'overwrite' | 'expired' | 'evicted' | 'expired-overwrite'
+  cause:
+    | 'explicit'
+    | 'overwrite'
+    | 'expired'
+    | 'evicted'
+    | 'expired-overwrite'
+    | 'inserted'
+    | 'inserted-no-change-overwrite'
+    | 'inserted-no-value-change-overwrite'
 }
 
 export interface BrowserSessionDiagnosticSummary {
@@ -181,6 +189,11 @@ export interface BrowserSessionDiagnosticSummary {
   errorMessage?: string
 }
 
+export interface BrowserSessionDiagnosticRequest {
+  url: string
+  profileId?: string | null
+}
+
 export interface BrowserRuntimeDiagnosticSummary {
   requestedTabId: string
   visibleTabId: string | null
@@ -192,6 +205,11 @@ export interface BrowserRuntimeDiagnosticSummary {
   playwrightUrl: string | null
   playwrightTitle: string | null
   bindingStatus: BrowserBindingStatus
+  engineVersions?: {
+    electron: string
+    chromium: string
+    node: string
+  }
   recentUrls: string[]
   lastClaim: {
     status: 'succeeded' | 'failed'
@@ -232,6 +250,9 @@ export interface BrowserApiContract {
   getActiveViewId: (workspaceKey?: string | null) => Promise<string | null>
   getDiagnostics: (tabId: string) => Promise<BrowserPageDiagnosticSummary | null>
   getRuntimeDiagnostics: (tabId: string) => Promise<BrowserRuntimeDiagnosticSummary>
+  getSessionDiagnostics: (
+    request: BrowserSessionDiagnosticRequest,
+  ) => Promise<BrowserSessionDiagnosticSummary>
   onUrlChanged: (callback: (payload: BrowserUrlChangedPayload) => void) => () => void
   onRequestOpenTab: (callback: (payload: BrowserOpenTabRequest) => void) => () => void
 

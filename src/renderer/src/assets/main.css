@@ -1395,6 +1395,60 @@ button.project-panel-row.active {
   color: var(--text-secondary);
 }
 
+.project-operations-message {
+  margin: 8px 12px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.project-operations-error {
+  color: var(--status-error, #f47174);
+}
+
+.project-operations-detail {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.project-operations-create {
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  min-height: 26px;
+  padding: 3px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.project-operations-create:hover {
+  background: var(--bg-hover);
+}
+
+.project-operations-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.project-operations-status {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  flex: 0 0 auto;
+}
+
+.project-operations-status.authenticated {
+  background: var(--status-success, #3fb950);
+}
+
 /* 数据源侧栏 */
 .data-source-panel {
   display: flex;
@@ -8357,6 +8411,38 @@ button.file-tree-item {
   min-width: 180px;
   padding: 4px 0;
   user-select: none;
+}
+
+.tab-context-menu {
+  position: fixed;
+  z-index: 10030;
+  -webkit-app-region: no-drag;
+}
+
+.tab-context-menu.renaming {
+  min-width: 260px;
+}
+
+.tab-context-rename {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+}
+
+.tab-context-rename input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+}
+
+.tab-context-rename button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .context-menu-items {

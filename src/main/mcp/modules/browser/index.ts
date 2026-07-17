@@ -5,7 +5,12 @@
  * 实现统一的 ToolModule 接口，可注册到 McpToolHost。
  */
 
-import type { ToolModule, ToolDefinition, ToolExecutionContext } from '../../types'
+import type {
+  ToolModule,
+  ToolDefinition,
+  ToolExecutionContext,
+  ToolExecutionPolicy,
+} from '../../types'
 import type { PlaywrightBridge } from '../../../playwright/playwright-bridge'
 import { executePlaywrightAction } from '../../../playwright/playwright-actions'
 import type { BrowserTaskRuntime } from '../../../browser/browser-task-runtime'
@@ -638,6 +643,44 @@ export class BrowserToolModule implements ToolModule {
     private browserManager?: BrowserManager | null,
   ) {}
 
+  async getExecutionPolicy(
+    toolName: string,
+    params: Record<string, unknown>,
+    context?: ToolExecutionContext,
+  ): Promise<ToolExecutionPolicy | null> {
+    const actionType = toolNameToActionType(toolName)
+    if (!['click', 'press', 'pressKey', 'mouseClick', 'evaluate'].includes(actionType)) {
+      return null
+    }
+    const hasWorkspaceContext = context?.workspaceKey !== undefined
+    const workspaceKey = context?.workspaceKey ?? null
+    const tabId = hasWorkspaceContext
+      ? ((await this.browserManager?.waitForActiveViewForWorkspace?.(workspaceKey)) ??
+        this.browserManager?.getViewIdForWorkspace?.(workspaceKey) ??
+        null)
+      : ((await this.browserManager?.waitForActiveView?.()) ??
+        this.browserManager?.getActiveViewId() ??
+        this.playwrightBridge.getActiveTabId())
+    if (!tabId) return null
+
+    await this.syncVisibleTab(tabId, true, hasWorkspaceContext ? workspaceKey : undefined).catch(
+      () => undefined,
+    )
+    const reason = await this.getV2exSubmissionConfirmationReason(
+      actionType,
+      params,
+      this.playwrightBridge.getPage(),
+      tabId,
+    )
+    if (!reason) return null
+    return {
+      requireConfirmation: true,
+      riskLevel: 'destructive',
+      reason,
+      allowAlways: false,
+    }
+  }
+
   async execute(
     toolName: string,
     params: Record<string, unknown>,
@@ -676,6 +719,15 @@ export class BrowserToolModule implements ToolModule {
     const page = this.playwrightBridge.getPage()
     const tabId =
       visibleTabId ?? (hasWorkspaceContext ? null : this.playwrightBridge.getActiveTabId())
+    const mandatoryConfirmationReason = await this.getV2exSubmissionConfirmationReason(
+      actionType,
+      params,
+      page,
+      tabId,
+    )
+    if (mandatoryConfirmationReason && context?.confirmationGranted !== true) {
+      throw new Error(`${mandatoryConfirmationReason}，必须先取得本次用户确认`)
+    }
     let actionLogId: string | null = null
     if (tabId) {
       const task = this.browserTaskRuntime?.assertCanRunAction(tabId)
@@ -742,6 +794,19 @@ export class BrowserToolModule implements ToolModule {
     tabId: string | null,
     workspaceKey?: string | null,
   ): Promise<unknown> {
+    if (workspaceKey !== undefined && actionType === 'newTab') {
+      throw new Error('Agent 不能创建脱离项目归属的浏览器 Tab，请由工作台新建浏览器')
+    }
+    if (
+      this.browserManager &&
+      workspaceKey !== undefined &&
+      (actionType === 'closeTab' || actionType === 'switchTab')
+    ) {
+      const targetTabId = String(params.tabId ?? '')
+      if (!targetTabId || this.browserManager.getViewWorkspaceKey(targetTabId) !== workspaceKey) {
+        throw new Error('目标浏览器 Tab 不属于任务项目，已拒绝跨项目操作')
+      }
+    }
     if (this.browserManager && actionType === 'listTabs') {
       return {
         tabs:
@@ -822,6 +887,83 @@ export class BrowserToolModule implements ToolModule {
       `浏览器自动化目标与可视页面不一致：可视页面=${visibleUrl}，工具页面=${playwrightUrl}。请刷新或重新打开浏览器 Tab 后重试。`,
     )
   }
+
+  private async getV2exSubmissionConfirmationReason(
+    actionType: string,
+    params: Record<string, unknown>,
+    page: ReturnType<PlaywrightBridge['getPage']>,
+    tabId: string | null,
+  ): Promise<string | null> {
+    if (!page) return null
+    const url = tabId ? (this.browserManager?.getCurrentURL(tabId) ?? page.url()) : page.url()
+    if (!isV2exUrl(url)) return null
+
+    const path = safeUrlPath(url)
+    if (actionType === 'evaluate' && isV2exPublishingPath(path)) {
+      return 'V2EX 发布页面脚本执行（可能绕过可见提交控件）'
+    }
+
+    if (!['click', 'press', 'pressKey', 'mouseClick'].includes(actionType)) return null
+    if ((actionType === 'press' || actionType === 'pressKey') && params.key !== 'Enter') return null
+
+    const result = await page
+      .evaluate(
+        ({ action, selector, x, y }) => {
+          let element: Element | null = null
+          try {
+            if (action === 'click' || action === 'press') {
+              element = selector ? document.querySelector(selector) : null
+            } else if (action === 'pressKey') {
+              element = document.activeElement
+            } else if (action === 'mouseClick') {
+              element = document.elementFromPoint(Number(x), Number(y))
+            }
+          } catch {
+            return { sensitive: false, label: '' }
+          }
+
+          const target = element?.closest('button, input, [role="button"]') ?? element
+          const form = target?.closest('form')
+          if (!target || !form) return { sensitive: false, label: '' }
+
+          const text = String(
+            target.getAttribute('value') ||
+              target.getAttribute('aria-label') ||
+              target.textContent ||
+              '',
+          ).trim()
+          const lowerText = text.toLowerCase()
+          const type = (target.getAttribute('type') || '').toLowerCase()
+          const hasEditor = Boolean(form.querySelector('textarea, [contenteditable="true"]'))
+          const publishingPath =
+            /^\/new(?:\/|$)/.test(location.pathname) ||
+            /^\/t\/\d+/.test(location.pathname) ||
+            /^\/(?:edit|update)\//.test(location.pathname)
+          const isPreview = /预览|preview/.test(lowerText)
+          const isEnter = action === 'press' || action === 'pressKey'
+          const isSubmitControl =
+            type === 'submit' ||
+            /创建主题|发布主题|发表|发布|提交回复|回复|保存修改|保存|post|submit|reply/.test(
+              lowerText,
+            )
+
+          return {
+            sensitive: publishingPath && hasEditor && !isPreview && (isEnter || isSubmitControl),
+            label: text,
+          }
+        },
+        {
+          action: actionType,
+          selector: String(params.selector ?? ''),
+          x: Number(params.x ?? 0),
+          y: Number(params.y ?? 0),
+        },
+      )
+      .catch(() => ({ sensitive: false, label: '' }))
+
+    if (!result.sensitive) return null
+    return `V2EX 最终发布动作${result.label ? `（${result.label}）` : ''}`
+  }
 }
 
 function requiresPlaywrightPage(actionType: string): boolean {
@@ -838,4 +980,25 @@ function normalizeComparableUrl(url: string): string {
   } catch {
     return url.replace(/\/$/, '')
   }
+}
+
+function isV2exUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase()
+    return hostname === 'v2ex.com' || hostname.endsWith('.v2ex.com')
+  } catch {
+    return false
+  }
+}
+
+function safeUrlPath(url: string): string {
+  try {
+    return new URL(url).pathname
+  } catch {
+    return ''
+  }
+}
+
+function isV2exPublishingPath(path: string): boolean {
+  return /^\/new(?:\/|$)/.test(path) || /^\/t\/\d+/.test(path) || /^\/(?:edit|update)\//.test(path)
 }

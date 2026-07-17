@@ -147,6 +147,9 @@ export interface ToolConfirmationRequest {
   toolName: string
   params: Record<string, unknown>
   riskLevel: 'read' | 'write' | 'destructive'
+  reason?: string
+  /** false 表示该操作每次都必须单独确认。 */
+  allowAlways?: boolean
 }
 
 export type AgentCapabilityName =

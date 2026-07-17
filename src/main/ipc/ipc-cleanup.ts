@@ -11,6 +11,7 @@ const IPC_HANDLE_CHANNELS = [
   'browser:getActiveViewId',
   'browser:getDiagnostics',
   'browser:getRuntimeDiagnostics',
+  'browser:getSessionDiagnostics',
   'browser:createView',
   'browser:destroyView',
   'browser:setActive',

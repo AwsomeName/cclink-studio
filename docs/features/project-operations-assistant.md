@@ -109,7 +109,7 @@ cclink-accounts.json
 
 - 读取 `cclink-accounts.json`。
 - 根据平台 id 打开 URL。
-- 使用对应 `browserProfile` 恢复登录态。
+- 优先使用对应 `browserProfile` 恢复登录态；如果登录实际发生在默认 Session，面板会明确标出并复用该 Session。
 - 读取指定 Markdown 文件。
 - 在浏览器中填表、上传素材、截图、下载资料。
 - 在提交前发起确认。
@@ -237,11 +237,15 @@ cclink-accounts.json
 - 新增 `ProjectOpsService` 和 `projectOps` preload API，负责 `cclink-accounts.json`、文案草稿和发布记录写回。
 - 工作空间侧栏新增“项目运营”区，只在本地工作空间显示。
 - 可一键创建 `cclink-accounts.json` 模板。
-- 兼容读取旧 `.cclink-studio/accounts.json`，但新建和文档约定统一使用项目根目录可见文件。
+- 兼容读取旧 `deepink-accounts.json`、`.cclink-studio/accounts.json` 和 `.deepink/accounts.json`，但新建和文档约定统一使用项目根目录 `cclink-accounts.json`。
 - 可按平台创建文案草稿和文案工作会话。
 - 可按平台打开独立浏览器 profile，并创建平台操作工作会话。
 - 可追加 `docs/发布记录.md`。
 - 浏览器 Tab 支持 `browserProfile`，主进程使用独立持久化 partition 隔离登录态。
+- 运营侧栏轮询平台 Profile 和默认 Session 的脱敏 Cookie 元数据，显示登录是否持久保存以及 Profile 是否错位。
+- 默认平台包含 V2EX；首次进入未登录的 V2EX 时打开注册页，并使用独立 `v2ex` Profile 保存登录态。
+- V2EX 会话可自动浏览节点、主题和回复，准备文案、填写表单并预览；最终创建主题、回复或保存修改由工具宿主强制逐次确认。
+- V2EX 发布确认是运行时硬约束，在 `auto` 权限模式下仍生效，且不允许设置“始终允许”。
 
 验证：
 

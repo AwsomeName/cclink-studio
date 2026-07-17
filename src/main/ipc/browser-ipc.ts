@@ -4,6 +4,7 @@ import type { BrowserInstanceStore } from '../persistence/browser-instance-store
 import type {
   BrowserCreateViewOptions,
   BrowserReconcileViewsOptions,
+  BrowserSessionDiagnosticRequest,
 } from '../../shared/ipc/browser'
 import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
 import type { BrowserDownloadStore } from '../browser/browser-download-store'
@@ -106,6 +107,12 @@ export function registerBrowserIpc(
       page,
     }
   })
+
+  ipcMain.handle(
+    'browser:getSessionDiagnostics',
+    (_event, request: BrowserSessionDiagnosticRequest) =>
+      browserManager.getSessionDiagnostics(request.url, request.profileId),
+  )
 
   // ─── 缩放控制 ───
   ipcMain.handle('browser:zoomIn', (_event, tabId: string) => {

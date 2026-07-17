@@ -60,7 +60,7 @@
 
 | 层级 | 技术 |
 | --- | --- |
-| 桌面框架 | Electron 35 |
+| 桌面框架 | Electron 43 |
 | 前端 | React 19 + TypeScript 5 |
 | 构建 | electron-vite + Vite |
 | 包管理 | pnpm |

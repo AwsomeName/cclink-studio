@@ -33,6 +33,15 @@ export interface ToolDefinition {
 export interface ToolExecutionContext {
   conversationId?: string
   workspaceKey?: string | null
+  /** 工具宿主已为本次调用取得显式用户确认。 */
+  confirmationGranted?: boolean
+}
+
+export interface ToolExecutionPolicy {
+  requireConfirmation: boolean
+  riskLevel?: 'read' | 'write' | 'destructive'
+  reason?: string
+  allowAlways?: boolean
 }
 
 /** 工具模块接口 */
@@ -41,6 +50,12 @@ export interface ToolModule {
   name: string
   /** 该模块提供的所有工具定义 */
   tools: ToolDefinition[]
+  /** 根据目标页面和参数追加运行时确认策略。 */
+  getExecutionPolicy?(
+    toolName: string,
+    params: Record<string, unknown>,
+    context?: ToolExecutionContext,
+  ): Promise<ToolExecutionPolicy | null> | ToolExecutionPolicy | null
   /** 执行工具调用 */
   execute(
     toolName: string,

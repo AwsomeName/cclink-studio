@@ -3,7 +3,7 @@
  *
  * 管理所有 agent 相关的 IPC 通道：
  * - Claude Code CLI 后端通信（sendMessage / abort / stream 事件）
- * - 直接 Playwright 操作（保留兼容）
+ * - 旧 Playwright 兼容入口（无项目归属，保留协议但禁用执行）
  */
 
 import { ipcMain } from 'electron'
@@ -13,9 +13,6 @@ import type { AgentBridge } from '../agent/agent-bridge'
 import type { PermissionManager } from '../mcp/permission'
 import type { McpClientManager, ExternalMcpServer } from '../mcp/client-manager'
 import { verifyAllCapabilities } from '../playwright/verify-capabilities'
-import { executePlaywrightAction } from '../playwright/playwright-actions'
-import { classifyBrowserError } from '../browser/browser-task-errors'
-import { summarizeBrowserActionParams } from '../browser/browser-task-runtime'
 import type { AgentScope } from '../agent/scope'
 import type {
   AgentCapabilityStatus,
@@ -61,8 +58,6 @@ function normalizeWorkspaceRef(value: unknown): WorkspaceRef | undefined {
 export function registerAgentIpc(deps: AgentIpcDeps): void {
   const requireAgentBridge = (): AgentBridge | null => deps.getAgentBridge()
   const requirePlaywrightBridge = (): PlaywrightBridge | null => deps.getPlaywrightBridge()
-  const requireBrowserTaskRuntime = (): BrowserTaskRuntime | null =>
-    deps.getBrowserTaskRuntime?.() ?? null
   const requireMcpClientMgr = (): McpClientManager | null => deps.getMcpClientMgr()
   const permissionManager = deps.permissionManager
 
@@ -155,48 +150,11 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
     await agentBridge.closeConversation(conversationId)
   })
 
-  // ─── 直接 Playwright 操作（保留兼容） ─────────────
-
-  // Agent 发送 Playwright 操作指令
-  ipcMain.handle('agent:executeAction', async (_event, action) => {
-    const playwrightBridge = requirePlaywrightBridge()
-    if (!playwrightBridge) {
-      return { success: false, error: 'Playwright 未就绪' }
-    }
-    const page = playwrightBridge.getPage()
-    if (!page) {
-      return { success: false, error: 'Playwright 页面未就绪' }
-    }
-
-    let actionLogId: string | null = null
-    try {
-      const tabId = playwrightBridge.getActiveTabId()
-      if (tabId) {
-        const browserTaskRuntime = requireBrowserTaskRuntime()
-        const task = browserTaskRuntime?.assertCanRunAction(tabId)
-        if (task) {
-          const log = browserTaskRuntime!.startActionLog({
-            taskRunId: task.id,
-            tabId,
-            action: action.type,
-            paramsSummary: summarizeBrowserActionParams(action.type, action),
-          })
-          actionLogId = log.id
-        }
-      }
-      const result = await executePlaywrightAction(page, action, playwrightBridge)
-      if (actionLogId) {
-        requireBrowserTaskRuntime()?.succeedActionLog(actionLogId)
-      }
-      return { success: true, data: result }
-    } catch (err) {
-      if (actionLogId) {
-        requireBrowserTaskRuntime()?.failActionLog(actionLogId, {
-          reason: classifyBrowserError(err),
-          errorMessage: err instanceof Error ? err.message : String(err),
-        })
-      }
-      return { success: false, error: String(err) }
+  // 旧入口没有 conversationId/workspaceKey，继续执行会直接造成跨项目资源串台。
+  ipcMain.handle('agent:executeAction', async () => {
+    return {
+      success: false,
+      error: '无项目归属的 Playwright 兼容入口已禁用，请通过会话浏览器工具执行',
     }
   })
 

@@ -28,6 +28,11 @@ const ACCOUNTS_SCHEMA = z.object({
 })
 
 const ACCOUNTS_FILE_NAME = 'cclink-accounts.json'
+const LEGACY_ACCOUNTS_PATHS = [
+  ['deepink-accounts.json'],
+  ['.cclink-studio', 'accounts.json'],
+  ['.deepink', 'accounts.json'],
+] as const
 
 const DEFAULT_ACCOUNTS_TEMPLATE: ProjectOpsAccountsConfig = {
   version: 1,
@@ -47,6 +52,14 @@ const DEFAULT_ACCOUNTS_TEMPLATE: ProjectOpsAccountsConfig = {
       account: '',
       notes: '用于专栏文章和问答；发布前必须人工确认。',
       browserProfile: 'zhihu',
+    },
+    {
+      id: 'v2ex',
+      name: 'V2EX',
+      url: 'https://www.v2ex.com',
+      account: '',
+      notes: '首次注册可能需要 Google/Solana、邀请码或 2FA；最终发帖和回复必须人工确认。',
+      browserProfile: 'v2ex',
     },
   ],
 }
@@ -87,6 +100,13 @@ export class ProjectOpsService {
     const filePath = this.accountsPath(workspace)
     const visibleResult = await this.readAccountsFile(filePath)
     if (visibleResult) return visibleResult
+
+    for (const segments of LEGACY_ACCOUNTS_PATHS) {
+      const legacyResult = await this.readAccountsFile(
+        this.resolveWithinWorkspace(workspace, ...segments),
+      )
+      if (legacyResult) return legacyResult
+    }
 
     return { exists: false, filePath, issues: [] }
   }

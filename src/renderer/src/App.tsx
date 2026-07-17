@@ -19,6 +19,7 @@ import { PanelErrorFallback } from './components/common/ErrorFallback'
 import { CommandPalette } from './components/command-palette/CommandPalette'
 import { ContextMenu } from './components/common/ContextMenu'
 import { TabContextMenu } from './components/common/TabContextMenu'
+import { useTabContextMenuStore } from './stores/tab-context-menu-store'
 import { ConversationCopyMenu } from './components/common/ConversationCopyMenu'
 import { Toast } from './components/common/Toast'
 import LoadingScreen from './components/loading/LoadingScreen'
@@ -50,6 +51,7 @@ function MainLayout(): React.ReactElement {
   const workspaceLoading = useFsStore((s) => s.loading)
   const workspacePicking = useFsStore((s) => s.picking)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
+  const tabContextMenuOpen = useTabContextMenuStore((s) => s.open)
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const agentInCenter = agentPanelMode === 'center'
@@ -69,7 +71,7 @@ function MainLayout(): React.ReactElement {
   useAgentWorkContext(workspaceReady)
   useBrowserOpenRequests(workspaceReady)
   useBrowserViewLifecycle(
-    agentInCenter ? undefined : activeTab,
+    agentInCenter || tabContextMenuOpen ? undefined : activeTab,
     tabs,
     activeWorkspaceRef,
     workspaceReady,

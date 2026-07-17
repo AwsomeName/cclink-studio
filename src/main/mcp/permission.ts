@@ -142,7 +142,7 @@ export class PermissionManager {
     this.pending.delete(id)
 
     // "始终允许"
-    if (approved && alwaysAllow) {
+    if (approved && alwaysAllow && pending.request.allowAlways !== false) {
       this.alwaysAllowed.add(pending.request.toolName)
       console.log(`[PermissionManager] 始终允许: ${pending.request.toolName}`)
     }

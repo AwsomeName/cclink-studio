@@ -108,7 +108,7 @@
     "@types/three": "^0.185.0",
     "@types/yauzl": "^3.3.0",
     "@vitejs/plugin-react": "^4.6.0",
-    "electron": "^35.7.5",
+    "electron": "^43.1.1",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.4",

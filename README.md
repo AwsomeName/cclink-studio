@@ -4,7 +4,7 @@
 
 [![GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](https://github.com/AwsomeName/cclink-studio)
-[![Electron](https://img.shields.io/badge/Electron-^35.7-47848F)](https://www.electronjs.org/)
+[![Electron](https://img.shields.io/badge/Electron-43.1-47848F)](https://www.electronjs.org/)
 
 CCLink Studio 是 CCLink 的桌面工作台端。这个仓库承载可以从源码直接运行的桌面壳：本地项目、文件、浏览器自动化、Markdown 编辑、Agent 面板、终端、数据源查询和设备连接能力。
 

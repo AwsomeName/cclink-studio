@@ -7,7 +7,6 @@ import {
 } from 'playwright-core'
 import { randomUUID } from 'node:crypto'
 import type { WebContents } from 'electron'
-import { BROWSER_STEALTH_INIT_SCRIPT } from '../browser/browser-stealth'
 import type { BrowserDownloadStore } from '../browser/browser-download-store'
 import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
 import type { BrowserPageDiagnosticSummary } from '../../shared/ipc/browser'
@@ -103,7 +102,6 @@ export class PlaywrightBridge {
     const contexts = this.browser.contexts()
     if (contexts.length > 0) {
       this.context = contexts[0]
-      await this.installStealthInitScript(this.context)
       const pages = this.context.pages()
 
       console.log(`[CCLink Studio] 发现 ${pages.length} 个页面:`)
@@ -271,14 +269,6 @@ export class PlaywrightBridge {
     return downloadId
   }
 
-  private async installStealthInitScript(target: BrowserContext | Page): Promise<void> {
-    try {
-      await target.addInitScript(BROWSER_STEALTH_INIT_SCRIPT)
-    } catch (err) {
-      console.warn('[CCLink Studio] 浏览器兼容脚本注入失败:', (err as Error).message)
-    }
-  }
-
   // ── 基础访问方法（向后兼容） ──────────────────
 
   /**
@@ -328,8 +318,6 @@ export class PlaywrightBridge {
       if (existingPage === page && existingTabId !== tabId) this.pages.delete(existingTabId)
     }
     this.pages.set(tabId, page)
-
-    void this.installStealthInitScript(page)
 
     // 设置事件监听
     this.setupPageListeners(page)

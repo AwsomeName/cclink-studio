@@ -100,6 +100,7 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
     `- Profile：${redactText(input.browser.profile ?? 'default')}`,
     `- View Mode：${input.browser.viewState?.viewMode ?? 'unknown'}`,
     `- Zoom：${input.browser.viewState ? `${input.browser.viewState.zoomMode} / ${input.browser.viewState.zoomFactor}` : 'unknown'}`,
+    `- 浏览器内核：Electron ${redactText(runtime?.engineVersions?.electron ?? 'unknown')} / Chromium ${redactText(runtime?.engineVersions?.chromium ?? 'unknown')}`,
     '',
     '## 浏览器绑定',
     `- 绑定状态：${runtime?.bindingStatus ?? 'unknown'}`,

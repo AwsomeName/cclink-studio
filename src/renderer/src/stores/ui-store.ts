@@ -66,12 +66,11 @@ const VISIBLE_ACTIVITY_PANELS = new Set<ActivityPanel>([
   'production',
   'terminal',
   'operations',
-  'sessions',
 ])
 
 function normalizeActivityPanel(panel: unknown): ActivityPanel {
-  // 项目入口暂时由顶栏接管；旧快照中的 projects 自动落到文件侧栏。
-  if (panel === 'projects') return 'files'
+  // 项目与会话入口已分别由顶栏和 Agent 面板接管；旧快照统一落到文件侧栏。
+  if (panel === 'projects' || panel === 'sessions') return 'files'
   return typeof panel === 'string' && VISIBLE_ACTIVITY_PANELS.has(panel as ActivityPanel)
     ? (panel as ActivityPanel)
     : UI_DEFAULTS.activePanel

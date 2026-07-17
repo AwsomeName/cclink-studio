@@ -138,6 +138,11 @@ describe('agent diagnostic report', () => {
         playwrightUrl: 'https://www.baidu.com',
         playwrightTitle: '百度一下',
         bindingStatus: 'tab_mismatch',
+        engineVersions: {
+          electron: '43.1.1',
+          chromium: '150.0.7871.114',
+          node: '24.18.0',
+        },
         recentUrls: [
           'https://www.zhihu.com/signin',
           'https://www.zhihu.com/',
@@ -233,6 +238,7 @@ describe('agent diagnostic report', () => {
     expect(markdown).toContain('https://www.zhihu.com/signin?token=[redacted]')
     expect(markdown).toContain('疑似挑战：auth_required, captcha_or_bot_check')
     expect(markdown).toContain('绑定状态：tab_mismatch')
+    expect(markdown).toContain('浏览器内核：Electron 43.1.1 / Chromium 150.0.7871.114')
     expect(markdown).toContain('可视 URL：https://www.zhihu.com/signin?token=[redacted]')
     expect(markdown).toContain('自动化 URL：https://www.baidu.com/')
     expect(markdown).toContain('Partition：persist:cclink-studio-profile-zhihu')

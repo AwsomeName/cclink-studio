@@ -27,7 +27,7 @@ const ZOOM_STEP = 0.1
 const DEFAULT_URL = 'https://www.baidu.com'
 const PROFILE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/
 const LIKELY_AUTH_COOKIE_RE =
-  /(?:^|[_-])(auth|account|login|session(?:id)?|sid|sso|token|user|uid)(?:$|[_-])|^(?:sessionid|z_c0|q_c1)$/i
+  /(?:^|[_-])(auth|account|login|session(?:id)?|sid|sso|token|user|uid)(?:$|[_-])|^(?:a2|sessionid|z_c0|q_c1)$/i
 const NON_AUTH_COOKIE_RE = /(captcha|challenge|csrf|xsrf|analytics|tracking|experiment)/i
 
 /** 设备模式：桌面 / 移动 */
@@ -795,6 +795,19 @@ export class BrowserManager {
     return entry.view.webContents.getTitle()
   }
 
+  /** 查询指定持久化 Profile 的 Cookie 元数据；不需要先创建可见 BrowserView。 */
+  async getSessionDiagnostics(
+    url: string,
+    profileId?: string | null,
+  ): Promise<BrowserSessionDiagnosticSummary> {
+    const normalizedProfileId = this.normalizeProfileId(profileId)
+    const browserSession = normalizedProfileId
+      ? session.fromPartition(`persist:cclink-studio-profile-${normalizedProfileId}`)
+      : session.defaultSession
+    this.observeCookieChanges(browserSession, normalizedProfileId)
+    return this.describeSession(browserSession, normalizedProfileId, url)
+  }
+
   /** 返回诊断所需的真实视图、Profile 和 Cookie 元数据，不暴露 Cookie 值。 */
   async getRuntimeDiagnostics(tabId: string): Promise<{
     visibleTabId: string | null
@@ -803,6 +816,11 @@ export class BrowserManager {
     profileId: string | null
     viewState: BrowserViewState | null
     recentUrls: string[]
+    engineVersions: {
+      electron: string
+      chromium: string
+      node: string
+    }
     lastClaim: {
       status: 'succeeded' | 'failed'
       timestamp: number
@@ -820,16 +838,47 @@ export class BrowserManager {
         profileId: null,
         viewState: null,
         recentUrls: [],
+        engineVersions: this.getEngineVersions(),
         lastClaim: this.lastClaimByTab.get(tabId) ?? null,
         session: null,
       }
     }
 
     const visibleUrl = entry.view.webContents.getURL() || entry.url || null
-    const partition = entry.profileId
-      ? `persist:cclink-studio-profile-${entry.profileId}`
-      : 'default'
     const browserSession = entry.view.webContents.session
+    const sessionDiagnostics = await this.describeSession(
+      browserSession,
+      entry.profileId,
+      visibleUrl,
+    )
+
+    return {
+      visibleTabId: this.activeViewId,
+      visibleUrl,
+      visibleTitle: entry.view.webContents.getTitle() || null,
+      profileId: entry.profileId,
+      viewState: this.getState(tabId),
+      recentUrls: entry.history.slice(-10),
+      engineVersions: this.getEngineVersions(),
+      lastClaim: this.lastClaimByTab.get(tabId) ?? null,
+      session: sessionDiagnostics,
+    }
+  }
+
+  private getEngineVersions(): { electron: string; chromium: string; node: string } {
+    return {
+      electron: process.versions.electron ?? 'unknown',
+      chromium: process.versions.chrome ?? 'unknown',
+      node: process.versions.node,
+    }
+  }
+
+  private async describeSession(
+    browserSession: Session,
+    profileId: string | null,
+    url: string | null,
+  ): Promise<BrowserSessionDiagnosticSummary> {
+    const partition = profileId ? `persist:cclink-studio-profile-${profileId}` : 'default'
     let cookieStoreFlushed = false
 
     try {
@@ -840,66 +889,34 @@ export class BrowserManager {
     }
 
     try {
-      const cookies = visibleUrl ? await browserSession.cookies.get({ url: visibleUrl }) : []
+      const cookies = url ? await browserSession.cookies.get({ url }) : []
       const nowSeconds = Date.now() / 1000
-      const metadata: BrowserCookieDiagnosticEntry[] = cookies.map((cookie) => ({
-        name: cookie.name,
-        domain: cookie.domain ?? '',
-        path: cookie.path ?? '/',
-        secure: Boolean(cookie.secure),
-        httpOnly: Boolean(cookie.httpOnly),
-        session: Boolean(cookie.session),
-        ...(typeof cookie.expirationDate === 'number'
-          ? { expiresAt: Math.round(cookie.expirationDate * 1000) }
-          : {}),
-        likelyAuth:
-          !NON_AUTH_COOKIE_RE.test(cookie.name) && LIKELY_AUTH_COOKIE_RE.test(cookie.name),
-      }))
-
+      const metadata = cookies.map((cookie) => this.cookieMetadata(cookie))
       return {
-        visibleTabId: this.activeViewId,
-        visibleUrl,
-        visibleTitle: entry.view.webContents.getTitle() || null,
-        profileId: entry.profileId,
-        viewState: this.getState(tabId),
-        recentUrls: entry.history.slice(-10),
-        lastClaim: this.lastClaimByTab.get(tabId) ?? null,
-        session: {
-          partition,
-          persistent: true,
-          cookieStoreFlushed,
-          cookieCount: metadata.length,
-          persistentCookieCount: metadata.filter((cookie) => !cookie.session).length,
-          expiredCookieCount: metadata.filter(
-            (cookie) =>
-              typeof cookie.expiresAt === 'number' && cookie.expiresAt / 1000 <= nowSeconds,
-          ).length,
-          likelyAuthCookies: metadata.filter((cookie) => cookie.likelyAuth),
-          cookieNames: metadata.map((cookie) => cookie.name).sort(),
-          recentCookieChanges: this.getRecentCookieChanges(partition, visibleUrl),
-        },
+        partition,
+        persistent: true,
+        cookieStoreFlushed,
+        cookieCount: metadata.length,
+        persistentCookieCount: metadata.filter((cookie) => !cookie.session).length,
+        expiredCookieCount: metadata.filter(
+          (cookie) => typeof cookie.expiresAt === 'number' && cookie.expiresAt / 1000 <= nowSeconds,
+        ).length,
+        likelyAuthCookies: metadata.filter((cookie) => cookie.likelyAuth),
+        cookieNames: metadata.map((cookie) => cookie.name).sort(),
+        recentCookieChanges: this.getRecentCookieChanges(partition, url),
       }
     } catch (error) {
       return {
-        visibleTabId: this.activeViewId,
-        visibleUrl,
-        visibleTitle: entry.view.webContents.getTitle() || null,
-        profileId: entry.profileId,
-        viewState: this.getState(tabId),
-        recentUrls: entry.history.slice(-10),
-        lastClaim: this.lastClaimByTab.get(tabId) ?? null,
-        session: {
-          partition,
-          persistent: true,
-          cookieStoreFlushed,
-          cookieCount: 0,
-          persistentCookieCount: 0,
-          expiredCookieCount: 0,
-          likelyAuthCookies: [],
-          cookieNames: [],
-          recentCookieChanges: this.getRecentCookieChanges(partition, visibleUrl),
-          errorMessage: error instanceof Error ? error.message : String(error),
-        },
+        partition,
+        persistent: true,
+        cookieStoreFlushed,
+        cookieCount: 0,
+        persistentCookieCount: 0,
+        expiredCookieCount: 0,
+        likelyAuthCookies: [],
+        cookieNames: [],
+        recentCookieChanges: this.getRecentCookieChanges(partition, url),
+        errorMessage: error instanceof Error ? error.message : String(error),
       }
     }
   }

@@ -14,6 +14,8 @@ import {
 
 // 项目切换暂时统一收口到顶栏；保留 Activity/Sidebar 实现，后续可直接重新启用。
 const PROJECT_ACTIVITY_ENABLED = false
+// 会话列表和管理已统一收口到 Agent 面板；保留 Sidebar 实现，暂不显示旧入口。
+const SESSION_ACTIVITY_ENABLED = false
 
 const MAIN_ICONS: Array<{
   id: ActivityPanel
@@ -23,7 +25,9 @@ const MAIN_ICONS: Array<{
   ...(PROJECT_ACTIVITY_ENABLED
     ? [{ id: 'projects' as const, Icon: IconProjects, label: '项目' }]
     : []),
-  { id: 'sessions', Icon: IconRobot, label: '会话' },
+  ...(SESSION_ACTIVITY_ENABLED
+    ? [{ id: 'sessions' as const, Icon: IconRobot, label: '会话' }]
+    : []),
   { id: 'files', Icon: IconFiles, label: '文件' },
   { id: 'browser', Icon: IconGlobe, label: '浏览器' },
   { id: 'data-sources', Icon: IconDatabase, label: '数据源' },

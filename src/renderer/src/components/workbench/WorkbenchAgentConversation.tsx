@@ -490,7 +490,9 @@ function ConversationActivityPanel({
             <div key={request.id} className="conversation-confirmation-item">
               <div className="conversation-confirmation-main">
                 <IconTool size={12} />
-                <span title={request.toolName}>{request.toolName}</span>
+                <span title={request.reason || request.toolName}>
+                  {request.reason || request.toolName}
+                </span>
                 <em>{riskLabel(request.riskLevel)}</em>
               </div>
               <div className="conversation-confirmation-actions">

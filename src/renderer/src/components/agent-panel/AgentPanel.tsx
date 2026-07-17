@@ -1053,6 +1053,12 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                     {riskLabel[req.riskLevel]}
                   </span>
                 </div>
+                {req.reason ? (
+                  <div className="confirmation-row">
+                    <span className="confirmation-label">原因:</span>
+                    <span className="confirmation-value">{req.reason}</span>
+                  </div>
+                ) : null}
               </div>
               <div className="confirmation-actions">
                 <button
@@ -1062,12 +1068,14 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                   <IconCheck size={12} />
                   允许
                 </button>
-                <button
-                  className="confirm-always-btn"
-                  onClick={() => handleConfirmApprove(req.id, true)}
-                >
-                  始终允许
-                </button>
+                {req.allowAlways !== false ? (
+                  <button
+                    className="confirm-always-btn"
+                    onClick={() => handleConfirmApprove(req.id, true)}
+                  >
+                    始终允许
+                  </button>
+                ) : null}
                 <button className="confirm-reject-btn" onClick={() => handleConfirmReject(req.id)}>
                   <IconError size={12} />
                   拒绝
