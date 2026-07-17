@@ -12,6 +12,7 @@ import {
 } from './workspace-state'
 import {
   applyWorkspaceRuntimeTransition,
+  beginWorkspaceRuntimeTransition,
   prepareWorkspaceRuntimeTransition,
 } from './workspace-transition'
 
@@ -37,7 +38,15 @@ beforeEach(() => {
         get: vi.fn().mockResolvedValue(
           snapshot('/workspace/b', {
             tabs: {
-              tabs: [{ id: 'browser-b', type: 'browser', title: 'B', icon: '🌐' }],
+              tabs: [
+                {
+                  id: 'browser-b',
+                  type: 'browser',
+                  title: 'B',
+                  icon: '🌐',
+                  workspaceRef: localWorkspaceRef('/workspace/b'),
+                },
+              ],
               activeTabId: 'browser-b',
             },
             browserTabs: { tabs: {} },
@@ -95,5 +104,37 @@ describe('workspace-transition', () => {
     expect(getWorkspaceStateKey()).toBe('/workspace/b')
     expect(useTabStore.getState().activeTabId).toBe('browser-b')
     expect(setSection.mock.calls.every((call) => call[0] === '/workspace/b')).toBe(true)
+  })
+
+  it('drops a completed transition when a newer project switch has already started', () => {
+    const staleGeneration = beginWorkspaceRuntimeTransition()
+    const currentGeneration = beginWorkspaceRuntimeTransition()
+
+    const staleApplied = applyWorkspaceRuntimeTransition({
+      ref: localWorkspaceRef('/workspace/b'),
+      key: '/workspace/b',
+      snapshot: snapshot('/workspace/b', {}),
+      generation: staleGeneration,
+    })
+    const currentApplied = applyWorkspaceRuntimeTransition({
+      ref: localWorkspaceRef('/workspace/c'),
+      key: '/workspace/c',
+      snapshot: snapshot('/workspace/c', {}),
+      generation: currentGeneration,
+    })
+
+    expect(staleApplied).toBe(false)
+    expect(currentApplied).toBe(true)
+    expect(getWorkspaceStateKey()).toBe('/workspace/c')
+  })
+
+  it('aborts a project switch when the target snapshot cannot be read', async () => {
+    const getSnapshot = window.cclinkStudio.workspaceState.get as ReturnType<typeof vi.fn>
+    getSnapshot.mockRejectedValueOnce(new Error('state unavailable'))
+
+    await expect(
+      prepareWorkspaceRuntimeTransition(localWorkspaceRef('/workspace/b')),
+    ).rejects.toThrow('state unavailable')
+    expect(getWorkspaceStateKey()).toBe('/workspace/a')
   })
 })

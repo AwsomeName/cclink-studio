@@ -29,6 +29,12 @@ export interface ToolDefinition {
   annotations: ToolAnnotations
 }
 
+/** 单轮 MCP 调用的宿主归属；工具不得用当前可见项目覆盖这里的来源。 */
+export interface ToolExecutionContext {
+  conversationId?: string
+  workspaceKey?: string | null
+}
+
 /** 工具模块接口 */
 export interface ToolModule {
   /** 模块名，如 'browser'、'file'、'editor' */
@@ -36,7 +42,11 @@ export interface ToolModule {
   /** 该模块提供的所有工具定义 */
   tools: ToolDefinition[]
   /** 执行工具调用 */
-  execute(toolName: string, params: Record<string, unknown>): Promise<unknown>
+  execute(
+    toolName: string,
+    params: Record<string, unknown>,
+    context?: ToolExecutionContext,
+  ): Promise<unknown>
 }
 
 /** 权限模式（Phase 1 硬编码 'auto'，Phase 2 实现完整逻辑） */

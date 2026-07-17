@@ -96,7 +96,7 @@ export function LocalSessionsList({
 
   const openConversation = (conversation: AgentConversationState): void => {
     if (conversation.archivedAt) {
-      restoreArchivedConversation(conversation.id)
+      void restoreArchivedConversation(conversation.id).catch(() => {})
     }
     switchConversation(conversation.id)
     if (conversation.surface === 'assistant-panel') return
@@ -136,7 +136,7 @@ export function LocalSessionsList({
               renameConversation(conversation.id, title)
             }}
             onArchive={(conversationId) => {
-              archiveConversation(conversationId)
+              void archiveConversation(conversationId).catch(() => {})
               closeConversationTabs(tabs, closeTab, conversationId)
             }}
             showTitle={false}
@@ -152,7 +152,7 @@ export function LocalSessionsList({
               renameConversation(conversation.id, title)
             }}
             onArchive={(conversationId) => {
-              archiveConversation(conversationId)
+              void archiveConversation(conversationId).catch(() => {})
               closeConversationTabs(tabs, closeTab, conversationId)
             }}
             showTitle={false}

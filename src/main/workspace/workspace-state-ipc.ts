@@ -3,9 +3,13 @@ import type { WorkspaceStateSection } from '../../shared/ipc/workspace-state'
 import { WorkspaceStateService } from './workspace-state-service'
 
 export function registerWorkspaceStateIpc(workspaceStateService: WorkspaceStateService): void {
+  ipcMain.handle('workspaceState:resolveLocalWorkspace', (_event, workspacePath: string) => {
+    return workspaceStateService.resolveLocalWorkspace(workspacePath)
+  })
+
   ipcMain.handle(
     'workspaceState:get',
-    (_event, workspaceKey?: string | null, ownerKey?: string | null) => {
+    async (_event, workspaceKey?: string | null, ownerKey?: string | null) => {
       return workspaceStateService.getSnapshot(workspaceKey, ownerKey)
     },
   )

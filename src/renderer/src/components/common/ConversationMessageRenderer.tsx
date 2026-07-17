@@ -1,5 +1,8 @@
 import type { AgentMessage, ContentBlock } from '../../types'
-import { IconCheck, IconError, IconThinking, IconTool } from './Icons'
+import { IconCheck, IconClipboard, IconError, IconThinking, IconTool } from './Icons'
+import { openFileRangeResource } from '../../features/markdown/markdown-navigation'
+import { copyTextToClipboard } from '../../utils/clipboard'
+import { useToastStore } from './Toast'
 
 type ToolContentBlock = Extract<ContentBlock, { type: 'tool_use' | 'tool_result' }>
 type ThinkingContentBlock = Extract<ContentBlock, { type: 'thinking' }>
@@ -15,15 +18,72 @@ export function ConversationMessageRenderer({
   message: AgentMessage
 }): React.ReactElement {
   const units = buildContentRenderUnits(message.content)
+  const copyText = getMessageCopyText(message)
+
+  const handleCopyMessage = async (): Promise<void> => {
+    try {
+      await copyTextToClipboard(copyText)
+      useToastStore.getState().show('已复制整条消息', 'success')
+    } catch (error) {
+      useToastStore.getState().show(`复制失败: ${String(error)}`, 'error')
+    }
+  }
 
   return (
     <div className={`agent-message ${message.role} ${message.isStreaming ? 'streaming' : ''}`}>
+      {copyText && (
+        <button
+          type="button"
+          className="agent-message-copy-btn"
+          onClick={() => void handleCopyMessage()}
+          title="复制整条消息"
+          aria-label="复制整条消息"
+        >
+          <IconClipboard size={12} />
+        </button>
+      )}
       {units.map((unit, index) => (
         <ContentRenderUnitRenderer key={index} unit={unit} />
       ))}
+      {message.resources && message.resources.length > 0 && (
+        <div className="message-resource-list">
+          {message.resources.map((resource) => (
+            <button
+              key={resource.id}
+              type="button"
+              className="message-resource-chip"
+              onClick={() => openFileRangeResource(resource)}
+              title={resource.detail}
+            >
+              {resource.label}
+            </button>
+          ))}
+        </div>
+      )}
       {message.isStreaming && <span className="streaming-cursor" />}
     </div>
   )
+}
+
+export function getMessageCopyText(message: AgentMessage): string {
+  if (message.rawText.trim()) return message.rawText
+
+  return message.content
+    .map((block) => {
+      switch (block.type) {
+        case 'text':
+          return block.text
+        case 'thinking':
+          return block.thinking
+        case 'tool_use':
+          return `${productToolLabel(block.name)}\n${formatToolInput(block.input)}`
+        case 'tool_result':
+          return block.content
+      }
+    })
+    .filter(Boolean)
+    .join('\n\n')
+    .trim()
 }
 
 export function buildContentRenderUnits(blocks: ContentBlock[]): ContentRenderUnit[] {
@@ -124,7 +184,8 @@ export function ContentBlockRenderer({ block }: { block: ContentBlock }): React.
 
     case 'tool_result': {
       const resultLabel = block.is_error ? '工具失败' : '工具完成'
-      const resultPreview = previewText(block.content, 92) || (block.is_error ? '执行失败' : '执行成功')
+      const resultPreview =
+        previewText(block.content, 92) || (block.is_error ? '执行失败' : '执行成功')
       return (
         <details className={`content-tool-result ${block.is_error ? 'error' : 'success'}`}>
           <summary>

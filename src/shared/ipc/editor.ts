@@ -29,7 +29,7 @@ export interface EditorSaveRequest {
 
 export interface EditorApiContract {
   onContentUpdate: (callback: (update: EditorContentUpdate) => void) => () => void
-  contentUpdateAck: (id: string) => Promise<void>
+  contentUpdateAck: (id: string, success?: boolean, error?: string) => Promise<void>
   onReadRequest: (callback: (request: EditorReadRequest) => void) => () => void
   readResponse: (id: string, content: string) => Promise<void>
   onSaveRequest: (callback: (request: EditorSaveRequest) => void) => () => void

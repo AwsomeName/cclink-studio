@@ -18,7 +18,11 @@ import {
 } from '../../stores'
 import type { ConversationRuntimeRef, PermissionMode } from '../../types'
 import type { ToolConfirmationRequest } from '../../types'
-import { workspaceRefLabel, workspaceRefSourceLabel } from '../../../../shared/workspace-ref'
+import {
+  workspaceRefKey,
+  workspaceRefLabel,
+  workspaceRefSourceLabel,
+} from '../../../../shared/workspace-ref'
 import { ConversationMessageRenderer } from '../common/ConversationMessageRenderer'
 import { IconCheck, IconError, IconSend, IconStop, IconTool } from '../common/Icons'
 import { ConversationShell, type ConversationShellBadgeKind } from './ConversationShell'
@@ -39,6 +43,7 @@ import {
 import {
   buildAgentSendPayload,
   stripTrailingMentionToken,
+  transientMessageResources,
   toMountedResource,
   toMountedSkill,
 } from '../../features/agent-conversations/payload'
@@ -47,6 +52,11 @@ import {
   type ConversationRuntimeAdapterStatus,
 } from '../../utils/conversation-runtime-adapter'
 import { createLocalAgentConversationProvider } from '../../utils/conversation-runtime-provider'
+import {
+  AGENT_FOCUS_COMPOSER_EVENT,
+  openFileRangeResource,
+} from '../../features/markdown/markdown-navigation'
+import { useConversationScroll } from '../../features/agent-conversations/use-conversation-scroll'
 
 export function WorkbenchAgentConversation({
   tabId,
@@ -59,7 +69,9 @@ export function WorkbenchAgentConversation({
   const setInput = useAgentStore((state) => state.setInput)
   const addUserMessage = useAgentStore((state) => state.addUserMessage)
   const addSystemMessage = useAgentStore((state) => state.addSystemMessage)
+  const beginRun = useAgentStore((state) => state.beginRun)
   const cancelStreaming = useAgentStore((state) => state.cancelStreaming)
+  const setBackendState = useAgentStore((state) => state.setBackendState)
   const restoreArchivedConversation = useAgentStore((state) => state.restoreArchivedConversation)
   const pendingConfirmations = useAgentStore((state) => state.pendingConfirmations)
   const permissionMode = useAgentStore((state) => state.permissionMode)
@@ -67,6 +79,7 @@ export function WorkbenchAgentConversation({
   const setPermissionMode = useAgentStore((state) => state.setPermissionMode)
   const addMountedResource = useAgentStore((state) => state.addMountedResource)
   const removeMountedResource = useAgentStore((state) => state.removeMountedResource)
+  const clearTransientResources = useAgentStore((state) => state.clearTransientResources)
   const addMountedSkill = useAgentStore((state) => state.addMountedSkill)
   const removeMountedSkill = useAgentStore((state) => state.removeMountedSkill)
   const tabs = useTabStore((state) => state.tabs)
@@ -81,17 +94,22 @@ export function WorkbenchAgentConversation({
   const savedQueriesBySourceId = useDataSourceStore((state) => state.savedQueriesBySourceId)
   const loadDataSources = useDataSourceStore((state) => state.loadSources)
   const loadSavedQueries = useDataSourceStore((state) => state.loadSavedQueries)
-  const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const [resourceQuery, setResourceQuery] = useState<string | null>(null)
   const [skillQuery, setSkillQuery] = useState<string | null>(null)
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
 
+  const scrollWorkspaceRef = conversation?.runtime.workspaceRef ?? activeWorkspaceRef
+  const conversationScroll = useConversationScroll(
+    `${workspaceRefKey(scrollWorkspaceRef) ?? '__global__'}::${conversationId}`,
+    conversation?.messages,
+  )
+
   useEffect(() => {
-    const list = listRef.current
-    if (!list) return
-    list.scrollTop = list.scrollHeight
-  }, [conversation?.messages.length])
+    const focusComposer = (): void => inputRef.current?.focus()
+    window.addEventListener(AGENT_FOCUS_COMPOSER_EVENT, focusComposer)
+    return () => window.removeEventListener(AGENT_FOCUS_COMPOSER_EVENT, focusComposer)
+  }, [])
 
   useEffect(() => {
     if (!conversation) return
@@ -252,11 +270,18 @@ export function WorkbenchAgentConversation({
     setInput,
     addUserMessage,
     addSystemMessage,
+    beginRun,
     cancelStreaming,
-    buildSendInput: (content) => {
+    setBackendState,
+    buildSendInput: (content, runId) => {
       const current = useAgentStore.getState().conversations[conversationId]
-      return buildAgentSendPayload(content, current)
+      return buildAgentSendPayload(content, current, runId)
     },
+    getMessageResources: () =>
+      transientMessageResources(
+        useAgentStore.getState().conversations[conversationId]?.mountedResources ?? [],
+      ),
+    clearTransientResources: () => clearTransientResources(conversationId),
     sendMessage: window.cclinkStudio.agent.sendMessage,
     abortMessage: window.cclinkStudio.agent.abort,
   })
@@ -299,6 +324,7 @@ export function WorkbenchAgentConversation({
       event.preventDefault()
       setResourceQuery(null)
       setSkillQuery(null)
+      conversationScroll.followLatest()
       void provider.send(conversation.input)
     }
   }
@@ -311,10 +337,20 @@ export function WorkbenchAgentConversation({
       badge={adapterMeta.badge}
       badgeKind={toShellBadgeKind(adapterMeta.status)}
       variant="local"
-      listRef={listRef}
+      listRef={conversationScroll.listRef}
+      listProps={{
+        onScroll: conversationScroll.onScroll,
+        onWheel: conversationScroll.onWheel,
+        onPointerDown: conversationScroll.onPointerDown,
+        onTouchStart: conversationScroll.onTouchStart,
+      }}
       context={
         <>
-          <MountedResourceBar resources={mountedResources} onRemove={handleRemoveMountedResource} />
+          <MountedResourceBar
+            resources={mountedResources}
+            onRemove={handleRemoveMountedResource}
+            onOpen={openFileRangeResource}
+          />
           <ConversationActivityPanel
             conversation={conversation}
             pendingConfirmations={conversationConfirmations}
@@ -328,7 +364,10 @@ export function WorkbenchAgentConversation({
           <ConversationComposer>
             <div className="conversation-archive-composer">
               <span>这个工作会话已归档。恢复后才能继续发送消息。</span>
-              <button onClick={() => restoreArchivedConversation(conversationId)} title="恢复会话">
+              <button
+                onClick={() => void restoreArchivedConversation(conversationId).catch(() => {})}
+                title="恢复会话"
+              >
                 恢复会话
               </button>
             </div>
@@ -380,6 +419,7 @@ export function WorkbenchAgentConversation({
                       onClick={() => {
                         setResourceQuery(null)
                         setSkillQuery(null)
+                        conversationScroll.followLatest()
                         void provider.send(conversation.input)
                       }}
                       title="发送"

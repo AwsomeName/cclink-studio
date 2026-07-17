@@ -29,16 +29,19 @@ function snapshot(
 function createDeps(overrides: Partial<WorkspaceBootstrapDeps> = {}): WorkspaceBootstrapDeps {
   return {
     getSettings: vi.fn().mockResolvedValue({ lastWorkspacePath: '' } as any),
+    resolveWorkspacePath: vi.fn(async (workspacePath: string) => workspacePath),
     getWorkspaceState: vi.fn().mockResolvedValue(snapshot(null, {})),
     setWorkspacePath: vi.fn(),
     hydrateLayout: vi.fn(),
     hydrateBrowserTabs: vi.fn(),
     hydrateTabs: vi.fn(),
     hydrateEditorDrafts: vi.fn(),
+    hydrateFileTree: vi.fn(),
     hydrateAgentConversations: vi.fn(),
     beginRestore: vi.fn(),
     endRestore: vi.fn(),
-    initWorkspace: vi.fn().mockResolvedValue(undefined),
+    initWorkspace: vi.fn(async (workspacePath: string | null) => workspacePath),
+    refreshWorkspace: vi.fn().mockResolvedValue(undefined),
     warn: vi.fn(),
     ...overrides,
   }
@@ -83,6 +86,7 @@ describe('restoreWorkspaceState', () => {
     await restoreWorkspaceState(deps)
 
     expect(deps.setWorkspacePath).toHaveBeenCalledWith('/workspace/a')
+    expect(deps.resolveWorkspacePath).toHaveBeenCalledWith('/workspace/a')
     expect(deps.getWorkspaceState).toHaveBeenCalledWith('/workspace/a')
     expect(deps.hydrateLayout).toHaveBeenCalledWith({ sidebarVisible: false })
     expect(deps.hydrateTabs).toHaveBeenCalledWith({ activeTabId: 'doc' })
@@ -104,6 +108,21 @@ describe('restoreWorkspaceState', () => {
     expect(getWorkspaceState).toHaveBeenNthCalledWith(1, '/workspace/a')
     expect(getWorkspaceState).toHaveBeenCalledTimes(1)
     expect(deps.hydrateLayout).toHaveBeenCalledWith(undefined)
+  })
+
+  it('候选项目无效时只恢复 global，不读取失效项目快照', async () => {
+    const deps = createDeps({
+      getSettings: vi.fn().mockResolvedValue({ lastWorkspacePath: '/workspace/missing' } as any),
+      resolveWorkspacePath: vi.fn().mockResolvedValue(null),
+      initWorkspace: vi.fn().mockResolvedValue(null),
+      getWorkspaceState: vi.fn().mockResolvedValue(snapshot(null, {})),
+    })
+
+    await restoreWorkspaceState(deps)
+
+    expect(deps.initWorkspace).toHaveBeenCalledWith(null, expect.anything())
+    expect(deps.getWorkspaceState).toHaveBeenCalledWith(null)
+    expect(deps.getWorkspaceState).not.toHaveBeenCalledWith('/workspace/missing')
   })
 
   it('工作区快照为空时清空运行态，不保留上一个项目的内存种子', async () => {
@@ -173,13 +192,31 @@ describe('restoreWorkspaceState', () => {
       getWorkspaceState: vi.fn().mockRejectedValue(new Error('state broken')),
     })
 
-    await restoreWorkspaceState(deps)
+    const result = await restoreWorkspaceState(deps)
 
     expect(deps.warn).toHaveBeenCalledWith(
-      '[WorkspaceBootstrap] 全局工作台状态恢复失败:',
+      '[WorkspaceBootstrap] 工作台状态读取失败:',
       expect.any(Error),
     )
     expect(deps.initWorkspace).toHaveBeenCalled()
+    expect(deps.hydrateTabs).not.toHaveBeenCalled()
+    expect(result.canPersistRuntime).toBe(false)
+  })
+
+  it('状态应用失败时禁止把部分恢复结果写回', async () => {
+    const deps = createDeps({
+      hydrateTabs: vi.fn(() => {
+        throw new Error('invalid tabs')
+      }),
+    })
+
+    const result = await restoreWorkspaceState(deps)
+
+    expect(result.canPersistRuntime).toBe(false)
+    expect(deps.warn).toHaveBeenCalledWith(
+      '[WorkspaceBootstrap] 工作台状态应用失败:',
+      expect.any(Error),
+    )
   })
 
   it('工作区恢复失败时只记录告警，不抛出异常', async () => {
@@ -187,11 +224,37 @@ describe('restoreWorkspaceState', () => {
       initWorkspace: vi.fn().mockRejectedValue(new Error('workspace missing')),
     })
 
-    await expect(restoreWorkspaceState(deps)).resolves.toBeUndefined()
+    await expect(restoreWorkspaceState(deps)).resolves.toEqual({
+      workspacePath: null,
+      canPersistRuntime: true,
+    })
     expect(deps.warn).toHaveBeenCalledWith(
-      '[WorkspaceBootstrap] 工作区恢复失败:',
+      '[WorkspaceBootstrap] 工作区确认失败:',
       expect.any(Error),
     )
+  })
+
+  it('先确认并打开项目，再读取该项目自己的现场', async () => {
+    const order: string[] = []
+    const deps = createDeps({
+      getSettings: vi.fn(async () => ({ lastWorkspacePath: '/workspace/a' }) as any),
+      resolveWorkspacePath: vi.fn(async () => {
+        order.push('resolve')
+        return '/workspace/a'
+      }),
+      initWorkspace: vi.fn(async () => {
+        order.push('open')
+        return '/workspace/a'
+      }),
+      getWorkspaceState: vi.fn(async () => {
+        order.push('read-state')
+        return snapshot('/workspace/a', {})
+      }),
+    })
+
+    await restoreWorkspaceState(deps)
+
+    expect(order).toEqual(['resolve', 'open', 'read-state'])
   })
 
   it('重启后同时恢复工作会话 Tab 与对应会话数据', async () => {

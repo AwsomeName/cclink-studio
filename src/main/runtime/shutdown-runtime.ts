@@ -45,6 +45,10 @@ export async function shutdownRuntime(runtime: CclinkStudioRuntimeState): Promis
     stop: () => runtime.terminalSessionRegistry?.clear(),
   })
   registry.register({ name: 'AgentBridge', stop: () => runtime.agentBridge?.destroy() })
+  registry.register({
+    name: 'WorkspaceStateService',
+    stop: () => runtime.workspaceStateService?.flush(),
+  })
   registry.register({ name: 'IPC', stop: () => cleanupIpcHandlers() })
 
   await registry.stopAll()

@@ -16,6 +16,8 @@ export type AgentEventHandler = (type: AgentEventType, data: unknown) => void
 export interface AgentBackendStatus {
   connected: boolean
   sessionId: string | null
+  /** 由 AgentRuntime 注入；后端本身无需生成。 */
+  runId?: string | null
 }
 
 /** Host-provided labels used by backend prompts and tool context. */
@@ -69,6 +71,8 @@ export interface IAgentBackend {
 export interface AgentSendOptions {
   /** 当前消息所属会话，用于把 MCP 工具确认等运行态回传到正确会话。 */
   conversationId?: string
+  /** 当前发送对应的运行实例，由 renderer 创建并贯穿事件链。 */
+  runId?: string
   /** 当前会话绑定的本地工作目录；优先级高于全局当前工作区。 */
   workspacePath?: string
   /**

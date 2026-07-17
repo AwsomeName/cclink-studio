@@ -37,12 +37,11 @@ function normalizeSendMessageInput(input: AgentSendMessageInput): AgentSendMessa
   if (typeof input === 'string') return { message: input }
   return {
     message: input.message,
+    runId: typeof input.runId === 'string' && input.runId.trim() ? input.runId.trim() : undefined,
     resources: Array.isArray(input.resources) ? input.resources : undefined,
     skills: Array.isArray(input.skills) ? input.skills : undefined,
     sessionId:
-      input.sessionId === null || typeof input.sessionId === 'string'
-        ? input.sessionId
-        : undefined,
+      input.sessionId === null || typeof input.sessionId === 'string' ? input.sessionId : undefined,
     workspaceRef: normalizeWorkspaceRef(input.workspaceRef),
   }
 }
@@ -86,6 +85,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
         payload.message,
         typeof conversationId === 'string' ? conversationId : undefined,
         {
+          runId: payload.runId,
           resources: payload.resources,
           skills: payload.skills,
           sessionId: payload.sessionId,
@@ -106,7 +106,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
   // 获取 AI 后端状态
   ipcMain.handle('agent:getStatus', (_event, conversationId?: string) => {
     const agentBridge = requireAgentBridge()
-    if (!agentBridge) return { connected: false, sessionId: null, ready: false }
+    if (!agentBridge) return { connected: false, busy: false, sessionId: null, ready: false }
     return agentBridge.getStatus(conversationId)
   })
 

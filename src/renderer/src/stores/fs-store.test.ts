@@ -4,6 +4,7 @@ import { useAgentStore } from './agent-store'
 import { useBrowserStore } from './browser-store'
 import { useEditorStore } from './editor-store'
 import { useFsStore } from './fs-store'
+import { useOpenProjectsStore } from './open-projects-store'
 import { useTabStore } from './tab-store'
 import { useWorkspaceStore } from './workspace-store'
 import { setWorkspaceStateOwnerKey, setWorkspaceStatePath } from '../utils/workspace-state'
@@ -39,6 +40,10 @@ describe('fs-store workspace switching', () => {
           watchDir: vi.fn().mockResolvedValue(vi.fn()),
         },
         workspaceState: {
+          resolveLocalWorkspace: vi.fn(async (path: string) => ({
+            valid: true,
+            workspacePath: path,
+          })),
           get: vi.fn(),
           setSection: vi.fn().mockResolvedValue({ success: true }),
           listLocalWorkspaces: vi.fn().mockResolvedValue([]),
@@ -63,6 +68,7 @@ describe('fs-store workspace switching', () => {
     useBrowserStore.setState(useBrowserStore.getInitialState(), true)
     useEditorStore.setState(useEditorStore.getInitialState(), true)
     useFsStore.setState(useFsStore.getInitialState(), true)
+    useOpenProjectsStore.setState(useOpenProjectsStore.getInitialState(), true)
     useTabStore.setState(useTabStore.getInitialState(), true)
     useWorkspaceStore.setState(useWorkspaceStore.getInitialState(), true)
     setWorkspaceStatePath(null)
@@ -138,6 +144,7 @@ describe('fs-store workspace switching', () => {
       kind: 'local',
       path: workspacePath,
     })
+    expect(useOpenProjectsStore.getState().openProjectPaths).toEqual([workspacePath])
     expect(useAgentStore.getState().activeConversationId).toBe(conversationId)
     expect(useAgentStore.getState().messages.at(-1)?.rawText).toBe('恢复项目里的这条消息')
   })
@@ -259,11 +266,11 @@ describe('fs-store workspace switching', () => {
 
   it('clears stale project runtime when the last workspace path no longer opens', async () => {
     const missingWorkspacePath = '/Users/apple/missing-project'
+    useWorkspaceStore.getState().activateLocalWorkspace(missingWorkspacePath)
     const staleConversationId = useAgentStore.getState().createConversation({ activate: true })
     useBrowserStore.getState().ensureTab('stale-browser', 'https://stale.example')
     useTabStore.getState().openTab({ type: 'browser', title: 'Stale', icon: '🌐' })
     useEditorStore.getState().initVirtualFile('virtual:stale', 'stale draft')
-    setWorkspaceStatePath(missingWorkspacePath)
 
     const getAll = window.cclinkStudio.settings.getAll as ReturnType<typeof vi.fn>
     getAll.mockResolvedValue({

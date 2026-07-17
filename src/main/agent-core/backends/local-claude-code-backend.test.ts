@@ -167,9 +167,12 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     const { backend, createToolSession, releaseToolSession, composeMcpConfig } =
       createBackendFixture()
 
-    await backend.sendMessage('操作当前会话', { conversationId: 'conv-123' })
+    await backend.sendMessage('操作当前会话', {
+      conversationId: 'conv-123',
+      workspacePath: '/Users/apple/Desktop/project-a',
+    })
 
-    expect(createToolSession).toHaveBeenCalledWith('conv-123')
+    expect(createToolSession).toHaveBeenCalledWith('conv-123', '/Users/apple/Desktop/project-a')
     expect(composeMcpConfig).toHaveBeenCalledWith(39876, 'mcp-session-1')
     await vi.waitFor(() => expect(releaseToolSession).toHaveBeenCalledWith('mcp-session-1'))
   })
@@ -264,5 +267,54 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       expect(backend.getSessionId()).toBe('123e4567-e89b-12d3-a456-426614174001'),
     )
     expect(events.some((event) => event.type === 'system')).toBe(true)
+  })
+
+  it('emits an error when the SDK stream ends without a result event', async () => {
+    queryMock.mockReturnValueOnce(
+      createMockQuery([
+        {
+          type: 'stream_event',
+          event: { type: 'message_start', message: { id: 'message-1' } },
+        },
+      ]),
+    )
+    const backend = createBackend()
+    const events: Array<{ type: string; data: any }> = []
+    backend.onEvent((type, data) => events.push({ type, data }))
+
+    await backend.sendMessage('继续')
+
+    await vi.waitFor(() =>
+      expect(events).toContainEqual({
+        type: 'error',
+        data: expect.objectContaining({
+          code: 'stream_ended_without_result',
+        }),
+      }),
+    )
+  })
+
+  it('does not emit a silent-end error after a normal result', async () => {
+    queryMock.mockReturnValueOnce(
+      createMockQuery([
+        {
+          type: 'result',
+          is_error: false,
+          total_cost_usd: 0.01,
+        },
+      ]),
+    )
+    const backend = createBackend()
+    const events: Array<{ type: string; data: any }> = []
+    backend.onEvent((type, data) => events.push({ type, data }))
+
+    await backend.sendMessage('继续')
+
+    await vi.waitFor(() => expect(events.some((event) => event.type === 'complete')).toBe(true))
+    expect(
+      events.some(
+        (event) => event.type === 'error' && event.data?.code === 'stream_ended_without_result',
+      ),
+    ).toBe(false)
   })
 })

@@ -3,7 +3,13 @@ import type { ConversationTabRef, Tab, TabType } from '../types'
 import { useBrowserStore } from './browser-store'
 import { useEditorStore } from './editor-store'
 import { getModelFileIcon, getTabTypeForFile } from '../utils/model-files'
-import { isWorkspaceStateRestoring, persistWorkspaceSection } from '../utils/workspace-state'
+import {
+  getWorkspaceStateKey,
+  isWorkspaceStateRestoring,
+  persistWorkspaceSection,
+} from '../utils/workspace-state'
+import { workspaceRefFromKey } from '../utils/conversation-workspace'
+import { workspaceRefKey } from '@shared/workspace-ref'
 
 /** 自增 ID 计数器 */
 let nextId = 1
@@ -91,7 +97,13 @@ function saveStoredTabs(state: TabState): void {
   try {
     if (isWorkspaceStateRestoring()) return
     const allTabs = state.tabs.map(normalizePersistedTab)
-    const projectTabs = allTabs.filter(isProjectTab)
+    const activeWorkspaceKey = getWorkspaceStateKey()
+    const projectTabs = allTabs.filter(
+      (tab) =>
+        isProjectTab(tab) &&
+        Boolean(tab.workspaceRef) &&
+        workspaceRefKey(tab.workspaceRef!) === activeWorkspaceKey,
+    )
     const projectActiveTabId =
       state.activeTabId && projectTabs.some((tab) => tab.id === state.activeTabId)
         ? state.activeTabId
@@ -140,6 +152,8 @@ interface OpenTabOptions {
   dataSourceQuery?: Tab['dataSourceQuery']
   /** 强制新建，跳过所有去重 */
   forceNew?: boolean
+  /** 显式指定 Tab 归属；缺省使用当前工作空间。 */
+  workspaceRef?: Tab['workspaceRef']
 }
 
 interface TabState {
@@ -194,6 +208,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     terminalRecord,
     dataSourceQuery,
     forceNew,
+    workspaceRef,
   }) => {
     set((state) => {
       // forceNew 跳过所有去重
@@ -271,6 +286,9 @@ export const useTabStore = create<TabState>((set, get) => ({
         type,
         title,
         icon,
+        ...(type === 'settings'
+          ? {}
+          : { workspaceRef: workspaceRef ?? workspaceRefFromKey(getWorkspaceStateKey()) }),
         filePath,
         initialContent,
         initialUrl,
@@ -349,6 +367,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         forceNew: true,
         initialUrl: url,
         browserProfile: tab.browserProfile ?? null,
+        workspaceRef: tab.workspaceRef,
       })
     } else if (tab.type === 'editor') {
       // 编辑器：克隆当前内容为可编辑未命名副本

@@ -3,6 +3,7 @@ import type { AgentConversationState } from '../../stores/agent-store'
 import type { WorkspaceRef } from '../../../../shared/workspace-ref'
 import {
   buildActiveContextChips,
+  buildArchivedQuickThreadList,
   buildArchivedAssistantPanelSessions,
   buildAssistantPanelSessionStats,
   buildAssistantPanelSessionGroups,
@@ -221,7 +222,7 @@ describe('agent conversation view model', () => {
     expect(sessions.closed.map((session) => session.id)).toEqual(['closed'])
   })
 
-  it('builds the right rail quick thread list from current, attention, and recent threads', () => {
+  it('builds the right rail quick thread list in fixed creation order', () => {
     const conversations = {
       active: conversation({
         id: 'active',
@@ -272,20 +273,20 @@ describe('agent conversation view model', () => {
     })
 
     expect(quickThreads.map((thread) => thread.id)).toEqual([
-      'active',
-      'running',
-      'error',
       'recent',
+      'error',
+      'running',
+      'active',
       'old',
     ])
     expect(quickThreads.map((thread) => thread.statusKind)).toEqual([
       'idle',
-      'running',
       'error',
+      'running',
       'idle',
       'idle',
     ])
-    expect(quickThreads[0]).toMatchObject({
+    expect(quickThreads[3]).toMatchObject({
       detail: '当前',
       workspaceLabel: 'project',
       messageCount: 0,
@@ -301,13 +302,73 @@ describe('agent conversation view model', () => {
     })
 
     expect(expanded.map((thread) => thread.id)).toEqual([
-      'active',
-      'running',
-      'error',
       'recent',
+      'error',
+      'running',
+      'active',
       'old',
       'overflow',
     ])
+  })
+
+  it('keeps quick thread positions stable when activity and update time change', () => {
+    const conversations = {
+      newer: conversation({
+        id: 'newer',
+        title: '后创建',
+        createdAt: now - 60 * 1000,
+        updatedAt: now - 60 * 1000,
+      }),
+      older: conversation({
+        id: 'older',
+        title: '先创建',
+        createdAt: now - 10 * 60 * 1000,
+        updatedAt: now,
+        loading: true,
+      }),
+    }
+
+    const threads = buildQuickThreadList({
+      conversations,
+      conversationOrder: ['older', 'newer'],
+      activeConversationId: 'older',
+      activeWorkspaceRef: workspace,
+      expanded: true,
+      now,
+    })
+
+    expect(threads.map((thread) => thread.id)).toEqual(['newer', 'older'])
+  })
+
+  it('lists archived quick threads separately in fixed creation order', () => {
+    const conversations = {
+      older: conversation({
+        id: 'older',
+        title: '较早归档',
+        createdAt: now - 20 * 60 * 1000,
+        archivedAt: now,
+      }),
+      newer: conversation({
+        id: 'newer',
+        title: '较新归档',
+        createdAt: now - 5 * 60 * 1000,
+        archivedAt: now - 60 * 1000,
+      }),
+      active: conversation({
+        id: 'active',
+        title: '未归档',
+      }),
+    }
+
+    const archived = buildArchivedQuickThreadList({
+      conversations,
+      conversationOrder: ['older', 'newer', 'active'],
+      activeConversationId: 'active',
+      activeWorkspaceRef: workspace,
+      now,
+    })
+
+    expect(archived.map((thread) => thread.id)).toEqual(['newer', 'older'])
   })
 
   it('marks the active quick thread as waiting when confirmations are pending', () => {
@@ -335,7 +396,31 @@ describe('agent conversation view model', () => {
     })
   })
 
-  it('keeps unbound local quick threads visible after switching to a workspace thread', () => {
+  it('shows a completed terminal state instead of only marking the active thread as current', () => {
+    const conversations = {
+      active: conversation({
+        id: 'active',
+        title: '已完成任务',
+        runStatus: 'completed',
+      }),
+    }
+
+    const quickThreads = buildQuickThreadList({
+      conversations,
+      conversationOrder: ['active'],
+      activeConversationId: 'active',
+      activeWorkspaceRef: workspace,
+      now,
+    })
+
+    expect(quickThreads[0]).toMatchObject({
+      statusKind: 'completed',
+      statusLabel: '已完成',
+      detail: '已完成',
+    })
+  })
+
+  it('keeps project quick threads strictly isolated from unbound and other projects', () => {
     const conversations = {
       workspaceThread: conversation({
         id: 'workspaceThread',
@@ -365,7 +450,60 @@ describe('agent conversation view model', () => {
       now,
     })
 
-    expect(quickThreads.map((thread) => thread.id)).toEqual(['workspaceThread', 'unboundThread'])
+    expect(quickThreads.map((thread) => thread.id)).toEqual(['workspaceThread'])
+  })
+
+  it('does not let a cross-project active id bypass quick thread isolation', () => {
+    const conversations = {
+      workspaceThread: conversation({
+        id: 'workspaceThread',
+        title: '当前项目',
+        workspaceRef: workspace,
+      }),
+      otherWorkspace: conversation({
+        id: 'otherWorkspace',
+        title: '其他项目',
+        workspaceRef: { kind: 'local', path: '/Users/apple/other' },
+      }),
+    }
+
+    const quickThreads = buildQuickThreadList({
+      conversations,
+      conversationOrder: ['workspaceThread', 'otherWorkspace'],
+      activeConversationId: 'otherWorkspace',
+      activeWorkspaceRef: workspace,
+      expanded: true,
+      now,
+    })
+
+    expect(quickThreads.map((thread) => thread.id)).toEqual(['workspaceThread'])
+  })
+
+  it('keeps archived quick threads inside the active project', () => {
+    const conversations = {
+      localArchived: conversation({
+        id: 'localArchived',
+        title: '当前项目历史',
+        workspaceRef: workspace,
+        archivedAt: now,
+      }),
+      otherArchived: conversation({
+        id: 'otherArchived',
+        title: '其他项目历史',
+        workspaceRef: { kind: 'local', path: '/Users/apple/other' },
+        archivedAt: now,
+      }),
+    }
+
+    const archived = buildArchivedQuickThreadList({
+      conversations,
+      conversationOrder: ['localArchived', 'otherArchived'],
+      activeConversationId: 'otherArchived',
+      activeWorkspaceRef: workspace,
+      now,
+    })
+
+    expect(archived.map((thread) => thread.id)).toEqual(['localArchived'])
   })
 
   it('builds visible context chips from workspace, scope, and active tab', () => {
@@ -607,6 +745,7 @@ describe('agent conversation view model', () => {
 function conversation({
   id,
   title,
+  createdAt,
   updatedAt = now,
   archivedAt = null,
   surface = 'assistant-panel',
@@ -614,9 +753,11 @@ function conversation({
   workspaceRef = workspace,
   loading = false,
   backendState,
+  runStatus,
 }: {
   id: string
   title: string
+  createdAt?: number
   updatedAt?: number
   archivedAt?: number | null
   surface?: AgentConversationState['surface']
@@ -624,6 +765,7 @@ function conversation({
   workspaceRef?: WorkspaceRef | null
   loading?: boolean
   backendState?: AgentConversationState['backendState']
+  runStatus?: AgentConversationState['runStatus']
 }): AgentConversationState {
   return {
     id,
@@ -654,13 +796,14 @@ function conversation({
     input: '',
     loading,
     backendState: backendState ?? (loading ? 'streaming' : 'connected'),
+    runStatus,
     sessionId: null,
     streamingMessageId: null,
     lastCost: null,
     scope: { kind: 'all' },
     mountedResources: [],
     mountedSkills: [],
-    createdAt: updatedAt,
+    createdAt: createdAt ?? updatedAt,
     updatedAt,
     archivedAt,
   }

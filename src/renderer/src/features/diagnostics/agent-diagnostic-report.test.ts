@@ -110,6 +110,12 @@ describe('agent diagnostic report', () => {
         updatedAt: 2,
         archivedAt: null,
       },
+      agentRuntime: {
+        connected: true,
+        busy: true,
+        ready: true,
+        sessionId: 'session-1',
+      },
       messages,
       backendState: 'streaming',
       permissionMode: 'categorized',
@@ -120,6 +126,55 @@ describe('agent diagnostic report', () => {
         title: '知乎 - 登录',
         profile: 'zhihu',
         viewState: { viewMode: 'desktop', zoomMode: 'fit', zoomFactor: 1 },
+      },
+      browserRuntime: {
+        requestedTabId: 'tab-1',
+        visibleTabId: 'tab-1',
+        visibleUrl: 'https://www.zhihu.com/signin?token=abc',
+        visibleTitle: '知乎 - 登录',
+        profileId: 'zhihu',
+        viewState: { viewMode: 'desktop', zoomMode: 'fit', zoomFactor: 1 },
+        playwrightTabId: 'hidden-tab',
+        playwrightUrl: 'https://www.baidu.com',
+        playwrightTitle: '百度一下',
+        bindingStatus: 'tab_mismatch',
+        recentUrls: [
+          'https://www.zhihu.com/signin',
+          'https://www.zhihu.com/',
+          'https://www.zhihu.com/signin?next=%2F',
+        ],
+        lastClaim: {
+          status: 'failed',
+          timestamp: new Date('2026-07-15T10:54:30+08:00').getTime(),
+          expectedUrl: 'https://www.zhihu.com/signin',
+          errorMessage: 'target mismatch',
+        },
+        session: {
+          partition: 'persist:cclink-studio-profile-zhihu',
+          persistent: true,
+          cookieStoreFlushed: true,
+          cookieCount: 2,
+          persistentCookieCount: 2,
+          expiredCookieCount: 0,
+          likelyAuthCookies: [],
+          cookieNames: ['captcha_session_v2', '_zap'],
+          recentCookieChanges: [
+            {
+              name: 'z_c0',
+              domain: '.zhihu.com',
+              path: '/',
+              secure: true,
+              httpOnly: true,
+              session: false,
+              expiresAt: new Date('2026-08-15T10:54:20+08:00').getTime(),
+              likelyAuth: true,
+              timestamp: new Date('2026-07-15T10:54:20+08:00').getTime(),
+              removed: true,
+              cause: 'explicit',
+            },
+          ],
+        },
+        page: null,
       },
       pageDiagnostics: {
         tabId: 'tab-1',
@@ -177,6 +232,16 @@ describe('agent diagnostic report', () => {
     expect(markdown).toContain('browser_action_fail')
     expect(markdown).toContain('https://www.zhihu.com/signin?token=[redacted]')
     expect(markdown).toContain('疑似挑战：auth_required, captcha_or_bot_check')
+    expect(markdown).toContain('绑定状态：tab_mismatch')
+    expect(markdown).toContain('可视 URL：https://www.zhihu.com/signin?token=[redacted]')
+    expect(markdown).toContain('自动化 URL：https://www.baidu.com/')
+    expect(markdown).toContain('Partition：persist:cclink-studio-profile-zhihu')
+    expect(markdown).toContain('z_c0 · removed · cause=explicit')
+    expect(markdown).toContain('认证态已被清除或撤销')
+    expect(markdown).toContain('最近 Claim：failed')
+    expect(markdown).toContain('主进程 busy：true')
+    expect(markdown).toContain('后端 Session：已存在')
+    expect(markdown).toContain('https://www.zhihu.com/signin?next=%2F')
     expect(markdown).toContain('138****5678')
     expect(markdown).toContain('ag***@example.com')
     expect(markdown).not.toContain('super-secret')

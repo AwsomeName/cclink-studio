@@ -16,6 +16,7 @@ export type CadErrorCode =
   | 'conversion-timeout'
   | 'conversion-empty-output'
   | 'source-file-invalid'
+  | 'reverse-conversion-unsupported'
   | 'unsupported-format'
   | 'unknown'
 

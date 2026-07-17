@@ -6,43 +6,61 @@ import {
   getWorkspaceStateOwnerKey,
   setWorkspaceStateRef,
 } from './workspace-state'
-import { hydrateRuntimeSections, persistRuntimeSections } from './workspace-runtime'
+import {
+  hydrateRuntimeSections,
+  persistRuntimeSections,
+  reconcileAgentRuntimeStatuses,
+} from './workspace-runtime'
 
 export interface WorkspaceRuntimeTransition {
   ref: WorkspaceRef
   key: string | null
   snapshot: WorkspaceStateSnapshot | null
+  generation: number
+}
+
+let workspaceTransitionGeneration = 0
+
+export function beginWorkspaceRuntimeTransition(): number {
+  workspaceTransitionGeneration += 1
+  return workspaceTransitionGeneration
+}
+
+export function isWorkspaceRuntimeTransitionCurrent(generation: number): boolean {
+  return generation === workspaceTransitionGeneration
 }
 
 export async function prepareWorkspaceRuntimeTransition(
   ref: WorkspaceRef,
-  options: { persistCurrent?: boolean } = {},
+  options: { persistCurrent?: boolean; generation?: number } = {},
 ): Promise<WorkspaceRuntimeTransition> {
+  const generation = options.generation ?? beginWorkspaceRuntimeTransition()
   const key = workspaceRefKey(ref)
   const currentKey = getWorkspaceStateKey()
 
   if (options.persistCurrent !== false && key !== currentKey) {
-    persistRuntimeSections(currentKey)
+    await persistRuntimeSections(currentKey)
   }
 
-  const snapshot = await window.cclinkStudio.workspaceState
-    .get(key, getWorkspaceStateOwnerKey())
-    .catch(() => null)
+  const snapshot = await window.cclinkStudio.workspaceState.get(key, getWorkspaceStateOwnerKey())
 
-  return { ref, key, snapshot }
+  return { ref, key, snapshot, generation }
 }
 
 export function applyWorkspaceRuntimeTransition(
   transition: WorkspaceRuntimeTransition,
   options: { hydrate?: boolean; flush?: boolean } = {},
-): void {
+): boolean {
+  if (!isWorkspaceRuntimeTransitionCurrent(transition.generation)) return false
   setWorkspaceStateRef(transition.ref)
 
   if (options.hydrate !== false) {
     hydrateRuntimeSections(transition.snapshot)
+    void reconcileAgentRuntimeStatuses(transition.key)
   }
 
   if (options.flush !== false) {
-    persistRuntimeSections(transition.key)
+    void persistRuntimeSections(transition.key)
   }
+  return true
 }

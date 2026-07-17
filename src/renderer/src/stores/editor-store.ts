@@ -11,8 +11,6 @@ import type { FsTextDocumentSnapshot } from '@shared/ipc/fs'
 import type { MarkdownDiagnostic } from '../features/markdown/markdown-codec'
 import { isWorkspaceStateRestoring, persistWorkspaceSection } from '../utils/workspace-state'
 
-export type MarkdownEditorMode = 'wysiwyg' | 'source'
-
 /** 单个文件的编辑器状态 */
 export interface EditorFileState {
   /** 上次保存/加载时的 Markdown 内容 */
@@ -23,8 +21,6 @@ export interface EditorFileState {
   dirty: boolean
   /** 是否正在加载 */
   loading: boolean
-  /** 当前编辑模式 */
-  mode?: MarkdownEditorMode
   /** Markdown 保真和兼容性诊断 */
   diagnostics?: MarkdownDiagnostic[]
   /** 最近一次读取/保存的磁盘内容指纹 */
@@ -64,9 +60,6 @@ interface EditorState {
 
   /** 检查文件是否被外部程序修改 */
   checkExternalChange: (filePath: string) => Promise<'same' | 'reloaded' | 'conflict'>
-
-  /** 设置 Markdown 编辑模式 */
-  setMode: (filePath: string, mode: MarkdownEditorMode) => void
 
   /** 更新 Markdown 诊断 */
   setDiagnostics: (filePath: string, diagnostics: MarkdownDiagnostic[]) => void
@@ -108,7 +101,6 @@ function normalizeEditorDrafts(value: unknown): Record<string, EditorFileState> 
       currentContent: file.currentContent,
       dirty: Boolean(file.dirty),
       loading: false,
-      mode: file.mode === 'source' ? 'source' : 'wysiwyg',
       diagnostics: Array.isArray(file.diagnostics) ? file.diagnostics : [],
       ...(typeof file.versionHash === 'string' ? { versionHash: file.versionHash } : {}),
       ...(typeof file.modifiedAt === 'number' ? { modifiedAt: file.modifiedAt } : {}),
@@ -162,7 +154,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           currentContent: '',
           dirty: false,
           loading: true,
-          mode: existing?.mode ?? 'wysiwyg',
           diagnostics: existing?.diagnostics ?? [],
         },
       },
@@ -173,7 +164,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       set((state) => ({
         files: {
           ...state.files,
-          [filePath]: fileStateFromSnapshot(snapshot, state.files[filePath]?.mode),
+          [filePath]: fileStateFromSnapshot(snapshot, state.files[filePath]?.diagnostics ?? []),
         },
       }))
     } catch (err) {
@@ -187,7 +178,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             currentContent: '',
             dirty: false,
             loading: false,
-            mode: 'wysiwyg',
             diagnostics: [],
             error: err instanceof Error ? err.message : '打开文件失败',
           },
@@ -223,6 +213,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   saveFile: async (filePath, options) => {
     const file = get().files[filePath]
     if (!file) return 'saved'
+    const blockingDiagnostic = file.diagnostics?.find(
+      (diagnostic) => diagnostic.severity === 'error',
+    )
+    if (blockingDiagnostic) {
+      throw new Error(blockingDiagnostic.message)
+    }
 
     try {
       const fsApi = window.cclinkStudio.fs
@@ -253,7 +249,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             ...state.files,
             [filePath]: fileStateFromSnapshot(
               result.snapshot,
-              state.files[filePath]?.mode,
               state.files[filePath]?.diagnostics ?? [],
             ),
           },
@@ -296,7 +291,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((state) => ({
       files: {
         ...state.files,
-        [filePath]: fileStateFromSnapshot(snapshot, state.files[filePath]?.mode),
+        [filePath]: fileStateFromSnapshot(snapshot, state.files[filePath]?.diagnostics ?? []),
       },
     }))
   },
@@ -310,7 +305,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       set((state) => ({
         files: {
           ...state.files,
-          [filePath]: fileStateFromSnapshot(snapshot, state.files[filePath]?.mode),
+          [filePath]: fileStateFromSnapshot(snapshot, state.files[filePath]?.diagnostics ?? []),
         },
       }))
       return 'reloaded'
@@ -329,18 +324,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }))
     return 'conflict'
   },
-
-  setMode: (filePath, mode) =>
-    set((state) => {
-      const file = state.files[filePath]
-      if (!file) return state
-      return {
-        files: {
-          ...state.files,
-          [filePath]: { ...file, mode },
-        },
-      }
-    }),
 
   setDiagnostics: (filePath, diagnostics) =>
     set((state) => {
@@ -417,7 +400,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             currentContent: seed,
             dirty: seed !== '',
             loading: false,
-            mode: 'wysiwyg',
             diagnostics: [],
           },
         },
@@ -452,7 +434,6 @@ async function readTextSnapshot(filePath: string): Promise<FsTextDocumentSnapsho
 
 function fileStateFromSnapshot(
   snapshot: FsTextDocumentSnapshot,
-  mode: MarkdownEditorMode = 'wysiwyg',
   diagnostics: MarkdownDiagnostic[] = [],
 ): EditorFileState {
   return {
@@ -460,7 +441,6 @@ function fileStateFromSnapshot(
     currentContent: snapshot.content,
     dirty: false,
     loading: false,
-    mode,
     diagnostics,
     versionHash: snapshot.hash || undefined,
     modifiedAt: snapshot.modifiedAt,

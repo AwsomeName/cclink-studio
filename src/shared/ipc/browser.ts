@@ -18,6 +18,13 @@ export interface BrowserCreateViewRestoreOptions {
 export interface BrowserCreateViewOptions {
   restore?: BrowserCreateViewRestoreOptions
   profileId?: string | null
+  workspaceKey?: string | null
+}
+
+export interface BrowserReconcileViewsOptions {
+  workspaceKey: string | null
+  validTabIds: string[]
+  activeTabId: string | null
 }
 
 /** 浏览器实例快照（关闭时落盘，重启「恢复上次会话」重建用）。 */
@@ -137,6 +144,65 @@ export interface BrowserPageDiagnosticSummary {
   pageTextSample?: string
 }
 
+export type BrowserBindingStatus =
+  | 'matched'
+  | 'url_mismatch'
+  | 'tab_mismatch'
+  | 'unclaimed'
+  | 'view_missing'
+
+export interface BrowserCookieDiagnosticEntry {
+  name: string
+  domain: string
+  path: string
+  secure: boolean
+  httpOnly: boolean
+  session: boolean
+  expiresAt?: number
+  likelyAuth: boolean
+}
+
+export interface BrowserCookieChangeDiagnosticEntry extends BrowserCookieDiagnosticEntry {
+  timestamp: number
+  removed: boolean
+  cause: 'explicit' | 'overwrite' | 'expired' | 'evicted' | 'expired-overwrite'
+}
+
+export interface BrowserSessionDiagnosticSummary {
+  partition: string
+  persistent: boolean
+  cookieStoreFlushed: boolean
+  cookieCount: number
+  persistentCookieCount: number
+  expiredCookieCount: number
+  likelyAuthCookies: BrowserCookieDiagnosticEntry[]
+  cookieNames: string[]
+  recentCookieChanges: BrowserCookieChangeDiagnosticEntry[]
+  errorMessage?: string
+}
+
+export interface BrowserRuntimeDiagnosticSummary {
+  requestedTabId: string
+  visibleTabId: string | null
+  visibleUrl: string | null
+  visibleTitle: string | null
+  profileId: string | null
+  viewState: BrowserViewState | null
+  playwrightTabId: string | null
+  playwrightUrl: string | null
+  playwrightTitle: string | null
+  bindingStatus: BrowserBindingStatus
+  recentUrls: string[]
+  lastClaim: {
+    status: 'succeeded' | 'failed'
+    timestamp: number
+    expectedUrl: string
+    errorMessage?: string
+  } | null
+  session: BrowserSessionDiagnosticSummary | null
+  page: BrowserPageDiagnosticSummary | null
+}
+
 export interface BrowserUrlChangedPayload {
   tabId: string
   url: string
@@ -146,18 +212,28 @@ export interface BrowserUrlChangedPayload {
 
 export type BrowserViewStateChangedPayload = BrowserViewState & { tabId: string }
 
+export interface BrowserOpenTabRequest {
+  initialUrl?: string
+  /** 发起浏览器任务的项目；renderer 只能在同一项目内响应。 */
+  workspaceKey: string | null
+}
+
 export interface BrowserApiContract {
   createView: (tabId: string, initialUrl?: string, opts?: BrowserCreateViewOptions) => Promise<void>
   destroyView: (tabId: string) => Promise<void>
   setActive: (tabId: string | null) => Promise<void>
+  reconcileViews: (options: BrowserReconcileViewsOptions) => Promise<void>
 
   navigate: (tabId: string, url: string) => Promise<void>
   goBack: (tabId: string) => Promise<void>
   goForward: (tabId: string) => Promise<void>
   reload: (tabId: string) => Promise<void>
   getCurrentURL: (tabId: string) => Promise<string>
+  getActiveViewId: (workspaceKey?: string | null) => Promise<string | null>
   getDiagnostics: (tabId: string) => Promise<BrowserPageDiagnosticSummary | null>
+  getRuntimeDiagnostics: (tabId: string) => Promise<BrowserRuntimeDiagnosticSummary>
   onUrlChanged: (callback: (payload: BrowserUrlChangedPayload) => void) => () => void
+  onRequestOpenTab: (callback: (payload: BrowserOpenTabRequest) => void) => () => void
 
   zoomIn: (tabId: string) => Promise<void>
   zoomOut: (tabId: string) => Promise<void>

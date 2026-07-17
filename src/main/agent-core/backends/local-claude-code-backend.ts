@@ -74,6 +74,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
   private abortController: AbortController | null = null
   private sessionId: string | null = null
   private aborted = false
+  private terminalEventEmitted = false
   private lastSdkErrorMessage: string | null = null
   private stderrTail = ''
   /** 当前 Claude Code 进程使用的 MCP 会话 token（进程退出时释放） */
@@ -341,12 +342,14 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     }
 
     this.aborted = false
+    this.terminalEventEmitted = false
     this.lastSdkErrorMessage = null
     this.stderrTail = ''
 
     // 为当前会话创建隔离的 MCP 工具会话。
     this.mcpSessionToken = this.toolHost.createToolSession(
       options?.conversationId ?? 'agent-default',
+      options?.resourceContext?.workspace.key ?? options?.workspacePath?.trim() ?? null,
     )
     const mcpConfig = this.mcpClientMgr.composeMcpConfig(
       this.toolHost.getPort(),
@@ -394,6 +397,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       void this.consumeQuery(sdkQuery)
     } catch (err) {
       this.cleanupMcpConfig()
+      this.terminalEventEmitted = true
       this.emit('error', {
         type: 'error',
         message: `无法启动 Claude Agent SDK: ${String(err)}`,
@@ -406,12 +410,21 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       for await (const event of sdkQuery) {
         this.handleEvent(event as Record<string, unknown>)
       }
+      if (!this.aborted && !this.terminalEventEmitted) {
+        this.terminalEventEmitted = true
+        this.emit('error', {
+          type: 'error',
+          code: 'stream_ended_without_result',
+          message: 'Agent 响应流已结束，但没有收到完成结果',
+        })
+      }
       const detail = this.stderrTail.trim()
       if (!this.aborted && detail && !this.lastSdkErrorMessage) {
         console.error('[ClaudeCodeBackend] stderr:', detail)
       }
     } catch (err) {
       if (!this.aborted) {
+        this.terminalEventEmitted = true
         this.emit('error', {
           type: 'error',
           message: `Claude Agent SDK 错误: ${err instanceof Error ? err.message : String(err)}`,
@@ -440,10 +453,12 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       }
       case 'stream_event':
       case 'assistant':
+      case 'user':
       case 'tool_progress':
         this.emit('stream', event)
         break
       case 'result':
+        this.terminalEventEmitted = true
         if (event.is_error === true) {
           const errors = Array.isArray(event.errors)
             ? event.errors.filter((item): item is string => typeof item === 'string')

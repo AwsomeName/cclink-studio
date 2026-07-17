@@ -19,6 +19,8 @@ asarUnpack:
   - node_modules/agent-device/android-snapshot-helper/dist/**
   - node_modules/agent-device/dist/**
   - node_modules/yaml/**
+  # occt-import-js：OpenCascade wasm 运行时需要随 STEP/STP 转换后端一起可读
+  - node_modules/occt-import-js/dist/**
 extraResources:
   - from: resources/scrcpy-server.jar
     to: scrcpy-server.jar

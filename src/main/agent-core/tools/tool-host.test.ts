@@ -12,13 +12,14 @@ describe('McpToolHost tool session context', () => {
 
   it('attaches conversationId to tool confirmation requests', async () => {
     const requestConfirmation = vi.fn(async () => true)
+    const execute = vi.fn(async () => ({ ok: true }))
     host = new McpToolHost({
       needsConfirmation: () => true,
       requestConfirmation,
     })
-    host.registerModule(createModule())
+    host.registerModule(createModule(execute))
     const port = await host.start()
-    const token = host.createToolSession('conv-123')
+    const token = host.createToolSession('conv-123', '/workspace/a')
 
     const response = await fetch(`http://127.0.0.1:${port}/mcp?session=${token}`, {
       method: 'POST',
@@ -40,10 +41,18 @@ describe('McpToolHost tool session context', () => {
         riskLevel: 'write',
       }),
     )
+    expect(execute).toHaveBeenCalledWith(
+      'test_write',
+      { value: 1 },
+      {
+        conversationId: 'conv-123',
+        workspaceKey: '/workspace/a',
+      },
+    )
   })
 })
 
-function createModule(): ToolModule {
+function createModule(execute = vi.fn(async () => ({ ok: true }))): ToolModule {
   return {
     name: 'test',
     tools: [
@@ -60,8 +69,6 @@ function createModule(): ToolModule {
         },
       },
     ],
-    async execute() {
-      return { ok: true }
-    },
+    execute,
   }
 }

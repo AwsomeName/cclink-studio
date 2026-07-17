@@ -7,6 +7,7 @@ import {
   endWorkspaceStateRestore,
   isWorkspaceStateRestoring,
   persistWorkspaceSection,
+  persistWorkspaceSectionNow,
   setWorkspaceStateOwnerKey,
   setWorkspaceStatePath,
   setWorkspaceStateRef,
@@ -97,5 +98,34 @@ describe('workspace-state utils', () => {
     endWorkspaceStateRestore()
 
     expect(setSection).not.toHaveBeenCalled()
+  })
+
+  it('同一项目的同一 section 严格按调用顺序提交', async () => {
+    const completions: Array<(value: { success: boolean }) => void> = []
+    const setSection = vi.fn(
+      (
+        _workspaceKey: string | null | undefined,
+        _section: string,
+        _value: unknown,
+        _ownerKey?: string | null,
+      ) =>
+        new Promise<{ success: boolean }>((resolve) => {
+          completions.push(resolve)
+        }),
+    )
+    vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+
+    const first = persistWorkspaceSectionNow('agentConversations', { revision: 1 }, '/workspace/a')
+    const second = persistWorkspaceSectionNow('agentConversations', { revision: 2 }, '/workspace/a')
+
+    await vi.waitFor(() => expect(setSection).toHaveBeenCalledTimes(1))
+    expect(setSection.mock.calls[0]?.[2]).toEqual({ revision: 1 })
+
+    completions[0]({ success: true })
+    await first
+    await vi.waitFor(() => expect(setSection).toHaveBeenCalledTimes(2))
+    expect(setSection.mock.calls[1]?.[2]).toEqual({ revision: 2 })
+    completions[1]({ success: true })
+    await second
   })
 })

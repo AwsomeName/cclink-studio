@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { HTMLAttributes, ReactNode } from 'react'
 import { IconRobot } from '../common/Icons'
 
 export type ConversationShellBadgeKind =
@@ -19,6 +19,7 @@ interface ConversationShellProps {
   error?: ReactNode | null
   context?: ReactNode
   listRef?: React.RefObject<HTMLDivElement | null>
+  listProps?: Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'className'>
   empty?: ReactNode
   children: ReactNode
   composer: ReactNode
@@ -34,6 +35,7 @@ export function ConversationShell({
   error,
   context,
   listRef,
+  listProps,
   empty,
   children,
   composer,
@@ -63,7 +65,11 @@ export function ConversationShell({
       {error && <div className="conversation-shell-error">{error}</div>}
       {context}
 
-      <div className="conversation-shell-list" ref={listRef}>
+      <div
+        {...listProps}
+        className="conversation-shell-list conversation-copy-surface"
+        ref={listRef}
+      >
         {empty}
         {children}
       </div>

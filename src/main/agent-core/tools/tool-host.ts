@@ -18,7 +18,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http'
 import { randomUUID } from 'node:crypto'
-import type { ToolModule, ToolDefinition, ToolAnnotations } from './types.js'
+import type { ToolModule, ToolDefinition, ToolAnnotations, ToolExecutionContext } from './types.js'
 
 export interface ToolConfirmationInput {
   conversationId?: string
@@ -40,9 +40,7 @@ interface JsonRpcRequest {
   params?: unknown
 }
 
-interface McpRequestContext {
-  conversationId?: string
-}
+type McpRequestContext = ToolExecutionContext
 
 /** JSON-RPC 成功的响应 */
 function jsonRpcResult(id: number | string | null, result: unknown) {
@@ -64,7 +62,7 @@ export class McpToolHost {
   /** 权限管理器 */
   private readonly permissionManager: ToolPermissionController
   /** 单轮 Agent 进程 → CCLink Studio 会话的短期映射 */
-  private readonly toolSessions = new Map<string, string>()
+  private readonly toolSessions = new Map<string, ToolExecutionContext>()
 
   constructor(permissionManager: ToolPermissionController) {
     this.permissionManager = permissionManager
@@ -106,9 +104,9 @@ export class McpToolHost {
    *
    * Claude Code 每次 sendMessage 都会拿到独立 MCP URL，工具调用回到这里时可恢复会话归属。
    */
-  createToolSession(conversationId: string): string {
+  createToolSession(conversationId: string, workspaceKey?: string | null): string {
     const token = randomUUID()
-    this.toolSessions.set(token, conversationId)
+    this.toolSessions.set(token, { conversationId, workspaceKey })
     return token
   }
 
@@ -205,7 +203,7 @@ export class McpToolHost {
     if (url.pathname !== '/mcp') return null
     const token = url.searchParams.get('session')
     if (!token) return {}
-    return { conversationId: this.toolSessions.get(token) }
+    return this.toolSessions.get(token) ?? {}
   }
 
   /**
@@ -322,7 +320,7 @@ export class McpToolHost {
       }
 
       // 执行工具
-      const result = await module.execute(toolName, args)
+      const result = await module.execute(toolName, args, context)
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
       }

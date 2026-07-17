@@ -15,9 +15,13 @@ import type { EditorToolModule } from '../mcp/modules/editor'
  */
 export function registerEditorIpc(editorModule: EditorToolModule): void {
   // Agent 内容更新确认（renderer → main）
-  ipcMain.handle('editor:contentUpdateAck', (_event, id: string) => {
-    editorModule.resolveOperation(id, { success: true })
-  })
+  ipcMain.handle(
+    'editor:contentUpdateAck',
+    (_event, id: string, success = true, error?: string) => {
+      if (success) editorModule.resolveOperation(id, { success: true })
+      else editorModule.rejectOperation(id, error ?? '编辑器拒绝了不安全的内容更新')
+    },
+  )
 
   // 编辑器内容读取响应（renderer → main）
   ipcMain.handle('editor:readResponse', (_event, id: string, content: string) => {

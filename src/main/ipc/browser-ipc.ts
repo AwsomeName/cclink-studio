@@ -1,7 +1,10 @@
 import { dialog, ipcMain } from 'electron'
 import { BrowserManager, ViewMode } from '../browser/browser-manager'
 import type { BrowserInstanceStore } from '../persistence/browser-instance-store'
-import type { BrowserCreateViewOptions } from '../../shared/ipc/browser'
+import type {
+  BrowserCreateViewOptions,
+  BrowserReconcileViewsOptions,
+} from '../../shared/ipc/browser'
 import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
 import type { BrowserDownloadStore } from '../browser/browser-download-store'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
@@ -42,6 +45,10 @@ export function registerBrowserIpc(
     browserManager.setActive(tabId)
   })
 
+  ipcMain.handle('browser:reconcileViews', (_event, options: BrowserReconcileViewsOptions) => {
+    browserManager.reconcileViews(options)
+  })
+
   // ─── 导航 ───
   ipcMain.handle('browser:navigate', async (_event, tabId: string, url: string) => {
     await browserManager.navigate(tabId, url)
@@ -63,8 +70,41 @@ export function registerBrowserIpc(
     return browserManager.getCurrentURL(tabId)
   })
 
+  ipcMain.handle('browser:getActiveViewId', (_event, workspaceKey?: string | null) => {
+    return workspaceKey === undefined
+      ? browserManager.getActiveViewId()
+      : browserManager.getActiveViewIdForWorkspace(workspaceKey)
+  })
+
   ipcMain.handle('browser:getDiagnostics', async (_event, tabId: string) => {
     return getPlaywrightBridge?.()?.getPageDiagnostics(tabId) ?? null
+  })
+
+  ipcMain.handle('browser:getRuntimeDiagnostics', async (_event, tabId: string) => {
+    const [visible, binding, page] = await Promise.all([
+      browserManager.getRuntimeDiagnostics(tabId),
+      getPlaywrightBridge?.()?.getPageBindingDiagnostics(tabId) ??
+        Promise.resolve({
+          playwrightTabId: null,
+          playwrightUrl: null,
+          playwrightTitle: null,
+        }),
+      getPlaywrightBridge?.()?.getPageDiagnostics(tabId) ?? Promise.resolve(null),
+    ])
+
+    return {
+      requestedTabId: tabId,
+      ...visible,
+      ...binding,
+      bindingStatus: resolveBindingStatus({
+        requestedTabId: tabId,
+        visibleTabId: visible.visibleTabId,
+        visibleUrl: visible.visibleUrl,
+        playwrightTabId: binding.playwrightTabId,
+        playwrightUrl: binding.playwrightUrl,
+      }),
+      page,
+    }
   })
 
   // ─── 缩放控制 ───
@@ -212,4 +252,34 @@ export function registerBrowserIpc(
     if (!downloadStore) throw new Error('浏览器下载存储未初始化')
     downloadStore.revealDownload(downloadId)
   })
+}
+
+function resolveBindingStatus(input: {
+  requestedTabId: string
+  visibleTabId: string | null
+  visibleUrl: string | null
+  playwrightTabId: string | null
+  playwrightUrl: string | null
+}): 'matched' | 'url_mismatch' | 'tab_mismatch' | 'unclaimed' | 'view_missing' {
+  if (!input.visibleUrl) return 'view_missing'
+  if (!input.playwrightUrl) return 'unclaimed'
+  if (
+    input.visibleTabId !== input.requestedTabId ||
+    input.playwrightTabId !== input.requestedTabId
+  ) {
+    return 'tab_mismatch'
+  }
+  return normalizeComparableUrl(input.visibleUrl) === normalizeComparableUrl(input.playwrightUrl)
+    ? 'matched'
+    : 'url_mismatch'
+}
+
+function normalizeComparableUrl(value: string): string {
+  try {
+    const url = new URL(value)
+    url.hash = ''
+    return url.toString().replace(/\/$/, '')
+  } catch {
+    return value.replace(/#.*$/, '').replace(/\/$/, '')
+  }
 }

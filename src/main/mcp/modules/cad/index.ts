@@ -44,6 +44,32 @@ const CAD_TOOL_DEFINITIONS: ToolDefinition[] = [
     annotations: { readOnlyHint: true, destructiveHint: false },
   },
   {
+    name: 'cad_convert_model',
+    description:
+      '执行 CAD/模型格式转换。当前只支持 STEP/STP CAD 源文件转换为 STL 预览 mesh。' +
+      '不支持把 3MF/STL/GLB/FBX 等网格模型反向转换为 STEP/STP；遇到这类请求应明确说明需要曲面重建或人工 CAD 重建，不能把“可预览”当作“已转换”。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        inputPath: {
+          type: 'string',
+          description: '本地源模型文件路径。',
+        },
+        targetFormat: {
+          type: 'string',
+          enum: ['stl'],
+          description: '目标格式。当前仅支持 stl。',
+        },
+        force: {
+          type: 'boolean',
+          description: '是否忽略缓存并强制重新转换。',
+        },
+      },
+      required: ['inputPath'],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  },
+  {
     name: 'cad_get_cache_status',
     description: '读取 CAD 转换缓存状态，包括缓存目录、缓存项数量和占用空间。',
     inputSchema: {
@@ -82,6 +108,18 @@ export class CadToolModule implements ToolModule {
         const inputPath = typeof params.inputPath === 'string' ? params.inputPath : ''
         if (!inputPath) throw new Error('缺少 inputPath')
         return this.cadConversionService.inspectModel(inputPath)
+      }
+      case 'cad_convert_model': {
+        const inputPath = typeof params.inputPath === 'string' ? params.inputPath : ''
+        if (!inputPath) throw new Error('缺少 inputPath')
+        const targetFormat = typeof params.targetFormat === 'string' ? params.targetFormat : 'stl'
+        const force = params.force === true
+        if (targetFormat !== 'stl') {
+          throw new Error(
+            `暂不支持转换为 ${targetFormat}。当前只支持 STEP/STP -> STL 预览转换；3MF/STL 等网格不能直接反向转 STEP。`,
+          )
+        }
+        return this.cadConversionService.convertModel({ inputPath, targetFormat, force })
       }
       case 'cad_get_cache_status':
         return this.cadConversionService.getCacheStatus()

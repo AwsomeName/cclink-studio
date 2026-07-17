@@ -6,6 +6,7 @@ describe('conversation-runtime-provider', () => {
     const setInput = vi.fn()
     const addUserMessage = vi.fn()
     const addSystemMessage = vi.fn()
+    const beginRun = vi.fn(() => 'run-1')
     const sendMessage = vi.fn().mockResolvedValue({ ok: true })
     const provider = createLocalAgentConversationProvider({
       conversationId: 'agent-1',
@@ -13,7 +14,9 @@ describe('conversation-runtime-provider', () => {
       setInput,
       addUserMessage,
       addSystemMessage,
+      beginRun,
       cancelStreaming: vi.fn(),
+      setBackendState: vi.fn(),
       sendMessage,
       abortMessage: vi.fn(),
     })
@@ -21,7 +24,11 @@ describe('conversation-runtime-provider', () => {
     await expect(provider.send('  你好  ')).resolves.toBe(true)
     expect(setInput).toHaveBeenCalledWith('', 'agent-1')
     expect(addUserMessage).toHaveBeenCalledWith('你好', 'agent-1')
-    expect(sendMessage).toHaveBeenCalledWith('agent-1', '你好')
+    expect(beginRun).toHaveBeenCalledWith('agent-1')
+    expect(sendMessage).toHaveBeenCalledWith('agent-1', {
+      message: '你好',
+      runId: 'run-1',
+    })
     expect(addSystemMessage).not.toHaveBeenCalled()
   })
 
@@ -33,7 +40,9 @@ describe('conversation-runtime-provider', () => {
       setInput: vi.fn(),
       addUserMessage: vi.fn(),
       addSystemMessage: vi.fn(),
+      beginRun: vi.fn(() => 'run-1'),
       cancelStreaming: vi.fn(),
+      setBackendState: vi.fn(),
       sendMessage,
       abortMessage: vi.fn(),
     })
@@ -45,19 +54,25 @@ describe('conversation-runtime-provider', () => {
 
   it('本地 Agent provider 发送失败时写系统消息', async () => {
     const addSystemMessage = vi.fn()
+    const cancelStreaming = vi.fn()
+    const setBackendState = vi.fn()
     const provider = createLocalAgentConversationProvider({
       conversationId: 'agent-1',
       isBusy: () => false,
       setInput: vi.fn(),
       addUserMessage: vi.fn(),
       addSystemMessage,
-      cancelStreaming: vi.fn(),
+      beginRun: vi.fn(() => 'run-1'),
+      cancelStreaming,
+      setBackendState,
       sendMessage: vi.fn().mockRejectedValue(new Error('boom')),
       abortMessage: vi.fn(),
     })
 
     await expect(provider.send('hello')).resolves.toBe(false)
+    expect(cancelStreaming).toHaveBeenCalledWith('agent-1', 'error', 'run-1')
     expect(addSystemMessage).toHaveBeenCalledWith('发送失败: Error: boom', 'agent-1')
+    expect(setBackendState).toHaveBeenCalledWith('error', 'agent-1')
   })
 
   it('本地 Agent provider 中止时调用后端并写系统消息', async () => {
@@ -70,7 +85,9 @@ describe('conversation-runtime-provider', () => {
       setInput: vi.fn(),
       addUserMessage: vi.fn(),
       addSystemMessage,
+      beginRun: vi.fn(() => 'run-1'),
       cancelStreaming,
+      setBackendState: vi.fn(),
       sendMessage: vi.fn(),
       abortMessage,
     })

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -62,6 +62,18 @@ describe('CadConversionService', () => {
     expect(support.backend?.error?.code).toBe('backend-not-configured')
   })
 
+  it('does not pretend mesh models can be reverse-converted to STEP', async () => {
+    const service = new CadConversionService(() => settings)
+    const sourcePath = join(tempDir, 'part.3mf')
+    await writeFile(sourcePath, '3mf mesh', 'utf-8')
+
+    const result = await service.convertModel({ inputPath: sourcePath, targetFormat: 'stl' })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.code).toBe('reverse-conversion-unsupported')
+    expect(result.error?.message).toContain('网格模型反向转换')
+  })
+
   it('reports and clears CAD conversion cache', async () => {
     const service = new CadConversionService(() => settings)
     await mkdir(join(tempDir, 'cad-cache', 'hash-a'), { recursive: true })
@@ -110,5 +122,31 @@ describe('CadConversionService', () => {
     expect(result.sourceHash).toBe(sourceHash)
     expect(result.metadata?.bounds?.size).toEqual({ x: 12, y: 5, z: 1.2 })
     expect(result.metadata?.unitConfidence).toBe('cad-backend')
+  })
+
+  it('converts STEP files with the OpenCascade experimental backend', async () => {
+    settings = {
+      ...settings,
+      cadBackend: 'occt-experimental',
+    }
+    const service = new CadConversionService(() => settings)
+    const sourcePath = join(tempDir, 'cube.stp')
+    const fixturePath = join(
+      process.cwd(),
+      'node_modules/occt-import-js/test/testfiles/cube-10x10mm/Cube 10x10.stp',
+    )
+    await writeFile(sourcePath, await readFile(fixturePath))
+
+    const status = await service.getBackendStatus()
+    const result = await service.convertModel({ inputPath: sourcePath, targetFormat: 'stl' })
+
+    expect(status).toMatchObject({
+      kind: 'occt-experimental',
+      available: true,
+    })
+    expect(result.success).toBe(true)
+    expect(result.previewPath).toMatch(/preview\.stl$/)
+    expect(result.metadata?.generator).toBe('OpenCascade (occt-import-js)')
+    expect(result.metadata?.bounds?.size.x).toBeGreaterThan(0)
   })
 })

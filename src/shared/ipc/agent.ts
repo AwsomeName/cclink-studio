@@ -8,6 +8,7 @@ import type { WorkspaceRef } from '../workspace-ref'
 
 export type AgentSendResourceKind =
   | 'file'
+  | 'file-range'
   | 'folder'
   | 'tab'
   | 'browser'
@@ -42,6 +43,15 @@ export interface AgentSendResource {
     total?: number
     returned?: number
     truncated?: boolean
+    format?: 'markdown'
+    startLine?: number
+    endLine?: number
+    startColumn?: number
+    endColumn?: number
+    selectedText?: string
+    sourceSnapshot?: string
+    snapshotHash?: string
+    dirty?: boolean
   }
 }
 
@@ -55,6 +65,8 @@ export interface AgentSendSkill {
 
 export interface AgentSendMessagePayload {
   message: string
+  /** 当前发送对应的运行实例；用于跨项目流事件关联和丢弃过期事件。 */
+  runId?: string
   resources?: AgentSendResource[]
   skills?: AgentSendSkill[]
   /** 已持久化的 Claude session；主进程在发送前原子恢复，避免 UI 历史与后端脱节。 */

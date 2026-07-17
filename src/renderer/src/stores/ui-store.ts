@@ -3,6 +3,7 @@ import type { ActivityPanel } from '../types'
 import { isWorkspaceStateRestoring, persistWorkspaceSection } from '../utils/workspace-state'
 
 export type AgentPanelMode = 'center' | 'right' | 'hidden'
+type VisibleAgentPanelMode = Exclude<AgentPanelMode, 'hidden'>
 export type AgentPanelModeSource = 'system' | 'user'
 export type WorkContext =
   | 'empty'
@@ -26,6 +27,8 @@ interface UIState {
   agentPanelWidth: number
   /** Agent 面板布局：居中入口 / 右侧协作 / 隐藏 */
   agentPanelMode: AgentPanelMode
+  /** 用户收起前最后一次可见布局；旧快照可能没有该信息。 */
+  agentPanelLastVisibleMode: VisibleAgentPanelMode | null
   /** 布局来源：system 可自动切换，user 代表用户手动选择后锁定 */
   agentPanelModeSource: AgentPanelModeSource
 
@@ -33,7 +36,7 @@ interface UIState {
   setActivePanel: (panel: ActivityPanel) => void
   toggleSidebar: () => void
   hideSidebar: () => void
-  toggleAgentPanel: () => void
+  toggleAgentPanel: (preferredMode?: VisibleAgentPanelMode) => void
   setAgentPanelMode: (mode: AgentPanelMode, source?: AgentPanelModeSource) => void
   applySystemWorkContext: (context: WorkContext) => void
   resetAgentLayout: () => void
@@ -45,18 +48,18 @@ interface UIState {
 
 /** UI 状态默认值 */
 const UI_DEFAULTS = {
-  activePanel: 'projects' as ActivityPanel,
+  activePanel: 'files' as ActivityPanel,
   sidebarVisible: true,
   agentPanelVisible: true,
   sidebarWidth: 250,
   agentPanelWidth: 350,
   agentPanelMode: 'center' as AgentPanelMode,
+  agentPanelLastVisibleMode: 'center' as VisibleAgentPanelMode | null,
   agentPanelModeSource: 'system' as AgentPanelModeSource,
 }
 
 const UI_STORAGE_KEY = 'cclink-studio-ui-state'
 const VISIBLE_ACTIVITY_PANELS = new Set<ActivityPanel>([
-  'projects',
   'browser',
   'files',
   'data-sources',
@@ -67,6 +70,8 @@ const VISIBLE_ACTIVITY_PANELS = new Set<ActivityPanel>([
 ])
 
 function normalizeActivityPanel(panel: unknown): ActivityPanel {
+  // 项目入口暂时由顶栏接管；旧快照中的 projects 自动落到文件侧栏。
+  if (panel === 'projects') return 'files'
   return typeof panel === 'string' && VISIBLE_ACTIVITY_PANELS.has(panel as ActivityPanel)
     ? (panel as ActivityPanel)
     : UI_DEFAULTS.activePanel
@@ -89,6 +94,14 @@ function agentVisibleFromMode(mode: AgentPanelMode): boolean {
   return mode !== 'hidden'
 }
 
+function normalizeLastVisibleAgentPanelMode(
+  value: unknown,
+  mode: AgentPanelMode,
+): VisibleAgentPanelMode | null {
+  if (value === 'center' || value === 'right') return value
+  return mode === 'hidden' ? null : mode
+}
+
 function loadStoredUI(): Partial<
   Pick<
     UIState,
@@ -98,6 +111,7 @@ function loadStoredUI(): Partial<
     | 'sidebarWidth'
     | 'agentPanelWidth'
     | 'agentPanelMode'
+    | 'agentPanelLastVisibleMode'
     | 'agentPanelModeSource'
   >
 > {
@@ -118,6 +132,10 @@ function loadStoredUI(): Partial<
           ? parsed.agentPanelWidth
           : UI_DEFAULTS.agentPanelWidth,
       agentPanelMode: mode,
+      agentPanelLastVisibleMode: normalizeLastVisibleAgentPanelMode(
+        parsed.agentPanelLastVisibleMode,
+        mode,
+      ),
       agentPanelModeSource: normalizeStoredAgentPanelModeSource(
         parsed.agentPanelModeSource,
         parsed.agentPanelVisible,
@@ -141,6 +159,7 @@ function saveStoredUI(state: UIState): void {
         sidebarWidth: state.sidebarWidth,
         agentPanelWidth: state.agentPanelWidth,
         agentPanelMode: state.agentPanelMode,
+        agentPanelLastVisibleMode: state.agentPanelLastVisibleMode,
         agentPanelModeSource: state.agentPanelModeSource,
       }),
     )
@@ -151,6 +170,7 @@ function saveStoredUI(state: UIState): void {
       sidebarWidth: state.sidebarWidth,
       agentPanelWidth: state.agentPanelWidth,
       agentPanelMode: state.agentPanelMode,
+      agentPanelLastVisibleMode: state.agentPanelLastVisibleMode,
       agentPanelModeSource: state.agentPanelModeSource,
     })
   } catch {
@@ -169,6 +189,7 @@ function normalizeLayoutState(
     | 'sidebarWidth'
     | 'agentPanelWidth'
     | 'agentPanelMode'
+    | 'agentPanelLastVisibleMode'
     | 'agentPanelModeSource'
   >
 > {
@@ -192,6 +213,10 @@ function normalizeLayoutState(
         ? parsed.agentPanelWidth
         : UI_DEFAULTS.agentPanelWidth,
     agentPanelMode: mode,
+    agentPanelLastVisibleMode: normalizeLastVisibleAgentPanelMode(
+      parsed.agentPanelLastVisibleMode,
+      mode,
+    ),
     agentPanelModeSource: normalizeStoredAgentPanelModeSource(
       parsed.agentPanelModeSource,
       parsed.agentPanelVisible,
@@ -204,33 +229,54 @@ export const useUIStore = create<UIState>((set) => ({
   ...loadStoredUI(),
 
   setActivePanel: (panel) =>
-    set((state) => ({
-      activePanel: panel,
-      // 点击已激活的面板 → 折叠侧栏；点击其他面板 → 展开侧栏
-      sidebarVisible: state.activePanel === panel ? !state.sidebarVisible : true,
-    })),
+    set((state) => {
+      const nextPanel = normalizeActivityPanel(panel)
+      return {
+        activePanel: nextPanel,
+        // 点击已激活的面板 → 折叠侧栏；点击其他面板 → 展开侧栏
+        sidebarVisible: state.activePanel === nextPanel ? !state.sidebarVisible : true,
+      }
+    }),
 
   toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
   hideSidebar: () => set({ sidebarVisible: false }),
-  toggleAgentPanel: () =>
+  toggleAgentPanel: (preferredMode = 'right') =>
     set((state) => {
-      const nextMode: AgentPanelMode = state.agentPanelMode === 'hidden' ? 'right' : 'hidden'
+      const wasVisible = state.agentPanelMode !== 'hidden'
+      const previousVisibleMode: VisibleAgentPanelMode | null = wasVisible
+        ? (state.agentPanelMode as VisibleAgentPanelMode)
+        : state.agentPanelLastVisibleMode
+      const nextMode: AgentPanelMode = wasVisible
+        ? 'hidden'
+        : (previousVisibleMode ?? preferredMode)
       return {
         agentPanelMode: nextMode,
+        agentPanelLastVisibleMode: previousVisibleMode,
         agentPanelVisible: agentVisibleFromMode(nextMode),
         agentPanelModeSource: 'user',
       }
     }),
   setAgentPanelMode: (mode, source = 'user') =>
-    set({
+    set((state) => ({
       agentPanelMode: mode,
+      agentPanelLastVisibleMode: mode === 'hidden' ? state.agentPanelLastVisibleMode : mode,
       agentPanelVisible: agentVisibleFromMode(mode),
       agentPanelModeSource: source,
-    }),
+    })),
   applySystemWorkContext: (context) =>
     set((state) => {
       const nextMode: AgentPanelMode = context === 'empty' ? 'center' : 'right'
-      if (context !== 'empty' && state.agentPanelModeSource === 'user') return state
+      if (context === 'empty') {
+        // 用户主动隐藏时保持隐藏；只要面板可见，关闭最后一个 Tab 就回到居中工作区。
+        if (state.agentPanelMode === 'hidden') return state
+        return {
+          agentPanelMode: 'center',
+          agentPanelLastVisibleMode: 'center',
+          agentPanelVisible: true,
+          agentPanelModeSource: 'system',
+        }
+      }
+      if (state.agentPanelModeSource === 'user') return state
       if (
         state.agentPanelMode === nextMode &&
         state.agentPanelVisible === agentVisibleFromMode(nextMode) &&
@@ -239,6 +285,7 @@ export const useUIStore = create<UIState>((set) => ({
         return state
       return {
         agentPanelMode: nextMode,
+        agentPanelLastVisibleMode: nextMode,
         agentPanelVisible: agentVisibleFromMode(nextMode),
         agentPanelModeSource: 'system',
       }
@@ -246,6 +293,7 @@ export const useUIStore = create<UIState>((set) => ({
   resetAgentLayout: () =>
     set({
       agentPanelMode: UI_DEFAULTS.agentPanelMode,
+      agentPanelLastVisibleMode: UI_DEFAULTS.agentPanelLastVisibleMode,
       agentPanelVisible: agentVisibleFromMode(UI_DEFAULTS.agentPanelMode),
       agentPanelModeSource: 'system',
       agentPanelWidth: UI_DEFAULTS.agentPanelWidth,

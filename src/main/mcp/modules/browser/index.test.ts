@@ -82,11 +82,8 @@ describe('BrowserToolModule 工具定义', () => {
 
 describe('BrowserToolModule 可视浏览器同步', () => {
   it('navigate uses the visible BrowserManager view instead of a hidden Playwright page', async () => {
-    const page = {
-      url: () => 'https://www.baidu.com/',
-    }
     const bridge = {
-      getPage: () => page,
+      getPage: () => null,
       getActiveTabId: () => 'hidden-tab',
       switchToPage: vi.fn().mockRejectedValue(new Error('not claimed')),
     }
@@ -115,6 +112,58 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     })
   })
 
+  it('list tabs reads visible BrowserManager views before Playwright claim completes', async () => {
+    const bridge = {
+      getPage: () => null,
+      getActiveTabId: () => null,
+      switchToPage: vi.fn().mockRejectedValue(new Error('not claimed')),
+    }
+    const browserManager = {
+      waitForActiveView: vi.fn().mockResolvedValue('visible-tab'),
+      getActiveViewId: () => 'visible-tab',
+      setActive: vi.fn(),
+      listViews: () => [{ tabId: 'visible-tab', url: 'https://www.baidu.com/', title: '百度一下' }],
+    }
+    const module = new BrowserToolModule(bridge as any, null, browserManager as any)
+
+    await expect(module.execute('browser_list_tabs', {})).resolves.toEqual({
+      tabs: [{ tabId: 'visible-tab', url: 'https://www.baidu.com/', title: '百度一下' }],
+      activeTabId: 'visible-tab',
+    })
+  })
+
+  it('interaction actions claim the visible page and retry automatically', async () => {
+    const page = {
+      url: () => 'https://www.zhihu.com/signin',
+      click: vi.fn().mockResolvedValue(undefined),
+    }
+    let claimed = false
+    const bridge = {
+      getPage: () => (claimed ? page : null),
+      getActiveTabId: () => null,
+      switchToPage: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('not claimed'))
+        .mockResolvedValue(undefined),
+    }
+    const browserManager = {
+      waitForActiveView: vi.fn().mockResolvedValue('visible-tab'),
+      getActiveViewId: () => 'visible-tab',
+      setActive: vi.fn(),
+      ensurePlaywrightPage: vi.fn().mockImplementation(async () => {
+        claimed = true
+      }),
+      getCurrentURL: () => 'https://www.zhihu.com/signin',
+    }
+    const module = new BrowserToolModule(bridge as any, null, browserManager as any)
+
+    await module.execute('browser_click', { selector: '#login' })
+
+    expect(browserManager.ensurePlaywrightPage).toHaveBeenCalledWith('visible-tab')
+    expect(bridge.switchToPage).toHaveBeenCalledTimes(2)
+    expect(page.click).toHaveBeenCalledWith('#login')
+  })
+
   it('fails interaction actions when Playwright is pointed at a different page than the visible view', async () => {
     const page = {
       url: () => 'https://www.zhihu.com/signin',
@@ -136,5 +185,59 @@ describe('BrowserToolModule 可视浏览器同步', () => {
       '浏览器自动化目标与可视页面不一致',
     )
     expect(page.click).not.toHaveBeenCalled()
+  })
+
+  it('never falls back to another project visible browser', async () => {
+    const bridge = {
+      getPage: () => ({ url: () => 'https://www.zhihu.com/signin' }),
+      getActiveTabId: () => 'project-b-tab',
+    }
+    const browserManager = {
+      waitForActiveViewForWorkspace: vi.fn().mockResolvedValue(null),
+      getViewIdForWorkspace: vi.fn().mockReturnValue(null),
+      getActiveViewId: vi.fn().mockReturnValue('project-b-tab'),
+      setActive: vi.fn(),
+      navigate: vi.fn(),
+    }
+    const module = new BrowserToolModule(bridge as any, null, browserManager as any)
+
+    await expect(
+      module.execute(
+        'browser_navigate',
+        { url: 'https://www.zhihu.com/signin' },
+        { conversationId: 'project-a-conversation', workspaceKey: '/workspace/a' },
+      ),
+    ).rejects.toThrow('浏览器资源未绑定到任务所属项目')
+    expect(browserManager.setActive).not.toHaveBeenCalled()
+    expect(browserManager.navigate).not.toHaveBeenCalled()
+  })
+
+  it('uses a background project view without attaching it to the current project UI', async () => {
+    const bridge = {
+      getPage: () => null,
+      getActiveTabId: () => 'project-b-tab',
+      switchToPage: vi.fn().mockResolvedValue(undefined),
+    }
+    const browserManager = {
+      waitForActiveViewForWorkspace: vi.fn().mockResolvedValue('project-a-tab'),
+      getViewIdForWorkspace: vi.fn().mockReturnValue('project-a-tab'),
+      isWorkspaceActive: vi.fn().mockReturnValue(false),
+      setActive: vi.fn(),
+      navigate: vi.fn().mockResolvedValue(undefined),
+      getCurrentURL: vi.fn().mockReturnValue('https://a.example/next'),
+      getTitle: vi.fn().mockReturnValue('Project A'),
+    }
+    const module = new BrowserToolModule(bridge as any, null, browserManager as any)
+
+    await expect(
+      module.execute(
+        'browser_navigate',
+        { url: 'https://a.example/next' },
+        { conversationId: 'project-a-conversation', workspaceKey: '/workspace/a' },
+      ),
+    ).resolves.toMatchObject({ tabId: 'project-a-tab', url: 'https://a.example/next' })
+    expect(browserManager.setActive).not.toHaveBeenCalled()
+    expect(bridge.switchToPage).toHaveBeenCalledWith('project-a-tab')
+    expect(browserManager.navigate).toHaveBeenCalledWith('project-a-tab', 'https://a.example/next')
   })
 })

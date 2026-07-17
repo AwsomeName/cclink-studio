@@ -13,16 +13,26 @@ import {
   getWorkspaceStateOwnerKey,
   setWorkspaceStatePath,
 } from '../utils/workspace-state'
-import { restoreWorkspaceState, type WorkspaceBootstrapDeps } from './workspace-bootstrap-core'
+import {
+  restoreWorkspaceState,
+  type WorkspaceBootstrapDeps,
+  type WorkspaceBootstrapResult,
+} from './workspace-bootstrap-core'
+import { persistRuntimeSections } from '../utils/workspace-runtime'
+import { runOpenProjectsBootstrapOnce } from '../stores/open-projects-store'
 
 export type { WorkspaceBootstrapDeps } from './workspace-bootstrap-core'
 export { restoreWorkspaceState } from './workspace-bootstrap-core'
 
-let workspaceBootstrapPromise: Promise<void> | null = null
+let workspaceBootstrapPromise: Promise<WorkspaceBootstrapResult> | null = null
 
 export function createWorkspaceBootstrapDeps(): WorkspaceBootstrapDeps {
   return {
     getSettings: () => window.cclinkStudio.settings.getAll().catch(() => null),
+    resolveWorkspacePath: async (workspacePath) => {
+      const result = await window.cclinkStudio.workspaceState.resolveLocalWorkspace(workspacePath)
+      return result.valid ? result.workspacePath : null
+    },
     getWorkspaceState: (workspacePath) =>
       window.cclinkStudio.workspaceState.get(workspacePath, getWorkspaceStateOwnerKey()),
     setWorkspacePath: setWorkspaceStatePath,
@@ -32,15 +42,19 @@ export function createWorkspaceBootstrapDeps(): WorkspaceBootstrapDeps {
     hydrateBrowserTabs: (value) => useBrowserStore.getState().hydrateFromWorkspaceState(value),
     hydrateTabs: (value) => useTabStore.getState().hydrateFromWorkspaceState(value),
     hydrateEditorDrafts: (value) => useEditorStore.getState().hydrateFromWorkspaceState(value),
-    hydrateAgentConversations: (value) => useAgentStore.getState().hydrateFromWorkspaceState(value),
-    initWorkspace: () => useFsStore.getState().initWorkspace(),
+    hydrateFileTree: (value) => useFsStore.getState().hydrateFromWorkspaceState(value),
+    hydrateAgentConversations: (value, options) =>
+      useAgentStore.getState().hydrateFromWorkspaceState(value, options),
+    initWorkspace: (workspacePath, settings) =>
+      useFsStore.getState().initWorkspace(workspacePath, settings),
+    refreshWorkspace: () => useFsStore.getState().refreshWorkspace(),
     warn: (message, error) => console.warn(message, error),
   }
 }
 
 export function runWorkspaceBootstrapOnce(
   depsFactory: () => WorkspaceBootstrapDeps = createWorkspaceBootstrapDeps,
-): Promise<void> {
+): Promise<WorkspaceBootstrapResult> {
   if (!workspaceBootstrapPromise) {
     workspaceBootstrapPromise = restoreWorkspaceState(depsFactory()).catch((error: unknown) => {
       workspaceBootstrapPromise = null
@@ -62,7 +76,9 @@ export function useWorkspaceBootstrap(): boolean {
     let cancelled = false
 
     async function bootstrap(): Promise<void> {
-      await runWorkspaceBootstrapOnce()
+      const result = await runWorkspaceBootstrapOnce()
+      if (result.canPersistRuntime) await persistRuntimeSections()
+      await runOpenProjectsBootstrapOnce(useFsStore.getState().workspacePath)
       if (!cancelled) setReady(true)
     }
 

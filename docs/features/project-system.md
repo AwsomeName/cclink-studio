@@ -128,6 +128,37 @@ Home 展示：
 | `agentConversations` | 当前工作空间内会话 |
 | `fileTree` | 当前工作空间内文件树状态 |
 
+本地工作空间以项目目录为状态事实源：
+
+```text
+<workspace>/
+└── .cclink-studio/
+    ├── project.json
+    └── state/
+        └── <owner-hash>.json
+```
+
+- `project.json` 保存稳定的本地 `projectId`。
+- `state/<owner-hash>.json` 保存该本地身份的 Tab、浏览器、草稿、会话和文件树现场。
+- `project.json.bak` 和 `state/<owner-hash>.json.bak` 用于身份与现场恢复；坏主文件不得覆盖有效备份。
+- `userData/workspace-state.json` 只保存 global 状态、本地工作空间索引，以及项目目录不可写时的 fallback。
+- 旧版中央项目快照在首次成功打开项目时迁入项目隐藏目录。
+- 项目移动且旧路径已不存在时沿用原 `projectId` 和现场；复制项目且原路径仍存在时生成新 `projectId`，不继承原项目现场。
+- `.cclink-studio/project.json` 和 `.cclink-studio/state/` 写入仓库本地 `.git/info/exclude`，不修改用户的 `.gitignore`。
+
+启动恢复顺序必须严格保持：
+
+1. 从全局设置取得候选工作空间路径。
+2. 对路径执行 `realpath`、主目录边界和目录存在性检查。
+3. 成功打开文件系统工作空间，确认它是当前工作空间。
+4. 读取该工作空间自己的 `.cclink-studio` 状态。
+5. 恢复文件树、会话、Tab、编辑器和浏览器现场。
+6. 重建当前工作空间的原生运行时资源。
+
+候选路径失效时只能恢复 global，不能读取失效路径对应的旧快照。项目切换使用 generation 守卫，较晚返回的旧异步请求不得覆盖较新的工作空间。
+
+状态读取必须区分“文件不存在”和“文件损坏或暂不可读”。只有明确不存在时可以使用空现场；损坏或读取失败必须中止恢复和切换，禁止把空状态写回覆盖原文件。项目身份清单损坏时，依次从清单备份和项目状态文件中的 `projectId` 恢复；全局索引及备份同时损坏时，本地项目仍从自己的隐藏目录恢复，但 global 状态进入只读故障态。
+
 切换工作空间时必须：
 
 1. 保存当前工作空间状态快照。

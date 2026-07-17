@@ -47,6 +47,7 @@ export type ConversationBackend = 'cclink-studio-agent' | 'codex' | 'claude-code
 
 export type AgentMountedResourceKind =
   | 'file'
+  | 'file-range'
   | 'folder'
   | 'tab'
   | 'browser'
@@ -82,6 +83,15 @@ export interface AgentMountedResource {
     total?: number
     returned?: number
     truncated?: boolean
+    format?: 'markdown'
+    startLine?: number
+    endLine?: number
+    startColumn?: number
+    endColumn?: number
+    selectedText?: string
+    sourceSnapshot?: string
+    snapshotHash?: string
+    dirty?: boolean
   }
 }
 
@@ -115,6 +125,8 @@ export interface Tab {
   type: TabType
   title: string
   icon: string
+  /** Tab 所属工作空间；设置页等全局 Tab 可省略。 */
+  workspaceRef?: WorkspaceRef
   /** 关联的文件路径（编辑器 Tab 使用） */
   filePath?: string
   /** 是否有未保存的修改 */
@@ -226,6 +238,8 @@ export interface AgentMessage {
   timestamp: number
   /** 是否仍在流式接收中 */
   isStreaming?: boolean
+  /** 用户发送该消息时附带的一次性片段资源快照 */
+  resources?: AgentMountedResource[]
 }
 
 export type {

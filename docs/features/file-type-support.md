@@ -9,7 +9,7 @@ S 级表示：可以可视化编辑、保存回原格式，并在约定范围内
 当前规划：
 
 - Markdown：`.md`, `.markdown`。产品设计和里程碑已确认，见
-  `docs/features/markdown-wysiwyg.md`；当前基础编辑器尚未达到 S 级验收标准。
+  `docs/features/markdown-wysiwyg.md`；常用 Markdown 的首轮 S 级实现与集中验收已完成。
 - Word：`.docx`。当前只有只读内容预览，S 级编辑后续单独设计。
 - PowerPoint：`.pptx`。当前只有只读内容预览，S 级编辑后续单独设计。
 

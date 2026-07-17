@@ -1,7 +1,22 @@
-import { resolve } from 'path'
+import { resolve, sep } from 'path'
 import { copyFileSync } from 'fs'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+import type { Plugin } from 'vite'
+
+const rendererStoreDir = `${resolve(__dirname, 'src/renderer/src/stores')}${sep}`
+
+function reloadRendererOnStoreUpdate(): Plugin {
+  return {
+    name: 'reload-renderer-on-store-update',
+    apply: 'serve',
+    handleHotUpdate(context) {
+      if (!context.file.startsWith(rendererStoreDir)) return
+      context.server.ws.send({ type: 'full-reload', path: '*' })
+      return []
+    },
+  }
+}
 
 export default defineConfig({
   main: {
@@ -19,7 +34,7 @@ export default defineConfig({
           const outDir = options.dir ?? resolve(__dirname, 'out/main')
           copyFileSync(
             resolve(__dirname, 'src/main/playwright/test-page.html'),
-            resolve(outDir, 'test-page.html')
+            resolve(outDir, 'test-page.html'),
           )
         },
       },
@@ -49,7 +64,7 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
   },
   renderer: {
     resolve: {
@@ -58,6 +73,6 @@ export default defineConfig({
         { find: '@shared', replacement: resolve('src/shared') },
       ],
     },
-    plugins: [react()]
-  }
+    plugins: [reloadRendererOnStoreUpdate(), react()],
+  },
 })

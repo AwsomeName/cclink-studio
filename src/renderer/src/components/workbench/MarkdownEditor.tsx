@@ -1,18 +1,9 @@
-/**
- * WYSIWYG Markdown 编辑器组件
- *
- * 基于 Tiptap (ProseMirror) 的飞书风格编辑器。
- * 支持 Markdown 快捷键（# → 标题、** → 粗体等）。
- * Agent 可通过 MCP 工具推送 Markdown 内容，实时渲染为富文本。
- */
-
-import { useEffect, useCallback, useRef } from 'react'
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import Placeholder from '@tiptap/extension-placeholder'
-import Image from '@tiptap/extension-image'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import { Table } from '@tiptap/extension-table'
@@ -21,273 +12,799 @@ import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import Link from '@tiptap/extension-link'
 import { common, createLowlight } from 'lowlight'
+import type { AgentMountedResource } from '../../types'
+import { useAgentStore } from '../../stores/agent-store'
 import { useEditorStore } from '../../stores/editor-store'
+import { useSettingsStore } from '../../stores/settings-store'
 import { useTabStore } from '../../stores/tab-store'
+import { useUIStore } from '../../stores/ui-store'
+import { useToastStore } from '../common/Toast'
 import { EditorToolbar } from './EditorToolbar'
+import {
+  analyzeMarkdown,
+  hashMarkdownSnapshot,
+  mapTopLevelSelectionToSource,
+  scanMarkdownBlocks,
+  type MarkdownSourceRange,
+} from '../../features/markdown/markdown-codec'
+import {
+  MAX_FILE_RANGE_BYTES,
+  MAX_FILE_RANGE_LINES,
+} from '../../features/agent-conversations/payload'
+import {
+  focusAgentComposer,
+  MARKDOWN_REVEAL_RANGE_EVENT,
+  type MarkdownRevealRange,
+} from '../../features/markdown/markdown-navigation'
+import { MarkdownImage, resolveMarkdownImageSource } from '../../features/markdown/MarkdownImage'
 
-/** 代码高亮引擎（同步，仅加载常用语言） */
 const lowlight = createLowlight(common)
 
 interface MarkdownEditorProps {
-  /** 关联的文件路径（undefined = Agent 创建的虚拟文档） */
   filePath?: string
-  /** Tab ID */
   tabId: string
 }
 
+interface SelectionMenuState {
+  range: MarkdownSourceRange
+  x: number
+  y: number
+}
+
+interface ImageDraft {
+  source: string
+  alt: string
+  title: string
+}
+
 export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.ReactElement {
-  // 用于存储文件的 key（filePath 或 tabId 作为虚拟文件 key）
   const fileKey = filePath ?? `virtual:${tabId}`
-
-  // 用 ref 持有最新 fileKey，防止 Tiptap onUpdate 闭包捕获旧值
   const fileKeyRef = useRef(fileKey)
+  const filePathRef = useRef(filePath)
   fileKeyRef.current = fileKey
+  filePathRef.current = filePath
 
-  const fileState = useEditorStore((s) => s.files[fileKey])
+  const fileState = useEditorStore((state) => state.files[fileKey])
+  const pendingCount = useEditorStore((state) => state.pendingUpdates.length)
+  const activeConversationId = useAgentStore((state) => state.activeConversationId)
+  const addMountedResource = useAgentStore((state) => state.addMountedResource)
+  const setAgentPanelMode = useUIStore((state) => state.setAgentPanelMode)
+  const editorFontFamily = useSettingsStore((state) => state.settings.editorFontFamily)
+  const editorFontSize = useSettingsStore((state) => state.settings.editorFontSize)
+  const editorWordWrap = useSettingsStore((state) => state.settings.editorWordWrap)
+  const showToast = useToastStore((state) => state.show)
   const dirty = fileState?.dirty ?? false
+  const diagnostics = fileState?.diagnostics ?? []
+  const loadError =
+    fileState?.error && !fileState.savedContent && !fileState.currentContent
+      ? fileState.error
+      : null
+  const [selectionRange, setSelectionRange] = useState<MarkdownSourceRange | null>(null)
+  const [selectionMenu, setSelectionMenu] = useState<SelectionMenuState | null>(null)
+  const [parseBlockedReason, setParseBlockedReason] = useState<string | null>(null)
+  const [imageDraft, setImageDraft] = useState<ImageDraft | null>(null)
+  const appliedUpdateIds = useRef(new Set<string>())
+  const loadedVersionRef = useRef<string | undefined>(undefined)
+  const hydratingRef = useRef(false)
 
-  // 订阅 pendingUpdates 长度变化（驱动消费 effect）
-  const pendingCount = useEditorStore((s) => s.pendingUpdates.length)
-
-  // 用于追踪已应用的 Agent 更新 ID
-  const appliedUpdateIds = useRef<Set<string>>(new Set())
-
-  // --- 初始化 Tiptap 编辑器 ---
-  const editor = useEditor({
-    extensions: [
+  const extensions = useMemo(
+    () => [
       StarterKit.configure({
-        codeBlock: false, // 用 CodeBlockLowlight 替代
+        codeBlock: false,
         heading: { levels: [1, 2, 3, 4, 5, 6] },
       }),
       Markdown,
-      CodeBlockLowlight.configure({
-        lowlight,
-        defaultLanguage: 'plaintext',
-      }),
-      Placeholder.configure({
-        placeholder: '开始输入，或让 AI 帮你写…',
-      }),
-      Image.configure({
-        inline: false,
-        allowBase64: true,
-      }),
+      CodeBlockLowlight.configure({ lowlight, defaultLanguage: 'plaintext' }),
+      Placeholder.configure({ placeholder: '开始输入，或让 AI 帮你写...' }),
+      MarkdownImage.configure({ documentPath: filePath, inline: false, allowBase64: true }),
       TaskList,
-      TaskItem.configure({
-        nested: true,
-      }),
-      Table.configure({
-        resizable: true,
-      }),
+      TaskItem.configure({ nested: true }),
+      Table.configure({ resizable: true }),
       TableRow,
       TableCell,
       TableHeader,
-      Link.configure({
-        openOnClick: false,
-        autolink: true,
-      }),
+      Link.configure({ openOnClick: false, autolink: true }),
     ],
-    editorProps: {
-      attributes: {
-        class: 'tiptap',
+    [filePath],
+  )
+
+  const editor = useEditor(
+    {
+      extensions,
+      editorProps: {
+        attributes: { class: 'tiptap' },
+        handlePaste: (_view, event) => {
+          const image = Array.from(event.clipboardData?.files ?? []).find((file) =>
+            file.type.startsWith('image/'),
+          )
+          if (!image) return false
+          event.preventDefault()
+          void saveClipboardImage(image)
+          return true
+        },
+        handleDrop: (_view, event) => {
+          const image = Array.from(event.dataTransfer?.files ?? []).find((file) =>
+            file.type.startsWith('image/'),
+          )
+          if (!image) return false
+          event.preventDefault()
+          void saveClipboardImage(image)
+          return true
+        },
+        handleDOMEvents: {
+          contextmenu: (_view, event) => {
+            const range = currentWysiwygSelection()
+            if (!range) return false
+            event.preventDefault()
+            setSelectionMenu({ range, x: event.clientX, y: event.clientY })
+            return true
+          },
+        },
+      },
+      onUpdate: ({ editor: currentEditor }) => {
+        if (hydratingRef.current) return
+        const markdown = currentEditor.getMarkdown()
+        useEditorStore.getState().updateContent(fileKeyRef.current, markdown)
+        const analysis = analyzeMarkdown(markdown)
+        useEditorStore.getState().setDiagnostics(fileKeyRef.current, analysis.diagnostics)
+      },
+      onSelectionUpdate: () => {
+        setSelectionRange(currentWysiwygSelection())
+        setSelectionMenu(null)
       },
     },
-    onUpdate: ({ editor: ed }) => {
-      // 用户编辑 → 序列化为 Markdown → 更新 store
-      // 使用 ref 获取最新 fileKey，避免闭包捕获旧值
-      // @tiptap/markdown v3: getMarkdown() 直接在 Editor 实例上
-      const md = ed.getMarkdown()
-      if (md !== undefined) {
-        useEditorStore.getState().updateContent(fileKeyRef.current, md)
+    [extensions],
+  )
+
+  const currentWysiwygSelection = useCallback((): MarkdownSourceRange | null => {
+    if (!editor) return null
+    const { from, to } = editor.state.selection
+    if (from === to) return null
+    let startIndex = 0
+    let endIndex = 0
+    let foundStart = false
+    editor.state.doc.forEach((node, offset, index) => {
+      const nodeStart = offset + 1
+      const nodeEnd = offset + node.nodeSize
+      if (!foundStart && to >= nodeStart && from <= nodeEnd) {
+        startIndex = index
+        foundStart = true
+      }
+      if (to >= nodeStart && from <= nodeEnd) endIndex = index
+    })
+    const markdown = editor.getMarkdown()
+    const selectedText = editor.state.doc.textBetween(from, to, '\n')
+    const mapped = mapTopLevelSelectionToSource(
+      markdown,
+      startIndex,
+      endIndex,
+      selectedText,
+      editor.state.doc.childCount,
+    )
+    if (mapped.diagnostics.length > 0) {
+      useEditorStore
+        .getState()
+        .setDiagnostics(fileKeyRef.current, [...diagnostics, ...mapped.diagnostics])
+    }
+    return mapped.range
+  }, [diagnostics, editor])
+
+  const saveClipboardImage = useCallback(
+    async (image: File) => {
+      const currentPath = filePathRef.current
+      if (!currentPath || !editor) {
+        showToast('请先保存 Markdown 文件，再粘贴或拖入本地图片', 'info')
+        return
+      }
+      try {
+        const content = arrayBufferToBase64(await image.arrayBuffer())
+        const asset = await window.cclinkStudio.fs.saveDocumentAsset({
+          documentPath: currentPath,
+          fileName: image.name || `pasted-${Date.now()}.png`,
+          mimeType: image.type || 'image/png',
+          content,
+          encoding: 'base64',
+        })
+        insertImageNode(editor, asset.path, asset.relativePath)
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : '图片导入失败', 'error')
       }
     },
-  })
+    [editor, showToast],
+  )
 
-  // --- 加载文件内容 ---
   useEffect(() => {
-    if (filePath) {
-      useEditorStore.getState().openFile(filePath)
-    } else {
-      // 虚拟文件：用 Tab 的 initialContent 作为种子（复制 Tab 时携带内容）
-      const seed = useTabStore.getState().tabs.find((t) => t.id === tabId)?.initialContent ?? ''
+    if (filePath) void useEditorStore.getState().openFile(filePath)
+    else {
+      const seed = useTabStore.getState().tabs.find((tab) => tab.id === tabId)?.initialContent ?? ''
       useEditorStore.getState().initVirtualFile(fileKey, seed)
     }
-  }, [filePath, fileKey, tabId])
+  }, [fileKey, filePath, tabId])
 
-  // --- 文件加载完成后设置编辑器内容 ---
   useEffect(() => {
     if (!editor || !fileState || fileState.loading) return
-    // 首次加载：将 Markdown 解析为 ProseMirror 文档
-    const md = fileState.currentContent
-    if (md) {
-      // @tiptap/markdown v3: 需要指定 contentType 让 Markdown 扩展解析
-      editor.commands.setContent(md, { contentType: 'markdown' })
+    const version = `${fileKey}:${fileState.versionHash ?? hashMarkdownSnapshot(fileState.savedContent)}`
+    if (loadedVersionRef.current === version) return
+    loadedVersionRef.current = version
+    const analysis = analyzeMarkdown(fileState.currentContent)
+    const restoredDraftAnalysis =
+      fileState.dirty && fileState.savedContent
+        ? analyzeMarkdown(fileState.savedContent, fileState.currentContent)
+        : null
+    const initialDiagnostics = [
+      ...analysis.diagnostics,
+      ...(restoredDraftAnalysis?.diagnostics ?? []),
+    ]
+    useEditorStore.getState().setDiagnostics(fileKey, initialDiagnostics)
+    if (!analysis.safeToEdit || restoredDraftAnalysis?.safeToSave === false) {
+      const reason =
+        initialDiagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
+        '当前文件包含暂不支持的 Markdown 语法'
+      setParseBlockedReason(reason)
+      showToast(reason, 'error')
+      return
     }
-    // 仅在 loading 从 true 变为 false 时执行
-  }, [editor, fileState?.loading])
+    hydratingRef.current = true
+    let serialized = ''
+    try {
+      editor.commands.setContent(fileState.currentContent, {
+        contentType: 'markdown',
+        emitUpdate: false,
+      })
+      serialized = editor.getMarkdown()
+    } finally {
+      hydratingRef.current = false
+    }
+    const roundTrip = analyzeMarkdown(fileState.currentContent, serialized)
+    useEditorStore.getState().setDiagnostics(fileKey, roundTrip.diagnostics)
+    if (!roundTrip.safeToSave) {
+      const reason =
+        roundTrip.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
+        'Markdown 解析结果不安全'
+      setParseBlockedReason(reason)
+      showToast(reason, 'error')
+    } else {
+      setParseBlockedReason(null)
+    }
+  }, [
+    editor,
+    fileKey,
+    fileState?.loading,
+    fileState?.savedContent,
+    fileState?.versionHash,
+    showToast,
+  ])
 
-  // --- 处理 Agent IPC 事件（读取请求、保存请求） ---
+  useEffect(() => {
+    if (!filePath) return
+    const directory = filePath.slice(0, filePath.lastIndexOf('/')) || '/'
+    let stop: (() => void) | undefined
+    let disposed = false
+    void window.cclinkStudio.fs
+      .watchDir(directory, (event) => {
+        if (event.filePath !== filePath) return
+        void useEditorStore.getState().checkExternalChange(filePath)
+      })
+      .then((unsubscribe) => {
+        if (disposed) unsubscribe()
+        else stop = unsubscribe
+      })
+    return () => {
+      disposed = true
+      stop?.()
+    }
+  }, [filePath])
+
+  useEffect(() => {
+    const reveal = (event: Event): void => {
+      const detail = (event as CustomEvent<MarkdownRevealRange>).detail
+      const matchesFile = Boolean(filePath && detail.filePath === filePath)
+      const matchesVirtualTab = Boolean(!filePath && detail.tabId === tabId)
+      if (!editor || (!matchesFile && !matchesVirtualTab)) return
+      const markdown = useEditorStore.getState().files[fileKey]?.currentContent ?? ''
+      const blocks = scanMarkdownBlocks(markdown)
+      const startIndex = Math.max(
+        0,
+        blocks.findIndex((block) => block.endLine >= detail.startLine),
+      )
+      const endMatch = blocks.findIndex((block) => block.endLine >= detail.endLine)
+      const endIndex = endMatch >= 0 ? endMatch : Math.max(0, blocks.length - 1)
+      let from = 1
+      let to = editor.state.doc.content.size
+      editor.state.doc.forEach((node, offset, index) => {
+        if (index === startIndex) from = offset + 1
+        if (index === endIndex) to = Math.min(editor.state.doc.content.size, offset + node.nodeSize)
+      })
+      editor.commands.setTextSelection({ from, to })
+      editor.commands.scrollIntoView()
+      editor.commands.focus()
+    }
+    window.addEventListener(MARKDOWN_REVEAL_RANGE_EVENT, reveal)
+    return () => window.removeEventListener(MARKDOWN_REVEAL_RANGE_EVENT, reveal)
+  }, [editor, fileKey, filePath, tabId])
+
+  useEffect(() => {
+    const closeMenu = (): void => setSelectionMenu(null)
+    window.addEventListener('pointerdown', closeMenu)
+    return () => window.removeEventListener('pointerdown', closeMenu)
+  }, [])
+
   useEffect(() => {
     if (!editor) return
-
-    // 监听 Agent 读取请求 → 回传当前编辑器内容
-    const unsubReadRequest = window.cclinkStudio.editor.onReadRequest((request) => {
-      // @tiptap/markdown v3: getMarkdown() 直接在 Editor 实例上
-      const md = editor.getMarkdown()
-      window.cclinkStudio.editor.readResponse(request.id, md)
+    const offRead = window.cclinkStudio.editor.onReadRequest((request) => {
+      const content =
+        useEditorStore.getState().files[fileKeyRef.current]?.currentContent ?? editor.getMarkdown()
+      window.cclinkStudio.editor.readResponse(request.id, content)
     })
-
-    // 监听 Agent 保存请求 → 写文件并回传结果
-    const unsubSaveRequest = window.cclinkStudio.editor.onSaveRequest(async (request) => {
+    const offSave = window.cclinkStudio.editor.onSaveRequest(async (request) => {
+      const targetPath = request.filePath ?? filePathRef.current
+      if (!targetPath) {
+        window.cclinkStudio.editor.saveResult(request.id, false, '无文件路径')
+        return
+      }
       try {
-        // @tiptap/markdown v3: getMarkdown() 直接在 Editor 实例上
-        const md = editor.getMarkdown()
-        const targetPath = request.filePath ?? filePath
-        if (targetPath) {
-          await window.cclinkStudio.fs.writeFile(targetPath, md)
-          // 更新 savedContent 清除 dirty
-          useEditorStore.setState((s) => ({
-            files: {
-              ...s.files,
-              [fileKey]: {
-                ...s.files[fileKey],
-                savedContent: md,
-                currentContent: md,
-                dirty: false,
-              },
-            },
-          }))
-          window.cclinkStudio.editor.saveResult(request.id, true)
+        if (targetPath === filePathRef.current) {
+          const result = await useEditorStore.getState().saveFile(targetPath)
+          window.cclinkStudio.editor.saveResult(
+            request.id,
+            result === 'saved',
+            result === 'conflict' ? '文件已被外部修改' : undefined,
+          )
         } else {
-          window.cclinkStudio.editor.saveResult(request.id, false, '无文件路径')
+          const content = useEditorStore.getState().files[fileKeyRef.current]?.currentContent ?? ''
+          await window.cclinkStudio.fs.saveTextDocument({ filePath: targetPath, content })
+          window.cclinkStudio.editor.saveResult(request.id, true)
         }
-      } catch (err: unknown) {
+      } catch (error) {
         window.cclinkStudio.editor.saveResult(
           request.id,
           false,
-          err instanceof Error ? err.message : '保存失败',
+          error instanceof Error ? error.message : '保存失败',
         )
       }
     })
-
-    // cleanup：preload 返回的取消订阅函数
     return () => {
-      unsubReadRequest()
-      unsubSaveRequest()
+      offRead()
+      offSave()
     }
-  }, [editor, filePath, fileKey])
+  }, [editor])
 
-  // --- 消费 pending updates（由 applyAgentUpdate 增加 pendingCount 驱动） ---
   useEffect(() => {
     if (!editor || pendingCount === 0) return
-
-    // 消费当前文件的待处理更新
-    const updates = useEditorStore.getState().consumePendingUpdates(filePath ?? undefined)
-
+    const updates = useEditorStore.getState().consumePendingUpdates(filePath)
     for (const update of updates) {
-      // 跳过已应用的更新
       if (appliedUpdateIds.current.has(update.id)) continue
       appliedUpdateIds.current.add(update.id)
-
-      switch (update.type) {
-        case 'write': {
-          // 替换全部内容（emitUpdate:false 避免触发 onUpdate 双写 store）
-          editor.commands.setContent(update.content, { contentType: 'markdown', emitUpdate: false })
-          useEditorStore.getState().updateContent(fileKey, update.content)
-          break
-        }
-        case 'append': {
-          // 在末尾追加内容
-          const currentMd = editor.getMarkdown()
-          const newMd = currentMd + '\n\n' + update.content
-          editor.commands.setContent(newMd, { contentType: 'markdown', emitUpdate: false })
-          useEditorStore.getState().updateContent(fileKey, newMd)
-          break
-        }
-        case 'insert': {
-          // 在指定位置插入
-          const currentMd = editor.getMarkdown()
-          let newMd: string
-          if (update.position === 'start') {
-            newMd = update.content + '\n\n' + currentMd
-          } else {
-            newMd = currentMd + '\n\n' + update.content
-          }
-          editor.commands.setContent(newMd, { contentType: 'markdown', emitUpdate: false })
-          useEditorStore.getState().updateContent(fileKey, newMd)
-          break
-        }
-      }
-
-      // 通知主进程更新已应用
-      window.cclinkStudio.editor.contentUpdateAck(update.id)
-    }
-  }, [editor, filePath, fileKey, pendingCount])
-
-  // --- 保存快捷键 (Cmd+S) ---
-  const handleSave = useCallback(async () => {
-    const editorStore = useEditorStore.getState()
-
-    // 未命名文档 → 另存为
-    if (!filePath) {
-      const current = editorStore.files[fileKey]?.currentContent ?? ''
-      if (!current) return
-      const result = await window.cclinkStudio.dialog.showSaveDialog({
-        title: '另存为',
-        defaultPath: '未命名.md',
-        filters: [{ name: 'Markdown', extensions: ['md'] }],
-      })
-      if (result.canceled || !result.filePath) return
+      const currentState = useEditorStore.getState().files[fileKey]
+      const current = currentState?.currentContent ?? ''
+      const previousDiagnostics = currentState?.diagnostics ?? []
+      const next =
+        update.type === 'write'
+          ? update.content
+          : update.type === 'append' || update.position !== 'start'
+            ? joinMarkdown(current, update.content)
+            : joinMarkdown(update.content, current)
+      let editorChanged = false
       try {
-        await window.cclinkStudio.fs.writeFile(result.filePath, current)
-        // 回填 Tab filePath，编辑器将按 key 重挂载并从磁盘读取（dirty 清零）
-        useTabStore.getState().updateTabFilePath(tabId, result.filePath)
-      } catch (err) {
-        console.error('[MarkdownEditor] 另存为失败:', err)
-      }
-      return
-    }
+        const inputAnalysis = analyzeMarkdown(next)
+        if (!inputAnalysis.safeToEdit) {
+          throw new Error(
+            inputAnalysis.diagnostics.find((diagnostic) => diagnostic.severity === 'error')
+              ?.message ?? 'Agent 内容包含当前版本不支持的 Markdown 语法',
+          )
+        }
 
-    // 已命名文档：用 getState() 读实时 dirty，不依赖闭包中的 stale dirty
-    const currentDirty = editorStore.files[fileKey]?.dirty
-    if (!currentDirty) return
+        hydratingRef.current = true
+        editor.commands.setContent(next, { contentType: 'markdown', emitUpdate: false })
+        editorChanged = true
+        const serialized = editor.getMarkdown()
+        const roundTrip = analyzeMarkdown(next, serialized)
+        if (!roundTrip.safeToSave) {
+          throw new Error(
+            roundTrip.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
+              'Agent 内容无法安全转换为所见即所得文档',
+          )
+        }
+
+        useEditorStore.getState().updateContent(fileKey, serialized)
+        useEditorStore.getState().setDiagnostics(fileKey, roundTrip.diagnostics)
+        void window.cclinkStudio.editor.contentUpdateAck(update.id, true)
+      } catch (error) {
+        if (editorChanged) {
+          editor.commands.setContent(current, { contentType: 'markdown', emitUpdate: false })
+        }
+        useEditorStore.getState().setDiagnostics(fileKey, previousDiagnostics)
+        const message = error instanceof Error ? error.message : 'Agent 内容更新失败'
+        showToast(message, 'error')
+        void window.cclinkStudio.editor.contentUpdateAck(update.id, false, message)
+      } finally {
+        hydratingRef.current = false
+      }
+    }
+  }, [editor, fileKey, filePath, pendingCount, showToast])
+
+  const handleSaveAs = useCallback(async () => {
+    const content = useEditorStore.getState().files[fileKey]?.currentContent ?? ''
+    const result = await window.cclinkStudio.dialog.showSaveDialog({
+      title: '另存为',
+      defaultPath: filePath?.split('/').pop() ?? '未命名.md',
+      filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
+    })
+    if (result.canceled || !result.filePath) return false
+    await window.cclinkStudio.fs.saveTextDocument({
+      filePath: result.filePath,
+      content,
+      force: true,
+    })
+    useTabStore.getState().updateTabFilePath(tabId, result.filePath)
+    showToast('Markdown 已保存', 'success')
+    return true
+  }, [fileKey, filePath, showToast, tabId])
+
+  const handleSave = useCallback(async () => {
     try {
-      await editorStore.saveFile(filePath)
-    } catch (err) {
-      console.error('[MarkdownEditor] 保存失败:', err)
+      if (!filePath) {
+        await handleSaveAs()
+        return
+      }
+      const result = await useEditorStore.getState().saveFile(filePath)
+      if (result === 'conflict') {
+        showToast('文件已被外部修改，请选择重新载入、另存为或覆盖', 'error')
+      } else {
+        showToast('已保存', 'success')
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '保存失败', 'error')
     }
-  }, [filePath, fileKey, tabId])
+  }, [filePath, handleSaveAs, showToast])
 
-  // 注册编辑器级别的快捷键
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent): void => {
-      const cmd = e.metaKey || e.ctrlKey
-      if (cmd && e.key === 's') {
-        e.preventDefault()
-        handleSave()
+    const save = (event: KeyboardEvent): void => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault()
+        void handleSave()
       }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', save)
+    return () => window.removeEventListener('keydown', save)
   }, [handleSave])
 
-  // --- Tab 标题更新（dirty 标记） ---
   useEffect(() => {
     useTabStore.getState().updateTabDirty(tabId, dirty)
   }, [dirty, tabId])
 
-  // --- 加载中状态 ---
-  if (fileState?.loading) {
+  const handleInsertLink = useCallback(() => {
+    if (!editor) return
+    const previous = editor.getAttributes('link').href as string | undefined
+    const href = window.prompt('链接地址', previous ?? 'https://')
+    if (href === null) return
+    if (!href.trim()) editor.chain().focus().extendMarkRange('link').unsetLink().run()
+    else editor.chain().focus().extendMarkRange('link').setLink({ href: href.trim() }).run()
+  }, [editor])
+
+  const handleInsertImage = useCallback(async () => {
+    if (!editor || !filePath) {
+      showToast('请先保存 Markdown 文件，再插入本地图片', 'info')
+      return
+    }
+    const result = await window.cclinkStudio.dialog.showOpenDialog({
+      title: '插入图片',
+      filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'] }],
+    })
+    const sourcePath = result.filePaths[0]
+    if (result.canceled || !sourcePath) return
+    try {
+      const asset = await window.cclinkStudio.fs.importDocumentAsset(filePath, sourcePath)
+      insertImageNode(editor, asset.path, asset.relativePath)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '图片导入失败', 'error')
+    }
+  }, [editor, filePath, showToast])
+
+  const handleInsertTable = useCallback(() => {
+    editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+  }, [editor])
+
+  const handleEditImage = useCallback(() => {
+    if (!editor || !editor.isActive('image')) return
+    const attributes = editor.getAttributes('image')
+    setImageDraft({
+      source: String(attributes.markdownSrc ?? attributes.src ?? ''),
+      alt: String(attributes.alt ?? ''),
+      title: String(attributes.title ?? ''),
+    })
+  }, [editor])
+
+  const handleApplyImage = useCallback(() => {
+    if (!editor || !imageDraft) return
+    const source = imageDraft.source.trim()
+    if (!source) {
+      showToast('图片地址不能为空', 'error')
+      return
+    }
+    editor
+      .chain()
+      .focus()
+      .updateAttributes('image', {
+        src: resolveMarkdownImageSource(source, filePath),
+        markdownSrc: source,
+        alt: imageDraft.alt.trim() || null,
+        title: imageDraft.title.trim() || null,
+      })
+      .run()
+    setImageDraft(null)
+  }, [editor, filePath, imageDraft, showToast])
+
+  const sendSelectionToConversation = useCallback(
+    (range: MarkdownSourceRange) => {
+      const lineCount = range.endLine - range.startLine + 1
+      const bytes = new TextEncoder().encode(range.sourceSnapshot).byteLength
+      if (lineCount > MAX_FILE_RANGE_LINES || bytes > MAX_FILE_RANGE_BYTES) {
+        showToast(
+          `选区最多 ${MAX_FILE_RANGE_LINES} 行且不超过 ${MAX_FILE_RANGE_BYTES / 1024}KB`,
+          'error',
+        )
+        return
+      }
+      const name = filePath?.split('/').pop() ?? '未命名.md'
+      const resource: AgentMountedResource = {
+        id: `file-range:${filePath ?? tabId}:${range.startLine}:${range.endLine}:${Date.now()}`,
+        kind: 'file-range',
+        label: `${name}:L${range.startLine}-L${range.endLine}`,
+        detail: `${filePath ?? '未保存文档'} 第 ${range.startLine}-${range.endLine} 行`,
+        ref: {
+          type: 'file-range',
+          path: filePath,
+          tabId,
+          format: 'markdown',
+          startLine: range.startLine,
+          endLine: range.endLine,
+          startColumn: range.startColumn,
+          endColumn: range.endColumn,
+          selectedText: range.selectedText,
+          sourceSnapshot: range.sourceSnapshot,
+          snapshotHash: hashMarkdownSnapshot(range.sourceSnapshot),
+          dirty,
+        },
+      }
+      addMountedResource(resource, activeConversationId)
+      setAgentPanelMode('right', 'user')
+      setSelectionMenu(null)
+      showToast('已将带行号的 Markdown 选区挂到当前会话', 'success')
+      requestAnimationFrame(focusAgentComposer)
+    },
+    [
+      activeConversationId,
+      addMountedResource,
+      dirty,
+      filePath,
+      setAgentPanelMode,
+      showToast,
+      tabId,
+    ],
+  )
+
+  const handleReload = useCallback(async () => {
+    if (!filePath) return
+    await useEditorStore.getState().reloadFile(filePath)
+    showToast('已重新载入磁盘版本', 'success')
+  }, [filePath, showToast])
+
+  const handleOverwrite = useCallback(async () => {
+    if (!filePath) return
+    await useEditorStore.getState().saveFile(filePath, { force: true })
+    showToast('已覆盖磁盘版本', 'success')
+  }, [filePath, showToast])
+
+  if (fileState?.loading || !fileState) {
     return (
       <div className="markdown-editor-wrapper">
-        <div className="editor-loading">加载中…</div>
+        <div className="editor-loading">加载中...</div>
       </div>
     )
   }
 
   return (
     <div className="markdown-editor-wrapper">
-      <EditorToolbar editor={editor} filePath={filePath} dirty={dirty} onSave={handleSave} />
-      <div className="tiptap-editor">{editor && <EditorContent editor={editor} />}</div>
+      <EditorToolbar
+        editor={editor}
+        filePath={filePath}
+        dirty={dirty}
+        diagnosticsCount={diagnostics.length}
+        onSave={() => void handleSave()}
+        onInsertLink={handleInsertLink}
+        onInsertImage={() => void handleInsertImage()}
+        onInsertTable={handleInsertTable}
+        onEditImage={handleEditImage}
+      />
+
+      {fileState.externalContent !== undefined && (
+        <div className="markdown-conflict-banner">
+          <div>
+            <strong>磁盘文件已在外部修改</strong>
+            <span>当前草稿尚未覆盖磁盘版本。</span>
+          </div>
+          <details>
+            <summary>查看源码差异</summary>
+            <div className="markdown-conflict-diff">
+              <pre>{fileState.currentContent}</pre>
+              <pre>{fileState.externalContent}</pre>
+            </div>
+          </details>
+          <button type="button" onClick={() => void handleReload()}>
+            重新载入
+          </button>
+          <button type="button" onClick={() => void handleSaveAs()}>
+            另存为
+          </button>
+          <button type="button" onClick={() => void handleOverwrite()}>
+            覆盖
+          </button>
+        </div>
+      )}
+
+      {diagnostics.length > 0 && (
+        <details className="markdown-diagnostics">
+          <summary>兼容性提示 ({diagnostics.length})</summary>
+          {diagnostics.map((diagnostic, index) => (
+            <div key={`${diagnostic.code}-${index}`} className={diagnostic.severity}>
+              {diagnostic.message}
+            </div>
+          ))}
+        </details>
+      )}
+
+      <div className="markdown-editor-body">
+        {loadError ? (
+          <div className="markdown-parse-blocked">
+            <strong>无法打开文档</strong>
+            <span>{loadError}</span>
+            {filePath && (
+              <button
+                type="button"
+                onClick={() => void useEditorStore.getState().openFile(filePath)}
+              >
+                重试
+              </button>
+            )}
+          </div>
+        ) : parseBlockedReason ? (
+          <div className="markdown-parse-blocked">
+            <strong>文档未被改写</strong>
+            <span>{parseBlockedReason}</span>
+            {filePath && (
+              <button type="button" onClick={() => void handleReload()}>
+                重新载入磁盘版本
+              </button>
+            )}
+          </div>
+        ) : (
+          <div
+            className={`tiptap-editor${editorWordWrap ? '' : ' no-wrap'}`}
+            style={
+              {
+                '--markdown-font-family': editorFontFamily,
+                '--markdown-font-size': `${editorFontSize}px`,
+              } as React.CSSProperties
+            }
+          >
+            {editor && <EditorContent editor={editor} />}
+          </div>
+        )}
+      </div>
+
+      {imageDraft && (
+        <div className="markdown-inspector-backdrop" onPointerDown={() => setImageDraft(null)}>
+          <section
+            className="markdown-image-inspector"
+            role="dialog"
+            aria-modal="true"
+            aria-label="编辑图片"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <header>编辑图片</header>
+            <label>
+              <span>地址</span>
+              <input
+                value={imageDraft.source}
+                onChange={(event) =>
+                  setImageDraft((current) =>
+                    current ? { ...current, source: event.target.value } : current,
+                  )
+                }
+              />
+            </label>
+            <label>
+              <span>替代文本</span>
+              <input
+                value={imageDraft.alt}
+                onChange={(event) =>
+                  setImageDraft((current) =>
+                    current ? { ...current, alt: event.target.value } : current,
+                  )
+                }
+              />
+            </label>
+            <label>
+              <span>标题</span>
+              <input
+                value={imageDraft.title}
+                onChange={(event) =>
+                  setImageDraft((current) =>
+                    current ? { ...current, title: event.target.value } : current,
+                  )
+                }
+              />
+            </label>
+            <footer>
+              <button type="button" onClick={() => setImageDraft(null)}>
+                取消
+              </button>
+              <button type="button" className="primary" onClick={handleApplyImage}>
+                应用
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
+
+      {selectionRange && !selectionMenu && (
+        <div className="markdown-selection-toolbar">
+          <span>
+            L{selectionRange.startLine}-L{selectionRange.endLine}
+          </span>
+          <button type="button" onClick={() => sendSelectionToConversation(selectionRange)}>
+            发给会话
+          </button>
+        </div>
+      )}
+
+      {selectionMenu && (
+        <div
+          className="markdown-selection-menu"
+          style={{ left: selectionMenu.x, top: selectionMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button type="button" onClick={() => sendSelectionToConversation(selectionMenu.range)}>
+            带行号发送给会话
+          </button>
+        </div>
+      )}
     </div>
   )
+}
+
+function insertImageNode(
+  editor: NonNullable<ReturnType<typeof useEditor>>,
+  path: string,
+  relativePath: string,
+): void {
+  editor
+    .chain()
+    .focus()
+    .insertContent({
+      type: 'image',
+      attrs: {
+        src: resolveMarkdownImageSource(path),
+        markdownSrc: relativePath,
+        alt: path.split('/').pop() ?? 'image',
+      },
+    })
+    .run()
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  const chunk = 0x8000
+  for (let offset = 0; offset < bytes.length; offset += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunk))
+  }
+  return btoa(binary)
+}
+
+function joinMarkdown(first: string, second: string): string {
+  if (!first.trim()) return second
+  if (!second.trim()) return first
+  return `${first.replace(/\s+$/, '')}\n\n${second.replace(/^\s+/, '')}`
 }

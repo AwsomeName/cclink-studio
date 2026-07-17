@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ContentBlock } from '../../types'
-import { buildContentRenderUnits } from './ConversationMessageRenderer'
+import { buildContentRenderUnits, getMessageCopyText } from './ConversationMessageRenderer'
 
 describe('ConversationMessageRenderer', () => {
   it('groups consecutive tool blocks into one execution unit', () => {
@@ -64,5 +64,36 @@ describe('ConversationMessageRenderer', () => {
       { type: 'block', block: blocks[2] },
       { type: 'thinking_group', blocks: [blocks[3]] },
     ])
+  })
+
+  it('uses raw text when copying a complete message', () => {
+    expect(
+      getMessageCopyText({
+        id: 'message-1',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'rendered' }],
+        rawText: 'original document text',
+        timestamp: 1,
+      }),
+    ).toBe('original document text')
+  })
+
+  it('falls back to structured block text when raw text is empty', () => {
+    expect(
+      getMessageCopyText({
+        id: 'message-2',
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'answer' },
+          {
+            type: 'tool_result',
+            tool_use_id: 'tool-1',
+            content: 'tool output',
+          },
+        ],
+        rawText: '',
+        timestamp: 1,
+      }),
+    ).toBe('answer\n\ntool output')
   })
 })

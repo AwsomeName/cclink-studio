@@ -68,6 +68,21 @@ export interface ClaudeAssistantEvent {
   session_id: string
 }
 
+export interface ClaudeUserEvent {
+  type: 'user'
+  message: {
+    id?: string
+    role: 'user'
+    content: Array<{
+      type: string
+      tool_use_id?: string
+      content?: unknown
+      is_error?: boolean
+    }>
+  }
+  session_id: string
+}
+
 export interface ClaudeResultEvent {
   type: 'result'
   subtype: string
@@ -83,11 +98,13 @@ export type ClaudeEvent =
   | ClaudeSystemInitEvent
   | ClaudeStreamEvent
   | ClaudeAssistantEvent
+  | ClaudeUserEvent
   | ClaudeResultEvent
 
 export interface ClaudeStreamEventData {
   type: string
   conversationId?: string
+  runId?: string
   subtype?: string
   session_id?: string
   event?: {
@@ -104,11 +121,12 @@ export interface ClaudeStreamEventData {
     }
     message?: { id: string; role: string; content: unknown[] }
   }
-  message?: ClaudeAssistantEvent['message']
+  message?: ClaudeAssistantEvent['message'] | ClaudeUserEvent['message']
 }
 
 export interface ClaudeResultEventData {
   conversationId?: string
+  runId?: string
   subtype: string
   is_error: boolean
   duration_ms: number
@@ -155,6 +173,10 @@ export interface AgentCommandResult {
 
 export interface AgentStatus {
   connected: boolean
+  /** 当前会话是否仍有一轮 Agent 查询在执行。 */
+  busy?: boolean
+  /** 当前正在执行的运行实例。 */
+  runId?: string | null
   sessionId: string | null
   ready?: boolean
 }
@@ -211,7 +233,14 @@ export interface AgentApiContract {
 
   onStreamEvent(callback: (event: ClaudeStreamEventData) => void): () => void
   onComplete(callback: (result: ClaudeResultEventData) => void): () => void
-  onError(callback: (error: { message: string; conversationId?: string }) => void): () => void
+  onError(
+    callback: (error: {
+      message: string
+      code?: string
+      conversationId?: string
+      runId?: string
+    }) => void,
+  ): () => void
 
   executeAction(action: PlaywrightAction): Promise<AgentPlaywrightActionResult>
   verifyCapabilities(): Promise<AgentCapabilityCheckResult[]>

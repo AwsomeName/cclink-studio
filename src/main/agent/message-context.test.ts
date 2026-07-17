@@ -47,6 +47,59 @@ describe('buildAgentMessageWithContext', () => {
     expect(message).not.toContain('"file-20.md"')
   })
 
+  it('passes a bounded markdown selection snapshot to the agent as actual context', () => {
+    const message = buildAgentMessageWithContext('解释这一段', {
+      resources: [
+        {
+          id: 'file-range:guide:8:10',
+          kind: 'file-range',
+          label: 'guide.md:L8-L10',
+          detail: '/workspace/guide.md 第 8-10 行',
+          ref: {
+            type: 'file-range',
+            path: '/workspace/guide.md',
+            tabId: 'tab-guide',
+            format: 'markdown',
+            startLine: 8,
+            endLine: 10,
+            startColumn: 1,
+            endColumn: 7,
+            selectedText: '原始选区内容',
+            sourceSnapshot: '## 第二节\n\n原始选区内容',
+            snapshotHash: 'snapshot-1',
+            dirty: true,
+          },
+        },
+      ],
+    })
+
+    expect(message).toContain('"kind": "file-range"')
+    expect(message).toContain('"startLine": 8')
+    expect(message).toContain('"sourceSnapshot": "## 第二节\\n\\n原始选区内容"')
+    expect(message).toContain('"dirty": true')
+  })
+
+  it('drops an oversized markdown selection instead of truncating it ambiguously', () => {
+    const message = buildAgentMessageWithContext('解释这一段', {
+      resources: [
+        {
+          id: 'file-range:oversized',
+          kind: 'file-range',
+          label: 'oversized.md:L1-L2',
+          ref: {
+            type: 'file-range',
+            format: 'markdown',
+            startLine: 1,
+            endLine: 2,
+            sourceSnapshot: '中'.repeat(11_000),
+          },
+        },
+      ],
+    })
+
+    expect(message).toBe('解释这一段')
+  })
+
   it('keeps data source resource references traceable without injecting raw records', () => {
     const message = buildAgentMessageWithContext('基于这些素材写摘要', {
       resources: [

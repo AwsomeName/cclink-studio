@@ -23,8 +23,20 @@ export interface BuildAgentResourceContextOptions {
 export async function buildAgentResourceContext(
   options: BuildAgentResourceContextOptions,
 ): Promise<AgentResourceContextSnapshot> {
-  const visibleTabId = options.browserManager?.getActiveViewId() ?? null
-  const tabId = options.browserTabId ?? visibleTabId
+  const workspace =
+    options.context?.workspaceRef ??
+    (options.settings.lastWorkspacePath.trim().length > 0
+      ? localWorkspaceRef(options.settings.lastWorkspacePath.trim())
+      : globalWorkspaceRef())
+  const workspaceKey = workspaceRefKey(workspace)
+  const visibleTabId = options.browserManager?.getViewIdForWorkspace(workspaceKey) ?? null
+  const requestedTabId = options.browserTabId ?? visibleTabId
+  const tabId =
+    requestedTabId &&
+    (!options.browserManager ||
+      options.browserManager.getViewWorkspaceKey(requestedTabId) === workspaceKey)
+      ? requestedTabId
+      : null
   const diagnostics = tabId
     ? await options.playwrightBridge.getPageDiagnostics(tabId).catch(() => null)
     : null
@@ -37,12 +49,6 @@ export async function buildAgentResourceContext(
           diagnostics,
         })
       : null
-  const workspace =
-    options.context?.workspaceRef ??
-    (options.settings.lastWorkspacePath.trim().length > 0
-      ? localWorkspaceRef(options.settings.lastWorkspacePath.trim())
-      : globalWorkspaceRef())
-
   return {
     version: 1,
     generatedAt: Date.now(),
@@ -50,7 +56,7 @@ export async function buildAgentResourceContext(
     activeBrowser,
     workspace: {
       ref: workspace,
-      key: workspaceRefKey(workspace),
+      key: workspaceKey,
       rootPath: workspace.kind === 'local' ? workspace.path : null,
       writable: workspace.kind === 'local',
     },

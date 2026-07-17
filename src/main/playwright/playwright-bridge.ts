@@ -35,6 +35,14 @@ export interface NetworkLogEntry {
   errorText?: string
 }
 
+interface ScopedConsoleLogEntry extends ConsoleLogEntry {
+  page: Page
+}
+
+interface ScopedNetworkLogEntry extends NetworkLogEntry {
+  page: Page
+}
+
 /**
  * 路由拦截处理器
  */
@@ -63,9 +71,9 @@ export class PlaywrightBridge {
   private activeTabId: string | null = null
 
   /** 控制台日志缓冲 */
-  private consoleLogs: ConsoleLogEntry[] = []
+  private consoleLogs: ScopedConsoleLogEntry[] = []
   /** 网络请求日志缓冲 */
-  private networkLog: NetworkLogEntry[] = []
+  private networkLog: ScopedNetworkLogEntry[] = []
   /** 路由拦截处理器：URL pattern → RouteHandler */
   private routeHandlers: Map<string, RouteHandler> = new Map()
   /** 自动对话框处理模式 */
@@ -98,66 +106,32 @@ export class PlaywrightBridge {
       await this.installStealthInitScript(this.context)
       const pages = this.context.pages()
 
-      // 找到 WebContentsView 的页面（非主渲染器、非 devtools）
-      this.page =
-        pages.find(
-          (p) =>
-            !p.url().includes('localhost') &&
-            !p.url().startsWith('devtools://') &&
-            !p.url().startsWith('chrome://'),
-        ) ?? pages[0]
-
       console.log(`[CCLink Studio] 发现 ${pages.length} 个页面:`)
       for (const p of pages) {
         console.log(`  - ${p.url()}`)
       }
     }
 
-    if (!this.page && this.context) {
-      this.page = await this.context.newPage()
-    }
-
-    // 注册初始页面到 Tab 注册表
-    // 用字面量 'browser' 作为 key，对齐主进程 BrowserManager 的种子 view tabId（index.ts createView('browser', ...)），
-    // 让 Agent 作用域选择器能直接按 'browser' 定位到种子浏览器实例。
-    if (this.page) {
-      const initialTabId = 'browser'
-      this.pages.set(initialTabId, this.page)
-      this.activeTabId = initialTabId
-      console.log(`[CCLink Studio] 初始页面已注册: tabId=${initialTabId}`)
-
-      await this.installStealthInitScript(this.page)
-
-      // 设置页面事件监听
-      this.setupPageListeners(this.page)
-    }
-
     // 监听 context 上的新页面事件（弹窗、window.open 等）
     if (this.context) {
-      this.context.on('page', (newPage) => {
-        // 去重：若该 Page 已在注册表（如种子页 'browser' 或已显式 claim 的 view），跳过自动登记
-        // 避免 on('page') 为同一页面分配新 randomUUID，造成种子 key 失效/重复。
+      this.context.on('page', async (newPage) => {
         for (const existing of this.pages.values()) {
           if (existing === newPage) {
             console.log(`[CCLink Studio] 新页面已在注册表，跳过自动注册: url=${newPage.url()}`)
             return
           }
         }
-        const tabId = randomUUID()
-        this.pages.set(tabId, newPage)
-        void this.installStealthInitScript(newPage)
-        this.setupPageListeners(newPage)
-        console.log(`[CCLink Studio] 新页面自动注册: tabId=${tabId}, url=${newPage.url()}`)
 
-        // 页面关闭时清理
-        newPage.on('close', () => {
-          this.pages.delete(tabId)
-          if (this.activeTabId === tabId) {
-            // 切换到第一个可用 Tab
-            const remaining = Array.from(this.pages.keys())
-            this.activeTabId = remaining.length > 0 ? remaining[0] : null
-          }
-        })
+        const opener = await newPage.opener().catch(() => null)
+        if (!opener || !Array.from(this.pages.values()).includes(opener)) {
+          console.log(
+            `[CCLink Studio] 未绑定 CDP 页面，等待 BrowserManager claim: url=${newPage.url()}`,
+          )
+          return
+        }
+
+        const tabId = this.registerPage(newPage)
+        console.log(`[CCLink Studio] 新页面自动注册: tabId=${tabId}, url=${newPage.url()}`)
       })
     }
   }
@@ -172,6 +146,7 @@ export class PlaywrightBridge {
     // 控制台日志
     page.on('console', (msg) => {
       this.consoleLogs.push({
+        page,
         type: msg.type() as ConsoleLogEntry['type'],
         text: msg.text(),
         timestamp: Date.now(),
@@ -185,6 +160,7 @@ export class PlaywrightBridge {
     // 页面错误
     page.on('pageerror', (err) => {
       this.consoleLogs.push({
+        page,
         type: 'error',
         text: err.message,
         timestamp: Date.now(),
@@ -194,6 +170,7 @@ export class PlaywrightBridge {
     // 网络请求
     page.on('request', (req) => {
       this.networkLog.push({
+        page,
         requestId: req.url() + '::' + Date.now(),
         method: req.method(),
         url: req.url(),
@@ -208,6 +185,7 @@ export class PlaywrightBridge {
 
     page.on('requestfailed', (req) => {
       this.networkLog.push({
+        page,
         requestId: req.url() + '::failed::' + Date.now(),
         method: req.method(),
         url: req.url(),
@@ -227,7 +205,11 @@ export class PlaywrightBridge {
       const status = res.status()
       // 更新最近的匹配条目
       for (let i = this.networkLog.length - 1; i >= 0; i--) {
-        if (this.networkLog[i].url === url && !this.networkLog[i].status) {
+        if (
+          this.networkLog[i].page === page &&
+          this.networkLog[i].url === url &&
+          !this.networkLog[i].status
+        ) {
           this.networkLog[i].status = status
           break
         }
@@ -256,7 +238,7 @@ export class PlaywrightBridge {
 
   private async captureDownload(page: Page, download: Download): Promise<string> {
     const downloadId = this.registerDownload(download)
-    const tabId = this.getTabIdForPage(page) ?? this.activeTabId ?? 'browser'
+    const tabId = this.getTabIdForPage(page) ?? this.activeTabId ?? 'unbound'
     const task = this.browserTaskRuntime?.getActiveTaskForTab(tabId)
 
     console.log(
@@ -342,6 +324,9 @@ export class PlaywrightBridge {
    */
   registerPage(page: Page, key?: string): string {
     const tabId = key ?? randomUUID()
+    for (const [existingTabId, existingPage] of this.pages) {
+      if (existingPage === page && existingTabId !== tabId) this.pages.delete(existingTabId)
+    }
     this.pages.set(tabId, page)
 
     void this.installStealthInitScript(page)
@@ -547,7 +532,7 @@ export class PlaywrightBridge {
    * 获取缓冲的控制台日志
    */
   getConsoleLogs(): ConsoleLogEntry[] {
-    return [...this.consoleLogs]
+    return this.consoleLogs.map(({ page: _page, ...entry }) => entry)
   }
 
   /**
@@ -563,7 +548,27 @@ export class PlaywrightBridge {
    * 获取缓冲的网络日志
    */
   getNetworkLog(): NetworkLogEntry[] {
-    return [...this.networkLog]
+    return this.networkLog.map(({ page: _page, ...entry }) => entry)
+  }
+
+  async getPageBindingDiagnostics(tabId: string): Promise<{
+    playwrightTabId: string | null
+    playwrightUrl: string | null
+    playwrightTitle: string | null
+  }> {
+    const page = this.pages.get(tabId)
+    if (!page || page.isClosed()) {
+      return {
+        playwrightTabId: this.activeTabId,
+        playwrightUrl: null,
+        playwrightTitle: null,
+      }
+    }
+    return {
+      playwrightTabId: this.getTabIdForPage(page) ?? this.activeTabId,
+      playwrightUrl: page.url(),
+      playwrightTitle: await page.title().catch(() => ''),
+    }
   }
 
   async getPageDiagnostics(tabId?: string | null): Promise<BrowserPageDiagnosticSummary | null> {
@@ -574,6 +579,7 @@ export class PlaywrightBridge {
     const title = await page.title().catch(() => '')
     const host = safeHost(url)
     const recentConsole = this.consoleLogs
+      .filter((entry) => entry.page === page)
       .filter((entry) => entry.type === 'error' || entry.type === 'warn')
       .slice(-20)
       .map((entry) => ({
@@ -582,6 +588,7 @@ export class PlaywrightBridge {
         timestamp: entry.timestamp,
       }))
     const recentNetwork = this.networkLog
+      .filter((entry) => entry.page === page)
       .filter((entry) => {
         const statusIssue =
           typeof entry.status === 'number' && (entry.status >= 400 || entry.status === 0)
@@ -603,7 +610,7 @@ export class PlaywrightBridge {
       .evaluate(() => document.body?.innerText?.slice(0, 3000) ?? '')
       .catch(() => '')
     return {
-      tabId: this.getTabIdForPage(page) ?? tabId ?? this.activeTabId ?? 'browser',
+      tabId: this.getTabIdForPage(page) ?? tabId ?? this.activeTabId ?? 'unbound',
       url,
       title,
       consoleErrors: recentConsole,

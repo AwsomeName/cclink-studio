@@ -25,6 +25,7 @@ import { DEFAULT_SETTINGS, type AppSettings } from '../settings/types'
 import type { AgentScope } from './scope'
 import { buildAgentMessageWithContext, type AgentSendMessageContext } from './message-context'
 import { buildAgentResourceContext } from './resource-context'
+import { workspaceRefKey } from '../../shared/workspace-ref'
 
 export interface AgentBridgeOptions {
   agentEngine?: 'local-claude-code'
@@ -139,9 +140,9 @@ export class AgentBridge {
         typeof context.sessionId === 'string' ? context.sessionId.trim() || null : null,
       )
     }
-    const sendPlan = this.resolveSendPlan(conversationId, message, context)
+    const sendPlan = await this.resolveSendPlan(conversationId, message, context)
     if (sendPlan.options.forceVisibleBrowser) {
-      await this.syncVisibleBrowserPage(sendPlan.browserTabId)
+      await this.syncVisibleBrowserPage(sendPlan.browserTabId, sendPlan.workspaceKey)
     }
     const resourceContext = await buildAgentResourceContext({
       message,
@@ -159,6 +160,7 @@ export class AgentBridge {
         conversationId,
         {
           ...sendPlan.options,
+          runId: context?.runId,
           workspacePath: resourceContext.workspace.rootPath ?? undefined,
           resourceContext,
         },
@@ -169,17 +171,25 @@ export class AgentBridge {
     }
   }
 
-  private resolveSendPlan(
+  private async resolveSendPlan(
     conversationId: string,
     message: string,
     context?: AgentSendMessageContext,
-  ): { options: AgentSendOptions; browserTabId: string | null } {
+  ): Promise<{
+    options: AgentSendOptions
+    browserTabId: string | null
+    workspaceKey: string | null
+  }> {
     const scope = this.runtime.getScope(conversationId)
-    const explicitBrowserTabId = this.getMountedBrowserTabId(context)
+    const workspaceKey = context?.workspaceRef ? workspaceRefKey(context.workspaceRef) : null
+    const explicitBrowserTabId = this.getMountedBrowserTabId(context, workspaceKey)
     const scopedBrowserTabId = scope.kind === 'browser' ? scope.instanceId : null
+    this.assertBrowserWorkspace(scopedBrowserTabId, workspaceKey)
     const visibleBrowserTabId =
       scope.kind === 'all' && looksLikeBrowserTask(message)
-        ? (this.deps.browserManager?.getActiveViewId?.() ?? null)
+        ? ((await this.deps.browserManager?.waitForActiveViewForWorkspace?.(workspaceKey)) ??
+          this.deps.browserManager?.getViewIdForWorkspace?.(workspaceKey) ??
+          null)
         : null
     const browserTabId = explicitBrowserTabId ?? scopedBrowserTabId ?? visibleBrowserTabId
     const forceVisibleBrowser = Boolean(browserTabId)
@@ -187,23 +197,45 @@ export class AgentBridge {
     return {
       options: { forceVisibleBrowser },
       browserTabId,
+      workspaceKey,
     }
   }
 
-  private getMountedBrowserTabId(context?: AgentSendMessageContext): string | null {
+  private getMountedBrowserTabId(
+    context: AgentSendMessageContext | undefined,
+    workspaceKey: string | null,
+  ): string | null {
     for (const resource of context?.resources ?? []) {
       if ((resource.kind === 'browser' || resource.ref.type === 'browser') && resource.ref.tabId) {
+        if (resource.ref.workspaceKey !== undefined && resource.ref.workspaceKey !== workspaceKey) {
+          throw new Error('挂载的浏览器资源不属于当前会话项目，已拒绝跨项目操作')
+        }
+        this.assertBrowserWorkspace(resource.ref.tabId, workspaceKey)
         return resource.ref.tabId
       }
     }
     return null
   }
 
-  private async syncVisibleBrowserPage(tabId: string | null): Promise<void> {
-    const visibleTabId = tabId ?? this.deps.browserManager?.getActiveViewId?.()
+  private assertBrowserWorkspace(tabId: string | null, workspaceKey: string | null): void {
+    if (!tabId) return
+    const actualWorkspaceKey = this.deps.browserManager?.getViewWorkspaceKey?.(tabId)
+    if (actualWorkspaceKey !== undefined && actualWorkspaceKey !== workspaceKey) {
+      throw new Error('浏览器 Tab 不属于当前会话项目，已拒绝跨项目操作')
+    }
+  }
+
+  private async syncVisibleBrowserPage(
+    tabId: string | null,
+    workspaceKey: string | null,
+  ): Promise<void> {
+    const visibleTabId = tabId ?? this.deps.browserManager?.getViewIdForWorkspace?.(workspaceKey)
     if (!visibleTabId) return
+    this.assertBrowserWorkspace(visibleTabId, workspaceKey)
     try {
-      this.deps.browserManager?.setActive(visibleTabId)
+      if (this.deps.browserManager?.isWorkspaceActive(workspaceKey)) {
+        this.deps.browserManager.setActive(visibleTabId)
+      }
     } catch {
       // 浏览器管理器未接入或视图不存在，继续尝试同步 Playwright 注册表
     }
@@ -224,9 +256,17 @@ export class AgentBridge {
   /** 获取后端状态 */
   getStatus(conversationId = DEFAULT_CONVERSATION_ID): {
     connected: boolean
+    busy: boolean
+    runId: string | null
     sessionId: string | null
+    ready: boolean
   } {
-    return this.runtime.getStatus(conversationId)
+    const status = this.runtime.getStatus(conversationId)
+    return {
+      ...status,
+      busy: this.runtime.isBusy(conversationId),
+      ready: true,
+    }
   }
 
   /** 后端是否正在处理一条消息（响应进行中） */
@@ -379,7 +419,7 @@ export class AgentBridge {
     } else if (event.type === 'error') {
       this.failActiveBrowserTask(event.conversationId, event.data)
     }
-    this.forwardToRenderer(event.type, event.data, event.conversationId)
+    this.forwardToRenderer(event.type, event.data, event.conversationId, event.runId)
   }
 
   private startBrowserTaskIfNeeded(
@@ -446,6 +486,7 @@ export class AgentBridge {
     type: string,
     data: unknown,
     conversationId = DEFAULT_CONVERSATION_ID,
+    runId: string | null = null,
   ): void {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return
 
@@ -461,8 +502,8 @@ export class AgentBridge {
     if (channel) {
       const payload =
         typeof data === 'object' && data !== null
-          ? { ...(data as Record<string, unknown>), conversationId }
-          : { value: data, conversationId }
+          ? { ...(data as Record<string, unknown>), conversationId, runId }
+          : { value: data, conversationId, runId }
       this.mainWindow.webContents.send(channel, payload)
     }
   }

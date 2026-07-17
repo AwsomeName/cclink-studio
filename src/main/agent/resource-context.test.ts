@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '../settings/types'
 import { buildAgentResourceContext, inferTaskIntent } from './resource-context'
 
@@ -51,5 +51,29 @@ describe('agent resource context intent inference', () => {
       rootPath: '/Users/apple/Desktop/previous-project',
       writable: true,
     })
+  })
+
+  it('does not expose a browser owned by another project', async () => {
+    const getPageDiagnostics = vi.fn(async () => ({
+      url: 'https://www.zhihu.com/signin',
+      title: '知乎',
+    }))
+    const snapshot = await buildAgentResourceContext({
+      message: '继续处理文档',
+      scope: { kind: 'all' },
+      browserTabId: 'project-b-browser',
+      context: {
+        workspaceRef: { kind: 'local', path: '/workspace/a' },
+      },
+      browserManager: {
+        getViewIdForWorkspace: () => null,
+        getViewWorkspaceKey: () => '/workspace/b',
+      } as never,
+      playwrightBridge: { getPageDiagnostics } as never,
+      settings: DEFAULT_SETTINGS,
+    })
+
+    expect(snapshot.activeBrowser).toBeNull()
+    expect(getPageDiagnostics).not.toHaveBeenCalled()
   })
 })

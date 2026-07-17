@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_SETTINGS, PROVIDER_PRESETS, getPresetBaseUrl } from '@shared/ipc/settings'
-import type { ApiFormat, AppSettings, PermissionMode, Provider } from '@shared/ipc/settings'
+import type {
+  ApiFormat,
+  AppSettings,
+  CadBackend,
+  PermissionMode,
+  Provider,
+} from '@shared/ipc/settings'
+import type { CadBackendStatus, CadCacheStatus } from '@shared/ipc/cad'
 import { useSettingsStore } from '../../stores'
 import { useThemeStore, type Theme } from '../../stores/theme-store'
 import {
   IconFile,
   IconGlobe,
   IconKeyboard,
+  IconMonitor,
   IconPaintbrush,
   IconRobot,
   IconSearch,
@@ -14,7 +22,14 @@ import {
 } from '../common/Icons'
 import { Toggle } from '../common/Toggle'
 
-type SettingsSectionId = 'appearance' | 'agent' | 'browser' | 'editor' | 'shortcuts' | 'about'
+type SettingsSectionId =
+  | 'appearance'
+  | 'agent'
+  | 'browser'
+  | 'editor'
+  | 'cad'
+  | 'shortcuts'
+  | 'about'
 type AppSettingKey = Extract<keyof AppSettings, string>
 
 const SETTINGS_SECTIONS: Array<{
@@ -26,6 +41,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'agent', label: 'Agent', icon: IconRobot },
   { id: 'browser', label: '浏览器', icon: IconGlobe },
   { id: 'editor', label: '编辑器', icon: IconFile },
+  { id: 'cad', label: '硬件与 CAD', icon: IconMonitor },
   { id: 'shortcuts', label: '快捷键', icon: IconKeyboard },
   { id: 'about', label: '关于', icon: IconSettings },
 ]
@@ -61,6 +77,12 @@ const SETTINGS_SEARCH_INDEX: Array<{
     keywords: ['editor', 'markdown', 'file', '编辑器', '文件'],
   },
   {
+    sectionId: 'cad',
+    label: '硬件与 CAD',
+    description: '启用 STEP/STP 结构件预览，配置本机 FreeCAD 和 CAD 转换缓存。',
+    keywords: ['cad', 'freecad', 'step', 'stp', 'hardware', '结构件', '硬件', '预览'],
+  },
+  {
     sectionId: 'about',
     label: '开源壳边界',
     description: '查看 CCLink Studio 开源壳说明。',
@@ -76,6 +98,35 @@ function normalizeSection(section?: string): SettingsSectionId {
 
 function isModified<K extends AppSettingKey>(key: K, settings: AppSettings): boolean {
   return settings[key] !== DEFAULT_SETTINGS[key]
+}
+
+function cadBackendLabel(value: CadBackend): string {
+  switch (value) {
+    case 'none':
+      return '未启用'
+    case 'local-freecad':
+      return '本机 FreeCAD'
+    case 'managed-freecad':
+      return '托管 FreeCAD（未实现）'
+    case 'occt-experimental':
+      return 'OpenCascade 实验后端'
+  }
+}
+
+function cadStatusLabel(status: CadBackendStatus | null): string {
+  if (!status) return '尚未检测'
+  if (status.available) {
+    const version = status.version ? ` · ${status.version}` : ''
+    const path = status.path ? ` · ${status.path}` : ''
+    return `${cadBackendLabel(status.kind)} 可用${version}${path}`
+  }
+  return status.error?.message ?? `${cadBackendLabel(status.kind)} 不可用`
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
+  return `${(value / 1024 / 1024).toFixed(1)} MB`
 }
 
 function SettingsRow({
@@ -118,6 +169,10 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   )
   const [searchQuery, setSearchQuery] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
+  const [cadStatus, setCadStatus] = useState<CadBackendStatus | null>(null)
+  const [cadCacheStatus, setCadCacheStatus] = useState<CadCacheStatus | null>(null)
+  const [cadChecking, setCadChecking] = useState(false)
+  const [cadActionError, setCadActionError] = useState<string | null>(null)
   const settings = useSettingsStore((state) => state.settings)
   const loading = useSettingsStore((state) => state.loading)
   const error = useSettingsStore((state) => state.error)
@@ -172,6 +227,42 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       backendType: apiFormat === 'anthropic' ? 'claude-code' : 'http-api',
       apiBaseUrl,
     })
+  }
+
+  const refreshCadStatus = (): void => {
+    const cadApi = window.cclinkStudio?.cad
+    if (!cadApi) {
+      setCadActionError('CAD 转换 API 未加载，请重启 CCLink Studio。')
+      return
+    }
+    setCadChecking(true)
+    setCadActionError(null)
+    Promise.all([cadApi.getBackendStatus(), cadApi.getCacheStatus()])
+      .then(([nextStatus, nextCacheStatus]) => {
+        setCadStatus(nextStatus)
+        setCadCacheStatus(nextCacheStatus)
+      })
+      .catch((nextError: unknown) => {
+        setCadActionError(nextError instanceof Error ? nextError.message : String(nextError))
+      })
+      .finally(() => setCadChecking(false))
+  }
+
+  const clearCadCache = (): void => {
+    const cadApi = window.cclinkStudio?.cad
+    if (!cadApi) {
+      setCadActionError('CAD 转换 API 未加载，请重启 CCLink Studio。')
+      return
+    }
+    setCadChecking(true)
+    setCadActionError(null)
+    cadApi
+      .clearCache()
+      .then((nextCacheStatus) => setCadCacheStatus(nextCacheStatus))
+      .catch((nextError: unknown) => {
+        setCadActionError(nextError instanceof Error ? nextError.message : String(nextError))
+      })
+      .finally(() => setCadChecking(false))
   }
 
   return (
@@ -531,6 +622,124 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                   />
                 </div>
               </SettingsRow>
+            </div>
+          </section>
+        )}
+
+        {activeSection === 'cad' && (
+          <section className="settings-section">
+            <h2>硬件与 CAD</h2>
+            <div className="settings-group">
+              <SettingsRow settingKey="cadBackend" settings={settings} onReset={resetOne}>
+                <div className="settings-label">
+                  <span>STEP/STP 预览后端</span>
+                  <span className="settings-description">
+                    开源壳只配置用户本机已有 FreeCAD，不下载 CAD 运行时。
+                  </span>
+                </div>
+                <div className="settings-control">
+                  <select
+                    className="settings-select"
+                    value={settings.cadBackend}
+                    onChange={(event) =>
+                      update({ cadBackend: event.target.value as AppSettings['cadBackend'] })
+                    }
+                  >
+                    <option value="none">未启用</option>
+                    <option value="local-freecad">本机 FreeCAD</option>
+                    <option value="managed-freecad" disabled>
+                      托管 FreeCAD（未实现）
+                    </option>
+                    <option value="occt-experimental">
+                      OpenCascade 实验后端
+                    </option>
+                  </select>
+                </div>
+              </SettingsRow>
+
+              <SettingsRow settingKey="freecadPath" settings={settings} onReset={resetOne}>
+                <div className="settings-label">
+                  <span>FreeCAD 路径</span>
+                  <span className="settings-description">
+                    可填写 FreeCADCmd / FreeCAD 可执行文件路径；留空时自动查找常见安装位置和 PATH。
+                  </span>
+                </div>
+                <div className="settings-control">
+                  <input
+                    className="settings-input"
+                    value={settings.freecadPath}
+                    placeholder="/Applications/FreeCAD.app/Contents/MacOS/FreeCADCmd"
+                    onChange={(event) => update({ freecadPath: event.target.value })}
+                  />
+                </div>
+              </SettingsRow>
+
+              <div className="settings-row">
+                <div className="settings-label">
+                  <span>后端检测</span>
+                  <span className="settings-description">{cadStatusLabel(cadStatus)}</span>
+                  {cadStatus?.error?.detail && (
+                    <span className="settings-description">{cadStatus.error.detail}</span>
+                  )}
+                  {cadActionError && <span className="settings-description">{cadActionError}</span>}
+                </div>
+                <div className="settings-control settings-control-inline">
+                  <button type="button" onClick={refreshCadStatus} disabled={cadChecking}>
+                    {cadChecking ? '检测中' : '检测'}
+                  </button>
+                </div>
+              </div>
+
+              <SettingsRow settingKey="cadCacheEnabled" settings={settings} onReset={resetOne}>
+                <div className="settings-label">
+                  <span>启用 CAD 转换缓存</span>
+                  <span className="settings-description">
+                    缓存 STEP/STP 转换后的预览 mesh 和尺寸 metadata。
+                  </span>
+                </div>
+                <div className="settings-control">
+                  <Toggle
+                    checked={settings.cadCacheEnabled}
+                    onChange={(checked) => update({ cadCacheEnabled: checked })}
+                  />
+                </div>
+              </SettingsRow>
+
+              <SettingsRow settingKey="cadCacheLimitMb" settings={settings} onReset={resetOne}>
+                <div className="settings-label">
+                  <span>CAD 缓存上限</span>
+                  <span className="settings-description">{settings.cadCacheLimitMb} MB</span>
+                </div>
+                <div className="settings-control">
+                  <input
+                    className="settings-input"
+                    type="number"
+                    min={128}
+                    step={128}
+                    value={settings.cadCacheLimitMb}
+                    onChange={(event) => update({ cadCacheLimitMb: Number(event.target.value) })}
+                  />
+                </div>
+              </SettingsRow>
+
+              <div className="settings-row">
+                <div className="settings-label">
+                  <span>转换缓存</span>
+                  <span className="settings-description">
+                    {cadCacheStatus
+                      ? `${cadCacheStatus.entryCount} 项 · ${formatBytes(cadCacheStatus.bytes)} · ${cadCacheStatus.cachePath}`
+                      : '尚未读取缓存状态'}
+                  </span>
+                </div>
+                <div className="settings-control settings-control-inline">
+                  <button type="button" onClick={refreshCadStatus} disabled={cadChecking}>
+                    刷新
+                  </button>
+                  <button type="button" onClick={clearCadCache} disabled={cadChecking}>
+                    清理缓存
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
         )}

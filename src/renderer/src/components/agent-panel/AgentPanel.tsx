@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState, useMemo } from 'react'
+import { useEffect, useRef, useCallback, useState, useMemo, type CSSProperties } from 'react'
 import {
   useAgentStore,
   useBrowserDownloadStore,
@@ -10,7 +10,7 @@ import {
   useTabStore,
   useWorkspaceStore,
 } from '../../stores'
-import { workspaceRefLabel } from '../../../../shared/workspace-ref'
+import { workspaceRefKey, workspaceRefLabel } from '../../../../shared/workspace-ref'
 import { MountedResourceBar } from '../../features/agent-conversations/mounted-resource-bar'
 import { MountedSkillStrip } from '../../features/agent-conversations/mounted-skill-strip'
 import {
@@ -20,10 +20,12 @@ import {
 import {
   buildAgentSendPayload,
   stripTrailingMentionToken,
+  transientMessageResources,
   toMountedResource,
   toMountedSkill,
 } from '../../features/agent-conversations/payload'
 import {
+  buildArchivedQuickThreadList,
   buildResourceCandidates,
   buildSkillCandidates,
   buildQuickThreadList,
@@ -54,9 +56,47 @@ import {
   IconPlus,
   IconHistory,
 } from '../common/Icons'
+import {
+  AGENT_FOCUS_COMPOSER_EVENT,
+  openFileRangeResource,
+} from '../../features/markdown/markdown-navigation'
+import { useConversationScroll } from '../../features/agent-conversations/use-conversation-scroll'
 
 interface AgentPanelProps {
   variant?: 'center' | 'side'
+}
+
+const MIN_COMPOSER_HEIGHT = 118
+const MAX_COMPOSER_HEIGHT = 520
+const MIN_MESSAGES_HEIGHT = 180
+const DEFAULT_THREAD_LIST_WIDTH = 292
+const MIN_THREAD_LIST_WIDTH = 180
+const MAX_THREAD_LIST_WIDTH = 440
+const MIN_CENTER_CONVERSATION_WIDTH = 320
+const THREAD_LIST_RESIZE_HANDLE_WIDTH = 7
+
+function composerHeightStorageKey(variant: NonNullable<AgentPanelProps['variant']>): string {
+  return `cclink-studio-agent-composer-height-${variant}`
+}
+
+function loadComposerHeight(variant: NonNullable<AgentPanelProps['variant']>): number | null {
+  try {
+    const value = Number(localStorage.getItem(composerHeightStorageKey(variant)))
+    if (!Number.isFinite(value) || value < MIN_COMPOSER_HEIGHT) return null
+    return Math.min(value, MAX_COMPOSER_HEIGHT)
+  } catch {
+    return null
+  }
+}
+
+function loadThreadListWidth(): number {
+  try {
+    const value = Number(localStorage.getItem('cclink-studio-agent-thread-list-width'))
+    if (!Number.isFinite(value)) return DEFAULT_THREAD_LIST_WIDTH
+    return Math.min(Math.max(value, MIN_THREAD_LIST_WIDTH), MAX_THREAD_LIST_WIDTH)
+  } catch {
+    return DEFAULT_THREAD_LIST_WIDTH
+  }
 }
 
 export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactElement {
@@ -73,20 +113,26 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const setInput = useAgentStore((s) => s.setInput)
   const addUserMessage = useAgentStore((s) => s.addUserMessage)
   const addSystemMessage = useAgentStore((s) => s.addSystemMessage)
+  const beginRun = useAgentStore((s) => s.beginRun)
   const cancelStreaming = useAgentStore((s) => s.cancelStreaming)
+  const setBackendState = useAgentStore((s) => s.setBackendState)
   const removePendingConfirmation = useAgentStore((s) => s.removePendingConfirmation)
   const setPermissionMode = useAgentStore((s) => s.setPermissionMode)
   const addMountedResource = useAgentStore((s) => s.addMountedResource)
   const removeMountedResource = useAgentStore((s) => s.removeMountedResource)
+  const clearTransientResources = useAgentStore((s) => s.clearTransientResources)
   const addMountedSkill = useAgentStore((s) => s.addMountedSkill)
   const removeMountedSkill = useAgentStore((s) => s.removeMountedSkill)
   const scope = useAgentStore((s) => s.scope)
   const createConversation = useAgentStore((s) => s.createConversation)
   const switchConversation = useAgentStore((s) => s.switchConversation)
+  const archiveConversation = useAgentStore((s) => s.archiveConversation)
+  const restoreArchivedConversation = useAgentStore((s) => s.restoreArchivedConversation)
   const renameConversation = useAgentStore((s) => s.renameConversation)
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const openTab = useTabStore((s) => s.openTab)
+  const closeTab = useTabStore((s) => s.closeTab)
   const settings = useSettingsStore((s) => s.settings)
   const loadSettings = useSettingsStore((s) => s.loadSettings)
   const editorFiles = useEditorStore((s) => s.files)
@@ -105,14 +151,173 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const loadDataSources = useDataSourceStore((s) => s.loadSources)
   const loadSavedQueries = useDataSourceStore((s) => s.loadSavedQueries)
   const showToast = useToastStore((s) => s.show)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const centerPanelRef = useRef<HTMLDivElement>(null)
+  const conversationMainRef = useRef<HTMLDivElement>(null)
+  const composerRef = useRef<HTMLDivElement>(null)
   /** 中止重入守卫：防止快速连点产生重复的中止提示 */
   const abortingRef = useRef(false)
   const [resourceQuery, setResourceQuery] = useState<string | null>(null)
   const [skillQuery, setSkillQuery] = useState<string | null>(null)
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
   const [quickThreadsExpanded, setQuickThreadsExpanded] = useState(false)
+  const [archivedThreadsExpanded, setArchivedThreadsExpanded] = useState(false)
+  const [composerHeight, setComposerHeight] = useState<number | null>(() =>
+    loadComposerHeight(variant),
+  )
+  const [threadListWidth, setThreadListWidth] = useState(loadThreadListWidth)
+  const scrollRevision = useMemo(
+    () => ({ messages, pendingConfirmationCount: pendingConfirmations.length }),
+    [messages, pendingConfirmations.length],
+  )
+  const conversationScroll = useConversationScroll(
+    `${workspaceRefKey(activeWorkspaceRef) ?? '__global__'}::${activeConversationId}`,
+    scrollRevision,
+  )
+
+  const clampComposerHeight = useCallback((height: number): number => {
+    const mainHeight = conversationMainRef.current?.getBoundingClientRect().height ?? 0
+    const availableHeight =
+      mainHeight > 0 ? Math.max(MIN_COMPOSER_HEIGHT, mainHeight - MIN_MESSAGES_HEIGHT) : height
+    return Math.min(Math.max(height, MIN_COMPOSER_HEIGHT), MAX_COMPOSER_HEIGHT, availableHeight)
+  }, [])
+
+  const handleComposerResizeStart = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return
+      event.preventDefault()
+      event.stopPropagation()
+
+      const startY = event.clientY
+      const startHeight = composerRef.current?.getBoundingClientRect().height ?? MIN_COMPOSER_HEIGHT
+      const previousCursor = document.body.style.cursor
+      const previousUserSelect = document.body.style.userSelect
+
+      document.body.classList.add('is-resizing-composer')
+      document.body.style.cursor = 'row-resize'
+      document.body.style.userSelect = 'none'
+
+      const handlePointerMove = (moveEvent: PointerEvent): void => {
+        setComposerHeight(clampComposerHeight(startHeight + startY - moveEvent.clientY))
+      }
+      const finishResize = (): void => {
+        document.body.classList.remove('is-resizing-composer')
+        document.body.style.cursor = previousCursor
+        document.body.style.userSelect = previousUserSelect
+        window.removeEventListener('pointermove', handlePointerMove)
+        window.removeEventListener('pointerup', finishResize)
+        window.removeEventListener('pointercancel', finishResize)
+      }
+
+      window.addEventListener('pointermove', handlePointerMove)
+      window.addEventListener('pointerup', finishResize)
+      window.addEventListener('pointercancel', finishResize)
+    },
+    [clampComposerHeight],
+  )
+
+  const handleComposerResizeKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+      event.preventDefault()
+      const currentHeight =
+        composerHeight ?? composerRef.current?.getBoundingClientRect().height ?? MIN_COMPOSER_HEIGHT
+      const delta = event.key === 'ArrowUp' ? 12 : -12
+      setComposerHeight(clampComposerHeight(currentHeight + delta))
+    },
+    [clampComposerHeight, composerHeight],
+  )
+
+  const clampThreadListWidth = useCallback((width: number): number => {
+    const panelWidth = centerPanelRef.current?.getBoundingClientRect().width ?? 0
+    const availableMaximum =
+      panelWidth > 0
+        ? Math.max(
+            MIN_THREAD_LIST_WIDTH,
+            panelWidth - MIN_CENTER_CONVERSATION_WIDTH - THREAD_LIST_RESIZE_HANDLE_WIDTH,
+          )
+        : MAX_THREAD_LIST_WIDTH
+    return Math.min(Math.max(width, MIN_THREAD_LIST_WIDTH), MAX_THREAD_LIST_WIDTH, availableMaximum)
+  }, [])
+
+  const handleThreadListResizeStart = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return
+      event.preventDefault()
+      event.stopPropagation()
+
+      const startX = event.clientX
+      const startWidth =
+        centerPanelRef.current
+          ?.querySelector<HTMLElement>('.agent-quick-switcher')
+          ?.getBoundingClientRect().width ?? threadListWidth
+      const previousCursor = document.body.style.cursor
+      const previousUserSelect = document.body.style.userSelect
+
+      document.body.classList.add('is-resizing-thread-list')
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+
+      const handlePointerMove = (moveEvent: PointerEvent): void => {
+        setThreadListWidth(clampThreadListWidth(startWidth + startX - moveEvent.clientX))
+      }
+      const finishResize = (): void => {
+        document.body.classList.remove('is-resizing-thread-list')
+        document.body.style.cursor = previousCursor
+        document.body.style.userSelect = previousUserSelect
+        window.removeEventListener('pointermove', handlePointerMove)
+        window.removeEventListener('pointerup', finishResize)
+        window.removeEventListener('pointercancel', finishResize)
+      }
+
+      window.addEventListener('pointermove', handlePointerMove)
+      window.addEventListener('pointerup', finishResize)
+      window.addEventListener('pointercancel', finishResize)
+    },
+    [clampThreadListWidth, threadListWidth],
+  )
+
+  const handleThreadListResizeKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      event.preventDefault()
+      const currentWidth =
+        centerPanelRef.current
+          ?.querySelector<HTMLElement>('.agent-quick-switcher')
+          ?.getBoundingClientRect().width ?? threadListWidth
+      const delta = event.key === 'ArrowLeft' ? 16 : -16
+      setThreadListWidth(clampThreadListWidth(currentWidth + delta))
+    },
+    [clampThreadListWidth, threadListWidth],
+  )
+
+  useEffect(() => {
+    try {
+      const key = composerHeightStorageKey(variant)
+      if (composerHeight === null) localStorage.removeItem(key)
+      else localStorage.setItem(key, String(composerHeight))
+    } catch {
+      // localStorage 不可用时仍保留当前运行期的拖拽结果。
+    }
+  }, [composerHeight, variant])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('cclink-studio-agent-thread-list-width', String(threadListWidth))
+    } catch {
+      // localStorage 不可用时仍保留当前运行期的拖拽结果。
+    }
+  }, [threadListWidth])
+
+  useEffect(() => {
+    const main = conversationMainRef.current
+    if (!main || composerHeight === null) return
+    const observer = new ResizeObserver(() => {
+      setComposerHeight((height) => (height === null ? null : clampComposerHeight(height)))
+    })
+    observer.observe(main)
+    return () => observer.disconnect()
+  }, [clampComposerHeight, composerHeight])
 
   useEffect(() => {
     void refreshBrowserTasks()
@@ -145,30 +350,52 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     void loadSettings()
   }, [loadSettings])
 
-  // 自动滚动到底部
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    const focusComposer = (): void => inputRef.current?.focus()
+    window.addEventListener(AGENT_FOCUS_COMPOSER_EVENT, focusComposer)
+    return () => window.removeEventListener(AGENT_FOCUS_COMPOSER_EVENT, focusComposer)
+  }, [])
 
   // 发送消息
   const handleSend = useCallback(async () => {
     const text = input.trim()
     if (!text || loading) return
     const conversationId = activeConversationId
+    conversationScroll.followLatest()
     setInput('', conversationId)
     setResourceQuery(null)
     setSkillQuery(null)
-    addUserMessage(text, conversationId)
+    const conversation = useAgentStore.getState().conversations[conversationId]
+    addUserMessage(
+      text,
+      conversationId,
+      transientMessageResources(conversation?.mountedResources ?? []),
+    )
+    const runId = beginRun(conversationId)
     try {
-      const conversation = useAgentStore.getState().conversations[conversationId]
       await window.cclinkStudio.agent.sendMessage(
         conversationId,
-        buildAgentSendPayload(text, conversation),
+        buildAgentSendPayload(text, conversation, runId),
       )
+      clearTransientResources(conversationId)
     } catch (err) {
+      cancelStreaming(conversationId, 'error', runId)
       addSystemMessage(`发送失败: ${String(err)}`, conversationId)
+      setBackendState('error', conversationId)
     }
-  }, [activeConversationId, addSystemMessage, addUserMessage, input, loading, setInput])
+  }, [
+    activeConversationId,
+    addSystemMessage,
+    addUserMessage,
+    beginRun,
+    cancelStreaming,
+    clearTransientResources,
+    conversationScroll,
+    input,
+    loading,
+    setBackendState,
+    setInput,
+  ])
 
   const updateMentionQueryFromInput = useCallback((text: string) => {
     const match = /(?:^|\s)([@/])([^\s@/]*)$/.exec(text)
@@ -288,17 +515,71 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     [switchConversation],
   )
 
+  const handleArchiveConversation = useCallback(
+    async (conversationId: string) => {
+      try {
+        await archiveConversation(conversationId)
+        tabs
+          .filter(
+            (tab) =>
+              tab.type === 'conversation' &&
+              tab.conversation &&
+              'sessionId' in tab.conversation &&
+              tab.conversation.sessionId === conversationId,
+          )
+          .forEach((tab) => closeTab(tab.id))
+      } catch (error) {
+        showToast(`会话已移到历史，但保存失败：${String(error)}`, 'error')
+      }
+    },
+    [archiveConversation, closeTab, showToast, tabs],
+  )
+
+  const handleRestoreConversation = useCallback(
+    async (conversationId: string) => {
+      try {
+        await restoreArchivedConversation(conversationId)
+      } catch (error) {
+        showToast(`会话已恢复，但保存失败：${String(error)}`, 'error')
+        return
+      }
+      setArchivedThreadsExpanded(false)
+      setResourceQuery(null)
+      setSkillQuery(null)
+    },
+    [restoreArchivedConversation, showToast],
+  )
+
   const handleCopyDiagnostics = useCallback(async () => {
     const conversation = useAgentStore.getState().conversations[activeConversationId] ?? null
+    const diagnosticWorkspaceKey = workspaceRefKey(
+      conversation?.runtime.workspaceRef ?? activeWorkspaceRef,
+    )
     const currentMessages = conversation?.messages ?? messages
     const browserTab =
       scope.kind === 'browser'
         ? tabs.find((tab) => tab.id === scope.instanceId && tab.type === 'browser')
         : tabs.find((tab) => tab.id === activeTabId && tab.type === 'browser')
-    const browserTabId = browserTab?.id ?? (scope.kind === 'browser' ? scope.instanceId : null)
+    let browserTabId = browserTab?.id ?? (scope.kind === 'browser' ? scope.instanceId : null)
     let currentUrl = browserTab?.initialUrl ?? null
     let viewState = null
     let pageDiagnostics = null
+    let browserRuntime = null
+    let agentRuntime = null
+
+    try {
+      agentRuntime = await window.cclinkStudio.agent.getStatus(activeConversationId)
+    } catch {
+      agentRuntime = null
+    }
+
+    if (!browserTabId) {
+      try {
+        browserTabId = await window.cclinkStudio.browser.getActiveViewId(diagnosticWorkspaceKey)
+      } catch {
+        browserTabId = null
+      }
+    }
 
     if (browserTabId) {
       try {
@@ -312,9 +593,14 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
         viewState = null
       }
       try {
-        pageDiagnostics = await window.cclinkStudio.browser.getDiagnostics(browserTabId)
+        browserRuntime = await window.cclinkStudio.browser.getRuntimeDiagnostics(browserTabId)
+        pageDiagnostics = browserRuntime.page
       } catch {
-        pageDiagnostics = null
+        try {
+          pageDiagnostics = await window.cclinkStudio.browser.getDiagnostics(browserTabId)
+        } catch {
+          pageDiagnostics = null
+        }
       }
     }
 
@@ -333,17 +619,19 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
       platform: navigator.platform,
       workspaceRef: activeWorkspaceRef,
       conversation,
+      agentRuntime,
       messages: currentMessages,
       backendState,
       permissionMode,
       scope,
       browser: {
         tabId: browserTabId,
-        url: pageDiagnostics?.url ?? currentUrl,
-        title: pageDiagnostics?.title || browserTab?.title || null,
-        profile: browserTab?.browserProfile ?? null,
-        viewState,
+        url: browserRuntime?.visibleUrl ?? currentUrl,
+        title: browserRuntime?.visibleTitle || browserTab?.title || null,
+        profile: browserRuntime?.profileId ?? browserTab?.browserProfile ?? null,
+        viewState: browserRuntime?.viewState ?? viewState,
       },
+      browserRuntime,
       pageDiagnostics,
       browserTask: diagnosticTask,
       browserActionLogs: diagnosticTask ? (browserActionLogs[diagnosticTask.id] ?? []) : [],
@@ -392,9 +680,18 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     ],
   )
   const quickThreads = quickThreadsExpanded ? allQuickThreads : allQuickThreads.slice(0, 5)
+  const archivedQuickThreads = useMemo(
+    () =>
+      buildArchivedQuickThreadList({
+        conversations,
+        conversationOrder,
+        activeConversationId,
+        activeWorkspaceRef,
+      }),
+    [activeConversationId, activeWorkspaceRef, conversationOrder, conversations],
+  )
 
   useEffect(() => {
-    if (variant !== 'side') return
     const active = conversations[activeConversationId]
     if (
       active &&
@@ -418,7 +715,6 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     conversations,
     createConversation,
     switchConversation,
-    variant,
   ])
 
   // 连接状态颜色
@@ -572,98 +868,135 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     pendingConfirmations.length === 0 &&
     !loading &&
     lastCost === null
+  const quickThreadSwitcher = (
+    <QuickThreadSwitcher
+      threads={quickThreads}
+      totalCount={allQuickThreads.length}
+      expanded={quickThreadsExpanded}
+      onToggleExpanded={() => setQuickThreadsExpanded((value) => !value)}
+      onNew={handleNewConversation}
+      onSwitch={handleSwitchConversation}
+      onRename={renameConversation}
+      archivedThreads={archivedQuickThreads}
+      archivedExpanded={archivedThreadsExpanded}
+      onToggleArchived={() => setArchivedThreadsExpanded((value) => !value)}
+      onArchive={handleArchiveConversation}
+      onRestore={handleRestoreConversation}
+    />
+  )
+  const centerThreadList = (
+    <>
+      <div
+        className="agent-thread-list-resize-handle"
+        role="separator"
+        aria-label="调整消息区和会话列表宽度"
+        aria-orientation="vertical"
+        aria-valuemin={MIN_THREAD_LIST_WIDTH}
+        aria-valuemax={MAX_THREAD_LIST_WIDTH}
+        aria-valuenow={Math.round(threadListWidth)}
+        tabIndex={0}
+        title="左右拖动调整会话列表宽度，双击恢复默认"
+        onPointerDown={handleThreadListResizeStart}
+        onKeyDown={handleThreadListResizeKeyDown}
+        onDoubleClick={() => setThreadListWidth(DEFAULT_THREAD_LIST_WIDTH)}
+      />
+      {quickThreadSwitcher}
+    </>
+  )
+  const centerPanelStyle = {
+    '--agent-thread-list-width': `${threadListWidth}px`,
+  } as CSSProperties
 
   if (variant === 'center' && isStartConversation) {
     return (
-      <div className="agent-start-page">
-        <div className="agent-start-content">
-          <div className="agent-start-status">
-            <IconSparkle size={14} />
-            <span>Agent</span>
-            <IconCircle
-              size={8}
-              filled
-              color={statusColor[backendState]}
-              className={isStreaming ? 'animate-pulse' : ''}
-            />
-            <span>{statusText[backendState]}</span>
-          </div>
+      <div ref={centerPanelRef} className="agent-panel agent-panel-center" style={centerPanelStyle}>
+        <div className="agent-conversation-main">
+          <div className="agent-start-page">
+            <div className="agent-start-content">
+              <div className="agent-start-status">
+                <IconSparkle size={14} />
+                <span>Agent</span>
+                <IconCircle
+                  size={8}
+                  filled
+                  color={statusColor[backendState]}
+                  className={isStreaming ? 'animate-pulse' : ''}
+                />
+                <span>{statusText[backendState]}</span>
+              </div>
 
-          <h1 className="agent-start-title">我们应该在 {workspaceName} 中构建什么？</h1>
+              <h1 className="agent-start-title">我们应该在 {workspaceName} 中构建什么？</h1>
 
-          <div className="agent-start-composer">
-            {resourceQuery !== null && (
-              <ResourceCandidateMenu
-                candidates={resourceCandidates}
-                selectedIndex={mentionSelectedIndex}
-                onActiveIndexChange={setMentionSelectedIndex}
-                onPick={handleMountResource}
-              />
-            )}
-            {skillQuery !== null && (
-              <SkillCandidateMenu
-                candidates={skillCandidates}
-                selectedIndex={mentionSelectedIndex}
-                onActiveIndexChange={setMentionSelectedIndex}
-                onPick={handleMountSkill}
-              />
-            )}
-            <MountedSkillStrip skills={mountedSkills} onRemove={handleRemoveMountedSkill} />
-            <textarea
-              ref={inputRef}
-              className="agent-start-input"
-              value={input}
-              onChange={(e) => handleInputChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="随心输入"
-              rows={3}
-            />
-            <AgentComposerToolbar
-              permissionMode={permissionMode}
-              settings={settings}
-              loading={loading}
-              canSend={Boolean(input.trim())}
-              onPermissionModeChange={handlePermissionModeChange}
-              onOpenResourceMenu={() => setResourceQuery('')}
-              onOpenSkillMenu={() => setSkillQuery('')}
-              onOpenSettings={handleOpenAgentSettings}
-              sendButton={
-                <button
-                  className="agent-start-send"
-                  onClick={handleSend}
-                  disabled={!input.trim()}
-                  title="发送"
-                >
-                  <IconSend size={16} />
-                </button>
-              }
-            />
-          </div>
+              <div className="agent-start-composer">
+                {resourceQuery !== null && (
+                  <ResourceCandidateMenu
+                    candidates={resourceCandidates}
+                    selectedIndex={mentionSelectedIndex}
+                    onActiveIndexChange={setMentionSelectedIndex}
+                    onPick={handleMountResource}
+                  />
+                )}
+                {skillQuery !== null && (
+                  <SkillCandidateMenu
+                    candidates={skillCandidates}
+                    selectedIndex={mentionSelectedIndex}
+                    onActiveIndexChange={setMentionSelectedIndex}
+                    onPick={handleMountSkill}
+                  />
+                )}
+                <MountedSkillStrip skills={mountedSkills} onRemove={handleRemoveMountedSkill} />
+                <textarea
+                  ref={inputRef}
+                  className="agent-start-input"
+                  value={input}
+                  onChange={(e) => handleInputChange(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="随心输入"
+                  rows={3}
+                />
+                <AgentComposerToolbar
+                  permissionMode={permissionMode}
+                  settings={settings}
+                  loading={loading}
+                  canSend={Boolean(input.trim())}
+                  onPermissionModeChange={handlePermissionModeChange}
+                  onOpenResourceMenu={() => setResourceQuery('')}
+                  onOpenSkillMenu={() => setSkillQuery('')}
+                  onOpenSettings={handleOpenAgentSettings}
+                  sendButton={
+                    <button
+                      className="agent-start-send"
+                      onClick={handleSend}
+                      disabled={!input.trim()}
+                      title="发送"
+                    >
+                      <IconSend size={16} />
+                    </button>
+                  }
+                />
+              </div>
 
-          <div className="agent-start-hints">
-            <span>打开网页并整理资料</span>
-            <span>新建 Markdown 草稿</span>
-            <span>继续当前工作空间任务</span>
+              <div className="agent-start-hints">
+                <span>打开网页并整理资料</span>
+                <span>新建 Markdown 草稿</span>
+                <span>继续当前工作空间任务</span>
+              </div>
+            </div>
           </div>
         </div>
+        {centerThreadList}
       </div>
     )
   }
 
   return (
-    <div className={`agent-panel agent-panel-${variant}`}>
-      {variant === 'side' && (
-        <QuickThreadSwitcher
-          threads={quickThreads}
-          totalCount={allQuickThreads.length}
-          expanded={quickThreadsExpanded}
-          onToggleExpanded={() => setQuickThreadsExpanded((value) => !value)}
-          onNew={handleNewConversation}
-          onSwitch={handleSwitchConversation}
-          onRename={renameConversation}
-        />
-      )}
-      <div className="agent-conversation-main">
+    <div
+      ref={variant === 'center' ? centerPanelRef : undefined}
+      className={`agent-panel agent-panel-${variant}`}
+      style={variant === 'center' ? centerPanelStyle : undefined}
+    >
+      {variant === 'side' && quickThreadSwitcher}
+      <div className="agent-conversation-main" ref={conversationMainRef}>
         {activeBrowserTask && (
           <BrowserTaskCard
             task={activeBrowserTask}
@@ -682,7 +1015,14 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
         )}
 
         {/* 消息列表 */}
-        <div className="agent-messages">
+        <div
+          className="agent-messages conversation-copy-surface"
+          ref={conversationScroll.listRef}
+          onScroll={conversationScroll.onScroll}
+          onWheel={conversationScroll.onWheel}
+          onPointerDown={conversationScroll.onPointerDown}
+          onTouchStart={conversationScroll.onTouchStart}
+        >
           {messages.map((msg) => (
             <ConversationMessageRenderer key={msg.id} message={msg} />
           ))}
@@ -737,8 +1077,6 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
           ))}
 
           <TerminalConfirmationCards />
-
-          <div ref={messagesEndRef} />
         </div>
 
         {/* 费用显示 */}
@@ -748,8 +1086,27 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
           </div>
         )}
 
+        <div
+          className="agent-composer-resize-handle"
+          role="separator"
+          aria-label="调整消息区和输入区高度"
+          aria-orientation="horizontal"
+          aria-valuemin={MIN_COMPOSER_HEIGHT}
+          aria-valuemax={MAX_COMPOSER_HEIGHT}
+          aria-valuenow={composerHeight ?? undefined}
+          tabIndex={0}
+          title="上下拖动调整输入区高度，双击恢复默认"
+          onPointerDown={handleComposerResizeStart}
+          onKeyDown={handleComposerResizeKeyDown}
+          onDoubleClick={() => setComposerHeight(null)}
+        />
+
         {/* 输入区域 */}
-        <div className="agent-composer-wrap">
+        <div
+          ref={composerRef}
+          className={`agent-composer-wrap ${composerHeight === null ? '' : 'resized'}`}
+          style={composerHeight === null ? undefined : { height: composerHeight }}
+        >
           {resourceQuery !== null && (
             <ResourceCandidateMenu
               candidates={resourceCandidates}
@@ -766,7 +1123,11 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
               onPick={handleMountSkill}
             />
           )}
-          <MountedResourceBar resources={mountedResources} onRemove={handleRemoveMountedResource} />
+          <MountedResourceBar
+            resources={mountedResources}
+            onRemove={handleRemoveMountedResource}
+            onOpen={openFileRangeResource}
+          />
           <MountedSkillStrip skills={mountedSkills} onRemove={handleRemoveMountedSkill} />
           <div className="agent-input-card">
             <button
@@ -815,6 +1176,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
           </div>
         </div>
       </div>
+      {variant === 'center' && centerThreadList}
     </div>
   )
 }
@@ -827,6 +1189,11 @@ function QuickThreadSwitcher({
   onNew,
   onSwitch,
   onRename,
+  archivedThreads,
+  archivedExpanded,
+  onToggleArchived,
+  onArchive,
+  onRestore,
 }: {
   threads: QuickThreadSummary[]
   totalCount: number
@@ -835,9 +1202,15 @@ function QuickThreadSwitcher({
   onNew: () => void
   onSwitch: (conversationId: string) => void
   onRename: (conversationId: string, title: string) => void
+  archivedThreads: QuickThreadSummary[]
+  archivedExpanded: boolean
+  onToggleArchived: () => void
+  onArchive: (conversationId: string) => Promise<void>
+  onRestore: (conversationId: string) => Promise<void>
 }): React.ReactElement {
   const [contextMenu, setContextMenu] = useState<{
     thread: QuickThreadSummary
+    archived: boolean
     x: number
     y: number
   } | null>(null)
@@ -899,6 +1272,88 @@ function QuickThreadSwitcher({
     onRename(threadId, nextTitle)
   }
 
+  const archiveContextThread = (): void => {
+    if (!contextMenu) return
+    const { thread } = contextMenu
+    setContextMenu(null)
+    void onArchive(thread.id)
+  }
+
+  const restoreContextThread = (): void => {
+    if (!contextMenu) return
+    const { thread } = contextMenu
+    setContextMenu(null)
+    void onRestore(thread.id)
+  }
+
+  const renderThreadRow = (thread: QuickThreadSummary, archived: boolean): React.ReactElement => (
+    <div
+      key={thread.id}
+      className={`agent-quick-thread-row ${thread.isActive ? 'active' : ''} ${
+        archived ? 'archived' : ''
+      }`}
+      role="button"
+      tabIndex={0}
+      onClick={() => {
+        if (renamingThreadId === thread.id) return
+        if (archived) void onRestore(thread.id)
+        else onSwitch(thread.id)
+      }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) {
+          return
+        }
+        event.preventDefault()
+        if (archived) void onRestore(thread.id)
+        else onSwitch(thread.id)
+      }}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        setContextMenu({
+          thread,
+          archived,
+          x: event.clientX,
+          y: event.clientY,
+        })
+      }}
+      title={`${thread.title} · ${thread.statusLabel} · 右键管理`}
+    >
+      <span className={`agent-quick-thread-dot status-${thread.statusKind}`} />
+      <span className="agent-quick-thread-copy">
+        {renamingThreadId === thread.id ? (
+          <input
+            ref={renameInputRef}
+            className="agent-quick-thread-rename-input"
+            value={renameDraft}
+            aria-label="重命名会话"
+            onChange={(event) => setRenameDraft(event.target.value)}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              event.stopPropagation()
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                event.currentTarget.blur()
+              } else if (event.key === 'Escape') {
+                event.preventDefault()
+                renameCancelledRef.current = true
+                setRenamingThreadId(null)
+                setRenameDraft('')
+              }
+            }}
+            onBlur={() => commitRename(thread.id)}
+          />
+        ) : (
+          <span className="agent-quick-thread-title">{thread.title}</span>
+        )}
+        <span className="agent-quick-thread-meta">
+          {thread.workspaceLabel} · {thread.messageCount} 条消息
+        </span>
+      </span>
+      <span className="agent-quick-thread-detail">{thread.detail}</span>
+    </div>
+  )
+
   return (
     <div className="agent-quick-switcher">
       <div className="agent-quick-switcher-head">
@@ -913,69 +1368,7 @@ function QuickThreadSwitcher({
       </div>
 
       <div className="agent-quick-thread-list" aria-label="会话列表">
-        {threads.map((thread) => (
-          <div
-            key={thread.id}
-            className={`agent-quick-thread-row ${thread.isActive ? 'active' : ''}`}
-            role="button"
-            tabIndex={0}
-            onClick={() => {
-              if (renamingThreadId !== thread.id) onSwitch(thread.id)
-            }}
-            onKeyDown={(event) => {
-              if (
-                event.target === event.currentTarget &&
-                (event.key === 'Enter' || event.key === ' ')
-              ) {
-                event.preventDefault()
-                onSwitch(thread.id)
-              }
-            }}
-            onContextMenu={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              setContextMenu({
-                thread,
-                x: event.clientX,
-                y: event.clientY,
-              })
-            }}
-            title={`${thread.title} · ${thread.statusLabel} · 右键重命名`}
-          >
-            <span className={`agent-quick-thread-dot status-${thread.statusKind}`} />
-            <span className="agent-quick-thread-copy">
-              {renamingThreadId === thread.id ? (
-                <input
-                  ref={renameInputRef}
-                  className="agent-quick-thread-rename-input"
-                  value={renameDraft}
-                  aria-label="重命名会话"
-                  onChange={(event) => setRenameDraft(event.target.value)}
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => {
-                    event.stopPropagation()
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      event.currentTarget.blur()
-                    } else if (event.key === 'Escape') {
-                      event.preventDefault()
-                      renameCancelledRef.current = true
-                      setRenamingThreadId(null)
-                      setRenameDraft('')
-                    }
-                  }}
-                  onBlur={() => commitRename(thread.id)}
-                />
-              ) : (
-                <span className="agent-quick-thread-title">{thread.title}</span>
-              )}
-              <span className="agent-quick-thread-meta">
-                {thread.workspaceLabel} · {thread.messageCount} 条消息
-              </span>
-            </span>
-            <span className="agent-quick-thread-detail">{thread.detail}</span>
-          </div>
-        ))}
+        {threads.map((thread) => renderThreadRow(thread, false))}
       </div>
 
       {hasOverflow && (
@@ -989,6 +1382,26 @@ function QuickThreadSwitcher({
         </button>
       )}
 
+      {archivedThreads.length > 0 && (
+        <div className="agent-quick-history">
+          <button
+            type="button"
+            className={`agent-quick-history-toggle ${archivedExpanded ? 'active' : ''}`}
+            onClick={onToggleArchived}
+            aria-expanded={archivedExpanded}
+          >
+            <IconHistory size={11} />
+            <span>历史会话</span>
+            <em>{archivedThreads.length}</em>
+          </button>
+          {archivedExpanded && (
+            <div className="agent-quick-thread-list agent-quick-history-list">
+              {archivedThreads.map((thread) => renderThreadRow(thread, true))}
+            </div>
+          )}
+        </div>
+      )}
+
       {contextMenu && (
         <div
           ref={contextMenuRef}
@@ -996,7 +1409,7 @@ function QuickThreadSwitcher({
           role="menu"
           style={{
             left: Math.min(contextMenu.x, window.innerWidth - 170),
-            top: Math.min(contextMenu.y, window.innerHeight - 56),
+            top: Math.min(contextMenu.y, window.innerHeight - 96),
           }}
         >
           <div className="context-menu-items">
@@ -1009,6 +1422,27 @@ function QuickThreadSwitcher({
               <span className="context-menu-icon">✎</span>
               <span>重命名</span>
             </button>
+            {contextMenu.archived ? (
+              <button
+                type="button"
+                className="context-menu-item agent-thread-context-action"
+                role="menuitem"
+                onClick={restoreContextThread}
+              >
+                <span className="context-menu-icon">↶</span>
+                <span>恢复到会话列表</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="context-menu-item agent-thread-context-action"
+                role="menuitem"
+                onClick={archiveContextThread}
+              >
+                <span className="context-menu-icon">⌄</span>
+                <span>移到历史会话</span>
+              </button>
+            )}
           </div>
         </div>
       )}

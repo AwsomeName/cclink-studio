@@ -61,6 +61,7 @@ function createSTLModel(arrayBuffer: ArrayBuffer, fileName: string): THREE.Mesh 
   const material = new THREE.MeshStandardMaterial({
     color: geometry.hasColors ? 0xffffff : 0x8dd5ff,
     vertexColors: geometry.hasColors === true,
+    side: THREE.DoubleSide,
     roughness: 0.58,
     metalness: 0.08,
     transparent: alpha < 1,
@@ -173,9 +174,12 @@ function normalizeModel(root: THREE.Object3D): void {
   const center = box.getCenter(new THREE.Vector3())
   const maxAxis = Math.max(size.x, size.y, size.z)
 
-  root.position.sub(center)
   if (maxAxis > 0) {
-    root.scale.multiplyScalar(3 / maxAxis)
+    const scale = 3 / maxAxis
+    root.scale.multiplyScalar(scale)
+    root.position.sub(center.multiplyScalar(scale))
+  } else {
+    root.position.sub(center)
   }
 }
 

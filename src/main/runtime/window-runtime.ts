@@ -39,8 +39,6 @@ export function createWindowRuntime(
     zoomMode: settings.defaultZoomMode,
     viewMode: settings.defaultDeviceMode,
   })
-  runtime.browserManager.createView('browser', 'https://www.baidu.com')
-  runtime.browserManager.setActive('browser')
 
   runtime.browserInstanceStore = new BrowserInstanceStore()
   void runtime.browserInstanceStore.load().then(() => runtime.browserInstanceStore?.clear())

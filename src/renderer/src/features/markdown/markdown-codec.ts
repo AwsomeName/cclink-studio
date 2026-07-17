@@ -20,11 +20,14 @@ export interface MarkdownSourceBlock {
 
 export interface MarkdownDiagnostic {
   code:
-    | 'source-only-mdx'
-    | 'source-only-math'
-    | 'source-only-footnote'
-    | 'source-only-directive'
-    | 'protected-block-changed'
+    | 'unsupported-frontmatter'
+    | 'unsupported-html'
+    | 'unsupported-mdx'
+    | 'unsupported-math'
+    | 'unsupported-footnote'
+    | 'unsupported-directive'
+    | 'catastrophic-roundtrip'
+    | 'structural-roundtrip-mismatch'
     | 'source-map-mismatch'
   severity: 'info' | 'warning' | 'error'
   message: string
@@ -35,7 +38,7 @@ export interface MarkdownDiagnostic {
 export interface MarkdownAnalysis {
   blocks: MarkdownSourceBlock[]
   diagnostics: MarkdownDiagnostic[]
-  forceSourceMode: boolean
+  safeToEdit: boolean
   safeToSave: boolean
 }
 
@@ -56,6 +59,8 @@ const LIST_ITEM = /^(\s*)([-+*]|\d+[.)])\s+/
 const TABLE_DELIMITER = /^\s*\|?(\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$/
 const BLOCKQUOTE = /^ {0,3}>/
 const BLOCK_HTML = /^\s*<(?:!--|\/?[A-Za-z][A-Za-z0-9:-]*(?:\s|>|\/))/
+const AUTOLINK_START = /^\s*<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^ <>\n]*>/
+const RAW_HTML = /(?<!\\)(?:<!--[\s\S]*?-->|<\/?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*?)?\s*\/?>)/m
 const MDX_IMPORT_EXPORT = /^\s*(?:import|export)\s+.+(?:from\s+)?['"][^'"]+['"]/m
 const MDX_COMPONENT = /^\s*<[A-Z][A-Za-z0-9.]*(?:\s|\/?>)/m
 const MATH_BLOCK = /^\s*\$\$\s*$/m
@@ -138,7 +143,7 @@ export function scanMarkdownBlocks(source: string): MarkdownSourceBlock[] {
       continue
     }
 
-    if (BLOCK_HTML.test(lines[index])) {
+    if (isBlockHtml(lines[index])) {
       const end = consumeWhile(lines, index + 1, (line) => !isBlank(line))
       blocks.push(makeBlock('html', lines, index, end - 1))
       index = end
@@ -160,43 +165,144 @@ export function analyzeMarkdown(source: string, serialized?: string): MarkdownAn
   const normalized = normalizeMarkdownSource(source)
   const blocks = scanMarkdownBlocks(normalized)
   const diagnostics: MarkdownDiagnostic[] = []
+  const proseSource = maskInlineCode(maskFencedBlocks(normalized, blocks))
 
-  if (MDX_IMPORT_EXPORT.test(normalized) || MDX_COMPONENT.test(normalized)) {
+  const frontmatter = blocks.find((block) => block.kind === 'frontmatter')
+  if (frontmatter) {
     diagnostics.push({
-      code: 'source-only-mdx',
-      severity: 'warning',
-      message: '检测到 MDX/JSX 语法，文档将使用源码模式以避免内容损失。',
+      code: 'unsupported-frontmatter',
+      severity: 'error',
+      message: '当前版本不支持编辑包含 Frontmatter 的 Markdown 文件。',
+      startLine: frontmatter.startLine,
+      endLine: frontmatter.endLine,
     })
   }
-  if (MATH_BLOCK.test(normalized) || /(^|[^\\])\$[^$\n]+\$/m.test(normalized)) {
+  const htmlMatch = RAW_HTML.exec(proseSource)
+  if (htmlMatch) {
+    const htmlLine = proseSource.slice(0, htmlMatch.index).split('\n').length
     diagnostics.push({
-      code: 'source-only-math',
-      severity: 'info',
-      message: '数学公式首轮只保证源码编辑。',
+      code: 'unsupported-html',
+      severity: 'error',
+      message: '当前版本不支持编辑包含原始 HTML 的 Markdown 文件。',
+      startLine: htmlLine,
+      endLine: htmlLine + htmlMatch[0].split('\n').length - 1,
     })
   }
-  if (FOOTNOTE.test(normalized)) {
+  if (MDX_IMPORT_EXPORT.test(proseSource) || MDX_COMPONENT.test(proseSource)) {
     diagnostics.push({
-      code: 'source-only-footnote',
-      severity: 'info',
-      message: '脚注首轮只保证源码编辑。',
+      code: 'unsupported-mdx',
+      severity: 'error',
+      message: '当前版本不支持编辑 MDX/JSX 文件。',
     })
   }
-  if (DIRECTIVE.test(normalized)) {
+  if (MATH_BLOCK.test(proseSource) || /(^|[^\\])\$[^$\n]+\$/m.test(proseSource)) {
     diagnostics.push({
-      code: 'source-only-directive',
-      severity: 'info',
-      message: 'Markdown directive 首轮只保证源码编辑。',
+      code: 'unsupported-math',
+      severity: 'error',
+      message: '当前版本不支持编辑包含数学公式的 Markdown 文件。',
+    })
+  }
+  if (FOOTNOTE.test(proseSource)) {
+    diagnostics.push({
+      code: 'unsupported-footnote',
+      severity: 'error',
+      message: '当前版本不支持编辑包含脚注的 Markdown 文件。',
+    })
+  }
+  if (DIRECTIVE.test(proseSource)) {
+    diagnostics.push({
+      code: 'unsupported-directive',
+      severity: 'error',
+      message: '当前版本不支持编辑包含 directive 的 Markdown 文件。',
     })
   }
 
   if (serialized !== undefined) {
-    diagnostics.push(...compareProtectedBlocks(normalized, normalizeMarkdownSource(serialized)))
+    const normalizedSerialized = normalizeMarkdownSource(serialized)
+    if (isCatastrophicRoundTrip(normalized, normalizedSerialized)) {
+      diagnostics.push({
+        code: 'catastrophic-roundtrip',
+        severity: 'error',
+        message: 'Markdown 解析结果异常缩减，已阻止保存并保留原始缓冲区。',
+      })
+    } else if (!hasEquivalentCriticalStructure(normalized, normalizedSerialized)) {
+      diagnostics.push({
+        code: 'structural-roundtrip-mismatch',
+        severity: 'error',
+        message: 'Markdown 解析前后的关键结构不一致，已阻止保存并保留原始缓冲区。',
+      })
+    }
   }
 
-  const forceSourceMode = diagnostics.some((item) => item.code === 'source-only-mdx')
-  const safeToSave = !diagnostics.some((item) => item.severity === 'error')
-  return { blocks, diagnostics, forceSourceMode, safeToSave }
+  const safeToEdit = !diagnostics.some((item) => item.severity === 'error')
+  return { blocks, diagnostics, safeToEdit, safeToSave: safeToEdit }
+}
+
+function maskFencedBlocks(source: string, blocks: MarkdownSourceBlock[]): string {
+  const lines = source.split('\n')
+  for (const block of blocks) {
+    if (block.kind !== 'fence' && block.kind !== 'mermaid') continue
+    for (let line = block.startLine - 1; line < block.endLine; line += 1) lines[line] = ''
+  }
+  return lines.join('\n')
+}
+
+function maskInlineCode(source: string): string {
+  return source.replace(/(`+)([\s\S]*?)\1/g, (match) => match.replace(/[^\n]/g, ' '))
+}
+
+function isCatastrophicRoundTrip(before: string, after: string): boolean {
+  const beforeTrimmed = before.trim()
+  const afterTrimmed = after.trim()
+  if (beforeTrimmed.length < 128) return false
+  if (afterTrimmed.length >= beforeTrimmed.length * 0.25) return false
+  const beforeBlocks = scanMarkdownBlocks(beforeTrimmed)
+  const afterBlocks = scanMarkdownBlocks(afterTrimmed)
+  return beforeBlocks.length >= 3 && afterBlocks.length <= Math.max(1, beforeBlocks.length * 0.2)
+}
+
+function hasEquivalentCriticalStructure(before: string, after: string): boolean {
+  return (
+    JSON.stringify(criticalStructureSignature(before)) ===
+    JSON.stringify(criticalStructureSignature(after))
+  )
+}
+
+function criticalStructureSignature(source: string): Record<string, unknown> {
+  const blocks = scanMarkdownBlocks(source)
+  const prose = maskInlineCode(maskFencedBlocks(source, blocks))
+  const lines = source.split('\n')
+  return {
+    headings: blocks
+      .filter((block) => block.kind === 'heading')
+      .map((block) => /^ {0,3}(#{1,6})/.exec(block.raw)?.[1].length ?? 0),
+    fences: blocks
+      .filter((block) => block.kind === 'fence' || block.kind === 'mermaid')
+      .map((block) => block.language ?? ''),
+    tableRows: blocks
+      .filter((block) => block.kind === 'table')
+      .map((block) => block.raw.split('\n').filter((line) => !isBlank(line)).length),
+    blockquotes: blocks.filter((block) => block.kind === 'blockquote').length,
+    horizontalRules: blocks.filter((block) => block.kind === 'horizontal-rule').length,
+    unorderedItems: lines.filter((line) => /^\s*[-+*]\s+/.test(line)).length,
+    orderedItems: lines.filter((line) => /^\s*\d+[.)]\s+/.test(line)).length,
+    taskItems: lines
+      .map((line) => /^\s*[-+*]\s+\[([ xX])\]\s+/.exec(line)?.[1])
+      .filter((value): value is string => value !== undefined)
+      .map((value) => value.toLowerCase()),
+    images: extractMarkdownDestinations(prose, true),
+    links: extractMarkdownDestinations(prose, false),
+  }
+}
+
+function extractMarkdownDestinations(source: string, images: boolean): string[] {
+  const expression = /(!?)\[[^\]]*]\(\s*(?:<([^>]+)>|([^\s)]+))/g
+  const destinations: string[] = []
+  for (const match of source.matchAll(expression)) {
+    if ((match[1] === '!') !== images) continue
+    destinations.push(match[2] ?? match[3] ?? '')
+  }
+  return destinations
 }
 
 export function mapTopLevelSelectionToSource(
@@ -272,38 +378,6 @@ export function hashMarkdownSnapshot(value: string): string {
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
-function compareProtectedBlocks(before: string, after: string): MarkdownDiagnostic[] {
-  const beforeBlocks = scanMarkdownBlocks(before).filter(isProtectedBlock)
-  const afterBlocks = scanMarkdownBlocks(after).filter(isProtectedBlock)
-  const diagnostics: MarkdownDiagnostic[] = []
-
-  for (const block of beforeBlocks) {
-    if (
-      afterBlocks.some((candidate) => candidate.kind === block.kind && candidate.raw === block.raw)
-    ) {
-      continue
-    }
-    diagnostics.push({
-      code: 'protected-block-changed',
-      severity: 'error',
-      message: `${protectedBlockLabel(block.kind)} 未能原样保留，已阻止普通保存。`,
-      startLine: block.startLine,
-      endLine: block.endLine,
-    })
-  }
-  return diagnostics
-}
-
-function isProtectedBlock(block: MarkdownSourceBlock): boolean {
-  return block.kind === 'frontmatter' || block.kind === 'mermaid' || block.kind === 'html'
-}
-
-function protectedBlockLabel(kind: MarkdownBlockKind): string {
-  if (kind === 'frontmatter') return 'Frontmatter'
-  if (kind === 'mermaid') return 'Mermaid 块'
-  return '原始 HTML 块'
-}
-
 function makeBlock(
   kind: MarkdownBlockKind,
   lines: string[],
@@ -328,13 +402,17 @@ function startsNewBlock(lines: string[], index: number): boolean {
     HORIZONTAL_RULE.test(line) ||
     BLOCKQUOTE.test(line) ||
     LIST_ITEM.test(line) ||
-    BLOCK_HTML.test(line)
+    isBlockHtml(line)
   ) {
     return true
   }
   return Boolean(
     line.includes('|') && index + 1 < lines.length && TABLE_DELIMITER.test(lines[index + 1]),
   )
+}
+
+function isBlockHtml(line: string): boolean {
+  return !AUTOLINK_START.test(line) && BLOCK_HTML.test(line)
 }
 
 function consumeList(lines: string[], start: number): number {

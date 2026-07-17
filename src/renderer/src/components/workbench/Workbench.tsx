@@ -6,7 +6,6 @@ import { BrowserToolbar } from './BrowserToolbar'
 import { TabBar } from './TabBar'
 import { WorkbenchContent } from './WorkbenchContent'
 import { useBrowserEvents } from './use-browser-events'
-import { useBrowserViewLifecycle } from './use-browser-view-lifecycle'
 import { useEditorContentUpdates } from './use-editor-content-updates'
 import { useWorkbenchBounds } from './use-workbench-bounds'
 import { closeTabWithDraftPolicy } from '../../utils/close-tab'
@@ -32,7 +31,6 @@ export function Workbench(): React.ReactElement {
   const activeBrowserState = activeTabId ? browserTabs[activeTabId] : undefined
 
   useWorkbenchBounds(contentRef)
-  useBrowserViewLifecycle(activeTab, tabs)
   useBrowserEvents()
   useEditorContentUpdates()
 

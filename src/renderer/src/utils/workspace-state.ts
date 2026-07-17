@@ -5,6 +5,7 @@ import { workspaceRefKey } from '../../../shared/workspace-ref'
 let activeWorkspaceKey: string | null = null
 let activeOwnerKey: string | null = null
 let restoreDepth = 0
+const sectionWriteQueues = new Map<string, Promise<void>>()
 
 /** 设置后续 WorkspaceState 镜像写入的默认身份 key。 */
 export function setWorkspaceStateOwnerKey(ownerKey: string | null | undefined): void {
@@ -60,13 +61,44 @@ export function persistWorkspaceSection(
   workspaceKey?: string | null,
   ownerKey?: string | null,
 ): void {
+  void persistWorkspaceSectionNow(section, value, workspaceKey, ownerKey).catch(() => {})
+}
+
+/** 立即提交写入，并等待此前与本次主进程写入确认。 */
+export function persistWorkspaceSectionNow(
+  section: WorkspaceStateSection,
+  value: unknown,
+  workspaceKey?: string | null,
+  ownerKey?: string | null,
+): Promise<void> {
   try {
-    if (isWorkspaceStateRestoring()) return
-    if (typeof window === 'undefined' || !window.cclinkStudio?.workspaceState) return
-    void window.cclinkStudio.workspaceState
-      .setSection(workspaceKey ?? activeWorkspaceKey, section, value, ownerKey ?? activeOwnerKey)
-      .catch(() => {})
+    if (isWorkspaceStateRestoring()) return Promise.resolve()
+    if (typeof window === 'undefined' || !window.cclinkStudio?.workspaceState) {
+      return Promise.resolve()
+    }
+    const targetWorkspaceKey = workspaceKey === undefined ? activeWorkspaceKey : workspaceKey
+    const targetOwnerKey = ownerKey === undefined ? activeOwnerKey : ownerKey
+    const queueKey = JSON.stringify([targetOwnerKey, targetWorkspaceKey, section])
+    const previous = sectionWriteQueues.get(queueKey)
+    const run = async (): Promise<void> => {
+      const result = await window.cclinkStudio.workspaceState.setSection(
+        targetWorkspaceKey,
+        section,
+        value,
+        targetOwnerKey,
+      )
+      if (!result.success) {
+        throw new Error(result.error || `保存 ${section} 失败`)
+      }
+    }
+    const next = previous ? previous.catch(() => {}).then(run) : run()
+    sectionWriteQueues.set(queueKey, next)
+    const clearQueue = (): void => {
+      if (sectionWriteQueues.get(queueKey) === next) sectionWriteQueues.delete(queueKey)
+    }
+    void next.then(clearQueue, clearQueue)
+    return next
   } catch {
-    // 主进程状态镜像失败不应影响用户当前操作。
+    return Promise.reject(new Error(`保存 ${section} 失败`))
   }
 }

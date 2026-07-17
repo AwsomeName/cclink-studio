@@ -9,6 +9,8 @@ import {
 import { setWorkspaceStateRef } from '../utils/workspace-state'
 import {
   applyWorkspaceRuntimeTransition,
+  beginWorkspaceRuntimeTransition,
+  isWorkspaceRuntimeTransitionCurrent,
   prepareWorkspaceRuntimeTransition,
 } from '../utils/workspace-transition'
 
@@ -47,8 +49,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     set({ activating: true, error: null })
 
     try {
-      const transition = await prepareWorkspaceRuntimeTransition(ref)
-      applyWorkspaceRuntimeTransition(transition)
+      const generation = beginWorkspaceRuntimeTransition()
+      const transition = await prepareWorkspaceRuntimeTransition(ref, { generation })
+      if (
+        !isWorkspaceRuntimeTransitionCurrent(generation) ||
+        !applyWorkspaceRuntimeTransition(transition)
+      ) {
+        return
+      }
       set({ activeWorkspaceRef: ref, activating: false, error: null })
     } catch (error) {
       set({ activating: false, error: describeError(error) })

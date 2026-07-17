@@ -7,6 +7,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { AppSettings } from '../settings/types'
 import { detectFreeCad } from './freecad-detector'
+import { convertStepWithOpenCascade, detectOpenCascade } from './occt-converter'
 import type {
   CadBackendStatus,
   CadCacheStatus,
@@ -25,6 +26,7 @@ const execFileAsync = promisify(execFile)
 const DEFAULT_CONVERSION_TIMEOUT_MS = 120_000
 const SUPPORTED_SOURCE_EXTENSIONS = new Set(['.step', '.stp'])
 const NATIVE_MODEL_EXTENSIONS = new Set(['.stl', '.3mf', '.glb', '.gltf', '.fbx'])
+const MESH_SOURCE_EXTENSIONS = new Set(['.stl', '.3mf', '.glb', '.gltf', '.fbx', '.obj'])
 
 function cadError(
   code: CadConversionError['code'],
@@ -136,12 +138,7 @@ export class CadConversionService {
         error: cadError('backend-not-implemented', '托管 FreeCAD 运行时下载尚未实现。', true),
       }
     }
-    return {
-      kind: 'occt-experimental',
-      available: false,
-      source: 'managed',
-      error: cadError('backend-not-implemented', 'OpenCascade 实验后端尚未实现。', true),
-    }
+    return detectOpenCascade()
   }
 
   async getModelSupport(inputPath: string): Promise<CadModelSupport> {
@@ -240,6 +237,18 @@ export class CadConversionService {
     const targetFormat = normalizeTargetFormat(request.targetFormat)
 
     if (!SUPPORTED_SOURCE_EXTENSIONS.has(sourceExtension)) {
+      if (MESH_SOURCE_EXTENSIONS.has(sourceExtension)) {
+        return {
+          success: false,
+          diagnostics,
+          error: cadError(
+            'reverse-conversion-unsupported',
+            `暂不支持把 ${sourceExtension} 网格模型反向转换为 STEP/STP。`,
+            false,
+            'STEP/STP 是 CAD B-Rep/拓扑格式；3MF/STL/GLB/FBX 多数是三角网格。网格转 STEP 需要曲面重建或人工 CAD 重建，不能作为普通格式转换可靠完成。',
+          ),
+        }
+      }
       return {
         success: false,
         diagnostics,
@@ -271,7 +280,7 @@ export class CadConversionService {
 
     const settings = this.getSettings()
     const backendStatus = await this.getBackendStatus()
-    if (!backendStatus.available || !backendStatus.path) {
+    if (!backendStatus.available) {
       return {
         success: false,
         diagnostics: [
@@ -309,15 +318,37 @@ export class CadConversionService {
 
     diagnostics.push({
       level: 'info',
-      message: '开始调用 FreeCAD 转换 STEP/STP。',
+      message:
+        settings.cadBackend === 'occt-experimental'
+          ? '开始调用 OpenCascade 转换 STEP/STP。'
+          : '开始调用 FreeCAD 转换 STEP/STP。',
       detail: `${basename(inputPath)} -> ${basename(previewPath)}`,
     })
 
     try {
-      await execFileAsync(backendStatus.path, [scriptPath, inputPath, previewPath, metadataPath], {
-        timeout: DEFAULT_CONVERSION_TIMEOUT_MS,
-        maxBuffer: 4 * 1024 * 1024,
-      })
+      if (settings.cadBackend === 'occt-experimental') {
+        await rm(scriptPath, { force: true }).catch(() => undefined)
+        await convertStepWithOpenCascade({
+          inputPath,
+          outputPath: previewPath,
+          metadataPath,
+          previewFormat: targetFormat,
+          sourceHash,
+          diagnostics,
+        })
+      } else {
+        if (!backendStatus.path) {
+          return {
+            success: false,
+            diagnostics,
+            error: cadError('backend-not-found', 'FreeCAD 可执行文件路径不可用。', true),
+          }
+        }
+        await execFileAsync(backendStatus.path, [scriptPath, inputPath, previewPath, metadataPath], {
+          timeout: DEFAULT_CONVERSION_TIMEOUT_MS,
+          maxBuffer: 4 * 1024 * 1024,
+        })
+      }
       const outputStat = await stat(previewPath).catch(() => null)
       if (!outputStat || outputStat.size <= 0) {
         return {
@@ -338,7 +369,14 @@ export class CadConversionService {
         sourceHash,
         diagnostics,
       })
-      diagnostics.push({ level: 'info', message: 'CAD 转换完成。', detail: previewPath })
+      diagnostics.push({
+        level: 'info',
+        message:
+          settings.cadBackend === 'occt-experimental'
+            ? 'OpenCascade 转换完成。'
+            : 'CAD 转换完成。',
+        detail: previewPath,
+      })
       if (settings.cadCacheEnabled) {
         await this.pruneCacheIfNeeded(diagnostics)
       }
@@ -359,7 +397,11 @@ export class CadConversionService {
         diagnostics,
         error: cadError(
           timedOut ? 'conversion-timeout' : 'unknown',
-          timedOut ? 'FreeCAD 转换超时。' : 'FreeCAD 转换失败。',
+          timedOut
+            ? 'CAD 转换超时。'
+            : settings.cadBackend === 'occt-experimental'
+              ? 'OpenCascade 转换失败。'
+              : 'FreeCAD 转换失败。',
           true,
           message,
         ),

@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useFsStore, useUIStore, useWorkspaceStore } from './stores'
+import { useFsStore, useTabStore, useUIStore, useWorkspaceStore } from './stores'
 import { useThemeStore } from './stores/theme-store'
 import { ActivityBar } from './components/activity-bar/ActivityBar'
 import { Sidebar } from './components/sidebar/Sidebar'
@@ -10,6 +10,7 @@ import { ResizeHandle } from './components/common/ResizeHandle'
 import {
   IconArrowLeft,
   IconArrowRight,
+  IconFolder,
   IconPanelLeft,
   IconPanelRight,
 } from './components/common/Icons'
@@ -18,6 +19,7 @@ import { PanelErrorFallback } from './components/common/ErrorFallback'
 import { CommandPalette } from './components/command-palette/CommandPalette'
 import { ContextMenu } from './components/common/ContextMenu'
 import { TabContextMenu } from './components/common/TabContextMenu'
+import { ConversationCopyMenu } from './components/common/ConversationCopyMenu'
 import { Toast } from './components/common/Toast'
 import LoadingScreen from './components/loading/LoadingScreen'
 import { useAgentWorkContext } from './bootstrap/use-agent-work-context'
@@ -29,14 +31,9 @@ import { useMainProcessEvents } from './bootstrap/use-main-process-events'
 import { useRegisterCommands } from './bootstrap/use-register-commands'
 import { useTerminalEvents } from './bootstrap/use-terminal-events'
 import { useWorkspaceBootstrap } from './bootstrap/use-workspace-bootstrap'
-import { workspaceRefLabel } from '../../shared/workspace-ref'
-
-function getWorkspaceTitleDetail(
-  workspaceRef: ReturnType<typeof useWorkspaceStore.getState>['activeWorkspaceRef'],
-): string {
-  if (workspaceRef.kind === 'local') return workspaceRef.path
-  return '临时草稿与全局会话'
-}
+import { useBrowserViewLifecycle } from './components/workbench/use-browser-view-lifecycle'
+import { useBrowserOpenRequests } from './bootstrap/use-browser-open-requests'
+import { ProjectStrip } from './components/project-strip/ProjectStrip'
 
 /** 主布局。 */
 function MainLayout(): React.ReactElement {
@@ -48,16 +45,17 @@ function MainLayout(): React.ReactElement {
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth)
   const setAgentPanelWidth = useUIStore((s) => s.setAgentPanelWidth)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
-  const setAgentPanelMode = useUIStore((s) => s.setAgentPanelMode)
-  const workspacePath = useFsStore((s) => s.workspacePath)
+  const toggleAgentPanel = useUIStore((s) => s.toggleAgentPanel)
+  const openWorkspacePicker = useFsStore((s) => s.openWorkspacePicker)
+  const workspaceLoading = useFsStore((s) => s.loading)
+  const workspacePicking = useFsStore((s) => s.picking)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
+  const tabs = useTabStore((s) => s.tabs)
+  const activeTabId = useTabStore((s) => s.activeTabId)
   const agentInCenter = agentPanelMode === 'center'
   const agentInRight = agentPanelMode === 'right'
-  const topbarProjectTitle =
-    activeWorkspaceRef.kind === 'local' && workspacePath
-      ? workspacePath.split('/').filter(Boolean).pop() || workspacePath
-      : workspaceRefLabel(activeWorkspaceRef)
-  const topbarProjectDetail = getWorkspaceTitleDetail(activeWorkspaceRef)
+  const agentPanelVisible = agentPanelMode !== 'hidden'
+  const activeTab = tabs.find((tab) => tab.id === activeTabId)
 
   // 订阅主题变化，触发 theme-store 初始化并应用 data-theme。
   useThemeStore((s) => s.resolvedTheme)
@@ -68,7 +66,14 @@ function MainLayout(): React.ReactElement {
   useAgentStreamEvents()
   useAgentConversationRestore(workspaceReady)
   useTerminalEvents()
-  useAgentWorkContext()
+  useAgentWorkContext(workspaceReady)
+  useBrowserOpenRequests(workspaceReady)
+  useBrowserViewLifecycle(
+    agentInCenter ? undefined : activeTab,
+    tabs,
+    activeWorkspaceRef,
+    workspaceReady,
+  )
 
   const handleSidebarResize = useCallback(
     (delta: number) => {
@@ -84,9 +89,9 @@ function MainLayout(): React.ReactElement {
     [agentPanelWidth, setAgentPanelWidth],
   )
 
-  const toggleRightAgentPanel = useCallback(() => {
-    setAgentPanelMode(agentInRight ? 'hidden' : 'right', 'user')
-  }, [agentInRight, setAgentPanelMode])
+  const toggleUnifiedAgentPanel = useCallback(() => {
+    toggleAgentPanel(activeTab ? 'right' : 'center')
+  }, [activeTab, toggleAgentPanel])
 
   if (!workspaceReady) {
     return <LoadingScreen />
@@ -109,15 +114,23 @@ function MainLayout(): React.ReactElement {
           <button className="app-topbar-icon muted" disabled title="前进">
             <IconArrowRight size={14} />
           </button>
-          <span className="app-topbar-title" title={topbarProjectDetail}>
-            {topbarProjectTitle}
-          </span>
+          <button
+            className="app-topbar-open-project"
+            type="button"
+            onClick={() => void openWorkspacePicker()}
+            disabled={workspaceLoading || workspacePicking}
+            title="打开项目"
+          >
+            <IconFolder size={14} />
+            <span>打开项目</span>
+          </button>
         </div>
+        <ProjectStrip />
         <div className="app-topbar-right">
           <button
-            className={`app-topbar-icon ${agentInRight ? 'active' : ''}`}
-            onClick={toggleRightAgentPanel}
-            title={agentInRight ? '收起右侧 Agent 面板' : '展开右侧 Agent 面板'}
+            className={`app-topbar-icon ${agentPanelVisible ? 'active' : ''}`}
+            onClick={toggleUnifiedAgentPanel}
+            title={agentPanelVisible ? '收起 Agent 面板' : '展开 Agent 面板'}
           >
             <IconPanelRight size={15} />
           </button>
@@ -194,6 +207,7 @@ function MainLayout(): React.ReactElement {
       <CommandPalette />
       <ContextMenu />
       <TabContextMenu />
+      <ConversationCopyMenu />
       <Toast />
     </div>
   )

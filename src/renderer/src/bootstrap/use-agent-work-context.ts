@@ -18,14 +18,15 @@ function workContextFromTab(tab: Tab | undefined): WorkContext {
   return 'preview'
 }
 
-/** 根据当前工作区 Tab 自动切换 Agent 面板位置。 */
-export function useAgentWorkContext(): void {
+/** 工作区恢复完成后，根据当前 Tab 自动切换 Agent 面板位置。 */
+export function useAgentWorkContext(workspaceReady: boolean): void {
   const applySystemWorkContext = useUIStore((s) => s.applySystemWorkContext)
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
 
   useEffect(() => {
+    if (!workspaceReady) return
     applySystemWorkContext(workContextFromTab(activeTab))
-  }, [activeTab, applySystemWorkContext])
+  }, [activeTab, applySystemWorkContext, workspaceReady])
 }

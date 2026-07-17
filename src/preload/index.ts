@@ -39,19 +39,30 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
           historyIndex?: number
         }
         profileId?: string | null
+        workspaceKey?: string | null
       },
     ) => ipcRenderer.invoke('browser:createView', tabId, initialUrl, opts),
     /** 销毁浏览器视图 */
     destroyView: (tabId: string) => ipcRenderer.invoke('browser:destroyView', tabId),
     /** 设置活跃视图（一次只显示一个）；null = 全部隐藏 */
     setActive: (tabId: string | null) => ipcRenderer.invoke('browser:setActive', tabId),
+    /** 按当前工作区声明合法视图，清理跨项目遗留的原生 WebContentsView。 */
+    reconcileViews: (options: {
+      workspaceKey: string | null
+      validTabIds: string[]
+      activeTabId: string | null
+    }) => ipcRenderer.invoke('browser:reconcileViews', options),
 
     navigate: (tabId: string, url: string) => ipcRenderer.invoke('browser:navigate', tabId, url),
     goBack: (tabId: string) => ipcRenderer.invoke('browser:goBack', tabId),
     goForward: (tabId: string) => ipcRenderer.invoke('browser:goForward', tabId),
     reload: (tabId: string) => ipcRenderer.invoke('browser:reload', tabId),
     getCurrentURL: (tabId: string) => ipcRenderer.invoke('browser:getCurrentURL', tabId),
+    getActiveViewId: (workspaceKey?: string | null) =>
+      ipcRenderer.invoke('browser:getActiveViewId', workspaceKey),
     getDiagnostics: (tabId: string) => ipcRenderer.invoke('browser:getDiagnostics', tabId),
+    getRuntimeDiagnostics: (tabId: string) =>
+      ipcRenderer.invoke('browser:getRuntimeDiagnostics', tabId),
     onUrlChanged: (callback: (payload: { tabId: string; url: string }) => void) => {
       const handler = (
         _event: Electron.IpcRendererEvent,
@@ -59,6 +70,16 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
       ) => callback(payload)
       ipcRenderer.on('browser:urlChanged', handler)
       return () => ipcRenderer.removeListener('browser:urlChanged', handler)
+    },
+    onRequestOpenTab: (
+      callback: (payload: { initialUrl?: string; workspaceKey: string | null }) => void,
+    ) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { initialUrl?: string; workspaceKey: string | null },
+      ) => callback(payload)
+      ipcRenderer.on('browser:requestOpenTab', handler)
+      return () => ipcRenderer.removeListener('browser:requestOpenTab', handler)
     },
 
     // ─── 缩放控制 ───
@@ -210,9 +231,18 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
     },
 
     /** 监听 AI 错误 */
-    onError: (callback: (error: { message: string }) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { message: string }): void =>
-        callback(data)
+    onError: (
+      callback: (error: {
+        message: string
+        code?: string
+        conversationId?: string
+        runId?: string
+      }) => void,
+    ) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { message: string; code?: string; conversationId?: string; runId?: string },
+      ): void => callback(data)
       ipcRenderer.on('agent:error', listener)
       return () => ipcRenderer.removeListener('agent:error', listener)
     },
@@ -410,8 +440,9 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
       ipcRenderer.on('editor:contentUpdate', handler)
       return () => ipcRenderer.removeListener('editor:contentUpdate', handler)
     },
-    /** 确认内容更新已应用 */
-    contentUpdateAck: (id: string) => ipcRenderer.invoke('editor:contentUpdateAck', id),
+    /** 确认内容更新是否安全应用 */
+    contentUpdateAck: (id: string, success = true, error?: string) =>
+      ipcRenderer.invoke('editor:contentUpdateAck', id, success, error),
     /** 监听 Agent 读取请求 */
     onReadRequest: (callback: (request: { id: string; filePath?: string }) => void) => {
       const handler = (_event: any, data: any): void => callback(data)
@@ -621,6 +652,9 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
 
   // 工作台状态（逐步替代 renderer localStorage）
   workspaceState: {
+    /** 验证并解析本地工作区真实路径；恢复任何项目现场前必须先调用。 */
+    resolveLocalWorkspace: (workspacePath: string) =>
+      ipcRenderer.invoke('workspaceState:resolveLocalWorkspace', workspacePath),
     /** 获取指定工作区的持久化工作台状态；空路径表示全局状态 */
     get: (workspacePath?: string | null, ownerKey?: string | null) =>
       ipcRenderer.invoke('workspaceState:get', workspacePath, ownerKey),

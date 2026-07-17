@@ -5,7 +5,7 @@
  * 实现统一的 ToolModule 接口，可注册到 McpToolHost。
  */
 
-import type { ToolModule, ToolDefinition } from '../../types'
+import type { ToolModule, ToolDefinition, ToolExecutionContext } from '../../types'
 import type { PlaywrightBridge } from '../../../playwright/playwright-bridge'
 import { executePlaywrightAction } from '../../../playwright/playwright-actions'
 import type { BrowserTaskRuntime } from '../../../browser/browser-task-runtime'
@@ -638,20 +638,44 @@ export class BrowserToolModule implements ToolModule {
     private browserManager?: BrowserManager | null,
   ) {}
 
-  async execute(toolName: string, params: Record<string, unknown>): Promise<unknown> {
+  async execute(
+    toolName: string,
+    params: Record<string, unknown>,
+    context?: ToolExecutionContext,
+  ): Promise<unknown> {
     const actionType = toolNameToActionType(toolName)
-    const visibleTabId =
-      this.browserManager?.getActiveViewId() ?? this.playwrightBridge.getActiveTabId()
+    const hasWorkspaceContext = context?.workspaceKey !== undefined
+    const workspaceKey = context?.workspaceKey ?? null
+    const visibleTabId = hasWorkspaceContext
+      ? ((await this.browserManager?.waitForActiveViewForWorkspace?.(workspaceKey)) ??
+        this.browserManager?.getViewIdForWorkspace?.(workspaceKey) ??
+        null)
+      : ((await this.browserManager?.waitForActiveView?.()) ??
+        this.browserManager?.getActiveViewId() ??
+        this.playwrightBridge.getActiveTabId())
+
+    if (hasWorkspaceContext && !visibleTabId) {
+      if (actionType === 'listTabs') {
+        return {
+          tabs: this.browserManager?.listViewsForWorkspace?.(workspaceKey) ?? [],
+          activeTabId: null,
+        }
+      }
+      throw new Error(
+        `浏览器资源未绑定到任务所属项目（workspace=${workspaceKey ?? 'global'}）。请切换到该项目并打开浏览器后重试。`,
+      )
+    }
     if (visibleTabId) {
-      await this.syncVisibleTab(visibleTabId)
+      await this.syncVisibleTab(
+        visibleTabId,
+        requiresPlaywrightPage(actionType),
+        hasWorkspaceContext ? workspaceKey : undefined,
+      )
     }
 
     const page = this.playwrightBridge.getPage()
-    if (!page) {
-      throw new Error('Playwright 页面未就绪，浏览器可能未启动')
-    }
-
-    const tabId = visibleTabId ?? this.playwrightBridge.getActiveTabId()
+    const tabId =
+      visibleTabId ?? (hasWorkspaceContext ? null : this.playwrightBridge.getActiveTabId())
     let actionLogId: string | null = null
     if (tabId) {
       const task = this.browserTaskRuntime?.assertCanRunAction(tabId)
@@ -667,7 +691,13 @@ export class BrowserToolModule implements ToolModule {
     }
 
     try {
-      const result = await this.executeVisibleBrowserAction(actionType, params, page, tabId)
+      const result = await this.executeVisibleBrowserAction(
+        actionType,
+        params,
+        page,
+        tabId,
+        hasWorkspaceContext ? workspaceKey : undefined,
+      )
       if (actionLogId) {
         this.browserTaskRuntime!.succeedActionLog(actionLogId)
       }
@@ -683,23 +713,48 @@ export class BrowserToolModule implements ToolModule {
     }
   }
 
-  private async syncVisibleTab(tabId: string): Promise<void> {
-    this.browserManager?.setActive(tabId)
+  private async syncVisibleTab(
+    tabId: string,
+    requirePlaywrightPage: boolean,
+    workspaceKey?: string | null,
+  ): Promise<void> {
+    if (
+      workspaceKey === undefined ||
+      this.browserManager?.isWorkspaceActive?.(workspaceKey) !== false
+    ) {
+      this.browserManager?.setActive(tabId)
+    }
     try {
       await this.playwrightBridge.switchToPage(tabId)
-    } catch {
-      // Some older views may not be claimed by Playwright yet. Navigation and
-      // tab-info actions still use BrowserManager; interaction actions validate
-      // the URL before touching Playwright so they do not silently hit a hidden page.
+    } catch (error) {
+      if (!requirePlaywrightPage || !this.browserManager) return
+      await this.browserManager.ensurePlaywrightPage(tabId)
+      await this.playwrightBridge.switchToPage(tabId).catch(() => {
+        throw error
+      })
     }
   }
 
   private async executeVisibleBrowserAction(
     actionType: string,
     params: Record<string, unknown>,
-    page: NonNullable<ReturnType<PlaywrightBridge['getPage']>>,
+    page: ReturnType<PlaywrightBridge['getPage']>,
     tabId: string | null,
+    workspaceKey?: string | null,
   ): Promise<unknown> {
+    if (this.browserManager && actionType === 'listTabs') {
+      return {
+        tabs:
+          workspaceKey === undefined
+            ? this.browserManager.listViews()
+            : this.browserManager.listViewsForWorkspace(workspaceKey),
+        activeTabId:
+          workspaceKey === undefined
+            ? this.browserManager.getActiveViewId()
+            : this.browserManager.getViewIdForWorkspace(workspaceKey),
+      }
+    }
+
     if (this.browserManager && tabId) {
       switch (actionType) {
         case 'navigate': {
@@ -739,11 +794,18 @@ export class BrowserToolModule implements ToolModule {
             url: this.browserManager.getCurrentURL(tabId),
             title: this.browserManager.getTitle(tabId),
           }
-        default:
+        default: {
+          if (!page) {
+            throw new Error('可视浏览器页面尚未就绪，请稍后自动重试')
+          }
           this.assertPlaywrightMatchesVisibleTab(page, tabId)
+        }
       }
     }
 
+    if (!page) {
+      throw new Error('可视浏览器页面尚未就绪，请稍后自动重试')
+    }
     return executePlaywrightAction(page, { type: actionType, ...params }, this.playwrightBridge)
   }
 
@@ -760,6 +822,12 @@ export class BrowserToolModule implements ToolModule {
       `浏览器自动化目标与可视页面不一致：可视页面=${visibleUrl}，工具页面=${playwrightUrl}。请刷新或重新打开浏览器 Tab 后重试。`,
     )
   }
+}
+
+function requiresPlaywrightPage(actionType: string): boolean {
+  return !['navigate', 'goBack', 'goForward', 'reload', 'getTabInfo', 'listTabs'].includes(
+    actionType,
+  )
 }
 
 function normalizeComparableUrl(url: string): string {

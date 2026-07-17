@@ -69,7 +69,15 @@ export interface AgentSessionDetail {
   }>
 }
 
-export type QuickThreadStatusKind = 'active' | 'waiting' | 'running' | 'error' | 'idle'
+export type QuickThreadStatusKind =
+  | 'active'
+  | 'waiting'
+  | 'running'
+  | 'completed'
+  | 'cancelled'
+  | 'interrupted'
+  | 'error'
+  | 'idle'
 
 export interface QuickThreadSummary {
   id: string
@@ -79,7 +87,9 @@ export interface QuickThreadSummary {
   detail: string
   workspaceLabel: string
   messageCount: number
+  createdAt: number
   updatedAt: number
+  archivedAt: number | null
   surface: AgentConversationState['surface']
   workspaceKey: string | null
   isActive: boolean
@@ -306,12 +316,66 @@ export function buildQuickThreadList({
   limit?: number
   now?: number
 }): QuickThreadSummary[] {
+  const summaries = buildQuickThreadSummaries({
+    conversations,
+    conversationOrder,
+    activeConversationId,
+    activeWorkspaceRef,
+    pendingConfirmationCount,
+    archived: false,
+    now,
+  })
+
+  return expanded ? summaries : summaries.slice(0, limit)
+}
+
+export function buildArchivedQuickThreadList({
+  conversations,
+  conversationOrder,
+  activeConversationId,
+  activeWorkspaceRef,
+  now = Date.now(),
+}: {
+  conversations: Record<string, AgentConversationState>
+  conversationOrder: string[]
+  activeConversationId: string
+  activeWorkspaceRef: WorkspaceRef
+  now?: number
+}): QuickThreadSummary[] {
+  return buildQuickThreadSummaries({
+    conversations,
+    conversationOrder,
+    activeConversationId,
+    activeWorkspaceRef,
+    pendingConfirmationCount: 0,
+    archived: true,
+    now,
+  })
+}
+
+function buildQuickThreadSummaries({
+  conversations,
+  conversationOrder,
+  activeConversationId,
+  activeWorkspaceRef,
+  pendingConfirmationCount,
+  archived,
+  now,
+}: {
+  conversations: Record<string, AgentConversationState>
+  conversationOrder: string[]
+  activeConversationId: string
+  activeWorkspaceRef: WorkspaceRef
+  pendingConfirmationCount: number
+  archived: boolean
+  now: number
+}): QuickThreadSummary[] {
   const activeWorkspaceKey = workspaceRefKey(activeWorkspaceRef)
-  const summaries = conversationOrder.flatMap((id) => {
+  const summaries = conversationOrder.flatMap((id, orderIndex) => {
     const conversation = conversations[id]
     if (!conversation) return []
     const isActive = id === activeConversationId
-    if (conversation.archivedAt && !isActive) return []
+    if (Boolean(conversation.archivedAt) !== archived) return []
 
     const workspaceKey = conversation.runtime.workspaceRef
       ? workspaceRefKey(conversation.runtime.workspaceRef)
@@ -319,13 +383,13 @@ export function buildQuickThreadList({
     const workspaceLabel = conversation.runtime.workspaceRef
       ? workspaceRefLabel(conversation.runtime.workspaceRef)
       : '未绑定'
-    const belongsToActiveWorkspace =
-      activeWorkspaceRef.kind === 'global'
-        ? !workspaceKey || workspaceKey === activeWorkspaceKey
-        : !workspaceKey || workspaceKey === activeWorkspaceKey
-    if (!belongsToActiveWorkspace && !isActive) return []
+    // 会话列表是项目现场的一部分，只展示严格归属于当前项目的会话。
+    // 未绑定会话只属于 global，当前会话也不能绕过项目边界。
+    if (workspaceKey !== activeWorkspaceKey) return []
 
-    const status = quickThreadStatus(conversation, isActive && pendingConfirmationCount > 0)
+    const status = archived
+      ? { kind: 'idle' as const, label: '已归档' }
+      : quickThreadStatus(conversation, isActive && pendingConfirmationCount > 0)
 
     return [
       {
@@ -336,23 +400,20 @@ export function buildQuickThreadList({
         detail: quickThreadDetail(conversation, status, isActive, now),
         workspaceLabel,
         messageCount: conversation.messages.filter((message) => message.id !== 'welcome').length,
+        createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
+        archivedAt: conversation.archivedAt,
         surface: conversation.surface,
         workspaceKey,
         isActive,
+        orderIndex,
       },
     ]
   })
 
-  const ordered = summaries.sort((a, b) => {
-    if (a.isActive) return -1
-    if (b.isActive) return 1
-    const attention = quickThreadStatusRank(b.statusKind) - quickThreadStatusRank(a.statusKind)
-    if (attention !== 0) return attention
-    return b.updatedAt - a.updatedAt
-  })
-
-  return expanded ? ordered : ordered.slice(0, limit)
+  return summaries
+    .sort((a, b) => b.createdAt - a.createdAt || b.orderIndex - a.orderIndex)
+    .map(({ orderIndex: _orderIndex, ...summary }) => summary)
 }
 
 export function buildSessionSummary({
@@ -396,7 +457,7 @@ export function buildSessionSummary({
     createdAt: conversation.createdAt,
     surface: conversation.surface,
     runtimeLabel: runtimeLabel(conversation),
-    statusLabel: conversation.loading ? '运行中' : statusLabel(conversation.backendState),
+    statusLabel: quickThreadStatus(conversation, false).label,
   }
 }
 
@@ -751,46 +812,24 @@ function runtimeLabel(conversation: AgentConversationState): string {
   return `${location} · ${transport} · ${backend}`
 }
 
-function statusLabel(status: AgentConversationState['backendState']): string {
-  switch (status) {
-    case 'disconnected':
-      return '未连接'
-    case 'connecting':
-      return '连接中'
-    case 'connected':
-      return '已就绪'
-    case 'streaming':
-      return '思考中'
-    case 'error':
-      return '连接错误'
-  }
-}
-
 function quickThreadStatus(
   conversation: AgentConversationState,
   hasPendingConfirmation: boolean,
 ): { kind: QuickThreadStatusKind; label: string } {
   if (hasPendingConfirmation) return { kind: 'waiting', label: '等待确认' }
-  if (conversation.backendState === 'error') return { kind: 'error', label: '错误' }
+  if (conversation.backendState === 'error' || conversation.runStatus === 'failed') {
+    return { kind: 'error', label: '失败' }
+  }
   if (conversation.loading || conversation.backendState === 'streaming') {
-    return { kind: 'running', label: '执行中' }
+    return {
+      kind: 'running',
+      label: conversation.runStatus === 'starting' ? '启动中' : '执行中',
+    }
   }
+  if (conversation.runStatus === 'completed') return { kind: 'completed', label: '已完成' }
+  if (conversation.runStatus === 'cancelled') return { kind: 'cancelled', label: '已终止' }
+  if (conversation.runStatus === 'interrupted') return { kind: 'interrupted', label: '已中断' }
   return { kind: 'idle', label: '空闲' }
-}
-
-function quickThreadStatusRank(kind: QuickThreadStatusKind): number {
-  switch (kind) {
-    case 'waiting':
-      return 4
-    case 'running':
-      return 3
-    case 'error':
-      return 2
-    case 'active':
-      return 1
-    case 'idle':
-      return 0
-  }
 }
 
 function quickThreadDetail(
@@ -799,9 +838,10 @@ function quickThreadDetail(
   isActive: boolean,
   now: number,
 ): string {
+  if (conversation.archivedAt) return formatRelativeTime(conversation.createdAt, now)
   if (status.kind !== 'idle') return status.label
   if (isActive) return '当前'
-  return formatRelativeTime(conversation.updatedAt, now)
+  return formatRelativeTime(conversation.createdAt, now)
 }
 
 function formatRelativeTime(timestamp: number, now: number): string {
@@ -847,7 +887,11 @@ function tabResourceCandidate(tab: Tab): AgentResourceCandidate | null {
         label: tab.title || '浏览器',
         detail: '浏览器 Tab',
         source: 'open-tab',
-        ref: { type: 'browser', tabId: tab.id },
+        ref: {
+          type: 'browser',
+          tabId: tab.id,
+          workspaceKey: tab.workspaceRef ? workspaceRefKey(tab.workspaceRef) : null,
+        },
       })
     case 'android':
       return createResourceCandidate({

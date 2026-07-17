@@ -2,6 +2,7 @@ import type {
   BrowserActionLog,
   BrowserDownloadRecord,
   BrowserPageDiagnosticSummary,
+  BrowserRuntimeDiagnosticSummary,
   BrowserTaskRun,
   BrowserViewState,
 } from '@shared/ipc/browser'
@@ -12,6 +13,7 @@ import type {
   ContentBlock,
   PermissionMode,
 } from '../../types'
+import type { AgentStatus } from '@shared/agent-protocol'
 import type { AgentConversationState } from '../../stores/agent-store'
 import {
   workspaceRefKey,
@@ -45,11 +47,13 @@ export interface AgentDiagnosticReportInput {
   platform?: string
   workspaceRef?: WorkspaceRef | null
   conversation?: AgentConversationState | null
+  agentRuntime?: AgentStatus | null
   messages: AgentMessage[]
   backendState: AgentBackendState
   permissionMode: PermissionMode
   scope: AgentScope
   browser: BrowserDiagnosticSnapshot
+  browserRuntime?: BrowserRuntimeDiagnosticSummary | null
   pageDiagnostics?: BrowserPageDiagnosticSummary | null
   browserTask: BrowserTaskRun | null
   browserActionLogs: BrowserActionLog[]
@@ -71,6 +75,7 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
   const workspaceKey = input.workspaceRef ? workspaceRefKey(input.workspaceRef) : null
   const userGoal = latestUserMessage(input.messages)
   const timeline = buildTimeline(input).slice(-MAX_TIMELINE_ITEMS)
+  const runtime = input.browserRuntime
 
   return [
     '# CCLink Studio 诊断日志',
@@ -96,8 +101,37 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
     `- View Mode：${input.browser.viewState?.viewMode ?? 'unknown'}`,
     `- Zoom：${input.browser.viewState ? `${input.browser.viewState.zoomMode} / ${input.browser.viewState.zoomFactor}` : 'unknown'}`,
     '',
+    '## 浏览器绑定',
+    `- 绑定状态：${runtime?.bindingStatus ?? 'unknown'}`,
+    `- 请求 tabId：${redactText(runtime?.requestedTabId ?? input.browser.tabId ?? '未知')}`,
+    `- 可视 tabId：${redactText(runtime?.visibleTabId ?? '无')}`,
+    `- 可视 URL：${redactUrl(runtime?.visibleUrl ?? '未知')}`,
+    `- 可视 Title：${redactText(runtime?.visibleTitle ?? '未知')}`,
+    `- 自动化 tabId：${redactText(runtime?.playwrightTabId ?? '无')}`,
+    `- 自动化 URL：${redactUrl(runtime?.playwrightUrl ?? '未知')}`,
+    `- 自动化 Title：${redactText(runtime?.playwrightTitle ?? '未知')}`,
+    ...formatBindingWarning(runtime),
+    `- 最近 Claim：${formatLastClaim(runtime)}`,
+    '- 最近 URL：',
+    ...(runtime?.recentUrls.length
+      ? runtime.recentUrls.map((url) => `  - ${redactUrl(url)}`)
+      : ['  - 无']),
+    '',
+    '## 登录态',
+    ...formatSessionDiagnostics(runtime, input.pageDiagnostics),
+    '',
     '## Agent 状态',
     `- 后端状态：${input.backendState}`,
+    `- 会话运行标记：${conversation?.runStatus ?? 'unknown'}`,
+    `- UI loading：${conversation?.loading ?? false}`,
+    `- UI runId：${redactText(conversation?.activeRunId ?? '无')}`,
+    `- 主进程 busy：${input.agentRuntime?.busy ?? input.agentRuntime?.connected ?? 'unknown'}`,
+    `- 主进程 ready：${input.agentRuntime?.ready ?? 'unknown'}`,
+    `- 主进程 runId：${redactText(input.agentRuntime?.runId ?? '无')}`,
+    `- 最近运行事件：${conversation?.lastRunEventAt ? formatDateTime(conversation.lastRunEventAt) : '无'}`,
+    `- 最近终止原因：${conversation?.lastRunTerminalReason ?? '无'}`,
+    `- 后端 Session：${input.agentRuntime?.sessionId ? '已存在' : '无'}`,
+    `- 流式消息：${conversation?.streamingMessageId ? '进行中' : '无'}`,
     `- 权限模式：${input.permissionMode}`,
     `- 待确认操作：${input.pendingConfirmationCount}`,
     `- 任务状态：${input.browserTask?.status ?? '无浏览器任务'}`,
@@ -290,6 +324,93 @@ function formatPageDiagnostics(summary?: BrowserPageDiagnosticSummary | null): s
   }
   if (summary.pageTextSample) {
     lines.push(`- 页面文本片段：${redactText(summary.pageTextSample)}`)
+  }
+  return lines
+}
+
+function formatBindingWarning(runtime?: BrowserRuntimeDiagnosticSummary | null): string[] {
+  if (!runtime || runtime.bindingStatus === 'matched') return []
+  switch (runtime.bindingStatus) {
+    case 'url_mismatch':
+      return ['- 警告：可视页面与自动化页面 URL 不一致，工具结果不可直接当作屏幕状态。']
+    case 'tab_mismatch':
+      return ['- 警告：可视 Tab、请求 Tab 与自动化 Tab 未对齐。']
+    case 'unclaimed':
+      return ['- 警告：当前可视页面尚未绑定 Playwright Page，自动化不可用。']
+    case 'view_missing':
+      return ['- 警告：主进程中找不到请求的可视浏览器 View。']
+  }
+}
+
+function formatLastClaim(runtime?: BrowserRuntimeDiagnosticSummary | null): string {
+  const claim = runtime?.lastClaim
+  if (!claim) return '无记录'
+  const base = `${claim.status} · ${formatDateTime(claim.timestamp)} · expected=${redactUrl(claim.expectedUrl)}`
+  return claim.errorMessage ? `${base} · error=${redactText(claim.errorMessage)}` : base
+}
+
+function formatSessionDiagnostics(
+  runtime?: BrowserRuntimeDiagnosticSummary | null,
+  pageDiagnostics?: BrowserPageDiagnosticSummary | null,
+): string[] {
+  const session = runtime?.session
+  if (!session) return ['- Session：不可用']
+  const likelyAuth = session.likelyAuthCookies
+  const pageRequiresAuth =
+    runtime?.page?.suspectedChallenges.includes('auth_required') ||
+    pageDiagnostics?.suspectedChallenges.includes('auth_required') ||
+    false
+  const cookieNames =
+    session.cookieNames.length > 0 ? session.cookieNames.map(redactText).join(', ') : '无'
+  const lines = [
+    `- 实际 Profile：${redactText(runtime?.profileId ?? 'default')}`,
+    `- Partition：${redactText(session.partition)}`,
+    `- 持久 Session：${session.persistent ? '是' : '否'}`,
+    `- Cookie 已 flush：${session.cookieStoreFlushed ? '是' : '否'}`,
+    `- 当前站点 Cookie：${session.cookieCount}（持久 ${session.persistentCookieCount}，已过期 ${session.expiredCookieCount}）`,
+    `- 疑似认证 Cookie：${likelyAuth.length}`,
+    `- Cookie 名称：${cookieNames}`,
+    '- 最近 Cookie 变更：',
+    ...(session.recentCookieChanges.length > 0
+      ? session.recentCookieChanges.map((change) => {
+          const action = change.removed ? 'removed' : 'added/updated'
+          const expires =
+            typeof change.expiresAt === 'number' ? formatDateTime(change.expiresAt) : '会话结束'
+          return `  - [${formatTime(change.timestamp)}] ${redactText(change.name)} · ${action} · cause=${change.cause} · auth=${change.likelyAuth ? '是' : '否'} · session=${change.session ? '是' : '否'} · expires=${expires}`
+        })
+      : ['  - 无']),
+  ]
+  if (likelyAuth.length > 0) {
+    lines.push(
+      ...likelyAuth.map((cookie) => {
+        const expires =
+          typeof cookie.expiresAt === 'number' ? formatDateTime(cookie.expiresAt) : '会话结束'
+        return `  - ${redactText(cookie.name)} · domain=${redactText(cookie.domain)} · session=${cookie.session ? '是' : '否'} · expires=${expires}`
+      }),
+    )
+  }
+  if (pageRequiresAuth && likelyAuth.length === 0) {
+    const removedAuth = [...session.recentCookieChanges]
+      .reverse()
+      .find((change) => change.likelyAuth && change.removed)
+    if (removedAuth) {
+      lines.push(
+        `- 登录态判断：页面要求登录，且认证 Cookie ${redactText(removedAuth.name)} 曾被删除（cause=${removedAuth.cause}）；认证态已被清除或撤销。`,
+      )
+    } else {
+      lines.push(
+        '- 登录态判断：未发现常见认证 Cookie，变更时间线也没有认证 Cookie 删除记录；认证态可能从未建立。',
+      )
+    }
+  } else if (pageRequiresAuth) {
+    lines.push(
+      '- 登录态判断：页面仍要求登录；疑似认证 Cookie 的存在不能证明认证有效，可能已失效或不完整。',
+    )
+  } else if (likelyAuth.length === 0) {
+    lines.push('- 登录态判断：未发现常见认证 Cookie；当前页面也未明确判定需要登录。')
+  }
+  if (session.errorMessage) {
+    lines.push(`- Session 诊断错误：${redactText(session.errorMessage)}`)
   }
   return lines
 }

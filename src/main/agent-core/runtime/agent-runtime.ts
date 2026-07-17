@@ -12,6 +12,7 @@ export const DEFAULT_CONVERSATION_ID = 'agent-default'
 
 export interface AgentRuntimeEvent {
   conversationId: string
+  runId: string | null
   type: AgentEventType
   data: unknown
 }
@@ -19,6 +20,7 @@ export interface AgentRuntimeEvent {
 interface AgentConversation {
   backend: IAgentBackend
   scope: AgentScope
+  activeRunId: string | null
 }
 
 export interface AgentRuntimeOptions {
@@ -53,18 +55,29 @@ export class AgentRuntime {
     conversationId = DEFAULT_CONVERSATION_ID,
     options?: AgentSendOptions,
   ): Promise<void> {
-    await this.ensureConversation(conversationId).backend.sendMessage(message, {
+    const conversation = this.ensureConversation(conversationId)
+    conversation.activeRunId = options?.runId ?? `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    await conversation.backend.sendMessage(message, {
       ...options,
       conversationId,
+      runId: conversation.activeRunId,
     })
   }
 
   async abort(conversationId = DEFAULT_CONVERSATION_ID): Promise<void> {
-    await this.ensureConversation(conversationId).backend.abort()
+    const conversation = this.ensureConversation(conversationId)
+    await conversation.backend.abort()
+    conversation.activeRunId = null
   }
 
-  getStatus(conversationId = DEFAULT_CONVERSATION_ID): AgentBackendStatus {
-    return this.ensureConversation(conversationId).backend.getStatus()
+  getStatus(
+    conversationId = DEFAULT_CONVERSATION_ID,
+  ): AgentBackendStatus & { runId: string | null } {
+    const conversation = this.ensureConversation(conversationId)
+    return {
+      ...conversation.backend.getStatus(),
+      runId: conversation.activeRunId,
+    }
   }
 
   isBusy(conversationId = DEFAULT_CONVERSATION_ID): boolean {
@@ -106,15 +119,29 @@ export class AgentRuntime {
         conversationId,
         scope: conversation.scope,
         sessionId: conversation.backend.getSessionId(),
+        activeRunId: conversation.activeRunId,
         backend: conversation.backend,
       }),
     )
     this.conversations.clear()
 
     for (const previous of existing) {
+      if (previous.activeRunId) {
+        this.onEvent?.({
+          conversationId: previous.conversationId,
+          runId: previous.activeRunId,
+          type: 'error',
+          data: {
+            type: 'error',
+            code: 'backend_reconfigured',
+            message: 'Agent 后端配置已变更，当前任务已中断',
+          },
+        })
+      }
       void previous.backend.destroy()
       const conversation = this.createConversation(previous.conversationId, previous.scope)
       conversation.backend.setSessionId?.(previous.sessionId)
+      conversation.activeRunId = null
       const { conversationId } = previous
       this.conversations.set(conversationId, conversation)
     }
@@ -138,10 +165,15 @@ export class AgentRuntime {
 
   private createConversation(conversationId: string, scope: AgentScope): AgentConversation {
     const backend = createBackend(this.currentConfig, this.deps)
+    const conversation: AgentConversation = { backend, scope, activeRunId: null }
     backend.onEvent((type, data) => {
-      this.onEvent?.({ conversationId, type, data })
+      const runId = conversation.activeRunId
+      this.onEvent?.({ conversationId, runId, type, data })
+      if (type === 'complete' || type === 'error') {
+        conversation.activeRunId = null
+      }
     })
     backend.setScope?.(scope)
-    return { backend, scope }
+    return conversation
   }
 }

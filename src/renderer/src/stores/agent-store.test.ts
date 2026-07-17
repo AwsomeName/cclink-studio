@@ -1,8 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { useAgentStore } from './agent-store'
+import {
+  buildAgentConversationWorkspaceSnapshot,
+  resetAgentWorkspaceActiveConversationMemoryForTests,
+  useAgentStore,
+} from './agent-store'
 import type { ContentBlock } from '../types'
+import { localWorkspaceRef } from '../../../shared/workspace-ref'
 
 beforeEach(() => {
+  resetAgentWorkspaceActiveConversationMemoryForTests()
   // 重置 store 到初始状态
   const initial = useAgentStore.getInitialState()
   useAgentStore.setState(initial, true)
@@ -34,6 +40,32 @@ describe('useAgentStore', () => {
       const last = msgs[msgs.length - 1]
       expect(last.role).toBe('system')
       expect(last.rawText).toBe('连接错误')
+    })
+  })
+
+  describe('run lifecycle', () => {
+    it('发送后立即进入启动中，不等待首个流事件', () => {
+      useAgentStore.getState().addUserMessage('开始执行')
+      useAgentStore.getState().beginRun()
+
+      expect(useAgentStore.getState().loading).toBe(true)
+      expect(useAgentStore.getState().backendState).toBe('connecting')
+      expect(useAgentStore.getState().conversations['agent-default'].runStatus).toBe('starting')
+      expect(useAgentStore.getState().conversations['agent-default'].activeRunId).toMatch(/^run-/)
+    })
+
+    it('切回项目时以主进程 busy 状态修正会话运行态', () => {
+      useAgentStore.getState().beginRun()
+      useAgentStore.getState().reconcileRuntimeStatus({
+        connected: true,
+        busy: true,
+        ready: true,
+        sessionId: 'session-1',
+      })
+
+      expect(useAgentStore.getState().loading).toBe(true)
+      expect(useAgentStore.getState().backendState).toBe('streaming')
+      expect(useAgentStore.getState().sessionId).toBe('session-1')
     })
   })
 
@@ -194,6 +226,7 @@ describe('useAgentStore', () => {
       expect(useAgentStore.getState().streamingMessageId).toBeNull()
       expect(useAgentStore.getState().loading).toBe(false)
       expect(useAgentStore.getState().backendState).toBe('connected')
+      expect(useAgentStore.getState().conversations['agent-default'].runStatus).toBe('completed')
 
       const msg = useAgentStore.getState().messages.find((m) => m.id === 'msg-1')!
       expect(msg.isStreaming).toBeFalsy()
@@ -401,6 +434,34 @@ describe('useAgentStore', () => {
       expect(state.conversations[state.activeConversationId].surface).toBe('assistant-panel')
     })
 
+    it('归档项目最后一个会话时不会切到其他项目', () => {
+      const projectA = useAgentStore.getState().createConversation({
+        activate: false,
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'cclink-studio-agent',
+          workspaceRef: localWorkspaceRef('/workspace/a'),
+        },
+      })
+      const projectB = useAgentStore.getState().createConversation({
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'cclink-studio-agent',
+          workspaceRef: localWorkspaceRef('/workspace/b'),
+        },
+      })
+
+      useAgentStore.getState().archiveConversation(projectB)
+
+      const state = useAgentStore.getState()
+      const fallback = state.conversations[state.activeConversationId]
+      expect(state.activeConversationId).not.toBe(projectA)
+      expect(fallback.runtime.workspaceRef).toEqual(localWorkspaceRef('/workspace/b'))
+      expect(fallback.archivedAt).toBeNull()
+    })
+
     it('恢复已归档会话后切为活跃会话', () => {
       const archivedId = useAgentStore.getState().createConversation()
       useAgentStore.getState().archiveConversation(archivedId)
@@ -469,6 +530,34 @@ describe('useAgentStore', () => {
 
       useAgentStore.getState().removeMountedResource('file:/Users/apple/project/README.md', id)
       expect(useAgentStore.getState().conversations[id].mountedResources).toEqual([])
+    })
+
+    it('发送后只清除临时文件选区，保留普通资源', () => {
+      const id = useAgentStore.getState().createConversation()
+      const file = {
+        id: 'file:/workspace/guide.md',
+        kind: 'file' as const,
+        label: 'guide.md',
+        ref: { type: 'file' as const, path: '/workspace/guide.md' },
+      }
+      const range = {
+        id: 'file-range:guide:8:10',
+        kind: 'file-range' as const,
+        label: 'guide.md:L8-L10',
+        ref: {
+          type: 'file-range' as const,
+          path: '/workspace/guide.md',
+          startLine: 8,
+          endLine: 10,
+          sourceSnapshot: '原始选区',
+        },
+      }
+      useAgentStore.getState().addMountedResource(file, id)
+      useAgentStore.getState().addMountedResource(range, id)
+
+      useAgentStore.getState().clearTransientResources(id)
+
+      expect(useAgentStore.getState().conversations[id].mountedResources).toEqual([file])
     })
 
     it('挂载 Skill 时按会话去重并支持移除', () => {
@@ -545,6 +634,40 @@ describe('useAgentStore', () => {
   })
 
   describe('hydrateFromWorkspaceState', () => {
+    it('把磁盘中的运行中快照恢复为明确的中断状态', () => {
+      const now = Date.now()
+      useAgentStore.getState().hydrateFromWorkspaceState({
+        conversations: {
+          running: {
+            id: 'running',
+            title: '运行中的任务',
+            messages: [],
+            input: '',
+            loading: false,
+            backendState: 'connected',
+            runStatus: 'running',
+            activeRunId: 'run-before-restart',
+            sessionId: 'session-1',
+            streamingMessageId: 'message-1',
+            lastCost: null,
+            scope: { kind: 'all' },
+            createdAt: now,
+            updatedAt: now,
+            archivedAt: null,
+          },
+        },
+        conversationOrder: ['running'],
+        activeConversationId: 'running',
+      })
+
+      expect(useAgentStore.getState().conversations.running).toMatchObject({
+        loading: false,
+        runStatus: 'interrupted',
+        activeRunId: null,
+        lastRunTerminalReason: 'runtime-unavailable',
+      })
+    })
+
     it('从工作台快照恢复历史会话并镜像活跃会话', () => {
       const now = Date.now()
       useAgentStore.getState().hydrateFromWorkspaceState({
@@ -680,9 +803,111 @@ describe('useAgentStore', () => {
       expect(useAgentStore.getState().activeConversationId).toBe('active')
       expect(useAgentStore.getState().conversations.archived.archivedAt).toBe(now)
     })
+
+    it('恢复快照时按创建时间规范会话顺序', () => {
+      const now = Date.now()
+      useAgentStore.getState().hydrateFromWorkspaceState({
+        conversations: {
+          newer: {
+            id: 'newer',
+            title: '后创建',
+            messages: [],
+            input: '',
+            loading: false,
+            backendState: 'connected',
+            sessionId: null,
+            streamingMessageId: null,
+            lastCost: null,
+            scope: { kind: 'all' },
+            createdAt: now,
+            updatedAt: now,
+          },
+          older: {
+            id: 'older',
+            title: '先创建',
+            messages: [],
+            input: '',
+            loading: false,
+            backendState: 'connected',
+            sessionId: null,
+            streamingMessageId: null,
+            lastCost: null,
+            scope: { kind: 'all' },
+            createdAt: now - 60_000,
+            updatedAt: now,
+          },
+        },
+        conversationOrder: ['newer', 'older'],
+        activeConversationId: 'newer',
+      })
+
+      expect(useAgentStore.getState().conversationOrder).toEqual(['older', 'newer'])
+    })
   })
 
   describe('workspace persistence', () => {
+    it('未绑定会话不会写入本地项目快照', () => {
+      const projectConversationId = useAgentStore.getState().createConversation({
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'cclink-studio-agent',
+          workspaceRef: localWorkspaceRef('/workspace/a'),
+        },
+      })
+
+      const snapshot = buildAgentConversationWorkspaceSnapshot(
+        useAgentStore.getState(),
+        '/workspace/a',
+      )
+
+      expect(snapshot.conversationOrder).toEqual([projectConversationId])
+      expect(snapshot.conversations['agent-default']).toBeUndefined()
+    })
+
+    it('后台会话更新不会覆盖该项目最后激活的会话', () => {
+      const workspaceA = '/workspace/a'
+      const workspaceB = '/workspace/b'
+      const state = useAgentStore.getState()
+      const activeA = state.createConversation({
+        activate: true,
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'cclink-studio-agent',
+          workspaceRef: localWorkspaceRef(workspaceA),
+        },
+      })
+      const otherA = state.createConversation({
+        activate: false,
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'cclink-studio-agent',
+          workspaceRef: localWorkspaceRef(workspaceA),
+        },
+      })
+
+      let snapshot = buildAgentConversationWorkspaceSnapshot(useAgentStore.getState(), workspaceA)
+      expect(snapshot.activeConversationId).toBe(activeA)
+
+      const activeB = useAgentStore.getState().createConversation({
+        activate: true,
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'cclink-studio-agent',
+          workspaceRef: localWorkspaceRef(workspaceB),
+        },
+      })
+      expect(useAgentStore.getState().activeConversationId).toBe(activeB)
+
+      useAgentStore.getState().addSystemMessage('后台完成', otherA)
+      snapshot = buildAgentConversationWorkspaceSnapshot(useAgentStore.getState(), workspaceA)
+
+      expect(snapshot.activeConversationId).toBe(activeA)
+    })
+
     it('不会把启动时的空白种子会话写回并覆盖已有历史', () => {
       const setSection = vi.fn().mockResolvedValue({ success: true })
       vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
@@ -708,9 +933,39 @@ describe('useAgentStore', () => {
         null,
       )
       const payload = setSection.mock.calls[0][2]
-      expect(payload.conversations['agent-default'].messages.at(-1)?.rawText).toBe(
-        '继续处理这件事',
+      expect(payload.conversations['agent-default'].messages.at(-1)?.rawText).toBe('继续处理这件事')
+    })
+
+    it('归档操作会等待归档快照确认写入', async () => {
+      const completions: Array<(value: { success: boolean }) => void> = []
+      const setSection = vi.fn(
+        () =>
+          new Promise<{ success: boolean }>((resolve) => {
+            completions.push(resolve)
+          }),
       )
+      vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+
+      const conversationId = useAgentStore.getState().activeConversationId
+      let settled = false
+      const archive = useAgentStore
+        .getState()
+        .archiveConversation(conversationId)
+        .then(() => {
+          settled = true
+        })
+
+      expect(useAgentStore.getState().conversations[conversationId].archivedAt).not.toBeNull()
+      expect(setSection).toHaveBeenCalledTimes(1)
+      expect(settled).toBe(false)
+
+      completions[0]({ success: true })
+      await vi.waitFor(() => expect(setSection).toHaveBeenCalledTimes(2))
+      expect(settled).toBe(false)
+
+      completions[1]({ success: true })
+      await archive
+      expect(settled).toBe(true)
     })
   })
 })

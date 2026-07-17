@@ -1,13 +1,18 @@
-import { BrowserWindow, WebContentsView, session } from 'electron'
+import { BrowserWindow, WebContentsView, session, type Cookie, type Session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
 import type { BrowserInstanceStore } from '../persistence/browser-instance-store'
 import type {
+  BrowserCookieChangeDiagnosticEntry,
+  BrowserCookieDiagnosticEntry,
+  BrowserSessionDiagnosticSummary,
+  BrowserReconcileViewsOptions,
   BrowserViewModeType,
   BrowserViewState,
   BrowserZoomModeType,
 } from '../../shared/ipc/browser'
 import { installBrowserCompatibilityHeaders, normalizeDesktopUserAgent } from './browser-stealth'
+import { shouldDestroyBrowserViewDuringReconcile } from './browser-view-reconciliation'
 
 /** 移动版模拟时的目标视口宽度（CSS px，约等于 iPhone Pro 逻辑宽度） */
 const MOBILE_WIDTH = 414
@@ -21,6 +26,9 @@ const ZOOM_STEP = 0.1
 /** 默认首页 */
 const DEFAULT_URL = 'https://www.baidu.com'
 const PROFILE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/
+const LIKELY_AUTH_COOKIE_RE =
+  /(?:^|[_-])(auth|account|login|session(?:id)?|sid|sso|token|user|uid)(?:$|[_-])|^(?:sessionid|z_c0|q_c1)$/i
+const NON_AUTH_COOKIE_RE = /(captcha|challenge|csrf|xsrf|analytics|tracking|experiment)/i
 
 /** 设备模式：桌面 / 移动 */
 export type ViewMode = BrowserViewModeType
@@ -60,6 +68,8 @@ interface ViewEntry {
   pendingHistoryDirection: 'back' | 'forward' | null
   /** 项目运营平台 Profile；为空时使用默认 session。 */
   profileId: string | null
+  /** 创建该视图的工作区；用于阻断相同 tabId 的跨项目复用。 */
+  workspaceKey: string | null
 }
 
 /**
@@ -73,6 +83,8 @@ export class BrowserManager {
   private views = new Map<string, ViewEntry>()
   /** 当前 attach 到窗口的视图 tabId（一次只能 attach 一个） */
   private activeViewId: string | null = null
+  /** renderer 最近声明的当前项目；与 Playwright 当前页、BrowserView 活跃页分开维护。 */
+  private currentWorkspaceKey: string | null = null
   private mainWindow: BrowserWindow
   /** 内容区坐标（全局，所有视图共享同一矩形） */
   private currentBounds = { x: 0, y: 0, width: 0, height: 0 }
@@ -85,6 +97,19 @@ export class BrowserManager {
   private readonly viewDestroyedCallbacks = new Set<(tabId: string) => void>()
   /** 浏览历史存储（晚绑定）。项目浏览器现场由 WorkspaceState 负责。 */
   private instanceStore: BrowserInstanceStore | null = null
+  private readonly lastClaimByTab = new Map<
+    string,
+    {
+      status: 'succeeded' | 'failed'
+      timestamp: number
+      expectedUrl: string
+      errorMessage?: string
+    }
+  >()
+  private readonly observedCookieSessions = new WeakSet<Session>()
+  private readonly cookieChanges: Array<
+    BrowserCookieChangeDiagnosticEntry & { partition: string }
+  > = []
 
   constructor(mainWindow: BrowserWindow, defaults?: { zoomMode?: ZoomMode; viewMode?: ViewMode }) {
     this.mainWindow = mainWindow
@@ -106,8 +131,7 @@ export class BrowserManager {
    */
   attachPlaywright(bridge: PlaywrightBridge): void {
     this.playwrightBridge = bridge
-    // 为启动种子视图补登记（'browser' 种子已在 connect() 时用字面量 key 登记，
-    // 这里幂等：claimPageForView 内部会跳过已绑定的 key）
+    // Playwright 连接后，为已存在的项目浏览器视图补做显式 claim。
     for (const [tabId, entry] of this.views) {
       // 不 await：claim 失败仅记录日志，不阻塞 UI
       void this.claimViewPage(tabId, entry).catch((err) =>
@@ -134,7 +158,23 @@ export class BrowserManager {
   private async claimViewPage(tabId: string, entry: ViewEntry): Promise<void> {
     if (!this.playwrightBridge) return
     const url = entry.view.webContents.getURL() || entry.pendingUrl
-    await this.playwrightBridge.claimPageForView(tabId, entry.view.webContents, url)
+    try {
+      await this.playwrightBridge.claimPageForView(tabId, entry.view.webContents, url)
+      if (this.activeViewId === tabId) await this.playwrightBridge.switchToPage(tabId)
+      this.lastClaimByTab.set(tabId, {
+        status: 'succeeded',
+        timestamp: Date.now(),
+        expectedUrl: url,
+      })
+    } catch (error) {
+      this.lastClaimByTab.set(tabId, {
+        status: 'failed',
+        timestamp: Date.now(),
+        expectedUrl: url,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    }
   }
 
   /**
@@ -155,9 +195,15 @@ export class BrowserManager {
         historyIndex?: number
       }
       profileId?: string | null
+      workspaceKey?: string | null
     },
   ): void {
-    const existing = this.views.get(tabId)
+    let existing = this.views.get(tabId)
+    const workspaceKey = opts?.workspaceKey ?? null
+    if (existing && existing.workspaceKey !== workspaceKey) {
+      this.destroyView(tabId)
+      existing = undefined
+    }
     if (existing) {
       if (opts?.restore) {
         existing.viewMode = opts.restore.viewMode
@@ -198,6 +244,7 @@ export class BrowserManager {
     })
 
     installBrowserCompatibilityHeaders(view.webContents.session)
+    this.observeCookieChanges(view.webContents.session, profileId)
 
     // 去掉 Electron/CCLink Studio 标识，让 UA 看起来像真实 Chrome
     const desktopUA = normalizeDesktopUserAgent(view.webContents.getUserAgent())
@@ -230,6 +277,7 @@ export class BrowserManager {
           : 0,
       pendingHistoryDirection: null,
       profileId,
+      workspaceKey,
     }
 
     // 监听导航事件（闭包捕获 tabId，发出的事件携带 tabId）
@@ -344,7 +392,6 @@ export class BrowserManager {
     for (const cb of this.viewDestroyedCallbacks) {
       cb(tabId)
     }
-
   }
 
   /**
@@ -355,12 +402,12 @@ export class BrowserManager {
     const win = this.win()
     if (!win) return
 
-    // detach 当前活跃视图（保持 warm，不销毁）
-    if (this.activeViewId && this.activeViewId !== tabId) {
-      const prev = this.views.get(this.activeViewId)
-      if (prev) {
+    // activeViewId 可能因旧异步调用或 removeChildView 异常失真。
+    // 每次都遍历并 detach 非目标视图，避免原生 View 盖到编辑器/其他项目 Tab 上。
+    for (const [viewId, entry] of this.views) {
+      if (viewId !== tabId) {
         try {
-          win.contentView.removeChildView(prev.view)
+          win.contentView.removeChildView(entry.view)
         } catch {
           // 忽略
         }
@@ -382,12 +429,38 @@ export class BrowserManager {
     win.contentView.addChildView(entry.view)
     entry.view.setBounds(this.currentBounds)
     this.activeViewId = tabId
+    void this.playwrightBridge?.switchToPage(tabId).catch(() => {
+      // 页面尚未 claim 时由 did-finish-load 完成绑定和激活。
+    })
 
     // 首次激活时加载页面；之后保持 warm 状态
     this.ensureLoaded(tabId)
     // 重新计算缩放（适配当前面板宽度）
     void this.applyZoom(tabId, false)
     this.emitState(tabId)
+  }
+
+  /** 让 renderer 声明当前工作区允许存在和显示的浏览器视图。 */
+  reconcileViews(options: BrowserReconcileViewsOptions): void {
+    this.currentWorkspaceKey = options.workspaceKey
+    const validTabIds = new Set(options.validTabIds)
+    for (const [tabId, entry] of [...this.views]) {
+      if (
+        shouldDestroyBrowserViewDuringReconcile({
+          tabId,
+          viewWorkspaceKey: entry.workspaceKey,
+          activeWorkspaceKey: options.workspaceKey,
+          validTabIds,
+        })
+      ) {
+        this.destroyView(tabId)
+      }
+    }
+
+    const activeEntry = options.activeTabId ? this.views.get(options.activeTabId) : null
+    this.setActive(
+      activeEntry && activeEntry.workspaceKey === options.workspaceKey ? options.activeTabId : null,
+    )
   }
 
   /**
@@ -496,6 +569,118 @@ export class BrowserManager {
   /** 当前真正 attach 到窗口里的可视浏览器视图 ID。 */
   getActiveViewId(): string | null {
     return this.activeViewId
+  }
+
+  /** 返回指定项目当前可见的浏览器；绝不回退到其他项目的活跃视图。 */
+  getActiveViewIdForWorkspace(workspaceKey: string | null): string | null {
+    if (!this.activeViewId) return null
+    return this.views.get(this.activeViewId)?.workspaceKey === workspaceKey
+      ? this.activeViewId
+      : null
+  }
+
+  /** 返回项目内可继续执行的浏览器，允许它处于后台但不改变 UI 激活态。 */
+  getViewIdForWorkspace(workspaceKey: string | null): string | null {
+    return (
+      this.getActiveViewIdForWorkspace(workspaceKey) ??
+      [...this.views].find(([, entry]) => entry.workspaceKey === workspaceKey)?.[0] ??
+      null
+    )
+  }
+
+  isWorkspaceActive(workspaceKey: string | null): boolean {
+    return this.currentWorkspaceKey === workspaceKey
+  }
+
+  /** 查询 Tab 的真实项目归属；undefined 表示视图不存在。 */
+  getViewWorkspaceKey(tabId: string): string | null | undefined {
+    return this.views.get(tabId)?.workspaceKey
+  }
+
+  /** 等待 renderer 完成浏览器 Tab -> WebContentsView 的异步创建与激活。 */
+  async waitForActiveView(timeoutMs = 2500): Promise<string | null> {
+    const deadline = Date.now() + timeoutMs
+    let lastRequestAt = 0
+    while (!this.activeViewId && Date.now() < deadline) {
+      if (Date.now() - lastRequestAt >= 500) {
+        this.win()?.webContents.send('browser:requestOpenTab', { initialUrl: DEFAULT_URL })
+        lastRequestAt = Date.now()
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    return this.activeViewId
+  }
+
+  /** 等待指定项目的浏览器；后台项目只复用已有 View，不会在当前 UI 新建。 */
+  async waitForActiveViewForWorkspace(
+    workspaceKey: string | null,
+    timeoutMs = 2500,
+  ): Promise<string | null> {
+    const deadline = Date.now() + timeoutMs
+    let lastRequestAt = 0
+    let tabId = this.getViewIdForWorkspace(workspaceKey)
+    if (!tabId && !this.isWorkspaceActive(workspaceKey)) return null
+    while (!tabId && Date.now() < deadline) {
+      if (this.isWorkspaceActive(workspaceKey) && Date.now() - lastRequestAt >= 500) {
+        this.win()?.webContents.send('browser:requestOpenTab', {
+          initialUrl: DEFAULT_URL,
+          workspaceKey,
+        })
+        lastRequestAt = Date.now()
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      tabId = this.getViewIdForWorkspace(workspaceKey)
+    }
+    return tabId
+  }
+
+  /** 列出真实可视浏览器 View，不依赖 Playwright 是否已完成 claim。 */
+  listViews(): Array<{ tabId: string; url: string; title: string }> {
+    const activeWorkspaceKey = this.activeViewId
+      ? (this.views.get(this.activeViewId)?.workspaceKey ?? null)
+      : null
+    return [...this.views]
+      .filter(([, entry]) => entry.workspaceKey === activeWorkspaceKey)
+      .map(([tabId, entry]) => ({
+        tabId,
+        url: entry.view.webContents.getURL() || entry.url || entry.pendingUrl,
+        title: entry.view.webContents.getTitle() || '',
+      }))
+  }
+
+  /** 列出指定项目的浏览器视图，不受当前 UI 项目影响。 */
+  listViewsForWorkspace(
+    workspaceKey: string | null,
+  ): Array<{ tabId: string; url: string; title: string }> {
+    return [...this.views]
+      .filter(([, entry]) => entry.workspaceKey === workspaceKey)
+      .map(([tabId, entry]) => ({
+        tabId,
+        url: entry.view.webContents.getURL() || entry.url || entry.pendingUrl,
+        title: entry.view.webContents.getTitle() || '',
+      }))
+  }
+
+  /** 主动补做 Playwright claim，供工具在页面恢复竞态中自愈。 */
+  async ensurePlaywrightPage(tabId: string): Promise<void> {
+    const entry = this.views.get(tabId)
+    if (!entry) throw new Error(`可视浏览器 Tab 不存在: ${tabId}`)
+    if (!this.playwrightBridge) throw new Error('Playwright 尚未连接')
+
+    if (this.isWorkspaceActive(entry.workspaceKey)) this.setActive(tabId)
+    let lastError: unknown = null
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await this.claimViewPage(tabId, entry)
+        return
+      } catch (error) {
+        lastError = error
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 250))
+        }
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(String(lastError))
   }
 
   // ─────────────────────── 缩放控制 ───────────────────────
@@ -610,6 +795,160 @@ export class BrowserManager {
     return entry.view.webContents.getTitle()
   }
 
+  /** 返回诊断所需的真实视图、Profile 和 Cookie 元数据，不暴露 Cookie 值。 */
+  async getRuntimeDiagnostics(tabId: string): Promise<{
+    visibleTabId: string | null
+    visibleUrl: string | null
+    visibleTitle: string | null
+    profileId: string | null
+    viewState: BrowserViewState | null
+    recentUrls: string[]
+    lastClaim: {
+      status: 'succeeded' | 'failed'
+      timestamp: number
+      expectedUrl: string
+      errorMessage?: string
+    } | null
+    session: BrowserSessionDiagnosticSummary | null
+  }> {
+    const entry = this.views.get(tabId)
+    if (!entry) {
+      return {
+        visibleTabId: this.activeViewId,
+        visibleUrl: null,
+        visibleTitle: null,
+        profileId: null,
+        viewState: null,
+        recentUrls: [],
+        lastClaim: this.lastClaimByTab.get(tabId) ?? null,
+        session: null,
+      }
+    }
+
+    const visibleUrl = entry.view.webContents.getURL() || entry.url || null
+    const partition = entry.profileId
+      ? `persist:cclink-studio-profile-${entry.profileId}`
+      : 'default'
+    const browserSession = entry.view.webContents.session
+    let cookieStoreFlushed = false
+
+    try {
+      await browserSession.cookies.flushStore()
+      cookieStoreFlushed = true
+    } catch {
+      // 诊断继续返回内存中的 Cookie 元数据。
+    }
+
+    try {
+      const cookies = visibleUrl ? await browserSession.cookies.get({ url: visibleUrl }) : []
+      const nowSeconds = Date.now() / 1000
+      const metadata: BrowserCookieDiagnosticEntry[] = cookies.map((cookie) => ({
+        name: cookie.name,
+        domain: cookie.domain ?? '',
+        path: cookie.path ?? '/',
+        secure: Boolean(cookie.secure),
+        httpOnly: Boolean(cookie.httpOnly),
+        session: Boolean(cookie.session),
+        ...(typeof cookie.expirationDate === 'number'
+          ? { expiresAt: Math.round(cookie.expirationDate * 1000) }
+          : {}),
+        likelyAuth:
+          !NON_AUTH_COOKIE_RE.test(cookie.name) && LIKELY_AUTH_COOKIE_RE.test(cookie.name),
+      }))
+
+      return {
+        visibleTabId: this.activeViewId,
+        visibleUrl,
+        visibleTitle: entry.view.webContents.getTitle() || null,
+        profileId: entry.profileId,
+        viewState: this.getState(tabId),
+        recentUrls: entry.history.slice(-10),
+        lastClaim: this.lastClaimByTab.get(tabId) ?? null,
+        session: {
+          partition,
+          persistent: true,
+          cookieStoreFlushed,
+          cookieCount: metadata.length,
+          persistentCookieCount: metadata.filter((cookie) => !cookie.session).length,
+          expiredCookieCount: metadata.filter(
+            (cookie) =>
+              typeof cookie.expiresAt === 'number' && cookie.expiresAt / 1000 <= nowSeconds,
+          ).length,
+          likelyAuthCookies: metadata.filter((cookie) => cookie.likelyAuth),
+          cookieNames: metadata.map((cookie) => cookie.name).sort(),
+          recentCookieChanges: this.getRecentCookieChanges(partition, visibleUrl),
+        },
+      }
+    } catch (error) {
+      return {
+        visibleTabId: this.activeViewId,
+        visibleUrl,
+        visibleTitle: entry.view.webContents.getTitle() || null,
+        profileId: entry.profileId,
+        viewState: this.getState(tabId),
+        recentUrls: entry.history.slice(-10),
+        lastClaim: this.lastClaimByTab.get(tabId) ?? null,
+        session: {
+          partition,
+          persistent: true,
+          cookieStoreFlushed,
+          cookieCount: 0,
+          persistentCookieCount: 0,
+          expiredCookieCount: 0,
+          likelyAuthCookies: [],
+          cookieNames: [],
+          recentCookieChanges: this.getRecentCookieChanges(partition, visibleUrl),
+          errorMessage: error instanceof Error ? error.message : String(error),
+        },
+      }
+    }
+  }
+
+  private observeCookieChanges(browserSession: Session, profileId: string | null): void {
+    if (this.observedCookieSessions.has(browserSession)) return
+    this.observedCookieSessions.add(browserSession)
+    const partition = profileId ? `persist:cclink-studio-profile-${profileId}` : 'default'
+    browserSession.cookies.on('changed', (_event, cookie, cause, removed) => {
+      this.cookieChanges.push({
+        ...this.cookieMetadata(cookie),
+        partition,
+        timestamp: Date.now(),
+        cause,
+        removed,
+      })
+      if (this.cookieChanges.length > 500) {
+        this.cookieChanges.splice(0, this.cookieChanges.length - 300)
+      }
+    })
+  }
+
+  private cookieMetadata(cookie: Cookie): BrowserCookieDiagnosticEntry {
+    return {
+      name: cookie.name,
+      domain: cookie.domain ?? '',
+      path: cookie.path ?? '/',
+      secure: Boolean(cookie.secure),
+      httpOnly: Boolean(cookie.httpOnly),
+      session: Boolean(cookie.session),
+      ...(typeof cookie.expirationDate === 'number'
+        ? { expiresAt: Math.round(cookie.expirationDate * 1000) }
+        : {}),
+      likelyAuth: !NON_AUTH_COOKIE_RE.test(cookie.name) && LIKELY_AUTH_COOKIE_RE.test(cookie.name),
+    }
+  }
+
+  private getRecentCookieChanges(
+    partition: string,
+    visibleUrl: string | null,
+  ): BrowserCookieChangeDiagnosticEntry[] {
+    const host = safeHost(visibleUrl)
+    return this.cookieChanges
+      .filter((change) => change.partition === partition)
+      .filter((change) => !host || cookieDomainMatchesHost(change.domain, host))
+      .slice(-50)
+      .map(({ partition: _partition, ...change }) => change)
+  }
+
   /** 销毁所有视图并清空窗口引用 */
   destroy(): void {
     for (const tabId of [...this.views.keys()]) {
@@ -619,4 +958,18 @@ export class BrowserManager {
     // 清空 mainWindow 引用，防止后续访问已销毁的窗口
     this.mainWindow = null as unknown as BrowserWindow
   }
+}
+
+function safeHost(value: string | null): string {
+  if (!value) return ''
+  try {
+    return new URL(value).hostname.toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+function cookieDomainMatchesHost(domain: string, host: string): boolean {
+  const normalizedDomain = domain.replace(/^\./, '').toLowerCase()
+  return host === normalizedDomain || host.endsWith(`.${normalizedDomain}`)
 }

@@ -69,4 +69,118 @@ describe('applyAgentStreamEventToStore', () => {
     expect(lastMessage.role).toBe('system')
     expect(lastMessage.rawText).toBe('连接错误: network down')
   })
+
+  it('忽略已经被新运行替代的迟到完成事件', () => {
+    const conversationId = useAgentStore.getState().activeConversationId
+    const oldRunId = useAgentStore.getState().beginRun(conversationId)
+    const newRunId = useAgentStore.getState().beginRun(conversationId)
+
+    applyAgentCompleteToStore({
+      conversationId,
+      runId: oldRunId,
+      total_cost_usd: 0.01,
+    })
+
+    expect(useAgentStore.getState().conversations[conversationId]).toMatchObject({
+      activeRunId: newRunId,
+      loading: true,
+      runStatus: 'starting',
+    })
+  })
+
+  it('记录工具结果和错误，供会话与诊断日志追踪', () => {
+    const conversationId = useAgentStore.getState().activeConversationId
+    useAgentStore.getState().beginRun(conversationId)
+    applyAgentStreamEventToStore({
+      type: 'stream_event',
+      conversationId,
+      event: {
+        type: 'message_start',
+        message: { id: 'msg-tool-result' },
+      },
+    })
+    applyAgentStreamEventToStore({
+      type: 'stream_event',
+      conversationId,
+      event: { type: 'message_stop' },
+    })
+
+    applyAgentStreamEventToStore({
+      type: 'user',
+      conversationId,
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'tool-browser-list',
+            content: 'Playwright 页面未就绪',
+            is_error: true,
+          },
+        ],
+      },
+    })
+
+    expect(useAgentStore.getState().messages.at(-1)?.content.at(-1)).toEqual({
+      type: 'tool_result',
+      tool_use_id: 'tool-browser-list',
+      content: 'Playwright 页面未就绪',
+      is_error: true,
+    })
+    expect(useAgentStore.getState().messages.at(-1)?.isStreaming).toBe(false)
+  })
+
+  it('忽略任务完成后迟到的流事件，避免重新出现假游标', () => {
+    const conversationId = useAgentStore.getState().activeConversationId
+    const runId = useAgentStore.getState().beginRun(conversationId)
+    applyAgentCompleteToStore({ conversationId, runId })
+
+    applyAgentStreamEventToStore({
+      type: 'stream_event',
+      conversationId,
+      runId,
+      event: { type: 'message_start', message: { id: 'late-message' } },
+    })
+
+    const conversation = useAgentStore.getState().conversations[conversationId]
+    expect(conversation.messages.some((message) => message.id === 'late-message')).toBe(false)
+    expect(conversation.streamingMessageId).toBeNull()
+    expect(conversation.loading).toBe(false)
+  })
+
+  it('每个 assistant turn 结束时关闭游标，但保持任务运行直到 result', () => {
+    const conversationId = useAgentStore.getState().activeConversationId
+    const runId = useAgentStore.getState().beginRun(conversationId)
+    applyAgentStreamEventToStore({
+      type: 'stream_event',
+      conversationId,
+      runId,
+      event: { type: 'message_start', message: { id: 'turn-1' } },
+    })
+    applyAgentStreamEventToStore({
+      type: 'stream_event',
+      conversationId,
+      runId,
+      event: { type: 'message_stop' },
+    })
+
+    let conversation = useAgentStore.getState().conversations[conversationId]
+    expect(conversation.messages.find((message) => message.id === 'turn-1')?.isStreaming).toBe(
+      false,
+    )
+    expect(conversation.loading).toBe(true)
+    expect(conversation.runStatus).toBe('running')
+
+    applyAgentStreamEventToStore({
+      type: 'stream_event',
+      conversationId,
+      runId,
+      event: { type: 'message_start', message: { id: 'turn-2' } },
+    })
+    applyAgentCompleteToStore({ conversationId, runId, total_cost_usd: 0.02 })
+
+    conversation = useAgentStore.getState().conversations[conversationId]
+    expect(conversation.messages.filter((message) => message.isStreaming)).toHaveLength(0)
+    expect(conversation.runStatus).toBe('completed')
+  })
 })
