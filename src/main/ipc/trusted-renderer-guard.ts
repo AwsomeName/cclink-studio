@@ -1,4 +1,6 @@
-import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+
+type TrustedRendererEvent = IpcMainInvokeEvent | IpcMainEvent
 
 export class UntrustedIpcSenderError extends Error {
   readonly code = 'UNTRUSTED_IPC_SENDER'
@@ -10,15 +12,15 @@ export class UntrustedIpcSenderError extends Error {
 }
 
 export interface TrustedRendererGuard {
-  assert(event: IpcMainInvokeEvent): void
-  isTrusted(event: IpcMainInvokeEvent): boolean
+  assert(event: TrustedRendererEvent): void
+  isTrusted(event: TrustedRendererEvent): boolean
 }
 
 export function createTrustedRendererGuard(
   mainWindow: BrowserWindow,
   rendererEntryUrl: string,
 ): TrustedRendererGuard {
-  const isTrusted = (event: IpcMainInvokeEvent): boolean => {
+  const isTrusted = (event: TrustedRendererEvent): boolean => {
     if (mainWindow.isDestroyed()) return false
     const trustedWebContents = mainWindow.webContents
     if (trustedWebContents.isDestroyed()) return false
@@ -42,6 +44,20 @@ export function registerTrustedIpcHandler<Args extends unknown[], Result>(
   ipcMain.handle(channel, (event, ...args: Args) => {
     guard.assert(event)
     return handler(event, ...args)
+  })
+}
+
+export function registerTrustedIpcListener<Args extends unknown[]>(
+  channel: string,
+  guard: TrustedRendererGuard,
+  listener: (event: IpcMainEvent, ...args: Args) => void,
+): void {
+  ipcMain.on(channel, (event, ...args: Args) => {
+    if (!guard.isTrusted(event)) {
+      console.warn(`[IPC] 已拒绝非受信任 renderer 的单向事件: ${channel}`)
+      return
+    }
+    listener(event, ...args)
   })
 }
 

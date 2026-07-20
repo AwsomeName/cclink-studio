@@ -9,7 +9,6 @@ import type { FsApiContract } from '../shared/ipc/fs'
 import type { GitBackupApiContract } from '../shared/ipc/git-backup'
 import type { HardwareApiContract } from '../shared/ipc/hardware'
 import type { IdentityApiContract } from '../shared/ipc/identity'
-import type { MeshyApiContract } from '../shared/ipc/meshy'
 import type { OfficialApiContract } from '../shared/ipc/official'
 import type { ProjectOpsApiContract } from '../shared/ipc/project-ops'
 import type { SettingsApiContract } from '../shared/ipc/settings'
@@ -55,8 +54,6 @@ export interface CCLinkStudioAPI {
   settings: SettingsApiContract
 
   workspaceState: WorkspaceStateApiContract
-
-  meshy: MeshyApiContract
 
   wechat: WechatApiContract
 

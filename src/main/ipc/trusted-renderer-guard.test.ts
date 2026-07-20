@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mockIpcMain = vi.hoisted(() => ({ handle: vi.fn() }))
+const mockIpcMain = vi.hoisted(() => ({ handle: vi.fn(), on: vi.fn() }))
 
 vi.mock('electron', () => ({ ipcMain: mockIpcMain }))
 
@@ -8,10 +8,12 @@ import {
   createTrustedRendererGuard,
   isAllowedMainRendererUrl,
   registerTrustedIpcHandler,
+  registerTrustedIpcListener,
 } from './trusted-renderer-guard'
 
 beforeEach(() => {
   mockIpcMain.handle.mockReset()
+  mockIpcMain.on.mockReset()
 })
 
 describe('TrustedRendererGuard', () => {
@@ -51,6 +53,20 @@ describe('TrustedRendererGuard', () => {
 
     expect(() => registered?.({ sender: {} }, 'value')).toThrow('blocked')
     expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('drops an untrusted one-way event before invoking its listener', () => {
+    const guard = { assert: vi.fn(), isTrusted: vi.fn(() => false) }
+    const listener = vi.fn()
+    registerTrustedIpcListener('test:event', guard, listener)
+    const registered = mockIpcMain.on.mock.calls[0]?.[1]
+
+    registered?.({ sender: {} }, 'value')
+    expect(listener).not.toHaveBeenCalled()
+
+    guard.isTrusted.mockReturnValue(true)
+    registered?.({ sender: {} }, 'value')
+    expect(listener).toHaveBeenCalledWith({ sender: {} }, 'value')
   })
 })
 

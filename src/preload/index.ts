@@ -1,171 +1,21 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { AgentSendMessageInput } from '../shared/ipc/agent'
-import type {
-  CreateDataSourceInput,
-  GetRecordInput,
-  RunDataQueryInput,
-  SaveDataQueryInput,
-  UpdateDataSourceInput,
-} from '../shared/ipc/data-source'
+import { androidApi } from './android-api'
+import { browserApi, reportWorkbenchBounds } from './browser-api'
+import { dataSourceApi } from './data-source-api'
 
 contextBridge.exposeInMainWorld('cclinkStudio', {
-  // 工作区坐标上报（供 WebContentsView 定位）
-  reportWorkbenchBounds: (bounds: { x: number; y: number; width: number; height: number }) =>
-    ipcRenderer.send('workbench:bounds', bounds),
+  reportWorkbenchBounds,
 
   // 窗口控制
   window: {
-    /** 切换全屏 */
     toggleFullscreen: () => ipcRenderer.invoke('window:toggleFullscreen'),
-    /** 切换开发者工具 */
     toggleDevtools: () => ipcRenderer.invoke('window:toggleDevtools'),
-    /** 重新加载窗口 */
     reload: () => ipcRenderer.invoke('window:reload'),
-    /** 从内嵌 WebContentsView 把原生键盘焦点切回工作台 renderer */
     focusRenderer: () => ipcRenderer.invoke('window:focusRenderer'),
   },
 
-  // 浏览器控制（多视图：所有操作按 tabId 索引视图）
-  browser: {
-    // ─── 视图生命周期 ───
-    /** 创建浏览器视图（已存在则忽略）。opts.restore 用于从快照重建（恢复 viewMode/zoom） */
-    createView: (
-      tabId: string,
-      initialUrl?: string,
-      opts?: {
-        restore?: {
-          viewMode: 'desktop' | 'mobile'
-          zoomMode: 'fit' | 'manual'
-          manualZoom: number
-          history?: string[]
-          historyIndex?: number
-        }
-        profileId?: string | null
-        workspaceKey?: string | null
-      },
-    ) => ipcRenderer.invoke('browser:createView', tabId, initialUrl, opts),
-    /** 销毁浏览器视图 */
-    destroyView: (tabId: string) => ipcRenderer.invoke('browser:destroyView', tabId),
-    /** 设置活跃视图（一次只显示一个）；null = 全部隐藏 */
-    setActive: (tabId: string | null) => ipcRenderer.invoke('browser:setActive', tabId),
-    /** 按当前工作区声明合法视图，清理跨项目遗留的原生 WebContentsView。 */
-    reconcileViews: (options: {
-      workspaceKey: string | null
-      validTabIds: string[]
-      activeTabId: string | null
-    }) => ipcRenderer.invoke('browser:reconcileViews', options),
-
-    navigate: (tabId: string, url: string) => ipcRenderer.invoke('browser:navigate', tabId, url),
-    goBack: (tabId: string) => ipcRenderer.invoke('browser:goBack', tabId),
-    goForward: (tabId: string) => ipcRenderer.invoke('browser:goForward', tabId),
-    reload: (tabId: string) => ipcRenderer.invoke('browser:reload', tabId),
-    capturePage: (tabId: string) => ipcRenderer.invoke('browser:capturePage', tabId),
-    getCurrentURL: (tabId: string) => ipcRenderer.invoke('browser:getCurrentURL', tabId),
-    getActiveViewId: (workspaceKey?: string | null) =>
-      ipcRenderer.invoke('browser:getActiveViewId', workspaceKey),
-    getDiagnostics: (tabId: string) => ipcRenderer.invoke('browser:getDiagnostics', tabId),
-    getRuntimeDiagnostics: (tabId: string) =>
-      ipcRenderer.invoke('browser:getRuntimeDiagnostics', tabId),
-    getSessionDiagnostics: (request: { url: string; profileId?: string | null }) =>
-      ipcRenderer.invoke('browser:getSessionDiagnostics', request),
-    onUrlChanged: (callback: (payload: { tabId: string; url: string }) => void) => {
-      const handler = (
-        _event: Electron.IpcRendererEvent,
-        payload: { tabId: string; url: string },
-      ) => callback(payload)
-      ipcRenderer.on('browser:urlChanged', handler)
-      return () => ipcRenderer.removeListener('browser:urlChanged', handler)
-    },
-    onPageMetaChanged: (
-      callback: (payload: { tabId: string; title?: string; faviconUrl?: string | null }) => void,
-    ) => {
-      const handler = (
-        _event: Electron.IpcRendererEvent,
-        payload: { tabId: string; title?: string; faviconUrl?: string | null },
-      ) => callback(payload)
-      ipcRenderer.on('browser:pageMetaChanged', handler)
-      return () => ipcRenderer.removeListener('browser:pageMetaChanged', handler)
-    },
-    onRequestOpenTab: (
-      callback: (payload: { initialUrl?: string; workspaceKey: string | null }) => void,
-    ) => {
-      const handler = (
-        _event: Electron.IpcRendererEvent,
-        payload: { initialUrl?: string; workspaceKey: string | null },
-      ) => callback(payload)
-      ipcRenderer.on('browser:requestOpenTab', handler)
-      return () => ipcRenderer.removeListener('browser:requestOpenTab', handler)
-    },
-    // ─── 缩放控制 ───
-    zoomIn: (tabId: string) => ipcRenderer.invoke('browser:zoomIn', tabId),
-    zoomOut: (tabId: string) => ipcRenderer.invoke('browser:zoomOut', tabId),
-    resetZoom: (tabId: string) => ipcRenderer.invoke('browser:resetZoom', tabId),
-    setZoom: (tabId: string, factor: number) =>
-      ipcRenderer.invoke('browser:setZoom', tabId, factor),
-    fitWidth: (tabId: string) => ipcRenderer.invoke('browser:fitWidth', tabId),
-
-    // ─── 设备模式（桌面 / 移动）───
-    setDeviceMode: (tabId: string, mode: 'desktop' | 'mobile') =>
-      ipcRenderer.invoke('browser:setDeviceMode', tabId, mode),
-
-    // ─── 视图状态 ───
-    getViewState: () => ipcRenderer.invoke('browser:getViewState'),
-
-    // ─── 实例快照（重启「恢复上次会话」）───
-    /** 列出已保存的实例快照（最近在前） */
-    listSnapshots: () => ipcRenderer.invoke('browser:listSnapshots'),
-    /** 删除指定快照 */
-    removeSnapshot: (id: string) => ipcRenderer.invoke('browser:removeSnapshot', id),
-    /** 清空所有快照 */
-    clearSnapshots: () => ipcRenderer.invoke('browser:clearSnapshots'),
-    /** 列出浏览历史 */
-    listHistory: (limit?: number) => ipcRenderer.invoke('browser:listHistory', limit),
-    /** 清空浏览历史 */
-    clearHistory: () => ipcRenderer.invoke('browser:clearHistory'),
-    startTask: (tabId: string, goal: string) =>
-      ipcRenderer.invoke('browserTask:start', tabId, goal),
-    listTasks: () => ipcRenderer.invoke('browserTask:list'),
-    getTask: (taskRunId: string) => ipcRenderer.invoke('browserTask:get', taskRunId),
-    getActiveTaskForTab: (tabId: string) =>
-      ipcRenderer.invoke('browserTask:getActiveForTab', tabId),
-    pauseTask: (taskRunId: string) => ipcRenderer.invoke('browserTask:pause', taskRunId),
-    resumeTask: (taskRunId: string) => ipcRenderer.invoke('browserTask:resume', taskRunId),
-    cancelTask: (taskRunId: string) => ipcRenderer.invoke('browserTask:cancel', taskRunId),
-    finishTask: (taskRunId: string) => ipcRenderer.invoke('browserTask:finish', taskRunId),
-    listActionLogs: (taskRunId: string) =>
-      ipcRenderer.invoke('browserTask:listActionLogs', taskRunId),
-    onTaskChanged: (callback: (payload: any) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, payload: any) => callback(payload)
-      ipcRenderer.on('browserTask:changed', handler)
-      return () => ipcRenderer.removeListener('browserTask:changed', handler)
-    },
-    onActionLogChanged: (callback: (payload: any) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, payload: any) => callback(payload)
-      ipcRenderer.on('browserActionLog:changed', handler)
-      return () => ipcRenderer.removeListener('browserActionLog:changed', handler)
-    },
-    listDownloads: () => ipcRenderer.invoke('browserDownload:list'),
-    getDownload: (downloadId: string) => ipcRenderer.invoke('browserDownload:get', downloadId),
-    keepDownloadToWorkspace: (downloadId: string) =>
-      ipcRenderer.invoke('browserDownload:keepToWorkspace', downloadId),
-    saveDownloadAs: (downloadId: string) =>
-      ipcRenderer.invoke('browserDownload:saveAs', downloadId),
-    discardDownload: (downloadId: string) =>
-      ipcRenderer.invoke('browserDownload:discard', downloadId),
-    openDownload: (downloadId: string) => ipcRenderer.invoke('browserDownload:open', downloadId),
-    revealDownload: (downloadId: string) =>
-      ipcRenderer.invoke('browserDownload:reveal', downloadId),
-    onDownloadChanged: (callback: (payload: any) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, payload: any) => callback(payload)
-      ipcRenderer.on('browserDownload:changed', handler)
-      return () => ipcRenderer.removeListener('browserDownload:changed', handler)
-    },
-    onViewStateChanged: (callback: (state: any) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, state: any) => callback(state)
-      ipcRenderer.on('browser:viewStateChanged', handler)
-      return () => ipcRenderer.removeListener('browser:viewStateChanged', handler)
-    },
-  },
+  browser: browserApi,
 
   // 本地优先身份：不登录也应存在稳定本机身份。
   identity: {
@@ -526,147 +376,9 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
       ipcRenderer.invoke('editor:saveResult', id, success, error),
   },
 
-  // Android 设备控制（用户自有真机）
-  android: {
-    /** 重连投屏（reconcile + 重绑 + scrcpy connect，替代裸 getDeviceId + connectMirror） */
-    reconnect: () => ipcRenderer.invoke('android:reconnect'),
-    /** 监听设备丢失（reconcile 检测到 serial 不在线时推送） */
-    onDeviceLost: (callback: (info: { reason: string }) => void) => {
-      const handler = (_event: unknown, info: any) => callback(info)
-      ipcRenderer.on('android:deviceLost', handler)
-      return () => {
-        ipcRenderer.removeListener('android:deviceLost', handler)
-      }
-    },
+  android: androidApi,
 
-    // ─── 物理真机 ───
-    /** 发现物理真机（含 unauthorized 便于 UI 引导授权） */
-    listPhysicalDevices: () => ipcRenderer.invoke('android:listPhysicalDevices'),
-    /** 连接物理真机 */
-    connectPhysical: (serial: string) => ipcRenderer.invoke('android:connectPhysical', serial),
-    /** 断开物理真机 */
-    disconnectPhysical: () => ipcRenderer.invoke('android:disconnectPhysical'),
-    /** 监听真机已连接（主进程推送） */
-    onPhysicalConnected: (callback: (data: { serial: string; deviceInfo: any }) => void) => {
-      const handler = (_event: unknown, data: any) => callback(data)
-      ipcRenderer.on('android:physicalConnected', handler)
-      return () => {
-        ipcRenderer.removeListener('android:physicalConnected', handler)
-      }
-    },
-    /** 监听真机已断开（主进程推送） */
-    onPhysicalDisconnected: (callback: () => void) => {
-      const handler = () => callback()
-      ipcRenderer.on('android:physicalDisconnected', handler)
-      return () => {
-        ipcRenderer.removeListener('android:physicalDisconnected', handler)
-      }
-    },
-
-    // ─── 应用商店引导安装（方案 A）───
-    /** 监听商店引导进度（下载/安装阶段提示） */
-    onStoreInstallProgress: (callback: (msg: string) => void) => {
-      const handler = (_event: unknown, msg: string) => callback(msg)
-      ipcRenderer.on('android:storeInstallProgress', handler)
-      return () => {
-        ipcRenderer.removeListener('android:storeInstallProgress', handler)
-      }
-    },
-    /** 监听商店引导结果（已装/成功/失败） */
-    onStoreInstallResult: (
-      callback: (result: {
-        status: 'already-installed' | 'installed' | 'failed'
-        storeId: string
-        displayName: string
-        message?: string
-      }) => void,
-    ) => {
-      const handler = (_event: unknown, result: any) => callback(result)
-      ipcRenderer.on('android:storeInstallResult', handler)
-      return () => {
-        ipcRenderer.removeListener('android:storeInstallResult', handler)
-      }
-    },
-    /** 手动重试商店引导安装（失败后点「重试」） */
-    retryStoreInstall: () => ipcRenderer.invoke('android:retryStoreInstall'),
-
-    // ─── 设备操控（ADB） ───
-    /** 点击坐标 */
-    tap: (x: number, y: number) => ipcRenderer.invoke('android:tap', x, y),
-    /** 滑动手势 */
-    swipe: (x1: number, y1: number, x2: number, y2: number, duration?: number) =>
-      ipcRenderer.invoke('android:swipe', x1, y1, x2, y2, duration),
-    /** 按键 */
-    pressKey: (key: string) => ipcRenderer.invoke('android:pressKey', key),
-    /** 输入文本 */
-    typeText: (text: string) => ipcRenderer.invoke('android:typeText', text),
-    /** 截图 */
-    screenshot: () => ipcRenderer.invoke('android:screenshot'),
-    /** 获取设备信息 */
-    getDeviceInfo: () => ipcRenderer.invoke('android:getDeviceInfo'),
-    /** 列出已安装应用 */
-    listPackages: (filter?: string) => ipcRenderer.invoke('android:listPackages', filter),
-
-    // ─── 新增：ADB 操控（补齐缺失的 IPC） ───
-    /** 获取当前连接的 deviceId */
-    getDeviceId: () => ipcRenderer.invoke('android:getDeviceId'),
-    /** 导出 UI 层级 XML */
-    dumpUi: () => ipcRenderer.invoke('android:dumpUi'),
-    /** 安装 APK */
-    installApk: (path: string) => ipcRenderer.invoke('android:installApk', path),
-    /** 卸载包 */
-    uninstallPackage: (packageName: string) =>
-      ipcRenderer.invoke('android:uninstallPackage', packageName),
-    /** 推送文件 */
-    pushFile: (local: string, remote: string) =>
-      ipcRenderer.invoke('android:pushFile', local, remote),
-    /** 执行 shell 命令 */
-    shell: (command: string) => ipcRenderer.invoke('android:shell', command),
-
-    // ─── Scrcpy 视频流 ───
-    /** 连接 scrcpy 投屏 */
-    connectMirror: (deviceId: string) => ipcRenderer.invoke('scrcpy:connect', deviceId),
-    /** 断开 scrcpy 投屏 */
-    disconnectMirror: () => ipcRenderer.invoke('scrcpy:disconnect'),
-    /** 发送触摸事件到设备 */
-    sendTouch: (data: { action: number; x: number; y: number; pressure: number }) =>
-      ipcRenderer.send('scrcpy:touch', data),
-    /** 监听视频帧数据（主进程 → 渲染进程） */
-    onVideoFrame: (callback: (frame: any) => void) => {
-      ipcRenderer.removeAllListeners('scrcpy:videoFrame')
-      ipcRenderer.on('scrcpy:videoFrame', (_event, frame) => callback(frame))
-    },
-    /** 监听 scrcpy 错误（主进程 → 渲染进程） */
-    onMirrorError: (callback: (error: string) => void) => {
-      ipcRenderer.removeAllListeners('scrcpy:error')
-      ipcRenderer.on('scrcpy:error', (_event, error) => callback(error))
-    },
-    /** 监听 scrcpy 断开连接（视频流结束） */
-    onMirrorDisconnected: (callback: () => void) => {
-      const handler = () => callback()
-      ipcRenderer.removeAllListeners('scrcpy:disconnected')
-      ipcRenderer.on('scrcpy:disconnected', handler)
-      return () => {
-        ipcRenderer.removeListener('scrcpy:disconnected', handler)
-      }
-    },
-  },
-
-  // 数据源：远程 ES/数据库资料的只读接入。Renderer 只能走白名单 IPC，不接触明文凭证。
-  dataSource: {
-    listSources: () => ipcRenderer.invoke('data-source:list'),
-    createSource: (input: CreateDataSourceInput) => ipcRenderer.invoke('data-source:create', input),
-    updateSource: (id: string, patch: UpdateDataSourceInput) =>
-      ipcRenderer.invoke('data-source:update', id, patch),
-    deleteSource: (id: string) => ipcRenderer.invoke('data-source:delete', id),
-    testConnection: (id: string) => ipcRenderer.invoke('data-source:test', id),
-    listCollections: (id: string) => ipcRenderer.invoke('data-source:list-collections', id),
-    runQuery: (input: RunDataQueryInput) => ipcRenderer.invoke('data-source:query', input),
-    getRecord: (input: GetRecordInput) => ipcRenderer.invoke('data-source:get-record', input),
-    listSavedQueries: (sourceId?: string) =>
-      ipcRenderer.invoke('data-source:list-saved-queries', sourceId),
-    saveQuery: (input: SaveDataQueryInput) => ipcRenderer.invoke('data-source:save-query', input),
-  },
+  dataSource: dataSourceApi,
 
   // Terminal 命令确认、执行事件与受限提交
   terminal: {
@@ -740,20 +452,6 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
       ipcRenderer.invoke('workspaceState:listLocalWorkspaces', ownerKey),
     /** 获取工作台状态文件和 userData 迁移诊断信息 */
     diagnostics: () => ipcRenderer.invoke('workspaceState:diagnostics'),
-  },
-
-  // Meshy 3D 资产生成
-  meshy: {
-    /** 创建 Text to 3D preview 任务 */
-    createPreview: (options: any) => ipcRenderer.invoke('meshy:createPreview', options),
-    /** 创建 Text to 3D refine 任务 */
-    createRefine: (options: any) => ipcRenderer.invoke('meshy:createRefine', options),
-    /** 查询 Text to 3D 任务 */
-    getTask: (taskId: string) => ipcRenderer.invoke('meshy:getTask', taskId),
-    /** 保存已成功任务的模型资产 */
-    saveAsset: (options: any) => ipcRenderer.invoke('meshy:saveAsset', options),
-    /** 从 prompt 生成、等待并保存模型资产 */
-    generateAndSave: (options: any) => ipcRenderer.invoke('meshy:generateAndSave', options),
   },
 
   // 自动更新（检查 + 下载 dmg）

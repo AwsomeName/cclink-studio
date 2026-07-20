@@ -1,78 +1,16 @@
-import { ipcMain } from 'electron'
 import { z } from 'zod'
-import { DataSourceError, isDataSourceError } from './errors'
+import type { IpcMainInvokeEvent } from 'electron'
+import { isDataSourceError } from './errors'
 import type { DataSourceService } from './data-source-service'
 import type { DataSourceOperationResult } from '../../shared/ipc/data-source'
-
-const secretSchema = z.object({
-  authType: z.enum(['apiKey', 'basic', 'bearer', 'none']),
-  username: z.string().optional(),
-  password: z.string().optional(),
-  apiKey: z.string().optional(),
-  token: z.string().optional(),
-})
-
-const fieldMappingSchema = z
-  .object({
-    title: z.array(z.string()).optional(),
-    content: z.array(z.string()).optional(),
-    sourceUrl: z.array(z.string()).optional(),
-    author: z.array(z.string()).optional(),
-    publishedAt: z.array(z.string()).optional(),
-    collectedAt: z.array(z.string()).optional(),
-    updatedAt: z.array(z.string()).optional(),
-    tags: z.array(z.string()).optional(),
-  })
-  .optional()
-
-const createSourceSchema = z.object({
-  type: z.literal('elasticsearch'),
-  scope: z.enum(['workspace', 'global']).optional(),
-  name: z.string().min(1),
-  endpoint: z.string().min(1),
-  defaultCollection: z.string().optional(),
-  timeoutMs: z.number().optional(),
-  maxRows: z.number().optional(),
-  fieldMapping: fieldMappingSchema,
-  secret: secretSchema.optional(),
-})
-
-const updateSourceSchema = z.object({
-  name: z.string().min(1).optional(),
-  endpoint: z.string().min(1).optional(),
-  defaultCollection: z.string().optional(),
-  timeoutMs: z.number().optional(),
-  maxRows: z.number().optional(),
-  fieldMapping: fieldMappingSchema,
-  secret: secretSchema.optional(),
-})
-
-const runQuerySchema = z.object({
-  sourceId: z.string().min(1),
-  collection: z.string().optional(),
-  query: z.unknown(),
-  maxRows: z.number().optional(),
-  includeRaw: z.boolean().optional(),
-  caller: z.string().optional(),
-})
-
-const getRecordSchema = z.object({
-  sourceId: z.string().min(1),
-  collection: z.string().min(1),
-  id: z.string().min(1),
-  includeRaw: z.boolean().optional(),
-  caller: z.string().optional(),
-})
-
-const saveQuerySchema = z.object({
-  id: z.string().optional(),
-  sourceId: z.string().min(1),
-  name: z.string().min(1),
-  collection: z.string().min(1),
-  query: z.unknown(),
-  fieldMapping: fieldMappingSchema,
-  maxRows: z.number().optional(),
-})
+import { registerTrustedIpcHandler, type TrustedRendererGuard } from '../ipc/trusted-renderer-guard'
+import {
+  createSourceSchema,
+  dataSourceIdSchema,
+  optionalDataSourceIdSchema,
+  runQuerySchema,
+  saveQuerySchema,
+} from './data-source-ipc-schema'
 
 function ok<T>(data: T): DataSourceOperationResult<T> {
   return { success: true, data }
@@ -103,7 +41,7 @@ function fail<T>(error: unknown): DataSourceOperationResult<T> {
   }
 }
 
-async function handle<T>(fn: () => Promise<T>): Promise<DataSourceOperationResult<T>> {
+async function runOperation<T>(fn: () => Promise<T>): Promise<DataSourceOperationResult<T>> {
   try {
     return ok(await fn())
   } catch (error) {
@@ -111,68 +49,40 @@ async function handle<T>(fn: () => Promise<T>): Promise<DataSourceOperationResul
   }
 }
 
-export function registerDataSourceIpc(dataSourceService: DataSourceService): void {
-  ipcMain.handle('data-source:list', () => handle(() => dataSourceService.listSources()))
+export function registerDataSourceIpc(
+  dataSourceService: DataSourceService,
+  trustedRendererGuard: TrustedRendererGuard,
+): void {
+  const handle = <Args extends unknown[], Result>(
+    channel: string,
+    handler: (event: IpcMainInvokeEvent, ...args: Args) => Result,
+  ): void => registerTrustedIpcHandler(channel, trustedRendererGuard, handler)
 
-  ipcMain.handle('data-source:create', (_event, input: unknown) =>
-    handle(() => dataSourceService.createSource(createSourceSchema.parse(input))),
+  handle('data-source:list', () => runOperation(() => dataSourceService.listSources()))
+
+  handle('data-source:create', (_event, input: unknown) =>
+    runOperation(() => dataSourceService.createSource(createSourceSchema.parse(input))),
   )
 
-  ipcMain.handle('data-source:update', (_event, id: unknown, patch: unknown) =>
-    handle(() => {
-      if (typeof id !== 'string' || !id) {
-        throw new DataSourceError('DATA_SOURCE_QUERY_INVALID', '缺少数据源 id')
-      }
-      return dataSourceService.updateSource(id, updateSourceSchema.parse(patch))
-    }),
+  handle('data-source:test', (_event, id: unknown) =>
+    runOperation(() => dataSourceService.testConnection(dataSourceIdSchema.parse(id))),
   )
 
-  ipcMain.handle('data-source:delete', (_event, id: unknown) =>
-    handle(async () => {
-      if (typeof id !== 'string' || !id) {
-        throw new DataSourceError('DATA_SOURCE_QUERY_INVALID', '缺少数据源 id')
-      }
-      await dataSourceService.deleteSource(id)
-      return { deleted: true as const }
-    }),
+  handle('data-source:list-collections', (_event, id: unknown) =>
+    runOperation(() => dataSourceService.listCollections(dataSourceIdSchema.parse(id))),
   )
 
-  ipcMain.handle('data-source:test', (_event, id: unknown) =>
-    handle(() => {
-      if (typeof id !== 'string' || !id) {
-        throw new DataSourceError('DATA_SOURCE_QUERY_INVALID', '缺少数据源 id')
-      }
-      return dataSourceService.testConnection(id)
-    }),
+  handle('data-source:query', (_event, input: unknown) =>
+    runOperation(() => dataSourceService.runQuery(runQuerySchema.parse(input))),
   )
 
-  ipcMain.handle('data-source:list-collections', (_event, id: unknown) =>
-    handle(() => {
-      if (typeof id !== 'string' || !id) {
-        throw new DataSourceError('DATA_SOURCE_QUERY_INVALID', '缺少数据源 id')
-      }
-      return dataSourceService.listCollections(id)
-    }),
+  handle('data-source:list-saved-queries', (_event, sourceId: unknown) =>
+    runOperation(() =>
+      dataSourceService.listSavedQueries(optionalDataSourceIdSchema.parse(sourceId)),
+    ),
   )
 
-  ipcMain.handle('data-source:query', (_event, input: unknown) =>
-    handle(() => dataSourceService.runQuery(runQuerySchema.parse(input))),
-  )
-
-  ipcMain.handle('data-source:get-record', (_event, input: unknown) =>
-    handle(() => dataSourceService.getRecord(getRecordSchema.parse(input))),
-  )
-
-  ipcMain.handle('data-source:list-saved-queries', (_event, sourceId: unknown) =>
-    handle(() => {
-      if (sourceId !== undefined && typeof sourceId !== 'string') {
-        throw new DataSourceError('DATA_SOURCE_QUERY_INVALID', 'sourceId 参数无效')
-      }
-      return dataSourceService.listSavedQueries(sourceId)
-    }),
-  )
-
-  ipcMain.handle('data-source:save-query', (_event, input: unknown) =>
-    handle(() => dataSourceService.saveQuery(saveQuerySchema.parse(input))),
+  handle('data-source:save-query', (_event, input: unknown) =>
+    runOperation(() => dataSourceService.saveQuery(saveQuerySchema.parse(input))),
   )
 }

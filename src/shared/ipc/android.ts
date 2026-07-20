@@ -51,10 +51,6 @@ export interface AndroidCommandResult {
   result: string
 }
 
-export interface AndroidShellResult {
-  output: string
-}
-
 export type StoreInstallStatus = 'already-installed' | 'installed' | 'failed'
 
 export interface StoreInstallResult {
@@ -109,9 +105,6 @@ export interface AndroidApiContract {
   getDeviceId(): Promise<string | null>
   dumpUi(): Promise<AndroidDumpUiResult>
   installApk(path: string): Promise<AndroidCommandResult>
-  uninstallPackage(packageName: string): Promise<AndroidCommandResult>
-  pushFile(local: string, remote: string): Promise<AndroidCommandResult>
-  shell(command: string): Promise<AndroidShellResult>
 
   connectMirror(deviceId: string): Promise<void>
   disconnectMirror(): Promise<void>

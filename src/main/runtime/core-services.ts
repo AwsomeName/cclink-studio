@@ -12,7 +12,6 @@ import { registerCadIpc } from '../cad/cad-ipc'
 import { DataSourceService } from '../data-source/data-source-service'
 import { registerDataSourceIpc } from '../data-source/data-source-ipc'
 import { MeshyService } from '../meshy/meshy-service'
-import { registerMeshyIpc } from '../meshy/meshy-ipc'
 import { registerWechatIPC } from '../ipc/wechat-ipc'
 import { SettingsService } from '../settings/settings-service'
 import { registerSettingsIpc } from '../settings/settings-ipc'
@@ -107,11 +106,10 @@ export async function bootstrapMainProcessServices(
 
   runtime.dataSourceService = new DataSourceService()
   await runtime.dataSourceService.load()
-  registerDataSourceIpc(runtime.dataSourceService)
+  registerDataSourceIpc(runtime.dataSourceService, runtime.trustedRendererGuard)
   console.log('[CCLink Studio] 数据源 IPC 已注册')
 
   runtime.meshyService = new MeshyService(() => runtime.settingsService!.getRuntimeSettings())
-  registerMeshyIpc(runtime.meshyService)
   console.log('[CCLink Studio] Meshy 服务已初始化')
 
   registerWechatIPC()

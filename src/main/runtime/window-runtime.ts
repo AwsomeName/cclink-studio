@@ -74,6 +74,7 @@ export function createWindowRuntime(
   )
   registerBrowserIpc(
     runtime.browserManager,
+    runtime.trustedRendererGuard,
     runtime.browserInstanceStore,
     runtime.browserTaskRuntime,
     runtime.browserDownloadStore,
@@ -96,6 +97,7 @@ export function createWindowRuntime(
     runtime.scrcpyBridge,
     runtime.activeDeviceManager,
     runtime.physicalDeviceManager,
+    runtime.trustedRendererGuard,
   )
   console.log('[CCLink Studio] Android 模块已注册（真机连接）')
 }
