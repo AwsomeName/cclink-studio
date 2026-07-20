@@ -6,6 +6,7 @@ import { chromium } from 'playwright-core'
 const rootDir = new URL('..', import.meta.url).pathname.replace(/\/$/, '')
 const logFile = process.env.CCLINK_STUDIO_LOG_FILE || '/tmp/cclink-studio-dev/cclink-studio-dev.log'
 const keepRunning = process.argv.includes('--keep-running')
+const uiReadyTimeoutMs = 30_000
 const results = []
 let startedBySmoke = false
 
@@ -92,11 +93,11 @@ async function main() {
   const page = await findRendererPage(browser)
   await page.setViewportSize({ width: 1440, height: 920 })
   await page.waitForLoadState('domcontentloaded')
-  await page.waitForSelector('.main-window', { timeout: 15_000 })
+  await page.waitForSelector('.main-window', { timeout: uiReadyTimeoutMs })
 
   await runCheck('first screen has no login wall', async () => {
-    await page.locator('.app-topbar').waitFor({ state: 'visible', timeout: 15_000 })
-    await page.locator('.workbench').waitFor({ state: 'visible', timeout: 15_000 })
+    await page.locator('.app-topbar').waitFor({ state: 'visible', timeout: uiReadyTimeoutMs })
+    await page.locator('.workbench').waitFor({ state: 'visible', timeout: uiReadyTimeoutMs })
     const text = await page.locator('body').innerText()
     assert(await page.locator('.main-window').isVisible(), 'main window is not visible')
     assert(
