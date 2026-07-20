@@ -9,9 +9,17 @@ import { app } from 'electron'
 import { join } from 'path'
 import { readFile, writeFile } from 'fs/promises'
 import { DEFAULT_SETTINGS, type AppSettings } from './types'
+import {
+  SettingsCredentialStore,
+  type SettingsSecretKey,
+  type SettingsSecrets,
+} from './settings-credential-store'
+import type { SettingsSecretStatus } from '../../shared/ipc/settings'
 
 /** AppSettings 的合法 key 集合，用于过滤 IPC 传入的未知字段 */
 const SETTINGS_KEYS = new Set<string>(Object.keys(DEFAULT_SETTINGS))
+const SECRET_KEYS = new Set<string>(['apiKey', 'meshyApiKey'])
+const EMPTY_SECRETS: SettingsSecrets = { apiKey: '', meshyApiKey: '' }
 
 /** 每个 key 的合法值集合（用于校验 IPC 传入的数据；数值/字符串字段不在此列） */
 const VALID_VALUES: Record<string, Set<string>> = {
@@ -37,10 +45,14 @@ const VALID_VALUES: Record<string, Set<string>> = {
 export class SettingsService {
   private storeFilePath: string
   private store: AppSettings
+  private secrets: SettingsSecrets = { ...EMPTY_SECRETS }
+  private migrationBlocked = false
+  private readonly credentialStore: SettingsCredentialStore
 
-  constructor() {
+  constructor(credentialStore = new SettingsCredentialStore()) {
     this.storeFilePath = join(app.getPath('userData'), 'settings.json')
     this.store = { ...DEFAULT_SETTINGS }
+    this.credentialStore = credentialStore
   }
 
   /**
@@ -50,47 +62,100 @@ export class SettingsService {
    * 这样未来新增字段时，旧文件不会缺少新字段的值。
    */
   async loadState(): Promise<void> {
+    let parsed: Record<string, unknown> = {}
+    let settingsFileExists = false
     try {
       const raw = await readFile(this.storeFilePath, 'utf-8')
-      const parsed = JSON.parse(raw)
-      this.store = { ...DEFAULT_SETTINGS }
-
-      // 防御性校验：只取合法值覆盖默认值，丢弃文件中的非法枚举值
-      for (const key of Object.keys(parsed) as Array<keyof AppSettings>) {
-        const val = (parsed as unknown as Record<string, unknown>)[key]
-        if (key === 'disabledAgentToolModules') {
-          this.store.disabledAgentToolModules = normalizeModuleIds(val)
-          continue
-        }
-        const validSet = VALID_VALUES[key]
-        if (validSet && typeof val === 'string' && !validSet.has(val)) {
-          console.warn(`[SettingsService] 加载配置时忽略无效值: ${key}=${val}`)
-          continue
-        }
-        ;(this.store as unknown as Record<string, unknown>)[key] = val
+      const value: unknown = JSON.parse(raw)
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        parsed = value as Record<string, unknown>
+        settingsFileExists = true
       }
-
-      console.log('[SettingsService] 设置已加载')
     } catch (err: unknown) {
-      // 文件不存在或 JSON 损坏 → 使用默认值
       const isEnoent =
         err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT'
       if (!isEnoent) {
         console.warn('[SettingsService] 设置文件读取失败，使用默认值:', err)
       }
-      this.store = { ...DEFAULT_SETTINGS }
     }
+
+    this.store = { ...DEFAULT_SETTINGS }
+    this.applyPersistedSettings(parsed)
+
+    const legacySecrets = extractLegacySecrets(parsed)
+    const hasLegacySecretFields = Object.keys(parsed).some((key) => SECRET_KEYS.has(key))
+    try {
+      await this.credentialStore.load()
+      const encryptedSecrets = await this.credentialStore.getAll()
+      const mergedSecrets: SettingsSecrets = {
+        apiKey: encryptedSecrets.apiKey || legacySecrets.apiKey,
+        meshyApiKey: encryptedSecrets.meshyApiKey || legacySecrets.meshyApiKey,
+      }
+      if (hasAnySecret(legacySecrets)) {
+        await this.credentialStore.setSecrets(mergedSecrets)
+      }
+      this.secrets = mergedSecrets
+      this.migrationBlocked = false
+      if (settingsFileExists && hasLegacySecretFields) {
+        await this.saveState()
+        console.log('[SettingsService] 旧版明文凭证已迁移到系统加密存储')
+      }
+    } catch (error) {
+      this.secrets = legacySecrets
+      this.migrationBlocked = hasAnySecret(legacySecrets)
+      console.warn(
+        '[SettingsService] 加密凭证加载或迁移失败，已保留旧配置且不会覆盖:',
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+
+    console.log('[SettingsService] 设置已加载')
   }
 
   /** 保存当前设置到磁盘 */
-  private async saveState(): Promise<void> {
-    const json = JSON.stringify(this.store, null, 2)
+  private async saveState(settings: AppSettings = this.store): Promise<void> {
+    if (this.migrationBlocked) {
+      throw new Error('系统加密存储不可用，旧版明文凭证尚未迁移，拒绝覆盖设置文件')
+    }
+    const json = JSON.stringify(withoutSecrets(settings), null, 2)
     await writeFile(this.storeFilePath, json, 'utf-8')
   }
 
   /** 获取所有设置（浅拷贝） */
   getAll(): AppSettings {
-    return { ...this.store }
+    return { ...this.store, ...EMPTY_SECRETS }
+  }
+
+  /** 仅供主进程服务使用，禁止通过 IPC 暴露。 */
+  getRuntimeSettings(): AppSettings {
+    return { ...this.store, ...this.secrets }
+  }
+
+  getSecretStatus(): SettingsSecretStatus {
+    return {
+      apiKeyConfigured: this.secrets.apiKey.length > 0,
+      meshyApiKeyConfigured: this.secrets.meshyApiKey.length > 0,
+      encryptionAvailable: this.credentialStore.isEncryptionAvailable(),
+      migrationBlocked: this.migrationBlocked,
+    }
+  }
+
+  async setSecret(key: SettingsSecretKey, value: string): Promise<SettingsSecretStatus> {
+    const next = { ...this.secrets, [key]: value }
+    await this.credentialStore.setSecrets(next)
+    this.secrets = await this.credentialStore.getAll()
+    this.migrationBlocked = false
+    await this.saveState()
+    return this.getSecretStatus()
+  }
+
+  async clearSecret(key: SettingsSecretKey): Promise<SettingsSecretStatus> {
+    const next = { ...this.secrets, [key]: '' }
+    await this.credentialStore.setSecrets(next)
+    this.secrets = await this.credentialStore.getAll()
+    this.migrationBlocked = false
+    await this.saveState()
+    return this.getSecretStatus()
   }
 
   /**
@@ -100,6 +165,9 @@ export class SettingsService {
    * @returns 更新后的完整设置
    */
   async set(partial: Partial<AppSettings>): Promise<AppSettings> {
+    if (Object.keys(partial).some((key) => SECRET_KEYS.has(key))) {
+      throw new Error('敏感设置必须通过专用凭证接口更新')
+    }
     // 只保留合法 key + 合法值，过滤掉 IPC 传入的无关字段和无效值
     const filtered: Partial<AppSettings> = {}
     for (const key of Object.keys(partial)) {
@@ -117,8 +185,9 @@ export class SettingsService {
       }
       ;(filtered as Record<string, unknown>)[key] = val
     }
-    this.store = { ...this.store, ...filtered }
-    await this.saveState()
+    const nextStore = { ...this.store, ...filtered }
+    await this.saveState(nextStore)
+    this.store = nextStore
     return this.getAll()
   }
 
@@ -128,8 +197,12 @@ export class SettingsService {
    * @returns 默认设置
    */
   async reset(): Promise<AppSettings> {
-    this.store = { ...DEFAULT_SETTINGS }
-    await this.saveState()
+    await this.credentialStore.clear()
+    this.secrets = { ...EMPTY_SECRETS }
+    this.migrationBlocked = false
+    const nextStore = { ...DEFAULT_SETTINGS }
+    await this.saveState(nextStore)
+    this.store = nextStore
     return this.getAll()
   }
 
@@ -143,10 +216,52 @@ export class SettingsService {
     if (!SETTINGS_KEYS.has(key)) {
       throw new Error(`Unknown setting key: ${key}`)
     }
-    this.store = { ...this.store, [key]: DEFAULT_SETTINGS[key] }
-    await this.saveState()
+    if (SECRET_KEYS.has(key)) {
+      await this.clearSecret(key as SettingsSecretKey)
+      return this.getAll()
+    }
+    const nextStore = { ...this.store, [key]: DEFAULT_SETTINGS[key] }
+    await this.saveState(nextStore)
+    this.store = nextStore
     return this.getAll()
   }
+
+  private applyPersistedSettings(parsed: Record<string, unknown>): void {
+    for (const key of Object.keys(parsed)) {
+      if (!SETTINGS_KEYS.has(key) || SECRET_KEYS.has(key)) continue
+      const val = parsed[key]
+      if (key === 'disabledAgentToolModules') {
+        this.store.disabledAgentToolModules = normalizeModuleIds(val)
+        continue
+      }
+      const validSet = VALID_VALUES[key]
+      if (validSet && typeof val === 'string' && !validSet.has(val)) {
+        console.warn(`[SettingsService] 加载配置时忽略无效值: ${key}=${val}`)
+        continue
+      }
+      ;(this.store as unknown as Record<string, unknown>)[key] = val
+    }
+  }
+}
+
+function extractLegacySecrets(parsed: Record<string, unknown>): SettingsSecrets {
+  return {
+    apiKey: normalizeLegacySecret(parsed.apiKey),
+    meshyApiKey: normalizeLegacySecret(parsed.meshyApiKey),
+  }
+}
+
+function normalizeLegacySecret(value: unknown): string {
+  return typeof value === 'string' && value.length <= 8192 ? value.trim() : ''
+}
+
+function hasAnySecret(secrets: SettingsSecrets): boolean {
+  return secrets.apiKey.length > 0 || secrets.meshyApiKey.length > 0
+}
+
+function withoutSecrets(settings: AppSettings): Omit<AppSettings, SettingsSecretKey> {
+  const { apiKey: _apiKey, meshyApiKey: _meshyApiKey, ...persisted } = settings
+  return persisted
 }
 
 function normalizeModuleIds(value: unknown): string[] {

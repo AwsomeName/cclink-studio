@@ -701,8 +701,14 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   settings: {
     /** 获取所有设置 */
     getAll: () => ipcRenderer.invoke('settings:getAll'),
+    /** 获取凭证配置状态，不返回凭证原文 */
+    getSecretStatus: () => ipcRenderer.invoke('settings:getSecretStatus'),
     /** 更新部分设置 */
     set: (updates: Partial<Record<string, unknown>>) => ipcRenderer.invoke('settings:set', updates),
+    /** 使用系统加密存储保存凭证 */
+    setSecret: (key: string, value: string) => ipcRenderer.invoke('settings:setSecret', key, value),
+    /** 清除系统加密存储中的凭证 */
+    clearSecret: (key: string) => ipcRenderer.invoke('settings:clearSecret', key),
     /** 恢复默认设置 */
     reset: () => ipcRenderer.invoke('settings:reset'),
     /** 重置单个设置到默认值 */

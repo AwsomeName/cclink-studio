@@ -11,7 +11,7 @@ export function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): void {
     runtime.adbBridge &&
     runtime.settingsService
   ) {
-    const settings = runtime.settingsService.getAll()
+    const settings = runtime.settingsService.getRuntimeSettings()
     runtime.agentBridge = new AgentBridge(
       runtime.mainWindow,
       runtime.playwrightBridge,

@@ -148,8 +148,9 @@ async function main() {
     )
     await page.locator('.settings-search input').fill('agent')
     await page.waitForTimeout(200)
-    assert(await page.getByText('Agent 后端').isVisible(), 'settings search result missing')
-    await page.getByText('Agent 后端').click()
+    const agentSearchResult = page.locator('.settings-search-result', { hasText: 'Agent 后端' })
+    assert(await agentSearchResult.isVisible(), 'settings search result missing')
+    await agentSearchResult.click()
     await page.waitForTimeout(200)
     assert(
       await page.getByRole('heading', { name: 'Agent' }).isVisible(),

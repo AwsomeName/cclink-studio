@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_SETTINGS, PROVIDER_PRESETS, getPresetBaseUrl } from '@shared/ipc/settings'
 import type { ApiFormat, AppSettings, CadBackend, Provider } from '@shared/ipc/settings'
+import type { SettingsSecretStatus } from '@shared/ipc/settings'
 import type { CadBackendStatus, CadCacheStatus } from '@shared/ipc/cad'
 import type { GitBackupAccountStatus } from '@shared/ipc/git-backup'
 import { useSettingsStore } from '../../stores'
@@ -183,6 +184,10 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   )
   const [searchQuery, setSearchQuery] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
+  const [apiKeyInput, setApiKeyInput] = useState('')
+  const [secretStatus, setSecretStatus] = useState<SettingsSecretStatus | null>(null)
+  const [secretBusy, setSecretBusy] = useState(false)
+  const [secretMessage, setSecretMessage] = useState<string | null>(null)
   const [cadStatus, setCadStatus] = useState<CadBackendStatus | null>(null)
   const [cadCacheStatus, setCadCacheStatus] = useState<CadCacheStatus | null>(null)
   const [cadChecking, setCadChecking] = useState(false)
@@ -211,6 +216,14 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
     }
   }, [])
 
+  const refreshSecretStatus = useCallback(async (): Promise<void> => {
+    try {
+      setSecretStatus(await window.cclinkStudio.settings.getSecretStatus())
+    } catch (nextError: unknown) {
+      setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
+    }
+  }, [])
+
   useEffect(() => {
     void loadSettings()
   }, [loadSettings])
@@ -226,6 +239,10 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   useEffect(() => {
     if (activeSection === 'git-backup') void refreshGitStatus()
   }, [activeSection, refreshGitStatus])
+
+  useEffect(() => {
+    if (activeSection === 'agent') void refreshSecretStatus()
+  }, [activeSection, refreshSecretStatus])
 
   const searchResults = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -358,6 +375,52 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
     }
   }
 
+  const saveApiKey = async (): Promise<void> => {
+    if (!apiKeyInput.trim()) return
+    setSecretBusy(true)
+    setSecretMessage(null)
+    try {
+      const result = await window.cclinkStudio.settings.setSecret('apiKey', apiKeyInput)
+      if (!result.success || !result.status) {
+        setSecretMessage(result.error ?? 'API Key 保存失败')
+        return
+      }
+      setApiKeyInput('')
+      setShowApiKey(false)
+      setSecretStatus(result.status)
+      setSecretMessage('API Key 已保存到系统加密存储')
+    } catch (nextError: unknown) {
+      setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
+    } finally {
+      setSecretBusy(false)
+    }
+  }
+
+  const clearApiKey = async (): Promise<void> => {
+    setSecretBusy(true)
+    setSecretMessage(null)
+    try {
+      const result = await window.cclinkStudio.settings.clearSecret('apiKey')
+      if (!result.success || !result.status) {
+        setSecretMessage(result.error ?? 'API Key 清除失败')
+        return
+      }
+      setApiKeyInput('')
+      setSecretStatus(result.status)
+      setSecretMessage('API Key 已清除')
+    } catch (nextError: unknown) {
+      setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
+    } finally {
+      setSecretBusy(false)
+    }
+  }
+
+  const resetAll = async (): Promise<void> => {
+    await resetSettings()
+    setApiKeyInput('')
+    await refreshSecretStatus()
+  }
+
   return (
     <div className="settings-page">
       <aside className="settings-sidebar">
@@ -414,7 +477,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
             <h1>设置</h1>
             <p>CCLink Studio 开源桌面壳仅保留本地工作台配置。</p>
           </div>
-          <button type="button" className="settings-reset-all" onClick={() => void resetSettings()}>
+          <button type="button" className="settings-reset-all" onClick={() => void resetAll()}>
             恢复默认
           </button>
         </div>
@@ -537,23 +600,65 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                 </div>
               </SettingsRow>
 
-              <SettingsRow settingKey="apiKey" settings={settings} onReset={resetOne}>
+              <div className="settings-row settings-secret-row">
                 <div className="settings-label">
                   <span>API Key</span>
-                  <span className="settings-description">仅保存在本机设置中。</span>
+                  <span className="settings-description">
+                    {secretStatus?.migrationBlocked
+                      ? '旧版凭证待迁移，当前设置文件不会被覆盖。'
+                      : secretStatus?.apiKeyConfigured
+                        ? '已配置并由系统加密存储保护。'
+                        : '尚未配置。'}
+                  </span>
                 </div>
-                <div className="settings-control settings-control-inline">
-                  <input
-                    className="settings-input"
-                    type={showApiKey ? 'text' : 'password'}
-                    value={settings.apiKey}
-                    onChange={(event) => update({ apiKey: event.target.value })}
-                  />
-                  <button type="button" onClick={() => setShowApiKey((value) => !value)}>
-                    {showApiKey ? '隐藏' : '显示'}
-                  </button>
+                <div className="settings-secret-control">
+                  <div className="settings-control settings-control-inline">
+                    <input
+                      className="settings-input settings-input-apikey"
+                      type={showApiKey ? 'text' : 'password'}
+                      value={apiKeyInput}
+                      placeholder={
+                        secretStatus?.apiKeyConfigured ? '输入新 Key 以替换' : '输入 API Key'
+                      }
+                      autoComplete="off"
+                      disabled={secretBusy || secretStatus?.encryptionAvailable === false}
+                      onChange={(event) => setApiKeyInput(event.target.value)}
+                    />
+                    <button
+                      className="settings-secondary-btn"
+                      type="button"
+                      disabled={secretBusy}
+                      onClick={() => setShowApiKey((value) => !value)}
+                    >
+                      {showApiKey ? '隐藏' : '显示'}
+                    </button>
+                    <button
+                      className="settings-secondary-btn"
+                      type="button"
+                      disabled={secretBusy || !apiKeyInput.trim()}
+                      onClick={() => void saveApiKey()}
+                    >
+                      保存
+                    </button>
+                    {secretStatus?.apiKeyConfigured && (
+                      <button
+                        className="settings-danger-btn"
+                        type="button"
+                        disabled={secretBusy}
+                        onClick={() => void clearApiKey()}
+                      >
+                        清除
+                      </button>
+                    )}
+                  </div>
+                  {secretStatus?.encryptionAvailable === false && (
+                    <span className="settings-inline-error">
+                      系统加密存储不可用，已禁止写入凭证。
+                    </span>
+                  )}
+                  {secretMessage && <span className="settings-description">{secretMessage}</span>}
                 </div>
-              </SettingsRow>
+              </div>
 
               <SettingsRow settingKey="modelName" settings={settings} onReset={resetOne}>
                 <div className="settings-label">

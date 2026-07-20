@@ -110,7 +110,7 @@ export async function bootstrapMainProcessServices(
   registerDataSourceIpc(runtime.dataSourceService)
   console.log('[CCLink Studio] 数据源 IPC 已注册')
 
-  runtime.meshyService = new MeshyService(() => runtime.settingsService!.getAll())
+  runtime.meshyService = new MeshyService(() => runtime.settingsService!.getRuntimeSettings())
   registerMeshyIpc(runtime.meshyService)
   console.log('[CCLink Studio] Meshy 服务已初始化')
 

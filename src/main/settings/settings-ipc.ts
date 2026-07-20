@@ -14,6 +14,7 @@ import type { AgentBridge } from '../agent/agent-bridge'
 import type { AppSettings, PermissionMode } from './types'
 import { detectClaudeCode } from '../agent/claude-code-detector'
 import type { McpToolHost } from '../mcp/tool-host'
+import type { SettingsSecretKey } from '../../shared/ipc/settings'
 
 /** 合法的 permissionMode 值 */
 const VALID_PERMISSION_MODES = new Set<string>(['auto', 'categorized', 'strict'])
@@ -26,9 +27,9 @@ const AGENT_SETTING_KEYS = new Set([
   'provider',
   'apiFormat',
   'apiBaseUrl',
-  'apiKey',
   'modelName',
 ])
+const SETTINGS_SECRET_KEYS = new Set<string>(['apiKey', 'meshyApiKey'])
 
 export function registerSettingsIpc(
   settingsService: SettingsService,
@@ -39,6 +40,35 @@ export function registerSettingsIpc(
   /** 获取所有设置 */
   ipcMain.handle('settings:getAll', () => {
     return settingsService.getAll()
+  })
+
+  ipcMain.handle('settings:getSecretStatus', () => {
+    return settingsService.getSecretStatus()
+  })
+
+  ipcMain.handle('settings:setSecret', async (_event, key: string, value: unknown) => {
+    try {
+      assertSecretKey(key)
+      if (typeof value !== 'string') throw new Error('设置凭证必须是字符串')
+      const status = await settingsService.setSecret(key, value)
+      reconfigureAgent(getAgentBridge(), settingsService)
+      return { success: true, status }
+    } catch (err) {
+      console.error('[SettingsIPC] 设置凭证更新失败:', err)
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('settings:clearSecret', async (_event, key: string) => {
+    try {
+      assertSecretKey(key)
+      const status = await settingsService.clearSecret(key)
+      reconfigureAgent(getAgentBridge(), settingsService)
+      return { success: true, status }
+    } catch (err) {
+      console.error('[SettingsIPC] 设置凭证清除失败:', err)
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
   })
 
   /**
@@ -69,11 +99,7 @@ export function registerSettingsIpc(
       // API 配置变更：热重载后端
       const agentBridge = getAgentBridge()
       if (agentBridge && Object.keys(partial).some((k) => AGENT_SETTING_KEYS.has(k))) {
-        try {
-          agentBridge.reconfigure(updated)
-        } catch (err) {
-          console.warn('[SettingsIPC] 后端热重载失败（下次启动生效）:', err)
-        }
+        reconfigureAgent(agentBridge, settingsService)
       }
 
       return { success: true, settings: updated }
@@ -94,11 +120,7 @@ export function registerSettingsIpc(
       // 热重载后端为默认配置
       const agentBridge = getAgentBridge()
       if (agentBridge) {
-        try {
-          agentBridge.reconfigure(settings)
-        } catch (err) {
-          console.warn('[SettingsIPC] 后端热重载失败（下次启动生效）:', err)
-        }
+        reconfigureAgent(agentBridge, settingsService)
       }
 
       return { success: true, settings }
@@ -124,11 +146,7 @@ export function registerSettingsIpc(
       // API 配置重置 → 热重载后端
       const agentBridge = getAgentBridge()
       if (AGENT_SETTING_KEYS.has(key) && agentBridge) {
-        try {
-          agentBridge.reconfigure(updated)
-        } catch (err) {
-          console.warn('[SettingsIPC] 后端热重载失败（下次启动生效）:', err)
-        }
+        reconfigureAgent(agentBridge, settingsService)
       }
 
       return { success: true, settings: updated }
@@ -156,5 +174,18 @@ function applyToolModuleSettings(toolHost: McpToolHost | null, disabledModules: 
   const disabled = new Set(disabledModules)
   for (const module of toolHost.getRegisteredModules()) {
     toolHost.setModuleEnabled(module.name, !disabled.has(module.name))
+  }
+}
+
+function assertSecretKey(key: string): asserts key is SettingsSecretKey {
+  if (!SETTINGS_SECRET_KEYS.has(key)) throw new Error(`Unknown settings secret key: ${key}`)
+}
+
+function reconfigureAgent(agentBridge: AgentBridge | null, settingsService: SettingsService): void {
+  if (!agentBridge) return
+  try {
+    agentBridge.reconfigure(settingsService.getRuntimeSettings())
+  } catch (err) {
+    console.warn('[SettingsIPC] 后端热重载失败（下次启动生效）:', err)
   }
 }

@@ -115,7 +115,10 @@ const IPC_HANDLE_CHANNELS = [
   'mcp:reloadConfig',
   // settings-ipc
   'settings:getAll',
+  'settings:getSecretStatus',
   'settings:set',
+  'settings:setSecret',
+  'settings:clearSecret',
   'settings:reset',
   'settings:resetKey',
   'settings:detectClaudeCode',

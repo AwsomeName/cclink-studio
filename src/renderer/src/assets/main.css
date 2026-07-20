@@ -7823,6 +7823,33 @@ button.file-tree-item {
   text-align: left;
 }
 
+.settings-secret-control {
+  display: flex;
+  width: min(300px, 65%);
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.settings-secret-row .settings-label {
+  min-width: 140px;
+  flex: 1;
+  padding-right: 12px;
+}
+
+.settings-secret-control .settings-control {
+  width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.settings-secret-control .settings-input {
+  width: 155px;
+  min-width: 120px;
+  flex: 0 1 155px;
+}
+
 /* ─── 设置页：错误提示 ─── */
 
 .settings-error {
