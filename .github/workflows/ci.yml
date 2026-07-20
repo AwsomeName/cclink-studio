@@ -33,10 +33,6 @@ jobs:
     needs: verify
     runs-on: macos-latest
     timeout-minutes: 30
-    env:
-      CCLINK_STUDIO_RUN_DIR: ${{ runner.temp }}/cclink-studio-dev
-      CCLINK_STUDIO_LOG_FILE: ${{ runner.temp }}/cclink-studio-dev/cclink-studio-dev.log
-      CCLINK_STUDIO_SCREEN_NAME: cclink-studio-ci
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -47,6 +43,11 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      - name: Configure isolated smoke runtime
+        run: |
+          echo "CCLINK_STUDIO_RUN_DIR=$RUNNER_TEMP/cclink-studio-dev" >> "$GITHUB_ENV"
+          echo "CCLINK_STUDIO_LOG_FILE=$RUNNER_TEMP/cclink-studio-dev/cclink-studio-dev.log" >> "$GITHUB_ENV"
+          echo "CCLINK_STUDIO_SCREEN_NAME=cclink-studio-ci" >> "$GITHUB_ENV"
       - run: pnpm smoke:standalone
       - run: pnpm smoke:auth-window
       - name: Upload smoke logs
