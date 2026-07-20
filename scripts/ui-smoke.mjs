@@ -97,7 +97,8 @@ async function main() {
 
   await runCheck('first screen has no login wall', async () => {
     await page.locator('.app-topbar').waitFor({ state: 'visible', timeout: uiReadyTimeoutMs })
-    await page.locator('.workbench').waitFor({ state: 'visible', timeout: uiReadyTimeoutMs })
+    const primarySurface = page.locator('.workbench, .agent-panel-center-shell')
+    await primarySurface.waitFor({ state: 'visible', timeout: uiReadyTimeoutMs })
     const text = await page.locator('body').innerText()
     assert(await page.locator('.main-window').isVisible(), 'main window is not visible')
     assert(
@@ -105,7 +106,11 @@ async function main() {
       'runtime unavailable screen visible',
     )
     assert(await page.locator('.app-topbar').isVisible(), 'topbar is not visible')
-    assert(await page.locator('.workbench').isVisible(), 'workbench is not visible')
+    assert((await primarySurface.count()) === 1, 'expected exactly one primary work surface')
+    assert(
+      await primarySurface.isVisible(),
+      'workbench or empty-session agent surface is not visible',
+    )
     assert(!text.includes('登录 CCLink'), 'login copy should not block the shell')
     return 'main window ready'
   })
