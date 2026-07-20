@@ -158,6 +158,6 @@
 2. 已完成：五个格式失败文件已局部执行 Prettier。
 3. 已完成：`pnpm verify`、`pnpm smoke:standalone` 和严格模式 `smoke:auth-window` 已通过。
 4. 已完成：从候选提交创建 detached 干净 worktree，使用锁文件安装后复现完整门禁、standalone smoke 和严格 auth-window smoke。
-5. 待完成：执行 Markdown、Terminal、登录回接、Profile 重启恢复、项目切换和可选能力降级的人工验收并归档日志。
-6. 待完成：当前跨域提交仍需形成可审计、可独立回滚的工作包；不得因为自动化绿色而跳过归因。
+5. 待完成：按 `docs/ops/stabilization-s0-acceptance.md` 执行 Markdown、Terminal、登录回接、项目切换和任务状态的真人验收并归档日志。
+6. 已处理：`49da3b2` 依据 ADR 0001 保留为不可改写的现场快照；库存继续承担领域归因，后续提交不得复用该例外。
 7. 待完成：取得 GitHub CI 结果，并确认与本机、干净 worktree 一致。

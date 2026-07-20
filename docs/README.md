@@ -11,6 +11,7 @@
 - `docs/decisions/`：架构原则例外和重大取舍的 ADR。
 - `docs/development.md`：当前开发事实源。
 - `docs/ops/local-smoke-check.md`：验证 Studio 开源壳可独立启动和本地核心能力可用。
+- `docs/ops/stabilization-s0-acceptance.md`：S0 自动化证据和必须真人执行的核心流程验收记录。
 - `docs/official-integration-contract.md`：Studio 暴露给官方构建层的接口边界。
 - `docs/ops/cclink-dev-official-integration-handoff.md`：发给 `cclink-dev` 的 official loader 接入清单。
 - `docs/features/project-system.md`：当前 OSS 本地工作空间模型。
