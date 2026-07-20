@@ -157,6 +157,7 @@
 1. 已完成：旧账号文件兼容已收敛到显式 migration 模块和精确允许列表。
 2. 已完成：五个格式失败文件已局部执行 Prettier。
 3. 已完成：`pnpm verify`、`pnpm smoke:standalone` 和严格模式 `smoke:auth-window` 已通过。
-4. 待完成：从候选提交创建干净 worktree，复现完整门禁和 Electron smoke，并取得 CI 结果。
+4. 已完成：从候选提交创建 detached 干净 worktree，使用锁文件安装后复现完整门禁、standalone smoke 和严格 auth-window smoke。
 5. 待完成：执行 Markdown、Terminal、登录回接、Profile 重启恢复、项目切换和可选能力降级的人工验收并归档日志。
 6. 待完成：当前跨域提交仍需形成可审计、可独立回滚的工作包；不得因为自动化绿色而跳过归因。
+7. 待完成：取得 GitHub CI 结果，并确认与本机、干净 worktree 一致。

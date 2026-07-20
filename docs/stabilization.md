@@ -22,11 +22,12 @@
 2026-07-20 检查结果：
 
 - 稳定化分支为 `codex/stabilization-s0`，现场基线提交为 `49da3b2`。该提交包含原始 104 个跨域文件，现场已保全，但仍需按 `docs/ops/stabilization-s0-inventory.md` 收敛可审计边界。
-- S0 收口代码已形成三个独立提交：`a4353ef` 恢复格式门禁、`45d1dcd` 隔离旧账号迁移、`16e13da` 加固 standalone/auth smoke。本文档记录提交后工作树干净，不存在未知未跟踪文件。
+- S0 收口代码已形成独立提交：`a4353ef` 恢复格式门禁、`45d1dcd` 隔离旧账号迁移、`16e13da` 加固 standalone/auth smoke、`2316f7a` 修复 workflow smoke 清理生命周期、`0137fb5` 保证干净安装具备 Electron runtime、`94fbcf7` 稳定 UI 首屏等待。本文档记录提交后工作树干净，不存在未知未跟踪文件。
 - `pnpm verify` 已通过：OSS 边界、格式、lint、107 个测试文件/718 项测试、typecheck 和生产构建全部返回 0。
 - `pnpm smoke:standalone` 已通过：local 9/9、UI 5/5、workflow 5/5、restore 4/4。
 - 严格模式 `CCLINK_AUTH_SMOKE_REQUIRE_GOOGLE=1 pnpm smoke:auth-window` 已通过：Profile 的 local storage 与 Cookie 跨 Electron 重启保留，纯净窗口到达 Google 账号校验页。对照实验中启用 CDP 的窗口被 Google 判为不安全，认证子进程不得挂接 CDP 或 Playwright。
-- 干净 worktree、GitHub CI 和核心流程人工验收尚未完成，因此 S0 仍为进行中。
+- detached 干净 worktree 已从 `94fbcf7` 复现成功：`pnpm install --frozen-lockfile`、`pnpm verify`、`pnpm smoke:standalone` 和严格模式 `smoke:auth-window` 全部返回 0，且应用由该 worktree 独立启动并完成重启恢复。
+- GitHub CI 和核心流程人工验收尚未完成，因此 S0 仍为进行中。
 
 每完成一个工作包都必须更新本节；不得用后续功能掩盖尚未恢复的基线。
 
