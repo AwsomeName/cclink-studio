@@ -83,10 +83,28 @@ async function main() {
   const cdpPort = await waitForCdpPort()
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`)
   const page = await findRendererPage(browser)
+  const rendererDiagnostics = []
+  page.on('pageerror', (error) => rendererDiagnostics.push(`pageerror: ${error.message}`))
+  page.on('console', (message) => {
+    if (message.type() === 'error') rendererDiagnostics.push(`console: ${message.text()}`)
+  })
   await page.waitForLoadState('domcontentloaded')
-  await page.waitForTimeout(1000)
 
   await runCheck('renderer shell is usable without login', async () => {
+    try {
+      await page.waitForFunction(
+        () =>
+          Boolean(
+            document.querySelector('.main-window') ||
+              document.querySelector('.runtime-unavailable'),
+          ),
+        undefined,
+        { timeout: 30_000 },
+      )
+    } catch {
+      const diagnostics = rendererDiagnostics.slice(-5).join(' | ') || 'no renderer errors captured'
+      throw new Error(`renderer shell did not settle within 30s; ${diagnostics}`)
+    }
     const shell = await page.evaluate(() => ({
       title: document.title,
       hasRuntimeUnavailable: Boolean(document.querySelector('.runtime-unavailable')),
