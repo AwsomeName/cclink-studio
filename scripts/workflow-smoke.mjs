@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
-import { rmSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, rm, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { chromium } from 'playwright-core'
 
@@ -13,6 +12,7 @@ let startedBySmoke = false
 let workspaceDir = null
 let originalWorkspaceSettings = null
 let pageRef = null
+const workspaceDirsToCleanup = new Set()
 
 function pass(name, detail = '') {
   results.push({ name, status: 'pass', detail })
@@ -100,8 +100,52 @@ async function restoreWorkspaceSettings() {
   })
 }
 
-function cleanupWorkspaceDir() {
-  if (workspaceDir) rmSync(workspaceDir, { recursive: true, force: true })
+async function closeTemporaryWorkspaces() {
+  if (!pageRef) return
+  const smokeProjectPaths = await pageRef
+    .locator('.project-strip-item')
+    .evaluateAll((elements) =>
+      elements
+        .map((element) => element.getAttribute('data-project-path'))
+        .filter((path) => path?.includes('/.cclink-studio-workflow-smoke-')),
+    )
+
+  for (const path of smokeProjectPaths) {
+    workspaceDirsToCleanup.add(path)
+    const projectItem = pageRef.locator(`.project-strip-item[data-project-path="${path}"]`).first()
+    if ((await projectItem.count()) === 0) continue
+    await projectItem.click({ button: 'right' })
+    const closeAction = pageRef.locator('.project-strip-context-action', { hasText: '关闭项目' })
+    await closeAction.waitFor({ timeout: 10_000 })
+    await closeAction.click()
+    await pageRef.waitForFunction(
+      (projectPath) =>
+        !Array.from(document.querySelectorAll('.project-strip-item')).some(
+          (element) => element.getAttribute('data-project-path') === projectPath,
+        ),
+      path,
+      { timeout: 15_000 },
+    )
+  }
+}
+
+async function cleanupWorkspaceDir() {
+  for (const path of workspaceDirsToCleanup) {
+    let lastError = null
+    for (let attempt = 1; attempt <= 8; attempt += 1) {
+      try {
+        await rm(path, { recursive: true, force: true, maxRetries: 2, retryDelay: 50 })
+        await new Promise((resolve) => setTimeout(resolve, 100 * attempt))
+        const remaining = await stat(path).catch(() => null)
+        if (!remaining) break
+        lastError = new Error(`temporary workspace was recreated after cleanup attempt ${attempt}`)
+      } catch (error) {
+        lastError = error
+      }
+    }
+    const remaining = await stat(path).catch(() => null)
+    if (remaining) throw lastError ?? new Error(`failed to remove temporary workspace: ${path}`)
+  }
 }
 
 async function main() {
@@ -156,6 +200,7 @@ async function main() {
     })
     assert(setup.result.success, setup.result.error || 'failed to persist smoke workspace setting')
     workspaceDir = setup.workspacePath
+    workspaceDirsToCleanup.add(workspaceDir)
     markdownPath = setup.markdownPath
     workspaceName = basename(workspaceDir)
     originalWorkspaceSettings = setup.original
@@ -268,8 +313,9 @@ async function main() {
     return `pid=${result.started.processId ?? 'unknown'}`
   })
 
+  await closeTemporaryWorkspaces()
   await restoreWorkspaceSettings()
-  cleanupWorkspaceDir()
+  await cleanupWorkspaceDir()
   await browser.close()
 
   const failed = results.filter((result) => result.status === 'fail')
@@ -283,11 +329,20 @@ async function main() {
 
 main().catch(async (error) => {
   try {
+    await closeTemporaryWorkspaces()
+  } catch {
+    // best effort project close
+  }
+  try {
     await restoreWorkspaceSettings()
   } catch {
     // best effort restore
   }
-  cleanupWorkspaceDir()
+  try {
+    await cleanupWorkspaceDir()
+  } catch (cleanupError) {
+    console.error(`Workflow smoke cleanup failed: ${cleanupError.message || String(cleanupError)}`)
+  }
   if (startedBySmoke && !keepRunning) {
     try {
       runRestart('stop')
