@@ -152,5 +152,37 @@ describe('useEditorStore', () => {
         '/project/archive/docs/note.md',
       )
     })
+
+    it('Markdown 资源组重命名后保留 dirty 草稿并重写资源引用', () => {
+      useEditorStore.setState({
+        files: {
+          '/project/notes.md': {
+            savedContent: '![old](notes.assets/old.png)\n',
+            currentContent: '![old](notes.assets/old.png)\n\n![new](notes.assets/new.png)\n\n草稿',
+            dirty: true,
+            loading: false,
+          },
+        },
+        pendingUpdates: [],
+      })
+
+      useEditorStore.getState().relocateMarkdownFile('/project/notes.md', '/project/plan.md', {
+        path: '/project/plan.md',
+        content:
+          '<!-- cclink-document: {"version":1,"resources":"plan.assets/manifest.json"} -->\n\n![old](plan.assets/old.png)\n',
+        size: 1,
+        modifiedAt: 2,
+        hash: 'next-hash',
+      })
+
+      const file = useEditorStore.getState().files['/project/plan.md']
+      expect(useEditorStore.getState().files['/project/notes.md']).toBeUndefined()
+      expect(file.savedContent).toBe('![old](plan.assets/old.png)\n')
+      expect(file.currentContent).toContain('![new](plan.assets/new.png)')
+      expect(file.currentContent).toContain('草稿')
+      expect(file.dirty).toBe(true)
+      expect(file.versionHash).toBe('next-hash')
+      expect(file.sourceLineOffset).toBe(2)
+    })
   })
 })

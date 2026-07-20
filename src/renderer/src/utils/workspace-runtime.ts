@@ -76,6 +76,7 @@ export async function persistRuntimeSections(workspaceKey?: string | null): Prom
   const browserTabs = Object.fromEntries(
     Object.entries(useBrowserStore.getState().tabs).filter(([tabId]) => browserTabIds.has(tabId)),
   )
+  const browserBookmarks = useBrowserStore.getState().bookmarks
   const editorDrafts = scopeWorkspaceEditorDraftSnapshot(
     { files: useEditorStore.getState().files },
     targetWorkspaceRef,
@@ -89,7 +90,11 @@ export async function persistRuntimeSections(workspaceKey?: string | null): Prom
 
   await Promise.all([
     persistWorkspaceSectionNow('tabs', { tabs: workspaceTabs, activeTabId }, targetWorkspaceKey),
-    persistWorkspaceSectionNow('browserTabs', { tabs: browserTabs }, targetWorkspaceKey),
+    persistWorkspaceSectionNow(
+      'browserTabs',
+      { tabs: browserTabs, bookmarks: browserBookmarks },
+      targetWorkspaceKey,
+    ),
     persistWorkspaceSectionNow('editorDrafts', editorDrafts, targetWorkspaceKey),
     persistWorkspaceSectionNow(
       'agentConversations',

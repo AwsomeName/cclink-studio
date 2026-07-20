@@ -47,6 +47,7 @@ export interface PtyExecutionAdapterOptions {
   wait?: (ms: number) => Promise<void>
   terminateGraceMs?: number
   terminateForceGraceMs?: number
+  browserEnvironment?: NodeJS.ProcessEnv
 }
 
 export class TerminalPtyError extends Error {
@@ -69,6 +70,7 @@ export class PtyExecutionAdapter implements TerminalExecutionAdapter {
   private readonly wait: NonNullable<PtyExecutionAdapterOptions['wait']>
   private readonly terminateGraceMs: number
   private readonly terminateForceGraceMs: number
+  private readonly browserEnvironment: NodeJS.ProcessEnv
 
   constructor(options: PtyExecutionAdapterOptions = {}) {
     this.now = options.now ?? Date.now
@@ -76,6 +78,7 @@ export class PtyExecutionAdapter implements TerminalExecutionAdapter {
     this.wait = options.wait ?? delay
     this.terminateGraceMs = options.terminateGraceMs ?? 800
     this.terminateForceGraceMs = options.terminateForceGraceMs ?? 400
+    this.browserEnvironment = options.browserEnvironment ?? {}
   }
 
   async start(input: TerminalStartInput): Promise<TerminalStartResult> {
@@ -101,6 +104,7 @@ export class PtyExecutionAdapter implements TerminalExecutionAdapter {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       ...input.env,
+      ...this.browserEnvironment,
       TERM: process.env.TERM || 'xterm-256color',
       COLORTERM: process.env.COLORTERM || 'truecolor',
       CCLINK_STUDIO_TERMINAL_SESSION_ID: input.sessionId,

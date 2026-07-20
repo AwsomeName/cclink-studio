@@ -19,6 +19,7 @@ import { useOpenProjectsStore } from './open-projects-store'
 import { useEditorStore } from './editor-store'
 import { useTabStore } from './tab-store'
 import { useWorkspaceStore } from './workspace-store'
+import { isMarkdownDocumentPath } from '@shared/markdown-document'
 
 /** setWorkspace 的最新请求序号（模块级，用于丢弃过期的并发结果，避免竞态） */
 let setWorkspaceSeq = 0
@@ -52,6 +53,15 @@ function replacePathPrefix(
   if (path === oldPrefix) return newPrefix
   if (path.startsWith(oldPrefix + '/')) return newPrefix + path.slice(oldPrefix.length)
   return path
+}
+
+function updateRenamedTabTitle(filePath: string): void {
+  const tabStore = useTabStore.getState()
+  for (const tab of tabStore.tabs) {
+    if (tab.filePath === filePath && tab.type === 'editor') {
+      tabStore.updateTabTitle(tab.id, baseName(filePath))
+    }
+  }
 }
 
 /** 把任意错误归一化为用户可读文案，并友好化沙箱越界等常见错误 */
@@ -807,13 +817,48 @@ export const useFsStore = create<FsState>((set, get) => ({
     set({ editingPath: null })
     if (newPath === oldPath) return
     try {
-      await window.cclinkStudio.fs.rename(oldPath, newPath)
+      let companionMove: { oldPath: string; newPath: string } | null = null
+      if (
+        isMarkdownDocumentPath(oldPath) &&
+        isMarkdownDocumentPath(newPath) &&
+        window.cclinkStudio.fs.relocateMarkdownDocument
+      ) {
+        const result = await window.cclinkStudio.fs.relocateMarkdownDocument({
+          sourcePath: oldPath,
+          targetPath: newPath,
+        })
+        useEditorStore.getState().relocateMarkdownFile(oldPath, newPath, result.snapshot)
+        if (result.oldAssetDir && result.newAssetDir) {
+          companionMove = { oldPath: result.oldAssetDir, newPath: result.newAssetDir }
+          useEditorStore.getState().rebaseFilePaths(result.oldAssetDir, result.newAssetDir)
+          useTabStore.getState().rebaseFilePaths(result.oldAssetDir, result.newAssetDir)
+          useAgentStore
+            .getState()
+            .rebaseMountedResourcePaths(result.oldAssetDir, result.newAssetDir)
+        }
+      } else {
+        await window.cclinkStudio.fs.rename(oldPath, newPath)
+        useEditorStore.getState().rebaseFilePaths(oldPath, newPath)
+      }
+      useTabStore.getState().rebaseFilePaths(oldPath, newPath)
+      useAgentStore.getState().rebaseMountedResourcePaths(oldPath, newPath)
+      updateRenamedTabTitle(newPath)
       await get().refreshDir(parent)
       set((state) => {
-        const expandedPaths = state.expandedPaths.map(
-          (path) => replacePathPrefix(path, oldPath, newPath) ?? path,
-        )
-        const selectedPath = replacePathPrefix(state.selectedPath, oldPath, newPath)
+        const expandedPaths = state.expandedPaths.map((path) => {
+          const rebased = replacePathPrefix(path, oldPath, newPath) ?? path
+          return companionMove
+            ? (replacePathPrefix(rebased, companionMove.oldPath, companionMove.newPath) ?? rebased)
+            : rebased
+        })
+        let selectedPath = replacePathPrefix(state.selectedPath, oldPath, newPath)
+        if (companionMove) {
+          selectedPath = replacePathPrefix(
+            selectedPath,
+            companionMove.oldPath,
+            companionMove.newPath,
+          )
+        }
         return { expandedPaths, selectedPath, operationError: null }
       })
       saveFsPanelState(
@@ -852,18 +897,54 @@ export const useFsStore = create<FsState>((set, get) => ({
     }
 
     try {
-      await window.cclinkStudio.fs.move(sourcePath, destinationPath)
-      useEditorStore.getState().rebaseFilePaths(sourcePath, destinationPath)
+      let companionMove: { oldPath: string; newPath: string } | null = null
+      if (
+        isMarkdownDocumentPath(sourcePath) &&
+        isMarkdownDocumentPath(destinationPath) &&
+        window.cclinkStudio.fs.relocateMarkdownDocument
+      ) {
+        const result = await window.cclinkStudio.fs.relocateMarkdownDocument({
+          sourcePath,
+          targetPath: destinationPath,
+        })
+        useEditorStore.getState().relocateMarkdownFile(sourcePath, destinationPath, result.snapshot)
+        if (result.oldAssetDir && result.newAssetDir) {
+          companionMove = { oldPath: result.oldAssetDir, newPath: result.newAssetDir }
+          useEditorStore.getState().rebaseFilePaths(result.oldAssetDir, result.newAssetDir)
+          useTabStore.getState().rebaseFilePaths(result.oldAssetDir, result.newAssetDir)
+          useAgentStore
+            .getState()
+            .rebaseMountedResourcePaths(result.oldAssetDir, result.newAssetDir)
+        }
+      } else {
+        await window.cclinkStudio.fs.move(sourcePath, destinationPath)
+        useEditorStore.getState().rebaseFilePaths(sourcePath, destinationPath)
+      }
       useTabStore.getState().rebaseFilePaths(sourcePath, destinationPath)
       useAgentStore.getState().rebaseMountedResourcePaths(sourcePath, destinationPath)
+      updateRenamedTabTitle(destinationPath)
       set((state) => {
         const expandedPaths = state.expandedPaths
-          .map((path) => replacePathPrefix(path, sourcePath, destinationPath) ?? path)
+          .map((path) => {
+            const rebased = replacePathPrefix(path, sourcePath, destinationPath) ?? path
+            return companionMove
+              ? (replacePathPrefix(rebased, companionMove.oldPath, companionMove.newPath) ??
+                  rebased)
+              : rebased
+          })
           .filter((path, index, paths) => paths.indexOf(path) === index)
         if (!expandedPaths.includes(targetDir)) expandedPaths.push(targetDir)
+        let selectedPath = replacePathPrefix(state.selectedPath, sourcePath, destinationPath)
+        if (companionMove) {
+          selectedPath = replacePathPrefix(
+            selectedPath,
+            companionMove.oldPath,
+            companionMove.newPath,
+          )
+        }
         return {
           expandedPaths,
-          selectedPath: replacePathPrefix(state.selectedPath, sourcePath, destinationPath),
+          selectedPath,
           operationError: null,
         }
       })

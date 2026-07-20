@@ -297,6 +297,20 @@
   color: var(--error, #f48771);
 }
 
+.markdown-diagnostics > div.warning {
+  color: var(--warning, #cca700);
+}
+
+.markdown-resource-diagnostics button {
+  margin-top: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
 .markdown-conflict-banner {
   display: flex;
   align-items: center;

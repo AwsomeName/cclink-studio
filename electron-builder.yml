@@ -1,5 +1,5 @@
 appId: com.cclink.studio
-productName: CCLink Studio
+productName: CCLink Studio 开源版
 directories:
   buildResources: resources
   output: dist

@@ -21,16 +21,16 @@ import {
 } from '../../features/agent-conversations/local-session-sidebar'
 import {
   IconFitWidth,
-  IconGlobe,
   IconBookmark,
   IconMobile,
   IconMonitor,
   IconProjects,
   IconRefresh,
-  IconChevronDown,
+  IconLink,
   IconPlus,
   IconTerminal,
 } from '../common/Icons'
+import { BrowserFavicon } from '../common/BrowserFavicon'
 import type { ActivityPanel } from '../../types'
 import { FileTree } from './FileTree'
 import { ProjectOperationsSection } from './ProjectOperationsSection'
@@ -39,8 +39,15 @@ import { DataSourcesPanel } from '../data-sources/DataSourcesPanel'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   buildTerminalRecordTabDraft,
+  buildTerminalTabDraft,
   buildTerminalTabDraftFromSession,
 } from '../../utils/terminal-tab'
+import { recordTerminalLifecycleEvent } from '../../utils/terminal-lifecycle'
+import {
+  getBrowserDisplayTitle,
+  getBrowserTabsForWorkspace,
+  getBrowserUrlLabel,
+} from './browser-sidebar-view-model'
 
 function getProjectName(path: string): string {
   return path.split('/').filter(Boolean).pop() ?? path
@@ -82,7 +89,14 @@ export function Sidebar(): React.ReactElement {
   const sidebarWidth = useUIStore((s) => s.sidebarWidth)
   const workspacePath = useFsStore((s) => s.workspacePath)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
+  const openTab = useTabStore((s) => s.openTab)
   const sidebarTitle = getSidebarTitle(activePanel, activeWorkspaceRef, workspacePath)
+
+  const openNewTerminal = useCallback((): void => {
+    const draft = buildTerminalTabDraft(activeWorkspaceRef)
+    openTab(draft)
+    void recordTerminalLifecycleEvent(draft.terminal, 'created', 'Terminal Tab 已创建')
+  }, [activeWorkspaceRef, openTab])
 
   return (
     <div className="sidebar" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
@@ -91,6 +105,17 @@ export function Sidebar(): React.ReactElement {
           <span className="sidebar-header-title" title={workspacePath ?? sidebarTitle}>
             {sidebarTitle}
           </span>
+          {activePanel === 'terminal' && (
+            <button
+              className="sidebar-header-action"
+              type="button"
+              onClick={openNewTerminal}
+              title="新建 Terminal"
+              aria-label="新建 Terminal"
+            >
+              <IconPlus size={14} />
+            </button>
+          )}
         </div>
       )}
 
@@ -164,9 +189,7 @@ function ProjectSidebarContent({
         <ProductionSidebarView workspaceRef={activeWorkspaceRef} workspacePath={workspacePath} />
       )}
 
-      {activePanel === 'terminal' && (
-        <TerminalSidebarView workspaceRef={activeWorkspaceRef} />
-      )}
+      {activePanel === 'terminal' && <TerminalSidebarView workspaceRef={activeWorkspaceRef} />}
 
       {activePanel === 'operations' && (
         <OperationsSidebarView workspaceRef={activeWorkspaceRef} workspacePath={workspacePath} />
@@ -268,40 +291,138 @@ function BrowserManagementView(): React.ReactElement {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const activateTab = useTabStore((s) => s.activateTab)
+  const openTab = useTabStore((s) => s.openTab)
   const browserTabs = useBrowserStore((s) => s.tabs)
+  const bookmarks = useBrowserStore((s) => s.bookmarks)
+  const addBookmark = useBrowserStore((s) => s.addBookmark)
+  const removeBookmark = useBrowserStore((s) => s.removeBookmark)
+  const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
-  const browserWorkbenchTabs = tabs.filter((tab) => tab.type === 'browser')
+  const browserWorkbenchTabs = useMemo(
+    () => getBrowserTabsForWorkspace(tabs, activeWorkspaceRef),
+    [activeWorkspaceRef, tabs],
+  )
   const currentBrowserTab =
-    activeTab?.type === 'browser' ? activeTab : (browserWorkbenchTabs[0] ?? null)
-  const currentBrowserState = currentBrowserTab ? browserTabs[currentBrowserTab.id] : undefined
-
+    activeTab && browserWorkbenchTabs.some((tab) => tab.id === activeTab.id)
+      ? activeTab
+      : (browserWorkbenchTabs[0] ?? null)
   const ensureBrowserFocus = (): string | null => {
     if (!currentBrowserTab) return null
     activateTab(currentBrowserTab.id)
     return currentBrowserTab.id
   }
 
+  const openNewBrowser = (): void => {
+    openTab({
+      type: 'browser',
+      title: '浏览器',
+      icon: '🌐',
+      forceNew: true,
+      workspaceRef: activeWorkspaceRef,
+    })
+  }
+
+  const openBookmark = (bookmark: (typeof bookmarks)[number]): void => {
+    const existing = browserWorkbenchTabs.find((tab) => browserTabs[tab.id]?.url === bookmark.url)
+    if (existing) {
+      activateTab(existing.id)
+      return
+    }
+    openTab({
+      type: 'browser',
+      title: bookmark.title,
+      icon: '🌐',
+      initialUrl: bookmark.url,
+      forceNew: true,
+      workspaceRef: activeWorkspaceRef,
+    })
+  }
+
   return (
-    <div className="sidebar-section">
-        <div className="sidebar-section-header expanded">
-          <IconChevronDown size={10} />
-          当前浏览器
+    <div className="browser-sidebar">
+      <div
+        className="browser-sidebar-scope"
+        title={workspaceRefKey(activeWorkspaceRef) ?? '未归档'}
+      >
+        <IconLink size={12} />
+        <span>{workspaceRefLabel(activeWorkspaceRef)}</span>
+      </div>
+
+      <div className="sidebar-section">
+        <div className="sidebar-section-header browser-sidebar-section-header">
+          <span>已打开</span>
+          <span className="browser-sidebar-count">{browserWorkbenchTabs.length}</span>
+          <button
+            className="browser-sidebar-add"
+            type="button"
+            onClick={openNewBrowser}
+            title="在当前项目新建浏览器"
+            aria-label="在当前项目新建浏览器"
+          >
+            <IconPlus size={14} />
+          </button>
         </div>
-        {currentBrowserTab ? (
+
+        <div className="browser-sidebar-list">
+          {browserWorkbenchTabs.map((tab) => {
+            const state = browserTabs[tab.id]
+            const title = getBrowserDisplayTitle(tab.title, state?.title)
+            const url = state?.url ?? tab.initialUrl ?? ''
+            const bookmark = bookmarks.find((item) => item.url === url)
+            return (
+              <div
+                className={`browser-sidebar-row ${tab.id === activeTabId ? 'active' : ''}`}
+                key={tab.id}
+              >
+                <button
+                  className="browser-sidebar-row-main"
+                  type="button"
+                  onClick={() => activateTab(tab.id)}
+                  title={url || title}
+                >
+                  <span className="browser-sidebar-favicon">
+                    <BrowserFavicon src={state?.faviconUrl} size={18} />
+                  </span>
+                  <span className="project-panel-row-main">
+                    <span className="project-panel-row-title">{title}</span>
+                    <span className="project-panel-row-meta">
+                      {url ? getBrowserUrlLabel(url) : '等待浏览器初始化'}
+                    </span>
+                  </span>
+                  {tab.id === activeTabId && <span className="browser-sidebar-current">当前</span>}
+                </button>
+                <button
+                  className={`browser-sidebar-bookmark ${bookmark ? 'active' : ''}`}
+                  type="button"
+                  disabled={!url}
+                  aria-pressed={Boolean(bookmark)}
+                  aria-label={bookmark ? '从当前项目收藏移除' : '收藏到当前项目'}
+                  title={bookmark ? '从当前项目收藏移除' : '收藏到当前项目'}
+                  onClick={() => {
+                    if (!url) return
+                    if (bookmark) {
+                      removeBookmark(bookmark.id)
+                    } else {
+                      addBookmark({
+                        url,
+                        title,
+                        faviconUrl: state?.faviconUrl ?? null,
+                      })
+                    }
+                  }}
+                >
+                  <IconBookmark size={14} />
+                </button>
+              </div>
+            )
+          })}
+          {browserWorkbenchTabs.length === 0 && (
+            <div className="project-panel-empty">当前项目没有浏览器现场</div>
+          )}
+        </div>
+
+        {currentBrowserTab && (
           <>
-            <button
-              className={`project-panel-row ${currentBrowserTab.id === activeTabId ? 'active' : ''}`}
-              onClick={() => activateTab(currentBrowserTab.id)}
-              title={currentBrowserState?.url ?? currentBrowserTab.title}
-            >
-              <IconGlobe size={14} />
-              <span className="project-panel-row-main">
-                <span className="project-panel-row-title">{currentBrowserTab.title}</span>
-                <span className="project-panel-row-meta">
-                  {currentBrowserState?.url ?? '等待浏览器初始化'}
-                </span>
-              </span>
-            </button>
             <div className="project-panel-quick-actions">
               <button
                 className="project-panel-quick-action"
@@ -351,9 +472,45 @@ function BrowserManagementView(): React.ReactElement {
               </button>
             </div>
           </>
-        ) : (
-          <div className="project-panel-empty">当前没有浏览器现场</div>
         )}
+      </div>
+
+      <div className="sidebar-section browser-sidebar-bookmarks-section">
+        <div className="sidebar-section-header browser-sidebar-section-header">
+          <span>项目收藏</span>
+          <span className="browser-sidebar-count">{bookmarks.length}</span>
+        </div>
+        <div className="browser-sidebar-list">
+          {bookmarks.map((bookmark) => (
+            <div className="browser-sidebar-row" key={bookmark.id}>
+              <button
+                className="browser-sidebar-row-main"
+                type="button"
+                onClick={() => openBookmark(bookmark)}
+                title={bookmark.url}
+              >
+                <span className="browser-sidebar-favicon">
+                  <BrowserFavicon src={bookmark.faviconUrl} size={18} />
+                </span>
+                <span className="project-panel-row-main">
+                  <span className="project-panel-row-title">{bookmark.title}</span>
+                  <span className="project-panel-row-meta">{getBrowserUrlLabel(bookmark.url)}</span>
+                </span>
+              </button>
+              <button
+                className="browser-sidebar-bookmark active"
+                type="button"
+                onClick={() => removeBookmark(bookmark.id)}
+                title="从当前项目收藏移除"
+                aria-label="从当前项目收藏移除"
+              >
+                <IconBookmark size={14} />
+              </button>
+            </div>
+          ))}
+          {bookmarks.length === 0 && <div className="project-panel-empty">暂无项目收藏</div>}
+        </div>
+      </div>
     </div>
   )
 }
@@ -430,11 +587,7 @@ function getTerminalTabWorkspaceKey(
   return workspaceRefKey(tab.terminal?.runtime.workspaceRef ?? { kind: 'global' })
 }
 
-function TerminalSidebarView({
-  workspaceRef,
-}: {
-  workspaceRef: WorkspaceRef
-}): React.ReactElement {
+function TerminalSidebarView({ workspaceRef }: { workspaceRef: WorkspaceRef }): React.ReactElement {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const openTab = useTabStore((s) => s.openTab)

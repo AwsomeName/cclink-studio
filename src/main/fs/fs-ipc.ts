@@ -75,6 +75,34 @@ export function registerFsIpc(fs: FileService, settingsService: SettingsService)
     ) => fs.saveDocumentAsset(input),
   )
 
+  ipcMain.handle('fs:inspectMarkdownDocument', async (_event, documentPath: string) => {
+    return fs.inspectMarkdownDocument(documentPath)
+  })
+
+  ipcMain.handle(
+    'fs:saveMarkdownDocumentAs',
+    async (_event, input: { sourcePath?: string; targetPath: string; content: string }) =>
+      fs.saveMarkdownDocumentAs(input),
+  )
+
+  ipcMain.handle(
+    'fs:relocateMarkdownDocument',
+    async (_event, input: { sourcePath: string; targetPath: string }) =>
+      fs.relocateMarkdownDocument(input),
+  )
+
+  ipcMain.handle(
+    'fs:exportMarkdownDocumentZip',
+    async (_event, input: { documentPath: string; targetPath: string }) =>
+      fs.exportMarkdownDocumentZip(input),
+  )
+
+  ipcMain.handle(
+    'fs:trashMarkdownDocument',
+    async (_event, input: { documentPath: string; includeAssets: boolean }) =>
+      fs.trashMarkdownDocument(input),
+  )
+
   // 获取文件/目录元数据
   ipcMain.handle('fs:stat', async (_event, filePath: string) => {
     return fs.stat(filePath)

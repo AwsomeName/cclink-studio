@@ -59,6 +59,9 @@ find_project_electron_pids() {
       *"$ROOT_DIR"/node_modules/*/electron*/dist/Electron.app/Contents/MacOS/Electron\ .*)
         printf '%s\n' "$pid"
         ;;
+      *"$ROOT_DIR"/.cache/electron-dev/*/CCLink\ Studio\ 开源版.app/Contents/MacOS/Electron\ .*)
+        printf '%s\n' "$pid"
+        ;;
     esac
   done
 }

@@ -48,6 +48,8 @@ Use prefix `feat/` for features, `fix/` for bug fixes, `docs/` for documentation
 
 ### 3. Make Changes
 
+- Read and follow the architecture constitution in `docs/architecture.md`
+- During the active stabilization phase, confirm the change is allowed by `docs/stabilization.md`
 - Write code following the project conventions (see below)
 - Keep commits clean and focused
 - Run `pnpm verify` before submitting
@@ -100,6 +102,8 @@ Main process is organized by domain:
 - `fs/` — File system service
 
 See [docs/architecture.md](docs/architecture.md) for full details.
+
+Changes that alter security boundaries, module dependencies, lifecycle ownership, state ownership, or persistence contracts require an ADR under `docs/decisions/` before implementation.
 
 ## Boundary
 

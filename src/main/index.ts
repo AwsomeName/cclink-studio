@@ -13,11 +13,17 @@ import { shutdownRuntime } from './runtime/shutdown-runtime'
 import { configureFixedUserDataPath } from './runtime/user-data-path'
 import { parseBrowserAuthChildOptions } from './browser/browser-auth-contract'
 import { configureBrowserAuthChildApp, runBrowserAuthChild } from './browser/browser-auth-child'
+import { parseCleanBrowserChildOptions } from './browser/clean-browser-contract'
+import { configureCleanBrowserChildApp, runCleanBrowserChild } from './browser/clean-browser-child'
+import { parseTerminalBrowserOpenUrl } from './terminal/terminal-browser-launcher'
 
 const browserAuthChildOptions = parseBrowserAuthChildOptions(process.argv)
+const cleanBrowserChildOptions = parseCleanBrowserChildOptions(process.argv)
 
 if (browserAuthChildOptions) {
   startBrowserAuthChild()
+} else if (cleanBrowserChildOptions) {
+  startCleanBrowserChild()
 } else {
   startMainApplication()
 }
@@ -28,6 +34,16 @@ function startBrowserAuthChild(): void {
 
   void app.whenReady().then(async () => {
     await runBrowserAuthChild(browserAuthChildOptions!)
+  })
+  app.on('window-all-closed', () => app.quit())
+}
+
+function startCleanBrowserChild(): void {
+  configureCleanBrowserChildApp(app, cleanBrowserChildOptions!)
+  registerProcessErrorHandlers()
+
+  void app.whenReady().then(async () => {
+    await runCleanBrowserChild(cleanBrowserChildOptions!)
   })
   app.on('window-all-closed', () => app.quit())
 }
@@ -55,7 +71,12 @@ function startMainApplication(): void {
       }
     })
 
-    app.on('second-instance', () => {
+    app.on('second-instance', (_event, commandLine) => {
+      const terminalUrl = parseTerminalBrowserOpenUrl(commandLine)
+      if (terminalUrl) {
+        runtime.browserAuthProcessService?.openExternalUrl(terminalUrl)
+        return
+      }
       if (runtime.mainWindow) {
         if (runtime.mainWindow.isMinimized()) runtime.mainWindow.restore()
         runtime.mainWindow.focus()

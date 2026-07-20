@@ -1,5 +1,6 @@
 {
   "name": "cclink-studio",
+  "productName": "CCLink Studio 开源版",
   "version": "0.1.1",
   "description": "An open-source AI-powered desktop workspace — embedded browser, document editor, and AI agent, all in one.",
   "main": "./out/main/index.js",
@@ -24,7 +25,7 @@
     "studio:stop": "bash scripts/studio.sh stop",
     "studio:smoke": "bash scripts/studio.sh smoke",
     "studio:package": "bash scripts/studio.sh package",
-    "dev": "ELECTRON_RUN_AS_NODE= electron-vite dev",
+    "dev": "ELECTRON_RUN_AS_NODE= bash scripts/dev.sh",
     "build": "pnpm typecheck && electron-vite build",
     "preview": "electron-vite preview",
     "postinstall": "electron-builder install-app-deps",
@@ -88,6 +89,7 @@
     "@yume-chan/stream-extra": "^2.5.3",
     "agent-device": "^0.17.2",
     "fast-xml-parser": "^5.8.0",
+    "fflate": "^0.8.3",
     "highlight.js": "^11.11.1",
     "juice": "^12.1.0",
     "lowlight": "^3.3.0",

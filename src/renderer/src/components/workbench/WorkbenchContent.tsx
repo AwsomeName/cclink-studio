@@ -7,6 +7,7 @@ import type { TerminalExecutionEvent } from '@shared/terminal'
 import type { Tab } from '../../types'
 import { workspaceRefLabel, workspaceRefSourceLabel } from '../../../../shared/workspace-ref'
 import { useTabStore } from '../../stores/tab-store'
+import { useTabContextMenuStore } from '../../stores/tab-context-menu-store'
 import { useTerminalStore } from '../../stores/terminal-store'
 import { resolveConversationTab } from '../../utils/conversation-tab'
 import { submitTerminalCommand } from '../../utils/terminal-command'
@@ -40,6 +41,15 @@ export function WorkbenchContent({
   contentRef,
 }: WorkbenchContentProps): React.ReactElement {
   const conversationTarget = activeTab ? resolveConversationTab(activeTab) : null
+  const tabContextMenuOpen = useTabContextMenuStore((state) => state.open)
+  const browserPreviewDataUrl = useTabContextMenuStore((state) => state.browserPreviewDataUrl)
+  const clearBrowserPreview = useTabContextMenuStore((state) => state.clearBrowserPreview)
+
+  useEffect(() => {
+    if (tabContextMenuOpen || !browserPreviewDataUrl) return
+    const timer = window.setTimeout(clearBrowserPreview, 120)
+    return () => window.clearTimeout(timer)
+  }, [browserPreviewDataUrl, clearBrowserPreview, tabContextMenuOpen])
 
   return (
     <div className="workbench-content" ref={contentRef}>
@@ -48,6 +58,14 @@ export function WorkbenchContent({
           <PanelErrorFallback error={error} retry={retry} title="Tab 内容" />
         )}
       >
+        {isBrowserTab && browserPreviewDataUrl && (
+          <img
+            className="browser-context-preview"
+            src={browserPreviewDataUrl}
+            alt=""
+            draggable={false}
+          />
+        )}
         {!isBrowserTab && activeTab && (
           <>
             {activeTab.type === 'settings' && (

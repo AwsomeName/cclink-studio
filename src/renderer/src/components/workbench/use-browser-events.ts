@@ -7,6 +7,9 @@ export function useBrowserEvents(): void {
     const offUrlChanged = window.cclinkStudio.browser.onUrlChanged((payload) => {
       useBrowserStore.getState().setUrl(payload.tabId, payload.url, payload)
     })
+    const offPageMetaChanged = window.cclinkStudio.browser.onPageMetaChanged((payload) => {
+      useBrowserStore.getState().setPageMeta(payload.tabId, payload)
+    })
     const offViewStateChanged = window.cclinkStudio.browser.onViewStateChanged((state) => {
       if (state?.tabId) {
         useBrowserStore.getState().setViewState(state.tabId, state)
@@ -14,6 +17,7 @@ export function useBrowserEvents(): void {
     })
     return () => {
       offUrlChanged()
+      offPageMetaChanged()
       offViewStateChanged()
     }
   }, [])

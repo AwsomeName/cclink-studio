@@ -19,6 +19,7 @@ interface ConversationShellProps {
   error?: ReactNode | null
   context?: ReactNode
   listRef?: React.RefObject<HTMLDivElement | null>
+  composerRef?: React.RefObject<HTMLDivElement | null>
   listProps?: Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'className'>
   empty?: ReactNode
   children: ReactNode
@@ -35,6 +36,7 @@ export function ConversationShell({
   error,
   context,
   listRef,
+  composerRef,
   listProps,
   empty,
   children,
@@ -74,7 +76,9 @@ export function ConversationShell({
         {children}
       </div>
 
-      <div className="conversation-shell-composer">{composer}</div>
+      <div ref={composerRef} className="conversation-shell-composer">
+        {composer}
+      </div>
     </div>
   )
 }

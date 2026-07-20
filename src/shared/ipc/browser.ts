@@ -228,6 +228,12 @@ export interface BrowserUrlChangedPayload {
   historyIndex?: number
 }
 
+export interface BrowserPageMetaChangedPayload {
+  tabId: string
+  title?: string
+  faviconUrl?: string | null
+}
+
 export type BrowserViewStateChangedPayload = BrowserViewState & { tabId: string }
 
 export interface BrowserOpenTabRequest {
@@ -246,6 +252,7 @@ export interface BrowserApiContract {
   goBack: (tabId: string) => Promise<void>
   goForward: (tabId: string) => Promise<void>
   reload: (tabId: string) => Promise<void>
+  capturePage: (tabId: string) => Promise<string | null>
   getCurrentURL: (tabId: string) => Promise<string>
   getActiveViewId: (workspaceKey?: string | null) => Promise<string | null>
   getDiagnostics: (tabId: string) => Promise<BrowserPageDiagnosticSummary | null>
@@ -254,6 +261,7 @@ export interface BrowserApiContract {
     request: BrowserSessionDiagnosticRequest,
   ) => Promise<BrowserSessionDiagnosticSummary>
   onUrlChanged: (callback: (payload: BrowserUrlChangedPayload) => void) => () => void
+  onPageMetaChanged: (callback: (payload: BrowserPageMetaChangedPayload) => void) => () => void
   onRequestOpenTab: (callback: (payload: BrowserOpenTabRequest) => void) => () => void
 
   zoomIn: (tabId: string) => Promise<void>

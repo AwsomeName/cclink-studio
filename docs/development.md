@@ -1,12 +1,14 @@
 # CCLink Studio 开发指南
 
-> 当前事实源。最后更新：2026-07-16。
+> 当前事实源。最后更新：2026-07-20。
 
 ## 结论
 
 本仓库是 CCLink Studio 的开源桌面壳。开发时默认只依赖本地能力，不假设存在官方生产 API、登录服务、订阅服务、官方消息凭证、云同步、网络工作区或商业更新源。
 
 官方构建、签名、公证和生产 API 注入在 `/Users/apple/Desktop/cclink-dev` 处理；CCLink 云函数与 Agent runtime 在 `/Users/apple/Desktop/chat-cc/deploy` 和 `/Users/apple/Desktop/chat-cc/Agent`。
+
+所有功能开发必须遵守 `docs/architecture.md` 的“架构宪法”。当前处于 `docs/stabilization.md` 定义的稳定化阶段，默认不扩大功能面。
 
 ## 环境准备
 
@@ -116,7 +118,7 @@ cclink-studio/
 
 | 层级         | 技术                          |
 | ------------ | ----------------------------- |
-| 桌面框架     | Electron 35                   |
+| 桌面框架     | Electron 43                   |
 | 前端         | React 19 + TypeScript 5.9     |
 | 构建         | electron-vite 5 + Vite 6      |
 | 状态管理     | Zustand 5                     |
@@ -145,6 +147,27 @@ cclink-studio/
 - 代码注释使用中文；public API 文档可中英双语。
 - 新能力优先接入现有 runtime/service/IPC 模式，不绕过 preload 直接给 renderer Node 权限。
 - Electron 保持 `contextIsolation: true`，不开 `nodeIntegration`。
+
+## 功能开发门禁
+
+开始实现前必须回答：
+
+1. 该功能属于哪个能力模块，失败时如何独立降级？
+2. 是否扩大 preload、IPC、文件系统、浏览器或密钥权限面？
+3. 状态由谁唯一拥有，工作区、Profile 和会话作用域是什么？
+4. 启动、窗口重建、项目切换和退出时如何创建、恢复与释放？
+5. 哪些外部副作用必须由用户在最后一步确认？
+6. 诊断日志如何证明功能当前处于什么状态、失败在哪里？
+7. 哪些自动化测试和 smoke 可以证明没有破坏已有能力？
+
+任一问题没有明确答案时，先补设计，不进入实现。需要违反架构宪法时，先提交 `docs/decisions/` ADR。
+
+合入前必须满足：
+
+- `pnpm verify` 通过。
+- 受影响的 smoke 测试通过。
+- 没有新增明文密钥、未校验 IPC、跨 store 隐式事务或不可释放的监听器/子进程。
+- 功能和降级路径都有测试，文档描述的是当前事实而非未来承诺。
 
 ## IPC 边界
 

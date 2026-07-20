@@ -1,8 +1,8 @@
-import { copyFile, readdir, readFile, writeFile, stat, mkdir, rename, unlink } from 'fs/promises'
+import { readdir, readFile, writeFile, stat, mkdir, rename, unlink } from 'fs/promises'
 import { createWriteStream, watch } from 'fs'
 import { join, resolve, extname, dirname, parse, sep, basename, relative } from 'path'
 import { pipeline } from 'stream/promises'
-import { app } from 'electron'
+import { app, shell } from 'electron'
 import { createHash, randomUUID } from 'crypto'
 import yauzl, { type Entry, type ZipFile } from 'yauzl'
 import { XMLParser } from 'fast-xml-parser'
@@ -26,6 +26,8 @@ import type {
   FsSaveTextDocumentResult,
   FsTextDocumentSnapshot,
 } from '../../shared/ipc/fs'
+import { isMarkdownDocumentPath } from '../../shared/markdown-document'
+import { MarkdownDocumentService } from './markdown-document-service'
 
 const MAX_INLINE_VIDEO_BYTES = 300 * 1024 * 1024
 const MAX_OFFICE_PREVIEW_BLOCKS = 400
@@ -48,6 +50,7 @@ const OOXML_PARSER = new XMLParser({
 export class FileService {
   /** 允许访问的根目录列表（用户主目录 + Desktop + Documents + Downloads） */
   private allowedRoots: string[]
+  private markdownDocuments: MarkdownDocumentService
 
   constructor() {
     const home = app.getPath('home')
@@ -57,6 +60,7 @@ export class FileService {
       app.getPath('documents'),
       app.getPath('downloads'),
     ]
+    this.markdownDocuments = new MarkdownDocumentService((filePath) => this.validatePath(filePath))
   }
 
   /**
@@ -262,10 +266,15 @@ export class FileService {
       return { status: 'conflict', current }
     }
 
+    const prepared = isMarkdownDocumentPath(safe)
+      ? await this.markdownDocuments.prepareSave(safe, input.content)
+      : null
+    const content = prepared?.content ?? input.content
     const tempPath = join(dirname(safe), `.${basename(safe)}.${randomUUID()}.tmp`)
     try {
-      await writeFile(tempPath, input.content, 'utf-8')
+      await writeFile(tempPath, content, 'utf-8')
       await rename(tempPath, safe)
+      if (prepared) await this.markdownDocuments.finalizeSave(prepared)
     } catch (error) {
       await unlink(tempPath).catch(() => {})
       throw error
@@ -284,9 +293,7 @@ export class FileService {
     if (!isImageFileExtension(extension)) {
       throw new Error('仅支持导入图片资源')
     }
-    const target = await this.createDocumentAssetPath(safeDocument, basename(safeSource))
-    await copyFile(safeSource, target.path)
-    return target
+    return this.markdownDocuments.importAsset(safeDocument, safeSource)
   }
 
   async saveDocumentAsset(input: {
@@ -304,25 +311,92 @@ export class FileService {
     if (!extension) throw new Error(`不支持的图片类型: ${input.mimeType}`)
     const requestedName = basename(input.fileName || `image-${Date.now()}${extension}`)
     const fileName = extname(requestedName) ? requestedName : `${requestedName}${extension}`
-    const target = await this.createDocumentAssetPath(safeDocument, fileName)
-    await writeFile(target.path, Buffer.from(input.content, 'base64'))
-    return target
+    return this.markdownDocuments.saveAsset(
+      safeDocument,
+      fileName,
+      Buffer.from(input.content, 'base64'),
+    )
   }
 
-  private async createDocumentAssetPath(
-    documentPath: string,
-    requestedName: string,
-  ): Promise<FsDocumentAssetResult> {
-    const parsed = parse(documentPath)
-    const assetDir = join(parsed.dir, '.assets', parsed.name || 'document')
-    await mkdir(assetDir, { recursive: true })
-    const fileName = await uniqueFileName(assetDir, basename(requestedName))
-    const targetPath = join(assetDir, fileName)
-    return {
-      path: targetPath,
-      relativePath: normalizeRelativePath(relative(parsed.dir, targetPath)),
-      fileName,
+  async inspectMarkdownDocument(documentPath: string) {
+    const safe = this.validatePath(documentPath)
+    if (!isMarkdownDocumentPath(safe)) throw new Error('仅支持检查 Markdown 文档')
+    return this.markdownDocuments.inspect(safe)
+  }
+
+  async saveMarkdownDocumentAs(input: {
+    sourcePath?: string
+    targetPath: string
+    content: string
+  }) {
+    const sourcePath = input.sourcePath ? this.validatePath(input.sourcePath) : undefined
+    const targetPath = this.validatePath(input.targetPath)
+    if (!isMarkdownDocumentPath(targetPath)) throw new Error('目标必须是 Markdown 文件')
+    return this.markdownDocuments.saveAs({
+      sourcePath,
+      targetPath,
+      content: input.content,
+      save: async (filePath, content) => {
+        const result = await this.saveTextDocument({ filePath, content, force: true })
+        if (result.status !== 'saved') throw new Error('另存为时发生文件冲突')
+        return result.snapshot
+      },
+    })
+  }
+
+  async relocateMarkdownDocument(input: { sourcePath: string; targetPath: string }) {
+    const sourcePath = this.validatePath(input.sourcePath)
+    const targetPath = this.validatePath(input.targetPath)
+    if (!isMarkdownDocumentPath(sourcePath) || !isMarkdownDocumentPath(targetPath)) {
+      throw new Error('仅支持移动或重命名 Markdown 文档资源组')
     }
+    return this.markdownDocuments.relocate({
+      sourcePath,
+      targetPath,
+      save: async (filePath, content) => {
+        const result = await this.saveTextDocument({ filePath, content, force: true })
+        if (result.status !== 'saved') throw new Error('移动文档时发生文件冲突')
+        return result.snapshot
+      },
+    })
+  }
+
+  async exportMarkdownDocumentZip(input: { documentPath: string; targetPath: string }) {
+    const documentPath = this.validatePath(input.documentPath)
+    const targetPath = this.validatePath(input.targetPath)
+    if (!isMarkdownDocumentPath(documentPath)) throw new Error('仅支持导出 Markdown 文档')
+    if (extname(targetPath).toLowerCase() !== '.zip')
+      throw new Error('导出文件必须使用 .zip 扩展名')
+    const current = await this.readTextDocument(documentPath)
+    const saved = await this.saveTextDocument({
+      filePath: documentPath,
+      content: current.content,
+      expectedHash: current.hash,
+      force: true,
+    })
+    if (saved.status !== 'saved') throw new Error('导出前保存 Markdown 资源组失败')
+    return this.markdownDocuments.exportZip(documentPath, targetPath)
+  }
+
+  async trashMarkdownDocument(input: { documentPath: string; includeAssets: boolean }) {
+    const documentPath = this.validatePath(input.documentPath)
+    if (!isMarkdownDocumentPath(documentPath)) throw new Error('仅支持删除 Markdown 文档资源组')
+    const resourceDirectories = input.includeAssets
+      ? await this.markdownDocuments.existingResourceDirectories(documentPath)
+      : []
+    const trashedPaths: string[] = []
+    const failedPaths: string[] = []
+    await shell.trashItem(documentPath)
+    trashedPaths.push(documentPath)
+    for (const resourcePath of resourceDirectories) {
+      try {
+        await shell.trashItem(resourcePath)
+        trashedPaths.push(resourcePath)
+      } catch {
+        failedPaths.push(resourcePath)
+      }
+    }
+    return { trashedPaths, failedPaths }
   }
 
   /** 获取文件/目录元数据 */
@@ -466,23 +540,6 @@ function textDocumentSnapshot(
     modifiedAt,
     hash: createHash('sha256').update(buffer).digest('hex'),
   }
-}
-
-async function uniqueFileName(dirPath: string, requestedName: string): Promise<string> {
-  const parsed = parse(requestedName)
-  const safeName = parsed.name.trim() || 'asset'
-  const extension = parsed.ext.toLowerCase()
-  let candidate = `${safeName}${extension}`
-  let index = 1
-  while (await pathExists(join(dirPath, candidate))) {
-    candidate = `${safeName}-${index}${extension}`
-    index += 1
-  }
-  return candidate
-}
-
-function normalizeRelativePath(filePath: string): string {
-  return filePath.split(sep).join('/')
 }
 
 function imageExtensionForMimeType(mimeType: string): string | null {

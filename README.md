@@ -116,7 +116,8 @@ cclink-studio/
 
 ## 文档
 
-- [架构设计](docs/architecture.md)
+- [架构设计与架构宪法](docs/architecture.md)
+- [当前稳定化阶段](docs/stabilization.md)
 - [开发指南](docs/development.md)
 - [本地冒烟检查](docs/ops/local-smoke-check.md)
 - [浏览器自动化](docs/features/browser-automation.md)

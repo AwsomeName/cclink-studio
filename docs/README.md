@@ -1,12 +1,14 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-07-17。
+> 当前事实源。最后更新：2026-07-20。
 
 ## 先读这些
 
 - `README.md`：仓库定位和快速开始。
 - `AGENTS.md`：给 Codex/Agent 的项目边界和协作规则。
 - `docs/architecture.md`：当前架构事实源。
+- `docs/stabilization.md`：当前稳定化阶段、工作包和退出标准。
+- `docs/decisions/`：架构原则例外和重大取舍的 ADR。
 - `docs/development.md`：当前开发事实源。
 - `docs/ops/local-smoke-check.md`：验证 Studio 开源壳可独立启动和本地核心能力可用。
 - `docs/official-integration-contract.md`：Studio 暴露给官方构建层的接口边界。
@@ -32,7 +34,7 @@ Studio 默认可单仓库独立启动，不要求 `cclink-dev`、`chat-cc/deploy
 
 ## 当前文档集
 
-- 架构与开发：`docs/architecture.md`、`docs/development.md`。
+- 架构与开发：`docs/architecture.md`、`docs/stabilization.md`、`docs/development.md`、`docs/decisions/`。
 - 本地验收：`docs/ops/local-smoke-check.md`。
 - 官方集成：`docs/official-integration-contract.md`、`docs/ops/cclink-dev-official-integration-handoff.md`。
 - 工作台能力：`docs/features/project-system.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/browser-automation.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`。

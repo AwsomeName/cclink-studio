@@ -1,4 +1,5 @@
 import type { BrowserTabState } from '../../stores/browser-store'
+import { copyTextToClipboard } from '../../utils/clipboard'
 import {
   IconArrowLeft,
   IconArrowRight,
@@ -42,7 +43,33 @@ export function BrowserToolbar({
         className="url-input"
         value={browserState?.urlInput ?? ''}
         onChange={(event) => onUrlInputChange(tabId, event.target.value)}
+        onFocus={() => {
+          void window.cclinkStudio.window.focusRenderer()
+        }}
         onKeyDown={(event) => {
+          const primaryModifier = event.metaKey || event.ctrlKey
+          const key = event.key.toLowerCase()
+
+          if (primaryModifier && !event.altKey && !event.shiftKey && key === 'a') {
+            event.preventDefault()
+            event.currentTarget.select()
+            return
+          }
+
+          if (primaryModifier && !event.altKey && !event.shiftKey && key === 'c') {
+            const input = event.currentTarget
+            const start = input.selectionStart ?? 0
+            const end = input.selectionEnd ?? start
+            if (end > start) {
+              event.preventDefault()
+              const selectedText = input.value.slice(start, end)
+              void copyTextToClipboard(selectedText).catch((error) => {
+                console.error('[BrowserToolbar] 地址复制失败:', error)
+              })
+            }
+            return
+          }
+
           if (event.key === 'Enter') onNavigate()
         }}
         placeholder="输入 URL..."

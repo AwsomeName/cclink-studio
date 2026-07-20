@@ -38,6 +38,7 @@ import type { PermissionMode } from '../../types'
 import type { BrowserActionLog, BrowserDownloadRecord, BrowserTaskRun } from '@shared/ipc/browser'
 import { ConversationMessageRenderer } from '../common/ConversationMessageRenderer'
 import { AgentComposerToolbar } from '../../features/agent-composer/AgentComposerToolbar'
+import { useComposerHistory } from '../../features/agent-composer/use-composer-history'
 import { TerminalConfirmationCards } from './TerminalConfirmationCards'
 import { buildAgentDiagnosticMarkdown } from '../../features/diagnostics/agent-diagnostic-report'
 import { useToastStore } from '../common/Toast'
@@ -161,6 +162,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const centerPanelRef = useRef<HTMLDivElement>(null)
   const conversationMainRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLDivElement>(null)
+  const startComposerRef = useRef<HTMLDivElement>(null)
   /** 中止重入守卫：防止快速连点产生重复的中止提示 */
   const abortingRef = useRef(false)
   const [resourceQuery, setResourceQuery] = useState<string | null>(null)
@@ -463,6 +465,13 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     },
     [activeConversationId, setInput, updateMentionQueryFromInput],
   )
+  const handleComposerHistoryKeyDown = useComposerHistory({
+    conversationId: activeConversationId,
+    messages,
+    value: input,
+    onValueChange: handleInputChange,
+    textareaRef: inputRef,
+  })
 
   const handleMountResource = useCallback(
     (resource: AgentResourceCandidate) => {
@@ -878,7 +887,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
 
   // 键盘事件：候选菜单优先；流式输出期间仍允许编辑草稿，但不提交。
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.nativeEvent.isComposing) return
 
       if (activeMentionKind && activeMentionCount > 0) {
@@ -907,13 +916,21 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
         return
       }
 
+      if (handleComposerHistoryKeyDown(e)) return
       if (loading) return
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
         handleSend()
       }
     },
-    [activeMentionCount, activeMentionKind, handlePickSelectedMention, handleSend, loading],
+    [
+      activeMentionCount,
+      activeMentionKind,
+      handleComposerHistoryKeyDown,
+      handlePickSelectedMention,
+      handleSend,
+      loading,
+    ],
   )
   const isStartConversation =
     messages.every((msg) => msg.id === 'welcome') &&
@@ -979,13 +996,15 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
 
               <h1 className="agent-start-title">我们应该在 {workspaceName} 中构建什么？</h1>
 
-              <div className="agent-start-composer">
+              <div ref={startComposerRef} className="agent-start-composer">
                 {resourceQuery !== null && (
                   <ResourceCandidateMenu
                     candidates={resourceCandidates}
                     selectedIndex={mentionSelectedIndex}
                     onActiveIndexChange={setMentionSelectedIndex}
                     onPick={handleMountResource}
+                    anchorRef={startComposerRef}
+                    onRequestClose={() => setResourceQuery(null)}
                   />
                 )}
                 {skillQuery !== null && (
@@ -994,6 +1013,8 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                     selectedIndex={mentionSelectedIndex}
                     onActiveIndexChange={setMentionSelectedIndex}
                     onPick={handleMountSkill}
+                    anchorRef={startComposerRef}
+                    onRequestClose={() => setSkillQuery(null)}
                   />
                 )}
                 <MountedSkillStrip skills={mountedSkills} onRemove={handleRemoveMountedSkill} />
@@ -1177,6 +1198,8 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
               selectedIndex={mentionSelectedIndex}
               onActiveIndexChange={setMentionSelectedIndex}
               onPick={handleMountResource}
+              anchorRef={composerRef}
+              onRequestClose={() => setResourceQuery(null)}
             />
           )}
           {skillQuery !== null && (
@@ -1185,6 +1208,8 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
               selectedIndex={mentionSelectedIndex}
               onActiveIndexChange={setMentionSelectedIndex}
               onPick={handleMountSkill}
+              anchorRef={composerRef}
+              onRequestClose={() => setSkillQuery(null)}
             />
           )}
           <MountedResourceBar

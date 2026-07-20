@@ -137,7 +137,7 @@ export async function runBrowserAuthChild(options: BrowserAuthChildOptions): Pro
   window.on('closed', () => {
     if (acknowledgementTimer) clearTimeout(acknowledgementTimer)
     if (navigationRetryTimer) clearTimeout(navigationRetryTimer)
-    activeBrowserAuthWindow = null
+    if (activeBrowserAuthWindow === window) activeBrowserAuthWindow = null
     if (!completed) {
       send({
         type: 'browser-auth-cancelled',

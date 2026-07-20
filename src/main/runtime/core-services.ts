@@ -1,5 +1,5 @@
 import { LocalIdentityService } from '../identity/local-identity-service'
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import { registerIdentityIpc } from '../identity/identity-ipc'
 import { FileService } from '../fs/file-service'
 import { registerFsIpc } from '../fs/fs-ipc'
@@ -29,6 +29,7 @@ import { TerminalSessionStore } from '../terminal/terminal-session-store'
 import { cleanupTerminalOrphans } from '../terminal/terminal-orphan-cleaner'
 import { TerminalCommandOrchestrator } from '../terminal/terminal-command-orchestrator'
 import { PtyExecutionAdapter } from '../terminal/terminal-pty-execution-adapter'
+import { createTerminalBrowserEnvironment } from '../terminal/terminal-browser-launcher'
 import { CompositeTerminalExecutionAdapter } from '../terminal/terminal-composite-execution-adapter'
 import { registerTerminalIpc } from '../ipc/terminal-ipc'
 import { registerOfficialIpc } from '../ipc/official-ipc'
@@ -133,7 +134,15 @@ export async function bootstrapMainProcessServices(
     auditStore: runtime.terminalAuditStore,
   })
   runtime.terminalSessionRegistry = new TerminalSessionRegistry()
-  const localTerminalExecutionAdapter = new PtyExecutionAdapter()
+  const terminalBrowserEnvironment = createTerminalBrowserEnvironment({
+    executablePath: process.execPath,
+    appPath: app.getAppPath(),
+    isPackaged: app.isPackaged,
+    tempPath: app.getPath('temp'),
+  })
+  const localTerminalExecutionAdapter = new PtyExecutionAdapter({
+    browserEnvironment: terminalBrowserEnvironment,
+  })
   const terminalExecutionAdapter = new CompositeTerminalExecutionAdapter({
     local: localTerminalExecutionAdapter,
   })

@@ -3,6 +3,8 @@ import { useCallback, useRef } from 'react'
 interface ResizeHandleProps {
   /** 拖拽时回调，参数为本次拖拽从起点到当前的宽度变化量 (px) */
   onResize: (delta: number) => void
+  /** 拖拽开始回调。 */
+  onResizeStart?: () => void
   /** 拖拽结束回调 */
   onResizeEnd?: () => void
   /** 被调整的面板位置：左侧面板向右拖变宽，右侧面板向左拖变宽 */
@@ -17,45 +19,55 @@ interface ResizeHandleProps {
  */
 export function ResizeHandle({
   onResize,
+  onResizeStart,
   onResizeEnd,
   side = 'right',
 }: ResizeHandleProps): React.ReactElement {
   const dragStartXRef = useRef(0)
   const draggingRef = useRef(false)
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return
       e.preventDefault()
       e.stopPropagation()
       dragStartXRef.current = e.clientX
       draggingRef.current = true
+      const pointerId = e.pointerId
+      const handle = e.currentTarget
+      handle.setPointerCapture(pointerId)
       document.body.classList.add('is-resizing-panels')
+      onResizeStart?.()
 
-      const handleMouseMove = (moveEvent: MouseEvent): void => {
-        if (!draggingRef.current) return
+      const handlePointerMove = (moveEvent: PointerEvent): void => {
+        if (!draggingRef.current || moveEvent.pointerId !== pointerId) return
         const delta = moveEvent.clientX - dragStartXRef.current
         // side='left' 时，向右拖 = 正值 = 增大宽度
         // side='right' 时，向右拖 = 正值 = 减小宽度
         onResize(side === 'left' ? delta : -delta)
       }
 
-      const handleMouseUp = (): void => {
+      const finishResize = (upEvent: PointerEvent): void => {
+        if (upEvent.pointerId !== pointerId) return
         draggingRef.current = false
+        if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId)
         document.body.classList.remove('is-resizing-panels')
         onResizeEnd?.()
-        document.removeEventListener('mousemove', handleMouseMove)
-        document.removeEventListener('mouseup', handleMouseUp)
+        window.removeEventListener('pointermove', handlePointerMove, true)
+        window.removeEventListener('pointerup', finishResize, true)
+        window.removeEventListener('pointercancel', finishResize, true)
         document.body.style.cursor = ''
         document.body.style.userSelect = ''
       }
 
       document.body.style.cursor = 'col-resize'
       document.body.style.userSelect = 'none'
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
+      window.addEventListener('pointermove', handlePointerMove, true)
+      window.addEventListener('pointerup', finishResize, true)
+      window.addEventListener('pointercancel', finishResize, true)
     },
-    [onResize, onResizeEnd, side],
+    [onResize, onResizeEnd, onResizeStart, side],
   )
 
-  return <div className="resize-handle" onMouseDown={handleMouseDown} />
+  return <div className="resize-handle" onPointerDown={handlePointerDown} />
 }

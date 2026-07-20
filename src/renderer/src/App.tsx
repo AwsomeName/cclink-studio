@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useFsStore, useTabStore, useUIStore, useWorkspaceStore } from './stores'
 import { useThemeStore } from './stores/theme-store'
 import { ActivityBar } from './components/activity-bar/ActivityBar'
@@ -29,6 +29,9 @@ import { useWorkspaceBootstrap } from './bootstrap/use-workspace-bootstrap'
 import { useBrowserViewLifecycle } from './components/workbench/use-browser-view-lifecycle'
 import { useBrowserOpenRequests } from './bootstrap/use-browser-open-requests'
 import { ProjectStrip } from './components/project-strip/ProjectStrip'
+import { APP_EDITION_LABEL } from './app-metadata'
+import { useAnyFloatingSurfaceOpen } from './components/common/floating-surface-registry'
+import { clampPanelWidth, getAgentPanelWidthBounds } from './utils/panel-layout'
 
 /** 主布局。 */
 function MainLayout(): React.ReactElement {
@@ -46,15 +49,31 @@ function MainLayout(): React.ReactElement {
   const workspacePicking = useFsStore((s) => s.picking)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const tabContextMenuOpen = useTabContextMenuStore((s) => s.open)
+  const tabContextMenuBrowserPreview = useTabContextMenuStore((s) => s.browserPreviewDataUrl)
+  const [tabCreateMenuOpen, setTabCreateMenuOpen] = useState(false)
+  const [panelResizing, setPanelResizing] = useState(false)
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
+  const floatingSurfaceOpen = useAnyFloatingSurfaceOpen()
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const agentInCenter = agentPanelMode === 'center'
   const agentInRight = agentPanelMode === 'right'
   const agentPanelVisible = agentPanelMode !== 'hidden'
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
+  const agentPanelWidthBounds = useMemo(
+    () => getAgentPanelWidthBounds({ viewportWidth, sidebarVisible, sidebarWidth }),
+    [sidebarVisible, sidebarWidth, viewportWidth],
+  )
+  const effectiveAgentPanelWidth = clampPanelWidth(agentPanelWidth, agentPanelWidthBounds)
 
   // 订阅主题变化，触发 theme-store 初始化并应用 data-theme。
   useThemeStore((s) => s.resolvedTheme)
+
+  useEffect(() => {
+    const handleResize = (): void => setViewportWidth(window.innerWidth)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   useRegisterCommands()
   useGlobalShortcuts()
@@ -65,7 +84,13 @@ function MainLayout(): React.ReactElement {
   useAgentWorkContext(workspaceReady)
   useBrowserOpenRequests(workspaceReady)
   useBrowserViewLifecycle(
-    agentInCenter || tabContextMenuOpen ? undefined : activeTab,
+    agentInCenter ||
+      floatingSurfaceOpen ||
+      panelResizing ||
+      (tabContextMenuOpen && tabContextMenuBrowserPreview) ||
+      tabCreateMenuOpen
+      ? undefined
+      : activeTab,
     tabs,
     activeWorkspaceRef,
     workspaceReady,
@@ -80,9 +105,9 @@ function MainLayout(): React.ReactElement {
 
   const handleAgentResize = useCallback(
     (delta: number) => {
-      setAgentPanelWidth(Math.max(220, Math.min(600, agentPanelWidth + delta)))
+      setAgentPanelWidth(clampPanelWidth(effectiveAgentPanelWidth + delta, agentPanelWidthBounds))
     },
-    [agentPanelWidth, setAgentPanelWidth],
+    [agentPanelWidthBounds, effectiveAgentPanelWidth, setAgentPanelWidth],
   )
 
   const toggleUnifiedAgentPanel = useCallback(() => {
@@ -117,6 +142,9 @@ function MainLayout(): React.ReactElement {
         </div>
         <ProjectStrip />
         <div className="app-topbar-right">
+          <span className="app-edition-badge" title={`${APP_EDITION_LABEL} · 本地开源桌面工作台`}>
+            {APP_EDITION_LABEL}
+          </span>
           <button
             className={`app-topbar-icon ${agentPanelVisible ? 'active' : ''}`}
             onClick={toggleUnifiedAgentPanel}
@@ -148,7 +176,14 @@ function MainLayout(): React.ReactElement {
           </ErrorBoundary>
         </div>
 
-        {sidebarVisible && <ResizeHandle side="left" onResize={handleSidebarResize} />}
+        {sidebarVisible && (
+          <ResizeHandle
+            side="left"
+            onResize={handleSidebarResize}
+            onResizeStart={() => setPanelResizing(true)}
+            onResizeEnd={() => setPanelResizing(false)}
+          />
+        )}
 
         {agentInCenter ? (
           <div className="agent-panel-center-shell">
@@ -164,11 +199,21 @@ function MainLayout(): React.ReactElement {
           <ErrorBoundary
             fallback={(e, retry) => <PanelErrorFallback error={e} retry={retry} title="主区域" />}
           >
-            <Workbench />
+            <Workbench
+              tabCreateMenuOpen={tabCreateMenuOpen}
+              onTabCreateMenuOpenChange={setTabCreateMenuOpen}
+            />
           </ErrorBoundary>
         )}
 
-        {agentInRight && <ResizeHandle side="right" onResize={handleAgentResize} />}
+        {agentInRight && (
+          <ResizeHandle
+            side="right"
+            onResize={handleAgentResize}
+            onResizeStart={() => setPanelResizing(true)}
+            onResizeEnd={() => setPanelResizing(false)}
+          />
+        )}
 
         <div
           className={`agent-side-shell ${agentInRight ? '' : 'collapsed'}`}
@@ -176,8 +221,8 @@ function MainLayout(): React.ReactElement {
             display: 'flex',
             overflow: 'hidden',
             transition: 'width 200ms ease-out, opacity 200ms ease-out',
-            width: agentInRight ? agentPanelWidth : 0,
-            minWidth: agentInRight ? agentPanelWidth : 0,
+            width: agentInRight ? effectiveAgentPanelWidth : 0,
+            minWidth: agentInRight ? effectiveAgentPanelWidth : 0,
             opacity: agentInRight ? 1 : 0,
           }}
         >

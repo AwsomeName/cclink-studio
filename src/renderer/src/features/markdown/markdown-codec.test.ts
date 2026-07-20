@@ -113,6 +113,16 @@ describe('markdown-codec', () => {
     ])
   })
 
+  it('accepts the controlled CCLink resource declaration without exposing an HTML block', () => {
+    const source =
+      '<!-- cclink-document: {"version":1,"resources":"notes.assets/manifest.json"} -->\n\n# Notes'
+    const analysis = analyzeMarkdown(source, '# Notes')
+
+    expect(analysis.safeToEdit).toBe(true)
+    expect(analysis.safeToSave).toBe(true)
+    expect(analysis.blocks.map((block) => block.kind)).toEqual(['heading'])
+  })
+
   it('accepts markdown autolinks and code spans while rejecting inline raw html', () => {
     const supported = analyzeMarkdown(
       [

@@ -37,6 +37,7 @@ import {
   type MarkdownRevealRange,
 } from '../../features/markdown/markdown-navigation'
 import { MarkdownImage, resolveMarkdownImageSource } from '../../features/markdown/MarkdownImage'
+import type { FsMarkdownDocumentInspection } from '@shared/ipc/fs'
 
 const lowlight = createLowlight(common)
 
@@ -80,6 +81,9 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       ? fileState.error
       : null
   const [selectionRange, setSelectionRange] = useState<MarkdownSourceRange | null>(null)
+  const [resourceInspection, setResourceInspection] = useState<FsMarkdownDocumentInspection | null>(
+    null,
+  )
   const [selectionMenu, setSelectionMenu] = useState<SelectionMenuState | null>(null)
   const [parseBlockedReason, setParseBlockedReason] = useState<string | null>(null)
   const [imageDraft, setImageDraft] = useState<ImageDraft | null>(null)
@@ -186,7 +190,16 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         .getState()
         .setDiagnostics(fileKeyRef.current, [...diagnostics, ...mapped.diagnostics])
     }
-    return mapped.range
+    if (!mapped.range) return null
+    const sourceLineOffset =
+      useEditorStore.getState().files[fileKeyRef.current]?.sourceLineOffset ?? 0
+    return sourceLineOffset > 0
+      ? {
+          ...mapped.range,
+          startLine: mapped.range.startLine + sourceLineOffset,
+          endLine: mapped.range.endLine + sourceLineOffset,
+        }
+      : mapped.range
   }, [diagnostics, editor])
 
   const saveClipboardImage = useCallback(
@@ -213,6 +226,19 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     [editor, showToast],
   )
 
+  const refreshResourceInspection = useCallback(async () => {
+    if (!filePath) {
+      setResourceInspection(null)
+      return
+    }
+    try {
+      setResourceInspection(await window.cclinkStudio.fs.inspectMarkdownDocument(filePath))
+    } catch (error) {
+      console.warn('[MarkdownEditor] 资源完整性检查失败:', error)
+      setResourceInspection(null)
+    }
+  }, [filePath])
+
   useEffect(() => {
     if (filePath) void useEditorStore.getState().openFile(filePath)
     else {
@@ -220,6 +246,10 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       useEditorStore.getState().initVirtualFile(fileKey, seed)
     }
   }, [fileKey, filePath, tabId])
+
+  useEffect(() => {
+    if (!fileState?.loading && fileState?.versionHash) void refreshResourceInspection()
+  }, [fileState?.loading, fileState?.versionHash, refreshResourceInspection])
 
   useEffect(() => {
     if (!editor || !fileState || fileState.loading) return
@@ -298,12 +328,15 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       const matchesVirtualTab = Boolean(!filePath && detail.tabId === tabId)
       if (!editor || (!matchesFile && !matchesVirtualTab)) return
       const markdown = useEditorStore.getState().files[fileKey]?.currentContent ?? ''
+      const sourceLineOffset = useEditorStore.getState().files[fileKey]?.sourceLineOffset ?? 0
+      const requestedStartLine = Math.max(1, detail.startLine - sourceLineOffset)
+      const requestedEndLine = Math.max(requestedStartLine, detail.endLine - sourceLineOffset)
       const blocks = scanMarkdownBlocks(markdown)
       const startIndex = Math.max(
         0,
-        blocks.findIndex((block) => block.endLine >= detail.startLine),
+        blocks.findIndex((block) => block.endLine >= requestedStartLine),
       )
-      const endMatch = blocks.findIndex((block) => block.endLine >= detail.endLine)
+      const endMatch = blocks.findIndex((block) => block.endLine >= requestedEndLine)
       const endIndex = endMatch >= 0 ? endMatch : Math.max(0, blocks.length - 1)
       let from = 1
       let to = editor.state.doc.content.size
@@ -427,13 +460,19 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
     })
     if (result.canceled || !result.filePath) return false
-    await window.cclinkStudio.fs.saveTextDocument({
-      filePath: result.filePath,
+    const saved = await window.cclinkStudio.fs.saveMarkdownDocumentAs({
+      ...(filePath ? { sourcePath: filePath } : {}),
+      targetPath: result.filePath,
       content,
-      force: true,
     })
+    useEditorStore.getState().rebaseFilePaths(fileKey, saved.filePath)
+    await useEditorStore.getState().reloadFile(saved.filePath)
     useTabStore.getState().updateTabFilePath(tabId, result.filePath)
-    showToast('Markdown 已保存', 'success')
+    useTabStore.getState().updateTabTitle(tabId, saved.filePath.split('/').pop() ?? 'Markdown')
+    showToast(
+      saved.copiedAssets > 0 ? `Markdown 与 ${saved.copiedAssets} 个资源已保存` : 'Markdown 已保存',
+      'success',
+    )
     return true
   }, [fileKey, filePath, showToast, tabId])
 
@@ -448,11 +487,12 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         showToast('文件已被外部修改，请选择重新载入、另存为或覆盖', 'error')
       } else {
         showToast('已保存', 'success')
+        await refreshResourceInspection()
       }
     } catch (error) {
       showToast(error instanceof Error ? error.message : '保存失败', 'error')
     }
-  }, [filePath, handleSaveAs, showToast])
+  }, [filePath, handleSaveAs, refreshResourceInspection, showToast])
 
   useEffect(() => {
     const save = (event: KeyboardEvent): void => {
@@ -647,6 +687,25 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
               {diagnostic.message}
             </div>
           ))}
+        </details>
+      )}
+
+      {resourceInspection && resourceInspection.warnings.length > 0 && (
+        <details className="markdown-diagnostics markdown-resource-diagnostics">
+          <summary>资源完整性提示 ({resourceInspection.warnings.length})</summary>
+          {resourceInspection.warnings.map((warning) => (
+            <div key={warning} className="warning">
+              {warning}
+            </div>
+          ))}
+          {resourceInspection.missingAssets.map((asset) => (
+            <div key={`missing-${asset}`} className="error">
+              缺失: {asset}
+            </div>
+          ))}
+          <button type="button" onClick={() => void refreshResourceInspection()}>
+            重新检查
+          </button>
         </details>
       )}
 

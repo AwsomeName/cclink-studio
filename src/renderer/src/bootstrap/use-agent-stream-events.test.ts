@@ -247,4 +247,34 @@ describe('applyAgentStreamEventToStore', () => {
     })
     expect(conversation.activeRunId).toBeNull()
   })
+
+  it('预算中止后清除不可安全恢复的 SDK session 和上下文用量', () => {
+    const conversationId = useAgentStore.getState().activeConversationId
+    useAgentStore.getState().setSessionId('session-with-dangling-tools', conversationId)
+    useAgentStore.getState().setContextUsage(
+      {
+        categories: [{ name: 'messages', tokens: 60_000 }],
+        totalTokens: 60_000,
+        maxTokens: 200_000,
+        rawMaxTokens: 200_000,
+        percentage: 30,
+        model: 'claude-sonnet',
+        autoCompactThreshold: 190_000,
+        isAutoCompactEnabled: true,
+        capturedAt: 1,
+      },
+      conversationId,
+    )
+
+    applyAgentErrorToStore({
+      conversationId,
+      code: 'budget_exceeded',
+      message: 'Reached maximum budget ($1)',
+    })
+
+    const conversation = useAgentStore.getState().conversations[conversationId]
+    expect(conversation.sessionId).toBeNull()
+    expect(conversation.contextUsage).toBeNull()
+    expect(conversation.runStatus).toBe('failed')
+  })
 })

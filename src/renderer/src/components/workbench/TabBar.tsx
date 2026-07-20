@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Tab } from '../../types'
 import { IconClose, IconFile, IconGlobe, IconPlus, IconRobot, IconTerminal } from '../common/Icons'
+import { BrowserFavicon } from '../common/BrowserFavicon'
+import { useBrowserStore } from '../../stores/browser-store'
+import { getBrowserDisplayTitle } from '../sidebar/browser-sidebar-view-model'
 
 const TAB_ICONS: Record<string, string> = {
   browser: '🌐',
@@ -11,6 +14,21 @@ const TAB_ICONS: Record<string, string> = {
   model: '🧊',
   conversation: '🤖',
   terminal: '⌨️',
+}
+
+function WorkbenchTabIcon({ tab }: { tab: Tab }): React.ReactElement {
+  const faviconUrl = useBrowserStore((state) =>
+    tab.type === 'browser' ? state.tabs[tab.id]?.faviconUrl : null,
+  )
+  if (tab.type === 'browser') return <BrowserFavicon src={faviconUrl} size={14} />
+  return <>{tab.icon || TAB_ICONS[tab.type]}</>
+}
+
+function WorkbenchTabTitle({ tab }: { tab: Tab }): React.ReactElement {
+  const pageTitle = useBrowserStore((state) =>
+    tab.type === 'browser' ? state.tabs[tab.id]?.title : null,
+  )
+  return <>{tab.type === 'browser' ? getBrowserDisplayTitle(tab.title, pageTitle) : tab.title}</>
 }
 
 interface TabBarProps {
@@ -24,6 +42,8 @@ interface TabBarProps {
   onNewConversation: () => void
   onNewTerminal: () => void
   onShowMenu: (tabId: string, x: number, y: number) => void
+  createMenuOpen: boolean
+  onCreateMenuOpenChange: (open: boolean) => void
 }
 
 export function TabBar({
@@ -37,10 +57,11 @@ export function TabBar({
   onNewConversation,
   onNewTerminal,
   onShowMenu,
+  createMenuOpen,
+  onCreateMenuOpenChange,
 }: TabBarProps): React.ReactElement {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
-  const [createMenuOpen, setCreateMenuOpen] = useState(false)
   const [createMenuPosition, setCreateMenuPosition] = useState({ left: 0, top: 0 })
   const createMenuRef = useRef<HTMLDivElement>(null)
   const createButtonRef = useRef<HTMLButtonElement>(null)
@@ -84,15 +105,22 @@ export function TabBar({
     if (!createMenuOpen) return
     const handleClickOutside = (event: MouseEvent): void => {
       if (createMenuRef.current && !createMenuRef.current.contains(event.target as Node)) {
-        setCreateMenuOpen(false)
+        onCreateMenuOpenChange(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [createMenuOpen])
+  }, [createMenuOpen, onCreateMenuOpenChange])
+
+  useEffect(
+    () => () => {
+      onCreateMenuOpenChange(false)
+    },
+    [onCreateMenuOpenChange],
+  )
 
   const runCreateAction = (action: () => void): void => {
-    setCreateMenuOpen(false)
+    onCreateMenuOpenChange(false)
     action()
   }
 
@@ -104,7 +132,7 @@ export function TabBar({
         top: rect.bottom + 4,
       })
     }
-    setCreateMenuOpen((open) => !open)
+    onCreateMenuOpenChange(!createMenuOpen)
   }
 
   return (
@@ -124,9 +152,11 @@ export function TabBar({
             onShowMenu(tab.id, event.clientX, event.clientY)
           }}
         >
-          <span className="tab-icon">{tab.icon || TAB_ICONS[tab.type]}</span>
+          <span className="tab-icon">
+            <WorkbenchTabIcon tab={tab} />
+          </span>
           <span className="tab-title">
-            {tab.title}
+            <WorkbenchTabTitle tab={tab} />
             {tab.dirty && <span className="tab-dirty-dot" />}
           </span>
           <span

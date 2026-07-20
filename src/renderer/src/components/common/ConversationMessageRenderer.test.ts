@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { ContentBlock } from '../../types'
-import { buildContentRenderUnits, getMessageCopyText } from './ConversationMessageRenderer'
+import {
+  buildContentRenderUnits,
+  getMessageCopyText,
+  getToolExecutionSummary,
+} from './ConversationMessageRenderer'
 
 describe('ConversationMessageRenderer', () => {
   it('groups consecutive tool blocks into one execution unit', () => {
@@ -49,6 +53,35 @@ describe('ConversationMessageRenderer', () => {
       { type: 'thinking_group', blocks: [blocks[1]] },
       { type: 'tool_group', blocks: [blocks[2]] },
     ])
+  })
+
+  it('does not count tool requests without results as completed actions', () => {
+    const blocks: Array<Extract<ContentBlock, { type: 'tool_use' | 'tool_result' }>> = [
+      {
+        type: 'tool_use',
+        id: 'tool-pending',
+        name: 'editor_write',
+        input: { filePath: '/project/report.md' },
+      },
+      {
+        type: 'tool_use',
+        id: 'tool-complete',
+        name: 'editor_write',
+        input: { filePath: '/project/ok.md' },
+      },
+      {
+        type: 'tool_result',
+        tool_use_id: 'tool-complete',
+        content: '{"persisted":true,"verified":true}',
+      },
+    ]
+
+    expect(getToolExecutionSummary(blocks)).toEqual({
+      actionCount: 2,
+      completedCount: 1,
+      failedCount: 0,
+      pendingCount: 1,
+    })
   })
 
   it('groups consecutive thinking blocks and separates them from text', () => {

@@ -89,9 +89,7 @@ function createBackendFixture(externalMcp = false): {
     return {
       mcpServers: {
         cclink_studio: { type: 'http', url: url.toString() },
-        ...(externalMcp
-          ? { knowledge: { type: 'http', url: 'https://mcp.example.com' } }
-          : {}),
+        ...(externalMcp ? { knowledge: { type: 'http', url: 'https://mcp.example.com' } } : {}),
       },
     }
   })
@@ -168,7 +166,58 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     expect(params.options.env.CLAUDE_AGENT_SDK_CLIENT_APP).toBe('cclink-studio/0.1.1')
     expect(params.options.tools).toBeUndefined()
     expect(params.options.disallowedTools).toBeUndefined()
+    expect(params.options.hooks.PreToolUse).toHaveLength(1)
     expect(getSystemPromptAppend()).toContain('| browser_new_tab |')
+  })
+
+  it('blocks built-in file tools from using absolute paths outside the conversation workspace', async () => {
+    await createBackend().sendMessage('继续处理下一篇')
+
+    const params = getLastQueryParams()
+    const hook = params.options.hooks.PreToolUse[0].hooks[0]
+    const result = await hook(
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Glob',
+        tool_input: {
+          path: '/Users/someone-else/Documents/unrelated-project',
+          pattern: '*.docx',
+        },
+        tool_use_id: 'tool-1',
+      },
+      'tool-1',
+      { signal: new AbortController().signal },
+    )
+
+    expect(result).toMatchObject({
+      continue: true,
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: expect.stringContaining(
+          '当前会话工作区是 /Users/apple/Desktop/project',
+        ),
+      },
+    })
+  })
+
+  it('allows built-in file tools to use paths inside the conversation workspace', async () => {
+    await createBackend().sendMessage('读取项目文件')
+
+    const params = getLastQueryParams()
+    const hook = params.options.hooks.PreToolUse[0].hooks[0]
+    const result = await hook(
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/Users/apple/Desktop/project/docs/next.docx' },
+        tool_use_id: 'tool-2',
+      },
+      'tool-2',
+      { signal: new AbortController().signal },
+    )
+
+    expect(result).toEqual({ continue: true })
   })
 
   it('disables invisible browser routes when a visible browser tab is forced', async () => {
@@ -291,6 +340,8 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     expect(prompt).toContain('按顺序读取第九篇和第十篇')
     expect(prompt).toContain('读取第十篇')
     expect(prompt).toContain('不要重复执行已完成任务')
+    expect(prompt).toContain('当前会话唯一可信的工作区根目录')
+    expect(prompt).toContain('不要搜索用户主目录或猜测其他项目名')
   })
 
   it('resumes existing Claude sessions via SDK options', async () => {
@@ -441,5 +492,95 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
         (event) => event.type === 'error' && event.data?.code === 'stream_ended_without_result',
       ),
     ).toBe(false)
+  })
+
+  it('invalidates an incomplete SDK session after the budget limit is reached', async () => {
+    const backend = createBackend()
+    backend.setSessionId('123e4567-e89b-12d3-a456-426614174000')
+    const events: Array<{ type: string; data: any }> = []
+    backend.onEvent((type, data) => events.push({ type, data }))
+    queryMock.mockReturnValueOnce(
+      createMockQuery([
+        {
+          type: 'result',
+          subtype: 'error_max_budget_usd',
+          is_error: true,
+          result: 'Reached maximum budget ($1)',
+        },
+      ]),
+    )
+
+    await backend.sendMessage('继续')
+
+    await vi.waitFor(() => expect(backend.getSessionId()).toBeNull())
+    expect(events).toContainEqual({
+      type: 'error',
+      data: expect.objectContaining({
+        code: 'budget_exceeded',
+        message: expect.stringContaining('SDK 会话已安全重置'),
+      }),
+    })
+
+    await backend.sendMessage('继续')
+    expect(getLastQueryParams().options.resume).toBeUndefined()
+  })
+
+  it('invalidates a resumed SDK session rejected as an invalid request', async () => {
+    const backend = createBackend()
+    backend.setSessionId('123e4567-e89b-12d3-a456-426614174000')
+    const events: Array<{ type: string; data: any }> = []
+    backend.onEvent((type, data) => events.push({ type, data }))
+    queryMock.mockReturnValueOnce(
+      createMockQuery([
+        {
+          type: 'result',
+          is_error: true,
+          result:
+            'API Error: 400 {"error":{"message":"Invalid request","type":"invalid_request_error"}}',
+        },
+      ]),
+    )
+
+    await backend.sendMessage('继续')
+
+    await vi.waitFor(() => expect(backend.getSessionId()).toBeNull())
+    expect(events).toContainEqual({
+      type: 'error',
+      data: expect.objectContaining({ code: 'sdk_session_invalid' }),
+    })
+  })
+
+  it('does not duplicate an SDK error already delivered as a result event', async () => {
+    const backend = createBackend()
+    const events: Array<{ type: string; data: any }> = []
+    backend.onEvent((type, data) => events.push({ type, data }))
+    queryMock.mockReturnValueOnce({
+      close: vi.fn(),
+      getContextUsage: vi.fn(async () => ({
+        categories: [],
+        totalTokens: 0,
+        maxTokens: 200_000,
+        rawMaxTokens: 200_000,
+        percentage: 0,
+        gridRows: [],
+        model: 'claude-sonnet',
+        memoryFiles: [],
+        mcpTools: [],
+        isAutoCompactEnabled: true,
+        apiUsage: {},
+      })),
+      async *[Symbol.asyncIterator]() {
+        yield {
+          type: 'result',
+          is_error: true,
+          result: 'Reached maximum budget ($1)',
+        }
+        throw new Error('Claude Code returned an error result: Reached maximum budget ($1)')
+      },
+    })
+
+    await backend.sendMessage('继续')
+
+    await vi.waitFor(() => expect(events.filter((event) => event.type === 'error')).toHaveLength(1))
   })
 })

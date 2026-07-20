@@ -52,6 +52,54 @@ export interface FsDocumentAssetResult {
   fileName: string
 }
 
+export interface FsMarkdownAssetManifestEntry {
+  path: string
+  mediaType: string | null
+  size: number
+  sha256: string
+}
+
+export interface FsMarkdownDocumentInspection {
+  documentPath: string
+  assetDir: string
+  manifestPath: string
+  declarationPresent: boolean
+  assetDirectoryPresent: boolean
+  manifestStatus: 'current' | 'missing' | 'invalid'
+  legacyAssetDir?: string
+  referencedAssets: string[]
+  unmanagedLocalAssets: string[]
+  missingAssets: string[]
+  modifiedAssets: string[]
+  orphanAssets: string[]
+  warnings: string[]
+}
+
+export interface FsMarkdownSaveAsResult {
+  filePath: string
+  assetDir?: string
+  copiedAssets: number
+  snapshot: FsTextDocumentSnapshot
+}
+
+export interface FsMarkdownRelocateResult {
+  oldPath: string
+  newPath: string
+  oldAssetDir?: string
+  newAssetDir?: string
+  snapshot: FsTextDocumentSnapshot
+}
+
+export interface FsMarkdownExportResult {
+  zipPath: string
+  entries: number
+}
+
+export interface FsTrashMarkdownDocumentResult {
+  trashedPaths: string[]
+  failedPaths: string[]
+}
+
 export type FsRenderResult =
   | {
       kind: 'image'
@@ -139,6 +187,24 @@ export interface FsApiContract {
     content: string
     encoding: 'base64'
   }) => Promise<FsDocumentAssetResult>
+  inspectMarkdownDocument: (documentPath: string) => Promise<FsMarkdownDocumentInspection>
+  saveMarkdownDocumentAs: (input: {
+    sourcePath?: string
+    targetPath: string
+    content: string
+  }) => Promise<FsMarkdownSaveAsResult>
+  relocateMarkdownDocument: (input: {
+    sourcePath: string
+    targetPath: string
+  }) => Promise<FsMarkdownRelocateResult>
+  exportMarkdownDocumentZip: (input: {
+    documentPath: string
+    targetPath: string
+  }) => Promise<FsMarkdownExportResult>
+  trashMarkdownDocument: (input: {
+    documentPath: string
+    includeAssets: boolean
+  }) => Promise<FsTrashMarkdownDocumentResult>
   stat: (filePath: string) => Promise<FsFileStat>
   isDirectory: (filePath: string) => Promise<boolean>
   mkdir: (dirPath: string) => Promise<void>

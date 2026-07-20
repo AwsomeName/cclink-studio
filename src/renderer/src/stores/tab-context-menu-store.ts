@@ -11,8 +11,10 @@ interface TabContextMenuState {
   x: number
   y: number
   tabId: string | null
-  show: (tabId: string, x: number, y: number) => void
+  browserPreviewDataUrl: string | null
+  show: (tabId: string, x: number, y: number, browserPreviewDataUrl?: string | null) => void
   hide: () => void
+  clearBrowserPreview: () => void
 }
 
 export const useTabContextMenuStore = create<TabContextMenuState>((set) => ({
@@ -20,7 +22,10 @@ export const useTabContextMenuStore = create<TabContextMenuState>((set) => ({
   x: 0,
   y: 0,
   tabId: null,
+  browserPreviewDataUrl: null,
 
-  show: (tabId, x, y) => set({ open: true, x, y, tabId }),
+  show: (tabId, x, y, browserPreviewDataUrl = null) =>
+    set({ open: true, x, y, tabId, browserPreviewDataUrl }),
   hide: () => set({ open: false, x: 0, y: 0, tabId: null }),
+  clearBrowserPreview: () => set({ browserPreviewDataUrl: null }),
 }))

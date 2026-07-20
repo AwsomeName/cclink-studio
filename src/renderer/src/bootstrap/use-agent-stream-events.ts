@@ -248,6 +248,10 @@ export function applyAgentErrorToStore(
     store.addSystemMessage(`上下文压缩失败: ${error.message}`, conversationId)
     return
   }
+  if (error.code === 'budget_exceeded' || error.code === 'sdk_session_invalid') {
+    store.setSessionId(null, conversationId)
+    store.setContextUsage(null, conversationId)
+  }
   store.cancelStreaming(
     conversationId,
     error.code === 'stream_ended_without_result' ? 'stream-ended' : 'error',

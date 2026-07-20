@@ -8,6 +8,15 @@
 import { create } from 'zustand'
 import type { EditorContentUpdate } from '@shared/ipc/editor'
 import type { FsTextDocumentSnapshot } from '@shared/ipc/fs'
+import {
+  cclinkMarkdownMetadataLineOffset,
+  collectMarkdownDestinations,
+  isMarkdownDocumentPath,
+  markdownAssetDirectoryName,
+  rewriteMarkdownDestinations,
+  splitMarkdownDestinationSuffix,
+  stripCclinkMarkdownMetadata,
+} from '@shared/markdown-document'
 import type { MarkdownDiagnostic } from '../features/markdown/markdown-codec'
 import { isWorkspaceStateRestoring, persistWorkspaceSection } from '../utils/workspace-state'
 
@@ -26,6 +35,8 @@ export interface EditorFileState {
   /** 最近一次读取/保存的磁盘内容指纹 */
   versionHash?: string
   modifiedAt?: number
+  /** 磁盘文件头受控元数据占用的行数；编辑器正文不显示，但行号引用必须计入。 */
+  sourceLineOffset?: number
   /** 外部修改产生的冲突快照 */
   externalContent?: string
   externalHash?: string
@@ -85,6 +96,9 @@ interface EditorState {
   /** 文件或目录移动后同步编辑缓冲和待处理更新的路径。 */
   rebaseFilePaths: (oldPrefix: string, newPrefix: string) => void
 
+  /** Markdown 资源组成组移动后，用新的磁盘基线重定位打开中的草稿。 */
+  relocateMarkdownFile: (oldPath: string, newPath: string, snapshot: FsTextDocumentSnapshot) => void
+
   /** 初始化虚拟文件（Agent 创建的无路径文档 / 复制 Tab 的种子内容） */
   initVirtualFile: (key: string, seed?: string) => void
 
@@ -107,6 +121,9 @@ function normalizeEditorDrafts(value: unknown): Record<string, EditorFileState> 
       diagnostics: Array.isArray(file.diagnostics) ? file.diagnostics : [],
       ...(typeof file.versionHash === 'string' ? { versionHash: file.versionHash } : {}),
       ...(typeof file.modifiedAt === 'number' ? { modifiedAt: file.modifiedAt } : {}),
+      ...(typeof file.sourceLineOffset === 'number'
+        ? { sourceLineOffset: file.sourceLineOffset }
+        : {}),
       ...(typeof file.externalContent === 'string'
         ? { externalContent: file.externalContent }
         : {}),
@@ -139,7 +156,11 @@ function saveStoredEditorFiles(state: EditorState): void {
   }
 }
 
-function rebasePath(path: string | undefined, oldPrefix: string, newPrefix: string): string | undefined {
+function rebasePath(
+  path: string | undefined,
+  oldPrefix: string,
+  newPrefix: string,
+): string | undefined {
   if (!path) return path
   if (path === oldPrefix) return newPrefix
   if (path.startsWith(oldPrefix + '/')) return newPrefix + path.slice(oldPrefix.length)
@@ -245,7 +266,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
               ...state.files,
               [filePath]: {
                 ...state.files[filePath],
-                externalContent: result.current?.content ?? '',
+                externalContent: result.current
+                  ? editorContent(result.current.path, result.current.content)
+                  : '',
                 externalHash: result.current?.hash,
                 modifiedAt: result.current?.modifiedAt,
                 error: '文件已被外部修改',
@@ -418,6 +441,43 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     })
   },
 
+  relocateMarkdownFile: (oldPath, newPath, snapshot) => {
+    set((state) => {
+      const existing = state.files[oldPath]
+      const nextSavedContent = editorContent(newPath, snapshot.content)
+      const { [oldPath]: _removed, ...remainingFiles } = state.files
+      const files = { ...remainingFiles }
+      if (existing) {
+        const currentContent = existing.dirty
+          ? rewriteRelocatedMarkdownDraft(
+              existing.currentContent,
+              existing.savedContent,
+              nextSavedContent,
+              oldPath,
+              newPath,
+            )
+          : nextSavedContent
+        files[newPath] = {
+          ...existing,
+          savedContent: nextSavedContent,
+          currentContent,
+          dirty: currentContent !== nextSavedContent,
+          loading: false,
+          versionHash: snapshot.hash || undefined,
+          modifiedAt: snapshot.modifiedAt,
+          sourceLineOffset: cclinkMarkdownMetadataLineOffset(snapshot.content) || undefined,
+          externalContent: undefined,
+          externalHash: undefined,
+          error: undefined,
+        }
+      }
+      const pendingUpdates = state.pendingUpdates.map((update) =>
+        update.filePath === oldPath ? { ...update, filePath: newPath } : update,
+      )
+      return { files, pendingUpdates }
+    })
+  },
+
   initVirtualFile: (key, seed = '') => {
     set((state) => {
       if (state.files[key]) return state
@@ -466,13 +526,54 @@ function fileStateFromSnapshot(
   snapshot: FsTextDocumentSnapshot,
   diagnostics: MarkdownDiagnostic[] = [],
 ): EditorFileState {
+  const content = editorContent(snapshot.path, snapshot.content)
+  const sourceLineOffset = isMarkdownDocumentPath(snapshot.path)
+    ? cclinkMarkdownMetadataLineOffset(snapshot.content)
+    : 0
   return {
-    savedContent: snapshot.content,
-    currentContent: snapshot.content,
+    savedContent: content,
+    currentContent: content,
     dirty: false,
     loading: false,
     diagnostics,
     versionHash: snapshot.hash || undefined,
     modifiedAt: snapshot.modifiedAt,
+    ...(sourceLineOffset > 0 ? { sourceLineOffset } : {}),
   }
+}
+
+function editorContent(filePath: string, content: string): string {
+  return isMarkdownDocumentPath(filePath) ? stripCclinkMarkdownMetadata(content) : content
+}
+
+function rewriteRelocatedMarkdownDraft(
+  currentContent: string,
+  previousSavedContent: string,
+  nextSavedContent: string,
+  oldPath: string,
+  newPath: string,
+): string {
+  const previous = collectMarkdownDestinations(previousSavedContent)
+  const next = collectMarkdownDestinations(nextSavedContent)
+  const savedRewrites = new Map<string, string>()
+  if (previous.length === next.length) {
+    previous.forEach((destination, index) => {
+      const nextDestination = next[index]
+      if (nextDestination && destination.value !== nextDestination.value) {
+        savedRewrites.set(destination.value, nextDestination.value)
+      }
+    })
+  }
+  const oldAssetDir = markdownAssetDirectoryName(oldPath)
+  const newAssetDir = markdownAssetDirectoryName(newPath)
+  return rewriteMarkdownDestinations(currentContent, (destination) => {
+    const savedRewrite = savedRewrites.get(destination)
+    if (savedRewrite) return savedRewrite
+    const { path, suffix } = splitMarkdownDestinationSuffix(destination)
+    const normalized = path.replace(/^\.\//, '')
+    if (normalized !== oldAssetDir && !normalized.startsWith(`${oldAssetDir}/`)) {
+      return destination
+    }
+    return `${newAssetDir}${normalized.slice(oldAssetDir.length)}${suffix}`
+  })
 }

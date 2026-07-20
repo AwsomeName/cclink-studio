@@ -431,6 +431,7 @@ function normalizeConversationSnapshot(
   for (const [index, id] of parsed.conversationOrder.entries()) {
     const conversation = parsed.conversations[id]
     if (!conversation) continue
+    const invalidPersistedSession = hasTerminalSdkSessionFailure(conversation.messages)
     const awaitingRuntimeReconciliation =
       conversation.runStatus === 'starting' ||
       conversation.runStatus === 'running' ||
@@ -455,7 +456,8 @@ function normalizeConversationSnapshot(
         ? conversation.mountedResources
         : [],
       mountedSkills: Array.isArray(conversation.mountedSkills) ? conversation.mountedSkills : [],
-      contextUsage: conversation.contextUsage ?? null,
+      sessionId: invalidPersistedSession ? null : (conversation.sessionId ?? null),
+      contextUsage: invalidPersistedSession ? null : (conversation.contextUsage ?? null),
       contextCompaction: conversation.contextCompaction ?? {
         status: 'idle',
         trigger: null,
@@ -526,6 +528,29 @@ function normalizeConversationSnapshot(
   }
 
   return { conversations, conversationOrder: order, activeConversationId }
+}
+
+function hasTerminalSdkSessionFailure(messages: AgentMessage[] | undefined): boolean {
+  if (!Array.isArray(messages)) return false
+  let latestAssistantAt = -1
+  let latestPoisonedSessionAt = -1
+
+  for (const message of messages) {
+    if (message.role === 'assistant') {
+      latestAssistantAt = Math.max(latestAssistantAt, message.timestamp)
+      continue
+    }
+    if (
+      message.role === 'system' &&
+      /reached maximum budget|invalid_request_error|api error:\s*400[\s\S]*invalid request/i.test(
+        message.rawText,
+      )
+    ) {
+      latestPoisonedSessionAt = Math.max(latestPoisonedSessionAt, message.timestamp)
+    }
+  }
+
+  return latestPoisonedSessionAt > latestAssistantAt
 }
 
 function conversationWorkspaceKey(conversation: AgentConversationState): string | null {

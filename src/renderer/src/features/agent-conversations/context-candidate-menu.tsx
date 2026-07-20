@@ -1,4 +1,6 @@
+import type { RefObject } from 'react'
 import type { AgentMountedResourceKind } from '../../types'
+import { FloatingSurface } from '../../components/common/FloatingSurface'
 import {
   IconFile,
   IconFolder,
@@ -16,14 +18,28 @@ export function ResourceCandidateMenu({
   selectedIndex = 0,
   onActiveIndexChange,
   onPick,
+  anchorRef,
+  onRequestClose,
 }: {
   candidates: AgentResourceCandidate[]
   selectedIndex?: number
   onActiveIndexChange?: (index: number) => void
   onPick: (candidate: AgentResourceCandidate) => void
+  anchorRef: RefObject<HTMLElement | null>
+  onRequestClose: () => void
 }): React.ReactElement {
   return (
-    <div className="agent-resource-menu" role="listbox" aria-label="资源候选">
+    <FloatingSurface
+      anchorRef={anchorRef}
+      open
+      placement="top-start"
+      gap={6}
+      matchAnchorWidth
+      className="agent-resource-menu"
+      role="listbox"
+      style={{ maxHeight: 'min(188px, calc(100vh - 16px))' }}
+      onRequestClose={onRequestClose}
+    >
       {candidates.length === 0 ? (
         <div className="agent-resource-menu-empty">
           <IconSearch size={13} />
@@ -49,7 +65,7 @@ export function ResourceCandidateMenu({
           </button>
         ))
       )}
-    </div>
+    </FloatingSurface>
   )
 }
 
@@ -58,14 +74,28 @@ export function SkillCandidateMenu({
   selectedIndex = 0,
   onActiveIndexChange,
   onPick,
+  anchorRef,
+  onRequestClose,
 }: {
   candidates: AgentSkillCandidate[]
   selectedIndex?: number
   onActiveIndexChange?: (index: number) => void
   onPick: (candidate: AgentSkillCandidate) => void
+  anchorRef: RefObject<HTMLElement | null>
+  onRequestClose: () => void
 }): React.ReactElement {
   return (
-    <div className="agent-resource-menu agent-skill-menu" role="listbox" aria-label="Skill 候选">
+    <FloatingSurface
+      anchorRef={anchorRef}
+      open
+      placement="top-start"
+      gap={6}
+      matchAnchorWidth
+      className="agent-resource-menu agent-skill-menu"
+      role="listbox"
+      style={{ maxHeight: 'min(188px, calc(100vh - 16px))' }}
+      onRequestClose={onRequestClose}
+    >
       {candidates.length === 0 ? (
         <div className="agent-resource-menu-empty">
           <IconSearch size={13} />
@@ -91,7 +121,7 @@ export function SkillCandidateMenu({
           </button>
         ))
       )}
-    </div>
+    </FloatingSurface>
   )
 }
 

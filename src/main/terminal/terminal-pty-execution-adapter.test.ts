@@ -41,7 +41,15 @@ describe('PtyExecutionAdapter', () => {
   it('starts a local PTY with normalized size and emits output', async () => {
     const mockPty = createMockPty()
     const spawnPty = vi.fn((_input: PtySpawnInput) => mockPty)
-    const adapter = new PtyExecutionAdapter({ now: () => 100, spawnPty })
+    const adapter = new PtyExecutionAdapter({
+      now: () => 100,
+      spawnPty,
+      browserEnvironment: {
+        BROWSER: '/tmp/cclink-browser',
+        npm_config_browser: "'/tmp/cclink-browser'",
+        PATH: '/tmp/cclink-bin:/usr/bin',
+      },
+    })
     const events: unknown[] = []
     adapter.onEvent((event) => events.push(event))
 
@@ -61,6 +69,9 @@ describe('PtyExecutionAdapter', () => {
         env: expect.objectContaining({
           CCLINK_STUDIO_TERMINAL_SESSION_ID: 'terminal-1',
           CCLINK_STUDIO_TERMINAL_RUNTIME: 'local',
+          BROWSER: '/tmp/cclink-browser',
+          npm_config_browser: "'/tmp/cclink-browser'",
+          PATH: '/tmp/cclink-bin:/usr/bin',
         }),
       }),
     )

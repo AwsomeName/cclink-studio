@@ -5,6 +5,7 @@
  * - window:toggleFullscreen — 切换全屏
  * - window:toggleDevtools   — 切换开发者工具
  * - window:reload           — 重新加载窗口
+ * - window:focusRenderer    — 从内嵌视图把原生焦点切回工作台
  */
 
 import { ipcMain, type BrowserWindow } from 'electron'
@@ -28,6 +29,14 @@ export function registerWindowIpc(mainWindow: BrowserWindow): void {
   ipcMain.handle('window:reload', () => {
     if (mainWindow.isDestroyed()) return { success: false }
     mainWindow.reload()
+    return { success: true }
+  })
+
+  ipcMain.handle('window:focusRenderer', (event) => {
+    if (mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) {
+      return { success: false }
+    }
+    mainWindow.webContents.focus()
     return { success: true }
   })
 

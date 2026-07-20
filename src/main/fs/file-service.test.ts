@@ -1,13 +1,19 @@
-import { mkdir, mkdtemp, readFile, rm, truncate, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const electronMock = vi.hoisted(() => ({ home: '' }))
+const electronMock = vi.hoisted(() => ({
+  home: '',
+  trashItem: vi.fn(async () => {}),
+}))
 
 vi.mock('electron', () => ({
   app: {
     getPath: () => electronMock.home,
+  },
+  shell: {
+    trashItem: electronMock.trashItem,
   },
 }))
 
@@ -18,6 +24,7 @@ let tempDir = ''
 beforeEach(async () => {
   tempDir = await mkdtemp(join(tmpdir(), 'cclink-studio-fs-'))
   electronMock.home = tempDir
+  electronMock.trashItem.mockClear()
 })
 
 afterEach(async () => {
@@ -121,10 +128,198 @@ describe('FileService', () => {
       encoding: 'base64',
     })
 
-    expect(imported.relativePath).toBe('.assets/notes/diagram.png')
-    expect(pasted.relativePath).toBe('.assets/notes/diagram-1.png')
+    expect(imported.relativePath).toBe('notes.assets/diagram.png')
+    expect(pasted.relativePath).toBe('notes.assets/diagram-1.png')
     await expect(readFile(imported.path)).resolves.toEqual(Buffer.from([1, 2, 3]))
     await expect(readFile(pasted.path)).resolves.toEqual(Buffer.from([4, 5, 6]))
+    await expect(stat(join(tempDir, 'notes.assets', 'manifest.json'))).resolves.toBeDefined()
+  })
+
+  it('writes a controlled declaration and migrates legacy hidden Markdown assets safely', async () => {
+    const service = new FileService()
+    const documentPath = join(tempDir, 'notes.md')
+    const legacyDir = join(tempDir, '.assets', 'notes')
+    await mkdir(legacyDir, { recursive: true })
+    await writeFile(join(legacyDir, 'old.png'), Buffer.from([1, 2, 3]))
+    await writeFile(documentPath, '![old](.assets/notes/old.png)\n', 'utf-8')
+
+    const saved = await service.saveTextDocument({
+      filePath: documentPath,
+      content: '![old](.assets/notes/old.png)\n',
+      force: true,
+    })
+
+    expect(saved.status).toBe('saved')
+    const content = await readFile(documentPath, 'utf-8')
+    expect(content).toContain('<!-- cclink-document:')
+    expect(content).toContain('![old](notes.assets/old.png)')
+    await expect(readFile(join(tempDir, 'notes.assets', 'old.png'))).resolves.toEqual(
+      Buffer.from([1, 2, 3]),
+    )
+    await expect(stat(legacyDir)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('inspects missing, modified, and orphan Markdown resources', async () => {
+    const service = new FileService()
+    const documentPath = join(tempDir, 'notes.md')
+    const sourcePath = join(tempDir, 'diagram.png')
+    await writeFile(documentPath, '# Notes\n', 'utf-8')
+    await writeFile(sourcePath, Buffer.from([1, 2, 3]))
+    const asset = await service.importDocumentAsset(documentPath, sourcePath)
+    await service.saveTextDocument({
+      filePath: documentPath,
+      content: `![diagram](${asset.relativePath})\n![missing](notes.assets/missing.png)\n`,
+      force: true,
+    })
+    await writeFile(asset.path, Buffer.from([9, 9, 9]))
+    await writeFile(join(tempDir, 'notes.assets', 'orphan.png'), Buffer.from([4]))
+
+    const inspection = await service.inspectMarkdownDocument(documentPath)
+
+    expect(inspection.manifestStatus).toBe('current')
+    expect(inspection.missingAssets).toEqual(['notes.assets/missing.png'])
+    expect(inspection.modifiedAssets).toEqual(['diagram.png'])
+    expect(inspection.orphanAssets).toEqual(['orphan.png'])
+  })
+
+  it('saves a Markdown resource group under a new visible name', async () => {
+    const service = new FileService()
+    const sourcePath = join(tempDir, 'notes.md')
+    const targetPath = join(tempDir, 'archive', 'renamed.md')
+    const imagePath = join(tempDir, 'diagram.png')
+    await writeFile(sourcePath, '# Notes\n', 'utf-8')
+    await writeFile(imagePath, Buffer.from([1, 2, 3]))
+    const asset = await service.importDocumentAsset(sourcePath, imagePath)
+
+    const result = await service.saveMarkdownDocumentAs({
+      sourcePath,
+      targetPath,
+      content: `![diagram](${asset.relativePath})\n`,
+    })
+
+    expect(result.copiedAssets).toBe(1)
+    expect(await readFile(targetPath, 'utf-8')).toContain('renamed.assets/diagram.png')
+    await expect(
+      readFile(join(tempDir, 'archive', 'renamed.assets', 'diagram.png')),
+    ).resolves.toEqual(Buffer.from([1, 2, 3]))
+  })
+
+  it('merges legacy and visible assets before Save As without overwriting collisions', async () => {
+    const service = new FileService()
+    const sourcePath = join(tempDir, 'notes.md')
+    const targetPath = join(tempDir, 'copy.md')
+    const legacyDir = join(tempDir, '.assets', 'notes')
+    const imagePath = join(tempDir, 'diagram.png')
+    await mkdir(legacyDir, { recursive: true })
+    await writeFile(sourcePath, '# Notes\n', 'utf-8')
+    await writeFile(join(legacyDir, 'diagram.png'), Buffer.from([1]))
+    await writeFile(imagePath, Buffer.from([2]))
+    const visibleAsset = await service.importDocumentAsset(sourcePath, imagePath)
+
+    const result = await service.saveMarkdownDocumentAs({
+      sourcePath,
+      targetPath,
+      content: [
+        '![legacy](.assets/notes/diagram.png)',
+        `![visible](${visibleAsset.relativePath})`,
+      ].join('\n'),
+    })
+
+    expect(result.copiedAssets).toBe(2)
+    const targetContent = await readFile(targetPath, 'utf-8')
+    expect(targetContent).toContain('![legacy](copy.assets/diagram-1.png)')
+    expect(targetContent).toContain('![visible](copy.assets/diagram.png)')
+    await expect(readFile(join(tempDir, 'copy.assets', 'diagram.png'))).resolves.toEqual(
+      Buffer.from([2]),
+    )
+    await expect(readFile(join(tempDir, 'copy.assets', 'diagram-1.png'))).resolves.toEqual(
+      Buffer.from([1]),
+    )
+  })
+
+  it('relocates a Markdown file and its visible resource directory together', async () => {
+    const service = new FileService()
+    const sourcePath = join(tempDir, 'notes.md')
+    const targetPath = join(tempDir, 'renamed.md')
+    const imagePath = join(tempDir, 'diagram.png')
+    await writeFile(sourcePath, '# Notes\n', 'utf-8')
+    await writeFile(imagePath, Buffer.from([1, 2, 3]))
+    const asset = await service.importDocumentAsset(sourcePath, imagePath)
+    await service.saveTextDocument({
+      filePath: sourcePath,
+      content: `![diagram](${asset.relativePath})\n`,
+      force: true,
+    })
+
+    const result = await service.relocateMarkdownDocument({ sourcePath, targetPath })
+
+    expect(result.newAssetDir).toBe(join(tempDir, 'renamed.assets'))
+    expect(await readFile(targetPath, 'utf-8')).toContain('renamed.assets/diagram.png')
+    await expect(stat(sourcePath)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(readFile(join(tempDir, 'renamed.assets', 'diagram.png'))).resolves.toEqual(
+      Buffer.from([1, 2, 3]),
+    )
+  })
+
+  it('exports a standard ZIP that expands to Markdown and visible resources', async () => {
+    const service = new FileService()
+    const documentPath = join(tempDir, 'notes.md')
+    const imagePath = join(tempDir, 'diagram.png')
+    const zipPath = join(tempDir, 'notes-export.zip')
+    await writeFile(documentPath, '# Notes\n', 'utf-8')
+    await writeFile(imagePath, Buffer.from([1, 2, 3]))
+    const asset = await service.importDocumentAsset(documentPath, imagePath)
+    await service.saveTextDocument({
+      filePath: documentPath,
+      content: `![diagram](${asset.relativePath})\n`,
+      force: true,
+    })
+
+    const exported = await service.exportMarkdownDocumentZip({
+      documentPath,
+      targetPath: zipPath,
+    })
+    const extracted = await service.extractZip(zipPath)
+
+    expect(exported.entries).toBe(3)
+    expect(await readdir(join(extracted.targetDir, 'notes'))).toEqual(['notes.assets', 'notes.md'])
+    await expect(
+      readFile(join(extracted.targetDir, 'notes', 'notes.assets', 'diagram.png')),
+    ).resolves.toEqual(Buffer.from([1, 2, 3]))
+  })
+
+  it('refuses ZIP export when existing local references are outside the managed asset directory', async () => {
+    const service = new FileService()
+    const documentPath = join(tempDir, 'notes.md')
+    const externalPath = join(tempDir, 'external.png')
+    const zipPath = join(tempDir, 'notes.zip')
+    await writeFile(documentPath, '![external](external.png)\n', 'utf-8')
+    await writeFile(externalPath, Buffer.from([1, 2, 3]))
+
+    const inspection = await service.inspectMarkdownDocument(documentPath)
+
+    expect(inspection.unmanagedLocalAssets).toEqual(['external.png'])
+    await expect(
+      service.exportMarkdownDocumentZip({ documentPath, targetPath: zipPath }),
+    ).rejects.toThrow('本地引用不在 notes.assets 中')
+    await expect(stat(zipPath)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('moves Markdown and its resources to the system trash when requested', async () => {
+    const service = new FileService()
+    const documentPath = join(tempDir, 'notes.md')
+    const assetDir = join(tempDir, 'notes.assets')
+    await mkdir(assetDir)
+    await writeFile(documentPath, '# Notes\n', 'utf-8')
+    await writeFile(join(assetDir, 'image.png'), Buffer.from([1]))
+
+    const result = await service.trashMarkdownDocument({
+      documentPath,
+      includeAssets: true,
+    })
+
+    expect(result).toEqual({ trashedPaths: [documentPath, assetDir], failedPaths: [] })
+    expect(electronMock.trashItem.mock.calls).toEqual([[documentPath], [assetDir]])
   })
 
   it('checks directories without throwing for missing paths', async () => {

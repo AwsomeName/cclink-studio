@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
     toggleDevtools: () => ipcRenderer.invoke('window:toggleDevtools'),
     /** 重新加载窗口 */
     reload: () => ipcRenderer.invoke('window:reload'),
+    /** 从内嵌 WebContentsView 把原生键盘焦点切回工作台 renderer */
+    focusRenderer: () => ipcRenderer.invoke('window:focusRenderer'),
   },
 
   // 浏览器控制（多视图：所有操作按 tabId 索引视图）
@@ -57,6 +59,7 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
     goBack: (tabId: string) => ipcRenderer.invoke('browser:goBack', tabId),
     goForward: (tabId: string) => ipcRenderer.invoke('browser:goForward', tabId),
     reload: (tabId: string) => ipcRenderer.invoke('browser:reload', tabId),
+    capturePage: (tabId: string) => ipcRenderer.invoke('browser:capturePage', tabId),
     getCurrentURL: (tabId: string) => ipcRenderer.invoke('browser:getCurrentURL', tabId),
     getActiveViewId: (workspaceKey?: string | null) =>
       ipcRenderer.invoke('browser:getActiveViewId', workspaceKey),
@@ -72,6 +75,16 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
       ) => callback(payload)
       ipcRenderer.on('browser:urlChanged', handler)
       return () => ipcRenderer.removeListener('browser:urlChanged', handler)
+    },
+    onPageMetaChanged: (
+      callback: (payload: { tabId: string; title?: string; faviconUrl?: string | null }) => void,
+    ) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { tabId: string; title?: string; faviconUrl?: string | null },
+      ) => callback(payload)
+      ipcRenderer.on('browser:pageMetaChanged', handler)
+      return () => ipcRenderer.removeListener('browser:pageMetaChanged', handler)
     },
     onRequestOpenTab: (
       callback: (payload: { initialUrl?: string; workspaceKey: string | null }) => void,
@@ -357,6 +370,16 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
       content: string
       encoding: 'base64'
     }) => ipcRenderer.invoke('fs:saveDocumentAsset', input),
+    inspectMarkdownDocument: (documentPath: string) =>
+      ipcRenderer.invoke('fs:inspectMarkdownDocument', documentPath),
+    saveMarkdownDocumentAs: (input: { sourcePath?: string; targetPath: string; content: string }) =>
+      ipcRenderer.invoke('fs:saveMarkdownDocumentAs', input),
+    relocateMarkdownDocument: (input: { sourcePath: string; targetPath: string }) =>
+      ipcRenderer.invoke('fs:relocateMarkdownDocument', input),
+    exportMarkdownDocumentZip: (input: { documentPath: string; targetPath: string }) =>
+      ipcRenderer.invoke('fs:exportMarkdownDocumentZip', input),
+    trashMarkdownDocument: (input: { documentPath: string; includeAssets: boolean }) =>
+      ipcRenderer.invoke('fs:trashMarkdownDocument', input),
     /** 获取文件/目录元数据 */
     stat: (filePath: string) => ipcRenderer.invoke('fs:stat', filePath),
     /** 安静检查路径是否为目录 */

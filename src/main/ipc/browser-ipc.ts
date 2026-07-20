@@ -67,6 +67,10 @@ export function registerBrowserIpc(
     browserManager.reload(tabId)
   })
 
+  ipcMain.handle('browser:capturePage', (_event, tabId: string) => {
+    return browserManager.capturePage(tabId)
+  })
+
   ipcMain.handle('browser:getCurrentURL', (_event, tabId: string) => {
     return browserManager.getCurrentURL(tabId)
   })

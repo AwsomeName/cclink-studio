@@ -27,6 +27,7 @@ import { ConversationMessageRenderer } from '../common/ConversationMessageRender
 import { IconCheck, IconError, IconSend, IconStop, IconTool } from '../common/Icons'
 import { ConversationShell, type ConversationShellBadgeKind } from './ConversationShell'
 import { AgentComposerToolbar } from '../../features/agent-composer/AgentComposerToolbar'
+import { useComposerHistory } from '../../features/agent-composer/use-composer-history'
 import { MountedResourceBar } from '../../features/agent-conversations/mounted-resource-bar'
 import { MountedSkillStrip } from '../../features/agent-conversations/mounted-skill-strip'
 import { getConversationActivity } from '../../features/agent-conversations/activity'
@@ -65,6 +66,7 @@ export function WorkbenchAgentConversation({
   tabId: string
   conversationId: string
 }): React.ReactElement {
+  const composerRef = useRef<HTMLDivElement>(null)
   const conversation = useAgentStore((state) => state.conversations[conversationId])
   const setInput = useAgentStore((state) => state.setInput)
   const addUserMessage = useAgentStore((state) => state.addUserMessage)
@@ -203,6 +205,13 @@ export function WorkbenchAgentConversation({
     },
     [conversationId, setInput, updateMentionQueryFromInput],
   )
+  const handleComposerHistoryKeyDown = useComposerHistory({
+    conversationId,
+    messages: conversation?.messages ?? [],
+    value: conversationInput,
+    onValueChange: handleInputChange,
+    textareaRef: inputRef,
+  })
   const handleMountResource = useCallback(
     (resource: AgentResourceCandidate) => {
       addMountedResource(toMountedResource(resource), conversationId)
@@ -365,11 +374,8 @@ export function WorkbenchAgentConversation({
       return
     }
 
-    if (
-      event.key === 'Enter' &&
-      (event.metaKey || event.ctrlKey) &&
-      !contextCompacting
-    ) {
+    if (handleComposerHistoryKeyDown(event)) return
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !contextCompacting) {
       event.preventDefault()
       setResourceQuery(null)
       setSkillQuery(null)
@@ -393,6 +399,7 @@ export function WorkbenchAgentConversation({
         onPointerDown: conversationScroll.onPointerDown,
         onTouchStart: conversationScroll.onTouchStart,
       }}
+      composerRef={composerRef}
       context={
         <>
           <MountedResourceBar
@@ -429,6 +436,8 @@ export function WorkbenchAgentConversation({
                 selectedIndex={mentionSelectedIndex}
                 onActiveIndexChange={setMentionSelectedIndex}
                 onPick={handleMountResource}
+                anchorRef={composerRef}
+                onRequestClose={() => setResourceQuery(null)}
               />
             )}
             {skillQuery !== null && (
@@ -437,6 +446,8 @@ export function WorkbenchAgentConversation({
                 selectedIndex={mentionSelectedIndex}
                 onActiveIndexChange={setMentionSelectedIndex}
                 onPick={handleMountSkill}
+                anchorRef={composerRef}
+                onRequestClose={() => setSkillQuery(null)}
               />
             )}
             <MountedSkillStrip skills={mountedSkills} onRemove={handleRemoveMountedSkill} />

@@ -237,6 +237,22 @@ input:focus {
   flex-shrink: 0;
 }
 
+.app-edition-badge {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--text-accent) 72%, #ffffff);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--text-accent) 78%, var(--bg-titlebar));
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
 .app-topbar-icon {
   width: 32px;
   height: 32px;
@@ -741,6 +757,174 @@ button.sidebar-section-header-button {
 
 .sidebar-section-header.expanded svg {
   transform: rotate(90deg);
+}
+
+.browser-sidebar {
+  min-width: 0;
+}
+
+.browser-sidebar-scope {
+  min-width: 0;
+  height: 30px;
+  margin: 2px 10px 6px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.browser-sidebar-scope span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-sidebar-section-header {
+  cursor: default;
+  gap: 6px;
+}
+
+.browser-sidebar-section-header:hover {
+  background: transparent;
+}
+
+.browser-sidebar-count {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.browser-sidebar-add {
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.browser-sidebar-add:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.browser-sidebar-list {
+  min-width: 0;
+}
+
+.browser-sidebar-row {
+  min-width: 0;
+  min-height: 48px;
+  margin: 1px 8px;
+  border-radius: 5px;
+  display: flex;
+  align-items: stretch;
+  color: var(--text-primary);
+}
+
+.browser-sidebar-row:hover,
+.browser-sidebar-row.active {
+  background: var(--bg-hover);
+}
+
+.browser-sidebar-row.active {
+  box-shadow: inset 2px 0 0 var(--text-accent);
+}
+
+.browser-sidebar-row-main {
+  min-width: 0;
+  flex: 1;
+  padding: 7px 4px 7px 9px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.browser-sidebar-favicon {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.browser-favicon {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.browser-sidebar-current {
+  flex-shrink: 0;
+  color: var(--text-accent);
+  font-size: 10px;
+}
+
+.browser-sidebar-bookmark {
+  width: 28px;
+  flex: 0 0 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  opacity: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.browser-sidebar-row:hover .browser-sidebar-bookmark,
+.browser-sidebar-row:focus-within .browser-sidebar-bookmark,
+.browser-sidebar-bookmark.active {
+  opacity: 1;
+}
+
+.browser-sidebar-bookmark:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+
+.browser-sidebar-bookmark.active {
+  color: var(--text-accent);
+}
+
+.browser-sidebar-bookmark.active svg {
+  fill: currentColor;
+}
+
+.browser-sidebar-bookmark:disabled {
+  opacity: 0;
+  cursor: default;
+}
+
+.browser-sidebar-bookmarks-section {
+  margin-top: 4px;
+  padding-top: 3px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .sidebar-item {
@@ -2281,6 +2465,7 @@ button.project-panel-row.active {
   position: relative;
   z-index: 10;
   flex-shrink: 0;
+  touch-action: none;
 }
 
 .resize-handle::after {
@@ -2351,6 +2536,11 @@ body.is-resizing-panels .main-area > div {
 
 .tab-icon {
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tab-title {
@@ -2663,6 +2853,8 @@ body.is-resizing-panels .main-area > div {
   padding: 0 10px;
   border-radius: 14px;
   background: var(--bg-input);
+  user-select: text;
+  -webkit-user-select: text;
   transition:
     border-color var(--transition-fast),
     box-shadow var(--transition-fast);
@@ -2732,6 +2924,16 @@ body.is-resizing-panels .main-area > div {
   overflow: hidden;
   position: relative;
   background: var(--bg-workbench);
+}
+
+.browser-context-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  user-select: none;
 }
 
 .workbench-placeholder {
@@ -3218,6 +3420,8 @@ body.is-resizing-panels .main-area > div {
 }
 
 .agent-side-shell {
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   overflow: hidden;
 }
@@ -3253,6 +3457,7 @@ body.is-resizing-panels .main-area > div {
 .agent-panel-side {
   width: 100%;
   min-width: 0;
+  max-width: 100%;
 }
 
 .agent-panel-center > .agent-conversation-main {
@@ -5148,8 +5353,11 @@ body.is-resizing-thread-list .agent-panel-center > .agent-quick-switcher {
 }
 
 .agent-messages {
+  min-width: 0;
+  max-width: 100%;
   flex: 1;
   padding: 12px;
+  overflow-x: hidden;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -5160,6 +5368,7 @@ body.is-resizing-thread-list .agent-panel-center > .agent-quick-switcher {
 }
 
 .agent-message {
+  min-width: 0;
   position: relative;
   padding: 8px 12px;
   border-radius: var(--radius-lg);
@@ -5316,7 +5525,10 @@ body.is-resizing-thread-list .agent-panel-center > .agent-quick-switcher {
 /* ====== 内容块样式 ====== */
 
 .content-text {
+  min-width: 0;
+  max-width: 100%;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 
@@ -5868,6 +6080,12 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   position: relative;
   display: inline-flex;
   min-width: 0;
+}
+
+.floating-surface {
+  z-index: 10060;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .agent-composer-icon-btn {
@@ -9231,6 +9449,14 @@ button.file-tree-item {
 
 .tab-context-menu.renaming {
   min-width: 260px;
+}
+
+.tab-context-menu .context-menu-item {
+  padding: 4px 12px;
+}
+
+.tab-context-menu .context-menu-separator {
+  margin: 2px 8px;
 }
 
 .tab-context-rename {

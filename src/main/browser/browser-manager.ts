@@ -314,6 +314,12 @@ export class BrowserManager {
     })
     wc.on('did-navigate', (_event, url) => this.onNavigate(tabId, url))
     wc.on('did-navigate-in-page', (_event, url) => this.onNavigate(tabId, url))
+    wc.on('page-title-updated', (_event, title) => {
+      this.emitPageMeta(tabId, { title })
+    })
+    wc.on('page-favicon-updated', (_event, favicons) => {
+      this.emitPageMeta(tabId, { faviconUrl: favicons[0] ?? null })
+    })
     // 每次页面加载完成后，按当前模式重新计算并应用缩放
     wc.on('did-finish-load', () => {
       void this.applyZoom(tabId, true)
@@ -382,6 +388,12 @@ export class BrowserManager {
         history: entry?.history ?? [url],
         historyIndex: entry?.historyIndex ?? 0,
       })
+  }
+
+  private emitPageMeta(tabId: string, meta: { title?: string; faviconUrl?: string | null }): void {
+    const win = this.win()
+    if (!win) return
+    win.webContents.send('browser:pageMetaChanged', { tabId, ...meta })
   }
 
   /**
@@ -818,6 +830,14 @@ export class BrowserManager {
   /** 刷新 */
   reload(tabId: string): void {
     this.views.get(tabId)?.view.webContents.reload()
+  }
+
+  /** 捕获当前网页画面，供原生 View 暂时隐藏时作为无闪烁占位。 */
+  async capturePage(tabId: string): Promise<string | null> {
+    const entry = this.views.get(tabId)
+    if (!entry || entry.view.webContents.isDestroyed()) return null
+    const image = await entry.view.webContents.capturePage()
+    return image.isEmpty() ? null : image.toDataURL()
   }
 
   /** 获取当前 URL（优先实时读取，回退到记录值） */

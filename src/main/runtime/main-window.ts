@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron'
+import { APP_DISPLAY_NAME } from './app-metadata'
 
 interface CreateMainWindowOptions {
   isDev: boolean
@@ -13,7 +14,7 @@ export function createMainWindow(options: CreateMainWindowOptions): BrowserWindo
     width: 1400,
     height: 900,
     show: false,
-    title: 'CCLink Studio',
+    title: APP_DISPLAY_NAME,
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: options.preloadPath,

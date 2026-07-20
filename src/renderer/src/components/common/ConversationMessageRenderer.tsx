@@ -43,7 +43,11 @@ export function ConversationMessageRenderer({
         </button>
       )}
       {units.map((unit, index) => (
-        <ContentRenderUnitRenderer key={index} unit={unit} />
+        <ContentRenderUnitRenderer
+          key={index}
+          unit={unit}
+          isStreaming={message.isStreaming === true}
+        />
       ))}
       {message.resources && message.resources.length > 0 && (
         <div className="message-resource-list">
@@ -125,9 +129,15 @@ export function buildContentRenderUnits(blocks: ContentBlock[]): ContentRenderUn
   return units
 }
 
-function ContentRenderUnitRenderer({ unit }: { unit: ContentRenderUnit }): React.ReactElement {
+function ContentRenderUnitRenderer({
+  unit,
+  isStreaming,
+}: {
+  unit: ContentRenderUnit
+  isStreaming: boolean
+}): React.ReactElement {
   if (unit.type === 'tool_group') {
-    return <ToolExecutionGroup blocks={unit.blocks} />
+    return <ToolExecutionGroup blocks={unit.blocks} isStreaming={isStreaming} />
   }
   if (unit.type === 'thinking_group') {
     return <ThinkingGroup blocks={unit.blocks} />
@@ -225,8 +235,43 @@ function ThinkingGroup({ blocks }: { blocks: ThinkingContentBlock[] }): React.Re
   )
 }
 
-function ToolExecutionGroup({ blocks }: { blocks: ToolContentBlock[] }): React.ReactElement {
-  const actionCount = blocks.filter((block) => block.type === 'tool_use').length || blocks.length
+export function getToolExecutionSummary(blocks: ToolContentBlock[]): {
+  actionCount: number
+  completedCount: number
+  failedCount: number
+  pendingCount: number
+} {
+  const toolUses = blocks.filter((block) => block.type === 'tool_use')
+  const results = new Map(
+    blocks
+      .filter((block) => block.type === 'tool_result')
+      .map((block) => [block.tool_use_id, block]),
+  )
+  let completedCount = 0
+  let failedCount = 0
+  let pendingCount = 0
+  for (const toolUse of toolUses) {
+    const result = results.get(toolUse.id)
+    if (!result) pendingCount += 1
+    else if (result.is_error) failedCount += 1
+    else completedCount += 1
+  }
+  return {
+    actionCount: toolUses.length || blocks.length,
+    completedCount,
+    failedCount,
+    pendingCount,
+  }
+}
+
+function ToolExecutionGroup({
+  blocks,
+  isStreaming,
+}: {
+  blocks: ToolContentBlock[]
+  isStreaming: boolean
+}): React.ReactElement {
+  const summary = getToolExecutionSummary(blocks)
   const preview = blocks
     .slice(0, 3)
     .map((block) =>
@@ -244,27 +289,54 @@ function ToolExecutionGroup({ blocks }: { blocks: ToolContentBlock[] }): React.R
         <IconTool size={12} />
         <span>执行过程</span>
         <em>
-          {actionCount} 个动作
+          {summary.actionCount} 个动作
+          {summary.completedCount > 0 ? ` · ${summary.completedCount} 完成` : ''}
+          {summary.failedCount > 0 ? ` · ${summary.failedCount} 失败` : ''}
+          {summary.pendingCount > 0
+            ? ` · ${summary.pendingCount} ${isStreaming ? '等待结果' : '未完成'}`
+            : ''}
           {preview ? ` · ${preview}` : ''}
         </em>
       </summary>
       <div className="tool-group-rows">
         {blocks.map((block, index) => (
-          <ToolExecutionRow key={index} block={block} />
+          <ToolExecutionRow
+            key={index}
+            block={block}
+            isPending={
+              block.type === 'tool_use' &&
+              !blocks.some(
+                (candidate) =>
+                  candidate.type === 'tool_result' && candidate.tool_use_id === block.id,
+              )
+            }
+            isStreaming={isStreaming}
+          />
         ))}
       </div>
     </details>
   )
 }
 
-function ToolExecutionRow({ block }: { block: ToolContentBlock }): React.ReactElement {
+function ToolExecutionRow({
+  block,
+  isPending,
+  isStreaming,
+}: {
+  block: ToolContentBlock
+  isPending: boolean
+  isStreaming: boolean
+}): React.ReactElement {
   if (block.type === 'tool_use') {
     return (
-      <details className="tool-group-row tool-group-row-use">
+      <details className={`tool-group-row tool-group-row-use ${isPending ? 'pending' : ''}`}>
         <summary>
           <IconTool size={12} />
           <span>{productToolLabel(block.name)}</span>
-          <em>{previewText(JSON.stringify(block.input), 72) || '无参数'}</em>
+          <em>
+            {isPending ? `${isStreaming ? '等待结果' : '未完成'} · ` : ''}
+            {previewText(JSON.stringify(block.input), 72) || '无参数'}
+          </em>
         </summary>
         <div className="tool-detail">
           <div className="tool-raw-name">{block.name}</div>

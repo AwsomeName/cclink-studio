@@ -35,7 +35,7 @@ describe('configureFixedUserDataPath', () => {
 
     expect(fixedPath).toBe(join(appData, 'CCLink Studio'))
     expect(existsSync(fixedPath)).toBe(true)
-    expect(setName).toHaveBeenCalledWith('CCLink Studio')
+    expect(setName).toHaveBeenCalledWith('CCLink Studio 开源版')
     expect(setPath).toHaveBeenCalledWith('userData', join(appData, 'CCLink Studio'))
     expect(getUserDataPathDiagnostics()).toEqual({ fixedUserDataPath: fixedPath })
   })

@@ -6,8 +6,10 @@
  */
 
 import { tmpdir } from 'os'
+import { isAbsolute, relative, resolve } from 'path'
 import {
   query,
+  type HookCallback,
   type McpServerConfig,
   type Options as ClaudeAgentSdkOptions,
   type Query,
@@ -213,6 +215,18 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       '',
     ]
 
+    const workspacePath = options?.workspacePath?.trim() || this.getWorkspacePath?.() || ''
+    if (workspacePath) {
+      sections.push(
+        '### 当前工作区边界',
+        `- 当前会话唯一可信的工作区根目录：${workspacePath}`,
+        '- 文件任务只能从当前工作区或用户本轮显式挂载的资源中定位目标。来自旧记忆、旧工具参数或其他机器且不在当前工作区内的绝对路径，均视为失效信息，不得使用。',
+        '- 用户说“继续”“下一篇”等续接指令时，先结合当前会话连续性快照和当前工作区内已完成结果判断下一步；仍不明确时，只列出当前工作区的相关目录，不要搜索用户主目录或猜测其他项目名。',
+        '- 如果工具提示某个外部目录不存在或无权限，立即放弃该外部路径并回到当前工作区，不要扩大到主目录继续搜索。',
+        '',
+      )
+    }
+
     if (options?.resourceContext) {
       sections.push(
         '### CCLink Studio 资源事实包',
@@ -410,6 +424,15 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       maxBudgetUsd: this.maxBudgetUsd,
       mcpServers,
       strictMcpConfig: true,
+      hooks: workspacePath
+        ? {
+            PreToolUse: [
+              {
+                hooks: [this.createWorkspaceBoundaryHook(workspacePath)],
+              },
+            ],
+          }
+        : undefined,
       pathToClaudeCodeExecutable: this.claudeCodePath,
       allowedTools,
       stderr: (data) => {
@@ -449,6 +472,29 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     }
   }
 
+  private createWorkspaceBoundaryHook(workspacePath: string): HookCallback {
+    const workspaceRoot = resolve(workspacePath)
+    return async (input) => {
+      if (input.hook_event_name !== 'PreToolUse') return { continue: true }
+      const escapedPath = findEscapedAbsolutePath(input.tool_input, workspaceRoot)
+      if (!escapedPath) return { continue: true }
+
+      const reason =
+        `已阻止跨工作区文件访问：${escapedPath}\n` +
+        `当前会话工作区是 ${workspaceRoot}。该路径不属于本会话，可能来自失效上下文。` +
+        '请放弃该路径，只在当前工作区内重新定位目标；不要扩大到用户主目录搜索。'
+      console.warn(`[ClaudeCodeBackend] ${reason}`)
+      return {
+        continue: true,
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason: reason,
+        },
+      }
+    }
+  }
+
   private async consumeQuery(sdkQuery: Query, operation: AgentQueryOperation): Promise<void> {
     try {
       for await (const event of sdkQuery) {
@@ -475,7 +521,9 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         console.error('[ClaudeCodeBackend] stderr:', detail)
       }
     } catch (err) {
-      if (!this.aborted) {
+      // Claude Agent SDK 会在已经产出 is_error result 后再次从迭代器抛出同一错误。
+      // result 已经是本轮的终态，不能再向 UI 重复发送第二张错误卡。
+      if (!this.aborted && !this.terminalEventEmitted) {
         this.terminalEventEmitted = true
         this.emit('error', {
           type: 'error',
@@ -525,7 +573,19 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
                 ? errors.join('\n')
                 : 'Claude Agent SDK 返回错误结果'
           this.lastSdkErrorMessage = message
-          this.emit('error', { type: 'error', operation, message })
+          const failure = classifySdkFailure(message)
+          if (failure.invalidatesSession) {
+            // 预算中止可能让 transcript 停在尚未配对 tool_result 的 tool_use 尾部；
+            // 继续 resume 会被 API 以 invalid_request 拒绝。保留 UI 对话，但丢弃坏 SDK session。
+            this.sessionId = null
+            this.lastContextUsage = null
+          }
+          this.emit('error', {
+            type: 'error',
+            operation,
+            code: failure.code,
+            message: failure.message,
+          })
         } else {
           this.emit('complete', payload)
         }
@@ -612,6 +672,64 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     await this.abort()
     this.eventHandler = null
   }
+}
+
+interface SdkFailureClassification {
+  code?: 'budget_exceeded' | 'sdk_session_invalid'
+  invalidatesSession: boolean
+  message: string
+}
+
+const FILE_PATH_INPUT_KEYS = new Set([
+  'file_path',
+  'notebook_path',
+  'path',
+  'paths',
+  'root_path',
+  'rootPath',
+])
+
+function findEscapedAbsolutePath(input: unknown, workspaceRoot: string): string | null {
+  if (!input || typeof input !== 'object') return null
+
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (!FILE_PATH_INPUT_KEYS.has(key)) continue
+    const values = Array.isArray(value) ? value : [value]
+    for (const candidate of values) {
+      if (typeof candidate !== 'string' || !isAbsolute(candidate)) continue
+      const candidatePath = resolve(candidate)
+      const pathFromWorkspace = relative(workspaceRoot, candidatePath)
+      if (
+        pathFromWorkspace === '' ||
+        (!pathFromWorkspace.startsWith('..') && !isAbsolute(pathFromWorkspace))
+      ) {
+        continue
+      }
+      return candidate
+    }
+  }
+
+  return null
+}
+
+function classifySdkFailure(message: string): SdkFailureClassification {
+  if (/reached maximum budget/i.test(message)) {
+    return {
+      code: 'budget_exceeded',
+      invalidatesSession: true,
+      message: `${message}\n本轮已达到设置的预算上限。为避免恢复未完成的工具调用，SDK 会话已安全重置；再次发送时会基于当前会话摘要继续。`,
+    }
+  }
+
+  if (/invalid_request_error|api error:\s*400[\s\S]*invalid request/i.test(message)) {
+    return {
+      code: 'sdk_session_invalid',
+      invalidatesSession: true,
+      message: `${message}\n当前 SDK 会话无法继续恢复，已安全重置；再次发送时会基于当前会话摘要新建 SDK 会话。`,
+    }
+  }
+
+  return { invalidatesSession: false, message }
 }
 
 function normalizeContextUsage(usage: {

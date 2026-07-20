@@ -12,7 +12,15 @@ import { closeTabWithDraftPolicy } from '../../utils/close-tab'
 import { recordTerminalLifecycleEvent } from '../../utils/terminal-lifecycle'
 import { buildTerminalTabDraft } from '../../utils/terminal-tab'
 
-export function Workbench(): React.ReactElement {
+interface WorkbenchProps {
+  tabCreateMenuOpen: boolean
+  onTabCreateMenuOpenChange: (open: boolean) => void
+}
+
+export function Workbench({
+  tabCreateMenuOpen,
+  onTabCreateMenuOpenChange,
+}: WorkbenchProps): React.ReactElement {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const activateTab = useTabStore((s) => s.activateTab)
@@ -90,6 +98,21 @@ export function Workbench(): React.ReactElement {
     void closeTabWithDraftPolicy(tabId)
   }, [])
 
+  const handleShowTabMenu = useCallback(
+    async (tabId: string, x: number, y: number): Promise<void> => {
+      let browserPreviewDataUrl: string | null = null
+      if (activeTabId && isBrowserTab) {
+        try {
+          browserPreviewDataUrl = await window.cclinkStudio.browser.capturePage(activeTabId)
+        } catch (error) {
+          console.warn('[Workbench] 浏览器右键菜单快照失败:', error)
+        }
+      }
+      showTabMenu(tabId, x, y, browserPreviewDataUrl)
+    },
+    [activeTabId, isBrowserTab, showTabMenu],
+  )
+
   const openBrowserUrl = useCallback(
     (url: string): void => {
       if (activeTabId && isBrowserTab) {
@@ -113,7 +136,9 @@ export function Workbench(): React.ReactElement {
         onNewBrowser={openNewBrowser}
         onNewConversation={openNewConversation}
         onNewTerminal={openNewTerminal}
-        onShowMenu={showTabMenu}
+        onShowMenu={(tabId, x, y) => void handleShowTabMenu(tabId, x, y)}
+        createMenuOpen={tabCreateMenuOpen}
+        onCreateMenuOpenChange={onTabCreateMenuOpenChange}
       />
 
       {isBrowserTab && activeTabId && (

@@ -10,6 +10,7 @@ import { useContextMenuStore } from '../../stores/context-menu-store'
 import { useTabStore } from '../../stores/tab-store'
 import { useFsStore } from '../../stores/fs-store'
 import { useAgentStore } from '../../stores/agent-store'
+import { useEditorStore } from '../../stores/editor-store'
 import { useToastStore } from './Toast'
 import {
   buildHtmlBrowserTabDraft,
@@ -160,6 +161,92 @@ export function ContextMenu(): React.ReactElement | null {
     }
   }
 
+  const handleExportMarkdownZip = async (): Promise<void> => {
+    if (!node || node.type !== 'file') return
+    hide()
+    const defaultPath = node.path.replace(/\.(?:md|markdown)$/i, '.zip')
+    const dialogResult = await window.cclinkStudio.dialog.showSaveDialog({
+      title: '导出 Markdown 文档包',
+      defaultPath,
+      filters: [{ name: 'ZIP 压缩包', extensions: ['zip'] }],
+    })
+    if (dialogResult.canceled || !dialogResult.filePath) return
+    try {
+      const result = await window.cclinkStudio.fs.exportMarkdownDocumentZip({
+        documentPath: node.path,
+        targetPath: dialogResult.filePath,
+      })
+      await refreshDir(parentPath(node.path))
+      showToast(`已导出 ${result.entries} 个文件到 ${result.zipPath}`, 'success')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Markdown ZIP 导出失败', 'error')
+    }
+  }
+
+  const handleTrashMarkdown = async (): Promise<void> => {
+    if (!node || node.type !== 'file') return
+    hide()
+    try {
+      const inspection = await window.cclinkStudio.fs.inspectMarkdownDocument(node.path)
+      const hasAssets = inspection.assetDirectoryPresent || Boolean(inspection.legacyAssetDir)
+      const confirmation = await window.cclinkStudio.dialog.showMessageBox({
+        type: 'warning',
+        title: '移到废纸篓',
+        message: `要删除 ${node.name} 吗？`,
+        detail: hasAssets
+          ? '该文档有配套资源目录。你可以只删除 Markdown，或将正文和资源一起移到废纸篓。'
+          : '文件将移到系统废纸篓，可以从废纸篓恢复。',
+        buttons: hasAssets ? ['取消', '仅 Markdown', 'Markdown 和资源'] : ['取消', '移到废纸篓'],
+        defaultId: hasAssets ? 2 : 1,
+        cancelId: 0,
+      })
+      if (confirmation.response === 0) return
+      const includeAssets = hasAssets && confirmation.response === 2
+      const result = await window.cclinkStudio.fs.trashMarkdownDocument({
+        documentPath: node.path,
+        includeAssets,
+      })
+      const trashedPaths = result.trashedPaths
+      const isTrashed = (filePath: string | undefined): boolean =>
+        Boolean(
+          filePath &&
+          trashedPaths.some(
+            (trashedPath) => filePath === trashedPath || filePath.startsWith(`${trashedPath}/`),
+          ),
+        )
+      const tabStore = useTabStore.getState()
+      for (const tab of [...tabStore.tabs]) {
+        if (isTrashed(tab.filePath)) tabStore.closeTab(tab.id)
+      }
+      const editorStore = useEditorStore.getState()
+      for (const filePath of Object.keys(editorStore.files)) {
+        if (isTrashed(filePath)) editorStore.closeFile(filePath)
+      }
+      const agentStore = useAgentStore.getState()
+      for (const [conversationId, conversation] of Object.entries(agentStore.conversations)) {
+        for (const resource of conversation.mountedResources) {
+          if (isTrashed(resource.ref.path)) {
+            agentStore.removeMountedResource(resource.id, conversationId)
+          }
+        }
+      }
+      await refreshDir(parentPath(node.path))
+      if (result.failedPaths.length > 0) {
+        showToast(
+          `Markdown 已移到废纸篓，但 ${result.failedPaths.length} 个资源目录未能移动`,
+          'error',
+        )
+      } else {
+        showToast(
+          includeAssets ? 'Markdown 和资源已移到废纸篓' : 'Markdown 已移到废纸篓',
+          'success',
+        )
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '移到废纸篓失败', 'error')
+    }
+  }
+
   const handlePreview = (): void => {
     if (!node) return
     openTab({
@@ -211,7 +298,7 @@ export function ContextMenu(): React.ReactElement | null {
   if (!open || !node) return null
 
   const isDir = node.type === 'directory'
-  const isMd = node.extension === '.md'
+  const isMd = node.type === 'file' && (node.extension === '.md' || node.extension === '.markdown')
   const isHtml = node.type === 'file' && isHtmlFileExtension(node.extension)
   const isZip = node.type === 'file' && node.extension === '.zip'
 
@@ -274,6 +361,12 @@ export function ContextMenu(): React.ReactElement | null {
             <span>解压到同名文件夹</span>
           </div>
         )}
+        {isMd && (
+          <div className="context-menu-item" onClick={() => void handleExportMarkdownZip()}>
+            <span className="context-menu-icon">📦</span>
+            <span>导出 Markdown ZIP</span>
+          </div>
+        )}
         {!isHtml && <div className="context-menu-separator" />}
 
         {/* 微信格式操作 */}
@@ -294,7 +387,21 @@ export function ContextMenu(): React.ReactElement | null {
             <span>微信格式仅支持 Markdown 文件</span>
           </div>
         ) : null}
+        {isMd && (
+          <>
+            <div className="context-menu-separator" />
+            <div className="context-menu-item" onClick={() => void handleTrashMarkdown()}>
+              <span className="context-menu-icon">🗑️</span>
+              <span>移到废纸篓…</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
+}
+
+function parentPath(filePath: string): string {
+  const index = filePath.lastIndexOf('/')
+  return index > 0 ? filePath.slice(0, index) : '/'
 }

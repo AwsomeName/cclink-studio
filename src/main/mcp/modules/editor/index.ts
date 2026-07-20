@@ -21,6 +21,7 @@ import type { DirEntry } from '../../../fs/file-service'
 export interface EditorFileAccess {
   readFile(filePath: string): Promise<{ content: string; encoding: string }>
   readDir(dirPath: string, options?: { showHiddenFiles?: boolean }): Promise<DirEntry[]>
+  writeFile(filePath: string, content: string): Promise<void>
 }
 
 /** 等待中的编辑器操作 */
@@ -40,7 +41,7 @@ const EDITOR_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'editor_write',
     description:
-      '将 Markdown 内容写入编辑器。替换当前文档全部内容。如果当前没有编辑器 Tab，会自动创建一个新的。用于让 AI 生成完整的文档。',
+      '写入完整 Markdown 文档。指定 filePath 时直接持久化到磁盘并自动创建父目录；省略 filePath 时只替换当前编辑器草稿。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -63,7 +64,8 @@ const EDITOR_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'editor_append',
-    description: '在编辑器文档末尾追加 Markdown 内容。适用于逐步构建文档。',
+    description:
+      '在 Markdown 文档末尾追加内容。指定 filePath 时直接持久化到磁盘；省略 filePath 时追加到当前编辑器草稿。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -83,7 +85,7 @@ const EDITOR_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'editor_insert',
     description:
-      '在编辑器指定位置插入 Markdown 内容。position 可选 "start"（文档开头）或 "end"（文档末尾）。',
+      '在 Markdown 文档指定位置插入内容。指定 filePath 时直接持久化到磁盘；省略 filePath 时操作当前编辑器草稿。position 可选 "start" 或 "end"。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -198,10 +200,28 @@ export class EditorToolModule implements ToolModule {
   /**
    * 推送内容更新到渲染进程，等待 ack
    */
-  private sendContentUpdate(
+  private async sendContentUpdate(
     type: 'write' | 'append' | 'insert',
     params: Record<string, unknown>,
   ): Promise<unknown> {
+    const filePath = typeof params.filePath === 'string' ? params.filePath.trim() : ''
+    const content = typeof params.content === 'string' ? params.content : ''
+    if (filePath) {
+      const nextContent = await this.resolveDiskContent(type, filePath, content, params.position)
+      await this.fileAccess.writeFile(filePath, nextContent)
+      const persisted = await this.fileAccess.readFile(filePath)
+      if (persisted.encoding !== 'utf-8' || persisted.content !== nextContent) {
+        throw new Error(`文件写入后校验失败: ${filePath}`)
+      }
+      return {
+        success: true,
+        persisted: true,
+        verified: true,
+        filePath,
+        bytes: Buffer.byteLength(nextContent, 'utf-8'),
+      }
+    }
+
     return new Promise((resolve, reject) => {
       const id = randomUUID()
 
@@ -215,8 +235,7 @@ export class EditorToolModule implements ToolModule {
       const payload: EditorContentUpdate = {
         id,
         type,
-        content: params.content as string,
-        filePath: params.filePath as string | undefined,
+        content,
         position: params.position as string | undefined,
         title: params.title as string | undefined,
         timestamp: Date.now(),
@@ -224,6 +243,30 @@ export class EditorToolModule implements ToolModule {
 
       this.mainWindow!.webContents.send('editor:contentUpdate', payload)
     })
+  }
+
+  private async resolveDiskContent(
+    type: 'write' | 'append' | 'insert',
+    filePath: string,
+    content: string,
+    position: unknown,
+  ): Promise<string> {
+    if (type === 'write') return content
+
+    let current = ''
+    try {
+      const result = await this.fileAccess.readFile(filePath)
+      if (result.encoding !== 'utf-8') {
+        throw new Error(`不支持修改二进制文件: ${filePath}`)
+      }
+      current = result.content
+    } catch (error) {
+      if (!isMissingFileError(error)) throw error
+    }
+
+    return type === 'insert' && position === 'start'
+      ? joinMarkdown(content, current)
+      : joinMarkdown(current, content)
   }
 
   /**
@@ -325,4 +368,20 @@ export class EditorToolModule implements ToolModule {
     this.pending.clear()
     this.mainWindow = null
   }
+}
+
+function joinMarkdown(before: string, after: string): string {
+  if (!before) return after
+  if (!after) return before
+  return `${before.replace(/\s+$/, '')}\n\n${after.replace(/^\s+/, '')}`
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return (
+    (error instanceof Error && /\bENOENT\b/.test(error.message)) ||
+    (typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'ENOENT')
+  )
 }

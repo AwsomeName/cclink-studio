@@ -634,6 +634,66 @@ describe('useAgentStore', () => {
   })
 
   describe('hydrateFromWorkspaceState', () => {
+    it('恢复时丢弃预算中止后留下的不可续接 SDK session', () => {
+      const now = Date.now()
+      useAgentStore.getState().hydrateFromWorkspaceState({
+        conversations: {
+          failed: {
+            id: 'failed',
+            title: '预算中止任务',
+            messages: [
+              {
+                id: 'assistant-before-budget',
+                role: 'assistant',
+                content: [{ type: 'text', text: '正在写文件' }],
+                rawText: '正在写文件',
+                timestamp: now - 10,
+              },
+              {
+                id: 'budget-error',
+                role: 'system',
+                content: [{ type: 'text', text: '连接错误: Reached maximum budget ($1)' }],
+                rawText: '连接错误: Reached maximum budget ($1)',
+                timestamp: now,
+              },
+            ],
+            input: '',
+            loading: false,
+            backendState: 'error',
+            runStatus: 'failed',
+            activeRunId: null,
+            sessionId: 'session-with-dangling-tools',
+            streamingMessageId: null,
+            lastCost: 0.35,
+            contextUsage: {
+              categories: [{ name: 'messages', tokens: 60_000 }],
+              totalTokens: 60_000,
+              maxTokens: 200_000,
+              rawMaxTokens: 200_000,
+              percentage: 30,
+              model: 'claude-sonnet',
+              autoCompactThreshold: 190_000,
+              isAutoCompactEnabled: true,
+              capturedAt: now,
+            },
+            scope: { kind: 'all' },
+            mountedResources: [],
+            mountedSkills: [],
+            createdAt: now - 100,
+            updatedAt: now,
+            archivedAt: null,
+          },
+        },
+        conversationOrder: ['failed'],
+        activeConversationId: 'failed',
+      })
+
+      const conversation = useAgentStore.getState().conversations.failed
+      expect(conversation.sessionId).toBeNull()
+      expect(conversation.contextUsage).toBeNull()
+      expect(conversation.messages).toHaveLength(2)
+    })
+
     it('保留磁盘中的运行标识，等待主进程核对后再决定是否中断', () => {
       const now = Date.now()
       useAgentStore.getState().hydrateFromWorkspaceState({

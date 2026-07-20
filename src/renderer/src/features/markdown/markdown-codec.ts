@@ -1,3 +1,5 @@
+import { stripCclinkMarkdownMetadata } from '@shared/markdown-document'
+
 export type MarkdownBlockKind =
   | 'frontmatter'
   | 'mermaid'
@@ -72,7 +74,7 @@ export function normalizeMarkdownSource(source: string): string {
 }
 
 export function scanMarkdownBlocks(source: string): MarkdownSourceBlock[] {
-  const normalized = normalizeMarkdownSource(source)
+  const normalized = normalizeMarkdownSource(stripCclinkMarkdownMetadata(source))
   const lines = normalized.split('\n')
   const blocks: MarkdownSourceBlock[] = []
   let index = 0
@@ -162,7 +164,7 @@ export function scanMarkdownBlocks(source: string): MarkdownSourceBlock[] {
 }
 
 export function analyzeMarkdown(source: string, serialized?: string): MarkdownAnalysis {
-  const normalized = normalizeMarkdownSource(source)
+  const normalized = normalizeMarkdownSource(stripCclinkMarkdownMetadata(source))
   const blocks = scanMarkdownBlocks(normalized)
   const diagnostics: MarkdownDiagnostic[] = []
   const proseSource = maskInlineCode(maskFencedBlocks(normalized, blocks))
@@ -218,7 +220,7 @@ export function analyzeMarkdown(source: string, serialized?: string): MarkdownAn
   }
 
   if (serialized !== undefined) {
-    const normalizedSerialized = normalizeMarkdownSource(serialized)
+    const normalizedSerialized = normalizeMarkdownSource(stripCclinkMarkdownMetadata(serialized))
     if (isCatastrophicRoundTrip(normalized, normalizedSerialized)) {
       diagnostics.push({
         code: 'catastrophic-roundtrip',

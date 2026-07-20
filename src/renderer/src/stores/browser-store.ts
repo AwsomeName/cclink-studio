@@ -16,6 +16,10 @@ export interface BrowserTabState {
   url: string
   /** URL 输入框内容 */
   urlInput: string
+  /** 页面标题；独立于用户可重命名的 Workbench Tab 标题。 */
+  title?: string | null
+  /** 页面 favicon；不存在或加载失败时 UI 使用通用浏览器图标。 */
+  faviconUrl?: string | null
   /** 设备模式（桌面 / 移动） */
   viewMode: ViewMode
   /** 缩放模式（适应宽度 / 手动） */
@@ -29,9 +33,19 @@ export interface BrowserTabState {
   ready: boolean
 }
 
+export interface BrowserBookmark {
+  id: string
+  url: string
+  title: string
+  faviconUrl: string | null
+  createdAt: number
+}
+
 interface BrowserState {
   /** tabId → 浏览器 Tab 状态 */
   tabs: Record<string, BrowserTabState>
+  /** 当前项目收藏的网页；随 browserTabs 分区持久化。 */
+  bookmarks: BrowserBookmark[]
 
   // --- Actions ---
   /** 确保某个浏览器 Tab 状态存在（不存在则用默认值创建），返回该状态 */
@@ -44,6 +58,8 @@ interface BrowserState {
   setUrl: (tabId: string, url: string, nav?: { history?: string[]; historyIndex?: number }) => void
   /** 仅设置 URL 输入框内容 */
   setUrlInput: (tabId: string, url: string) => void
+  /** 同步页面标题与 favicon。 */
+  setPageMeta: (tabId: string, meta: { title?: string; faviconUrl?: string | null }) => void
   /** 同步主进程下发的视图状态 */
   setViewState: (
     tabId: string,
@@ -51,6 +67,10 @@ interface BrowserState {
   ) => void
   /** 从主进程 WorkspaceState 恢复浏览器 Tab 状态 */
   hydrateFromWorkspaceState: (value: unknown) => void
+  /** 收藏网页到当前项目。 */
+  addBookmark: (bookmark: Omit<BrowserBookmark, 'id' | 'createdAt'>) => void
+  /** 从当前项目收藏中移除网页。 */
+  removeBookmark: (id: string) => void
 }
 
 /** 构造默认浏览器 Tab 状态 */
@@ -58,6 +78,8 @@ function defaultTab(url: string = DEFAULT_URL): BrowserTabState {
   return {
     url,
     urlInput: url,
+    title: null,
+    faviconUrl: null,
     viewMode: 'desktop',
     zoomMode: 'fit',
     zoomFactor: 1,
@@ -67,10 +89,15 @@ function defaultTab(url: string = DEFAULT_URL): BrowserTabState {
   }
 }
 
-function normalizeBrowserTabsSnapshot(value: unknown): Record<string, BrowserTabState> | null {
-  if (!value || typeof value !== 'object') return null
-  const parsed = value as { tabs?: Record<string, BrowserTabState> }
-  if (parsed.tabs && Object.keys(parsed.tabs).length === 0) return {}
+function normalizeBrowserSnapshot(value: unknown): {
+  tabs: Record<string, BrowserTabState>
+  bookmarks: BrowserBookmark[]
+} {
+  if (!value || typeof value !== 'object') return { tabs: {}, bookmarks: [] }
+  const parsed = value as {
+    tabs?: Record<string, BrowserTabState>
+    bookmarks?: BrowserBookmark[]
+  }
   const tabs: Record<string, BrowserTabState> = {}
   for (const [id, tab] of Object.entries(parsed.tabs ?? {})) {
     if (!id || !tab?.url) continue
@@ -78,6 +105,9 @@ function normalizeBrowserTabsSnapshot(value: unknown): Record<string, BrowserTab
     tabs[id] = {
       url: tab.url,
       urlInput: tab.urlInput || tab.url,
+      title: typeof tab.title === 'string' && tab.title.trim() ? tab.title.trim() : null,
+      faviconUrl:
+        typeof tab.faviconUrl === 'string' && tab.faviconUrl.trim() ? tab.faviconUrl : null,
       viewMode: tab.viewMode === 'mobile' ? 'mobile' : 'desktop',
       zoomMode: tab.zoomMode === 'manual' ? 'manual' : 'fit',
       zoomFactor: typeof tab.zoomFactor === 'number' ? tab.zoomFactor : 1,
@@ -89,7 +119,30 @@ function normalizeBrowserTabsSnapshot(value: unknown): Record<string, BrowserTab
       ready: false,
     }
   }
-  return Object.keys(tabs).length > 0 ? tabs : null
+  const bookmarks = Array.isArray(parsed.bookmarks)
+    ? parsed.bookmarks.flatMap((bookmark) => {
+        if (!bookmark || typeof bookmark.url !== 'string' || !bookmark.url.trim()) return []
+        return [
+          {
+            id:
+              typeof bookmark.id === 'string' && bookmark.id
+                ? bookmark.id
+                : `bookmark-${bookmark.createdAt || Date.now()}`,
+            url: bookmark.url.trim(),
+            title:
+              typeof bookmark.title === 'string' && bookmark.title.trim()
+                ? bookmark.title.trim()
+                : bookmark.url.trim(),
+            faviconUrl:
+              typeof bookmark.faviconUrl === 'string' && bookmark.faviconUrl.trim()
+                ? bookmark.faviconUrl
+                : null,
+            createdAt: typeof bookmark.createdAt === 'number' ? bookmark.createdAt : Date.now(),
+          },
+        ]
+      })
+    : []
+  return { tabs, bookmarks }
 }
 
 function saveStoredBrowserTabs(state: BrowserState): void {
@@ -99,7 +152,7 @@ function saveStoredBrowserTabs(state: BrowserState): void {
     for (const [id, tab] of Object.entries(state.tabs)) {
       tabs[id] = { ...tab, ready: false }
     }
-    persistWorkspaceSection('browserTabs', { tabs })
+    persistWorkspaceSection('browserTabs', { tabs, bookmarks: state.bookmarks })
   } catch {
     // WorkspaceState 镜像失败不应影响当前浏览器状态。
   }
@@ -108,6 +161,7 @@ function saveStoredBrowserTabs(state: BrowserState): void {
 export const useBrowserStore = create<BrowserState>((set, get) => ({
   // 项目相关浏览器状态以 main process WorkspaceState 为权威，避免全局 localStorage 串项目。
   tabs: {},
+  bookmarks: [],
 
   ensureTab: (tabId, initialUrl) => {
     const existing = get().tabs[tabId]
@@ -157,6 +211,24 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       return { tabs: { ...state.tabs, [tabId]: { ...tab, urlInput: url } } }
     }),
 
+  setPageMeta: (tabId, meta) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: {
+            ...tab,
+            ...(typeof meta.title === 'string' ? { title: meta.title.trim() || null } : {}),
+            ...(meta.faviconUrl !== undefined
+              ? { faviconUrl: meta.faviconUrl?.trim() || null }
+              : {}),
+          },
+        },
+      }
+    }),
+
   setViewState: (tabId, viewState) =>
     set((state) => {
       const tab = state.tabs[tabId]
@@ -175,10 +247,33 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
     }),
 
   hydrateFromWorkspaceState: (value) => {
-    const tabs = normalizeBrowserTabsSnapshot(value)
-    if (!tabs) return
-    set({ tabs })
+    set(normalizeBrowserSnapshot(value))
   },
+
+  addBookmark: (bookmark) =>
+    set((state) => {
+      const existing = state.bookmarks.find((item) => item.url === bookmark.url)
+      if (existing) {
+        return {
+          bookmarks: state.bookmarks.map((item) =>
+            item.id === existing.id ? { ...item, ...bookmark } : item,
+          ),
+        }
+      }
+      return {
+        bookmarks: [
+          ...state.bookmarks,
+          {
+            ...bookmark,
+            id: `bookmark-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            createdAt: Date.now(),
+          },
+        ],
+      }
+    }),
+
+  removeBookmark: (id) =>
+    set((state) => ({ bookmarks: state.bookmarks.filter((bookmark) => bookmark.id !== id) })),
 }))
 
 useBrowserStore.subscribe((state) => {

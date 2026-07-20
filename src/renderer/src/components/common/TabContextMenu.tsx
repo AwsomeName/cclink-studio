@@ -38,6 +38,7 @@ export function TabContextMenu(): React.ReactElement | null {
   const x = useTabContextMenuStore((s) => s.x)
   const y = useTabContextMenuStore((s) => s.y)
   const tabId = useTabContextMenuStore((s) => s.tabId)
+  const browserPreviewDataUrl = useTabContextMenuStore((s) => s.browserPreviewDataUrl)
   const hide = useTabContextMenuStore((s) => s.hide)
 
   const tabs = useTabStore((s) => s.tabs)
@@ -96,6 +97,7 @@ export function TabContextMenu(): React.ReactElement | null {
   const isTerminalLike = tab.type === 'terminal' || tab.type === 'terminal-record'
   const isHtml = isHtmlFilePath(tab.filePath)
   const closeLabel = isTerminalLike ? '关闭 Terminal' : '关闭'
+  const activeTab = tabs.find((item) => item.id === useTabStore.getState().activeTabId)
 
   const handleDuplicate = (): void => {
     duplicateTab(tabId)
@@ -128,10 +130,18 @@ export function TabContextMenu(): React.ReactElement | null {
   }
 
   // 确保菜单不超出视口右侧和底部
+  const estimatedMenuHeight = isHtml ? 116 : 90
+  const browserContentTop =
+    activeTab?.type === 'browser' && !browserPreviewDataUrl
+      ? document.querySelector('.workbench-content')?.getBoundingClientRect().top
+      : undefined
+  const menuTop = browserContentTop
+    ? Math.max(8, Math.min(y, browserContentTop - estimatedMenuHeight - 4))
+    : Math.max(8, Math.min(y, window.innerHeight - (isHtml ? 220 : 150)))
   const menuStyle: React.CSSProperties = {
     position: 'fixed',
     left: Math.min(x, window.innerWidth - 180),
-    top: Math.max(8, Math.min(y, window.innerHeight - (isHtml ? 220 : 150))),
+    top: menuTop,
   }
 
   return (

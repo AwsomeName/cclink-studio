@@ -5,6 +5,8 @@ function browserTab(url = 'https://www.baidu.com'): BrowserTabState {
   return {
     url,
     urlInput: url,
+    title: null,
+    faviconUrl: null,
     viewMode: 'desktop',
     zoomMode: 'fit',
     zoomFactor: 1,
@@ -18,6 +20,7 @@ beforeEach(() => {
   useBrowserStore.setState({
     // 重置为单种子浏览器 Tab
     tabs: { browser: browserTab() },
+    bookmarks: [],
   })
 })
 
@@ -79,6 +82,52 @@ describe('useBrowserStore', () => {
     })
   })
 
+  describe('page metadata', () => {
+    it('同步指定页面的标题和 favicon', () => {
+      useBrowserStore.getState().setPageMeta('browser', {
+        title: '百度一下',
+        faviconUrl: 'https://www.baidu.com/favicon.ico',
+      })
+
+      expect(useBrowserStore.getState().tabs.browser.title).toBe('百度一下')
+      expect(useBrowserStore.getState().tabs.browser.faviconUrl).toBe(
+        'https://www.baidu.com/favicon.ico',
+      )
+    })
+  })
+
+  describe('project bookmarks', () => {
+    it('收藏按 URL 去重，并可移除', () => {
+      const bookmark = {
+        url: 'https://example.com',
+        title: 'Example',
+        faviconUrl: 'https://example.com/favicon.ico',
+      }
+      useBrowserStore.getState().addBookmark(bookmark)
+      useBrowserStore.getState().addBookmark({ ...bookmark, title: 'Updated' })
+
+      const [saved] = useBrowserStore.getState().bookmarks
+      expect(useBrowserStore.getState().bookmarks).toHaveLength(1)
+      expect(saved.title).toBe('Updated')
+
+      useBrowserStore.getState().removeBookmark(saved.id)
+      expect(useBrowserStore.getState().bookmarks).toEqual([])
+    })
+
+    it('恢复空项目时清空上一项目收藏和浏览器状态', () => {
+      useBrowserStore.getState().addBookmark({
+        url: 'https://project-a.example',
+        title: 'Project A',
+        faviconUrl: null,
+      })
+
+      useBrowserStore.getState().hydrateFromWorkspaceState({ tabs: {}, bookmarks: [] })
+
+      expect(useBrowserStore.getState().tabs).toEqual({})
+      expect(useBrowserStore.getState().bookmarks).toEqual([])
+    })
+  })
+
   describe('removeTab', () => {
     it('移除指定 Tab 状态', () => {
       useBrowserStore.getState().ensureTab('tab-2', 'https://github.com')
@@ -109,6 +158,15 @@ describe('useBrowserStore', () => {
             ready: true,
           },
         },
+        bookmarks: [
+          {
+            id: 'saved-example',
+            url: 'https://example.com',
+            title: 'Example',
+            faviconUrl: null,
+            createdAt: 42,
+          },
+        ],
       })
 
       const state = useBrowserStore.getState()
@@ -119,6 +177,15 @@ describe('useBrowserStore', () => {
       expect(state.tabs['browser-2'].history).toEqual(['https://a.test', 'https://cclink.studio'])
       expect(state.tabs['browser-2'].historyIndex).toBe(1)
       expect(state.tabs['browser-2'].ready).toBe(false)
+      expect(state.bookmarks).toEqual([
+        {
+          id: 'saved-example',
+          url: 'https://example.com',
+          title: 'Example',
+          faviconUrl: null,
+          createdAt: 42,
+        },
+      ])
     })
 
     it('恢复时钳制越界 historyIndex', () => {
