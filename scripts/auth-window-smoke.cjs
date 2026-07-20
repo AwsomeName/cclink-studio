@@ -13,7 +13,10 @@ const GOOGLE_OAUTH_URL =
   'https://accounts.google.com/o/oauth2/v2/auth?client_id=910913558771-jo298qljjvd2vh4b1rmkcb8m97mdbsbk.apps.googleusercontent.com&redirect_uri=https%3A%2F%2Fwww.v2ex.com%2Fauth%2Fgoogle&response_type=code&scope=profile%20email&prompt=select_account'
 const GOOGLE_VARIANTS = ['clean', 'cdp', 'automation-controlled', 'ua-normalized', 'current']
 const REQUIRE_GOOGLE_LIVE = process.env.CCLINK_AUTH_SMOKE_REQUIRE_GOOGLE === '1'
-const NETWORK_ERROR_CODES = new Set([-2, -7, -21, -100, -101, -102, -105, -106, -109, -118, -137])
+const CLEAN_GOOGLE_MAX_ATTEMPTS = 3
+const NETWORK_ERROR_CODES = new Set([
+  -2, -7, -21, -100, -101, -102, -105, -106, -109, -118, -137, -356,
+])
 
 if (!process.versions.electron) {
   void runController()
@@ -37,7 +40,7 @@ async function runController() {
     const readResult = await runChild(electronPath, 'read', userDataPath)
     const googleResults = {}
     for (const variant of GOOGLE_VARIANTS) {
-      googleResults[variant] = await runChild(electronPath, 'google', userDataPath, variant)
+      googleResults[variant] = await runGoogleVariant(electronPath, userDataPath, variant)
     }
     const cleanGoogleOutcome = googleResults.clean.outcome
     const googleStatus =
@@ -66,6 +69,23 @@ async function runController() {
   } finally {
     fs.rmSync(userDataPath, { recursive: true, force: true })
   }
+}
+
+async function runGoogleVariant(electronPath, userDataPath, variant) {
+  const maxAttempts = variant === 'clean' ? CLEAN_GOOGLE_MAX_ATTEMPTS : 1
+  const attemptOutcomes = []
+  let result = null
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    result = await runChild(electronPath, 'google', userDataPath, variant)
+    attemptOutcomes.push(result.outcome)
+    if (result.outcome !== 'network-unavailable') break
+    if (attempt < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** (attempt - 1)))
+    }
+  }
+
+  return { ...result, attemptOutcomes }
 }
 
 function runChild(electronPath, phase, userDataPath, variant = null) {
@@ -304,7 +324,7 @@ function destroyWindow(window) {
 function classifyNavigationFailure(errorCode, errorDescription) {
   if (
     NETWORK_ERROR_CODES.has(errorCode) ||
-    /ERR_(?:FAILED|TIMED_OUT|CONNECTION_|INTERNET_|NAME_NOT_RESOLVED|ADDRESS_UNREACHABLE)/i.test(
+    /ERR_(?:FAILED|TIMED_OUT|CONNECTION_|INTERNET_|NAME_NOT_RESOLVED|ADDRESS_UNREACHABLE|QUIC_PROTOCOL_ERROR)/i.test(
       errorDescription,
     )
   ) {

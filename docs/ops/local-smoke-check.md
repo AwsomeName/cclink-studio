@@ -41,6 +41,10 @@ CCLINK_AUTH_SMOKE_REQUIRE_GOOGLE=1 pnpm smoke:auth-window
 Strict mode returns nonzero for `inconclusive-network`; Google's unsafe-browser rejection always
 returns nonzero in both modes.
 
+The clean-window live probe retries up to three times only when navigation fails with a classified
+network error. It does not retry or downgrade an unsafe-browser rejection, and reports every result
+in `attemptOutcomes`.
+
 Use this variant when you want to keep the app open after the smoke check:
 
 ```bash
