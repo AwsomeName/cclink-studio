@@ -13,6 +13,7 @@ const GOOGLE_OAUTH_URL =
   'https://accounts.google.com/o/oauth2/v2/auth?client_id=910913558771-jo298qljjvd2vh4b1rmkcb8m97mdbsbk.apps.googleusercontent.com&redirect_uri=https%3A%2F%2Fwww.v2ex.com%2Fauth%2Fgoogle&response_type=code&scope=profile%20email&prompt=select_account'
 const GOOGLE_VARIANTS = ['clean', 'cdp', 'automation-controlled', 'ua-normalized', 'current']
 const REQUIRE_GOOGLE_LIVE = process.env.CCLINK_AUTH_SMOKE_REQUIRE_GOOGLE === '1'
+const PROFILE_ONLY = process.env.CCLINK_AUTH_SMOKE_PROFILE_ONLY === '1'
 const CLEAN_GOOGLE_MAX_ATTEMPTS = 3
 const NETWORK_ERROR_CODES = new Set([
   -2, -7, -21, -100, -101, -102, -105, -106, -109, -118, -137, -356,
@@ -32,6 +33,10 @@ if (!process.versions.electron) {
 }
 
 async function runController() {
+  if (PROFILE_ONLY && REQUIRE_GOOGLE_LIVE) {
+    throw new Error('Profile-only auth smoke cannot require live Google verification')
+  }
+
   const electronPath = require('electron')
   const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), 'cclink-auth-smoke-'))
 
@@ -39,12 +44,15 @@ async function runController() {
     const writeResult = await runChild(electronPath, 'write', userDataPath)
     const readResult = await runChild(electronPath, 'read', userDataPath)
     const googleResults = {}
-    for (const variant of GOOGLE_VARIANTS) {
-      googleResults[variant] = await runGoogleVariant(electronPath, userDataPath, variant)
+    if (!PROFILE_ONLY) {
+      for (const variant of GOOGLE_VARIANTS) {
+        googleResults[variant] = await runGoogleVariant(electronPath, userDataPath, variant)
+      }
     }
-    const cleanGoogleOutcome = googleResults.clean.outcome
-    const googleStatus =
-      cleanGoogleOutcome === 'account-validation-reached'
+    const cleanGoogleOutcome = googleResults.clean?.outcome
+    const googleStatus = PROFILE_ONLY
+      ? 'not-run-profile-only'
+      : cleanGoogleOutcome === 'account-validation-reached'
         ? 'passed'
         : cleanGoogleOutcome === 'network-unavailable'
           ? 'inconclusive-network'
@@ -57,13 +65,16 @@ async function runController() {
         readResult.cookieValue === STORAGE_VALUE,
       writeResult,
       readResult,
-      googleCompatible: googleStatus === 'passed',
+      googleCompatible: PROFILE_ONLY ? null : googleStatus === 'passed',
       googleStatus,
       googleLiveRequired: REQUIRE_GOOGLE_LIVE,
+      profileOnly: PROFILE_ONLY,
       googleResults,
     }
     const googleGatePassed =
-      googleStatus === 'passed' || (googleStatus === 'inconclusive-network' && !REQUIRE_GOOGLE_LIVE)
+      PROFILE_ONLY ||
+      googleStatus === 'passed' ||
+      (googleStatus === 'inconclusive-network' && !REQUIRE_GOOGLE_LIVE)
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
     process.exitCode = result.profilePersistence && googleGatePassed ? 0 : 1
   } finally {

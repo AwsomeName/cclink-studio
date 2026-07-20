@@ -49,7 +49,10 @@ jobs:
           echo "CCLINK_STUDIO_LOG_FILE=$RUNNER_TEMP/cclink-studio-dev/cclink-studio-dev.log" >> "$GITHUB_ENV"
           echo "CCLINK_STUDIO_SCREEN_NAME=cclink-studio-ci" >> "$GITHUB_ENV"
       - run: pnpm smoke:standalone
-      - run: pnpm smoke:auth-window
+      - name: Verify deterministic auth profile and window mechanism
+        run: pnpm smoke:auth-window
+        env:
+          CCLINK_AUTH_SMOKE_PROFILE_ONLY: '1'
       - name: Upload smoke logs
         if: failure()
         uses: actions/upload-artifact@v4

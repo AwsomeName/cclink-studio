@@ -45,9 +45,10 @@ The clean-window live probe retries up to three times only when navigation fails
 network error. It does not retry or downgrade an unsafe-browser rejection, and reports every result
 in `attemptOutcomes`.
 
-CI runs the default mode so third-party network availability cannot randomly fail the repository
-gate. Release candidates and human acceptance run strict mode; a candidate is not considered Google
-compatible based only on CI's `inconclusive-network` result.
+CI runs `CCLINK_AUTH_SMOKE_PROFILE_ONLY=1 pnpm smoke:auth-window`. This mode verifies the isolated
+window and Profile persistence without making any Google request, so third-party network behavior
+cannot randomly fail the repository gate. Release candidates and human acceptance run strict mode;
+only the strict local result can establish live Google compatibility.
 
 Use this variant when you want to keep the app open after the smoke check:
 
