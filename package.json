@@ -28,7 +28,7 @@
     "dev": "ELECTRON_RUN_AS_NODE= bash scripts/dev.sh",
     "build": "pnpm typecheck && electron-vite build",
     "preview": "electron-vite preview",
-    "postinstall": "electron-builder install-app-deps",
+    "postinstall": "node scripts/ensure-electron-runtime.mjs && electron-builder install-app-deps",
     "prepackage": "pnpm build",
     "package": "electron-builder",
     "package:dev": "electron-builder --config.compression=store",

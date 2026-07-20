@@ -3,26 +3,17 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+import { ensureElectronRuntime } from './ensure-electron-runtime.mjs'
 
 const APP_DISPLAY_NAME = 'CCLink Studio 开源版'
 const DEV_BUNDLE_ID = 'com.cclink.studio.dev'
-const require = createRequire(import.meta.url)
-const electronPackagePath = require.resolve('electron/package.json')
-const electronPackageDir = dirname(electronPackagePath)
-const electronPackage = JSON.parse(readFileSync(electronPackagePath, 'utf8'))
-const electronRelativePath = readFileSync(join(electronPackageDir, 'path.txt'), 'utf8').trim()
+const { electronPackageDir, electronRelativePath, electronVersion } = ensureElectronRuntime()
 const sourceExecutable = join(electronPackageDir, 'dist', electronRelativePath)
 const sourceBundle = resolve(dirname(sourceExecutable), '../..')
 const sourceInfoPlist = join(sourceBundle, 'Contents', 'Info.plist')
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const cacheRoot = join(
-  projectRoot,
-  '.cache',
-  'electron-dev',
-  `${electronPackage.version}-${process.arch}`,
-)
+const cacheRoot = join(projectRoot, '.cache', 'electron-dev', `${electronVersion}-${process.arch}`)
 const targetBundle = join(cacheRoot, `${APP_DISPLAY_NAME}.app`)
 const targetExecutable = join(targetBundle, 'Contents', 'MacOS', 'Electron')
 const targetInfoPlist = join(targetBundle, 'Contents', 'Info.plist')
