@@ -184,7 +184,9 @@ S3.3 与 S3 已关闭：项目切换 transition 现显式盘点 Browser view、B
 - 按职责拆分超大组件、store 和服务；拆分前先补行为测试。
 - 将诊断事件统一到可关联的任务和工作区 ID。
 
-S4 库存与分包见 `docs/ops/stabilization-s4-state-inventory.md`。S4.1 已关闭：Terminal 主进程 registry/store 是 session 事实边界，Terminal Tab 降为可见投影；项目 hydrate 后从 `terminal:listSessions` 对账，过期 workspace 结果被丢弃，查询失败不阻断项目切换。实现提交 `7b9f81e` 在当前工作树与全新 detached worktree 均通过 141 个测试文件/849 项测试、standalone 24/24 与严格认证 smoke，GitHub Actions run `29816406350` 成功。S4 下一工作包为 S4.2 workspace/tab 状态边界；S4 与稳定化阶段继续。
+S4 库存与分包见 `docs/ops/stabilization-s4-state-inventory.md`。S4.1 已关闭：Terminal 主进程 registry/store 是 session 事实边界，Terminal Tab 降为可见投影；项目 hydrate 后从 `terminal:listSessions` 对账，过期 workspace 结果被丢弃，查询失败不阻断项目切换。实现提交 `7b9f81e` 在当前工作树与全新 detached worktree 均通过 141 个测试文件/849 项测试、standalone 24/24 与严格认证 smoke，GitHub Actions run `29816406350` 成功。
+
+S4.2 已关闭：workspace transition 在 Browser/Terminal 异步准备完成和 generation 复核后，才同步提交文件树、workspace identity 与各运行时投影；选择器、最近项目和关闭项目共用互斥状态，失败或过期切换不再留下半提交现场，空快照也不会继承上一项目的文件树路径。`workspace-store` 只保留一个身份提交入口，最近项目与文件树准备职责从 `fs-store` 拆出，启动恢复补做 Terminal 事实对账。实现提交 `e08150d` 在当前工作树与全新 detached worktree 均通过 143 个测试文件/858 项测试、standalone 24/24 与严格认证 smoke，GitHub Actions run `29823522729` 成功。S4 下一工作包为 S4.3 conversation/browser profile 投影与高变模块拆分；S4 与稳定化阶段继续。
 
 ## 退出标准
 

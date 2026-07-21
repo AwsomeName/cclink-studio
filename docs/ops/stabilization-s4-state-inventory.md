@@ -1,6 +1,6 @@
 # S4 状态与复杂度库存
 
-> 状态：S4.1 已关闭，S4.2 实现候选待完整门禁。分支：`codex/stabilization-s4`。起始基线：`1059ba6`。S4.1 实现基线：`7b9f81e`。日期：2026-07-21。
+> 状态：S4.1、S4.2 已关闭，S4 继续。分支：`codex/stabilization-s4`。起始基线：`1059ba6`。S4.1 实现基线：`7b9f81e`。S4.2 实现基线：`e08150d`。日期：2026-07-21。
 
 ## 结论
 
@@ -84,10 +84,12 @@ S4.1 实现提交为 `7b9f81e`。全新 detached worktree `/tmp/cclink-studio-s4
 - [x] 路径与文件树职责从 `fs-store` 拆出并有行为测试保护。
 - [x] 相关 6 个测试文件/53 项测试与 TypeScript 检查通过。
 - [x] 当前工作树完整 `pnpm verify`、standalone 与严格认证 smoke 通过。
-- [ ] 实现提交后的全新 detached worktree 完成锁定安装和相同门禁。
-- [ ] 远端 CI 通过，提交和 run ID 写回本文。
+- [x] 实现提交后的全新 detached worktree 完成锁定安装和相同门禁。
+- [x] 远端 CI 通过，提交和 run ID 写回本文。
 
 当前工作树证据：`pnpm verify` 通过 143 个测试文件/858 项测试；`pnpm smoke:standalone` 通过 local 9/9、UI 6/6、workflow 5/5、restore 4/4；严格认证 smoke 验证 Profile 的 Cookie/localStorage 跨进程重启保留，干净认证进程与 automation-controlled 对照到达 Google account validation，CDP 和当前带调试控制路径被判为不安全浏览器。
+
+S4.2 实现提交为 `e08150d`。全新 detached worktree `/tmp/cclink-studio-s4-workspace-verify.BqRT9u` 从该提交执行 `pnpm install --frozen-lockfile`，并通过相同的 143 个测试文件/858 项测试、standalone 24/24 与严格认证 smoke；detached HEAD 与工作树均干净。GitHub Actions run `29823522729` 绑定同一提交，`verify` 和 `smoke` job 全部成功。S4.2 已关闭，下一工作包为 S4.3 conversation/browser profile 投影与高变模块拆分；S4 与稳定化阶段继续。
 
 ## 后续阻断项
 
