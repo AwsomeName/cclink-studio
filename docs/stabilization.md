@@ -1,6 +1,6 @@
 # CCLink Studio 稳定化阶段
 
-> 状态：S0、S1、S2、S3 已完成，S4 待推进，稳定化阶段继续。开始日期：2026-07-20。S0 完成日期：2026-07-20。S1、S2、S3 完成日期：2026-07-21。
+> 状态：S0、S1、S2、S3 已完成，S4 进行中，稳定化阶段继续。开始日期：2026-07-20。S0 完成日期：2026-07-20。S1、S2、S3 完成日期：2026-07-21。
 
 ## 结论
 
@@ -183,6 +183,8 @@ S3.3 与 S3 已关闭：项目切换 transition 现显式盘点 Browser view、B
 - 把跨 store 项目切换收敛为可测试的 transition/service。
 - 按职责拆分超大组件、store 和服务；拆分前先补行为测试。
 - 将诊断事件统一到可关联的任务和工作区 ID。
+
+S4 库存与分包见 `docs/ops/stabilization-s4-state-inventory.md`。S4.1 当前候选已将 Terminal 主进程 registry/store 明确为 session 事实边界，Terminal Tab 降为可见投影；项目 hydrate 后从 `terminal:listSessions` 对账，过期 workspace 结果被丢弃，查询失败不阻断项目切换。当前工作树已通过 141 个测试文件/849 项测试、standalone 24/24 与严格认证 smoke；在 detached worktree 和远端 CI 通过前，S4.1 不宣称关闭。
 
 ## 退出标准
 

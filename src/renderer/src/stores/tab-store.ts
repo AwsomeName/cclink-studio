@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { ConversationTabRef, Tab, TabType } from '../types'
+import type { TerminalSessionSnapshot } from '@shared/ipc/terminal'
 import { useBrowserStore } from './browser-store'
 import { useEditorStore } from './editor-store'
 import { getModelFileIcon, getTabTypeForFile } from '../utils/model-files'
@@ -178,6 +179,8 @@ interface TabState {
   updateTabDirty: (id: string, dirty: boolean) => void
   /** 更新 Terminal Tab 的运行态 */
   updateTabTerminal: (id: string, terminal: NonNullable<Tab['terminal']>) => void
+  /** 使用主进程 session 事实源校准 Terminal Tab 的可见投影。 */
+  reconcileTerminalSession: (session: TerminalSessionSnapshot) => void
   /** 更新 Tab 关联的文件路径（Save-As 后回填） */
   updateTabFilePath: (id: string, filePath: string) => void
   /** 文件或目录移动后批量同步相关 Tab 路径。 */
@@ -352,6 +355,22 @@ export const useTabStore = create<TabState>((set, get) => ({
   updateTabTerminal: (id, terminal) =>
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, terminal } : t)),
+    })),
+
+  reconcileTerminalSession: (session) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (tab.type !== 'terminal' || tab.terminal?.sessionId !== session.sessionId) return tab
+        return {
+          ...tab,
+          terminal: {
+            ...tab.terminal,
+            status: session.status,
+            processId: session.processId,
+          },
+          terminalRecord: session,
+        }
+      }),
     })),
 
   updateTabFilePath: (id, filePath) =>

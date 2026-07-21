@@ -65,6 +65,9 @@ beforeEach(() => {
       browser: {
         reconcileViews: vi.fn().mockResolvedValue(undefined),
       },
+      terminal: {
+        listSessions: vi.fn().mockResolvedValue([]),
+      },
     },
   })
   vi.stubGlobal('localStorage', {
@@ -256,6 +259,24 @@ describe('workspace-transition', () => {
     })
     const getSnapshot = window.cclinkStudio.workspaceState.get as ReturnType<typeof vi.fn>
     getSnapshot.mockResolvedValueOnce(targetSnapshot)
+    const listSessions = window.cclinkStudio.terminal.listSessions as ReturnType<typeof vi.fn>
+    listSessions.mockResolvedValueOnce([
+      {
+        sessionId: 'terminal-session-b',
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'local-shell',
+          workspaceRef: workspaceB,
+        },
+        status: 'exited',
+        createdAt: 1,
+        updatedAt: 2,
+        exitCode: 0,
+        exitedAt: 2,
+        attachable: false,
+      },
+    ])
 
     const transition = await prepareWorkspaceRuntimeTransition(workspaceB)
     expect(transition.outgoingOwnership).toMatchObject({
@@ -276,6 +297,10 @@ describe('workspace-transition', () => {
       activeTabId: null,
     })
     expect(useTabStore.getState().tabs.map((tab) => tab.id)).toEqual(['browser-b', 'terminal-b'])
+    expect(useTabStore.getState().tabs.find((tab) => tab.id === 'terminal-b')).toMatchObject({
+      terminal: { status: 'exited', processId: undefined },
+      terminalRecord: { status: 'exited', exitCode: 0, attachable: false },
+    })
     expect(useAgentStore.getState().activeConversationId).toBe('agent-b')
     expect(useAgentStore.getState().conversations[agentA]).toMatchObject({
       activeRunId: runA,
@@ -306,6 +331,21 @@ describe('workspace-transition', () => {
     expect(getWorkspaceStateKey()).toBe('/workspace/b')
     expect(warn).toHaveBeenCalledWith(
       '[WorkspaceTransition] Browser runtime ownership update failed:',
+      expect.any(Error),
+    )
+  })
+
+  it('continues switching when terminal status reconciliation is unavailable', async () => {
+    const listSessions = window.cclinkStudio.terminal.listSessions as ReturnType<typeof vi.fn>
+    listSessions.mockRejectedValueOnce(new Error('terminal unavailable'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const transition = await prepareWorkspaceRuntimeTransition(localWorkspaceRef('/workspace/b'))
+
+    await expect(applyWorkspaceRuntimeTransition(transition)).resolves.toBe(true)
+
+    expect(getWorkspaceStateKey()).toBe('/workspace/b')
+    expect(warn).toHaveBeenCalledWith(
+      '[WorkspaceRuntime] Terminal session reconciliation failed:',
       expect.any(Error),
     )
   })

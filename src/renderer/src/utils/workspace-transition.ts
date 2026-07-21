@@ -13,6 +13,7 @@ import {
   hydrateRuntimeSections,
   persistRuntimeSections,
   reconcileAgentRuntimeStatuses,
+  reconcileTerminalRuntimeStatuses,
 } from './workspace-runtime'
 
 export interface WorkspaceRuntimeTransition {
@@ -140,6 +141,8 @@ export async function applyWorkspaceRuntimeTransition(
 
   if (options.hydrate !== false) {
     hydrateRuntimeSections(transition.snapshot)
+    await reconcileTerminalRuntimeStatuses(transition.key)
+    if (!isWorkspaceRuntimeTransitionCurrent(transition.generation)) return false
     void reconcileAgentRuntimeStatuses(transition.key)
   }
 

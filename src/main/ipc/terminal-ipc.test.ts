@@ -169,6 +169,53 @@ describe('registerTerminalIpc', () => {
     await expect(mockIpcMain.handlers.get('terminal:listSessions')?.({})).resolves.toEqual([])
   })
 
+  it('updates the authoritative terminal registry before publishing execution events', () => {
+    const order: string[] = []
+    let executionListener: ((event: any) => void) | undefined
+    const terminalSessionRegistry = {
+      get: vi.fn(() => ({ sessionId: 'terminal-1', status: 'running' })),
+      transition: vi.fn(() => order.push('registry')),
+    } as any
+    const terminalExecutionAdapter = {
+      onEvent: vi.fn((listener) => {
+        executionListener = listener
+      }),
+    } as any
+    const webContents = {
+      send: vi.fn(() => order.push('renderer')),
+    } as any
+    const terminalSessionStore = {
+      appendExecutionEvent: vi.fn(async () => undefined),
+    } as any
+
+    registerTerminalIpc(
+      { resolveConfirmation: vi.fn() } as any,
+      { recordEvent: vi.fn(async () => undefined) } as any,
+      terminalSessionRegistry,
+      undefined,
+      terminalExecutionAdapter,
+      webContents,
+      terminalSessionStore,
+    )
+    executionListener?.({
+      kind: 'exit',
+      sessionId: 'terminal-1',
+      timestamp: 200,
+      exitCode: 0,
+    })
+
+    expect(order).toEqual(['registry', 'renderer'])
+    expect(terminalSessionRegistry.transition).toHaveBeenCalledWith('terminal-1', 'exited', {
+      now: 200,
+      exitCode: 0,
+      errorMessage: undefined,
+    })
+    expect(webContents.send).toHaveBeenCalledWith(
+      'terminal:executionEvent',
+      expect.objectContaining({ kind: 'exit', sessionId: 'terminal-1' }),
+    )
+  })
+
   it('submits terminal commands through the orchestrator with normalized input', async () => {
     const terminalCommandOrchestrator = {
       submitCommand: vi.fn(async () => ({

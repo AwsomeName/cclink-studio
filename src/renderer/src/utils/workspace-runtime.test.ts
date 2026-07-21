@@ -11,13 +11,18 @@ import {
   hydrateRuntimeSections,
   persistRuntimeSections,
   reconcileAgentRuntimeStatuses,
+  reconcileTerminalRuntimeStatuses,
 } from './workspace-runtime'
+import { setWorkspaceStatePath } from './workspace-state'
 
 beforeEach(() => {
   vi.stubGlobal('window', {
     cclinkStudio: {
       workspaceState: {
         setSection: vi.fn().mockResolvedValue({ success: true }),
+      },
+      terminal: {
+        listSessions: vi.fn().mockResolvedValue([]),
       },
     },
   })
@@ -35,6 +40,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  setWorkspaceStatePath(null)
 })
 
 describe('workspace-runtime', () => {
@@ -406,6 +412,83 @@ describe('workspace-runtime', () => {
       lastRunTerminalReason: 'completed',
     })
   })
+
+  it('切回项目时用主进程 Terminal session 修正 Tab 的陈旧运行状态', async () => {
+    setWorkspaceStatePath('/workspace/a')
+    useTabStore.setState({
+      tabs: [
+        terminalTab('terminal-a', '/workspace/a', 'terminal-session-a'),
+        terminalTab('terminal-b', '/workspace/b', 'terminal-session-b'),
+      ],
+      activeTabId: 'terminal-a',
+    })
+    const listSessions = window.cclinkStudio.terminal.listSessions as ReturnType<typeof vi.fn>
+    listSessions.mockResolvedValueOnce([
+      {
+        sessionId: 'terminal-session-a',
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'local-shell',
+          workspaceRef: { kind: 'local', path: '/workspace/a' },
+        },
+        status: 'exited',
+        createdAt: 1,
+        updatedAt: 2,
+        exitCode: 0,
+        exitedAt: 2,
+        attachable: false,
+      },
+    ])
+
+    await reconcileTerminalRuntimeStatuses('/workspace/a')
+
+    const [terminalA, terminalB] = useTabStore.getState().tabs
+    expect(terminalA.terminal).toMatchObject({ status: 'exited', processId: undefined })
+    expect(terminalA.terminalRecord).toMatchObject({
+      sessionId: 'terminal-session-a',
+      status: 'exited',
+      exitCode: 0,
+    })
+    expect(terminalB.terminal?.status).toBe('running')
+  })
+
+  it('Terminal 状态查询返回时项目已切换则丢弃过期结果', async () => {
+    setWorkspaceStatePath('/workspace/a')
+    useTabStore.setState({
+      tabs: [terminalTab('terminal-a', '/workspace/a', 'terminal-session-a')],
+      activeTabId: 'terminal-a',
+    })
+    let resolveSessions!: (
+      value: Awaited<ReturnType<typeof window.cclinkStudio.terminal.listSessions>>,
+    ) => void
+    const listSessions = window.cclinkStudio.terminal.listSessions as ReturnType<typeof vi.fn>
+    listSessions.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSessions = resolve
+      }),
+    )
+
+    const reconciliation = reconcileTerminalRuntimeStatuses('/workspace/a')
+    setWorkspaceStatePath('/workspace/b')
+    resolveSessions([
+      {
+        sessionId: 'terminal-session-a',
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'local-shell',
+          workspaceRef: { kind: 'local', path: '/workspace/a' },
+        },
+        status: 'exited',
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ])
+    await reconciliation
+
+    expect(useTabStore.getState().tabs[0].terminal?.status).toBe('running')
+  })
 })
 
 function hydrateRecoveringConversation(): void {
@@ -516,5 +599,29 @@ function browserState(url: string) {
     history: [url],
     historyIndex: 0,
     ready: false,
+  }
+}
+
+function terminalTab(id: string, workspacePath: string, sessionId: string) {
+  const workspaceRef = { kind: 'local' as const, path: workspacePath }
+  return {
+    id,
+    type: 'terminal' as const,
+    title: id,
+    icon: 'terminal',
+    workspaceRef,
+    terminal: {
+      runtime: {
+        location: 'local' as const,
+        transport: 'local' as const,
+        backend: 'local-shell' as const,
+        workspaceRef,
+      },
+      permissionPolicy: { mode: 'ask-risky-command' as const, requireConfirmationFor: [] },
+      status: 'running' as const,
+      closePolicy: 'keep-running' as const,
+      sessionId,
+      processId: 123,
+    },
   }
 }

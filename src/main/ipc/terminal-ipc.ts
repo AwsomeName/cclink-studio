@@ -48,13 +48,13 @@ export function registerTerminalIpc(
 
   if (terminalExecutionAdapter) {
     terminalExecutionAdapter.onEvent((event) => {
-      webContents?.send('terminal:executionEvent', event)
       void syncTerminalExecutionEvent(
         event,
         terminalSessionRegistry,
         terminalAuditStore,
         terminalSessionStore,
       )
+      webContents?.send('terminal:executionEvent', event)
     })
   }
 

@@ -159,3 +159,32 @@ export async function reconcileAgentRuntimeStatuses(
     )
   }
 }
+
+export async function reconcileTerminalRuntimeStatuses(
+  workspaceKey: string | null = getWorkspaceStateKey(),
+): Promise<void> {
+  const listSessions = window.cclinkStudio?.terminal?.listSessions
+  if (!listSessions) return
+
+  try {
+    const sessions = await listSessions()
+    if (getWorkspaceStateKey() !== workspaceKey) return
+
+    const sessionsById = new Map(sessions.map((session) => [session.sessionId, session]))
+    const tabStore = useTabStore.getState()
+    for (const tab of tabStore.tabs) {
+      if (
+        tab.type !== 'terminal' ||
+        !tab.terminal?.sessionId ||
+        !tab.workspaceRef ||
+        workspaceRefKey(tab.workspaceRef) !== workspaceKey
+      ) {
+        continue
+      }
+      const session = sessionsById.get(tab.terminal.sessionId)
+      if (session) tabStore.reconcileTerminalSession(session)
+    }
+  } catch (error) {
+    console.warn('[WorkspaceRuntime] Terminal session reconciliation failed:', error)
+  }
+}
