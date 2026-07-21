@@ -1,6 +1,6 @@
 # S2 能力独立降级矩阵
 
-> 状态：S2.1 本地候选已完成，等待提交与远端门禁。分支：`codex/stabilization-s2`。起始基线：`9fed92c`。日期：2026-07-21。
+> 状态：S2.1 已完成。分支：`codex/stabilization-s2`。起始基线：`9fed92c`。S2.1 基线：`56afb38`。日期：2026-07-21。
 
 ## 结论
 
@@ -38,6 +38,7 @@ S2 的目标不是给启动异常多加几层 `catch`，而是保证每项可选
 - [x] `pnpm verify` 通过：136 个测试文件、812 项测试、typecheck 与生产构建全部返回 0。
 - [x] `pnpm smoke:standalone` 通过：local 9/9、UI 6/6、workflow 5/5、restore 4/4。
 - [x] 严格 `CCLINK_AUTH_SMOKE_REQUIRE_GOOGLE=1 pnpm smoke:auth-window` 通过：Profile Cookie/localStorage 跨进程保留，纯净认证窗口到达 Google 账号校验页；CDP 与当前自动化窗口对照仍被判为不安全浏览器。
+- [x] GitHub Actions run `29798156373` 绑定 `56afb38`，`verify` 和独立 `smoke` job 均成功；CI 认证检查保持为确定性 Profile/窗口机制。
 
 严格认证结果只证明纯净认证窗口路径和 Profile 持久化有效，不表示 Google 接受带 CDP 的自动化登录窗口。S2.1 没有改变该安全边界。
 
