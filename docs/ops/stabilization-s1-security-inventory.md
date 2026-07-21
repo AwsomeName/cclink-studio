@@ -1,6 +1,6 @@
 # S1 安全边界库存
 
-> 状态：S1.1-S1.4b 实现与本地门禁已完成，等待干净 worktree 与远端 CI 后关闭 S1。分支：`codex/stabilization-s1`。起始基线：`540b93e`。S1.4b 候选：`4afa82f`。日期：2026-07-21。
+> 状态：S1 已完成。分支：`codex/stabilization-s1`。起始基线：`540b93e`。验证基线：`43dc9ac`。完成日期：2026-07-21。
 
 ## 结论
 
@@ -123,12 +123,15 @@ S1 的首要目标是切断不可信内容、密钥和高权限 IPC 之间的直
 验收：
 
 - 恶意回归覆盖不可信 sender、超大 Agent/Editor/WorkspaceState 输入、未知状态分区、非标准 JSON、MCP URL 明文凭证、相对路径、Gerber 路径穿越、Browser 本地文件越界与符号链接逃逸、更新源协议/同源约束和官方集成 registrar。
-- `pnpm verify` 完成 132 个测试文件/801 项测试、OSS 边界、格式、lint、typecheck 与生产构建。真实 Git 进程集成测试使用 15 秒明确超时，避免与并行 Git 测试争用时随机触发 Vitest 5 秒默认值。
+- `pnpm verify` 完成 132 个测试文件/803 项测试、OSS 边界、格式、lint、typecheck 与生产构建。真实 Git 进程集成测试使用 15 秒明确超时，避免与并行 Git 测试争用时随机触发 Vitest 5 秒默认值。
 - `pnpm smoke:standalone` 完成 local 9/9、UI 6/6、workflow 5/5、restore 4/4。
 - 严格模式 `CCLINK_AUTH_SMOKE_REQUIRE_GOOGLE=1 pnpm smoke:auth-window` 通过：Profile Cookie/localStorage 跨进程保留，纯净窗口到达 Google 账号校验页，CDP 对照进程被判为不安全。
+- 首次 detached worktree 的 workflow smoke 发现 WorkspaceState 严格 JSON schema 会拒绝 renderer 正常状态中的 `undefined` 可选字段，导致项目切换和临时项目关闭失败。`43dc9ac` 在 renderer 持久化边界按 JSON 语义归一化状态，同时保留 main schema 对非标准、超限和恶意直接 IPC 输入的拒绝；新增回归后重新执行全部门禁。
+- 从 `43dc9ac` 创建的全新 detached worktree 已通过 `pnpm install --frozen-lockfile`、`pnpm verify`、`pnpm smoke:standalone` 和严格 Google 联网 `smoke:auth-window`，最终 `git status --short` 为空。
+- GitHub Actions run `29795361173` 已绑定 `43dc9ac`，`verify` 与 `smoke` job 全部成功；CI smoke 覆盖 standalone 和确定性的认证 Profile/窗口机制，严格 Google 联网结果由本机及 detached worktree 保证。
 
-结果：实现与当前工作树本地门禁通过。S1 仅等待最新收口提交的全新 detached worktree 复验和远端 CI，不提前宣称关闭。
+结果：通过。S1 已关闭。
 
 ## 下一工作包
 
-完成干净 worktree 和远端 CI 后关闭 S1，下一轮进入 S2 能力独立降级。S2 先建立能力启动/失败矩阵，再处理 Agent 对 Browser、Android、Meshy、数据源和其他可选模块的初始化依赖；不得借机扩大功能面。IPC 声明源、清理清单和完整生命周期统一保留给 S3。
+下一轮进入 S2 能力独立降级。先建立能力启动/失败矩阵，再处理 Agent 对 Browser、Android、Meshy、数据源和其他可选模块的初始化依赖；不得借机扩大功能面。IPC 声明源、清理清单和完整生命周期统一保留给 S3。
