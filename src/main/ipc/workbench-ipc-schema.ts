@@ -86,50 +86,11 @@ export const workspaceStateSectionSchema = z.enum([
 ])
 export const workspaceStateValueSchema = boundedJsonValueSchema(5 * 1024 * 1024, '工作空间状态')
 
-const dialogFilterSchema = z
-  .object({
-    name: boundedTextSchema(256).trim().min(1),
-    extensions: z
-      .array(
-        z
-          .string()
-          .trim()
-          .min(1)
-          .max(32)
-          .regex(/^[A-Za-z0-9*._-]+$/),
-      )
-      .max(64),
-  })
-  .strict()
-const dialogFiltersSchema = z.array(dialogFilterSchema).max(64).optional()
-export const openDialogOptionsSchema = z
-  .object({
-    title: boundedTextSchema(512).optional(),
-    multiSelections: z.boolean().optional(),
-    selectDirectory: z.boolean().optional(),
-    filters: dialogFiltersSchema,
-  })
-  .strict()
-  .optional()
-export const saveDialogOptionsSchema = z
-  .object({
-    title: boundedTextSchema(512).optional(),
-    defaultPath: boundedTextSchema(32_768).optional(),
-    filters: dialogFiltersSchema,
-  })
-  .strict()
-  .optional()
-export const messageBoxOptionsSchema = z
-  .object({
-    type: z.enum(['none', 'info', 'error', 'question', 'warning']).optional(),
-    title: boundedTextSchema(512).optional(),
-    message: boundedTextSchema(16 * 1_024),
-    detail: boundedTextSchema(64 * 1_024).optional(),
-    buttons: z.array(boundedTextSchema(512)).max(32).optional(),
-    defaultId: z.number().int().min(0).max(31).optional(),
-    cancelId: z.number().int().min(0).max(31).optional(),
-  })
-  .strict()
+export {
+  messageBoxOptionsSchema,
+  openDialogOptionsSchema,
+  saveDialogOptionsSchema,
+} from '../../shared/ipc/dialog-schema'
 
 export const editorOperationIdSchema = boundedIdentifierSchema()
 export const editorContentSchema = boundedTextSchema(5 * 1024 * 1024)

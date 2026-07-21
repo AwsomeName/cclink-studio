@@ -117,7 +117,16 @@ export function registerTrustedIpcContract<Args extends unknown[], Result>(
   registerTrustedIpcHandler<unknown[], Result | Promise<Result>>(
     contract.channel,
     guard,
-    (event, ...args) => handler(event, ...contract.parseArgs(args)),
+    (event, ...args) => {
+      let parsedArgs: Args
+      try {
+        parsedArgs = contract.parseArgs(args)
+      } catch (error) {
+        if (contract.mapParseError) return contract.mapParseError(error)
+        throw error
+      }
+      return handler(event, ...parsedArgs)
+    },
   )
 }
 

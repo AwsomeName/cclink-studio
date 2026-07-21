@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { officialIpc } from '../shared/ipc/official'
+import { settingsIpc, type SettingsApiContract } from '../shared/ipc/settings'
 import { agentApi } from './agent-api'
 import { androidApi } from './android-api'
 import { browserApi, reportWorkbenchBounds } from './browser-api'
@@ -20,6 +21,17 @@ import {
   windowApi,
 } from './renderer-support-api'
 import { invokeIpcContract } from './ipc-contract-client'
+
+const settingsApi: SettingsApiContract = {
+  getAll: () => invokeIpcContract(settingsIpc.getAll),
+  getSecretStatus: () => invokeIpcContract(settingsIpc.getSecretStatus),
+  set: (updates) => invokeIpcContract(settingsIpc.set, updates),
+  setSecret: (key, value) => invokeIpcContract(settingsIpc.setSecret, key, value),
+  clearSecret: (key) => invokeIpcContract(settingsIpc.clearSecret, key),
+  reset: () => invokeIpcContract(settingsIpc.reset),
+  resetKey: (key) => invokeIpcContract(settingsIpc.resetKey, key),
+  detectClaudeCode: () => invokeIpcContract(settingsIpc.detectClaudeCode),
+}
 
 contextBridge.exposeInMainWorld('cclinkStudio', {
   reportWorkbenchBounds,
@@ -158,24 +170,7 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   },
 
   // 应用设置
-  settings: {
-    /** 获取所有设置 */
-    getAll: () => ipcRenderer.invoke('settings:getAll'),
-    /** 获取凭证配置状态，不返回凭证原文 */
-    getSecretStatus: () => ipcRenderer.invoke('settings:getSecretStatus'),
-    /** 更新部分设置 */
-    set: (updates: Partial<Record<string, unknown>>) => ipcRenderer.invoke('settings:set', updates),
-    /** 使用系统加密存储保存凭证 */
-    setSecret: (key: string, value: string) => ipcRenderer.invoke('settings:setSecret', key, value),
-    /** 清除系统加密存储中的凭证 */
-    clearSecret: (key: string) => ipcRenderer.invoke('settings:clearSecret', key),
-    /** 恢复默认设置 */
-    reset: () => ipcRenderer.invoke('settings:reset'),
-    /** 重置单个设置到默认值 */
-    resetKey: (key: string) => ipcRenderer.invoke('settings:resetKey', key),
-    /** 检测本机 Claude Code CLI */
-    detectClaudeCode: () => ipcRenderer.invoke('settings:detectClaudeCode'),
-  },
+  settings: settingsApi,
 
   workspaceState: workspaceStateApi,
 

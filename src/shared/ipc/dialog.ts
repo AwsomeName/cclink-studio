@@ -1,3 +1,5 @@
+import { defineIpcCall } from './contract'
+
 export interface DialogFileFilter {
   name: string
   extensions: string[]
@@ -47,3 +49,13 @@ export interface DialogApiContract {
   showSaveDialog: (options?: SaveDialogOptions) => Promise<SaveDialogResult>
   showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxResult>
 }
+
+export const dialogIpc = {
+  showOpenDialog: defineIpcCall<[OpenDialogOptions | undefined], OpenDialogResult>(
+    'dialog:showOpenDialog',
+  ),
+  showSaveDialog: defineIpcCall<[SaveDialogOptions | undefined], SaveDialogResult>(
+    'dialog:showSaveDialog',
+  ),
+  showMessageBox: defineIpcCall<[MessageBoxOptions], MessageBoxResult>('dialog:showMessageBox'),
+} as const

@@ -18,7 +18,7 @@ import {
   registerTrustedIpcContract,
   registerTrustedIpcListener,
 } from './trusted-renderer-guard'
-import { defineNoArgsIpc } from '../../shared/ipc/contract'
+import { defineIpcInvoke, defineNoArgsIpc } from '../../shared/ipc/contract'
 
 beforeEach(() => {
   mockIpcMain.handle.mockReset()
@@ -137,6 +137,26 @@ describe('TrustedRendererGuard', () => {
     expect(() => registered?.({ sender: {} }, 'unexpected')).toThrow('不接受参数')
     expect(handler).not.toHaveBeenCalled()
     expect(registered?.({ sender: {} })).toEqual({ success: true })
+  })
+
+  it('maps parser failures without swallowing handler failures', async () => {
+    const guard = { assert: vi.fn(), isTrusted: vi.fn(() => true) }
+    const contract = defineIpcInvoke<[string], { success: boolean }>(
+      'test:mapped-contract',
+      (args) => {
+        if (typeof args[0] !== 'string') throw new Error('invalid argument')
+        return [args[0]]
+      },
+      async () => ({ success: false }),
+    )
+    const handler = vi.fn((_event: unknown, _value: string) => {
+      throw new Error('handler failed')
+    })
+    registerTrustedIpcContract(contract, guard, handler)
+    const registered = mockIpcMain.handle.mock.calls[0]?.[1]
+
+    await expect(registered?.({ sender: {} }, 42)).resolves.toEqual({ success: false })
+    expect(() => registered?.({ sender: {} }, 'valid')).toThrow('handler failed')
   })
 })
 

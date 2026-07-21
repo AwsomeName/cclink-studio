@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { DialogApiContract } from '../shared/ipc/dialog'
+import { dialogIpc, type DialogApiContract } from '../shared/ipc/dialog'
 import type { EditorApiContract } from '../shared/ipc/editor'
 import { identityIpc, type IdentityApiContract } from '../shared/ipc/identity'
 import type { UpdateApiContract } from '../shared/ipc/update'
@@ -19,9 +19,9 @@ export const identityApi: IdentityApiContract = {
 }
 
 export const dialogApi: DialogApiContract = {
-  showOpenDialog: (options) => ipcRenderer.invoke('dialog:showOpenDialog', options),
-  showSaveDialog: (options) => ipcRenderer.invoke('dialog:showSaveDialog', options),
-  showMessageBox: (options) => ipcRenderer.invoke('dialog:showMessageBox', options),
+  showOpenDialog: (options) => invokeIpcContract(dialogIpc.showOpenDialog, options),
+  showSaveDialog: (options) => invokeIpcContract(dialogIpc.showSaveDialog, options),
+  showMessageBox: (options) => invokeIpcContract(dialogIpc.showMessageBox, options),
 }
 
 export const wechatApi: WechatApiContract = {

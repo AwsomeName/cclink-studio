@@ -14,6 +14,7 @@ export type {
 export { PROVIDER_PRESETS, DEFAULT_SETTINGS, getPresetBaseUrl } from '../settings-constants'
 
 import type { AppSettings } from '../settings-constants'
+import { defineIpcCall } from './contract'
 
 export interface SettingsOperationResult {
   success: boolean
@@ -56,6 +57,21 @@ export interface SettingsApiContract {
   setSecret(key: SettingsSecretKey, value: string): Promise<SettingsSecretOperationResult>
   clearSecret(key: SettingsSecretKey): Promise<SettingsSecretOperationResult>
   reset(): Promise<SettingsOperationResult>
-  resetKey(key: string): Promise<SettingsOperationResult>
+  resetKey(key: keyof AppSettings): Promise<SettingsOperationResult>
   detectClaudeCode(): Promise<ClaudeCodeDetectionResult>
 }
+
+export const settingsIpc = {
+  getAll: defineIpcCall<[], AppSettings>('settings:getAll'),
+  getSecretStatus: defineIpcCall<[], SettingsSecretStatus>('settings:getSecretStatus'),
+  set: defineIpcCall<[Partial<AppSettings>], SettingsOperationResult>('settings:set'),
+  setSecret: defineIpcCall<[SettingsSecretKey, string], SettingsSecretOperationResult>(
+    'settings:setSecret',
+  ),
+  clearSecret: defineIpcCall<[SettingsSecretKey], SettingsSecretOperationResult>(
+    'settings:clearSecret',
+  ),
+  reset: defineIpcCall<[], SettingsOperationResult>('settings:reset'),
+  resetKey: defineIpcCall<[keyof AppSettings], SettingsOperationResult>('settings:resetKey'),
+  detectClaudeCode: defineIpcCall<[], ClaudeCodeDetectionResult>('settings:detectClaudeCode'),
+} as const
