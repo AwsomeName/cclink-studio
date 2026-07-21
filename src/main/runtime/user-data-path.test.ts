@@ -39,4 +39,22 @@ describe('configureFixedUserDataPath', () => {
     expect(setPath).toHaveBeenCalledWith('userData', join(appData, 'CCLink Studio'))
     expect(getUserDataPathDiagnostics()).toEqual({ fixedUserDataPath: fixedPath })
   })
+
+  it('uses an absolute test profile override for an unpackaged smoke runtime', () => {
+    const testUserData = join(tempDir, 'smoke-profile')
+    const setName = vi.fn()
+    const setPath = vi.fn()
+    const app = {
+      getPath: vi.fn(() => join(tempDir, 'Application Support')),
+      setName,
+      setPath,
+    }
+
+    const fixedPath = configureFixedUserDataPath(app as never, testUserData)
+
+    expect(fixedPath).toBe(testUserData)
+    expect(existsSync(fixedPath)).toBe(true)
+    expect(setPath).toHaveBeenCalledWith('userData', testUserData)
+    expect(getUserDataPathDiagnostics()).toEqual({ fixedUserDataPath: testUserData })
+  })
 })

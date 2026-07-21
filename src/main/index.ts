@@ -49,7 +49,10 @@ function startCleanBrowserChild(): void {
 }
 
 function startMainApplication(): void {
-  configureFixedUserDataPath(app)
+  configureFixedUserDataPath(
+    app,
+    app.isPackaged ? undefined : process.env['CCLINK_STUDIO_TEST_USER_DATA_PATH'],
+  )
   if (!ensureSingleInstance(app)) return
   configureAppCommandLine(app)
   registerProcessErrorHandlers()

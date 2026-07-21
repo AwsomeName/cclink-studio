@@ -5,6 +5,13 @@ import react from '@vitejs/plugin-react'
 import type { Plugin } from 'vite'
 
 const rendererStoreDir = `${resolve(__dirname, 'src/renderer/src/stores')}${sep}`
+const configuredRendererPort = Number(process.env.CCLINK_STUDIO_RENDERER_PORT)
+const rendererServer =
+  Number.isInteger(configuredRendererPort) &&
+  configuredRendererPort >= 1024 &&
+  configuredRendererPort <= 65_535
+    ? { port: configuredRendererPort, strictPort: true }
+    : undefined
 
 function reloadRendererOnStoreUpdate(): Plugin {
   return {
@@ -67,6 +74,7 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
   },
   renderer: {
+    server: rendererServer,
     resolve: {
       alias: [
         { find: '@', replacement: resolve('src/renderer/src') },

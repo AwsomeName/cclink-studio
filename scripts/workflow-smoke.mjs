@@ -1,11 +1,10 @@
 #!/usr/bin/env node
-import { execFileSync } from 'node:child_process'
 import { readFile, rm, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { chromium } from 'playwright-core'
+import { createSmokeRuntime } from './smoke-runtime.mjs'
 
-const rootDir = new URL('..', import.meta.url).pathname.replace(/\/$/, '')
-const logFile = process.env.CCLINK_STUDIO_LOG_FILE || '/tmp/cclink-studio-dev/cclink-studio-dev.log'
+const { logFile, rendererOrigin, runRestart } = createSmokeRuntime(import.meta.url)
 const keepRunning = process.argv.includes('--keep-running')
 const results = []
 let startedBySmoke = false
@@ -26,14 +25,6 @@ function fail(name, error) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
-}
-
-function runRestart(action) {
-  return execFileSync('bash', ['scripts/restart.sh', action], {
-    cwd: rootDir,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
 }
 
 async function readLog() {
@@ -57,11 +48,11 @@ async function findRendererPage(browser) {
   const startedAt = Date.now()
   while (Date.now() - startedAt < 20_000) {
     const pages = browser.contexts().flatMap((context) => context.pages())
-    const page = pages.find((candidate) => candidate.url().startsWith('http://localhost:5173/'))
+    const page = pages.find((candidate) => candidate.url().startsWith(`${rendererOrigin}/`))
     if (page) return page
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
-  throw new Error('Renderer page http://localhost:5173/ not found')
+  throw new Error(`Renderer page ${rendererOrigin}/ not found`)
 }
 
 async function runCheck(name, fn) {
@@ -149,12 +140,8 @@ async function cleanupWorkspaceDir() {
 }
 
 async function main() {
-  const statusOutput = runRestart('status')
-  const wasRunning = statusOutput.includes('CCLink Studio is running')
-  if (!wasRunning) {
-    runRestart('start')
-    startedBySmoke = true
-  }
+  runRestart('restart')
+  startedBySmoke = true
 
   const cdpPort = await waitForCdpPort()
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`)
