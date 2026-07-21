@@ -1,5 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
+import { browserIpcEvents } from '../../shared/ipc/browser'
 import type {
   BrowserActionLog,
   BrowserActionLogChangedPayload,
@@ -210,7 +211,7 @@ export class BrowserTaskRuntime {
     const payload: BrowserTaskChangedPayload = {
       task: { ...task, downloadIds: [...task.downloadIds] },
     }
-    this.mainWindow.webContents.send('browserTask:changed', payload)
+    this.mainWindow.webContents.send(browserIpcEvents.taskChanged, payload)
   }
 
   private emitActionLogChanged(log: BrowserActionLog): void {
@@ -218,7 +219,7 @@ export class BrowserTaskRuntime {
     const payload: BrowserActionLogChangedPayload = {
       log: { ...log },
     }
-    this.mainWindow.webContents.send('browserActionLog:changed', payload)
+    this.mainWindow.webContents.send(browserIpcEvents.actionLogChanged, payload)
   }
 }
 

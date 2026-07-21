@@ -1,3 +1,5 @@
+import { defineIpcCall } from './contract'
+
 export type BrowserViewModeType = 'desktop' | 'mobile'
 export type BrowserZoomModeType = 'fit' | 'manual'
 
@@ -242,6 +244,13 @@ export interface BrowserOpenTabRequest {
   workspaceKey: string | null
 }
 
+export interface BrowserBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface BrowserApiContract {
   createView: (tabId: string, initialUrl?: string, opts?: BrowserCreateViewOptions) => Promise<void>
   destroyView: (tabId: string) => Promise<void>
@@ -301,3 +310,79 @@ export interface BrowserApiContract {
   revealDownload: (downloadId: string) => Promise<void>
   onDownloadChanged: (callback: (payload: BrowserDownloadChangedPayload) => void) => () => void
 }
+
+export const browserIpc = {
+  createView: defineIpcCall<
+    [tabId: string, initialUrl?: string, opts?: BrowserCreateViewOptions],
+    void
+  >('browser:createView'),
+  destroyView: defineIpcCall<[string], void>('browser:destroyView'),
+  setActive: defineIpcCall<[string | null], void>('browser:setActive'),
+  reconcileViews: defineIpcCall<[BrowserReconcileViewsOptions], void>('browser:reconcileViews'),
+  navigate: defineIpcCall<[string, string], void>('browser:navigate'),
+  goBack: defineIpcCall<[string], void>('browser:goBack'),
+  goForward: defineIpcCall<[string], void>('browser:goForward'),
+  reload: defineIpcCall<[string], void>('browser:reload'),
+  capturePage: defineIpcCall<[string], string | null>('browser:capturePage'),
+  getCurrentURL: defineIpcCall<[string], string>('browser:getCurrentURL'),
+  getActiveViewId: defineIpcCall<[workspaceKey?: string | null], string | null>(
+    'browser:getActiveViewId',
+  ),
+  getDiagnostics: defineIpcCall<[string], BrowserPageDiagnosticSummary | null>(
+    'browser:getDiagnostics',
+  ),
+  getRuntimeDiagnostics: defineIpcCall<[string], BrowserRuntimeDiagnosticSummary>(
+    'browser:getRuntimeDiagnostics',
+  ),
+  getSessionDiagnostics: defineIpcCall<
+    [BrowserSessionDiagnosticRequest],
+    BrowserSessionDiagnosticSummary
+  >('browser:getSessionDiagnostics'),
+  zoomIn: defineIpcCall<[string], void>('browser:zoomIn'),
+  zoomOut: defineIpcCall<[string], void>('browser:zoomOut'),
+  resetZoom: defineIpcCall<[string], void>('browser:resetZoom'),
+  setZoom: defineIpcCall<[string, number], void>('browser:setZoom'),
+  fitWidth: defineIpcCall<[string], void>('browser:fitWidth'),
+  setDeviceMode: defineIpcCall<[string, BrowserViewModeType], void>('browser:setDeviceMode'),
+  getViewState: defineIpcCall<[], BrowserViewState | null>('browser:getViewState'),
+  listSnapshots: defineIpcCall<[], BrowserInstanceSnapshot[]>('browser:listSnapshots'),
+  removeSnapshot: defineIpcCall<[string], void>('browser:removeSnapshot'),
+  clearSnapshots: defineIpcCall<[], void>('browser:clearSnapshots'),
+  listHistory: defineIpcCall<[limit?: number], BrowserHistoryEntry[]>('browser:listHistory'),
+  clearHistory: defineIpcCall<[], void>('browser:clearHistory'),
+} as const
+
+export const browserTaskIpc = {
+  start: defineIpcCall<[string, string], BrowserTaskRun>('browserTask:start'),
+  list: defineIpcCall<[], BrowserTaskRun[]>('browserTask:list'),
+  get: defineIpcCall<[string], BrowserTaskRun | null>('browserTask:get'),
+  getActiveForTab: defineIpcCall<[string], BrowserTaskRun | null>('browserTask:getActiveForTab'),
+  pause: defineIpcCall<[string], BrowserTaskRun>('browserTask:pause'),
+  resume: defineIpcCall<[string], BrowserTaskRun>('browserTask:resume'),
+  cancel: defineIpcCall<[string], BrowserTaskRun>('browserTask:cancel'),
+  finish: defineIpcCall<[string], BrowserTaskRun>('browserTask:finish'),
+  listActionLogs: defineIpcCall<[string], BrowserActionLog[]>('browserTask:listActionLogs'),
+} as const
+
+export const browserDownloadIpc = {
+  list: defineIpcCall<[], BrowserDownloadRecord[]>('browserDownload:list'),
+  get: defineIpcCall<[string], BrowserDownloadRecord | null>('browserDownload:get'),
+  keepToWorkspace: defineIpcCall<[string], BrowserDownloadRecord>(
+    'browserDownload:keepToWorkspace',
+  ),
+  saveAs: defineIpcCall<[string], BrowserDownloadRecord | null>('browserDownload:saveAs'),
+  discard: defineIpcCall<[string], BrowserDownloadRecord>('browserDownload:discard'),
+  open: defineIpcCall<[string], void>('browserDownload:open'),
+  reveal: defineIpcCall<[string], void>('browserDownload:reveal'),
+} as const
+
+export const browserIpcEvents = {
+  workbenchBounds: 'workbench:bounds',
+  urlChanged: 'browser:urlChanged',
+  pageMetaChanged: 'browser:pageMetaChanged',
+  requestOpenTab: 'browser:requestOpenTab',
+  viewStateChanged: 'browser:viewStateChanged',
+  taskChanged: 'browserTask:changed',
+  actionLogChanged: 'browserActionLog:changed',
+  downloadChanged: 'browserDownload:changed',
+} as const

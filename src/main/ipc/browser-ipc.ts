@@ -1,33 +1,22 @@
 import { dialog, type IpcMainInvokeEvent } from 'electron'
 import type { BrowserManager } from '../browser/browser-manager'
 import type { BrowserInstanceStore } from '../persistence/browser-instance-store'
-import type {
-  BrowserCreateViewOptions,
-  BrowserReconcileViewsOptions,
-  BrowserSessionDiagnosticRequest,
-} from '../../shared/ipc/browser'
+import { browserIpcEvents } from '../../shared/ipc/browser'
+import {
+  browserDownloadIpcContracts,
+  browserIpcContracts,
+  browserTaskIpcContracts,
+} from '../../shared/ipc/browser-contract'
+import type { IpcInvokeContract } from '../../shared/ipc/contract'
 import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
 import type { BrowserDownloadStore } from '../browser/browser-download-store'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
 import {
-  registerTrustedIpcHandler,
+  registerTrustedIpcContract,
   registerTrustedIpcListener,
   type TrustedRendererGuard,
 } from './trusted-renderer-guard'
-import {
-  browserBoundsSchema,
-  browserCreateViewOptionsSchema,
-  browserHistoryLimitSchema,
-  browserIdentifierSchema,
-  browserOptionalIdentifierSchema,
-  browserReconcileViewsSchema,
-  browserSessionDiagnosticRequestSchema,
-  browserTaskGoalSchema,
-  browserUrlSchema,
-  browserViewModeSchema,
-  browserWorkspaceKeySchema,
-  browserZoomFactorSchema,
-} from './browser-ipc-schema'
+import { browserBoundsSchema } from './browser-ipc-schema'
 
 /**
  * 注册浏览器相关的 IPC 处理器
@@ -44,99 +33,100 @@ export function registerBrowserIpc(
   getPlaywrightBridge?: () => PlaywrightBridge | null | undefined,
 ): void {
   const handle = <Args extends unknown[], Result>(
-    channel: string,
-    handler: (event: IpcMainInvokeEvent, ...args: Args) => Result,
-  ): void => registerTrustedIpcHandler(channel, trustedRendererGuard, handler)
+    contract: IpcInvokeContract<Args, Result>,
+    handler: (
+      event: IpcMainInvokeEvent,
+      ...args: NoInfer<Args>
+    ) => NoInfer<Result> | Promise<NoInfer<Result>>,
+  ): void => registerTrustedIpcContract(contract, trustedRendererGuard, handler)
 
   // 渲染进程上报 Workbench 区域坐标（作用于当前活跃视图）
-  registerTrustedIpcListener('workbench:bounds', trustedRendererGuard, (_event, bounds) => {
-    const parsed = browserBoundsSchema.safeParse(bounds)
-    if (!parsed.success) {
-      console.warn('[BrowserIpc] 已丢弃非法 workbench bounds')
-      return
-    }
-    browserManager.updateBounds(parsed.data)
-  })
-
-  // ─── 视图生命周期 ───
-  // opts.restore：从快照重建时传入，恢复 viewMode/zoom
-  handle(
-    'browser:createView',
-    async (_event, tabId: string, initialUrl?: string, opts?: BrowserCreateViewOptions) => {
-      await browserManager.createView(
-        browserIdentifierSchema.parse(tabId),
-        initialUrl === undefined ? undefined : browserUrlSchema.parse(initialUrl),
-        opts === undefined ? undefined : browserCreateViewOptionsSchema.parse(opts),
-      )
+  registerTrustedIpcListener(
+    browserIpcEvents.workbenchBounds,
+    trustedRendererGuard,
+    (_event, bounds) => {
+      const parsed = browserBoundsSchema.safeParse(bounds)
+      if (!parsed.success) {
+        console.warn('[BrowserIpc] 已丢弃非法 workbench bounds')
+        return
+      }
+      browserManager.updateBounds(parsed.data)
     },
   )
 
-  handle('browser:destroyView', (_event, tabId: string) => {
-    browserManager.destroyView(browserIdentifierSchema.parse(tabId))
+  // ─── 视图生命周期 ───
+  // opts.restore：从快照重建时传入，恢复 viewMode/zoom
+  handle(browserIpcContracts.createView, async (_event, ...args) => {
+    const [tabId, initialUrl, opts] = args
+    await browserManager.createView(tabId, initialUrl, opts)
+  })
+
+  handle(browserIpcContracts.destroyView, (_event, tabId) => {
+    browserManager.destroyView(tabId)
   })
 
   /** 设置活跃视图；null = 全部隐藏 */
-  handle('browser:setActive', (_event, tabId: string | null) => {
-    browserManager.setActive(browserOptionalIdentifierSchema.parse(tabId))
+  handle(browserIpcContracts.setActive, (_event, tabId) => {
+    browserManager.setActive(tabId)
   })
 
-  handle('browser:reconcileViews', (_event, options: BrowserReconcileViewsOptions) => {
-    browserManager.reconcileViews(browserReconcileViewsSchema.parse(options))
+  handle(browserIpcContracts.reconcileViews, (_event, options) => {
+    browserManager.reconcileViews(options)
   })
 
   // ─── 导航 ───
-  handle('browser:navigate', async (_event, tabId: string, url: string) => {
-    await browserManager.navigate(browserIdentifierSchema.parse(tabId), browserUrlSchema.parse(url))
+  handle(browserIpcContracts.navigate, async (_event, tabId, url) => {
+    await browserManager.navigate(tabId, url)
   })
 
-  handle('browser:goBack', (_event, tabId: string) => {
-    browserManager.goBack(browserIdentifierSchema.parse(tabId))
+  handle(browserIpcContracts.goBack, (_event, tabId) => {
+    browserManager.goBack(tabId)
   })
 
-  handle('browser:goForward', (_event, tabId: string) => {
-    browserManager.goForward(browserIdentifierSchema.parse(tabId))
+  handle(browserIpcContracts.goForward, (_event, tabId) => {
+    browserManager.goForward(tabId)
   })
 
-  handle('browser:reload', (_event, tabId: string) => {
-    browserManager.reload(browserIdentifierSchema.parse(tabId))
+  handle(browserIpcContracts.reload, (_event, tabId) => {
+    browserManager.reload(tabId)
   })
 
-  handle('browser:capturePage', (_event, tabId: string) => {
-    return browserManager.capturePage(browserIdentifierSchema.parse(tabId))
+  handle(browserIpcContracts.capturePage, (_event, tabId) => {
+    return browserManager.capturePage(tabId)
   })
 
-  handle('browser:getCurrentURL', (_event, tabId: string) => {
-    return browserManager.getCurrentURL(browserIdentifierSchema.parse(tabId))
+  handle(browserIpcContracts.getCurrentURL, (_event, tabId) => {
+    return browserManager.getCurrentURL(tabId)
   })
 
-  handle('browser:getActiveViewId', (_event, workspaceKey?: string | null) => {
+  handle(browserIpcContracts.getActiveViewId, (_event, ...args) => {
+    const [workspaceKey] = args
     if (workspaceKey === undefined) return browserManager.getActiveViewId()
-    return browserManager.getActiveViewIdForWorkspace(browserWorkspaceKeySchema.parse(workspaceKey))
+    return browserManager.getActiveViewIdForWorkspace(workspaceKey)
   })
 
-  handle('browser:getDiagnostics', async (_event, tabId: string) => {
-    return getPlaywrightBridge?.()?.getPageDiagnostics(browserIdentifierSchema.parse(tabId)) ?? null
+  handle(browserIpcContracts.getDiagnostics, async (_event, tabId) => {
+    return getPlaywrightBridge?.()?.getPageDiagnostics(tabId) ?? null
   })
 
-  handle('browser:getRuntimeDiagnostics', async (_event, tabId: string) => {
-    const parsedTabId = browserIdentifierSchema.parse(tabId)
+  handle(browserIpcContracts.getRuntimeDiagnostics, async (_event, tabId) => {
     const [visible, binding, page] = await Promise.all([
-      browserManager.getRuntimeDiagnostics(parsedTabId),
-      getPlaywrightBridge?.()?.getPageBindingDiagnostics(parsedTabId) ??
+      browserManager.getRuntimeDiagnostics(tabId),
+      getPlaywrightBridge?.()?.getPageBindingDiagnostics(tabId) ??
         Promise.resolve({
           playwrightTabId: null,
           playwrightUrl: null,
           playwrightTitle: null,
         }),
-      getPlaywrightBridge?.()?.getPageDiagnostics(parsedTabId) ?? Promise.resolve(null),
+      getPlaywrightBridge?.()?.getPageDiagnostics(tabId) ?? Promise.resolve(null),
     ])
 
     return {
-      requestedTabId: parsedTabId,
+      requestedTabId: tabId,
       ...visible,
       ...binding,
       bindingStatus: resolveBindingStatus({
-        requestedTabId: parsedTabId,
+        requestedTabId: tabId,
         visibleTabId: visible.visibleTabId,
         visibleUrl: visible.visibleUrl,
         playwrightTabId: binding.playwrightTabId,
@@ -146,165 +136,155 @@ export function registerBrowserIpc(
     }
   })
 
-  handle('browser:getSessionDiagnostics', (_event, request: BrowserSessionDiagnosticRequest) => {
-    const parsed = browserSessionDiagnosticRequestSchema.parse(request)
-    return browserManager.getSessionDiagnostics(parsed.url, parsed.profileId)
+  handle(browserIpcContracts.getSessionDiagnostics, (_event, request) => {
+    return browserManager.getSessionDiagnostics(request.url, request.profileId)
   })
 
   // ─── 缩放控制 ───
-  handle('browser:zoomIn', (_event, tabId: string) => {
-    browserManager.zoomIn(browserIdentifierSchema.parse(tabId))
+  handle(browserIpcContracts.zoomIn, (_event, tabId) => {
+    browserManager.zoomIn(tabId)
   })
 
-  handle('browser:zoomOut', (_event, tabId: string) => {
-    browserManager.zoomOut(browserIdentifierSchema.parse(tabId))
+  handle(browserIpcContracts.zoomOut, (_event, tabId) => {
+    browserManager.zoomOut(tabId)
   })
 
-  handle('browser:resetZoom', (_event, tabId: string) => {
-    browserManager.resetZoom(browserIdentifierSchema.parse(tabId))
+  handle(browserIpcContracts.resetZoom, (_event, tabId) => {
+    browserManager.resetZoom(tabId)
   })
 
-  handle('browser:setZoom', (_event, tabId: string, factor: number) => {
-    browserManager.setZoom(
-      browserIdentifierSchema.parse(tabId),
-      browserZoomFactorSchema.parse(factor),
-    )
+  handle(browserIpcContracts.setZoom, (_event, tabId, factor) => {
+    browserManager.setZoom(tabId, factor)
   })
 
-  handle('browser:fitWidth', (_event, tabId: string) => {
-    browserManager.setFitWidth(browserIdentifierSchema.parse(tabId))
+  handle(browserIpcContracts.fitWidth, (_event, tabId) => {
+    browserManager.setFitWidth(tabId)
   })
 
   // ─── 设备模式（桌面 / 移动）───
-  handle('browser:setDeviceMode', (_event, tabId: string, mode) => {
-    browserManager.setDeviceMode(
-      browserIdentifierSchema.parse(tabId),
-      browserViewModeSchema.parse(mode),
-    )
+  handle(browserIpcContracts.setDeviceMode, (_event, tabId, mode) => {
+    browserManager.setDeviceMode(tabId, mode)
   })
 
   // ─── 视图状态查询（活跃视图）───
-  handle('browser:getViewState', () => {
+  handle(browserIpcContracts.getViewState, () => {
     return browserManager.getViewState()
   })
 
   // ─── 实例快照（重启「恢复上次会话」入口） ───
   // 登录态由默认 session 持久化，无需 IPC；此处仅管理 URL/视图模式快照。
 
-  handle('browser:listSnapshots', async () => {
+  handle(browserIpcContracts.listSnapshots, async () => {
     if (!instanceStore) return []
     return instanceStore.list()
   })
 
-  handle('browser:removeSnapshot', async (_event, id: string) => {
+  handle(browserIpcContracts.removeSnapshot, async (_event, id) => {
     if (!instanceStore) return
-    await instanceStore.remove(browserIdentifierSchema.parse(id))
+    await instanceStore.remove(id)
   })
 
-  handle('browser:clearSnapshots', async () => {
+  handle(browserIpcContracts.clearSnapshots, async () => {
     if (!instanceStore) return
     await instanceStore.clear()
   })
 
-  handle('browser:listHistory', async (_event, limit?: number) => {
+  handle(browserIpcContracts.listHistory, async (_event, ...args) => {
+    const [limit] = args
     if (!instanceStore) return []
-    return instanceStore.listHistory(browserHistoryLimitSchema.parse(limit))
+    return instanceStore.listHistory(limit)
   })
 
-  handle('browser:clearHistory', async () => {
+  handle(browserIpcContracts.clearHistory, async () => {
     if (!instanceStore) return
     await instanceStore.clearHistory()
   })
 
-  handle('browserTask:start', (_event, tabId: string, goal: string) => {
+  handle(browserTaskIpcContracts.start, (_event, tabId, goal) => {
     if (!taskRuntime) throw new Error('浏览器任务运行时未初始化')
-    return taskRuntime.startTask({
-      tabId: browserIdentifierSchema.parse(tabId),
-      goal: browserTaskGoalSchema.parse(goal),
-    })
+    return taskRuntime.startTask({ tabId, goal })
   })
 
-  handle('browserTask:list', () => {
+  handle(browserTaskIpcContracts.list, () => {
     if (!taskRuntime) return []
     return taskRuntime.listTasks()
   })
 
-  handle('browserTask:get', (_event, taskRunId: string) => {
+  handle(browserTaskIpcContracts.get, (_event, taskRunId) => {
     if (!taskRuntime) return null
-    return taskRuntime.getTask(browserIdentifierSchema.parse(taskRunId))
+    return taskRuntime.getTask(taskRunId)
   })
 
-  handle('browserTask:getActiveForTab', (_event, tabId: string) => {
+  handle(browserTaskIpcContracts.getActiveForTab, (_event, tabId) => {
     if (!taskRuntime) return null
-    return taskRuntime.getActiveTaskForTab(browserIdentifierSchema.parse(tabId))
+    return taskRuntime.getActiveTaskForTab(tabId)
   })
 
-  handle('browserTask:pause', (_event, taskRunId: string) => {
+  handle(browserTaskIpcContracts.pause, (_event, taskRunId) => {
     if (!taskRuntime) throw new Error('浏览器任务运行时未初始化')
-    return taskRuntime.pauseTask(browserIdentifierSchema.parse(taskRunId))
+    return taskRuntime.pauseTask(taskRunId)
   })
 
-  handle('browserTask:resume', (_event, taskRunId: string) => {
+  handle(browserTaskIpcContracts.resume, (_event, taskRunId) => {
     if (!taskRuntime) throw new Error('浏览器任务运行时未初始化')
-    return taskRuntime.resumeTask(browserIdentifierSchema.parse(taskRunId))
+    return taskRuntime.resumeTask(taskRunId)
   })
 
-  handle('browserTask:cancel', (_event, taskRunId: string) => {
+  handle(browserTaskIpcContracts.cancel, (_event, taskRunId) => {
     if (!taskRuntime) throw new Error('浏览器任务运行时未初始化')
-    return taskRuntime.cancelTask(browserIdentifierSchema.parse(taskRunId))
+    return taskRuntime.cancelTask(taskRunId)
   })
 
-  handle('browserTask:finish', (_event, taskRunId: string) => {
+  handle(browserTaskIpcContracts.finish, (_event, taskRunId) => {
     if (!taskRuntime) throw new Error('浏览器任务运行时未初始化')
-    return taskRuntime.finishTask(browserIdentifierSchema.parse(taskRunId))
+    return taskRuntime.finishTask(taskRunId)
   })
 
-  handle('browserTask:listActionLogs', (_event, taskRunId: string) => {
+  handle(browserTaskIpcContracts.listActionLogs, (_event, taskRunId) => {
     if (!taskRuntime) return []
-    return taskRuntime.listActionLogs(browserIdentifierSchema.parse(taskRunId))
+    return taskRuntime.listActionLogs(taskRunId)
   })
 
-  handle('browserDownload:list', () => {
+  handle(browserDownloadIpcContracts.list, () => {
     if (!downloadStore) return []
     return downloadStore.listDownloads()
   })
 
-  handle('browserDownload:get', (_event, downloadId: string) => {
+  handle(browserDownloadIpcContracts.get, (_event, downloadId) => {
     if (!downloadStore) return null
-    return downloadStore.getDownload(browserIdentifierSchema.parse(downloadId))
+    return downloadStore.getDownload(downloadId)
   })
 
-  handle('browserDownload:keepToWorkspace', async (_event, downloadId: string) => {
+  handle(browserDownloadIpcContracts.keepToWorkspace, async (_event, downloadId) => {
     if (!downloadStore) throw new Error('浏览器下载存储未初始化')
-    return downloadStore.keepDownloadToWorkspace(browserIdentifierSchema.parse(downloadId))
+    return downloadStore.keepDownloadToWorkspace(downloadId)
   })
 
-  handle('browserDownload:saveAs', async (_event, downloadId: string) => {
+  handle(browserDownloadIpcContracts.saveAs, async (_event, downloadId) => {
     if (!downloadStore) throw new Error('浏览器下载存储未初始化')
-    const parsedDownloadId = browserIdentifierSchema.parse(downloadId)
-    const record = downloadStore.getDownload(parsedDownloadId)
+    const record = downloadStore.getDownload(downloadId)
     if (!record) throw new Error(`下载记录不存在: ${downloadId}`)
     const result = await dialog.showSaveDialog({
       defaultPath: record.suggestedFilename,
       properties: ['createDirectory', 'showOverwriteConfirmation'],
     })
     if (result.canceled || !result.filePath) return null
-    return downloadStore.saveDownloadAs(parsedDownloadId, result.filePath)
+    return downloadStore.saveDownloadAs(downloadId, result.filePath)
   })
 
-  handle('browserDownload:discard', async (_event, downloadId: string) => {
+  handle(browserDownloadIpcContracts.discard, async (_event, downloadId) => {
     if (!downloadStore) throw new Error('浏览器下载存储未初始化')
-    return downloadStore.discardDownload(browserIdentifierSchema.parse(downloadId))
+    return downloadStore.discardDownload(downloadId)
   })
 
-  handle('browserDownload:open', async (_event, downloadId: string) => {
+  handle(browserDownloadIpcContracts.open, async (_event, downloadId) => {
     if (!downloadStore) throw new Error('浏览器下载存储未初始化')
-    await downloadStore.openDownload(browserIdentifierSchema.parse(downloadId))
+    await downloadStore.openDownload(downloadId)
   })
 
-  handle('browserDownload:reveal', (_event, downloadId: string) => {
+  handle(browserDownloadIpcContracts.reveal, (_event, downloadId) => {
     if (!downloadStore) throw new Error('浏览器下载存储未初始化')
-    downloadStore.revealDownload(browserIdentifierSchema.parse(downloadId))
+    downloadStore.revealDownload(downloadId)
   })
 }
 

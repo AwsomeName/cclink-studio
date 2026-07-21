@@ -3,7 +3,11 @@ import { app, shell } from 'electron'
 import { basename, dirname, join } from 'node:path'
 import { existsSync } from 'node:fs'
 import { copyFile, mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises'
-import type { BrowserDownloadChangedPayload, BrowserDownloadRecord } from '../../shared/ipc/browser'
+import {
+  browserIpcEvents,
+  type BrowserDownloadChangedPayload,
+  type BrowserDownloadRecord,
+} from '../../shared/ipc/browser'
 
 interface StartDownloadOptions {
   id: string
@@ -225,7 +229,7 @@ export class BrowserDownloadStore {
   private emitDownloadChanged(record: BrowserDownloadRecord): void {
     if (this.mainWindow.isDestroyed()) return
     const payload: BrowserDownloadChangedPayload = { download: this.serializeRecord(record) }
-    this.mainWindow.webContents.send('browserDownload:changed', payload)
+    this.mainWindow.webContents.send(browserIpcEvents.downloadChanged, payload)
   }
 
   private persistSoon(): void {

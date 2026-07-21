@@ -3,6 +3,17 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { agentIpcContracts, agentMcpIpcContracts } from '../../shared/ipc/agent-contract'
 import { agentIpc, agentMcpIpc } from '../../shared/ipc/agent'
+import {
+  browserDownloadIpcContracts,
+  browserIpcContracts,
+  browserTaskIpcContracts,
+} from '../../shared/ipc/browser-contract'
+import {
+  browserDownloadIpc,
+  browserIpc,
+  browserIpcEvents,
+  browserTaskIpc,
+} from '../../shared/ipc/browser'
 import { defineIpcInvoke, defineNoArgsIpc } from '../../shared/ipc/contract'
 import { dialogIpcContracts as dialogIpc } from '../../shared/ipc/dialog-contract'
 import { fsIpcContracts } from '../../shared/ipc/fs-contract'
@@ -105,6 +116,30 @@ describe('IPC invoke contracts', () => {
     })
   })
 
+  it('binds every Browser definition to a bounded runtime parser', () => {
+    expect(Object.keys(browserIpcContracts)).toEqual(Object.keys(browserIpc))
+    expect(Object.keys(browserTaskIpcContracts)).toEqual(Object.keys(browserTaskIpc))
+    expect(Object.keys(browserDownloadIpcContracts)).toEqual(Object.keys(browserDownloadIpc))
+    expect(Object.keys(browserIpcEvents)).toHaveLength(8)
+
+    expect(browserIpcContracts.createView.parseArgs(['tab-1'])).toEqual([
+      'tab-1',
+      undefined,
+      undefined,
+    ])
+    expect(browserIpcContracts.getActiveViewId.parseArgs([])).toEqual([undefined])
+    expect(browserIpcContracts.listHistory.parseArgs([])).toEqual([undefined])
+    expect(
+      browserIpcContracts.getSessionDiagnostics.parseArgs([
+        { url: 'https://example.com', profileId: 'operations' },
+      ]),
+    ).toEqual([{ url: 'https://example.com', profileId: 'operations' }])
+    expect(() => browserIpcContracts.navigate.parseArgs(['tab-1', 'javascript:alert(1)'])).toThrow()
+    expect(() => browserIpcContracts.setZoom.parseArgs(['tab-1', 4])).toThrow()
+    expect(() => browserTaskIpcContracts.start.parseArgs(['tab-1', '   '])).toThrow()
+    expect(() => browserDownloadIpcContracts.get.parseArgs(['id', 'extra'])).toThrow()
+  })
+
   it('keeps migrated channel literals in shared declarations only', () => {
     const productionFiles = [
       'src/main/ipc/window-ipc.ts',
@@ -116,9 +151,14 @@ describe('IPC invoke contracts', () => {
       'src/main/ipc/agent-ipc.ts',
       'src/main/agent/agent-bridge.ts',
       'src/main/mcp/permission.ts',
+      'src/main/ipc/browser-ipc.ts',
+      'src/main/browser/browser-manager.ts',
+      'src/main/browser/browser-task-runtime.ts',
+      'src/main/browser/browser-download-store.ts',
       'src/preload/renderer-support-api.ts',
       'src/preload/fs-api.ts',
       'src/preload/agent-api.ts',
+      'src/preload/browser-api.ts',
       'src/preload/index.ts',
     ]
     const source = productionFiles
@@ -126,7 +166,7 @@ describe('IPC invoke contracts', () => {
       .join('\n')
 
     expect(source).not.toMatch(
-      /['"](?:window|identity|official|dialog|settings|fs|agent|mcp):[A-Za-z]/,
+      /['"](?:window|identity|official|dialog|settings|fs|agent|mcp|browser|browserTask|browserActionLog|browserDownload|workbench):[A-Za-z]/,
     )
   })
 
@@ -136,16 +176,18 @@ describe('IPC invoke contracts', () => {
       'src/shared/ipc/dialog.ts',
       'src/shared/ipc/fs.ts',
       'src/shared/ipc/agent.ts',
+      'src/shared/ipc/browser.ts',
       'src/preload/index.ts',
       'src/preload/renderer-support-api.ts',
       'src/preload/fs-api.ts',
       'src/preload/agent-api.ts',
+      'src/preload/browser-api.ts',
     ]
     const source = preloadFacingFiles
       .map((file) => readFileSync(resolve(process.cwd(), file), 'utf8'))
       .join('\n')
 
-    expect(source).not.toMatch(/(?:settings|dialog|fs|agent)-(?:schema|contract)/)
+    expect(source).not.toMatch(/(?:settings|dialog|fs|agent|browser)-(?:schema|contract)/)
     expect(source).not.toMatch(/from ['"]zod['"]/)
   })
 })

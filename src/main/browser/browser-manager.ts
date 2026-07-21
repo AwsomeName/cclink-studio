@@ -2,14 +2,15 @@ import { BrowserWindow, WebContentsView, session, type Cookie, type Session } fr
 import { randomUUID } from 'node:crypto'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
 import type { BrowserInstanceStore } from '../persistence/browser-instance-store'
-import type {
-  BrowserCookieChangeDiagnosticEntry,
-  BrowserCookieDiagnosticEntry,
-  BrowserSessionDiagnosticSummary,
-  BrowserReconcileViewsOptions,
-  BrowserViewModeType,
-  BrowserViewState,
-  BrowserZoomModeType,
+import {
+  browserIpcEvents,
+  type BrowserCookieChangeDiagnosticEntry,
+  type BrowserCookieDiagnosticEntry,
+  type BrowserSessionDiagnosticSummary,
+  type BrowserReconcileViewsOptions,
+  type BrowserViewModeType,
+  type BrowserViewState,
+  type BrowserZoomModeType,
 } from '../../shared/ipc/browser'
 import { assertBrowserUrlAccess, isSupportedBrowserUrl } from './browser-url-access'
 import { installBrowserCompatibilityHeaders, normalizeDesktopUserAgent } from './browser-stealth'
@@ -411,7 +412,7 @@ export class BrowserManager {
     }
     const win = this.win()
     if (win)
-      win.webContents.send('browser:urlChanged', {
+      win.webContents.send(browserIpcEvents.urlChanged, {
         tabId,
         url,
         history: entry?.history ?? [url],
@@ -422,7 +423,7 @@ export class BrowserManager {
   private emitPageMeta(tabId: string, meta: { title?: string; faviconUrl?: string | null }): void {
     const win = this.win()
     if (!win) return
-    win.webContents.send('browser:pageMetaChanged', { tabId, ...meta })
+    win.webContents.send(browserIpcEvents.pageMetaChanged, { tabId, ...meta })
   }
 
   /**
@@ -625,7 +626,7 @@ export class BrowserManager {
   private emitState(tabId: string): void {
     const win = this.win()
     if (!win) return
-    win.webContents.send('browser:viewStateChanged', { tabId, ...this.getState(tabId) })
+    win.webContents.send(browserIpcEvents.viewStateChanged, { tabId, ...this.getState(tabId) })
   }
 
   /** 获取指定视图状态 */
@@ -682,7 +683,7 @@ export class BrowserManager {
     let lastRequestAt = 0
     while (!this.activeViewId && Date.now() < deadline) {
       if (Date.now() - lastRequestAt >= 500) {
-        this.win()?.webContents.send('browser:requestOpenTab', { initialUrl: DEFAULT_URL })
+        this.win()?.webContents.send(browserIpcEvents.requestOpenTab, { initialUrl: DEFAULT_URL })
         lastRequestAt = Date.now()
       }
       await new Promise((resolve) => setTimeout(resolve, 50))
@@ -701,7 +702,7 @@ export class BrowserManager {
     if (!tabId && !this.isWorkspaceActive(workspaceKey)) return null
     while (!tabId && Date.now() < deadline) {
       if (this.isWorkspaceActive(workspaceKey) && Date.now() - lastRequestAt >= 500) {
-        this.win()?.webContents.send('browser:requestOpenTab', {
+        this.win()?.webContents.send(browserIpcEvents.requestOpenTab, {
           initialUrl: DEFAULT_URL,
           workspaceKey,
         })
