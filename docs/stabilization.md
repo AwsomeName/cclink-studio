@@ -1,6 +1,6 @@
 # CCLink Studio 稳定化阶段
 
-> 状态：S0、S1 已完成，稳定化阶段继续。开始日期：2026-07-20。S0 完成日期：2026-07-20。S1 完成日期：2026-07-21。
+> 状态：S0、S1、S2 已完成，S3 进行中，稳定化阶段继续。开始日期：2026-07-20。S0 完成日期：2026-07-20。S1、S2 完成日期：2026-07-21。
 
 ## 结论
 
@@ -168,6 +168,8 @@ S3.2a 已关闭：所有生产 renderer IPC 注册均已确认收敛到 trusted 
 S3.2b1 已关闭：shared `IpcInvokeContract` 已建立，main 注册器自动执行参数 parser，preload client 使用同一 channel/result contract；Window、Identity、Official 为首批迁移域。当前工作树与全新 detached worktree 均通过 140 个测试文件/832 项测试、standalone 24/24 和严格认证 smoke，GitHub Actions run `29805753076` 成功。带参数的高权限 Settings、Dialog、FS、Agent 与 Browser 仍待后续批次迁移，S3.2 尚未关闭。
 
 S3.2b2 已关闭：Settings 与 Dialog 已迁移到 shared 轻量 invoke definition，并在主进程从同一声明绑定运行时 schema；Settings 的结构化失败语义和 Dialog 的可选参数语义保持不变。standalone 首次复验发现 sandbox preload 不能加载外部 Zod，现已通过 definition/parser 分层修复并补防回退测试，preload 不再携带 runtime schema。实现提交 `bcaadc9` 在当前工作树与全新 detached worktree 均通过 140 个测试文件/836 项测试、standalone 24/24 和严格认证 smoke，GitHub Actions run `29807348621` 成功。FS、Agent、Browser contract 与 S3.3 项目切换资源解绑仍未完成，因此 S3 和稳定化阶段均保持进行中。
+
+S3.2b3 已关闭：FS 的 24 个 invoke 通道和目录监听事件已迁移到 shared 轻量 definition，主进程从同一声明绑定有界 parser，preload client 不再保存重复通道字符串或加载 runtime schema。路径、文本、图片、Markdown 操作和 watcher 生命周期语义保持不变，源码边界与非法参数测试防止回退。实现提交 `34af454` 在当前工作树与全新 detached worktree 均通过 140 个测试文件/838 项测试、standalone 24/24、严格认证 smoke 和 preload 无 Zod 产物检查，GitHub Actions run `29808826150` 的 `verify` 与 `smoke` job 均成功。Agent、Browser contract 与 S3.3 项目切换资源解绑仍未完成，因此 S3 和稳定化阶段继续进行。
 
 ### S4：收敛状态和复杂度
 
