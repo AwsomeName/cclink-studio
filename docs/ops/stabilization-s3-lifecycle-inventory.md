@@ -1,10 +1,10 @@
 # S3 生命周期与契约治理记录
 
-> 状态：进行中。S3.1、S3.2 已关闭；下一工作包为 S3.3。
+> 状态：已完成。S3.1、S3.2、S3.3 均已关闭；下一工作包为 S4。
 
 ## 结论
 
-S3.1 先关闭运行时生命周期的双清单问题：同一个 `ServiceRegistry` 声明启动与停止，保存在 runtime 中，并负责启动失败回滚、窗口重建和最终退出。S3.2 已删除 IPC 人工清理总表，并分域把注册、preload 调用和运行时校验迁移到共享 contract。项目切换资源解绑完成前，不得宣称 S3 完成。
+S3.1 关闭了运行时生命周期的双清单问题：同一个 `ServiceRegistry` 声明启动与停止，保存在 runtime 中，并负责启动失败回滚、窗口重建和最终退出。S3.2 删除 IPC 人工清理总表，并分域把注册、preload 调用和运行时校验迁移到共享 contract。S3.3 将项目切换资源归属收敛到 workspace transition，明确后台保留与当前项目可见资源的边界。三项均通过当前工作树、全新 detached worktree 和远端 CI 门禁，S3 已关闭。
 
 ## 基线问题
 
@@ -55,7 +55,31 @@ S3.2b4 已迁移 Agent 的 16 个 invoke 通道、MCP 的 5 个 invoke 通道和
 
 S3.2b5 已迁移 Browser、BrowserTask 和 BrowserDownload 的 42 个 invoke 通道及 8 个 renderer 事件。现有 URL、Profile、bounds、缩放、任务目标和 ID 边界保持不变；解析失败继续以 Promise rejection 返回。Browser schema 移入 shared 主进程绑定层，旧 main import 通过兼容 re-export 保留，sandbox preload 只加载轻量 definition，不加载 Zod。至此 S3.2 已关闭。
 
-S3.3 再处理项目切换时 Browser view、BrowserTask、Agent conversation 和 Terminal session 的统一解绑及集成测试。
+S3.3 已处理项目切换时 Browser view、BrowserTask、Agent conversation 和 Terminal session 的统一解绑及集成测试。
+
+## S3.3 项目切换资源归属
+
+项目切换保留后台执行，不以终止任务掩盖状态所有权问题。transition 在加载目标快照前记录旧 workspace 的 Browser Tab、BrowserTask、Agent conversation 和 Terminal session 所有权；提交切换时先通过 Browser reconcile 把主进程当前 workspace 指向目标并隐藏旧视图，再 hydrate 目标 Tabs、活跃 Agent conversation 和 Terminal 现场。
+
+| 资源 | 切换后的行为 | 重新进入原项目 |
+| --- | --- | --- |
+| Browser view | 保留在原 workspace，立即从当前窗口 detach，不能作为目标项目可见页 | 按原 Tab 恢复并重新 attach |
+| BrowserTask | 保持与原 Browser Tab 绑定，不因项目切换取消，也不能被目标 workspace 借用 | 原任务状态继续可见 |
+| Agent conversation/run | 全局运行态保留，目标项目只激活自己的 conversation | 流式结果和终态继续恢复 |
+| Terminal PTY/session | 主进程 PTY 保留，目标项目 Tab 不引用旧 session | 重新挂载原 session 并继续读取输出 |
+| 人工确认请求 | Agent 按 conversation、Terminal 按 workspace 过滤 | 回到所属项目/会话后显示 |
+
+Browser runtime 是可选能力：reconcile IPC 不可用或失败时记录诊断并继续切换 workspace，避免 Browser 故障阻断文件、Agent 或 Terminal；新工作区渲染后的 Browser lifecycle 会继续按目标 workspace 收敛视图。
+
+### S3.3 验收
+
+- [x] transition 显式盘点 Browser Tab、BrowserTask、Agent conversation 和 Terminal session 的 workspace 所有权。
+- [x] 提交切换前 BrowserManager 收到目标 workspace 与目标 Browser Tab 白名单，旧原生视图不再覆盖目标工作台。
+- [x] 后台 BrowserTask、Agent run 和 Terminal PTY 不因项目切换被隐式终止。
+- [x] 目标项目只 hydrate 自己的 Tabs、活跃 Agent conversation 和 Terminal session。
+- [x] Agent 与 Terminal 人工确认请求不会跨 conversation/workspace 显示。
+- [x] Browser reconcile 失败时工作区仍可切换，符合 S2 独立降级要求。
+- [x] 当前工作树、全新 detached worktree 和远端 CI 门禁通过。
 
 ### S3.2a 验收
 
@@ -152,9 +176,13 @@ S3.2b5 实现提交为 `dee51b6`。当前工作树与全新 detached worktree `/
 
 2026-07-21 S3.2b5 最新证据：实现提交 `dee51b6` 在当前工作树和全新 detached worktree 均通过 140 个测试文件/840 项测试、standalone 24/24、严格认证 smoke 和 preload 无 Zod 产物检查；远端 CI run `29812695777` 成功。S3.2 已关闭，S3 的剩余阻断项为 S3.3 项目切换资源解绑。
 
+2026-07-21 S3.3 最新证据：实现提交 `57f1ed2` 在当前工作树与全新 detached worktree `/tmp/cclink-studio-s3-workspace-verify.Imu5cl` 均通过 `pnpm verify`（141 个测试文件/845 项测试）、standalone 24/24 和严格认证 smoke；Profile Cookie/localStorage 跨进程保持成功，clean 与 automation-controlled 探针到达 Google account validation。detached HEAD 与工作树干净，GitHub Actions run `29814488957` 成功。S3.1-S3.3 全部关闭，S3 完成。
+
 ## 拷问
 
 - registry 统一不等于资源已经全部可释放；没有 disposer 的服务必须补契约，不能只把字段设为 `null`。
 - 重建测试不能只断言窗口出现，还要证明 Agent、Terminal、Browser IPC 均重新注册且不存在 duplicate handler。
 - 项目切换不能借用全应用重启掩盖状态所有权问题；旧资源必须按 workspace ID 明确解绑。
 - shared contract 可复用不代表所有实现都适合进入 preload；任何 parser 依赖都必须留在主进程绑定层，preload 只加载轻量 definition。
+- 后台资源保留不等于可以跨项目操作；Browser、Agent、Terminal 的可见入口和人工确认必须继续按 workspace/conversation 过滤。
+- S3 关闭不代表状态所有者已经完全唯一；跨 store 状态收敛、诊断关联和大模块拆分仍属于 S4，不能回填到新的功能开发里。
