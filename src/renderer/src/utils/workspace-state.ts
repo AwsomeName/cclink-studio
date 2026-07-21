@@ -7,6 +7,12 @@ let activeOwnerKey: string | null = null
 let restoreDepth = 0
 const sectionWriteQueues = new Map<string, Promise<void>>()
 
+function normalizeWorkspaceStateValue(value: unknown): unknown {
+  const serialized = JSON.stringify(value)
+  if (serialized === undefined) throw new Error('工作空间状态必须是可序列化 JSON')
+  return JSON.parse(serialized) as unknown
+}
+
 /** 设置后续 WorkspaceState 镜像写入的默认身份 key。 */
 export function setWorkspaceStateOwnerKey(ownerKey: string | null | undefined): void {
   activeOwnerKey = ownerKey || null
@@ -81,10 +87,11 @@ export function persistWorkspaceSectionNow(
     const queueKey = JSON.stringify([targetOwnerKey, targetWorkspaceKey, section])
     const previous = sectionWriteQueues.get(queueKey)
     const run = async (): Promise<void> => {
+      const normalizedValue = normalizeWorkspaceStateValue(value)
       const result = await window.cclinkStudio.workspaceState.setSection(
         targetWorkspaceKey,
         section,
-        value,
+        normalizedValue,
         targetOwnerKey,
       )
       if (!result.success) {
