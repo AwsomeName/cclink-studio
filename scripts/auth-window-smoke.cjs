@@ -8,7 +8,7 @@ const PROFILE_PARTITION = 'persist:cclink-auth-window-smoke'
 const STORAGE_KEY = 'cclink-auth-window-smoke'
 const STORAGE_VALUE = 'retained-across-restart'
 const COOKIE_NAME = 'cclink_auth_window_smoke'
-const TEST_EMAIL = 'cclink-browser-compat-test-20260717@example.com'
+const TEST_EMAIL = `cclink-browser-compat-${process.pid}-${Date.now()}@example.com`
 const GOOGLE_OAUTH_URL =
   'https://accounts.google.com/o/oauth2/v2/auth?client_id=910913558771-jo298qljjvd2vh4b1rmkcb8m97mdbsbk.apps.googleusercontent.com&redirect_uri=https%3A%2F%2Fwww.v2ex.com%2Fauth%2Fgoogle&response_type=code&scope=profile%20email&prompt=select_account'
 const GOOGLE_VARIANTS = ['clean', 'cdp', 'automation-controlled', 'ua-normalized', 'current']
