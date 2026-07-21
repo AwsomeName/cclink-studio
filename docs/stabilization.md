@@ -190,6 +190,8 @@ S4.2 已关闭：workspace transition 在 Browser/Terminal 异步准备完成和
 
 S4.3a 已关闭：Browser Profile ID、Electron partition、运营配置、workspace 对账和 View 重建共用一个规则；非法 Profile 不再静默落入默认 Session，同一 Tab 的 workspace 或 Profile 绑定变化会清理旧 View，后台工具无法继续复用与 Tab 投影不一致的凭证域。Cookie 观察和脱敏 Session 诊断已从 `BrowserManager` 拆出，凭证值仍只存在于 Electron 持久化 Session。实现提交 `f29e51d` 在当前工作树与全新 detached worktree 均通过 144 个测试文件/863 项测试、standalone 24/24 与严格认证 smoke，GitHub Actions run `29825345007` 成功。S4.3b conversation 投影与 run 编排、S4.4 诊断关联与架构复审仍未完成，因此 S4 和稳定化阶段继续。
 
+S4.3b 已关闭：main Agent runtime 继续拥有执行、run 与 session 事实，renderer `agent-store` 只保存消息和可见运行投影；`AgentPanel`、工作台会话和硬件生产入口的发送、取消、压缩事务已统一进入 conversation 级 run controller，生产 renderer 不再直接拼装第二套 run 流程。取消绑定发起时的 `runId` 并按 conversation 去重，命令拒绝和异常具有一致失败投影。会话类型、默认构造、工作区快照归一化与恢复合并从 1444 行 `agent-store` 拆出，store 降至 1059 行且持久化 schema 不变。实现提交 `4cdd1d5` 在当前工作树与全新 detached worktree 均通过 144 个测试文件/869 项测试、standalone 24/24 和严格认证 smoke，GitHub Actions run `29827593012` 成功。S4 下一工作包只剩 S4.4 诊断关联、架构复审和稳定化退出验收；在其完成前仍不得恢复功能扩张。
+
 ## 退出标准
 
 只有同时满足以下条件，才能恢复常规功能扩张：
