@@ -90,7 +90,7 @@ async function runGoogleVariant(electronPath, userDataPath, variant) {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     result = await runChild(electronPath, 'google', userDataPath, variant)
     attemptOutcomes.push(result.outcome)
-    if (result.outcome !== 'network-unavailable') break
+    if (!['network-unavailable', 'pending'].includes(result.outcome)) break
     if (attempt < maxAttempts) {
       await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** (attempt - 1)))
     }

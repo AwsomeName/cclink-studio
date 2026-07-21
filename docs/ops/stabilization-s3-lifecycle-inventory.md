@@ -41,9 +41,24 @@ S3.1 先关闭运行时生命周期的双清单问题：同一个 `ServiceRegist
 - [x] 全新 detached worktree 通过锁定安装和相同门禁。
 - [x] 远端 CI 通过。
 
-## 后续边界
+## S3.2 IPC 契约
 
-S3.2 必须把 IPC 通道名、参数 schema、trusted sender、preload 调用和 disposer 收敛到共享声明，删除 `ipc-cleanup.ts` 的人工通道数组。S3.3 再处理项目切换时 Browser view、BrowserTask、Agent conversation 和 Terminal session 的统一解绑及集成测试。两项完成前，S3 保持进行中。
+S3.2a 已将生产 renderer IPC 的实际注册和释放收敛到窗口级 `TrustedIpcRegistrationScope`：handler/listener 注册时立即生成精确 disposer，窗口阶段停止时逆序释放；重复 handler 会在同一 scope 内失败，重复 dispose 幂等。原有 `ipc-cleanup.ts` 人工通道数组已删除，listener 不再通过 `removeAllListeners` 误删其他所有者。
+
+S3.2b 继续把 main/preload 的通道名和运行时 schema 收敛到共享 contract。完成前，通道字符串仍可能在调用端漂移，S3.2 和整个 S3 都不能关闭。
+
+S3.3 再处理项目切换时 Browser view、BrowserTask、Agent conversation 和 Terminal session 的统一解绑及集成测试。
+
+### S3.2a 验收
+
+- [x] 生产 renderer IPC 不存在 guard 之外的裸 `ipcMain.handle/on`。
+- [x] 每次 handler/listener 注册同时生成精确 disposer。
+- [x] dispose 幂等，单项清理失败不阻断其他通道。
+- [x] 删除人工维护的 IPC 清理通道数组。
+- [x] 单元测试覆盖 handler、listener、重复注册和重复清理。
+- [ ] 当前工作树、干净 worktree 和远端 CI 门禁通过。
+
+首次严格认证复验捕获到 clean Google 已到 identifier URL 但 20 秒内仍为 `pending`，门禁立即失败。检查发现 smoke 虽声明 clean 最多三次，却只对 `network-unavailable` 重试；现将 `pending` 纳入同样的有限重试，但最终通过条件仍严格要求 `account-validation-reached`，不会把超时或外部失败降级为成功。
 
 ## 当前门禁证据
 
