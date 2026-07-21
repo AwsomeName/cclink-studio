@@ -3,8 +3,10 @@ import {
   buildAgentDiagnosticMarkdown,
   redactDiagnosticValue,
   redactText,
+  selectDiagnosticBrowserTask,
 } from './agent-diagnostic-report'
 import type { AgentMessage, AgentScope } from '../../types'
+import type { BrowserTaskRun } from '@shared/ipc/browser'
 
 const messages: AgentMessage[] = [
   {
@@ -100,7 +102,9 @@ describe('agent diagnostic report', () => {
         input: '',
         loading: false,
         backendState: 'streaming',
-        sessionId: 'session-1',
+        runStatus: 'running',
+        activeRunId: 'run-1',
+        sessionId: 'raw-agent-session-secret',
         streamingMessageId: null,
         lastCost: null,
         contextUsage: null,
@@ -123,7 +127,9 @@ describe('agent diagnostic report', () => {
         connected: true,
         busy: true,
         ready: true,
-        sessionId: 'session-1',
+        runId: 'run-1',
+        sessionId: 'raw-agent-session-secret',
+        sessionRef: 'session-diagnostic-ref-1',
       },
       capabilities: [
         {
@@ -235,6 +241,13 @@ describe('agent diagnostic report', () => {
         id: 'task-1',
         tabId: 'tab-1',
         goal: '登录知乎',
+        correlation: {
+          workspaceKey: null,
+          conversationId: 'conv-1',
+          agentRunId: 'run-1',
+          agentSessionRef: 'session-diagnostic-ref-1',
+          profileId: 'zhihu',
+        },
         status: 'failed',
         startedAt: 1,
         endedAt: 2,
@@ -261,6 +274,12 @@ describe('agent diagnostic report', () => {
     })
 
     expect(markdown).toContain('# CCLink Studio 诊断日志')
+    expect(markdown).toContain('## 关联链')
+    expect(markdown).toContain('- 状态：matched')
+    expect(markdown).toContain(
+      'Agent session：UI/Main=一致 · ref=session-diagnostic-ref-1 · task=session-diagnostic-ref-1',
+    )
+    expect(markdown).toContain('[taskRunId=task-1] fill')
     expect(markdown).toContain('browser_action_fail')
     expect(markdown).toContain('https://www.zhihu.com/signin?token=[redacted]')
     expect(markdown).toContain('疑似挑战：auth_required, captcha_or_bot_check')
@@ -283,6 +302,147 @@ describe('agent diagnostic report', () => {
     expect(markdown).not.toContain('super-secret')
     expect(markdown).not.toContain('abcdef')
     expect(markdown).not.toContain('13812345678')
+    expect(markdown).not.toContain('raw-agent-session-secret')
+  })
+
+  it('reports correlation mismatches without exposing the raw session', () => {
+    const input = minimalReportInput({ kind: 'browser', instanceId: 'tab-current' })
+    input.workspaceRef = { kind: 'local', path: '/workspace-current' }
+    input.conversation = {
+      id: 'conversation-current',
+      title: 'diagnostic correlation',
+      surface: 'assistant-panel',
+      runtime: { location: 'local', transport: 'local', backend: 'cclink-studio-agent' },
+      messages: [],
+      input: '',
+      loading: true,
+      backendState: 'streaming',
+      runStatus: 'running',
+      activeRunId: 'run-current',
+      lastRunEventAt: 1,
+      lastRunTerminalReason: null,
+      sessionId: 'raw-session-current',
+      streamingMessageId: null,
+      lastCost: null,
+      contextUsage: null,
+      contextCompaction: {
+        status: 'idle',
+        trigger: null,
+        preTokens: null,
+        postTokens: null,
+        error: null,
+        updatedAt: null,
+      },
+      scope: { kind: 'browser', instanceId: 'tab-current' },
+      mountedResources: [],
+      mountedSkills: [],
+      createdAt: 1,
+      updatedAt: 1,
+      archivedAt: null,
+    }
+    input.agentRuntime = {
+      connected: true,
+      busy: true,
+      ready: true,
+      runId: 'run-current',
+      sessionId: 'raw-session-current',
+      sessionRef: 'session-current-ref',
+    }
+    input.browser = {
+      tabId: 'tab-current',
+      url: 'https://example.com',
+      title: 'Example',
+      profile: 'profile-current',
+      viewState: null,
+    }
+    input.browserRuntime = {
+      requestedTabId: 'tab-current',
+      visibleTabId: 'tab-current',
+      visibleUrl: 'https://example.com',
+      visibleTitle: 'Example',
+      profileId: 'profile-current',
+      viewState: null,
+      playwrightTabId: 'tab-current',
+      playwrightUrl: 'https://example.com',
+      playwrightTitle: 'Example',
+      bindingStatus: 'matched',
+      recentUrls: [],
+      lastClaim: null,
+      session: null,
+      page: null,
+    }
+    input.browserTask = {
+      id: 'task-other',
+      tabId: 'tab-other',
+      goal: 'other operation',
+      correlation: {
+        workspaceKey: '/workspace-other',
+        conversationId: 'conversation-other',
+        agentRunId: 'run-other',
+        agentSessionRef: 'session-other-ref',
+        profileId: 'profile-other',
+      },
+      status: 'running',
+      startedAt: 1,
+      downloadIds: [],
+    }
+
+    const markdown = buildAgentDiagnosticMarkdown(input)
+    expect(markdown).toContain('- 状态：mismatch')
+    expect(markdown).toContain(
+      '- 错配字段：workspace, conversation, tab, profile, agent-run, agent-session',
+    )
+    expect(markdown).not.toContain('raw-session-current')
+    expect(markdown).not.toContain('raw-session-other')
+  })
+
+  it('selects only the current conversation task and falls back to legacy tasks', () => {
+    const task = (
+      id: string,
+      startedAt: number,
+      correlation?: BrowserTaskRun['correlation'],
+    ): BrowserTaskRun => ({
+      id,
+      tabId: 'tab-shared',
+      goal: id,
+      correlation,
+      status: 'completed',
+      startedAt,
+      endedAt: startedAt + 1,
+      downloadIds: [],
+    })
+    const legacy = task('legacy', 10)
+    const otherConversation = task('other', 30, {
+      workspaceKey: '/workspace-a',
+      conversationId: 'conversation-b',
+      agentRunId: 'run-b',
+      agentSessionRef: null,
+      profileId: null,
+    })
+    const currentConversation = task('current', 20, {
+      workspaceKey: '/workspace-a',
+      conversationId: 'conversation-a',
+      agentRunId: 'run-a',
+      agentSessionRef: null,
+      profileId: null,
+    })
+
+    expect(
+      selectDiagnosticBrowserTask({
+        tasks: [legacy, otherConversation, currentConversation],
+        tabId: 'tab-shared',
+        workspaceKey: '/workspace-a',
+        conversationId: 'conversation-a',
+      })?.id,
+    ).toBe('current')
+    expect(
+      selectDiagnosticBrowserTask({
+        tasks: [legacy, otherConversation],
+        tabId: 'tab-shared',
+        workspaceKey: '/workspace-a',
+        conversationId: 'conversation-a',
+      })?.id,
+    ).toBe('legacy')
   })
 
   it('formats non-instance scopes without assuming an instance id', () => {

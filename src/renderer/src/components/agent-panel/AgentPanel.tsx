@@ -41,7 +41,10 @@ import { AgentComposerToolbar } from '../../features/agent-composer/AgentCompose
 import { useComposerHistory } from '../../features/agent-composer/use-composer-history'
 import { TerminalConfirmationCards } from './TerminalConfirmationCards'
 import { isAgentConfirmationVisible } from '../../utils/workspace-resource-visibility'
-import { buildAgentDiagnosticMarkdown } from '../../features/diagnostics/agent-diagnostic-report'
+import {
+  buildAgentDiagnosticMarkdown,
+  selectDiagnosticBrowserTask,
+} from '../../features/diagnostics/agent-diagnostic-report'
 import { useToastStore } from '../common/Toast'
 import {
   IconSparkle,
@@ -604,13 +607,12 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
       }
     }
 
-    const tasksForTab = browserTabId
-      ? Object.values(browserTasks)
-          .filter((task) => task.tabId === browserTabId)
-          .sort((a, b) => b.startedAt - a.startedAt)
-      : []
-    const diagnosticTask =
-      tasksForTab.find((task) => !isFinalBrowserTaskStatus(task.status)) ?? tasksForTab[0] ?? null
+    const diagnosticTask = selectDiagnosticBrowserTask({
+      tasks: Object.values(browserTasks),
+      tabId: browserTabId,
+      workspaceKey: diagnosticWorkspaceKey,
+      conversationId: conversation?.id ?? null,
+    })
     const diagnosticDownloads = diagnosticTask
       ? diagnosticTask.downloadIds.map((downloadId) => browserDownloads[downloadId]).filter(Boolean)
       : []

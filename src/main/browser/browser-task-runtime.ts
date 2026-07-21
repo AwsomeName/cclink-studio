@@ -11,6 +11,7 @@ import type {
   FailBrowserTaskOptions,
   StartBrowserActionLogOptions,
   StartBrowserTaskOptions,
+  UpdateBrowserTaskCorrelationOptions,
 } from './browser-task-types'
 
 const FINAL_STATUSES = new Set<BrowserTaskStatus>(['completed', 'failed', 'cancelled'])
@@ -33,6 +34,7 @@ export class BrowserTaskRuntime {
       id: randomUUID(),
       tabId: options.tabId,
       goal: options.goal,
+      correlation: options.correlation ? { ...options.correlation } : undefined,
       status: 'running',
       startedAt: Date.now(),
       downloadIds: [],
@@ -40,19 +42,16 @@ export class BrowserTaskRuntime {
     this.tasks.set(task.id, task)
     this.activeTaskByTab.set(task.tabId, task.id)
     this.emitTaskChanged(task)
-    return { ...task }
+    return cloneTask(task)
   }
 
   listTasks(): BrowserTaskRun[] {
-    return Array.from(this.tasks.values()).map((task) => ({
-      ...task,
-      downloadIds: [...task.downloadIds],
-    }))
+    return Array.from(this.tasks.values()).map(cloneTask)
   }
 
   getTask(taskRunId: string): BrowserTaskRun | null {
     const task = this.tasks.get(taskRunId)
-    return task ? { ...task, downloadIds: [...task.downloadIds] } : null
+    return task ? cloneTask(task) : null
   }
 
   getActiveTaskForTab(tabId: string): BrowserTaskRun | null {
@@ -60,7 +59,7 @@ export class BrowserTaskRuntime {
     if (!taskId) return null
     const task = this.tasks.get(taskId)
     if (!task || FINAL_STATUSES.has(task.status)) return null
-    return { ...task, downloadIds: [...task.downloadIds] }
+    return cloneTask(task)
   }
 
   assertCanRunAction(tabId: string): BrowserTaskRun | null {
@@ -79,7 +78,7 @@ export class BrowserTaskRuntime {
       throw new Error('Browser task has failed')
     }
 
-    return { ...task, downloadIds: [...task.downloadIds] }
+    return cloneTask(task)
   }
 
   pauseTask(taskRunId: string): BrowserTaskRun {
@@ -127,7 +126,20 @@ export class BrowserTaskRuntime {
       task.downloadIds.push(downloadId)
     }
     this.emitTaskChanged(task)
-    return { ...task, downloadIds: [...task.downloadIds] }
+    return cloneTask(task)
+  }
+
+  updateCorrelation(taskRunId: string, patch: UpdateBrowserTaskCorrelationOptions): BrowserTaskRun {
+    const task = this.requireTask(taskRunId)
+    if (!task.correlation) return cloneTask(task)
+    const nextCorrelation = { ...task.correlation, ...patch }
+    const changed = Object.entries(patch).some(
+      ([key, value]) => task.correlation?.[key as keyof typeof task.correlation] !== value,
+    )
+    if (!changed) return cloneTask(task)
+    task.correlation = nextCorrelation
+    this.emitTaskChanged(task)
+    return cloneTask(task)
   }
 
   startActionLog(options: StartBrowserActionLogOptions): BrowserActionLog {
@@ -181,7 +193,7 @@ export class BrowserTaskRuntime {
   ): BrowserTaskRun {
     const task = this.requireTask(taskRunId)
     if (FINAL_STATUSES.has(task.status)) {
-      return { ...task, downloadIds: [...task.downloadIds] }
+      return cloneTask(task)
     }
 
     Object.assign(task, patch, { status })
@@ -191,7 +203,7 @@ export class BrowserTaskRuntime {
       this.activeTaskByTab.set(task.tabId, task.id)
     }
     this.emitTaskChanged(task)
-    return { ...task, downloadIds: [...task.downloadIds] }
+    return cloneTask(task)
   }
 
   private requireTask(taskRunId: string): BrowserTaskRun {
@@ -209,7 +221,7 @@ export class BrowserTaskRuntime {
   private emitTaskChanged(task: BrowserTaskRun): void {
     if (this.mainWindow.isDestroyed()) return
     const payload: BrowserTaskChangedPayload = {
-      task: { ...task, downloadIds: [...task.downloadIds] },
+      task: cloneTask(task),
     }
     this.mainWindow.webContents.send(browserIpcEvents.taskChanged, payload)
   }
@@ -220,6 +232,14 @@ export class BrowserTaskRuntime {
       log: { ...log },
     }
     this.mainWindow.webContents.send(browserIpcEvents.actionLogChanged, payload)
+  }
+}
+
+function cloneTask(task: BrowserTaskRun): BrowserTaskRun {
+  return {
+    ...task,
+    correlation: task.correlation ? { ...task.correlation } : undefined,
+    downloadIds: [...task.downloadIds],
   }
 }
 

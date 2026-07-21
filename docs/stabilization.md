@@ -192,6 +192,8 @@ S4.3a 已关闭：Browser Profile ID、Electron partition、运营配置、works
 
 S4.3b 已关闭：main Agent runtime 继续拥有执行、run 与 session 事实，renderer `agent-store` 只保存消息和可见运行投影；`AgentPanel`、工作台会话和硬件生产入口的发送、取消、压缩事务已统一进入 conversation 级 run controller，生产 renderer 不再直接拼装第二套 run 流程。取消绑定发起时的 `runId` 并按 conversation 去重，命令拒绝和异常具有一致失败投影。会话类型、默认构造、工作区快照归一化与恢复合并从 1444 行 `agent-store` 拆出，store 降至 1059 行且持久化 schema 不变。实现提交 `4cdd1d5` 在当前工作树与全新 detached worktree 均通过 144 个测试文件/869 项测试、standalone 24/24 和严格认证 smoke，GitHub Actions run `29827593012` 成功。S4 下一工作包只剩 S4.4 诊断关联、架构复审和稳定化退出验收；在其完成前仍不得恢复功能扩张。
 
+S4.4 已形成验证候选：Agent 发起的 BrowserTask 在主进程内固定 workspace/conversation/run/session-ref/tab/profile 关联，复制诊断可报告匹配、缺失和错配，同 Tab 的其他会话任务不再被误选；Session 只使用进程内随机诊断引用，原始值不进入日志。架构复审未发现新的 P0/P1 或需要 ADR 的例外，结果写入 `docs/architecture.md`，自动化与真人退出清单位于 `docs/ops/stabilization-s4-acceptance.md`。完整门禁、detached worktree、CI 和 H1-H4 尚未全部通过，因此 S4 与稳定化阶段仍为进行中。
+
 ## 退出标准
 
 只有同时满足以下条件，才能恢复常规功能扩张：

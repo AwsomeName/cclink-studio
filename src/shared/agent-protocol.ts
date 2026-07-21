@@ -207,6 +207,8 @@ export interface AgentStatus {
   /** 当前正在执行的运行实例。 */
   runId?: string | null
   sessionId: string | null
+  /** Process-local random reference for redacted diagnostic correlation. */
+  sessionRef?: string | null
   ready?: boolean
 }
 

@@ -31,6 +31,7 @@ import type {
   AgentContextUsageSnapshot,
 } from '../../shared/agent-protocol'
 import { agentIpcEvents } from '../../shared/ipc/agent'
+import { SessionDiagnosticReferenceStore } from './session-diagnostic-reference-store'
 
 const AGENT_EVENT_CHANNELS: Record<AgentRuntimeEvent['type'], string> = {
   stream: agentIpcEvents.stream,
@@ -74,6 +75,7 @@ export class AgentBridge {
   private readonly runtime: AgentRuntime
   private readonly permissionManager: PermissionManager
   private readonly activeBrowserTaskIds = new Map<string, string>()
+  private readonly sessionDiagnosticRefs = new SessionDiagnosticReferenceStore()
   private readonly deps: {
     playwrightBridge: PlaywrightBridge | null
     toolHost: McpToolHost
@@ -171,7 +173,13 @@ export class AgentBridge {
       playwrightBridge: this.deps.playwrightBridge,
       settings: this.deps.getSettingsSnapshot?.() ?? DEFAULT_SETTINGS,
     })
-    this.startBrowserTaskIfNeeded(conversationId, message, sendPlan.browserTabId)
+    this.startBrowserTaskIfNeeded(
+      conversationId,
+      message,
+      sendPlan.browserTabId,
+      sendPlan.workspaceKey,
+      context?.runId ?? null,
+    )
     try {
       await this.runtime.sendMessage(
         buildAgentMessageWithContext(message, {
@@ -305,12 +313,14 @@ export class AgentBridge {
     busy: boolean
     runId: string | null
     sessionId: string | null
+    sessionRef: string | null
     ready: boolean
   } {
     const status = this.runtime.getStatus(conversationId)
     return {
       ...status,
       busy: this.runtime.isBusy(conversationId),
+      sessionRef: this.getSessionDiagnosticRef(status.sessionId),
       ready: true,
     }
   }
@@ -322,6 +332,8 @@ export class AgentBridge {
 
   /** 重置会话 */
   resetSession(conversationId = DEFAULT_CONVERSATION_ID): void {
+    const sessionId = this.runtime.getStatus(conversationId).sessionId
+    this.sessionDiagnosticRefs.delete(sessionId)
     this.runtime.resetSession(conversationId)
   }
 
@@ -333,6 +345,8 @@ export class AgentBridge {
   /** 销毁一个会话 backend（关闭历史会话时释放资源） */
   async closeConversation(conversationId = DEFAULT_CONVERSATION_ID): Promise<void> {
     this.cancelActiveBrowserTask(conversationId)
+    const sessionId = this.runtime.getStatus(conversationId).sessionId
+    this.sessionDiagnosticRefs.delete(sessionId)
     await this.runtime.closeConversation(conversationId)
   }
 
@@ -464,9 +478,14 @@ export class AgentBridge {
     this.mainWindow = null
     await this.runtime.destroy()
     this.activeBrowserTaskIds.clear()
+    this.sessionDiagnosticRefs.clear()
   }
 
   private handleRuntimeEvent(event: AgentRuntimeEvent): void {
+    const taskId = this.activeBrowserTaskIds.get(event.conversationId)
+    if (taskId) {
+      this.syncActiveBrowserTaskCorrelation(event.conversationId, taskId, event.runId)
+    }
     if (event.type === 'complete') {
       if (this.isErrorResult(event.data)) {
         this.failActiveBrowserTask(event.conversationId, event.data)
@@ -483,6 +502,8 @@ export class AgentBridge {
     conversationId: string,
     message: string,
     browserTabId: string | null = null,
+    workspaceKey: string | null = null,
+    agentRunId: string | null = null,
   ): void {
     const scope = this.runtime.getScope(conversationId)
     const tabId = browserTabId ?? (scope.kind === 'browser' ? scope.instanceId : null)
@@ -491,9 +512,17 @@ export class AgentBridge {
     if (!runtime) return
 
     const goal = message.trim().replace(/\s+/g, ' ').slice(0, 200) || '浏览器任务'
+    const sessionId = this.runtime.getStatus(conversationId).sessionId
     const task = runtime.startTask({
       tabId,
       goal,
+      correlation: {
+        workspaceKey,
+        conversationId,
+        agentRunId,
+        agentSessionRef: this.getSessionDiagnosticRef(sessionId),
+        profileId: this.deps.browserManager?.getViewProfileId(tabId) ?? null,
+      },
     })
     this.activeBrowserTaskIds.set(conversationId, task.id)
   }
@@ -501,6 +530,7 @@ export class AgentBridge {
   private finishActiveBrowserTask(conversationId: string): void {
     const taskId = this.activeBrowserTaskIds.get(conversationId)
     if (!taskId) return
+    this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
     this.deps.browserTaskRuntime?.finishTask(taskId)
     this.activeBrowserTaskIds.delete(conversationId)
   }
@@ -508,6 +538,7 @@ export class AgentBridge {
   private cancelActiveBrowserTask(conversationId: string): void {
     const taskId = this.activeBrowserTaskIds.get(conversationId)
     if (!taskId) return
+    this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
     this.deps.browserTaskRuntime?.cancelTask(taskId)
     this.activeBrowserTaskIds.delete(conversationId)
   }
@@ -515,11 +546,28 @@ export class AgentBridge {
   private failActiveBrowserTask(conversationId: string, error: unknown): void {
     const taskId = this.activeBrowserTaskIds.get(conversationId)
     if (!taskId) return
+    this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
     this.deps.browserTaskRuntime?.failTask(taskId, {
       reason: 'unknown',
       errorMessage: this.extractErrorMessage(error),
     })
     this.activeBrowserTaskIds.delete(conversationId)
+  }
+
+  private syncActiveBrowserTaskCorrelation(
+    conversationId: string,
+    taskId: string,
+    eventRunId: string | null = null,
+  ): void {
+    const status = this.runtime.getStatus(conversationId)
+    this.deps.browserTaskRuntime?.updateCorrelation(taskId, {
+      agentRunId: eventRunId ?? status.runId,
+      agentSessionRef: this.getSessionDiagnosticRef(status.sessionId),
+    })
+  }
+
+  private getSessionDiagnosticRef(sessionId: string | null): string | null {
+    return this.sessionDiagnosticRefs.get(sessionId)
   }
 
   private isErrorResult(data: unknown): boolean {

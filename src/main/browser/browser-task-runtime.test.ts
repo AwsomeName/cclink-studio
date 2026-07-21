@@ -68,6 +68,32 @@ describe('BrowserTaskRuntime', () => {
     ])
   })
 
+  it('keeps Agent correlation immutable and only emits real updates', () => {
+    const { runtime, send } = createRuntime()
+    const task = runtime.startTask({
+      tabId: 'browser',
+      goal: 'inspect page',
+      correlation: {
+        workspaceKey: '/workspace-a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        agentSessionRef: null,
+        profileId: 'profile-a',
+      },
+    })
+
+    task.correlation!.conversationId = 'mutated-outside-runtime'
+    expect(runtime.getTask(task.id)?.correlation?.conversationId).toBe('conversation-a')
+
+    const sendsBeforeNoop = send.mock.calls.length
+    runtime.updateCorrelation(task.id, { agentRunId: 'run-a' })
+    expect(send).toHaveBeenCalledTimes(sendsBeforeNoop)
+
+    runtime.updateCorrelation(task.id, { agentSessionRef: 'session-reference' })
+    expect(runtime.getTask(task.id)?.correlation?.agentSessionRef).toBe('session-reference')
+    expect(send).toHaveBeenCalledTimes(sendsBeforeNoop + 1)
+  })
+
   it('redacts sensitive browser action params', () => {
     expect(
       summarizeBrowserActionParams('fill', {

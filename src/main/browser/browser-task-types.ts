@@ -19,7 +19,12 @@ export type {
 export interface StartBrowserTaskOptions {
   tabId: string
   goal: string
+  correlation?: BrowserTaskRun['correlation']
 }
+
+export type UpdateBrowserTaskCorrelationOptions = Partial<
+  NonNullable<BrowserTaskRun['correlation']>
+>
 
 export interface FailBrowserTaskOptions {
   reason: BrowserTaskFailureReason

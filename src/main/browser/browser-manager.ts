@@ -678,6 +678,11 @@ export class BrowserManager {
     return this.views.get(tabId)?.workspaceKey
   }
 
+  /** 查询 Tab 的真实 Profile 归属；undefined 表示视图不存在。 */
+  getViewProfileId(tabId: string): string | null | undefined {
+    return this.views.get(tabId)?.profileId
+  }
+
   /** 等待 renderer 完成浏览器 Tab -> WebContentsView 的异步创建与激活。 */
   async waitForActiveView(timeoutMs = 2500): Promise<string | null> {
     const deadline = Date.now() + timeoutMs

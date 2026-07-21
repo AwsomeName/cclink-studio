@@ -1,6 +1,6 @@
 # CCLink Studio 架构说明
 
-> 当前事实源。最后更新：2026-07-20。
+> 当前事实源。最后更新：2026-07-21。
 
 ## 结论
 
@@ -142,6 +142,28 @@ main
 official integration layer (outside OSS default path)
   account, entitlement, CCLink device/message/runtime network, official release
 ```
+
+## 状态与诊断基线
+
+稳定化后的状态边界如下。运行事实不能由 renderer 的恢复快照反向覆盖；项目切换只改变可见投影，后台运行是否继续由各自主进程事实源决定。
+
+| 状态域 | 运行事实 | renderer 投影 | 持久化与恢复 |
+| --- | --- | --- | --- |
+| workspace/tab | `workspace-transition` 的 generation 与单一提交事务 | `workspace-store` / `tab-store` | `WorkspaceStateService` 按 workspace 分区 |
+| Agent conversation | main Agent runtime 的 run/session | `agent-store` 的消息与可见运行状态 | workspace conversation snapshot；恢复后与 main 状态对账 |
+| Browser/Profile | `BrowserManager` 的 Tab 绑定与 Electron 持久 Session | Browser Tab 的 URL/Profile/View 状态 | Profile partition 保存 Cookie/localStorage，Tab 快照只保存绑定 |
+| BrowserTask | `BrowserTaskRuntime` 的 task/action 状态 | `browser-task-store` | 当前进程内可诊断任务；终态不伪装为持久后台任务 |
+| Terminal | `TerminalSessionRegistry` / `TerminalSessionStore` | Terminal Tab 与 renderer store | 主进程 session record；项目恢复后通过 `listSessions` 对账 |
+
+Agent 发起的浏览器任务在创建时固定 `workspaceKey`、`conversationId`、`agentRunId`、进程内随机 `agentSessionRef`、`tabId` 和 `profileId`。浏览器动作通过 `taskRunId` 归因。复制诊断必须报告关联链是 `matched`、`incomplete` 还是 `mismatch`，并列出缺失或错配字段；同一 Tab 上其他会话的任务不能被误选。
+
+`agentSessionRef` 只在主进程当前生命周期内稳定，由随机值生成，不是 Session ID 的哈希或截断，也不能用于认证。诊断可以比较 UI/Main Session 是否一致，但不得输出 Session ID、Cookie 值、密码、验证码或 token。旧任务和手动 BrowserTask 没有关联块时保持兼容，但必须标为 `incomplete`，不能伪称已完整归因。
+
+## 架构复审基线
+
+2026-07-21 的稳定化退出复审未发现需要 ADR 的架构例外：开源/官方边界、renderer 隔离与密钥边界、能力独立降级、生命周期注册表、IPC 单一契约源、状态所有权、人工确认边界和诊断关联均有实现及回归测试。最终退出仍以 `docs/ops/stabilization-s4-acceptance.md` 的当前提交门禁、全新 detached worktree、远端 CI 和真人验收为准，任何一项未完成时不得把稳定化状态改为完成。
+
+已知维护债务包括 `AgentPanel`、`SettingsPage`、`BrowserManager`、Browser MCP、文件服务和部分 store 仍超过约一千行。它们当前有领域边界和行为测试保护，未形成已知 P0/P1，因此不以机械拆文件阻塞稳定化退出；后续改动必须先固定行为，再按状态所有者拆分，不能重新引入第二套事务或写入所有者。
 
 ## 文档状态
 

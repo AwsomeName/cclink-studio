@@ -72,6 +72,14 @@ export interface BrowserTaskRun {
   id: string
   tabId: string
   goal: string
+  /** Correlation metadata captured by an Agent-owned browser run. Legacy/manual tasks may omit it. */
+  correlation?: {
+    workspaceKey: string | null
+    conversationId: string
+    agentRunId: string | null
+    agentSessionRef: string | null
+    profileId: string | null
+  }
   status: BrowserTaskStatus
   startedAt: number
   endedAt?: number

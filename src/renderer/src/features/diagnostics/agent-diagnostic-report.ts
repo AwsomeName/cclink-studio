@@ -27,7 +27,7 @@ const MAX_FIELD_LENGTH = 500
 const SENSITIVE_KEY_RE =
   /(password|passwd|pwd|token|secret|cookie|authorization|api[-_]?key|session|验证码|校验码|短信|code)/i
 const SENSITIVE_ASSIGNMENT_RE =
-  /((?:password|passwd|pwd|token|secret|cookie|authorization|api[-_]?key|session|验证码|校验码|短信验证码|code|密码)\s*[:：=]\s*)(?!\[redacted\])([^\s,;，。]+)/gi
+  /((?:password|passwd|pwd|token|secret|cookie|authorization|api[-_]?key|session|验证码|校验码|短信验证码|code|密码)\s*[:：=]\s*)(?!\[redacted(?:\]|:))([^\s,;，。]+)/gi
 const PHONE_RE = /(?<!\d)(1[3-9]\d)(\d{4})(\d{4})(?!\d)/g
 const EMAIL_RE = /\b([A-Z0-9._%+-]{2})[A-Z0-9._%+-]*(@[A-Z0-9.-]+\.[A-Z]{2,})\b/gi
 const QUERY_SECRET_RE =
@@ -62,6 +62,13 @@ export interface AgentDiagnosticReportInput {
   pendingConfirmationCount: number
 }
 
+export interface DiagnosticBrowserTaskSelection {
+  tasks: BrowserTaskRun[]
+  tabId: string | null
+  workspaceKey: string | null
+  conversationId: string | null
+}
+
 interface TimelineEvent {
   timestamp: number
   kind: string
@@ -77,6 +84,7 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
   const userGoal = latestUserMessage(input.messages)
   const timeline = buildTimeline(input).slice(-MAX_TIMELINE_ITEMS)
   const runtime = input.browserRuntime
+  const correlation = formatCorrelationDiagnostics(input, workspaceKey)
 
   return [
     '# CCLink Studio 诊断日志',
@@ -89,6 +97,9 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
     `- 工作区 Key：${redactText(workspaceKey ?? '未绑定')}`,
     `- 会话 ID：${redactText(conversation?.id ?? '未找到')}`,
     `- 会话标题：${redactText(conversation?.title ?? '未找到')}`,
+    '',
+    '## 关联链',
+    ...correlation,
     '',
     '## 用户目标',
     userGoal ? redactText(userGoal) : '未找到最近用户消息',
@@ -126,10 +137,10 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
     `- 后端状态：${input.backendState}`,
     `- 会话运行标记：${conversation?.runStatus ?? 'unknown'}`,
     `- UI loading：${conversation?.loading ?? false}`,
-    `- UI runId：${redactText(conversation?.activeRunId ?? '无')}`,
+    `- UI 当前 runId：${redactText(conversation?.activeRunId ?? '无')}`,
     `- 主进程 busy：${input.agentRuntime?.busy ?? input.agentRuntime?.connected ?? 'unknown'}`,
     `- 主进程 ready：${input.agentRuntime?.ready ?? 'unknown'}`,
-    `- 主进程 runId：${redactText(input.agentRuntime?.runId ?? '无')}`,
+    `- 主进程当前 runId：${redactText(input.agentRuntime?.runId ?? '无')}`,
     `- 最近运行事件：${conversation?.lastRunEventAt ? formatDateTime(conversation.lastRunEventAt) : '无'}`,
     `- 最近终止原因：${conversation?.lastRunTerminalReason ?? '无'}`,
     `- 后端 Session：${input.agentRuntime?.sessionId ? '已存在' : '无'}`,
@@ -157,6 +168,122 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
     '## 脱敏说明',
     'password/token/cookie/authorization/api key/session/验证码/手机号/邮箱等字段已脱敏或截断。',
   ].join('\n')
+}
+
+export function selectDiagnosticBrowserTask({
+  tasks,
+  tabId,
+  workspaceKey,
+  conversationId,
+}: DiagnosticBrowserTaskSelection): BrowserTaskRun | null {
+  if (!tabId) return null
+  const candidates = tasks
+    .filter((task) => task.tabId === tabId)
+    .sort((a, b) => b.startedAt - a.startedAt)
+  const exact = candidates.filter(
+    (task) =>
+      task.correlation?.conversationId === conversationId &&
+      task.correlation.workspaceKey === workspaceKey,
+  )
+  const legacy = candidates.filter((task) => !task.correlation)
+  return pickCurrentTask(exact) ?? pickCurrentTask(legacy)
+}
+
+function pickCurrentTask(tasks: BrowserTaskRun[]): BrowserTaskRun | null {
+  return tasks.find((task) => !isFinalBrowserTaskStatus(task.status)) ?? tasks[0] ?? null
+}
+
+function isFinalBrowserTaskStatus(status: BrowserTaskRun['status']): boolean {
+  return status === 'completed' || status === 'failed' || status === 'cancelled'
+}
+
+function formatCorrelationDiagnostics(
+  input: AgentDiagnosticReportInput,
+  workspaceKey: string | null,
+): string[] {
+  const task = input.browserTask
+  const taskCorrelation = task?.correlation
+  const conversationId = input.conversation?.id ?? null
+  const uiRunId = input.conversation?.activeRunId ?? null
+  const mainRunId = input.agentRuntime?.runId ?? null
+  const uiSessionId = input.conversation?.sessionId ?? null
+  const mainSessionId = input.agentRuntime?.sessionId ?? null
+  const mainSessionRef = input.agentRuntime?.sessionRef ?? null
+  const actualProfileId = input.browserRuntime?.profileId ?? input.browser.profile
+  const mismatches: string[] = []
+  const missing: string[] = []
+
+  if (!task) {
+    return [
+      '- 状态：unavailable',
+      `- Workspace：${redactText(workspaceKey ?? 'global')}`,
+      `- Conversation：${redactText(conversationId ?? '无')}`,
+      '- BrowserTaskRun：无',
+      '- 说明：当前没有可归因到该会话和浏览器 Tab 的任务记录。',
+    ]
+  }
+  if (!taskCorrelation) {
+    return [
+      '- 状态：incomplete',
+      `- Workspace：${redactText(workspaceKey ?? 'global')}`,
+      `- Conversation：${redactText(conversationId ?? '无')}`,
+      `- BrowserTaskRun：${redactText(task.id)}`,
+      '- 说明：历史或手动任务没有关联元数据，不能证明 workspace/run/session/profile 属于同一次操作。',
+    ]
+  }
+
+  compareCorrelation('workspace', taskCorrelation.workspaceKey, workspaceKey, mismatches)
+  compareCorrelation('conversation', taskCorrelation.conversationId, conversationId, mismatches)
+  compareCorrelation('tab', task.tabId, input.browser.tabId, mismatches)
+  if (input.browserRuntime) {
+    compareCorrelation('profile', taskCorrelation.profileId, actualProfileId, mismatches)
+  } else {
+    missing.push('browser-runtime')
+  }
+
+  const currentRunIds = [uiRunId, mainRunId].filter((value): value is string => Boolean(value))
+  if (!taskCorrelation.agentRunId) {
+    missing.push('agent-run')
+  } else if (currentRunIds.some((runId) => runId !== taskCorrelation.agentRunId)) {
+    mismatches.push('agent-run')
+  }
+
+  if (uiSessionId && mainSessionId && uiSessionId !== mainSessionId) {
+    mismatches.push('agent-session-ui-main')
+  }
+  if (!taskCorrelation.agentSessionRef) {
+    missing.push('agent-session')
+  } else if (mainSessionRef && mainSessionRef !== taskCorrelation.agentSessionRef) {
+    mismatches.push('agent-session')
+  }
+
+  const status = mismatches.length > 0 ? 'mismatch' : missing.length > 0 ? 'incomplete' : 'matched'
+  return [
+    `- 状态：${status}`,
+    `- Workspace：当前=${redactText(workspaceKey ?? 'global')} · task=${redactText(taskCorrelation.workspaceKey ?? 'global')}`,
+    `- Conversation：当前=${redactText(conversationId ?? '无')} · task=${redactText(taskCorrelation.conversationId)}`,
+    `- Agent run：UI=${redactText(uiRunId ?? '无')} · main=${redactText(mainRunId ?? '无')} · task=${redactText(taskCorrelation.agentRunId ?? '无')}`,
+    `- Agent session：UI/Main=${formatSessionMatch(uiSessionId, mainSessionId)} · ref=${mainSessionRef ?? '无'} · task=${taskCorrelation.agentSessionRef ?? '无'}`,
+    `- Browser task/tab：taskRunId=${redactText(task.id)} · taskTab=${redactText(task.tabId)} · currentTab=${redactText(input.browser.tabId ?? '无')}`,
+    `- Browser profile：current=${redactText(actualProfileId ?? 'default')} · task=${redactText(taskCorrelation.profileId ?? 'default')}`,
+    `- 缺失字段：${missing.length > 0 ? missing.join(', ') : '无'}`,
+    `- 错配字段：${mismatches.length > 0 ? mismatches.join(', ') : '无'}`,
+  ]
+}
+
+function formatSessionMatch(uiSessionId: string | null, mainSessionId: string | null): string {
+  if (!uiSessionId && !mainSessionId) return '均无'
+  if (!uiSessionId || !mainSessionId) return '一侧缺失'
+  return uiSessionId === mainSessionId ? '一致' : '错配'
+}
+
+function compareCorrelation(
+  field: string,
+  taskValue: string | null,
+  currentValue: string | null,
+  mismatches: string[],
+): void {
+  if (taskValue !== currentValue) mismatches.push(field)
 }
 
 function formatCapabilities(capabilities?: AgentCapabilityStatus[]): string[] {
@@ -197,12 +324,13 @@ export function redactText(value: string): string {
 function redactUrl(value: string): string {
   try {
     const url = new URL(value)
+    const redactedSentinel = '__CCLINK_REDACTED_VALUE__'
     for (const key of Array.from(url.searchParams.keys())) {
       if (SENSITIVE_KEY_RE.test(key)) {
-        url.searchParams.set(key, '[redacted]')
+        url.searchParams.set(key, redactedSentinel)
       }
     }
-    return redactText(url.toString())
+    return redactText(url.toString().replaceAll(redactedSentinel, '[redacted]'))
   } catch {
     return redactText(value)
   }
@@ -241,7 +369,7 @@ function messageToEvents(message: AgentMessage): TimelineEvent[] {
 function actionLogToEvents(log: BrowserActionLog): TimelineEvent[] {
   const duration =
     typeof log.endedAt === 'number' ? `${Math.max(0, log.endedAt - log.startedAt)}ms` : 'running'
-  const base = `${log.action} ${duration} ${redactText(log.paramsSummary)}`
+  const base = `[taskRunId=${log.taskRunId}] ${log.action} ${duration} ${redactText(log.paramsSummary)}`
   const events: TimelineEvent[] = [
     {
       timestamp: log.startedAt,
@@ -255,8 +383,8 @@ function actionLogToEvents(log: BrowserActionLog): TimelineEvent[] {
       kind: log.status === 'failed' ? 'browser_action_fail' : 'browser_action_done',
       summary:
         log.status === 'failed'
-          ? `${log.action} failed reason=${log.failureReason ?? 'unknown'} error=${redactText(log.errorMessage ?? '-')}`
-          : `${log.action} ${log.status} ${duration}`,
+          ? `[taskRunId=${log.taskRunId}] ${log.action} failed reason=${log.failureReason ?? 'unknown'} error=${redactText(log.errorMessage ?? '-')}`
+          : `[taskRunId=${log.taskRunId}] ${log.action} ${log.status} ${duration}`,
     })
   }
   return events
