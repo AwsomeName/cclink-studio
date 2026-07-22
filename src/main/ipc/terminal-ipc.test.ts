@@ -226,12 +226,18 @@ describe('registerTerminalIpc', () => {
         message: 'ok',
       })),
     } as any
+    const terminalSessionStore = {
+      appendCommand: vi.fn(async () => undefined),
+    } as any
 
     registerTerminalIpc(
       { resolveConfirmation: vi.fn() } as any,
       { listEvents: vi.fn() } as any,
       undefined,
       terminalCommandOrchestrator,
+      undefined,
+      undefined,
+      terminalSessionStore,
     )
 
     const handler = mockIpcMain.handlers.get('terminal:submitCommand')
@@ -271,6 +277,40 @@ describe('registerTerminalIpc', () => {
         denylist: ['rm -rf dist'],
       },
     })
+    expect(terminalSessionStore.appendCommand).toHaveBeenCalledWith('terminal-1', 'pwd', 'user')
+  })
+
+  it('does not persist raw PTY input such as passwords', async () => {
+    const terminalExecutionAdapter = {
+      onEvent: vi.fn(),
+      write: vi.fn(async () => undefined),
+    } as any
+    const terminalSessionStore = {
+      appendInput: vi.fn(),
+    } as any
+
+    registerTerminalIpc(
+      { resolveConfirmation: vi.fn() } as any,
+      { listEvents: vi.fn() } as any,
+      undefined,
+      undefined,
+      terminalExecutionAdapter,
+      undefined,
+      terminalSessionStore,
+    )
+
+    await expect(
+      mockIpcMain.handlers.get('terminal:writePty')?.(
+        {},
+        { terminalSessionId: 'terminal-1', data: 'secret-password\r' },
+      ),
+    ).resolves.toEqual({ success: true })
+    expect(terminalExecutionAdapter.write).toHaveBeenCalledWith({
+      sessionId: 'terminal-1',
+      data: 'secret-password\r',
+      actor: 'user',
+    })
+    expect(terminalSessionStore.appendInput).not.toHaveBeenCalled()
   })
 
   it('rejects terminal command submission when orchestrator is unavailable', async () => {

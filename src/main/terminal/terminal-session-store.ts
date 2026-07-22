@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { dirname, join } from 'node:path'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import type {
   TerminalSessionCommandRecord,
   TerminalSessionOutputLine,
@@ -84,7 +84,10 @@ function normalizeLoadedRecord(record: TerminalSessionRecord): TerminalSessionRe
     ...record,
     attachable: Boolean(record.attachable),
     workspaceKey: record.workspaceKey ?? workspaceRefKey(record.runtime.workspaceRef),
-    outputBuffer: Array.isArray(record.outputBuffer) ? record.outputBuffer : [],
+    // 旧版本把原始键盘输入也写入了记录，其中可能包含密码提示下的敏感内容。
+    outputBuffer: Array.isArray(record.outputBuffer)
+      ? record.outputBuffer.filter((line) => line.kind !== 'input')
+      : [],
     commandHistory: Array.isArray(record.commandHistory) ? record.commandHistory : [],
   }
 }
@@ -101,7 +104,7 @@ export class TerminalSessionStore {
   private readonly filePath: string
   private state: TerminalSessionStoreState = { ...EMPTY_STATE, sessions: [] }
   private loaded = false
-  private readonly pendingInputBySessionId = new Map<string, string>()
+  private saveQueue: Promise<void> = Promise.resolve()
 
   constructor(filename = 'terminal-sessions.json') {
     this.filePath = join(app.getPath('userData'), filename)
@@ -124,6 +127,7 @@ export class TerminalSessionStore {
         console.warn('[TerminalSessionStore] 加载失败:', (error as Error).message)
       }
       this.state = { ...EMPTY_STATE, sessions: [] }
+      await this.save()
     }
     this.loaded = true
   }
@@ -135,9 +139,17 @@ export class TerminalSessionStore {
   private async save(): Promise<void> {
     this.state.updatedAt = Date.now()
     this.state.sessions = [...this.state.sessions].sort(byUpdatedAtAsc).slice(-MAX_SESSIONS)
-    try {
+    const serialized = JSON.stringify(this.state, null, 2)
+    const temporaryPath = `${this.filePath}.tmp`
+    const persist = async (): Promise<void> => {
       await mkdir(dirname(this.filePath), { recursive: true })
-      await writeFile(this.filePath, JSON.stringify(this.state, null, 2), 'utf-8')
+      await writeFile(temporaryPath, serialized, 'utf-8')
+      await rename(temporaryPath, this.filePath)
+    }
+    const pendingSave = this.saveQueue.then(persist, persist)
+    this.saveQueue = pendingSave.catch(() => undefined)
+    try {
+      await pendingSave
     } catch (error) {
       console.warn('[TerminalSessionStore] 保存失败:', (error as Error).message)
     }
@@ -261,22 +273,6 @@ export class TerminalSessionStore {
     }
   }
 
-  async appendInput(sessionId: string, data: string, actor: TerminalCommandActor): Promise<void> {
-    await this.ensureLoaded()
-    const record = this.state.sessions.find((session) => session.sessionId === sessionId)
-    if (!record) return
-    await this.appendOutputLine(sessionId, { kind: 'input', text: data, timestamp: Date.now() })
-    const current = this.pendingInputBySessionId.get(sessionId) ?? ''
-    const next = `${current}${data}`
-    const parts = next.split(/\r?\n/)
-    this.pendingInputBySessionId.set(sessionId, parts.pop() ?? '')
-    for (const part of parts) {
-      const command = sanitizeText(part.replace(/\r/g, ''), 4000).trim()
-      if (!command) continue
-      await this.appendCommand(sessionId, command, actor)
-    }
-  }
-
   async appendCommand(
     sessionId: string,
     command: string,
@@ -347,14 +343,12 @@ export class TerminalSessionStore {
   async clearSession(sessionId: string): Promise<void> {
     await this.ensureLoaded()
     this.state.sessions = this.state.sessions.filter((session) => session.sessionId !== sessionId)
-    this.pendingInputBySessionId.delete(sessionId)
     await this.save()
   }
 
   async clearAll(): Promise<void> {
     await this.ensureLoaded()
     this.state = { ...EMPTY_STATE, sessions: [] }
-    this.pendingInputBySessionId.clear()
     await this.save()
   }
 }

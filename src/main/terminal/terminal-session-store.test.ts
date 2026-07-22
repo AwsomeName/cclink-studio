@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -72,16 +72,69 @@ describe('TerminalSessionStore', () => {
     expect(sessions[0].outputBuffer.map((line) => line.text)).toContain('hello\n')
   })
 
-  it('extracts command records from user input chunks', async () => {
+  it('persists only commands submitted through the controlled command path', async () => {
     const store = new TerminalSessionStore()
 
     await store.upsertSession({ sessionId: 'terminal-1', runtime })
-    await store.appendInput('terminal-1', 'pnpm ', 'user')
-    await store.appendInput('terminal-1', 'test\n', 'user')
+    await store.appendCommand('terminal-1', 'pnpm test', 'user')
 
     const session = await store.getSession('terminal-1')
     expect(session?.lastCommand).toBe('pnpm test')
     expect(session?.commandHistory).toMatchObject([{ command: 'pnpm test', actor: 'user' }])
+  })
+
+  it('removes legacy raw input records that may contain sensitive terminal input', async () => {
+    await writeFile(
+      join(tempDir, 'terminal-sessions.json'),
+      JSON.stringify({
+        version: 1,
+        updatedAt: 100,
+        sessions: [
+          {
+            sessionId: 'terminal-1',
+            runtime,
+            status: 'running',
+            createdAt: 100,
+            updatedAt: 100,
+            attachable: true,
+            outputBuffer: [
+              { id: 'input-1', kind: 'input', text: 'secret-password', timestamp: 100 },
+              { id: 'output-1', kind: 'stdout', text: 'visible output\n', timestamp: 101 },
+            ],
+            commandHistory: [],
+          },
+        ],
+      }),
+      'utf-8',
+    )
+
+    const store = new TerminalSessionStore()
+    const session = await store.getSession('terminal-1')
+
+    expect(session?.outputBuffer).toMatchObject([{ kind: 'stdout', text: 'visible output\n' }])
+    expect(await readFile(join(tempDir, 'terminal-sessions.json'), 'utf-8')).not.toContain(
+      'secret-password',
+    )
+  })
+
+  it('serializes concurrent output persistence into valid JSON', async () => {
+    const store = new TerminalSessionStore()
+    await store.upsertSession({ sessionId: 'terminal-1', runtime })
+
+    await Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        store.appendOutputLine('terminal-1', {
+          kind: 'stdout',
+          text: `line-${index}\n`,
+          timestamp: 200 + index,
+        }),
+      ),
+    )
+
+    const persisted = JSON.parse(
+      await readFile(join(tempDir, 'terminal-sessions.json'), 'utf-8'),
+    ) as { sessions: Array<{ outputBuffer: unknown[] }> }
+    expect(persisted.sessions[0].outputBuffer).toHaveLength(20)
   })
 
   it('marks exited sessions as non-attachable', async () => {

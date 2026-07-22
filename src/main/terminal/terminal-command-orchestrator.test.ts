@@ -111,7 +111,7 @@ describe('TerminalCommandOrchestrator', () => {
     const resultPromise = orchestrator.submitCommand({
       terminalSessionId: 'terminal-1',
       command: 'rm -rf dist',
-      actor: 'agent',
+      actor: 'user',
       permissionPolicy: askRiskyPolicy,
     })
 
@@ -124,7 +124,7 @@ describe('TerminalCommandOrchestrator', () => {
       terminalSessionId: 'terminal-1',
       workspaceKey: '/workspace',
       command: 'rm -rf dist',
-      actor: 'agent',
+      actor: 'user',
       risk: 'destructive',
       reason: '命令风险需要确认',
       cwd: '/workspace',
@@ -258,7 +258,7 @@ describe('TerminalCommandOrchestrator', () => {
     )
   })
 
-  it('writes accepted running commands to the execution adapter and audits generic failures', async () => {
+  it('writes user commands to a running interactive terminal and audits generic failures', async () => {
     const executionAdapter = {
       start: vi.fn(async () => ({ sessionId: 'terminal-1', status: 'running' as const })),
       write: vi.fn(async () => {
@@ -274,7 +274,7 @@ describe('TerminalCommandOrchestrator', () => {
       orchestrator.submitCommand({
         terminalSessionId: 'terminal-1',
         command: 'git status --short',
-        actor: 'agent',
+        actor: 'user',
         permissionPolicy: askRiskyPolicy,
       }),
     ).resolves.toMatchObject({
@@ -287,18 +287,50 @@ describe('TerminalCommandOrchestrator', () => {
     expect(executionAdapter.write).toHaveBeenCalledWith({
       sessionId: 'terminal-1',
       data: 'git status --short\n',
-      actor: 'agent',
+      actor: 'user',
     })
     expect(recordEvent).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         kind: 'error',
-        actor: 'agent',
+        actor: 'user',
         command: 'git status --short',
         message: 'write failed',
         executionError: undefined,
       }),
     )
+  })
+
+  it('rejects automatic command injection into a running interactive terminal', async () => {
+    const executionAdapter = {
+      start: vi.fn(),
+      write: vi.fn(),
+    }
+    const { registry, requestConfirmation, recordEvent, orchestrator } = createOrchestrator({
+      executionAdapter,
+    })
+    registry.register({ sessionId: 'terminal-1', runtime, now: 100 })
+    registry.transition('terminal-1', 'starting', { now: 110 })
+    registry.transition('terminal-1', 'running', { now: 120 })
+
+    await expect(
+      orchestrator.submitCommand({
+        terminalSessionId: 'terminal-1',
+        command: 'scp artifact server:/tmp/artifact',
+        actor: 'agent',
+        permissionPolicy: askRiskyPolicy,
+      }),
+    ).resolves.toEqual({
+      success: false,
+      status: 'rejected',
+      error:
+        'Terminal 正在运行交互式进程，无法安全注入自动命令；请等待前台命令结束，或在新 Terminal 中执行',
+    })
+
+    expect(requestConfirmation).not.toHaveBeenCalled()
+    expect(recordEvent).not.toHaveBeenCalled()
+    expect(executionAdapter.start).not.toHaveBeenCalled()
+    expect(executionAdapter.write).not.toHaveBeenCalled()
   })
 
   it('rejects missing or busy sessions before permission evaluation', async () => {

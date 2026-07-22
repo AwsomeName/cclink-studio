@@ -109,7 +109,15 @@ export function registerTerminalIpc(
         error: 'Terminal 命令提交参数无效',
       }
     }
-    return terminalCommandOrchestrator.submitCommand(normalized)
+    const result = await terminalCommandOrchestrator.submitCommand(normalized)
+    if (result.success && result.status === 'accepted') {
+      await terminalSessionStore?.appendCommand(
+        normalized.terminalSessionId,
+        normalized.command,
+        normalized.actor,
+      )
+    }
+    return result
   })
 
   handle('terminal:startPty', async (_event, input?: TerminalPtyStartInput) => {
@@ -160,7 +168,6 @@ export function registerTerminalIpc(
         data: normalized.data,
         actor: 'user',
       })
-      await terminalSessionStore?.appendInput(normalized.terminalSessionId, normalized.data, 'user')
       return { success: true }
     } catch (error) {
       return {

@@ -15,6 +15,7 @@ import { useContextMenuStore } from '../../features/context-actions/context-menu
 import { useTerminalStore } from '../../stores/terminal-store'
 import { resolveConversationTab } from '../../utils/conversation-tab'
 import { submitTerminalCommand } from '../../utils/terminal-command'
+import { resolveTerminalAltArrowSequence } from '../../utils/terminal-keyboard'
 import { buildTerminalTabDraft } from '../../utils/terminal-tab'
 import { ErrorBoundary } from '../common/ErrorBoundary'
 import { PanelErrorFallback } from '../common/ErrorFallback'
@@ -237,7 +238,8 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
     : EMPTY_TERMINAL_OUTPUT_LINES
   const initialRecordOutput =
     outputLines.length === 0
-      ? (tab.terminalRecord?.outputBuffer ?? EMPTY_TERMINAL_OUTPUT_LINES)
+      ? (tab.terminalRecord?.outputBuffer?.filter((line) => line.kind !== 'input') ??
+        EMPTY_TERMINAL_OUTPUT_LINES)
       : EMPTY_TERMINAL_OUTPUT_LINES
 
   useEffect(() => {
@@ -245,7 +247,8 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
 
     const xterm = new XtermTerminal({
       cursorBlink: true,
-      convertEol: true,
+      // PTY 已负责换行转换；保留 \r 语义才能正确渲染 scp 等原地刷新的进度行。
+      convertEol: false,
       fontFamily: 'Menlo, Monaco, "SF Mono", "Cascadia Mono", "Roboto Mono", Consolas, monospace',
       fontSize: 13,
       lineHeight: 1.25,
@@ -314,6 +317,20 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
         terminalSessionId: terminal.sessionId!,
         data,
       })
+    })
+
+    xterm.attachCustomKeyEventHandler((event) => {
+      const sequence = resolveTerminalAltArrowSequence(event, xterm.modes.applicationCursorKeysMode)
+      if (!sequence) return true
+      event.preventDefault()
+      event.stopPropagation()
+      if (event.type === 'keydown') {
+        void window.cclinkStudio.terminal.writePty({
+          terminalSessionId: terminal.sessionId!,
+          data: sequence,
+        })
+      }
+      return false
     })
 
     const resizeDisposable = xterm.onResize((size) => {

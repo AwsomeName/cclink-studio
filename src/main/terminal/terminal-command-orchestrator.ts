@@ -62,6 +62,15 @@ export class TerminalCommandOrchestrator {
       }
     }
 
+    if (session.status === 'running' && input.actor !== 'user') {
+      return {
+        success: false,
+        status: 'rejected',
+        error:
+          'Terminal 正在运行交互式进程，无法安全注入自动命令；请等待前台命令结束，或在新 Terminal 中执行',
+      }
+    }
+
     const decision = evaluateTerminalPermission(input.command, input.permissionPolicy)
     if (decision.action === 'deny') {
       await this.recordCommandAudit('command-denied', input, session, decision.risk, {
