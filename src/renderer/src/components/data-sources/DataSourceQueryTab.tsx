@@ -2,6 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import type { DataQuerySnapshot, NormalizedRecord } from '@shared/ipc/data-source'
 import type { AgentMountedResource, Tab } from '../../types'
 import { useAgentStore, useDataSourceStore } from '../../stores'
+import { workspaceRefKey } from '@shared/workspace-ref'
+import { useWorkspaceStore } from '../../stores/workspace-store'
+import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
+import {
+  buildKeyboardContextMenuInput,
+  isContextMenuKeyboardEvent,
+} from '../../features/context-actions/context-menu-trigger'
+import { registerDataSourceContextSurface } from '../../features/context-actions/data-source-context-surface'
 
 const DEFAULT_QUERY = JSON.stringify({ query: { match_all: {} }, size: 20 }, null, 2)
 
@@ -13,6 +21,9 @@ export function DataSourceQueryTab({ tab }: { tab: Tab }): React.ReactElement {
   const saveQuery = useDataSourceStore((s) => s.saveQuery)
   const activeConversationId = useAgentStore((s) => s.activeConversationId)
   const addMountedResource = useAgentStore((s) => s.addMountedResource)
+  const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
+  const showContextMenu = useContextMenuStore((s) => s.show)
+  const workspaceKey = workspaceRefKey(tab.workspaceRef ?? activeWorkspaceRef)
   const sourceId = tab.dataSourceQuery?.sourceId ?? ''
   const source = sources.find((item) => item.id === sourceId)
   const collection = tab.dataSourceQuery?.collection ?? source?.defaultCollection ?? ''
@@ -124,26 +135,41 @@ export function DataSourceQueryTab({ tab }: { tab: Tab }): React.ReactElement {
     setNotice('查询结果已挂载给 Agent')
   }
 
-  const mountSelectedRecord = (): void => {
-    if (!selectedRecord) return
+  const mountRecord = (record: NormalizedRecord): void => {
     const resource: AgentMountedResource = {
-      id: `data-record:${selectedRecord.sourceId}:${selectedRecord.collection}:${selectedRecord.id}`,
+      id: `data-record:${record.sourceId}:${record.collection}:${record.id}`,
       kind: 'data-record',
-      label: selectedRecord.title ?? selectedRecord.id,
-      detail: selectedRecord.sourceUrl ?? selectedRecord.collection,
+      label: record.title ?? record.id,
+      detail: record.sourceUrl ?? record.collection,
       ref: {
         type: 'data-record',
-        sourceId: selectedRecord.sourceId,
-        collection: selectedRecord.collection,
-        recordId: selectedRecord.id,
-        sourceUrl: selectedRecord.sourceUrl,
-        publishedAt: selectedRecord.publishedAt,
-        collectedAt: selectedRecord.collectedAt,
+        sourceId: record.sourceId,
+        collection: record.collection,
+        recordId: record.id,
+        sourceUrl: record.sourceUrl,
+        publishedAt: record.publishedAt,
+        collectedAt: record.collectedAt,
       },
     }
     addMountedResource(resource, activeConversationId)
     setNotice('记录已挂载给 Agent')
   }
+
+  const mountSelectedRecord = (): void => {
+    if (selectedRecord) mountRecord(selectedRecord)
+  }
+
+  useEffect(
+    () =>
+      registerDataSourceContextSurface(tab.id, {
+        getRecord: (recordId) => records.find((record) => record.id === recordId) ?? null,
+        mountRecord: (recordId) => {
+          const record = records.find((item) => item.id === recordId)
+          if (record) mountRecord(record)
+        },
+      }),
+    [activeConversationId, addMountedResource, records, tab.id],
+  )
 
   const downloadText = (filename: string, content: string, type: string): void => {
     const blob = new Blob([content], { type })
@@ -251,7 +277,47 @@ export function DataSourceQueryTab({ tab }: { tab: Tab }): React.ReactElement {
           {records.length > 0 ? (
             <div className="data-source-result-table">
               {records.map((record) => (
-                <button key={record.id} type="button" onClick={() => setSelectedRecord(record)}>
+                <button
+                  key={record.id}
+                  data-context-target="data-record"
+                  type="button"
+                  onClick={() => setSelectedRecord(record)}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    showContextMenu({
+                      target: {
+                        kind: 'data-record',
+                        workspaceKey,
+                        tabId: tab.id,
+                        sourceId: record.sourceId,
+                        collection: record.collection,
+                        recordId: record.id,
+                      },
+                      x: event.clientX,
+                      y: event.clientY,
+                      focusReturn: event.currentTarget,
+                    })
+                  }}
+                  onKeyDown={(event) => {
+                    if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+                    event.preventDefault()
+                    event.stopPropagation()
+                    showContextMenu(
+                      buildKeyboardContextMenuInput(
+                        {
+                          kind: 'data-record',
+                          workspaceKey,
+                          tabId: tab.id,
+                          sourceId: record.sourceId,
+                          collection: record.collection,
+                          recordId: record.id,
+                        },
+                        event.currentTarget,
+                      ),
+                    )
+                  }}
+                >
                   <span>{record.title ?? record.id}</span>
                   <small>
                     {record.sourceUrl ??

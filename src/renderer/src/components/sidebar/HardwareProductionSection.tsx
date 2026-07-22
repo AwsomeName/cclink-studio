@@ -7,6 +7,12 @@ import type {
 import type { WorkspaceRef } from '../../../../shared/workspace-ref'
 import { useAgentStore, useFsStore, useHardwareStore, useTabStore } from '../../stores'
 import { createConversationRunController } from '../../features/agent-conversations/conversation-run-controller'
+import { workspaceRefKey } from '@shared/workspace-ref'
+import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
+import {
+  buildKeyboardContextMenuInput,
+  isContextMenuKeyboardEvent,
+} from '../../features/context-actions/context-menu-trigger'
 import {
   IconChevronDown,
   IconChevronRight,
@@ -128,6 +134,8 @@ export function HardwareProductionSection({
   const prepareFpcShapeContext = useHardwareStore((s) => s.prepareFpcShapeContext)
   const writeProductionReportMarkdown = useHardwareStore((s) => s.writeProductionReportMarkdown)
   const clear = useHardwareStore((s) => s.clear)
+  const showContextMenu = useContextMenuStore((s) => s.show)
+  const workspaceKey = workspaceRefKey(workspaceRef)
   const sameWorkspace = summary?.workspacePath === workspacePath
   const hasHardwareSignals = sameWorkspace && summary.hasHardwareSignals
 
@@ -251,7 +259,33 @@ export function HardwareProductionSection({
   }
 
   return (
-    <div className="sidebar-section hardware-production-section">
+    <div
+      className="sidebar-section hardware-production-section"
+      data-context-target="production"
+      tabIndex={-1}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        if (!workspaceKey) return
+        showContextMenu({
+          target: { kind: 'production', workspaceKey, workspacePath },
+          x: event.clientX,
+          y: event.clientY,
+          focusReturn: event.currentTarget,
+        })
+      }}
+      onKeyDown={(event) => {
+        if (!workspaceKey || !isContextMenuKeyboardEvent(event.nativeEvent)) return
+        event.preventDefault()
+        event.stopPropagation()
+        showContextMenu(
+          buildKeyboardContextMenuInput(
+            { kind: 'production', workspaceKey, workspacePath },
+            event.currentTarget,
+          ),
+        )
+      }}
+    >
       <button
         className={`sidebar-section-header sidebar-section-header-button ${expanded ? 'expanded' : ''}`}
         onClick={() => setExpanded((value) => !value)}

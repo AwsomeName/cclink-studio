@@ -165,6 +165,26 @@ async function main() {
       await window.cclinkStudio.fs.mkdir(workspacePath)
       await window.cclinkStudio.fs.writeFile(markdownPath, '# Workflow Smoke\n\ninitial')
       await window.cclinkStudio.fs.writeFile(`${workspacePath}/todo.txt`, 'todo')
+      await window.cclinkStudio.fs.writeFile(
+        `${workspacePath}/cclink-accounts.json`,
+        JSON.stringify(
+          {
+            version: 1,
+            platforms: [
+              {
+                id: 'smoke-platform',
+                name: 'Smoke Platform',
+                url: 'https://example.com',
+                account: 'smoke',
+                notes: 'Workflow smoke only',
+                browserProfile: 'smoke-profile',
+              },
+            ],
+          },
+          null,
+          2,
+        ),
+      )
       const recentWorkspacePaths = [
         workspacePath,
         ...settings.recentWorkspacePaths.filter((path) => path !== workspacePath),
@@ -351,6 +371,44 @@ async function main() {
       await page.locator('[data-context-action="terminal.clear"]').waitFor({ timeout: 10_000 })
       await page.keyboard.press('Escape')
       return 'editor/message/terminal mouse+keyboard'
+    },
+  )
+
+  await runCheck(
+    'domain context actions bind Operations, Production, and Settings targets',
+    async () => {
+      const verifyMouseAndKeyboardMenu = async (target, mouseActionId, keyboardActionId) => {
+        await target.click({ button: 'right' })
+        await page.locator(`[data-context-action="${mouseActionId}"]`).waitFor({ timeout: 10_000 })
+        await page.keyboard.press('Escape')
+        await target.focus()
+        await page.keyboard.press('Shift+F10')
+        await page
+          .locator(`[data-context-action="${keyboardActionId}"]`)
+          .waitFor({ timeout: 10_000 })
+        await page.keyboard.press('Escape')
+      }
+
+      await ensureSidebarVisible(page)
+      await clickByTitle(page, '运营')
+      const operationsPlatform = page.locator('[data-context-target="operations-platform"]').first()
+      await operationsPlatform.waitFor({ timeout: 15_000 })
+      await verifyMouseAndKeyboardMenu(
+        operationsPlatform,
+        'operations.prepare-session',
+        'operations.open-config',
+      )
+
+      await clickByTitle(page, '生产')
+      const production = page.locator('[data-context-target="production"]').first()
+      await production.waitFor({ timeout: 15_000 })
+      await verifyMouseAndKeyboardMenu(production, 'production.scan', 'production.copy-status')
+
+      await clickByTitle(page, '设置')
+      const setting = page.locator('[data-context-target="setting"]').first()
+      await setting.waitFor({ timeout: 15_000 })
+      await verifyMouseAndKeyboardMenu(setting, 'settings.copy-key', 'settings.reset-current')
+      return 'operations/production/settings mouse+keyboard'
     },
   )
 

@@ -72,6 +72,60 @@ export type ContextTarget =
       status: string
     }
   | {
+      kind: 'data-source'
+      workspaceKey: string | null
+      sourceId: string
+      sourceName: string
+    }
+  | {
+      kind: 'data-collection'
+      workspaceKey: string | null
+      sourceId: string
+      collection: string
+    }
+  | {
+      kind: 'saved-query'
+      workspaceKey: string | null
+      sourceId: string
+      queryId: string
+      queryName: string
+      collection: string
+    }
+  | {
+      kind: 'data-record'
+      workspaceKey: string | null
+      tabId: string
+      sourceId: string
+      collection: string
+      recordId: string
+    }
+  | {
+      kind: 'operations-platform'
+      workspaceKey: string
+      workspacePath: string
+      platformId: string
+      platformName: string
+    }
+  | {
+      kind: 'production'
+      workspaceKey: string
+      workspacePath: string
+    }
+  | {
+      kind: 'android'
+      workspaceKey: string | null
+      tabId: string
+      available: boolean
+      connected: boolean
+      unavailableReason?: string
+    }
+  | {
+      kind: 'setting'
+      settingKey: string
+      label: string
+      modified: boolean
+    }
+  | {
       kind: 'conversation-selection'
       text: string
     }

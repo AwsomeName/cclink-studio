@@ -1,5 +1,14 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
 import { useAndroidStore } from '../../stores/android-store'
+import { useTabStore } from '../../stores/tab-store'
+import { useWorkspaceStore } from '../../stores/workspace-store'
+import { workspaceRefKey } from '@shared/workspace-ref'
+import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
+import {
+  buildKeyboardContextMenuInput,
+  isContextMenuKeyboardEvent,
+} from '../../features/context-actions/context-menu-trigger'
+import { registerAndroidContextSurface } from '../../features/context-actions/android-context-surface'
 
 /**
  * Android 真机画面显示。
@@ -18,7 +27,11 @@ export function AndroidDisplay(): React.JSX.Element {
   const storeInstall = useAndroidStore((s) => s.storeInstall)
   const setStoreInstall = useAndroidStore((s) => s.setStoreInstall)
   const deviceMode = useAndroidStore((s) => s.deviceMode)
+  const mirrorConnected = useAndroidStore((s) => s.mirrorConnected)
   const setMirrorConnected = useAndroidStore((s) => s.setMirrorConnected)
+  const activeTabId = useTabStore((s) => s.activeTabId)
+  const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
+  const showContextMenu = useContextMenuStore((s) => s.show)
 
   /** 连接到 scrcpy 投屏（主进程只允许当前已连接真机重连） */
   const connectMirror = useCallback(async () => {
@@ -246,9 +259,55 @@ export function AndroidDisplay(): React.JSX.Element {
     }
   }, [setStoreInstall])
 
+  useEffect(() => {
+    if (!activeTabId) return
+    const tab = useTabStore.getState().tabs.find((item) => item.id === activeTabId)
+    if (tab?.type !== 'android') return
+    return registerAndroidContextSurface(activeTabId, {
+      connect: connectMirror,
+      disconnect: disconnectMirror,
+    })
+  }, [activeTabId, connectMirror, disconnectMirror])
+
+  const androidTarget = activeTabId
+    ? {
+        kind: 'android' as const,
+        workspaceKey: workspaceRefKey(activeWorkspaceRef),
+        tabId: activeTabId,
+        available: deviceMode === 'physical',
+        connected: mirrorConnected,
+        unavailableReason:
+          deviceMode === 'physical' ? undefined : '未连接用户真机；请确认本机 adb 可用且设备已授权',
+      }
+    : null
+
+  const openAndroidContextMenu = (event: React.MouseEvent<HTMLDivElement>): void => {
+    if (!androidTarget) return
+    event.preventDefault()
+    event.stopPropagation()
+    showContextMenu({
+      target: androidTarget,
+      x: event.clientX,
+      y: event.clientY,
+      focusReturn: event.currentTarget,
+    })
+  }
+
+  const openAndroidKeyboardMenu = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (!androidTarget || !isContextMenuKeyboardEvent(event.nativeEvent)) return
+    event.preventDefault()
+    event.stopPropagation()
+    showContextMenu(buildKeyboardContextMenuInput(androidTarget, event.currentTarget))
+  }
+
   if (deviceMode !== 'physical') {
     return (
-      <CenterMessage>
+      <CenterMessage
+        data-context-target="android"
+        tabIndex={-1}
+        onContextMenu={openAndroidContextMenu}
+        onKeyDown={openAndroidKeyboardMenu}
+      >
         <div style={{ marginBottom: '12px' }}>未连接 Android 真机</div>
         <div style={{ fontSize: '12px', color: '#888', maxWidth: '420px', lineHeight: 1.6 }}>
           请在设置页扫描并连接自己的 USB 或 Wi-Fi ADB 真机。
@@ -259,6 +318,10 @@ export function AndroidDisplay(): React.JSX.Element {
 
   return (
     <div
+      data-context-target="android"
+      tabIndex={-1}
+      onContextMenu={openAndroidContextMenu}
+      onKeyDown={openAndroidKeyboardMenu}
       style={{
         width: '100%',
         height: '100%',
@@ -454,9 +517,13 @@ function CenterOverlay({ children }: { children: React.ReactNode }): React.JSX.E
   )
 }
 
-function CenterMessage({ children }: { children: React.ReactNode }): React.JSX.Element {
+function CenterMessage({
+  children,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>): React.JSX.Element {
   return (
     <div
+      {...props}
       style={{
         width: '100%',
         height: '100%',

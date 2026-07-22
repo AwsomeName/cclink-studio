@@ -28,6 +28,26 @@ import {
   createMessageContextCommands,
   messageMenuContributions,
 } from './domains/message-context-actions'
+import {
+  createDataSourceContextCommands,
+  dataSourceMenuContributions,
+} from './domains/data-source-context-actions'
+import {
+  createOperationsContextCommands,
+  operationsMenuContributions,
+} from './domains/operations-context-actions'
+import {
+  createProductionContextCommands,
+  productionMenuContributions,
+} from './domains/production-context-actions'
+import {
+  androidMenuContributions,
+  createAndroidContextCommands,
+} from './domains/android-context-actions'
+import {
+  createSettingsContextCommands,
+  settingsMenuContributions,
+} from './domains/settings-context-actions'
 
 const commands = [
   ...createTabContextCommands(),
@@ -39,6 +59,11 @@ const commands = [
   ...createEditorContextCommands(),
   ...createTerminalContextCommands(),
   ...createMessageContextCommands(),
+  ...createDataSourceContextCommands(),
+  ...createOperationsContextCommands(),
+  ...createProductionContextCommands(),
+  ...createAndroidContextCommands(),
+  ...createSettingsContextCommands(),
 ]
 const contributions = [
   ...tabMenuContributions,
@@ -50,6 +75,11 @@ const contributions = [
   ...editorMenuContributions,
   ...terminalMenuContributions,
   ...messageMenuContributions,
+  ...dataSourceMenuContributions,
+  ...operationsMenuContributions,
+  ...productionMenuContributions,
+  ...androidMenuContributions,
+  ...settingsMenuContributions,
 ]
 
 export function useRegisterContextActions(): void {

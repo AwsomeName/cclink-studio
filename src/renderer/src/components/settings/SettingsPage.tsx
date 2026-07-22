@@ -25,6 +25,11 @@ import {
 } from '../common/Icons'
 import { Toggle } from '../common/Toggle'
 import { AgentCapabilitiesSettings } from './AgentCapabilitiesSettings'
+import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
+import {
+  buildKeyboardContextMenuInput,
+  isContextMenuKeyboardEvent,
+} from '../../features/context-actions/context-menu-trigger'
 
 type SettingsSectionId =
   | 'appearance'
@@ -161,8 +166,35 @@ function SettingsRow({
   children: React.ReactNode
 }): React.ReactElement {
   const modified = isModified(settingKey, settings)
+  const showContextMenu = useContextMenuStore((state) => state.show)
+  const target = {
+    kind: 'setting' as const,
+    settingKey,
+    label: settingKey,
+    modified,
+  }
   return (
-    <div className={`settings-row ${modified ? 'modified' : ''}`}>
+    <div
+      className={`settings-row ${modified ? 'modified' : ''}`}
+      data-context-target="setting"
+      tabIndex={-1}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        showContextMenu({
+          target,
+          x: event.clientX,
+          y: event.clientY,
+          focusReturn: event.currentTarget,
+        })
+      }}
+      onKeyDown={(event) => {
+        if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+        event.preventDefault()
+        event.stopPropagation()
+        showContextMenu(buildKeyboardContextMenuInput(target, event.currentTarget))
+      }}
+    >
       {modified && <span className="settings-modified-dot" />}
       {children}
       {modified && (

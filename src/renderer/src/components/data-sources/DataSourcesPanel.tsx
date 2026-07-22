@@ -2,6 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useDataSourceStore, useTabStore } from '../../stores'
 import type { CreateDataSourceInput } from '@shared/ipc/data-source'
 import { IconDatabase, IconRefresh } from '../common/Icons'
+import { workspaceRefKey } from '@shared/workspace-ref'
+import { useWorkspaceStore } from '../../stores/workspace-store'
+import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
+import {
+  buildKeyboardContextMenuInput,
+  isContextMenuKeyboardEvent,
+} from '../../features/context-actions/context-menu-trigger'
 
 export function DataSourcesPanel(): React.ReactElement {
   const sources = useDataSourceStore((s) => s.sources)
@@ -16,6 +23,9 @@ export function DataSourcesPanel(): React.ReactElement {
   const testConnection = useDataSourceStore((s) => s.testConnection)
   const clearError = useDataSourceStore((s) => s.clearError)
   const openTab = useTabStore((s) => s.openTab)
+  const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
+  const showContextMenu = useContextMenuStore((s) => s.show)
+  const workspaceKey = workspaceRefKey(activeWorkspaceRef)
   const [name, setName] = useState('')
   const [endpoint, setEndpoint] = useState('')
   const [apiKey, setApiKey] = useState('')
@@ -98,8 +108,40 @@ export function DataSourcesPanel(): React.ReactElement {
           sources.map((source) => (
             <button
               key={source.id}
+              data-context-target="data-source"
               className={`project-panel-row ${selectedSourceId === source.id ? 'active' : ''}`}
               onClick={() => void selectSource(source.id)}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                showContextMenu({
+                  target: {
+                    kind: 'data-source',
+                    workspaceKey,
+                    sourceId: source.id,
+                    sourceName: source.name,
+                  },
+                  x: event.clientX,
+                  y: event.clientY,
+                  focusReturn: event.currentTarget,
+                })
+              }}
+              onKeyDown={(event) => {
+                if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+                event.preventDefault()
+                event.stopPropagation()
+                showContextMenu(
+                  buildKeyboardContextMenuInput(
+                    {
+                      kind: 'data-source',
+                      workspaceKey,
+                      sourceId: source.id,
+                      sourceName: source.name,
+                    },
+                    event.currentTarget,
+                  ),
+                )
+              }}
               title={source.endpoint}
             >
               <IconDatabase size={14} />
@@ -133,8 +175,40 @@ export function DataSourcesPanel(): React.ReactElement {
             selectedCollections.map((collection) => (
               <button
                 key={collection.name}
+                data-context-target="data-collection"
                 className="project-panel-row project-panel-row-compact"
                 onClick={() => openQueryTab(selectedSourceId, collection.name)}
+                onContextMenu={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  showContextMenu({
+                    target: {
+                      kind: 'data-collection',
+                      workspaceKey,
+                      sourceId: selectedSourceId,
+                      collection: collection.name,
+                    },
+                    x: event.clientX,
+                    y: event.clientY,
+                    focusReturn: event.currentTarget,
+                  })
+                }}
+                onKeyDown={(event) => {
+                  if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+                  event.preventDefault()
+                  event.stopPropagation()
+                  showContextMenu(
+                    buildKeyboardContextMenuInput(
+                      {
+                        kind: 'data-collection',
+                        workspaceKey,
+                        sourceId: selectedSourceId,
+                        collection: collection.name,
+                      },
+                      event.currentTarget,
+                    ),
+                  )
+                }}
                 title="打开查询 Tab"
               >
                 <span className="project-panel-row-main">
@@ -158,8 +232,44 @@ export function DataSourcesPanel(): React.ReactElement {
             selectedSavedQueries.map((query) => (
               <button
                 key={query.id}
+                data-context-target="saved-query"
                 className="project-panel-row project-panel-row-compact"
                 onClick={() => openSavedQuery(query.id, query.sourceId, query.collection)}
+                onContextMenu={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  showContextMenu({
+                    target: {
+                      kind: 'saved-query',
+                      workspaceKey,
+                      sourceId: query.sourceId,
+                      queryId: query.id,
+                      queryName: query.name,
+                      collection: query.collection,
+                    },
+                    x: event.clientX,
+                    y: event.clientY,
+                    focusReturn: event.currentTarget,
+                  })
+                }}
+                onKeyDown={(event) => {
+                  if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+                  event.preventDefault()
+                  event.stopPropagation()
+                  showContextMenu(
+                    buildKeyboardContextMenuInput(
+                      {
+                        kind: 'saved-query',
+                        workspaceKey,
+                        sourceId: query.sourceId,
+                        queryId: query.id,
+                        queryName: query.name,
+                        collection: query.collection,
+                      },
+                      event.currentTarget,
+                    ),
+                  )
+                }}
                 title="打开 Saved Query"
               >
                 <span className="project-panel-row-main">
