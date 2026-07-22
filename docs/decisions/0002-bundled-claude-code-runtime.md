@@ -453,6 +453,7 @@ claudeRuntimeCustomPath: string
 #### 方案
 
 - RuntimeProbe 与 provider readiness 分开报告。
+- provider readiness 通过设置页显式触发的无工具、单轮隔离请求验证；测试只读取主进程加密凭证，不复用正式会话。
 - 设置页显示版本、架构、来源、最后探测时间和修复动作。
 - Agent 诊断加入 runtime manifest、fingerprint 摘要、generation、provider 类型、认证是否配置和最近失败码。
 - 继续使用 safeStorage；诊断只输出布尔认证状态。

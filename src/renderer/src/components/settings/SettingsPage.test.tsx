@@ -26,5 +26,6 @@ describe('SettingsPage secrets', () => {
     expect(markup).not.toContain('renderer-must-not-render-this')
     expect(markup).toContain('type="password"')
     expect(markup).toContain('value=""')
+    expect(markup).toContain('测试连接')
   })
 })

@@ -4,6 +4,7 @@ import {
   type SettingsOperationResult,
   type SettingsSecretOperationResult,
   type ClaudeRuntimeProbeOperationResult,
+  type ClaudeModelConnectionTestOperationResult,
 } from './settings'
 import {
   parseSettingsKey,
@@ -25,6 +26,11 @@ const invalidRuntimeProbeResult = async (): Promise<ClaudeRuntimeProbeOperationR
   success: false,
   error: 'Claude Code 运行时参数无效',
 })
+const invalidConnectionTestResult =
+  async (): Promise<ClaudeModelConnectionTestOperationResult> => ({
+    success: false,
+    error: 'Claude 模型连接测试参数无效',
+  })
 
 function requireArgs(args: unknown[], count: number, channel: string): void {
   if (args.length !== count) throw new Error(`IPC ${channel} 需要 ${count} 个参数`)
@@ -75,5 +81,13 @@ export const settingsIpcContracts = {
       return ipcArgs(parseClaudeRuntimeSelection(args[0]))
     },
     invalidRuntimeProbeResult,
+  ),
+  testClaudeModelConnection: bindIpcParser(
+    settingsIpc.testClaudeModelConnection,
+    (args) => {
+      requireArgs(args, 1, settingsIpc.testClaudeModelConnection.channel)
+      return ipcArgs(parseClaudeRuntimeSelection(args[0]))
+    },
+    invalidConnectionTestResult,
   ),
 } as const

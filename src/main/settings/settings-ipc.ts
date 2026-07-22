@@ -25,6 +25,11 @@ import type { McpToolHost } from '../mcp/tool-host'
 import type { TrustedRendererGuard } from '../ipc/trusted-renderer-guard'
 import { registerTrustedIpcContract } from '../ipc/trusted-renderer-guard'
 import { settingsIpcContracts as settingsIpc } from '../../shared/ipc/settings-contract'
+import type { ClaudeModelConnectionTestOperationResult } from '../../shared/ipc/settings'
+import {
+  testClaudeModelConnection,
+  type ClaudeModelConnectionTestInput,
+} from '../agent/claude-model-connection-test'
 
 /** 合法的 permissionMode 值 */
 const VALID_PERMISSION_MODES = new Set<string>(['auto', 'categorized', 'strict'])
@@ -48,7 +53,12 @@ export function registerSettingsIpc(
   getToolHost: () => McpToolHost | null = () => null,
   getClaudeRuntimeManager: () => ClaudeRuntimeManager | null = () => null,
   recoverAgentRuntime: () => Promise<void> = async () => undefined,
+  runClaudeModelConnectionTest: (
+    input: ClaudeModelConnectionTestInput,
+  ) => ReturnType<typeof testClaudeModelConnection> = testClaudeModelConnection,
 ): void {
+  let modelConnectionTestPending = false
+
   /** 获取所有设置 */
   registerTrustedIpcContract(settingsIpc.getAll, trustedRendererGuard, () => {
     return settingsService.getAll()
@@ -327,6 +337,87 @@ export function registerSettingsIpc(
         return { success: true, result: await runtimeManager.probe(selection) }
       } catch (err) {
         return { success: false, error: settingsIpcError(err) }
+      }
+    },
+  )
+
+  registerTrustedIpcContract(
+    settingsIpc.testClaudeModelConnection,
+    trustedRendererGuard,
+    async (_event, selection): Promise<ClaudeModelConnectionTestOperationResult> => {
+      if (modelConnectionTestPending) {
+        return { success: false, error: '模型连接测试正在进行，请等待当前测试完成' }
+      }
+      modelConnectionTestPending = true
+      try {
+        const runtimeManager = getClaudeRuntimeManager()
+        if (!runtimeManager) {
+          return { success: false, error: 'Claude Code 运行时管理器未初始化' }
+        }
+
+        const settings = settingsService.getRuntimeSettings()
+        if (!settings.apiKey.trim()) {
+          return {
+            success: true,
+            result: {
+              success: false,
+              code: 'AUTH_REQUIRED' as const,
+              message: '请先保存 API Key，再测试连接。',
+              durationMs: 0,
+            },
+          }
+        }
+        if (settings.apiFormat !== 'anthropic') {
+          return {
+            success: true,
+            result: {
+              success: false,
+              code: 'API_FORMAT_UNSUPPORTED' as const,
+              message:
+                '内置 Claude Code 当前只支持 Anthropic 兼容 API，不能直接测试 OpenAI Compatible 接口。',
+              durationMs: 0,
+            },
+          }
+        }
+        if (!settings.modelName.trim()) {
+          return {
+            success: true,
+            result: {
+              success: false,
+              code: 'MODEL_REQUIRED' as const,
+              message: '请先填写要测试的模型名称。',
+              durationMs: 0,
+            },
+          }
+        }
+
+        const runtimeProbe = await runtimeManager.probe(selection)
+        if (!runtimeProbe.success) {
+          return {
+            success: true,
+            result: {
+              success: false,
+              code: 'RUNTIME_UNAVAILABLE' as const,
+              message: `${runtimeProbe.failure.code}: ${runtimeProbe.failure.message}`,
+              durationMs: 0,
+            },
+          }
+        }
+
+        return {
+          success: true,
+          result: await runClaudeModelConnectionTest({
+            runtime: runtimeProbe.runtime,
+            apiFormat: settings.apiFormat,
+            apiBaseUrl: settings.apiBaseUrl,
+            apiKey: settings.apiKey,
+            modelName: settings.modelName,
+          }),
+        }
+      } catch (err) {
+        return { success: false, error: settingsIpcError(err) }
+      } finally {
+        modelConnectionTestPending = false
       }
     },
   )

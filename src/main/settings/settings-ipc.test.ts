@@ -213,6 +213,152 @@ describe('registerSettingsIpc', () => {
     ).resolves.toMatchObject({ success: true })
     expect(recoverAgentRuntime).toHaveBeenCalledOnce()
   })
+
+  it('tests the selected runtime with the encrypted API settings without exposing the key', async () => {
+    const settingsService = createSettingsService()
+    settingsService.getRuntimeSettings.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      apiFormat: 'anthropic',
+      apiBaseUrl: 'https://example.com/anthropic',
+      apiKey: 'encrypted-key',
+      modelName: 'claude-test',
+    })
+    const resolvedRuntime = {
+      source: 'bundled',
+      executablePath: '/bundle/claude',
+      claudeCodeVersion: '2.1.211',
+      sdkVersion: '0.3.211',
+      fingerprint: 'a'.repeat(64),
+      integrity: 'manifest-sha256',
+      probedAt: 1,
+    }
+    const runtimeManager = {
+      probe: vi.fn(async () => ({ success: true, runtime: resolvedRuntime })),
+    }
+    const runConnectionTest = vi.fn(async () => ({
+      success: true as const,
+      message: '连接成功',
+      model: 'claude-test',
+      durationMs: 120,
+    }))
+    registerSettingsIpc(
+      settingsService as never,
+      createGuard('trusted') as never,
+      createPermissionManager() as never,
+      () => null,
+      () => null,
+      () => runtimeManager as never,
+      async () => undefined,
+      runConnectionTest,
+    )
+
+    const handler = mockIpcMain.handlers.get('settings:testClaudeModelConnection')
+    await expect(handler?.({ sender: 'trusted' }, { source: 'bundled' })).resolves.toEqual({
+      success: true,
+      result: {
+        success: true,
+        message: '连接成功',
+        model: 'claude-test',
+        durationMs: 120,
+      },
+    })
+    expect(runtimeManager.probe).toHaveBeenCalledWith({ source: 'bundled' })
+    expect(runConnectionTest).toHaveBeenCalledWith({
+      runtime: resolvedRuntime,
+      apiFormat: 'anthropic',
+      apiBaseUrl: 'https://example.com/anthropic',
+      apiKey: 'encrypted-key',
+      modelName: 'claude-test',
+    })
+  })
+
+  it('rejects a model connection test before runtime launch when no API key is saved', async () => {
+    const settingsService = createSettingsService()
+    const runtimeManager = { probe: vi.fn() }
+    const runConnectionTest = vi.fn()
+    registerSettingsIpc(
+      settingsService as never,
+      createGuard('trusted') as never,
+      createPermissionManager() as never,
+      () => null,
+      () => null,
+      () => runtimeManager as never,
+      async () => undefined,
+      runConnectionTest,
+    )
+
+    const handler = mockIpcMain.handlers.get('settings:testClaudeModelConnection')
+    await expect(handler?.({ sender: 'trusted' }, { source: 'system' })).resolves.toEqual({
+      success: true,
+      result: {
+        success: false,
+        code: 'AUTH_REQUIRED',
+        message: '请先保存 API Key，再测试连接。',
+        durationMs: 0,
+      },
+    })
+    expect(runtimeManager.probe).not.toHaveBeenCalled()
+    expect(runConnectionTest).not.toHaveBeenCalled()
+  })
+
+  it('allows only one model connection test at a time', async () => {
+    const settingsService = createSettingsService()
+    settingsService.getRuntimeSettings.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      apiKey: 'encrypted-key',
+      modelName: 'claude-test',
+    })
+    const resolvedRuntime = {
+      source: 'system',
+      executablePath: '/usr/local/bin/claude',
+      claudeCodeVersion: '2.1.211',
+      sdkVersion: '0.3.211',
+      fingerprint: 'a'.repeat(64),
+      integrity: 'version-probe',
+      probedAt: 1,
+    }
+    const runtimeManager = {
+      probe: vi.fn(async () => ({ success: true, runtime: resolvedRuntime })),
+    }
+    let finishTest: (() => void) | undefined
+    const runConnectionTest = vi.fn(
+      () =>
+        new Promise<{
+          success: true
+          message: string
+          model: string
+          durationMs: number
+        }>((resolve) => {
+          finishTest = () =>
+            resolve({
+              success: true,
+              message: '连接成功',
+              model: 'claude-test',
+              durationMs: 120,
+            })
+        }),
+    )
+    registerSettingsIpc(
+      settingsService as never,
+      createGuard('trusted') as never,
+      createPermissionManager() as never,
+      () => null,
+      () => null,
+      () => runtimeManager as never,
+      async () => undefined,
+      runConnectionTest,
+    )
+
+    const handler = mockIpcMain.handlers.get('settings:testClaudeModelConnection')
+    const firstTest = handler?.({ sender: 'trusted' }, { source: 'system' })
+    await vi.waitFor(() => expect(runConnectionTest).toHaveBeenCalledOnce())
+    await expect(handler?.({ sender: 'trusted' }, { source: 'system' })).resolves.toEqual({
+      success: false,
+      error: '模型连接测试正在进行，请等待当前测试完成',
+    })
+    finishTest?.()
+    await expect(firstTest).resolves.toMatchObject({ success: true })
+  })
 })
 
 function createSettingsService() {

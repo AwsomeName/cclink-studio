@@ -62,6 +62,41 @@ export interface ClaudeRuntimeProbeOperationResult {
   result?: ClaudeRuntimeProbeResult
 }
 
+export type ClaudeModelConnectionErrorCode =
+  | 'AUTH_REQUIRED'
+  | 'API_FORMAT_UNSUPPORTED'
+  | 'MODEL_REQUIRED'
+  | 'RUNTIME_UNAVAILABLE'
+  | 'AUTHENTICATION_FAILED'
+  | 'MODEL_NOT_FOUND'
+  | 'RATE_LIMITED'
+  | 'PROVIDER_UNAVAILABLE'
+  | 'PROXY_GATEWAY_ERROR'
+  | 'NETWORK_UNAVAILABLE'
+  | 'REQUEST_TIMEOUT'
+  | 'REQUEST_FAILED'
+
+export type ClaudeModelConnectionTestResult =
+  | {
+      success: true
+      message: string
+      model: string
+      durationMs: number
+      totalCostUsd?: number
+    }
+  | {
+      success: false
+      code: ClaudeModelConnectionErrorCode
+      message: string
+      durationMs: number
+    }
+
+export interface ClaudeModelConnectionTestOperationResult {
+  success: boolean
+  error?: string
+  result?: ClaudeModelConnectionTestResult
+}
+
 export interface ClaudeCodeDetectionResult {
   success: boolean
   error?: string
@@ -79,6 +114,9 @@ export interface SettingsApiContract {
   detectClaudeCode(): Promise<ClaudeCodeDetectionResult>
   getClaudeRuntimeStatus(): Promise<ClaudeRuntimeStatusResult>
   probeClaudeRuntime(selection: ClaudeRuntimeSelection): Promise<ClaudeRuntimeProbeOperationResult>
+  testClaudeModelConnection(
+    selection: ClaudeRuntimeSelection,
+  ): Promise<ClaudeModelConnectionTestOperationResult>
 }
 
 export const settingsIpc = {
@@ -100,4 +138,8 @@ export const settingsIpc = {
   probeClaudeRuntime: defineIpcCall<[ClaudeRuntimeSelection], ClaudeRuntimeProbeOperationResult>(
     'settings:probeClaudeRuntime',
   ),
+  testClaudeModelConnection: defineIpcCall<
+    [ClaudeRuntimeSelection],
+    ClaudeModelConnectionTestOperationResult
+  >('settings:testClaudeModelConnection'),
 } as const

@@ -7807,6 +7807,37 @@ button.file-tree-item {
   flex: 0 1 155px;
 }
 
+.settings-connection-test-row {
+  align-items: flex-start;
+}
+
+.settings-connection-test-control {
+  display: flex;
+  width: min(420px, 65%);
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.settings-connection-result {
+  max-width: 100%;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: right;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.settings-connection-result.success {
+  color: var(--success, #3fb950);
+}
+
+.settings-connection-result.error {
+  color: var(--error, #f47174);
+}
+
 /* ─── 设置页：错误提示 ─── */
 
 .settings-error {

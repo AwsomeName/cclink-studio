@@ -198,6 +198,11 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   const [claudeRuntimePath, setClaudeRuntimePath] = useState('')
   const [claudeRuntimeBusy, setClaudeRuntimeBusy] = useState(false)
   const [claudeRuntimeMessage, setClaudeRuntimeMessage] = useState<string | null>(null)
+  const [claudeConnectionBusy, setClaudeConnectionBusy] = useState(false)
+  const [claudeConnectionResult, setClaudeConnectionResult] = useState<{
+    success: boolean
+    message: string
+  } | null>(null)
   const [cadStatus, setCadStatus] = useState<CadBackendStatus | null>(null)
   const [cadCacheStatus, setCadCacheStatus] = useState<CadCacheStatus | null>(null)
   const [cadChecking, setCadChecking] = useState(false)
@@ -292,10 +297,12 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   }
 
   const resetOne = (key: AppSettingKey): void => {
+    setClaudeConnectionResult(null)
     void resetSetting(key)
   }
 
   const handleProviderChange = (provider: Provider): void => {
+    setClaudeConnectionResult(null)
     const preset = PROVIDER_PRESETS[provider]
     const apiBaseUrl = getPresetBaseUrl(provider, settings.apiFormat)
     update({
@@ -306,6 +313,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   }
 
   const handleApiFormatChange = (apiFormat: ApiFormat): void => {
+    setClaudeConnectionResult(null)
     const apiBaseUrl = getPresetBaseUrl(settings.provider, apiFormat)
     update({
       apiFormat,
@@ -340,6 +348,46 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       setClaudeRuntimeMessage(nextError instanceof Error ? nextError.message : String(nextError))
     } finally {
       setClaudeRuntimeBusy(false)
+    }
+  }
+
+  const testClaudeConnection = async (): Promise<void> => {
+    setClaudeConnectionBusy(true)
+    setClaudeConnectionResult(null)
+    try {
+      const response =
+        await window.cclinkStudio.settings.testClaudeModelConnection(runtimeSelectionDraft())
+      if (!response.success || !response.result) {
+        setClaudeConnectionResult({
+          success: false,
+          message: response.error ?? '模型连接测试失败',
+        })
+        return
+      }
+
+      if (!response.result.success) {
+        setClaudeConnectionResult({
+          success: false,
+          message: `${response.result.code}: ${response.result.message}`,
+        })
+        return
+      }
+
+      const cost =
+        typeof response.result.totalCostUsd === 'number'
+          ? ` · $${response.result.totalCostUsd.toFixed(4)}`
+          : ''
+      setClaudeConnectionResult({
+        success: true,
+        message: `${response.result.message} · ${response.result.model} · ${response.result.durationMs}ms${cost}`,
+      })
+    } catch (nextError: unknown) {
+      setClaudeConnectionResult({
+        success: false,
+        message: nextError instanceof Error ? nextError.message : String(nextError),
+      })
+    } finally {
+      setClaudeConnectionBusy(false)
     }
   }
 
@@ -466,6 +514,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       setShowApiKey(false)
       setSecretStatus(result.status)
       setSecretMessage('API Key 已保存到系统加密存储')
+      setClaudeConnectionResult(null)
     } catch (nextError: unknown) {
       setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
     } finally {
@@ -485,6 +534,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       setApiKeyInput('')
       setSecretStatus(result.status)
       setSecretMessage('API Key 已清除')
+      setClaudeConnectionResult(null)
     } catch (nextError: unknown) {
       setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
     } finally {
@@ -495,6 +545,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   const resetAll = async (): Promise<void> => {
     await resetSettings()
     setApiKeyInput('')
+    setClaudeConnectionResult(null)
     await refreshSecretStatus()
   }
 
@@ -672,7 +723,10 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                   <input
                     className="settings-input"
                     value={settings.apiBaseUrl}
-                    onChange={(event) => update({ apiBaseUrl: event.target.value })}
+                    onChange={(event) => {
+                      setClaudeConnectionResult(null)
+                      update({ apiBaseUrl: event.target.value })
+                    }}
                   />
                 </div>
               </SettingsRow>
@@ -746,10 +800,41 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                   <input
                     className="settings-input"
                     value={settings.modelName}
-                    onChange={(event) => update({ modelName: event.target.value })}
+                    onChange={(event) => {
+                      setClaudeConnectionResult(null)
+                      update({ modelName: event.target.value })
+                    }}
                   />
                 </div>
               </SettingsRow>
+
+              <div className="settings-row settings-connection-test-row">
+                <div className="settings-label">
+                  <span>连接测试</span>
+                  <span className="settings-description">
+                    使用当前运行时、已保存的 Key 和模型发送一次无工具最小请求，可能产生少量费用。
+                  </span>
+                </div>
+                <div className="settings-connection-test-control">
+                  <button
+                    className="settings-secondary-btn"
+                    type="button"
+                    disabled={claudeConnectionBusy || claudeRuntimeBusy}
+                    onClick={() => void testClaudeConnection()}
+                  >
+                    {claudeConnectionBusy ? '测试中...' : '测试连接'}
+                  </button>
+                  {claudeConnectionResult && (
+                    <span
+                      className={`settings-connection-result ${
+                        claudeConnectionResult.success ? 'success' : 'error'
+                      }`}
+                    >
+                      {claudeConnectionResult.message}
+                    </span>
+                  )}
+                </div>
+              </div>
 
               <SettingsRow settingKey="claudeRuntimeSource" settings={settings} onReset={resetOne}>
                 <div className="settings-label">
@@ -762,9 +847,10 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                   <select
                     className="settings-select"
                     value={claudeRuntimeSource}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      setClaudeConnectionResult(null)
                       setClaudeRuntimeSource(event.target.value as ClaudeRuntimeSource)
-                    }
+                    }}
                   >
                     <option value="bundled">内置固定版本</option>
                     <option value="system">系统安装</option>
@@ -799,7 +885,10 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                     <input
                       className="settings-input"
                       value={claudeRuntimePath}
-                      onChange={(event) => setClaudeRuntimePath(event.target.value)}
+                      onChange={(event) => {
+                        setClaudeConnectionResult(null)
+                        setClaudeRuntimePath(event.target.value)
+                      }}
                     />
                   </div>
                 </SettingsRow>
