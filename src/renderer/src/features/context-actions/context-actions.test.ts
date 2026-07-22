@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCommandStore } from '../../stores/command-store'
 import { useContextMenuStore } from './context-menu-store'
+import { useContextActionDiagnosticsStore } from './context-action-diagnostics'
 import { resolveMenuContributions, type MenuContribution } from './menu-contribution-registry'
 import { findBoundaryEnabledIndex, findNextEnabledIndex, fitMenuPosition } from './menu-position'
 
@@ -23,6 +24,7 @@ beforeEach(() => {
     editingContributionId: null,
     inputValue: '',
   })
+  useContextActionDiagnosticsStore.getState().clear()
 })
 
 describe('context command execution', () => {
@@ -80,6 +82,14 @@ describe('context command execution', () => {
       message: '操作目标所属项目已切换',
     })
     expect(action).not.toHaveBeenCalled()
+    expect(useContextActionDiagnosticsStore.getState().events).toMatchObject([
+      {
+        kind: 'stale-target',
+        commandId: 'test.stale',
+        targetKind: 'tab',
+        message: '操作目标所属项目已切换',
+      },
+    ])
   })
 })
 

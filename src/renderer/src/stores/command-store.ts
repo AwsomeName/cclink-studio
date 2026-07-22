@@ -4,6 +4,10 @@ import {
   targetMatchesWorkspace,
   type CommandContext,
 } from '../features/context-actions/context-target'
+import {
+  classifyContextActionCommandFailure,
+  useContextActionDiagnosticsStore,
+} from '../features/context-actions/context-action-diagnostics'
 import { useWorkspaceStore } from './workspace-store'
 
 export type CommandRisk =
@@ -177,34 +181,47 @@ export const useCommandStore = create<CommandState>((set, get) => ({
   },
 
   executeCommand: async (id, context) => {
+    const fail = (result: CommandExecutionResult): CommandExecutionResult => {
+      if (context.source !== 'context-menu') return result
+      const kind = classifyContextActionCommandFailure(result)
+      if (kind) {
+        useContextActionDiagnosticsStore.getState().record({
+          kind,
+          commandId: id,
+          targetKind: context.target?.kind,
+          message: result.message || result.reason || '上下文命令执行失败',
+        })
+      }
+      return result
+    }
     const command = get().commands.find((item) => item.id === id)
-    if (!command) return { ok: false, reason: 'missing-command', message: '命令不存在' }
+    if (!command) return fail({ ok: false, reason: 'missing-command', message: '命令不存在' })
     const activeWorkspaceKey = workspaceRefKey(useWorkspaceStore.getState().activeWorkspaceRef)
     if (context.target && !targetMatchesWorkspace(context.target, activeWorkspaceKey)) {
-      return { ok: false, reason: 'stale-target', message: '操作目标所属项目已切换' }
+      return fail({ ok: false, reason: 'stale-target', message: '操作目标所属项目已切换' })
     }
     if (command.visible && !command.visible(context)) {
-      return { ok: false, reason: 'hidden', message: '命令对当前目标不可用' }
+      return fail({ ok: false, reason: 'hidden', message: '命令对当前目标不可用' })
     }
     const availability = command.enabled?.(context) ?? true
     const enabled = typeof availability === 'boolean' ? availability : availability.enabled
     if (!enabled) {
-      return {
+      return fail({
         ok: false,
         reason: 'disabled',
         message: typeof availability === 'boolean' ? undefined : availability.reason,
-      }
+      })
     }
     try {
       await command.action(context)
       get().markCommandUsed(id)
       return { ok: true }
     } catch (error) {
-      return {
+      return fail({
         ok: false,
         reason: 'failed',
         message: error instanceof Error ? error.message : String(error),
-      }
+      })
     }
   },
 }))

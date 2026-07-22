@@ -1,36 +1,15 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { workspaceRefKey } from '@shared/workspace-ref'
-import { useCommandStore, type CommandAvailability } from '../../stores/command-store'
+import { useCommandStore } from '../../stores/command-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { IconCheck } from '../../components/common/Icons'
 import { useToastStore } from '../../components/common/Toast'
 import { useContextMenuStore } from './context-menu-store'
-import {
-  resolveMenuContributions,
-  useMenuContributionRegistry,
-  type MenuContribution,
-} from './menu-contribution-registry'
+import { useMenuContributionRegistry } from './menu-contribution-registry'
 import { findBoundaryEnabledIndex, findNextEnabledIndex, fitMenuPosition } from './menu-position'
 import { targetMatchesWorkspace, type CommandContext } from './context-target'
-
-interface ResolvedMenuItem {
-  contribution: MenuContribution
-  commandId: string
-  label: string
-  enabled: boolean
-  disabledReason?: string
-  risk?: string
-  checked?: boolean
-}
-
-function resolveAvailability(value: CommandAvailability | undefined): {
-  enabled: boolean
-  reason?: string
-} {
-  if (value === undefined) return { enabled: true }
-  if (typeof value === 'boolean') return { enabled: value }
-  return { enabled: value.enabled, reason: value.reason }
-}
+import { resolveContextMenu, type ResolvedContextMenuItem } from './resolve-context-menu'
+import { useContextActionDiagnosticsStore } from './context-action-diagnostics'
 
 export function ContextMenuHost(): React.ReactElement | null {
   const open = useContextMenuStore((state) => state.open)
@@ -59,25 +38,24 @@ export function ContextMenuHost(): React.ReactElement | null {
     [target],
   )
 
-  const items = useMemo<ResolvedMenuItem[]>(() => {
-    if (!context) return []
-    return resolveMenuContributions(contributions, context).flatMap((contribution) => {
-      const command = commands.find((item) => item.id === contribution.commandId)
-      if (!command || (command.visible && !command.visible(context))) return []
-      const availability = resolveAvailability(command.enabled?.(context))
-      return [
-        {
-          contribution,
-          commandId: command.id,
-          label: command.contextLabel?.(context) ?? command.label,
-          enabled: availability.enabled,
-          disabledReason: availability.reason,
-          risk: command.risk,
-          checked: command.checked?.(context),
-        },
-      ]
-    })
+  const resolution = useMemo(() => {
+    if (!context) return { items: [], failures: [] }
+    return resolveContextMenu({ contributions, commands, context })
   }, [commands, context, contributions])
+  const items = resolution.items
+
+  useEffect(() => {
+    if (!open || !target) return
+    resolution.failures.forEach((failure) => {
+      useContextActionDiagnosticsStore.getState().record({
+        kind: 'menu-build-failed',
+        commandId: failure.commandId,
+        contributionId: failure.contributionId,
+        targetKind: target.kind,
+        message: failure.message,
+      })
+    })
+  }, [menuId, open, resolution.failures, target])
 
   useLayoutEffect(() => {
     if (!open || !menuRef.current) return
@@ -94,6 +72,13 @@ export function ContextMenuHost(): React.ReactElement | null {
     )
   }, [editingContributionId, items.length, menuId, open, x, y])
 
+  useLayoutEffect(() => {
+    if (!open || editingContributionId) return
+    const firstEnabled = items.findIndex((item) => item.enabled)
+    setSelectedIndex(firstEnabled >= 0 ? firstEnabled : 0)
+    menuRef.current?.querySelector<HTMLElement>('[role^="menuitem"]:not(:disabled)')?.focus()
+  }, [editingContributionId, items, menuId, open])
+
   useEffect(() => {
     if (!open) return
     const currentWorkspaceKey = workspaceRefKey(activeWorkspaceRef)
@@ -104,13 +89,7 @@ export function ContextMenuHost(): React.ReactElement | null {
       hide('workspace-switch')
       return
     }
-    const firstEnabled = items.findIndex((item) => item.enabled)
-    setSelectedIndex(firstEnabled >= 0 ? firstEnabled : 0)
-    requestAnimationFrame(() => {
-      const first = menuRef.current?.querySelector<HTMLElement>('[role^="menuitem"]:not(:disabled)')
-      first?.focus()
-    })
-  }, [activeWorkspaceRef, hide, items, menuId, open, target, workspaceKeyAtOpen])
+  }, [activeWorkspaceRef, hide, open, target, workspaceKeyAtOpen])
 
   useEffect(() => {
     if (editingContributionId) requestAnimationFrame(() => inputRef.current?.select())
@@ -144,7 +123,7 @@ export function ContextMenuHost(): React.ReactElement | null {
 
   if (!open || !context || !target || items.length === 0) return null
 
-  const execute = async (item: ResolvedMenuItem, value?: string): Promise<void> => {
+  const execute = async (item: ResolvedContextMenuItem, value?: string): Promise<void> => {
     if (!item.enabled) return
     hide('execute')
     const result = await executeCommand(item.commandId, {
@@ -157,14 +136,18 @@ export function ContextMenuHost(): React.ReactElement | null {
   }
 
   const moveSelection = (direction: 1 | -1): void => {
+    const menuItems = menuRef.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]')
+    const focusedIndex = menuItems
+      ? Array.from(menuItems).indexOf(document.activeElement as HTMLElement)
+      : -1
     const next = findNextEnabledIndex(
       items.map((item) => item.enabled),
-      selectedIndex,
+      focusedIndex >= 0 ? focusedIndex : selectedIndex,
       direction,
     )
     if (next < 0) return
     setSelectedIndex(next)
-    menuRef.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]')[next]?.focus()
+    menuItems?.[next]?.focus()
   }
 
   const handleKeyDown = (event: React.KeyboardEvent): void => {
@@ -194,6 +177,10 @@ export function ContextMenuHost(): React.ReactElement | null {
         event.preventDefault()
         moveSelection(-1)
         break
+      case 'Tab':
+        event.preventDefault()
+        moveSelection(event.shiftKey ? -1 : 1)
+        break
       case 'Home': {
         event.preventDefault()
         const index = findBoundaryEnabledIndex(
@@ -219,6 +206,17 @@ export function ContextMenuHost(): React.ReactElement | null {
         break
       }
       case 'Enter': {
+        event.preventDefault()
+        const item = items[selectedIndex]
+        if (!item?.enabled) break
+        if (item.contribution.inlineInput) {
+          beginInlineEdit(item.contribution.id, item.contribution.inlineInput.initialValue(context))
+        } else {
+          void execute(item)
+        }
+        break
+      }
+      case ' ': {
         event.preventDefault()
         const item = items[selectedIndex]
         if (!item?.enabled) break
@@ -273,6 +271,13 @@ export function ContextMenuHost(): React.ReactElement | null {
                   type="button"
                   role={item.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
                   aria-checked={item.checked}
+                  aria-disabled={!item.enabled}
+                  aria-keyshortcuts={item.shortcut}
+                  aria-label={
+                    !item.enabled && item.disabledReason
+                      ? `${item.label}，不可用：${item.disabledReason}`
+                      : item.label
+                  }
                   data-context-action={item.contribution.id}
                   className={`context-menu-item ${index === selectedIndex ? 'selected' : ''} ${item.risk === 'destructive' ? 'danger' : ''}`}
                   disabled={!item.enabled}
@@ -293,7 +298,12 @@ export function ContextMenuHost(): React.ReactElement | null {
                   {item.contribution.icon && (
                     <span className="context-menu-icon">{item.contribution.icon}</span>
                   )}
-                  <span>{item.label}</span>
+                  <span className="context-menu-label">
+                    <span>{item.label}</span>
+                    {!item.enabled && item.disabledReason && (
+                      <span className="context-menu-disabled-reason">{item.disabledReason}</span>
+                    )}
+                  </span>
                 </button>
               )}
             </div>

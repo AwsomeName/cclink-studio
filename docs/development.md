@@ -10,7 +10,7 @@
 
 所有功能开发必须遵守 `docs/architecture.md` 的“架构宪法”。S0-S4 稳定化阶段已经关闭，后续功能可以从当前 `main` 稳定基线受控推进，但不得重新引入跨模块硬依赖、第二状态所有者或未经验证的权限扩张。
 
-统一右键、命令面板、快捷键和工具栏入口的产品与工程方案见 `docs/features/context-action-system.md`。在其 M1 完成前，不继续为新区域添加独立右键组件。
+统一右键、命令面板、快捷键和工具栏入口的产品与工程事实源见 `docs/features/context-action-system.md`，区域 owner 库存见 `docs/ops/context-action-inventory.md`。新增区域只能贡献结构化 target、command 和 contribution；不得新增独立菜单 Host、第二个菜单 Store 或未登记的原生菜单。`pnpm verify:context-actions` 会执行该边界门禁。
 
 ## 环境准备
 

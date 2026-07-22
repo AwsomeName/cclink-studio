@@ -9450,6 +9450,8 @@ button.file-tree-item {
 
 .unified-context-menu {
   -webkit-app-region: no-drag;
+  min-width: 200px;
+  max-width: min(360px, calc(100vw - 16px));
 }
 
 .unified-context-menu.renaming {
@@ -9500,6 +9502,21 @@ button.file-tree-item {
   color: var(--text-primary);
   cursor: pointer;
   transition: background var(--transition-fast);
+}
+
+.context-menu-label {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+  overflow-wrap: anywhere;
+}
+
+.context-menu-disabled-reason {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.25;
 }
 
 button.context-menu-item {

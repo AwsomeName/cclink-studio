@@ -2,11 +2,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useToastStore } from '../../components/common/Toast'
 import { createDiagnosticsCommands } from './diagnostics-commands'
 import { formatWorkspaceDiagnosticsMarkdown } from '../../utils/workspace-diagnostics'
+import {
+  formatContextActionDiagnosticsMarkdown,
+  useContextActionDiagnosticsStore,
+} from '../../features/context-actions/context-action-diagnostics'
 
 describe('diagnostics commands', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     useToastStore.setState({ message: '', type: 'info', visible: false })
+    useContextActionDiagnosticsStore.getState().clear()
   })
 
   it('copies workspace state diagnostics to the clipboard', async () => {
@@ -35,7 +40,9 @@ describe('diagnostics commands', () => {
     await vi.waitFor(() => expect(writeText).toHaveBeenCalled())
 
     expect(window.cclinkStudio.workspaceState.diagnostics).toHaveBeenCalled()
-    expect(writeText).toHaveBeenCalledWith(formatWorkspaceDiagnosticsMarkdown(diagnostics))
+    expect(writeText).toHaveBeenCalledWith(
+      `${formatWorkspaceDiagnosticsMarkdown(diagnostics)}${formatContextActionDiagnosticsMarkdown([])}`,
+    )
     expect(useToastStore.getState().message).toContain('2 个工作空间')
     expect(useToastStore.getState().type).toBe('success')
   })

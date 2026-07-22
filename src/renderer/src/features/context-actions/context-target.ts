@@ -140,6 +140,35 @@ export type ContextTarget =
 
 export type ContextTargetKind = ContextTarget['kind']
 
+export const CONTEXT_TARGET_KINDS = [
+  'file',
+  'tab',
+  'project',
+  'activity',
+  'sidebar',
+  'status-item',
+  'layout',
+  'thread',
+  'message',
+  'editor',
+  'terminal',
+  'data-source',
+  'data-collection',
+  'saved-query',
+  'data-record',
+  'operations-platform',
+  'production',
+  'android',
+  'setting',
+  'conversation-selection',
+  'markdown-selection',
+] as const satisfies readonly ContextTargetKind[]
+
+type MissingContextTargetKind = Exclude<ContextTargetKind, (typeof CONTEXT_TARGET_KINDS)[number]>
+const allContextTargetKindsAreInventoried: MissingContextTargetKind extends never ? true : never =
+  true
+void allContextTargetKindsAreInventoried
+
 export type CommandSource = 'palette' | 'shortcut' | 'toolbar' | 'context-menu'
 
 export interface CommandContext {
