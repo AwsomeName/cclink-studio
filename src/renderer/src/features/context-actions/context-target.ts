@@ -44,6 +44,32 @@ export type ContextTarget =
       kind: 'thread'
       workspaceKey: string | null
       conversationId: string
+      activeRunId?: string | null
+    }
+  | {
+      kind: 'message'
+      workspaceKey: string | null
+      conversationId: string
+      messageId: string
+    }
+  | {
+      kind: 'editor'
+      workspaceKey: string | null
+      tabId: string
+      filePath: string
+      editorKind: 'markdown' | 'source'
+      range: MarkdownSourceRange | null
+      dirty: boolean
+      linkUrl?: string | null
+      imageSrc?: string | null
+    }
+  | {
+      kind: 'terminal'
+      workspaceKey: string | null
+      tabId: string
+      sessionId: string
+      selectionText: string
+      status: string
     }
   | {
       kind: 'conversation-selection'

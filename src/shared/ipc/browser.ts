@@ -255,6 +255,59 @@ export interface BrowserOpenTabRequest {
   initialUrl?: string
   /** 发起浏览器任务的项目；renderer 只能在同一项目内响应。 */
   workspaceKey: string | null
+  /** 新 Tab 必须继承来源页面的持久化 Profile。 */
+  profileId?: string | null
+  /** 原生网页菜单显式要求新建 Tab 时不得复用当前页面。 */
+  forceNew?: boolean
+}
+
+export type BrowserContextMediaType =
+  | 'none'
+  | 'image'
+  | 'audio'
+  | 'video'
+  | 'canvas'
+  | 'file'
+  | 'plugin'
+
+export interface BrowserContextEditFlags {
+  canUndo: boolean
+  canRedo: boolean
+  canCut: boolean
+  canCopy: boolean
+  canPaste: boolean
+  canDelete: boolean
+  canSelectAll: boolean
+}
+
+/** WebContentsView 网页右键允许进入 Studio 的有界上下文。 */
+export interface BrowserContext {
+  workspaceKey: string | null
+  tabId: string
+  profileId: string | null
+  pageUrl: string
+  selectionText: string
+  linkUrl: string | null
+  srcUrl: string | null
+  isEditable: boolean
+  mediaType: BrowserContextMediaType
+  editFlags: BrowserContextEditFlags
+}
+
+export interface BrowserContextAgentRequest {
+  workspaceKey: string | null
+  tabId: string
+  profileId: string | null
+  source: 'selection' | 'link' | 'image' | 'page'
+  pageUrl: string
+  text?: string
+  url?: string
+}
+
+export interface BrowserNativeContextMenuOpenedPayload {
+  workspaceKey: string | null
+  tabId: string
+  profileId: string | null
 }
 
 export interface BrowserBounds {
@@ -285,6 +338,10 @@ export interface BrowserApiContract {
   onUrlChanged: (callback: (payload: BrowserUrlChangedPayload) => void) => () => void
   onPageMetaChanged: (callback: (payload: BrowserPageMetaChangedPayload) => void) => () => void
   onRequestOpenTab: (callback: (payload: BrowserOpenTabRequest) => void) => () => void
+  onNativeContextMenuOpened: (
+    callback: (payload: BrowserNativeContextMenuOpenedPayload) => void,
+  ) => () => void
+  onContextAgentRequest: (callback: (payload: BrowserContextAgentRequest) => void) => () => void
 
   zoomIn: (tabId: string) => Promise<void>
   zoomOut: (tabId: string) => Promise<void>
@@ -394,6 +451,8 @@ export const browserIpcEvents = {
   urlChanged: 'browser:urlChanged',
   pageMetaChanged: 'browser:pageMetaChanged',
   requestOpenTab: 'browser:requestOpenTab',
+  nativeContextMenuOpened: 'browser:nativeContextMenuOpened',
+  contextAgentRequest: 'browser:contextAgentRequest',
   viewStateChanged: 'browser:viewStateChanged',
   taskChanged: 'browserTask:changed',
   actionLogChanged: 'browserActionLog:changed',

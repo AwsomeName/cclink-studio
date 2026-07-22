@@ -12,6 +12,10 @@ import {
 } from '../../stores'
 import { workspaceRefKey, workspaceRefLabel } from '../../../../shared/workspace-ref'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
+import {
+  buildKeyboardContextMenuInput,
+  isContextMenuKeyboardEvent,
+} from '../../features/context-actions/context-menu-trigger'
 import { useCommandStore } from '../../stores/command-store'
 import { THREAD_RESTORED_EVENT } from '../../features/context-actions/domains/thread-context-actions'
 import { MountedResourceBar } from '../../features/agent-conversations/mounted-resource-bar'
@@ -1014,7 +1018,16 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
           onTouchStart={conversationScroll.onTouchStart}
         >
           {messages.map((msg) => (
-            <ConversationMessageRenderer key={msg.id} message={msg} />
+            <ConversationMessageRenderer
+              key={msg.id}
+              message={msg}
+              conversationId={activeConversationId}
+              workspaceKey={
+                activeConversation?.runtime.workspaceRef
+                  ? workspaceRefKey(activeConversation.runtime.workspaceRef)
+                  : null
+              }
+            />
           ))}
 
           {/* 工具确认卡片（支持并发多个） */}
@@ -1236,6 +1249,21 @@ function QuickThreadSwitcher({
         else onSwitch(thread.id)
       }}
       onKeyDown={(event) => {
+        if (isContextMenuKeyboardEvent(event.nativeEvent)) {
+          event.preventDefault()
+          showContextMenu(
+            buildKeyboardContextMenuInput(
+              {
+                kind: 'thread',
+                workspaceKey: thread.workspaceKey,
+                conversationId: thread.id,
+                activeRunId: useAgentStore.getState().conversations[thread.id]?.activeRunId ?? null,
+              },
+              event.currentTarget,
+            ),
+          )
+          return
+        }
         if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) {
           return
         }
@@ -1251,6 +1279,7 @@ function QuickThreadSwitcher({
             kind: 'thread',
             workspaceKey: thread.workspaceKey,
             conversationId: thread.id,
+            activeRunId: useAgentStore.getState().conversations[thread.id]?.activeRunId ?? null,
           },
           x: event.clientX,
           y: event.clientY,

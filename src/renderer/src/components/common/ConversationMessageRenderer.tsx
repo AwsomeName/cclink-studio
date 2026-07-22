@@ -3,6 +3,11 @@ import { IconCheck, IconClipboard, IconError, IconThinking, IconTool } from './I
 import { openFileRangeResource } from '../../features/markdown/markdown-navigation'
 import { copyTextToClipboard } from '../../utils/clipboard'
 import { useToastStore } from './Toast'
+import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
+import {
+  buildKeyboardContextMenuInput,
+  isContextMenuKeyboardEvent,
+} from '../../features/context-actions/context-menu-trigger'
 
 type ToolContentBlock = Extract<ContentBlock, { type: 'tool_use' | 'tool_result' }>
 type ThinkingContentBlock = Extract<ContentBlock, { type: 'thinking' }>
@@ -14,8 +19,12 @@ type ContentRenderUnit =
 
 export function ConversationMessageRenderer({
   message,
+  conversationId,
+  workspaceKey,
 }: {
   message: AgentMessage
+  conversationId: string
+  workspaceKey: string | null
 }): React.ReactElement {
   const units = buildContentRenderUnits(message.content)
   const copyText = getMessageCopyText(message)
@@ -30,7 +39,32 @@ export function ConversationMessageRenderer({
   }
 
   return (
-    <div className={`agent-message ${message.role} ${message.isStreaming ? 'streaming' : ''}`}>
+    <div
+      className={`agent-message ${message.role} ${message.isStreaming ? 'streaming' : ''}`}
+      tabIndex={0}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        useContextMenuStore.getState().show({
+          target: { kind: 'message', workspaceKey, conversationId, messageId: message.id },
+          x: event.clientX,
+          y: event.clientY,
+          focusReturn: event.currentTarget,
+        })
+      }}
+      onKeyDown={(event) => {
+        if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+        event.preventDefault()
+        useContextMenuStore
+          .getState()
+          .show(
+            buildKeyboardContextMenuInput(
+              { kind: 'message', workspaceKey, conversationId, messageId: message.id },
+              event.currentTarget,
+            ),
+          )
+      }}
+    >
       {copyText && (
         <button
           type="button"

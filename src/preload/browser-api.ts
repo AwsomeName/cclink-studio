@@ -46,6 +46,18 @@ export const browserApi: BrowserApiContract = {
     ipcRenderer.on(browserIpcEvents.requestOpenTab, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.requestOpenTab, handler)
   },
+  onNativeContextMenuOpened: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
+      callback(payload)
+    ipcRenderer.on(browserIpcEvents.nativeContextMenuOpened, handler)
+    return () => ipcRenderer.removeListener(browserIpcEvents.nativeContextMenuOpened, handler)
+  },
+  onContextAgentRequest: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
+      callback(payload)
+    ipcRenderer.on(browserIpcEvents.contextAgentRequest, handler)
+    return () => ipcRenderer.removeListener(browserIpcEvents.contextAgentRequest, handler)
+  },
   zoomIn: (tabId) => invokeIpcContract(browserIpc.zoomIn, tabId),
   zoomOut: (tabId) => invokeIpcContract(browserIpc.zoomOut, tabId),
   resetZoom: (tabId) => invokeIpcContract(browserIpc.resetZoom, tabId),

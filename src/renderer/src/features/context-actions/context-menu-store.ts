@@ -10,6 +10,7 @@ export type ContextMenuCloseReason =
   | 'blur'
   | 'workspace-switch'
   | 'target-invalidated'
+  | 'native-browser-menu'
 
 export interface ShowContextMenuInput {
   target: ContextTarget

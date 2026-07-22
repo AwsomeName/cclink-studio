@@ -5,7 +5,11 @@ import '@xterm/xterm/css/xterm.css'
 import type { TerminalSubmitCommandResult } from '@shared/ipc/terminal'
 import type { TerminalExecutionEvent } from '@shared/terminal'
 import type { Tab } from '../../types'
-import { workspaceRefLabel, workspaceRefSourceLabel } from '../../../../shared/workspace-ref'
+import {
+  workspaceRefKey,
+  workspaceRefLabel,
+  workspaceRefSourceLabel,
+} from '../../../../shared/workspace-ref'
 import { useTabStore } from '../../stores/tab-store'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import { useTerminalStore } from '../../stores/terminal-store'
@@ -26,6 +30,15 @@ import { WorkbenchAgentConversation } from './WorkbenchAgentConversation'
 import { WeChatPreview } from './wechat/WeChatPreview'
 import type { TerminalOutputLine } from '../../stores/terminal-store'
 import { isHtmlFilePath } from '../../utils/html-files'
+import {
+  pasteClipboardToTerminal,
+  registerTerminalContextSurface,
+} from '../../features/context-actions/terminal-context-surface'
+import { copyTextToClipboard } from '../../utils/clipboard'
+import {
+  buildKeyboardContextMenuInput,
+  isContextMenuKeyboardEvent,
+} from '../../features/context-actions/context-menu-trigger'
 
 const EMPTY_TERMINAL_OUTPUT_LINES: TerminalOutputLine[] = []
 
@@ -214,6 +227,9 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const xtermRef = useRef<XtermTerminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const findInputRef = useRef<HTMLInputElement | null>(null)
+  const [findOpen, setFindOpen] = useState(false)
+  const [findQuery, setFindQuery] = useState('')
   const terminal = tab.terminal
   const outputBySessionId = useTerminalStore((state) => state.outputBySessionId)
   const outputLines = terminal?.sessionId
@@ -266,6 +282,20 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
     for (const line of [...initialRecordOutput, ...outputLines]) {
       xterm.write(line.text)
     }
+
+    const unregisterContextSurface = registerTerminalContextSurface(terminal.sessionId, {
+      getSelectionText: () => xterm.getSelection(),
+      copy: () => copyTextToClipboard(xterm.getSelection()),
+      paste: () => pasteClipboardToTerminal(terminal.sessionId!),
+      clear: () => {
+        xterm.clear()
+        useTerminalStore.getState().clearOutput(terminal.sessionId!)
+      },
+      openFind: () => {
+        setFindOpen(true)
+        requestAnimationFrame(() => findInputRef.current?.focus())
+      },
+    })
 
     const resizeToContainer = (): void => {
       try {
@@ -322,6 +352,7 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
 
     return () => {
       resizeObserver.disconnect()
+      unregisterContextSurface()
       offExecutionEvent()
       dataDisposable.dispose()
       resizeDisposable.dispose()
@@ -331,10 +362,80 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
     }
   }, [terminal?.sessionId, terminal?.runtime])
 
+  const findNext = (): void => {
+    const xterm = xtermRef.current
+    const query = findQuery.trim().toLowerCase()
+    if (!xterm || !query) return
+    const buffer = xterm.buffer.active
+    for (let row = 0; row < buffer.length; row += 1) {
+      const text = buffer.getLine(row)?.translateToString(true) ?? ''
+      const column = text.toLowerCase().indexOf(query)
+      if (column < 0) continue
+      xterm.select(column, row, query.length)
+      xterm.scrollToLine(row)
+      return
+    }
+  }
+
+  const terminalTarget = () => ({
+    kind: 'terminal' as const,
+    workspaceKey: terminal ? workspaceRefKey(terminal.runtime.workspaceRef) : null,
+    tabId: tab.id,
+    sessionId: terminal?.sessionId ?? '',
+    selectionText: xtermRef.current?.getSelection().slice(0, 8_000) ?? '',
+    status: terminal?.status ?? 'idle',
+  })
+
+  const showTerminalContextMenu = (x: number, y: number, focusReturn: HTMLElement): void => {
+    if (!terminal?.sessionId) return
+    useContextMenuStore.getState().show({
+      target: terminalTarget(),
+      x,
+      y,
+      focusReturn,
+    })
+  }
+
   return (
-    <div className="terminal-pty-shell">
+    <div
+      className="terminal-pty-shell"
+      tabIndex={0}
+      onContextMenu={(event) => {
+        if (event.target instanceof HTMLInputElement) return
+        event.preventDefault()
+        showTerminalContextMenu(event.clientX, event.clientY, event.currentTarget)
+      }}
+      onKeyDown={(event) => {
+        if (!isContextMenuKeyboardEvent(event.nativeEvent) || !terminal?.sessionId) return
+        event.preventDefault()
+        useContextMenuStore
+          .getState()
+          .show(buildKeyboardContextMenuInput(terminalTarget(), event.currentTarget))
+      }}
+    >
       <div className="terminal-pty-toolbar">
         <span>{terminal?.runtime.cwd ?? '本地 Terminal'}</span>
+        {findOpen && (
+          <span className="terminal-find-control">
+            <input
+              ref={findInputRef}
+              value={findQuery}
+              onChange={(event) => setFindQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') findNext()
+                if (event.key === 'Escape') setFindOpen(false)
+              }}
+              aria-label="查找 Terminal 输出"
+              placeholder="查找"
+            />
+            <button type="button" onClick={findNext} title="查找下一个">
+              查找
+            </button>
+            <button type="button" onClick={() => setFindOpen(false)} title="关闭查找">
+              ×
+            </button>
+          </span>
+        )}
         <button type="button" onClick={() => xtermRef.current?.focus()} title="聚焦 Terminal">
           聚焦
         </button>

@@ -1,4 +1,4 @@
-import { BrowserWindow, WebContentsView, session } from 'electron'
+import { BrowserWindow, WebContentsView, session, type ContextMenuParams } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
 import type { BrowserInstanceStore } from '../persistence/browser-instance-store'
@@ -26,6 +26,7 @@ import {
   shouldDestroyBrowserViewDuringReconcile,
   shouldRecreateBrowserViewForBinding,
 } from './browser-view-reconciliation'
+import { normalizeBrowserContext, showBrowserContextMenu } from './browser-context-menu'
 
 /** 移动版模拟时的目标视口宽度（CSS px，约等于 iPhone Pro 逻辑宽度） */
 const MOBILE_WIDTH = 414
@@ -79,6 +80,8 @@ interface ViewEntry {
   profileId: string | null
   /** 创建该视图的工作区；用于阻断相同 tabId 的跨项目复用。 */
   workspaceKey: string | null
+  /** 最近一次原生网页菜单 token；新菜单或 View 销毁后旧回调不可执行。 */
+  contextMenuToken: string | null
 }
 
 /**
@@ -313,6 +316,7 @@ export class BrowserManager {
       pendingHistoryDirection: null,
       profileId,
       workspaceKey,
+      contextMenuToken: null,
     }
 
     // 监听导航事件（闭包捕获 tabId，发出的事件携带 tabId）
@@ -354,6 +358,7 @@ export class BrowserManager {
     wc.on('page-favicon-updated', (_event, favicons) => {
       this.emitPageMeta(tabId, { faviconUrl: favicons[0] ?? null })
     })
+    wc.on('context-menu', (_event, params) => this.openContextMenu(tabId, entry, params))
     // 每次页面加载完成后，按当前模式重新计算并应用缩放
     wc.on('did-finish-load', () => {
       void this.applyZoom(tabId, true)
@@ -374,6 +379,50 @@ export class BrowserManager {
     if (this.activeViewId === tabId) {
       this.ensureLoaded(tabId)
     }
+  }
+
+  private openContextMenu(tabId: string, entry: ViewEntry, params: ContextMenuParams): void {
+    const win = this.win()
+    if (!win || this.views.get(tabId) !== entry) return
+    const context = normalizeBrowserContext(
+      {
+        workspaceKey: entry.workspaceKey,
+        tabId,
+        profileId: entry.profileId,
+      },
+      entry.view.webContents.getURL() || entry.url || 'about:blank',
+      params,
+    )
+    if (!context) return
+
+    const token = randomUUID()
+    entry.contextMenuToken = token
+    win.webContents.send(browserIpcEvents.nativeContextMenuOpened, {
+      workspaceKey: entry.workspaceKey,
+      tabId,
+      profileId: entry.profileId,
+    })
+    const validate = (): boolean => {
+      const current = this.views.get(tabId)
+      return Boolean(
+        current === entry &&
+        current.contextMenuToken === token &&
+        this.currentWorkspaceKey === entry.workspaceKey &&
+        this.activeViewId === tabId &&
+        current.profileId === context.profileId,
+      )
+    }
+    showBrowserContextMenu(win, {
+      context,
+      webContents: entry.view.webContents,
+      validate,
+      requestOpenTab: (request) => {
+        if (validate()) win.webContents.send(browserIpcEvents.requestOpenTab, request)
+      },
+      requestAgentMount: (request) => {
+        if (validate()) win.webContents.send(browserIpcEvents.contextAgentRequest, request)
+      },
+    })
   }
 
   private routeBrowserAuth(tabId: string, entry: ViewEntry, url: string): boolean {
@@ -689,7 +738,10 @@ export class BrowserManager {
     let lastRequestAt = 0
     while (!this.activeViewId && Date.now() < deadline) {
       if (Date.now() - lastRequestAt >= 500) {
-        this.win()?.webContents.send(browserIpcEvents.requestOpenTab, { initialUrl: DEFAULT_URL })
+        this.win()?.webContents.send(browserIpcEvents.requestOpenTab, {
+          initialUrl: DEFAULT_URL,
+          workspaceKey: this.currentWorkspaceKey,
+        })
         lastRequestAt = Date.now()
       }
       await new Promise((resolve) => setTimeout(resolve, 50))

@@ -448,7 +448,16 @@ export function WorkbenchAgentConversation({
       }
     >
       {conversation.messages.map((message) => (
-        <ConversationMessageRenderer key={message.id} message={message} />
+        <ConversationMessageRenderer
+          key={message.id}
+          message={message}
+          conversationId={conversationId}
+          workspaceKey={
+            conversation.runtime.workspaceRef
+              ? workspaceRefKey(conversation.runtime.workspaceRef)
+              : null
+          }
+        />
       ))}
     </ConversationShell>
   )

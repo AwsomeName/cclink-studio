@@ -5,6 +5,16 @@ import { useTabStore } from '../../stores/tab-store'
 import { buildHtmlBrowserTabDraft } from '../../utils/html-files'
 import { IconGlobe } from '../common/Icons'
 import { useToastStore } from '../common/Toast'
+import { useWorkspaceStore } from '../../stores/workspace-store'
+import { workspaceRefKey } from '@shared/workspace-ref'
+import type { MarkdownSourceRange } from '../../features/markdown/markdown-codec'
+import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
+import {
+  buildKeyboardContextMenuInput,
+  isContextMenuKeyboardEvent,
+} from '../../features/context-actions/context-menu-trigger'
+import { registerEditorContextSurface } from '../../features/context-actions/editor-context-surface'
+import { copyTextToClipboard } from '../../utils/clipboard'
 
 interface SourceTextEditorProps {
   filePath: string
@@ -20,6 +30,26 @@ function applyPlainTextUpdate(
   return current + update.content
 }
 
+function sourceSelectionRange(
+  content: string,
+  start: number,
+  end: number,
+): MarkdownSourceRange | null {
+  if (start === end) return null
+  const beforeStart = content.slice(0, start)
+  const beforeEnd = content.slice(0, end)
+  const startLines = beforeStart.split('\n')
+  const endLines = beforeEnd.split('\n')
+  return {
+    startLine: startLines.length,
+    endLine: endLines.length,
+    startColumn: (startLines.at(-1)?.length ?? 0) + 1,
+    endColumn: (endLines.at(-1)?.length ?? 0) + 1,
+    selectedText: content.slice(start, end),
+    sourceSnapshot: content.slice(start, end),
+  }
+}
+
 export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): React.ReactElement {
   const fileState = useEditorStore((state) => state.files[filePath])
   const pendingCount = useEditorStore((state) => state.pendingUpdates.length)
@@ -28,6 +58,7 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
   const editorWordWrap = useSettingsStore((state) => state.settings.editorWordWrap)
   const showToast = useToastStore((state) => state.show)
   const appliedUpdateIds = useRef(new Set<string>())
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     let disposed = false
@@ -170,6 +201,83 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
     }
   }, [filePath, pendingCount])
 
+  useEffect(
+    () =>
+      registerEditorContextSurface(tabId, {
+        getSelectionText: () => {
+          const textarea = textareaRef.current
+          return textarea?.value.slice(textarea.selectionStart, textarea.selectionEnd) ?? ''
+        },
+        copy: async () => {
+          const textarea = textareaRef.current
+          if (!textarea) return
+          await copyTextToClipboard(
+            textarea.value.slice(textarea.selectionStart, textarea.selectionEnd),
+          )
+        },
+        cut: async () => {
+          const textarea = textareaRef.current
+          if (!textarea) return
+          const { selectionStart, selectionEnd, value } = textarea
+          await copyTextToClipboard(value.slice(selectionStart, selectionEnd))
+          useEditorStore
+            .getState()
+            .updateContent(filePath, value.slice(0, selectionStart) + value.slice(selectionEnd))
+          requestAnimationFrame(() => {
+            textarea.focus()
+            textarea.setSelectionRange(selectionStart, selectionStart)
+          })
+        },
+        paste: async () => {
+          const textarea = textareaRef.current
+          if (!textarea) return
+          const text = await navigator.clipboard.readText()
+          const { selectionStart, selectionEnd, value } = textarea
+          useEditorStore
+            .getState()
+            .updateContent(
+              filePath,
+              value.slice(0, selectionStart) + text + value.slice(selectionEnd),
+            )
+          requestAnimationFrame(() => {
+            const cursor = selectionStart + text.length
+            textarea.focus()
+            textarea.setSelectionRange(cursor, cursor)
+          })
+        },
+        selectAll: () => {
+          textareaRef.current?.select()
+          textareaRef.current?.focus()
+        },
+      }),
+    [filePath, tabId],
+  )
+
+  const showEditorContextMenu = (
+    textarea: HTMLTextAreaElement,
+    position: { x: number; y: number },
+  ): void => {
+    const range = sourceSelectionRange(
+      textarea.value,
+      textarea.selectionStart,
+      textarea.selectionEnd,
+    )
+    useContextMenuStore.getState().show({
+      target: {
+        kind: 'editor',
+        workspaceKey: workspaceRefKey(useWorkspaceStore.getState().activeWorkspaceRef),
+        tabId,
+        filePath,
+        editorKind: 'source',
+        range,
+        dirty: useEditorStore.getState().files[filePath]?.dirty ?? false,
+      },
+      x: position.x,
+      y: position.y,
+      focusReturn: textarea,
+    })
+  }
+
   if (!fileState || fileState.loading) {
     return (
       <div className="markdown-editor-wrapper">
@@ -234,6 +342,7 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
         </div>
       ) : (
         <textarea
+          ref={textareaRef}
           className={`source-text-area${editorWordWrap ? '' : ' no-wrap'}`}
           value={fileState.currentContent}
           onChange={(event) =>
@@ -242,6 +351,31 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
           aria-label="HTML 源码"
           spellCheck={false}
           wrap={editorWordWrap ? 'soft' : 'off'}
+          onContextMenu={(event) => {
+            event.preventDefault()
+            showEditorContextMenu(event.currentTarget, { x: event.clientX, y: event.clientY })
+          }}
+          onKeyDown={(event) => {
+            if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+            event.preventDefault()
+            const input = buildKeyboardContextMenuInput(
+              {
+                kind: 'editor',
+                workspaceKey: workspaceRefKey(useWorkspaceStore.getState().activeWorkspaceRef),
+                tabId,
+                filePath,
+                editorKind: 'source',
+                range: sourceSelectionRange(
+                  event.currentTarget.value,
+                  event.currentTarget.selectionStart,
+                  event.currentTarget.selectionEnd,
+                ),
+                dirty: useEditorStore.getState().files[filePath]?.dirty ?? false,
+              },
+              event.currentTarget,
+            )
+            useContextMenuStore.getState().show(input)
+          }}
           style={{
             fontFamily: editorFontFamily,
             fontSize: `${editorFontSize}px`,

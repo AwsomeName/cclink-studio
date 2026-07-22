@@ -34,6 +34,8 @@ import { MarkdownImage, resolveMarkdownImageSource } from '../../features/markdo
 import type { FsMarkdownDocumentInspection } from '@shared/ipc/fs'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
+import { registerEditorContextSurface } from '../../features/context-actions/editor-context-surface'
+import { copyTextToClipboard } from '../../utils/clipboard'
 
 const lowlight = createLowlight(common)
 
@@ -125,17 +127,22 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         handleDOMEvents: {
           contextmenu: (_view, event) => {
             const range = currentWysiwygSelection()
-            if (!range) return false
+            const element = event.target instanceof Element ? event.target : null
+            const linkUrl = element?.closest('a')?.getAttribute('href') ?? null
+            const imageSrc = element?.closest('img')?.getAttribute('src') ?? null
             event.preventDefault()
             const activeWorkspaceRef = useWorkspaceStore.getState().activeWorkspaceRef
             useContextMenuStore.getState().show({
               target: {
-                kind: 'markdown-selection',
+                kind: 'editor',
                 workspaceKey: workspaceRefKey(activeWorkspaceRef),
                 tabId,
                 filePath: filePathRef.current ?? '',
+                editorKind: 'markdown',
                 range,
                 dirty: useEditorStore.getState().files[fileKeyRef.current]?.dirty ?? false,
+                linkUrl,
+                imageSrc,
               },
               x: event.clientX,
               y: event.clientY,
@@ -200,6 +207,33 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         }
       : mapped.range
   }, [diagnostics, editor])
+
+  useEffect(() => {
+    if (!editor) return
+    return registerEditorContextSurface(tabId, {
+      getSelectionText: () => {
+        const { from, to } = editor.state.selection
+        return from === to ? '' : editor.state.doc.textBetween(from, to, '\n')
+      },
+      copy: async () => {
+        const { from, to } = editor.state.selection
+        if (from !== to) await copyTextToClipboard(editor.state.doc.textBetween(from, to, '\n'))
+      },
+      cut: async () => {
+        const { from, to } = editor.state.selection
+        if (from === to) return
+        await copyTextToClipboard(editor.state.doc.textBetween(from, to, '\n'))
+        editor.chain().focus().deleteSelection().run()
+      },
+      paste: async () => {
+        const text = await navigator.clipboard.readText()
+        editor.chain().focus().insertContent(text).run()
+      },
+      selectAll: () => {
+        editor.chain().focus().selectAll().run()
+      },
+    })
+  }, [editor, tabId])
 
   const saveClipboardImage = useCallback(
     async (image: File) => {

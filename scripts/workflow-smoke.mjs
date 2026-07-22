@@ -319,6 +319,41 @@ async function main() {
     return 'file/activity/status/project/tab'
   })
 
+  await runCheck(
+    'core content context actions bind editor, Terminal, and Agent targets',
+    async () => {
+      const editorTab = page.locator('.tab', { hasText: 'notes.md' }).first()
+      await editorTab.click()
+      const editor = page.locator('.tiptap').first()
+      await editor.waitFor({ timeout: 10_000 })
+      await editor.click({ button: 'right' })
+      await page.locator('[data-context-action="editor.paste"]').waitFor({ timeout: 10_000 })
+      await page.keyboard.press('Escape')
+
+      const message = page.locator('.agent-message').first()
+      await message.waitFor({ timeout: 10_000 })
+      await message.click({ button: 'right' })
+      await page.locator('[data-context-action="message.quote"]').waitFor({ timeout: 10_000 })
+      await page.keyboard.press('Escape')
+      await message.focus()
+      await page.keyboard.press('Shift+F10')
+      await page.locator('[data-context-action="message.copy"]').waitFor({ timeout: 10_000 })
+      await page.keyboard.press('Escape')
+
+      await createTabFromMenu(page, 'Terminal')
+      const terminal = page.locator('.terminal-pty-shell').first()
+      await terminal.waitFor({ timeout: 15_000 })
+      await terminal.click({ button: 'right' })
+      await page.locator('[data-context-action="terminal.paste"]').waitFor({ timeout: 10_000 })
+      await page.keyboard.press('Escape')
+      await terminal.focus()
+      await page.keyboard.press('Shift+F10')
+      await page.locator('[data-context-action="terminal.clear"]').waitFor({ timeout: 10_000 })
+      await page.keyboard.press('Escape')
+      return 'editor/message/terminal mouse+keyboard'
+    },
+  )
+
   await runCheck('terminal can execute a command in the local workspace', async () => {
     const result = await page.evaluate(async (workspacePath) => {
       const sessionId = `workflow-terminal-${Date.now()}`

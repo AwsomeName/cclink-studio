@@ -5,6 +5,7 @@ const MAX_URL_LENGTH = 32_768
 const MAX_IDENTIFIER_LENGTH = 512
 const MAX_WORKSPACE_KEY_LENGTH = 32_768
 const MAX_HISTORY_ENTRIES = 500
+const MAX_CONTEXT_TEXT_LENGTH = 8_000
 
 const boundedString = (max: number) =>
   z
@@ -118,3 +119,34 @@ export const browserZoomFactorSchema = zoomFactorSchema
 export const browserViewModeSchema = z.enum(['desktop', 'mobile'])
 export const browserHistoryLimitSchema = z.number().int().min(1).max(MAX_HISTORY_ENTRIES).optional()
 export const browserTaskGoalSchema = z.string().trim().min(1).max(4_000)
+
+const browserContextUrlSchema = browserUrlSchema.nullable()
+const browserContextTextSchema = z
+  .string()
+  .max(MAX_CONTEXT_TEXT_LENGTH)
+  .refine((value) => !value.includes('\0'), '包含非法控制字符')
+
+export const browserContextSchema = z
+  .object({
+    workspaceKey: browserWorkspaceKeySchema,
+    tabId: browserIdentifierSchema,
+    profileId: browserProfileIdSchema,
+    pageUrl: browserUrlSchema,
+    selectionText: browserContextTextSchema,
+    linkUrl: browserContextUrlSchema,
+    srcUrl: browserContextUrlSchema,
+    isEditable: z.boolean(),
+    mediaType: z.enum(['none', 'image', 'audio', 'video', 'canvas', 'file', 'plugin']),
+    editFlags: z
+      .object({
+        canUndo: z.boolean(),
+        canRedo: z.boolean(),
+        canCut: z.boolean(),
+        canCopy: z.boolean(),
+        canPaste: z.boolean(),
+        canDelete: z.boolean(),
+        canSelectAll: z.boolean(),
+      })
+      .strict(),
+  })
+  .strict()

@@ -20,7 +20,7 @@ export interface TerminalRecordTabDraft {
   forceNew: true
 }
 
-function createTerminalId(prefix: string): string {
+export function createTerminalId(prefix: string): string {
   const random =
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()

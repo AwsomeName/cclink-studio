@@ -72,4 +72,34 @@ describe('openRequestedBrowserTab', () => {
       activeTabId: 'file-a',
     })
   })
+
+  it('opens an explicit native-menu request in a new tab with the same profile', () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'browser-a',
+          type: 'browser',
+          title: '浏览器',
+          icon: 'B',
+          workspaceRef,
+          browserProfile: 'v2ex',
+        },
+      ],
+      activeTabId: 'browser-a',
+    })
+
+    openRequestedBrowserTab({
+      initialUrl: 'https://www.v2ex.com/t/1',
+      workspaceKey: '/workspace/a',
+      profileId: 'v2ex',
+      forceNew: true,
+    })
+
+    expect(useTabStore.getState().tabs).toHaveLength(2)
+    expect(useTabStore.getState().tabs.at(-1)).toMatchObject({
+      initialUrl: 'https://www.v2ex.com/t/1',
+      browserProfile: 'v2ex',
+      workspaceRef,
+    })
+  })
 })

@@ -120,7 +120,7 @@ describe('IPC invoke contracts', () => {
     expect(Object.keys(browserIpcContracts)).toEqual(Object.keys(browserIpc))
     expect(Object.keys(browserTaskIpcContracts)).toEqual(Object.keys(browserTaskIpc))
     expect(Object.keys(browserDownloadIpcContracts)).toEqual(Object.keys(browserDownloadIpc))
-    expect(Object.keys(browserIpcEvents)).toHaveLength(8)
+    expect(Object.keys(browserIpcEvents)).toHaveLength(10)
 
     expect(browserIpcContracts.createView.parseArgs(['tab-1'])).toEqual([
       'tab-1',
