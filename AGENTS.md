@@ -23,14 +23,14 @@
 
 这个仓库提供可以从源码直接运行的本地桌面壳：本地工作区、内嵌浏览器、Markdown 编辑、Agent 面板、Terminal、数据源查询和 Android 真机连接能力。
 
-用户心智只有一个：登录 CCLink 后，在官方构建中看到桌面、手机、远程服务器、Agent 和任务状态。开源仓库默认不承载官方账号、消息网络、订阅、配额、生产 API、签名、公证或发布上传链路。
+用户心智只有一个：登录 CCLink 后，在官方构建中看到桌面、手机、远程服务器、Agent 和任务状态。开源仓库默认不承载官方账号、消息网络、订阅、配额或生产 API。开源版与商业版各自拥有独立发布工作流；开源仓库只发布由自身不可变 Tag 构建的开源制品，发布凭证只存在于 GitHub Environment Secrets。
 
 ## 项目边界
 
 | 位置                                            | 角色                                                                                                |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `/Users/apple/Desktop/cclink-dev/cclink-studio` | 开源桌面壳。默认不内置官方生产 API 地址，不带登录/订阅/官方消息网络/云同步/网络工作区实现。         |
-| `/Users/apple/Desktop/cclink-dev`               | 闭源总控/官方编译工作区。承接官方集成层、签名、公证、生产 API 注入、多仓库集成脚本和 release 基线。 |
+| `/Users/apple/Desktop/cclink-dev/cclink-studio` | 开源桌面壳。独立构建、签名、公证并发布开源版，不内置官方生产 API、登录、订阅或消息网络。           |
+| `/Users/apple/Desktop/cclink-dev`               | 闭源总控/商业版编译工作区。独立承接官方集成层、生产 API 注入、商业版签名、公证和 release 基线。    |
 | `/Users/apple/Desktop/chat-cc/deploy`           | CCLink 云函数与账号体系。                                                                           |
 | `/Users/apple/Desktop/chat-cc/Agent`            | CCLink Agent runtime。                                                                              |
 
@@ -55,8 +55,10 @@
 - 官方消息凭证、消息路由、配对、网络运行时注册。
 - 登录、订阅、entitlement、quota、官方 feature gate。
 - 云同步、网络文件树、网络文件查看、网络 session sidebar。
-- 私有服务配置、生产 API 地址、官方更新源、制品上传、签名和公证流程。
+- 私有服务配置、生产 API 地址、商业版更新源及商业版发布流程。
 - Android SDK 下载、AVD 创建、模拟器启动或托管设备服务。
+
+开源版发布例外由 `docs/decisions/0003-independent-edition-release-pipelines.md` 约束：不得读取 `cclink-dev`、注入商业配置或共享发布状态。
 
 ## 独立启动要求
 

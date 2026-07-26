@@ -44,4 +44,4 @@ mac:
     - zip
   category: public.app-category.productivity
   identity: null
-# 开源壳不内置发布源；官方更新源、签名和公证由 cclink-dev 官方构建层注入。
+# 本地构建默认不选择签名身份；开源 Release workflow 在 CI 中显式注入 Developer ID。

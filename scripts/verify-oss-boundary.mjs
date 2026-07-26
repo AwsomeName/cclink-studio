@@ -3,6 +3,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const root = process.cwd()
 
@@ -11,9 +12,10 @@ const ignoredFiles = new Set(['pnpm-lock.yaml', 'verify-oss-boundary.mjs'])
 // 旧产品名只允许存在于显式迁移模块，不能回流到业务代码、测试或产品文档。
 const scopedAllowances = new Map([
   ['src/main/migrations/project-ops-legacy-account-paths.ts', new Set(['old product name'])],
+  ['scripts/verify-oss-boundary.test.mjs', new Set(['old artifact upload or cloud config'])],
 ])
 
-const forbidden = [
+export const forbidden = [
   { label: 'old product name', pattern: /DeepInk|deepink|DEEPINK/ },
   { label: 'old private service naming', pattern: /private-serv|private service|private-service/ },
   { label: 'nonexistent split project', pattern: /cclink-cloud|cclink-agent/ },
@@ -28,7 +30,10 @@ const forbidden = [
     label: 'migrated store/module residue',
     pattern: /SyncPanel|sync-store|auth-store|subscription-store|cclink-store/,
   },
-  { label: 'old artifact upload or cloud config', pattern: /upload-cos|COS_|COS_BUCKET|CloudBase/ },
+  {
+    label: 'old artifact upload or cloud config',
+    pattern: /upload-cos|\bCOS_|CloudBase/,
+  },
   { label: 'old MCP server name', pattern: /mcp__deepink/ },
 ]
 
@@ -191,23 +196,29 @@ function listRepositoryFiles() {
   return output.split('\0').filter(Boolean)
 }
 
-for (const path of listRepositoryFiles()) {
-  if (!shouldSkip(path)) scanFile(path)
+function main() {
+  for (const path of listRepositoryFiles()) {
+    if (!shouldSkip(path)) scanFile(path)
+  }
+
+  assertOfficialSeams()
+
+  if (matches.length > 0 || structuralFailures.length > 0) {
+    console.error('OSS boundary verification failed:')
+    for (const match of matches) {
+      console.error(
+        `${match.path}:${match.line}:${match.column} ${match.label}: ${JSON.stringify(match.value)}`,
+      )
+    }
+    for (const failure of structuralFailures) {
+      console.error(`${failure.path}: ${failure.message}`)
+    }
+    process.exit(1)
+  }
+
+  console.log('OSS boundary verification passed.')
 }
 
-assertOfficialSeams()
-
-if (matches.length > 0 || structuralFailures.length > 0) {
-  console.error('OSS boundary verification failed:')
-  for (const match of matches) {
-    console.error(
-      `${match.path}:${match.line}:${match.column} ${match.label}: ${JSON.stringify(match.value)}`,
-    )
-  }
-  for (const failure of structuralFailures) {
-    console.error(`${failure.path}: ${failure.message}`)
-  }
-  process.exit(1)
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main()
 }
-
-console.log('OSS boundary verification passed.')

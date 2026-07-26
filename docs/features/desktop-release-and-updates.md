@@ -4,12 +4,13 @@
 
 ## 结论
 
-CCLink Studio 采用 Developer ID 直接分发：官方发布层从不可变 Git Tag 构建，
-完成签名和 Apple 公证后，将安装包及更新元数据发布到 GitHub Releases。Studio
-负责检查、展示、下载和用户确认后的安装，不承载发布凭证。
+CCLink Studio 开源版采用 Developer ID 直接分发：本仓库的开源发布工作流从不可变
+Git Tag 构建，完成签名和 Apple 公证后，将安装包及更新元数据发布到本仓库 GitHub
+Releases。Studio 运行时负责检查、展示、下载和用户确认后的安装，不承载发布凭证。
 
-开源默认构建继续保持无生产更新源。`cclink-dev` 是唯一官方发布编排者，并在
-官方构建时注入公开、无凭证的 Release Provider 配置。
+`cclink-dev` 保留独立的商业版发布工作流，不编排、不触发也不拥有开源版 Release。
+两个项目可以使用同一 Developer ID 发布者，但凭证、Tag、制品和发布状态按仓库隔离。
+具体边界见 `docs/decisions/0003-independent-edition-release-pipelines.md`。
 
 ## 架构原则
 
@@ -17,9 +18,9 @@ CCLink Studio 采用 Developer ID 直接分发：官方发布层从不可变 Git
    已发布 Tag、安装包和更新元数据不得覆盖；修复必须发布更高版本。
 2. **单一状态所有者**：主进程 `UpdateService` 是检查、下载和安装状态的唯一
    所有者。renderer 只消费快照并发出用户命令。
-3. **发布权限隔离**：签名证书、Apple 公证凭证、GitHub 写权限只存在于
-   `cclink-dev` 的受保护发布环境，不能进入 Studio 源码、安装包、renderer、
-   preload、日志或诊断包。
+3. **发布权限隔离**：开源版签名证书和 Apple 公证凭证只存在于本仓库受保护的
+   `studio-release` Environment Secrets；同仓库 Release 使用短期
+   `GITHUB_TOKEN`。凭证不能进入源码、安装包、renderer、preload、日志或诊断包。
 4. **默认无副作用**：OSS no-op provider、开发模式、网络失败和元数据损坏都不得
    阻塞 Studio 启动，也不得自动下载。
 5. **双重信任**：文件哈希用于检测传输损坏，Developer ID 代码签名用于确认
@@ -34,11 +35,27 @@ CCLink Studio 采用 Developer ID 直接分发：官方发布层从不可变 Git
 | 能力 | 所有者 |
 | --- | --- |
 | 中性更新契约、no-op provider、UpdateService、更新 UI | `cclink-studio` |
-| 官方 feed、渠道、签名、公证、Release 上传 | `cclink-dev` |
-| 二进制与公开更新元数据托管 | GitHub Releases |
+| 开源版签名、公证和 Release 上传 | `cclink-studio` GitHub Actions |
+| 商业版集成与商业版发布 | `cclink-dev` 自有工作流 |
+| 开源二进制与公开更新元数据托管 | `cclink-studio` GitHub Releases |
 | 发布批准、安装确认 | 人类 |
 
-Studio 不保存 GitHub Token。公开 Release 的检查和下载不需要用户凭证。
+Studio 安装包不保存 GitHub Token。开源发布使用 GitHub Actions 自动提供的短期
+`GITHUB_TOKEN`；公开 Release 的检查和下载不需要用户凭证。
+
+开源发布环境固定为 `studio-release`，只包含以下 Secrets：
+
+```text
+MACOS_CERTIFICATE_P12_BASE64
+MACOS_CERTIFICATE_PASSWORD
+MACOS_DEVELOPER_IDENTITY
+APPLE_API_KEY_BASE64
+APPLE_API_KEY_ID
+APPLE_API_ISSUER
+```
+
+不创建长期 GitHub PAT。发布工作流的 `contents: write` 只授予创建 Draft Release
+的 job，验证和打包 job 保持 `contents: read`。
 
 ## 更新状态机
 
@@ -63,7 +80,7 @@ available ──> downloading ──> downloaded ──> installing
 目标：
 
 - 从指定 Studio Tag 构建 arm64/x64 安装包。
-- 执行确定性门禁，记录 Studio SHA、官方集成 SHA、架构和哈希。
+- 执行确定性门禁，记录源码 SHA、发布 workflow SHA、架构和哈希。
 - Developer ID 签名、Apple 公证并 staple。
 - 创建 GitHub Draft Release；人工批准后公开。
 
@@ -75,6 +92,7 @@ available ──> downloading ──> downloaded ──> installing
 - 两种架构在干净 Mac 上安装启动，不要求 `xattr` 绕过。
 - Release 资产包含 DMG、ZIP、校验和及构建记录。跨架构更新元数据由 R1
   在全部架构汇总后统一生成。
+- 开源 workflow 不 checkout `cclink-dev`，商业 workflow 也不参与开源 Release。
 
 ### R1：可靠半自动更新
 

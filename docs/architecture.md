@@ -1,19 +1,19 @@
 # CCLink Studio 架构说明
 
-> 当前事实源。最后更新：2026-07-21。
+> 当前事实源。最后更新：2026-07-26。
 
 ## 结论
 
 CCLink Studio 是 CCLink 的开源桌面工作台端，不是 CCLink Studio 接入 CCLink，也不是独立账号体系。
 
-开源仓库的目标是提供本地优先的桌面壳、浏览器/文档/Android/Terminal/Agent 工作台、MCP 工具和可扩展 IPC 边界。官方账号、云函数、配对、消息路由、额度、签名、公证、生产 API 注入和官方发布链路由闭源工作区与 CCLink 主项目承接。
+开源仓库的目标是提供本地优先的桌面壳、浏览器/文档/Android/Terminal/Agent 工作台、MCP 工具和可扩展 IPC 边界。官方账号、云函数、配对、消息路由、额度和生产 API 注入由闭源工作区与 CCLink 主项目承接。开源版和商业版各自从自己的不可变 Tag 独立构建、签名、公证和发布。
 
 ## 项目边界
 
 | 位置                                            | 角色                                                                                                |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `/Users/apple/Desktop/cclink-dev/cclink-studio` | 开源桌面壳。默认不内置官方生产 API 地址，不带登录/订阅/官方消息网络/云同步/网络工作区实现。         |
-| `/Users/apple/Desktop/cclink-dev`               | 闭源总控/官方编译工作区。承接官方集成层、签名、公证、生产 API 注入、多仓库集成脚本和 release 基线。 |
+| `/Users/apple/Desktop/cclink-dev/cclink-studio` | 开源桌面壳。独立发布开源版，不内置官方生产 API、登录、订阅、官方消息网络或云同步。                 |
+| `/Users/apple/Desktop/cclink-dev`               | 闭源总控/商业版编译工作区。独立承接官方集成层、生产 API 注入、商业版签名、公证和 release 基线。    |
 | `/Users/apple/Desktop/chat-cc/deploy`           | CCLink 云函数与账号体系。                                                                           |
 | `/Users/apple/Desktop/chat-cc/Agent`            | CCLink Agent runtime。                                                                              |
 
@@ -104,7 +104,7 @@ CCLink Studio 开源壳保留这些本地能力：
 - 本地工作空间、标签页、浏览器、Markdown 编辑器、Android/设备视图、Terminal。
 - 本地 Agent 会话、本地 Claude Code 后端、MCP 工具系统和权限确认。
 - 本地设置、诊断、文件访问和工作台状态恢复。
-- updater 的中性检查框架，但不开源默认生产更新源、签名、公证或制品上传链路。
+- updater 的中性检查框架，以及只针对本仓库不可变 Tag 的开源版签名、公证和制品发布链路。
 
 桌面发布与更新的状态所有权、发布权限边界和 R0-R2 验收以
 `docs/features/desktop-release-and-updates.md` 为事实源。Developer ID 直接分发是
@@ -119,7 +119,7 @@ CCLink Studio 开源壳保留这些本地能力：
 - `pnpm dev` 直接启动开发模式。
 - `bash scripts/restart.sh restart` 启动后台开发进程。
 - 默认启动不得要求存在 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent`。
-- 官方账号、官方运行时、生产 API、签名、公证和发布上传只通过官方集成层进入。
+- 官方账号、官方运行时和生产 API 只通过官方集成层进入。开源版发布链路不得读取官方集成层。
 
 Android 是本地真机能力：只连接用户自有 USB 或 Wi-Fi ADB 真机。不提供 Android SDK 下载、AVD 创建、模拟器启动或托管设备服务。找不到 `adb` 时，Studio 应继续启动，Android 设备能力降级为不可用。
 
@@ -131,7 +131,7 @@ Android 是本地真机能力：只连接用户自有 USB 或 Wi-Fi ADB 真机�
 - 官方消息凭证、消息路由、配对、网络运行时注册。
 - 登录、订阅、entitlement、quota、官方 feature gate。
 - 云同步、网络文件树、网络文件查看、网络 session sidebar。
-- 私有服务配置、生产 API 地址、官方更新源、制品上传、签名和公证流程。
+- 私有服务配置、生产 API 地址、商业版更新源及商业版发布流程。
 - Android SDK/AVD 管理、模拟器启动、托管设备服务。
 
 验收上，开源壳不应默认 import 官方账号、订阅、同步、消息网络或网络工作区实现，也不应默认暴露这些 preload API。
