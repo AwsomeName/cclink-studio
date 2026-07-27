@@ -30,12 +30,8 @@ security unlock-keychain -p "$keychain_password" "$keychain_path"
 security import "$certificate_path" \
   -k "$keychain_path" \
   -P "$CSC_KEY_PASSWORD" \
-  -T /usr/bin/codesign
-security set-key-partition-list \
-  -S apple-tool:,apple:,codesign: \
-  -s \
-  -k "$keychain_password" \
-  "$keychain_path"
+  -T /usr/bin/codesign \
+  -T /usr/bin/security
 
 for dmg in "$@"; do
   test -f "$dmg"
