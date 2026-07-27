@@ -1,7 +1,7 @@
 # Desktop Release And Updates
 
-> 状态：R0 自动化发布链路已通过，等待双架构干净 Mac 真人安装验收和 Draft
-> Release 人工发布；Mac App Store 不在本阶段范围。
+> 状态：R0 Gatekeeper 修复验证中。应用签名和公证已通过，但首个 Draft 的
+> DMG 外层签名缺失；Mac App Store 不在本阶段范围。
 
 ## 结论
 
@@ -101,12 +101,11 @@ available ──> downloading ──> downloaded ──> installing
 实施记录（2026-07-27）：
 
 - [`release-oss` #5](https://github.com/AwsomeName/cclink-studio/actions/runs/30239299035)
-  从 `v0.1.1` 的不可变源码构建，validate、arm64、x64 和 draft job 全部通过。
-- 两种架构均通过 P12 导入、Developer ID 签名、Apple 公证、DMG staple、
-  `codesign`、`spctl` 和 `stapler validate`。
-- Draft Release `360219183` 已生成，包含两套 DMG、ZIP、SHA-256 校验和与构建记录，
-  共 8 个上传成功的资产。
-- 剩余真人门禁：分别在干净 Apple Silicon 和 Intel Mac 上安装并启动，不使用
+  暴露了首轮门禁缺口：内部 `.app` 是有效的 `Notarized Developer ID`，DMG
+  哈希和文件结构也有效，但 DMG 外层没有可用签名，Gatekeeper 以“已损坏”拒绝打开。
+- R0 在补齐“DMG 签名 → 公证 → staple → `codesign` → Gatekeeper `spctl`”
+  自动门禁并重新生成 Draft 前保持未完成。
+- 修复通过后仍需分别在干净 Apple Silicon 和 Intel Mac 上安装并启动，不使用
   `xattr` 绕过；确认后方可公开 Draft Release。
 
 ### R1：可靠半自动更新

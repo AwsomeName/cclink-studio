@@ -163,6 +163,10 @@ jobs:
             --config.mac.notarize=true
       - name: Notarize and staple disk image
         working-directory: source
+        env:
+          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          CSC_NAME: ${{ secrets.MACOS_DEVELOPER_IDENTITY }}
         run: bash ../release-tools/scripts/notarize-dmg.sh dist/*.dmg
       - name: Verify signed artifacts
         working-directory: source
@@ -172,7 +176,14 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app_path"
           spctl --assess --type execute --verbose=2 "$app_path"
           for dmg in dist/*.dmg; do
+            codesign --verify --verbose=2 "$dmg"
             xcrun stapler validate "$dmg"
+            spctl \
+              --assess \
+              --type open \
+              --context context:primary-signature \
+              --verbose=4 \
+              "$dmg"
           done
       - name: Prepare release assets
         working-directory: source

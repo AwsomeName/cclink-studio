@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import test from 'node:test'
 
 const workflow = readFileSync(resolve('.github/workflows/release-oss.yml'), 'utf8')
+const notarizeDmgScript = readFileSync(resolve('scripts/notarize-dmg.sh'), 'utf8')
 
 test('release workflow uses native runners for each target architecture', () => {
   assert.match(workflow, /- arch: arm64\s+runner: macos-15/)
@@ -23,4 +24,18 @@ test('release workflow passes electron-builder an identity without the certifica
   assert.match(workflow, /unset CSC_NAME/)
   assert.match(workflow, /--config\.mac\.identity="\$builder_identity"/)
   assert.doesNotMatch(workflow, /--config\.mac\.identity="\$CSC_NAME"/)
+})
+
+test('release workflow signs and Gatekeeper-assesses each DMG before upload', () => {
+  assert.match(workflow, /CSC_NAME: \$\{\{ secrets\.MACOS_DEVELOPER_IDENTITY \}\}/)
+  assert.match(workflow, /codesign --verify --verbose=2 "\$dmg"/)
+  assert.match(workflow, /--type open/)
+  assert.match(workflow, /context:primary-signature/)
+
+  assert.match(notarizeDmgScript, /security import "\$certificate_path"/)
+  assert.match(notarizeDmgScript, /--sign "\$CSC_NAME"/)
+  assert.match(notarizeDmgScript, /--keychain "\$keychain_path"/)
+  assert.match(notarizeDmgScript, /xcrun notarytool submit "\$dmg"/)
+  assert.match(notarizeDmgScript, /xcrun stapler staple "\$dmg"/)
+  assert.match(notarizeDmgScript, /spctl[\s\S]*--type open/)
 })
