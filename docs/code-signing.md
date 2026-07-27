@@ -1,10 +1,15 @@
 # CCLink Studio Mac 签名与公证指南
 
-> 状态：OSS 本地构建默认未签名；官方签名、公证和发布链路在 `/Users/apple/Desktop/cclink-dev`。
+> 状态：OSS 本地构建默认未签名；OSS Release 由本仓库受保护的 GitHub
+> Environment 完成签名和公证。商业版由 `/Users/apple/Desktop/cclink-dev`
+> 独立发布。
 
 ## 结论
 
-开源 `cclink-studio` 仓库不内置官方 Developer ID、notarization 密钥、生产更新源或上传脚本。普通本地构建可以用于开发测试；正式签名、公证、更新源生成和分发应由 `cclink-dev` 的官方发布层执行。
+开源 `cclink-studio` 仓库不内置 Developer ID、notarization 密钥或生产更新源。
+普通本地构建用于开发测试；开源正式包由本仓库 `.github/workflows/release-oss.yml`
+从不可变 Tag 构建，使用 `studio-release` Environment Secrets 完成签名和公证，
+并创建本仓库 Draft Release。商业版继续由 `cclink-dev` 自有工作流独立发布。
 
 ## 背景
 
@@ -14,7 +19,8 @@ CCLink Studio 通过 DMG 分发时，如果要让普通用户无警告打开，�
 2. Apple notarization。
 3. 正确的 entitlements 和 hardened runtime 配置。
 
-这些材料包含官方身份和发布权限，不应进入 OSS 默认配置。
+这些材料包含发布身份和权限，只能存在于受保护的 GitHub Environment Secrets，
+不得进入 OSS 源码、默认配置、安装包或日志。
 
 ## OSS 本地构建
 
@@ -28,19 +34,24 @@ pnpm package
 xattr -cr /path/to/CCLink\\ Studio.app
 ```
 
-## 官方发布
+## OSS Release
 
-官方发布侧应在 `cclink-dev` 维护：
+本仓库只维护中性的发布流程：
 
-- electron-builder 官方发布基线。
-- Developer ID Application 签名配置。
-- notarization 环境变量模板。
+- `.github/workflows/release-oss.yml`。
+- Developer ID Application 签名和 P12 导入校验。
+- Apple API Key 公证与 staple。
 - entitlements。
-- updater feed。
-- 上传脚本。
+- GitHub Draft Release 资产上传。
 
-不要把证书、Apple ID、App 专用密码、Team ID、制品上传 密钥或生产 feed URL 写回 `cclink-studio` 默认路径。
+证书、P12 密码、Apple API Key 和其他敏感值只存在于 `studio-release`
+Environment Secrets。不要把它们、生产 feed URL 或长期 GitHub Token 写回
+`cclink-studio` 默认路径。
+
+商业版可以复用同一发布者身份，但必须在 `cclink-dev` 中维护独立的凭证授权、
+Tag、制品和发布状态，不能由开源 workflow 编排。
 
 ## 拷问
 
-签名问题看起来只是打包配置，但本质是发布权限边界。只要 OSS 仓库能默认触达官方上传或生产更新源，就说明边界没有清干净。
+签名问题看起来只是打包配置，但本质是发布权限边界。源码可审计的 workflow
+可以描述流程，敏感凭证不能进入仓库；开源版与商业版也不能共享发布状态或互相触发。

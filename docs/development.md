@@ -1,12 +1,15 @@
 # CCLink Studio 开发指南
 
-> 当前事实源。最后更新：2026-07-22。
+> 当前事实源。最后更新：2026-07-27。
 
 ## 结论
 
 本仓库是 CCLink Studio 的开源桌面壳。开发时默认只依赖本地能力，不假设存在官方生产 API、登录服务、订阅服务、官方消息凭证、云同步、网络工作区或商业更新源。
 
-官方构建、签名、公证和生产 API 注入在 `/Users/apple/Desktop/cclink-dev` 处理；CCLink 云函数与 Agent runtime 在 `/Users/apple/Desktop/chat-cc/deploy` 和 `/Users/apple/Desktop/chat-cc/Agent`。
+开源版签名、公证和 GitHub Release 由本仓库工作流处理；商业版构建、签名、公证和
+生产 API 注入由 `/Users/apple/Desktop/cclink-dev` 的独立工作流处理。CCLink
+云函数与 Agent runtime 位于 `/Users/apple/Desktop/chat-cc/deploy` 和
+`/Users/apple/Desktop/chat-cc/Agent`。
 
 所有功能开发必须遵守 `docs/architecture.md` 的“架构宪法”。S0-S4 稳定化阶段已经关闭，后续功能可以从当前 `main` 稳定基线受控推进，但不得重新引入跨模块硬依赖、第二状态所有者或未经验证的权限扩张。
 
@@ -112,7 +115,9 @@ cclink-studio/
 
 ## 当前边界
 
-开源壳默认只保留本地桌面能力。官方账号、订阅、同步、消息网络、网络工作区和官方发布链路由 `cclink-dev` 与 `/Users/apple/Desktop/chat-cc` 承接。
+开源壳默认只保留本地桌面能力。官方账号、订阅、同步、消息网络和网络工作区由
+`cclink-dev` 与 `/Users/apple/Desktop/chat-cc` 承接。开源版与商业版各自拥有
+独立的发布工作流、凭证授权、Tag、制品和发布状态。
 
 如果 TypeScript 报错需要引入官方账号、订阅、同步、消息网络或网络工作区实现才能通过，优先判断是不是本地接入点边界没有收干净。
 
@@ -196,16 +201,17 @@ cclink-studio/
 
 ## 发布与签名
 
-OSS 默认构建可以产出本地测试包，但不包含官方生产更新源、制品上传、签名和公证配置。
+OSS 默认本地构建可以产出未签名测试包，不包含生产更新源或发布凭证。
 
-官方发布链路由 `/Users/apple/Desktop/cclink-dev` 承接：
+开源正式包由本仓库 `.github/workflows/release-oss.yml` 从不可变 Tag 构建：
 
-- release integration
-- 生产 API 注入
-- electron-builder 官方发布基线
-- 签名和公证
-- updater feed
-- 上传脚本
+- `studio-release` Environment Secrets 提供受保护的签名和公证凭证。
+- arm64 和 x64 分别在原生架构 runner 构建。
+- 工作流完成 Developer ID 签名、Apple 公证、staple 和制品验证。
+- 工作流只创建 Draft Release，公开发布仍需人工批准。
+
+商业版发布由 `/Users/apple/Desktop/cclink-dev` 的自有工作流承接，包括生产 API
+注入、商业更新源和商业制品；它不触发也不拥有开源版 Release。
 
 ## 拷问
 
