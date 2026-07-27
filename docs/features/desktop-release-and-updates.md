@@ -1,7 +1,7 @@
 # Desktop Release And Updates
 
-> 状态：R0 Gatekeeper 修复验证中。应用签名和公证已通过，但首个 Draft 的
-> DMG 外层签名缺失；Mac App Store 不在本阶段范围。
+> 状态：R0 自动化门禁已通过，等待干净 Apple Silicon 和 Intel Mac 的真人安装启动
+> 验收；Mac App Store 不在本阶段范围。
 
 ## 结论
 
@@ -103,8 +103,13 @@ available ──> downloading ──> downloaded ──> installing
 - [`release-oss` #5](https://github.com/AwsomeName/cclink-studio/actions/runs/30239299035)
   暴露了首轮门禁缺口：内部 `.app` 是有效的 `Notarized Developer ID`，DMG
   哈希和文件结构也有效，但 DMG 外层没有可用签名，Gatekeeper 以“已损坏”拒绝打开。
-- R0 在补齐“DMG 签名 → 公证 → staple → `codesign` → Gatekeeper `spctl`”
-  自动门禁并重新生成 Draft 前保持未完成。
+- [`release-oss` #9](https://github.com/AwsomeName/cclink-studio/actions/runs/30249565536)
+  使用 GitHub Runner 官方临时钥匙串流程，arm64、x64 和 Draft job 全部通过。DMG
+  在上传前依次完成 Developer ID 签名、公证、staple、`codesign` 和 Gatekeeper
+  `spctl --type open` 检查。
+- 从 Draft Release 重新下载 arm64 DMG 后进行独立复验：SHA-256 与发布清单一致，
+  `hdiutil verify`、`codesign --verify`、`stapler validate` 均通过，Gatekeeper
+  返回 `accepted`，来源为 `Notarized Developer ID`。
 - 修复通过后仍需分别在干净 Apple Silicon 和 Intel Mac 上安装并启动，不使用
   `xattr` 绕过；确认后方可公开 Draft Release。
 
