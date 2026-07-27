@@ -193,7 +193,7 @@ src/renderer/src/features/<domain>/context-actions.ts
 | 项目条 Project   | 切换、关闭、复制路径、Finder 显示、项目诊断                  | 关闭其他、关闭右侧、Git 备份         | 有运行任务时关闭只关闭视图，不终止任务 |
 | Activity Bar     | 打开面板、显示/隐藏侧栏                                      | 隐藏入口、恢复默认顺序               | 不允许隐藏唯一恢复入口                 |
 | Sidebar 容器     | 刷新、新建当前领域对象                                       | 折叠全部、复制项目信息               | 刷新失败只降级当前面板                 |
-| 文件/目录        | 打开方式、新建、重命名、复制路径、发送给 Agent、Finder 显示  | 多选、压缩/解压、复制/移动           | 删除统一移到废纸篓并确认               |
+| 文件/目录        | 打开方式、新建、重命名、复制/粘贴、复制路径、发送给 Agent、Finder 显示 | 多选、剪切                           | 删除统一移到废纸篓并确认               |
 | Workbench Tab    | 重命名、复制、关闭                                           | 固定、关闭其他、关闭右侧、恢复关闭项 | 关闭草稿继续使用现有保存确认           |
 | 编辑器正文       | 剪切、复制、粘贴、全选、发送选区给 Agent                     | 格式、链接和图片动作                 | 不覆盖系统输入法与密码字段行为         |
 | Browser 页面     | 后退、前进、刷新、复制选区/链接、在新 Tab 打开、发送给 Agent | 保存图片、查看页面诊断               | 不使用 CDP；下载和外部协议继续校验     |
@@ -348,6 +348,7 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 - Project 菜单已提供切换、复制路径、Finder 显示、工作台诊断和关闭；右键非活跃项目不会先触发项目切换。
 - Activity Bar、Sidebar 容器、Status Bar 具体状态项和左右布局分隔条已接入统一 Host；鼠标右键、Menu 键和 Shift+F10 共用同一目标解析与命令。
 - 文件菜单已增加 Finder 显示，并将 Markdown 特例删除收敛为通用“移到废纸篓”；主进程使用 `workspacePath + targetPath` 契约再次校验作用域，拒绝越界路径和工作区根目录。
+- 文件菜单与文件树快捷键复用 `fileTree.copyEntry` / `fileTree.pasteEntry`；文件剪贴板由 `fs-store` 单独拥有，主进程复制契约分别校验源和目标工作区，同名自动生成副本且不覆盖。
 - Tab 已增加关闭其他、关闭右侧，按顺序复用现有草稿保存、Terminal 视图关闭和 Conversation 视图生命周期；用户取消一次确认后停止后续关闭。
 - 任意 React 上下文菜单打开时都会暂时卸载 Browser View，避免 Electron `WebContentsView` 遮挡框架菜单；Tab 菜单仍保留页面截图预览。
 - 单元测试覆盖工作区路径保护、通用废纸篓、Finder 显示、Tab 批量关闭、键盘触发和框架布局命令。

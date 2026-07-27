@@ -80,6 +80,47 @@ describe('ClaudeRuntimeManager', () => {
     expect(detectSystem).not.toHaveBeenCalled()
   })
 
+  it('materializes a verified bundled runtime outside the packaged resource root', async () => {
+    const bundledRoot = await createTemporaryDirectory()
+    const materializedRoot = await createTemporaryDirectory()
+    const runtimeRoot = join(bundledRoot, 'darwin-arm64')
+    await mkdir(runtimeRoot)
+    const sourcePath = await createExecutable(runtimeRoot)
+    const content = await import('node:fs/promises').then(({ readFile }) => readFile(sourcePath))
+    const manifest: BundledClaudeRuntimeManifest = {
+      schemaVersion: 1,
+      source: 'anthropic-agent-sdk-platform-package',
+      sdkPackage: '@anthropic-ai/claude-agent-sdk',
+      sdkVersion: '0.3.211',
+      claudeCodePackage: '@anthropic-ai/claude-agent-sdk-darwin-arm64',
+      claudeCodeVersion: '2.1.211',
+      platform: 'darwin',
+      arch: 'arm64',
+      executable: 'claude',
+      sha256: createHash('sha256').update(content).digest('hex'),
+      size: content.byteLength,
+    }
+    await writeFile(join(runtimeRoot, 'manifest.json'), JSON.stringify(manifest), 'utf8')
+    const executeVersion = vi.fn(async () => '2.1.211 (Claude Code)')
+    const manager = new ClaudeRuntimeManager({
+      bundledRoot,
+      materializedRoot,
+      platform: 'darwin',
+      arch: 'arm64',
+      executeVersion,
+    })
+
+    const runtime = await manager.initialize({ source: 'bundled' })
+
+    expect(runtime.executablePath).toContain(materializedRoot)
+    expect(runtime.executablePath).not.toBe(sourcePath)
+    expect(executeVersion).toHaveBeenCalledWith(runtime.executablePath, 15_000)
+    const materialized = await import('node:fs/promises').then(({ readFile }) =>
+      readFile(runtime.executablePath),
+    )
+    expect(materialized).toEqual(content)
+  })
+
   it('rejects a bundled runtime whose bytes do not match the manifest', async () => {
     const bundledRoot = await createTemporaryDirectory()
     const runtimeRoot = join(bundledRoot, 'darwin-arm64')

@@ -1,7 +1,17 @@
 import { execFile } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { constants, createReadStream } from 'node:fs'
-import { access, readFile, realpath, stat } from 'node:fs/promises'
+import {
+  access,
+  chmod,
+  copyFile,
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+} from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -24,6 +34,7 @@ type SupportedArch = 'arm64' | 'x64'
 
 export interface ClaudeRuntimeManagerOptions {
   bundledRoot: string
+  materializedRoot?: string
   platform?: NodeJS.Platform
   arch?: string
   probeTimeoutMs?: number
@@ -195,7 +206,10 @@ export class ClaudeRuntimeManager {
     if (digest !== manifest.sha256) {
       throw failure('BUNDLED_RUNTIME_INTEGRITY_FAILED', '内置 Claude Code SHA-256 校验失败')
     }
-    const versionOutput = await this.executeVersion(executablePath)
+    const runnablePath = this.options.materializedRoot
+      ? await materializeBundledRuntime(executablePath, this.options.materializedRoot, manifest)
+      : executablePath
+    const versionOutput = await this.executeVersion(runnablePath)
     if (!versionOutput.includes(manifest.claudeCodeVersion)) {
       throw failure(
         'RUNTIME_VERSION_MISMATCH',
@@ -205,7 +219,7 @@ export class ClaudeRuntimeManager {
 
     return {
       source: 'bundled',
-      executablePath,
+      executablePath: runnablePath,
       claudeCodeVersion: manifest.claudeCodeVersion,
       sdkVersion: manifest.sdkVersion,
       fingerprint: fingerprint([
@@ -298,6 +312,55 @@ export function buildClaudeSessionCompatibilityFingerprint(
     settings.apiBaseUrl?.trim() ?? '',
     settings.modelName?.trim() ?? '',
   ])
+}
+
+async function materializeBundledRuntime(
+  sourcePath: string,
+  materializedRoot: string,
+  manifest: BundledClaudeRuntimeManifest,
+): Promise<string> {
+  const versionDirectory = join(
+    resolve(materializedRoot),
+    `${manifest.platform}-${manifest.arch}`,
+    `${manifest.sdkVersion}-${manifest.claudeCodeVersion}-${manifest.sha256.slice(0, 16)}`,
+  )
+  const executablePath = join(versionDirectory, manifest.executable)
+  await mkdir(versionDirectory, { recursive: true, mode: 0o700 })
+
+  if (await matchesManifest(executablePath, manifest)) {
+    await chmod(executablePath, 0o700)
+    return executablePath
+  }
+
+  const temporaryPath = join(versionDirectory, `.claude-${process.pid}-${randomUUID()}`)
+  try {
+    await copyFile(sourcePath, temporaryPath, constants.COPYFILE_EXCL)
+    await chmod(temporaryPath, 0o700)
+    if (!(await matchesManifest(temporaryPath, manifest))) {
+      throw failure('BUNDLED_RUNTIME_INTEGRITY_FAILED', '内置 Claude Code 缓存副本校验失败')
+    }
+    await rename(temporaryPath, executablePath)
+    await chmod(executablePath, 0o700)
+  } finally {
+    await rm(temporaryPath, { force: true })
+  }
+  return executablePath
+}
+
+async function matchesManifest(
+  executablePath: string,
+  manifest: BundledClaudeRuntimeManifest,
+): Promise<boolean> {
+  try {
+    const fileStat = await stat(executablePath)
+    return (
+      fileStat.isFile() &&
+      fileStat.size === manifest.size &&
+      (await sha256(executablePath)) === manifest.sha256
+    )
+  } catch {
+    return false
+  }
 }
 
 function normalizeSelection(selection: ClaudeRuntimeSelection): ClaudeRuntimeSelection {

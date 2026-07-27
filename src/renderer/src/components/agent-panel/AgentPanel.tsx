@@ -52,6 +52,8 @@ import {
   buildAgentDiagnosticMarkdown,
   selectDiagnosticBrowserTask,
 } from '../../features/diagnostics/agent-diagnostic-report'
+import { collectUnifiedDiagnosticReport } from '../../features/diagnostics/unified-diagnostic-report'
+import { APP_VERSION } from '../../app-metadata'
 import { useToastStore } from '../common/Toast'
 import {
   IconSparkle,
@@ -594,8 +596,8 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     const diagnosticDownloads = diagnosticTask
       ? diagnosticTask.downloadIds.map((downloadId) => browserDownloads[downloadId]).filter(Boolean)
       : []
-    const markdown = buildAgentDiagnosticMarkdown({
-      appVersion: '0.1.1',
+    const agentReport = buildAgentDiagnosticMarkdown({
+      appVersion: APP_VERSION,
       platform: navigator.platform,
       workspaceRef: activeWorkspaceRef,
       conversation,
@@ -621,8 +623,13 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     })
 
     try {
-      await copyTextToClipboard(markdown)
-      showToast('诊断日志已复制', 'success')
+      const activeFilePath = tabs.find((tab) => tab.id === activeTabId)?.filePath ?? null
+      const report = await collectUnifiedDiagnosticReport({
+        agentReport,
+        activeFilePath,
+      })
+      await copyTextToClipboard(report)
+      showToast('完整诊断日志已复制', 'success')
     } catch (err) {
       showToast(`复制诊断日志失败: ${String(err)}`, 'error')
     }
@@ -1149,7 +1156,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
               type="button"
               className="agent-copy-diagnostics-btn"
               onClick={() => void handleCopyDiagnostics()}
-              title="复制当前会话诊断日志"
+              title="复制完整诊断日志"
             >
               <IconClipboard size={13} />
             </button>

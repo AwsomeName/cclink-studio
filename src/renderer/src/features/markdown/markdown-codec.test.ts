@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   analyzeMarkdown,
   hashMarkdownSnapshot,
+  inspectMarkdownRoundTrip,
   mapTopLevelSelectionToSource,
+  normalizeMarkdownEditorOutput,
+  prepareMarkdownEditorInput,
   scanMarkdownBlocks,
   sourceRangeFromOffsets,
 } from './markdown-codec'
@@ -70,7 +73,7 @@ describe('markdown-codec', () => {
     })
   })
 
-  it('rejects unsupported extended syntax instead of creating special blocks', () => {
+  it('rejects destructive extended syntax while tolerating preserved math as text', () => {
     const mdx = analyzeMarkdown("import Card from './Card'\n\n<Card />")
     expect(mdx.safeToEdit).toBe(false)
     expect(mdx.diagnostics.map((item) => item.code)).toContain('unsupported-mdx')
@@ -81,6 +84,139 @@ describe('markdown-codec', () => {
       'unsupported-math',
       'unsupported-footnote',
     ])
+    expect(extended.diagnostics[0]).toMatchObject({
+      code: 'unsupported-math',
+      severity: 'warning',
+    })
+  })
+
+  it('allows math to open as text and only blocks saving when a formula is lost', () => {
+    const source = [
+      '# Hebbian 学习',
+      '',
+      '权重更新为 $\\Delta w = \\eta xy$。',
+      '',
+      '$$',
+      'w_{t+1} = w_t + \\eta x_t y_t',
+      '$$',
+    ].join('\n')
+
+    expect(analyzeMarkdown(source)).toMatchObject({
+      safeToEdit: true,
+      safeToSave: true,
+      diagnostics: [expect.objectContaining({ code: 'unsupported-math', severity: 'warning' })],
+    })
+    expect(analyzeMarkdown(source, source).safeToSave).toBe(true)
+
+    const lostFormula = '# Hebbian 学习\n\n权重更新公式。\n'
+    const unsafe = analyzeMarkdown(source, lostFormula)
+    expect(unsafe.safeToSave).toBe(false)
+    expect(unsafe.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'structural-roundtrip-mismatch',
+        severity: 'error',
+        message: expect.stringContaining('数学公式'),
+      }),
+    )
+  })
+
+  it('does not mistake currency ranges or escaped dollar signs for math', () => {
+    const source = '价格从 $5 增长到 $10，转义金额为 \\$20。'
+
+    expect(analyzeMarkdown(source)).toMatchObject({
+      safeToEdit: true,
+      diagnostics: [],
+    })
+  })
+
+  it('restores Tiptap text escapes inside math before validation and saving', () => {
+    const serialized = [
+      '# Hebbian 学习',
+      '',
+      '权重更新为 $\\\\Delta w = \\\\eta xy$。',
+      '',
+      '$$',
+      'w\\_{t+1} = w\\_t + \\\\eta x\\_t y\\_t',
+      '$$',
+      '',
+      '价格从 $5 增长到 $10，转义金额为 \\$20。',
+      '',
+      '```text',
+      '$\\\\Delta code$',
+      '```',
+    ].join('\n')
+
+    expect(normalizeMarkdownEditorOutput(serialized)).toBe(
+      [
+        '# Hebbian 学习',
+        '',
+        '权重更新为 $\\Delta w = \\eta xy$。',
+        '',
+        '$$',
+        'w_{t+1} = w_t + \\eta x_t y_t',
+        '$$',
+        '',
+        '价格从 \\$5 增长到 \\$10，转义金额为 \\$20。',
+        '',
+        '```text',
+        '$\\\\Delta code$',
+        '```',
+      ].join('\n'),
+    )
+  })
+
+  it('keeps currency ranges literal while leaving code dollars untouched', () => {
+    expect(normalizeMarkdownEditorOutput('区间 $5–$10，代码 `$value`。')).toBe(
+      '区间 \\$5–\\$10，代码 `$value`。',
+    )
+  })
+
+  it('keeps the exact source of an unchanged formula when a reference is available', () => {
+    const reference = '字面下划线 $x\\_label + \\Delta$。'
+    const serialized = '字面下划线 $x\\_label + \\\\Delta$。'
+
+    expect(normalizeMarkdownEditorOutput(serialized, reference)).toBe(reference)
+  })
+
+  it('protects LaTeX punctuation from Markdown and HTML parsing artifacts', () => {
+    const source = [
+      '$$',
+      '\\Delta w = \\eta \\cdot \\underbrace{x}_{\\text{输入}} \\cdot \\underbrace{y}_{\\text{输出}}',
+      '$$',
+      '',
+      '$$',
+      '\\Delta w = \\begin{cases} A^+ & \\Delta t > 0 \\\\ -A^- & \\Delta t < 0 \\end{cases}',
+      '$$',
+    ].join('\n')
+    const prepared = prepareMarkdownEditorInput(source)
+
+    expect(prepared).toContain('\\underbrace\\{x\\}\\_\\{\\text\\{输入\\}\\}')
+    expect(prepared).toContain('A\\^\\+ \\& \\Delta t \\> 0')
+    expect(normalizeMarkdownEditorOutput(prepared, source)).toBe(source)
+  })
+
+  it('repairs known Tiptap math artifacts without hiding a real formula edit', () => {
+    const reference = [
+      '$$',
+      '\\Delta w = \\underbrace{x}_{\\text{输入}}',
+      '$$',
+      '',
+      '$$',
+      'A^+ & \\Delta t > 0',
+      '$$',
+    ].join('\n')
+    const serialized = [
+      '$$',
+      '\\\\Delta w = \\\\underbrace{x}*{\\\\text{输入}}',
+      '$$',
+      '',
+      '$$',
+      'A^+ &amp; \\\\Delta t &gt; 0',
+      '$$',
+    ].join('\n')
+
+    expect(normalizeMarkdownEditorOutput(serialized, reference)).toBe(reference)
+    expect(normalizeMarkdownEditorOutput('$x + z$', '$x + y$')).toBe('$x + z$')
   })
 
   it('does not reject unsupported-looking text inside ordinary code fences', () => {
@@ -203,6 +339,191 @@ describe('markdown-codec', () => {
     ].join('\n')
 
     expect(analyzeMarkdown(source, serialized).safeToSave).toBe(true)
+  })
+
+  it('accepts equivalent setext headings, reference links and autolinks', () => {
+    const source = [
+      '计划',
+      '====',
+      '',
+      '访问 <https://example.com>。',
+      '',
+      '查看 [内部文档][guide]。',
+      '',
+      '[guide]: ./资料/说明.md',
+    ].join('\n')
+    const serialized = [
+      '# 计划',
+      '',
+      '访问 [https://example.com](https://example.com)。',
+      '',
+      '查看 [内部文档](./%E8%B5%84%E6%96%99/%E8%AF%B4%E6%98%8E.md)。',
+    ].join('\n')
+
+    expect(analyzeMarkdown(source, serialized)).toMatchObject({
+      safeToSave: true,
+      diagnostics: [],
+    })
+  })
+
+  it('accepts equivalent indented, fenced and plain-language code blocks', () => {
+    const source = [
+      '缩进代码：',
+      '',
+      '    const indented = true',
+      '',
+      '围栏代码：',
+      '',
+      '```',
+      'plain text',
+      '```',
+    ].join('\n')
+    const serialized = [
+      '缩进代码：',
+      '',
+      '```',
+      'const indented = true',
+      '```',
+      '',
+      '围栏代码：',
+      '',
+      '```plaintext',
+      'plain text',
+      '```',
+    ].join('\n')
+
+    expect(analyzeMarkdown(source, serialized)).toMatchObject({
+      safeToSave: true,
+      diagnostics: [],
+    })
+  })
+
+  it('accepts multiple indented code blocks normalized into fences', () => {
+    const source = [
+      '上午计划',
+      '',
+      '    first task',
+      '',
+      '    second task',
+      '',
+      '下午计划',
+      '',
+      '    third task',
+    ].join('\n')
+    const serialized = [
+      '上午计划',
+      '',
+      '```',
+      'first task',
+      '',
+      'second task',
+      '```',
+      '',
+      '下午计划',
+      '',
+      '```plaintext',
+      'third task',
+      '```',
+    ].join('\n')
+
+    expect(analyzeMarkdown(source, serialized)).toMatchObject({
+      safeToSave: true,
+      diagnostics: [],
+    })
+  })
+
+  it('blocks code block content loss even when the language stays unchanged', () => {
+    const analysis = analyzeMarkdown(
+      ['```typescript', 'const retained = true', '```'].join('\n'),
+      ['```typescript', '```'].join('\n'),
+    )
+
+    expect(analysis.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'structural-roundtrip-mismatch',
+        message: expect.stringContaining('代码块'),
+      }),
+    )
+  })
+
+  it('reports the exact code block position and fingerprints for a round-trip mismatch', () => {
+    const source = [
+      '# Notes',
+      '',
+      '```typescript',
+      'const retained = true',
+      '```',
+      '',
+      '```json',
+      '{"ok":true}',
+      '```',
+    ].join('\n')
+    const serialized = [
+      '# Notes',
+      '',
+      '```typescript',
+      '```',
+      '',
+      '```json',
+      '{"ok":true}',
+      '```',
+    ].join('\n')
+
+    const inspection = inspectMarkdownRoundTrip(source, serialized)
+
+    expect(inspection.equivalent).toBe(false)
+    expect(inspection.differences).toHaveLength(1)
+    expect(inspection.differences[0]).toMatchObject({
+      key: 'codeBlocks',
+      label: '代码块',
+      before: [
+        {
+          index: 1,
+          startLine: 3,
+          endLine: 5,
+          language: 'typescript',
+          contentLines: 1,
+          contentLength: 21,
+          preview: 'const retained = true',
+        },
+        {
+          index: 2,
+          startLine: 7,
+          endLine: 9,
+          language: 'json',
+          preview: '{"ok":true}',
+        },
+      ],
+      after: [
+        {
+          index: 1,
+          startLine: 3,
+          endLine: 4,
+          language: 'typescript',
+          contentLines: 0,
+          contentLength: 0,
+          preview: '',
+        },
+        {
+          index: 2,
+          startLine: 6,
+          endLine: 8,
+          language: 'json',
+          preview: '{"ok":true}',
+        },
+      ],
+    })
+  })
+
+  it('reports which critical structures differ', () => {
+    const analysis = analyzeMarkdown('# 标题\n\n[链接](https://example.com)', '正文')
+
+    expect(analysis.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'structural-roundtrip-mismatch',
+        message: expect.stringContaining('标题、链接'),
+      }),
+    )
   })
 
   it('accepts intentional structural edits when the dirty draft is validated as the new source', () => {

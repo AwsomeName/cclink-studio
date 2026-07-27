@@ -1,4 +1,15 @@
-import { readdir, readFile, writeFile, stat, mkdir, rename, unlink } from 'fs/promises'
+import {
+  cp,
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  unlink,
+  writeFile,
+} from 'fs/promises'
 import { createWriteStream, watch } from 'fs'
 import { join, resolve, extname, dirname, parse, sep, basename, relative, isAbsolute } from 'path'
 import { pipeline } from 'stream/promises'
@@ -20,13 +31,15 @@ import {
 } from '../../shared/file-types'
 import type {
   FsDocumentAssetResult,
+  FsCopyEntryInput,
+  FsCopyEntryResult,
   FsExtractZipResult,
   FsOfficePreviewBlock,
   FsRenderResult,
   FsSaveTextDocumentResult,
   FsTextDocumentSnapshot,
 } from '../../shared/ipc/fs'
-import { isMarkdownDocumentPath } from '../../shared/markdown-document'
+import { isMarkdownDocumentPath, markdownAssetDirectoryName } from '../../shared/markdown-document'
 import { MarkdownDocumentService } from './markdown-document-service'
 
 const MAX_INLINE_VIDEO_BYTES = 300 * 1024 * 1024
@@ -508,6 +521,72 @@ export class FileService {
     await rename(safeOld, safeNew)
   }
 
+  /** 复制文件或目录；目标同名时生成不覆盖的“副本”名称。 */
+  async copyEntry(input: FsCopyEntryInput): Promise<FsCopyEntryResult> {
+    const sourceScope = this.validateWorkspaceTarget(input.sourceWorkspacePath, input.sourcePath, {
+      allowWorkspaceRoot: true,
+    })
+    const targetScope = this.validateWorkspaceTarget(
+      input.targetWorkspacePath,
+      input.targetDirectory,
+      { allowWorkspaceRoot: true },
+    )
+    if (sourceScope.targetPath === sourceScope.workspacePath) {
+      throw new Error('不能复制工作区根目录')
+    }
+
+    const [sourceStat, targetStat] = await Promise.all([
+      lstat(sourceScope.targetPath),
+      stat(targetScope.targetPath),
+    ])
+    if (!targetStat.isDirectory()) throw new Error('ENOTDIR: 粘贴目标不是文件夹')
+    if (
+      sourceStat.isDirectory() &&
+      (targetScope.targetPath === sourceScope.targetPath ||
+        targetScope.targetPath.startsWith(`${sourceScope.targetPath}${sep}`))
+    ) {
+      throw new Error('EINVAL: 文件夹不能复制到自身或其子目录')
+    }
+
+    const markdownDocument = sourceStat.isFile() && isMarkdownDocumentPath(sourceScope.targetPath)
+    const destinationPath = markdownDocument
+      ? await uniqueMarkdownCopyPath(targetScope.targetPath, basename(sourceScope.targetPath))
+      : await uniqueCopyPath(
+          targetScope.targetPath,
+          basename(sourceScope.targetPath),
+          sourceStat.isDirectory(),
+        )
+    if (markdownDocument) {
+      const source = await this.readTextDocument(sourceScope.targetPath)
+      await this.saveMarkdownDocumentAs({
+        sourcePath: sourceScope.targetPath,
+        targetPath: destinationPath,
+        content: source.content,
+      })
+      return {
+        sourcePath: sourceScope.targetPath,
+        destinationPath,
+      }
+    }
+    try {
+      await cp(sourceScope.targetPath, destinationPath, {
+        recursive: sourceStat.isDirectory(),
+        force: false,
+        errorOnExist: true,
+        preserveTimestamps: true,
+      })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        await rm(destinationPath, { recursive: true, force: true }).catch(() => {})
+      }
+      throw error
+    }
+    return {
+      sourcePath: sourceScope.targetPath,
+      destinationPath,
+    }
+  }
+
   /** 删除文件 */
   async delete(filePath: string): Promise<void> {
     const safe = this.validatePath(filePath)
@@ -559,6 +638,49 @@ async function uniqueExtractDir(parentDir: string, baseName: string): Promise<st
     index += 1
   }
   return candidate
+}
+
+async function uniqueCopyPath(
+  targetDirectory: string,
+  sourceName: string,
+  isDirectory: boolean,
+): Promise<string> {
+  const original = join(targetDirectory, sourceName)
+  if (!(await entryExists(original))) return original
+
+  const parsed = isDirectory ? { name: sourceName, ext: '' } : parse(sourceName)
+  let index = 1
+  while (true) {
+    const suffix = index === 1 ? ' 副本' : ` 副本 ${index}`
+    const candidate = join(targetDirectory, `${parsed.name}${suffix}${parsed.ext}`)
+    if (!(await entryExists(candidate))) return candidate
+    index += 1
+  }
+}
+
+async function uniqueMarkdownCopyPath(
+  targetDirectory: string,
+  sourceName: string,
+): Promise<string> {
+  const parsed = parse(sourceName)
+  let index = 0
+  while (true) {
+    const suffix = index === 0 ? '' : index === 1 ? ' 副本' : ` 副本 ${index}`
+    const candidate = join(targetDirectory, `${parsed.name}${suffix}${parsed.ext}`)
+    const assetDirectory = join(targetDirectory, markdownAssetDirectoryName(candidate))
+    if (!(await entryExists(candidate)) && !(await entryExists(assetDirectory))) return candidate
+    index += 1
+  }
+}
+
+async function entryExists(filePath: string): Promise<boolean> {
+  try {
+    await lstat(filePath)
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
 }
 
 async function readTextDocumentIfExists(filePath: string): Promise<FsTextDocumentSnapshot | null> {

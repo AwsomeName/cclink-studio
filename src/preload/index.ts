@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { officialIpc } from '../shared/ipc/official'
+import { diagnosticsIpc } from '../shared/ipc/diagnostics'
 import { settingsIpc, type SettingsApiContract } from '../shared/ipc/settings'
 import { agentApi } from './agent-api'
 import { androidApi } from './android-api'
@@ -49,6 +50,10 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
 
   official: {
     getStatus: () => invokeIpcContract(officialIpc.getStatus),
+  },
+
+  diagnostics: {
+    getMainLogSnapshot: () => invokeIpcContract(diagnosticsIpc.getMainLogSnapshot),
   },
 
   // Agent

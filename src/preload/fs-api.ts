@@ -26,6 +26,7 @@ export const fsApi: FsApiContract = {
   mkdir: (dirPath) => invokeIpcContract(fsIpc.mkdir, dirPath),
   rename: (oldPath, newPath) => invokeIpcContract(fsIpc.rename, oldPath, newPath),
   move: (oldPath, newPath) => invokeIpcContract(fsIpc.move, oldPath, newPath),
+  copyEntry: (input) => invokeIpcContract(fsIpc.copyEntry, input),
   delete: (filePath) => invokeIpcContract(fsIpc.delete, filePath),
   extractZip: (filePath) => invokeIpcContract(fsIpc.extractZip, filePath),
   openPath: (path) => invokeIpcContract(fsIpc.openPath, path),

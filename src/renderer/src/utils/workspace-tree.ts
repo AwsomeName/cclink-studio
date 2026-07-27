@@ -17,6 +17,20 @@ export interface WorkspaceTreeProjection {
   selectedPath: string | null
 }
 
+export function findFileTreeNode(
+  nodes: FileTreeNode[],
+  targetPath: string,
+): FileTreeNode | undefined {
+  for (const node of nodes) {
+    if (node.path === targetPath) return node
+    if (node.children) {
+      const found = findFileTreeNode(node.children, targetPath)
+      if (found) return found
+    }
+  }
+  return undefined
+}
+
 export function normalizeFileTreeState(
   value: unknown,
 ): { expandedPaths: string[]; selectedPath: string | null } | null {

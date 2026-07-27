@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { app } from 'electron'
 import { AgentBridge } from '../agent/agent-bridge'
 import {
   buildClaudeSessionCompatibilityFingerprint,
@@ -22,6 +23,9 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
         bundledRoot: runtime.isDev
           ? join(process.cwd(), '.agent-runtime-staging')
           : join(process.resourcesPath, 'agent-runtime'),
+        ...(runtime.isDev
+          ? {}
+          : { materializedRoot: join(app.getPath('userData'), 'agent-runtime-cache') }),
       })
       const claudeCodePath = settings.claudeCodePath?.trim() ?? ''
       const claudeRuntime = await runtime.claudeRuntimeManager.initialize(

@@ -118,6 +118,10 @@ export function registerFsIpc(
     await fs.move(oldPath, newPath)
   })
 
+  handle(fsIpc.copyEntry, async (_event, input) => {
+    return fs.copyEntry(input)
+  })
+
   // 删除文件
   handle(fsIpc.delete, async (_event, filePath) => {
     await fs.delete(filePath)

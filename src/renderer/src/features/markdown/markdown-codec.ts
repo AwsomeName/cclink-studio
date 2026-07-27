@@ -1,4 +1,5 @@
 import { stripCclinkMarkdownMetadata } from '@shared/markdown-document'
+import MarkdownIt from 'markdown-it'
 
 export type MarkdownBlockKind =
   | 'frontmatter'
@@ -30,6 +31,7 @@ export interface MarkdownDiagnostic {
     | 'unsupported-directive'
     | 'catastrophic-roundtrip'
     | 'structural-roundtrip-mismatch'
+    | 'parser-runtime-error'
     | 'source-map-mismatch'
   severity: 'info' | 'warning' | 'error'
   message: string
@@ -42,6 +44,32 @@ export interface MarkdownAnalysis {
   diagnostics: MarkdownDiagnostic[]
   safeToEdit: boolean
   safeToSave: boolean
+}
+
+export type MarkdownCriticalStructureName =
+  | 'headings'
+  | 'codeBlocks'
+  | 'tableRows'
+  | 'blockquotes'
+  | 'horizontalRules'
+  | 'unorderedItems'
+  | 'orderedItems'
+  | 'taskItems'
+  | 'images'
+  | 'links'
+  | 'mathExpressions'
+
+export interface MarkdownRoundTripDifference {
+  key: MarkdownCriticalStructureName
+  label: string
+  before: unknown
+  after: unknown
+}
+
+export interface MarkdownRoundTripInspection {
+  catastrophic: boolean
+  equivalent: boolean
+  differences: MarkdownRoundTripDifference[]
 }
 
 export interface MarkdownSourceRange {
@@ -65,9 +93,13 @@ const AUTOLINK_START = /^\s*<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^ <>\n]*>/
 const RAW_HTML = /(?<!\\)(?:<!--[\s\S]*?-->|<\/?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*?)?\s*\/?>)/m
 const MDX_IMPORT_EXPORT = /^\s*(?:import|export)\s+.+(?:from\s+)?['"][^'"]+['"]/m
 const MDX_COMPONENT = /^\s*<[A-Z][A-Za-z0-9.]*(?:\s|\/?>)/m
-const MATH_BLOCK = /^\s*\$\$\s*$/m
 const FOOTNOTE = /^\s*\[\^[^\]]+\]:/m
 const DIRECTIVE = /^\s*:::{1,}\s*[A-Za-z]/m
+const markdownStructureParser = new MarkdownIt({
+  html: false,
+  linkify: true,
+  typographer: false,
+})
 
 export function normalizeMarkdownSource(source: string): string {
   return source.replace(/\r\n?/g, '\n')
@@ -197,11 +229,11 @@ export function analyzeMarkdown(source: string, serialized?: string): MarkdownAn
       message: '当前版本不支持编辑 MDX/JSX 文件。',
     })
   }
-  if (MATH_BLOCK.test(proseSource) || /(^|[^\\])\$[^$\n]+\$/m.test(proseSource)) {
+  if (extractMathExpressions(proseSource).length > 0) {
     diagnostics.push({
       code: 'unsupported-math',
-      severity: 'error',
-      message: '当前版本不支持编辑包含数学公式的 Markdown 文件。',
+      severity: 'warning',
+      message: '数学公式暂按普通文本显示；保存前会检查公式内容是否完整保留。',
     })
   }
   if (FOOTNOTE.test(proseSource)) {
@@ -228,10 +260,11 @@ export function analyzeMarkdown(source: string, serialized?: string): MarkdownAn
         message: 'Markdown 解析结果异常缩减，已阻止保存并保留原始缓冲区。',
       })
     } else if (!hasEquivalentCriticalStructure(normalized, normalizedSerialized)) {
+      const mismatch = describeCriticalStructureMismatch(normalized, normalizedSerialized)
       diagnostics.push({
         code: 'structural-roundtrip-mismatch',
         severity: 'error',
-        message: 'Markdown 解析前后的关键结构不一致，已阻止保存并保留原始缓冲区。',
+        message: `Markdown 解析前后的关键结构不一致（${mismatch}），已阻止保存并保留原始缓冲区。`,
       })
     }
   }
@@ -244,7 +277,9 @@ function maskFencedBlocks(source: string, blocks: MarkdownSourceBlock[]): string
   const lines = source.split('\n')
   for (const block of blocks) {
     if (block.kind !== 'fence' && block.kind !== 'mermaid') continue
-    for (let line = block.startLine - 1; line < block.endLine; line += 1) lines[line] = ''
+    for (let line = block.startLine - 1; line < block.endLine; line += 1) {
+      lines[line] = ' '.repeat(lines[line]?.length ?? 0)
+    }
   }
   return lines.join('\n')
 }
@@ -264,47 +299,410 @@ function isCatastrophicRoundTrip(before: string, after: string): boolean {
 }
 
 function hasEquivalentCriticalStructure(before: string, after: string): boolean {
-  return (
-    JSON.stringify(criticalStructureSignature(before)) ===
-    JSON.stringify(criticalStructureSignature(after))
-  )
+  return inspectMarkdownRoundTrip(before, after).equivalent
 }
 
-function criticalStructureSignature(source: string): Record<string, unknown> {
-  const blocks = scanMarkdownBlocks(source)
-  const prose = maskInlineCode(maskFencedBlocks(source, blocks))
-  const lines = source.split('\n')
+interface MarkdownCriticalStructureSignature {
+  headings: number[]
+  codeBlocks: Array<{ language: string; content: string }>
+  tableRows: number[]
+  blockquotes: number
+  horizontalRules: number
+  unorderedItems: number
+  orderedItems: number
+  taskItems: string[]
+  images: string[]
+  links: string[]
+  mathExpressions: Array<{ display: boolean; content: string }>
+}
+
+function criticalStructureSignature(source: string): MarkdownCriticalStructureSignature {
+  const normalized = normalizeMarkdownSource(stripCclinkMarkdownMetadata(source))
+  const tokens = markdownStructureParser.parse(normalized, {})
+  const lines = normalized.split('\n')
+  const headings: number[] = []
+  const codeBlocks: Array<{ language: string; content: string }> = []
+  const tableRows: number[] = []
+  const listStack: Array<'ordered' | 'unordered'> = []
+  const images: string[] = []
+  const links: string[] = []
+  let activeTableRows: number | null = null
+  let blockquotes = 0
+  let horizontalRules = 0
+  let unorderedItems = 0
+  let orderedItems = 0
+
+  for (const token of tokens) {
+    if (token.type === 'heading_open') headings.push(Number(token.tag.slice(1)))
+    else if (token.type === 'fence' || token.type === 'code_block') {
+      codeBlocks.push({
+        language:
+          token.type === 'fence'
+            ? normalizeCodeBlockLanguage(token.info.trim().split(/\s+/)[0] ?? '')
+            : '',
+        content: normalizeCodeBlockContent(token.content),
+      })
+    } else if (token.type === 'table_open') activeTableRows = 0
+    else if (token.type === 'tr_open' && activeTableRows !== null) activeTableRows += 1
+    else if (token.type === 'table_close' && activeTableRows !== null) {
+      tableRows.push(activeTableRows)
+      activeTableRows = null
+    } else if (token.type === 'blockquote_open') blockquotes += 1
+    else if (token.type === 'hr') horizontalRules += 1
+    else if (token.type === 'bullet_list_open') listStack.push('unordered')
+    else if (token.type === 'ordered_list_open') listStack.push('ordered')
+    else if (token.type === 'bullet_list_close' || token.type === 'ordered_list_close') {
+      listStack.pop()
+    } else if (token.type === 'list_item_open') {
+      if (listStack.at(-1) === 'ordered') orderedItems += 1
+      else if (listStack.at(-1) === 'unordered') unorderedItems += 1
+    }
+
+    for (const child of token.children ?? []) {
+      if (child.type === 'image') {
+        images.push(normalizeMarkdownDestination(child.attrGet('src') ?? ''))
+      } else if (child.type === 'link_open') {
+        links.push(normalizeMarkdownDestination(child.attrGet('href') ?? ''))
+      }
+    }
+  }
+
   return {
-    headings: blocks
-      .filter((block) => block.kind === 'heading')
-      .map((block) => /^ {0,3}(#{1,6})/.exec(block.raw)?.[1].length ?? 0),
-    fences: blocks
-      .filter((block) => block.kind === 'fence' || block.kind === 'mermaid')
-      .map((block) => block.language ?? ''),
-    tableRows: blocks
-      .filter((block) => block.kind === 'table')
-      .map((block) => block.raw.split('\n').filter((line) => !isBlank(line)).length),
-    blockquotes: blocks.filter((block) => block.kind === 'blockquote').length,
-    horizontalRules: blocks.filter((block) => block.kind === 'horizontal-rule').length,
-    unorderedItems: lines.filter((line) => /^\s*[-+*]\s+/.test(line)).length,
-    orderedItems: lines.filter((line) => /^\s*\d+[.)]\s+/.test(line)).length,
+    headings,
+    codeBlocks,
+    tableRows,
+    blockquotes,
+    horizontalRules,
+    unorderedItems,
+    orderedItems,
     taskItems: lines
       .map((line) => /^\s*[-+*]\s+\[([ xX])\]\s+/.exec(line)?.[1])
       .filter((value): value is string => value !== undefined)
       .map((value) => value.toLowerCase()),
-    images: extractMarkdownDestinations(prose, true),
-    links: extractMarkdownDestinations(prose, false),
+    images,
+    links,
+    mathExpressions: extractMathExpressions(
+      maskInlineCode(maskFencedBlocks(normalized, scanMarkdownBlocks(normalized))),
+    ),
   }
 }
 
-function extractMarkdownDestinations(source: string, images: boolean): string[] {
-  const expression = /(!?)\[[^\]]*]\(\s*(?:<([^>]+)>|([^\s)]+))/g
-  const destinations: string[] = []
-  for (const match of source.matchAll(expression)) {
-    if ((match[1] === '!') !== images) continue
-    destinations.push(match[2] ?? match[3] ?? '')
+function normalizeCodeBlockLanguage(value: string): string {
+  const language = value.trim().toLowerCase()
+  return ['plain', 'plaintext', 'text', 'txt'].includes(language) ? '' : language
+}
+
+function normalizeCodeBlockContent(value: string): string {
+  return normalizeMarkdownSource(value).replace(/\n$/, '')
+}
+
+function normalizeMarkdownDestination(value: string): string {
+  try {
+    return decodeURI(value)
+  } catch {
+    return value
   }
-  return destinations
+}
+
+function describeCriticalStructureMismatch(before: string, after: string): string {
+  return (
+    inspectMarkdownRoundTrip(before, after)
+      .differences.map((difference) => difference.label)
+      .join('、') || '未知结构'
+  )
+}
+
+export function inspectMarkdownRoundTrip(
+  before: string,
+  after: string,
+): MarkdownRoundTripInspection {
+  const beforeSignature = criticalStructureSignature(before)
+  const afterSignature = criticalStructureSignature(after)
+  const labels: Record<MarkdownCriticalStructureName, string> = {
+    headings: '标题',
+    codeBlocks: '代码块',
+    tableRows: '表格',
+    blockquotes: '引用',
+    horizontalRules: '分隔线',
+    unorderedItems: '无序列表',
+    orderedItems: '有序列表',
+    taskItems: '任务列表',
+    images: '图片',
+    links: '链接',
+    mathExpressions: '数学公式',
+  }
+  const keys = Object.keys(labels) as MarkdownCriticalStructureName[]
+  const differences = keys
+    .filter((key) => JSON.stringify(beforeSignature[key]) !== JSON.stringify(afterSignature[key]))
+    .map((key) => ({
+      key,
+      label: labels[key],
+      before: key === 'codeBlocks' ? diagnosticCodeBlocks(before) : beforeSignature[key],
+      after: key === 'codeBlocks' ? diagnosticCodeBlocks(after) : afterSignature[key],
+    }))
+  return {
+    catastrophic: isCatastrophicRoundTrip(before, after),
+    equivalent: differences.length === 0,
+    differences,
+  }
+}
+
+function extractMathExpressions(source: string): Array<{ display: boolean; content: string }> {
+  return scanMathExpressions(source).map(({ display, content }) => ({
+    display,
+    content: normalizeMathExpressionContent(content, display),
+  }))
+}
+
+interface MarkdownMathExpression {
+  start: number
+  end: number
+  contentStart: number
+  contentEnd: number
+  display: boolean
+  content: string
+}
+
+function scanMathExpressions(source: string): MarkdownMathExpression[] {
+  const expressions: MarkdownMathExpression[] = []
+  let index = 0
+  while (index < source.length) {
+    if (source[index] !== '$' || isEscapedAt(source, index)) {
+      index += 1
+      continue
+    }
+
+    const display = source[index + 1] === '$'
+    const delimiterLength = display ? 2 : 1
+    const contentStart = index + delimiterLength
+    const closing = findMathClosingDelimiter(source, contentStart, delimiterLength)
+    if (closing < 0) {
+      index += delimiterLength
+      continue
+    }
+
+    const rawContent = source.slice(contentStart, closing)
+    const closesCurrencyRange =
+      !display && /^\d/.test(rawContent) && /\d/.test(source[closing + delimiterLength] ?? '')
+    const validInline =
+      display ||
+      (rawContent.length > 0 &&
+        !/^\s/.test(rawContent) &&
+        !/\s$/.test(rawContent) &&
+        !rawContent.includes('\n') &&
+        !closesCurrencyRange)
+    if (validInline && rawContent.trim()) {
+      expressions.push({
+        start: index,
+        end: closing + delimiterLength,
+        contentStart,
+        contentEnd: closing,
+        display,
+        content: rawContent,
+      })
+      index = closing + delimiterLength
+      continue
+    }
+    index += delimiterLength
+  }
+  return expressions
+}
+
+function normalizeMathExpressionContent(content: string, display: boolean): string {
+  const unescaped = decodeMarkdownHtmlEntities(content).replace(
+    /\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g,
+    '$1',
+  )
+  return display ? normalizeMarkdownSource(unescaped).trim().replace(/\s+/g, ' ') : unescaped
+}
+
+const MATH_MARKDOWN_PUNCTUATION = new Set([...`!"#%&'()*+,-./:;<=>?@[]^_\`{|}~`])
+
+export function prepareMarkdownEditorInput(source: string): string {
+  const normalized = normalizeMarkdownSource(source)
+  const masked = maskInlineCode(maskFencedBlocks(normalized, scanMarkdownBlocks(normalized)))
+  const expressions = scanMathExpressions(masked)
+  if (expressions.length === 0) return normalized
+
+  let prepared = ''
+  let cursor = 0
+  for (const expression of expressions) {
+    prepared += normalized.slice(cursor, expression.contentStart)
+    const content = normalized.slice(expression.contentStart, expression.contentEnd)
+    for (let index = 0; index < content.length; index += 1) {
+      const character = content[index]
+      if (MATH_MARKDOWN_PUNCTUATION.has(character) && !isEscapedAt(content, index)) {
+        prepared += '\\'
+      }
+      prepared += character
+    }
+    prepared += normalized.slice(expression.contentEnd, expression.end)
+    cursor = expression.end
+  }
+  prepared += normalized.slice(cursor)
+  return prepared
+}
+
+export function normalizeMarkdownEditorOutput(source: string, referenceSource?: string): string {
+  const normalized = normalizeMarkdownSource(source)
+  const masked = maskInlineCode(maskFencedBlocks(normalized, scanMarkdownBlocks(normalized)))
+  const expressions = scanMathExpressions(masked)
+  const normalizedReference =
+    referenceSource === undefined ? null : normalizeMarkdownSource(referenceSource)
+  const referenceExpressions =
+    normalizedReference === null
+      ? []
+      : scanMathExpressions(
+          maskInlineCode(
+            maskFencedBlocks(normalizedReference, scanMarkdownBlocks(normalizedReference)),
+          ),
+        )
+
+  let restored = ''
+  let cursor = 0
+  for (let index = 0; index < expressions.length; index += 1) {
+    const expression = expressions[index]
+    restored += restorePlainMarkdownDollars(normalized, masked, cursor, expression.start)
+    restored += normalized.slice(expression.start, expression.contentStart)
+    const content = normalized.slice(expression.contentStart, expression.contentEnd)
+    const referenceExpression = referenceExpressions[index]
+    const referenceContent =
+      normalizedReference && referenceExpression
+        ? normalizedReference.slice(
+            referenceExpression.contentStart,
+            referenceExpression.contentEnd,
+          )
+        : null
+    const canReuseReference =
+      referenceContent !== null &&
+      hasEquivalentMathExpressionContent(
+        content,
+        referenceContent,
+        expression.display,
+        referenceExpression.display,
+      )
+    const restoredContent = canReuseReference
+      ? referenceContent
+      : decodeMarkdownHtmlEntities(content).replace(
+          /\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g,
+          '$1',
+        )
+    restored += restoredContent
+    restored += normalized.slice(expression.contentEnd, expression.end)
+    cursor = expression.end
+  }
+  restored += restorePlainMarkdownDollars(normalized, masked, cursor, normalized.length)
+  return restored
+}
+
+function hasEquivalentMathExpressionContent(
+  content: string,
+  referenceContent: string,
+  display: boolean,
+  referenceDisplay: boolean,
+): boolean {
+  if (display !== referenceDisplay) return false
+  const current = normalizeMathExpressionContent(content, display)
+  const reference = normalizeMathExpressionContent(referenceContent, referenceDisplay)
+  if (current === reference) return true
+  if (current.length !== reference.length) return false
+
+  for (let index = 0; index < current.length; index += 1) {
+    if (current[index] === reference[index]) continue
+    // Tiptap parses TeX subscripts as Markdown emphasis and serializes `_` back as `*`.
+    if (current[index] === '*' && reference[index] === '_') continue
+    return false
+  }
+  return true
+}
+
+function decodeMarkdownHtmlEntities(value: string): string {
+  return value.replace(
+    /&(?:amp|lt|gt|quot|#39|#x27|#(\d+)|#x([0-9a-f]+));/gi,
+    (entity, decimal: string | undefined, hexadecimal: string | undefined) => {
+      const named: Record<string, string> = {
+        '&amp;': '&',
+        '&lt;': '<',
+        '&gt;': '>',
+        '&quot;': '"',
+        '&#39;': "'",
+        '&#x27;': "'",
+      }
+      const normalized = entity.toLowerCase()
+      if (named[normalized]) return named[normalized]
+      const codePoint = decimal
+        ? Number.parseInt(decimal, 10)
+        : hexadecimal
+          ? Number.parseInt(hexadecimal, 16)
+          : Number.NaN
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : entity
+    },
+  )
+}
+
+function restorePlainMarkdownDollars(
+  source: string,
+  masked: string,
+  start: number,
+  end: number,
+): string {
+  let restored = ''
+  for (let index = start; index < end; index += 1) {
+    if (source[index] === '$' && masked[index] === '$' && !isEscapedAt(source, index)) {
+      restored += '\\'
+    }
+    restored += source[index]
+  }
+  return restored
+}
+
+function findMathClosingDelimiter(source: string, start: number, delimiterLength: number): number {
+  for (let index = start; index < source.length; index += 1) {
+    if (delimiterLength === 1 && source[index] === '\n') return -1
+    if (source[index] !== '$' || isEscapedAt(source, index)) continue
+    if (delimiterLength === 2) {
+      if (source[index + 1] === '$') return index
+      continue
+    }
+    if (source[index + 1] !== '$') return index
+  }
+  return -1
+}
+
+function isEscapedAt(source: string, index: number): boolean {
+  let backslashes = 0
+  for (let cursor = index - 1; cursor >= 0 && source[cursor] === '\\'; cursor -= 1) {
+    backslashes += 1
+  }
+  return backslashes % 2 === 1
+}
+
+function diagnosticCodeBlocks(source: string): Array<Record<string, unknown>> {
+  return markdownStructureParser
+    .parse(source, {})
+    .filter((token) => token.type === 'fence' || token.type === 'code_block')
+    .map((token, index) => {
+      const content = normalizeCodeBlockContent(token.content)
+      return {
+        index: index + 1,
+        kind: token.type,
+        startLine: token.map ? token.map[0] + 1 : null,
+        endLine: token.map ? token.map[1] : null,
+        language:
+          token.type === 'fence'
+            ? normalizeCodeBlockLanguage(token.info.trim().split(/\s+/)[0] ?? '')
+            : '',
+        contentLines: content ? content.split('\n').length : 0,
+        contentLength: content.length,
+        contentHash: hashMarkdownSnapshot(content),
+        preview: diagnosticPreview(content),
+      }
+    })
+}
+
+function diagnosticPreview(value: string): string {
+  const normalized = value.replace(/\u0000/g, '\\0')
+  return normalized.length <= 240 ? normalized : `${normalized.slice(0, 240)}…`
 }
 
 export function mapTopLevelSelectionToSource(

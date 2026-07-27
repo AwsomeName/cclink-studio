@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useContextMenuStore } from './context-menu-store'
 
 describe('tab context menu browser preview', () => {
@@ -14,6 +14,10 @@ describe('tab context menu browser preview', () => {
       browserPreviewDataUrl: null,
       workspaceKeyAtOpen: null,
     })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('keeps the preview until the browser view has time to reattach', () => {
@@ -51,5 +55,35 @@ describe('tab context menu browser preview', () => {
     })
 
     expect(useContextMenuStore.getState().browserPreviewDataUrl).toBeNull()
+  })
+
+  it('lets executed commands transfer focus before restoring the menu trigger', () => {
+    const focus = vi.fn()
+    const focusReturn = { isConnected: true, focus } as unknown as HTMLElement
+    const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
+    vi.stubGlobal('requestAnimationFrame', requestAnimationFrame)
+    const store = useContextMenuStore.getState()
+
+    store.show({
+      target: { kind: 'file', workspaceKey: '/a', path: '/a/a.md', name: 'a.md', fileType: 'file' },
+      x: 10,
+      y: 20,
+      focusReturn,
+    })
+    store.hide('execute')
+    expect(focus).not.toHaveBeenCalled()
+
+    store.show({
+      target: { kind: 'file', workspaceKey: '/a', path: '/a/a.md', name: 'a.md', fileType: 'file' },
+      x: 10,
+      y: 20,
+      focusReturn,
+    })
+    store.hide('escape')
+    expect(requestAnimationFrame).toHaveBeenCalledOnce()
+    expect(focus).toHaveBeenCalledOnce()
   })
 })

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { AppSettings } from '../../../shared/ipc/settings'
-import type { FsDirEntry } from '../../../shared/ipc/fs'
+import type { FsCopyEntryResult, FsDirEntry } from '../../../shared/ipc/fs'
 import { globalWorkspaceRef, localWorkspaceRef } from '../../../shared/workspace-ref'
 import {
   getWorkspaceStateOwnerKey,
@@ -23,17 +23,20 @@ import {
   updateRecentWorkspacePaths,
 } from '../utils/workspace-paths'
 import {
+  findFileTreeNode,
   normalizeFileTreeState,
   prepareWorkspaceTree,
   type FileTreeNode,
   type WorkspaceTreeProjection,
 } from '../utils/workspace-tree'
 import { useAgentStore } from './agent-store'
+import { useBrowserStore } from './browser-store'
 import { useOpenProjectsStore } from './open-projects-store'
 import { useEditorStore } from './editor-store'
 import { useTabStore } from './tab-store'
 import { useWorkspaceStore } from './workspace-store'
 import { isMarkdownDocumentPath } from '@shared/markdown-document'
+import { toLocalFileUrl } from '../utils/html-files'
 
 /** setWorkspace 的最新请求序号（模块级，用于丢弃过期的并发结果，避免竞态） */
 let setWorkspaceSeq = 0
@@ -72,9 +75,27 @@ function replacePathPrefix(
 function updateRenamedTabTitle(filePath: string): void {
   const tabStore = useTabStore.getState()
   for (const tab of tabStore.tabs) {
-    if (tab.filePath === filePath && tab.type === 'editor') {
+    if (tab.filePath === filePath) {
       tabStore.updateTabTitle(tab.id, baseName(filePath))
     }
+  }
+}
+
+function syncRenamedBrowserFileTabs(oldPath: string, newPath: string): void {
+  const oldUrl = toLocalFileUrl(oldPath)
+  const newUrl = toLocalFileUrl(newPath)
+  const browserStore = useBrowserStore.getState()
+  for (const tab of useTabStore.getState().tabs) {
+    if (tab.type !== 'browser' || tab.filePath !== newPath) continue
+    const browserTab = browserStore.tabs[tab.id]
+    if (!browserTab || browserTab.url !== oldUrl) continue
+    browserStore.setUrl(tab.id, newUrl, {
+      history: browserTab.history.map((url) => (url === oldUrl ? newUrl : url)),
+      historyIndex: browserTab.historyIndex,
+    })
+    void window.cclinkStudio.browser
+      .navigate(tab.id, newUrl)
+      .catch((error) => console.warn('[fs-store] 本地 HTML 重命名后重新导航失败:', error))
   }
 }
 
@@ -205,6 +226,13 @@ function replaceDirectoryChildren(
 
 export type { FileTreeNode } from '../utils/workspace-tree'
 
+export interface FileClipboardEntry {
+  workspacePath: string
+  path: string
+  name: string
+  fileType: 'file' | 'directory'
+}
+
 interface FsState {
   /** 当前工作区根路径 */
   workspacePath: string | null
@@ -228,6 +256,8 @@ interface FsState {
   expandedPaths: string[]
   /** 当前选中的文件/目录路径 */
   selectedPath: string | null
+  /** 会话内文件剪贴板；实际写磁盘只发生在 pasteClipboardEntry。 */
+  clipboardEntry: FileClipboardEntry | null
   /** 最近打开的工作空间路径（工程侧仍是 workspace） */
   recentWorkspacePaths: string[]
 
@@ -273,7 +303,14 @@ interface FsState {
   /** 清除文件操作错误 */
   clearOperationError: () => void
   /** 确认重命名 */
-  confirmRename: (oldPath: string, newName: string) => Promise<void>
+  confirmRename: (oldPath: string, newName: string) => Promise<boolean>
+  /** 将文件或目录记录为待复制资源。 */
+  copyEntryToClipboard: (entry: FileClipboardEntry) => void
+  /** 将待复制资源粘贴到目录目标，或文件目标的父目录。 */
+  pasteClipboardEntry: (
+    targetPath: string,
+    targetType: 'file' | 'directory',
+  ) => Promise<FsCopyEntryResult | null>
   /** 把文件或目录移动到当前工作空间内的目标目录。 */
   moveEntry: (sourcePath: string, targetDir: string) => Promise<boolean>
   /** 确认新建文件夹（从 state.newFolderParent 读取父目录） */
@@ -327,6 +364,7 @@ export const useFsStore = create<FsState>((set, get) => ({
   newFolderParent: null,
   expandedPaths: initialFsPanelState.expandedPaths,
   selectedPath: initialFsPanelState.selectedPath,
+  clipboardEntry: null,
   recentWorkspacePaths: [],
 
   setWorkspace: async (path, options) => {
@@ -597,7 +635,7 @@ export const useFsStore = create<FsState>((set, get) => ({
         const currentChildren =
           dirPath === state.workspacePath
             ? state.tree
-            : (findNode(state.tree, dirPath)?.children ?? [])
+            : (findFileTreeNode(state.tree, dirPath)?.children ?? [])
         const newChildren = reconcileDirectoryEntries(
           entries,
           currentChildren,
@@ -665,7 +703,7 @@ export const useFsStore = create<FsState>((set, get) => ({
 
     // 刚展开且从未加载过子节点（children===undefined）才加载
     // 区分"未加载"(undefined) 与 "加载过但为空目录"([])，避免空目录每次展开都重读
-    const node = findNode(get().tree, dirPath)
+    const node = findFileTreeNode(get().tree, dirPath)
     if (node?.expanded && node.children === undefined) {
       await get().refreshDir(dirPath)
     }
@@ -724,15 +762,19 @@ export const useFsStore = create<FsState>((set, get) => ({
 
   confirmRename: async (oldPath, newName) => {
     const trimmedName = newName.trim()
-    if (!trimmedName) return
+    if (!trimmedName) return false
     if (hasPathSeparator(trimmedName)) {
+      console.warn('[FileSystem] 重命名被拒绝：文件名包含路径分隔符', { oldPath })
       set({ operationError: '重命名失败: 文件名不能包含路径分隔符' })
-      return
+      return false
     }
     const parent = parentDir(oldPath)
     const newPath = parent === '/' ? '/' + trimmedName : parent + '/' + trimmedName
     set({ editingPath: null })
-    if (newPath === oldPath) return
+    if (newPath === oldPath) {
+      set({ operationError: null })
+      return true
+    }
     try {
       let companionMove: { oldPath: string; newPath: string } | null = null
       if (
@@ -760,6 +802,7 @@ export const useFsStore = create<FsState>((set, get) => ({
       useTabStore.getState().rebaseFilePaths(oldPath, newPath)
       useAgentStore.getState().rebaseMountedResourcePaths(oldPath, newPath)
       updateRenamedTabTitle(newPath)
+      syncRenamedBrowserFileTabs(oldPath, newPath)
       await get().refreshDir(parent)
       set((state) => {
         const expandedPaths = state.expandedPaths.map((path) => {
@@ -782,9 +825,76 @@ export const useFsStore = create<FsState>((set, get) => ({
         { expandedPaths: get().expandedPaths, selectedPath: get().selectedPath },
         get().workspacePath,
       )
+      return true
     } catch (err) {
       await get().refreshDir(parent)
-      set({ operationError: '重命名失败: ' + describeError(err) })
+      const error = describeError(err)
+      console.error('[FileSystem] 重命名失败', { oldPath, newPath, error })
+      set({ operationError: '重命名失败: ' + error })
+      return false
+    }
+  },
+
+  copyEntryToClipboard: (entry) => {
+    set({ clipboardEntry: entry, operationError: null })
+  },
+
+  pasteClipboardEntry: async (targetPath, targetType) => {
+    const workspacePath = get().workspacePath
+    const clipboardEntry = get().clipboardEntry
+    if (!workspacePath || !clipboardEntry) {
+      set({ operationError: '粘贴失败: 尚未复制文件或文件夹' })
+      return null
+    }
+    const targetDirectory = targetType === 'directory' ? targetPath : parentDir(targetPath)
+    if (!isPathWithin(workspacePath, targetDirectory)) {
+      set({ operationError: '粘贴失败: 目标不属于当前项目' })
+      return null
+    }
+    if (
+      clipboardEntry.fileType === 'directory' &&
+      (targetDirectory === clipboardEntry.path ||
+        targetDirectory.startsWith(`${clipboardEntry.path}/`))
+    ) {
+      set({ operationError: '粘贴失败: 文件夹不能复制到自身或其子目录' })
+      return null
+    }
+
+    try {
+      const result = await window.cclinkStudio.fs.copyEntry({
+        sourceWorkspacePath: clipboardEntry.workspacePath,
+        sourcePath: clipboardEntry.path,
+        targetWorkspacePath: workspacePath,
+        targetDirectory,
+      })
+      set((state) => {
+        const expandedPaths =
+          targetDirectory === workspacePath || state.expandedPaths.includes(targetDirectory)
+            ? state.expandedPaths
+            : [...state.expandedPaths, targetDirectory]
+        return {
+          tree: applyExpandedFlags(state.tree, new Set(expandedPaths)),
+          expandedPaths,
+          selectedPath: result.destinationPath,
+          operationError: null,
+        }
+      })
+      await get().refreshDir(targetDirectory)
+      saveFsPanelState(
+        { expandedPaths: get().expandedPaths, selectedPath: result.destinationPath },
+        workspacePath,
+      )
+      return result
+    } catch (err) {
+      const error = describeError(err)
+      console.error('[FileSystem] 复制粘贴失败', {
+        sourcePath: clipboardEntry.path,
+        targetDirectory,
+        error,
+      })
+      set({ operationError: '粘贴失败: ' + error })
+      await get().refreshDir(targetDirectory)
+      return null
     }
   },
 
@@ -840,6 +950,7 @@ export const useFsStore = create<FsState>((set, get) => ({
       useTabStore.getState().rebaseFilePaths(sourcePath, destinationPath)
       useAgentStore.getState().rebaseMountedResourcePaths(sourcePath, destinationPath)
       updateRenamedTabTitle(destinationPath)
+      syncRenamedBrowserFileTabs(sourcePath, destinationPath)
       set((state) => {
         const expandedPaths = state.expandedPaths
           .map((path) => {
@@ -932,18 +1043,6 @@ export const useFsStore = create<FsState>((set, get) => ({
   },
 }))
 
-/** 在树中查找指定路径的节点 */
-function findNode(nodes: FileTreeNode[], targetPath: string): FileTreeNode | undefined {
-  for (const node of nodes) {
-    if (node.path === targetPath) return node
-    if (node.children) {
-      const found = findNode(node.children, targetPath)
-      if (found) return found
-    }
-  }
-  return undefined
-}
-
 async function restoreExpandedDirs(
   workspacePath: string,
   get: () => FsState,
@@ -955,7 +1054,7 @@ async function restoreExpandedDirs(
     .sort((a, b) => a.split('/').length - b.split('/').length)
 
   for (const dirPath of paths) {
-    const node = findNode(get().tree, dirPath)
+    const node = findFileTreeNode(get().tree, dirPath)
     if (!node || node.type !== 'directory') continue
 
     set((state) => {
@@ -963,7 +1062,7 @@ async function restoreExpandedDirs(
       return tree === state.tree ? state : { tree }
     })
 
-    if (refreshLoaded || findNode(get().tree, dirPath)?.children === undefined) {
+    if (refreshLoaded || findFileTreeNode(get().tree, dirPath)?.children === undefined) {
       await get().refreshDir(dirPath)
     }
   }

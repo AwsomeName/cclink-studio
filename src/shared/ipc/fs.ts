@@ -210,6 +210,18 @@ export interface FsScopedPathInput {
   targetPath: string
 }
 
+export interface FsCopyEntryInput {
+  sourceWorkspacePath: string
+  sourcePath: string
+  targetWorkspacePath: string
+  targetDirectory: string
+}
+
+export interface FsCopyEntryResult {
+  sourcePath: string
+  destinationPath: string
+}
+
 export interface FsApiContract {
   getHomePath: () => Promise<string>
   readDir: (dirPath: string) => Promise<FsDirEntry[]>
@@ -232,6 +244,7 @@ export interface FsApiContract {
   mkdir: (dirPath: string) => Promise<void>
   rename: (oldPath: string, newPath: string) => Promise<void>
   move: (oldPath: string, newPath: string) => Promise<void>
+  copyEntry: (input: FsCopyEntryInput) => Promise<FsCopyEntryResult>
   delete: (filePath: string) => Promise<void>
   extractZip: (filePath: string) => Promise<FsExtractZipResult>
   openPath: (path: string) => Promise<void>
@@ -276,6 +289,7 @@ export const fsIpc = {
   mkdir: defineIpcCall<[string], void>('fs:mkdir'),
   rename: defineIpcCall<[string, string], void>('fs:rename'),
   move: defineIpcCall<[string, string], void>('fs:move'),
+  copyEntry: defineIpcCall<[FsCopyEntryInput], FsCopyEntryResult>('fs:copyEntry'),
   delete: defineIpcCall<[string], void>('fs:delete'),
   extractZip: defineIpcCall<[string], FsExtractZipResult>('fs:extractZip'),
   openPath: defineIpcCall<[string], void>('fs:openPath'),

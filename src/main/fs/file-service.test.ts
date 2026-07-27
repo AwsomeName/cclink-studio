@@ -54,6 +54,122 @@ describe('FileService', () => {
     await expect(readFile(sourcePath, 'utf-8')).resolves.toBe('new source')
   })
 
+  it('copies files and directories without overwriting existing entries', async () => {
+    const service = new FileService()
+    const sourceFile = join(tempDir, 'note.txt')
+    const sourceDir = join(tempDir, '资料')
+    const targetDir = join(tempDir, 'archive')
+    await writeFile(sourceFile, 'source', 'utf-8')
+    await mkdir(sourceDir)
+    await writeFile(join(sourceDir, 'nested.txt'), 'nested', 'utf-8')
+    await mkdir(targetDir)
+
+    const firstFileCopy = await service.copyEntry({
+      sourceWorkspacePath: tempDir,
+      sourcePath: sourceFile,
+      targetWorkspacePath: tempDir,
+      targetDirectory: tempDir,
+    })
+    const secondFileCopy = await service.copyEntry({
+      sourceWorkspacePath: tempDir,
+      sourcePath: sourceFile,
+      targetWorkspacePath: tempDir,
+      targetDirectory: tempDir,
+    })
+    const directoryCopy = await service.copyEntry({
+      sourceWorkspacePath: tempDir,
+      sourcePath: sourceDir,
+      targetWorkspacePath: tempDir,
+      targetDirectory: targetDir,
+    })
+
+    expect(firstFileCopy.destinationPath).toBe(join(tempDir, 'note 副本.txt'))
+    expect(secondFileCopy.destinationPath).toBe(join(tempDir, 'note 副本 2.txt'))
+    await expect(readFile(firstFileCopy.destinationPath, 'utf-8')).resolves.toBe('source')
+    await expect(
+      readFile(join(directoryCopy.destinationPath, 'nested.txt'), 'utf-8'),
+    ).resolves.toBe('nested')
+  })
+
+  it('rejects copying a directory into itself or a descendant', async () => {
+    const service = new FileService()
+    const sourceDir = join(tempDir, 'docs')
+    const childDir = join(sourceDir, 'archive')
+    await mkdir(childDir, { recursive: true })
+
+    await expect(
+      service.copyEntry({
+        sourceWorkspacePath: tempDir,
+        sourcePath: sourceDir,
+        targetWorkspacePath: tempDir,
+        targetDirectory: childDir,
+      }),
+    ).rejects.toThrow('不能复制到自身或其子目录')
+  })
+
+  it('copies Markdown with its visible asset directory as an independent document', async () => {
+    const service = new FileService()
+    const sourcePath = join(tempDir, 'notes.md')
+    const imagePath = join(tempDir, 'diagram.png')
+    await writeFile(sourcePath, '# Notes\n', 'utf-8')
+    await writeFile(imagePath, Buffer.from([1, 2, 3]))
+    const asset = await service.importDocumentAsset(sourcePath, imagePath)
+    await service.saveTextDocument({
+      filePath: sourcePath,
+      content: `![diagram](${asset.relativePath})\n`,
+      force: true,
+    })
+
+    const result = await service.copyEntry({
+      sourceWorkspacePath: tempDir,
+      sourcePath,
+      targetWorkspacePath: tempDir,
+      targetDirectory: tempDir,
+    })
+
+    expect(result.destinationPath).toBe(join(tempDir, 'notes 副本.md'))
+    const copiedContent = await readFile(result.destinationPath, 'utf-8')
+    const copiedImageReference = copiedContent.match(/!\[diagram\]\(([^)]+)\)/)?.[1]
+    expect(copiedImageReference).toBeDefined()
+    expect(decodeURI(copiedImageReference!)).toBe('notes 副本.assets/diagram.png')
+    await expect(readFile(join(tempDir, 'notes 副本.assets', 'diagram.png'))).resolves.toEqual(
+      Buffer.from([1, 2, 3]),
+    )
+  })
+
+  it('avoids an existing Markdown companion asset directory when choosing a copy name', async () => {
+    const service = new FileService()
+    const sourcePath = join(tempDir, 'notes.md')
+    const imagePath = join(tempDir, 'diagram.png')
+    const occupiedAssetDir = join(tempDir, 'notes 副本.assets')
+    await writeFile(sourcePath, '# Notes\n', 'utf-8')
+    await writeFile(imagePath, Buffer.from([1, 2, 3]))
+    const asset = await service.importDocumentAsset(sourcePath, imagePath)
+    await service.saveTextDocument({
+      filePath: sourcePath,
+      content: `![diagram](${asset.relativePath})\n`,
+      force: true,
+    })
+    await mkdir(occupiedAssetDir)
+    await writeFile(join(occupiedAssetDir, 'keep.txt'), 'existing', 'utf-8')
+
+    const result = await service.copyEntry({
+      sourceWorkspacePath: tempDir,
+      sourcePath,
+      targetWorkspacePath: tempDir,
+      targetDirectory: tempDir,
+    })
+
+    expect(result.destinationPath).toBe(join(tempDir, 'notes 副本 2.md'))
+    expect(await readFile(result.destinationPath, 'utf-8')).toContain(
+      'notes%20%E5%89%AF%E6%9C%AC%202.assets/diagram.png',
+    )
+    await expect(readFile(join(occupiedAssetDir, 'keep.txt'), 'utf-8')).resolves.toBe('existing')
+    await expect(readFile(join(tempDir, 'notes 副本 2.assets', 'diagram.png'))).resolves.toEqual(
+      Buffer.from([1, 2, 3]),
+    )
+  })
+
   it('reads markdown as UTF-8 text', async () => {
     const service = new FileService()
     const filePath = join(tempDir, 'README.md')

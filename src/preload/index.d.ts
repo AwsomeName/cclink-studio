@@ -3,6 +3,7 @@ import type { AndroidApiContract } from '../shared/ipc/android'
 import type { BrowserApiContract } from '../shared/ipc/browser'
 import type { CadApiContract } from '../shared/ipc/cad'
 import type { DataSourceApiContract } from '../shared/ipc/data-source'
+import type { DiagnosticsApiContract } from '../shared/ipc/diagnostics'
 import type { DialogApiContract } from '../shared/ipc/dialog'
 import type { EditorApiContract } from '../shared/ipc/editor'
 import type { FsApiContract } from '../shared/ipc/fs'
@@ -28,6 +29,8 @@ export interface CCLinkStudioAPI {
   cad: CadApiContract
 
   dataSource: DataSourceApiContract
+
+  diagnostics: DiagnosticsApiContract
 
   identity: IdentityApiContract
 

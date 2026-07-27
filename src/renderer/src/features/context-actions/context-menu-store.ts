@@ -67,7 +67,7 @@ export const useContextMenuStore = create<ContextMenuState>((set, get) => ({
       inputValue: '',
     }),
 
-  hide: () => {
+  hide: (reason = 'outside') => {
     const focusReturn = get().focusReturn
     set({
       open: false,
@@ -78,7 +78,9 @@ export const useContextMenuStore = create<ContextMenuState>((set, get) => ({
       editingContributionId: null,
       inputValue: '',
     })
-    if (focusReturn?.isConnected) requestAnimationFrame(() => focusReturn.focus())
+    if (reason !== 'execute' && focusReturn?.isConnected) {
+      requestAnimationFrame(() => focusReturn.focus())
+    }
   },
 
   beginInlineEdit: (editingContributionId, inputValue) =>

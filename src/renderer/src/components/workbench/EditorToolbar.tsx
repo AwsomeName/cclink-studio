@@ -40,13 +40,13 @@ export function EditorToolbar({
     ? [
         {
           label: '↶',
-          title: '撤销',
+          title: '撤销 (⌘Z)',
           onClick: () => editor.chain().focus().undo().run(),
           disabled: !editor.can().undo(),
         },
         {
           label: '↷',
-          title: '重做',
+          title: '重做 (⌘⇧Z)',
           onClick: () => editor.chain().focus().redo().run(),
           disabled: !editor.can().redo(),
         },
@@ -64,43 +64,43 @@ export function EditorToolbar({
         },
         {
           label: 'S',
-          title: '删除线',
+          title: '删除线 (⌘⇧S / ⌘⇧X)',
           isActive: () => editor.isActive('strike'),
           onClick: () => editor.chain().focus().toggleStrike().run(),
         },
         {
           label: '</>',
-          title: '行内代码',
+          title: '行内代码 (⌘E)',
           isActive: () => editor.isActive('code'),
           onClick: () => editor.chain().focus().toggleCode().run(),
         },
         {
           label: '•',
-          title: '无序列表',
+          title: '无序列表 (⌘⇧8)',
           isActive: () => editor.isActive('bulletList'),
           onClick: () => editor.chain().focus().toggleBulletList().run(),
         },
         {
           label: '1.',
-          title: '有序列表',
+          title: '有序列表 (⌘⇧7)',
           isActive: () => editor.isActive('orderedList'),
           onClick: () => editor.chain().focus().toggleOrderedList().run(),
         },
         {
           label: '☐',
-          title: '任务列表',
+          title: '任务列表 (⌘⇧9)',
           isActive: () => editor.isActive('taskList'),
           onClick: () => editor.chain().focus().toggleTaskList().run(),
         },
         {
           label: '❝',
-          title: '引用',
+          title: '引用 (⌘⇧B)',
           isActive: () => editor.isActive('blockquote'),
           onClick: () => editor.chain().focus().toggleBlockquote().run(),
         },
         {
           label: '{ }',
-          title: '代码块',
+          title: '代码块 (⌘⌥C)',
           isActive: () => editor.isActive('codeBlock'),
           onClick: () => editor.chain().focus().toggleCodeBlock().run(),
         },
@@ -111,7 +111,7 @@ export function EditorToolbar({
         },
         {
           label: <IconLink size={13} />,
-          title: '插入链接',
+          title: '插入或编辑链接 (⌘K)',
           isActive: () => editor.isActive('link'),
           onClick: onInsertLink,
         },
@@ -138,7 +138,7 @@ export function EditorToolbar({
         <select
           className="toolbar-select heading"
           value={headingLevel ? String(headingLevel) : 'paragraph'}
-          title="段落与标题"
+          title="正文与标题 (⌘⌥0...6)"
           onChange={(event) => {
             if (!editor) return
             const value = event.target.value

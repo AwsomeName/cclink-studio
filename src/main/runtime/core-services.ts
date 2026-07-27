@@ -23,6 +23,7 @@ import { registerGitBackupIpc } from '../git-backup/git-backup-ipc'
 import type { CclinkStudioRuntimeState } from './app-runtime'
 import { bootstrapOptionalMainServices } from './optional-main-services'
 import { runShutdownStep } from './shutdown'
+import { registerDiagnosticsIpc } from '../ipc/diagnostics-ipc'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   runtime.settingsService = new SettingsService()
@@ -49,6 +50,9 @@ export async function bootstrapMainProcessServices(
 
   registerWorkspaceStateIpc(runtime.workspaceStateService!, runtime.trustedRendererGuard)
   console.log('[CCLink Studio] 工作台状态 IPC 已注册')
+
+  registerDiagnosticsIpc(runtime.trustedRendererGuard)
+  console.log('[CCLink Studio] 诊断日志 IPC 已注册')
 
   try {
     runtime.localIdentityService = new LocalIdentityService()

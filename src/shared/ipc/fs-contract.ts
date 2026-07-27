@@ -4,6 +4,7 @@ import { fsIpc } from './fs'
 import {
   fsDocumentPathPairSchema,
   fsDocumentTargetPathSchema,
+  fsCopyEntrySchema,
   fsMarkdownSaveAsSchema,
   fsMarkdownTrashSchema,
   fsPathPairSchema,
@@ -90,6 +91,10 @@ export const fsIpcContracts = {
   mkdir: bindPath(fsIpc.mkdir),
   rename: bindPathPair(fsIpc.rename),
   move: bindPathPair(fsIpc.move),
+  copyEntry: bindIpcParser(fsIpc.copyEntry, (args) => {
+    requireArgs(args, 1, fsIpc.copyEntry.channel)
+    return ipcArgs(fsCopyEntrySchema.parse(args[0]))
+  }),
   delete: bindPath(fsIpc.delete),
   extractZip: bindPath(fsIpc.extractZip),
   openPath: bindPath(fsIpc.openPath),

@@ -14,6 +14,9 @@ import { configureBrowserAuthChildApp, runBrowserAuthChild } from './browser/bro
 import { parseCleanBrowserChildOptions } from './browser/clean-browser-contract'
 import { configureCleanBrowserChildApp, runCleanBrowserChild } from './browser/clean-browser-child'
 import { parseTerminalBrowserOpenUrl } from './terminal/terminal-browser-launcher'
+import { installMainDiagnosticCapture } from './diagnostics/main-diagnostic-log'
+
+installMainDiagnosticCapture()
 
 const browserAuthChildOptions = parseBrowserAuthChildOptions(process.argv)
 const cleanBrowserChildOptions = parseCleanBrowserChildOptions(process.argv)

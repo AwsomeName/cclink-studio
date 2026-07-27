@@ -46,6 +46,10 @@ function parentPath(path: string): string {
   return index > 0 ? path.slice(0, index) : '/'
 }
 
+function pasteTargetDirectory(target: FileTarget): string {
+  return target.fileType === 'directory' ? target.path : parentPath(target.path)
+}
+
 function toWorkspaceRelativePath(filePath: string, workspacePath: string | null): string {
   if (!workspacePath) return filePath
   const root = workspacePath.replace(/\/+$/, '')
@@ -172,7 +176,72 @@ export function createFileContextCommands(): Command[] {
       contextOnly: true,
       category: '文件',
       risk: 'local-write',
-      action: (context) => useFsStore.getState().startEditing(requireFileTarget(context).path),
+      action: async (context) => {
+        const target = requireFileTarget(context)
+        const inputValue = context?.inputValue
+        if (inputValue === undefined) {
+          useFsStore.getState().startEditing(target.path)
+          return
+        }
+        const renamed = await useFsStore.getState().confirmRename(target.path, inputValue)
+        if (!renamed) {
+          throw new Error(useFsStore.getState().operationError ?? '文件重命名失败')
+        }
+      },
+    },
+    {
+      id: 'fileTree.copyEntry',
+      label: '复制',
+      shortcut: '⌘C',
+      contextOnly: true,
+      category: '文件',
+      action: (context) => {
+        const target = requireFileTarget(context)
+        if (!target.workspaceKey) throw new Error('当前文件没有本地工作区归属')
+        useFsStore.getState().copyEntryToClipboard({
+          workspacePath: target.workspaceKey,
+          path: target.path,
+          name: target.name,
+          fileType: target.fileType,
+        })
+        useToastStore.getState().show(`已复制 ${target.name}`, 'success')
+      },
+    },
+    {
+      id: 'fileTree.pasteEntry',
+      label: '粘贴',
+      shortcut: '⌘V',
+      contextOnly: true,
+      category: '文件',
+      risk: 'local-write',
+      enabled: (context) => {
+        const target = fileTarget(context)
+        const clipboardEntry = useFsStore.getState().clipboardEntry
+        if (!target) return { enabled: false, reason: '粘贴目标已失效' }
+        if (!clipboardEntry) return { enabled: false, reason: '尚未复制文件或文件夹' }
+        const targetDirectory = pasteTargetDirectory(target)
+        if (
+          clipboardEntry.fileType === 'directory' &&
+          (targetDirectory === clipboardEntry.path ||
+            targetDirectory.startsWith(`${clipboardEntry.path}/`))
+        ) {
+          return { enabled: false, reason: '文件夹不能复制到自身或其子目录' }
+        }
+        return true
+      },
+      action: async (context) => {
+        const target = requireFileTarget(context)
+        const result = await useFsStore.getState().pasteClipboardEntry(target.path, target.fileType)
+        if (!result) {
+          throw new Error(useFsStore.getState().operationError ?? '文件粘贴失败')
+        }
+        useToastStore
+          .getState()
+          .show(
+            `已粘贴为 ${result.destinationPath.slice(result.destinationPath.lastIndexOf('/') + 1)}`,
+            'success',
+          )
+      },
     },
     {
       id: 'fileTree.copyAbsolutePath',
@@ -426,12 +495,32 @@ export const fileMenuContributions: MenuContribution[] = [
     order: 20,
     commandId: 'fileTree.rename',
     icon: '✎',
+    inlineInput: {
+      ariaLabel: '重命名文件或文件夹',
+      initialValue: (context) => fileTarget(context)?.name ?? '',
+    },
+  },
+  {
+    id: 'file.copy-entry',
+    targetKinds: ['file'],
+    group: '40-copy',
+    order: 10,
+    commandId: 'fileTree.copyEntry',
+    icon: '⧉',
+  },
+  {
+    id: 'file.paste-entry',
+    targetKinds: ['file'],
+    group: '40-copy',
+    order: 20,
+    commandId: 'fileTree.pasteEntry',
+    icon: '▣',
   },
   {
     id: 'file.copy-absolute',
     targetKinds: ['file'],
     group: '40-copy',
-    order: 10,
+    order: 30,
     commandId: 'fileTree.copyAbsolutePath',
     icon: '📋',
   },
@@ -439,7 +528,7 @@ export const fileMenuContributions: MenuContribution[] = [
     id: 'file.copy-relative',
     targetKinds: ['file'],
     group: '40-copy',
-    order: 20,
+    order: 40,
     commandId: 'fileTree.copyRelativePath',
     icon: '📎',
   },
@@ -447,7 +536,7 @@ export const fileMenuContributions: MenuContribution[] = [
     id: 'file.reveal',
     targetKinds: ['file'],
     group: '40-copy',
-    order: 30,
+    order: 50,
     commandId: 'fileTree.revealInFileManager',
     icon: '↗',
   },

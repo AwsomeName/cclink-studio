@@ -8,6 +8,7 @@ import { useOpenProjectsStore } from './open-projects-store'
 import { useTabStore } from './tab-store'
 import { useWorkspaceStore } from './workspace-store'
 import { setWorkspaceStateOwnerKey, setWorkspaceStatePath } from '../utils/workspace-state'
+import { toLocalFileUrl } from '../utils/html-files'
 
 function snapshot(
   workspaceKey: string | null,
@@ -36,6 +37,10 @@ describe('fs-store workspace switching', () => {
           isDirectory: vi.fn().mockResolvedValue(true),
           rename: vi.fn().mockResolvedValue(undefined),
           move: vi.fn().mockResolvedValue(undefined),
+          copyEntry: vi.fn().mockResolvedValue({
+            sourcePath: '/Users/apple/project/source',
+            destinationPath: '/Users/apple/project/source 副本',
+          }),
           mkdir: vi.fn().mockResolvedValue(undefined),
           writeFile: vi.fn().mockResolvedValue(undefined),
           watchDir: vi.fn().mockResolvedValue(vi.fn()),
@@ -55,6 +60,9 @@ describe('fs-store workspace switching', () => {
         },
         dialog: {
           showOpenDialog: vi.fn().mockResolvedValue({ canceled: true, filePaths: [] }),
+        },
+        browser: {
+          navigate: vi.fn().mockResolvedValue(undefined),
         },
       },
     })
@@ -544,7 +552,24 @@ describe('fs-store workspace switching', () => {
     ])
 
     await useFsStore.getState().setWorkspace(workspacePath)
-    await useFsStore.getState().confirmRename(`${workspacePath}/a`, '05-c c lin k')
+    useTabStore.getState().openTab({
+      type: 'editor',
+      title: 'a',
+      icon: '📄',
+      filePath: `${workspacePath}/a`,
+    })
+    useTabStore.getState().openTab({
+      type: 'browser',
+      title: 'a',
+      icon: '🌐',
+      filePath: `${workspacePath}/a`,
+      forceNew: true,
+    })
+    const browserTab = useTabStore.getState().tabs.find((tab) => tab.type === 'browser')!
+    useBrowserStore.getState().ensureTab(browserTab.id, toLocalFileUrl(`${workspacePath}/a`))
+    await expect(
+      useFsStore.getState().confirmRename(`${workspacePath}/a`, '05-c c lin k'),
+    ).resolves.toBe(true)
 
     expect(window.cclinkStudio.fs.rename).toHaveBeenCalledWith(
       `${workspacePath}/a`,
@@ -558,6 +583,23 @@ describe('fs-store workspace switching', () => {
     ])
     expect(useFsStore.getState().error).toBeNull()
     expect(useFsStore.getState().operationError).toBeNull()
+    expect(useTabStore.getState().tabs).toEqual([
+      expect.objectContaining({
+        title: '05-c c lin k',
+        filePath: `${workspacePath}/05-c c lin k`,
+      }),
+      expect.objectContaining({
+        title: '05-c c lin k',
+        filePath: `${workspacePath}/05-c c lin k`,
+      }),
+    ])
+    expect(useBrowserStore.getState().tabs[browserTab.id].url).toBe(
+      toLocalFileUrl(`${workspacePath}/05-c c lin k`),
+    )
+    expect(window.cclinkStudio.browser.navigate).toHaveBeenCalledWith(
+      browserTab.id,
+      toLocalFileUrl(`${workspacePath}/05-c c lin k`),
+    )
   })
 
   it('moves an open dirty markdown file and rebases its tab and editor buffer', async () => {
@@ -682,6 +724,93 @@ describe('fs-store workspace switching', () => {
     expect(useFsStore.getState().operationError).toContain('不能移动到自身或其子目录')
   })
 
+  it('copies a selected file and pastes it into the selected directory', async () => {
+    const workspacePath = '/Users/apple/project'
+    const sourcePath = `${workspacePath}/note.txt`
+    const targetDir = `${workspacePath}/archive`
+    const destinationPath = `${targetDir}/note.txt`
+    const copyEntry = window.cclinkStudio.fs.copyEntry as ReturnType<typeof vi.fn>
+    copyEntry.mockResolvedValue({ sourcePath, destinationPath })
+    const readDir = window.cclinkStudio.fs.readDir as ReturnType<typeof vi.fn>
+    readDir.mockResolvedValue([
+      {
+        name: 'note.txt',
+        path: destinationPath,
+        type: 'file',
+        extension: '.txt',
+        size: 4,
+        modifiedAt: 2,
+      },
+    ])
+    useFsStore.setState({
+      workspacePath,
+      tree: [
+        {
+          name: 'note.txt',
+          path: sourcePath,
+          type: 'file',
+          extension: '.txt',
+        },
+        {
+          name: 'archive',
+          path: targetDir,
+          type: 'directory',
+          expanded: false,
+        },
+      ],
+      expandedPaths: [],
+      selectedPath: sourcePath,
+    })
+
+    useFsStore.getState().copyEntryToClipboard({
+      workspacePath,
+      path: sourcePath,
+      name: 'note.txt',
+      fileType: 'file',
+    })
+    await expect(
+      useFsStore.getState().pasteClipboardEntry(targetDir, 'directory'),
+    ).resolves.toEqual({ sourcePath, destinationPath })
+
+    expect(copyEntry).toHaveBeenCalledWith({
+      sourceWorkspacePath: workspacePath,
+      sourcePath,
+      targetWorkspacePath: workspacePath,
+      targetDirectory: targetDir,
+    })
+    expect(useFsStore.getState().expandedPaths).toContain(targetDir)
+    expect(useFsStore.getState().selectedPath).toBe(destinationPath)
+    expect(useFsStore.getState().tree).toEqual([
+      expect.objectContaining({ path: sourcePath }),
+      expect.objectContaining({
+        path: targetDir,
+        expanded: true,
+        children: [expect.objectContaining({ path: destinationPath })],
+      }),
+    ])
+  })
+
+  it('rejects pasting a copied directory into itself before IPC', async () => {
+    const workspacePath = '/Users/apple/project'
+    const sourceDir = `${workspacePath}/docs`
+    useFsStore.setState({
+      workspacePath,
+      clipboardEntry: {
+        workspacePath,
+        path: sourceDir,
+        name: 'docs',
+        fileType: 'directory',
+      },
+    })
+
+    await expect(
+      useFsStore.getState().pasteClipboardEntry(sourceDir, 'directory'),
+    ).resolves.toBeNull()
+
+    expect(window.cclinkStudio.fs.copyEntry).not.toHaveBeenCalled()
+    expect(useFsStore.getState().operationError).toContain('不能复制到自身或其子目录')
+  })
+
   it('refreshes workspace and reloads expanded directories', async () => {
     const workspacePath = '/Users/apple/project'
     const childDir = `${workspacePath}/docs`
@@ -782,7 +911,9 @@ describe('fs-store workspace switching', () => {
     rename.mockRejectedValue(new Error('ENOENT'))
 
     await useFsStore.getState().setWorkspace(workspacePath)
-    await useFsStore.getState().confirmRename(`${workspacePath}/a`, '05-c c lin k')
+    await expect(
+      useFsStore.getState().confirmRename(`${workspacePath}/a`, '05-c c lin k'),
+    ).resolves.toBe(false)
 
     expect(useFsStore.getState().workspacePath).toBe(workspacePath)
     expect(useFsStore.getState().tree).toEqual([

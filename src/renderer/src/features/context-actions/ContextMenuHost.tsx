@@ -98,8 +98,10 @@ export function ContextMenuHost(): React.ReactElement | null {
     }
   }, [activeWorkspaceRef, hide, open, target, workspaceKeyAtOpen])
 
-  useEffect(() => {
-    if (editingContributionId) requestAnimationFrame(() => inputRef.current?.select())
+  useLayoutEffect(() => {
+    if (!editingContributionId || !inputRef.current) return
+    inputRef.current.focus()
+    inputRef.current.select()
   }, [editingContributionId])
 
   useEffect(() => {

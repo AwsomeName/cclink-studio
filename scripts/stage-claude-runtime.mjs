@@ -8,6 +8,7 @@ import {
   chmod,
   copyFile,
   mkdir,
+  mkdtemp,
   readFile,
   rename,
   rm,
@@ -16,6 +17,7 @@ import {
 } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
@@ -77,11 +79,23 @@ async function sha256(path) {
 
 async function runVersion(executablePath) {
   const { stdout, stderr } = await execFileAsync(executablePath, ['--version'], {
-    timeout: 15_000,
+    timeout: 45_000,
     maxBuffer: 1024 * 1024,
     env: { ...process.env, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
   })
   return `${stdout}\n${stderr}`.trim()
+}
+
+async function runVersionFromTemporaryCopy(executablePath) {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'cclink-runtime-verify-'))
+  const temporaryExecutable = join(temporaryRoot, 'claude')
+  try {
+    await copyFile(executablePath, temporaryExecutable)
+    await chmod(temporaryExecutable, 0o755)
+    return await runVersion(temporaryExecutable)
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true })
+  }
 }
 
 function platformPackageName(arch) {
@@ -188,7 +202,7 @@ async function verifyRuntime(outputRoot, arch, sdkMetadata) {
   if ((await sha256(executablePath)) !== manifest.sha256) {
     throw new Error(`Claude Code 运行时 SHA-256 校验失败: ${executablePath}`)
   }
-  const versionOutput = await runVersion(executablePath)
+  const versionOutput = await runVersionFromTemporaryCopy(executablePath)
   if (!versionOutput.includes(manifest.claudeCodeVersion)) {
     throw new Error(`Claude Code 运行时版本校验失败: ${versionOutput || '无输出'}`)
   }

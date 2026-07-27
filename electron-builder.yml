@@ -43,5 +43,9 @@ mac:
     - dmg
     - zip
   category: public.app-category.productivity
-  identity: null
+  # Local builds use ad-hoc signing so macOS accepts nested executables inside the app bundle.
+  # The bundled Claude runtime keeps its upstream Anthropic Developer ID signature.
+  identity: '-'
+  signIgnore:
+    - 'Contents/Resources/agent-runtime/.*'
 # 开源壳不内置发布源；官方更新源、签名和公证由 cclink-dev 官方构建层注入。

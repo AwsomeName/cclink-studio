@@ -123,9 +123,14 @@ case "$ARCH" in
 esac
 [ -n "$COMPRESSION" ] && EB_ARGS+=("--config.compression=$COMPRESSION")
 
-info "打包（electron-builder ${EB_ARGS[*]}）..."
-npx electron-builder "${EB_ARGS[@]}" > /tmp/cclink-studio-package.log 2>&1 \
-  || { tail -40 /tmp/cclink-studio-package.log; die "打包失败，详见 /tmp/cclink-studio-package.log"; }
+info "串行打包 DMG 与 ZIP（electron-builder ${EB_ARGS[*]}）..."
+: > /tmp/cclink-studio-package.log
+for TARGET in dmg zip; do
+  info "生成 $TARGET ..."
+  npx electron-builder "${EB_ARGS[@]}" "--config.mac.target=$TARGET" \
+    >> /tmp/cclink-studio-package.log 2>&1 \
+    || { tail -40 /tmp/cclink-studio-package.log; die "$TARGET 打包失败，详见 /tmp/cclink-studio-package.log"; }
+done
 ok "打包完成"
 
 # ── 7. 验证安装包内 Agent 运行时 ──────────────────────────
@@ -156,7 +161,7 @@ for artifact in dist/*.dmg dist/*.zip; do
 done
 echo ""
 echo -e "${CYAN}搬到另一台 Mac 的提示:${RESET}"
-echo -e "  • 默认未签名 → 目标机安装后执行:  ${BOLD}xattr -cr /Applications/CCLink\\ Studio.app${RESET}"
+echo -e "  • 本地包仅做 ad-hoc 签封、未公证 → 若 macOS 拦截，安装后执行:  ${BOLD}xattr -cr /Applications/CCLink\\ Studio\\ 开源版.app${RESET}"
 echo -e "  • Intel Mac 需另行用 ${BOLD}--x64${RESET} 打包；当前产物仅适用于 ${BOLD}$ARCH${RESET}"
 echo -e "  • 安装包携带固定版本 Claude Code 运行时；模型服务和 API 凭证仍由用户配置"
 echo -e "  • 内嵌浏览器用 Electron 自带 Chromium，无需额外下载"

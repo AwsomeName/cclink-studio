@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useCallback, type DragEvent } from 'react'
 import { useFsStore, useTabStore } from '../../stores'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
+import type { ContextTarget } from '../../features/context-actions/context-target'
 import {
   buildKeyboardContextMenuInput,
   isContextMenuKeyboardEvent,
@@ -18,6 +19,9 @@ import { getModelFileIcon, getTabTypeForFile, isModelFileExtension } from '../..
 import { isGerberFileExtension } from '../../utils/hardware-files'
 import { buildHtmlBrowserTabDraft, isHtmlFileExtension } from '../../utils/html-files'
 import { getFileTreeRefreshDirectory } from './file-tree-watch'
+import { resolveFileTreeClipboardShortcut } from './file-tree-shortcuts'
+import { findFileTreeNode } from '../../utils/workspace-tree'
+import { useCommandStore } from '../../stores/command-store'
 
 const FILE_TREE_SCROLL_KEY = 'cclink-studio-file-tree-scroll'
 
@@ -98,6 +102,25 @@ function getFileIcon(node: FileTreeNode): string {
   if (isGerberFileExtension(node.extension)) return '🧩'
   if (isModelFileExtension(node.extension)) return getModelFileIcon(node.extension)
   return FILE_ICONS[node.extension ?? ''] ?? '📄'
+}
+
+function buildFileTarget(node: FileTreeNode, workspacePath: string | null): ContextTarget {
+  return {
+    kind: 'file',
+    workspaceKey: workspacePath,
+    path: node.path,
+    name: node.name,
+    fileType: node.type,
+    extension: node.extension,
+    expanded: node.expanded,
+  }
+}
+
+function isTextEditingElement(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  return Boolean(
+    target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]'),
+  )
 }
 
 export function FileTree(): React.ReactElement {
@@ -340,6 +363,30 @@ export function FileTree(): React.ReactElement {
       <div
         className={`file-tree ${dropTargetPath === workspacePath ? 'drop-target-root' : ''}`}
         ref={treeRef}
+        onKeyDown={(event) => {
+          const shortcut = resolveFileTreeClipboardShortcut({
+            key: event.key,
+            metaKey: event.metaKey,
+            ctrlKey: event.ctrlKey,
+            altKey: event.altKey,
+            shiftKey: event.shiftKey,
+            isComposing: event.nativeEvent.isComposing,
+            isTextEditing: isTextEditingElement(event.target),
+          })
+          if (!shortcut) return
+          const fsState = useFsStore.getState()
+          if (!fsState.workspacePath || !fsState.selectedPath) return
+          const node = findFileTreeNode(fsState.tree, fsState.selectedPath)
+          if (!node) return
+          event.preventDefault()
+          event.stopPropagation()
+          void useCommandStore
+            .getState()
+            .executeCommand(shortcut === 'copy' ? 'fileTree.copyEntry' : 'fileTree.pasteEntry', {
+              source: 'shortcut',
+              target: buildFileTarget(node, fsState.workspacePath),
+            })
+        }}
         onDragOver={(event) => {
           if (!canDropTo(workspacePath)) return
           event.preventDefault()
@@ -427,6 +474,7 @@ function FileTreeNodeView({
   const confirmNewFile = useFsStore((s) => s.confirmNewFile)
   const cancelEditing = useFsStore((s) => s.cancelEditing)
   const selectedPath = useFsStore((s) => s.selectedPath)
+  const setSelectedPath = useFsStore((s) => s.setSelectedPath)
 
   /** 重命名输入框（在此节点上） */
   const isRenaming = editingPath === node.path
@@ -461,18 +509,12 @@ function FileTreeNodeView({
             else onFileClick(node)
           }
         }}
+        onFocus={() => setSelectedPath(node.path)}
         onContextMenu={(e) => {
           e.preventDefault()
+          setSelectedPath(node.path)
           showMenu({
-            target: {
-              kind: 'file',
-              workspaceKey: workspacePath,
-              path: node.path,
-              name: node.name,
-              fileType: node.type,
-              extension: node.extension,
-              expanded: node.expanded,
-            },
+            target: buildFileTarget(node, workspacePath),
             x: e.clientX,
             y: e.clientY,
             focusReturn: e.currentTarget,
@@ -484,15 +526,7 @@ function FileTreeNodeView({
           event.stopPropagation()
           showMenu(
             buildKeyboardContextMenuInput(
-              {
-                kind: 'file',
-                workspaceKey: workspacePath,
-                path: node.path,
-                name: node.name,
-                fileType: node.type,
-                extension: node.extension,
-                expanded: node.expanded,
-              },
+              buildFileTarget(node, workspacePath),
               event.currentTarget,
             ),
           )
@@ -513,7 +547,9 @@ function FileTreeNodeView({
         {isRenaming ? (
           <InlineInputBox
             initialValue={node.name}
-            onConfirm={(name) => confirmRename(node.path, name)}
+            onConfirm={async (name) => {
+              await confirmRename(node.path, name)
+            }}
             onCancel={cancelEditing}
           />
         ) : (

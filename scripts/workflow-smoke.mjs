@@ -172,7 +172,85 @@ async function main() {
       const workspacePath = `${home}/.cclink-studio-workflow-smoke-${Date.now()}`
       const markdownPath = `${workspacePath}/notes.md`
       await window.cclinkStudio.fs.mkdir(workspacePath)
+      await window.cclinkStudio.fs.mkdir(`${workspacePath}/archive`)
       await window.cclinkStudio.fs.writeFile(markdownPath, '# Workflow Smoke\n\ninitial')
+      await window.cclinkStudio.fs.writeFile(
+        `${workspacePath}/roundtrip.md`,
+        [
+          '计划',
+          '====',
+          '',
+          '访问 <https://example.com>。',
+          '',
+          '查看 [内部文档][guide]。',
+          '',
+          '[guide]: ./资料/说明.md',
+          '',
+          '- [ ] 待办',
+          '',
+          '1. 第一项',
+          '',
+          '缩进代码：',
+          '',
+          '    const indented = true',
+          '',
+          '    const indentedAgain = true',
+          '',
+          '```',
+          'plain text',
+          '```',
+          '',
+          '第二段缩进代码：',
+          '',
+          '    return 42',
+        ].join('\n'),
+      )
+      const reportLines = [
+        '# Hebbian 学习',
+        '',
+        '权重更新为 $\\Delta w = \\eta xy$。',
+        '',
+        '$$',
+        'w_{t+1} = w_t + \\eta x_t y_t',
+        '$$',
+        '',
+        '$$',
+        '\\Delta w = \\eta \\cdot \\underbrace{x}_{\\text{输入}} \\cdot \\underbrace{y}_{\\text{输出}}',
+        '$$',
+        '',
+        '$$',
+        '\\Delta w = \\begin{cases} A^+ e^{-\\Delta t/\\tau} & \\Delta t > 0 \\\\ -A^- e^{\\Delta t/\\tau} & \\Delta t < 0 \\end{cases}',
+        '$$',
+        '',
+        '价格从 $5 增长到 $10，转义金额为 \\$20。',
+      ]
+      for (let section = 1; section <= 30; section += 1) {
+        reportLines.push(
+          '',
+          '---',
+          '',
+          `## 路线 ${section}`,
+          '',
+          `第 ${section} 节讨论 Hebbian 学习、局部可塑性和深层网络训练之间的关系。`.repeat(4),
+          '',
+          '> 这一节保留论文证据、限制条件和工程实现差异。',
+          '',
+          '| 方法 | 更新规则 | 特点 |',
+          '| --- | --- | --- |',
+          `| Oja-${section} | $\\Delta w = \\eta y(x-yw)$ | 稳定局部学习 |`,
+          '',
+          `1. 核对第 ${section} 节的论文来源`,
+          `2. 复现实验并记录第 ${section} 组结果`,
+          '',
+          `- [ ] 完成第 ${section} 节代码验证`,
+        )
+      }
+      reportLines.push('', '## 报告结尾', '', '大型报告渲染完成。')
+      await window.cclinkStudio.fs.writeFile(`${workspacePath}/math.md`, reportLines.join('\n'))
+      await window.cclinkStudio.fs.writeFile(
+        `${workspacePath}/blocked.md`,
+        ['---', 'title: Diagnostic fixture', '---', '', '# Blocked'].join('\n'),
+      )
       await window.cclinkStudio.fs.writeFile(`${workspacePath}/todo.txt`, 'todo')
       await window.cclinkStudio.fs.writeFile(
         `${workspacePath}/cclink-accounts.json`,
@@ -272,6 +350,385 @@ async function main() {
     return 'notes.md saved'
   })
 
+  await runCheck('markdown editor shortcuts preserve structure and app layout', async () => {
+    await ensureSidebarVisible(page)
+    const editor = page.locator('.tiptap').first()
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
+
+    await editor.click()
+    await page.keyboard.press(`${modifier}+A`)
+    await page.keyboard.type('shortcut bold')
+    await page.keyboard.press(`${modifier}+A`)
+    await page.keyboard.press(`${modifier}+B`)
+    assert(
+      (await editor.locator('strong').innerText()) === 'shortcut bold',
+      'formatting shortcut did not apply bold',
+    )
+    assert((await page.locator('.sidebar').count()) === 1, 'Cmd/Ctrl+B hid the app sidebar')
+
+    await page.keyboard.press(`${modifier}+B`)
+    await page.keyboard.press(`${modifier}+I`)
+    assert(
+      (await editor.locator('em').innerText()) === 'shortcut bold',
+      'formatting shortcut did not apply italic',
+    )
+    await page.keyboard.press(`${modifier}+I`)
+
+    await page.keyboard.press(`${modifier}+Shift+S`)
+    assert(
+      (await editor.locator('s').innerText()) === 'shortcut bold',
+      'strike shortcut did not apply',
+    )
+    await page.waitForTimeout(150)
+    const diskAfterStrike = await page.evaluate(
+      async (path) => (await window.cclinkStudio.fs.readFile(path)).content,
+      markdownPath,
+    )
+    assert(
+      diskAfterStrike.includes('saved through editor'),
+      'Cmd/Ctrl+Shift+S accidentally saved the document',
+    )
+    await page.keyboard.press(`${modifier}+Shift+X`)
+    assert((await editor.locator('s').count()) === 0, 'strike alias did not remove formatting')
+
+    await page.keyboard.press(`${modifier}+E`)
+    assert(
+      (await editor.locator('code').innerText()) === 'shortcut bold',
+      'inline code shortcut did not apply',
+    )
+    await page.keyboard.press(`${modifier}+E`)
+
+    await page.keyboard.press(`${modifier}+K`)
+    const linkEditor = page.getByRole('dialog', { name: '编辑链接' })
+    await linkEditor.waitFor({ timeout: 5_000 })
+    await linkEditor.getByRole('textbox', { name: '链接地址' }).fill('https://example.com')
+    await linkEditor.getByRole('button', { name: '应用' }).click()
+    assert(
+      (await editor.locator('a').getAttribute('href')) === 'https://example.com',
+      'Cmd/Ctrl+K did not apply the link',
+    )
+
+    await editor.locator('p, h1, h2, h3').first().click()
+    await page.keyboard.press('End')
+    await page.keyboard.press(`${modifier}+Alt+Digit3`)
+    assert((await editor.locator('h3').count()) === 1, 'heading shortcut did not create H3')
+    await page.keyboard.press(`${modifier}+Alt+Digit0`)
+    assert((await editor.locator('h3').count()) === 0, 'paragraph shortcut did not clear H3')
+
+    await page.keyboard.press(`${modifier}+A`)
+    await page.keyboard.type('quote shortcut')
+    await page.keyboard.press(`${modifier}+Alt+Digit0`)
+    await editor.locator('p').first().click()
+    await page.keyboard.press(`${modifier}+Shift+B`)
+    assert((await editor.locator('blockquote').count()) === 1, 'blockquote shortcut did not apply')
+    await editor.locator('blockquote p').first().click()
+    const selectionInsideBlockquote = await page.evaluate(() => {
+      const anchor = window.getSelection()?.anchorNode
+      const element = anchor instanceof Element ? anchor : anchor?.parentElement
+      return Boolean(element?.closest('blockquote'))
+    })
+    assert(
+      selectionInsideBlockquote,
+      `test cursor did not enter blockquote: ${await editor.innerHTML()}`,
+    )
+    await page.keyboard.press(`${modifier}+Shift+B`)
+    assert(
+      (await editor.locator('blockquote').count()) === 0,
+      `blockquote shortcut did not toggle off: ${await editor.innerHTML()}`,
+    )
+
+    await editor.locator('p').first().click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Shift+Enter')
+    await page.keyboard.type('hard break')
+    assert(
+      (await editor.locator('br:not(.ProseMirror-trailingBreak)').count()) === 1,
+      `hard break shortcut did not apply: ${await editor.innerHTML()}`,
+    )
+    await page.keyboard.type(' undo')
+    await page.keyboard.press(`${modifier}+Z`)
+    assert(!(await editor.innerText()).includes(' undo'), 'undo shortcut did not revert input')
+    await page.keyboard.press(`${modifier}+Shift+Z`)
+    assert((await editor.innerText()).includes(' undo'), 'redo shortcut did not restore input')
+
+    await page.keyboard.press(`${modifier}+A`)
+    await page.keyboard.type('first')
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('second')
+    await page.keyboard.press(`${modifier}+A`)
+    await page.keyboard.press(`${modifier}+Shift+8`)
+    const listItems = editor.locator('ul > li')
+    assert(
+      (await listItems.count()) === 2,
+      `list shortcut did not create two items: ${await editor.innerHTML()}`,
+    )
+    await listItems.nth(1).locator('p').click()
+    await page.waitForTimeout(100)
+    const selectionBeforeTab = await page.evaluate(() => ({
+      activeClass: document.activeElement?.className,
+      anchorText: window.getSelection()?.anchorNode?.textContent,
+      anchorOffset: window.getSelection()?.anchorOffset,
+    }))
+    await page.keyboard.press('Tab')
+    assert(
+      (await editor.locator('ul ul li').count()) === 1,
+      `Tab did not indent the list item: ${JSON.stringify(selectionBeforeTab)} ${await editor.innerHTML()}`,
+    )
+    await page.keyboard.press('Shift+Tab')
+    assert(
+      (await editor.locator('ul ul li').count()) === 0,
+      'Shift+Tab did not outdent the list item',
+    )
+    await page.keyboard.press(`${modifier}+BracketRight`)
+    assert(
+      (await editor.locator('ul ul li').count()) === 1,
+      'Cmd/Ctrl+] did not indent the list item',
+    )
+    await page.keyboard.press(`${modifier}+BracketLeft`)
+    assert(
+      (await editor.locator('ul ul li').count()) === 0,
+      'Cmd/Ctrl+[ did not outdent the list item',
+    )
+
+    await page.keyboard.press(`${modifier}+Shift+7`)
+    assert(
+      (await editor.locator('ol > li').count()) === 2,
+      'ordered-list shortcut did not convert the list',
+    )
+
+    await page.keyboard.press(`${modifier}+A`)
+    await page.keyboard.type('task first')
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('task second')
+    await page.keyboard.press(`${modifier}+A`)
+    await page.keyboard.press(`${modifier}+Shift+9`)
+    const taskItems = editor.locator('ul[data-type="taskList"] > li')
+    assert((await taskItems.count()) === 2, 'task-list shortcut did not convert the list')
+
+    await page.keyboard.press(`${modifier}+A`)
+    await page.keyboard.type('const value = 1')
+    await page.keyboard.press(`${modifier}+A`)
+    await page.keyboard.press(`${modifier}+Alt+C`)
+    const code = editor.locator('pre code')
+    await code.click()
+    await page.keyboard.press('Home')
+    await page.waitForTimeout(100)
+    const tabSize = await page.evaluate(
+      async () => (await window.cclinkStudio.settings.getAll()).editorTabSize,
+    )
+    await page.keyboard.press('Tab')
+    const indentedCode = (await code.textContent()) ?? ''
+    assert(
+      indentedCode.startsWith(' '.repeat(tabSize)),
+      `code block Tab used the wrong width (expected=${tabSize}, actual=${JSON.stringify(indentedCode)})`,
+    )
+    await page.keyboard.press('Shift+Tab')
+    const outdentedCode = (await code.textContent()) ?? ''
+    assert(!outdentedCode.startsWith(' '), 'code block Shift+Tab did not remove indentation')
+
+    await page.keyboard.press(`${modifier}+Alt+C`)
+    await page.getByTitle('插入表格').click()
+    const table = editor.locator('table').last()
+    assert((await table.locator('tr').count()) === 3, 'table command did not insert three rows')
+    await table.locator('th, td').last().locator('p').click()
+    await page.keyboard.type('last cell')
+    await page.keyboard.press('Tab')
+    assert((await table.locator('tr').count()) === 4, 'table Tab did not append a row')
+
+    await page.keyboard.press(`${modifier}+S`)
+    await page.waitForFunction(
+      () => document.querySelector('.toolbar-save')?.textContent?.includes('已保存'),
+      null,
+      { timeout: 10_000 },
+    )
+    return 'format/link/heading/quote/list/code/table/save shortcuts'
+  })
+
+  await runCheck('markdown normalization stays editable after save', async () => {
+    await ensureSidebarVisible(page)
+    await clickByTitle(page, '文件')
+    const fileItem = page.locator('.file-tree-item.file', { hasText: 'roundtrip.md' }).first()
+    await fileItem.waitFor({ timeout: 10_000 })
+    await fileItem.evaluate((element) => element.click())
+    await page.waitForSelector('.markdown-editor-wrapper', { timeout: 15_000 })
+    assert(
+      (await page.locator('.markdown-parse-blocked').count()) === 0,
+      'equivalent Markdown normalization was blocked on open',
+    )
+
+    const editor = page.locator('.tiptap').first()
+    assert(
+      (await editor.locator('pre code').count()) === 3,
+      'multiple indented and fenced code blocks were not all rendered',
+    )
+    const heading = editor.locator('h1').first()
+    await heading.click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(' updated')
+    await page.locator('.toolbar-save').click()
+    await page.waitForFunction(
+      () => document.querySelector('.toolbar-save')?.textContent?.includes('已保存'),
+      null,
+      { timeout: 10_000 },
+    )
+    assert(await editor.isVisible(), 'editor was hidden after its own successful save')
+    assert(
+      (await page.locator('.markdown-parse-blocked').count()) === 0,
+      'editor was blocked after its own version hash changed',
+    )
+
+    const roundtripTab = page.locator('.tab', { hasText: 'roundtrip.md' }).first()
+    await roundtripTab.locator('.tab-close').click()
+    await fileItem.evaluate((element) => element.click())
+    await page.waitForSelector('.markdown-editor-wrapper', { timeout: 15_000 })
+    assert(
+      (await page.locator('.markdown-parse-blocked').count()) === 0,
+      'saved Markdown was blocked when reopened',
+    )
+    assert(
+      (await page.locator('.tiptap h1').first().textContent())?.includes('updated'),
+      'reopened Markdown did not contain the saved change',
+    )
+    assert(
+      (await page.locator('.tiptap pre code').count()) === 3,
+      'reopened Markdown lost a normalized code block',
+    )
+    return 'setext/reference/autolink/code-block save, stay-open, and reopen lifecycle'
+  })
+
+  await runCheck('markdown math degrades to editable text without source loss', async () => {
+    await ensureSidebarVisible(page)
+    await clickByTitle(page, '文件')
+    const fileItem = page.locator('.file-tree-item.file', { hasText: 'math.md' }).first()
+    await fileItem.waitFor({ timeout: 10_000 })
+    await fileItem.evaluate((element) => element.click())
+    await page.waitForSelector('.markdown-editor-wrapper', { timeout: 15_000 })
+    assert(
+      (await page.locator('.markdown-parse-blocked').count()) === 0,
+      'math Markdown was blocked during preflight',
+    )
+    const protectedPreview = page.locator('.markdown-protected-preview')
+    if ((await protectedPreview.count()) > 0) {
+      await protectedPreview.getByRole('button', { name: '复制诊断日志' }).click()
+      const diagnostic = await page.evaluate(() => navigator.clipboard.readText())
+      throw new Error(`math Markdown fell back to a protected preview:\n${diagnostic}`)
+    }
+
+    const editor = page.locator('.tiptap').first()
+    const editorText = (await editor.textContent()) ?? ''
+    assert(
+      editorText.includes('\\Delta w = \\eta xy') &&
+        editorText.includes('w_{t+1} = w_t + \\eta x_t y_t'),
+      'math source was not visible as plain text',
+    )
+    assert(
+      editorText.length > 7_500 && editorText.includes('大型报告渲染完成。'),
+      `large Markdown report rendered incompletely (characters=${editorText.length})`,
+    )
+    const heading = editor.locator('h1').first()
+    await heading.click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(' updated')
+    await page.locator('.toolbar-save').click()
+    await page.waitForFunction(
+      () => document.querySelector('.toolbar-save')?.textContent?.includes('已保存'),
+      null,
+      { timeout: 10_000 },
+    )
+
+    const mathPath = `${workspaceDir}/math.md`
+    const diskContent = await page.evaluate(
+      async (path) => (await window.cclinkStudio.fs.readFile(path)).content,
+      mathPath,
+    )
+    assert(diskContent.includes('$\\Delta w = \\eta xy$'), 'saved Markdown lost inline math')
+    assert(
+      diskContent.includes('w_{t+1} = w_t + \\eta x_t y_t'),
+      'saved Markdown lost display math',
+    )
+    assert(
+      diskContent.includes('\\underbrace{x}_{\\text{输入}}') &&
+        diskContent.includes('A^+ e^{-\\Delta t/\\tau} & \\Delta t > 0'),
+      'saved Markdown changed LaTeX punctuation',
+    )
+    assert(
+      diskContent.includes('$5') && diskContent.includes('$10') && diskContent.includes('\\$20'),
+      'saved Markdown changed currency or escaped dollar text',
+    )
+
+    const mathTab = page.locator('.tab', { hasText: 'math.md' }).first()
+    await mathTab.locator('.tab-close').click()
+    await fileItem.evaluate((element) => element.click())
+    await page.waitForSelector('.markdown-editor-wrapper', { timeout: 15_000 })
+    assert(
+      (await page.locator('.markdown-parse-blocked').count()) === 0 &&
+        (await page.locator('.markdown-protected-preview').count()) === 0,
+      'saved math Markdown was blocked when reopened',
+    )
+    assert(
+      ((await page.locator('.tiptap').first().textContent()) ?? '').includes(
+        'w_{t+1} = w_t + \\eta x_t y_t',
+      ),
+      'reopened Markdown did not retain display math',
+    )
+    return 'inline/display math stayed editable and survived save/reopen as plain text'
+  })
+
+  await runCheck('markdown failures expose a fresh copyable diagnostic after reload', async () => {
+    await ensureSidebarVisible(page)
+    await clickByTitle(page, '文件')
+    const fileItem = page.locator('.file-tree-item.file', { hasText: 'blocked.md' }).first()
+    await fileItem.waitFor({ timeout: 10_000 })
+    await fileItem.evaluate((element) => element.click())
+
+    const blocked = page.locator('.markdown-parse-blocked')
+    await blocked.waitFor({ timeout: 10_000 })
+    const reload = blocked.getByRole('button', { name: '重新载入磁盘版本' })
+    const copy = blocked.getByRole('button', { name: '复制诊断日志' })
+    await copy.waitFor({ timeout: 10_000 })
+
+    const recheckLog = page.waitForEvent('console', {
+      predicate: (message) => message.text().includes('Markdown 预检查失败'),
+      timeout: 10_000,
+    })
+    await reload.click()
+    await recheckLog
+    await copy.click()
+    const diagnostic = await page.evaluate(() => navigator.clipboard.readText())
+    assert(
+      diagnostic.includes('"reportType": "cclink-markdown-render-diagnostic"'),
+      'copied Markdown diagnostic has the wrong report type',
+    )
+    assert(
+      diagnostic.includes('"trigger": "reload"') && diagnostic.includes('"reloadGeneration": 1'),
+      'copied Markdown diagnostic was stale after reload',
+    )
+    assert(
+      diagnostic.includes('"code": "unsupported-frontmatter"'),
+      'copied Markdown diagnostic omitted the blocking reason',
+    )
+
+    const copyAll = page.locator('.agent-copy-diagnostics-btn')
+    await copyAll.waitFor({ timeout: 10_000 })
+    await copyAll.click()
+    const completeDiagnostic = await page.evaluate(() => navigator.clipboard.readText())
+    assert(
+      completeDiagnostic.includes('# CCLink Studio 完整诊断日志'),
+      'Agent diagnostic button did not copy the unified report',
+    )
+    assert(
+      completeDiagnostic.includes('## Markdown') &&
+        completeDiagnostic.includes('"reportType": "cclink-markdown-render-diagnostic"'),
+      'unified report omitted the active Markdown diagnostic',
+    )
+    assert(
+      completeDiagnostic.includes('## Renderer 近期日志') &&
+        completeDiagnostic.includes('## 主进程近期日志'),
+      'unified report omitted process logs',
+    )
+    return 'reload generated a fresh report and the Agent button copied all diagnostics'
+  })
+
   await runCheck('browser tab is available from the workbench', async () => {
     await page.locator('.tab-new-browser-button').click()
     await page.waitForSelector('.browser-toolbar .url-input', { timeout: 15_000 })
@@ -281,10 +738,35 @@ async function main() {
   })
 
   await runCheck('workbench frame context actions bind the intended target', async () => {
+    await page.locator('.tab', { hasText: 'notes.md' }).first().click()
     await ensureSidebarVisible(page)
+    const fileActivity = page.locator('.activity-bar-icon[title="文件"]').first()
+    await fileActivity.click()
+    await page.waitForFunction(
+      () =>
+        document.querySelector('.activity-bar-icon[title="文件"]')?.classList.contains('active'),
+      undefined,
+      { timeout: 10_000 },
+    )
+    const activeFileTree = page.locator('.sidebar .file-tree').first()
+    await activeFileTree.waitFor({ timeout: 10_000 })
+
+    const openRendererContextMenu = async (target, position) => {
+      const point = await target.evaluate((element) => {
+        const rect = element.getBoundingClientRect()
+        return { clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 }
+      })
+      await target.dispatchEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        buttons: 2,
+        ...(position ?? point),
+      })
+    }
 
     const verifyMouseAndKeyboardMenu = async (target, actionId) => {
-      await target.click({ button: 'right' })
+      await openRendererContextMenu(target)
       await page.locator(`[data-context-action="${actionId}"]`).waitFor({ timeout: 10_000 })
       await page.keyboard.press('Escape')
       await target.focus()
@@ -293,20 +775,86 @@ async function main() {
       await page.keyboard.press('Escape')
     }
 
-    const fileItem = page.locator('.file-tree-item.file', { hasText: 'todo.txt' }).first()
-    if (!(await fileItem.isVisible())) await clickByTitle(page, '文件')
+    const fileItem = activeFileTree.locator('.file-tree-item.file', { hasText: 'todo.txt' }).first()
     await fileItem.waitFor({ timeout: 10_000 })
     await verifyMouseAndKeyboardMenu(fileItem, 'file.reveal')
-    await fileItem.click({ button: 'right' })
+    await openRendererContextMenu(fileItem)
     assert(
       (await page.locator('[data-context-action="file.trash"]').count()) === 1,
       'generic file trash action is missing',
     )
     await page.keyboard.press('Escape')
+    await openRendererContextMenu(fileItem)
+    await page.locator('[data-context-action="file.rename"]').evaluate((element) => element.click())
+    const fileRenameInput = page
+      .locator('.unified-context-menu input[aria-label="重命名文件或文件夹"]')
+      .first()
+    await fileRenameInput.waitFor({ timeout: 10_000 })
+    assert(
+      await fileRenameInput.evaluate((element) => element === document.activeElement),
+      'file rename input did not retain focus',
+    )
+    await fileRenameInput.fill('todo-renamed.txt')
+    await fileRenameInput.press('Enter')
+    await activeFileTree
+      .locator('.file-tree-item.file', { hasText: 'todo-renamed.txt' })
+      .first()
+      .waitFor({ timeout: 10_000 })
+    const fileRenameDiskState = await page.evaluate(async (workspacePath) => {
+      let oldExists = true
+      try {
+        await window.cclinkStudio.fs.stat(`${workspacePath}/todo.txt`)
+      } catch {
+        oldExists = false
+      }
+      const renamed = await window.cclinkStudio.fs.stat(`${workspacePath}/todo-renamed.txt`)
+      return { oldExists, renamed }
+    }, workspaceDir)
+    assert(!fileRenameDiskState.oldExists, 'file tree rename left the old path on disk')
+    assert(
+      fileRenameDiskState.renamed.name === 'todo-renamed.txt',
+      'file tree rename did not create the expected disk path',
+    )
+
+    const renamedFileItem = activeFileTree
+      .locator('.file-tree-item.file', { hasText: 'todo-renamed.txt' })
+      .first()
+    const archiveItem = activeFileTree
+      .locator('.file-tree-item.directory', { hasText: 'archive' })
+      .first()
+    await openRendererContextMenu(renamedFileItem)
+    await page
+      .locator('[data-context-action="file.copy-entry"]')
+      .evaluate((element) => element.click())
+    await archiveItem.focus()
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V')
+    await activeFileTree
+      .locator('.file-tree-children .file-tree-item.file', { hasText: 'todo-renamed.txt' })
+      .first()
+      .waitFor({ timeout: 10_000 })
+    await page.evaluate(
+      async (path) => window.cclinkStudio.fs.stat(path),
+      `${workspaceDir}/archive/todo-renamed.txt`,
+    )
+
+    await renamedFileItem.focus()
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+C' : 'Control+C')
+    await openRendererContextMenu(archiveItem)
+    await page
+      .locator('[data-context-action="file.paste-entry"]')
+      .evaluate((element) => element.click())
+    const duplicateCopy = await page.evaluate(
+      async (path) => window.cclinkStudio.fs.stat(path),
+      `${workspaceDir}/archive/todo-renamed 副本.txt`,
+    )
+    assert(
+      duplicateCopy.name === 'todo-renamed 副本.txt',
+      'file copy did not generate a non-overwriting duplicate name',
+    )
 
     const activity = page.locator('.activity-bar-icon[title="文件"]').first()
     await verifyMouseAndKeyboardMenu(activity, 'activity.open')
-    await activity.click({ button: 'right' })
+    await openRendererContextMenu(activity)
     assert(
       (await page.locator('[data-context-action="activity.sidebar"]').count()) === 1,
       'activity layout action is missing',
@@ -316,9 +864,9 @@ async function main() {
     const sidebar = page.locator('.sidebar').first()
     const sidebarBox = await sidebar.boundingBox()
     assert(sidebarBox, 'sidebar bounds are unavailable')
-    await sidebar.click({
-      button: 'right',
-      position: { x: 4, y: Math.max(4, sidebarBox.height - 4) },
+    await openRendererContextMenu(sidebar, {
+      clientX: sidebarBox.x + 4,
+      clientY: sidebarBox.y + Math.max(4, sidebarBox.height - 4),
     })
     await page.locator('[data-context-action="sidebar.hide"]').waitFor({ timeout: 10_000 })
     await page.keyboard.press('Escape')
@@ -327,12 +875,13 @@ async function main() {
     await page.locator('[data-context-action="sidebar.hide"]').waitFor({ timeout: 10_000 })
     await page.keyboard.press('Escape')
 
+    await ensureSidebarVisible(page)
     const layoutHandle = page.locator('[data-layout-area="sidebar"]').first()
     await verifyMouseAndKeyboardMenu(layoutHandle, 'layout.reset-size')
 
     const workspaceStatus = page.locator('[data-status-item="workspace"]')
     await verifyMouseAndKeyboardMenu(workspaceStatus, 'status.copy')
-    await workspaceStatus.click({ button: 'right' })
+    await openRendererContextMenu(workspaceStatus)
     assert(
       (await page.locator('[data-context-action="status.diagnostics"]').count()) === 1,
       'workspace diagnostics action is missing',
@@ -341,7 +890,7 @@ async function main() {
 
     const project = page.locator(`.project-strip-item[data-project-path="${workspaceDir}"]`).first()
     await verifyMouseAndKeyboardMenu(project, 'project.copy-path')
-    await project.click({ button: 'right' })
+    await openRendererContextMenu(project)
     assert(
       (await page.locator('[data-context-action="project.diagnostics"]').count()) === 1,
       'project diagnostics action is missing',
@@ -350,7 +899,7 @@ async function main() {
 
     const tab = page.locator('.tab').first()
     await verifyMouseAndKeyboardMenu(tab, 'tab.close-others')
-    await tab.click({ button: 'right' })
+    await openRendererContextMenu(tab)
     await page.locator('[data-context-action="tab.close-right"]').waitFor({ timeout: 10_000 })
     await page.keyboard.press('Escape')
     return 'file/activity/status/project/tab'
@@ -492,6 +1041,60 @@ async function main() {
     await page.keyboard.press('Escape')
     await page.setViewportSize({ width: 1440, height: 920 })
     return `${Math.round(bounds.width)}x${Math.round(bounds.height)}`
+  })
+
+  await runCheck('file tab rename updates the disk path, tab, and file tree', async () => {
+    const oldPath = markdownPath
+    const newName = 'notes-renamed.md'
+    const newPath = `${workspaceDir}/${newName}`
+    const contentBeforeRename = await page.evaluate(
+      async (path) => (await window.cclinkStudio.fs.readFile(path)).content,
+      oldPath,
+    )
+    const editorTab = page.locator('.tab', { hasText: 'notes.md' }).first()
+    await editorTab.waitFor({ timeout: 10_000 })
+    await editorTab.click({ button: 'right' })
+    const renameAction = page.locator('[data-context-action="tab.rename"]')
+    await renameAction.waitFor({ timeout: 10_000 })
+    assert(
+      (await renameAction.textContent())?.includes('重命名文件'),
+      'file-backed tab should expose a file rename action',
+    )
+    await renameAction.click()
+    const renameInput = page.locator('.unified-context-menu input').first()
+    await renameInput.waitFor({ timeout: 10_000 })
+    await renameInput.fill(newName)
+    await renameInput.press('Enter')
+
+    const renamedTab = page.locator('.tab', { hasText: newName }).first()
+    await renamedTab.waitFor({ timeout: 10_000 })
+    await ensureSidebarVisible(page)
+    await clickByTitle(page, '文件')
+    await page
+      .locator('.file-tree-item.file', { hasText: newName })
+      .first()
+      .waitFor({ timeout: 10_000 })
+
+    const diskState = await page.evaluate(
+      async ({ oldFilePath, newFilePath }) => {
+        let oldExists = true
+        try {
+          await window.cclinkStudio.fs.stat(oldFilePath)
+        } catch {
+          oldExists = false
+        }
+        const renamed = await window.cclinkStudio.fs.readFile(newFilePath)
+        return { oldExists, renamed }
+      },
+      { oldFilePath: oldPath, newFilePath: newPath },
+    )
+    assert(!diskState.oldExists, 'old markdown path still exists after tab rename')
+    assert(
+      diskState.renamed.content === contentBeforeRename,
+      'renamed markdown content differs from the pre-rename disk content',
+    )
+    markdownPath = newPath
+    return newName
   })
 
   await runCheck('terminal can execute a command in the local workspace', async () => {

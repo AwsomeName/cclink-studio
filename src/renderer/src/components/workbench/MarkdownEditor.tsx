@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
+import type { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
@@ -23,7 +24,10 @@ import {
   analyzeMarkdown,
   hashMarkdownSnapshot,
   mapTopLevelSelectionToSource,
+  normalizeMarkdownEditorOutput,
+  prepareMarkdownEditorInput,
   scanMarkdownBlocks,
+  type MarkdownDiagnostic,
   type MarkdownSourceRange,
 } from '../../features/markdown/markdown-codec'
 import {
@@ -31,11 +35,22 @@ import {
   type MarkdownRevealRange,
 } from '../../features/markdown/markdown-navigation'
 import { MarkdownImage, resolveMarkdownImageSource } from '../../features/markdown/MarkdownImage'
+import {
+  adjustMarkdownListIndent,
+  applyMarkdownLink,
+  MarkdownKeyboardShortcuts,
+  toggleMarkdownBlockquote,
+} from '../../features/markdown/markdown-editor-shortcuts'
+import { createMarkdownDiagnosticReport } from '../../features/markdown/markdown-diagnostic-report'
 import type { FsMarkdownDocumentInspection } from '@shared/ipc/fs'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import { registerEditorContextSurface } from '../../features/context-actions/editor-context-surface'
 import { copyTextToClipboard } from '../../utils/clipboard'
+import {
+  clearMarkdownDiagnosticReport,
+  publishMarkdownDiagnosticReport,
+} from '../../features/diagnostics/renderer-diagnostic-log'
 
 const lowlight = createLowlight(common)
 
@@ -54,6 +69,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   const fileKey = filePath ?? `virtual:${tabId}`
   const fileKeyRef = useRef(fileKey)
   const filePathRef = useRef(filePath)
+  const tiptapEditorRef = useRef<Editor | null>(null)
   fileKeyRef.current = fileKey
   filePathRef.current = filePath
 
@@ -62,6 +78,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   const executeCommand = useCommandStore((state) => state.executeCommand)
   const editorFontFamily = useSettingsStore((state) => state.settings.editorFontFamily)
   const editorFontSize = useSettingsStore((state) => state.settings.editorFontSize)
+  const editorTabSize = useSettingsStore((state) => state.settings.editorTabSize)
   const editorWordWrap = useSettingsStore((state) => state.settings.editorWordWrap)
   const showToast = useToastStore((state) => state.show)
   const dirty = fileState?.dirty ?? false
@@ -75,19 +92,49 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     null,
   )
   const [parseBlockedReason, setParseBlockedReason] = useState<string | null>(null)
+  const [protectedPreviewAvailable, setProtectedPreviewAvailable] = useState(false)
+  const [markdownDiagnosticLog, setMarkdownDiagnosticLog] = useState<string | null>(null)
+  const [hydratedVersion, setHydratedVersion] = useState<string | null>(null)
   const [imageDraft, setImageDraft] = useState<ImageDraft | null>(null)
+  const [linkDraft, setLinkDraft] = useState<string | null>(null)
   const appliedUpdateIds = useRef(new Set<string>())
-  const loadedVersionRef = useRef<string | undefined>(undefined)
+  const loadedVersionRef = useRef<{ fileKey: string; version: string } | undefined>(undefined)
+  const reloadGenerationRef = useRef(0)
   const hydratingRef = useRef(false)
+
+  useEffect(() => {
+    if (markdownDiagnosticLog) {
+      publishMarkdownDiagnosticReport({
+        key: tabId,
+        filePath,
+        report: markdownDiagnosticLog,
+      })
+    } else {
+      clearMarkdownDiagnosticReport(tabId)
+    }
+  }, [filePath, markdownDiagnosticLog, tabId])
+
+  const openLinkEditor = useCallback((targetEditor: Editor): boolean => {
+    const previous = targetEditor.getAttributes('link').href as string | undefined
+    setLinkDraft(previous ?? 'https://')
+    return true
+  }, [])
 
   const extensions = useMemo(
     () => [
       StarterKit.configure({
         codeBlock: false,
         heading: { levels: [1, 2, 3, 4, 5, 6] },
+        link: false,
+        underline: false,
       }),
       Markdown,
-      CodeBlockLowlight.configure({ lowlight, defaultLanguage: 'plaintext' }),
+      CodeBlockLowlight.configure({
+        lowlight,
+        defaultLanguage: 'plaintext',
+        enableTabIndentation: true,
+        tabSize: editorTabSize,
+      }),
       Placeholder.configure({ placeholder: '开始输入，或让 AI 帮你写...' }),
       MarkdownImage.configure({ documentPath: filePath, inline: false, allowBase64: true }),
       TaskList,
@@ -97,8 +144,9 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       TableCell,
       TableHeader,
       Link.configure({ openOnClick: false, autolink: true }),
+      MarkdownKeyboardShortcuts.configure({ openLinkEditor }),
     ],
-    [filePath],
+    [editorTabSize, filePath, openLinkEditor],
   )
 
   const editor = useEditor(
@@ -106,6 +154,56 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       extensions,
       editorProps: {
         attributes: { class: 'tiptap' },
+        handleKeyDown: (_view, event) => {
+          const headingShortcut = /^Digit([0-6])$/.exec(event.code)
+          if (
+            (event.metaKey || event.ctrlKey) &&
+            event.altKey &&
+            !event.shiftKey &&
+            headingShortcut &&
+            tiptapEditorRef.current
+          ) {
+            const level = Number(headingShortcut[1])
+            return level === 0
+              ? tiptapEditorRef.current.commands.setParagraph()
+              : tiptapEditorRef.current.commands.toggleHeading({
+                  level: level as 1 | 2 | 3 | 4 | 5 | 6,
+                })
+          }
+          if (
+            (event.metaKey || event.ctrlKey) &&
+            event.shiftKey &&
+            !event.altKey &&
+            event.key.toLowerCase() === 'b' &&
+            tiptapEditorRef.current
+          ) {
+            return toggleMarkdownBlockquote(tiptapEditorRef.current)
+          }
+          if (
+            (event.metaKey || event.ctrlKey) &&
+            !event.altKey &&
+            (event.code === 'BracketLeft' || event.code === 'BracketRight') &&
+            tiptapEditorRef.current
+          ) {
+            return adjustMarkdownListIndent(
+              tiptapEditorRef.current,
+              event.code === 'BracketRight' ? 'indent' : 'outdent',
+            )
+          }
+          if (
+            event.key !== 'Tab' ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.altKey ||
+            !tiptapEditorRef.current
+          ) {
+            return false
+          }
+          return adjustMarkdownListIndent(
+            tiptapEditorRef.current,
+            event.shiftKey ? 'outdent' : 'indent',
+          )
+        },
         handlePaste: (_view, event) => {
           const image = Array.from(event.clipboardData?.files ?? []).find((file) =>
             file.type.startsWith('image/'),
@@ -154,7 +252,8 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       },
       onUpdate: ({ editor: currentEditor }) => {
         if (hydratingRef.current) return
-        const markdown = currentEditor.getMarkdown()
+        const reference = useEditorStore.getState().files[fileKeyRef.current]?.currentContent
+        const markdown = normalizeMarkdownEditorOutput(currentEditor.getMarkdown(), reference)
         useEditorStore.getState().updateContent(fileKeyRef.current, markdown)
         const analysis = analyzeMarkdown(markdown)
         useEditorStore.getState().setDiagnostics(fileKeyRef.current, analysis.diagnostics)
@@ -165,6 +264,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     },
     [extensions],
   )
+  tiptapEditorRef.current = editor
 
   const currentWysiwygSelection = useCallback((): MarkdownSourceRange | null => {
     if (!editor) return null
@@ -182,7 +282,8 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       }
       if (to >= nodeStart && from <= nodeEnd) endIndex = index
     })
-    const markdown = editor.getMarkdown()
+    const reference = useEditorStore.getState().files[fileKeyRef.current]?.currentContent
+    const markdown = normalizeMarkdownEditorOutput(editor.getMarkdown(), reference)
     const selectedText = editor.state.doc.textBetween(from, to, '\n')
     const mapped = mapTopLevelSelectionToSource(
       markdown,
@@ -287,8 +388,25 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   useEffect(() => {
     if (!editor || !fileState || fileState.loading) return
     const version = `${fileKey}:${fileState.versionHash ?? hashMarkdownSnapshot(fileState.savedContent)}`
-    if (loadedVersionRef.current === version) return
-    loadedVersionRef.current = version
+    if (loadedVersionRef.current?.version === version && hydratedVersion === version) return
+    if (
+      loadedVersionRef.current?.fileKey === fileKey &&
+      normalizeMarkdownEditorOutput(editor.getMarkdown(), fileState.currentContent) ===
+        fileState.currentContent
+    ) {
+      loadedVersionRef.current = { fileKey, version }
+      setParseBlockedReason(null)
+      setProtectedPreviewAvailable(false)
+      setMarkdownDiagnosticLog(null)
+      setHydratedVersion(version)
+      editor.setEditable(true)
+      return
+    }
+    loadedVersionRef.current = { fileKey, version }
+    setHydratedVersion(null)
+    setParseBlockedReason(null)
+    setProtectedPreviewAvailable(false)
+    editor.setEditable(false)
     const analysis = analyzeMarkdown(fileState.currentContent)
     const initialDiagnostics = analysis.diagnostics
     useEditorStore.getState().setDiagnostics(fileKey, initialDiagnostics)
@@ -297,6 +415,21 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         initialDiagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
         '当前文件包含暂不支持的 Markdown 语法'
       setParseBlockedReason(reason)
+      setProtectedPreviewAvailable(false)
+      const report = createMarkdownDiagnosticReport({
+        filePath,
+        stage: 'preflight',
+        trigger: reloadGenerationRef.current > 0 ? 'reload' : 'open',
+        source: fileState.currentContent,
+        diagnostics: initialDiagnostics,
+        versionHash: fileState.versionHash,
+        modifiedAt: fileState.modifiedAt,
+        dirty: fileState.dirty,
+        reloadGeneration: reloadGenerationRef.current,
+      })
+      setMarkdownDiagnosticLog(report)
+      setHydratedVersion(version)
+      console.error('[MarkdownEditor] Markdown 预检查失败\n' + report)
       showToast(reason, 'error')
       return
     }
@@ -306,11 +439,41 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     hydratingRef.current = true
     let serialized = ''
     try {
-      editor.commands.setContent(fileState.currentContent, {
+      editor.commands.setContent(prepareMarkdownEditorInput(fileState.currentContent), {
         contentType: 'markdown',
         emitUpdate: false,
       })
-      serialized = editor.getMarkdown()
+      serialized = normalizeMarkdownEditorOutput(editor.getMarkdown(), fileState.currentContent)
+    } catch (error) {
+      const parserDiagnostics: MarkdownDiagnostic[] = [
+        {
+          code: 'parser-runtime-error',
+          severity: 'error',
+          message: `Markdown 解析器运行失败：${error instanceof Error ? error.message : String(error)}`,
+        },
+      ]
+      const reason = parserDiagnostics[0].message
+      useEditorStore.getState().setDiagnostics(fileKey, parserDiagnostics)
+      setParseBlockedReason(reason)
+      setProtectedPreviewAvailable(false)
+      const report = createMarkdownDiagnosticReport({
+        filePath,
+        stage: 'hydrate',
+        trigger: reloadGenerationRef.current > 0 ? 'reload' : 'open',
+        source: fileState.currentContent,
+        diagnostics: parserDiagnostics,
+        versionHash: fileState.versionHash,
+        modifiedAt: fileState.modifiedAt,
+        dirty: fileState.dirty,
+        reloadGeneration: reloadGenerationRef.current,
+        editorJson: editor.getJSON(),
+        error,
+      })
+      setMarkdownDiagnosticLog(report)
+      setHydratedVersion(version)
+      console.error('[MarkdownEditor] Markdown 解析器运行失败\n' + report)
+      showToast(reason, 'error')
+      return
     } finally {
       hydratingRef.current = false
     }
@@ -321,18 +484,48 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         roundTrip.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
         'Markdown 解析结果不安全'
       setParseBlockedReason(reason)
+      setProtectedPreviewAvailable(true)
+      const report = createMarkdownDiagnosticReport({
+        filePath,
+        stage: 'roundtrip',
+        trigger: reloadGenerationRef.current > 0 ? 'reload' : 'open',
+        source: fileState.currentContent,
+        serialized,
+        diagnostics: roundTrip.diagnostics,
+        versionHash: fileState.versionHash,
+        modifiedAt: fileState.modifiedAt,
+        dirty: fileState.dirty,
+        reloadGeneration: reloadGenerationRef.current,
+        editorJson: editor.getJSON(),
+      })
+      setMarkdownDiagnosticLog(report)
+      setHydratedVersion(version)
+      console.error('[MarkdownEditor] Markdown 往返检查失败\n' + report)
       showToast(reason, 'error')
     } else {
       setParseBlockedReason(null)
+      setProtectedPreviewAvailable(false)
+      setMarkdownDiagnosticLog(null)
+      setHydratedVersion(version)
+      editor.setEditable(true)
     }
   }, [
     editor,
     fileKey,
     fileState?.loading,
     fileState?.savedContent,
+    fileState?.dirty,
+    fileState?.modifiedAt,
     fileState?.versionHash,
+    filePath,
+    hydratedVersion,
     showToast,
   ])
+
+  useEffect(() => {
+    if (!editor) return
+    editor.setEditable(!parseBlockedReason)
+  }, [editor, parseBlockedReason])
 
   useEffect(() => {
     if (!filePath) return
@@ -389,7 +582,8 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     if (!editor) return
     const offRead = window.cclinkStudio.editor.onReadRequest((request) => {
       const content =
-        useEditorStore.getState().files[fileKeyRef.current]?.currentContent ?? editor.getMarkdown()
+        useEditorStore.getState().files[fileKeyRef.current]?.currentContent ??
+        normalizeMarkdownEditorOutput(editor.getMarkdown())
       window.cclinkStudio.editor.readResponse(request.id, content)
     })
     const offSave = window.cclinkStudio.editor.onSaveRequest(async (request) => {
@@ -451,9 +645,12 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         }
 
         hydratingRef.current = true
-        editor.commands.setContent(next, { contentType: 'markdown', emitUpdate: false })
+        editor.commands.setContent(prepareMarkdownEditorInput(next), {
+          contentType: 'markdown',
+          emitUpdate: false,
+        })
         editorChanged = true
-        const serialized = editor.getMarkdown()
+        const serialized = normalizeMarkdownEditorOutput(editor.getMarkdown(), next)
         const roundTrip = analyzeMarkdown(next, serialized)
         if (!roundTrip.safeToSave) {
           throw new Error(
@@ -467,7 +664,10 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         void window.cclinkStudio.editor.contentUpdateAck(update.id, true)
       } catch (error) {
         if (editorChanged) {
-          editor.commands.setContent(current, { contentType: 'markdown', emitUpdate: false })
+          editor.commands.setContent(prepareMarkdownEditorInput(current), {
+            contentType: 'markdown',
+            emitUpdate: false,
+          })
         }
         useEditorStore.getState().setDiagnostics(fileKey, previousDiagnostics)
         const message = error instanceof Error ? error.message : 'Agent 内容更新失败'
@@ -523,7 +723,13 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
 
   useEffect(() => {
     const save = (event: KeyboardEvent): void => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+      if (
+        !event.defaultPrevented &&
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === 's'
+      ) {
         event.preventDefault()
         void handleSave()
       }
@@ -538,11 +744,19 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
 
   const handleInsertLink = useCallback(() => {
     if (!editor) return
-    const previous = editor.getAttributes('link').href as string | undefined
-    const href = window.prompt('链接地址', previous ?? 'https://')
-    if (href === null) return
-    if (!href.trim()) editor.chain().focus().extendMarkRange('link').unsetLink().run()
-    else editor.chain().focus().extendMarkRange('link').setLink({ href: href.trim() }).run()
+    openLinkEditor(editor)
+  }, [editor, openLinkEditor])
+
+  const handleApplyLink = useCallback(() => {
+    if (!editor || linkDraft === null) return
+    applyMarkdownLink(editor, linkDraft)
+    setLinkDraft(null)
+  }, [editor, linkDraft])
+
+  const handleRemoveLink = useCallback(() => {
+    if (!editor) return
+    applyMarkdownLink(editor, '')
+    setLinkDraft(null)
   }, [editor])
 
   const handleInsertImage = useCallback(async () => {
@@ -620,9 +834,41 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
 
   const handleReload = useCallback(async () => {
     if (!filePath) return
-    await useEditorStore.getState().reloadFile(filePath)
-    showToast('已重新载入磁盘版本', 'success')
+    try {
+      loadedVersionRef.current = undefined
+      setHydratedVersion(null)
+      reloadGenerationRef.current += 1
+      await useEditorStore.getState().reloadFile(filePath)
+      showToast('已重新读取磁盘版本，正在重新检查', 'info')
+    } catch (error) {
+      const current = useEditorStore.getState().files[filePath]
+      const report = createMarkdownDiagnosticReport({
+        filePath,
+        stage: 'reload',
+        trigger: 'reload',
+        source: current?.currentContent ?? '',
+        diagnostics: current?.diagnostics ?? [],
+        versionHash: current?.versionHash,
+        modifiedAt: current?.modifiedAt,
+        dirty: current?.dirty ?? false,
+        reloadGeneration: reloadGenerationRef.current,
+        error,
+      })
+      setMarkdownDiagnosticLog(report)
+      console.error('[MarkdownEditor] Markdown 重新读取失败\n' + report)
+      showToast(error instanceof Error ? error.message : '重新读取失败', 'error')
+    }
   }, [filePath, showToast])
+
+  const handleCopyDiagnosticLog = useCallback(async () => {
+    if (!markdownDiagnosticLog) return
+    try {
+      await copyTextToClipboard(markdownDiagnosticLog)
+      showToast('Markdown 诊断日志已复制', 'success')
+    } catch {
+      showToast('诊断日志复制失败', 'error')
+    }
+  }, [markdownDiagnosticLog, showToast])
 
   const handleOverwrite = useCallback(async () => {
     if (!filePath) return
@@ -638,10 +884,13 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     )
   }
 
+  const expectedVersion = `${fileKey}:${fileState.versionHash ?? hashMarkdownSnapshot(fileState.savedContent)}`
+  const hydrationPending = !editor || hydratedVersion !== expectedVersion
+
   return (
     <div className="markdown-editor-wrapper">
       <EditorToolbar
-        editor={editor}
+        editor={parseBlockedReason || hydrationPending ? null : editor}
         filePath={filePath}
         dirty={dirty}
         diagnosticsCount={diagnostics.length}
@@ -721,7 +970,9 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
               </button>
             )}
           </div>
-        ) : parseBlockedReason ? (
+        ) : hydrationPending ? (
+          <div className="editor-loading">正在渲染 Markdown...</div>
+        ) : parseBlockedReason && !protectedPreviewAvailable ? (
           <div className="markdown-parse-blocked">
             <strong>文档未被改写</strong>
             <span>{parseBlockedReason}</span>
@@ -730,26 +981,94 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
                 重新载入磁盘版本
               </button>
             )}
+            {markdownDiagnosticLog && (
+              <button type="button" onClick={() => void handleCopyDiagnosticLog()}>
+                复制诊断日志
+              </button>
+            )}
           </div>
         ) : (
-          <div
-            className={`tiptap-editor${editorWordWrap ? '' : ' no-wrap'}`}
-            style={
-              {
-                '--markdown-font-family': editorFontFamily,
-                '--markdown-font-size': `${editorFontSize}px`,
-              } as React.CSSProperties
-            }
-          >
-            {editor && <EditorContent editor={editor} />}
-          </div>
+          <>
+            {parseBlockedReason && (
+              <div className="markdown-protected-preview" role="status">
+                <div>
+                  <strong>只读预览，原文件未被改写</strong>
+                  <span>{parseBlockedReason}</span>
+                </div>
+                {filePath && (
+                  <button type="button" onClick={() => void handleReload()}>
+                    重新读取并检查
+                  </button>
+                )}
+                {markdownDiagnosticLog && (
+                  <button type="button" onClick={() => void handleCopyDiagnosticLog()}>
+                    复制诊断日志
+                  </button>
+                )}
+              </div>
+            )}
+            <div
+              className={`tiptap-editor${editorWordWrap ? '' : ' no-wrap'}${parseBlockedReason ? ' protected' : ''}`}
+              style={
+                {
+                  '--markdown-font-family': editorFontFamily,
+                  '--markdown-font-size': `${editorFontSize}px`,
+                } as React.CSSProperties
+              }
+            >
+              {editor && <EditorContent editor={editor} />}
+            </div>
+          </>
         )}
       </div>
+
+      {linkDraft !== null && (
+        <div className="markdown-inspector-backdrop" onPointerDown={() => setLinkDraft(null)}>
+          <form
+            className="markdown-inspector-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="编辑链接"
+            onPointerDown={(event) => event.stopPropagation()}
+            onSubmit={(event) => {
+              event.preventDefault()
+              handleApplyLink()
+            }}
+          >
+            <header>插入或编辑链接</header>
+            <label>
+              <span>地址</span>
+              <input
+                autoFocus
+                aria-label="链接地址"
+                value={linkDraft}
+                onChange={(event) => setLinkDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') setLinkDraft(null)
+                }}
+              />
+            </label>
+            <footer>
+              {editor?.isActive('link') && (
+                <button type="button" onClick={handleRemoveLink}>
+                  移除链接
+                </button>
+              )}
+              <button type="button" onClick={() => setLinkDraft(null)}>
+                取消
+              </button>
+              <button type="submit" className="primary">
+                应用
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
 
       {imageDraft && (
         <div className="markdown-inspector-backdrop" onPointerDown={() => setImageDraft(null)}>
           <section
-            className="markdown-image-inspector"
+            className="markdown-inspector-panel"
             role="dialog"
             aria-modal="true"
             aria-label="编辑图片"

@@ -22,7 +22,7 @@ CCLink Studio 只有一个 renderer 菜单 Host、一个瞬时菜单 Store 和�
 | Project Strip | `project` | `ProjectStrip.tsx` | 切换、路径、Finder、诊断、关闭 |
 | Activity Bar | `activity` | `ActivityBar.tsx` | 打开区域、Sidebar 布局 |
 | Sidebar 容器 | `sidebar` | `Sidebar.tsx` | 创建、刷新、宽度、隐藏 |
-| 文件树 | `file` | `FileTree.tsx` | 文件领域命令；作用域由 workspace 再校验 |
+| 文件树 | `file` | `FileTree.tsx` | 文件领域命令；复制/粘贴、重命名、删除等副作用由 FS owner 执行，作用域由 workspace 再校验 |
 | Workbench Tab | `tab` | `TabBar.tsx` | 重命名、复制、批量关闭和关闭 |
 | Status Bar | `status-item` | `StatusBar.tsx` | 复制具体状态、工作台诊断 |
 | 布局分隔条 | `layout` | `ResizeHandle.tsx` | 重置尺寸、隐藏区域 |

@@ -32,6 +32,7 @@ describe('preload API surface', () => {
         browser: expect.any(Object),
         android: expect.any(Object),
         dataSource: expect.any(Object),
+        diagnostics: expect.any(Object),
       }),
     )
     expect(api).not.toHaveProperty('meshy')
@@ -51,5 +52,10 @@ describe('preload API surface', () => {
     expect(api.dataSource).not.toHaveProperty('updateSource')
     expect(api.dataSource).not.toHaveProperty('deleteSource')
     expect(api.dataSource).not.toHaveProperty('getRecord')
+    expect(api.diagnostics).toEqual(
+      expect.objectContaining({
+        getMainLogSnapshot: expect.any(Function),
+      }),
+    )
   })
 })

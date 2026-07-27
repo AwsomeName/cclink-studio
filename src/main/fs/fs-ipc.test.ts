@@ -65,6 +65,35 @@ describe('registerFsIpc directory watcher lifecycle', () => {
     expect(fs.readFile).not.toHaveBeenCalled()
   })
 
+  it('validates and forwards a scoped file copy transaction', async () => {
+    const copyEntry = vi.fn().mockResolvedValue({
+      sourcePath: '/tmp/project/note.md',
+      destinationPath: '/tmp/project/archive/note.md',
+    })
+    const fs = { copyEntry } as unknown as FileService
+    const settings = { getAll: vi.fn() } as unknown as SettingsService
+    registerFsIpc(fs, settings, trustedRendererGuard as never)
+
+    const input = {
+      sourceWorkspacePath: '/tmp/project',
+      sourcePath: '/tmp/project/note.md',
+      targetWorkspacePath: '/tmp/project',
+      targetDirectory: '/tmp/project/archive',
+    }
+    await expect(getHandler('fs:copyEntry')({ sender: {} }, input)).resolves.toEqual({
+      sourcePath: input.sourcePath,
+      destinationPath: '/tmp/project/archive/note.md',
+    })
+    expect(copyEntry).toHaveBeenCalledWith(input)
+
+    expect(() =>
+      getHandler('fs:copyEntry')(
+        { sender: {} },
+        { ...input, sourcePath: '/tmp/project/bad\0path' },
+      ),
+    ).toThrow()
+  })
+
   it('removes the sender destroyed listener when a watcher stops normally', () => {
     const stop = vi.fn()
     const fs = {

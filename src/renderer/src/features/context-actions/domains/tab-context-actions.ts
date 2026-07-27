@@ -1,5 +1,6 @@
 import type { Command } from '../../../stores/command-store'
 import { useAgentStore } from '../../../stores/agent-store'
+import { useFsStore } from '../../../stores/fs-store'
 import { useTabStore } from '../../../stores/tab-store'
 import { resolveConversationTab } from '../../../utils/conversation-tab'
 import { closeTabsWithDraftPolicy } from '../../../utils/close-tab'
@@ -15,11 +16,18 @@ function tabIdFromContext(context?: CommandContext): string | null {
   return context?.target?.kind === 'tab' ? context.target.tabId : null
 }
 
-export function renameWorkbenchTab(tabId: string, requestedTitle: string | null): boolean {
+export async function renameWorkbenchTab(
+  tabId: string,
+  requestedTitle: string | null,
+): Promise<boolean> {
   const title = requestedTitle?.trim()
   if (!title) return false
   const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
   if (!tab) return false
+
+  if (tab.filePath) {
+    return useFsStore.getState().confirmRename(tab.filePath, title)
+  }
 
   useTabStore.getState().updateTabTitle(tabId, title)
   const conversation = resolveConversationTab(tab)
@@ -27,19 +35,33 @@ export function renameWorkbenchTab(tabId: string, requestedTitle: string | null)
   return true
 }
 
+function renameTabLabel(context?: CommandContext): string {
+  const tabId = tabIdFromContext(context)
+  const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
+  if (tab?.filePath) return '重命名文件'
+  if (tab && resolveConversationTab(tab)) return '重命名会话'
+  return '重命名标签'
+}
+
 export function createTabContextCommands(): Command[] {
   return [
     {
       id: 'workbench.renameTab',
-      label: '重命名 Tab',
+      label: '重命名标签',
       contextOnly: true,
       category: 'Tab',
       risk: 'local-write',
+      contextLabel: renameTabLabel,
       enabled: (context) => Boolean(tabIdFromContext(context)),
-      action: (context) => {
+      action: async (context) => {
         const tabId = tabIdFromContext(context)
-        if (!tabId || !renameWorkbenchTab(tabId, context?.inputValue ?? null)) {
-          throw new Error('标签页已不存在或名称为空')
+        const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
+        if (!tabId || !(await renameWorkbenchTab(tabId, context?.inputValue ?? null))) {
+          throw new Error(
+            tab?.filePath
+              ? (useFsStore.getState().operationError ?? '文件重命名失败')
+              : '标签页已不存在或名称为空',
+          )
         }
       },
     },

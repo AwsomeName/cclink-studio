@@ -1,7 +1,7 @@
-# Agent 诊断日志与一键复制调试包
+# Agent 与工作台统一诊断日志
 
-> 状态：D0-D3 已落地；浏览器绑定与登录态诊断已增强；D4 错误现场附件待做
-> 最后更新：2026-07-16
+> 状态：D0-D3.5 已落地；D4 错误现场附件待做
+> 最后更新：2026-07-26
 > 关联文档：`docs/features/agent-system.md`、`docs/features/ai-work-browser-v0.1-tasks.md`、`docs/features/project-operations-assistant.md`、`docs/features/browser-automation.md`
 
 ## 结论
@@ -14,15 +14,20 @@ Agent 诊断日志不是锦上添花，而是 CCLink Studio 进入真实网页�
 - 开发者很难判断是浏览器没打开、页面没加载、登录态失效、选择器找不到、验证码/风控、权限确认卡住，还是模型自己绕远了。
 - 现有右侧 Agent 面板能看到部分 tool use，但它不是可复制、可脱敏、可定位的调试材料。
 
-第一版要做的不是完整日志平台，而是一个可复制的“当前任务诊断包”：
+当前入口不是完整日志平台，而是一个可复制的“当前现场诊断包”：
 
 ```text
-用户点击右侧 Agent 面板顶部的“复制诊断日志”
-  -> CCLink Studio 汇总当前会话、浏览器、任务、工具调用、错误、URL、console/network 摘要
+用户点击 Agent 输入框旁原有的“复制诊断日志”
+  -> CCLink Studio 汇总当前会话、浏览器、任务、工作台、Markdown、右键操作、
+     Renderer 和主进程近期日志
   -> 默认脱敏 password/token/cookie/验证码/API key
   -> 复制 Markdown 到剪贴板
   -> 用户可以直接粘贴给开发者或 Agent 排查
 ```
+
+每个来源独立采集。单项 IPC、store 或格式化失败只会在对应章节标记“采集失败”，
+不能阻止其他章节复制。主进程和 Renderer 日志仅保存在当前进程的有界内存环中，
+不落盘、不上传；重启后清空。
 
 当前实现状态：
 
@@ -30,7 +35,7 @@ Agent 诊断日志不是锦上添花，而是 CCLink Studio 进入真实网页�
 |------|------|------|
 | Markdown 诊断包格式 | ✅ 已完成 | `buildAgentDiagnosticMarkdown` 输出固定结构 |
 | 脱敏规则 | ✅ 已完成 | 覆盖 cookie/token/password/验证码/API key/手机号/邮箱等常见模式 |
-| Agent 面板复制按钮 | ✅ 已完成 | 右侧资源栏旁剪贴板按钮复制当前会话诊断日志 |
+| Agent 面板复制按钮 | ✅ 已完成 | Agent 输入框旁原剪贴板按钮一次复制完整诊断日志 |
 | 浏览器任务日志合并 | ✅ 已完成 | 汇总 `BrowserTaskRun`、`BrowserActionLog`、下载记录 |
 | 复制反馈 | ✅ 已完成 | 成功/失败 toast |
 | console/network/page summary | ✅ 已完成 | 只读 `browser:getDiagnostics` 汇总 console、network、疑似登录/验证码/风控 |
@@ -38,6 +43,10 @@ Agent 诊断日志不是锦上添花，而是 CCLink Studio 进入真实网页�
 | 登录态安全摘要 | ✅ 已完成 | 输出实际 partition、Cookie 数量、持久性、过期数和疑似认证 Cookie 元数据，不输出 Cookie 值 |
 | 最近导航与 claim 结果 | ✅ 已完成 | 输出最近 URL 链和最近一次 Page claim 成败 |
 | Console/Network 按 Page 隔离 | ✅ 已完成 | 页面日志带 Page 归属，避免其他 Tab 错误串入 |
+| 工作台与上下文操作 | ✅ 已完成 | 合并 WorkspaceState 和最近上下文操作失败 |
+| Markdown 失败现场 | ✅ 已完成 | 优先合并当前 Markdown Tab 的结构化失败报告；大型节点树按预算摘要，内嵌 JSON 保持完整 |
+| Renderer/Main 近期日志 | ✅ 已完成 | 两侧各保留最近 200 条脱敏日志，报告输出最近 100 条 |
+| 独立失败降级 | ✅ 已完成 | 任一来源采集失败不影响其余章节复制 |
 | 截图/DOM 摘要 | 📋 待做 | D4：用户显式选择后再保存 |
 
 ## /grilling 结论
@@ -108,7 +117,7 @@ Agent 读取 Markdown 后准备填公众号编辑器，但内容没有进入编�
 
 ### 第一版入口
 
-位置：右侧 Agent 面板顶部，当前资源 chips 行右侧。
+位置：Agent 输入框旁原有的剪贴板按钮。
 
 按钮：
 
@@ -116,7 +125,7 @@ Agent 读取 Markdown 后准备填公众号编辑器，但内容没有进入编�
 [复制诊断日志]
 ```
 
-建议使用剪贴板图标，hover tooltip 显示“复制当前会话诊断日志”。
+使用剪贴板图标，hover tooltip 显示“复制完整诊断日志”。
 
 点击行为：
 
@@ -126,8 +135,9 @@ Agent 读取 Markdown 后准备填公众号编辑器，但内容没有进入编�
 4. 收集当前浏览器 URL、title、profile、view mode。
 5. 收集最近 console error 和 network failure 摘要。
 6. 脱敏。
-7. 复制 Markdown 到剪贴板。
-8. toast 提示“诊断日志已复制”。
+7. 合并工作台、Markdown、上下文操作、Renderer 和主进程近期日志。
+8. 复制 Markdown 到剪贴板。
+9. toast 提示“完整诊断日志已复制”。
 
 ### 后续入口
 
@@ -391,6 +401,35 @@ interface DiagnosticEvent {
 
 - 不能把验证码识别做成“绕过验证码”。目标是定位和提示人工接管。
 - network URL 必须清理 query 参数，很多 token 会藏在 query 里。
+
+### D3.5：工作台统一诊断出口
+
+状态：✅ 已完成。
+
+目标：保留 Agent 输入框旁原按钮，但让它覆盖桌面工作台的主要本地排障来源。
+
+实现：
+
+- Agent 与浏览器继续使用原有任务关联报告。
+- WorkspaceState、上下文操作、当前 Markdown 失败报告独立采集。
+- Renderer 和主进程各自拥有最多 200 条的进程内脱敏日志环，统一报告各输出最近 100 条。
+- 主进程日志通过共享无参数 contract 和可信 Renderer guard 只读获取。
+- 统一聚合器对每个来源单独捕获错误并限制章节长度。
+- 文件重命名的参数拒绝和底层失败进入 Renderer 日志，但不记录未脱敏凭证或文件内容。
+
+验收标准：
+
+- 点击一次原按钮即可看到 Agent、工作台、Markdown、上下文操作、Renderer 和主进程章节。
+- 当前 Markdown 打不开时，统一报告包含同一 Tab 的结构化 Markdown 诊断。
+- 主进程 IPC 或任一其他来源失败时，剪贴板仍得到报告，其对应章节明确标记失败。
+- 用户主目录、凭证字段、Bearer 值和 URL 查询参数不会原样进入报告。
+- 日志有固定上限，报告明确显示丢弃的旧记录数量。
+
+边界：
+
+- 当前不持久化日志，应用重启后不能回溯上一次进程现场。
+- 当前不自动附加截图、DOM、文件全文或完整网页正文。
+- 当前不上传诊断，也不把诊断放入工作区或云同步。
 
 ### D4：错误现场附件
 

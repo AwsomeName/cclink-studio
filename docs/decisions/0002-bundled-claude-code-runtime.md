@@ -384,7 +384,8 @@ claudeRuntimeCustomPath: string
 
 - 新增 staging 脚本，从 pnpm 锁定的平台包复制二进制并生成 manifest。
 - arm64 和 x64 构建分别只选择匹配架构资源；universal 产物包含两个隔离目录并按运行架构选择。
-- 不从 `app.asar` 直接 spawn；二进制进入真实 `resources/agent-runtime/<platform>-<arch>`。
+- 不从 `app.asar` 直接 spawn；二进制进入真实 `resources/agent-runtime/<platform>-<arch>`，作为只读完整性校验源。
+- macOS 本地 ad-hoc 安装包不得直接执行 `.app` 内不同签名团队的嵌套 CLI。主进程校验 manifest、大小和 SHA-256 后，将同版本二进制原子复制到 `userData/agent-runtime-cache/` 的版本化目录并复验，再从应用包外执行。缓存可重建，不是第二份运行时状态，也不进入项目、同步或诊断正文。
 - package 脚本在构建前检查目标平台依赖，在构建后解包验证 manifest、hash、Mach-O 架构和 `--version`。
 - 更新打包说明，报告内置 runtime 对安装包体积的真实影响。
 

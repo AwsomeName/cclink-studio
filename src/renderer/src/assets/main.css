@@ -6703,6 +6703,8 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
 .file-tree-shell {
   display: flex;
   flex: 1;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
   flex-direction: column;
 }
@@ -6769,6 +6771,9 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
 .file-tree {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -6832,8 +6837,11 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   display: flex;
   align-items: center;
   gap: 4px;
+  width: 100%;
+  min-width: 0;
   height: 24px;
   padding-right: 8px;
+  box-sizing: border-box;
   cursor: pointer;
   font-size: 13px;
   color: var(--text-primary);
@@ -6902,6 +6910,8 @@ button.file-tree-item {
 }
 
 .file-tree-name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }

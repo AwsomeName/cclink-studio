@@ -76,3 +76,12 @@ export const fsScopedPathSchema = z
     targetPath: fsPathSchema,
   })
   .strict()
+
+export const fsCopyEntrySchema = z
+  .object({
+    sourceWorkspacePath: fsPathSchema,
+    sourcePath: fsPathSchema,
+    targetWorkspacePath: fsPathSchema,
+    targetDirectory: fsPathSchema,
+  })
+  .strict()
