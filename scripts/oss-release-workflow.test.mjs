@@ -17,3 +17,10 @@ test('release workflow verifies the P12 password and Developer ID identity befor
   assert.match(workflow, /security find-identity -v -p codesigning "\$keychain_path"/)
   assert.match(workflow, /grep -F -- "\$CSC_NAME"/)
 })
+
+test('release workflow passes electron-builder an identity without the certificate prefix', () => {
+  assert.match(workflow, /builder_identity="\$\{CSC_NAME#Developer ID Application: \}"/)
+  assert.match(workflow, /unset CSC_NAME/)
+  assert.match(workflow, /--config\.mac\.identity="\$builder_identity"/)
+  assert.doesNotMatch(workflow, /--config\.mac\.identity="\$CSC_NAME"/)
+})

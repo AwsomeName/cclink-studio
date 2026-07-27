@@ -149,10 +149,16 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           CSC_NAME: ${{ secrets.MACOS_DEVELOPER_IDENTITY }}
         run: |
+          builder_identity="${CSC_NAME#Developer ID Application: }"
+          if [ "$builder_identity" = "$CSC_NAME" ]; then
+            echo "::error::MACOS_DEVELOPER_IDENTITY must start with 'Developer ID Application: '."
+            exit 1
+          fi
+          unset CSC_NAME
           pnpm exec electron-builder \
             --mac "--${{ matrix.arch }}" \
             --publish never \
-            --config.mac.identity="$CSC_NAME" \
+            --config.mac.identity="$builder_identity" \
             --config.mac.hardenedRuntime=true \
             --config.mac.notarize=true
       - name: Notarize and staple disk image
