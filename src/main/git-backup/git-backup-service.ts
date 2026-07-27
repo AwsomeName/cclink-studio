@@ -36,7 +36,6 @@ export class GitBackupService {
   private readonly now: () => Date
   private readonly activeBackups = new Set<string>()
   private connectedLogin: string | null = null
-  private credentialLoadError: GitBackupError | null = null
 
   constructor(
     private readonly settingsService: SettingsService,
@@ -52,31 +51,10 @@ export class GitBackupService {
 
   async load(): Promise<void> {
     await this.projectStore.load()
-    try {
-      await this.credentialStore.load()
-      this.credentialLoadError = null
-    } catch (error: unknown) {
-      this.credentialLoadError = toGitBackupError(error)
-      console.warn(
-        '[GitBackupService] Git 凭证不可用，备份功能降级:',
-        this.credentialLoadError.message,
-      )
-    }
   }
 
   async getAccountStatus(): Promise<GitBackupAccountStatus> {
     const git = await this.gitClient.detect()
-    if (this.credentialLoadError) {
-      return {
-        gitAvailable: git.available,
-        gitVersion: git.version,
-        username: this.settingsService.getAll().gitBackupUsername,
-        tokenConfigured: false,
-        connected: false,
-        error: this.credentialLoadError.message,
-        errorCode: this.credentialLoadError.code,
-      }
-    }
     try {
       return {
         gitAvailable: git.available,
@@ -123,7 +101,6 @@ export class GitBackupService {
         throw new GitBackupError('INVALID_INPUT', '请输入 GitHub Token')
       }
       await this.settingsService.set({ gitBackupUsername: username })
-      this.credentialLoadError = null
       this.connectedLogin = null
       return {
         success: true,
@@ -140,7 +117,6 @@ export class GitBackupService {
       await this.credentialStore.clear()
       await this.settingsService.set({ gitBackupUsername: '' })
       this.connectedLogin = null
-      this.credentialLoadError = null
       return {
         success: true,
         message: 'Git 备份账号已清除',

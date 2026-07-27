@@ -42,6 +42,34 @@ afterEach(async () => {
 })
 
 describe('GitBackupService', () => {
+  it('defers decrypting the GitHub token until account status is requested', async () => {
+    await new GitBackupCredentialStore().saveToken('github-secret-token')
+    const decryptString = vi.fn((value: Buffer) =>
+      value.toString('utf-8').replace(/^encrypted:/, ''),
+    )
+    const credentialStore = new GitBackupCredentialStore('git-backup/secrets.enc', {
+      isEncryptionAvailable: () => true,
+      encryptString: (value) => Buffer.from(`encrypted:${value}`, 'utf-8'),
+      decryptString,
+    })
+    const settingsService = new SettingsService()
+    await settingsService.loadState()
+    const workspaceStateService = new WorkspaceStateService()
+    const service = new GitBackupService(settingsService, workspaceStateService, {
+      credentialStore,
+      projectStore: new GitBackupProjectStore(),
+      gitClient: {
+        detect: async () => ({ available: true, version: 'git version test' }),
+      } as GitClient,
+    })
+
+    await service.load()
+
+    expect(decryptString).not.toHaveBeenCalled()
+    await expect(service.getAccountStatus()).resolves.toMatchObject({ tokenConfigured: true })
+    expect(decryptString).toHaveBeenCalledOnce()
+  })
+
   it('backs up manually without force operations and blocks tracked secrets', async () => {
     const workspacePath = join(tempDir, 'project')
     const remotePath = join(tempDir, 'backup.git')

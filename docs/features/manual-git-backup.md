@@ -162,6 +162,7 @@ CCLink Studio Backup <backup@cclink.local>
 ## 认证和安全边界
 
 - Token 使用 Electron `safeStorage` 加密后写入独立凭证文件，不进入 `settings.json`、工作空间文件或日志。
+- 启动时只加载 Git 项目绑定，不读取或解密 Token；进入 Git 备份设置、测试账号或执行备份时才按需访问系统钥匙串。
 - Renderer 只能看到 `configured: boolean` 等脱敏状态，不能读取 Token 明文。
 - 匹配已配置 GitHub 账号的 HTTPS Push 通过受控的 `GIT_ASKPASS` 机制向 Git 子进程提供凭证，Token 不拼接进远程 URL、命令参数或错误文本；其他 HTTPS 地址使用本机 Git 凭证机制。
 - SSH 地址继续使用用户本机 SSH Agent 和密钥，不读取或托管 SSH 私钥。

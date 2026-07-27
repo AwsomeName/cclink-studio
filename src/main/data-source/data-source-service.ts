@@ -89,11 +89,7 @@ export class DataSourceService {
   }
 
   async load(): Promise<void> {
-    await Promise.all([
-      this.configStore.load(),
-      this.credentialStore.load(),
-      this.savedQueryStore.load(),
-    ])
+    await Promise.all([this.configStore.load(), this.savedQueryStore.load()])
   }
 
   async listSources(): Promise<DataSourceConfig[]> {

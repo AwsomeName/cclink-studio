@@ -47,6 +47,64 @@ function createService(adapter: DataSourceAdapter): DataSourceService {
 }
 
 describe('DataSourceService', () => {
+  it('defers decrypting credentials until an authenticated operation runs', async () => {
+    const config: DataSourceConfig = {
+      id: 'source-lazy',
+      type: 'elasticsearch',
+      scope: 'workspace',
+      name: 'Lazy source',
+      endpoint: 'https://es.example.com',
+      authRef: 'data-source:source-lazy',
+      readOnly: true,
+      timeoutMs: 10_000,
+      maxRows: 100,
+      createdAt: '2026-07-27T00:00:00.000Z',
+      updatedAt: '2026-07-27T00:00:00.000Z',
+    }
+    const configStore = new DataSourceConfigStore()
+    await configStore.upsert(config)
+    await new DataSourceCredentialStore().saveSecret({
+      sourceId: config.id,
+      authType: 'apiKey',
+      apiKey: 'lazy-secret',
+    })
+    const decryptString = vi.fn((value: Buffer) => value.toString('utf-8'))
+    const credentialStore = new DataSourceCredentialStore('data-source/secrets.enc', {
+      isEncryptionAvailable: () => true,
+      encryptString: (value) => Buffer.from(value, 'utf-8'),
+      decryptString,
+    })
+    const registry = new DataSourceAdapterRegistry()
+    registry.register({
+      type: 'elasticsearch',
+      async test(_config, secret) {
+        return { ok: secret?.apiKey === 'lazy-secret', sourceId: config.id }
+      },
+      async listCollections() {
+        return []
+      },
+      async query() {
+        throw new Error('not used')
+      },
+      async getRecord() {
+        throw new Error('not used')
+      },
+    })
+    const service = new DataSourceService({
+      configStore,
+      credentialStore,
+      auditLog: new DataSourceAuditLog(),
+      adapterRegistry: registry,
+    })
+
+    await service.load()
+    await expect(service.listSources()).resolves.toHaveLength(1)
+    expect(decryptString).not.toHaveBeenCalled()
+
+    await expect(service.testConnection(config.id)).resolves.toMatchObject({ ok: true })
+    expect(decryptString).toHaveBeenCalledOnce()
+  })
+
   it('creates a source without leaking secrets into config', async () => {
     const service = createService({
       type: 'elasticsearch',
