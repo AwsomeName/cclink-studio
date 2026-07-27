@@ -43,7 +43,7 @@
     "typecheck": "pnpm typecheck:web && pnpm typecheck:node",
     "verify:oss-boundary": "node scripts/verify-oss-boundary.mjs && node --test scripts/verify-oss-boundary.test.mjs",
     "verify:context-actions": "node scripts/verify-context-action-boundary.mjs",
-    "verify:release": "node --test scripts/oss-release-preflight.test.mjs",
+    "verify:release": "node --test scripts/oss-release-preflight.test.mjs scripts/oss-release-workflow.test.mjs",
     "stage:agent-runtime": "node scripts/stage-claude-runtime.mjs",
     "verify:agent-runtime": "node scripts/stage-claude-runtime.mjs --verify-only",
     "smoke:agent-runtime": "node scripts/smoke-claude-runtime.mjs",

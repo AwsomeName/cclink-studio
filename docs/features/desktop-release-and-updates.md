@@ -80,6 +80,9 @@ available ──> downloading ──> downloaded ──> installing
 目标：
 
 - 从指定 Studio Tag 构建 arm64/x64 安装包。
+- arm64 固定使用 Apple Silicon runner，x64 固定使用 Intel runner；不得依赖
+  `macos-latest` 的可变架构。
+- 在应用构建前真实导入 P12，验证导出密码和 Developer ID identity。
 - 执行确定性门禁，记录源码 SHA、发布 workflow SHA、架构和哈希。
 - Developer ID 签名、Apple 公证并 staple。
 - 创建 GitHub Draft Release；人工批准后公开。

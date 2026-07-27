@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 45
     env:
       RELEASE_TAG: ${{ inputs.tag }}
@@ -60,12 +60,16 @@ jobs:
     if: ${{ inputs.create_draft }}
     needs: validate
     environment: studio-release
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        arch: [arm64, x64]
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
     env:
       RELEASE_TAG: ${{ inputs.tag }}
     steps:
@@ -107,7 +111,32 @@ jobs:
           CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           CSC_NAME: ${{ secrets.MACOS_DEVELOPER_IDENTITY }}
-        run: node release-tools/scripts/oss-release-preflight.mjs --source-dir source --tag "$RELEASE_TAG" --mode release
+        run: |
+          node release-tools/scripts/oss-release-preflight.mjs \
+            --source-dir source \
+            --tag "$RELEASE_TAG" \
+            --mode release
+
+          certificate_path="$RUNNER_TEMP/developer-id.p12"
+          keychain_path="$RUNNER_TEMP/release-preflight.keychain-db"
+          keychain_password="$(uuidgen)"
+          cleanup_keychain() {
+            security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
+          }
+          trap cleanup_keychain EXIT
+
+          printf '%s' "$CSC_LINK" | base64 -D > "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$CSC_KEY_PASSWORD" \
+            -T /usr/bin/codesign
+          security find-identity -v -p codesigning "$keychain_path" |
+            grep -F -- "$CSC_NAME" >/dev/null || {
+              echo "::error::The P12 does not contain the configured Developer ID identity."
+              exit 1
+            }
       - name: Build application
         working-directory: source
         run: |

@@ -104,15 +104,22 @@ export function inspectOssReleasePreflight({
   add('release-tools-clean', toolsClean, true, toolsClean ? 'clean' : 'dirty-or-unavailable')
 
   const releaseMode = mode === 'release'
-  const importableDeveloperId =
-    Boolean(environment.CSC_LINK?.trim()) &&
-    Boolean(environment.CSC_KEY_PASSWORD?.trim()) &&
-    Boolean(environment.CSC_NAME?.startsWith('Developer ID Application:'))
+  const developerIdParts = {
+    p12: Boolean(environment.CSC_LINK?.trim()),
+    password: Boolean(environment.CSC_KEY_PASSWORD?.trim()),
+    identity: Boolean(environment.CSC_NAME?.startsWith('Developer ID Application:')),
+  }
+  const importableDeveloperId = Object.values(developerIdParts).every(Boolean)
+  const missingDeveloperIdParts = Object.entries(developerIdParts)
+    .filter(([, present]) => !present)
+    .map(([name]) => name)
   add(
     'developer-id-application',
     importableDeveloperId,
     releaseMode,
-    importableDeveloperId ? 'importable' : 'missing',
+    importableDeveloperId
+      ? 'configured; P12 import is verified by the workflow'
+      : `missing-or-invalid=${missingDeveloperIdParts.join(',')}`,
   )
 
   const apiNotary =
