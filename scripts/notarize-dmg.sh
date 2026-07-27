@@ -33,11 +33,20 @@ security import "$certificate_path" \
   -T /usr/bin/codesign \
   -T /usr/bin/security
 
+identity_hash="$(
+  security find-identity -v -p codesigning "$keychain_path" |
+    awk '/"Developer ID Application: / { print $2; exit }'
+)"
+if [ -z "$identity_hash" ]; then
+  echo "::error::The P12 does not contain a Developer ID Application identity." >&2
+  exit 1
+fi
+
 for dmg in "$@"; do
   test -f "$dmg"
   codesign \
     --force \
-    --sign "$CSC_NAME" \
+    --sign "$identity_hash" \
     --timestamp \
     --keychain "$keychain_path" \
     "$dmg"
