@@ -28,10 +28,16 @@ security create-keychain -p "$keychain_password" "$keychain_path"
 security set-keychain-settings -lut 21600 "$keychain_path"
 security unlock-keychain -p "$keychain_password" "$keychain_path"
 security import "$certificate_path" \
-  -k "$keychain_path" \
   -P "$CSC_KEY_PASSWORD" \
-  -T /usr/bin/codesign \
-  -T /usr/bin/security
+  -A \
+  -t cert \
+  -f pkcs12 \
+  -k "$keychain_path"
+security set-key-partition-list \
+  -S apple-tool:,apple: \
+  -k "$keychain_password" \
+  "$keychain_path"
+security list-keychains -d user -s "$keychain_path"
 
 identity_hash="$(
   security find-identity -v -p codesigning "$keychain_path" |
@@ -48,7 +54,6 @@ for dmg in "$@"; do
     --force \
     --sign "$identity_hash" \
     --timestamp \
-    --keychain "$keychain_path" \
     "$dmg"
   codesign --verify --verbose=2 "$dmg"
   xcrun notarytool submit "$dmg" \
