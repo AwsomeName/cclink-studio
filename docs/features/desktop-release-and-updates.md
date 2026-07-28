@@ -33,13 +33,13 @@ Releases。Studio 运行时负责检查、展示、下载和用户确认后的�
 
 ## 边界与所有权
 
-| 能力 | 所有者 |
-| --- | --- |
-| 中性更新契约、no-op provider、UpdateService、更新 UI | `cclink-studio` |
-| 开源版签名、公证和 Release 上传 | `cclink-studio` GitHub Actions |
-| 商业版集成与商业版发布 | `cclink-dev` 自有工作流 |
-| 开源二进制与公开更新元数据托管 | `cclink-studio` GitHub Releases |
-| 发布批准、安装确认 | 人类 |
+| 能力                                                 | 所有者                          |
+| ---------------------------------------------------- | ------------------------------- |
+| 中性更新契约、no-op provider、UpdateService、更新 UI | `cclink-studio`                 |
+| 开源版签名、公证和 Release 上传                      | `cclink-studio` GitHub Actions  |
+| 商业版集成与商业版发布                               | `cclink-dev` 自有工作流         |
+| 开源二进制与公开更新元数据托管                       | `cclink-studio` GitHub Releases |
+| 发布批准、安装确认                                   | 人类                            |
 
 Studio 安装包不保存 GitHub Token。开源发布使用 GitHub Actions 自动提供的短期
 `GITHUB_TOKEN`；公开 Release 的检查和下载不需要用户凭证。
@@ -57,6 +57,44 @@ APPLE_API_ISSUER
 
 不创建长期 GitHub PAT。发布工作流的 `contents: write` 只授予创建 Draft Release
 的 job，验证和打包 job 保持 `contents: read`。
+
+## 维护者发布命令
+
+开源版正式发布只有一个本地入口：
+
+```bash
+pnpm release:oss -- --patch
+pnpm release:oss -- --version 0.1.3
+```
+
+命令要求：
+
+- 当前仓库是 `AwsomeName/cclink-studio`，处于干净且与 `origin/main` 一致的
+  `main`。
+- 目标版本高于 `package.json` 当前稳定版本，且本地和远端都不存在同名 Tag。
+- 本机 Git 凭证可以推送 main、Tag 并触发 GitHub Actions。
+- 操作者输入 `release vX.Y.Z` 进行最终确认；CI 或受控自动化必须显式传入
+  `--yes`。
+
+确认后，命令执行以下固定流程：
+
+1. `pnpm install --frozen-lockfile`、`pnpm verify` 和 `pnpm smoke:standalone`。
+2. 只修改 `package.json` 版本，创建版本提交和 annotated Tag。
+3. 运行 OSS 发布预检，再原子推送 main 与 Tag，避免只推成功其中一项。
+4. 触发 `release-oss.yml` 并等待 arm64、x64 签名、公证和 Draft Release 完成。
+5. 输出 Draft Release 地址和资产清单，不执行公开发布。
+
+若远端 main 与 Tag 已存在，但触发 GitHub Actions 时网络中断，使用恢复入口：
+
+```bash
+pnpm release:oss -- --dispatch-only v0.1.3
+```
+
+`--no-wait` 只跳过本地等待，不改变远端构建和 Draft 策略。命令失败后不自动删除
+本地提交或 Tag，维护者应先判断失败发生在推送前还是推送后，再决定修复或使用
+`--dispatch-only`；不得覆盖或重写已推送 Tag。
+
+`scripts/package.sh` 只用于当前机器上的未签名测试打包，不是正式发布入口。
 
 ## 更新状态机
 

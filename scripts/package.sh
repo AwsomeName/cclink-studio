@@ -15,7 +15,7 @@
 #   bash scripts/package.sh --help
 #
 # 说明: out/ 与 dist/ 均在 .gitignore 中，清理是安全的（可重新生成）。
-#       开源壳只生成本地产物；官方发布、签名、公证和上传由 cclink-dev 发布集成层承接。
+#       本脚本只生成本地未签名测试产物；开源正式发布请使用 pnpm release:oss。
 
 set -e
 

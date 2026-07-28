@@ -210,6 +210,25 @@ OSS 默认本地构建可以产出未签名测试包，不包含生产更新源�
 - 工作流完成 Developer ID 签名、Apple 公证、staple 和制品验证。
 - 工作流只创建 Draft Release，公开发布仍需人工批准。
 
+维护者从干净且与 `origin/main` 一致的 `main` 执行：
+
+```bash
+pnpm release:oss -- --patch
+# 或指定版本
+pnpm release:oss -- --version 0.1.3
+```
+
+该命令依次执行依赖锁定安装、完整门禁、独立启动 smoke、版本提交、不可变 Tag、
+原子推送和 GitHub 发布工作流，并等待 Draft Release 完成。若 main 与 Tag 已成功
+推送，但工作流触发失败，可只重试远端构建：
+
+```bash
+pnpm release:oss -- --dispatch-only v0.1.3
+```
+
+命令不会公开 Release，也不会把签名、公证或 GitHub 凭证写入源码和安装包。Draft
+资产复验通过后，维护者仍需在 GitHub 点击 `Publish release`。
+
 商业版发布由 `/Users/apple/Desktop/cclink-dev` 的自有工作流承接，包括生产 API
 注入、商业更新源和商业制品；它不触发也不拥有开源版 Release。
 
