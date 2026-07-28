@@ -11,14 +11,17 @@ import {
 } from './oss-release.mjs'
 
 test('parses a patch release with confirmation and wait controls', () => {
-  assert.deepEqual(parseArgs(['--patch', '--yes', '--no-wait']), {
+  const expected = {
     version: '',
     patch: true,
     dispatchOnly: '',
     yes: true,
     wait: false,
     help: false,
-  })
+  }
+  assert.deepEqual(parseArgs(['--patch', '--yes', '--no-wait']), expected)
+  assert.deepEqual(parseArgs(['--', '--patch', '--yes', '--no-wait']), expected)
+  assert.throws(() => parseArgs(['--patch', '--', '--yes']), /未知或不完整/)
 })
 
 test('requires exactly one release version mode', () => {

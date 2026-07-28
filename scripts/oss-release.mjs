@@ -16,6 +16,7 @@ const stableVersionPattern = /^(\d+)\.(\d+)\.(\d+)$/
 const stableTagPattern = /^v(\d+\.\d+\.\d+)$/
 
 export function parseArgs(argv) {
+  const normalizedArgv = argv[0] === '--' ? argv.slice(1) : argv
   const options = {
     version: '',
     patch: false,
@@ -25,9 +26,9 @@ export function parseArgs(argv) {
     help: false,
   }
 
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index]
-    const value = argv[index + 1]
+  for (let index = 0; index < normalizedArgv.length; index += 1) {
+    const arg = normalizedArgv[index]
+    const value = normalizedArgv[index + 1]
     if (arg === '--version' && value) {
       options.version = value
       index += 1
