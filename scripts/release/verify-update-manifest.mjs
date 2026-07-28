@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { verifyUpdateManifestDirectory } from './update-manifest-lib.mjs'
 
 function parseArgs(argv) {
+  const normalizedArgv = argv[0] === '--' ? argv.slice(1) : argv
   const result = {
     assetsDir: '',
     manifest: '',
@@ -13,9 +14,9 @@ function parseArgs(argv) {
     expectedReleaseWorkflowSha: '',
     expectedWorkflowRunId: '',
   }
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index]
-    const value = argv[index + 1]
+  for (let index = 0; index < normalizedArgv.length; index += 1) {
+    const arg = normalizedArgv[index]
+    const value = normalizedArgv[index + 1]
     if (arg === '--assets-dir' && value) result.assetsDir = resolve(value)
     else if (arg === '--manifest' && value) result.manifest = resolve(value)
     else if (arg === '--tag' && value) result.tag = value

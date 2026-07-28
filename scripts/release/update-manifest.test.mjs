@@ -14,6 +14,7 @@ import { resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { generateUpdateManifest, verifyUpdateManifestDirectory } from './update-manifest-lib.mjs'
+import { runVerifyUpdateManifest } from './verify-update-manifest.mjs'
 
 const sourceSha = 'a'.repeat(40)
 const releaseWorkflowSha = 'b'.repeat(40)
@@ -111,6 +112,24 @@ test('CLI generates and independently verifies a manifest before release upload'
     ),
     /Update Manifest verified: v1\.2\.3/,
   )
+})
+
+test('verifier accepts the pnpm argument separator', async () => {
+  const assetsDir = createFixture()
+  const manifestPath = resolve(assetsDir, 'update-manifest.json')
+  const manifest = await generateUpdateManifest({ assetsDir, tag: 'v1.2.3' })
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+
+  const verified = await runVerifyUpdateManifest([
+    '--',
+    '--assets-dir',
+    assetsDir,
+    '--manifest',
+    manifestPath,
+    '--tag',
+    'v1.2.3',
+  ])
+  assert.equal(verified.tag, 'v1.2.3')
 })
 
 test('rejects a missing architecture before a draft can be created', async () => {
