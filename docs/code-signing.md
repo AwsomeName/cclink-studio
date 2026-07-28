@@ -10,6 +10,7 @@
 普通本地构建用于开发测试；开源正式包由本仓库 `.github/workflows/release-oss.yml`
 从不可变 Tag 构建，使用 `studio-release` Environment Secrets 完成签名和公证，
 并创建本仓库 Draft Release。商业版继续由 `cclink-dev` 自有工作流独立发布。
+维护者的完整发布步骤和失败恢复见 `docs/ops/oss-release-runbook.md`。
 
 ## 背景
 

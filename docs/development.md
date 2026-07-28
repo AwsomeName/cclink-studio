@@ -228,6 +228,8 @@ pnpm release:oss -- --dispatch-only v0.1.3
 
 命令不会公开 Release，也不会把签名、公证或 GitHub 凭证写入源码和安装包。Draft
 资产复验通过后，维护者仍需在 GitHub 点击 `Publish release`。
+首次配置、逐步操作、验收标准和失败恢复见
+`docs/ops/oss-release-runbook.md`。
 
 商业版发布由 `/Users/apple/Desktop/cclink-dev` 的自有工作流承接，包括生产 API
 注入、商业更新源和商业制品；它不触发也不拥有开源版 Release。

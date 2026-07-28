@@ -95,6 +95,7 @@ pnpm release:oss -- --dispatch-only v0.1.3
 `--dispatch-only`；不得覆盖或重写已推送 Tag。
 
 `scripts/package.sh` 只用于当前机器上的未签名测试打包，不是正式发布入口。
+维护者执行发布时以 `docs/ops/oss-release-runbook.md` 为操作事实源。
 
 ## 更新状态机
 
