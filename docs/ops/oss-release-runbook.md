@@ -138,6 +138,14 @@ pnpm verify:update-manifest -- \
 只有以上检查通过，才在 GitHub Draft Release 页面点击 `Publish release`。这是正式
 公开给用户的最后人工确认点。
 
+### U0 失败注入
+
+`release-oss` 的手动输入 `failure_injection` 默认且正常值必须是 `none`，仓库发布
+脚本也会显式传入 `none`。`omit-x64-build-record` 只用于维护者执行 U0 回归验收：
+它在两个 package job 成功后、Manifest 生成和 Draft 上传前删除 x64 build record，
+预期结果是 Manifest job 失败且 `Create draft release` 为 `skipped`。不得将失败注入
+用于正常发版，也不得据此移动或复用已有 Tag。
+
 ## 失败恢复
 
 先判断远端 Tag 是否存在：

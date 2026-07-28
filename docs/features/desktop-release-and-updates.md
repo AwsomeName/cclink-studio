@@ -1,8 +1,9 @@
 # Desktop Release And Updates
 
 > 状态：R0 发布自动化门禁已通过，等待干净 Apple Silicon 和 Intel Mac 的真人安装
-> 启动验收；客户端自动更新 U0 的本地 contract、Manifest、发布聚合和门禁已通过，
-> 远端 Release 验收待完成，U1-U5 尚未开始。Mac App Store 不在本阶段范围。
+> 启动验收；客户端自动更新 U0 的 contract、Manifest、发布聚合、真实 Draft、
+> 下载后独立验证和预期失败 Run 均已通过并关闭，U1-U5 尚未开始。Mac App Store
+> 不在本阶段范围。
 
 ## 结论
 

@@ -1,6 +1,7 @@
 # Desktop Update Development Plan
 
-> 状态：计划已冻结；U0 本地实现和门禁已通过，远端 Release 验收待完成。
+> 状态：计划已冻结；U0 已完成并关闭，R0 干净双架构真人安装验收待完成，U1-U5
+> 尚未开始。
 > 产品与架构事实源：`docs/features/desktop-release-and-updates.md`。
 > 本文件只负责工程拆解、顺序、验收和交付证据；与产品事实源冲突时，以产品事实源
 > 为准。
@@ -611,12 +612,11 @@ U2-B Progress UI ────────┘     v
 当前状态：
 
 - R0 自动化完成，但双架构干净机器真人验收未完成，按 `75%` 计。
-- U0 contract、Manifest 工具、workflow 汇总、失败矩阵、全量门禁和独立启动 smoke
-  已通过，远端 branch CI 也已通过；真实测试 Tag、成功 Draft、下载后独立复核和
-  预期失败 Run 待完成，按 `75%` 计。
+- U0 contract、Manifest 工具、workflow 汇总、失败矩阵、全量门禁、真实测试 Tag、
+  成功 Draft、下载后独立复核和预期失败 Run 均已通过，按 `100%` 计。
 - U1-U5 未开始，均按 `0%` 计。
-- 按权重计算的当前整体进度为 `18.75%`。U0 仍是 `IN PROGRESS`，不能因本地门禁
-  已通过就宣称更新功能或 U0 已完成。
+- 按权重计算的当前整体进度为 `22.5%`。U0 已关闭，但客户端仍没有 U1-U5 定义的
+  检查、下载、安装和稳定化能力。
 
 每次阶段汇报固定包含：
 
@@ -639,10 +639,10 @@ U2-B Progress UI ────────┘     v
 2. [x] 实现 Manifest generator/verifier。
 3. [x] 扩展 OSS workflow 汇总 job。
 4. [x] 创建 desktop update acceptance 记录。
-5. [ ] 用测试 Tag 验证成功和预期失败两条路径。
-6. [ ] 下载 Draft 全部资产并执行独立 verifier。
+5. [x] 用测试 Tag 验证成功和预期失败两条路径。
+6. [x] 下载 Draft 全部资产并执行独立 verifier。
 7. [x] 通过 `pnpm verify`、独立启动 smoke 和文档复审。
-8. [ ] 回填提交 SHA、Actions/Draft 证据并关闭 U0。
+8. [x] 回填提交 SHA、Actions/Draft 证据并关闭 U0。
 
 第一轮明确不做：
 
