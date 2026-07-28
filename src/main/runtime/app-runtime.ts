@@ -34,6 +34,7 @@ import type { OfficialIntegration } from '../official/official-integration'
 import type { GitBackupService } from '../git-backup/git-backup-service'
 import type { FileService } from '../fs/file-service'
 import type { TrustedRendererGuard } from '../ipc/trusted-renderer-guard'
+import type { UpdateService } from '../update/update-service'
 import { RuntimeCapabilityRegistry } from './capability-registry'
 import type { ServiceRegistry } from './service-registry'
 
@@ -76,6 +77,8 @@ export interface CclinkStudioRuntimeState {
   terminalExecutionAdapter: TerminalExecutionAdapter | null
   officialIntegration: OfficialIntegration | null
   gitBackupService: GitBackupService | null
+  updateService: UpdateService | null
+  updateSnapshotUnsubscribe: (() => void) | null
   trustedRendererGuard: TrustedRendererGuard | null
 }
 
@@ -119,6 +122,8 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     terminalExecutionAdapter: null,
     officialIntegration: null,
     gitBackupService: null,
+    updateService: null,
+    updateSnapshotUnsubscribe: null,
     trustedRendererGuard: null,
   }
 }

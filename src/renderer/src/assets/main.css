@@ -6561,6 +6561,214 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   background: rgba(59, 130, 246, 0.45);
 }
 
+.status-bar-item.update-badge.phase-available,
+.status-bar-item.update-badge.phase-readyToInstall {
+  background: rgba(22, 163, 74, 0.38);
+}
+
+.status-bar-item.update-badge.phase-failed {
+  background: rgba(220, 38, 38, 0.42);
+}
+
+.update-panel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: flex;
+  justify-content: center;
+  padding-top: 14vh;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.update-panel {
+  width: min(580px, calc(100vw - 40px));
+  max-height: min(680px, 72vh);
+  height: fit-content;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-elevated);
+}
+
+.update-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.update-panel-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.update-panel-header p {
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.update-panel-header .icon-button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.update-panel-header .icon-button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.update-panel-body {
+  max-height: 50vh;
+  overflow: auto;
+  padding: 18px 20px;
+}
+
+.update-message,
+.update-error {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.update-message strong,
+.update-error strong {
+  font-size: 14px;
+}
+
+.update-message span,
+.update-error span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.update-error {
+  padding: 12px;
+  border-left: 3px solid #ef4444;
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.update-release {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.update-release-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.update-release-title > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.update-release-title strong {
+  font-size: 14px;
+}
+
+.update-release-title span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.update-release-notes {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.update-download-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.update-progress-label,
+.update-progress-detail {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.update-progress-detail {
+  color: var(--text-secondary);
+}
+
+.update-download-progress progress {
+  width: 100%;
+  height: 8px;
+}
+
+.update-panel-actions {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.update-panel-actions button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.update-panel-actions button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.update-panel-actions button.primary {
+  border-color: var(--accent-color);
+  background: var(--accent-color);
+  color: #fff;
+}
+
+.update-panel-actions button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .status-bar-item.git-backup-status {
   border: 0;
   background: transparent;

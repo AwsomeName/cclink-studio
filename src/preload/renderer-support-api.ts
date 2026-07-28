@@ -3,6 +3,12 @@ import { dialogIpc, type DialogApiContract } from '../shared/ipc/dialog'
 import type { EditorApiContract } from '../shared/ipc/editor'
 import { identityIpc, type IdentityApiContract } from '../shared/ipc/identity'
 import type { UpdateApiContract } from '../shared/ipc/update'
+import {
+  parseUpdateSnapshot,
+  updateIpc,
+  updateSnapshotChangedChannel,
+  updateSnapshotChangedEventSchema,
+} from '../shared/update'
 import type { WechatApiContract } from '../shared/ipc/wechat'
 import { windowIpc, type WindowApiContract } from '../shared/ipc/window'
 import { invokeIpcContract } from './ipc-contract-client'
@@ -63,15 +69,20 @@ export const editorApi: EditorApiContract = {
 }
 
 export const updateApi: UpdateApiContract = {
-  check: () => ipcRenderer.invoke('updater:check'),
-  download: () => ipcRenderer.invoke('updater:download'),
-  onUpdateAvailable: (callback) => {
+  getSnapshot: async () => parseUpdateSnapshot(await invokeIpcContract(updateIpc.getSnapshot)),
+  check: () => invokeIpcContract(updateIpc.check),
+  startDownload: () => invokeIpcContract(updateIpc.startDownload),
+  cancelDownload: () => invokeIpcContract(updateIpc.cancelDownload),
+  defer: () => invokeIpcContract(updateIpc.defer),
+  ignoreVersion: () => invokeIpcContract(updateIpc.ignoreVersion),
+  prepareInstall: () => invokeIpcContract(updateIpc.prepareInstall),
+  installAndRestart: (input) => invokeIpcContract(updateIpc.installAndRestart, input),
+  onSnapshotChanged: (callback) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
-      info: Parameters<typeof callback>[0],
-    ): void => callback(info)
-    ipcRenderer.removeAllListeners('updater:update-available')
-    ipcRenderer.on('updater:update-available', handler)
-    return () => ipcRenderer.removeListener('updater:update-available', handler)
+      value: Parameters<typeof callback>[0],
+    ): void => callback(updateSnapshotChangedEventSchema.parse(value))
+    ipcRenderer.on(updateSnapshotChangedChannel, handler)
+    return () => ipcRenderer.removeListener(updateSnapshotChangedChannel, handler)
   },
 }

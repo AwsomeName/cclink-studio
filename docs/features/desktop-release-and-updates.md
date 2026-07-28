@@ -1,9 +1,9 @@
 # Desktop Release And Updates
 
 > 状态：R0 发布自动化门禁已通过，等待干净 Apple Silicon 和 Intel Mac 的真人安装
-> 启动验收；客户端自动更新 U0 的 contract、Manifest、发布聚合、真实 Draft、
-> 下载后独立验证和预期失败 Run 均已通过并关闭，U1-U5 尚未开始。Mac App Store
-> 不在本阶段范围。
+> 启动验收；U0 已关闭。U1 已形成可用纵向链路，真实 Studio 可以手动检查公开稳定版
+> 并展示明确结果；U2 已接通私有缓存下载、进度、取消、大小和 SHA-256 校验，但恢复
+> 摘要和真实公开新版验收尚未完成。U3-U5 尚未开始。Mac App Store 不在本阶段范围。
 
 ## 结论
 
@@ -26,9 +26,18 @@ Releases。Studio 默认自动检查自身公开的稳定版 Release；发现新
   -> 退出、替换应用、自动重启
 ```
 
-当前旧 updater 只能读取外部 `latest-mac.yml`、下载一个 DMG 并打开，不能视为
-正式自动更新能力。新的更新链路必须以本文件定义的 Manifest、`UpdateService` 和状态机
-为唯一事实源，旧路径在 U1 完成时移除。
+当前运行时已删除旧 `latest-mac.yml` 和“下载到 Downloads 后直接打开”的 updater。
+新的更新链路以本文件定义的 Manifest、`UpdateService` 和状态机为唯一事实源。
+
+截至 2026-07-28，用户可见能力为：
+
+- Studio 状态栏始终提供更新入口，手动检查后明确展示当前版本和检查结果。
+- 发现新版时可以由用户确认下载；主进程负责进度、取消、重试、私有 `.part` 文件、
+  磁盘空间、最终大小和 SHA-256 校验。
+- 校验通过后进入 `readyToInstall`，但尚不能安装并重启；应用重启后也尚不能恢复
+  已校验资产状态。
+- 当前 GitHub 只有 Draft，没有公开稳定 Release，因此真实 Studio 已验收“已是最新”
+  路径；“发现新版并下载”的 UI 仍需一个公开测试版本做真人验收。
 
 `cclink-dev` 保留独立的商业版发布工作流，不编排、不触发也不拥有开源版 Release。
 两个项目可以使用同一 Developer ID 发布者，但凭证、Tag、制品和发布状态按仓库隔离。

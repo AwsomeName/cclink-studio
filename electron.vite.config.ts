@@ -71,7 +71,12 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [
+      externalizeDepsPlugin({
+        // Sandboxed preload cannot resolve package dependencies at runtime.
+        exclude: ['zod'],
+      }),
+    ],
   },
   renderer: {
     server: rendererServer,

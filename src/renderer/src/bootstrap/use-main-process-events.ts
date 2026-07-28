@@ -30,9 +30,10 @@ export function useMainProcessEvents(): void {
   }, [])
 
   useEffect(() => {
-    const setUpdate = useUpdateStore.getState().setUpdate
-    const offUpdate = window.cclinkStudio.update.onUpdateAvailable((info) => {
-      if (info.latest) setUpdate(info.latest)
+    const store = useUpdateStore.getState()
+    void store.hydrate()
+    const offUpdate = window.cclinkStudio.update.onSnapshotChanged((event) => {
+      useUpdateStore.getState().setSnapshot(event.snapshot)
     })
     return () => {
       offUpdate()
