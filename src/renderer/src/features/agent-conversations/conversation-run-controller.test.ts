@@ -89,6 +89,43 @@ describe('conversation-run-controller', () => {
     expect(store.clearTransientResources).toHaveBeenCalledWith('agent-1')
   })
 
+  it('allows an image-only turn and clears image data only after the backend accepts it', async () => {
+    const image = {
+      id: 'image-1',
+      name: 'screen.png',
+      mediaType: 'image/png' as const,
+      data: 'AQID',
+      size: 3,
+    }
+    const { store, agentApi, controller } = createHarness(
+      createConversation({ input: '', pendingImages: [image] }),
+    )
+
+    await expect(controller.send('')).resolves.toEqual({
+      status: 'accepted',
+      runId: 'run-1',
+    })
+    expect(store.addUserMessage).toHaveBeenCalledWith(
+      '请查看我发送的图片。',
+      'agent-1',
+      [
+        expect.objectContaining({
+          kind: 'image',
+          label: 'screen.png',
+          ref: { type: 'image', mediaType: 'image/png', size: 3 },
+        }),
+      ],
+    )
+    expect(agentApi.sendMessage).toHaveBeenCalledWith(
+      'agent-1',
+      expect.objectContaining({
+        message: '请查看我发送的图片。',
+        images: [image],
+      }),
+    )
+    expect(store.clearTransientResources).toHaveBeenCalledWith('agent-1')
+  })
+
   it.each([
     ['空消息', '   ', createConversation(), 'empty'],
     ['归档会话', 'hello', createConversation({ archivedAt: 2 }), 'archived'],

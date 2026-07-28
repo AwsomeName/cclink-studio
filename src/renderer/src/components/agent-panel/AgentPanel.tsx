@@ -20,6 +20,11 @@ import { useCommandStore } from '../../stores/command-store'
 import { THREAD_RESTORED_EVENT } from '../../features/context-actions/domains/thread-context-actions'
 import { MountedResourceBar } from '../../features/agent-conversations/mounted-resource-bar'
 import { MountedSkillStrip } from '../../features/agent-conversations/mounted-skill-strip'
+import { ImageAttachmentStrip } from '../../features/agent-conversations/image-attachment-strip'
+import {
+  importAgentImageFiles,
+  MAX_AGENT_IMAGES,
+} from '../../features/agent-conversations/image-attachments'
 import {
   ResourceCandidateMenu,
   SkillCandidateMenu,
@@ -133,6 +138,8 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const setPermissionMode = useAgentStore((s) => s.setPermissionMode)
   const addMountedResource = useAgentStore((s) => s.addMountedResource)
   const removeMountedResource = useAgentStore((s) => s.removeMountedResource)
+  const addPendingImages = useAgentStore((s) => s.addPendingImages)
+  const removePendingImage = useAgentStore((s) => s.removePendingImage)
   const addMountedSkill = useAgentStore((s) => s.addMountedSkill)
   const removeMountedSkill = useAgentStore((s) => s.removeMountedSkill)
   const scope = useAgentStore((s) => s.scope)
@@ -754,7 +761,23 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const workspaceName = useMemo(() => workspaceRefLabel(activeWorkspaceRef), [activeWorkspaceRef])
   const activeConversation = conversations[activeConversationId]
   const mountedResources = activeConversation?.mountedResources ?? []
+  const pendingImages = activeConversation?.pendingImages ?? []
   const mountedSkills = activeConversation?.mountedSkills ?? []
+  const handleAddImages = useCallback(
+    async (files: File[]) => {
+      const result = await importAgentImageFiles(files, MAX_AGENT_IMAGES - pendingImages.length)
+      if (result.attachments.length > 0) {
+        addPendingImages(result.attachments, activeConversationId)
+      }
+      if (result.errors.length > 0) showToast(result.errors.join('\n'), 'error')
+      requestAnimationFrame(() => inputRef.current?.focus())
+    },
+    [activeConversationId, addPendingImages, pendingImages.length, showToast],
+  )
+  const handleRemovePendingImage = useCallback(
+    (imageId: string) => removePendingImage(imageId, activeConversationId),
+    [activeConversationId, removePendingImage],
+  )
   const savedQueries = useMemo(
     () => Object.values(savedQueriesBySourceId).flat(),
     [savedQueriesBySourceId],
@@ -942,12 +965,34 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                   />
                 )}
                 <MountedSkillStrip skills={mountedSkills} onRemove={handleRemoveMountedSkill} />
+                <ImageAttachmentStrip images={pendingImages} onRemove={handleRemovePendingImage} />
                 <textarea
                   ref={inputRef}
                   className="agent-start-input"
                   value={input}
                   onChange={(e) => handleInputChange(e.target.value)}
                   onKeyDown={handleKeyDown}
+                  onPaste={(event) => {
+                    const files = Array.from(event.clipboardData.files).filter((file) =>
+                      file.type.startsWith('image/'),
+                    )
+                    if (files.length === 0) return
+                    event.preventDefault()
+                    void handleAddImages(files)
+                  }}
+                  onDragOver={(event) => {
+                    if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
+                      event.preventDefault()
+                    }
+                  }}
+                  onDrop={(event) => {
+                    const files = Array.from(event.dataTransfer.files).filter((file) =>
+                      file.type.startsWith('image/'),
+                    )
+                    if (files.length === 0) return
+                    event.preventDefault()
+                    void handleAddImages(files)
+                  }}
                   placeholder="随心输入"
                   rows={3}
                 />
@@ -955,7 +1000,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                   permissionMode={permissionMode}
                   settings={settings}
                   loading={loading || contextCompacting}
-                  canSend={Boolean(input.trim()) && !contextCompacting}
+                  canSend={(Boolean(input.trim()) || pendingImages.length > 0) && !contextCompacting}
                   contextUsage={contextUsage}
                   contextCompaction={contextCompaction}
                   canCompact={Boolean(sessionId) && !loading}
@@ -963,12 +1008,13 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                   onPermissionModeChange={handlePermissionModeChange}
                   onOpenResourceMenu={() => setResourceQuery('')}
                   onOpenSkillMenu={() => setSkillQuery('')}
+                  onAddImages={(files) => void handleAddImages(files)}
                   onOpenSettings={handleOpenAgentSettings}
                   sendButton={
                     <button
                       className="agent-start-send"
                       onClick={handleSend}
-                      disabled={!input.trim() || contextCompacting}
+                      disabled={(!input.trim() && pendingImages.length === 0) || contextCompacting}
                       title="发送"
                     >
                       <IconSend size={16} />
@@ -1152,6 +1198,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
           />
           <MountedSkillStrip skills={mountedSkills} onRemove={handleRemoveMountedSkill} />
           <div className="agent-input-card">
+            <ImageAttachmentStrip images={pendingImages} onRemove={handleRemovePendingImage} />
             <button
               type="button"
               className="agent-copy-diagnostics-btn"
@@ -1166,6 +1213,27 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
               value={input}
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
+              onPaste={(event) => {
+                const files = Array.from(event.clipboardData.files).filter((file) =>
+                  file.type.startsWith('image/'),
+                )
+                if (files.length === 0) return
+                event.preventDefault()
+                void handleAddImages(files)
+              }}
+              onDragOver={(event) => {
+                if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
+                  event.preventDefault()
+                }
+              }}
+              onDrop={(event) => {
+                const files = Array.from(event.dataTransfer.files).filter((file) =>
+                  file.type.startsWith('image/'),
+                )
+                if (files.length === 0) return
+                event.preventDefault()
+                void handleAddImages(files)
+              }}
               placeholder="输入消息，@ 挂资源，/ 挂技能..."
               rows={2}
             />
@@ -1173,7 +1241,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
               permissionMode={permissionMode}
               settings={settings}
               loading={loading || contextCompacting}
-              canSend={Boolean(input.trim()) && !contextCompacting}
+              canSend={(Boolean(input.trim()) || pendingImages.length > 0) && !contextCompacting}
               contextUsage={contextUsage}
               contextCompaction={contextCompaction}
               canCompact={Boolean(sessionId) && !loading}
@@ -1181,6 +1249,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
               onPermissionModeChange={handlePermissionModeChange}
               onOpenResourceMenu={() => setResourceQuery('')}
               onOpenSkillMenu={() => setSkillQuery('')}
+              onAddImages={(files) => void handleAddImages(files)}
               onOpenSettings={handleOpenAgentSettings}
               sendButton={
                 loading ? (
@@ -1191,7 +1260,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                   <button
                     className="agent-send-btn"
                     onClick={handleSend}
-                    disabled={!input.trim() || contextCompacting}
+                    disabled={(!input.trim() && pendingImages.length === 0) || contextCompacting}
                     title="发送"
                   >
                     <IconSend size={17} />

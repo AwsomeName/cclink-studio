@@ -4174,6 +4174,65 @@ body.is-resizing-thread-list .agent-panel-center > .agent-quick-switcher {
   white-space: nowrap;
 }
 
+.agent-image-attachment-strip {
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  padding: 9px 10px 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.agent-image-attachment {
+  position: relative;
+  width: 76px;
+  height: 64px;
+  flex: 0 0 76px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-workbench);
+}
+
+.agent-image-attachment img {
+  width: 100%;
+  height: 44px;
+  display: block;
+  object-fit: cover;
+}
+
+.agent-image-attachment > span {
+  display: block;
+  padding: 2px 5px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 9px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-image-attachment > button {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+  background: rgba(24, 24, 24, 0.82);
+  color: #fff;
+  cursor: pointer;
+}
+
+.agent-image-attachment > button:hover {
+  background: rgba(52, 52, 52, 0.96);
+}
+
 .agent-resource-chip {
   min-width: 0;
   max-width: 180px;

@@ -149,6 +149,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
         runId: payload.runId,
         resources: payload.resources,
         skills: payload.skills,
+        images: payload.images,
         sessionId: payload.sessionId,
         sessionCompatibilityFingerprint: payload.sessionCompatibilityFingerprint,
         workspaceRef: payload.workspaceRef,

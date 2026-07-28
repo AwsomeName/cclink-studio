@@ -13,7 +13,9 @@ import {
   type McpServerConfig,
   type Options as ClaudeAgentSdkOptions,
   type Query,
+  type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk'
+import type { AgentImageAttachment } from '../../../shared/ipc/agent.js'
 import type { AgentContextUsageSnapshot } from '../../../shared/agent-protocol.js'
 import type { McpToolHost } from '../tools/tool-host.js'
 import type { ToolDefinition } from '../tools/types.js'
@@ -454,7 +456,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
 
     try {
       const sdkQuery = query({
-        prompt: userMessage,
+        prompt: createSdkPrompt(userMessage, options?.images),
         options: sdkOptions,
       })
       this.currentQuery = sdkQuery
@@ -679,6 +681,34 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     await this.abort()
     this.eventHandler = null
   }
+}
+
+function createSdkPrompt(
+  message: string,
+  images: AgentImageAttachment[] | undefined,
+): string | AsyncIterable<SDKUserMessage> {
+  if (!images?.length) return message
+
+  return (async function* (): AsyncGenerator<SDKUserMessage> {
+    yield {
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [
+          { type: 'text', text: message },
+          ...images.map((image) => ({
+            type: 'image' as const,
+            source: {
+              type: 'base64' as const,
+              media_type: image.mediaType,
+              data: image.data,
+            },
+          })),
+        ],
+      },
+      parent_tool_use_id: null,
+    }
+  })()
 }
 
 interface SdkFailureClassification {

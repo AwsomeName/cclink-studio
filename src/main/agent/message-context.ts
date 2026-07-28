@@ -1,5 +1,6 @@
 import type {
   AgentConversationContinuity,
+  AgentImageAttachment,
   AgentSendResource,
   AgentSendSkill,
 } from '../../shared/ipc/agent'
@@ -9,6 +10,7 @@ import type { WorkspaceRef } from '../../shared/workspace-ref'
 export interface AgentSendMessageContext {
   resources?: AgentSendResource[]
   skills?: AgentSendSkill[]
+  images?: AgentImageAttachment[]
   runId?: string
   sessionId?: string | null
   sessionCompatibilityFingerprint?: string | null
@@ -115,6 +117,8 @@ function normalizeResources(resources?: AgentSendResource[]): AgentSendResource[
             ? { snapshotHash: truncate(resource.ref.snapshotHash) }
             : {}),
           ...(typeof resource.ref.dirty === 'boolean' ? { dirty: resource.ref.dirty } : {}),
+          ...(resource.ref.mediaType ? { mediaType: resource.ref.mediaType } : {}),
+          ...(typeof resource.ref.size === 'number' ? { size: resource.ref.size } : {}),
         },
       },
     ]

@@ -47,6 +47,7 @@ export type ConversationBackend = 'cclink-studio-agent' | 'codex' | 'claude-code
 
 export type AgentMountedResourceKind =
   | 'file'
+  | 'image'
   | 'file-range'
   | 'folder'
   | 'tab'
@@ -92,6 +93,8 @@ export interface AgentMountedResource {
     sourceSnapshot?: string
     snapshotHash?: string
     dirty?: boolean
+    mediaType?: import('@shared/ipc/agent').AgentImageMediaType
+    size?: number
   }
 }
 

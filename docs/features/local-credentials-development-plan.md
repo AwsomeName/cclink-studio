@@ -1,6 +1,6 @@
 # 本地凭证管理开发计划
 
-> 状态：M0-M5 已完成；M6 自动化通过，安装包与真人验收待执行  
+> 状态：M0-M5 与商业 WebDAV 扩展迁移已完成；M6 自动化通过，安装包与真人验收待执行
 > 最后更新：2026-07-28  
 > 产品事实源：`docs/features/local-credentials.md`  
 > 架构决策：`docs/decisions/0003-plaintext-local-credentials.md`
@@ -34,6 +34,7 @@
 - 一个设置页“本地凭证”产品面。
 - 定向保存、按字段显示/复制、替换和清除。
 - Agent、Git、数据源及有效扩展的统一凭证解析。
+- 商业覆盖层的 WebDAV 密码通过统一服务本地持久化，不再另设内存或密文 Store。
 - 旧密文检测和重新输入流程。
 - 删除 OSS 生产路径中的系统钥匙串依赖。
 - 自动化、smoke、打包和真人验收。
@@ -41,7 +42,7 @@
 ### 不在本轮
 
 - 主密码或加密保险库。
-- CCLink 账号、云同步或跨设备凭证同步。
+- CCLink 账号 Session、官方云端凭证托管或跨设备凭证同步。
 - 浏览器 Cookie、网站会话和验证码管理。
 - SSH 私钥托管。
 - 团队共享凭证或远程 Agent 凭证下发。
@@ -63,6 +64,7 @@ main CredentialService
           +-- Agent
           +-- Git backup
           +-- Data source
+          +-- Commercial WebDAV adapter
           +-- enabled extensions
 ```
 

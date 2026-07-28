@@ -9,6 +9,9 @@ import {
 
 const MAX_MESSAGE_LENGTH = 1024 * 1024
 const MAX_RESOURCE_PAYLOAD_BYTES = 5 * 1024 * 1024
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+const MAX_IMAGE_BASE64_LENGTH = Math.ceil(MAX_IMAGE_BYTES / 3) * 4
+const MAX_IMAGE_PAYLOAD_BYTES = 26 * 1024 * 1024
 
 export const agentConversationIdSchema = boundedIdentifierSchema()
 export const optionalAgentConversationIdSchema = agentConversationIdSchema.optional()
@@ -52,6 +55,7 @@ const resourceRefSchema = z
   .object({
     type: z.enum([
       'file',
+      'image',
       'file-range',
       'folder',
       'tab',
@@ -92,6 +96,8 @@ const resourceRefSchema = z
       .regex(/^[a-f0-9]{64}$/i)
       .optional(),
     dirty: z.boolean().optional(),
+    mediaType: z.enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp']).optional(),
+    size: z.number().int().positive().max(MAX_IMAGE_BYTES).optional(),
   })
   .strict()
 
@@ -124,6 +130,25 @@ const skillsSchema = z
   )
   .max(50)
 
+const imagesSchema = z
+  .array(
+    z
+      .object({
+        id: boundedIdentifierSchema(),
+        name: boundedTextSchema(512).trim().min(1),
+        mediaType: z.enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp']),
+        data: z
+          .string()
+          .min(1)
+          .max(MAX_IMAGE_BASE64_LENGTH)
+          .regex(/^[A-Za-z0-9+/]+={0,2}$/, '图片数据不是有效 Base64'),
+        size: z.number().int().positive().max(MAX_IMAGE_BYTES),
+      })
+      .strict(),
+  )
+  .max(5)
+  .and(boundedJsonValueSchema(MAX_IMAGE_PAYLOAD_BYTES, 'Agent 图片附件'))
+
 export const agentSendMessageInputSchema = z.union([
   boundedTextSchema(MAX_MESSAGE_LENGTH).trim().min(1),
   z
@@ -132,6 +157,7 @@ export const agentSendMessageInputSchema = z.union([
       runId: boundedIdentifierSchema().optional(),
       resources: resourcesSchema.optional(),
       skills: skillsSchema.optional(),
+      images: imagesSchema.optional(),
       sessionId: nullableAgentSessionIdSchema.optional(),
       sessionCompatibilityFingerprint:
         nullableAgentSessionCompatibilityFingerprintSchema.optional(),

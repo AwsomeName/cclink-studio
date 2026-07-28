@@ -255,6 +255,7 @@ function consumersFor(id: string): string[] {
   if (id.startsWith('agent:')) return ['Agent']
   if (id.startsWith('git:')) return ['Git 备份']
   if (id.startsWith('data-source:')) return ['数据源']
+  if (id.startsWith('extension:webdav:')) return ['云同步']
   if (id.startsWith('extension:meshy:')) return ['Meshy']
   if (id.startsWith('extension:')) return ['扩展']
   return []

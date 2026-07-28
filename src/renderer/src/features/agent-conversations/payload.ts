@@ -1,5 +1,6 @@
 import type {
   AgentConversationContinuity,
+  AgentImageAttachment,
   AgentSendMessagePayload,
   AgentSendResource,
   AgentSendSkill,
@@ -71,8 +72,22 @@ export function toSendResources(resources: AgentMountedResource[]): AgentSendRes
 
 export function transientMessageResources(
   resources: AgentMountedResource[],
+  images: AgentImageAttachment[] = [],
 ): AgentMountedResource[] {
-  return resources.filter((resource) => resource.kind === 'file-range')
+  return [
+    ...resources.filter((resource) => resource.kind === 'file-range'),
+    ...images.map((image) => ({
+      id: image.id,
+      kind: 'image' as const,
+      label: image.name,
+      detail: `${image.mediaType} · ${formatBytes(image.size)}`,
+      ref: {
+        type: 'image' as const,
+        mediaType: image.mediaType,
+        size: image.size,
+      },
+    })),
+  ]
 }
 
 export function toSendSkills(skills: AgentMountedSkill[]): AgentSendSkill[] {
@@ -95,6 +110,7 @@ export function buildAgentSendPayload(
     ...(runId ? { runId } : {}),
     resources: toSendResources(conversation?.mountedResources ?? []),
     skills: toSendSkills(conversation?.mountedSkills ?? []),
+    images: conversation?.pendingImages ?? [],
     sessionId: conversation?.sessionId ?? null,
     sessionCompatibilityFingerprint: conversation?.sessionCompatibilityFingerprint ?? null,
     continuity: buildConversationContinuity(conversation, message),
@@ -102,6 +118,12 @@ export function buildAgentSendPayload(
       ? { workspaceRef: conversation.runtime.workspaceRef }
       : {}),
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 export function buildConversationContinuity(

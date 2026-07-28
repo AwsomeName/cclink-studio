@@ -1,5 +1,6 @@
 import type { AgentContextUsageSnapshot } from '@shared/agent-protocol'
 import type { WorkspaceRef } from '@shared/workspace-ref'
+import type { AgentImageAttachment } from '@shared/ipc/agent'
 import type {
   AgentBackendState,
   AgentMessage,
@@ -58,6 +59,8 @@ export interface AgentConversationState {
   contextCompaction: AgentContextCompactionState
   scope: AgentScope
   mountedResources: AgentMountedResource[]
+  /** Full image data is transient and is removed before workspace persistence. */
+  pendingImages?: AgentImageAttachment[]
   mountedSkills: AgentMountedSkill[]
   createdAt: number
   updatedAt: number
@@ -125,6 +128,7 @@ export function createAgentConversationState(
     },
     scope: { kind: 'all' },
     mountedResources: [],
+    pendingImages: [],
     mountedSkills: [],
     createdAt: now,
     updatedAt: now,

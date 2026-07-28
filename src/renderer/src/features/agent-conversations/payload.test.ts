@@ -189,6 +189,31 @@ describe('buildAgentSendPayload', () => {
 
     expect(transientMessageResources([file, range])).toEqual([range])
   })
+
+  it('sends pending images separately and records only bounded image metadata in the user message', () => {
+    const conversationId = useAgentStore.getState().createConversation()
+    const image = {
+      id: 'image-1',
+      name: 'screen.png',
+      mediaType: 'image/png' as const,
+      data: 'AQID',
+      size: 3,
+    }
+    useAgentStore.getState().addPendingImages([image], conversationId)
+    const conversation = useAgentStore.getState().conversations[conversationId]
+
+    expect(buildAgentSendPayload('看看这里', conversation).images).toEqual([image])
+    expect(transientMessageResources([], [image])).toEqual([
+      {
+        id: 'image-1',
+        kind: 'image',
+        label: 'screen.png',
+        detail: 'image/png · 3 B',
+        ref: { type: 'image', mediaType: 'image/png', size: 3 },
+      },
+    ])
+    expect(JSON.stringify(transientMessageResources([], [image]))).not.toContain('AQID')
+  })
 })
 
 function fileRangeResource(

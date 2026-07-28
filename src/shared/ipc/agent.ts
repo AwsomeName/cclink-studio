@@ -20,6 +20,7 @@ import type { WorkspaceRef } from '../workspace-ref'
 
 export type AgentSendResourceKind =
   | 'file'
+  | 'image'
   | 'file-range'
   | 'folder'
   | 'tab'
@@ -64,6 +65,8 @@ export interface AgentSendResource {
     sourceSnapshot?: string
     snapshotHash?: string
     dirty?: boolean
+    mediaType?: AgentImageMediaType
+    size?: number
   }
 }
 
@@ -73,6 +76,17 @@ export interface AgentSendSkill {
   label: string
   description?: string
   source?: 'builtin' | 'user' | 'workspace'
+}
+
+export type AgentImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+
+export interface AgentImageAttachment {
+  id: string
+  name: string
+  mediaType: AgentImageMediaType
+  /** Raw base64 without a data URL prefix. It is transient and must not enter workspace snapshots. */
+  data: string
+  size: number
 }
 
 export interface AgentConversationContinuity {
@@ -92,6 +106,7 @@ export interface AgentSendMessagePayload {
   runId?: string
   resources?: AgentSendResource[]
   skills?: AgentSendSkill[]
+  images?: AgentImageAttachment[]
   /** 已持久化的 Claude session；主进程在发送前原子恢复，避免 UI 历史与后端脱节。 */
   sessionId?: string | null
   /** 创建 sessionId 时的运行时/API/模型指纹；不匹配时主进程必须拒绝恢复。 */

@@ -961,6 +961,38 @@ describe('useAgentStore', () => {
       expect(snapshot.conversations['agent-default']).toBeUndefined()
     })
 
+    it('待发送图片正文不会写入项目会话快照', () => {
+      const workspacePath = '/workspace/a'
+      const conversationId = useAgentStore.getState().createConversation({
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'cclink-studio-agent',
+          workspaceRef: localWorkspaceRef(workspacePath),
+        },
+      })
+      useAgentStore.getState().addPendingImages(
+        [
+          {
+            id: 'image-1',
+            name: 'screen.png',
+            mediaType: 'image/png',
+            data: 'base64-secret-image-data',
+            size: 12,
+          },
+        ],
+        conversationId,
+      )
+
+      const snapshot = buildAgentConversationWorkspaceSnapshot(
+        useAgentStore.getState(),
+        workspacePath,
+      )
+
+      expect(snapshot.conversations[conversationId]?.pendingImages).toEqual([])
+      expect(JSON.stringify(snapshot)).not.toContain('base64-secret-image-data')
+    })
+
     it('后台会话更新不会覆盖该项目最后激活的会话', () => {
       const workspaceA = '/workspace/a'
       const workspaceB = '/workspace/b'

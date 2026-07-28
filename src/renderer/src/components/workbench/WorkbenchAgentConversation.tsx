@@ -56,6 +56,12 @@ import {
   openFileRangeResource,
 } from '../../features/markdown/markdown-navigation'
 import { useConversationScroll } from '../../features/agent-conversations/use-conversation-scroll'
+import { useToastStore } from '../common/Toast'
+import { ImageAttachmentStrip } from '../../features/agent-conversations/image-attachment-strip'
+import {
+  importAgentImageFiles,
+  MAX_AGENT_IMAGES,
+} from '../../features/agent-conversations/image-attachments'
 
 export function WorkbenchAgentConversation({
   tabId,
@@ -75,6 +81,8 @@ export function WorkbenchAgentConversation({
   const setPermissionMode = useAgentStore((state) => state.setPermissionMode)
   const addMountedResource = useAgentStore((state) => state.addMountedResource)
   const removeMountedResource = useAgentStore((state) => state.removeMountedResource)
+  const addPendingImages = useAgentStore((state) => state.addPendingImages)
+  const removePendingImage = useAgentStore((state) => state.removePendingImage)
   const addMountedSkill = useAgentStore((state) => state.addMountedSkill)
   const removeMountedSkill = useAgentStore((state) => state.removeMountedSkill)
   const tabs = useTabStore((state) => state.tabs)
@@ -89,6 +97,7 @@ export function WorkbenchAgentConversation({
   const savedQueriesBySourceId = useDataSourceStore((state) => state.savedQueriesBySourceId)
   const loadDataSources = useDataSourceStore((state) => state.loadSources)
   const loadSavedQueries = useDataSourceStore((state) => state.loadSavedQueries)
+  const showToast = useToastStore((state) => state.show)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const [resourceQuery, setResourceQuery] = useState<string | null>(null)
   const [skillQuery, setSkillQuery] = useState<string | null>(null)
@@ -136,6 +145,7 @@ export function WorkbenchAgentConversation({
 
   const conversationInput = conversation?.input ?? ''
   const mountedResources = conversation?.mountedResources ?? []
+  const pendingImages = conversation?.pendingImages ?? []
   const mountedSkills = conversation?.mountedSkills ?? []
   const contextCompacting = conversation?.contextCompaction.status === 'compacting'
   const composerWorkspaceRef = conversation?.runtime.workspaceRef ?? activeWorkspaceRef
@@ -222,6 +232,19 @@ export function WorkbenchAgentConversation({
       removeMountedResource(resourceId, conversationId)
     },
     [conversationId, removeMountedResource],
+  )
+  const handleAddImages = useCallback(
+    async (files: File[]) => {
+      const result = await importAgentImageFiles(files, MAX_AGENT_IMAGES - pendingImages.length)
+      if (result.attachments.length > 0) addPendingImages(result.attachments, conversationId)
+      if (result.errors.length > 0) showToast(result.errors.join('\n'), 'error')
+      requestAnimationFrame(() => inputRef.current?.focus())
+    },
+    [addPendingImages, conversationId, pendingImages.length, showToast],
+  )
+  const handleRemovePendingImage = useCallback(
+    (imageId: string) => removePendingImage(imageId, conversationId),
+    [conversationId, removePendingImage],
   )
   const handleMountSkill = useCallback(
     (skill: AgentSkillCandidate) => {
@@ -401,18 +424,43 @@ export function WorkbenchAgentConversation({
             )}
             <MountedSkillStrip skills={mountedSkills} onRemove={handleRemoveMountedSkill} />
             <div className="conversation-input-card">
+              <ImageAttachmentStrip images={pendingImages} onRemove={handleRemovePendingImage} />
               <textarea
                 ref={inputRef}
                 value={conversation.input}
                 onChange={(event) => handleInputChange(event.target.value)}
                 onKeyDown={handleComposerKeyDown}
+                onPaste={(event) => {
+                  const files = Array.from(event.clipboardData.files).filter((file) =>
+                    file.type.startsWith('image/'),
+                  )
+                  if (files.length === 0) return
+                  event.preventDefault()
+                  void handleAddImages(files)
+                }}
+                onDragOver={(event) => {
+                  if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
+                    event.preventDefault()
+                  }
+                }}
+                onDrop={(event) => {
+                  const files = Array.from(event.dataTransfer.files).filter((file) =>
+                    file.type.startsWith('image/'),
+                  )
+                  if (files.length === 0) return
+                  event.preventDefault()
+                  void handleAddImages(files)
+                }}
                 placeholder="发送到这个工作会话，@ 挂资源，/ 挂技能。Cmd/Ctrl + Enter 发送。"
               />
               <AgentComposerToolbar
                 permissionMode={permissionMode}
                 settings={settings}
                 loading={conversation.loading || contextCompacting}
-                canSend={Boolean(conversation.input.trim()) && !contextCompacting}
+                canSend={
+                  (Boolean(conversation.input.trim()) || pendingImages.length > 0) &&
+                  !contextCompacting
+                }
                 contextUsage={conversation.contextUsage}
                 contextCompaction={conversation.contextCompaction}
                 canCompact={Boolean(conversation.sessionId) && !conversation.loading}
@@ -420,6 +468,7 @@ export function WorkbenchAgentConversation({
                 onPermissionModeChange={handlePermissionModeChange}
                 onOpenResourceMenu={() => setResourceQuery('')}
                 onOpenSkillMenu={() => setSkillQuery('')}
+                onAddImages={(files) => void handleAddImages(files)}
                 onOpenSettings={handleOpenAgentSettings}
                 sendButton={
                   conversation.loading ? (
@@ -428,7 +477,10 @@ export function WorkbenchAgentConversation({
                     </button>
                   ) : (
                     <button
-                      disabled={!conversation.input.trim() || contextCompacting}
+                      disabled={
+                        (!conversation.input.trim() && pendingImages.length === 0) ||
+                        contextCompacting
+                      }
                       onClick={() => {
                         setResourceQuery(null)
                         setSkillQuery(null)

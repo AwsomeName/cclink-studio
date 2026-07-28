@@ -84,6 +84,7 @@ export function normalizeConversationSnapshot(
       mountedResources: Array.isArray(conversation.mountedResources)
         ? conversation.mountedResources
         : [],
+      pendingImages: [],
       mountedSkills: Array.isArray(conversation.mountedSkills) ? conversation.mountedSkills : [],
       sessionId: invalidPersistedSession ? null : (conversation.sessionId ?? null),
       sessionCompatibilityFingerprint: invalidPersistedSession ? null : persistedFingerprint,
@@ -268,6 +269,7 @@ export function buildAgentConversationWorkspaceSnapshot(
       backendState: conversation.loading ? 'connected' : conversation.backendState,
       streamingMessageId: null,
       input: '',
+      pendingImages: [],
       messages: conversation.messages.map((message) => ({ ...message, isStreaming: false })),
     }
   }

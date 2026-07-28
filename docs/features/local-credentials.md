@@ -32,6 +32,7 @@ CCLink Studio OSS 是无 CCLink 账号、无 CCLink 云服务、无操作系统�
 | 模型服务 | API Key | 本地 Agent、内置 Claude Code Runtime、兼容 Provider | 本机全局 |
 | Git 平台 | GitHub Token | 手动 Git 备份、GitHub 建仓 | 本机全局 |
 | 数据源 | API Key、Bearer Token、用户名、密码 | DataSourceService | 按数据源 ID |
+| 云同步 | WebDAV 密码 | 商业装配层 SyncService | 按同步配置 ID |
 | 扩展服务 | API Key、Token | 已启用的 Meshy 等扩展 | 按服务实例 |
 
 第一版只管理用户明确输入的第三方凭证，不管理：
@@ -158,6 +159,7 @@ CredentialService  <---- Diagnostics projection
     +---- Agent credential resolver
     +---- Git backup credential resolver
     +---- Data source credential resolver
+    +---- WebDAV credential resolver (commercial assembly)
     +---- Extension credential resolver
 ```
 

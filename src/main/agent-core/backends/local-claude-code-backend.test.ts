@@ -123,7 +123,7 @@ function createBackend(): LocalClaudeCodeBackend {
   return createBackendFixture().backend
 }
 
-function getLastQueryParams(): { prompt: string; options: Record<string, any> } {
+function getLastQueryParams(): { prompt: string | AsyncIterable<unknown>; options: Record<string, any> } {
   const call = queryMock.mock.calls.at(-1)
   if (!call) throw new Error('query was not called')
   return call[0]
@@ -168,6 +168,45 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     expect(params.options.disallowedTools).toBeUndefined()
     expect(params.options.hooks.PreToolUse).toHaveLength(1)
     expect(getSystemPromptAppend()).toContain('| browser_new_tab |')
+  })
+
+  it('sends attached images as native Claude multimodal content blocks', async () => {
+    await createBackend().sendMessage('分析这张截图', {
+      images: [
+        {
+          id: 'image-1',
+          name: 'screen.png',
+          mediaType: 'image/png',
+          data: 'AQID',
+          size: 3,
+        },
+      ],
+    })
+
+    const prompt = getLastQueryParams().prompt
+    expect(typeof prompt).not.toBe('string')
+    const messages: unknown[] = []
+    for await (const message of prompt as AsyncIterable<unknown>) messages.push(message)
+    expect(messages).toEqual([
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: '分析这张截图' },
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/png',
+                data: 'AQID',
+              },
+            },
+          ],
+        },
+        parent_tool_use_id: null,
+      },
+    ])
   })
 
   it('lets the SDK use its own executable only when no resolved path was supplied', async () => {

@@ -6,6 +6,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react'
+import { AGENT_IMAGE_ACCEPT } from '../agent-conversations/image-attachments'
 import type { AppSettings, ClaudeCodeStatus } from '@shared/ipc/settings'
 import type { AgentContextUsageSnapshot } from '@shared/agent-protocol'
 import type { PermissionMode } from '../../types'
@@ -44,6 +45,7 @@ interface AgentComposerToolbarProps {
   onCompactContext: (instructions: string) => void
   onOpenResourceMenu: () => void
   onOpenSkillMenu: () => void
+  onAddImages: (files: File[]) => void
   onOpenSettings: () => void
   sendButton: ReactNode
 }
@@ -62,6 +64,7 @@ export function AgentComposerToolbar({
   onCompactContext,
   onOpenResourceMenu,
   onOpenSkillMenu,
+  onAddImages,
   onOpenSettings,
   sendButton,
 }: AgentComposerToolbarProps): ReactElement {
@@ -74,6 +77,7 @@ export function AgentComposerToolbar({
   const permissionRef = useRef<HTMLDivElement>(null)
   const runtimeRef = useRef<HTMLDivElement>(null)
   const contextRef = useRef<HTMLDivElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
   const runtimeOpen = openMenu === 'runtime'
   const selectedPermission = getPermissionModeOption(permissionMode)
   const runtimeLabel = getRuntimeLabel(settings)
@@ -124,6 +128,18 @@ export function AgentComposerToolbar({
     <div className="agent-composer-toolbar">
       <div className="agent-composer-tools">
         <div className="agent-composer-menu-wrap" ref={addRef}>
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept={AGENT_IMAGE_ACCEPT}
+            multiple
+            hidden
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? [])
+              event.target.value = ''
+              if (files.length > 0) onAddImages(files)
+            }}
+          />
           <button
             className="agent-composer-icon-btn"
             title="添加上下文"
@@ -139,6 +155,18 @@ export function AgentComposerToolbar({
             className="agent-composer-menu compact"
             onRequestClose={() => setOpenMenu(null)}
           >
+            <button
+              onClick={() => {
+                setOpenMenu(null)
+                imageInputRef.current?.click()
+              }}
+            >
+              <IconFile size={13} />
+              <span>
+                <strong>添加图片</strong>
+                <em>PNG、JPEG、GIF 或 WebP</em>
+              </span>
+            </button>
             <button
               onClick={() => {
                 setOpenMenu(null)

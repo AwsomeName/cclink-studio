@@ -203,6 +203,7 @@ export class AgentBridge {
         {
           ...sendPlan.options,
           runId: context?.runId,
+          images: context?.images,
           workspacePath: resourceContext.workspace.rootPath ?? undefined,
           resourceContext,
           continuity: context?.continuity,

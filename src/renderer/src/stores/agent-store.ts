@@ -15,6 +15,7 @@ import type {
 } from '../types'
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import type { AgentContextUsageSnapshot, AgentStatus } from '@shared/agent-protocol'
+import type { AgentImageAttachment } from '@shared/ipc/agent'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import {
   isWorkspaceStateRestoring,
@@ -148,6 +149,8 @@ interface AgentState {
   setScope: (scope: AgentScope, conversationId?: string) => void
   addMountedResource: (resource: AgentMountedResource, conversationId?: string) => void
   removeMountedResource: (resourceId: string, conversationId?: string) => void
+  addPendingImages: (images: AgentImageAttachment[], conversationId?: string) => void
+  removePendingImage: (imageId: string, conversationId?: string) => void
   rebaseMountedResourcePaths: (oldPrefix: string, newPrefix: string) => void
   clearTransientResources: (conversationId?: string) => void
   addMountedSkill: (skill: AgentMountedSkill, conversationId?: string) => void
@@ -993,6 +996,32 @@ export const useAgentStore = create<AgentState>((set) => ({
       })),
     ),
 
+  addPendingImages: (images, conversationId) =>
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => {
+        const next = [...(conversation.pendingImages ?? [])]
+        for (const image of images) {
+          const existingIndex = next.findIndex((item) => item.id === image.id)
+          if (existingIndex >= 0) next[existingIndex] = image
+          else if (next.length < 5) next.push(image)
+        }
+        return {
+          ...conversation,
+          pendingImages: next,
+          updatedAt: Date.now(),
+        }
+      }),
+    ),
+
+  removePendingImage: (imageId, conversationId) =>
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        pendingImages: (conversation.pendingImages ?? []).filter((image) => image.id !== imageId),
+        updatedAt: Date.now(),
+      })),
+    ),
+
   rebaseMountedResourcePaths: (oldPrefix, newPrefix) => {
     if (oldPrefix === newPrefix) return
     set((state) => {
@@ -1036,6 +1065,7 @@ export const useAgentStore = create<AgentState>((set) => ({
         mountedResources: conversation.mountedResources.filter(
           (resource) => resource.kind !== 'file-range',
         ),
+        pendingImages: [],
         updatedAt: Date.now(),
       })),
     ),

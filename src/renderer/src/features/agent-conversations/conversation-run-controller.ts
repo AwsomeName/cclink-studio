@@ -89,12 +89,12 @@ export function createConversationRunController({
 }: ConversationRunControllerOptions): ConversationRunController {
   return {
     send: async (content) => {
-      const text = content.trim()
-      if (!text) return { status: 'ignored', reason: 'empty' }
-
       const store = getStore()
       const conversation = store.conversations[conversationId]
       if (!conversation) return { status: 'ignored', reason: 'missing' }
+      const images = conversation.pendingImages ?? []
+      const text = content.trim() || (images.length > 0 ? '请查看我发送的图片。' : '')
+      if (!text) return { status: 'ignored', reason: 'empty' }
       if (conversation.archivedAt) return { status: 'ignored', reason: 'archived' }
       if (conversation.loading || conversation.contextCompaction.status === 'compacting') {
         return { status: 'ignored', reason: 'busy' }
@@ -104,7 +104,7 @@ export function createConversationRunController({
       store.addUserMessage(
         text,
         conversationId,
-        transientMessageResources(conversation.mountedResources),
+        transientMessageResources(conversation.mountedResources, images),
       )
       const runId = store.beginRun(conversationId)
 

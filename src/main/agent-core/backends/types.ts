@@ -81,6 +81,8 @@ export interface AgentSendOptions {
   conversationId?: string
   /** 当前发送对应的运行实例，由 renderer 创建并贯穿事件链。 */
   runId?: string
+  /** Transient multimodal images for this user turn. */
+  images?: import('../../../shared/ipc/agent').AgentImageAttachment[]
   /** 当前会话绑定的本地工作目录；优先级高于全局当前工作区。 */
   workspacePath?: string
   /**
