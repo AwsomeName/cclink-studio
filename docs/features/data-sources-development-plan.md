@@ -4,11 +4,13 @@
 > 关联方案：`docs/features/data-sources.md`
 > 目标读者：负责落地数据源系统的前端、主进程、MCP、Agent 和测试开发者。
 
+> 2026-07-28 更新：原 D2 的 `safeStorage` / Keychain 方案已由 ADR 0003 取代，数据源凭证已迁移到统一 `CredentialService`；本文其他数据源里程碑继续有效。
+
 ## 结论
 
 数据源系统第一版只做一件事：**把远程 Elasticsearch 里的采集资料，以只读、可追溯、可授权的方式接入 CCLink Studio，并让查询结果可以挂载给 Agent 写作。**
 
-不要把它做成数据库管理器。开发顺序必须先安全边界，再主进程能力，再 IPC，再 UI，再 Agent。任何阶段只要出现“Renderer 拿到明文凭证”“Agent 静默扫库”“查询结果无限塞上下文”，都要停下来修边界。
+不要把它做成数据库管理器。开发顺序必须先安全边界，再主进程能力，再 IPC，再 UI，再 Agent。任何阶段只要出现“数据源 Renderer 拿到明文凭证”“Agent 静默扫库”“查询结果无限塞上下文”，都要停下来修边界。用户在统一凭证页显式显示单条凭证不属于数据源 Renderer 的常规能力。
 
 ## 总体拆分
 
@@ -44,7 +46,7 @@ D9 和 D10 可以在 D7 稳定后并行，但 D10 不能早于 D4。UI 可以先
 |------|------|------|
 | D0 需求冻结与风险封口 | ✅ 完成 | 产品边界和安全边界已写入 `docs/features/data-sources.md` 与本文档 |
 | D1 类型、错误码、目录骨架 | ✅ 完成 | 已新增共享类型、错误模型、adapter registry 和主进程目录 |
-| D2 凭证存储与配置存储 | ✅ 完成 | 配置与凭证已分离；数据源凭证无明文 fallback |
+| D2 凭证存储与配置存储 | ✅ 已完成 | 配置与凭证分离，旧 Store 已删除，凭证统一由本地明文 CredentialService 管理 |
 | D3 Elasticsearch 只读 Adapter | ✅ 完成 | 已支持 test、list indices、search、get record，并拒绝危险 collection/path |
 | D4 DataSourceService 编排层 | ✅ 完成 | 已统一 config、secret、adapter、audit 和错误归一化 |
 | D5 IPC 与 Preload 白名单 | ✅ 完成 | 已注册 `data-source:*` IPC，并暴露 `window.cclinkStudio.dataSource` |
@@ -60,7 +62,7 @@ D9 和 D10 可以在 D7 稳定后并行，但 D10 不能早于 D4。UI 可以先
 
 - 数据源第一版只读。
 - 只有主进程访问远程数据库。
-- Renderer 永远不接触明文凭证。
+- 数据源 Renderer 永远不接触明文凭证；显示和复制只属于统一凭证页的显式用户操作。
 - 工作空间只保存非敏感配置、Saved Queries、字段映射和结果快照 metadata。
 - Agent 默认不能读取未授权数据源。
 - 所有查询都有超时、条数上限、字节上限和审计日志。
@@ -225,17 +227,17 @@ DATA_SOURCE_INTERNAL_ERROR
 
 ### 目标
 
-实现数据源配置和凭证的分离：配置可持久化、可迁移，凭证只能留在本机安全存储。
+实现数据源配置和凭证的分离：配置可持久化、可迁移，凭证只进入统一的本机明文凭证文件。
 
 ### 方案
 
 - 实现 `DataSourceConfigStore`。
-- 实现 `DataSourceCredentialStore`。
+- 通过统一 `CredentialService` 保存和解析凭证。
 - 配置文件只保存 `authRef`，不保存 password、token、apiKey。
-- 优先复用现有 settings / sync credential 的加密存储模式。
-- 如果使用 safeStorage 文件兜底，文件内容必须加密。
+- `authRef` 直接使用 `data-source:<sourceId>` 或其他稳定共享凭证 ID，不叠加第二层协议前缀。
+- 不新增数据源专属 Store，不调用系统钥匙串。
 - 对外提供 create/update/delete/list/get。
-- 删除数据源时同步删除对应 secret。
+- 删除数据源时检查引用计数；专属凭证默认删除，共享凭证不得误删。
 
 ### 存储建议
 
@@ -243,11 +245,10 @@ DATA_SOURCE_INTERNAL_ERROR
 ~/Library/Application Support/CCLink Studio/data-source/
 ├── connections.json
 ├── saved-queries.json
-├── audit-log.jsonl
-└── secrets.enc
+└── audit-log.jsonl
 
-macOS Keychain:
-└── data-source:<sourceId>
+~/Library/Application Support/CCLink Studio/credentials/
+└── credentials.json
 ```
 
 ### 涉及文件
@@ -259,10 +260,10 @@ macOS Keychain:
 
 ### 验收标准
 
-- 创建数据源后，配置文件中只有 `authRef`，没有明文 secret。
+- 创建数据源后，工作空间配置文件中只有 `authRef`，没有明文 secret。
 - 更新凭证不会改变 source id。
-- 删除数据源会删除凭证引用。
-- `rg "password|apiKey|token" ~/Library/Application Support/CCLink Studio/data-source` 不应搜到真实 secret。
+- 删除数据源会删除凭证引用；只有无其他消费者时才删除对应凭证。
+- `rg "password|apiKey|token" ~/Library/Application Support/CCLink Studio/data-source` 不应搜到真实 secret；真实值只允许出现在统一 `credentials.json`。
 
 说明：`Application Support/CCLink Studio` 是当前兼容保留的 Electron `userData` 目录，不随产品名机械替换。
 - 单测覆盖 create/update/delete/list 和 secret 缺失。
@@ -716,7 +717,7 @@ data_source.run_saved_query
 
 ## 代码评审清单
 
-- [ ] 是否有任何 secret 写入明文文件？
+- [ ] 是否有任何 secret 写入统一 `credentials.json` 之外的明文文件？
 - [ ] Renderer 是否能触碰 Authorization / token / password？
 - [ ] IPC 是否允许任意 URL / method / headers？
 - [ ] ES adapter 是否只允许只读路径？

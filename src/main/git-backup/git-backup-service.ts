@@ -9,7 +9,7 @@ import type {
 } from '../../shared/ipc/git-backup'
 import type { SettingsService } from '../settings/settings-service'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
-import { GitBackupCredentialStore } from './git-backup-credential-store'
+import type { CredentialService } from '../credentials/credential-service'
 import { GitBackupError, toGitBackupError } from './git-backup-error'
 import { GitBackupProjectStore, type GitBackupProjectBinding } from './git-backup-project-store'
 import { GitClient } from './git-client'
@@ -21,7 +21,6 @@ import {
 } from './git-backup-validation'
 
 interface GitBackupServiceOptions {
-  credentialStore?: GitBackupCredentialStore
   projectStore?: GitBackupProjectStore
   gitClient?: GitClient
   githubClientFactory?: (token: string) => GitHubClient
@@ -29,7 +28,6 @@ interface GitBackupServiceOptions {
 }
 
 export class GitBackupService {
-  private readonly credentialStore: GitBackupCredentialStore
   private readonly projectStore: GitBackupProjectStore
   private readonly gitClient: GitClient
   private readonly githubClientFactory: (token: string) => GitHubClient
@@ -41,9 +39,9 @@ export class GitBackupService {
   constructor(
     private readonly settingsService: SettingsService,
     private readonly workspaceStateService: WorkspaceStateService,
+    private readonly credentialService: CredentialService,
     options: GitBackupServiceOptions = {},
   ) {
-    this.credentialStore = options.credentialStore ?? new GitBackupCredentialStore()
     this.projectStore = options.projectStore ?? new GitBackupProjectStore()
     this.gitClient = options.gitClient ?? new GitClient()
     this.githubClientFactory = options.githubClientFactory ?? ((token) => new GitHubClient(token))
@@ -53,7 +51,8 @@ export class GitBackupService {
   async load(): Promise<void> {
     await this.projectStore.load()
     try {
-      await this.credentialStore.load()
+      await this.credentialService.ensureLoaded()
+      this.credentialService.resolveCredential('git:github')
       this.credentialLoadError = null
     } catch (error: unknown) {
       this.credentialLoadError = toGitBackupError(error)
@@ -82,7 +81,7 @@ export class GitBackupService {
         gitAvailable: git.available,
         gitVersion: git.version,
         username: this.settingsService.getAll().gitBackupUsername,
-        tokenConfigured: await this.credentialStore.hasToken(),
+        tokenConfigured: this.hasToken(),
         connected: Boolean(this.connectedLogin),
         connectedLogin: this.connectedLogin ?? undefined,
       }
@@ -111,15 +110,17 @@ export class GitBackupService {
       }
       const username = normalizeGitHubUsername(input.username)
       const currentUsername = this.settingsService.getAll().gitBackupUsername
-      if (
-        !input.token?.trim() &&
-        username !== currentUsername &&
-        (await this.credentialStore.hasToken())
-      ) {
+      if (!input.token?.trim() && username !== currentUsername && this.hasToken()) {
         throw new GitBackupError('INVALID_INPUT', '修改 GitHub 账号时请同时填写对应 Token')
       }
-      if (input.token?.trim()) await this.credentialStore.saveToken(input.token)
-      if (!(await this.credentialStore.hasToken())) {
+      if (input.token?.trim()) {
+        await this.credentialService.setCredential({
+          id: 'git:github',
+          kind: 'token',
+          fields: { token: input.token },
+        })
+      }
+      if (!this.hasToken()) {
         throw new GitBackupError('INVALID_INPUT', '请输入 GitHub Token')
       }
       await this.settingsService.set({ gitBackupUsername: username })
@@ -137,7 +138,7 @@ export class GitBackupService {
 
   async clearAccount(): Promise<GitBackupOperationResult> {
     try {
-      await this.credentialStore.clear()
+      await this.credentialService.removeCredential('git:github')
       await this.settingsService.set({ gitBackupUsername: '' })
       this.connectedLogin = null
       this.credentialLoadError = null
@@ -163,7 +164,7 @@ export class GitBackupService {
       const username = normalizeGitHubUsername(
         input.username?.trim() || this.settingsService.getAll().gitBackupUsername,
       )
-      const token = input.token?.trim() || (await this.credentialStore.getToken())
+      const token = input.token?.trim() || this.getToken()
       if (!token) throw new GitBackupError('ACCOUNT_NOT_CONFIGURED', '请先填写 GitHub Token')
       const login = await this.githubClientFactory(token).verifyAccount(username)
       this.connectedLogin = login
@@ -318,7 +319,7 @@ export class GitBackupService {
     }
 
     const username = normalizeGitHubUsername(this.settingsService.getAll().gitBackupUsername)
-    const token = await this.credentialStore.getToken()
+    const token = this.getToken()
     if (!token) {
       throw new GitBackupError(
         'ACCOUNT_NOT_CONFIGURED',
@@ -348,8 +349,16 @@ export class GitBackupService {
     }
     if (parsed.protocol !== 'https:' || parsed.hostname.toLowerCase() !== 'github.com') return null
     const username = this.settingsService.getAll().gitBackupUsername.trim()
-    const token = await this.credentialStore.getToken()
+    const token = this.getToken()
     return username && token ? { username, token } : null
+  }
+
+  private getToken(): string | null {
+    return this.credentialService.resolveCredential('git:github')?.token ?? null
+  }
+
+  private hasToken(): boolean {
+    return Boolean(this.getToken())
   }
 
   private async resolveWorkspace(workspacePath: string): Promise<string> {

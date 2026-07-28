@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-07-22。
+> 当前事实源。最后更新：2026-07-28。
 
 ## 先读这些
 
@@ -17,13 +17,15 @@
 - `docs/features/project-system.md`：当前 OSS 本地工作空间模型。
 - `docs/features/context-action-system.md`：规划中的统一右键、命令与上下文操作系统。
 - `docs/features/manual-git-backup.md`：规划中的单用户手动 Git 备份方案和开发里程碑。
+- `docs/features/local-credentials.md`：已确认的 OSS 本地明文凭证产品与架构边界。
+- `docs/features/local-credentials-development-plan.md`：移除系统钥匙串依赖的 M0-M6 详细开发计划。
 - `docs/features/agent-device.md`：Android 真机和 agent-device 边界。
 
 ## 当前边界
 
 CCLink Studio 是开源桌面壳。官方账号、云函数、配对、官方消息网络、额度、官方发布、签名、公证和生产 API 注入不在 OSS 默认路径里。
 
-Studio 默认可单仓库独立启动，不要求 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent` 存在。Android 默认只支持用户自有 USB / Wi-Fi ADB 真机；缺少 adb 时只降级设备能力，不阻断启动。
+Studio 默认可单仓库独立启动，不要求 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent` 存在。当前凭证实现不依赖系统钥匙串，用户主动配置的第三方凭证保存在本机独立明文文件；发布验收状态见 `docs/features/local-credentials-development-plan.md`。Android 默认只支持用户自有 USB / Wi-Fi ADB 真机；缺少 adb 时只降级设备能力，不阻断启动。
 
 真实项目位置：
 
@@ -39,7 +41,7 @@ Studio 默认可单仓库独立启动，不要求 `cclink-dev`、`chat-cc/deploy
 - 架构与开发：`docs/architecture.md`、`docs/stabilization.md`、`docs/development.md`、`docs/decisions/`。
 - 本地验收：`docs/ops/local-smoke-check.md`。
 - 官方集成：`docs/official-integration-contract.md`、`docs/ops/cclink-dev-official-integration-handoff.md`。
-- 工作台能力：`docs/features/project-system.md`、`docs/features/context-action-system.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/browser-automation.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`。
+- 工作台能力：`docs/features/project-system.md`、`docs/features/context-action-system.md`、`docs/features/local-credentials.md`、`docs/features/local-credentials-development-plan.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/browser-automation.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`。
 - 行业能力：数据源、硬件工作区、FPC 改版、CAD 转换、项目内运营助手。
 
 文档只描述最新产品方向和当前工程边界，不保留旧方案细节。

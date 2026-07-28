@@ -161,6 +161,28 @@ async function main() {
     return 'showHiddenFiles restored'
   })
 
+  await runCheck('local credential service is available without a system keychain', async () => {
+    const result = await page.evaluate(async () => {
+      const status = await window.cclinkStudio.credentials.getStatus()
+      const metadata = await window.cclinkStudio.credentials.listMetadata()
+      return { status, metadata }
+    })
+    assert(
+      ['ready', 'degraded', 'conflict'].includes(result.status.status),
+      `unexpected credential status: ${result.status.status}`,
+    )
+    assert(
+      result.status.filePath.endsWith('/credentials/credentials.json'),
+      `unexpected credential path: ${result.status.filePath}`,
+    )
+    assert(Array.isArray(result.metadata.metadata), 'credential metadata should be an array')
+    assert(
+      !JSON.stringify(result.metadata).match(/"fields"|"value"/),
+      'credential metadata exposed a secret value field',
+    )
+    return `${result.status.status}, configured=${result.status.configuredCount}`
+  })
+
   await runCheck('filesystem can create, read, rename, and delete local files', async () => {
     const result = await page.evaluate(async (dir) => {
       const home = await window.cclinkStudio.fs.getHomePath()

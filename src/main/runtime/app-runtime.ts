@@ -18,6 +18,7 @@ import type { ActiveDeviceManager } from '../android/active-device-manager'
 import type { PhysicalDeviceManager } from '../android/physical-device-manager'
 import type { ScrcpyBridge } from '../android/scrcpy-bridge'
 import type { SettingsService } from '../settings/settings-service'
+import type { CredentialService } from '../credentials/credential-service'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 import type { MeshyService } from '../meshy/meshy-service'
 import type { ProjectOpsService } from '../project-ops/project-ops-service'
@@ -62,6 +63,7 @@ export interface CclinkStudioRuntimeState {
   agentDeviceManager: AgentDeviceManager | null
   scrcpyBridge: ScrcpyBridge | null
   settingsService: SettingsService | null
+  credentialService: CredentialService | null
   workspaceStateService: WorkspaceStateService | null
   meshyService: MeshyService | null
   projectOpsService: ProjectOpsService | null
@@ -105,6 +107,7 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     agentDeviceManager: null,
     scrcpyBridge: null,
     settingsService: null,
+    credentialService: null,
     workspaceStateService: null,
     meshyService: null,
     projectOpsService: null,

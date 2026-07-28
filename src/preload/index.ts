@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { officialIpc } from '../shared/ipc/official'
 import { diagnosticsIpc } from '../shared/ipc/diagnostics'
 import { settingsIpc, type SettingsApiContract } from '../shared/ipc/settings'
+import { credentialsIpc, type CredentialsApiContract } from '../shared/ipc/credentials'
 import { agentApi } from './agent-api'
 import { androidApi } from './android-api'
 import { browserApi, reportWorkbenchBounds } from './browser-api'
@@ -39,6 +40,19 @@ const settingsApi: SettingsApiContract = {
     invokeIpcContract(settingsIpc.testClaudeModelConnection, selection),
 }
 
+const credentialsApi: CredentialsApiContract = {
+  listMetadata: () => invokeIpcContract(credentialsIpc.listMetadata),
+  getStatus: () => invokeIpcContract(credentialsIpc.getStatus),
+  set: (input) => invokeIpcContract(credentialsIpc.set, input),
+  revealField: (id, field) => invokeIpcContract(credentialsIpc.revealField, id, field),
+  copyField: (id, field) => invokeIpcContract(credentialsIpc.copyField, id, field),
+  remove: (id) => invokeIpcContract(credentialsIpc.remove, id),
+  clearAll: () => invokeIpcContract(credentialsIpc.clearAll),
+  removeLegacyFiles: () => invokeIpcContract(credentialsIpc.removeLegacyFiles),
+  openDirectory: () => invokeIpcContract(credentialsIpc.openDirectory),
+  reload: () => invokeIpcContract(credentialsIpc.reload),
+}
+
 contextBridge.exposeInMainWorld('cclinkStudio', {
   reportWorkbenchBounds,
 
@@ -58,6 +72,8 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
 
   // Agent
   agent: agentApi,
+
+  credentials: credentialsApi,
 
   fs: fsApi,
 

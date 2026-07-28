@@ -1,8 +1,8 @@
 # 手动 Git 备份
 
-> 状态：M1-M6 代码已实现，待真实 GitHub / HTTPS / SSH 人工验收
+> 状态：原功能与统一明文凭证迁移已实现；真实 GitHub 人工验收待执行
 >
-> 最后更新：2026-07-17
+> 最后更新：2026-07-28
 
 ## 结论
 
@@ -14,14 +14,15 @@ CCLink Studio 第一版只提供“手动备份到 Git”，不做自动备份�
 
 ## 当前实现
 
-- 已新增主进程 `GitBackupService`、GitHub 建仓客户端、受控 Git 执行器、加密 Token 存储和项目绑定存储。
-- 已新增 Git 备份 IPC / preload 白名单接口，Renderer 无法读回 Token 明文。
+- 已新增主进程 `GitBackupService`、GitHub 建仓客户端、受控 Git 执行器、Token 存储和项目绑定存储。
+- GitHub Token 使用稳定 ID `git:github`，由统一的本地明文 `CredentialService` 管理。
+- 当前 Renderer 无法读回 Token；目标产品允许用户通过统一凭证页显式显示或复制单条 Token。
 - 设置页已新增单账号 GitHub 配置、保存、清除和连接测试。
 - “运营”侧栏已新增独立的“项目备份”分组和 GitHub 备份卡片；状态栏入口继续保留，两处共享同一个备份状态和首次地址/项目名对话框。
 - 侧栏只共享 UI 容器：Git 凭证、项目绑定、IPC 和主进程服务仍与网站运营账号、浏览器会话和 `ProjectOpsService` 完全分离。
 - 已实现 Git 初始化、Studio 本地 exclude、敏感路径预检、备份提交和非强制 Push。
 - 首次 Push 成功后才保存远程绑定；失败时保留输入对话框，允许用户修改地址后重试。
-- 自动化测试已覆盖输入校验、Token 加密、项目绑定、GitHub 私有仓库约束、真实本地 Git Push、无变化重试和已跟踪敏感文件阻断。
+- 自动化测试已覆盖输入校验、旧 Token Store、项目绑定、GitHub 私有仓库约束、真实本地 Git Push、无变化重试和已跟踪敏感文件阻断。
 - 尚未使用真实 GitHub Token、真实 HTTPS 仓库和真实 SSH Agent 完成人工验收，因此里程碑验收项保持待验收状态。
 
 ## 产品目标
@@ -68,10 +69,10 @@ GitHub 账号：[ zhangsan       ]
 交互规则：
 
 - GitHub 账号是普通非敏感设置，可以回显。
-- Token 只允许覆盖或清除，不允许 Renderer 读回明文。
+- Token 可以覆盖、清除，并可在统一凭证页由用户明确显示或复制；默认状态和 Git 页面不读取明文。
 - “测试连接”只验证账号和 Token 当前有效，不创建仓库；建仓和写入权限在实际操作时验证。
 - 本机没有 Git 时显示安装提示，但不能阻断 Studio 启动。
-- 本机加密存储不可用时拒绝保存 Token，不允许降级为明文。
+- 凭证文件损坏或不可写时拒绝覆盖，并保留原文件；Git 能力降级但不阻断 Studio。
 
 第一版不要求用户填写提交姓名和邮箱。Studio 生成的备份提交使用固定身份：
 
@@ -161,8 +162,8 @@ CCLink Studio Backup <backup@cclink.local>
 
 ## 认证和安全边界
 
-- Token 使用 Electron `safeStorage` 加密后写入独立凭证文件，不进入 `settings.json`、工作空间文件或日志。
-- Renderer 只能看到 `configured: boolean` 等脱敏状态，不能读取 Token 明文。
+- Token 由统一 `CredentialService` 以明文保存在 `userData/credentials/credentials.json`，不进入 `settings.json`、工作空间文件或日志。
+- Renderer 默认只看到 `configured: boolean` 等脱敏状态；只有用户在统一凭证页明确显示目标 Token 时才进行定向读取，复制由主进程直接写剪贴板。
 - 匹配已配置 GitHub 账号的 HTTPS Push 通过受控的 `GIT_ASKPASS` 机制向 Git 子进程提供凭证，Token 不拼接进远程 URL、命令参数或错误文本；其他 HTTPS 地址使用本机 Git 凭证机制。
 - SSH 地址继续使用用户本机 SSH Agent 和密钥，不读取或托管 SSH 私钥。
 - Git 子进程使用参数数组直接启动，禁止通过 Shell 拼接账号、项目名、路径或远程 URL。
@@ -178,17 +179,17 @@ CCLink Studio Backup <backup@cclink.local>
 
 ```text
 settings.json
-└── gitBackupProvider / gitBackupUsername
+└── gitBackupProvider / gitBackupUsername / credentialRef
 
-userData/git-backup/secrets.enc
-└── safeStorage 加密后的访问 Token
+userData/credentials/credentials.json
+└── git:<providerId> 明文访问 Token
 
 userData/git-backup/projects.json
 └── projectId → remoteUrl / lastBackupAt
 ```
 
 - 非敏感账号信息进入普通设置。
-- Token 只进入加密凭证存储。
+- Token 只进入统一的本地明文凭证文件。
 - 项目绑定按稳定 `projectId` 保存，不把 Token 或远程凭证写进项目目录。
 - Git 自身的 `.git/config` 可以保存无凭证远程地址，但不能保存内嵌 Token 的 URL。
 
@@ -196,25 +197,25 @@ userData/git-backup/projects.json
 
 ## 开发计划
 
-### M1：共享契约和安全凭证
+### M1：共享契约和统一凭证
 
 #### 目标
 
-建立 Git 备份的数据模型、IPC 边界和 Token 安全存储，让后续功能不把凭证混入普通设置或 Renderer。
+建立 Git 备份的数据模型、IPC 边界和统一 Token 引用，让后续功能不把凭证混入普通设置、工作空间或常规 Renderer 状态。
 
 #### 方案
 
 - 在 `src/shared/ipc/` 定义 Git 状态、账号状态、项目绑定、备份输入、进度和结果类型。
-- 在普通设置中增加 GitHub provider 和 username；Token 不进入 `AppSettings`。
-- 抽取或复用 `safeStorage` 加密模式，新增独立 `GitBackupCredentialStore`。
-- preload 只暴露账号状态、保存/清除 Token、连接测试和备份操作，不暴露明文凭证。
+- 在普通设置中增加 GitHub provider、username 和 credentialRef；Token 不进入 `AppSettings`。
+- 通过统一 `CredentialService` 保存和解析 Token，不新增 Git 专属凭证文件。
+- Git preload 只暴露账号状态、连接测试和备份操作；显示、复制、保存和清除统一由凭证 contract 承担。
 - 给所有 IPC 输入增加运行时校验和长度限制。
 
 #### 验收标准
 
-- [ ] Token 不出现在 `settings.json`、项目目录、Renderer 状态、日志和 IPC 返回值中。
-- [ ] 本机加密不可用时保存 Token 明确失败，不生成明文兜底文件。
-- [ ] 重启应用后可以得到“已配置”状态并成功使用凭证，但 Renderer 仍无法读回 Token。
+- [ ] Token 不出现在 `settings.json`、项目目录、常规 Renderer 状态、日志和诊断中。
+- [ ] Token 只出现在统一明文凭证文件和用户明确触发的定向显示结果中。
+- [ ] 重启应用后可以得到“已配置”状态并成功使用凭证。
 - [ ] 非法 provider、账号、项目名和超长输入被主进程拒绝。
 - [ ] 未配置 Git 备份时 Studio 可以正常独立启动。
 
@@ -359,7 +360,7 @@ userData/git-backup/projects.json
 
 最关键的假设是“备份当前全部变更”符合用户预期。它会把已有暂存内容和未跟踪文件一起提交，因此按钮和首次说明必须用“备份当前全部变更”，不能伪装成精细 Git 提交。
 
-最危险的失败路径不是 Push 失败，而是敏感文件已经进入提交或日志。敏感路径预检、加密凭证和日志脱敏属于第一版交付门槛，不是后续优化。
+最危险的失败路径不是 Push 失败，而是敏感文件已经进入提交或日志。敏感路径预检、统一凭证隔离和日志脱敏属于第一版交付门槛，不是后续优化。
 
 项目名模式并不是通用 Git 能力，它依赖 GitHub API。第一版要么明确只支持 GitHub 自动创建，要么删除项目名模式；不能用“Git 账号”模糊不同托管平台的授权和建仓差异。
 

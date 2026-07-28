@@ -1,6 +1,6 @@
 # CCLink Studio 开发指南
 
-> 当前事实源。最后更新：2026-07-22。
+> 当前事实源。最后更新：2026-07-28。
 
 ## 结论
 
@@ -9,6 +9,8 @@
 官方构建、签名、公证和生产 API 注入在 `/Users/apple/Desktop/cclink-dev` 处理；CCLink 云函数与 Agent runtime 在 `/Users/apple/Desktop/chat-cc/deploy` 和 `/Users/apple/Desktop/chat-cc/Agent`。
 
 所有功能开发必须遵守 `docs/architecture.md` 的“架构宪法”。S0-S4 稳定化阶段已经关闭，后续功能可以从当前 `main` 稳定基线受控推进，但不得重新引入跨模块硬依赖、第二状态所有者或未经验证的权限扩张。
+
+第三方凭证边界见 `docs/features/local-credentials.md` 和 ADR 0003。当前实现统一使用主进程 `CredentialService`；新代码不得增加钥匙串调用、独立凭证 Store 或工作空间内凭证文件。
 
 统一右键、命令面板、快捷键和工具栏入口的产品与工程事实源见 `docs/features/context-action-system.md`，区域 owner 库存见 `docs/ops/context-action-inventory.md`。新增区域只能贡献结构化 target、command 和 contribution；不得新增独立菜单 Host、第二个菜单 Store 或未登记的原生菜单。`pnpm verify:context-actions` 会执行该边界门禁。
 
@@ -168,7 +170,8 @@ cclink-studio/
 
 - `pnpm verify` 通过。
 - 受影响的 smoke 测试通过。
-- 没有新增明文密钥、未校验 IPC、跨 store 隐式事务或不可释放的监听器/子进程。
+- 没有把凭证新增到工作空间、普通设置、日志、诊断或 renderer 全量状态；明文凭证只能进入 `CredentialService` 管理的独立本地文件。
+- 没有新增系统钥匙串依赖、未校验 IPC、跨 store 隐式事务或不可释放的监听器/子进程。
 - 功能和降级路径都有测试，文档描述的是当前事实而非未来承诺。
 
 ## IPC 边界

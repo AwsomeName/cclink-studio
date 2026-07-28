@@ -8,7 +8,11 @@ CCLink Studio 的 Agent 是本地工作台里的 AI 协作入口，能够理解�
 
 ### Agent 后端：本地 Claude Code
 
-Agent 由本地 Claude Code 驱动。Claude Code 自身有完整的 AI 服务配置能力（模型选择、API Key、自定义端点等），CCLink Studio OSS 不需要自建 AI 调用层。
+Agent 由本地 Claude Code 驱动。运行时来源与模型服务凭证是两件事：
+
+- 本机/自定义 Claude Code 可以使用其自身认证。
+- Studio 的内置 Runtime 使用用户在 Studio 中配置的 Provider API Key。
+- Studio 不提供 CCLink 模型服务，不代理 Claude.ai Free/Pro/Max 登录材料。
 
 ```
 ┌──────────┐    IPC    ┌────────────┐   stdin/stdout   ┌──────────────┐
@@ -18,9 +22,8 @@ Agent 由本地 Claude Code 驱动。Claude Code 自身有完整的 AI 服务配
                                                         │
                                                         │ AI 配置
                                                         ↓
-                                                   用户自行配置:
-                                                   ~/.claude/config.json
-                                                   (模型、Key、端点)
+                                                   本机 Claude 自身认证
+                                                   或 Studio 本地凭证
 ```
 
 **M9 当前配置层级：**
@@ -29,12 +32,15 @@ Agent 由本地 Claude Code 驱动。Claude Code 自身有完整的 AI 服务配
 CCLink Studio 设置页（VSCode 风格，在主工作区 Tab 中打开）
 │
 ├── Agent 引擎：Local Claude Code
-├── Claude Code CLI 路径：自动检测 / 手动填写
+├── Runtime 来源：内置 / 本机 / 自定义路径
+├── Provider：格式 / API 地址 / 模型 / 本地凭证引用
 ├── 权限模式：auto / categorized / strict
 └── 预算上限：--max-budget-usd
 ```
 
-CCLink Studio 不保存模型 API Key。模型选择、登录、自定义端点等由本机 Claude Code 自己管理：
+CCLink Studio 可以保存用户主动配置的模型 API Key，并只在主进程创建 Agent backend 时使用。当前存储是 ADR 0003 定义的本地明文凭证文件，由统一 `CredentialService` 管理。
+
+本机/自定义 Claude Code 仍可以使用自身认证：
 
 ```bash
 claude login
@@ -377,9 +383,9 @@ interface AgentContext {
 
 ## AI 模型调用
 
-### 当前方案：本机 Claude Code 集成
+### 当前方案：Claude Code Runtime 与 Provider 分离
 
-Agent 由本地 Claude Code 驱动。CCLink Studio 不直接保存模型 API Key，也不代理模型服务：
+Agent 由本地 Claude Code 驱动。Studio 不代理模型服务，但可以保存用户配置的 Provider API Key，并在创建子进程时注入：
 
 ```typescript
 // 主进程启动 Claude Code 子进程
@@ -387,16 +393,15 @@ const claudeProcess = spawn(claudeCodePath || 'claude', ['-p', '--output-format'
   stdio: ['pipe', 'pipe', 'pipe'],
 })
 
-// AI 服务配置由 Claude Code 管理
-// 用户可在终端运行:
-//   claude login
-// 或按 Claude Code 自身文档配置模型、Key、端点
+// 本机/自定义 Runtime 也可以继续使用 Claude Code 自身认证。
+// Studio 管理的 Key 只由主进程从统一 CredentialService 解析，
+// 不进入命令参数、会话快照、日志或诊断。
 ```
 
-CCLink Studio 设置页只负责：
+CCLink Studio 设置页负责：
 
-- 检测常见 `claude` 路径。
-- 允许用户手动填写 Claude Code CLI 绝对路径。
+- 选择内置、本机或自定义 Runtime。
+- 配置 Provider 格式、API 地址、模型和本地凭证。
 - 配置权限模式。
 - 配置 `--max-budget-usd`。
 
@@ -499,9 +504,9 @@ interface Message {
   - [ ] 设置项按分组展示（常用、外观、Agent、浏览器、快捷键等）
   - [ ] 右上角 GUI / JSON 编辑模式切换
   - [ ] Agent 分组：
-    - [ ] Agent 模式切换（Claude Code / 直连 API）
-    - [ ] Claude Code 配置区域：模型选择、API Key、端点（底层写 Claude Code 配置）
-    - [ ] 直连 API 配置区域：服务商选择、API Key（存 Keychain）、模型选择
+    - [ ] Runtime 来源切换（内置 / 本机 / 自定义）
+    - [ ] Provider 配置区域：格式、API 地址、模型和本地凭证引用
+    - [ ] API Key 进入统一本地凭证管理，不写 Claude Code 配置或系统钥匙串
     - [ ] 连接测试按钮
   - [ ] 外观分组：主题（深色/浅色）、字体大小等
   - [ ] 浏览器分组：默认搜索引擎、代理、下载目录等

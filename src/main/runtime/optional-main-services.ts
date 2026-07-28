@@ -43,7 +43,8 @@ const defaultBootstrappers: OptionalMainServiceBootstrappers = {
   },
   'data-source': async (runtime) => {
     registerDataSourceIpc(() => runtime.dataSourceService, runtime.trustedRendererGuard!)
-    runtime.dataSourceService = new DataSourceService()
+    if (!runtime.credentialService) throw new Error('本地凭证服务未就绪')
+    runtime.dataSourceService = new DataSourceService(runtime.credentialService)
     await runtime.dataSourceService.load()
     console.log('[CCLink Studio] 数据源 IPC 已注册')
   },

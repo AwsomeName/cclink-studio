@@ -131,7 +131,7 @@ export interface AppSettings {
 
   // ─── 手动 Git 备份 ───
 
-  /** GitHub 用户名；访问 Token 独立加密保存，不进入普通设置。 */
+  /** GitHub 用户名；访问 Token 保存到统一凭证文件，不进入普通设置。 */
   gitBackupUsername: string
 
   // ─── 文件浏览 ───

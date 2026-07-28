@@ -82,7 +82,7 @@ cclink-accounts.json
 
 - 不存密码。
 - 可以记录账号名、登录方式、2FA 提示、注意事项。
-- 密码、Token、恢复码等秘密信息不进入项目可见文件；后续如支持密码，只保存加密凭据引用。
+- 密码、Token、恢复码等秘密信息不进入项目可见文件；后续如支持第三方凭证，只保存统一 `CredentialService` 的稳定引用。
 - `browserProfile` 用于隔离登录态和 Cookie。
 - 发布记录先写 Markdown，不单独建数据库。
 

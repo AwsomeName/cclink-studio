@@ -1,6 +1,6 @@
 # CCLink Studio 架构说明
 
-> 当前事实源。最后更新：2026-07-21。
+> 当前事实源。最后更新：2026-07-28。
 
 ## 结论
 
@@ -34,7 +34,7 @@ CCLink Studio 是 CCLink 的开源桌面工作台端，不是 CCLink Studio 接�
 - renderer、内嵌网页、用户文档、网页下载和 Agent 输出都按不可信输入处理。
 - preload 只暴露完成当前界面职责所需的最小 API；主进程必须校验 sender、参数和资源作用域。
 - HTML、Markdown、SVG、网页内容不得未经清洗进入拥有高权限 preload 的执行上下文。无法证明安全时，必须放入无 preload 的隔离视图或明确降级。
-- 密钥不得进入普通设置、日志、诊断报告或 renderer 全量状态；必须使用本机加密存储，renderer 只能获知是否已配置。
+- 第三方凭证不得进入工作空间、普通设置、日志、诊断报告或 renderer 全量状态。OSS 使用 `userData` 下受限权限的独立明文凭证文件，不依赖系统钥匙串；renderer 默认只获知是否已配置，显示或复制单条凭证必须由用户明确触发。
 - 会校验浏览器完整性的第三方登录必须使用应用内独立认证子进程：禁用 preload、CDP 和自动化挂钩，启用 sandbox 与 context isolation，并使用按 Profile 隔离的持久化 session。认证子进程只能通过受校验的 contract 回传允许列表内的站点状态，不能把认证窗口变成通用自动化窗口。
 
 ### 3. 能力独立、失败可降级
@@ -93,6 +93,8 @@ CCLink Studio 是 CCLink 的开源桌面工作台端，不是 CCLink Studio 接�
 
 如果需求确实需要违反上述原则，必须先在 `docs/decisions/` 新增 ADR，写清问题、选择、风险、替代方案、迁移与回收条件，并在实现前完成评审。没有 ADR 的例外视为架构缺陷，而不是默认的新模式。
 
+ADR 0003 已实施 OSS 本地明文凭证存储，并取代此前“必须使用本机加密存储”的要求。`CredentialService` 是唯一状态所有者；Agent、Git、数据源和扩展不得重新建立独立凭证 Store，`verify:credential-boundary` 负责阻止系统钥匙串依赖回流。
+
 已关闭的稳定化阶段、修复顺序和退出证据见 `docs/stabilization.md`。后续功能按本架构宪法和 `docs/development.md` 的门禁受控推进。
 
 ## 开源版能力
@@ -103,6 +105,7 @@ CCLink Studio 开源壳保留这些本地能力：
 - VSCode 风格布局：Activity Bar、Sidebar、Workbench、Agent Panel、Status Bar。
 - 本地工作空间、标签页、浏览器、Markdown 编辑器、Android/设备视图、Terminal。
 - 本地 Agent 会话、本地 Claude Code 后端、MCP 工具系统和权限确认。
+- 用户自有第三方凭证的本地明文管理；凭证不依赖 CCLink 账号、云服务或系统钥匙串。
 - 本地设置、诊断、文件访问和工作台状态恢复。
 - updater 的中性检查框架，但不开源默认生产更新源、签名、公证或制品上传链路。
 
@@ -115,6 +118,7 @@ CCLink Studio 开源壳保留这些本地能力：
 - `pnpm dev` 直接启动开发模式。
 - `bash scripts/restart.sh restart` 启动后台开发进程。
 - 默认启动不得要求存在 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent`。
+- 默认启动不得要求或主动访问 Apple Keychain、Windows Credential Manager、Linux Secret Service 等系统凭证存储。
 - 官方账号、官方运行时、生产 API、签名、公证和发布上传只通过官方集成层进入。
 
 Android 是本地真机能力：只连接用户自有 USB 或 Wi-Fi ADB 真机。不提供 Android SDK 下载、AVD 创建、模拟器启动或托管设备服务。找不到 `adb` 时，Studio 应继续启动，Android 设备能力降级为不可用。

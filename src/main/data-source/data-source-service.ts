@@ -1,7 +1,6 @@
 import { DataSourceAdapterRegistry } from './adapter-registry'
 import { DataSourceAuditLog } from './audit-log'
 import { DataSourceConfigStore } from './config-store'
-import { DataSourceCredentialStore } from './credential-store'
 import { SavedQueryStore } from './saved-query-store'
 import { ElasticsearchAdapter } from './adapters/elasticsearch-adapter'
 import { DataSourceError, toDataSourceError } from './errors'
@@ -19,6 +18,7 @@ import type {
   SavedDataQuery,
   UpdateDataSourceInput,
 } from './types'
+import type { CredentialService } from '../credentials/credential-service'
 
 const DEFAULT_TIMEOUT_MS = 10_000
 const DEFAULT_MAX_ROWS = 100
@@ -64,7 +64,6 @@ function publicConfig(config: DataSourceConfig): DataSourceConfig {
 
 export interface DataSourceServiceOptions {
   configStore?: DataSourceConfigStore
-  credentialStore?: DataSourceCredentialStore
   savedQueryStore?: SavedQueryStore
   auditLog?: DataSourceAuditLog
   adapterRegistry?: DataSourceAdapterRegistry
@@ -72,14 +71,15 @@ export interface DataSourceServiceOptions {
 
 export class DataSourceService {
   private readonly configStore: DataSourceConfigStore
-  private readonly credentialStore: DataSourceCredentialStore
   private readonly savedQueryStore: SavedQueryStore
   private readonly auditLog: DataSourceAuditLog
   private readonly adapterRegistry: DataSourceAdapterRegistry
 
-  constructor(options: DataSourceServiceOptions = {}) {
+  constructor(
+    private readonly credentialService: CredentialService,
+    options: DataSourceServiceOptions = {},
+  ) {
     this.configStore = options.configStore ?? new DataSourceConfigStore()
-    this.credentialStore = options.credentialStore ?? new DataSourceCredentialStore()
     this.savedQueryStore = options.savedQueryStore ?? new SavedQueryStore()
     this.auditLog = options.auditLog ?? new DataSourceAuditLog()
     this.adapterRegistry = options.adapterRegistry ?? new DataSourceAdapterRegistry()
@@ -91,7 +91,7 @@ export class DataSourceService {
   async load(): Promise<void> {
     await Promise.all([
       this.configStore.load(),
-      this.credentialStore.load(),
+      this.credentialService.ensureLoaded(),
       this.savedQueryStore.load(),
     ])
   }
@@ -129,7 +129,7 @@ export class DataSourceService {
       throw new DataSourceError('DATA_SOURCE_QUERY_INVALID', '数据源名称不能为空')
     }
     if (input.secret) {
-      await this.credentialStore.saveSecret({ ...input.secret, sourceId: id })
+      await this.saveSecret(id, input.secret)
     }
     return this.configStore.upsert(config)
   }
@@ -155,14 +155,20 @@ export class DataSourceService {
       throw new DataSourceError('DATA_SOURCE_QUERY_INVALID', '数据源名称不能为空')
     }
     if (patch.secret) {
-      await this.credentialStore.saveSecret({ ...patch.secret, sourceId: id })
+      await this.saveSecret(id, patch.secret)
     }
     return this.configStore.upsert(updated)
   }
 
   async deleteSource(id: string): Promise<void> {
+    const existing = await this.requireConfig(id)
     await this.configStore.remove(id)
-    await this.credentialStore.removeSecret(id)
+    if (existing.authRef) {
+      const stillReferenced = (await this.configStore.list()).some(
+        (config) => config.authRef === existing.authRef,
+      )
+      if (!stillReferenced) await this.credentialService.removeCredential(existing.authRef)
+    }
     await this.savedQueryStore.removeBySource(id)
   }
 
@@ -303,11 +309,53 @@ export class DataSourceService {
 
   private async getSecret(config: DataSourceConfig): Promise<DataSourceSecret | null> {
     if (!config.authRef) return null
-    const secret = await this.credentialStore.getSecret(config.id)
-    if (!secret) {
+    await this.credentialService.ensureLoaded()
+    const fields = this.credentialService.resolveCredential(config.authRef)
+    if (!fields) {
       throw new DataSourceError('DATA_SOURCE_SECRET_MISSING', `数据源缺少凭证: ${config.name}`)
     }
-    return secret
+    const authType = fields.authType
+    if (
+      authType !== 'apiKey' &&
+      authType !== 'basic' &&
+      authType !== 'bearer' &&
+      authType !== 'none'
+    ) {
+      throw new DataSourceError('DATA_SOURCE_SECRET_MISSING', `数据源凭证格式无效: ${config.name}`)
+    }
+    return {
+      sourceId: config.id,
+      authType,
+      ...(fields.username ? { username: fields.username } : {}),
+      ...(fields.password ? { password: fields.password } : {}),
+      ...(fields.apiKey ? { apiKey: fields.apiKey } : {}),
+      ...(fields.token ? { token: fields.token } : {}),
+    }
+  }
+
+  private async saveSecret(
+    sourceId: string,
+    secret: Omit<DataSourceSecret, 'sourceId'>,
+  ): Promise<void> {
+    await this.credentialService.ensureLoaded()
+    const fields = Object.fromEntries(
+      Object.entries(secret).filter(
+        (entry): entry is [string, string] =>
+          typeof entry[1] === 'string' && entry[1].trim().length > 0,
+      ),
+    )
+    await this.credentialService.setCredential({
+      id: `data-source:${sourceId}`,
+      kind:
+        secret.authType === 'basic'
+          ? 'basic'
+          : secret.authType === 'bearer'
+            ? 'bearer'
+            : secret.authType === 'apiKey'
+              ? 'api-key'
+              : 'generic',
+      fields,
+    })
   }
 
   private async recordAudit(input: Parameters<DataSourceAuditLog['record']>[0]): Promise<void> {

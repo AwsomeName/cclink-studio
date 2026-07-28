@@ -31,7 +31,9 @@ export async function renameWorkbenchTab(
 
   useTabStore.getState().updateTabTitle(tabId, title)
   const conversation = resolveConversationTab(tab)
-  if (conversation) useAgentStore.getState().renameConversation(conversation.conversationId, title)
+  if (conversation?.kind === 'local-agent') {
+    useAgentStore.getState().renameConversation(conversation.conversationId, title)
+  }
   return true
 }
 

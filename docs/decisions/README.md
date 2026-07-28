@@ -34,3 +34,4 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
 
 - `0001-preserve-stabilization-snapshot.md`：保留 `49da3b2` 作为不可改写的稳定化现场快照，后续提交继续执行单一目标约束。
 - `0002-bundled-claude-code-runtime.md`：以固定版本内置 Claude Code 作为新安装默认 Agent 运行时，并定义本机/自定义来源、认证边界、打包、切换、恢复和发布门禁。
+- `0003-plaintext-local-credentials.md`：OSS 不依赖系统钥匙串，使用 `userData` 下的独立明文文件管理用户第三方凭证，并统一状态所有者、IPC、迁移和诊断边界。

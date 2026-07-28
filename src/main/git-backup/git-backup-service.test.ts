@@ -12,16 +12,14 @@ vi.mock('electron', () => ({
   app: {
     getPath: (name: string) => (name === 'home' ? mockPaths.home : mockPaths.userData),
   },
-  safeStorage: {
-    isEncryptionAvailable: () => true,
-    encryptString: (value: string) => Buffer.from(`encrypted:${value}`, 'utf-8'),
-    decryptString: (value: Buffer) => value.toString('utf-8').replace(/^encrypted:/, ''),
-  },
+  clipboard: { writeText: vi.fn() },
+  shell: { openPath: vi.fn(async () => '') },
 }))
 
+import { CredentialService } from '../credentials/credential-service'
+import { PlaintextCredentialStore } from '../credentials/plaintext-credential-store'
 import { SettingsService } from '../settings/settings-service'
 import { WorkspaceStateService } from '../workspace/workspace-state-service'
-import { GitBackupCredentialStore } from './git-backup-credential-store'
 import { GitBackupProjectStore } from './git-backup-project-store'
 import { GitBackupService } from './git-backup-service'
 import { GitBackupError } from './git-backup-error'
@@ -48,7 +46,8 @@ describe('GitBackupService', () => {
     await mkdir(workspacePath)
     await execFileAsync('git', ['init', '--bare', remotePath])
 
-    const settingsService = new SettingsService()
+    const credentialService = createCredentialService()
+    const settingsService = new SettingsService(credentialService)
     await settingsService.loadState()
     const workspaceStateService = new WorkspaceStateService()
     await workspaceStateService.loadState()
@@ -63,14 +62,18 @@ describe('GitBackupService', () => {
       remoteName: 'cclink-backup',
       lastBackupAt: null,
     })
-    const service = new GitBackupService(settingsService, workspaceStateService, {
-      credentialStore: new GitBackupCredentialStore(),
-      projectStore,
-      gitClient: new GitClient(
-        new GitExecutor({ askPassDirectory: join(tempDir, 'askpass'), timeoutMs: 20_000 }),
-      ),
-      now: () => new Date('2026-07-17T12:00:00.000Z'),
-    })
+    const service = new GitBackupService(
+      settingsService,
+      workspaceStateService,
+      credentialService,
+      {
+        projectStore,
+        gitClient: new GitClient(
+          new GitExecutor({ askPassDirectory: join(tempDir, 'askpass'), timeoutMs: 20_000 }),
+        ),
+        now: () => new Date('2026-07-17T12:00:00.000Z'),
+      },
+    )
     await service.load()
 
     await writeFile(join(workspacePath, 'README.md'), '# manual backup\n', 'utf-8')
@@ -101,7 +104,8 @@ describe('GitBackupService', () => {
   it('does not persist a first-time remote binding before push succeeds', async () => {
     const workspacePath = join(tempDir, 'failed-project')
     await mkdir(workspacePath)
-    const settingsService = new SettingsService()
+    const credentialService = createCredentialService()
+    const settingsService = new SettingsService(credentialService)
     await settingsService.loadState()
     const workspaceStateService = new WorkspaceStateService()
     await workspaceStateService.loadState()
@@ -123,11 +127,15 @@ describe('GitBackupService', () => {
         throw new GitBackupError('NETWORK_ERROR', 'network unavailable')
       },
     } as unknown as GitClient
-    const service = new GitBackupService(settingsService, workspaceStateService, {
-      credentialStore: new GitBackupCredentialStore(),
-      projectStore,
-      gitClient: failingGitClient,
-    })
+    const service = new GitBackupService(
+      settingsService,
+      workspaceStateService,
+      credentialService,
+      {
+        projectStore,
+        gitClient: failingGitClient,
+      },
+    )
     await service.load()
 
     expect(
@@ -139,3 +147,10 @@ describe('GitBackupService', () => {
     expect(await projectStore.get(projectId!)).toBeNull()
   })
 })
+
+function createCredentialService(): CredentialService {
+  return new CredentialService(
+    new PlaintextCredentialStore(join(mockPaths.userData, 'credentials/credentials.json')),
+    { userDataPath: mockPaths.userData },
+  )
+}

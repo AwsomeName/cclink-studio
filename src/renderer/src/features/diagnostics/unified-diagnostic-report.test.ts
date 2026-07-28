@@ -44,6 +44,15 @@ describe('collectUnifiedDiagnosticReport', () => {
             droppedCount: 3,
           }),
         },
+        credentials: {
+          getStatus: vi.fn().mockResolvedValue({
+            status: 'ready',
+            filePath:
+              '/Users/alice/Library/Application Support/CCLink/credentials/credentials.json',
+            configuredCount: 2,
+            legacyEncryptedFiles: [],
+          }),
+        },
       },
     })
     recordRendererDiagnosticLog('warn', ['renderer warning'])
@@ -66,6 +75,8 @@ describe('collectUnifiedDiagnosticReport', () => {
     expect(report).toContain('# CCLink Studio 完整诊断日志')
     expect(report).toContain('## Agent 与当前会话')
     expect(report).toContain('## 工作台状态')
+    expect(report).toContain('## 本地凭证')
+    expect(report).toContain('已配置：2')
     expect(report).toContain('## Markdown')
     expect(report).toContain('markdown diagnostic')
     expect(report).toContain('file.rename')
@@ -85,6 +96,9 @@ describe('collectUnifiedDiagnosticReport', () => {
         diagnostics: {
           getMainLogSnapshot: vi.fn().mockRejectedValue(new Error('main unavailable')),
         },
+        credentials: {
+          getStatus: vi.fn().mockRejectedValue(new Error('credentials unavailable')),
+        },
       },
     })
 
@@ -95,6 +109,7 @@ describe('collectUnifiedDiagnosticReport', () => {
     expect(report).toContain('agent still available')
     expect(report).toContain('- 采集失败：workspace unavailable')
     expect(report).toContain('- 采集失败：main unavailable')
+    expect(report).toContain('- 采集失败：credentials unavailable')
     expect(report).toContain('## Renderer 近期日志')
   })
 })

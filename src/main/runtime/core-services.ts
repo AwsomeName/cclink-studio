@@ -7,6 +7,8 @@ import { registerProjectOpsIpc } from '../project-ops/project-ops-ipc'
 import { registerWechatIPC } from '../ipc/wechat-ipc'
 import { SettingsService } from '../settings/settings-service'
 import { registerSettingsIpc } from '../settings/settings-ipc'
+import { CredentialService } from '../credentials/credential-service'
+import { registerCredentialsIpc } from '../credentials/credentials-ipc'
 import { PermissionManager } from '../mcp/permission'
 import { McpClientManager } from '../mcp/client-manager'
 import { registerAgentIpc } from '../ipc/agent-ipc'
@@ -26,7 +28,11 @@ import { runShutdownStep } from './shutdown'
 import { registerDiagnosticsIpc } from '../ipc/diagnostics-ipc'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
-  runtime.settingsService = new SettingsService()
+  runtime.credentialService = new CredentialService()
+  await runtime.credentialService.load()
+  console.log('[CCLink Studio] 本地凭证服务已初始化')
+
+  runtime.settingsService = new SettingsService(runtime.credentialService)
   await runtime.settingsService.loadState()
   console.log('[CCLink Studio] 设置系统已初始化')
 
@@ -39,13 +45,19 @@ export async function shutdownStateServices(runtime: CclinkStudioRuntimeState): 
   await runShutdownStep('WorkspaceStateService', () => runtime.workspaceStateService?.flush())
   runtime.workspaceStateService = null
   runtime.settingsService = null
+  runtime.credentialService = null
 }
 
 export async function bootstrapMainProcessServices(
   runtime: CclinkStudioRuntimeState,
 ): Promise<void> {
-  if (!runtime.mainWindow || !runtime.settingsService || !runtime.trustedRendererGuard) {
-    throw new Error('主窗口、可信 renderer 或设置系统尚未初始化')
+  if (
+    !runtime.mainWindow ||
+    !runtime.settingsService ||
+    !runtime.credentialService ||
+    !runtime.trustedRendererGuard
+  ) {
+    throw new Error('主窗口、可信 renderer、凭证或设置系统尚未初始化')
   }
 
   registerWorkspaceStateIpc(runtime.workspaceStateService!, runtime.trustedRendererGuard)
@@ -53,6 +65,9 @@ export async function bootstrapMainProcessServices(
 
   registerDiagnosticsIpc(runtime.trustedRendererGuard)
   console.log('[CCLink Studio] 诊断日志 IPC 已注册')
+
+  registerCredentialsIpc(runtime.credentialService, runtime.trustedRendererGuard)
+  console.log('[CCLink Studio] 本地凭证 IPC 已注册')
 
   try {
     runtime.localIdentityService = new LocalIdentityService()
@@ -96,6 +111,7 @@ export async function bootstrapMainProcessServices(
     runtime.gitBackupService = new GitBackupService(
       runtime.settingsService,
       runtime.workspaceStateService!,
+      runtime.credentialService,
     )
     await runtime.gitBackupService.load()
     registerGitBackupIpc(runtime.gitBackupService, runtime.trustedRendererGuard)

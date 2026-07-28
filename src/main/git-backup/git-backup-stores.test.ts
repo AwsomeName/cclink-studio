@@ -7,14 +7,8 @@ const mockPaths = vi.hoisted(() => ({ userDataDir: '' }))
 
 vi.mock('electron', () => ({
   app: { getPath: () => mockPaths.userDataDir },
-  safeStorage: {
-    isEncryptionAvailable: () => true,
-    encryptString: (value: string) => Buffer.from(`encrypted:${value}`, 'utf-8'),
-    decryptString: (value: Buffer) => value.toString('utf-8').replace(/^encrypted:/, ''),
-  },
 }))
 
-import { GitBackupCredentialStore } from './git-backup-credential-store'
 import { GitBackupProjectStore } from './git-backup-project-store'
 
 let tempDir = ''
@@ -26,28 +20,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(tempDir, { recursive: true, force: true })
-})
-
-describe('GitBackupCredentialStore', () => {
-  it('encrypts the token and never persists plaintext', async () => {
-    const store = new GitBackupCredentialStore()
-    await store.saveToken('github-secret-token')
-
-    const raw = await readFile(join(tempDir, 'git-backup/secrets.enc'), 'utf-8')
-    expect(raw).not.toContain('github-secret-token')
-    expect(await new GitBackupCredentialStore().getToken()).toBe('github-secret-token')
-  })
-
-  it('refuses plaintext fallback when encryption is unavailable', async () => {
-    const store = new GitBackupCredentialStore('git-backup/secrets.enc', {
-      isEncryptionAvailable: () => false,
-      encryptString: () => Buffer.from(''),
-      decryptString: () => '',
-    })
-    await expect(store.saveToken('github-secret-token')).rejects.toMatchObject({
-      code: 'ENCRYPTION_UNAVAILABLE',
-    })
-  })
 })
 
 describe('GitBackupProjectStore', () => {

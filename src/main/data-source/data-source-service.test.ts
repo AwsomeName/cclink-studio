@@ -9,18 +9,16 @@ vi.mock('electron', () => ({
   app: {
     getPath: () => mockPaths.userDataDir,
   },
-  safeStorage: {
-    isEncryptionAvailable: () => true,
-    encryptString: (value: string) => Buffer.from(value, 'utf-8'),
-    decryptString: (value: Buffer) => value.toString('utf-8'),
-  },
+  clipboard: { writeText: vi.fn() },
+  shell: { openPath: vi.fn(async () => '') },
 }))
 
 import { DataSourceAdapterRegistry } from './adapter-registry'
 import { DataSourceAuditLog } from './audit-log'
 import { DataSourceConfigStore } from './config-store'
-import { DataSourceCredentialStore } from './credential-store'
 import { DataSourceService } from './data-source-service'
+import { CredentialService } from '../credentials/credential-service'
+import { PlaintextCredentialStore } from '../credentials/plaintext-credential-store'
 import type { DataSourceAdapter } from './adapters/adapter'
 import type { DataSourceConfig, DataSourceSecret, RunDataQueryInput } from './types'
 
@@ -38,9 +36,12 @@ afterEach(async () => {
 function createService(adapter: DataSourceAdapter): DataSourceService {
   const registry = new DataSourceAdapterRegistry()
   registry.register(adapter)
-  return new DataSourceService({
+  const credentials = new CredentialService(
+    new PlaintextCredentialStore(join(tempDir, 'credentials/credentials.json')),
+    { userDataPath: tempDir },
+  )
+  return new DataSourceService(credentials, {
     configStore: new DataSourceConfigStore(),
-    credentialStore: new DataSourceCredentialStore(),
     auditLog: new DataSourceAuditLog(),
     adapterRegistry: registry,
   })
@@ -164,7 +165,12 @@ describe('DataSourceService', () => {
       endpoint: 'https://es.example.com',
       secret: { authType: 'apiKey', apiKey: 'temporary' },
     })
-    await new DataSourceCredentialStore().removeSecret(config.id)
+    const credentials = new CredentialService(
+      new PlaintextCredentialStore(join(tempDir, 'credentials/credentials.json')),
+      { userDataPath: tempDir },
+    )
+    await credentials.load()
+    await credentials.removeCredential(config.authRef!)
 
     await expect(
       createService(adapter).runQuery({ sourceId: config.id, query: { query: { match_all: {} } } }),

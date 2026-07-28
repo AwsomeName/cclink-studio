@@ -9,10 +9,12 @@ import type {
 } from '@shared/claude-runtime'
 import type { CadBackendStatus, CadCacheStatus } from '@shared/ipc/cad'
 import type { GitBackupAccountStatus } from '@shared/ipc/git-backup'
+import type { CredentialMetadata, CredentialServiceStatus } from '@shared/ipc/credentials'
 import { useSettingsStore } from '../../stores'
 import { useThemeStore, type Theme } from '../../stores/theme-store'
 import {
   IconFile,
+  IconDatabase,
   IconGlobe,
   IconKeyboard,
   IconLink,
@@ -37,6 +39,7 @@ type SettingsSectionId =
   | 'agent-capabilities'
   | 'browser'
   | 'editor'
+  | 'credentials'
   | 'git-backup'
   | 'cad'
   | 'shortcuts'
@@ -53,6 +56,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'agent-capabilities', label: 'Agent 能力', icon: IconTool },
   { id: 'browser', label: '浏览器', icon: IconGlobe },
   { id: 'editor', label: '编辑器', icon: IconFile },
+  { id: 'credentials', label: '本地凭证', icon: IconDatabase },
   { id: 'git-backup', label: 'Git 备份', icon: IconLink },
   { id: 'cad', label: '硬件与 CAD', icon: IconMonitor },
   { id: 'shortcuts', label: '快捷键', icon: IconKeyboard },
@@ -100,6 +104,12 @@ const SETTINGS_SEARCH_INDEX: Array<{
     label: '硬件与 CAD',
     description: '启用 STEP/STP 结构件预览，配置本机 FreeCAD 和 CAD 转换缓存。',
     keywords: ['cad', 'freecad', 'step', 'stp', 'hardware', '结构件', '硬件', '预览'],
+  },
+  {
+    sectionId: 'credentials',
+    label: '本地凭证',
+    description: '管理 Agent、Git、数据源和扩展使用的本机凭证文件。',
+    keywords: ['credential', 'secret', 'token', 'key', '凭证', '密钥'],
   },
   {
     sectionId: 'git-backup',
@@ -244,6 +254,13 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   const [gitStatus, setGitStatus] = useState<GitBackupAccountStatus | null>(null)
   const [gitBusy, setGitBusy] = useState(false)
   const [gitMessage, setGitMessage] = useState<string | null>(null)
+  const [credentialStatus, setCredentialStatus] = useState<CredentialServiceStatus | null>(null)
+  const [credentialMetadata, setCredentialMetadata] = useState<CredentialMetadata[]>([])
+  const [credentialBusy, setCredentialBusy] = useState(false)
+  const [credentialMessage, setCredentialMessage] = useState<string | null>(null)
+  const [revealedCredentialFields, setRevealedCredentialFields] = useState<Record<string, string>>(
+    {},
+  )
   const settings = useSettingsStore((state) => state.settings)
   const loading = useSettingsStore((state) => state.loading)
   const error = useSettingsStore((state) => state.error)
@@ -268,6 +285,17 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       setSecretStatus(await window.cclinkStudio.settings.getSecretStatus())
     } catch (nextError: unknown) {
       setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
+    }
+  }, [])
+
+  const refreshCredentialStatus = useCallback(async (): Promise<void> => {
+    try {
+      const result = await window.cclinkStudio.credentials.listMetadata()
+      setCredentialStatus(result.status ?? (await window.cclinkStudio.credentials.getStatus()))
+      setCredentialMetadata(result.metadata ?? [])
+      if (!result.success) setCredentialMessage(result.error ?? '无法读取本地凭证状态')
+    } catch (nextError: unknown) {
+      setCredentialMessage(nextError instanceof Error ? nextError.message : String(nextError))
     }
   }, [])
 
@@ -303,6 +331,14 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   useEffect(() => {
     if (activeSection === 'agent') void refreshSecretStatus()
   }, [activeSection, refreshSecretStatus])
+
+  useEffect(() => {
+    if (activeSection === 'credentials') {
+      void refreshCredentialStatus()
+    } else {
+      setRevealedCredentialFields({})
+    }
+  }, [activeSection, refreshCredentialStatus])
 
   useEffect(() => {
     setClaudeRuntimeSource(settings.claudeRuntimeSource)
@@ -545,7 +581,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       setApiKeyInput('')
       setShowApiKey(false)
       setSecretStatus(result.status)
-      setSecretMessage('API Key 已保存到系统加密存储')
+      setSecretMessage('API Key 已保存到本地凭证文件')
       setClaudeConnectionResult(null)
     } catch (nextError: unknown) {
       setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
@@ -571,6 +607,58 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
     } finally {
       setSecretBusy(false)
+    }
+  }
+
+  const runCredentialAction = async (
+    action: () => Promise<{ success: boolean; error?: string }>,
+    successMessage: string,
+  ): Promise<void> => {
+    setCredentialBusy(true)
+    setCredentialMessage(null)
+    try {
+      const result = await action()
+      setCredentialMessage(result.success ? successMessage : (result.error ?? '凭证操作失败'))
+      setRevealedCredentialFields({})
+      await refreshCredentialStatus()
+      await refreshSecretStatus()
+      await refreshGitStatus()
+    } catch (nextError: unknown) {
+      setCredentialMessage(nextError instanceof Error ? nextError.message : String(nextError))
+    } finally {
+      setCredentialBusy(false)
+    }
+  }
+
+  const revealCredentialField = async (id: string, field: string): Promise<void> => {
+    const key = `${id}:${field}`
+    if (revealedCredentialFields[key] !== undefined) {
+      setRevealedCredentialFields((current) => {
+        const next = { ...current }
+        delete next[key]
+        return next
+      })
+      return
+    }
+    setCredentialBusy(true)
+    setCredentialMessage(null)
+    try {
+      const result = await window.cclinkStudio.credentials.revealField(id, field)
+      if (!result.success || result.value === undefined) {
+        setCredentialMessage(result.error ?? '无法显示凭证字段')
+        return
+      }
+      setRevealedCredentialFields((current) => ({ ...current, [key]: result.value! }))
+      window.setTimeout(() => {
+        setRevealedCredentialFields((current) => {
+          if (current[key] === undefined) return current
+          const next = { ...current }
+          delete next[key]
+          return next
+        })
+      }, 30_000)
+    } finally {
+      setCredentialBusy(false)
     }
   }
 
@@ -770,7 +858,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                     {secretStatus?.migrationBlocked
                       ? '旧版凭证待迁移，当前设置文件不会被覆盖。'
                       : secretStatus?.apiKeyConfigured
-                        ? '已配置并由系统加密存储保护。'
+                        ? '已配置并保存到本地凭证文件。'
                         : '尚未配置。'}
                   </span>
                 </div>
@@ -784,7 +872,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                         secretStatus?.apiKeyConfigured ? '输入新 Key 以替换' : '输入 API Key'
                       }
                       autoComplete="off"
-                      disabled={secretBusy || secretStatus?.encryptionAvailable === false}
+                      disabled={secretBusy || secretStatus?.storageAvailable === false}
                       onChange={(event) => setApiKeyInput(event.target.value)}
                     />
                     <button
@@ -814,10 +902,8 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                       </button>
                     )}
                   </div>
-                  {secretStatus?.encryptionAvailable === false && (
-                    <span className="settings-inline-error">
-                      系统加密存储不可用，已禁止写入凭证。
-                    </span>
+                  {secretStatus?.storageAvailable === false && (
+                    <span className="settings-inline-error">本地凭证文件不可用，已禁止写入。</span>
                   )}
                   {secretMessage && <span className="settings-description">{secretMessage}</span>}
                 </div>
@@ -1104,8 +1190,8 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                   <span>访问 Token</span>
                   <span className="settings-description">
                     {gitStatus?.tokenConfigured
-                      ? '已加密保存；留空表示继续使用现有 Token。'
-                      : 'Token 通过系统安全存储加密保存，无法读回明文。'}
+                      ? '已保存到本地凭证文件；留空表示继续使用现有 Token。'
+                      : 'Token 保存在本机可见的统一凭证文件中。'}
                   </span>
                 </div>
                 <div className="settings-control">
@@ -1147,6 +1233,195 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                   )}
                 </div>
               </div>
+            </div>
+          </section>
+        )}
+
+        {activeSection === 'credentials' && (
+          <section className="settings-section">
+            <h2>本地凭证</h2>
+            <div className="settings-group">
+              <div className="settings-row">
+                <div className="settings-label">
+                  <span>凭证文件</span>
+                  <span className="settings-description">
+                    {credentialStatus?.filePath ?? '正在读取…'}
+                  </span>
+                  <span className="settings-description">
+                    状态：{credentialStatus?.status ?? 'unknown'} · 已配置{' '}
+                    {credentialStatus?.configuredCount ?? 0} 项
+                  </span>
+                  <span className="settings-description">
+                    凭证以明文保存在本机，拥有当前系统用户权限的程序可以读取。
+                  </span>
+                </div>
+                <div className="settings-control settings-control-inline">
+                  <button
+                    type="button"
+                    disabled={credentialBusy}
+                    onClick={() =>
+                      void runCredentialAction(
+                        () => window.cclinkStudio.credentials.openDirectory(),
+                        '已打开凭证目录',
+                      )
+                    }
+                  >
+                    打开目录
+                  </button>
+                  <button
+                    type="button"
+                    disabled={credentialBusy}
+                    onClick={() =>
+                      void runCredentialAction(
+                        () => window.cclinkStudio.credentials.reload(),
+                        '已重新加载磁盘版本',
+                      )
+                    }
+                  >
+                    重新加载
+                  </button>
+                </div>
+              </div>
+
+              {credentialStatus?.message && (
+                <div className="settings-row">
+                  <div className="settings-label">
+                    <span>状态提示</span>
+                    <span className="settings-description">{credentialStatus.message}</span>
+                  </div>
+                </div>
+              )}
+
+              {credentialStatus && credentialStatus.legacyEncryptedFiles.length > 0 && (
+                <div className="settings-row">
+                  <div className="settings-label">
+                    <span>旧版加密文件</span>
+                    <span className="settings-description">
+                      无法在不访问系统钥匙串的情况下迁移，请重新输入对应凭证。
+                    </span>
+                    {credentialStatus.legacyEncryptedFiles.map((filePath) => (
+                      <span key={filePath} className="settings-description">
+                        {filePath}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="settings-control">
+                    <button
+                      type="button"
+                      disabled={credentialBusy}
+                      onClick={() => {
+                        if (!window.confirm('确认删除检测到的全部旧版加密凭证文件？')) return
+                        void runCredentialAction(
+                          () => window.cclinkStudio.credentials.removeLegacyFiles(),
+                          '旧版加密凭证文件已删除',
+                        )
+                      }}
+                    >
+                      删除旧文件
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {credentialMetadata.map((credential) => (
+                <div key={credential.id} className="settings-row">
+                  <div className="settings-label">
+                    <span>{credential.id}</span>
+                    <span className="settings-description">
+                      {credential.kind} · {credential.consumers.join('、') || '暂无消费者'} · 更新于{' '}
+                      {credential.updatedAt ?? '未知'}
+                    </span>
+                    {credential.fieldNames.map((field) => {
+                      const key = `${credential.id}:${field}`
+                      const revealed = revealedCredentialFields[key]
+                      return (
+                        <span key={field} className="settings-description">
+                          {field}: {revealed ?? '••••••••'}
+                        </span>
+                      )
+                    })}
+                  </div>
+                  <div className="settings-control settings-control-inline">
+                    {credential.fieldNames.map((field) => {
+                      const key = `${credential.id}:${field}`
+                      return (
+                        <span key={field} className="settings-control settings-control-inline">
+                          <button
+                            type="button"
+                            disabled={credentialBusy}
+                            onClick={() => void revealCredentialField(credential.id, field)}
+                          >
+                            {revealedCredentialFields[key] === undefined ? '显示' : '隐藏'} {field}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={credentialBusy}
+                            onClick={() =>
+                              void runCredentialAction(
+                                () =>
+                                  window.cclinkStudio.credentials.copyField(credential.id, field),
+                                `已复制 ${credential.id}.${field}`,
+                              )
+                            }
+                          >
+                            复制
+                          </button>
+                        </span>
+                      )
+                    })}
+                    <button
+                      type="button"
+                      disabled={credentialBusy}
+                      onClick={() => {
+                        if (!window.confirm(`确认清除 ${credential.id}？`)) return
+                        void runCredentialAction(
+                          () => window.cclinkStudio.credentials.remove(credential.id),
+                          `已清除 ${credential.id}`,
+                        )
+                      }}
+                    >
+                      清除
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {credentialMetadata.length === 0 && (
+                <div className="settings-row">
+                  <div className="settings-label">
+                    <span>尚未保存凭证</span>
+                    <span className="settings-description">
+                      请在 Agent、Git 备份或数据源设置中输入凭证。
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="settings-row">
+                <div className="settings-label">
+                  <span>清除全部</span>
+                  <span className="settings-description">
+                    只清除 CCLink Studio 管理的第三方凭证，不删除项目配置。
+                  </span>
+                </div>
+                <div className="settings-control">
+                  <button
+                    type="button"
+                    disabled={credentialBusy || credentialMetadata.length === 0}
+                    onClick={() => {
+                      if (!window.confirm('确认清除全部本地凭证？此操作不可撤销。')) return
+                      void runCredentialAction(
+                        () => window.cclinkStudio.credentials.clearAll(),
+                        '全部本地凭证已清除',
+                      )
+                    }}
+                  >
+                    清除全部
+                  </button>
+                </div>
+              </div>
+
+              {credentialMessage && <div className="settings-description">{credentialMessage}</div>}
             </div>
           </section>
         )}

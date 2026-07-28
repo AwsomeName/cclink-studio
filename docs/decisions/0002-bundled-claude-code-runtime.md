@@ -4,6 +4,8 @@
 - 日期：2026-07-22
 - 负责人：CCLink Studio Maintainers
 
+> 2026-07-28 更新：本 ADR 的 Runtime 来源、打包、生命周期和认证边界继续有效；其中关于 Studio 凭证使用 Electron `safeStorage` 的决定已由 ADR 0003 取代并完成代码迁移。发布验收状态见 `docs/features/local-credentials-development-plan.md`。
+
 ## 结论
 
 CCLink Studio 将固定版本的 Claude Code 可执行运行时作为新安装的默认本地 Agent 运行时，同时保留“使用本机 Claude Code”和“使用自定义可执行文件”两种显式选择。

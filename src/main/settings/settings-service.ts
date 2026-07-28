@@ -9,17 +9,16 @@ import { app } from 'electron'
 import { join } from 'path'
 import { readFile, writeFile } from 'fs/promises'
 import { DEFAULT_SETTINGS, normalizeClaudeRuntimeSettingsUpdate, type AppSettings } from './types'
-import {
-  SettingsCredentialStore,
-  type SettingsSecretKey,
-  type SettingsSecrets,
-} from './settings-credential-store'
+import type { SettingsSecretKey } from '../../shared/ipc/settings'
 import type { SettingsSecretStatus } from '../../shared/ipc/settings'
+import { CredentialService } from '../credentials/credential-service'
 
 /** AppSettings 的合法 key 集合，用于过滤 IPC 传入的未知字段 */
 const SETTINGS_KEYS = new Set<string>(Object.keys(DEFAULT_SETTINGS))
 const SECRET_KEYS = new Set<string>(['apiKey', 'meshyApiKey'])
-const EMPTY_SECRETS: SettingsSecrets = { apiKey: '', meshyApiKey: '' }
+const EMPTY_SECRETS = { apiKey: '', meshyApiKey: '' }
+const AGENT_CREDENTIAL_ID = 'agent:default'
+const MESHY_CREDENTIAL_ID = 'extension:meshy:default'
 
 /** 每个 key 的合法值集合（用于校验 IPC 传入的数据；数值/字符串字段不在此列） */
 const VALID_VALUES: Record<string, Set<string>> = {
@@ -46,14 +45,11 @@ const VALID_VALUES: Record<string, Set<string>> = {
 export class SettingsService {
   private storeFilePath: string
   private store: AppSettings
-  private secrets: SettingsSecrets = { ...EMPTY_SECRETS }
   private migrationBlocked = false
-  private readonly credentialStore: SettingsCredentialStore
 
-  constructor(credentialStore = new SettingsCredentialStore()) {
+  constructor(private readonly credentialService: CredentialService) {
     this.storeFilePath = join(app.getPath('userData'), 'settings.json')
     this.store = { ...DEFAULT_SETTINGS }
-    this.credentialStore = credentialStore
   }
 
   /**
@@ -89,31 +85,35 @@ export class SettingsService {
     const needsClaudeRuntimeMigration =
       settingsFileExists && typeof parsed.claudeRuntimeSource !== 'string'
     try {
-      await this.credentialStore.load()
-      const encryptedSecrets = await this.credentialStore.getAll()
-      const mergedSecrets: SettingsSecrets = {
-        apiKey: encryptedSecrets.apiKey || legacySecrets.apiKey,
-        meshyApiKey: encryptedSecrets.meshyApiKey || legacySecrets.meshyApiKey,
+      await this.credentialService.ensureLoaded()
+      if (legacySecrets.apiKey) {
+        await this.credentialService.setCredential({
+          id: AGENT_CREDENTIAL_ID,
+          kind: 'api-key',
+          fields: { apiKey: legacySecrets.apiKey },
+        })
       }
-      if (hasAnySecret(legacySecrets)) {
-        await this.credentialStore.setSecrets(mergedSecrets)
+      if (legacySecrets.meshyApiKey) {
+        await this.credentialService.setCredential({
+          id: MESHY_CREDENTIAL_ID,
+          kind: 'api-key',
+          fields: { apiKey: legacySecrets.meshyApiKey },
+        })
       }
-      this.secrets = mergedSecrets
       this.migrationBlocked = false
       if (settingsFileExists && (hasLegacySecretFields || needsClaudeRuntimeMigration)) {
         await this.saveState()
         if (hasLegacySecretFields) {
-          console.log('[SettingsService] 旧版明文凭证已迁移到系统加密存储')
+          console.log('[SettingsService] 旧版明文凭证已迁移到统一本地凭证文件')
         }
         if (needsClaudeRuntimeMigration) {
           console.log('[SettingsService] Claude Code 运行时来源设置已迁移')
         }
       }
     } catch (error) {
-      this.secrets = legacySecrets
       this.migrationBlocked = hasAnySecret(legacySecrets)
       console.warn(
-        '[SettingsService] 加密凭证加载或迁移失败，已保留旧配置且不会覆盖:',
+        '[SettingsService] 本地凭证加载或迁移失败，已保留旧配置且不会覆盖:',
         error instanceof Error ? error.message : String(error),
       )
     }
@@ -124,7 +124,7 @@ export class SettingsService {
   /** 保存当前设置到磁盘 */
   private async saveState(settings: AppSettings = this.store): Promise<void> {
     if (this.migrationBlocked) {
-      throw new Error('系统加密存储不可用，旧版明文凭证尚未迁移，拒绝覆盖设置文件')
+      throw new Error('本地凭证文件不可用，旧版明文凭证尚未迁移，拒绝覆盖设置文件')
     }
     const json = JSON.stringify(withoutSecrets(settings), null, 2)
     await writeFile(this.storeFilePath, json, 'utf-8')
@@ -137,31 +137,36 @@ export class SettingsService {
 
   /** 仅供主进程服务使用，禁止通过 IPC 暴露。 */
   getRuntimeSettings(): AppSettings {
-    return { ...this.store, ...this.secrets }
+    return { ...this.store, ...this.getResolvedSecrets() }
   }
 
   getSecretStatus(): SettingsSecretStatus {
+    const status = this.credentialService.getStatus()
+    const secrets = this.getResolvedSecrets()
     return {
-      apiKeyConfigured: this.secrets.apiKey.length > 0,
-      meshyApiKeyConfigured: this.secrets.meshyApiKey.length > 0,
-      encryptionAvailable: this.credentialStore.isEncryptionAvailable(),
+      apiKeyConfigured: secrets.apiKey.length > 0,
+      meshyApiKeyConfigured: secrets.meshyApiKey.length > 0,
+      storageAvailable: status.status === 'ready' || status.status === 'conflict',
       migrationBlocked: this.migrationBlocked,
+      legacyCredentialsDetected: status.legacyEncryptedFiles.length > 0,
     }
   }
 
   async setSecret(key: SettingsSecretKey, value: string): Promise<SettingsSecretStatus> {
-    const next = { ...this.secrets, [key]: value }
-    await this.credentialStore.setSecrets(next)
-    this.secrets = await this.credentialStore.getAll()
+    const normalized = normalizeLegacySecret(value)
+    if (!normalized) throw new Error('凭证不能为空')
+    await this.credentialService.setCredential({
+      id: credentialIdFor(key),
+      kind: 'api-key',
+      fields: { apiKey: normalized },
+    })
     this.migrationBlocked = false
     await this.saveState()
     return this.getSecretStatus()
   }
 
   async clearSecret(key: SettingsSecretKey): Promise<SettingsSecretStatus> {
-    const next = { ...this.secrets, [key]: '' }
-    await this.credentialStore.setSecrets(next)
-    this.secrets = await this.credentialStore.getAll()
+    await this.credentialService.removeCredential(credentialIdFor(key))
     this.migrationBlocked = false
     await this.saveState()
     return this.getSecretStatus()
@@ -207,8 +212,8 @@ export class SettingsService {
    * @returns 默认设置
    */
   async reset(): Promise<AppSettings> {
-    await this.credentialStore.clear()
-    this.secrets = { ...EMPTY_SECRETS }
+    await this.credentialService.removeCredential(AGENT_CREDENTIAL_ID)
+    await this.credentialService.removeCredential(MESHY_CREDENTIAL_ID)
     this.migrationBlocked = false
     const nextStore = { ...DEFAULT_SETTINGS }
     await this.saveState(nextStore)
@@ -257,9 +262,20 @@ export class SettingsService {
     if (typeof parsed.claudeRuntimeSource === 'string') return
     this.store.claudeRuntimeSource = this.store.claudeCodePath.trim() ? 'custom' : 'system'
   }
+
+  private getResolvedSecrets(): typeof EMPTY_SECRETS {
+    try {
+      return {
+        apiKey: this.credentialService.resolveCredential(AGENT_CREDENTIAL_ID)?.apiKey ?? '',
+        meshyApiKey: this.credentialService.resolveCredential(MESHY_CREDENTIAL_ID)?.apiKey ?? '',
+      }
+    } catch {
+      return { ...EMPTY_SECRETS }
+    }
+  }
 }
 
-function extractLegacySecrets(parsed: Record<string, unknown>): SettingsSecrets {
+function extractLegacySecrets(parsed: Record<string, unknown>): typeof EMPTY_SECRETS {
   return {
     apiKey: normalizeLegacySecret(parsed.apiKey),
     meshyApiKey: normalizeLegacySecret(parsed.meshyApiKey),
@@ -270,13 +286,17 @@ function normalizeLegacySecret(value: unknown): string {
   return typeof value === 'string' && value.length <= 8192 ? value.trim() : ''
 }
 
-function hasAnySecret(secrets: SettingsSecrets): boolean {
+function hasAnySecret(secrets: typeof EMPTY_SECRETS): boolean {
   return secrets.apiKey.length > 0 || secrets.meshyApiKey.length > 0
 }
 
 function withoutSecrets(settings: AppSettings): Omit<AppSettings, SettingsSecretKey> {
   const { apiKey: _apiKey, meshyApiKey: _meshyApiKey, ...persisted } = settings
   return persisted
+}
+
+function credentialIdFor(key: SettingsSecretKey): string {
+  return key === 'apiKey' ? AGENT_CREDENTIAL_ID : MESHY_CREDENTIAL_ID
 }
 
 function normalizeModuleIds(value: unknown): string[] {

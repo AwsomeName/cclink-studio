@@ -4,6 +4,7 @@
 > 优先级：P0/P1
 > 目标：让本地 CCLink Studio 工作空间可以把远程数据库、搜索索引和数据采集项目作为可浏览、可查询、可挂载给 Agent 的资料来源。
 > 开发者实施计划：`docs/features/data-sources-development-plan.md`
+> 凭证状态：当前代码已统一到 `docs/features/local-credentials.md` 定义的本地明文凭证服务。
 
 ## 结论
 
@@ -100,7 +101,7 @@ Agent Panel：
 
 - Elasticsearch 只读连接。
 - 连接配置管理：名称、类型、endpoint、默认 index、查询超时、结果上限。
-- 凭证加密存储，不把密码/API Key 明文写入项目文件。
+- 凭证进入统一的本机明文凭证文件，不把密码/API Key 写入项目文件、普通设置、日志或诊断。
 - 浏览 index 列表和基础 metadata。
 - 执行只读 DSL 查询。
 - 查询结果表格、JSON 详情、分页。
@@ -133,7 +134,7 @@ Agent Panel：
       "name": "文章素材 ES",
       "endpoint": "https://es.example.com",
       "defaultIndex": "articles-*",
-      "authRef": "keychain:ds_articles_es",
+      "authRef": "data-source:ds_articles_es",
       "readOnly": true,
       "timeoutMs": 10000,
       "maxRows": 100,
@@ -144,7 +145,7 @@ Agent Panel：
 }
 ```
 
-凭证进入本机加密存储：
+凭证进入 `userData/credentials/credentials.json` 中的统一本地明文存储：
 
 ```ts
 type DataSourceSecret = {
@@ -208,7 +209,7 @@ type FieldMapping = {
 
 ## 安全原则
 
-1. Renderer 不直接连接数据库，也不接触明文凭证。
+1. 数据源 Renderer 不直接连接数据库，也不接触明文凭证；用户显示或复制凭证只通过统一凭证设置页。
 2. 所有数据库访问都通过主进程 IPC。
 3. 主进程读取凭证、执行查询、做超时和结果上限控制。
 4. Agent 只能调用只读数据源工具。
@@ -308,7 +309,7 @@ data_source.run_saved_query
 
 - 新建 `src/main/data-source/`。
 - 实现 `DataSourceService`：管理配置、测试连接、查询、记录读取。
-- 实现 `DataSourceCredentialStore`：复用 safeStorage / Keychain 保存凭证。
+- 通过统一 `CredentialService` 保存和解析凭证，不新增数据源专属凭证文件。
 - 实现 `ElasticsearchAdapter`：封装 ES 请求、超时、错误归一化。
 - 实现 `DataSourceAuditLog`：记录查询 metadata。
 - 新增单元测试覆盖配置读写、凭证引用、只读限制和错误归一化。
@@ -316,7 +317,7 @@ data_source.run_saved_query
 验收标准：
 
 - 能创建一个 ES 连接并测试成功/失败。
-- 明文凭证不出现在工作空间配置文件、settings.json 或日志中。
+- 明文凭证只出现在统一凭证文件，不出现在工作空间配置文件、settings.json、日志或诊断中。
 - 查询超时、认证失败、网络失败、index 不存在都有稳定错误码。
 - 查询请求拒绝 `_bulk`、`_delete_by_query`、`PUT`、`POST` 写入类路径。
 - `pnpm test -- --run` 通过。

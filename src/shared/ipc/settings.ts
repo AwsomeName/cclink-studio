@@ -33,8 +33,9 @@ export type SettingsSecretKey = 'apiKey' | 'meshyApiKey'
 export interface SettingsSecretStatus {
   apiKeyConfigured: boolean
   meshyApiKeyConfigured: boolean
-  encryptionAvailable: boolean
+  storageAvailable: boolean
   migrationBlocked: boolean
+  legacyCredentialsDetected: boolean
 }
 
 export interface SettingsSecretOperationResult {

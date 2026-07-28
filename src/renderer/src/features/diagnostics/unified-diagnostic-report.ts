@@ -27,10 +27,20 @@ const MAX_LOG_ENTRIES = 100
 export async function collectUnifiedDiagnosticReport(
   input: UnifiedDiagnosticReportInput,
 ): Promise<string> {
-  const [workspaceSection, mainLogSection] = await Promise.all([
+  const [workspaceSection, credentialSection, mainLogSection] = await Promise.all([
     collectSection('工作台状态', async () => {
       const diagnostics = await window.cclinkStudio.workspaceState.diagnostics()
       return formatWorkspaceDiagnosticsMarkdown(diagnostics)
+    }),
+    collectSection('本地凭证', async () => {
+      const status = await window.cclinkStudio.credentials.getStatus()
+      return [
+        `- 状态：${status.status}`,
+        `- 文件：${status.filePath}`,
+        `- 已配置：${status.configuredCount}`,
+        `- 旧版加密文件：${status.legacyEncryptedFiles.length}`,
+        ...(status.message ? [`- 提示：${status.message}`] : []),
+      ].join('\n')
     }),
     collectSection('主进程近期日志', async () =>
       formatLogSnapshot(await window.cclinkStudio.diagnostics.getMainLogSnapshot()),
@@ -60,6 +70,7 @@ export async function collectUnifiedDiagnosticReport(
       body: input.agentReport || '- Agent 诊断未生成',
     },
     workspaceSection,
+    credentialSection,
     markdownSection,
     contextActionSection,
     rendererLogSection,
