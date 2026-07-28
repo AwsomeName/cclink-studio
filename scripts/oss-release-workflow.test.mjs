@@ -44,6 +44,16 @@ test('release workflow signs and Gatekeeper-assesses each DMG before upload', ()
   assert.match(notarizeDmgScript, /spctl[\s\S]*--type open/)
 })
 
+test('release workflow normalizes public asset names before checksums and upload', () => {
+  assert.match(workflow, /Expected exactly one DMG and one ZIP/)
+  assert.match(workflow, /cclink-studio-\$\{VERSION\}-\$\{\{ matrix\.arch \}\}\.dmg/)
+  assert.match(workflow, /cclink-studio-\$\{VERSION\}-\$\{\{ matrix\.arch \}\}\.zip/)
+  assert.doesNotMatch(
+    workflow,
+    /cp dist\/\*\.dmg dist\/\*\.zip "\.\.\/release-assets-\$\{\{ matrix\.arch \}\}\/"/,
+  )
+})
+
 test('draft release aggregates both architectures into one verified update manifest', () => {
   assert.match(workflow, /pattern: studio-\$\{\{ inputs\.tag \}\}-\*/)
   assert.match(workflow, /merge-multiple: true/)

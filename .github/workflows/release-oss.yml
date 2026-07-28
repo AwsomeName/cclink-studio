@@ -188,15 +188,24 @@ jobs:
       - name: Prepare release assets
         working-directory: source
         run: |
-          mkdir -p "../release-assets-${{ matrix.arch }}"
-          cp dist/*.dmg dist/*.zip "../release-assets-${{ matrix.arch }}/"
+          VERSION="$(node -p "require('./package.json').version")"
+          release_assets_dir="../release-assets-${{ matrix.arch }}"
+          mkdir -p "$release_assets_dir"
+          shopt -s nullglob
+          dmg_files=(dist/*.dmg)
+          zip_files=(dist/*.zip)
+          if [ "${#dmg_files[@]}" -ne 1 ] || [ "${#zip_files[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one DMG and one ZIP before release asset normalization."
+            exit 1
+          fi
+          cp "${dmg_files[0]}" "$release_assets_dir/cclink-studio-${VERSION}-${{ matrix.arch }}.dmg"
+          cp "${zip_files[0]}" "$release_assets_dir/cclink-studio-${VERSION}-${{ matrix.arch }}.zip"
           (
-            cd "../release-assets-${{ matrix.arch }}"
+            cd "$release_assets_dir"
             shasum -a 256 ./*.dmg ./*.zip > "checksums-${{ matrix.arch }}.txt"
           )
           SOURCE_SHA="$(git rev-parse HEAD)"
           RELEASE_WORKFLOW_SHA="$(git -C ../release-tools rev-parse HEAD)"
-          VERSION="$(node -p "require('./package.json').version")"
           export SOURCE_SHA RELEASE_WORKFLOW_SHA VERSION RELEASE_ARCH="${{ matrix.arch }}"
           node -e '
             const fs = require("node:fs");
