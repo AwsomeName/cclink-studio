@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
@@ -9,6 +10,12 @@ import {
   parseArgs,
   resolveRemoteTagCommit,
 } from './oss-release.mjs'
+
+const gitignore = readFileSync(new URL('../.gitignore', import.meta.url), 'utf8')
+
+test('ignores generated release preflight reports between releases', () => {
+  assert.match(gitignore, /^\.build\/$/m)
+})
 
 test('parses a patch release with confirmation and wait controls', () => {
   const expected = {
