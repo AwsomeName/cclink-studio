@@ -59,6 +59,7 @@ test('always dispatches the default-branch workflow as a draft release', () => {
     inputs: {
       tag: 'v0.1.3',
       create_draft: true,
+      failure_injection: 'none',
     },
   })
   assert.throws(() => createWorkflowDispatchPayload('0.1.3'), /格式错误/)

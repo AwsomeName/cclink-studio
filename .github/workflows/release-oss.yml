@@ -12,6 +12,14 @@ on:
         required: true
         default: false
         type: boolean
+      failure_injection:
+        description: U0 acceptance only; fail manifest aggregation before release upload
+        required: true
+        default: none
+        type: choice
+        options:
+          - none
+          - omit-x64-build-record
 
 permissions:
   contents: read
@@ -252,6 +260,20 @@ jobs:
           pattern: studio-${{ inputs.tag }}-*
           path: release-assets
           merge-multiple: true
+      - name: Inject U0 manifest validation failure
+        if: ${{ inputs.failure_injection != 'none' }}
+        env:
+          FAILURE_INJECTION: ${{ inputs.failure_injection }}
+        run: |
+          case "$FAILURE_INJECTION" in
+            omit-x64-build-record)
+              rm release-assets/build-record-x64.json
+              ;;
+            *)
+              echo "::error::Unsupported failure injection: $FAILURE_INJECTION"
+              exit 1
+              ;;
+          esac
       - name: Generate and verify update manifest
         run: |
           RELEASE_WORKFLOW_SHA="$(git -C release-tools rev-parse HEAD)"

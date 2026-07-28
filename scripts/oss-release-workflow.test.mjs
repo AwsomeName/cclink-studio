@@ -70,3 +70,14 @@ test('draft release aggregates both architectures into one verified update manif
   assert.ok(verifyIndex > generateIndex)
   assert.ok(draftIndex > verifyIndex)
 })
+
+test('U0 failure injection stops manifest aggregation before draft upload', () => {
+  assert.match(workflow, /failure_injection:[\s\S]*default: none/)
+  assert.match(workflow, /omit-x64-build-record/)
+  const injectIndex = workflow.indexOf('Inject U0 manifest validation failure')
+  const manifestIndex = workflow.indexOf('Generate and verify update manifest')
+  const draftIndex = workflow.indexOf('Create draft release')
+  assert.ok(injectIndex > 0)
+  assert.ok(injectIndex < manifestIndex)
+  assert.ok(manifestIndex < draftIndex)
+})

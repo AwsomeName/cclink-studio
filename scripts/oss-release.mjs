@@ -91,6 +91,7 @@ export function createWorkflowDispatchPayload(tag) {
     inputs: {
       tag,
       create_draft: true,
+      failure_injection: 'none',
     },
   }
 }
