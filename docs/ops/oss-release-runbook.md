@@ -116,13 +116,24 @@ GitHub Actions 必须全部通过：
 - `package (x64, macos-15-intel)`
 - `draft`
 
-Draft Release 至少应包含两种架构的 DMG、ZIP、checksums 和 build record。发布前：
+Draft Release 至少应包含两种架构的 DMG、ZIP、checksums、build record 和唯一的
+`update-manifest.json`。`draft` job 会在创建 Draft 前根据真实文件反向重建 Manifest；
+任一架构缺失、版本/source SHA 不一致、文件大小或哈希不匹配都会停止发布。发布前：
 
 1. 核对 Release、Tag 和 `package.json` 版本一致。
 2. 核对 build record 的源码 SHA 与 Tag 提交一致。
-3. 下载对应架构 DMG，在干净 Mac 上安装和启动。
-4. 确认 Gatekeeper 不要求 `xattr` 绕过。
-5. 确认应用名称、版本、架构和基础本地能力正确。
+3. 下载完整 Draft 资产并再次验证 Manifest：
+
+```bash
+pnpm verify:update-manifest -- \
+  --assets-dir /path/to/downloaded-release-assets \
+  --manifest /path/to/downloaded-release-assets/update-manifest.json \
+  --tag vX.Y.Z
+```
+
+4. 下载对应架构 DMG，在干净 Mac 上安装和启动。
+5. 确认 Gatekeeper 不要求 `xattr` 绕过。
+6. 确认应用名称、版本、架构和基础本地能力正确。
 
 只有以上检查通过，才在 GitHub Draft Release 页面点击 `Publish release`。这是正式
 公开给用户的最后人工确认点。
@@ -190,5 +201,6 @@ pnpm release:oss -- --dispatch-only vX.Y.Z
 - `vX.Y.Z` Tag 指向该提交。
 - GitHub Actions 全绿。
 - arm64 和 x64 Draft 资产齐全且通过签名、公证和 Gatekeeper 检查。
+- `update-manifest.json` 能从下载后的真实资产、checksums 和 build record 独立重建。
 - 真人安装启动验收通过。
 - Draft Release 已由维护者人工公开。

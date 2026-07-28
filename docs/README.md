@@ -12,6 +12,8 @@
 - `docs/development.md`：当前开发事实源。
 - `docs/ops/local-smoke-check.md`：验证 Studio 开源壳可独立启动和本地核心能力可用。
 - `docs/ops/oss-release-runbook.md`：开源版打包、签名、公证、Draft 验收和公开发布手册。
+- `docs/features/desktop-release-and-updates.md`：桌面发布、自动检查、受控下载、确认安装和 U0-U5 开发计划。
+- `docs/features/desktop-update-development-plan.md`：桌面更新 U0-U5 的任务编号、代码落点、工作量、失败矩阵、真人验收和退出证据。
 - `docs/ops/stabilization-s0-acceptance.md`：S0 自动化证据和必须真人执行的核心流程验收记录。
 - `docs/official-integration-contract.md`：Studio 暴露给官方构建层的接口边界。
 - `docs/ops/cclink-dev-official-integration-handoff.md`：发给 `cclink-dev` 的 official loader 接入清单。
@@ -38,7 +40,8 @@ Studio 默认可单仓库独立启动，不要求 `cclink-dev`、`chat-cc/deploy
 ## 当前文档集
 
 - 架构与开发：`docs/architecture.md`、`docs/stabilization.md`、`docs/development.md`、`docs/decisions/`。
-- 本地验收与发布：`docs/ops/local-smoke-check.md`、`docs/ops/oss-release-runbook.md`。
+- 本地验收与发布：`docs/ops/local-smoke-check.md`、`docs/ops/oss-release-runbook.md`、`docs/features/desktop-release-and-updates.md`。
+- 桌面更新验收证据：`docs/ops/desktop-update-acceptance.md`。
 - 官方集成：`docs/official-integration-contract.md`、`docs/ops/cclink-dev-official-integration-handoff.md`。
 - 工作台能力：`docs/features/project-system.md`、`docs/features/context-action-system.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/browser-automation.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`。
 - 行业能力：数据源、硬件工作区、FPC 改版、CAD 转换、项目内运营助手。

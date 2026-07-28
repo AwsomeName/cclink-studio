@@ -232,11 +232,33 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ inputs.tag }}
     steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: release-tools
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           pattern: studio-${{ inputs.tag }}-*
           path: release-assets
           merge-multiple: true
+      - name: Generate and verify update manifest
+        run: |
+          RELEASE_WORKFLOW_SHA="$(git -C release-tools rev-parse HEAD)"
+          node release-tools/scripts/release/generate-update-manifest.mjs \
+            --assets-dir release-assets \
+            --tag "$RELEASE_TAG" \
+            --minimum-system-version 13.0 \
+            --release-workflow-sha "$RELEASE_WORKFLOW_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --output release-assets/update-manifest.json
+          node release-tools/scripts/release/verify-update-manifest.mjs \
+            --assets-dir release-assets \
+            --manifest release-assets/update-manifest.json \
+            --tag "$RELEASE_TAG" \
+            --release-workflow-sha "$RELEASE_WORKFLOW_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID"
       - name: Create draft release
         run: |
           gh release create "$RELEASE_TAG" \

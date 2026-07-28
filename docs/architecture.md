@@ -10,12 +10,12 @@ CCLink Studio 是 CCLink 的开源桌面工作台端，不是 CCLink Studio 接�
 
 ## 项目边界
 
-| 位置                                            | 角色                                                                                                |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `/Users/apple/Desktop/cclink-dev/cclink-studio` | 开源桌面壳。独立发布开源版，不内置官方生产 API、登录、订阅、官方消息网络或云同步。                 |
-| `/Users/apple/Desktop/cclink-dev`               | 闭源总控/商业版编译工作区。独立承接官方集成层、生产 API 注入、商业版签名、公证和 release 基线。    |
-| `/Users/apple/Desktop/chat-cc/deploy`           | CCLink 云函数与账号体系。                                                                           |
-| `/Users/apple/Desktop/chat-cc/Agent`            | CCLink Agent runtime。                                                                              |
+| 位置                                            | 角色                                                                                            |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `/Users/apple/Desktop/cclink-dev/cclink-studio` | 开源桌面壳。独立发布开源版，不内置官方生产 API、登录、订阅、官方消息网络或云同步。              |
+| `/Users/apple/Desktop/cclink-dev`               | 闭源总控/商业版编译工作区。独立承接官方集成层、生产 API 注入、商业版签名、公证和 release 基线。 |
+| `/Users/apple/Desktop/chat-cc/deploy`           | CCLink 云函数与账号体系。                                                                       |
+| `/Users/apple/Desktop/chat-cc/Agent`            | CCLink Agent runtime。                                                                          |
 
 不存在额外拆分出的云端或 Agent 独立项目。
 
@@ -107,9 +107,11 @@ CCLink Studio 开源壳保留这些本地能力：
 - 本地设置、诊断、文件访问和工作台状态恢复。
 - updater 的中性检查框架，以及只针对本仓库不可变 Tag 的开源版签名、公证和制品发布链路。
 
-桌面发布与更新的状态所有权、发布权限边界和 R0-R2 验收以
-`docs/features/desktop-release-and-updates.md` 为事实源。Developer ID 直接分发是
-当前默认路线；Mac App Store 需要独立 ADR。
+桌面发布与更新的状态所有权、发布权限边界、R0 发布基线和 U0-U5 更新验收以
+`docs/features/desktop-release-and-updates.md` 为产品事实源，任务拆解、代码落点、
+工作量、失败矩阵和验收证据以
+`docs/features/desktop-update-development-plan.md` 为执行事实源。Developer ID
+直接分发是当前默认路线；Mac App Store 需要独立 ADR。
 
 这些能力不需要用户登录 CCLink，也不依赖官方云服务。
 
