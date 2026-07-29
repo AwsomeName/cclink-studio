@@ -38,9 +38,10 @@ describe('useUIStore', () => {
       expect(useUIStore.getState().activePanel).toBe('files')
     })
 
-    it('停用的会话入口会转到文件侧栏', () => {
+    it('会话是可见 Activity 面板', () => {
       useUIStore.getState().setActivePanel('sessions')
-      expect(useUIStore.getState().activePanel).toBe('files')
+      expect(useUIStore.getState().activePanel).toBe('sessions')
+      expect(useUIStore.getState().sidebarVisible).toBe(true)
     })
 
     it('点击不同面板 → 展开侧栏并切换', () => {

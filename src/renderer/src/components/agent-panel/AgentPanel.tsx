@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState, useMemo, type CSSProperties } from 'react'
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react'
 import {
   useAgentStore,
   useBrowserDownloadStore,
@@ -11,13 +11,6 @@ import {
   useWorkspaceStore,
 } from '../../stores'
 import { workspaceRefKey, workspaceRefLabel } from '../../../../shared/workspace-ref'
-import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
-import {
-  buildKeyboardContextMenuInput,
-  isContextMenuKeyboardEvent,
-} from '../../features/context-actions/context-menu-trigger'
-import { useCommandStore } from '../../stores/command-store'
-import { THREAD_RESTORED_EVENT } from '../../features/context-actions/domains/thread-context-actions'
 import { MountedResourceBar } from '../../features/agent-conversations/mounted-resource-bar'
 import { MountedSkillStrip } from '../../features/agent-conversations/mounted-skill-strip'
 import { ImageAttachmentStrip } from '../../features/agent-conversations/image-attachment-strip'
@@ -36,14 +29,12 @@ import {
 } from '../../features/agent-conversations/payload'
 import { createConversationRunController } from '../../features/agent-conversations/conversation-run-controller'
 import {
-  buildArchivedQuickThreadList,
   buildResourceCandidates,
   buildSkillCandidates,
   buildQuickThreadList,
   createConversationRuntimeForWorkspace,
   type AgentResourceCandidate,
   type AgentSkillCandidate,
-  type QuickThreadSummary,
 } from '../../features/agent-conversations/view-model'
 import type { PermissionMode } from '../../types'
 import type { BrowserActionLog, BrowserDownloadRecord, BrowserTaskRun } from '@shared/ipc/browser'
@@ -72,8 +63,6 @@ import {
   IconGlobe,
   IconFile,
   IconClipboard,
-  IconPlus,
-  IconHistory,
 } from '../common/Icons'
 import {
   AGENT_FOCUS_COMPOSER_EVENT,
@@ -88,11 +77,6 @@ interface AgentPanelProps {
 const MIN_COMPOSER_HEIGHT = 118
 const MAX_COMPOSER_HEIGHT = 520
 const MIN_MESSAGES_HEIGHT = 180
-const DEFAULT_THREAD_LIST_WIDTH = 292
-const MIN_THREAD_LIST_WIDTH = 180
-const MAX_THREAD_LIST_WIDTH = 440
-const MIN_CENTER_CONVERSATION_WIDTH = 320
-const THREAD_LIST_RESIZE_HANDLE_WIDTH = 7
 
 function composerHeightStorageKey(variant: NonNullable<AgentPanelProps['variant']>): string {
   return `cclink-studio-agent-composer-height-${variant}`
@@ -105,16 +89,6 @@ function loadComposerHeight(variant: NonNullable<AgentPanelProps['variant']>): n
     return Math.min(value, MAX_COMPOSER_HEIGHT)
   } catch {
     return null
-  }
-}
-
-function loadThreadListWidth(): number {
-  try {
-    const value = Number(localStorage.getItem('cclink-studio-agent-thread-list-width'))
-    if (!Number.isFinite(value)) return DEFAULT_THREAD_LIST_WIDTH
-    return Math.min(Math.max(value, MIN_THREAD_LIST_WIDTH), MAX_THREAD_LIST_WIDTH)
-  } catch {
-    return DEFAULT_THREAD_LIST_WIDTH
   }
 }
 
@@ -167,19 +141,15 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const loadSavedQueries = useDataSourceStore((s) => s.loadSavedQueries)
   const showToast = useToastStore((s) => s.show)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
-  const centerPanelRef = useRef<HTMLDivElement>(null)
   const conversationMainRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLDivElement>(null)
   const startComposerRef = useRef<HTMLDivElement>(null)
   const [resourceQuery, setResourceQuery] = useState<string | null>(null)
   const [skillQuery, setSkillQuery] = useState<string | null>(null)
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
-  const [quickThreadsExpanded, setQuickThreadsExpanded] = useState(false)
-  const [archivedThreadsExpanded, setArchivedThreadsExpanded] = useState(false)
   const [composerHeight, setComposerHeight] = useState<number | null>(() =>
     loadComposerHeight(variant),
   )
-  const [threadListWidth, setThreadListWidth] = useState(loadThreadListWidth)
   const pendingConfirmations = useMemo(
     () =>
       allPendingConfirmations.filter((confirmation) =>
@@ -264,69 +234,6 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     [clampComposerHeight, composerHeight],
   )
 
-  const clampThreadListWidth = useCallback((width: number): number => {
-    const panelWidth = centerPanelRef.current?.getBoundingClientRect().width ?? 0
-    const availableMaximum =
-      panelWidth > 0
-        ? Math.max(
-            MIN_THREAD_LIST_WIDTH,
-            panelWidth - MIN_CENTER_CONVERSATION_WIDTH - THREAD_LIST_RESIZE_HANDLE_WIDTH,
-          )
-        : MAX_THREAD_LIST_WIDTH
-    return Math.min(Math.max(width, MIN_THREAD_LIST_WIDTH), MAX_THREAD_LIST_WIDTH, availableMaximum)
-  }, [])
-
-  const handleThreadListResizeStart = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.button !== 0) return
-      event.preventDefault()
-      event.stopPropagation()
-
-      const startX = event.clientX
-      const startWidth =
-        centerPanelRef.current
-          ?.querySelector<HTMLElement>('.agent-quick-switcher')
-          ?.getBoundingClientRect().width ?? threadListWidth
-      const previousCursor = document.body.style.cursor
-      const previousUserSelect = document.body.style.userSelect
-
-      document.body.classList.add('is-resizing-thread-list')
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-
-      const handlePointerMove = (moveEvent: PointerEvent): void => {
-        setThreadListWidth(clampThreadListWidth(startWidth + startX - moveEvent.clientX))
-      }
-      const finishResize = (): void => {
-        document.body.classList.remove('is-resizing-thread-list')
-        document.body.style.cursor = previousCursor
-        document.body.style.userSelect = previousUserSelect
-        window.removeEventListener('pointermove', handlePointerMove)
-        window.removeEventListener('pointerup', finishResize)
-        window.removeEventListener('pointercancel', finishResize)
-      }
-
-      window.addEventListener('pointermove', handlePointerMove)
-      window.addEventListener('pointerup', finishResize)
-      window.addEventListener('pointercancel', finishResize)
-    },
-    [clampThreadListWidth, threadListWidth],
-  )
-
-  const handleThreadListResizeKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-      event.preventDefault()
-      const currentWidth =
-        centerPanelRef.current
-          ?.querySelector<HTMLElement>('.agent-quick-switcher')
-          ?.getBoundingClientRect().width ?? threadListWidth
-      const delta = event.key === 'ArrowLeft' ? 16 : -16
-      setThreadListWidth(clampThreadListWidth(currentWidth + delta))
-    },
-    [clampThreadListWidth, threadListWidth],
-  )
-
   useEffect(() => {
     try {
       const key = composerHeightStorageKey(variant)
@@ -336,14 +243,6 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
       // localStorage 不可用时仍保留当前运行期的拖拽结果。
     }
   }, [composerHeight, variant])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('cclink-studio-agent-thread-list-width', String(threadListWidth))
-    } catch {
-      // localStorage 不可用时仍保留当前运行期的拖拽结果。
-    }
-  }, [threadListWidth])
 
   useEffect(() => {
     const main = conversationMainRef.current
@@ -504,35 +403,6 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     openTab({ type: 'settings', title: 'Agent 设置', icon: '⚙️', settingsSection: 'agent' })
   }, [openTab])
 
-  const handleNewConversation = useCallback(() => {
-    const conversationId = createConversation({
-      runtime: createConversationRuntimeForWorkspace(activeWorkspaceRef),
-      activate: true,
-    })
-    setResourceQuery(null)
-    setSkillQuery(null)
-    void window.cclinkStudio.agent.resetSession(conversationId)
-  }, [activeWorkspaceRef, createConversation])
-
-  const handleSwitchConversation = useCallback(
-    (conversationId: string) => {
-      switchConversation(conversationId)
-      setResourceQuery(null)
-      setSkillQuery(null)
-    },
-    [switchConversation],
-  )
-
-  useEffect(() => {
-    const handleThreadRestored = (): void => {
-      setArchivedThreadsExpanded(false)
-      setResourceQuery(null)
-      setSkillQuery(null)
-    }
-    window.addEventListener(THREAD_RESTORED_EVENT, handleThreadRestored)
-    return () => window.removeEventListener(THREAD_RESTORED_EVENT, handleThreadRestored)
-  }, [])
-
   const handleCopyDiagnostics = useCallback(async () => {
     const conversation = useAgentStore.getState().conversations[activeConversationId] ?? null
     const diagnosticWorkspaceKey = workspaceRefKey(
@@ -674,18 +544,6 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
       pendingConfirmations.length,
     ],
   )
-  const quickThreads = quickThreadsExpanded ? allQuickThreads : allQuickThreads.slice(0, 5)
-  const archivedQuickThreads = useMemo(
-    () =>
-      buildArchivedQuickThreadList({
-        conversations,
-        conversationOrder,
-        activeConversationId,
-        activeWorkspaceRef,
-      }),
-    [activeConversationId, activeWorkspaceRef, conversationOrder, conversations],
-  )
-
   useEffect(() => {
     const active = conversations[activeConversationId]
     if (
@@ -887,45 +745,10 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     pendingConfirmations.length === 0 &&
     !loading &&
     lastCost === null
-  const quickThreadSwitcher = (
-    <QuickThreadSwitcher
-      threads={quickThreads}
-      totalCount={allQuickThreads.length}
-      expanded={quickThreadsExpanded}
-      onToggleExpanded={() => setQuickThreadsExpanded((value) => !value)}
-      onNew={handleNewConversation}
-      onSwitch={handleSwitchConversation}
-      archivedThreads={archivedQuickThreads}
-      archivedExpanded={archivedThreadsExpanded}
-      onToggleArchived={() => setArchivedThreadsExpanded((value) => !value)}
-    />
-  )
-  const centerThreadList = (
-    <>
-      <div
-        className="agent-thread-list-resize-handle"
-        role="separator"
-        aria-label="调整消息区和会话列表宽度"
-        aria-orientation="vertical"
-        aria-valuemin={MIN_THREAD_LIST_WIDTH}
-        aria-valuemax={MAX_THREAD_LIST_WIDTH}
-        aria-valuenow={Math.round(threadListWidth)}
-        tabIndex={0}
-        title="左右拖动调整会话列表宽度，双击恢复默认"
-        onPointerDown={handleThreadListResizeStart}
-        onKeyDown={handleThreadListResizeKeyDown}
-        onDoubleClick={() => setThreadListWidth(DEFAULT_THREAD_LIST_WIDTH)}
-      />
-      {quickThreadSwitcher}
-    </>
-  )
-  const centerPanelStyle = {
-    '--agent-thread-list-width': `${threadListWidth}px`,
-  } as CSSProperties
 
   if (variant === 'center' && isStartConversation) {
     return (
-      <div ref={centerPanelRef} className="agent-panel agent-panel-center" style={centerPanelStyle}>
+      <div className="agent-panel agent-panel-center">
         <div className="agent-conversation-main">
           <div className="agent-start-page">
             <div className="agent-start-content">
@@ -1033,18 +856,12 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
             </div>
           </div>
         </div>
-        {centerThreadList}
       </div>
     )
   }
 
   return (
-    <div
-      ref={variant === 'center' ? centerPanelRef : undefined}
-      className={`agent-panel agent-panel-${variant}`}
-      style={variant === 'center' ? centerPanelStyle : undefined}
-    >
-      {variant === 'side' && quickThreadSwitcher}
+    <div className={`agent-panel agent-panel-${variant}`}>
       <div className="agent-conversation-main" ref={conversationMainRef}>
         {activeBrowserTask && (
           <BrowserTaskCard
@@ -1273,157 +1090,6 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
           </div>
         </div>
       </div>
-      {variant === 'center' && centerThreadList}
-    </div>
-  )
-}
-
-function QuickThreadSwitcher({
-  threads,
-  totalCount,
-  expanded,
-  onToggleExpanded,
-  onNew,
-  onSwitch,
-  archivedThreads,
-  archivedExpanded,
-  onToggleArchived,
-}: {
-  threads: QuickThreadSummary[]
-  totalCount: number
-  expanded: boolean
-  onToggleExpanded: () => void
-  onNew: () => void
-  onSwitch: (conversationId: string) => void
-  archivedThreads: QuickThreadSummary[]
-  archivedExpanded: boolean
-  onToggleArchived: () => void
-}): React.ReactElement {
-  const showContextMenu = useContextMenuStore((state) => state.show)
-  const executeCommand = useCommandStore((state) => state.executeCommand)
-  const hasOverflow = totalCount > 5
-
-  const restoreThread = (thread: QuickThreadSummary): void => {
-    void executeCommand('agent.restoreConversation', {
-      source: 'toolbar',
-      target: {
-        kind: 'thread',
-        workspaceKey: thread.workspaceKey,
-        conversationId: thread.id,
-      },
-    })
-  }
-
-  const renderThreadRow = (thread: QuickThreadSummary, archived: boolean): React.ReactElement => (
-    <div
-      key={thread.id}
-      className={`agent-quick-thread-row ${thread.isActive ? 'active' : ''} ${
-        archived ? 'archived' : ''
-      }`}
-      role="button"
-      tabIndex={0}
-      onClick={() => {
-        if (archived) restoreThread(thread)
-        else onSwitch(thread.id)
-      }}
-      onKeyDown={(event) => {
-        if (isContextMenuKeyboardEvent(event.nativeEvent)) {
-          event.preventDefault()
-          showContextMenu(
-            buildKeyboardContextMenuInput(
-              {
-                kind: 'thread',
-                workspaceKey: thread.workspaceKey,
-                conversationId: thread.id,
-                activeRunId: useAgentStore.getState().conversations[thread.id]?.activeRunId ?? null,
-              },
-              event.currentTarget,
-            ),
-          )
-          return
-        }
-        if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) {
-          return
-        }
-        event.preventDefault()
-        if (archived) restoreThread(thread)
-        else onSwitch(thread.id)
-      }}
-      onContextMenu={(event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        showContextMenu({
-          target: {
-            kind: 'thread',
-            workspaceKey: thread.workspaceKey,
-            conversationId: thread.id,
-            activeRunId: useAgentStore.getState().conversations[thread.id]?.activeRunId ?? null,
-          },
-          x: event.clientX,
-          y: event.clientY,
-          focusReturn: event.currentTarget,
-        })
-      }}
-      title={`${thread.title} · ${thread.statusLabel} · 右键管理`}
-    >
-      <span className={`agent-quick-thread-dot status-${thread.statusKind}`} />
-      <span className="agent-quick-thread-copy">
-        <span className="agent-quick-thread-title">{thread.title}</span>
-        <span className="agent-quick-thread-meta">
-          {thread.workspaceLabel} · {thread.messageCount} 条消息
-        </span>
-      </span>
-      <span className="agent-quick-thread-detail">{thread.detail}</span>
-    </div>
-  )
-
-  return (
-    <div className="agent-quick-switcher">
-      <div className="agent-quick-switcher-head">
-        <div className="agent-quick-switcher-heading">
-          <IconHistory size={12} />
-          <span>会话列表</span>
-          <em>{totalCount}</em>
-        </div>
-        <button type="button" className="agent-quick-new-btn" onClick={onNew} title="新建会话">
-          <IconPlus size={14} />
-        </button>
-      </div>
-
-      <div className="agent-quick-thread-list" aria-label="会话列表">
-        {threads.map((thread) => renderThreadRow(thread, false))}
-      </div>
-
-      {hasOverflow && (
-        <button
-          type="button"
-          className="agent-quick-expand-btn"
-          onClick={onToggleExpanded}
-          title={expanded ? '收起会话列表' : '展开更多会话'}
-        >
-          {expanded ? '收起' : `展开其余 ${totalCount - threads.length}`}
-        </button>
-      )}
-
-      {archivedThreads.length > 0 && (
-        <div className="agent-quick-history">
-          <button
-            type="button"
-            className={`agent-quick-history-toggle ${archivedExpanded ? 'active' : ''}`}
-            onClick={onToggleArchived}
-            aria-expanded={archivedExpanded}
-          >
-            <IconHistory size={11} />
-            <span>历史会话</span>
-            <em>{archivedThreads.length}</em>
-          </button>
-          {archivedExpanded && (
-            <div className="agent-quick-thread-list agent-quick-history-list">
-              {archivedThreads.map((thread) => renderThreadRow(thread, true))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }

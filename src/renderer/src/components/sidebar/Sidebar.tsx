@@ -23,6 +23,7 @@ import {
   getWorkspaceConversationGroups,
   LocalSessionsList,
 } from '../../features/agent-conversations/local-session-sidebar'
+import { createConversationRuntimeForWorkspace } from '../../features/agent-conversations/view-model'
 import {
   IconFitWidth,
   IconBookmark,
@@ -94,6 +95,8 @@ export function Sidebar(): React.ReactElement {
   const workspacePath = useFsStore((s) => s.workspacePath)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const openTab = useTabStore((s) => s.openTab)
+  const createConversation = useAgentStore((s) => s.createConversation)
+  const setAgentPanelMode = useUIStore((s) => s.setAgentPanelMode)
   const sidebarTitle = getSidebarTitle(activePanel, activeWorkspaceRef, workspacePath)
   const showContextMenu = useContextMenuStore((s) => s.show)
   const sidebarTarget = {
@@ -107,6 +110,15 @@ export function Sidebar(): React.ReactElement {
     openTab(draft)
     void recordTerminalLifecycleEvent(draft.terminal, 'created', 'Terminal Tab 已创建')
   }, [activeWorkspaceRef, openTab])
+
+  const openNewConversation = useCallback((): void => {
+    const conversationId = createConversation({
+      runtime: createConversationRuntimeForWorkspace(activeWorkspaceRef),
+      activate: true,
+    })
+    setAgentPanelMode('right', 'user')
+    void window.cclinkStudio.agent.resetSession(conversationId)
+  }, [activeWorkspaceRef, createConversation, setAgentPanelMode])
 
   return (
     <div
@@ -149,6 +161,21 @@ export function Sidebar(): React.ReactElement {
         </div>
       )}
 
+      {activePanel === 'sessions' && (
+        <div className="sidebar-header">
+          <span className="sidebar-header-title">{sidebarTitle}</span>
+          <button
+            className="sidebar-header-action"
+            type="button"
+            onClick={openNewConversation}
+            title="新建会话"
+            aria-label="新建会话"
+          >
+            <IconPlus size={14} />
+          </button>
+        </div>
+      )}
+
       <div className="sidebar-content">
         <ProjectSidebarContent activePanel={activePanel} />
       </div>
@@ -170,7 +197,6 @@ function ProjectSidebarContent({
   const picking = useFsStore((s) => s.picking)
   const switchingPath = useFsStore((s) => s.switchingPath)
   const tabs = useTabStore((s) => s.tabs)
-  const openTab = useTabStore((s) => s.openTab)
   const closeTab = useTabStore((s) => s.closeTab)
   const conversationOrder = useAgentStore((s) => s.conversationOrder)
   const conversations = useAgentStore((s) => s.conversations)
@@ -180,6 +206,7 @@ function ProjectSidebarContent({
   const restoreArchivedConversation = useAgentStore((s) => s.restoreArchivedConversation)
   const deleteConversation = useAgentStore((s) => s.deleteConversation)
   const renameConversation = useAgentStore((s) => s.renameConversation)
+  const setAgentPanelMode = useUIStore((s) => s.setAgentPanelMode)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const projectTabs = tabs.filter((tab) => tab.type !== 'settings')
   const sessionGroups = getWorkspaceConversationGroups(
@@ -234,8 +261,8 @@ function ProjectSidebarContent({
           deleteConversation={deleteConversation}
           renameConversation={renameConversation}
           tabs={tabs}
-          openTab={openTab}
           closeTab={closeTab}
+          revealConversation={() => setAgentPanelMode('right', 'user')}
         />
       )}
     </>
@@ -866,8 +893,8 @@ function SessionsSidebarView({
   deleteConversation,
   renameConversation,
   tabs,
-  openTab,
   closeTab,
+  revealConversation,
 }: {
   workspaceRef: WorkspaceRef
   sessionGroups: ReturnType<typeof getWorkspaceConversationGroups>
@@ -880,8 +907,8 @@ function SessionsSidebarView({
   deleteConversation: ReturnType<typeof useAgentStore.getState>['deleteConversation']
   renameConversation: ReturnType<typeof useAgentStore.getState>['renameConversation']
   tabs: ReturnType<typeof useTabStore.getState>['tabs']
-  openTab: ReturnType<typeof useTabStore.getState>['openTab']
   closeTab: ReturnType<typeof useTabStore.getState>['closeTab']
+  revealConversation: () => void
 }): React.ReactElement {
   return (
     <LocalSessionsList
@@ -894,8 +921,8 @@ function SessionsSidebarView({
       deleteConversation={deleteConversation}
       renameConversation={renameConversation}
       tabs={tabs}
-      openTab={openTab}
       closeTab={closeTab}
+      revealConversation={revealConversation}
     />
   )
 }

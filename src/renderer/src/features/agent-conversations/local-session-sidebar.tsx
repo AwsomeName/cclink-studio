@@ -69,8 +69,8 @@ export function LocalSessionsList({
   deleteConversation,
   renameConversation,
   tabs,
-  openTab,
   closeTab,
+  revealConversation,
 }: {
   workspaceRef: WorkspaceRef
   sessionGroups: WorkspaceConversationGroups
@@ -83,8 +83,8 @@ export function LocalSessionsList({
   deleteConversation: ReturnType<typeof useAgentStore.getState>['deleteConversation']
   renameConversation: ReturnType<typeof useAgentStore.getState>['renameConversation']
   tabs: ReturnType<typeof useTabStore.getState>['tabs']
-  openTab: ReturnType<typeof useTabStore.getState>['openTab']
   closeTab: ReturnType<typeof useTabStore.getState>['closeTab']
+  revealConversation: () => void
 }): React.ReactElement {
   const [query, setQuery] = useState('')
   const [showClosed, setShowClosed] = useState(false)
@@ -99,18 +99,7 @@ export function LocalSessionsList({
       void restoreArchivedConversation(conversation.id).catch(() => {})
     }
     switchConversation(conversation.id)
-    if (conversation.surface === 'assistant-panel') return
-
-    openTab({
-      type: 'conversation',
-      title: conversation.title === '新会话' ? '新工作会话' : conversation.title,
-      icon: '🤖',
-      conversation: {
-        surface: 'workbench-tab',
-        runtime: conversation.runtime,
-        sessionId: conversation.id,
-      },
-    })
+    revealConversation()
   }
 
   return (

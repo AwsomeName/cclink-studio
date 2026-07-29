@@ -1,29 +1,29 @@
 # Agent Panel 产品模型与推进计划
 
-> 当前产品规格。最后更新：2026-07-28。
+> 当前产品规格。最后更新：2026-07-29。
 
 ## 结论
 
-Agent Panel 是当前工作流的执行控制台，不是全局会话后台，也不是配置页。
+Agent Panel 是当前工作流的执行控制台，不是全局会话后台，也不是配置页。会话列表统一位于左侧工作区“会话”页，不再占用右侧 Agent Panel 的垂直空间。
 
-右侧 Agent Panel 定稿为三段式：
+工作台定稿为左侧管理、右侧执行：
 
 ```text
-Quick Switcher / 新建
-  当前 + 运行中 + 最近，单列表混排，默认最多 5 条，可以展开
+左侧工作区 / 会话
+  搜索 + 新建 + 当前工作空间会话 + 已关闭历史
 
-Messages
+右侧 Agent Panel / Messages
   高密度 turn 视图，工具调用默认折叠
 
-Composer / 已挂载资源
+右侧 Agent Panel / Composer
   输入框 + 图片 + @资源 + /技能 + 发送
 ```
 
 核心产品规则：
 
 - 用户只理解 Thread / 会话，不理解 `assistant-panel`、`workbench-tab` 这类工程 surface。
-- 右侧 Quick Switcher 只做快速切换和新建，不复制左侧完整会话中心。
-- 左侧“会话”视图负责完整历史、搜索、归档和工作空间级管理。
+- 左侧“会话”视图是会话列表的唯一入口，负责新建、切换、搜索、归档和工作空间级管理。
+- 右侧 Agent Panel 只展示当前会话的 Messages 和 Composer，不再重复展示会话列表。
 - 中间 Workbench 只打开同一个 Thread 的工作视图，关闭 Tab 不删除 Thread。
 - Messages 默认展示结果和可审计摘要，不把每个工具事件铺成大卡片。
 - Composer 区域承载下一条消息的上下文：输入、已挂载资源、`@`、`/`、发送。
@@ -53,31 +53,31 @@ Thread 是同一个东西，可以在右侧继续聊，可以在左侧管理，�
 
 不要把“右侧即时助手会话”和“中间工作会话”做成两种用户概念。工程上可以保留迁移字段，但产品表现必须收敛为同一个 Thread。
 
-## 右侧 Agent Panel 布局
+## 左侧会话工作区
 
-### Quick Switcher / 新建
+### 会话列表 / 新建
 
-顶部只承担快速切换和新建。
+通过左侧 Activity Bar 的“会话”图标进入，会话列表占用可复用的工作区侧栏宽度，不挤压右侧消息区。
 
 ```text
-[ 当前 Thread 标题                         + ]
+[ 会话                                      + ]
+[ 搜索会话                                    ]
 
-● 知乎登录排查                  等待确认
-● 修改文件预览                  执行中
-○ 新会话                        2分钟前
-○ 构建报错分析                  10分钟前
-○ API 类型错误                  昨天
-展开全部
+● 知乎登录排查          等待确认 · 20 条消息
+● 修改文件预览          执行中 · 8 条消息
+○ 新会话                刚刚 · 0 条消息
+
+[ 已关闭 3 ]
 ```
 
 排序规则：
 
-1. 当前 Thread 永远第一。
-2. 等待确认、执行中、出错等需要注意的 Thread 优先于普通空闲 Thread。
-3. 其他 Thread 按 `updatedAt desc`。
-4. 默认最多显示 5 条。
-5. 展开后在右侧局部显示更多当前工作空间 Thread，不跳转到左侧。
-6. 已归档 Thread 默认不显示，除非当前正在查看它。
+1. 仅显示严格属于当前工作空间的 Thread；全局工作区显示未归档 Thread。
+2. 当前与普通 Thread 按 `updatedAt desc` 展示，并保留运行、错误等状态。
+3. 已归档 Thread 收在“已关闭”分组，默认折叠。
+4. 搜索覆盖标题、摘要、工作空间和运行状态。
+5. 点击 Thread 切换右侧 Messages 和 Composer，不自动创建 Workbench Tab。
+6. `+` 新建 Thread，绑定当前工作空间并立即显示在右侧。
 
 每行展示：
 
@@ -85,6 +85,8 @@ Thread 是同一个东西，可以在右侧继续聊，可以在左侧管理，�
 - Thread 标题。
 - 简短状态或相对时间。
 - hover / 更多菜单提供重命名、归档、在 Workbench 打开。
+
+## 右侧 Agent Panel 布局
 
 ### Messages
 
@@ -196,28 +198,27 @@ Workbench 是 Thread 的深度工作视图：
 - 关闭 Workbench Tab 不删除、不归档 Thread。
 - 已有 workspace snapshot 能迁移或兼容恢复，不丢现有会话。
 
-### M2：右侧 Quick Switcher / 新建
+### M2：左侧会话工作区 / 新建
 
 目标：
 
-- 替换混乱的右侧 header，会话切换和新建集中到顶部 Quick Switcher。
-- 支持当前 + 运行中 + 最近的单列表混排，默认最多 5 条，可展开。
+- 将会话切换和新建统一收口到左侧工作区“会话”页。
+- 右侧 Agent Panel 只保留当前会话内容，释放纵向空间。
 
 方案：
 
-- 新增 `buildQuickThreadList` 视图模型，输入为 conversations、activeThreadId、activeWorkspaceRef。
-- 排序优先级：当前、等待确认/执行中/错误、最近更新。
-- 默认显示 5 条，提供展开状态显示更多当前工作空间 Thread。
+- 启用 `sessions` Activity 和既有 `SessionsSidebarView`。
+- 复用 `getWorkspaceConversationGroups`，保持当前工作空间、未绑定和已关闭分组。
 - `+` 新建 Thread 并绑定当前工作空间；无工作空间时进入未归档。
-- 每行提供状态点、标题、状态/时间和更多操作。
+- 删除 Agent Panel 的 Quick Switcher、展开状态和独立宽度拖拽状态。
 
 验收标准：
 
-- 当前 Thread 永远在 Quick Switcher 第一位。
-- 运行中、等待确认、错误 Thread 在普通空闲 Thread 前面。
-- 默认最多 5 条；点击展开后显示更多，且不跳转左侧。
+- 左侧 Activity Bar 可打开“会话”工作区，支持搜索、新建、切换和已关闭历史。
 - 点击任一 Thread 立即切换右侧 Messages 和 Composer。
-- 新建 Thread 后右侧立刻切到新 Thread，并出现在 Quick Switcher 和左侧 Thread Center。
+- 新建 Thread 后右侧立刻切到新 Thread，并出现在左侧列表。
+- 右侧与居中 Agent Panel 均不再渲染第二份会话列表。
+- 关闭左侧侧栏不影响当前会话继续运行。
 
 ### M3：Messages 高密度 turn 视图
 
@@ -314,7 +315,7 @@ Workbench 是 Thread 的深度工作视图：
 
 必须主动拷问：
 
-1. 是否又把右侧 Quick Switcher 做成了第二个左侧会话中心？
+1. 是否又在 Agent Panel 中复制出第二个会话列表？
 2. 是否仍然让用户理解 `assistant-panel` / `workbench-tab`？
 3. 是否只是把工具卡片缩小，而没有把 raw event 聚合成 turn？
 4. 是否隐藏了审计信息，导致工具调用不可追踪？

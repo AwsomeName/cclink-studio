@@ -22,6 +22,7 @@ type StatusTarget = Extract<ContextTarget, { kind: 'status-item' }>
 type LayoutTarget = Extract<ContextTarget, { kind: 'layout' }>
 
 const ACTIVITY_LABELS: Record<string, string> = {
+  sessions: '会话',
   files: '文件',
   browser: '浏览器',
   'data-sources': '数据源',
