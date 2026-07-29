@@ -1,31 +1,53 @@
 import { create } from 'zustand'
+import type { UpdateCommandResult, UpdateSnapshot } from '@shared/update'
 
-/**
- * update-store — 自动更新状态（半自动方案：检查 + 通知 + 下载 dmg）
- *
- * 主进程周期性检查配置更新源上的 latest-mac.yml，发现新版本时推送，
- * App.tsx 监听后写入本 store，StatusBar 据此显示更新提示。
- */
-interface UpdateState {
-  /** 是否有可用更新 */
-  hasUpdate: boolean
-  /** 最新版本号 */
-  latestVersion: string
-  /** 是否正在下载 */
-  downloading: boolean
-  /** 收到主进程的更新通知 */
-  setUpdate: (version: string) => void
-  /** 清除提示（下载后或忽略） */
-  clear: () => void
-  /** 设置下载中状态 */
-  setDownloading: (downloading: boolean) => void
+const initialSnapshot: UpdateSnapshot = {
+  schemaVersion: 1,
+  phase: 'idle',
+  operationId: null,
+  currentVersion: '未知',
+  availableRelease: null,
+  progress: null,
+  lastCheckedAt: null,
+  ignoredVersion: null,
+  error: null,
 }
 
-export const useUpdateStore = create<UpdateState>((set) => ({
-  hasUpdate: false,
-  latestVersion: '',
-  downloading: false,
-  setUpdate: (version) => set({ hasUpdate: true, latestVersion: version }),
-  clear: () => set({ hasUpdate: false, latestVersion: '', downloading: false }),
-  setDownloading: (downloading) => set({ downloading }),
-}))
+interface UpdateState {
+  snapshot: UpdateSnapshot
+  panelOpen: boolean
+  hydrated: boolean
+  setSnapshot: (snapshot: UpdateSnapshot) => void
+  openPanel: () => void
+  closePanel: () => void
+  hydrate: () => Promise<void>
+  check: () => Promise<UpdateCommandResult>
+  startDownload: () => Promise<UpdateCommandResult>
+  cancelDownload: () => Promise<UpdateCommandResult>
+  defer: () => Promise<UpdateCommandResult>
+  ignoreVersion: () => Promise<UpdateCommandResult>
+}
+
+export const useUpdateStore = create<UpdateState>((set) => {
+  const apply = (result: UpdateCommandResult): UpdateCommandResult => {
+    set({ snapshot: result.snapshot })
+    return result
+  }
+  return {
+    snapshot: initialSnapshot,
+    panelOpen: false,
+    hydrated: false,
+    setSnapshot: (snapshot) => set({ snapshot, hydrated: true }),
+    openPanel: () => set({ panelOpen: true }),
+    closePanel: () => set({ panelOpen: false }),
+    hydrate: async () => {
+      const snapshot = await window.cclinkStudio.update.getSnapshot()
+      set({ snapshot, hydrated: true })
+    },
+    check: async () => apply(await window.cclinkStudio.update.check()),
+    startDownload: async () => apply(await window.cclinkStudio.update.startDownload()),
+    cancelDownload: async () => apply(await window.cclinkStudio.update.cancelDownload()),
+    defer: async () => apply(await window.cclinkStudio.update.defer()),
+    ignoreVersion: async () => apply(await window.cclinkStudio.update.ignoreVersion()),
+  }
+})

@@ -96,7 +96,61 @@ U0 只关闭更新契约与发布元数据，不代表 U1-U5 的检查、下载�
 - 后续完成声明必须附真实 Studio 的用户验收动作；mock、CI、Draft 和文档只能证明
   工程门禁。
 
-## U1-U5
+## U1：检查服务与更新界面
+
+### 当前状态
+
+`IN PROGRESS`。不可宣称 U1 已关闭。
+
+已完成：
+
+- [x] 公开 GitHub stable Release Provider、架构选择和 Manifest 约束。
+- [x] `UpdateService` 成为唯一检查状态所有者。
+- [x] typed IPC、preload 白名单、renderer snapshot 投影。
+- [x] 状态栏固定入口和统一更新面板。
+- [x] 删除旧 `latest-mac.yml`、`latestResult` 和直接写 Downloads 的路径。
+- [x] 真实 Studio 手动检查“已是最新版本”通过，控制台无错误。
+
+待完成：
+
+- [ ] 公开一个高于当前版本的测试 Release，真人验证“发现新版”。
+- [ ] 设置页“自动检查更新”开关和持久化。
+- [ ] 更新诊断摘要、限流细节和完整生命周期测试。
+- [ ] 正式安装包的启动延迟与周期检查真人验收。
+
+### 2026-07-28 自动化与应用证据
+
+| 验证 | 结果 |
+| ---- | ---- |
+| `pnpm test` | PASS，163 files / 980 tests |
+| `pnpm build` | PASS |
+| `pnpm smoke:ui` | PASS，6/6 |
+| 隔离 Profile 启动真实 Electron、打开更新面板并手动检查 | PASS，v0.1.4 -> “已是最新版本”，console/page error 为 0 |
+| preload 沙箱回归 | 首轮发现 `zod` 被 externalize 导致 preload 失败；改为内联后真实 Electron 和 UI smoke 均通过 |
+
+## U2：可靠下载与校验
+
+### 当前状态
+
+`IN PROGRESS`。下载主链已经进入产品代码，但尚未通过公开新版的真人下载验收。
+
+已完成：
+
+- [x] 用户确认后开始下载，renderer 不接触下载 URL 或本地路径。
+- [x] 应用私有缓存、`.part`、磁盘空间检查、Content-Length、最终大小和 SHA-256。
+- [x] 流式进度、速度、取消、重试和原子改名。
+- [x] 校验通过写入 `verified.json` 并进入 `readyToInstall`。
+- [x] 成功、哈希损坏和中途取消自动化测试。
+
+待完成：
+
+- [ ] 启动时恢复仍有效的 `verified.json` 和 `readyToInstall`。
+- [ ] 断点续传或明确的从头重试策略及对应验收。
+- [ ] 窗口/runtime 重建时下载不中断。
+- [ ] 公开测试 Release 的真实下载、取消、损坏注入和缓存恢复验收。
+- [ ] Developer ID/Team ID 的客户端侧信任校验。
+
+## U3-U5
 
 尚未开始。后续每个里程碑复制以下模板：
 

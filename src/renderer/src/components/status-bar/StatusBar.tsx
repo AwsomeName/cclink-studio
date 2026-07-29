@@ -17,6 +17,8 @@ import {
 } from '../../../../shared/workspace-ref'
 import { APP_EDITION_LABEL } from '../../app-metadata'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
+import { UpdatePanel } from '../update/UpdatePanel'
+import { IconRefresh } from '../common/Icons'
 import {
   buildKeyboardContextMenuInput,
   isContextMenuKeyboardEvent,
@@ -49,7 +51,8 @@ export function StatusBar(): React.ReactElement {
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const workspacePath = useFsStore((s) => s.workspacePath)
   const switchingPath = useFsStore((s) => s.switchingPath)
-  const { hasUpdate, latestVersion, downloading, setDownloading, clear } = useUpdateStore()
+  const updateSnapshot = useUpdateStore((state) => state.snapshot)
+  const openUpdatePanel = useUpdateStore((state) => state.openPanel)
   const showToast = useToastStore((s) => s.show)
   const gitProjectStatus = useGitBackupStore((s) => s.projectStatus)
   const gitBusy = useGitBackupStore((s) => s.busy)
@@ -97,16 +100,6 @@ export function StatusBar(): React.ReactElement {
   useEffect(() => {
     void loadGitWorkspace(workspacePath)
   }, [loadGitWorkspace, workspacePath])
-
-  const handleDownloadUpdate = async (): Promise<void> => {
-    setDownloading(true)
-    try {
-      await window.cclinkStudio.update.download()
-      clear()
-    } finally {
-      setDownloading(false)
-    }
-  }
 
   const handleGitBackupClick = async (): Promise<void> => {
     if (!workspacePath) return
@@ -190,17 +183,16 @@ export function StatusBar(): React.ReactElement {
           </button>
         )}
 
-        {/* 更新提示（主进程检查到新版本时显示） */}
-        {hasUpdate && (
-          <button
-            className="status-bar-item update-badge"
-            onClick={handleDownloadUpdate}
-            {...statusContextProps('update')}
-            title={`下载 v${latestVersion} 到下载文件夹并打开`}
-          >
-            🆕 新版本 v{latestVersion} {downloading ? '下载中...' : '立即下载'}
-          </button>
-        )}
+        <button
+          type="button"
+          className={`status-bar-item update-badge phase-${updateSnapshot.phase}`}
+          onClick={openUpdatePanel}
+          {...statusContextProps('update')}
+          title="检查和下载 CCLink Studio 更新"
+        >
+          <IconRefresh size={12} />
+          {getUpdateStatusLabel(updateSnapshot)}
+        </button>
 
         {/* 右侧：版本 */}
         <span
@@ -243,8 +235,30 @@ export function StatusBar(): React.ReactElement {
           </form>
         </div>
       )}
+      <UpdatePanel />
     </>
   )
+}
+
+function getUpdateStatusLabel(
+  snapshot: ReturnType<typeof useUpdateStore.getState>['snapshot'],
+): string {
+  switch (snapshot.phase) {
+    case 'checking':
+      return '检查更新中…'
+    case 'available':
+      return `可更新至 v${snapshot.availableRelease?.version ?? ''}`
+    case 'downloading':
+      return `下载更新 ${Math.round((snapshot.progress?.fraction ?? 0) * 100)}%`
+    case 'verifying':
+      return '校验更新中…'
+    case 'readyToInstall':
+      return '更新已下载'
+    case 'failed':
+      return '更新失败'
+    default:
+      return '检查更新'
+  }
 }
 
 /** 截断 URL 显示 */

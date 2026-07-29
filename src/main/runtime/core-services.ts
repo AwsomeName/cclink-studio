@@ -1,3 +1,5 @@
+import { app } from 'electron'
+import { join } from 'node:path'
 import { LocalIdentityService } from '../identity/local-identity-service'
 import { registerIdentityIpc } from '../identity/identity-ipc'
 import { FileService } from '../fs/file-service'
@@ -27,6 +29,9 @@ import { bootstrapOptionalMainServices } from './optional-main-services'
 import { runShutdownStep } from './shutdown'
 import { registerDiagnosticsIpc } from '../ipc/diagnostics-ipc'
 import { UsageLedgerService } from '../usage/usage-ledger-service'
+import { GitHubReleaseProvider } from '../update/github-release-provider'
+import { NoopUpdateProvider } from '../update/noop-update-provider'
+import { UpdateService } from '../update/update-service'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   runtime.credentialService = new CredentialService()
@@ -176,8 +181,36 @@ export async function bootstrapMainProcessServices(
   )
   console.log('[CCLink Studio] 设置 IPC 已注册')
 
-  registerUpdaterIpc(runtime.mainWindow, runtime.trustedRendererGuard)
-  console.log('[CCLink Studio] 更新检查 IPC 已注册')
+  const architecture = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'x64' : null
+  const provider =
+    process.platform === 'darwin' && architecture
+      ? new GitHubReleaseProvider()
+      : new NoopUpdateProvider()
+  runtime.updateService = new UpdateService({
+    currentVersion:
+      !app.isPackaged && process.env['CCLINK_STUDIO_UPDATE_CURRENT_VERSION']
+        ? process.env['CCLINK_STUDIO_UPDATE_CURRENT_VERSION']
+        : app.getVersion(),
+    architecture: architecture ?? 'arm64',
+    systemVersion:
+      process.platform === 'darwin'
+        ? (
+            process as NodeJS.Process & {
+              getSystemVersion(): string
+            }
+          ).getSystemVersion()
+        : '0.0.0',
+    cacheRoot: join(app.getPath('userData'), 'updates'),
+    provider,
+    automaticChecks: app.isPackaged,
+  })
+  await runtime.updateService.start()
+  runtime.updateSnapshotUnsubscribe = registerUpdaterIpc(
+    runtime.updateService,
+    runtime.mainWindow,
+    runtime.trustedRendererGuard,
+  )
+  console.log(`[CCLink Studio] 更新服务已初始化 (provider=${provider.id})`)
 
   await bootstrapOptionalMainServices(runtime)
 }
@@ -185,6 +218,9 @@ export async function bootstrapMainProcessServices(
 export async function shutdownMainProcessServices(
   runtime: CclinkStudioRuntimeState,
 ): Promise<void> {
+  runtime.updateSnapshotUnsubscribe?.()
+  runtime.updateSnapshotUnsubscribe = null
+  await runShutdownStep('UpdateService', () => runtime.updateService?.stop())
   await runShutdownStep('PermissionManager', () => runtime.permissionManager?.destroy())
   await runShutdownStep('TerminalConfirmationService', () =>
     runtime.terminalConfirmationService?.destroy(),
@@ -216,4 +252,5 @@ export async function shutdownMainProcessServices(
   runtime.terminalSessionRegistry = null
   runtime.terminalExecutionAdapter = null
   runtime.terminalCommandOrchestrator = null
+  runtime.updateService = null
 }

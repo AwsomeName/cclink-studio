@@ -90,8 +90,15 @@ function getStatusValue(itemId: string): { value: string; label: string } | null
   }
   if (itemId === 'update') {
     const state = useUpdateStore.getState()
+    const release = state.snapshot.availableRelease
     return {
-      value: state.hasUpdate ? `可更新到 ${state.latestVersion ?? '新版本'}` : '已是最新版本',
+      value: release
+        ? `可更新到 ${release.version}`
+        : state.snapshot.phase === 'failed'
+          ? `失败: ${state.snapshot.error?.userMessage ?? '未知错误'}`
+          : state.snapshot.phase === 'readyToInstall'
+            ? '更新已下载并校验'
+            : '未发现待下载更新',
       label: '更新状态',
     }
   }
