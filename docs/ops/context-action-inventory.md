@@ -8,7 +8,7 @@ CCLink Studio 只有一个 renderer 菜单 Host、一个瞬时菜单 Store 和�
 
 当前维护门禁统计：
 
-- Renderer context-menu owner：18 个组件文件。
+- Renderer context-menu owner：19 个组件文件。
 - Browser 原生菜单 owner：1 个主进程文件。
 - ContextMenu Store owner：1 个。
 - 结构化 `ContextTarget`：22 种，全部有 contribution 覆盖。
@@ -29,16 +29,16 @@ CCLink Studio 只有一个 renderer 菜单 Host、一个瞬时菜单 Store 和�
 
 ## 核心内容
 
-| 区域            | Target                          | Renderer owner                             | 结论                                      |
-| --------------- | ------------------------------- | ------------------------------------------ | ----------------------------------------- |
-| Source 编辑器   | `editor`                        | `SourceTextEditor.tsx`                     | 输入、选区、链接和图片命令                |
-| Markdown 编辑器 | `editor` / `markdown-selection` | `WorkbenchContent.tsx`                     | 复用编辑器 surface，不创建独立菜单        |
-| 图片预览        | `image-preview`                 | `FilePreview.tsx`                          | 复制位图；右键、快捷键和工具栏复用同一命令 |
-| Terminal        | `terminal`                      | `WorkbenchContent.tsx`                     | 复制、粘贴、查找、清屏、挂载和生命周期    |
-| Agent Thread    | `thread`                        | `AgentPanel.tsx`                           | 打开、重命名、停止、诊断和归档            |
-| Agent Message   | `message`                       | `ConversationMessageRenderer.tsx`          | 复制、Markdown、引用到 Composer           |
-| Agent 文本选区  | `conversation-selection`        | `AgentPanel.tsx`                           | 只复制选区                                |
-| Browser 页面    | bounded native context          | `src/main/browser/browser-context-menu.ts` | Electron 原生菜单；不注入页面、不使用 CDP |
+| 区域            | Target                          | Renderer owner                                                 | 结论                                       |
+| --------------- | ------------------------------- | -------------------------------------------------------------- | ------------------------------------------ |
+| Source 编辑器   | `editor`                        | `SourceTextEditor.tsx`                                         | 输入、选区、链接和图片命令                 |
+| Markdown 编辑器 | `editor` / `markdown-selection` | `WorkbenchContent.tsx`                                         | 复用编辑器 surface，不创建独立菜单         |
+| 图片预览        | `image-preview`                 | `FilePreview.tsx`                                              | 复制位图；右键、快捷键和工具栏复用同一命令 |
+| Terminal        | `terminal`                      | `WorkbenchContent.tsx`                                         | 复制、粘贴、查找、清屏、挂载和生命周期     |
+| Agent Thread    | `thread`                        | `local-session-sidebar.tsx` / `session-sidebar-primitives.tsx` | 打开、重命名、停止、诊断和归档             |
+| Agent Message   | `message`                       | `ConversationMessageRenderer.tsx`                              | 复制、Markdown、引用到 Composer            |
+| Agent 文本选区  | `conversation-selection`        | `use-conversation-selection-menu.ts`                           | 只复制选区                                 |
+| Browser 页面    | bounded native context          | `src/main/browser/browser-context-menu.ts`                     | Electron 原生菜单；不注入页面、不使用 CDP  |
 
 ## 领域模块
 

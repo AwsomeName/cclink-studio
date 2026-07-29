@@ -8,7 +8,6 @@ const sourceDir = resolve(rootDir, 'src')
 
 const expectedRendererContextMenuOwners = new Set([
   'src/renderer/src/components/activity-bar/ActivityBar.tsx',
-  'src/renderer/src/components/agent-panel/AgentPanel.tsx',
   'src/renderer/src/components/common/ConversationMessageRenderer.tsx',
   'src/renderer/src/components/common/ResizeHandle.tsx',
   'src/renderer/src/components/data-sources/DataSourceQueryTab.tsx',
@@ -25,6 +24,8 @@ const expectedRendererContextMenuOwners = new Set([
   'src/renderer/src/components/workbench/SourceTextEditor.tsx',
   'src/renderer/src/components/workbench/TabBar.tsx',
   'src/renderer/src/components/workbench/WorkbenchContent.tsx',
+  'src/renderer/src/features/agent-conversations/local-session-sidebar.tsx',
+  'src/renderer/src/features/agent-conversations/session-sidebar-primitives.tsx',
 ])
 const expectedNativeMenuOwners = new Set(['src/main/browser/browser-context-menu.ts'])
 const expectedContextMenuStores = new Set([

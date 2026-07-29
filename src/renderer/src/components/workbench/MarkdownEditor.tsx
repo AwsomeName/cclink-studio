@@ -954,25 +954,6 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         </details>
       )}
 
-      {resourceInspection && resourceInspection.warnings.length > 0 && (
-        <details className="markdown-diagnostics markdown-resource-diagnostics">
-          <summary>资源完整性提示 ({resourceInspection.warnings.length})</summary>
-          {resourceInspection.warnings.map((warning) => (
-            <div key={warning} className="warning">
-              {warning}
-            </div>
-          ))}
-          {resourceInspection.missingAssets.map((asset) => (
-            <div key={`missing-${asset}`} className="error">
-              缺失: {asset}
-            </div>
-          ))}
-          <button type="button" onClick={() => void refreshResourceInspection()}>
-            重新检查
-          </button>
-        </details>
-      )}
-
       <div className="markdown-editor-body">
         {loadError ? (
           <div className="markdown-parse-blocked">
@@ -1038,6 +1019,25 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
           </>
         )}
       </div>
+
+      {resourceInspection && resourceInspection.warnings.length > 0 && (
+        <details className="markdown-diagnostics markdown-resource-diagnostics">
+          <summary>资源完整性提示 ({resourceInspection.warnings.length})</summary>
+          {resourceInspection.warnings.map((warning) => (
+            <div key={warning} className="warning">
+              {warning}
+            </div>
+          ))}
+          {resourceInspection.missingAssets.map((asset) => (
+            <div key={`missing-${asset}`} className="error">
+              缺失: {asset}
+            </div>
+          ))}
+          <button type="button" onClick={() => void refreshResourceInspection()}>
+            重新检查
+          </button>
+        </details>
+      )}
 
       {linkDraft !== null && (
         <div className="markdown-inspector-backdrop" onPointerDown={() => setLinkDraft(null)}>

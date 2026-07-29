@@ -5,6 +5,11 @@ import type { AgentConversationState } from '../../stores/agent-store'
 import { useAgentStore, useTabStore } from '../../stores'
 import { IconSearch } from '../../components/common/Icons'
 import { getConversationActivity } from './activity'
+import { useContextMenuStore } from '../context-actions/context-menu-store'
+import {
+  buildKeyboardContextMenuInput,
+  isContextMenuKeyboardEvent,
+} from '../context-actions/context-menu-trigger'
 import {
   formatRelativeSessionTime,
   SessionSidebarGroup,
@@ -258,6 +263,14 @@ function ConversationRow({
   const status = getConversationStatus(conversation, active)
   const activity = getConversationActivity(conversation)
   const preview = getConversationPreview(conversation)
+  const threadTarget = {
+    kind: 'thread' as const,
+    workspaceKey: conversation.runtime.workspaceRef
+      ? workspaceRefKey(conversation.runtime.workspaceRef)
+      : null,
+    conversationId: conversation.id,
+    activeRunId: conversation.activeRunId,
+  }
   const actions: SessionSidebarAction[] = [
     ...(onRename ? [{ label: '重命名', title: '重命名会话', onAction: onRename }] : []),
     ...(onArchive ? [{ label: '关闭', title: '关闭会话，保留历史', onAction: onArchive }] : []),
@@ -294,6 +307,24 @@ function ConversationRow({
       }`}
       actions={actions}
       onOpen={onOpen}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        useContextMenuStore.getState().show({
+          target: threadTarget,
+          x: event.clientX,
+          y: event.clientY,
+          focusReturn: event.currentTarget,
+        })
+      }}
+      onKeyDown={(event) => {
+        if (!isContextMenuKeyboardEvent(event.nativeEvent) || event.target !== event.currentTarget)
+          return
+        event.preventDefault()
+        useContextMenuStore
+          .getState()
+          .show(buildKeyboardContextMenuInput(threadTarget, event.currentTarget))
+      }}
     />
   )
 }

@@ -348,6 +348,11 @@
   color: var(--warning, #cca700);
 }
 
+.markdown-resource-diagnostics {
+  border-top: 1px solid var(--border-color);
+  border-bottom: 0;
+}
+
 .markdown-resource-diagnostics button {
   margin-top: 6px;
   padding: 3px 8px;

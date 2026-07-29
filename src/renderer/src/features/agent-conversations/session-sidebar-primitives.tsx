@@ -72,6 +72,8 @@ export function SessionSidebarRow({
   meta,
   actions = [],
   onOpen,
+  onContextMenu,
+  onKeyDown,
 }: {
   title: string
   rowTitle?: string
@@ -85,11 +87,15 @@ export function SessionSidebarRow({
   meta: string
   actions?: SessionSidebarAction[]
   onOpen: () => void
+  onContextMenu?: React.MouseEventHandler<HTMLButtonElement>
+  onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>
 }): React.ReactElement {
   return (
     <button
       className={`session-sidebar-row ${active ? 'active' : ''} ${muted ? 'muted' : ''}`}
       onClick={onOpen}
+      onContextMenu={onContextMenu}
+      onKeyDown={onKeyDown}
       title={rowTitle ?? title}
     >
       <span className={`session-sidebar-status ${statusKind}`} />

@@ -157,7 +157,7 @@ Composer 是下一条消息的上下文区，已挂载资源必须靠近输入�
 - 批量或长期管理。
 - 打开到 Workbench 的入口。
 
-右侧 Quick Switcher 不是 Thread Center，只保留当前工作流最相关的少量 Thread。
+右侧 Agent Panel 不承担 Thread Center，只显示当前 Thread 的 Messages 和 Composer。
 
 Workbench 是 Thread 的深度工作视图：
 
@@ -170,7 +170,7 @@ Workbench 是 Thread 的深度工作视图：
 | 里程碑                                  | 当前状态                                         |
 | --------------------------------------- | ------------------------------------------------ |
 | M1 统一 Thread 产品模型                 | 已实现                                           |
-| M2 右侧 Quick Switcher / 新建           | 已实现                                           |
+| M2 左侧会话工作区 / 新建                | 已实现                                           |
 | M3 Messages 高密度 turn 视图            | 已实现                                           |
 | M4 Composer / 已挂载资源                | 已实现，已补图片输入                             |
 | M5 左侧 Thread Center 与 Workbench 联动 | 已实现                                           |
@@ -270,7 +270,7 @@ Workbench 是 Thread 的深度工作视图：
 
 目标：
 
-- 左侧保留完整管理能力，右侧保持轻量快速切换。
+- 左侧保留完整管理能力，右侧专注当前会话。
 - Workbench 只作为 Thread 的深度视图，不制造第二套会话。
 
 方案：
@@ -283,7 +283,7 @@ Workbench 是 Thread 的深度工作视图：
 验收标准：
 
 - 左侧能搜索当前工作空间、未归档、已归档 Thread。
-- 左侧归档 Thread 后，右侧 Quick Switcher 移除该 Thread；如果当前正在查看，切换到合理 fallback。
+- 左侧归档 Thread 后，如果当前正在查看，右侧切换到合理 fallback。
 - Workbench 打开的 Thread 与右侧切换到同一 Thread 时消息一致。
 - 删除 Thread 前有确认；删除后相关 Workbench Tab 被关闭或进入明确不可用状态。
 
@@ -298,7 +298,7 @@ Workbench 是 Thread 的深度工作视图：
 
 - 补齐 store/view-model 单元测试。
 - 补齐 workspace snapshot 恢复测试。
-- 用 Playwright 或本地手测覆盖右侧 Quick Switcher、Messages 折叠、Composer 资源挂载。
+- 用 Playwright 或本地手测覆盖左侧会话工作区、Messages 折叠、Composer 资源挂载。
 - 更新本地 smoke check。
 
 验收标准：
