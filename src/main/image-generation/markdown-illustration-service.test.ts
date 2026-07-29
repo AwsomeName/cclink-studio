@@ -117,7 +117,10 @@ function createService(overrides: {
   fileService?: Partial<FileService>
   usageLedger?: Partial<UsageLedgerService>
 }): MarkdownIllustrationService {
-  const imageGeneration = overrides.imageGeneration ?? {}
+  const imageGeneration = {
+    getDefaultProviderId: vi.fn(() => 'meshy'),
+    ...overrides.imageGeneration,
+  }
   const fileService = overrides.fileService ?? {}
   const usageLedger = {
     record: vi.fn().mockResolvedValue(undefined),

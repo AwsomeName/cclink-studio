@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Image, { type ImageOptions } from '@tiptap/extension-image'
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react'
+import { decodeMarkdownPath, splitMarkdownDestinationSuffix } from '@shared/markdown-document'
 
 interface MarkdownImageOptions extends ImageOptions {
   documentPath?: string
@@ -53,11 +54,13 @@ export const MarkdownImage = Image.extend<MarkdownImageOptions>({
 
 export function resolveMarkdownImageSource(source: string, documentPath?: string): string {
   if (!source || /^(?:https?:|data:|blob:)/i.test(source)) return source
-  if (source.startsWith('file://')) return decodeURI(source.slice('file://'.length))
-  if (source.startsWith('/')) return source
-  if (!documentPath) return source
+  const { path } = splitMarkdownDestinationSuffix(source)
+  if (path.startsWith('file://')) return decodeMarkdownPath(path.slice('file://'.length))
+  const decodedPath = decodeMarkdownPath(path)
+  if (decodedPath.startsWith('/')) return decodedPath
+  if (!documentPath) return decodedPath
   const directory = documentPath.slice(0, Math.max(0, documentPath.lastIndexOf('/')))
-  const parts = `${directory}/${source}`.split('/')
+  const parts = `${directory}/${decodedPath}`.split('/')
   const normalized: string[] = []
   for (const part of parts) {
     if (!part || part === '.') continue

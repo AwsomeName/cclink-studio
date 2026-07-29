@@ -15,6 +15,15 @@ const messages: AgentMessage[] = [
     rawText: '我想登录知乎，手机号 13812345678，验证码: 123456',
     timestamp: new Date('2026-07-15T10:54:02+08:00').getTime(),
     content: [{ type: 'text', text: '我想登录知乎，手机号 13812345678，验证码: 123456' }],
+    resources: [
+      {
+        id: 'image-1',
+        kind: 'image',
+        label: 'screen.png',
+        detail: 'image/png · 3 B',
+        ref: { type: 'image', mediaType: 'image/png', size: 3 },
+      },
+    ],
   },
   {
     id: 'assistant-1',
@@ -287,6 +296,7 @@ describe('agent diagnostic report', () => {
     )
     expect(markdown).toContain('[taskRunId=task-1] fill')
     expect(markdown).toContain('browser_action_fail')
+    expect(markdown).toContain('[图片附件: 1; image/png:3]')
     expect(markdown).toContain('https://www.zhihu.com/signin?token=[redacted]')
     expect(markdown).toContain('疑似挑战：auth_required, captcha_or_bot_check')
     expect(markdown).toContain('绑定状态：tab_mismatch')

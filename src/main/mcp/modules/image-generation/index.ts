@@ -33,13 +33,13 @@ const IMAGE_GENERATION_TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         provider: {
           type: 'string',
-          enum: ['meshy'],
-          description: '图片服务商，当前版本支持 meshy',
+          enum: ['meshy', 'jimeng'],
+          description: '图片服务商；省略时自动选择一个已配置的服务商',
         },
         model: {
           type: 'string',
-          enum: ['nano-banana', 'nano-banana-2', 'nano-banana-pro', 'gpt-image-2'],
-          description: 'Meshy 图片模型，默认 nano-banana',
+          enum: ['nano-banana', 'nano-banana-2', 'nano-banana-pro', 'gpt-image-2', 'jimeng-4.0'],
+          description: '服务商对应的图片模型；即梦当前支持 jimeng-4.0',
         },
         illustrations: {
           type: 'array',
@@ -119,7 +119,9 @@ function parseIllustrationRequest(params: Record<string, unknown>): MarkdownIllu
   return {
     filePath: String(params.filePath ?? ''),
     ...(typeof params.expectedHash === 'string' ? { expectedHash: params.expectedHash } : {}),
-    ...(params.provider === 'meshy' ? { provider: params.provider } : {}),
+    ...(params.provider === 'meshy' || params.provider === 'jimeng'
+      ? { provider: params.provider }
+      : {}),
     ...(typeof params.model === 'string'
       ? { model: params.model as MarkdownIllustrationRequest['model'] }
       : {}),

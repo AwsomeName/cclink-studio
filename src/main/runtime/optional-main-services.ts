@@ -55,11 +55,24 @@ const defaultBootstrappers: OptionalMainServiceBootstrappers = {
     console.log('[CCLink Studio] Meshy 3D 服务已初始化')
   },
   'image-generation': (runtime) => {
-    if (!runtime.fileService || !runtime.usageLedgerService) {
-      throw new Error('文件或用量统计服务未就绪')
+    if (!runtime.fileService || !runtime.usageLedgerService || !runtime.credentialService) {
+      throw new Error('文件、凭证或用量统计服务未就绪')
     }
     runtime.imageGenerationService = new ImageGenerationService(
       () => runtime.settingsService!.getRuntimeSettings().meshyApiKey,
+      () => {
+        try {
+          const credential = runtime.credentialService!.resolveCredential(
+            'extension:jimeng:default',
+          )
+          return {
+            accessKeyId: credential?.accessKeyId ?? '',
+            secretAccessKey: credential?.secretAccessKey ?? '',
+          }
+        } catch {
+          return { accessKeyId: '', secretAccessKey: '' }
+        }
+      },
     )
     runtime.markdownIllustrationService = new MarkdownIllustrationService(
       runtime.imageGenerationService,

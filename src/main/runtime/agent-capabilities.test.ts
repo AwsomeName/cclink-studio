@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createRuntimeState } from './app-runtime'
-import { getAgentCapabilities } from './agent-capabilities'
+import { getAgentCapabilities, getAgentToolModules } from './agent-capabilities'
 
 describe('getAgentCapabilities', () => {
   it('returns the structured runtime state and derives available from ready only', () => {
@@ -41,6 +41,30 @@ describe('getAgentCapabilities', () => {
     expect(getAgentCapabilities(runtime).find((item) => item.name === 'android')).toMatchObject({
       state: 'failed',
       reason: 'adb bootstrap failed',
+    })
+  })
+
+  it('makes Markdown illustration available when any image provider is configured', () => {
+    const runtime = createRuntimeState(true)
+    runtime.toolHost = {
+      getRegisteredModules: () => [
+        {
+          name: 'image-generation',
+          enabled: true,
+          tools: [],
+        },
+      ],
+    } as never
+    runtime.imageGenerationService = {
+      getStatus: () => [
+        { id: 'meshy', configured: false, models: [], reason: 'Meshy 未配置' },
+        { id: 'jimeng', configured: true, models: ['jimeng-4.0'] },
+      ],
+    } as never
+
+    expect(getAgentToolModules(runtime)[0]).toMatchObject({
+      id: 'image-generation',
+      available: true,
     })
   })
 })

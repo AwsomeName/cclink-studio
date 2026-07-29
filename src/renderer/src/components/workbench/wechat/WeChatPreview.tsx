@@ -60,6 +60,8 @@ export function WeChatPreviewFrame({ html }: { html: string }): React.ReactEleme
 
 export function WeChatPreview({ filePath }: WeChatPreviewProps): React.ReactElement {
   const [html, setHtml] = useState('')
+  const [warnings, setWarnings] = useState<string[]>([])
+  const [embeddedImages, setEmbeddedImages] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const showToast = useToastStore((s) => s.show)
@@ -72,15 +74,21 @@ export function WeChatPreview({ filePath }: WeChatPreviewProps): React.ReactElem
       try {
         setLoading(true)
         setError('')
+        setWarnings([])
+        setEmbeddedImages(0)
         const file = await window.cclinkStudio.fs.readFile(filePath)
         const content = typeof file === 'string' ? file : file.content
-        const result = await window.cclinkStudio.wechat.convert(content)
+        const result = await window.cclinkStudio.wechat.convert(content, filePath)
         if (result.error) {
           if (!cancelled) setError(result.error)
         } else if (!result.html) {
           if (!cancelled) setError('未生成 HTML')
         } else {
-          if (!cancelled) setHtml(result.html)
+          if (!cancelled) {
+            setHtml(result.html)
+            setWarnings(result.warnings ?? [])
+            setEmbeddedImages(result.embeddedImages ?? 0)
+          }
         }
       } catch (err) {
         if (!cancelled) setError(String(err))
@@ -100,11 +108,16 @@ export function WeChatPreview({ filePath }: WeChatPreviewProps): React.ReactElem
     try {
       const blob = new Blob([html], { type: 'text/html' })
       await navigator.clipboard.write([new ClipboardItem({ 'text/html': blob })])
-      showToast('已复制，可直接粘贴到公众号', 'success')
+      showToast(
+        warnings.length > 0
+          ? `已复制，${warnings.length} 张图片需要检查`
+          : `已复制${embeddedImages > 0 ? `，包含 ${embeddedImages} 张本地图片` : ''}`,
+        warnings.length > 0 ? 'info' : 'success',
+      )
     } catch (err) {
       showToast('复制失败: ' + String(err), 'error')
     }
-  }, [html, showToast])
+  }, [embeddedImages, html, showToast, warnings.length])
 
   /** 保存为 HTML 文件 */
   const handleSave = useCallback(async () => {
@@ -156,6 +169,11 @@ export function WeChatPreview({ filePath }: WeChatPreviewProps): React.ReactElem
       {/* 工具栏 */}
       <div className="wechat-preview-toolbar">
         <span className="wechat-preview-title">📱 微信公众号预览</span>
+        {warnings.length > 0 && (
+          <span className="wechat-preview-warning" title={warnings.join('\n')}>
+            {warnings.length} 项图片提示
+          </span>
+        )}
         <div className="wechat-preview-actions">
           <button className="wechat-btn-copy" onClick={handleCopy} title="复制为微信公众号格式">
             📋 复制到公众号

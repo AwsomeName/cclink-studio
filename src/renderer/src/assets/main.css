@@ -5502,6 +5502,11 @@ body.is-resizing-thread-list .agent-panel-center > .agent-quick-switcher {
   background: var(--bg-hover);
 }
 
+.agent-message.user .message-resource-chip {
+  border-color: currentColor;
+  color: inherit;
+}
+
 .streaming-cursor {
   display: inline-block;
   width: 2px;
@@ -9731,6 +9736,14 @@ button.context-menu-item {
   font-weight: 500;
 }
 
+.wechat-preview-warning {
+  overflow: hidden;
+  color: var(--warning, #d8a400);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .wechat-preview-actions {
   display: flex;
   gap: 8px;
@@ -9991,6 +10004,18 @@ button.context-menu-item {
   background: var(--bg-hover);
 }
 
+.file-preview-toolbar-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.file-preview-toolbar-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
 .file-preview-image-stage {
   display: flex;
   min-height: 0;
@@ -9999,6 +10024,14 @@ button.context-menu-item {
   justify-content: center;
   overflow: auto;
   padding: 24px;
+}
+
+.file-preview-image-stage:focus {
+  outline: none;
+}
+
+.file-preview-image-stage:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--border-focus);
 }
 
 .file-preview-image-stage img {

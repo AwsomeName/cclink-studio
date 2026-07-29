@@ -56,6 +56,30 @@ describe('registerAgentIpc', () => {
     )
   })
 
+  it('preserves validated image attachments when forwarding to the Agent bridge', async () => {
+    const deps = createDeps()
+    registerAgentIpc(deps as never)
+    const image = {
+      id: 'image-1',
+      name: 'screen.png',
+      mediaType: 'image/png',
+      data: 'AQID',
+      size: 3,
+    }
+
+    await expect(
+      mockIpcMain.handlers.get('agent:sendMessage')?.({ sender: 'trusted' }, 'conversation-1', {
+        message: '分析这张截图',
+        images: [image],
+      }),
+    ).resolves.toEqual({ success: true })
+    expect(deps.agentBridge.sendMessage).toHaveBeenCalledWith(
+      '分析这张截图',
+      'conversation-1',
+      expect.objectContaining({ images: [image] }),
+    )
+  })
+
   it('rejects credential-bearing MCP URLs before changing configuration', () => {
     const deps = createDeps()
     registerAgentIpc(deps as never)

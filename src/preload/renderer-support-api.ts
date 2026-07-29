@@ -25,7 +25,8 @@ export const dialogApi: DialogApiContract = {
 }
 
 export const wechatApi: WechatApiContract = {
-  convert: (markdown) => ipcRenderer.invoke('wechat:convert', { markdown }),
+  convert: (markdown, documentPath) =>
+    ipcRenderer.invoke('wechat:convert', { markdown, documentPath }),
 }
 
 export const editorApi: EditorApiContract = {

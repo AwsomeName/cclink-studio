@@ -48,6 +48,7 @@ function normalizeSendMessageInput(input: AgentSendMessageInput): AgentSendMessa
     runId: typeof input.runId === 'string' && input.runId.trim() ? input.runId.trim() : undefined,
     resources: Array.isArray(input.resources) ? input.resources : undefined,
     skills: Array.isArray(input.skills) ? input.skills : undefined,
+    images: Array.isArray(input.images) ? input.images : undefined,
     sessionId:
       input.sessionId === null || typeof input.sessionId === 'string' ? input.sessionId : undefined,
     sessionCompatibilityFingerprint:
@@ -142,6 +143,9 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
     const conversationId = args.length === 2 ? args[0] : undefined
     const input = args.length === 2 ? args[1] : args[0]
     const payload = normalizeSendMessageInput(input)
+    if (payload.images?.length) {
+      console.info(`[AgentIPC] 图片附件已接收: ${formatImageAttachmentDiagnostics(payload.images)}`)
+    }
     await agentBridge.sendMessage(
       payload.message,
       typeof conversationId === 'string' ? conversationId : undefined,
@@ -326,4 +330,12 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
     mcpClientMgr.loadFromConfig()
     return mcpClientMgr.getAllServers()
   })
+}
+
+function formatImageAttachmentDiagnostics(
+  images: NonNullable<AgentSendMessagePayload['images']>,
+): string {
+  return `count=${images.length}, items=${images
+    .map((image) => `${image.mediaType}:${image.size}`)
+    .join(',')}`
 }

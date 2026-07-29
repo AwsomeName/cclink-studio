@@ -257,6 +257,7 @@ function consumersFor(id: string): string[] {
   if (id.startsWith('data-source:')) return ['数据源']
   if (id.startsWith('extension:webdav:')) return ['云同步']
   if (id.startsWith('extension:meshy:')) return ['Meshy']
+  if (id.startsWith('extension:jimeng:')) return ['即梦图片生成']
   if (id.startsWith('extension:')) return ['扩展']
   return []
 }

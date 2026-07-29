@@ -14,6 +14,15 @@ describe('resolveMarkdownImageSource', () => {
     )
   })
 
+  it('decodes encoded local paths before reading files', () => {
+    expect(
+      resolveMarkdownImageSource(
+        '0729-%E5%91%A8%E4%B8%89.assets/%E9%85%8D%E5%9B%BE.png#preview',
+        '/Users/test/docs/0729-周三.md',
+      ),
+    ).toBe('/Users/test/docs/0729-周三.assets/配图.png')
+  })
+
   it('keeps network and data sources unchanged', () => {
     expect(resolveMarkdownImageSource('https://example.com/a.png', '/workspace/readme.md')).toBe(
       'https://example.com/a.png',

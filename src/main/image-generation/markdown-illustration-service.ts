@@ -3,7 +3,7 @@ import type { FileService } from '../fs/file-service'
 import type { ToolExecutionContext } from '../mcp/types'
 import type { UsageLedgerService } from '../usage/usage-ledger-service'
 import type { ImageGenerationService } from './image-generation-service'
-import type { ImageAspectRatio, ImageGenerationProviderId, MeshyImageModel } from './types'
+import type { ImageAspectRatio, ImageGenerationModel, ImageGenerationProviderId } from './types'
 
 export interface MarkdownIllustrationItem {
   prompt: string
@@ -17,7 +17,7 @@ export interface MarkdownIllustrationRequest {
   filePath: string
   expectedHash?: string
   provider?: ImageGenerationProviderId
-  model?: MeshyImageModel
+  model?: ImageGenerationModel
   illustrations: MarkdownIllustrationItem[]
 }
 
@@ -45,6 +45,7 @@ export class MarkdownIllustrationService {
       throw new Error('illustrations 至少需要一项')
     }
     const normalized = request.illustrations.map((item) => normalizeIllustrationItem(item))
+    const provider = request.provider ?? this.imageGeneration.getDefaultProviderId()
     const snapshot = await this.fileService.preflightMarkdownIllustrations({
       documentPath: filePath,
       ...(request.expectedHash ? { expectedHash: request.expectedHash } : {}),
@@ -60,7 +61,7 @@ export class MarkdownIllustrationService {
     for (const [index, item] of normalized.entries()) {
       try {
         const image = await this.imageGeneration.generate({
-          provider: request.provider,
+          provider,
           prompt: item.prompt,
           model: request.model,
           aspectRatio: item.aspectRatio,
@@ -90,7 +91,7 @@ export class MarkdownIllustrationService {
           {
             conversationId: context?.conversationId ?? 'unknown',
             source: 'image-generation',
-            provider: request.provider ?? 'meshy',
+            provider,
             model: request.model,
             quantity: 1,
             unit: 'image',

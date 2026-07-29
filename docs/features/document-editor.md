@@ -68,7 +68,12 @@ Workbench Editor Tab
 - 使用基础富文本工具栏和 Markdown 快捷输入。
 - 手动保存文件并恢复未保存草稿。
 - 让当前 Agent 会话读取、覆盖、追加或保存 Markdown。
-- 将 Markdown 转换为微信公众号兼容 HTML。
+- 将 Markdown 转换为微信公众号兼容 HTML；预览、复制和保存共用同一文档级转换结果。
+- 微信转换会隐藏 CCLink 文档元数据和有效 YAML frontmatter，不修改原 Markdown。
+- 相对本地图片会按 Markdown 文件位置读取并内嵌为 data URL：最多 30 张、单张 5MB、总计
+  25MB，支持 PNG、JPEG、GIF 和 WebP；缺失或超限图片显示明确提示。
+- 保存的 HTML 可离线携带已内嵌图片。复制到公众号会携带同一 HTML 和图片数据，但微信后台
+  是否接受、压缩或重新上传图片由微信编辑器决定，粘贴后仍需人工检查。
 
 Markdown S 级保持单一所见即所得文档体验，只支持明确列出的常用 Markdown。完整图片和表格交互、保存冲突以及选区带行号发送到会话已完成。Frontmatter、Mermaid 图表、原始 HTML、MDX、公式、脚注和 directives 不在本轮范围。AI 行内改写、翻译、续写等能力属于后续专项。
 

@@ -204,6 +204,7 @@ src/renderer/src/features/<domain>/context-actions.ts
 | Browser 页面         | 后退、前进、刷新、复制选区/链接、在新 Tab 打开、发送给 Agent           | 保存图片、查看页面诊断               | 不使用 CDP；下载和外部协议继续校验     |
 | Browser 侧栏 Tab     | 激活、刷新、复制 URL、复制 Tab、关闭                                   | Profile 信息、页面诊断               | Profile 变更必须走现有绑定规则         |
 | Terminal             | 复制、粘贴、查找、清屏、发送选区给 Agent                               | 重启、查看审计记录                   | 终止需确认；粘贴不能自动执行           |
+| 图片预览             | 复制图片；右键、Cmd/Ctrl+C 和工具栏复用同一命令                        | 缩放、旋转、另存为                   | 非 PNG 在本地转换后写入系统剪贴板      |
 | Agent Thread         | 打开、重命名、停止、归档、恢复、复制诊断                               | 在 Workbench 打开、复制引用          | 删除需确认；停止绑定当前 runId         |
 | Agent Message        | 复制、复制 Markdown、引用到输入框                                      | 从这里重试、发送到新 Thread          | 重试不能重复已完成的外部副作用         |
 | 数据源               | 测试、刷新、编辑、复制安全标识                                         | 复制配置、导出结果                   | 凭证值不进入菜单或剪贴板               |

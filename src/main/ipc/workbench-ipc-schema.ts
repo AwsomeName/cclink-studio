@@ -96,5 +96,8 @@ export const editorOperationIdSchema = boundedIdentifierSchema()
 export const editorContentSchema = boundedTextSchema(5 * 1024 * 1024)
 export const editorErrorSchema = boundedTextSchema(8_192).optional()
 export const wechatConvertSchema = z
-  .object({ markdown: boundedTextSchema(5 * 1024 * 1024) })
+  .object({
+    markdown: boundedTextSchema(5 * 1024 * 1024),
+    documentPath: absolutePathSchema.optional(),
+  })
   .strict()

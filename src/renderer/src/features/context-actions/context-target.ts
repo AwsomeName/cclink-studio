@@ -72,6 +72,12 @@ export type ContextTarget =
       status: string
     }
   | {
+      kind: 'image-preview'
+      workspaceKey: string | null
+      tabId: string
+      filePath: string
+    }
+  | {
       kind: 'data-source'
       workspaceKey: string | null
       sourceId: string
@@ -152,6 +158,7 @@ export const CONTEXT_TARGET_KINDS = [
   'message',
   'editor',
   'terminal',
+  'image-preview',
   'data-source',
   'data-collection',
   'saved-query',

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   imageMimeTypeForExtension,
   isImageFileExtension,
@@ -8,9 +8,21 @@ import {
   mediaMimeTypeForExtension,
 } from '@shared/file-types'
 import type { FsOfficePreviewBlock, FsRenderResult } from '@shared/ipc/fs'
+import { useCommandStore } from '../../stores/command-store'
+import { useToastStore } from '../common/Toast'
+import { IconClipboard } from '../common/Icons'
+import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
+import { registerImagePreviewContextSurface } from '../../features/context-actions/image-preview-context-surface'
+import {
+  buildKeyboardContextMenuInput,
+  isContextMenuKeyboardEvent,
+} from '../../features/context-actions/context-menu-trigger'
+import { copyBase64ImageToClipboard } from '../../utils/image-clipboard'
 
 interface FilePreviewProps {
   filePath: string
+  tabId: string
+  workspaceKey: string | null
 }
 
 type FilePreviewState =
@@ -18,8 +30,17 @@ type FilePreviewState =
   | { status: 'ready'; result: FsRenderResult }
   | { status: 'error'; message: string }
 
-export function FilePreview({ filePath }: FilePreviewProps): React.ReactElement {
+export function FilePreview({
+  filePath,
+  tabId,
+  workspaceKey,
+}: FilePreviewProps): React.ReactElement {
   const [state, setState] = useState<FilePreviewState>({ status: 'loading' })
+  const executeCommand = useCommandStore((store) => store.executeCommand)
+  const showToast = useToastStore((store) => store.show)
+  const showContextMenu = useContextMenuStore((store) => store.show)
+  const imageResult =
+    state.status === 'ready' && state.result.kind === 'image' ? state.result : null
 
   useEffect(() => {
     let cancelled = false
@@ -44,6 +65,31 @@ export function FilePreview({ filePath }: FilePreviewProps): React.ReactElement 
   const openExternal = (): void => {
     void window.cclinkStudio.fs.openPath(filePath)
   }
+
+  useEffect(() => {
+    if (!imageResult) return
+    return registerImagePreviewContextSurface(tabId, {
+      copyImage: () => copyBase64ImageToClipboard(imageResult.content, imageResult.mimeType),
+    })
+  }, [imageResult, tabId])
+
+  const imageTarget = useCallback(
+    () => ({
+      kind: 'image-preview' as const,
+      workspaceKey,
+      tabId,
+      filePath,
+    }),
+    [filePath, tabId, workspaceKey],
+  )
+
+  const copyImage = useCallback(async (): Promise<void> => {
+    const result = await executeCommand('imagePreview.copyImage', {
+      source: 'shortcut',
+      target: imageTarget(),
+    })
+    if (!result.ok) showToast(result.message ?? '图片复制失败', 'error')
+  }, [executeCommand, imageTarget, showToast])
 
   if (state.status === 'loading') {
     return (
@@ -77,11 +123,41 @@ export function FilePreview({ filePath }: FilePreviewProps): React.ReactElement 
             <div className="file-preview-title">{result.fileName}</div>
             <div className="file-preview-path">{result.path}</div>
           </div>
-          <button type="button" onClick={openExternal}>
-            系统打开
-          </button>
+          <div className="file-preview-toolbar-actions">
+            <button type="button" onClick={() => void copyImage()} title="复制图片">
+              <IconClipboard size={13} />
+              复制图片
+            </button>
+            <button type="button" onClick={openExternal}>
+              系统打开
+            </button>
+          </div>
         </div>
-        <div className="file-preview-image-stage">
+        <div
+          className="file-preview-image-stage"
+          tabIndex={0}
+          aria-label={`图片预览：${result.fileName}`}
+          onPointerDown={(event) => event.currentTarget.focus({ preventScroll: true })}
+          onCopy={(event) => {
+            event.preventDefault()
+            void copyImage()
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault()
+            event.currentTarget.focus({ preventScroll: true })
+            showContextMenu({
+              target: imageTarget(),
+              x: event.clientX,
+              y: event.clientY,
+              focusReturn: event.currentTarget,
+            })
+          }}
+          onKeyDown={(event) => {
+            if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+            event.preventDefault()
+            showContextMenu(buildKeyboardContextMenuInput(imageTarget(), event.currentTarget))
+          }}
+        >
           <img src={`data:${result.mimeType};base64,${result.content}`} alt={result.fileName} />
         </div>
       </div>

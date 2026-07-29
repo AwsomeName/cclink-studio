@@ -3,7 +3,7 @@
  */
 
 import type { IpcMainInvokeEvent } from 'electron'
-import { convertMarkdownToWechatHTML } from '../wechat/convert'
+import { convertMarkdownDocumentToWechatHTML } from '../wechat/convert'
 import { registerTrustedIpcHandler, type TrustedRendererGuard } from './trusted-renderer-guard'
 import { wechatConvertSchema } from './workbench-ipc-schema'
 
@@ -13,11 +13,13 @@ export function registerWechatIPC(trustedRendererGuard: TrustedRendererGuard): v
     handler: (event: IpcMainInvokeEvent, ...args: Args) => Result,
   ): void => registerTrustedIpcHandler(channel, trustedRendererGuard, handler)
 
-  handle('wechat:convert', async (_event, input: { markdown: string }) => {
+  handle('wechat:convert', async (_event, input: { markdown: string; documentPath?: string }) => {
     try {
       const parsedInput = wechatConvertSchema.parse(input)
-      const html = convertMarkdownToWechatHTML(parsedInput.markdown)
-      return { html }
+      return await convertMarkdownDocumentToWechatHTML(
+        parsedInput.markdown,
+        parsedInput.documentPath,
+      )
     } catch (error) {
       return { error: String(error) }
     }

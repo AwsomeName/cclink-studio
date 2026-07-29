@@ -144,12 +144,18 @@ function getModuleAvailability(
         ? { available: true }
         : { available: false, reason: 'Meshy 服务未就绪' }
     case 'image-generation': {
-      const provider = runtime.imageGenerationService
-        ?.getStatus()
-        .find((item) => item.id === 'meshy')
-      return provider?.configured
+      const providers = runtime.imageGenerationService?.getStatus() ?? []
+      const configured = providers.find((item) => item.configured)
+      return configured
         ? { available: true }
-        : { available: false, reason: provider?.reason ?? '图片生成服务未就绪' }
+        : {
+            available: false,
+            reason:
+              providers
+                .map((provider) => provider.reason)
+                .filter(Boolean)
+                .join('；') || '图片生成服务未就绪',
+          }
     }
     case 'android':
       return runtime.activeDeviceManager?.getSource() === 'physical'

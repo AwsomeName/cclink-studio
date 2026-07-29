@@ -244,5 +244,38 @@ describe('useEditorStore', () => {
       expect(file.versionHash).toBe('next-hash')
       expect(file.sourceLineOffset).toBe(2)
     })
+
+    it('Markdown 中文资源组重命名后重写 dirty 草稿中的编码引用', () => {
+      useEditorStore.setState({
+        files: {
+          '/project/旧文档.md': {
+            savedContent: '![old](%E6%97%A7%E6%96%87%E6%A1%A3.assets/%E6%97%A7%E5%9B%BE.png)\n',
+            currentContent:
+              '![old](%E6%97%A7%E6%96%87%E6%A1%A3.assets/%E6%97%A7%E5%9B%BE.png)\n\n![new](%E6%97%A7%E6%96%87%E6%A1%A3.assets/%E6%96%B0%E5%9B%BE.png)\n',
+            dirty: true,
+            loading: false,
+          },
+        },
+        pendingUpdates: [],
+      })
+
+      useEditorStore.getState().relocateMarkdownFile('/project/旧文档.md', '/project/新文档.md', {
+        path: '/project/新文档.md',
+        content:
+          '<!-- cclink-document: {"version":1,"resources":"新文档.assets/manifest.json"} -->\n\n![old](%E6%96%B0%E6%96%87%E6%A1%A3.assets/%E6%97%A7%E5%9B%BE.png)\n',
+        size: 1,
+        modifiedAt: 2,
+        hash: 'next-hash',
+      })
+
+      const file = useEditorStore.getState().files['/project/新文档.md']
+      expect(file.currentContent).toContain(
+        '![old](%E6%96%B0%E6%96%87%E6%A1%A3.assets/%E6%97%A7%E5%9B%BE.png)',
+      )
+      expect(file.currentContent).toContain(
+        '![new](%E6%96%B0%E6%96%87%E6%A1%A3.assets/%E6%96%B0%E5%9B%BE.png)',
+      )
+      expect(file.dirty).toBe(true)
+    })
   })
 })

@@ -1,7 +1,7 @@
 # 本地凭证管理
 
-> 状态：代码已实现，自动化验收通过；安装包真人验收待执行  
-> 最后更新：2026-07-28  
+> 状态：代码已实现，自动化验收通过；安装包真人验收待执行
+> 最后更新：2026-07-29
 > 架构决策：`docs/decisions/0003-plaintext-local-credentials.md`
 
 ## 结论
@@ -33,7 +33,7 @@ CCLink Studio OSS 是无 CCLink 账号、无 CCLink 云服务、无操作系统�
 | Git 平台 | GitHub Token                        | 手动 Git 备份、GitHub 建仓                          | 本机全局      |
 | 数据源   | API Key、Bearer Token、用户名、密码 | DataSourceService                                   | 按数据源 ID   |
 | 云同步   | WebDAV 密码                         | 商业装配层 SyncService                              | 按同步配置 ID |
-| 扩展服务 | API Key、Token                      | 已启用的 Meshy 等扩展                               | 按服务实例    |
+| 扩展服务 | API Key、AK/SK、Token               | Meshy、即梦等已启用扩展                             | 按服务实例    |
 
 第一版只管理用户明确输入的第三方凭证，不管理：
 
@@ -241,6 +241,8 @@ interface CredentialMetadata {
 - 只有已启用且有真实消费者的扩展才能注册凭证类型。
 - Meshy 由“图像生成”设置页管理，凭证 ID 为 `extension:meshy:default`；主进程的
   3D 和 Markdown 自动配图 Provider 是真实消费者。
+- 即梦由“图像生成”设置页管理，凭证 ID 为 `extension:jimeng:default`，以一个
+  `generic` 记录原子保存 `accessKeyId` 与 `secretAccessKey`；只有主进程签名器可以解析。
 - 插件不得直接读取凭证文件，只能通过受限主进程能力按 ID 请求。
 
 ## 失败与降级

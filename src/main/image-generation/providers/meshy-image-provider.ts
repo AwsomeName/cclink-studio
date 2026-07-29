@@ -1,3 +1,8 @@
+import {
+  MAX_GENERATED_IMAGE_BYTES,
+  normalizeImageMimeType,
+  validateImageContent,
+} from '../image-content'
 import type {
   GeneratedImage,
   ImageAspectRatio,
@@ -13,7 +18,6 @@ const DEFAULT_MODEL: MeshyImageModel = 'nano-banana'
 const DEFAULT_ASPECT_RATIO: ImageAspectRatio = '16:9'
 const DEFAULT_POLL_INTERVAL_MS = 3_000
 const DEFAULT_TIMEOUT_MS = 10 * 60_000
-const MAX_IMAGE_BYTES = 25 * 1024 * 1024
 const FINAL_STATUSES = new Set(['SUCCEEDED', 'FAILED', 'CANCELED'])
 const MODELS = new Set<MeshyImageModel>([
   'nano-banana',
@@ -23,12 +27,6 @@ const MODELS = new Set<MeshyImageModel>([
 ])
 const STANDARD_ASPECT_RATIOS = new Set<ImageAspectRatio>(['1:1', '16:9', '9:16', '4:3', '3:4'])
 const GPT_IMAGE_ASPECT_RATIOS = new Set<ImageAspectRatio>(['1:1', '3:2', '2:3'])
-const IMAGE_MIME_TYPES = new Set<GeneratedImage['mimeType']>([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-])
-
 interface MeshyTextToImageTask {
   id: string
   ai_model: string
@@ -78,7 +76,9 @@ export class MeshyImageProvider implements ImageGenerationProvider {
     if (!prompt) throw new Error('图片提示词不能为空')
     if (prompt.length > 4_000) throw new Error('图片提示词不能超过 4000 个字符')
     const model = request.model ?? DEFAULT_MODEL
-    if (!MODELS.has(model)) throw new Error(`不支持的 Meshy 图片模型: ${model}`)
+    if (!MODELS.has(model as MeshyImageModel)) {
+      throw new Error(`不支持的 Meshy 图片模型: ${model}`)
+    }
     const aspectRatio = request.aspectRatio ?? DEFAULT_ASPECT_RATIO
     const allowedRatios = model === 'gpt-image-2' ? GPT_IMAGE_ASPECT_RATIOS : STANDARD_ASPECT_RATIOS
     if (!allowedRatios.has(aspectRatio)) {
@@ -163,45 +163,20 @@ export class MeshyImageProvider implements ImageGenerationProvider {
       throw new Error(`下载 Meshy 图片失败 (${response.status}): ${response.statusText}`)
     }
     const mimeType = normalizeImageMimeType(response.headers.get('content-type'))
-    if (!mimeType || !IMAGE_MIME_TYPES.has(mimeType)) {
+    if (!mimeType) {
       throw new Error(
         `Meshy 返回了不支持的图片类型: ${response.headers.get('content-type') ?? '未知'}`,
       )
     }
     const declaredLength = Number(response.headers.get('content-length') ?? '0')
-    if (declaredLength > MAX_IMAGE_BYTES) throw new Error('Meshy 图片超过 25MB 限制')
+    if (declaredLength > MAX_GENERATED_IMAGE_BYTES) throw new Error('Meshy 图片超过 25MB 限制')
     const content = Buffer.from(await response.arrayBuffer())
-    if (content.byteLength === 0 || content.byteLength > MAX_IMAGE_BYTES) {
-      throw new Error('Meshy 图片为空或超过 25MB 限制')
-    }
-    if (!matchesImageSignature(content, mimeType)) {
-      throw new Error('Meshy 下载内容与声明的图片类型不一致')
-    }
-    return { content, mimeType }
+    return { content, mimeType: validateImageContent(content, mimeType) }
   }
-}
-
-function normalizeImageMimeType(value: string | null): GeneratedImage['mimeType'] | null {
-  const normalized = value?.split(';')[0].trim().toLowerCase()
-  if (normalized === 'image/jpg') return 'image/jpeg'
-  return normalized === 'image/png' || normalized === 'image/jpeg' || normalized === 'image/webp'
-    ? normalized
-    : null
 }
 
 function isMeshyHost(hostname: string): boolean {
   return hostname === 'meshy.ai' || hostname.endsWith('.meshy.ai')
-}
-
-function matchesImageSignature(content: Buffer, mimeType: GeneratedImage['mimeType']): boolean {
-  if (mimeType === 'image/png') {
-    return content.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-  }
-  if (mimeType === 'image/jpeg') return content[0] === 0xff && content[1] === 0xd8
-  return (
-    content.subarray(0, 4).toString('ascii') === 'RIFF' &&
-    content.subarray(8, 12).toString('ascii') === 'WEBP'
-  )
 }
 
 function sanitizeProviderError(value: string): string {

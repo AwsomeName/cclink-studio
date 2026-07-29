@@ -46,6 +46,11 @@ describe('CredentialService', () => {
         kind: 'token',
         fields: { token: 'github-secret' },
       }),
+      service.setCredential({
+        id: 'extension:jimeng:default',
+        kind: 'generic',
+        fields: { accessKeyId: 'jimeng-ak', secretAccessKey: 'jimeng-sk' },
+      }),
     ])
 
     const raw = await readFile(credentialFile, 'utf-8')
@@ -57,6 +62,10 @@ describe('CredentialService', () => {
     await reloaded.load()
     expect(reloaded.resolveCredential('agent:default')).toEqual({ apiKey: 'agent-secret' })
     expect(reloaded.resolveCredential('git:github')).toEqual({ token: 'github-secret' })
+    expect(reloaded.resolveCredential('extension:jimeng:default')).toEqual({
+      accessKeyId: 'jimeng-ak',
+      secretAccessKey: 'jimeng-sk',
+    })
     expect(reloaded.listMetadata()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -68,6 +77,11 @@ describe('CredentialService', () => {
           id: 'git:github',
           fieldNames: ['token'],
           consumers: ['Git 备份'],
+        }),
+        expect.objectContaining({
+          id: 'extension:jimeng:default',
+          fieldNames: ['accessKeyId', 'secretAccessKey'],
+          consumers: ['即梦图片生成'],
         }),
       ]),
     )

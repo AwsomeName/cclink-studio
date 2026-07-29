@@ -11,11 +11,13 @@ import {
   workspaceRefSourceLabel,
 } from '../../../../shared/workspace-ref'
 import { useTabStore } from '../../stores/tab-store'
+import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import { useTerminalStore } from '../../stores/terminal-store'
 import { resolveConversationTab } from '../../utils/conversation-tab'
 import { submitTerminalCommand } from '../../utils/terminal-command'
 import { resolveTerminalAltArrowSequence } from '../../utils/terminal-keyboard'
+import { subscribeTerminalInputAfterReplay } from '../../utils/terminal-replay'
 import { buildTerminalTabDraft } from '../../utils/terminal-tab'
 import { ErrorBoundary } from '../common/ErrorBoundary'
 import { PanelErrorFallback } from '../common/ErrorFallback'
@@ -58,6 +60,7 @@ export function WorkbenchContent({
   const contextMenuOpen = useContextMenuStore((state) => state.open)
   const browserPreviewDataUrl = useContextMenuStore((state) => state.browserPreviewDataUrl)
   const clearBrowserPreview = useContextMenuStore((state) => state.clearBrowserPreview)
+  const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
 
   useEffect(() => {
     if (contextMenuOpen || !browserPreviewDataUrl) return
@@ -104,7 +107,12 @@ export function WorkbenchContent({
               <WeChatPreview key={activeTab.filePath} filePath={activeTab.filePath} />
             )}
             {activeTab.type === 'file-preview' && activeTab.filePath && (
-              <FilePreview key={activeTab.filePath} filePath={activeTab.filePath} />
+              <FilePreview
+                key={activeTab.filePath}
+                filePath={activeTab.filePath}
+                tabId={activeTab.id}
+                workspaceKey={workspaceRefKey(activeTab.workspaceRef ?? activeWorkspaceRef)}
+              />
             )}
             {activeTab.type === 'model' && activeTab.filePath && (
               <ModelViewer key={activeTab.filePath} filePath={activeTab.filePath} />
@@ -282,9 +290,13 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
     xtermRef.current = xterm
     fitAddonRef.current = fitAddon
 
-    for (const line of [...initialRecordOutput, ...outputLines]) {
-      xterm.write(line.text)
-    }
+    const replayOutput = [...initialRecordOutput, ...outputLines].map((line) => line.text).join('')
+    const dataDisposable = subscribeTerminalInputAfterReplay(xterm, replayOutput, (data) => {
+      void window.cclinkStudio.terminal.writePty({
+        terminalSessionId: terminal.sessionId!,
+        data,
+      })
+    })
 
     const unregisterContextSurface = registerTerminalContextSurface(terminal.sessionId, {
       getSelectionText: () => xterm.getSelection(),
@@ -311,13 +323,6 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
         // xterm 尚未完成布局时 fit 可能失败；下一次 ResizeObserver 会重试。
       }
     }
-
-    const dataDisposable = xterm.onData((data) => {
-      void window.cclinkStudio.terminal.writePty({
-        terminalSessionId: terminal.sessionId!,
-        data,
-      })
-    })
 
     xterm.attachCustomKeyEventHandler((event) => {
       const sequence = resolveTerminalAltArrowSequence(event, xterm.modes.applicationCursorKeysMode)

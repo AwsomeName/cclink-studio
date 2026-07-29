@@ -363,7 +363,23 @@ function buildTimeline(input: AgentDiagnosticReportInput): TimelineEvent[] {
 function messageToEvents(message: AgentMessage): TimelineEvent[] {
   if (message.id === 'welcome') return []
   if (message.role === 'user') {
-    return [{ timestamp: message.timestamp, kind: 'user_message', summary: message.rawText }]
+    const imageResources = message.resources?.filter((resource) => resource.kind === 'image') ?? []
+    const imageSummary =
+      imageResources.length > 0
+        ? ` [图片附件: ${imageResources.length}; ${imageResources
+            .map(
+              (resource) =>
+                `${resource.ref.mediaType ?? 'unknown'}:${resource.ref.size ?? 'unknown'}`,
+            )
+            .join(', ')}]`
+        : ''
+    return [
+      {
+        timestamp: message.timestamp,
+        kind: 'user_message',
+        summary: `${message.rawText}${imageSummary}`,
+      },
+    ]
   }
   if (message.role === 'system') {
     return [{ timestamp: message.timestamp, kind: 'system_message', summary: message.rawText }]

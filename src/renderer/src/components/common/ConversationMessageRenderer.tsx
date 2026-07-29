@@ -93,7 +93,7 @@ export function ConversationMessageRenderer({
               onClick={() => openFileRangeResource(resource)}
               title={resource.detail}
             >
-              {resource.label}
+              {resource.kind === 'image' ? `图片：${resource.label}` : resource.label}
             </button>
           ))}
         </div>

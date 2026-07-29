@@ -92,8 +92,8 @@ const SETTINGS_SEARCH_INDEX: Array<{
   {
     sectionId: 'image-generation',
     label: '图像生成',
-    description: '配置 Markdown 自动配图使用的 Meshy API Key。',
-    keywords: ['image', 'meshy', 'illustration', '图片', '插图', '配图'],
+    description: '配置 Markdown 自动配图使用的 Meshy 或即梦凭证。',
+    keywords: ['image', 'meshy', 'jimeng', '即梦', 'illustration', '图片', '插图', '配图'],
   },
   {
     sectionId: 'browser',
@@ -242,6 +242,9 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   const [apiKeyInput, setApiKeyInput] = useState('')
   const [showMeshyApiKey, setShowMeshyApiKey] = useState(false)
   const [meshyApiKeyInput, setMeshyApiKeyInput] = useState('')
+  const [jimengAccessKeyIdInput, setJimengAccessKeyIdInput] = useState('')
+  const [jimengSecretAccessKeyInput, setJimengSecretAccessKeyInput] = useState('')
+  const [showJimengSecretAccessKey, setShowJimengSecretAccessKey] = useState(false)
   const [secretStatus, setSecretStatus] = useState<SettingsSecretStatus | null>(null)
   const [secretBusy, setSecretBusy] = useState(false)
   const [secretMessage, setSecretMessage] = useState<string | null>(null)
@@ -345,7 +348,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   }, [activeSection, refreshSecretStatus])
 
   useEffect(() => {
-    if (activeSection === 'credentials') {
+    if (activeSection === 'credentials' || activeSection === 'image-generation') {
       void refreshCredentialStatus()
     } else {
       setRevealedCredentialFields({})
@@ -662,6 +665,54 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
     }
   }
 
+  const saveJimengCredentials = async (): Promise<void> => {
+    const accessKeyId = jimengAccessKeyIdInput.trim()
+    const secretAccessKey = jimengSecretAccessKeyInput.trim()
+    if (!accessKeyId || !secretAccessKey) return
+    setCredentialBusy(true)
+    setCredentialMessage(null)
+    try {
+      const result = await window.cclinkStudio.credentials.set({
+        id: 'extension:jimeng:default',
+        kind: 'generic',
+        fields: { accessKeyId, secretAccessKey },
+      })
+      if (!result.success) {
+        setCredentialMessage(result.error ?? '即梦 AK/SK 保存失败')
+        return
+      }
+      setJimengAccessKeyIdInput('')
+      setJimengSecretAccessKeyInput('')
+      setShowJimengSecretAccessKey(false)
+      setCredentialMessage('即梦 AK/SK 已保存到本地凭证文件')
+      await refreshCredentialStatus()
+    } catch (nextError: unknown) {
+      setCredentialMessage(nextError instanceof Error ? nextError.message : String(nextError))
+    } finally {
+      setCredentialBusy(false)
+    }
+  }
+
+  const clearJimengCredentials = async (): Promise<void> => {
+    setCredentialBusy(true)
+    setCredentialMessage(null)
+    try {
+      const result = await window.cclinkStudio.credentials.remove('extension:jimeng:default')
+      if (!result.success) {
+        setCredentialMessage(result.error ?? '即梦 AK/SK 清除失败')
+        return
+      }
+      setJimengAccessKeyIdInput('')
+      setJimengSecretAccessKeyInput('')
+      setCredentialMessage('即梦 AK/SK 已清除')
+      await refreshCredentialStatus()
+    } catch (nextError: unknown) {
+      setCredentialMessage(nextError instanceof Error ? nextError.message : String(nextError))
+    } finally {
+      setCredentialBusy(false)
+    }
+  }
+
   const runCredentialAction = async (
     action: () => Promise<{ success: boolean; error?: string }>,
     successMessage: string,
@@ -717,9 +768,24 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   const resetAll = async (): Promise<void> => {
     await resetSettings()
     setApiKeyInput('')
+    setMeshyApiKeyInput('')
+    setJimengAccessKeyIdInput('')
+    setJimengSecretAccessKeyInput('')
     setClaudeConnectionResult(null)
     await refreshSecretStatus()
+    await refreshCredentialStatus()
   }
+
+  const jimengCredentialConfigured = credentialMetadata.some(
+    (credential) =>
+      credential.id === 'extension:jimeng:default' &&
+      credential.fieldNames.includes('accessKeyId') &&
+      credential.fieldNames.includes('secretAccessKey'),
+  )
+  const credentialStorageAvailable =
+    credentialStatus === null ||
+    credentialStatus.status === 'ready' ||
+    credentialStatus.status === 'conflict'
 
   return (
     <div className="settings-page">
@@ -1148,6 +1214,81 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                     <span className="settings-inline-error">本地凭证文件不可用，已禁止写入。</span>
                   )}
                   {secretMessage && <span className="settings-description">{secretMessage}</span>}
+                </div>
+              </div>
+
+              <div className="settings-row settings-secret-row">
+                <div className="settings-label">
+                  <span>即梦 AK/SK</span>
+                  <span className="settings-description">
+                    {jimengCredentialConfigured
+                      ? '已配置并保存到本地凭证文件。'
+                      : '需要火山引擎 Access Key ID 和 Secret Access Key。'}
+                  </span>
+                </div>
+                <div className="settings-secret-control">
+                  <div className="settings-control settings-control-inline">
+                    <input
+                      className="settings-input settings-input-apikey"
+                      type="text"
+                      value={jimengAccessKeyIdInput}
+                      placeholder={
+                        jimengCredentialConfigured ? '输入新 Access Key ID' : 'Access Key ID'
+                      }
+                      autoComplete="off"
+                      disabled={credentialBusy || !credentialStorageAvailable}
+                      onChange={(event) => setJimengAccessKeyIdInput(event.target.value)}
+                    />
+                    <input
+                      className="settings-input settings-input-apikey"
+                      type={showJimengSecretAccessKey ? 'text' : 'password'}
+                      value={jimengSecretAccessKeyInput}
+                      placeholder={
+                        jimengCredentialConfigured
+                          ? '输入新 Secret Access Key'
+                          : 'Secret Access Key'
+                      }
+                      autoComplete="off"
+                      disabled={credentialBusy || !credentialStorageAvailable}
+                      onChange={(event) => setJimengSecretAccessKeyInput(event.target.value)}
+                    />
+                    <button
+                      className="settings-secondary-btn"
+                      type="button"
+                      disabled={credentialBusy}
+                      onClick={() => setShowJimengSecretAccessKey((value) => !value)}
+                    >
+                      {showJimengSecretAccessKey ? '隐藏' : '显示'}
+                    </button>
+                    <button
+                      className="settings-secondary-btn"
+                      type="button"
+                      disabled={
+                        credentialBusy ||
+                        !jimengAccessKeyIdInput.trim() ||
+                        !jimengSecretAccessKeyInput.trim()
+                      }
+                      onClick={() => void saveJimengCredentials()}
+                    >
+                      保存
+                    </button>
+                    {jimengCredentialConfigured && (
+                      <button
+                        className="settings-danger-btn"
+                        type="button"
+                        disabled={credentialBusy}
+                        onClick={() => void clearJimengCredentials()}
+                      >
+                        清除
+                      </button>
+                    )}
+                  </div>
+                  {!credentialStorageAvailable && (
+                    <span className="settings-inline-error">本地凭证文件不可用，已禁止写入。</span>
+                  )}
+                  {credentialMessage && (
+                    <span className="settings-description">{credentialMessage}</span>
+                  )}
                 </div>
               </div>
 

@@ -138,6 +138,18 @@ export function splitMarkdownDestinationSuffix(destination: string): {
   return { path: match?.[1] ?? destination, suffix: match?.[2] ?? '' }
 }
 
+export function decodeMarkdownPath(value: string): string {
+  try {
+    return decodeURI(value)
+  } catch {
+    return value
+  }
+}
+
+export function encodeMarkdownPath(value: string): string {
+  return encodeURI(value.replace(/\\/g, '/')).replace(/#/g, '%23').replace(/\?/g, '%3F')
+}
+
 function isSafeRelativeResourceReference(reference: string): boolean {
   const normalized = reference.replace(/\\/g, '/')
   return (

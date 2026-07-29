@@ -450,6 +450,13 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     }
 
     try {
+      if (options?.images?.length) {
+        console.info(
+          `[ClaudeCodeBackend] 图片附件已提交给 SDK: count=${options.images.length}, items=${options.images
+            .map((image) => `${image.mediaType}:${image.size}`)
+            .join(',')}`,
+        )
+      }
       const sdkQuery = query({
         prompt: createSdkPrompt(userMessage, options?.images),
         options: sdkOptions,

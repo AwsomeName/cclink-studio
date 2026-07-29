@@ -45,6 +45,10 @@ import {
   createSettingsContextCommands,
   settingsMenuContributions,
 } from './domains/settings-context-actions'
+import {
+  createImagePreviewContextCommands,
+  imagePreviewMenuContributions,
+} from './domains/image-preview-context-actions'
 
 export const contextActionCommands = [
   ...createTabContextCommands(),
@@ -61,6 +65,7 @@ export const contextActionCommands = [
   ...createProductionContextCommands(),
   ...createAndroidContextCommands(),
   ...createSettingsContextCommands(),
+  ...createImagePreviewContextCommands(),
 ]
 
 export const contextActionContributions = [
@@ -78,6 +83,7 @@ export const contextActionContributions = [
   ...productionMenuContributions,
   ...androidMenuContributions,
   ...settingsMenuContributions,
+  ...imagePreviewMenuContributions,
 ]
 
 export const contextActionExternalCommandIds = new Set([

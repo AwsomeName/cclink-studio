@@ -1,11 +1,13 @@
-export type ImageGenerationProviderId = 'meshy'
+export type ImageGenerationProviderId = 'meshy' | 'jimeng'
 export type MeshyImageModel = 'nano-banana' | 'nano-banana-2' | 'nano-banana-pro' | 'gpt-image-2'
+export type JimengImageModel = 'jimeng-4.0'
+export type ImageGenerationModel = MeshyImageModel | JimengImageModel
 export type ImageAspectRatio = '1:1' | '16:9' | '9:16' | '4:3' | '3:4' | '3:2' | '2:3'
 
 export interface ImageGenerationRequest {
   provider?: ImageGenerationProviderId
   prompt: string
-  model?: MeshyImageModel
+  model?: ImageGenerationModel
   aspectRatio?: ImageAspectRatio
 }
 

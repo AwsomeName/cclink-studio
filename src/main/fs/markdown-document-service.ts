@@ -17,6 +17,8 @@ import { basename, dirname, extname, join, parse, relative, resolve, sep } from 
 import { Zip, ZipDeflate, ZipPassThrough } from 'fflate'
 import {
   collectMarkdownDestinations,
+  decodeMarkdownPath,
+  encodeMarkdownPath,
   isExternalMarkdownDestination,
   markdownAssetDirectoryName,
   markdownDocumentBaseName,
@@ -681,18 +683,6 @@ function isPathWithin(root: string, candidate: string): boolean {
 
 function normalizeRelativePath(value: string): string {
   return value.split(sep).join('/')
-}
-
-function decodeMarkdownPath(value: string): string {
-  try {
-    return decodeURI(value)
-  } catch {
-    return value
-  }
-}
-
-function encodeMarkdownPath(value: string): string {
-  return encodeURI(normalizeRelativePath(value)).replace(/#/g, '%23').replace(/\?/g, '%3F')
 }
 
 function uniqueSorted(values: string[]): string[] {

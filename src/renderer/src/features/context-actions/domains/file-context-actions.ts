@@ -356,14 +356,22 @@ export function createFileContextCommands(): Command[] {
         try {
           const file = await window.cclinkStudio.fs.readFile(target.path)
           const content = typeof file === 'string' ? file : file.content
-          const result = await window.cclinkStudio.wechat.convert(content)
+          const result = await window.cclinkStudio.wechat.convert(content, target.path)
           if (result.error || !result.html) {
             useToastStore.getState().show(`转换失败: ${result.error ?? '未生成 HTML'}`, 'error')
             return
           }
           const blob = new Blob([result.html], { type: 'text/html' })
           await navigator.clipboard.write([new ClipboardItem({ 'text/html': blob })])
-          useToastStore.getState().show('已复制，可直接粘贴到公众号', 'success')
+          const warnings = result.warnings ?? []
+          useToastStore
+            .getState()
+            .show(
+              warnings.length > 0
+                ? `已复制，但有 ${warnings.length} 项图片提示`
+                : `已复制${result.embeddedImages ? `，包含 ${result.embeddedImages} 张本地图片` : ''}`,
+              warnings.length > 0 ? 'info' : 'success',
+            )
         } catch (error) {
           useToastStore.getState().show(`导出失败: ${String(error)}`, 'error')
         }

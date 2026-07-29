@@ -1,6 +1,6 @@
 # CCLink Studio 架构说明
 
-> 当前事实源。最后更新：2026-07-28。
+> 当前事实源。最后更新：2026-07-29。
 
 ## 结论
 
@@ -109,6 +109,8 @@ CCLink Studio 开源壳保留这些本地能力：
 - VSCode 风格布局：Activity Bar、Sidebar、Workbench、Agent Panel、Status Bar。
 - 本地工作空间、标签页、浏览器、Markdown 编辑器、Android/设备视图、Terminal。
 - 本地 Agent 会话、本地 Claude Code 后端、MCP 工具系统和权限确认。
+- Markdown 自动配图；`ImageGenerationService` 统一调度 Meshy 与即梦 Provider，
+  `MarkdownIllustrationService` 负责文档哈希、资产写入和引用插入事务。
 - 用户自有第三方凭证的本地明文管理；凭证不依赖 CCLink 账号、云服务或系统钥匙串。
 - 本地设置、诊断、文件访问和工作台状态恢复。
 - updater 的中性检查框架，但不开源默认生产更新源、签名、公证或制品上传链路。

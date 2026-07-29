@@ -457,6 +457,30 @@ describe('FileService', () => {
     )
   })
 
+  it('relocates encoded Chinese Markdown asset references', async () => {
+    const service = new FileService()
+    const sourcePath = join(tempDir, '旧文档.md')
+    const targetPath = join(tempDir, '新文档.md')
+    const imagePath = join(tempDir, '配图.png')
+    await writeFile(sourcePath, '# Notes\n', 'utf-8')
+    await writeFile(imagePath, Buffer.from([1, 2, 3]))
+    const asset = await service.importDocumentAsset(sourcePath, imagePath)
+    await service.saveTextDocument({
+      filePath: sourcePath,
+      content: `![diagram](${asset.relativePath})\n`,
+      force: true,
+    })
+
+    await service.relocateMarkdownDocument({ sourcePath, targetPath })
+
+    expect(await readFile(targetPath, 'utf-8')).toContain(
+      '%E6%96%B0%E6%96%87%E6%A1%A3.assets/%E9%85%8D%E5%9B%BE.png',
+    )
+    await expect(readFile(join(tempDir, '新文档.assets', '配图.png'))).resolves.toEqual(
+      Buffer.from([1, 2, 3]),
+    )
+  })
+
   it('exports a standard ZIP that expands to Markdown and visible resources', async () => {
     const service = new FileService()
     const documentPath = join(tempDir, 'notes.md')

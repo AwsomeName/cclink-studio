@@ -28,4 +28,18 @@ describe('SettingsPage secrets', () => {
     expect(markup).toContain('value=""')
     expect(markup).toContain('测试连接')
   })
+
+  it('renders separate Meshy and Jimeng credential inputs for image generation', () => {
+    useSettingsStore.setState({
+      settings: { ...DEFAULT_SETTINGS },
+      loading: false,
+    })
+
+    const markup = renderToStaticMarkup(<SettingsPage initialSection="image-generation" />)
+
+    expect(markup).toContain('Meshy API Key')
+    expect(markup).toContain('即梦 AK/SK')
+    expect(markup).toContain('Access Key ID')
+    expect(markup).toContain('Secret Access Key')
+  })
 })

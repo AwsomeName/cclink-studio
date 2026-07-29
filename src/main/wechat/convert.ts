@@ -8,6 +8,16 @@
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import juice from 'juice'
+import { readFile, stat } from 'fs/promises'
+import { dirname, extname, isAbsolute, resolve } from 'path'
+import { fileURLToPath } from 'url'
+import { imageMimeTypeForExtension } from '../../shared/file-types'
+import { stripCclinkMarkdownMetadata } from '../../shared/markdown-document'
+
+const MAX_EMBEDDED_IMAGES = 30
+const MAX_EMBEDDED_IMAGE_BYTES = 5 * 1024 * 1024
+const MAX_TOTAL_EMBEDDED_IMAGE_BYTES = 25 * 1024 * 1024
+const WECHAT_EMBEDDED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
 
 // ─── 微信公众号默认主题 CSS ──────────────────────────────
 // Atom One Dark 代码高亮 + 蓝色标题清新排版风格
@@ -275,6 +285,9 @@ const md = new MarkdownIt({
   breaks: true,
   linkify: true,
 })
+const defaultImageRenderer =
+  md.renderer.rules.image ??
+  ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
 
 /** 自定义围栏代码块渲染：带 class="hljs" 的 <pre> */
 md.renderer.rules.fence = (tokens, idx) => {
@@ -302,19 +315,42 @@ md.renderer.rules.code_block = (tokens, idx) => {
   return `<pre class="hljs"><code>${code}</code></pre>`
 }
 
+md.renderer.rules.image = (tokens, idx, options, env, self) => {
+  const source = tokens[idx].attrGet('src')
+  const embeddedSources = (env as WechatMarkdownEnvironment | undefined)?.embeddedImageSources
+  const embedded = source ? embeddedSources?.get(source) : undefined
+  if (embedded) tokens[idx].attrSet('src', embedded)
+  return defaultImageRenderer(tokens, idx, options, env, self)
+}
+
 // ─── 导出函数 ──────────────────────────────────────────
+
+interface WechatMarkdownEnvironment {
+  embeddedImageSources?: Map<string, string>
+}
+
+export interface WechatDocumentConversion {
+  html: string
+  embeddedImages: number
+  warnings: string[]
+}
 
 /**
  * 将 Markdown 文本转换为微信公众号兼容的 HTML
  *
  * 所有样式通过 juice 内联化，可直接粘贴到公众号编辑器。
  */
-export function convertMarkdownToWechatHTML(markdown: string): string {
+export function convertMarkdownToWechatHTML(
+  markdown: string,
+  environment: WechatMarkdownEnvironment = {},
+): string {
   // 预处理：GFM task list → Unicode checkbox
-  const src = markdown.replace(/^- \[x\] /gm, '- ☑ ').replace(/^- \[ \] /gm, '- ☐ ')
+  const src = stripWechatPublishingMetadata(markdown)
+    .replace(/^- \[x\] /gim, '- ☑ ')
+    .replace(/^- \[ \] /gm, '- ☐ ')
 
   // 1. Markdown → HTML
-  let html = md.render(src)
+  let html = md.render(src, environment)
 
   // 2. 包裹主题容器
   html = `<section class="wechat-content">${html}</section>`
@@ -329,6 +365,116 @@ export function convertMarkdownToWechatHTML(markdown: string): string {
   html = cleanHTML(html)
 
   return html
+}
+
+export async function convertMarkdownDocumentToWechatHTML(
+  markdown: string,
+  documentPath?: string,
+): Promise<WechatDocumentConversion> {
+  const publishableMarkdown = stripWechatPublishingMetadata(markdown)
+  if (!documentPath) {
+    return {
+      html: convertMarkdownToWechatHTML(publishableMarkdown),
+      embeddedImages: 0,
+      warnings: [],
+    }
+  }
+
+  const imageSources = collectMarkdownImageSources(publishableMarkdown)
+  const embeddedImageSources = new Map<string, string>()
+  const warnings: string[] = []
+  let totalBytes = 0
+
+  for (const source of imageSources) {
+    if (!isLocalImageSource(source)) continue
+    if (embeddedImageSources.size >= MAX_EMBEDDED_IMAGES) {
+      warnings.push(`本地图片超过 ${MAX_EMBEDDED_IMAGES} 张，剩余图片未嵌入`)
+      break
+    }
+
+    try {
+      const imagePath = resolveLocalImagePath(source, documentPath)
+      const mimeType = imageMimeTypeForExtension(extname(imagePath))
+      if (!mimeType || !WECHAT_EMBEDDED_IMAGE_TYPES.has(mimeType)) {
+        warnings.push(`${source}：微信导出仅嵌入 PNG、JPEG、GIF 和 WebP`)
+        continue
+      }
+
+      const fileStat = await stat(imagePath)
+      if (!fileStat.isFile()) {
+        warnings.push(`${source}：不是可读取的图片文件`)
+        continue
+      }
+      if (fileStat.size <= 0 || fileStat.size > MAX_EMBEDDED_IMAGE_BYTES) {
+        warnings.push(`${source}：单张图片不能超过 5MB`)
+        continue
+      }
+      if (totalBytes + fileStat.size > MAX_TOTAL_EMBEDDED_IMAGE_BYTES) {
+        warnings.push('本地图片总大小超过 25MB，剩余图片未嵌入')
+        break
+      }
+
+      const content = await readFile(imagePath)
+      embeddedImageSources.set(source, `data:${mimeType};base64,${content.toString('base64')}`)
+      totalBytes += content.byteLength
+    } catch {
+      warnings.push(`${source}：本地图片不存在或无法读取`)
+    }
+  }
+
+  return {
+    html: convertMarkdownToWechatHTML(publishableMarkdown, { embeddedImageSources }),
+    embeddedImages: embeddedImageSources.size,
+    warnings: [...new Set(warnings)],
+  }
+}
+
+export function stripWechatPublishingMetadata(markdown: string): string {
+  let source = markdown.replace(/^\uFEFF/, '')
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const withoutCclink = stripCclinkMarkdownMetadata(source).replace(
+      /^<!--\s*cclink-document:\s*\{[^\r\n]*\}\s*-->\s*(?:\r?\n(?:\r?\n)?)?/,
+      '',
+    )
+    const withoutFrontmatter = stripYamlFrontmatter(withoutCclink)
+    if (withoutFrontmatter === source) break
+    source = withoutFrontmatter
+  }
+
+  return source.replace(/^\s*\n/, '')
+}
+
+function stripYamlFrontmatter(source: string): string {
+  const match = /^---[ \t]*\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(source)
+  if (!match || !/^[A-Za-z0-9_-]+[ \t]*:/m.test(match[1])) return source
+  return source.slice(match[0].length)
+}
+
+function collectMarkdownImageSources(markdown: string): string[] {
+  const sources = new Set<string>()
+  const visit = (tokens: ReturnType<typeof md.parse>): void => {
+    for (const token of tokens) {
+      if (token.type === 'image') {
+        const source = token.attrGet('src')
+        if (source) sources.add(source)
+      }
+      if (token.children) visit(token.children)
+    }
+  }
+  visit(md.parse(markdown, {}))
+  return [...sources]
+}
+
+function isLocalImageSource(source: string): boolean {
+  return !/^(?:https?:|data:|blob:)/i.test(source) && !source.startsWith('#')
+}
+
+function resolveLocalImagePath(source: string, documentPath: string): string {
+  const pathWithoutSuffix = source.split(/[?#]/, 1)[0]
+  const decoded = decodeURIComponent(pathWithoutSuffix)
+  if (/^file:/i.test(decoded)) return fileURLToPath(decoded)
+  return isAbsolute(decoded) ? decoded : resolve(dirname(documentPath), decoded)
 }
 
 /** 清洗 HTML，移除微信公众号不需要的属性 */

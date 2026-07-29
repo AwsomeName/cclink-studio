@@ -11,6 +11,8 @@ import type { FsTextDocumentSnapshot } from '@shared/ipc/fs'
 import {
   cclinkMarkdownMetadataLineOffset,
   collectMarkdownDestinations,
+  decodeMarkdownPath,
+  encodeMarkdownPath,
   isMarkdownDocumentPath,
   markdownAssetDirectoryName,
   rewriteMarkdownDestinations,
@@ -608,10 +610,10 @@ function rewriteRelocatedMarkdownDraft(
     const savedRewrite = savedRewrites.get(destination)
     if (savedRewrite) return savedRewrite
     const { path, suffix } = splitMarkdownDestinationSuffix(destination)
-    const normalized = path.replace(/^\.\//, '')
+    const normalized = decodeMarkdownPath(path).replace(/^\.\//, '').replace(/\\/g, '/')
     if (normalized !== oldAssetDir && !normalized.startsWith(`${oldAssetDir}/`)) {
       return destination
     }
-    return `${newAssetDir}${normalized.slice(oldAssetDir.length)}${suffix}`
+    return `${encodeMarkdownPath(`${newAssetDir}${normalized.slice(oldAssetDir.length)}`)}${suffix}`
   })
 }
