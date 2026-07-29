@@ -47,6 +47,9 @@ bash scripts/studio.sh package:x64
 ```
 
 本地打包只生成开源壳产物；官方签名、公证、上传和生产 API 注入不在本仓库默认路径。
+OSS 包产品名必须为 `CCLink Studio 开源版`，输出到本仓库 `dist/`，并使用 ad-hoc
+签封。执行前后必须按照 `docs/ops/package-target-check.md` 核对目标，不能从
+`cclink-dev` 父目录调用 commercial packaging 后把商业产物当作 OSS 产物交付。
 
 常用验证：
 
@@ -66,7 +69,7 @@ git diff --check
 
 `pnpm verify` 是无 GUI 的代码质量门禁；`pnpm smoke:local` 是 Electron preload/API 本地冒烟；`pnpm smoke:ui` 是真实 UI 点击冒烟；`pnpm smoke:workflow` 是本地工作流闭环冒烟；`pnpm smoke:restore` 是启动自动恢复冒烟；`pnpm smoke:standalone` 会串联全部本地桌面壳冒烟。冒烟说明见 `docs/ops/local-smoke-check.md`。
 
-## 项目结构
+## 仓库结构
 
 ```text
 cclink-studio/
@@ -159,7 +162,7 @@ cclink-studio/
 1. 该功能属于哪个能力模块，失败时如何独立降级？
 2. 是否扩大 preload、IPC、文件系统、浏览器或密钥权限面？
 3. 状态由谁唯一拥有，工作区、Profile 和会话作用域是什么？
-4. 启动、窗口重建、项目切换和退出时如何创建、恢复与释放？
+4. 启动、窗口重建、工作空间切换和退出时如何创建、恢复与释放？
 5. 哪些外部副作用必须由用户在最后一步确认？
 6. 诊断日志如何证明功能当前处于什么状态、失败在哪里？
 7. 哪些自动化测试和 smoke 可以证明没有破坏已有能力？
@@ -199,7 +202,9 @@ cclink-studio/
 
 ## 发布与签名
 
-OSS 默认构建可以产出本地测试包，但不包含官方生产更新源、制品上传、签名和公证配置。
+OSS 默认构建可以产出本地测试包，使用 ad-hoc 签封，但不包含官方生产更新源、
+制品上传、Developer ID 签名和公证配置。开源与商业打包目标的强制检查见
+`docs/ops/package-target-check.md`。
 
 官方发布链路由 `/Users/apple/Desktop/cclink-dev` 承接：
 

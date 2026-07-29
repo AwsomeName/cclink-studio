@@ -21,6 +21,9 @@ import type { SettingsService } from '../settings/settings-service'
 import type { CredentialService } from '../credentials/credential-service'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 import type { MeshyService } from '../meshy/meshy-service'
+import type { ImageGenerationService } from '../image-generation/image-generation-service'
+import type { MarkdownIllustrationService } from '../image-generation/markdown-illustration-service'
+import type { UsageLedgerService } from '../usage/usage-ledger-service'
 import type { ProjectOpsService } from '../project-ops/project-ops-service'
 import type { HardwareService } from '../hardware/hardware-service'
 import type { CadConversionService } from '../cad/cad-conversion-service'
@@ -66,6 +69,9 @@ export interface CclinkStudioRuntimeState {
   credentialService: CredentialService | null
   workspaceStateService: WorkspaceStateService | null
   meshyService: MeshyService | null
+  imageGenerationService: ImageGenerationService | null
+  markdownIllustrationService: MarkdownIllustrationService | null
+  usageLedgerService: UsageLedgerService | null
   projectOpsService: ProjectOpsService | null
   hardwareService: HardwareService | null
   cadConversionService: CadConversionService | null
@@ -110,6 +116,9 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     credentialService: null,
     workspaceStateService: null,
     meshyService: null,
+    imageGenerationService: null,
+    markdownIllustrationService: null,
+    usageLedgerService: null,
     projectOpsService: null,
     hardwareService: null,
     cadConversionService: null,

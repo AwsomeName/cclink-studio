@@ -1,6 +1,6 @@
 # CCLink Studio Mac 签名与公证指南
 
-> 状态：OSS 本地构建默认未签名；官方签名、公证和发布链路在 `/Users/apple/Desktop/cclink-dev`。
+> 状态：OSS 本地构建使用 ad-hoc 签封，不包含 Developer ID 签名或公证；官方签名、公证和发布链路在 `/Users/apple/Desktop/cclink-dev`。
 
 ## 结论
 
@@ -22,10 +22,10 @@ CCLink Studio 通过 DMG 分发时，如果要让普通用户无警告打开，�
 pnpm package
 ```
 
-本地未签名版本首次打开可能需要右键打开，或清除 quarantine：
+OSS 本地包使用 `identity: '-'` 做 ad-hoc 签封，便于 macOS 接受应用包内的嵌套可执行文件。它不是 Developer ID 签名，也没有经过 Apple 公证。首次打开仍可能需要右键打开，或清除 quarantine：
 
 ```bash
-xattr -cr /path/to/CCLink\\ Studio.app
+xattr -cr /Applications/CCLink\\ Studio\\ 开源版.app
 ```
 
 ## 官方发布

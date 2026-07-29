@@ -1,12 +1,12 @@
 # CCLink Studio
 
-**CCLink 的开源桌面工作台端：本地 Agent、内嵌浏览器、文档编辑、文件工作区和设备自动化外壳。**
+**CCLink 的开源桌面工作台端：本地 Agent、内嵌浏览器、文档编辑、文件工作空间和设备自动化外壳。**
 
 [![GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](https://github.com/AwsomeName/cclink-studio)
 [![Electron](https://img.shields.io/badge/Electron-43.1-47848F)](https://www.electronjs.org/)
 
-CCLink Studio 是 CCLink 的桌面工作台端。这个仓库承载可以从源码直接运行的桌面壳：本地项目、文件、浏览器自动化、Markdown 编辑、Agent 面板、终端、数据源查询和设备连接能力。
+CCLink Studio 是 CCLink 的桌面工作台端。这个仓库承载可以从源码直接运行的桌面壳：本地工作空间、文件、浏览器自动化、Markdown 编辑、Agent 面板、终端、数据源查询和设备连接能力。
 
 官方账号、设备注册、配对、消息路由、官方消息凭证、订阅、配额、官方更新源、签名、公证和发布上传由 `cclink-dev` 官方构建工作区和 `/Users/apple/Desktop/chat-cc` 中的 CCLink deploy / Agent 侧实现承接。
 
@@ -17,7 +17,7 @@ CCLink Studio 是 CCLink 的桌面工作台端。这个仓库承载可以从源�
 | 内嵌浏览器 + Playwright 自动化         | 保留               | Electron 内嵌 Chromium，Agent 可在用户监视下操作网页。                                  |
 | Markdown 编辑器                        | 保留               | Tiptap/ProseMirror，本地文件读写。                                                      |
 | 本地 Agent 面板                        | 保留               | 面向本机 Claude Code / 用户自配 API 的桌面壳能力。                                      |
-| 本地文件和项目工作区                   | 保留               | 本地目录浏览、文件读写、workspace state 恢复。                                          |
+| 本地文件和工作空间                     | 保留               | 本地目录浏览、文件读写、workspace state 恢复。                                          |
 | 统一上下文操作                         | 保留               | 右键、键盘和命令入口复用同一命令事实源，按对象贡献操作并提供脱敏诊断。                  |
 | Terminal                               | 保留               | 本地 shell 和审计；网络执行链路已从开源壳默认路径移除。                                 |
 | 数据源只读查询                         | 保留               | 本地配置用户自有数据源，不内置官方云。                                                  |
@@ -53,7 +53,10 @@ bash scripts/studio.sh package:arm64
 bash scripts/studio.sh package:x64
 ```
 
-开源壳本地打包只生成 `dist/` 下的 macOS 安装产物，不包含官方签名、公证、上传或生产 API 注入。
+开源壳本地打包只生成 `dist/` 下的 macOS 安装产物，产品名固定为
+`CCLink Studio 开源版`。本地包使用 ad-hoc 签封，不包含 Developer ID
+签名、公证、上传或生产 API 注入。打包前后的目标校验见
+[`docs/ops/package-target-check.md`](docs/ops/package-target-check.md)。
 
 本仓库默认启动不依赖 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent`。这些目录只参与官方账号、官方运行时和发布集成。
 
@@ -83,16 +86,24 @@ Android 能力只面向用户自有 USB 或 Wi-Fi ADB 真机。CCLink Studio 不
 
 ### Agent
 
-CCLink Studio 不提供模型服务。开源壳可以连接用户本机或用户自有的 Agent 后端；当前主线优先支持本机 Claude Code：
+CCLink Studio 不提供模型服务。开源壳可以连接用户本机或用户自有的 Agent 后端；
+当前默认 Runtime 来源是 `system`，优先使用用户本机安装的 Claude Code：
 
 ```bash
 npm install -g @anthropic-ai/claude-code
 claude login
 ```
 
-在 `设置 > Agent` 中可以配置 `claude` 路径、模型提供商、API 地址和 API Key。密钥只保存于本机设置。
+在 `设置 > Agent` 中可以选择 `system`、`custom` 或 `bundled` Runtime，并配置
+模型提供商、API 地址和 API Key。API Key 由主进程 `CredentialService` 保存到
+Electron `userData/credentials/credentials.json`，不会写入工作空间、普通设置或
+诊断日志。
 
-## 项目结构
+构建链目前会把固定版本 Runtime 放入本地安装包，但新安装默认仍使用 `system`。
+bundled Runtime 的公开再分发尚未批准，公开发布前必须完成
+[`ADR 0002`](docs/decisions/0002-bundled-claude-code-runtime.md) 的许可门禁。
+
+## 仓库结构
 
 ```text
 cclink-studio/
@@ -118,7 +129,7 @@ cclink-studio/
 ## 文档
 
 - [架构设计与架构宪法](docs/architecture.md)
-- [当前稳定化阶段](docs/stabilization.md)
+- [已关闭的稳定化阶段](docs/stabilization.md)
 - [开发指南](docs/development.md)
 - [本地冒烟检查](docs/ops/local-smoke-check.md)
 - [浏览器自动化](docs/features/browser-automation.md)

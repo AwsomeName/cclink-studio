@@ -62,8 +62,6 @@ export interface AppSettings {
   permissionMode: PermissionMode
   /** 被用户禁用的内置 Agent 工具模块 */
   disabledAgentToolModules: string[]
-  /** 单次对话最大 AI 调用费用（USD） */
-  maxBudgetUsd: number
   /** Claude Code 运行时来源。 */
   claudeRuntimeSource: ClaudeRuntimeSource
   /** 自定义 Claude Code CLI 路径；仅在 claudeRuntimeSource=custom 时生效。 */
@@ -193,7 +191,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   backendType: 'claude-code',
   permissionMode: 'auto',
   disabledAgentToolModules: [],
-  maxBudgetUsd: 1.0,
   // 法务/再分发门禁完成前，新旧安装都保持系统运行时默认值。
   claudeRuntimeSource: 'system',
   claudeCodePath: '',

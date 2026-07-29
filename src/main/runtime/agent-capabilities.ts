@@ -12,6 +12,10 @@ const MODULE_CATALOG: Record<string, { label: string; description: string }> = {
   hardware: { label: '硬件工作区', description: '管理硬件项目结构、生产资料和工程工作流。' },
   cad: { label: 'CAD', description: '检测、转换和检查 STEP/STP 等结构件模型。' },
   meshy: { label: 'Meshy 3D', description: '通过 Meshy 生成、查询并保存 3D 资产。' },
+  'image-generation': {
+    label: 'Markdown 自动配图',
+    description: '根据用户明确要求生成图片，保存到文档资源目录并插入 Markdown。',
+  },
   android: { label: 'Android 真机', description: '通过 ADB 检查和操作用户连接的 Android 真机。' },
   'agent-device': { label: '设备语义操作', description: '基于界面快照执行语义点击、输入和滑动。' },
 }
@@ -24,6 +28,7 @@ const CAPABILITY_LABELS: Record<AgentCapabilityStatus['name'], string> = {
   android: 'Android',
   'agent-device': 'Device AI',
   meshy: 'Meshy',
+  'image-generation': 'Image Generation',
   'data-source': 'Data Source',
   hardware: 'Hardware',
   cad: 'CAD',
@@ -40,6 +45,7 @@ const CAPABILITY_ORDER: AgentCapabilityStatus['name'][] = [
   'android',
   'agent-device',
   'meshy',
+  'image-generation',
   'data-source',
   'hardware',
   'cad',
@@ -137,6 +143,14 @@ function getModuleAvailability(
       return runtime.meshyService
         ? { available: true }
         : { available: false, reason: 'Meshy 服务未就绪' }
+    case 'image-generation': {
+      const provider = runtime.imageGenerationService
+        ?.getStatus()
+        .find((item) => item.id === 'meshy')
+      return provider?.configured
+        ? { available: true }
+        : { available: false, reason: provider?.reason ?? '图片生成服务未就绪' }
+    }
     case 'android':
       return runtime.activeDeviceManager?.getSource() === 'physical'
         ? { available: true }

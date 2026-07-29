@@ -18,13 +18,13 @@ S4 分四个可独立回滚和验收的工作包推进：
 
 ## 状态所有权
 
-| 状态域          | 运行事实所有者                                                                                                                                | 可见投影                                                                                 | 持久化所有者                                                   | 当前判断                                                           |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------ |
-| workspace       | renderer `workspace-transition.ts` 拥有运行时切换事务与 generation；`workspace-store.commitActiveWorkspace` 是唯一身份提交入口                | `fs-store.workspacePath` 只是已挂载文件树根路径，项目条和工作台读取 `activeWorkspaceRef` | main `WorkspaceStateService` 保存按 owner/workspace 分区的快照 | S4.2 候选已把异步准备与最终投影提交分离                            |
-| browser profile | Electron 持久化 `session` partition 拥有 Cookie/localStorage 事实，`BrowserManager` 拥有 Tab 到 Profile 的运行绑定                            | Browser Tab 的 `browserProfile` 只保存绑定 ID                                            | Electron userData 下的持久化 partition                         | S4.3a 已关闭；绑定、重建、配置和诊断共用同一 Profile 规则          |
+| 状态域          | 运行事实所有者                                                                                                                                | 可见投影                                                                                 | 持久化所有者                                                   | 当前判断                                                                           |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| workspace       | renderer `workspace-transition.ts` 拥有运行时切换事务与 generation；`workspace-store.commitActiveWorkspace` 是唯一身份提交入口                | `fs-store.workspacePath` 只是已挂载文件树根路径，项目条和工作台读取 `activeWorkspaceRef` | main `WorkspaceStateService` 保存按 owner/workspace 分区的快照 | S4.2 候选已把异步准备与最终投影提交分离                                            |
+| browser profile | Electron 持久化 `session` partition 拥有 Cookie/localStorage 事实，`BrowserManager` 拥有 Tab 到 Profile 的运行绑定                            | Browser Tab 的 `browserProfile` 只保存绑定 ID                                            | Electron userData 下的持久化 partition                         | S4.3a 已关闭；绑定、重建、配置和诊断共用同一 Profile 规则                          |
 | conversation    | main Agent runtime 拥有连接、run 和 session 的执行事实                                                                                        | renderer `agent-store` 拥有消息文档、输入和可见运行投影                                  | `WorkspaceStateService.agentConversations`                     | S4.3b 已关闭；生产入口统一经过 run controller，工作区快照与恢复规则已从 store 拆出 |
-| terminal        | main `TerminalSessionRegistry` 拥有当前进程状态，`TerminalSessionStore` 保存同一 session 的可恢复记录；`terminal:listSessions` 是对外事实入口 | Terminal Tab 与 terminal renderer store 只显示 session 投影                              | main `TerminalSessionStore`；workspace Tab 快照只保存挂载关系  | S4.1 已关闭陈旧 Tab 状态问题                                       |
-| tab             | renderer `tab-store` 拥有当前窗口的布局、顺序和激活状态                                                                                       | Workbench/TabBar                                                                         | `WorkspaceStateService.tabs` 是按 workspace 的恢复快照         | S4.2 候选已把 hydrate 收敛到 generation 保护的最终提交点           |
+| terminal        | main `TerminalSessionRegistry` 拥有当前进程状态，`TerminalSessionStore` 保存同一 session 的可恢复记录；`terminal:listSessions` 是对外事实入口 | Terminal Tab 与 terminal renderer store 只显示 session 投影                              | main `TerminalSessionStore`；workspace Tab 快照只保存挂载关系  | S4.1 已关闭陈旧 Tab 状态问题                                                       |
+| tab             | renderer `tab-store` 拥有当前窗口的布局、顺序和激活状态                                                                                       | Workbench/TabBar                                                                         | `WorkspaceStateService.tabs` 是按 workspace 的恢复快照         | S4.2 候选已把 hydrate 收敛到 generation 保护的最终提交点                           |
 
 “运行事实所有者”和“持久化所有者”可以是同一领域服务的两个职责，但 renderer 快照不得反向覆盖主进程仍存活的运行事实。任何新状态字段必须先进入本表，说明其 owner、scope、生命周期、诊断 ID 和恢复策略。
 
@@ -190,9 +190,9 @@ H4 首次真人验收捕获两个阻断：Agent 流式快照形成磁盘写队�
 
 ## 后续阻断项
 
-| 工作包 | 目标                                                                                    | 退出证据                                                                                   |
-| ------ | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| S4.4   | 统一诊断关联字段并完成架构复审（已关闭）                                              | workspace/task/run/session/profile 可从脱敏日志串联；完整门禁、detached、CI 和人工验收通过 |
+| 工作包 | 目标                                     | 退出证据                                                                                   |
+| ------ | ---------------------------------------- | ------------------------------------------------------------------------------------------ |
+| S4.4   | 统一诊断关联字段并完成架构复审（已关闭） | workspace/task/run/session/profile 可从脱敏日志串联；完整门禁、detached、CI 和人工验收通过 |
 
 ## 拷问
 

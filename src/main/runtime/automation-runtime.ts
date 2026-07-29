@@ -5,6 +5,7 @@ import { BrowserToolModule } from '../mcp/modules/browser'
 import { EditorToolModule } from '../mcp/modules/editor'
 import { registerEditorIpc } from '../ipc/editor-ipc'
 import { MeshyToolModule } from '../mcp/modules/meshy'
+import { ImageGenerationToolModule } from '../mcp/modules/image-generation'
 import { HardwareToolModule } from '../mcp/modules/hardware'
 import { CadToolModule } from '../mcp/modules/cad'
 import { AndroidToolModule } from '../mcp/modules/android'
@@ -100,6 +101,11 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
     runtime,
     'meshy',
     () => new MeshyToolModule(requireService(runtime.meshyService)),
+  )
+  registerToolModule(
+    runtime,
+    'image-generation',
+    () => new ImageGenerationToolModule(requireService(runtime.markdownIllustrationService)),
   )
   registerToolModule(
     runtime,

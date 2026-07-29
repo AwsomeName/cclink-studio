@@ -105,17 +105,13 @@ describe('conversation-run-controller', () => {
       status: 'accepted',
       runId: 'run-1',
     })
-    expect(store.addUserMessage).toHaveBeenCalledWith(
-      '请查看我发送的图片。',
-      'agent-1',
-      [
-        expect.objectContaining({
-          kind: 'image',
-          label: 'screen.png',
-          ref: { type: 'image', mediaType: 'image/png', size: 3 },
-        }),
-      ],
-    )
+    expect(store.addUserMessage).toHaveBeenCalledWith('请查看我发送的图片。', 'agent-1', [
+      expect.objectContaining({
+        kind: 'image',
+        label: 'screen.png',
+        ref: { type: 'image', mediaType: 'image/png', size: 3 },
+      }),
+    ])
     expect(agentApi.sendMessage).toHaveBeenCalledWith(
       'agent-1',
       expect.objectContaining({

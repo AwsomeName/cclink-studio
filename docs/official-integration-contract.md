@@ -1,97 +1,40 @@
 # Official Integration Contract
 
+> Current OSS contract. Last updated: 2026-07-28.
+
 ## Conclusion
 
-CCLink Studio should expose explicit extension seams for the official build, but the open source repository must not ship production endpoints, paid feature logic, account truth, message credentials, quota enforcement, signing material, notarization secrets, or artifact delivery credentials.
+CCLink Studio exposes a minimal, inert main-process integration contract. The OSS build
+always loads `oss-noop`; it does not ship official account, message network, entitlement,
+quota, production runtime, release provider, production endpoints, or publication secrets.
 
-The official integration layer is owned by `cclink-dev`, backed by the CCLink service workspace under `/Users/apple/Desktop/chat-cc`.
+The current commercial build is assembled by `cclink-dev`: it copies the OSS tree into an
+isolated build directory and overlays commercial-only source, configuration, resources, scripts, and
+package metadata. The overlay is an assembly mechanism, not permission for OSS runtime files
+to import official-only implementations.
 
-## Required Inputs From The Official Side
+## Current Interface
 
-To finalize the integration interface, the official side needs to provide:
-
-- Integration package layout: where main-process, preload, renderer, and release hooks live.
-- Build profile names: development, internal, beta, stable, and any region-specific profile.
-- Endpoint injection schema: typed names, required/optional status, and validation rules.
-- Account service contract: login, device registration, pairing, session refresh, logout, and error model.
-- Message credential provider contract: how the desktop obtains short-lived messaging credentials without exposing secrets to renderer state.
-- Entitlement and quota contract: local cache shape, refresh cadence, offline grace behavior, and failure semantics.
-- Official runtime contract: how desktop tasks connect to the private runtime and how task state is surfaced.
-- Release provider contract: update feed, artifact delivery adapter, signing, notarization, and rollout channel metadata.
-- Telemetry and diagnostics boundary: what the open source shell may emit, what the official build may add, and how users can inspect it.
-- Test matrix: open source build, official dev build, official production build, migrated user data, and downgrade scenarios.
-
-## Studio Extension Seams
-
-The open source shell can provide these seams:
-
-- Main-process service registry hooks.
-- Preload API augmentation with a namespaced official object.
-- Renderer feature slots for account status, entitlement status, device status, network runtime entries, and update status.
-- IPC registration hooks with schema validation.
-- Build-time config validation that rejects production values in open source defaults.
-- Update provider abstraction with a no-production default implementation.
-- Workspace snapshot handling hooks for official entries.
-
-These seams should be inert by default. A clean open source build must not try to load an absent official integration layer.
-
-## Hard Boundaries
-
-- No official production endpoint in open source defaults.
-- No paid feature gate that blocks local open source functionality.
-- No long-lived secret in renderer state, preload globals, local storage, logs, screenshots, or diagnostics bundles.
-- No direct dependency on official service packages from open source runtime entry points.
-- No artifact delivery, signing, or notarization credential in this repository.
-- No official runtime client initialized unless the official integration layer is present and validated.
-
-## Proposed Interface Shape
+The contract is defined in `src/main/official/official-integration.ts`:
 
 ```ts
 export interface OfficialIntegration {
   readonly id: string
-  readonly buildProfile: 'oss' | 'dev' | 'internal' | 'beta' | 'stable'
-  registerMainServices(context: OfficialMainContext): Promise<void>
-  registerIpc?(context: OfficialIpcContext): Promise<void>
-  exposePreload?(context: OfficialPreloadContext): OfficialPreloadApi
-  registerRendererFeatures?(context: OfficialRendererContext): OfficialRendererFeatures
-  createUpdateProvider?(context: OfficialReleaseContext): OfficialUpdateProvider
+  readonly buildProfile: OfficialBuildProfile
+  getStatus(): OfficialIntegrationStatus
+  registerMainServices?(context: OfficialMainContext): void | Promise<void>
+  registerIpc?(context: OfficialIpcContext): void | Promise<void>
 }
 ```
 
-The open source shell owns the context interfaces and default no-op providers. The official integration layer owns the implementations. `OfficialIpcContext` exposes only `ipc.handle(...)`, which always applies Studio's trusted-main-frame guard; it never exposes Electron's raw `ipcMain`.
+`OfficialIpcContext` exposes only the Studio-owned trusted IPC registrar. It never exposes
+raw `ipcMain`.
 
-## Acceptance Standards
+The OSS loader in `src/main/official/official-integration-loader.ts` returns
+`createNoopOfficialIntegration()`. Runtime startup may call the two optional hooks, but the
+no-op implementation registers nothing.
 
-- `pnpm typecheck` passes with no official integration layer installed.
-- `pnpm test` includes no-integration startup tests.
-- A production endpoint scan over the open source repository returns empty.
-- The official build can be assembled by `cclink-dev` without patching source files in place.
-- Secrets never cross into renderer stores except as non-sensitive status snapshots.
-
-## Questions For The Official Side
-
-1. Which integration package format should `cclink-dev` produce: source copied before build, local package dependency, or generated virtual module?
-2. Does the official runtime need a single connection manager or separate task, file, and terminal providers?
-3. What is the minimum offline behavior for entitlement and quota?
-4. Which update channels exist, and does channel selection belong to build config or user settings?
-5. Should official diagnostics be exportable from the open source diagnostics panel, or kept behind an official-only panel?
-
-Until these are answered, the safe default is a typed no-op integration interface with compile-time validation and no production values in this repository.
-
-## Current OSS Implementation
-
-The open source shell now owns a minimal inert integration surface:
-
-- Shared status contract: `src/shared/ipc/official.ts`.
-- Main-process no-op implementation: `src/main/official/official-integration.ts`.
-- Assembly seam: `src/main/official/official-integration-loader.ts`.
-- Read-only IPC probe: `official:getStatus`.
-- Preload namespace: `window.cclinkStudio.official.getStatus()`.
-- Runtime hook points: `registerMainServices()` and `registerIpc()` are invoked with typed contexts, but the OSS implementation is a no-op. Official IPC must register through `context.ipc.handle(...)`; raw `ipcMain` is intentionally absent.
-
-`loadOfficialIntegration()` is the only main-process assembly point the official build should replace or alias. The default implementation always returns `createNoopOfficialIntegration()`. Core runtime startup must not import official account, message, quota, release, or runtime packages directly.
-
-In OSS builds this returns:
+## OSS Status
 
 ```ts
 {
@@ -111,4 +54,58 @@ In OSS builds this returns:
 }
 ```
 
-This is intentionally a status probe only. It does not expose login, message credentials, device registry, entitlement, quota, release upload, signing, notarization, or official runtime APIs.
+Renderer access is limited to the read-only
+`window.cclinkStudio.official.getStatus()` probe. It contains capability booleans and a
+reason code, not credentials or account data.
+
+## Hard Boundaries
+
+- OSS defaults contain no official production endpoint or update feed.
+- Local workspace, Agent, browser, editor, Terminal, data-source, and Android capabilities
+  cannot depend on the official integration being present.
+- Official IPC uses `context.ipc.handle(...)` and a bounded runtime parser.
+- Credentials never cross into preload globals, renderer-wide stores, localStorage, logs,
+  screenshots, or diagnostics.
+- OSS runtime entry points do not import account, message, entitlement, quota, official
+  runtime, release upload, signing, or notarization packages.
+- The commercial assembler must work in its isolated `.build` directory and must not patch
+  the OSS checkout in place.
+
+## Commercial Assembly
+
+The current assembly implementation is owned by
+`cclink-dev/scripts/prepare-commercial-build.mjs`:
+
+1. Copy `cclink-studio` into `.build/cclink-studio-commercial`.
+2. Overlay `commercial/src` onto the copied `src`.
+3. Install the commercial Vite and electron-builder configurations.
+4. Install commercial resources, scripts, and package metadata.
+5. Link the OSS dependency installation.
+6. Build and package only from the isolated assembly directory.
+7. Run `commercial:package:check` against product identity and artifacts.
+
+The commercial source may use the shared `OfficialIntegration` type, but the current
+commercial runtime also owns private composition files through the overlay. Documentation
+must not claim that replacing `official-integration-loader.ts` alone describes the complete
+commercial assembly.
+
+## Acceptance
+
+OSS:
+
+```bash
+pnpm verify:oss-boundary
+pnpm verify
+pnpm smoke:standalone
+```
+
+Commercial, from `cclink-dev`:
+
+```bash
+pnpm commercial:typecheck
+pnpm commercial:build
+pnpm commercial:package
+pnpm commercial:package:check
+```
+
+The package identity gate is documented in `docs/ops/package-target-check.md`.

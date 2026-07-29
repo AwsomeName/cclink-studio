@@ -37,6 +37,7 @@ type SettingsSectionId =
   | 'appearance'
   | 'agent'
   | 'agent-capabilities'
+  | 'image-generation'
   | 'browser'
   | 'editor'
   | 'credentials'
@@ -54,6 +55,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'appearance', label: '外观', icon: IconPaintbrush },
   { id: 'agent', label: 'Agent', icon: IconRobot },
   { id: 'agent-capabilities', label: 'Agent 能力', icon: IconTool },
+  { id: 'image-generation', label: '图像生成', icon: IconPaintbrush },
   { id: 'browser', label: '浏览器', icon: IconGlobe },
   { id: 'editor', label: '编辑器', icon: IconFile },
   { id: 'credentials', label: '本地凭证', icon: IconDatabase },
@@ -86,6 +88,12 @@ const SETTINGS_SEARCH_INDEX: Array<{
     label: 'Agent 工具与 MCP',
     description: '管理内置工具、外部 MCP、运行状态和权限策略。',
     keywords: ['agent', 'tool', 'mcp', 'permission', '工具', '能力', '权限'],
+  },
+  {
+    sectionId: 'image-generation',
+    label: '图像生成',
+    description: '配置 Markdown 自动配图使用的 Meshy API Key。',
+    keywords: ['image', 'meshy', 'illustration', '图片', '插图', '配图'],
   },
   {
     sectionId: 'browser',
@@ -232,6 +240,8 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   const [searchQuery, setSearchQuery] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [apiKeyInput, setApiKeyInput] = useState('')
+  const [showMeshyApiKey, setShowMeshyApiKey] = useState(false)
+  const [meshyApiKeyInput, setMeshyApiKeyInput] = useState('')
   const [secretStatus, setSecretStatus] = useState<SettingsSecretStatus | null>(null)
   const [secretBusy, setSecretBusy] = useState(false)
   const [secretMessage, setSecretMessage] = useState<string | null>(null)
@@ -329,7 +339,9 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   }, [activeSection, refreshGitStatus])
 
   useEffect(() => {
-    if (activeSection === 'agent') void refreshSecretStatus()
+    if (activeSection === 'agent' || activeSection === 'image-generation') {
+      void refreshSecretStatus()
+    }
   }, [activeSection, refreshSecretStatus])
 
   useEffect(() => {
@@ -603,6 +615,46 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       setSecretStatus(result.status)
       setSecretMessage('API Key 已清除')
       setClaudeConnectionResult(null)
+    } catch (nextError: unknown) {
+      setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
+    } finally {
+      setSecretBusy(false)
+    }
+  }
+
+  const saveMeshyApiKey = async (): Promise<void> => {
+    if (!meshyApiKeyInput.trim()) return
+    setSecretBusy(true)
+    setSecretMessage(null)
+    try {
+      const result = await window.cclinkStudio.settings.setSecret('meshyApiKey', meshyApiKeyInput)
+      if (!result.success || !result.status) {
+        setSecretMessage(result.error ?? 'Meshy API Key 保存失败')
+        return
+      }
+      setMeshyApiKeyInput('')
+      setShowMeshyApiKey(false)
+      setSecretStatus(result.status)
+      setSecretMessage('Meshy API Key 已保存到本地凭证文件')
+    } catch (nextError: unknown) {
+      setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
+    } finally {
+      setSecretBusy(false)
+    }
+  }
+
+  const clearMeshyApiKey = async (): Promise<void> => {
+    setSecretBusy(true)
+    setSecretMessage(null)
+    try {
+      const result = await window.cclinkStudio.settings.clearSecret('meshyApiKey')
+      if (!result.success || !result.status) {
+        setSecretMessage(result.error ?? 'Meshy API Key 清除失败')
+        return
+      }
+      setMeshyApiKeyInput('')
+      setSecretStatus(result.status)
+      setSecretMessage('Meshy API Key 已清除')
     } catch (nextError: unknown) {
       setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
     } finally {
@@ -1035,6 +1087,83 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
 
         {activeSection === 'agent-capabilities' && (
           <AgentCapabilitiesSettings settings={settings} updateSettings={update} />
+        )}
+
+        {activeSection === 'image-generation' && (
+          <section className="settings-section">
+            <h2>图像生成</h2>
+            <div className="settings-group">
+              <div className="settings-row settings-secret-row">
+                <div className="settings-label">
+                  <span>Meshy API Key</span>
+                  <span className="settings-description">
+                    {secretStatus?.meshyApiKeyConfigured
+                      ? '已配置并保存到本地凭证文件。'
+                      : '尚未配置。'}
+                  </span>
+                </div>
+                <div className="settings-secret-control">
+                  <div className="settings-control settings-control-inline">
+                    <input
+                      className="settings-input settings-input-apikey"
+                      type={showMeshyApiKey ? 'text' : 'password'}
+                      value={meshyApiKeyInput}
+                      placeholder={
+                        secretStatus?.meshyApiKeyConfigured
+                          ? '输入新 Key 以替换'
+                          : '输入 Meshy API Key'
+                      }
+                      autoComplete="off"
+                      disabled={secretBusy || secretStatus?.storageAvailable === false}
+                      onChange={(event) => setMeshyApiKeyInput(event.target.value)}
+                    />
+                    <button
+                      className="settings-secondary-btn"
+                      type="button"
+                      disabled={secretBusy}
+                      onClick={() => setShowMeshyApiKey((value) => !value)}
+                    >
+                      {showMeshyApiKey ? '隐藏' : '显示'}
+                    </button>
+                    <button
+                      className="settings-secondary-btn"
+                      type="button"
+                      disabled={secretBusy || !meshyApiKeyInput.trim()}
+                      onClick={() => void saveMeshyApiKey()}
+                    >
+                      保存
+                    </button>
+                    {secretStatus?.meshyApiKeyConfigured && (
+                      <button
+                        className="settings-danger-btn"
+                        type="button"
+                        disabled={secretBusy}
+                        onClick={() => void clearMeshyApiKey()}
+                      >
+                        清除
+                      </button>
+                    )}
+                  </div>
+                  {secretStatus?.storageAvailable === false && (
+                    <span className="settings-inline-error">本地凭证文件不可用，已禁止写入。</span>
+                  )}
+                  {secretMessage && <span className="settings-description">{secretMessage}</span>}
+                </div>
+              </div>
+
+              <div className="settings-row">
+                <div className="settings-label">
+                  <span>费用策略</span>
+                  <span className="settings-description">
+                    图片调用只记录服务商、模型、图片数和返回的 credits。
+                  </span>
+                </div>
+                <div className="settings-control">
+                  <span>仅统计</span>
+                </div>
+              </div>
+            </div>
+          </section>
         )}
 
         {activeSection === 'browser' && (

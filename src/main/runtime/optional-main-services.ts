@@ -7,6 +7,8 @@ import { HardwareService } from '../hardware/hardware-service'
 import { registerHardwareIpc } from '../hardware/hardware-ipc'
 import { registerTerminalIpc } from '../ipc/terminal-ipc'
 import { MeshyService } from '../meshy/meshy-service'
+import { ImageGenerationService } from '../image-generation/image-generation-service'
+import { MarkdownIllustrationService } from '../image-generation/markdown-illustration-service'
 import { cleanupTerminalOrphans } from '../terminal/terminal-orphan-cleaner'
 import { TerminalAuditStore } from '../terminal/terminal-audit-store'
 import { createTerminalBrowserEnvironment } from '../terminal/terminal-browser-launcher'
@@ -21,7 +23,7 @@ import type { CclinkStudioRuntimeState } from './app-runtime'
 
 type OptionalMainCapability = Extract<
   AgentCapabilityName,
-  'cad' | 'hardware' | 'data-source' | 'meshy' | 'terminal'
+  'cad' | 'hardware' | 'data-source' | 'meshy' | 'image-generation' | 'terminal'
 >
 
 export type OptionalMainServiceBootstrappers = Record<
@@ -50,7 +52,21 @@ const defaultBootstrappers: OptionalMainServiceBootstrappers = {
   },
   meshy: (runtime) => {
     runtime.meshyService = new MeshyService(() => runtime.settingsService!.getRuntimeSettings())
-    console.log('[CCLink Studio] Meshy 服务已初始化')
+    console.log('[CCLink Studio] Meshy 3D 服务已初始化')
+  },
+  'image-generation': (runtime) => {
+    if (!runtime.fileService || !runtime.usageLedgerService) {
+      throw new Error('文件或用量统计服务未就绪')
+    }
+    runtime.imageGenerationService = new ImageGenerationService(
+      () => runtime.settingsService!.getRuntimeSettings().meshyApiKey,
+    )
+    runtime.markdownIllustrationService = new MarkdownIllustrationService(
+      runtime.imageGenerationService,
+      runtime.fileService,
+      runtime.usageLedgerService,
+    )
+    console.log('[CCLink Studio] Markdown 图片生成服务已初始化')
   },
   terminal: bootstrapTerminalServices,
 }
@@ -64,7 +80,14 @@ export async function bootstrapOptionalMainServices(
   }
 
   const bootstrappers = { ...defaultBootstrappers, ...overrides }
-  for (const capability of ['cad', 'hardware', 'data-source', 'meshy', 'terminal'] as const) {
+  for (const capability of [
+    'cad',
+    'hardware',
+    'data-source',
+    'meshy',
+    'image-generation',
+    'terminal',
+  ] as const) {
     await startIsolatedCapability(runtime, capability, bootstrappers[capability])
   }
 
@@ -153,6 +176,10 @@ function resetCapability(
       break
     case 'meshy':
       runtime.meshyService = null
+      break
+    case 'image-generation':
+      runtime.imageGenerationService = null
+      runtime.markdownIllustrationService = null
       break
     case 'terminal':
       runtime.terminalConfirmationService?.destroy()

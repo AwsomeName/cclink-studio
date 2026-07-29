@@ -351,6 +351,94 @@ export class FileService {
     )
   }
 
+  async applyMarkdownIllustrations(input: {
+    documentPath: string
+    expectedHash: string
+    illustrations: Array<{
+      fileName: string
+      mimeType: string
+      content: Buffer
+      alt: string
+      anchorText?: string
+      placement: 'before' | 'after' | 'end'
+    }>
+  }): Promise<{
+    snapshot: FsTextDocumentSnapshot
+    assets: FsDocumentAssetResult[]
+  }> {
+    const safeDocument = this.validatePath(input.documentPath)
+    if (!isMarkdownDocumentPath(safeDocument)) {
+      throw new Error('自动配图仅支持 Markdown 文档')
+    }
+    if (input.illustrations.length === 0) throw new Error('至少需要一张插图')
+    const current = await this.readTextDocument(safeDocument)
+    if (current.hash !== input.expectedHash) {
+      throw new Error('Markdown 文档已发生变化，请重新读取后再配图')
+    }
+    preflightMarkdownIllustrationAnchors(current.content, input.illustrations)
+
+    const assets: FsDocumentAssetResult[] = []
+    try {
+      for (const illustration of input.illustrations) {
+        const extension = imageExtensionForMimeType(illustration.mimeType)
+        if (!extension) throw new Error(`不支持的生成图片类型: ${illustration.mimeType}`)
+        const requestedName = extname(illustration.fileName)
+          ? illustration.fileName
+          : `${illustration.fileName}${extension}`
+        assets.push(
+          await this.markdownDocuments.saveAsset(safeDocument, requestedName, illustration.content),
+        )
+      }
+
+      const content = insertMarkdownIllustrations(
+        current.content,
+        input.illustrations.map((illustration, index) => ({
+          ...illustration,
+          relativePath: assets[index].relativePath,
+        })),
+      )
+      const result = await this.saveTextDocument({
+        filePath: safeDocument,
+        content,
+        expectedHash: current.hash,
+      })
+      if (result.status !== 'saved') {
+        throw new Error('Markdown 文档已发生变化，未插入生成图片')
+      }
+      return { snapshot: result.snapshot, assets }
+    } catch (error) {
+      await this.markdownDocuments
+        .removeAssets(
+          safeDocument,
+          assets.map((asset) => asset.path),
+        )
+        .catch((rollbackError) => {
+          console.error('[FileService] 自动配图资源回滚失败:', rollbackError)
+        })
+      throw error
+    }
+  }
+
+  async preflightMarkdownIllustrations(input: {
+    documentPath: string
+    expectedHash?: string
+    illustrations: Array<{
+      anchorText?: string
+      placement: 'before' | 'after' | 'end'
+    }>
+  }): Promise<FsTextDocumentSnapshot> {
+    const safeDocument = this.validatePath(input.documentPath)
+    if (!isMarkdownDocumentPath(safeDocument)) {
+      throw new Error('自动配图仅支持 Markdown 文档')
+    }
+    const current = await this.readTextDocument(safeDocument)
+    if (input.expectedHash && current.hash !== input.expectedHash) {
+      throw new Error('Markdown 文档已发生变化，请重新读取后再配图')
+    }
+    preflightMarkdownIllustrationAnchors(current.content, input.illustrations)
+    return current
+  }
+
   async inspectMarkdownDocument(documentPath: string) {
     const safe = this.validatePath(documentPath)
     if (!isMarkdownDocumentPath(safe)) throw new Error('仅支持检查 Markdown 文档')
@@ -705,6 +793,86 @@ function textDocumentSnapshot(
     modifiedAt,
     hash: createHash('sha256').update(buffer).digest('hex'),
   }
+}
+
+interface MarkdownIllustrationInsertion {
+  alt: string
+  relativePath: string
+  anchorText?: string
+  placement: 'before' | 'after' | 'end'
+}
+
+function preflightMarkdownIllustrationAnchors(
+  source: string,
+  illustrations: Array<{
+    anchorText?: string
+    placement: 'before' | 'after' | 'end'
+  }>,
+): void {
+  for (const illustration of illustrations) {
+    if (illustration.placement === 'end') continue
+    const anchor = illustration.anchorText?.trim()
+    if (!anchor) throw new Error('插图位置缺少 anchorText')
+    const first = source.indexOf(anchor)
+    if (first < 0) throw new Error(`未找到插图锚点: ${anchor.slice(0, 80)}`)
+    if (source.indexOf(anchor, first + anchor.length) >= 0) {
+      throw new Error(`插图锚点不唯一，请提供更长的附近文本: ${anchor.slice(0, 80)}`)
+    }
+  }
+}
+
+function insertMarkdownIllustrations(
+  source: string,
+  illustrations: MarkdownIllustrationInsertion[],
+): string {
+  preflightMarkdownIllustrationAnchors(source, illustrations)
+  const grouped = new Map<number, string[]>()
+  for (const illustration of illustrations) {
+    const offset =
+      illustration.placement === 'end'
+        ? source.length
+        : resolveMarkdownIllustrationOffset(
+            source,
+            illustration.anchorText!.trim(),
+            illustration.placement,
+          )
+    const alt = illustration.alt.replace(/\\/g, '\\\\').replace(/\]/g, '\\]')
+    const markdown = `![${alt}](<${illustration.relativePath.replace(/>/g, '%3E')}>)`
+    grouped.set(offset, [...(grouped.get(offset) ?? []), markdown])
+  }
+
+  let content = source
+  for (const [offset, markdownItems] of [...grouped.entries()].sort(([a], [b]) => b - a)) {
+    const before = content.slice(0, offset)
+    const after = content.slice(offset)
+    const prefix =
+      before.length === 0
+        ? ''
+        : before.endsWith('\n\n')
+          ? ''
+          : before.endsWith('\n')
+            ? '\n'
+            : '\n\n'
+    const suffix =
+      after.length === 0
+        ? '\n'
+        : after.startsWith('\n\n')
+          ? ''
+          : after.startsWith('\n')
+            ? '\n'
+            : '\n\n'
+    content = `${before}${prefix}${markdownItems.join('\n\n')}${suffix}${after}`
+  }
+  return content
+}
+
+function resolveMarkdownIllustrationOffset(
+  source: string,
+  anchor: string,
+  placement: 'before' | 'after',
+): number {
+  const index = source.indexOf(anchor)
+  return placement === 'before' ? index : index + anchor.length
 }
 
 function imageExtensionForMimeType(mimeType: string): string | null {

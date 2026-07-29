@@ -26,6 +26,7 @@ import type { CclinkStudioRuntimeState } from './app-runtime'
 import { bootstrapOptionalMainServices } from './optional-main-services'
 import { runShutdownStep } from './shutdown'
 import { registerDiagnosticsIpc } from '../ipc/diagnostics-ipc'
+import { UsageLedgerService } from '../usage/usage-ledger-service'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   runtime.credentialService = new CredentialService()
@@ -39,11 +40,16 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
   runtime.workspaceStateService = new WorkspaceStateService()
   await runtime.workspaceStateService.loadState()
   console.log('[CCLink Studio] 工作台状态服务已初始化')
+
+  runtime.usageLedgerService = new UsageLedgerService()
+  console.log('[CCLink Studio] 用量统计服务已初始化')
 }
 
 export async function shutdownStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   await runShutdownStep('WorkspaceStateService', () => runtime.workspaceStateService?.flush())
+  await runShutdownStep('UsageLedgerService', () => runtime.usageLedgerService?.flush())
   runtime.workspaceStateService = null
+  runtime.usageLedgerService = null
   runtime.settingsService = null
   runtime.credentialService = null
 }
@@ -202,6 +208,8 @@ export async function shutdownMainProcessServices(
   runtime.hardwareService = null
   runtime.dataSourceService = null
   runtime.meshyService = null
+  runtime.imageGenerationService = null
+  runtime.markdownIllustrationService = null
   runtime.terminalAuditStore = null
   runtime.terminalSessionStore = null
   runtime.terminalConfirmationService = null

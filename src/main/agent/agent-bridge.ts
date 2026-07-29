@@ -33,6 +33,7 @@ import type {
 import { agentIpcEvents } from '../../shared/ipc/agent'
 import { SessionDiagnosticReferenceStore } from './session-diagnostic-reference-store'
 import type { ClaudeRuntimeProvenance } from '../../shared/claude-runtime'
+import type { UsageLedgerService } from '../usage/usage-ledger-service'
 
 const AGENT_EVENT_CHANNELS: Record<AgentRuntimeEvent['type'], string> = {
   stream: agentIpcEvents.stream,
@@ -44,7 +45,6 @@ const AGENT_EVENT_CHANNELS: Record<AgentRuntimeEvent['type'], string> = {
 export interface AgentBridgeOptions {
   agentEngine?: 'local-claude-code'
   backendType?: 'claude-code' | 'http-api'
-  maxBudgetUsd?: number
   /** 主进程 ClaudeRuntimeManager 已探测的 Claude Code executable 绝对路径。 */
   claudeCodePath?: string
   /** Claude Code 运行时与 provider/model 组合的会话兼容指纹。 */
@@ -73,6 +73,8 @@ export interface AgentBridgeOptions {
   browserManager?: BrowserManager
   /** 浏览器任务运行时：browser scope 下自动创建/收束 BrowserTaskRun。 */
   browserTaskRuntime?: BrowserTaskRuntime
+  /** 只记录、不控制调用的统一用量账本。 */
+  usageLedgerService?: UsageLedgerService
 }
 
 export class AgentBridge {
@@ -90,6 +92,7 @@ export class AgentBridge {
     browserManager?: BrowserManager
     browserTaskRuntime?: BrowserTaskRuntime
     getSettingsSnapshot?: () => AppSettings
+    usageLedgerService?: UsageLedgerService
   }
   private readonly getWorkspacePath?: () => string
   private configurationChangePending = false
@@ -115,6 +118,7 @@ export class AgentBridge {
       browserManager: options?.browserManager,
       browserTaskRuntime: options?.browserTaskRuntime,
       getSettingsSnapshot: options?.getSettingsSnapshot,
+      usageLedgerService: options?.usageLedgerService,
     }
     this.getWorkspacePath = options?.getWorkspacePath
     this.sessionCompatibilityFingerprint = options?.sessionCompatibilityFingerprint ?? null
@@ -144,7 +148,6 @@ export class AgentBridge {
       type: 'local-claude-code',
       claudeCode: {
         claudeCodePath: options?.claudeCodePath,
-        maxBudgetUsd: options?.maxBudgetUsd,
         apiBaseUrl: options?.apiBaseUrl,
         apiKey: options?.apiKey,
         modelName: options?.modelName,
@@ -512,14 +515,12 @@ export class AgentBridge {
       apiBaseUrl?: string
       apiKey?: string
       modelName?: string
-      maxBudgetUsd?: number
       sessionCompatibilityFingerprint?: string
       runtimeProvenance?: ClaudeRuntimeProvenance
     },
     options?: { forceResetSessions?: boolean },
   ): void {
     const config = this.buildBackendConfig({
-      maxBudgetUsd: apiSettings.maxBudgetUsd,
       agentEngine: 'local-claude-code',
       claudeCodePath: apiSettings.claudeCodePath,
       apiBaseUrl: apiSettings.apiBaseUrl,
@@ -550,6 +551,7 @@ export class AgentBridge {
       this.syncActiveBrowserTaskCorrelation(event.conversationId, taskId, event.runId)
     }
     if (event.type === 'complete') {
+      this.recordAgentUsage(event)
       if (this.isErrorResult(event.data)) {
         this.failActiveBrowserTask(event.conversationId, event.data)
       } else {
@@ -559,6 +561,31 @@ export class AgentBridge {
       this.failActiveBrowserTask(event.conversationId, event.data)
     }
     this.forwardToRenderer(event.type, event.data, event.conversationId, event.runId)
+  }
+
+  private recordAgentUsage(event: AgentRuntimeEvent): void {
+    const ledger = this.deps.usageLedgerService
+    if (!ledger || !event.data || typeof event.data !== 'object') return
+    const totalCostUsd = (event.data as { total_cost_usd?: unknown }).total_cost_usd
+    if (typeof totalCostUsd !== 'number' || !Number.isFinite(totalCostUsd)) return
+    void ledger
+      .record({
+        conversationId: event.conversationId,
+        ...(event.runId ? { runId: event.runId } : {}),
+        source: 'agent-model',
+        provider: 'claude-code',
+        quantity: 1,
+        unit: 'usd',
+        amount: Math.max(0, totalCostUsd),
+        estimated: false,
+        status: this.isErrorResult(event.data) ? 'failed' : 'succeeded',
+      })
+      .catch((error) => {
+        console.warn(
+          '[AgentBridge] 记录 Agent 用量失败:',
+          error instanceof Error ? error.message : String(error),
+        )
+      })
   }
 
   private startBrowserTaskIfNeeded(

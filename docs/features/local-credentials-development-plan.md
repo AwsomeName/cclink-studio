@@ -1,6 +1,6 @@
 # 本地凭证管理开发计划
 
-> 状态：M0-M5 与商业 WebDAV 扩展迁移已完成；M6 自动化通过，安装包与真人验收待执行
+> 状态：M0-M5 与扩展凭证迁移已完成；M6 自动化和 arm64 打包通过，arm64 真人验收及 x64 打包/真人验收待执行
 > 最后更新：2026-07-28  
 > 产品事实源：`docs/features/local-credentials.md`  
 > 架构决策：`docs/decisions/0003-plaintext-local-credentials.md`
@@ -13,17 +13,17 @@
 
 当前实现进度：
 
-| 里程碑 | 状态 | 证据 |
-| --- | --- | --- |
-| M0 | ✅ 完成 | ADR、产品事实源、凭证 ID 与 IPC 契约已冻结 |
-| M1 | ✅ 完成 | `PlaintextCredentialStore`、`CredentialService` 及损坏/冲突测试 |
-| M2 | ✅ 完成 | 设置页、trusted IPC、字段级显示/复制、清除与重新加载 |
-| M3 | ✅ 完成 | Agent 与 Meshy 通过统一服务动态解析 |
-| M4 | ✅ 完成 | Git 与数据源旧 Store 已删除，统一使用稳定 credential ID |
-| M5 | ✅ 完成 | `safeStorage` 生产引用清零，边界脚本进入 `pnpm verify` |
-| M6 | 🔄 部分完成 | `pnpm verify` 已通过；安装包双架构与真人验收尚未执行 |
+| 里程碑 | 状态        | 证据                                                                            |
+| ------ | ----------- | ------------------------------------------------------------------------------- |
+| M0     | ✅ 完成     | ADR、产品事实源、凭证 ID 与 IPC 契约已冻结                                      |
+| M1     | ✅ 完成     | `PlaintextCredentialStore`、`CredentialService` 及损坏/冲突测试                 |
+| M2     | ✅ 完成     | 设置页、trusted IPC、字段级显示/复制、清除与重新加载                            |
+| M3     | ✅ 完成     | Agent 与 Meshy 通过统一服务动态解析                                             |
+| M4     | ✅ 完成     | Git 与数据源旧 Store 已删除，统一使用稳定 credential ID                         |
+| M5     | ✅ 完成     | `safeStorage` 生产引用清零，边界脚本进入 `pnpm verify`                          |
+| M6     | 🔄 部分完成 | `pnpm verify` 与 arm64 打包验证已通过；arm64 真人验收及 x64 打包/真人验收待执行 |
 
-任一阶段只要出现凭证进入项目、日志、诊断、全量 renderer 状态或 Git 提交，立即停止后续开发并修复。
+任一阶段只要出现凭证进入工作空间、日志、诊断、全量 renderer 状态或 Git 提交，立即停止后续开发并修复。
 
 ## 总体范围
 
@@ -46,7 +46,7 @@
 - 浏览器 Cookie、网站会话和验证码管理。
 - SSH 私钥托管。
 - 团队共享凭证或远程 Agent 凭证下发。
-- 自动读取项目 `.env` 的全部变量。
+- 自动读取工作空间 `.env` 的全部变量。
 
 ## 目标架构
 
@@ -105,11 +105,11 @@ main CredentialService
 
 ### 验收标准
 
-- [ ] 文档能回答每一类凭证由谁保存、谁消费、作用域是什么。
-- [ ] 不再出现“Studio 不保存 API Key”和“Studio 保存 API Key”同时成立的当前描述。
-- [ ] 所有旧凭证路径都有迁移或删除结论。
-- [ ] 产品明确承认本地明文威胁模型。
-- [ ] 架构评审确认无需第二状态所有者或新的官方集成依赖。
+- [x] 文档能回答每一类凭证由谁保存、谁消费、作用域是什么。
+- [x] 不再出现“Studio 不保存 API Key”和“Studio 保存 API Key”同时成立的当前描述。
+- [x] 所有旧凭证路径都有迁移或删除结论。
+- [x] 产品明确承认本地明文威胁模型。
+- [x] 架构评审确认无需第二状态所有者或新的官方集成依赖。
 
 ### 失败判定
 
@@ -171,13 +171,13 @@ main CredentialService
 
 ### 验收标准
 
-- [ ] 新 Store 和 Service 不 import `safeStorage`。
-- [ ] 损坏文件不会被覆盖或静默清空。
-- [ ] 外部修改不会被内存旧状态覆盖，重新加载后可以继续写入。
-- [ ] macOS/Linux 新文件权限为 `0600`。
-- [ ] 原子写失败后旧凭证仍可读取。
-- [ ] 凭证服务失败不阻断设置、工作区、浏览器、编辑器和 Terminal 启动。
-- [ ] 单元测试覆盖全部错误码和并发路径。
+- [x] 新 Store 和 Service 不 import `safeStorage`。
+- [x] 损坏文件不会被覆盖或静默清空。
+- [x] 外部修改不会被内存旧状态覆盖，重新加载后可以继续写入。
+- [x] macOS/Linux 新文件权限为 `0600`。
+- [x] 原子写失败后旧凭证仍可读取。
+- [x] 凭证服务失败不阻断设置、工作空间、浏览器、编辑器和 Terminal 启动。
+- [x] 单元测试覆盖全部错误码和并发路径。
 
 ### 失败判定
 
@@ -231,13 +231,13 @@ main CredentialService
 
 ### 验收标准
 
-- [ ] 用户可以保存、重启、显示、复制、替换和清除测试凭证。
-- [ ] 默认 UI、Zustand 快照和诊断中没有凭证值。
-- [ ] 设置页明确显示明文存储说明及实际目录。
-- [ ] 复制操作不经过 renderer 明文返回。
-- [ ] 文件损坏时 UI 不显示“未配置”误导用户。
-- [ ] 文件被外部修改时 UI 提示冲突，重新加载前不能保存。
-- [ ] UI 冒烟覆盖关键操作和失败提示。
+- [x] 用户可以保存、重启、显示、复制、替换和清除测试凭证。
+- [x] 默认 UI、Zustand 快照和诊断中没有凭证值。
+- [x] 设置页明确显示明文存储说明及实际目录。
+- [x] 复制操作不经过 renderer 明文返回。
+- [x] 文件损坏时 UI 不显示“未配置”误导用户。
+- [x] 文件被外部修改时 UI 提示冲突，重新加载前不能保存。
+- [x] UI 自动化覆盖关键操作和失败提示。
 
 ### 失败判定
 
@@ -272,12 +272,12 @@ main CredentialService
 
 ### 验收标准
 
-- [ ] Agent 不再读取 `SettingsCredentialStore`。
-- [ ] 普通 `settings.json` 不包含 Key，只包含引用。
-- [ ] 内置 Runtime 可以使用新凭证完成最小连接测试。
-- [ ] 本机 Claude Code 无 Studio Key 时仍按自身认证边界工作。
-- [ ] Meshy 有明确保留或删除结论。
-- [ ] Agent 日志、诊断和会话快照不包含测试 Key。
+- [x] Agent 不再读取 `SettingsCredentialStore`。
+- [x] 普通 `settings.json` 不包含 Key，只包含引用。
+- [x] 内置 Runtime 可以使用新凭证完成最小连接测试。
+- [x] 本机 Claude Code 无 Studio Key 时仍按自身认证边界工作。
+- [x] Meshy 有明确保留或删除结论。
+- [x] Agent 日志、诊断和会话快照不包含测试 Key。
 
 ### 失败判定
 
@@ -301,7 +301,7 @@ main CredentialService
 - Git 设置只保存 provider、username 和 credentialRef。
 - `GIT_ASKPASS` 在执行时解析 Token。
 - Token 不进入 URL、命令参数、`.git/config` 或 Git 输出。
-- 清除 Token 后保留项目远程绑定，但状态变为 `credential-required`。
+- 清除 Token 后保留工作空间远程绑定，但状态变为 `credential-required`。
 
 ### 数据源方案
 
@@ -322,12 +322,12 @@ main CredentialService
 
 ### 验收标准
 
-- [ ] Git 和数据源不再创建独立 `secrets.enc`。
+- [x] Git 和数据源不再创建独立 `secrets.enc`。
 - [ ] Git 备份真实使用统一凭证完成测试 Push。
 - [ ] 数据源真实使用统一凭证完成只读连接测试。
-- [ ] 清除凭证只降级对应能力，不删除连接或项目绑定。
-- [ ] 工作空间、Git 提交、日志和诊断不包含测试凭证。
-- [ ] 数据源配置中的 `authRef` 不再使用 `keychain:`。
+- [x] 清除凭证只降级对应能力，不删除连接或工作空间绑定。
+- [x] 工作空间、Git 提交、日志和诊断不包含测试凭证。
+- [x] 数据源配置中的 `authRef` 不再使用 `keychain:`。
 
 ### 失败判定
 
@@ -374,11 +374,11 @@ main CredentialService
 
 ### 验收标准
 
-- [ ] `rg "safeStorage|keytar|Keychain|keychain" src package.json pnpm-lock.yaml` 不命中生产依赖和生产代码。
-- [ ] 启动、打开设置和使用无凭证能力都不触达系统钥匙串。
-- [ ] 旧密文不会被自动删除或覆盖。
-- [ ] 用户可以通过重新输入恢复所有仍需要的凭证。
-- [ ] 边界脚本已进入 `pnpm verify`。
+- [x] `rg "safeStorage|keytar|Keychain|keychain" src package.json pnpm-lock.yaml` 不命中生产依赖和生产代码。
+- [x] 启动、打开设置和使用无凭证能力都不触达系统钥匙串。
+- [x] 旧密文不会被自动删除或覆盖。
+- [x] 用户可以通过重新输入恢复所有仍需要的凭证。
+- [x] 边界脚本已进入 `pnpm verify`。
 - [ ] 打包应用在干净 macOS 用户环境中不出现钥匙串访问提示。
 
 ### 失败判定
@@ -415,28 +415,28 @@ pnpm verify:credential-boundary
 
 ### 真人验收矩阵
 
-| 场景 | 预期 |
-| --- | --- |
-| 全新安装，无凭证 | 正常启动，无钥匙串提示 |
-| 保存 Agent Key 后重启 | 已配置，Agent 可使用 |
-| 显示和复制 | 只操作目标凭证 |
-| GitHub Token | 连接测试和真实私有仓库 Push 成功 |
-| 数据源凭证 | 只读连接与查询成功 |
-| JSON 损坏 | 显示 degraded，不覆盖原文件 |
-| 文件只读 | 保存失败，旧凭证仍在 |
-| 文件运行中被外部修改 | 保存被拒绝，重新加载后显示磁盘版本 |
-| 旧 `secrets.enc` 存在 | 仅提示重新输入，不访问钥匙串 |
-| 复制诊断 | 不含 canary secret |
-| Git 备份 | 不提交 credentials 目录 |
+| 场景                  | 预期                               |
+| --------------------- | ---------------------------------- |
+| 全新安装，无凭证      | 正常启动，无钥匙串提示             |
+| 保存 Agent Key 后重启 | 已配置，Agent 可使用               |
+| 显示和复制            | 只操作目标凭证                     |
+| GitHub Token          | 连接测试和真实私有仓库 Push 成功   |
+| 数据源凭证            | 只读连接与查询成功                 |
+| JSON 损坏             | 显示 degraded，不覆盖原文件        |
+| 文件只读              | 保存失败，旧凭证仍在               |
+| 文件运行中被外部修改  | 保存被拒绝，重新加载后显示磁盘版本 |
+| 旧 `secrets.enc` 存在 | 仅提示重新输入，不访问钥匙串       |
+| 复制诊断              | 不含 canary secret                 |
+| Git 备份              | 不提交 credentials 目录            |
 
 ### 验收标准
 
-- [ ] 所有自动化门禁通过。
+- [x] 所有自动化门禁通过。
 - [ ] arm64/x64 打包产物完成凭证流程人工验收。
-- [ ] canary secret 不出现在日志、诊断、工作空间、Git、MCP 或 Agent 消息。
-- [ ] 设置、Agent、Git、数据源的错误提示可区分缺失、无效、存储损坏和权限失败。
-- [ ] 无凭证和凭证服务 degraded 时，无关能力全部可用。
-- [ ] 产品文档、架构文档和当前代码事实一致。
+- [x] canary secret 不出现在日志、诊断、工作空间、Git、MCP 或 Agent 消息。
+- [x] 设置、Agent、Git、数据源的错误提示可区分缺失、无效、存储损坏和权限失败。
+- [x] 无凭证和凭证服务 degraded 时，无关能力全部可用。
+- [x] 产品文档、架构文档和当前代码事实一致。
 
 ### 失败判定
 

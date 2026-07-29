@@ -8,7 +8,7 @@
 
 CCLink Studio OSS 是无 CCLink 账号、无 CCLink 云服务、无操作系统钥匙串依赖的本地工作台。
 
-用户可以在 Studio 中长期保存自己提供的第三方凭证。凭证以明文保存在 Electron `userData` 下的独立文件中，不进入项目、普通设置、日志、诊断或自动备份。
+用户可以在 Studio 中长期保存自己提供的第三方凭证。凭证以明文保存在 Electron `userData` 下的独立文件中，不进入工作空间、普通设置、日志、诊断或自动备份。
 
 当前生产代码已经使用统一 `CredentialService` 和可见的 `credentials/credentials.json`，不再导入 Electron `safeStorage`。发布验收状态以 `docs/features/local-credentials-development-plan.md` 为准。
 
@@ -27,13 +27,13 @@ CCLink Studio OSS 是无 CCLink 账号、无 CCLink 云服务、无操作系统�
 
 ## 支持范围
 
-| 凭证类别 | 典型字段 | 使用者 | 默认作用域 |
-| --- | --- | --- | --- |
-| 模型服务 | API Key | 本地 Agent、内置 Claude Code Runtime、兼容 Provider | 本机全局 |
-| Git 平台 | GitHub Token | 手动 Git 备份、GitHub 建仓 | 本机全局 |
-| 数据源 | API Key、Bearer Token、用户名、密码 | DataSourceService | 按数据源 ID |
-| 云同步 | WebDAV 密码 | 商业装配层 SyncService | 按同步配置 ID |
-| 扩展服务 | API Key、Token | 已启用的 Meshy 等扩展 | 按服务实例 |
+| 凭证类别 | 典型字段                            | 使用者                                              | 默认作用域    |
+| -------- | ----------------------------------- | --------------------------------------------------- | ------------- |
+| 模型服务 | API Key                             | 本地 Agent、内置 Claude Code Runtime、兼容 Provider | 本机全局      |
+| Git 平台 | GitHub Token                        | 手动 Git 备份、GitHub 建仓                          | 本机全局      |
+| 数据源   | API Key、Bearer Token、用户名、密码 | DataSourceService                                   | 按数据源 ID   |
+| 云同步   | WebDAV 密码                         | 商业装配层 SyncService                              | 按同步配置 ID |
+| 扩展服务 | API Key、Token                      | 已启用的 Meshy 等扩展                               | 按服务实例    |
 
 第一版只管理用户明确输入的第三方凭证，不管理：
 
@@ -41,7 +41,7 @@ CCLink Studio OSS 是无 CCLink 账号、无 CCLink 云服务、无操作系统�
 - Claude.ai Free/Pro/Max 登录材料；
 - 浏览器 Cookie、验证码或网站会话；
 - SSH 私钥、证书私钥或系统登录密码；
-- 项目 `.env` 中已有的任意变量；
+- 工作空间 `.env` 中已有的任意变量；
 - 官方构建、签名、公证或发布上传凭证。
 
 ## 产品入口
@@ -92,7 +92,7 @@ CCLink Studio OSS 是无 CCLink 账号、无 CCLink 云服务、无操作系统�
 
 - 清除单条凭证前显示凭证名称和受影响能力。
 - “清除全部”需要二次确认，并列出记录数量和受影响能力。
-- 清除凭证不删除非敏感连接配置、Provider 配置、项目 Git 绑定或 Saved Query。
+- 清除凭证不删除非敏感连接配置、Provider 配置、工作空间 Git 绑定或 Saved Query。
 - 清除后相关能力进入 `degraded/credential-required`，无关能力不受影响。
 
 ## 存储与可见性
@@ -239,21 +239,22 @@ interface CredentialMetadata {
 ### 扩展服务
 
 - 只有已启用且有真实消费者的扩展才能注册凭证类型。
-- 没有完整产品入口的 Meshy 凭证不得继续作为普通设置遗留字段存在。
+- Meshy 由“图像生成”设置页管理，凭证 ID 为 `extension:meshy:default`；主进程的
+  3D 和 Markdown 自动配图 Provider 是真实消费者。
 - 插件不得直接读取凭证文件，只能通过受限主进程能力按 ID 请求。
 
 ## 失败与降级
 
-| 场景 | 行为 | 禁止行为 |
-| --- | --- | --- |
-| 文件不存在 | 空凭证状态，正常启动 | 报致命错误 |
-| JSON 损坏 | `degraded`，保留文件，提供打开位置 | 当作空文件覆盖 |
+| 场景                | 行为                               | 禁止行为             |
+| ------------------- | ---------------------------------- | -------------------- |
+| 文件不存在          | 空凭证状态，正常启动               | 报致命错误           |
+| JSON 损坏           | `degraded`，保留文件，提供打开位置 | 当作空文件覆盖       |
 | 文件被外部修改/删除 | `conflict`，拒绝写入，要求重新加载 | 用内存旧状态覆盖磁盘 |
-| 权限不足 | `degraded`，禁止写入，提示修复权限 | 静默改存其他路径 |
-| 原子写失败 | 保留旧文件和旧内存状态 | 部分提交新状态 |
-| 凭证缺失 | 对应能力显示需要配置 | 阻断工作区或其他能力 |
-| 凭证无效/过期 | 返回认证错误并允许替换 | 自动删除凭证 |
-| 旧密文存在 | 提示重新输入或删除旧文件 | 启动时访问钥匙串 |
+| 权限不足            | `degraded`，禁止写入，提示修复权限 | 静默改存其他路径     |
+| 原子写失败          | 保留旧文件和旧内存状态             | 部分提交新状态       |
+| 凭证缺失            | 对应能力显示需要配置               | 阻断工作区或其他能力 |
+| 凭证无效/过期       | 返回认证错误并允许替换             | 自动删除凭证         |
+| 旧密文存在          | 提示重新输入或删除旧文件           | 启动时访问钥匙串     |
 
 ## 诊断
 
@@ -281,7 +282,7 @@ interface CredentialMetadata {
 
 > 第三方凭证以明文保存在当前设备。CCLink Studio 不会将其上传到 CCLink 服务，但拥有当前系统用户文件权限的程序可能读取该文件。
 
-本方案不声称抵抗本机恶意程序。真正的安全目标是隔离、最小暴露、可诊断和防止凭证误入项目、Git、日志及诊断。
+本方案不声称抵抗本机恶意程序。真正的安全目标是隔离、最小暴露、可诊断和防止凭证误入工作空间、Git、日志及诊断。
 
 ## 验收总则
 

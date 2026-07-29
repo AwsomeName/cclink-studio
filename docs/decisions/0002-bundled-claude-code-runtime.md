@@ -8,9 +8,15 @@
 
 ## 结论
 
-CCLink Studio 将固定版本的 Claude Code 可执行运行时作为新安装的默认本地 Agent 运行时，同时保留“使用本机 Claude Code”和“使用自定义可执行文件”两种显式选择。
+本 ADR 的产品目标是在许可和发布门禁关闭后，将固定版本的 Claude Code
+可执行运行时作为新安装的默认本地 Agent 运行时，同时保留“使用本机 Claude Code”和
+“使用自定义可执行文件”两种显式选择。当前实现默认仍为 `system`，不能把目标状态
+写成已经交付。
 
-内置运行时只是 Agent 执行引擎，不包含模型、账号、API 凭证、额度或 CCLink 官方服务。运行时来源与模型服务配置相互独立；密钥继续由 Studio 的本机加密设置管理，不写入安装包、普通设置、renderer 状态或诊断日志。
+内置运行时只是 Agent 执行引擎，不包含模型、账号、API 凭证、额度或 CCLink
+官方服务。运行时来源与模型服务配置相互独立；用户配置的 API Key 由主进程
+`CredentialService` 写入 ADR 0003 定义的独立本地明文凭证文件，不写入安装包、
+工作空间、普通设置、renderer 全量状态或诊断日志。
 
 当前 `@anthropic-ai/claude-agent-sdk` 已锁定为 `0.3.211`，其平台包声明携带 Claude Code `2.1.211`。当前后端却在未配置路径时强制传入 `claude`，绕过了 SDK 内置运行时。本决策将这一隐式 PATH 行为改为显式、可探测、可诊断、可回滚的运行时选择。
 
@@ -19,7 +25,7 @@ CCLink Studio 将固定版本的 Claude Code 可执行运行时作为新安装�
 ## 当前事实依据
 
 - [`package.json`](../../package.json) 将 `@anthropic-ai/claude-agent-sdk` 固定为 `0.3.211`；该版本的平台可选依赖声明 Claude Code `2.1.211`。
-- [`local-claude-code-backend.ts`](../../src/main/agent-core/backends/local-claude-code-backend.ts) 当前把空路径替换为 `'claude'` 并始终传入 `pathToClaudeCodeExecutable`，因此仍依赖系统 PATH，没有使用 SDK 的内置运行时解析。
+- [`local-claude-code-backend.ts`](../../src/main/agent-core/backends/local-claude-code-backend.ts) 只接收已经由 `ClaudeRuntimeManager` 解析和验证的可执行路径；默认选择仍为 `system`。
 - SDK 类型契约说明未传 `pathToClaudeCodeExecutable` 时使用 built-in executable，但 Electron 发布包仍需解决 optional dependency、ASAR 和目标架构问题。
 - 平台包当前许可证不是普通开源许可证，而是指向 Anthropic 法律协议；[Anthropic Legal and compliance](https://code.claude.com/docs/en/legal-and-compliance) 同时说明第三方 Agent SDK 产品应使用 API Key 或受支持云服务，不能向用户提供 Claude.ai 登录或代用户路由 Free/Pro/Max 凭证。
 - 2026-07-22 本机安装的 darwin-arm64 Claude Code `2.1.211` 原生二进制约 231 MB。该数字只用于容量规划，正式产物必须由 M0/M2 重新测量并记录。
@@ -103,7 +109,7 @@ interface ResolvedClaudeRuntime {
 }
 ```
 
-backend 只能接收已经解析并验证过的 `ResolvedClaudeRuntime`，不得自行读取 PATH、renderer 设置或项目状态。
+backend 只能接收已经解析并验证过的 `ResolvedClaudeRuntime`，不得自行读取 PATH、renderer 设置或工作空间状态。
 
 ### 3. 主进程是唯一状态所有者
 
@@ -146,7 +152,7 @@ renderer 只展示投影并发送显式 command。设置页、Agent Panel 和诊
 选择“内置”或“本机”只决定执行哪个 Claude Code，不决定模型服务和凭证来源。
 
 - 安装包不带 API Key、OAuth token 或官方服务地址。
-- Studio 管理的 API Key 继续保存在 `safeStorage`，只在主进程构造子进程环境时注入。
+- Studio 管理的 API Key 由主进程 `CredentialService` 保存，只在构造子进程环境时定向注入。
 - 不新增 Claude.ai OAuth 登录 UI，不代理 Free/Pro/Max 凭证。
 - 本机和自定义运行时也使用同一套 Studio provider 配置，不因可执行文件来自本机就自动导入账号材料。
 - 没有可用认证时，probe 可以为 runtime `ready`，但 Agent 能力必须显示 `degraded/auth-required`，不能把认证失败误报为运行时损坏。
@@ -264,22 +270,23 @@ main
     |- explicit executable path
     |- workspace boundary hook
     |- MCP session binding
-    |- provider env from safeStorage
+    |- provider env from CredentialService
     `- structured events and diagnostics
 ```
 
 ### 状态作用域
 
-| 状态               | 作用域               | 所有者                                 | 持久化                                 |
-| ------------------ | -------------------- | -------------------------------------- | -------------------------------------- |
-| runtime selection  | 设备/应用全局        | SettingsService + ClaudeRuntimeManager | 全局设置                               |
-| bundled manifest   | 安装包               | 构建系统                               | `resources/agent-runtime`              |
-| resolved runtime   | 当前主进程           | ClaudeRuntimeManager                   | 不直接持久化，启动时重建               |
-| pending switch     | 当前主进程           | ClaudeRuntimeManager                   | selection 已持久化，pending 状态可重建 |
-| runtime provenance | conversation/session | Agent runtime                          | 项目 conversation snapshot             |
-| API secret         | 设备/应用全局        | SettingsSecretStore                    | `safeStorage`                          |
+| 状态               | 作用域               | 所有者                                 | 持久化                                  |
+| ------------------ | -------------------- | -------------------------------------- | --------------------------------------- |
+| runtime selection  | 设备/应用全局        | SettingsService + ClaudeRuntimeManager | 全局设置                                |
+| bundled manifest   | 安装包               | 构建系统                               | `resources/agent-runtime`               |
+| resolved runtime   | 当前主进程           | ClaudeRuntimeManager                   | 不直接持久化，启动时重建                |
+| pending switch     | 当前主进程           | ClaudeRuntimeManager                   | selection 已持久化，pending 状态可重建  |
+| runtime provenance | conversation/session | Agent runtime                          | 工作空间 conversation snapshot          |
+| API secret         | 设备/应用全局        | CredentialService                      | `userData/credentials/credentials.json` |
 
-运行时选择属于设备能力，不属于项目。项目只能记录某个会话实际使用过的 runtime provenance，不能把另一台机器的绝对可执行路径写入项目目录并强制恢复。
+运行时选择属于设备能力，不属于工作空间。工作空间只能记录某个会话实际使用过的
+runtime provenance，不能把另一台机器的绝对可执行路径写入工作空间目录并强制恢复。
 
 ## 设置与交互设计
 
@@ -444,7 +451,7 @@ claudeRuntimeCustomPath: string
 - 延迟切换在最后一个活动 run 终态后只提交一次。
 - 立即切换会给所有受影响 run 发送明确的 `runtime_reconfigured` 终态。
 - 同 fingerprint 重启可以恢复 SDK Session；不兼容 fingerprint 不会复用旧 Session ID。
-- 项目切换不改变 runtime generation，也不会把其他项目的 session provenance 串入当前项目。
+- 工作空间切换不改变 runtime generation，也不会把其他工作空间的 session provenance 串入当前工作空间。
 - 窗口重建、应用退出和失败回滚均释放 probe/子进程/监听器，无悬挂 Claude 进程。
 
 ### M5：认证、诊断和独立降级闭环
@@ -456,10 +463,10 @@ claudeRuntimeCustomPath: string
 #### 方案
 
 - RuntimeProbe 与 provider readiness 分开报告。
-- provider readiness 通过设置页显式触发的无工具、单轮隔离请求验证；测试只读取主进程加密凭证，不复用正式会话。
+- provider readiness 通过设置页显式触发的无工具、单轮隔离请求验证；测试只从主进程 `CredentialService` 读取指定凭证，不复用正式会话。
 - 设置页显示版本、架构、来源、最后探测时间和修复动作。
 - Agent 诊断加入 runtime manifest、fingerprint 摘要、generation、provider 类型、认证是否配置和最近失败码。
-- 继续使用 safeStorage；诊断只输出布尔认证状态。
+- 继续使用 ADR 0003 的统一明文凭证服务；诊断只输出布尔认证状态和脱敏引用。
 - capability registry 将 Agent 降级独立于 Browser、Editor、Terminal 和 Android。
 
 #### 验收标准
@@ -467,7 +474,7 @@ claudeRuntimeCustomPath: string
 - 缺少 API Key 显示 `AUTH_REQUIRED`，不显示“Claude Code 未安装”。
 - provider 401、网络失败、runtime spawn 失败和会话不兼容呈现不同错误码。
 - 一键诊断不包含 API Key、OAuth token、Cookie、完整 Session ID 或未脱敏 home path。
-- Agent failed 时仍可打开项目、编辑文件、使用浏览器和 Terminal。
+- Agent failed 时仍可打开工作空间、编辑文件、使用浏览器和 Terminal。
 - 修复设置后可以重新 probe，不要求重启整个应用，除非错误明确标记为 restart-required。
 
 ### M6：发布候选与默认启用

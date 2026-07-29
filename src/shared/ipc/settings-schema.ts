@@ -10,7 +10,6 @@ const settingsUpdateSchema = z
     backendType: z.enum(['claude-code', 'http-api']),
     permissionMode: z.enum(['auto', 'categorized', 'strict']),
     disabledAgentToolModules: z.array(z.string().min(1).max(256)).max(128),
-    maxBudgetUsd: z.number().finite().min(0).max(10_000),
     claudeRuntimeSource: z.enum(['bundled', 'system', 'custom']),
     claudeCodePath: pathString,
     defaultZoomMode: z.enum(['fit', 'manual']),

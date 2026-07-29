@@ -1,5 +1,7 @@
 # Agent 对话系统
 
+> 当前事实源。最后更新：2026-07-29。
+
 ## 概述
 
 CCLink Studio 的 Agent 是本地工作台里的 AI 协作入口，能够理解自然语言指令并调用工具完成复杂任务。Agent 不是简单的聊天机器人，而是能够操作浏览器、编辑文档、搜索网络的本地工作助手。
@@ -35,7 +37,7 @@ CCLink Studio 设置页（VSCode 风格，在主工作区 Tab 中打开）
 ├── Runtime 来源：内置 / 本机 / 自定义路径
 ├── Provider：格式 / API 地址 / 模型 / 本地凭证引用
 ├── 权限模式：auto / categorized / strict
-└── 预算上限：--max-budget-usd
+└── 费用策略：只统计，不设置预算或阻止调用
 ```
 
 CCLink Studio 可以保存用户主动配置的模型 API Key，并只在主进程创建 Agent backend 时使用。当前存储是 ADR 0003 定义的本地明文凭证文件，由统一 `CredentialService` 管理。
@@ -49,7 +51,9 @@ claude login
 
 ### 当前开发阶段
 
-> **当前阶段**：M9.1-M9.3 已推进到本仓库内置 Agent 最小内核、本机 Claude Code 后端、Claude Code 路径检测和设置页配置。HTTP API / OpenAI 兼容直连暂不作为完整工具 Agent。
+> **当前阶段**：本仓库已经具备 Agent 内核、Claude Code 后端、Runtime
+> 选择与探测、设置页、会话持久化、流式事件、工具桥接、权限确认、诊断和图片输入。
+> HTTP API / OpenAI 兼容直连暂不作为完整工具 Agent。
 
 ## 设计原则
 
@@ -57,6 +61,9 @@ claude login
 2. **透明可观测** — 用户能看到 Agent 的每一步推理和操作
 3. **可中断** — 用户随时可以暂停或取消 Agent 操作
 4. **上下文感知** — Agent 知道用户当前打开的文件、浏览的页面
+
+费用不是权限。Agent 模型和第三方图片生成的用量由主进程统一记录，但费用、credits
+或估算金额不得参与权限判断、预算限制或调用拦截。
 
 ### 诊断与排障
 
@@ -69,13 +76,13 @@ claude login
 这里记录 Agent 系统必须遵守的核心规则：
 
 - 用户只理解 Thread / 会话，不理解 `assistant-panel`、`workbench-tab` 这类工程 surface。
-- 有激活项目时，新 Thread 自动归属当前项目。
-- 无激活项目时，新 Thread 归属默认项目 / 未归档。
+- 有激活工作空间时，新 Thread 自动归属当前工作空间。
+- 无激活工作空间时，新 Thread 归属未归档。
 - 右侧 Agent Panel 是当前工作流控制台，结构为 Quick Switcher / Messages / Composer。
 - Quick Switcher 负责当前 + 运行中 + 最近 Thread 的快速切换和新建，单列表混排，默认最多 5 条，可展开。
 - Messages 使用高密度 turn 视图，工具调用默认折叠，raw MCP 名称和 JSON 参数只在展开详情中显示。
 - Composer 区域展示已挂载资源，并承载输入框、`@资源`、`/技能` 和发送。
-- 左侧 Activity Bar 的“会话”视图是 Thread Center，负责完整历史、搜索、过滤、归档和项目级管理。
+- 左侧 Activity Bar 的“会话”视图是 Thread Center，负责完整历史、搜索、过滤、归档和工作空间级管理。
 - Workbench 只打开同一个 Thread 的深度工作视图，关闭 Tab 不删除 Thread。
 - Skill、模型、Provider、API Key、默认模式等长期配置只放设置页。
 
@@ -403,7 +410,7 @@ CCLink Studio 设置页负责：
 - 选择内置、本机或自定义 Runtime。
 - 配置 Provider 格式、API 地址、模型和本地凭证。
 - 配置权限模式。
-- 配置 `--max-budget-usd`。
+- 查看模型费用统计；费用数据不参与调用限制。
 
 ### 后续方案：HTTP Chat / HTTP Tool Agent
 
@@ -449,8 +456,8 @@ export class LocalClaudeCodeBackend implements IAgentBackend { ... }
 ### 模型选择
 
 - **Claude Code 模式**：用户通过 `claude config` 或 CCLink Studio 设置页配置模型
-- **直连 API 模式**：用户在设置页选择服务商 + 具体模型
-- 流式输出：所有模式均支持
+- **直连 API 模式**：未来独立后端，不得把普通 HTTP Chat 伪装成当前完整工具 Agent
+- 流式输出：当前 Claude Code 后端支持
 
 ## 对话管理
 
@@ -486,55 +493,23 @@ interface Message {
 - 支持从历史对话恢复上下文
 - 对话摘要（长对话自动压缩）
 
-## 功能清单
+## 当前能力矩阵
 
-### P0 — 对话 UI + 设置页面（当前阶段）
+| 能力                                  | 状态   | 边界                                            |
+| ------------------------------------- | ------ | ----------------------------------------------- |
+| Agent Panel、消息和流式事件           | 已实现 | 同一 Thread 可在右侧和 Workbench 展示           |
+| Claude Code backend                   | 已实现 | 当前完整工具 Agent 的唯一主线 backend           |
+| Runtime 来源                          | 已实现 | `system` / `custom` / `bundled`，默认 `system`  |
+| Provider 与 API Key                   | 已实现 | Key 由主进程 `CredentialService` 保存           |
+| 工具调用与权限确认                    | 已实现 | 修改性和高风险操作按权限模型确认                |
+| Browser、Editor、FS、Terminal 工具    | 已实现 | 通过主进程和 MCP 边界调用                       |
+| 工作空间会话持久化                    | 已实现 | Thread 随工作空间保存和恢复                     |
+| 取消、错误状态和诊断复制              | 已实现 | 诊断默认脱敏                                    |
+| 图片输入                              | 已实现 | PNG/JPEG/GIF/WebP；单条最多 5 张、单张最多 5 MB |
+| HTTP/OpenAI Compatible 完整工具 Agent | 未实现 | 不与普通 Chat Completion 混为一谈               |
+| 多 Agent、跨会话记忆、操作回放        | 未实现 | 需要单独产品规格和架构评审                      |
 
-> 先做页面，不对接后端。UI 用 Mock 数据驱动。
-
-- [ ] 对话面板布局（消息列表 + 底部输入框）
-- [ ] 消息气泡渲染（用户 / Agent / 系统）
-- [ ] 流式文本展示（打字机效果）
-- [ ] 工具调用卡片 UI（展示操作描述 + 确认/拒绝按钮）
-- [ ] 操作状态指示器（进行中 / 已确认 / 已拒绝）
-- [ ] 暂停 / 停止按钮
-- [ ] 截图预览（在工具调用卡片中展示）
-- [ ] **VSCode 风格设置页（在主工作区 Tab 中打开，不是弹窗）**
-  - [ ] 顶部搜索框，实时过滤设置项
-  - [ ] 设置项按分组展示（常用、外观、Agent、浏览器、快捷键等）
-  - [ ] 右上角 GUI / JSON 编辑模式切换
-  - [ ] Agent 分组：
-    - [ ] Runtime 来源切换（内置 / 本机 / 自定义）
-    - [ ] Provider 配置区域：格式、API 地址、模型和本地凭证引用
-    - [ ] API Key 进入统一本地凭证管理，不写 Claude Code 配置或系统钥匙串
-    - [ ] 连接测试按钮
-  - [ ] 外观分组：主题（深色/浅色）、字体大小等
-  - [ ] 浏览器分组：默认搜索引擎、代理、下载目录等
-
-### P1 — 对接 Claude Code 后端
-
-- [ ] AgentBridge：管理 Claude Code 子进程
-- [ ] stdin/stdout JSON 消息协议
-- [ ] Claude Code 事件流 → UI 渲染
-- [ ] 用户确认 → 工具执行 → 结果回传
-- [ ] 浏览器工具桥接（browser\_\* → Playwright → BrowserView）
-- [ ] 编辑器工具桥接（editor\_\* → Tiptap）
-- [ ] 上下文注入（当前文件、浏览器状态）
-
-### P2 — 增强
-
-- [ ] 对话历史管理
-- [ ] 批量确认
-- [ ] 操作回滚
-- [ ] 搜索工具集成
-- [ ] 上下文摘要（长对话压缩）
-- [ ] 对话模板（预设常用任务流程）
-
-### P3 — 高级
-
-- [ ] 多 Agent 协作（不同专长的 Agent）
-- [ ] Agent 记忆（跨对话记住用户偏好）
-- [ ] 操作录制与回放
-- [ ] 自定义工具插件
-- [ ] Agent 市场（分享 Agent 配置）
-- [ ] 演进为直接 Claude API 调用（可选）
+图片可以通过文件选择、粘贴或拖放加入 Composer。图片正文只进入当前待发送消息，
+发送成功后从 Composer 清除，不写入工作空间或 conversation 持久化快照。当前本地
+Claude Code backend 使用原生多模态输入；诊断只记录数量、MIME 和大小，不记录
+base64 正文。

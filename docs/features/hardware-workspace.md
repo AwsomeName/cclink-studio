@@ -1,17 +1,17 @@
 # 硬件工作区与生产助手
 
-> 状态：规划稿
-> 最后更新：2026-07-15
-> 关联文档：`docs/features/fpc-shape-change-assistant.md`、`docs/features/cad-conversion-plugins.md`、`docs/features/browser-automation.md`、`docs/features/platform-automation.md`、`docs/features/project-system.md`
+> 状态：部分实现。硬件领域模型、几何/BOM 服务、MCP 和自动化测试已落地；完整工作空间 UI 与真实工程验收待完成。
+> 最后更新：2026-07-28
+> 关联文档：`docs/features/fpc-shape-change-assistant.md`、`docs/features/cad-conversion-plugins.md`、`docs/features/browser-automation.md`、`docs/features/platform-automation.md`、`docs/features/workspace-system.md`
 
 ## 结论
 
-硬件工作区是 CCLink Studio 面向 AI 眼镜、PCB、FPC、结构件和小批量生产项目的垂直工作流。
+硬件工作区是 CCLink Studio 面向 AI 眼镜、PCB、FPC、结构件和小批量生产工作空间的垂直工作流。
 
 第一版不做“AI 自动画板”，也不承诺“AI 独立改电路并下单”。第一版做一个更真实、更安全、更容易验收的闭环：
 
 ```text
-打开硬件项目目录
+打开硬件工作空间目录
 → 自动识别原理图 / PCB 源工程 / Gerber / BOM / 坐标 / 结构件
 → 生成生产包检查报告
 → 帮用户定位缺失文件、版本混乱和下单风险
@@ -19,15 +19,15 @@
 → 下单、付款、地址确认前必须人工确认
 ```
 
-CCLink Studio 在硬件项目里的定位是“硬件生产副驾驶”，不是 EDA 的替代品。
+CCLink Studio 在硬件工作空间里的定位是“硬件生产副驾驶”，不是 EDA 的替代品。
 
 FPC 外形调整是硬件工作区的第一个真实改版场景。它的产品边界、用户流程和分阶段方案见 `docs/features/fpc-shape-change-assistant.md`。
 
 ## 产品功能
 
-### 1. 硬件项目识别
+### 1. 硬件工作空间识别
 
-当用户打开工作空间时，CCLink Studio 扫描目录并识别硬件项目特征：
+当用户打开工作空间时，CCLink Studio 扫描目录并识别硬件工作空间特征：
 
 - 原理图：KiCad、嘉立创 EDA、Altium、PDF 原理图、图片原理图。
 - PCB 源工程：KiCad PCB、嘉立创 EDA 工程、Altium PCBDoc。
@@ -36,7 +36,7 @@ FPC 外形调整是硬件工作区的第一个真实改版场景。它的产品�
 - 固件和软件：MCU 固件、测试脚本、烧录说明。
 - 数据手册：PDF datasheet、规格书、连接器手册。
 
-识别结果以“硬件项目摘要”显示在 Sidebar 或主工作区：
+识别结果以“硬件工作空间摘要”显示在 Sidebar 或主工作区：
 
 ```text
 AI 眼镜右眼 FPC
@@ -177,11 +177,11 @@ Altium 只做读取和外部打开，不在早期承诺自动写回。
 
 - 读取生产包检查结果。
 - 打开嘉立创或嘉立创 EDA 下单入口。
-- 使用项目绑定浏览器 profile。
+- 使用工作空间绑定浏览器 profile。
 - 上传 Gerber zip、BOM、坐标文件。
 - 根据检查报告预填板厚、数量、颜色、工艺等参数。
 - 生成报价页并截图留档。
-- 将报价、参数和截图写回项目记录。
+- 将报价、参数和截图写回工作空间记录。
 
 必须人工确认：
 
@@ -191,7 +191,7 @@ Altium 只做读取和外部打开，不在早期承诺自动写回。
 - 选择替代物料。
 - 接受高风险 DFM 提示。
 
-项目记录建议写入：
+工作空间记录建议写入：
 
 ```text
 hardware/orders/2026-07-14-jlc-v4.0.md
@@ -208,14 +208,14 @@ hardware/orders/2026-07-14-jlc-v4.0.md
 
 ## 信息架构
 
-硬件项目不是新的顶层工作空间类型，而是当前工作空间的一种能力视图。
+硬件工作空间不是新的顶层工作空间类型，而是当前工作空间的一种能力视图。
 
 ```text
 工作空间
 ├─ 文件
 ├─ 会话
 ├─ 硬件
-│  ├─ 项目摘要
+│  ├─ 工作空间摘要
 │  ├─ 生产包
 │  ├─ BOM / 坐标
 │  ├─ 调试记录
@@ -223,7 +223,7 @@ hardware/orders/2026-07-14-jlc-v4.0.md
 └─ 浏览器 / 文档 / 预览 Tab
 ```
 
-Activity Bar 不新增“硬件”一级入口。硬件能力在工作空间 Sidebar 内根据项目识别结果出现，避免左侧入口继续膨胀。
+Activity Bar 不新增“硬件”一级入口。硬件能力在工作空间 Sidebar 内根据工作空间识别结果出现，避免左侧入口继续膨胀。
 
 ## 代码架构
 
@@ -233,7 +233,7 @@ Activity Bar 不新增“硬件”一级入口。硬件能力在工作空间 Sid
 
 ```text
 src/main/hardware/
-├─ hardware-project-detector.ts      # 硬件项目识别
+├─ hardware-project-detector.ts      # 硬件工作空间识别
 ├─ hardware-artifact-index.ts        # 产物索引与分类
 ├─ production-package-service.ts     # 生产包检查
 ├─ bom-parser.ts                     # BOM 解析
@@ -408,7 +408,7 @@ interface HardwareRisk {
 
 确认卡片必须显示：
 
-- 项目名称和版本。
+- 工作空间名称和版本。
 - 将要上传的文件路径。
 - 文件 hash。
 - 目标网站。
@@ -417,15 +417,15 @@ interface HardwareRisk {
 
 ## 开发里程碑
 
-### M8.1：硬件项目识别
+### M8.1：硬件工作空间识别
 
-目标：打开 AI 眼镜目录后，CCLink Studio 能识别这是硬件项目，并列出关键产物。
+目标：打开 AI 眼镜目录后，CCLink Studio 能识别这是硬件工作空间，并列出关键产物。
 
 实现：
 
 - 新增 `src/main/hardware` 基础模块。
 - 扫描文件名、扩展名、zip 内容和目录结构。
-- 在工作空间 Sidebar 内展示“硬件项目摘要”入口。
+- 在工作空间 Sidebar 内展示“硬件工作空间摘要”入口。
 
 验收：
 
@@ -466,7 +466,7 @@ interface HardwareRisk {
 
 - UI 中能查看报告、风险和建议下一步。
 - Agent 能调用 `hardware_inspect_production_package`。
-- 检查报告可保存到项目 Markdown。
+- 检查报告可保存到工作空间 Markdown。
 
 ### M8.4：结构件预览与 CAD 转换插件
 
@@ -517,7 +517,7 @@ interface HardwareRisk {
 
 实现：
 
-- 为硬件项目支持 `cclink-hardware.json` 配置：
+- 为硬件工作空间支持 `cclink-hardware.json` 配置：
 
 ```json
 {
@@ -546,7 +546,7 @@ interface HardwareRisk {
 
 ### M8.6：调试助手
 
-目标：支持基于故障现象、测量值和项目文件生成排查路径。
+目标：支持基于故障现象、测量值和工作空间文件生成排查路径。
 
 实现：
 

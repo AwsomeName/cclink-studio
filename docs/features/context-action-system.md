@@ -11,13 +11,13 @@ CCLink Studio 将为主要工作区域建立统一的上下文操作系统。这
 
 纯装饰元素不强行提供菜单。打开、保存、发送、发布等关键能力仍必须保留可见入口，右键菜单是高效入口，不得成为用户发现核心功能的唯一方式。
 
-本功能不是逐个组件追加 `onContextMenu`。它将统一现有文件树、Workbench Tab、项目、Agent Thread、Terminal 和选中文本菜单，使工具栏、快捷键、命令面板和右键菜单复用同一个命令事实源。
+本功能不是逐个组件追加 `onContextMenu`。它将统一现有文件树、Workbench Tab、工作空间、Agent Thread、Terminal 和选中文本菜单，使工具栏、快捷键、命令面板和右键菜单复用同一个命令事实源。
 
 ## 产品目标
 
 - 用户在对象附近即可找到下一步相关操作，减少跨区域移动。
 - 同一命令在工具栏、命令面板、快捷键和右键菜单中具有相同名称、可用条件和执行结果。
-- 右键目标在项目切换、Tab 切换和异步更新后仍能准确归属，不串项目、不串 Profile、不串 Thread。
+- 右键目标在工作空间切换、Tab 切换和异步更新后仍能准确归属，不串工作空间、不串 Profile、不串 Thread。
 - 浏览器网页、编辑器、Terminal 等不同渲染表面拥有符合各自技术边界的菜单体验。
 - 所有危险操作、远端副作用和凭证相关操作继续遵守权限与人工确认边界。
 - 菜单系统可由各功能模块独立贡献命令，不要求持续修改一个全局巨型组件。
@@ -37,7 +37,8 @@ M1 开始前存在多套相互独立的菜单实现：
 
 - 文件树菜单：`components/common/ContextMenu.tsx`。
 - Workbench Tab 菜单：`components/common/TabContextMenu.tsx`。
-- 项目条菜单：`components/project-strip/ProjectStrip.tsx` 内部状态。
+- 工作空间条菜单：当前代码路径仍为
+  `components/project-strip/ProjectStrip.tsx`，属于待迁移兼容命名。
 - Agent Thread 菜单：`components/agent-panel/AgentPanel.tsx` 内部状态。
 - 会话选中文本菜单：`components/common/ConversationCopyMenu.tsx`。
 - Markdown 编辑器选区菜单：`components/workbench/MarkdownEditor.tsx` 内部状态。
@@ -48,7 +49,7 @@ M1 开始前存在多套相互独立的菜单实现：
 
 ### 1. 对象优先，不以像素为单位
 
-右键必须先解析出稳定的 `ContextTarget`，再构建菜单。目标可以是 Project、File、Tab、BrowserPage、TerminalSession、Thread、Message 或 StatusItem，不能只传一个 DOM 节点或坐标。
+右键必须先解析出稳定的 `ContextTarget`，再构建菜单。目标可以是 Workspace、File、Tab、BrowserPage、TerminalSession、Thread、Message 或 StatusItem，不能只传一个 DOM 节点或坐标。
 
 在列表项上右键时，菜单绑定被点击项，但不擅自执行左键的打开、导航或激活动作。区域空白处只能得到该区域的容器菜单。
 
@@ -69,7 +70,7 @@ M1 开始前存在多套相互独立的菜单实现：
 
 renderer 的 `ContextMenuService` 是菜单开关、目标、坐标和焦点恢复的唯一所有者。菜单状态不持久化，不进入 WorkspaceState，也不能成为业务事实源。
 
-同一时刻只允许一个菜单。打开新菜单、项目切换、窗口失焦、目标被删除或 generation 变化时，旧菜单必须关闭。
+同一时刻只允许一个菜单。打开新菜单、工作空间切换、窗口失焦、目标被删除或 generation 变化时，旧菜单必须关闭。
 
 ### 4. 业务副作用仍由领域模块拥有
 
@@ -105,11 +106,15 @@ Contribution 必须声明目标类型、分组、顺序和 commandId；不得捕
 
 ## 领域模型
 
-建议的目标类型：
+规范目标类型统一使用 `workspace`。当前实现中的 `kind: 'project'` 是既有兼容字面量，
+必须在 ContextTarget schema、contribution、诊断和测试中原子迁移；迁移完成前需要
+兼容读取旧诊断数据，但新增 contribution 不得继续扩散旧名称。
+
+目标类型：
 
 ```ts
 type ContextTarget =
-  | { kind: 'project'; workspaceKey: string; path?: string }
+  | { kind: 'workspace'; workspaceKey: string; path?: string }
   | { kind: 'activity'; activityId: string }
   | { kind: 'sidebar'; panelId: string; workspaceKey: string | null }
   | { kind: 'file'; workspaceKey: string; path: string; fileType: 'file' | 'directory' }
@@ -184,29 +189,29 @@ src/renderer/src/features/<domain>/context-actions.ts
 - 与目标无关的动作不显示，避免长菜单中充满灰色选项。
 - 危险操作置于最后一组，使用危险样式和省略号表示仍有确认步骤。
 - 菜单自动避开窗口四边，跟随 UI zoom 正确换算坐标。
-- 列表滚动、区域 resize、项目切换和 Browser View 重建时关闭菜单。
+- 列表滚动、区域 resize、工作空间切换和 Browser View 重建时关闭菜单。
 
 ## 区域能力矩阵
 
-| 区域/目标        | 第一阶段操作                                                 | 后续增强                             | 危险或权限边界                         |
-| ---------------- | ------------------------------------------------------------ | ------------------------------------ | -------------------------------------- |
-| 项目条 Project   | 切换、关闭、复制路径、Finder 显示、项目诊断                  | 关闭其他、关闭右侧、Git 备份         | 有运行任务时关闭只关闭视图，不终止任务 |
-| Activity Bar     | 打开面板、显示/隐藏侧栏                                      | 隐藏入口、恢复默认顺序               | 不允许隐藏唯一恢复入口                 |
-| Sidebar 容器     | 刷新、新建当前领域对象                                       | 折叠全部、复制项目信息               | 刷新失败只降级当前面板                 |
-| 文件/目录        | 打开方式、新建、重命名、复制/粘贴、复制路径、发送给 Agent、Finder 显示 | 多选、剪切                           | 删除统一移到废纸篓并确认               |
-| Workbench Tab    | 重命名、复制、关闭                                           | 固定、关闭其他、关闭右侧、恢复关闭项 | 关闭草稿继续使用现有保存确认           |
-| 编辑器正文       | 剪切、复制、粘贴、全选、发送选区给 Agent                     | 格式、链接和图片动作                 | 不覆盖系统输入法与密码字段行为         |
-| Browser 页面     | 后退、前进、刷新、复制选区/链接、在新 Tab 打开、发送给 Agent | 保存图片、查看页面诊断               | 不使用 CDP；下载和外部协议继续校验     |
-| Browser 侧栏 Tab | 激活、刷新、复制 URL、复制 Tab、关闭                         | Profile 信息、页面诊断               | Profile 变更必须走现有绑定规则         |
-| Terminal         | 复制、粘贴、查找、清屏、发送选区给 Agent                     | 重启、查看审计记录                   | 终止需确认；粘贴不能自动执行           |
-| Agent Thread     | 打开、重命名、停止、归档、恢复、复制诊断                     | 在 Workbench 打开、复制引用          | 删除需确认；停止绑定当前 runId         |
-| Agent Message    | 复制、复制 Markdown、引用到输入框                            | 从这里重试、发送到新 Thread          | 重试不能重复已完成的外部副作用         |
-| 数据源           | 测试、刷新、编辑、复制安全标识                               | 复制配置、导出结果                   | 凭证值不进入菜单或剪贴板               |
-| 运营/生产        | 打开配置、生成草稿、查看状态、复制诊断                       | 模板与批量准备                       | 发布、评论、发送仍需最终人工确认       |
-| Android          | 截图、复制设备信息、刷新设备                                 | 重连、打开日志                       | Shell/设备写操作继续走权限策略         |
-| 设置项           | 重置当前项、复制设置键                                       | 恢复默认分组                         | 密钥只能复制配置状态，不能复制原值     |
-| 状态栏项         | 查看详情、复制对应状态、打开诊断                             | 快速恢复动作                         | 只针对被右键的状态项构建菜单           |
-| 布局分隔条/空白  | 隐藏区域、重置尺寸                                           | 保存布局预设                         | 不为纯装饰背景显示空菜单               |
+| 区域/目标            | 第一阶段操作                                                           | 后续增强                             | 危险或权限边界                         |
+| -------------------- | ---------------------------------------------------------------------- | ------------------------------------ | -------------------------------------- |
+| 工作空间条 Workspace | 切换、关闭、复制路径、Finder 显示、工作空间诊断                        | 关闭其他、关闭右侧、Git 备份         | 有运行任务时关闭只关闭视图，不终止任务 |
+| Activity Bar         | 打开面板、显示/隐藏侧栏                                                | 隐藏入口、恢复默认顺序               | 不允许隐藏唯一恢复入口                 |
+| Sidebar 容器         | 刷新、新建当前领域对象                                                 | 折叠全部、复制工作空间信息           | 刷新失败只降级当前面板                 |
+| 文件/目录            | 打开方式、新建、重命名、复制/粘贴、复制路径、发送给 Agent、Finder 显示 | 多选、剪切                           | 删除统一移到废纸篓并确认               |
+| Workbench Tab        | 重命名、复制、关闭                                                     | 固定、关闭其他、关闭右侧、恢复关闭项 | 关闭草稿继续使用现有保存确认           |
+| 编辑器正文           | 剪切、复制、粘贴、全选、发送选区给 Agent                               | 格式、链接和图片动作                 | 不覆盖系统输入法与密码字段行为         |
+| Browser 页面         | 后退、前进、刷新、复制选区/链接、在新 Tab 打开、发送给 Agent           | 保存图片、查看页面诊断               | 不使用 CDP；下载和外部协议继续校验     |
+| Browser 侧栏 Tab     | 激活、刷新、复制 URL、复制 Tab、关闭                                   | Profile 信息、页面诊断               | Profile 变更必须走现有绑定规则         |
+| Terminal             | 复制、粘贴、查找、清屏、发送选区给 Agent                               | 重启、查看审计记录                   | 终止需确认；粘贴不能自动执行           |
+| Agent Thread         | 打开、重命名、停止、归档、恢复、复制诊断                               | 在 Workbench 打开、复制引用          | 删除需确认；停止绑定当前 runId         |
+| Agent Message        | 复制、复制 Markdown、引用到输入框                                      | 从这里重试、发送到新 Thread          | 重试不能重复已完成的外部副作用         |
+| 数据源               | 测试、刷新、编辑、复制安全标识                                         | 复制配置、导出结果                   | 凭证值不进入菜单或剪贴板               |
+| 运营/生产            | 打开配置、生成草稿、查看状态、复制诊断                                 | 模板与批量准备                       | 发布、评论、发送仍需最终人工确认       |
+| Android              | 截图、复制设备信息、刷新设备                                           | 重连、打开日志                       | Shell/设备写操作继续走权限策略         |
+| 设置项               | 重置当前项、复制设置键                                                 | 恢复默认分组                         | 密钥只能复制配置状态，不能复制原值     |
+| 状态栏项             | 查看详情、复制对应状态、打开诊断                                       | 快速恢复动作                         | 只针对被右键的状态项构建菜单           |
+| 布局分隔条/空白      | 隐藏区域、重置尺寸                                                     | 保存布局预设                         | 不为纯装饰背景显示空菜单               |
 
 ## 浏览器特殊方案
 
@@ -235,7 +240,7 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 - `menuId`：每次打开生成的新 ID。
 - `target`：结构化目标，不保存业务对象实例。
 - `anchor`：窗口坐标或触发元素引用。
-- `workspaceGeneration`：打开时的项目 generation。
+- `workspaceGeneration`：打开时的工作空间 generation。
 - `focusReturn`：关闭后恢复焦点的元素。
 
 生命周期：
@@ -246,7 +251,7 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 4. 打开菜单并聚焦首个可用项。
 5. 执行前重新解析目标和命令状态。
 6. 命令完成、取消或失败后关闭菜单并恢复焦点。
-7. 项目切换、窗口 blur、目标删除或 generation 变化时立即失效。
+7. 工作空间切换、窗口 blur、目标删除或 generation 变化时立即失效。
 
 菜单构建不得触发网络请求或慢 IPC。需要异步信息时先显示已有状态和明确的加载/不可用项，不能阻塞右键打开。
 
@@ -292,16 +297,16 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 
 - 扩展 Command 类型，加入 context、visible、enabled、disabledReason、checked 和 risk。
 - 建立 ContextTarget、ContextMenuStore、统一位置计算和焦点管理。
-- 为 File、Tab、Project、Thread、Conversation selection 和 Markdown selection 编写 contribution。
+- 为 File、Tab、Workspace、Thread、Conversation selection 和 Markdown selection 编写 contribution。
 - 旧菜单组件在迁移完成后删除，不保留兼容双写。
 - 命令面板继续调用同一 Command Registry；无目标命令使用当前工作台上下文。
 
 #### 验收标准
 
 - 同一时间最多显示一个菜单。
-- 现有文件、Tab、项目、Thread 和选区菜单行为无回归。
+- 现有文件、Tab、工作空间、Thread 和选区菜单行为无回归。
 - 同一命令从菜单和命令面板执行结果一致。
-- 项目切换和窗口失焦会关闭菜单，旧目标不能执行。
+- 工作空间切换和窗口失焦会关闭菜单，旧目标不能执行。
 - 菜单定位、排序、可见性、禁用原因和键盘导航有单元测试。
 - 不新增 preload 权限，不新增业务副作用。
 - `pnpm verify` 和受影响 UI smoke 通过。
@@ -310,9 +315,9 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 
 - 已建立唯一 `ContextMenuStore`、`ContextMenuHost`、结构化 `ContextTarget` 和 Menu Contribution Registry。
 - Command Registry 已支持 context、visible、enabled/禁用原因、checked、risk 和统一异步执行结果。
-- File、Tab、Project、Thread、Conversation selection、Markdown selection 六套现有菜单已迁移；旧菜单组件与旧 Store 已删除，不保留双写。
+- File、Tab、Workspace、Thread、Conversation selection、Markdown selection 六套现有菜单已迁移；旧菜单组件与旧 Store 已删除，不保留双写。
 - Tab 浏览器截图遮罩、Tab/Thread 内联重命名、草稿关闭确认、Thread 归档/恢复和 Markdown 带行号发送行为保留。
-- 项目切换、窗口失焦、外部点击和 Escape 会关闭菜单；执行前再次验证 workspace 与目标是否仍有效。
+- 工作空间切换、窗口失焦、外部点击和 Escape 会关闭菜单；执行前再次验证 workspace 与目标是否仍有效。
 - 单元测试覆盖中央执行、stale target、贡献过滤/排序、单菜单所有权、边界定位、禁用项键盘跳转和浏览器预览生命周期。
 - 2026-07-22 本地门禁：`pnpm verify` 通过（146 files / 885 tests），`pnpm smoke:standalone` 通过（local 9/9、UI 6/6、workflow 5/5、restore 4/4）。
 
@@ -322,30 +327,30 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 
 #### 目标
 
-- 覆盖 Project Strip、Activity Bar、Sidebar、文件树、Workbench Tab、Status Bar 和布局区域。
+- 覆盖 Workspace Strip、Activity Bar、Sidebar、文件树、Workbench Tab、Status Bar 和布局区域。
 - 让工作台导航和管理对象拥有一致的右键入口。
 
 #### 方案
 
 - 为每个框架区域增加显式 target resolver。
 - 文件删除从 Markdown 特例收敛为受保护的通用移到废纸篓命令。
-- Tab 增加关闭其他、关闭右侧；项目增加 Finder 显示、复制路径和项目诊断。
+- Tab 增加关闭其他、关闭右侧；工作空间增加 Finder 显示、复制路径和工作空间诊断。
 - Status Bar 按具体 itemId 构建菜单，不使用整条状态栏的万能菜单。
 - 布局分隔条只提供隐藏和重置，不显示业务命令。
 
 #### 验收标准
 
 - 每个可操作框架对象都能通过鼠标和 Shift+F10 打开正确菜单。
-- 右键非活跃项目/Tab 不会先切换项目或激活 Tab。
+- 右键非活跃工作空间/Tab 不会先切换工作空间或激活 Tab。
 - 关闭其他/右侧遵守草稿保存、Terminal 和 Thread 既有生命周期。
 - 文件操作严格限制在当前 workspace，非法路径被 schema 拒绝。
 - 窄窗口、UI zoom 和屏幕四边不裁切菜单。
-- Project/Tab/文件树自动化测试和 standalone smoke 通过。
+- Workspace/Tab/文件树自动化测试和 standalone smoke 通过。
 
 #### 完成证据
 
-- `ContextTarget` 已增加 Activity、Sidebar、StatusItem 和 Layout；Project、File、Tab 继续使用稳定对象标识，不以 DOM 节点作为业务目标。
-- Project 菜单已提供切换、复制路径、Finder 显示、工作台诊断和关闭；右键非活跃项目不会先触发项目切换。
+- `ContextTarget` 已增加 Activity、Sidebar、StatusItem 和 Layout；Workspace、File、Tab 继续使用稳定对象标识，不以 DOM 节点作为业务目标。
+- Workspace 菜单已提供切换、复制路径、Finder 显示、工作台诊断和关闭；右键非活跃工作空间不会先触发工作空间切换。
 - Activity Bar、Sidebar 容器、Status Bar 具体状态项和左右布局分隔条已接入统一 Host；鼠标右键、Menu 键和 Shift+F10 共用同一目标解析与命令。
 - 文件菜单已增加 Finder 显示，并将 Markdown 特例删除收敛为通用“移到废纸篓”；主进程使用 `workspacePath + targetPath` 契约再次校验作用域，拒绝越界路径和工作区根目录。
 - 文件菜单与文件树快捷键复用 `fileTree.copyEntry` / `fileTree.pasteEntry`；文件剪贴板由 `fs-store` 单独拥有，主进程复制契约分别校验源和目标工作区，同名自动生成副本且不覆盖。
@@ -375,11 +380,11 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 
 - Browser 网页右键不启用 CDP、不注入脚本，登录 Profile 保持不变。
 - 链接、图片、选区、输入框和普通页面得到不同且正确的菜单。
-- Browser action 始终绑定当前 workspace/tab/profile，不漂移到其他项目。
+- Browser action 始终绑定当前 workspace/tab/profile，不漂移到其他工作空间。
 - Terminal 粘贴不自动执行；终止操作有确认并留下审计记录。
 - Agent 停止动作只影响打开菜单时重新验证后的当前 runId。
-- 项目切换期间打开的 Browser/Terminal/Agent 菜单立即失效。
-- Browser、Terminal、Agent 回归测试和真人跨项目验收通过。
+- 工作空间切换期间打开的 Browser/Terminal/Agent 菜单立即失效。
+- Browser、Terminal、Agent 回归测试和真人跨工作空间验收通过。
 
 #### 当前证据
 
@@ -389,7 +394,7 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 - Terminal 已接入复制、粘贴、查找、清屏、发送选区、重启和终止；粘贴只写入 PTY 输入且不附加回车，重启/终止在确认后再次校验当前 workspace、tab 与 session，并记录生命周期审计。
 - Agent Thread 已接入打开、重命名、停止当前 run、复制诊断和归档/恢复；停止命令执行前重新核对 `runId`。消息已接入复制、复制 Markdown 和引用到 Composer，引用不会触发发送。
 - 2026-07-22 全新 detached worktree 自动门禁：`pnpm install --frozen-lockfile`、`pnpm verify` 通过（151 files / 902 tests），`pnpm smoke:standalone` 通过（local 9/9、UI 6/6、workflow 7/7、restore 4/4）。
-- `docs/ops/context-action-m3-acceptance.md` 的 H1-H4 已由真人逐项确认：Browser Profile 与登录态保持，Terminal 粘贴及终止确认正确，Agent 引用与 run 停止不产生旁路副作用，项目切换时旧菜单失效且各项目运行现场不串。
+- `docs/ops/context-action-m3-acceptance.md` 的 H1-H4 已由真人逐项确认：Browser Profile 与登录态保持，Terminal 粘贴及终止确认正确，Agent 引用与 run 停止不产生旁路副作用，工作空间切换时旧菜单失效且各工作空间运行现场不串。
 - M3 关闭提交 `ca634cb` 已在全新 detached worktree 完成锁定安装和最新整体基线复验：`pnpm verify` 通过（153 files / 926 tests），`pnpm smoke:standalone` 通过（26/26）。
 
 ### M4：领域模块独立贡献
@@ -452,7 +457,7 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 - 没有重复 commandId、孤立 contribution、第二套菜单 store 或遗留全局菜单组件。
 - 诊断能区分菜单构建失败、目标失效、权限拒绝和领域执行失败。
 - 全新 detached worktree 通过锁定安装、`pnpm verify`、standalone 和受影响 smoke。
-- 真人验收覆盖项目切换、Browser Profile、Terminal、Agent、危险确认和可选能力降级。
+- 真人验收覆盖工作空间切换、Browser Profile、Terminal、Agent、危险确认和可选能力降级。
 - 远端 CI 通过，工作树干净后才能宣称功能完成。
 
 #### 当前证据
@@ -480,7 +485,7 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 
 - renderer 右键到领域 command 的完整链路。
 - Browser WebContentsView 原生菜单到 BrowserManager 的完整链路。
-- 项目 A 打开菜单后切到项目 B，A 的命令无法执行。
+- 工作空间 A 打开菜单后切到工作空间 B，A 的命令无法执行。
 - Terminal/Agent 正在运行时菜单动作绑定正确 session/run。
 - 可选模块故障时菜单系统和其他模块继续工作。
 
@@ -490,7 +495,7 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 - 窄窗口、全屏、不同缩放比例和多显示器边缘。
 - Browser 登录态、链接、图片、文本选区和输入框。
 - 文件删除、Terminal 终止、Thread 删除和外部提交确认。
-- 项目切换与回切后目标、状态和诊断不串。
+- 工作空间切换与回切后目标、状态和诊断不串。
 
 ## 发布与回滚
 
@@ -505,7 +510,7 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 必须持续拷问：
 
 1. 是真的复用了命令，还是只把相同代码复制到另一个菜单？
-2. 菜单目标是否在执行前重新验证，还是可能操作已经切走的项目、Tab 或 Thread？
+2. 菜单目标是否在执行前重新验证，还是可能操作已经切走的工作空间、Tab 或 Thread？
 3. Browser 网页菜单是否偷偷依赖 CDP、脚本注入或高权限 preload？
 4. 是否把关键功能藏进右键，导致新用户找不到？
 5. 是否因为“方便”而绕过 Terminal、外部发布和删除操作的确认边界？

@@ -96,6 +96,66 @@ describe('useEditorStore', () => {
 
       expect(useEditorStore.getState().files['virtual:note'].currentContent).toBe('keep')
     })
+
+    it('恢复草稿时移除选区映射提示并合并重复的文档诊断', () => {
+      const compatibilityWarning = {
+        code: 'unsupported-math' as const,
+        severity: 'warning' as const,
+        message: '数学公式按原文保留。',
+      }
+      useEditorStore.getState().hydrateFromWorkspaceState({
+        files: {
+          '/docs/plan.md': {
+            savedContent: 'old',
+            currentContent: 'new',
+            dirty: true,
+            diagnostics: [
+              compatibilityWarning,
+              compatibilityWarning,
+              {
+                code: 'source-map-mismatch',
+                severity: 'warning',
+                message: '选区采用邻近块映射。',
+              },
+            ],
+          },
+        },
+      })
+
+      expect(useEditorStore.getState().files['/docs/plan.md'].diagnostics).toEqual([
+        compatibilityWarning,
+      ])
+    })
+  })
+
+  describe('setDiagnostics', () => {
+    it('不保存选区映射提示且相同诊断不会重复更新状态', () => {
+      useEditorStore.getState().initVirtualFile('virtual:note', '# 草稿')
+      const compatibilityWarning = {
+        code: 'unsupported-math' as const,
+        severity: 'warning' as const,
+        message: '数学公式按原文保留。',
+      }
+
+      useEditorStore.getState().setDiagnostics('virtual:note', [
+        compatibilityWarning,
+        compatibilityWarning,
+        {
+          code: 'source-map-mismatch',
+          severity: 'warning',
+          message: '选区采用邻近块映射。',
+        },
+      ])
+      const firstFileState = useEditorStore.getState().files['virtual:note']
+
+      expect(firstFileState.diagnostics).toEqual([compatibilityWarning])
+
+      useEditorStore
+        .getState()
+        .setDiagnostics('virtual:note', [compatibilityWarning, compatibilityWarning])
+
+      expect(useEditorStore.getState().files['virtual:note']).toBe(firstFileState)
+    })
   })
 
   describe('pendingUpdates', () => {

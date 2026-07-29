@@ -1000,7 +1000,9 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                   permissionMode={permissionMode}
                   settings={settings}
                   loading={loading || contextCompacting}
-                  canSend={(Boolean(input.trim()) || pendingImages.length > 0) && !contextCompacting}
+                  canSend={
+                    (Boolean(input.trim()) || pendingImages.length > 0) && !contextCompacting
+                  }
                   contextUsage={contextUsage}
                   contextCompaction={contextCompaction}
                   canCompact={Boolean(sessionId) && !loading}

@@ -399,8 +399,8 @@ export function AgentComposerToolbar({
                 <em>来源</em>
               </span>
               <span>
-                <strong>${settings.maxBudgetUsd.toFixed(2)}</strong>
-                <em>单次预算</em>
+                <strong>仅统计</strong>
+                <em>费用策略</em>
               </span>
             </div>
             <button
@@ -412,7 +412,7 @@ export function AgentComposerToolbar({
               <IconSettings size={13} />
               <span>
                 <strong>打开 Agent 设置</strong>
-                <em>Claude Code 路径、权限和预算</em>
+                <em>Claude Code 路径、权限和费用统计</em>
               </span>
             </button>
           </FloatingSurface>

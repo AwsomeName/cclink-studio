@@ -1,5 +1,7 @@
 # 内嵌浏览器 & Playwright 自动化
 
+> 状态：已实现。最后更新：2026-07-28。
+
 ## 概述
 
 CCLink Studio 在应用窗口内嵌入一个完整的 Chrome 浏览器，支持通过 Playwright 进行自动化操作。这是与"打开外部浏览器"或"调用 headless Chrome"完全不同的方案——浏览器渲染在窗口内部，用户可以实时看到并参与操作。
@@ -21,7 +23,7 @@ CCLink Studio 在应用窗口内嵌入一个完整的 Chrome 浏览器，支持�
 使用 Electron 的 `WebContentsView` API（Electron 30+，替代旧的 BrowserView）将 Chromium 嵌入主窗口：
 
 ```typescript
-// packages/main/src/browser/browser-manager.ts
+// src/main/browser/browser-manager.ts
 
 import { WebContentsView, BrowserWindow } from 'electron'
 
@@ -41,7 +43,7 @@ export class BrowserManager {
       webPreferences: {
         contextIsolation: true,
         sandbox: true,
-      }
+      },
     })
     this.mainWindow.contentView.addChildView(this.view)
     this.updateBounds()
@@ -94,7 +96,7 @@ export class BrowserManager {
 ### Playwright CDP 集成
 
 ```typescript
-// packages/main/src/playwright/playwright-bridge.ts
+// src/main/playwright/playwright-bridge.ts
 
 import { chromium, type Browser, type Page } from 'playwright'
 
@@ -108,7 +110,7 @@ export class PlaywrightBridge {
   async connect(cdpEndpoint: string): Promise<void> {
     this.browser = await chromium.connectOverCDP(cdpEndpoint)
     const contexts = this.browser.contexts()
-    this.page = contexts[0]?.pages()[0] ?? await contexts[0]?.newPage()
+    this.page = contexts[0]?.pages()[0] ?? (await contexts[0]?.newPage())
   }
 
   /**
@@ -152,7 +154,7 @@ export class PlaywrightBridge {
 ### 启动时的 CDP 端口配置
 
 ```typescript
-// packages/main/src/main.ts
+// src/main/index.ts
 
 import { app, BrowserWindow } from 'electron'
 
@@ -181,28 +183,28 @@ app.on('ready', () => {
 
 **完整 Playwright 功能验证清单（全部已实现 ✅）：**
 
-| 功能 | Playwright API | 用途 | 状态 |
-|------|---------------|------|------|
-| 页面导航 | `page.goto()` | 打开任意 URL | ✅ |
-| 元素点击 | `page.click()` | 点击按钮/链接 | ✅ |
-| 表单填写 | `page.fill()` | 填写输入框/文本域 | ✅ |
-| 文件上传 | `page.setInputFiles()` | 上传简历/附件 | ✅ |
-| 截图 | `page.screenshot()` | Agent 感知页面状态 | ✅ |
-| DOM 提取 | `page.textContent()` / `innerHTML` | 提取 JD、岗位信息 | ✅ |
-| 网络拦截 | `page.route()` / `intercept` | 拦截 API 请求获取数据 | ✅ |
-| 多 Tab | `browser.newPage()` / `pages()` | 同时操作多个页面 | ✅ |
-| 等待元素 | `page.waitForSelector()` | 等待动态加载内容 | ✅ |
-| 键盘输入 | `page.keyboard` | 模拟键盘操作 | ✅ |
-| 鼠标操作 | `page.mouse` | 拖拽、悬停等 | ✅ |
-| 下拉选择 | `page.selectOption()` | 选择城市、薪资范围 | ✅ |
-| 复选框/单选 | `page.check()` / `uncheck()` | 勾选同意条款等 | ✅ |
-| 拖拽上传 | `page.dragAndDrop()` | 拖拽文件上传 | ✅ |
-| iframe 操作 | `frameLocator()` | 处理嵌套 iframe | ✅ |
-| 对话框处理 | `page.on('dialog')` | 处理 alert/confirm | ✅ |
-| 新窗口处理 | `page.waitFor('popup')` | 处理新打开的窗口 | ✅ |
-| Cookie 操作 | `context.cookies()` / `addCookies()` | 保持登录态 | ✅ |
-| 页面等待 | `page.waitForLoadState()` | 等待页面加载完成 | ✅ |
-| JavaScript 执行 | `page.evaluate()` | 在页面中执行自定义 JS | ✅ |
+| 功能            | Playwright API                       | 用途                  | 状态 |
+| --------------- | ------------------------------------ | --------------------- | ---- |
+| 页面导航        | `page.goto()`                        | 打开任意 URL          | ✅   |
+| 元素点击        | `page.click()`                       | 点击按钮/链接         | ✅   |
+| 表单填写        | `page.fill()`                        | 填写输入框/文本域     | ✅   |
+| 文件上传        | `page.setInputFiles()`               | 上传简历/附件         | ✅   |
+| 截图            | `page.screenshot()`                  | Agent 感知页面状态    | ✅   |
+| DOM 提取        | `page.textContent()` / `innerHTML`   | 提取 JD、岗位信息     | ✅   |
+| 网络拦截        | `page.route()` / `intercept`         | 拦截 API 请求获取数据 | ✅   |
+| 多 Tab          | `browser.newPage()` / `pages()`      | 同时操作多个页面      | ✅   |
+| 等待元素        | `page.waitForSelector()`             | 等待动态加载内容      | ✅   |
+| 键盘输入        | `page.keyboard`                      | 模拟键盘操作          | ✅   |
+| 鼠标操作        | `page.mouse`                         | 拖拽、悬停等          | ✅   |
+| 下拉选择        | `page.selectOption()`                | 选择城市、薪资范围    | ✅   |
+| 复选框/单选     | `page.check()` / `uncheck()`         | 勾选同意条款等        | ✅   |
+| 拖拽上传        | `page.dragAndDrop()`                 | 拖拽文件上传          | ✅   |
+| iframe 操作     | `frameLocator()`                     | 处理嵌套 iframe       | ✅   |
+| 对话框处理      | `page.on('dialog')`                  | 处理 alert/confirm    | ✅   |
+| 新窗口处理      | `page.waitFor('popup')`              | 处理新打开的窗口      | ✅   |
+| Cookie 操作     | `context.cookies()` / `addCookies()` | 保持登录态            | ✅   |
+| 页面等待        | `page.waitForLoadState()`            | 等待页面加载完成      | ✅   |
+| JavaScript 执行 | `page.evaluate()`                    | 在页面中执行自定义 JS | ✅   |
 
 > 上述 20 项核心能力已全部封装为 **46 个 MCP 工具**（`browser_*` 前缀），按类别含：只读、导航、交互、对话框、Cookie、网络拦截/mock、多 Tab、文件下载、iframe、控制台日志、弹窗、坐标鼠标等。完整清单见 `src/main/mcp/modules/browser/index.ts` 的 `BROWSER_TOOL_DEFINITIONS`。
 
@@ -264,9 +266,9 @@ app.on('ready', () => {
 
 ### 如何区分
 
-| 检查项 | bounds 有问题 | 内容过宽（本问题） |
-|--------|---------------|-------------------|
-| `innerWidth` vs `bounds.width` | 不一致 | **一致** |
+| 检查项                                 | bounds 有问题     | 内容过宽（本问题）    |
+| -------------------------------------- | ----------------- | --------------------- |
+| `innerWidth` vs `bounds.width`         | 不一致            | **一致**              |
 | `document.documentElement.scrollWidth` | 通常 ≈ innerWidth | **明显 > innerWidth** |
 
 可通过 CDP 在已连接的内嵌页执行：

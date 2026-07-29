@@ -32,7 +32,11 @@ export function scopeToAllowedTools(scope: AgentScope): string[] {
       // android_* 与 agent_device_* 并存（互补：语义 UI 感知 + 坐标操作）
       return ['mcp__cclink_studio__android_*', 'mcp__cclink_studio__agent_device_*']
     case 'editor':
-      return ['mcp__cclink_studio__editor_*']
+      return [
+        'mcp__cclink_studio__editor_*',
+        'mcp__cclink_studio__image_generation_status',
+        'mcp__cclink_studio__markdown_illustrate',
+      ]
   }
 }
 
@@ -50,7 +54,11 @@ export function toolBelongsToScope(toolName: string, scope: AgentScope): boolean
     case 'android':
       return toolName.startsWith('android_') || toolName.startsWith('agent_device_')
     case 'editor':
-      return toolName.startsWith('editor_')
+      return (
+        toolName.startsWith('editor_') ||
+        toolName === 'image_generation_status' ||
+        toolName === 'markdown_illustrate'
+      )
   }
 }
 

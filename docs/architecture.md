@@ -28,6 +28,10 @@ CCLink Studio 是 CCLink 的开源桌面工作台端，不是 CCLink Studio 接�
 - Studio OSS 是本地优先的 Electron 桌面工作台，必须可以单仓库、免官方账号启动。
 - 官方账号、订阅、消息网络、云同步、生产 API 和发布链路只能通过官方集成层进入。
 - renderer 不得直接依赖官方实现、Node.js 或主进程内部模块。
+- 产品、工程和持久化领域统一使用“工作空间 / workspace”，不把“项目 / project”
+  作为同义状态对象。当前 `projectId`、`project.json`、`ProjectStrip` 和
+  `ProjectOpsService` 是待迁移兼容命名；新增代码不得继续扩散，迁移必须通过
+  双读、单写新格式和回滚保护现有用户状态。
 
 ### 2. 最小权限与不可信内容隔离
 
@@ -59,7 +63,7 @@ CCLink Studio 是 CCLink 的开源桌面工作台端，不是 CCLink Studio 接�
 
 - 工作区、浏览器 Profile、会话、标签页和 Terminal 状态必须有明确唯一所有者及作用域标识。
 - 跨 store 协作通过显式 command、service 或 transition 完成，禁止多个 store 相互修改内部状态形成隐式事务。
-- 持久化写入必须串行、原子、可迁移、可恢复；快照型分区在写入进行中只保留最新待写值，不能把 Agent 流式中间态排成无界磁盘队列；切换项目时必须验证旧任务、视图和监听器已经解绑。
+- 持久化写入必须串行、原子、可迁移、可恢复；快照型分区在写入进行中只保留最新待写值，不能把 Agent 流式中间态排成无界磁盘队列；切换工作空间时必须验证旧任务、视图和监听器已经解绑。
 
 ### 7. 外部副作用由人确认
 
@@ -71,7 +75,7 @@ CCLink Studio 是 CCLink 的开源桌面工作台端，不是 CCLink Studio 接�
 
 - 每个长任务必须有稳定 ID、状态、当前步骤、开始/结束时间、失败原因和所属工作区。
 - 诊断日志必须覆盖 renderer、IPC、主进程、工具调用、浏览器/Profile 和持久化状态，同时默认脱敏。
-- 项目切换、窗口重建或后台运行不得让任务状态变成不可判断。
+- 工作空间切换、窗口重建或后台运行不得让任务状态变成不可判断。
 
 ### 9. 质量门禁优先于功能数量
 
@@ -151,6 +155,8 @@ main
   Browser WebContentsView
   Agent bridge and local Claude Code backend
   MCP tool host
+  image generation providers and Markdown illustration transaction
+  append-only usage ledger (statistics only; never an execution gate)
   local filesystem, editor, terminal, diagnostics, updater shell
 
 official integration layer (outside OSS default path)
@@ -159,7 +165,7 @@ official integration layer (outside OSS default path)
 
 ## 状态与诊断基线
 
-稳定化后的状态边界如下。运行事实不能由 renderer 的恢复快照反向覆盖；项目切换只改变可见投影，后台运行是否继续由各自主进程事实源决定。
+稳定化后的状态边界如下。运行事实不能由 renderer 的恢复快照反向覆盖；工作空间切换只改变可见投影，后台运行是否继续由各自主进程事实源决定。
 
 | 状态域             | 运行事实                                             | renderer 投影                        | 持久化与恢复                                                   |
 | ------------------ | ---------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------- |
@@ -167,9 +173,10 @@ official integration layer (outside OSS default path)
 | Agent conversation | main Agent runtime 的 run/session                    | `agent-store` 的消息与可见运行状态   | workspace conversation snapshot；恢复后与 main 状态对账        |
 | Browser/Profile    | `BrowserManager` 的 Tab 绑定与 Electron 持久 Session | Browser Tab 的 URL/Profile/View 状态 | Profile partition 保存 Cookie/localStorage，Tab 快照只保存绑定 |
 | BrowserTask        | `BrowserTaskRuntime` 的 task/action 状态             | `browser-task-store`                 | 当前进程内可诊断任务；终态不伪装为持久后台任务                 |
-| Terminal           | `TerminalSessionRegistry` / `TerminalSessionStore`   | Terminal Tab 与 renderer store       | 主进程 session record；项目恢复后通过 `listSessions` 对账      |
+| Terminal           | `TerminalSessionRegistry` / `TerminalSessionStore`   | Terminal Tab 与 renderer store       | 主进程 session record；工作空间恢复后通过 `listSessions` 对账  |
+| Usage              | `UsageLedgerService` 的追加事件                       | 会话费用与 credits 的只读投影         | `{userData}/usage-events.jsonl`；统计失败不得阻断能力调用       |
 
-Agent 发起的浏览器任务在创建时固定 `workspaceKey`、`conversationId`、`agentRunId`、进程内随机 `agentSessionRef`、`tabId` 和 `profileId`。浏览器工具必须由 conversation 找到活动 BrowserTask，再直接使用该 `tabId` 注册的 Playwright Page；不得在同步后重新读取全局活跃 Page，否则项目切换会造成跨项目竞态。浏览器动作通过 `taskRunId` 归因。复制诊断必须报告关联链是 `matched`、`incomplete` 还是 `mismatch`，并列出缺失或错配字段；同一 Tab 上其他会话的任务不能被误选。
+Agent 发起的浏览器任务在创建时固定 `workspaceKey`、`conversationId`、`agentRunId`、进程内随机 `agentSessionRef`、`tabId` 和 `profileId`。浏览器工具必须由 conversation 找到活动 BrowserTask，再直接使用该 `tabId` 注册的 Playwright Page；不得在同步后重新读取全局活跃 Page，否则工作空间切换会造成跨工作空间竞态。浏览器动作通过 `taskRunId` 归因。复制诊断必须报告关联链是 `matched`、`incomplete` 还是 `mismatch`，并列出缺失或错配字段；同一 Tab 上其他会话的任务不能被误选。
 
 `agentSessionRef` 只在主进程当前生命周期内稳定，由随机值生成，不是 Session ID 的哈希或截断，也不能用于认证。诊断可以比较 UI/Main Session 是否一致，但不得输出 Session ID、Cookie 值、密码、验证码或 token。旧任务和手动 BrowserTask 没有关联块时保持兼容，但必须标为 `incomplete`，不能伪称已完整归因。
 

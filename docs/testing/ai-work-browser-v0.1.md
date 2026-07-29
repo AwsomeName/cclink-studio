@@ -25,9 +25,9 @@ pnpm test src/main/browser/browser-task-runtime.test.ts src/main/browser/browser
 
 当前覆盖：
 
-| 测试文件 | 覆盖 |
-|----------|------|
-| `src/main/browser/browser-task-runtime.test.ts` | 任务状态机、暂停/取消拦截、完成释放 active、动作日志、参数脱敏 |
+| 测试文件                                          | 覆盖                                                                     |
+| ------------------------------------------------- | ------------------------------------------------------------------------ |
+| `src/main/browser/browser-task-runtime.test.ts`   | 任务状态机、暂停/取消拦截、完成释放 active、动作日志、参数脱敏           |
 | `src/main/browser/browser-download-store.test.ts` | Agent 临时下载、用户系统下载、保留到工作空间、持久化、打开定位、文件缺失 |
 
 ### /grilling 风险
@@ -45,20 +45,20 @@ src/main/playwright/test-page.html
 
 覆盖能力：
 
-| 区域 | selector | 验证点 |
-|------|----------|--------|
-| 点击 | `#click-btn` | DOM 文案变化，动作日志 succeeded |
-| 表单 | `#input-name` / `#input-email` / `#input-message` | fill 动作记录且 value 脱敏 |
-| 下拉 | `#select-city` | select 动作 |
-| 复选框 | `#chk-agree` / `#chk-newsletter` | check / uncheck |
-| 上传 | `#file-upload` | uploadFile 权限与动作日志 |
-| 拖拽 | `#drag-source` -> `#drag-target` | dragDrop |
-| 对话框 | Alert / Confirm 按钮 | handleDialog / autoDialog |
-| iframe | `#test-iframe` | listFrames / frameExecute |
-| popup | `#popup-link` | waitForPopup / tab 注册 |
-| 下载 | `#download-json` / `#download-text` | BrowserDownloadRecord、taskRunId、临时路径 |
-| 延迟元素 | `#show-delayed` / `#delayed-btn` | waitForSelector |
-| 失败 selector | `#never-appears` | timeout / selector_missing 分类 |
+| 区域          | selector                                          | 验证点                                     |
+| ------------- | ------------------------------------------------- | ------------------------------------------ |
+| 点击          | `#click-btn`                                      | DOM 文案变化，动作日志 succeeded           |
+| 表单          | `#input-name` / `#input-email` / `#input-message` | fill 动作记录且 value 脱敏                 |
+| 下拉          | `#select-city`                                    | select 动作                                |
+| 复选框        | `#chk-agree` / `#chk-newsletter`                  | check / uncheck                            |
+| 上传          | `#file-upload`                                    | uploadFile 权限与动作日志                  |
+| 拖拽          | `#drag-source` -> `#drag-target`                  | dragDrop                                   |
+| 对话框        | Alert / Confirm 按钮                              | handleDialog / autoDialog                  |
+| iframe        | `#test-iframe`                                    | listFrames / frameExecute                  |
+| popup         | `#popup-link`                                     | waitForPopup / tab 注册                    |
+| 下载          | `#download-json` / `#download-text`               | BrowserDownloadRecord、taskRunId、临时路径 |
+| 延迟元素      | `#show-delayed` / `#delayed-btn`                  | waitForSelector                            |
+| 失败 selector | `#never-appears`                                  | timeout / selector_missing 分类            |
 
 ## 三、手动冒烟流程
 
@@ -139,14 +139,14 @@ pnpm dev
 
 ## 四、失败路径必测
 
-| 失败路径 | 操作 | 预期 |
-|----------|------|------|
-| selector 不存在 | 等待 `#never-appears` | `timeout` 或 `selector_missing` |
-| 用户暂停后工具继续调用 | 暂停任务后继续执行 browser 工具 | 主进程拒绝 |
-| 用户终止后还有排队工具 | 终止任务后继续执行 browser 工具 | 主进程拒绝 |
-| 无工作空间保留下载 | 未选择工作空间时点击“保留” | 明确错误，不移动文件 |
-| 外部删除下载文件 | 删除 tempPath/savedPath | 显示已丢失 |
-| 下载重复文件名 | 连续下载同名文件 | 自动生成唯一文件名 |
+| 失败路径               | 操作                            | 预期                            |
+| ---------------------- | ------------------------------- | ------------------------------- |
+| selector 不存在        | 等待 `#never-appears`           | `timeout` 或 `selector_missing` |
+| 用户暂停后工具继续调用 | 暂停任务后继续执行 browser 工具 | 主进程拒绝                      |
+| 用户终止后还有排队工具 | 终止任务后继续执行 browser 工具 | 主进程拒绝                      |
+| 无工作空间保留下载     | 未选择工作空间时点击“保留”      | 明确错误，不移动文件            |
+| 外部删除下载文件       | 删除 tempPath/savedPath         | 显示已丢失                      |
+| 下载重复文件名         | 连续下载同名文件                | 自动生成唯一文件名              |
 
 ## 五、真实网站冒烟
 
@@ -174,4 +174,3 @@ v0.1 发布前至少满足：
 - 下载产物路径和保留策略符合文档。
 - 暂停/终止在主进程执行层生效。
 - 已知失败路径能被 UI 或日志解释，而不是静默失败。
-

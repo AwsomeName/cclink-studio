@@ -79,6 +79,22 @@ export class MarkdownDocumentService {
     return target
   }
 
+  async removeAssets(documentPath: string, assetPaths: string[]): Promise<void> {
+    const assetDir = markdownAssetDirectoryPath(documentPath)
+    for (const assetPath of assetPaths) {
+      const safePath = resolve(assetPath)
+      if (!isPathWithin(assetDir, safePath)) {
+        throw new Error(`资源不属于当前 Markdown 文档: ${assetPath}`)
+      }
+      await unlink(safePath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ENOENT') throw error
+      })
+    }
+    await this.writeManifest(documentPath)
+    const remaining = await readdir(assetDir).catch(() => ['not-empty'])
+    if (remaining.length === 0) await rm(assetDir, { recursive: true, force: true })
+  }
+
   async prepareSave(documentPath: string, source: string): Promise<PreparedMarkdownSave> {
     const assetDir = markdownAssetDirectoryPath(documentPath)
     const legacyAssetDir = legacyMarkdownAssetDirectoryPath(documentPath)

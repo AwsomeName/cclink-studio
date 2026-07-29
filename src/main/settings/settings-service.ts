@@ -191,7 +191,7 @@ export class SettingsService {
         ;(filtered as unknown as Record<string, unknown>)[key] = normalizeModuleIds(val)
         continue
       }
-      // 对有枚举约束的字段做值校验；数值字段（如 maxBudgetUsd）跳过枚举检查
+      // 对有枚举约束的字段做值校验；其他数值/字符串字段跳过枚举检查。
       const validSet = VALID_VALUES[key]
       if (validSet && typeof val === 'string' && !validSet.has(val)) {
         console.warn(`[SettingsService] 忽略无效值: ${key}=${val}`)

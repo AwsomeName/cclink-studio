@@ -1,14 +1,18 @@
-# CCLink Studio 数据源系统 — Database / ES 接入计划
+# CCLink Studio 数据源系统
 
-> 状态：📋 规划中
+> 状态：部分实现。D0-D6、D8-D9 已完成；D7、D10-D11 部分完成；D12 待真实 ES 验收。
+> 最后更新：2026-07-28
 > 优先级：P0/P1
-> 目标：让本地 CCLink Studio 工作空间可以把远程数据库、搜索索引和数据采集项目作为可浏览、可查询、可挂载给 Agent 的资料来源。
+> 目标：让本地 CCLink Studio 工作空间可以把远程数据库、搜索索引和数据采集工作空间作为可浏览、可查询、可挂载给 Agent 的资料来源。
 > 开发者实施计划：`docs/features/data-sources-development-plan.md`
 > 凭证状态：当前代码已统一到 `docs/features/local-credentials.md` 定义的本地明文凭证服务。
 
 ## 结论
 
-CCLink Studio 应新增 **数据源（Data Sources）** 能力：左侧 Activity Bar 增加数据库图标，侧栏展示连接、索引和 Saved Queries，主工作区用专门的 Tab 承载查询编辑器和结果视图，右侧 Agent 可以把数据源、查询结果或单条记录作为上下文资源挂载。
+CCLink Studio 已提供 **数据源（Data Sources）** 能力：左侧 Activity Bar
+包含数据库入口，侧栏展示连接、索引和 Saved Queries，主工作区用专门的 Tab
+承载查询编辑器和结果视图，右侧 Agent 可以把数据源、查询结果或单条记录作为上下文
+资源挂载。
 
 第一版只做：
 
@@ -31,19 +35,19 @@ CCLink Studio 应新增 **数据源（Data Sources）** 能力：左侧 Activity
 
 典型场景：
 
-- 远程数据采集项目每天写入 Elasticsearch，本地写作项目需要搜索和引用这些数据。
+- 远程数据采集工作空间每天写入 Elasticsearch，本地写作工作空间需要搜索和引用这些数据。
 - 用户在 CCLink Studio 中打开文章草稿，用数据源查询最新素材，挂载结果给 Agent 写文章。
 - Agent 在用户授权下调用只读工具，检索资料、读取详情、生成引用和草稿。
 
 与其他模块的关系：
 
-| 模块 | 关系 |
-|------|------|
-| 工作空间 | 数据源配置可归属当前工作空间，查询 Tab 和 Saved Queries 随工作空间恢复 |
-| Agent | 数据源、查询结果、记录可通过 `@` 挂载，也可通过 MCP 工具读取 |
-| 设置页 | 管理全局数据源、安全策略、凭证状态和默认超时 |
-| Activity Bar | 数据源作为内容入口展示，不把连接配置细节塞进工作空间侧栏 |
-| 官方同步 | OSS 默认不内置云同步；若官方集成层同步数据源配置，只能同步非敏感配置，不能同步明文凭证 |
+| 模块         | 关系                                                                                   |
+| ------------ | -------------------------------------------------------------------------------------- |
+| 工作空间     | 数据源配置可归属当前工作空间，查询 Tab 和 Saved Queries 随工作空间恢复                 |
+| Agent        | 数据源、查询结果、记录可通过 `@` 挂载，也可通过 MCP 工具读取                           |
+| 设置页       | 管理全局数据源、安全策略、凭证状态和默认超时                                           |
+| Activity Bar | 数据源作为内容入口展示，不把连接配置细节塞进工作空间侧栏                               |
+| 官方同步     | OSS 默认不内置云同步；若官方集成层同步数据源配置，只能同步非敏感配置，不能同步明文凭证 |
 
 ## Activity Bar 与信息架构
 
@@ -101,7 +105,7 @@ Agent Panel：
 
 - Elasticsearch 只读连接。
 - 连接配置管理：名称、类型、endpoint、默认 index、查询超时、结果上限。
-- 凭证进入统一的本机明文凭证文件，不把密码/API Key 写入项目文件、普通设置、日志或诊断。
+- 凭证进入统一的本机明文凭证文件，不把密码/API Key 写入工作空间文件、普通设置、日志或诊断。
 - 浏览 index 列表和基础 metadata。
 - 执行只读 DSL 查询。
 - 查询结果表格、JSON 详情、分页。
@@ -264,13 +268,13 @@ data_source.run_saved_query
 
 权限分类：
 
-| 工具 | 默认权限 | 说明 |
-|------|----------|------|
-| `data_source.list_sources` | auto/categorized 可自动 | 只返回连接名称和 metadata |
-| `data_source.list_collections` | categorized 可自动 | 只读 metadata |
-| `data_source.search` | 首次确认，之后可按 source 记住 | 可能读取用户数据 |
-| `data_source.get_record` | 首次确认，之后可按 source 记住 | 读取单条数据 |
-| `data_source.run_saved_query` | 首次确认，之后可按 query 记住 | 读取查询结果 |
+| 工具                           | 默认权限                       | 说明                      |
+| ------------------------------ | ------------------------------ | ------------------------- |
+| `data_source.list_sources`     | auto/categorized 可自动        | 只返回连接名称和 metadata |
+| `data_source.list_collections` | categorized 可自动             | 只读 metadata             |
+| `data_source.search`           | 首次确认，之后可按 source 记住 | 可能读取用户数据          |
+| `data_source.get_record`       | 首次确认，之后可按 source 记住 | 读取单条数据              |
+| `data_source.run_saved_query`  | 首次确认，之后可按 query 记住  | 读取查询结果              |
 
 工具返回必须限制大小：
 
@@ -500,63 +504,68 @@ interface DataSourceAdapter {
 
 不要为了“支持很多数据库”牺牲第一版质量。真实写作链路跑通前，扩展类型都是次要的。
 
-## 开发任务拆分
-
-建议目录：
+## 当前代码结构
 
 ```text
 src/main/data-source/
 ├── data-source-service.ts
 ├── data-source-ipc.ts
-├── credential-store.ts
+├── data-source-ipc-schema.ts
+├── config-store.ts
+├── saved-query-store.ts
 ├── audit-log.ts
+├── normalization.ts
+├── adapter-registry.ts
+├── errors.ts
 ├── types.ts
 ├── adapters/
 │   ├── adapter.ts
 │   └── elasticsearch-adapter.ts
-└── __tests__/
+└── *.test.ts
 
 src/main/mcp/modules/data-source/
 ├── index.ts
-└── tools.ts
+└── index.test.ts
 
 src/renderer/src/stores/
 └── data-source-store.ts
 
 src/renderer/src/components/data-sources/
 ├── DataSourcesPanel.tsx
-├── DataSourceQueryTab.tsx
-├── DataSourceResultTable.tsx
-├── DataSourceRecordDrawer.tsx
-└── DataSourceConnectionForm.tsx
+└── DataSourceQueryTab.tsx
 ```
 
-核心文件改动：
+连接表单由 `DataSourcesPanel.tsx` 承载；结果表格、单条 JSON 和 JSON/CSV
+导出由 `DataSourceQueryTab.tsx` 承载。当前没有独立
+`DataSourceConnectionForm`、`DataSourceResultTable`、
+`DataSourceRecordDrawer` 或 `tools.ts`，后续只有在复杂度确实增长时才拆分。
 
-| 文件 | 改动 |
-|------|------|
-| `src/main/index.ts` | 注册 DataSourceService、IPC、MCP module |
-| `src/preload/index.ts` | 暴露 `cclinkStudio.dataSource` |
-| `src/preload/index.d.ts` | 补充 DataSource API 类型 |
-| `src/renderer/src/types/index.ts` | 增加 Data Source Tab 类型 |
-| `src/renderer/src/stores/ui-store.ts` | 增加 Activity Bar data-sources 状态 |
-| `src/renderer/src/components/activity-bar/ActivityBar.tsx` | 增加数据库图标入口 |
-| `src/renderer/src/components/sidebar/Sidebar.tsx` | 渲染 DataSourcesPanel |
-| `src/renderer/src/components/workbench/Workbench.tsx` | 渲染数据源查询/结果 Tab |
-| `src/main/mcp/tool-host.ts` | 注册数据源工具模块 |
+核心接入点：
+
+| 文件                                                       | 改动                                    |
+| ---------------------------------------------------------- | --------------------------------------- |
+| `src/main/index.ts`                                        | 注册 DataSourceService、IPC、MCP module |
+| `src/preload/index.ts`                                     | 暴露 `cclinkStudio.dataSource`          |
+| `src/preload/index.d.ts`                                   | 补充 DataSource API 类型                |
+| `src/renderer/src/types/index.ts`                          | 增加 Data Source Tab 类型               |
+| `src/renderer/src/stores/ui-store.ts`                      | 增加 Activity Bar data-sources 状态     |
+| `src/renderer/src/components/activity-bar/ActivityBar.tsx` | 增加数据库图标入口                      |
+| `src/renderer/src/components/sidebar/Sidebar.tsx`          | 渲染 DataSourcesPanel                   |
+| `src/renderer/src/components/workbench/Workbench.tsx`      | 渲染数据源查询/结果 Tab                 |
+| `src/main/mcp/tool-host.ts`                                | 注册数据源工具模块                      |
 
 ## 失败路径与处理
 
-| 失败 | 用户可见处理 | 工程处理 |
-|------|--------------|----------|
-| 网络不可达 | 显示连接失败和 endpoint | `DATA_SOURCE_NETWORK_ERROR` |
-| 凭证错误 | 提示重新输入凭证 | 不记录 secret，清理缓存 |
-| TLS 证书错误 | 提示证书不可信 | 默认拒绝，后续可做显式信任 |
-| 查询超时 | 显示超时和建议缩小范围 | AbortController / timeout |
-| index 不存在 | 提示 index 缺失 | `DATA_SOURCE_COLLECTION_NOT_FOUND` |
-| 结果过大 | 提示已截断，可分页 | maxRows / byteLimit |
-| 字段映射失败 | 显示 raw JSON 和配置入口 | fallback raw preview |
-| Agent 越权 | 请求用户确认 | permission manager |
+| 失败         | 用户可见处理             | 工程处理                           |
+| ------------ | ------------------------ | ---------------------------------- |
+| 网络不可达   | 显示连接失败和 endpoint  | `DATA_SOURCE_NETWORK_ERROR`        |
+| 凭证错误     | 提示重新输入凭证         | 不记录 secret，清理缓存            |
+| TLS 证书错误 | 提示证书不可信           | 默认拒绝，后续可做显式信任         |
+| 查询超时     | 显示超时和建议缩小范围   | AbortController / timeout          |
+| index 不存在 | 提示 index 缺失          | `DATA_SOURCE_COLLECTION_NOT_FOUND` |
+| 结果过大     | 提示已截断，可分页       | maxRows / byteLimit                |
+| 字段映射失败 | 显示 raw JSON 和配置入口 | fallback raw preview               |
+| Agent 越权   | 请求用户确认             | permission manager                 |
 
 ## 质量门槛
 
@@ -572,6 +581,6 @@ src/renderer/src/components/data-sources/
 - 是否需要支持 SSH tunnel / VPN 场景？
 - ES 是公网、内网还是只允许远端机器访问？
 - 是否存在只读副本，还是只能连接生产集群？
-- 数据采集项目的 index 命名是否稳定？
+- 数据采集工作空间的 index 命名是否稳定？
 - 写文章是否必须自动生成引用格式？
 - 查询结果快照要不要保存到工作空间文件，还是只保存 metadata？

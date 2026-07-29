@@ -39,7 +39,6 @@ const AGENT_SETTING_KEYS = new Set([
   'agentEngine',
   'claudeRuntimeSource',
   'claudeCodePath',
-  'maxBudgetUsd',
   'provider',
   'apiFormat',
   'apiBaseUrl',
@@ -74,6 +73,10 @@ export function registerSettingsIpc(
     async (_event, key, value) => {
       let releaseAgentLock: (() => void) | null = null
       try {
+        if (key === 'meshyApiKey') {
+          const status = await settingsService.setSecret(key, value)
+          return { success: true, status }
+        }
         releaseAgentLock = acquireAgentConfigurationLock(getAgentBridge())
         if (!releaseAgentLock) return runtimeSwitchPendingSecretResult()
         const status = await settingsService.setSecret(key, value)
@@ -97,6 +100,10 @@ export function registerSettingsIpc(
   registerTrustedIpcContract(settingsIpc.clearSecret, trustedRendererGuard, async (_event, key) => {
     let releaseAgentLock: (() => void) | null = null
     try {
+      if (key === 'meshyApiKey') {
+        const status = await settingsService.clearSecret(key)
+        return { success: true, status }
+      }
       if (key === 'apiKey' && settingsService.getAll().claudeRuntimeSource === 'bundled') {
         return {
           success: false,

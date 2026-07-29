@@ -102,7 +102,6 @@ export interface BackendConfig {
   claudeCode?: {
     /** Claude Code executable 绝对路径；为空时按 PATH 解析。 */
     claudeCodePath?: string
-    maxBudgetUsd?: number
     /** 注入到子进程的环境变量。第一版默认交给 Claude Code 自身管理模型登录。 */
     env?: Record<string, string>
     /** Anthropic-compatible API base URL for the SDK subprocess. */

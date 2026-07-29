@@ -123,7 +123,10 @@ function createBackend(): LocalClaudeCodeBackend {
   return createBackendFixture().backend
 }
 
-function getLastQueryParams(): { prompt: string | AsyncIterable<unknown>; options: Record<string, any> } {
+function getLastQueryParams(): {
+  prompt: string | AsyncIterable<unknown>
+  options: Record<string, any>
+} {
   const call = queryMock.mock.calls.at(-1)
   if (!call) throw new Error('query was not called')
   return call[0]
@@ -149,7 +152,6 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       cwd: '/Users/apple/Desktop/project',
       additionalDirectories: ['/Users/apple/Desktop/project'],
       includePartialMessages: true,
-      maxBudgetUsd: 1,
       model: 'glm-4.6',
       pathToClaudeCodeExecutable: '/usr/local/bin/claude',
       strictMcpConfig: true,
@@ -161,6 +163,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
         },
       },
     })
+    expect(params.options.maxBudgetUsd).toBeUndefined()
     expect(params.options.env.ANTHROPIC_BASE_URL).toBe('https://open.bigmodel.cn/api/anthropic')
     expect(params.options.env.ANTHROPIC_API_KEY).toBe('test-api-key')
     expect(params.options.env.CLAUDE_AGENT_SDK_CLIENT_APP).toBe('cclink-studio/0.1.1')

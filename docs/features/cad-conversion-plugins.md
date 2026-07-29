@@ -1,7 +1,7 @@
 # CAD 转换插件与 STEP 预览
 
-> 状态：规划稿
-> 最后更新：2026-07-15
+> 状态：部分实现。转换服务、FreeCAD 探测、OCCT 转换器、IPC、MCP 和自动化测试已落地；插件管理 UI、更多格式与真实 CAD 验收待完成。
+> 最后更新：2026-07-28
 > 关联文档：`docs/features/hardware-workspace.md`、`docs/features/fpc-shape-change-assistant.md`
 
 ## 结论
@@ -27,7 +27,7 @@ STEP/STP 支持不应作为 CCLink Studio 默认内置功能直接打包。
 
 ## 产品目标
 
-让 CCLink Studio 在硬件项目中逐步支持结构件文件：
+让 CCLink Studio 在硬件工作空间中逐步支持结构件文件：
 
 - 默认能打开 STL、3MF、GLB、GLTF、FBX 等 mesh 格式。
 - 启用 CAD 转换插件后能预览 STEP/STP。
@@ -109,7 +109,7 @@ STEP/STP 支持不应作为 CCLink Studio 默认内置功能直接打包。
 
 ### 硬件工作区
 
-结构件作为硬件产物进入项目摘要：
+结构件作为硬件产物进入工作空间摘要：
 
 ```text
 结构件
@@ -208,7 +208,7 @@ FreeCADCmd / FreeCAD --console
 
 要求：
 
-- 不执行用户项目目录里的任意脚本。
+- 不执行用户工作空间目录里的任意脚本。
 - 转换脚本由 CCLink Studio 内置生成。
 - 输入输出路径必须经过 allowlist 校验。
 - 超时可取消。
@@ -257,7 +257,7 @@ FreeCADCmd / FreeCAD --console
 - `CAD-M3` 已打底：主进程新增 CAD 转换服务，第一版支持 STEP/STP 通过本机 FreeCAD 转为 STL 预览文件，并按源文件 hash 写入 `userData/cad-cache/`。
 - `CAD-M4` 已打底：ModelViewer 打开 STEP/STP 时会走 CAD 转换服务；未启用或转换失败时显示结构化错误，不再只给静态“暂不支持”文案。
 - `CAD-M4.1` 已打底：CAD IPC 增加 `getModelSupport`、`getCacheStatus`、`clearCache`，设置页可查看缓存占用、缓存目录并清理缓存。
-- `CAD-M5` 已打底：`hardware_scan_project` 和 `hardware_inspect_production_package` 会返回 `structuralArtifacts`，让结构件预览状态、缓存命中和尺寸 metadata 进入硬件项目上下文。
+- `CAD-M5` 已打底：`hardware_scan_project` 和 `hardware_inspect_production_package` 会返回 `structuralArtifacts`，让结构件预览状态、缓存命中和尺寸 metadata 进入硬件工作空间上下文。
 - `CAD-M6` 已打底第一段：ModelViewer 会展示预览 mesh 的包围盒尺寸；STEP/STP 转换成功后会在 `metadata.json` 中持久化包围盒、单位置信度、预览路径和源文件 hash。
 - `CAD-M6.1` 已打底：新增 CAD MCP 只读诊断工具，Agent 可查询 CAD 后端状态、模型支持情况、已缓存结构 metadata 和缓存状态；清缓存工具只删除 CCLink Studio 生成的预览缓存。
 

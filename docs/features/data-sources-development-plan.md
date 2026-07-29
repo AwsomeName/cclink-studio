@@ -40,23 +40,23 @@ D9 和 D10 可以在 D7 稳定后并行，但 D10 不能早于 D4。UI 可以先
 
 ## 当前实现进度
 
-> 更新时间：2026-07-15
+> 更新时间：2026-07-28
 
-| 阶段 | 状态 | 说明 |
-|------|------|------|
-| D0 需求冻结与风险封口 | ✅ 完成 | 产品边界和安全边界已写入 `docs/features/data-sources.md` 与本文档 |
-| D1 类型、错误码、目录骨架 | ✅ 完成 | 已新增共享类型、错误模型、adapter registry 和主进程目录 |
-| D2 凭证存储与配置存储 | ✅ 已完成 | 配置与凭证分离，旧 Store 已删除，凭证统一由本地明文 CredentialService 管理 |
-| D3 Elasticsearch 只读 Adapter | ✅ 完成 | 已支持 test、list indices、search、get record，并拒绝危险 collection/path |
-| D4 DataSourceService 编排层 | ✅ 完成 | 已统一 config、secret、adapter、audit 和错误归一化 |
-| D5 IPC 与 Preload 白名单 | ✅ 完成 | 已注册 `data-source:*` IPC，并暴露 `window.cclinkStudio.dataSource` |
-| D6 Renderer Store 与 Activity 入口 | ✅ 完成 | 已新增数据源 Activity、store、连接表单、连接测试和 index 列表 |
-| D7 查询 Tab 与结果视图 | 🔧 部分完成 | 已能从 index 打开查询 Tab、运行 JSON DSL、展示结果和单条 JSON；已补齐错误复制、单条 JSON 复制、结果 JSON/CSV 导出；分页/虚拟滚动仍待补齐 |
-| D8 Saved Queries 与工作空间恢复 | ✅ 完成 | 已实现 Saved Query 类型、主进程持久化、IPC、preload、store、侧栏列表和查询 Tab 保存/打开；工作空间恢复依赖现有 Tab 持久化链路 |
-| D9 Agent 资源挂载 | ✅ 完成 | 已扩展数据源资源类型，支持 `@` 挂载 Data Source / Saved Query，并支持从查询 Tab 一键挂载查询结果和单条记录 |
-| D10 MCP 只读工具 | 🔧 部分完成 | 已注册 DataSourceToolModule，提供 list/search/get/run saved query 等只读工具；sourceId 级首次授权与 Saved Query 单独授权仍待权限系统扩展 |
-| D11 字段归一化与引用链路 | 🔧 部分完成 | 已有默认字段归一化；字段映射编辑 UI 和引用链路未完成 |
-| D12 真实 ES 验收与发布门槛 | 📋 未开始 | 尚未接真实 ES 走查 |
+| 阶段                               | 状态        | 说明                                                                                                                                     |
+| ---------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| D0 需求冻结与风险封口              | ✅ 完成     | 产品边界和安全边界已写入 `docs/features/data-sources.md` 与本文档                                                                        |
+| D1 类型、错误码、目录骨架          | ✅ 完成     | 已新增共享类型、错误模型、adapter registry 和主进程目录                                                                                  |
+| D2 凭证存储与配置存储              | ✅ 已完成   | 配置与凭证分离，旧 Store 已删除，凭证统一由本地明文 CredentialService 管理                                                               |
+| D3 Elasticsearch 只读 Adapter      | ✅ 完成     | 已支持 test、list indices、search、get record，并拒绝危险 collection/path                                                                |
+| D4 DataSourceService 编排层        | ✅ 完成     | 已统一 config、secret、adapter、audit 和错误归一化                                                                                       |
+| D5 IPC 与 Preload 白名单           | ✅ 完成     | 已注册 `data-source:*` IPC，并暴露 `window.cclinkStudio.dataSource`                                                                      |
+| D6 Renderer Store 与 Activity 入口 | ✅ 完成     | 已新增数据源 Activity、store、连接表单、连接测试和 index 列表                                                                            |
+| D7 查询 Tab 与结果视图             | 🔧 部分完成 | 已能从 index 打开查询 Tab、运行 JSON DSL、展示结果和单条 JSON；已补齐错误复制、单条 JSON 复制、结果 JSON/CSV 导出；分页/虚拟滚动仍待补齐 |
+| D8 Saved Queries 与工作空间恢复    | ✅ 完成     | 已实现 Saved Query 类型、主进程持久化、IPC、preload、store、侧栏列表和查询 Tab 保存/打开；工作空间恢复依赖现有 Tab 持久化链路            |
+| D9 Agent 资源挂载                  | ✅ 完成     | 已扩展数据源资源类型，支持 `@` 挂载 Data Source / Saved Query，并支持从查询 Tab 一键挂载查询结果和单条记录                               |
+| D10 MCP 只读工具                   | 🔧 部分完成 | 已注册 DataSourceToolModule，提供 list/search/get/run saved query 等只读工具；sourceId 级首次授权与 Saved Query 单独授权仍待权限系统扩展 |
+| D11 字段归一化与引用链路           | 🔧 部分完成 | 已有默认字段归一化；字段映射编辑 UI 和引用链路未完成                                                                                     |
+| D12 真实 ES 验收与发布门槛         | 📋 未开始   | 尚未接真实 ES 走查                                                                                                                       |
 
 ## 全局原则
 
@@ -171,7 +171,7 @@ type DataQuerySnapshot = {
 
 ### 拷问
 
-如果现在还说“要不顺便做个管理后台”，这一步没过。第一版目标是让写作项目吃到远程采集资料，不是造数据库客户端。
+如果现在还说“要不顺便做个管理后台”，这一步没过。第一版目标是让写作工作空间吃到远程采集资料，不是造数据库客户端。
 
 ## D1：类型、错误码、目录骨架
 
@@ -186,7 +186,7 @@ type DataQuerySnapshot = {
 - 新建 `src/shared/data-source.ts` 或复用现有 shared 类型目录，放 renderer/preload/MCP 共享类型。
 - 新建 `src/main/data-source/errors.ts`，统一错误码。
 - 新建 `src/main/data-source/adapters/adapter.ts`，定义 adapter 接口。
-- 建立测试目录 `src/main/data-source/__tests__/`。
+- 测试与实现文件同目录放置为 `*.test.ts`。
 
 ### 建议错误码
 
@@ -254,9 +254,8 @@ DATA_SOURCE_INTERNAL_ERROR
 ### 涉及文件
 
 - `src/main/data-source/config-store.ts`
-- `src/main/data-source/credential-store.ts`
-- `src/main/data-source/__tests__/credential-store.test.ts`
-- `src/main/data-source/__tests__/config-store.test.ts`
+- `src/main/credentials/credential-service.ts`
+- `src/main/data-source/config-store.test.ts`
 
 ### 验收标准
 
@@ -266,6 +265,7 @@ DATA_SOURCE_INTERNAL_ERROR
 - `rg "password|apiKey|token" ~/Library/Application Support/CCLink Studio/data-source` 不应搜到真实 secret；真实值只允许出现在统一 `credentials.json`。
 
 说明：`Application Support/CCLink Studio` 是当前兼容保留的 Electron `userData` 目录，不随产品名机械替换。
+
 - 单测覆盖 create/update/delete/list 和 secret 缺失。
 
 ### 拷问
@@ -299,8 +299,8 @@ DATA_SOURCE_INTERNAL_ERROR
 ### 涉及文件
 
 - `src/main/data-source/adapters/elasticsearch-adapter.ts`
-- `src/main/data-source/adapters/elasticsearch-normalizer.ts`
-- `src/main/data-source/__tests__/elasticsearch-adapter.test.ts`
+- `src/main/data-source/normalization.ts`
+- `src/main/data-source/elasticsearch-adapter.test.ts`
 
 ### 验收标准
 
@@ -352,7 +352,7 @@ class DataSourceService {
 - `src/main/data-source/data-source-service.ts`
 - `src/main/data-source/audit-log.ts`
 - `src/main/data-source/adapter-registry.ts`
-- `src/main/data-source/__tests__/data-source-service.test.ts`
+- `src/main/data-source/data-source-service.test.ts`
 
 ### 验收标准
 
@@ -437,7 +437,7 @@ data-source:save-query
 - `src/renderer/src/components/activity-bar/ActivityBar.tsx`
 - `src/renderer/src/components/sidebar/Sidebar.tsx`
 - `src/renderer/src/components/data-sources/DataSourcesPanel.tsx`
-- `src/renderer/src/components/data-sources/DataSourceConnectionForm.tsx`
+- 连接表单当前内聚在 `src/renderer/src/components/data-sources/DataSourcesPanel.tsx`
 - `src/renderer/src/assets/main.css`
 
 ### 验收标准
@@ -475,9 +475,7 @@ data-source:save-query
 - `src/renderer/src/types/index.ts`
 - `src/renderer/src/components/workbench/Workbench.tsx`
 - `src/renderer/src/components/data-sources/DataSourceQueryTab.tsx`
-- `src/renderer/src/components/data-sources/DataSourceResultTable.tsx`
-- `src/renderer/src/components/data-sources/DataSourceRecordDrawer.tsx`
-- `src/renderer/src/components/data-sources/data-source-export.ts`
+- 结果表格、单条 JSON 和导出当前内聚在 `src/renderer/src/components/data-sources/DataSourceQueryTab.tsx`
 
 ### 验收标准
 
@@ -526,7 +524,7 @@ data-source:save-query
 
 ### 拷问
 
-如果“工作空间可恢复”和“凭证不随项目走”冲突，优先保护凭证。恢复体验不能压过安全底线。
+如果“工作空间可恢复”和“凭证不随工作空间走”冲突，优先保护凭证。恢复体验不能压过安全底线。
 
 ## D9：Agent 资源挂载
 
@@ -561,7 +559,7 @@ Data query result:
 - `src/renderer/src/components/agent-panel/*`
 - `src/renderer/src/stores/agent-store.ts`
 - `src/renderer/src/components/data-sources/DataSourceQueryTab.tsx`
-- `src/renderer/src/components/data-sources/DataSourceResultTable.tsx`
+- 结果展示当前内聚在 `src/renderer/src/components/data-sources/DataSourceQueryTab.tsx`
 
 ### 验收标准
 
@@ -605,10 +603,10 @@ data_source.run_saved_query
 ### 涉及文件
 
 - `src/main/mcp/modules/data-source/index.ts`
-- `src/main/mcp/modules/data-source/tools.ts`
+- 工具定义当前内聚在 `src/main/mcp/modules/data-source/index.ts`
 - `src/main/mcp/tool-host.ts` 或模块注册入口
 - `src/main/mcp/permission.ts`
-- `src/main/mcp/modules/data-source/__tests__/data-source-tools.test.ts`
+- `src/main/mcp/modules/data-source/index.test.ts`
 
 ### 验收标准
 
@@ -647,7 +645,7 @@ data_source.run_saved_query
 ### 涉及文件
 
 - `src/main/data-source/normalization.ts`
-- `src/main/data-source/adapters/elasticsearch-normalizer.ts`
+- `src/main/data-source/normalization.ts`
 - `src/renderer/src/components/data-sources/FieldMappingEditor.tsx`
 - `src/renderer/src/components/data-sources/DataSourceRecordDrawer.tsx`
 
@@ -667,7 +665,7 @@ data_source.run_saved_query
 
 ### 目标
 
-用真实远程数据采集项目跑通完整闭环，确认功能可用且不越权。
+用真实远程数据采集工作空间跑通完整闭环，确认功能可用且不越权。
 
 ### 方案
 
@@ -706,14 +704,14 @@ data_source.run_saved_query
 
 ## 测试矩阵
 
-| 层级 | 必测内容 |
-|------|----------|
-| Unit | config store、credential store、adapter path guard、normalization、error mapping |
-| IPC | schema 校验、错误序列化、缺失凭证、超时、结果过大 |
-| Renderer | store 状态、空状态、错误态、查询结果表格、字段映射 |
-| MCP | 权限、响应大小、只读工具、错误结构 |
-| E2E | 创建连接、查询、保存、挂载 Agent、重启恢复 |
-| Security | secret 不进配置、日志、快照、MCP 响应、DevTools 可见状态 |
+| 层级     | 必测内容                                                                         |
+| -------- | -------------------------------------------------------------------------------- |
+| Unit     | config store、credential store、adapter path guard、normalization、error mapping |
+| IPC      | schema 校验、错误序列化、缺失凭证、超时、结果过大                                |
+| Renderer | store 状态、空状态、错误态、查询结果表格、字段映射                               |
+| MCP      | 权限、响应大小、只读工具、错误结构                                               |
+| E2E      | 创建连接、查询、保存、挂载 Agent、重启恢复                                       |
+| Security | secret 不进配置、日志、快照、MCP 响应、DevTools 可见状态                         |
 
 ## 代码评审清单
 

@@ -46,6 +46,11 @@ vi.mock('../mcp/modules/meshy', () => ({
     }
   },
 }))
+vi.mock('../mcp/modules/image-generation', () => ({
+  ImageGenerationToolModule: class ImageGenerationToolModule {
+    name = 'image-generation'
+  },
+}))
 vi.mock('../mcp/modules/hardware', () => ({
   HardwareToolModule: class HardwareToolModule {
     name = 'hardware'
@@ -172,6 +177,7 @@ function createAutomationRuntime() {
   runtime.fileService = {} as never
   runtime.trustedRendererGuard = {} as never
   runtime.meshyService = {} as never
+  runtime.markdownIllustrationService = {} as never
   runtime.hardwareService = {} as never
   runtime.cadConversionService = {} as never
   runtime.dataSourceService = {} as never

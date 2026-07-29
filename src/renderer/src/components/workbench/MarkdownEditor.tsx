@@ -50,6 +50,7 @@ import { copyTextToClipboard } from '../../utils/clipboard'
 import {
   clearMarkdownDiagnosticReport,
   publishMarkdownDiagnosticReport,
+  recordRendererDiagnosticLog,
 } from '../../features/diagnostics/renderer-diagnostic-log'
 
 const lowlight = createLowlight(common)
@@ -101,6 +102,11 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   const loadedVersionRef = useRef<{ fileKey: string; version: string } | undefined>(undefined)
   const reloadGenerationRef = useRef(0)
   const hydratingRef = useRef(false)
+  const selectionMappingWarningRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    selectionMappingWarningRef.current = null
+  }, [fileKey])
 
   useEffect(() => {
     if (markdownDiagnosticLog) {
@@ -292,10 +298,21 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       selectedText,
       editor.state.doc.childCount,
     )
-    if (mapped.diagnostics.length > 0) {
-      useEditorStore
-        .getState()
-        .setDiagnostics(fileKeyRef.current, [...diagnostics, ...mapped.diagnostics])
+    const mappingWarning = mapped.diagnostics.find(
+      (diagnostic) => diagnostic.code === 'source-map-mismatch',
+    )
+    if (mappingWarning) {
+      const warningKey = `${fileKeyRef.current}:${mappingWarning.message}`
+      if (selectionMappingWarningRef.current !== warningKey) {
+        selectionMappingWarningRef.current = warningKey
+        recordRendererDiagnosticLog('warn', [
+          '[MarkdownEditor] 选区源码映射已降级',
+          {
+            filePath: filePathRef.current,
+            message: mappingWarning.message,
+          },
+        ])
+      }
     }
     if (!mapped.range) return null
     const sourceLineOffset =
@@ -307,7 +324,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
           endLine: mapped.range.endLine + sourceLineOffset,
         }
       : mapped.range
-  }, [diagnostics, editor])
+  }, [editor])
 
   useEffect(() => {
     if (!editor) return

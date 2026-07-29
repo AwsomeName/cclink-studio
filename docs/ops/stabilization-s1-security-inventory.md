@@ -17,18 +17,18 @@ S1 的首要目标是切断不可信内容、密钥和高权限 IPC 之间的直
 
 ## 当前库存
 
-| 边界 | 当前事实 | 风险 | 状态 |
-| --- | --- | --- | --- |
-| 微信 HTML 预览 | 原实现允许 Markdown 原始 HTML，并通过 `dangerouslySetInnerHTML` 注入拥有 preload 的主 renderer | 恶意文档可尝试在高权限页面执行脚本 | S1.1 已修复：禁用原始 HTML，改用零权限 sandbox iframe，并增加 iframe 内 CSP |
-| 主 renderer | `contextIsolation: true`、`nodeIntegration: false`；S1.1 前 `sandbox: false` | renderer 被攻破后缺少 Chromium 进程沙箱 | S1.1 已改为 `sandbox: true`，S1.1-S1.3 完整 smoke 均通过 |
-| 主 renderer CSP | 主进程按开发/生产入口为主文档注入响应头 CSP；生产脚本只允许 self，开发只额外允许 Vite inline refresh 和精确 HMR origin/WebSocket；禁止 `unsafe-eval` | 开发环境仍因 Vite refresh 保留 `unsafe-inline`，必须防止该例外进入生产策略 | S1.3 已修复；UI smoke 以被禁止的 `data:` 脚本验证策略真实生效 |
-| Browser/Auth 视图 | 普通 WebContentsView、纯净窗口和认证子进程均启用 sandbox/context isolation，认证窗口无 preload/CDP | 边界已有实现，仍需保持回归门禁 | 已有 S0 smoke 与 H3 证据 |
-| preload | 总入口从 769 行降至 179 行；Browser、Android、数据源、Agent、本地高权限操作和 renderer 支撑能力按所有者拆为 typed API | 通道名和运行时 schema 尚未由单一声明源生成 | S1.4b 已完成最小化；声明源统一属于 S3 |
-| IPC sender | 统一 guard 要求调用方为当前主窗口 WebContents、主 frame 且 URL 仍处于受信任 renderer 入口；所有 renderer handler/listener 已接入，官方集成只能取得同一 trusted registrar | `ipc-cleanup` 仍手工维护清理清单 | S1.4b 已关闭裸注册；生命周期与清理清单统一属于 S3 |
-| IPC schema/scope | 高权限输入均使用严格有界 schema；路径写入继续由领域服务执行真实工作区授权；Browser `file:` 只允许工作区内经 `realpath` 验证的 HTML 普通文件 | 本地 HTML 子资源继续依赖 Chromium 默认 `webSecurity`；IPC 单一声明源尚未形成 | S1.4b 已关闭已知 renderer 输入与顶层本地文件越权路径；契约生成属于 S3 |
-| Agent API Key | 启动时迁移到独立 `safeStorage` 文件；公共设置快照固定返回空值，Agent 只从主进程运行时快照读取 | 迁移失败时旧明文仍暂时存在，但禁止覆盖且 UI 明确显示阻塞状态 | S1.2 已修复；保留迁移失败回归测试 |
-| Meshy API Key | 与 Agent Key 共用加密凭证存储，Meshy 只从主进程运行时快照读取 | Linux `basic_text` 等非安全后端不得被误判为可用加密 | S1.2 已修复；拒绝非安全后端 |
-| Git/Data source 凭证 | 已使用 Electron `safeStorage` 独立加密文件，普通配置只保留引用或是否已配置 | 已有正确模式，可复用 | 保持现有回归测试 |
+| 边界                 | 当前事实                                                                                                                                                                 | 风险                                                                         | 状态                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 微信 HTML 预览       | 原实现允许 Markdown 原始 HTML，并通过 `dangerouslySetInnerHTML` 注入拥有 preload 的主 renderer                                                                           | 恶意文档可尝试在高权限页面执行脚本                                           | S1.1 已修复：禁用原始 HTML，改用零权限 sandbox iframe，并增加 iframe 内 CSP |
+| 主 renderer          | `contextIsolation: true`、`nodeIntegration: false`；S1.1 前 `sandbox: false`                                                                                             | renderer 被攻破后缺少 Chromium 进程沙箱                                      | S1.1 已改为 `sandbox: true`，S1.1-S1.3 完整 smoke 均通过                    |
+| 主 renderer CSP      | 主进程按开发/生产入口为主文档注入响应头 CSP；生产脚本只允许 self，开发只额外允许 Vite inline refresh 和精确 HMR origin/WebSocket；禁止 `unsafe-eval`                     | 开发环境仍因 Vite refresh 保留 `unsafe-inline`，必须防止该例外进入生产策略   | S1.3 已修复；UI smoke 以被禁止的 `data:` 脚本验证策略真实生效               |
+| Browser/Auth 视图    | 普通 WebContentsView、纯净窗口和认证子进程均启用 sandbox/context isolation，认证窗口无 preload/CDP                                                                       | 边界已有实现，仍需保持回归门禁                                               | 已有 S0 smoke 与 H3 证据                                                    |
+| preload              | 总入口从 769 行降至 179 行；Browser、Android、数据源、Agent、本地高权限操作和 renderer 支撑能力按所有者拆为 typed API                                                    | 通道名和运行时 schema 尚未由单一声明源生成                                   | S1.4b 已完成最小化；声明源统一属于 S3                                       |
+| IPC sender           | 统一 guard 要求调用方为当前主窗口 WebContents、主 frame 且 URL 仍处于受信任 renderer 入口；所有 renderer handler/listener 已接入，官方集成只能取得同一 trusted registrar | `ipc-cleanup` 仍手工维护清理清单                                             | S1.4b 已关闭裸注册；生命周期与清理清单统一属于 S3                           |
+| IPC schema/scope     | 高权限输入均使用严格有界 schema；路径写入继续由领域服务执行真实工作区授权；Browser `file:` 只允许工作区内经 `realpath` 验证的 HTML 普通文件                              | 本地 HTML 子资源继续依赖 Chromium 默认 `webSecurity`；IPC 单一声明源尚未形成 | S1.4b 已关闭已知 renderer 输入与顶层本地文件越权路径；契约生成属于 S3       |
+| Agent API Key        | 启动时迁移到独立 `safeStorage` 文件；公共设置快照固定返回空值，Agent 只从主进程运行时快照读取                                                                            | 迁移失败时旧明文仍暂时存在，但禁止覆盖且 UI 明确显示阻塞状态                 | S1.2 已修复；保留迁移失败回归测试                                           |
+| Meshy API Key        | 与 Agent Key 共用加密凭证存储，Meshy 只从主进程运行时快照读取                                                                                                            | Linux `basic_text` 等非安全后端不得被误判为可用加密                          | S1.2 已修复；拒绝非安全后端                                                 |
+| Git/Data source 凭证 | 已使用 Electron `safeStorage` 独立加密文件，普通配置只保留引用或是否已配置                                                                                               | 已有正确模式，可复用                                                         | 保持现有回归测试                                                            |
 
 ## S1.1 不可信 HTML 隔离
 

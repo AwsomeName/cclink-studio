@@ -67,6 +67,7 @@ pnpm smoke:restore -- --keep-running
 - The official integration status is the open source no-op provider.
 - A stable local device identity exists without account login.
 - Settings can be read, changed, and restored locally.
+- The local credential service is available without a system keychain.
 - Files can be created, read, renamed, listed, and deleted under the local filesystem allowlist.
 - Browser preload APIs respond, including current URL, history, and snapshot queries.
 - Agent status, capability status, and permission mode are available locally.
@@ -75,6 +76,7 @@ pnpm smoke:restore -- --keep-running
 
 ## What `smoke:ui` Proves
 
+- The main renderer enforces its CSP source boundary.
 - The first screen is the local workbench, not a login wall.
 - Activity Bar entries switch between local panels.
 - Settings opens and local search works.
@@ -83,27 +85,30 @@ pnpm smoke:restore -- --keep-running
 
 ## What `smoke:workflow` Proves
 
-- A temporary local workspace can be opened from recent projects.
+- A temporary local workspace can be opened from recent workspaces.
 - The file tree can open a Markdown file from that workspace.
-- The Markdown editor can save changes back to disk.
+- Markdown shortcuts, normalization, math degradation, diagnostics, saving, and rename flows
+  preserve document and disk state.
 - Browser workbench state remains available during the local workflow.
+- Context actions target the intended file, folder, tab, data source, and workbench surface.
+- Compact-viewport context menus remain on screen.
 - Terminal execution can run in the local workspace cwd and produce output.
 
 ## What `smoke:restore` Proves
 
 - A temporary local workspace persisted as `lastWorkspacePath` is restored after an app restart.
-- The restored file tree is usable without manually opening the project again.
+- The restored file tree is usable without manually opening the workspace again.
 - `lastWorkspacePath` is not cleared during successful startup restore.
 - Previous workspace settings are restored after the smoke check.
 
-## Current Passing Result
+## Current Script Totals
 
-Latest local run:
+The current scripts report these totals when all checks pass:
 
 ```text
-Local smoke passed: 9/9
-UI smoke passed: 5/5
-Workflow smoke passed: 5/5
+Local smoke passed: 10/10
+UI smoke passed: 6/6
+Workflow smoke passed: 14/14
 Restore smoke passed: 4/4
 ```
 
@@ -124,7 +129,7 @@ Treat a failure here as a Studio-side blocker when it affects standalone local u
 - The app requires CCLink account login before the workbench loads.
 - Browser, editor, terminal, settings, or local filesystem APIs fail in the open source shell.
 - First-screen UI, Activity Bar, settings, or tab creation cannot be used without login.
-- A local workspace cannot be opened from recent projects, edited, saved, or used as Terminal cwd.
+- A local workspace cannot be opened from recent workspaces, edited, saved, or used as Terminal cwd.
 - `lastWorkspacePath` is cleared or ignored when it points at a valid local workspace.
 - Official account, paid feature, message, quota, or release capabilities appear in the default
   preload surface.

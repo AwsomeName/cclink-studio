@@ -9,7 +9,6 @@ import type {
 
 const CONNECTION_TEST_MARKER = 'CCLINK_CONNECTION_OK'
 const DEFAULT_TIMEOUT_MS = 45_000
-const CONNECTION_TEST_BUDGET_USD = 0.05
 
 export interface ClaudeModelConnectionTestInput {
   runtime: ResolvedClaudeRuntime
@@ -77,7 +76,6 @@ export async function testClaudeModelConnection(
         tools: [],
         allowedTools: [],
         maxTurns: 1,
-        maxBudgetUsd: CONNECTION_TEST_BUDGET_USD,
         model: modelName,
       },
     })

@@ -29,7 +29,14 @@ describe('bootstrapOptionalMainServices', () => {
 
     await bootstrapOptionalMainServices(runtime, bootstrappers)
 
-    expect(starts).toEqual(['cad', 'hardware', 'data-source', 'meshy', 'terminal'])
+    expect(starts).toEqual([
+      'cad',
+      'hardware',
+      'data-source',
+      'meshy',
+      'image-generation',
+      'terminal',
+    ])
     expect(runtime.capabilities.get('data-source')).toMatchObject({
       state: 'failed',
       reason: 'data source load failed',
@@ -95,6 +102,9 @@ function createBootstrappers(starts: string[]): OptionalMainServiceBootstrappers
     },
     meshy: () => {
       starts.push('meshy')
+    },
+    'image-generation': () => {
+      starts.push('image-generation')
     },
     terminal: () => {
       starts.push('terminal')

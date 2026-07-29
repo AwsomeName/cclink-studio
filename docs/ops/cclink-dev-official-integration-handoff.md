@@ -1,114 +1,87 @@
 # cclink-dev Official Integration Handoff
 
+> Current assembly handoff. Last updated: 2026-07-28.
+
 ## Conclusion
 
-`cclink-studio` now exposes a single main-process assembly seam for official builds:
+`cclink-dev` currently assembles the commercial application through an isolated source
+overlay. It does not modify the OSS checkout in place and it is not limited to replacing the
+OSS official loader.
 
-```text
-src/main/official/official-integration-loader.ts
+The OSS official contract remains useful as a typed status and lifecycle boundary. The
+complete commercial composition, product identity, official-only implementations, release configuration,
+and packaging policy are owned by `cclink-dev`.
+
+## Assembly Owner
+
+Run commercial commands from the `cclink-dev` root:
+
+```bash
+pnpm commercial:prepare
+pnpm commercial:typecheck
+pnpm commercial:build
+pnpm commercial:package
+pnpm commercial:package:check
 ```
 
-The open source default returns `oss-noop`. `cclink-dev` should replace or alias this loader during official assembly, and should not patch Studio runtime startup files.
+`scripts/prepare-commercial-build.mjs` creates
+`.build/cclink-studio-commercial` and performs this order:
 
-## Required Shape
+1. Copy the OSS `cclink-studio` tree.
+2. Overlay `commercial/src`.
+3. Replace the Vite and electron-builder configuration in the assembly directory.
+4. Install commercial resources, scripts, and package metadata.
+5. Build and package inside the assembly directory.
+6. Write and validate the commercial build record.
 
-The loader must export:
+## Shared Contract
 
-```ts
-export async function loadOfficialIntegration(): Promise<OfficialIntegration>
-```
-
-The returned integration must satisfy:
+Private source that participates in the OSS lifecycle uses:
 
 ```ts
 export interface OfficialIntegration {
   readonly id: string
-  readonly buildProfile: 'oss' | 'dev' | 'internal' | 'beta' | 'stable'
+  readonly buildProfile: OfficialBuildProfile
   getStatus(): OfficialIntegrationStatus
   registerMainServices?(context: OfficialMainContext): void | Promise<void>
   registerIpc?(context: OfficialIpcContext): void | Promise<void>
 }
 ```
 
-Studio will call the hooks in this order during main-process startup:
+`OfficialIpcContext` provides `context.ipc.handle(...)`, not raw Electron `ipcMain`.
 
-1. `loadOfficialIntegration()`
-2. `registerMainServices(context)`
-3. `registerIpc(context)`
-4. Studio-owned read-only `official:getStatus` IPC registration
-
-`OfficialIpcContext` provides `context.ipc.handle(...)`, not Electron's raw `ipcMain`. Every official handler therefore inherits the same trusted-main-frame sender check as OSS handlers.
+The OSS fallback remains `oss-noop`. Commercial assembly may overlay runtime composition,
+but it must preserve trusted sender checks, bounded schemas, independent capability failure,
+and local workspace availability.
 
 ## Hard Rules
 
-- Do not edit `src/main/runtime/core-services.ts` for official assembly.
-- Do not import or register raw Electron `ipcMain` handlers in the integration; use `context.ipc.handle(...)` and validate each payload with a bounded runtime schema.
-- Do not import official account, message, quota, release, or runtime packages from Studio default runtime files.
-- Do not expose secrets through preload, renderer stores, logs, diagnostics, screenshots, or localStorage.
-- Do not add production endpoints to OSS defaults or `.env.example`.
-- Do not make local Studio startup depend on `/Users/apple/Desktop/chat-cc/deploy` or `/Users/apple/Desktop/chat-cc/Agent`.
+- Do not write generated private source or configuration into the OSS checkout.
+- Do not put production endpoints, account logic, update feeds, or publication credentials
+  into OSS defaults.
+- Do not expose secrets through preload, renderer stores, logs, diagnostics, screenshots, or
+  localStorage.
+- Do not make local capabilities depend on CCLink account or network availability.
+- Do not bypass the shared `CredentialService` with a commercial-only credential store.
+- Do not report a package as OSS or commercial until the target-specific identity check has
+  passed.
 
-## Expected OSS Status
+## Required Product Identity
 
-The OSS build must keep returning:
+| Target     | Product name           | Bundle identifier              | Output                                 |
+| ---------- | ---------------------- | ------------------------------ | -------------------------------------- |
+| OSS        | `CCLink Studio 开源版` | `com.cclink.studio`            | `cclink-studio/dist`                   |
+| Commercial | `CCLink Studio`        | `com.cclink.studio.commercial` | `.build/cclink-studio-commercial/dist` |
 
-```ts
-{
-  id: 'oss-noop',
-  buildProfile: 'oss',
-  available: false,
-  reason: 'official-integration-not-installed',
-  features: {
-    account: false,
-    deviceRegistry: false,
-    messageNetwork: false,
-    entitlement: false,
-    quota: false,
-    officialRuntime: false,
-    releaseProvider: false,
-  },
-}
-```
+The complete operator checklist is
+`cclink-studio/docs/ops/package-target-check.md`.
 
-## Suggested cclink-dev Assembly Options
+## Failure Paths
 
-Pick one and keep it centralized:
-
-- Replace `src/main/official/official-integration-loader.ts` in the build workspace before `pnpm build`.
-- Alias `src/main/official/official-integration-loader.ts` to a generated official loader in the official Vite config.
-- Generate the loader from `cclink-dev` release scripts, then run Studio validation.
-
-The safest first integration is file replacement in the private build workspace, because the public source tree stays simple and the replacement surface is one file.
-
-## Joint Debugging Acceptance
-
-Run these from `cclink-studio` after official assembly:
-
-```bash
-pnpm typecheck
-pnpm test
-pnpm build
-bash scripts/restart.sh restart
-bash scripts/restart.sh status
-bash scripts/restart.sh stop
-```
-
-Expected official dev-build logs:
-
-```text
-[CCLink Studio] 官方集成接口已注册 (id=<official-id>, profile=dev)
-```
-
-Expected OSS logs:
-
-```text
-[CCLink Studio] 官方集成接口已注册 (id=oss-noop, profile=oss)
-```
-
-## Failure Paths To Test
-
-- Official loader missing: OSS no-op path still builds and starts.
-- Official loader throws during startup: official build must fail loudly before partial account/message initialization.
-- Account service unavailable: local workspace, browser, editor, terminal, and Android true-device shell still start.
-- No adb installed: Studio starts; `agent-device` reports unavailable until adb is configured.
-- Renderer status probe: `window.cclinkStudio.official.getStatus()` returns a non-secret snapshot only.
+- Private overlay missing: commercial preparation fails before build.
+- Commercial service unavailable: unrelated local capabilities still start or report an
+  isolated failure.
+- No adb installed: Studio starts and Android reports unavailable.
+- Invalid commercial identity or missing build record: `commercial:package:check` fails.
+- OSS source contains production values: `verify:oss-boundary` fails.
+- A package came from the wrong output directory: delivery stops even if the app launches.

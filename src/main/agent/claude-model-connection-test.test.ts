@@ -58,7 +58,6 @@ describe('testClaudeModelConnection', () => {
       tools: [],
       allowedTools: [],
       maxTurns: 1,
-      maxBudgetUsd: 0.05,
       model: 'claude-test',
     })
     expect(request?.options?.env).toMatchObject({

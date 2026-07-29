@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agentSendMessageInputSchema } from './agent-schema'
+import { agentSendMessageInputSchema } from '../../shared/ipc/agent-schema'
 
 describe('agentSendMessageInputSchema image attachments', () => {
   it('accepts a bounded supported image', () => {

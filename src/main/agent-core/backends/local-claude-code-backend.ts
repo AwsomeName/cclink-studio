@@ -57,8 +57,6 @@ export interface AndroidAdbHost {
 export interface ClaudeCodeBackendOptions {
   /** Claude Code executable path；产品运行时应传入主进程已探测的绝对路径。 */
   claudeCodePath?: string
-  /** 单次会话最大费用（美元） */
-  maxBudgetUsd?: number
   /** 注入到子进程的环境变量（如 ANTHROPIC_BASE_URL, ANTHROPIC_API_KEY） */
   env?: Record<string, string>
   /** Anthropic-compatible API base URL. */
@@ -89,7 +87,6 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
   private lastContextUsageCapturedAt = 0
   /** 当前 Claude Code 进程使用的 MCP 会话 token（进程退出时释放） */
   private mcpSessionToken: string | null = null
-  private readonly maxBudgetUsd: number
   private readonly claudeCodePath?: string
   private readonly extraEnv: Record<string, string>
   private readonly apiBaseUrl?: string
@@ -118,7 +115,6 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     this.mcpClientMgr = mcpClientMgr
     this.adbBridge = adbBridge
     this.claudeCodePath = options?.claudeCodePath?.trim() || undefined
-    this.maxBudgetUsd = options?.maxBudgetUsd ?? 1.0
     this.extraEnv = options?.env ?? {}
     this.apiBaseUrl = options?.apiBaseUrl?.trim() || undefined
     this.apiKey = options?.apiKey?.trim() || undefined
@@ -360,7 +356,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       case 'android':
         return '- 📱 **Android**：本次任务聚焦操作用户已连接的 Android 真机。只列出了 android_* / agent_device_* 工具；如需操作浏览器/编辑器，提示用户切换作用域。'
       case 'editor':
-        return '- 📄 **编辑器**：本次任务聚焦 Markdown 编辑器。只列出了 editor_* 工具；如需操作浏览器/手机，提示用户切换作用域。'
+        return '- 📄 **编辑器**：本次任务聚焦 Markdown 编辑器。可使用 editor_* 和 Markdown 自动配图工具；如需操作浏览器/手机，提示用户切换作用域。'
     }
   }
 
@@ -423,7 +419,6 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       additionalDirectories: workspacePath ? [workspacePath] : [],
       env: this.buildProcessEnv(),
       includePartialMessages: true,
-      maxBudgetUsd: this.maxBudgetUsd,
       mcpServers,
       strictMcpConfig: true,
       hooks: workspacePath

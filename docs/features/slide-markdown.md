@@ -58,7 +58,7 @@ CCLink Studio Slide Markdown 是一种内容驱动的幻灯片格式。
 它的目标不是替代所有 PowerPoint 场景，而是覆盖 70% 的结构化演示需求：
 
 - 产品介绍
-- 项目汇报
+- 工作空间汇报
 - 周报月报
 - 融资路演初稿
 - 教学课件
@@ -128,17 +128,19 @@ size: 16:9
 
 ```md
 :::hero
+
 # CCLink Studio
 
 下一代一站式 AI 桌面服务。
 :::
 
 :::features
+
 - AI 文档
 - 浏览器 Agent
 - Android Agent
 - AI 协作
-:::
+  :::
 
 :::media
 ![产品界面](./assets/app.png)
@@ -185,24 +187,24 @@ CSS 适合作为渲染层和主题层，而不是让用户直接写布局细节�
 示例：
 
 ```css
-.slide[data-layout="product-intro"] {
+.slide[data-layout='product-intro'] {
   display: grid;
   grid-template:
-    "hero media" 180px
-    "body media" 1fr
+    'hero media' 180px
+    'body media' 1fr
     / 1fr 460px;
   gap: 32px;
 }
 
-.slide-block[data-role="hero"] {
+.slide-block[data-role='hero'] {
   grid-area: hero;
 }
 
-.slide-block[data-role="features"] {
+.slide-block[data-role='features'] {
   grid-area: body;
 }
 
-.slide-block[data-role="media"] {
+.slide-block[data-role='media'] {
   grid-area: media;
 }
 ```
@@ -238,15 +240,15 @@ CSS 适合作为渲染层和主题层，而不是让用户直接写布局细节�
 
 ## 与传统 PPT 的差异
 
-| 维度 | 传统 PPT | CCLink Studio Slide Markdown |
-|------|----------|------------------------|
-| 核心模型 | 画布对象 | 内容块 + 语义版式 |
-| 源文件 | 二进制/复杂 XML | Markdown + JSON + CSS |
-| 编辑方式 | 像素级拖拽 | 块级拖拽 |
-| AI 友好度 | 较低 | 高 |
-| 版本管理 | 差 | 好 |
-| 导出 | PPTX/PDF 原生强 | 先 HTML/PDF，后 PPTX |
-| 适合场景 | 精修商业演示 | 快速生成、汇报、课程、结构化演示 |
+| 维度      | 传统 PPT        | CCLink Studio Slide Markdown     |
+| --------- | --------------- | -------------------------------- |
+| 核心模型  | 画布对象        | 内容块 + 语义版式                |
+| 源文件    | 二进制/复杂 XML | Markdown + JSON + CSS            |
+| 编辑方式  | 像素级拖拽      | 块级拖拽                         |
+| AI 友好度 | 较低            | 高                               |
+| 版本管理  | 差              | 好                               |
+| 导出      | PPTX/PDF 原生强 | 先 HTML/PDF，后 PPTX             |
+| 适合场景  | 精修商业演示    | 快速生成、汇报、课程、结构化演示 |
 
 ## 与普通 Markdown 的差异
 
@@ -398,17 +400,19 @@ size: 16:9
 ---
 
 :::hero
+
 # CCLink Studio
 
 下一代一站式 AI 桌面服务。
 :::
 
 :::features
+
 - AI 文档编辑
 - 内嵌浏览器 Agent
 - Android 自动化
 - AI-Native IM
-:::
+  :::
 
 :::media
 ![CCLink Studio 主界面](./assets/app.png)

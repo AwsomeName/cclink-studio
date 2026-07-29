@@ -53,7 +53,6 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
         {
           agentEngine: settings.agentEngine,
           backendType: settings.backendType,
-          maxBudgetUsd: settings.maxBudgetUsd,
           claudeCodePath: claudeRuntime.executablePath,
           sessionCompatibilityFingerprint: buildClaudeSessionCompatibilityFingerprint(
             claudeRuntime.fingerprint,
@@ -73,6 +72,7 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
           agentDeviceAvailable: () => runtime.agentDeviceManager?.isAvailable() ?? false,
           browserManager: runtime.browserManager ?? undefined,
           browserTaskRuntime: runtime.browserTaskRuntime ?? undefined,
+          usageLedgerService: runtime.usageLedgerService ?? undefined,
         },
       )
 

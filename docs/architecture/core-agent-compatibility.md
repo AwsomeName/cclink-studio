@@ -1,23 +1,45 @@
-# coreAgent Compatibility Layer
+# Agent Core Boundary
 
-Status: accepted
+> Current fact source. Last updated: 2026-07-28.
 
-CCLink Studio keeps a pure re-export compatibility layer for the Agent files that were
-moved to `coreAgent`.
+## Conclusion
 
-Decision:
-- Keep the existing CCLink Studio import paths as shims during the split.
-- Each shim must contain exactly one `export * from 'core-agent/...'` line.
-- New Agent core code belongs in `coreAgent`; CCLink Studio owns only host adapters,
-  Electron IPC, BrowserWindow delivery, browser/editor/android concrete modules,
-  and product integration.
+CCLink Studio owns its Agent kernel under `src/main/agent-core`. There is no external
+`coreAgent` repository, `core-agent/*` package, or re-export compatibility layer in the
+current architecture.
 
-Reason:
-- This keeps the split low-risk while preserving existing CCLink Studio imports.
-- The boundary is enforced by `npm run cclink-studio:shim-check` and
-  `npm run check:boundaries`.
+## Ownership
 
-Removal criteria:
-- Remove the shims only after all CCLink Studio imports have moved directly to
-  `core-agent/*` public entry points.
-- The removal must be paired with a successful `pnpm build`.
+`src/main/agent-core` owns:
+
+- local Agent backend contracts and the Claude Code backend;
+- conversation execution and tool dispatch;
+- Agent capability status and failure isolation;
+- host adapters for editor, browser, terminal, file system, data sources, and devices.
+
+The Electron host continues to own trusted IPC registration, application lifecycle,
+workspace projection, permission confirmation, and renderer delivery. Renderer code must
+not start Agent processes or import Node.js runtime APIs directly.
+
+## Boundary Rules
+
+- Agent backends depend on typed host capabilities, not renderer stores or BrowserWindow
+  instances.
+- Optional tools fail independently and must not prevent the local workspace from opening.
+- Credentials are obtained from the main-process `CredentialService`; they do not enter
+  workspace files, ordinary settings, renderer-wide state, or diagnostics.
+- New IPC contracts use the shared definition/parser pattern and trusted renderer guard.
+- A future extraction of `agent-core` requires an ADR. Until then, code must not introduce
+  compatibility shims or pretend that an external package is the state owner.
+
+## Verification
+
+The current boundary is covered by the repository quality gates:
+
+```bash
+pnpm verify:oss-boundary
+pnpm verify:credential-boundary
+pnpm typecheck
+pnpm test
+pnpm build
+```

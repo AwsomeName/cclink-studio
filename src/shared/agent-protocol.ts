@@ -152,6 +152,7 @@ export type AgentCapabilityName =
   | 'android'
   | 'agent-device'
   | 'meshy'
+  | 'image-generation'
   | 'data-source'
   | 'hardware'
   | 'cad'

@@ -254,6 +254,83 @@ describe('FileService', () => {
     await expect(stat(join(tempDir, 'notes.assets', 'manifest.json'))).resolves.toBeDefined()
   })
 
+  it('inserts generated Markdown illustrations with version and anchor protection', async () => {
+    const service = new FileService()
+    const documentPath = join(tempDir, 'article.md')
+    await writeFile(documentPath, '# Article\n\nFirst paragraph.\n\n## Details\n\nBody.\n', 'utf-8')
+    const snapshot = await service.preflightMarkdownIllustrations({
+      documentPath,
+      illustrations: [
+        { anchorText: '# Article', placement: 'after' },
+        { anchorText: '## Details', placement: 'after' },
+      ],
+    })
+
+    const result = await service.applyMarkdownIllustrations({
+      documentPath,
+      expectedHash: snapshot.hash,
+      illustrations: [
+        {
+          fileName: 'cover',
+          mimeType: 'image/png',
+          content: Buffer.from([1, 2, 3]),
+          alt: 'Cover',
+          anchorText: '# Article',
+          placement: 'after',
+        },
+        {
+          fileName: 'details',
+          mimeType: 'image/webp',
+          content: Buffer.from([4, 5, 6]),
+          alt: 'Details',
+          anchorText: '## Details',
+          placement: 'after',
+        },
+      ],
+    })
+
+    expect(result.assets.map((asset) => asset.relativePath)).toEqual([
+      'article.assets/cover.png',
+      'article.assets/details.webp',
+    ])
+    const content = await readFile(documentPath, 'utf-8')
+    expect(content).toContain('![Cover](<article.assets/cover.png>)')
+    expect(content).toContain('![Details](<article.assets/details.webp>)')
+    expect(content).toContain('<!-- cclink-document:')
+  })
+
+  it('rejects stale or ambiguous Markdown illustration anchors before writing assets', async () => {
+    const service = new FileService()
+    const documentPath = join(tempDir, 'article.md')
+    await writeFile(documentPath, 'Repeated\n\nRepeated\n', 'utf-8')
+
+    await expect(
+      service.preflightMarkdownIllustrations({
+        documentPath,
+        illustrations: [{ anchorText: 'Repeated', placement: 'after' }],
+      }),
+    ).rejects.toThrow('锚点不唯一')
+
+    const snapshot = await service.readTextDocument(documentPath)
+    await writeFile(documentPath, 'Changed\n', 'utf-8')
+    await expect(
+      service.applyMarkdownIllustrations({
+        documentPath,
+        expectedHash: snapshot.hash,
+        illustrations: [
+          {
+            fileName: 'image.png',
+            mimeType: 'image/png',
+            content: Buffer.from([1]),
+            alt: 'Image',
+            placement: 'end',
+          },
+        ],
+      }),
+    ).rejects.toThrow('文档已发生变化')
+    await expect(stat(join(tempDir, 'article.assets'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('writes a controlled declaration and migrates legacy hidden Markdown assets safely', async () => {
     const service = new FileService()
     const documentPath = join(tempDir, 'notes.md')

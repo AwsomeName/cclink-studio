@@ -2,7 +2,7 @@
 
 > 状态：D0-D3.5 已落地；D4 错误现场附件待做
 > 最后更新：2026-07-26
-> 关联文档：`docs/features/agent-system.md`、`docs/features/ai-work-browser-v0.1-tasks.md`、`docs/features/project-operations-assistant.md`、`docs/features/browser-automation.md`
+> 关联文档：`docs/features/agent-system.md`、`docs/features/ai-work-browser-v0.1-tasks.md`、`docs/features/workspace-operations-assistant.md`、`docs/features/browser-automation.md`
 
 ## 结论
 
@@ -31,23 +31,23 @@ Agent 诊断日志不是锦上添花，而是 CCLink Studio 进入真实网页�
 
 当前实现状态：
 
-| 项目 | 状态 | 说明 |
-|------|------|------|
-| Markdown 诊断包格式 | ✅ 已完成 | `buildAgentDiagnosticMarkdown` 输出固定结构 |
-| 脱敏规则 | ✅ 已完成 | 覆盖 cookie/token/password/验证码/API key/手机号/邮箱等常见模式 |
-| Agent 面板复制按钮 | ✅ 已完成 | Agent 输入框旁原剪贴板按钮一次复制完整诊断日志 |
-| 浏览器任务日志合并 | ✅ 已完成 | 汇总 `BrowserTaskRun`、`BrowserActionLog`、下载记录 |
-| 复制反馈 | ✅ 已完成 | 成功/失败 toast |
-| console/network/page summary | ✅ 已完成 | 只读 `browser:getDiagnostics` 汇总 console、network、疑似登录/验证码/风控 |
-| 可视页与自动化页绑定诊断 | ✅ 已完成 | 并列输出 WebContentsView 与 Playwright 的 tabId、URL、标题和绑定状态 |
-| 登录态安全摘要 | ✅ 已完成 | 输出实际 partition、Cookie 数量、持久性、过期数和疑似认证 Cookie 元数据，不输出 Cookie 值 |
-| 最近导航与 claim 结果 | ✅ 已完成 | 输出最近 URL 链和最近一次 Page claim 成败 |
-| Console/Network 按 Page 隔离 | ✅ 已完成 | 页面日志带 Page 归属，避免其他 Tab 错误串入 |
-| 工作台与上下文操作 | ✅ 已完成 | 合并 WorkspaceState 和最近上下文操作失败 |
-| Markdown 失败现场 | ✅ 已完成 | 优先合并当前 Markdown Tab 的结构化失败报告；大型节点树按预算摘要，内嵌 JSON 保持完整 |
-| Renderer/Main 近期日志 | ✅ 已完成 | 两侧各保留最近 200 条脱敏日志，报告输出最近 100 条 |
-| 独立失败降级 | ✅ 已完成 | 任一来源采集失败不影响其余章节复制 |
-| 截图/DOM 摘要 | 📋 待做 | D4：用户显式选择后再保存 |
+| 工作空间                     | 状态      | 说明                                                                                      |
+| ---------------------------- | --------- | ----------------------------------------------------------------------------------------- |
+| Markdown 诊断包格式          | ✅ 已完成 | `buildAgentDiagnosticMarkdown` 输出固定结构                                               |
+| 脱敏规则                     | ✅ 已完成 | 覆盖 cookie/token/password/验证码/API key/手机号/邮箱等常见模式                           |
+| Agent 面板复制按钮           | ✅ 已完成 | Agent 输入框旁原剪贴板按钮一次复制完整诊断日志                                            |
+| 浏览器任务日志合并           | ✅ 已完成 | 汇总 `BrowserTaskRun`、`BrowserActionLog`、下载记录                                       |
+| 复制反馈                     | ✅ 已完成 | 成功/失败 toast                                                                           |
+| console/network/page summary | ✅ 已完成 | 只读 `browser:getDiagnostics` 汇总 console、network、疑似登录/验证码/风控                 |
+| 可视页与自动化页绑定诊断     | ✅ 已完成 | 并列输出 WebContentsView 与 Playwright 的 tabId、URL、标题和绑定状态                      |
+| 登录态安全摘要               | ✅ 已完成 | 输出实际 partition、Cookie 数量、持久性、过期数和疑似认证 Cookie 元数据，不输出 Cookie 值 |
+| 最近导航与 claim 结果        | ✅ 已完成 | 输出最近 URL 链和最近一次 Page claim 成败                                                 |
+| Console/Network 按 Page 隔离 | ✅ 已完成 | 页面日志带 Page 归属，避免其他 Tab 错误串入                                               |
+| 工作台与上下文操作           | ✅ 已完成 | 合并 WorkspaceState 和最近上下文操作失败                                                  |
+| Markdown 失败现场            | ✅ 已完成 | 优先合并当前 Markdown Tab 的结构化失败报告；大型节点树按预算摘要，内嵌 JSON 保持完整      |
+| Renderer/Main 近期日志       | ✅ 已完成 | 两侧各保留最近 200 条脱敏日志，报告输出最近 100 条                                        |
+| 独立失败降级                 | ✅ 已完成 | 任一来源采集失败不影响其余章节复制                                                        |
+| 截图/DOM 摘要                | 📋 待做   | D4：用户显式选择后再保存                                                                  |
 
 ## /grilling 结论
 
@@ -154,6 +154,7 @@ Agent 读取 Markdown 后准备填公众号编辑器，但内容没有进入编�
 # CCLink Studio 诊断日志
 
 ## 元信息
+
 - 生成时间：2026-07-15 10:54:23
 - CCLink Studio 版本：0.1.0
 - 平台：macOS
@@ -161,9 +162,11 @@ Agent 读取 Markdown 后准备填公众号编辑器，但内容没有进入编�
 - 会话 ID：...
 
 ## 用户目标
+
 我想登录自己的知乎
 
 ## 当前浏览器
+
 - tabId：...
 - URL：https://www.zhihu.com/signin
 - Title：知乎 - 登录
@@ -171,12 +174,14 @@ Agent 读取 Markdown 后准备填公众号编辑器，但内容没有进入编�
 - View Mode：desktop
 
 ## Agent 状态
+
 - 后端：cclink-studio-agent
 - 权限模式：categorized
 - 任务状态：running
 - failureReason：-
 
 ## 时间线
+
 [10:54:02.120] user_message: 我想登录自己的知乎
 [10:54:04.031] tool_start browser_title {}
 [10:54:04.166] tool_success browser_title 135ms title="百度一下，你就知道"
@@ -186,28 +191,31 @@ Agent 读取 Markdown 后准备填公众号编辑器，但内容没有进入编�
 [10:54:13.772] tool_fail browser_click 5000ms reason="selector_missing"
 
 ## 最近浏览器错误
+
 - console.error: -
 - network failed: -
 
 ## 下载/上传
+
 - 无
 
 ## 脱敏说明
+
 password/token/cookie/api key/验证码等字段已脱敏。
 ```
 
 ## 数据来源
 
-| 来源 | 当前状态 | 用途 |
-|------|----------|------|
-| Agent conversation messages | 已存在 | 用户目标、assistant 文本、tool use/tool result |
-| `BrowserTaskRuntime` | 已存在 | taskRunId、状态、失败原因、动作日志 |
-| `BrowserActionLog` | 已存在 | 工具名、参数摘要、开始结束、错误 |
-| `BrowserManager` | 已存在 | active tab、URL、title、profile、view mode |
-| `PlaywrightBridge` console/network buffers | 已存在 | console error、network 摘要 |
-| `BrowserDownloadStore` | 已存在 | 下载记录、触发来源、文件状态 |
-| 权限确认 pending 状态 | 部分存在 | 判断是否卡在用户确认 |
-| 截图/DOM snapshot | 未形成诊断接口 | 第一版只预留，不默认复制 |
+| 来源                                       | 当前状态       | 用途                                           |
+| ------------------------------------------ | -------------- | ---------------------------------------------- |
+| Agent conversation messages                | 已存在         | 用户目标、assistant 文本、tool use/tool result |
+| `BrowserTaskRuntime`                       | 已存在         | taskRunId、状态、失败原因、动作日志            |
+| `BrowserActionLog`                         | 已存在         | 工具名、参数摘要、开始结束、错误               |
+| `BrowserManager`                           | 已存在         | active tab、URL、title、profile、view mode     |
+| `PlaywrightBridge` console/network buffers | 已存在         | console error、network 摘要                    |
+| `BrowserDownloadStore`                     | 已存在         | 下载记录、触发来源、文件状态                   |
+| 权限确认 pending 状态                      | 部分存在       | 判断是否卡在用户确认                           |
+| 截图/DOM snapshot                          | 未形成诊断接口 | 第一版只预留，不默认复制                       |
 
 ## 脱敏规则
 
@@ -504,7 +512,9 @@ interface DiagnosticEvent {
 
 怎么做：
 
-- 新增测试记录文档：`docs/testing/project-ops-browser-diagnostics.md`。
+- D6 开始时新增测试记录文档
+  `docs/testing/workspace-ops-browser-diagnostics.md`；该文件当前尚未创建，不能作为
+  已有验收证据引用。
 - 每个场景记录：目标、平台、profile、步骤、结果、诊断日志摘要、修复项。
 - 至少保留 3 类失败样本：登录态失效、选择器失败、验证码/风控。
 

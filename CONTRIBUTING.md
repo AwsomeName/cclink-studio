@@ -26,6 +26,7 @@ pnpm dev
 CCLink Studio OSS does not provide model services. Use a local or user-owned Agent backend.
 
 **Local Claude Code CLI**
+
 ```bash
 npm install -g @anthropic-ai/claude-code
 claude login
@@ -49,7 +50,7 @@ Use prefix `feat/` for features, `fix/` for bug fixes, `docs/` for documentation
 ### 3. Make Changes
 
 - Read and follow the architecture constitution in `docs/architecture.md`
-- During the active stabilization phase, confirm the change is allowed by `docs/stabilization.md`
+- Preserve the closed S0-S4 stable baseline documented in `docs/stabilization.md`
 - Write code following the project conventions (see below)
 - Keep commits clean and focused
 - Run `pnpm verify` before submitting
@@ -72,16 +73,16 @@ docs: 更新架构设计文档
 
 ## Code Style
 
-| Rule | Convention |
-|------|-----------|
-| Language | TypeScript strict mode (`"strict": true`) |
-| File names | `kebab-case` (e.g., `browser-manager.ts`) |
-| Components | `PascalCase.tsx` (e.g., `AgentPanel.tsx`) |
-| Functions/vars | `camelCase` (e.g., `updateSettings`) |
-| Comments | Code comments in Chinese, public API docs in Chinese + English |
-| Styling | Pure CSS with CSS variables (no CSS-in-JS, no CSS Modules) |
-| State | Zustand stores with selector subscriptions |
-| Icons | SVG components in `components/common/Icons.tsx` |
+| Rule           | Convention                                                     |
+| -------------- | -------------------------------------------------------------- |
+| Language       | TypeScript strict mode (`"strict": true`)                      |
+| File names     | `kebab-case` (e.g., `browser-manager.ts`)                      |
+| Components     | `PascalCase.tsx` (e.g., `AgentPanel.tsx`)                      |
+| Functions/vars | `camelCase` (e.g., `updateSettings`)                           |
+| Comments       | Code comments in Chinese, public API docs in Chinese + English |
+| Styling        | Pure CSS with CSS variables (no CSS-in-JS, no CSS Modules)     |
+| State          | Zustand stores with selector subscriptions                     |
+| Icons          | SVG components in `components/common/Icons.tsx`                |
 
 ## Architecture Overview
 
@@ -93,9 +94,11 @@ src/
 ```
 
 Main process is organized by domain:
+
 - `browser/` — Embedded Chromium WebContentsView
 - `playwright/` — CDP-based browser automation
-- `agent/` — AI Agent backend (Claude Code CLI / HTTP API)
+- `agent/` — Agent host bridge and conversation context
+- `agent-core/` — Local Claude Code backend, execution kernel, and tools
 - `android/` — ADB + scrcpy device control
 - `mcp/` — Modular MCP tool system (browser/editor/android)
 - `settings/` — Settings persistence
@@ -112,6 +115,9 @@ CCLink Studio is the open source desktop shell. It must run without official pro
 Do not add official account, subscription, quota, payment, message-network, cloud-sync, network-workspace, signing, notarization, artifact-upload, Android SDK download, AVD management, emulator launch, or hosted-device implementations to the OSS default path.
 
 Official integration belongs to `/Users/apple/Desktop/cclink-dev` and `/Users/apple/Desktop/chat-cc`.
+
+OSS and commercial packages are separate targets. Packaging changes must follow
+[`docs/ops/package-target-check.md`](docs/ops/package-target-check.md).
 
 ## Testing
 

@@ -8,26 +8,26 @@ S3.1 关闭了运行时生命周期的双清单问题：同一个 `ServiceRegist
 
 ## 基线问题
 
-| 问题 | 失败表现 | 根因 | S3 工作包 |
-| --- | --- | --- | --- |
-| 启动与退出使用两份服务清单 | 新服务容易只启动不释放，失败后残留子进程或 listener | `bootstrap-runtime.ts` 和 `shutdown-runtime.ts` 分别手工声明 | S3.1 |
-| 启动中断不回滚 | 后续阶段失败时，已创建窗口和主进程服务继续存活 | registry 只记录注册顺序，不记录已启动阶段 | S3.1 |
-| macOS activate 只重建窗口 | 全量 IPC 被清除，但主服务、自动化和 Agent IPC 没有重新注册 | 入口直接调用 `cleanupIpcHandlers()` 和 `createWindowRuntime()` | S3.1 |
-| IPC 清理依赖手工通道数组 | 新增或改名通道后可能重复注册或无法清理 | 注册、preload、schema、清理没有单一声明源 | S3.2 |
-| 项目切换资源归属分散 | 旧 Browser view、任务、Terminal 或会话可能跨项目残留 | workspace transition 尚未统一拥有资源解绑 | S3.3 |
+| 问题                       | 失败表现                                                   | 根因                                                           | S3 工作包 |
+| -------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------- | --------- |
+| 启动与退出使用两份服务清单 | 新服务容易只启动不释放，失败后残留子进程或 listener        | `bootstrap-runtime.ts` 和 `shutdown-runtime.ts` 分别手工声明   | S3.1      |
+| 启动中断不回滚             | 后续阶段失败时，已创建窗口和主进程服务继续存活             | registry 只记录注册顺序，不记录已启动阶段                      | S3.1      |
+| macOS activate 只重建窗口  | 全量 IPC 被清除，但主服务、自动化和 Agent IPC 没有重新注册 | 入口直接调用 `cleanupIpcHandlers()` 和 `createWindowRuntime()` | S3.1      |
+| IPC 清理依赖手工通道数组   | 新增或改名通道后可能重复注册或无法清理                     | 注册、preload、schema、清理没有单一声明源                      | S3.2      |
+| 项目切换资源归属分散       | 旧 Browser view、任务、Terminal 或会话可能跨项目残留       | workspace transition 尚未统一拥有资源解绑                      | S3.3      |
 
 ## S3.1 生命周期声明
 
 启动顺序是依赖顺序，停止和失败回滚严格逆序执行。失败阶段在调用 `start` 前即进入 started 集合，因此其部分初始化资源也会执行配对 `stop`。
 
-| 阶段 | 启动责任 | 停止责任 |
-| --- | --- | --- |
-| `ipc-runtime` | 建立生命周期锚点 | 所有服务停止后清理 IPC handler/listener |
-| `state-services` | Settings、WorkspaceState 加载 | flush WorkspaceState 并释放引用 |
-| `window-runtime` | 主窗口、可信 sender、Browser/Android 窗口能力 | 认证子进程、Browser views、设备连接、窗口 |
-| `main-process-services` | 本地身份、文件、设置、可选主服务和 IPC | 权限确认、Terminal sessions、主服务引用 |
-| `automation-runtime` | Editor、Playwright、MCP、设备工具 | Editor、设备工具、MCP、Playwright |
-| `agent-runtime` | 本地 Agent bridge | Agent runtime 和子进程 |
+| 阶段                    | 启动责任                                      | 停止责任                                  |
+| ----------------------- | --------------------------------------------- | ----------------------------------------- |
+| `ipc-runtime`           | 建立生命周期锚点                              | 所有服务停止后清理 IPC handler/listener   |
+| `state-services`        | Settings、WorkspaceState 加载                 | flush WorkspaceState 并释放引用           |
+| `window-runtime`        | 主窗口、可信 sender、Browser/Android 窗口能力 | 认证子进程、Browser views、设备连接、窗口 |
+| `main-process-services` | 本地身份、文件、设置、可选主服务和 IPC        | 权限确认、Terminal sessions、主服务引用   |
+| `automation-runtime`    | Editor、Playwright、MCP、设备工具             | Editor、设备工具、MCP、Playwright         |
+| `agent-runtime`         | 本地 Agent bridge                             | Agent runtime 和子进程                    |
 
 ## S3.1 验收
 
@@ -61,13 +61,13 @@ S3.3 已处理项目切换时 Browser view、BrowserTask、Agent conversation �
 
 项目切换保留后台执行，不以终止任务掩盖状态所有权问题。transition 在加载目标快照前记录旧 workspace 的 Browser Tab、BrowserTask、Agent conversation 和 Terminal session 所有权；提交切换时先通过 Browser reconcile 把主进程当前 workspace 指向目标并隐藏旧视图，再 hydrate 目标 Tabs、活跃 Agent conversation 和 Terminal 现场。
 
-| 资源 | 切换后的行为 | 重新进入原项目 |
-| --- | --- | --- |
-| Browser view | 保留在原 workspace，立即从当前窗口 detach，不能作为目标项目可见页 | 按原 Tab 恢复并重新 attach |
-| BrowserTask | 保持与原 Browser Tab 绑定，不因项目切换取消，也不能被目标 workspace 借用 | 原任务状态继续可见 |
-| Agent conversation/run | 全局运行态保留，目标项目只激活自己的 conversation | 流式结果和终态继续恢复 |
-| Terminal PTY/session | 主进程 PTY 保留，目标项目 Tab 不引用旧 session | 重新挂载原 session 并继续读取输出 |
-| 人工确认请求 | Agent 按 conversation、Terminal 按 workspace 过滤 | 回到所属项目/会话后显示 |
+| 资源                   | 切换后的行为                                                             | 重新进入原项目                    |
+| ---------------------- | ------------------------------------------------------------------------ | --------------------------------- |
+| Browser view           | 保留在原 workspace，立即从当前窗口 detach，不能作为目标项目可见页        | 按原 Tab 恢复并重新 attach        |
+| BrowserTask            | 保持与原 Browser Tab 绑定，不因项目切换取消，也不能被目标 workspace 借用 | 原任务状态继续可见                |
+| Agent conversation/run | 全局运行态保留，目标项目只激活自己的 conversation                        | 流式结果和终态继续恢复            |
+| Terminal PTY/session   | 主进程 PTY 保留，目标项目 Tab 不引用旧 session                           | 重新挂载原 session 并继续读取输出 |
+| 人工确认请求           | Agent 按 conversation、Terminal 按 workspace 过滤                        | 回到所属项目/会话后显示           |
 
 Browser runtime 是可选能力：reconcile IPC 不可用或失败时记录诊断并继续切换 workspace，避免 Browser 故障阻断文件、Agent 或 Terminal；新工作区渲染后的 Browser lifecycle 会继续按目标 workspace 收敛视图。
 

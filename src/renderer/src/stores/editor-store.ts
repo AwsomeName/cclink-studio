@@ -106,6 +106,40 @@ interface EditorState {
   hydrateFromWorkspaceState: (value: unknown) => void
 }
 
+function normalizeMarkdownDiagnostics(diagnostics: MarkdownDiagnostic[]): MarkdownDiagnostic[] {
+  const seen = new Set<string>()
+  return diagnostics.filter((diagnostic) => {
+    // Selection/source mapping is transient operational state, not a document compatibility issue.
+    if (diagnostic.code === 'source-map-mismatch') return false
+    const key = JSON.stringify([
+      diagnostic.code,
+      diagnostic.severity,
+      diagnostic.message,
+      diagnostic.startLine ?? null,
+      diagnostic.endLine ?? null,
+    ])
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function sameMarkdownDiagnostics(left: MarkdownDiagnostic[], right: MarkdownDiagnostic[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((diagnostic, index) => {
+      const candidate = right[index]
+      return (
+        diagnostic.code === candidate.code &&
+        diagnostic.severity === candidate.severity &&
+        diagnostic.message === candidate.message &&
+        diagnostic.startLine === candidate.startLine &&
+        diagnostic.endLine === candidate.endLine
+      )
+    })
+  )
+}
+
 function normalizeEditorDrafts(value: unknown): Record<string, EditorFileState> | null {
   if (!value || typeof value !== 'object') return null
   const parsed = value as { files?: Record<string, EditorFileState> }
@@ -118,7 +152,9 @@ function normalizeEditorDrafts(value: unknown): Record<string, EditorFileState> 
       currentContent: file.currentContent,
       dirty: Boolean(file.dirty),
       loading: false,
-      diagnostics: Array.isArray(file.diagnostics) ? file.diagnostics : [],
+      diagnostics: Array.isArray(file.diagnostics)
+        ? normalizeMarkdownDiagnostics(file.diagnostics)
+        : [],
       ...(typeof file.versionHash === 'string' ? { versionHash: file.versionHash } : {}),
       ...(typeof file.modifiedAt === 'number' ? { modifiedAt: file.modifiedAt } : {}),
       ...(typeof file.sourceLineOffset === 'number'
@@ -362,10 +398,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((state) => {
       const file = state.files[filePath]
       if (!file) return state
+      const normalized = normalizeMarkdownDiagnostics(diagnostics)
+      if (sameMarkdownDiagnostics(file.diagnostics ?? [], normalized)) return state
       return {
         files: {
           ...state.files,
-          [filePath]: { ...file, diagnostics },
+          [filePath]: { ...file, diagnostics: normalized },
         },
       }
     }),
@@ -535,7 +573,7 @@ function fileStateFromSnapshot(
     currentContent: content,
     dirty: false,
     loading: false,
-    diagnostics,
+    diagnostics: normalizeMarkdownDiagnostics(diagnostics),
     versionHash: snapshot.hash || undefined,
     modifiedAt: snapshot.modifiedAt,
     ...(sourceLineOffset > 0 ? { sourceLineOffset } : {}),
