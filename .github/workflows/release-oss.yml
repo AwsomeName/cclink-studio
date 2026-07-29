@@ -1,0 +1,301 @@
+name: release-oss
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing cclink-studio tag, for example v0.1.1
+        required: true
+        type: string
+      create_draft:
+        description: Build signed assets and create a draft GitHub Release
+        required: true
+        default: false
+        type: boolean
+      failure_injection:
+        description: U0 acceptance only; fail manifest aggregation before release upload
+        required: true
+        default: none
+        type: choice
+        options:
+          - none
+          - omit-x64-build-record
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oss-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: release-tools
+          fetch-depth: 0
+      - name: Checkout immutable source tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          path: source
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+      - name: Require the default-branch release workflow
+        run: test "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH"
+      - run: pnpm --dir source install --frozen-lockfile
+      - run: node --test release-tools/scripts/oss-release-preflight.test.mjs
+      - run: node release-tools/scripts/oss-release-preflight.mjs --source-dir source --tag "$RELEASE_TAG" --mode plan
+      - run: pnpm --dir source verify
+      - run: pnpm --dir source smoke:standalone
+
+  package:
+    if: ${{ inputs.create_draft }}
+    needs: validate
+    environment: studio-release
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: release-tools
+          fetch-depth: 0
+      - name: Checkout immutable source tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          path: source
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+      - run: pnpm --dir source install --frozen-lockfile
+      - name: Prepare Apple notarization key
+        env:
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY_BASE64" | base64 -D > "$key_path"
+          chmod 600 "$key_path"
+          echo "APPLE_API_KEY=$key_path" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID" >> "$GITHUB_ENV"
+          echo "APPLE_API_ISSUER=$APPLE_API_ISSUER" >> "$GITHUB_ENV"
+      - name: Validate release credentials
+        env:
+          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          CSC_NAME: ${{ secrets.MACOS_DEVELOPER_IDENTITY }}
+        run: |
+          node release-tools/scripts/oss-release-preflight.mjs \
+            --source-dir source \
+            --tag "$RELEASE_TAG" \
+            --mode release
+
+          certificate_path="$RUNNER_TEMP/developer-id.p12"
+          keychain_path="$RUNNER_TEMP/release-preflight.keychain-db"
+          keychain_password="$(uuidgen)"
+          cleanup_keychain() {
+            security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
+          }
+          trap cleanup_keychain EXIT
+
+          printf '%s' "$CSC_LINK" | base64 -D > "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$CSC_KEY_PASSWORD" \
+            -T /usr/bin/codesign
+          security find-identity -v -p codesigning "$keychain_path" |
+            grep -F -- "$CSC_NAME" >/dev/null || {
+              echo "::error::The P12 does not contain the configured Developer ID identity."
+              exit 1
+            }
+      - name: Build application
+        working-directory: source
+        run: |
+          pnpm build
+          node scripts/stage-claude-runtime.mjs --arch "${{ matrix.arch }}"
+      - name: Package signed and notarized application
+        working-directory: source
+        env:
+          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          CSC_NAME: ${{ secrets.MACOS_DEVELOPER_IDENTITY }}
+        run: |
+          builder_identity="${CSC_NAME#Developer ID Application: }"
+          if [ "$builder_identity" = "$CSC_NAME" ]; then
+            echo "::error::MACOS_DEVELOPER_IDENTITY must start with 'Developer ID Application: '."
+            exit 1
+          fi
+          unset CSC_NAME
+          pnpm exec electron-builder \
+            --mac "--${{ matrix.arch }}" \
+            --publish never \
+            --config.mac.identity="$builder_identity" \
+            --config.mac.hardenedRuntime=true \
+            --config.mac.notarize=true
+      - name: Notarize and staple disk image
+        working-directory: source
+        env:
+          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          CSC_NAME: ${{ secrets.MACOS_DEVELOPER_IDENTITY }}
+        run: bash ../release-tools/scripts/notarize-dmg.sh dist/*.dmg
+      - name: Verify signed artifacts
+        working-directory: source
+        run: |
+          app_path="$(find dist -maxdepth 3 -type d -name '*.app' -print -quit)"
+          test -n "$app_path"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          spctl --assess --type execute --verbose=2 "$app_path"
+          for dmg in dist/*.dmg; do
+            codesign --verify --verbose=2 "$dmg"
+            xcrun stapler validate "$dmg"
+            spctl \
+              --assess \
+              --type open \
+              --context context:primary-signature \
+              --verbose=4 \
+              "$dmg"
+          done
+      - name: Prepare release assets
+        working-directory: source
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          release_assets_dir="../release-assets-${{ matrix.arch }}"
+          mkdir -p "$release_assets_dir"
+          shopt -s nullglob
+          dmg_files=(dist/*.dmg)
+          zip_files=(dist/*.zip)
+          if [ "${#dmg_files[@]}" -ne 1 ] || [ "${#zip_files[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one DMG and one ZIP before release asset normalization."
+            exit 1
+          fi
+          cp "${dmg_files[0]}" "$release_assets_dir/cclink-studio-${VERSION}-${{ matrix.arch }}.dmg"
+          cp "${zip_files[0]}" "$release_assets_dir/cclink-studio-${VERSION}-${{ matrix.arch }}.zip"
+          (
+            cd "$release_assets_dir"
+            shasum -a 256 ./*.dmg ./*.zip > "checksums-${{ matrix.arch }}.txt"
+          )
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          RELEASE_WORKFLOW_SHA="$(git -C ../release-tools rev-parse HEAD)"
+          export SOURCE_SHA RELEASE_WORKFLOW_SHA VERSION RELEASE_ARCH="${{ matrix.arch }}"
+          node -e '
+            const fs = require("node:fs");
+            const record = {
+              schemaVersion: 1,
+              tag: process.env.RELEASE_TAG,
+              version: process.env.VERSION,
+              arch: process.env.RELEASE_ARCH,
+              sourceSha: process.env.SOURCE_SHA,
+              releaseWorkflowSha: process.env.RELEASE_WORKFLOW_SHA,
+              workflowRunId: process.env.GITHUB_RUN_ID
+            };
+            fs.writeFileSync(
+              `../release-assets-${process.env.RELEASE_ARCH}/build-record-${process.env.RELEASE_ARCH}.json`,
+              `${JSON.stringify(record, null, 2)}\n`
+            );
+          '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: studio-${{ inputs.tag }}-${{ matrix.arch }}
+          path: release-assets-${{ matrix.arch }}
+          if-no-files-found: error
+
+  draft:
+    if: ${{ inputs.create_draft }}
+    needs: package
+    environment: studio-release
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: release-tools
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: studio-${{ inputs.tag }}-*
+          path: release-assets
+          merge-multiple: true
+      - name: Inject U0 manifest validation failure
+        if: ${{ inputs.failure_injection != 'none' }}
+        env:
+          FAILURE_INJECTION: ${{ inputs.failure_injection }}
+        run: |
+          case "$FAILURE_INJECTION" in
+            omit-x64-build-record)
+              rm release-assets/build-record-x64.json
+              ;;
+            *)
+              echo "::error::Unsupported failure injection: $FAILURE_INJECTION"
+              exit 1
+              ;;
+          esac
+      - name: Generate and verify update manifest
+        run: |
+          RELEASE_WORKFLOW_SHA="$(git -C release-tools rev-parse HEAD)"
+          node release-tools/scripts/release/generate-update-manifest.mjs \
+            --assets-dir release-assets \
+            --tag "$RELEASE_TAG" \
+            --minimum-system-version 13.0 \
+            --release-workflow-sha "$RELEASE_WORKFLOW_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --output release-assets/update-manifest.json
+          node release-tools/scripts/release/verify-update-manifest.mjs \
+            --assets-dir release-assets \
+            --manifest release-assets/update-manifest.json \
+            --tag "$RELEASE_TAG" \
+            --release-workflow-sha "$RELEASE_WORKFLOW_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID"
+      - name: Create draft release
+        run: |
+          gh release create "$RELEASE_TAG" \
+            release-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --verify-tag \
+            --generate-notes \
+            --title "CCLink Studio 开源版 $RELEASE_TAG"

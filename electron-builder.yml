@@ -45,7 +45,8 @@ mac:
   category: public.app-category.productivity
   # Local builds use ad-hoc signing so macOS accepts nested executables inside the app bundle.
   # The bundled Claude runtime keeps its upstream Anthropic Developer ID signature.
+  # The OSS Release workflow overrides this identity with its protected Developer ID.
   identity: '-'
   signIgnore:
     - 'Contents/Resources/agent-runtime/.*'
-# 开源壳不内置发布源；官方更新源、签名和公证由 cclink-dev 官方构建层注入。
+# 开源壳不内置生产更新源；商业版更新源与发布配置由 cclink-dev 构建层注入。

@@ -106,6 +106,7 @@ Agent Panel：
 - Elasticsearch 只读连接。
 - 连接配置管理：名称、类型、endpoint、默认 index、查询超时、结果上限。
 - 凭证进入统一的本机明文凭证文件，不把密码/API Key 写入工作空间文件、普通设置、日志或诊断。
+- Renderer 默认只看到是否已配置等脱敏状态；定向显示或复制凭证必须由用户明确触发。
 - 浏览 index 列表和基础 metadata。
 - 执行只读 DSL 查询。
 - 查询结果表格、JSON 详情、分页。

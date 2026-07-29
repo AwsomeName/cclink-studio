@@ -9,7 +9,7 @@ must identify the repository, product name, bundle identifier, assembly path, an
 directory. A successful `electron-builder` exit code does not prove that the intended
 product was built.
 
-## OSS Target
+## OSS Local Package Target
 
 | Field             | Required value                                             |
 | ----------------- | ---------------------------------------------------------- |
@@ -21,6 +21,10 @@ product was built.
 | Output            | `cclink-studio/dist/`                                      |
 | Signing           | ad-hoc (`identity: '-'`), not notarized                    |
 | Command           | `pnpm studio:package` or `bash scripts/package.sh --arm64` |
+
+This table describes local test packaging. Formal OSS releases use
+`.github/workflows/release-oss.yml`, which overrides the ad-hoc identity with the protected
+Developer ID, notarizes artifacts, and creates a Draft Release from an immutable Tag.
 
 Preflight:
 

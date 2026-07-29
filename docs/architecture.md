@@ -6,16 +6,16 @@
 
 CCLink Studio 是 CCLink 的开源桌面工作台端，不是 CCLink Studio 接入 CCLink，也不是独立账号体系。
 
-开源仓库的目标是提供本地优先的桌面壳、浏览器/文档/Android/Terminal/Agent 工作台、MCP 工具和可扩展 IPC 边界。官方账号、云函数、配对、消息路由、额度、签名、公证、生产 API 注入和官方发布链路由闭源工作区与 CCLink 主项目承接。
+开源仓库的目标是提供本地优先的桌面壳、浏览器/文档/Android/Terminal/Agent 工作台、MCP 工具和可扩展 IPC 边界。官方账号、云函数、配对、消息路由、额度和生产 API 注入由闭源工作区与 CCLink 主项目承接。开源版和商业版各自从自己的不可变 Tag 独立构建、签名、公证和发布。
 
 ## 项目边界
 
-| 位置                                            | 角色                                                                                                |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `/Users/apple/Desktop/cclink-dev/cclink-studio` | 开源桌面壳。默认不内置官方生产 API 地址，不带登录/订阅/官方消息网络/云同步/网络工作区实现。         |
-| `/Users/apple/Desktop/cclink-dev`               | 闭源总控/官方编译工作区。承接官方集成层、签名、公证、生产 API 注入、多仓库集成脚本和 release 基线。 |
-| `/Users/apple/Desktop/chat-cc/deploy`           | CCLink 云函数与账号体系。                                                                           |
-| `/Users/apple/Desktop/chat-cc/Agent`            | CCLink Agent runtime。                                                                              |
+| 位置                                            | 角色                                                                                            |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `/Users/apple/Desktop/cclink-dev/cclink-studio` | 开源桌面壳。独立发布开源版，不内置官方生产 API、登录、订阅、官方消息网络或云同步。              |
+| `/Users/apple/Desktop/cclink-dev`               | 闭源总控/商业版编译工作区。独立承接官方集成层、生产 API 注入、商业版签名、公证和 release 基线。 |
+| `/Users/apple/Desktop/chat-cc/deploy`           | CCLink 云函数与账号体系。                                                                       |
+| `/Users/apple/Desktop/chat-cc/Agent`            | CCLink Agent runtime。                                                                          |
 
 不存在额外拆分出的云端或 Agent 独立项目。
 
@@ -26,7 +26,7 @@ CCLink Studio 是 CCLink 的开源桌面工作台端，不是 CCLink Studio 接�
 ### 1. 单一产品边界
 
 - Studio OSS 是本地优先的 Electron 桌面工作台，必须可以单仓库、免官方账号启动。
-- 官方账号、订阅、消息网络、云同步、生产 API 和发布链路只能通过官方集成层进入。
+- 官方账号、订阅、消息网络、云同步、生产 API 和商业版发布链路只能通过官方集成层进入。
 - renderer 不得直接依赖官方实现、Node.js 或主进程内部模块。
 - 产品、工程和持久化领域统一使用“工作空间 / workspace”，不把“项目 / project”
   作为同义状态对象。当前 `projectId`、`project.json`、`ProjectStrip` 和
@@ -93,11 +93,30 @@ CCLink Studio 是 CCLink 的开源桌面工作台端，不是 CCLink Studio 接�
 - 上下文操作 owner 必须登记在 `docs/ops/context-action-inventory.md` 并通过 `pnpm verify:context-actions`；重复 command/contribution、孤儿 owner、未覆盖 target、第二个菜单 Store 或未登记原生菜单属于架构门禁失败。
 - 上下文操作诊断只记录失败分类、稳定 ID、target kind 和脱敏消息，不记录凭证、target payload 或网页正文。
 
+### 11. 用户闭环先于工程完成度
+
+- 新功能必须先定义用户在真实应用中可执行的端到端验收动作，再设计 contract、服务、
+  UI、发布和测试任务。只有内部产物、CI 或脚本的阶段不得标记为产品里程碑。
+- 构建、签名、公证、Manifest、Schema、重构和测试基建只计入工程准备度，不计入
+  用户功能进度。汇报必须分列两者，并默认先报告用户功能进度。
+- 实施顺序优先形成最小纵向闭环，使用户尽早看到真实行为；横向基础设施只做到当前
+  闭环所需的最小范围，再按失败证据补强。
+- 连续开发超过 60 分钟没有产生新的用户可验收能力时，必须执行偏航检查。单项前置
+  工作超过 60 分钟或同一阻塞连续失败两次时，必须停止扩张并重新确认主线取舍。
+- 产品完成声明必须附真实应用中的用户验收结果。mock、单元测试、CI、Draft Release
+  或文档通过，只能证明相应工程门禁，不能证明用户功能完成。
+- 阶段总结必须先回答“用户现在能做什么、还不能做什么”，再报告内部里程碑、提交、
+  测试或工程准备度。
+
 ## 架构变更规则
 
 如果需求确实需要违反上述原则，必须先在 `docs/decisions/` 新增 ADR，写清问题、选择、风险、替代方案、迁移与回收条件，并在实现前完成评审。没有 ADR 的例外视为架构缺陷，而不是默认的新模式。
 
 ADR 0003 已实施 OSS 本地明文凭证存储，并取代此前“必须使用本机加密存储”的要求。`CredentialService` 是唯一状态所有者；Agent、Git、数据源和扩展不得重新建立独立凭证 Store，`verify:credential-boundary` 负责阻止系统钥匙串依赖回流。
+
+ADR 0004 已实施开源版与商业版独立发布。OSS Release 只从本仓库不可变 Tag
+构建、签名、公证并创建 Draft Release；商业版发布仍由 `cclink-dev` 独立拥有，
+两条链路不得读取对方的凭证、配置或发布状态。
 
 已关闭的稳定化阶段、修复顺序和退出证据见 `docs/stabilization.md`。后续功能按本架构宪法和 `docs/development.md` 的门禁受控推进。
 
@@ -113,7 +132,13 @@ CCLink Studio 开源壳保留这些本地能力：
   `MarkdownIllustrationService` 负责文档哈希、资产写入和引用插入事务。
 - 用户自有第三方凭证的本地明文管理；凭证不依赖 CCLink 账号、云服务或系统钥匙串。
 - 本地设置、诊断、文件访问和工作台状态恢复。
-- updater 的中性检查框架，但不开源默认生产更新源、签名、公证或制品上传链路。
+- updater 的中性检查框架，以及只针对本仓库不可变 Tag 的开源版签名、公证和制品发布链路。
+
+桌面发布与更新的状态所有权、发布权限边界、R0 发布基线和 U0-U5 更新验收以
+`docs/features/desktop-release-and-updates.md` 为产品事实源，任务拆解、代码落点、
+工作量、失败矩阵和验收证据以
+`docs/features/desktop-update-development-plan.md` 为执行事实源。Developer ID
+直接分发是当前默认路线；Mac App Store 需要独立 ADR。
 
 这些能力不需要用户登录 CCLink，也不依赖官方云服务。
 
@@ -125,7 +150,8 @@ CCLink Studio 开源壳保留这些本地能力：
 - `bash scripts/restart.sh restart` 启动后台开发进程。
 - 默认启动不得要求存在 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent`。
 - 默认启动不得要求或主动访问 Apple Keychain、Windows Credential Manager、Linux Secret Service 等系统凭证存储。
-- 官方账号、官方运行时、生产 API、签名、公证和发布上传只通过官方集成层进入。
+- 官方账号、官方运行时和生产 API 只通过官方集成层进入。开源版发布链路不得读取官方集成层。
+- OSS 签名、公证和制品上传只存在于受保护的仓库 Release workflow，不得进入应用默认启动路径。
 
 Android 是本地真机能力：只连接用户自有 USB 或 Wi-Fi ADB 真机。不提供 Android SDK 下载、AVD 创建、模拟器启动或托管设备服务。找不到 `adb` 时，Studio 应继续启动，Android 设备能力降级为不可用。
 
@@ -137,7 +163,7 @@ Android 是本地真机能力：只连接用户自有 USB 或 Wi-Fi ADB 真机�
 - 官方消息凭证、消息路由、配对、网络运行时注册。
 - 登录、订阅、entitlement、quota、官方 feature gate。
 - 云同步、网络文件树、网络文件查看、网络 session sidebar。
-- 私有服务配置、生产 API 地址、官方更新源、制品上传、签名和公证流程。
+- 私有服务配置、生产 API 地址、商业版更新源及商业版发布流程。
 - Android SDK/AVD 管理、模拟器启动、托管设备服务。
 
 验收上，开源壳不应默认 import 官方账号、订阅、同步、消息网络或网络工作区实现，也不应默认暴露这些 preload API。

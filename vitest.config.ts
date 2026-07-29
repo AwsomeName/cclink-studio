@@ -10,6 +10,7 @@ export default defineConfig({
   },
   test: {
     include: [
+      'src/shared/**/*.test.ts',
       'src/main/**/*.test.ts',
       'src/preload/**/*.test.ts',
       'src/renderer/**/*.test.ts',
