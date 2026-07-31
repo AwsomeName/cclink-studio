@@ -12,7 +12,12 @@ const settingsUpdateSchema = z
     disabledAgentToolModules: z.array(z.string().min(1).max(256)).max(128),
     defaultAgentRoleRef: z
       .object({
-        roleId: z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9._-]+$/),
+        roleId: z
+          .string()
+          .trim()
+          .min(1)
+          .max(128)
+          .regex(/^[A-Za-z0-9._-]+$/),
         version: z.number().int().positive().max(1_000_000),
       })
       .strict(),

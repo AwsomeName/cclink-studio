@@ -23,7 +23,6 @@ import {
   workspaceRefLabel,
   workspaceRefSourceLabel,
 } from '../../../../shared/workspace-ref'
-import { ConversationMessageRenderer } from '../common/ConversationMessageRenderer'
 import { IconCheck, IconError, IconSend, IconStop, IconTool } from '../common/Icons'
 import { ConversationShell, type ConversationShellBadgeKind } from './ConversationShell'
 import { AgentComposerToolbar } from '../../features/agent-composer/AgentComposerToolbar'
@@ -62,6 +61,13 @@ import {
   importAgentImageFiles,
   MAX_AGENT_IMAGES,
 } from '../../features/agent-conversations/image-attachments'
+import { useAgentRoles } from '../../features/agent-profiles/use-agent-profiles'
+import type { AgentRoleSummary } from '@shared/agent-role'
+import {
+  applyAgentRoleToConversation,
+  getApplyAgentRoleError,
+} from '../../features/agent-roles/agent-role-actions'
+import { AgentConversationTimeline } from '../../features/agent-roles/AgentConversationTimeline'
 
 export function WorkbenchAgentConversation({
   tabId,
@@ -98,6 +104,7 @@ export function WorkbenchAgentConversation({
   const loadDataSources = useDataSourceStore((state) => state.loadSources)
   const loadSavedQueries = useDataSourceStore((state) => state.loadSavedQueries)
   const showToast = useToastStore((state) => state.show)
+  const { roles, error: rolesError } = useAgentRoles()
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const [resourceQuery, setResourceQuery] = useState<string | null>(null)
   const [skillQuery, setSkillQuery] = useState<string | null>(null)
@@ -134,6 +141,10 @@ export function WorkbenchAgentConversation({
   }, [loadDataSources, loadSavedQueries])
 
   useEffect(() => {
+    if (rolesError) showToast(`角色列表加载失败: ${rolesError}`, 'error')
+  }, [rolesError, showToast])
+
+  useEffect(() => {
     let cancelled = false
     void window.cclinkStudio.agent.getContextUsage(conversationId).then((usage) => {
       if (!cancelled && usage) setContextUsage(usage, conversationId)
@@ -148,6 +159,11 @@ export function WorkbenchAgentConversation({
   const pendingImages = conversation?.pendingImages ?? []
   const mountedSkills = conversation?.mountedSkills ?? []
   const contextCompacting = conversation?.contextCompaction.status === 'compacting'
+  const activeRoleAvailable = roles.some(
+    (role) =>
+      role.roleId === conversation?.configuration.roleRef.roleId &&
+      role.version === conversation.configuration.roleRef.version,
+  )
   const composerWorkspaceRef = conversation?.runtime.workspaceRef ?? activeWorkspaceRef
   const savedQueries = useMemo(
     () => Object.values(savedQueriesBySourceId).flat(),
@@ -270,6 +286,18 @@ export function WorkbenchAgentConversation({
       setPermissionMode(nextMode)
     },
     [permissionMode, setPermissionMode],
+  )
+  const handleRoleChange = useCallback(
+    async (role: AgentRoleSummary) => {
+      if (!conversation) return
+      const result = await applyAgentRoleToConversation(conversationId, {
+        roleId: role.roleId,
+        version: role.version,
+      })
+      const failure = getApplyAgentRoleError(result)
+      showToast(failure ?? `当前会话已切换为「${role.label}」`, failure ? 'error' : 'success')
+    },
+    [conversation, conversationId, showToast],
   )
 
   const handleCompactContext = useCallback(
@@ -454,12 +482,16 @@ export function WorkbenchAgentConversation({
                 placeholder="发送到这个工作会话，@ 挂资源，/ 挂技能。Cmd/Ctrl + Enter 发送。"
               />
               <AgentComposerToolbar
+                roleRef={conversation.configuration.roleRef}
+                roles={roles}
+                onRoleChange={(role) => void handleRoleChange(role)}
                 permissionMode={permissionMode}
                 settings={settings}
                 loading={conversation.loading || contextCompacting}
                 canSend={
                   (Boolean(conversation.input.trim()) || pendingImages.length > 0) &&
-                  !contextCompacting
+                  !contextCompacting &&
+                  activeRoleAvailable
                 }
                 contextUsage={conversation.contextUsage}
                 contextCompaction={conversation.contextCompaction}
@@ -479,7 +511,8 @@ export function WorkbenchAgentConversation({
                     <button
                       disabled={
                         (!conversation.input.trim() && pendingImages.length === 0) ||
-                        contextCompacting
+                        contextCompacting ||
+                        !activeRoleAvailable
                       }
                       onClick={() => {
                         setResourceQuery(null)
@@ -499,18 +532,15 @@ export function WorkbenchAgentConversation({
         )
       }
     >
-      {conversation.messages.map((message) => (
-        <ConversationMessageRenderer
-          key={message.id}
-          message={message}
-          conversationId={conversationId}
-          workspaceKey={
-            conversation.runtime.workspaceRef
-              ? workspaceRefKey(conversation.runtime.workspaceRef)
-              : null
-          }
-        />
-      ))}
+      <AgentConversationTimeline
+        messages={conversation.messages}
+        configurationEvents={conversation.configurationEvents}
+        roles={roles}
+        conversationId={conversationId}
+        workspaceKey={
+          conversation.runtime.workspaceRef ? workspaceRefKey(conversation.runtime.workspaceRef) : null
+        }
+      />
     </ConversationShell>
   )
 }

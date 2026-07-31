@@ -1,6 +1,7 @@
 import type { AgentCommandResult, AgentCompactConversationPayload } from '@shared/agent-protocol'
 import type { AgentSendMessageInput } from '@shared/ipc/agent'
 import type { AgentBackendState, AgentMountedResource } from '../../types'
+import type { AgentRunConfigurationReceipt } from '@shared/agent-role'
 import {
   useAgentStore,
   type AgentConversationState,
@@ -51,6 +52,7 @@ interface ConversationRunStore {
   ) => void
   setBackendState: (state: AgentBackendState, conversationId?: string) => void
   clearTransientResources: (conversationId?: string) => void
+  setRunConfigurationReceipt: (receipt: AgentRunConfigurationReceipt) => boolean
   beginContextCompaction: (conversationId?: string) => string
   finishContextCompaction: (
     success: boolean,
@@ -121,6 +123,17 @@ export function createConversationRunController({
           store.setBackendState('error', conversationId)
           return { status: 'failed', error, runId }
         }
+        if (
+          !result.configurationReceipt ||
+          !store.setRunConfigurationReceipt(result.configurationReceipt)
+        ) {
+          const error = '本轮 Agent 实际角色配置与当前会话不一致，已停止运行'
+          await agentApi.abort(conversationId).catch(() => undefined)
+          store.cancelStreaming(conversationId, 'error', runId)
+          store.addSystemMessage(error, conversationId)
+          store.setBackendState('error', conversationId)
+          return { status: 'failed', error, runId }
+        }
         store.clearTransientResources(conversationId)
         return { status: 'accepted', runId }
       } catch (cause) {
@@ -173,7 +186,7 @@ export function createConversationRunController({
           runId,
           sessionId: conversation.sessionId,
           sessionCompatibilityFingerprint: conversation.sessionCompatibilityFingerprint ?? null,
-          profileRef: conversation.profileRef,
+          configuration: conversation.configuration,
           workspaceRef: conversation.runtime.workspaceRef,
           instructions: instructions.trim() || undefined,
         })

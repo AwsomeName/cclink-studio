@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_AGENT_PROFILE_REF } from '../../shared/agent-profile'
+import { DEFAULT_AGENT_ROLE_REF } from '../../shared/agent-role'
 import {
   AGENT_PROFILE_PROMPT_COMPILER_VERSION,
   BuiltinAgentProfileRegistry,
@@ -10,9 +10,9 @@ describe('BuiltinAgentProfileRegistry', () => {
     const profiles = new BuiltinAgentProfileRegistry().list()
 
     expect(profiles).toHaveLength(7)
-    expect(new Set(profiles.map((profile) => profile.profileId)).size).toBe(7)
+    expect(new Set(profiles.map((profile) => profile.roleId)).size).toBe(7)
     expect(profiles[0]).toMatchObject({
-      ...DEFAULT_AGENT_PROFILE_REF,
+      ...DEFAULT_AGENT_ROLE_REF,
       label: '默认助手',
     })
   })
@@ -20,11 +20,11 @@ describe('BuiltinAgentProfileRegistry', () => {
   it('keeps political profiles framed as analysis lenses', () => {
     const registry = new BuiltinAgentProfileRegistry()
 
-    expect(registry.resolve({ profileId: 'public-governance', version: 1 })).toMatchObject({
+    expect(registry.resolve({ roleId: 'public-governance', version: 1 })).toMatchObject({
       disclaimer: expect.stringContaining('分析框架'),
       systemInstructions: expect.stringContaining('真实政府'),
     })
-    expect(registry.resolve({ profileId: 'civil-rights-advocate', version: 1 })).toMatchObject({
+    expect(registry.resolve({ roleId: 'civil-rights-advocate', version: 1 })).toMatchObject({
       disclaimer: expect.stringContaining('分析框架'),
       systemInstructions: expect.stringContaining('真实组织'),
     })
@@ -33,8 +33,8 @@ describe('BuiltinAgentProfileRegistry', () => {
   it('rejects unknown identifiers and versions instead of silently falling back', () => {
     const registry = new BuiltinAgentProfileRegistry()
 
-    expect(() => registry.resolve({ profileId: 'missing', version: 1 })).toThrow('角色不可用')
-    expect(() => registry.resolve({ profileId: 'default-assistant', version: 2 })).toThrow(
+    expect(() => registry.resolve({ roleId: 'missing', version: 1 })).toThrow('角色不可用')
+    expect(() => registry.resolve({ roleId: 'default-assistant', version: 2 })).toThrow(
       '角色不可用',
     )
   })
@@ -44,11 +44,13 @@ describe('BuiltinAgentProfileRegistry', () => {
     const runtimeFingerprint = 'a'.repeat(64)
     const defaultFingerprint = registry.buildConversationCompatibilityFingerprint(
       runtimeFingerprint,
-      DEFAULT_AGENT_PROFILE_REF,
+      DEFAULT_AGENT_ROLE_REF,
+      1,
     )
     const challengerFingerprint = registry.buildConversationCompatibilityFingerprint(
       runtimeFingerprint,
-      { profileId: 'critical-challenger', version: 1 },
+      { roleId: 'critical-challenger', version: 1 },
+      1,
     )
 
     expect(AGENT_PROFILE_PROMPT_COMPILER_VERSION).toBe(1)

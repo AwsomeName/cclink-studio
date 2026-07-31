@@ -13,6 +13,7 @@ import {
   IconTerminal,
   IconTool,
   IconClock,
+  IconUser,
 } from '../common/Icons'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import {
@@ -32,6 +33,7 @@ const MAIN_ICONS: Array<{
     ? [{ id: 'projects' as const, Icon: IconProjects, label: '项目' }]
     : []),
   { id: 'sessions', Icon: IconRobot, label: '会话' },
+  { id: 'agent-roles', Icon: IconUser, label: '角色' },
   { id: 'files', Icon: IconFiles, label: '文件' },
   { id: 'browser', Icon: IconGlobe, label: '浏览器' },
   { id: 'data-sources', Icon: IconDatabase, label: '数据源' },

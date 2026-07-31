@@ -56,6 +56,7 @@ import {
 } from './browser-sidebar-view-model'
 import { ScheduledTasksSidebar } from '../../features/scheduled-tasks/ScheduledTasksSidebar'
 import { createScheduledTaskTab } from '../../features/scheduled-tasks/scheduled-task-view-model'
+import { AgentRolesSidebar } from '../../features/agent-roles/AgentRolesSidebar'
 
 function getProjectName(path: string): string {
   return path.split('/').filter(Boolean).pop() ?? path
@@ -89,6 +90,8 @@ function getSidebarTitle(
       return '事务'
     case 'sessions':
       return '会话'
+    case 'agent-roles':
+      return '角色'
     case 'scheduled-tasks':
       return '定时任务'
     case 'files':
@@ -232,7 +235,7 @@ function ProjectSidebarContent({
   const renameConversation = useAgentStore((s) => s.renameConversation)
   const setAgentPanelMode = useUIStore((s) => s.setAgentPanelMode)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
-  const projectTabs = tabs.filter((tab) => tab.type !== 'settings')
+  const projectTabs = tabs.filter((tab) => tab.type !== 'settings' && tab.type !== 'agent-role')
   const sessionGroups = getWorkspaceConversationGroups(
     conversationOrder,
     conversations,
@@ -292,6 +295,7 @@ function ProjectSidebarContent({
           revealConversation={() => setAgentPanelMode('right', 'user')}
         />
       )}
+      {activePanel === 'agent-roles' && <AgentRolesSidebar />}
     </>
   )
 }

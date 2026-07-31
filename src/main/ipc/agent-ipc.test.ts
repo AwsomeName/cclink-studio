@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentProfileSummary } from '../../shared/agent-profile'
+import type { AgentRoleSummary } from '../../shared/agent-role'
 
 const mockIpcMain = vi.hoisted(() => ({
   handlers: new Map<string, (...args: any[]) => any>(),
@@ -81,40 +81,52 @@ describe('registerAgentIpc', () => {
     )
   })
 
-  it('lists safe profile summaries and forwards a validated profile reference', async () => {
+  it('lists safe role summaries and forwards a validated conversation configuration', async () => {
     const deps = createDeps()
     registerAgentIpc(deps as never)
-    deps.agentBridge.listProfiles.mockReturnValue([
+    deps.agentBridge.listRoles.mockReturnValue([
       {
-        profileId: 'default-assistant',
+        roleId: 'default-assistant',
         version: 1,
         label: '默认助手',
         description: '均衡处理一般任务',
         icon: 'assistant',
+        instructions: ['均衡处理任务'],
       },
     ])
 
-    expect(mockIpcMain.handlers.get('agent:listProfiles')?.({ sender: 'trusted' })).toEqual([
+    expect(mockIpcMain.handlers.get('agent:listRoles')?.({ sender: 'trusted' })).toEqual([
       {
-        profileId: 'default-assistant',
+        roleId: 'default-assistant',
         version: 1,
         label: '默认助手',
         description: '均衡处理一般任务',
         icon: 'assistant',
+        instructions: ['均衡处理任务'],
       },
     ])
 
     await expect(
       mockIpcMain.handlers.get('agent:sendMessage')?.({ sender: 'trusted' }, 'conversation-1', {
         message: '评估',
-        profileRef: { profileId: 'critical-challenger', version: 1 },
+        configuration: {
+          schemaVersion: 1,
+          roleRef: { roleId: 'critical-challenger', version: 1 },
+          revision: 2,
+          updatedAt: 1,
+        },
       }),
     ).resolves.toEqual({ success: true })
     expect(deps.agentBridge.sendMessage).toHaveBeenCalledWith(
       '评估',
       'conversation-1',
       expect.objectContaining({
-        profileRef: { profileId: 'critical-challenger', version: 1 },
+        configuration: {
+          schemaVersion: 1,
+          roleRef: { roleId: 'critical-challenger', version: 1 },
+          revision: 2,
+          updatedAt: 1,
+        },
       }),
     )
   })
@@ -141,7 +153,7 @@ describe('registerAgentIpc', () => {
 function createDeps() {
   const agentBridge = {
     sendMessage: vi.fn(async () => undefined),
-    listProfiles: vi.fn<() => AgentProfileSummary[]>(() => []),
+    listRoles: vi.fn<() => AgentRoleSummary[]>(() => []),
   }
   const mcpManager = {
     addServer: vi.fn(),

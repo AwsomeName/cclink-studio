@@ -1,7 +1,13 @@
 import type { AgentContextUsageSnapshot } from '@shared/agent-protocol'
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import type { AgentImageAttachment } from '@shared/ipc/agent'
-import { DEFAULT_AGENT_PROFILE_REF, type AgentProfileRef } from '@shared/agent-profile'
+import {
+  createDefaultAgentConversationConfiguration,
+  type AgentConversationConfiguration,
+  type AgentConversationConfigurationEvent,
+  type AgentRoleRef,
+  type AgentRunConfigurationReceipt,
+} from '@shared/agent-role'
 import type {
   AgentBackendState,
   AgentMessage,
@@ -43,7 +49,9 @@ export interface AgentConversationState {
   title: string
   surface: ConversationSurface
   runtime: ConversationRuntimeRef
-  profileRef: AgentProfileRef
+  configuration: AgentConversationConfiguration
+  configurationEvents: AgentConversationConfigurationEvent[]
+  lastRunConfigurationReceipt: AgentRunConfigurationReceipt | null
   messages: AgentMessage[]
   input: string
   loading: boolean
@@ -93,7 +101,7 @@ export function createAgentConversationState(
     surface?: ConversationSurface
     runtime?: ConversationRuntimeRef
     workspaceRef?: WorkspaceRef
-    profileRef?: AgentProfileRef
+    roleRef?: AgentRoleRef
     input?: string
     mountedResources?: AgentMountedResource[]
     mountedSkills?: AgentMountedSkill[]
@@ -111,7 +119,9 @@ export function createAgentConversationState(
     title: '新会话',
     surface: options.surface ?? 'assistant-panel',
     runtime,
-    profileRef: options.profileRef ?? DEFAULT_AGENT_PROFILE_REF,
+    configuration: createDefaultAgentConversationConfiguration(now, options.roleRef),
+    configurationEvents: [],
+    lastRunConfigurationReceipt: null,
     messages: [createWelcomeMessage()],
     input: options.input ?? '',
     loading: false,

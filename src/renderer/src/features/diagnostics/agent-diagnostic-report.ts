@@ -148,10 +148,10 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
     `- 最近终止原因：${conversation?.lastRunTerminalReason ?? '无'}`,
     `- 后端 Session：${input.agentRuntime?.sessionId ? '已存在' : '无'}`,
     `- Agent 角色：${
-      conversation?.profileRef
-        ? `${conversation.profileRef.profileId}@${conversation.profileRef.version}`
-        : input.agentRuntime?.profileRef
-          ? `${input.agentRuntime.profileRef.profileId}@${input.agentRuntime.profileRef.version}`
+      conversation?.configuration
+        ? `${conversation.configuration.roleRef.roleId}@${conversation.configuration.roleRef.version} · revision ${conversation.configuration.revision}`
+        : input.agentRuntime?.conversationConfiguration
+          ? `${input.agentRuntime.conversationConfiguration.roleRef.roleId}@${input.agentRuntime.conversationConfiguration.roleRef.version} · revision ${input.agentRuntime.conversationConfiguration.revision}`
           : 'unknown'
     }`,
     `- 角色 Prompt 编译器：${input.agentRuntime?.profilePromptCompilerVersion ?? 'unknown'}`,

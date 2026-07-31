@@ -46,7 +46,12 @@ export const agentApi: AgentApiContract = {
   setScope,
   getScope: (conversationId) => invokeIpcContract(agentIpc.getScope, conversationId),
   resetSession: (conversationId) => invokeIpcContract(agentIpc.resetSession, conversationId),
-  restoreConversation: (conversationId, sessionId, configuration, sessionCompatibilityFingerprint) =>
+  restoreConversation: (
+    conversationId,
+    sessionId,
+    configuration,
+    sessionCompatibilityFingerprint,
+  ) =>
     invokeIpcContract(
       agentIpc.restoreConversation,
       conversationId,

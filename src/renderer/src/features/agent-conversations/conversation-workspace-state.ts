@@ -2,10 +2,13 @@ import type { WorkspaceRef } from '@shared/workspace-ref'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import type { AgentMessage } from '../../types'
 import {
-  DEFAULT_AGENT_PROFILE_REF,
-  agentProfileRefsEqual,
-  type AgentProfileRef,
-} from '@shared/agent-profile'
+  DEFAULT_AGENT_ROLE_REF,
+  agentRoleRefsEqual,
+  createDefaultAgentConversationConfiguration,
+  type AgentConversationConfiguration,
+  type AgentRoleRef,
+} from '@shared/agent-role'
+import { DEFAULT_AGENT_PROFILE_REF, type AgentProfileRef } from '@shared/agent-profile'
 import {
   createAgentConversationState,
   DEFAULT_CONVERSATION_ID,
@@ -85,7 +88,15 @@ export function normalizeConversationSnapshot(
         transport: 'local',
         backend: 'cclink-studio-agent',
       },
-      profileRef: normalizeAgentProfileRef(conversation.profileRef),
+      configuration: normalizeAgentConversationConfiguration(
+        conversation.configuration,
+        (conversation as AgentConversationState & { profileRef?: unknown }).profileRef,
+        updatedAt,
+      ),
+      configurationEvents: Array.isArray(conversation.configurationEvents)
+        ? conversation.configurationEvents
+        : [],
+      lastRunConfigurationReceipt: conversation.lastRunConfigurationReceipt ?? null,
       archivedAt: conversation.archivedAt ?? null,
       mountedResources: Array.isArray(conversation.mountedResources)
         ? conversation.mountedResources
@@ -156,7 +167,7 @@ function normalizeSessionCompatibilityFingerprint(value: unknown): string | null
   return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value) ? value : null
 }
 
-function normalizeAgentProfileRef(value: unknown): AgentProfileRef {
+function normalizeLegacyAgentProfileRef(value: unknown): AgentProfileRef {
   if (!value || typeof value !== 'object') return DEFAULT_AGENT_PROFILE_REF
   const candidate = value as { profileId?: unknown; version?: unknown }
   if (
@@ -171,6 +182,55 @@ function normalizeAgentProfileRef(value: unknown): AgentProfileRef {
     profileId: candidate.profileId.trim(),
     version: Number(candidate.version),
   }
+}
+
+function normalizeAgentRoleRef(value: unknown): AgentRoleRef | null {
+  if (!value || typeof value !== 'object') return null
+  const candidate = value as { roleId?: unknown; version?: unknown }
+  if (
+    typeof candidate.roleId !== 'string' ||
+    !candidate.roleId.trim() ||
+    !Number.isInteger(candidate.version) ||
+    Number(candidate.version) <= 0
+  ) {
+    return null
+  }
+  return { roleId: candidate.roleId.trim(), version: Number(candidate.version) }
+}
+
+function normalizeAgentConversationConfiguration(
+  value: unknown,
+  legacyProfileRef: unknown,
+  updatedAt: number,
+): AgentConversationConfiguration {
+  if (value && typeof value === 'object') {
+    const candidate = value as {
+      schemaVersion?: unknown
+      roleRef?: unknown
+      revision?: unknown
+      updatedAt?: unknown
+    }
+    const roleRef = normalizeAgentRoleRef(candidate.roleRef)
+    if (
+      candidate.schemaVersion === 1 &&
+      roleRef &&
+      Number.isInteger(candidate.revision) &&
+      Number(candidate.revision) > 0
+    ) {
+      return {
+        schemaVersion: 1,
+        roleRef,
+        revision: Number(candidate.revision),
+        updatedAt: Number.isFinite(candidate.updatedAt) ? Number(candidate.updatedAt) : updatedAt,
+      }
+    }
+  }
+
+  const legacy = normalizeLegacyAgentProfileRef(legacyProfileRef)
+  return createDefaultAgentConversationConfiguration(updatedAt, {
+    roleId: legacy.profileId,
+    version: legacy.version,
+  })
 }
 
 function hasTerminalSdkSessionFailure(messages: AgentMessage[] | undefined): boolean {
@@ -264,7 +324,7 @@ export function isInitialSeedConversation(conversation: AgentConversationState):
     conversation.input === '' &&
     conversation.mountedResources.length === 0 &&
     conversation.mountedSkills.length === 0 &&
-    agentProfileRefsEqual(conversation.profileRef, DEFAULT_AGENT_PROFILE_REF) &&
+    agentRoleRefsEqual(conversation.configuration.roleRef, DEFAULT_AGENT_ROLE_REF) &&
     onlyMessage?.id === 'welcome' &&
     onlyMessage.role === 'assistant'
   )

@@ -45,6 +45,7 @@ import {
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
 import { ScheduledTaskTab } from '../../features/scheduled-tasks/ScheduledTaskTab'
+import { AgentRoleDetailTab } from '../../features/agent-roles/AgentRoleDetailTab'
 
 const EMPTY_TERMINAL_OUTPUT_LINES: TerminalOutputLine[] = []
 
@@ -91,6 +92,7 @@ export function WorkbenchContent({
             {activeTab.type === 'settings' && (
               <SettingsPage initialSection={activeTab.settingsSection} />
             )}
+            {activeTab.type === 'agent-role' && <AgentRoleDetailTab tab={activeTab} />}
             {activeTab.type === 'editor' &&
               (activeTab.filePath && isHtmlFilePath(activeTab.filePath) ? (
                 <SourceTextEditor

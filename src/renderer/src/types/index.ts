@@ -21,6 +21,7 @@ export type ActivityPanel =
   | 'operations'
   | 'affairs'
   | 'sessions'
+  | 'agent-roles'
   | 'scheduled-tasks'
 
 /** Workbench Tab 类型 */
@@ -41,6 +42,7 @@ export type TabType =
   | 'scheduled-task'
   | 'web-resource'
   | 'web-affair'
+  | 'agent-role'
 
 export type ConversationSurface = 'assistant-panel' | 'workbench-tab'
 
@@ -185,6 +187,11 @@ export interface Tab {
   /** 持久网页事务详情。 */
   webAffair?: {
     affairId: string
+  }
+  /** 内置 Agent 角色定义详情。 */
+  agentRole?: {
+    roleId: string
+    version: number
   }
 }
 

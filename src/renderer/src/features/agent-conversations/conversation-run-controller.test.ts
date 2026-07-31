@@ -14,7 +14,14 @@ function createConversation(updates: Partial<AgentConversationState> = {}): Agen
       transport: 'local',
       backend: 'cclink-studio-agent',
     },
-    profileRef: { profileId: 'default-assistant', version: 1 },
+    configuration: {
+      schemaVersion: 1,
+      roleRef: { roleId: 'default-assistant', version: 1 },
+      revision: 1,
+      updatedAt: 1,
+    },
+    configurationEvents: [],
+    lastRunConfigurationReceipt: null,
     messages: [],
     input: 'hello',
     loading: false,
@@ -58,9 +65,20 @@ function createHarness(conversation = createConversation()) {
     clearTransientResources: vi.fn(),
     beginContextCompaction: vi.fn(() => 'compact-1'),
     finishContextCompaction: vi.fn(),
+    setRunConfigurationReceipt: vi.fn(() => true),
   }
   const agentApi = {
-    sendMessage: vi.fn().mockResolvedValue({ success: true }),
+    sendMessage: vi.fn().mockResolvedValue({
+      success: true,
+      configurationReceipt: {
+        conversationId: 'agent-1',
+        runId: 'run-1',
+        roleRef: conversation.configuration.roleRef,
+        configurationRevision: conversation.configuration.revision,
+        configurationFingerprint: SESSION_COMPATIBILITY_FINGERPRINT,
+        runtimeSessionMode: 'resumed',
+      },
+    }),
     abort: vi.fn().mockResolvedValue(undefined),
     compactConversation: vi.fn().mockResolvedValue({ success: true }),
   }
@@ -88,6 +106,38 @@ describe('conversation-run-controller', () => {
       expect.objectContaining({ message: '你好', runId: 'run-1', sessionId: 'session-1' }),
     )
     expect(store.clearTransientResources).toHaveBeenCalledWith('agent-1')
+    expect(store.setRunConfigurationReceipt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        roleRef: { roleId: 'default-assistant', version: 1 },
+        configurationRevision: 1,
+      }),
+    )
+  })
+
+  it('同一会话连续发送时每一轮都携带并确认同一份角色配置', async () => {
+    const { store, agentApi, controller } = createHarness()
+
+    await expect(controller.send('第一轮')).resolves.toMatchObject({ status: 'accepted' })
+    await expect(controller.send('第二轮')).resolves.toMatchObject({ status: 'accepted' })
+
+    expect(agentApi.sendMessage).toHaveBeenCalledTimes(2)
+    expect(agentApi.sendMessage.mock.calls.map((call) => call[1].configuration)).toEqual([
+      createConversation().configuration,
+      createConversation().configuration,
+    ])
+    expect(store.setRunConfigurationReceipt).toHaveBeenCalledTimes(2)
+  })
+
+  it('主进程没有返回角色配置回执时停止本轮运行', async () => {
+    const { store, agentApi, controller } = createHarness()
+    agentApi.sendMessage.mockResolvedValue({ success: true })
+
+    await expect(controller.send('检查角色')).resolves.toMatchObject({
+      status: 'failed',
+      error: expect.stringContaining('实际角色配置'),
+    })
+    expect(agentApi.abort).toHaveBeenCalledWith('agent-1')
+    expect(store.clearTransientResources).not.toHaveBeenCalled()
   })
 
   it('allows an image-only turn and clears image data only after the backend accepts it', async () => {
@@ -214,7 +264,7 @@ describe('conversation-run-controller', () => {
       runId: 'compact-1',
       sessionId: 'session-1',
       sessionCompatibilityFingerprint: SESSION_COMPATIBILITY_FINGERPRINT,
-      profileRef: { profileId: 'default-assistant', version: 1 },
+      configuration: createConversation().configuration,
       workspaceRef: undefined,
       instructions: '保留任务',
     })

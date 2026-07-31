@@ -1,3 +1,5 @@
+import { DEFAULT_AGENT_ROLE_REF, type AgentRoleRef } from './agent-role'
+
 /**
  * settings-constants — 跨进程共享的设置常量
  *
@@ -260,4 +262,3 @@ export function getPresetBaseUrl(provider: Provider, apiFormat: ApiFormat): stri
   const preset = PROVIDER_PRESETS[provider]
   return apiFormat === 'anthropic' ? preset.anthropicBaseUrl : preset.openaiBaseUrl
 }
-import { DEFAULT_AGENT_ROLE_REF, type AgentRoleRef } from './agent-role'

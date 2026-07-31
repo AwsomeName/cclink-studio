@@ -24,7 +24,8 @@
 - `docs/features/local-credentials.md`：已确认的 OSS 本地明文凭证产品与架构边界。
 - `docs/features/local-credentials-development-plan.md`：移除系统钥匙串依赖的 M0-M6 详细开发计划。
 - `docs/features/markdown-auto-illustration.md`：Markdown 自动配图的产品边界、MCP 工具、资产事务和失败降级。
-- `docs/features/agent-profiles.md`：尚未实现的 Agent 预制角色、Composer 选择入口、Thread 绑定和 Session 隔离提案。
+- `docs/features/agent-role-configuration.md`：已实现待异机验收的 Agent 角色中心、会话配置、运行回执和 Session 隔离事实源。
+- `docs/features/agent-profiles.md`：v0.1.14 旧角色方案的兼容与迁移说明。
 - `docs/features/ai-web-affairs-agent.md`：尚未实现的 AI 网页事务代理人产品事实源，定义跨运行事务、人与 AI 双向交接、外部等待、证据和恢复边界。
 - `docs/features/ai-web-affairs-agent-development-plan.md`：AI 网页事务代理人的正式开发管理事实源，统一维护当前状态、里程碑、验收、进度、风险、决策、代码落点和交付证据。
 - `docs/features/scheduled-tasks.md`：工作空间定时任务的 Activity Bar、侧栏、Workbench Tab、App 内统一调度与本机启用产品方案草稿。

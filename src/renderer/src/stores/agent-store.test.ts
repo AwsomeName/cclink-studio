@@ -7,12 +7,14 @@ import {
 import type { ContentBlock } from '../types'
 import { localWorkspaceRef } from '../../../shared/workspace-ref'
 import { createAgentConversationState } from '../features/agent-conversations/conversation-state'
+import { useSettingsStore } from './settings-store'
 
 beforeEach(() => {
   resetAgentWorkspaceActiveConversationMemoryForTests()
   // 重置 store 到初始状态
   const initial = useAgentStore.getInitialState()
   useAgentStore.setState(initial, true)
+  useSettingsStore.setState(useSettingsStore.getInitialState(), true)
 })
 
 afterEach(() => {
@@ -268,6 +270,27 @@ describe('useAgentStore', () => {
   })
 
   describe('多会话', () => {
+    it('新会话读取全局默认角色，但不改动已有会话', () => {
+      const existingId = useAgentStore.getState().activeConversationId
+      useSettingsStore.setState((state) => ({
+        settings: {
+          ...state.settings,
+          defaultAgentRoleRef: { roleId: 'product-lead', version: 1 },
+        },
+      }))
+
+      const nextId = useAgentStore.getState().createConversation()
+
+      expect(useAgentStore.getState().conversations[existingId].configuration.roleRef).toEqual({
+        roleId: 'default-assistant',
+        version: 1,
+      })
+      expect(useAgentStore.getState().conversations[nextId].configuration.roleRef).toEqual({
+        roleId: 'product-lead',
+        version: 1,
+      })
+    })
+
     it('新建会话并切换时保留各自消息', () => {
       useAgentStore.getState().addUserMessage('默认会话')
       const firstId = useAgentStore.getState().activeConversationId
@@ -942,6 +965,67 @@ describe('useAgentStore', () => {
   })
 
   describe('workspace persistence', () => {
+    it('角色切换保留同一会话和历史、清空内部 session，并持久化配置事件', async () => {
+      const setSection = vi.fn().mockResolvedValue({ success: true })
+      vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+      const conversationId = useAgentStore.getState().activeConversationId
+      useAgentStore.getState().addUserMessage('保留这条历史', conversationId)
+      useAgentStore.getState().setSessionId('session-before-role-change', conversationId, 'a'.repeat(64))
+
+      await expect(
+        useAgentStore
+          .getState()
+          .applyRoleToConversation({ roleId: 'critical-challenger', version: 1 }, conversationId),
+      ).resolves.toBe(true)
+
+      const conversation = useAgentStore.getState().conversations[conversationId]
+      expect(useAgentStore.getState().activeConversationId).toBe(conversationId)
+      expect(conversation.messages.some((message) => message.rawText === '保留这条历史')).toBe(true)
+      expect(conversation.configuration).toMatchObject({
+        roleRef: { roleId: 'critical-challenger', version: 1 },
+        revision: 2,
+      })
+      expect(conversation.configurationEvents).toHaveLength(1)
+      expect(conversation.sessionId).toBeNull()
+      expect(conversation.sessionCompatibilityFingerprint).toBeNull()
+      expect(setSection).toHaveBeenCalledWith(
+        null,
+        'agentConversations',
+        expect.objectContaining({
+          conversations: expect.objectContaining({
+            [conversationId]: expect.objectContaining({
+              configuration: expect.objectContaining({ revision: 2 }),
+              configurationEvents: [expect.objectContaining({ configurationRevision: 2 })],
+            }),
+          }),
+        }),
+        null,
+      )
+    })
+
+    it('角色配置持久化失败时回滚到原配置和 session', async () => {
+      const setSection = vi.fn().mockRejectedValue(new Error('disk full'))
+      vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+      const conversationId = useAgentStore.getState().activeConversationId
+      useAgentStore.getState().setSessionId('session-before-role-change', conversationId, 'a'.repeat(64))
+
+      await expect(
+        useAgentStore
+          .getState()
+          .applyRoleToConversation({ roleId: 'fact-checker', version: 1 }, conversationId),
+      ).resolves.toBe(false)
+
+      expect(useAgentStore.getState().conversations[conversationId]).toMatchObject({
+        configuration: {
+          roleRef: { roleId: 'default-assistant', version: 1 },
+          revision: 1,
+        },
+        configurationEvents: [],
+        sessionId: 'session-before-role-change',
+        sessionCompatibilityFingerprint: 'a'.repeat(64),
+      })
+    })
+
     it('未绑定会话不会写入本地项目快照', () => {
       const projectConversationId = useAgentStore.getState().createConversation({
         runtime: {

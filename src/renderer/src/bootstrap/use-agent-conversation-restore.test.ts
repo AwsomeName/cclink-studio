@@ -28,13 +28,19 @@ describe('collectRestorableAgentSessions', () => {
         conversationId: assistantId,
         sessionId: 'assistant-session',
         sessionCompatibilityFingerprint,
-        profileRef: { profileId: 'default-assistant', version: 1 },
+        configuration: expect.objectContaining({
+          roleRef: { roleId: 'default-assistant', version: 1 },
+          revision: 1,
+        }),
       },
       {
         conversationId: workbenchId,
         sessionId: 'workbench-session',
         sessionCompatibilityFingerprint,
-        profileRef: { profileId: 'default-assistant', version: 1 },
+        configuration: expect.objectContaining({
+          roleRef: { roleId: 'default-assistant', version: 1 },
+          revision: 1,
+        }),
       },
     ])
   })

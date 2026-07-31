@@ -16,7 +16,11 @@ import type {
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import type { AgentContextUsageSnapshot, AgentStatus } from '@shared/agent-protocol'
 import type { AgentImageAttachment } from '@shared/ipc/agent'
-import type { AgentProfileRef } from '@shared/agent-profile'
+import {
+  agentRoleRefsEqual,
+  type AgentRoleRef,
+  type AgentRunConfigurationReceipt,
+} from '@shared/agent-role'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import {
   isWorkspaceStateRestoring,
@@ -39,6 +43,7 @@ import {
   normalizeConversationSnapshot,
   rememberWorkspaceActiveConversation,
 } from '../features/agent-conversations/conversation-workspace-state'
+import { useSettingsStore } from './settings-store'
 
 export type {
   AgentContextCompactionState,
@@ -92,7 +97,7 @@ interface AgentState {
     surface?: ConversationSurface
     runtime?: ConversationRuntimeRef
     activate?: boolean
-    profileRef?: AgentProfileRef
+    roleRef?: AgentRoleRef
     input?: string
     mountedResources?: AgentMountedResource[]
     mountedSkills?: AgentMountedSkill[]
@@ -104,7 +109,8 @@ interface AgentState {
   deleteConversation: (id: string) => void
   renameConversation: (id: string, title: string) => void
   markAsWorkConversation: (id: string, runtime: ConversationRuntimeRef) => void
-  setProfileRef: (profileRef: AgentProfileRef, conversationId?: string) => void
+  applyRoleToConversation: (roleRef: AgentRoleRef, conversationId?: string) => Promise<boolean>
+  setRunConfigurationReceipt: (receipt: AgentRunConfigurationReceipt) => boolean
 
   // --- 当前/指定会话 Actions ---
   setInput: (text: string, conversationId?: string) => void
@@ -167,7 +173,15 @@ interface AgentState {
   ) => void
 }
 
-const createConversation = createAgentConversationState
+function createConversation(
+  id?: string,
+  options: Parameters<typeof createAgentConversationState>[1] = {},
+): AgentConversationState {
+  return createAgentConversationState(id, {
+    ...options,
+    roleRef: options.roleRef ?? useSettingsStore.getState().settings.defaultAgentRoleRef,
+  })
+}
 
 function resolveRuntimeSession(
   conversation: AgentConversationState,
@@ -384,7 +398,7 @@ async function persistConversationWorkspace(conversationId: string): Promise<voi
   )
 }
 
-export const useAgentStore = create<AgentState>((set) => ({
+export const useAgentStore = create<AgentState>((set, get) => ({
   // 会话恢复以 WorkspaceState 为权威，避免全局 localStorage 把其他项目会话作为启动种子。
   conversations: initialConversationState.conversations,
   conversationOrder: initialConversationState.conversationOrder,
@@ -575,17 +589,83 @@ export const useAgentStore = create<AgentState>((set) => ({
       }
     }),
 
-  setProfileRef: (profileRef, conversationId) =>
+  applyRoleToConversation: async (roleRef, conversationId) => {
+    const id = resolveConversationId(get(), conversationId)
+    const previous = get().conversations[id]
+    if (!previous) return false
+    if (agentRoleRefsEqual(previous.configuration.roleRef, roleRef)) return true
+
+    const now = Date.now()
+    const revision = previous.configuration.revision + 1
     set((state) =>
-      updateConversation(state, conversationId, (conversation) => ({
+      updateConversation(state, id, (conversation) => ({
         ...conversation,
-        profileRef,
+        configuration: {
+          schemaVersion: 1,
+          roleRef: { ...roleRef },
+          revision,
+          updatedAt: now,
+        },
+        configurationEvents: [
+          ...conversation.configurationEvents,
+          {
+            id: `configuration-${now}-${Math.random().toString(36).slice(2, 8)}`,
+            type: 'configuration-changed',
+            fromRoleRef: conversation.configuration.roleRef,
+            toRoleRef: { ...roleRef },
+            configurationRevision: revision,
+            timestamp: now,
+          },
+        ],
+        lastRunConfigurationReceipt: null,
         sessionId: null,
         sessionCompatibilityFingerprint: null,
         contextUsage: null,
+        updatedAt: now,
+      })),
+    )
+
+    try {
+      await persistConversationWorkspace(id)
+      return true
+    } catch {
+      set((state) =>
+        updateConversation(state, id, (conversation) => {
+          if (conversation.configuration.revision !== revision) return conversation
+          return {
+            ...conversation,
+            configuration: previous.configuration,
+            configurationEvents: previous.configurationEvents,
+            lastRunConfigurationReceipt: previous.lastRunConfigurationReceipt,
+            sessionId: previous.sessionId,
+            sessionCompatibilityFingerprint: previous.sessionCompatibilityFingerprint,
+            contextUsage: previous.contextUsage,
+            updatedAt: Date.now(),
+          }
+        }),
+      )
+      return false
+    }
+  },
+
+  setRunConfigurationReceipt: (receipt) => {
+    const conversation = get().conversations[receipt.conversationId]
+    if (
+      !conversation ||
+      conversation.configuration.revision !== receipt.configurationRevision ||
+      !agentRoleRefsEqual(conversation.configuration.roleRef, receipt.roleRef)
+    ) {
+      return false
+    }
+    set((state) =>
+      updateConversation(state, receipt.conversationId, (current) => ({
+        ...current,
+        lastRunConfigurationReceipt: receipt,
         updatedAt: Date.now(),
       })),
-    ),
+    )
+    return true
+  },
 
   setInput: (text, conversationId) =>
     set((state) =>

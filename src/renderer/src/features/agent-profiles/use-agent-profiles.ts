@@ -1,33 +1,35 @@
 import { useEffect, useState } from 'react'
-import type { AgentProfileSummary } from '@shared/agent-profile'
+import type { AgentRoleSummary } from '@shared/agent-role'
 
-let cachedProfiles: AgentProfileSummary[] | null = null
-let pendingProfiles: Promise<AgentProfileSummary[]> | null = null
+let cachedRoles: AgentRoleSummary[] | null = null
+let pendingRoles: Promise<AgentRoleSummary[]> | null = null
 
-function loadProfiles(): Promise<AgentProfileSummary[]> {
-  if (cachedProfiles) return Promise.resolve(cachedProfiles)
-  pendingProfiles ??= window.cclinkStudio.agent.listProfiles().then((profiles) => {
-    cachedProfiles = profiles
-    return profiles
+function loadRoles(): Promise<AgentRoleSummary[]> {
+  if (cachedRoles) return Promise.resolve(cachedRoles)
+  pendingRoles ??= window.cclinkStudio.agent.listRoles().then((roles) => {
+    cachedRoles = roles
+    return roles
   })
-  return pendingProfiles.finally(() => {
-    pendingProfiles = null
+  return pendingRoles.finally(() => {
+    pendingRoles = null
   })
 }
 
-export function useAgentProfiles(): {
-  profiles: AgentProfileSummary[]
+export function useAgentRoles(): {
+  roles: AgentRoleSummary[]
   error: string | null
+  reload: () => void
 } {
-  const [profiles, setProfiles] = useState<AgentProfileSummary[]>(cachedProfiles ?? [])
+  const [roles, setRoles] = useState<AgentRoleSummary[]>(cachedRoles ?? [])
   const [error, setError] = useState<string | null>(null)
+  const [revision, setRevision] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    void loadProfiles()
-      .then((nextProfiles) => {
+    void loadRoles()
+      .then((nextRoles) => {
         if (cancelled) return
-        setProfiles(nextProfiles)
+        setRoles(nextRoles)
         setError(null)
       })
       .catch((cause) => {
@@ -37,7 +39,14 @@ export function useAgentProfiles(): {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [revision])
 
-  return { profiles, error }
+  return {
+    roles,
+    error,
+    reload: () => {
+      cachedRoles = null
+      setRevision((value) => value + 1)
+    },
+  }
 }

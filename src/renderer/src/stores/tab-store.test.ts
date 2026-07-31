@@ -159,6 +159,24 @@ describe('useTabStore', () => {
       expect(settingsTabs[0].settingsSection).toBe('remote-connections')
     })
 
+    it('同一角色定义只打开一个全局配置 Tab', () => {
+      const draft = {
+        type: 'agent-role' as const,
+        title: '事实核查员',
+        icon: '✓',
+        agentRole: { roleId: 'fact-checker', version: 1 },
+      }
+
+      useTabStore.getState().openTab(draft)
+      const firstId = useTabStore.getState().activeTabId
+      useTabStore.getState().openTab(draft)
+
+      const roleTabs = useTabStore.getState().tabs.filter((tab) => tab.type === 'agent-role')
+      expect(roleTabs).toHaveLength(1)
+      expect(roleTabs[0].workspaceRef).toBeUndefined()
+      expect(useTabStore.getState().activeTabId).toBe(firstId)
+    })
+
     it('forceNew 绕过 filePath 去重', () => {
       useTabStore.getState().openTab({ type: 'editor', title: 'A', icon: '📄', filePath: '/x.md' })
       const len1 = useTabStore.getState().tabs.length

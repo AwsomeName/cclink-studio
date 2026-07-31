@@ -43,7 +43,7 @@ function normalizeFileTab(tab: Tab): Tab {
 }
 
 function isProjectTab(tab: Tab): boolean {
-  return tab.type !== 'settings'
+  return tab.type !== 'settings' && tab.type !== 'agent-role'
 }
 
 function getConversationRuntime(conversation?: ConversationTabRef): {
@@ -163,6 +163,8 @@ interface OpenTabOptions {
   webResource?: Tab['webResource']
   /** 持久网页事务详情 */
   webAffair?: Tab['webAffair']
+  /** 内置 Agent 角色定义详情 */
+  agentRole?: Tab['agentRole']
   /** 强制新建，跳过所有去重 */
   forceNew?: boolean
   /** 显式指定 Tab 归属；缺省使用当前工作空间。 */
@@ -229,6 +231,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     scheduledTask,
     webResource,
     webAffair,
+    agentRole,
     forceNew,
     workspaceRef,
   }) => {
@@ -274,6 +277,14 @@ export const useTabStore = create<TabState>((set, get) => ({
             )
             return { tabs: nextTabs, activeTabId: existing.id }
           }
+        } else if (type === 'agent-role' && agentRole) {
+          const existing = state.tabs.find(
+            (tab) =>
+              tab.type === 'agent-role' &&
+              tab.agentRole?.roleId === agentRole.roleId &&
+              tab.agentRole.version === agentRole.version,
+          )
+          if (existing) return { activeTabId: existing.id }
         } else if (type === 'conversation' && conversation) {
           // 会话按来源和会话 ID 去重。
           const targetKey = getConversationKey({ type, conversation })
@@ -331,7 +342,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         type,
         title,
         icon,
-        ...(type === 'settings'
+        ...(type === 'settings' || type === 'agent-role'
           ? {}
           : { workspaceRef: workspaceRef ?? workspaceRefFromKey(getWorkspaceStateKey()) }),
         filePath,
@@ -348,6 +359,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         scheduledTask,
         webResource,
         webAffair,
+        agentRole,
       }
       return {
         tabs: [...state.tabs, newTab],

@@ -61,6 +61,7 @@ const UI_DEFAULTS = {
 const UI_STORAGE_KEY = 'cclink-studio-ui-state'
 const VISIBLE_ACTIVITY_PANELS = new Set<ActivityPanel>([
   'sessions',
+  'agent-roles',
   'browser',
   'files',
   'data-sources',

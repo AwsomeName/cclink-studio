@@ -33,7 +33,10 @@ describe('buildAgentSendPayload', () => {
       message: '继续',
       sessionId: 'session-123',
       sessionCompatibilityFingerprint,
-      profileRef: { profileId: 'default-assistant', version: 1 },
+      configuration: expect.objectContaining({
+        roleRef: { roleId: 'default-assistant', version: 1 },
+        revision: 1,
+      }),
       workspaceRef: { kind: 'local', path: '/Users/apple/Desktop/previous-project' },
     })
   })

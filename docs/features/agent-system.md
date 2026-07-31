@@ -88,9 +88,11 @@ claude login
 
 详细产品模型和推进里程碑见 `docs/features/agent-panel-product-model.md`。
 
-预制角色与 Thread 绑定仍处于产品和架构提案阶段，当前应用尚未提供角色选择。拟议的
-Composer 入口、预制角色、切换语义、Session 隔离和最小实现顺序见
-`docs/features/agent-profiles.md`。
+内置角色是会话配置。当前应用提供 Composer 快速选择、Activity Bar“角色”入口、角色
+Sidebar 和只读角色配置 Tab；切换角色保留同一用户会话和可见历史，只重建目标会话的
+内部 Runtime Session。角色定义归主进程只读 Registry，会话绑定归
+`AgentConversationState.configuration`，每轮运行通过主进程配置回执对账。详细事实和
+验收步骤见 `docs/features/agent-role-configuration.md`。
 
 ## 系统架构
 

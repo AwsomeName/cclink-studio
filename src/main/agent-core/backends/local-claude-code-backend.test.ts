@@ -176,7 +176,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
   it('injects a resolved role into the system prompt without changing tool permissions', async () => {
     await createBackend().sendMessage('评估这个方案', {
       agentProfile: {
-        ref: { profileId: 'critical-challenger', version: 1 },
+        ref: { roleId: 'critical-challenger', version: 1 },
         label: '反方挑战者',
         systemInstructions: '检查反例和失败路径。',
       },
@@ -189,6 +189,24 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     expect(getSystemPromptAppend()).toContain('检查反例和失败路径。')
     expect(getSystemPromptAppend()).toContain('不能扩大工具权限')
     expect(params.options.allowedTools).toEqual(['mcp__cclink_studio__*'])
+  })
+
+  it('injects the selected role again on the second send of the same backend conversation', async () => {
+    const backend = createBackend()
+    const agentProfile = {
+      ref: { roleId: 'fact-checker', version: 1 },
+      label: '事实核查员',
+      systemInstructions: '区分事实、推断和观点。',
+    } as const
+
+    await backend.sendMessage('第一轮', { agentProfile })
+    await backend.sendMessage('第二轮', { agentProfile })
+
+    expect(queryMock).toHaveBeenCalledTimes(2)
+    for (const [params] of queryMock.mock.calls) {
+      expect(params.options.systemPrompt.append).toContain('fact-checker@1')
+      expect(params.options.systemPrompt.append).toContain('区分事实、推断和观点。')
+    }
   })
 
   it('sends attached images as native Claude multimodal content blocks', async () => {

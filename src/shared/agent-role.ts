@@ -68,4 +68,3 @@ export function agentRoleRefsEqual(
 ): boolean {
   return left?.roleId === right?.roleId && left?.version === right?.version
 }
-

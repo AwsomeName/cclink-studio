@@ -17,10 +17,7 @@ import type {
   ToolConfirmationRequest,
 } from '../agent-protocol'
 import type { WorkspaceRef } from '../workspace-ref'
-import type {
-  AgentConversationConfiguration,
-  AgentRoleSummary,
-} from '../agent-role'
+import type { AgentConversationConfiguration, AgentRoleSummary } from '../agent-role'
 import type { AgentProfileRef } from '../agent-profile'
 
 export type AgentSendResourceKind =

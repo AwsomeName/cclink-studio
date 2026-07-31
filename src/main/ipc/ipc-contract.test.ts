@@ -103,20 +103,30 @@ describe('IPC invoke contracts', () => {
       { message: 'hello', workspaceRef: { kind: 'local', path: '/tmp/project' } },
     ])
     expect(agentIpcContracts.getStatus.parseArgs([])).toEqual([undefined])
-    expect(agentIpcContracts.listProfiles.parseArgs([])).toEqual([])
+    expect(agentIpcContracts.listRoles.parseArgs([])).toEqual([])
     expect(
       agentIpcContracts.sendMessage.parseArgs([
         'conversation-1',
         {
           message: '评估',
-          profileRef: { profileId: 'critical-challenger', version: 1 },
+          configuration: {
+            schemaVersion: 1,
+            roleRef: { roleId: 'critical-challenger', version: 1 },
+            revision: 2,
+            updatedAt: 1,
+          },
         },
       ]),
     ).toEqual([
       'conversation-1',
       {
         message: '评估',
-        profileRef: { profileId: 'critical-challenger', version: 1 },
+        configuration: {
+          schemaVersion: 1,
+          roleRef: { roleId: 'critical-challenger', version: 1 },
+          revision: 2,
+          updatedAt: 1,
+        },
       },
     ])
     expect(() =>
@@ -124,7 +134,12 @@ describe('IPC invoke contracts', () => {
         'conversation-1',
         {
           message: '评估',
-          profileRef: { profileId: '../../escape', version: 0 },
+          configuration: {
+            schemaVersion: 1,
+            roleRef: { roleId: '../../escape', version: 0 },
+            revision: 1,
+            updatedAt: 1,
+          },
         },
       ]),
     ).toThrow()
