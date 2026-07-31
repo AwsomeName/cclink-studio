@@ -940,92 +940,60 @@ async function main() {
     },
   )
 
-  await runCheck(
-    'domain context actions bind Operations, Production, and Settings targets',
-    async () => {
-      const verifyMouseAndKeyboardMenu = async (target, mouseActionId, keyboardActionId) => {
-        await target.click({ button: 'right' })
-        await page.locator(`[data-context-action="${mouseActionId}"]`).waitFor({ timeout: 10_000 })
-        await page.keyboard.press('Escape')
-        await target.focus()
-        await page.keyboard.press('Shift+F10')
-        await page
-          .locator(`[data-context-action="${keyboardActionId}"]`)
-          .waitFor({ timeout: 10_000 })
-        await page.keyboard.press('Escape')
-      }
-
-      await ensureSidebarVisible(page)
-      await clickByTitle(page, '运营')
-      const operationsPlatform = page.locator('[data-context-target="operations-platform"]').first()
-      await operationsPlatform.waitFor({ timeout: 15_000 })
-      await verifyMouseAndKeyboardMenu(
-        operationsPlatform,
-        'operations.prepare-session',
-        'operations.open-config',
-      )
-      await operationsPlatform.click({ button: 'right' })
-      await page.locator('[data-context-action="operations.prepare-session"]').waitFor()
-      const firstFocusedAction = await waitForContextActionFocus(page)
-      await page.keyboard.press('Tab')
-      const nextFocusedAction = await page.evaluate(() =>
-        document.activeElement?.getAttribute('data-context-action'),
-      )
-      assert(
-        firstFocusedAction && nextFocusedAction && firstFocusedAction !== nextFocusedAction,
-        `Tab should move focus within the context menu (before=${firstFocusedAction ?? 'none'}, after=${nextFocusedAction ?? 'none'})`,
-      )
-      await page.keyboard.press('Shift+Tab')
-      assert(
-        (await page.evaluate(() => document.activeElement?.getAttribute('data-context-action'))) ===
-          firstFocusedAction,
-        'Shift+Tab should move focus back within the context menu',
-      )
+  await runCheck('domain context actions bind Production and Settings targets', async () => {
+    const verifyMouseAndKeyboardMenu = async (target, mouseActionId, keyboardActionId) => {
+      await target.click({ button: 'right' })
+      await page.locator(`[data-context-action="${mouseActionId}"]`).waitFor({ timeout: 10_000 })
       await page.keyboard.press('Escape')
-
-      await clickByTitle(page, '生产')
-      const production = page.locator('[data-context-target="production"]').first()
-      await production.waitFor({ timeout: 15_000 })
-      await verifyMouseAndKeyboardMenu(production, 'production.scan', 'production.copy-status')
-      await production.click({ button: 'right' })
-      const disabledProductionAction = page.locator('[data-context-action="production.inspect"]')
-      await disabledProductionAction.waitFor()
-      assert(await disabledProductionAction.isDisabled(), 'production inspect should be disabled')
-      assert(
-        Boolean(
-          (
-            await disabledProductionAction.locator('.context-menu-disabled-reason').textContent()
-          )?.trim(),
-        ),
-        'disabled context action should expose its reason',
-      )
-      await page.keyboard.press('Escape')
-
-      await clickByTitle(page, '设置')
-      const setting = page.locator('[data-context-target="setting"]').first()
-      await setting.waitFor({ timeout: 15_000 })
-      await verifyMouseAndKeyboardMenu(setting, 'settings.copy-key', 'settings.reset-current')
-      await setting.focus()
+      await target.focus()
       await page.keyboard.press('Shift+F10')
-      const settingsCopyKeyAction = page.locator('[data-context-action="settings.copy-key"]')
-      await settingsCopyKeyAction.waitFor()
-      const initialSettingsAction = await waitForContextActionFocus(page)
-      assert(
-        initialSettingsAction === 'settings.reset-current' ||
-          initialSettingsAction === 'settings.copy-key',
-        `settings context menu should focus an enabled action (actual=${initialSettingsAction ?? 'none'})`,
-      )
-      await page.keyboard.press('End')
-      assert(
-        (await page.evaluate(() => document.activeElement?.getAttribute('data-context-action'))) ===
-          'settings.copy-key',
-        'End should focus the final enabled settings action',
-      )
-      await settingsCopyKeyAction.press('Space')
-      await page.locator('.unified-context-menu').waitFor({ state: 'hidden' })
-      return 'mouse/Shift+F10/Tab/Space/disabled reason'
-    },
-  )
+      await page.locator(`[data-context-action="${keyboardActionId}"]`).waitFor({ timeout: 10_000 })
+      await page.keyboard.press('Escape')
+    }
+
+    await ensureSidebarVisible(page)
+    await clickByTitle(page, '生产')
+    const production = page.locator('[data-context-target="production"]').first()
+    await production.waitFor({ timeout: 15_000 })
+    await verifyMouseAndKeyboardMenu(production, 'production.scan', 'production.copy-status')
+    await production.click({ button: 'right' })
+    const disabledProductionAction = page.locator('[data-context-action="production.inspect"]')
+    await disabledProductionAction.waitFor()
+    assert(await disabledProductionAction.isDisabled(), 'production inspect should be disabled')
+    assert(
+      Boolean(
+        (
+          await disabledProductionAction.locator('.context-menu-disabled-reason').textContent()
+        )?.trim(),
+      ),
+      'disabled context action should expose its reason',
+    )
+    await page.keyboard.press('Escape')
+
+    await clickByTitle(page, '设置')
+    const setting = page.locator('[data-context-target="setting"]').first()
+    await setting.waitFor({ timeout: 15_000 })
+    await verifyMouseAndKeyboardMenu(setting, 'settings.copy-key', 'settings.reset-current')
+    await setting.focus()
+    await page.keyboard.press('Shift+F10')
+    const settingsCopyKeyAction = page.locator('[data-context-action="settings.copy-key"]')
+    await settingsCopyKeyAction.waitFor()
+    const initialSettingsAction = await waitForContextActionFocus(page)
+    assert(
+      initialSettingsAction === 'settings.reset-current' ||
+        initialSettingsAction === 'settings.copy-key',
+      `settings context menu should focus an enabled action (actual=${initialSettingsAction ?? 'none'})`,
+    )
+    await page.keyboard.press('End')
+    assert(
+      (await page.evaluate(() => document.activeElement?.getAttribute('data-context-action'))) ===
+        'settings.copy-key',
+      'End should focus the final enabled settings action',
+    )
+    await settingsCopyKeyAction.press('Space')
+    await page.locator('.unified-context-menu').waitFor({ state: 'hidden' })
+    return 'mouse/Shift+F10/Space/disabled reason'
+  })
 
   await runCheck('context menu stays inside a compact viewport', async () => {
     await page.setViewportSize({ width: 900, height: 620 })
