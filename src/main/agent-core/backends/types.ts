@@ -101,7 +101,7 @@ export interface AgentSendOptions {
   scheduledTaskPolicy?: import('../tools/types.js').ToolExecutionContext['scheduledTaskPolicy']
   /** 主进程解析后的内置角色；renderer 不得直接提供 system instructions。 */
   agentProfile?: {
-    ref: import('../../../shared/agent-profile').AgentProfileRef
+    ref: import('../../../shared/agent-role').AgentRoleRef
     label: string
     disclaimer?: string
     systemInstructions: string

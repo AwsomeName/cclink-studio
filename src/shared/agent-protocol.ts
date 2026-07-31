@@ -174,6 +174,7 @@ export interface AgentCapabilityStatus {
 export interface AgentCommandResult {
   success: boolean
   error?: string
+  configurationReceipt?: import('./agent-role').AgentRunConfigurationReceipt
 }
 
 export interface AgentContextUsageCategory {
@@ -200,7 +201,7 @@ export interface AgentCompactConversationPayload {
   runId?: string
   sessionId: string
   sessionCompatibilityFingerprint?: string | null
-  profileRef?: import('./agent-profile').AgentProfileRef
+  configuration: import('./agent-role').AgentConversationConfiguration
   workspaceRef?: import('./workspace-ref').WorkspaceRef
   instructions?: string
 }
@@ -214,8 +215,8 @@ export interface AgentStatus {
   sessionId: string | null
   /** Runtime/API/model identity that must match before restoring sessionId. */
   sessionCompatibilityFingerprint?: string | null
-  /** Built-in role currently bound to this conversation. */
-  profileRef?: import('./agent-profile').AgentProfileRef
+  /** Built-in role configuration currently bound to this conversation. */
+  conversationConfiguration?: import('./agent-role').AgentConversationConfiguration
   /** Version of the trusted main-process compiler that injects the role prompt. */
   profilePromptCompilerVersion?: number
   /** Safe, path-free facts for status UI and copied diagnostics. */
@@ -277,10 +278,10 @@ export interface AgentApiContract {
   restoreConversation(
     conversationId: string,
     sessionId: string | null,
+    configuration: import('./agent-role').AgentConversationConfiguration,
     sessionCompatibilityFingerprint?: string | null,
-    profileRef?: import('./agent-profile').AgentProfileRef,
   ): Promise<void>
-  listProfiles(): Promise<import('./agent-profile').AgentProfileSummary[]>
+  listRoles(): Promise<import('./agent-role').AgentRoleSummary[]>
   closeConversation(conversationId: string): Promise<void>
   getContextUsage(conversationId?: string): Promise<AgentContextUsageSnapshot | null>
   compactConversation(

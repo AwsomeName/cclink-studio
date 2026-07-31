@@ -24,6 +24,11 @@ import {
   agentIpcContracts as agentIpc,
   agentMcpIpcContracts as agentMcpIpc,
 } from '../../shared/ipc/agent-contract'
+import {
+  createDefaultAgentConversationConfiguration,
+  type AgentConversationConfiguration,
+} from '../../shared/agent-role'
+import { legacyAgentProfileRefToRoleRef } from '../../shared/agent-profile'
 
 interface AgentIpcDeps {
   trustedRendererGuard: TrustedRendererGuard
@@ -43,6 +48,14 @@ interface AgentIpcDeps {
 
 function normalizeSendMessageInput(input: AgentSendMessageInput): AgentSendMessagePayload {
   if (typeof input === 'string') return { message: input }
+  const configuration: AgentConversationConfiguration | undefined = input.configuration
+    ? input.configuration
+    : input.profileRef
+      ? createDefaultAgentConversationConfiguration(
+          0,
+          legacyAgentProfileRefToRoleRef(input.profileRef),
+        )
+      : undefined
   return {
     message: input.message,
     runId: typeof input.runId === 'string' && input.runId.trim() ? input.runId.trim() : undefined,
@@ -56,7 +69,7 @@ function normalizeSendMessageInput(input: AgentSendMessageInput): AgentSendMessa
       typeof input.sessionCompatibilityFingerprint === 'string'
         ? input.sessionCompatibilityFingerprint
         : undefined,
-    profileRef: input.profileRef,
+    configuration,
     workspaceRef: normalizeWorkspaceRef(input.workspaceRef),
     continuity: normalizeContinuity(input.continuity),
   }
@@ -147,7 +160,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
     if (payload.images?.length) {
       console.info(`[AgentIPC] 图片附件已接收: ${formatImageAttachmentDiagnostics(payload.images)}`)
     }
-    await agentBridge.sendMessage(
+    const configurationReceipt = await agentBridge.sendMessage(
       payload.message,
       typeof conversationId === 'string' ? conversationId : undefined,
       {
@@ -157,12 +170,12 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
         images: payload.images,
         sessionId: payload.sessionId,
         sessionCompatibilityFingerprint: payload.sessionCompatibilityFingerprint,
-        profileRef: payload.profileRef,
+        configuration: payload.configuration,
         workspaceRef: payload.workspaceRef,
         continuity: payload.continuity,
       },
     )
-    return { success: true }
+    return { success: true, configurationReceipt }
   })
 
   // 中止当前 AI 响应
@@ -191,9 +204,9 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
     return agentBridge.getStatus(conversationId)
   })
 
-  handle(agentIpc.listProfiles, () => {
+  handle(agentIpc.listRoles, () => {
     const agentBridge = requireAgentBridge()
-    return agentBridge?.listProfiles() ?? []
+    return agentBridge?.listRoles() ?? []
   })
 
   handle(agentIpc.getContextUsage, async (_event, ...args) => {
@@ -210,7 +223,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
       await agentBridge.compactConversation(conversationId, {
         sessionId: input.sessionId,
         sessionCompatibilityFingerprint: input.sessionCompatibilityFingerprint,
-        profileRef: input.profileRef,
+        configuration: input.configuration,
         runId: input.runId,
         workspaceRef: input.workspaceRef,
         instructions: input.instructions,
@@ -252,14 +265,14 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
 
   // 恢复历史会话的后端 session id
   handle(agentIpc.restoreConversation, (_event, ...args) => {
-    const [conversationId, sessionId, sessionCompatibilityFingerprint, profileRef] = args
+    const [conversationId, sessionId, configuration, sessionCompatibilityFingerprint] = args
     const agentBridge = requireAgentBridge()
     if (!agentBridge) return
     agentBridge.restoreConversation(
       conversationId,
       sessionId,
+      configuration,
       sessionCompatibilityFingerprint,
-      profileRef,
     )
   })
 

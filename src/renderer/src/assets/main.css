@@ -2677,6 +2677,8 @@ button.project-panel-row.active {
 }
 
 .web-affair-secondary-action {
+  align-self: flex-end;
+  margin: 8px 10px 0;
   min-height: 26px;
   padding: 3px 8px;
   border: 1px solid var(--border-color);
@@ -7585,6 +7587,47 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
 
 .status-bar-item svg {
   flex-shrink: 0;
+}
+
+.status-bar-conversation-switcher {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex: 1 1 240px;
+  align-items: stretch;
+  justify-content: center;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.status-bar-conversation {
+  min-width: 0;
+  max-width: 116px;
+  flex: 1 1 0;
+  overflow: hidden;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 2px;
+  outline: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.76);
+  font: inherit;
+  line-height: var(--statusbar-height);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.status-bar-conversation:hover,
+.status-bar-conversation:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+}
+
+.status-bar-conversation.active {
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 -2px rgba(255, 255, 255, 0.72);
+  color: white;
 }
 
 /* 更新提示徽章（可点击按钮，重置默认 button 样式） */

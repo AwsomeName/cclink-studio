@@ -62,6 +62,8 @@ export interface AppSettings {
   permissionMode: PermissionMode
   /** 被用户禁用的内置 Agent 工具模块 */
   disabledAgentToolModules: string[]
+  /** 新建 Agent 会话默认使用的内置角色。 */
+  defaultAgentRoleRef: AgentRoleRef
   /** Claude Code 运行时来源。 */
   claudeRuntimeSource: ClaudeRuntimeSource
   /** 自定义 Claude Code CLI 路径；仅在 claudeRuntimeSource=custom 时生效。 */
@@ -191,6 +193,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   backendType: 'claude-code',
   permissionMode: 'auto',
   disabledAgentToolModules: [],
+  defaultAgentRoleRef: DEFAULT_AGENT_ROLE_REF,
   // 法务/再分发门禁完成前，新旧安装都保持系统运行时默认值。
   claudeRuntimeSource: 'system',
   claudeCodePath: '',
@@ -257,3 +260,4 @@ export function getPresetBaseUrl(provider: Provider, apiFormat: ApiFormat): stri
   const preset = PROVIDER_PRESETS[provider]
   return apiFormat === 'anthropic' ? preset.anthropicBaseUrl : preset.openaiBaseUrl
 }
+import { DEFAULT_AGENT_ROLE_REF, type AgentRoleRef } from './agent-role'

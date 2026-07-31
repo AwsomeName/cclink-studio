@@ -6,7 +6,7 @@ import type {
 } from '../../shared/ipc/agent'
 import type { AgentResourceContextSnapshot } from '../../shared/agent-resource-context'
 import type { WorkspaceRef } from '../../shared/workspace-ref'
-import type { AgentProfileRef } from '../../shared/agent-profile'
+import type { AgentConversationConfiguration } from '../../shared/agent-role'
 
 export interface AgentSendMessageContext {
   resources?: AgentSendResource[]
@@ -15,7 +15,7 @@ export interface AgentSendMessageContext {
   runId?: string
   sessionId?: string | null
   sessionCompatibilityFingerprint?: string | null
-  profileRef?: AgentProfileRef
+  configuration?: AgentConversationConfiguration
   workspaceRef?: WorkspaceRef
   resourceContext?: AgentResourceContextSnapshot
   continuity?: AgentConversationContinuity

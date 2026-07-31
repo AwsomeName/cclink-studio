@@ -1,29 +1,29 @@
 import { createHash } from 'node:crypto'
 import {
-  DEFAULT_AGENT_PROFILE_REF,
-  type AgentProfileIcon,
-  type AgentProfileRef,
-  type AgentProfileSummary,
-} from '../../shared/agent-profile'
+  DEFAULT_AGENT_ROLE_REF,
+  type AgentRoleIcon,
+  type AgentRoleRef,
+  type AgentRoleSummary,
+} from '../../shared/agent-role'
 
 export const AGENT_PROFILE_PROMPT_COMPILER_VERSION = 1
 
-export interface BuiltinAgentProfile {
+export interface BuiltinAgentRole {
   id: string
   version: number
   label: string
   description: string
-  icon: AgentProfileIcon
+  icon: AgentRoleIcon
   disclaimer?: string
   systemInstructions: string
 }
 
 const ANALYSIS_FRAMEWORK_DISCLAIMER = '这是分析框架，不代表任何真实政府、组织、群体或个人。'
 
-const BUILTIN_AGENT_PROFILES: readonly BuiltinAgentProfile[] = [
+const BUILTIN_AGENT_ROLES: readonly BuiltinAgentRole[] = [
   {
-    id: DEFAULT_AGENT_PROFILE_REF.profileId,
-    version: DEFAULT_AGENT_PROFILE_REF.version,
+    id: DEFAULT_AGENT_ROLE_REF.roleId,
+    version: DEFAULT_AGENT_ROLE_REF.version,
     label: '默认助手',
     description: '均衡处理一般任务',
     icon: 'assistant',
@@ -122,38 +122,40 @@ const BUILTIN_AGENT_PROFILES: readonly BuiltinAgentProfile[] = [
   },
 ]
 
-function toSummary(profile: BuiltinAgentProfile): AgentProfileSummary {
+function toSummary(role: BuiltinAgentRole): AgentRoleSummary {
   return {
-    profileId: profile.id,
-    version: profile.version,
-    label: profile.label,
-    description: profile.description,
-    icon: profile.icon,
-    ...(profile.disclaimer ? { disclaimer: profile.disclaimer } : {}),
+    roleId: role.id,
+    version: role.version,
+    label: role.label,
+    description: role.description,
+    icon: role.icon,
+    instructions: role.systemInstructions.split('\n').filter(Boolean),
+    ...(role.disclaimer ? { disclaimer: role.disclaimer } : {}),
   }
 }
 
-export class BuiltinAgentProfileRegistry {
-  private readonly profiles = new Map(
-    BUILTIN_AGENT_PROFILES.map((profile) => [`${profile.id}@${profile.version}`, profile]),
+export class BuiltinAgentRoleRegistry {
+  private readonly roles = new Map(
+    BUILTIN_AGENT_ROLES.map((role) => [`${role.id}@${role.version}`, role]),
   )
 
-  list(): AgentProfileSummary[] {
-    return BUILTIN_AGENT_PROFILES.map(toSummary)
+  list(): AgentRoleSummary[] {
+    return BUILTIN_AGENT_ROLES.map(toSummary)
   }
 
-  resolve(ref: AgentProfileRef | null | undefined): BuiltinAgentProfile {
-    const effectiveRef = ref ?? DEFAULT_AGENT_PROFILE_REF
-    const profile = this.profiles.get(`${effectiveRef.profileId}@${effectiveRef.version}`)
-    if (!profile) {
-      throw new Error(`Agent 角色不可用: ${effectiveRef.profileId}@${effectiveRef.version}`)
+  resolve(ref: AgentRoleRef | null | undefined): BuiltinAgentRole {
+    const effectiveRef = ref ?? DEFAULT_AGENT_ROLE_REF
+    const role = this.roles.get(`${effectiveRef.roleId}@${effectiveRef.version}`)
+    if (!role) {
+      throw new Error(`Agent 角色不可用: ${effectiveRef.roleId}@${effectiveRef.version}`)
     }
-    return profile
+    return role
   }
 
   buildConversationCompatibilityFingerprint(
     runtimeCompatibilityFingerprint: string | null,
-    ref: AgentProfileRef | null | undefined,
+    ref: AgentRoleRef | null | undefined,
+    configurationRevision = 1,
   ): string | null {
     if (!runtimeCompatibilityFingerprint) return null
     const profile = this.resolve(ref)
@@ -164,7 +166,14 @@ export class BuiltinAgentProfileRegistry {
       .update('\0')
       .update(String(profile.version))
       .update('\0')
+      .update(String(configurationRevision))
+      .update('\0')
       .update(String(AGENT_PROFILE_PROMPT_COMPILER_VERSION))
       .digest('hex')
   }
 }
+
+/** @deprecated v0.1.14 名称兼容；新增代码使用 BuiltinAgentRoleRegistry。 */
+export { BuiltinAgentRoleRegistry as BuiltinAgentProfileRegistry }
+/** @deprecated v0.1.14 名称兼容；新增代码使用 BuiltinAgentRole。 */
+export type BuiltinAgentProfile = BuiltinAgentRole

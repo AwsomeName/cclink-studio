@@ -229,7 +229,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       sections.push(
         '### 当前 Agent 角色',
         `- 角色：${options.agentProfile.label}`,
-        `- 角色版本：${options.agentProfile.ref.profileId}@${options.agentProfile.ref.version}`,
+        `- 角色版本：${options.agentProfile.ref.roleId}@${options.agentProfile.ref.version}`,
         ...(options.agentProfile.disclaimer ? [`- 说明：${options.agentProfile.disclaimer}`] : []),
         '',
         options.agentProfile.systemInstructions,

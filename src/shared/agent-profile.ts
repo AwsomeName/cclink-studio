@@ -30,3 +30,10 @@ export function agentProfileRefsEqual(
 ): boolean {
   return left?.profileId === right?.profileId && left?.version === right?.version
 }
+
+/** @deprecated 只用于读取 v0.1.14 及更早的持久化快照和 IPC。 */
+export function legacyAgentProfileRefToRoleRef(
+  ref: AgentProfileRef,
+): import('./agent-role').AgentRoleRef {
+  return { roleId: ref.profileId, version: ref.version }
+}

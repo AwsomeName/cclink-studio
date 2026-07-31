@@ -12,6 +12,7 @@ import { DEFAULT_SETTINGS, normalizeClaudeRuntimeSettingsUpdate, type AppSetting
 import type { SettingsSecretKey } from '../../shared/ipc/settings'
 import type { SettingsSecretStatus } from '../../shared/ipc/settings'
 import { CredentialService } from '../credentials/credential-service'
+import type { AgentRoleRef } from '../../shared/agent-role'
 
 /** AppSettings 的合法 key 集合，用于过滤 IPC 传入的未知字段 */
 const SETTINGS_KEYS = new Set<string>(Object.keys(DEFAULT_SETTINGS))
@@ -191,6 +192,13 @@ export class SettingsService {
         ;(filtered as unknown as Record<string, unknown>)[key] = normalizeModuleIds(val)
         continue
       }
+      if (key === 'defaultAgentRoleRef') {
+        const roleRef = normalizeAgentRoleRef(val)
+        if (roleRef) {
+          ;(filtered as unknown as Record<string, unknown>)[key] = roleRef
+        }
+        continue
+      }
       // 对有枚举约束的字段做值校验；其他数值/字符串字段跳过枚举检查。
       const validSet = VALID_VALUES[key]
       if (validSet && typeof val === 'string' && !validSet.has(val)) {
@@ -249,6 +257,11 @@ export class SettingsService {
         this.store.disabledAgentToolModules = normalizeModuleIds(val)
         continue
       }
+      if (key === 'defaultAgentRoleRef') {
+        const roleRef = normalizeAgentRoleRef(val)
+        if (roleRef) this.store.defaultAgentRoleRef = roleRef
+        continue
+      }
       const validSet = VALID_VALUES[key]
       if (validSet && typeof val === 'string' && !validSet.has(val)) {
         console.warn(`[SettingsService] 加载配置时忽略无效值: ${key}=${val}`)
@@ -273,6 +286,22 @@ export class SettingsService {
       return { ...EMPTY_SECRETS }
     }
   }
+}
+
+function normalizeAgentRoleRef(value: unknown): AgentRoleRef | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as { roleId?: unknown; version?: unknown }
+  if (
+    typeof candidate.roleId !== 'string' ||
+    !/^[A-Za-z0-9._-]{1,128}$/.test(candidate.roleId) ||
+    typeof candidate.version !== 'number' ||
+    !Number.isInteger(candidate.version) ||
+    candidate.version < 1 ||
+    candidate.version > 1_000_000
+  ) {
+    return null
+  }
+  return { roleId: candidate.roleId, version: candidate.version }
 }
 
 function extractLegacySecrets(parsed: Record<string, unknown>): typeof EMPTY_SECRETS {

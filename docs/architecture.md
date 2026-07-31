@@ -195,14 +195,19 @@ official integration layer (outside OSS default path)
 
 稳定化后的状态边界如下。运行事实不能由 renderer 的恢复快照反向覆盖；工作空间切换只改变可见投影，后台运行是否继续由各自主进程事实源决定。
 
-| 状态域             | 运行事实                                             | renderer 投影                        | 持久化与恢复                                                   |
-| ------------------ | ---------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------- |
-| workspace/tab      | `workspace-transition` 的 generation 与单一提交事务  | `workspace-store` / `tab-store`      | `WorkspaceStateService` 按 workspace 分区                      |
-| Agent conversation | main Agent runtime 的 run/session                    | `agent-store` 的消息与可见运行状态   | workspace conversation snapshot；恢复后与 main 状态对账        |
-| Browser/Profile    | `BrowserManager` 的 Tab 绑定与 Electron 持久 Session | Browser Tab 的 URL/Profile/View 状态 | Profile partition 保存 Cookie/localStorage，Tab 快照只保存绑定 |
-| BrowserTask        | `BrowserTaskRuntime` 的 task/action 状态             | `browser-task-store`                 | 当前进程内可诊断任务；终态不伪装为持久后台任务                 |
-| Terminal           | `TerminalSessionRegistry` / `TerminalSessionStore`   | Terminal Tab 与 renderer store       | 主进程 session record；工作空间恢复后通过 `listSessions` 对账  |
-| Usage              | `UsageLedgerService` 的追加事件                       | 会话费用与 credits 的只读投影         | `{userData}/usage-events.jsonl`；统计失败不得阻断能力调用       |
+| 状态域             | 运行事实                                             | renderer 投影                        | 持久化与恢复                                                     |
+| ------------------ | ---------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------- |
+| workspace/tab      | `workspace-transition` 的 generation 与单一提交事务  | `workspace-store` / `tab-store`      | `WorkspaceStateService` 按 workspace 分区                        |
+| Agent conversation | main Agent runtime 的 run/session                    | `agent-store` 的消息与可见运行状态   | workspace conversation snapshot；恢复后与 main 状态对账          |
+| Browser/Profile    | `BrowserManager` 的 Tab 绑定与 Electron 持久 Session | Browser Tab 的 URL/Profile/View 状态 | Profile partition 保存 Cookie/localStorage，Tab 快照只保存绑定   |
+| BrowserTask        | `BrowserTaskRuntime` 的 task/action 状态             | `browser-task-store`                 | 当前进程内可诊断任务；终态不伪装为持久后台任务                   |
+| Terminal           | `TerminalSessionRegistry` / `TerminalSessionStore`   | Terminal Tab 与 renderer store       | 主进程 session record；工作空间恢复后通过 `listSessions` 对账    |
+| Usage              | `UsageLedgerService` 的追加事件                      | 会话费用与 credits 的只读投影        | `{userData}/usage-events.jsonl`；统计失败不得阻断能力调用        |
+| WebAffair          | `WebAffairService` 的流程版本、Attempt、等待和证据   | 事务列表、流程图与节点详情只读投影   | `{userData}/web-affairs/web-affairs.json`；v1 迁移、原子备份恢复 |
+
+网页事务的 BrowserTask、AgentRun、Profile、定时唤醒、模板和平台适配器都只保存自身事实或
+关联 ID，不能拥有事务节点状态。进程内 Attempt 在应用重启后必须对账为中断或人工处理；外部
+等待在 App 退出期间不运行，重启后显示错过检查。最终外部提交仍受产品级人工确认约束。
 
 Agent 发起的浏览器任务在创建时固定 `workspaceKey`、`conversationId`、`agentRunId`、进程内随机 `agentSessionRef`、`tabId` 和 `profileId`。浏览器工具必须由 conversation 找到活动 BrowserTask，再直接使用该 `tabId` 注册的 Playwright Page；不得在同步后重新读取全局活跃 Page，否则工作空间切换会造成跨工作空间竞态。浏览器动作通过 `taskRunId` 归因。复制诊断必须报告关联链是 `matched`、`incomplete` 还是 `mismatch`，并列出缺失或错配字段；同一 Tab 上其他会话的任务不能被误选。
 

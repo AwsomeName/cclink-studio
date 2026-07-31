@@ -28,6 +28,22 @@ export const agentProfileRefSchema = z
   })
   .strict()
 
+export const agentRoleRefSchema = z
+  .object({
+    roleId: boundedIdentifierSchema(),
+    version: z.number().int().positive().max(1_000_000),
+  })
+  .strict()
+
+export const agentConversationConfigurationSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    roleRef: agentRoleRefSchema,
+    revision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    updatedAt: z.number().finite().nonnegative(),
+  })
+  .strict()
+
 const workspaceRefSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('global') }).strict(),
   z.object({ kind: z.literal('local'), path: absolutePathSchema }).strict(),
@@ -168,6 +184,7 @@ export const agentSendMessageInputSchema = z.union([
       sessionId: nullableAgentSessionIdSchema.optional(),
       sessionCompatibilityFingerprint:
         nullableAgentSessionCompatibilityFingerprintSchema.optional(),
+      configuration: agentConversationConfigurationSchema.optional(),
       profileRef: agentProfileRefSchema.optional(),
       workspaceRef: workspaceRefSchema.optional(),
       continuity: continuitySchema.optional(),
@@ -180,7 +197,7 @@ export const agentCompactPayloadSchema = z
     runId: boundedIdentifierSchema().optional(),
     sessionId: boundedIdentifierSchema(),
     sessionCompatibilityFingerprint: nullableAgentSessionCompatibilityFingerprintSchema.optional(),
-    profileRef: agentProfileRefSchema.optional(),
+    configuration: agentConversationConfigurationSchema,
     workspaceRef: workspaceRefSchema.optional(),
     instructions: boundedTextSchema(1_000).trim().min(1).optional(),
   })

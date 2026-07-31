@@ -222,12 +222,12 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
               <h2>整体流程</h2>
             </div>
             <small>点击节点查看办理情况</small>
-            <WebAffairFlowEditor
-              affair={affair}
-              onSaved={acceptChangedAffair}
-              onError={(message) => setError(message)}
-            />
           </div>
+          <WebAffairFlowEditor
+            affair={affair}
+            onSaved={acceptChangedAffair}
+            onError={(message) => setError(message)}
+          />
           <div className="web-affair-flow">
             {affair.flow.nodes.map((node, index) => {
               const dependencies = affair.flow.edges
