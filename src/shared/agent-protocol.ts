@@ -200,6 +200,7 @@ export interface AgentCompactConversationPayload {
   runId?: string
   sessionId: string
   sessionCompatibilityFingerprint?: string | null
+  profileRef?: import('./agent-profile').AgentProfileRef
   workspaceRef?: import('./workspace-ref').WorkspaceRef
   instructions?: string
 }
@@ -213,6 +214,10 @@ export interface AgentStatus {
   sessionId: string | null
   /** Runtime/API/model identity that must match before restoring sessionId. */
   sessionCompatibilityFingerprint?: string | null
+  /** Built-in role currently bound to this conversation. */
+  profileRef?: import('./agent-profile').AgentProfileRef
+  /** Version of the trusted main-process compiler that injects the role prompt. */
+  profilePromptCompilerVersion?: number
   /** Safe, path-free facts for status UI and copied diagnostics. */
   runtimeProvenance?: import('./claude-runtime').ClaudeRuntimeProvenance | null
   /** Process-local random reference for redacted diagnostic correlation. */
@@ -273,7 +278,9 @@ export interface AgentApiContract {
     conversationId: string,
     sessionId: string | null,
     sessionCompatibilityFingerprint?: string | null,
+    profileRef?: import('./agent-profile').AgentProfileRef,
   ): Promise<void>
+  listProfiles(): Promise<import('./agent-profile').AgentProfileSummary[]>
   closeConversation(conversationId: string): Promise<void>
   getContextUsage(conversationId?: string): Promise<AgentContextUsageSnapshot | null>
   compactConversation(

@@ -173,6 +173,24 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     expect(getSystemPromptAppend()).toContain('| browser_new_tab |')
   })
 
+  it('injects a resolved role into the system prompt without changing tool permissions', async () => {
+    await createBackend().sendMessage('评估这个方案', {
+      agentProfile: {
+        ref: { profileId: 'critical-challenger', version: 1 },
+        label: '反方挑战者',
+        systemInstructions: '检查反例和失败路径。',
+      },
+    })
+
+    const params = getLastQueryParams()
+    expect(getSystemPromptAppend()).toContain('### 当前 Agent 角色')
+    expect(getSystemPromptAppend()).toContain('反方挑战者')
+    expect(getSystemPromptAppend()).toContain('critical-challenger@1')
+    expect(getSystemPromptAppend()).toContain('检查反例和失败路径。')
+    expect(getSystemPromptAppend()).toContain('不能扩大工具权限')
+    expect(params.options.allowedTools).toEqual(['mcp__cclink_studio__*'])
+  })
+
   it('sends attached images as native Claude multimodal content blocks', async () => {
     await createBackend().sendMessage('分析这张截图', {
       images: [

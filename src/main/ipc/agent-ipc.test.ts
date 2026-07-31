@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentProfileSummary } from '../../shared/agent-profile'
 
 const mockIpcMain = vi.hoisted(() => ({
   handlers: new Map<string, (...args: any[]) => any>(),
@@ -80,6 +81,44 @@ describe('registerAgentIpc', () => {
     )
   })
 
+  it('lists safe profile summaries and forwards a validated profile reference', async () => {
+    const deps = createDeps()
+    registerAgentIpc(deps as never)
+    deps.agentBridge.listProfiles.mockReturnValue([
+      {
+        profileId: 'default-assistant',
+        version: 1,
+        label: '默认助手',
+        description: '均衡处理一般任务',
+        icon: 'assistant',
+      },
+    ])
+
+    expect(mockIpcMain.handlers.get('agent:listProfiles')?.({ sender: 'trusted' })).toEqual([
+      {
+        profileId: 'default-assistant',
+        version: 1,
+        label: '默认助手',
+        description: '均衡处理一般任务',
+        icon: 'assistant',
+      },
+    ])
+
+    await expect(
+      mockIpcMain.handlers.get('agent:sendMessage')?.({ sender: 'trusted' }, 'conversation-1', {
+        message: '评估',
+        profileRef: { profileId: 'critical-challenger', version: 1 },
+      }),
+    ).resolves.toEqual({ success: true })
+    expect(deps.agentBridge.sendMessage).toHaveBeenCalledWith(
+      '评估',
+      'conversation-1',
+      expect.objectContaining({
+        profileRef: { profileId: 'critical-challenger', version: 1 },
+      }),
+    )
+  })
+
   it('rejects credential-bearing MCP URLs before changing configuration', () => {
     const deps = createDeps()
     registerAgentIpc(deps as never)
@@ -102,6 +141,7 @@ describe('registerAgentIpc', () => {
 function createDeps() {
   const agentBridge = {
     sendMessage: vi.fn(async () => undefined),
+    listProfiles: vi.fn<() => AgentProfileSummary[]>(() => []),
   }
   const mcpManager = {
     addServer: vi.fn(),

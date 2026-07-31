@@ -11,6 +11,7 @@ import type { AppSettings, ClaudeCodeStatus } from '@shared/ipc/settings'
 import type { AgentContextUsageSnapshot } from '@shared/agent-protocol'
 import type { PermissionMode } from '../../types'
 import type { AgentContextCompactionState } from '../../stores/agent-store'
+import type { AgentProfileRef, AgentProfileSummary } from '@shared/agent-profile'
 import {
   IconCheck,
   IconChevronDown,
@@ -34,6 +35,9 @@ import {
 } from './composer-view-model'
 
 interface AgentComposerToolbarProps {
+  profileRef?: AgentProfileRef
+  profiles?: AgentProfileSummary[]
+  onProfileChange?: (profile: AgentProfileSummary) => void
   permissionMode: PermissionMode
   settings: AppSettings
   loading: boolean
@@ -50,9 +54,12 @@ interface AgentComposerToolbarProps {
   sendButton: ReactNode
 }
 
-type ComposerMenuName = 'add' | 'permission' | 'context' | 'runtime'
+type ComposerMenuName = 'add' | 'profile' | 'permission' | 'context' | 'runtime'
 
 export function AgentComposerToolbar({
+  profileRef,
+  profiles = [],
+  onProfileChange,
   permissionMode,
   settings,
   loading,
@@ -74,11 +81,17 @@ export function AgentComposerToolbar({
   const [detectingClaude, setDetectingClaude] = useState(false)
   const [claudeError, setClaudeError] = useState<string | null>(null)
   const addRef = useRef<HTMLDivElement>(null)
+  const profileRefElement = useRef<HTMLDivElement>(null)
   const permissionRef = useRef<HTMLDivElement>(null)
   const runtimeRef = useRef<HTMLDivElement>(null)
   const contextRef = useRef<HTMLDivElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const runtimeOpen = openMenu === 'runtime'
+  const selectedProfile =
+    profiles.find(
+      (profile) =>
+        profile.profileId === profileRef?.profileId && profile.version === profileRef.version,
+    ) ?? null
   const selectedPermission = getPermissionModeOption(permissionMode)
   const runtimeLabel = getRuntimeLabel(settings)
   const runtimeDetail = getRuntimeDetail(settings)
@@ -193,6 +206,55 @@ export function AgentComposerToolbar({
             </button>
           </FloatingSurface>
         </div>
+
+        {profileRef && onProfileChange && (
+          <div className="agent-composer-menu-wrap" ref={profileRefElement}>
+            <button
+              className="agent-mode-btn agent-profile-btn"
+              onClick={() => toggleMenu('profile')}
+              title={`当前角色: ${selectedProfile?.label ?? profileRef.profileId}`}
+              disabled={loading || profiles.length === 0}
+            >
+              <IconRobot size={13} />
+              <span>{selectedProfile?.label ?? '角色不可用'}</span>
+              <IconChevronDown size={12} />
+            </button>
+            <FloatingSurface
+              anchorRef={profileRefElement}
+              open={openMenu === 'profile'}
+              placement="top-start"
+              className="agent-composer-menu agent-profile-menu"
+              onRequestClose={() => setOpenMenu(null)}
+            >
+              <div className="agent-composer-menu-title">选择角色</div>
+              {profiles.map((profile) => {
+                const selected =
+                  profile.profileId === profileRef.profileId &&
+                  profile.version === profileRef.version
+                return (
+                  <button
+                    key={`${profile.profileId}@${profile.version}`}
+                    className={selected ? 'selected' : ''}
+                    onClick={() => {
+                      setOpenMenu(null)
+                      if (!selected) onProfileChange(profile)
+                    }}
+                  >
+                    <span className="agent-profile-avatar" aria-hidden="true">
+                      {profile.label.slice(0, 1)}
+                    </span>
+                    <span>
+                      <strong>{profile.label}</strong>
+                      <em>{profile.description}</em>
+                      {profile.disclaimer && <small>{profile.disclaimer}</small>}
+                    </span>
+                    {selected && <IconCheck size={11} />}
+                  </button>
+                )
+              })}
+            </FloatingSurface>
+          </div>
+        )}
 
         <div className="agent-composer-menu-wrap" ref={permissionRef}>
           <button

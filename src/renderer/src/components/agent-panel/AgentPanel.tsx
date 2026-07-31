@@ -39,6 +39,7 @@ import {
 import type { PermissionMode } from '../../types'
 import type { BrowserActionLog, BrowserDownloadRecord, BrowserTaskRun } from '@shared/ipc/browser'
 import type { AgentCapabilityStatus } from '@shared/agent-protocol'
+import type { AgentProfileSummary } from '@shared/agent-profile'
 import { ConversationMessageRenderer } from '../common/ConversationMessageRenderer'
 import { AgentComposerToolbar } from '../../features/agent-composer/AgentComposerToolbar'
 import { useComposerHistory } from '../../features/agent-composer/use-composer-history'
@@ -69,6 +70,11 @@ import {
   openFileRangeResource,
 } from '../../features/markdown/markdown-navigation'
 import { useConversationScroll } from '../../features/agent-conversations/use-conversation-scroll'
+import { useAgentProfiles } from '../../features/agent-profiles/use-agent-profiles'
+import {
+  buildProfileBranchOptions,
+  canReplaceConversationProfile,
+} from '../../features/agent-profiles/profile-selection'
 
 interface AgentPanelProps {
   variant?: 'center' | 'side'
@@ -116,6 +122,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const removePendingImage = useAgentStore((s) => s.removePendingImage)
   const addMountedSkill = useAgentStore((s) => s.addMountedSkill)
   const removeMountedSkill = useAgentStore((s) => s.removeMountedSkill)
+  const setProfileRef = useAgentStore((s) => s.setProfileRef)
   const scope = useAgentStore((s) => s.scope)
   const createConversation = useAgentStore((s) => s.createConversation)
   const switchConversation = useAgentStore((s) => s.switchConversation)
@@ -140,6 +147,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const loadDataSources = useDataSourceStore((s) => s.loadSources)
   const loadSavedQueries = useDataSourceStore((s) => s.loadSavedQueries)
   const showToast = useToastStore((s) => s.show)
+  const { profiles, error: profilesError } = useAgentProfiles()
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const conversationMainRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLDivElement>(null)
@@ -399,6 +407,45 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     [permissionMode, setPermissionMode],
   )
 
+  const handleProfileChange = useCallback(
+    (profile: AgentProfileSummary) => {
+      const conversation = useAgentStore.getState().conversations[activeConversationId]
+      if (!conversation) return
+      if (conversation.loading || conversation.contextCompaction.status === 'compacting') {
+        showToast('Agent 正在运行，完成或中止后才能切换角色', 'error')
+        return
+      }
+      if (pendingConfirmations.length > 0) {
+        showToast('当前会话仍有待确认操作，请先处理后再切换角色', 'error')
+        return
+      }
+
+      const nextProfileRef = {
+        profileId: profile.profileId,
+        version: profile.version,
+      }
+      if (canReplaceConversationProfile(conversation)) {
+        setProfileRef(nextProfileRef, conversation.id)
+        return
+      }
+
+      const confirmed = window.confirm(
+        `当前会话已经使用其他角色开始。\n\n切换到「${profile.label}」需要创建新会话；当前草稿和已挂载资源会被保留。`,
+      )
+      if (!confirmed) return
+
+      createConversation(buildProfileBranchOptions(conversation, nextProfileRef))
+      showToast(`已创建使用「${profile.label}」的新会话`, 'success')
+    },
+    [
+      activeConversationId,
+      createConversation,
+      pendingConfirmations.length,
+      setProfileRef,
+      showToast,
+    ],
+  )
+
   const handleOpenAgentSettings = useCallback(() => {
     openTab({ type: 'settings', title: 'Agent 设置', icon: '⚙️', settingsSection: 'agent' })
   }, [openTab])
@@ -621,6 +668,12 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const mountedResources = activeConversation?.mountedResources ?? []
   const pendingImages = activeConversation?.pendingImages ?? []
   const mountedSkills = activeConversation?.mountedSkills ?? []
+  const activeProfileRef = activeConversation?.profileRef
+  const activeProfile = profiles.find(
+    (profile) =>
+      profile.profileId === activeProfileRef?.profileId &&
+      profile.version === activeProfileRef.version,
+  )
   const handleAddImages = useCallback(
     async (files: File[]) => {
       const result = await importAgentImageFiles(files, MAX_AGENT_IMAGES - pendingImages.length)
@@ -746,6 +799,10 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     !loading &&
     lastCost === null
 
+  useEffect(() => {
+    if (profilesError) showToast(`角色列表加载失败: ${profilesError}`, 'error')
+  }, [profilesError, showToast])
+
   if (variant === 'center' && isStartConversation) {
     return (
       <div className="agent-panel agent-panel-center">
@@ -754,7 +811,9 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
             <div className="agent-start-content">
               <div className="agent-start-status">
                 <IconSparkle size={14} />
-                <span>Agent</span>
+                <span>
+                  Agent · {activeProfile?.label ?? activeProfileRef?.profileId ?? '角色加载中'}
+                </span>
                 <IconCircle
                   size={8}
                   filled
@@ -820,6 +879,9 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                   rows={3}
                 />
                 <AgentComposerToolbar
+                  profileRef={activeProfileRef}
+                  profiles={profiles}
+                  onProfileChange={handleProfileChange}
                   permissionMode={permissionMode}
                   settings={settings}
                   loading={loading || contextCompacting}
@@ -1057,6 +1119,9 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
               rows={2}
             />
             <AgentComposerToolbar
+              profileRef={activeProfileRef}
+              profiles={profiles}
+              onProfileChange={handleProfileChange}
               permissionMode={permissionMode}
               settings={settings}
               loading={loading || contextCompacting}

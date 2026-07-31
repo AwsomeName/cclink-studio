@@ -93,6 +93,13 @@ export interface AgentSendOptions {
   resourceContext?: import('../../../shared/agent-resource-context').AgentResourceContextSnapshot
   /** UI 保存的最近对话与任务状态，用于长会话压缩或进程恢复后的连续性兜底。 */
   continuity?: import('../../../shared/ipc/agent').AgentConversationContinuity
+  /** 主进程解析后的内置角色；renderer 不得直接提供 system instructions。 */
+  agentProfile?: {
+    ref: import('../../../shared/agent-profile').AgentProfileRef
+    label: string
+    disclaimer?: string
+    systemInstructions: string
+  }
 }
 
 /** 后端配置 */

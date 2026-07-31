@@ -14,6 +14,7 @@ function localConversation(
       transport: 'local',
       backend: 'cclink-studio-agent',
     },
+    profileRef: { profileId: 'default-assistant', version: 1 },
     messages: [],
     input: '',
     loading: false,

@@ -99,6 +99,31 @@ describe('IPC invoke contracts', () => {
       { message: 'hello', workspaceRef: { kind: 'local', path: '/tmp/project' } },
     ])
     expect(agentIpcContracts.getStatus.parseArgs([])).toEqual([undefined])
+    expect(agentIpcContracts.listProfiles.parseArgs([])).toEqual([])
+    expect(
+      agentIpcContracts.sendMessage.parseArgs([
+        'conversation-1',
+        {
+          message: '评估',
+          profileRef: { profileId: 'critical-challenger', version: 1 },
+        },
+      ]),
+    ).toEqual([
+      'conversation-1',
+      {
+        message: '评估',
+        profileRef: { profileId: 'critical-challenger', version: 1 },
+      },
+    ])
+    expect(() =>
+      agentIpcContracts.sendMessage.parseArgs([
+        'conversation-1',
+        {
+          message: '评估',
+          profileRef: { profileId: '../../escape', version: 0 },
+        },
+      ]),
+    ).toThrow()
     expect(() => agentIpcContracts.sendMessage.parseArgs(['a', 'b', 'c'])).toThrow()
     expect(() => agentIpcContracts.setPermissionMode.parseArgs(['unrestricted'])).toThrow()
     const mcpError = captureError(() =>

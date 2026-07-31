@@ -17,6 +17,7 @@ function conversation(
       transport: 'local',
       workspaceRef: { kind: 'local', path: workspacePath },
     },
+    profileRef: { profileId: 'default-assistant', version: 1 },
     messages: [],
     input: '',
     loading: false,

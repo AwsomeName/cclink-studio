@@ -14,6 +14,7 @@ function createConversation(updates: Partial<AgentConversationState> = {}): Agen
       transport: 'local',
       backend: 'cclink-studio-agent',
     },
+    profileRef: { profileId: 'default-assistant', version: 1 },
     messages: [],
     input: 'hello',
     loading: false,
@@ -213,6 +214,7 @@ describe('conversation-run-controller', () => {
       runId: 'compact-1',
       sessionId: 'session-1',
       sessionCompatibilityFingerprint: SESSION_COMPATIBILITY_FINGERPRINT,
+      profileRef: { profileId: 'default-assistant', version: 1 },
       workspaceRef: undefined,
       instructions: '保留任务',
     })

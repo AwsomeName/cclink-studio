@@ -1,6 +1,7 @@
 import type { AgentContextUsageSnapshot } from '@shared/agent-protocol'
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import type { AgentImageAttachment } from '@shared/ipc/agent'
+import { DEFAULT_AGENT_PROFILE_REF, type AgentProfileRef } from '@shared/agent-profile'
 import type {
   AgentBackendState,
   AgentMessage,
@@ -42,6 +43,7 @@ export interface AgentConversationState {
   title: string
   surface: ConversationSurface
   runtime: ConversationRuntimeRef
+  profileRef: AgentProfileRef
   messages: AgentMessage[]
   input: string
   loading: boolean
@@ -91,6 +93,10 @@ export function createAgentConversationState(
     surface?: ConversationSurface
     runtime?: ConversationRuntimeRef
     workspaceRef?: WorkspaceRef
+    profileRef?: AgentProfileRef
+    input?: string
+    mountedResources?: AgentMountedResource[]
+    mountedSkills?: AgentMountedSkill[]
   } = {},
 ): AgentConversationState {
   const now = Date.now()
@@ -105,8 +111,9 @@ export function createAgentConversationState(
     title: '新会话',
     surface: options.surface ?? 'assistant-panel',
     runtime,
+    profileRef: options.profileRef ?? DEFAULT_AGENT_PROFILE_REF,
     messages: [createWelcomeMessage()],
-    input: '',
+    input: options.input ?? '',
     loading: false,
     backendState: 'disconnected',
     runStatus: 'idle',
@@ -127,9 +134,9 @@ export function createAgentConversationState(
       updatedAt: null,
     },
     scope: { kind: 'all' },
-    mountedResources: [],
+    mountedResources: options.mountedResources ?? [],
     pendingImages: [],
-    mountedSkills: [],
+    mountedSkills: options.mountedSkills ?? [],
     createdAt: now,
     updatedAt: now,
     archivedAt: null,

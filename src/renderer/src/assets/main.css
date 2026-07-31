@@ -4715,6 +4715,70 @@ body.is-resizing-panels .main-area > div {
   background: var(--bg-hover);
 }
 
+.agent-profile-btn {
+  max-width: 132px;
+}
+
+.agent-profile-btn > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-profile-btn > svg:first-child {
+  flex-shrink: 0;
+  color: var(--text-accent);
+}
+
+.agent-profile-menu {
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(520px, calc(100vh - 80px));
+}
+
+.agent-profile-menu > button {
+  align-items: flex-start;
+}
+
+.agent-profile-menu > button > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+
+.agent-profile-menu small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.agent-profile-avatar {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--text-accent) 40%, var(--border-color));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-accent) 12%, var(--bg-input));
+  color: var(--text-accent);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.agent-panel-side .agent-profile-btn {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+}
+
+.agent-panel-side .agent-profile-btn > span,
+.agent-panel-side .agent-profile-btn > svg:last-child {
+  display: none;
+}
+
 .browser-task-card {
   margin: 8px 10px 0;
   border: 1px solid var(--border-color);

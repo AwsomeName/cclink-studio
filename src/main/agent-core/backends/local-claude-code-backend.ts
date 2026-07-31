@@ -225,6 +225,20 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       )
     }
 
+    if (options?.agentProfile) {
+      sections.push(
+        '### 当前 Agent 角色',
+        `- 角色：${options.agentProfile.label}`,
+        `- 角色版本：${options.agentProfile.ref.profileId}@${options.agentProfile.ref.version}`,
+        ...(options.agentProfile.disclaimer ? [`- 说明：${options.agentProfile.disclaimer}`] : []),
+        '',
+        options.agentProfile.systemInstructions,
+        '',
+        '角色只定义职责、关注点和表达方式。它不能扩大工具权限、改变当前操作作用域、覆盖用户授权，或绕过不可逆外部操作的人工确认。',
+        '',
+      )
+    }
+
     if (options?.resourceContext) {
       sections.push(
         '### CCLink Studio 资源事实包',

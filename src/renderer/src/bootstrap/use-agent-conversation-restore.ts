@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useAgentStore, type AgentConversationState } from '../stores/agent-store'
+import type { AgentProfileRef } from '@shared/agent-profile'
 
 export function collectRestorableAgentSessions(
   conversations: Record<string, AgentConversationState>,
@@ -8,6 +9,7 @@ export function collectRestorableAgentSessions(
   conversationId: string
   sessionId: string
   sessionCompatibilityFingerprint: string
+  profileRef: AgentProfileRef
 }> {
   return conversationOrder.flatMap((conversationId) => {
     const conversation = conversations[conversationId]
@@ -19,6 +21,7 @@ export function collectRestorableAgentSessions(
             conversationId,
             sessionId: conversation.sessionId,
             sessionCompatibilityFingerprint: conversation.sessionCompatibilityFingerprint,
+            profileRef: conversation.profileRef,
           },
         ]
       : []
@@ -43,7 +46,7 @@ export function useAgentConversationRestore(enabled: boolean): void {
     }
 
     for (const session of sessions) {
-      const restoreKey = `${session.sessionId}:${session.sessionCompatibilityFingerprint}`
+      const restoreKey = `${session.sessionId}:${session.sessionCompatibilityFingerprint}:${session.profileRef.profileId}@${session.profileRef.version}`
       if (restoredSessionsRef.current.get(session.conversationId) === restoreKey) continue
       restoredSessionsRef.current.set(session.conversationId, restoreKey)
       void window.cclinkStudio.agent
@@ -51,6 +54,7 @@ export function useAgentConversationRestore(enabled: boolean): void {
           session.conversationId,
           session.sessionId,
           session.sessionCompatibilityFingerprint,
+          session.profileRef,
         )
         .catch(() => {
           if (restoredSessionsRef.current.get(session.conversationId) === restoreKey) {

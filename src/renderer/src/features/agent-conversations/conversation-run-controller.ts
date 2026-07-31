@@ -173,6 +173,7 @@ export function createConversationRunController({
           runId,
           sessionId: conversation.sessionId,
           sessionCompatibilityFingerprint: conversation.sessionCompatibilityFingerprint ?? null,
+          profileRef: conversation.profileRef,
           workspaceRef: conversation.runtime.workspaceRef,
           instructions: instructions.trim() || undefined,
         })

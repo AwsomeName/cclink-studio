@@ -21,6 +21,13 @@ export const nullableAgentSessionCompatibilityFingerprintSchema = z
   .regex(/^[a-f0-9]{64}$/)
   .nullable()
 
+export const agentProfileRefSchema = z
+  .object({
+    profileId: boundedIdentifierSchema(),
+    version: z.number().int().positive().max(1_000_000),
+  })
+  .strict()
+
 const workspaceRefSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('global') }).strict(),
   z.object({ kind: z.literal('local'), path: absolutePathSchema }).strict(),
@@ -161,6 +168,7 @@ export const agentSendMessageInputSchema = z.union([
       sessionId: nullableAgentSessionIdSchema.optional(),
       sessionCompatibilityFingerprint:
         nullableAgentSessionCompatibilityFingerprintSchema.optional(),
+      profileRef: agentProfileRefSchema.optional(),
       workspaceRef: workspaceRefSchema.optional(),
       continuity: continuitySchema.optional(),
     })
@@ -172,6 +180,7 @@ export const agentCompactPayloadSchema = z
     runId: boundedIdentifierSchema().optional(),
     sessionId: boundedIdentifierSchema(),
     sessionCompatibilityFingerprint: nullableAgentSessionCompatibilityFingerprintSchema.optional(),
+    profileRef: agentProfileRefSchema.optional(),
     workspaceRef: workspaceRefSchema.optional(),
     instructions: boundedTextSchema(1_000).trim().min(1).optional(),
   })
