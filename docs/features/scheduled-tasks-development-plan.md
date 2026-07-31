@@ -1,6 +1,6 @@
 # 工作空间定时任务开发计划
 
-> 状态：计划草稿，尚未开始实现
+> 状态：开发中；M8.1 首个纵向切片已实现并通过自动化 App 冒烟，真人验收待执行
 > 最后更新：2026-07-29
 > 产品事实源：`docs/features/scheduled-tasks.md`
 > 架构约束：`docs/architecture.md`
@@ -19,7 +19,34 @@
 开发顺序必须先形成用户可见闭环，再补齐可靠性。共享契约、存储、状态机和测试基建
 属于工程准备度，不能单独报告为产品里程碑完成。
 
-### 1.1 总体里程碑
+### 1.1 当前进度快照
+
+用户功能进度：
+
+- M8.1 已可在真实 Electron 中完成“打开当前工作空间 → 进入定时任务侧栏 → 新建 Tab
+  → 保存并在本机启用 → 暂停 → 重启恢复 → 从侧栏重新打开”。
+- 同一任务重复点击会复用逻辑 Tab；未保存草稿不会在重启后伪装成已保存任务。
+- 用户仍不能立即运行、到点运行或看到运行历史，因此 M8.2 和首版产品闭环均未完成。
+
+工程准备度：
+
+- 已落地 shared 严格运行时 parser、typed IPC contract、trusted sender、preload API、
+  `ScheduledTaskService` 和 runtime 生命周期。
+- 定义与本机 activation 分离持久化；definition 原子写入、备份、revision 冲突保护和
+  损坏阻断已有测试。
+- 单次/每天/工作日/每周的时区下次时间计算已有纯函数测试。
+- 自动化 Electron 冒烟已验证定义写盘、启用/暂停、重启恢复和单 Tab 去重。
+- `pnpm verify` 已通过，包含 OSS/凭证/Context Action 边界、格式、lint、全量单测和
+  生产构建；真人验收尚未在本快照中登记。
+
+M8.1 尚未关闭的产品项：
+
+- 完整任务级 Context Action contribution。
+- 跨两个真实工作空间切换的人工验收。
+- activation 写盘失败后的部分成功交互文案与恢复流程。
+- 本文 5.6 的真人逐项验收记录。
+
+### 1.2 总体里程碑
 
 | 类别     | 阶段   | 用户可见结果                                         | 估算工作量 |
 | -------- | ------ | ---------------------------------------------------- | ---------- |
@@ -38,7 +65,7 @@
 M8.2 只有 A、B、C 全部完成且真人闭环通过后才能标记完成。M8.2-A 或 M8.2-B 单独通过
 时，只能描述用户当前已经获得的具体增量，不能宣称首版定时任务完成。
 
-### 1.2 首版范围
+### 1.3 首版范围
 
 首版允许：
 
@@ -264,7 +291,7 @@ E0 不增加用户功能，不能计入产品进度。
 | -------- | -------------- | ----------------------------------------------------- |
 | ST-E0-01 | 现状库存       | Activity、Tab、Workspace、Agent、Editor、runtime 清单 |
 | ST-E0-02 | shared 类型    | definition、activation、run、artifact、failure        |
-| ST-E0-03 | Zod schema     | IPC 和持久化运行时校验                                |
+| ST-E0-03 | 运行时 parser  | IPC 和持久化严格校验                                  |
 | ST-E0-04 | IPC contract   | list/get/create/save/enable/pause/run/cancel/history  |
 | ST-E0-05 | 状态转换表     | definition、activation 和 run 的合法转换              |
 | ST-E0-06 | 时间规则冻结   | once/daily/weekdays/weekly、时区、宽限窗口            |

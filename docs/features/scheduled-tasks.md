@@ -1,6 +1,6 @@
 # 工作空间定时任务
 
-> 状态：产品方案草稿，首版核心边界已确认，待交互与实现评审
+> 状态：首版核心闭环已实现并通过真实 App 自动验收，待真人验收矩阵签字
 > 最后更新：2026-07-29
 > 关联文档：`docs/architecture.md`、`docs/features/workspace-system.md`、
 > `docs/features/agent-panel-product-model.md`、`docs/features/context-action-system.md`、
@@ -25,6 +25,38 @@
 macOS LaunchAgent、Windows Task Scheduler、Linux cron/systemd timer、登录启动项、
 后台 Helper、守护进程或其他操作系统级调度入口，不唤醒已退出的 App，也不在退出后
 遗留子进程。最小产品闭环只覆盖定时读取工作空间资料并生成 Markdown 产物。
+
+## 当前实现快照
+
+截至 2026-07-29，`codex/scheduled-tasks-m8` 已形成 M8.1–M8.2 的首版纵向闭环：
+
+- Activity Bar 已有独立时钟入口。
+- 侧栏只投影当前本地工作空间任务，并提供空状态和新建入口。
+- 任务使用独立 `scheduled-task` Workbench Tab。
+- 用户可以填写名称、指令、单次/每天/工作日/每周计划、绑定路径和输出约定。
+- 显式保存产生 revision；定义写入工作空间，本机启用状态写入 `userData`。
+- 用户可以仅保存、在此设备启用和暂停；重启后恢复定义与本机状态。
+- 用户可以立即运行已保存 revision，查看排队、运行、终态、错误和产物。
+- 受限 Agent 只获得 `editor_read/list`；全局权限模式不能扩大 scheduled allowlist。
+- Markdown 由主进程按声明目录 create-only 原子写入，并校验 UTF-8、字节数和 SHA-256。
+- 主进程只维护一个 nearest-due timer；关闭任务 Tab 不影响到点运行。
+- App 退出时清 timer、取消队列、中断 Agent；重启把旧运行恢复为 interrupted。
+- 单次错过记录 missed；重复任务只在 30 分钟窗口内补最近一次。
+- Activity Bar 显示全局排队/运行数量；当前工作空间侧栏展示运行和待处理状态。
+- 统一诊断报告包含调度状态、timer 目标、队列、当前 run 和 `systemScheduler=none`。
+- Git 工作空间会把任务定义目录加入仓库本地 `.git/info/exclude`，不修改
+  `.gitignore`。
+
+当前首版边界：
+
+- 只支持读取工作空间资料并生成 Markdown；Terminal、Browser、Android、Git 和数据源
+  会结构化拒绝，不执行外部动作。
+- 全局 scheduled run 单并发；不注册系统计划任务、后台 Helper 或登录项。
+- 真实 App 自动验收已覆盖立即运行、到点运行、取消、权限拒绝、退出不运行和重启
+  missed；多工作空间真人切换、屏幕阅读器和磁盘故障仍待人工矩阵签字。
+
+在真人验收矩阵签字前，只能声明“首版核心闭环已实现并进入验收”，不能声明产品已经
+正式交付。
 
 ## 已确认的首版决策
 
