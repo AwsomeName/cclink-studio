@@ -21,6 +21,8 @@ import { fsIpc } from '../../shared/ipc/fs'
 import { settingsIpcContracts as settingsIpc } from '../../shared/ipc/settings-contract'
 import { webResourcesIpcContracts } from '../../shared/web-resources/web-resource-contract'
 import { webResourcesIpc } from '../../shared/web-resources/web-resource'
+import { webAffairsIpcContracts } from '../../shared/web-affairs/web-affair-contract'
+import { webAffairsIpc } from '../../shared/web-affairs/web-affair'
 
 describe('IPC invoke contracts', () => {
   it('rejects unexpected arguments for no-argument channels', () => {
@@ -195,6 +197,23 @@ describe('IPC invoke contracts', () => {
     ).toThrow()
   })
 
+  it('binds every Web Affairs definition to a bounded runtime parser', () => {
+    expect(Object.keys(webAffairsIpcContracts)).toEqual(Object.keys(webAffairsIpc))
+    expect(
+      webAffairsIpcContracts.createAffair.parseArgs([
+        {
+          title: 'App 上架',
+          objective: '取得审核结果',
+          principalId: '11111111-1111-4111-8111-111111111111',
+          accountIds: [],
+          materialPaths: [],
+          nodeTitles: ['提交审核'],
+        },
+      ]),
+    ).toHaveLength(1)
+    expect(() => webAffairsIpcContracts.createAffair.parseArgs([])).toThrow()
+  })
+
   it('keeps migrated channel literals in shared declarations only', () => {
     const productionFiles = [
       'src/main/ipc/window-ipc.ts',
@@ -211,11 +230,13 @@ describe('IPC invoke contracts', () => {
       'src/main/browser/browser-task-runtime.ts',
       'src/main/browser/browser-download-store.ts',
       'src/main/web-resources/web-resource-ipc.ts',
+      'src/main/web-affairs/web-affair-ipc.ts',
       'src/preload/renderer-support-api.ts',
       'src/preload/fs-api.ts',
       'src/preload/agent-api.ts',
       'src/preload/browser-api.ts',
       'src/preload/web-resources-api.ts',
+      'src/preload/web-affairs-api.ts',
       'src/preload/index.ts',
     ]
     const source = productionFiles
@@ -223,7 +244,7 @@ describe('IPC invoke contracts', () => {
       .join('\n')
 
     expect(source).not.toMatch(
-      /['"](?:window|identity|official|dialog|settings|fs|agent|mcp|browser|browserTask|browserActionLog|browserDownload|webResources|workbench):[A-Za-z]/,
+      /['"](?:window|identity|official|dialog|settings|fs|agent|mcp|browser|browserTask|browserActionLog|browserDownload|webResources|webAffairs|workbench):[A-Za-z]/,
     )
   })
 
@@ -235,12 +256,14 @@ describe('IPC invoke contracts', () => {
       'src/shared/ipc/agent.ts',
       'src/shared/ipc/browser.ts',
       'src/shared/web-resources/web-resource.ts',
+      'src/shared/web-affairs/web-affair.ts',
       'src/preload/index.ts',
       'src/preload/renderer-support-api.ts',
       'src/preload/fs-api.ts',
       'src/preload/agent-api.ts',
       'src/preload/browser-api.ts',
       'src/preload/web-resources-api.ts',
+      'src/preload/web-affairs-api.ts',
     ]
     const source = preloadFacingFiles
       .map((file) => readFileSync(resolve(process.cwd(), file), 'utf8'))

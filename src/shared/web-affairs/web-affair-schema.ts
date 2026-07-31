@@ -49,7 +49,10 @@ export const createWebAffairInputSchema = z
     title: trimmedText(160, '事务名称'),
     objective: trimmedText(4_000, '事务目标'),
     principalId: uuidSchema,
-    accountIds: z.array(uuidSchema).max(32).transform((items) => [...new Set(items)]),
+    accountIds: z
+      .array(uuidSchema)
+      .max(32)
+      .transform((items) => [...new Set(items)]),
     materialPaths: z
       .array(absolutePathSchema)
       .max(64)
@@ -120,7 +123,7 @@ const webAffairEventSchema = z
     id: uuidSchema,
     type: z.enum(['created', 'node-status-changed']),
     nodeId: uuidSchema.optional(),
-    summary: trimmedText(2_000, '事务事件'),
+    summary: trimmedText(2_400, '事务事件'),
     occurredAt: timestampSchema,
   })
   .strict()

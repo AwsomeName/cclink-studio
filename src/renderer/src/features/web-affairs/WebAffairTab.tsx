@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type {
-  WebAffair,
-  WebAffairNodeStatus,
-} from '@shared/web-affairs/web-affair-types'
+import type { WebAffair, WebAffairNodeStatus } from '@shared/web-affairs/web-affair-types'
 import type { WebResourceSnapshot } from '@shared/web-resources/web-resource-types'
 import { useTabStore, useWorkspaceStore } from '../../stores'
 import {
@@ -45,14 +42,15 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
   }, [affairId])
 
   useEffect(() => {
-    void load().catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)))
+    void load().catch((reason) =>
+      setError(reason instanceof Error ? reason.message : String(reason)),
+    )
   }, [load])
 
   const selectedNode = affair?.flow.nodes.find((node) => node.id === selectedNodeId)
   const principal = resources?.principals.find((item) => item.id === affair?.principalId)
   const accounts = resources?.accounts.filter((item) => affair?.accountIds.includes(item.id)) ?? []
-  const websites =
-    resources?.websites.filter((item) => affair?.websiteIds.includes(item.id)) ?? []
+  const websites = resources?.websites.filter((item) => affair?.websiteIds.includes(item.id)) ?? []
   const selectedAccounts =
     accounts.filter((account) => selectedNode?.accountIds.includes(account.id)) ?? []
   const selectedMaterials =
@@ -207,8 +205,14 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
           {selectedNode ? (
             <div className="web-affair-node-detail">
               <h3>{selectedNode.title}</h3>
-              <DetailRow label="当前状态" value={WEB_AFFAIR_NODE_STATUS_LABELS[selectedNode.status]} />
-              <DetailRow label="当前责任人" value={WEB_AFFAIR_EXECUTOR_LABELS[selectedNode.executor]} />
+              <DetailRow
+                label="当前状态"
+                value={WEB_AFFAIR_NODE_STATUS_LABELS[selectedNode.status]}
+              />
+              <DetailRow
+                label="当前责任人"
+                value={WEB_AFFAIR_EXECUTOR_LABELS[selectedNode.executor]}
+              />
               <DetailRow
                 label="涉及账号"
                 value={
@@ -257,7 +261,9 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
                   </label>
                   <button
                     type="button"
-                    disabled={saving || !nextStatus || (nextStatus === 'completed' && !resultNote.trim())}
+                    disabled={
+                      saving || !nextStatus || (nextStatus === 'completed' && !resultNote.trim())
+                    }
                     onClick={() => void updateNode()}
                   >
                     {saving ? '保存中…' : '保存节点进度'}

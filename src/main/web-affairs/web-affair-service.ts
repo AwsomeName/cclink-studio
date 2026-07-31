@@ -19,11 +19,7 @@ import { WebAffairStore } from './web-affair-store'
 
 const AFFAIR_LIMIT = 1_000
 const EVENT_LIMIT = 2_000
-const TERMINAL_NODE_STATUSES = new Set<WebAffairNodeStatus>([
-  'completed',
-  'skipped',
-  'cancelled',
-])
+const TERMINAL_NODE_STATUSES = new Set<WebAffairNodeStatus>(['completed', 'skipped', 'cancelled'])
 
 const ALLOWED_TRANSITIONS: Record<WebAffairNodeStatus, ReadonlySet<WebAffairNodeStatus>> = {
   blocked: new Set(['cancelled']),
@@ -112,7 +108,9 @@ export class WebAffairService {
 
     const resources = this.getWebResources()
     const principal = resources?.principals.find((item) => item.id === input.principalId)
-    const accounts = input.accountIds.map((id) => resources?.accounts.find((item) => item.id === id))
+    const accounts = input.accountIds.map((id) =>
+      resources?.accounts.find((item) => item.id === id),
+    )
     if (!resources || !principal || accounts.some((account) => !account)) {
       return {
         success: false,
@@ -152,9 +150,7 @@ export class WebAffairService {
       objective: input.objective,
       status: 'active',
       principalId: principal.id,
-      websiteIds: [
-        ...new Set(accounts.flatMap((account) => (account ? [account.websiteId] : []))),
-      ],
+      websiteIds: [...new Set(accounts.flatMap((account) => (account ? [account.websiteId] : [])))],
       accountIds: [...input.accountIds],
       materials,
       flow: {
@@ -322,16 +318,41 @@ export class WebAffairService {
     for (const affair of snapshot.affairs) {
       const nodeIds = new Set(affair.flow.nodes.map((node) => node.id))
       const materialIds = new Set(affair.materials.map((material) => material.id))
+      if (
+        nodeIds.size !== affair.flow.nodes.length ||
+        materialIds.size !== affair.materials.length
+      ) {
+        throw new Error('事务流程存在重复资源 ID')
+      }
+      const incoming = new Map(affair.flow.nodes.map((node) => [node.id, 0]))
+      const outgoing = new Map(affair.flow.nodes.map((node) => [node.id, [] as string[]]))
       for (const edge of affair.flow.edges) {
         if (!nodeIds.has(edge.fromNodeId) || !nodeIds.has(edge.toNodeId)) {
           throw new Error('事务流程存在失效节点引用')
         }
+        if (edge.fromNodeId === edge.toNodeId) throw new Error('事务流程不能包含自循环')
+        incoming.set(edge.toNodeId, (incoming.get(edge.toNodeId) ?? 0) + 1)
+        outgoing.get(edge.fromNodeId)?.push(edge.toNodeId)
       }
       for (const node of affair.flow.nodes) {
         if (node.materialIds.some((id) => !materialIds.has(id))) {
           throw new Error('事务流程存在失效材料引用')
         }
       }
+      const pending = [...incoming.entries()]
+        .filter(([, count]) => count === 0)
+        .map(([nodeId]) => nodeId)
+      let visited = 0
+      while (pending.length > 0) {
+        const nodeId = pending.pop()!
+        visited += 1
+        for (const target of outgoing.get(nodeId) ?? []) {
+          const count = (incoming.get(target) ?? 0) - 1
+          incoming.set(target, count)
+          if (count === 0) pending.push(target)
+        }
+      }
+      if (visited !== affair.flow.nodes.length) throw new Error('事务流程必须是有向无环图')
     }
   }
 }

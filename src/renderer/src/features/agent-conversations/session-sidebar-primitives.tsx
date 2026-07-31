@@ -105,35 +105,41 @@ export function SessionSidebarRow({
           <span className="session-sidebar-row-time">{time}</span>
         </span>
         <span className="session-sidebar-row-preview">{preview}</span>
-        {activity && (
-          <span className="session-sidebar-row-activity" title={activityTitle}>
-            {activity}
-          </span>
-        )}
-        <span className="session-sidebar-row-meta">{meta}</span>
-      </span>
-      {actions.map((action) => (
-        <span
-          key={`${action.label}:${action.title}`}
-          className={`session-sidebar-row-action ${action.kind === 'danger' ? 'danger' : ''}`}
-          role="button"
-          tabIndex={0}
-          title={action.title}
-          onClick={(event) => {
-            event.stopPropagation()
-            action.onAction()
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault()
-              event.stopPropagation()
-              action.onAction()
-            }
-          }}
-        >
-          {action.label}
+        <span className="session-sidebar-row-details">
+          {activity && (
+            <span className="session-sidebar-row-activity" title={activityTitle}>
+              {activity}
+            </span>
+          )}
+          <span className="session-sidebar-row-meta">{meta}</span>
         </span>
-      ))}
+      </span>
+      {actions.length > 0 && (
+        <span className="session-sidebar-row-actions">
+          {actions.map((action) => (
+            <span
+              key={`${action.label}:${action.title}`}
+              className={`session-sidebar-row-action ${action.kind === 'danger' ? 'danger' : ''}`}
+              role="button"
+              tabIndex={0}
+              title={action.title}
+              onClick={(event) => {
+                event.stopPropagation()
+                action.onAction()
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  action.onAction()
+                }
+              }}
+            >
+              {action.label}
+            </span>
+          ))}
+        </span>
+      )}
     </button>
   )
 }

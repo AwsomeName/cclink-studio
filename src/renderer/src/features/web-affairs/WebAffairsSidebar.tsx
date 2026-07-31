@@ -1,16 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { WebAffairSnapshot } from '@shared/web-affairs/web-affair-types'
-import type {
-  WebAccount,
-  WebResourceSnapshot,
-} from '@shared/web-resources/web-resource-types'
+import type { WebAccount, WebResourceSnapshot } from '@shared/web-resources/web-resource-types'
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import { IconPlus } from '../../components/common/Icons'
 import { useTabStore } from '../../stores'
-import {
-  WEB_AFFAIR_CHANGED_EVENT,
-  WEB_AFFAIR_STATUS_LABELS,
-} from './web-affair-view-model'
+import { WEB_AFFAIR_CHANGED_EVENT, WEB_AFFAIR_STATUS_LABELS } from './web-affair-view-model'
 
 const DEFAULT_FLOW = [
   '确认办理要求',
@@ -152,7 +146,12 @@ export function WebAffairsSidebar({
         <form className="web-affairs-form" onSubmit={(event) => void createAffair(event)}>
           <label>
             事务名称
-            <input required maxLength={160} value={title} onChange={(e) => setTitle(e.target.value)} />
+            <input
+              required
+              maxLength={160}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
           </label>
           <label>
             最终目标
@@ -217,7 +216,9 @@ export function WebAffairsSidebar({
                   <button
                     type="button"
                     aria-label={`移除 ${path}`}
-                    onClick={() => setMaterialPaths((paths) => paths.filter((item) => item !== path))}
+                    onClick={() =>
+                      setMaterialPaths((paths) => paths.filter((item) => item !== path))
+                    }
                   >
                     ×
                   </button>
@@ -290,7 +291,11 @@ function AccountChoice({
 }): React.ReactElement {
   return (
     <label className="web-affairs-account-choice">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
       <span>
         {account.label}
         <small>{account.browserProfileId}</small>

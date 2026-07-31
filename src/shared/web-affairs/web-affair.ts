@@ -17,12 +17,10 @@ export const webAffairsIpc = {
   getSnapshot: defineIpcCall<[], WebAffairOperationResult<WebAffairSnapshot>>(
     'webAffairs:getSnapshot',
   ),
-  createAffair: defineIpcCall<
-    [CreateWebAffairInput],
-    WebAffairOperationResult<WebAffair>
-  >('webAffairs:createAffair'),
-  updateNode: defineIpcCall<
-    [UpdateWebAffairNodeInput],
-    WebAffairOperationResult<WebAffair>
-  >('webAffairs:updateNode'),
+  createAffair: defineIpcCall<[CreateWebAffairInput], WebAffairOperationResult<WebAffair>>(
+    'webAffairs:createAffair',
+  ),
+  updateNode: defineIpcCall<[UpdateWebAffairNodeInput], WebAffairOperationResult<WebAffair>>(
+    'webAffairs:updateNode',
+  ),
 } as const

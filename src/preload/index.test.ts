@@ -33,6 +33,7 @@ describe('preload API surface', () => {
         android: expect.any(Object),
         dataSource: expect.any(Object),
         diagnostics: expect.any(Object),
+        webAffairs: expect.any(Object),
       }),
     )
     expect(api).not.toHaveProperty('meshy')

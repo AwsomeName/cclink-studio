@@ -250,6 +250,75 @@ async function main() {
     return 'app restart persistence and two Profile partitions verified'
   })
 
+  await runCheck('web affair persists a five-node workflow and node progress', async () => {
+    await clickByTitle(page, '事务')
+    await page.waitForTimeout(200)
+    assert(
+      (await page.locator('.sidebar-header-title').innerText()) === '事务',
+      'web affairs panel missing',
+    )
+
+    const affairTitle = 'UI Smoke Web Affair'
+    const affairRow = () => page.locator('.web-affair-row', { hasText: affairTitle })
+    if ((await affairRow().count()) === 0) {
+      await page.getByRole('button', { name: '新建事务' }).click()
+      const form = page.locator('.web-affairs-form')
+      await form.waitFor({ state: 'visible', timeout: 10_000 })
+      await form.getByLabel('事务名称').fill(affairTitle)
+      await form.getByLabel('最终目标').fill('验证事务列表、流程、节点详情和重启恢复')
+      await form.getByLabel('代表的业务主体').selectOption({ label: 'CCLink Smoke Company' })
+      const account = form.locator('.web-affairs-account-choice', { hasText: 'UI Smoke Account' })
+      if ((await account.count()) > 0) await account.first().locator('input').check()
+      await form.getByRole('button', { name: '创建事务' }).click()
+    } else {
+      await affairRow().click()
+    }
+
+    await page.locator('.web-affair-tab').waitFor({ state: 'visible', timeout: 10_000 })
+    const tabText = await page.locator('.web-affair-tab').innerText()
+    assert(tabText.includes('相关资源'), 'affair resources section missing')
+    assert(tabText.includes('整体流程'), 'affair flow section missing')
+    assert(tabText.includes('节点办理情况'), 'affair node detail section missing')
+    assert((await page.locator('.web-affair-flow-step').count()) === 5, 'expected five flow nodes')
+
+    const firstNode = page.locator('.web-affair-flow-step button').first()
+    const secondNode = page.locator('.web-affair-flow-step button').nth(1)
+    if (!(await firstNode.evaluate((element) => element.classList.contains('completed')))) {
+      await firstNode.click()
+      await page.getByLabel('更新办理状态').selectOption('completed')
+      await page.getByLabel(/结果或卡点说明/).fill('UI smoke 已核对第一节点')
+      await page.getByRole('button', { name: '保存节点进度' }).click()
+      await page.waitForFunction(() =>
+        document.querySelector('.web-affair-flow-step button')?.classList.contains('completed'),
+      )
+    }
+    assert(
+      await secondNode.evaluate((element) => element.classList.contains('ready')),
+      'completing the first node did not unlock the second node',
+    )
+
+    await browser.close()
+    runRestart('restart')
+    const restartedCdpPort = await waitForCdpPort()
+    browser = await chromium.connectOverCDP(`http://127.0.0.1:${restartedCdpPort}`)
+    page = await findRendererPage(browser)
+    await page.setViewportSize({ width: 1440, height: 920 })
+    await page.waitForLoadState('domcontentloaded')
+    await page.waitForSelector('.main-window', { timeout: uiReadyTimeoutMs })
+    await page.locator('.web-affair-tab', { hasText: affairTitle }).waitFor({
+      state: 'visible',
+      timeout: 10_000,
+    })
+    if ((await page.locator('.sidebar-header-title', { hasText: '事务' }).count()) === 0) {
+      await page
+        .locator('[title="事务"]')
+        .first()
+        .evaluate((element) => element.click())
+    }
+    await affairRow().waitFor({ state: 'visible', timeout: 10_000 })
+    return 'five-node affair, progress transition, and app restart persistence verified'
+  })
+
   await runCheck('settings page opens and searches locally', async () => {
     await clickByTitle(page, '设置')
     await page.waitForSelector('.settings-page', { timeout: 10_000 })

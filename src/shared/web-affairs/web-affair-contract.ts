@@ -1,9 +1,6 @@
 import { bindIpcParser, bindNoArgsIpc, ipcArgs } from '../ipc/contract'
 import { webAffairsIpc } from './web-affair'
-import {
-  parseCreateWebAffairInput,
-  parseUpdateWebAffairNodeInput,
-} from './web-affair-schema'
+import { parseCreateWebAffairInput, parseUpdateWebAffairNodeInput } from './web-affair-schema'
 import type { WebAffair, WebAffairOperationResult } from './web-affair-types'
 
 const invalidInputResult = async (): Promise<WebAffairOperationResult<WebAffair>> => ({
