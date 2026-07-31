@@ -25,6 +25,7 @@ import {
 } from './renderer-support-api'
 import { invokeIpcContract } from './ipc-contract-client'
 import { webResourcesApi } from './web-resources-api'
+import { webAffairsApi } from './web-affairs-api'
 
 const settingsApi: SettingsApiContract = {
   getAll: () => invokeIpcContract(settingsIpc.getAll),
@@ -81,6 +82,8 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   projectOps: projectOpsApi,
 
   webResources: webResourcesApi,
+
+  webAffairs: webAffairsApi,
 
   gitBackup: gitBackupApi,
 

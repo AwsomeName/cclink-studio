@@ -23,6 +23,7 @@ import { ErrorBoundary } from '../common/ErrorBoundary'
 import { PanelErrorFallback } from '../common/ErrorFallback'
 import { DataSourceQueryTab } from '../data-sources/DataSourceQueryTab'
 import { WebResourceDetailTab } from '../../features/web-resources/WebResourceDetailTab'
+import { WebAffairTab } from '../../features/web-affairs/WebAffairTab'
 import { SettingsPage } from '../settings/SettingsPage'
 import { FilePreview } from './FilePreview'
 import { AndroidDisplay } from './AndroidDisplay'
@@ -138,6 +139,9 @@ export function WorkbenchContent({
             {activeTab.type === 'data-source-query' && <DataSourceQueryTab tab={activeTab} />}
             {activeTab.type === 'web-resource' && activeTab.webResource && (
               <WebResourceDetailTab accountId={activeTab.webResource.accountId} />
+            )}
+            {activeTab.type === 'web-affair' && activeTab.webAffair && (
+              <WebAffairTab affairId={activeTab.webAffair.affairId} />
             )}
           </>
         )}

@@ -8,6 +8,8 @@ import { ProjectOpsService } from '../project-ops/project-ops-service'
 import { registerProjectOpsIpc } from '../project-ops/project-ops-ipc'
 import { WebResourceService } from '../web-resources/web-resource-service'
 import { registerWebResourceIpc } from '../web-resources/web-resource-ipc'
+import { WebAffairService } from '../web-affairs/web-affair-service'
+import { registerWebAffairIpc } from '../web-affairs/web-affair-ipc'
 import { registerWechatIPC } from '../ipc/wechat-ipc'
 import { SettingsService } from '../settings/settings-service'
 import { registerSettingsIpc } from '../settings/settings-ipc'
@@ -155,6 +157,20 @@ export async function bootstrapMainProcessServices(
   console.log('[CCLink Studio] 网站与账号 IPC 已注册')
 
   try {
+    runtime.webAffairService = new WebAffairService(() => {
+      const result = runtime.webResourceService?.getSnapshot()
+      return result?.success ? result.data : null
+    })
+    await runtime.webAffairService.load()
+    console.log('[CCLink Studio] 事务服务已初始化')
+  } catch (error) {
+    runtime.webAffairService = null
+    console.error('[CCLink Studio] 事务服务初始化失败，其他本地能力继续启动:', error)
+  }
+  registerWebAffairIpc(() => runtime.webAffairService, runtime.trustedRendererGuard)
+  console.log('[CCLink Studio] 事务 IPC 已注册')
+
+  try {
     registerWechatIPC(runtime.trustedRendererGuard)
     console.log('[CCLink Studio] 微信格式转换 IPC 已注册')
   } catch (error) {
@@ -259,6 +275,7 @@ export async function shutdownMainProcessServices(
   })
   await runShutdownStep('TerminalSessionRegistry', () => runtime.terminalSessionRegistry?.clear())
   await runShutdownStep('WebResourceService', () => runtime.webResourceService?.flush())
+  await runShutdownStep('WebAffairService', () => runtime.webAffairService?.flush())
 
   runtime.localIdentityService = null
   runtime.officialIntegration = null
@@ -266,6 +283,7 @@ export async function shutdownMainProcessServices(
   runtime.gitBackupService = null
   runtime.projectOpsService = null
   runtime.webResourceService = null
+  runtime.webAffairService = null
   runtime.permissionManager = null
   runtime.mcpClientMgr = null
   runtime.cadConversionService = null

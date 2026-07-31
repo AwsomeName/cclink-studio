@@ -8,6 +8,7 @@ import {
   IconRobot,
   IconSettings,
   IconSparkle,
+  IconClipboard,
   IconTerminal,
   IconTool,
 } from '../common/Icons'
@@ -34,6 +35,7 @@ const MAIN_ICONS: Array<{
   { id: 'data-sources', Icon: IconDatabase, label: '数据源' },
   { id: 'terminal', Icon: IconTerminal, label: 'Terminal' },
   { id: 'operations', Icon: IconSparkle, label: '网站与账号' },
+  { id: 'affairs', Icon: IconClipboard, label: '事务' },
   { id: 'production', Icon: IconTool, label: '生产' },
 ]
 

@@ -19,6 +19,7 @@ export type ActivityPanel =
   | 'production'
   | 'terminal'
   | 'operations'
+  | 'affairs'
   | 'sessions'
 
 /** Workbench Tab 类型 */
@@ -37,6 +38,7 @@ export type TabType =
   | 'data-source-query'
   | 'data-source-result'
   | 'web-resource'
+  | 'web-affair'
 
 export type ConversationSurface = 'assistant-panel' | 'workbench-tab'
 
@@ -172,6 +174,10 @@ export interface Tab {
   /** 网站与账号资源详情。 */
   webResource?: {
     accountId: string
+  }
+  /** 持久网页事务详情。 */
+  webAffair?: {
+    affairId: string
   }
 }
 

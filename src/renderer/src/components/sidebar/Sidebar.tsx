@@ -39,6 +39,7 @@ import { BrowserFavicon } from '../common/BrowserFavicon'
 import type { ActivityPanel } from '../../types'
 import { FileTree } from './FileTree'
 import { WebResourcesSidebar } from '../../features/web-resources/WebResourcesSidebar'
+import { WebAffairsSidebar } from '../../features/web-affairs/WebAffairsSidebar'
 import { HardwareProductionSection } from './HardwareProductionSection'
 import { DataSourcesPanel } from '../data-sources/DataSourcesPanel'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -82,6 +83,8 @@ function getSidebarTitle(
       return 'Terminal'
     case 'operations':
       return '网站与账号'
+    case 'affairs':
+      return '事务'
     case 'sessions':
       return '会话'
     case 'files':
@@ -249,6 +252,8 @@ function ProjectSidebarContent({
       {activePanel === 'operations' && (
         <OperationsSidebarView workspaceRef={activeWorkspaceRef} workspacePath={workspacePath} />
       )}
+
+      {activePanel === 'affairs' && <WebAffairsSidebar workspaceRef={activeWorkspaceRef} />}
 
       {activePanel === 'sessions' && (
         <SessionsSidebarView
