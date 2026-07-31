@@ -45,6 +45,10 @@ test('builds the target-version local package before committing or pushing a rel
   assert.ok(atomicPush > versionCommit)
 })
 
+test('uses Git transport negotiation instead of forcing HTTP/1.1', () => {
+  assert.doesNotMatch(releaseScript, /http\.version=HTTP\/1\.1/)
+})
+
 test('restores package.json byte-for-byte when local release packaging fails', () => {
   const directory = mkdtempSync(join(tmpdir(), 'cclink-release-local-package-'))
   const packagePath = join(directory, 'package.json')

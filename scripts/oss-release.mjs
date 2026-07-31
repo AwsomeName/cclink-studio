@@ -162,7 +162,7 @@ function run(command, args, options = {}) {
 }
 
 function git(args, options = {}) {
-  return run('git', ['-c', 'http.version=HTTP/1.1', ...args], options)
+  return run('git', args, options)
 }
 
 function readPackage() {
