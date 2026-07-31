@@ -33,6 +33,15 @@ export interface ToolDefinition {
 export interface ToolExecutionContext {
   conversationId?: string
   workspaceKey?: string | null
+  scheduledTaskPolicy?: {
+    origin: 'scheduled-task'
+    taskId: string
+    taskRevision: number
+    runId: string
+    workspaceRoot: string
+    readRoots: string[]
+    allowedTools: string[]
+  }
   /** 工具宿主已为本次调用取得显式用户确认。 */
   confirmationGranted?: boolean
 }

@@ -147,6 +147,25 @@ async function closeTerminalView(tab: Tab): Promise<boolean> {
   return true
 }
 
+async function closeScheduledTaskView(tab: Tab): Promise<boolean> {
+  if (!tab.dirty) {
+    useTabStore.getState().closeTab(tab.id)
+    return true
+  }
+  const { response } = await window.cclinkStudio.dialog.showMessageBox({
+    type: 'question',
+    title: '关闭定时任务',
+    message: `“${tab.title}”有未保存的修改`,
+    detail: '放弃修改会保留最近已保存的任务定义；新建草稿将被丢弃。',
+    buttons: ['放弃修改', '继续编辑'],
+    defaultId: 1,
+    cancelId: 1,
+  })
+  if (response !== 0) return false
+  useTabStore.getState().closeTab(tab.id)
+  return true
+}
+
 export async function closeTabWithDraftPolicy(tabId: string): Promise<boolean> {
   const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
   if (!tab) return false
@@ -157,6 +176,10 @@ export async function closeTabWithDraftPolicy(tabId: string): Promise<boolean> {
 
   if (tab.type === 'terminal') {
     return closeTerminalView(tab)
+  }
+
+  if (tab.type === 'scheduled-task') {
+    return closeScheduledTaskView(tab)
   }
 
   if (tab.type !== 'editor') {

@@ -32,6 +32,8 @@ import { UsageLedgerService } from '../usage/usage-ledger-service'
 import { GitHubReleaseProvider } from '../update/github-release-provider'
 import { NoopUpdateProvider } from '../update/noop-update-provider'
 import { UpdateService } from '../update/update-service'
+import { ScheduledTaskService } from '../scheduled-task/scheduled-task-service'
+import { registerScheduledTaskIpc } from '../scheduled-task/scheduled-task-ipc'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   runtime.credentialService = new CredentialService()
@@ -46,14 +48,20 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
   await runtime.workspaceStateService.loadState()
   console.log('[CCLink Studio] 工作台状态服务已初始化')
 
+  runtime.scheduledTaskService = new ScheduledTaskService(runtime.workspaceStateService)
+  await runtime.scheduledTaskService.load()
+  console.log('[CCLink Studio] 定时任务定义与本机启用状态已初始化（尚未启动调度）')
+
   runtime.usageLedgerService = new UsageLedgerService()
   console.log('[CCLink Studio] 用量统计服务已初始化')
 }
 
 export async function shutdownStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
+  await runShutdownStep('ScheduledTaskService', () => runtime.scheduledTaskService?.flush())
   await runShutdownStep('WorkspaceStateService', () => runtime.workspaceStateService?.flush())
   await runShutdownStep('UsageLedgerService', () => runtime.usageLedgerService?.flush())
   runtime.workspaceStateService = null
+  runtime.scheduledTaskService = null
   runtime.usageLedgerService = null
   runtime.settingsService = null
   runtime.credentialService = null
@@ -73,6 +81,13 @@ export async function bootstrapMainProcessServices(
 
   registerWorkspaceStateIpc(runtime.workspaceStateService!, runtime.trustedRendererGuard)
   console.log('[CCLink Studio] 工作台状态 IPC 已注册')
+
+  registerScheduledTaskIpc(
+    runtime.scheduledTaskService!,
+    runtime.trustedRendererGuard,
+    runtime.mainWindow,
+  )
+  console.log('[CCLink Studio] 定时任务 IPC 已注册')
 
   registerDiagnosticsIpc(runtime.trustedRendererGuard)
   console.log('[CCLink Studio] 诊断日志 IPC 已注册')

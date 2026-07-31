@@ -3,6 +3,11 @@ import { officialIpc } from '../shared/ipc/official'
 import { diagnosticsIpc } from '../shared/ipc/diagnostics'
 import { settingsIpc, type SettingsApiContract } from '../shared/ipc/settings'
 import { credentialsIpc, type CredentialsApiContract } from '../shared/ipc/credentials'
+import {
+  scheduledTasksIpc,
+  scheduledTasksIpcEvents,
+  type ScheduledTasksApiContract,
+} from '../shared/scheduled-task/scheduled-task-contract'
 import { agentApi } from './agent-api'
 import { androidApi } from './android-api'
 import { browserApi, reportWorkbenchBounds } from './browser-api'
@@ -51,6 +56,24 @@ const credentialsApi: CredentialsApiContract = {
   removeLegacyFiles: () => invokeIpcContract(credentialsIpc.removeLegacyFiles),
   openDirectory: () => invokeIpcContract(credentialsIpc.openDirectory),
   reload: () => invokeIpcContract(credentialsIpc.reload),
+}
+
+const scheduledTasksApi: ScheduledTasksApiContract = {
+  list: (workspacePath) => invokeIpcContract(scheduledTasksIpc.list, workspacePath),
+  get: (workspacePath, taskId) => invokeIpcContract(scheduledTasksIpc.get, workspacePath, taskId),
+  save: (input) => invokeIpcContract(scheduledTasksIpc.save, input),
+  setEnabled: (input) => invokeIpcContract(scheduledTasksIpc.setEnabled, input),
+  runNow: (input) => invokeIpcContract(scheduledTasksIpc.runNow, input),
+  cancelRun: (input) => invokeIpcContract(scheduledTasksIpc.cancelRun, input),
+  listRuns: (workspacePath, taskId) =>
+    invokeIpcContract(scheduledTasksIpc.listRuns, workspacePath, taskId),
+  getRuntimeStatus: () => invokeIpcContract(scheduledTasksIpc.getRuntimeStatus),
+  onChanged: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, workspacePath: string): void =>
+      callback(workspacePath)
+    ipcRenderer.on(scheduledTasksIpcEvents.changed, handler)
+    return () => ipcRenderer.removeListener(scheduledTasksIpcEvents.changed, handler)
+  },
 }
 
 contextBridge.exposeInMainWorld('cclinkStudio', {
@@ -128,6 +151,8 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   settings: settingsApi,
 
   workspaceState: workspaceStateApi,
+
+  scheduledTasks: scheduledTasksApi,
 
   update: updateApi,
 })

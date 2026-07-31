@@ -53,6 +53,8 @@ import {
   getBrowserTabsForWorkspace,
   getBrowserUrlLabel,
 } from './browser-sidebar-view-model'
+import { ScheduledTasksSidebar } from '../../features/scheduled-tasks/ScheduledTasksSidebar'
+import { createScheduledTaskTab } from '../../features/scheduled-tasks/scheduled-task-view-model'
 
 function getProjectName(path: string): string {
   return path.split('/').filter(Boolean).pop() ?? path
@@ -84,6 +86,8 @@ function getSidebarTitle(
       return '运营'
     case 'sessions':
       return '会话'
+    case 'scheduled-tasks':
+      return '定时任务'
     case 'files':
       return getWorkspaceTitle(workspaceRef, workspacePath)
   }
@@ -120,6 +124,11 @@ export function Sidebar(): React.ReactElement {
     void window.cclinkStudio.agent.resetSession(conversationId)
   }, [activeWorkspaceRef, createConversation, setAgentPanelMode])
 
+  const openNewScheduledTask = useCallback((): void => {
+    if (!workspacePath || activeWorkspaceRef.kind !== 'local') return
+    openTab(createScheduledTaskTab(workspacePath))
+  }, [activeWorkspaceRef.kind, openTab, workspacePath])
+
   return (
     <div
       className="sidebar"
@@ -154,6 +163,18 @@ export function Sidebar(): React.ReactElement {
               onClick={openNewTerminal}
               title="新建 Terminal"
               aria-label="新建 Terminal"
+            >
+              <IconPlus size={14} />
+            </button>
+          )}
+          {activePanel === 'scheduled-tasks' && (
+            <button
+              className="sidebar-header-action"
+              type="button"
+              onClick={openNewScheduledTask}
+              disabled={!workspacePath || activeWorkspaceRef.kind !== 'local'}
+              title="新建定时任务"
+              aria-label="新建定时任务"
             >
               <IconPlus size={14} />
             </button>
@@ -249,6 +270,8 @@ function ProjectSidebarContent({
       {activePanel === 'operations' && (
         <OperationsSidebarView workspaceRef={activeWorkspaceRef} workspacePath={workspacePath} />
       )}
+
+      {activePanel === 'scheduled-tasks' && <ScheduledTasksSidebar workspacePath={workspacePath} />}
 
       {activePanel === 'sessions' && (
         <SessionsSidebarView

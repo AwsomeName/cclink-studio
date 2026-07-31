@@ -20,6 +20,7 @@ export type ActivityPanel =
   | 'terminal'
   | 'operations'
   | 'sessions'
+  | 'scheduled-tasks'
 
 /** Workbench Tab 类型 */
 export type TabType =
@@ -36,6 +37,7 @@ export type TabType =
   | 'terminal-record'
   | 'data-source-query'
   | 'data-source-result'
+  | 'scheduled-task'
 
 export type ConversationSurface = 'assistant-panel' | 'workbench-tab'
 
@@ -167,6 +169,11 @@ export interface Tab {
     sourceId: string
     collection?: string
     savedQueryId?: string
+  }
+  /** 工作空间定时任务编辑现场 */
+  scheduledTask?: {
+    taskId: string | null
+    draftKey: string
   }
 }
 

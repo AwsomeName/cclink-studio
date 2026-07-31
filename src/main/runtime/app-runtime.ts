@@ -39,6 +39,7 @@ import type { GitBackupService } from '../git-backup/git-backup-service'
 import type { FileService } from '../fs/file-service'
 import type { TrustedRendererGuard } from '../ipc/trusted-renderer-guard'
 import type { UpdateService } from '../update/update-service'
+import type { ScheduledTaskService } from '../scheduled-task/scheduled-task-service'
 import { RuntimeCapabilityRegistry } from './capability-registry'
 import type { ServiceRegistry } from './service-registry'
 
@@ -87,6 +88,7 @@ export interface CclinkStudioRuntimeState {
   gitBackupService: GitBackupService | null
   updateService: UpdateService | null
   updateSnapshotUnsubscribe: (() => void) | null
+  scheduledTaskService: ScheduledTaskService | null
   trustedRendererGuard: TrustedRendererGuard | null
 }
 
@@ -136,6 +138,7 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     gitBackupService: null,
     updateService: null,
     updateSnapshotUnsubscribe: null,
+    scheduledTaskService: null,
     trustedRendererGuard: null,
   }
 }

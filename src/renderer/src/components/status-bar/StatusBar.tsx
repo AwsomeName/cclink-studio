@@ -40,6 +40,7 @@ const TAB_TYPE_LABEL: Record<string, string> = {
   preview: '预览',
   'data-source-query': '数据源查询',
   'data-source-result': '数据源结果',
+  'scheduled-task': '定时任务',
 }
 
 export function StatusBar(): React.ReactElement {

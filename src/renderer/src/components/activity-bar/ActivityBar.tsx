@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useUIStore, useTabStore } from '../../stores'
 import type { ActivityPanel } from '../../types'
 import {
@@ -10,6 +11,7 @@ import {
   IconSparkle,
   IconTerminal,
   IconTool,
+  IconClock,
 } from '../common/Icons'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import {
@@ -34,6 +36,7 @@ const MAIN_ICONS: Array<{
   { id: 'data-sources', Icon: IconDatabase, label: '数据源' },
   { id: 'terminal', Icon: IconTerminal, label: 'Terminal' },
   { id: 'operations', Icon: IconSparkle, label: '运营' },
+  { id: 'scheduled-tasks', Icon: IconClock, label: '定时任务' },
   { id: 'production', Icon: IconTool, label: '生产' },
 ]
 
@@ -43,6 +46,18 @@ export function ActivityBar(): React.ReactElement {
   const hideSidebar = useUIStore((s) => s.hideSidebar)
   const openTab = useTabStore((s) => s.openTab)
   const showContextMenu = useContextMenuStore((s) => s.show)
+  const [scheduledRunCount, setScheduledRunCount] = useState(0)
+
+  useEffect(() => {
+    const refresh = (): void => {
+      void window.cclinkStudio.scheduledTasks
+        .getRuntimeStatus()
+        .then((status) => setScheduledRunCount(status.queuedCount + (status.runningRunId ? 1 : 0)))
+        .catch(() => setScheduledRunCount(0))
+    }
+    refresh()
+    return window.cclinkStudio.scheduledTasks.onChanged(() => refresh())
+  }, [])
 
   const handleClick = (id: ActivityPanel): void => {
     setActivePanel(id)
@@ -85,6 +100,11 @@ export function ActivityBar(): React.ReactElement {
             title={label}
           >
             <Icon size={22} />
+            {id === 'scheduled-tasks' && scheduledRunCount > 0 && (
+              <span className="activity-bar-badge" aria-label={`${scheduledRunCount} 个任务运行中`}>
+                {scheduledRunCount > 99 ? '99+' : scheduledRunCount}
+              </span>
+            )}
           </button>
         ))}
       </div>

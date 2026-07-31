@@ -110,6 +110,23 @@ export function IconDatabase(p: IconProps = defaults): React.ReactElement {
   )
 }
 
+/** 定时任务 / 时钟 */
+export function IconClock(p: IconProps = defaults): React.ReactElement {
+  return I(
+    p,
+    <>
+      <circle cx="8" cy="8" r="5.75" stroke="currentColor" strokeWidth="1.2" />
+      <path
+        d="M8 4.5v3.8l2.7 1.6"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>,
+  )
+}
+
 /** 设置 / 齿轮 */
 export function IconSettings(p: IconProps = defaults): React.ReactElement {
   return I(

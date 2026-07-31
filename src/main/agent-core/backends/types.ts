@@ -93,6 +93,12 @@ export interface AgentSendOptions {
   resourceContext?: import('../../../shared/agent-resource-context').AgentResourceContextSnapshot
   /** UI 保存的最近对话与任务状态，用于长会话压缩或进程恢复后的连续性兜底。 */
   continuity?: import('../../../shared/ipc/agent').AgentConversationContinuity
+  /** 宿主强制的精确 MCP allowlist；只供非交互式受限 origin 使用。 */
+  allowedTools?: string[]
+  /** 禁用 Claude Code 内置文件、Shell 和网络工具。 */
+  disableBuiltinTools?: boolean
+  /** 随一次 MCP session 固定的定时任务权限事实。 */
+  scheduledTaskPolicy?: import('../tools/types.js').ToolExecutionContext['scheduledTaskPolicy']
 }
 
 /** 后端配置 */

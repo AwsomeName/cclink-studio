@@ -396,17 +396,20 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     this.stderrTail = ''
 
     // 为当前会话创建隔离的 MCP 工具会话。
-    this.mcpSessionToken = this.toolHost.createToolSession(
-      options?.conversationId ?? 'agent-default',
-      options?.resourceContext?.workspace.key ?? options?.workspacePath?.trim() ?? null,
-    )
+    const conversationId = options?.conversationId ?? 'agent-default'
+    const workspaceKey =
+      options?.resourceContext?.workspace.key ?? options?.workspacePath?.trim() ?? null
+    this.mcpSessionToken = options?.scheduledTaskPolicy
+      ? this.toolHost.createToolSession(conversationId, workspaceKey, options.scheduledTaskPolicy)
+      : this.toolHost.createToolSession(conversationId, workspaceKey)
     const mcpConfig = this.mcpClientMgr.composeMcpConfig(
       this.toolHost.getPort(),
       this.mcpSessionToken,
     )
     const mcpServers = (mcpConfig as { mcpServers?: Record<string, McpServerConfig> }).mcpServers
-    const allowedTools =
-      this.scope.kind === 'all' && mcpServers
+    const allowedTools = options?.allowedTools
+      ? [...options.allowedTools]
+      : this.scope.kind === 'all' && mcpServers
         ? Object.keys(mcpServers).map((serverName) => `mcp__${serverName}__*`)
         : scopeToAllowedTools(this.scope)
 
@@ -444,7 +447,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       ...(this.modelName ? { model: this.modelName } : {}),
       ...(this.sessionId ? { resume: this.sessionId } : {}),
     }
-    if (options?.forceVisibleBrowser) {
+    if (options?.forceVisibleBrowser || options?.disableBuiltinTools) {
       sdkOptions.tools = []
       sdkOptions.disallowedTools = DISALLOWED_CLAUDE_TOOLS
     }

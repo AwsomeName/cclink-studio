@@ -82,10 +82,14 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
         )
       }
       runtime.capabilities.ready('agent-backend')
+      await runtime.scheduledTaskService?.startRuntime(runtime.agentBridge)
       console.log(
         `[CCLink Studio] Agent 后端就绪 (${settings.agentEngine}, ${claudeRuntime.source}, Claude Code ${claudeRuntime.claudeCodeVersion})`,
       )
     } catch (error) {
+      await runtime.scheduledTaskService?.markRuntimeUnavailable(
+        error instanceof Error ? error.message : String(error),
+      )
       runtime.agentBridge = null
       const runtimeState = runtime.claudeRuntimeManager?.getStatus().state
       const reason =
@@ -110,6 +114,7 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
   }
 
   runtime.capabilities.unavailable('agent-backend', 'Agent 核心依赖未就绪')
+  await runtime.scheduledTaskService?.markRuntimeUnavailable('Agent 核心依赖未就绪')
   console.warn(
     '[CCLink Studio] Agent 后端未就绪：MCP、权限或设置 runtime 初始化失败，Agent IPC 将保持降级状态',
   )
@@ -117,6 +122,7 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
 
 export async function shutdownAgentRuntime(runtime: CclinkStudioRuntimeState): Promise<void> {
   try {
+    await runtime.scheduledTaskService?.stopRuntime()
     await runtime.agentBridge?.destroy()
   } finally {
     runtime.agentBridge = null

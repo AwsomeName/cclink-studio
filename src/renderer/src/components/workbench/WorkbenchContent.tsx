@@ -42,6 +42,7 @@ import {
   buildKeyboardContextMenuInput,
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
+import { ScheduledTaskTab } from '../../features/scheduled-tasks/ScheduledTaskTab'
 
 const EMPTY_TERMINAL_OUTPUT_LINES: TerminalOutputLine[] = []
 
@@ -135,6 +136,7 @@ export function WorkbenchContent({
               <TerminalRecordView tab={activeTab} />
             )}
             {activeTab.type === 'data-source-query' && <DataSourceQueryTab tab={activeTab} />}
+            {activeTab.type === 'scheduled-task' && <ScheduledTaskTab tab={activeTab} />}
           </>
         )}
       </ErrorBoundary>

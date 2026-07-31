@@ -19,6 +19,7 @@ import type { UpdateApiContract } from '../shared/ipc/update'
 import type { WechatApiContract } from '../shared/ipc/wechat'
 import type { WindowApiContract } from '../shared/ipc/window'
 import type { WorkspaceStateApiContract } from '../shared/ipc/workspace-state'
+import type { ScheduledTasksApiContract } from '../shared/scheduled-task/scheduled-task-types'
 
 export interface CCLinkStudioAPI {
   reportWorkbenchBounds: (bounds: { x: number; y: number; width: number; height: number }) => void
@@ -60,6 +61,8 @@ export interface CCLinkStudioAPI {
   settings: SettingsApiContract
 
   workspaceState: WorkspaceStateApiContract
+
+  scheduledTasks: ScheduledTasksApiContract
 
   wechat: WechatApiContract
 

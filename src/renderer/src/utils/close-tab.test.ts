@@ -166,3 +166,49 @@ describe('closeTabWithDraftPolicy terminal lifecycle', () => {
     expect(useTabStore.getState().tabs.some((tab) => tab.id === tabId)).toBe(false)
   })
 })
+
+describe('closeTabWithDraftPolicy scheduled task drafts', () => {
+  it('keeps a dirty scheduled task open when the user continues editing', async () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'scheduled-task',
+          type: 'scheduled-task',
+          title: '每周工作总结',
+          icon: '🕒',
+          dirty: true,
+          workspaceRef: { kind: 'local', path: '/workspace' },
+          scheduledTask: { taskId: null, draftKey: 'draft-1' },
+        },
+      ],
+      activeTabId: 'scheduled-task',
+    })
+    vi.mocked(window.cclinkStudio.dialog.showMessageBox).mockResolvedValueOnce({
+      response: 1,
+      checkboxChecked: false,
+    })
+
+    expect(await closeTabWithDraftPolicy('scheduled-task')).toBe(false)
+    expect(useTabStore.getState().tabs).toHaveLength(1)
+  })
+
+  it('closes a dirty scheduled task only after explicit discard', async () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'scheduled-task',
+          type: 'scheduled-task',
+          title: '每周工作总结',
+          icon: '🕒',
+          dirty: true,
+          workspaceRef: { kind: 'local', path: '/workspace' },
+          scheduledTask: { taskId: '11111111-1111-4111-8111-111111111111', draftKey: 'task-1' },
+        },
+      ],
+      activeTabId: 'scheduled-task',
+    })
+
+    expect(await closeTabWithDraftPolicy('scheduled-task')).toBe(true)
+    expect(useTabStore.getState().tabs).toHaveLength(0)
+  })
+})

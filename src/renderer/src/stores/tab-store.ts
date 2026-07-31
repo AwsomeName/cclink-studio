@@ -85,6 +85,11 @@ function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeT
   const parsed = value as { tabs?: Tab[]; activeTabId?: string | null }
   const tabs = (parsed.tabs ?? [])
     .filter((tab): tab is Tab => Boolean(tab?.id && tab.type && tab.title && tab.icon))
+    .filter(
+      (tab) =>
+        tab.type !== 'scheduled-task' ||
+        (typeof tab.scheduledTask?.taskId === 'string' && Boolean(tab.scheduledTask.taskId)),
+    )
     .map(normalizeFileTab)
   if (tabs.length === 0 && Array.isArray(parsed.tabs)) return { tabs: [], activeTabId: null }
   if (tabs.length === 0) return null
@@ -152,6 +157,8 @@ interface OpenTabOptions {
   terminalRecord?: Tab['terminalRecord']
   /** 数据源查询现场 */
   dataSourceQuery?: Tab['dataSourceQuery']
+  /** 定时任务编辑现场 */
+  scheduledTask?: Tab['scheduledTask']
   /** 强制新建，跳过所有去重 */
   forceNew?: boolean
   /** 显式指定 Tab 归属；缺省使用当前工作空间。 */
@@ -183,6 +190,8 @@ interface TabState {
   reconcileTerminalSession: (session: TerminalSessionSnapshot) => void
   /** 更新 Tab 关联的文件路径（Save-As 后回填） */
   updateTabFilePath: (id: string, filePath: string) => void
+  /** 新任务首次保存后，将草稿 Tab 绑定到持久化任务。 */
+  updateTabScheduledTask: (id: string, scheduledTask: NonNullable<Tab['scheduledTask']>) => void
   /** 文件或目录移动后批量同步相关 Tab 路径。 */
   rebaseFilePaths: (oldPrefix: string, newPrefix: string) => void
   /** 复制 Tab（浏览器克隆 URL；编辑器克隆内容为未命名副本） */
@@ -213,6 +222,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     terminal,
     terminalRecord,
     dataSourceQuery,
+    scheduledTask,
     forceNew,
     workspaceRef,
   }) => {
@@ -286,6 +296,15 @@ export const useTabStore = create<TabState>((set, get) => ({
           if (existing) {
             return { activeTabId: existing.id }
           }
+        } else if (type === 'scheduled-task' && scheduledTask?.taskId) {
+          const existing = state.tabs.find(
+            (tab) =>
+              tab.type === 'scheduled-task' &&
+              tab.scheduledTask?.taskId === scheduledTask.taskId &&
+              workspaceRefKey(tab.workspaceRef ?? workspaceRefFromKey(null)) ===
+                workspaceRefKey(workspaceRef ?? workspaceRefFromKey(getWorkspaceStateKey())),
+          )
+          if (existing) return { activeTabId: existing.id }
         }
         // browser / 未命名 editor 不去重 → 可开多个
       }
@@ -309,6 +328,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         terminal,
         terminalRecord,
         dataSourceQuery,
+        scheduledTask,
       }
       return {
         tabs: [...state.tabs, newTab],
@@ -376,6 +396,11 @@ export const useTabStore = create<TabState>((set, get) => ({
   updateTabFilePath: (id, filePath) =>
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, filePath } : t)),
+    })),
+
+  updateTabScheduledTask: (id, scheduledTask) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, scheduledTask } : tab)),
     })),
 
   rebaseFilePaths: (oldPrefix, newPrefix) => {

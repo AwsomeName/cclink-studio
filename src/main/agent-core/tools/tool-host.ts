@@ -18,6 +18,8 @@
 
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { realpath } from 'node:fs/promises'
+import { isAbsolute, relative, resolve } from 'node:path'
 import type { ToolModule, ToolDefinition, ToolAnnotations, ToolExecutionContext } from './types.js'
 
 export interface ToolConfirmationInput {
@@ -130,9 +132,13 @@ export class McpToolHost {
    *
    * Claude Code 每次 sendMessage 都会拿到独立 MCP URL，工具调用回到这里时可恢复会话归属。
    */
-  createToolSession(conversationId: string, workspaceKey?: string | null): string {
+  createToolSession(
+    conversationId: string,
+    workspaceKey?: string | null,
+    scheduledTaskPolicy?: ToolExecutionContext['scheduledTaskPolicy'],
+  ): string {
     const token = randomUUID()
-    this.toolSessions.set(token, { conversationId, workspaceKey })
+    this.toolSessions.set(token, { conversationId, workspaceKey, scheduledTaskPolicy })
     return token
   }
 
@@ -263,7 +269,7 @@ export class McpToolHost {
 
         case 'tools/list':
           return jsonRpcResult(id, {
-            tools: this.getAllTools().map((t) => ({
+            tools: this.getToolsForContext(context).map((t) => ({
               name: t.name,
               description: t.description,
               inputSchema: t.inputSchema,
@@ -308,6 +314,13 @@ export class McpToolHost {
     args: Record<string, unknown>,
     context: McpRequestContext,
   ): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> {
+    const scheduledPolicyFailure = await validateScheduledTaskToolCall(toolName, args, context)
+    if (scheduledPolicyFailure) {
+      return {
+        content: [{ type: 'text' as const, text: scheduledPolicyFailure }],
+        isError: true,
+      }
+    }
     const moduleName = this.toolToModule.get(toolName)
     if (!moduleName) {
       return {
@@ -337,8 +350,9 @@ export class McpToolHost {
       const annotations: ToolAnnotations | undefined = toolDef?.annotations
       const executionPolicy = await module.getExecutionPolicy?.(toolName, args, context)
       const confirmationRequired =
-        executionPolicy?.requireConfirmation === true ||
-        this.permissionManager.needsConfirmation(toolName, annotations)
+        !context.scheduledTaskPolicy &&
+        (executionPolicy?.requireConfirmation === true ||
+          this.permissionManager.needsConfirmation(toolName, annotations))
       let confirmationGranted = false
 
       if (confirmationRequired) {
@@ -377,6 +391,14 @@ export class McpToolHost {
     }
   }
 
+  private getToolsForContext(context: McpRequestContext): ToolDefinition[] {
+    const tools = this.getAllTools()
+    const allowedTools = context.scheduledTaskPolicy?.allowedTools
+    if (!allowedTools) return tools
+    const allowlist = new Set(allowedTools)
+    return tools.filter((tool) => allowlist.has(tool.name))
+  }
+
   /**
    * 读取 HTTP 请求体
    */
@@ -399,6 +421,45 @@ export class McpToolHost {
       req.on('error', reject)
     })
   }
+}
+
+async function validateScheduledTaskToolCall(
+  toolName: string,
+  args: Record<string, unknown>,
+  context: McpRequestContext,
+): Promise<string | null> {
+  const policy = context.scheduledTaskPolicy
+  if (!policy) return null
+  if (!policy.taskId || !policy.runId || policy.taskRevision < 1) {
+    return '定时任务 correlation 不完整，已拒绝工具调用'
+  }
+  if (!policy.allowedTools.includes(toolName)) {
+    return `定时任务不支持工具 "${toolName}"`
+  }
+  const pathValue =
+    toolName === 'editor_read'
+      ? args.filePath
+      : toolName === 'editor_list'
+        ? args.dirPath
+        : undefined
+  if (typeof pathValue !== 'string' || !isAbsolute(pathValue)) {
+    return '定时任务文件工具必须提供工作空间内的绝对路径'
+  }
+  try {
+    const canonical = await realpath(pathValue)
+    const allowed = await Promise.all(policy.readRoots.map((root) => realpath(root)))
+    if (!allowed.some((root) => isPathWithin(root, canonical))) {
+      return '定时任务只能读取声明的工作空间资源'
+    }
+  } catch {
+    return '定时任务声明的读取路径不可用'
+  }
+  return null
+}
+
+function isPathWithin(rootPath: string, candidatePath: string): boolean {
+  const fromRoot = relative(resolve(rootPath), resolve(candidatePath))
+  return fromRoot === '' || (!fromRoot.startsWith('..') && !isAbsolute(fromRoot))
 }
 
 function getRiskLevel(annotations: ToolAnnotations | undefined): 'read' | 'write' | 'destructive' {

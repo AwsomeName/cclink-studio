@@ -53,6 +53,17 @@ describe('collectUnifiedDiagnosticReport', () => {
             legacyEncryptedFiles: [],
           }),
         },
+        scheduledTasks: {
+          getRuntimeStatus: vi.fn().mockResolvedValue({
+            state: 'ready',
+            startedAt: 1,
+            timerDueAt: 2,
+            queuedCount: 0,
+            runningRunId: null,
+            enabledCount: 1,
+            systemScheduler: 'none',
+          }),
+        },
       },
     })
     recordRendererDiagnosticLog('warn', ['renderer warning'])
@@ -77,6 +88,8 @@ describe('collectUnifiedDiagnosticReport', () => {
     expect(report).toContain('## 工作台状态')
     expect(report).toContain('## 本地凭证')
     expect(report).toContain('已配置：2')
+    expect(report).toContain('## 定时任务')
+    expect(report).toContain('系统调度配置：none')
     expect(report).toContain('## Markdown')
     expect(report).toContain('markdown diagnostic')
     expect(report).toContain('file.rename')
@@ -99,6 +112,9 @@ describe('collectUnifiedDiagnosticReport', () => {
         credentials: {
           getStatus: vi.fn().mockRejectedValue(new Error('credentials unavailable')),
         },
+        scheduledTasks: {
+          getRuntimeStatus: vi.fn().mockRejectedValue(new Error('scheduler unavailable')),
+        },
       },
     })
 
@@ -110,6 +126,7 @@ describe('collectUnifiedDiagnosticReport', () => {
     expect(report).toContain('- 采集失败：workspace unavailable')
     expect(report).toContain('- 采集失败：main unavailable')
     expect(report).toContain('- 采集失败：credentials unavailable')
+    expect(report).toContain('- 采集失败：scheduler unavailable')
     expect(report).toContain('## Renderer 近期日志')
   })
 })

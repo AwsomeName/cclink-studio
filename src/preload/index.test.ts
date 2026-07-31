@@ -33,6 +33,7 @@ describe('preload API surface', () => {
         android: expect.any(Object),
         dataSource: expect.any(Object),
         diagnostics: expect.any(Object),
+        scheduledTasks: expect.any(Object),
       }),
     )
     expect(api).not.toHaveProperty('meshy')
@@ -55,6 +56,13 @@ describe('preload API surface', () => {
     expect(api.diagnostics).toEqual(
       expect.objectContaining({
         getMainLogSnapshot: expect.any(Function),
+      }),
+    )
+    expect(api.scheduledTasks).toEqual(
+      expect.objectContaining({
+        list: expect.any(Function),
+        save: expect.any(Function),
+        setEnabled: expect.any(Function),
       }),
     )
   })

@@ -27,25 +27,41 @@ const MAX_LOG_ENTRIES = 100
 export async function collectUnifiedDiagnosticReport(
   input: UnifiedDiagnosticReportInput,
 ): Promise<string> {
-  const [workspaceSection, credentialSection, mainLogSection] = await Promise.all([
-    collectSection('工作台状态', async () => {
-      const diagnostics = await window.cclinkStudio.workspaceState.diagnostics()
-      return formatWorkspaceDiagnosticsMarkdown(diagnostics)
-    }),
-    collectSection('本地凭证', async () => {
-      const status = await window.cclinkStudio.credentials.getStatus()
-      return [
-        `- 状态：${status.status}`,
-        `- 文件：${status.filePath}`,
-        `- 已配置：${status.configuredCount}`,
-        `- 旧版加密文件：${status.legacyEncryptedFiles.length}`,
-        ...(status.message ? [`- 提示：${status.message}`] : []),
-      ].join('\n')
-    }),
-    collectSection('主进程近期日志', async () =>
-      formatLogSnapshot(await window.cclinkStudio.diagnostics.getMainLogSnapshot()),
-    ),
-  ])
+  const [workspaceSection, credentialSection, scheduledTaskSection, mainLogSection] =
+    await Promise.all([
+      collectSection('工作台状态', async () => {
+        const diagnostics = await window.cclinkStudio.workspaceState.diagnostics()
+        return formatWorkspaceDiagnosticsMarkdown(diagnostics)
+      }),
+      collectSection('本地凭证', async () => {
+        const status = await window.cclinkStudio.credentials.getStatus()
+        return [
+          `- 状态：${status.status}`,
+          `- 文件：${status.filePath}`,
+          `- 已配置：${status.configuredCount}`,
+          `- 旧版加密文件：${status.legacyEncryptedFiles.length}`,
+          ...(status.message ? [`- 提示：${status.message}`] : []),
+        ].join('\n')
+      }),
+      collectSection('定时任务', async () => {
+        const status = await window.cclinkStudio.scheduledTasks.getRuntimeStatus()
+        return [
+          `- Scheduler：${status.state}`,
+          `- 启动时间：${status.startedAt ?? '未启动'}`,
+          `- 最近 timer：${status.timerDueAt ?? '无'}`,
+          `- 排队数量：${status.queuedCount}`,
+          `- 当前运行：${status.runningRunId ?? '无'}`,
+          `- 已启用任务：${status.enabledCount}`,
+          `- 系统调度配置：${status.systemScheduler}`,
+          ...(status.lastError
+            ? [`- 最近失败：${status.lastError.code} · ${status.lastError.message}`]
+            : []),
+        ].join('\n')
+      }),
+      collectSection('主进程近期日志', async () =>
+        formatLogSnapshot(await window.cclinkStudio.diagnostics.getMainLogSnapshot()),
+      ),
+    ])
 
   const contextActionSection = collectSyncSection('上下文操作', () =>
     formatContextActionDiagnosticsMarkdown(useContextActionDiagnosticsStore.getState().events),
@@ -71,6 +87,7 @@ export async function collectUnifiedDiagnosticReport(
     },
     workspaceSection,
     credentialSection,
+    scheduledTaskSection,
     markdownSection,
     contextActionSection,
     rendererLogSection,

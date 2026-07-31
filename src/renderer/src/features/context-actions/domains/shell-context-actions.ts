@@ -13,6 +13,7 @@ import { useWorkspaceStore } from '../../../stores/workspace-store'
 import type { ActivityPanel } from '../../../types'
 import { recordTerminalLifecycleEvent } from '../../../utils/terminal-lifecycle'
 import { buildTerminalTabDraft } from '../../../utils/terminal-tab'
+import { createScheduledTaskTab } from '../../scheduled-tasks/scheduled-task-view-model'
 import type { CommandContext, ContextTarget } from '../context-target'
 import type { MenuContribution } from '../menu-contribution-registry'
 
@@ -29,6 +30,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   terminal: 'Terminal',
   operations: '运营',
   production: '生产',
+  'scheduled-tasks': '定时任务',
   settings: '设置',
 }
 
@@ -124,6 +126,12 @@ function createForSidebar(panelId: string): void {
     void recordTerminalLifecycleEvent(draft.terminal, 'created', 'Terminal Tab 已创建')
     return
   }
+  if (panelId === 'scheduled-tasks') {
+    const workspacePath = useFsStore.getState().workspacePath
+    if (!workspacePath || workspaceRef.kind !== 'local') throw new Error('当前没有本地工作区')
+    useTabStore.getState().openTab(createScheduledTaskTab(workspacePath))
+    return
+  }
   throw new Error('当前侧栏没有可创建对象')
 }
 
@@ -176,10 +184,13 @@ export function createShellContextCommands(): Command[] {
         if (panel === 'files') return '新建文件'
         if (panel === 'browser') return '新建浏览器页'
         if (panel === 'terminal') return '新建 Terminal'
+        if (panel === 'scheduled-tasks') return '新建定时任务'
         return '新建'
       },
       visible: (context) =>
-        ['files', 'browser', 'terminal'].includes(sidebarTarget(context)?.panelId ?? ''),
+        ['files', 'browser', 'terminal', 'scheduled-tasks'].includes(
+          sidebarTarget(context)?.panelId ?? '',
+        ),
       action: (context) => createForSidebar(sidebarTarget(context)?.panelId ?? ''),
     },
     {

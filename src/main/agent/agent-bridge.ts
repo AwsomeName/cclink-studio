@@ -98,6 +98,7 @@ export class AgentBridge {
   private configurationChangePending = false
   private sessionCompatibilityFingerprint: string | null
   private runtimeProvenance: ClaudeRuntimeProvenance | null
+  private readonly runtimeListeners = new Set<(event: AgentRuntimeEvent) => void>()
   constructor(
     mainWindow: BrowserWindow,
     playwrightBridge: PlaywrightBridge | null,
@@ -216,6 +217,37 @@ export class AgentBridge {
       this.failActiveBrowserTask(conversationId, error)
       throw error
     }
+  }
+
+  async sendScheduledTaskMessage(input: {
+    message: string
+    conversationId: string
+    runId: string
+    workspacePath: string
+    taskId: string
+    taskRevision: number
+    readRoots: string[]
+  }): Promise<void> {
+    await this.runtime.sendMessage(input.message, input.conversationId, {
+      runId: input.runId,
+      workspacePath: input.workspacePath,
+      allowedTools: ['mcp__cclink_studio__editor_read', 'mcp__cclink_studio__editor_list'],
+      disableBuiltinTools: true,
+      scheduledTaskPolicy: {
+        origin: 'scheduled-task',
+        taskId: input.taskId,
+        taskRevision: input.taskRevision,
+        runId: input.runId,
+        workspaceRoot: input.workspacePath,
+        readRoots: input.readRoots,
+        allowedTools: ['editor_read', 'editor_list'],
+      },
+    })
+  }
+
+  onRuntimeEvent(listener: (event: AgentRuntimeEvent) => void): () => void {
+    this.runtimeListeners.add(listener)
+    return () => this.runtimeListeners.delete(listener)
   }
 
   async getContextUsage(
@@ -543,9 +575,11 @@ export class AgentBridge {
     await this.runtime.destroy()
     this.activeBrowserTaskIds.clear()
     this.sessionDiagnosticRefs.clear()
+    this.runtimeListeners.clear()
   }
 
   private handleRuntimeEvent(event: AgentRuntimeEvent): void {
+    for (const listener of this.runtimeListeners) listener(event)
     const taskId = this.activeBrowserTaskIds.get(event.conversationId)
     if (taskId) {
       this.syncActiveBrowserTaskCorrelation(event.conversationId, taskId, event.runId)
