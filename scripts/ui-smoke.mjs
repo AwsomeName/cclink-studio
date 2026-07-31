@@ -151,6 +151,44 @@ async function main() {
     return 'browser/terminal/files'
   })
 
+  await runCheck('web resources accepts a non-predefined website', async () => {
+    await clickByTitle(page, '网站与账号')
+    await page.waitForTimeout(200)
+    assert(
+      (await page.locator('.sidebar-header-title').innerText()) === '网站与账号',
+      'web resources panel missing',
+    )
+
+    const accountLabel = 'UI Smoke Account'
+    const existing = page.locator('.web-resource-row', { hasText: accountLabel })
+    if ((await existing.count()) === 0) {
+      await page.getByRole('button', { name: '添加网站' }).click()
+      const form = page.locator('.web-resources-form')
+      await form.waitFor({ state: 'visible', timeout: 10_000 })
+      await form.getByLabel('网站名称').fill('Web Affairs Smoke')
+      await form.getByLabel('办理入口').fill('https://example.com/cclink-web-affairs-smoke')
+      await form.getByPlaceholder('姓名或公司全称').fill('CCLink Smoke Company')
+      await form.getByLabel('账号名称').fill(accountLabel)
+      await form.getByLabel('Browser Profile').fill('web-affairs-ui-smoke')
+      await form.getByRole('button', { name: '保存并建立连接' }).click()
+    }
+
+    await page
+      .locator('.web-resource-row', { hasText: accountLabel })
+      .waitFor({ state: 'visible', timeout: 10_000 })
+    const rowText = await page.locator('.web-resource-row', { hasText: accountLabel }).innerText()
+    assert(rowText.includes('CCLink Smoke Company'), 'principal is not visible')
+    assert(rowText.includes('web-affairs-ui-smoke'), 'Browser Profile is not visible')
+
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.main-window', { timeout: uiReadyTimeoutMs })
+    await clickByTitle(page, '网站与账号')
+    await page
+      .locator('.web-resource-row', { hasText: accountLabel })
+      .waitFor({ state: 'visible', timeout: 10_000 })
+    return 'arbitrary website persisted across renderer reload'
+  })
+
   await runCheck('settings page opens and searches locally', async () => {
     await clickByTitle(page, '设置')
     await page.waitForSelector('.settings-page', { timeout: 10_000 })

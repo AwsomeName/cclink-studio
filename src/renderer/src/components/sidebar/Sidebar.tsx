@@ -38,7 +38,7 @@ import {
 import { BrowserFavicon } from '../common/BrowserFavicon'
 import type { ActivityPanel } from '../../types'
 import { FileTree } from './FileTree'
-import { ProjectOperationsSection } from './ProjectOperationsSection'
+import { WebResourcesSidebar } from '../../features/web-resources/WebResourcesSidebar'
 import { HardwareProductionSection } from './HardwareProductionSection'
 import { DataSourcesPanel } from '../data-sources/DataSourcesPanel'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -81,7 +81,7 @@ function getSidebarTitle(
     case 'terminal':
       return 'Terminal'
     case 'operations':
-      return '运营'
+      return '网站与账号'
     case 'sessions':
       return '会话'
     case 'files':
@@ -246,9 +246,7 @@ function ProjectSidebarContent({
 
       {activePanel === 'terminal' && <TerminalSidebarView workspaceRef={activeWorkspaceRef} />}
 
-      {activePanel === 'operations' && (
-        <OperationsSidebarView workspaceRef={activeWorkspaceRef} workspacePath={workspacePath} />
-      )}
+      {activePanel === 'operations' && <OperationsSidebarView workspaceRef={activeWorkspaceRef} />}
 
       {activePanel === 'sessions' && (
         <SessionsSidebarView
@@ -871,16 +869,10 @@ function TerminalSidebarView({ workspaceRef }: { workspaceRef: WorkspaceRef }): 
 
 function OperationsSidebarView({
   workspaceRef,
-  workspacePath,
 }: {
   workspaceRef: WorkspaceRef
-  workspacePath: string | null
 }): React.ReactElement | null {
-  if (workspaceRef.kind === 'local' && workspacePath) {
-    return <ProjectOperationsSection workspacePath={workspacePath} workspaceRef={workspaceRef} />
-  }
-
-  return null
+  return <WebResourcesSidebar workspaceRef={workspaceRef} />
 }
 
 function SessionsSidebarView({

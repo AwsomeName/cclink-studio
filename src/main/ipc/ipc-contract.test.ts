@@ -19,6 +19,8 @@ import { dialogIpcContracts as dialogIpc } from '../../shared/ipc/dialog-contrac
 import { fsIpcContracts } from '../../shared/ipc/fs-contract'
 import { fsIpc } from '../../shared/ipc/fs'
 import { settingsIpcContracts as settingsIpc } from '../../shared/ipc/settings-contract'
+import { webResourcesIpcContracts } from '../../shared/web-resources/web-resource-contract'
+import { webResourcesIpc } from '../../shared/web-resources/web-resource'
 
 describe('IPC invoke contracts', () => {
   it('rejects unexpected arguments for no-argument channels', () => {
@@ -165,6 +167,34 @@ describe('IPC invoke contracts', () => {
     expect(() => browserDownloadIpcContracts.get.parseArgs(['id', 'extra'])).toThrow()
   })
 
+  it('binds every Web Resources definition to a bounded runtime parser', () => {
+    expect(Object.keys(webResourcesIpcContracts)).toEqual(Object.keys(webResourcesIpc))
+    expect(
+      webResourcesIpcContracts.createConnection.parseArgs([
+        {
+          websiteName: 'Example',
+          entryUrl: 'https://example.com',
+          principalKind: 'company',
+          principalName: 'Example Ltd.',
+          accountLabel: 'Admin',
+          browserProfileId: 'example-admin',
+        },
+      ]),
+    ).toHaveLength(1)
+    expect(() =>
+      webResourcesIpcContracts.createConnection.parseArgs([
+        {
+          websiteName: 'Unsafe',
+          entryUrl: 'javascript:alert(1)',
+          principalKind: 'company',
+          principalName: 'Example Ltd.',
+          accountLabel: 'Admin',
+          browserProfileId: 'example-admin',
+        },
+      ]),
+    ).toThrow()
+  })
+
   it('keeps migrated channel literals in shared declarations only', () => {
     const productionFiles = [
       'src/main/ipc/window-ipc.ts',
@@ -180,10 +210,12 @@ describe('IPC invoke contracts', () => {
       'src/main/browser/browser-manager.ts',
       'src/main/browser/browser-task-runtime.ts',
       'src/main/browser/browser-download-store.ts',
+      'src/main/web-resources/web-resource-ipc.ts',
       'src/preload/renderer-support-api.ts',
       'src/preload/fs-api.ts',
       'src/preload/agent-api.ts',
       'src/preload/browser-api.ts',
+      'src/preload/web-resources-api.ts',
       'src/preload/index.ts',
     ]
     const source = productionFiles
@@ -191,7 +223,7 @@ describe('IPC invoke contracts', () => {
       .join('\n')
 
     expect(source).not.toMatch(
-      /['"](?:window|identity|official|dialog|settings|fs|agent|mcp|browser|browserTask|browserActionLog|browserDownload|workbench):[A-Za-z]/,
+      /['"](?:window|identity|official|dialog|settings|fs|agent|mcp|browser|browserTask|browserActionLog|browserDownload|webResources|workbench):[A-Za-z]/,
     )
   })
 
@@ -202,11 +234,13 @@ describe('IPC invoke contracts', () => {
       'src/shared/ipc/fs.ts',
       'src/shared/ipc/agent.ts',
       'src/shared/ipc/browser.ts',
+      'src/shared/web-resources/web-resource.ts',
       'src/preload/index.ts',
       'src/preload/renderer-support-api.ts',
       'src/preload/fs-api.ts',
       'src/preload/agent-api.ts',
       'src/preload/browser-api.ts',
+      'src/preload/web-resources-api.ts',
     ]
     const source = preloadFacingFiles
       .map((file) => readFileSync(resolve(process.cwd(), file), 'utf8'))
