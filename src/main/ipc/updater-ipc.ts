@@ -26,6 +26,9 @@ export function registerUpdaterIpc(
   registerTrustedIpcContract(updateIpc.ignoreVersion, trustedRendererGuard, () =>
     service.ignoreVersion(),
   )
+  registerTrustedIpcContract(updateIpc.openManualInstaller, trustedRendererGuard, () =>
+    service.openManualInstaller(),
+  )
   registerTrustedIpcContract(updateIpc.prepareInstall, trustedRendererGuard, () =>
     service.prepareInstall(),
   )

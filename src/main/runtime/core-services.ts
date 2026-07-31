@@ -1,5 +1,5 @@
-import { app } from 'electron'
-import { join } from 'node:path'
+import { app, shell } from 'electron'
+import { join, resolve } from 'node:path'
 import { LocalIdentityService } from '../identity/local-identity-service'
 import { registerIdentityIpc } from '../identity/identity-ipc'
 import { FileService } from '../fs/file-service'
@@ -32,6 +32,7 @@ import { UsageLedgerService } from '../usage/usage-ledger-service'
 import { GitHubReleaseProvider } from '../update/github-release-provider'
 import { NoopUpdateProvider } from '../update/noop-update-provider'
 import { UpdateService } from '../update/update-service'
+import { MacDmgVerifier } from '../update/mac-dmg-verifier'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   runtime.credentialService = new CredentialService()
@@ -181,11 +182,17 @@ export async function bootstrapMainProcessServices(
   )
   console.log('[CCLink Studio] 设置 IPC 已注册')
 
-  const architecture = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'x64' : null
+  const architecture = process.arch === 'arm64' ? 'arm64' : null
   const provider =
     process.platform === 'darwin' && architecture
       ? new GitHubReleaseProvider()
       : new NoopUpdateProvider()
+  const dmgInspector =
+    app.isPackaged && process.platform === 'darwin' && architecture
+      ? new MacDmgVerifier({
+          currentAppBundlePath: resolve(app.getPath('exe'), '..', '..', '..'),
+        })
+      : undefined
   runtime.updateService = new UpdateService({
     currentVersion:
       !app.isPackaged && process.env['CCLINK_STUDIO_UPDATE_CURRENT_VERSION']
@@ -203,6 +210,8 @@ export async function bootstrapMainProcessServices(
     cacheRoot: join(app.getPath('userData'), 'updates'),
     provider,
     automaticChecks: app.isPackaged,
+    dmgInspector,
+    openPath: dmgInspector ? (path) => shell.openPath(path) : undefined,
   })
   await runtime.updateService.start()
   runtime.updateSnapshotUnsubscribe = registerUpdaterIpc(

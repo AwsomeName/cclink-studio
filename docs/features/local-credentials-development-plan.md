@@ -1,6 +1,6 @@
 # 本地凭证管理开发计划
 
-> 状态：M0-M5 与扩展凭证迁移已完成；M6 自动化和 arm64 打包通过，arm64 真人验收及 x64 打包/真人验收待执行
+> 状态：M0-M5 与扩展凭证迁移已完成；M6 自动化和 arm64 打包通过，arm64 真人验收待执行
 > 最后更新：2026-07-28  
 > 产品事实源：`docs/features/local-credentials.md`  
 > 架构决策：`docs/decisions/0003-plaintext-local-credentials.md`
@@ -21,7 +21,7 @@
 | M3     | ✅ 完成     | Agent 与 Meshy 通过统一服务动态解析                                             |
 | M4     | ✅ 完成     | Git 与数据源旧 Store 已删除，统一使用稳定 credential ID                         |
 | M5     | ✅ 完成     | `safeStorage` 生产引用清零，边界脚本进入 `pnpm verify`                          |
-| M6     | 🔄 部分完成 | `pnpm verify` 与 arm64 打包验证已通过；arm64 真人验收及 x64 打包/真人验收待执行 |
+| M6     | 🔄 部分完成 | `pnpm verify` 与 arm64 打包验证已通过；arm64 真人验收待执行 |
 
 任一阶段只要出现凭证进入工作空间、日志、诊断、全量 renderer 状态或 Git 提交，立即停止后续开发并修复。
 
@@ -398,7 +398,7 @@ main CredentialService
 - 诊断加入凭证服务状态、schema、记录元数据和旧文件存在状态。
 - 建立固定 canary secret，贯穿单元测试、IPC、日志、诊断、Git 和 Agent 快照泄漏扫描。
 - 执行完整 verify 和受影响 smoke。
-- 构建 macOS arm64/x64 本地包，在新用户目录和升级用户目录分别验收。
+- 构建 macOS arm64 本地包，在新用户目录和升级用户目录分别验收。
 - 人工测试复制、显示、重启、文件损坏、权限拒绝、旧文件提示和真实消费者。
 
 ### 自动化门禁
@@ -432,7 +432,7 @@ pnpm verify:credential-boundary
 ### 验收标准
 
 - [x] 所有自动化门禁通过。
-- [ ] arm64/x64 打包产物完成凭证流程人工验收。
+- [ ] arm64 打包产物完成凭证流程人工验收。
 - [x] canary secret 不出现在日志、诊断、工作空间、Git、MCP 或 Agent 消息。
 - [x] 设置、Agent、Git、数据源的错误提示可区分缺失、无效、存储损坏和权限失败。
 - [x] 无凭证和凭证服务 degraded 时，无关能力全部可用。

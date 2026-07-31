@@ -5,7 +5,7 @@ const sha = 'a'.repeat(64)
 
 function validManifest() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     channel: 'stable',
     tag: 'v1.2.3',
     version: '1.2.3',
@@ -16,23 +16,30 @@ function validManifest() {
         dmg: { name: 'CCLink-Studio-1.2.3-arm64.dmg', size: 100, sha256: sha },
         zip: { name: 'CCLink-Studio-1.2.3-arm64.zip', size: 90, sha256: sha },
       },
-      x64: {
-        dmg: { name: 'CCLink-Studio-1.2.3-x64.dmg', size: 101, sha256: sha },
-        zip: { name: 'CCLink-Studio-1.2.3-x64.zip', size: 91, sha256: sha },
-      },
     },
   }
 }
 
 describe('updateManifestSchema', () => {
-  it('accepts a complete stable cross-architecture manifest', () => {
+  it('accepts a complete stable arm64 manifest', () => {
     expect(parseUpdateManifest(validManifest())).toEqual(validManifest())
   })
 
-  it('rejects a missing architecture', () => {
-    const manifest = validManifest()
-    Reflect.deleteProperty(manifest.assets, 'x64')
+  it('rejects historical architectures and manifest versions', () => {
+    const manifest = {
+      ...validManifest(),
+      assets: {
+        ...validManifest().assets,
+        x64: {
+          dmg: { name: 'CCLink-Studio-1.2.3-x64.dmg', size: 101, sha256: sha },
+          zip: { name: 'CCLink-Studio-1.2.3-x64.zip', size: 91, sha256: sha },
+        },
+      },
+    }
     expect(updateManifestSchema.safeParse(manifest).success).toBe(false)
+    expect(updateManifestSchema.safeParse({ ...validManifest(), schemaVersion: 1 }).success).toBe(
+      false,
+    )
   })
 
   it('rejects tag and version mismatches', () => {
@@ -46,7 +53,7 @@ describe('updateManifestSchema', () => {
     expect(updateManifestSchema.safeParse(manifest).success).toBe(false)
   })
 
-  it('rejects unsafe asset names and duplicate architecture assets', () => {
+  it('rejects unsafe and duplicate arm64 asset names', () => {
     const unsafe = validManifest()
     unsafe.assets.arm64.dmg.name = '../CCLink-Studio.dmg'
     expect(updateManifestSchema.safeParse(unsafe).success).toBe(false)
@@ -56,7 +63,7 @@ describe('updateManifestSchema', () => {
     expect(updateManifestSchema.safeParse(urlLike).success).toBe(false)
 
     const duplicate = validManifest()
-    duplicate.assets.x64.dmg.name = duplicate.assets.arm64.dmg.name
+    duplicate.assets.arm64.zip.name = duplicate.assets.arm64.dmg.name
     expect(updateManifestSchema.safeParse(duplicate).success).toBe(false)
   })
 

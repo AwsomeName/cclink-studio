@@ -7,9 +7,6 @@
 #   bash scripts/studio.sh logs           # follow background dev app logs
 #   bash scripts/studio.sh stop           # stop background dev app
 #   bash scripts/studio.sh smoke          # run standalone smoke gate
-#   bash scripts/studio.sh package        # build local mac package for current host arch
-#   bash scripts/studio.sh package:arm64  # build Apple Silicon package
-#   bash scripts/studio.sh package:x64    # build Intel package
 
 set -euo pipefail
 
@@ -73,22 +70,6 @@ case "${1:-start}" in
   smoke)
     ensure_deps
     pnpm smoke:standalone
-    ;;
-  package)
-    ensure_deps
-    bash scripts/package.sh
-    ;;
-  package:arm64)
-    ensure_deps
-    bash scripts/package.sh --arm64
-    ;;
-  package:x64)
-    ensure_deps
-    bash scripts/package.sh --x64
-    ;;
-  package:universal)
-    ensure_deps
-    bash scripts/package.sh --universal
     ;;
   help|-h|--help)
     usage

@@ -10,6 +10,9 @@ export function UpdatePanel(): React.ReactElement | null {
   const cancelDownload = useUpdateStore((state) => state.cancelDownload)
   const defer = useUpdateStore((state) => state.defer)
   const ignoreVersion = useUpdateStore((state) => state.ignoreVersion)
+  const openManualInstaller = useUpdateStore((state) => state.openManualInstaller)
+  const manualInstallerBusy = useUpdateStore((state) => state.manualInstallerBusy)
+  const manualInstallerError = useUpdateStore((state) => state.manualInstallerError)
 
   if (!open) return null
 
@@ -106,8 +109,15 @@ export function UpdatePanel(): React.ReactElement | null {
           {snapshot.phase === 'readyToInstall' && (
             <UpdateMessage
               title="更新已下载并通过校验"
-              detail="可信文件已保存在 Studio 私有缓存中。安装并重启将在下一阶段接入。"
+              detail="打开前会再次核对完整性、Apple 公证、发布者、版本和 arm64 架构。macOS 打开后，将 CCLink Studio 开源版拖入“应用程序”完成替换。"
             />
+          )}
+
+          {manualInstallerError && (
+            <div className="update-error" role="alert">
+              <strong>{manualInstallerError}</strong>
+              <span>当前版本不会被替换；可以直接重试。</span>
+            </div>
           )}
 
           {snapshot.phase === 'failed' && snapshot.error && (
@@ -163,9 +173,19 @@ export function UpdatePanel(): React.ReactElement | null {
             </button>
           )}
           {snapshot.phase === 'readyToInstall' && (
-            <button type="button" onClick={close}>
-              稍后安装
-            </button>
+            <>
+              <button type="button" disabled={manualInstallerBusy} onClick={close}>
+                稍后安装
+              </button>
+              <button
+                type="button"
+                className="primary"
+                disabled={manualInstallerBusy}
+                onClick={() => void openManualInstaller()}
+              >
+                {manualInstallerBusy ? '正在安全检查…' : '打开安装包'}
+              </button>
+            </>
           )}
           {!busy && (snapshot.phase === 'idle' || snapshot.phase === 'disabled') && (
             <button type="button" onClick={close}>

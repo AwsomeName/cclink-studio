@@ -5,7 +5,7 @@ const sha256 = 'a'.repeat(64)
 
 function manifest() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     channel: 'stable',
     tag: 'v1.2.3',
     version: '1.2.3',
@@ -16,10 +16,6 @@ function manifest() {
         dmg: { name: 'CCLink-Studio-1.2.3-arm64.dmg', size: 100, sha256 },
         zip: { name: 'CCLink-Studio-1.2.3-arm64.zip', size: 90, sha256 },
       },
-      x64: {
-        dmg: { name: 'CCLink-Studio-1.2.3-x64.dmg', size: 101, sha256 },
-        zip: { name: 'CCLink-Studio-1.2.3-x64.zip', size: 91, sha256 },
-      },
     },
   }
 }
@@ -29,8 +25,6 @@ function release() {
     { name: 'update-manifest.json', size: 500 },
     { name: 'CCLink-Studio-1.2.3-arm64.dmg', size: 100 },
     { name: 'CCLink-Studio-1.2.3-arm64.zip', size: 90 },
-    { name: 'CCLink-Studio-1.2.3-x64.dmg', size: 101 },
-    { name: 'CCLink-Studio-1.2.3-x64.zip', size: 91 },
   ].map((asset) => ({
     ...asset,
     browser_download_url: `https://github.com/AwsomeName/cclink-studio/releases/download/v1.2.3/${asset.name}`,
@@ -86,7 +80,7 @@ describe('GitHubReleaseProvider', () => {
       provider.check({
         currentVersion: '1.0.0',
         channel: 'stable',
-        architecture: 'x64',
+        architecture: 'arm64',
         signal: new AbortController().signal,
       }),
     ).resolves.toEqual({ status: 'up-to-date' })

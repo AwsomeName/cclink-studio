@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 
 import {
@@ -8,10 +10,66 @@ import {
   incrementPatch,
   isRetryableGitHubStatus,
   parseArgs,
+  prepareLocalReleasePackage,
   resolveRemoteTagCommit,
 } from './oss-release.mjs'
 
 const gitignore = readFileSync(new URL('../.gitignore', import.meta.url), 'utf8')
+const packageJson = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+)
+const localPackageScript = readFileSync(new URL('./package.sh', import.meta.url), 'utf8')
+const releaseScript = readFileSync(new URL('./oss-release.mjs', import.meta.url), 'utf8')
+
+test('keeps local packaging separate from the canonical formal release command', () => {
+  assert.equal(packageJson.scripts['package:local'], 'bash scripts/package.sh')
+  assert.equal(packageJson.scripts.package, undefined)
+  assert.equal(packageJson.scripts['package:dev'], undefined)
+  assert.equal(packageJson.scripts['studio:package'], undefined)
+  assert.equal(packageJson.scripts.release, 'node scripts/oss-release.mjs')
+  assert.equal(packageJson.scripts['release:oss'], packageJson.scripts.release)
+  assert.equal(packageJson.scripts['release:arm64'], undefined)
+  assert.doesNotMatch(localPackageScript, /--bump|--version\)|NEW_VERSION|writeFileSync/)
+  assert.match(localPackageScript, /pnpm release/)
+})
+
+test('builds the target-version local package before committing or pushing a release', () => {
+  const localPackage = releaseScript.lastIndexOf('prepareLocalReleasePackage(packagePath')
+  const versionCommit = releaseScript.indexOf("git(['commit', '-m', `chore: prepare ${tag}`])")
+  const atomicPush = releaseScript.indexOf(
+    "git(['push', '--atomic', 'origin', 'HEAD:refs/heads/main', `refs/tags/${tag}`])",
+  )
+
+  assert.ok(localPackage > 0)
+  assert.ok(versionCommit > localPackage)
+  assert.ok(atomicPush > versionCommit)
+})
+
+test('restores package.json byte-for-byte when local release packaging fails', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cclink-release-local-package-'))
+  const packagePath = join(directory, 'package.json')
+  const original = '{\n  "name": "fixture",\n  "version": "1.2.3"\n}\n'
+  writeFileSync(packagePath, original)
+
+  assert.throws(
+    () =>
+      prepareLocalReleasePackage(packagePath, '1.2.4', () => {
+        throw new Error('local package failed')
+      }),
+    /local package failed/,
+  )
+  assert.equal(readFileSync(packagePath, 'utf8'), original)
+})
+
+test('keeps the target version after local release packaging succeeds', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cclink-release-local-package-'))
+  const packagePath = join(directory, 'package.json')
+  writeFileSync(packagePath, '{"name":"fixture","version":"1.2.3"}\n')
+
+  prepareLocalReleasePackage(packagePath, '1.2.4', () => undefined)
+
+  assert.equal(JSON.parse(readFileSync(packagePath, 'utf8')).version, '1.2.4')
+})
 
 test('ignores generated release preflight reports between releases', () => {
   assert.match(gitignore, /^\.build\/$/m)

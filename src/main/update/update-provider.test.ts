@@ -5,7 +5,7 @@ const sha256 = 'a'.repeat(64)
 
 function availableResult() {
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     channel: 'stable',
     tag: 'v1.2.3',
     version: '1.2.3',
@@ -15,10 +15,6 @@ function availableResult() {
       arm64: {
         dmg: { name: 'CCLink Studio-1.2.3-arm64.dmg', size: 100, sha256 },
         zip: { name: 'CCLink Studio-1.2.3-arm64.zip', size: 90, sha256 },
-      },
-      x64: {
-        dmg: { name: 'CCLink Studio-1.2.3-x64.dmg', size: 101, sha256 },
-        zip: { name: 'CCLink Studio-1.2.3-x64.zip', size: 91, sha256 },
       },
     },
   } as const

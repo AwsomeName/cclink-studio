@@ -3,7 +3,7 @@ import { createReadStream, lstatSync, readFileSync } from 'node:fs'
 import { basename, resolve } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 
-const ARCHITECTURES = ['arm64', 'x64']
+const ARCHITECTURE = 'arm64'
 const ASSET_KINDS = ['dmg', 'zip']
 const STABLE_VERSION_SOURCE = '(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)'
 const STABLE_VERSION_PATTERN = new RegExp(`^${STABLE_VERSION_SOURCE}$`)
@@ -135,7 +135,7 @@ export function validateUpdateManifest(manifest) {
     ['schemaVersion', 'channel', 'tag', 'version', 'sourceSha', 'minimumSystemVersion', 'assets'],
     'update-manifest.json',
   )
-  if (manifest.schemaVersion !== 1) fail('Manifest schemaVersion must be 1')
+  if (manifest.schemaVersion !== 2) fail('Manifest schemaVersion must be 2')
   if (manifest.channel !== 'stable') fail('OSS Manifest channel must be stable')
   if (!STABLE_VERSION_PATTERN.test(manifest.version)) {
     fail('Stable Manifest version must be a stable semantic version')
@@ -145,30 +145,29 @@ export function validateUpdateManifest(manifest) {
   if (!SYSTEM_VERSION_PATTERN.test(manifest.minimumSystemVersion)) {
     fail('Manifest minimumSystemVersion is invalid')
   }
-  assertExactKeys(manifest.assets, ARCHITECTURES, 'Manifest assets')
+  assertExactKeys(manifest.assets, [ARCHITECTURE], 'Manifest assets')
 
   const names = new Set()
-  for (const arch of ARCHITECTURES) {
-    assertExactKeys(manifest.assets[arch], ASSET_KINDS, `Manifest assets.${arch}`)
-    for (const kind of ASSET_KINDS) {
-      const asset = manifest.assets[arch][kind]
-      assertExactKeys(asset, ['name', 'size', 'sha256'], `Manifest ${arch}.${kind}`)
-      if (
-        typeof asset.name !== 'string' ||
-        !SAFE_ASSET_NAME_PATTERN.test(asset.name) ||
-        asset.name !== basename(asset.name) ||
-        !asset.name.toLowerCase().endsWith(`.${kind}`)
-      ) {
-        fail(`Manifest ${arch}.${kind} asset name is invalid`)
-      }
-      if (names.has(asset.name)) fail('Manifest asset names must be unique')
-      names.add(asset.name)
-      if (!Number.isSafeInteger(asset.size) || asset.size <= 0 || asset.size > MAX_ASSET_BYTES) {
-        fail(`Manifest ${arch}.${kind} asset size is invalid`)
-      }
-      if (!SHA256_PATTERN.test(asset.sha256)) {
-        fail(`Manifest ${arch}.${kind} SHA-256 is invalid`)
-      }
+  const architectureAssets = manifest.assets[ARCHITECTURE]
+  assertExactKeys(architectureAssets, ASSET_KINDS, `Manifest assets.${ARCHITECTURE}`)
+  for (const kind of ASSET_KINDS) {
+    const asset = architectureAssets[kind]
+    assertExactKeys(asset, ['name', 'size', 'sha256'], `Manifest ${ARCHITECTURE}.${kind}`)
+    if (
+      typeof asset.name !== 'string' ||
+      !SAFE_ASSET_NAME_PATTERN.test(asset.name) ||
+      asset.name !== basename(asset.name) ||
+      !asset.name.toLowerCase().endsWith(`.${kind}`)
+    ) {
+      fail(`Manifest ${ARCHITECTURE}.${kind} asset name is invalid`)
+    }
+    if (names.has(asset.name)) fail('Manifest asset names must be unique')
+    names.add(asset.name)
+    if (!Number.isSafeInteger(asset.size) || asset.size <= 0 || asset.size > MAX_ASSET_BYTES) {
+      fail(`Manifest ${ARCHITECTURE}.${kind} asset size is invalid`)
+    }
+    if (!SHA256_PATTERN.test(asset.sha256)) {
+      fail(`Manifest ${ARCHITECTURE}.${kind} SHA-256 is invalid`)
     }
   }
   return manifest
@@ -188,40 +187,34 @@ export async function generateUpdateManifest({
     fail('minimumSystemVersion is invalid')
   }
 
-  const records = {}
-  const assets = {}
-  for (const arch of ARCHITECTURES) {
-    const record = readJson(
-      resolve(assetsDir, `build-record-${arch}.json`),
-      `build-record-${arch}.json`,
-    )
-    validateBuildRecord(record, arch, tag)
-    records[arch] = record
-    const checksums = parseChecksums(resolve(assetsDir, `checksums-${arch}.txt`), arch)
-    assets[arch] = await resolveArchitectureAssets(assetsDir, arch, checksums)
-  }
-
-  for (const field of ['version', 'sourceSha', 'releaseWorkflowSha', 'workflowRunId']) {
-    if (String(records.arm64[field]) !== String(records.x64[field])) {
-      fail(`Cross-architecture build record mismatch: ${field}`)
-    }
+  const record = readJson(
+    resolve(assetsDir, `build-record-${ARCHITECTURE}.json`),
+    `build-record-${ARCHITECTURE}.json`,
+  )
+  validateBuildRecord(record, ARCHITECTURE, tag)
+  const checksums = parseChecksums(
+    resolve(assetsDir, `checksums-${ARCHITECTURE}.txt`),
+    ARCHITECTURE,
+  )
+  const assets = {
+    [ARCHITECTURE]: await resolveArchitectureAssets(assetsDir, ARCHITECTURE, checksums),
   }
   if (
     expectedReleaseWorkflowSha &&
-    records.arm64.releaseWorkflowSha !== expectedReleaseWorkflowSha
+    record.releaseWorkflowSha !== expectedReleaseWorkflowSha
   ) {
-    fail('Build records do not belong to the current release workflow commit')
+    fail('Build record does not belong to the current release workflow commit')
   }
-  if (expectedWorkflowRunId && String(records.arm64.workflowRunId) !== expectedWorkflowRunId) {
-    fail('Build records do not belong to the current workflow run')
+  if (expectedWorkflowRunId && String(record.workflowRunId) !== expectedWorkflowRunId) {
+    fail('Build record does not belong to the current workflow run')
   }
 
   return validateUpdateManifest({
-    schemaVersion: 1,
+    schemaVersion: 2,
     channel: 'stable',
     tag,
-    version: records.arm64.version,
-    sourceSha: records.arm64.sourceSha,
+    version: record.version,
+    sourceSha: record.sourceSha,
     minimumSystemVersion,
     assets,
   })

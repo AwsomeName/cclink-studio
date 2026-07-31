@@ -28,32 +28,31 @@ function sha256(content) {
 function createFixture({ version = '1.2.3', tag = `v${version}` } = {}) {
   const assetsDir = mkdtempSync(resolve(tmpdir(), 'cclink-update-manifest-'))
   mkdirSync(assetsDir, { recursive: true })
-  for (const arch of ['arm64', 'x64']) {
-    const entries = []
-    for (const extension of ['dmg', 'zip']) {
-      const name = `CCLink-Studio-${version}-${arch}.${extension}`
-      const content = `${arch}-${extension}-fixture`
-      writeFileSync(resolve(assetsDir, name), content)
-      entries.push(`${sha256(content)}  ./${name}`)
-    }
-    writeFileSync(resolve(assetsDir, `checksums-${arch}.txt`), `${entries.join('\n')}\n`)
-    writeFileSync(
-      resolve(assetsDir, `build-record-${arch}.json`),
-      `${JSON.stringify(
-        {
-          schemaVersion: 1,
-          tag,
-          version,
-          arch,
-          sourceSha,
-          releaseWorkflowSha,
-          workflowRunId: '12345',
-        },
-        null,
-        2,
-      )}\n`,
-    )
+  const arch = 'arm64'
+  const entries = []
+  for (const extension of ['dmg', 'zip']) {
+    const name = `CCLink-Studio-${version}-${arch}.${extension}`
+    const content = `${arch}-${extension}-fixture`
+    writeFileSync(resolve(assetsDir, name), content)
+    entries.push(`${sha256(content)}  ./${name}`)
   }
+  writeFileSync(resolve(assetsDir, `checksums-${arch}.txt`), `${entries.join('\n')}\n`)
+  writeFileSync(
+    resolve(assetsDir, `build-record-${arch}.json`),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        tag,
+        version,
+        arch,
+        sourceSha,
+        releaseWorkflowSha,
+        workflowRunId: '12345',
+      },
+      null,
+      2,
+    )}\n`,
+  )
   return assetsDir
 }
 
@@ -62,12 +61,14 @@ test('generates a deterministic manifest from real assets and build records', as
   const first = await generateUpdateManifest({ assetsDir, tag: 'v1.2.3' })
   const second = await generateUpdateManifest({ assetsDir, tag: 'v1.2.3' })
   assert.deepEqual(first, second)
+  assert.equal(first.schemaVersion, 2)
   assert.equal(first.version, '1.2.3')
   assert.equal(
     first.assets.arm64.dmg.size,
     readFileSync(resolve(assetsDir, first.assets.arm64.dmg.name)).length,
   )
-  assert.equal(first.assets.x64.zip.sha256.length, 64)
+  assert.equal(first.assets.arm64.zip.sha256.length, 64)
+  assert.deepEqual(Object.keys(first.assets), ['arm64'])
 })
 
 test('CLI generates and independently verifies a manifest before release upload', () => {
@@ -132,26 +133,30 @@ test('verifier accepts the pnpm argument separator', async () => {
   assert.equal(verified.tag, 'v1.2.3')
 })
 
-test('rejects a missing architecture before a draft can be created', async () => {
+test('rejects a missing arm64 build record before a draft can be created', async () => {
   const assetsDir = createFixture()
-  writeFileSync(resolve(assetsDir, 'build-record-x64.json'), '{}\n')
+  writeFileSync(resolve(assetsDir, 'build-record-arm64.json'), '{}\n')
   await assert.rejects(
     generateUpdateManifest({ assetsDir, tag: 'v1.2.3' }),
-    /build-record-x64\.json keys/,
+    /build-record-arm64\.json keys/,
   )
 })
 
-test('rejects cross-architecture source SHA and version mismatches', async () => {
+test('rejects an arm64 build record with the wrong source metadata', async () => {
   const assetsDir = createFixture()
-  const recordPath = resolve(assetsDir, 'build-record-x64.json')
+  const recordPath = resolve(assetsDir, 'build-record-arm64.json')
   const record = JSON.parse(readFileSync(recordPath, 'utf8'))
   writeFileSync(
     recordPath,
-    `${JSON.stringify({ ...record, sourceSha: 'c'.repeat(40) }, null, 2)}\n`,
+    `${JSON.stringify({ ...record, releaseWorkflowSha: 'c'.repeat(40) }, null, 2)}\n`,
   )
   await assert.rejects(
-    generateUpdateManifest({ assetsDir, tag: 'v1.2.3' }),
-    /Cross-architecture build record mismatch: sourceSha/,
+    generateUpdateManifest({
+      assetsDir,
+      tag: 'v1.2.3',
+      expectedReleaseWorkflowSha: releaseWorkflowSha,
+    }),
+    /current release workflow commit/,
   )
 })
 

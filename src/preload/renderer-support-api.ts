@@ -76,6 +76,7 @@ export const updateApi: UpdateApiContract = {
   cancelDownload: () => invokeIpcContract(updateIpc.cancelDownload),
   defer: () => invokeIpcContract(updateIpc.defer),
   ignoreVersion: () => invokeIpcContract(updateIpc.ignoreVersion),
+  openManualInstaller: () => invokeIpcContract(updateIpc.openManualInstaller),
   prepareInstall: () => invokeIpcContract(updateIpc.prepareInstall),
   installAndRestart: (input) => invokeIpcContract(updateIpc.installAndRestart, input),
   onSnapshotChanged: (callback) => {

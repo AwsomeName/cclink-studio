@@ -2,9 +2,10 @@ import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { UpdateProvider, UpdateProviderCheckResult } from './update-provider'
 import { UpdateService } from './update-service'
+import { UpdateAssetVerificationError, type VerifiedDmgInspector } from './mac-dmg-verifier'
 
 const temporaryDirectories: string[] = []
 
@@ -30,7 +31,7 @@ function availableRelease(data: Buffer, sha256 = createHash('sha256').update(dat
     status: 'available' as const,
     release: {
       manifest: {
-        schemaVersion: 1 as const,
+        schemaVersion: 2 as const,
         channel: 'stable' as const,
         tag: 'v1.2.3',
         version: '1.2.3',
@@ -40,10 +41,6 @@ function availableRelease(data: Buffer, sha256 = createHash('sha256').update(dat
           arm64: {
             dmg: { name: 'studio-arm64.dmg', size: data.length, sha256 },
             zip: { name: 'studio-arm64.zip', size: data.length, sha256 },
-          },
-          x64: {
-            dmg: { name: 'studio-x64.dmg', size: data.length, sha256 },
-            zip: { name: 'studio-x64.zip', size: data.length, sha256 },
           },
         },
       },
@@ -71,6 +68,10 @@ class FixtureProvider implements UpdateProvider {
 async function createService(
   result: UpdateProviderCheckResult,
   fetchImpl: (input: string | URL, init?: RequestInit) => Promise<Response>,
+  manualInstaller: {
+    dmgInspector?: VerifiedDmgInspector
+    openPath?: (path: string) => Promise<string>
+  } = {},
 ): Promise<{ service: UpdateService; cacheRoot: string }> {
   const cacheRoot = await fs.mkdtemp(join(tmpdir(), 'cclink-update-service-'))
   temporaryDirectories.push(cacheRoot)
@@ -82,9 +83,35 @@ async function createService(
     provider: new FixtureProvider(result),
     fetch: fetchImpl,
     automaticChecks: false,
+    ...manualInstaller,
   })
   await service.start()
   return { service, cacheRoot }
+}
+
+function serviceForCache(
+  result: UpdateProviderCheckResult,
+  cacheRoot: string,
+  currentVersion = '1.0.0',
+): UpdateService {
+  return new UpdateService({
+    currentVersion,
+    architecture: 'arm64',
+    systemVersion: '15.0',
+    cacheRoot,
+    provider: new FixtureProvider(result),
+    fetch: async () => {
+      throw new Error('Restoring a verified update must not access the network')
+    },
+    automaticChecks: false,
+  })
+}
+
+async function onlyReleaseDirectory(cacheRoot: string): Promise<string> {
+  const entries = await fs.readdir(cacheRoot, { withFileTypes: true })
+  const directories = entries.filter((entry) => entry.isDirectory())
+  expect(directories).toHaveLength(1)
+  return join(cacheRoot, directories[0].name)
 }
 
 function downloadResponse(data: Buffer): Response {
@@ -111,9 +138,85 @@ describe('UpdateService', () => {
     expect(downloaded.ok).toBe(true)
     expect(downloaded.snapshot.phase).toBe('readyToInstall')
     expect(JSON.stringify(downloaded.snapshot)).not.toContain(cacheRoot)
-    await expect(fs.readFile(join(cacheRoot, '1.2.3-arm64', 'studio-arm64.dmg'))).resolves.toEqual(
-      data,
+    const releaseDirectory = await onlyReleaseDirectory(cacheRoot)
+    await expect(fs.readFile(join(releaseDirectory, 'studio-arm64.dmg'))).resolves.toEqual(data)
+    await service.stop()
+  })
+
+  it('re-verifies a completed download and restores readyToInstall after restart', async () => {
+    const data = Buffer.from('trusted update')
+    const release = availableRelease(data)
+    const { service, cacheRoot } = await createService(release, async () => downloadResponse(data))
+    await service.check()
+    await service.startDownload()
+    await service.stop()
+
+    const restoredService = serviceForCache(release, cacheRoot)
+    await restoredService.start()
+
+    expect(restoredService.getSnapshot()).toMatchObject({
+      phase: 'readyToInstall',
+      currentVersion: '1.0.0',
+      availableRelease: {
+        version: '1.2.3',
+        architecture: 'arm64',
+        asset: { name: 'studio-arm64.dmg', size: data.length },
+      },
+      error: null,
+    })
+    await restoredService.stop()
+  })
+
+  it('rejects and deletes a verified cache whose DMG was changed after download', async () => {
+    const data = Buffer.from('trusted update')
+    const release = availableRelease(data)
+    const { service, cacheRoot } = await createService(release, async () => downloadResponse(data))
+    await service.check()
+    await service.startDownload()
+    await service.stop()
+    const releaseDirectory = await onlyReleaseDirectory(cacheRoot)
+    await fs.writeFile(join(releaseDirectory, 'studio-arm64.dmg'), 'tampered update')
+
+    const restoredService = serviceForCache(release, cacheRoot)
+    await restoredService.start()
+
+    expect(restoredService.getSnapshot().phase).toBe('idle')
+    await expect(fs.readdir(cacheRoot)).resolves.toEqual([])
+    await restoredService.stop()
+  })
+
+  it('deletes a verified cache after the installed version catches up', async () => {
+    const data = Buffer.from('trusted update')
+    const release = availableRelease(data)
+    const { service, cacheRoot } = await createService(release, async () => downloadResponse(data))
+    await service.check()
+    await service.startDownload()
+    await service.stop()
+
+    const restoredService = serviceForCache(release, cacheRoot, '1.2.3')
+    await restoredService.start()
+
+    expect(restoredService.getSnapshot().phase).toBe('idle')
+    await expect(fs.readdir(cacheRoot)).resolves.toEqual([])
+    await restoredService.stop()
+  })
+
+  it('does not block Studio startup when the update cache path is unusable', async () => {
+    const data = Buffer.from('trusted update')
+    const parent = await fs.mkdtemp(join(tmpdir(), 'cclink-update-cache-failure-'))
+    temporaryDirectories.push(parent)
+    const cacheRoot = join(parent, 'updates')
+    await fs.writeFile(cacheRoot, 'not a directory')
+    const service = serviceForCache(availableRelease(data), cacheRoot)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    await expect(service.start()).resolves.toBeUndefined()
+    expect(service.getSnapshot().phase).toBe('idle')
+    expect(consoleError).toHaveBeenCalledWith(
+      '[UpdateService] 更新缓存初始化失败，已降级为空闲状态:',
+      expect.anything(),
     )
+    consoleError.mockRestore()
     await service.stop()
   })
 
@@ -131,9 +234,10 @@ describe('UpdateService', () => {
     expect(result.ok).toBe(false)
     expect(result.snapshot.phase).toBe('failed')
     expect(result.snapshot.error?.code).toBe('download_corrupt')
-    await expect(fs.stat(join(cacheRoot, '1.2.3-arm64', 'studio-arm64.dmg'))).rejects.toMatchObject(
-      { code: 'ENOENT' },
-    )
+    const releaseDirectory = await onlyReleaseDirectory(cacheRoot)
+    await expect(fs.stat(join(releaseDirectory, 'studio-arm64.dmg'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    })
     await service.stop()
   })
 
@@ -166,8 +270,117 @@ describe('UpdateService', () => {
     await active
 
     expect(cancelled.snapshot.phase).toBe('available')
-    const files = await fs.readdir(join(cacheRoot, '1.2.3-arm64'))
+    const files = await fs.readdir(await onlyReleaseDirectory(cacheRoot))
     expect(files.some((name) => name.endsWith('.part'))).toBe(false)
+    await service.stop()
+  })
+
+  it('revalidates and opens only the internally verified DMG handle', async () => {
+    const data = Buffer.from('trusted update')
+    const verify = vi.fn(async () => undefined)
+    const openPath = vi.fn(async () => '')
+    const { service, cacheRoot } = await createService(
+      availableRelease(data),
+      async () => downloadResponse(data),
+      { dmgInspector: { verify }, openPath },
+    )
+    await service.check()
+    await service.startDownload()
+
+    const result = await service.openManualInstaller()
+
+    expect(result).toMatchObject({
+      ok: true,
+      error: null,
+      snapshot: { phase: 'readyToInstall' },
+    })
+    const releaseDirectory = await onlyReleaseDirectory(cacheRoot)
+    const expectedPath = join(releaseDirectory, 'studio-arm64.dmg')
+    expect(verify).toHaveBeenCalledWith({
+      dmgPath: expectedPath,
+      expectedVersion: '1.2.3',
+    })
+    expect(openPath).toHaveBeenCalledWith(expectedPath)
+    await service.stop()
+  })
+
+  it('keeps the trusted cache and ready state when macOS cannot open the DMG', async () => {
+    const data = Buffer.from('trusted update')
+    const openPath = vi.fn().mockResolvedValueOnce('open failed').mockResolvedValueOnce('')
+    const { service, cacheRoot } = await createService(
+      availableRelease(data),
+      async () => downloadResponse(data),
+      { dmgInspector: { verify: async () => undefined }, openPath },
+    )
+    await service.check()
+    await service.startDownload()
+
+    const failed = await service.openManualInstaller()
+    const retried = await service.openManualInstaller()
+
+    expect(failed).toMatchObject({
+      ok: false,
+      error: { code: 'install_failed', retryable: true },
+      snapshot: { phase: 'readyToInstall' },
+    })
+    expect(retried.ok).toBe(true)
+    await expect(fs.readdir(cacheRoot)).resolves.toHaveLength(1)
+    await service.stop()
+  })
+
+  it('invalidates a DMG changed between download and the open action', async () => {
+    const data = Buffer.from('trusted update')
+    const verify = vi.fn(async () => undefined)
+    const { service, cacheRoot } = await createService(
+      availableRelease(data),
+      async () => downloadResponse(data),
+      { dmgInspector: { verify }, openPath: async () => '' },
+    )
+    await service.check()
+    await service.startDownload()
+    const releaseDirectory = await onlyReleaseDirectory(cacheRoot)
+    await fs.writeFile(join(releaseDirectory, 'studio-arm64.dmg'), 'tampered update')
+
+    const result = await service.openManualInstaller()
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'download_corrupt', retryable: true },
+      snapshot: { phase: 'failed' },
+    })
+    expect(verify).not.toHaveBeenCalled()
+    await expect(fs.readdir(cacheRoot)).resolves.toEqual([])
+    await service.stop()
+  })
+
+  it('invalidates a cache that fails publisher verification', async () => {
+    const data = Buffer.from('trusted update')
+    const { service, cacheRoot } = await createService(
+      availableRelease(data),
+      async () => downloadResponse(data),
+      {
+        dmgInspector: {
+          verify: async () => {
+            throw new UpdateAssetVerificationError(
+              'publisher_mismatch',
+              '更新安装包的发布者身份不匹配',
+            )
+          },
+        },
+        openPath: async () => '',
+      },
+    )
+    await service.check()
+    await service.startDownload()
+
+    const result = await service.openManualInstaller()
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'publisher_mismatch', retryable: false },
+      snapshot: { phase: 'failed' },
+    })
+    await expect(fs.readdir(cacheRoot)).resolves.toEqual([])
     await service.stop()
   })
 })
