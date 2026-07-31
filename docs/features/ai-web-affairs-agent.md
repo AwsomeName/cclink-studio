@@ -1,6 +1,6 @@
 # AI 网页事务代理人
 
-> 状态：产品方案已确认，尚未实现；开发顺序见
+> 状态：产品方案已确认；网站资源底座和事务首条切片已实现，完整代理闭环尚未完成；开发顺序见
 > `docs/features/ai-web-affairs-agent-development-plan.md`
 > 最后更新：2026-07-31
 > 关联文档：`docs/architecture.md`、`docs/features/ai-work-browser.md`、
@@ -10,6 +10,8 @@
 > `docs/features/ai-web-affairs-agent-development-plan.md`
 
 ## 结论
+
+产品定位：**个人或公司的网页事务代理人。**
 
 CCLink Studio 的目标不是支持若干预定义网站，也不是为备案、工商、知识产权、应用商店
 分别开发互不相干的功能。

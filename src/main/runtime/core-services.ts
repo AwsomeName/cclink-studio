@@ -289,8 +289,8 @@ export async function shutdownMainProcessServices(
     )
   })
   await runShutdownStep('TerminalSessionRegistry', () => runtime.terminalSessionRegistry?.clear())
-  await runShutdownStep('WebResourceService', () => runtime.webResourceService?.flush())
   await runShutdownStep('WebAffairService', () => runtime.webAffairService?.flush())
+  await runShutdownStep('WebResourceService', () => runtime.webResourceService?.flush())
 
   runtime.localIdentityService = null
   runtime.officialIntegration = null
