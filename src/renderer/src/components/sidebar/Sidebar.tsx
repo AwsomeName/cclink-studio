@@ -246,7 +246,9 @@ function ProjectSidebarContent({
 
       {activePanel === 'terminal' && <TerminalSidebarView workspaceRef={activeWorkspaceRef} />}
 
-      {activePanel === 'operations' && <OperationsSidebarView workspaceRef={activeWorkspaceRef} />}
+      {activePanel === 'operations' && (
+        <OperationsSidebarView workspaceRef={activeWorkspaceRef} workspacePath={workspacePath} />
+      )}
 
       {activePanel === 'sessions' && (
         <SessionsSidebarView
@@ -869,10 +871,12 @@ function TerminalSidebarView({ workspaceRef }: { workspaceRef: WorkspaceRef }): 
 
 function OperationsSidebarView({
   workspaceRef,
+  workspacePath,
 }: {
   workspaceRef: WorkspaceRef
+  workspacePath: string | null
 }): React.ReactElement | null {
-  return <WebResourcesSidebar workspaceRef={workspaceRef} />
+  return <WebResourcesSidebar workspaceRef={workspaceRef} workspacePath={workspacePath} />
 }
 
 function SessionsSidebarView({

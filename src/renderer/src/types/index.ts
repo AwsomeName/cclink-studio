@@ -36,6 +36,7 @@ export type TabType =
   | 'terminal-record'
   | 'data-source-query'
   | 'data-source-result'
+  | 'web-resource'
 
 export type ConversationSurface = 'assistant-panel' | 'workbench-tab'
 
@@ -167,6 +168,10 @@ export interface Tab {
     sourceId: string
     collection?: string
     savedQueryId?: string
+  }
+  /** 网站与账号资源详情。 */
+  webResource?: {
+    accountId: string
   }
 }
 

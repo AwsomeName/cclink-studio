@@ -22,6 +22,7 @@ import { buildTerminalTabDraft } from '../../utils/terminal-tab'
 import { ErrorBoundary } from '../common/ErrorBoundary'
 import { PanelErrorFallback } from '../common/ErrorFallback'
 import { DataSourceQueryTab } from '../data-sources/DataSourceQueryTab'
+import { WebResourceDetailTab } from '../../features/web-resources/WebResourceDetailTab'
 import { SettingsPage } from '../settings/SettingsPage'
 import { FilePreview } from './FilePreview'
 import { AndroidDisplay } from './AndroidDisplay'
@@ -135,6 +136,9 @@ export function WorkbenchContent({
               <TerminalRecordView tab={activeTab} />
             )}
             {activeTab.type === 'data-source-query' && <DataSourceQueryTab tab={activeTab} />}
+            {activeTab.type === 'web-resource' && activeTab.webResource && (
+              <WebResourceDetailTab accountId={activeTab.webResource.accountId} />
+            )}
           </>
         )}
       </ErrorBoundary>

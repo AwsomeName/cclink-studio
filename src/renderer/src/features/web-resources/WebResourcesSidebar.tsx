@@ -6,53 +6,20 @@ import type {
   WebResourceSnapshot,
   WebsiteResource,
 } from '@shared/web-resources/web-resource-types'
-import type { BrowserSessionDiagnosticSummary } from '@shared/ipc/browser'
 import type { WorkspaceRef } from '@shared/workspace-ref'
-import { useBrowserStore, useTabStore } from '../../stores'
+import { useTabStore } from '../../stores'
 import { IconGlobe, IconPlus } from '../../components/common/Icons'
-
-type LoginStatus = 'checking' | 'authenticated' | 'session-data' | 'not-authenticated' | 'error'
-
-interface LoginObservation {
-  status: LoginStatus
-  checkedAt: number
-}
+import {
+  formatWebResourceLoginStatus,
+  observeWebResourceLogin,
+  WEB_PRINCIPAL_KIND_LABELS,
+  type WebResourceLoginObservation,
+} from './web-resource-view-model'
 
 interface AccountRow {
   account: WebAccount
   website: WebsiteResource
   principalName: string
-}
-
-const PRINCIPAL_KIND_LABELS: Record<WebPrincipalKind, string> = {
-  personal: '个人',
-  'sole-proprietor': '个体工商户',
-  company: '公司',
-  organization: '其他组织',
-}
-
-function statusFromDiagnostics(summary: BrowserSessionDiagnosticSummary): LoginStatus {
-  const hasActiveAuthCookie = summary.likelyAuthCookies.some(
-    (cookie) => typeof cookie.expiresAt !== 'number' || cookie.expiresAt > Date.now(),
-  )
-  if (hasActiveAuthCookie) return 'authenticated'
-  if (summary.cookieCount > 0) return 'session-data'
-  return 'not-authenticated'
-}
-
-function statusLabel(observation: LoginObservation | undefined): string {
-  switch (observation?.status) {
-    case 'authenticated':
-      return '检测到登录凭据'
-    case 'session-data':
-      return '有会话数据，需确认'
-    case 'not-authenticated':
-      return '待登录'
-    case 'error':
-      return '状态检查失败'
-    default:
-      return '检查中'
-  }
 }
 
 function initialForm(): CreateWebConnectionInput {
@@ -68,20 +35,25 @@ function initialForm(): CreateWebConnectionInput {
 
 export function WebResourcesSidebar({
   workspaceRef,
+  workspacePath,
 }: {
   workspaceRef: WorkspaceRef
+  workspacePath?: string | null
 }): React.ReactElement {
   const openTab = useTabStore((state) => state.openTab)
-  const activateTab = useTabStore((state) => state.activateTab)
-  const tabs = useTabStore((state) => state.tabs)
-  const browserTabs = useBrowserStore((state) => state.tabs)
   const [snapshot, setSnapshot] = useState<WebResourceSnapshot | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [showImportForm, setShowImportForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [checkingLogin, setCheckingLogin] = useState(false)
   const [form, setForm] = useState<CreateWebConnectionInput>(initialForm)
-  const [loginStatuses, setLoginStatuses] = useState<Record<string, LoginObservation>>({})
+  const [importPrincipalKind, setImportPrincipalKind] = useState<WebPrincipalKind>('company')
+  const [importPrincipalName, setImportPrincipalName] = useState('')
+  const [importMessage, setImportMessage] = useState<string | null>(null)
+  const [loginStatuses, setLoginStatuses] = useState<Record<string, WebResourceLoginObservation>>(
+    {},
+  )
 
   const rows = useMemo<AccountRow[]>(() => {
     if (!snapshot) return []
@@ -117,7 +89,7 @@ export function WebResourcesSidebar({
     }
     setCheckingLogin(true)
     try {
-      const entries: Array<readonly [string, LoginObservation]> = []
+      const entries: Array<readonly [string, WebResourceLoginObservation]> = []
       for (let index = 0; index < rows.length; index += 8) {
         const batch = rows.slice(index, index + 8)
         entries.push(
@@ -128,10 +100,7 @@ export function WebResourcesSidebar({
                   url: website.entryUrl,
                   profileId: account.browserProfileId,
                 })
-                return [
-                  account.id,
-                  { status: statusFromDiagnostics(summary), checkedAt: Date.now() },
-                ] as const
+                return [account.id, observeWebResourceLogin(summary)] as const
               } catch {
                 return [account.id, { status: 'error' as const, checkedAt: Date.now() }] as const
               }
@@ -170,25 +139,41 @@ export function WebResourcesSidebar({
   }
 
   const openAccount = ({ account, website }: AccountRow): void => {
-    const existing = tabs.find(
-      (tab) =>
-        tab.type === 'browser' &&
-        tab.browserProfile === account.browserProfileId &&
-        sameOrigin(browserTabs[tab.id]?.url ?? tab.initialUrl, website.entryUrl),
-    )
-    if (existing) {
-      activateTab(existing.id)
-      return
-    }
     openTab({
-      type: 'browser',
-      title: website.name,
+      type: 'web-resource',
+      title: `${website.name} · ${account.label}`,
       icon: '🌐',
-      initialUrl: website.entryUrl,
-      browserProfile: account.browserProfileId,
+      webResource: { accountId: account.id },
       workspaceRef,
-      forceNew: true,
     })
+  }
+
+  const importProjectOpsConfig = async (event: FormEvent): Promise<void> => {
+    event.preventDefault()
+    if (!workspacePath) return
+    setSaving(true)
+    setLoadError(null)
+    setImportMessage(null)
+    try {
+      const result = await window.cclinkStudio.webResources.importProjectOpsConfig({
+        workspacePath,
+        principalKind: importPrincipalKind,
+        principalName: importPrincipalName,
+      })
+      if (!result.success) {
+        setLoadError(result.error.message)
+        return
+      }
+      setImportMessage(
+        `已导入 ${result.data.importedCount} 个，跳过 ${result.data.skippedCount} 个已存在账号`,
+      )
+      setShowImportForm(false)
+      await reload()
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -203,6 +188,11 @@ export function WebResourcesSidebar({
           >
             {checkingLogin ? '核验中…' : '核验登录'}
           </button>
+          {workspacePath ? (
+            <button type="button" onClick={() => setShowImportForm((value) => !value)}>
+              导入旧配置
+            </button>
+          ) : null}
           <button type="button" onClick={() => setShowForm((value) => !value)}>
             <IconPlus size={14} />
             添加网站
@@ -244,7 +234,7 @@ export function WebResourcesSidebar({
                   })
                 }
               >
-                {Object.entries(PRINCIPAL_KIND_LABELS).map(([value, label]) => (
+                {Object.entries(WEB_PRINCIPAL_KIND_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
                   </option>
@@ -309,7 +299,48 @@ export function WebResourcesSidebar({
         </form>
       ) : null}
 
+      {showImportForm && workspacePath ? (
+        <form
+          className="web-resources-form web-resources-import-form"
+          onSubmit={(event) => void importProjectOpsConfig(event)}
+        >
+          <div className="web-resources-import-title">导入当前项目的 cclink-accounts.json</div>
+          <p>旧文件只读且保留。请指定这些账号属于哪个业务主体。</p>
+          <label>
+            业务主体
+            <span className="web-resources-inline-fields">
+              <select
+                value={importPrincipalKind}
+                onChange={(event) => setImportPrincipalKind(event.target.value as WebPrincipalKind)}
+              >
+                {Object.entries(WEB_PRINCIPAL_KIND_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <input
+                required
+                maxLength={160}
+                value={importPrincipalName}
+                onChange={(event) => setImportPrincipalName(event.target.value)}
+                placeholder="姓名或公司全称"
+              />
+            </span>
+          </label>
+          <div className="web-resources-form-actions">
+            <button type="button" onClick={() => setShowImportForm(false)}>
+              取消
+            </button>
+            <button type="submit" disabled={saving}>
+              {saving ? '导入中…' : '开始导入'}
+            </button>
+          </div>
+        </form>
+      ) : null}
+
       {loadError ? <div className="web-resources-error">{loadError}</div> : null}
+      {importMessage ? <div className="web-resources-success">{importMessage}</div> : null}
       {!snapshot && !loadError ? (
         <div className="web-resources-empty">正在读取网站与账号</div>
       ) : null}
@@ -342,7 +373,7 @@ export function WebResourcesSidebar({
                     .join(' · ')}
                 </span>
                 <span>
-                  {statusLabel(observation)} · {row.account.browserProfileId}
+                  {formatWebResourceLoginStatus(observation)} · {row.account.browserProfileId}
                   {observation
                     ? ` · ${new Date(observation.checkedAt).toLocaleTimeString([], {
                         hour: '2-digit',
@@ -361,13 +392,4 @@ export function WebResourcesSidebar({
       </div>
     </div>
   )
-}
-
-function sameOrigin(left: string | undefined, right: string): boolean {
-  if (!left) return false
-  try {
-    return new URL(left).origin === new URL(right).origin
-  } catch {
-    return false
-  }
 }

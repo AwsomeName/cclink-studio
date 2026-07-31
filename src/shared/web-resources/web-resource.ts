@@ -1,6 +1,8 @@
 import { defineIpcCall } from '../ipc/contract'
 import type {
   CreateWebConnectionInput,
+  ImportProjectOpsConfigInput,
+  ImportProjectOpsConfigSummary,
   WebResourceConnection,
   WebResourceOperationResult,
   WebResourceSnapshot,
@@ -11,6 +13,9 @@ export interface WebResourcesApiContract {
   createConnection(
     input: CreateWebConnectionInput,
   ): Promise<WebResourceOperationResult<WebResourceConnection>>
+  importProjectOpsConfig(
+    input: ImportProjectOpsConfigInput,
+  ): Promise<WebResourceOperationResult<ImportProjectOpsConfigSummary>>
 }
 
 export const webResourcesIpc = {
@@ -21,4 +26,8 @@ export const webResourcesIpc = {
     [CreateWebConnectionInput],
     WebResourceOperationResult<WebResourceConnection>
   >('webResources:createConnection'),
+  importProjectOpsConfig: defineIpcCall<
+    [ImportProjectOpsConfigInput],
+    WebResourceOperationResult<ImportProjectOpsConfigSummary>
+  >('webResources:importProjectOpsConfig'),
 } as const

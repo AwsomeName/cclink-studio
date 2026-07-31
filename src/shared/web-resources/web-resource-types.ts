@@ -56,12 +56,27 @@ export interface WebResourceConnection {
   account: WebAccount
 }
 
+export interface ImportProjectOpsConfigInput {
+  workspacePath: string
+  principalKind: WebPrincipalKind
+  principalName: string
+}
+
+export interface ImportProjectOpsConfigSummary {
+  sourceFilePath: string
+  totalCount: number
+  importedCount: number
+  skippedCount: number
+}
+
 export type WebResourceErrorCode =
   | 'INVALID_INPUT'
   | 'DUPLICATE_ACCOUNT'
   | 'RESOURCE_LIMIT_REACHED'
   | 'STORAGE_UNAVAILABLE'
   | 'SERVICE_UNAVAILABLE'
+  | 'PROJECT_OPS_CONFIG_NOT_FOUND'
+  | 'PROJECT_OPS_CONFIG_INVALID'
   | 'UNKNOWN'
 
 export interface WebResourceOperationError {

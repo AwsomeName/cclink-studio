@@ -147,7 +147,11 @@ export async function bootstrapMainProcessServices(
     runtime.webResourceService = null
     console.error('[CCLink Studio] 网站与账号服务初始化失败，其他本地能力继续启动:', error)
   }
-  registerWebResourceIpc(() => runtime.webResourceService, runtime.trustedRendererGuard)
+  registerWebResourceIpc(
+    () => runtime.webResourceService,
+    () => runtime.projectOpsService,
+    runtime.trustedRendererGuard,
+  )
   console.log('[CCLink Studio] 网站与账号 IPC 已注册')
 
   try {

@@ -69,8 +69,32 @@ describe('web resources IPC contract', () => {
     ).toThrow()
   })
 
-  it('does not accept extra arguments on either channel', () => {
+  it('validates legacy import scope and principal', () => {
+    expect(
+      webResourcesIpcContracts.importProjectOpsConfig.parseArgs([
+        {
+          workspacePath: ' /Users/example/project ',
+          principalKind: 'company',
+          principalName: ' Example Ltd. ',
+        },
+      ]),
+    ).toEqual([
+      {
+        workspacePath: '/Users/example/project',
+        principalKind: 'company',
+        principalName: 'Example Ltd.',
+      },
+    ])
+    expect(() =>
+      webResourcesIpcContracts.importProjectOpsConfig.parseArgs([
+        { workspacePath: '', principalKind: 'company', principalName: 'Example Ltd.' },
+      ]),
+    ).toThrow()
+  })
+
+  it('does not accept extra arguments on any channel', () => {
     expect(() => webResourcesIpcContracts.getSnapshot.parseArgs(['extra'])).toThrow()
     expect(() => webResourcesIpcContracts.createConnection.parseArgs([])).toThrow()
+    expect(() => webResourcesIpcContracts.importProjectOpsConfig.parseArgs([])).toThrow()
   })
 })

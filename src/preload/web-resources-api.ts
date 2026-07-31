@@ -4,4 +4,6 @@ import { invokeIpcContract } from './ipc-contract-client'
 export const webResourcesApi: WebResourcesApiContract = {
   getSnapshot: () => invokeIpcContract(webResourcesIpc.getSnapshot),
   createConnection: (input) => invokeIpcContract(webResourcesIpc.createConnection, input),
+  importProjectOpsConfig: (input) =>
+    invokeIpcContract(webResourcesIpc.importProjectOpsConfig, input),
 }

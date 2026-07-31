@@ -272,6 +272,34 @@ describe('useTabStore', () => {
       expect(dataSourceTabs).toHaveLength(3)
       expect(dataSourceTabs[0].id).toBe(adHocId)
     })
+
+    it('网站账号资源详情按 accountId 去重', () => {
+      useTabStore.getState().openTab({
+        type: 'web-resource',
+        title: 'App Store Connect · Release',
+        icon: '🌐',
+        webResource: { accountId: 'account-1' },
+      })
+      const firstId = useTabStore.getState().activeTabId
+
+      useTabStore.getState().openTab({
+        type: 'web-resource',
+        title: 'App Store Connect · Release',
+        icon: '🌐',
+        webResource: { accountId: 'account-1' },
+      })
+      useTabStore.getState().openTab({
+        type: 'web-resource',
+        title: '阿里云 · 备案账号',
+        icon: '🌐',
+        webResource: { accountId: 'account-2' },
+      })
+
+      const resourceTabs = useTabStore.getState().tabs.filter((tab) => tab.type === 'web-resource')
+      expect(resourceTabs).toHaveLength(2)
+      expect(resourceTabs[0].id).toBe(firstId)
+      expect(resourceTabs[0].webResource).toEqual({ accountId: 'account-1' })
+    })
   })
 
   describe('closeTab', () => {

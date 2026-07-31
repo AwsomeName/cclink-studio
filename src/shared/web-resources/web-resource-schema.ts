@@ -47,6 +47,14 @@ export const createWebConnectionInputSchema = z
   })
   .strict()
 
+export const importProjectOpsConfigInputSchema = z
+  .object({
+    workspacePath: trimmedText(4_096, '工作空间路径'),
+    principalKind: webPrincipalKindSchema,
+    principalName: trimmedText(160, '主体名称'),
+  })
+  .strict()
+
 export const websiteResourceSchema = z
   .object({
     id: z.uuid(),
@@ -97,6 +105,10 @@ export const webResourceSnapshotSchema = z
 
 export function parseCreateWebConnectionInput(value: unknown) {
   return createWebConnectionInputSchema.parse(value)
+}
+
+export function parseImportProjectOpsConfigInput(value: unknown) {
+  return importProjectOpsConfigInputSchema.parse(value)
 }
 
 export function parseWebResourceSnapshot(value: unknown) {

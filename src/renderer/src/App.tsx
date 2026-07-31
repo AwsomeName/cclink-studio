@@ -152,7 +152,7 @@ function MainLayout(): React.ReactElement {
         <ActivityBar />
 
         <div
-          className={sidebarVisible ? '' : 'collapsed'}
+          className={`workspace-sidebar-shell ${sidebarVisible ? '' : 'collapsed'}`}
           style={{
             display: 'flex',
             overflow: 'hidden',

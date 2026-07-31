@@ -152,6 +152,8 @@ interface OpenTabOptions {
   terminalRecord?: Tab['terminalRecord']
   /** 数据源查询现场 */
   dataSourceQuery?: Tab['dataSourceQuery']
+  /** 网站与账号资源详情 */
+  webResource?: Tab['webResource']
   /** 强制新建，跳过所有去重 */
   forceNew?: boolean
   /** 显式指定 Tab 归属；缺省使用当前工作空间。 */
@@ -213,6 +215,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     terminal,
     terminalRecord,
     dataSourceQuery,
+    webResource,
     forceNew,
     workspaceRef,
   }) => {
@@ -286,6 +289,12 @@ export const useTabStore = create<TabState>((set, get) => ({
           if (existing) {
             return { activeTabId: existing.id }
           }
+        } else if (type === 'web-resource' && webResource) {
+          const existing = state.tabs.find(
+            (tab) =>
+              tab.type === 'web-resource' && tab.webResource?.accountId === webResource.accountId,
+          )
+          if (existing) return { activeTabId: existing.id }
         }
         // browser / 未命名 editor 不去重 → 可开多个
       }
@@ -309,6 +318,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         terminal,
         terminalRecord,
         dataSourceQuery,
+        webResource,
       }
       return {
         tabs: [...state.tabs, newTab],
