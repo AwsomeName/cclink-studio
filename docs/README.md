@@ -26,6 +26,7 @@
 - `docs/features/markdown-auto-illustration.md`：Markdown 自动配图的产品边界、MCP 工具、资产事务和失败降级。
 - `docs/features/agent-profiles.md`：尚未实现的 Agent 预制角色、Composer 选择入口、Thread 绑定和 Session 隔离提案。
 - `docs/features/ai-web-affairs-agent.md`：尚未实现的 AI 网页事务代理人产品事实源，定义跨运行事务、人与 AI 双向交接、外部等待、证据和恢复边界。
+- `docs/features/ai-web-affairs-agent-development-plan.md`：AI 网页事务代理人的正式开发管理事实源，统一维护当前状态、里程碑、验收、进度、风险、决策、代码落点和交付证据。
 - `docs/features/scheduled-tasks.md`：工作空间定时任务的 Activity Bar、侧栏、Workbench Tab、App 内统一调度与本机启用产品方案草稿。
 - `docs/features/scheduled-tasks-development-plan.md`：工作空间定时任务 E0、M8.1-M8.3、R1 的详细开发顺序、任务拆解和真人验收计划。
 - `docs/features/agent-device.md`：Android 真机和 agent-device 边界。
@@ -51,7 +52,7 @@ Studio 默认可单仓库独立启动，不要求 `cclink-dev`、`chat-cc/deploy
 - 本地验收与发布：`docs/ops/local-smoke-check.md`、`docs/ops/oss-release-runbook.md`、`docs/features/desktop-release-and-updates.md`。
 - 桌面更新验收证据：`docs/ops/desktop-update-acceptance.md`。
 - 官方集成：`docs/official-integration-contract.md`、`docs/ops/cclink-dev-official-integration-handoff.md`。
-- 工作台能力：`docs/features/workspace-system.md`、`docs/features/context-action-system.md`、`docs/features/local-credentials.md`、`docs/features/local-credentials-development-plan.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/agent-profiles.md`、`docs/features/ai-web-affairs-agent.md`、`docs/features/browser-automation.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/markdown-auto-illustration.md`、`docs/features/scheduled-tasks.md`、`docs/features/scheduled-tasks-development-plan.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`。
+- 工作台能力：`docs/features/workspace-system.md`、`docs/features/context-action-system.md`、`docs/features/local-credentials.md`、`docs/features/local-credentials-development-plan.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/agent-profiles.md`、`docs/features/ai-web-affairs-agent.md`、`docs/features/ai-web-affairs-agent-development-plan.md`、`docs/features/browser-automation.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/markdown-auto-illustration.md`、`docs/features/scheduled-tasks.md`、`docs/features/scheduled-tasks-development-plan.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`。
 - 行业能力：数据源、硬件工作空间、FPC 改版、CAD 转换、工作空间内运营助手。
 
 架构、开发和功能规格描述当前事实；`docs/decisions/` 和带日期的 `docs/ops/`
