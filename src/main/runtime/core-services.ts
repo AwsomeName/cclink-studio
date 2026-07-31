@@ -1,11 +1,15 @@
-import { app } from 'electron'
-import { join } from 'node:path'
+import { app, shell } from 'electron'
+import { join, resolve } from 'node:path'
 import { LocalIdentityService } from '../identity/local-identity-service'
 import { registerIdentityIpc } from '../identity/identity-ipc'
 import { FileService } from '../fs/file-service'
 import { registerFsIpc } from '../fs/fs-ipc'
 import { ProjectOpsService } from '../project-ops/project-ops-service'
 import { registerProjectOpsIpc } from '../project-ops/project-ops-ipc'
+import { WebResourceService } from '../web-resources/web-resource-service'
+import { registerWebResourceIpc } from '../web-resources/web-resource-ipc'
+import { WebAffairService } from '../web-affairs/web-affair-service'
+import { registerWebAffairIpc } from '../web-affairs/web-affair-ipc'
 import { registerWechatIPC } from '../ipc/wechat-ipc'
 import { SettingsService } from '../settings/settings-service'
 import { registerSettingsIpc } from '../settings/settings-ipc'
@@ -34,6 +38,7 @@ import { NoopUpdateProvider } from '../update/noop-update-provider'
 import { UpdateService } from '../update/update-service'
 import { ScheduledTaskService } from '../scheduled-task/scheduled-task-service'
 import { registerScheduledTaskIpc } from '../scheduled-task/scheduled-task-ipc'
+import { MacDmgVerifier } from '../update/mac-dmg-verifier'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   runtime.credentialService = new CredentialService()
@@ -152,6 +157,35 @@ export async function bootstrapMainProcessServices(
   console.log('[CCLink Studio] 项目运营 IPC 已注册')
 
   try {
+    runtime.webResourceService = new WebResourceService()
+    await runtime.webResourceService.load()
+    console.log('[CCLink Studio] 网站与账号服务已初始化')
+  } catch (error) {
+    runtime.webResourceService = null
+    console.error('[CCLink Studio] 网站与账号服务初始化失败，其他本地能力继续启动:', error)
+  }
+  registerWebResourceIpc(
+    () => runtime.webResourceService,
+    () => runtime.projectOpsService,
+    runtime.trustedRendererGuard,
+  )
+  console.log('[CCLink Studio] 网站与账号 IPC 已注册')
+
+  try {
+    runtime.webAffairService = new WebAffairService(() => {
+      const result = runtime.webResourceService?.getSnapshot()
+      return result?.success ? result.data : null
+    })
+    await runtime.webAffairService.load()
+    console.log('[CCLink Studio] 事务服务已初始化')
+  } catch (error) {
+    runtime.webAffairService = null
+    console.error('[CCLink Studio] 事务服务初始化失败，其他本地能力继续启动:', error)
+  }
+  registerWebAffairIpc(() => runtime.webAffairService, runtime.trustedRendererGuard)
+  console.log('[CCLink Studio] 事务 IPC 已注册')
+
+  try {
     registerWechatIPC(runtime.trustedRendererGuard)
     console.log('[CCLink Studio] 微信格式转换 IPC 已注册')
   } catch (error) {
@@ -196,11 +230,17 @@ export async function bootstrapMainProcessServices(
   )
   console.log('[CCLink Studio] 设置 IPC 已注册')
 
-  const architecture = process.arch === 'arm64' ? 'arm64' : process.arch === 'x64' ? 'x64' : null
+  const architecture = process.arch === 'arm64' ? 'arm64' : null
   const provider =
     process.platform === 'darwin' && architecture
       ? new GitHubReleaseProvider()
       : new NoopUpdateProvider()
+  const dmgInspector =
+    app.isPackaged && process.platform === 'darwin' && architecture
+      ? new MacDmgVerifier({
+          currentAppBundlePath: resolve(app.getPath('exe'), '..', '..', '..'),
+        })
+      : undefined
   runtime.updateService = new UpdateService({
     currentVersion:
       !app.isPackaged && process.env['CCLINK_STUDIO_UPDATE_CURRENT_VERSION']
@@ -218,6 +258,8 @@ export async function bootstrapMainProcessServices(
     cacheRoot: join(app.getPath('userData'), 'updates'),
     provider,
     automaticChecks: app.isPackaged,
+    dmgInspector,
+    openPath: dmgInspector ? (path) => shell.openPath(path) : undefined,
   })
   await runtime.updateService.start()
   runtime.updateSnapshotUnsubscribe = registerUpdaterIpc(
@@ -247,12 +289,16 @@ export async function shutdownMainProcessServices(
     )
   })
   await runShutdownStep('TerminalSessionRegistry', () => runtime.terminalSessionRegistry?.clear())
+  await runShutdownStep('WebResourceService', () => runtime.webResourceService?.flush())
+  await runShutdownStep('WebAffairService', () => runtime.webAffairService?.flush())
 
   runtime.localIdentityService = null
   runtime.officialIntegration = null
   runtime.fileService = null
   runtime.gitBackupService = null
   runtime.projectOpsService = null
+  runtime.webResourceService = null
+  runtime.webAffairService = null
   runtime.permissionManager = null
   runtime.mcpClientMgr = null
   runtime.cadConversionService = null

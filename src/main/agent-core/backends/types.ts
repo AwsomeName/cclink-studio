@@ -99,6 +99,13 @@ export interface AgentSendOptions {
   disableBuiltinTools?: boolean
   /** 随一次 MCP session 固定的定时任务权限事实。 */
   scheduledTaskPolicy?: import('../tools/types.js').ToolExecutionContext['scheduledTaskPolicy']
+  /** 主进程解析后的内置角色；renderer 不得直接提供 system instructions。 */
+  agentProfile?: {
+    ref: import('../../../shared/agent-profile').AgentProfileRef
+    label: string
+    disclaimer?: string
+    systemInstructions: string
+  }
 }
 
 /** 后端配置 */

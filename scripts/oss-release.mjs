@@ -119,9 +119,9 @@ function usage() {
   console.log(`CCLink Studio 开源版发布
 
 用法:
-  pnpm release:oss -- --patch
-  pnpm release:oss -- --version 0.1.3
-  pnpm release:oss -- --dispatch-only v0.1.3
+  pnpm release -- --patch
+  pnpm release -- --version 0.1.3
+  pnpm release -- --dispatch-only v0.1.3
 
 选项:
   --patch                  当前版本的 patch +1
@@ -131,7 +131,8 @@ function usage() {
   --no-wait                触发 GitHub Actions 后立即返回
   -h, --help               显示帮助
 
-脚本只创建 Draft Release，不会自动公开发布。`)
+脚本会先生成目标版本的本地 ad-hoc 验收包，再推送并创建远程 Draft Release。
+它不会自动公开 Release。`)
 }
 
 function run(command, args, options = {}) {
@@ -161,11 +162,24 @@ function run(command, args, options = {}) {
 }
 
 function git(args, options = {}) {
-  return run('git', ['-c', 'http.version=HTTP/1.1', ...args], options)
+  return run('git', args, options)
 }
 
 function readPackage() {
   return JSON.parse(readFileSync(resolve(projectRoot, 'package.json'), 'utf8'))
+}
+
+export function prepareLocalReleasePackage(packagePath, targetVersion, packageRunner) {
+  const originalPackageText = readFileSync(packagePath, 'utf8')
+  const packageJson = JSON.parse(originalPackageText)
+  packageJson.version = targetVersion
+  writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`)
+  try {
+    packageRunner()
+  } catch (error) {
+    writeFileSync(packagePath, originalPackageText)
+    throw error
+  }
 }
 
 function assertRepositoryRemote() {
@@ -399,9 +413,9 @@ async function release(options) {
   }
 
   const packagePath = resolve(projectRoot, 'package.json')
-  const packageJson = readPackage()
-  packageJson.version = targetVersion
-  writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`)
+  prepareLocalReleasePackage(packagePath, targetVersion, () =>
+    run('pnpm', ['package:local', '--', '--no-install']),
+  )
   git(['diff', '--check'])
   git(['add', 'package.json'])
   git(['commit', '-m', `chore: prepare ${tag}`])

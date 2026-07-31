@@ -48,14 +48,12 @@ pnpm studio:stop
 本地打包入口：
 
 ```bash
-pnpm studio:package
-bash scripts/studio.sh package:arm64
-bash scripts/studio.sh package:x64
+pnpm package:local
 ```
 
-开源壳本地打包只生成 `dist/` 下的 macOS 安装产物，产品名固定为
+开源壳本地打包只生成 `dist/` 下的 Apple Silicon arm64 验收产物，产品名固定为
 `CCLink Studio 开源版`。本地包使用 ad-hoc 签封，不包含 Developer ID
-签名、公证、上传或生产 API 注入。打包前后的目标校验见
+签名、公证、上传或生产 API 注入，也不会修改版本号。打包前后的目标校验见
 [`docs/ops/package-target-check.md`](docs/ops/package-target-check.md)。
 
 本仓库默认启动不依赖 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent`。这些目录只参与官方账号、官方运行时和发布集成。

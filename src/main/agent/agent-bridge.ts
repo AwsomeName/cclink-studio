@@ -34,6 +34,17 @@ import { agentIpcEvents } from '../../shared/ipc/agent'
 import { SessionDiagnosticReferenceStore } from './session-diagnostic-reference-store'
 import type { ClaudeRuntimeProvenance } from '../../shared/claude-runtime'
 import type { UsageLedgerService } from '../usage/usage-ledger-service'
+import {
+  AGENT_PROFILE_PROMPT_COMPILER_VERSION,
+  BuiltinAgentProfileRegistry,
+  type BuiltinAgentProfile,
+} from './agent-profile-registry'
+import {
+  DEFAULT_AGENT_PROFILE_REF,
+  agentProfileRefsEqual,
+  type AgentProfileRef,
+  type AgentProfileSummary,
+} from '../../shared/agent-profile'
 
 const AGENT_EVENT_CHANNELS: Record<AgentRuntimeEvent['type'], string> = {
   stream: agentIpcEvents.stream,
@@ -83,6 +94,8 @@ export class AgentBridge {
   private readonly permissionManager: PermissionManager
   private readonly activeBrowserTaskIds = new Map<string, string>()
   private readonly sessionDiagnosticRefs = new SessionDiagnosticReferenceStore()
+  private readonly profileRegistry = new BuiltinAgentProfileRegistry()
+  private readonly conversationProfileRefs = new Map<string, AgentProfileRef>()
   private readonly deps: {
     playwrightBridge: PlaywrightBridge | null
     toolHost: McpToolHost
@@ -171,10 +184,15 @@ export class AgentBridge {
     if (this.configurationChangePending) {
       throw new Error('Agent 配置正在切换，请稍后重试')
     }
+    const profile = this.bindConversationProfile(conversationId, context?.profileRef)
     if (context?.sessionId !== undefined) {
       this.runtime.restoreConversation(
         conversationId,
-        this.resolveRestorableSessionId(context.sessionId, context.sessionCompatibilityFingerprint),
+        this.resolveRestorableSessionId(
+          conversationId,
+          context.sessionId,
+          context.sessionCompatibilityFingerprint,
+        ),
       )
     }
     const sendPlan = await this.resolveSendPlan(conversationId, message, context)
@@ -211,6 +229,7 @@ export class AgentBridge {
           workspacePath: resourceContext.workspace.rootPath ?? undefined,
           resourceContext,
           continuity: context?.continuity,
+          agentProfile: this.toAgentProfileContext(profile),
         },
       )
     } catch (error) {
@@ -261,9 +280,11 @@ export class AgentBridge {
     payload: AgentCompactConversationPayload,
   ): Promise<void> {
     if (this.isBusy(conversationId)) throw new Error('Agent 正在响应中，暂时不能压缩上下文')
+    const profile = this.bindConversationProfile(conversationId, payload.profileRef)
     const sessionId = payload.sessionId.trim()
     if (!sessionId) throw new Error('当前会话还没有可压缩的 Claude SDK session')
     const compatibleSessionId = this.resolveRestorableSessionId(
+      conversationId,
       sessionId,
       payload.sessionCompatibilityFingerprint,
     )
@@ -280,6 +301,7 @@ export class AgentBridge {
     await this.runtime.compactConversation(conversationId, payload.instructions, {
       runId: payload.runId,
       workspacePath,
+      agentProfile: this.toAgentProfileContext(profile),
     })
   }
 
@@ -373,14 +395,23 @@ export class AgentBridge {
     sessionId: string | null
     sessionCompatibilityFingerprint: string | null
     runtimeProvenance: ClaudeRuntimeProvenance | null
+    profileRef: AgentProfileRef
+    profilePromptCompilerVersion: number
     sessionRef: string | null
     ready: boolean
   } {
     const status = this.runtime.getStatus(conversationId)
+    const profileRef = this.getConversationProfileRef(conversationId)
     return {
       ...status,
       busy: this.runtime.isBusy(conversationId),
-      sessionCompatibilityFingerprint: this.sessionCompatibilityFingerprint,
+      sessionCompatibilityFingerprint:
+        this.profileRegistry.buildConversationCompatibilityFingerprint(
+          this.sessionCompatibilityFingerprint,
+          profileRef,
+        ),
+      profileRef,
+      profilePromptCompilerVersion: AGENT_PROFILE_PROMPT_COMPILER_VERSION,
       runtimeProvenance: this.runtimeProvenance,
       sessionRef: this.getSessionDiagnosticRef(status.sessionId),
       ready: true,
@@ -421,11 +452,17 @@ export class AgentBridge {
     conversationId: string,
     sessionId: string | null,
     sessionCompatibilityFingerprint?: string | null,
+    profileRef?: AgentProfileRef,
   ): void {
+    this.bindConversationProfile(conversationId, profileRef)
     this.runtime.restoreConversation(
       conversationId,
-      this.resolveRestorableSessionId(sessionId, sessionCompatibilityFingerprint),
+      this.resolveRestorableSessionId(conversationId, sessionId, sessionCompatibilityFingerprint),
     )
+  }
+
+  listProfiles(): AgentProfileSummary[] {
+    return this.profileRegistry.list()
   }
 
   /** 销毁一个会话 backend（关闭历史会话时释放资源） */
@@ -434,6 +471,7 @@ export class AgentBridge {
     const sessionId = this.runtime.getStatus(conversationId).sessionId
     this.sessionDiagnosticRefs.delete(sessionId)
     await this.runtime.closeConversation(conversationId)
+    this.conversationProfileRefs.delete(conversationId)
   }
 
   /**
@@ -576,6 +614,7 @@ export class AgentBridge {
     this.activeBrowserTaskIds.clear()
     this.sessionDiagnosticRefs.clear()
     this.runtimeListeners.clear()
+    this.conversationProfileRefs.clear()
   }
 
   private handleRuntimeEvent(event: AgentRuntimeEvent): void {
@@ -727,27 +766,71 @@ export class AgentBridge {
               ...(data as Record<string, unknown>),
               conversationId,
               runId,
-              sessionCompatibilityFingerprint: this.sessionCompatibilityFingerprint,
+              sessionCompatibilityFingerprint:
+                this.getConversationCompatibilityFingerprint(conversationId),
+              profileRef: this.getConversationProfileRef(conversationId),
             }
           : {
               value: data,
               conversationId,
               runId,
-              sessionCompatibilityFingerprint: this.sessionCompatibilityFingerprint,
+              sessionCompatibilityFingerprint:
+                this.getConversationCompatibilityFingerprint(conversationId),
+              profileRef: this.getConversationProfileRef(conversationId),
             }
       this.mainWindow.webContents.send(channel, payload)
     }
   }
 
   private resolveRestorableSessionId(
+    conversationId: string,
     sessionId: string | null,
     persistedFingerprint?: string | null,
   ): string | null {
     return resolveCompatibleClaudeSessionId(
       sessionId,
       persistedFingerprint,
-      this.sessionCompatibilityFingerprint,
+      this.getConversationCompatibilityFingerprint(conversationId),
     )
+  }
+
+  private bindConversationProfile(
+    conversationId: string,
+    ref: AgentProfileRef | null | undefined,
+  ): BuiltinAgentProfile {
+    const profile = this.profileRegistry.resolve(ref)
+    const nextRef = { profileId: profile.id, version: profile.version }
+    const currentRef = this.conversationProfileRefs.get(conversationId)
+    if (currentRef && !agentProfileRefsEqual(currentRef, nextRef)) {
+      if (this.runtime.isBusy(conversationId)) {
+        throw new Error('Agent 正在响应中，暂时不能切换角色')
+      }
+      this.runtime.resetSession(conversationId)
+    }
+    this.conversationProfileRefs.set(conversationId, nextRef)
+    return profile
+  }
+
+  private getConversationProfileRef(conversationId: string): AgentProfileRef {
+    return this.conversationProfileRefs.get(conversationId) ?? DEFAULT_AGENT_PROFILE_REF
+  }
+
+  private getConversationCompatibilityFingerprint(conversationId: string): string | null {
+    return this.profileRegistry.buildConversationCompatibilityFingerprint(
+      this.sessionCompatibilityFingerprint,
+      this.getConversationProfileRef(conversationId),
+    )
+  }
+
+  private toAgentProfileContext(
+    profile: BuiltinAgentProfile,
+  ): NonNullable<AgentSendOptions['agentProfile']> {
+    return {
+      ref: { profileId: profile.id, version: profile.version },
+      label: profile.label,
+      ...(profile.disclaimer ? { disclaimer: profile.disclaimer } : {}),
+      systemInstructions: profile.systemInstructions,
+    }
   }
 }
 

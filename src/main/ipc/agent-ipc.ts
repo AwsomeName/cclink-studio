@@ -56,6 +56,7 @@ function normalizeSendMessageInput(input: AgentSendMessageInput): AgentSendMessa
       typeof input.sessionCompatibilityFingerprint === 'string'
         ? input.sessionCompatibilityFingerprint
         : undefined,
+    profileRef: input.profileRef,
     workspaceRef: normalizeWorkspaceRef(input.workspaceRef),
     continuity: normalizeContinuity(input.continuity),
   }
@@ -156,6 +157,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
         images: payload.images,
         sessionId: payload.sessionId,
         sessionCompatibilityFingerprint: payload.sessionCompatibilityFingerprint,
+        profileRef: payload.profileRef,
         workspaceRef: payload.workspaceRef,
         continuity: payload.continuity,
       },
@@ -181,11 +183,17 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
         busy: false,
         sessionId: null,
         sessionCompatibilityFingerprint: null,
+        profilePromptCompilerVersion: undefined,
         runtimeProvenance: null,
         ready: false,
       }
     }
     return agentBridge.getStatus(conversationId)
+  })
+
+  handle(agentIpc.listProfiles, () => {
+    const agentBridge = requireAgentBridge()
+    return agentBridge?.listProfiles() ?? []
   })
 
   handle(agentIpc.getContextUsage, async (_event, ...args) => {
@@ -202,6 +210,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
       await agentBridge.compactConversation(conversationId, {
         sessionId: input.sessionId,
         sessionCompatibilityFingerprint: input.sessionCompatibilityFingerprint,
+        profileRef: input.profileRef,
         runId: input.runId,
         workspaceRef: input.workspaceRef,
         instructions: input.instructions,
@@ -243,10 +252,15 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
 
   // 恢复历史会话的后端 session id
   handle(agentIpc.restoreConversation, (_event, ...args) => {
-    const [conversationId, sessionId, sessionCompatibilityFingerprint] = args
+    const [conversationId, sessionId, sessionCompatibilityFingerprint, profileRef] = args
     const agentBridge = requireAgentBridge()
     if (!agentBridge) return
-    agentBridge.restoreConversation(conversationId, sessionId, sessionCompatibilityFingerprint)
+    agentBridge.restoreConversation(
+      conversationId,
+      sessionId,
+      sessionCompatibilityFingerprint,
+      profileRef,
+    )
   })
 
   // 关闭指定会话并释放后端资源

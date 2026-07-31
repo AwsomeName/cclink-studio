@@ -76,8 +76,8 @@ async function main() {
   startedBySmoke = true
 
   const cdpPort = await waitForCdpPort()
-  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`)
-  const page = await findRendererPage(browser)
+  let browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`)
+  let page = await findRendererPage(browser)
   await page.setViewportSize({ width: 1440, height: 920 })
   await page.waitForLoadState('domcontentloaded')
   await page.waitForSelector('.main-window', { timeout: uiReadyTimeoutMs })
@@ -149,6 +149,174 @@ async function main() {
       .first()
     await filesState.waitFor({ state: 'visible', timeout: 10_000 })
     return 'browser/terminal/files'
+  })
+
+  await runCheck('web resources accepts a non-predefined website', async () => {
+    await clickByTitle(page, '网站与账号')
+    await page.waitForTimeout(200)
+    assert(
+      (await page.locator('.sidebar-header-title').innerText()) === '网站与账号',
+      'web resources panel missing',
+    )
+
+    const accountLabel = 'UI Smoke Account'
+    const primaryProfile = 'web-affairs-ui-smoke'
+    const primaryRow = () => page.locator(`.web-resource-row[title$="Profile: ${primaryProfile}"]`)
+    const existing = primaryRow()
+    if ((await existing.count()) === 0) {
+      await page.getByRole('button', { name: '添加网站' }).click()
+      const form = page.locator('.web-resources-form')
+      await form.waitFor({ state: 'visible', timeout: 10_000 })
+      await form.getByLabel('网站名称').fill('Web Affairs Smoke')
+      await form.getByLabel('办理入口').fill('https://example.com/cclink-web-affairs-smoke')
+      await form.getByPlaceholder('姓名或公司全称').fill('CCLink Smoke Company')
+      await form.getByLabel('账号名称').fill(accountLabel)
+      await form.getByLabel('Browser Profile').fill(primaryProfile)
+      await form.getByRole('button', { name: '保存并建立连接' }).click()
+    }
+
+    await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
+    const rowText = await primaryRow().innerText()
+    assert(rowText.includes('CCLink Smoke Company'), 'principal is not visible')
+    assert(rowText.includes('web-affairs-ui-smoke'), 'Browser Profile is not visible')
+
+    const secondaryAccountLabel = 'UI Smoke Account Secondary'
+    const secondaryProfile = 'web-affairs-ui-smoke-secondary'
+    const secondaryRow = () =>
+      page.locator(`.web-resource-row[title$="Profile: ${secondaryProfile}"]`)
+    if ((await secondaryRow().count()) === 0) {
+      await page.getByRole('button', { name: '添加网站' }).click()
+      const form = page.locator('.web-resources-form')
+      await form.waitFor({ state: 'visible', timeout: 10_000 })
+      await form.getByLabel('网站名称').fill('Web Affairs Smoke')
+      await form.getByLabel('办理入口').fill('https://example.com/cclink-web-affairs-smoke')
+      await form.getByPlaceholder('姓名或公司全称').fill('CCLink Smoke Company')
+      await form.getByLabel('账号名称').fill(secondaryAccountLabel)
+      await form.getByLabel('Browser Profile').fill(secondaryProfile)
+      await form.getByRole('button', { name: '保存并建立连接' }).click()
+    }
+
+    await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
+    await secondaryRow().waitFor({ state: 'visible', timeout: 10_000 })
+    await primaryRow().click()
+    await page.locator('.web-resource-detail').waitFor({ state: 'visible', timeout: 10_000 })
+    const detailText = await page.locator('.web-resource-detail').innerText()
+    assert(detailText.includes('CCLink Smoke Company'), 'resource detail principal is missing')
+    assert(detailText.includes('web-affairs-ui-smoke'), 'resource detail Profile is missing')
+    assert(detailText.includes('Session Partition'), 'resource session diagnostics are missing')
+    await page.waitForFunction(() => {
+      const field = Array.from(document.querySelectorAll('.web-resource-detail-field')).find(
+        (node) => node.querySelector('span')?.textContent === 'Session Partition',
+      )
+      return field?.querySelector('strong')?.textContent !== '待核验'
+    })
+    const firstPartition = await page
+      .locator('.web-resource-detail-field', { hasText: 'Session Partition' })
+      .locator('strong')
+      .innerText()
+
+    await secondaryRow().click()
+    await page
+      .locator('.web-resource-detail-header', { hasText: secondaryAccountLabel })
+      .waitFor({ state: 'visible', timeout: 10_000 })
+    await page.waitForFunction(() => {
+      const field = Array.from(document.querySelectorAll('.web-resource-detail-field')).find(
+        (node) => node.querySelector('span')?.textContent === 'Session Partition',
+      )
+      return field?.querySelector('strong')?.textContent !== '待核验'
+    })
+    const secondaryPartition = await page
+      .locator('.web-resource-detail-field', { hasText: 'Session Partition' })
+      .locator('strong')
+      .innerText()
+    assert(firstPartition !== secondaryPartition, 'two Browser Profiles share one partition')
+
+    await browser.close()
+    runRestart('restart')
+    const restartedCdpPort = await waitForCdpPort()
+    browser = await chromium.connectOverCDP(`http://127.0.0.1:${restartedCdpPort}`)
+    page = await findRendererPage(browser)
+    await page.setViewportSize({ width: 1440, height: 920 })
+    await page.waitForLoadState('domcontentloaded')
+    await page.waitForSelector('.main-window', { timeout: uiReadyTimeoutMs })
+    if ((await page.locator('.sidebar-header-title', { hasText: '网站与账号' }).count()) === 0) {
+      await page
+        .locator('[title="网站与账号"]')
+        .first()
+        .evaluate((element) => element.click())
+    }
+    await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
+    await secondaryRow().waitFor({ state: 'visible', timeout: 10_000 })
+    return 'app restart persistence and two Profile partitions verified'
+  })
+
+  await runCheck('web affair persists a five-node workflow and node progress', async () => {
+    await clickByTitle(page, '事务')
+    await page.waitForTimeout(200)
+    assert(
+      (await page.locator('.sidebar-header-title').innerText()) === '事务',
+      'web affairs panel missing',
+    )
+
+    const affairTitle = 'UI Smoke Web Affair'
+    const affairRow = () => page.locator('.web-affair-row', { hasText: affairTitle })
+    if ((await affairRow().count()) === 0) {
+      await page.getByRole('button', { name: '新建事务' }).click()
+      const form = page.locator('.web-affairs-form')
+      await form.waitFor({ state: 'visible', timeout: 10_000 })
+      await form.getByLabel('事务名称').fill(affairTitle)
+      await form.getByLabel('最终目标').fill('验证事务列表、流程、节点详情和重启恢复')
+      await form.getByLabel('代表的业务主体').selectOption({ label: 'CCLink Smoke Company' })
+      const account = form.locator('.web-affairs-account-choice', { hasText: 'UI Smoke Account' })
+      if ((await account.count()) > 0) await account.first().locator('input').check()
+      await form.getByRole('button', { name: '创建事务' }).click()
+    } else {
+      await affairRow().click()
+    }
+
+    await page.locator('.web-affair-tab').waitFor({ state: 'visible', timeout: 10_000 })
+    const tabText = await page.locator('.web-affair-tab').innerText()
+    assert(tabText.includes('相关资源'), 'affair resources section missing')
+    assert(tabText.includes('整体流程'), 'affair flow section missing')
+    assert(tabText.includes('节点办理情况'), 'affair node detail section missing')
+    assert((await page.locator('.web-affair-flow-step').count()) === 5, 'expected five flow nodes')
+
+    const firstNode = page.locator('.web-affair-flow-step button').first()
+    const secondNode = page.locator('.web-affair-flow-step button').nth(1)
+    if (!(await firstNode.evaluate((element) => element.classList.contains('completed')))) {
+      await firstNode.click()
+      await page.getByLabel('更新办理状态').selectOption('completed')
+      await page.getByLabel(/结果或卡点说明/).fill('UI smoke 已核对第一节点')
+      await page.getByRole('button', { name: '保存节点进度' }).click()
+      await page.waitForFunction(() =>
+        document.querySelector('.web-affair-flow-step button')?.classList.contains('completed'),
+      )
+    }
+    assert(
+      await secondNode.evaluate((element) => element.classList.contains('ready')),
+      'completing the first node did not unlock the second node',
+    )
+
+    await browser.close()
+    runRestart('restart')
+    const restartedCdpPort = await waitForCdpPort()
+    browser = await chromium.connectOverCDP(`http://127.0.0.1:${restartedCdpPort}`)
+    page = await findRendererPage(browser)
+    await page.setViewportSize({ width: 1440, height: 920 })
+    await page.waitForLoadState('domcontentloaded')
+    await page.waitForSelector('.main-window', { timeout: uiReadyTimeoutMs })
+    await page.locator('.web-affair-tab', { hasText: affairTitle }).waitFor({
+      state: 'visible',
+      timeout: 10_000,
+    })
+    if ((await page.locator('.sidebar-header-title', { hasText: '事务' }).count()) === 0) {
+      await page
+        .locator('[title="事务"]')
+        .first()
+        .evaluate((element) => element.click())
+    }
+    await affairRow().waitFor({ state: 'visible', timeout: 10_000 })
+    return 'five-node affair, progress transition, and app restart persistence verified'
   })
 
   await runCheck('settings page opens and searches locally', async () => {

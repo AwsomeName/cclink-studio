@@ -25,6 +25,8 @@ import type { ImageGenerationService } from '../image-generation/image-generatio
 import type { MarkdownIllustrationService } from '../image-generation/markdown-illustration-service'
 import type { UsageLedgerService } from '../usage/usage-ledger-service'
 import type { ProjectOpsService } from '../project-ops/project-ops-service'
+import type { WebResourceService } from '../web-resources/web-resource-service'
+import type { WebAffairService } from '../web-affairs/web-affair-service'
 import type { HardwareService } from '../hardware/hardware-service'
 import type { CadConversionService } from '../cad/cad-conversion-service'
 import type { DataSourceService } from '../data-source/data-source-service'
@@ -75,6 +77,8 @@ export interface CclinkStudioRuntimeState {
   markdownIllustrationService: MarkdownIllustrationService | null
   usageLedgerService: UsageLedgerService | null
   projectOpsService: ProjectOpsService | null
+  webResourceService: WebResourceService | null
+  webAffairService: WebAffairService | null
   hardwareService: HardwareService | null
   cadConversionService: CadConversionService | null
   dataSourceService: DataSourceService | null
@@ -125,6 +129,8 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     markdownIllustrationService: null,
     usageLedgerService: null,
     projectOpsService: null,
+    webResourceService: null,
+    webAffairService: null,
     hardwareService: null,
     cadConversionService: null,
     dataSourceService: null,

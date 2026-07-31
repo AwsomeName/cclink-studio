@@ -28,11 +28,13 @@ describe('collectRestorableAgentSessions', () => {
         conversationId: assistantId,
         sessionId: 'assistant-session',
         sessionCompatibilityFingerprint,
+        profileRef: { profileId: 'default-assistant', version: 1 },
       },
       {
         conversationId: workbenchId,
         sessionId: 'workbench-session',
         sessionCompatibilityFingerprint,
+        profileRef: { profileId: 'default-assistant', version: 1 },
       },
     ])
   })

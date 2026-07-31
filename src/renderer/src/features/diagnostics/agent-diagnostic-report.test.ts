@@ -107,6 +107,7 @@ describe('agent diagnostic report', () => {
         title: '知乎操作会话',
         surface: 'assistant-panel',
         runtime: { location: 'local', transport: 'local', backend: 'cclink-studio-agent' },
+        profileRef: { profileId: 'default-assistant', version: 1 },
         messages,
         input: '',
         loading: false,
@@ -140,6 +141,7 @@ describe('agent diagnostic report', () => {
         sessionId: 'raw-agent-session-secret',
         sessionRef: 'session-diagnostic-ref-1',
         sessionCompatibilityFingerprint: 'a'.repeat(64),
+        profilePromptCompilerVersion: 1,
         runtimeProvenance: {
           source: 'bundled',
           sdkVersion: '0.3.211',
@@ -302,6 +304,7 @@ describe('agent diagnostic report', () => {
     expect(markdown).toContain('绑定状态：tab_mismatch')
     expect(markdown).toContain('浏览器内核：Electron 43.1.1 / Chromium 150.0.7871.114')
     expect(markdown).toContain('Session 兼容指纹：aaaaaaaaaaaa...')
+    expect(markdown).toContain('角色 Prompt 编译器：1')
     expect(markdown).toContain('Claude 运行时来源：bundled')
     expect(markdown).toContain('Agent SDK 版本：0.3.211')
     expect(markdown).toContain('Claude Code 版本：2.1.211')
@@ -333,6 +336,7 @@ describe('agent diagnostic report', () => {
       title: 'diagnostic correlation',
       surface: 'assistant-panel',
       runtime: { location: 'local', transport: 'local', backend: 'cclink-studio-agent' },
+      profileRef: { profileId: 'default-assistant', version: 1 },
       messages: [],
       input: '',
       loading: true,

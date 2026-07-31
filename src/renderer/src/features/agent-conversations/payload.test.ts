@@ -33,6 +33,7 @@ describe('buildAgentSendPayload', () => {
       message: '继续',
       sessionId: 'session-123',
       sessionCompatibilityFingerprint,
+      profileRef: { profileId: 'default-assistant', version: 1 },
       workspaceRef: { kind: 'local', path: '/Users/apple/Desktop/previous-project' },
     })
   })

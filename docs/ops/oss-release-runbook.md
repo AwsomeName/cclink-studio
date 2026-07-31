@@ -1,27 +1,26 @@
 # CCLink Studio 开源版发布手册
 
-> 适用范围：`AwsomeName/cclink-studio` 的 Developer ID 直接分发版本。
-> 商业版由 `cclink-dev` 使用自己的工作流发布，不执行本手册。
+> 适用范围：`AwsomeName/cclink-studio` 的 Apple Silicon Developer ID 直接分发版。
+> 不支持 Intel/x64。商业版由 `cclink-dev` 使用独立工作流发布。
 
-## 结论
-
-开源版正式发布统一从仓库根目录执行：
+## 正式入口
 
 ```bash
-pnpm release:oss -- --patch
+pnpm release -- --patch
+pnpm release -- --version 0.2.0
 ```
 
-该命令负责发布前验证、版本提交、不可变 Tag、原子推送、触发 GitHub Actions，
-以及等待 arm64 和 x64 的签名、公证与 Draft Release 完成。它不会公开 Release；
-维护者检查安装包后，仍须在 GitHub 手动点击 `Publish release`。
+该命令验证源码，先在本机生成目标版本的 ad-hoc arm64 DMG/ZIP，再创建不可变版本
+提交和 Tag、原子推送、触发 GitHub Actions，并等待签名、公证和 Draft Release。
+它不会公开 Release；维护者真人验收后必须手动点击 `Publish release`。
 
-`scripts/package.sh` 只生成本机未签名测试包，不得用于正式发布。
+`pnpm package:local` 只生成本机未签名 arm64 测试包，不修改版本、不推送，也不得用于
+正式发布。`release:oss` 仅作为旧命令的兼容别名保留，文档和人工操作统一使用
+`pnpm release`。
 
 ## 一次性准备
 
-### GitHub Environment
-
-仓库必须存在名为 `studio-release` 的 Environment，并配置：
+仓库必须存在 `studio-release` Environment，并配置：
 
 ```text
 MACOS_CERTIFICATE_P12_BASE64
@@ -32,61 +31,43 @@ APPLE_API_KEY_ID
 APPLE_API_ISSUER
 ```
 
-这些值只保存在 GitHub Environment Secrets 中，不得写入源码、`.env`、安装包、
-日志或诊断文件。具体材料与安全边界见 `docs/code-signing.md`。
+凭证不得写入源码、`.env`、安装包、日志或诊断文件。具体材料见
+`docs/code-signing.md`。
 
-### 本机 GitHub 权限
-
-发布操作者需要能够：
+发布操作者需要：
 
 - 推送 `main` 和新 Tag。
-- 触发 `release-oss.yml`。
+- 触发与读取 `release-oss.yml`。
 - 读取 Actions 和 Release 状态。
 
-使用细粒度 GitHub Token 时，仓库范围只选择 `AwsomeName/cclink-studio`，最小权限为
-`Contents: Read and write` 和 `Actions: Read and write`。Token 交给本机 Git
-credential helper 保存，不配置为仓库文件或环境变量。
+细粒度 GitHub Token 只授权 `AwsomeName/cclink-studio`，最小权限为
+`Contents: Read and write`、`Actions: Read and write`。Token 交给系统 Git
+credential helper，不配置成仓库文件或环境变量。
 
-先验证本机可以访问远端：
+## 发布前
 
-```bash
-git ls-remote origin HEAD
-```
-
-## 每次发布前
-
-1. 确认当前位于开源仓库，而不是 `cclink-dev` 商业版工作区。
-2. 提交或妥善处理所有本地改动，确保工作树干净。
-3. 切换并快进到最新 `main`：
+1. 确认当前目录是开源仓库，不是 `cclink-dev` 商业版工作区。
+2. 确认工作树干净并与 `origin/main` 一致。
+3. 确认目标版本高于当前稳定版本，且本地和远端不存在同名 Tag。
 
 ```bash
 git switch main
 git pull --ff-only origin main
 git status --short
+git ls-remote origin HEAD
 ```
 
-`git status --short` 必须没有输出。发布脚本还会再次校验远端仓库、当前分支、
-工作树、`origin/main` 和目标 Tag；任一条件不满足都会在产生发布副作用前停止。
+`git status --short` 必须无输出。发布脚本还会校验仓库、分支、远端、版本和 Tag。
 
-## 标准发布
+## 标准流程
 
-### Patch 版本
-
-例如当前版本是 `0.1.2`，发布 `0.1.3`：
+例如当前为 `0.1.12`，发布下一个 patch：
 
 ```bash
-pnpm release:oss -- --patch
+pnpm release -- --patch
 ```
 
-### 指定版本
-
-```bash
-pnpm release:oss -- --version 0.2.0
-```
-
-目标必须是高于当前版本的稳定 `X.Y.Z`，不能复用已有 Tag。
-
-脚本会显示计划并要求输入：
+脚本显示计划后要求输入：
 
 ```text
 release vX.Y.Z
@@ -94,35 +75,48 @@ release vX.Y.Z
 
 确认后依次执行：
 
-1. `pnpm install --frozen-lockfile`。
-2. `pnpm verify`。
-3. `pnpm smoke:standalone`。
-4. 更新 `package.json`，创建 `chore: prepare vX.Y.Z` 提交。
-5. 创建 annotated `vX.Y.Z` Tag。
-6. 执行 OSS 发布预检。
-7. 原子推送 `main` 和 Tag，避免只成功其中一项。
-8. 触发 `release-oss.yml`，等待远端任务完成。
-9. 输出 Draft Release 地址和资产清单。
+1. `pnpm install --frozen-lockfile`
+2. `pnpm verify`
+3. `pnpm smoke:standalone`
+4. 更新 `package.json`
+5. 运行 `pnpm package:local -- --no-install`，在 `dist/` 生成目标版本本地验收包
+6. 创建 `chore: prepare vX.Y.Z` 提交
+7. 创建 annotated `vX.Y.Z` Tag
+8. 执行 OSS 发布预检
+9. 原子推送 `main` 和 Tag
+10. 触发并等待 `release-oss.yml`
+11. 输出本地产物、Draft Release 地址和远程资产清单
 
-`--no-wait` 可以在触发远端任务后立即返回，但不改变远端构建和 Draft 策略。
-`--yes` 只用于明确受控的非交互环境，日常人工发布不要使用。
+本地打包发生在提交和推送之前。若本地打包失败，脚本恢复原始 `package.json` 并
+停止，不创建版本提交或 Tag，也不触碰远程。本地 DMG 是方便立即安装的 ad-hoc
+验收包；GitHub Draft 中的 DMG 才是 Developer ID 签名和公证的正式候选包。
 
-## Draft 验收与公开
+`--no-wait` 只跳过本地等待，不改变远端 Draft 策略。`--yes` 只用于明确受控的
+非交互环境。
+
+## Actions 门禁
 
 GitHub Actions 必须全部通过：
 
 - `validate`
-- `package (arm64, macos-15)`
-- `package (x64, macos-15-intel)`
+- `package`，固定 `macos-15` 和 arm64
 - `draft`
 
-Draft Release 至少应包含两种架构的 DMG、ZIP、checksums、build record 和唯一的
-`update-manifest.json`。`draft` job 会在创建 Draft 前根据真实文件反向重建 Manifest；
-任一架构缺失、版本/source SHA 不一致、文件大小或哈希不匹配都会停止发布。发布前：
+Draft Release 必须且只能包含一组 arm64：
 
-1. 核对 Release、Tag 和 `package.json` 版本一致。
-2. 核对 build record 的源码 SHA 与 Tag 提交一致。
-3. 下载完整 Draft 资产并再次验证 Manifest：
+```text
+cclink-studio-X.Y.Z-arm64.dmg
+cclink-studio-X.Y.Z-arm64.zip
+checksums-arm64.txt
+build-record-arm64.json
+update-manifest.json
+```
+
+`update-manifest.json` 必须为 schema v2，只包含 `assets.arm64`。`draft` job 会根据
+真实文件反向重建 Manifest；资产缺失、版本/source SHA 不一致、大小或哈希错误都会
+在上传前停止。
+
+下载 Draft 资产后独立验证：
 
 ```bash
 pnpm verify:update-manifest -- \
@@ -131,32 +125,36 @@ pnpm verify:update-manifest -- \
   --tag vX.Y.Z
 ```
 
-4. 下载对应架构 DMG，在干净 Mac 上安装和启动。
-5. 确认 Gatekeeper 不要求 `xattr` 绕过。
-6. 确认应用名称、版本、架构和基础本地能力正确。
+## 真人验收
 
-只有以上检查通过，才在 GitHub Draft Release 页面点击 `Publish release`。这是正式
-公开给用户的最后人工确认点。
+在干净 Apple Silicon Mac 上：
 
-### U0 失败注入
+1. 下载并打开 DMG。
+2. 确认 Gatekeeper 不要求 `xattr` 或关闭安全设置。
+3. 安装并启动应用。
+4. 确认名称、版本和架构正确。
+5. 验收本地 workspace、Agent、浏览器、Markdown、Terminal 和 Android 降级。
+6. 若该版本包含更新能力，按对应里程碑执行旧版到新版升级验收。
 
-`release-oss` 的手动输入 `failure_injection` 默认且正常值必须是 `none`，仓库发布
-脚本也会显式传入 `none`。`omit-x64-build-record` 只用于维护者执行 U0 回归验收：
-它在两个 package job 成功后、Manifest 生成和 Draft 上传前删除 x64 build record，
-预期结果是 Manifest job 失败且 `Create draft release` 为 `skipped`。不得将失败注入
-用于正常发版，也不得据此移动或复用已有 Tag。
+只有门禁和真人验收都通过，才公开 Draft。
+
+## M0 故障注入
+
+手动工作流输入 `failure_injection` 的正常值是 `none`。维护者验证 Manifest 门禁时
+可选择 `omit-arm64-build-record`；工作流会在 Manifest 生成前删除
+`build-record-arm64.json`，预期 `draft` 在 `Create draft release` 前失败。
+
+故障注入不得用于正常发布，也不得移动或复用已有 Tag。
 
 ## 失败恢复
 
-先判断远端 Tag 是否存在：
+先检查远端 Tag：
 
 ```bash
 git ls-remote --tags origin refs/tags/vX.Y.Z refs/tags/vX.Y.Z^{}
 ```
 
-### 远端 Tag 不存在
-
-失败发生在推送之前。查看本地状态：
+远端 Tag 不存在时，失败发生在推送前。检查现场，不使用 `git reset --hard`：
 
 ```bash
 git status
@@ -164,51 +162,34 @@ git log -1 --oneline
 git tag --points-at HEAD
 ```
 
-不要直接重复运行并制造第二个版本提交。先修复失败原因；如果脚本已经创建本地
-版本提交或 Tag，由维护者审查现场后再决定如何整理，禁止使用
-`git reset --hard` 清理现场。
-
-### 远端 Tag 已存在，但工作流未触发
-
-不要重新创建、移动或覆盖 Tag。执行：
+远端 Tag 已存在但工作流未触发时，不重建或移动 Tag：
 
 ```bash
-pnpm release:oss -- --dispatch-only vX.Y.Z
+pnpm release -- --dispatch-only vX.Y.Z
 ```
 
-脚本会从远端 Tag 解析真实提交，校验该提交中的 `package.json` 版本，然后重新触发
-签名、公证和 Draft Release。
+工作流失败时：
 
-### 工作流失败
-
-- 凭证、Runner 或临时网络问题：修复 GitHub Environment 或外部状态后，使用
-  `--dispatch-only` 重试同一个不可变 Tag。
-- 源码、打包配置或产物问题：不要修改已推送 Tag。修复代码后发布更高版本。
-- GitHub API 返回 401/403：检查本机 GitHub credential 的仓库范围和
-  `Contents`、`Actions` 权限，不要修改 Apple 公证 Secrets。
-
-### Draft 资产不合格
-
-不要公开，不要用手工上传覆盖正式资产。修复后发布更高版本，保留失败记录用于
-审计。
+- 凭证、Runner 或临时网络问题：修复外部状态后用 `--dispatch-only` 重试。
+- 源码、打包配置或产物问题：修复代码后发布更高版本。
+- Draft 资产不合格：不要公开或手工覆盖，修复后发布更高版本。
 
 ## 禁止操作
 
 - 禁止 force-push `main`。
 - 禁止删除、移动或复用已推送 Tag。
 - 禁止把 P12、P12 密码、P8 或 GitHub Token 写入仓库。
-- 禁止把 `scripts/package.sh` 产物当成正式安装包上传。
-- 禁止绕过失败的 `verify`、smoke、签名、公证、staple 或 Gatekeeper 检查。
-- 禁止让开源工作流调用 `cclink-dev`，或让商业工作流拥有开源 Release 状态。
+- 禁止把 `pnpm package:local` 产物当正式安装包上传。
+- 禁止绕过 `verify`、smoke、签名、公证、staple、Gatekeeper 或 Manifest 检查。
+- 禁止让开源工作流调用 `cclink-dev` 或共享商业版 Release 状态。
 
-## 发布完成标准
+## 完成标准
 
 一次开源发布只有同时满足以下条件才算完成：
 
-- `main` 包含唯一的版本提交。
-- `vX.Y.Z` Tag 指向该提交。
+- `main` 包含唯一版本提交，`vX.Y.Z` 指向该提交。
 - GitHub Actions 全绿。
-- arm64 和 x64 Draft 资产齐全且通过签名、公证和 Gatekeeper 检查。
-- `update-manifest.json` 能从下载后的真实资产、checksums 和 build record 独立重建。
-- 真人安装启动验收通过。
-- Draft Release 已由维护者人工公开。
+- arm64 DMG/ZIP、checksums、build record 和 Manifest 齐全。
+- 签名、公证、staple、Gatekeeper 和 Manifest 反向验证通过。
+- 干净 Apple Silicon Mac 真人安装启动通过。
+- Draft 由维护者人工公开。

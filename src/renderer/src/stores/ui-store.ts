@@ -68,6 +68,7 @@ const VISIBLE_ACTIVITY_PANELS = new Set<ActivityPanel>([
   'terminal',
   'operations',
   'scheduled-tasks',
+  'affairs',
 ])
 
 function normalizeActivityPanel(panel: unknown): ActivityPanel {

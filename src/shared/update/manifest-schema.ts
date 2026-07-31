@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-export const updateArchitectureSchema = z.enum(['arm64', 'x64'])
-export const updateChannelSchema = z.enum(['stable', 'beta'])
+export const updateArchitectureSchema = z.literal('arm64')
+export const updateChannelSchema = z.literal('stable')
 export const updateAssetKindSchema = z.enum(['dmg', 'zip'])
 
 const stableVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
@@ -43,7 +43,7 @@ export const updateArchitectureAssetsSchema = z
 
 export const updateManifestSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     channel: updateChannelSchema,
     tag: z.string().min(2).max(128),
     version: z.string().regex(semanticVersionPattern, '更新版本不是合法语义版本'),
@@ -52,7 +52,6 @@ export const updateManifestSchema = z
     assets: z
       .object({
         arm64: updateArchitectureAssetsSchema,
-        x64: updateArchitectureAssetsSchema,
       })
       .strict(),
   })
@@ -73,17 +72,12 @@ export const updateManifestSchema = z
       })
     }
 
-    const assetNames = [
-      manifest.assets.arm64.dmg.name,
-      manifest.assets.arm64.zip.name,
-      manifest.assets.x64.dmg.name,
-      manifest.assets.x64.zip.name,
-    ]
+    const assetNames = [manifest.assets.arm64.dmg.name, manifest.assets.arm64.zip.name]
     if (new Set(assetNames).size !== assetNames.length) {
       context.addIssue({
         code: 'custom',
         path: ['assets'],
-        message: '不同架构和格式的更新资产名不能重复',
+        message: '不同格式的更新资产名不能重复',
       })
     }
   })

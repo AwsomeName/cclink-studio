@@ -64,6 +64,7 @@ function conversation({
       transport: 'local',
       backend: 'cclink-studio-agent',
     },
+    profileRef: { profileId: 'default-assistant', version: 1 },
     messages: [
       {
         id: 'welcome',

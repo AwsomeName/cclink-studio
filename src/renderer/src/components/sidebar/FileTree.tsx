@@ -20,7 +20,7 @@ import { isGerberFileExtension } from '../../utils/hardware-files'
 import { buildHtmlBrowserTabDraft, isHtmlFileExtension } from '../../utils/html-files'
 import { getFileTreeRefreshDirectory } from './file-tree-watch'
 import { resolveFileTreeClipboardShortcut } from './file-tree-shortcuts'
-import { findFileTreeNode } from '../../utils/workspace-tree'
+import { findFileTreeNode, resolveFileTreeCreationParent } from '../../utils/workspace-tree'
 import { useCommandStore } from '../../stores/command-store'
 
 const FILE_TREE_SCROLL_KEY = 'cclink-studio-file-tree-scroll'
@@ -134,6 +134,7 @@ export function FileTree(): React.ReactElement {
   const toggleDir = useFsStore((s) => s.toggleDir)
   const editingPath = useFsStore((s) => s.editingPath)
   const newFolderParent = useFsStore((s) => s.newFolderParent)
+  const selectedPath = useFsStore((s) => s.selectedPath)
   const startEditing = useFsStore((s) => s.startEditing)
   const setSelectedPath = useFsStore((s) => s.setSelectedPath)
   const refreshWorkspace = useFsStore((s) => s.refreshWorkspace)
@@ -240,6 +241,20 @@ export function FileTree(): React.ReactElement {
     }
   }
 
+  const startCreatingEntry = (kind: 'new-file' | 'new-folder'): void => {
+    if (!workspacePath) return
+    const parentPath = resolveFileTreeCreationParent(workspacePath, tree, selectedPath)
+    const selectedNode = selectedPath ? findFileTreeNode(tree, selectedPath) : undefined
+    if (
+      selectedNode?.type === 'directory' &&
+      selectedNode.path === parentPath &&
+      !selectedNode.expanded
+    ) {
+      void toggleDir(parentPath)
+    }
+    startEditing(kind, parentPath)
+  }
+
   const canDropTo = useCallback(
     (targetDir: string): boolean => {
       if (!draggingPath) return false
@@ -335,7 +350,7 @@ export function FileTree(): React.ReactElement {
         </button>
         <button
           className="file-tree-toolbar-btn"
-          onClick={() => startEditing('new-file', workspacePath)}
+          onClick={() => startCreatingEntry('new-file')}
           title="新建文件"
         >
           <IconFile size={13} />
@@ -343,7 +358,7 @@ export function FileTree(): React.ReactElement {
         </button>
         <button
           className="file-tree-toolbar-btn"
-          onClick={() => startEditing('new-folder', workspacePath)}
+          onClick={() => startCreatingEntry('new-folder')}
           title="新建文件夹"
         >
           <IconFolder size={13} />

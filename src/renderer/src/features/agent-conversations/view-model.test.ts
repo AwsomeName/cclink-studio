@@ -777,6 +777,7 @@ function conversation({
       backend: 'cclink-studio-agent',
       ...(workspaceRef ? { workspaceRef } : {}),
     },
+    profileRef: { profileId: 'default-assistant', version: 1 },
     messages: [
       {
         id: 'welcome',

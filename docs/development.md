@@ -44,15 +44,14 @@ pnpm studio:stop
 本地打包：
 
 ```bash
-pnpm studio:package
-bash scripts/studio.sh package:arm64
-bash scripts/studio.sh package:x64
+pnpm package:local
 ```
 
-本地打包只生成开源壳产物；官方签名、公证、上传和生产 API 注入不在本仓库默认路径。
-OSS 包产品名必须为 `CCLink Studio 开源版`，输出到本仓库 `dist/`，并使用 ad-hoc
-签封。执行前后必须按照 `docs/ops/package-target-check.md` 核对目标，不能从
-`cclink-dev` 父目录调用 commercial packaging 后把商业产物当作 OSS 产物交付。
+本地打包只生成 arm64 开源壳验收产物，不修改版本；官方签名、公证、上传和生产 API
+注入不在本地路径。OSS 包产品名必须为 `CCLink Studio 开源版`，输出到本仓库
+`dist/`，并使用 ad-hoc 签封。执行前后必须按照
+`docs/ops/package-target-check.md` 核对目标，不能从 `cclink-dev` 父目录调用
+commercial packaging 后把商业产物当作 OSS 产物交付。
 
 常用验证：
 
@@ -214,24 +213,25 @@ OSS 默认构建可以产出本地测试包，使用 ad-hoc 签封，但不包�
 开源正式包由本仓库 `.github/workflows/release-oss.yml` 从不可变 Tag 构建：
 
 - `studio-release` Environment Secrets 提供受保护的签名和公证凭证。
-- arm64 和 x64 分别在原生架构 runner 构建。
+- arm64 固定在 Apple Silicon runner 构建。
 - 工作流完成 Developer ID 签名、Apple 公证、staple 和制品验证。
 - 工作流只创建 Draft Release，公开发布仍需人工批准。
 
 维护者从干净且与 `origin/main` 一致的 `main` 执行：
 
 ```bash
-pnpm release:oss -- --patch
+pnpm release -- --patch
 # 或指定版本
-pnpm release:oss -- --version 0.1.3
+pnpm release -- --version 0.1.3
 ```
 
-该命令依次执行依赖锁定安装、完整门禁、独立启动 smoke、版本提交、不可变 Tag、
-原子推送和 GitHub 发布工作流，并等待 Draft Release 完成。若 main 与 Tag 已成功
-推送，但工作流触发失败，可只重试远端构建：
+该命令依次执行依赖锁定安装、完整门禁、独立启动 smoke，生成目标版本的本地
+ad-hoc arm64 DMG/ZIP，然后创建版本提交、不可变 Tag、原子推送并触发 GitHub
+发布工作流，等待 Draft Release 完成。本地打包失败会恢复版本文件并在推送前停止。
+若 main 与 Tag 已成功推送，但工作流触发失败，可只重试远端构建：
 
 ```bash
-pnpm release:oss -- --dispatch-only v0.1.3
+pnpm release -- --dispatch-only v0.1.3
 ```
 
 命令不会公开 Release，也不会把签名、公证或 GitHub 凭证写入源码和安装包。Draft

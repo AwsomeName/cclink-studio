@@ -20,6 +20,8 @@ import type { WechatApiContract } from '../shared/ipc/wechat'
 import type { WindowApiContract } from '../shared/ipc/window'
 import type { WorkspaceStateApiContract } from '../shared/ipc/workspace-state'
 import type { ScheduledTasksApiContract } from '../shared/scheduled-task/scheduled-task-types'
+import type { WebResourcesApiContract } from '../shared/web-resources/web-resource'
+import type { WebAffairsApiContract } from '../shared/web-affairs/web-affair'
 
 export interface CCLinkStudioAPI {
   reportWorkbenchBounds: (bounds: { x: number; y: number; width: number; height: number }) => void
@@ -49,6 +51,10 @@ export interface CCLinkStudioAPI {
   gitBackup: GitBackupApiContract
 
   projectOps: ProjectOpsApiContract
+
+  webResources: WebResourcesApiContract
+
+  webAffairs: WebAffairsApiContract
 
   hardware: HardwareApiContract
 

@@ -34,6 +34,7 @@ describe('preload API surface', () => {
         dataSource: expect.any(Object),
         diagnostics: expect.any(Object),
         scheduledTasks: expect.any(Object),
+        webAffairs: expect.any(Object),
       }),
     )
     expect(api).not.toHaveProperty('meshy')

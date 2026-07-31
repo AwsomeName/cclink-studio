@@ -1,6 +1,6 @@
 # Agent 对话系统
 
-> 当前事实源。最后更新：2026-07-29。
+> 当前事实源。最后更新：2026-07-31。
 
 ## 概述
 
@@ -87,6 +87,10 @@ claude login
 - Skill、模型、Provider、API Key、默认模式等长期配置只放设置页。
 
 详细产品模型和推进里程碑见 `docs/features/agent-panel-product-model.md`。
+
+预制角色与 Thread 绑定仍处于产品和架构提案阶段，当前应用尚未提供角色选择。拟议的
+Composer 入口、预制角色、切换语义、Session 隔离和最小实现顺序见
+`docs/features/agent-profiles.md`。
 
 ## 系统架构
 

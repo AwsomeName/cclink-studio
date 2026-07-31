@@ -45,7 +45,7 @@ const boundedIdentifierSchema = z
   .max(256)
   .refine((value) => !/[\0\r\n]/.test(value), '标识符包含非法控制字符')
 
-const updateErrorSchema = z
+export const updateErrorSchema = z
   .object({
     code: updateErrorCodeSchema,
     userMessage: z
@@ -183,6 +183,30 @@ export const updateCommandResultSchema = z
   })
   .strict()
 
+export const updateManualInstallerResultSchema = z
+  .object({
+    ok: z.boolean(),
+    error: updateErrorSchema.nullable(),
+    snapshot: updateSnapshotSchema,
+  })
+  .strict()
+  .superRefine((result, context) => {
+    if (result.ok && result.error) {
+      context.addIssue({
+        code: 'custom',
+        path: ['error'],
+        message: '成功打开安装包时不能包含错误',
+      })
+    }
+    if (!result.ok && !result.error) {
+      context.addIssue({
+        code: 'custom',
+        path: ['error'],
+        message: '打开安装包失败时必须包含结构化错误',
+      })
+    }
+  })
+
 const installImpactSchema = z
   .object({
     kind: z.enum(['editor', 'agent', 'terminal', 'browser', 'long_task']),
@@ -227,6 +251,7 @@ export type UpdatePhase = z.infer<typeof updatePhaseSchema>
 export type UpdateErrorCode = z.infer<typeof updateErrorCodeSchema>
 export type UpdateSnapshot = z.infer<typeof updateSnapshotSchema>
 export type UpdateCommandResult = z.infer<typeof updateCommandResultSchema>
+export type UpdateManualInstallerResult = z.infer<typeof updateManualInstallerResultSchema>
 export type UpdateInstallPreparation = z.infer<typeof updateInstallPreparationSchema>
 export type UpdateInstallImpact = z.infer<typeof installImpactSchema>
 export type UpdateInstallAndRestartInput = z.infer<typeof installAndRestartInputSchema>
@@ -256,6 +281,9 @@ export const updateIpc = {
   ignoreVersion: bindNoArgsIpc(
     defineIpcCall<[], UpdateCommandResult>('updater.ignoreVersion'),
   ) as IpcInvokeContract<[], UpdateCommandResult>,
+  openManualInstaller: bindNoArgsIpc(
+    defineIpcCall<[], UpdateManualInstallerResult>('updater.openManualInstaller'),
+  ) as IpcInvokeContract<[], UpdateManualInstallerResult>,
   prepareInstall: bindNoArgsIpc(
     defineIpcCall<[], UpdateInstallPreparation>('updater.prepareInstall'),
   ) as IpcInvokeContract<[], UpdateInstallPreparation>,
@@ -273,6 +301,10 @@ export function parseUpdateSnapshot(value: unknown): UpdateSnapshot {
 
 export function parseUpdateCommandResult(value: unknown): UpdateCommandResult {
   return updateCommandResultSchema.parse(value)
+}
+
+export function parseUpdateManualInstallerResult(value: unknown): UpdateManualInstallerResult {
+  return updateManualInstallerResultSchema.parse(value)
 }
 
 export function parseUpdateInstallPreparation(value: unknown): UpdateInstallPreparation {

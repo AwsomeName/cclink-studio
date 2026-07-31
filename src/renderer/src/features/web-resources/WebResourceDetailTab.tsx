@@ -1,0 +1,208 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type {
+  WebAccount,
+  WebPrincipal,
+  WebsiteResource,
+} from '@shared/web-resources/web-resource-types'
+import { useBrowserStore, useTabStore, useWorkspaceStore } from '../../stores'
+import {
+  formatWebResourceLoginStatus,
+  observeWebResourceLogin,
+  WEB_PRINCIPAL_KIND_LABELS,
+  type WebResourceLoginObservation,
+} from './web-resource-view-model'
+
+interface WebResourceDetail {
+  website: WebsiteResource
+  principal: WebPrincipal
+  account: WebAccount
+}
+
+export function WebResourceDetailTab({ accountId }: { accountId: string }): React.ReactElement {
+  const openTab = useTabStore((state) => state.openTab)
+  const activateTab = useTabStore((state) => state.activateTab)
+  const tabs = useTabStore((state) => state.tabs)
+  const browserTabs = useBrowserStore((state) => state.tabs)
+  const workspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
+  const [detail, setDetail] = useState<WebResourceDetail | null>(null)
+  const [observation, setObservation] = useState<WebResourceLoginObservation>()
+  const [error, setError] = useState<string | null>(null)
+  const [checking, setChecking] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void window.cclinkStudio.webResources
+      .getSnapshot()
+      .then((result) => {
+        if (cancelled) return
+        if (!result.success) {
+          setError(result.error.message)
+          return
+        }
+        const account = result.data.accounts.find((item) => item.id === accountId)
+        const website = account
+          ? result.data.websites.find((item) => item.id === account.websiteId)
+          : undefined
+        const principal = account
+          ? result.data.principals.find((item) => item.id === account.principalId)
+          : undefined
+        if (!account || !website || !principal) {
+          setError('网站账号资源不存在或已失效')
+          return
+        }
+        setDetail({ account, website, principal })
+        setError(null)
+      })
+      .catch((reason) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [accountId])
+
+  const checkLogin = useCallback(async (): Promise<void> => {
+    if (!detail) return
+    setChecking(true)
+    try {
+      const summary = await window.cclinkStudio.browser.getSessionDiagnostics({
+        url: detail.website.entryUrl,
+        profileId: detail.account.browserProfileId,
+      })
+      setObservation(observeWebResourceLogin(summary))
+    } catch (reason) {
+      setObservation({ status: 'error', checkedAt: Date.now() })
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setChecking(false)
+    }
+  }, [detail])
+
+  useEffect(() => {
+    void checkLogin()
+  }, [checkLogin])
+
+  const authCookieNames = useMemo(
+    () => observation?.summary?.likelyAuthCookies.map((cookie) => cookie.name) ?? [],
+    [observation],
+  )
+
+  if (error && !detail) {
+    return <div className="web-resource-detail-state error">{error}</div>
+  }
+  if (!detail) {
+    return <div className="web-resource-detail-state">正在读取网站与账号资源…</div>
+  }
+
+  const openWebsite = (): void => {
+    const existing = tabs.find(
+      (tab) =>
+        tab.type === 'browser' &&
+        tab.browserProfile === detail.account.browserProfileId &&
+        sameOrigin(browserTabs[tab.id]?.url ?? tab.initialUrl, detail.website.entryUrl),
+    )
+    if (existing) {
+      activateTab(existing.id)
+      return
+    }
+    openTab({
+      type: 'browser',
+      title: detail.website.name,
+      icon: '🌐',
+      initialUrl: detail.website.entryUrl,
+      browserProfile: detail.account.browserProfileId,
+      workspaceRef,
+      forceNew: true,
+    })
+  }
+
+  return (
+    <div className="web-resource-detail">
+      <header className="web-resource-detail-header">
+        <div>
+          <div className="web-resource-detail-eyebrow">网站与账号</div>
+          <h1>{detail.website.name}</h1>
+          <p>{detail.account.label}</p>
+        </div>
+        <div className="web-resource-detail-actions">
+          <button type="button" disabled={checking} onClick={() => void checkLogin()}>
+            {checking ? '核验中…' : '核验登录'}
+          </button>
+          <button type="button" className="primary" onClick={openWebsite}>
+            打开网站
+          </button>
+        </div>
+      </header>
+
+      {error ? <div className="web-resource-detail-alert">{error}</div> : null}
+
+      <div className="web-resource-detail-grid">
+        <section>
+          <h2>网站资源</h2>
+          <DetailField label="名称" value={detail.website.name} />
+          <DetailField label="Origin" value={detail.website.origin} />
+          <DetailField label="办理入口" value={detail.website.entryUrl} />
+          <DetailField label="备注" value={detail.website.notes ?? '未填写'} />
+        </section>
+
+        <section>
+          <h2>业务主体与账号</h2>
+          <DetailField label="主体类型" value={WEB_PRINCIPAL_KIND_LABELS[detail.principal.kind]} />
+          <DetailField label="主体名称" value={detail.principal.name} />
+          <DetailField label="账号名称" value={detail.account.label} />
+          <DetailField label="账号角色" value={detail.account.role ?? '未填写'} />
+          <DetailField label="登录提示" value={detail.account.loginHint ?? '未填写'} />
+        </section>
+
+        <section className="web-resource-session-card">
+          <h2>登录环境</h2>
+          <div className={`web-resource-session-state ${observation?.status ?? 'checking'}`}>
+            {formatWebResourceLoginStatus(observation)}
+          </div>
+          <DetailField label="Browser Profile" value={detail.account.browserProfileId} />
+          <DetailField
+            label="Session Partition"
+            value={observation?.summary?.partition ?? '待核验'}
+          />
+          <DetailField
+            label="Cookie"
+            value={
+              observation?.summary
+                ? `${observation.summary.cookieCount} 个，${observation.summary.persistentCookieCount} 个持久化`
+                : '待核验'
+            }
+          />
+          <DetailField
+            label="可能的登录 Cookie"
+            value={authCookieNames.length > 0 ? authCookieNames.join('、') : '未检测到'}
+          />
+          <DetailField
+            label="最近核验"
+            value={observation ? new Date(observation.checkedAt).toLocaleString() : '尚未核验'}
+          />
+          <p className="web-resource-session-note">
+            这里只展示脱敏诊断。密码不保存在资源库，Cookie 仍由 Browser Profile 持有。
+          </p>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+function DetailField({ label, value }: { label: string; value: string }): React.ReactElement {
+  return (
+    <div className="web-resource-detail-field">
+      <span>{label}</span>
+      <strong title={value}>{value}</strong>
+    </div>
+  )
+}
+
+function sameOrigin(left: string | undefined, right: string): boolean {
+  if (!left) return false
+  try {
+    return new URL(left).origin === new URL(right).origin
+  } catch {
+    return false
+  }
+}

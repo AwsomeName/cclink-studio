@@ -2,6 +2,11 @@ import type { WorkspaceRef } from '@shared/workspace-ref'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import type { AgentMessage } from '../../types'
 import {
+  DEFAULT_AGENT_PROFILE_REF,
+  agentProfileRefsEqual,
+  type AgentProfileRef,
+} from '@shared/agent-profile'
+import {
   createAgentConversationState,
   DEFAULT_CONVERSATION_ID,
   type AgentConversationState,
@@ -80,6 +85,7 @@ export function normalizeConversationSnapshot(
         transport: 'local',
         backend: 'cclink-studio-agent',
       },
+      profileRef: normalizeAgentProfileRef(conversation.profileRef),
       archivedAt: conversation.archivedAt ?? null,
       mountedResources: Array.isArray(conversation.mountedResources)
         ? conversation.mountedResources
@@ -148,6 +154,23 @@ export function normalizeConversationSnapshot(
 
 function normalizeSessionCompatibilityFingerprint(value: unknown): string | null {
   return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value) ? value : null
+}
+
+function normalizeAgentProfileRef(value: unknown): AgentProfileRef {
+  if (!value || typeof value !== 'object') return DEFAULT_AGENT_PROFILE_REF
+  const candidate = value as { profileId?: unknown; version?: unknown }
+  if (
+    typeof candidate.profileId !== 'string' ||
+    !candidate.profileId.trim() ||
+    !Number.isInteger(candidate.version) ||
+    Number(candidate.version) <= 0
+  ) {
+    return DEFAULT_AGENT_PROFILE_REF
+  }
+  return {
+    profileId: candidate.profileId.trim(),
+    version: Number(candidate.version),
+  }
 }
 
 function hasTerminalSdkSessionFailure(messages: AgentMessage[] | undefined): boolean {
@@ -241,6 +264,7 @@ export function isInitialSeedConversation(conversation: AgentConversationState):
     conversation.input === '' &&
     conversation.mountedResources.length === 0 &&
     conversation.mountedSkills.length === 0 &&
+    agentProfileRefsEqual(conversation.profileRef, DEFAULT_AGENT_PROFILE_REF) &&
     onlyMessage?.id === 'welcome' &&
     onlyMessage.role === 'assistant'
   )

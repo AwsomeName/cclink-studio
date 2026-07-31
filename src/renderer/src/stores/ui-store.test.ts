@@ -51,6 +51,12 @@ describe('useUIStore', () => {
       expect(useUIStore.getState().sidebarVisible).toBe(true)
     })
 
+    it('事务是可见 Activity 面板', () => {
+      useUIStore.getState().setActivePanel('affairs')
+      expect(useUIStore.getState().activePanel).toBe('affairs')
+      expect(useUIStore.getState().sidebarVisible).toBe(true)
+    })
+
     it('Terminal 是可见 Activity 面板', () => {
       const { setActivePanel } = useUIStore.getState()
       setActivePanel('terminal')

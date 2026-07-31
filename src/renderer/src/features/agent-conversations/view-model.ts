@@ -928,6 +928,24 @@ function tabResourceCandidate(tab: Tab): AgentResourceCandidate | null {
           savedQueryId: tab.dataSourceQuery?.savedQueryId,
         },
       })
+    case 'web-resource':
+      return createResourceCandidate({
+        id: `web-resource:${tab.webResource?.accountId ?? tab.id}`,
+        kind: 'tab',
+        label: tab.title || '网站与账号',
+        detail: '网站账号资源 Tab',
+        source: 'open-tab',
+        ref: { type: 'tab', tabId: tab.id },
+      })
+    case 'web-affair':
+      return createResourceCandidate({
+        id: `web-affair:${tab.webAffair?.affairId ?? tab.id}`,
+        kind: 'tab',
+        label: tab.title || '事务',
+        detail: '持久网页事务 Tab',
+        source: 'open-tab',
+        ref: { type: 'tab', tabId: tab.id },
+      })
     default:
       return null
   }
@@ -985,6 +1003,10 @@ function tabTypeLabel(tab: Tab): string {
       return '设置'
     case 'preview':
       return '预览'
+    case 'web-resource':
+      return '网站与账号'
+    case 'web-affair':
+      return '事务'
     default:
       return '工作区 Tab'
   }

@@ -159,6 +159,10 @@ interface OpenTabOptions {
   dataSourceQuery?: Tab['dataSourceQuery']
   /** 定时任务编辑现场 */
   scheduledTask?: Tab['scheduledTask']
+  /** 网站与账号资源详情 */
+  webResource?: Tab['webResource']
+  /** 持久网页事务详情 */
+  webAffair?: Tab['webAffair']
   /** 强制新建，跳过所有去重 */
   forceNew?: boolean
   /** 显式指定 Tab 归属；缺省使用当前工作空间。 */
@@ -223,6 +227,8 @@ export const useTabStore = create<TabState>((set, get) => ({
     terminalRecord,
     dataSourceQuery,
     scheduledTask,
+    webResource,
+    webAffair,
     forceNew,
     workspaceRef,
   }) => {
@@ -305,6 +311,17 @@ export const useTabStore = create<TabState>((set, get) => ({
                 workspaceRefKey(workspaceRef ?? workspaceRefFromKey(getWorkspaceStateKey())),
           )
           if (existing) return { activeTabId: existing.id }
+        } else if (type === 'web-resource' && webResource) {
+          const existing = state.tabs.find(
+            (tab) =>
+              tab.type === 'web-resource' && tab.webResource?.accountId === webResource.accountId,
+          )
+          if (existing) return { activeTabId: existing.id }
+        } else if (type === 'web-affair' && webAffair) {
+          const existing = state.tabs.find(
+            (tab) => tab.type === 'web-affair' && tab.webAffair?.affairId === webAffair.affairId,
+          )
+          if (existing) return { activeTabId: existing.id }
         }
         // browser / 未命名 editor 不去重 → 可开多个
       }
@@ -329,6 +346,8 @@ export const useTabStore = create<TabState>((set, get) => ({
         terminalRecord,
         dataSourceQuery,
         scheduledTask,
+        webResource,
+        webAffair,
       }
       return {
         tabs: [...state.tabs, newTab],

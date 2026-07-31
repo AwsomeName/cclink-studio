@@ -31,6 +31,19 @@ export function findFileTreeNode(
   return undefined
 }
 
+export function resolveFileTreeCreationParent(
+  workspacePath: string,
+  nodes: FileTreeNode[],
+  selectedPath: string | null,
+): string {
+  if (!selectedPath) return workspacePath
+  const selectedNode = findFileTreeNode(nodes, selectedPath)
+  if (!selectedNode) return workspacePath
+  if (selectedNode.type === 'directory') return selectedNode.path
+  const separatorIndex = selectedNode.path.lastIndexOf('/')
+  return separatorIndex > 0 ? selectedNode.path.slice(0, separatorIndex) : workspacePath
+}
+
 export function normalizeFileTreeState(
   value: unknown,
 ): { expandedPaths: string[]; selectedPath: string | null } | null {

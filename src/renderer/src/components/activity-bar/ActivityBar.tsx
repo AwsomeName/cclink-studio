@@ -9,6 +9,7 @@ import {
   IconRobot,
   IconSettings,
   IconSparkle,
+  IconClipboard,
   IconTerminal,
   IconTool,
   IconClock,
@@ -35,7 +36,8 @@ const MAIN_ICONS: Array<{
   { id: 'browser', Icon: IconGlobe, label: '浏览器' },
   { id: 'data-sources', Icon: IconDatabase, label: '数据源' },
   { id: 'terminal', Icon: IconTerminal, label: 'Terminal' },
-  { id: 'operations', Icon: IconSparkle, label: '运营' },
+  { id: 'operations', Icon: IconSparkle, label: '网站与账号' },
+  { id: 'affairs', Icon: IconClipboard, label: '事务' },
   { id: 'scheduled-tasks', Icon: IconClock, label: '定时任务' },
   { id: 'production', Icon: IconTool, label: '生产' },
 ]

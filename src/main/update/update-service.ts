@@ -1,18 +1,24 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
-import { basename, join } from 'node:path'
 import type {
   UpdateArchitecture,
   UpdateCommandResult,
   UpdateErrorCode,
   UpdateInstallAndRestartInput,
   UpdateInstallPreparation,
+  UpdateManualInstallerResult,
   UpdateSnapshot,
 } from '../../shared/update'
-import { parseUpdateCommandResult, parseUpdateSnapshot } from '../../shared/update'
+import {
+  parseUpdateCommandResult,
+  parseUpdateManualInstallerResult,
+  parseUpdateSnapshot,
+} from '../../shared/update'
 import type { ResolvedUpdateAsset, ResolvedUpdateRelease, UpdateProvider } from './update-provider'
 import { UpdateProviderRequestError } from './github-release-provider'
+import { UpdateCache, type RestoredVerifiedUpdate } from './update-cache'
 import { compareStableVersions } from './version'
+import { UpdateAssetVerificationError, type VerifiedDmgInspector } from './mac-dmg-verifier'
 
 const FIRST_CHECK_DELAY_MS = 60_000
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -33,6 +39,8 @@ export interface UpdateServiceOptions {
   automaticChecks?: boolean
   firstCheckDelayMs?: number
   checkIntervalMs?: number
+  dmgInspector?: VerifiedDmgInspector
+  openPath?: (path: string) => Promise<string>
 }
 
 class UpdateOperationError extends Error {
@@ -53,13 +61,16 @@ export class UpdateService {
   private readonly automaticChecks: boolean
   private readonly firstCheckDelayMs: number
   private readonly checkIntervalMs: number
+  private readonly updateCache: UpdateCache
   private resolvedRelease: ResolvedUpdateRelease | null = null
+  private verifiedUpdate: RestoredVerifiedUpdate | null = null
   private checkPromise: Promise<UpdateCommandResult> | null = null
   private checkController: AbortController | null = null
   private downloadController: AbortController | null = null
   private downloadPromise: Promise<UpdateCommandResult> | null = null
   private firstCheckTimer: NodeJS.Timeout | null = null
   private intervalTimer: NodeJS.Timeout | null = null
+  private manualInstallerPromise: Promise<UpdateManualInstallerResult> | null = null
   private stopped = false
 
   constructor(private readonly options: UpdateServiceOptions) {
@@ -67,6 +78,12 @@ export class UpdateService {
     this.automaticChecks = options.automaticChecks ?? true
     this.firstCheckDelayMs = options.firstCheckDelayMs ?? FIRST_CHECK_DELAY_MS
     this.checkIntervalMs = options.checkIntervalMs ?? CHECK_INTERVAL_MS
+    this.updateCache = new UpdateCache({
+      cacheRoot: options.cacheRoot,
+      currentVersion: options.currentVersion,
+      architecture: options.architecture,
+      systemVersion: options.systemVersion,
+    })
     this.snapshot = parseUpdateSnapshot({
       schemaVersion: 1,
       phase: options.provider.id === 'noop' ? 'disabled' : 'idle',
@@ -82,8 +99,24 @@ export class UpdateService {
 
   async start(): Promise<void> {
     this.stopped = false
-    await fs.mkdir(this.options.cacheRoot, { recursive: true, mode: 0o700 })
-    await this.cleanupPartialDownloads()
+    try {
+      await this.updateCache.start()
+      if (this.snapshot.phase !== 'disabled') {
+        this.verifiedUpdate = await this.updateCache.restore()
+        if (this.verifiedUpdate) {
+          this.setSnapshot({
+            ...this.snapshot,
+            phase: 'readyToInstall',
+            operationId: randomUUID(),
+            availableRelease: this.verifiedUpdate.releaseSummary,
+            progress: null,
+            error: null,
+          })
+        }
+      }
+    } catch (error) {
+      console.error('[UpdateService] 更新缓存初始化失败，已降级为空闲状态:', error)
+    }
     if (!this.automaticChecks || this.snapshot.phase === 'disabled') return
     this.firstCheckTimer = setTimeout(() => {
       void this.check(false)
@@ -117,6 +150,9 @@ export class UpdateService {
 
   check(manual = true): Promise<UpdateCommandResult> {
     if (this.checkPromise) return this.checkPromise
+    if (this.snapshot.phase === 'readyToInstall') {
+      return Promise.resolve(this.result(true))
+    }
     if (this.snapshot.phase === 'downloading' || this.snapshot.phase === 'verifying') {
       return Promise.resolve(this.result(false))
     }
@@ -208,6 +244,14 @@ export class UpdateService {
     return this.result(true)
   }
 
+  openManualInstaller(): Promise<UpdateManualInstallerResult> {
+    if (this.manualInstallerPromise) return this.manualInstallerPromise
+    this.manualInstallerPromise = this.performOpenManualInstaller().finally(() => {
+      this.manualInstallerPromise = null
+    })
+    return this.manualInstallerPromise
+  }
+
   prepareInstall(): UpdateInstallPreparation {
     return {
       ok: false,
@@ -220,9 +264,83 @@ export class UpdateService {
   installAndRestart(_input: UpdateInstallAndRestartInput): UpdateCommandResult {
     this.fail(
       this.snapshot.operationId ?? randomUUID(),
-      new UpdateOperationError('install_blocked', '安装能力将在下一阶段接入', false),
+      new UpdateOperationError(
+        'install_blocked',
+        '自动安装尚未通过安全验收，请使用可信 DMG 手工安装',
+        false,
+      ),
     )
     return this.result(false)
+  }
+
+  private async performOpenManualInstaller(): Promise<UpdateManualInstallerResult> {
+    const candidate = this.verifiedUpdate
+    if (
+      this.snapshot.phase !== 'readyToInstall' ||
+      !this.snapshot.availableRelease ||
+      !candidate ||
+      !this.options.dmgInspector ||
+      !this.options.openPath
+    ) {
+      return this.manualInstallerResult(
+        false,
+        new UpdateOperationError('install_blocked', '当前构建无法验证并打开更新安装包', false),
+      )
+    }
+
+    try {
+      this.verifiedUpdate = await this.updateCache.revalidate(candidate)
+    } catch {
+      this.verifiedUpdate = null
+      this.fail(
+        this.snapshot.operationId ?? randomUUID(),
+        new UpdateOperationError(
+          'download_corrupt',
+          '更新安装包在打开前的完整性复验失败，请重新下载',
+          true,
+        ),
+      )
+      return this.manualInstallerResult(
+        false,
+        new UpdateOperationError(
+          'download_corrupt',
+          '更新安装包在打开前的完整性复验失败，请重新下载',
+          true,
+        ),
+      )
+    }
+
+    try {
+      await this.options.dmgInspector.verify({
+        dmgPath: this.verifiedUpdate.filePath,
+        expectedVersion: this.verifiedUpdate.record.manifest.version,
+      })
+    } catch (error) {
+      const mapped =
+        error instanceof UpdateAssetVerificationError
+          ? new UpdateOperationError(error.code, error.message, false)
+          : new UpdateOperationError('publisher_mismatch', '更新安装包未通过发布者身份检查', false)
+      if (mapped.code !== 'install_failed') {
+        await this.updateCache.invalidate(this.verifiedUpdate).catch(() => undefined)
+        this.verifiedUpdate = null
+        this.fail(this.snapshot.operationId ?? randomUUID(), mapped)
+      }
+      return this.manualInstallerResult(false, mapped)
+    }
+
+    let openError = ''
+    try {
+      openError = await this.options.openPath(this.verifiedUpdate.filePath)
+    } catch {
+      openError = 'openPath failed'
+    }
+    if (openError) {
+      return this.manualInstallerResult(
+        false,
+        new UpdateOperationError('install_failed', 'macOS 未能打开更新安装包，请重试', true),
+      )
+    }
+    return this.manualInstallerResult(true, null)
   }
 
   private async performCheck(operationId: string, manual: boolean): Promise<UpdateCommandResult> {
@@ -298,12 +416,8 @@ export class UpdateService {
     release: ResolvedUpdateRelease,
     asset: ResolvedUpdateAsset,
   ): Promise<UpdateCommandResult> {
-    const releaseDirectory = join(
-      this.options.cacheRoot,
-      `${release.manifest.version}-${release.architecture}`,
-    )
-    const finalPath = join(releaseDirectory, basename(asset.name))
-    const partialPath = `${finalPath}.part`
+    const target = this.updateCache.createDownloadTarget(release, asset)
+    const { directory: releaseDirectory, finalPath, partialPath } = target
     let file: fs.FileHandle | null = null
     try {
       await fs.mkdir(releaseDirectory, { recursive: true, mode: 0o700 })
@@ -385,21 +499,7 @@ export class UpdateService {
       }
       await fs.rm(finalPath, { force: true })
       await fs.rename(partialPath, finalPath)
-      await fs.writeFile(
-        join(releaseDirectory, 'verified.json'),
-        JSON.stringify(
-          {
-            schemaVersion: 1,
-            version: release.manifest.version,
-            architecture: release.architecture,
-            asset: { name: asset.name, size: asset.size, sha256: asset.sha256 },
-            verifiedAt: new Date().toISOString(),
-          },
-          null,
-          2,
-        ),
-        { mode: 0o600 },
-      )
+      this.verifiedUpdate = await this.updateCache.commitVerified(release, asset, finalPath)
       this.setSnapshot({
         ...this.snapshot,
         phase: 'readyToInstall',
@@ -435,23 +535,6 @@ export class UpdateService {
     }
   }
 
-  private async cleanupPartialDownloads(): Promise<void> {
-    const entries = await fs.readdir(this.options.cacheRoot, { withFileTypes: true })
-    await Promise.all(
-      entries
-        .filter((entry) => entry.isDirectory())
-        .map(async (entry) => {
-          const directory = join(this.options.cacheRoot, entry.name)
-          const children = await fs.readdir(directory).catch(() => [])
-          await Promise.all(
-            children
-              .filter((name) => name.endsWith('.part'))
-              .map((name) => fs.rm(join(directory, name), { force: true })),
-          )
-        }),
-    )
-  }
-
   private fail(operationId: string, error: UpdateOperationError): void {
     this.setSnapshot({
       ...this.snapshot,
@@ -474,6 +557,23 @@ export class UpdateService {
 
   private result(ok: boolean): UpdateCommandResult {
     return parseUpdateCommandResult({ ok, snapshot: this.getSnapshot() })
+  }
+
+  private manualInstallerResult(
+    ok: boolean,
+    error: UpdateOperationError | null,
+  ): UpdateManualInstallerResult {
+    return parseUpdateManualInstallerResult({
+      ok,
+      error: error
+        ? {
+            code: error.code,
+            userMessage: error.message,
+            retryable: error.retryable,
+          }
+        : null,
+      snapshot: this.getSnapshot(),
+    })
   }
 }
 

@@ -2,6 +2,7 @@ import type {
   UpdateCommandResult,
   UpdateInstallAndRestartInput,
   UpdateInstallPreparation,
+  UpdateManualInstallerResult,
   UpdateSnapshot,
   UpdateSnapshotChangedEvent,
 } from '../update'
@@ -13,6 +14,7 @@ export interface UpdateApiContract {
   cancelDownload(): Promise<UpdateCommandResult>
   defer(): Promise<UpdateCommandResult>
   ignoreVersion(): Promise<UpdateCommandResult>
+  openManualInstaller(): Promise<UpdateManualInstallerResult>
   prepareInstall(): Promise<UpdateInstallPreparation>
   installAndRestart(input: UpdateInstallAndRestartInput): Promise<UpdateCommandResult>
   onSnapshotChanged(callback: (event: UpdateSnapshotChangedEvent) => void): () => void

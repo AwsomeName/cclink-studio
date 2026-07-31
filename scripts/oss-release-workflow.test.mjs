@@ -6,10 +6,11 @@ import test from 'node:test'
 const workflow = readFileSync(resolve('.github/workflows/release-oss.yml'), 'utf8')
 const notarizeDmgScript = readFileSync(resolve('scripts/notarize-dmg.sh'), 'utf8')
 
-test('release workflow uses native runners for each target architecture', () => {
-  assert.match(workflow, /- arch: arm64\s+runner: macos-15/)
-  assert.match(workflow, /- arch: x64\s+runner: macos-15-intel/)
-  assert.match(workflow, /runs-on: \$\{\{ matrix\.runner \}\}/)
+test('release workflow packages only Apple Silicon on the native runner', () => {
+  assert.match(workflow, /package:[\s\S]*runs-on: macos-15/)
+  assert.match(workflow, /stage-claude-runtime\.mjs --arch arm64/)
+  assert.match(workflow, /--mac --arm64/)
+  assert.doesNotMatch(workflow, /x64|macos-15-intel|matrix\.arch|matrix\.runner/)
 })
 
 test('release workflow verifies the P12 password and Developer ID identity before build', () => {
@@ -46,17 +47,18 @@ test('release workflow signs and Gatekeeper-assesses each DMG before upload', ()
 
 test('release workflow normalizes public asset names before checksums and upload', () => {
   assert.match(workflow, /Expected exactly one DMG and one ZIP/)
-  assert.match(workflow, /cclink-studio-\$\{VERSION\}-\$\{\{ matrix\.arch \}\}\.dmg/)
-  assert.match(workflow, /cclink-studio-\$\{VERSION\}-\$\{\{ matrix\.arch \}\}\.zip/)
+  assert.match(workflow, /cclink-studio-\$\{VERSION\}-arm64\.dmg/)
+  assert.match(workflow, /cclink-studio-\$\{VERSION\}-arm64\.zip/)
   assert.doesNotMatch(
     workflow,
-    /cp dist\/\*\.dmg dist\/\*\.zip "\.\.\/release-assets-\$\{\{ matrix\.arch \}\}\/"/,
+    /cp dist\/\*\.dmg dist\/\*\.zip "\.\.\/release-assets-arm64\/"/,
   )
 })
 
-test('draft release aggregates both architectures into one verified update manifest', () => {
-  assert.match(workflow, /pattern: studio-\$\{\{ inputs\.tag \}\}-\*/)
-  assert.match(workflow, /merge-multiple: true/)
+test('draft release consumes one arm64 artifact and generates a verified update manifest', () => {
+  assert.match(workflow, /name: studio-\$\{\{ inputs\.tag \}\}-arm64/)
+  assert.doesNotMatch(workflow, /pattern: studio-\$\{\{ inputs\.tag \}\}-\*/)
+  assert.doesNotMatch(workflow, /merge-multiple: true/)
   assert.match(workflow, /generate-update-manifest\.mjs/)
   assert.match(workflow, /verify-update-manifest\.mjs/)
   assert.match(workflow, /--minimum-system-version 13\.0/)
@@ -73,7 +75,7 @@ test('draft release aggregates both architectures into one verified update manif
 
 test('U0 failure injection stops manifest aggregation before draft upload', () => {
   assert.match(workflow, /failure_injection:[\s\S]*default: none/)
-  assert.match(workflow, /omit-x64-build-record/)
+  assert.match(workflow, /omit-arm64-build-record/)
   const injectIndex = workflow.indexOf('Inject U0 manifest validation failure')
   const manifestIndex = workflow.indexOf('Generate and verify update manifest')
   const draftIndex = workflow.indexOf('Create draft release')

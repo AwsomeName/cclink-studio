@@ -46,13 +46,15 @@ export const agentApi: AgentApiContract = {
   setScope,
   getScope: (conversationId) => invokeIpcContract(agentIpc.getScope, conversationId),
   resetSession: (conversationId) => invokeIpcContract(agentIpc.resetSession, conversationId),
-  restoreConversation: (conversationId, sessionId, sessionCompatibilityFingerprint) =>
+  restoreConversation: (conversationId, sessionId, sessionCompatibilityFingerprint, profileRef) =>
     invokeIpcContract(
       agentIpc.restoreConversation,
       conversationId,
       sessionId,
       sessionCompatibilityFingerprint,
+      profileRef,
     ),
+  listProfiles: () => invokeIpcContract(agentIpc.listProfiles),
   closeConversation: (conversationId) =>
     invokeIpcContract(agentIpc.closeConversation, conversationId),
   onStreamEvent: (callback) => {

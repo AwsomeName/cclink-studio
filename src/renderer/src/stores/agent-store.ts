@@ -16,6 +16,7 @@ import type {
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import type { AgentContextUsageSnapshot, AgentStatus } from '@shared/agent-protocol'
 import type { AgentImageAttachment } from '@shared/ipc/agent'
+import type { AgentProfileRef } from '@shared/agent-profile'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import {
   isWorkspaceStateRestoring,
@@ -91,6 +92,10 @@ interface AgentState {
     surface?: ConversationSurface
     runtime?: ConversationRuntimeRef
     activate?: boolean
+    profileRef?: AgentProfileRef
+    input?: string
+    mountedResources?: AgentMountedResource[]
+    mountedSkills?: AgentMountedSkill[]
   }) => string
   switchConversation: (id: string) => void
   closeConversation: (id: string) => void
@@ -99,6 +104,7 @@ interface AgentState {
   deleteConversation: (id: string) => void
   renameConversation: (id: string, title: string) => void
   markAsWorkConversation: (id: string, runtime: ConversationRuntimeRef) => void
+  setProfileRef: (profileRef: AgentProfileRef, conversationId?: string) => void
 
   // --- 当前/指定会话 Actions ---
   setInput: (text: string, conversationId?: string) => void
@@ -568,6 +574,18 @@ export const useAgentStore = create<AgentState>((set) => ({
         ...mirrorActive(state, fresh),
       }
     }),
+
+  setProfileRef: (profileRef, conversationId) =>
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        profileRef,
+        sessionId: null,
+        sessionCompatibilityFingerprint: null,
+        contextUsage: null,
+        updatedAt: Date.now(),
+      })),
+    ),
 
   setInput: (text, conversationId) =>
     set((state) =>

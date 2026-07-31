@@ -1,158 +1,152 @@
 # Desktop Update Acceptance
 
-> 目的：记录桌面更新 U0-U5 的自动化、真人验收和脱敏证据。
+> 目的：记录当前 arm64 M0-M6 的自动化、真人验收和脱敏证据。
 > 产品事实源：`docs/features/desktop-release-and-updates.md`。
 > 执行计划：`docs/features/desktop-update-development-plan.md`。
 
-## 记录规则
+## 规则
 
-- 每个里程碑必须同时记录源提交、自动化命令、真人步骤、失败注入和残余风险。
-- 远端 Actions、Draft 和正式 Release 使用 URL；本地证据只记录必要摘要。
-- 禁止记录 Token、Cookie、P12/P8、密码、用户目录完整路径和下载 URL 查询参数。
-- 未完成的真人或远端验收必须保持 `PENDING`，不能用本地 mock 代替。
+- 每个里程碑记录源提交、自动化命令、真人步骤、失败注入和残余风险。
+- Actions、Draft 和公开 Release 使用 URL；本地只记录必要摘要。
+- 不记录 Token、Cookie、P12/P8、密码、用户目录完整路径或下载 URL 查询参数。
+- 真人或远端验收未完成时保持 `PENDING`，不能用 mock、CI 或文档替代。
+- M0 是工程准备度，不计入用户功能进度。
 
-## U0：更新契约与发布元数据
-
-### 当前状态
-
-`COMPLETE (100%)`。本地实现、失败矩阵、全量门禁、独立启动 smoke、远端 CI、
-真实测试 Tag、成功 Draft、下载后独立复核和预期失败 Actions Run 均已通过。
-U0 只关闭更新契约与发布元数据，不代表 U1-U5 的检查、下载或安装能力已经实现。
-
-### 实现范围
-
-- [x] Manifest schemaVersion 1 和双架构资产契约。
-- [x] UpdateSnapshot、command、event、错误码和安装短期确认令牌契约。
-- [x] 中性 UpdateProvider 接口，不包含仓库或商业版状态。
-- [x] 从真实资产、checksums 和 build record 生成 Manifest。
-- [x] 反向重建 Manifest 并在 Draft 创建前验证。
-- [x] OSS workflow 汇总 arm64/x64 后生成唯一 Manifest。
-- [x] 有效、缺架构、错 source SHA、错哈希、非法资产名和 prerelease 自动化测试。
-- [x] 真实测试 Tag 成功生成 Draft。
-- [x] 真实失败注入在创建 Draft 前停止。
-
-### 本地自动化
-
-| 日期       | 源提交    | 命令                                                | 结果                 |
-| ---------- | --------- | --------------------------------------------------- | -------------------- |
-| 2026-07-28 | `09aacf5` | `pnpm verify:release`                               | PASS，26/26          |
-| 2026-07-28 | `09aacf5` | U0 TypeScript/Vitest 定向测试                       | PASS，17/17          |
-| 2026-07-28 | `09aacf5` | `pnpm verify`                                       | PASS，161 files/974  |
-| 2026-07-28 | `09aacf5` | `pnpm smoke:standalone`                             | PASS，28/28          |
-| 2026-07-28 | `09aacf5` | 缺架构、错 SHA/哈希、跨 Run、非法名、符号链接和篡改 | PASS，本地确定性测试 |
-| 2026-07-28 | `1bd1985` | `pnpm verify:release`                               | PASS，30/30          |
-| 2026-07-28 | `1152699` | 文档所列 `pnpm verify:update-manifest -- ...`       | PASS，真实 Draft 资产 |
-
-### 远端 CI
-
-| 日期       | 源提交    | Run                                                                             | 结果                             |
-| ---------- | --------- | ------------------------------------------------------------------------------- | -------------------------------- |
-| 2026-07-28 | `047355f` | [CI #112](https://github.com/AwsomeName/cclink-studio/actions/runs/30341274046) | PASS，verify 1m57s / smoke 2m09s |
-| 2026-07-28 | `9ad528b` | [v0.1.4 Release Run](https://github.com/AwsomeName/cclink-studio/actions/runs/30350340061) | PASS，validate、arm64、x64、draft |
-| 2026-07-28 | `1bd1985` | [U0 failure Run](https://github.com/AwsomeName/cclink-studio/actions/runs/30354492019) | EXPECTED FAIL，上传前停止 |
-
-### 真人与远端验收
-
-| 项目                                    | 状态    | 证据 |
-| --------------------------------------- | ------- | ---- |
-| 测试 Tag 的 arm64/x64 package jobs      | PASS | [v0.1.4 Run](https://github.com/AwsomeName/cclink-studio/actions/runs/30350340061)，两个原生 runner 均完成签名、公证、staple 和 Gatekeeper |
-| Draft 包含唯一 `update-manifest.json`   | PASS | [v0.1.4 Draft](https://github.com/AwsomeName/cclink-studio/releases/tag/untagged-275b3b615a6816753c12)，9 个资产 |
-| 本地下载并反向验证 Draft 全部资产       | PASS | 重新下载约 1 GB；4/4 SHA-256、Manifest 重建、2/2 `stapler validate` 和 Gatekeeper 均通过 |
-| 修改任一资产后 verifier 拒绝            | PASS | 向 arm64 ZIP 追加数据后返回退出码 1，错误为 `asset checksum mismatch` |
-| 缺架构或错哈希时 Draft job 在上传前失败 | PASS | [failure draft job](https://github.com/AwsomeName/cclink-studio/actions/runs/30354492019/job/90263174878)：注入删除 x64 build record，Manifest 失败，Create draft 为 skipped |
-
-### 发现并修复
-
-- 首次测试 Tag `v0.1.3` 的 [Run](https://github.com/AwsomeName/cclink-studio/actions/runs/30344952244)
-  虽成功，但 GitHub 将中文和空格资产名规范化，导致下载后的文件名与 Manifest 不一致。
-  对应 Draft 保持未公开，Tag 不移动、不复用；`v0.1.4` 改为规范 ASCII 资产名后通过。
-- 发布脚本和 Manifest verifier 均补齐 pnpm 参数分隔符兼容；发布预检生成的 `.build/`
-  已作为派生产物忽略，连续发布不会再被自身报告阻塞。
-
-### U0 关闭条件
-
-关闭结论：以上条件已全部满足，U0 于 2026-07-28 关闭。`v0.1.4` 仍是 Draft，
-不得把 U0 关闭误解为允许跳过 R0 的干净 Apple Silicon/Intel Mac 真人安装验收，
-也不得误解为客户端自动更新已经可用。
-
-### 过程偏航复盘（2026-07-28）
-
-结论：U0 技术验收有效，但执行和汇报不符合产品预期。连续约五小时投入发布流水线
-后，Studio 仍不能检查、下载或安装更新；此前使用“U0 100%”和“整体 22.5%”作为
-主要进度表述，错误地把工程准备度包装成用户功能进度。
-
-根因：
-
-- 计划允许没有用户可见结果的 U0 作为产品里程碑并获得进度权重。
-- 前置工作没有 60 分钟时间盒，同类发布问题可以连续占用主线时间。
-- 阶段汇报先报告内部编号、测试和 CI，没有先回答用户现在能做什么。
-
-纠正：
-
-- R0/U0 重新归类为工程前置，不计入用户功能进度。
-- 当前用户功能进度明确回退为 `0%`；只有 U1 在真实 Studio 中通过检查更新验收后
-  才能提高。
-- 执行采用 60 分钟偏航检查、单项前置时间盒和同一阻塞两次失败止损。
-- 后续完成声明必须附真实 Studio 的用户验收动作；mock、CI、Draft 和文档只能证明
-  工程门禁。
-
-## U1：检查服务与更新界面
+## M0：arm64 单架构收口
 
 ### 当前状态
 
-`IN PROGRESS`。不可宣称 U1 已关闭。
+`COMPLETE`。本地代码、当前文档、全量门禁和 arm64 发布契约均已收口。下一次真实
+Draft 的签名与安装证据属于发布验收，不会重新引入 x64 路径。
 
-已完成：
+### 已完成
 
-- [x] 公开 GitHub stable Release Provider、架构选择和 Manifest 约束。
-- [x] `UpdateService` 成为唯一检查状态所有者。
-- [x] typed IPC、preload 白名单、renderer snapshot 投影。
-- [x] 状态栏固定入口和统一更新面板。
-- [x] 删除旧 `latest-mac.yml`、`latestResult` 和直接写 Downloads 的路径。
-- [x] 真实 Studio 手动检查“已是最新版本”通过，控制台无错误。
+- [x] Manifest 升级为 schema v2，且只允许 `assets.arm64`。
+- [x] 正式运行时只在 `darwin + arm64` 启用 GitHub Provider。
+- [x] `release-oss.yml` 只使用 `macos-15` 构建 arm64。
+- [x] Draft 只消费一个 arm64 artifact。
+- [x] 本地 package/release 命令删除 x64 和 universal 入口。
+- [x] Runbook、产品规范和开发计划改为 arm64 当前事实。
+- [x] 故障注入改为 `omit-arm64-build-record`。
 
-待完成：
+### 自动化证据
 
-- [ ] 公开一个高于当前版本的测试 Release，真人验证“发现新版”。
-- [ ] 设置页“自动检查更新”开关和持久化。
-- [ ] 更新诊断摘要、限流细节和完整生命周期测试。
-- [ ] 正式安装包的启动延迟与周期检查真人验收。
+| 日期 | 命令 | 结果 |
+| --- | --- | --- |
+| 2026-07-29 | Manifest/Provider 定向 Vitest | PASS，13/13 |
+| 2026-07-29 | `pnpm verify:release` | PASS，30/30 |
+| 2026-07-29 | `pnpm typecheck` | PASS |
+| 2026-07-29 | `pnpm lint` | PASS |
+| 2026-07-29 | `git diff --check` | PASS |
+| 2026-07-29 | `pnpm verify` | PASS，184 files / 1068 tests / production build |
 
-### 2026-07-28 自动化与应用证据
+### 待完成
 
-| 验证 | 结果 |
-| ---- | ---- |
-| `pnpm test` | PASS，163 files / 980 tests |
-| `pnpm build` | PASS |
-| `pnpm smoke:ui` | PASS，6/6 |
-| 隔离 Profile 启动真实 Electron、打开更新面板并手动检查 | PASS，v0.1.4 -> “已是最新版本”，console/page error 为 0 |
-| preload 沙箱回归 | 首轮发现 `zod` 被 externalize 导致 preload 失败；改为内联后真实 Electron 和 UI smoke 均通过 |
+- [ ] 下一次 arm64 Draft 从真实 Tag 构建并通过签名、公证、Gatekeeper 和 Manifest v2。
+- [ ] 干净 Apple Silicon Mac 安装启动。
 
-## U2：可靠下载与校验
+## M1：下载恢复闭环
 
 ### 当前状态
 
-`IN PROGRESS`。下载主链已经进入产品代码，但尚未通过公开新版的真人下载验收。
+`IN PROGRESS`。代码、自动化和隔离 Profile 的真实 Electron 恢复通过；公开新版真实
+下载和下载中的窗口重建验收尚未关闭。
 
-已完成：
+### 已完成
 
-- [x] 用户确认后开始下载，renderer 不接触下载 URL 或本地路径。
-- [x] 应用私有缓存、`.part`、磁盘空间检查、Content-Length、最终大小和 SHA-256。
-- [x] 流式进度、速度、取消、重试和原子改名。
-- [x] 校验通过写入 `verified.json` 并进入 `readyToInstall`。
-- [x] 成功、哈希损坏和中途取消自动化测试。
+- [x] `UpdateCache` 是缓存目录、原子记录和启动复验的唯一所有者。
+- [x] 缓存键包含版本、arm64 和 Manifest digest。
+- [x] `verified.json` 使用 schema v2，不保存 URL。
+- [x] 启动清理 `.part` 并重新核验版本、系统版本、Manifest、常规文件、大小和 SHA。
+- [x] 有效缓存恢复 `readyToInstall`。
+- [x] 篡改、版本追平和元数据不一致使缓存失效。
+- [x] 多个有效候选只保留最高稳定版本。
 
-待完成：
+### 自动化证据
 
-- [ ] 启动时恢复仍有效的 `verified.json` 和 `readyToInstall`。
-- [ ] 断点续传或明确的从头重试策略及对应验收。
-- [ ] 窗口/runtime 重建时下载不中断。
-- [ ] 公开测试 Release 的真实下载、取消、损坏注入和缓存恢复验收。
-- [ ] Developer ID/Team ID 的客户端侧信任校验。
+| 日期 | 场景 | 结果 |
+| --- | --- | --- |
+| 2026-07-29 | 下载、校验并进入 `readyToInstall` | PASS |
+| 2026-07-29 | 关闭服务并重新创建，启动恢复 | PASS |
+| 2026-07-29 | 修改缓存 DMG 后重启 | PASS，拒绝并删除 |
+| 2026-07-29 | 当前版本追平目标版本 | PASS，回到 idle 并删除 |
+| 2026-07-29 | 错误 SHA-256 | PASS，不生成可安装文件 |
+| 2026-07-29 | 中途取消 | PASS，删除 `.part` 并回到 available |
+| 2026-07-29 | 缓存目录不可用 | PASS，Studio 启动降级为空闲状态 |
+| 2026-07-29 | 更新相关 Vitest | PASS，20/20 |
+| 2026-07-29 | `pnpm verify` | PASS，184 files / 1068 tests / production build |
+| 2026-07-29 | 隔离 Profile 真实 Electron 恢复 | PASS，状态栏和面板为 `readyToInstall` |
+| 2026-07-29 | renderer reload 后主进程快照对账 | PASS，仍显示“更新已下载” |
 
-## U3-U5
+### 待完成
 
-尚未开始。后续每个里程碑复制以下模板：
+- [ ] 公开新版完成真实下载、退出、重开和状态恢复。
+- [ ] 下载进行中销毁并重建 BrowserWindow，主进程下载不中断。
+
+M1 关闭前，只能声明自动化行为成立，不能宣称真实安装包已完成恢复闭环。
+
+## M2：可信 DMG 兜底
+
+### 当前状态
+
+`IN PROGRESS`。代码、定向测试和真实 Electron UI 入口通过；公开仓库当前没有
+Release，真实签名、公证 DMG 的打开与 Finder 替换待首个公开版本验收。
+
+### 已完成
+
+- [x] 打开前重新核对 verified record、Manifest digest、大小和 SHA-256。
+- [x] 校验 DMG Developer ID、Team ID 和 Gatekeeper 公证结果。
+- [x] 只读挂载，要求唯一 `.app`，并检查签名、公证、Bundle ID、版本和纯 arm64。
+- [x] 预期 Team ID 来自当前正式应用，不由 renderer 或配置文件提供。
+- [x] renderer 无参数调用；本地路径不跨 IPC。
+- [x] 打开失败保留缓存；内容或发布者失败作废缓存。
+- [x] 更新面板展示 Finder 替换指引和“打开安装包”按钮。
+
+### 自动化证据
+
+| 日期 | 场景 | 结果 |
+| --- | --- | --- |
+| 2026-07-29 | M2 Verifier + Service 定向测试 | PASS，17/17 |
+| 2026-07-29 | 错 Team ID、错版本、universal/x64、多应用 | PASS，全部拒绝 |
+| 2026-07-29 | 打开前篡改 DMG | PASS，拒绝并删除缓存 |
+| 2026-07-29 | `shell.openPath` 失败后重试 | PASS，保留 ready 状态和缓存 |
+| 2026-07-29 | 隔离 Profile 真实 Electron UI | PASS，显示“打开安装包” |
+| 2026-07-29 | `pnpm typecheck` / `pnpm lint` | PASS |
+| 2026-07-29 | `pnpm verify` | PASS，185 files / 1079 tests / production build |
+| 2026-07-29 | `pnpm smoke:standalone` | PASS，10 + 6 + 14 + 4 + update recovery |
+| 2026-07-29 | 本地 arm64 ad-hoc package | PASS，Bundle ID/版本/arm64/深度签封正确 |
+
+### 待完成
+
+- [ ] 从公开 Release 下载真实签名、公证 DMG。
+- [ ] 在正式旧版点击“打开安装包”，通过所有系统检查并显示 Finder。
+- [ ] 手工替换后启动新版，确认旧缓存清理。
+
+## M3：安装技术闸门
+
+### 当前状态
+
+`BLOCKED`。分析已经结束，未向生产接入不可靠安装器：
+
+- Electron 内置 `autoUpdater` 会建立 Squirrel.Mac 的检查和自动下载状态。
+- `electron-updater` 的公开 API 不能消费现有 verified handle。
+- 最小 Helper 需要两个签名、公证测试包完成替换和回滚实验。
+- 当前公开仓库没有 Release，本机没有本轮公证凭证，不能伪造真人安装证据。
+
+决策见 `docs/decisions/0005-macos-update-installer-gate.md`。在闸门关闭前，
+`installAndRestart()` 保持 `install_blocked`，M5 不进入生产路径。
+
+## M4-M6
+
+尚未进入生产实现：
+
+```text
+M4 工作现场保护
+M5 自动安装重启
+M6 两轮真实升级验收
+```
+
+每个里程碑使用以下记录模板：
 
 ```text
 里程碑 / 日期 / 操作者
@@ -164,3 +158,9 @@ Actions Run / Draft 或 Release URL
 脱敏截图或诊断编号
 残余风险与是否允许进入下一里程碑
 ```
+
+## 历史证据
+
+2026-07-28 的 Manifest v1 双架构 Runs 和 Draft 只作为历史研发证据保留在 GitHub，
+不再是当前产品契约、发布门禁或验收要求。当前发布必须使用 Manifest v2 和 arm64
+单架构流程，不能复用历史 Draft 作为 M0/M1 完成证据。

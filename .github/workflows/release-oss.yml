@@ -19,7 +19,7 @@ on:
         type: choice
         options:
           - none
-          - omit-x64-build-record
+          - omit-arm64-build-record
 
 permissions:
   contents: read
@@ -68,16 +68,8 @@ jobs:
     if: ${{ inputs.create_draft }}
     needs: validate
     environment: studio-release
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-15
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: macos-15
-          - arch: x64
-            runner: macos-15-intel
     env:
       RELEASE_TAG: ${{ inputs.tag }}
     steps:
@@ -149,7 +141,7 @@ jobs:
         working-directory: source
         run: |
           pnpm build
-          node scripts/stage-claude-runtime.mjs --arch "${{ matrix.arch }}"
+          node scripts/stage-claude-runtime.mjs --arch arm64
       - name: Package signed and notarized application
         working-directory: source
         env:
@@ -164,7 +156,7 @@ jobs:
           fi
           unset CSC_NAME
           pnpm exec electron-builder \
-            --mac "--${{ matrix.arch }}" \
+            --mac --arm64 \
             --publish never \
             --config.mac.identity="$builder_identity" \
             --config.mac.hardenedRuntime=true \
@@ -197,7 +189,7 @@ jobs:
         working-directory: source
         run: |
           VERSION="$(node -p "require('./package.json').version")"
-          release_assets_dir="../release-assets-${{ matrix.arch }}"
+          release_assets_dir="../release-assets-arm64"
           mkdir -p "$release_assets_dir"
           shopt -s nullglob
           dmg_files=(dist/*.dmg)
@@ -206,15 +198,15 @@ jobs:
             echo "::error::Expected exactly one DMG and one ZIP before release asset normalization."
             exit 1
           fi
-          cp "${dmg_files[0]}" "$release_assets_dir/cclink-studio-${VERSION}-${{ matrix.arch }}.dmg"
-          cp "${zip_files[0]}" "$release_assets_dir/cclink-studio-${VERSION}-${{ matrix.arch }}.zip"
+          cp "${dmg_files[0]}" "$release_assets_dir/cclink-studio-${VERSION}-arm64.dmg"
+          cp "${zip_files[0]}" "$release_assets_dir/cclink-studio-${VERSION}-arm64.zip"
           (
             cd "$release_assets_dir"
-            shasum -a 256 ./*.dmg ./*.zip > "checksums-${{ matrix.arch }}.txt"
+            shasum -a 256 ./*.dmg ./*.zip > checksums-arm64.txt
           )
           SOURCE_SHA="$(git rev-parse HEAD)"
           RELEASE_WORKFLOW_SHA="$(git -C ../release-tools rev-parse HEAD)"
-          export SOURCE_SHA RELEASE_WORKFLOW_SHA VERSION RELEASE_ARCH="${{ matrix.arch }}"
+          export SOURCE_SHA RELEASE_WORKFLOW_SHA VERSION RELEASE_ARCH=arm64
           node -e '
             const fs = require("node:fs");
             const record = {
@@ -233,8 +225,8 @@ jobs:
           '
       - uses: actions/upload-artifact@v4
         with:
-          name: studio-${{ inputs.tag }}-${{ matrix.arch }}
-          path: release-assets-${{ matrix.arch }}
+          name: studio-${{ inputs.tag }}-arm64
+          path: release-assets-arm64
           if-no-files-found: error
 
   draft:
@@ -257,17 +249,16 @@ jobs:
           fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
-          pattern: studio-${{ inputs.tag }}-*
+          name: studio-${{ inputs.tag }}-arm64
           path: release-assets
-          merge-multiple: true
       - name: Inject U0 manifest validation failure
         if: ${{ inputs.failure_injection != 'none' }}
         env:
           FAILURE_INJECTION: ${{ inputs.failure_injection }}
         run: |
           case "$FAILURE_INJECTION" in
-            omit-x64-build-record)
-              rm release-assets/build-record-x64.json
+            omit-arm64-build-record)
+              rm release-assets/build-record-arm64.json
               ;;
             *)
               echo "::error::Unsupported failure injection: $FAILURE_INJECTION"

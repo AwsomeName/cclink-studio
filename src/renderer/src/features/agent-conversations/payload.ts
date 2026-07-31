@@ -113,6 +113,7 @@ export function buildAgentSendPayload(
     images: conversation?.pendingImages ?? [],
     sessionId: conversation?.sessionId ?? null,
     sessionCompatibilityFingerprint: conversation?.sessionCompatibilityFingerprint ?? null,
+    profileRef: conversation?.profileRef,
     continuity: buildConversationContinuity(conversation, message),
     ...(conversation?.runtime.workspaceRef
       ? { workspaceRef: conversation.runtime.workspaceRef }

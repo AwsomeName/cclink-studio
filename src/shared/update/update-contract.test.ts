@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   parseUpdateInstallPreparation,
+  parseUpdateManualInstallerResult,
   parseUpdateSnapshot,
   updateIpc,
   updateSnapshotChangedEventSchema,
@@ -66,6 +67,27 @@ describe('update contract', () => {
       { confirmationToken: 'confirm-1' },
     ])
     expect(() => updateIpc.installAndRestart.parseArgs([{ confirmationToken: '' }])).toThrow()
+  })
+
+  it('requires a structured error when opening the manual installer fails', () => {
+    expect(() =>
+      parseUpdateManualInstallerResult({
+        ok: false,
+        error: null,
+        snapshot: idleSnapshot(),
+      }),
+    ).toThrow()
+    expect(
+      parseUpdateManualInstallerResult({
+        ok: false,
+        error: {
+          code: 'install_failed',
+          userMessage: 'macOS 未能打开安装包',
+          retryable: true,
+        },
+        snapshot: idleSnapshot(),
+      }).error?.code,
+    ).toBe('install_failed')
   })
 
   it('validates snapshot change event payloads', () => {

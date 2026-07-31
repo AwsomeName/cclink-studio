@@ -3,6 +3,12 @@
 > 状态：M7.1-M7.5 已实现，待人工验收
 > 最后更新：2026-07-14
 > 关联文档：`docs/features/browser-automation.md`、`docs/features/document-editor.md`、`docs/features/agent-diagnostic-log.md`
+>
+> 产品演进：本文记录当前已存在的轻量工作空间运营能力。跨网站、跨多次运行、支持
+> 人与 AI 双向交接并持续负责结果的后续产品目标，以
+> `docs/features/ai-web-affairs-agent.md` 为事实源；不得继续扩张本模块形成第二套
+> 事务状态或调度系统。“运营”改造为“网站与账号”以及旧配置迁移的实施顺序，以
+> `docs/features/ai-web-affairs-agent-development-plan.md` 为准。
 
 ## 结论
 

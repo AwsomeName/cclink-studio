@@ -20,7 +20,7 @@ product was built.
 | Builder config    | `cclink-studio/electron-builder.yml`                       |
 | Output            | `cclink-studio/dist/`                                      |
 | Signing           | ad-hoc (`identity: '-'`), not notarized                    |
-| Command           | `pnpm studio:package` or `bash scripts/package.sh --arm64` |
+| Command           | `pnpm package:local`                                       |
 
 This table describes local test packaging. Formal OSS releases use
 `.github/workflows/release-oss.yml`, which overrides the ad-hoc identity with the protected

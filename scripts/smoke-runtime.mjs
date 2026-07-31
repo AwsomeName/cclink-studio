@@ -25,6 +25,7 @@ export function createSmokeRuntime(importMetaUrl) {
 
   return {
     rootDir,
+    runDir,
     logFile,
     rendererOrigin,
     runRestart(action) {
