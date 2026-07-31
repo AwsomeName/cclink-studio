@@ -12,6 +12,7 @@ import { AndroidToolModule } from '../mcp/modules/android'
 import { AgentDeviceManager } from '../android/agent-device-manager'
 import { AgentDeviceToolModule } from '../mcp/modules/agent-device'
 import { DataSourceToolModule } from '../mcp/modules/data-source'
+import { WebAffairToolModule } from '../mcp/modules/web-affairs'
 import type { ToolModule } from '../mcp/types'
 import type { AgentCapabilityName } from '../../shared/agent-protocol'
 import type { CclinkStudioRuntimeState } from './app-runtime'
@@ -94,6 +95,14 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
     } catch (error) {
       runtime.capabilities.degraded('editor', '编辑器可用，但 Agent 工具注册失败')
       console.error('[CCLink Studio] editor MCP 工具模块注册失败:', error)
+    }
+  }
+
+  if (runtime.webAffairService) {
+    try {
+      runtime.toolHost.registerModule(new WebAffairToolModule(runtime.webAffairService))
+    } catch (error) {
+      console.error('[CCLink Studio] web-affairs MCP 工具模块注册失败:', error)
     }
   }
 

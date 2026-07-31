@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import type { WebAffairSnapshot } from '@shared/web-affairs/web-affair-types'
+import type {
+  WebAffairCatalog,
+  WebAffairSnapshot,
+  WebAffairTemplateRef,
+} from '@shared/web-affairs/web-affair-types'
 import type { WebAccount, WebResourceSnapshot } from '@shared/web-resources/web-resource-types'
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import { IconPlus } from '../../components/common/Icons'
@@ -22,6 +26,7 @@ export function WebAffairsSidebar({
   const openTab = useTabStore((state) => state.openTab)
   const [affairs, setAffairs] = useState<WebAffairSnapshot | null>(null)
   const [resources, setResources] = useState<WebResourceSnapshot | null>(null)
+  const [catalog, setCatalog] = useState<WebAffairCatalog | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -31,16 +36,20 @@ export function WebAffairsSidebar({
   const [accountIds, setAccountIds] = useState<string[]>([])
   const [materialPaths, setMaterialPaths] = useState<string[]>([])
   const [flowText, setFlowText] = useState(DEFAULT_FLOW)
+  const [templateRef, setTemplateRef] = useState<WebAffairTemplateRef | undefined>()
 
   const reload = useCallback(async (): Promise<void> => {
-    const [affairResult, resourceResult] = await Promise.all([
+    const [affairResult, resourceResult, catalogResult] = await Promise.all([
       window.cclinkStudio.webAffairs.getSnapshot(),
       window.cclinkStudio.webResources.getSnapshot(),
+      window.cclinkStudio.webAffairs.getCatalog(),
     ])
     if (!affairResult.success) throw new Error(affairResult.error.message)
     if (!resourceResult.success) throw new Error(resourceResult.error.message)
+    if (!catalogResult.success) throw new Error(catalogResult.error.message)
     setAffairs(affairResult.data)
     setResources(resourceResult.data)
+    setCatalog(catalogResult.data)
     setError(null)
   }, [])
 
@@ -59,6 +68,16 @@ export function WebAffairsSidebar({
     window.addEventListener(WEB_AFFAIR_CHANGED_EVENT, handleChange)
     return () => window.removeEventListener(WEB_AFFAIR_CHANGED_EVENT, handleChange)
   }, [reload])
+
+  useEffect(
+    () =>
+      window.cclinkStudio.webAffairs.onChanged(() => {
+        void reload().catch((reason) =>
+          setError(reason instanceof Error ? reason.message : String(reason)),
+        )
+      }),
+    [reload],
+  )
 
   const accounts = useMemo(
     () => resources?.accounts.filter((account) => account.principalId === principalId) ?? [],
@@ -96,6 +115,7 @@ export function WebAffairsSidebar({
           .map((item) => item.trim())
           .filter(Boolean),
         workspaceRef,
+        templateRef,
       })
       if (!result.success) {
         setError(result.error.message)
@@ -107,6 +127,7 @@ export function WebAffairsSidebar({
       setAccountIds([])
       setMaterialPaths([])
       setFlowText(DEFAULT_FLOW)
+      setTemplateRef(undefined)
       await reload()
       window.dispatchEvent(new Event(WEB_AFFAIR_CHANGED_EVENT))
       openTab({
@@ -226,6 +247,36 @@ export function WebAffairsSidebar({
               ))}
             </ul>
           ) : null}
+          <label>
+            业务模板（可选）
+            <select
+              value={templateRef ? `${templateRef.templateId}@${templateRef.version}` : ''}
+              onChange={(event) => {
+                const template = catalog?.templates.find(
+                  (item) => `${item.id}@${item.version}` === event.target.value,
+                )
+                if (!template) {
+                  setTemplateRef(undefined)
+                  return
+                }
+                setTemplateRef({ templateId: template.id, version: template.version })
+                const titleById = new Map(
+                  catalog?.atomicNodes.map((item) => [item.id, item.title]) ?? [],
+                )
+                setFlowText(template.nodeCatalogIds.map((id) => titleById.get(id) ?? id).join('\n'))
+              }}
+            >
+              <option value="">不使用模板</option>
+              {catalog?.templates.map((template) => (
+                <option
+                  key={`${template.id}@${template.version}`}
+                  value={`${template.id}@${template.version}`}
+                >
+                  {template.title} · v{template.version}
+                </option>
+              ))}
+            </select>
+          </label>
           <label>
             整体流程（每行一个节点）
             <textarea

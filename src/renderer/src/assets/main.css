@@ -2096,7 +2096,8 @@ button.project-panel-row.active {
 
 .web-affairs-toolbar button,
 .web-affairs-form button,
-.web-affair-node-update button {
+.web-affair-node-update button,
+.web-affair-tab button {
   display: inline-flex;
   min-height: 28px;
   align-items: center;
@@ -2111,7 +2112,8 @@ button.project-panel-row.active {
 
 .web-affairs-toolbar button:hover,
 .web-affairs-form button:hover,
-.web-affair-node-update button:hover:not(:disabled) {
+.web-affair-node-update button:hover:not(:disabled),
+.web-affair-tab button:hover:not(:disabled) {
   background: var(--bg-hover);
 }
 
@@ -2563,6 +2565,12 @@ button.project-panel-row.active {
   font-style: normal;
 }
 
+.web-affair-flow-step > button > small {
+  grid-column: 2 / -1;
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
 .web-affair-flow-step > button.ready > span,
 .web-affair-flow-step > button.running > span {
   background: color-mix(in srgb, var(--text-accent) 18%, transparent);
@@ -2666,6 +2674,173 @@ button.project-panel-row.active {
 
 .web-affair-node-history time {
   font-variant-numeric: tabular-nums;
+}
+
+.web-affair-secondary-action {
+  min-height: 26px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.web-affair-flow-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+
+.web-affair-flow-editor-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+}
+
+.web-affair-flow-editor-heading span {
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.web-affair-flow-editor-row {
+  display: grid;
+  grid-template-columns: 20px minmax(120px, 1fr) 92px 82px minmax(130px, 0.8fr) 48px;
+  gap: 6px;
+  align-items: center;
+  padding: 7px;
+  border: 1px solid var(--border-color);
+}
+
+.web-affair-flow-editor-row.immutable {
+  opacity: 0.68;
+}
+
+.web-affair-flow-editor-row input,
+.web-affair-flow-editor-row select,
+.web-affair-node-actions textarea,
+.web-affair-wait-card input {
+  min-width: 0;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.web-affair-flow-editor-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.web-affair-flow-editor-row label select {
+  min-height: 46px;
+}
+
+.web-affair-flow-editor-actions,
+.web-affair-node-action-row,
+.web-affair-confirm-card > div,
+.web-affair-proposals > div > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.web-affair-flow-editor-actions .primary,
+.web-affair-node-actions .primary {
+  border-color: var(--text-accent);
+  background: var(--text-accent);
+  color: white;
+}
+
+.web-affair-node-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.web-affair-node-actions > strong,
+.web-affair-node-actions h4 {
+  margin: 0;
+  font-size: 11px;
+}
+
+.web-affair-node-actions > small,
+.web-affair-confirm-card small,
+.web-affair-proposals small {
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.web-affair-node-actions textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.web-affair-confirm-card,
+.web-affair-wait-card,
+.web-affair-proposals {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--text-accent) 35%, var(--border-color));
+  background: color-mix(in srgb, var(--text-accent) 6%, var(--bg-primary));
+  font-size: 10px;
+}
+
+.web-affair-confirm-card.compact {
+  border-color: var(--border-color);
+  background: var(--bg-primary);
+}
+
+.web-affair-confirm-card p,
+.web-affair-wait-card p,
+.web-affair-proposals p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.web-affair-confirm-card label,
+.web-affair-wait-card label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-secondary);
+}
+
+.web-affair-confirm-card label input {
+  flex: none;
+}
+
+.web-affair-proposals > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border-color);
+}
+
+@media (max-width: 1200px) {
+  .web-affair-flow-editor-row {
+    grid-template-columns: 20px minmax(120px, 1fr) 92px 82px;
+  }
+
+  .web-affair-flow-editor-row label {
+    grid-column: 2 / -1;
+  }
 }
 
 @media (max-width: 1000px) {

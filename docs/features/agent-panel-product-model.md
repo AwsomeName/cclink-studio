@@ -73,7 +73,7 @@ Thread 是同一个东西，可以在右侧继续聊，可以在左侧管理，�
 排序规则：
 
 1. 仅显示严格属于当前工作空间的 Thread；全局工作区显示未归档 Thread。
-2. 当前与普通 Thread 按 `updatedAt desc` 展示，并保留运行、错误等状态。
+2. 当前与普通 Thread 按 `createdAt desc` 固定展示；`updatedAt` 只用于相对时间，运行或消息更新不得改变列表位置。
 3. 已归档 Thread 收在“已关闭”分组，默认折叠。
 4. 搜索覆盖标题、摘要、工作空间和运行状态。
 5. 点击 Thread 切换右侧 Messages 和 Composer，不自动创建 Workbench Tab。

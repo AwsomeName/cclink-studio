@@ -8,6 +8,8 @@ import {
   WEB_AFFAIR_NODE_STATUS_LABELS,
   WEB_AFFAIR_STATUS_LABELS,
 } from './web-affair-view-model'
+import { WebAffairFlowEditor } from './WebAffairFlowEditor'
+import { WebAffairNodeActions } from './WebAffairNodeActions'
 
 export function WebAffairTab({ affairId }: { affairId: string }): React.ReactElement {
   const openTab = useTabStore((state) => state.openTab)
@@ -47,6 +49,18 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
     )
   }, [load])
 
+  useEffect(
+    () =>
+      window.cclinkStudio.webAffairs.onChanged((payload) => {
+        if (payload.affairId === affairId) {
+          void load().catch((reason) =>
+            setError(reason instanceof Error ? reason.message : String(reason)),
+          )
+        }
+      }),
+    [affairId, load],
+  )
+
   const selectedNode = affair?.flow.nodes.find((node) => node.id === selectedNodeId)
   const principal = resources?.principals.find((item) => item.id === affair?.principalId)
   const accounts = resources?.accounts.filter((item) => affair?.accountIds.includes(item.id)) ?? []
@@ -83,6 +97,29 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
       setNextStatus('')
       setResultNote('')
       window.dispatchEvent(new Event(WEB_AFFAIR_CHANGED_EVENT))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const acceptChangedAffair = (next: WebAffair): void => {
+    setAffair(next)
+    setError(null)
+    window.dispatchEvent(new Event(WEB_AFFAIR_CHANGED_EVENT))
+  }
+
+  const inspectMaterials = async (): Promise<void> => {
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await window.cclinkStudio.webAffairs.inspectMaterials(affairId)
+      if (!result.success) {
+        setError(result.error.message)
+        return
+      }
+      acceptChangedAffair(result.data)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -128,6 +165,9 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
             <h2>相关资源</h2>
           </div>
           <small>本地物料、目标网站、业务主体和登录账号</small>
+          <button type="button" disabled={saving} onClick={() => void inspectMaterials()}>
+            {saving ? '检查中…' : '检查材料'}
+          </button>
         </div>
         <div className="web-affair-resource-grid">
           <ResourceCard title="业务主体" items={[principal?.name ?? '主体资源已失效']} />
@@ -156,7 +196,18 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
             title="本地物料"
             items={
               affair.materials.length > 0
-                ? affair.materials.map((material) => material.name)
+                ? affair.materials.map(
+                    (material) =>
+                      `${material.name} · ${
+                        material.state === 'available'
+                          ? '可用'
+                          : material.state === 'missing'
+                            ? '已丢失'
+                            : material.state === 'changed'
+                              ? '已变化，需确认'
+                              : '待检查'
+                      }`,
+                  )
                 : ['暂未关联']
             }
           />
@@ -171,26 +222,42 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
               <h2>整体流程</h2>
             </div>
             <small>点击节点查看办理情况</small>
+            <WebAffairFlowEditor
+              affair={affair}
+              onSaved={acceptChangedAffair}
+              onError={(message) => setError(message)}
+            />
           </div>
           <div className="web-affair-flow">
-            {affair.flow.nodes.map((node, index) => (
-              <div className="web-affair-flow-step" key={node.id}>
-                <button
-                  type="button"
-                  className={`${node.status} ${selectedNodeId === node.id ? 'selected' : ''}`}
-                  onClick={() => {
-                    setSelectedNodeId(node.id)
-                    setNextStatus('')
-                    setResultNote('')
-                  }}
-                >
-                  <span>{index + 1}</span>
-                  <strong>{node.title}</strong>
-                  <em>{WEB_AFFAIR_NODE_STATUS_LABELS[node.status]}</em>
-                </button>
-                {index < affair.flow.nodes.length - 1 ? <i aria-hidden="true">↓</i> : null}
-              </div>
-            ))}
+            {affair.flow.nodes.map((node, index) => {
+              const dependencies = affair.flow.edges
+                .filter((edge) => edge.toNodeId === node.id)
+                .map((edge) => affair.flow.nodes.find((item) => item.id === edge.fromNodeId)?.title)
+                .filter(Boolean)
+              return (
+                <div className="web-affair-flow-step" key={node.id}>
+                  <button
+                    type="button"
+                    className={`${node.status} ${selectedNodeId === node.id ? 'selected' : ''}`}
+                    onClick={() => {
+                      setSelectedNodeId(node.id)
+                      setNextStatus('')
+                      setResultNote('')
+                    }}
+                  >
+                    <span>{index + 1}</span>
+                    <strong>{node.title}</strong>
+                    <em>{WEB_AFFAIR_NODE_STATUS_LABELS[node.status]}</em>
+                    {dependencies.length > 0 ? (
+                      <small>前置：{dependencies.join('、')}</small>
+                    ) : (
+                      <small>起始节点</small>
+                    )}
+                  </button>
+                  {index < affair.flow.nodes.length - 1 ? <i aria-hidden="true">↳</i> : null}
+                </div>
+              )
+            })}
           </div>
         </section>
 
@@ -231,6 +298,14 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
               />
               <DetailRow label="成功判据" value={selectedNode.successCriteria.join('；')} />
               <DetailRow label="最近结果" value={selectedNode.lastResultNote ?? '尚无结果说明'} />
+
+              <WebAffairNodeActions
+                affair={affair}
+                node={selectedNode}
+                resources={resources}
+                onChanged={acceptChangedAffair}
+                onError={(message) => setError(message)}
+              />
 
               {selectedNode.availableTransitions.length > 0 ? (
                 <div className="web-affair-node-update">

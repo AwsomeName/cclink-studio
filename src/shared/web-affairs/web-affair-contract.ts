@@ -1,6 +1,27 @@
-import { bindIpcParser, bindNoArgsIpc, ipcArgs } from '../ipc/contract'
+import { z } from 'zod'
+import {
+  bindIpcParser,
+  bindNoArgsIpc,
+  ipcArgs,
+  type IpcInvokeContract,
+  type IpcInvokeDefinition,
+} from '../ipc/contract'
 import { webAffairsIpc } from './web-affair'
-import { parseCreateWebAffairInput, parseUpdateWebAffairNodeInput } from './web-affair-schema'
+import {
+  bindWebAffairAttemptInputSchema,
+  completeWebAffairCheckInputSchema,
+  confirmWebAffairFinalActionInputSchema,
+  createWebAffairInputSchema,
+  decideWebAffairFlowProposalInputSchema,
+  finishWebAffairAttemptInputSchema,
+  handoffWebAffairAttemptInputSchema,
+  proposeWebAffairFlowDiffInputSchema,
+  returnWebAffairAttemptInputSchema,
+  reviseWebAffairFlowInputSchema,
+  scheduleWebAffairCheckInputSchema,
+  startWebAffairAttemptInputSchema,
+  updateWebAffairNodeInputSchema,
+} from './web-affair-schema'
 import type { WebAffair, WebAffairOperationResult } from './web-affair-types'
 
 const invalidInputResult = async (): Promise<WebAffairOperationResult<WebAffair>> => ({
@@ -8,26 +29,44 @@ const invalidInputResult = async (): Promise<WebAffairOperationResult<WebAffair>
   error: { code: 'INVALID_INPUT', message: '事务参数无效' },
 })
 
+function bindSingleInput<Input>(
+  contract: IpcInvokeDefinition<[Input], WebAffairOperationResult<WebAffair>>,
+  schema: z.ZodType<Input>,
+): IpcInvokeContract<[Input], WebAffairOperationResult<WebAffair>> {
+  return bindIpcParser(
+    contract,
+    (args) => {
+      if (args.length !== 1) throw new Error(`IPC ${contract.channel} 需要 1 个参数`)
+      return ipcArgs(schema.parse(args[0]))
+    },
+    invalidInputResult,
+  )
+}
+
 export const webAffairsIpcContracts = {
   getSnapshot: bindNoArgsIpc(webAffairsIpc.getSnapshot),
-  createAffair: bindIpcParser(
-    webAffairsIpc.createAffair,
-    (args) => {
-      if (args.length !== 1) {
-        throw new Error(`IPC ${webAffairsIpc.createAffair.channel} 需要 1 个参数`)
-      }
-      return ipcArgs(parseCreateWebAffairInput(args[0]))
-    },
-    invalidInputResult,
+  getCatalog: bindNoArgsIpc(webAffairsIpc.getCatalog),
+  createAffair: bindSingleInput(webAffairsIpc.createAffair, createWebAffairInputSchema),
+  updateNode: bindSingleInput(webAffairsIpc.updateNode, updateWebAffairNodeInputSchema),
+  reviseFlow: bindSingleInput(webAffairsIpc.reviseFlow, reviseWebAffairFlowInputSchema),
+  inspectMaterials: bindSingleInput(webAffairsIpc.inspectMaterials, z.uuid()),
+  startAttempt: bindSingleInput(webAffairsIpc.startAttempt, startWebAffairAttemptInputSchema),
+  bindAttempt: bindSingleInput(webAffairsIpc.bindAttempt, bindWebAffairAttemptInputSchema),
+  handoffAttempt: bindSingleInput(webAffairsIpc.handoffAttempt, handoffWebAffairAttemptInputSchema),
+  returnAttempt: bindSingleInput(webAffairsIpc.returnAttempt, returnWebAffairAttemptInputSchema),
+  confirmFinalAction: bindSingleInput(
+    webAffairsIpc.confirmFinalAction,
+    confirmWebAffairFinalActionInputSchema,
   ),
-  updateNode: bindIpcParser(
-    webAffairsIpc.updateNode,
-    (args) => {
-      if (args.length !== 1) {
-        throw new Error(`IPC ${webAffairsIpc.updateNode.channel} 需要 1 个参数`)
-      }
-      return ipcArgs(parseUpdateWebAffairNodeInput(args[0]))
-    },
-    invalidInputResult,
+  finishAttempt: bindSingleInput(webAffairsIpc.finishAttempt, finishWebAffairAttemptInputSchema),
+  scheduleCheck: bindSingleInput(webAffairsIpc.scheduleCheck, scheduleWebAffairCheckInputSchema),
+  completeCheck: bindSingleInput(webAffairsIpc.completeCheck, completeWebAffairCheckInputSchema),
+  proposeFlowDiff: bindSingleInput(
+    webAffairsIpc.proposeFlowDiff,
+    proposeWebAffairFlowDiffInputSchema,
   ),
-} as const
+  decideFlowProposal: bindSingleInput(
+    webAffairsIpc.decideFlowProposal,
+    decideWebAffairFlowProposalInputSchema,
+  ),
+}

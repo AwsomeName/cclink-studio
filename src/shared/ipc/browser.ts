@@ -79,6 +79,9 @@ export interface BrowserTaskRun {
     agentRunId: string | null
     agentSessionRef: string | null
     profileId: string | null
+    affairId?: string
+    affairNodeId?: string
+    affairAttemptId?: string
   }
   status: BrowserTaskStatus
   startedAt: number

@@ -31,11 +31,14 @@ export function getWorkspaceConversationGroups(
 ): WorkspaceConversationGroups {
   const activeWorkspaceKey = workspaceRefKey(workspaceRef)
   const ordered = conversationOrder
-    .flatMap((id) => {
+    .flatMap((id, orderIndex) => {
       const conversation = conversations[id]
-      return conversation ? [conversation] : []
+      return conversation ? [{ conversation, orderIndex }] : []
     })
-    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .sort(
+      (a, b) => b.conversation.createdAt - a.conversation.createdAt || b.orderIndex - a.orderIndex,
+    )
+    .map(({ conversation }) => conversation)
 
   const belongsToActiveWorkspace = (conversation: AgentConversationState): boolean => {
     const conversationWorkspaceKey = conversation.runtime.workspaceRef

@@ -27,10 +27,14 @@ async function readLog() {
   return readFile(logFile, 'utf8').catch(() => '')
 }
 
-async function waitForCdpPort(timeoutMs = 30_000) {
+async function waitForCdpPort(timeoutMs = 30_000, previousLog = '') {
   const startedAt = Date.now()
   while (Date.now() - startedAt < timeoutMs) {
-    const log = await readLog()
+    const completeLog = await readLog()
+    const log =
+      previousLog && completeLog.startsWith(previousLog)
+        ? completeLog.slice(previousLog.length)
+        : completeLog
     const portMatch =
       log.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//) ||
       log.match(/\[CCLink Studio\] CDP .*?:\s*(\d+)/)
@@ -72,10 +76,11 @@ async function createTabFromMenu(page, label) {
 }
 
 async function main() {
+  const initialLog = await readLog()
   runRestart('restart')
   startedBySmoke = true
 
-  const cdpPort = await waitForCdpPort()
+  const cdpPort = await waitForCdpPort(30_000, initialLog)
   let browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`)
   let page = await findRendererPage(browser)
   await page.setViewportSize({ width: 1440, height: 920 })
@@ -232,8 +237,9 @@ async function main() {
     assert(firstPartition !== secondaryPartition, 'two Browser Profiles share one partition')
 
     await browser.close()
+    const resourceRestartLog = await readLog()
     runRestart('restart')
-    const restartedCdpPort = await waitForCdpPort()
+    const restartedCdpPort = await waitForCdpPort(30_000, resourceRestartLog)
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${restartedCdpPort}`)
     page = await findRendererPage(browser)
     await page.setViewportSize({ width: 1440, height: 920 })
@@ -298,8 +304,9 @@ async function main() {
     )
 
     await browser.close()
+    const affairRestartLog = await readLog()
     runRestart('restart')
-    const restartedCdpPort = await waitForCdpPort()
+    const restartedCdpPort = await waitForCdpPort(30_000, affairRestartLog)
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${restartedCdpPort}`)
     page = await findRendererPage(browser)
     await page.setViewportSize({ width: 1440, height: 920 })
@@ -318,6 +325,129 @@ async function main() {
     await affairRow().waitFor({ state: 'visible', timeout: 10_000 })
     return 'five-node affair, progress transition, and app restart persistence verified'
   })
+
+  await runCheck(
+    'web affair exposes A2-A4 handoff, wait, template, and flow-diff controls',
+    async () => {
+      const affairSidebarTitle = page.locator('.sidebar-header-title', { hasText: '事务' })
+      if (
+        (await affairSidebarTitle.count()) === 0 ||
+        !(await affairSidebarTitle.first().isVisible())
+      ) {
+        await clickByTitle(page, '事务')
+      }
+      const affairTitle = 'UI Smoke Agent Affair'
+      const affairRow = () => page.locator('.web-affair-row', { hasText: affairTitle })
+      if ((await affairRow().count()) === 0) {
+        await page.getByRole('button', { name: '新建事务' }).evaluate((element) => element.click())
+        const form = page.locator('.web-affairs-form')
+        await form.getByLabel('事务名称').fill(affairTitle)
+        await form.getByLabel('最终目标').fill('验证 AI 交接、外部等待、模板和动态流程入口')
+        await form.getByLabel('代表的业务主体').selectOption({ label: 'CCLink Smoke Company' })
+        const account = form.locator('.web-affairs-account-choice', { hasText: 'UI Smoke Account' })
+        await account.first().locator('input').check()
+        await form.getByLabel('业务模板（可选）').selectOption('generic-web-affair@1')
+        await form.getByRole('button', { name: '创建事务' }).click()
+      } else {
+        await affairRow().click()
+      }
+
+      await page.locator('.web-affair-tab', { hasText: affairTitle }).waitFor({ timeout: 10_000 })
+      assert(
+        (await page.locator('.web-affair-flow-step').count()) === 6,
+        'template did not create six nodes',
+      )
+
+      await page.evaluate(async (title) => {
+        const snapshot = await window.cclinkStudio.webAffairs.getSnapshot()
+        if (!snapshot.success) throw new Error(snapshot.error.message)
+        let affair = snapshot.data.affairs.find((item) => item.title === title)
+        if (!affair) throw new Error('smoke affair missing')
+        for (const node of affair.flow.nodes.slice(0, 2)) {
+          if (node.status === 'completed') continue
+          const updated = await window.cclinkStudio.webAffairs.updateNode({
+            affairId: affair.id,
+            nodeId: node.id,
+            status: 'completed',
+            resultNote: `Smoke 已完成 ${node.title}`,
+          })
+          if (!updated.success) throw new Error(updated.error.message)
+          affair = updated.data
+        }
+      }, affairTitle)
+
+      const webFormNode = page.locator('.web-affair-flow-step button.ready', {
+        has: page.locator('strong', { hasText: '填写网页表单' }),
+      })
+      await webFormNode.waitFor({ timeout: 10_000 })
+      await webFormNode.click()
+      await page.getByRole('button', { name: '交给 AI' }).click()
+      const preflight = page.locator('.web-affair-confirm-card', { hasText: '执行前账号核验' })
+      await preflight.waitFor({ timeout: 10_000 })
+      assert(
+        (await preflight.innerText()).includes('web-affairs-ui-smoke'),
+        'preflight Profile missing',
+      )
+      await preflight.getByRole('button', { name: '取消' }).click()
+
+      await page
+        .locator('.web-affair-flow-step button', {
+          has: page.locator('strong', { hasText: '等待外部审核' }),
+        })
+        .click()
+      await page.getByText('外部等待与重新检查', { exact: true }).waitFor({ timeout: 10_000 })
+      assert(
+        await page.getByText('最终确认卡固定展示', { exact: true }).isVisible(),
+        'final confirmation card missing',
+      )
+
+      await page.getByRole('button', { name: '编辑未执行流程' }).click()
+      assert(
+        (await page.locator('.web-affair-flow-editor-row').count()) === 6,
+        'flow editor missing nodes',
+      )
+      await page
+        .locator('.web-affair-flow-editor-actions')
+        .getByRole('button', { name: '取消' })
+        .click()
+
+      await page.evaluate(async (title) => {
+        const snapshot = await window.cclinkStudio.webAffairs.getSnapshot()
+        if (!snapshot.success) throw new Error(snapshot.error.message)
+        const affair = snapshot.data.affairs.find((item) => item.title === title)
+        if (!affair) throw new Error('smoke affair missing')
+        const result = await window.cclinkStudio.webAffairs.proposeFlowDiff({
+          affairId: affair.id,
+          baseVersion: affair.flow.version,
+          reason: 'Smoke 页面要求补充一次身份核验',
+          operations: [
+            {
+              kind: 'add-node',
+              tempId: 'smoke-extra-check',
+              title: '补充身份核验',
+              nodeType: 'human-task',
+              executor: 'user',
+            },
+            {
+              kind: 'add-edge',
+              fromNodeId: affair.flow.nodes[0].id,
+              toNodeId: 'smoke-extra-check',
+            },
+          ],
+          impacts: ['新增人工核验步骤'],
+          proposedBy: 'ai',
+        })
+        if (!result.success) throw new Error(result.error.message)
+      }, affairTitle)
+      const proposal = page.locator('.web-affair-proposals', {
+        hasText: 'Smoke 页面要求补充一次身份核验',
+      })
+      await proposal.waitFor({ timeout: 10_000 })
+      await proposal.getByRole('button', { name: '拒绝' }).click()
+      await proposal.waitFor({ state: 'detached', timeout: 10_000 })
+      return 'A2 preflight, A3 wait, A4 template/editor/proposal controls verified'
+    },
+  )
 
   await runCheck('settings page opens and searches locally', async () => {
     await clickByTitle(page, '设置')

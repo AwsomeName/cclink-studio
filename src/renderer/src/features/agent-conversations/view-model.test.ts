@@ -168,6 +168,59 @@ describe('agent conversation view model', () => {
     expect(groups.closed.map((item) => item.id)).toEqual(['closed'])
   })
 
+  it('keeps left sidebar conversations in fixed creation order while runs update', () => {
+    const conversations = {
+      older: conversation({
+        id: 'older',
+        title: '先创建且刚更新',
+        createdAt: now - 10 * 60 * 1000,
+        updatedAt: now,
+        loading: true,
+      }),
+      newer: conversation({
+        id: 'newer',
+        title: '后创建且较早更新',
+        createdAt: now - 60 * 1000,
+        updatedAt: now - 30 * 1000,
+        loading: true,
+      }),
+    }
+
+    const initial = getWorkspaceConversationGroups(['older', 'newer'], conversations, workspace)
+    const afterOlderUpdates = getWorkspaceConversationGroups(
+      ['older', 'newer'],
+      {
+        ...conversations,
+        older: { ...conversations.older, updatedAt: now + 60 * 1000 },
+      },
+      workspace,
+    )
+
+    expect(initial.current.map((item) => item.id)).toEqual(['newer', 'older'])
+    expect(afterOlderUpdates.current.map((item) => item.id)).toEqual(['newer', 'older'])
+  })
+
+  it('uses persisted creation order when conversations share a creation timestamp', () => {
+    const conversations = {
+      first: conversation({
+        id: 'first',
+        title: '同毫秒先创建',
+        createdAt: now,
+        updatedAt: now + 1000,
+      }),
+      second: conversation({
+        id: 'second',
+        title: '同毫秒后创建',
+        createdAt: now,
+        updatedAt: now,
+      }),
+    }
+
+    const groups = getWorkspaceConversationGroups(['first', 'second'], conversations, workspace)
+
+    expect(groups.current.map((item) => item.id)).toEqual(['second', 'first'])
+  })
+
   it('builds session stats for visible assistant sessions', () => {
     const conversations = {
       bound: conversation({ id: 'bound', title: '已绑定' }),

@@ -18,6 +18,10 @@ const MODULE_CATALOG: Record<string, { label: string; description: string }> = {
   },
   android: { label: 'Android 真机', description: '通过 ADB 检查和操作用户连接的 Android 真机。' },
   'agent-device': { label: '设备语义操作', description: '基于界面快照执行语义点击、输入和滑动。' },
+  'web-affairs': {
+    label: '网页事务',
+    description: '读取事务事实、记录办理证据并提出待用户确认的流程变更。',
+  },
 }
 
 const CAPABILITY_LABELS: Record<AgentCapabilityStatus['name'], string> = {
@@ -165,6 +169,10 @@ function getModuleAvailability(
       return runtime.agentDeviceManager?.isAvailable()
         ? { available: true }
         : { available: false, reason: '设备语义层不可用' }
+    case 'web-affairs':
+      return runtime.webAffairService
+        ? { available: true }
+        : { available: false, reason: '事务服务未就绪' }
     default:
       return { available: true }
   }
