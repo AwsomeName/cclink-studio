@@ -28,7 +28,10 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
   if (error) {
     return (
       <div className="agent-role-detail-state error">
-        角色加载失败：{error} <button type="button" onClick={reload}>重试</button>
+        角色加载失败：{error}{' '}
+        <button type="button" onClick={reload}>
+          重试
+        </button>
       </div>
     )
   }
@@ -46,8 +49,14 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
     }
     return (
       <div className="agent-role-detail-state error">
-        <p>角色版本 {tab.agentRole?.roleId}@{tab.agentRole?.version} 已不可用，系统不会静默替换。</p>
-        <button type="button" onClick={migrateToDefault} disabled={!conversation || saving !== null}>
+        <p>
+          角色版本 {tab.agentRole?.roleId}@{tab.agentRole?.version} 已不可用，系统不会静默替换。
+        </p>
+        <button
+          type="button"
+          onClick={migrateToDefault}
+          disabled={!conversation || saving !== null}
+        >
           将当前会话迁移到默认助手
         </button>
       </div>

@@ -8,6 +8,7 @@ interface CreateMainWindowOptions {
   preloadPath: string
   rendererUrl?: string
   rendererHtmlPath: string
+  appZoomLevel?: number
 }
 
 /** 创建 CCLink Studio 主窗口并加载 renderer，不负责业务 runtime 装配。 */
@@ -32,6 +33,7 @@ export function createMainWindow(options: CreateMainWindowOptions): BrowserWindo
     if (!isAllowedMainRendererUrl(targetUrl, rendererEntryUrl)) event.preventDefault()
   })
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  window.webContents.setZoomLevel(options.appZoomLevel ?? 0)
 
   if (options.isDev && options.rendererUrl) {
     void window.loadURL(options.rendererUrl)

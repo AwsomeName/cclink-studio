@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { DEFAULT_SETTINGS } from '@shared/settings-constants'
 import type { Command } from '../../stores/command-store'
 import { createAgentCommands } from './agent-commands'
 import { createBrowserCommands } from './browser-commands'
@@ -8,6 +9,7 @@ import { createSettingsCommands } from './settings-commands'
 import { createTabCommands } from './tab-commands'
 import { createViewCommands } from './view-commands'
 import { createWindowCommands } from './window-commands'
+import { useSettingsStore } from '../../stores/settings-store'
 
 function createAllCommands(): Command[] {
   return [
@@ -43,5 +45,35 @@ describe('bootstrap command modules', () => {
     expect(ids).toContain('agent.resetSession')
     expect(ids).toContain('diagnostics.copyWorkspaceState')
     expect(ids).toContain('window.reload')
+  })
+
+  it('routes application zoom commands through the persisted settings owner', async () => {
+    const original = useSettingsStore.getState()
+    const updateSettings = vi.fn(async () => true)
+    useSettingsStore.setState({
+      settings: { ...DEFAULT_SETTINGS, appZoomLevel: 0 },
+      updateSettings,
+      error: null,
+    })
+
+    try {
+      const commands = createViewCommands({
+        toggleSidebar: () => undefined,
+        toggleAgentPanel: () => undefined,
+        focusAgentPanel: () => undefined,
+        resetAgentLayout: () => undefined,
+      })
+      await commands.find((command) => command.id === 'view.zoomOut')?.action()
+      await commands.find((command) => command.id === 'view.zoomReset')?.action()
+
+      expect(updateSettings).toHaveBeenNthCalledWith(1, { appZoomLevel: -0.5 })
+      expect(updateSettings).toHaveBeenNthCalledWith(2, { appZoomLevel: 0 })
+    } finally {
+      useSettingsStore.setState({
+        settings: original.settings,
+        updateSettings: original.updateSettings,
+        error: original.error,
+      })
+    }
   })
 })

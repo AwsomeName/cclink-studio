@@ -40,6 +40,7 @@ import { UpdateService } from '../update/update-service'
 import { ScheduledTaskService } from '../scheduled-task/scheduled-task-service'
 import { registerScheduledTaskIpc } from '../scheduled-task/scheduled-task-ipc'
 import { MacDmgVerifier } from '../update/mac-dmg-verifier'
+import { applyWindowZoomLevel } from './window-runtime'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   runtime.credentialService = new CredentialService()
@@ -244,6 +245,7 @@ export async function bootstrapMainProcessServices(
       const { bootstrapAgentRuntime } = await import('./agent-runtime')
       await bootstrapAgentRuntime(runtime)
     },
+    (level) => applyWindowZoomLevel(runtime, level),
   )
   console.log('[CCLink Studio] 设置 IPC 已注册')
 

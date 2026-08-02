@@ -1,11 +1,27 @@
 import type { Command } from '../../stores/command-store'
+import { useSettingsStore } from '../../stores/settings-store'
 import { useThemeStore } from '../../stores/theme-store'
+import {
+  APP_ZOOM_LEVEL_MAX,
+  APP_ZOOM_LEVEL_MIN,
+  APP_ZOOM_LEVEL_STEP,
+} from '@shared/settings-constants'
 
 interface ViewCommandDeps {
   toggleSidebar: () => void
   toggleAgentPanel: () => void
   focusAgentPanel: () => void
   resetAgentLayout: () => void
+}
+
+function clampAppZoomLevel(level: number): number {
+  return Math.min(APP_ZOOM_LEVEL_MAX, Math.max(APP_ZOOM_LEVEL_MIN, level))
+}
+
+async function updateAppZoomLevel(level: number): Promise<void> {
+  const store = useSettingsStore.getState()
+  const success = await store.updateSettings({ appZoomLevel: clampAppZoomLevel(level) })
+  if (!success) throw new Error(useSettingsStore.getState().error ?? '应用缩放更新失败')
 }
 
 export function createViewCommands(deps: ViewCommandDeps): Command[] {
@@ -41,25 +57,21 @@ export function createViewCommands(deps: ViewCommandDeps): Command[] {
       id: 'view.zoomIn',
       label: '放大界面',
       category: '视图',
-      action: () => {
-        document.body.style.zoom = String(parseFloat(document.body.style.zoom || '1') * 1.1)
-      },
+      action: () =>
+        updateAppZoomLevel(useSettingsStore.getState().settings.appZoomLevel + APP_ZOOM_LEVEL_STEP),
     },
     {
       id: 'view.zoomOut',
       label: '缩小界面',
       category: '视图',
-      action: () => {
-        document.body.style.zoom = String(parseFloat(document.body.style.zoom || '1') / 1.1)
-      },
+      action: () =>
+        updateAppZoomLevel(useSettingsStore.getState().settings.appZoomLevel - APP_ZOOM_LEVEL_STEP),
     },
     {
       id: 'view.zoomReset',
       label: '重置界面缩放',
       category: '视图',
-      action: () => {
-        document.body.style.zoom = '1'
-      },
+      action: () => updateAppZoomLevel(0),
     },
     {
       id: 'view.toggleFullscreen',

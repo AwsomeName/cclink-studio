@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { AppSettings } from '../settings-constants'
+import { APP_ZOOM_LEVEL_MAX, APP_ZOOM_LEVEL_MIN } from '../settings-constants'
 
 const shortString = z.string().max(4096)
 const pathString = z.string().max(32_768)
@@ -47,7 +48,7 @@ const settingsUpdateSchema = z
     editorTabSize: z.number().finite().int().min(1).max(16),
     editorWordWrap: z.boolean(),
     editorLineNumbers: z.boolean(),
-    appZoomLevel: z.number().finite().min(-5).max(5),
+    appZoomLevel: z.number().finite().min(APP_ZOOM_LEVEL_MIN).max(APP_ZOOM_LEVEL_MAX),
     uiFontSize: z.number().finite().min(8).max(48),
     lastWorkspacePath: pathString,
     recentWorkspacePaths: z.array(pathString).max(100),

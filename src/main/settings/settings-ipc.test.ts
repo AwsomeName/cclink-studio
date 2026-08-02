@@ -68,6 +68,29 @@ describe('registerSettingsIpc', () => {
     })
   })
 
+  it('applies persisted app zoom changes for set and reset paths', async () => {
+    const settingsService = createSettingsService()
+    const applyAppZoomLevel = vi.fn()
+    registerSettingsIpc(
+      settingsService as never,
+      createGuard('trusted') as never,
+      createPermissionManager() as never,
+      () => null,
+      () => null,
+      () => null,
+      async () => undefined,
+      applyAppZoomLevel,
+    )
+
+    await mockIpcMain.handlers.get('settings:set')?.({ sender: 'trusted' }, { appZoomLevel: -1 })
+    await mockIpcMain.handlers.get('settings:reset')?.({ sender: 'trusted' })
+    await mockIpcMain.handlers.get('settings:resetKey')?.({ sender: 'trusted' }, 'appZoomLevel')
+
+    expect(applyAppZoomLevel).toHaveBeenNthCalledWith(1, -1)
+    expect(applyAppZoomLevel).toHaveBeenNthCalledWith(2, DEFAULT_SETTINGS.appZoomLevel)
+    expect(applyAppZoomLevel).toHaveBeenNthCalledWith(3, DEFAULT_SETTINGS.appZoomLevel)
+  })
+
   it('probes a runtime before persistence and commits the verified candidate', async () => {
     const settingsService = createSettingsService()
     settingsService.getRuntimeSettings.mockReturnValue({ ...DEFAULT_SETTINGS, apiKey: 'test-key' })
@@ -249,6 +272,7 @@ describe('registerSettingsIpc', () => {
       () => null,
       () => runtimeManager as never,
       async () => undefined,
+      () => undefined,
       runConnectionTest,
     )
 
@@ -284,6 +308,7 @@ describe('registerSettingsIpc', () => {
       () => null,
       () => runtimeManager as never,
       async () => undefined,
+      () => undefined,
       runConnectionTest,
     )
 
@@ -346,6 +371,7 @@ describe('registerSettingsIpc', () => {
       () => null,
       () => runtimeManager as never,
       async () => undefined,
+      () => undefined,
       runConnectionTest,
     )
 

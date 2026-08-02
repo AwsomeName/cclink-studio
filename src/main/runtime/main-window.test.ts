@@ -6,6 +6,7 @@ const electronMocks = vi.hoisted(() => {
     session: { webRequest },
     on: vi.fn(),
     setWindowOpenHandler: vi.fn(),
+    setZoomLevel: vi.fn(),
   }
   const window = {
     webContents,
@@ -54,6 +55,21 @@ describe('createMainWindow security boundary', () => {
     )
     expect(electronMocks.window.loadFile).toHaveBeenCalledWith('/tmp/index.html')
     expect(electronMocks.webContents.setWindowOpenHandler).toHaveBeenCalledOnce()
+    expect(electronMocks.webContents.setZoomLevel).toHaveBeenCalledWith(0)
+  })
+
+  it('applies the persisted app zoom before loading the renderer', () => {
+    createMainWindow({
+      isDev: false,
+      preloadPath: '/tmp/preload.js',
+      rendererHtmlPath: '/tmp/index.html',
+      appZoomLevel: -1,
+    })
+
+    expect(electronMocks.webContents.setZoomLevel).toHaveBeenCalledWith(-1)
+    expect(electronMocks.webContents.setZoomLevel.mock.invocationCallOrder[0]).toBeLessThan(
+      electronMocks.window.loadFile.mock.invocationCallOrder[0],
+    )
   })
 
   it('injects a production CSP without development script or network exceptions', () => {

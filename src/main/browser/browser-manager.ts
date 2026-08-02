@@ -4,6 +4,7 @@ import type { PlaywrightBridge } from '../playwright/playwright-bridge'
 import type { BrowserInstanceStore } from '../persistence/browser-instance-store'
 import {
   browserIpcEvents,
+  type BrowserBounds,
   type BrowserSessionDiagnosticSummary,
   type BrowserReconcileViewsOptions,
   type BrowserViewModeType,
@@ -27,6 +28,7 @@ import {
   shouldRecreateBrowserViewForBinding,
 } from './browser-view-reconciliation'
 import { normalizeBrowserContext, showBrowserContextMenu } from './browser-context-menu'
+import { rendererBoundsToWindowDip } from './browser-view-bounds'
 
 /** 移动版模拟时的目标视口宽度（CSS px，约等于 iPhone Pro 逻辑宽度） */
 const MOBILE_WIDTH = 414
@@ -100,6 +102,8 @@ export class BrowserManager {
   private mainWindow: BrowserWindow
   /** 内容区坐标（全局，所有视图共享同一矩形） */
   private currentBounds = { x: 0, y: 0, width: 0, height: 0 }
+  /** renderer 最近上报的 CSS 坐标；应用缩放变化时据此立即重算原生 View。 */
+  private currentRendererBounds = { x: 0, y: 0, width: 0, height: 0 }
   /** 新建视图的默认状态（从设置继承） */
   private defaultViewMode: ViewMode = 'desktop'
   private defaultZoomMode: ZoomMode = 'fit'
@@ -131,6 +135,20 @@ export class BrowserManager {
   private win(): BrowserWindow | null {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return null
     return this.mainWindow
+  }
+
+  private resolveRendererBounds(bounds: BrowserBounds): BrowserBounds {
+    const win = this.win()
+    if (!win) return rendererBoundsToWindowDip(bounds, 1)
+    try {
+      const contentBounds = win.getContentBounds()
+      return rendererBoundsToWindowDip(bounds, win.webContents.getZoomFactor(), {
+        width: contentBounds.width,
+        height: contentBounds.height,
+      })
+    } catch {
+      return rendererBoundsToWindowDip(bounds, 1)
+    }
   }
 
   /**
@@ -598,7 +616,8 @@ export class BrowserManager {
    * 由渲染进程通过 IPC 上报 Workbench 区域坐标，作用于当前活跃视图
    */
   updateBounds(bounds: { x: number; y: number; width: number; height: number }): void {
-    this.currentBounds = bounds
+    this.currentRendererBounds = bounds
+    this.currentBounds = this.resolveRendererBounds(bounds)
     if (!this.activeViewId) return
     const entry = this.views.get(this.activeViewId)
     if (!entry) return
@@ -610,7 +629,17 @@ export class BrowserManager {
     }
 
     // bounds 立即生效，保证 resize 跟手；缩放重算防抖处理
-    entry.view.setBounds(bounds)
+    entry.view.setBounds(this.currentBounds)
+    this.scheduleFit(this.activeViewId)
+  }
+
+  /** 主窗口界面缩放变化后，先用最近一次 CSS 坐标重算，等待 renderer 上报最终布局。 */
+  refreshBoundsForWindowZoom(): void {
+    this.currentBounds = this.resolveRendererBounds(this.currentRendererBounds)
+    if (!this.activeViewId) return
+    const entry = this.views.get(this.activeViewId)
+    if (!entry?.boundsReceived) return
+    entry.view.setBounds(this.currentBounds)
     this.scheduleFit(this.activeViewId)
   }
 

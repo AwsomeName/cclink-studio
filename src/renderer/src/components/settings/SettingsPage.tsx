@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_SETTINGS, PROVIDER_PRESETS, getPresetBaseUrl } from '@shared/ipc/settings'
 import type { ApiFormat, AppSettings, CadBackend, Provider } from '@shared/ipc/settings'
 import type { SettingsSecretStatus } from '@shared/ipc/settings'
+import { APP_ZOOM_LEVEL_MAX, APP_ZOOM_LEVEL_MIN } from '@shared/settings-constants'
 import type {
   ClaudeRuntimeSelection,
   ClaudeRuntimeSource,
@@ -899,8 +900,8 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                   <input
                     className="settings-input"
                     type="number"
-                    min={-2}
-                    max={3}
+                    min={APP_ZOOM_LEVEL_MIN}
+                    max={APP_ZOOM_LEVEL_MAX}
                     step={0.25}
                     value={settings.appZoomLevel}
                     onChange={(event) => update({ appZoomLevel: Number(event.target.value) })}

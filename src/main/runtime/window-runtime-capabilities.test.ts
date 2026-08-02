@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createRuntimeState } from './app-runtime'
-import { bootstrapWindowCapabilities } from './window-runtime'
+import { applyWindowZoomLevel, bootstrapWindowCapabilities } from './window-runtime'
 
 describe('bootstrapWindowCapabilities', () => {
   it('continues Android startup after Browser initialization fails', () => {
@@ -61,6 +61,24 @@ describe('bootstrapWindowCapabilities', () => {
       state: 'failed',
       reason: 'adb bridge bootstrap failed',
     })
+  })
+})
+
+describe('applyWindowZoomLevel', () => {
+  it('updates the main renderer and immediately refreshes native browser bounds', () => {
+    const runtime = createRuntimeState(true)
+    const setZoomLevel = vi.fn()
+    const refreshBoundsForWindowZoom = vi.fn()
+    runtime.mainWindow = {
+      isDestroyed: () => false,
+      webContents: { setZoomLevel },
+    } as never
+    runtime.browserManager = { refreshBoundsForWindowZoom } as never
+
+    applyWindowZoomLevel(runtime, -1)
+
+    expect(setZoomLevel).toHaveBeenCalledWith(-1)
+    expect(refreshBoundsForWindowZoom).toHaveBeenCalledOnce()
   })
 })
 

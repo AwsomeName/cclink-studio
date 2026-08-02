@@ -52,6 +52,7 @@ export function registerSettingsIpc(
   getToolHost: () => McpToolHost | null = () => null,
   getClaudeRuntimeManager: () => ClaudeRuntimeManager | null = () => null,
   recoverAgentRuntime: () => Promise<void> = async () => undefined,
+  applyAppZoomLevel: (level: number) => void = () => undefined,
   runClaudeModelConnectionTest: (
     input: ClaudeModelConnectionTestInput,
   ) => ReturnType<typeof testClaudeModelConnection> = testClaudeModelConnection,
@@ -177,6 +178,10 @@ export function registerSettingsIpc(
 
       const updated = await settingsService.set(normalizedPartial)
 
+      if ('appZoomLevel' in normalizedPartial) {
+        applyAppZoomLevel(updated.appZoomLevel)
+      }
+
       // 权限模式：校验后立即生效
       if (normalizedPartial.permissionMode) {
         const mode = normalizedPartial.permissionMode as string
@@ -224,6 +229,7 @@ export function registerSettingsIpc(
         return { success: false, error: `${probe.failure.code}: ${probe.failure.message}` }
       }
       const settings = await settingsService.reset()
+      applyAppZoomLevel(settings.appZoomLevel)
       // 重置权限模式为默认值
       permissionManager.setMode(settings.permissionMode)
       applyToolModuleSettings(getToolHost(), settings.disabledAgentToolModules)
@@ -267,6 +273,10 @@ export function registerSettingsIpc(
         return { success: false, error: `${probe.failure.code}: ${probe.failure.message}` }
       }
       const updated = await settingsService.resetKey(key)
+
+      if (key === 'appZoomLevel') {
+        applyAppZoomLevel(updated.appZoomLevel)
+      }
 
       // 权限模式重置 → 即时生效
       if (key === 'permissionMode') {

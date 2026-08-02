@@ -970,7 +970,9 @@ describe('useAgentStore', () => {
       vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
       const conversationId = useAgentStore.getState().activeConversationId
       useAgentStore.getState().addUserMessage('保留这条历史', conversationId)
-      useAgentStore.getState().setSessionId('session-before-role-change', conversationId, 'a'.repeat(64))
+      useAgentStore
+        .getState()
+        .setSessionId('session-before-role-change', conversationId, 'a'.repeat(64))
 
       await expect(
         useAgentStore
@@ -1007,7 +1009,9 @@ describe('useAgentStore', () => {
       const setSection = vi.fn().mockRejectedValue(new Error('disk full'))
       vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
       const conversationId = useAgentStore.getState().activeConversationId
-      useAgentStore.getState().setSessionId('session-before-role-change', conversationId, 'a'.repeat(64))
+      useAgentStore
+        .getState()
+        .setSessionId('session-before-role-change', conversationId, 'a'.repeat(64))
 
       await expect(
         useAgentStore

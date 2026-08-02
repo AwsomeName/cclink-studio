@@ -49,7 +49,9 @@ export function AgentRolesSidebar(): React.ReactElement {
       {error && (
         <div className="agent-role-sidebar-error">
           <span>角色列表加载失败：{error}</span>
-          <button type="button" onClick={reload}>重试</button>
+          <button type="button" onClick={reload}>
+            重试
+          </button>
         </div>
       )}
       <div className="agent-role-list">

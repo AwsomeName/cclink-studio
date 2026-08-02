@@ -538,7 +538,9 @@ export function WorkbenchAgentConversation({
         roles={roles}
         conversationId={conversationId}
         workspaceKey={
-          conversation.runtime.workspaceRef ? workspaceRefKey(conversation.runtime.workspaceRef) : null
+          conversation.runtime.workspaceRef
+            ? workspaceRefKey(conversation.runtime.workspaceRef)
+            : null
         }
       />
     </ConversationShell>

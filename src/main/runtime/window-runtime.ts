@@ -40,6 +40,7 @@ export function createWindowRuntime(
     preloadPath: options.preloadPath,
     rendererUrl: options.rendererUrl,
     rendererHtmlPath: options.rendererHtmlPath,
+    appZoomLevel: runtime.settingsService?.getAll().appZoomLevel ?? 0,
   })
   runtime.trustedRendererGuard = createTrustedRendererGuard(
     runtime.mainWindow,
@@ -58,6 +59,18 @@ export function createWindowRuntime(
   registerDialogIpc(runtime.mainWindow, runtime.trustedRendererGuard)
   registerWindowIpc(runtime.mainWindow, runtime.trustedRendererGuard)
   bootstrapWindowCapabilities(runtime)
+}
+
+/** 设置主 renderer 缩放，并让已挂载的原生 Browser View 立即进入同一坐标系。 */
+export function applyWindowZoomLevel(runtime: CclinkStudioRuntimeState, zoomLevel: number): void {
+  const mainWindow = runtime.mainWindow
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  try {
+    mainWindow.webContents.setZoomLevel(zoomLevel)
+    runtime.browserManager?.refreshBoundsForWindowZoom()
+  } catch (error) {
+    console.warn('[CCLink Studio] 应用界面缩放失败，保留当前缩放:', error)
+  }
 }
 
 export async function destroyWindowRuntime(runtime: CclinkStudioRuntimeState): Promise<void> {

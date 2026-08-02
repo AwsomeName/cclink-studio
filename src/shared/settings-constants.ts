@@ -142,6 +142,11 @@ export interface AppSettings {
   showHiddenFiles: boolean
 }
 
+export const APP_ZOOM_LEVEL_MIN = -5
+export const APP_ZOOM_LEVEL_MAX = 5
+/** 约等于每次放大或缩小 10%。 */
+export const APP_ZOOM_LEVEL_STEP = 0.5
+
 /** 所有提供商的预设（唯一权威来源） */
 export const PROVIDER_PRESETS: Record<Provider, ProviderPreset> = {
   anthropic: {

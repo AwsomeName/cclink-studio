@@ -11,7 +11,9 @@ export function buildAgentConversationTimeline(
   events: AgentConversationConfigurationEvent[],
 ): TimelineItem[] {
   return [
-    ...messages.map((value): TimelineItem => ({ kind: 'message', timestamp: value.timestamp, value })),
+    ...messages.map(
+      (value): TimelineItem => ({ kind: 'message', timestamp: value.timestamp, value }),
+    ),
     ...events.map(
       (value): TimelineItem => ({ kind: 'configuration', timestamp: value.timestamp, value }),
     ),

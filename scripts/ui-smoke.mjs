@@ -156,6 +156,38 @@ async function main() {
     return 'browser/terminal/files'
   })
 
+  await runCheck('role center separates viewing a role from applying it', async () => {
+    await clickByTitle(page, '角色')
+    await page.locator('.agent-role-sidebar').waitFor({ state: 'visible', timeout: 10_000 })
+    assert(
+      (await page.locator('.sidebar-header-title').innerText()) === '角色',
+      'role sidebar title missing',
+    )
+    const roleRows = page.locator('.agent-role-row')
+    await roleRows.first().waitFor({ state: 'visible', timeout: 10_000 })
+    assert((await roleRows.count()) === 7, 'expected seven built-in roles')
+
+    const appliedRow = page.locator('.agent-role-row.applied')
+    assert((await appliedRow.count()) === 1, 'expected exactly one applied role')
+    const appliedLabel = await appliedRow.locator('strong').innerText()
+    const candidateRow = page.locator('.agent-role-row:not(.applied)').first()
+    await candidateRow.click()
+    await page.locator('.agent-role-detail').waitFor({ state: 'visible', timeout: 10_000 })
+    assert(
+      await page.getByRole('button', { name: '应用到当前会话' }).isEnabled(),
+      'role apply action is not available',
+    )
+    assert(
+      (await page.locator('.agent-role-row.applied strong').innerText()) === appliedLabel,
+      'opening a role detail changed the conversation configuration',
+    )
+    assert(
+      await page.getByRole('button', { name: '设为新会话默认' }).isVisible(),
+      'new-conversation default action missing',
+    )
+    return 'seven roles, current receipt card, read-only detail, and explicit apply actions'
+  })
+
   await runCheck('web resources accepts a non-predefined website', async () => {
     await clickByTitle(page, '网站与账号')
     await page.waitForTimeout(200)

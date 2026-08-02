@@ -1,7 +1,10 @@
 import { useEffect, type RefObject } from 'react'
+import { useSettingsStore } from '../../stores/settings-store'
 
 /** 将 React 内容区域尺寸同步给主进程 WebContentsView。 */
 export function useWorkbenchBounds(contentRef: RefObject<HTMLDivElement | null>): void {
+  const appZoomLevel = useSettingsStore((state) => state.settings.appZoomLevel)
+
   useEffect(() => {
     const el = contentRef.current
     if (!el) return
@@ -18,8 +21,13 @@ export function useWorkbenchBounds(contentRef: RefObject<HTMLDivElement | null>)
 
     const observer = new ResizeObserver(reportBounds)
     observer.observe(el)
-    requestAnimationFrame(reportBounds)
+    const animationFrame = requestAnimationFrame(reportBounds)
+    window.addEventListener('resize', reportBounds)
 
-    return () => observer.disconnect()
-  }, [contentRef])
+    return () => {
+      cancelAnimationFrame(animationFrame)
+      window.removeEventListener('resize', reportBounds)
+      observer.disconnect()
+    }
+  }, [appZoomLevel, contentRef])
 }
