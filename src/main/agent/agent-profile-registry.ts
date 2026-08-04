@@ -134,13 +134,17 @@ function toSummary(role: BuiltinAgentRole): AgentRoleSummary {
   }
 }
 
+export function listBuiltinAgentRoles(): AgentRoleSummary[] {
+  return BUILTIN_AGENT_ROLES.map(toSummary)
+}
+
 export class BuiltinAgentRoleRegistry {
   private readonly roles = new Map(
     BUILTIN_AGENT_ROLES.map((role) => [`${role.id}@${role.version}`, role]),
   )
 
   list(): AgentRoleSummary[] {
-    return BUILTIN_AGENT_ROLES.map(toSummary)
+    return listBuiltinAgentRoles()
   }
 
   resolve(ref: AgentRoleRef | null | undefined): BuiltinAgentRole {

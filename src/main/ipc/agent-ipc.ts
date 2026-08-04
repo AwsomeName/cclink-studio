@@ -8,6 +8,7 @@
 
 import type { IpcMainInvokeEvent } from 'electron'
 import type { AgentBridge } from '../agent/agent-bridge'
+import { listBuiltinAgentRoles } from '../agent/agent-profile-registry'
 import type { PermissionManager } from '../mcp/permission'
 import type { McpClientManager } from '../mcp/client-manager'
 import type {
@@ -206,7 +207,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
 
   handle(agentIpc.listRoles, () => {
     const agentBridge = requireAgentBridge()
-    return agentBridge?.listRoles() ?? []
+    return agentBridge?.listRoles() ?? listBuiltinAgentRoles()
   })
 
   handle(agentIpc.getContextUsage, async (_event, ...args) => {

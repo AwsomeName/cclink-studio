@@ -131,6 +131,21 @@ describe('registerAgentIpc', () => {
     )
   })
 
+  it('lists built-in roles while the Agent backend is unavailable', () => {
+    const deps = createDeps()
+    registerAgentIpc({ ...deps, getAgentBridge: () => null } as never)
+
+    const roles = mockIpcMain.handlers.get('agent:listRoles')?.({ sender: 'trusted' })
+
+    expect(roles).toHaveLength(7)
+    expect(roles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ roleId: 'default-assistant', label: '默认助手' }),
+        expect.objectContaining({ roleId: 'technical-architect', label: '技术架构师' }),
+      ]),
+    )
+  })
+
   it('rejects credential-bearing MCP URLs before changing configuration', () => {
     const deps = createDeps()
     registerAgentIpc(deps as never)
