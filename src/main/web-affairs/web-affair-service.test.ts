@@ -143,6 +143,71 @@ describe('WebAffairService', () => {
     if (unchanged.success) expect(unchanged.data.affairs[0].flow.nodes[0].status).toBe('ready')
   })
 
+  it('lists legacy affairs and only assigns one after explicit current-workspace validation', async () => {
+    const service = createService(filePath)
+    await service.load()
+    const created = await service.createAffair(validInput(), WORKSPACE_ID)
+    if (!created.success) throw new Error(created.error.message)
+    await service.flush()
+
+    await new WebAffairStore(filePath).save({
+      schemaVersion: 3,
+      revision: 2,
+      affairs: [
+        {
+          ...created.data,
+          workspaceId: null,
+          workspaceRef: { kind: 'global' },
+        },
+      ],
+    })
+    const reloaded = createService(filePath)
+    await reloaded.load()
+
+    expect(reloaded.getProjectSnapshot(WORKSPACE_ID)).toMatchObject({
+      success: true,
+      data: {
+        affairs: [],
+        unassignedAffairCount: 1,
+        unassignedAffairs: [
+          {
+            id: created.data.id,
+            title: 'App 上架',
+            accountCount: 1,
+            sourceWorkspaceRef: { kind: 'global' },
+          },
+        ],
+      },
+    })
+    await expect(
+      reloaded.claimLegacyAffair(
+        { workspaceRef: OTHER_WORKSPACE_REF, affairId: created.data.id },
+        OTHER_WORKSPACE_ID,
+      ),
+    ).resolves.toMatchObject({
+      success: false,
+      error: { code: 'INVALID_RESOURCE_REFERENCE' },
+    })
+
+    const claimed = await reloaded.claimLegacyAffair(
+      { workspaceRef: WORKSPACE_REF, affairId: created.data.id },
+      WORKSPACE_ID,
+    )
+    expect(claimed).toMatchObject({
+      success: true,
+      data: {
+        workspaceId: WORKSPACE_ID,
+        workspaceRef: WORKSPACE_REF,
+        events: expect.arrayContaining([expect.objectContaining({ type: 'workspace-assigned' })]),
+      },
+    })
+    expect(reloaded.getProjectSnapshot(WORKSPACE_ID)).toMatchObject({
+      success: true,
+      data: { unassignedAffairCount: 0, unassignedAffairs: [], affairs: [{ id: created.data.id }] },
+    })
+    await reloaded.flush()
+  })
+
   it('revises a mutable flow into a parallel DAG and locks completed history', async () => {
     const service = createService(filePath)
     await service.load()

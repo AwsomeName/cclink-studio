@@ -52,6 +52,10 @@ export const webAffairWorkspaceScopeInputSchema = z
   .object({ workspaceRef: workspaceRefSchema })
   .strict()
 
+export const claimLegacyWebAffairInputSchema = z
+  .object({ workspaceRef: workspaceRefSchema, affairId: uuidSchema })
+  .strict()
+
 const templateRefSchema = z
   .object({ templateId: trimmedText(120, '模板 ID'), version: positiveVersionSchema })
   .strict()
@@ -403,6 +407,7 @@ const webAffairEventSchema = z
       'wait-due',
       'flow-proposed',
       'flow-proposal-decided',
+      'workspace-assigned',
     ]),
     nodeId: uuidSchema.optional(),
     attemptId: uuidSchema.optional(),

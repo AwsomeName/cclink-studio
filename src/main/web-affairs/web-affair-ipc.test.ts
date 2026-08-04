@@ -82,6 +82,26 @@ describe('registerWebAffairIpc', () => {
     expect(updateNode).toHaveBeenCalledWith(input, WORKSPACE_ID)
   })
 
+  it('resolves the stable workspace id before assigning one legacy affair', async () => {
+    const claimLegacyAffair = vi.fn(async () => ({ success: true, data: { id: 'affair' } }))
+    const workspaceState = { getLocalProjectId: vi.fn(async () => WORKSPACE_ID) }
+    registerWebAffairIpc(
+      () => ({ claimLegacyAffair }) as never,
+      createGuard('trusted') as never,
+      () => null,
+      () => workspaceState as never,
+    )
+    const input = {
+      ...WORKSPACE_SCOPE,
+      affairId: '22222222-2222-4222-8222-222222222222',
+    }
+
+    await expect(
+      mockIpcMain.handlers.get('webAffairs:claimLegacyAffair')?.({ sender: 'trusted' }, input),
+    ).resolves.toMatchObject({ success: true })
+    expect(claimLegacyAffair).toHaveBeenCalledWith(input, WORKSPACE_ID)
+  })
+
   it('returns a structured degraded result', async () => {
     registerWebAffairIpc(
       () => null,

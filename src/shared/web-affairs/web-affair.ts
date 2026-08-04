@@ -1,6 +1,7 @@
 import { defineIpcCall } from '../ipc/contract'
 import type {
   BindWebAffairAttemptInput,
+  ClaimLegacyWebAffairInput,
   CompleteWebAffairCheckInput,
   ConfirmWebAffairFinalActionInput,
   CreateWebAffairInput,
@@ -28,6 +29,7 @@ export interface WebAffairsApiContract {
   ): Promise<WebAffairOperationResult<WebAffairProjectSnapshot>>
   getCatalog(): Promise<WebAffairOperationResult<WebAffairCatalog>>
   createAffair(input: CreateWebAffairInput): Promise<WebAffairOperationResult<WebAffair>>
+  claimLegacyAffair(input: ClaimLegacyWebAffairInput): Promise<WebAffairOperationResult<WebAffair>>
   updateNode(input: UpdateWebAffairNodeInput): Promise<WebAffairOperationResult<WebAffair>>
   reviseFlow(input: ReviseWebAffairFlowInput): Promise<WebAffairOperationResult<WebAffair>>
   inspectMaterials(
@@ -63,6 +65,10 @@ export const webAffairsIpc = {
   createAffair: defineIpcCall<[CreateWebAffairInput], WebAffairOperationResult<WebAffair>>(
     'webAffairs:createAffair',
   ),
+  claimLegacyAffair: defineIpcCall<
+    [ClaimLegacyWebAffairInput],
+    WebAffairOperationResult<WebAffair>
+  >('webAffairs:claimLegacyAffair'),
   updateNode: defineIpcCall<[UpdateWebAffairNodeInput], WebAffairOperationResult<WebAffair>>(
     'webAffairs:updateNode',
   ),

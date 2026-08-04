@@ -5,7 +5,7 @@ import type {
   WebAffairTemplateRef,
 } from '@shared/web-affairs/web-affair-types'
 import type { WebAccount, WebResourceSnapshot } from '@shared/web-resources/web-resource-types'
-import type { WorkspaceRef } from '@shared/workspace-ref'
+import { workspaceRefLabel, type WorkspaceRef } from '@shared/workspace-ref'
 import { IconPlus } from '../../components/common/Icons'
 import { useTabStore } from '../../stores'
 import { getStaleWebAffairTabIds } from './web-affair-tab-reconciliation'
@@ -38,6 +38,7 @@ export function WebAffairsSidebar({
   const [materialPaths, setMaterialPaths] = useState<string[]>([])
   const [flowText, setFlowText] = useState(DEFAULT_FLOW)
   const [templateRef, setTemplateRef] = useState<WebAffairTemplateRef | undefined>()
+  const [confirmClaimId, setConfirmClaimId] = useState<string | null>(null)
 
   const reload = useCallback(async (): Promise<void> => {
     const [affairResult, resourceResult, catalogResult] = await Promise.all([
@@ -157,6 +158,28 @@ export function WebAffairsSidebar({
       webAffair: { affairId },
       workspaceRef,
     })
+  }
+
+  const claimLegacyAffair = async (affairId: string): Promise<void> => {
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await window.cclinkStudio.webAffairs.claimLegacyAffair({
+        workspaceRef,
+        affairId,
+      })
+      if (!result.success) {
+        setError(result.error.message)
+        return
+      }
+      setConfirmClaimId(null)
+      await reload()
+      openAffair(result.data.id, result.data.title)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -305,8 +328,43 @@ export function WebAffairsSidebar({
       {error ? <div className="web-affairs-error">{error}</div> : null}
       {affairs && affairs.unassignedAffairCount > 0 ? (
         <div className="web-affairs-legacy-notice">
-          发现 {affairs.unassignedAffairCount} 个旧事务尚未归属工作空间，当前不会显示或执行；
-          后续迁移时需要逐项确认。
+          <strong>待归属旧事务 · {affairs.unassignedAffairCount}</strong>
+          <p>不会按旧路径自动归类。只有你逐项确认后，才会归入当前项目。</p>
+          <div className="web-affairs-legacy-list">
+            {affairs.unassignedAffairs.map((legacy) => (
+              <div key={legacy.id} className="web-affairs-legacy-item">
+                <span>
+                  <b>{legacy.title}</b>
+                  <small>{legacy.objective}</small>
+                  <small>
+                    原工作空间：{workspaceRefLabel(legacy.sourceWorkspaceRef)} · 关联{' '}
+                    {legacy.accountCount} 个账号
+                  </small>
+                </span>
+                {confirmClaimId === legacy.id ? (
+                  <div className="web-affairs-legacy-confirm">
+                    <em>确认归入当前项目？主进程会重新校验其主体和账号。</em>
+                    <div>
+                      <button type="button" onClick={() => setConfirmClaimId(null)}>
+                        取消
+                      </button>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => void claimLegacyAffair(legacy.id)}
+                      >
+                        {saving ? '校验中…' : '确认归入'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setConfirmClaimId(legacy.id)}>
+                    归入当前项目
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
       {!affairs && !error ? <div className="web-affairs-empty">正在读取事务…</div> : null}

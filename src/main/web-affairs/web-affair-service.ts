@@ -5,6 +5,7 @@ import type { WebResourceSnapshot } from '../../shared/web-resources/web-resourc
 import { WEB_AFFAIR_CATALOG } from '../../shared/web-affairs/web-affair-catalog'
 import type {
   BindWebAffairAttemptInput,
+  ClaimLegacyWebAffairInput,
   CompleteWebAffairCheckInput,
   ConfirmWebAffairFinalActionInput,
   CreateWebAffairInput,
@@ -34,6 +35,7 @@ import type {
 } from '../../shared/web-affairs/web-affair-types'
 import {
   bindWebAffairAttemptInputSchema,
+  claimLegacyWebAffairInputSchema,
   completeWebAffairCheckInputSchema,
   confirmWebAffairFinalActionInputSchema,
   createWebAffairInputSchema,
@@ -131,6 +133,17 @@ export class WebAffairService {
         affairs: result.data.affairs.filter((affair) => affair.workspaceId === workspaceId),
         unassignedAffairCount: result.data.affairs.filter((affair) => affair.workspaceId === null)
           .length,
+        unassignedAffairs: result.data.affairs
+          .filter((affair) => affair.workspaceId === null)
+          .map((affair) => ({
+            id: affair.id,
+            title: affair.title,
+            objective: affair.objective,
+            accountCount: affair.accountIds.length,
+            sourceWorkspaceRef: affair.workspaceRef,
+            createdAt: affair.createdAt,
+            updatedAt: affair.updatedAt,
+          })),
       },
     }
   }
@@ -141,6 +154,10 @@ export class WebAffairService {
 
   createAffair(input: CreateWebAffairInput, workspaceId: string) {
     return this.enqueue(() => this.createAffairNow(input, workspaceId))
+  }
+
+  claimLegacyAffair(input: ClaimLegacyWebAffairInput, workspaceId: string) {
+    return this.enqueue(() => this.claimLegacyAffairNow(input, workspaceId))
   }
 
   updateNode(input: UpdateWebAffairNodeInput, workspaceId: string) {
@@ -283,6 +300,46 @@ export class WebAffairService {
       updatedAt: now,
     }
     return this.persistNewAffair(affair)
+  }
+
+  private async claimLegacyAffairNow(
+    rawInput: ClaimLegacyWebAffairInput,
+    workspaceId: string,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    if (!this.snapshot) return this.unavailable()
+    const parsed = claimLegacyWebAffairInputSchema.safeParse(rawInput)
+    if (!parsed.success) return this.invalid('旧事务归属参数无效')
+    const affair = this.findAffair(parsed.data.affairId)
+    if (!affair || affair.workspaceId !== null) {
+      return this.notFound('待归属旧事务不存在或已经完成归属')
+    }
+
+    const resources = this.getWebResources()
+    const principal = resources?.principals.find((item) => item.id === affair.principalId)
+    const accounts = affair.accountIds.map((id) =>
+      resources?.accounts.find((item) => item.id === id),
+    )
+    if (!resources || !principal || accounts.some((account) => !account)) {
+      return this.resourceError('旧事务的主体或账号已失效，请先在“网站与账号”处理')
+    }
+    if (accounts.some((account) => account?.projectId !== workspaceId)) {
+      return this.resourceError('请先把该事务引用的旧网站账号归入当前项目')
+    }
+    if (accounts.some((account) => account?.principalId !== affair.principalId)) {
+      return this.resourceError('旧事务的账号与业务主体不一致，不能直接归属')
+    }
+
+    const now = this.timestamp()
+    return this.persistAffair({
+      ...affair,
+      workspaceId,
+      workspaceRef: parsed.data.workspaceRef,
+      events: this.appendEvent(
+        affair,
+        this.event('workspace-assigned', '用户已确认将旧事务归入当前项目', now),
+      ),
+      updatedAt: now,
+    })
   }
 
   private async updateNodeNow(

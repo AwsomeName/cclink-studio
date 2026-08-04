@@ -9,6 +9,7 @@ import {
 import { webAffairsIpc } from './web-affair'
 import {
   bindWebAffairAttemptInputSchema,
+  claimLegacyWebAffairInputSchema,
   completeWebAffairCheckInputSchema,
   confirmWebAffairFinalActionInputSchema,
   createWebAffairInputSchema,
@@ -58,6 +59,10 @@ export const webAffairsIpcContracts = {
   ),
   getCatalog: bindNoArgsIpc(webAffairsIpc.getCatalog),
   createAffair: bindSingleInput(webAffairsIpc.createAffair, createWebAffairInputSchema),
+  claimLegacyAffair: bindSingleInput(
+    webAffairsIpc.claimLegacyAffair,
+    claimLegacyWebAffairInputSchema,
+  ),
   updateNode: bindSingleInput(webAffairsIpc.updateNode, updateWebAffairNodeInputSchema),
   reviseFlow: bindSingleInput(webAffairsIpc.reviseFlow, reviseWebAffairFlowInputSchema),
   inspectMaterials: bindSingleInput(

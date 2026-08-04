@@ -181,6 +181,7 @@ export interface WebAffairEvent {
     | 'wait-due'
     | 'flow-proposed'
     | 'flow-proposal-decided'
+    | 'workspace-assigned'
   nodeId?: string
   attemptId?: string
   summary: string
@@ -218,10 +219,25 @@ export interface WebAffairSnapshot {
 export interface WebAffairProjectSnapshot extends WebAffairSnapshot {
   workspaceId: string
   unassignedAffairCount: number
+  unassignedAffairs: WebAffairLegacySummary[]
+}
+
+export interface WebAffairLegacySummary {
+  id: string
+  title: string
+  objective: string
+  accountCount: number
+  sourceWorkspaceRef: WorkspaceRef
+  createdAt: string
+  updatedAt: string
 }
 
 export interface WebAffairWorkspaceScopeInput {
   workspaceRef: WorkspaceRef
+}
+
+export interface ClaimLegacyWebAffairInput extends WebAffairWorkspaceScopeInput {
+  affairId: string
 }
 
 export interface WebAffairChangedPayload {

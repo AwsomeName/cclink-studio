@@ -48,6 +48,22 @@ describe('web affairs IPC contract', () => {
     })
   })
 
+  it('accepts only an explicit workspace-scoped legacy affair claim', () => {
+    expect(
+      webAffairsIpcContracts.claimLegacyAffair.parseArgs([
+        {
+          workspaceRef: { kind: 'local', path: '/tmp/workspace' },
+          affairId: '11111111-1111-4111-8111-111111111111',
+        },
+      ]),
+    ).toEqual([
+      {
+        workspaceRef: { kind: 'local', path: '/tmp/workspace' },
+        affairId: '11111111-1111-4111-8111-111111111111',
+      },
+    ])
+  })
+
   it('rejects extra arguments on every channel', () => {
     expect(() => webAffairsIpcContracts.getSnapshot.parseArgs(['extra'])).toThrow()
     expect(() => webAffairsIpcContracts.createAffair.parseArgs([])).toThrow()

@@ -67,6 +67,14 @@ export function registerWebAffairIpc(
       ),
   )
   registerTrustedIpcContract(
+    webAffairsIpcContracts.claimLegacyAffair,
+    trustedRendererGuard,
+    async (_event, input): Promise<WebAffairOperationResult<WebAffair>> =>
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.claimLegacyAffair(input, workspaceId),
+      ),
+  )
+  registerTrustedIpcContract(
     webAffairsIpcContracts.updateNode,
     trustedRendererGuard,
     async (_event, input): Promise<WebAffairOperationResult<WebAffair>> =>

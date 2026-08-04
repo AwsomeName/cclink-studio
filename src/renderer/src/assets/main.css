@@ -2675,6 +2675,47 @@ button.project-panel-row.active {
   line-height: 1.45;
 }
 
+.web-affairs-legacy-notice > strong,
+.web-affairs-legacy-notice > p {
+  display: block;
+  margin: 0 0 6px;
+}
+
+.web-affairs-legacy-list,
+.web-affairs-legacy-item,
+.web-affairs-legacy-item > span,
+.web-affairs-legacy-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.web-affairs-legacy-item {
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--warning, #d8a400) 25%, transparent);
+}
+
+.web-affairs-legacy-item small {
+  display: block;
+  color: var(--text-muted);
+}
+
+.web-affairs-legacy-item > button,
+.web-affairs-legacy-confirm button {
+  align-self: flex-start;
+  min-height: 26px;
+}
+
+.web-affairs-legacy-confirm em {
+  color: var(--text-primary);
+  font-style: normal;
+}
+
+.web-affairs-legacy-confirm > div {
+  display: flex;
+  gap: 6px;
+}
+
 .web-affairs-list {
   display: flex;
   flex-direction: column;
