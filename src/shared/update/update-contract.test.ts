@@ -13,6 +13,7 @@ function idleSnapshot() {
     phase: 'idle',
     operationId: null,
     currentVersion: '1.2.3',
+    track: 'stable',
     availableRelease: null,
     progress: null,
     lastCheckedAt: null,

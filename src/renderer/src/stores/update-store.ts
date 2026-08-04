@@ -6,6 +6,7 @@ const initialSnapshot: UpdateSnapshot = {
   phase: 'idle',
   operationId: null,
   currentVersion: '未知',
+  track: 'stable',
   availableRelease: null,
   progress: null,
   lastCheckedAt: null,

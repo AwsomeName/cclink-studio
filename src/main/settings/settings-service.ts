@@ -23,6 +23,7 @@ const MESHY_CREDENTIAL_ID = 'extension:meshy:default'
 
 /** 每个 key 的合法值集合（用于校验 IPC 传入的数据；数值/字符串字段不在此列） */
 const VALID_VALUES: Record<string, Set<string>> = {
+  updateTrack: new Set<string>(['stable', 'beta']),
   backendType: new Set<string>(['claude-code', 'http-api']),
   permissionMode: new Set<string>(['auto', 'categorized', 'strict']),
   defaultZoomMode: new Set<string>(['fit', 'manual']),

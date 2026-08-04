@@ -136,7 +136,12 @@ pnpm verify:update-manifest -- \
 5. 验收本地 workspace、Agent、浏览器、Markdown、Terminal 和 Android 降级。
 6. 若该版本包含更新能力，按对应里程碑执行旧版到新版升级验收。
 
-只有门禁和真人验收都通过，才公开 Draft。
+只有门禁和真人验收都通过，才公开 Draft：面向普通用户选择正式 Release；面向已选择
+“测试版”更新通道的测试用户选择 GitHub Pre-release。Draft 本身永远不会被应用发现。
+
+首次启用测试通道存在一次性引导约束：不包含 `updateTrack` 能力的旧客户端无法发现
+Pre-release。必须先发布一个包含该能力的正式基线版，或让测试用户人工安装一次包含
+该能力的测试包；此后才能通过应用内更新持续接收测试版。
 
 ## M0 故障注入
 
@@ -192,4 +197,4 @@ pnpm release -- --dispatch-only vX.Y.Z
 - arm64 DMG/ZIP、checksums、build record 和 Manifest 齐全。
 - 签名、公证、staple、Gatekeeper 和 Manifest 反向验证通过。
 - 干净 Apple Silicon Mac 真人安装启动通过。
-- Draft 由维护者人工公开。
+- Draft 由维护者人工公开为正式 Release 或明确标记的 Pre-release。

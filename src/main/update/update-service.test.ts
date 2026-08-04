@@ -3,7 +3,11 @@ import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { UpdateProvider, UpdateProviderCheckResult } from './update-provider'
+import type {
+  UpdateProvider,
+  UpdateProviderCheckInput,
+  UpdateProviderCheckResult,
+} from './update-provider'
 import { UpdateService } from './update-service'
 import { UpdateAssetVerificationError, type VerifiedDmgInspector } from './mac-dmg-verifier'
 
@@ -17,7 +21,11 @@ afterEach(async () => {
   )
 })
 
-function availableRelease(data: Buffer, sha256 = createHash('sha256').update(data).digest('hex')) {
+function availableRelease(
+  data: Buffer,
+  sha256 = createHash('sha256').update(data).digest('hex'),
+  prerelease = false,
+) {
   const makeAsset = (kind: 'dmg' | 'zip', name: string, size: number) => ({
     kind,
     name,
@@ -47,6 +55,7 @@ function availableRelease(data: Buffer, sha256 = createHash('sha256').update(dat
       architecture: 'arm64' as const,
       publishedAt: '2026-07-28T08:00:00.000Z',
       releaseNotes: 'Update notes',
+      prerelease,
       assets: {
         dmg: makeAsset('dmg', 'studio-arm64.dmg', data.length),
         zip: makeAsset('zip', 'studio-arm64.zip', data.length),
@@ -57,10 +66,12 @@ function availableRelease(data: Buffer, sha256 = createHash('sha256').update(dat
 
 class FixtureProvider implements UpdateProvider {
   readonly id = 'fixture'
+  lastInput: UpdateProviderCheckInput | null = null
 
   constructor(private readonly result: UpdateProviderCheckResult) {}
 
-  async check(): Promise<UpdateProviderCheckResult> {
+  async check(input: UpdateProviderCheckInput): Promise<UpdateProviderCheckResult> {
+    this.lastInput = input
     return this.result
   }
 }
@@ -143,6 +154,35 @@ describe('UpdateService', () => {
     await service.stop()
   })
 
+  it('uses the selected track and clears active release state when the track changes', async () => {
+    const data = Buffer.from('trusted beta update')
+    const cacheRoot = await fs.mkdtemp(join(tmpdir(), 'cclink-update-track-'))
+    temporaryDirectories.push(cacheRoot)
+    const provider = new FixtureProvider(availableRelease(data))
+    const service = new UpdateService({
+      currentVersion: '1.0.0',
+      architecture: 'arm64',
+      systemVersion: '15.0',
+      cacheRoot,
+      provider,
+      initialTrack: 'beta',
+      automaticChecks: false,
+    })
+    await service.start()
+
+    expect((await service.check()).snapshot.track).toBe('beta')
+    expect(provider.lastInput?.track).toBe('beta')
+    const switched = await service.setTrack('stable')
+
+    expect(switched.snapshot).toMatchObject({
+      phase: 'idle',
+      track: 'stable',
+      availableRelease: null,
+      lastCheckedAt: null,
+    })
+    await service.stop()
+  })
+
   it('re-verifies a completed download and restores readyToInstall after restart', async () => {
     const data = Buffer.from('trusted update')
     const release = availableRelease(data)
@@ -165,6 +205,34 @@ describe('UpdateService', () => {
       error: null,
     })
     await restoredService.stop()
+  })
+
+  it('does not restore a prerelease cache after restarting on the stable track', async () => {
+    const data = Buffer.from('trusted prerelease update')
+    const release = availableRelease(data, createHash('sha256').update(data).digest('hex'), true)
+    const cacheRoot = await fs.mkdtemp(join(tmpdir(), 'cclink-update-beta-cache-'))
+    temporaryDirectories.push(cacheRoot)
+    const betaService = new UpdateService({
+      currentVersion: '1.0.0',
+      architecture: 'arm64',
+      systemVersion: '15.0',
+      cacheRoot,
+      provider: new FixtureProvider(release),
+      fetch: async () => downloadResponse(data),
+      initialTrack: 'beta',
+      automaticChecks: false,
+    })
+    await betaService.start()
+    await betaService.check()
+    await betaService.startDownload()
+    await betaService.stop()
+
+    const stableService = serviceForCache(release, cacheRoot)
+    await stableService.start()
+
+    expect(stableService.getSnapshot()).toMatchObject({ phase: 'idle', track: 'stable' })
+    await expect(fs.readdir(cacheRoot)).resolves.toEqual([])
+    await stableService.stop()
   })
 
   it('rejects and deletes a verified cache whose DMG was changed after download', async () => {

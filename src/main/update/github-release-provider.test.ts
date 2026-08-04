@@ -57,7 +57,7 @@ describe('GitHubReleaseProvider', () => {
 
     const result = await provider.check({
       currentVersion: '1.0.0',
-      channel: 'stable',
+      track: 'stable',
       architecture: 'arm64',
       signal: new AbortController().signal,
     })
@@ -79,11 +79,33 @@ describe('GitHubReleaseProvider', () => {
     await expect(
       provider.check({
         currentVersion: '1.0.0',
-        channel: 'stable',
+        track: 'stable',
         architecture: 'arm64',
         signal: new AbortController().signal,
       }),
     ).resolves.toEqual({ status: 'up-to-date' })
+  })
+
+  it('exposes a public prerelease to the beta track but never exposes a draft', async () => {
+    const beta = { ...release(), prerelease: true }
+    const draft = { ...release(), draft: true }
+    const fetchMock = vi.fn(async (input: string | URL) =>
+      String(input).includes('update-manifest.json')
+        ? jsonResponse(manifest())
+        : jsonResponse([draft, beta]),
+    )
+    const provider = new GitHubReleaseProvider({ fetch: fetchMock })
+
+    const result = await provider.check({
+      currentVersion: '1.0.0',
+      track: 'beta',
+      architecture: 'arm64',
+      signal: new AbortController().signal,
+    })
+
+    expect(result.status).toBe('available')
+    if (result.status !== 'available') throw new Error('Expected beta release')
+    expect(result.release.prerelease).toBe(true)
   })
 
   it('rejects a release whose manifest asset is missing', async () => {
@@ -94,7 +116,7 @@ describe('GitHubReleaseProvider', () => {
     await expect(
       provider.check({
         currentVersion: '1.0.0',
-        channel: 'stable',
+        track: 'stable',
         architecture: 'arm64',
         signal: new AbortController().signal,
       }),

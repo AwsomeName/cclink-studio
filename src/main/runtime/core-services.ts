@@ -248,6 +248,10 @@ export async function bootstrapMainProcessServices(
       await bootstrapAgentRuntime(runtime)
     },
     (level) => applyWindowZoomLevel(runtime, level),
+    undefined,
+    async (track) => {
+      await runtime.updateService?.setTrack(track)
+    },
   )
   console.log('[CCLink Studio] 设置 IPC 已注册')
 
@@ -278,6 +282,7 @@ export async function bootstrapMainProcessServices(
         : '0.0.0',
     cacheRoot: join(app.getPath('userData'), 'updates'),
     provider,
+    initialTrack: runtime.settingsService.getAll().updateTrack,
     automaticChecks: app.isPackaged,
     dmgInspector,
     openPath: dmgInspector ? (path) => shell.openPath(path) : undefined,

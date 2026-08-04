@@ -2,14 +2,14 @@ import { z } from 'zod'
 import {
   updateArchitectureSchema,
   updateAssetKindSchema,
-  updateChannelSchema,
   updateManifestSchema,
+  updateTrackSchema,
 } from '../../shared/update'
 
 export const updateProviderCheckInputSchema = z
   .object({
     currentVersion: z.string().min(1).max(128),
-    channel: updateChannelSchema,
+    track: updateTrackSchema,
     architecture: updateArchitectureSchema,
   })
   .strict()
@@ -40,6 +40,7 @@ const resolvedUpdateReleaseSchema = z
     architecture: updateArchitectureSchema,
     publishedAt: z.string().datetime({ offset: true }),
     releaseNotes: z.string().max(100_000),
+    prerelease: z.boolean(),
     assets: z
       .object({
         dmg: resolvedUpdateAssetSchema,

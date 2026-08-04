@@ -10,6 +10,7 @@ import {
   updateAssetKindSchema,
   updateChannelSchema,
 } from './manifest-schema'
+import { updateTrackSchema } from './update-track'
 
 export const updatePhaseSchema = z.enum([
   'disabled',
@@ -78,6 +79,7 @@ const updateReleaseSummarySchema = z
     minimumSystemVersion: z.string().min(3).max(64),
     publishedAt: z.string().datetime({ offset: true }),
     releaseNotes: z.string().max(100_000),
+    prerelease: z.boolean(),
     asset: updateAssetSummarySchema,
   })
   .strict()
@@ -101,6 +103,7 @@ export const updateSnapshotSchema = z
     phase: updatePhaseSchema,
     operationId: boundedIdentifierSchema.nullable(),
     currentVersion: z.string().min(1).max(128),
+    track: updateTrackSchema,
     availableRelease: updateReleaseSummarySchema.nullable(),
     progress: updateProgressSchema.nullable(),
     lastCheckedAt: z.string().datetime({ offset: true }).nullable(),

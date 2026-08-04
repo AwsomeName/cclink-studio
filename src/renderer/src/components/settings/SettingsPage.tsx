@@ -14,6 +14,7 @@ import type { CredentialMetadata, CredentialServiceStatus } from '@shared/ipc/cr
 import { useSettingsStore } from '../../stores'
 import { useThemeStore, type Theme } from '../../stores/theme-store'
 import {
+  IconCloud,
   IconFile,
   IconDatabase,
   IconGlobe,
@@ -36,6 +37,7 @@ import {
 
 type SettingsSectionId =
   | 'appearance'
+  | 'updates'
   | 'agent'
   | 'agent-capabilities'
   | 'image-generation'
@@ -54,6 +56,7 @@ const SETTINGS_SECTIONS: Array<{
   icon: (props: { size?: number }) => React.ReactElement
 }> = [
   { id: 'appearance', label: '外观', icon: IconPaintbrush },
+  { id: 'updates', label: '更新', icon: IconCloud },
   { id: 'agent', label: 'Agent', icon: IconRobot },
   { id: 'agent-capabilities', label: 'Agent 能力', icon: IconTool },
   { id: 'image-generation', label: '图像生成', icon: IconPaintbrush },
@@ -77,6 +80,12 @@ const SETTINGS_SEARCH_INDEX: Array<{
     label: '主题与字号',
     description: '调整桌面壳主题、界面字号和缩放。',
     keywords: ['theme', 'font', 'zoom', '主题', '字号', '缩放'],
+  },
+  {
+    sectionId: 'updates',
+    label: '更新通道',
+    description: '选择只接收正式版，或同时接收公开测试版。',
+    keywords: ['update', 'release', 'beta', '更新', '测试版', '预发布'],
   },
   {
     sectionId: 'agent',
@@ -908,6 +917,45 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                   />
                 </div>
               </SettingsRow>
+            </div>
+          </section>
+        )}
+
+        {activeSection === 'updates' && (
+          <section className="settings-section">
+            <h2>更新</h2>
+            <div className="settings-group">
+              <SettingsRow settingKey="updateTrack" settings={settings} onReset={resetOne}>
+                <div className="settings-label">
+                  <span>更新通道</span>
+                  <span className="settings-description">
+                    测试通道会接收公开的 GitHub Pre-release 和正式版；Draft 永远不会下发。
+                    切换后需重新检查更新。
+                  </span>
+                </div>
+                <div className="settings-control">
+                  <select
+                    className="settings-select"
+                    value={settings.updateTrack}
+                    onChange={(event) =>
+                      update({ updateTrack: event.target.value as AppSettings['updateTrack'] })
+                    }
+                  >
+                    <option value="stable">稳定版</option>
+                    <option value="beta">测试版（包含预发布）</option>
+                  </select>
+                </div>
+              </SettingsRow>
+              {settings.updateTrack === 'beta' && (
+                <div className="settings-row">
+                  <div className="settings-label">
+                    <span>测试风险</span>
+                    <span className="settings-description">
+                      测试版可能存在未完成能力或兼容问题；可随时切回稳定版。
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         )}

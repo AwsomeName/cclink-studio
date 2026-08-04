@@ -1,6 +1,7 @@
 # Desktop Release And Updates
 
-> 状态：2026-07-29。开源版只支持 Apple Silicon `arm64` 稳定通道。
+> 状态：2026-08-05。开源版只支持 Apple Silicon `arm64`；稳定/测试订阅轨道的代码、
+> 自动化门禁和真实 Electron UI 冒烟已通过，公开 Pre-release 端到端升级待执行。
 > M0 单架构收口已完成；M1 已实现下载缓存恢复与启动复验；M2 已实现可信 DMG
 > 二次校验和打开入口。本地门禁与隔离 Profile 的真实 Electron 验收已通过，公开
 > 签名版本验收待执行。自动安装与重启仍未接入。
@@ -30,7 +31,8 @@ GitHub Releases。
 
 用户现在可以：
 
-- 从状态栏打开更新面板并手动检查公开稳定 Release。
+- 从设置中选择稳定版或测试版更新通道，再从状态栏打开更新面板手动检查。
+- 稳定通道只接收公开正式 Release；测试通道同时接收公开 Pre-release 和正式 Release。
 - 看到“已是最新”“发现新版”或结构化失败状态。
 - 确认下载，查看进度，取消并重试。
 - 将 DMG 下载到 Studio 私有缓存，并校验空间、长度和 SHA-256。
@@ -63,7 +65,7 @@ GitHub Releases。
 明确不做：
 
 - Intel/x64、Windows、Linux 和 Mac App Store。
-- beta/nightly 通道和通道设置页。
+- nightly、灰度和私有测试通道。
 - 自动下载、静默安装、强制升级和退出时自动安装。
 - 差分更新、断点续传、灰度发布和最低版本封锁。
 - 独立更新中心、更新历史页面或营销弹窗。
@@ -76,7 +78,7 @@ GitHub Releases。
 2. `GitHubReleaseProvider` 只发现 Release；`UpdateCache` 只管理可信缓存；
    后续 Verifier 和 Installer 只接受主进程内部句柄。
 3. renderer store 是可丢弃投影，窗口重建后必须从主进程重新对账。
-4. 正式构建只接受公开稳定 Release，忽略 Draft、prerelease、同版本和降级版本。
+4. 稳定轨道忽略 prerelease；测试轨道允许 prerelease。两者都忽略 Draft、同版本和降级版本。
 5. 下载和安装分别要求一次明确用户确认。
 6. 安装前必须完成工作现场检查、保存和持久化。
 7. 安装失败必须保持旧版本可启动。
@@ -86,13 +88,13 @@ GitHub Releases。
 
 ## 边界与所有权
 
-| 能力 | 所有者 |
-| --- | --- |
-| Manifest、Provider、UpdateService、UpdateCache、更新 UI | `cclink-studio` |
-| 开源版签名、公证和 Release 上传 | 本仓库 GitHub Actions |
-| 开源版公开更新元数据和资产 | 本仓库 GitHub Releases |
-| 商业版集成与发布 | `cclink-dev` 自有工作流 |
-| 发布批准、下载确认、安装确认 | 人类 |
+| 能力                                                    | 所有者                  |
+| ------------------------------------------------------- | ----------------------- |
+| Manifest、Provider、UpdateService、UpdateCache、更新 UI | `cclink-studio`         |
+| 开源版签名、公证和 Release 上传                         | 本仓库 GitHub Actions   |
+| 开源版公开更新元数据和资产                              | 本仓库 GitHub Releases  |
+| 商业版集成与发布                                        | `cclink-dev` 自有工作流 |
+| 发布批准、下载确认、安装确认                            | 人类                    |
 
 开源版安装包不保存 GitHub Token。公开 Release 的检查与下载不需要用户凭证。签名和
 公证凭证只存在于本仓库受保护的 `studio-release` GitHub Environment：
@@ -110,7 +112,7 @@ APPLE_API_ISSUER
 
 ## Manifest v2
 
-开源版使用 GitHub Releases API 查找最新公开稳定 Release，不依赖
+开源版使用 GitHub Releases API 查找订阅轨道内最新的公开 Release，不依赖
 `latest-mac.yml`。发布工作流只构建一组 arm64 DMG/ZIP，并在创建 Draft 前生成和
 反向校验唯一的 `update-manifest.json`：
 
@@ -145,7 +147,7 @@ Manifest 保存资产 basename，不保存下载 URL。Provider 从同一 Releas
 
 检查通过必须同时满足：
 
-1. Release 已公开且不是 Draft 或 prerelease。
+1. Release 已公开且不是 Draft；稳定轨道还要求不是 prerelease。
 2. Release Tag、Manifest Tag、Manifest version 一致。
 3. 目标版本严格高于当前版本。
 4. Manifest 只包含合法 arm64 DMG 和 ZIP。
@@ -153,6 +155,15 @@ Manifest 保存资产 basename，不保存下载 URL。Provider 从同一 Releas
 6. 当前 macOS 满足 `minimumSystemVersion`。
 
 ## 检查策略
+
+- 更新轨道是本地持久化设置，默认 `stable`，可选 `beta`。
+- `stable` 只考虑正式 Release；`beta` 同时考虑 Pre-release 和正式 Release，并选择
+  版本号最高的合法候选。
+- 切换轨道会取消正在进行的检查或下载，清空候选、忽略版本和已验证缓存，再要求重新
+  检查。启动恢复也会拒绝与当前轨道不兼容的 Pre-release 缓存。
+- Draft 永远不参与应用内更新；测试包必须由维护者公开为 GitHub Pre-release。
+- Manifest 的 `channel: stable` 继续表示当前不可变资产格式，不等同于用户订阅轨道，
+  因而同一组已签名资产可先作为 Pre-release 验收，再原样提升为正式 Release。
 
 - 正式安装包在主窗口可交互后延迟 60 秒首次检查。
 - 应用运行期间每 6 小时检查一次。
@@ -245,7 +256,7 @@ pnpm release -- --version 0.1.13
 5. 触发 `release-oss.yml`，在 `macos-15` 重新构建 arm64 正式候选包。
 6. 签名、公证、staple，并执行 `codesign`、`spctl` 和 Manifest 校验。
 7. 创建 Draft Release，等待维护者在干净 Apple Silicon Mac 真人验收。
-8. 人工公开 Draft。
+8. 人工将 Draft 发布为正式 Release；测试候选则发布为 Pre-release。
 
 本地 `pnpm package:local` 只生成当前 Apple Silicon Mac 的未签名测试包，不修改
 版本、不推送，也不是正式发布入口。`pnpm release` 会在目标版本写入后复用它生成

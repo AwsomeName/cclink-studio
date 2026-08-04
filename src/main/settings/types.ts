@@ -15,6 +15,7 @@ export type {
   AgentEngine,
   ClaudeRuntimeSource,
   CadBackend,
+  UpdateTrack,
   AppSettings,
   ProviderPreset,
 } from '../../shared/settings-constants'

@@ -7,6 +7,7 @@ const pathString = z.string().max(32_768)
 
 const settingsUpdateSchema = z
   .object({
+    updateTrack: z.enum(['stable', 'beta']),
     agentEngine: z.literal('local-claude-code'),
     backendType: z.enum(['claude-code', 'http-api']),
     permissionMode: z.enum(['auto', 'categorized', 'strict']),

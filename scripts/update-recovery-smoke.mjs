@@ -41,12 +41,13 @@ async function main() {
     join(releaseDirectory, 'verified.json'),
     `${JSON.stringify(
       {
-        schemaVersion: 2,
+        schemaVersion: 3,
         manifest,
         manifestDigest: digestManifest(manifest),
         architecture: 'arm64',
         publishedAt: '2026-07-29T00:00:00.000Z',
         releaseNotes: 'Update recovery smoke fixture',
+        prerelease: false,
         asset: { name: assetName, size: assetContent.length, sha256: assetSha256 },
         verifiedAt: new Date().toISOString(),
       },

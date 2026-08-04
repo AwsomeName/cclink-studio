@@ -8,6 +8,7 @@ import type {
   UpdateInstallPreparation,
   UpdateManualInstallerResult,
   UpdateSnapshot,
+  UpdateTrack,
 } from '../../shared/update'
 import {
   parseUpdateCommandResult,
@@ -35,6 +36,7 @@ export interface UpdateServiceOptions {
   systemVersion: string
   cacheRoot: string
   provider: UpdateProvider
+  initialTrack?: UpdateTrack
   fetch?: FetchLike
   automaticChecks?: boolean
   firstCheckDelayMs?: number
@@ -81,6 +83,7 @@ export class UpdateService {
     this.updateCache = new UpdateCache({
       cacheRoot: options.cacheRoot,
       currentVersion: options.currentVersion,
+      track: options.initialTrack ?? 'stable',
       architecture: options.architecture,
       systemVersion: options.systemVersion,
     })
@@ -89,6 +92,7 @@ export class UpdateService {
       phase: options.provider.id === 'noop' ? 'disabled' : 'idle',
       operationId: null,
       currentVersion: options.currentVersion,
+      track: options.initialTrack ?? 'stable',
       availableRelease: null,
       progress: null,
       lastCheckedAt: null,
@@ -146,6 +150,35 @@ export class UpdateService {
   subscribe(listener: SnapshotListener): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  async setTrack(track: UpdateTrack): Promise<UpdateCommandResult> {
+    if (track === this.snapshot.track) return this.result(true)
+
+    this.checkController?.abort()
+    this.downloadController?.abort()
+    const cached = this.verifiedUpdate
+    this.resolvedRelease = null
+    this.verifiedUpdate = null
+    this.updateCache.setTrack(track)
+    this.setSnapshot({
+      ...this.snapshot,
+      phase: this.options.provider.id === 'noop' ? 'disabled' : 'idle',
+      operationId: null,
+      track,
+      availableRelease: null,
+      progress: null,
+      lastCheckedAt: null,
+      ignoredVersion: null,
+      error: null,
+    })
+    await Promise.allSettled([this.checkPromise, this.downloadPromise].filter(Boolean))
+    if (cached) {
+      await this.updateCache.invalidate(cached).catch((error) => {
+        console.warn('[UpdateService] 切换更新轨道时清理缓存失败:', error)
+      })
+    }
+    return this.result(true)
   }
 
   check(manual = true): Promise<UpdateCommandResult> {
@@ -347,7 +380,7 @@ export class UpdateService {
     try {
       const result = await this.options.provider.check({
         currentVersion: this.options.currentVersion,
-        channel: 'stable',
+        track: this.snapshot.track,
         architecture: this.options.architecture,
         signal: this.checkController!.signal,
       })
@@ -406,6 +439,7 @@ export class UpdateService {
       return this.result(true)
     } catch (error) {
       if (this.stopped) return this.result(false)
+      if (this.snapshot.operationId !== operationId) return this.result(false)
       this.fail(operationId, mapOperationError(error, '检查更新失败'))
       return this.result(false)
     }
@@ -511,6 +545,7 @@ export class UpdateService {
     } catch (error) {
       await file?.close().catch(() => undefined)
       await fs.rm(partialPath, { force: true }).catch(() => undefined)
+      if (this.snapshot.operationId !== operationId) return this.result(false)
       const mapped = mapOperationError(error, '下载更新失败')
       if (mapped.code === 'download_cancelled') {
         this.setSnapshot({
@@ -589,6 +624,7 @@ function summarizeRelease(
     minimumSystemVersion: release.manifest.minimumSystemVersion,
     publishedAt: release.publishedAt,
     releaseNotes: release.releaseNotes,
+    prerelease: release.prerelease,
     asset: {
       kind: asset.kind,
       name: asset.name,

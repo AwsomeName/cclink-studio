@@ -34,7 +34,10 @@ export function UpdatePanel(): React.ReactElement | null {
         <header className="update-panel-header">
           <div>
             <h2 id="update-panel-title">CCLink Studio 更新</h2>
-            <p>当前版本 v{snapshot.currentVersion}</p>
+            <p>
+              当前版本 v{snapshot.currentVersion} ·{' '}
+              {snapshot.track === 'beta' ? '测试通道' : '稳定通道'}
+            </p>
           </div>
           <button type="button" className="icon-button" title="关闭" onClick={close}>
             <IconClose size={16} />
@@ -55,7 +58,9 @@ export function UpdatePanel(): React.ReactElement | null {
               detail={
                 snapshot.lastCheckedAt
                   ? `上次检查：${formatDateTime(snapshot.lastCheckedAt)}`
-                  : '点击下方按钮检查公开稳定版本。'
+                  : snapshot.track === 'beta'
+                    ? '点击下方按钮检查公开测试版和正式版。'
+                    : '点击下方按钮检查公开正式版。'
               }
             />
           )}
@@ -69,7 +74,10 @@ export function UpdatePanel(): React.ReactElement | null {
               <div className="update-release-title">
                 <IconCloud size={18} />
                 <div>
-                  <strong>发现 v{release.version}</strong>
+                  <strong>
+                    发现 v{release.version}
+                    {release.prerelease ? ' · 测试版' : ' · 正式版'}
+                  </strong>
                   <span>
                     {release.architecture} · {formatBytes(release.asset.size)} ·{' '}
                     {formatDateTime(release.publishedAt)}

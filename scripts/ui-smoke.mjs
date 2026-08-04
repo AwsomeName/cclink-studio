@@ -487,7 +487,24 @@ async function main() {
       await page.getByRole('heading', { name: 'Agent' }).isVisible(),
       'agent settings section missing',
     )
-    return 'settings search'
+
+    await page.getByRole('button', { name: '更新', exact: true }).click()
+    await page.getByRole('heading', { name: '更新', exact: true }).waitFor({ timeout: 10_000 })
+    const updateTrack = page.locator('.settings-section select')
+    assert((await updateTrack.count()) === 1, 'update track selector missing')
+    await updateTrack.selectOption('beta')
+    await page.getByText('测试风险', { exact: true }).waitFor({ timeout: 10_000 })
+
+    await page.locator('[title="检查和下载 CCLink Studio 更新"]').click()
+    const updatePanel = page.locator('.update-panel')
+    await updatePanel.waitFor({ state: 'visible', timeout: 10_000 })
+    assert(
+      (await updatePanel.innerText()).includes('测试通道'),
+      'update panel track did not refresh',
+    )
+    await updatePanel.locator('.update-panel-header button[title="关闭"]').click()
+    await updateTrack.selectOption('stable')
+    return 'settings search and stable/beta update track projection'
   })
 
   await runCheck('tab create menu opens editor, browser, and terminal tabs', async () => {

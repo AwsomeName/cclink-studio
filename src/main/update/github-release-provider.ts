@@ -77,10 +77,6 @@ export class GitHubReleaseProvider implements UpdateProvider {
   }
 
   async check(input: UpdateProviderCheckInput): Promise<UpdateProviderCheckResult> {
-    if (input.channel !== 'stable') {
-      return { status: 'disabled', reason: 'provider_unavailable' }
-    }
-
     const releases = await this.fetchJson(
       `https://api.github.com/repos/${this.owner}/${this.repository}/releases?per_page=20`,
       input.signal,
@@ -91,13 +87,17 @@ export class GitHubReleaseProvider implements UpdateProvider {
       throw new UpdateProviderRequestError('release_invalid', 'GitHub Release 响应格式无效')
     }
 
-    const release = parsedReleases.data.find(
-      (candidate) =>
-        !candidate.draft &&
-        !candidate.prerelease &&
-        stableTagPattern.test(candidate.tag_name) &&
-        candidate.published_at,
-    )
+    const release = parsedReleases.data
+      .filter(
+        (candidate) =>
+          !candidate.draft &&
+          (input.track === 'beta' || !candidate.prerelease) &&
+          stableTagPattern.test(candidate.tag_name) &&
+          candidate.published_at,
+      )
+      .sort((left, right) =>
+        compareStableVersions(right.tag_name.slice(1), left.tag_name.slice(1)),
+      )[0]
     if (!release) return { status: 'up-to-date' }
 
     const version = release.tag_name.slice(1)
@@ -126,6 +126,7 @@ export class GitHubReleaseProvider implements UpdateProvider {
         architecture: input.architecture,
         publishedAt: release.published_at!,
         releaseNotes: release.body ?? '',
+        prerelease: release.prerelease,
         assets: {
           dmg: this.resolveAsset(release.assets, input.architecture, manifestResult, 'dmg'),
           zip: this.resolveAsset(release.assets, input.architecture, manifestResult, 'zip'),

@@ -91,6 +91,29 @@ describe('registerSettingsIpc', () => {
     expect(applyAppZoomLevel).toHaveBeenNthCalledWith(3, DEFAULT_SETTINGS.appZoomLevel)
   })
 
+  it('applies the persisted update track immediately', async () => {
+    const settingsService = createSettingsService()
+    const applyUpdateTrack = vi.fn(async () => undefined)
+    registerSettingsIpc(
+      settingsService as never,
+      createGuard('trusted') as never,
+      createPermissionManager() as never,
+      () => null,
+      () => null,
+      () => null,
+      async () => undefined,
+      () => undefined,
+      undefined,
+      applyUpdateTrack,
+    )
+
+    await mockIpcMain.handlers.get('settings:set')?.({ sender: 'trusted' }, { updateTrack: 'beta' })
+    await mockIpcMain.handlers.get('settings:resetKey')?.({ sender: 'trusted' }, 'updateTrack')
+
+    expect(applyUpdateTrack).toHaveBeenNthCalledWith(1, 'beta')
+    expect(applyUpdateTrack).toHaveBeenNthCalledWith(2, 'stable')
+  })
+
   it('probes a runtime before persistence and commits the verified candidate', async () => {
     const settingsService = createSettingsService()
     settingsService.getRuntimeSettings.mockReturnValue({ ...DEFAULT_SETTINGS, apiKey: 'test-key' })

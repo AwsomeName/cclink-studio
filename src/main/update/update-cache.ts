@@ -16,12 +16,13 @@ const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/)
 
 const verifiedUpdateRecordSchema = z
   .object({
-    schemaVersion: z.literal(2),
+    schemaVersion: z.literal(3),
     manifest: updateManifestSchema,
     manifestDigest: sha256Schema,
     architecture: updateArchitectureSchema,
     publishedAt: z.string().datetime({ offset: true }),
     releaseNotes: z.string().max(100_000),
+    prerelease: z.boolean(),
     asset: z
       .object({
         name: z.string().min(1).max(255),
@@ -52,10 +53,15 @@ export interface UpdateCacheOptions {
   currentVersion: string
   architecture: UpdateArchitecture
   systemVersion: string
+  track: 'stable' | 'beta'
 }
 
 export class UpdateCache {
   constructor(private readonly options: UpdateCacheOptions) {}
+
+  setTrack(track: 'stable' | 'beta'): void {
+    this.options.track = track
+  }
 
   async start(): Promise<void> {
     await fs.mkdir(this.options.cacheRoot, { recursive: true, mode: 0o700 })
@@ -85,12 +91,13 @@ export class UpdateCache {
     filePath: string,
   ): Promise<RestoredVerifiedUpdate> {
     const record = verifiedUpdateRecordSchema.parse({
-      schemaVersion: 2,
+      schemaVersion: 3,
       manifest: release.manifest,
       manifestDigest: digestManifest(release.manifest),
       architecture: release.architecture,
       publishedAt: release.publishedAt,
       releaseNotes: release.releaseNotes,
+      prerelease: release.prerelease,
       asset: { name: asset.name, size: asset.size, sha256: asset.sha256 },
       verifiedAt: new Date().toISOString(),
     })
@@ -173,6 +180,7 @@ export class UpdateCache {
       record.architecture !== this.options.architecture ||
       record.manifestDigest !== digestManifest(record.manifest) ||
       compareStableVersions(record.manifest.version, this.options.currentVersion) <= 0 ||
+      (this.options.track === 'stable' && record.prerelease) ||
       compareStableVersions(
         normalizeSystemVersion(this.options.systemVersion),
         normalizeSystemVersion(record.manifest.minimumSystemVersion),
@@ -269,6 +277,7 @@ function summarizeRecord(
     minimumSystemVersion: record.manifest.minimumSystemVersion,
     publishedAt: record.publishedAt,
     releaseNotes: record.releaseNotes,
+    prerelease: record.prerelease,
     asset: {
       kind: 'dmg',
       name: record.asset.name,

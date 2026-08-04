@@ -1,4 +1,7 @@
 import { DEFAULT_AGENT_ROLE_REF, type AgentRoleRef } from './agent-role'
+import type { UpdateTrack } from './update/update-track'
+
+export type { UpdateTrack } from './update/update-track'
 
 /**
  * settings-constants — 跨进程共享的设置常量
@@ -56,6 +59,8 @@ export interface ProviderPreset {
 
 /** 所有持久化的应用设置 */
 export interface AppSettings {
+  /** 应用内更新订阅轨道。 */
+  updateTrack: UpdateTrack
   /** Agent 引擎 */
   agentEngine: AgentEngine
   /** Agent 后端类型（内部使用，由 apiFormat 决定） */
@@ -196,6 +201,7 @@ export const PROVIDER_PRESETS: Record<Provider, ProviderPreset> = {
 
 /** 默认设置值（唯一权威来源） */
 export const DEFAULT_SETTINGS: AppSettings = {
+  updateTrack: 'stable',
   agentEngine: 'local-claude-code',
   backendType: 'claude-code',
   permissionMode: 'auto',

@@ -26,6 +26,7 @@ function availableResult() {
       architecture: 'arm64',
       publishedAt: '2026-07-28T06:00:00.000Z',
       releaseNotes: 'Security and stability update.',
+      prerelease: false,
       assets: {
         dmg: {
           kind: 'dmg',

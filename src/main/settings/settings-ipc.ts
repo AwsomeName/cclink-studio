@@ -56,6 +56,7 @@ export function registerSettingsIpc(
   runClaudeModelConnectionTest: (
     input: ClaudeModelConnectionTestInput,
   ) => ReturnType<typeof testClaudeModelConnection> = testClaudeModelConnection,
+  applyUpdateTrack: (track: 'stable' | 'beta') => Promise<void> = async () => undefined,
 ): void {
   let modelConnectionTestPending = false
 
@@ -178,6 +179,10 @@ export function registerSettingsIpc(
 
       const updated = await settingsService.set(normalizedPartial)
 
+      if ('updateTrack' in normalizedPartial) {
+        await applyUpdateTrack(updated.updateTrack)
+      }
+
       if ('appZoomLevel' in normalizedPartial) {
         applyAppZoomLevel(updated.appZoomLevel)
       }
@@ -229,6 +234,7 @@ export function registerSettingsIpc(
         return { success: false, error: `${probe.failure.code}: ${probe.failure.message}` }
       }
       const settings = await settingsService.reset()
+      await applyUpdateTrack(settings.updateTrack)
       applyAppZoomLevel(settings.appZoomLevel)
       // 重置权限模式为默认值
       permissionManager.setMode(settings.permissionMode)
@@ -273,6 +279,10 @@ export function registerSettingsIpc(
         return { success: false, error: `${probe.failure.code}: ${probe.failure.message}` }
       }
       const updated = await settingsService.resetKey(key)
+
+      if (key === 'updateTrack') {
+        await applyUpdateTrack(updated.updateTrack)
+      }
 
       if (key === 'appZoomLevel') {
         applyAppZoomLevel(updated.appZoomLevel)

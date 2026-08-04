@@ -6,6 +6,7 @@ export type {
   AgentEngine,
   ClaudeRuntimeSource,
   CadBackend,
+  UpdateTrack,
   Provider,
   ApiFormat,
   ProviderPreset,
