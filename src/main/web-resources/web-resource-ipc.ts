@@ -1,9 +1,11 @@
 import { webResourcesIpcContracts } from '../../shared/web-resources/web-resource-contract'
 import type {
+  ClaimLegacyWebConnectionsSummary,
   ImportProjectOpsConfigSummary,
   WebResourceConnection,
   WebResourceOperationResult,
-  WebResourceSnapshot,
+  WebResourceProjectSnapshot,
+  WebResourceProjectScopeInput,
 } from '../../shared/web-resources/web-resource-types'
 import {
   registerTrustedIpcContract,
@@ -11,6 +13,7 @@ import {
 } from '../ipc/trusted-renderer-guard'
 import type { WebResourceService } from './web-resource-service'
 import type { ProjectOpsService } from '../project-ops/project-ops-service'
+import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 
 function unavailable<T>(): WebResourceOperationResult<T> {
   return {
@@ -25,20 +28,58 @@ function unavailable<T>(): WebResourceOperationResult<T> {
 export function registerWebResourceIpc(
   getService: () => WebResourceService | null,
   getProjectOpsService: () => ProjectOpsService | null,
+  getWorkspaceStateService: () => WorkspaceStateService | null,
   trustedRendererGuard: TrustedRendererGuard,
 ): void {
   registerTrustedIpcContract(
     webResourcesIpcContracts.getSnapshot,
     trustedRendererGuard,
-    (): WebResourceOperationResult<WebResourceSnapshot> =>
-      getService()?.getSnapshot() ?? unavailable(),
+    async (_event, input): Promise<WebResourceOperationResult<WebResourceProjectSnapshot>> => {
+      const service = getService()
+      const projectId = await resolveProjectId(input, getWorkspaceStateService())
+      if (!service) return unavailable()
+      if (!projectId.success) return projectId
+      return service.getProjectSnapshot(projectId.data)
+    },
   )
 
   registerTrustedIpcContract(
     webResourcesIpcContracts.createConnection,
     trustedRendererGuard,
-    async (_event, input): Promise<WebResourceOperationResult<WebResourceConnection>> =>
-      getService()?.createConnection(input) ?? unavailable(),
+    async (_event, input): Promise<WebResourceOperationResult<WebResourceConnection>> => {
+      const service = getService()
+      const projectId = await resolveProjectId(input, getWorkspaceStateService())
+      if (!service) return unavailable()
+      if (!projectId.success) return projectId
+      return service.createConnection(input, projectId.data)
+    },
+  )
+
+  registerTrustedIpcContract(
+    webResourcesIpcContracts.confirmLogin,
+    trustedRendererGuard,
+    async (_event, input): Promise<WebResourceOperationResult<WebResourceConnection>> => {
+      const service = getService()
+      const projectId = await resolveProjectId(input, getWorkspaceStateService())
+      if (!service) return unavailable()
+      if (!projectId.success) return projectId
+      return service.confirmLogin(projectId.data, input.accountId)
+    },
+  )
+
+  registerTrustedIpcContract(
+    webResourcesIpcContracts.claimLegacyConnections,
+    trustedRendererGuard,
+    async (
+      _event,
+      input,
+    ): Promise<WebResourceOperationResult<ClaimLegacyWebConnectionsSummary>> => {
+      const service = getService()
+      const projectId = await resolveProjectId(input, getWorkspaceStateService())
+      if (!service) return unavailable()
+      if (!projectId.success) return projectId
+      return service.claimLegacyConnections(projectId.data)
+    },
   )
 
   registerTrustedIpcContract(
@@ -47,9 +88,12 @@ export function registerWebResourceIpc(
     async (_event, input): Promise<WebResourceOperationResult<ImportProjectOpsConfigSummary>> => {
       const service = getService()
       const projectOpsService = getProjectOpsService()
-      if (!service || !projectOpsService) return unavailable()
+      const workspaceStateService = getWorkspaceStateService()
+      if (!service || !projectOpsService || !workspaceStateService) return unavailable()
 
       try {
+        const projectId = await workspaceStateService.getLocalProjectId(input.workspacePath)
+        if (!projectId) return projectRequired()
         const legacy = await projectOpsService.getAccounts(input.workspacePath)
         if (!legacy.exists) {
           return {
@@ -73,16 +117,20 @@ export function registerWebResourceIpc(
         let importedCount = 0
         let skippedCount = 0
         for (const platform of legacy.config.platforms) {
-          const result = await service.createConnection({
-            websiteName: platform.name,
-            entryUrl: platform.url,
-            websiteNotes: platform.notes,
-            principalKind: input.principalKind,
-            principalName: input.principalName,
-            accountLabel: platform.account?.trim() || `${input.principalName} · ${platform.name}`,
-            browserProfileId: platform.browserProfile || platform.id,
-            loginHint: platform.notes,
-          })
+          const result = await service.createConnection(
+            {
+              workspaceRef: { kind: 'local', path: input.workspacePath },
+              websiteName: platform.name,
+              entryUrl: platform.url,
+              websiteNotes: platform.notes,
+              principalKind: input.principalKind,
+              principalName: input.principalName,
+              accountLabel: platform.account?.trim() || `${input.principalName} · ${platform.name}`,
+              loginHint: platform.notes,
+            },
+            projectId,
+            platform.browserProfile || platform.id,
+          )
           if (result.success) {
             importedCount += 1
             continue
@@ -123,4 +171,27 @@ export function registerWebResourceIpc(
       }
     },
   )
+}
+
+async function resolveProjectId(
+  input: WebResourceProjectScopeInput,
+  workspaceStateService: WorkspaceStateService | null,
+): Promise<WebResourceOperationResult<string>> {
+  if (input.workspaceRef.kind !== 'local' || !workspaceStateService) return projectRequired()
+  try {
+    const projectId = await workspaceStateService.getLocalProjectId(input.workspaceRef.path)
+    return projectId ? { success: true, data: projectId } : projectRequired()
+  } catch {
+    return projectRequired()
+  }
+}
+
+function projectRequired<T>(): WebResourceOperationResult<T> {
+  return {
+    success: false,
+    error: {
+      code: 'PROJECT_REQUIRED',
+      message: '请先打开一个可写的本地项目，再管理网站与账号',
+    },
+  }
 }

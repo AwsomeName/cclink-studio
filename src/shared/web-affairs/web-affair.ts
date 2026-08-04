@@ -7,6 +7,7 @@ import type {
   DecideWebAffairFlowProposalInput,
   FinishWebAffairAttemptInput,
   HandoffWebAffairAttemptInput,
+  InspectWebAffairMaterialsInput,
   ProposeWebAffairFlowDiffInput,
   ReturnWebAffairAttemptInput,
   ReviseWebAffairFlowInput,
@@ -17,16 +18,21 @@ import type {
   WebAffairCatalog,
   WebAffairChangedPayload,
   WebAffairOperationResult,
-  WebAffairSnapshot,
+  WebAffairProjectSnapshot,
+  WebAffairWorkspaceScopeInput,
 } from './web-affair-types'
 
 export interface WebAffairsApiContract {
-  getSnapshot(): Promise<WebAffairOperationResult<WebAffairSnapshot>>
+  getSnapshot(
+    input: WebAffairWorkspaceScopeInput,
+  ): Promise<WebAffairOperationResult<WebAffairProjectSnapshot>>
   getCatalog(): Promise<WebAffairOperationResult<WebAffairCatalog>>
   createAffair(input: CreateWebAffairInput): Promise<WebAffairOperationResult<WebAffair>>
   updateNode(input: UpdateWebAffairNodeInput): Promise<WebAffairOperationResult<WebAffair>>
   reviseFlow(input: ReviseWebAffairFlowInput): Promise<WebAffairOperationResult<WebAffair>>
-  inspectMaterials(affairId: string): Promise<WebAffairOperationResult<WebAffair>>
+  inspectMaterials(
+    input: InspectWebAffairMaterialsInput,
+  ): Promise<WebAffairOperationResult<WebAffair>>
   startAttempt(input: StartWebAffairAttemptInput): Promise<WebAffairOperationResult<WebAffair>>
   bindAttempt(input: BindWebAffairAttemptInput): Promise<WebAffairOperationResult<WebAffair>>
   handoffAttempt(input: HandoffWebAffairAttemptInput): Promise<WebAffairOperationResult<WebAffair>>
@@ -47,9 +53,10 @@ export interface WebAffairsApiContract {
 }
 
 export const webAffairsIpc = {
-  getSnapshot: defineIpcCall<[], WebAffairOperationResult<WebAffairSnapshot>>(
-    'webAffairs:getSnapshot',
-  ),
+  getSnapshot: defineIpcCall<
+    [WebAffairWorkspaceScopeInput],
+    WebAffairOperationResult<WebAffairProjectSnapshot>
+  >('webAffairs:getSnapshot'),
   getCatalog: defineIpcCall<[], WebAffairOperationResult<WebAffairCatalog>>(
     'webAffairs:getCatalog',
   ),
@@ -62,9 +69,10 @@ export const webAffairsIpc = {
   reviseFlow: defineIpcCall<[ReviseWebAffairFlowInput], WebAffairOperationResult<WebAffair>>(
     'webAffairs:reviseFlow',
   ),
-  inspectMaterials: defineIpcCall<[string], WebAffairOperationResult<WebAffair>>(
-    'webAffairs:inspectMaterials',
-  ),
+  inspectMaterials: defineIpcCall<
+    [InspectWebAffairMaterialsInput],
+    WebAffairOperationResult<WebAffair>
+  >('webAffairs:inspectMaterials'),
   startAttempt: defineIpcCall<[StartWebAffairAttemptInput], WebAffairOperationResult<WebAffair>>(
     'webAffairs:startAttempt',
   ),

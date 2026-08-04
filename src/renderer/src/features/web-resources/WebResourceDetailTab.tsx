@@ -4,13 +4,14 @@ import type {
   WebPrincipal,
   WebsiteResource,
 } from '@shared/web-resources/web-resource-types'
-import { useBrowserStore, useTabStore, useWorkspaceStore } from '../../stores'
+import { useWorkspaceStore } from '../../stores'
 import {
   formatWebResourceLoginStatus,
   observeWebResourceLogin,
   WEB_PRINCIPAL_KIND_LABELS,
   type WebResourceLoginObservation,
 } from './web-resource-view-model'
+import { ensureWebResourceTab } from './web-resource-tab'
 
 interface WebResourceDetail {
   website: WebsiteResource
@@ -19,10 +20,6 @@ interface WebResourceDetail {
 }
 
 export function WebResourceDetailTab({ accountId }: { accountId: string }): React.ReactElement {
-  const openTab = useTabStore((state) => state.openTab)
-  const activateTab = useTabStore((state) => state.activateTab)
-  const tabs = useTabStore((state) => state.tabs)
-  const browserTabs = useBrowserStore((state) => state.tabs)
   const workspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const [detail, setDetail] = useState<WebResourceDetail | null>(null)
   const [observation, setObservation] = useState<WebResourceLoginObservation>()
@@ -32,7 +29,7 @@ export function WebResourceDetailTab({ accountId }: { accountId: string }): Reac
   useEffect(() => {
     let cancelled = false
     void window.cclinkStudio.webResources
-      .getSnapshot()
+      .getSnapshot({ workspaceRef })
       .then((result) => {
         if (cancelled) return
         if (!result.success) {
@@ -59,7 +56,7 @@ export function WebResourceDetailTab({ accountId }: { accountId: string }): Reac
     return () => {
       cancelled = true
     }
-  }, [accountId])
+  }, [accountId, workspaceRef])
 
   const checkLogin = useCallback(async (): Promise<void> => {
     if (!detail) return
@@ -95,25 +92,7 @@ export function WebResourceDetailTab({ accountId }: { accountId: string }): Reac
   }
 
   const openWebsite = (): void => {
-    const existing = tabs.find(
-      (tab) =>
-        tab.type === 'browser' &&
-        tab.browserProfile === detail.account.browserProfileId &&
-        sameOrigin(browserTabs[tab.id]?.url ?? tab.initialUrl, detail.website.entryUrl),
-    )
-    if (existing) {
-      activateTab(existing.id)
-      return
-    }
-    openTab({
-      type: 'browser',
-      title: detail.website.name,
-      icon: '🌐',
-      initialUrl: detail.website.entryUrl,
-      browserProfile: detail.account.browserProfileId,
-      workspaceRef,
-      forceNew: true,
-    })
+    ensureWebResourceTab(detail, workspaceRef)
   }
 
   return (
@@ -157,7 +136,7 @@ export function WebResourceDetailTab({ accountId }: { accountId: string }): Reac
         <section className="web-resource-session-card">
           <h2>登录环境</h2>
           <div className={`web-resource-session-state ${observation?.status ?? 'checking'}`}>
-            {formatWebResourceLoginStatus(observation)}
+            {formatWebResourceLoginStatus(observation, detail.account.loginConfirmedAt)}
           </div>
           <DetailField label="Browser Profile" value={detail.account.browserProfileId} />
           <DetailField
@@ -196,13 +175,4 @@ function DetailField({ label, value }: { label: string; value: string }): React.
       <strong title={value}>{value}</strong>
     </div>
   )
-}
-
-function sameOrigin(left: string | undefined, right: string): boolean {
-  if (!left) return false
-  try {
-    return new URL(left).origin === new URL(right).origin
-  } catch {
-    return false
-  }
 }

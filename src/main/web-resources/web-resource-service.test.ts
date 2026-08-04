@@ -17,14 +17,16 @@ import { WebResourceStore } from './web-resource-store'
 
 let tempDir = ''
 let storePath = ''
+const PROJECT_ID = '11111111-1111-4111-8111-111111111111'
+const OTHER_PROJECT_ID = '22222222-2222-4222-8222-222222222222'
 
 const baseInput: CreateWebConnectionInput = {
+  workspaceRef: { kind: 'local', path: '/tmp/cclink-project' },
   websiteName: 'App Store Connect',
   entryUrl: 'https://appstoreconnect.apple.com/apps',
   principalKind: 'company',
   principalName: 'Example Technology Ltd.',
   accountLabel: 'Release account',
-  browserProfileId: 'apple-release',
 }
 
 beforeEach(async () => {
@@ -42,7 +44,7 @@ describe('WebResourceService', () => {
     const service = new WebResourceService(new WebResourceStore(storePath))
     await service.load()
 
-    const created = await service.createConnection(baseInput)
+    const created = await service.createConnection(baseInput, PROJECT_ID, 'apple-release')
     expect(created.success).toBe(true)
     expect(service.getSnapshot()).toMatchObject({
       success: true,
@@ -67,12 +69,15 @@ describe('WebResourceService', () => {
     await service.load()
 
     const [first, second] = await Promise.all([
-      service.createConnection(baseInput),
-      service.createConnection({
-        ...baseInput,
-        accountLabel: 'Finance account',
-        browserProfileId: 'apple-finance',
-      }),
+      service.createConnection(baseInput, PROJECT_ID, 'apple-release'),
+      service.createConnection(
+        {
+          ...baseInput,
+          accountLabel: 'Finance account',
+        },
+        PROJECT_ID,
+        'apple-finance',
+      ),
     ])
 
     expect(first.success).toBe(true)
@@ -87,15 +92,108 @@ describe('WebResourceService', () => {
     })
   })
 
+  it('isolates website-account connections by stable project id', async () => {
+    const service = new WebResourceService(new WebResourceStore(storePath))
+    await service.load()
+
+    await service.createConnection(baseInput, PROJECT_ID, 'shared-profile-name')
+    await service.createConnection(baseInput, OTHER_PROJECT_ID, 'shared-profile-name')
+
+    expect(service.getProjectSnapshot(PROJECT_ID)).toMatchObject({
+      success: true,
+      data: {
+        projectId: PROJECT_ID,
+        accounts: [{ projectId: PROJECT_ID, label: 'Release account' }],
+      },
+    })
+    expect(service.getProjectSnapshot(OTHER_PROJECT_ID)).toMatchObject({
+      success: true,
+      data: {
+        projectId: OTHER_PROJECT_ID,
+        accounts: [{ projectId: OTHER_PROJECT_ID, label: 'Release account' }],
+      },
+    })
+  })
+
+  it('loads v1 accounts as unassigned and only exposes them after an explicit claim', async () => {
+    const now = new Date().toISOString()
+    const websiteId = '33333333-3333-4333-8333-333333333333'
+    const principalId = '44444444-4444-4444-8444-444444444444'
+    const accountId = '55555555-5555-4555-8555-555555555555'
+    await writeFile(
+      storePath,
+      JSON.stringify({
+        schemaVersion: 1,
+        revision: 7,
+        websites: [
+          {
+            id: websiteId,
+            name: 'Legacy Portal',
+            origin: 'https://legacy.example.com',
+            entryUrl: 'https://legacy.example.com/',
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+        principals: [
+          {
+            id: principalId,
+            kind: 'company',
+            name: 'Legacy Ltd.',
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+        accounts: [
+          {
+            id: accountId,
+            websiteId,
+            principalId,
+            label: 'Legacy account',
+            browserProfileId: 'legacy-profile',
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      }),
+      'utf8',
+    )
+
+    const service = new WebResourceService(new WebResourceStore(storePath))
+    await service.load()
+    expect(service.getProjectSnapshot(PROJECT_ID)).toMatchObject({
+      success: true,
+      data: { accounts: [], unassignedAccountCount: 1 },
+    })
+
+    await expect(service.claimLegacyConnections(PROJECT_ID)).resolves.toEqual({
+      success: true,
+      data: { claimedCount: 1 },
+    })
+    expect(service.getProjectSnapshot(PROJECT_ID)).toMatchObject({
+      success: true,
+      data: { accounts: [{ id: accountId, projectId: PROJECT_ID }], unassignedAccountCount: 0 },
+    })
+    expect(JSON.parse(await readFile(storePath, 'utf8'))).toMatchObject({
+      schemaVersion: 2,
+      revision: 8,
+      accounts: [{ id: accountId, projectId: PROJECT_ID }],
+    })
+  })
+
   it('rejects a duplicate account without advancing the revision', async () => {
     const service = new WebResourceService(new WebResourceStore(storePath))
     await service.load()
-    await service.createConnection(baseInput)
+    await service.createConnection(baseInput, PROJECT_ID, 'apple-release')
 
-    const duplicate = await service.createConnection({
-      ...baseInput,
-      accountLabel: 'Renamed display label',
-    })
+    const duplicate = await service.createConnection(
+      {
+        ...baseInput,
+        accountLabel: 'Renamed display label',
+      },
+      PROJECT_ID,
+      'apple-release',
+    )
 
     expect(duplicate).toMatchObject({
       success: false,
@@ -110,15 +208,19 @@ describe('WebResourceService', () => {
   it('recovers a valid backup when the primary file is corrupt', async () => {
     const service = new WebResourceService(new WebResourceStore(storePath))
     await service.load()
-    await service.createConnection(baseInput)
-    await service.createConnection({
-      websiteName: '阿里云',
-      entryUrl: 'https://beian.aliyun.com/',
-      principalKind: 'company',
-      principalName: 'Example Technology Ltd.',
-      accountLabel: '备案账号',
-      browserProfileId: 'aliyun-filing',
-    })
+    await service.createConnection(baseInput, PROJECT_ID, 'apple-release')
+    await service.createConnection(
+      {
+        workspaceRef: { kind: 'local', path: '/tmp/cclink-project' },
+        websiteName: '阿里云',
+        entryUrl: 'https://beian.aliyun.com/',
+        principalKind: 'company',
+        principalName: 'Example Technology Ltd.',
+        accountLabel: '备案账号',
+      },
+      PROJECT_ID,
+      'aliyun-filing',
+    )
     await writeFile(storePath, '{corrupt', 'utf8')
 
     const recovered = new WebResourceService(new WebResourceStore(storePath))

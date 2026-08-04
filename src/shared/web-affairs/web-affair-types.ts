@@ -189,6 +189,8 @@ export interface WebAffairEvent {
 
 export interface WebAffair {
   id: string
+  /** Stable local workspace identity. `null` is reserved for migrated legacy affairs. */
+  workspaceId: string | null
   title: string
   objective: string
   status: WebAffairStatus
@@ -202,15 +204,24 @@ export interface WebAffair {
   flowProposals: WebAffairFlowProposal[]
   templateRef?: WebAffairTemplateRef
   events: WebAffairEvent[]
-  workspaceRef?: WorkspaceRef
+  workspaceRef: WorkspaceRef
   createdAt: string
   updatedAt: string
 }
 
 export interface WebAffairSnapshot {
-  schemaVersion: 2
+  schemaVersion: 3
   revision: number
   affairs: WebAffair[]
+}
+
+export interface WebAffairProjectSnapshot extends WebAffairSnapshot {
+  workspaceId: string
+  unassignedAffairCount: number
+}
+
+export interface WebAffairWorkspaceScopeInput {
+  workspaceRef: WorkspaceRef
 }
 
 export interface WebAffairChangedPayload {
@@ -225,11 +236,11 @@ export interface CreateWebAffairInput {
   accountIds: string[]
   materialPaths: string[]
   nodeTitles: string[]
-  workspaceRef?: WorkspaceRef
+  workspaceRef: WorkspaceRef
   templateRef?: WebAffairTemplateRef
 }
 
-export interface UpdateWebAffairNodeInput {
+export interface UpdateWebAffairNodeInput extends WebAffairWorkspaceScopeInput {
   affairId: string
   nodeId: string
   status: WebAffairNodeStatus
@@ -248,20 +259,24 @@ export interface ReviseWebAffairFlowNodeInput {
   successCriteria: string[]
 }
 
-export interface ReviseWebAffairFlowInput {
+export interface ReviseWebAffairFlowInput extends WebAffairWorkspaceScopeInput {
   affairId: string
   expectedVersion: number
   nodes: ReviseWebAffairFlowNodeInput[]
   edges: Array<{ fromNodeId: string; toNodeId: string }>
 }
 
-export interface StartWebAffairAttemptInput {
+export interface InspectWebAffairMaterialsInput extends WebAffairWorkspaceScopeInput {
+  affairId: string
+}
+
+export interface StartWebAffairAttemptInput extends WebAffairWorkspaceScopeInput {
   affairId: string
   nodeId: string
   accountId: string
 }
 
-export interface BindWebAffairAttemptInput {
+export interface BindWebAffairAttemptInput extends WebAffairWorkspaceScopeInput {
   affairId: string
   attemptId: string
   tabId: string
@@ -270,26 +285,26 @@ export interface BindWebAffairAttemptInput {
   browserTaskRunId: string
 }
 
-export interface HandoffWebAffairAttemptInput {
+export interface HandoffWebAffairAttemptInput extends WebAffairWorkspaceScopeInput {
   affairId: string
   attemptId: string
   reason: string
 }
 
-export interface ReturnWebAffairAttemptInput {
+export interface ReturnWebAffairAttemptInput extends WebAffairWorkspaceScopeInput {
   affairId: string
   attemptId: string
   observationSummary: string
   url: string
 }
 
-export interface ConfirmWebAffairFinalActionInput {
+export interface ConfirmWebAffairFinalActionInput extends WebAffairWorkspaceScopeInput {
   affairId: string
   attemptId: string
   summary: string
 }
 
-export interface FinishWebAffairAttemptInput {
+export interface FinishWebAffairAttemptInput extends WebAffairWorkspaceScopeInput {
   affairId: string
   attemptId: string
   outcome: 'succeeded' | 'failed' | 'cancelled' | 'interrupted'
@@ -298,7 +313,7 @@ export interface FinishWebAffairAttemptInput {
   evidenceKind?: WebAffairEvidence['kind']
 }
 
-export interface ScheduleWebAffairCheckInput {
+export interface ScheduleWebAffairCheckInput extends WebAffairWorkspaceScopeInput {
   affairId: string
   nodeId: string
   nextCheckAt: string
@@ -307,7 +322,7 @@ export interface ScheduleWebAffairCheckInput {
   maxChecks: number
 }
 
-export interface CompleteWebAffairCheckInput {
+export interface CompleteWebAffairCheckInput extends WebAffairWorkspaceScopeInput {
   affairId: string
   nodeId: string
   outcome: 'unchanged' | 'approved' | 'rejected'
@@ -315,7 +330,7 @@ export interface CompleteWebAffairCheckInput {
   url?: string
 }
 
-export interface ProposeWebAffairFlowDiffInput {
+export interface ProposeWebAffairFlowDiffInput extends WebAffairWorkspaceScopeInput {
   affairId: string
   baseVersion: number
   reason: string
@@ -324,7 +339,7 @@ export interface ProposeWebAffairFlowDiffInput {
   proposedBy: 'ai' | 'user'
 }
 
-export interface DecideWebAffairFlowProposalInput {
+export interface DecideWebAffairFlowProposalInput extends WebAffairWorkspaceScopeInput {
   affairId: string
   proposalId: string
   decision: 'accept' | 'reject'
@@ -374,6 +389,7 @@ export type WebAffairErrorCode =
   | 'RESOURCE_LIMIT_REACHED'
   | 'STORAGE_UNAVAILABLE'
   | 'SERVICE_UNAVAILABLE'
+  | 'WORKSPACE_REQUIRED'
   | 'UNKNOWN'
 
 export interface WebAffairOperationError {
@@ -386,7 +402,7 @@ export type WebAffairOperationResult<T> =
   | { success: false; error: WebAffairOperationError }
 
 export const EMPTY_WEB_AFFAIR_SNAPSHOT: WebAffairSnapshot = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   revision: 0,
   affairs: [],
 }

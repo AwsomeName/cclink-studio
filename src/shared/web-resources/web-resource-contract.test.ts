@@ -6,23 +6,23 @@ describe('web resources IPC contract', () => {
     expect(
       webResourcesIpcContracts.createConnection.parseArgs([
         {
+          workspaceRef: { kind: 'local', path: ' /Users/example/project ' },
           websiteName: '  国家知识产权局  ',
           entryUrl: 'https://cpservice.cnipa.gov.cn/',
           principalKind: 'company',
           principalName: '  示例科技有限公司 ',
           accountLabel: ' 经办账号 ',
-          browserProfileId: 'cnipa-company',
           loginHint: '',
         },
       ]),
     ).toEqual([
       {
+        workspaceRef: { kind: 'local', path: '/Users/example/project' },
         websiteName: '国家知识产权局',
         entryUrl: 'https://cpservice.cnipa.gov.cn/',
         principalKind: 'company',
         principalName: '示例科技有限公司',
         accountLabel: '经办账号',
-        browserProfileId: 'cnipa-company',
         loginHint: undefined,
         websiteNotes: undefined,
         accountRole: undefined,
@@ -30,7 +30,7 @@ describe('web resources IPC contract', () => {
     ])
   })
 
-  it('rejects executable URLs and invalid Browser Profile ids', async () => {
+  it('rejects executable URLs and renderer-supplied session identifiers', async () => {
     const capture = (value: unknown): unknown => {
       try {
         webResourcesIpcContracts.createConnection.parseArgs([value])
@@ -41,12 +41,12 @@ describe('web resources IPC contract', () => {
     }
 
     const executableUrlError = capture({
+      workspaceRef: { kind: 'local', path: '/Users/example/project' },
       websiteName: 'Bad',
       entryUrl: 'javascript:alert(1)',
       principalKind: 'personal',
       principalName: 'User',
       accountLabel: 'Account',
-      browserProfileId: 'safe-profile',
     })
     await expect(
       webResourcesIpcContracts.createConnection.mapParseError?.(executableUrlError),
@@ -58,12 +58,13 @@ describe('web resources IPC contract', () => {
     expect(() =>
       webResourcesIpcContracts.createConnection.parseArgs([
         {
+          workspaceRef: { kind: 'local', path: '/Users/example/project' },
           websiteName: 'Example',
           entryUrl: 'https://example.com',
           principalKind: 'personal',
           principalName: 'User',
           accountLabel: 'Account',
-          browserProfileId: '../escape',
+          browserProfileId: 'renderer-must-not-control-this',
         },
       ]),
     ).toThrow()

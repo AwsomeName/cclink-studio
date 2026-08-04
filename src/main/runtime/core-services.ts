@@ -169,6 +169,7 @@ export async function bootstrapMainProcessServices(
   registerWebResourceIpc(
     () => runtime.webResourceService,
     () => runtime.projectOpsService,
+    () => runtime.workspaceStateService,
     runtime.trustedRendererGuard,
   )
   console.log('[CCLink Studio] 网站与账号 IPC 已注册')
@@ -200,6 +201,7 @@ export async function bootstrapMainProcessServices(
     () => runtime.webAffairService,
     runtime.trustedRendererGuard,
     () => runtime.browserTaskRuntime,
+    () => runtime.workspaceStateService,
   )
   console.log('[CCLink Studio] 事务 IPC 已注册')
 

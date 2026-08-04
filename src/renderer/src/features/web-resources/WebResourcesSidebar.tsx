@@ -3,18 +3,19 @@ import type {
   CreateWebConnectionInput,
   WebAccount,
   WebPrincipalKind,
-  WebResourceSnapshot,
+  WebResourceProjectSnapshot,
   WebsiteResource,
 } from '@shared/web-resources/web-resource-types'
 import type { WorkspaceRef } from '@shared/workspace-ref'
-import { useTabStore } from '../../stores'
 import { IconGlobe, IconPlus } from '../../components/common/Icons'
 import {
   formatWebResourceLoginStatus,
+  getWebResourceLoginStatus,
   observeWebResourceLogin,
   WEB_PRINCIPAL_KIND_LABELS,
   type WebResourceLoginObservation,
 } from './web-resource-view-model'
+import { ensureWebResourceTab } from './web-resource-tab'
 
 interface AccountRow {
   account: WebAccount
@@ -22,14 +23,14 @@ interface AccountRow {
   principalName: string
 }
 
-function initialForm(): CreateWebConnectionInput {
+function initialForm(workspaceRef: WorkspaceRef): CreateWebConnectionInput {
   return {
+    workspaceRef,
     websiteName: '',
     entryUrl: '',
     principalKind: 'company',
     principalName: '',
     accountLabel: '',
-    browserProfileId: `web-${Date.now().toString(36)}`,
   }
 }
 
@@ -40,14 +41,13 @@ export function WebResourcesSidebar({
   workspaceRef: WorkspaceRef
   workspacePath?: string | null
 }): React.ReactElement {
-  const openTab = useTabStore((state) => state.openTab)
-  const [snapshot, setSnapshot] = useState<WebResourceSnapshot | null>(null)
+  const [snapshot, setSnapshot] = useState<WebResourceProjectSnapshot | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [showImportForm, setShowImportForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [checkingLogin, setCheckingLogin] = useState(false)
-  const [form, setForm] = useState<CreateWebConnectionInput>(initialForm)
+  const [form, setForm] = useState<CreateWebConnectionInput>(() => initialForm(workspaceRef))
   const [importPrincipalKind, setImportPrincipalKind] = useState<WebPrincipalKind>('company')
   const [importPrincipalName, setImportPrincipalName] = useState('')
   const [importMessage, setImportMessage] = useState<string | null>(null)
@@ -67,14 +67,25 @@ export function WebResourcesSidebar({
   }, [snapshot])
 
   const reload = useCallback(async (): Promise<void> => {
-    const result = await window.cclinkStudio.webResources.getSnapshot()
+    if (workspaceRef.kind !== 'local') {
+      setSnapshot(null)
+      setLoadError(null)
+      return
+    }
+    const result = await window.cclinkStudio.webResources.getSnapshot({ workspaceRef })
     if (!result.success) {
       setLoadError(result.error.message)
       return
     }
     setSnapshot(result.data)
     setLoadError(null)
-  }, [])
+  }, [workspaceRef])
+
+  useEffect(() => {
+    setForm(initialForm(workspaceRef))
+    setShowForm(false)
+    setLoginStatuses({})
+  }, [workspaceRef])
 
   useEffect(() => {
     void reload().catch((error) => {
@@ -128,7 +139,8 @@ export function WebResourcesSidebar({
         setLoadError(result.error.message)
         return
       }
-      setForm(initialForm())
+      ensureWebResourceTab(result.data, workspaceRef)
+      setForm(initialForm(workspaceRef))
       setShowForm(false)
       await reload()
     } catch (error) {
@@ -139,13 +151,51 @@ export function WebResourcesSidebar({
   }
 
   const openAccount = ({ account, website }: AccountRow): void => {
-    openTab({
-      type: 'web-resource',
-      title: `${website.name} · ${account.label}`,
-      icon: '🌐',
-      webResource: { accountId: account.id },
-      workspaceRef,
-    })
+    const principal = snapshot?.principals.find((item) => item.id === account.principalId)
+    if (!principal) {
+      setLoadError(`账号“${account.label}”的业务主体已失效`)
+      return
+    }
+    ensureWebResourceTab({ account, website, principal }, workspaceRef)
+  }
+
+  const confirmLogin = async (row: AccountRow): Promise<void> => {
+    setSaving(true)
+    setLoadError(null)
+    try {
+      const result = await window.cclinkStudio.webResources.confirmLogin({
+        workspaceRef,
+        accountId: row.account.id,
+      })
+      if (!result.success) {
+        setLoadError(result.error.message)
+        return
+      }
+      await reload()
+      await refreshLoginStatuses()
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const claimLegacyConnections = async (): Promise<void> => {
+    setSaving(true)
+    setLoadError(null)
+    try {
+      const result = await window.cclinkStudio.webResources.claimLegacyConnections({ workspaceRef })
+      if (!result.success) {
+        setLoadError(result.error.message)
+        return
+      }
+      setImportMessage(`已将 ${result.data.claimedCount} 个旧网站账号归入当前项目`)
+      await reload()
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const importProjectOpsConfig = async (event: FormEvent): Promise<void> => {
@@ -176,27 +226,34 @@ export function WebResourcesSidebar({
     }
   }
 
+  if (workspaceRef.kind !== 'local') {
+    return (
+      <div className="web-resources-sidebar">
+        <div className="web-resources-empty">请先打开一个本地项目，再添加网站与账号。</div>
+      </div>
+    )
+  }
+
   return (
     <div className="web-resources-sidebar">
       <div className="web-resources-toolbar">
-        <span>{rows.length} 个账号连接</span>
+        <button type="button" onClick={() => setShowForm((value) => !value)}>
+          <IconPlus size={14} />
+          添加网站与账号
+        </button>
         <span className="web-resources-toolbar-actions">
           <button
             type="button"
             disabled={checkingLogin || rows.length === 0}
             onClick={() => void refreshLoginStatuses()}
           >
-            {checkingLogin ? '核验中…' : '核验登录'}
+            {checkingLogin ? '核验中…' : '刷新状态'}
           </button>
           {workspacePath ? (
             <button type="button" onClick={() => setShowImportForm((value) => !value)}>
-              导入旧配置
+              导入
             </button>
           ) : null}
-          <button type="button" onClick={() => setShowForm((value) => !value)}>
-            <IconPlus size={14} />
-            添加网站
-          </button>
         </span>
       </div>
 
@@ -269,17 +326,6 @@ export function WebResourcesSidebar({
             />
           </label>
           <label>
-            Browser Profile
-            <input
-              required
-              maxLength={64}
-              pattern="[A-Za-z0-9._-]+"
-              value={form.browserProfileId}
-              onChange={(event) => setForm({ ...form, browserProfileId: event.target.value })}
-            />
-            <span className="web-resources-help">隔离并复用该账号的浏览器登录态</span>
-          </label>
-          <label>
             登录提示（可选）
             <input
               maxLength={500}
@@ -293,7 +339,7 @@ export function WebResourcesSidebar({
               取消
             </button>
             <button type="submit" disabled={saving}>
-              {saving ? '保存中…' : '保存并建立连接'}
+              {saving ? '正在添加…' : '添加并打开'}
             </button>
           </div>
         </form>
@@ -341,6 +387,14 @@ export function WebResourcesSidebar({
 
       {loadError ? <div className="web-resources-error">{loadError}</div> : null}
       {importMessage ? <div className="web-resources-success">{importMessage}</div> : null}
+      {snapshot && snapshot.unassignedAccountCount > 0 ? (
+        <div className="web-resources-legacy-notice">
+          <span>发现 {snapshot.unassignedAccountCount} 个旧网站账号尚未归属项目。</span>
+          <button type="button" disabled={saving} onClick={() => void claimLegacyConnections()}>
+            归入当前项目
+          </button>
+        </div>
+      ) : null}
       {!snapshot && !loadError ? (
         <div className="web-resources-empty">正在读取网站与账号</div>
       ) : null}
@@ -353,42 +407,46 @@ export function WebResourcesSidebar({
       <div className="web-resources-list">
         {rows.map((row) => {
           const observation = loginStatuses[row.account.id]
+          const status = getWebResourceLoginStatus(observation, row.account.loginConfirmedAt)
           return (
-            <button
-              type="button"
-              className="web-resource-row"
-              key={row.account.id}
-              onClick={() => openAccount(row)}
-              title={`${row.website.entryUrl}\nProfile: ${row.account.browserProfileId}`}
-            >
-              <IconGlobe size={15} />
-              <span className="web-resource-row-main">
-                <span className="web-resource-row-title">
-                  <span>{row.website.name}</span>
-                  <span className={`web-resource-status ${observation?.status ?? 'checking'}`} />
+            <div className="web-resource-row" key={row.account.id}>
+              <button
+                type="button"
+                className="web-resource-row-open"
+                onClick={() => openAccount(row)}
+                title={row.website.entryUrl}
+              >
+                <IconGlobe size={15} />
+                <span className="web-resource-row-main">
+                  <span className="web-resource-row-title">
+                    <span>{row.website.name}</span>
+                    <span className={`web-resource-status ${status}`} />
+                  </span>
+                  <span>
+                    {row.principalName} ·{' '}
+                    {formatWebResourceLoginStatus(observation, row.account.loginConfirmedAt)}
+                  </span>
+                  {row.account.label !== row.principalName || row.account.role ? (
+                    <span>{[row.account.label, row.account.role].filter(Boolean).join(' · ')}</span>
+                  ) : null}
                 </span>
-                <span>
-                  {[row.account.label, row.account.role, row.principalName]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-                <span>
-                  {formatWebResourceLoginStatus(observation)} · {row.account.browserProfileId}
-                  {observation
-                    ? ` · ${new Date(observation.checkedAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                      })} 核验`
-                    : ''}
-                </span>
-              </span>
-            </button>
+              </button>
+              {status !== 'authenticated' ? (
+                <button
+                  type="button"
+                  className="web-resource-row-confirm"
+                  disabled={saving}
+                  onClick={() => void confirmLogin(row)}
+                >
+                  确认登录
+                </button>
+              ) : null}
+            </div>
           )
         })}
       </div>
       <div className="web-resources-boundary">
-        密码与 Cookie 不存入资源库；登录态由对应 Browser Profile 持有。
+        密码与 Cookie 不存入项目资源；登录由隔离的本机浏览器环境持有。
       </div>
     </div>
   )

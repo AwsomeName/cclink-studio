@@ -25,6 +25,17 @@ export function adjustMarkdownListIndent(editor: Editor, direction: 'indent' | '
     : editor.commands.liftListItem(itemType)
 }
 
+export function handleMarkdownTabKey(editor: Editor, direction: 'indent' | 'outdent'): boolean {
+  // Let the dedicated extensions handle Tab inside code blocks and tables.
+  if (editor.isActive('codeBlock') || editor.isActive('table')) return false
+
+  // Lists support structural indentation. In ordinary Markdown blocks there is
+  // no safe structural indent operation, but Tab must still remain inside the
+  // editor instead of falling through to the browser's focus navigation.
+  adjustMarkdownListIndent(editor, direction)
+  return true
+}
+
 export function toggleMarkdownBlockquote(editor: Editor): boolean {
   const domPosition = getDomBlockquoteSelectionPosition(editor)
   if (!editor.isActive('blockquote') && domPosition === null) {

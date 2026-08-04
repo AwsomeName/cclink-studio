@@ -100,7 +100,13 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
 
   if (runtime.webAffairService) {
     try {
-      runtime.toolHost.registerModule(new WebAffairToolModule(runtime.webAffairService))
+      runtime.toolHost.registerModule(
+        new WebAffairToolModule(
+          runtime.webAffairService,
+          async (workspacePath) =>
+            runtime.workspaceStateService?.getLocalProjectId(workspacePath) ?? null,
+        ),
+      )
     } catch (error) {
       console.error('[CCLink Studio] web-affairs MCP 工具模块注册失败:', error)
     }

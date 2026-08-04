@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import type { WebAffair, WebAffairNode } from '@shared/web-affairs/web-affair-types'
 import type { WebResourceSnapshot } from '@shared/web-resources/web-resource-types'
-import { useAgentStore, useTabStore, useWorkspaceStore } from '../../stores'
+import { useAgentStore, useWorkspaceStore } from '../../stores'
 import { useUIStore } from '../../stores/ui-store'
 import { createConversationRunController } from '../agent-conversations/conversation-run-controller'
 import { createConversationRuntimeForWorkspace } from '../agent-conversations/view-model'
+import { ensureWebResourceTab } from '../web-resources/web-resource-tab'
 
 export function WebAffairNodeActions({
   affair,
@@ -19,7 +20,8 @@ export function WebAffairNodeActions({
   onChanged: (affair: WebAffair) => void
   onError: (message: string | null) => void
 }): React.ReactElement {
-  const workspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
+  const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
+  const workspaceRef = affair.workspaceRef ?? activeWorkspaceRef
   const [busy, setBusy] = useState(false)
   const [preflight, setPreflight] = useState(false)
   const [loginConfirmed, setLoginConfirmed] = useState(false)
@@ -39,7 +41,8 @@ export function WebAffairNodeActions({
     .filter((item) => node.materialIds.includes(item.id))
     .map((item) => item.name)
   const canStart =
-    (node.status === 'ready' || node.status === 'failed') && Boolean(account && website)
+    (node.status === 'ready' || node.status === 'failed') &&
+    Boolean(account && website && principal)
   const isAttemptActive =
     attempt && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(attempt.status)
 
@@ -56,8 +59,9 @@ export function WebAffairNodeActions({
   }
 
   const startAi = async (): Promise<void> => {
-    if (!account || !website || !loginConfirmed) return
+    if (!account || !website || !principal || !loginConfirmed) return
     const started = await window.cclinkStudio.webAffairs.startAttempt({
+      workspaceRef,
       affairId: affair.id,
       nodeId: node.id,
       accountId: account.id,
@@ -66,18 +70,7 @@ export function WebAffairNodeActions({
     const createdAttempt = started.data.attempts[started.data.attempts.length - 1]
     onChanged(started.data)
 
-    const tabStore = useTabStore.getState()
-    tabStore.openTab({
-      type: 'browser',
-      title: website.name,
-      icon: '🌐',
-      initialUrl: website.entryUrl,
-      browserProfile: account.browserProfileId,
-      workspaceRef,
-      forceNew: true,
-    })
-    const tabId = useTabStore.getState().activeTabId
-    if (!tabId) throw new Error('浏览器 Tab 创建失败')
+    const tabId = ensureWebResourceTab({ account, website, principal }, workspaceRef)
     await waitForBrowser(tabId)
 
     const agentStore = useAgentStore.getState()
@@ -94,6 +87,7 @@ export function WebAffairNodeActions({
     )
     if (result.status !== 'accepted' || !result.runId) {
       const failed = await window.cclinkStudio.webAffairs.finishAttempt({
+        workspaceRef,
         affairId: affair.id,
         attemptId: createdAttempt.id,
         outcome: 'interrupted',
@@ -104,6 +98,7 @@ export function WebAffairNodeActions({
     }
     const browserTask = await waitForBrowserTask(tabId)
     const bound = await window.cclinkStudio.webAffairs.bindAttempt({
+      workspaceRef,
       affairId: affair.id,
       attemptId: createdAttempt.id,
       tabId,
@@ -121,6 +116,7 @@ export function WebAffairNodeActions({
     if (attempt.browserTaskRunId)
       await window.cclinkStudio.browser.pauseTask(attempt.browserTaskRunId)
     const result = await window.cclinkStudio.webAffairs.handoffAttempt({
+      workspaceRef,
       affairId: affair.id,
       attemptId: attempt.id,
       reason: note.trim() || '用户主动接管网页',
@@ -136,6 +132,7 @@ export function WebAffairNodeActions({
     const observationSummary = note.trim()
     if (!observationSummary) throw new Error('请说明人工操作后的页面状态，AI 才能重新观察')
     const returned = await window.cclinkStudio.webAffairs.returnAttempt({
+      workspaceRef,
       affairId: affair.id,
       attemptId: attempt.id,
       observationSummary,
@@ -159,6 +156,7 @@ export function WebAffairNodeActions({
     const summary = note.trim()
     if (!summary) throw new Error('请填写本次最终动作的确认摘要')
     const result = await window.cclinkStudio.webAffairs.confirmFinalAction({
+      workspaceRef,
       affairId: affair.id,
       attemptId: attempt.id,
       summary,
@@ -184,6 +182,7 @@ export function WebAffairNodeActions({
       ? await window.cclinkStudio.browser.getCurrentURL(attempt.tabId).catch(() => undefined)
       : undefined
     const result = await window.cclinkStudio.webAffairs.finishAttempt({
+      workspaceRef,
       affairId: affair.id,
       attemptId: attempt.id,
       outcome,
@@ -203,6 +202,7 @@ export function WebAffairNodeActions({
 
   const scheduleCheck = async (): Promise<void> => {
     const result = await window.cclinkStudio.webAffairs.scheduleCheck({
+      workspaceRef,
       affairId: affair.id,
       nodeId: node.id,
       nextCheckAt: new Date(nextCheckAt).toISOString(),
@@ -217,6 +217,7 @@ export function WebAffairNodeActions({
   const completeCheck = async (outcome: 'unchanged' | 'approved' | 'rejected'): Promise<void> => {
     if (!note.trim()) throw new Error('请填写官网显示的状态或官方原文摘要')
     const result = await window.cclinkStudio.webAffairs.completeCheck({
+      workspaceRef,
       affairId: affair.id,
       nodeId: node.id,
       outcome,
@@ -232,6 +233,7 @@ export function WebAffairNodeActions({
     decision: 'accept' | 'reject',
   ): Promise<void> => {
     const result = await window.cclinkStudio.webAffairs.decideFlowProposal({
+      workspaceRef,
       affairId: affair.id,
       proposalId,
       decision,
@@ -273,7 +275,7 @@ export function WebAffairNodeActions({
                 checked={loginConfirmed}
                 onChange={(event) => setLoginConfirmed(event.target.checked)}
               />
-              我已在“网站与账号”中核验当前 Profile 的登录状态和业务主体
+              我已在“网站与账号”中核验当前账号的登录状态和业务主体
             </label>
             <div>
               <button type="button" onClick={() => setPreflight(false)}>

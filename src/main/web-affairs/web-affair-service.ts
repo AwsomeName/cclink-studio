@@ -11,6 +11,7 @@ import type {
   DecideWebAffairFlowProposalInput,
   FinishWebAffairAttemptInput,
   HandoffWebAffairAttemptInput,
+  InspectWebAffairMaterialsInput,
   ProposeWebAffairFlowDiffInput,
   ReturnWebAffairAttemptInput,
   ReviseWebAffairFlowInput,
@@ -27,6 +28,7 @@ import type {
   WebAffairNode,
   WebAffairNodeStatus,
   WebAffairOperationResult,
+  WebAffairProjectSnapshot,
   WebAffairSnapshot,
   WebAffairStatus,
 } from '../../shared/web-affairs/web-affair-types'
@@ -38,6 +40,7 @@ import {
   decideWebAffairFlowProposalInputSchema,
   finishWebAffairAttemptInputSchema,
   handoffWebAffairAttemptInputSchema,
+  inspectWebAffairMaterialsInputSchema,
   proposeWebAffairFlowDiffInputSchema,
   returnWebAffairAttemptInputSchema,
   reviseWebAffairFlowInputSchema,
@@ -116,64 +119,80 @@ export class WebAffairService {
     return { success: true, data: structuredClone(this.snapshot) }
   }
 
+  getProjectSnapshot(workspaceId: string): WebAffairOperationResult<WebAffairProjectSnapshot> {
+    const result = this.getSnapshot()
+    if (!result.success) return result
+    return {
+      success: true,
+      data: {
+        schemaVersion: 3,
+        revision: result.data.revision,
+        workspaceId,
+        affairs: result.data.affairs.filter((affair) => affair.workspaceId === workspaceId),
+        unassignedAffairCount: result.data.affairs.filter((affair) => affair.workspaceId === null)
+          .length,
+      },
+    }
+  }
+
   getCatalog(): WebAffairOperationResult<WebAffairCatalog> {
     return { success: true, data: structuredClone(WEB_AFFAIR_CATALOG) }
   }
 
-  createAffair(input: CreateWebAffairInput) {
-    return this.enqueue(() => this.createAffairNow(input))
+  createAffair(input: CreateWebAffairInput, workspaceId: string) {
+    return this.enqueue(() => this.createAffairNow(input, workspaceId))
   }
 
-  updateNode(input: UpdateWebAffairNodeInput) {
-    return this.enqueue(() => this.updateNodeNow(input))
+  updateNode(input: UpdateWebAffairNodeInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () => this.updateNodeNow(input))
   }
 
-  reviseFlow(input: ReviseWebAffairFlowInput) {
-    return this.enqueue(() => this.reviseFlowNow(input))
+  reviseFlow(input: ReviseWebAffairFlowInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () => this.reviseFlowNow(input))
   }
 
-  inspectMaterials(affairId: string) {
-    return this.enqueue(() => this.inspectMaterialsNow(affairId))
+  inspectMaterials(input: InspectWebAffairMaterialsInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () => this.inspectMaterialsNow(input))
   }
 
-  startAttempt(input: StartWebAffairAttemptInput) {
-    return this.enqueue(() => this.startAttemptNow(input))
+  startAttempt(input: StartWebAffairAttemptInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () => this.startAttemptNow(input))
   }
 
-  bindAttempt(input: BindWebAffairAttemptInput) {
-    return this.enqueue(() => this.bindAttemptNow(input))
+  bindAttempt(input: BindWebAffairAttemptInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () => this.bindAttemptNow(input))
   }
 
-  handoffAttempt(input: HandoffWebAffairAttemptInput) {
-    return this.enqueue(() => this.handoffAttemptNow(input))
+  handoffAttempt(input: HandoffWebAffairAttemptInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () => this.handoffAttemptNow(input))
   }
 
-  returnAttempt(input: ReturnWebAffairAttemptInput) {
-    return this.enqueue(() => this.returnAttemptNow(input))
+  returnAttempt(input: ReturnWebAffairAttemptInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () => this.returnAttemptNow(input))
   }
 
-  confirmFinalAction(input: ConfirmWebAffairFinalActionInput) {
-    return this.enqueue(() => this.confirmFinalActionNow(input))
+  confirmFinalAction(input: ConfirmWebAffairFinalActionInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () => this.confirmFinalActionNow(input))
   }
 
-  finishAttempt(input: FinishWebAffairAttemptInput) {
-    return this.enqueue(() => this.finishAttemptNow(input))
+  finishAttempt(input: FinishWebAffairAttemptInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () => this.finishAttemptNow(input))
   }
 
-  scheduleCheck(input: ScheduleWebAffairCheckInput) {
-    return this.enqueue(() => this.scheduleCheckNow(input))
+  scheduleCheck(input: ScheduleWebAffairCheckInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () => this.scheduleCheckNow(input))
   }
 
-  completeCheck(input: CompleteWebAffairCheckInput) {
-    return this.enqueue(() => this.completeCheckNow(input))
+  completeCheck(input: CompleteWebAffairCheckInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () => this.completeCheckNow(input))
   }
 
-  proposeFlowDiff(input: ProposeWebAffairFlowDiffInput) {
-    return this.enqueue(() => this.proposeFlowDiffNow(input))
+  proposeFlowDiff(input: ProposeWebAffairFlowDiffInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () => this.proposeFlowDiffNow(input))
   }
 
-  decideFlowProposal(input: DecideWebAffairFlowProposalInput) {
-    return this.enqueue(() => this.decideFlowProposalNow(input))
+  decideFlowProposal(input: DecideWebAffairFlowProposalInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () => this.decideFlowProposalNow(input))
   }
 
   async flush(): Promise<void> {
@@ -185,6 +204,7 @@ export class WebAffairService {
 
   private async createAffairNow(
     rawInput: CreateWebAffairInput,
+    workspaceId: string,
   ): Promise<WebAffairOperationResult<WebAffair>> {
     if (!this.snapshot) return this.unavailable()
     const parsed = createWebAffairInputSchema.safeParse(rawInput)
@@ -202,6 +222,9 @@ export class WebAffairService {
     }
     if (accounts.some((account) => account?.principalId !== principal.id)) {
       return this.resourceError('所选账号不属于当前业务主体')
+    }
+    if (accounts.some((account) => account?.projectId !== workspaceId)) {
+      return this.resourceError('所选账号不属于当前工作空间')
     }
 
     const now = this.timestamp()
@@ -233,6 +256,7 @@ export class WebAffairService {
     })
     const affair: WebAffair = {
       id: randomUUID(),
+      workspaceId,
       title: input.title,
       objective: input.objective,
       status: 'active',
@@ -340,9 +364,11 @@ export class WebAffairService {
   }
 
   private async inspectMaterialsNow(
-    affairId: string,
+    rawInput: InspectWebAffairMaterialsInput,
   ): Promise<WebAffairOperationResult<WebAffair>> {
-    const affair = this.findAffair(affairId)
+    const parsed = inspectWebAffairMaterialsInputSchema.safeParse(rawInput)
+    if (!parsed.success) return this.invalid('材料检查参数无效')
+    const affair = this.findAffair(parsed.data.affairId)
     if (!affair) return this.notFound('事务不存在')
     const now = this.timestamp()
     const materials = await Promise.all(
@@ -384,6 +410,7 @@ export class WebAffairService {
     if (
       !account ||
       !website ||
+      account.projectId !== affair.workspaceId ||
       account.principalId !== affair.principalId ||
       !node.accountIds.includes(account.id)
     ) {
@@ -1490,6 +1517,20 @@ export class WebAffairService {
     }
     this.mutationQueue = this.mutationQueue.then(mutate, mutate)
     return result
+  }
+
+  private enqueueScoped(
+    affairId: string,
+    workspaceId: string,
+    operation: () => Promise<WebAffairOperationResult<WebAffair>>,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    return this.enqueue(async () => {
+      const affair = this.findAffair(affairId)
+      if (!affair || affair.workspaceId !== workspaceId) {
+        return this.notFound('当前工作空间不存在该事务')
+      }
+      return operation()
+    })
   }
 
   private unavailable<T>(): WebAffairOperationResult<T> {

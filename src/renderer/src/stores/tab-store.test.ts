@@ -319,6 +319,46 @@ describe('useTabStore', () => {
       expect(resourceTabs[0].webResource).toEqual({ accountId: 'account-1' })
     })
 
+    it('网站账号浏览器 Tab 按 projectId 和 accountId 聚焦复用', () => {
+      const workspaceRef = { kind: 'local' as const, path: '/tmp/project-a' }
+      useTabStore.getState().openTab({
+        type: 'browser',
+        title: 'App Store Connect · Example Ltd.',
+        icon: '🌐',
+        initialUrl: 'https://appstoreconnect.apple.com/apps',
+        browserProfile: 'profile-a',
+        webResourceRef: { projectId: 'project-a', accountId: 'account-1' },
+        workspaceRef,
+      })
+      const firstId = useTabStore.getState().activeTabId
+
+      useTabStore.getState().openTab({
+        type: 'browser',
+        title: 'Changed display title',
+        icon: '🌐',
+        initialUrl: 'https://appstoreconnect.apple.com/apps/changed',
+        browserProfile: 'profile-a',
+        webResourceRef: { projectId: 'project-a', accountId: 'account-1' },
+        workspaceRef,
+      })
+      expect(useTabStore.getState().activeTabId).toBe(firstId)
+
+      useTabStore.getState().openTab({
+        type: 'browser',
+        title: 'Same account id in another project',
+        icon: '🌐',
+        initialUrl: 'https://appstoreconnect.apple.com/apps',
+        browserProfile: 'profile-b',
+        webResourceRef: { projectId: 'project-b', accountId: 'account-1' },
+        workspaceRef: { kind: 'local', path: '/tmp/project-b' },
+      })
+
+      const resourceBrowserTabs = useTabStore
+        .getState()
+        .tabs.filter((tab) => tab.type === 'browser' && tab.webResourceRef)
+      expect(resourceBrowserTabs).toHaveLength(2)
+    })
+
     it('网页事务 Tab 按 affairId 去重', () => {
       useTabStore.getState().openTab({
         type: 'web-affair',

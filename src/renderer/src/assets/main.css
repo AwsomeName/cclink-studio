@@ -1838,10 +1838,19 @@ button.project-panel-row.active {
 
 .web-resource-row {
   display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+}
+
+.web-resource-row-open {
+  display: flex;
   align-items: flex-start;
   gap: 7px;
-  width: 100%;
-  padding: 7px 10px;
+  min-width: 0;
+  flex: 1;
+  padding: 8px 5px 8px 10px;
   border: 0;
   background: transparent;
   color: var(--text-secondary);
@@ -1849,13 +1858,33 @@ button.project-panel-row.active {
   cursor: pointer;
 }
 
-.web-resource-row:hover {
+.web-resource-row:hover,
+.web-resource-row-open:hover {
   background: var(--bg-hover);
 }
 
-.web-resource-row > svg {
+.web-resource-row-open > svg {
   flex: 0 0 auto;
   margin-top: 1px;
+}
+
+.web-resource-row-confirm {
+  flex: 0 0 auto;
+  margin-right: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-color);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.web-resource-row-confirm:hover {
+  text-decoration: underline;
+}
+
+.web-resource-row-confirm:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .web-resource-row-main {
@@ -1906,6 +1935,30 @@ button.project-panel-row.active {
   margin-top: auto;
   padding-top: 8px;
   border-top: 1px solid var(--border-color);
+}
+
+.web-resources-legacy-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 10px 0;
+  padding: 7px;
+  border: 1px solid var(--status-warning, #d29922);
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.web-resources-legacy-notice span {
+  min-width: 0;
+  flex: 1;
+}
+
+.web-resources-legacy-notice button {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--accent-color);
+  cursor: pointer;
 }
 
 .web-resource-detail,
@@ -2610,6 +2663,16 @@ button.project-panel-row.active {
 
 .web-affairs-error {
   color: var(--status-error, #f47174);
+}
+
+.web-affairs-legacy-notice {
+  margin: 6px 8px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--warning, #d8a400) 45%, transparent);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .web-affairs-list {

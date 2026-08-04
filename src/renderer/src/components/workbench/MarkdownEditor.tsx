@@ -38,6 +38,7 @@ import { MarkdownImage, resolveMarkdownImageSource } from '../../features/markdo
 import {
   adjustMarkdownListIndent,
   applyMarkdownLink,
+  handleMarkdownTabKey,
   MarkdownKeyboardShortcuts,
   toggleMarkdownBlockquote,
 } from '../../features/markdown/markdown-editor-shortcuts'
@@ -205,7 +206,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
           ) {
             return false
           }
-          return adjustMarkdownListIndent(
+          return handleMarkdownTabKey(
             tiptapEditorRef.current,
             event.shiftKey ? 'outdent' : 'indent',
           )

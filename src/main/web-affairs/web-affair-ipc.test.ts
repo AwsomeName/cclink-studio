@@ -11,6 +11,9 @@ vi.mock('electron', () => ({ ipcMain: mockIpcMain }))
 
 import { registerWebAffairIpc } from './web-affair-ipc'
 
+const WORKSPACE_ID = '11111111-1111-4111-8111-111111111111'
+const WORKSPACE_SCOPE = { workspaceRef: { kind: 'local', path: '/Users/example/project' } }
+
 describe('registerWebAffairIpc', () => {
   beforeEach(() => mockIpcMain.handlers.clear())
 
@@ -37,10 +40,59 @@ describe('registerWebAffairIpc', () => {
     expect(service.createAffair).not.toHaveBeenCalled()
   })
 
-  it('returns a structured degraded result', () => {
-    registerWebAffairIpc(() => null, createGuard('trusted') as never)
+  it('resolves the renderer workspace to a stable id before returning affairs', async () => {
+    const service = {
+      getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [] } })),
+    }
+    const workspaceState = { getLocalProjectId: vi.fn(async () => WORKSPACE_ID) }
+    registerWebAffairIpc(
+      () => service as never,
+      createGuard('trusted') as never,
+      () => null,
+      () => workspaceState as never,
+    )
 
-    expect(mockIpcMain.handlers.get('webAffairs:getSnapshot')?.({ sender: 'trusted' })).toEqual({
+    await expect(
+      mockIpcMain.handlers.get('webAffairs:getSnapshot')?.({ sender: 'trusted' }, WORKSPACE_SCOPE),
+    ).resolves.toMatchObject({ success: true, data: { affairs: [] } })
+    expect(workspaceState.getLocalProjectId).toHaveBeenCalledWith('/Users/example/project')
+    expect(service.getProjectSnapshot).toHaveBeenCalledWith(WORKSPACE_ID)
+  })
+
+  it('resolves and forwards the stable workspace id for affair mutations', async () => {
+    const updateNode = vi.fn(async () => ({ success: true, data: { id: 'affair' } }))
+    const workspaceState = { getLocalProjectId: vi.fn(async () => WORKSPACE_ID) }
+    registerWebAffairIpc(
+      () => ({ updateNode }) as never,
+      createGuard('trusted') as never,
+      () => null,
+      () => workspaceState as never,
+    )
+    const input = {
+      ...WORKSPACE_SCOPE,
+      affairId: '22222222-2222-4222-8222-222222222222',
+      nodeId: '33333333-3333-4333-8333-333333333333',
+      status: 'completed',
+      resultNote: '已取得可核验的网页结果',
+    }
+
+    await expect(
+      mockIpcMain.handlers.get('webAffairs:updateNode')?.({ sender: 'trusted' }, input),
+    ).resolves.toMatchObject({ success: true })
+    expect(updateNode).toHaveBeenCalledWith(input, WORKSPACE_ID)
+  })
+
+  it('returns a structured degraded result', async () => {
+    registerWebAffairIpc(
+      () => null,
+      createGuard('trusted') as never,
+      () => null,
+      () => ({ getLocalProjectId: vi.fn(async () => WORKSPACE_ID) }) as never,
+    )
+
+    await expect(
+      mockIpcMain.handlers.get('webAffairs:getSnapshot')?.({ sender: 'trusted' }, WORKSPACE_SCOPE),
+    ).resolves.toEqual({
       success: false,
       error: {
         code: 'SERVICE_UNAVAILABLE',

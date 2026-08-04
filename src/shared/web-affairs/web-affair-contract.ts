@@ -15,16 +15,18 @@ import {
   decideWebAffairFlowProposalInputSchema,
   finishWebAffairAttemptInputSchema,
   handoffWebAffairAttemptInputSchema,
+  inspectWebAffairMaterialsInputSchema,
   proposeWebAffairFlowDiffInputSchema,
   returnWebAffairAttemptInputSchema,
   reviseWebAffairFlowInputSchema,
   scheduleWebAffairCheckInputSchema,
   startWebAffairAttemptInputSchema,
   updateWebAffairNodeInputSchema,
+  webAffairWorkspaceScopeInputSchema,
 } from './web-affair-schema'
 import type { WebAffair, WebAffairOperationResult } from './web-affair-types'
 
-const invalidInputResult = async (): Promise<WebAffairOperationResult<WebAffair>> => ({
+const invalidInputResult = async <T>(): Promise<WebAffairOperationResult<T>> => ({
   success: false,
   error: { code: 'INVALID_INPUT', message: '事务参数无效' },
 })
@@ -44,12 +46,24 @@ function bindSingleInput<Input>(
 }
 
 export const webAffairsIpcContracts = {
-  getSnapshot: bindNoArgsIpc(webAffairsIpc.getSnapshot),
+  getSnapshot: bindIpcParser(
+    webAffairsIpc.getSnapshot,
+    (args) => {
+      if (args.length !== 1) {
+        throw new Error(`IPC ${webAffairsIpc.getSnapshot.channel} 需要 1 个参数`)
+      }
+      return ipcArgs(webAffairWorkspaceScopeInputSchema.parse(args[0]))
+    },
+    invalidInputResult,
+  ),
   getCatalog: bindNoArgsIpc(webAffairsIpc.getCatalog),
   createAffair: bindSingleInput(webAffairsIpc.createAffair, createWebAffairInputSchema),
   updateNode: bindSingleInput(webAffairsIpc.updateNode, updateWebAffairNodeInputSchema),
   reviseFlow: bindSingleInput(webAffairsIpc.reviseFlow, reviseWebAffairFlowInputSchema),
-  inspectMaterials: bindSingleInput(webAffairsIpc.inspectMaterials, z.uuid()),
+  inspectMaterials: bindSingleInput(
+    webAffairsIpc.inspectMaterials,
+    inspectWebAffairMaterialsInputSchema,
+  ),
   startAttempt: bindSingleInput(webAffairsIpc.startAttempt, startWebAffairAttemptInputSchema),
   bindAttempt: bindSingleInput(webAffairsIpc.bindAttempt, bindWebAffairAttemptInputSchema),
   handoffAttempt: bindSingleInput(webAffairsIpc.handoffAttempt, handoffWebAffairAttemptInputSchema),

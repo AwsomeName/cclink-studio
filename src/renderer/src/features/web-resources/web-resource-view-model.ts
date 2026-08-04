@@ -40,17 +40,32 @@ export function observeWebResourceLogin(
 
 export function formatWebResourceLoginStatus(
   observation: WebResourceLoginObservation | undefined,
+  loginConfirmedAt?: string,
 ): string {
-  switch (observation?.status) {
+  switch (getWebResourceLoginStatus(observation, loginConfirmedAt)) {
     case 'authenticated':
-      return '检测到登录凭据'
+      return '已登录'
     case 'session-data':
-      return '有会话数据，需确认'
+      return '待确认'
     case 'not-authenticated':
-      return '待登录'
+      return loginConfirmedAt ? '需重新登录' : '待登录'
     case 'error':
       return '状态检查失败'
     default:
       return '检查中'
   }
+}
+
+export function getWebResourceLoginStatus(
+  observation: WebResourceLoginObservation | undefined,
+  loginConfirmedAt?: string,
+): WebResourceLoginStatus {
+  if (!observation) return 'checking'
+  if (observation.status === 'error') return 'error'
+  if (loginConfirmedAt) {
+    return observation.status === 'not-authenticated' ? 'not-authenticated' : 'authenticated'
+  }
+  return observation.status === 'authenticated' || observation.status === 'session-data'
+    ? 'session-data'
+    : observation.status
 }

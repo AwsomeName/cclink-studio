@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { WebAffair, WebAffairNodeStatus } from '@shared/web-affairs/web-affair-types'
 import type { WebResourceSnapshot } from '@shared/web-resources/web-resource-types'
-import { useTabStore, useWorkspaceStore } from '../../stores'
+import { useWorkspaceStore } from '../../stores'
 import {
   WEB_AFFAIR_CHANGED_EVENT,
   WEB_AFFAIR_EXECUTOR_LABELS,
@@ -10,9 +10,9 @@ import {
 } from './web-affair-view-model'
 import { WebAffairFlowEditor } from './WebAffairFlowEditor'
 import { WebAffairNodeActions } from './WebAffairNodeActions'
+import { ensureWebResourceTab } from '../web-resources/web-resource-tab'
 
 export function WebAffairTab({ affairId }: { affairId: string }): React.ReactElement {
-  const openTab = useTabStore((state) => state.openTab)
   const workspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const [affair, setAffair] = useState<WebAffair | null>(null)
   const [resources, setResources] = useState<WebResourceSnapshot | null>(null)
@@ -24,8 +24,8 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
 
   const load = useCallback(async (): Promise<void> => {
     const [affairResult, resourceResult] = await Promise.all([
-      window.cclinkStudio.webAffairs.getSnapshot(),
-      window.cclinkStudio.webResources.getSnapshot(),
+      window.cclinkStudio.webAffairs.getSnapshot({ workspaceRef }),
+      window.cclinkStudio.webResources.getSnapshot({ workspaceRef }),
     ])
     if (!affairResult.success) throw new Error(affairResult.error.message)
     if (!resourceResult.success) throw new Error(resourceResult.error.message)
@@ -41,7 +41,7 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
           null),
     )
     setError(null)
-  }, [affairId])
+  }, [affairId, workspaceRef])
 
   useEffect(() => {
     void load().catch((reason) =>
@@ -84,6 +84,7 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
     setError(null)
     try {
       const result = await window.cclinkStudio.webAffairs.updateNode({
+        workspaceRef: affair?.workspaceRef ?? workspaceRef,
         affairId,
         nodeId: selectedNode.id,
         status: nextStatus,
@@ -114,7 +115,10 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
     setSaving(true)
     setError(null)
     try {
-      const result = await window.cclinkStudio.webAffairs.inspectMaterials(affairId)
+      const result = await window.cclinkStudio.webAffairs.inspectMaterials({
+        workspaceRef: affair?.workspaceRef ?? workspaceRef,
+        affairId,
+      })
       if (!result.success) {
         setError(result.error.message)
         return
@@ -127,14 +131,18 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
     }
   }
 
-  const openAccount = (accountId: string, label: string): void => {
-    openTab({
-      type: 'web-resource',
-      title: label,
-      icon: '🌐',
-      webResource: { accountId },
-      workspaceRef,
-    })
+  const openAccount = (accountId: string): void => {
+    const account = resources?.accounts.find((item) => item.id === accountId)
+    const website = resources?.websites.find((item) => item.id === account?.websiteId)
+    const accountPrincipal = resources?.principals.find((item) => item.id === account?.principalId)
+    if (!account || !website || !accountPrincipal) {
+      setError('网站账号资源不存在或已失效')
+      return
+    }
+    ensureWebResourceTab(
+      { account, website, principal: accountPrincipal },
+      affair?.workspaceRef ?? workspaceRef,
+    )
   }
 
   if (error && !affair) return <div className="web-affair-tab-state error">{error}</div>
@@ -179,13 +187,9 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
             <strong>账号与登录环境</strong>
             {accounts.length > 0 ? (
               accounts.map((account) => (
-                <button
-                  type="button"
-                  key={account.id}
-                  onClick={() => openAccount(account.id, account.label)}
-                >
+                <button type="button" key={account.id} onClick={() => openAccount(account.id)}>
                   {account.label}
-                  <small>{account.browserProfileId}</small>
+                  <small>{account.role ?? '登录环境已绑定'}</small>
                 </button>
               ))
             ) : (

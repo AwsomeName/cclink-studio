@@ -110,10 +110,11 @@ describe('web affairs IPC contract', () => {
     })
 
     expect(migrated).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       revision: 3,
       affairs: [
         {
+          workspaceId: null,
           title: '旧事务',
           materials: [{ state: 'unchecked' }],
           attempts: [],

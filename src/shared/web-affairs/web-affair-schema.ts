@@ -48,6 +48,10 @@ const workspaceRefSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('local'), path: absolutePathSchema }).strict(),
 ])
 
+export const webAffairWorkspaceScopeInputSchema = z
+  .object({ workspaceRef: workspaceRefSchema })
+  .strict()
+
 const templateRefSchema = z
   .object({ templateId: trimmedText(120, '模板 ID'), version: positiveVersionSchema })
   .strict()
@@ -70,13 +74,14 @@ export const createWebAffairInputSchema = z
       .min(1)
       .max(40)
       .transform((items) => items.map((item) => item.trim())),
-    workspaceRef: workspaceRefSchema.optional(),
+    workspaceRef: workspaceRefSchema,
     templateRef: templateRefSchema.optional(),
   })
   .strict()
 
 export const updateWebAffairNodeInputSchema = z
   .object({
+    workspaceRef: workspaceRefSchema,
     affairId: uuidSchema,
     nodeId: uuidSchema,
     status: webAffairNodeStatusSchema,
@@ -108,6 +113,7 @@ const reviseFlowNodeInputSchema = z
 
 export const reviseWebAffairFlowInputSchema = z
   .object({
+    workspaceRef: workspaceRefSchema,
     affairId: uuidSchema,
     expectedVersion: positiveVersionSchema,
     nodes: z.array(reviseFlowNodeInputSchema).min(1).max(40),
@@ -117,12 +123,22 @@ export const reviseWebAffairFlowInputSchema = z
   })
   .strict()
 
+export const inspectWebAffairMaterialsInputSchema = z
+  .object({ workspaceRef: workspaceRefSchema, affairId: uuidSchema })
+  .strict()
+
 export const startWebAffairAttemptInputSchema = z
-  .object({ affairId: uuidSchema, nodeId: uuidSchema, accountId: uuidSchema })
+  .object({
+    workspaceRef: workspaceRefSchema,
+    affairId: uuidSchema,
+    nodeId: uuidSchema,
+    accountId: uuidSchema,
+  })
   .strict()
 
 export const bindWebAffairAttemptInputSchema = z
   .object({
+    workspaceRef: workspaceRefSchema,
     affairId: uuidSchema,
     attemptId: uuidSchema,
     tabId: trimmedText(200, '浏览器 Tab ID'),
@@ -133,11 +149,17 @@ export const bindWebAffairAttemptInputSchema = z
   .strict()
 
 export const handoffWebAffairAttemptInputSchema = z
-  .object({ affairId: uuidSchema, attemptId: uuidSchema, reason: trimmedText(1_000, '接管原因') })
+  .object({
+    workspaceRef: workspaceRefSchema,
+    affairId: uuidSchema,
+    attemptId: uuidSchema,
+    reason: trimmedText(1_000, '接管原因'),
+  })
   .strict()
 
 export const returnWebAffairAttemptInputSchema = z
   .object({
+    workspaceRef: workspaceRefSchema,
     affairId: uuidSchema,
     attemptId: uuidSchema,
     observationSummary: trimmedText(2_000, '重新观察结果'),
@@ -146,11 +168,17 @@ export const returnWebAffairAttemptInputSchema = z
   .strict()
 
 export const confirmWebAffairFinalActionInputSchema = z
-  .object({ affairId: uuidSchema, attemptId: uuidSchema, summary: trimmedText(2_000, '确认摘要') })
+  .object({
+    workspaceRef: workspaceRefSchema,
+    affairId: uuidSchema,
+    attemptId: uuidSchema,
+    summary: trimmedText(2_000, '确认摘要'),
+  })
   .strict()
 
 export const finishWebAffairAttemptInputSchema = z
   .object({
+    workspaceRef: workspaceRefSchema,
     affairId: uuidSchema,
     attemptId: uuidSchema,
     outcome: z.enum(['succeeded', 'failed', 'cancelled', 'interrupted']),
@@ -164,6 +192,7 @@ export const finishWebAffairAttemptInputSchema = z
 
 export const scheduleWebAffairCheckInputSchema = z
   .object({
+    workspaceRef: workspaceRefSchema,
     affairId: uuidSchema,
     nodeId: uuidSchema,
     nextCheckAt: timestampSchema,
@@ -179,6 +208,7 @@ export const scheduleWebAffairCheckInputSchema = z
 
 export const completeWebAffairCheckInputSchema = z
   .object({
+    workspaceRef: workspaceRefSchema,
     affairId: uuidSchema,
     nodeId: uuidSchema,
     outcome: z.enum(['unchanged', 'approved', 'rejected']),
@@ -221,6 +251,7 @@ const flowDiffOperationSchema = z.discriminatedUnion('kind', [
 
 export const proposeWebAffairFlowDiffInputSchema = z
   .object({
+    workspaceRef: workspaceRefSchema,
     affairId: uuidSchema,
     baseVersion: positiveVersionSchema,
     reason: trimmedText(2_000, '变更原因'),
@@ -231,7 +262,12 @@ export const proposeWebAffairFlowDiffInputSchema = z
   .strict()
 
 export const decideWebAffairFlowProposalInputSchema = z
-  .object({ affairId: uuidSchema, proposalId: uuidSchema, decision: z.enum(['accept', 'reject']) })
+  .object({
+    workspaceRef: workspaceRefSchema,
+    affairId: uuidSchema,
+    proposalId: uuidSchema,
+    decision: z.enum(['accept', 'reject']),
+  })
   .strict()
 
 const webAffairMaterialSchema = z
@@ -378,6 +414,7 @@ const webAffairEventSchema = z
 const webAffairSchema = z
   .object({
     id: uuidSchema,
+    workspaceId: uuidSchema.nullable(),
     title: trimmedText(160, '事务名称'),
     objective: trimmedText(4_000, '事务目标'),
     status: webAffairStatusSchema,
@@ -397,7 +434,7 @@ const webAffairSchema = z
     flowProposals: z.array(webAffairFlowProposalSchema).max(500),
     templateRef: templateRefSchema.optional(),
     events: z.array(webAffairEventSchema).max(2_000),
-    workspaceRef: workspaceRefSchema.optional(),
+    workspaceRef: workspaceRefSchema,
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
   })
@@ -405,7 +442,7 @@ const webAffairSchema = z
 
 export const webAffairSnapshotSchema = z
   .object({
-    schemaVersion: z.literal(2),
+    schemaVersion: z.literal(3),
     revision: z.number().int().nonnegative(),
     affairs: z.array(webAffairSchema).max(1_000),
   })
@@ -426,6 +463,17 @@ export function parseWebAffairSnapshot(value: unknown) {
 function migrateSnapshot(value: unknown): unknown {
   if (!value || typeof value !== 'object') return value
   const snapshot = structuredClone(value) as Record<string, unknown>
+  if (snapshot['schemaVersion'] === 2) {
+    const affairs = Array.isArray(snapshot['affairs']) ? snapshot['affairs'] : []
+    for (const item of affairs) {
+      if (!item || typeof item !== 'object') continue
+      const affair = item as Record<string, unknown>
+      affair['workspaceId'] = null
+      affair['workspaceRef'] ??= { kind: 'global' }
+    }
+    snapshot['schemaVersion'] = 3
+    return snapshot
+  }
   if (snapshot['schemaVersion'] !== 1) return snapshot
   const affairs = Array.isArray(snapshot['affairs']) ? snapshot['affairs'] : []
   for (const item of affairs) {
@@ -442,5 +490,5 @@ function migrateSnapshot(value: unknown): unknown {
     }
   }
   snapshot['schemaVersion'] = 2
-  return snapshot
+  return migrateSnapshot(snapshot)
 }

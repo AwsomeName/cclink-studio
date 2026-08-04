@@ -11,6 +11,9 @@ vi.mock('electron', () => ({ ipcMain: mockIpcMain }))
 
 import { registerWebResourceIpc } from './web-resource-ipc'
 
+const PROJECT_ID = '11111111-1111-4111-8111-111111111111'
+const PROJECT_SCOPE = { workspaceRef: { kind: 'local' as const, path: '/Users/example/project' } }
+
 describe('registerWebResourceIpc', () => {
   beforeEach(() => {
     mockIpcMain.handlers.clear()
@@ -23,6 +26,7 @@ describe('registerWebResourceIpc', () => {
     registerWebResourceIpc(
       () => service as never,
       () => null,
+      () => createWorkspaceState() as never,
       createGuard('trusted') as never,
     )
 
@@ -39,6 +43,7 @@ describe('registerWebResourceIpc', () => {
     registerWebResourceIpc(
       () => service as never,
       () => null,
+      () => createWorkspaceState() as never,
       createGuard('trusted') as never,
     )
 
@@ -51,7 +56,7 @@ describe('registerWebResourceIpc', () => {
           principalKind: 'company',
           principalName: 'Example Ltd.',
           accountLabel: 'Account',
-          browserProfileId: 'safe-profile',
+          workspaceRef: PROJECT_SCOPE.workspaceRef,
         },
       ),
     ).resolves.toMatchObject({
@@ -65,10 +70,13 @@ describe('registerWebResourceIpc', () => {
     registerWebResourceIpc(
       () => null,
       () => null,
+      () => createWorkspaceState() as never,
       createGuard('trusted') as never,
     )
 
-    expect(mockIpcMain.handlers.get('webResources:getSnapshot')?.({ sender: 'trusted' })).toEqual({
+    await expect(
+      mockIpcMain.handlers.get('webResources:getSnapshot')?.({ sender: 'trusted' }, PROJECT_SCOPE),
+    ).resolves.toEqual({
       success: false,
       error: {
         code: 'SERVICE_UNAVAILABLE',
@@ -119,6 +127,7 @@ describe('registerWebResourceIpc', () => {
     registerWebResourceIpc(
       () => service as never,
       () => projectOps as never,
+      () => createWorkspaceState() as never,
       createGuard('trusted') as never,
     )
 
@@ -136,13 +145,17 @@ describe('registerWebResourceIpc', () => {
     expect(service.createConnection).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        browserProfileId: 'apple-release',
+        workspaceRef: PROJECT_SCOPE.workspaceRef,
         principalName: 'Example Ltd.',
       }),
+      PROJECT_ID,
+      'apple-release',
     )
     expect(service.createConnection).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ browserProfileId: 'aliyun' }),
+      expect.objectContaining({ workspaceRef: PROJECT_SCOPE.workspaceRef }),
+      PROJECT_ID,
+      'aliyun',
     )
     await expect(handler?.({ sender: 'trusted' }, input)).resolves.toMatchObject({
       success: true,
@@ -160,6 +173,7 @@ describe('registerWebResourceIpc', () => {
     registerWebResourceIpc(
       () => service as never,
       () => projectOps as never,
+      () => createWorkspaceState() as never,
       createGuard('trusted') as never,
     )
 
@@ -185,5 +199,11 @@ function createGuard(trustedSender: string) {
       if (event.sender !== trustedSender) throw new Error('untrusted')
     },
     isTrusted: (event: { sender: string }) => event.sender === trustedSender,
+  }
+}
+
+function createWorkspaceState() {
+  return {
+    getLocalProjectId: vi.fn(async () => PROJECT_ID),
   }
 }

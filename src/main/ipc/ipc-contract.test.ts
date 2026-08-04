@@ -189,24 +189,24 @@ describe('IPC invoke contracts', () => {
     expect(
       webResourcesIpcContracts.createConnection.parseArgs([
         {
+          workspaceRef: { kind: 'local', path: '/Users/example/project' },
           websiteName: 'Example',
           entryUrl: 'https://example.com',
           principalKind: 'company',
           principalName: 'Example Ltd.',
           accountLabel: 'Admin',
-          browserProfileId: 'example-admin',
         },
       ]),
     ).toHaveLength(1)
     expect(() =>
       webResourcesIpcContracts.createConnection.parseArgs([
         {
+          workspaceRef: { kind: 'local', path: '/Users/example/project' },
           websiteName: 'Unsafe',
           entryUrl: 'javascript:alert(1)',
           principalKind: 'company',
           principalName: 'Example Ltd.',
           accountLabel: 'Admin',
-          browserProfileId: 'example-admin',
         },
       ]),
     ).toThrow()
@@ -217,6 +217,7 @@ describe('IPC invoke contracts', () => {
     expect(
       webAffairsIpcContracts.createAffair.parseArgs([
         {
+          workspaceRef: { kind: 'local', path: '/Users/example/project' },
           title: 'App 上架',
           objective: '取得审核结果',
           principalId: '11111111-1111-4111-8111-111111111111',

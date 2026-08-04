@@ -7,7 +7,7 @@ import {
 import { invokeIpcContract } from './ipc-contract-client'
 
 export const webAffairsApi: WebAffairsApiContract = {
-  getSnapshot: () => invokeIpcContract(webAffairsIpc.getSnapshot),
+  getSnapshot: (input) => invokeIpcContract(webAffairsIpc.getSnapshot, input),
   getCatalog: () => invokeIpcContract(webAffairsIpc.getCatalog),
   createAffair: (input) => invokeIpcContract(webAffairsIpc.createAffair, input),
   updateNode: (input) => invokeIpcContract(webAffairsIpc.updateNode, input),

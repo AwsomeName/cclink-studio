@@ -1,5 +1,7 @@
 import type { ToolDefinition, ToolExecutionContext, ToolModule } from '../../types'
 import type { WebAffairService } from '../../../web-affairs/web-affair-service'
+import type { WorkspaceRef } from '../../../../shared/workspace-ref'
+import type { WebAffairOperationResult } from '../../../../shared/web-affairs/web-affair-types'
 
 const TOOLS: ToolDefinition[] = [
   {
@@ -74,15 +76,22 @@ export class WebAffairToolModule implements ToolModule {
   readonly name = 'web-affairs'
   readonly tools = TOOLS
 
-  constructor(private readonly service: WebAffairService) {}
+  constructor(
+    private readonly service: WebAffairService,
+    private readonly resolveWorkspaceId: (workspacePath: string) => Promise<string | null>,
+  ) {}
 
   async execute(
     toolName: string,
     params: Record<string, unknown>,
-    _context?: ToolExecutionContext,
+    context?: ToolExecutionContext,
   ): Promise<unknown> {
+    const scope = await this.resolveScope(context)
+    if (!scope.success) return scope
+    const { workspaceId, workspaceRef } = scope.data
+
     if (toolName === 'web_affair_get') {
-      const snapshot = this.service.getSnapshot()
+      const snapshot = this.service.getProjectSnapshot(workspaceId)
       if (!snapshot.success) return snapshot
       const affair = snapshot.data.affairs.find((item) => item.id === params['affairId'])
       return affair
@@ -90,21 +99,53 @@ export class WebAffairToolModule implements ToolModule {
         : { success: false, error: { code: 'NOT_FOUND', message: '事务不存在' } }
     }
     if (toolName === 'web_affair_propose_flow_diff') {
-      return this.service.proposeFlowDiff({
-        affairId: params['affairId'] as string,
-        baseVersion: params['baseVersion'] as number,
-        reason: params['reason'] as string,
-        operations: params['operations'] as never,
-        impacts: params['impacts'] as string[],
-        proposedBy: 'ai',
-      })
+      return this.service.proposeFlowDiff(
+        {
+          workspaceRef,
+          affairId: params['affairId'] as string,
+          baseVersion: params['baseVersion'] as number,
+          reason: params['reason'] as string,
+          operations: params['operations'] as never,
+          impacts: params['impacts'] as string[],
+          proposedBy: 'ai',
+        },
+        workspaceId,
+      )
     }
     if (toolName === 'web_affair_finish_attempt') {
-      return this.service.finishAttempt(params as never)
+      return this.service.finishAttempt({ ...params, workspaceRef } as never, workspaceId)
     }
     if (toolName === 'web_affair_complete_check') {
-      return this.service.completeCheck(params as never)
+      return this.service.completeCheck({ ...params, workspaceRef } as never, workspaceId)
     }
     throw new Error(`未知网页事务工具: ${toolName}`)
+  }
+
+  private async resolveScope(
+    context?: ToolExecutionContext,
+  ): Promise<WebAffairOperationResult<{ workspaceId: string; workspaceRef: WorkspaceRef }>> {
+    const workspacePath = context?.workspaceKey?.trim()
+    if (!workspacePath) return workspaceRequired()
+    try {
+      const workspaceId = await this.resolveWorkspaceId(workspacePath)
+      return workspaceId
+        ? {
+            success: true,
+            data: { workspaceId, workspaceRef: { kind: 'local', path: workspacePath } },
+          }
+        : workspaceRequired()
+    } catch {
+      return workspaceRequired()
+    }
+  }
+}
+
+function workspaceRequired<T>(): WebAffairOperationResult<T> {
+  return {
+    success: false,
+    error: {
+      code: 'WORKSPACE_REQUIRED',
+      message: '当前 Agent 会话没有可验证的本地工作空间，不能读写事务',
+    },
   }
 }

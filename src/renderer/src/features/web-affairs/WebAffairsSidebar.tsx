@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import type {
   WebAffairCatalog,
-  WebAffairSnapshot,
+  WebAffairProjectSnapshot,
   WebAffairTemplateRef,
 } from '@shared/web-affairs/web-affair-types'
 import type { WebAccount, WebResourceSnapshot } from '@shared/web-resources/web-resource-types'
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import { IconPlus } from '../../components/common/Icons'
 import { useTabStore } from '../../stores'
+import { getStaleWebAffairTabIds } from './web-affair-tab-reconciliation'
 import { WEB_AFFAIR_CHANGED_EVENT, WEB_AFFAIR_STATUS_LABELS } from './web-affair-view-model'
 
 const DEFAULT_FLOW = [
@@ -24,7 +25,7 @@ export function WebAffairsSidebar({
   workspaceRef: WorkspaceRef
 }): React.ReactElement {
   const openTab = useTabStore((state) => state.openTab)
-  const [affairs, setAffairs] = useState<WebAffairSnapshot | null>(null)
+  const [affairs, setAffairs] = useState<WebAffairProjectSnapshot | null>(null)
   const [resources, setResources] = useState<WebResourceSnapshot | null>(null)
   const [catalog, setCatalog] = useState<WebAffairCatalog | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -40,18 +41,22 @@ export function WebAffairsSidebar({
 
   const reload = useCallback(async (): Promise<void> => {
     const [affairResult, resourceResult, catalogResult] = await Promise.all([
-      window.cclinkStudio.webAffairs.getSnapshot(),
-      window.cclinkStudio.webResources.getSnapshot(),
+      window.cclinkStudio.webAffairs.getSnapshot({ workspaceRef }),
+      window.cclinkStudio.webResources.getSnapshot({ workspaceRef }),
       window.cclinkStudio.webAffairs.getCatalog(),
     ])
     if (!affairResult.success) throw new Error(affairResult.error.message)
     if (!resourceResult.success) throw new Error(resourceResult.error.message)
     if (!catalogResult.success) throw new Error(catalogResult.error.message)
+    const tabStore = useTabStore.getState()
+    for (const tabId of getStaleWebAffairTabIds(tabStore.tabs, affairResult.data, workspaceRef)) {
+      tabStore.closeTab(tabId)
+    }
     setAffairs(affairResult.data)
     setResources(resourceResult.data)
     setCatalog(catalogResult.data)
     setError(null)
-  }, [])
+  }, [workspaceRef])
 
   useEffect(() => {
     void reload().catch((reason) =>
@@ -298,6 +303,12 @@ export function WebAffairsSidebar({
       ) : null}
 
       {error ? <div className="web-affairs-error">{error}</div> : null}
+      {affairs && affairs.unassignedAffairCount > 0 ? (
+        <div className="web-affairs-legacy-notice">
+          发现 {affairs.unassignedAffairCount} 个旧事务尚未归属工作空间，当前不会显示或执行；
+          后续迁移时需要逐项确认。
+        </div>
+      ) : null}
       {!affairs && !error ? <div className="web-affairs-empty">正在读取事务…</div> : null}
       {affairs && sortedAffairs.length === 0 ? (
         <div className="web-affairs-empty">还没有事务。创建后，流程和卡点会持续保存在这里。</div>

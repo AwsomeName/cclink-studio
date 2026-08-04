@@ -60,6 +60,7 @@ export function WebAffairFlowEditor({
     setSaving(true)
     try {
       const result = await window.cclinkStudio.webAffairs.reviseFlow({
+        workspaceRef: affair.workspaceRef,
         affairId: affair.id,
         expectedVersion: affair.flow.version,
         nodes: drafts.map(

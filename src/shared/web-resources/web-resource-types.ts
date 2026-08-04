@@ -1,3 +1,5 @@
+import type { WorkspaceRef } from '../workspace-ref'
+
 export type WebPrincipalKind = 'personal' | 'sole-proprietor' | 'company' | 'organization'
 
 export interface WebsiteResource {
@@ -20,25 +22,38 @@ export interface WebPrincipal {
 
 export interface WebAccount {
   id: string
+  /** Stable project identity. `null` is reserved for migrated v1 records awaiting user assignment. */
+  projectId: string | null
   websiteId: string
   principalId: string
   label: string
   role?: string
   browserProfileId: string
   loginHint?: string
+  loginConfirmedAt?: string
   createdAt: string
   updatedAt: string
 }
 
 export interface WebResourceSnapshot {
-  schemaVersion: 1
+  schemaVersion: 2
   revision: number
   websites: WebsiteResource[]
   principals: WebPrincipal[]
   accounts: WebAccount[]
 }
 
+export interface WebResourceProjectSnapshot extends WebResourceSnapshot {
+  projectId: string
+  unassignedAccountCount: number
+}
+
+export interface WebResourceProjectScopeInput {
+  workspaceRef: WorkspaceRef
+}
+
 export interface CreateWebConnectionInput {
+  workspaceRef: WorkspaceRef
   websiteName: string
   entryUrl: string
   websiteNotes?: string
@@ -46,9 +61,14 @@ export interface CreateWebConnectionInput {
   principalName: string
   accountLabel: string
   accountRole?: string
-  browserProfileId: string
   loginHint?: string
 }
+
+export interface ConfirmWebConnectionLoginInput extends WebResourceProjectScopeInput {
+  accountId: string
+}
+
+export type ClaimLegacyWebConnectionsInput = WebResourceProjectScopeInput
 
 export interface WebResourceConnection {
   website: WebsiteResource
@@ -69,6 +89,10 @@ export interface ImportProjectOpsConfigSummary {
   skippedCount: number
 }
 
+export interface ClaimLegacyWebConnectionsSummary {
+  claimedCount: number
+}
+
 export type WebResourceErrorCode =
   | 'INVALID_INPUT'
   | 'DUPLICATE_ACCOUNT'
@@ -77,6 +101,8 @@ export type WebResourceErrorCode =
   | 'SERVICE_UNAVAILABLE'
   | 'PROJECT_OPS_CONFIG_NOT_FOUND'
   | 'PROJECT_OPS_CONFIG_INVALID'
+  | 'PROJECT_REQUIRED'
+  | 'RESOURCE_NOT_FOUND'
   | 'UNKNOWN'
 
 export interface WebResourceOperationError {
@@ -89,7 +115,7 @@ export type WebResourceOperationResult<T> =
   | { success: false; error: WebResourceOperationError }
 
 export const EMPTY_WEB_RESOURCE_SNAPSHOT: WebResourceSnapshot = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   revision: 0,
   websites: [],
   principals: [],

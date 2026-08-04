@@ -1,18 +1,18 @@
-import { bindIpcParser, bindNoArgsIpc, ipcArgs } from '../ipc/contract'
+import { bindIpcParser, ipcArgs } from '../ipc/contract'
 import {
+  parseConfirmWebConnectionLoginInput,
   parseCreateWebConnectionInput,
   parseImportProjectOpsConfigInput,
+  parseWebResourceProjectScopeInput,
 } from './web-resource-schema'
 import { webResourcesIpc } from './web-resource'
 import type {
+  ClaimLegacyWebConnectionsSummary,
   ImportProjectOpsConfigSummary,
-  WebResourceConnection,
   WebResourceOperationResult,
 } from './web-resource-types'
 
-const invalidInputResult = async (): Promise<
-  WebResourceOperationResult<WebResourceConnection>
-> => ({
+const invalidInputResult = async <T>(): Promise<WebResourceOperationResult<T>> => ({
   success: false,
   error: {
     code: 'INVALID_INPUT',
@@ -21,7 +21,16 @@ const invalidInputResult = async (): Promise<
 })
 
 export const webResourcesIpcContracts = {
-  getSnapshot: bindNoArgsIpc(webResourcesIpc.getSnapshot),
+  getSnapshot: bindIpcParser(
+    webResourcesIpc.getSnapshot,
+    (args) => {
+      if (args.length !== 1) {
+        throw new Error(`IPC ${webResourcesIpc.getSnapshot.channel} 需要 1 个参数`)
+      }
+      return ipcArgs(parseWebResourceProjectScopeInput(args[0]))
+    },
+    invalidInputResult,
+  ),
   createConnection: bindIpcParser(
     webResourcesIpc.createConnection,
     (args) => {
@@ -31,6 +40,27 @@ export const webResourcesIpcContracts = {
       return ipcArgs(parseCreateWebConnectionInput(args[0]))
     },
     invalidInputResult,
+  ),
+  confirmLogin: bindIpcParser(
+    webResourcesIpc.confirmLogin,
+    (args) => {
+      if (args.length !== 1) {
+        throw new Error(`IPC ${webResourcesIpc.confirmLogin.channel} 需要 1 个参数`)
+      }
+      return ipcArgs(parseConfirmWebConnectionLoginInput(args[0]))
+    },
+    invalidInputResult,
+  ),
+  claimLegacyConnections: bindIpcParser(
+    webResourcesIpc.claimLegacyConnections,
+    (args) => {
+      if (args.length !== 1) {
+        throw new Error(`IPC ${webResourcesIpc.claimLegacyConnections.channel} 需要 1 个参数`)
+      }
+      return ipcArgs(parseWebResourceProjectScopeInput(args[0]))
+    },
+    async (): Promise<WebResourceOperationResult<ClaimLegacyWebConnectionsSummary>> =>
+      invalidInputResult(),
   ),
   importProjectOpsConfig: bindIpcParser(
     webResourcesIpc.importProjectOpsConfig,

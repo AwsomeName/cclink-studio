@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
 import { createSmokeRuntime } from './smoke-runtime.mjs'
 
-const { logFile, rendererOrigin, runRestart } = createSmokeRuntime(import.meta.url)
+const { rootDir, logFile, rendererOrigin, runRestart } = createSmokeRuntime(import.meta.url)
 const keepRunning = process.argv.includes('--keep-running')
 const uiReadyTimeoutMs = 30_000
 const results = []
@@ -189,6 +189,12 @@ async function main() {
   })
 
   await runCheck('web resources accepts a non-predefined website', async () => {
+    const projectOpened = await page.evaluate(async (workspacePath) => {
+      const { useFsStore } = await import('/src/stores/fs-store.ts')
+      return useFsStore.getState().openRecentWorkspace(workspacePath)
+    }, rootDir)
+    assert(projectOpened, 'smoke project could not be opened')
+
     await clickByTitle(page, '网站与账号')
     await page.waitForTimeout(200)
     assert(
@@ -197,76 +203,35 @@ async function main() {
     )
 
     const accountLabel = 'UI Smoke Account'
-    const primaryProfile = 'web-affairs-ui-smoke'
-    const primaryRow = () => page.locator(`.web-resource-row[title$="Profile: ${primaryProfile}"]`)
+    const primaryRow = () => page.locator('.web-resource-row', { hasText: accountLabel })
     const existing = primaryRow()
     if ((await existing.count()) === 0) {
-      await page.getByRole('button', { name: '添加网站' }).click()
+      await page.getByRole('button', { name: '添加网站与账号' }).click()
       const form = page.locator('.web-resources-form')
       await form.waitFor({ state: 'visible', timeout: 10_000 })
       await form.getByLabel('网站名称').fill('Web Affairs Smoke')
       await form.getByLabel('办理入口').fill('https://example.com/cclink-web-affairs-smoke')
       await form.getByPlaceholder('姓名或公司全称').fill('CCLink Smoke Company')
       await form.getByLabel('账号名称').fill(accountLabel)
-      await form.getByLabel('Browser Profile').fill(primaryProfile)
-      await form.getByRole('button', { name: '保存并建立连接' }).click()
+      await form.getByRole('button', { name: '添加并打开' }).click()
     }
 
     await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
     const rowText = await primaryRow().innerText()
     assert(rowText.includes('CCLink Smoke Company'), 'principal is not visible')
-    assert(rowText.includes('web-affairs-ui-smoke'), 'Browser Profile is not visible')
-
-    const secondaryAccountLabel = 'UI Smoke Account Secondary'
-    const secondaryProfile = 'web-affairs-ui-smoke-secondary'
-    const secondaryRow = () =>
-      page.locator(`.web-resource-row[title$="Profile: ${secondaryProfile}"]`)
-    if ((await secondaryRow().count()) === 0) {
-      await page.getByRole('button', { name: '添加网站' }).click()
-      const form = page.locator('.web-resources-form')
-      await form.waitFor({ state: 'visible', timeout: 10_000 })
-      await form.getByLabel('网站名称').fill('Web Affairs Smoke')
-      await form.getByLabel('办理入口').fill('https://example.com/cclink-web-affairs-smoke')
-      await form.getByPlaceholder('姓名或公司全称').fill('CCLink Smoke Company')
-      await form.getByLabel('账号名称').fill(secondaryAccountLabel)
-      await form.getByLabel('Browser Profile').fill(secondaryProfile)
-      await form.getByRole('button', { name: '保存并建立连接' }).click()
-    }
-
-    await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
-    await secondaryRow().waitFor({ state: 'visible', timeout: 10_000 })
     await primaryRow().click()
-    await page.locator('.web-resource-detail').waitFor({ state: 'visible', timeout: 10_000 })
-    const detailText = await page.locator('.web-resource-detail').innerText()
-    assert(detailText.includes('CCLink Smoke Company'), 'resource detail principal is missing')
-    assert(detailText.includes('web-affairs-ui-smoke'), 'resource detail Profile is missing')
-    assert(detailText.includes('Session Partition'), 'resource session diagnostics are missing')
-    await page.waitForFunction(() => {
-      const field = Array.from(document.querySelectorAll('.web-resource-detail-field')).find(
-        (node) => node.querySelector('span')?.textContent === 'Session Partition',
-      )
-      return field?.querySelector('strong')?.textContent !== '待核验'
-    })
-    const firstPartition = await page
-      .locator('.web-resource-detail-field', { hasText: 'Session Partition' })
-      .locator('strong')
-      .innerText()
-
-    await secondaryRow().click()
-    await page
-      .locator('.web-resource-detail-header', { hasText: secondaryAccountLabel })
-      .waitFor({ state: 'visible', timeout: 10_000 })
-    await page.waitForFunction(() => {
-      const field = Array.from(document.querySelectorAll('.web-resource-detail-field')).find(
-        (node) => node.querySelector('span')?.textContent === 'Session Partition',
-      )
-      return field?.querySelector('strong')?.textContent !== '待核验'
-    })
-    const secondaryPartition = await page
-      .locator('.web-resource-detail-field', { hasText: 'Session Partition' })
-      .locator('strong')
-      .innerText()
-    assert(firstPartition !== secondaryPartition, 'two Browser Profiles share one partition')
+    await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+    const tabCountBeforeDraft = await page.locator('.tab').count()
+    await createTabFromMenu(page, 'Markdown 草稿')
+    await page.locator('.markdown-editor-wrapper').waitFor({ state: 'visible', timeout: 10_000 })
+    const tabCountWithDraft = await page.locator('.tab').count()
+    assert(tabCountWithDraft === tabCountBeforeDraft + 1, 'draft tab did not open')
+    await primaryRow().click()
+    await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+    assert(
+      (await page.locator('.tab').count()) === tabCountWithDraft,
+      'reopening one website account created a duplicate Browser Tab',
+    )
 
     await browser.close()
     const resourceRestartLog = await readLog()
@@ -284,8 +249,7 @@ async function main() {
         .evaluate((element) => element.click())
     }
     await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
-    await secondaryRow().waitFor({ state: 'visible', timeout: 10_000 })
-    return 'app restart persistence and two Profile partitions verified'
+    return 'project-scoped resource, direct Browser Tab launch/focus, and restart persistence verified'
   })
 
   await runCheck('web affair persists a five-node workflow and node progress', async () => {
@@ -368,7 +332,7 @@ async function main() {
       ) {
         await clickByTitle(page, '事务')
       }
-      const affairTitle = 'UI Smoke Agent Affair'
+      const affairTitle = 'UI Smoke Agent Affair Project v2'
       const affairRow = () => page.locator('.web-affair-row', { hasText: affairTitle })
       if ((await affairRow().count()) === 0) {
         await page.getByRole('button', { name: '新建事务' }).evaluate((element) => element.click())
@@ -391,13 +355,17 @@ async function main() {
       )
 
       await page.evaluate(async (title) => {
-        const snapshot = await window.cclinkStudio.webAffairs.getSnapshot()
+        const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+        const snapshot = await window.cclinkStudio.webAffairs.getSnapshot({
+          workspaceRef: useWorkspaceStore.getState().activeWorkspaceRef,
+        })
         if (!snapshot.success) throw new Error(snapshot.error.message)
         let affair = snapshot.data.affairs.find((item) => item.title === title)
         if (!affair) throw new Error('smoke affair missing')
         for (const node of affair.flow.nodes.slice(0, 2)) {
           if (node.status === 'completed') continue
           const updated = await window.cclinkStudio.webAffairs.updateNode({
+            workspaceRef: affair.workspaceRef,
             affairId: affair.id,
             nodeId: node.id,
             status: 'completed',
@@ -417,10 +385,27 @@ async function main() {
       const preflight = page.locator('.web-affair-confirm-card', { hasText: '执行前账号核验' })
       await preflight.waitFor({ timeout: 10_000 })
       assert(
-        (await preflight.innerText()).includes('web-affairs-ui-smoke'),
-        'preflight Profile missing',
+        (await preflight.innerText()).includes('UI Smoke Account'),
+        'preflight account identity missing',
       )
       await preflight.getByRole('button', { name: '取消' }).click()
+
+      const tabCountBeforeResourceLaunch = await page.locator('.tab').count()
+      await page
+        .locator('.web-affair-resource-card', { hasText: '账号与登录环境' })
+        .getByRole('button', { name: /UI Smoke Account/ })
+        .click()
+      await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+      assert(
+        (await page.locator('.web-resource-detail').count()) === 0,
+        'affair resource opened a detail tab instead of the Browser Tab',
+      )
+      assert(
+        (await page.locator('.tab').count()) === tabCountBeforeResourceLaunch,
+        'affair resource did not reuse the existing website account Browser Tab',
+      )
+      await page.locator('.tab', { hasText: affairTitle }).last().click()
+      await page.locator('.web-affair-tab', { hasText: affairTitle }).waitFor({ timeout: 10_000 })
 
       await page
         .locator('.web-affair-flow-step button', {
@@ -444,11 +429,15 @@ async function main() {
         .click()
 
       await page.evaluate(async (title) => {
-        const snapshot = await window.cclinkStudio.webAffairs.getSnapshot()
+        const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+        const snapshot = await window.cclinkStudio.webAffairs.getSnapshot({
+          workspaceRef: useWorkspaceStore.getState().activeWorkspaceRef,
+        })
         if (!snapshot.success) throw new Error(snapshot.error.message)
         const affair = snapshot.data.affairs.find((item) => item.title === title)
         if (!affair) throw new Error('smoke affair missing')
         const result = await window.cclinkStudio.webAffairs.proposeFlowDiff({
+          workspaceRef: affair.workspaceRef,
           affairId: affair.id,
           baseVersion: affair.flow.version,
           reason: 'Smoke 页面要求补充一次身份核验',

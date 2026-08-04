@@ -137,6 +137,8 @@ interface OpenTabOptions {
   initialUrl?: string
   /** 浏览器持久化 Profile，用于隔离平台登录态。 */
   browserProfile?: string | null
+  /** 项目网站账号资源引用。 */
+  webResourceRef?: Tab['webResourceRef']
   /** 从快照重建时的视图模式/缩放（仅激活创建时消费一次） */
   restore?: {
     viewMode: 'desktop' | 'mobile'
@@ -221,6 +223,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     initialContent,
     initialUrl,
     browserProfile,
+    webResourceRef,
     restore,
     conversation,
     settingsSection,
@@ -238,6 +241,15 @@ export const useTabStore = create<TabState>((set, get) => ({
     set((state) => {
       // forceNew 跳过所有去重
       if (!forceNew) {
+        if (type === 'browser' && webResourceRef) {
+          const existing = state.tabs.find(
+            (tab) =>
+              tab.type === 'browser' &&
+              tab.webResourceRef?.projectId === webResourceRef.projectId &&
+              tab.webResourceRef.accountId === webResourceRef.accountId,
+          )
+          if (existing) return { activeTabId: existing.id }
+        }
         // HTML 可同时保留浏览器预览和源码文本；其他文件仍按 filePath 去重。
         if (filePath) {
           const existing = state.tabs.find(
@@ -349,6 +361,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         initialContent,
         initialUrl,
         browserProfile,
+        webResourceRef,
         restore,
         conversation,
         settingsSection,

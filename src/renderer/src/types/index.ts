@@ -147,6 +147,11 @@ export interface Tab {
   initialUrl?: string
   /** 浏览器持久化 Profile，用于隔离平台登录态。 */
   browserProfile?: string | null
+  /** 项目网站账号资源引用；Browser Tab 只是该资源的可关闭运行投影。 */
+  webResourceRef?: {
+    projectId: string
+    accountId: string
+  }
   /** 从快照重建时的视图模式/缩放（仅激活创建时消费一次） */
   restore?: {
     viewMode: 'desktop' | 'mobile'

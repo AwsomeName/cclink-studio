@@ -2,7 +2,8 @@ import { webAffairsIpcContracts } from '../../shared/web-affairs/web-affair-cont
 import type {
   WebAffair,
   WebAffairOperationResult,
-  WebAffairSnapshot,
+  WebAffairProjectSnapshot,
+  WebAffairWorkspaceScopeInput,
 } from '../../shared/web-affairs/web-affair-types'
 import {
   registerTrustedIpcContract,
@@ -10,6 +11,7 @@ import {
 } from '../ipc/trusted-renderer-guard'
 import type { WebAffairService } from './web-affair-service'
 import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
+import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 
 function unavailable<T>(): WebAffairOperationResult<T> {
   return {
@@ -21,10 +23,27 @@ function unavailable<T>(): WebAffairOperationResult<T> {
   }
 }
 
+async function invokeScoped<T>(
+  input: WebAffairWorkspaceScopeInput,
+  getService: () => WebAffairService | null,
+  getWorkspaceStateService: () => WorkspaceStateService | null,
+  invoke: (
+    service: WebAffairService,
+    workspaceId: string,
+  ) => Promise<WebAffairOperationResult<T>> | WebAffairOperationResult<T>,
+): Promise<WebAffairOperationResult<T>> {
+  const service = getService()
+  if (!service) return unavailable()
+  const workspaceId = await resolveWorkspaceId(input, getWorkspaceStateService())
+  if (!workspaceId.success) return workspaceId
+  return invoke(service, workspaceId.data)
+}
+
 export function registerWebAffairIpc(
   getService: () => WebAffairService | null,
   trustedRendererGuard: TrustedRendererGuard,
   getBrowserTaskRuntime: () => BrowserTaskRuntime | null = () => null,
+  getWorkspaceStateService: () => WorkspaceStateService | null = () => null,
 ): void {
   registerTrustedIpcContract(
     webAffairsIpcContracts.getCatalog,
@@ -34,35 +53,53 @@ export function registerWebAffairIpc(
   registerTrustedIpcContract(
     webAffairsIpcContracts.getSnapshot,
     trustedRendererGuard,
-    (): WebAffairOperationResult<WebAffairSnapshot> => getService()?.getSnapshot() ?? unavailable(),
+    async (_event, input): Promise<WebAffairOperationResult<WebAffairProjectSnapshot>> =>
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.getProjectSnapshot(workspaceId),
+      ),
   )
   registerTrustedIpcContract(
     webAffairsIpcContracts.createAffair,
     trustedRendererGuard,
     async (_event, input): Promise<WebAffairOperationResult<WebAffair>> =>
-      getService()?.createAffair(input) ?? unavailable(),
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.createAffair(input, workspaceId),
+      ),
   )
   registerTrustedIpcContract(
     webAffairsIpcContracts.updateNode,
     trustedRendererGuard,
     async (_event, input): Promise<WebAffairOperationResult<WebAffair>> =>
-      getService()?.updateNode(input) ?? unavailable(),
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.updateNode(input, workspaceId),
+      ),
   )
   registerTrustedIpcContract(
     webAffairsIpcContracts.reviseFlow,
     trustedRendererGuard,
-    async (_event, input) => getService()?.reviseFlow(input) ?? unavailable(),
+    async (_event, input) =>
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.reviseFlow(input, workspaceId),
+      ),
   )
   registerTrustedIpcContract(
     webAffairsIpcContracts.startAttempt,
     trustedRendererGuard,
-    async (_event, input) => getService()?.startAttempt(input) ?? unavailable(),
+    async (_event, input) =>
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.startAttempt(input, workspaceId),
+      ),
   )
   registerTrustedIpcContract(
     webAffairsIpcContracts.bindAttempt,
     trustedRendererGuard,
     async (_event, input) => {
-      const result = (await getService()?.bindAttempt(input)) ?? unavailable<WebAffair>()
+      const result = await invokeScoped(
+        input,
+        getService,
+        getWorkspaceStateService,
+        (service, workspaceId) => service.bindAttempt(input, workspaceId),
+      )
       if (result.success) {
         const attempt = result.data.attempts.find((item) => item.id === input.attemptId)
         try {
@@ -81,47 +118,96 @@ export function registerWebAffairIpc(
   registerTrustedIpcContract(
     webAffairsIpcContracts.handoffAttempt,
     trustedRendererGuard,
-    async (_event, input) => getService()?.handoffAttempt(input) ?? unavailable(),
+    async (_event, input) =>
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.handoffAttempt(input, workspaceId),
+      ),
   )
   registerTrustedIpcContract(
     webAffairsIpcContracts.returnAttempt,
     trustedRendererGuard,
-    async (_event, input) => getService()?.returnAttempt(input) ?? unavailable(),
+    async (_event, input) =>
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.returnAttempt(input, workspaceId),
+      ),
   )
   registerTrustedIpcContract(
     webAffairsIpcContracts.confirmFinalAction,
     trustedRendererGuard,
-    async (_event, input) => getService()?.confirmFinalAction(input) ?? unavailable(),
+    async (_event, input) =>
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.confirmFinalAction(input, workspaceId),
+      ),
   )
   registerTrustedIpcContract(
     webAffairsIpcContracts.finishAttempt,
     trustedRendererGuard,
-    async (_event, input) => getService()?.finishAttempt(input) ?? unavailable(),
+    async (_event, input) =>
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.finishAttempt(input, workspaceId),
+      ),
   )
   registerTrustedIpcContract(
     webAffairsIpcContracts.scheduleCheck,
     trustedRendererGuard,
-    async (_event, input) => getService()?.scheduleCheck(input) ?? unavailable(),
+    async (_event, input) =>
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.scheduleCheck(input, workspaceId),
+      ),
   )
   registerTrustedIpcContract(
     webAffairsIpcContracts.completeCheck,
     trustedRendererGuard,
-    async (_event, input) => getService()?.completeCheck(input) ?? unavailable(),
+    async (_event, input) =>
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.completeCheck(input, workspaceId),
+      ),
   )
   registerTrustedIpcContract(
     webAffairsIpcContracts.proposeFlowDiff,
     trustedRendererGuard,
-    async (_event, input) => getService()?.proposeFlowDiff(input) ?? unavailable(),
+    async (_event, input) =>
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.proposeFlowDiff(input, workspaceId),
+      ),
   )
   registerTrustedIpcContract(
     webAffairsIpcContracts.decideFlowProposal,
     trustedRendererGuard,
-    async (_event, input) => getService()?.decideFlowProposal(input) ?? unavailable(),
+    async (_event, input) =>
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.decideFlowProposal(input, workspaceId),
+      ),
   )
   registerTrustedIpcContract(
     webAffairsIpcContracts.inspectMaterials,
     trustedRendererGuard,
-    async (_event, affairId): Promise<WebAffairOperationResult<WebAffair>> =>
-      getService()?.inspectMaterials(affairId) ?? unavailable(),
+    async (_event, input): Promise<WebAffairOperationResult<WebAffair>> =>
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.inspectMaterials(input, workspaceId),
+      ),
   )
+}
+
+async function resolveWorkspaceId(
+  input: WebAffairWorkspaceScopeInput,
+  workspaceStateService: WorkspaceStateService | null,
+): Promise<WebAffairOperationResult<string>> {
+  if (input.workspaceRef.kind !== 'local' || !workspaceStateService) return workspaceRequired()
+  try {
+    const workspaceId = await workspaceStateService.getLocalProjectId(input.workspaceRef.path)
+    return workspaceId ? { success: true, data: workspaceId } : workspaceRequired()
+  } catch {
+    return workspaceRequired()
+  }
+}
+
+function workspaceRequired<T>(): WebAffairOperationResult<T> {
+  return {
+    success: false,
+    error: {
+      code: 'WORKSPACE_REQUIRED',
+      message: '请先打开一个可写的本地工作空间，再管理事务',
+    },
+  }
 }
