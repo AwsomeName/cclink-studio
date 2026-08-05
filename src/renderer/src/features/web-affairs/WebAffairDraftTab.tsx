@@ -366,7 +366,7 @@ function AccountChoice({
       />
       <span>
         {account.label}
-        <small>{account.browserProfileId}</small>
+        <small>使用“网站与账号”中已保存的登录状态</small>
       </span>
     </label>
   )

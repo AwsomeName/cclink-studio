@@ -359,6 +359,36 @@ describe('useTabStore', () => {
       expect(resourceBrowserTabs).toHaveLength(2)
     })
 
+    it('网站账号草稿在原 Browser Tab 原地绑定正式资源', () => {
+      useTabStore.getState().openTab({
+        type: 'browser',
+        title: '未保存的网站账号',
+        icon: '🌐',
+        browserProfile: 'web-draft-profile',
+        webResourceDraftRef: { draftId: 'draft-1' },
+        workspaceRef: { kind: 'local', path: '/tmp/project-a' },
+        forceNew: true,
+      })
+      const tabId = useTabStore.getState().activeTabId!
+
+      useTabStore.getState().bindWebResourceDraft(tabId, {
+        title: 'App Store Connect',
+        initialUrl: 'https://appstoreconnect.apple.com/apps',
+        browserProfile: 'web-draft-profile',
+        webResourceRef: { projectId: 'project-a', accountId: 'account-1' },
+      })
+
+      expect(useTabStore.getState().tabs.find((tab) => tab.id === tabId)).toMatchObject({
+        title: 'App Store Connect',
+        initialUrl: 'https://appstoreconnect.apple.com/apps',
+        browserProfile: 'web-draft-profile',
+        webResourceRef: { projectId: 'project-a', accountId: 'account-1' },
+      })
+      expect(
+        useTabStore.getState().tabs.find((tab) => tab.id === tabId)?.webResourceDraftRef,
+      ).toBeUndefined()
+    })
+
     it('网页事务 Tab 按 affairId 去重', () => {
       useTabStore.getState().openTab({
         type: 'web-affair',

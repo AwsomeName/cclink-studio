@@ -5,7 +5,7 @@ import { useAgentStore, useWorkspaceStore } from '../../stores'
 import { useUIStore } from '../../stores/ui-store'
 import { createConversationRunController } from '../agent-conversations/conversation-run-controller'
 import { createConversationRuntimeForWorkspace } from '../agent-conversations/view-model'
-import { ensureWebResourceTab } from '../web-resources/web-resource-tab'
+import { resolveAndOpenWebResourceTab } from '../web-resources/web-resource-tab'
 
 export function WebAffairNodeActions({
   affair,
@@ -37,14 +37,20 @@ export function WebAffairNodeActions({
   const website = resources.websites.find((item) => item.id === account?.websiteId)
   const principal = resources.principals.find((item) => item.id === affair.principalId)
   const pendingProposals = affair.flowProposals.filter((item) => item.status === 'pending')
+  const isDueCheck =
+    node.status === 'waiting-external' &&
+    Boolean(waitPlan && (waitPlan.status === 'due' || waitPlan.status === 'missed'))
   const materialNames = affair.materials
     .filter((item) => node.materialIds.includes(item.id))
     .map((item) => item.name)
   const canStart =
-    (node.status === 'ready' || node.status === 'failed') &&
+    (node.status === 'ready' || node.status === 'failed' || isDueCheck) &&
     Boolean(account && website && principal)
   const isAttemptActive =
-    attempt && !['succeeded', 'failed', 'cancelled', 'interrupted'].includes(attempt.status)
+    attempt &&
+    !['waiting-external', 'succeeded', 'failed', 'cancelled', 'interrupted'].includes(
+      attempt.status,
+    )
 
   const run = async (operation: () => Promise<void>): Promise<void> => {
     setBusy(true)
@@ -68,47 +74,60 @@ export function WebAffairNodeActions({
     })
     if (!started.success) throw new Error(started.error.message)
     const createdAttempt = started.data.attempts[started.data.attempts.length - 1]
+    if (!createdAttempt) throw new Error('事务 Attempt 创建失败')
     onChanged(started.data)
 
-    const tabId = ensureWebResourceTab({ account, website, principal }, workspaceRef)
-    await waitForBrowser(tabId)
+    try {
+      const tabId = await resolveAndOpenWebResourceTab(account.id, workspaceRef)
+      await waitForBrowser(tabId)
 
-    const agentStore = useAgentStore.getState()
-    const conversationId = agentStore.createConversation({
-      runtime: createConversationRuntimeForWorkspace(workspaceRef),
-      activate: true,
-    })
-    const scope = { kind: 'browser' as const, instanceId: tabId }
-    useAgentStore.getState().setScope(scope, conversationId)
-    await window.cclinkStudio.agent.setScope(conversationId, scope)
-    useUIStore.getState().setAgentPanelMode('right', 'user')
-    const result = await createConversationRunController({ conversationId }).send(
-      buildAttemptPrompt(affair, node, createdAttempt.id, account.label, website.entryUrl),
-    )
-    if (result.status !== 'accepted' || !result.runId) {
+      const agentStore = useAgentStore.getState()
+      const conversationId = agentStore.createConversation({
+        runtime: createConversationRuntimeForWorkspace(workspaceRef),
+        activate: true,
+      })
+      const scope = { kind: 'browser' as const, instanceId: tabId }
+      useAgentStore.getState().setScope(scope, conversationId)
+      await window.cclinkStudio.agent.setScope(conversationId, scope)
+      useUIStore.getState().setAgentPanelMode('right', 'user')
+      const result = await createConversationRunController({ conversationId }).send(
+        buildAttemptPrompt(
+          affair,
+          node,
+          createdAttempt.id,
+          account.label,
+          website.entryUrl,
+          isDueCheck,
+        ),
+      )
+      if (result.status !== 'accepted' || !result.runId) {
+        throw new Error(result.status === 'failed' ? result.error : 'Agent 未接受事务节点')
+      }
+      const browserTask = await waitForBrowserTask(tabId)
+      const bound = await window.cclinkStudio.webAffairs.bindAttempt({
+        workspaceRef,
+        affairId: affair.id,
+        attemptId: createdAttempt.id,
+        tabId,
+        conversationId,
+        agentRunId: result.runId,
+        browserTaskRunId: browserTask.id,
+      })
+      if (!bound.success) throw new Error(bound.error.message)
+      onChanged(bound.data)
+      setPreflight(false)
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : String(reason)
       const failed = await window.cclinkStudio.webAffairs.finishAttempt({
         workspaceRef,
         affairId: affair.id,
         attemptId: createdAttempt.id,
-        outcome: 'interrupted',
-        summary: result.status === 'failed' ? result.error : 'Agent 未接受事务节点',
+        outcome: 'failed',
+        summary: `AI 启动失败：${message}`,
       })
       if (failed.success) onChanged(failed.data)
-      throw new Error(result.status === 'failed' ? result.error : 'Agent 未接受事务节点')
+      throw new Error(message)
     }
-    const browserTask = await waitForBrowserTask(tabId)
-    const bound = await window.cclinkStudio.webAffairs.bindAttempt({
-      workspaceRef,
-      affairId: affair.id,
-      attemptId: createdAttempt.id,
-      tabId,
-      conversationId,
-      agentRunId: result.runId,
-      browserTaskRunId: browserTask.id,
-    })
-    if (!bound.success) throw new Error(bound.error.message)
-    onChanged(bound.data)
-    setPreflight(false)
   }
 
   const handoff = async (): Promise<void> => {
@@ -211,19 +230,29 @@ export function WebAffairNodeActions({
       maxChecks: 12,
     })
     if (!result.success) throw new Error(result.error.message)
+    if (attempt?.browserTaskRunId) {
+      await window.cclinkStudio.browser.finishTask(attempt.browserTaskRunId).catch(() => undefined)
+    }
     onChanged(result.data)
   }
 
   const completeCheck = async (outcome: 'unchanged' | 'approved' | 'rejected'): Promise<void> => {
     if (!note.trim()) throw new Error('请填写官网显示的状态或官方原文摘要')
+    const url = attempt?.tabId
+      ? await window.cclinkStudio.browser.getCurrentURL(attempt.tabId).catch(() => undefined)
+      : undefined
     const result = await window.cclinkStudio.webAffairs.completeCheck({
       workspaceRef,
       affairId: affair.id,
       nodeId: node.id,
       outcome,
       summary: note.trim(),
+      url,
     })
     if (!result.success) throw new Error(result.error.message)
+    if (attempt?.browserTaskRunId) {
+      await window.cclinkStudio.browser.finishTask(attempt.browserTaskRunId).catch(() => undefined)
+    }
     onChanged(result.data)
     setNote('')
   }
@@ -263,7 +292,7 @@ export function WebAffairNodeActions({
             </p>
             <p>
               <b>账号：</b>
-              {account?.label} / Profile {account?.browserProfileId}
+              {account?.label}
             </p>
             <p>
               <b>入口：</b>
@@ -287,13 +316,13 @@ export function WebAffairNodeActions({
                 disabled={busy || !loginConfirmed}
                 onClick={() => void run(startAi)}
               >
-                {busy ? '启动中…' : '确认并交给 AI'}
+                {busy ? '启动中…' : isDueCheck ? '确认并交给 AI 检查' : '确认并交给 AI'}
               </button>
             </div>
           </div>
         ) : (
           <button type="button" className="primary" onClick={() => setPreflight(true)}>
-            交给 AI
+            {isDueCheck ? '开始复查' : '交给 AI'}
           </button>
         )
       ) : null}
@@ -450,6 +479,7 @@ function buildAttemptPrompt(
   attemptId: string,
   accountLabel: string,
   entryUrl: string,
+  isDueCheck: boolean,
 ): string {
   return [
     `你正在执行网页事务 ${affair.id} 的节点 ${node.id}，Attempt ${attemptId}。`,
@@ -461,7 +491,9 @@ function buildAttemptPrompt(
     '遇到扫码、验证码、主体不确定、材料变化或页面不确定时停止并要求用户接管。',
     '任何不可逆外部提交前必须停止，等待事务 Tab 的产品级确认卡；不能仅依赖工具权限确认。',
     '页面流程与当前流程不一致时，用 web_affair_propose_flow_diff 提交建议，不要直接覆盖历史。',
-    '取得明确后置条件证据后，用 web_affair_finish_attempt 记录结果；没有回执或可验证页面状态时不得成功。',
+    isDueCheck
+      ? '这是一次到期复查。读取官网当前状态后，用 web_affair_complete_check 记录状态未变化、已通过或被驳回；必须附官网原文摘要和当前 URL。'
+      : '取得明确后置条件证据后，用 web_affair_finish_attempt 记录结果；没有回执或可验证页面状态时不得成功。',
   ].join('\n')
 }
 

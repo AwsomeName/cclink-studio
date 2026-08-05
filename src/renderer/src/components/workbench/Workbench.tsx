@@ -158,6 +158,7 @@ export function Workbench({
       {isBrowserTab && activeTabId && (
         <BrowserToolbar
           tabId={activeTabId}
+          tab={activeTab}
           browserState={activeBrowserState}
           onUrlInputChange={setBrowserUrlInput}
           onNavigate={handleNavigate}

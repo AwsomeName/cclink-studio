@@ -127,6 +127,9 @@ function bootstrapBrowserWindowCapability(runtime: CclinkStudioRuntimeState): vo
     zoomMode: settings.defaultZoomMode,
     viewMode: settings.defaultDeviceMode,
   })
+  void runtime.webResourceService
+    ?.reconcileDrafts((profileId) => runtime.browserManager!.clearProfileData(profileId))
+    .catch((error) => console.error('[CCLink Studio] 遗留网站账号草稿回收失败:', error))
   runtime.browserInstanceStore = new BrowserInstanceStore()
   void runtime.browserInstanceStore
     .load()

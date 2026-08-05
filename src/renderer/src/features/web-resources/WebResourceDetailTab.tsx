@@ -11,7 +11,7 @@ import {
   WEB_PRINCIPAL_KIND_LABELS,
   type WebResourceLoginObservation,
 } from './web-resource-view-model'
-import { ensureWebResourceTab } from './web-resource-tab'
+import { resolveAndOpenWebResourceTab } from './web-resource-tab'
 
 interface WebResourceDetail {
   website: WebsiteResource
@@ -91,8 +91,13 @@ export function WebResourceDetailTab({ accountId }: { accountId: string }): Reac
     return <div className="web-resource-detail-state">正在读取网站与账号资源…</div>
   }
 
-  const openWebsite = (): void => {
-    ensureWebResourceTab(detail, workspaceRef)
+  const openWebsite = async (): Promise<void> => {
+    setError(null)
+    try {
+      await resolveAndOpenWebResourceTab(detail.account.id, workspaceRef)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    }
   }
 
   return (
@@ -107,7 +112,7 @@ export function WebResourceDetailTab({ accountId }: { accountId: string }): Reac
           <button type="button" disabled={checking} onClick={() => void checkLogin()}>
             {checking ? '核验中…' : '核验登录'}
           </button>
-          <button type="button" className="primary" onClick={openWebsite}>
+          <button type="button" className="primary" onClick={() => void openWebsite()}>
             打开网站
           </button>
         </div>
@@ -138,11 +143,6 @@ export function WebResourceDetailTab({ accountId }: { accountId: string }): Reac
           <div className={`web-resource-session-state ${observation?.status ?? 'checking'}`}>
             {formatWebResourceLoginStatus(observation, detail.account.loginConfirmedAt)}
           </div>
-          <DetailField label="Browser Profile" value={detail.account.browserProfileId} />
-          <DetailField
-            label="Session Partition"
-            value={observation?.summary?.partition ?? '待核验'}
-          />
           <DetailField
             label="Cookie"
             value={
@@ -160,7 +160,7 @@ export function WebResourceDetailTab({ accountId }: { accountId: string }): Reac
             value={observation ? new Date(observation.checkedAt).toLocaleString() : '尚未核验'}
           />
           <p className="web-resource-session-note">
-            这里只展示脱敏诊断。密码不保存在资源库，Cookie 仍由 Browser Profile 持有。
+            这里只展示脱敏诊断。密码不保存在项目资源中，登录状态由本机隔离环境持有。
           </p>
         </section>
       </div>

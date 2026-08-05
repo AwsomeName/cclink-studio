@@ -10,7 +10,7 @@ import {
 } from './web-affair-view-model'
 import { WebAffairFlowEditor } from './WebAffairFlowEditor'
 import { WebAffairNodeActions } from './WebAffairNodeActions'
-import { ensureWebResourceTab } from '../web-resources/web-resource-tab'
+import { resolveAndOpenWebResourceTab } from '../web-resources/web-resource-tab'
 
 export function WebAffairTab({ affairId }: { affairId: string }): React.ReactElement {
   const workspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
@@ -131,18 +131,18 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
     }
   }
 
-  const openAccount = (accountId: string): void => {
+  const openAccount = async (accountId: string): Promise<void> => {
     const account = resources?.accounts.find((item) => item.id === accountId)
-    const website = resources?.websites.find((item) => item.id === account?.websiteId)
-    const accountPrincipal = resources?.principals.find((item) => item.id === account?.principalId)
-    if (!account || !website || !accountPrincipal) {
+    if (!account) {
       setError('网站账号资源不存在或已失效')
       return
     }
-    ensureWebResourceTab(
-      { account, website, principal: accountPrincipal },
-      affair?.workspaceRef ?? workspaceRef,
-    )
+    setError(null)
+    try {
+      await resolveAndOpenWebResourceTab(account.id, affair?.workspaceRef ?? workspaceRef)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    }
   }
 
   if (error && !affair) return <div className="web-affair-tab-state error">{error}</div>
@@ -187,7 +187,7 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
             <strong>账号与登录环境</strong>
             {accounts.length > 0 ? (
               accounts.map((account) => (
-                <button type="button" key={account.id} onClick={() => openAccount(account.id)}>
+                <button type="button" key={account.id} onClick={() => void openAccount(account.id)}>
                   {account.label}
                   <small>{account.role ?? '登录环境已绑定'}</small>
                 </button>

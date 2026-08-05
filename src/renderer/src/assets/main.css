@@ -235,6 +235,206 @@ input:focus {
 
 .app-topbar-right {
   flex-shrink: 0;
+  align-self: stretch;
+  justify-content: flex-end;
+}
+
+.conversation-quick-switcher {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 3px;
+  overflow: visible;
+  -webkit-app-region: no-drag;
+}
+
+.conversation-quick-tabs {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+.conversation-quick-tab {
+  position: relative;
+  min-width: 0;
+  max-width: 116px;
+  height: 100%;
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.conversation-quick-tab:hover,
+.conversation-quick-tab:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.conversation-quick-tab:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--focus-border, var(--text-accent));
+}
+
+.conversation-quick-tab.active {
+  background: color-mix(in srgb, var(--text-accent) 9%, transparent);
+  color: var(--text-primary);
+}
+
+.conversation-quick-tab.active::after {
+  position: absolute;
+  right: 5px;
+  bottom: 0;
+  left: 5px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--text-accent);
+  content: '';
+}
+
+.conversation-quick-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-quick-status {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.45;
+}
+
+.status-running .conversation-quick-status {
+  background: #22c55e;
+  opacity: 1;
+}
+
+.status-waiting .conversation-quick-status {
+  background: #f59e0b;
+  opacity: 1;
+}
+
+.status-error .conversation-quick-status {
+  background: #ef4444;
+  opacity: 1;
+}
+
+.status-completed .conversation-quick-status {
+  background: #3b82f6;
+  opacity: 0.85;
+}
+
+.status-cancelled .conversation-quick-status,
+.status-interrupted .conversation-quick-status {
+  background: #94a3b8;
+  opacity: 0.75;
+}
+
+.conversation-quick-overflow {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+.conversation-quick-overflow-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  letter-spacing: 1px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.conversation-quick-overflow-button:hover,
+.conversation-quick-overflow-button[aria-expanded='true'] {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.conversation-quick-overflow-menu {
+  position: absolute;
+  z-index: 10020;
+  top: calc(100% + 5px);
+  right: 0;
+  width: min(280px, calc(100vw - 24px));
+  overflow: hidden;
+  padding: 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-elevated);
+  -webkit-app-region: no-drag;
+}
+
+.conversation-quick-overflow-menu button {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.conversation-quick-overflow-menu button:hover,
+.conversation-quick-overflow-menu button:focus-visible {
+  background: var(--bg-hover);
+}
+
+.conversation-quick-overflow-menu button > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-quick-overflow-menu small {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.conversation-quick-switcher.compact {
+  width: min(178px, 28vw);
+  flex: none;
+}
+
+.conversation-quick-switcher.compact .conversation-quick-tab {
+  max-width: none;
 }
 
 .app-topbar-icon {
@@ -4624,6 +4824,44 @@ body.is-resizing-panels .main-area > div {
   background: var(--bg-active);
 }
 
+.browser-resource-save {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.browser-resource-save input {
+  width: 150px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.browser-resource-save span {
+  color: var(--status-error, #f47174);
+  font-size: 11px;
+}
+
+.browser-toolbar button.browser-resource-text-button {
+  min-width: max-content;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.browser-toolbar button.browser-resource-text-button.primary {
+  color: var(--button-primary-foreground, #fff);
+  background: var(--button-primary-background, #0e639c);
+}
+
+.browser-toolbar button.browser-resource-text-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .url-input {
   flex: 1;
   height: 28px;
@@ -8164,45 +8402,9 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   flex-shrink: 0;
 }
 
-.status-bar-conversation-switcher {
-  display: flex;
+.status-bar-spacer {
   min-width: 0;
-  height: 100%;
-  flex: 1 1 240px;
-  align-items: stretch;
-  justify-content: center;
-  gap: 2px;
-  overflow: hidden;
-}
-
-.status-bar-conversation {
-  min-width: 0;
-  max-width: 116px;
-  flex: 1 1 0;
-  overflow: hidden;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 2px;
-  outline: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.76);
-  font: inherit;
-  line-height: var(--statusbar-height);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.status-bar-conversation:hover,
-.status-bar-conversation:focus-visible {
-  background: rgba(255, 255, 255, 0.12);
-  color: white;
-}
-
-.status-bar-conversation.active {
-  background: rgba(255, 255, 255, 0.18);
-  box-shadow: inset 0 -2px rgba(255, 255, 255, 0.72);
-  color: white;
+  flex: 1;
 }
 
 /* 更新提示徽章（可点击按钮，重置默认 button 样式） */

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import type {
-  CreateWebConnectionInput,
   WebAccount,
   WebPrincipalKind,
   WebResourceProjectSnapshot,
@@ -15,23 +14,14 @@ import {
   WEB_PRINCIPAL_KIND_LABELS,
   type WebResourceLoginObservation,
 } from './web-resource-view-model'
-import { ensureWebResourceTab } from './web-resource-tab'
+import { resolveAndOpenWebResourceTab } from './web-resource-tab'
+import { observeWebResourcesChanged } from './web-resource-events'
+import { useTabStore } from '../../stores'
 
 interface AccountRow {
   account: WebAccount
   website: WebsiteResource
   principalName: string
-}
-
-function initialForm(workspaceRef: WorkspaceRef): CreateWebConnectionInput {
-  return {
-    workspaceRef,
-    websiteName: '',
-    entryUrl: '',
-    principalKind: 'company',
-    principalName: '',
-    accountLabel: '',
-  }
 }
 
 export function WebResourcesSidebar({
@@ -43,11 +33,9 @@ export function WebResourcesSidebar({
 }): React.ReactElement {
   const [snapshot, setSnapshot] = useState<WebResourceProjectSnapshot | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [showForm, setShowForm] = useState(false)
   const [showImportForm, setShowImportForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [checkingLogin, setCheckingLogin] = useState(false)
-  const [form, setForm] = useState<CreateWebConnectionInput>(() => initialForm(workspaceRef))
   const [importPrincipalKind, setImportPrincipalKind] = useState<WebPrincipalKind>('company')
   const [importPrincipalName, setImportPrincipalName] = useState('')
   const [importMessage, setImportMessage] = useState<string | null>(null)
@@ -82,8 +70,6 @@ export function WebResourcesSidebar({
   }, [workspaceRef])
 
   useEffect(() => {
-    setForm(initialForm(workspaceRef))
-    setShowForm(false)
     setLoginStatuses({})
   }, [workspaceRef])
 
@@ -92,6 +78,14 @@ export function WebResourcesSidebar({
       setLoadError(error instanceof Error ? error.message : String(error))
     })
   }, [reload])
+
+  useEffect(
+    () =>
+      observeWebResourcesChanged(() => {
+        void reload()
+      }),
+    [reload],
+  )
 
   const refreshLoginStatuses = useCallback(async (): Promise<void> => {
     if (rows.length === 0) {
@@ -129,20 +123,24 @@ export function WebResourcesSidebar({
     void refreshLoginStatuses()
   }, [refreshLoginStatuses])
 
-  const submit = async (event: FormEvent): Promise<void> => {
-    event.preventDefault()
+  const beginDraft = async (): Promise<void> => {
     setSaving(true)
     setLoadError(null)
     try {
-      const result = await window.cclinkStudio.webResources.createConnection(form)
+      const result = await window.cclinkStudio.webResources.beginDraft({ workspaceRef })
       if (!result.success) {
         setLoadError(result.error.message)
         return
       }
-      ensureWebResourceTab(result.data, workspaceRef)
-      setForm(initialForm(workspaceRef))
-      setShowForm(false)
-      await reload()
+      useTabStore.getState().openTab({
+        type: 'browser',
+        title: '未保存的网站账号',
+        icon: '🌐',
+        browserProfile: result.data.browserProfileId,
+        webResourceDraftRef: { draftId: result.data.draftId },
+        workspaceRef,
+        forceNew: true,
+      })
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -150,13 +148,17 @@ export function WebResourcesSidebar({
     }
   }
 
-  const openAccount = ({ account, website }: AccountRow): void => {
-    const principal = snapshot?.principals.find((item) => item.id === account.principalId)
-    if (!principal) {
-      setLoadError(`账号“${account.label}”的业务主体已失效`)
+  const openAccount = async ({ account }: AccountRow): Promise<void> => {
+    setLoadError(null)
+    if (!account.projectId) {
+      setLoadError(`账号“${account.label}”尚未归属当前项目`)
       return
     }
-    ensureWebResourceTab({ account, website, principal }, workspaceRef)
+    try {
+      await resolveAndOpenWebResourceTab(account.id, workspaceRef)
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : String(error))
+    }
   }
 
   const confirmLogin = async (row: AccountRow): Promise<void> => {
@@ -237,9 +239,9 @@ export function WebResourcesSidebar({
   return (
     <div className="web-resources-sidebar">
       <div className="web-resources-toolbar">
-        <button type="button" onClick={() => setShowForm((value) => !value)}>
+        <button type="button" disabled={saving} onClick={() => void beginDraft()}>
           <IconPlus size={14} />
-          添加网站与账号
+          {saving ? '正在打开…' : '添加网站与账号'}
         </button>
         <span className="web-resources-toolbar-actions">
           <button
@@ -256,94 +258,6 @@ export function WebResourcesSidebar({
           ) : null}
         </span>
       </div>
-
-      {showForm ? (
-        <form className="web-resources-form" onSubmit={(event) => void submit(event)}>
-          <label>
-            网站名称
-            <input
-              required
-              maxLength={120}
-              value={form.websiteName}
-              onChange={(event) => setForm({ ...form, websiteName: event.target.value })}
-              placeholder="例如：App Store Connect"
-            />
-          </label>
-          <label>
-            办理入口
-            <input
-              required
-              type="url"
-              value={form.entryUrl}
-              onChange={(event) => setForm({ ...form, entryUrl: event.target.value })}
-              placeholder="https://..."
-            />
-          </label>
-          <label>
-            业务主体
-            <span className="web-resources-inline-fields">
-              <select
-                value={form.principalKind}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    principalKind: event.target.value as WebPrincipalKind,
-                  })
-                }
-              >
-                {Object.entries(WEB_PRINCIPAL_KIND_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <input
-                required
-                maxLength={160}
-                value={form.principalName}
-                onChange={(event) => setForm({ ...form, principalName: event.target.value })}
-                placeholder="姓名或公司全称"
-              />
-            </span>
-          </label>
-          <label>
-            账号名称
-            <input
-              required
-              maxLength={160}
-              value={form.accountLabel}
-              onChange={(event) => setForm({ ...form, accountLabel: event.target.value })}
-              placeholder="用于识别，不填写密码"
-            />
-          </label>
-          <label>
-            账号角色（可选）
-            <input
-              maxLength={120}
-              value={form.accountRole ?? ''}
-              onChange={(event) => setForm({ ...form, accountRole: event.target.value })}
-              placeholder="例如：管理员、经办人、开发者"
-            />
-          </label>
-          <label>
-            登录提示（可选）
-            <input
-              maxLength={500}
-              value={form.loginHint ?? ''}
-              onChange={(event) => setForm({ ...form, loginHint: event.target.value })}
-              placeholder="用户名提示、登录方式；不要填写密码"
-            />
-          </label>
-          <div className="web-resources-form-actions">
-            <button type="button" onClick={() => setShowForm(false)}>
-              取消
-            </button>
-            <button type="submit" disabled={saving}>
-              {saving ? '正在添加…' : '添加并打开'}
-            </button>
-          </div>
-        </form>
-      ) : null}
 
       {showImportForm && workspacePath ? (
         <form
@@ -398,7 +312,7 @@ export function WebResourcesSidebar({
       {!snapshot && !loadError ? (
         <div className="web-resources-empty">正在读取网站与账号</div>
       ) : null}
-      {snapshot && rows.length === 0 && !showForm ? (
+      {snapshot && rows.length === 0 ? (
         <div className="web-resources-empty">
           这里不再受预定义网站限制。添加第一个需要 AI 接管的网站和账号。
         </div>
@@ -413,7 +327,7 @@ export function WebResourcesSidebar({
               <button
                 type="button"
                 className="web-resource-row-open"
-                onClick={() => openAccount(row)}
+                onClick={() => void openAccount(row)}
                 title={row.website.entryUrl}
               >
                 <IconGlobe size={15} />

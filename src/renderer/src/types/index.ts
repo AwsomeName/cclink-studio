@@ -165,6 +165,10 @@ export interface Tab {
     projectId: string
     accountId: string
   }
+  /** 尚未保存的网站账号草稿；不进入 WorkspaceState。 */
+  webResourceDraftRef?: {
+    draftId: string
+  }
   /** 从快照重建时的视图模式/缩放（仅激活创建时消费一次） */
   restore?: {
     viewMode: 'desktop' | 'mobile'

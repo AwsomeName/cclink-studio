@@ -454,7 +454,7 @@ describe('WebAffairService', () => {
   it('persists missed external checks, bounded backoff and rejection correction nodes', async () => {
     const service = createService(filePath)
     await service.load()
-    const created = await service.createAffair(validInput(), WORKSPACE_ID)
+    const created = await service.createAffair({ ...validInput(), materialPaths: [] }, WORKSPACE_ID)
     if (!created.success) throw new Error(created.error.message)
     const first = created.data.flow.nodes[0]
     const completed = await service.updateNode(
@@ -489,6 +489,19 @@ describe('WebAffairService', () => {
     const snapshot = reloaded.getSnapshot()
     if (!snapshot.success) throw new Error(snapshot.error.message)
     expect(snapshot.data.affairs[0].waitPlans[0].status).toBe('missed')
+    const checkStarted = await reloaded.startAttempt(
+      {
+        workspaceRef: WORKSPACE_REF,
+        affairId: created.data.id,
+        nodeId: reviewNode.id,
+        accountId: ACCOUNT_ID,
+      },
+      WORKSPACE_ID,
+    )
+    expect(checkStarted).toMatchObject({
+      success: true,
+      data: { attempts: [{ nodeId: reviewNode.id, status: 'preparing' }] },
+    })
     const unchanged = await reloaded.completeCheck(
       {
         workspaceRef: WORKSPACE_REF,
@@ -501,7 +514,16 @@ describe('WebAffairService', () => {
     )
     expect(unchanged).toMatchObject({
       success: true,
-      data: { waitPlans: [{ status: 'scheduled', checkCount: 1 }] },
+      data: {
+        attempts: [
+          {
+            nodeId: reviewNode.id,
+            status: 'succeeded',
+            evidence: [{ kind: 'official-response', summary: '官网仍显示审核中' }],
+          },
+        ],
+        waitPlans: [{ status: 'scheduled', checkCount: 1 }],
+      },
     })
     const rejected = await reloaded.completeCheck(
       {

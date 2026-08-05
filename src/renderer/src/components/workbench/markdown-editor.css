@@ -196,28 +196,47 @@
   font-size: 11px;
 }
 
-.editor-toolbar .toolbar-save {
+.editor-toolbar .toolbar-trailing {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: none;
+  min-width: max-content;
+  padding-left: 6px;
+  border-left: 1px solid var(--border-color);
+}
+
+.editor-toolbar .toolbar-save-action {
+  flex: none;
   width: auto;
-  padding: 0 8px;
-  font-size: 12px;
-}
-
-.editor-toolbar .toolbar-save.dirty {
-  color: var(--text-accent);
-}
-
-.editor-toolbar .toolbar-filepath {
+  min-width: 52px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--text-accent) 48%, var(--border-color));
+  background: color-mix(in srgb, var(--text-accent) 12%, transparent);
+  color: var(--text-accent-hover);
   font-size: 11px;
-  color: var(--text-secondary);
-  margin-left: 8px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 500;
   white-space: nowrap;
-  max-width: 200px;
+}
+
+.editor-toolbar .toolbar-save-action:hover {
+  border-color: var(--text-accent);
+  background: color-mix(in srgb, var(--text-accent) 20%, transparent);
+  color: var(--text-accent-hover);
+}
+
+.editor-toolbar .toolbar-save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 58px;
+  height: 28px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .editor-toolbar .toolbar-diagnostics {

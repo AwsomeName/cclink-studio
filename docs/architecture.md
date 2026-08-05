@@ -1,6 +1,6 @@
 # CCLink Studio 架构说明
 
-> 当前事实源。最后更新：2026-07-29。
+> 当前事实源。最后更新：2026-08-05。
 
 ## 结论
 
@@ -119,6 +119,29 @@ ADR 0004 已实施开源版与商业版独立发布。OSS Release 只从本仓�
 两条链路不得读取对方的凭证、配置或发布状态。
 
 已关闭的稳定化阶段、修复顺序和退出证据见 `docs/stabilization.md`。后续功能按本架构宪法和 `docs/development.md` 的门禁受控推进。
+
+## 网站账号与网页事务领域
+
+“网站与账号”和“事务”是两个独立领域，均只管理当前本地工作空间：
+
+- `WebResourceService` 是正式网站账号元数据、工作空间归属、Browser Profile 绑定和未保存
+  草稿清理账本的唯一 owner；Cookie/Session 仍由 `BrowserManager` 持有，密码和 Token
+  不进入资源快照。
+- `WebAffairService` 是事务、流程版本、节点、Attempt、人工交接、证据、等待计划和流程
+  建议的唯一 owner；renderer、Agent、BrowserTask 和模板只持有引用或可丢弃投影。
+- renderer 只提交 `workspaceRef + accountId`。侧栏、事务资源区、账号详情和 AI Attempt
+  统一调用主进程 `resolveLaunch`；主进程解析稳定工作空间身份并校验账号归属后，才返回
+  URL、Profile 和 `webResourceRef`。renderer 不得按当前 Tab、URL 或 Profile 猜账号。
+- 新建账号先创建临时 Browser 草稿和独立 Profile，登录后只以一个显示名称保存；主进程
+  从真实 Browser View 反查 URL、标题和 Profile。关闭未保存 Tab 会清理 Profile，异常
+  退出遗留项由启动对账继续清理。正式资源与 Session 不随 Tab 关闭而删除。
+- 一次网页执行由 Attempt 记录。人工接管和交还是持久状态转换；应用重启会把未结束运行
+  标为中断。进入外部等待时当前 Attempt 结束；到期或错过后才能创建新的检查 Attempt，
+  不用常驻 Agent 伪装后台跟踪。
+- 最终外部动作继续受产品级确认卡约束；同节点同流程版本的副作用 key 阻止重复确认。
+
+现有 `projectId` 字段是稳定工作空间身份的兼容命名，只能封装在 Workspace/WebResource
+边界内；事务领域使用 `workspaceId`，不得由 renderer 自报或按可移动路径推断。
 
 ## 开源版能力
 

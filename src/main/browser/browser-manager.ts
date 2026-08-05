@@ -1023,6 +1023,20 @@ export class BrowserManager {
     return this.sessionDiagnostics.describe(browserSession, normalizedProfileId, url)
   }
 
+  /** Clear all persisted login/session data owned by one isolated website-account profile. */
+  async clearProfileData(profileId: string): Promise<void> {
+    const normalizedProfileId = normalizeBrowserProfileId(profileId)
+    if (!normalizedProfileId) throw new Error('不能清理默认浏览器环境')
+    for (const [tabId, entry] of this.views) {
+      if (entry.profileId === normalizedProfileId) this.destroyView(tabId)
+    }
+    const browserSession = session.fromPartition(browserProfilePartition(normalizedProfileId))
+    await browserSession.clearStorageData()
+    await browserSession.clearCache()
+    await browserSession.cookies.flushStore()
+    await browserSession.flushStorageData()
+  }
+
   /** 返回诊断所需的真实视图、Profile 和 Cookie 元数据，不暴露 Cookie 值。 */
   async getRuntimeDiagnostics(tabId: string): Promise<{
     visibleTabId: string | null

@@ -1,36 +1,16 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import type { WebResourceConnection } from '@shared/web-resources/web-resource-types'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { WebResourceLaunchDescriptor } from '@shared/web-resources/web-resource-types'
 import { useTabStore } from '../../stores'
-import { ensureWebResourceTab } from './web-resource-tab'
+import { resolveAndOpenWebResourceTab } from './web-resource-tab'
 
 const workspaceRef = { kind: 'local' as const, path: '/tmp/project' }
-const now = new Date().toISOString()
-
-const connection: WebResourceConnection = {
-  website: {
-    id: '11111111-1111-4111-8111-111111111111',
-    name: 'App Store Connect',
-    origin: 'https://appstoreconnect.apple.com',
-    entryUrl: 'https://appstoreconnect.apple.com/apps',
-    createdAt: now,
-    updatedAt: now,
-  },
-  principal: {
-    id: '22222222-2222-4222-8222-222222222222',
-    kind: 'company',
-    name: 'Example Ltd.',
-    createdAt: now,
-    updatedAt: now,
-  },
-  account: {
-    id: '33333333-3333-4333-8333-333333333333',
+const launch: WebResourceLaunchDescriptor = {
+  title: 'App Store Connect',
+  entryUrl: 'https://appstoreconnect.apple.com/apps',
+  browserProfileId: 'release-profile',
+  webResourceRef: {
     projectId: '44444444-4444-4444-8444-444444444444',
-    websiteId: '11111111-1111-4111-8111-111111111111',
-    principalId: '22222222-2222-4222-8222-222222222222',
-    label: 'Release account',
-    browserProfileId: 'release-profile',
-    createdAt: now,
-    updatedAt: now,
+    accountId: '33333333-3333-4333-8333-333333333333',
   },
 }
 
@@ -39,16 +19,29 @@ beforeEach(() => {
 })
 
 describe('ensureWebResourceTab', () => {
-  it('opens one Browser Tab projection and focuses it on repeated launches', () => {
-    const firstId = ensureWebResourceTab(connection, workspaceRef)
-    const secondId = ensureWebResourceTab(connection, workspaceRef)
+  it('resolves in main, opens one Browser Tab projection and focuses it on repeated launches', async () => {
+    const resolveLaunch = vi.fn().mockResolvedValue({ success: true, data: launch })
+    vi.stubGlobal('window', { cclinkStudio: { webResources: { resolveLaunch } } })
+
+    const firstId = await resolveAndOpenWebResourceTab(
+      launch.webResourceRef.accountId,
+      workspaceRef,
+    )
+    const secondId = await resolveAndOpenWebResourceTab(
+      launch.webResourceRef.accountId,
+      workspaceRef,
+    )
 
     expect(secondId).toBe(firstId)
+    expect(resolveLaunch).toHaveBeenCalledWith({
+      workspaceRef,
+      accountId: launch.webResourceRef.accountId,
+    })
     expect(useTabStore.getState().tabs).toEqual([
       expect.objectContaining({
         id: firstId,
         type: 'browser',
-        title: 'App Store Connect · Example Ltd.',
+        title: 'App Store Connect',
         initialUrl: 'https://appstoreconnect.apple.com/apps',
         browserProfile: 'release-profile',
         webResourceRef: {
@@ -60,12 +53,21 @@ describe('ensureWebResourceTab', () => {
     ])
   })
 
-  it('refuses to launch a migrated resource before project assignment', () => {
-    expect(() =>
-      ensureWebResourceTab(
-        { ...connection, account: { ...connection.account, projectId: null } },
-        workspaceRef,
-      ),
-    ).toThrow('尚未归属当前项目')
+  it('surfaces the main-process project guard and does not create a tab', async () => {
+    vi.stubGlobal('window', {
+      cclinkStudio: {
+        webResources: {
+          resolveLaunch: vi.fn().mockResolvedValue({
+            success: false,
+            error: { code: 'RESOURCE_NOT_FOUND', message: '当前项目的网站账号不存在' },
+          }),
+        },
+      },
+    })
+
+    await expect(
+      resolveAndOpenWebResourceTab(launch.webResourceRef.accountId, workspaceRef),
+    ).rejects.toThrow('当前项目的网站账号不存在')
+    expect(useTabStore.getState().tabs).toEqual([])
   })
 })

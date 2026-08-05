@@ -1,4 +1,8 @@
+import { useEffect, useState } from 'react'
 import type { BrowserTabState } from '../../stores/browser-store'
+import type { Tab } from '../../types'
+import { useTabStore } from '../../stores/tab-store'
+import { notifyWebResourcesChanged } from '../../features/web-resources/web-resource-events'
 import { copyTextToClipboard } from '../../utils/clipboard'
 import {
   IconArrowLeft,
@@ -14,6 +18,7 @@ import { BrowserHistoryMenu } from './BrowserHistoryMenu'
 
 interface BrowserToolbarProps {
   tabId: string
+  tab: Tab
   browserState: BrowserTabState | undefined
   onUrlInputChange: (tabId: string, value: string) => void
   onNavigate: () => void
@@ -22,11 +27,89 @@ interface BrowserToolbarProps {
 
 export function BrowserToolbar({
   tabId,
+  tab,
   browserState,
   onUrlInputChange,
   onNavigate,
   onOpenUrl,
 }: BrowserToolbarProps): React.ReactElement {
+  const [showSave, setShowSave] = useState(false)
+  const [displayName, setDisplayName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [duplicateAccountId, setDuplicateAccountId] = useState<string | null>(null)
+  const draftId = tab.webResourceDraftRef?.draftId
+
+  useEffect(() => {
+    setShowSave(false)
+    setDisplayName('')
+    setSaveError(null)
+    setDuplicateAccountId(null)
+  }, [draftId])
+
+  const saveDraft = async (duplicateResolution?: 'save-another'): Promise<void> => {
+    if (!draftId || tab.workspaceRef?.kind !== 'local' || !displayName.trim()) return
+    setSaving(true)
+    setSaveError(null)
+    setDuplicateAccountId(null)
+    try {
+      const result = await window.cclinkStudio.webResources.saveDraft({
+        workspaceRef: tab.workspaceRef,
+        draftId,
+        tabId,
+        displayName,
+        duplicateResolution,
+      })
+      if (!result.success) {
+        setSaveError(result.error.message)
+        setDuplicateAccountId(result.error.context?.existingAccountId ?? null)
+        return
+      }
+      const projectId = result.data.account.projectId
+      if (!projectId) throw new Error('保存结果未归属当前项目')
+      useTabStore.getState().bindWebResourceDraft(tabId, {
+        title: result.data.website.name,
+        initialUrl: result.data.website.entryUrl,
+        browserProfile: result.data.account.browserProfileId,
+        webResourceRef: { projectId, accountId: result.data.account.id },
+      })
+      notifyWebResourcesChanged()
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const openExistingAccount = async (): Promise<void> => {
+    if (!draftId || !duplicateAccountId || tab.workspaceRef?.kind !== 'local') return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const cancelled = await window.cclinkStudio.webResources.cancelDraft({
+        workspaceRef: tab.workspaceRef,
+        draftId,
+        tabId,
+      })
+      if (!cancelled.success) throw new Error(cancelled.error.message)
+      const launch = await window.cclinkStudio.webResources.resolveLaunch({
+        workspaceRef: tab.workspaceRef,
+        accountId: duplicateAccountId,
+      })
+      if (!launch.success) throw new Error(launch.error.message)
+      useTabStore.getState().bindWebResourceDraft(tabId, {
+        title: launch.data.title,
+        initialUrl: launch.data.entryUrl,
+        browserProfile: launch.data.browserProfileId,
+        webResourceRef: launch.data.webResourceRef,
+      })
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="browser-toolbar">
       <button onClick={() => window.cclinkStudio.browser.goBack(tabId)} title="后退">
@@ -74,6 +157,71 @@ export function BrowserToolbar({
         }}
         placeholder="输入 URL..."
       />
+
+      {draftId ? (
+        showSave ? (
+          <div className="browser-resource-save">
+            <input
+              autoFocus
+              maxLength={160}
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') void saveDraft()
+                if (event.key === 'Escape') setShowSave(false)
+              }}
+              placeholder="账号名称"
+              aria-label="账号名称"
+            />
+            {saveError ? <span title={saveError}>{saveError}</span> : null}
+            {duplicateAccountId ? (
+              <>
+                <button
+                  type="button"
+                  className="browser-resource-text-button"
+                  disabled={saving}
+                  onClick={() => void openExistingAccount()}
+                >
+                  打开已有账号
+                </button>
+                <button
+                  type="button"
+                  className="browser-resource-text-button primary"
+                  disabled={saving}
+                  onClick={() => void saveDraft('save-another')}
+                >
+                  作为另一个账号保存
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="browser-resource-text-button primary"
+                disabled={saving || !displayName.trim()}
+                onClick={() => void saveDraft()}
+              >
+                {saving ? '保存中…' : '保存'}
+              </button>
+            )}
+            <button
+              type="button"
+              className="browser-resource-text-button"
+              disabled={saving}
+              onClick={() => setShowSave(false)}
+            >
+              返回
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="browser-resource-text-button primary"
+            onClick={() => setShowSave(true)}
+          >
+            登录完成，保存到当前项目
+          </button>
+        )
+      ) : null}
 
       <div className="browser-zoom-group">
         <button onClick={() => window.cclinkStudio.browser.zoomOut(tabId)} title="缩小">

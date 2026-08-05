@@ -93,9 +93,42 @@ describe('web resources IPC contract', () => {
     ).toThrow()
   })
 
+  it('accepts only the one-field draft save contract', () => {
+    expect(
+      webResourcesIpcContracts.saveDraft.parseArgs([
+        {
+          workspaceRef: { kind: 'local', path: ' /Users/example/project ' },
+          draftId: '11111111-1111-4111-8111-111111111111',
+          tabId: ' tab-draft ',
+          displayName: ' 张三公司 ',
+        },
+      ]),
+    ).toEqual([
+      {
+        workspaceRef: { kind: 'local', path: '/Users/example/project' },
+        draftId: '11111111-1111-4111-8111-111111111111',
+        tabId: 'tab-draft',
+        displayName: '张三公司',
+      },
+    ])
+    expect(() =>
+      webResourcesIpcContracts.saveDraft.parseArgs([
+        {
+          workspaceRef: { kind: 'local', path: '/Users/example/project' },
+          draftId: '11111111-1111-4111-8111-111111111111',
+          tabId: 'tab-draft',
+          displayName: '张三公司',
+          accountRole: '不允许额外设计',
+        },
+      ]),
+    ).toThrow()
+  })
+
   it('does not accept extra arguments on any channel', () => {
     expect(() => webResourcesIpcContracts.getSnapshot.parseArgs(['extra'])).toThrow()
     expect(() => webResourcesIpcContracts.createConnection.parseArgs([])).toThrow()
+    expect(() => webResourcesIpcContracts.beginDraft.parseArgs([])).toThrow()
+    expect(() => webResourcesIpcContracts.saveDraft.parseArgs([])).toThrow()
     expect(() => webResourcesIpcContracts.importProjectOpsConfig.parseArgs([])).toThrow()
   })
 })

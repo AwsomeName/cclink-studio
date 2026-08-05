@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import {
   useAgentStore,
   useFsStore,
@@ -23,9 +23,6 @@ import {
   buildKeyboardContextMenuInput,
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
-import { buildQuickThreadList } from '../../features/agent-conversations/view-model'
-import { formatStatusBarConversationTitle } from './status-bar-conversation-switcher'
-import { useCommandStore } from '../../stores/command-store'
 
 /** Agent 状态 → 显示文本 */
 const AGENT_STATUS_MAP: Record<string, { text: string; color: string }> = {
@@ -50,9 +47,6 @@ const TAB_TYPE_LABEL: Record<string, string> = {
 
 export function StatusBar(): React.ReactElement {
   const backendState = useAgentStore((s) => s.backendState)
-  const conversations = useAgentStore((s) => s.conversations)
-  const conversationOrder = useAgentStore((s) => s.conversationOrder)
-  const activeConversationId = useAgentStore((s) => s.activeConversationId)
   const activeTab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId))
   const currentUrl = useBrowserStore((s) =>
     activeTab?.type === 'browser' ? s.tabs[activeTab.id]?.url : undefined,
@@ -74,22 +68,10 @@ export function StatusBar(): React.ReactElement {
   const setRepositoryInput = useGitBackupStore((s) => s.setRepositoryInput)
   const closeGitDialog = useGitBackupStore((s) => s.closeDialog)
   const showContextMenu = useContextMenuStore((s) => s.show)
-  const executeCommand = useCommandStore((s) => s.executeCommand)
 
   const agentStatus = AGENT_STATUS_MAP[backendState] ?? AGENT_STATUS_MAP.disconnected
   const tabLabel = activeTab ? (TAB_TYPE_LABEL[activeTab.type] ?? activeTab.title) : ''
   const workspaceKey = workspaceRefKey(activeWorkspaceRef)
-  const recentConversations = useMemo(
-    () =>
-      buildQuickThreadList({
-        conversations,
-        conversationOrder,
-        activeConversationId,
-        activeWorkspaceRef,
-        limit: 5,
-      }),
-    [activeConversationId, activeWorkspaceRef, conversationOrder, conversations],
-  )
 
   const showStatusMenu = (
     itemId: string,
@@ -131,23 +113,6 @@ export function StatusBar(): React.ReactElement {
   const handleFirstGitBackup = async (): Promise<void> => {
     const result = await submitFirstGitBackup()
     if (result) showToast(result.message, result.success ? 'success' : 'error')
-  }
-
-  const openConversation = async (conversationId: string): Promise<void> => {
-    const conversation = conversations[conversationId]
-    if (!conversation) return
-    const result = await executeCommand('agent.openConversation', {
-      source: 'toolbar',
-      target: {
-        kind: 'thread',
-        workspaceKey: conversation.runtime.workspaceRef
-          ? workspaceRefKey(conversation.runtime.workspaceRef)
-          : null,
-        conversationId,
-        activeRunId: conversation.activeRunId,
-      },
-    })
-    if (!result.ok) showToast(result.message ?? '会话切换失败', 'error')
   }
 
   return (
@@ -194,21 +159,7 @@ export function StatusBar(): React.ReactElement {
           </span>
         )}
 
-        <div className="status-bar-conversation-switcher" aria-label="当前项目最近会话">
-          {recentConversations.map((conversation) => (
-            <button
-              key={conversation.id}
-              type="button"
-              className={`status-bar-conversation ${conversation.isActive ? 'active' : ''}`}
-              title={conversation.title}
-              aria-label={`切换到会话：${conversation.title}`}
-              aria-pressed={conversation.isActive}
-              onClick={() => void openConversation(conversation.id)}
-            >
-              {formatStatusBarConversationTitle(conversation.title)}
-            </button>
-          ))}
-        </div>
+        <span className="status-bar-spacer" aria-hidden="true" />
 
         {workspacePath && (
           <button

@@ -171,6 +171,7 @@ export async function bootstrapMainProcessServices(
     () => runtime.projectOpsService,
     () => runtime.workspaceStateService,
     runtime.trustedRendererGuard,
+    () => runtime.browserManager,
   )
   console.log('[CCLink Studio] 网站与账号 IPC 已注册')
 
@@ -190,6 +191,14 @@ export async function bootstrapMainProcessServices(
           })
         }
       },
+      (workspaceId, accountId) =>
+        runtime.webResourceService?.resolveLaunch(workspaceId, accountId) ?? {
+          success: false,
+          error: {
+            code: 'SERVICE_UNAVAILABLE',
+            message: '网站与账号服务当前不可用',
+          },
+        },
     )
     await runtime.webAffairService.load()
     console.log('[CCLink Studio] 事务服务已初始化')

@@ -14,6 +14,7 @@ vi.mock('electron', () => ({
 import type { CreateWebConnectionInput } from '../../shared/web-resources/web-resource-types'
 import { WebResourceService } from './web-resource-service'
 import { WebResourceStore } from './web-resource-store'
+import { WebResourceDraftStore } from './web-resource-draft-store'
 
 let tempDir = ''
 let storePath = ''
@@ -40,6 +41,208 @@ afterEach(async () => {
 })
 
 describe('WebResourceService', () => {
+  it('turns one observed browser draft into a confirmed project resource using the same profile', async () => {
+    const draftPath = join(tempDir, 'web-resource-drafts.json')
+    const service = new WebResourceService(
+      new WebResourceStore(storePath),
+      new WebResourceDraftStore(draftPath),
+    )
+    await service.load()
+
+    const begun = await service.beginDraft(PROJECT_ID)
+    expect(begun.success).toBe(true)
+    if (!begun.success) return
+
+    const saved = await service.saveDraft(
+      PROJECT_ID,
+      {
+        workspaceRef: baseInput.workspaceRef,
+        draftId: begun.data.draftId,
+        tabId: 'tab-draft',
+        displayName: '张三公司',
+      },
+      {
+        url: 'https://appstoreconnect.apple.com/apps',
+        title: 'App Store Connect',
+        profileId: begun.data.browserProfileId,
+      },
+    )
+
+    expect(saved).toMatchObject({
+      success: true,
+      data: {
+        website: { name: 'App Store Connect' },
+        account: {
+          projectId: PROJECT_ID,
+          label: '张三公司',
+          browserProfileId: begun.data.browserProfileId,
+          loginConfirmedAt: expect.any(String),
+        },
+      },
+    })
+    expect(JSON.parse(await readFile(draftPath, 'utf8'))).toEqual({
+      schemaVersion: 1,
+      records: [],
+    })
+
+    const repeated = await service.saveDraft(
+      PROJECT_ID,
+      {
+        workspaceRef: baseInput.workspaceRef,
+        draftId: begun.data.draftId,
+        tabId: 'tab-draft',
+        displayName: '张三公司',
+      },
+      {
+        url: 'https://appstoreconnect.apple.com/apps',
+        title: 'App Store Connect',
+        profileId: begun.data.browserProfileId,
+      },
+    )
+    expect(repeated).toMatchObject({
+      success: true,
+      data: { account: { id: saved.success ? saved.data.account.id : undefined } },
+    })
+    expect(service.getSnapshot()).toMatchObject({ success: true, data: { revision: 1 } })
+  })
+
+  it('keeps cleanup-pending drafts for startup reconciliation after profile cleanup fails', async () => {
+    const draftPath = join(tempDir, 'web-resource-drafts.json')
+    const service = new WebResourceService(
+      new WebResourceStore(storePath),
+      new WebResourceDraftStore(draftPath),
+    )
+    await service.load()
+    const begun = await service.beginDraft(PROJECT_ID)
+    if (!begun.success) throw new Error(begun.error.message)
+
+    const failed = await service.cancelDraft(
+      PROJECT_ID,
+      begun.data.draftId,
+      begun.data.browserProfileId,
+      async () => Promise.reject(new Error('locked')),
+    )
+    expect(failed).toMatchObject({ success: false, error: { code: 'CLEANUP_FAILED' } })
+    expect(JSON.parse(await readFile(draftPath, 'utf8'))).toMatchObject({
+      records: [{ id: begun.data.draftId, state: 'cleanup-pending' }],
+    })
+
+    const reloaded = new WebResourceService(
+      new WebResourceStore(storePath),
+      new WebResourceDraftStore(draftPath),
+    )
+    await reloaded.load()
+    const cleanup = vi.fn().mockResolvedValue(undefined)
+    await reloaded.reconcileDrafts(cleanup)
+    expect(cleanup).toHaveBeenCalledWith(begun.data.browserProfileId)
+    expect(JSON.parse(await readFile(draftPath, 'utf8'))).toEqual({
+      schemaVersion: 1,
+      records: [],
+    })
+  })
+
+  it('offers an explicit duplicate branch and preserves isolated profiles when saved as another account', async () => {
+    const service = new WebResourceService(
+      new WebResourceStore(storePath),
+      new WebResourceDraftStore(join(tempDir, 'web-resource-drafts.json')),
+    )
+    await service.load()
+    const first = await service.beginDraft(PROJECT_ID)
+    if (!first.success) throw new Error(first.error.message)
+    const firstSaved = await service.saveDraft(
+      PROJECT_ID,
+      {
+        workspaceRef: baseInput.workspaceRef,
+        draftId: first.data.draftId,
+        tabId: 'tab-first',
+        displayName: '张三公司',
+      },
+      {
+        url: 'https://appstoreconnect.apple.com/apps',
+        title: 'App Store Connect',
+        profileId: first.data.browserProfileId,
+      },
+    )
+    if (!firstSaved.success) throw new Error(firstSaved.error.message)
+
+    const second = await service.beginDraft(PROJECT_ID)
+    if (!second.success) throw new Error(second.error.message)
+    const duplicate = await service.saveDraft(
+      PROJECT_ID,
+      {
+        workspaceRef: baseInput.workspaceRef,
+        draftId: second.data.draftId,
+        tabId: 'tab-second',
+        displayName: '张三公司',
+      },
+      {
+        url: 'https://appstoreconnect.apple.com/apps',
+        title: 'App Store Connect',
+        profileId: second.data.browserProfileId,
+      },
+    )
+    expect(duplicate).toMatchObject({
+      success: false,
+      error: {
+        code: 'DUPLICATE_ACCOUNT',
+        context: { existingAccountId: firstSaved.data.account.id },
+      },
+    })
+
+    const savedAnother = await service.saveDraft(
+      PROJECT_ID,
+      {
+        workspaceRef: baseInput.workspaceRef,
+        draftId: second.data.draftId,
+        tabId: 'tab-second',
+        displayName: '张三公司',
+        duplicateResolution: 'save-another',
+      },
+      {
+        url: 'https://appstoreconnect.apple.com/apps',
+        title: 'App Store Connect',
+        profileId: second.data.browserProfileId,
+      },
+    )
+    expect(savedAnother).toMatchObject({
+      success: true,
+      data: { account: { browserProfileId: second.data.browserProfileId } },
+    })
+    expect(service.getProjectSnapshot(PROJECT_ID)).toMatchObject({
+      success: true,
+      data: {
+        accounts: [
+          { browserProfileId: first.data.browserProfileId },
+          { browserProfileId: second.data.browserProfileId },
+        ],
+      },
+    })
+  })
+
+  it('cleans a cancelled draft profile and keeps it out of formal resources', async () => {
+    const service = new WebResourceService(
+      new WebResourceStore(storePath),
+      new WebResourceDraftStore(join(tempDir, 'web-resource-drafts.json')),
+    )
+    await service.load()
+    const begun = await service.beginDraft(PROJECT_ID)
+    expect(begun.success).toBe(true)
+    if (!begun.success) return
+    const cleanupProfile = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      service.cancelDraft(PROJECT_ID, begun.data.draftId, null, cleanupProfile),
+    ).resolves.toEqual({
+      success: true,
+      data: { draftId: begun.data.draftId, cleaned: true },
+    })
+    expect(cleanupProfile).toHaveBeenCalledWith(begun.data.browserProfileId)
+    expect(service.getProjectSnapshot(PROJECT_ID)).toMatchObject({
+      success: true,
+      data: { accounts: [] },
+    })
+  })
+
   it('persists one atomic website-principal-account connection', async () => {
     const service = new WebResourceService(new WebResourceStore(storePath))
     await service.load()

@@ -1,37 +1,35 @@
-import type {
-  WebAccount,
-  WebPrincipal,
-  WebsiteResource,
-} from '@shared/web-resources/web-resource-types'
+import type { WebResourceLaunchDescriptor } from '@shared/web-resources/web-resource-types'
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import { useTabStore } from '../../stores'
 
-export interface WebResourceTabDescriptor {
-  account: WebAccount
-  principal: WebPrincipal
-  website: WebsiteResource
-}
-
-/** Open or activate the single primary Browser Tab for a project website account resource. */
-export function ensureWebResourceTab(
-  descriptor: WebResourceTabDescriptor,
+export function openResolvedWebResourceTab(
+  descriptor: WebResourceLaunchDescriptor,
   workspaceRef: WorkspaceRef,
 ): string {
-  const { account, principal, website } = descriptor
-  if (!account.projectId) throw new Error('网站账号尚未归属当前项目')
-
   const store = useTabStore.getState()
   store.openTab({
     type: 'browser',
-    title: `${website.name} · ${principal.name}`,
+    title: descriptor.title,
     icon: '🌐',
-    initialUrl: website.entryUrl,
-    browserProfile: account.browserProfileId,
-    webResourceRef: { projectId: account.projectId, accountId: account.id },
+    initialUrl: descriptor.entryUrl,
+    browserProfile: descriptor.browserProfileId,
+    webResourceRef: descriptor.webResourceRef,
     workspaceRef,
   })
-
   const tabId = useTabStore.getState().activeTabId
   if (!tabId) throw new Error('网页 Tab 创建失败')
   return tabId
+}
+
+/** Resolve the project-owned account in main, then open or activate its single Browser Tab. */
+export async function resolveAndOpenWebResourceTab(
+  accountId: string,
+  workspaceRef: WorkspaceRef,
+): Promise<string> {
+  const result = await window.cclinkStudio.webResources.resolveLaunch({
+    workspaceRef,
+    accountId,
+  })
+  if (!result.success) throw new Error(result.error.message)
+  return openResolvedWebResourceTab(result.data, workspaceRef)
 }

@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { basename } from 'node:path'
-import type { WebResourceSnapshot } from '../../shared/web-resources/web-resource-types'
+import type {
+  WebResourceLaunchDescriptor,
+  WebResourceOperationResult,
+  WebResourceSnapshot,
+} from '../../shared/web-resources/web-resource-types'
 import { WEB_AFFAIR_CATALOG } from '../../shared/web-affairs/web-affair-catalog'
 import type {
   BindWebAffairAttemptInput,
@@ -105,6 +109,31 @@ export class WebAffairService {
     private readonly store = new WebAffairStore(),
     private readonly now: () => Date = () => new Date(),
     private readonly onChanged: (affairId: string, revision: number) => void = () => undefined,
+    private readonly resolveWebResourceLaunch: (
+      workspaceId: string,
+      accountId: string,
+    ) => WebResourceOperationResult<WebResourceLaunchDescriptor> = (workspaceId, accountId) => {
+      const resources = this.getWebResources()
+      const account = resources?.accounts.find(
+        (item) => item.id === accountId && item.projectId === workspaceId,
+      )
+      const website = resources?.websites.find((item) => item.id === account?.websiteId)
+      if (!account || !website) {
+        return {
+          success: false,
+          error: { code: 'RESOURCE_NOT_FOUND', message: '当前项目的网站账号不存在' },
+        }
+      }
+      return {
+        success: true,
+        data: {
+          webResourceRef: { projectId: workspaceId, accountId: account.id },
+          title: website.name,
+          entryUrl: website.entryUrl,
+          browserProfileId: account.browserProfileId,
+        },
+      }
+    },
   ) {}
 
   async load(): Promise<void> {
@@ -173,7 +202,9 @@ export class WebAffairService {
   }
 
   startAttempt(input: StartWebAffairAttemptInput, workspaceId: string) {
-    return this.enqueueScoped(input.affairId, workspaceId, () => this.startAttemptNow(input))
+    return this.enqueueScoped(input.affairId, workspaceId, () =>
+      this.startAttemptNow(input, workspaceId),
+    )
   }
 
   bindAttempt(input: BindWebAffairAttemptInput, workspaceId: string) {
@@ -452,6 +483,7 @@ export class WebAffairService {
 
   private async startAttemptNow(
     rawInput: StartWebAffairAttemptInput,
+    workspaceId: string,
   ): Promise<WebAffairOperationResult<WebAffair>> {
     const parsed = startWebAffairAttemptInputSchema.safeParse(rawInput)
     if (!parsed.success) return this.invalid('启动参数无效')
@@ -459,8 +491,14 @@ export class WebAffairService {
     const affair = this.findAffair(input.affairId)
     const node = affair?.flow.nodes.find((item) => item.id === input.nodeId)
     if (!affair || !node) return this.notFound('事务或节点不存在')
-    if (node.status !== 'ready' && node.status !== 'failed')
+    const waitPlan = affair.waitPlans.find((item) => item.nodeId === node.id)
+    const isDueCheck =
+      node.status === 'waiting-external' &&
+      Boolean(waitPlan && (waitPlan.status === 'due' || waitPlan.status === 'missed'))
+    if (node.status !== 'ready' && node.status !== 'failed' && !isDueCheck)
       return this.transitionError('当前节点尚不能交给 AI')
+    const launch = this.resolveWebResourceLaunch(workspaceId, input.accountId)
+    if (!launch.success) return this.resourceError(launch.error.message)
     const resources = this.getWebResources()
     const account = resources?.accounts.find((item) => item.id === input.accountId)
     const website = resources?.websites.find((item) => item.id === account?.websiteId)
@@ -487,9 +525,9 @@ export class WebAffairService {
       nodeId: node.id,
       number,
       status: 'preparing',
-      profileId: account.browserProfileId,
+      profileId: launch.data.browserProfileId,
       accountId: account.id,
-      entryUrl: website.entryUrl,
+      entryUrl: launch.data.entryUrl,
       sideEffectKey: `${affair.id}:${node.id}:flow-${affair.flow.version}`,
       evidence: [],
       startedAt: now,
@@ -775,10 +813,33 @@ export class WebAffairService {
           }
         : item,
     )
+    const attempts = affair.attempts.map((attempt) =>
+      attempt.nodeId === node.id && !TERMINAL_ATTEMPT_STATUSES.has(attempt.status)
+        ? {
+            ...attempt,
+            status: 'succeeded' as const,
+            endedAt: now,
+            evidence: [
+              ...attempt.evidence,
+              {
+                id: randomUUID(),
+                kind: 'user-note' as const,
+                source: 'system' as const,
+                summary: `当前办理已结束，进入外部等待；下次检查 ${input.nextCheckAt}`,
+                observedAt: now,
+                attemptId: attempt.id,
+                browserTaskRunId: attempt.browserTaskRunId,
+                agentRunId: attempt.agentRunId,
+              },
+            ],
+          }
+        : attempt,
+    )
     return this.persistAffair({
       ...affair,
       status: 'waiting-external',
       flow: { ...affair.flow, nodes },
+      attempts,
       waitPlans: [...affair.waitPlans.filter((item) => item.nodeId !== node.id), waitPlan],
       events: this.appendEvent(
         affair,
@@ -802,6 +863,58 @@ export class WebAffairService {
     if (!affair || !node || !plan) return this.notFound('等待节点或计划不存在')
     const now = this.timestamp()
     const checkedCount = plan.checkCount + 1
+    const accountId = node.accountIds[0] ?? affair.accountIds[0]
+    if (!accountId) return this.resourceError('复查节点没有绑定网站账号')
+    const launch = this.resolveWebResourceLaunch(affair.workspaceId!, accountId)
+    if (!launch.success) return this.resourceError(launch.error.message)
+    const checkEvidence = {
+      id: randomUUID(),
+      kind: 'official-response' as const,
+      source: input.url ? ('browser' as const) : ('user' as const),
+      summary: input.summary,
+      observedAt: now,
+      url: input.url,
+    }
+    const activeAttempt = [...affair.attempts]
+      .reverse()
+      .find(
+        (attempt) => attempt.nodeId === node.id && !TERMINAL_ATTEMPT_STATUSES.has(attempt.status),
+      )
+    const attempts = activeAttempt
+      ? affair.attempts.map((attempt) =>
+          attempt.id === activeAttempt.id
+            ? {
+                ...attempt,
+                status: 'succeeded' as const,
+                evidence: [
+                  ...attempt.evidence,
+                  {
+                    ...checkEvidence,
+                    attemptId: attempt.id,
+                    browserTaskRunId: attempt.browserTaskRunId,
+                    agentRunId: attempt.agentRunId,
+                  },
+                ],
+                endedAt: now,
+              }
+            : attempt,
+        )
+      : [
+          ...affair.attempts,
+          {
+            id: randomUUID(),
+            nodeId: node.id,
+            number: affair.attempts.filter((item) => item.nodeId === node.id).length + 1,
+            status: 'succeeded' as const,
+            profileId: launch.data.browserProfileId,
+            accountId,
+            entryUrl: input.url ?? launch.data.entryUrl,
+            sideEffectKey: `${affair.id}:${node.id}:check-${checkedCount}`,
+            evidence: [checkEvidence],
+            startedAt: now,
+            endedAt: now,
+          },
+        ]
     if (input.outcome === 'unchanged') {
       const exhausted = checkedCount >= plan.maxChecks
       const nextInterval = Math.min(
@@ -838,6 +951,7 @@ export class WebAffairService {
         ...affair,
         status: exhausted ? 'needs-attention' : 'waiting-external',
         flow: { ...affair.flow, nodes },
+        attempts,
         waitPlans,
         events: this.appendEvent(
           affair,
@@ -854,16 +968,6 @@ export class WebAffairService {
       })
     }
 
-    const evidence = input.url
-      ? {
-          id: randomUUID(),
-          kind: 'official-response' as const,
-          source: 'external' as const,
-          summary: input.summary,
-          observedAt: now,
-          url: input.url,
-        }
-      : null
     let nodes = affair.flow.nodes.map((item) =>
       item.id === node.id
         ? { ...item, status: 'completed' as const, lastResultNote: input.summary, updatedAt: now }
@@ -894,24 +998,6 @@ export class WebAffairService {
       nodes = [...nodes, correction]
     }
     nodes = this.normalizeNodeStates(nodes, edges, now)
-    const attempts = evidence
-      ? [
-          ...affair.attempts,
-          {
-            id: randomUUID(),
-            nodeId: node.id,
-            number: affair.attempts.filter((item) => item.nodeId === node.id).length + 1,
-            status: 'succeeded' as const,
-            profileId: 'external-check',
-            accountId: node.accountIds[0] ?? affair.accountIds[0],
-            entryUrl: input.url!,
-            sideEffectKey: `${affair.id}:${node.id}:check-${checkedCount}`,
-            evidence: [evidence],
-            startedAt: now,
-            endedAt: now,
-          },
-        ]
-      : affair.attempts
     return this.persistAffair({
       ...affair,
       flow: {

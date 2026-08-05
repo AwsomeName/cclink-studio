@@ -1,15 +1,20 @@
 import { randomUUID } from 'node:crypto'
 import type {
   ClaimLegacyWebConnectionsSummary,
+  BeginWebResourceDraftResult,
+  CancelWebResourceDraftResult,
   CreateWebConnectionInput,
+  SaveWebResourceDraftInput,
   WebAccount,
   WebResourceConnection,
   WebResourceOperationResult,
+  WebResourceLaunchDescriptor,
   WebResourceProjectSnapshot,
   WebResourceSnapshot,
 } from '../../shared/web-resources/web-resource-types'
 import { parseCreateWebConnectionInput } from '../../shared/web-resources/web-resource-schema'
 import { WebResourceStore } from './web-resource-store'
+import { WebResourceDraftStore, type WebResourceDraftRecord } from './web-resource-draft-store'
 
 const WEBSITE_LIMIT = 1_000
 const PRINCIPAL_LIMIT = 500
@@ -32,13 +37,219 @@ function publicError(error: unknown): WebResourceOperationResult<never> {
 
 export class WebResourceService {
   private snapshot: WebResourceSnapshot | null = null
+  private drafts: WebResourceDraftRecord[] = []
   private mutationQueue: Promise<void> = Promise.resolve()
 
-  constructor(private readonly store = new WebResourceStore()) {}
+  constructor(
+    private readonly store = new WebResourceStore(),
+    private readonly draftStore = new WebResourceDraftStore(),
+  ) {}
 
   async load(): Promise<void> {
-    this.snapshot = await this.store.load()
+    ;[this.snapshot, this.drafts] = await Promise.all([this.store.load(), this.draftStore.load()])
     this.assertReferentialIntegrity(this.snapshot)
+  }
+
+  async beginDraft(
+    workspaceId: string,
+  ): Promise<WebResourceOperationResult<BeginWebResourceDraftResult>> {
+    return this.mutate(async () => {
+      if (!this.snapshot) return this.unavailable()
+      if (this.drafts.length >= 200) {
+        return {
+          success: false,
+          error: { code: 'RESOURCE_LIMIT_REACHED', message: '未完成的网站账号草稿过多' },
+        }
+      }
+      const id = randomUUID()
+      const now = new Date().toISOString()
+      const record: WebResourceDraftRecord = {
+        id,
+        workspaceId,
+        browserProfileId: `web-draft-${id}`,
+        state: 'open',
+        createdAt: now,
+        updatedAt: now,
+      }
+      await this.draftStore.save([...this.drafts, record])
+      this.drafts = [...this.drafts, record]
+      return { success: true, data: { draftId: id, browserProfileId: record.browserProfileId } }
+    })
+  }
+
+  async saveDraft(
+    workspaceId: string,
+    input: SaveWebResourceDraftInput,
+    browserState: { url: string | null; title: string | null; profileId: string | null },
+  ): Promise<WebResourceOperationResult<WebResourceConnection>> {
+    return this.mutateConnection(async () => {
+      if (!this.snapshot) return this.unavailable()
+      const draft = this.drafts.find(
+        (item) => item.id === input.draftId && item.workspaceId === workspaceId,
+      )
+      if (!draft) {
+        const converted = browserState.profileId
+          ? this.getConnectionByProfile(workspaceId, browserState.profileId)
+          : undefined
+        return converted ? { success: true, data: converted } : this.draftNotFound()
+      }
+      if (browserState.profileId !== draft.browserProfileId) {
+        return {
+          success: false,
+          error: { code: 'DRAFT_MISMATCH', message: '当前标签页不属于这个网站账号草稿' },
+        }
+      }
+      const existing = this.getConnectionByProfile(workspaceId, draft.browserProfileId)
+      if (existing) {
+        await this.removeDraftBestEffort(draft.id)
+        return { success: true, data: existing }
+      }
+      let url: URL
+      try {
+        url = new URL(browserState.url ?? '')
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('unsupported')
+      } catch {
+        return {
+          success: false,
+          error: {
+            code: 'INVALID_BROWSER_STATE',
+            message: '请先在当前标签页打开要保存的网站',
+          },
+        }
+      }
+      const displayName = input.displayName.trim()
+      if (!displayName || displayName.length > 160) {
+        return {
+          success: false,
+          error: { code: 'INVALID_INPUT', message: '请输入 1–160 个字符的账号名称' },
+        }
+      }
+      const savingDraft = {
+        ...draft,
+        state: 'saving' as const,
+        updatedAt: new Date().toISOString(),
+      }
+      const nextDrafts = this.drafts.map((item) => (item.id === draft.id ? savingDraft : item))
+      await this.draftStore.save(nextDrafts)
+      this.drafts = nextDrafts
+
+      const websiteName = browserState.title?.trim().slice(0, 120) || url.hostname
+      const created = await this.createConnectionNow(
+        {
+          workspaceRef: input.workspaceRef,
+          websiteName,
+          entryUrl: url.toString(),
+          principalKind: 'organization',
+          principalName: displayName,
+          accountLabel: displayName,
+        },
+        workspaceId,
+        draft.browserProfileId,
+        true,
+        input.duplicateResolution === 'save-another',
+      )
+      if (!created.success) {
+        const reopened = {
+          ...savingDraft,
+          state: 'open' as const,
+          updatedAt: new Date().toISOString(),
+        }
+        const reopenedDrafts = this.drafts.map((item) => (item.id === draft.id ? reopened : item))
+        await this.draftStore.save(reopenedDrafts)
+        this.drafts = reopenedDrafts
+        return created
+      }
+      await this.removeDraftBestEffort(draft.id)
+      return created
+    })
+  }
+
+  async cancelDraft(
+    workspaceId: string,
+    draftId: string,
+    browserProfileId: string | null,
+    cleanupProfile: (profileId: string) => Promise<void>,
+  ): Promise<WebResourceOperationResult<CancelWebResourceDraftResult>> {
+    return this.mutate(async () => {
+      const draft = this.drafts.find(
+        (item) => item.id === draftId && item.workspaceId === workspaceId,
+      )
+      if (!draft) return this.draftNotFound()
+      if (browserProfileId && browserProfileId !== draft.browserProfileId) {
+        return {
+          success: false,
+          error: { code: 'DRAFT_MISMATCH', message: '当前标签页不属于这个网站账号草稿' },
+        }
+      }
+      const pending = {
+        ...draft,
+        state: 'cleanup-pending' as const,
+        updatedAt: new Date().toISOString(),
+      }
+      const nextDrafts = this.drafts.map((item) => (item.id === draft.id ? pending : item))
+      await this.draftStore.save(nextDrafts)
+      this.drafts = nextDrafts
+      try {
+        await cleanupProfile(draft.browserProfileId)
+        const remaining = this.drafts.filter((item) => item.id !== draft.id)
+        await this.draftStore.save(remaining)
+        this.drafts = remaining
+        return { success: true, data: { draftId, cleaned: true } }
+      } catch (error) {
+        console.error('[WebResourceService] 网站账号草稿清理失败:', error)
+        return {
+          success: false,
+          error: { code: 'CLEANUP_FAILED', message: '草稿登录环境清理失败，请重试关闭' },
+        }
+      }
+    })
+  }
+
+  async reconcileDrafts(cleanupProfile: (profileId: string) => Promise<void>): Promise<void> {
+    await this.mutate(async () => {
+      const remaining: WebResourceDraftRecord[] = []
+      for (const draft of this.drafts) {
+        if (this.getConnectionByProfile(draft.workspaceId, draft.browserProfileId)) continue
+        try {
+          await cleanupProfile(draft.browserProfileId)
+        } catch (error) {
+          console.error('[WebResourceService] 遗留网站账号草稿清理失败:', error)
+          remaining.push({
+            ...draft,
+            state: 'cleanup-pending',
+            updatedAt: new Date().toISOString(),
+          })
+        }
+      }
+      await this.draftStore.save(remaining)
+      this.drafts = remaining
+      return { success: true, data: undefined }
+    })
+  }
+
+  resolveLaunch(
+    workspaceId: string,
+    accountId: string,
+  ): WebResourceOperationResult<WebResourceLaunchDescriptor> {
+    const connection = this.getConnection(workspaceId, accountId)
+    if (!connection) {
+      return {
+        success: false,
+        error: { code: 'RESOURCE_NOT_FOUND', message: '当前项目的网站账号不存在' },
+      }
+    }
+    return {
+      success: true,
+      data: {
+        webResourceRef: {
+          projectId: workspaceId,
+          accountId: connection.account.id,
+        },
+        title: connection.website.name,
+        entryUrl: connection.website.entryUrl,
+        browserProfileId: connection.account.browserProfileId,
+      },
+    }
   }
 
   getSnapshot(): WebResourceOperationResult<WebResourceSnapshot> {
@@ -98,7 +309,7 @@ export class WebResourceService {
 
   async flush(): Promise<void> {
     await this.mutationQueue
-    await this.store.flush()
+    await Promise.all([this.store.flush(), this.draftStore.flush()])
   }
 
   async confirmLogin(
@@ -173,6 +384,8 @@ export class WebResourceService {
     rawInput: CreateWebConnectionInput,
     projectId: string,
     browserProfileId: string,
+    loginConfirmed = false,
+    allowDuplicateLabel = false,
   ): Promise<WebResourceOperationResult<WebResourceConnection>> {
     if (!this.snapshot) {
       return {
@@ -234,20 +447,37 @@ export class WebResourceService {
       updatedAt: now,
     }
 
-    const duplicate = current.accounts.find(
+    const profileDuplicate = current.accounts.find(
       (item) =>
         item.projectId === projectId &&
         item.websiteId === website.id &&
         item.principalId === principal.id &&
-        (item.browserProfileId === browserProfileId ||
-          normalizedKey(item.label) === normalizedKey(input.accountLabel)),
+        item.browserProfileId === browserProfileId,
     )
-    if (duplicate) {
+    if (profileDuplicate) {
       return {
         success: false,
         error: {
           code: 'DUPLICATE_ACCOUNT',
-          message: '该网站、主体下已存在相同账号或 Browser Profile',
+          message: '该 Browser Profile 已经保存为项目账号',
+          context: { existingAccountId: profileDuplicate.id },
+        },
+      }
+    }
+    const labelDuplicate = current.accounts.find(
+      (item) =>
+        item.projectId === projectId &&
+        item.websiteId === website.id &&
+        item.principalId === principal.id &&
+        normalizedKey(item.label) === normalizedKey(input.accountLabel),
+    )
+    if (labelDuplicate && !allowDuplicateLabel) {
+      return {
+        success: false,
+        error: {
+          code: 'DUPLICATE_ACCOUNT',
+          message: '当前项目已存在名称相同的网站账号',
+          context: { existingAccountId: labelDuplicate.id },
         },
       }
     }
@@ -267,6 +497,7 @@ export class WebResourceService {
       role: input.accountRole,
       browserProfileId,
       loginHint: input.loginHint,
+      loginConfirmedAt: loginConfirmed ? now : undefined,
       createdAt: now,
       updatedAt: now,
     }
@@ -301,6 +532,50 @@ export class WebResourceService {
       if (!websiteIds.has(account.websiteId) || !principalIds.has(account.principalId)) {
         throw new Error('网站与账号数据存在失效引用')
       }
+    }
+  }
+
+  private getConnection(workspaceId: string, accountId: string): WebResourceConnection | null {
+    if (!this.snapshot) return null
+    const account = this.snapshot.accounts.find(
+      (item) => item.id === accountId && item.projectId === workspaceId,
+    )
+    if (!account) return null
+    const website = this.snapshot.websites.find((item) => item.id === account.websiteId)
+    const principal = this.snapshot.principals.find((item) => item.id === account.principalId)
+    return website && principal
+      ? {
+          website: structuredClone(website),
+          principal: structuredClone(principal),
+          account: structuredClone(account),
+        }
+      : null
+  }
+
+  private getConnectionByProfile(
+    workspaceId: string,
+    browserProfileId: string,
+  ): WebResourceConnection | null {
+    const account = this.snapshot?.accounts.find(
+      (item) => item.projectId === workspaceId && item.browserProfileId === browserProfileId,
+    )
+    return account ? this.getConnection(workspaceId, account.id) : null
+  }
+
+  private draftNotFound<T>(): WebResourceOperationResult<T> {
+    return {
+      success: false,
+      error: { code: 'DRAFT_NOT_FOUND', message: '网站账号草稿不存在或已经处理' },
+    }
+  }
+
+  private async removeDraftBestEffort(draftId: string): Promise<void> {
+    const remaining = this.drafts.filter((item) => item.id !== draftId)
+    try {
+      await this.draftStore.save(remaining)
+      this.drafts = remaining
+    } catch (error) {
+      console.warn('[WebResourceService] 正式资源已保存，草稿索引将在下次启动时回收:', error)
     }
   }
 

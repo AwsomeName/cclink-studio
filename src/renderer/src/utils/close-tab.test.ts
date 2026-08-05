@@ -18,6 +18,12 @@ beforeEach(() => {
       terminal: {
         recordLifecycleEvent: vi.fn().mockResolvedValue({ success: true }),
       },
+      webResources: {
+        cancelDraft: vi.fn().mockResolvedValue({
+          success: true,
+          data: { draftId: 'draft-1', cleaned: true },
+        }),
+      },
     },
   })
 })
@@ -209,6 +215,33 @@ describe('closeTabWithDraftPolicy scheduled task drafts', () => {
     })
 
     expect(await closeTabWithDraftPolicy('scheduled-task')).toBe(true)
+    expect(useTabStore.getState().tabs).toHaveLength(0)
+  })
+})
+
+describe('closeTabWithDraftPolicy website-account drafts', () => {
+  it('cleans the isolated draft before closing its Browser Tab', async () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'web-draft-tab',
+          type: 'browser',
+          title: '未保存的网站账号',
+          icon: '🌐',
+          workspaceRef: { kind: 'local', path: '/workspace' },
+          browserProfile: 'web-draft-profile',
+          webResourceDraftRef: { draftId: 'draft-1' },
+        },
+      ],
+      activeTabId: 'web-draft-tab',
+    })
+
+    expect(await closeTabWithDraftPolicy('web-draft-tab')).toBe(true)
+    expect(window.cclinkStudio.webResources.cancelDraft).toHaveBeenCalledWith({
+      workspaceRef: { kind: 'local', path: '/workspace' },
+      draftId: 'draft-1',
+      tabId: 'web-draft-tab',
+    })
     expect(useTabStore.getState().tabs).toHaveLength(0)
   })
 })

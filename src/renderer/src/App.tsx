@@ -29,6 +29,7 @@ import { useWorkspaceBootstrap } from './bootstrap/use-workspace-bootstrap'
 import { useBrowserViewLifecycle } from './components/workbench/use-browser-view-lifecycle'
 import { useBrowserOpenRequests } from './bootstrap/use-browser-open-requests'
 import { ProjectStrip } from './components/project-strip/ProjectStrip'
+import { ConversationQuickSwitcher } from './components/topbar/ConversationQuickSwitcher'
 import { useAnyFloatingSurfaceOpen } from './components/common/floating-surface-registry'
 import { clampPanelWidth, getAgentPanelWidthBounds } from './utils/panel-layout'
 
@@ -137,7 +138,14 @@ function MainLayout(): React.ReactElement {
           </button>
         </div>
         <ProjectStrip />
-        <div className="app-topbar-right">
+        <div
+          className="app-topbar-right"
+          style={agentInRight ? { width: effectiveAgentPanelWidth } : undefined}
+        >
+          <ConversationQuickSwitcher
+            panelMode={agentPanelMode}
+            panelWidth={effectiveAgentPanelWidth}
+          />
           <button
             className={`app-topbar-icon ${agentPanelVisible ? 'active' : ''}`}
             onClick={toggleUnifiedAgentPanel}

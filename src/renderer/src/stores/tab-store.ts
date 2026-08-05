@@ -85,6 +85,7 @@ function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeT
   const parsed = value as { tabs?: Tab[]; activeTabId?: string | null }
   const tabs = (parsed.tabs ?? [])
     .filter((tab): tab is Tab => Boolean(tab?.id && tab.type && tab.title && tab.icon))
+    .filter((tab) => !tab.webResourceDraftRef)
     .filter(
       (tab) =>
         tab.type !== 'scheduled-task' ||
@@ -103,7 +104,7 @@ function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeT
 function saveStoredTabs(state: TabState): void {
   try {
     if (isWorkspaceStateRestoring()) return
-    const allTabs = state.tabs.map(normalizePersistedTab)
+    const allTabs = state.tabs.filter((tab) => !tab.webResourceDraftRef).map(normalizePersistedTab)
     const activeWorkspaceKey = getWorkspaceStateKey()
     const projectTabs = allTabs.filter(
       (tab) =>
@@ -139,6 +140,8 @@ interface OpenTabOptions {
   browserProfile?: string | null
   /** 项目网站账号资源引用。 */
   webResourceRef?: Tab['webResourceRef']
+  /** 尚未保存的网站账号草稿引用。 */
+  webResourceDraftRef?: Tab['webResourceDraftRef']
   /** 从快照重建时的视图模式/缩放（仅激活创建时消费一次） */
   restore?: {
     viewMode: 'desktop' | 'mobile'
@@ -202,6 +205,16 @@ interface TabState {
   updateTabScheduledTask: (id: string, scheduledTask: NonNullable<Tab['scheduledTask']>) => void
   /** 新事务草稿和持久事务共用同一 Tab；创建成功后原地绑定事务。 */
   updateTabWebAffair: (id: string, webAffair: NonNullable<Tab['webAffair']>) => void
+  /** 将网站账号草稿原地转为正式 Browser Tab。 */
+  bindWebResourceDraft: (
+    id: string,
+    binding: {
+      title: string
+      initialUrl: string
+      browserProfile: string
+      webResourceRef: NonNullable<Tab['webResourceRef']>
+    },
+  ) => void
   /** 文件或目录移动后批量同步相关 Tab 路径。 */
   rebaseFilePaths: (oldPrefix: string, newPrefix: string) => void
   /** 复制 Tab（浏览器克隆 URL；编辑器克隆内容为未命名副本） */
@@ -226,6 +239,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     initialUrl,
     browserProfile,
     webResourceRef,
+    webResourceDraftRef,
     restore,
     conversation,
     settingsSection,
@@ -370,6 +384,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         initialUrl,
         browserProfile,
         webResourceRef,
+        webResourceDraftRef,
         restore,
         conversation,
         settingsSection,
@@ -458,6 +473,22 @@ export const useTabStore = create<TabState>((set, get) => ({
   updateTabWebAffair: (id, webAffair) =>
     set((state) => ({
       tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, webAffair } : tab)),
+    })),
+
+  bindWebResourceDraft: (id, binding) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === id
+          ? {
+              ...tab,
+              title: binding.title,
+              initialUrl: binding.initialUrl,
+              browserProfile: binding.browserProfile,
+              webResourceRef: binding.webResourceRef,
+              webResourceDraftRef: undefined,
+            }
+          : tab,
+      ),
     })),
 
   rebaseFilePaths: (oldPrefix, newPrefix) => {

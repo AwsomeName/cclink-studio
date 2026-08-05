@@ -132,6 +132,49 @@ async function main() {
     return 'main window ready'
   })
 
+  await runCheck('topbar switches the current project conversation and reopens Agent', async () => {
+    const switcher = page.locator('.conversation-quick-switcher')
+    await switcher.waitFor({ state: 'visible', timeout: 10_000 })
+    assert(
+      (await page.locator('.status-bar-conversation-switcher').count()) === 0,
+      'legacy conversation switcher is still rendered in the status bar',
+    )
+    assert(
+      (await switcher.evaluate((element) => getComputedStyle(element).webkitAppRegion)) ===
+        'no-drag',
+      'conversation controls are still part of the window drag region',
+    )
+
+    const panelToggle = page.locator('.app-topbar-right .app-topbar-icon')
+    if ((await panelToggle.getAttribute('title')) === '收起 Agent 面板') {
+      await panelToggle.click()
+      await page.waitForFunction(
+        () => document.querySelector('.conversation-quick-switcher')?.classList.contains('compact'),
+        undefined,
+        { timeout: 10_000 },
+      )
+    }
+
+    await page.locator('.conversation-quick-tab').first().click()
+    await page.waitForFunction(
+      () =>
+        document.querySelector('.conversation-quick-switcher')?.classList.contains('compact') ===
+        false,
+      undefined,
+      { timeout: 10_000 },
+    )
+    const widths = await page.evaluate(() => ({
+      panel: document.querySelector('.agent-side-shell')?.getBoundingClientRect().width ?? 0,
+      topbar: document.querySelector('.app-topbar-right')?.getBoundingClientRect().width ?? 0,
+    }))
+    assert(widths.panel > 0, 'conversation switch did not reopen the Agent panel')
+    assert(
+      Math.abs(widths.panel - widths.topbar) < 1,
+      `topbar switcher width is not aligned with Agent panel (${widths.topbar} vs ${widths.panel})`,
+    )
+    return 'topbar switcher aligned and Agent reopened'
+  })
+
   await runCheck('activity bar switches local panels', async () => {
     await clickByTitle(page, '浏览器')
     await page.waitForTimeout(200)
@@ -207,18 +250,32 @@ async function main() {
     const existing = primaryRow()
     if ((await existing.count()) === 0) {
       await page.getByRole('button', { name: '添加网站与账号' }).click()
-      const form = page.locator('.web-resources-form')
-      await form.waitFor({ state: 'visible', timeout: 10_000 })
-      await form.getByLabel('网站名称').fill('Web Affairs Smoke')
-      await form.getByLabel('办理入口').fill('https://example.com/cclink-web-affairs-smoke')
-      await form.getByPlaceholder('姓名或公司全称').fill('CCLink Smoke Company')
-      await form.getByLabel('账号名称').fill(accountLabel)
-      await form.getByRole('button', { name: '添加并打开' }).click()
+      await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+      assert(
+        (await page.locator('.web-resources-form:not(.web-resources-import-form)').count()) === 0,
+        'adding a website account opened a sidebar form',
+      )
+      await page.locator('.url-input').fill('https://example.com/cclink-web-affairs-smoke')
+      await page.locator('.url-input').press('Enter')
+      await page.waitForFunction(
+        async () => {
+          const { useTabStore } = await import('/src/stores/tab-store.ts')
+          const tabId = useTabStore.getState().activeTabId
+          if (!tabId) return false
+          const diagnostic = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
+          return diagnostic.visibleUrl?.includes('example.com/cclink-web-affairs-smoke') ?? false
+        },
+        undefined,
+        { timeout: 10_000 },
+      )
+      await page.getByRole('button', { name: '登录完成，保存到当前项目' }).click()
+      await page.getByLabel('账号名称').fill(accountLabel)
+      await page.getByRole('button', { name: '保存', exact: true }).click()
     }
 
     await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
     const rowText = await primaryRow().innerText()
-    assert(rowText.includes('CCLink Smoke Company'), 'principal is not visible')
+    assert(rowText.includes(accountLabel), 'saved account label is not visible')
     await primaryRow().click()
     await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
     const tabCountBeforeDraft = await page.locator('.tab').count()

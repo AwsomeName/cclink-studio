@@ -14,6 +14,7 @@ import {
 import type { WebResourceService } from './web-resource-service'
 import type { ProjectOpsService } from '../project-ops/project-ops-service'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
+import type { BrowserManager } from '../browser/browser-manager'
 
 function unavailable<T>(): WebResourceOperationResult<T> {
   return {
@@ -30,6 +31,7 @@ export function registerWebResourceIpc(
   getProjectOpsService: () => ProjectOpsService | null,
   getWorkspaceStateService: () => WorkspaceStateService | null,
   trustedRendererGuard: TrustedRendererGuard,
+  getBrowserManager: () => BrowserManager | null = () => null,
 ): void {
   registerTrustedIpcContract(
     webResourcesIpcContracts.getSnapshot,
@@ -52,6 +54,64 @@ export function registerWebResourceIpc(
       if (!service) return unavailable()
       if (!projectId.success) return projectId
       return service.createConnection(input, projectId.data)
+    },
+  )
+
+  registerTrustedIpcContract(
+    webResourcesIpcContracts.beginDraft,
+    trustedRendererGuard,
+    async (_event, input) => {
+      const service = getService()
+      const projectId = await resolveProjectId(input, getWorkspaceStateService())
+      if (!service) return unavailable()
+      if (!projectId.success) return projectId
+      return service.beginDraft(projectId.data)
+    },
+  )
+
+  registerTrustedIpcContract(
+    webResourcesIpcContracts.saveDraft,
+    trustedRendererGuard,
+    async (_event, input) => {
+      const service = getService()
+      const browserManager = getBrowserManager()
+      const projectId = await resolveProjectId(input, getWorkspaceStateService())
+      if (!service || !browserManager) return unavailable()
+      if (!projectId.success) return projectId
+      const runtime = await browserManager.getRuntimeDiagnostics(input.tabId)
+      return service.saveDraft(projectId.data, input, {
+        url: runtime.visibleUrl,
+        title: runtime.visibleTitle,
+        profileId: runtime.profileId,
+      })
+    },
+  )
+
+  registerTrustedIpcContract(
+    webResourcesIpcContracts.cancelDraft,
+    trustedRendererGuard,
+    async (_event, input) => {
+      const service = getService()
+      const browserManager = getBrowserManager()
+      const projectId = await resolveProjectId(input, getWorkspaceStateService())
+      if (!service || !browserManager) return unavailable()
+      if (!projectId.success) return projectId
+      const runtime = await browserManager.getRuntimeDiagnostics(input.tabId)
+      return service.cancelDraft(projectId.data, input.draftId, runtime.profileId, (profileId) =>
+        browserManager.clearProfileData(profileId),
+      )
+    },
+  )
+
+  registerTrustedIpcContract(
+    webResourcesIpcContracts.resolveLaunch,
+    trustedRendererGuard,
+    async (_event, input) => {
+      const service = getService()
+      const projectId = await resolveProjectId(input, getWorkspaceStateService())
+      if (!service) return unavailable()
+      if (!projectId.success) return projectId
+      return service.resolveLaunch(projectId.data, input.accountId)
     },
   )
 

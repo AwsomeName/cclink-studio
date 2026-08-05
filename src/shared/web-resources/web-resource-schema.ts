@@ -54,6 +54,28 @@ export const webResourceProjectScopeInputSchema = z
   .object({ workspaceRef: workspaceRefSchema })
   .strict()
 
+export const saveWebResourceDraftInputSchema = z
+  .object({
+    workspaceRef: workspaceRefSchema,
+    draftId: uuidSchema,
+    tabId: trimmedText(160, '浏览器标签页'),
+    displayName: trimmedText(160, '账号名称'),
+    duplicateResolution: z.literal('save-another').optional(),
+  })
+  .strict()
+
+export const cancelWebResourceDraftInputSchema = z
+  .object({
+    workspaceRef: workspaceRefSchema,
+    draftId: uuidSchema,
+    tabId: trimmedText(160, '浏览器标签页'),
+  })
+  .strict()
+
+export const resolveWebResourceLaunchInputSchema = z
+  .object({ workspaceRef: workspaceRefSchema, accountId: uuidSchema })
+  .strict()
+
 export const confirmWebConnectionLoginInputSchema = z
   .object({ workspaceRef: workspaceRefSchema, accountId: uuidSchema })
   .strict()
@@ -134,6 +156,18 @@ export function parseCreateWebConnectionInput(value: unknown) {
 
 export function parseWebResourceProjectScopeInput(value: unknown) {
   return webResourceProjectScopeInputSchema.parse(value)
+}
+
+export function parseSaveWebResourceDraftInput(value: unknown) {
+  return saveWebResourceDraftInputSchema.parse(value)
+}
+
+export function parseCancelWebResourceDraftInput(value: unknown) {
+  return cancelWebResourceDraftInputSchema.parse(value)
+}
+
+export function parseResolveWebResourceLaunchInput(value: unknown) {
+  return resolveWebResourceLaunchInputSchema.parse(value)
 }
 
 export function parseConfirmWebConnectionLoginInput(value: unknown) {

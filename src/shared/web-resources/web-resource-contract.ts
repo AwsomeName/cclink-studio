@@ -1,8 +1,11 @@
 import { bindIpcParser, ipcArgs } from '../ipc/contract'
 import {
+  parseCancelWebResourceDraftInput,
   parseConfirmWebConnectionLoginInput,
   parseCreateWebConnectionInput,
   parseImportProjectOpsConfigInput,
+  parseResolveWebResourceLaunchInput,
+  parseSaveWebResourceDraftInput,
   parseWebResourceProjectScopeInput,
 } from './web-resource-schema'
 import { webResourcesIpc } from './web-resource'
@@ -38,6 +41,46 @@ export const webResourcesIpcContracts = {
         throw new Error(`IPC ${webResourcesIpc.createConnection.channel} 需要 1 个参数`)
       }
       return ipcArgs(parseCreateWebConnectionInput(args[0]))
+    },
+    invalidInputResult,
+  ),
+  beginDraft: bindIpcParser(
+    webResourcesIpc.beginDraft,
+    (args) => {
+      if (args.length !== 1) {
+        throw new Error(`IPC ${webResourcesIpc.beginDraft.channel} 需要 1 个参数`)
+      }
+      return ipcArgs(parseWebResourceProjectScopeInput(args[0]))
+    },
+    invalidInputResult,
+  ),
+  saveDraft: bindIpcParser(
+    webResourcesIpc.saveDraft,
+    (args) => {
+      if (args.length !== 1) {
+        throw new Error(`IPC ${webResourcesIpc.saveDraft.channel} 需要 1 个参数`)
+      }
+      return ipcArgs(parseSaveWebResourceDraftInput(args[0]))
+    },
+    invalidInputResult,
+  ),
+  cancelDraft: bindIpcParser(
+    webResourcesIpc.cancelDraft,
+    (args) => {
+      if (args.length !== 1) {
+        throw new Error(`IPC ${webResourcesIpc.cancelDraft.channel} 需要 1 个参数`)
+      }
+      return ipcArgs(parseCancelWebResourceDraftInput(args[0]))
+    },
+    invalidInputResult,
+  ),
+  resolveLaunch: bindIpcParser(
+    webResourcesIpc.resolveLaunch,
+    (args) => {
+      if (args.length !== 1) {
+        throw new Error(`IPC ${webResourcesIpc.resolveLaunch.channel} 需要 1 个参数`)
+      }
+      return ipcArgs(parseResolveWebResourceLaunchInput(args[0]))
     },
     invalidInputResult,
   ),

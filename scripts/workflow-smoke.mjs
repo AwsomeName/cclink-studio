@@ -324,13 +324,33 @@ async function main() {
     await fileItem.waitFor({ timeout: 10_000 })
     await fileItem.evaluate((element) => element.click())
     await page.waitForSelector('.markdown-editor-wrapper', { timeout: 15_000 })
+    assert(
+      (await page.locator('.toolbar-filepath').count()) === 0,
+      'markdown toolbar still exposes the redundant file path',
+    )
+    const savedState = page.locator('.toolbar-save-state')
+    await savedState.waitFor({ state: 'visible', timeout: 10_000 })
+    const savedLayout = await savedState.evaluate((element) => ({
+      whiteSpace: getComputedStyle(element).whiteSpace,
+      height: element.getBoundingClientRect().height,
+    }))
+    assert(savedLayout.whiteSpace === 'nowrap', 'saved state can wrap vertically')
+    assert(savedLayout.height <= 28, 'saved state is taller than the toolbar control')
     const editor = page.locator('.tiptap').first()
     await editor.click()
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A')
     await page.keyboard.type('# Workflow Smoke\n\nsaved through editor')
-    await page.locator('.toolbar-save').click()
+    const saveAction = page.locator('.toolbar-save-action')
+    await saveAction.waitFor({ state: 'visible', timeout: 10_000 })
+    const saveLayout = await saveAction.evaluate((element) => ({
+      whiteSpace: getComputedStyle(element).whiteSpace,
+      height: element.getBoundingClientRect().height,
+    }))
+    assert(saveLayout.whiteSpace === 'nowrap', 'save action can wrap vertically')
+    assert(saveLayout.height <= 28, 'save action is taller than the toolbar control')
+    await saveAction.click()
     await page.waitForFunction(
-      () => document.querySelector('.toolbar-save')?.textContent?.includes('已保存'),
+      () => document.querySelector('.toolbar-save-state')?.textContent?.includes('已保存'),
       null,
       { timeout: 10_000 },
     )
@@ -537,7 +557,7 @@ async function main() {
 
     await page.keyboard.press(`${modifier}+S`)
     await page.waitForFunction(
-      () => document.querySelector('.toolbar-save')?.textContent?.includes('已保存'),
+      () => document.querySelector('.toolbar-save-state')?.textContent?.includes('已保存'),
       null,
       { timeout: 10_000 },
     )
@@ -565,9 +585,9 @@ async function main() {
     await heading.click()
     await page.keyboard.press('End')
     await page.keyboard.type(' updated')
-    await page.locator('.toolbar-save').click()
+    await page.locator('.toolbar-save-action').click()
     await page.waitForFunction(
-      () => document.querySelector('.toolbar-save')?.textContent?.includes('已保存'),
+      () => document.querySelector('.toolbar-save-state')?.textContent?.includes('已保存'),
       null,
       { timeout: 10_000 },
     )
@@ -629,9 +649,9 @@ async function main() {
     await heading.click()
     await page.keyboard.press('End')
     await page.keyboard.type(' updated')
-    await page.locator('.toolbar-save').click()
+    await page.locator('.toolbar-save-action').click()
     await page.waitForFunction(
-      () => document.querySelector('.toolbar-save')?.textContent?.includes('已保存'),
+      () => document.querySelector('.toolbar-save-state')?.textContent?.includes('已保存'),
       null,
       { timeout: 10_000 },
     )

@@ -52,6 +52,45 @@ export interface WebResourceProjectScopeInput {
   workspaceRef: WorkspaceRef
 }
 
+export type BeginWebResourceDraftInput = WebResourceProjectScopeInput
+
+export interface BeginWebResourceDraftResult {
+  draftId: string
+  browserProfileId: string
+}
+
+export interface SaveWebResourceDraftInput extends WebResourceProjectScopeInput {
+  draftId: string
+  tabId: string
+  displayName: string
+  duplicateResolution?: 'save-another'
+}
+
+export interface CancelWebResourceDraftInput extends WebResourceProjectScopeInput {
+  draftId: string
+  tabId: string
+}
+
+export interface CancelWebResourceDraftResult {
+  draftId: string
+  cleaned: true
+}
+
+export interface ResolveWebResourceLaunchInput extends WebResourceProjectScopeInput {
+  accountId: string
+}
+
+/** Main-process-authoritative descriptor used to open a saved website account. */
+export interface WebResourceLaunchDescriptor {
+  webResourceRef: {
+    projectId: string
+    accountId: string
+  }
+  title: string
+  entryUrl: string
+  browserProfileId: string
+}
+
 export interface CreateWebConnectionInput {
   workspaceRef: WorkspaceRef
   websiteName: string
@@ -103,11 +142,18 @@ export type WebResourceErrorCode =
   | 'PROJECT_OPS_CONFIG_INVALID'
   | 'PROJECT_REQUIRED'
   | 'RESOURCE_NOT_FOUND'
+  | 'DRAFT_NOT_FOUND'
+  | 'DRAFT_MISMATCH'
+  | 'INVALID_BROWSER_STATE'
+  | 'CLEANUP_FAILED'
   | 'UNKNOWN'
 
 export interface WebResourceOperationError {
   code: WebResourceErrorCode
   message: string
+  context?: {
+    existingAccountId?: string
+  }
 }
 
 export type WebResourceOperationResult<T> =

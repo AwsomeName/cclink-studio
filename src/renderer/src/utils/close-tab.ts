@@ -166,6 +166,24 @@ async function closeScheduledTaskView(tab: Tab): Promise<boolean> {
   return true
 }
 
+async function closeWebResourceDraft(tab: Tab): Promise<boolean> {
+  const draftId = tab.webResourceDraftRef?.draftId
+  if (!draftId || tab.workspaceRef?.kind !== 'local') return false
+  try {
+    const result = await window.cclinkStudio.webResources.cancelDraft({
+      workspaceRef: tab.workspaceRef,
+      draftId,
+      tabId: tab.id,
+    })
+    if (!result.success) throw new Error(result.error.message)
+    useTabStore.getState().closeTab(tab.id)
+    return true
+  } catch (error) {
+    await showSaveError(error)
+    return false
+  }
+}
+
 export async function closeTabWithDraftPolicy(tabId: string): Promise<boolean> {
   const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
   if (!tab) return false
@@ -180,6 +198,10 @@ export async function closeTabWithDraftPolicy(tabId: string): Promise<boolean> {
 
   if (tab.type === 'scheduled-task') {
     return closeScheduledTaskView(tab)
+  }
+
+  if (tab.type === 'browser' && tab.webResourceDraftRef) {
+    return closeWebResourceDraft(tab)
   }
 
   if (tab.type !== 'editor') {

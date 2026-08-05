@@ -2,12 +2,19 @@ import { defineIpcCall } from '../ipc/contract'
 import type {
   ClaimLegacyWebConnectionsInput,
   ClaimLegacyWebConnectionsSummary,
+  BeginWebResourceDraftInput,
+  BeginWebResourceDraftResult,
+  CancelWebResourceDraftInput,
+  CancelWebResourceDraftResult,
   ConfirmWebConnectionLoginInput,
   CreateWebConnectionInput,
   ImportProjectOpsConfigInput,
   ImportProjectOpsConfigSummary,
+  ResolveWebResourceLaunchInput,
+  SaveWebResourceDraftInput,
   WebResourceConnection,
   WebResourceOperationResult,
+  WebResourceLaunchDescriptor,
   WebResourceProjectScopeInput,
   WebResourceProjectSnapshot,
 } from './web-resource-types'
@@ -19,6 +26,18 @@ export interface WebResourcesApiContract {
   createConnection(
     input: CreateWebConnectionInput,
   ): Promise<WebResourceOperationResult<WebResourceConnection>>
+  beginDraft(
+    input: BeginWebResourceDraftInput,
+  ): Promise<WebResourceOperationResult<BeginWebResourceDraftResult>>
+  saveDraft(
+    input: SaveWebResourceDraftInput,
+  ): Promise<WebResourceOperationResult<WebResourceConnection>>
+  cancelDraft(
+    input: CancelWebResourceDraftInput,
+  ): Promise<WebResourceOperationResult<CancelWebResourceDraftResult>>
+  resolveLaunch(
+    input: ResolveWebResourceLaunchInput,
+  ): Promise<WebResourceOperationResult<WebResourceLaunchDescriptor>>
   confirmLogin(
     input: ConfirmWebConnectionLoginInput,
   ): Promise<WebResourceOperationResult<WebResourceConnection>>
@@ -39,6 +58,22 @@ export const webResourcesIpc = {
     [CreateWebConnectionInput],
     WebResourceOperationResult<WebResourceConnection>
   >('webResources:createConnection'),
+  beginDraft: defineIpcCall<
+    [BeginWebResourceDraftInput],
+    WebResourceOperationResult<BeginWebResourceDraftResult>
+  >('webResources:beginDraft'),
+  saveDraft: defineIpcCall<
+    [SaveWebResourceDraftInput],
+    WebResourceOperationResult<WebResourceConnection>
+  >('webResources:saveDraft'),
+  cancelDraft: defineIpcCall<
+    [CancelWebResourceDraftInput],
+    WebResourceOperationResult<CancelWebResourceDraftResult>
+  >('webResources:cancelDraft'),
+  resolveLaunch: defineIpcCall<
+    [ResolveWebResourceLaunchInput],
+    WebResourceOperationResult<WebResourceLaunchDescriptor>
+  >('webResources:resolveLaunch'),
   confirmLogin: defineIpcCall<
     [ConfirmWebConnectionLoginInput],
     WebResourceOperationResult<WebResourceConnection>

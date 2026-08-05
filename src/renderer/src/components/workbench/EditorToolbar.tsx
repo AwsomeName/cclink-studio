@@ -1,5 +1,5 @@
 import { type Editor, useEditorState } from '@tiptap/react'
-import { IconLink } from '../common/Icons'
+import { IconCheck, IconLink } from '../common/Icons'
 
 interface EditorToolbarProps {
   editor: Editor | null
@@ -19,6 +19,26 @@ interface ToolbarButton {
   isActive?: () => boolean
   onClick: () => void
   disabled?: boolean
+}
+
+export interface EditorSaveControl {
+  kind: 'action' | 'status'
+  label: '保存' | '另存为' | '已保存'
+  title: string
+}
+
+export function resolveEditorSaveControl(
+  filePath: string | undefined,
+  dirty: boolean,
+): EditorSaveControl {
+  if (!dirty && filePath) {
+    return { kind: 'status', label: '已保存', title: '所有更改均已保存' }
+  }
+  return {
+    kind: 'action',
+    label: filePath ? '保存' : '另存为',
+    title: filePath ? '保存 (⌘S)' : '另存为 (⌘S)',
+  }
 }
 
 export function EditorToolbar({
@@ -131,6 +151,7 @@ export function EditorToolbar({
   const codeLanguage = (editor?.getAttributes('codeBlock').language as string | undefined) ?? ''
   const inTable = editor?.isActive('table') ?? false
   const imageSelected = editor?.isActive('image') ?? false
+  const saveControl = resolveEditorSaveControl(filePath, dirty)
 
   return (
     <div className="editor-toolbar">
@@ -260,21 +281,33 @@ export function EditorToolbar({
         </button>
       )}
 
-      {filePath && <span className="toolbar-filepath">{filePath}</span>}
-      {diagnosticsCount > 0 && (
-        <span className="toolbar-diagnostics" title="文档包含兼容性提示">
-          {diagnosticsCount} 项提示
-        </span>
-      )}
-      <button
-        type="button"
-        className={`toolbar-save ${dirty ? 'dirty' : ''}`}
-        title={filePath ? '保存 (⌘S)' : '另存为 (⌘S)'}
-        onClick={onSave}
-        disabled={!dirty && Boolean(filePath)}
-      >
-        {dirty ? (filePath ? '保存' : '另存为') : filePath ? '已保存' : '另存为'}
-      </button>
+      <div className="toolbar-trailing">
+        {diagnosticsCount > 0 && (
+          <span className="toolbar-diagnostics" title="文档包含兼容性提示">
+            {diagnosticsCount} 项提示
+          </span>
+        )}
+        {saveControl.kind === 'status' ? (
+          <span
+            className="toolbar-save-state"
+            role="status"
+            aria-live="polite"
+            title={saveControl.title}
+          >
+            <IconCheck size={13} />
+            {saveControl.label}
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="toolbar-save-action"
+            title={saveControl.title}
+            onClick={onSave}
+          >
+            {saveControl.label}
+          </button>
+        )}
+      </div>
     </div>
   )
 }
