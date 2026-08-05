@@ -2511,7 +2511,7 @@ button.project-panel-row.active {
 }
 
 .web-affairs-toolbar button,
-.web-affairs-form button,
+.web-affair-draft-form button,
 .web-affair-node-update button,
 .web-affair-tab button {
   display: inline-flex;
@@ -2527,24 +2527,14 @@ button.project-panel-row.active {
 }
 
 .web-affairs-toolbar button:hover,
-.web-affairs-form button:hover,
+.web-affair-draft-form button:hover:not(:disabled),
 .web-affair-node-update button:hover:not(:disabled),
 .web-affair-tab button:hover:not(:disabled) {
   background: var(--bg-hover);
 }
 
-.web-affairs-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 8px;
-  padding: 10px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-}
-
-.web-affairs-form label,
-.web-affairs-form fieldset {
+.web-affair-draft-form label,
+.web-affair-draft-form fieldset {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -2556,13 +2546,13 @@ button.project-panel-row.active {
   font-size: 11px;
 }
 
-.web-affairs-form legend {
+.web-affair-draft-form legend {
   margin-bottom: 5px;
 }
 
-.web-affairs-form input,
-.web-affairs-form textarea,
-.web-affairs-form select,
+.web-affair-draft-form input,
+.web-affair-draft-form textarea,
+.web-affair-draft-form select,
 .web-affair-node-update textarea,
 .web-affair-node-update select {
   width: 100%;
@@ -2574,22 +2564,22 @@ button.project-panel-row.active {
   font: inherit;
 }
 
-.web-affairs-form input,
-.web-affairs-form select,
+.web-affair-draft-form input,
+.web-affair-draft-form select,
 .web-affair-node-update select {
   min-height: 28px;
   padding: 4px 6px;
 }
 
-.web-affairs-form textarea,
+.web-affair-draft-form textarea,
 .web-affair-node-update textarea {
   resize: vertical;
   padding: 6px;
 }
 
-.web-affairs-form input:focus,
-.web-affairs-form textarea:focus,
-.web-affairs-form select:focus,
+.web-affair-draft-form input:focus,
+.web-affair-draft-form textarea:focus,
+.web-affair-draft-form select:focus,
 .web-affair-node-update textarea:focus,
 .web-affair-node-update select:focus {
   border-color: var(--text-accent);
@@ -2614,17 +2604,7 @@ button.project-panel-row.active {
 }
 
 .web-affairs-account-choice small,
-.web-affairs-form-hint {
-  color: var(--text-secondary);
-  font-size: 10px;
-}
-
-.web-affairs-material-picker,
-.web-affairs-form-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+.web-affair-draft-form small {
   color: var(--text-secondary);
   font-size: 10px;
 }
@@ -2651,6 +2631,134 @@ button.project-panel-row.active {
 .web-affairs-material-list li button {
   min-height: 20px;
   padding: 0 5px;
+}
+
+.web-affair-draft-tab {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  padding: 24px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.web-affair-draft-tab > .web-affair-tab-header,
+.web-affair-draft-tab > .web-affair-tab-alert,
+.web-affair-draft-form {
+  max-width: 980px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.web-affair-draft-workspace {
+  max-width: 300px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-affair-draft-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.web-affair-draft-section {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.web-affair-draft-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+
+.web-affair-draft-fields .wide {
+  grid-column: 1 / -1;
+}
+
+.web-affair-draft-materials {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.web-affair-draft-materials > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.web-affair-draft-materials span {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.web-affair-draft-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.web-affair-draft-flow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.web-affair-draft-flow-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.web-affair-draft-flow-row > span {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text-accent) 16%, var(--bg-input));
+  color: var(--text-accent);
+  font-size: 10px;
+}
+
+.web-affair-draft-flow-row button {
+  color: var(--text-secondary);
+}
+
+.web-affair-draft-add-step {
+  align-self: flex-start;
+}
+
+.web-affair-draft-actions {
+  position: sticky;
+  bottom: -24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 0 24px;
+  background: linear-gradient(transparent, var(--bg-primary) 28%);
+}
+
+.web-affair-draft-actions .primary {
+  border-color: var(--text-accent);
+  background: var(--text-accent);
+  color: var(--bg-primary);
+}
+
+.web-affair-draft-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .web-affairs-error,

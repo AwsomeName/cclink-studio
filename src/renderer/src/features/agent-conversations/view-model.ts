@@ -938,8 +938,9 @@ function tabResourceCandidate(tab: Tab): AgentResourceCandidate | null {
         ref: { type: 'tab', tabId: tab.id },
       })
     case 'web-affair':
+      if (!tab.webAffair?.affairId) return null
       return createResourceCandidate({
-        id: `web-affair:${tab.webAffair?.affairId ?? tab.id}`,
+        id: `web-affair:${tab.webAffair.affairId}`,
         kind: 'tab',
         label: tab.title || '事务',
         detail: '持久网页事务 Tab',

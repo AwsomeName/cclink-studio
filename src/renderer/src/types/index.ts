@@ -129,6 +129,19 @@ export type ConversationTabRef = {
   sessionId: string
 }
 
+export interface WebAffairDraftState {
+  title: string
+  objective: string
+  principalId: string
+  accountIds: string[]
+  materialPaths: string[]
+  nodeTitles: string[]
+  templateRef?: {
+    templateId: string
+    version: number
+  }
+}
+
 /** Workbench Tab */
 export interface Tab {
   id: string
@@ -191,7 +204,9 @@ export interface Tab {
   }
   /** 持久网页事务详情。 */
   webAffair?: {
-    affairId: string
+    affairId: string | null
+    draftKey?: string
+    draft?: WebAffairDraftState
   }
   /** 内置 Agent 角色定义详情。 */
   agentRole?: {

@@ -24,6 +24,7 @@ import { PanelErrorFallback } from '../common/ErrorFallback'
 import { DataSourceQueryTab } from '../data-sources/DataSourceQueryTab'
 import { WebResourceDetailTab } from '../../features/web-resources/WebResourceDetailTab'
 import { WebAffairTab } from '../../features/web-affairs/WebAffairTab'
+import { WebAffairDraftTab } from '../../features/web-affairs/WebAffairDraftTab'
 import { SettingsPage } from '../settings/SettingsPage'
 import { FilePreview } from './FilePreview'
 import { AndroidDisplay } from './AndroidDisplay'
@@ -144,8 +145,11 @@ export function WorkbenchContent({
             {activeTab.type === 'web-resource' && activeTab.webResource && (
               <WebResourceDetailTab accountId={activeTab.webResource.accountId} />
             )}
-            {activeTab.type === 'web-affair' && activeTab.webAffair && (
+            {activeTab.type === 'web-affair' && activeTab.webAffair?.affairId && (
               <WebAffairTab affairId={activeTab.webAffair.affairId} />
+            )}
+            {activeTab.type === 'web-affair' && activeTab.webAffair?.affairId === null && (
+              <WebAffairDraftTab tab={activeTab} />
             )}
           </>
         )}

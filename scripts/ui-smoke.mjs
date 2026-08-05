@@ -264,7 +264,12 @@ async function main() {
     const affairRow = () => page.locator('.web-affair-row', { hasText: affairTitle })
     if ((await affairRow().count()) === 0) {
       await page.getByRole('button', { name: '新建事务' }).click()
-      const form = page.locator('.web-affairs-form')
+      assert(
+        (await page.locator('.web-affairs-form').count()) === 0,
+        'transaction creation form leaked into the sidebar',
+      )
+      await page.locator('.web-affair-draft-tab').waitFor({ state: 'visible', timeout: 10_000 })
+      const form = page.locator('.web-affair-draft-form')
       await form.waitFor({ state: 'visible', timeout: 10_000 })
       await form.getByLabel('事务名称').fill(affairTitle)
       await form.getByLabel('最终目标').fill('验证事务列表、流程、节点详情和重启恢复')
@@ -336,7 +341,12 @@ async function main() {
       const affairRow = () => page.locator('.web-affair-row', { hasText: affairTitle })
       if ((await affairRow().count()) === 0) {
         await page.getByRole('button', { name: '新建事务' }).evaluate((element) => element.click())
-        const form = page.locator('.web-affairs-form')
+        assert(
+          (await page.locator('.web-affairs-form').count()) === 0,
+          'transaction creation form leaked into the sidebar',
+        )
+        await page.locator('.web-affair-draft-tab').waitFor({ state: 'visible', timeout: 10_000 })
+        const form = page.locator('.web-affair-draft-form')
         await form.getByLabel('事务名称').fill(affairTitle)
         await form.getByLabel('最终目标').fill('验证 AI 交接、外部等待、模板和动态流程入口')
         await form.getByLabel('代表的业务主体').selectOption({ label: 'CCLink Smoke Company' })

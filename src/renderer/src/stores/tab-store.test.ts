@@ -385,6 +385,41 @@ describe('useTabStore', () => {
       expect(affairTabs[0].id).toBe(firstId)
       expect(affairTabs[0].webAffair).toEqual({ affairId: 'affair-1' })
     })
+
+    it('同一工作空间只保留一个新事务草稿，并可原地绑定持久事务', () => {
+      const workspaceRef = { kind: 'local' as const, path: '/tmp/project-a' }
+      useTabStore.getState().openTab({
+        type: 'web-affair',
+        title: '新建事务',
+        icon: '📋',
+        workspaceRef,
+        webAffair: { affairId: null, draftKey: 'draft-1' },
+      })
+      const draftTabId = useTabStore.getState().activeTabId!
+
+      useTabStore.getState().openTab({
+        type: 'web-affair',
+        title: '新建事务',
+        icon: '📋',
+        workspaceRef,
+        webAffair: { affairId: null, draftKey: 'draft-2' },
+      })
+
+      expect(useTabStore.getState().tabs.filter((tab) => tab.type === 'web-affair')).toHaveLength(1)
+      expect(useTabStore.getState().activeTabId).toBe(draftTabId)
+
+      useTabStore
+        .getState()
+        .updateTabWebAffair(draftTabId, { affairId: 'affair-created', draftKey: 'affair-created' })
+      useTabStore.getState().updateTabTitle(draftTabId, 'Apple 版本审核')
+
+      expect(useTabStore.getState().tabs.find((tab) => tab.id === draftTabId)).toEqual(
+        expect.objectContaining({
+          title: 'Apple 版本审核',
+          webAffair: { affairId: 'affair-created', draftKey: 'affair-created' },
+        }),
+      )
+    })
   })
 
   describe('closeTab', () => {

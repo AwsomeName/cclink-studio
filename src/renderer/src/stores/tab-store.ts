@@ -200,6 +200,8 @@ interface TabState {
   updateTabFilePath: (id: string, filePath: string) => void
   /** 新任务首次保存后，将草稿 Tab 绑定到持久化任务。 */
   updateTabScheduledTask: (id: string, scheduledTask: NonNullable<Tab['scheduledTask']>) => void
+  /** 新事务草稿和持久事务共用同一 Tab；创建成功后原地绑定事务。 */
+  updateTabWebAffair: (id: string, webAffair: NonNullable<Tab['webAffair']>) => void
   /** 文件或目录移动后批量同步相关 Tab 路径。 */
   rebaseFilePaths: (oldPrefix: string, newPrefix: string) => void
   /** 复制 Tab（浏览器克隆 URL；编辑器克隆内容为未命名副本） */
@@ -341,9 +343,15 @@ export const useTabStore = create<TabState>((set, get) => ({
           )
           if (existing) return { activeTabId: existing.id }
         } else if (type === 'web-affair' && webAffair) {
-          const existing = state.tabs.find(
-            (tab) => tab.type === 'web-affair' && tab.webAffair?.affairId === webAffair.affairId,
-          )
+          const existing = state.tabs.find((tab) => {
+            if (tab.type !== 'web-affair' || !tab.webAffair) return false
+            if (webAffair.affairId) return tab.webAffair.affairId === webAffair.affairId
+            return (
+              tab.webAffair.affairId === null &&
+              workspaceRefKey(tab.workspaceRef ?? workspaceRefFromKey(null)) ===
+                workspaceRefKey(workspaceRef ?? workspaceRefFromKey(getWorkspaceStateKey()))
+            )
+          })
           if (existing) return { activeTabId: existing.id }
         }
         // browser / 未命名 editor 不去重 → 可开多个
@@ -445,6 +453,11 @@ export const useTabStore = create<TabState>((set, get) => ({
   updateTabScheduledTask: (id, scheduledTask) =>
     set((state) => ({
       tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, scheduledTask } : tab)),
+    })),
+
+  updateTabWebAffair: (id, webAffair) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, webAffair } : tab)),
     })),
 
   rebaseFilePaths: (oldPrefix, newPrefix) => {
