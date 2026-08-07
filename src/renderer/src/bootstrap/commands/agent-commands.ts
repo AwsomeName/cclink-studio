@@ -17,7 +17,7 @@ export function createAgentCommands(): Command[] {
       category: 'Agent',
       action: () => {
         const { activeConversationId, clearMessages } = useAgentStore.getState()
-        clearMessages(activeConversationId)
+        void clearMessages(activeConversationId)
         window.cclinkStudio.agent.resetSession(activeConversationId)
       },
     },

@@ -1,4 +1,7 @@
-import type { WorkspaceStateSection } from '@shared/ipc/workspace-state'
+import type {
+  WorkspaceStateSection,
+  WorkspaceStateSetSectionOptions,
+} from '@shared/ipc/workspace-state'
 import type { WorkspaceRef } from '../../../shared/workspace-ref'
 import { workspaceRefKey } from '../../../shared/workspace-ref'
 
@@ -11,6 +14,7 @@ interface SectionWriteRequest {
   ownerKey: string | null
   section: WorkspaceStateSection
   value: unknown
+  options?: WorkspaceStateSetSectionOptions
   waiters: Array<{
     resolve: () => void
     reject: (error: Error) => void
@@ -20,6 +24,7 @@ interface SectionWriteRequest {
 interface SectionWriteQueue {
   running: boolean
   pending: SectionWriteRequest | null
+  idleWaiters: Array<() => void>
 }
 
 const sectionWriteQueues = new Map<string, SectionWriteQueue>()
@@ -83,8 +88,9 @@ export function persistWorkspaceSection(
   value: unknown,
   workspaceKey?: string | null,
   ownerKey?: string | null,
+  options?: WorkspaceStateSetSectionOptions,
 ): void {
-  void persistWorkspaceSectionNow(section, value, workspaceKey, ownerKey).catch(() => {})
+  void persistWorkspaceSectionNow(section, value, workspaceKey, ownerKey, options).catch(() => {})
 }
 
 /** 立即提交写入，并等待此前与本次主进程写入确认。 */
@@ -93,6 +99,7 @@ export function persistWorkspaceSectionNow(
   value: unknown,
   workspaceKey?: string | null,
   ownerKey?: string | null,
+  options?: WorkspaceStateSetSectionOptions,
 ): Promise<void> {
   try {
     if (isWorkspaceStateRestoring()) return Promise.resolve()
@@ -102,7 +109,11 @@ export function persistWorkspaceSectionNow(
     const targetWorkspaceKey = workspaceKey === undefined ? activeWorkspaceKey : workspaceKey
     const targetOwnerKey = ownerKey === undefined ? activeOwnerKey : ownerKey
     const queueKey = JSON.stringify([targetOwnerKey, targetWorkspaceKey, section])
-    const queue = sectionWriteQueues.get(queueKey) ?? { running: false, pending: null }
+    const queue = sectionWriteQueues.get(queueKey) ?? {
+      running: false,
+      pending: null,
+      idleWaiters: [],
+    }
     sectionWriteQueues.set(queueKey, queue)
 
     const completion = new Promise<void>((resolve, reject) => {
@@ -110,6 +121,7 @@ export function persistWorkspaceSectionNow(
         // WorkspaceState 是快照而非事件流。正在写盘时只需保留最新快照，所有等待者
         // 在该最新值落盘后一起完成，避免 Agent 流式增量制造无界磁盘写队列。
         queue.pending.value = value
+        queue.pending.options = options
         queue.pending.waiters.push({ resolve, reject })
         return
       }
@@ -118,6 +130,7 @@ export function persistWorkspaceSectionNow(
         ownerKey: targetOwnerKey,
         section,
         value,
+        options,
         waiters: [{ resolve, reject }],
       }
     })
@@ -137,12 +150,20 @@ async function drainSectionWriteQueue(queueKey: string, queue: SectionWriteQueue
       queue.pending = null
       try {
         const normalizedValue = normalizeWorkspaceStateValue(request.value)
-        const result = await window.cclinkStudio.workspaceState.setSection(
-          request.workspaceKey,
-          request.section,
-          normalizedValue,
-          request.ownerKey,
-        )
+        const result = request.options
+          ? await window.cclinkStudio.workspaceState.setSection(
+              request.workspaceKey,
+              request.section,
+              normalizedValue,
+              request.ownerKey,
+              request.options,
+            )
+          : await window.cclinkStudio.workspaceState.setSection(
+              request.workspaceKey,
+              request.section,
+              normalizedValue,
+              request.ownerKey,
+            )
         if (!result.success) {
           throw new Error(result.error || `保存 ${request.section} 失败`)
         }
@@ -159,6 +180,22 @@ async function drainSectionWriteQueue(queueKey: string, queue: SectionWriteQueue
       void drainSectionWriteQueue(queueKey, queue)
     } else if (sectionWriteQueues.get(queueKey) === queue) {
       sectionWriteQueues.delete(queueKey)
+      for (const resolve of queue.idleWaiters.splice(0)) resolve()
     }
+  }
+}
+
+/** 等待 renderer 内所有尚未送达 main process 的工作空间快照完成写盘。 */
+export async function flushPendingWorkspaceStateWrites(): Promise<void> {
+  while (sectionWriteQueues.size > 0) {
+    await Promise.all(
+      Array.from(sectionWriteQueues.values()).map(
+        (queue) =>
+          new Promise<void>((resolve) => {
+            if (!queue.running && !queue.pending) resolve()
+            else queue.idleWaiters.push(resolve)
+          }),
+      ),
+    )
   }
 }

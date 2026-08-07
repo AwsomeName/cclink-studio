@@ -254,12 +254,12 @@ describe('useAgentStore', () => {
   })
 
   describe('clearMessages', () => {
-    it('重置为欢迎消息', () => {
+    it('重置为欢迎消息', async () => {
       useAgentStore.getState().addUserMessage('test')
       useAgentStore.getState().setSessionId('sess-1')
       useAgentStore.getState().setLastCost(0.5)
 
-      useAgentStore.getState().clearMessages()
+      await useAgentStore.getState().clearMessages()
 
       const state = useAgentStore.getState()
       expect(state.messages).toHaveLength(1)
@@ -497,22 +497,22 @@ describe('useAgentStore', () => {
       expect(state.conversations[archivedId].archivedAt).toBeNull()
     })
 
-    it('删除会话时才真正移除历史数据', () => {
+    it('删除会话时才真正移除历史数据', async () => {
       const id = useAgentStore.getState().createConversation()
       useAgentStore.getState().addUserMessage('删除目标', id)
 
-      useAgentStore.getState().deleteConversation(id)
+      await useAgentStore.getState().deleteConversation(id)
 
       expect(useAgentStore.getState().conversations[id]).toBeUndefined()
       expect(useAgentStore.getState().conversationOrder).not.toContain(id)
     })
 
-    it('删除已归档历史会话时不切走当前活跃会话', () => {
+    it('删除已归档历史会话时不切走当前活跃会话', async () => {
       const activeId = useAgentStore.getState().activeConversationId
       const archivedId = useAgentStore.getState().createConversation({ activate: false })
       useAgentStore.getState().archiveConversation(archivedId)
 
-      useAgentStore.getState().deleteConversation(archivedId)
+      await useAgentStore.getState().deleteConversation(archivedId)
 
       expect(useAgentStore.getState().activeConversationId).toBe(activeId)
       expect(useAgentStore.getState().conversations[archivedId]).toBeUndefined()
@@ -1047,6 +1047,29 @@ describe('useAgentStore', () => {
 
       expect(snapshot.conversationOrder).toEqual([projectConversationId])
       expect(snapshot.conversations['agent-default']).toBeUndefined()
+    })
+
+    it('项目快照不会静默裁掉超过 20 个的旧会话', () => {
+      const workspacePath = '/workspace/many-conversations'
+      const ids = Array.from({ length: 25 }, () =>
+        useAgentStore.getState().createConversation({
+          activate: false,
+          runtime: {
+            location: 'local',
+            transport: 'local',
+            backend: 'cclink-studio-agent',
+            workspaceRef: localWorkspaceRef(workspacePath),
+          },
+        }),
+      )
+
+      const snapshot = buildAgentConversationWorkspaceSnapshot(
+        useAgentStore.getState(),
+        workspacePath,
+      )
+
+      expect(snapshot.conversationOrder).toEqual(ids)
+      expect(Object.keys(snapshot.conversations)).toHaveLength(25)
     })
 
     it('待发送图片正文不会写入项目会话快照', () => {

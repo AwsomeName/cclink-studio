@@ -1,10 +1,14 @@
 import type { IpcMainInvokeEvent } from 'electron'
-import type { WorkspaceStateSection } from '../../shared/ipc/workspace-state'
+import type {
+  WorkspaceStateSection,
+  WorkspaceStateSetSectionOptions,
+} from '../../shared/ipc/workspace-state'
 import { WorkspaceStateService } from './workspace-state-service'
 import { registerTrustedIpcHandler, type TrustedRendererGuard } from '../ipc/trusted-renderer-guard'
 import {
   workspaceStateOwnerKeySchema,
   workspaceStateSectionSchema,
+  workspaceStateSetSectionOptionsSchema,
   workspaceStateValueSchema,
   workspaceStateWorkspaceKeySchema,
 } from '../ipc/workbench-ipc-schema'
@@ -41,18 +45,28 @@ export function registerWorkspaceStateIpc(
       section: WorkspaceStateSection,
       value: unknown,
       ownerKey?: string | null,
+      options?: WorkspaceStateSetSectionOptions,
     ) => {
       try {
         const parsedWorkspaceKey = workspaceStateWorkspaceKeySchema.parse(workspaceKey)
         const parsedSection = workspaceStateSectionSchema.parse(section)
         const parsedValue = workspaceStateValueSchema.parse(value)
         const parsedOwnerKey = workspaceStateOwnerKeySchema.parse(ownerKey)
-        const snapshot = await workspaceStateService.setSection(
-          parsedWorkspaceKey,
-          parsedSection,
-          parsedValue,
-          parsedOwnerKey,
-        )
+        const parsedOptions = workspaceStateSetSectionOptionsSchema.parse(options)
+        const snapshot = parsedOptions
+          ? await workspaceStateService.setSection(
+              parsedWorkspaceKey,
+              parsedSection,
+              parsedValue,
+              parsedOwnerKey,
+              parsedOptions,
+            )
+          : await workspaceStateService.setSection(
+              parsedWorkspaceKey,
+              parsedSection,
+              parsedValue,
+              parsedOwnerKey,
+            )
         return { success: true, snapshot }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error)

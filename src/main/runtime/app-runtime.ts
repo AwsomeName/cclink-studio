@@ -44,6 +44,7 @@ import type { UpdateService } from '../update/update-service'
 import type { ScheduledTaskService } from '../scheduled-task/scheduled-task-service'
 import { RuntimeCapabilityRegistry } from './capability-registry'
 import type { ServiceRegistry } from './service-registry'
+import type { RendererWorkspaceStateFlushCoordinator } from '../workspace/renderer-workspace-state-flush'
 
 export interface CclinkStudioRuntimeState {
   isDev: boolean
@@ -94,6 +95,7 @@ export interface CclinkStudioRuntimeState {
   updateSnapshotUnsubscribe: (() => void) | null
   scheduledTaskService: ScheduledTaskService | null
   trustedRendererGuard: TrustedRendererGuard | null
+  rendererWorkspaceStateFlush: RendererWorkspaceStateFlushCoordinator | null
 }
 
 export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
@@ -146,5 +148,6 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     updateSnapshotUnsubscribe: null,
     scheduledTaskService: null,
     trustedRendererGuard: null,
+    rendererWorkspaceStateFlush: null,
   }
 }

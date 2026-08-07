@@ -3,7 +3,10 @@ import type { CadApiContract } from '../shared/ipc/cad'
 import type { GitBackupApiContract } from '../shared/ipc/git-backup'
 import type { HardwareApiContract } from '../shared/ipc/hardware'
 import type { ProjectOpsApiContract } from '../shared/ipc/project-ops'
-import type { WorkspaceStateApiContract } from '../shared/ipc/workspace-state'
+import {
+  workspaceStateIpcEvents,
+  type WorkspaceStateApiContract,
+} from '../shared/ipc/workspace-state'
 
 export const projectOpsApi: ProjectOpsApiContract = {
   getAccounts: (workspacePath) => ipcRenderer.invoke('projectOps:getAccounts', workspacePath),
@@ -53,11 +56,28 @@ export const workspaceStateApi: WorkspaceStateApiContract = {
     ipcRenderer.invoke('workspaceState:resolveLocalWorkspace', workspacePath),
   get: (workspacePath, ownerKey) =>
     ipcRenderer.invoke('workspaceState:get', workspacePath, ownerKey),
-  setSection: (workspacePath, section, value, ownerKey) =>
-    ipcRenderer.invoke('workspaceState:setSection', workspacePath, section, value, ownerKey),
+  setSection: (workspacePath, section, value, ownerKey, options) =>
+    options
+      ? ipcRenderer.invoke(
+          'workspaceState:setSection',
+          workspacePath,
+          section,
+          value,
+          ownerKey,
+          options,
+        )
+      : ipcRenderer.invoke('workspaceState:setSection', workspacePath, section, value, ownerKey),
   clear: (workspacePath, ownerKey) =>
     ipcRenderer.invoke('workspaceState:clear', workspacePath, ownerKey),
   listLocalWorkspaces: (ownerKey) =>
     ipcRenderer.invoke('workspaceState:listLocalWorkspaces', ownerKey),
   diagnostics: () => ipcRenderer.invoke('workspaceState:diagnostics'),
+  onFlushRequest: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, requestId: string): void =>
+      callback(requestId)
+    ipcRenderer.on(workspaceStateIpcEvents.flushRequest, listener)
+    return () => ipcRenderer.removeListener(workspaceStateIpcEvents.flushRequest, listener)
+  },
+  acknowledgeFlush: (acknowledgement) =>
+    ipcRenderer.send(workspaceStateIpcEvents.flushAcknowledged, acknowledgement),
 }

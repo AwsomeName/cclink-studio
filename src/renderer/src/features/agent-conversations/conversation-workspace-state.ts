@@ -344,7 +344,7 @@ export function buildAgentConversationWorkspaceSnapshot(
     return conversation && conversationWorkspaceKey(conversation) === workspaceKey
   })
 
-  for (const id of ids.slice(-20)) {
+  for (const id of ids) {
     const conversation = state.conversations[id]
     if (!conversation) continue
     conversations[id] = {

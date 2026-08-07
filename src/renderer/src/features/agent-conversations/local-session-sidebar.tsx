@@ -168,7 +168,7 @@ export function LocalSessionsList({
               onRestore={restoreArchivedConversation}
               onDelete={(conversationId) => {
                 if (window.confirm('删除后将移除这个本地会话历史，确定删除吗？')) {
-                  deleteConversation(conversationId)
+                  void deleteConversation(conversationId)
                 }
               }}
               muted

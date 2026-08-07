@@ -41,6 +41,7 @@ import { ScheduledTaskService } from '../scheduled-task/scheduled-task-service'
 import { registerScheduledTaskIpc } from '../scheduled-task/scheduled-task-ipc'
 import { MacDmgVerifier } from '../update/mac-dmg-verifier'
 import { applyWindowZoomLevel } from './window-runtime'
+import { RendererWorkspaceStateFlushCoordinator } from '../workspace/renderer-workspace-state-flush'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   runtime.credentialService = new CredentialService()
@@ -87,6 +88,10 @@ export async function bootstrapMainProcessServices(
   }
 
   registerWorkspaceStateIpc(runtime.workspaceStateService!, runtime.trustedRendererGuard)
+  runtime.rendererWorkspaceStateFlush = new RendererWorkspaceStateFlushCoordinator(
+    runtime.mainWindow,
+    runtime.trustedRendererGuard,
+  )
   console.log('[CCLink Studio] 工作台状态 IPC 已注册')
 
   registerScheduledTaskIpc(
@@ -310,6 +315,12 @@ export async function bootstrapMainProcessServices(
 export async function shutdownMainProcessServices(
   runtime: CclinkStudioRuntimeState,
 ): Promise<void> {
+  await runShutdownStep('RendererWorkspaceStateFlush', async () => {
+    const outcome = await runtime.rendererWorkspaceStateFlush?.requestFlush()
+    if (outcome) console.log(`[WorkspaceStateService] renderer 退出快照: ${outcome}`)
+  })
+  runtime.rendererWorkspaceStateFlush?.dispose()
+  runtime.rendererWorkspaceStateFlush = null
   runtime.updateSnapshotUnsubscribe?.()
   runtime.updateSnapshotUnsubscribe = null
   await runShutdownStep('UpdateService', () => runtime.updateService?.stop())

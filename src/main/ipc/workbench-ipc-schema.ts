@@ -85,6 +85,23 @@ export const workspaceStateSectionSchema = z.enum([
   'projectStrip',
 ])
 export const workspaceStateValueSchema = boundedJsonValueSchema(5 * 1024 * 1024, '工作空间状态')
+export const workspaceStateSetSectionOptionsSchema = z
+  .object({
+    conversationHistoryMutation: z
+      .discriminatedUnion('type', [
+        z.object({
+          type: z.literal('clear-messages'),
+          conversationId: boundedIdentifierSchema(256),
+        }),
+        z.object({
+          type: z.literal('delete-conversation'),
+          conversationId: boundedIdentifierSchema(256),
+        }),
+      ])
+      .optional(),
+  })
+  .strict()
+  .optional()
 
 export {
   messageBoxOptionsSchema,

@@ -614,7 +614,7 @@ describe('WorkspaceStateService', () => {
     expect(diagnostics.recoveryTrace?.documentStatus).toBe('ok')
   })
 
-  it('persists redacted conversation recovery traces and flags smaller snapshots', async () => {
+  it('protects persisted conversation history from smaller snapshots and records the regression', async () => {
     const service = new WorkspaceStateService()
     await service.loadState()
     const ownerKey = 'local:private-owner'
@@ -626,8 +626,8 @@ describe('WorkspaceStateService', () => {
           title: 'private title',
           sessionId: 'private-session',
           messages: [
-            { role: 'user', rawText: 'private prompt' },
-            { role: 'assistant', rawText: 'private answer' },
+            { id: 'user-1', role: 'user', rawText: 'private prompt' },
+            { id: 'assistant-1', role: 'assistant', rawText: 'private answer' },
           ],
         },
       },
@@ -637,7 +637,7 @@ describe('WorkspaceStateService', () => {
       conversations: {
         'private-conversation': {
           ...first.conversations['private-conversation'],
-          messages: [{ role: 'user', rawText: 'short' }],
+          messages: [{ id: 'user-1', role: 'user', rawText: 'short' }],
         },
       },
     }
@@ -645,6 +645,13 @@ describe('WorkspaceStateService', () => {
     await service.setSection(workspaceA, 'agentConversations', first, ownerKey)
     await service.setSection(workspaceA, 'agentConversations', smaller, ownerKey)
     await service.flush()
+
+    const protectedSnapshot = await service.getSnapshot(workspaceA, ownerKey)
+    const protectedConversation = (protectedSnapshot.sections.agentConversations as typeof first)
+      .conversations['private-conversation']
+    expect(protectedConversation.messages).toEqual(
+      first.conversations['private-conversation'].messages,
+    )
 
     const reloaded = new WorkspaceStateService()
     await reloaded.loadState()
@@ -663,11 +670,70 @@ describe('WorkspaceStateService', () => {
       'utf-8',
     )
     expect(document).toContain('# CCLink Studio 会话恢复日志')
-    expect(document).toContain('conversation-write-regression/persisted-smaller-snapshot')
+    expect(document).toContain('conversation-write-regression/protected-smaller-snapshot')
     expect(document).not.toContain(workspaceA)
     expect(document).not.toContain(ownerKey)
     expect(document).not.toContain('private prompt')
     expect(document).not.toContain('private-session')
+  })
+
+  it('allows only the explicitly targeted conversation history to be cleared or deleted', async () => {
+    const service = new WorkspaceStateService()
+    await service.loadState()
+    const ownerKey = 'local:owner'
+    const initial = {
+      activeConversationId: 'a',
+      conversationOrder: ['a', 'b'],
+      conversations: {
+        a: { id: 'a', createdAt: 1, messages: [{ id: 'a-1', rawText: 'keep-a' }] },
+        b: { id: 'b', createdAt: 2, messages: [{ id: 'b-1', rawText: 'keep-b' }] },
+      },
+    }
+    await service.setSection(workspaceA, 'agentConversations', initial, ownerKey)
+
+    const cleared = {
+      ...initial,
+      conversations: {
+        ...initial.conversations,
+        a: { ...initial.conversations.a, messages: [{ id: 'welcome', rawText: 'welcome' }] },
+      },
+    }
+    await service.setSection(workspaceA, 'agentConversations', cleared, ownerKey, {
+      conversationHistoryMutation: { type: 'clear-messages', conversationId: 'a' },
+    })
+    let restored = (await service.getSnapshot(workspaceA, ownerKey)).sections
+      .agentConversations as typeof cleared
+    expect(restored.conversations.a.messages).toEqual(cleared.conversations.a.messages)
+    expect(restored.conversations.b.messages).toEqual(initial.conversations.b.messages)
+
+    const deleted = {
+      activeConversationId: 'a',
+      conversationOrder: ['a'],
+      conversations: { a: cleared.conversations.a },
+    }
+    await service.setSection(workspaceA, 'agentConversations', deleted, ownerKey, {
+      conversationHistoryMutation: { type: 'delete-conversation', conversationId: 'b' },
+    })
+    restored = (await service.getSnapshot(workspaceA, ownerKey)).sections
+      .agentConversations as typeof cleared
+    expect(restored.conversations.b).toBeUndefined()
+  })
+
+  it('does not rotate a project backup when a section write has no content change', async () => {
+    const service = new WorkspaceStateService()
+    await service.loadState()
+    const ownerKey = 'local:a'
+    await service.setSection(workspaceA, 'tabs', { activeTabId: 'first' }, ownerKey)
+    await service.setSection(workspaceA, 'tabs', { activeTabId: 'second' }, ownerKey)
+    const ownerFile = `${createHash('sha256').update(ownerKey).digest('hex').slice(0, 16)}.json`
+    const statePath = join(workspaceA, '.cclink-studio', 'state', ownerFile)
+    const backupBefore = await readFile(`${statePath}.bak`, 'utf-8')
+
+    const before = await service.getSnapshot(workspaceA, ownerKey)
+    const after = await service.setSection(workspaceA, 'tabs', { activeTabId: 'second' }, ownerKey)
+
+    expect(after.updatedAt).toBe(before.updatedAt)
+    expect(await readFile(`${statePath}.bak`, 'utf-8')).toBe(backupBefore)
   })
 
   it('keeps workspace recovery working when the fixed diagnostic document is unavailable', async () => {

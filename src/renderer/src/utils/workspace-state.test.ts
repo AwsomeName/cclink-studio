@@ -5,6 +5,7 @@ import {
   getWorkspaceStatePath,
   beginWorkspaceStateRestore,
   endWorkspaceStateRestore,
+  flushPendingWorkspaceStateWrites,
   isWorkspaceStateRestoring,
   persistWorkspaceSection,
   persistWorkspaceSectionNow,
@@ -160,6 +161,33 @@ describe('workspace-state utils', () => {
     expect(setSection.mock.calls.map((call) => call[2])).toEqual([{ revision: 1 }, { revision: 3 }])
     completions[1]({ success: true })
     await expect(Promise.all([superseded, latest])).resolves.toEqual([undefined, undefined])
+  })
+
+  it('退出 flush 会等待正在写入和最新待写快照全部完成', async () => {
+    const completions: Array<(value: { success: boolean }) => void> = []
+    const setSection = vi.fn(
+      () =>
+        new Promise<{ success: boolean }>((resolve) => {
+          completions.push(resolve)
+        }),
+    )
+    vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+
+    void persistWorkspaceSectionNow('agentConversations', { revision: 1 }, '/workspace/a')
+    void persistWorkspaceSectionNow('agentConversations', { revision: 2 }, '/workspace/a')
+    let flushed = false
+    const flush = flushPendingWorkspaceStateWrites().then(() => {
+      flushed = true
+    })
+
+    await vi.waitFor(() => expect(setSection).toHaveBeenCalledTimes(1))
+    expect(flushed).toBe(false)
+    completions[0]({ success: true })
+    await vi.waitFor(() => expect(setSection).toHaveBeenCalledTimes(2))
+    expect(flushed).toBe(false)
+    completions[1]({ success: true })
+    await flush
+    expect(flushed).toBe(true)
   })
 
   it('写入前按 JSON 语义移除运行态对象里的 undefined 可选字段', async () => {

@@ -26,6 +26,7 @@ import { useMainProcessEvents } from './bootstrap/use-main-process-events'
 import { useRegisterCommands } from './bootstrap/use-register-commands'
 import { useTerminalEvents } from './bootstrap/use-terminal-events'
 import { useWorkspaceBootstrap } from './bootstrap/use-workspace-bootstrap'
+import { useWorkspaceStateFlush } from './bootstrap/use-workspace-state-flush'
 import { useBrowserViewLifecycle } from './components/workbench/use-browser-view-lifecycle'
 import { useBrowserOpenRequests } from './bootstrap/use-browser-open-requests'
 import { ProjectStrip } from './components/project-strip/ProjectStrip'
@@ -36,6 +37,7 @@ import { clampPanelWidth, getAgentPanelWidthBounds } from './utils/panel-layout'
 /** 主布局。 */
 function MainLayout(): React.ReactElement {
   const workspaceReady = useWorkspaceBootstrap()
+  useWorkspaceStateFlush()
   const sidebarVisible = useUIStore((s) => s.sidebarVisible)
   const agentPanelMode = useUIStore((s) => s.agentPanelMode)
   const sidebarWidth = useUIStore((s) => s.sidebarWidth)

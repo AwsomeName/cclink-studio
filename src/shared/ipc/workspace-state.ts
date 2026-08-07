@@ -32,6 +32,25 @@ export interface WorkspaceStateSetSectionResult {
   error?: string
 }
 
+export type WorkspaceConversationHistoryMutation =
+  | { type: 'clear-messages'; conversationId: string }
+  | { type: 'delete-conversation'; conversationId: string }
+
+export interface WorkspaceStateSetSectionOptions {
+  /** 会缩短会话历史的用户显式操作；普通快照写入不得携带。 */
+  conversationHistoryMutation?: WorkspaceConversationHistoryMutation
+}
+
+export const workspaceStateIpcEvents = {
+  flushRequest: 'workspaceState:flushRequest',
+  flushAcknowledged: 'workspaceState:flushAcknowledged',
+} as const
+
+export interface WorkspaceStateFlushAcknowledgement {
+  requestId: string
+  success: boolean
+}
+
 export interface WorkspaceStateDiagnostics {
   userDataPath: string
   stateFilePath: string
@@ -103,6 +122,7 @@ export interface WorkspaceStateApiContract {
     section: WorkspaceStateSection,
     value: unknown,
     ownerKey?: string | null,
+    options?: WorkspaceStateSetSectionOptions,
   ) => Promise<WorkspaceStateSetSectionResult>
   clear: (
     workspaceKey?: string | null,
@@ -110,4 +130,6 @@ export interface WorkspaceStateApiContract {
   ) => Promise<{ success: boolean; error?: string }>
   listLocalWorkspaces: (ownerKey?: string | null) => Promise<WorkspaceStateLocalWorkspaceSummary[]>
   diagnostics: () => Promise<WorkspaceStateDiagnostics>
+  onFlushRequest: (callback: (requestId: string) => void) => () => void
+  acknowledgeFlush: (acknowledgement: WorkspaceStateFlushAcknowledgement) => void
 }

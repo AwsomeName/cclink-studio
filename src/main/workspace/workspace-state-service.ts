@@ -12,6 +12,7 @@ import {
   writeFile,
 } from 'fs/promises'
 import { dirname, isAbsolute, join, resolve, sep } from 'path'
+import { isDeepStrictEqual } from 'node:util'
 import type {
   WorkspaceRecoveryTraceEntry,
   WorkspaceRecoveryTraceEvent,
@@ -19,6 +20,10 @@ import type {
   WorkspaceStateLocalWorkspaceSummary,
   WorkspaceStateResolveResult,
   WorkspaceStateSnapshot,
+} from '../../shared/ipc/workspace-state'
+import type {
+  WorkspaceConversationHistoryMutation,
+  WorkspaceStateSetSectionOptions,
 } from '../../shared/ipc/workspace-state'
 import { summarizeWorkspaceConversationSnapshot } from '../../shared/workspace-conversation-diagnostics'
 import { getUserDataPathDiagnostics } from '../runtime/user-data-path'
@@ -74,6 +79,173 @@ const PROJECT_METADATA_DIR = '.cclink-studio'
 const PROJECT_MANIFEST_FILE = 'project.json'
 const PROJECT_STATE_DIR = 'state'
 const INDEX_TOUCH_INTERVAL_MS = 5_000
+
+interface ConversationSnapshotShape {
+  conversations?: Record<string, unknown>
+  conversationOrder?: unknown
+  activeConversationId?: unknown
+}
+
+interface ConversationShape {
+  id?: unknown
+  createdAt?: unknown
+  messages?: unknown
+}
+
+interface MessageShape {
+  id?: unknown
+  timestamp?: unknown
+  rawText?: unknown
+  content?: unknown
+  resources?: unknown
+}
+
+function protectConversationHistory(
+  currentValue: unknown,
+  nextValue: unknown,
+  mutation?: WorkspaceConversationHistoryMutation,
+): { value: unknown; protected: boolean } {
+  if (!currentValue || typeof currentValue !== 'object') {
+    return { value: nextValue, protected: false }
+  }
+  if (!nextValue || typeof nextValue !== 'object') {
+    return { value: currentValue, protected: true }
+  }
+
+  const current = currentValue as ConversationSnapshotShape
+  const next = nextValue as ConversationSnapshotShape
+  if (!current.conversations || !next.conversations) {
+    return { value: nextValue, protected: false }
+  }
+
+  let protectedHistory = false
+  const conversations = { ...next.conversations }
+
+  for (const [conversationId, currentRaw] of Object.entries(current.conversations)) {
+    if (mutation?.type === 'delete-conversation' && mutation.conversationId === conversationId) {
+      continue
+    }
+    const nextRaw = conversations[conversationId]
+    if (!nextRaw || typeof nextRaw !== 'object') {
+      conversations[conversationId] = currentRaw
+      protectedHistory = true
+      continue
+    }
+    if (mutation?.type === 'clear-messages' && mutation.conversationId === conversationId) {
+      continue
+    }
+
+    const currentConversation = currentRaw as ConversationShape
+    const nextConversation = nextRaw as ConversationShape
+    const mergedMessages = mergeConversationMessages(
+      currentConversation.messages,
+      nextConversation.messages,
+    )
+    if (!mergedMessages.protected) continue
+    conversations[conversationId] = {
+      ...nextConversation,
+      messages: mergedMessages.messages,
+    }
+    protectedHistory = true
+  }
+
+  if (!protectedHistory) return { value: nextValue, protected: false }
+
+  const order = Array.isArray(next.conversationOrder)
+    ? next.conversationOrder.filter((id): id is string => typeof id === 'string')
+    : []
+  for (const id of Object.keys(conversations)) {
+    if (!order.includes(id)) order.push(id)
+  }
+  order.sort((left, right) => {
+    const leftConversation = conversations[left] as ConversationShape | undefined
+    const rightConversation = conversations[right] as ConversationShape | undefined
+    const leftCreatedAt = numberOrInfinity(leftConversation?.createdAt)
+    const rightCreatedAt = numberOrInfinity(rightConversation?.createdAt)
+    return leftCreatedAt - rightCreatedAt || left.localeCompare(right)
+  })
+
+  return {
+    value: {
+      ...next,
+      conversations,
+      conversationOrder: order,
+      activeConversationId:
+        typeof next.activeConversationId === 'string' && conversations[next.activeConversationId]
+          ? next.activeConversationId
+          : (order[0] ?? null),
+    },
+    protected: true,
+  }
+}
+
+function mergeConversationMessages(
+  currentValue: unknown,
+  nextValue: unknown,
+): { messages: unknown; protected: boolean } {
+  if (!Array.isArray(currentValue) || !Array.isArray(nextValue)) {
+    return Array.isArray(currentValue) && !Array.isArray(nextValue)
+      ? { messages: currentValue, protected: true }
+      : { messages: nextValue, protected: false }
+  }
+
+  let protectedHistory = false
+  const currentById = new Map<string, unknown>()
+  for (const message of currentValue) {
+    const id = messageId(message)
+    if (id) currentById.set(id, message)
+  }
+
+  const seen = new Set<string>()
+  const messages = nextValue.map((message) => {
+    const id = messageId(message)
+    if (!id) return message
+    seen.add(id)
+    const currentMessage = currentById.get(id)
+    if (!currentMessage) return message
+    if (messagePayloadSize(currentMessage) <= messagePayloadSize(message)) return message
+    protectedHistory = true
+    return currentMessage
+  })
+
+  for (const message of currentValue) {
+    const id = messageId(message)
+    if (id ? seen.has(id) : messages.some((candidate) => isDeepStrictEqual(candidate, message))) {
+      continue
+    }
+    messages.push(message)
+    protectedHistory = true
+  }
+
+  if (protectedHistory) {
+    messages.sort((left, right) => {
+      const leftTimestamp = numberOrInfinity((left as MessageShape | null)?.timestamp)
+      const rightTimestamp = numberOrInfinity((right as MessageShape | null)?.timestamp)
+      return leftTimestamp - rightTimestamp
+    })
+  }
+  return { messages, protected: protectedHistory }
+}
+
+function messageId(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null
+  const id = (value as MessageShape).id
+  return typeof id === 'string' && id ? id : null
+}
+
+function messagePayloadSize(value: unknown): number {
+  if (!value || typeof value !== 'object') return 0
+  const message = value as MessageShape
+  return JSON.stringify({
+    rawText: message.rawText,
+    content: message.content,
+    resources: message.resources,
+  }).length
+}
+
+function numberOrInfinity(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : Number.POSITIVE_INFINITY
+}
 
 type FileMigrator = (input: unknown) => WorkspaceStateFile
 const FILE_MIGRATIONS: Partial<Record<number, FileMigrator>> = {
@@ -374,6 +546,7 @@ export class WorkspaceStateService {
     section: string,
     value: unknown,
     ownerKey?: string | null,
+    options?: WorkspaceStateSetSectionOptions,
   ): Promise<WorkspaceStateSnapshot> {
     if (!workspaceKey || !isAbsolute(workspaceKey)) {
       this.assertCentralStateAvailable()
@@ -381,7 +554,9 @@ export class WorkspaceStateService {
         const snapshot = await this.trackOperation(
           this.enqueueWorkspaceMutation(getWorkspaceId(workspaceKey, ownerKey), async () => {
             const current = this.getCentralSnapshot(workspaceKey, ownerKey)
-            const next = this.withSection(current, workspaceKey, ownerKey, section, value)
+            const protectedValue = this.protectSectionValue(current, section, value, options)
+            if (isDeepStrictEqual(current.sections[section], protectedValue)) return current
+            const next = this.withSection(current, workspaceKey, ownerKey, section, protectedValue)
             this.state.workspaces[next.workspaceId] = next
             await this.saveState()
             this.recordConversationWrite(workspaceKey, ownerKey, current, next, 'central')
@@ -402,7 +577,9 @@ export class WorkspaceStateService {
       const workspacePath = await this.resolveLocalWorkspacePath(workspaceKey)
       return this.enqueueWorkspaceMutation(getWorkspaceId(workspacePath, ownerKey), async () => {
         const current = await this.getLocalSnapshot(workspacePath, ownerKey, workspaceKey, false)
-        const next = this.withSection(current, workspacePath, ownerKey, section, value)
+        const protectedValue = this.protectSectionValue(current, section, value, options)
+        if (isDeepStrictEqual(current.sections[section], protectedValue)) return current
+        const next = this.withSection(current, workspacePath, ownerKey, section, protectedValue)
         const source = await this.persistLocalSnapshot(workspacePath, ownerKey, next)
         this.recordConversationWrite(workspacePath, ownerKey, current, next, source)
         return next
@@ -789,6 +966,35 @@ export class WorkspaceStateService {
         [section]: value,
       },
     }
+  }
+
+  private protectSectionValue(
+    current: WorkspaceStateSnapshot,
+    section: string,
+    value: unknown,
+    options?: WorkspaceStateSetSectionOptions,
+  ): unknown {
+    if (section !== 'agentConversations') return value
+    const result = protectConversationHistory(
+      current.sections.agentConversations,
+      value,
+      options?.conversationHistoryMutation,
+    )
+    if (result.protected) {
+      const previousSummary = summarizeWorkspaceConversationSnapshot(
+        current.sections.agentConversations,
+      )
+      const requestedSummary = summarizeWorkspaceConversationSnapshot(value)
+      this.recordRecoveryTrace({
+        event: 'conversation-write-regression',
+        outcome: 'protected-smaller-snapshot',
+        workspaceKey: current.workspaceKey,
+        ownerKey: current.ownerKey,
+        summary: requestedSummary,
+        previousSummary,
+      })
+    }
+    return result.value
   }
 
   private async resolveLocalWorkspacePath(workspacePath: string): Promise<string> {

@@ -16,6 +16,7 @@ import type {
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import type { AgentContextUsageSnapshot, AgentStatus } from '@shared/agent-protocol'
 import type { AgentImageAttachment } from '@shared/ipc/agent'
+import type { WorkspaceStateSetSectionOptions } from '@shared/ipc/workspace-state'
 import {
   agentRoleRefsEqual,
   type AgentRoleRef,
@@ -107,7 +108,7 @@ interface AgentState {
   closeConversation: (id: string) => void
   archiveConversation: (id: string) => Promise<void>
   restoreArchivedConversation: (id: string) => Promise<void>
-  deleteConversation: (id: string) => void
+  deleteConversation: (id: string) => Promise<void>
   renameConversation: (id: string, title: string) => void
   markAsWorkConversation: (id: string, runtime: ConversationRuntimeRef) => void
   applyRoleToConversation: (roleRef: AgentRoleRef, conversationId?: string) => Promise<boolean>
@@ -154,7 +155,7 @@ interface AgentState {
   setLoading: (loading: boolean, conversationId?: string) => void
   reconcileRuntimeStatus: (status: AgentStatus, conversationId?: string) => void
   setPlaywrightStatus: (status: PlaywrightStatus) => void
-  clearMessages: (conversationId?: string) => void
+  clearMessages: (conversationId?: string) => Promise<void>
   addPendingConfirmation: (req: ToolConfirmationRequest) => void
   removePendingConfirmation: (id: string) => void
   clearPendingConfirmations: () => void
@@ -422,6 +423,36 @@ async function persistConversationWorkspace(conversationId: string): Promise<voi
   )
 }
 
+async function persistConversationWorkspaceByKey(
+  workspaceKey: string | null,
+  options?: WorkspaceStateSetSectionOptions,
+): Promise<void> {
+  const state = useAgentStore.getState()
+  await persistWorkspaceSectionNow(
+    'agentConversations',
+    buildAgentConversationWorkspaceSnapshot(state, workspaceKey),
+    workspaceKey,
+    undefined,
+    options,
+  )
+}
+
+/** 退出前生成最终会话快照，并等待 renderer 写队列真正排空。 */
+export async function flushAgentConversationWorkspaceState(): Promise<void> {
+  if (isWorkspaceStateRestoring()) return
+  const state = useAgentStore.getState()
+  const workspaceKeys = new Set(
+    Object.values(state.conversations).map((conversation) =>
+      conversationWorkspaceKey(conversation),
+    ),
+  )
+  await Promise.all(
+    Array.from(workspaceKeys).map((workspaceKey) =>
+      persistConversationWorkspaceByKey(workspaceKey),
+    ),
+  )
+}
+
 export const useAgentStore = create<AgentState>((set, get) => ({
   // 会话恢复以 WorkspaceState 为权威，避免全局 localStorage 把其他项目会话作为启动种子。
   conversations: initialConversationState.conversations,
@@ -549,7 +580,15 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     await persistConversationWorkspace(id)
   },
 
-  deleteConversation: (id) => set((state) => removeConversation(state, id)),
+  deleteConversation: async (id) => {
+    const conversation = get().conversations[id]
+    if (!conversation) return
+    const workspaceKey = conversationWorkspaceKey(conversation)
+    set((state) => removeConversation(state, id))
+    await persistConversationWorkspaceByKey(workspaceKey, {
+      conversationHistoryMutation: { type: 'delete-conversation', conversationId: id },
+    })
+  },
 
   renameConversation: (id, title) =>
     set((state) =>
@@ -1059,17 +1098,29 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
   setPlaywrightStatus: (playwrightStatus) => set({ playwrightStatus }),
 
-  clearMessages: (conversationId) =>
+  clearMessages: async (conversationId) => {
+    const id = conversationId ?? get().activeConversationId
+    const conversation = get().conversations[id]
+    if (!conversation) return
+    const workspaceKey = conversationWorkspaceKey(conversation)
     set((state) =>
       updateConversation(state, conversationId, (conversation) => {
-        const fresh = createConversation(conversation.id)
+        const fresh = createConversation(conversation.id, {
+          surface: conversation.surface,
+          runtime: conversation.runtime,
+          roleRef: conversation.configuration.roleRef,
+        })
         return {
           ...fresh,
           title: conversation.title,
           scope: conversation.scope,
         }
       }),
-    ),
+    )
+    await persistConversationWorkspaceByKey(workspaceKey, {
+      conversationHistoryMutation: { type: 'clear-messages', conversationId: id },
+    })
+  },
 
   addPendingConfirmation: (req) =>
     set((state) => ({
