@@ -44,6 +44,7 @@ import {
   rememberWorkspaceActiveConversation,
 } from '../features/agent-conversations/conversation-workspace-state'
 import { useSettingsStore } from './settings-store'
+import { recordRendererDiagnosticLog } from '../features/diagnostics/renderer-diagnostic-log'
 
 export type {
   AgentContextCompactionState,
@@ -361,6 +362,7 @@ const initialConversationState = {
   activeConversationId: DEFAULT_CONVERSATION_ID,
 }
 const initialActiveConversation = initialConversation
+const lastTrimmedConversationCountByWorkspace = new Map<string, number>()
 
 function saveStoredConversations(state: AgentState): void {
   try {
@@ -373,6 +375,28 @@ function saveStoredConversations(state: AgentState): void {
 
     for (const workspaceKey of workspaceKeys) {
       const payload = buildAgentConversationWorkspaceSnapshot(state, workspaceKey)
+      const workspaceConversationCount = state.conversationOrder.filter((id) => {
+        const conversation = state.conversations[id]
+        return conversation && conversationWorkspaceKey(conversation) === workspaceKey
+      }).length
+      if (
+        workspaceConversationCount > payload.conversationOrder.length &&
+        lastTrimmedConversationCountByWorkspace.get(workspaceKey ?? '__global__') !==
+          workspaceConversationCount
+      ) {
+        lastTrimmedConversationCountByWorkspace.set(
+          workspaceKey ?? '__global__',
+          workspaceConversationCount,
+        )
+        recordRendererDiagnosticLog('warn', [
+          '[ConversationPersistence] snapshot-trimmed',
+          {
+            workspaceKind: workspaceKey ? 'local' : 'global',
+            inMemoryConversationCount: workspaceConversationCount,
+            persistedConversationCount: payload.conversationOrder.length,
+          },
+        ])
+      }
       if (
         payload.conversationOrder.length === 1 &&
         isInitialSeedConversation(payload.conversations[payload.conversationOrder[0]])

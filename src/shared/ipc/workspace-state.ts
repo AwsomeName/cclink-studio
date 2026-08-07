@@ -1,3 +1,5 @@
+import type { WorkspaceConversationSnapshotSummary } from '../workspace-conversation-diagnostics'
+
 /** 工作台状态分区名称。先允许扩展字符串，便于逐步迁移各 renderer store。 */
 export type WorkspaceStateSection =
   | 'layout'
@@ -39,6 +41,43 @@ export interface WorkspaceStateDiagnostics {
   userData: {
     fixedUserDataPath: string
   } | null
+  /** 旧版 main process 不提供；新版诊断会跨重启保留会话恢复轨迹。 */
+  recoveryTrace?: WorkspaceRecoveryTraceSnapshot
+}
+
+export type WorkspaceRecoveryTraceEvent =
+  | 'state-index-loaded'
+  | 'state-index-recovered'
+  | 'state-index-reset'
+  | 'snapshot-selected'
+  | 'snapshot-missing'
+  | 'conversation-write'
+  | 'conversation-write-regression'
+  | 'conversation-write-failed'
+  | 'shutdown-flush'
+
+export interface WorkspaceRecoveryTraceEntry {
+  timestamp: string
+  appVersion: string
+  event: WorkspaceRecoveryTraceEvent
+  outcome: string
+  workspaceRef: string | null
+  ownerRef: string | null
+  source: 'central' | 'project-primary' | 'project-backup' | 'fallback' | 'empty' | null
+  summary: WorkspaceConversationSnapshotSummary | null
+  previousSummary: WorkspaceConversationSnapshotSummary | null
+  primaryStatus: 'ok' | 'missing' | 'invalid' | 'unavailable' | null
+  backupStatus: 'ok' | 'missing' | 'invalid' | 'unavailable' | null
+}
+
+export interface WorkspaceRecoveryTraceSnapshot {
+  filePath: string
+  /** 用户可直接打开的固定 Markdown 镜像；旧版运行时可能不提供。 */
+  documentFilePath?: string
+  documentStatus?: 'pending' | 'ok' | 'unavailable'
+  retainedEntries: number
+  droppedCount: number
+  entries: WorkspaceRecoveryTraceEntry[]
 }
 
 export interface WorkspaceStateLocalWorkspaceSummary {

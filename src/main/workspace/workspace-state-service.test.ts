@@ -5,11 +5,12 @@ import { tmpdir } from 'os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceStateSnapshot } from '../../shared/ipc/workspace-state'
 
-const mockPaths = vi.hoisted(() => ({ userDataDir: '' }))
+const mockPaths = vi.hoisted(() => ({ userDataDir: '', documentsDir: '' }))
 
 vi.mock('electron', () => ({
   app: {
-    getPath: () => mockPaths.userDataDir,
+    getPath: (name: string) =>
+      name === 'documents' ? mockPaths.documentsDir : mockPaths.userDataDir,
   },
 }))
 
@@ -34,6 +35,7 @@ beforeEach(async () => {
   workspaceA = await realpath(workspaceA)
   workspaceB = await realpath(workspaceB)
   mockPaths.userDataDir = tempDir
+  mockPaths.documentsDir = join(tempDir, 'Documents')
 })
 
 afterEach(async () => {
@@ -491,6 +493,20 @@ describe('WorkspaceStateService', () => {
     await expect(service.getSnapshot(workspaceA, 'local:a')).rejects.toThrow(
       '项目状态及备份均不可读取',
     )
+
+    const trace = JSON.parse(
+      await readFile(join(tempDir, 'workspace-recovery-diagnostics.json'), 'utf-8'),
+    ) as { entries: Array<{ outcome?: string; primaryStatus?: string; backupStatus?: string }> }
+    expect(trace.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          outcome: 'project-primary-and-backup-unreadable',
+          primaryStatus: 'invalid',
+          backupStatus: 'missing',
+        }),
+        expect.objectContaining({ outcome: 'local-snapshot-read-failed' }),
+      ]),
+    )
   })
 
   it('keeps a valid project backup when the primary state file is corrupted', async () => {
@@ -589,5 +605,84 @@ describe('WorkspaceStateService', () => {
     expect(diagnostics.backupFilePath).toBe(join(tempDir, 'workspace-state.json.bak'))
     expect(diagnostics.workspaceCount).toBe(1)
     expect(diagnostics.fileVersion).toBe(2)
+    expect(diagnostics.recoveryTrace?.filePath).toBe(
+      join(tempDir, 'workspace-recovery-diagnostics.json'),
+    )
+    expect(diagnostics.recoveryTrace?.documentFilePath).toBe(
+      join(tempDir, 'Documents', 'CCLink Studio', 'Diagnostics', 'conversation-recovery-log.md'),
+    )
+    expect(diagnostics.recoveryTrace?.documentStatus).toBe('ok')
+  })
+
+  it('persists redacted conversation recovery traces and flags smaller snapshots', async () => {
+    const service = new WorkspaceStateService()
+    await service.loadState()
+    const ownerKey = 'local:private-owner'
+    const first = {
+      activeConversationId: 'private-conversation',
+      conversationOrder: ['private-conversation'],
+      conversations: {
+        'private-conversation': {
+          title: 'private title',
+          sessionId: 'private-session',
+          messages: [
+            { role: 'user', rawText: 'private prompt' },
+            { role: 'assistant', rawText: 'private answer' },
+          ],
+        },
+      },
+    }
+    const smaller = {
+      ...first,
+      conversations: {
+        'private-conversation': {
+          ...first.conversations['private-conversation'],
+          messages: [{ role: 'user', rawText: 'short' }],
+        },
+      },
+    }
+
+    await service.setSection(workspaceA, 'agentConversations', first, ownerKey)
+    await service.setSection(workspaceA, 'agentConversations', smaller, ownerKey)
+    await service.flush()
+
+    const reloaded = new WorkspaceStateService()
+    await reloaded.loadState()
+    const trace = reloaded.getDiagnostics().recoveryTrace
+    expect(trace?.entries.some((entry) => entry.event === 'conversation-write-regression')).toBe(
+      true,
+    )
+    const serialized = JSON.stringify(trace)
+    expect(serialized).not.toContain(workspaceA)
+    expect(serialized).not.toContain(ownerKey)
+    expect(serialized).not.toContain('private prompt')
+    expect(serialized).not.toContain('private-session')
+
+    const document = await readFile(
+      join(tempDir, 'Documents', 'CCLink Studio', 'Diagnostics', 'conversation-recovery-log.md'),
+      'utf-8',
+    )
+    expect(document).toContain('# CCLink Studio 会话恢复日志')
+    expect(document).toContain('conversation-write-regression/persisted-smaller-snapshot')
+    expect(document).not.toContain(workspaceA)
+    expect(document).not.toContain(ownerKey)
+    expect(document).not.toContain('private prompt')
+    expect(document).not.toContain('private-session')
+  })
+
+  it('keeps workspace recovery working when the fixed diagnostic document is unavailable', async () => {
+    mockPaths.documentsDir = join(tempDir, 'blocked-documents')
+    await writeFile(mockPaths.documentsDir, 'not-a-directory', 'utf-8')
+    const service = new WorkspaceStateService()
+
+    await expect(service.loadState()).resolves.toBeUndefined()
+    await expect(service.setSection(workspaceA, 'tabs', { activeTabId: 'safe' })).resolves.toEqual(
+      expect.objectContaining({ sections: { tabs: { activeTabId: 'safe' } } }),
+    )
+
+    expect(service.getDiagnostics().recoveryTrace?.documentStatus).toBe('unavailable')
+    expect(await readFile(join(tempDir, 'workspace-recovery-diagnostics.json'), 'utf-8')).toContain(
+      'state-index-reset',
+    )
   })
 })

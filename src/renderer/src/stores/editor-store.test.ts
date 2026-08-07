@@ -1,11 +1,94 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { FsSaveTextDocumentResult } from '@shared/ipc/fs'
 import { useEditorStore } from './editor-store'
 
 beforeEach(() => {
   useEditorStore.setState({ files: {}, pendingUpdates: [] })
 })
 
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 describe('useEditorStore', () => {
+  describe('saveFile', () => {
+    it('keeps the exact editor buffer as the saved baseline when disk metadata is added', async () => {
+      const saveTextDocument = vi.fn().mockResolvedValue({
+        status: 'saved',
+        snapshot: {
+          path: '/project/notes.md',
+          content:
+            '<!-- cclink-document: {"version":1,"resources":"notes.assets/manifest.json"} -->\n\n# Draft',
+          size: 100,
+          modifiedAt: 2,
+          hash: 'next-hash',
+        },
+      })
+      vi.stubGlobal('window', { cclinkStudio: { fs: { saveTextDocument } } })
+      useEditorStore.setState({
+        files: {
+          '/project/notes.md': {
+            savedContent: '# Old',
+            currentContent: '# Draft',
+            dirty: true,
+            loading: false,
+          },
+        },
+        pendingUpdates: [],
+      })
+
+      await useEditorStore.getState().saveFile('/project/notes.md')
+
+      const file = useEditorStore.getState().files['/project/notes.md']
+      expect(file.savedContent).toBe('# Draft')
+      expect(file.currentContent).toBe('# Draft')
+      expect(file.dirty).toBe(false)
+      expect(file.versionHash).toBe('next-hash')
+      expect(file.sourceLineOffset).toBe(2)
+    })
+
+    it('does not discard edits made while an earlier save is in flight', async () => {
+      let resolveSave!: (result: FsSaveTextDocumentResult) => void
+      const saveTextDocument = vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveSave = resolve
+          }),
+      )
+      vi.stubGlobal('window', { cclinkStudio: { fs: { saveTextDocument } } })
+      useEditorStore.setState({
+        files: {
+          '/project/notes.md': {
+            savedContent: '# Old',
+            currentContent: '# First draft',
+            dirty: true,
+            loading: false,
+          },
+        },
+        pendingUpdates: [],
+      })
+
+      const saving = useEditorStore.getState().saveFile('/project/notes.md')
+      useEditorStore.getState().updateContent('/project/notes.md', '# Newer draft')
+      resolveSave({
+        status: 'saved',
+        snapshot: {
+          path: '/project/notes.md',
+          content: '# First draft',
+          size: 13,
+          modifiedAt: 2,
+          hash: 'next-hash',
+        },
+      })
+      await saving
+
+      const file = useEditorStore.getState().files['/project/notes.md']
+      expect(file.savedContent).toBe('# First draft')
+      expect(file.currentContent).toBe('# Newer draft')
+      expect(file.dirty).toBe(true)
+    })
+  })
+
   describe('initVirtualFile', () => {
     it('初始化虚拟文件并根据种子内容标记 dirty', () => {
       useEditorStore.getState().initVirtualFile('virtual:note', '# 草稿')

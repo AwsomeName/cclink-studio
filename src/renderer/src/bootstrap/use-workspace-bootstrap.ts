@@ -49,6 +49,14 @@ export function createWorkspaceBootstrapDeps(): WorkspaceBootstrapDeps {
     hydrateFileTree: (value) => useFsStore.getState().hydrateFromWorkspaceState(value),
     hydrateAgentConversations: (value, options) =>
       useAgentStore.getState().hydrateFromWorkspaceState(value, options),
+    getHydratedAgentConversations: () => {
+      const state = useAgentStore.getState()
+      return {
+        conversations: state.conversations,
+        conversationOrder: state.conversationOrder,
+        activeConversationId: state.activeConversationId,
+      }
+    },
     initWorkspace: (workspacePath, settings) =>
       useFsStore.getState().initWorkspace(workspacePath, settings),
     refreshWorkspace: () => useFsStore.getState().refreshWorkspace(),

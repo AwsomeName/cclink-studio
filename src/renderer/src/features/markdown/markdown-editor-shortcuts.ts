@@ -4,21 +4,22 @@ interface MarkdownKeyboardShortcutOptions {
   openLinkEditor: (editor: Editor) => boolean
 }
 
+interface MarkdownTabKeyboardEvent {
+  key: string
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+  preventDefault: () => void
+}
+
 export function applyMarkdownLink(editor: Editor, href: string): boolean {
   const chain = editor.chain().focus().extendMarkRange('link')
   return href.trim() ? chain.setLink({ href: href.trim() }).run() : chain.unsetLink().run()
 }
 
 export function adjustMarkdownListIndent(editor: Editor, direction: 'indent' | 'outdent'): boolean {
-  const { $from } = editor.state.selection
-  let itemType: 'listItem' | 'taskItem' | null = null
-  for (let depth = $from.depth; depth > 0; depth -= 1) {
-    const name = $from.node(depth).type.name
-    if (name === 'listItem' || name === 'taskItem') {
-      itemType = name
-      break
-    }
-  }
+  const itemType = findMarkdownListItemType(editor)
   if (!itemType) return false
   return direction === 'indent'
     ? editor.commands.sinkListItem(itemType)
@@ -26,14 +27,48 @@ export function adjustMarkdownListIndent(editor: Editor, direction: 'indent' | '
 }
 
 export function handleMarkdownTabKey(editor: Editor, direction: 'indent' | 'outdent'): boolean {
-  // Let the dedicated extensions handle Tab inside code blocks and tables.
-  if (editor.isActive('codeBlock') || editor.isActive('table')) return false
+  // Code blocks already implement Markdown-safe indentation in their own
+  // keymap. Returning false lets that keymap receive the untouched event.
+  if (editor.isActive('codeBlock')) return false
+  if (editor.isActive('table')) return handleMarkdownTableTab(editor, direction)
 
-  // Lists support structural indentation. In ordinary Markdown blocks there is
-  // no safe structural indent operation, but Tab must still remain inside the
-  // editor instead of falling through to the browser's focus navigation.
+  // Markdown has no portable paragraph-indentation syntax. Keep focus inside
+  // the WYSIWYG editor without inserting spaces that could become a hard break
+  // or an indented code block after serialization.
   adjustMarkdownListIndent(editor, direction)
   return true
+}
+
+function handleMarkdownTableTab(editor: Editor, direction: 'indent' | 'outdent'): boolean {
+  if (direction === 'outdent') {
+    // Keep focus in the first cell even when there is no previous cell.
+    editor.commands.goToPreviousCell()
+    return true
+  }
+
+  if (editor.commands.goToNextCell()) return true
+  if (editor.can().addRowAfter()) {
+    editor.chain().addRowAfter().goToNextCell().run()
+  }
+  // Keep focus in the table when it cannot grow further.
+  return true
+}
+
+export function handleMarkdownTabKeyDown(editor: Editor, event: MarkdownTabKeyboardEvent): boolean {
+  if (event.key !== 'Tab' || event.metaKey || event.ctrlKey || event.altKey) return false
+
+  const handled = handleMarkdownTabKey(editor, event.shiftKey ? 'outdent' : 'indent')
+  if (handled) event.preventDefault()
+  return handled
+}
+
+function findMarkdownListItemType(editor: Editor): 'listItem' | 'taskItem' | null {
+  const { $from } = editor.state.selection
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const name = $from.node(depth).type.name
+    if (name === 'listItem' || name === 'taskItem') return name
+  }
+  return null
 }
 
 export function toggleMarkdownBlockquote(editor: Editor): boolean {

@@ -315,32 +315,50 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           }))
           return 'conflict'
         }
-        set((state) => ({
-          files: {
-            ...state.files,
-            [filePath]: fileStateFromSnapshot(
-              result.snapshot,
-              state.files[filePath]?.diagnostics ?? [],
-            ),
-          },
-        }))
+        set((state) => {
+          const latest = state.files[filePath]
+          const savedContent = file.currentContent
+          const currentContent = latest?.currentContent ?? savedContent
+          const snapshotState = fileStateFromSnapshot(result.snapshot, latest?.diagnostics ?? [])
+          return {
+            files: {
+              ...state.files,
+              [filePath]: {
+                ...snapshotState,
+                // The snapshot may contain controlled metadata or normalized
+                // line endings. Keep the exact editor buffer as the new local
+                // baseline so Markdown hydration does not rewrite the document
+                // immediately after its own save.
+                savedContent,
+                currentContent,
+                dirty: currentContent !== savedContent,
+              },
+            },
+          }
+        })
         return 'saved'
       }
 
       await fsApi.writeFile(filePath, file.currentContent)
-      set((state) => ({
-        files: {
-          ...state.files,
-          [filePath]: {
-            ...state.files[filePath],
-            savedContent: file.currentContent,
-            dirty: false,
-            externalContent: undefined,
-            externalHash: undefined,
-            error: undefined,
+      set((state) => {
+        const latest = state.files[filePath]
+        const currentContent = latest?.currentContent ?? file.currentContent
+        return {
+          files: {
+            ...state.files,
+            [filePath]: {
+              ...latest,
+              savedContent: file.currentContent,
+              currentContent,
+              dirty: currentContent !== file.currentContent,
+              loading: false,
+              externalContent: undefined,
+              externalHash: undefined,
+              error: undefined,
+            },
           },
-        },
-      }))
+        }
+      })
       return 'saved'
     } catch (err) {
       console.error('[EditorStore] 保存文件失败:', filePath, err)

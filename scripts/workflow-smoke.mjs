@@ -85,6 +85,15 @@ async function waitForContextActionFocus(page, timeout = 2_000) {
   return page.evaluate(() => document.activeElement?.getAttribute('data-context-action'))
 }
 
+async function assertMarkdownEditorFocus(page, message) {
+  const activeElement = await page.evaluate(() => ({
+    className: String(document.activeElement?.className ?? ''),
+    insideEditor: Boolean(document.activeElement?.closest('.markdown-editor-wrapper .tiptap')),
+    tagName: document.activeElement?.tagName ?? '',
+  }))
+  assert(activeElement.insideEditor, `${message}: ${JSON.stringify(activeElement)}`)
+}
+
 async function createTabFromMenu(page, label) {
   await page.locator('.tab-new-button').first().click()
   const menu = page.locator('.tab-create-menu')
@@ -458,6 +467,18 @@ async function main() {
     )
 
     await editor.locator('p').first().click()
+    const paragraphBeforeTab = await editor.innerHTML()
+    const configuredTabSize = await page.evaluate(
+      async () => (await window.cclinkStudio.settings.getAll()).editorTabSize,
+    )
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Shift+Tab')
+    await assertMarkdownEditorFocus(page, 'ordinary paragraph Tab moved focus out of the editor')
+    assert(
+      (await editor.innerHTML()) === paragraphBeforeTab,
+      'ordinary paragraph Tab changed Markdown content or structure',
+    )
     await page.keyboard.press('End')
     await page.keyboard.press('Shift+Enter')
     await page.keyboard.type('hard break')
@@ -481,6 +502,13 @@ async function main() {
     assert(
       (await listItems.count()) === 2,
       `list shortcut did not create two items: ${await editor.innerHTML()}`,
+    )
+    await listItems.nth(0).locator('p').click()
+    await page.keyboard.press('Tab')
+    await assertMarkdownEditorFocus(page, 'non-indentable list Tab moved focus out of the editor')
+    assert(
+      (await editor.locator('ul ul li').count()) === 0,
+      'first list item was unexpectedly nested',
     )
     await listItems.nth(1).locator('p').click()
     await page.waitForTimeout(100)
@@ -533,23 +561,25 @@ async function main() {
     await code.click()
     await page.keyboard.press('Home')
     await page.waitForTimeout(100)
-    const tabSize = await page.evaluate(
-      async () => (await window.cclinkStudio.settings.getAll()).editorTabSize,
-    )
     await page.keyboard.press('Tab')
     const indentedCode = (await code.textContent()) ?? ''
     assert(
-      indentedCode.startsWith(' '.repeat(tabSize)),
-      `code block Tab used the wrong width (expected=${tabSize}, actual=${JSON.stringify(indentedCode)})`,
+      indentedCode.startsWith(' '.repeat(configuredTabSize)),
+      `code block Tab used the wrong width (expected=${configuredTabSize}, actual=${JSON.stringify(indentedCode)})`,
     )
     await page.keyboard.press('Shift+Tab')
     const outdentedCode = (await code.textContent()) ?? ''
     assert(!outdentedCode.startsWith(' '), 'code block Shift+Tab did not remove indentation')
+    await page.keyboard.press('Shift+Tab')
+    await assertMarkdownEditorFocus(page, 'code block boundary Shift+Tab moved focus out')
 
     await page.keyboard.press(`${modifier}+Alt+C`)
     await page.getByTitle('插入表格').click()
     const table = editor.locator('table').last()
     assert((await table.locator('tr').count()) === 3, 'table command did not insert three rows')
+    await table.locator('th, td').first().locator('p').click()
+    await page.keyboard.press('Shift+Tab')
+    await assertMarkdownEditorFocus(page, 'first table cell Shift+Tab moved focus out')
     await table.locator('th, td').last().locator('p').click()
     await page.keyboard.type('last cell')
     await page.keyboard.press('Tab')
@@ -645,15 +675,28 @@ async function main() {
       editorText.length > 7_500 && editorText.includes('大型报告渲染完成。'),
       `large Markdown report rendered incompletely (characters=${editorText.length})`,
     )
-    const heading = editor.locator('h1').first()
+    const heading = editor.locator('h2').nth(20)
     await heading.click()
     await page.keyboard.press('End')
     await page.keyboard.type(' updated')
+    const scrollContainer = page.locator('.tiptap-editor').first()
+    await page.waitForTimeout(150)
+    const scrollTopBeforeSave = await scrollContainer.evaluate((element) => element.scrollTop)
+    assert(scrollTopBeforeSave > 100, 'large Markdown fixture was not scrollable before save')
     await page.locator('.toolbar-save-action').click()
     await page.waitForFunction(
       () => document.querySelector('.toolbar-save-state')?.textContent?.includes('已保存'),
       null,
       { timeout: 10_000 },
+    )
+    await page.waitForTimeout(100)
+    const scrollTopAfterSave = await page
+      .locator('.tiptap-editor')
+      .first()
+      .evaluate((element) => element.scrollTop)
+    assert(
+      Math.abs(scrollTopAfterSave - scrollTopBeforeSave) <= 2,
+      `saving Markdown reset scroll position (before=${scrollTopBeforeSave}, after=${scrollTopAfterSave})`,
     )
 
     const mathPath = `${workspaceDir}/math.md`

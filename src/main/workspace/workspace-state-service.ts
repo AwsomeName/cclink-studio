@@ -13,12 +13,20 @@ import {
 } from 'fs/promises'
 import { dirname, isAbsolute, join, resolve, sep } from 'path'
 import type {
+  WorkspaceRecoveryTraceEntry,
+  WorkspaceRecoveryTraceEvent,
   WorkspaceStateDiagnostics,
   WorkspaceStateLocalWorkspaceSummary,
   WorkspaceStateResolveResult,
   WorkspaceStateSnapshot,
 } from '../../shared/ipc/workspace-state'
+import { summarizeWorkspaceConversationSnapshot } from '../../shared/workspace-conversation-diagnostics'
 import { getUserDataPathDiagnostics } from '../runtime/user-data-path'
+import {
+  createWorkspaceRecoveryRef,
+  WorkspaceRecoveryDiagnostics,
+  type WorkspaceRecoveryTraceInput,
+} from './workspace-recovery-diagnostics'
 
 interface WorkspaceStateIndexEntry extends WorkspaceStateLocalWorkspaceSummary {
   storage: 'project' | 'fallback'
@@ -212,11 +220,17 @@ function isMissingFileError(error: unknown): boolean {
   )
 }
 
+function diagnosticFileStatus(error: unknown): WorkspaceRecoveryTraceEntry['primaryStatus'] {
+  if (isMissingFileError(error)) return 'missing'
+  return error instanceof SyntaxError ? 'invalid' : 'unavailable'
+}
+
 /** 项目现场以项目目录为事实源；userData 只保留全局状态、项目索引和只读 fallback。 */
 export class WorkspaceStateService {
   private readonly stateFilePath: string
   private readonly backupFilePath: string
   private readonly tempFilePath: string
+  private readonly recoveryDiagnostics: WorkspaceRecoveryDiagnostics
   private state: WorkspaceStateFile = {
     version: CURRENT_FILE_VERSION,
     workspaces: {},
@@ -231,13 +245,28 @@ export class WorkspaceStateService {
     this.stateFilePath = join(app.getPath('userData'), 'workspace-state.json')
     this.backupFilePath = `${this.stateFilePath}.bak`
     this.tempFilePath = `${this.stateFilePath}.${process.pid}.tmp`
+    this.recoveryDiagnostics = new WorkspaceRecoveryDiagnostics(
+      join(app.getPath('userData'), 'workspace-recovery-diagnostics.json'),
+      join(
+        app.getPath('documents'),
+        'CCLink Studio',
+        'Diagnostics',
+        'conversation-recovery-log.md',
+      ),
+      typeof app.getVersion === 'function' ? app.getVersion() : 'unknown',
+    )
   }
 
   async loadState(): Promise<void> {
+    await this.recoveryDiagnostics.load()
     this.stateLoadError = null
     try {
       this.state = await this.readStateFile(this.stateFilePath)
       if (removeLegacyGlobalBrowserRestores(this.state)) await this.saveState()
+      this.recordRecoveryTrace({
+        event: 'state-index-loaded',
+        outcome: 'primary',
+      })
       console.log('[WorkspaceStateService] 工作台状态索引已加载')
     } catch (error: unknown) {
       if (isMissingFileError(error)) {
@@ -246,6 +275,12 @@ export class WorkspaceStateService {
           workspaces: {},
           localWorkspaces: {},
         }
+        this.recordRecoveryTrace({
+          event: 'state-index-reset',
+          outcome: 'missing-primary',
+          primaryStatus: 'missing',
+        })
+        await this.recoveryDiagnostics.flush()
         return
       }
 
@@ -253,6 +288,12 @@ export class WorkspaceStateService {
       try {
         this.state = await this.readStateFile(this.backupFilePath)
         if (removeLegacyGlobalBrowserRestores(this.state)) await this.saveState()
+        this.recordRecoveryTrace({
+          event: 'state-index-recovered',
+          outcome: 'backup',
+          primaryStatus: diagnosticFileStatus(error),
+          backupStatus: 'ok',
+        })
       } catch (backupError: unknown) {
         if (!isMissingFileError(backupError)) {
           console.warn('[WorkspaceStateService] 工作台状态备份读取失败:', backupError)
@@ -265,8 +306,15 @@ export class WorkspaceStateService {
         this.stateLoadError = new Error('工作台状态索引及备份均不可读取', {
           cause: backupError,
         })
+        this.recordRecoveryTrace({
+          event: 'state-index-reset',
+          outcome: 'primary-and-backup-unreadable',
+          primaryStatus: diagnosticFileStatus(error),
+          backupStatus: diagnosticFileStatus(backupError),
+        })
       }
     }
+    await this.recoveryDiagnostics.flush()
   }
 
   async resolveLocalWorkspace(workspacePath: string): Promise<WorkspaceStateResolveResult> {
@@ -295,13 +343,30 @@ export class WorkspaceStateService {
   ): Promise<WorkspaceStateSnapshot> {
     if (!workspaceKey || !isAbsolute(workspaceKey)) {
       this.assertCentralStateAvailable()
-      return this.getCentralSnapshot(workspaceKey, ownerKey)
+      const snapshot = this.getCentralSnapshot(workspaceKey, ownerKey)
+      this.recordSnapshotSelection(snapshot, workspaceKey, ownerKey, 'central')
+      await this.recoveryDiagnostics.flush()
+      return snapshot
     }
 
     const workspacePath = await this.resolveLocalWorkspacePath(workspaceKey)
 
     await this.workspaceQueues.get(getWorkspaceId(workspacePath, ownerKey))?.catch(() => {})
-    return this.getLocalSnapshot(workspacePath, ownerKey, workspaceKey)
+    try {
+      const snapshot = await this.getLocalSnapshot(workspacePath, ownerKey, workspaceKey)
+      await this.recoveryDiagnostics.flush()
+      return snapshot
+    } catch (error) {
+      this.recordRecoveryTrace({
+        event: 'snapshot-missing',
+        outcome: 'local-snapshot-read-failed',
+        workspaceKey: workspacePath,
+        ownerKey,
+        source: 'empty',
+      })
+      await this.recoveryDiagnostics.flush()
+      throw error
+    }
   }
 
   async setSection(
@@ -312,28 +377,46 @@ export class WorkspaceStateService {
   ): Promise<WorkspaceStateSnapshot> {
     if (!workspaceKey || !isAbsolute(workspaceKey)) {
       this.assertCentralStateAvailable()
-      return this.trackOperation(
-        this.enqueueWorkspaceMutation(getWorkspaceId(workspaceKey, ownerKey), async () => {
-          const current = this.getCentralSnapshot(workspaceKey, ownerKey)
-          const next = this.withSection(current, workspaceKey, ownerKey, section, value)
-          this.state.workspaces[next.workspaceId] = next
-          await this.saveState()
-          return next
-        }),
-      )
+      try {
+        const snapshot = await this.trackOperation(
+          this.enqueueWorkspaceMutation(getWorkspaceId(workspaceKey, ownerKey), async () => {
+            const current = this.getCentralSnapshot(workspaceKey, ownerKey)
+            const next = this.withSection(current, workspaceKey, ownerKey, section, value)
+            this.state.workspaces[next.workspaceId] = next
+            await this.saveState()
+            this.recordConversationWrite(workspaceKey, ownerKey, current, next, 'central')
+            return next
+          }),
+        )
+        await this.recoveryDiagnostics.flush()
+        return snapshot
+      } catch (error) {
+        this.recordConversationWriteFailure(workspaceKey, ownerKey, section, value)
+        await this.recoveryDiagnostics.flush()
+        throw error
+      }
     }
 
     const inputQueueKey = `input:${getWorkspaceId(workspaceKey, ownerKey)}`
     const operation = this.enqueueWorkspaceMutation(inputQueueKey, async () => {
       const workspacePath = await this.resolveLocalWorkspacePath(workspaceKey)
       return this.enqueueWorkspaceMutation(getWorkspaceId(workspacePath, ownerKey), async () => {
-        const current = await this.getLocalSnapshot(workspacePath, ownerKey, workspaceKey)
+        const current = await this.getLocalSnapshot(workspacePath, ownerKey, workspaceKey, false)
         const next = this.withSection(current, workspacePath, ownerKey, section, value)
-        await this.persistLocalSnapshot(workspacePath, ownerKey, next)
+        const source = await this.persistLocalSnapshot(workspacePath, ownerKey, next)
+        this.recordConversationWrite(workspacePath, ownerKey, current, next, source)
         return next
       })
     })
-    return this.trackOperation(operation)
+    try {
+      const snapshot = await this.trackOperation(operation)
+      await this.recoveryDiagnostics.flush()
+      return snapshot
+    } catch (error) {
+      this.recordConversationWriteFailure(workspaceKey, ownerKey, section, value)
+      await this.recoveryDiagnostics.flush()
+      throw error
+    }
   }
 
   async clear(workspaceKey?: string | null, ownerKey?: string | null): Promise<void> {
@@ -384,6 +467,11 @@ export class WorkspaceStateService {
       Array.from(this.workspaceQueues.values()).map((queue) => queue.catch(() => {})),
     )
     await this.saveQueue
+    this.recordRecoveryTrace({
+      event: 'shutdown-flush',
+      outcome: 'main-queues-drained',
+    })
+    await this.recoveryDiagnostics.flush()
   }
 
   listLocalWorkspaces(ownerKey?: string | null): WorkspaceStateLocalWorkspaceSummary[] {
@@ -432,6 +520,7 @@ export class WorkspaceStateService {
       workspaceCount: workspaceIds.size,
       fileVersion: this.state.version,
       userData: getUserDataPathDiagnostics(),
+      recoveryTrace: this.recoveryDiagnostics.getSnapshot(),
     }
   }
 
@@ -448,10 +537,16 @@ export class WorkspaceStateService {
     workspacePath: string,
     ownerKey?: string | null,
     legacyWorkspaceKey?: string,
+    diagnoseSelection = true,
   ): Promise<WorkspaceStateSnapshot> {
     const context = await this.ensureProjectContext(workspacePath)
     if (context.projectId) {
-      const projectSnapshot = await this.readProjectSnapshot(workspacePath, ownerKey, context)
+      const projectSnapshot = await this.readProjectSnapshot(
+        workspacePath,
+        ownerKey,
+        context,
+        diagnoseSelection,
+      )
       if (projectSnapshot) {
         const normalized = normalizeSnapshot(projectSnapshot, ownerKey, workspacePath)
         const changed = this.recordLocalWorkspace(
@@ -485,6 +580,9 @@ export class WorkspaceStateService {
             context.projectId,
           )
           await this.saveState()
+          if (diagnoseSelection) {
+            this.recordSnapshotSelection(normalized, workspacePath, ownerKey, 'fallback')
+          }
           return normalized
         } catch (error: unknown) {
           console.warn('[WorkspaceStateService] 项目状态迁移失败，使用 fallback:', error)
@@ -501,6 +599,9 @@ export class WorkspaceStateService {
         context.projectId,
       )
       await this.saveState()
+      if (diagnoseSelection) {
+        this.recordSnapshotSelection(normalized, workspacePath, ownerKey, 'fallback')
+      }
       return normalized
     }
 
@@ -513,6 +614,16 @@ export class WorkspaceStateService {
       context.projectId,
     )
     if (changed) await this.saveState()
+    if (diagnoseSelection) {
+      this.recordRecoveryTrace({
+        event: 'snapshot-missing',
+        outcome: 'created-empty',
+        workspaceKey: workspacePath,
+        ownerKey,
+        source: 'empty',
+        summary: summarizeWorkspaceConversationSnapshot(empty.sections.agentConversations),
+      })
+    }
     return empty
   }
 
@@ -520,7 +631,7 @@ export class WorkspaceStateService {
     workspacePath: string,
     ownerKey: string | null | undefined,
     snapshot: WorkspaceStateSnapshot,
-  ): Promise<void> {
+  ): Promise<'project-primary' | 'fallback'> {
     const context = await this.ensureProjectContext(workspacePath)
     const workspaceId = getWorkspaceId(workspacePath, ownerKey)
 
@@ -537,7 +648,7 @@ export class WorkspaceStateService {
           context.projectId,
         )
         if (removedFallback || indexChanged) await this.saveState()
-        return
+        return 'project-primary'
       } catch (error: unknown) {
         console.warn('[WorkspaceStateService] 项目目录不可写，切换到全局 fallback:', error)
       }
@@ -553,6 +664,110 @@ export class WorkspaceStateService {
       context.projectId,
     )
     await this.saveState()
+    return 'fallback'
+  }
+
+  private recordSnapshotSelection(
+    snapshot: WorkspaceStateSnapshot,
+    workspaceKey: string | null | undefined,
+    ownerKey: string | null | undefined,
+    source: WorkspaceRecoveryTraceEntry['source'],
+  ): void {
+    this.recordRecoveryTrace({
+      event: 'snapshot-selected',
+      outcome: snapshot.sections.agentConversations
+        ? 'with-conversations'
+        : 'without-conversations',
+      workspaceKey,
+      ownerKey,
+      source,
+      summary: summarizeWorkspaceConversationSnapshot(snapshot.sections.agentConversations),
+    })
+  }
+
+  private recordConversationWrite(
+    workspaceKey: string | null | undefined,
+    ownerKey: string | null | undefined,
+    current: WorkspaceStateSnapshot,
+    next: WorkspaceStateSnapshot,
+    source: WorkspaceRecoveryTraceEntry['source'],
+  ): void {
+    if (current.sections.agentConversations === next.sections.agentConversations) return
+    const previousSummary = summarizeWorkspaceConversationSnapshot(
+      current.sections.agentConversations,
+    )
+    const summary = summarizeWorkspaceConversationSnapshot(next.sections.agentConversations)
+    const regressed =
+      summary.storedConversationCount < previousSummary.storedConversationCount ||
+      summary.orderedConversationCount < previousSummary.orderedConversationCount ||
+      summary.messageCount < previousSummary.messageCount ||
+      summary.textCharacterCount < previousSummary.textCharacterCount
+    const structuralChange =
+      summary.storedConversationCount !== previousSummary.storedConversationCount ||
+      summary.orderedConversationCount !== previousSummary.orderedConversationCount ||
+      summary.archivedConversationCount !== previousSummary.archivedConversationCount ||
+      summary.sessionBackedConversationCount !== previousSummary.sessionBackedConversationCount ||
+      summary.messageCount !== previousSummary.messageCount ||
+      summary.streamingMessageCount !== previousSummary.streamingMessageCount ||
+      summary.activeConversationPresent !== previousSummary.activeConversationPresent
+    const crossedTextCheckpoint =
+      Math.floor(summary.textCharacterCount / 4_096) !==
+      Math.floor(previousSummary.textCharacterCount / 4_096)
+    if (!regressed && !structuralChange && !crossedTextCheckpoint) return
+    this.recordRecoveryTrace({
+      event: regressed ? 'conversation-write-regression' : 'conversation-write',
+      outcome: regressed
+        ? 'persisted-smaller-snapshot'
+        : source === 'fallback'
+          ? 'persisted-fallback'
+          : 'persisted',
+      workspaceKey,
+      ownerKey,
+      source,
+      summary,
+      previousSummary,
+    })
+  }
+
+  private recordConversationWriteFailure(
+    workspaceKey: string | null | undefined,
+    ownerKey: string | null | undefined,
+    section: string,
+    value: unknown,
+  ): void {
+    if (section !== 'agentConversations') return
+    this.recordRecoveryTrace({
+      event: 'conversation-write-failed',
+      outcome: 'persistence-error',
+      workspaceKey,
+      ownerKey,
+      summary: summarizeWorkspaceConversationSnapshot(value),
+    })
+  }
+
+  private recordRecoveryTrace(input: {
+    event: WorkspaceRecoveryTraceEvent
+    outcome: string
+    workspaceKey?: string | null
+    ownerKey?: string | null
+    source?: WorkspaceRecoveryTraceEntry['source']
+    summary?: WorkspaceRecoveryTraceEntry['summary']
+    previousSummary?: WorkspaceRecoveryTraceEntry['previousSummary']
+    primaryStatus?: WorkspaceRecoveryTraceEntry['primaryStatus']
+    backupStatus?: WorkspaceRecoveryTraceEntry['backupStatus']
+  }): void {
+    const trace: WorkspaceRecoveryTraceInput = {
+      event: input.event,
+      outcome: input.outcome,
+      workspaceRef: createWorkspaceRecoveryRef(input.workspaceKey),
+      ownerRef: createWorkspaceRecoveryRef(input.ownerKey),
+      source: input.source ?? null,
+      summary: input.summary ?? null,
+      previousSummary: input.previousSummary ?? null,
+      primaryStatus: input.primaryStatus ?? null,
+      backupStatus: input.backupStatus ?? null,
+    }
+    this.recoveryDiagnostics.record(trace)
   }
 
   private withSection(
@@ -750,26 +965,76 @@ export class WorkspaceStateService {
     workspacePath: string,
     ownerKey: string | null | undefined,
     context: ProjectContext,
+    diagnoseSelection: boolean,
   ): Promise<WorkspaceStateSnapshot | null> {
     const stateFilePath = this.getProjectStateFilePath(workspacePath, ownerKey)
     const primary = await this.readProjectStateFile(stateFilePath)
     const backup = await this.readProjectStateFile(`${stateFilePath}.bak`)
     const candidates = [primary, backup]
 
-    const matching = candidates.find(
+    const matchingIndex = candidates.findIndex(
       (candidate) => candidate.status === 'ok' && candidate.value.projectId === context.projectId,
     )
-    if (matching?.status === 'ok') return matching.value.snapshot
+    const matching = matchingIndex >= 0 ? candidates[matchingIndex] : null
+    if (matching?.status === 'ok') {
+      if (!diagnoseSelection) return matching.value.snapshot
+      this.recordRecoveryTrace({
+        event: 'snapshot-selected',
+        outcome: matchingIndex === 0 ? 'project-primary' : 'project-backup',
+        workspaceKey: workspacePath,
+        ownerKey,
+        source: matchingIndex === 0 ? 'project-primary' : 'project-backup',
+        summary: summarizeWorkspaceConversationSnapshot(
+          matching.value.snapshot.sections.agentConversations,
+        ),
+        primaryStatus: primary.status,
+        backupStatus: backup.status,
+      })
+      return matching.value.snapshot
+    }
     const inherited = candidates.some(
       (candidate) =>
         candidate.status === 'ok' && candidate.value.projectId === context.ignoredProjectId,
     )
-    if (inherited) return null
+    if (inherited) {
+      if (!diagnoseSelection) return null
+      this.recordRecoveryTrace({
+        event: 'snapshot-missing',
+        outcome: 'ignored-inherited-project-state',
+        workspaceKey: workspacePath,
+        ownerKey,
+        source: 'empty',
+        primaryStatus: primary.status,
+        backupStatus: backup.status,
+      })
+      return null
+    }
     if (candidates.some((candidate) => candidate.status === 'ok')) {
+      this.recordRecoveryTrace({
+        event: 'snapshot-missing',
+        outcome: 'project-state-identity-mismatch',
+        workspaceKey: workspacePath,
+        ownerKey,
+        source: 'empty',
+        primaryStatus: primary.status,
+        backupStatus: backup.status,
+      })
       throw new Error('项目状态身份与项目清单不匹配')
     }
 
-    if (candidates.every((candidate) => candidate.status === 'missing')) return null
+    if (candidates.every((candidate) => candidate.status === 'missing')) {
+      if (!diagnoseSelection) return null
+      this.recordRecoveryTrace({
+        event: 'snapshot-missing',
+        outcome: 'project-primary-and-backup-missing',
+        workspaceKey: workspacePath,
+        ownerKey,
+        source: 'empty',
+        primaryStatus: primary.status,
+        backupStatus: backup.status,
+      })
+      return null
+    }
     const error = candidates.find(
       (
         candidate,
@@ -778,6 +1043,15 @@ export class WorkspaceStateService {
         { status: 'invalid' | 'unavailable' }
       > => candidate.status === 'invalid' || candidate.status === 'unavailable',
     )
+    this.recordRecoveryTrace({
+      event: 'snapshot-missing',
+      outcome: 'project-primary-and-backup-unreadable',
+      workspaceKey: workspacePath,
+      ownerKey,
+      source: 'empty',
+      primaryStatus: primary.status,
+      backupStatus: backup.status,
+    })
     throw new Error('项目状态及备份均不可读取', { cause: error?.error })
   }
 

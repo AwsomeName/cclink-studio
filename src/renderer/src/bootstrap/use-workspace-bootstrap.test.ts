@@ -10,6 +10,10 @@ import { useBrowserStore } from '../stores/browser-store'
 import { useEditorStore } from '../stores/editor-store'
 import { useTabStore } from '../stores/tab-store'
 import { resolveConversationTab } from '../utils/conversation-tab'
+import {
+  getRendererDiagnosticLogSnapshot,
+  resetRendererDiagnosticsForTest,
+} from '../features/diagnostics/renderer-diagnostic-log'
 
 function snapshot(
   workspacePath: string | null,
@@ -50,6 +54,7 @@ function createDeps(overrides: Partial<WorkspaceBootstrapDeps> = {}): WorkspaceB
 describe('restoreWorkspaceState', () => {
   afterEach(() => {
     resetWorkspaceBootstrapForTests()
+    resetRendererDiagnosticsForTest()
   })
 
   it('启动恢复只运行一次，避免 StrictMode 双 effect 触发工作区竞态', async () => {
@@ -91,6 +96,35 @@ describe('restoreWorkspaceState', () => {
     expect(deps.hydrateLayout).toHaveBeenCalledWith({ sidebarVisible: false })
     expect(deps.hydrateTabs).toHaveBeenCalledWith({ activeTabId: 'doc' })
     expect(deps.initWorkspace).toHaveBeenCalled()
+  })
+
+  it('records redacted conversation counts before and after workspace scoping', async () => {
+    const deps = createDeps({
+      getSettings: vi.fn().mockResolvedValue({ lastWorkspacePath: '/workspace/a' } as any),
+      getWorkspaceState: vi.fn().mockResolvedValue(
+        snapshot('/workspace/a', {
+          agentConversations: {
+            activeConversationId: 'conversation-a',
+            conversationOrder: ['conversation-a'],
+            conversations: {
+              'conversation-a': {
+                id: 'conversation-a',
+                runtime: { workspaceRef: { kind: 'local', path: '/workspace/a' } },
+                messages: [{ role: 'user', rawText: 'private prompt' }],
+              },
+            },
+          },
+        }),
+      ),
+    })
+
+    await restoreWorkspaceState(deps)
+
+    const messages = getRendererDiagnosticLogSnapshot().entries.map((entry) => entry.message)
+    expect(messages.some((message) => message.includes('snapshot-scoped'))).toBe(true)
+    expect(messages.some((message) => message.includes('hydrate-applied'))).toBe(true)
+    expect(messages.join('\n')).not.toContain('private prompt')
+    expect(messages.join('\n')).not.toContain('conversation-a')
   })
 
   it('工作区快照为空时不回退到 global，避免未归档状态串入项目', async () => {

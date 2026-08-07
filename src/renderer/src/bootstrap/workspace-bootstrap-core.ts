@@ -1,6 +1,7 @@
 import type { AppSettings } from '@shared/ipc/settings'
 import type { WorkspaceStateSnapshot } from '@shared/ipc/workspace-state'
 import type { WorkspaceRef } from '@shared/workspace-ref'
+import { summarizeWorkspaceConversationSnapshot } from '@shared/workspace-conversation-diagnostics'
 import {
   scopeWorkspaceAgentSnapshot,
   scopeWorkspaceBrowserSnapshot,
@@ -8,6 +9,7 @@ import {
   scopeWorkspaceTabSnapshot,
   workspaceRefFromKey,
 } from '../utils/conversation-workspace'
+import { recordRendererDiagnosticLog } from '../features/diagnostics/renderer-diagnostic-log'
 
 export interface WorkspaceBootstrapDeps {
   getSettings: () => Promise<AppSettings | null>
@@ -25,6 +27,7 @@ export interface WorkspaceBootstrapDeps {
     value: unknown,
     options?: { workspaceRef?: WorkspaceRef; merge?: boolean },
   ) => void
+  getHydratedAgentConversations?: () => unknown
   initWorkspace: (
     workspacePath: string | null,
     settings: AppSettings | null,
@@ -77,6 +80,9 @@ export async function restoreWorkspaceState(
   try {
     const sections = snapshot.sections
     const workspaceRef = workspaceRefFromKey(workspacePath)
+    const storedConversationSummary = summarizeWorkspaceConversationSnapshot(
+      sections.agentConversations,
+    )
     const scopedAgentSnapshot = scopeWorkspaceAgentSnapshot(
       sections.agentConversations ?? {
         conversations: {},
@@ -85,6 +91,18 @@ export async function restoreWorkspaceState(
       },
       workspaceRef,
     )
+    const scopedConversationSummary = summarizeWorkspaceConversationSnapshot(
+      scopedAgentSnapshot.value,
+    )
+    recordRendererDiagnosticLog('info', [
+      '[ConversationRestore] snapshot-scoped',
+      {
+        workspaceKind: workspaceRef.kind,
+        snapshotUpdatedAt: snapshot.updatedAt,
+        stored: storedConversationSummary,
+        scoped: scopedConversationSummary,
+      },
+    ])
     const scopedTabsSnapshot = scopeWorkspaceTabSnapshot(
       sections.tabs ?? { tabs: [], activeTabId: null },
       scopedAgentSnapshot.conversationIdMap,
@@ -104,7 +122,23 @@ export async function restoreWorkspaceState(
       workspaceRef,
       merge: true,
     })
+    const hydratedConversationSummary = summarizeWorkspaceConversationSnapshot(
+      deps.getHydratedAgentConversations?.() ?? scopedAgentSnapshot.value,
+    )
+    recordRendererDiagnosticLog('info', [
+      '[ConversationRestore] hydrate-applied',
+      {
+        workspaceKind: workspaceRef.kind,
+        storedConversationCount: storedConversationSummary.storedConversationCount,
+        scopedConversationCount: scopedConversationSummary.storedConversationCount,
+        storedMessageCount: storedConversationSummary.messageCount,
+        scopedMessageCount: scopedConversationSummary.messageCount,
+        hydratedConversationCount: hydratedConversationSummary.storedConversationCount,
+        hydratedMessageCount: hydratedConversationSummary.messageCount,
+      },
+    ])
   } catch (error) {
+    recordRendererDiagnosticLog('error', ['[ConversationRestore] hydrate-failed', error])
     deps.warn('[WorkspaceBootstrap] 工作台状态应用失败:', error)
     canPersistRuntime = false
   } finally {

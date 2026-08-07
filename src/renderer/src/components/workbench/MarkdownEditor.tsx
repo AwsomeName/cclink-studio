@@ -38,11 +38,12 @@ import { MarkdownImage, resolveMarkdownImageSource } from '../../features/markdo
 import {
   adjustMarkdownListIndent,
   applyMarkdownLink,
-  handleMarkdownTabKey,
+  handleMarkdownTabKeyDown,
   MarkdownKeyboardShortcuts,
   toggleMarkdownBlockquote,
 } from '../../features/markdown/markdown-editor-shortcuts'
 import { createMarkdownDiagnosticReport } from '../../features/markdown/markdown-diagnostic-report'
+import { isMarkdownHydrationPending } from '../../features/markdown/markdown-editor-hydration'
 import type { FsMarkdownDocumentInspection } from '@shared/ipc/fs'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
@@ -197,19 +198,8 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
               event.code === 'BracketRight' ? 'indent' : 'outdent',
             )
           }
-          if (
-            event.key !== 'Tab' ||
-            event.metaKey ||
-            event.ctrlKey ||
-            event.altKey ||
-            !tiptapEditorRef.current
-          ) {
-            return false
-          }
-          return handleMarkdownTabKey(
-            tiptapEditorRef.current,
-            event.shiftKey ? 'outdent' : 'indent',
-          )
+          if (!tiptapEditorRef.current) return false
+          return handleMarkdownTabKeyDown(tiptapEditorRef.current, event)
         },
         handlePaste: (_view, event) => {
           const image = Array.from(event.clipboardData?.files ?? []).find((file) =>
@@ -903,7 +893,13 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   }
 
   const expectedVersion = `${fileKey}:${fileState.versionHash ?? hashMarkdownSnapshot(fileState.savedContent)}`
-  const hydrationPending = !editor || hydratedVersion !== expectedVersion
+  const hydrationPending = isMarkdownHydrationPending({
+    hasEditor: Boolean(editor),
+    hydratedVersion,
+    expectedVersion,
+    loadedFileKey: loadedVersionRef.current?.fileKey,
+    fileKey,
+  })
 
   return (
     <div className="markdown-editor-wrapper">
