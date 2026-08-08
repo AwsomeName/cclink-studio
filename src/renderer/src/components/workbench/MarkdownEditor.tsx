@@ -38,7 +38,6 @@ import { MarkdownImage, resolveMarkdownImageSource } from '../../features/markdo
 import {
   adjustMarkdownListIndent,
   applyMarkdownLink,
-  handleMarkdownTabKeyDown,
   MarkdownKeyboardShortcuts,
   toggleMarkdownBlockquote,
 } from '../../features/markdown/markdown-editor-shortcuts'
@@ -152,7 +151,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       TableCell,
       TableHeader,
       Link.configure({ openOnClick: false, autolink: true }),
-      MarkdownKeyboardShortcuts.configure({ openLinkEditor }),
+      MarkdownKeyboardShortcuts.configure({ openLinkEditor, tabSize: editorTabSize }),
     ],
     [editorTabSize, filePath, openLinkEditor],
   )
@@ -198,8 +197,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
               event.code === 'BracketRight' ? 'indent' : 'outdent',
             )
           }
-          if (!tiptapEditorRef.current) return false
-          return handleMarkdownTabKeyDown(tiptapEditorRef.current, event)
+          return false
         },
         handlePaste: (_view, event) => {
           const image = Array.from(event.clipboardData?.files ?? []).find((file) =>

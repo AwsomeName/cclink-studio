@@ -2,15 +2,7 @@ import { Extension, type Editor } from '@tiptap/core'
 
 interface MarkdownKeyboardShortcutOptions {
   openLinkEditor: (editor: Editor) => boolean
-}
-
-interface MarkdownTabKeyboardEvent {
-  key: string
-  metaKey: boolean
-  ctrlKey: boolean
-  altKey: boolean
-  shiftKey: boolean
-  preventDefault: () => void
+  tabSize: number
 }
 
 export function applyMarkdownLink(editor: Editor, href: string): boolean {
@@ -26,17 +18,72 @@ export function adjustMarkdownListIndent(editor: Editor, direction: 'indent' | '
     : editor.commands.liftListItem(itemType)
 }
 
-export function handleMarkdownTabKey(editor: Editor, direction: 'indent' | 'outdent'): boolean {
+export function handleMarkdownTabKey(
+  editor: Editor,
+  direction: 'indent' | 'outdent',
+  tabSize = 2,
+): boolean {
   // Code blocks already implement Markdown-safe indentation in their own
   // keymap. Returning false lets that keymap receive the untouched event.
   if (editor.isActive('codeBlock')) return false
   if (editor.isActive('table')) return handleMarkdownTableTab(editor, direction)
 
-  // Markdown has no portable paragraph-indentation syntax. Keep focus inside
-  // the WYSIWYG editor without inserting spaces that could become a hard break
-  // or an indented code block after serialization.
-  adjustMarkdownListIndent(editor, direction)
-  return true
+  const itemType = findMarkdownListItemType(editor)
+  if (itemType) {
+    // A boundary list item cannot always move, but Tab still belongs to the
+    // editor so focus must not escape when the structural command returns false.
+    adjustMarkdownListIndent(editor, direction)
+    return true
+  }
+
+  return adjustMarkdownTextBlockIndent(editor, direction, tabSize)
+}
+
+function adjustMarkdownTextBlockIndent(
+  editor: Editor,
+  direction: 'indent' | 'outdent',
+  requestedTabSize: number,
+): boolean {
+  const tabSize = Math.min(16, Math.max(1, Math.trunc(requestedTabSize) || 2))
+
+  return editor.commands.command(({ state, tr, dispatch }) => {
+    const { from, to, empty } = state.selection
+    const targets: Array<{ start: number; leadingSpaces: number }> = []
+    let containsSelectedTextBlock = false
+
+    state.doc.descendants((node, position) => {
+      if (!node.isTextblock) return true
+
+      const start = position + 1
+      const end = start + node.content.size
+      const selected = empty ? from >= start && from <= end : from <= end && to >= start
+      if (selected) {
+        containsSelectedTextBlock = true
+        // Heading marker spacing is normalized by Markdown parsers, so writing
+        // spaces into a heading would appear to work and then disappear on reopen.
+        if (node.type.name !== 'paragraph') return false
+        const leadingSpaces = node
+          .textBetween(0, node.content.size, '\n', '\n')
+          .match(/^ */)?.[0].length
+        targets.push({ start, leadingSpaces: leadingSpaces ?? 0 })
+      }
+      return false
+    })
+
+    if (targets.length === 0) return containsSelectedTextBlock
+    if (!dispatch) return true
+
+    for (const target of targets.sort((left, right) => right.start - left.start)) {
+      if (direction === 'indent') {
+        tr.insertText(' '.repeat(tabSize), target.start)
+        continue
+      }
+
+      const spacesToRemove = Math.min(target.leadingSpaces, tabSize)
+      if (spacesToRemove > 0) tr.delete(target.start, target.start + spacesToRemove)
+    }
+    return true
+  })
 }
 
 function handleMarkdownTableTab(editor: Editor, direction: 'indent' | 'outdent'): boolean {
@@ -52,14 +99,6 @@ function handleMarkdownTableTab(editor: Editor, direction: 'indent' | 'outdent')
   }
   // Keep focus in the table when it cannot grow further.
   return true
-}
-
-export function handleMarkdownTabKeyDown(editor: Editor, event: MarkdownTabKeyboardEvent): boolean {
-  if (event.key !== 'Tab' || event.metaKey || event.ctrlKey || event.altKey) return false
-
-  const handled = handleMarkdownTabKey(editor, event.shiftKey ? 'outdent' : 'indent')
-  if (handled) event.preventDefault()
-  return handled
 }
 
 function findMarkdownListItemType(editor: Editor): 'listItem' | 'taskItem' | null {
@@ -104,11 +143,14 @@ export const MarkdownKeyboardShortcuts = Extension.create<MarkdownKeyboardShortc
   addOptions() {
     return {
       openLinkEditor: () => false,
+      tabSize: 2,
     }
   },
 
   addKeyboardShortcuts() {
     return {
+      Tab: () => handleMarkdownTabKey(this.editor, 'indent', this.options.tabSize),
+      'Shift-Tab': () => handleMarkdownTabKey(this.editor, 'outdent', this.options.tabSize),
       'Mod-k': () => this.options.openLinkEditor(this.editor),
       'Mod-Alt-0': () => this.editor.commands.setParagraph(),
       'Mod-Shift-b': () => toggleMarkdownBlockquote(this.editor),

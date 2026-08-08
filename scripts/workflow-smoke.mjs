@@ -467,17 +467,47 @@ async function main() {
     )
 
     await editor.locator('p').first().click()
-    const paragraphBeforeTab = await editor.innerHTML()
+    const paragraphBeforeTab = (await editor.locator('p').first().textContent()) ?? ''
     const configuredTabSize = await page.evaluate(
       async () => (await window.cclinkStudio.settings.getAll()).editorTabSize,
     )
     await page.keyboard.press('Tab')
-    await page.keyboard.press('Tab')
-    await page.keyboard.press('Shift+Tab')
     await assertMarkdownEditorFocus(page, 'ordinary paragraph Tab moved focus out of the editor')
+    const indentedParagraph = (await editor.locator('p').first().textContent()) ?? ''
     assert(
-      (await editor.innerHTML()) === paragraphBeforeTab,
-      'ordinary paragraph Tab changed Markdown content or structure',
+      indentedParagraph === `${' '.repeat(configuredTabSize)}${paragraphBeforeTab}`,
+      `ordinary paragraph Tab did not indent content (expected=${configuredTabSize}, actual=${JSON.stringify(indentedParagraph)})`,
+    )
+    await page.keyboard.press(`${modifier}+Z`)
+    assert(
+      (await editor.locator('p').first().textContent()) === paragraphBeforeTab,
+      'undo did not revert ordinary paragraph Tab indentation',
+    )
+    await page.keyboard.press(`${modifier}+Shift+Z`)
+    assert(
+      (await editor.locator('p').first().textContent()) === indentedParagraph,
+      'redo did not restore ordinary paragraph Tab indentation',
+    )
+    await page.keyboard.press(`${modifier}+S`)
+    await page.waitForFunction(
+      () => document.querySelector('.toolbar-save-state')?.textContent?.includes('已保存'),
+      null,
+      { timeout: 10_000 },
+    )
+    const indentedFile = await page.evaluate(
+      async (path) => window.cclinkStudio.fs.readFile(path),
+      markdownPath,
+    )
+    assert(
+      indentedFile.content.startsWith(' '.repeat(configuredTabSize)),
+      `ordinary paragraph Tab indentation was not saved: ${JSON.stringify(indentedFile.content)}`,
+    )
+    await editor.locator('p').first().click()
+    await page.keyboard.press('Shift+Tab')
+    await assertMarkdownEditorFocus(page, 'ordinary paragraph Shift+Tab moved focus out')
+    assert(
+      (await editor.locator('p').first().textContent()) === paragraphBeforeTab,
+      'ordinary paragraph Shift+Tab did not remove indentation',
     )
     await page.keyboard.press('End')
     await page.keyboard.press('Shift+Enter')

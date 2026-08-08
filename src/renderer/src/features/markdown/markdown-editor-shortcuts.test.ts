@@ -1,6 +1,8 @@
-import type { Editor } from '@tiptap/core'
+import { Editor } from '@tiptap/core'
+import { Markdown } from '@tiptap/markdown'
+import StarterKit from '@tiptap/starter-kit'
 import { describe, expect, it, vi } from 'vitest'
-import { handleMarkdownTabKey, handleMarkdownTabKeyDown } from './markdown-editor-shortcuts'
+import { handleMarkdownTabKey } from './markdown-editor-shortcuts'
 
 function createEditor(options?: {
   active?: string
@@ -42,24 +44,81 @@ function createEditor(options?: {
   } as unknown as Editor
 }
 
+function createHeadlessMarkdownEditor(markdown: string): Editor {
+  const editor = new Editor({
+    element: null,
+    extensions: [StarterKit, Markdown],
+    content: { type: 'doc', content: [{ type: 'paragraph' }] },
+  })
+  editor.commands.setContent(markdown, { contentType: 'markdown' })
+  return editor
+}
+
 describe('handleMarkdownTabKey', () => {
-  it.each(['indent', 'outdent'] as const)(
-    'keeps an ordinary Markdown block unchanged for %s',
-    (direction) => {
-      const editor = createEditor()
+  it('indents and outdents an ordinary Markdown block with serializable spaces', () => {
+    const editor = createHeadlessMarkdownEditor('alpha')
+    editor.commands.setTextSelection(3)
 
-      expect(handleMarkdownTabKey(editor, direction)).toBe(true)
-      expect(editor.commands.insertContent).not.toHaveBeenCalled()
-      expect(editor.commands.deleteRange).not.toHaveBeenCalled()
-    },
-  )
+    expect(handleMarkdownTabKey(editor, 'indent', 2)).toBe(true)
+    expect(editor.getMarkdown()).toBe('  alpha')
+    expect(handleMarkdownTabKey(editor, 'outdent', 2)).toBe(true)
+    expect(editor.getMarkdown()).toBe('alpha')
+    editor.destroy()
+  })
 
-  it('does not turn repeated ordinary Tab presses into Markdown indentation syntax', () => {
-    const editor = createEditor()
+  it('indents all selected Markdown blocks together', () => {
+    const editor = createHeadlessMarkdownEditor('alpha\n\nbeta')
+    editor.commands.selectAll()
 
-    expect(handleMarkdownTabKey(editor, 'indent')).toBe(true)
-    expect(handleMarkdownTabKey(editor, 'indent')).toBe(true)
-    expect(editor.commands.insertContent).not.toHaveBeenCalled()
+    expect(handleMarkdownTabKey(editor, 'indent', 2)).toBe(true)
+    expect(editor.getMarkdown()).toBe('  alpha\n\n  beta')
+    expect(handleMarkdownTabKey(editor, 'outdent', 2)).toBe(true)
+    expect(editor.getMarkdown()).toBe('alpha\n\nbeta')
+    editor.destroy()
+  })
+
+  it('preserves ordinary indentation after a Markdown serialize-and-parse round trip', () => {
+    const editor = createHeadlessMarkdownEditor('alpha')
+    editor.commands.setTextSelection(1)
+    handleMarkdownTabKey(editor, 'indent', 2)
+
+    const serialized = editor.getMarkdown()
+    const reopened = createHeadlessMarkdownEditor(serialized)
+    expect(serialized).toBe('  alpha')
+    expect(reopened.getJSON()).toMatchObject({
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: '  alpha' }] }],
+    })
+    reopened.destroy()
+    editor.destroy()
+  })
+
+  it('preserves indentation inside a blockquote after a Markdown round trip', () => {
+    const editor = createHeadlessMarkdownEditor('> alpha')
+    editor.commands.setTextSelection(2)
+
+    expect(handleMarkdownTabKey(editor, 'indent', 2)).toBe(true)
+    const serialized = editor.getMarkdown()
+    const reopened = createHeadlessMarkdownEditor(serialized)
+    expect(serialized).toBe('>   alpha')
+    expect(reopened.getJSON()).toMatchObject({
+      content: [
+        {
+          type: 'blockquote',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: '  alpha' }] }],
+        },
+      ],
+    })
+    reopened.destroy()
+    editor.destroy()
+  })
+
+  it('does not write indentation that Markdown would discard into a heading', () => {
+    const editor = createHeadlessMarkdownEditor('# alpha')
+    editor.commands.setTextSelection(2)
+
+    expect(handleMarkdownTabKey(editor, 'indent', 2)).toBe(true)
+    expect(editor.getMarkdown()).toBe('# alpha')
+    editor.destroy()
   })
 
   it('defers Tab handling inside a code block', () => {
@@ -92,60 +151,7 @@ describe('handleMarkdownTabKey', () => {
 
     expect(handleMarkdownTabKey(editor, 'indent')).toBe(true)
     expect(editor.commands.sinkListItem).toHaveBeenCalledWith('listItem')
-    expect(editor.commands.insertContent).not.toHaveBeenCalled()
     expect(handleMarkdownTabKey(editor, 'outdent')).toBe(true)
     expect(editor.commands.liftListItem).toHaveBeenCalledWith('listItem')
-  })
-})
-
-describe('handleMarkdownTabKeyDown', () => {
-  function createTabEvent(options?: {
-    key?: string
-    metaKey?: boolean
-    ctrlKey?: boolean
-    altKey?: boolean
-    shiftKey?: boolean
-  }) {
-    return {
-      key: options?.key ?? 'Tab',
-      metaKey: options?.metaKey ?? false,
-      ctrlKey: options?.ctrlKey ?? false,
-      altKey: options?.altKey ?? false,
-      shiftKey: options?.shiftKey ?? false,
-      preventDefault: vi.fn(),
-    }
-  }
-
-  it('passes an untouched Tab event to the code-block keymap', () => {
-    const editor = createEditor({ active: 'codeBlock' })
-    const event = createTabEvent({ shiftKey: true })
-
-    expect(handleMarkdownTabKeyDown(editor, event)).toBe(false)
-    expect(event.preventDefault).not.toHaveBeenCalled()
-  })
-
-  it('prevents browser focus navigation at a table boundary', () => {
-    const editor = createEditor({ active: 'table', previousCellResult: false })
-    const event = createTabEvent({ shiftKey: true })
-
-    expect(handleMarkdownTabKeyDown(editor, event)).toBe(true)
-    expect(event.preventDefault).toHaveBeenCalledOnce()
-  })
-
-  it('keeps an ordinary Tab inside the editor without changing Markdown content', () => {
-    const editor = createEditor()
-    const event = createTabEvent()
-
-    expect(handleMarkdownTabKeyDown(editor, event)).toBe(true)
-    expect(event.preventDefault).toHaveBeenCalledOnce()
-    expect(editor.commands.insertContent).not.toHaveBeenCalled()
-  })
-
-  it('does not intercept modified Tab shortcuts', () => {
-    const editor = createEditor()
-    const event = createTabEvent({ ctrlKey: true })
-
-    expect(handleMarkdownTabKeyDown(editor, event)).toBe(false)
-    expect(event.preventDefault).not.toHaveBeenCalled()
   })
 })

@@ -119,7 +119,7 @@ export function EditorToolbar({
           onClick: () => editor.chain().focus().toggleBlockquote().run(),
         },
         {
-          label: '{ }',
+          label: '{}',
           title: '代码块 (⌘⌥C)',
           isActive: () => editor.isActive('codeBlock'),
           onClick: () => editor.chain().focus().toggleCodeBlock().run(),
