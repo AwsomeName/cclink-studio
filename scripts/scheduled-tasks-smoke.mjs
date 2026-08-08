@@ -22,10 +22,14 @@ async function readLog() {
   return readFile(logFile, 'utf8').catch(() => '')
 }
 
-async function waitForCdpPort(timeoutMs = 30_000) {
+async function waitForCdpPort(timeoutMs = 30_000, previousLog = '') {
   const startedAt = Date.now()
   while (Date.now() - startedAt < timeoutMs) {
-    const log = await readLog()
+    const completeLog = await readLog()
+    const log =
+      previousLog && completeLog.startsWith(previousLog)
+        ? completeLog.slice(previousLog.length)
+        : completeLog
     const match =
       log.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//) ||
       log.match(/\[CCLink Studio\] CDP .*?:\s*(\d+)/)
@@ -90,9 +94,12 @@ async function main() {
   await rm(join(dirname(logFile), 'user-data'), { recursive: true, force: true })
   await rm(logFile, { force: true })
 
+  const previousLog = await readLog()
   runRestart('start')
   started = true
-  browser = await chromium.connectOverCDP(`http://127.0.0.1:${await waitForCdpPort()}`)
+  browser = await chromium.connectOverCDP(
+    `http://127.0.0.1:${await waitForCdpPort(30_000, previousLog)}`,
+  )
   let page = await findRendererPage()
   await page.setViewportSize({ width: 1440, height: 920 })
   await page.waitForSelector('.main-window', { timeout: 30_000 })
@@ -346,9 +353,12 @@ async function main() {
     'Studio still has a managed background process after stop',
   )
 
+  const restartLog = await readLog()
   runRestart('start')
   started = true
-  browser = await chromium.connectOverCDP(`http://127.0.0.1:${await waitForCdpPort()}`)
+  browser = await chromium.connectOverCDP(
+    `http://127.0.0.1:${await waitForCdpPort(30_000, restartLog)}`,
+  )
   page = await findRendererPage()
   await page.waitForSelector('.main-window', { timeout: 30_000 })
   const missedRun = await waitForTerminalRun(page, exitSaved.task.definition.id, 30_000)

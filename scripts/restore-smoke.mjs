@@ -32,10 +32,14 @@ async function readLog() {
   return readFile(logFile, 'utf8').catch(() => '')
 }
 
-async function waitForCdpPort(timeoutMs = 30_000) {
+async function waitForCdpPort(timeoutMs = 30_000, previousLog = '') {
   const startedAt = Date.now()
   while (Date.now() - startedAt < timeoutMs) {
-    const log = await readLog()
+    const completeLog = await readLog()
+    const log =
+      previousLog && completeLog.startsWith(previousLog)
+        ? completeLog.slice(previousLog.length)
+        : completeLog
     const portMatch =
       log.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//) ||
       log.match(/\[CCLink Studio\] CDP .*?:\s*(\d+)/)
@@ -56,8 +60,8 @@ async function findRendererPage(browser) {
   throw new Error(`Renderer page ${rendererOrigin}/ not found`)
 }
 
-async function connectRenderer() {
-  const cdpPort = await waitForCdpPort()
+async function connectRenderer(previousLog = '') {
+  const cdpPort = await waitForCdpPort(30_000, previousLog)
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`)
   const page = await findRendererPage(browser)
   await page.setViewportSize({ width: 1440, height: 920 })
@@ -109,16 +113,18 @@ function cleanupWorkspaceDir() {
 }
 
 async function restartAndReconnect() {
+  const previousLog = await readLog()
   await closeRenderer()
   runRestart('restart')
-  return connectRenderer()
+  return connectRenderer(previousLog)
 }
 
 async function main() {
+  const initialLog = await readLog()
   runRestart('restart')
   startedBySmoke = true
 
-  const { page } = await connectRenderer()
+  const { page } = await connectRenderer(initialLog)
   let workspaceName = null
 
   await runCheck('prepare persisted startup workspace', async () => {

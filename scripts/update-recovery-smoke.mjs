@@ -57,8 +57,9 @@ async function main() {
     { mode: 0o600 },
   )
 
+  const initialLog = await readFile(logFile, 'utf8').catch(() => '')
   runRestart('restart')
-  const cdpPort = await waitForCdpPort()
+  const cdpPort = await waitForCdpPort(30_000, initialLog)
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`)
   try {
     const page = await findRendererPage(browser)
@@ -106,10 +107,14 @@ function stableStringify(value) {
   return JSON.stringify(value)
 }
 
-async function waitForCdpPort(timeoutMs = 30_000) {
+async function waitForCdpPort(timeoutMs = 30_000, previousLog = '') {
   const startedAt = Date.now()
   while (Date.now() - startedAt < timeoutMs) {
-    const log = await readFile(logFile, 'utf8').catch(() => '')
+    const completeLog = await readFile(logFile, 'utf8').catch(() => '')
+    const log =
+      previousLog && completeLog.startsWith(previousLog)
+        ? completeLog.slice(previousLog.length)
+        : completeLog
     const match =
       log.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//) ||
       log.match(/\[CCLink Studio\] CDP .*?:\s*(\d+)/)
