@@ -8,6 +8,7 @@ import {
   buildKeyboardContextMenuInput,
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
+import { ConversationMarkdown, markdownPreviewText } from './ConversationMarkdown'
 
 type ToolContentBlock = Extract<ContentBlock, { type: 'tool_use' | 'tool_result' }>
 type ThinkingContentBlock = Extract<ContentBlock, { type: 'thinking' }>
@@ -81,6 +82,7 @@ export function ConversationMessageRenderer({
           key={index}
           unit={unit}
           isStreaming={message.isStreaming === true}
+          renderMarkdown={message.role === 'assistant'}
         />
       ))}
       {message.resources && message.resources.length > 0 && (
@@ -166,9 +168,11 @@ export function buildContentRenderUnits(blocks: ContentBlock[]): ContentRenderUn
 function ContentRenderUnitRenderer({
   unit,
   isStreaming,
+  renderMarkdown,
 }: {
   unit: ContentRenderUnit
   isStreaming: boolean
+  renderMarkdown: boolean
 }): React.ReactElement {
   if (unit.type === 'tool_group') {
     return <ToolExecutionGroup blocks={unit.blocks} isStreaming={isStreaming} />
@@ -177,12 +181,19 @@ function ContentRenderUnitRenderer({
     return <ThinkingGroup blocks={unit.blocks} />
   }
 
-  return <ContentBlockRenderer block={unit.block} />
+  return <ContentBlockRenderer block={unit.block} renderMarkdown={renderMarkdown} />
 }
 
-export function ContentBlockRenderer({ block }: { block: ContentBlock }): React.ReactElement {
+export function ContentBlockRenderer({
+  block,
+  renderMarkdown = false,
+}: {
+  block: ContentBlock
+  renderMarkdown?: boolean
+}): React.ReactElement {
   switch (block.type) {
     case 'text':
+      if (renderMarkdown) return <ConversationMarkdown source={block.text} />
       return (
         <div className="content-text">
           {block.text.split('\n').map((line, index) => (
@@ -195,7 +206,7 @@ export function ContentBlockRenderer({ block }: { block: ContentBlock }): React.
       )
 
     case 'thinking': {
-      const thinkingPreview = previewText(block.thinking, 56) || '查看推理摘要'
+      const thinkingPreview = previewText(markdownPreviewText(block.thinking), 56) || '查看推理摘要'
       return (
         <details className="content-thinking">
           <summary>
@@ -246,7 +257,7 @@ export function ContentBlockRenderer({ block }: { block: ContentBlock }): React.
 
 function ThinkingGroup({ blocks }: { blocks: ThinkingContentBlock[] }): React.ReactElement {
   const joined = blocks.map((block) => block.thinking).join('\n\n')
-  const preview = previewText(joined, 72) || '查看推理摘要'
+  const preview = previewText(markdownPreviewText(joined), 72) || '查看推理摘要'
 
   return (
     <details className="content-thinking content-thinking-group">
