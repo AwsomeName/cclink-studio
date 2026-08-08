@@ -1,6 +1,6 @@
 # Agent 对话系统
 
-> 当前事实源。最后更新：2026-07-31。
+> 当前事实源。最后更新：2026-08-07。
 
 ## 概述
 
@@ -54,6 +54,16 @@ claude login
 > **当前阶段**：本仓库已经具备 Agent 内核、Claude Code 后端、Runtime
 > 选择与探测、设置页、会话持久化、流式事件、工具桥接、权限确认、诊断和图片输入。
 > HTTP API / OpenAI 兼容直连暂不作为完整工具 Agent。
+
+### 产品方向：CCLink Agent + 可替换模型服务
+
+ADR 0006 已确定产品边界：CCLink 提供一致的 Agent Runtime，拥有 Thread、上下文、工具
+循环、MCP、权限、角色、调度、诊断和用量事实；用户只选择受支持的模型服务、模型和本地
+凭证。更换模型服务不能更换 Agent 产品语义或绕过 Studio 的工具与人工确认边界。
+
+当前 Claude Code backend 仍是唯一已交付的完整工具 Agent。供应商无关的模型 Adapter 与
+自有模型循环是后续目标，尚未实现。ACP、用户自带 Agent 可执行文件、Agent Registry 和
+外部 Agent 框架不进入当前产品路线。
 
 ## 设计原则
 
@@ -418,12 +428,16 @@ CCLink Studio 设置页负责：
 - 配置权限模式。
 - 查看模型费用统计；费用数据不参与调用限制。
 
-### 后续方案：HTTP Chat / HTTP Tool Agent
+### 后续方案：自有 Agent Loop 与 Model Service Adapter
 
-OpenAI 兼容 HTTP API 后续可以作为独立能力接入，但不能和当前完整工具 Agent 混为一谈：
+后续模型服务接入必须复用同一套 CCLink Thread、MCP 工具、权限、取消、诊断和恢复语义。
+Model Service Adapter 只归一化模型请求、流式内容、结构化工具请求、工具结果、用量、取消
+和错误，不拥有第二份 Agent Session 或直接调用业务工具。
 
-- `HTTP Chat`：纯对话、写文案、总结，不承诺浏览器/编辑器工具调用。
-- `HTTP Tool Agent`：未来需要完整 tool calling / MCP loop，再作为新后端接入。
+- `HTTP Chat`：如单独提供，只是纯对话、写作或总结能力，不能冒充完整工具 Agent。
+- `Model Service Adapter`：必须经过真实 tool calling、多轮工具结果、图片、取消、上下文、
+  用量和失败降级能力矩阵；不能因为端点自称 OpenAI-compatible 就推断全部支持。
+- `ACP / BYO Agent`：非目标。Studio 不安装或运行用户自带 Agent 框架。
 
 ### AgentBridge — 统一接口
 
@@ -513,6 +527,7 @@ interface Message {
 | 取消、错误状态和诊断复制              | 已实现 | 诊断默认脱敏                                    |
 | 图片输入                              | 已实现 | PNG/JPEG/GIF/WebP；单条最多 5 张、单张最多 5 MB |
 | HTTP/OpenAI Compatible 完整工具 Agent | 未实现 | 不与普通 Chat Completion 混为一谈               |
+| ACP / 用户自带 Agent                  | 非目标 | CCLink 提供 Agent Runtime，用户只选择模型服务   |
 | 多 Agent、跨会话记忆、操作回放        | 未实现 | 需要单独产品规格和架构评审                      |
 
 图片可以通过文件选择、粘贴或拖放加入 Composer。图片正文只进入当前待发送消息，

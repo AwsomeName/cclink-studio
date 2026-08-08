@@ -37,3 +37,4 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
 - `0003-plaintext-local-credentials.md`：OSS 不依赖系统钥匙串，使用 `userData` 下的独立明文文件管理用户第三方凭证，并统一状态所有者、IPC、迁移和诊断边界。
 - `0004-independent-edition-release-pipelines.md`：开源版与商业版由各自仓库独立构建和发布，不建立跨仓库发布依赖。
 - `0005-macos-update-installer-gate.md`：淘汰会建立第二检查/下载状态机的现成 updater，只允许受真实签名与回滚实验约束的最小 Helper 候选；闸门前维持可信 DMG。
+- `0006-owned-agent-runtime-model-service-boundary.md`：CCLink 拥有一致的 Agent Runtime，用户只选择受支持的模型服务；ACP、用户自带 Agent 和外部 Agent Registry 不进入当前产品路线。

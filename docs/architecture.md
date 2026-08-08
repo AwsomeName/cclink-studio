@@ -1,6 +1,6 @@
 # CCLink Studio 架构说明
 
-> 当前事实源。最后更新：2026-08-05。
+> 当前事实源。最后更新：2026-08-07。
 
 ## 结论
 
@@ -118,6 +118,12 @@ ADR 0004 已实施开源版与商业版独立发布。OSS Release 只从本仓�
 构建、签名、公证并创建 Draft Release；商业版发布仍由 `cclink-dev` 独立拥有，
 两条链路不得读取对方的凭证、配置或发布状态。
 
+ADR 0006 已确定 Agent 产品边界：CCLink 拥有 Thread、上下文、工具循环、MCP、权限、
+角色、调度、诊断和用量事实，用户只选择受支持的模型服务、模型与本地凭证。ACP、用户
+自带 Agent 可执行文件和外部 Agent Registry 不进入当前路线。当前实现仍以本地 Claude
+Code backend 为唯一完整工具 Agent；供应商无关的 Model Adapter 与自有模型循环尚未交付，
+不得把 Provider 设置、HTTP 连通性或普通 Chat 宣称为该目标已经完成。
+
 已关闭的稳定化阶段、修复顺序和退出证据见 `docs/stabilization.md`。后续功能按本架构宪法和 `docs/development.md` 的门禁受控推进。
 
 ## 网站账号与网页事务领域
@@ -151,6 +157,8 @@ CCLink Studio 开源壳保留这些本地能力：
 - VSCode 风格布局：Activity Bar、Sidebar、Workbench、Agent Panel、Status Bar。
 - 本地工作空间、标签页、浏览器、Markdown 编辑器、Android/设备视图、Terminal。
 - 本地 Agent 会话、本地 Claude Code 后端、MCP 工具系统和权限确认。
+- Agent 产品边界由 CCLink Runtime 统一拥有；未来模型服务通过有界 Adapter 接入，不接入
+  用户自带 Agent 框架、ACP 可执行文件或外部 Agent Registry。
 - Markdown 自动配图；`ImageGenerationService` 统一调度 Meshy 与即梦 Provider，
   `MarkdownIllustrationService` 负责文档哈希、资产写入和引用插入事务。
 - 用户自有第三方凭证的本地明文管理；凭证不依赖 CCLink 账号、云服务或系统钥匙串。
