@@ -10,6 +10,10 @@ import { createTabCommands } from './tab-commands'
 import { createViewCommands } from './view-commands'
 import { createWindowCommands } from './window-commands'
 import { useSettingsStore } from '../../stores/settings-store'
+import { useAgentStore } from '../../stores/agent-store'
+import { useUIStore } from '../../stores/ui-store'
+import { useWorkspaceStore } from '../../stores/workspace-store'
+import { localWorkspaceRef } from '@shared/workspace-ref'
 
 function createAllCommands(): Command[] {
   return [
@@ -45,6 +49,54 @@ describe('bootstrap command modules', () => {
     expect(ids).toContain('agent.resetSession')
     expect(ids).toContain('diagnostics.copyWorkspaceState')
     expect(ids).toContain('window.reload')
+  })
+
+  it('新建 Agent 会话绑定当前工作空间并打开右侧输入框', async () => {
+    const workspaceRef = localWorkspaceRef('/workspace/current')
+    const createConversation = vi.fn(() => 'conversation-new')
+    const setAgentPanelMode = vi.fn()
+    const resetSession = vi.fn()
+    const dispatchEvent = vi.fn()
+
+    vi.spyOn(useWorkspaceStore, 'getState').mockReturnValue({
+      activeWorkspaceRef: workspaceRef,
+    } as ReturnType<typeof useWorkspaceStore.getState>)
+    vi.spyOn(useAgentStore, 'getState').mockReturnValue({
+      createConversation,
+    } as unknown as ReturnType<typeof useAgentStore.getState>)
+    vi.spyOn(useUIStore, 'getState').mockReturnValue({ setAgentPanelMode } as unknown as ReturnType<
+      typeof useUIStore.getState
+    >)
+    vi.stubGlobal('window', {
+      cclinkStudio: { agent: { resetSession } },
+      dispatchEvent,
+    })
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
+
+    try {
+      await createAgentCommands()
+        .find((command) => command.id === 'agent.newConversation')
+        ?.action({ source: 'toolbar' })
+
+      expect(createConversation).toHaveBeenCalledWith({
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'cclink-studio-agent',
+          workspaceRef,
+        },
+        activate: true,
+      })
+      expect(setAgentPanelMode).toHaveBeenCalledWith('right', 'user')
+      expect(resetSession).toHaveBeenCalledWith('conversation-new')
+      expect(dispatchEvent).toHaveBeenCalledOnce()
+    } finally {
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
+    }
   })
 
   it('routes application zoom commands through the persisted settings owner', async () => {

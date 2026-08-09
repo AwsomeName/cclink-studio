@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useAgentStore } from '../../stores/agent-store'
 import { useCommandStore } from '../../stores/command-store'
 import type { AgentPanelMode } from '../../stores/ui-store'
@@ -6,6 +6,7 @@ import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useToastStore } from '../common/Toast'
 import { buildQuickThreadList } from '../../features/agent-conversations/view-model'
 import { workspaceRefKey } from '@shared/workspace-ref'
+import { IconPlus } from '../common/Icons'
 import {
   formatQuickSwitcherTitle,
   partitionQuickSwitcherThreads,
@@ -76,8 +77,6 @@ export function ConversationQuickSwitcher({
     }
   }, [overflowOpen])
 
-  if (recentConversations.length === 0) return null
-
   const openConversation = async (conversationId: string): Promise<void> => {
     setOverflowOpen(false)
     const conversation = conversations[conversationId]
@@ -97,6 +96,19 @@ export function ConversationQuickSwitcher({
       },
     })
     if (!result.ok) showToast(result.message ?? '会话切换失败', 'error')
+  }
+
+  const createConversation = async (): Promise<void> => {
+    setOverflowOpen(false)
+    const result = await executeCommand('agent.newConversation', {
+      source: 'toolbar',
+      target: {
+        kind: 'layout',
+        workspaceKey,
+        area: 'agent',
+      },
+    })
+    if (!result.ok) showToast(result.message ?? '新建会话失败', 'error')
   }
 
   return (
@@ -176,6 +188,16 @@ export function ConversationQuickSwitcher({
           )}
         </div>
       )}
+
+      <button
+        type="button"
+        className="conversation-quick-new-button"
+        title="新建会话"
+        aria-label="新建会话"
+        onClick={() => void createConversation()}
+      >
+        <IconPlus size={14} />
+      </button>
     </div>
   )
 }

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import type { QuickThreadSummary } from '../../features/agent-conversations/view-model'
+import { useAgentStore } from '../../stores/agent-store'
+import { ConversationQuickSwitcher } from './ConversationQuickSwitcher'
 import {
   formatQuickSwitcherTitle,
   partitionQuickSwitcherThreads,
@@ -69,5 +73,25 @@ describe('conversation quick switcher', () => {
     expect(quickSwitcherVisibleCount('right', 320)).toBe(2)
     expect(quickSwitcherVisibleCount('hidden', 900)).toBe(1)
     expect(quickSwitcherVisibleCount('center', 900)).toBe(1)
+  })
+
+  it('keeps the new-conversation button visible when the workspace has no conversations', () => {
+    const originalState = useAgentStore.getState()
+    useAgentStore.setState({
+      conversations: {},
+      conversationOrder: [],
+      activeConversationId: '',
+      pendingConfirmations: [],
+    })
+
+    try {
+      const markup = renderToStaticMarkup(
+        createElement(ConversationQuickSwitcher, { panelMode: 'right', panelWidth: 560 }),
+      )
+      expect(markup).toContain('class="conversation-quick-new-button"')
+      expect(markup).toContain('aria-label="新建会话"')
+    } finally {
+      useAgentStore.setState(originalState, true)
+    }
   })
 })

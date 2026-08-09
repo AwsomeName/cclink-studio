@@ -4,6 +4,7 @@ import {
   useFsStore,
   useBrowserStore,
   useAgentStore,
+  useCommandStore,
   useWorkspaceStore,
 } from '../../stores'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
@@ -23,7 +24,6 @@ import {
   getWorkspaceConversationGroups,
   LocalSessionsList,
 } from '../../features/agent-conversations/local-session-sidebar'
-import { createConversationRuntimeForWorkspace } from '../../features/agent-conversations/view-model'
 import {
   IconFitWidth,
   IconBookmark,
@@ -57,6 +57,7 @@ import {
 import { ScheduledTasksSidebar } from '../../features/scheduled-tasks/ScheduledTasksSidebar'
 import { createScheduledTaskTab } from '../../features/scheduled-tasks/scheduled-task-view-model'
 import { AgentRolesSidebar } from '../../features/agent-roles/AgentRolesSidebar'
+import { useToastStore } from '../common/Toast'
 
 function getProjectName(path: string): string {
   return path.split('/').filter(Boolean).pop() ?? path
@@ -105,8 +106,8 @@ export function Sidebar(): React.ReactElement {
   const workspacePath = useFsStore((s) => s.workspacePath)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const openTab = useTabStore((s) => s.openTab)
-  const createConversation = useAgentStore((s) => s.createConversation)
-  const setAgentPanelMode = useUIStore((s) => s.setAgentPanelMode)
+  const executeCommand = useCommandStore((s) => s.executeCommand)
+  const showToast = useToastStore((s) => s.show)
   const sidebarTitle = getSidebarTitle(activePanel, activeWorkspaceRef, workspacePath)
   const showContextMenu = useContextMenuStore((s) => s.show)
   const sidebarTarget = {
@@ -121,14 +122,17 @@ export function Sidebar(): React.ReactElement {
     void recordTerminalLifecycleEvent(draft.terminal, 'created', 'Terminal Tab 已创建')
   }, [activeWorkspaceRef, openTab])
 
-  const openNewConversation = useCallback((): void => {
-    const conversationId = createConversation({
-      runtime: createConversationRuntimeForWorkspace(activeWorkspaceRef),
-      activate: true,
+  const openNewConversation = useCallback(async (): Promise<void> => {
+    const result = await executeCommand('agent.newConversation', {
+      source: 'toolbar',
+      target: {
+        kind: 'layout',
+        workspaceKey: workspaceRefKey(activeWorkspaceRef),
+        area: 'agent',
+      },
     })
-    setAgentPanelMode('right', 'user')
-    void window.cclinkStudio.agent.resetSession(conversationId)
-  }, [activeWorkspaceRef, createConversation, setAgentPanelMode])
+    if (!result.ok) showToast(result.message ?? '新建会话失败', 'error')
+  }, [activeWorkspaceRef, executeCommand, showToast])
 
   const openNewScheduledTask = useCallback((): void => {
     if (!workspacePath || activeWorkspaceRef.kind !== 'local') return
@@ -194,7 +198,7 @@ export function Sidebar(): React.ReactElement {
           <button
             className="sidebar-header-action"
             type="button"
-            onClick={openNewConversation}
+            onClick={() => void openNewConversation()}
             title="新建会话"
             aria-label="新建会话"
           >
