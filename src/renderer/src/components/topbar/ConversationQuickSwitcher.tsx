@@ -5,6 +5,11 @@ import type { AgentPanelMode } from '../../stores/ui-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useToastStore } from '../common/Toast'
 import { buildQuickThreadList } from '../../features/agent-conversations/view-model'
+import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
+import {
+  buildKeyboardContextMenuInput,
+  isContextMenuKeyboardEvent,
+} from '../../features/context-actions/context-menu-trigger'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { IconPlus } from '../common/Icons'
 import {
@@ -30,6 +35,7 @@ export function ConversationQuickSwitcher({
   const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const executeCommand = useCommandStore((state) => state.executeCommand)
   const showToast = useToastStore((state) => state.show)
+  const showContextMenu = useContextMenuStore((state) => state.show)
   const rootRef = useRef<HTMLDivElement>(null)
   const [overflowOpen, setOverflowOpen] = useState(false)
   const workspaceKey = workspaceRefKey(activeWorkspaceRef)
@@ -111,6 +117,19 @@ export function ConversationQuickSwitcher({
     if (!result.ok) showToast(result.message ?? '新建会话失败', 'error')
   }
 
+  const getConversationTarget = (conversationId: string) => {
+    const conversation = conversations[conversationId]
+    if (!conversation) return null
+    return {
+      kind: 'thread' as const,
+      workspaceKey: conversation.runtime.workspaceRef
+        ? workspaceRefKey(conversation.runtime.workspaceRef)
+        : null,
+      conversationId,
+      activeRunId: conversation.activeRunId,
+    }
+  }
+
   return (
     <div
       ref={rootRef}
@@ -145,7 +164,28 @@ export function ConversationQuickSwitcher({
             title={`${conversation.title} · ${conversation.statusLabel}`}
             aria-label={`切换到会话：${conversation.title}，${conversation.statusLabel}`}
             aria-selected={conversation.isActive}
+            aria-haspopup="menu"
             onClick={() => void openConversation(conversation.id)}
+            onContextMenu={(event) => {
+              const target = getConversationTarget(conversation.id)
+              if (!target) return
+              event.preventDefault()
+              event.stopPropagation()
+              showContextMenu({
+                target,
+                x: event.clientX,
+                y: event.clientY,
+                focusReturn: event.currentTarget,
+              })
+            }}
+            onKeyDown={(event) => {
+              if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+              const target = getConversationTarget(conversation.id)
+              if (!target) return
+              event.preventDefault()
+              event.stopPropagation()
+              showContextMenu(buildKeyboardContextMenuInput(target, event.currentTarget))
+            }}
           >
             <span className="conversation-quick-status" aria-hidden="true" />
             <span className="conversation-quick-title">
@@ -177,7 +217,28 @@ export function ConversationQuickSwitcher({
                   role="menuitem"
                   className={`status-${conversation.statusKind}`}
                   title={conversation.title}
+                  aria-haspopup="menu"
                   onClick={() => void openConversation(conversation.id)}
+                  onContextMenu={(event) => {
+                    const target = getConversationTarget(conversation.id)
+                    if (!target) return
+                    event.preventDefault()
+                    event.stopPropagation()
+                    showContextMenu({
+                      target,
+                      x: event.clientX,
+                      y: event.clientY,
+                      focusReturn: event.currentTarget,
+                    })
+                  }}
+                  onKeyDown={(event) => {
+                    if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+                    const target = getConversationTarget(conversation.id)
+                    if (!target) return
+                    event.preventDefault()
+                    event.stopPropagation()
+                    showContextMenu(buildKeyboardContextMenuInput(target, event.currentTarget))
+                  }}
                 >
                   <span className="conversation-quick-status" aria-hidden="true" />
                   <span>{conversation.title}</span>

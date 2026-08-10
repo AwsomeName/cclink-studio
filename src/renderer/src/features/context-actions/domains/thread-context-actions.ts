@@ -97,7 +97,7 @@ export function createThreadContextCommands(): Command[] {
     },
     {
       id: 'agent.archiveConversation',
-      label: '移到历史会话',
+      label: '关闭会话',
       contextOnly: true,
       category: '会话',
       visible: (context) => Boolean(currentThread(context) && !currentThread(context)?.archivedAt),

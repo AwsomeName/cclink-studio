@@ -172,7 +172,22 @@ async function main() {
       Math.abs(widths.panel - widths.topbar) < 1,
       `topbar switcher width is not aligned with Agent panel (${widths.topbar} vs ${widths.panel})`,
     )
-    return 'topbar switcher aligned and Agent reopened'
+
+    const quickTab = page.locator('.conversation-quick-tab').first()
+    await quickTab.click({ button: 'right' })
+    const contextMenu = page.locator('.unified-context-menu')
+    await contextMenu.waitFor({ state: 'visible', timeout: 10_000 })
+    assert(
+      await contextMenu.getByRole('menuitem', { name: '重命名' }).isVisible(),
+      'quick conversation menu is missing rename',
+    )
+    assert(
+      await contextMenu.getByRole('menuitem', { name: '关闭会话' }).isVisible(),
+      'quick conversation menu is missing close',
+    )
+    await page.keyboard.press('Escape')
+    await contextMenu.waitFor({ state: 'hidden', timeout: 10_000 })
+    return 'topbar switcher aligned, Agent reopened, and thread menu available'
   })
 
   await runCheck('activity bar switches local panels', async () => {

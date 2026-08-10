@@ -19,6 +19,7 @@ const expectedRendererContextMenuOwners = new Set([
   'src/renderer/src/components/sidebar/ProjectOperationsSection.tsx',
   'src/renderer/src/components/sidebar/Sidebar.tsx',
   'src/renderer/src/components/status-bar/StatusBar.tsx',
+  'src/renderer/src/components/topbar/ConversationQuickSwitcher.tsx',
   'src/renderer/src/components/workbench/AndroidDisplay.tsx',
   'src/renderer/src/components/workbench/FilePreview.tsx',
   'src/renderer/src/components/workbench/SourceTextEditor.tsx',
