@@ -3,6 +3,7 @@ import {
   cadConvertRequestSchema,
   hardwarePackageEntrySchema,
   projectOpsPublicationSchema,
+  workspaceStateConversationValueSchema,
   workspaceStateValueSchema,
 } from './workbench-ipc-schema'
 
@@ -33,5 +34,12 @@ describe('workbench IPC schemas', () => {
     expect(() => workspaceStateValueSchema.parse({ value: Number.NaN })).toThrow('非有限数字')
     expect(() => workspaceStateValueSchema.parse(new Date())).toThrow('普通 JSON 对象')
     expect(workspaceStateValueSchema.parse({ tabs: [] })).toEqual({ tabs: [] })
+  })
+
+  it('allows bounded long-running Agent history without relaxing other workspace sections', () => {
+    const sixMegabytes = { content: 'x'.repeat(6 * 1024 * 1024) }
+
+    expect(() => workspaceStateValueSchema.parse(sixMegabytes)).toThrow('超过大小限制')
+    expect(workspaceStateConversationValueSchema.parse(sixMegabytes)).toEqual(sixMegabytes)
   })
 })

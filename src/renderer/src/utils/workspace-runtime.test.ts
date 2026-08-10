@@ -215,6 +215,34 @@ describe('workspace-runtime', () => {
     expect(Object.keys(browserPayload.tabs)).toEqual(['browser-a'])
   })
 
+  it('单个状态分区保存失败时记录具体分区并允许项目切换继续', async () => {
+    const setSection = window.cclinkStudio.workspaceState.setSection as ReturnType<typeof vi.fn>
+    setSection.mockImplementation(async (_workspaceKey: string, section: string) =>
+      section === 'agentConversations'
+        ? { success: false, error: '保存 agentConversations 失败：超过大小限制' }
+        : { success: true },
+    )
+    setSection.mockClear()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    const result = await persistRuntimeSections('/workspace/a')
+
+    expect(result).toEqual({
+      success: false,
+      failures: [
+        {
+          section: 'agentConversations',
+          message: '保存 agentConversations 失败：超过大小限制',
+        },
+      ],
+    })
+    expect(setSection).toHaveBeenCalledTimes(4)
+    expect(error).toHaveBeenCalledWith(
+      '[WorkspaceRuntime] 工作台状态分区保存失败，项目切换继续:',
+      expect.objectContaining({ section: 'agentConversations' }),
+    )
+  })
+
   it('切换项目时保留后台运行会话，并在切回后显示完整结果', async () => {
     const startedAt = Date.now() - 60_000
     const projectASnapshot = workspaceSnapshot('/workspace/a', {

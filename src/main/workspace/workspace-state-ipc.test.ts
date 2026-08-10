@@ -42,8 +42,33 @@ describe('registerWorkspaceStateIpc', () => {
         { content: 'x'.repeat(5 * 1024 * 1024 + 1) },
         null,
       ),
-    ).resolves.toMatchObject({ success: false })
+    ).resolves.toEqual({
+      success: false,
+      error: '保存 layout 失败：工作空间状态 JSON 超过大小限制',
+    })
     expect(service.setSection).not.toHaveBeenCalled()
+  })
+
+  it('accepts Agent conversation history above the generic workspace section limit', async () => {
+    const service = createService()
+    registerWorkspaceStateIpc(service as never, createGuard('trusted') as never)
+    const value = { content: 'x'.repeat(6 * 1024 * 1024) }
+
+    await expect(
+      mockIpcMain.handlers.get('workspaceState:setSection')?.(
+        { sender: 'trusted' },
+        '/tmp/project',
+        'agentConversations',
+        value,
+        null,
+      ),
+    ).resolves.toMatchObject({ success: true })
+    expect(service.setSection).toHaveBeenCalledWith(
+      '/tmp/project',
+      'agentConversations',
+      value,
+      null,
+    )
   })
 
   it('writes a bounded known section for an absolute workspace', async () => {

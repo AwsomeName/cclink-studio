@@ -476,7 +476,12 @@ export const useFsStore = create<FsState>((set, get) => ({
       const generation = beginWorkspaceRuntimeTransition()
       const path = await resolveWorkspaceCandidate(result.filePaths[0]!)
       if (!path || !isWorkspaceRuntimeTransitionCurrent(generation)) {
-        if (!path) set({ error: '无法打开所选工作空间' })
+        if (!path) {
+          console.warn('[FsStore] 打开所选项目失败：路径不存在、不可访问或不受支持', {
+            selectedPath: result.filePaths[0],
+          })
+          set({ error: '无法打开所选工作空间' })
+        }
         return
       }
       set({ switchingPath: path })
@@ -507,8 +512,11 @@ export const useFsStore = create<FsState>((set, get) => ({
         if (!r.success) {
           set({ error: '无法记住此工作空间，下次启动需重新选择' })
         }
+      } else {
+        console.warn('[FsStore] 打开所选项目失败：工作台运行时切换未能应用', { path })
       }
     } catch (err) {
+      console.error('[FsStore] 打开所选项目失败:', err)
       set({ error: describeError(err) })
     } finally {
       set({ loading: false, picking: false, switchingPath: null })
@@ -532,7 +540,10 @@ export const useFsStore = create<FsState>((set, get) => ({
       const generation = beginWorkspaceRuntimeTransition()
       const resolvedPath = await resolveWorkspaceCandidate(path)
       if (!resolvedPath || !isWorkspaceRuntimeTransitionCurrent(generation)) {
-        if (!resolvedPath) set({ error: '该工作空间已不存在或不可访问' })
+        if (!resolvedPath) {
+          console.warn('[FsStore] 打开最近项目失败：工作空间已不存在或不可访问', { path })
+          set({ error: '该工作空间已不存在或不可访问' })
+        }
         return false
       }
       const transition = await prepareWorkspaceRuntimeTransition(localWorkspaceRef(resolvedPath), {
@@ -551,6 +562,9 @@ export const useFsStore = create<FsState>((set, get) => ({
           commitProjection: () => commitPreparedWorkspaceTree(prepared, set),
         }))
       ) {
+        console.warn('[FsStore] 打开最近项目失败：工作台运行时切换未能应用', {
+          path: resolvedPath,
+        })
         return false
       }
       await finishPreparedWorkspaceTree(prepared, get, set)
@@ -562,6 +576,7 @@ export const useFsStore = create<FsState>((set, get) => ({
         .catch(() => {})
       return true
     } catch (err) {
+      console.error('[FsStore] 打开最近项目失败:', { path, error: err })
       set({ error: describeError(err) })
       return false
     } finally {

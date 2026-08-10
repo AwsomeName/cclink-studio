@@ -48,6 +48,7 @@ describe('bootstrap command modules', () => {
     expect(ids).toContain('agent.newConversation')
     expect(ids).toContain('agent.resetSession')
     expect(ids).toContain('diagnostics.copyWorkspaceState')
+    expect(ids).toContain('diagnostics.copyFrameworkLogs')
     expect(ids).toContain('window.reload')
   })
 

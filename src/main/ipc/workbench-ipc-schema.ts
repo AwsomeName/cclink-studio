@@ -85,6 +85,19 @@ export const workspaceStateSectionSchema = z.enum([
   'projectStrip',
 ])
 export const workspaceStateValueSchema = boundedJsonValueSchema(5 * 1024 * 1024, '工作空间状态')
+export const workspaceStateConversationValueSchema = boundedJsonValueSchema(
+  32 * 1024 * 1024,
+  'Agent 会话状态',
+)
+
+export function parseWorkspaceStateSectionValue(
+  section: z.infer<typeof workspaceStateSectionSchema>,
+  value: unknown,
+): unknown {
+  return section === 'agentConversations'
+    ? workspaceStateConversationValueSchema.parse(value)
+    : workspaceStateValueSchema.parse(value)
+}
 export const workspaceStateSetSectionOptionsSchema = z
   .object({
     conversationHistoryMutation: z

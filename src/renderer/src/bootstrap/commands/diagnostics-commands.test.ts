@@ -6,6 +6,11 @@ import {
   formatContextActionDiagnosticsMarkdown,
   useContextActionDiagnosticsStore,
 } from '../../features/context-actions/context-action-diagnostics'
+import { collectFrameworkDiagnosticReport } from '../../features/diagnostics/framework-diagnostic-report'
+
+vi.mock('../../features/diagnostics/framework-diagnostic-report', () => ({
+  collectFrameworkDiagnosticReport: vi.fn().mockResolvedValue('framework diagnostic'),
+}))
 
 describe('diagnostics commands', () => {
   afterEach(() => {
@@ -44,6 +49,20 @@ describe('diagnostics commands', () => {
       `${formatWorkspaceDiagnosticsMarkdown(diagnostics)}${formatContextActionDiagnosticsMarkdown([])}`,
     )
     expect(useToastStore.getState().message).toContain('2 个工作空间')
+    expect(useToastStore.getState().type).toBe('success')
+  })
+
+  it('copies the Agent-free framework diagnostic report', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+
+    createDiagnosticsCommands()
+      .find((command) => command.id === 'diagnostics.copyFrameworkLogs')
+      ?.action()
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('framework diagnostic'))
+
+    expect(collectFrameworkDiagnosticReport).toHaveBeenCalled()
+    expect(useToastStore.getState().message).toBe('框架诊断日志已复制')
     expect(useToastStore.getState().type).toBe('success')
   })
 })

@@ -5,6 +5,8 @@ import {
 } from '../../features/context-actions/context-action-diagnostics'
 import type { Command } from '../../stores/command-store'
 import { formatWorkspaceDiagnosticsMarkdown } from '../../utils/workspace-diagnostics'
+import { collectFrameworkDiagnosticReport } from '../../features/diagnostics/framework-diagnostic-report'
+import { copyTextToClipboard } from '../../utils/clipboard'
 
 async function copyWorkspaceDiagnostics(): Promise<void> {
   const showToast = useToastStore.getState().show
@@ -22,6 +24,20 @@ async function copyWorkspaceDiagnostics(): Promise<void> {
   }
 }
 
+async function copyFrameworkDiagnostics(): Promise<void> {
+  const showToast = useToastStore.getState().show
+  try {
+    const report = await collectFrameworkDiagnosticReport()
+    await copyTextToClipboard(report)
+    showToast('框架诊断日志已复制', 'success')
+  } catch (error) {
+    showToast(
+      `复制框架诊断日志失败: ${error instanceof Error ? error.message : String(error)}`,
+      'error',
+    )
+  }
+}
+
 export function createDiagnosticsCommands(): Command[] {
   return [
     {
@@ -30,6 +46,14 @@ export function createDiagnosticsCommands(): Command[] {
       category: '开发者',
       action: () => {
         void copyWorkspaceDiagnostics()
+      },
+    },
+    {
+      id: 'diagnostics.copyFrameworkLogs',
+      label: '开发者：复制框架诊断日志',
+      category: '开发者',
+      action: () => {
+        void copyFrameworkDiagnostics()
       },
     },
   ]

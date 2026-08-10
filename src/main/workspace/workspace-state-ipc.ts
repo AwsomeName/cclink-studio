@@ -1,4 +1,5 @@
 import type { IpcMainInvokeEvent } from 'electron'
+import { ZodError } from 'zod'
 import type {
   WorkspaceStateSection,
   WorkspaceStateSetSectionOptions,
@@ -7,9 +8,9 @@ import { WorkspaceStateService } from './workspace-state-service'
 import { registerTrustedIpcHandler, type TrustedRendererGuard } from '../ipc/trusted-renderer-guard'
 import {
   workspaceStateOwnerKeySchema,
+  parseWorkspaceStateSectionValue,
   workspaceStateSectionSchema,
   workspaceStateSetSectionOptionsSchema,
-  workspaceStateValueSchema,
   workspaceStateWorkspaceKeySchema,
 } from '../ipc/workbench-ipc-schema'
 import { absolutePathSchema } from '../ipc/ipc-input-schema'
@@ -50,7 +51,7 @@ export function registerWorkspaceStateIpc(
       try {
         const parsedWorkspaceKey = workspaceStateWorkspaceKeySchema.parse(workspaceKey)
         const parsedSection = workspaceStateSectionSchema.parse(section)
-        const parsedValue = workspaceStateValueSchema.parse(value)
+        const parsedValue = parseWorkspaceStateSectionValue(parsedSection, value)
         const parsedOwnerKey = workspaceStateOwnerKeySchema.parse(ownerKey)
         const parsedOptions = workspaceStateSetSectionOptionsSchema.parse(options)
         const snapshot = parsedOptions
@@ -69,7 +70,7 @@ export function registerWorkspaceStateIpc(
             )
         return { success: true, snapshot }
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = formatWorkspaceStateWriteError(section, error)
         return { success: false, error: message }
       }
     },
@@ -98,4 +99,13 @@ export function registerWorkspaceStateIpc(
   handle('workspaceState:diagnostics', () => {
     return workspaceStateService.getDiagnostics()
   })
+}
+
+function formatWorkspaceStateWriteError(section: unknown, error: unknown): string {
+  const sectionLabel = typeof section === 'string' && section ? section : 'unknown'
+  if (error instanceof ZodError) {
+    const details = [...new Set(error.issues.map((issue) => issue.message))].join('；')
+    return `保存 ${sectionLabel} 失败：${details || '输入无效'}`
+  }
+  return `保存 ${sectionLabel} 失败：${error instanceof Error ? error.message : String(error)}`
 }

@@ -8,7 +8,7 @@ import {
   useWorkspaceStore,
   useGitBackupStore,
 } from '../../stores'
-import { IconLink, IconRobot, IconCircle, IconProjects } from '../common/Icons'
+import { IconClipboard, IconLink, IconRobot, IconCircle, IconProjects } from '../common/Icons'
 import { useToastStore } from '../common/Toast'
 import {
   workspaceRefKey,
@@ -23,6 +23,7 @@ import {
   buildKeyboardContextMenuInput,
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
+import { useCommandStore } from '../../stores/command-store'
 
 /** Agent 状态 → 显示文本 */
 const AGENT_STATUS_MAP: Record<string, { text: string; color: string }> = {
@@ -68,6 +69,7 @@ export function StatusBar(): React.ReactElement {
   const setRepositoryInput = useGitBackupStore((s) => s.setRepositoryInput)
   const closeGitDialog = useGitBackupStore((s) => s.closeDialog)
   const showContextMenu = useContextMenuStore((s) => s.show)
+  const executeCommand = useCommandStore((s) => s.executeCommand)
 
   const agentStatus = AGENT_STATUS_MAP[backendState] ?? AGENT_STATUS_MAP.disconnected
   const tabLabel = activeTab ? (TAB_TYPE_LABEL[activeTab.type] ?? activeTab.title) : ''
@@ -160,6 +162,19 @@ export function StatusBar(): React.ReactElement {
         )}
 
         <span className="status-bar-spacer" aria-hidden="true" />
+
+        <button
+          type="button"
+          className="status-bar-item framework-diagnostics-status"
+          onClick={() =>
+            void executeCommand('diagnostics.copyFrameworkLogs', { source: 'toolbar' })
+          }
+          title="复制 Agent 以外的工作台框架诊断日志"
+          {...statusContextProps('framework-diagnostics')}
+        >
+          <IconClipboard size={12} />
+          框架日志
+        </button>
 
         {workspacePath && (
           <button

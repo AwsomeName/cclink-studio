@@ -8622,6 +8622,19 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   flex: 1;
 }
 
+.status-bar-item.framework-diagnostics-status {
+  font: inherit;
+  color: inherit;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.status-bar-item.framework-diagnostics-status:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
 /* 更新提示徽章（可点击按钮，重置默认 button 样式） */
 .status-bar-item.update-badge {
   font: inherit;

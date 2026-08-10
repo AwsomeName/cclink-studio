@@ -61,7 +61,19 @@ export function hydrateRuntimeSections(snapshot: WorkspaceStateSnapshot | null):
   }
 }
 
-export async function persistRuntimeSections(workspaceKey?: string | null): Promise<void> {
+export interface WorkspaceRuntimePersistenceFailure {
+  section: 'tabs' | 'browserTabs' | 'editorDrafts' | 'agentConversations'
+  message: string
+}
+
+export interface WorkspaceRuntimePersistenceResult {
+  success: boolean
+  failures: WorkspaceRuntimePersistenceFailure[]
+}
+
+export async function persistRuntimeSections(
+  workspaceKey?: string | null,
+): Promise<WorkspaceRuntimePersistenceResult> {
   const targetWorkspaceKey = workspaceKey === undefined ? getWorkspaceStateKey() : workspaceKey
   const targetWorkspaceRef = workspaceRefFromKey(targetWorkspaceKey)
   const tabState = useTabStore.getState()
@@ -89,20 +101,50 @@ export async function persistRuntimeSections(workspaceKey?: string | null): Prom
 
   const agentState = useAgentStore.getState()
 
-  await Promise.all([
-    persistWorkspaceSectionNow('tabs', { tabs: workspaceTabs, activeTabId }, targetWorkspaceKey),
-    persistWorkspaceSectionNow(
-      'browserTabs',
-      { tabs: browserTabs, bookmarks: browserBookmarks },
-      targetWorkspaceKey,
-    ),
-    persistWorkspaceSectionNow('editorDrafts', editorDrafts, targetWorkspaceKey),
-    persistWorkspaceSectionNow(
-      'agentConversations',
-      buildAgentConversationWorkspaceSnapshot(agentState, targetWorkspaceKey),
-      targetWorkspaceKey,
-    ),
-  ])
+  const writes = [
+    {
+      section: 'tabs' as const,
+      promise: persistWorkspaceSectionNow(
+        'tabs',
+        { tabs: workspaceTabs, activeTabId },
+        targetWorkspaceKey,
+      ),
+    },
+    {
+      section: 'browserTabs' as const,
+      promise: persistWorkspaceSectionNow(
+        'browserTabs',
+        { tabs: browserTabs, bookmarks: browserBookmarks },
+        targetWorkspaceKey,
+      ),
+    },
+    {
+      section: 'editorDrafts' as const,
+      promise: persistWorkspaceSectionNow('editorDrafts', editorDrafts, targetWorkspaceKey),
+    },
+    {
+      section: 'agentConversations' as const,
+      promise: persistWorkspaceSectionNow(
+        'agentConversations',
+        buildAgentConversationWorkspaceSnapshot(agentState, targetWorkspaceKey),
+        targetWorkspaceKey,
+      ),
+    },
+  ]
+  const settled = await Promise.allSettled(writes.map((write) => write.promise))
+  const failures = settled.flatMap((result, index): WorkspaceRuntimePersistenceFailure[] => {
+    if (result.status === 'fulfilled') return []
+    const failure = {
+      section: writes[index]!.section,
+      message: result.reason instanceof Error ? result.reason.message : String(result.reason),
+    }
+    console.error('[WorkspaceRuntime] 工作台状态分区保存失败，项目切换继续:', {
+      workspaceKey: targetWorkspaceKey,
+      ...failure,
+    })
+    return [failure]
+  })
+  return { success: failures.length === 0, failures }
 }
 
 export async function reconcileAgentRuntimeStatuses(

@@ -160,6 +160,8 @@ export async function prepareWorkspaceRuntimeTransition(
   const outgoingOwnership = collectWorkspaceRuntimeResourceOwnership(currentKey)
 
   if (options.persistCurrent !== false && key !== currentKey) {
+    // 单个恢复快照写入失败不能让用户失去打开其他项目的能力。失败会由
+    // persistRuntimeSections 写入框架日志，当前内存态仍保留并可继续重试。
     await persistRuntimeSections(currentKey)
   }
 

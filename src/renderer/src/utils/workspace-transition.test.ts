@@ -191,6 +191,24 @@ describe('workspace-transition', () => {
     expect(getWorkspaceStateKey()).toBe('/workspace/a')
   })
 
+  it('continues preparing a project switch when an outgoing state section cannot be saved', async () => {
+    const setSection = window.cclinkStudio.workspaceState.setSection as ReturnType<typeof vi.fn>
+    setSection.mockImplementation(async (_workspaceKey: string, section: string) =>
+      section === 'agentConversations'
+        ? { success: false, error: '保存 agentConversations 失败：超过大小限制' }
+        : { success: true },
+    )
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    await expect(
+      prepareWorkspaceRuntimeTransition(localWorkspaceRef('/workspace/b')),
+    ).resolves.toMatchObject({ key: '/workspace/b' })
+    expect(window.cclinkStudio.workspaceState.get).toHaveBeenCalledWith(
+      '/workspace/b',
+      'local:owner-1',
+    )
+  })
+
   it('unbinds visible resources without terminating background agent or terminal runtimes', async () => {
     const workspaceA = localWorkspaceRef('/workspace/a')
     const workspaceB = localWorkspaceRef('/workspace/b')
