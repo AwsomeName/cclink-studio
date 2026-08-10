@@ -809,22 +809,35 @@ async function main() {
     const copyAll = page.locator('.agent-copy-diagnostics-btn')
     await copyAll.waitFor({ timeout: 10_000 })
     await copyAll.click()
-    const completeDiagnostic = await page.evaluate(() => navigator.clipboard.readText())
+    const agentDiagnostic = await page.evaluate(() => navigator.clipboard.readText())
     assert(
-      completeDiagnostic.includes('# CCLink Studio 完整诊断日志'),
-      'Agent diagnostic button did not copy the unified report',
+      agentDiagnostic.includes('# CCLink Studio 诊断日志'),
+      'Agent diagnostic button did not copy the Agent report',
     )
     assert(
-      completeDiagnostic.includes('## Markdown') &&
-        completeDiagnostic.includes('"reportType": "cclink-markdown-render-diagnostic"'),
-      'unified report omitted the active Markdown diagnostic',
+      !agentDiagnostic.includes('# CCLink Studio 框架诊断日志'),
+      'Agent diagnostic button unexpectedly copied the framework report',
+    )
+
+    const copyFramework = page.locator('.framework-diagnostics-status')
+    await copyFramework.waitFor({ timeout: 10_000 })
+    await copyFramework.click()
+    const frameworkDiagnostic = await page.evaluate(() => navigator.clipboard.readText())
+    assert(
+      frameworkDiagnostic.includes('# CCLink Studio 框架诊断日志'),
+      'status bar diagnostic button did not copy the framework report',
     )
     assert(
-      completeDiagnostic.includes('## Renderer 近期日志') &&
-        completeDiagnostic.includes('## 主进程近期日志'),
-      'unified report omitted process logs',
+      frameworkDiagnostic.includes('## Markdown 编辑器') &&
+        frameworkDiagnostic.includes('"reportType": "cclink-markdown-render-diagnostic"'),
+      'framework report omitted the active Markdown diagnostic',
     )
-    return 'reload generated a fresh report and the Agent button copied all diagnostics'
+    assert(
+      frameworkDiagnostic.includes('## 界面近期框架日志') &&
+        frameworkDiagnostic.includes('## 主进程近期框架日志'),
+      'framework report omitted process logs',
+    )
+    return 'reload generated a fresh report and Agent/framework diagnostics stayed separated'
   })
 
   await runCheck('browser tab is available from the workbench', async () => {
