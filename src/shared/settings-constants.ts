@@ -59,6 +59,8 @@ export interface ProviderPreset {
 
 /** 所有持久化的应用设置 */
 export interface AppSettings {
+  /** 已展示过的组件管理首次配置页版本；0 表示从未展示。 */
+  componentSetupPageSeenVersion: number
   /** 应用内更新订阅轨道。 */
   updateTrack: UpdateTrack
   /** Agent 引擎 */
@@ -201,6 +203,7 @@ export const PROVIDER_PRESETS: Record<Provider, ProviderPreset> = {
 
 /** 默认设置值（唯一权威来源） */
 export const DEFAULT_SETTINGS: AppSettings = {
+  componentSetupPageSeenVersion: 0,
   updateTrack: 'stable',
   agentEngine: 'local-claude-code',
   backendType: 'claude-code',

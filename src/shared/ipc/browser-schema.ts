@@ -120,6 +120,32 @@ export const browserViewModeSchema = z.enum(['desktop', 'mobile'])
 export const browserHistoryLimitSchema = z.number().int().min(1).max(MAX_HISTORY_ENTRIES).optional()
 export const browserTaskGoalSchema = z.string().trim().min(1).max(4_000)
 
+export const browserPopupDispositionSchema = z.enum([
+  'default',
+  'foreground-tab',
+  'background-tab',
+  'new-window',
+  'other',
+])
+
+export const browserPopupCreatedSchema = z
+  .object({
+    tabId: browserIdentifierSchema,
+    url: browserUrlSchema,
+    workspaceKey: browserWorkspaceKeySchema,
+    profileId: browserProfileIdSchema,
+    disposition: browserPopupDispositionSchema,
+    activate: z.boolean(),
+  })
+  .strict()
+
+export const browserRuntimeTabClosedSchema = z
+  .object({
+    tabId: browserIdentifierSchema,
+    workspaceKey: browserWorkspaceKeySchema,
+  })
+  .strict()
+
 const browserContextUrlSchema = browserUrlSchema.nullable()
 const browserContextTextSchema = z
   .string()

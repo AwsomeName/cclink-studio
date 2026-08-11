@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-07-31。
+> 当前事实源。最后更新：2026-08-11。
 
 ## 先读这些
 
@@ -15,6 +15,10 @@
 - `docs/ops/oss-release-runbook.md`：开源版打包、签名、公证、Draft 验收和公开发布手册。
 - `docs/features/desktop-release-and-updates.md`：桌面发布、自动检查、受控下载、确认安装和 U0-U5 开发计划。
 - `docs/features/desktop-update-development-plan.md`：桌面更新 U0-U5 的任务编号、代码落点、工作量、失败矩阵、真人验收和退出证据。
+- `docs/features/runtime-components-and-capability-plugins.md`：尚未实现的 Runtime 组件独立更新与受限能力插件产品方案，定义核心外壳、Runtime、npm 插件和内容包边界。
+- `docs/features/npm-updatable-capability-inventory.md`：可通过 npm 下载、更新和管理的内容包、能力插件与 Runtime 清单，以及必须走完整 App 更新的边界。
+- `docs/features/component-management-settings.md`：组件管理配置页、首次安装自动打开、清单字段、状态所有权和页面验收标准。
+- `docs/features/runtime-components-and-capability-plugins-development-plan.md`：上述方案的 ADR 门禁、纵向里程碑、代码落点、工作量、失败矩阵和真实验收计划。
 - `docs/ops/stabilization-s0-acceptance.md`：S0 自动化证据和必须真人执行的核心流程验收记录。
 - `docs/official-integration-contract.md`：Studio 暴露给官方构建层的接口边界。
 - `docs/ops/cclink-dev-official-integration-handoff.md`：发给 `cclink-dev` 的 official loader 接入清单。
@@ -53,7 +57,7 @@ Studio 默认可单仓库独立启动，不要求 `cclink-dev`、`chat-cc/deploy
 - 本地验收与发布：`docs/ops/local-smoke-check.md`、`docs/ops/oss-release-runbook.md`、`docs/features/desktop-release-and-updates.md`。
 - 桌面更新验收证据：`docs/ops/desktop-update-acceptance.md`。
 - 官方集成：`docs/official-integration-contract.md`、`docs/ops/cclink-dev-official-integration-handoff.md`。
-- 工作台能力：`docs/features/workspace-system.md`、`docs/features/context-action-system.md`、`docs/features/local-credentials.md`、`docs/features/local-credentials-development-plan.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/agent-profiles.md`、`docs/features/ai-web-affairs-agent.md`、`docs/features/ai-web-affairs-agent-development-plan.md`、`docs/features/browser-automation.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/markdown-auto-illustration.md`、`docs/features/scheduled-tasks.md`、`docs/features/scheduled-tasks-development-plan.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`。
+- 工作台能力：`docs/features/workspace-system.md`、`docs/features/context-action-system.md`、`docs/features/local-credentials.md`、`docs/features/local-credentials-development-plan.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/agent-profiles.md`、`docs/features/ai-web-affairs-agent.md`、`docs/features/ai-web-affairs-agent-development-plan.md`、`docs/features/browser-automation.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/markdown-auto-illustration.md`、`docs/features/scheduled-tasks.md`、`docs/features/scheduled-tasks-development-plan.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`、`docs/features/runtime-components-and-capability-plugins.md`、`docs/features/runtime-components-and-capability-plugins-development-plan.md`。
 - 行业能力：数据源、硬件工作空间、FPC 改版、CAD 转换、工作空间内运营助手。
 
 架构、开发和功能规格描述当前事实；`docs/decisions/` 和带日期的 `docs/ops/`

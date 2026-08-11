@@ -29,6 +29,7 @@ import { useWorkspaceBootstrap } from './bootstrap/use-workspace-bootstrap'
 import { useWorkspaceStateFlush } from './bootstrap/use-workspace-state-flush'
 import { useBrowserViewLifecycle } from './components/workbench/use-browser-view-lifecycle'
 import { useBrowserOpenRequests } from './bootstrap/use-browser-open-requests'
+import { useComponentSetupOnboarding } from './bootstrap/use-component-setup-onboarding'
 import { ProjectStrip } from './components/project-strip/ProjectStrip'
 import { ConversationQuickSwitcher } from './components/topbar/ConversationQuickSwitcher'
 import { useAnyFloatingSurfaceOpen } from './components/common/floating-surface-registry'
@@ -37,6 +38,7 @@ import { clampPanelWidth, getAgentPanelWidthBounds } from './utils/panel-layout'
 /** 主布局。 */
 function MainLayout(): React.ReactElement {
   const workspaceReady = useWorkspaceBootstrap()
+  useComponentSetupOnboarding(workspaceReady)
   useWorkspaceStateFlush()
   const sidebarVisible = useUIStore((s) => s.sidebarVisible)
   const agentPanelMode = useUIStore((s) => s.agentPanelMode)

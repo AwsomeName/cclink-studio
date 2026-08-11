@@ -59,6 +59,8 @@ export const browserIpcContracts = {
     )
   }),
   destroyView: bindIdentifier(browserIpc.destroyView),
+  acceptPopup: bindIdentifier(browserIpc.acceptPopup),
+  rejectPopup: bindIdentifier(browserIpc.rejectPopup),
   setActive: bindOptionalIdentifier(browserIpc.setActive),
   reconcileViews: bindBrowserParser(browserIpc.reconcileViews, (args) => {
     requireArgs(args, 1, browserIpc.reconcileViews.channel)

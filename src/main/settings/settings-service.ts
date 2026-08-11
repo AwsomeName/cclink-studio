@@ -81,6 +81,12 @@ export class SettingsService {
     this.store = { ...DEFAULT_SETTINGS }
     this.applyPersistedSettings(parsed)
     this.migrateClaudeRuntimeSelection(parsed)
+    const needsComponentSetupMigration =
+      settingsFileExists && typeof parsed.componentSetupPageSeenVersion !== 'number'
+    if (needsComponentSetupMigration) {
+      // 已有安装升级时不冒充“首次安装”；只有真正没有 settings.json 的新安装显示引导页。
+      this.store.componentSetupPageSeenVersion = 1
+    }
 
     const legacySecrets = extractLegacySecrets(parsed)
     const hasLegacySecretFields = Object.keys(parsed).some((key) => SECRET_KEYS.has(key))
@@ -103,13 +109,19 @@ export class SettingsService {
         })
       }
       this.migrationBlocked = false
-      if (settingsFileExists && (hasLegacySecretFields || needsClaudeRuntimeMigration)) {
+      if (
+        settingsFileExists &&
+        (hasLegacySecretFields || needsClaudeRuntimeMigration || needsComponentSetupMigration)
+      ) {
         await this.saveState()
         if (hasLegacySecretFields) {
           console.log('[SettingsService] 旧版明文凭证已迁移到统一本地凭证文件')
         }
         if (needsClaudeRuntimeMigration) {
           console.log('[SettingsService] Claude Code 运行时来源设置已迁移')
+        }
+        if (needsComponentSetupMigration) {
+          console.log('[SettingsService] 已有安装的组件配置页状态已迁移')
         }
       }
     } catch (error) {
@@ -224,7 +236,10 @@ export class SettingsService {
     await this.credentialService.removeCredential(AGENT_CREDENTIAL_ID)
     await this.credentialService.removeCredential(MESHY_CREDENTIAL_ID)
     this.migrationBlocked = false
-    const nextStore = { ...DEFAULT_SETTINGS }
+    const nextStore = {
+      ...DEFAULT_SETTINGS,
+      componentSetupPageSeenVersion: this.store.componentSetupPageSeenVersion,
+    }
     await this.saveState(nextStore)
     this.store = nextStore
     return this.getAll()
@@ -261,6 +276,12 @@ export class SettingsService {
       if (key === 'defaultAgentRoleRef') {
         const roleRef = normalizeAgentRoleRef(val)
         if (roleRef) this.store.defaultAgentRoleRef = roleRef
+        continue
+      }
+      if (key === 'componentSetupPageSeenVersion') {
+        if (typeof val === 'number' && Number.isInteger(val) && val >= 0 && val <= 1_000) {
+          this.store.componentSetupPageSeenVersion = val
+        }
         continue
       }
       const validSet = VALID_VALUES[key]

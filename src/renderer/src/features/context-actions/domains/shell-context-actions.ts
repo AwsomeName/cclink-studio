@@ -14,6 +14,7 @@ import type { ActivityPanel } from '../../../types'
 import { recordTerminalLifecycleEvent } from '../../../utils/terminal-lifecycle'
 import { buildTerminalTabDraft } from '../../../utils/terminal-tab'
 import { createScheduledTaskTab } from '../../scheduled-tasks/scheduled-task-view-model'
+import { openDefaultBrowserTab } from '../../web-resources/open-default-browser-tab'
 import type { CommandContext, ContextTarget } from '../context-target'
 import type { MenuContribution } from '../menu-contribution-registry'
 
@@ -108,7 +109,7 @@ function getStatusValue(itemId: string): { value: string; label: string } | null
   return null
 }
 
-function createForSidebar(panelId: string): void {
+function createForSidebar(panelId: string): void | Promise<unknown> {
   const workspaceRef = useWorkspaceStore.getState().activeWorkspaceRef
   if (panelId === 'files') {
     const workspacePath = useFsStore.getState().workspacePath
@@ -117,8 +118,7 @@ function createForSidebar(panelId: string): void {
     return
   }
   if (panelId === 'browser') {
-    useTabStore.getState().openTab({ type: 'browser', title: '浏览器', icon: '🌐', forceNew: true })
-    return
+    return openDefaultBrowserTab(workspaceRef)
   }
   if (panelId === 'terminal') {
     const draft = buildTerminalTabDraft(workspaceRef)

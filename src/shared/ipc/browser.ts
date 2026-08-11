@@ -219,6 +219,10 @@ export interface BrowserRuntimeDiagnosticSummary {
   visibleTitle: string | null
   profileId: string | null
   viewState: BrowserViewState | null
+  popup: {
+    adoptionState: 'pending' | 'adopted'
+    disposition: BrowserPopupDisposition
+  } | null
   playwrightTabId: string | null
   playwrightUrl: string | null
   playwrightTitle: string | null
@@ -262,6 +266,74 @@ export interface BrowserOpenTabRequest {
   profileId?: string | null
   /** 原生网页菜单显式要求新建 Tab 时不得复用当前页面。 */
   forceNew?: boolean
+}
+
+export type BrowserPopupDisposition =
+  | 'default'
+  | 'foreground-tab'
+  | 'background-tab'
+  | 'new-window'
+  | 'other'
+
+/** BrowserManager 已创建、等待 renderer 接纳为可见工作台 Tab 的 popup。 */
+export interface BrowserPopupCreatedPayload {
+  tabId: string
+  url: string
+  workspaceKey: string | null
+  profileId: string | null
+  disposition: BrowserPopupDisposition
+  activate: boolean
+}
+
+/** 网页侧 window.close/opener 销毁导致 Browser runtime 主动消失。 */
+export interface BrowserRuntimeTabClosedPayload {
+  tabId: string
+  workspaceKey: string | null
+}
+
+const popupDispositions = new Set<BrowserPopupDisposition>([
+  'default',
+  'foreground-tab',
+  'background-tab',
+  'new-window',
+  'other',
+])
+
+function isBoundedBrowserEventString(value: unknown, max: number): value is string {
+  return (
+    typeof value === 'string' && value.length > 0 && value.length <= max && !value.includes('\0')
+  )
+}
+
+/** preload 可安全使用的轻量事件解析器；避免把 Zod 运行时打入隔离桥。 */
+export function parseBrowserPopupCreatedPayload(value: unknown): BrowserPopupCreatedPayload | null {
+  if (!value || typeof value !== 'object') return null
+  const payload = value as Partial<BrowserPopupCreatedPayload>
+  if (
+    !isBoundedBrowserEventString(payload.tabId, 512) ||
+    !isBoundedBrowserEventString(payload.url, 32_768) ||
+    (payload.workspaceKey !== null && !isBoundedBrowserEventString(payload.workspaceKey, 32_768)) ||
+    (payload.profileId !== null && !isBoundedBrowserEventString(payload.profileId, 128)) ||
+    !popupDispositions.has(payload.disposition as BrowserPopupDisposition) ||
+    typeof payload.activate !== 'boolean'
+  ) {
+    return null
+  }
+  return payload as BrowserPopupCreatedPayload
+}
+
+export function parseBrowserRuntimeTabClosedPayload(
+  value: unknown,
+): BrowserRuntimeTabClosedPayload | null {
+  if (!value || typeof value !== 'object') return null
+  const payload = value as Partial<BrowserRuntimeTabClosedPayload>
+  if (
+    !isBoundedBrowserEventString(payload.tabId, 512) ||
+    (payload.workspaceKey !== null && !isBoundedBrowserEventString(payload.workspaceKey, 32_768))
+  ) {
+    return null
+  }
+  return payload as BrowserRuntimeTabClosedPayload
 }
 
 export type BrowserContextMediaType =
@@ -323,6 +395,8 @@ export interface BrowserBounds {
 export interface BrowserApiContract {
   createView: (tabId: string, initialUrl?: string, opts?: BrowserCreateViewOptions) => Promise<void>
   destroyView: (tabId: string) => Promise<void>
+  acceptPopup: (tabId: string) => Promise<void>
+  rejectPopup: (tabId: string) => Promise<void>
   setActive: (tabId: string | null) => Promise<void>
   reconcileViews: (options: BrowserReconcileViewsOptions) => Promise<void>
 
@@ -341,6 +415,8 @@ export interface BrowserApiContract {
   onUrlChanged: (callback: (payload: BrowserUrlChangedPayload) => void) => () => void
   onPageMetaChanged: (callback: (payload: BrowserPageMetaChangedPayload) => void) => () => void
   onRequestOpenTab: (callback: (payload: BrowserOpenTabRequest) => void) => () => void
+  onPopupCreated: (callback: (payload: BrowserPopupCreatedPayload) => void) => () => void
+  onRuntimeTabClosed: (callback: (payload: BrowserRuntimeTabClosedPayload) => void) => () => void
   onNativeContextMenuOpened: (
     callback: (payload: BrowserNativeContextMenuOpenedPayload) => void,
   ) => () => void
@@ -390,6 +466,8 @@ export const browserIpc = {
     void
   >('browser:createView'),
   destroyView: defineIpcCall<[string], void>('browser:destroyView'),
+  acceptPopup: defineIpcCall<[string], void>('browser:acceptPopup'),
+  rejectPopup: defineIpcCall<[string], void>('browser:rejectPopup'),
   setActive: defineIpcCall<[string | null], void>('browser:setActive'),
   reconcileViews: defineIpcCall<[BrowserReconcileViewsOptions], void>('browser:reconcileViews'),
   navigate: defineIpcCall<[string, string], void>('browser:navigate'),
@@ -454,6 +532,8 @@ export const browserIpcEvents = {
   urlChanged: 'browser:urlChanged',
   pageMetaChanged: 'browser:pageMetaChanged',
   requestOpenTab: 'browser:requestOpenTab',
+  popupCreated: 'browser:popupCreated',
+  runtimeTabClosed: 'browser:runtimeTabClosed',
   nativeContextMenuOpened: 'browser:nativeContextMenuOpened',
   contextAgentRequest: 'browser:contextAgentRequest',
   viewStateChanged: 'browser:viewStateChanged',

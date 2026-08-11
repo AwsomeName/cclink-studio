@@ -65,6 +65,14 @@ export function registerBrowserIpc(
     browserManager.destroyView(tabId)
   })
 
+  handle(browserIpcContracts.acceptPopup, (_event, tabId) => {
+    browserManager.acceptPopup(tabId)
+  })
+
+  handle(browserIpcContracts.rejectPopup, (_event, tabId) => {
+    browserManager.rejectPopup(tabId)
+  })
+
   /** 设置活跃视图；null = 全部隐藏 */
   handle(browserIpcContracts.setActive, (_event, tabId) => {
     browserManager.setActive(tabId)

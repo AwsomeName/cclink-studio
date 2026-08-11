@@ -2,11 +2,17 @@
 
 > 状态：部分实现。转换服务、FreeCAD 探测、OCCT 转换器、IPC、MCP 和自动化测试已落地；插件管理 UI、更多格式与真实 CAD 验收待完成。
 > 最后更新：2026-07-28
-> 关联文档：`docs/features/hardware-workspace.md`、`docs/features/fpc-shape-change-assistant.md`
+> 关联文档：`docs/features/hardware-workspace.md`、`docs/features/fpc-shape-change-assistant.md`、
+> `docs/features/runtime-components-and-capability-plugins.md`
 
 ## 结论
 
 STEP/STP 支持不应作为 CCLink Studio 默认内置功能直接打包。
+
+本文沿用的“CAD 插件”是产品能力名称。按照 Runtime 组件与能力插件的新分类，FreeCAD、
+OCCT/WASM 和其他需要本地执行资源的转换后端属于 **Runtime 组件**，不是可以直接进入主进程
+的 npm 能力插件。通用组件下载、签名、版本和回滚尚未实现，不能把当前本机 FreeCAD 探测和
+内置 OCCT 资源称为插件更新闭环。
 
 正确产品形态是：
 

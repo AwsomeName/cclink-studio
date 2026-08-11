@@ -164,7 +164,7 @@ describe('IPC invoke contracts', () => {
     expect(Object.keys(browserIpcContracts)).toEqual(Object.keys(browserIpc))
     expect(Object.keys(browserTaskIpcContracts)).toEqual(Object.keys(browserTaskIpc))
     expect(Object.keys(browserDownloadIpcContracts)).toEqual(Object.keys(browserDownloadIpc))
-    expect(Object.keys(browserIpcEvents)).toHaveLength(10)
+    expect(Object.keys(browserIpcEvents)).toHaveLength(12)
 
     expect(browserIpcContracts.createView.parseArgs(['tab-1'])).toEqual([
       'tab-1',
@@ -172,6 +172,9 @@ describe('IPC invoke contracts', () => {
       undefined,
     ])
     expect(browserIpcContracts.getActiveViewId.parseArgs([])).toEqual([undefined])
+    expect(browserIpcContracts.acceptPopup.parseArgs(['browser-popup-1'])).toEqual([
+      'browser-popup-1',
+    ])
     expect(browserIpcContracts.listHistory.parseArgs([])).toEqual([undefined])
     expect(
       browserIpcContracts.getSessionDiagnostics.parseArgs([

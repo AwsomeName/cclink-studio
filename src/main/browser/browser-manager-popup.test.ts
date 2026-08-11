@@ -1,0 +1,284 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const electronMocks = vi.hoisted(() => {
+  type Listener = (...args: any[]) => void
+
+  const makeSession = () => ({
+    cookies: {
+      on: vi.fn(),
+      flushStore: vi.fn().mockResolvedValue(undefined),
+      get: vi.fn().mockResolvedValue([]),
+    },
+    webRequest: { onBeforeSendHeaders: vi.fn() },
+  })
+
+  const defaultSession = makeSession()
+  const sessions = new Map<string, ReturnType<typeof makeSession>>()
+
+  const makeWebContents = (browserSession = defaultSession) => {
+    const listeners = new Map<string, Listener[]>()
+    const onceListeners = new Map<string, Listener[]>()
+    const webContents = {
+      session: browserSession,
+      currentUrl: '',
+      currentTitle: '',
+      userAgent: 'Mozilla/5.0 Chrome/150.0 Electron/43.1.1',
+      windowOpenHandler: null as null | ((details: any) => any),
+      on: vi.fn((event: string, listener: Listener) => {
+        listeners.set(event, [...(listeners.get(event) ?? []), listener])
+        return webContents
+      }),
+      once: vi.fn((event: string, listener: Listener) => {
+        onceListeners.set(event, [...(onceListeners.get(event) ?? []), listener])
+        return webContents
+      }),
+      emit(event: string, ...args: any[]) {
+        for (const listener of listeners.get(event) ?? []) listener(...args)
+        const pending = onceListeners.get(event) ?? []
+        onceListeners.delete(event)
+        for (const listener of pending) listener(...args)
+      },
+      setWindowOpenHandler: vi.fn((handler: (details: any) => any) => {
+        webContents.windowOpenHandler = handler
+      }),
+      getUserAgent: vi.fn(() => webContents.userAgent),
+      setUserAgent: vi.fn((value: string) => {
+        webContents.userAgent = value
+      }),
+      getURL: vi.fn(() => webContents.currentUrl),
+      getTitle: vi.fn(() => webContents.currentTitle),
+      setZoomFactor: vi.fn(),
+      executeJavaScript: vi.fn().mockResolvedValue(800),
+      loadURL: vi.fn(async (url: string) => {
+        webContents.currentUrl = url
+      }),
+      close: vi.fn(() => webContents.emit('destroyed')),
+    }
+    return webContents
+  }
+
+  const createdViews: Array<{
+    webContents: ReturnType<typeof makeWebContents>
+    setBounds: ReturnType<typeof vi.fn>
+  }> = []
+
+  class WebContentsView {
+    webContents: ReturnType<typeof makeWebContents>
+    setBounds = vi.fn()
+
+    constructor(options: {
+      webContents?: ReturnType<typeof makeWebContents>
+      webPreferences?: any
+    }) {
+      this.webContents =
+        options?.webContents ?? makeWebContents(options?.webPreferences?.session ?? defaultSession)
+      createdViews.push(this)
+    }
+  }
+
+  const mainWebContents = {
+    send: vi.fn(),
+    getZoomFactor: vi.fn(() => 1),
+  }
+  const mainWindow = {
+    webContents: mainWebContents,
+    contentView: {
+      addChildView: vi.fn(),
+      removeChildView: vi.fn(),
+    },
+    isDestroyed: vi.fn(() => false),
+    getContentBounds: vi.fn(() => ({ width: 1200, height: 800 })),
+  }
+
+  return {
+    createdViews,
+    defaultSession,
+    mainWebContents,
+    mainWindow,
+    makeWebContents,
+    WebContentsView,
+    session: {
+      fromPartition: vi.fn((partition: string) => {
+        const existing = sessions.get(partition)
+        if (existing) return existing
+        const created = makeSession()
+        sessions.set(partition, created)
+        return created
+      }),
+    },
+  }
+})
+
+vi.mock('electron', () => ({
+  BrowserWindow: class {},
+  WebContentsView: electronMocks.WebContentsView,
+  session: electronMocks.session,
+  clipboard: { writeText: vi.fn() },
+  Menu: { buildFromTemplate: vi.fn(() => ({ popup: vi.fn() })) },
+}))
+
+import { browserIpcEvents } from '../../shared/ipc/browser'
+import { BrowserManager } from './browser-manager'
+
+const popupDetails = (overrides: Record<string, unknown> = {}) => ({
+  url: 'https://mp.weixin.qq.com/cgi-bin/appmsg',
+  frameName: '_blank',
+  features: '',
+  disposition: 'foreground-tab',
+  referrer: { url: 'https://mp.weixin.qq.com/', policy: 'strict-origin-when-cross-origin' },
+  ...overrides,
+})
+
+describe('BrowserManager popup adoption', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    electronMocks.createdViews.length = 0
+  })
+
+  async function createSource(): Promise<{
+    manager: BrowserManager
+    source: ReturnType<typeof electronMocks.makeWebContents>
+  }> {
+    const manager = new BrowserManager(electronMocks.mainWindow as never)
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: null,
+    })
+    await manager.createView('source-tab', 'https://mp.weixin.qq.com/', {
+      workspaceKey: '/workspace/a',
+      profileId: 'wechat',
+    })
+    return { manager, source: electronMocks.createdViews[0].webContents }
+  }
+
+  it('creates a WebContentsView runtime and requests a workbench tab instead of a BrowserWindow', async () => {
+    const { manager, source } = await createSource()
+    const response = source.windowOpenHandler?.(popupDetails())
+
+    expect(response).toMatchObject({ action: 'allow' })
+    const popupWebContents = electronMocks.makeWebContents(source.session)
+    const returned = response.createWindow({ webContents: popupWebContents })
+
+    expect(returned).toBe(popupWebContents)
+    const popupEvent = electronMocks.mainWebContents.send.mock.calls.find(
+      ([channel]) => channel === browserIpcEvents.popupCreated,
+    )
+    expect(popupEvent?.[1]).toMatchObject({
+      url: 'https://mp.weixin.qq.com/cgi-bin/appmsg',
+      workspaceKey: '/workspace/a',
+      profileId: 'wechat',
+      disposition: 'foreground-tab',
+      activate: true,
+    })
+    expect(manager.listViewsForWorkspace('/workspace/a')).toHaveLength(2)
+
+    const popupTabId = popupEvent?.[1].tabId as string
+    manager.acceptPopup(popupTabId)
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [
+        { tabId: 'source-tab', profileId: 'wechat' },
+        { tabId: popupTabId, profileId: 'wechat' },
+      ],
+      activeTabId: popupTabId,
+    })
+    expect(manager.getActiveViewId()).toBe(popupTabId)
+  })
+
+  it('removes the runtime and notifies renderer when popup calls window.close', async () => {
+    const { manager, source } = await createSource()
+    const response = source.windowOpenHandler?.(popupDetails())
+    const popupWebContents = electronMocks.makeWebContents(source.session)
+    response.createWindow({ webContents: popupWebContents })
+    const popupEvent = electronMocks.mainWebContents.send.mock.calls.find(
+      ([channel]) => channel === browserIpcEvents.popupCreated,
+    )
+    const popupTabId = popupEvent?.[1].tabId as string
+    manager.acceptPopup(popupTabId)
+
+    popupWebContents.emit('destroyed')
+
+    expect(manager.listViewsForWorkspace('/workspace/a')).toEqual([
+      expect.objectContaining({ tabId: 'source-tab' }),
+    ])
+    expect(electronMocks.mainWebContents.send).toHaveBeenCalledWith(
+      browserIpcEvents.runtimeTabClosed,
+      { tabId: popupTabId, workspaceKey: '/workspace/a' },
+    )
+  })
+
+  it('denies file and unsupported protocol popups before creating a view', async () => {
+    const { source } = await createSource()
+
+    expect(source.windowOpenHandler?.(popupDetails({ url: 'file:///tmp/private.html' }))).toEqual({
+      action: 'deny',
+    })
+    expect(source.windowOpenHandler?.(popupDetails({ url: 'javascript:alert(1)' }))).toEqual({
+      action: 'deny',
+    })
+    expect(electronMocks.createdViews).toHaveLength(1)
+  })
+
+  it('preserves background POST body, content type and referrer without stealing focus', async () => {
+    const { source } = await createSource()
+    const postData = [{ type: 'rawData', bytes: Buffer.from('title=hello') }]
+    const referrer = {
+      url: 'https://example.com/source',
+      policy: 'strict-origin-when-cross-origin',
+    }
+    const response = source.windowOpenHandler?.(
+      popupDetails({
+        url: 'https://example.com/submit',
+        disposition: 'background-tab',
+        referrer,
+        postBody: {
+          contentType: 'multipart/form-data',
+          boundary: 'popup-boundary',
+          data: postData,
+        },
+      }),
+    )
+
+    const returned = response.createWindow({ webPreferences: {} })
+    const popupView = electronMocks.createdViews.at(-1)!
+
+    expect(returned).toBe(popupView.webContents)
+    expect(popupView.webContents.loadURL).toHaveBeenCalledWith('https://example.com/submit', {
+      httpReferrer: referrer,
+      postData,
+      extraHeaders: 'Content-Type: multipart/form-data; boundary=popup-boundary\n',
+    })
+    expect(electronMocks.mainWebContents.send).toHaveBeenCalledWith(
+      browserIpcEvents.popupCreated,
+      expect.objectContaining({ disposition: 'background-tab', activate: false }),
+    )
+  })
+
+  it('closes an unadopted popup after the bounded handshake timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const { manager, source } = await createSource()
+      const response = source.windowOpenHandler?.(popupDetails())
+      const popupWebContents = electronMocks.makeWebContents(source.session)
+      response.createWindow({ webContents: popupWebContents })
+      const popupEvent = electronMocks.mainWebContents.send.mock.calls.find(
+        ([channel]) => channel === browserIpcEvents.popupCreated,
+      )
+      const popupTabId = popupEvent?.[1].tabId as string
+
+      vi.advanceTimersByTime(10_000)
+
+      expect(popupWebContents.close).toHaveBeenCalledOnce()
+      expect(manager.listViewsForWorkspace('/workspace/a')).toEqual([
+        expect.objectContaining({ tabId: 'source-tab' }),
+      ])
+      expect(electronMocks.mainWebContents.send).toHaveBeenCalledWith(
+        browserIpcEvents.runtimeTabClosed,
+        { tabId: popupTabId, workspaceKey: '/workspace/a' },
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

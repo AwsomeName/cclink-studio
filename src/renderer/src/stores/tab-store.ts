@@ -185,6 +185,15 @@ interface TabState {
   // --- Actions ---
   /** 打开新 Tab */
   openTab: (options: OpenTabOptions) => void
+  /** 接纳主进程已经创建的 Browser runtime；ID 由 BrowserManager 唯一分配。 */
+  adoptBrowserRuntimeTab: (options: {
+    id: string
+    title: string
+    initialUrl: string
+    browserProfile: string | null
+    workspaceRef: NonNullable<Tab['workspaceRef']>
+    activate: boolean
+  }) => boolean
   /** 关闭 Tab */
   closeTab: (id: string) => void
   /** 激活 Tab */
@@ -402,6 +411,37 @@ export const useTabStore = create<TabState>((set, get) => ({
         activeTabId: newTab.id,
       }
     })
+  },
+
+  adoptBrowserRuntimeTab: ({ id, title, initialUrl, browserProfile, workspaceRef, activate }) => {
+    let accepted = false
+    set((state) => {
+      const existing = state.tabs.find((tab) => tab.id === id)
+      if (existing) {
+        accepted =
+          existing.type === 'browser' &&
+          workspaceRefKey(existing.workspaceRef ?? workspaceRefFromKey(null)) ===
+            workspaceRefKey(workspaceRef) &&
+          (existing.browserProfile ?? null) === browserProfile
+        return accepted && activate ? { activeTabId: id } : state
+      }
+
+      accepted = true
+      const tab: Tab = {
+        id,
+        type: 'browser',
+        title,
+        icon: '🌐',
+        initialUrl,
+        browserProfile,
+        workspaceRef,
+      }
+      return {
+        tabs: [...state.tabs, tab],
+        activeTabId: activate ? id : state.activeTabId,
+      }
+    })
+    return accepted
   },
 
   closeTab: (id) => {

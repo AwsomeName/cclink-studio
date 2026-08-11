@@ -29,6 +29,7 @@ import {
 } from '../common/Icons'
 import { Toggle } from '../common/Toggle'
 import { AgentCapabilitiesSettings } from './AgentCapabilitiesSettings'
+import { ComponentManagementSettings } from './ComponentManagementSettings'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import {
   buildKeyboardContextMenuInput,
@@ -38,6 +39,7 @@ import {
 type SettingsSectionId =
   | 'appearance'
   | 'updates'
+  | 'components'
   | 'agent'
   | 'agent-capabilities'
   | 'image-generation'
@@ -57,6 +59,7 @@ const SETTINGS_SECTIONS: Array<{
 }> = [
   { id: 'appearance', label: '外观', icon: IconPaintbrush },
   { id: 'updates', label: '更新', icon: IconCloud },
+  { id: 'components', label: '组件管理', icon: IconTool },
   { id: 'agent', label: 'Agent', icon: IconRobot },
   { id: 'agent-capabilities', label: 'Agent 能力', icon: IconTool },
   { id: 'image-generation', label: '图像生成', icon: IconPaintbrush },
@@ -86,6 +89,12 @@ const SETTINGS_SEARCH_INDEX: Array<{
     label: '更新通道',
     description: '选择只接收正式版，或同时接收公开测试版。',
     keywords: ['update', 'release', 'beta', '更新', '测试版', '预发布'],
+  },
+  {
+    sectionId: 'components',
+    label: '组件管理',
+    description: '查看 Runtime、能力插件和内容包的安装与更新状态。',
+    keywords: ['component', 'runtime', 'plugin', 'npm', '组件', '插件', '版本', '更新'],
   },
   {
     sectionId: 'agent',
@@ -848,15 +857,17 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       </aside>
 
       <main className="settings-content">
-        <div className="settings-header">
-          <div>
-            <h1>设置</h1>
-            <p>CCLink Studio 开源桌面壳仅保留本地工作台配置。</p>
+        {activeSection !== 'components' && (
+          <div className="settings-header">
+            <div>
+              <h1>设置</h1>
+              <p>CCLink Studio 开源桌面壳仅保留本地工作台配置。</p>
+            </div>
+            <button type="button" className="settings-reset-all" onClick={() => void resetAll()}>
+              恢复默认
+            </button>
           </div>
-          <button type="button" className="settings-reset-all" onClick={() => void resetAll()}>
-            恢复默认
-          </button>
-        </div>
+        )}
 
         {loading && <div className="settings-description">正在加载设置...</div>}
         {error && <div className="settings-error">{error}</div>}
@@ -959,6 +970,8 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
             </div>
           </section>
         )}
+
+        {activeSection === 'components' && <ComponentManagementSettings />}
 
         {activeSection === 'agent' && (
           <section className="settings-section">

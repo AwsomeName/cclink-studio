@@ -698,6 +698,34 @@ async function main() {
       { timeout: 10_000 },
     )
 
+    const activeBrowserTabId = await page.evaluate(async () => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      const state = useTabStore.getState()
+      const active = state.tabs.find((tab) => tab.id === state.activeTabId)
+      return active?.type === 'browser' ? active.id : null
+    })
+    assert(activeBrowserTabId, 'new browser tab did not become active')
+    await page.waitForFunction(
+      async (tabId) => (await window.cclinkStudio.browser.getActiveViewId()) === tabId,
+      activeBrowserTabId,
+      { timeout: 10_000 },
+    )
+
+    await page.locator('[title="检查和下载 CCLink Studio 更新"]').click()
+    const browserUpdatePanel = page.locator('.update-panel')
+    await browserUpdatePanel.waitFor({ state: 'visible', timeout: 10_000 })
+    await page.waitForFunction(
+      async () => (await window.cclinkStudio.browser.getActiveViewId()) === null,
+      undefined,
+      { timeout: 10_000 },
+    )
+    await browserUpdatePanel.locator('.update-panel-header button[title="关闭"]').click()
+    await page.waitForFunction(
+      async (tabId) => (await window.cclinkStudio.browser.getActiveViewId()) === tabId,
+      activeBrowserTabId,
+      { timeout: 10_000 },
+    )
+
     const initialTerminalCount = await page.locator('.tab-title', { hasText: 'Terminal' }).count()
     await createTabFromMenu(page, 'Terminal')
     await page.waitForFunction(
@@ -708,7 +736,7 @@ async function main() {
       initialTerminalCount,
       { timeout: 10_000 },
     )
-    return 'editor/browser/terminal'
+    return 'editor/browser/terminal and update modal native-view occlusion'
   })
 
   await runCheck('no paid or account UI appears during smoke', async () => {

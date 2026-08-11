@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   browserBoundsSchema,
   browserCreateViewOptionsSchema,
+  browserPopupCreatedSchema,
   browserReconcileViewsSchema,
+  browserRuntimeTabClosedSchema,
   browserUrlSchema,
 } from './browser-ipc-schema'
 
@@ -67,5 +69,34 @@ describe('browser IPC schemas', () => {
   it('rejects non-finite or implausible workbench bounds', () => {
     expect(() => browserBoundsSchema.parse({ x: 0, y: 0, width: Infinity, height: 100 })).toThrow()
     expect(() => browserBoundsSchema.parse({ x: 0, y: 0, width: 100_001, height: 100 })).toThrow()
+  })
+
+  it('bounds popup lifecycle event payloads', () => {
+    expect(
+      browserPopupCreatedSchema.parse({
+        tabId: 'browser-popup-1',
+        url: 'https://example.com/',
+        workspaceKey: '/workspace/a',
+        profileId: 'operations',
+        disposition: 'foreground-tab',
+        activate: true,
+      }),
+    ).toMatchObject({ tabId: 'browser-popup-1', disposition: 'foreground-tab' })
+    expect(() =>
+      browserPopupCreatedSchema.parse({
+        tabId: 'browser-popup-1',
+        url: 'javascript:alert(1)',
+        workspaceKey: '/workspace/a',
+        profileId: null,
+        disposition: 'foreground-tab',
+        activate: true,
+      }),
+    ).toThrow()
+    expect(() =>
+      browserRuntimeTabClosedSchema.parse({
+        tabId: '',
+        workspaceKey: '/workspace/a',
+      }),
+    ).toThrow()
   })
 })

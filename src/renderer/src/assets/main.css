@@ -12547,3 +12547,170 @@ h6.file-preview-office-heading {
   font-size: 13px;
   line-height: 1.6;
 }
+
+/* ====== 设置页：组件管理 ====== */
+
+.component-management-settings {
+  min-width: 0;
+}
+
+.component-table-shell {
+  overflow: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.component-table {
+  width: 100%;
+  min-width: 640px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.component-table th:nth-child(1) {
+  width: 27%;
+}
+
+.component-table th:nth-child(2) {
+  width: 11%;
+}
+
+.component-table th:nth-child(3) {
+  width: 24%;
+}
+
+.component-table th:nth-child(4) {
+  width: 14%;
+}
+
+.component-table th:nth-child(5) {
+  width: 15%;
+}
+
+.component-table th:nth-child(6) {
+  width: 9%;
+}
+
+.component-table th:nth-child(6),
+.component-table td:nth-child(6) {
+  padding-right: 4px;
+  padding-left: 4px;
+  text-align: center;
+}
+
+.component-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.component-table td {
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.component-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.component-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.component-table td:first-child {
+  min-width: 0;
+}
+
+.component-table td:first-child strong,
+.component-table td:first-child small {
+  display: block;
+}
+
+.component-table td:first-child strong {
+  margin-bottom: 3px;
+  color: var(--text-active);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.component-table td:first-child small {
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.component-kind {
+  display: inline-flex;
+  padding: 2px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.component-install-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.4;
+}
+
+.component-install-state > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+}
+
+.component-install-state.installed > span {
+  background: #3fb950;
+}
+
+.component-install-state.not-installed > span {
+  background: #d29922;
+}
+
+.component-install-state.unavailable > span {
+  background: #f85149;
+}
+
+.component-install-state.checking > span {
+  background: var(--text-accent);
+}
+
+.component-install-summary {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.component-installed-version {
+  padding-left: 13px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.component-row-action {
+  min-width: 48px;
+  padding-right: 9px;
+  padding-left: 9px;
+}
+
+.component-table td:nth-child(4),
+.component-table td:nth-child(5) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

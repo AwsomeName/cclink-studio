@@ -201,7 +201,8 @@ app.on('ready', () => {
 | 拖拽上传        | `page.dragAndDrop()`                 | 拖拽文件上传          | ✅   |
 | iframe 操作     | `frameLocator()`                     | 处理嵌套 iframe       | ✅   |
 | 对话框处理      | `page.on('dialog')`                  | 处理 alert/confirm    | ✅   |
-| 新窗口处理      | `page.waitFor('popup')`              | 处理新打开的窗口      | ✅   |
+| 新窗口自动化    | `page.waitForEvent('popup')`         | Agent 捕获新页面      | ✅   |
+| 新窗口可视接管  | `setWindowOpenHandler.createWindow`  | 工作台新 Tab 展示     | 🚧   |
 | Cookie 操作     | `context.cookies()` / `addCookies()` | 保持登录态            | ✅   |
 | 页面等待        | `page.waitForLoadState()`            | 等待页面加载完成      | ✅   |
 | JavaScript 执行 | `page.evaluate()`                    | 在页面中执行自定义 JS | ✅   |
@@ -212,7 +213,8 @@ app.on('ready', () => {
 
 - [ ] Cookie 持久化（保持登录态跨会话；Cookie 读写工具已实现）
 - [ ] 书签管理
-- [x] 多 Tab 可视化管理（Tab 栏 UI + `browser_new_tab`/`list_tabs`/`switch_tab`）
+- [x] 工作台主动创建的多 Tab 可视化管理（Tab 栏 UI + `browser_new_tab`/`list_tabs`/`switch_tab`）
+- [ ] 网页自身 `window.open` / `target=_blank` 接管为工作台 Tab（开发方案见 `browser-popup-tabs-development-plan.md`）
 - [x] 下载管理（`browser_wait_for_download`/`save_download`）
 - [ ] 代理设置
 - [x] 与 Agent 对话面板联动（工具调用桥接，46 个 `browser_*` 工具）

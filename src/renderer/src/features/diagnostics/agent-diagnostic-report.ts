@@ -123,6 +123,7 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
     `- 自动化 tabId：${redactText(runtime?.playwrightTabId ?? '无')}`,
     `- 自动化 URL：${redactUrl(runtime?.playwrightUrl ?? '未知')}`,
     `- 自动化 Title：${redactText(runtime?.playwrightTitle ?? '未知')}`,
+    `- Popup：${runtime?.popup ? `${runtime.popup.adoptionState} / ${runtime.popup.disposition}` : '否'}`,
     ...formatBindingWarning(runtime),
     `- 最近 Claim：${formatLastClaim(runtime)}`,
     '- 最近 URL：',

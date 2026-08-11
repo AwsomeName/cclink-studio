@@ -68,6 +68,10 @@ export class PlaywrightBridge {
   private pages: Map<string, Page> = new Map()
   /** 当前活跃 Tab ID */
   private activeTabId: string | null = null
+  /** BrowserManager 已正式 claim 的可见 View ID；临时 popup ID 不进入此集合。 */
+  private claimedViewTabIds = new Set<string>()
+  /** 同一 View 的加载事件可能并发触发 claim；按 tabId + WebContents 合并。 */
+  private viewClaims = new Map<string, { webContents: WebContents; promise: Promise<Page> }>()
 
   /** 控制台日志缓冲 */
   private consoleLogs: ScopedConsoleLogEntry[] = []
@@ -128,8 +132,9 @@ export class PlaywrightBridge {
           return
         }
 
-        const tabId = this.registerPage(newPage)
-        console.log(`[CCLink Studio] 新页面自动注册: tabId=${tabId}, url=${newPage.url()}`)
+        // 所有来自可见 Browser View 的 popup 都由 BrowserManager 分配稳定 tabId。
+        // 这里不能先注册随机 ID，否则会短暂形成第二套 Tab 事实源。
+        console.log(`[CCLink Studio] popup 等待 BrowserManager claim: url=${newPage.url()}`)
       })
     }
   }
@@ -315,7 +320,10 @@ export class PlaywrightBridge {
   registerPage(page: Page, key?: string): string {
     const tabId = key ?? randomUUID()
     for (const [existingTabId, existingPage] of this.pages) {
-      if (existingPage === page && existingTabId !== tabId) this.pages.delete(existingTabId)
+      if (existingPage === page && existingTabId !== tabId) {
+        this.pages.delete(existingTabId)
+        this.claimedViewTabIds.delete(existingTabId)
+      }
     }
     this.pages.set(tabId, page)
 
@@ -325,6 +333,7 @@ export class PlaywrightBridge {
     // 页面关闭时清理
     page.on('close', () => {
       this.pages.delete(tabId)
+      this.claimedViewTabIds.delete(tabId)
       if (this.activeTabId === tabId) {
         const remaining = Array.from(this.pages.keys())
         this.activeTabId = remaining.length > 0 ? remaining[0] : null
@@ -351,6 +360,23 @@ export class PlaywrightBridge {
    * @param expectedUrl 该 view 预期加载的 URL（URL 兜底匹配 + 轮询用）
    */
   async claimPageForView(
+    tabId: string,
+    webContents: WebContents,
+    expectedUrl?: string,
+  ): Promise<Page> {
+    const pending = this.viewClaims.get(tabId)
+    if (pending?.webContents === webContents) return pending.promise
+
+    const promise = this.performPageClaim(tabId, webContents, expectedUrl)
+    this.viewClaims.set(tabId, { webContents, promise })
+    try {
+      return await promise
+    } finally {
+      if (this.viewClaims.get(tabId)?.promise === promise) this.viewClaims.delete(tabId)
+    }
+  }
+
+  private async performPageClaim(
     tabId: string,
     webContents: WebContents,
     expectedUrl?: string,
@@ -407,6 +433,7 @@ export class PlaywrightBridge {
 
     // 用 tabId 注册（覆盖旧 key），监听 + 关闭清理由 registerPage 负责
     this.registerPage(page, tabId)
+    this.claimedViewTabIds.add(tabId)
     console.log(
       `[CCLink Studio] view 已 claim 为 Playwright Page: tabId=${tabId}, url=${page.url()}`,
     )
@@ -440,6 +467,7 @@ export class PlaywrightBridge {
    */
   unregisterPage(tabId: string): void {
     this.pages.delete(tabId)
+    this.claimedViewTabIds.delete(tabId)
     if (this.activeTabId === tabId) {
       const remaining = Array.from(this.pages.keys())
       this.activeTabId = remaining.length > 0 ? remaining[0] : null
@@ -474,6 +502,17 @@ export class PlaywrightBridge {
       }
     }
     return result
+  }
+
+  /** 等待 popup 被 BrowserManager 用稳定可见 tabId claim，避免 MCP 返回临时随机 ID。 */
+  async waitForClaimedPageId(page: Page, timeoutMs = 1500): Promise<string | null> {
+    const deadline = Date.now() + timeoutMs
+    while (true) {
+      const tabId = this.getTabIdForPage(page)
+      if (tabId && this.claimedViewTabIds.has(tabId)) return tabId
+      if (Date.now() >= deadline) return null
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
   }
 
   /**
@@ -691,6 +730,8 @@ export class PlaywrightBridge {
   async disconnect(): Promise<void> {
     // 清空所有状态
     this.pages.clear()
+    this.claimedViewTabIds.clear()
+    this.viewClaims.clear()
     this.consoleLogs = []
     this.networkLog = []
     this.routeHandlers.clear()

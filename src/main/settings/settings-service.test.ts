@@ -155,6 +155,42 @@ describe('SettingsService Claude runtime migration', () => {
   })
 })
 
+describe('SettingsService component setup onboarding', () => {
+  it('keeps a fresh install eligible for the first-run component page', async () => {
+    const service = createSettingsService()
+    await service.loadState()
+
+    expect(service.getAll().componentSetupPageSeenVersion).toBe(0)
+  })
+
+  it('does not treat an existing installation as a fresh install after upgrade', async () => {
+    await writeFile(
+      join(tempDir, 'settings.json'),
+      JSON.stringify({ updateTrack: 'stable' }),
+      'utf8',
+    )
+
+    const service = createSettingsService()
+    await service.loadState()
+
+    expect(service.getAll().componentSetupPageSeenVersion).toBe(1)
+    expect(
+      JSON.parse(await readFile(join(tempDir, 'settings.json'), 'utf8'))
+        .componentSetupPageSeenVersion,
+    ).toBe(1)
+  })
+
+  it('preserves the onboarding marker when user settings are reset', async () => {
+    const service = createSettingsService()
+    await service.loadState()
+    await service.set({ componentSetupPageSeenVersion: 1 })
+
+    await service.reset()
+
+    expect(service.getAll().componentSetupPageSeenVersion).toBe(1)
+  })
+})
+
 function createSettingsService(): SettingsService {
   return new SettingsService(
     new CredentialService(

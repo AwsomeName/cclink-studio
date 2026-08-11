@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { IconClose, IconCloud, IconRefresh } from '../common/Icons'
+import { registerFloatingSurface } from '../common/floating-surface-registry'
 import { useUpdateStore } from '../../stores/update-store'
 
 export function UpdatePanel(): React.ReactElement | null {
@@ -13,6 +15,11 @@ export function UpdatePanel(): React.ReactElement | null {
   const openManualInstaller = useUpdateStore((state) => state.openManualInstaller)
   const manualInstallerBusy = useUpdateStore((state) => state.manualInstallerBusy)
   const manualInstallerError = useUpdateStore((state) => state.manualInstallerError)
+
+  useEffect(() => {
+    if (!open) return
+    return registerFloatingSurface()
+  }, [open])
 
   if (!open) return null
 

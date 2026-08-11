@@ -84,4 +84,19 @@ describe('PlaywrightBridge diagnostics', () => {
       },
     ])
   })
+
+  it('returns only BrowserManager-claimed IDs as stable popup IDs', async () => {
+    const bridge = new PlaywrightBridge()
+    const page = fakePage('https://example.com/popup', 'Popup')
+    const internals = bridge as unknown as {
+      claimedViewTabIds: Set<string>
+    }
+
+    bridge.registerPage(page, 'temporary-popup-id')
+    expect(await bridge.waitForClaimedPageId(page, 0)).toBeNull()
+
+    bridge.registerPage(page, 'browser-popup-stable')
+    internals.claimedViewTabIds.add('browser-popup-stable')
+    expect(await bridge.waitForClaimedPageId(page, 0)).toBe('browser-popup-stable')
+  })
 })

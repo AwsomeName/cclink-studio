@@ -472,7 +472,7 @@ export async function executePlaywrightAction(
       const popup = await activePage.waitForEvent('popup', {
         timeout: action.timeout ?? 5000,
       })
-      const tabId = bridge!.registerPage(popup)
+      const tabId = (await bridge!.waitForClaimedPageId(popup)) ?? bridge!.registerPage(popup)
       return { tabId, url: popup.url() }
     }
 

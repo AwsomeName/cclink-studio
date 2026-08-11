@@ -18,6 +18,7 @@ import {
   hasConversationDragData,
   readConversationDragData,
 } from '../../features/agent-conversations/conversation-workbench'
+import { openDefaultBrowserTab } from '../../features/web-resources/open-default-browser-tab'
 
 interface WorkbenchProps {
   tabCreateMenuOpen: boolean
@@ -119,8 +120,12 @@ export function Workbench({
   }, [openTab])
 
   const openNewBrowser = useCallback((): void => {
-    openTab({ type: 'browser', title: '浏览器', icon: '🌐', forceNew: true })
-  }, [openTab])
+    void openDefaultBrowserTab(activeWorkspaceRef).then((result) => {
+      if (!result.saveable) {
+        showToast(`已打开普通浏览器；当前无法保存到项目：${result.error}`, 'info')
+      }
+    })
+  }, [activeWorkspaceRef, showToast])
 
   const openNewConversation = useCallback((): void => {
     const conversationId = createConversation({

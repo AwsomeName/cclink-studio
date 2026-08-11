@@ -607,7 +607,8 @@ Preload 不另造手写字符串 API；shared contract、main handler 和 preloa
 产品方案：
 
 - 删除侧栏内联创建表单；侧栏始终保持添加入口和当前项目资源列表。
-- 点击添加调用 `beginDraft`，成功后打开带“未保存的网站账号”标识的 Browser Tab。
+- 点击添加或手动新建默认 Browser Tab 都调用同一创建入口；`beginDraft` 成功后打开标题为
+  “浏览器”、顶部带保存按钮的 Browser Tab。
 - Browser 地址栏和网页现场保持现有交互；扫码、验证码、2FA 由用户在网页内完成。
 - 点击“登录完成，保存到当前项目”后只确认“显示名称”；网站、地址和项目只读展示。
 - 保存成功后当前 Tab 原地转正式资源，侧栏新增一行；关闭后从侧栏用同一 Session 重开。
@@ -849,8 +850,9 @@ D0 只证明契约可实现，不能算 W1-A 用户功能。
 ### Batch D1：点击添加即进入实际 Browser Tab
 
 - 删除侧栏网站账号创建表单；侧栏只保留添加入口和当前项目资源列表。
-- 点击添加创建实际 Browser Tab 和临时隔离 Profile，地址栏立即可用。
-- Browser 顶部显示“未保存的网站账号”以及“保存到当前项目”。
+- 点击添加或手动新建默认 Browser Tab 都创建实际 Browser Tab 和临时隔离 Profile，地址栏
+  立即可用。
+- Browser Tab 使用统一的“浏览器”标题，顶部显示“登录完成，保存到当前项目”。
 - 未保存 Tab 不进入资源 Snapshot、事务选择器或 AI 工具；关闭时触发临时环境清理。
 - UI smoke 明确断言侧栏不存在创建表单。
 
@@ -1640,7 +1642,8 @@ Mock、fixture、单元测试或静态流程图通过，只能证明对应工程
   `workspaceRef + draftId + tabId + displayName`，URL、标题和 Profile 由主进程读取。
 - `WebResourceService` 成为草稿账本和正式资源转换 owner；草稿记录持久化在本机
   `web-resources/web-resource-drafts.json`，不进入项目资源或事务/AI 选择器。
-- 侧栏完整创建表单已经删除；BrowserToolbar 提供“登录完成，保存到当前项目”和唯一
+- 侧栏完整创建表单已经删除；侧栏添加、顶部“+”、命令面板和浏览器侧栏的新建动作统一
+  创建可保存的默认 Browser Tab。BrowserToolbar 提供“登录完成，保存到当前项目”和唯一
   “账号名称”字段；保存后 `webResourceDraftRef` 在原 Tab 转为 `webResourceRef`。
 - 侧栏正式资源点击已改为先调用主进程 `resolveLaunch`，不再使用 renderer 自报的 URL
   和 Profile 启动网页。

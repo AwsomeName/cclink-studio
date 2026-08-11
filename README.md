@@ -136,6 +136,8 @@ cclink-studio/
 - [统一上下文操作系统](docs/features/context-action-system.md)
 - [数据源](docs/features/data-sources.md)
 - [Android agent-device](docs/features/agent-device.md)
+- [Runtime 组件与能力插件方案（尚未实现）](docs/features/runtime-components-and-capability-plugins.md)
+- [Runtime 组件与能力插件开发方案](docs/features/runtime-components-and-capability-plugins-development-plan.md)
 
 ## 许可证
 

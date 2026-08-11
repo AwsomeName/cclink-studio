@@ -1,10 +1,20 @@
-import { BrowserWindow, WebContentsView, session, type ContextMenuParams } from 'electron'
+import {
+  BrowserWindow,
+  WebContentsView,
+  session,
+  type BrowserWindowConstructorOptions,
+  type ContextMenuParams,
+  type HandlerDetails,
+  type WebContents,
+  type WindowOpenHandlerResponse,
+} from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
 import type { BrowserInstanceStore } from '../persistence/browser-instance-store'
 import {
   browserIpcEvents,
   type BrowserBounds,
+  type BrowserPopupDisposition,
   type BrowserSessionDiagnosticSummary,
   type BrowserReconcileViewsOptions,
   type BrowserViewModeType,
@@ -41,6 +51,8 @@ const MAX_ZOOM = 3
 const ZOOM_STEP = 0.1
 /** 默认首页 */
 const DEFAULT_URL = 'https://www.baidu.com'
+/** renderer 未接纳 popup 时的有界清理窗口，避免不可见 WebContents 泄漏。 */
+const POPUP_ADOPTION_TIMEOUT_MS = 10_000
 
 /** 设备模式：桌面 / 移动 */
 export type ViewMode = BrowserViewModeType
@@ -84,6 +96,12 @@ interface ViewEntry {
   workspaceKey: string | null
   /** 最近一次原生网页菜单 token；新菜单或 View 销毁后旧回调不可执行。 */
   contextMenuToken: string | null
+  /** 仅 popup View 存在；普通工作台 View 为 null。 */
+  popup: {
+    adoptionState: 'pending' | 'adopted'
+    disposition: BrowserPopupDisposition
+    adoptionTimer: ReturnType<typeof setTimeout> | null
+  } | null
 }
 
 /**
@@ -192,6 +210,10 @@ export class BrowserManager {
     const url = entry.view.webContents.getURL() || entry.pendingUrl
     try {
       await this.playwrightBridge.claimPageForView(tabId, entry.view.webContents, url)
+      if (this.views.get(tabId) !== entry) {
+        this.playwrightBridge.unregisterPage(tabId)
+        throw new Error(`浏览器 View 已在 claim 期间销毁: ${tabId}`)
+      }
       if (this.activeViewId === tabId) await this.playwrightBridge.switchToPage(tabId)
       this.lastClaimByTab.set(tabId, {
         status: 'succeeded',
@@ -335,10 +357,21 @@ export class BrowserManager {
       profileId,
       workspaceKey,
       contextMenuToken: null,
+      popup: null,
     }
 
-    // 监听导航事件（闭包捕获 tabId，发出的事件携带 tabId）
-    const wc = view.webContents
+    this.installViewListeners(tabId, entry)
+    this.views.set(tabId, entry)
+
+    // 若该视图已是活跃视图，立即尝试加载（bounds 已就绪时）
+    if (this.activeViewId === tabId) {
+      this.ensureLoaded(tabId)
+    }
+  }
+
+  /** 普通工作台 View 与网页 popup 共用同一套安全、导航和自动化监听。 */
+  private installViewListeners(tabId: string, entry: ViewEntry): void {
+    const wc = entry.view.webContents
     wc.on('will-navigate', (event, url) => {
       if (this.routeBrowserAuth(tabId, entry, url)) {
         event.preventDefault()
@@ -362,12 +395,7 @@ export class BrowserManager {
       }
       if (new URL(url).protocol === 'file:') event.preventDefault()
     })
-    wc.setWindowOpenHandler(({ url }) => {
-      if (this.routeBrowserAuth(tabId, entry, url) || !isSupportedBrowserUrl(url)) {
-        return { action: 'deny' }
-      }
-      return new URL(url).protocol === 'file:' ? { action: 'deny' } : { action: 'allow' }
-    })
+    wc.setWindowOpenHandler((details) => this.handleWindowOpen(tabId, entry, details))
     wc.on('did-navigate', (_event, url) => this.onNavigate(tabId, url))
     wc.on('did-navigate-in-page', (_event, url) => this.onNavigate(tabId, url))
     wc.on('page-title-updated', (_event, title) => {
@@ -377,6 +405,7 @@ export class BrowserManager {
       this.emitPageMeta(tabId, { faviconUrl: favicons[0] ?? null })
     })
     wc.on('context-menu', (_event, params) => this.openContextMenu(tabId, entry, params))
+    wc.once('destroyed', () => this.handleWebContentsDestroyed(tabId, entry))
     // 每次页面加载完成后，按当前模式重新计算并应用缩放
     wc.on('did-finish-load', () => {
       void this.applyZoom(tabId, true)
@@ -390,13 +419,152 @@ export class BrowserManager {
         )
       }
     })
+  }
 
-    this.views.set(tabId, entry)
-
-    // 若该视图已是活跃视图，立即尝试加载（bounds 已就绪时）
-    if (this.activeViewId === tabId) {
-      this.ensureLoaded(tabId)
+  private handleWindowOpen(
+    sourceTabId: string,
+    sourceEntry: ViewEntry,
+    details: HandlerDetails,
+  ): WindowOpenHandlerResponse {
+    if (
+      this.views.get(sourceTabId) !== sourceEntry ||
+      !this.win() ||
+      this.routeBrowserAuth(sourceTabId, sourceEntry, details.url) ||
+      !isSupportedBrowserUrl(details.url)
+    ) {
+      return { action: 'deny' }
     }
+    if (details.url !== 'about:blank' && new URL(details.url).protocol === 'file:') {
+      return { action: 'deny' }
+    }
+
+    return {
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        show: false,
+        webPreferences: {
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+        },
+      },
+      createWindow: (options) => this.createPopupView(sourceTabId, sourceEntry, details, options),
+    }
+  }
+
+  /**
+   * 让 Chromium 创建的 popup WebContents 直接进入 BrowserManager，而不是生成 BrowserWindow。
+   * createWindow 是同步回调，因此先建立 pending runtime，再通过 IPC 让 renderer 接纳投影。
+   */
+  private createPopupView(
+    sourceTabId: string,
+    sourceEntry: ViewEntry,
+    details: HandlerDetails,
+    options: BrowserWindowConstructorOptions,
+  ): WebContents {
+    if (this.views.get(sourceTabId) !== sourceEntry || !this.win()) {
+      throw new Error('来源浏览器 Tab 已失效，无法创建 popup')
+    }
+
+    // Electron 的 createWindow 运行时会为非 background disposition 附带预建 WebContents，
+    // 但 BrowserWindowConstructorOptions 类型尚未声明该字段。
+    const suppliedWebContents = (
+      options as BrowserWindowConstructorOptions & { webContents?: WebContents }
+    ).webContents
+    const view = suppliedWebContents
+      ? new WebContentsView({ webContents: suppliedWebContents })
+      : new WebContentsView({
+          webPreferences: {
+            ...options.webPreferences,
+            sandbox: true,
+            contextIsolation: true,
+            nodeIntegration: false,
+            session: sourceEntry.view.webContents.session,
+          },
+        })
+    const tabId = `browser-popup-${randomUUID()}`
+    const popupUrl = details.url || 'about:blank'
+    const desktopUA = sourceEntry.desktopUA
+    if (view.webContents.session !== sourceEntry.view.webContents.session) {
+      view.webContents.close()
+      throw new Error('popup Session 未继承来源 Profile，已拒绝创建')
+    }
+    view.webContents.setUserAgent(
+      sourceEntry.viewMode === 'mobile' ? MOBILE_UA : normalizeDesktopUserAgent(desktopUA),
+    )
+    view.setBounds({ x: 0, y: 0, width: 1, height: 1 })
+
+    installBrowserCompatibilityHeaders(view.webContents.session)
+    this.sessionDiagnostics.observe(view.webContents.session, sourceEntry.profileId)
+
+    const entry: ViewEntry = {
+      view,
+      // Chromium 已拥有此次 popup 导航；不能由 ensureLoaded 再次 loadURL。
+      boundsReceived: true,
+      viewMode: sourceEntry.viewMode,
+      zoomMode: sourceEntry.zoomMode,
+      manualZoom: sourceEntry.manualZoom,
+      effectiveZoom: sourceEntry.effectiveZoom,
+      desktopUA,
+      fitDebounce: null,
+      pendingUrl: popupUrl,
+      url: popupUrl,
+      history: [popupUrl],
+      historyIndex: 0,
+      pendingHistoryDirection: null,
+      profileId: sourceEntry.profileId,
+      workspaceKey: sourceEntry.workspaceKey,
+      contextMenuToken: null,
+      popup: {
+        adoptionState: 'pending',
+        disposition: details.disposition,
+        adoptionTimer: null,
+      },
+    }
+
+    this.installViewListeners(tabId, entry)
+    this.views.set(tabId, entry)
+    if (this.playwrightBridge) {
+      void this.claimViewPage(tabId, entry).catch((error) =>
+        console.warn(`[BrowserManager] popup 提前 claim 失败 tabId=${tabId}:`, error),
+      )
+    }
+
+    const popup = entry.popup!
+    popup.adoptionTimer = setTimeout(() => {
+      const current = this.views.get(tabId)
+      if (current !== entry || current.popup?.adoptionState !== 'pending') return
+      console.warn(`[BrowserManager] popup 接纳超时，已清理 tabId=${tabId}`)
+      this.destroyView(tabId)
+      this.emitRuntimeTabClosed(tabId, entry.workspaceKey)
+    }, POPUP_ADOPTION_TIMEOUT_MS)
+
+    this.win()?.webContents.send(browserIpcEvents.popupCreated, {
+      tabId,
+      url: popupUrl,
+      workspaceKey: entry.workspaceKey,
+      profileId: entry.profileId,
+      disposition: details.disposition,
+      activate: details.disposition !== 'background-tab',
+    })
+
+    // Electron 对 background-tab 可能延迟创建 WebContents；此分支需主动保留请求语义。
+    if (!suppliedWebContents && details.disposition === 'background-tab') {
+      const contentType = details.postBody
+        ? `${details.postBody.contentType}${details.postBody.boundary ? `; boundary=${details.postBody.boundary}` : ''}`
+        : null
+      void view.webContents
+        .loadURL(popupUrl, {
+          httpReferrer: details.referrer,
+          ...(details.postBody ? { postData: details.postBody.data } : {}),
+          ...(contentType ? { extraHeaders: `Content-Type: ${contentType}\n` } : {}),
+        })
+        .catch((error) =>
+          console.warn(`[BrowserManager] background popup 加载失败 tabId=${tabId}:`, error),
+        )
+    }
+
+    return view.webContents
   }
 
   private openContextMenu(tabId: string, entry: ViewEntry, params: ContextMenuParams): void {
@@ -509,11 +677,46 @@ export class BrowserManager {
     void entry.view.webContents.loadURL(entry.pendingUrl)
   }
 
-  /** 销毁指定视图 */
-  destroyView(tabId: string): void {
+  /** renderer 已创建同 ID 的工作台 Tab，pending runtime 进入正常对账生命周期。 */
+  acceptPopup(tabId: string): void {
     const entry = this.views.get(tabId)
-    if (!entry) return
+    if (!entry?.popup) throw new Error('待接纳 popup 不存在')
+    if (entry.popup.adoptionState === 'adopted') return
+    if (entry.workspaceKey !== this.currentWorkspaceKey) {
+      this.destroyView(tabId)
+      this.emitRuntimeTabClosed(tabId, entry.workspaceKey)
+      throw new Error('popup 来源工作空间已切换')
+    }
+    entry.popup.adoptionState = 'adopted'
+    if (entry.popup.adoptionTimer) clearTimeout(entry.popup.adoptionTimer)
+    entry.popup.adoptionTimer = null
+  }
+
+  /** renderer 无法安全投影该 popup，立即释放 runtime。 */
+  rejectPopup(tabId: string): void {
+    const entry = this.views.get(tabId)
+    if (!entry?.popup) return
+    this.destroyView(tabId)
+    this.emitRuntimeTabClosed(tabId, entry.workspaceKey)
+  }
+
+  private handleWebContentsDestroyed(tabId: string, entry: ViewEntry): void {
+    if (!this.removeViewEntry(tabId, entry)) return
+    this.emitRuntimeTabClosed(tabId, entry.workspaceKey)
+  }
+
+  private emitRuntimeTabClosed(tabId: string, workspaceKey: string | null): void {
+    this.win()?.webContents.send(browserIpcEvents.runtimeTabClosed, { tabId, workspaceKey })
+  }
+
+  /** 从 BrowserManager 和所有下游注册表移除 ViewEntry；不负责关闭 WebContents 本身。 */
+  private removeViewEntry(tabId: string, entry: ViewEntry): boolean {
+    if (this.views.get(tabId) !== entry) return false
     if (entry.fitDebounce) clearTimeout(entry.fitDebounce)
+    if (entry.popup?.adoptionTimer) clearTimeout(entry.popup.adoptionTimer)
+    entry.contextMenuToken = null
+    if (entry.popup) entry.popup.adoptionTimer = null
+
     const win = this.win()
     if (win) {
       try {
@@ -522,20 +725,23 @@ export class BrowserManager {
         // 窗口可能已销毁，忽略
       }
     }
+    this.views.delete(tabId)
+    if (this.activeViewId === tabId) this.activeViewId = null
+
+    this.playwrightBridge?.unregisterPage(tabId)
+    for (const cb of this.viewDestroyedCallbacks) cb(tabId)
+    return true
+  }
+
+  /** 销毁指定视图 */
+  destroyView(tabId: string): void {
+    const entry = this.views.get(tabId)
+    if (!entry) return
+    if (!this.removeViewEntry(tabId, entry)) return
     try {
       entry.view.webContents.close()
     } catch {
       // 忽略
-    }
-    this.views.delete(tabId)
-    if (this.activeViewId === tabId) this.activeViewId = null
-
-    // 解绑 Playwright Page（释放注册表 key），并通知 AgentBridge 把失效的 browser scope 降级
-    if (this.playwrightBridge) {
-      this.playwrightBridge.unregisterPage(tabId)
-    }
-    for (const cb of this.viewDestroyedCallbacks) {
-      cb(tabId)
     }
   }
 
@@ -592,6 +798,19 @@ export class BrowserManager {
       options.views.map(({ tabId, profileId }) => [tabId, normalizeBrowserProfileId(profileId)]),
     )
     for (const [tabId, entry] of [...this.views]) {
+      if (entry.popup?.adoptionState === 'pending') {
+        const rendererDeclaredPopup = expectedProfileByTabId.has(tabId)
+        const bindingMismatch =
+          rendererDeclaredPopup &&
+          (entry.workspaceKey !== options.workspaceKey ||
+            entry.profileId !== expectedProfileByTabId.get(tabId))
+        if (bindingMismatch) {
+          this.destroyView(tabId)
+          this.emitRuntimeTabClosed(tabId, entry.workspaceKey)
+        }
+        // 接纳 IPC 与 renderer effect 异步竞速期间，pending View 不能按孤儿销毁。
+        continue
+      }
       if (
         shouldDestroyBrowserViewDuringReconcile({
           tabId,
@@ -1044,6 +1263,10 @@ export class BrowserManager {
     visibleTitle: string | null
     profileId: string | null
     viewState: BrowserViewState | null
+    popup: {
+      adoptionState: 'pending' | 'adopted'
+      disposition: BrowserPopupDisposition
+    } | null
     recentUrls: string[]
     engineVersions: {
       electron: string
@@ -1066,6 +1289,7 @@ export class BrowserManager {
         visibleTitle: null,
         profileId: null,
         viewState: null,
+        popup: null,
         recentUrls: [],
         engineVersions: this.getEngineVersions(),
         lastClaim: this.lastClaimByTab.get(tabId) ?? null,
@@ -1087,6 +1311,12 @@ export class BrowserManager {
       visibleTitle: entry.view.webContents.getTitle() || null,
       profileId: entry.profileId,
       viewState: this.getState(tabId),
+      popup: entry.popup
+        ? {
+            adoptionState: entry.popup.adoptionState,
+            disposition: entry.popup.disposition,
+          }
+        : null,
       recentUrls: entry.history.slice(-10),
       engineVersions: this.getEngineVersions(),
       lastClaim: this.lastClaimByTab.get(tabId) ?? null,

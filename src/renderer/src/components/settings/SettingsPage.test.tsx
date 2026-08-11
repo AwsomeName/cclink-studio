@@ -42,4 +42,26 @@ describe('SettingsPage secrets', () => {
     expect(markup).toContain('Access Key ID')
     expect(markup).toContain('Secret Access Key')
   })
+
+  it('renders the component inventory with installation and update columns', () => {
+    useSettingsStore.setState({
+      settings: { ...DEFAULT_SETTINGS, componentSetupPageSeenVersion: 1 },
+      loading: false,
+    })
+
+    const markup = renderToStaticMarkup(<SettingsPage initialSection="components" />)
+
+    expect(markup).toContain('组件管理')
+    expect(markup).toContain('Claude Code Runtime')
+    expect(markup).toContain('安装状态')
+    expect(markup).toContain('版本 2.3.1')
+    expect(markup).toContain('限定版本')
+    expect(markup).toContain('仅 2.1.211')
+    expect(markup).toContain('可用版本')
+    expect(markup).toContain('操作')
+    expect(markup).toContain('安装</button>')
+    expect(markup).toContain('更新源尚未接入')
+    expect(markup).not.toContain('清单项目')
+    expect(markup).not.toContain('恢复默认')
+  })
 })

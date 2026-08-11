@@ -144,6 +144,27 @@ cclink-studio/
 | Schema       | Zod                           |
 | 样式         | CSS variables + component CSS |
 
+## Runtime 组件与能力插件计划
+
+Runtime 组件独立更新和能力插件尚未实现。产品边界以
+`docs/features/runtime-components-and-capability-plugins.md` 为准，开发顺序、代码落点、
+工作量和失败矩阵以
+`docs/features/runtime-components-and-capability-plugins-development-plan.md` 为准。
+
+开始编码前必须先完成新的 ADR，处理 ADR 0002 中“Claude Runtime 只随 Studio 更新”的现行
+决定。第一版开发约束固定为：
+
+- npm 只提供维护者允许目录中的精确 tarball；客户端不运行 npm/pnpm、不解析 `latest`、
+  不运行 lifecycle script。
+- 普通插件构建为单一 browser ESM bundle，在 `sandbox: true`、`nodeIntegration: false`、
+  `contextIsolation: true` 的独立 Host 中运行。
+- 插件不直接读取文件、网络、环境变量、Shell 或凭证，只能调用主进程有界 broker。
+- Plugin Host、Manager 和 broker 必须进入统一 `ServiceRegistry`，启动、失败回滚、窗口重建和
+  退出使用同一生命周期声明。
+- 完整 App、Runtime 组件和插件分别保留明确状态 owner；renderer 只投影状态。
+- 第一版更新后允许重启插件宿主或 Studio 生效，不为“热更新”提前增加运行中卸载分支。
+- 当前桌面 updater 的自动安装和真实升级仍是核心发布主线，插件不能替代它。
+
 ## Android 真机边界
 
 开源壳只支持用户自有 Android 真机：

@@ -1,5 +1,10 @@
 import { useEffect } from 'react'
-import type { BrowserContextAgentRequest, BrowserOpenTabRequest } from '@shared/ipc/browser'
+import type {
+  BrowserContextAgentRequest,
+  BrowserOpenTabRequest,
+  BrowserPopupCreatedPayload,
+  BrowserRuntimeTabClosedPayload,
+} from '@shared/ipc/browser'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { useTabStore } from '../stores/tab-store'
 import { useWorkspaceStore } from '../stores/workspace-store'
@@ -47,6 +52,47 @@ export function openRequestedBrowserTab(request: BrowserOpenTabRequest): void {
     workspaceRef: activeWorkspaceRef,
     forceNew: true,
   })
+}
+
+export function adoptRequestedBrowserPopup(payload: BrowserPopupCreatedPayload): boolean {
+  const activeWorkspaceRef = useWorkspaceStore.getState().activeWorkspaceRef
+  if (workspaceRefKey(activeWorkspaceRef) !== payload.workspaceKey) {
+    void window.cclinkStudio.browser.rejectPopup(payload.tabId)
+    return false
+  }
+
+  const accepted = useTabStore.getState().adoptBrowserRuntimeTab({
+    id: payload.tabId,
+    title: '浏览器',
+    initialUrl: payload.url,
+    browserProfile: payload.profileId,
+    workspaceRef: activeWorkspaceRef,
+    activate: payload.activate,
+  })
+  if (!accepted) {
+    void window.cclinkStudio.browser.rejectPopup(payload.tabId)
+    useToastStore.getState().show('新页面与现有 Tab 冲突，已安全关闭', 'error')
+    return false
+  }
+
+  void window.cclinkStudio.browser.acceptPopup(payload.tabId).catch(() => {
+    const tab = useTabStore.getState().tabs.find((item) => item.id === payload.tabId)
+    if (tab?.type === 'browser') useTabStore.getState().closeTab(payload.tabId)
+    useToastStore.getState().show('新页面接纳失败，已关闭', 'error')
+  })
+  return true
+}
+
+export function closeRuntimeBrowserTab(payload: BrowserRuntimeTabClosedPayload): void {
+  const tab = useTabStore.getState().tabs.find((item) => item.id === payload.tabId)
+  if (
+    tab?.type !== 'browser' ||
+    !tab.workspaceRef ||
+    workspaceRefKey(tab.workspaceRef) !== payload.workspaceKey
+  ) {
+    return
+  }
+  useTabStore.getState().closeTab(payload.tabId)
 }
 
 export function mountBrowserContextToAgent(request: BrowserContextAgentRequest): void {
@@ -106,12 +152,16 @@ export function useBrowserOpenRequests(enabled: boolean): void {
   useEffect(() => {
     if (!enabled) return
     const offOpen = window.cclinkStudio.browser.onRequestOpenTab(openRequestedBrowserTab)
+    const offPopup = window.cclinkStudio.browser.onPopupCreated(adoptRequestedBrowserPopup)
+    const offRuntimeClosed = window.cclinkStudio.browser.onRuntimeTabClosed(closeRuntimeBrowserTab)
     const offNativeMenu = window.cclinkStudio.browser.onNativeContextMenuOpened(() => {
       useContextMenuStore.getState().hide('native-browser-menu')
     })
     const offAgent = window.cclinkStudio.browser.onContextAgentRequest(mountBrowserContextToAgent)
     return () => {
       offOpen()
+      offPopup()
+      offRuntimeClosed()
       offNativeMenu()
       offAgent()
     }

@@ -58,6 +58,7 @@ import { ScheduledTasksSidebar } from '../../features/scheduled-tasks/ScheduledT
 import { createScheduledTaskTab } from '../../features/scheduled-tasks/scheduled-task-view-model'
 import { AgentRolesSidebar } from '../../features/agent-roles/AgentRolesSidebar'
 import { useToastStore } from '../common/Toast'
+import { openDefaultBrowserTab } from '../../features/web-resources/open-default-browser-tab'
 
 function getProjectName(path: string): string {
   return path.split('/').filter(Boolean).pop() ?? path
@@ -404,12 +405,12 @@ function BrowserManagementView(): React.ReactElement {
   }
 
   const openNewBrowser = (): void => {
-    openTab({
-      type: 'browser',
-      title: '浏览器',
-      icon: '🌐',
-      forceNew: true,
-      workspaceRef: activeWorkspaceRef,
+    void openDefaultBrowserTab(activeWorkspaceRef).then((result) => {
+      if (!result.saveable) {
+        useToastStore
+          .getState()
+          .show(`已打开普通浏览器；当前无法保存到项目：${result.error}`, 'info')
+      }
     })
   }
 

@@ -1,5 +1,7 @@
 import type { Command } from '../../stores/command-store'
 import { useTabStore } from '../../stores/tab-store'
+import { useWorkspaceStore } from '../../stores/workspace-store'
+import { openDefaultBrowserTab } from '../../features/web-resources/open-default-browser-tab'
 import { closeTabWithDraftPolicy } from '../../utils/close-tab'
 
 export function createTabCommands(): Command[] {
@@ -18,10 +20,7 @@ export function createTabCommands(): Command[] {
       id: 'browser.newTab',
       label: '新建浏览器页',
       category: '浏览器',
-      action: () =>
-        useTabStore
-          .getState()
-          .openTab({ type: 'browser', title: '浏览器', icon: '🌐', forceNew: true }),
+      action: () => openDefaultBrowserTab(useWorkspaceStore.getState().activeWorkspaceRef),
     },
     {
       id: 'workbench.closeTab',

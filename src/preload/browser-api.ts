@@ -6,6 +6,8 @@ import {
   browserTaskIpc,
   type BrowserApiContract,
   type BrowserBounds,
+  parseBrowserPopupCreatedPayload,
+  parseBrowserRuntimeTabClosedPayload,
 } from '../shared/ipc/browser'
 import { invokeIpcContract } from './ipc-contract-client'
 
@@ -16,6 +18,8 @@ export const browserApi: BrowserApiContract = {
   createView: (tabId, initialUrl, opts) =>
     invokeIpcContract(browserIpc.createView, tabId, initialUrl, opts),
   destroyView: (tabId) => invokeIpcContract(browserIpc.destroyView, tabId),
+  acceptPopup: (tabId) => invokeIpcContract(browserIpc.acceptPopup, tabId),
+  rejectPopup: (tabId) => invokeIpcContract(browserIpc.rejectPopup, tabId),
   setActive: (tabId) => invokeIpcContract(browserIpc.setActive, tabId),
   reconcileViews: (options) => invokeIpcContract(browserIpc.reconcileViews, options),
   navigate: (tabId, url) => invokeIpcContract(browserIpc.navigate, tabId, url),
@@ -45,6 +49,22 @@ export const browserApi: BrowserApiContract = {
       callback(payload)
     ipcRenderer.on(browserIpcEvents.requestOpenTab, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.requestOpenTab, handler)
+  },
+  onPopupCreated: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      const parsed = parseBrowserPopupCreatedPayload(payload)
+      if (parsed) callback(parsed)
+    }
+    ipcRenderer.on(browserIpcEvents.popupCreated, handler)
+    return () => ipcRenderer.removeListener(browserIpcEvents.popupCreated, handler)
+  },
+  onRuntimeTabClosed: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      const parsed = parseBrowserRuntimeTabClosedPayload(payload)
+      if (parsed) callback(parsed)
+    }
+    ipcRenderer.on(browserIpcEvents.runtimeTabClosed, handler)
+    return () => ipcRenderer.removeListener(browserIpcEvents.runtimeTabClosed, handler)
   },
   onNativeContextMenuOpened: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>

@@ -16,7 +16,7 @@ import {
 } from './web-resource-view-model'
 import { resolveAndOpenWebResourceTab } from './web-resource-tab'
 import { observeWebResourcesChanged } from './web-resource-events'
-import { useTabStore } from '../../stores'
+import { openDefaultBrowserTab } from './open-default-browser-tab'
 
 interface AccountRow {
   account: WebAccount
@@ -127,20 +127,8 @@ export function WebResourcesSidebar({
     setSaving(true)
     setLoadError(null)
     try {
-      const result = await window.cclinkStudio.webResources.beginDraft({ workspaceRef })
-      if (!result.success) {
-        setLoadError(result.error.message)
-        return
-      }
-      useTabStore.getState().openTab({
-        type: 'browser',
-        title: '未保存的网站账号',
-        icon: '🌐',
-        browserProfile: result.data.browserProfileId,
-        webResourceDraftRef: { draftId: result.data.draftId },
-        workspaceRef,
-        forceNew: true,
-      })
+      const result = await openDefaultBrowserTab(workspaceRef)
+      if (!result.saveable) setLoadError(`已打开普通浏览器；${result.error}`)
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error))
     } finally {
