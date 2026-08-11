@@ -45,6 +45,7 @@ interface TabBarProps {
   onShowMenu: (tabId: string, x: number, y: number, focusReturn: HTMLElement) => void
   createMenuOpen: boolean
   onCreateMenuOpenChange: (open: boolean) => void
+  conversationDropActive: boolean
 }
 
 export function TabBar({
@@ -60,6 +61,7 @@ export function TabBar({
   onShowMenu,
   createMenuOpen,
   onCreateMenuOpenChange,
+  conversationDropActive,
 }: TabBarProps): React.ReactElement {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
@@ -137,7 +139,7 @@ export function TabBar({
   }
 
   return (
-    <div className="tab-bar">
+    <div className={`tab-bar ${conversationDropActive ? 'conversation-drop-target' : ''}`}>
       {tabs.map((tab) => (
         <div
           key={tab.id}
@@ -250,6 +252,11 @@ export function TabBar({
       >
         <IconGlobe size={13} />
       </button>
+      {conversationDropActive && (
+        <div className="conversation-tab-drop-hint" aria-hidden="true">
+          松开以在中间 Tab 打开会话
+        </div>
+      )}
     </div>
   )
 }

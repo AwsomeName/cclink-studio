@@ -9,6 +9,7 @@ import { copyTextToClipboard } from '../../../utils/clipboard'
 import { createConversationRunController } from '../../agent-conversations/conversation-run-controller'
 import { focusAgentComposer } from '../../markdown/markdown-navigation'
 import { buildAgentConversationContextDiagnosticMarkdown } from '../../diagnostics/conversation-context-diagnostics'
+import { openConversationInWorkbench } from '../../agent-conversations/conversation-workbench'
 
 export const THREAD_RESTORED_EVENT = 'cclink:thread-restored'
 
@@ -49,6 +50,17 @@ export function createThreadContextCommands(): Command[] {
         const title = context?.inputValue?.trim()
         if (!id || !title || !currentThread(context)) throw new Error('会话已不存在或名称为空')
         useAgentStore.getState().renameConversation(id, title)
+      },
+    },
+    {
+      id: 'agent.openConversationInWorkbench',
+      label: '在中间 Tab 打开',
+      contextOnly: true,
+      category: '会话',
+      visible: (context) => Boolean(currentThread(context) && !currentThread(context)?.archivedAt),
+      action: (context) => {
+        const id = threadId(context)
+        if (!id || !openConversationInWorkbench(id)) throw new Error('会话已不存在或已关闭')
       },
     },
     {
@@ -154,6 +166,14 @@ export const threadMenuContributions: MenuContribution[] = [
       ariaLabel: '重命名会话',
       initialValue: (context) => currentThread(context)?.title ?? '',
     },
+  },
+  {
+    id: 'thread.open-in-workbench',
+    targetKinds: ['thread'],
+    group: '10-open',
+    order: 20,
+    commandId: 'agent.openConversationInWorkbench',
+    icon: '▣',
   },
   {
     id: 'thread.stop-run',

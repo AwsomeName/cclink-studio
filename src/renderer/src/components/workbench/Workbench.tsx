@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { useAgentStore, useBrowserStore, useTabStore, useWorkspaceStore } from '../../stores'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import { workspaceRefKey } from '@shared/workspace-ref'
@@ -12,6 +12,12 @@ import { useWorkbenchBounds } from './use-workbench-bounds'
 import { closeTabWithDraftPolicy } from '../../utils/close-tab'
 import { recordTerminalLifecycleEvent } from '../../utils/terminal-lifecycle'
 import { buildTerminalTabDraft } from '../../utils/terminal-tab'
+import { useCommandStore } from '../../stores/command-store'
+import { useToastStore } from '../common/Toast'
+import {
+  hasConversationDragData,
+  readConversationDragData,
+} from '../../features/agent-conversations/conversation-workbench'
 
 interface WorkbenchProps {
   tabCreateMenuOpen: boolean
@@ -30,9 +36,12 @@ export function Workbench({
   const createConversation = useAgentStore((s) => s.createConversation)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const showContextMenu = useContextMenuStore((s) => s.show)
+  const executeCommand = useCommandStore((s) => s.executeCommand)
+  const showToast = useToastStore((s) => s.show)
   const browserTabs = useBrowserStore((s) => s.tabs)
   const setBrowserUrlInput = useBrowserStore((s) => s.setUrlInput)
   const contentRef = useRef<HTMLDivElement>(null)
+  const [conversationDropActive, setConversationDropActive] = useState(false)
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
   const isBrowserTab = activeTab?.type === 'browser'
@@ -42,6 +51,58 @@ export function Workbench({
   useWorkbenchBounds(contentRef)
   useBrowserEvents()
   useEditorContentUpdates()
+
+  useEffect(() => {
+    const clearConversationDrop = (): void => setConversationDropActive(false)
+    window.addEventListener('dragend', clearConversationDrop)
+    window.addEventListener('drop', clearConversationDrop)
+    return () => {
+      window.removeEventListener('dragend', clearConversationDrop)
+      window.removeEventListener('drop', clearConversationDrop)
+    }
+  }, [])
+
+  const handleConversationDragOver = useCallback((event: DragEvent<HTMLDivElement>): void => {
+    if (!hasConversationDragData(event.dataTransfer)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    setConversationDropActive(true)
+  }, [])
+
+  const handleConversationDragLeave = useCallback((event: DragEvent<HTMLDivElement>): void => {
+    if (event.relatedTarget && event.currentTarget.contains(event.relatedTarget as Node)) return
+    setConversationDropActive(false)
+  }, [])
+
+  const handleConversationDrop = useCallback(
+    async (event: DragEvent<HTMLDivElement>): Promise<void> => {
+      if (!hasConversationDragData(event.dataTransfer)) return
+      event.preventDefault()
+      event.stopPropagation()
+      setConversationDropActive(false)
+      const conversationId = readConversationDragData(event.dataTransfer)
+      const conversation = conversationId
+        ? useAgentStore.getState().conversations[conversationId]
+        : null
+      if (!conversationId || !conversation) {
+        showToast('会话已不存在', 'error')
+        return
+      }
+      const result = await executeCommand('agent.openConversationInWorkbench', {
+        source: 'toolbar',
+        target: {
+          kind: 'thread',
+          workspaceKey: conversation.runtime.workspaceRef
+            ? workspaceRefKey(conversation.runtime.workspaceRef)
+            : null,
+          conversationId,
+          activeRunId: conversation.activeRunId,
+        },
+      })
+      if (!result.ok) showToast(result.message ?? '无法在中间 Tab 打开会话', 'error')
+    },
+    [executeCommand, showToast],
+  )
 
   const handleNavigate = useCallback((): void => {
     if (!activeTabId) return
@@ -139,7 +200,12 @@ export function Workbench({
   )
 
   return (
-    <div className="workbench">
+    <div
+      className="workbench"
+      onDragOver={handleConversationDragOver}
+      onDragLeave={handleConversationDragLeave}
+      onDrop={(event) => void handleConversationDrop(event)}
+    >
       <TabBar
         tabs={tabs}
         activeTabId={activeTabId}
@@ -153,6 +219,7 @@ export function Workbench({
         onShowMenu={(tabId, x, y, focusReturn) => void handleShowTabMenu(tabId, x, y, focusReturn)}
         createMenuOpen={tabCreateMenuOpen}
         onCreateMenuOpenChange={onTabCreateMenuOpenChange}
+        conversationDropActive={conversationDropActive}
       />
 
       {isBrowserTab && activeTabId && (

@@ -78,6 +78,10 @@ export async function buildAgentResourceContext(
 export function inferTaskIntent(message: string): AgentTaskIntentSnapshot {
   const normalized = message.trim().toLowerCase()
   const site = detectTargetSite(normalized)
+  const hasExplicitWebTarget = /https?:\/\/|www\.|\burl\b|网页|网站|浏览器|网上|网络|\bweb\b/.test(
+    normalized,
+  )
+  const hasNavigationAction = /打开|访问|进入|浏览|\bopen\b|\bvisit\b|\bnavigate\b/.test(normalized)
   if (/登录|登陆|sign\s*in|log\s*in|login/.test(normalized) && site) {
     return {
       kind: 'browser_login',
@@ -98,7 +102,7 @@ export function inferTaskIntent(message: string): AgentTaskIntentSnapshot {
       reason: `用户要求在 ${site.name} 发布或投稿`,
     }
   }
-  if (/https?:\/\/|www\.|打开|访问|进入|网页|网站|url|open|visit/.test(normalized) || site) {
+  if (hasNavigationAction && (hasExplicitWebTarget || site)) {
     return {
       kind: 'browser_navigation',
       confidence: site ? 'high' : 'medium',
@@ -108,7 +112,10 @@ export function inferTaskIntent(message: string): AgentTaskIntentSnapshot {
       reason: site ? `用户提到站点 ${site.name}` : '用户要求打开或访问网页',
     }
   }
-  if (/搜索|查找|百度|google|search/.test(normalized)) {
+  if (
+    /百度|google/.test(normalized) ||
+    (/搜索|查找|\bsearch\b/.test(normalized) && hasExplicitWebTarget)
+  ) {
     return {
       kind: 'browser_search',
       confidence: 'medium',

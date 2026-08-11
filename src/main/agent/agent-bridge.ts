@@ -196,7 +196,7 @@ export class AgentBridge {
       this.runtime.restoreConversation(conversationId, restorableSessionId)
       runtimeSessionMode = restorableSessionId ? 'resumed' : 'new'
     }
-    const sendPlan = await this.resolveSendPlan(conversationId, message, context)
+    const sendPlan = this.resolveSendPlan(conversationId, context)
     if (sendPlan.options.forceVisibleBrowser) {
       await this.syncVisibleBrowserPage(sendPlan.browserTabId, sendPlan.workspaceKey)
     }
@@ -314,27 +314,20 @@ export class AgentBridge {
     })
   }
 
-  private async resolveSendPlan(
+  private resolveSendPlan(
     conversationId: string,
-    message: string,
     context?: AgentSendMessageContext,
-  ): Promise<{
+  ): {
     options: AgentSendOptions
     browserTabId: string | null
     workspaceKey: string | null
-  }> {
+  } {
     const scope = this.runtime.getScope(conversationId)
     const workspaceKey = context?.workspaceRef ? workspaceRefKey(context.workspaceRef) : null
     const explicitBrowserTabId = this.getMountedBrowserTabId(context, workspaceKey)
     const scopedBrowserTabId = scope.kind === 'browser' ? scope.instanceId : null
     this.assertBrowserWorkspace(scopedBrowserTabId, workspaceKey)
-    const visibleBrowserTabId =
-      scope.kind === 'all' && looksLikeBrowserTask(message)
-        ? ((await this.deps.browserManager?.waitForActiveViewForWorkspace?.(workspaceKey)) ??
-          this.deps.browserManager?.getViewIdForWorkspace?.(workspaceKey) ??
-          null)
-        : null
-    const browserTabId = explicitBrowserTabId ?? scopedBrowserTabId ?? visibleBrowserTabId
+    const browserTabId = explicitBrowserTabId ?? scopedBrowserTabId
     const forceVisibleBrowser = Boolean(browserTabId)
 
     return {
@@ -700,7 +693,7 @@ export class AgentBridge {
   }
 
   private finishActiveBrowserTask(conversationId: string): void {
-    const taskId = this.activeBrowserTaskIds.get(conversationId)
+    const taskId = this.resolveActiveBrowserTaskId(conversationId)
     if (!taskId) return
     this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
     this.deps.browserTaskRuntime?.finishTask(taskId)
@@ -708,7 +701,7 @@ export class AgentBridge {
   }
 
   private cancelActiveBrowserTask(conversationId: string): void {
-    const taskId = this.activeBrowserTaskIds.get(conversationId)
+    const taskId = this.resolveActiveBrowserTaskId(conversationId)
     if (!taskId) return
     this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
     this.deps.browserTaskRuntime?.cancelTask(taskId)
@@ -716,7 +709,7 @@ export class AgentBridge {
   }
 
   private failActiveBrowserTask(conversationId: string, error: unknown): void {
-    const taskId = this.activeBrowserTaskIds.get(conversationId)
+    const taskId = this.resolveActiveBrowserTaskId(conversationId)
     if (!taskId) return
     this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
     this.deps.browserTaskRuntime?.failTask(taskId, {
@@ -724,6 +717,14 @@ export class AgentBridge {
       errorMessage: this.extractErrorMessage(error),
     })
     this.activeBrowserTaskIds.delete(conversationId)
+  }
+
+  private resolveActiveBrowserTaskId(conversationId: string): string | null {
+    return (
+      this.activeBrowserTaskIds.get(conversationId) ??
+      this.deps.browserTaskRuntime?.getActiveTaskForConversation(conversationId)?.id ??
+      null
+    )
   }
 
   private syncActiveBrowserTaskCorrelation(
@@ -868,12 +869,4 @@ export function resolveCompatibleClaudeSessionId(
   if (!normalizedSessionId) return null
   if (!activeFingerprint || persistedFingerprint !== activeFingerprint) return null
   return normalizedSessionId
-}
-
-function looksLikeBrowserTask(message: string): boolean {
-  const normalized = message.trim().toLowerCase()
-  if (!normalized) return false
-  return /https?:\/\/|www\.|网页|网站|浏览器|打开|访问|搜索|百度|知乎|小红书|微博|公众号|登录|登陆|投稿|发布|点击|填写|上传|下载|截图|抓取|提取|页面|url|link|search|login|sign in|open|visit|click|submit|post/.test(
-    normalized,
-  )
 }

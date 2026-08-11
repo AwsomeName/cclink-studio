@@ -5,6 +5,7 @@ import type { AgentPanelMode } from '../../stores/ui-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useToastStore } from '../common/Toast'
 import { buildQuickThreadList } from '../../features/agent-conversations/view-model'
+import { writeConversationDragData } from '../../features/agent-conversations/conversation-workbench'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import {
   buildKeyboardContextMenuInput,
@@ -160,11 +161,14 @@ export function ConversationQuickSwitcher({
             key={conversation.id}
             type="button"
             role="tab"
+            draggable
+            data-conversation-id={conversation.id}
             className={`conversation-quick-tab status-${conversation.statusKind} ${conversation.isActive ? 'active' : ''}`}
             title={`${conversation.title} · ${conversation.statusLabel}`}
             aria-label={`切换到会话：${conversation.title}，${conversation.statusLabel}`}
             aria-selected={conversation.isActive}
             aria-haspopup="menu"
+            onDragStart={(event) => writeConversationDragData(event.dataTransfer, conversation.id)}
             onClick={() => void openConversation(conversation.id)}
             onContextMenu={(event) => {
               const target = getConversationTarget(conversation.id)
@@ -215,9 +219,14 @@ export function ConversationQuickSwitcher({
                   key={conversation.id}
                   type="button"
                   role="menuitem"
+                  draggable
+                  data-conversation-id={conversation.id}
                   className={`status-${conversation.statusKind}`}
                   title={conversation.title}
                   aria-haspopup="menu"
+                  onDragStart={(event) =>
+                    writeConversationDragData(event.dataTransfer, conversation.id)
+                  }
                   onClick={() => void openConversation(conversation.id)}
                   onContextMenu={(event) => {
                     const target = getConversationTarget(conversation.id)

@@ -185,9 +185,94 @@ async function main() {
       await contextMenu.getByRole('menuitem', { name: '关闭会话' }).isVisible(),
       'quick conversation menu is missing close',
     )
+    assert(
+      await contextMenu.getByRole('menuitem', { name: '在中间 Tab 打开' }).isVisible(),
+      'quick conversation menu is missing Workbench open',
+    )
     await page.keyboard.press('Escape')
     await contextMenu.waitFor({ state: 'hidden', timeout: 10_000 })
-    return 'topbar switcher aligned, Agent reopened, and thread menu available'
+
+    const conversationId = await quickTab.getAttribute('data-conversation-id')
+    assert(conversationId, 'quick conversation drag identity is missing')
+    const beforeDrop = await page.evaluate(async (id) => {
+      const { useAgentStore } = await import('/src/stores/agent-store.ts')
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      const agentState = useAgentStore.getState()
+      const tabState = useTabStore.getState()
+      return {
+        activeConversationId: agentState.activeConversationId,
+        conversationSurface: agentState.conversations[id]?.surface ?? null,
+        existingTabId:
+          tabState.tabs.find(
+            (tab) => tab.type === 'conversation' && tab.conversation?.sessionId === id,
+          )?.id ?? null,
+        previousActiveTabId: tabState.activeTabId,
+      }
+    }, conversationId)
+
+    await quickTab.dragTo(page.locator('.tab-bar'))
+    await page.waitForFunction(
+      async (id) => {
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        const state = useTabStore.getState()
+        const active = state.tabs.find((tab) => tab.id === state.activeTabId)
+        return active?.type === 'conversation' && active.conversation?.sessionId === id
+      },
+      conversationId,
+      { timeout: 10_000 },
+    )
+    const afterFirstDrop = await page.evaluate(async (id) => {
+      const { useAgentStore } = await import('/src/stores/agent-store.ts')
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      const agentState = useAgentStore.getState()
+      const tabState = useTabStore.getState()
+      return {
+        activeConversationId: agentState.activeConversationId,
+        conversationSurface: agentState.conversations[id]?.surface ?? null,
+        conversationTabCount: tabState.tabs.filter(
+          (tab) => tab.type === 'conversation' && tab.conversation?.sessionId === id,
+        ).length,
+        activeTabId: tabState.activeTabId,
+      }
+    }, conversationId)
+
+    await quickTab.dragTo(page.locator('.tab-bar'))
+    const afterSecondDropCount = await page.evaluate(async (id) => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      return useTabStore
+        .getState()
+        .tabs.filter((tab) => tab.type === 'conversation' && tab.conversation?.sessionId === id)
+        .length
+    }, conversationId)
+    assert(
+      afterSecondDropCount === afterFirstDrop.conversationTabCount,
+      'dropping the same conversation created a duplicate Tab',
+    )
+    assert(
+      afterFirstDrop.activeConversationId === beforeDrop.activeConversationId &&
+        afterFirstDrop.conversationSurface === beforeDrop.conversationSurface,
+      'dropping the conversation moved or replaced the right-side Thread state',
+    )
+
+    await page.evaluate(
+      async ({ openedTabId, existingTabId, previousActiveTabId }) => {
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        const tabStore = useTabStore.getState()
+        if (!existingTabId && openedTabId) tabStore.closeTab(openedTabId)
+        if (
+          previousActiveTabId &&
+          useTabStore.getState().tabs.some((tab) => tab.id === previousActiveTabId)
+        ) {
+          useTabStore.getState().activateTab(previousActiveTabId)
+        }
+      },
+      {
+        openedTabId: afterFirstDrop.activeTabId,
+        existingTabId: beforeDrop.existingTabId,
+        previousActiveTabId: beforeDrop.previousActiveTabId,
+      },
+    )
+    return 'topbar switcher, thread menu, drag-open, and Tab deduplication verified'
   })
 
   await runCheck('activity bar switches local panels', async () => {

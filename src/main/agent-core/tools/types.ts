@@ -33,6 +33,10 @@ export interface ToolDefinition {
 export interface ToolExecutionContext {
   conversationId?: string
   workspaceKey?: string | null
+  /** 当前 Agent Run，用于把首次工具调用关联到可诊断的任务。 */
+  agentRunId?: string | null
+  /** 当前用户目标，只在主进程的短期 MCP session 内使用。 */
+  agentGoal?: string
   scheduledTaskPolicy?: {
     origin: 'scheduled-task'
     taskId: string

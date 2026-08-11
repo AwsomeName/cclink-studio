@@ -22,7 +22,12 @@ describe('McpToolHost tool session context', () => {
     })
     host.registerModule(createModule(execute))
     const port = await host.start()
-    const token = host.createToolSession('conv-123', '/workspace/a')
+    const token = host.createToolSession({
+      conversationId: 'conv-123',
+      workspaceKey: '/workspace/a',
+      agentRunId: 'run-123',
+      agentGoal: 'write the file',
+    })
 
     const response = await fetch(`http://127.0.0.1:${port}/mcp?session=${token}`, {
       method: 'POST',
@@ -50,6 +55,8 @@ describe('McpToolHost tool session context', () => {
       {
         conversationId: 'conv-123',
         workspaceKey: '/workspace/a',
+        agentRunId: 'run-123',
+        agentGoal: 'write the file',
         confirmationGranted: true,
       },
     )
@@ -146,14 +153,18 @@ describe('McpToolHost tool session context', () => {
     host.registerModule(createEditorModule(editorExecute))
     host.registerModule(createTerminalModule(terminalExecute))
     const port = await host.start()
-    const token = host.createToolSession('scheduled-conversation', workspace, {
-      origin: 'scheduled-task',
-      taskId: 'task-1',
-      taskRevision: 1,
-      runId: 'run-1',
-      workspaceRoot: workspace,
-      readRoots: [workspace],
-      allowedTools: ['editor_read', 'editor_list'],
+    const token = host.createToolSession({
+      conversationId: 'scheduled-conversation',
+      workspaceKey: workspace,
+      scheduledTaskPolicy: {
+        origin: 'scheduled-task',
+        taskId: 'task-1',
+        taskRevision: 1,
+        runId: 'run-1',
+        workspaceRoot: workspace,
+        readRoots: [workspace],
+        allowedTools: ['editor_read', 'editor_list'],
+      },
     })
 
     const listed = await callMcp(port, token, 'tools/list')

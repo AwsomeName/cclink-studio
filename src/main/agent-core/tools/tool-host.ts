@@ -132,13 +132,9 @@ export class McpToolHost {
    *
    * Claude Code 每次 sendMessage 都会拿到独立 MCP URL，工具调用回到这里时可恢复会话归属。
    */
-  createToolSession(
-    conversationId: string,
-    workspaceKey?: string | null,
-    scheduledTaskPolicy?: ToolExecutionContext['scheduledTaskPolicy'],
-  ): string {
+  createToolSession(context: Omit<ToolExecutionContext, 'confirmationGranted'>): string {
     const token = randomUUID()
-    this.toolSessions.set(token, { conversationId, workspaceKey, scheduledTaskPolicy })
+    this.toolSessions.set(token, { ...context })
     return token
   }
 

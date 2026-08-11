@@ -413,9 +413,13 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     const conversationId = options?.conversationId ?? 'agent-default'
     const workspaceKey =
       options?.resourceContext?.workspace.key ?? options?.workspacePath?.trim() ?? null
-    this.mcpSessionToken = options?.scheduledTaskPolicy
-      ? this.toolHost.createToolSession(conversationId, workspaceKey, options.scheduledTaskPolicy)
-      : this.toolHost.createToolSession(conversationId, workspaceKey)
+    this.mcpSessionToken = this.toolHost.createToolSession({
+      conversationId,
+      workspaceKey,
+      agentRunId: options?.runId ?? null,
+      ...(operation === 'message' ? { agentGoal: userMessage } : {}),
+      ...(options?.scheduledTaskPolicy ? { scheduledTaskPolicy: options.scheduledTaskPolicy } : {}),
+    })
     const mcpConfig = this.mcpClientMgr.composeMcpConfig(
       this.toolHost.getPort(),
       this.mcpSessionToken,

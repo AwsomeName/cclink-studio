@@ -179,6 +179,82 @@ describe('BrowserToolModule 可视浏览器同步', () => {
       tabs: [{ tabId: 'visible-tab', url: 'https://www.baidu.com/', title: '百度一下' }],
       activeTabId: 'visible-tab',
     })
+    expect(browserManager.waitForActiveView).not.toHaveBeenCalled()
+  })
+
+  it('list tabs does not create a browser when the workspace has none', async () => {
+    const browserManager = {
+      getViewIdForWorkspace: vi.fn().mockReturnValue(null),
+      waitForActiveViewForWorkspace: vi.fn(),
+      listViewsForWorkspace: vi.fn().mockReturnValue([]),
+    }
+    const module = new BrowserToolModule(mockBridge, null, browserManager as any)
+
+    await expect(
+      module.execute(
+        'browser_list_tabs',
+        {},
+        { conversationId: 'conversation-a', workspaceKey: '/workspace/a' },
+      ),
+    ).resolves.toEqual({ tabs: [], activeTabId: null })
+    expect(browserManager.waitForActiveViewForWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('creates and attributes a browser task on the first navigate tool call', async () => {
+    const bridge = {
+      getPage: () => null,
+      getActiveTabId: () => null,
+      switchToPage: vi.fn().mockRejectedValue(new Error('not claimed yet')),
+    }
+    const browserTaskRuntime = {
+      getActiveTaskForConversation: vi.fn().mockReturnValue(null),
+      startTask: vi.fn().mockReturnValue({ id: 'task-a' }),
+      assertCanRunAction: vi.fn().mockReturnValue(null),
+    }
+    const browserManager = {
+      getViewIdForWorkspace: vi.fn().mockReturnValue(null),
+      waitForActiveViewForWorkspace: vi.fn().mockResolvedValue('browser-a'),
+      isWorkspaceActive: vi.fn().mockReturnValue(true),
+      setActive: vi.fn(),
+      navigate: vi.fn().mockResolvedValue(undefined),
+      getCurrentURL: vi.fn().mockReturnValue('https://example.com/'),
+      getTitle: vi.fn().mockReturnValue('Example'),
+      getViewProfileId: vi.fn().mockReturnValue('profile-a'),
+    }
+    const module = new BrowserToolModule(
+      bridge as any,
+      browserTaskRuntime as any,
+      browserManager as any,
+    )
+
+    await expect(
+      module.execute(
+        'browser_navigate',
+        { url: 'https://example.com/' },
+        {
+          conversationId: 'conversation-a',
+          workspaceKey: '/workspace/a',
+          agentRunId: 'run-a',
+          agentGoal: '用浏览器打开 Example',
+        },
+      ),
+    ).resolves.toEqual({
+      tabId: 'browser-a',
+      url: 'https://example.com/',
+      title: 'Example',
+    })
+    expect(browserManager.waitForActiveViewForWorkspace).toHaveBeenCalledWith('/workspace/a')
+    expect(browserTaskRuntime.startTask).toHaveBeenCalledWith({
+      tabId: 'browser-a',
+      goal: '用浏览器打开 Example',
+      correlation: {
+        workspaceKey: '/workspace/a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        agentSessionRef: null,
+        profileId: 'profile-a',
+      },
+    })
   })
 
   it('interaction actions claim the visible page and retry automatically', async () => {

@@ -652,7 +652,10 @@ export class BrowserToolModule implements ToolModule {
     if (!['click', 'press', 'pressKey', 'mouseClick', 'evaluate'].includes(actionType)) {
       return null
     }
-    const { tabId, workspaceKey, hasWorkspaceContext } = await this.resolveTargetTab(context)
+    const { tabId, workspaceKey, hasWorkspaceContext } = await this.resolveTargetTab(
+      actionType,
+      context,
+    )
     if (!tabId) return null
 
     await this.syncVisibleTab(tabId, true, hasWorkspaceContext ? workspaceKey : undefined).catch(
@@ -683,7 +686,7 @@ export class BrowserToolModule implements ToolModule {
       tabId: visibleTabId,
       workspaceKey,
       hasWorkspaceContext,
-    } = await this.resolveTargetTab(context)
+    } = await this.resolveTargetTab(actionType, context)
 
     if (hasWorkspaceContext && !visibleTabId) {
       if (actionType === 'listTabs') {
@@ -697,6 +700,9 @@ export class BrowserToolModule implements ToolModule {
       )
     }
     if (visibleTabId) {
+      if (actionType !== 'listTabs') {
+        this.ensureAgentBrowserTask(visibleTabId, toolName, context)
+      }
       await this.syncVisibleTab(
         visibleTabId,
         requiresPlaywrightPage(actionType),
@@ -753,7 +759,10 @@ export class BrowserToolModule implements ToolModule {
     }
   }
 
-  private async resolveTargetTab(context?: ToolExecutionContext): Promise<{
+  private async resolveTargetTab(
+    actionType: string,
+    context?: ToolExecutionContext,
+  ): Promise<{
     tabId: string | null
     workspaceKey: string | null
     hasWorkspaceContext: boolean
@@ -775,6 +784,13 @@ export class BrowserToolModule implements ToolModule {
       return { tabId: task.tabId, workspaceKey, hasWorkspaceContext }
     }
 
+    const existingTabId = hasWorkspaceContext
+      ? (this.browserManager?.getViewIdForWorkspace?.(workspaceKey) ?? null)
+      : (this.browserManager?.getActiveViewId() ?? this.playwrightBridge.getActiveTabId())
+    if (existingTabId || !shouldCreateBrowserViewForAction(actionType)) {
+      return { tabId: existingTabId, workspaceKey, hasWorkspaceContext }
+    }
+
     const tabId = hasWorkspaceContext
       ? ((await this.browserManager?.waitForActiveViewForWorkspace?.(workspaceKey)) ??
         this.browserManager?.getViewIdForWorkspace?.(workspaceKey) ??
@@ -783,6 +799,29 @@ export class BrowserToolModule implements ToolModule {
         this.browserManager?.getActiveViewId() ??
         this.playwrightBridge.getActiveTabId())
     return { tabId, workspaceKey, hasWorkspaceContext }
+  }
+
+  private ensureAgentBrowserTask(
+    tabId: string,
+    toolName: string,
+    context?: ToolExecutionContext,
+  ): void {
+    const conversationId = context?.conversationId
+    if (!conversationId || !this.browserTaskRuntime) return
+    if (this.browserTaskRuntime.getActiveTaskForConversation(conversationId)) return
+
+    const goal = context.agentGoal?.trim().replace(/\s+/g, ' ').slice(0, 200)
+    this.browserTaskRuntime.startTask({
+      tabId,
+      goal: goal || `Agent 调用 ${toolName}`,
+      correlation: {
+        workspaceKey: context.workspaceKey ?? null,
+        conversationId,
+        agentRunId: context.agentRunId ?? null,
+        agentSessionRef: null,
+        profileId: this.browserManager?.getViewProfileId(tabId) ?? null,
+      },
+    })
   }
 
   private getPageForTab(tabId: string): ReturnType<PlaywrightBridge['getPage']> {
@@ -997,6 +1036,10 @@ function requiresPlaywrightPage(actionType: string): boolean {
   return !['navigate', 'goBack', 'goForward', 'reload', 'getTabInfo', 'listTabs'].includes(
     actionType,
   )
+}
+
+function shouldCreateBrowserViewForAction(actionType: string): boolean {
+  return actionType === 'navigate'
 }
 
 function normalizeComparableUrl(url: string): string {

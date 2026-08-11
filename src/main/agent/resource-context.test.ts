@@ -28,6 +28,23 @@ describe('agent resource context intent inference', () => {
     })
   })
 
+  it('does not treat a Git remote URL as a browser navigation request', () => {
+    expect(
+      inferTaskIntent('我想把项目提交到远程 https://github.com/AwsomeName/cclink-promotion'),
+    ).toMatchObject({
+      kind: 'general',
+      confidence: 'low',
+    })
+  })
+
+  it('requires an explicit web action before classifying a URL as browser navigation', () => {
+    expect(inferTaskIntent('用浏览器打开 https://example.com')).toMatchObject({
+      kind: 'browser_navigation',
+      confidence: 'medium',
+    })
+    expect(inferTaskIntent('打开 README.md')).toMatchObject({ kind: 'general' })
+  })
+
   it('uses the conversation workspace instead of the currently selected project', async () => {
     const snapshot = await buildAgentResourceContext({
       message: '继续',

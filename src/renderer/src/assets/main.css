@@ -4519,6 +4519,27 @@ body.is-resizing-panels .main-area > div {
   overflow-x: auto;
 }
 
+.tab-bar.conversation-drop-target {
+  box-shadow: inset 0 -2px 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-tab));
+}
+
+.conversation-tab-drop-hint {
+  position: sticky;
+  right: 8px;
+  z-index: 3;
+  align-self: center;
+  flex: 0 0 auto;
+  margin-left: auto;
+  border: 1px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  border-radius: 4px;
+  background: var(--bg-workbench);
+  color: var(--text-primary);
+  padding: 3px 8px;
+  font-size: 11px;
+  pointer-events: none;
+}
+
 .tab {
   flex: 0 1 220px;
   display: flex;

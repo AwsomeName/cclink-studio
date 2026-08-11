@@ -356,7 +356,12 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       workspacePath: '/Users/apple/Desktop/project-a',
     })
 
-    expect(createToolSession).toHaveBeenCalledWith('conv-123', '/Users/apple/Desktop/project-a')
+    expect(createToolSession).toHaveBeenCalledWith({
+      conversationId: 'conv-123',
+      workspaceKey: '/Users/apple/Desktop/project-a',
+      agentRunId: null,
+      agentGoal: '操作当前会话',
+    })
     expect(composeMcpConfig).toHaveBeenCalledWith(39876, 'mcp-session-1')
     await vi.waitFor(() => expect(releaseToolSession).toHaveBeenCalledWith('mcp-session-1'))
   })
