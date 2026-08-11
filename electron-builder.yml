@@ -4,13 +4,10 @@ directories:
   buildResources: resources
   output: dist
 files:
-  - '!**/.vscode/*'
-  - '!src/*'
-  - '!docs/*'
-  - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,CLAUDE.md,README.md}'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-  - '!{.gitignore,.claude,dev.sh,pnpm-workspace.yaml}'
+  # 正式包只接收构建输出与运行时 package manifest。生产依赖由 electron-builder
+  # 根据 package.json 自动收集，避免把本机缓存、工作空间状态、凭证或设计资料带入 ASAR。
+  - out/**
+  - package.json
 asar: true
 asarUnpack:
   # node-pty：native .node 需要从真实文件路径加载，不能留在 asar 内

@@ -13,6 +13,21 @@ test('release workflow packages only Apple Silicon on the native runner', () => 
   assert.doesNotMatch(workflow, /x64|macos-15-intel|matrix\.arch|matrix\.runner/)
 })
 
+test('release validation reuses exact successful main CI without rerunning the full suite', () => {
+  const validateSection = workflow.slice(
+    workflow.indexOf('  validate:'),
+    workflow.indexOf('  package:'),
+  )
+  assert.match(validateSection, /runs-on: ubuntu-latest/)
+  assert.match(validateSection, /git -C source rev-parse HEAD\^/)
+  assert.match(validateSection, /Release commit must modify only package\.json/)
+  assert.match(validateSection, /package\.json fields other than version/)
+  assert.match(validateSection, /actions\/workflows\/ci\.yml\/runs/)
+  assert.match(validateSection, /\.head_sha == \$sha/)
+  assert.doesNotMatch(validateSection, /pnpm --dir source verify/)
+  assert.doesNotMatch(validateSection, /pnpm --dir source smoke:standalone/)
+})
+
 test('release workflow verifies the P12 password and Developer ID identity before build', () => {
   assert.match(workflow, /security import "\$certificate_path"/)
   assert.match(workflow, /-P "\$CSC_KEY_PASSWORD"/)
@@ -49,10 +64,7 @@ test('release workflow normalizes public asset names before checksums and upload
   assert.match(workflow, /Expected exactly one DMG and one ZIP/)
   assert.match(workflow, /cclink-studio-\$\{VERSION\}-arm64\.dmg/)
   assert.match(workflow, /cclink-studio-\$\{VERSION\}-arm64\.zip/)
-  assert.doesNotMatch(
-    workflow,
-    /cp dist\/\*\.dmg dist\/\*\.zip "\.\.\/release-assets-arm64\/"/,
-  )
+  assert.doesNotMatch(workflow, /cp dist\/\*\.dmg dist\/\*\.zip "\.\.\/release-assets-arm64\/"/)
 })
 
 test('draft release consumes one arm64 artifact and generates a verified update manifest', () => {

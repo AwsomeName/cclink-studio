@@ -23,6 +23,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: oss-release-${{ inputs.tag }}
@@ -30,11 +31,12 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: macos-15
-    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       RELEASE_TAG: ${{ inputs.tag }}
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout release tooling
         uses: actions/checkout@v4
@@ -48,21 +50,51 @@ jobs:
           ref: ${{ inputs.tag }}
           path: source
           fetch-depth: 0
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.5.0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: pnpm
-          cache-dependency-path: source/pnpm-lock.yaml
       - name: Require the default-branch release workflow
         run: test "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH"
-      - run: pnpm --dir source install --frozen-lockfile
       - run: node --test release-tools/scripts/oss-release-preflight.test.mjs
       - run: node release-tools/scripts/oss-release-preflight.mjs --source-dir source --tag "$RELEASE_TAG" --mode plan
-      - run: pnpm --dir source verify
-      - run: pnpm --dir source smoke:standalone
+      - name: Require a version-only release commit with successful source CI
+        run: |
+          release_sha="$(git -C source rev-parse HEAD)"
+          source_sha="$(git -C source rev-parse HEAD^)"
+          changed_files="$(git -C source diff --name-status "$source_sha" "$release_sha")"
+          if [ "$changed_files" != $'M\tpackage.json' ]; then
+            echo "::error::Release commit must modify only package.json; got: $changed_files"
+            exit 1
+          fi
+
+          SOURCE_DIR="$PWD/source" node <<'NODE'
+          const assert = require('node:assert/strict')
+          const { execFileSync } = require('node:child_process')
+          const sourceDir = process.env.SOURCE_DIR
+          const readPackage = (ref) =>
+            JSON.parse(execFileSync('git', ['show', `${ref}:package.json`], {
+              cwd: sourceDir,
+              encoding: 'utf8',
+            }))
+          const before = readPackage('HEAD^')
+          const after = readPackage('HEAD')
+          const releasedVersion = after.version
+          before.version = releasedVersion
+          assert.deepEqual(after, before, 'release commit changed package.json fields other than version')
+          assert.equal(`v${releasedVersion}`, process.env.RELEASE_TAG, 'release tag does not match version')
+          NODE
+
+          ci_runs="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=$DEFAULT_BRANCH&event=push&status=success&per_page=50")"
+          successful_runs="$(printf '%s' "$ci_runs" | jq \
+            --arg sha "$source_sha" \
+            '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main" and .event == "push" and .status == "completed" and .conclusion == "success")] | length')"
+          if [ "$successful_runs" -lt 1 ]; then
+            echo "::error::No successful main CI run found for release source $source_sha"
+            exit 1
+          fi
+          echo "Reusing successful main CI for source $source_sha"
 
   package:
     if: ${{ inputs.create_draft }}

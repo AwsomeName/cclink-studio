@@ -1,8 +1,17 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 
@@ -21,6 +30,7 @@ export function parseArgs(argv) {
     version: '',
     patch: false,
     dispatchOnly: '',
+    localArtifacts: false,
     yes: false,
     wait: true,
     help: false,
@@ -37,6 +47,8 @@ export function parseArgs(argv) {
     } else if (arg === '--dispatch-only' && value) {
       options.dispatchOnly = value
       index += 1
+    } else if (arg === '--local-artifacts') {
+      options.localArtifacts = true
     } else if (arg === '--yes') {
       options.yes = true
     } else if (arg === '--no-wait') {
@@ -50,8 +62,8 @@ export function parseArgs(argv) {
 
   if (options.help) return options
   if (options.dispatchOnly) {
-    if (options.version || options.patch) {
-      throw new Error('--dispatch-only 不能与 --version 或 --patch 同时使用')
+    if (options.version || options.patch || options.localArtifacts) {
+      throw new Error('--dispatch-only 不能与 --version、--patch 或 --local-artifacts 同时使用')
     }
     if (!stableTagPattern.test(options.dispatchOnly)) {
       throw new Error('--dispatch-only 必须使用 vX.Y.Z 格式')
@@ -127,11 +139,13 @@ function usage() {
   --patch                  当前版本的 patch +1
   --version X.Y.Z          指定更高的稳定版本
   --dispatch-only vX.Y.Z   仅重新触发已推送 Tag 的发布工作流
+  --local-artifacts        推送前额外生成本地 ad-hoc DMG/ZIP（默认不生成）
   --yes                    跳过交互确认
   --no-wait                触发 GitHub Actions 后立即返回
   -h, --help               显示帮助
 
-脚本会先生成目标版本的本地 ad-hoc 验收包，再推送并创建远程 Draft Release。
+脚本只从已通过 CI 的 main 创建版本提交；本地产物为显式可选项。
+正式签名、公证和 DMG/ZIP 统一由 GitHub Actions 从不可变 Tag 生成。
 它不会自动公开 Release。`)
 }
 
@@ -165,21 +179,37 @@ function git(args, options = {}) {
   return run('git', args, options)
 }
 
-function readPackage() {
-  return JSON.parse(readFileSync(resolve(projectRoot, 'package.json'), 'utf8'))
+function readPackageAt(ref = 'HEAD') {
+  return JSON.parse(git(['show', `${ref}:package.json`], { capture: true, quiet: true }).stdout)
 }
 
-export function prepareLocalReleasePackage(packagePath, targetVersion, packageRunner) {
+export function prepareReleaseVersion(packagePath, targetVersion, mutationRunner) {
   const originalPackageText = readFileSync(packagePath, 'utf8')
   const packageJson = JSON.parse(originalPackageText)
   packageJson.version = targetVersion
   writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`)
   try {
-    packageRunner()
+    mutationRunner()
   } catch (error) {
     writeFileSync(packagePath, originalPackageText)
     throw error
   }
+}
+
+export function selectSuccessfulWorkflowRun(runs, sourceSha) {
+  return runs.find(
+    (run) =>
+      run.head_sha === sourceSha &&
+      run.head_branch === 'main' &&
+      run.event === 'push' &&
+      run.status === 'completed' &&
+      run.conclusion === 'success',
+  )
+}
+
+export function isVersionOnlyPackageChange(before, after, targetVersion) {
+  if (after.version !== targetVersion || before.version === targetVersion) return false
+  return JSON.stringify(after) === JSON.stringify({ ...before, version: targetVersion })
 }
 
 function assertRepositoryRemote() {
@@ -193,13 +223,10 @@ function assertRepositoryRemote() {
   }
 }
 
-function assertCleanLatestMain() {
+function assertLatestMain() {
   assertRepositoryRemote()
   const branch = git(['branch', '--show-current'], { capture: true, quiet: true }).stdout
   if (branch !== 'main') throw new Error(`必须从 main 分支发布，当前分支是 ${branch || 'detached'}`)
-
-  const dirty = git(['status', '--porcelain'], { capture: true, quiet: true }).stdout
-  if (dirty) throw new Error(`工作树必须干净:\n${dirty}`)
 
   git(['fetch', 'origin', 'main', '--tags', '--prune'])
   const head = git(['rev-parse', 'HEAD'], { capture: true, quiet: true }).stdout
@@ -207,6 +234,21 @@ function assertCleanLatestMain() {
   if (head !== remoteMain) {
     throw new Error(`本地 main 不是最新远端基线:\nHEAD=${head}\norigin/main=${remoteMain}`)
   }
+
+  const packageChanges = git(['status', '--porcelain', '--', 'package.json'], {
+    capture: true,
+    quiet: true,
+  }).stdout
+  if (packageChanges) {
+    throw new Error(`package.json 存在未提交改动，无法创建纯版本提交:\n${packageChanges}`)
+  }
+
+  const ignoredChanges = git(['status', '--porcelain'], { capture: true, quiet: true }).stdout
+  if (ignoredChanges) {
+    console.log('\n当前工作区的其他未提交改动不会进入本次发布：')
+    console.log(ignoredChanges)
+  }
+  return head
 }
 
 function assertTagAvailable(tag) {
@@ -248,7 +290,7 @@ function assertRemoteTag(tag) {
 async function confirmRelease(tag, dispatchOnly, skipConfirmation) {
   const action = dispatchOnly
     ? `重新触发 ${tag} 的签名、公证和 Draft Release`
-    : `验证、提交、创建 ${tag}、原子推送 main + Tag，并触发 Draft Release`
+    : `复用 main 的绿色 CI、创建 ${tag}、原子推送 main + Tag，并触发 Draft Release`
   console.log(`\n即将执行: ${action}`)
   console.log('不会自动公开 Release。')
   if (skipConfirmation) return
@@ -327,6 +369,56 @@ async function dispatchWorkflow(tag, token) {
   )
 }
 
+async function assertSuccessfulSourceCi(sourceSha, token) {
+  const response = await githubRequest(
+    `/repos/${repository.owner}/${repository.name}/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=50`,
+    token,
+  )
+  const run = selectSuccessfulWorkflowRun(response.workflow_runs ?? [], sourceSha)
+  if (!run) {
+    throw new Error(
+      `main 当前源码还没有成功完成 CI，不能发布:\nSHA=${sourceSha}\n` +
+        `https://github.com/${repository.owner}/${repository.name}/actions/workflows/ci.yml`,
+    )
+  }
+  console.log(`\n已复用 main 源码 CI: ${run.html_url}`)
+  return run
+}
+
+function withReleaseWorktree(ref, callback) {
+  const temporaryRoot = mkdtempSync(join(tmpdir(), 'cclink-studio-release-'))
+  const worktreePath = join(temporaryRoot, 'source')
+  let worktreeAdded = false
+  try {
+    git(['worktree', 'add', '--detach', worktreePath, ref])
+    worktreeAdded = true
+    return callback(worktreePath)
+  } finally {
+    if (worktreeAdded) {
+      git(['worktree', 'remove', '--force', worktreePath], {
+        allowFailure: true,
+        quiet: true,
+      })
+    }
+    rmSync(temporaryRoot, { recursive: true, force: true })
+  }
+}
+
+function copyLocalArtifacts(worktreePath) {
+  const sourceDist = resolve(worktreePath, 'dist')
+  const targetDist = resolve(projectRoot, 'dist')
+  const artifacts = readdirSync(sourceDist).filter(
+    (name) => name.endsWith('.dmg') || name.endsWith('.zip'),
+  )
+  if (artifacts.length === 0) throw new Error('本地验收打包未生成 DMG 或 ZIP')
+  mkdirSync(targetDist, { recursive: true })
+  for (const name of artifacts) {
+    copyFileSync(resolve(sourceDist, name), resolve(targetDist, name))
+  }
+  console.log('\n本地 ad-hoc 产物已复制到 dist/:')
+  for (const name of artifacts) console.log(`  - ${name}`)
+}
+
 function delay(milliseconds) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds))
 }
@@ -390,8 +482,8 @@ async function printDraftSummary(tag, token) {
 }
 
 async function release(options) {
-  assertCleanLatestMain()
-  const currentVersion = readPackage().version
+  const sourceSha = assertLatestMain()
+  const currentVersion = readPackageAt(sourceSha).version
   const targetVersion = options.patch ? incrementPatch(currentVersion) : options.version
   if (compareStableVersions(targetVersion, currentVersion) <= 0) {
     throw new Error(`目标版本必须高于当前版本: ${currentVersion} -> ${targetVersion}`)
@@ -400,44 +492,51 @@ async function release(options) {
   assertTagAvailable(tag)
   await confirmRelease(tag, false, options.yes)
 
-  run('pnpm', ['install', '--frozen-lockfile'])
-  run('pnpm', ['verify'])
-  run('pnpm', ['smoke:standalone'])
+  const token = getGitHubToken()
+  await assertSuccessfulSourceCi(sourceSha, token)
 
-  const unexpectedChanges = git(['status', '--porcelain'], {
+  const packagePath = resolve(projectRoot, 'package.json')
+  prepareReleaseVersion(packagePath, targetVersion, () => {
+    git(['diff', '--check', '--', 'package.json'])
+    git(['commit', '--only', 'package.json', '-m', `chore: prepare ${tag}`])
+  })
+  const releaseSha = git(['rev-parse', 'HEAD'], { capture: true, quiet: true }).stdout
+  const releaseChanges = git(['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'], {
     capture: true,
     quiet: true,
   }).stdout
-  if (unexpectedChanges) {
-    throw new Error(`发布门禁产生了未预期的源码变更:\n${unexpectedChanges}`)
+  if (releaseChanges !== 'package.json') {
+    throw new Error(`版本提交包含了 package.json 以外的文件:\n${releaseChanges}`)
   }
-
-  const packagePath = resolve(projectRoot, 'package.json')
-  prepareLocalReleasePackage(packagePath, targetVersion, () =>
-    run('pnpm', ['package:local', '--', '--no-install']),
-  )
-  git(['diff', '--check'])
-  git(['add', 'package.json'])
-  git(['commit', '-m', `chore: prepare ${tag}`])
+  if (
+    !isVersionOnlyPackageChange(
+      readPackageAt(`${releaseSha}^`),
+      readPackageAt(releaseSha),
+      targetVersion,
+    )
+  ) {
+    throw new Error('版本提交修改了 package.json.version 以外的字段')
+  }
   git(['tag', '-a', tag, '-m', `CCLink Studio 开源版 ${tag}`])
-  run(process.execPath, [
-    'scripts/oss-release-preflight.mjs',
-    '--source-dir',
-    '.',
-    '--tag',
-    tag,
-    '--mode',
-    'plan',
-  ])
+  withReleaseWorktree(releaseSha, (worktreePath) => {
+    run(
+      process.execPath,
+      ['scripts/oss-release-preflight.mjs', '--source-dir', '.', '--tag', tag, '--mode', 'plan'],
+      { cwd: worktreePath },
+    )
+    if (options.localArtifacts) {
+      run('pnpm', ['install', '--frozen-lockfile'], { cwd: worktreePath })
+      run('pnpm', ['package:local', '--', '--no-install'], { cwd: worktreePath })
+      copyLocalArtifacts(worktreePath)
+    }
+  })
   git(['push', '--atomic', 'origin', 'HEAD:refs/heads/main', `refs/tags/${tag}`])
 
-  const sourceSha = git(['rev-parse', 'HEAD'], { capture: true, quiet: true }).stdout
-  const token = getGitHubToken()
   const startedAt = Date.now()
   await dispatchWorkflow(tag, token)
   console.log(`\n已触发 ${tag} 的 release-oss 工作流。`)
   if (!options.wait) return
-  await waitForWorkflow({ sourceSha, token, startedAt })
+  await waitForWorkflow({ sourceSha: releaseSha, token, startedAt })
   await printDraftSummary(tag, token)
 }
 

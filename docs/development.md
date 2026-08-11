@@ -1,6 +1,6 @@
 # CCLink Studio 开发指南
 
-> 当前事实源。最后更新：2026-07-28。
+> 当前事实源。最后更新：2026-08-11。
 
 ## 结论
 
@@ -52,6 +52,12 @@ pnpm package:local
 `dist/`，并使用 ad-hoc 签封。执行前后必须按照
 `docs/ops/package-target-check.md` 核对目标，不能从 `cclink-dev` 父目录调用
 commercial packaging 后把商业产物当作 OSS 产物交付。
+
+正式包采用文件允许列表，只包含 `out/`、运行时 `package.json`、生产依赖和
+`electron-builder.yml` 明确声明的额外资源。本机 `.cache`、`.env`、工作空间状态、
+设计稿、源码与开发脚本不得进入 `app.asar`。只由 renderer 使用的库属于构建期依赖，
+由 Vite 写入 renderer bundle 后不再重复复制完整 npm 包。`pnpm verify:package-boundary`
+负责检查这些边界；它不设置安装包体积阈值。
 
 常用验证：
 
@@ -217,7 +223,8 @@ OSS 默认构建可以产出本地测试包，使用 ad-hoc 签封，但不包�
 - 工作流完成 Developer ID 签名、Apple 公证、staple 和制品验证。
 - 工作流只创建 Draft Release，公开发布仍需人工批准。
 
-维护者从干净且与 `origin/main` 一致的 `main` 执行：
+维护者从与 `origin/main` 一致、源码 CI 已全绿且 `package.json` 无本地改动的
+`main` 执行；其他未提交开发文件会被保留并排除在发布之外：
 
 ```bash
 pnpm release -- --patch
@@ -225,9 +232,10 @@ pnpm release -- --patch
 pnpm release -- --version 0.1.3
 ```
 
-该命令依次执行依赖锁定安装、完整门禁、独立启动 smoke，生成目标版本的本地
-ad-hoc arm64 DMG/ZIP，然后创建版本提交、不可变 Tag、原子推送并触发 GitHub
-发布工作流，等待 Draft Release 完成。本地打包失败会恢复版本文件并在推送前停止。
+该命令复用当前源码 SHA 已通过的普通 CI，只创建修改 `package.json.version` 的版本
+提交，在独立临时 worktree 中完成发布预检，然后创建不可变 Tag、原子推送并触发
+GitHub 发布工作流，等待 Draft Release 完成。正式签名、公证和 DMG/ZIP 只在线上
+执行；需要额外本地 ad-hoc 包时显式提供 `--local-artifacts`。
 若 main 与 Tag 已成功推送，但工作流触发失败，可只重试远端构建：
 
 ```bash

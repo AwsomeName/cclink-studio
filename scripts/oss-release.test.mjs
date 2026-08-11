@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -8,16 +9,16 @@ import {
   compareStableVersions,
   createWorkflowDispatchPayload,
   incrementPatch,
+  isVersionOnlyPackageChange,
   isRetryableGitHubStatus,
   parseArgs,
-  prepareLocalReleasePackage,
+  prepareReleaseVersion,
   resolveRemoteTagCommit,
+  selectSuccessfulWorkflowRun,
 } from './oss-release.mjs'
 
 const gitignore = readFileSync(new URL('../.gitignore', import.meta.url), 'utf8')
-const packageJson = JSON.parse(
-  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
-)
+const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const localPackageScript = readFileSync(new URL('./package.sh', import.meta.url), 'utf8')
 const releaseScript = readFileSync(new URL('./oss-release.mjs', import.meta.url), 'utf8')
 
@@ -33,44 +34,72 @@ test('keeps local packaging separate from the canonical formal release command',
   assert.match(localPackageScript, /pnpm release/)
 })
 
-test('builds the target-version local package before committing or pushing a release', () => {
-  const localPackage = releaseScript.lastIndexOf('prepareLocalReleasePackage(packagePath')
-  const versionCommit = releaseScript.indexOf("git(['commit', '-m', `chore: prepare ${tag}`])")
+test('keeps local artifacts opt-in and commits only the version file before pushing', () => {
+  const localPackageGuard = releaseScript.indexOf('if (options.localArtifacts)')
+  const localPackage = releaseScript.indexOf("run('pnpm', ['package:local'", localPackageGuard)
+  const versionCommit = releaseScript.indexOf(
+    "git(['commit', '--only', 'package.json', '-m', `chore: prepare ${tag}`])",
+  )
   const atomicPush = releaseScript.indexOf(
     "git(['push', '--atomic', 'origin', 'HEAD:refs/heads/main', `refs/tags/${tag}`])",
   )
 
-  assert.ok(localPackage > 0)
-  assert.ok(versionCommit > localPackage)
+  assert.ok(versionCommit > 0)
+  assert.ok(localPackageGuard > versionCommit)
+  assert.ok(localPackage > localPackageGuard)
   assert.ok(atomicPush > versionCommit)
+})
+
+test('git version-only commit preserves unrelated staged work', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cclink-release-dirty-worktree-'))
+  const git = (...args) => execFileSync('git', args, { cwd: directory, encoding: 'utf8' }).trim()
+  try {
+    git('init', '-q')
+    git('config', 'user.name', 'Release Test')
+    git('config', 'user.email', 'release-test@example.com')
+    writeFileSync(join(directory, 'package.json'), '{"version":"1.2.3"}\n')
+    writeFileSync(join(directory, 'notes.md'), 'base\n')
+    git('add', 'package.json', 'notes.md')
+    git('commit', '-qm', 'base')
+
+    writeFileSync(join(directory, 'package.json'), '{"version":"1.2.4"}\n')
+    writeFileSync(join(directory, 'notes.md'), 'user work\n')
+    git('add', 'notes.md')
+    git('commit', '--only', 'package.json', '-qm', 'version only')
+
+    assert.equal(git('diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'), 'package.json')
+    assert.equal(git('diff', '--cached', '--name-only'), 'notes.md')
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
 })
 
 test('uses Git transport negotiation instead of forcing HTTP/1.1', () => {
   assert.doesNotMatch(releaseScript, /http\.version=HTTP\/1\.1/)
 })
 
-test('restores package.json byte-for-byte when local release packaging fails', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'cclink-release-local-package-'))
+test('restores package.json byte-for-byte when version preparation fails', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cclink-release-version-'))
   const packagePath = join(directory, 'package.json')
   const original = '{\n  "name": "fixture",\n  "version": "1.2.3"\n}\n'
   writeFileSync(packagePath, original)
 
   assert.throws(
     () =>
-      prepareLocalReleasePackage(packagePath, '1.2.4', () => {
-        throw new Error('local package failed')
+      prepareReleaseVersion(packagePath, '1.2.4', () => {
+        throw new Error('version commit failed')
       }),
-    /local package failed/,
+    /version commit failed/,
   )
   assert.equal(readFileSync(packagePath, 'utf8'), original)
 })
 
-test('keeps the target version after local release packaging succeeds', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'cclink-release-local-package-'))
+test('keeps the target version after version preparation succeeds', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cclink-release-version-'))
   const packagePath = join(directory, 'package.json')
   writeFileSync(packagePath, '{"name":"fixture","version":"1.2.3"}\n')
 
-  prepareLocalReleasePackage(packagePath, '1.2.4', () => undefined)
+  prepareReleaseVersion(packagePath, '1.2.4', () => undefined)
 
   assert.equal(JSON.parse(readFileSync(packagePath, 'utf8')).version, '1.2.4')
 })
@@ -84,6 +113,7 @@ test('parses a patch release with confirmation and wait controls', () => {
     version: '',
     patch: true,
     dispatchOnly: '',
+    localArtifacts: false,
     yes: true,
     wait: false,
     help: false,
@@ -91,6 +121,14 @@ test('parses a patch release with confirmation and wait controls', () => {
   assert.deepEqual(parseArgs(['--patch', '--yes', '--no-wait']), expected)
   assert.deepEqual(parseArgs(['--', '--patch', '--yes', '--no-wait']), expected)
   assert.throws(() => parseArgs(['--patch', '--', '--yes']), /未知或不完整/)
+})
+
+test('parses optional local artifacts only for a new release', () => {
+  assert.equal(parseArgs(['--patch', '--local-artifacts']).localArtifacts, true)
+  assert.throws(
+    () => parseArgs(['--dispatch-only', 'v0.1.2', '--local-artifacts']),
+    /不能与 --version、--patch 或 --local-artifacts/,
+  )
 })
 
 test('requires exactly one release version mode', () => {
@@ -103,7 +141,7 @@ test('accepts dispatch-only recovery without a version mutation', () => {
   assert.equal(parseArgs(['--dispatch-only', 'v0.1.2']).dispatchOnly, 'v0.1.2')
   assert.throws(
     () => parseArgs(['--dispatch-only', 'v0.1.2', '--patch']),
-    /不能与 --version 或 --patch/,
+    /不能与 --version、--patch 或 --local-artifacts/,
   )
 })
 
@@ -133,6 +171,35 @@ test('only retries temporary GitHub API failures', () => {
   assert.equal(isRetryableGitHubStatus(503), true)
   assert.equal(isRetryableGitHubStatus(400), false)
   assert.equal(isRetryableGitHubStatus(401), false)
+})
+
+test('reuses only a successful main push CI run for the exact source commit', () => {
+  const sourceSha = 'a'.repeat(40)
+  const expected = {
+    id: 3,
+    head_sha: sourceSha,
+    head_branch: 'main',
+    event: 'push',
+    status: 'completed',
+    conclusion: 'success',
+  }
+  const runs = [
+    { ...expected, id: 1, conclusion: 'failure' },
+    { ...expected, id: 2, event: 'pull_request' },
+    expected,
+  ]
+
+  assert.equal(selectSuccessfulWorkflowRun(runs, sourceSha), expected)
+  assert.equal(selectSuccessfulWorkflowRun(runs, 'b'.repeat(40)), undefined)
+})
+
+test('accepts only a package version mutation in the release commit', () => {
+  const before = { name: 'studio', version: '1.2.3', scripts: { test: 'node --test' } }
+  const after = { ...before, version: '1.2.4' }
+
+  assert.equal(isVersionOnlyPackageChange(before, after, '1.2.4'), true)
+  assert.equal(isVersionOnlyPackageChange(before, { ...after, private: false }, '1.2.4'), false)
+  assert.equal(isVersionOnlyPackageChange(before, before, '1.2.3'), false)
 })
 
 test('resolves annotated and lightweight remote tags without trusting local refs', () => {

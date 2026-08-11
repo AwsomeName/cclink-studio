@@ -10,13 +10,14 @@ pnpm release -- --patch
 pnpm release -- --version 0.2.0
 ```
 
-该命令验证源码，先在本机生成目标版本的 ad-hoc arm64 DMG/ZIP，再创建不可变版本
-提交和 Tag、原子推送、触发 GitHub Actions，并等待签名、公证和 Draft Release。
+该命令要求当前 `main` 源码已有成功的普通 CI，然后只创建修改 `package.json.version`
+的版本提交和不可变 Tag，原子推送并触发 GitHub Actions，等待签名、公证和 Draft Release。
 它不会公开 Release；维护者真人验收后必须手动点击 `Publish release`。
 
 `pnpm package:local` 只生成本机未签名 arm64 测试包，不修改版本、不推送，也不得用于
 正式发布。`release:oss` 仅作为旧命令的兼容别名保留，文档和人工操作统一使用
-`pnpm release`。
+`pnpm release`。正式发布默认不再重复生成本地 DMG/ZIP；确实需要时显式增加
+`--local-artifacts`。
 
 ## 一次性准备
 
@@ -47,8 +48,9 @@ credential helper，不配置成仓库文件或环境变量。
 ## 发布前
 
 1. 确认当前目录是开源仓库，不是 `cclink-dev` 商业版工作区。
-2. 确认工作树干净并与 `origin/main` 一致。
-3. 确认目标版本高于当前稳定版本，且本地和远端不存在同名 Tag。
+2. 确认 `main` 与 `origin/main` 一致，且该源码提交的普通 CI 已全绿。
+3. 确认 `package.json` 没有未提交改动；其他本地改动可以保留，但不会进入发布。
+4. 确认目标版本高于当前稳定版本，且本地和远端不存在同名 Tag。
 
 ```bash
 git switch main
@@ -57,7 +59,9 @@ git status --short
 git ls-remote origin HEAD
 ```
 
-`git status --short` 必须无输出。发布脚本还会校验仓库、分支、远端、版本和 Tag。
+发布脚本会校验仓库、分支、远端、版本和 Tag。工作区可以存在其他未提交文件；脚本
+只提交 `package.json`，并在临时 worktree 中执行发布预检和可选本地打包。若
+`package.json` 本身有未提交改动，发布立即停止。
 
 ## 标准流程
 
@@ -75,21 +79,20 @@ release vX.Y.Z
 
 确认后依次执行：
 
-1. `pnpm install --frozen-lockfile`
-2. `pnpm verify`
-3. `pnpm smoke:standalone`
-4. 更新 `package.json`
-5. 运行 `pnpm package:local -- --no-install`，在 `dist/` 生成目标版本本地验收包
-6. 创建 `chore: prepare vX.Y.Z` 提交
-7. 创建 annotated `vX.Y.Z` Tag
-8. 执行 OSS 发布预检
-9. 原子推送 `main` 和 Tag
-10. 触发并等待 `release-oss.yml`
-11. 输出本地产物、Draft Release 地址和远程资产清单
+1. 校验当前 `main` 与 `origin/main` 一致，并查找该 SHA 的成功 CI。
+2. 仅更新 `package.json.version`。
+3. 使用 `git commit --only package.json` 创建 `chore: prepare vX.Y.Z` 提交。
+4. 创建 annotated `vX.Y.Z` Tag。
+5. 在独立临时 worktree 中执行 OSS 发布预检。
+6. 若提供 `--local-artifacts`，在临时 worktree 中额外生成本地 ad-hoc DMG/ZIP，
+   再复制到当前仓库 `dist/`。
+7. 原子推送 `main` 和 Tag。
+8. 触发并等待 `release-oss.yml`。
+9. 输出 Draft Release 地址和远程资产清单。
 
-本地打包发生在提交和推送之前。若本地打包失败，脚本恢复原始 `package.json` 并
-停止，不创建版本提交或 Tag，也不触碰远程。本地 DMG 是方便立即安装的 ad-hoc
-验收包；GitHub Draft 中的 DMG 才是 Developer ID 签名和公证的正式候选包。
+普通 CI 是源码验证的唯一事实源。Release workflow 会再次证明版本提交只修改了
+`package.json.version`，并核对其父提交存在准确匹配的成功 `main` CI，然后才允许
+进入正式签名和公证。GitHub Draft 中的 DMG 才是正式候选包。
 
 `--no-wait` 只跳过本地等待，不改变远端 Draft 策略。`--yes` 只用于明确受控的
 非交互环境。
@@ -98,7 +101,7 @@ release vX.Y.Z
 
 GitHub Actions 必须全部通过：
 
-- `validate`
+- `validate`：验证不可变 Tag、纯版本提交及其父提交的绿色 CI，不重复跑完整测试
 - `package`，固定 `macos-15` 和 arm64
 - `draft`
 
@@ -185,7 +188,8 @@ pnpm release -- --dispatch-only vX.Y.Z
 - 禁止删除、移动或复用已推送 Tag。
 - 禁止把 P12、P12 密码、P8 或 GitHub Token 写入仓库。
 - 禁止把 `pnpm package:local` 产物当正式安装包上传。
-- 禁止绕过 `verify`、smoke、签名、公证、staple、Gatekeeper 或 Manifest 检查。
+- 禁止绕过源码 CI 的 `verify`/smoke，以及正式包的签名、公证、staple、Gatekeeper
+  或 Manifest 检查。
 - 禁止让开源工作流调用 `cclink-dev` 或共享商业版 Release 状态。
 
 ## 完成标准
