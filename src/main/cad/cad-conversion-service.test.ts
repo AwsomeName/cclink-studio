@@ -146,7 +146,42 @@ describe('CadConversionService', () => {
     })
     expect(result.success).toBe(true)
     expect(result.previewPath).toMatch(/preview\.stl$/)
-    expect(result.metadata?.generator).toBe('OpenCascade (occt-import-js)')
+    expect(result.metadata?.generator).toBe('OpenCascade (occt-import-js 0.0.23, bundled)')
     expect(result.metadata?.bounds?.size.x).toBeGreaterThan(0)
+  })
+
+  it('uses the managed OCCT wasm when the Runtime component is installed', async () => {
+    settings = { ...settings, cadBackend: 'occt-experimental' }
+    const managedWasmPath = join(tempDir, 'runtime-components', 'occt-import-js.wasm')
+    await mkdir(join(tempDir, 'runtime-components'), { recursive: true })
+    await writeFile(
+      managedWasmPath,
+      await readFile(join(process.cwd(), 'node_modules/occt-import-js/dist/occt-import-js.wasm')),
+    )
+    const service = new CadConversionService(
+      () => settings,
+      async () => ({
+        wasmPath: managedWasmPath,
+        version: '0.0.23',
+        source: 'managed',
+      }),
+    )
+    const sourcePath = join(tempDir, 'managed-cube.stp')
+    await writeFile(
+      sourcePath,
+      await readFile(
+        join(
+          process.cwd(),
+          'node_modules/occt-import-js/test/testfiles/cube-10x10mm/Cube 10x10.stp',
+        ),
+      ),
+    )
+
+    const status = await service.getBackendStatus()
+    const result = await service.convertModel({ inputPath: sourcePath, targetFormat: 'stl' })
+
+    expect(status).toMatchObject({ source: 'managed', path: managedWasmPath, version: '0.0.23' })
+    expect(result.success).toBe(true)
+    expect(result.metadata?.generator).toBe('OpenCascade (occt-import-js 0.0.23, managed)')
   })
 })

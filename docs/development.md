@@ -255,7 +255,7 @@ pnpm release -- --version 0.1.3
 
 该命令复用当前源码 SHA 已通过的普通 CI，只创建修改 `package.json.version` 的版本
 提交，在独立临时 worktree 中完成发布预检，然后创建不可变 Tag、原子推送并触发
-GitHub 发布工作流，等待 Draft Release 完成。正式签名、公证和 DMG/ZIP 只在线上
+GitHub 发布工作流，等待 Draft Release 完成。正式签名、公证和 DMG 只在线上
 执行；需要额外本地 ad-hoc 包时显式提供 `--local-artifacts`。
 若 main 与 Tag 已成功推送，但工作流触发失败，可只重试远端构建：
 

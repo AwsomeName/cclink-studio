@@ -150,6 +150,7 @@ describe('registerSettingsIpc', () => {
     expect(settingsService.set).toHaveBeenCalledWith({
       claudeRuntimeSource: 'bundled',
       claudeCodePath: '',
+      claudeManagedVersion: '',
     })
     expect(runtimeManager.commit).toHaveBeenCalledWith({ source: 'bundled' }, resolvedRuntime)
     expect(bridge.reconfigure).toHaveBeenCalledWith(

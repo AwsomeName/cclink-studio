@@ -4,7 +4,7 @@ import { basename, resolve } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 
 const ARCHITECTURE = 'arm64'
-const ASSET_KINDS = ['dmg', 'zip']
+const ASSET_KINDS = ['dmg']
 const STABLE_VERSION_SOURCE = '(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)'
 const STABLE_VERSION_PATTERN = new RegExp(`^${STABLE_VERSION_SOURCE}$`)
 const SOURCE_SHA_PATTERN = /^[0-9a-f]{40}$/
@@ -124,7 +124,7 @@ async function resolveArchitectureAssets(assetsDir, arch, checksums) {
     result[kind] = { name, size: stats.size, sha256: actualHash }
   }
   if (checksums.size !== ASSET_KINDS.length) {
-    fail(`checksums-${arch}.txt must contain only one DMG and one ZIP`)
+    fail(`checksums-${arch}.txt must contain only one DMG`)
   }
   return result
 }
@@ -135,7 +135,7 @@ export function validateUpdateManifest(manifest) {
     ['schemaVersion', 'channel', 'tag', 'version', 'sourceSha', 'minimumSystemVersion', 'assets'],
     'update-manifest.json',
   )
-  if (manifest.schemaVersion !== 2) fail('Manifest schemaVersion must be 2')
+  if (manifest.schemaVersion !== 3) fail('Manifest schemaVersion must be 3')
   if (manifest.channel !== 'stable') fail('OSS Manifest channel must be stable')
   if (!STABLE_VERSION_PATTERN.test(manifest.version)) {
     fail('Stable Manifest version must be a stable semantic version')
@@ -210,7 +210,7 @@ export async function generateUpdateManifest({
   }
 
   return validateUpdateManifest({
-    schemaVersion: 2,
+    schemaVersion: 3,
     channel: 'stable',
     tag,
     version: record.version,

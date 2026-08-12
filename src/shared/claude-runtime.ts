@@ -7,6 +7,8 @@ export type ClaudeRuntimeState = 'ready' | 'degraded' | 'unavailable' | 'failed'
 export type ClaudeRuntimeErrorCode =
   | 'BUNDLED_RUNTIME_MISSING'
   | 'BUNDLED_RUNTIME_INTEGRITY_FAILED'
+  | 'MANAGED_RUNTIME_MISSING'
+  | 'MANAGED_RUNTIME_INTEGRITY_FAILED'
   | 'RUNTIME_ARCH_MISMATCH'
   | 'RUNTIME_NOT_EXECUTABLE'
   | 'RUNTIME_VERSION_MISMATCH'
@@ -17,10 +19,11 @@ export type ClaudeRuntimeErrorCode =
   | 'RUNTIME_SWITCH_PENDING'
   | 'RUNTIME_SESSION_INCOMPATIBLE'
 
-export interface ClaudeRuntimeSelection {
-  source: ClaudeRuntimeSource
-  customPath?: string
-}
+export type ClaudeRuntimeSelection =
+  | { source: 'bundled' }
+  | { source: 'managed'; version: string }
+  | { source: 'system' }
+  | { source: 'custom'; customPath: string }
 
 export interface BundledClaudeRuntimeManifest {
   schemaVersion: 1
@@ -42,7 +45,7 @@ export interface ResolvedClaudeRuntime {
   claudeCodeVersion: string
   sdkVersion?: string
   fingerprint: string
-  integrity: 'manifest-sha256' | 'filesystem-probe'
+  integrity: 'manifest-sha256' | 'catalog-sha256' | 'filesystem-probe'
   probedAt: number
 }
 

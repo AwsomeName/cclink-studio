@@ -39,6 +39,12 @@ export interface ClaudeRuntimeManagerOptions {
   arch?: string
   probeTimeoutMs?: number
   detectSystem?: () => Promise<ClaudeCodeStatus>
+  resolveManaged?: (version: string) => Promise<{
+    executablePath: string
+    runtimeVersion: string
+    sdkVersion: string
+    sha256: string
+  }>
   executeVersion?: (executablePath: string, timeoutMs: number) => Promise<string>
   now?: () => number
 }
@@ -136,9 +142,11 @@ export class ClaudeRuntimeManager {
       const runtime =
         normalized.source === 'bundled'
           ? await this.resolveBundled()
-          : normalized.source === 'custom'
-            ? await this.resolveCustom(normalized.customPath ?? '')
-            : await this.resolveSystem()
+          : normalized.source === 'managed'
+            ? await this.resolveManaged(normalized.version)
+            : normalized.source === 'custom'
+              ? await this.resolveCustom(normalized.customPath)
+              : await this.resolveSystem()
       return { success: true, runtime }
     } catch (error) {
       return { success: false, failure: toFailure(error, normalized.source) }
@@ -240,6 +248,42 @@ export class ClaudeRuntimeManager {
       throw failure('SYSTEM_RUNTIME_NOT_FOUND', detected.error ?? '未找到系统 Claude Code')
     }
     return this.resolveFilesystemRuntime('system', detected.path)
+  }
+
+  private async resolveManaged(version: string): Promise<ResolvedClaudeRuntime> {
+    if (!this.options.resolveManaged) {
+      throw failure('MANAGED_RUNTIME_MISSING', 'Studio 管理的 Claude Runtime 服务未初始化')
+    }
+    let resolved: Awaited<ReturnType<NonNullable<ClaudeRuntimeManagerOptions['resolveManaged']>>>
+    try {
+      resolved = await this.options.resolveManaged(version)
+    } catch (error) {
+      throw failure('MANAGED_RUNTIME_INTEGRITY_FAILED', describeError(error))
+    }
+    if (resolved.runtimeVersion !== version) {
+      throw failure(
+        'RUNTIME_VERSION_MISMATCH',
+        `Studio 管理的 Claude Runtime 版本不匹配：期望 ${version}`,
+      )
+    }
+    const versionOutput = await this.executeVersion(resolved.executablePath)
+    if (!versionOutput.includes(version)) {
+      throw failure('RUNTIME_VERSION_MISMATCH', `Claude Runtime 版本不匹配：期望 ${version}`)
+    }
+    return {
+      source: 'managed',
+      executablePath: resolved.executablePath,
+      claudeCodeVersion: resolved.runtimeVersion,
+      sdkVersion: resolved.sdkVersion,
+      fingerprint: fingerprint([
+        'managed',
+        resolved.sdkVersion,
+        resolved.runtimeVersion,
+        resolved.sha256,
+      ]),
+      integrity: 'catalog-sha256',
+      probedAt: this.options.now(),
+    }
   }
 
   private async resolveCustom(configuredPath: string): Promise<ResolvedClaudeRuntime> {
@@ -364,9 +408,13 @@ async function matchesManifest(
 }
 
 function normalizeSelection(selection: ClaudeRuntimeSelection): ClaudeRuntimeSelection {
-  return selection.source === 'custom'
-    ? { source: 'custom', customPath: selection.customPath?.trim() ?? '' }
-    : { source: selection.source }
+  if (selection.source === 'custom') {
+    return { source: 'custom', customPath: selection.customPath.trim() }
+  }
+  if (selection.source === 'managed') {
+    return { source: 'managed', version: selection.version.trim() }
+  }
+  return { source: selection.source }
 }
 
 function expandHome(path: string): string {
@@ -468,15 +516,18 @@ function toFailure(error: unknown, source: ClaudeRuntimeSelection['source']): Cl
   return failure(
     source === 'bundled'
       ? 'BUNDLED_RUNTIME_INTEGRITY_FAILED'
-      : source === 'custom'
-        ? 'CUSTOM_RUNTIME_INVALID'
-        : 'SYSTEM_RUNTIME_NOT_FOUND',
+      : source === 'managed'
+        ? 'MANAGED_RUNTIME_INTEGRITY_FAILED'
+        : source === 'custom'
+          ? 'CUSTOM_RUNTIME_INVALID'
+          : 'SYSTEM_RUNTIME_NOT_FOUND',
     describeError(error),
   )
 }
 
 function stateForFailure(code: ClaudeRuntimeErrorCode): ClaudeRuntimeStatus['state'] {
   return code === 'BUNDLED_RUNTIME_INTEGRITY_FAILED' ||
+    code === 'MANAGED_RUNTIME_INTEGRITY_FAILED' ||
     code === 'RUNTIME_ARCH_MISMATCH' ||
     code === 'RUNTIME_VERSION_MISMATCH'
     ? 'failed'

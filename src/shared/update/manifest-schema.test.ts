@@ -5,7 +5,7 @@ const sha = 'a'.repeat(64)
 
 function validManifest() {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     channel: 'stable',
     tag: 'v1.2.3',
     version: '1.2.3',
@@ -14,7 +14,6 @@ function validManifest() {
     assets: {
       arm64: {
         dmg: { name: 'CCLink-Studio-1.2.3-arm64.dmg', size: 100, sha256: sha },
-        zip: { name: 'CCLink-Studio-1.2.3-arm64.zip', size: 90, sha256: sha },
       },
     },
   }
@@ -32,7 +31,6 @@ describe('updateManifestSchema', () => {
         ...validManifest().assets,
         x64: {
           dmg: { name: 'CCLink-Studio-1.2.3-x64.dmg', size: 101, sha256: sha },
-          zip: { name: 'CCLink-Studio-1.2.3-x64.zip', size: 91, sha256: sha },
         },
       },
     }
@@ -53,7 +51,7 @@ describe('updateManifestSchema', () => {
     expect(updateManifestSchema.safeParse(manifest).success).toBe(false)
   })
 
-  it('rejects unsafe and duplicate arm64 asset names', () => {
+  it('rejects unsafe arm64 asset names', () => {
     const unsafe = validManifest()
     unsafe.assets.arm64.dmg.name = '../CCLink-Studio.dmg'
     expect(updateManifestSchema.safeParse(unsafe).success).toBe(false)
@@ -61,10 +59,6 @@ describe('updateManifestSchema', () => {
     const urlLike = validManifest()
     urlLike.assets.arm64.dmg.name = 'https:CCLink-Studio.dmg'
     expect(updateManifestSchema.safeParse(urlLike).success).toBe(false)
-
-    const duplicate = validManifest()
-    duplicate.assets.arm64.zip.name = duplicate.assets.arm64.dmg.name
-    expect(updateManifestSchema.safeParse(duplicate).success).toBe(false)
   })
 
   it('rejects stable versions with leading zeroes', () => {

@@ -31,6 +31,10 @@ import {
 import { invokeIpcContract } from './ipc-contract-client'
 import { webResourcesApi } from './web-resources-api'
 import { webAffairsApi } from './web-affairs-api'
+import {
+  runtimeComponentsIpc,
+  type RuntimeComponentsApiContract,
+} from '../shared/ipc/runtime-components'
 
 const settingsApi: SettingsApiContract = {
   getAll: () => invokeIpcContract(settingsIpc.getAll),
@@ -58,6 +62,14 @@ const credentialsApi: CredentialsApiContract = {
   removeLegacyFiles: () => invokeIpcContract(credentialsIpc.removeLegacyFiles),
   openDirectory: () => invokeIpcContract(credentialsIpc.openDirectory),
   reload: () => invokeIpcContract(credentialsIpc.reload),
+}
+
+const runtimeComponentsApi: RuntimeComponentsApiContract = {
+  getManagedClaudeStatus: () => invokeIpcContract(runtimeComponentsIpc.getManagedClaudeStatus),
+  installManagedClaude: () => invokeIpcContract(runtimeComponentsIpc.installManagedClaude),
+  listRuntimeResources: () => invokeIpcContract(runtimeComponentsIpc.listRuntimeResources),
+  installRuntimeResource: (componentId) =>
+    invokeIpcContract(runtimeComponentsIpc.installRuntimeResource, componentId),
 }
 
 const scheduledTasksApi: ScheduledTasksApiContract = {
@@ -155,6 +167,8 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
 
   // 应用设置
   settings: settingsApi,
+
+  runtimeComponents: runtimeComponentsApi,
 
   workspaceState: workspaceStateApi,
 

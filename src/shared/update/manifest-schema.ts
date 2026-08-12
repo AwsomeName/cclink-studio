@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export const updateArchitectureSchema = z.literal('arm64')
 export const updateChannelSchema = z.literal('stable')
-export const updateAssetKindSchema = z.enum(['dmg', 'zip'])
+export const updateAssetKindSchema = z.literal('dmg')
 
 const stableVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const semanticVersionPattern =
@@ -12,7 +12,7 @@ const sha256Pattern = /^[0-9a-f]{64}$/
 const systemVersionPattern = /^\d+\.\d+(?:\.\d+)?$/
 const safeAssetNamePattern = /^[\p{L}\p{N}][\p{L}\p{N} ._+()-]*$/u
 
-function updateAssetSchema(extension: 'dmg' | 'zip') {
+function updateAssetSchema(extension: 'dmg') {
   return z
     .object({
       name: z
@@ -37,13 +37,12 @@ function updateAssetSchema(extension: 'dmg' | 'zip') {
 export const updateArchitectureAssetsSchema = z
   .object({
     dmg: updateAssetSchema('dmg'),
-    zip: updateAssetSchema('zip'),
   })
   .strict()
 
 export const updateManifestSchema = z
   .object({
-    schemaVersion: z.literal(2),
+    schemaVersion: z.literal(3),
     channel: updateChannelSchema,
     tag: z.string().min(2).max(128),
     version: z.string().regex(semanticVersionPattern, '更新版本不是合法语义版本'),
@@ -69,15 +68,6 @@ export const updateManifestSchema = z
         code: 'custom',
         path: ['version'],
         message: 'stable 通道不能包含 prerelease 或 build metadata',
-      })
-    }
-
-    const assetNames = [manifest.assets.arm64.dmg.name, manifest.assets.arm64.zip.name]
-    if (new Set(assetNames).size !== assetNames.length) {
-      context.addIssue({
-        code: 'custom',
-        path: ['assets'],
-        message: '不同格式的更新资产名不能重复',
       })
     }
   })

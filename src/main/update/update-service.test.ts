@@ -26,7 +26,7 @@ function availableRelease(
   sha256 = createHash('sha256').update(data).digest('hex'),
   prerelease = false,
 ) {
-  const makeAsset = (kind: 'dmg' | 'zip', name: string, size: number) => ({
+  const makeAsset = (kind: 'dmg', name: string, size: number) => ({
     kind,
     name,
     size,
@@ -39,7 +39,7 @@ function availableRelease(
     status: 'available' as const,
     release: {
       manifest: {
-        schemaVersion: 2 as const,
+        schemaVersion: 3 as const,
         channel: 'stable' as const,
         tag: 'v1.2.3',
         version: '1.2.3',
@@ -48,7 +48,6 @@ function availableRelease(
         assets: {
           arm64: {
             dmg: { name: 'studio-arm64.dmg', size: data.length, sha256 },
-            zip: { name: 'studio-arm64.zip', size: data.length, sha256 },
           },
         },
       },
@@ -58,7 +57,6 @@ function availableRelease(
       prerelease,
       assets: {
         dmg: makeAsset('dmg', 'studio-arm64.dmg', data.length),
-        zip: makeAsset('zip', 'studio-arm64.zip', data.length),
       },
     },
   }

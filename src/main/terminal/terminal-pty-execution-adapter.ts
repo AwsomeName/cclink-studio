@@ -295,6 +295,7 @@ function createPtyLaunch(
   browserEnvironment: NodeJS.ProcessEnv,
 ): { shell: string; args?: string[] } {
   if (process.platform === 'win32') return { shell }
+  const interactiveShellArguments = getInteractiveShellArguments(shell)
   const browserAssignments = ['PATH', 'BROWSER', 'npm_config_browser'].flatMap((key) => {
     const value = browserEnvironment[key]
     return typeof value === 'string' ? [`${key}=${shellQuote(value)}`] : []
@@ -303,9 +304,17 @@ function createPtyLaunch(
     shell: '/bin/sh',
     args: [
       '-lc',
-      `${browserAssignments.join(' ')} CCLINK_STUDIO_TERMINAL_SESSION_ID=${shellQuote(sessionId)} ${shellQuote(shell)} -i`,
+      `${browserAssignments.join(' ')} CCLINK_STUDIO_TERMINAL_SESSION_ID=${shellQuote(sessionId)} ${shellQuote(shell)} ${interactiveShellArguments}`,
     ],
   }
+}
+
+function getInteractiveShellArguments(shell: string): string {
+  // macOS Terminal opens zsh as a login + interactive shell. Match that behavior so
+  // commands added to ~/.zprofile (for example Claude Code) are also available here.
+  // Keep unknown/custom shells on the existing interactive-only behavior because
+  // login flag support is shell-specific.
+  return /(^|\/)zsh$/.test(shell) ? '-l -i' : '-i'
 }
 
 function shellQuote(value: string): string {

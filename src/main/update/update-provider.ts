@@ -44,13 +44,12 @@ const resolvedUpdateReleaseSchema = z
     assets: z
       .object({
         dmg: resolvedUpdateAssetSchema,
-        zip: resolvedUpdateAssetSchema,
       })
       .strict(),
   })
   .strict()
   .superRefine((release, context) => {
-    for (const kind of ['dmg', 'zip'] as const) {
+    for (const kind of ['dmg'] as const) {
       const resolved = release.assets[kind]
       const expected = release.manifest.assets[release.architecture][kind]
       if (

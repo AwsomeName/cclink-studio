@@ -14,6 +14,20 @@ export function getUserDataPathDiagnostics(): UserDataPathDiagnostics | null {
 }
 
 /**
+ * Packaged smoke tests need an isolated profile so they never touch a developer's real state.
+ * Production launches ignore the override unless the explicit smoke guard is also present.
+ */
+export function resolveMainUserDataOverride(
+  isPackaged: boolean,
+  environment: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const candidate = environment['CCLINK_STUDIO_TEST_USER_DATA_PATH']
+  if (!candidate) return undefined
+  if (!isPackaged || environment['CCLINK_STUDIO_PACKAGED_SMOKE'] === '1') return candidate
+  return undefined
+}
+
+/**
  * 固定本机数据目录，避免 dev/package/appName 差异造成状态分裂。
  *
  * 必须在任何服务读取 app.getPath('userData') 前调用。

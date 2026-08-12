@@ -61,10 +61,11 @@ test('release workflow signs and Gatekeeper-assesses each DMG before upload', ()
 })
 
 test('release workflow normalizes public asset names before checksums and upload', () => {
-  assert.match(workflow, /Expected exactly one DMG and one ZIP/)
+  assert.match(workflow, /Expected exactly one DMG/)
+  assert.match(workflow, /ZIP artifacts are forbidden/)
   assert.match(workflow, /cclink-studio-\$\{VERSION\}-arm64\.dmg/)
-  assert.match(workflow, /cclink-studio-\$\{VERSION\}-arm64\.zip/)
-  assert.doesNotMatch(workflow, /cp dist\/\*\.dmg dist\/\*\.zip "\.\.\/release-assets-arm64\/"/)
+  assert.doesNotMatch(workflow, /cclink-studio-\$\{VERSION\}-arm64\.zip/)
+  assert.doesNotMatch(workflow, /cp "\$\{zip_files\[0\]\}"/)
 })
 
 test('draft release consumes one arm64 artifact and generates a verified update manifest', () => {

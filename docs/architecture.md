@@ -201,13 +201,15 @@ CCLink Studio 开源壳保留这些本地能力：
 `docs/features/desktop-update-development-plan.md` 为执行事实源。Developer ID
 直接分发是当前默认路线；Mac App Store 需要独立 ADR。
 
-### 规划中的 Runtime 组件与能力插件（未实现）
+### Runtime 组件与规划中的能力插件
 
 Runtime 组件独立更新和受限能力插件的产品方案见
 `docs/features/runtime-components-and-capability-plugins.md`，执行门禁与里程碑见
-`docs/features/runtime-components-and-capability-plugins-development-plan.md`。当前代码尚无
-插件安装、npm 更新、独立 Runtime 下载或自动回滚闭环，不能把内置 `ToolModule`、Adapter
-Registry 或打包资源称为插件系统。
+`docs/features/runtime-components-and-capability-plugins-development-plan.md`。ADR 0007 已实现
+固定 Claude Runtime 的 npm 安装与 App 替换复用；ADR 0008 已实现 OCCT WASM、scrcpy server
+和 agent-device Android Helper 的固定目录下载、校验与安装，其中 OCCT/scrcpy 已接入领域回退，
+Android Helper 仍待宿主注入接口。通用插件安装、隔离 Plugin Host、远程签名目录和真实双版本
+更新仍未实现，不能把内置 `ToolModule`、Adapter Registry 或打包资源称为插件系统。
 
 该方案不得改变以下不变量：
 
@@ -221,8 +223,11 @@ Registry 或打包资源称为插件系统。
 - OSS 与商业版组件源、签名根和发布状态独立，OSS 默认路径不要求账号、私有 Registry 或
   官方生产 API。
 
-ADR 0002 当前仍规定内置 Claude Code 只随 Studio 更新；实现 Runtime 独立更新前必须新增
-ADR，明确 supersede 条款并保持其 selection、probe、generation、provenance 和安全点约束。
+ADR 0007 已取代 ADR 0002 中“内置 Claude Code 只随 Studio 更新”的限制，允许
+Studio 从受限 npm 平台包安装 managed Claude Runtime。Agent SDK 仍属于完整 App 核心代码；
+Runtime 独立更新必须保持 selection、probe、generation、provenance、会话兼容指纹和
+安全点约束。当前只冻结 `2.1.211` 用于托管安装；在第二真实兼容版本和远程签名
+目录就绪前，不得宣称独立更新已交付。
 
 这些能力不需要用户登录 CCLink，也不依赖官方云服务。
 

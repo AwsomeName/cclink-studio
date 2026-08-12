@@ -5,7 +5,7 @@ const sha256 = 'a'.repeat(64)
 
 function manifest() {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     channel: 'stable',
     tag: 'v1.2.3',
     version: '1.2.3',
@@ -14,7 +14,6 @@ function manifest() {
     assets: {
       arm64: {
         dmg: { name: 'CCLink-Studio-1.2.3-arm64.dmg', size: 100, sha256 },
-        zip: { name: 'CCLink-Studio-1.2.3-arm64.zip', size: 90, sha256 },
       },
     },
   }
@@ -24,7 +23,6 @@ function release() {
   const assets = [
     { name: 'update-manifest.json', size: 500 },
     { name: 'CCLink-Studio-1.2.3-arm64.dmg', size: 100 },
-    { name: 'CCLink-Studio-1.2.3-arm64.zip', size: 90 },
   ].map((asset) => ({
     ...asset,
     browser_download_url: `https://github.com/AwsomeName/cclink-studio/releases/download/v1.2.3/${asset.name}`,
@@ -65,7 +63,6 @@ describe('GitHubReleaseProvider', () => {
     expect(result.status).toBe('available')
     if (result.status !== 'available') throw new Error('Expected available release')
     expect(result.release.assets.dmg.name).toBe('CCLink-Studio-1.2.3-arm64.dmg')
-    expect(result.release.assets.zip.name).toBe('CCLink-Studio-1.2.3-arm64.zip')
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 

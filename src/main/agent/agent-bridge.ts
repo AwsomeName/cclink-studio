@@ -34,6 +34,7 @@ import { agentIpcEvents } from '../../shared/ipc/agent'
 import { SessionDiagnosticReferenceStore } from './session-diagnostic-reference-store'
 import type { ClaudeRuntimeProvenance } from '../../shared/claude-runtime'
 import type { UsageLedgerService } from '../usage/usage-ledger-service'
+import { managedClaudeIsolationEnvironment } from './managed-claude-environment'
 import {
   AGENT_PROFILE_PROMPT_COMPILER_VERSION,
   BuiltinAgentRoleRegistry,
@@ -163,6 +164,16 @@ export class AgentBridge {
       type: 'local-claude-code',
       claudeCode: {
         claudeCodePath: options?.claudeCodePath,
+        env:
+          options?.runtimeProvenance?.source === 'managed'
+            ? {
+                DISABLE_UPDATES: '1',
+                CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+                ...(options.claudeCodePath
+                  ? managedClaudeIsolationEnvironment(options.claudeCodePath)
+                  : {}),
+              }
+            : undefined,
         apiBaseUrl: options?.apiBaseUrl,
         apiKey: options?.apiKey,
         modelName: options?.modelName,
@@ -598,6 +609,7 @@ export class AgentBridge {
       apiBaseUrl: apiSettings.apiBaseUrl,
       apiKey: apiSettings.apiKey,
       modelName: apiSettings.modelName,
+      runtimeProvenance: apiSettings.runtimeProvenance,
     })
     const nextFingerprint = apiSettings.sessionCompatibilityFingerprint ?? null
     const preserveSessions =

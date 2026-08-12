@@ -116,15 +116,15 @@ APPLE_API_ISSUER
 
 开源版不得 checkout `cclink-dev`、读取商业版更新源或共享商业版发布状态。
 
-## Manifest v2
+## Manifest v3
 
 开源版使用 GitHub Releases API 查找订阅轨道内最新的公开 Release，不依赖
-`latest-mac.yml`。发布工作流只构建一组 arm64 DMG/ZIP，并在创建 Draft 前生成和
+`latest-mac.yml`。发布工作流只构建一个 arm64 DMG，并在创建 Draft 前生成和
 反向校验唯一的 `update-manifest.json`：
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "channel": "stable",
   "tag": "v0.1.13",
   "version": "0.1.13",
@@ -134,11 +134,6 @@ APPLE_API_ISSUER
     "arm64": {
       "dmg": {
         "name": "cclink-studio-0.1.13-arm64.dmg",
-        "size": 123,
-        "sha256": "64-character-lowercase-sha256"
-      },
-      "zip": {
-        "name": "cclink-studio-0.1.13-arm64.zip",
         "size": 123,
         "sha256": "64-character-lowercase-sha256"
       }
@@ -156,7 +151,7 @@ Manifest 保存资产 basename，不保存下载 URL。Provider 从同一 Releas
 1. Release 已公开且不是 Draft；稳定轨道还要求不是 prerelease。
 2. Release Tag、Manifest Tag、Manifest version 一致。
 3. 目标版本严格高于当前版本。
-4. Manifest 只包含合法 arm64 DMG 和 ZIP。
+4. Manifest 只包含合法 arm64 DMG；构建目录和 Release 不得包含 ZIP。
 5. 资产名称、大小和 SHA-256 与 Release 一致。
 6. 当前 macOS 满足 `minimumSystemVersion`。
 
@@ -256,7 +251,7 @@ pnpm release -- --version 0.1.13
 固定流程：
 
 1. 安装锁定依赖，执行 `pnpm verify` 和 `pnpm smoke:standalone`。
-2. 写入目标版本，在本机生成同版本 ad-hoc arm64 DMG/ZIP；失败则恢复版本并停止。
+2. 写入目标版本；若显式要求本地产物，则生成同版本 ad-hoc arm64 DMG，失败时恢复版本并停止。
 3. 创建版本提交和 annotated Tag。
 4. 原子推送 `main` 与 Tag。
 5. 触发 `release-oss.yml`，在 `macos-15` 重新构建 arm64 正式候选包。

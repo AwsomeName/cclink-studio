@@ -42,6 +42,8 @@ import { registerScheduledTaskIpc } from '../scheduled-task/scheduled-task-ipc'
 import { MacDmgVerifier } from '../update/mac-dmg-verifier'
 import { applyWindowZoomLevel } from './window-runtime'
 import { RendererWorkspaceStateFlushCoordinator } from '../workspace/renderer-workspace-state-flush'
+import { RuntimeComponentManager } from '../runtime-components/runtime-component-manager'
+import { registerRuntimeComponentsIpc } from '../runtime-components/runtime-components-ipc'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   runtime.credentialService = new CredentialService()
@@ -51,6 +53,12 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
   runtime.settingsService = new SettingsService(runtime.credentialService)
   await runtime.settingsService.loadState()
   console.log('[CCLink Studio] 设置系统已初始化')
+
+  runtime.runtimeComponentManager = new RuntimeComponentManager(
+    join(app.getPath('userData'), 'runtime-components'),
+  )
+  await runtime.runtimeComponentManager.initialize()
+  console.log('[CCLink Studio] Runtime 组件管理器已初始化')
 
   runtime.workspaceStateService = new WorkspaceStateService()
   await runtime.workspaceStateService.loadState()
@@ -73,6 +81,7 @@ export async function shutdownStateServices(runtime: CclinkStudioRuntimeState): 
   runtime.usageLedgerService = null
   runtime.settingsService = null
   runtime.credentialService = null
+  runtime.runtimeComponentManager = null
 }
 
 export async function bootstrapMainProcessServices(
@@ -106,6 +115,9 @@ export async function bootstrapMainProcessServices(
 
   registerCredentialsIpc(runtime.credentialService, runtime.trustedRendererGuard)
   console.log('[CCLink Studio] 本地凭证 IPC 已注册')
+
+  registerRuntimeComponentsIpc(runtime.runtimeComponentManager!, runtime.trustedRendererGuard)
+  console.log('[CCLink Studio] Runtime 组件管理 IPC 已注册')
 
   try {
     runtime.localIdentityService = new LocalIdentityService()

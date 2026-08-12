@@ -3,7 +3,11 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { configureFixedUserDataPath, getUserDataPathDiagnostics } from './user-data-path'
+import {
+  configureFixedUserDataPath,
+  getUserDataPathDiagnostics,
+  resolveMainUserDataOverride,
+} from './user-data-path'
 
 describe('configureFixedUserDataPath', () => {
   let tempDir = ''
@@ -56,5 +60,22 @@ describe('configureFixedUserDataPath', () => {
     expect(existsSync(fixedPath)).toBe(true)
     expect(setPath).toHaveBeenCalledWith('userData', testUserData)
     expect(getUserDataPathDiagnostics()).toEqual({ fixedUserDataPath: testUserData })
+  })
+
+  it('requires an explicit guard before a packaged smoke can override userData', () => {
+    const testUserData = join(tempDir, 'packaged-smoke-profile')
+
+    expect(
+      resolveMainUserDataOverride(true, { CCLINK_STUDIO_TEST_USER_DATA_PATH: testUserData }),
+    ).toBeUndefined()
+    expect(
+      resolveMainUserDataOverride(true, {
+        CCLINK_STUDIO_TEST_USER_DATA_PATH: testUserData,
+        CCLINK_STUDIO_PACKAGED_SMOKE: '1',
+      }),
+    ).toBe(testUserData)
+    expect(
+      resolveMainUserDataOverride(false, { CCLINK_STUDIO_TEST_USER_DATA_PATH: testUserData }),
+    ).toBe(testUserData)
   })
 })

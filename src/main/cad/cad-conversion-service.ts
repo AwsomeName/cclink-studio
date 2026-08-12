@@ -7,7 +7,11 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { AppSettings } from '../settings/types'
 import { detectFreeCad } from './freecad-detector'
-import { convertStepWithOpenCascade, detectOpenCascade } from './occt-converter'
+import {
+  convertStepWithOpenCascade,
+  detectOpenCascade,
+  type OcctRuntimeResource,
+} from './occt-converter'
 import type {
   CadBackendStatus,
   CadCacheStatus,
@@ -111,7 +115,11 @@ App.closeDocument(doc.Name)
 }
 
 export class CadConversionService {
-  constructor(private readonly getSettings: () => AppSettings) {}
+  constructor(
+    private readonly getSettings: () => AppSettings,
+    private readonly resolveManagedOcct: () => Promise<OcctRuntimeResource | null> = async () =>
+      null,
+  ) {}
 
   private getCacheRoot(): string {
     return join(app.getPath('userData'), 'cad-cache')
@@ -138,7 +146,7 @@ export class CadConversionService {
         error: cadError('backend-not-implemented', '托管 FreeCAD 运行时下载尚未实现。', true),
       }
     }
-    return detectOpenCascade()
+    return detectOpenCascade(await this.resolveManagedOcct())
   }
 
   async getModelSupport(inputPath: string): Promise<CadModelSupport> {
@@ -328,6 +336,7 @@ export class CadConversionService {
     try {
       if (settings.cadBackend === 'occt-experimental') {
         await rm(scriptPath, { force: true }).catch(() => undefined)
+        const managedRuntime = await this.resolveManagedOcct()
         await convertStepWithOpenCascade({
           inputPath,
           outputPath: previewPath,
@@ -335,6 +344,7 @@ export class CadConversionService {
           previewFormat: targetFormat,
           sourceHash,
           diagnostics,
+          runtime: managedRuntime,
         })
       } else {
         if (!backendStatus.path) {

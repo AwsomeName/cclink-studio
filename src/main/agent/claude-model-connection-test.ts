@@ -6,6 +6,7 @@ import type {
   ClaudeModelConnectionErrorCode,
   ClaudeModelConnectionTestResult,
 } from '../../shared/ipc/settings'
+import { managedClaudeIsolationEnvironment } from './managed-claude-environment'
 
 const CONNECTION_TEST_MARKER = 'CCLINK_CONNECTION_OK'
 const DEFAULT_TIMEOUT_MS = 45_000
@@ -72,7 +73,7 @@ export async function testClaudeModelConnection(
         abortController,
         cwd: tmpdir(),
         pathToClaudeCodeExecutable: input.runtime.executablePath,
-        env: buildConnectionTestEnvironment(apiKey, input.apiBaseUrl),
+        env: buildConnectionTestEnvironment(input.runtime, apiKey, input.apiBaseUrl),
         tools: [],
         allowedTools: [],
         maxTurns: 1,
@@ -122,6 +123,7 @@ export async function testClaudeModelConnection(
 }
 
 function buildConnectionTestEnvironment(
+  runtime: ResolvedClaudeRuntime,
   apiKey: string,
   apiBaseUrl: string,
 ): Record<string, string | undefined> {
@@ -146,6 +148,9 @@ function buildConnectionTestEnvironment(
 
   return {
     ...env,
+    ...(runtime.source === 'managed'
+      ? managedClaudeIsolationEnvironment(runtime.executablePath)
+      : {}),
     ANTHROPIC_API_KEY: apiKey,
     ...(apiBaseUrl.trim() ? { ANTHROPIC_BASE_URL: apiBaseUrl.trim() } : {}),
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',

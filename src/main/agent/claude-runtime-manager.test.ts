@@ -224,4 +224,44 @@ describe('ClaudeRuntimeManager', () => {
       failure: { code: 'RUNTIME_PROBE_TIMEOUT' },
     })
   })
+
+  it('activates a catalog-verified managed runtime with a version-bound fingerprint', async () => {
+    const resolveManaged = vi.fn(async () => ({
+      executablePath: '/user-data/runtime-components/claude',
+      runtimeVersion: '2.1.211',
+      sdkVersion: '0.3.211',
+      sha256: '1'.repeat(64),
+    }))
+    const manager = new ClaudeRuntimeManager({
+      bundledRoot: '/unused',
+      resolveManaged,
+      executeVersion: async () => '2.1.211 (Claude Code)',
+      now: () => 200,
+    })
+
+    const runtime = await manager.initialize({ source: 'managed', version: '2.1.211' })
+
+    expect(resolveManaged).toHaveBeenCalledWith('2.1.211')
+    expect(runtime).toMatchObject({
+      source: 'managed',
+      claudeCodeVersion: '2.1.211',
+      sdkVersion: '0.3.211',
+      integrity: 'catalog-sha256',
+      probedAt: 200,
+    })
+    expect(runtime.fingerprint).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('does not silently fall back when a managed runtime is missing', async () => {
+    const detectSystem = vi.fn()
+    const manager = new ClaudeRuntimeManager({ bundledRoot: '/unused', detectSystem })
+
+    const result = await manager.probe({ source: 'managed', version: '2.1.211' })
+
+    expect(result).toMatchObject({
+      success: false,
+      failure: { code: 'MANAGED_RUNTIME_MISSING' },
+    })
+    expect(detectSystem).not.toHaveBeenCalled()
+  })
 })

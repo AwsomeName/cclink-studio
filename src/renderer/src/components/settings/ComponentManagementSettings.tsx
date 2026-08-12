@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ClaudeRuntimeStatus } from '@shared/claude-runtime'
 import type { CadBackendStatus } from '@shared/ipc/cad'
+import type {
+  ManagedClaudeRuntimeStatus,
+  RuntimeResourceComponentId,
+  RuntimeResourceStatus,
+} from '@shared/ipc/runtime-components'
 import { APP_VERSION } from '../../app-metadata'
 
 type CapabilityKind = 'Runtime' | '能力插件' | '内容包'
@@ -17,31 +22,12 @@ interface ManagedCapabilityRow {
   installedVersion: string | null
   constrainedVersion: string
   availableVersion: string | null
+  actionEnabled?: boolean
+  actionTitle?: string
+  installComponentId?: RuntimeResourceComponentId
 }
 
 const BUILTIN_ROWS: ManagedCapabilityRow[] = [
-  {
-    id: 'scrcpy-server',
-    name: 'Android scrcpy server',
-    description: 'Android 真机画面与控制服务',
-    kind: 'Runtime',
-    installationState: 'installed',
-    installationLabel: '已安装 · 随应用',
-    installedVersion: '2.3.1',
-    constrainedVersion: '仅 2.3.1',
-    availableVersion: null,
-  },
-  {
-    id: 'runtime-helper',
-    name: 'WASM / 辅助程序',
-    description: '后续受控 Runtime 扩展位置',
-    kind: 'Runtime',
-    installationState: 'not-installed',
-    installationLabel: '未安装',
-    installedVersion: null,
-    constrainedVersion: '待定义',
-    availableVersion: null,
-  },
   {
     id: 'mcp-tools',
     name: 'MCP 工具',
@@ -132,53 +118,110 @@ const BUILTIN_ROWS: ManagedCapabilityRow[] = [
   },
 ]
 
-function claudeRow(status: ClaudeRuntimeStatus | null, failed: boolean): ManagedCapabilityRow {
+function claudeRow(
+  status: ClaudeRuntimeStatus | null,
+  managed: ManagedClaudeRuntimeStatus | null,
+  failed: boolean,
+): ManagedCapabilityRow {
   const active = status?.active
+  const managedVersion = managed?.installedVersions[0] ?? null
+  const installing =
+    managed?.phase === 'downloading' ||
+    managed?.phase === 'verifying' ||
+    managed?.phase === 'installing'
   return {
     id: 'claude-code-runtime',
     name: 'Claude Code Runtime',
     description: '本地 Agent 执行引擎',
     kind: 'Runtime',
-    installationState: active ? 'installed' : failed ? 'unavailable' : 'checking',
-    installationLabel: active ? `已安装 · ${active.source}` : failed ? '不可用' : '检测中',
-    installedVersion: active?.claudeCodeVersion ?? null,
-    constrainedVersion: `仅 ${CLAUDE_RUNTIME_CONSTRAINED_VERSION}`,
-    availableVersion: null,
+    installationState:
+      managedVersion || active ? 'installed' : failed ? 'unavailable' : 'not-installed',
+    installationLabel: managedVersion
+      ? '已安装 · Studio 管理'
+      : active
+        ? `已安装 · ${active.source}`
+        : failed
+          ? '不可用'
+          : '未安装',
+    installedVersion: managedVersion ?? active?.claudeCodeVersion ?? null,
+    constrainedVersion: managed?.constrainedVersion
+      ? `仅 ${managed.constrainedVersion}`
+      : `仅 ${CLAUDE_RUNTIME_CONSTRAINED_VERSION}`,
+    availableVersion: managed?.availableVersion ?? null,
+    actionEnabled: Boolean(managed?.supported && !managedVersion && !installing),
+    actionTitle: managedVersion
+      ? '该限定版本已经安装'
+      : installing
+        ? '正在安装'
+        : managed?.supported
+          ? '从固定 npm 包下载安装'
+          : '当前平台没有允许的安装包',
   }
 }
 
-function cadRow(status: CadBackendStatus | null, failed: boolean): ManagedCapabilityRow {
+function runtimeResourceRow(
+  componentId: RuntimeResourceComponentId,
+  status: RuntimeResourceStatus | null,
+  bundledVersion: string,
+  description: string,
+  fallbackAvailable = true,
+): ManagedCapabilityRow {
+  const installing =
+    status?.phase === 'downloading' ||
+    status?.phase === 'verifying' ||
+    status?.phase === 'installing'
+  const installed = status?.installedVersion ?? null
+  const awaitingHost = status?.activation === 'awaiting-host'
+  const names: Record<RuntimeResourceComponentId, string> = {
+    'occt-runtime': 'OCCT Runtime',
+    'scrcpy-server': 'Android scrcpy server',
+    'agent-device-android-helpers': 'agent-device Android Helper',
+  }
   return {
-    id: 'cad-runtime',
-    name: 'CAD / OCCT / FreeCAD Runtime',
-    description: 'STEP/STP 等结构件转换后端',
+    id: componentId,
+    name: names[componentId],
+    description,
     kind: 'Runtime',
-    installationState: status?.available
-      ? 'installed'
-      : failed || status
-        ? 'not-installed'
-        : 'checking',
-    installationLabel: status?.available
-      ? `已安装 · ${status.kind}`
-      : failed || status
-        ? '未安装或未启用'
-        : '检测中',
-    installedVersion: status?.available ? (status.version ?? '版本未知') : null,
-    constrainedVersion: '待定义',
-    availableVersion: null,
+    installationState: installed || fallbackAvailable ? 'installed' : 'not-installed',
+    installationLabel: installed
+      ? awaitingHost
+        ? '已下载 · 待宿主支持'
+        : '已安装 · Studio 管理'
+      : fallbackAvailable
+        ? '已安装 · 随应用'
+        : '未安装',
+    installedVersion: installed ?? (fallbackAvailable ? bundledVersion : null),
+    constrainedVersion: `仅 ${status?.constrainedVersion ?? bundledVersion}`,
+    availableVersion: status?.availableVersion ?? null,
+    actionEnabled: Boolean(status && !installed && !installing),
+    actionTitle: installed
+      ? awaitingHost
+        ? '资源已经校验下载；当前 agent-device 宿主尚不能切换到用户目录资源'
+        : '该限定版本已经安装'
+      : installing
+        ? '正在安装'
+        : '从固定可信来源下载安装',
+    installComponentId: componentId,
   }
 }
 
 export function ComponentManagementSettings(): React.ReactElement {
   const [claudeStatus, setClaudeStatus] = useState<ClaudeRuntimeStatus | null>(null)
+  const [managedClaudeStatus, setManagedClaudeStatus] = useState<ManagedClaudeRuntimeStatus | null>(
+    null,
+  )
   const [cadStatus, setCadStatus] = useState<CadBackendStatus | null>(null)
+  const [runtimeResources, setRuntimeResources] = useState<RuntimeResourceStatus[]>([])
   const [claudeFailed, setClaudeFailed] = useState(false)
-  const [cadFailed, setCadFailed] = useState(false)
+  const [installBusyId, setInstallBusyId] = useState<string | null>(null)
+  const [installMessage, setInstallMessage] = useState<string | null>(null)
 
   const refresh = useCallback(async (): Promise<void> => {
-    const [runtimeResult, cadResult] = await Promise.allSettled([
+    const [runtimeResult, managedResult, cadResult, resourcesResult] = await Promise.allSettled([
       window.cclinkStudio.settings.getClaudeRuntimeStatus(),
+      window.cclinkStudio.runtimeComponents.getManagedClaudeStatus(),
       window.cclinkStudio.cad.getBackendStatus(),
+      window.cclinkStudio.runtimeComponents.listRuntimeResources(),
     ])
 
     if (runtimeResult.status === 'fulfilled' && runtimeResult.value.success) {
@@ -188,11 +231,24 @@ export function ComponentManagementSettings(): React.ReactElement {
       setClaudeFailed(true)
     }
 
+    if (managedResult.status === 'fulfilled') {
+      setManagedClaudeStatus(managedResult.value)
+      if (managedResult.value.failure) {
+        setInstallMessage(
+          `${managedResult.value.failure.code}: ${managedResult.value.failure.message}`,
+        )
+      }
+    } else {
+      setClaudeFailed(true)
+    }
+
     if (cadResult.status === 'fulfilled') {
       setCadStatus(cadResult.value)
-      setCadFailed(false)
-    } else {
-      setCadFailed(true)
+    }
+    if (resourcesResult.status === 'fulfilled') {
+      setRuntimeResources(resourcesResult.value)
+      const failure = resourcesResult.value.find((item) => item.failure)?.failure
+      if (failure) setInstallMessage(`${failure.code}: ${failure.message}`)
     }
   }, [])
 
@@ -200,9 +256,91 @@ export function ComponentManagementSettings(): React.ReactElement {
     void refresh()
   }, [refresh])
 
+  useEffect(() => {
+    const timer = window.setInterval(() => void refresh(), 2_000)
+    return () => window.clearInterval(timer)
+  }, [refresh])
+
+  useEffect(() => {
+    if (!installBusyId) return
+    const timer = window.setInterval(() => void refresh(), 400)
+    return () => window.clearInterval(timer)
+  }, [installBusyId, refresh])
+
+  const installClaudeRuntime = useCallback(async (): Promise<void> => {
+    setInstallBusyId('claude-code-runtime')
+    setInstallMessage(null)
+    try {
+      const result = await window.cclinkStudio.runtimeComponents.installManagedClaude()
+      setManagedClaudeStatus(result.status)
+      setInstallMessage(
+        result.success
+          ? `Claude Runtime ${result.status.installedVersions[0] ?? ''} 已安装，可在 Agent 设置中启用。`
+          : (result.error ?? 'Claude Runtime 安装失败'),
+      )
+    } catch (error) {
+      setInstallMessage(error instanceof Error ? error.message : String(error))
+    } finally {
+      setInstallBusyId(null)
+      await refresh()
+    }
+  }, [refresh])
+
+  const installRuntimeResource = useCallback(
+    async (componentId: RuntimeResourceComponentId): Promise<void> => {
+      setInstallBusyId(componentId)
+      setInstallMessage(null)
+      try {
+        const result =
+          await window.cclinkStudio.runtimeComponents.installRuntimeResource(componentId)
+        setInstallMessage(
+          result.success
+            ? result.status.activation === 'awaiting-host'
+              ? `${result.status.displayName} ${result.status.installedVersion ?? ''} 已下载并校验；当前宿主版本尚不能切换使用。`
+              : `${result.status.displayName} ${result.status.installedVersion ?? ''} 已安装并启用。`
+            : (result.error ?? `${result.status.displayName} 安装失败`),
+        )
+      } catch (error) {
+        setInstallMessage(error instanceof Error ? error.message : String(error))
+      } finally {
+        setInstallBusyId(null)
+        await refresh()
+      }
+    },
+    [refresh],
+  )
+
+  const resourceStatus = useCallback(
+    (componentId: RuntimeResourceComponentId) =>
+      runtimeResources.find((item) => item.componentId === componentId) ?? null,
+    [runtimeResources],
+  )
+
   const rows = useMemo(
-    () => [claudeRow(claudeStatus, claudeFailed), cadRow(cadStatus, cadFailed), ...BUILTIN_ROWS],
-    [cadFailed, cadStatus, claudeFailed, claudeStatus],
+    () => [
+      claudeRow(claudeStatus, managedClaudeStatus, claudeFailed),
+      runtimeResourceRow(
+        'occt-runtime',
+        resourceStatus('occt-runtime'),
+        cadStatus?.version ?? '0.0.23',
+        'STEP/STP 结构件转换 WASM',
+        Boolean(cadStatus?.available),
+      ),
+      runtimeResourceRow(
+        'scrcpy-server',
+        resourceStatus('scrcpy-server'),
+        '2.3.1',
+        'Android 真机画面与控制服务',
+      ),
+      runtimeResourceRow(
+        'agent-device-android-helpers',
+        resourceStatus('agent-device-android-helpers'),
+        '0.17.2',
+        'Android 语义快照与多点触控辅助 APK',
+      ),
+      ...BUILTIN_ROWS,
+    ],
+    [cadStatus, claudeFailed, claudeStatus, managedClaudeStatus, resourceStatus],
   )
 
   return (
@@ -221,7 +359,7 @@ export function ComponentManagementSettings(): React.ReactElement {
           </thead>
           <tbody>
             {rows.map((row) => {
-              const canUpdate = row.availableVersion !== null
+              const canInstall = row.actionEnabled ?? false
               return (
                 <tr key={row.id}>
                   <td>
@@ -250,10 +388,29 @@ export function ComponentManagementSettings(): React.ReactElement {
                     <button
                       type="button"
                       className="settings-secondary-btn component-row-action"
-                      disabled={!canUpdate}
-                      title={canUpdate ? undefined : '更新源尚未接入'}
+                      disabled={!canInstall}
+                      title={row.actionTitle ?? '更新源尚未接入'}
+                      onClick={
+                        row.id === 'claude-code-runtime'
+                          ? () => void installClaudeRuntime()
+                          : row.installComponentId
+                            ? () => void installRuntimeResource(row.installComponentId!)
+                            : undefined
+                      }
                     >
-                      安装
+                      {installBusyId === row.id
+                        ? row.id === 'claude-code-runtime'
+                          ? managedClaudeStatus?.progress?.percent !== null &&
+                            managedClaudeStatus?.progress?.percent !== undefined
+                            ? `${managedClaudeStatus.progress.percent}%`
+                            : '安装中'
+                          : resourceStatus(row.id as RuntimeResourceComponentId)?.progress
+                                ?.percent !== null &&
+                              resourceStatus(row.id as RuntimeResourceComponentId)?.progress
+                                ?.percent !== undefined
+                            ? `${resourceStatus(row.id as RuntimeResourceComponentId)?.progress?.percent}%`
+                            : '安装中'
+                        : '安装'}
                     </button>
                   </td>
                 </tr>
@@ -262,6 +419,7 @@ export function ComponentManagementSettings(): React.ReactElement {
           </tbody>
         </table>
       </div>
+      {installMessage && <p className="settings-description">{installMessage}</p>}
     </section>
   )
 }

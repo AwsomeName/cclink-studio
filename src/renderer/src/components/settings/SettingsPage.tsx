@@ -36,6 +36,8 @@ import {
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
 
+const MANAGED_CLAUDE_RUNTIME_VERSION = '2.1.211'
+
 type SettingsSectionId =
   | 'appearance'
   | 'updates'
@@ -270,6 +272,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   const [claudeRuntimeStatus, setClaudeRuntimeStatus] = useState<ClaudeRuntimeStatus | null>(null)
   const [claudeRuntimeSource, setClaudeRuntimeSource] = useState<ClaudeRuntimeSource>('system')
   const [claudeRuntimePath, setClaudeRuntimePath] = useState('')
+  const [claudeManagedVersion, setClaudeManagedVersion] = useState('')
   const [claudeRuntimeBusy, setClaudeRuntimeBusy] = useState(false)
   const [claudeRuntimeMessage, setClaudeRuntimeMessage] = useState<string | null>(null)
   const [claudeConnectionBusy, setClaudeConnectionBusy] = useState(false)
@@ -377,7 +380,8 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   useEffect(() => {
     setClaudeRuntimeSource(settings.claudeRuntimeSource)
     setClaudeRuntimePath(settings.claudeCodePath)
-  }, [settings.claudeCodePath, settings.claudeRuntimeSource])
+    setClaudeManagedVersion(settings.claudeManagedVersion)
+  }, [settings.claudeCodePath, settings.claudeManagedVersion, settings.claudeRuntimeSource])
 
   useEffect(() => {
     if (activeSection === 'agent') void refreshClaudeRuntimeStatus()
@@ -427,7 +431,9 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   const runtimeSelectionDraft = (): ClaudeRuntimeSelection =>
     claudeRuntimeSource === 'custom'
       ? { source: 'custom', customPath: claudeRuntimePath }
-      : { source: claudeRuntimeSource }
+      : claudeRuntimeSource === 'managed'
+        ? { source: 'managed', version: claudeManagedVersion }
+        : { source: claudeRuntimeSource }
 
   const probeClaudeRuntime = async (): Promise<void> => {
     setClaudeRuntimeBusy(true)
@@ -500,6 +506,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       const success = await updateSettings({
         claudeRuntimeSource,
         claudeCodePath: claudeRuntimeSource === 'custom' ? claudeRuntimePath : '',
+        claudeManagedVersion: claudeRuntimeSource === 'managed' ? claudeManagedVersion : '',
       })
       if (!success) return
       setClaudeRuntimeMessage('Claude Code 运行时已切换')
@@ -1138,7 +1145,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                 <div className="settings-label">
                   <span>Claude Code 运行时</span>
                   <span className="settings-description">
-                    内置固定版本、系统安装或自定义可执行文件。切换前会先探测，不会静默回退。
+                    Studio 管理版本、系统安装或自定义可执行文件。切换前会先探测，不会静默回退。
                   </span>
                 </div>
                 <div className="settings-control">
@@ -1147,10 +1154,15 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                     value={claudeRuntimeSource}
                     onChange={(event) => {
                       setClaudeConnectionResult(null)
-                      setClaudeRuntimeSource(event.target.value as ClaudeRuntimeSource)
+                      const source = event.target.value as ClaudeRuntimeSource
+                      setClaudeRuntimeSource(source)
+                      if (source === 'managed' && !claudeManagedVersion) {
+                        setClaudeManagedVersion(MANAGED_CLAUDE_RUNTIME_VERSION)
+                      }
                     }}
                   >
                     <option value="bundled">内置固定版本</option>
+                    <option value="managed">Studio 管理版本</option>
                     <option value="system">系统安装</option>
                     <option value="custom">自定义路径</option>
                   </select>
@@ -1187,6 +1199,29 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                         setClaudeConnectionResult(null)
                         setClaudeRuntimePath(event.target.value)
                       }}
+                    />
+                  </div>
+                </SettingsRow>
+              )}
+
+              {claudeRuntimeSource === 'managed' && (
+                <SettingsRow
+                  settingKey="claudeManagedVersion"
+                  settings={settings}
+                  onReset={resetOne}
+                >
+                  <div className="settings-label">
+                    <span>Managed Runtime 版本</span>
+                    <span className="settings-description">
+                      先在“组件管理”安装允许的版本，再在这里启用。
+                    </span>
+                  </div>
+                  <div className="settings-control">
+                    <input
+                      className="settings-input"
+                      value={claudeManagedVersion}
+                      onChange={(event) => setClaudeManagedVersion(event.target.value)}
+                      placeholder="2.1.211"
                     />
                   </div>
                 </SettingsRow>

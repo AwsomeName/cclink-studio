@@ -15,7 +15,7 @@ const assetName = 'cclink-studio-1.2.3-arm64.dmg'
 const assetContent = Buffer.from('CCLink Studio verified update recovery smoke')
 const assetSha256 = createHash('sha256').update(assetContent).digest('hex')
 const manifest = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   channel: 'stable',
   tag: 'v1.2.3',
   version: '1.2.3',
@@ -24,11 +24,6 @@ const manifest = {
   assets: {
     arm64: {
       dmg: { name: assetName, size: assetContent.length, sha256: assetSha256 },
-      zip: {
-        name: 'cclink-studio-1.2.3-arm64.zip',
-        size: assetContent.length,
-        sha256: assetSha256,
-      },
     },
   },
 }

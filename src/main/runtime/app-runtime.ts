@@ -45,6 +45,7 @@ import type { ScheduledTaskService } from '../scheduled-task/scheduled-task-serv
 import { RuntimeCapabilityRegistry } from './capability-registry'
 import type { ServiceRegistry } from './service-registry'
 import type { RendererWorkspaceStateFlushCoordinator } from '../workspace/renderer-workspace-state-flush'
+import type { RuntimeComponentManager } from '../runtime-components/runtime-component-manager'
 
 export interface CclinkStudioRuntimeState {
   isDev: boolean
@@ -59,6 +60,7 @@ export interface CclinkStudioRuntimeState {
   playwrightBridge: PlaywrightBridge | null
   agentBridge: AgentBridge | null
   claudeRuntimeManager: ClaudeRuntimeManager | null
+  runtimeComponentManager: RuntimeComponentManager | null
   toolHost: McpToolHost | null
   permissionManager: PermissionManager | null
   mcpClientMgr: McpClientManager | null
@@ -112,6 +114,7 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     playwrightBridge: null,
     agentBridge: null,
     claudeRuntimeManager: null,
+    runtimeComponentManager: null,
     toolHost: null,
     permissionManager: null,
     mcpClientMgr: null,

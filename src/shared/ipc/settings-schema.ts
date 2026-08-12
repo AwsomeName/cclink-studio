@@ -24,8 +24,12 @@ const settingsUpdateSchema = z
         version: z.number().int().positive().max(1_000_000),
       })
       .strict(),
-    claudeRuntimeSource: z.enum(['bundled', 'system', 'custom']),
+    claudeRuntimeSource: z.enum(['bundled', 'managed', 'system', 'custom']),
     claudeCodePath: pathString,
+    claudeManagedVersion: z
+      .string()
+      .max(64)
+      .regex(/^$|^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/),
     defaultZoomMode: z.enum(['fit', 'manual']),
     defaultDeviceMode: z.enum(['desktop', 'mobile']),
     provider: z.enum([
@@ -64,6 +68,16 @@ const settingsSecretKeySchema = z.enum(['apiKey', 'meshyApiKey'])
 const settingsSecretValueSchema = z.string().max(8192)
 const claudeRuntimeSelectionSchema = z.discriminatedUnion('source', [
   z.object({ source: z.literal('bundled') }).strict(),
+  z
+    .object({
+      source: z.literal('managed'),
+      version: z
+        .string()
+        .min(1)
+        .max(64)
+        .regex(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/),
+    })
+    .strict(),
   z.object({ source: z.literal('system') }).strict(),
   z.object({ source: z.literal('custom'), customPath: pathString }).strict(),
 ])

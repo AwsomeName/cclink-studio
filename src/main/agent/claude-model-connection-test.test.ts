@@ -13,6 +13,13 @@ const runtime: ResolvedClaudeRuntime = {
   probedAt: 1,
 }
 
+const managedRuntime: ResolvedClaudeRuntime = {
+  ...runtime,
+  source: 'managed',
+  executablePath: '/user-data/runtime-components/claude-runtime/darwin-arm64/2.1.211/claude',
+  integrity: 'catalog-sha256',
+}
+
 afterEach(() => {
   delete process.env.ANTHROPIC_AUTH_TOKEN
   delete process.env.CLAUDE_CODE_OAUTH_TOKEN
@@ -97,6 +104,32 @@ describe('testClaudeModelConnection', () => {
     })
     expect(result.message).toContain('[REDACTED]')
     expect(result.message).not.toContain('secret-value')
+  })
+
+  it('isolates managed runtime auth state from the user Claude subscription', async () => {
+    const sdkQuery = fakeQuery([
+      { type: 'assistant', error: 'authentication_failed' },
+      { type: 'result', is_error: true, result: 'Invalid API key' },
+    ])
+    const createQuery = vi.fn((_request: unknown) => sdkQuery)
+
+    await testClaudeModelConnection(
+      {
+        runtime: managedRuntime,
+        apiFormat: 'anthropic',
+        apiBaseUrl: 'https://api.anthropic.com',
+        apiKey: 'invalid-key',
+        modelName: 'claude-test',
+      },
+      { createQuery: createQuery as never, now: () => 100 },
+    )
+
+    const request = createQuery.mock.calls[0]?.[0] as { options?: Options } | undefined
+    expect(request?.options?.env).toMatchObject({
+      CLAUDE_CONFIG_DIR: '/user-data/runtime-components/claude-runtime/darwin-arm64/config',
+      CLAUDE_CODE_OAUTH_TOKEN: '',
+      ANTHROPIC_API_KEY: 'invalid-key',
+    })
   })
 
   it('rejects OpenAI-compatible format before launching the runtime', async () => {

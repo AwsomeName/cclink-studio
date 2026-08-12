@@ -26,19 +26,30 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
         ...(runtime.isDev
           ? {}
           : { materializedRoot: join(app.getPath('userData'), 'agent-runtime-cache') }),
+        resolveManaged: (version) => {
+          if (!runtime.runtimeComponentManager) {
+            throw new Error('Runtime 组件管理器未初始化')
+          }
+          return runtime.runtimeComponentManager.resolveManagedClaude(version)
+        },
       })
       const claudeCodePath = settings.claudeCodePath?.trim() ?? ''
       const claudeRuntime = await runtime.claudeRuntimeManager.initialize(
         settings.claudeRuntimeSource === 'bundled'
           ? { source: 'bundled' }
-          : settings.claudeRuntimeSource === 'custom' || claudeCodePath
-            ? { source: 'custom', customPath: claudeCodePath }
-            : { source: 'system' },
+          : settings.claudeRuntimeSource === 'managed'
+            ? { source: 'managed', version: settings.claudeManagedVersion }
+            : settings.claudeRuntimeSource === 'custom' || claudeCodePath
+              ? { source: 'custom', customPath: claudeCodePath }
+              : { source: 'system' },
       )
-      if (claudeRuntime.source === 'bundled' && !settings.apiKey.trim()) {
+      if (
+        (claudeRuntime.source === 'bundled' || claudeRuntime.source === 'managed') &&
+        !settings.apiKey.trim()
+      ) {
         const failure = {
           code: 'AUTH_REQUIRED' as const,
-          message: '内置 Claude Code 仅支持用户显式配置的 API 凭证，不能使用 Claude 订阅登录',
+          message: 'Studio 管理的 Claude Code 仅支持显式 API 凭证，不能使用 Claude 订阅登录',
         }
         runtime.claudeRuntimeManager.reportFailure(failure)
         throw new ClaudeRuntimeResolutionError(failure)

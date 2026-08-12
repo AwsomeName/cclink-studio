@@ -22,6 +22,7 @@ import type { WorkspaceStateApiContract } from '../shared/ipc/workspace-state'
 import type { ScheduledTasksApiContract } from '../shared/scheduled-task/scheduled-task-types'
 import type { WebResourcesApiContract } from '../shared/web-resources/web-resource'
 import type { WebAffairsApiContract } from '../shared/web-affairs/web-affair'
+import type { RuntimeComponentsApiContract } from '../shared/ipc/runtime-components'
 
 export interface CCLinkStudioAPI {
   reportWorkbenchBounds: (bounds: { x: number; y: number; width: number; height: number }) => void
@@ -65,6 +66,8 @@ export interface CCLinkStudioAPI {
   terminal: TerminalApiContract
 
   settings: SettingsApiContract
+
+  runtimeComponents: RuntimeComponentsApiContract
 
   workspaceState: WorkspaceStateApiContract
 

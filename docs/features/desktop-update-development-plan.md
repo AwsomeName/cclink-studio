@@ -50,7 +50,7 @@ Actions 和公开 Release 的外部等待时间不计入工程日。
 - `UpdateService` 是检查和下载状态的唯一所有者。
 - `prepareInstall()` 当前固定返回 `ok: false`。
 - `installAndRestart()` 当前固定返回 `install_blocked`。
-- Manifest v2、发布 Workflow、本地打包命令和更新运行时已收口为 arm64。
+- Manifest v3、发布 Workflow、本地打包命令和更新运行时已收口为 arm64 DMG-only。
 - `UpdateCache` 已负责 Manifest digest 隔离、原子记录、启动复验和失效清理。
 - `MacDmgVerifier` 只在正式 `darwin + arm64` 构建启用；当前正式应用提供预期 Team
   ID，候选 DMG 和 `.app` 必须与其一致。
@@ -132,9 +132,10 @@ M0 工程整理抬高用户功能进度。M7 不替代 M1-M6 的真实正式版�
 
 ### 方案
 
-- 新增 `schemaVersion: 2` 的 arm64-only Manifest，避免静默改变已冻结的 v1。
+- `schemaVersion: 2` 曾定义 arm64 DMG/ZIP；DMG-only 发布改用 `schemaVersion: 3`，
+  避免静默改变已冻结的 v2。
 - 正式运行时只在 `darwin + arm64` 启用 GitHub Provider，其他架构使用 no-op。
-- Release Workflow 只保留 Apple Silicon runner 和 arm64 DMG/ZIP。
+- Release Workflow 只保留 Apple Silicon runner 和 arm64 DMG。
 - 删除 `release:x64`、`package:x64`、Intel runner 和双架构汇总门禁。
 - 更新 Manifest generator、verifier、fixture、测试、Runbook 和产品文档。
 - 历史双架构 Release 证据保留为历史记录，不作为当前产品要求。
@@ -153,7 +154,7 @@ M0 工程整理抬高用户功能进度。M7 不替代 M1-M6 的真实正式版�
 
 ### 当前证据
 
-- Manifest v2、Provider、release workflow 和本地 package 命令已切为 arm64。
+- Manifest v3、Provider、release workflow 和本地 package 命令已切为 arm64 DMG-only。
 - Manifest/Provider 针对性测试 13 项通过。
 - release workflow/Manifest 脚本测试 30 项通过。
 - `pnpm typecheck` 与 `pnpm lint` 通过。
@@ -392,7 +393,7 @@ prepare
 ### 验收证据
 
 - Tag、源提交、Actions Run 和公开 Release 地址。
-- arm64 DMG/ZIP、Manifest、checksum 和公证结果。
+- arm64 DMG、Manifest、checksum 和公证结果，且发布资产中不存在 ZIP。
 - 安装前后版本截图和脱敏诊断。
 - 失败注入及恢复结果。
 - `pnpm verify`、standalone smoke 和真实升级记录。
@@ -440,7 +441,7 @@ M0 arm64 单架构收口
 
 不能越过的门禁：
 
-- M0 的 arm64 Manifest v2 契约不得回退或重新扩展为多架构。
+- 当前 arm64 Manifest v3 DMG-only 契约不得回退或重新扩展为多架构、多格式。
 - M1 未形成可恢复 verified asset，不进入安装。
 - M2 兜底未通过，不把自动安装暴露给用户。
 - M3 没有 ADR 和真实签名实验，不接生产 Installer。

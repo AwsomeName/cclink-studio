@@ -8,7 +8,7 @@ import {
 import { createRuntimeState } from './runtime/app-runtime'
 import { bootstrapRuntime, rebuildRuntime } from './runtime/bootstrap-runtime'
 import { shutdownRuntime } from './runtime/shutdown-runtime'
-import { configureFixedUserDataPath } from './runtime/user-data-path'
+import { configureFixedUserDataPath, resolveMainUserDataOverride } from './runtime/user-data-path'
 import { parseBrowserAuthChildOptions } from './browser/browser-auth-contract'
 import { configureBrowserAuthChildApp, runBrowserAuthChild } from './browser/browser-auth-child'
 import { parseCleanBrowserChildOptions } from './browser/clean-browser-contract'
@@ -50,10 +50,7 @@ function startCleanBrowserChild(): void {
 }
 
 function startMainApplication(): void {
-  configureFixedUserDataPath(
-    app,
-    app.isPackaged ? undefined : process.env['CCLINK_STUDIO_TEST_USER_DATA_PATH'],
-  )
+  configureFixedUserDataPath(app, resolveMainUserDataOverride(app.isPackaged))
   if (!ensureSingleInstance(app)) return
   configureAppCommandLine(app)
   registerProcessErrorHandlers()

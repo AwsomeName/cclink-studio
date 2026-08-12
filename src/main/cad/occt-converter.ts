@@ -17,6 +17,12 @@ interface OcctImportModule {
   ReadStepFile(content: Uint8Array, params: Record<string, unknown> | null): OcctImportResult
 }
 
+export interface OcctRuntimeResource {
+  wasmPath: string
+  version: string
+  source: 'managed' | 'bundled'
+}
+
 interface OcctMesh {
   name?: string
   attributes?: {
@@ -60,40 +66,59 @@ function getOcctPackageRoot(): string {
   return dirname(require.resolve('occt-import-js/package.json'))
 }
 
-function getOcctWasmPath(): string {
+function getBundledOcctWasmPath(): string {
   return join(getOcctPackageRoot(), 'dist', 'occt-import-js.wasm')
 }
 
-async function loadOcct(): Promise<OcctImportModule> {
-  const factory = require('occt-import-js') as () => Promise<OcctImportModule>
-  return factory()
+function bundledRuntime(): OcctRuntimeResource {
+  const packageJson = require('occt-import-js/package.json') as { version?: string }
+  return {
+    wasmPath: getBundledOcctWasmPath(),
+    version: packageJson.version ?? '0.0.23',
+    source: 'bundled',
+  }
 }
 
-export async function detectOpenCascade(): Promise<CadBackendStatus> {
+async function loadOcct(runtime: OcctRuntimeResource): Promise<OcctImportModule> {
+  const factory = require('occt-import-js') as (options?: {
+    locateFile?: (path: string) => string
+  }) => Promise<OcctImportModule>
+  return factory({
+    locateFile: (path) => (path.endsWith('.wasm') ? runtime.wasmPath : path),
+  })
+}
+
+export async function detectOpenCascade(
+  managedRuntime?: OcctRuntimeResource | null,
+): Promise<CadBackendStatus> {
   try {
-    const packageRoot = getOcctPackageRoot()
-    const wasmPath = getOcctWasmPath()
-    if (!(await canRead(wasmPath))) {
+    const runtime = managedRuntime ?? bundledRuntime()
+    if (!(await canRead(runtime.wasmPath))) {
       return {
         kind: 'occt-experimental',
         available: false,
-        source: 'managed',
-        path: packageRoot,
-        error: occtError('backend-not-found', 'OpenCascade wasm 文件不可读。', true, wasmPath),
+        source: runtime.source,
+        path: runtime.wasmPath,
+        error: occtError(
+          'backend-not-found',
+          'OpenCascade wasm 文件不可读。',
+          true,
+          runtime.wasmPath,
+        ),
       }
     }
     return {
       kind: 'occt-experimental',
       available: true,
-      version: 'occt-import-js',
-      path: packageRoot,
-      source: 'managed',
+      version: runtime.version,
+      path: runtime.wasmPath,
+      source: runtime.source,
     }
   } catch (error) {
     return {
       kind: 'occt-experimental',
       available: false,
-      source: 'managed',
+      source: managedRuntime?.source ?? 'bundled',
       error: occtError(
         'backend-not-found',
         'OpenCascade 导入器未安装或无法加载。',
@@ -213,6 +238,7 @@ export async function convertStepWithOpenCascade({
   previewFormat,
   sourceHash,
   diagnostics,
+  runtime,
 }: {
   inputPath: string
   outputPath: string
@@ -220,8 +246,10 @@ export async function convertStepWithOpenCascade({
   previewFormat: CadPreviewFormat
   sourceHash: string
   diagnostics: CadDiagnostic[]
+  runtime?: OcctRuntimeResource | null
 }): Promise<CadModelMetadata> {
-  const occt = await loadOcct()
+  const activeRuntime = runtime ?? bundledRuntime()
+  const occt = await loadOcct(activeRuntime)
   const content = new Uint8Array(await readFile(inputPath))
   const result = occt.ReadStepFile(content, {
     linearUnit: 'millimeter',
@@ -244,7 +272,7 @@ export async function convertStepWithOpenCascade({
     unit: 'mm',
     unitConfidence: 'cad-backend',
     generatedAt: new Date().toISOString(),
-    generator: 'OpenCascade (occt-import-js)',
+    generator: `OpenCascade (occt-import-js ${activeRuntime.version}, ${activeRuntime.source})`,
     diagnostics: [],
   }
   if (!bounds) {

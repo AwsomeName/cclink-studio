@@ -129,7 +129,6 @@ export class GitHubReleaseProvider implements UpdateProvider {
         prerelease: release.prerelease,
         assets: {
           dmg: this.resolveAsset(release.assets, input.architecture, manifestResult, 'dmg'),
-          zip: this.resolveAsset(release.assets, input.architecture, manifestResult, 'zip'),
         },
       },
     }
@@ -140,7 +139,7 @@ export class GitHubReleaseProvider implements UpdateProvider {
     releaseAssets: z.infer<typeof githubAssetSchema>[],
     architecture: UpdateArchitecture,
     manifest: ReturnType<typeof parseUpdateManifest>,
-    kind: 'dmg' | 'zip',
+    kind: 'dmg',
   ): ResolvedUpdateAsset {
     const expected = manifest.assets[architecture][kind]
     const releaseAsset = releaseAssets.find((asset) => asset.name === expected.name)

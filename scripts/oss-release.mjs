@@ -139,13 +139,13 @@ function usage() {
   --patch                  当前版本的 patch +1
   --version X.Y.Z          指定更高的稳定版本
   --dispatch-only vX.Y.Z   仅重新触发已推送 Tag 的发布工作流
-  --local-artifacts        推送前额外生成本地 ad-hoc DMG/ZIP（默认不生成）
+  --local-artifacts        推送前额外生成本地 ad-hoc DMG（默认不生成）
   --yes                    跳过交互确认
   --no-wait                触发 GitHub Actions 后立即返回
   -h, --help               显示帮助
 
 脚本只从已通过 CI 的 main 创建版本提交；本地产物为显式可选项。
-正式签名、公证和 DMG/ZIP 统一由 GitHub Actions 从不可变 Tag 生成。
+正式签名、公证和 DMG 统一由 GitHub Actions 从不可变 Tag 生成。
 它不会自动公开 Release。`)
 }
 
@@ -407,10 +407,8 @@ function withReleaseWorktree(ref, callback) {
 function copyLocalArtifacts(worktreePath) {
   const sourceDist = resolve(worktreePath, 'dist')
   const targetDist = resolve(projectRoot, 'dist')
-  const artifacts = readdirSync(sourceDist).filter(
-    (name) => name.endsWith('.dmg') || name.endsWith('.zip'),
-  )
-  if (artifacts.length === 0) throw new Error('本地验收打包未生成 DMG 或 ZIP')
+  const artifacts = readdirSync(sourceDist).filter((name) => name.endsWith('.dmg'))
+  if (artifacts.length === 0) throw new Error('本地验收打包未生成 DMG')
   mkdirSync(targetDist, { recursive: true })
   for (const name of artifacts) {
     copyFileSync(resolve(sourceDist, name), resolve(targetDist, name))

@@ -16,7 +16,7 @@ pnpm release -- --version 0.2.0
 
 `pnpm package:local` 只生成本机未签名 arm64 测试包，不修改版本、不推送，也不得用于
 正式发布。`release:oss` 仅作为旧命令的兼容别名保留，文档和人工操作统一使用
-`pnpm release`。正式发布默认不再重复生成本地 DMG/ZIP；确实需要时显式增加
+`pnpm release`。正式发布默认不再重复生成本地 DMG；确实需要时显式增加
 `--local-artifacts`。
 
 ## 一次性准备
@@ -84,7 +84,7 @@ release vX.Y.Z
 3. 使用 `git commit --only package.json` 创建 `chore: prepare vX.Y.Z` 提交。
 4. 创建 annotated `vX.Y.Z` Tag。
 5. 在独立临时 worktree 中执行 OSS 发布预检。
-6. 若提供 `--local-artifacts`，在临时 worktree 中额外生成本地 ad-hoc DMG/ZIP，
+6. 若提供 `--local-artifacts`，在临时 worktree 中额外生成本地 ad-hoc DMG，
    再复制到当前仓库 `dist/`。
 7. 原子推送 `main` 和 Tag。
 8. 触发并等待 `release-oss.yml`。
@@ -109,13 +109,12 @@ Draft Release 必须且只能包含一组 arm64：
 
 ```text
 cclink-studio-X.Y.Z-arm64.dmg
-cclink-studio-X.Y.Z-arm64.zip
 checksums-arm64.txt
 build-record-arm64.json
 update-manifest.json
 ```
 
-`update-manifest.json` 必须为 schema v2，只包含 `assets.arm64`。`draft` job 会根据
+`update-manifest.json` 必须为 schema v3，只包含 `assets.arm64.dmg`。`draft` job 会根据
 真实文件反向重建 Manifest；资产缺失、版本/source SHA 不一致、大小或哈希错误都会
 在上传前停止。
 
@@ -198,7 +197,7 @@ pnpm release -- --dispatch-only vX.Y.Z
 
 - `main` 包含唯一版本提交，`vX.Y.Z` 指向该提交。
 - GitHub Actions 全绿。
-- arm64 DMG/ZIP、checksums、build record 和 Manifest 齐全。
+- arm64 DMG、checksums、build record 和 Manifest 齐全，且不存在 ZIP 资产。
 - 签名、公证、staple、Gatekeeper 和 Manifest 反向验证通过。
 - 干净 Apple Silicon Mac 真人安装启动通过。
 - Draft 由维护者人工公开为正式 Release 或明确标记的 Pre-release。

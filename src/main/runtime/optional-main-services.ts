@@ -34,7 +34,17 @@ export type OptionalMainServiceBootstrappers = Record<
 const defaultBootstrappers: OptionalMainServiceBootstrappers = {
   cad: (runtime) => {
     registerCadIpc(() => runtime.cadConversionService, runtime.trustedRendererGuard!)
-    runtime.cadConversionService = new CadConversionService(() => runtime.settingsService!.getAll())
+    runtime.cadConversionService = new CadConversionService(
+      () => runtime.settingsService!.getAll(),
+      async () => {
+        const resource =
+          await runtime.runtimeComponentManager?.resolveRuntimeResource('occt-runtime')
+        const wasmPath = resource?.files['occt-import-js.wasm']
+        return resource && wasmPath
+          ? { wasmPath, version: resource.version, source: 'managed' as const }
+          : null
+      },
+    )
     console.log('[CCLink Studio] CAD 转换 IPC 已注册')
   },
   hardware: (runtime) => {

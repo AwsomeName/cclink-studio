@@ -39,6 +39,7 @@ const AGENT_SETTING_KEYS = new Set([
   'agentEngine',
   'claudeRuntimeSource',
   'claudeCodePath',
+  'claudeManagedVersion',
   'provider',
   'apiFormat',
   'apiBaseUrl',
@@ -106,10 +107,14 @@ export function registerSettingsIpc(
         const status = await settingsService.clearSecret(key)
         return { success: true, status }
       }
-      if (key === 'apiKey' && settingsService.getAll().claudeRuntimeSource === 'bundled') {
+      if (
+        key === 'apiKey' &&
+        ['bundled', 'managed'].includes(settingsService.getAll().claudeRuntimeSource)
+      ) {
         return {
           success: false,
-          error: 'AUTH_REQUIRED: 使用内置 Claude Code 时必须保留 API 凭证，请先切换运行时',
+          error:
+            'AUTH_REQUIRED: 使用 Studio 管理的 Claude Code 时必须保留 API 凭证，请先切换运行时',
         }
       }
       releaseAgentLock = acquireAgentConfigurationLock(getAgentBridge())
@@ -155,17 +160,20 @@ export function registerSettingsIpc(
 
       const runtimeManager = getClaudeRuntimeManager()
       const changesRuntime =
-        'claudeRuntimeSource' in normalizedPartial || 'claudeCodePath' in normalizedPartial
+        'claudeRuntimeSource' in normalizedPartial ||
+        'claudeCodePath' in normalizedPartial ||
+        'claudeManagedVersion' in normalizedPartial
       const runtimeSelection = changesRuntime
         ? selectionFromSettings({ ...settingsService.getAll(), ...normalizedPartial })
         : null
       if (
-        runtimeSelection?.source === 'bundled' &&
+        (runtimeSelection?.source === 'bundled' || runtimeSelection?.source === 'managed') &&
         !settingsService.getRuntimeSettings().apiKey.trim()
       ) {
         return {
           success: false,
-          error: 'AUTH_REQUIRED: 内置 Claude Code 仅支持显式 API 凭证，不能使用 Claude 订阅登录',
+          error:
+            'AUTH_REQUIRED: Studio 管理的 Claude Code 仅支持显式 API 凭证，不能使用 Claude 订阅登录',
         }
       }
       const runtimeProbe =
@@ -267,7 +275,8 @@ export function registerSettingsIpc(
         if (!releaseAgentLock) return runtimeSwitchPendingSettingsResult()
       }
       const runtimeManager = getClaudeRuntimeManager()
-      const changesRuntime = key === 'claudeRuntimeSource' || key === 'claudeCodePath'
+      const changesRuntime =
+        key === 'claudeRuntimeSource' || key === 'claudeCodePath' || key === 'claudeManagedVersion'
       const resetUpdate = normalizeClaudeRuntimeSettingsUpdate(settingsService.getAll(), {
         [key]: DEFAULT_SETTINGS[key],
       })
@@ -507,11 +516,18 @@ async function applyAgentConfiguration(
 }
 
 function selectionFromSettings(
-  settings: { claudeRuntimeSource?: string; claudeCodePath?: string },
+  settings: {
+    claudeRuntimeSource?: string
+    claudeCodePath?: string
+    claudeManagedVersion?: string
+  },
   useDefaults = false,
 ): ClaudeRuntimeSelection {
   const source = useDefaults ? 'system' : settings.claudeRuntimeSource
   if (source === 'bundled') return { source: 'bundled' }
+  if (source === 'managed') {
+    return { source: 'managed', version: settings.claudeManagedVersion?.trim() ?? '' }
+  }
   if (source === 'custom') return { source: 'custom', customPath: settings.claudeCodePath ?? '' }
   return { source: 'system' }
 }

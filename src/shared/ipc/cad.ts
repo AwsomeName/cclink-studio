@@ -38,7 +38,14 @@ export interface CadBackendStatus {
   available: boolean
   version?: string
   path?: string
-  source: 'disabled' | 'configured' | 'known-path' | 'shell-path' | 'managed' | 'not-found'
+  source:
+    | 'disabled'
+    | 'configured'
+    | 'known-path'
+    | 'shell-path'
+    | 'bundled'
+    | 'managed'
+    | 'not-found'
   error?: CadConversionError
 }
 

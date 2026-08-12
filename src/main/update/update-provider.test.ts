@@ -5,7 +5,7 @@ const sha256 = 'a'.repeat(64)
 
 function availableResult() {
   const manifest = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     channel: 'stable',
     tag: 'v1.2.3',
     version: '1.2.3',
@@ -14,7 +14,6 @@ function availableResult() {
     assets: {
       arm64: {
         dmg: { name: 'CCLink Studio-1.2.3-arm64.dmg', size: 100, sha256 },
-        zip: { name: 'CCLink Studio-1.2.3-arm64.zip', size: 90, sha256 },
       },
     },
   } as const
@@ -32,11 +31,6 @@ function availableResult() {
           kind: 'dmg',
           ...manifest.assets.arm64.dmg,
           downloadUrl: new URL('https://downloads.example.test/arm64.dmg'),
-        },
-        zip: {
-          kind: 'zip',
-          ...manifest.assets.arm64.zip,
-          downloadUrl: new URL('https://downloads.example.test/arm64.zip'),
         },
       },
     },
@@ -56,7 +50,7 @@ describe('UpdateProvider result contract', () => {
 
   it('rejects provider metadata that diverges from the manifest', () => {
     const result = availableResult()
-    result.release.assets.zip.size += 1
+    result.release.assets.dmg.size += 1
     expect(() => parseUpdateProviderCheckResult(result)).toThrow()
   })
 

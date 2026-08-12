@@ -38,3 +38,5 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
 - `0004-independent-edition-release-pipelines.md`：开源版与商业版由各自仓库独立构建和发布，不建立跨仓库发布依赖。
 - `0005-macos-update-installer-gate.md`：淘汰会建立第二检查/下载状态机的现成 updater，只允许受真实签名与回滚实验约束的最小 Helper 候选；闸门前维持可信 DMG。
 - `0006-owned-agent-runtime-model-service-boundary.md`：CCLink 拥有一致的 Agent Runtime，用户只选择受支持的模型服务；ACP、用户自带 Agent 和外部 Agent Registry 不进入当前产品路线。
+- `0007-managed-claude-runtime.md`：允许 Studio 从受限 npm 平台包安装并管理 Claude Runtime，保持 Agent SDK 为完整 App 核心代码，并定义 App 替换复用、会话边界和回滚门禁。
+- `0008-managed-runtime-resources.md`：允许固定目录下载安装 OCCT WASM、scrcpy server 与 agent-device Android Helper，禁止执行下载 JavaScript，并明确各领域激活、App 内回退和 Helper 待宿主支持边界。

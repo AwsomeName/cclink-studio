@@ -9,6 +9,7 @@ function createRuntime(): TerminalRuntimeRef {
     backend: 'local-shell',
     workspaceRef: { kind: 'local', path: '/tmp' },
     cwd: '/tmp',
+    shell: '/bin/zsh',
   }
 }
 
@@ -82,6 +83,7 @@ describe('PtyExecutionAdapter', () => {
       expect(launchCommand).toContain("PATH='/tmp/cclink-bin:/usr/bin'")
       expect(launchCommand).toContain("BROWSER='/tmp/cclink-browser'")
       expect(launchCommand).toContain('npm_config_browser=')
+      expect(launchCommand).toContain("'/bin/zsh' -l -i")
     }
     expect(events).toContainEqual({
       kind: 'started',
@@ -98,6 +100,23 @@ describe('PtyExecutionAdapter', () => {
       stream: 'stdout',
       timestamp: 100,
     })
+  })
+
+  it('does not assume login flag support for a custom shell', async () => {
+    const mockPty = createMockPty()
+    const spawnPty = vi.fn((_input: PtySpawnInput) => mockPty)
+    const adapter = new PtyExecutionAdapter({ spawnPty })
+
+    await adapter.start({
+      sessionId: 'terminal-custom-shell',
+      runtime: { ...createRuntime(), shell: '/usr/local/bin/custom-shell' },
+    })
+
+    if (process.platform !== 'win32') {
+      const launchCommand = spawnPty.mock.calls[0]?.[0].args?.join(' ') ?? ''
+      expect(launchCommand).toContain("'/usr/local/bin/custom-shell' -i")
+      expect(launchCommand).not.toContain("'/usr/local/bin/custom-shell' -l -i")
+    }
   })
 
   it('writes, resizes, and terminates an existing PTY session', async () => {

@@ -1,6 +1,6 @@
 # npm 可更新能力清单
 
-> 状态：方向清单，尚未实现。最后更新：2026-08-11。
+> 状态：固定版本 Runtime 首批已实现；通用能力插件和内容包尚未实现。最后更新：2026-08-12。
 > 详细产品边界见 `runtime-components-and-capability-plugins.md`。
 
 ## 一句话结论
@@ -18,10 +18,10 @@ npm 可以作为内容包、能力插件和 Runtime 组件的下载源，但三�
 
 | 能力                      | 分类         | npm 下载/更新 | 生效方式                                   | 管理方式                                                              | 首期结论                             |
 | ------------------------- | ------------ | ------------- | ------------------------------------------ | --------------------------------------------------------------------- | ------------------------------------ |
-| Claude Code Runtime       | Runtime 组件 | 可以          | 无活动任务时切换；运行中任务继续固定旧版本 | `RuntimeComponentManager` 下载校验，`ClaudeRuntimeManager` 选择和运行 | 可做；先关闭许可和再分发门禁         |
-| CAD / OCCT / FreeCAD 后端 | Runtime 组件 | 可以          | 完成 probe 后，新转换任务使用新版          | Runtime Manager                                                       | 可做；按平台和架构分包               |
-| `scrcpy-server.jar`       | Runtime 组件 | 可以          | Android 会话重连后生效                     | Runtime Manager + Android 领域服务                                    | 可做；必须校验客户端兼容范围         |
-| 受控 WASM / 辅助程序      | Runtime 组件 | 可以          | probe 通过后在安全点切换                   | Runtime Manager                                                       | 可做；可执行权限单独评审             |
+| Claude Code Runtime       | Runtime 组件 | 可以          | 无活动任务时切换；运行中任务继续固定旧版本 | `RuntimeComponentManager` 下载校验，`ClaudeRuntimeManager` 选择和运行 | 固定 `2.1.211` 已实现                |
+| CAD / OCCT / FreeCAD 后端 | Runtime 组件 | 可以          | 完成 probe 后，新转换任务使用新版          | Runtime Manager + CAD 领域服务                                        | OCCT WASM `0.0.23` 已实现            |
+| `scrcpy-server.jar`       | Runtime 组件 | 可以          | Android 会话重连后生效                     | Runtime Manager + Android 领域服务                                    | 固定 `2.3.1` 已实现                  |
+| 受控 WASM / 辅助程序      | Runtime 组件 | 可以          | probe 通过后在安全点切换                   | Runtime Manager                                                       | agent-device APK 已下载，尚未激活    |
 | MCP 工具                  | 能力插件     | 可以          | 重启对应 Plugin Host 后生效                | `PluginManager` + 隔离 Plugin Host                                    | 首批推荐样本                         |
 | 模型或图片服务 Provider   | 能力插件     | 可以          | 重启对应 Plugin Host；新请求使用新版       | `PluginManager`，凭证仍归 `CredentialService`                         | 可做                                 |
 | 数据源 Adapter            | 能力插件     | 可以          | 重启对应 Plugin Host；新查询使用新版       | `PluginManager`，数据源状态仍归原领域服务                             | 可做                                 |
@@ -78,6 +78,10 @@ Runtime 可以在首次启动后通过 npm 更新，但它仍是 Runtime 组件�
 
 ## 当前完成度
 
-本清单记录的是可行方向，不是已交付功能。当前 Studio 仍不能在应用内安装、更新、回滚或
-卸载这些 npm 包；实现前还需要新的 ADR、真实样本、签名信任链、组件管理器、隔离宿主和
-端到端验收。
+当前 Studio 已能在应用内安装固定 Claude、OCCT、scrcpy 和 agent-device Helper 制品，校验后
+存入 `userData` 并在 App 覆盖升级后复用。OCCT 与 scrcpy 已由各自领域服务真实使用，损坏时
+退回随 App 资源；agent-device Helper 因上游 host 没有资源注入 contract，只能显示“已下载，
+待宿主支持”，不能宣称已激活。
+
+尚未交付：任意插件安装、隔离 Plugin Host、内容包、远程签名目录、卸载，以及两个真实版本
+之间的更新/回滚。因此“固定版本独立安装和修复”已完成，“通用 npm 更新系统”尚未完成。

@@ -31,11 +31,17 @@ const DEVICE_SERVER_PATH = '/data/local/tmp/scrcpy-server.jar'
  * 生产模式：process.resourcesPath/scrcpy-server.jar
  * 开发模式：项目根目录 resources/scrcpy-server.jar
  */
-function getServerJarPath(): string {
+function getBundledServerJarPath(): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, 'scrcpy-server.jar')
   }
   return join(app.getAppPath(), 'resources', 'scrcpy-server.jar')
+}
+
+export interface ScrcpyServerResource {
+  path: string
+  version: '2.3.1'
+  source: 'managed' | 'bundled'
 }
 
 /**
@@ -64,7 +70,11 @@ export class ScrcpyBridge {
   private videoWidth = 0
   private videoHeight = 0
 
-  constructor(mainWindow: BrowserWindow) {
+  constructor(
+    mainWindow: BrowserWindow,
+    private readonly resolveManagedServer: () => Promise<ScrcpyServerResource | null> = async () =>
+      null,
+  ) {
     this.mainWindow = mainWindow
   }
 
@@ -86,7 +96,13 @@ export class ScrcpyBridge {
     console.log(`[ScrcpyBridge] 正在连接设备: ${deviceId}`)
 
     // 1. 验证 scrcpy-server.jar 存在
-    const jarPath = getServerJarPath()
+    const managedServer = await this.resolveManagedServer()
+    const server: ScrcpyServerResource = managedServer ?? {
+      path: getBundledServerJarPath(),
+      version: '2.3.1',
+      source: 'bundled',
+    }
+    const jarPath = server.path
     if (!existsSync(jarPath)) {
       throw new Error(
         `scrcpy-server.jar 未找到: ${jarPath}。请确保 resources/scrcpy-server.jar 已放置。`,
@@ -94,7 +110,7 @@ export class ScrcpyBridge {
     }
     const jarSize = statSync(jarPath).size
     console.log(
-      `[ScrcpyBridge] scrcpy-server.jar: ${jarPath} (${(jarSize / 1024 / 1024).toFixed(1)}MB)`,
+      `[ScrcpyBridge] scrcpy-server.jar: ${jarPath} (${(jarSize / 1024 / 1024).toFixed(1)}MB, ${server.source})`,
     )
 
     // 2. 通过 AdbServerClient 连接到本地 adb server
@@ -124,7 +140,7 @@ export class ScrcpyBridge {
         powerOn: true,
         logLevel: 'warn',
       },
-      { version: '2.3.1' },
+      { version: server.version },
     )
 
     // 5. 启动 scrcpy

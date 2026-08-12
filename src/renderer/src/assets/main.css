@@ -12552,6 +12552,7 @@ h6.file-preview-office-heading {
 
 .component-management-settings {
   min-width: 0;
+  container-type: inline-size;
 }
 
 .component-table-shell {
@@ -12562,22 +12563,22 @@ h6.file-preview-office-heading {
 
 .component-table {
   width: 100%;
-  min-width: 640px;
+  min-width: 520px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 12px;
 }
 
 .component-table th:nth-child(1) {
-  width: 27%;
+  width: 24%;
 }
 
 .component-table th:nth-child(2) {
-  width: 11%;
+  width: 12%;
 }
 
 .component-table th:nth-child(3) {
-  width: 24%;
+  width: 25%;
 }
 
 .component-table th:nth-child(4) {
@@ -12585,11 +12586,11 @@ h6.file-preview-office-heading {
 }
 
 .component-table th:nth-child(5) {
-  width: 15%;
+  width: 14%;
 }
 
 .component-table th:nth-child(6) {
-  width: 9%;
+  width: 11%;
 }
 
 .component-table th:nth-child(6),
@@ -12603,7 +12604,7 @@ h6.file-preview-office-heading {
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 9px 10px;
+  padding: 9px 8px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
   color: var(--text-secondary);
@@ -12613,7 +12614,7 @@ h6.file-preview-office-heading {
 }
 
 .component-table td {
-  padding: 11px 10px;
+  padding: 11px 8px;
   border-bottom: 1px solid var(--border-subtle);
   color: var(--text-primary);
   vertical-align: middle;
@@ -12713,4 +12714,91 @@ h6.file-preview-office-heading {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@container (max-width: 700px) {
+  .component-table-shell {
+    overflow: visible;
+    border: 0;
+  }
+
+  .component-table {
+    min-width: 0;
+    table-layout: auto;
+  }
+
+  .component-table thead {
+    display: none;
+  }
+
+  .component-table tbody {
+    display: grid;
+    gap: 8px;
+  }
+
+  .component-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+  }
+
+  .component-table td {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    grid-column: 1 / -1;
+    gap: 8px;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    text-align: left;
+    white-space: normal;
+  }
+
+  .component-table td::before {
+    color: var(--text-secondary);
+    font-size: 11px;
+  }
+
+  .component-table td:nth-child(1) {
+    display: block;
+    padding-top: 10px;
+  }
+
+  .component-table td:nth-child(1)::before {
+    content: none;
+  }
+
+  .component-table td:nth-child(2)::before {
+    content: '类型';
+  }
+
+  .component-table td:nth-child(3)::before {
+    content: '安装状态';
+  }
+
+  .component-table td:nth-child(4)::before {
+    content: '限定版本';
+  }
+
+  .component-table td:nth-child(5)::before {
+    content: '可用版本';
+  }
+
+  .component-table td:nth-child(6) {
+    display: block;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    padding: 8px 10px;
+    border: 0;
+  }
+
+  .component-table td:nth-child(6)::before {
+    content: none;
+  }
+
+  .component-installed-version {
+    padding-left: 13px;
+  }
 }

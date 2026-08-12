@@ -30,7 +30,7 @@ function createFixture({ version = '1.2.3', tag = `v${version}` } = {}) {
   mkdirSync(assetsDir, { recursive: true })
   const arch = 'arm64'
   const entries = []
-  for (const extension of ['dmg', 'zip']) {
+  for (const extension of ['dmg']) {
     const name = `CCLink-Studio-${version}-${arch}.${extension}`
     const content = `${arch}-${extension}-fixture`
     writeFileSync(resolve(assetsDir, name), content)
@@ -61,13 +61,13 @@ test('generates a deterministic manifest from real assets and build records', as
   const first = await generateUpdateManifest({ assetsDir, tag: 'v1.2.3' })
   const second = await generateUpdateManifest({ assetsDir, tag: 'v1.2.3' })
   assert.deepEqual(first, second)
-  assert.equal(first.schemaVersion, 2)
+  assert.equal(first.schemaVersion, 3)
   assert.equal(first.version, '1.2.3')
   assert.equal(
     first.assets.arm64.dmg.size,
     readFileSync(resolve(assetsDir, first.assets.arm64.dmg.name)).length,
   )
-  assert.equal(first.assets.arm64.zip.sha256.length, 64)
+  assert.equal(first.assets.arm64.dmg.sha256.length, 64)
   assert.deepEqual(Object.keys(first.assets), ['arm64'])
 })
 

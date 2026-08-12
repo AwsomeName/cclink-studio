@@ -17,7 +17,7 @@ export type BackendType = 'claude-code' | 'http-api'
 export type AgentEngine = 'local-claude-code'
 
 /** Claude Code 运行时来源。 */
-export type ClaudeRuntimeSource = 'bundled' | 'system' | 'custom'
+export type ClaudeRuntimeSource = 'bundled' | 'managed' | 'system' | 'custom'
 
 /** 权限模式 */
 export type PermissionMode = 'auto' | 'categorized' | 'strict'
@@ -77,6 +77,8 @@ export interface AppSettings {
   claudeRuntimeSource: ClaudeRuntimeSource
   /** 自定义 Claude Code CLI 路径；仅在 claudeRuntimeSource=custom 时生效。 */
   claudeCodePath: string
+  /** Studio 管理的 Claude Runtime 固定版本；仅在 claudeRuntimeSource=managed 时生效。 */
+  claudeManagedVersion: string
   /** 新浏览器 Tab 默认缩放模式 */
   defaultZoomMode: ZoomMode
   /** 新浏览器 Tab 默认设备模式 */
@@ -213,6 +215,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // 法务/再分发门禁完成前，新旧安装都保持系统运行时默认值。
   claudeRuntimeSource: 'system',
   claudeCodePath: '',
+  claudeManagedVersion: '',
   defaultZoomMode: 'fit',
   defaultDeviceMode: 'desktop',
 
@@ -254,7 +257,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 }
 
 export function normalizeClaudeRuntimeSettingsUpdate(
-  current: Pick<AppSettings, 'claudeRuntimeSource' | 'claudeCodePath'>,
+  current: Pick<AppSettings, 'claudeRuntimeSource' | 'claudeCodePath' | 'claudeManagedVersion'>,
   update: Partial<AppSettings>,
 ): Partial<AppSettings> {
   const normalized = { ...update }
@@ -263,8 +266,16 @@ export function normalizeClaudeRuntimeSettingsUpdate(
       update.claudeRuntimeSource === 'custom'
         ? (update.claudeCodePath ?? current.claudeCodePath)
         : ''
+    normalized.claudeManagedVersion =
+      update.claudeRuntimeSource === 'managed'
+        ? (update.claudeManagedVersion ?? current.claudeManagedVersion)
+        : ''
   } else if (typeof update.claudeCodePath === 'string') {
     normalized.claudeRuntimeSource = update.claudeCodePath.trim() ? 'custom' : 'system'
+    normalized.claudeManagedVersion = ''
+  } else if (typeof update.claudeManagedVersion === 'string') {
+    normalized.claudeRuntimeSource = update.claudeManagedVersion.trim() ? 'managed' : 'system'
+    normalized.claudeCodePath = ''
   }
   return normalized
 }

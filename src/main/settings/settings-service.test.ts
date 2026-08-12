@@ -153,6 +153,30 @@ describe('SettingsService Claude runtime migration', () => {
       claudeCodePath: '',
     })
   })
+
+  it('persists a managed version and clears mutually exclusive runtime fields', async () => {
+    const service = createSettingsService()
+    await service.loadState()
+    await service.set({ claudeCodePath: '/opt/homebrew/bin/claude' })
+
+    await service.set({
+      claudeRuntimeSource: 'managed',
+      claudeManagedVersion: '2.1.211',
+    })
+
+    expect(service.getAll()).toMatchObject({
+      claudeRuntimeSource: 'managed',
+      claudeManagedVersion: '2.1.211',
+      claudeCodePath: '',
+    })
+    const replacementAppService = createSettingsService()
+    await replacementAppService.loadState()
+    expect(replacementAppService.getAll()).toMatchObject({
+      claudeRuntimeSource: 'managed',
+      claudeManagedVersion: '2.1.211',
+      claudeCodePath: '',
+    })
+  })
 })
 
 describe('SettingsService component setup onboarding', () => {

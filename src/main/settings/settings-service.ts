@@ -29,7 +29,7 @@ const VALID_VALUES: Record<string, Set<string>> = {
   defaultZoomMode: new Set<string>(['fit', 'manual']),
   defaultDeviceMode: new Set<string>(['desktop', 'mobile']),
   agentEngine: new Set<string>(['local-claude-code']),
-  claudeRuntimeSource: new Set<string>(['bundled', 'system', 'custom']),
+  claudeRuntimeSource: new Set<string>(['bundled', 'managed', 'system', 'custom']),
   provider: new Set<string>([
     'anthropic',
     'deepseek',
@@ -284,6 +284,12 @@ export class SettingsService {
         }
         continue
       }
+      if (key === 'claudeManagedVersion') {
+        if (typeof val === 'string' && isManagedRuntimeVersion(val)) {
+          this.store.claudeManagedVersion = val
+        }
+        continue
+      }
       const validSet = VALID_VALUES[key]
       if (validSet && typeof val === 'string' && !validSet.has(val)) {
         console.warn(`[SettingsService] 加载配置时忽略无效值: ${key}=${val}`)
@@ -308,6 +314,10 @@ export class SettingsService {
       return { ...EMPTY_SECRETS }
     }
   }
+}
+
+function isManagedRuntimeVersion(value: string): boolean {
+  return /^$|^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(value) && value.length <= 64
 }
 
 function normalizeAgentRoleRef(value: unknown): AgentRoleRef | null {

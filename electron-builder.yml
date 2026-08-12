@@ -38,7 +38,6 @@ mac:
   icon: resources/icon.png
   target:
     - dmg
-    - zip
   category: public.app-category.productivity
   # Local builds use ad-hoc signing so macOS accepts nested executables inside the app bundle.
   # The bundled Claude runtime keeps its upstream Anthropic Developer ID signature.

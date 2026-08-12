@@ -189,6 +189,7 @@ jobs:
           unset CSC_NAME
           pnpm exec electron-builder \
             --mac --arm64 \
+            --config.mac.target=dmg \
             --publish never \
             --config.mac.identity="$builder_identity" \
             --config.mac.hardenedRuntime=true \
@@ -226,15 +227,18 @@ jobs:
           shopt -s nullglob
           dmg_files=(dist/*.dmg)
           zip_files=(dist/*.zip)
-          if [ "${#dmg_files[@]}" -ne 1 ] || [ "${#zip_files[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one DMG and one ZIP before release asset normalization."
+          if [ "${#dmg_files[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one DMG before release asset normalization."
+            exit 1
+          fi
+          if [ "${#zip_files[@]}" -ne 0 ]; then
+            echo "::error::ZIP artifacts are forbidden in the DMG-only release pipeline."
             exit 1
           fi
           cp "${dmg_files[0]}" "$release_assets_dir/cclink-studio-${VERSION}-arm64.dmg"
-          cp "${zip_files[0]}" "$release_assets_dir/cclink-studio-${VERSION}-arm64.zip"
           (
             cd "$release_assets_dir"
-            shasum -a 256 ./*.dmg ./*.zip > checksums-arm64.txt
+            shasum -a 256 ./*.dmg > checksums-arm64.txt
           )
           SOURCE_SHA="$(git rev-parse HEAD)"
           RELEASE_WORKFLOW_SHA="$(git -C ../release-tools rev-parse HEAD)"

@@ -102,14 +102,11 @@ ok "Agent 运行时资源已验证"
 EB_ARGS=(--mac --arm64)
 [ -n "$COMPRESSION" ] && EB_ARGS+=("--config.compression=$COMPRESSION")
 
-info "串行打包 DMG 与 ZIP（electron-builder ${EB_ARGS[*]}）..."
+info "打包 DMG（electron-builder ${EB_ARGS[*]}）..."
 : > /tmp/cclink-studio-package.log
-for TARGET in dmg zip; do
-  info "生成 $TARGET ..."
-  npx electron-builder "${EB_ARGS[@]}" "--config.mac.target=$TARGET" \
-    >> /tmp/cclink-studio-package.log 2>&1 \
-    || { tail -40 /tmp/cclink-studio-package.log; die "$TARGET 打包失败，详见 /tmp/cclink-studio-package.log"; }
-done
+npx electron-builder "${EB_ARGS[@]}" "--config.mac.target=dmg" \
+  >> /tmp/cclink-studio-package.log 2>&1 \
+  || { tail -40 /tmp/cclink-studio-package.log; die "DMG 打包失败，详见 /tmp/cclink-studio-package.log"; }
 ok "打包完成"
 
 # ── 7. 验证安装包内 Agent 运行时 ──────────────────────────
@@ -129,7 +126,7 @@ echo ""
 echo -e "${GREEN}${BOLD}✅ 打包成功${RESET} — 版本 $VERSION / 架构 $ARCH"
 echo ""
 info "产物清单:"
-for artifact in dist/*.dmg dist/*.zip; do
+for artifact in dist/*.dmg; do
   [ -e "$artifact" ] || continue
   size=$(du -h "$artifact" | cut -f1)
   printf "    %s  %s\n" "$size" "$artifact"

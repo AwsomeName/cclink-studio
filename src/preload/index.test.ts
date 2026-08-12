@@ -35,6 +35,10 @@ describe('preload API surface', () => {
         diagnostics: expect.any(Object),
         scheduledTasks: expect.any(Object),
         webAffairs: expect.any(Object),
+        runtimeComponents: expect.objectContaining({
+          getManagedClaudeStatus: expect.any(Function),
+          installManagedClaude: expect.any(Function),
+        }),
       }),
     )
     expect(api).not.toHaveProperty('meshy')
