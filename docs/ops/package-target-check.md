@@ -24,7 +24,8 @@ product was built.
 
 This table describes local test packaging. Formal OSS releases use
 `.github/workflows/release-oss.yml`, which overrides the ad-hoc identity with the protected
-Developer ID, notarizes artifacts, and creates a Draft Release from an immutable Tag.
+Developer ID, notarizes artifacts, and publishes a stable Release from an immutable Tag after
+all automated gates pass.
 
 Preflight:
 

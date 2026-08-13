@@ -7,8 +7,8 @@ on:
         description: Existing cclink-studio tag, for example v0.1.1
         required: true
         type: string
-      create_draft:
-        description: Build signed assets and create a draft GitHub Release
+      publish_release:
+        description: Build signed assets and publish a stable GitHub Release
         required: true
         default: false
         type: boolean
@@ -97,7 +97,7 @@ jobs:
           echo "Reusing successful main CI for source $source_sha"
 
   package:
-    if: ${{ inputs.create_draft }}
+    if: ${{ inputs.publish_release }}
     needs: validate
     environment: studio-release
     runs-on: macos-15
@@ -265,8 +265,8 @@ jobs:
           path: release-assets-arm64
           if-no-files-found: error
 
-  draft:
-    if: ${{ inputs.create_draft }}
+  publish:
+    if: ${{ inputs.publish_release }}
     needs: package
     environment: studio-release
     permissions:
@@ -317,12 +317,12 @@ jobs:
             --tag "$RELEASE_TAG" \
             --release-workflow-sha "$RELEASE_WORKFLOW_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID"
-      - name: Create draft release
+      - name: Publish stable release
         run: |
           gh release create "$RELEASE_TAG" \
             release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
-            --draft \
+            --latest \
             --verify-tag \
             --generate-notes \
             --title "CCLink Studio 开源版 $RELEASE_TAG"

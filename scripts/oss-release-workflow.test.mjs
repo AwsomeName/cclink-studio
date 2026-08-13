@@ -68,7 +68,7 @@ test('release workflow normalizes public asset names before checksums and upload
   assert.doesNotMatch(workflow, /cp "\$\{zip_files\[0\]\}"/)
 })
 
-test('draft release consumes one arm64 artifact and generates a verified update manifest', () => {
+test('public release consumes one arm64 artifact and generates a verified update manifest', () => {
   assert.match(workflow, /name: studio-\$\{\{ inputs\.tag \}\}-arm64/)
   assert.doesNotMatch(workflow, /pattern: studio-\$\{\{ inputs\.tag \}\}-\*/)
   assert.doesNotMatch(workflow, /merge-multiple: true/)
@@ -80,19 +80,22 @@ test('draft release consumes one arm64 artifact and generates a verified update 
 
   const generateIndex = workflow.indexOf('generate-update-manifest.mjs')
   const verifyIndex = workflow.indexOf('verify-update-manifest.mjs')
-  const draftIndex = workflow.indexOf('gh release create')
+  const publishIndex = workflow.indexOf('gh release create')
   assert.ok(generateIndex > 0)
   assert.ok(verifyIndex > generateIndex)
-  assert.ok(draftIndex > verifyIndex)
+  assert.ok(publishIndex > verifyIndex)
+  assert.match(workflow, /publish_release:/)
+  assert.match(workflow, /--latest/)
+  assert.doesNotMatch(workflow, /--draft/)
 })
 
-test('U0 failure injection stops manifest aggregation before draft upload', () => {
+test('U0 failure injection stops manifest aggregation before public release', () => {
   assert.match(workflow, /failure_injection:[\s\S]*default: none/)
   assert.match(workflow, /omit-arm64-build-record/)
   const injectIndex = workflow.indexOf('Inject U0 manifest validation failure')
   const manifestIndex = workflow.indexOf('Generate and verify update manifest')
-  const draftIndex = workflow.indexOf('Create draft release')
+  const publishIndex = workflow.indexOf('Publish stable release')
   assert.ok(injectIndex > 0)
   assert.ok(injectIndex < manifestIndex)
-  assert.ok(manifestIndex < draftIndex)
+  assert.ok(manifestIndex < publishIndex)
 })

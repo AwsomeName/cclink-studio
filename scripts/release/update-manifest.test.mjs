@@ -133,7 +133,7 @@ test('verifier accepts the pnpm argument separator', async () => {
   assert.equal(verified.tag, 'v1.2.3')
 })
 
-test('rejects a missing arm64 build record before a draft can be created', async () => {
+test('rejects a missing arm64 build record before a release can be published', async () => {
   const assetsDir = createFixture()
   writeFileSync(resolve(assetsDir, 'build-record-arm64.json'), '{}\n')
   await assert.rejects(

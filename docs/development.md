@@ -240,7 +240,7 @@ OSS 默认构建可以产出本地测试包，使用 ad-hoc 签封，但不包�
 - `studio-release` Environment Secrets 提供受保护的签名和公证凭证。
 - arm64 固定在 Apple Silicon runner 构建。
 - 工作流完成 Developer ID 签名、Apple 公证、staple 和制品验证。
-- 工作流只创建 Draft Release，公开发布仍需人工批准。
+- 工作流在全部自动门禁通过后直接创建公开稳定 Release。
 
 维护者从与 `origin/main` 一致、源码 CI 已全绿且 `package.json` 无本地改动的
 `main` 执行；其他未提交开发文件会被保留并排除在发布之外：
@@ -253,7 +253,7 @@ pnpm release -- --version 0.1.3
 
 该命令复用当前源码 SHA 已通过的普通 CI，只创建修改 `package.json.version` 的版本
 提交，在独立临时 worktree 中完成发布预检，然后创建不可变 Tag、原子推送并触发
-GitHub 发布工作流，等待 Draft Release 完成。正式签名、公证和 DMG 只在线上
+GitHub 发布工作流，等待公开稳定 Release 完成。正式签名、公证和 DMG 只在线上
 执行；需要额外本地 ad-hoc 包时显式提供 `--local-artifacts`。
 若 main 与 Tag 已成功推送，但工作流触发失败，可只重试远端构建：
 
@@ -261,8 +261,8 @@ GitHub 发布工作流，等待 Draft Release 完成。正式签名、公证和 
 pnpm release -- --dispatch-only v0.1.3
 ```
 
-命令不会公开 Release，也不会把签名、公证或 GitHub 凭证写入源码和安装包。Draft
-资产复验通过后，维护者仍需在 GitHub 点击 `Publish release`。
+命令会在全部自动门禁通过后公开稳定 Release，但不会把签名、公证或 GitHub 凭证写入
+源码和安装包。真实安装与更新反馈在发布后进行，不再设置人工 Publish 步骤。
 首次配置、逐步操作、验收标准和失败恢复见
 `docs/ops/oss-release-runbook.md`。
 

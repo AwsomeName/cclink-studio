@@ -4,7 +4,7 @@
 - 日期：2026-07-26
 - 负责人：CCLink Studio Maintainers
 
-> 2026-08-13：ADR 0009 已取代本文中“开源版与商业版长期维护两个桌面制品”的产品前提。不可变 Tag、凭证不入库和发布可审计性约束继续有效；旧 commercial overlay 仅保留到单一 Studio 的远程只读闭环通过真实 App 验收。
+> 2026-08-13：ADR 0009 已取代本文中“开源版与商业版长期维护两个桌面制品”的产品前提。不可变 Tag、凭证不入库和发布可审计性约束继续有效；开源 Release 在自动门禁通过后直接公开，不再经过 Draft 人工批准。
 
 ## 问题
 
@@ -20,7 +20,7 @@
 - `cclink-dev` 保留自己的商业版发布流程，负责私有集成和商业版制品。
 - 两个仓库不调用对方的 workflow，不读取对方工作树，不共享 Release 状态。
 - 开源版使用本仓库 `studio-release` Environment Secrets 和同仓库
-  `GITHUB_TOKEN` 创建 Draft Release。
+  `GITHUB_TOKEN` 创建公开稳定 Release。
 
 ## 不变量
 
@@ -45,10 +45,10 @@
 
 ## 迁移计划
 
-1. 在 `cclink-studio` 增加开源版预检、签名、公证和 Draft Release workflow。
+1. 在 `cclink-studio` 增加开源版预检、签名、公证和公开 Release workflow。
 2. 将 R0 文档中的“`cclink-dev` 唯一发布者”改为双项目独立发布。
 3. 不删除、不迁移 `cclink-dev` 现有商业版发布实现。
-4. 开源版首次发布先运行 plan，再创建 Draft，经人工检查后公开。
+4. 开源版通过自动门禁后直接公开，真实安装和更新反馈在发布后进行。
 
 ## 回收或复审条件
 
@@ -60,5 +60,5 @@
 - 开源 workflow 只 checkout `AwsomeName/cclink-studio`。
 - 缺少签名或公证凭证时，release 预检在打包前失败。
 - plan 模式不读取 Environment Secrets。
-- Draft Release 使用同仓库 `GITHUB_TOKEN` 创建。
+- 公开稳定 Release 使用同仓库 `GITHUB_TOKEN` 创建。
 - 构建记录包含源码 SHA、发布 workflow SHA、Tag、版本和架构。

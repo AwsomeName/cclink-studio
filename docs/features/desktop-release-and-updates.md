@@ -100,7 +100,7 @@ App 更新只有一个状态所有者”的范围。
 | 开源版签名、公证和 Release 上传                         | 本仓库 GitHub Actions   |
 | 开源版公开更新元数据和资产                              | 本仓库 GitHub Releases  |
 | 商业版集成与发布                                        | `cclink-dev` 自有工作流 |
-| 发布批准、下载确认、安装确认                            | 人类                    |
+| 发布授权、下载确认、安装确认                            | 人类                    |
 
 开源版安装包不保存 GitHub Token。公开 Release 的检查与下载不需要用户凭证。签名和
 公证凭证只存在于本仓库受保护的 `studio-release` GitHub Environment：
@@ -119,7 +119,7 @@ APPLE_API_ISSUER
 ## Manifest v3
 
 开源版使用 GitHub Releases API 查找订阅轨道内最新的公开 Release，不依赖
-`latest-mac.yml`。发布工作流只构建一个 arm64 DMG，并在创建 Draft 前生成和
+`latest-mac.yml`。发布工作流只构建一个 arm64 DMG，并在公开 Release 前生成和
 反向校验唯一的 `update-manifest.json`：
 
 ```json
@@ -256,12 +256,12 @@ pnpm release -- --version 0.1.13
 4. 原子推送 `main` 与 Tag。
 5. 触发 `release-oss.yml`，在 `macos-15` 重新构建 arm64 正式候选包。
 6. 签名、公证、staple，并执行 `codesign`、`spctl` 和 Manifest 校验。
-7. 创建 Draft Release，等待维护者在干净 Apple Silicon Mac 真人验收。
-8. 人工将 Draft 发布为正式 Release；测试候选则发布为 Pre-release。
+7. 全部门禁通过后直接创建公开稳定 Release。
+8. 在真实用户安装与应用内更新中继续发布后测试；问题通过更高版本修复，不覆盖已有资产。
 
 本地 `pnpm package:local` 只生成当前 Apple Silicon Mac 的未签名测试包，不修改
-版本、不推送，也不是正式发布入口。`pnpm release` 会在目标版本写入后复用它生成
-一份本地验收包，但远程仍从不可变 Tag 独立构建签名公证包。详细操作见
+版本、不推送，也不是正式发布入口。`pnpm release` 默认不重复生成本地验收包；远程从
+不可变 Tag 独立构建签名公证包并在门禁通过后公开。详细操作见
 `docs/ops/oss-release-runbook.md`。
 
 ## 开发里程碑

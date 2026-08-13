@@ -9,7 +9,7 @@
 开源 `cclink-studio` 仓库不内置 Developer ID、notarization 密钥或生产更新源。
 普通本地构建用于开发测试；开源正式包由本仓库 `.github/workflows/release-oss.yml`
 从不可变 Tag 构建，使用 `studio-release` Environment Secrets 完成签名和公证，
-并创建本仓库 Draft Release。商业版继续由 `cclink-dev` 自有工作流独立发布。
+并在全部自动门禁通过后创建本仓库公开稳定 Release。商业版继续由 `cclink-dev` 自有工作流独立发布。
 维护者的完整发布步骤和失败恢复见 `docs/ops/oss-release-runbook.md`。
 
 ## 背景
@@ -43,7 +43,7 @@ xattr -cr /Applications/CCLink\\ Studio\\ 开源版.app
 - Developer ID Application 签名和 P12 导入校验。
 - Apple API Key 公证与 staple。
 - entitlements。
-- GitHub Draft Release 资产上传。
+- GitHub 公开稳定 Release 资产上传。
 
 证书、P12 密码、Apple API Key 和其他敏感值只存在于 `studio-release`
 Environment Secrets。不要把它们、生产 feed URL 或长期 GitHub Token 写回

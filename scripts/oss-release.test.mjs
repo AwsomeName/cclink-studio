@@ -153,12 +153,12 @@ test('increments and compares stable versions', () => {
   assert.throws(() => incrementPatch('0.1.2-beta.1'), /不是稳定版本/)
 })
 
-test('always dispatches the default-branch workflow as a draft release', () => {
+test('always dispatches the default-branch workflow as a public stable release', () => {
   assert.deepEqual(createWorkflowDispatchPayload('v0.1.3'), {
     ref: 'main',
     inputs: {
       tag: 'v0.1.3',
-      create_draft: true,
+      publish_release: true,
       failure_injection: 'none',
     },
   })

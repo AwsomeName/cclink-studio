@@ -102,7 +102,7 @@ export function createWorkflowDispatchPayload(tag) {
     ref: 'main',
     inputs: {
       tag,
-      create_draft: true,
+      publish_release: true,
       failure_injection: 'none',
     },
   }
@@ -146,7 +146,7 @@ function usage() {
 
 脚本只从已通过 CI 的 main 创建版本提交；本地产物为显式可选项。
 正式签名、公证和 DMG 统一由 GitHub Actions 从不可变 Tag 生成。
-它不会自动公开 Release。`)
+所有发布门禁通过后会自动公开稳定 Release。`)
 }
 
 function run(command, args, options = {}) {
@@ -289,10 +289,10 @@ function assertRemoteTag(tag) {
 
 async function confirmRelease(tag, dispatchOnly, skipConfirmation) {
   const action = dispatchOnly
-    ? `重新触发 ${tag} 的签名、公证和 Draft Release`
-    : `复用 main 的绿色 CI、创建 ${tag}、原子推送 main + Tag，并触发 Draft Release`
+    ? `重新触发 ${tag} 的签名、公证和正式 Release`
+    : `复用 main 的绿色 CI、创建 ${tag}、原子推送 main + Tag，并触发正式 Release`
   console.log(`\n即将执行: ${action}`)
-  console.log('不会自动公开 Release。')
+  console.log('全部自动门禁通过后会公开稳定 Release。')
   if (skipConfirmation) return
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error('非交互环境必须显式提供 --yes')
@@ -461,22 +461,24 @@ async function waitForWorkflow({ sourceSha, token, startedAt }) {
   throw new Error(`等待发布工作流超时: ${run.html_url}`)
 }
 
-async function printDraftSummary(tag, token) {
+async function printReleaseSummary(tag, token) {
   const releases = await githubRequest(
     `/repos/${repository.owner}/${repository.name}/releases?per_page=30`,
     token,
   )
   const release = releases.find((candidate) => candidate.tag_name === tag)
   if (!release) {
-    console.log(`\n工作流成功，但未找到 ${tag} 的 Draft Release，请在 GitHub Releases 检查。`)
-    return
+    throw new Error(`工作流成功，但未找到 ${tag} 的公开 Release`)
   }
-  console.log(`\nDraft Release: ${release.html_url}`)
+  if (release.draft || release.prerelease || !release.published_at) {
+    throw new Error(`${tag} 未成为公开稳定 Release`)
+  }
+  console.log(`\nRelease: ${release.html_url}`)
   console.log(`资产数量: ${release.assets?.length ?? 0}`)
   for (const asset of release.assets ?? []) {
     console.log(`  - ${asset.name}`)
   }
-  console.log('\n发布仍是 Draft；检查安装包后，再由维护者在 GitHub 点击 Publish release。')
+  console.log('\n发布已公开，稳定通道可以发现该版本。')
 }
 
 async function release(options) {
@@ -535,7 +537,7 @@ async function release(options) {
   console.log(`\n已触发 ${tag} 的 release-oss 工作流。`)
   if (!options.wait) return
   await waitForWorkflow({ sourceSha: releaseSha, token, startedAt })
-  await printDraftSummary(tag, token)
+  await printReleaseSummary(tag, token)
 }
 
 async function dispatchOnly(options) {
@@ -548,7 +550,7 @@ async function dispatchOnly(options) {
   console.log(`\n已重新触发 ${tag} 的 release-oss 工作流。`)
   if (!options.wait) return
   await waitForWorkflow({ sourceSha, token, startedAt })
-  await printDraftSummary(tag, token)
+  await printReleaseSummary(tag, token)
 }
 
 async function main() {
