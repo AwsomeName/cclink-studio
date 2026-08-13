@@ -318,6 +318,21 @@ describe('markdown-codec', () => {
     )
   })
 
+  it('blocks subtle content and formatting losses before save', () => {
+    const cases = [
+      ['正文不能丢字', '正文不能'],
+      ['7. 保留起始序号', '1. 保留起始序号'],
+      ['| 左 | 右 |\n| :--- | ---: |\n| a | b |', '| 左 | 右 |\n| --- | --- |\n| a | b |'],
+      ['[链接](https://example.com "标题")', '[链接](https://example.com)'],
+      ['![替代文本](image.png "标题")', '![另一个文本](image.png "标题")'],
+      ['第一行  \n第二行', '第一行 第二行'],
+    ]
+
+    for (const [source, damaged] of cases) {
+      expect(analyzeMarkdown(source, damaged).safeToSave).toBe(false)
+    }
+  })
+
   it('allows formatting normalization when critical structures stay equivalent', () => {
     const source = [
       '# 标题',

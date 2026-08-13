@@ -1,14 +1,23 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Tab } from '../../types'
 import { remoteWorkspaceRef } from '@shared/workspace-ref'
+import type { RemoteStatus } from '@shared/remote-protocol'
 import { IconRefresh } from '../../components/common/Icons'
-import { useCclinkStore } from '../../stores'
+import { useCclinkStore, useTabStore } from '../../stores'
+import {
+  clearRemoteFileDraft,
+  registerRemoteFileDraft,
+  rememberRemoteFileDraft,
+  restoreRemoteFileDraft,
+} from '../../utils/remote-file-draft-registry'
 
 export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
   const remoteFile = tab.remoteFile!
   const [content, setContent] = useState<string | null>(null)
   const [savedContent, setSavedContent] = useState<string | null>(null)
   const [sha256, setSha256] = useState<string | null>(null)
+  const [complete, setComplete] = useState(false)
+  const [status, setStatus] = useState<RemoteStatus | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [revision, setRevision] = useState(0)
@@ -24,18 +33,54 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
   const selectedSessionId = useCclinkStore((state) => state.selectedSessionId)
   const sessions = useCclinkStore((state) => state.sessions)
   const createSession = useCclinkStore((state) => state.createSession)
+  const updateTabDirty = useTabStore((state) => state.updateTabDirty)
+  const dirty = content !== null && savedContent !== null && content !== savedContent
+  const writable =
+    status?.state === 'online' &&
+    status.capabilities.file.write &&
+    Boolean(sha256) &&
+    complete
+
+  useEffect(() => {
+    updateTabDirty(tab.id, dirty)
+    if (dirty && content !== null && savedContent !== null && sha256) {
+      rememberRemoteFileDraft(tab.id, {
+        path: remoteFile.path,
+        content,
+        savedContent,
+        sha256,
+      })
+    } else if (!dirty) {
+      clearRemoteFileDraft(tab.id)
+    }
+  }, [content, dirty, remoteFile.path, savedContent, sha256, tab.id, updateTabDirty])
+
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
-    void window.cclinkStudio.remote
-      .readFile({ ref, path: remoteFile.path })
-      .then((result) => {
+    void Promise.all([
+      window.cclinkStudio.remote.getStatus(ref),
+      window.cclinkStudio.remote.readFile({ ref, path: remoteFile.path }),
+    ])
+      .then(([nextStatus, result]) => {
         if (cancelled) return
+        setStatus(nextStatus)
         if (!result.success || !result.file) throw new Error(result.error || '远程文件读取失败')
-        setContent(result.file.content)
-        setSavedContent(result.file.content)
-        setSha256(result.file.sha256 ?? null)
+        setComplete(result.file.complete)
+        if (!result.file.complete) {
+          throw new Error('远程文件只读取了部分内容，已禁止编辑以避免覆盖完整文件')
+        }
+        const draft = restoreRemoteFileDraft(tab.id)
+        if (draft?.path === remoteFile.path) {
+          setContent(draft.content)
+          setSavedContent(draft.savedContent)
+          setSha256(draft.sha256)
+        } else {
+          setContent(result.file.content)
+          setSavedContent(result.file.content)
+          setSha256(result.file.sha256 ?? null)
+        }
       })
       .catch((readError: unknown) => {
         if (!cancelled) setError(readError instanceof Error ? readError.message : String(readError))
@@ -46,10 +91,18 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
     return () => {
       cancelled = true
     }
-  }, [ref, remoteFile.path, revision])
+  }, [ref, remoteFile.path, revision, tab.id])
 
-  const save = async (): Promise<void> => {
-    if (content === null || !sha256 || content === savedContent) return
+  const save = useCallback(async (): Promise<boolean> => {
+    if (content === null || content === savedContent) return true
+    if (!writable || !sha256) {
+      setError(
+        status?.state !== 'online'
+          ? '远程设备当前离线，无法保存'
+          : '当前 Agent 未提供远程文件写入能力',
+      )
+      return false
+    }
     setLoading(true)
     setError(null)
     try {
@@ -74,12 +127,27 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
       if (!result.success) throw new Error(result.error || '远程文件保存失败')
       setSavedContent(content)
       if (result.sha256) setSha256(result.sha256)
+      clearRemoteFileDraft(tab.id)
+      return true
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : String(saveError))
+      return false
     } finally {
       setLoading(false)
     }
-  }
+  }, [content, createSession, ref, savedContent, selectedSessionId, sessions, sha256, status?.state, tab.id, tab.title, writable])
+
+  useEffect(
+    () =>
+      registerRemoteFileDraft(tab.id, {
+        save,
+        discard: () => {
+          if (savedContent !== null) setContent(savedContent)
+          clearRemoteFileDraft(tab.id)
+        },
+      }),
+    [save, savedContent, tab.id],
+  )
   return (
     <div className="remote-file-viewer">
       <div className="remote-file-header">
@@ -93,7 +161,7 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
         <button
           type="button"
           title="保存到远程设备"
-          disabled={loading || content === null || content === savedContent || !sha256}
+          disabled={loading || !dirty || !writable}
           onClick={() => void save()}
         >
           保存
@@ -107,6 +175,12 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
           value={content}
           disabled={loading}
           onChange={(event) => setContent(event.target.value)}
+          onKeyDown={(event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+              event.preventDefault()
+              void save()
+            }
+          }}
           spellCheck={false}
         />
       )}

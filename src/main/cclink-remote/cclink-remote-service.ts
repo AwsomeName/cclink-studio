@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { posix, win32 } from 'node:path'
 import type {
   CclinkFileReadResponseMessage,
+  CclinkCapabilityProbeResponseMessage,
   CclinkFileCreateRequestMessage,
   CclinkFileDeleteRequestMessage,
   CclinkFileMutationBeginRequestMessage,
@@ -23,6 +24,8 @@ import type {
   CclinkTreeNode,
   CclinkWorkspace,
   CclinkWorkspaceListResponseMessage,
+  CCLINK_MIN_PROTOCOL_VERSION,
+  CCLINK_PROTOCOL_VERSION,
 } from '../../shared/cclink'
 import { createCclinkEnvelope } from '../../shared/cclink'
 import type { CclinkRealtimeStatus } from '../../shared/ipc/cclink'
@@ -39,6 +42,7 @@ import type {
   RemoteFileWriteRequest,
   RemoteProvider,
   RemoteStatus,
+  RemoteDiagnosticReport,
 } from '../../shared/remote-protocol'
 import { REMOTE_ERROR_CODE, type RemoteError } from '../../shared/remote-error'
 import type { RemoteWorkspaceRef } from '../../shared/workspace-ref'
@@ -47,6 +51,9 @@ import { CclinkAuthService } from './auth-service'
 import { CclinkRequestError, CclinkRequestRouter } from './request-router'
 import { TencentChatAdapter } from './tencent-chat-adapter'
 import { TimTransport } from './tim-transport'
+import { CclinkRuntimeStateStore } from './runtime-state-store'
+import { RemoteDiagnosticLog } from '../remote/remote-diagnostic-log'
+import { buildRemoteDiagnosticReport } from '../remote/remote-diagnostics'
 
 interface PairedAgentResponse {
   agent_id?: string
@@ -77,6 +84,7 @@ export class CclinkRemoteService implements RemoteProvider {
   readonly transport = 'cclink' as const
   private readonly requestRouter = new CclinkRequestRouter()
   private timTransport: TimTransport | null = null
+  private timStatusUnsubscribe: (() => void) | null = null
   private status: CclinkRealtimeStatus = { state: 'idle' }
   private readonly statusListeners = new Set<StatusListener>()
   private readonly realtimeListeners = new Set<RealtimeListener>()
@@ -84,15 +92,28 @@ export class CclinkRemoteService implements RemoteProvider {
   private sessions = new Map<string, CclinkRemoteSession>()
   private messages = new Map<string, CclinkRemoteMessage[]>()
   private streams = new Map<string, StreamBuffer>()
+  private capabilityProbes = new Map<
+    string,
+    { expiresAt: number; response: CclinkCapabilityProbeResponseMessage | null }
+  >()
   private connecting: Promise<CclinkRealtimeStatus> | null = null
+  private readonly diagnosticLog = new RemoteDiagnosticLog()
 
   constructor(
     readonly auth: CclinkAuthService,
     private readonly baseUrl: string | null,
+    private readonly runtimeStateStore?: CclinkRuntimeStateStore,
   ) {
     this.requestRouter.onProtocolEvent((event) => {
       void this.handleProtocolMessage(event.serverId, event.message)
     })
+  }
+
+  async initialize(): Promise<void> {
+    if (!this.runtimeStateStore) return
+    const state = await this.runtimeStateStore.load()
+    this.sessions = new Map(state.sessions.map((session) => [session.id, session]))
+    this.messages = new Map(Object.entries(state.messages))
   }
 
   onStatus(listener: StatusListener): () => void {
@@ -237,6 +258,7 @@ export class CclinkRemoteService implements RemoteProvider {
       contextUsage: 0,
     }
     this.sessions.set(sessionId, session)
+    this.persistState()
     this.emitRealtime({ type: 'sessions', serverId: ref.endpointId, sessionId })
     await this.syncSessions(ref.endpointId).catch(() => undefined)
     return this.sessions.get(sessionId) ?? session
@@ -297,13 +319,30 @@ export class CclinkRemoteService implements RemoteProvider {
 
   async getStatus(ref: RemoteWorkspaceRef): Promise<RemoteStatus> {
     const server = this.servers.get(ref.endpointId)
-    const protocolVersion = server?.protocolVersion
-    const compatibility = protocolVersion
-      ? Number(protocolVersion) >= 2
-        ? 'compatible'
-        : 'upgrade-required'
-      : 'unknown'
     const online = server?.status === 'online' && this.status.state === 'online'
+    const probe = online ? await this.getLiveCapabilityProbe(ref.endpointId) : null
+    const protocolVersion = valueAsString(
+      probe?.protocolVersion ?? probe?.protocol_version ?? server?.protocolVersion,
+    )
+    const minProtocolVersion = valueAsString(
+      probe?.minProtocolVersion ?? probe?.min_protocol_version ?? server?.minProtocolVersion,
+    )
+    const compatibility = protocolCompatibility(protocolVersion, minProtocolVersion)
+    const grouped = probe?.capabilities
+    const capabilityMap = probe?.capability_map ?? server?.capabilities
+    const has = (key: string): boolean =>
+      capabilityMap?.[key] === true ||
+      probe?.capability_list?.includes(key) === true ||
+      server?.capabilityList?.includes(key) === true
+    const fileCapability = (groupedKey: string, legacyKey: string): boolean =>
+      online && (grouped?.file?.[groupedKey] === true || has(legacyKey))
+    const sessionStreaming =
+      online &&
+      (grouped?.session?.streaming === true ||
+        grouped?.agent?.stream_json_input === true ||
+        grouped?.agent?.runtime_select === true ||
+        has('stream_json_input') ||
+        has('runtime_select'))
     return {
       ref,
       state: online ? 'online' : (server?.status ?? 'unknown'),
@@ -314,15 +353,19 @@ export class CclinkRemoteService implements RemoteProvider {
       workspacePath: ref.path,
       capabilities: {
         file: {
-          tree: online && supports(server, 'file_tree'),
-          read: online && supports(server, 'file_read'),
-          write: online && supports(server, 'file_write'),
-          create: online && supports(server, 'file_create'),
-          rename: online && supports(server, 'file_rename'),
-          delete: online && supports(server, 'file_delete'),
+          tree: fileCapability('tree', 'file_tree'),
+          read: fileCapability('read', 'file_read'),
+          write: fileCapability('write', 'file_write'),
+          create: fileCapability('create', 'file_create'),
+          rename: fileCapability('rename', 'file_rename'),
+          delete: fileCapability('delete', 'file_delete'),
         },
-        shell: { pty: online && supports(server, 'terminal_workspace_pty') },
-        agent: { session: online, stream: online },
+        shell: {
+          pty:
+            online &&
+            (grouped?.shell?.terminal_workspace_pty === true || has('terminal_workspace_pty')),
+        },
+        agent: { session: sessionStreaming, stream: sessionStreaming },
       },
       ...(!online
         ? {
@@ -335,6 +378,20 @@ export class CclinkRemoteService implements RemoteProvider {
           }
         : {}),
     }
+  }
+
+  async diagnose(ref: RemoteWorkspaceRef): Promise<RemoteDiagnosticReport> {
+    const status = await this.getStatus(ref)
+    if (status.remoteError) {
+      this.diagnosticLog.record('status', {
+        ...status.remoteError,
+        context: { ...status.remoteError.context, endpointId: ref.endpointId },
+      })
+    }
+    return buildRemoteDiagnosticReport(
+      status,
+      this.diagnosticLog.recent(ref.endpointId),
+    )
   }
 
   async listFileTree(request: RemoteFileTreeRequest): Promise<RemoteFileTreeResult> {
@@ -705,6 +762,7 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   async destroy(): Promise<void> {
+    await this.saveState()
     await this.disconnect()
     this.servers.clear()
     this.statusListeners.clear()
@@ -712,9 +770,12 @@ export class CclinkRemoteService implements RemoteProvider {
     this.sessions.clear()
     this.messages.clear()
     this.streams.clear()
+    this.capabilityProbes.clear()
   }
 
   async disconnect(): Promise<void> {
+    this.timStatusUnsubscribe?.()
+    this.timStatusUnsubscribe = null
     this.requestRouter.detach()
     if (this.timTransport) {
       await this.timTransport.logout().catch(() => undefined)
@@ -729,11 +790,25 @@ export class CclinkRemoteService implements RemoteProvider {
     try {
       const identity = await this.auth.ensureIdentity()
       const transport = new TimTransport(new TencentChatAdapter())
-      await transport.login(identity)
       this.timTransport = transport
+      this.timStatusUnsubscribe = transport.onStatus((status) => {
+        if (this.timTransport !== transport) return
+        if (status === 'online') {
+          this.requestRouter.attach(transport)
+          const reconnected = this.status.state === 'offline' || this.status.state === 'error'
+          this.updateStatus({ state: 'online' })
+          if (reconnected) void this.refreshOnlineMetadata()
+          return
+        }
+        this.requestRouter.detach()
+        this.updateStatus({ state: 'offline', error: '腾讯 IM 连接已断开，等待自动恢复' })
+      })
+      await transport.login(identity)
       this.requestRouter.attach(transport)
       this.updateStatus({ state: 'online' })
     } catch (error) {
+      this.timStatusUnsubscribe?.()
+      this.timStatusUnsubscribe = null
       this.requestRouter.detach()
       this.timTransport?.destroy()
       this.timTransport = null
@@ -748,6 +823,48 @@ export class CclinkRemoteService implements RemoteProvider {
   private async requireOnline(): Promise<void> {
     const status = await this.connect()
     if (status.state !== 'online') throw new Error(status.error || 'CCLink 实时链路连接失败')
+  }
+
+  private async getLiveCapabilityProbe(
+    serverId: string,
+  ): Promise<CclinkCapabilityProbeResponseMessage | null> {
+    const cached = this.capabilityProbes.get(serverId)
+    if (cached && cached.expiresAt > Date.now()) return cached.response
+    try {
+      const response = (await this.requestRouter.request(
+        serverId,
+        createCclinkEnvelope('capability_probe_request'),
+        ['capability_probe_response'],
+        3_000,
+      )) as CclinkCapabilityProbeResponseMessage
+      const server = this.servers.get(serverId)
+      if (server) {
+        server.capabilities = {
+          ...server.capabilities,
+          ...response.capability_map,
+          file_tree: response.capabilities?.file?.tree ?? server.capabilities?.file_tree,
+          file_read: response.capabilities?.file?.read ?? server.capabilities?.file_read,
+          file_write: response.capabilities?.file?.write ?? server.capabilities?.file_write,
+          file_create: response.capabilities?.file?.create ?? server.capabilities?.file_create,
+          file_rename: response.capabilities?.file?.rename ?? server.capabilities?.file_rename,
+          file_delete: response.capabilities?.file?.delete ?? server.capabilities?.file_delete,
+          terminal_workspace_pty:
+            response.capabilities?.shell?.terminal_workspace_pty ??
+            server.capabilities?.terminal_workspace_pty,
+          stream_json_input:
+            response.capabilities?.agent?.stream_json_input ??
+            server.capabilities?.stream_json_input,
+          runtime_select:
+            response.capabilities?.agent?.runtime_select ?? server.capabilities?.runtime_select,
+        }
+        server.capabilityList = response.capability_list ?? server.capabilityList
+      }
+      this.capabilityProbes.set(serverId, { expiresAt: Date.now() + 15_000, response })
+      return response
+    } catch {
+      this.capabilityProbes.set(serverId, { expiresAt: Date.now() + 5_000, response: null })
+      return null
+    }
   }
 
   private async syncSessions(serverId: string): Promise<void> {
@@ -777,6 +894,7 @@ export class CclinkRemoteService implements RemoteProvider {
             name: update.name?.trim() || current.name,
             updatedAt: nowSeconds(),
           })
+          this.persistState()
           this.emitRealtime({ type: 'sessions', serverId, sessionId: update.session_id })
         }
         return
@@ -795,6 +913,66 @@ export class CclinkRemoteService implements RemoteProvider {
           serverId,
           sessionId: event.session_id,
           phase: 'started',
+        })
+        return
+      }
+      case 'user_text': {
+        const event = message as unknown as {
+          session_id: string
+          request_id?: string
+          content: string
+        }
+        const remoteMessage: CclinkRemoteMessage = {
+          type: 'user',
+          id: `remote-user-${event.request_id || randomUUID()}`,
+          content: event.content,
+          timestamp: nowSeconds(),
+        }
+        this.appendMessage(event.session_id, remoteMessage)
+        this.setSessionStatus(event.session_id, 'active')
+        this.emitRealtime({
+          type: 'conversation',
+          serverId,
+          sessionId: event.session_id,
+          phase: 'started',
+          message: remoteMessage,
+        })
+        return
+      }
+      case 'agent_status': {
+        const event = message as unknown as {
+          session_id: string
+          status: string
+          msg_id?: string
+          code?: string
+          message?: string
+        }
+        const active = !['idle', 'completed', 'failed', 'error'].includes(event.status)
+        this.setSessionStatus(event.session_id, active ? 'active' : 'idle')
+        const failed = event.status === 'failed' || event.status === 'error'
+        const remoteMessage: CclinkRemoteMessage | undefined =
+          failed && (event.message || event.code)
+            ? {
+                type: 'system',
+                id: `remote-status-${event.msg_id || randomUUID()}`,
+                content: event.message || event.code || '远程 Agent 执行失败',
+                timestamp: nowSeconds(),
+                remoteError: {
+                  layer: 'remote-agent',
+                  code: event.code || 'REMOTE_AGENT_FAILED',
+                  message: event.message || '远程 Agent 执行失败',
+                  retryable: true,
+                  context: { serverId, sessionId: event.session_id },
+                },
+              }
+            : undefined
+        if (remoteMessage) this.appendMessage(event.session_id, remoteMessage)
+        this.emitRealtime({
+          type: 'conversation',
+          serverId,
+          sessionId: event.session_id,
+          phase: active ? 'streaming' : failed ? 'error' : 'completed',
+          ...(remoteMessage ? { message: remoteMessage } : {}),
         })
         return
       }
@@ -986,9 +1164,12 @@ export class CclinkRemoteService implements RemoteProvider {
       this.sessions.set(session.id, session)
     }
     for (const session of this.sessions.values()) {
-      if (session.serverId === serverId && !incoming.has(session.id))
+      if (session.serverId === serverId && !incoming.has(session.id)) {
         this.sessions.delete(session.id)
+        this.messages.delete(session.id)
+      }
     }
+    this.persistState()
     this.emitRealtime({ type: 'sessions', serverId })
   }
 
@@ -1004,11 +1185,28 @@ export class CclinkRemoteService implements RemoteProvider {
         messageCount: next.length,
       })
     }
+    this.persistState()
   }
 
   private setSessionStatus(sessionId: string, status: CclinkRemoteSession['status']): void {
     const session = this.sessions.get(sessionId)
-    if (session) this.sessions.set(sessionId, { ...session, status, updatedAt: nowSeconds() })
+    if (session) {
+      this.sessions.set(sessionId, { ...session, status, updatedAt: nowSeconds() })
+      this.persistState()
+    }
+  }
+
+  private persistState(): void {
+    void this.saveState()
+  }
+
+  private saveState(): Promise<void> {
+    if (!this.runtimeStateStore) return Promise.resolve()
+    return this.runtimeStateStore.save({
+      version: 1,
+      sessions: [...this.sessions.values()],
+      messages: Object.fromEntries(this.messages),
+    })
   }
 
   private emitRealtime(event: CclinkRealtimeEvent): void {
@@ -1210,6 +1408,19 @@ function supports(server: CclinkServer | undefined, capability: string): boolean
     server &&
     (server.capabilities?.[capability] === true || server.capabilityList?.includes(capability)),
   )
+}
+function valueAsString(value: string | number | undefined): string | undefined {
+  return value == null ? undefined : String(value)
+}
+function protocolCompatibility(
+  remoteVersion: string | undefined,
+  remoteMinimum: string | undefined,
+): RemoteStatus['compatibility'] {
+  const version = Number(remoteVersion)
+  const minimum = Number(remoteMinimum)
+  if (Number.isFinite(minimum) && minimum > CCLINK_PROTOCOL_VERSION) return 'upgrade-required'
+  if (Number.isFinite(version) && version < CCLINK_MIN_PROTOCOL_VERSION) return 'upgrade-required'
+  return Number.isFinite(version) ? 'compatible' : 'unknown'
 }
 function text(value: unknown): string {
   return value == null ? '' : String(value).trim()

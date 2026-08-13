@@ -8,7 +8,7 @@ process.env.WS_NO_UTF_8_VALIDATE ??= '1'
 
 type ChatStatic = {
   create(options: { SDKAppID: number }): ChatInstance
-  EVENT: { SDK_READY: string; MESSAGE_RECEIVED: string }
+  EVENT: { SDK_READY: string; SDK_NOT_READY: string; MESSAGE_RECEIVED: string }
   TYPES: { CONV_C2C: string }
 }
 
@@ -31,6 +31,9 @@ export class TencentChatAdapter implements TimAdapter {
   private sdk: ChatStatic | null = null
   private chat: ChatInstance | null = null
   private readonly listeners = new Set<(message: { from: string; payload: string }) => void>()
+  private readonly statusListeners = new Set<(status: 'online' | 'offline') => void>()
+  private readonly readyStatus = (): void => this.emitStatus('online')
+  private readonly notReadyStatus = (): void => this.emitStatus('offline')
   private readonly receive = (event: { data?: unknown }): void => {
     const messages = Array.isArray(event.data) ? event.data : []
     for (const raw of messages) {
@@ -46,6 +49,8 @@ export class TencentChatAdapter implements TimAdapter {
     this.chat = this.sdk.create({ SDKAppID: options.sdkAppId })
     this.chat.setLogLevel?.(1)
     this.chat.on(this.sdk.EVENT.MESSAGE_RECEIVED, this.receive)
+    this.chat.on(this.sdk.EVENT.SDK_READY, this.readyStatus)
+    this.chat.on(this.sdk.EVENT.SDK_NOT_READY, this.notReadyStatus)
     await new Promise<void>((resolve, reject) => {
       const ready = (): void => {
         clearTimeout(timer)
@@ -70,9 +75,12 @@ export class TencentChatAdapter implements TimAdapter {
   async logout(): Promise<void> {
     if (!this.chat || !this.sdk) return
     this.chat.off(this.sdk.EVENT.MESSAGE_RECEIVED, this.receive)
+    this.chat.off(this.sdk.EVENT.SDK_READY, this.readyStatus)
+    this.chat.off(this.sdk.EVENT.SDK_NOT_READY, this.notReadyStatus)
     await this.chat.logout().catch(() => undefined)
     await this.chat.destroy?.()
     this.chat = null
+    this.emitStatus('offline')
   }
 
   async sendCustomMessage(peerId: string, payload: string): Promise<void> {
@@ -88,6 +96,15 @@ export class TencentChatAdapter implements TimAdapter {
   onCustomMessage(listener: (message: { from: string; payload: string }) => void): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  onStatus(listener: (status: 'online' | 'offline') => void): () => void {
+    this.statusListeners.add(listener)
+    return () => this.statusListeners.delete(listener)
+  }
+
+  private emitStatus(status: 'online' | 'offline'): void {
+    for (const listener of this.statusListeners) listener(status)
   }
 
   private async loadSdk(): Promise<ChatStatic> {

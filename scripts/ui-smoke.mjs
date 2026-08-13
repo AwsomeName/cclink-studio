@@ -349,13 +349,28 @@ async function main() {
       await page.getByRole('button', { name: '设为新会话默认' }).isVisible(),
       'new-conversation default action missing',
     )
+    for (let index = 0; index < (await roleRows.count()); index += 1) {
+      const roleRow = roleRows.nth(index)
+      const roleLabel = await roleRow.locator('strong').innerText()
+      await roleRow.click()
+      await page.locator('[data-role-soul]').waitFor({ state: 'visible', timeout: 10_000 })
+      assert(
+        await page.getByRole('heading', { name: '人格与原则 · SOUL.md' }).isVisible(),
+        `role SOUL preview missing: ${roleLabel}`,
+      )
+      assert(
+        (await page.locator('.agent-role-overview-section li').count()) > 0,
+        `role overview content missing: ${roleLabel}`,
+      )
+      assert(
+        (await page.locator('.agent-role-examples-section article').count()) > 0,
+        `role examples missing: ${roleLabel}`,
+      )
+    }
+
     const challengerRow = roleRows.filter({ hasText: '反方挑战者' })
     await challengerRow.click()
     await page.locator('[data-role-soul]').waitFor({ state: 'visible', timeout: 10_000 })
-    assert(
-      await page.getByRole('heading', { name: '人格与原则 · SOUL.md' }).isVisible(),
-      'role SOUL preview missing',
-    )
     assert(
       await page.getByRole('heading', { name: '建议 Skills' }).isVisible(),
       'recommended Skills section missing',
@@ -385,7 +400,7 @@ async function main() {
       (await page.locator('.agent-role-row.applied strong').innerText()) === appliedLabel,
       'switching the viewed role changed the conversation configuration',
     )
-    return 'one switchable configuration tab, SOUL preview, and explicit Skill mounting'
+    return 'one switchable configuration tab, seven SOUL previews, and explicit Skill mounting'
   })
 
   await runCheck('web resources accepts a non-predefined website', async () => {

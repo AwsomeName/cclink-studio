@@ -50,6 +50,38 @@ describe('BuiltinAgentProfileRegistry', () => {
     expect(registry.buildSystemInstructions(resolved)).toContain('不攻击稻草人')
   })
 
+  it('exposes a complete, versioned content model for every built-in role', () => {
+    const registry = new BuiltinAgentProfileRegistry()
+
+    for (const role of registry.list()) {
+      expect(role.goals, role.roleId).not.toHaveLength(0)
+      expect(role.suitableFor, role.roleId).not.toHaveLength(0)
+      expect(role.unsuitableFor, role.roleId).not.toHaveLength(0)
+      expect(role.boundaries, role.roleId).not.toHaveLength(0)
+      expect(role.examples, role.roleId).not.toHaveLength(0)
+      expect(role.soul, role.roleId).toMatchObject({
+        format: 'markdown',
+        source: 'builtin',
+        markdown: expect.stringContaining('# Identity'),
+        contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      })
+      expect(role.contentHash, role.roleId).toMatch(/^[a-f0-9]{64}$/)
+
+      const resolved = registry.resolve(role)
+      expect(registry.buildSystemInstructions(resolved), role.roleId).toContain(
+        '经过版本化的 SOUL.md',
+      )
+    }
+  })
+
+  it('does not invent recommended Skills for roles without a registered workflow', () => {
+    const roles = new BuiltinAgentProfileRegistry().list()
+
+    expect(
+      roles.filter((role) => role.recommendedSkillRefs.length > 0).map((role) => role.roleId),
+    ).toEqual(['critical-challenger'])
+  })
+
   it('rejects unknown identifiers and versions instead of silently falling back', () => {
     const registry = new BuiltinAgentProfileRegistry()
 

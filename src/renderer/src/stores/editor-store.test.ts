@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FsSaveTextDocumentResult } from '@shared/ipc/fs'
 import { useEditorStore } from './editor-store'
+import { registerEditorSaveGuard } from '../features/editor-save-guard'
 
 beforeEach(() => {
   useEditorStore.setState({ files: {}, pendingUpdates: [] })
@@ -12,6 +13,38 @@ afterEach(() => {
 
 describe('useEditorStore', () => {
   describe('saveFile', () => {
+    it('runs the mounted editor guard before any disk write', async () => {
+      const saveTextDocument = vi.fn()
+      vi.stubGlobal('window', { cclinkStudio: { fs: { saveTextDocument } } })
+      useEditorStore.setState({
+        files: {
+          '/project/notes.md': {
+            savedContent: '# Old',
+            currentContent: '# Unsafe draft',
+            dirty: true,
+            loading: false,
+          },
+        },
+        pendingUpdates: [],
+      })
+      const guard = vi.fn(() => {
+        throw new Error('保存前复查失败')
+      })
+      const unregister = registerEditorSaveGuard('/project/notes.md', guard)
+
+      try {
+        await expect(useEditorStore.getState().saveFile('/project/notes.md')).rejects.toThrow(
+          '保存前复查失败',
+        )
+      } finally {
+        unregister()
+      }
+
+      expect(guard).toHaveBeenCalledOnce()
+      expect(saveTextDocument).not.toHaveBeenCalled()
+      expect(useEditorStore.getState().files['/project/notes.md'].dirty).toBe(true)
+    })
+
     it('keeps the exact editor buffer as the saved baseline when disk metadata is added', async () => {
       const saveTextDocument = vi.fn().mockResolvedValue({
         status: 'saved',

@@ -110,6 +110,8 @@ export type CclinkMessageType =
   | 'terminal_pty_error'
   | 'server_meta_request'
   | 'server_meta'
+  | 'capability_probe_request'
+  | 'capability_probe_response'
   | 'workspace_list_request'
   | 'workspace_list_response'
   | 'file_tree_request'
@@ -138,6 +140,25 @@ export interface CclinkServerMetaMessage extends CclinkEnvelope {
   capability_list?: string[]
   workspaces?: Array<{ path: string; name: string; session_count?: number }>
   suggestedWorkspaces?: Array<{ path: string; name: string; kind?: string }>
+}
+
+export interface CclinkCapabilityProbeResponseMessage extends CclinkEnvelope {
+  cc_type: 'capability_probe_response'
+  agent_id?: string
+  agentVersion?: string
+  agent_version?: string
+  protocolVersion?: string | number
+  protocol_version?: string | number
+  minProtocolVersion?: string | number
+  min_protocol_version?: string | number
+  capabilities?: {
+    file?: Record<string, boolean>
+    shell?: Record<string, boolean>
+    agent?: Record<string, boolean>
+    session?: Record<string, boolean>
+  }
+  capability_map?: Record<string, boolean>
+  capability_list?: string[]
 }
 
 export interface CclinkWorkspaceListResponseMessage extends CclinkEnvelope {
@@ -184,6 +205,7 @@ export interface CclinkErrorMessage extends CclinkEnvelope {
 export type CclinkProtocolMessage =
   | CclinkEnvelope
   | CclinkServerMetaMessage
+  | CclinkCapabilityProbeResponseMessage
   | CclinkWorkspaceListResponseMessage
   | CclinkFileTreeResponseMessage
   | CclinkFileReadResponseMessage
@@ -240,6 +262,8 @@ const MESSAGE_TYPES = new Set<CclinkMessageType>([
   'terminal_pty_error',
   'server_meta_request',
   'server_meta',
+  'capability_probe_request',
+  'capability_probe_response',
   'workspace_list_request',
   'workspace_list_response',
   'file_tree_request',

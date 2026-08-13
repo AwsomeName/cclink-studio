@@ -205,6 +205,15 @@ interface TabState {
   updateTabTitle: (id: string, title: string) => void
   /** 更新 Tab dirty 状态 */
   updateTabDirty: (id: string, dirty: boolean) => void
+  /** 远程文件或目录重命名后同步相关 Tab。 */
+  rebaseRemoteFilePaths: (
+    serverId: string,
+    workspaceId: string,
+    oldPrefix: string,
+    newPrefix: string,
+  ) => void
+  /** 远程文件或目录删除后关闭相关 Tab。 */
+  closeRemoteFilePaths: (serverId: string, workspaceId: string, pathPrefix: string) => void
   /** 更新 Terminal Tab 的运行态 */
   updateTabTerminal: (id: string, terminal: NonNullable<Tab['terminal']>) => void
   /** 使用主进程 session 事实源校准 Terminal Tab 的可见投影。 */
@@ -496,6 +505,51 @@ export const useTabStore = create<TabState>((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, dirty } : t)),
     })),
+
+  rebaseRemoteFilePaths: (serverId, workspaceId, oldPrefix, newPrefix) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        const remoteFile = tab.remoteFile
+        if (
+          tab.type !== 'remote-file' ||
+          !remoteFile ||
+          remoteFile.serverId !== serverId ||
+          remoteFile.workspaceId !== workspaceId ||
+          (remoteFile.path !== oldPrefix &&
+            !remoteFile.path.startsWith(`${oldPrefix}/`) &&
+            !remoteFile.path.startsWith(`${oldPrefix}\\`))
+        ) {
+          return tab
+        }
+        const path = `${newPrefix}${remoteFile.path.slice(oldPrefix.length)}`
+        return {
+          ...tab,
+          title: path.split(/[\\/]/u).filter(Boolean).pop() ?? path,
+          remoteFile: { ...remoteFile, path },
+        }
+      }),
+    })),
+
+  closeRemoteFilePaths: (serverId, workspaceId, pathPrefix) =>
+    set((state) => {
+      const tabs = state.tabs.filter((tab) => {
+        const remoteFile = tab.remoteFile
+        return !(
+          tab.type === 'remote-file' &&
+          remoteFile?.serverId === serverId &&
+          remoteFile.workspaceId === workspaceId &&
+          (remoteFile.path === pathPrefix ||
+            remoteFile.path.startsWith(`${pathPrefix}/`) ||
+            remoteFile.path.startsWith(`${pathPrefix}\\`))
+        )
+      })
+      return {
+        tabs,
+        activeTabId: tabs.some((tab) => tab.id === state.activeTabId)
+          ? state.activeTabId
+          : (tabs[tabs.length - 1]?.id ?? null),
+      }
+    }),
 
   updateTabTerminal: (id, terminal) =>
     set((state) => ({

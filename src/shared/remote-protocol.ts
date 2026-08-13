@@ -27,6 +27,28 @@ export interface RemoteStatus {
   remoteError?: RemoteError
 }
 
+export interface RemoteDiagnosticEvent {
+  timestamp: number
+  operation: string
+  error: RemoteError
+}
+
+export interface RemoteDiagnosticCheck {
+  id: string
+  label: string
+  status: 'pass' | 'warn' | 'fail'
+  message: string
+  remoteError?: RemoteError
+}
+
+export interface RemoteDiagnosticReport {
+  ref: RemoteWorkspaceRef
+  generatedAt: number
+  status: RemoteStatus
+  checks: RemoteDiagnosticCheck[]
+  recentErrors: RemoteDiagnosticEvent[]
+}
+
 export interface RemoteFileTreeRequest {
   ref: RemoteWorkspaceRef
   path?: string
@@ -102,6 +124,7 @@ export interface RemoteFileMutationResult {
 export interface RemoteProvider {
   transport: 'cclink'
   getStatus(ref: RemoteWorkspaceRef): Promise<RemoteStatus>
+  diagnose(ref: RemoteWorkspaceRef): Promise<RemoteDiagnosticReport>
   listFileTree(request: RemoteFileTreeRequest): Promise<RemoteFileTreeResult>
   readFile(request: RemoteFileReadRequest): Promise<RemoteFileReadResult>
   writeFile(request: RemoteFileWriteRequest): Promise<RemoteFileMutationResult>

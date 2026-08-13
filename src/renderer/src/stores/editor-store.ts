@@ -20,6 +20,7 @@ import {
   stripCclinkMarkdownMetadata,
 } from '@shared/markdown-document'
 import type { MarkdownDiagnostic } from '../features/markdown/markdown-codec'
+import { runEditorSaveGuard } from '../features/editor-save-guard'
 import { isWorkspaceStateRestoring, persistWorkspaceSection } from '../utils/workspace-state'
 
 /** 单个文件的编辑器状态 */
@@ -280,6 +281,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   saveFile: async (filePath, options) => {
+    if (!get().files[filePath]) return 'saved'
+    const guardResult = runEditorSaveGuard(filePath)
+    if (guardResult) await guardResult
     const file = get().files[filePath]
     if (!file) return 'saved'
     const blockingDiagnostic = file.diagnostics?.find(

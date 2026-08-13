@@ -43,6 +43,8 @@ import {
 } from '../../features/markdown/markdown-editor-shortcuts'
 import { createMarkdownDiagnosticReport } from '../../features/markdown/markdown-diagnostic-report'
 import { MarkdownListItem } from '../../features/markdown/markdown-list-item'
+import { inspectMarkdownEditorBeforeSave } from '../../features/markdown/markdown-save-guard'
+import { registerEditorSaveGuard, runEditorSaveGuard } from '../../features/editor-save-guard'
 import {
   isMarkdownHydrationPending,
   setMarkdownEditorEditable,
@@ -267,6 +269,21 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     [extensions],
   )
   tiptapEditorRef.current = editor
+
+  useEffect(() => {
+    if (!editor) return
+    return registerEditorSaveGuard(fileKey, () => {
+      const current = useEditorStore.getState().files[fileKey]
+      const inspection = inspectMarkdownEditorBeforeSave(editor, current?.currentContent)
+      useEditorStore.getState().setDiagnostics(fileKey, inspection.diagnostics)
+      if (!inspection.safeToSave) {
+        throw new Error(
+          inspection.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
+            '当前 Markdown 无法安全保存',
+        )
+      }
+    })
+  }, [editor, fileKey])
 
   const currentWysiwygSelection = useCallback((): MarkdownSourceRange | null => {
     if (!editor) return null
@@ -614,6 +631,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
             result === 'conflict' ? '文件已被外部修改' : undefined,
           )
         } else {
+          await runEditorSaveGuard(fileKeyRef.current)
           const content = useEditorStore.getState().files[fileKeyRef.current]?.currentContent ?? ''
           await window.cclinkStudio.fs.saveTextDocument({ filePath: targetPath, content })
           window.cclinkStudio.editor.saveResult(request.id, true)
@@ -693,27 +711,35 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   }, [editor, fileKey, filePath, pendingCount, showToast])
 
   const handleSaveAs = useCallback(async () => {
-    const content = useEditorStore.getState().files[fileKey]?.currentContent ?? ''
-    const result = await window.cclinkStudio.dialog.showSaveDialog({
-      title: '另存为',
-      defaultPath: filePath?.split('/').pop() ?? '未命名.md',
-      filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
-    })
-    if (result.canceled || !result.filePath) return false
-    const saved = await window.cclinkStudio.fs.saveMarkdownDocumentAs({
-      ...(filePath ? { sourcePath: filePath } : {}),
-      targetPath: result.filePath,
-      content,
-    })
-    useEditorStore.getState().rebaseFilePaths(fileKey, saved.filePath)
-    await useEditorStore.getState().reloadFile(saved.filePath)
-    useTabStore.getState().updateTabFilePath(tabId, result.filePath)
-    useTabStore.getState().updateTabTitle(tabId, saved.filePath.split('/').pop() ?? 'Markdown')
-    showToast(
-      saved.copiedAssets > 0 ? `Markdown 与 ${saved.copiedAssets} 个资源已保存` : 'Markdown 已保存',
-      'success',
-    )
-    return true
+    try {
+      await runEditorSaveGuard(fileKey)
+      const content = useEditorStore.getState().files[fileKey]?.currentContent ?? ''
+      const result = await window.cclinkStudio.dialog.showSaveDialog({
+        title: '另存为',
+        defaultPath: filePath?.split('/').pop() ?? '未命名.md',
+        filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
+      })
+      if (result.canceled || !result.filePath) return false
+      const saved = await window.cclinkStudio.fs.saveMarkdownDocumentAs({
+        ...(filePath ? { sourcePath: filePath } : {}),
+        targetPath: result.filePath,
+        content,
+      })
+      useEditorStore.getState().rebaseFilePaths(fileKey, saved.filePath)
+      await useEditorStore.getState().reloadFile(saved.filePath)
+      useTabStore.getState().updateTabFilePath(tabId, result.filePath)
+      useTabStore.getState().updateTabTitle(tabId, saved.filePath.split('/').pop() ?? 'Markdown')
+      showToast(
+        saved.copiedAssets > 0
+          ? `Markdown 与 ${saved.copiedAssets} 个资源已保存`
+          : 'Markdown 已保存',
+        'success',
+      )
+      return true
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '另存为失败', 'error')
+      return false
+    }
   }, [fileKey, filePath, showToast, tabId])
 
   const handleSave = useCallback(async () => {

@@ -7,6 +7,7 @@ export interface TimAdapter {
   logout(): Promise<void>
   sendCustomMessage(peerId: string, payload: string): Promise<void>
   onCustomMessage(listener: (message: { from: string; payload: string }) => void): () => void
+  onStatus(listener: (status: 'online' | 'offline') => void): () => void
 }
 
 export class TimTransport implements CclinkTransport {
@@ -14,12 +15,18 @@ export class TimTransport implements CclinkTransport {
   private readonly serverToPeer = new Map<string, string>()
   private readonly peerToServer = new Map<string, string>()
   private readonly unsubscribe: () => void
+  private readonly unsubscribeStatus: () => void
+  private readonly statusListeners = new Set<(status: 'online' | 'offline') => void>()
   private online = false
 
   constructor(private readonly adapter: TimAdapter) {
     this.unsubscribe = adapter.onCustomMessage((message) =>
       this.receive(message.from, message.payload),
     )
+    this.unsubscribeStatus = adapter.onStatus((status) => {
+      this.online = status === 'online'
+      for (const listener of this.statusListeners) listener(status)
+    })
   }
 
   async login(identity: CclinkIdentity): Promise<void> {
@@ -49,9 +56,16 @@ export class TimTransport implements CclinkTransport {
     return () => this.listeners.delete(listener)
   }
 
+  onStatus(listener: (status: 'online' | 'offline') => void): () => void {
+    this.statusListeners.add(listener)
+    return () => this.statusListeners.delete(listener)
+  }
+
   destroy(): void {
     this.unsubscribe()
+    this.unsubscribeStatus()
     this.listeners.clear()
+    this.statusListeners.clear()
   }
 
   private receive(peerId: string, payload: string): void {

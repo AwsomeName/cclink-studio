@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { CclinkTreeNode } from '@shared/cclink'
 import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
 import type { RemoteCapabilitySet } from '@shared/remote-protocol'
+import type { RemoteDiagnosticReport } from '@shared/remote-protocol'
 import { useCclinkStore, useTabStore } from '../../stores'
 import {
   IconChevronDown,
@@ -10,6 +11,10 @@ import {
   IconFolder,
   IconRefresh,
 } from '../../components/common/Icons'
+import {
+  clearRemoteFileDraftPaths,
+  rebaseRemoteFileDraftPaths,
+} from '../../utils/remote-file-draft-registry'
 
 export function RemoteFileTree({
   workspaceRef,
@@ -23,6 +28,7 @@ export function RemoteFileTree({
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<CclinkTreeNode | null>(null)
   const [capabilities, setCapabilities] = useState<RemoteCapabilitySet | null>(null)
+  const [diagnostic, setDiagnostic] = useState<RemoteDiagnosticReport | null>(null)
   const sessions = useCclinkStore((state) => state.sessions)
   const selectedSessionId = useCclinkStore((state) => state.selectedSessionId)
   const createSession = useCclinkStore((state) => state.createSession)
@@ -146,6 +152,16 @@ export function RemoteFileTree({
         newPath: joinRemotePath(parent, name),
       })
       if (!result.success) throw new Error(result.error || '重命名失败')
+      const newPath = result.path ?? joinRemotePath(parent, name)
+      rebaseRemoteFileDraftPaths(selected.path, newPath)
+      useTabStore
+        .getState()
+        .rebaseRemoteFilePaths(
+          workspaceRef.endpointId,
+          workspaceRef.workspaceId,
+          selected.path,
+          newPath,
+        )
       setSelected(null)
       await loadRoot()
     } catch (mutationError) {
@@ -167,6 +183,14 @@ export function RemoteFileTree({
         recursive: selected.type === 'directory',
       })
       if (!result.success) throw new Error(result.error || '删除失败')
+      clearRemoteFileDraftPaths(selected.path)
+      useTabStore
+        .getState()
+        .closeRemoteFilePaths(
+          workspaceRef.endpointId,
+          workspaceRef.workspaceId,
+          selected.path,
+        )
       setSelected(null)
       await loadRoot()
     } catch (mutationError) {
@@ -210,6 +234,14 @@ export function RemoteFileTree({
         <button type="button" onClick={() => void loadRoot()}>
           <IconRefresh size={13} />
         </button>
+        <button
+          type="button"
+          onClick={() =>
+            void window.cclinkStudio.remote.diagnose(workspaceRef).then(setDiagnostic)
+          }
+        >
+          诊断
+        </button>
       </div>
       <div className="remote-tree-actions">
         <button disabled={!capabilities?.file.create} onClick={() => void createEntry('file')}>
@@ -233,6 +265,14 @@ export function RemoteFileTree({
       </div>
       {loading && <div className="cclink-panel-state">正在读取远程文件树…</div>}
       {error && <div className="cclink-inline-notice error">{error}</div>}
+      {diagnostic && (
+        <div className="cclink-inline-notice">
+          {diagnostic.checks
+            .filter((check) => check.status !== 'pass')
+            .map((check) => `${check.label}：${check.message}`)
+            .join('；') || '远程连接、协议和所需能力检查正常'}
+        </div>
+      )}
       {root && (children[root.path] ?? root.children ?? []).map((node) => renderNode(node, 0))}
     </div>
   )

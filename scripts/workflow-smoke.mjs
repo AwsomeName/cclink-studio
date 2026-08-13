@@ -198,11 +198,19 @@ async function main() {
           '',
           '查看 [内部文档][guide]。',
           '',
-          '[guide]: ./资料/说明.md',
+          '[guide]: ./资料/说明.md "说明标题"',
           '',
           '- [ ] 待办',
           '',
-          '1. 第一项',
+          '7. 第七项',
+          '8. 第八项',
+          '',
+          '| 左对齐 | 居中 | 右对齐 |',
+          '| :--- | :---: | ---: |',
+          '| a | b | c |',
+          '',
+          '第一行保留硬换行。  ',
+          '第二行不能丢。',
           '',
           '缩进代码：',
           '',
@@ -654,7 +662,17 @@ async function main() {
     await page.keyboard.type('second')
     await page.keyboard.press(`${modifier}+A`)
     await page.keyboard.press(`${modifier}+Shift+7`)
-    await editor.locator('ol > li').nth(1).locator('p').click()
+    const secondOrderedItem = editor.locator('ol > li').nth(1).locator('p')
+    await secondOrderedItem.click()
+    await page.waitForFunction(
+      (element) => {
+        const selection = window.getSelection()
+        return Boolean(
+          selection?.isCollapsed && selection.anchorNode && element.contains(selection.anchorNode),
+        )
+      },
+      await secondOrderedItem.elementHandle(),
+    )
     await page.keyboard.press('End')
     await page.keyboard.press('Tab')
     const nestedOrderedList = editor.locator('ol ol').first()
@@ -733,6 +751,13 @@ async function main() {
       (await editor.locator('pre code').count()) === 3,
       'multiple indented and fenced code blocks were not all rendered',
     )
+    assert((await editor.locator('ol').first().getAttribute('start')) === '7', 'ordered start lost')
+    assert((await editor.locator('table').count()) === 1, 'aligned table did not render')
+    assert((await editor.locator('a[title="说明标题"]').count()) === 1, 'link title did not render')
+    assert(
+      (await editor.locator('br:not(.ProseMirror-trailingBreak)').count()) >= 1,
+      'hard break did not render',
+    )
     const heading = editor.locator('h1').first()
     await heading.click()
     await page.keyboard.press('End')
@@ -747,6 +772,22 @@ async function main() {
     assert(
       (await page.locator('.markdown-parse-blocked').count()) === 0,
       'editor was blocked after its own version hash changed',
+    )
+    const savedRoundtrip = await page.evaluate(
+      async (path) => (await window.cclinkStudio.fs.readFile(path)).content,
+      `${workspaceDir}/roundtrip.md`,
+    )
+    assert(/^7\. 第七项/m.test(savedRoundtrip), 'save changed the ordered-list start')
+    assert(
+      savedRoundtrip.includes('| :---') &&
+        savedRoundtrip.includes(':---:') &&
+        savedRoundtrip.includes('---:'),
+      'save changed table alignment',
+    )
+    assert(savedRoundtrip.includes('"说明标题"'), 'save removed the link title')
+    assert(
+      savedRoundtrip.includes('第一行保留硬换行。  \n第二行不能丢。'),
+      'save changed the hard break or nearby text',
     )
 
     const roundtripTab = page.locator('.tab', { hasText: 'roundtrip.md' }).first()
@@ -765,7 +806,13 @@ async function main() {
       (await page.locator('.tiptap pre code').count()) === 3,
       'reopened Markdown lost a normalized code block',
     )
-    return 'setext/reference/autolink/code-block save, stay-open, and reopen lifecycle'
+    assert(
+      (await page.locator('.tiptap ol').first().getAttribute('start')) === '7' &&
+        (await page.locator('.tiptap table').count()) === 1 &&
+        (await page.locator('.tiptap a[title="说明标题"]').count()) === 1,
+      'reopened Markdown lost an untouched structure',
+    )
+    return 'single edit preserved list start, table alignment, link title, hard break, and code blocks'
   })
 
   await runCheck('markdown math degrades to editable text without source loss', async () => {

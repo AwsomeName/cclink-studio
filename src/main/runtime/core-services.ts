@@ -46,6 +46,7 @@ import { RuntimeComponentManager } from '../runtime-components/runtime-component
 import { registerRuntimeComponentsIpc } from '../runtime-components/runtime-components-ipc'
 import { CclinkAuthService } from '../cclink-remote/auth-service'
 import { CclinkRemoteService } from '../cclink-remote/cclink-remote-service'
+import { CclinkRuntimeStateStore } from '../cclink-remote/runtime-state-store'
 import { registerCclinkRemoteIpc } from '../cclink-remote/cclink-remote-ipc'
 import { getCclinkServiceUrl } from '../cclink-remote/service-config'
 
@@ -133,15 +134,15 @@ export async function bootstrapMainProcessServices(
   console.log('[CCLink Studio] Runtime 组件管理 IPC 已注册')
 
   try {
-    runtime.cclinkAuthService = new CclinkAuthService(
-      getCclinkServiceUrl(),
-      join(app.getPath('userData'), 'cclink-remote'),
-    )
+    const cclinkStateRoot = join(app.getPath('userData'), 'cclink-remote')
+    runtime.cclinkAuthService = new CclinkAuthService(getCclinkServiceUrl(), cclinkStateRoot)
     runtime.cclinkAuthService.initialize()
     runtime.cclinkRemoteService = new CclinkRemoteService(
       runtime.cclinkAuthService,
       getCclinkServiceUrl(),
+      new CclinkRuntimeStateStore(cclinkStateRoot),
     )
+    await runtime.cclinkRemoteService.initialize()
     runtime.cclinkIpcUnsubscribe = registerCclinkRemoteIpc(
       runtime.mainWindow,
       runtime.cclinkRemoteService,

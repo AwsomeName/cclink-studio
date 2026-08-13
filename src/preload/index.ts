@@ -100,6 +100,7 @@ const cclinkApi: CclinkApiContract = {
 
 const remoteApi: RemoteApiContract = {
   getStatus: (ref) => invokeIpcContract(remoteIpc.getStatus, ref),
+  diagnose: (ref) => invokeIpcContract(remoteIpc.diagnose, ref),
   listFileTree: (request) => invokeIpcContract(remoteIpc.listFileTree, request),
   readFile: (request) => invokeIpcContract(remoteIpc.readFile, request),
   writeFile: (request) => invokeIpcContract(remoteIpc.writeFile, request),

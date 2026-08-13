@@ -50,14 +50,17 @@ export type MarkdownCriticalStructureName =
   | 'headings'
   | 'codeBlocks'
   | 'tableRows'
+  | 'tableAlignments'
   | 'blockquotes'
   | 'horizontalRules'
   | 'unorderedItems'
   | 'orderedItems'
+  | 'orderedStarts'
   | 'taskItems'
   | 'images'
   | 'links'
   | 'mathExpressions'
+  | 'textContent'
 
 export interface MarkdownRoundTripDifference {
   key: MarkdownCriticalStructureName
@@ -306,14 +309,17 @@ interface MarkdownCriticalStructureSignature {
   headings: number[]
   codeBlocks: Array<{ language: string; content: string }>
   tableRows: number[]
+  tableAlignments: string[][]
   blockquotes: number
   horizontalRules: number
   unorderedItems: number
   orderedItems: number
+  orderedStarts: number[]
   taskItems: string[]
-  images: string[]
-  links: string[]
+  images: Array<{ source: string; alt: string; title: string }>
+  links: Array<{ destination: string; title: string }>
   mathExpressions: Array<{ display: boolean; content: string }>
+  textContent: string[]
 }
 
 function criticalStructureSignature(source: string): MarkdownCriticalStructureSignature {
@@ -323,10 +329,14 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
   const headings: number[] = []
   const codeBlocks: Array<{ language: string; content: string }> = []
   const tableRows: number[] = []
+  const tableAlignments: string[][] = []
   const listStack: Array<'ordered' | 'unordered'> = []
-  const images: string[] = []
-  const links: string[] = []
+  const orderedStarts: number[] = []
+  const images: Array<{ source: string; alt: string; title: string }> = []
+  const links: Array<{ destination: string; title: string }> = []
+  const textContent: string[] = []
   let activeTableRows: number | null = null
+  let activeTableAlignments: string[] | null = null
   let blockquotes = 0
   let horizontalRules = 0
   let unorderedItems = 0
@@ -342,27 +352,44 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
             : '',
         content: normalizeCodeBlockContent(token.content),
       })
-    } else if (token.type === 'table_open') activeTableRows = 0
-    else if (token.type === 'tr_open' && activeTableRows !== null) activeTableRows += 1
+    } else if (token.type === 'table_open') {
+      activeTableRows = 0
+      activeTableAlignments = []
+    } else if (token.type === 'th_open' && activeTableAlignments !== null) {
+      activeTableAlignments.push(markdownTableAlignment(token.attrGet('style') ?? ''))
+    } else if (token.type === 'tr_open' && activeTableRows !== null) activeTableRows += 1
     else if (token.type === 'table_close' && activeTableRows !== null) {
       tableRows.push(activeTableRows)
+      tableAlignments.push(activeTableAlignments ?? [])
       activeTableRows = null
+      activeTableAlignments = null
     } else if (token.type === 'blockquote_open') blockquotes += 1
     else if (token.type === 'hr') horizontalRules += 1
     else if (token.type === 'bullet_list_open') listStack.push('unordered')
-    else if (token.type === 'ordered_list_open') listStack.push('ordered')
-    else if (token.type === 'bullet_list_close' || token.type === 'ordered_list_close') {
+    else if (token.type === 'ordered_list_open') {
+      listStack.push('ordered')
+      orderedStarts.push(Number(token.attrGet('start') ?? 1))
+    } else if (token.type === 'bullet_list_close' || token.type === 'ordered_list_close') {
       listStack.pop()
     } else if (token.type === 'list_item_open') {
       if (listStack.at(-1) === 'ordered') orderedItems += 1
       else if (listStack.at(-1) === 'unordered') unorderedItems += 1
     }
 
+    if (token.type === 'inline') textContent.push(markdownInlineText(token.children ?? []))
+
     for (const child of token.children ?? []) {
       if (child.type === 'image') {
-        images.push(normalizeMarkdownDestination(child.attrGet('src') ?? ''))
+        images.push({
+          source: normalizeMarkdownDestination(child.attrGet('src') ?? ''),
+          alt: child.content ?? '',
+          title: child.attrGet('title') ?? '',
+        })
       } else if (child.type === 'link_open') {
-        links.push(normalizeMarkdownDestination(child.attrGet('href') ?? ''))
+        links.push({
+          destination: normalizeMarkdownDestination(child.attrGet('href') ?? ''),
+          title: child.attrGet('title') ?? '',
+        })
       }
     }
   }
@@ -371,10 +398,12 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
     headings,
     codeBlocks,
     tableRows,
+    tableAlignments,
     blockquotes,
     horizontalRules,
     unorderedItems,
     orderedItems,
+    orderedStarts,
     taskItems: lines
       .map((line) => /^\s*[-+*]\s+\[([ xX])\]\s+/.exec(line)?.[1])
       .filter((value): value is string => value !== undefined)
@@ -384,7 +413,25 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
     mathExpressions: extractMathExpressions(
       maskInlineCode(maskFencedBlocks(normalized, scanMarkdownBlocks(normalized))),
     ),
+    textContent,
   }
+}
+
+function markdownTableAlignment(style: string): string {
+  return /text-align\s*:\s*(left|center|right)/i.exec(style)?.[1]?.toLowerCase() ?? ''
+}
+
+function markdownInlineText(tokens: Array<{ type: string; content: string }>): string {
+  return tokens
+    .map((token) => {
+      if (token.type === 'text' || token.type === 'code_inline' || token.type === 'image') {
+        return token.content
+      }
+      if (token.type === 'hardbreak') return '\n'
+      if (token.type === 'softbreak') return ' '
+      return ''
+    })
+    .join('')
 }
 
 function normalizeCodeBlockLanguage(value: string): string {
@@ -422,14 +469,17 @@ export function inspectMarkdownRoundTrip(
     headings: '标题',
     codeBlocks: '代码块',
     tableRows: '表格',
+    tableAlignments: '表格对齐',
     blockquotes: '引用',
     horizontalRules: '分隔线',
     unorderedItems: '无序列表',
     orderedItems: '有序列表',
+    orderedStarts: '有序列表起始序号',
     taskItems: '任务列表',
     images: '图片',
     links: '链接',
     mathExpressions: '数学公式',
+    textContent: '正文内容',
   }
   const keys = Object.keys(labels) as MarkdownCriticalStructureName[]
   const differences = keys

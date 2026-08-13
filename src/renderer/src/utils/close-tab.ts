@@ -3,6 +3,8 @@ import { useEditorStore } from '../stores/editor-store'
 import { useTabStore } from '../stores/tab-store'
 import { resolveConversationTab } from './conversation-tab'
 import { recordTerminalLifecycleEvent } from './terminal-lifecycle'
+import { runEditorSaveGuard } from '../features/editor-save-guard'
+import { clearRemoteFileDraft, getRemoteFileDraft } from './remote-file-draft-registry'
 
 function getEditorFileKey(tab: Tab): string {
   return tab.filePath ?? `virtual:${tab.id}`
@@ -36,6 +38,7 @@ async function saveVirtualDraftAsFile(tab: Tab, fileKey: string): Promise<boolea
   if (result.canceled || !result.filePath) return false
 
   try {
+    await runEditorSaveGuard(fileKey)
     await window.cclinkStudio.fs.writeFile(result.filePath, current)
     editorStore.closeFile(fileKey)
     return true
@@ -133,12 +136,74 @@ async function closeConversationView(tab: Tab): Promise<boolean> {
   return true
 }
 
+async function closeRemoteFile(tab: Tab): Promise<boolean> {
+  if (!tab.dirty) {
+    clearRemoteFileDraft(tab.id)
+    useTabStore.getState().closeTab(tab.id)
+    return true
+  }
+  const draft = getRemoteFileDraft(tab.id)
+  if (!draft) {
+    await showSaveError('远程文件编辑状态不可用，已阻止关闭以避免丢失修改')
+    return false
+  }
+  const { response } = await window.cclinkStudio.dialog.showMessageBox({
+    type: 'question',
+    title: '关闭远程文件',
+    message: `要保存对“${tab.title}”的修改吗？`,
+    detail: '保存会通过当前远程 Agent 写入；不保存会丢弃本次修改。',
+    buttons: ['保存', '不保存', '取消'],
+    defaultId: 0,
+    cancelId: 2,
+  })
+  if (response === 2) return false
+  if (response === 0 && !(await draft.save())) return false
+  if (response === 1) draft.discard()
+  clearRemoteFileDraft(tab.id)
+  useTabStore.getState().closeTab(tab.id)
+  return true
+}
+
 function terminalHasActiveProcess(tab: Tab): boolean {
   return ['starting', 'running', 'blocked'].includes(tab.terminal?.status ?? 'idle')
 }
 
 async function closeTerminalView(tab: Tab): Promise<boolean> {
   const terminal = tab.terminal
+  if (
+    terminal?.runtime.location === 'remote' &&
+    terminal.sessionId &&
+    terminalHasActiveProcess(tab)
+  ) {
+    const { response } = await window.cclinkStudio.dialog.showMessageBox({
+      type: 'question',
+      title: '关闭远程 Terminal',
+      message: '这个远程 Terminal 中仍有正在运行的 Shell。',
+      detail: '可以终止远程 PTY，或只关闭视图并让它在租约内继续运行。',
+      buttons: ['终止并关闭', '保留进程', '取消'],
+      defaultId: 1,
+      cancelId: 2,
+    })
+    if (response === 2) return false
+    if (response === 0) {
+      const result = await window.cclinkStudio.terminal.terminatePty(terminal.sessionId)
+      if (!result.success) {
+        await window.cclinkStudio.dialog.showMessageBox({
+          type: 'error',
+          title: '远程 Terminal 关闭失败',
+          message: '无法确认远程 PTY 已经终止',
+          detail: result.error || '远程 Terminal 后端未返回成功结果',
+          buttons: ['知道了'],
+          defaultId: 0,
+          cancelId: 0,
+        })
+        return false
+      }
+      await recordTerminalLifecycleEvent(terminal, 'closed', '远程 Terminal 已终止并关闭')
+      useTabStore.getState().closeTab(tab.id)
+      return true
+    }
+  }
   const message = terminalHasActiveProcess(tab)
     ? 'Terminal 视图已关闭，进程保留'
     : 'Terminal 视图已关闭'
@@ -203,6 +268,8 @@ export async function closeTabWithDraftPolicy(tabId: string): Promise<boolean> {
   if (tab.type === 'browser' && tab.webResourceDraftRef) {
     return closeWebResourceDraft(tab)
   }
+
+  if (tab.type === 'remote-file') return closeRemoteFile(tab)
 
   if (tab.type !== 'editor') {
     useTabStore.getState().closeTab(tabId)
