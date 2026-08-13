@@ -30,6 +30,7 @@ import {
 import {
   createDefaultAgentConversationConfiguration,
   type AgentConversationConfiguration,
+  type AgentRoleRef,
 } from '../../shared/agent-role'
 import { legacyAgentProfileRefToRoleRef } from '../../shared/agent-profile'
 
@@ -37,6 +38,7 @@ interface AgentIpcDeps {
   trustedRendererGuard: TrustedRendererGuard
   getAgentBridge: () => AgentBridge | null
   getAgentRoleRegistry?: () => AgentRoleRegistry | null
+  getDefaultAgentRoleRef?: () => AgentRoleRef
   permissionManager: PermissionManager
   getMcpClientMgr: () => McpClientManager | null
   getCapabilities?: () => AgentCapabilityStatus[]
@@ -272,6 +274,13 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
 
   handle(agentIpc.setRoleArchived, (_event, roleId, archived) => {
     const registry = deps.getAgentRoleRegistry?.()
+    const defaultRoleRef = deps.getDefaultAgentRoleRef?.()
+    if (archived && defaultRoleRef?.roleId === roleId) {
+      return {
+        success: false,
+        error: '该角色是新会话默认角色；请先设置其他默认角色，再归档。',
+      }
+    }
     return (
       registry?.setArchived(roleId, archived) ?? {
         success: false,

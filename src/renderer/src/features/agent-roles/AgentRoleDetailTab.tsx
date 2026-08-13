@@ -62,7 +62,7 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
   useEffect(() => setEditing(false), [tab.agentRole?.roleId, tab.agentRole?.version])
 
   if (tab.agentRole?.roleId === '__new-local-role__') {
-    return <AgentRoleEditor />
+    return <AgentRoleEditor tabId={tab.id} />
   }
 
   if (error) {
@@ -104,12 +104,13 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
   }
 
   if (editing && role.source !== 'builtin' && role.isLatest) {
-    return <AgentRoleEditor role={role} />
+    return <AgentRoleEditor tabId={tab.id} role={role} />
   }
 
   const roleRef = { roleId: role.roleId, version: role.version }
   const applied = agentRoleRefsEqual(roleRef, conversation?.configuration.roleRef)
   const isDefault = agentRoleRefsEqual(roleRef, defaultRoleRef)
+  const isDefaultRole = role.roleId === defaultRoleRef.roleId
   const roleVersions = roles
     .filter((candidate) => candidate.roleId === role.roleId)
     .sort((left, right) => right.version - left.version)
@@ -149,6 +150,10 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
   }
 
   const setArchived = async (): Promise<void> => {
+    if (!role.archived && isDefaultRole) {
+      showToast('该角色是新会话默认角色；请先设置其他默认角色，再归档。', 'error')
+      return
+    }
     const result = await window.cclinkStudio.agent.setRoleArchived(role.roleId, !role.archived)
     if (!result.success || !result.role) {
       showToast(result.error ?? '角色归档状态保存失败', 'error')
@@ -214,7 +219,11 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
             </button>
           )}
           {role.source !== 'builtin' && role.isLatest && (
-            <button type="button" onClick={() => void setArchived()}>
+            <button
+              type="button"
+              onClick={() => void setArchived()}
+              title={!role.archived && isDefaultRole ? '请先设置其他新会话默认角色' : undefined}
+            >
               {role.archived ? '恢复' : '归档'}
             </button>
           )}

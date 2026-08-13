@@ -282,6 +282,13 @@ export const useTabStore = create<TabState>((set, get) => ({
           state.tabs.find((tab) => tab.id === state.activeTabId && tab.type === 'agent-role') ??
           state.tabs.find((tab) => tab.type === 'agent-role')
         if (existing) {
+          if (
+            existing.dirty &&
+            (existing.agentRole?.roleId !== agentRole.roleId ||
+              existing.agentRole.version !== agentRole.version)
+          ) {
+            return { activeTabId: existing.id }
+          }
           const nextTabs = state.tabs
             .filter((tab) => tab.type !== 'agent-role' || tab.id === existing.id)
             .map((tab) =>

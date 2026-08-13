@@ -216,6 +216,30 @@ describe('useTabStore', () => {
       expect(useTabStore.getState().activeTabId).toBe(firstId)
     })
 
+    it('底层 openTab 不能覆盖带未保存草稿的角色配置目标', () => {
+      useTabStore.getState().openTab({
+        type: 'agent-role',
+        title: '角色配置',
+        icon: '◇',
+        agentRole: { roleId: 'local-role', version: 1 },
+      })
+      const roleTabId = useTabStore.getState().activeTabId!
+      useTabStore.getState().updateTabDirty(roleTabId, true)
+
+      useTabStore.getState().openTab({
+        type: 'agent-role',
+        title: '角色配置',
+        icon: '◇',
+        agentRole: { roleId: 'public-governance', version: 1 },
+      })
+
+      expect(useTabStore.getState().tabs.find((tab) => tab.id === roleTabId)).toMatchObject({
+        dirty: true,
+        agentRole: { roleId: 'local-role', version: 1 },
+      })
+      expect(useTabStore.getState().activeTabId).toBe(roleTabId)
+    })
+
     it('切换角色时收敛运行中遗留的重复配置 Tab', () => {
       useTabStore.setState({
         tabs: [

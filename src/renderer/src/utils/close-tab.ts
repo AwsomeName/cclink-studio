@@ -5,6 +5,8 @@ import { resolveConversationTab } from './conversation-tab'
 import { recordTerminalLifecycleEvent } from './terminal-lifecycle'
 import { runEditorSaveGuard } from '../features/editor-save-guard'
 import { clearRemoteFileDraft, getRemoteFileDraft } from './remote-file-draft-registry'
+import { confirmAgentRoleDraftExit } from '../features/agent-roles/agent-role-draft-policy'
+import { clearAgentRoleDraftController } from '../features/agent-roles/agent-role-draft-registry'
 
 function getEditorFileKey(tab: Tab): string {
   return tab.filePath ?? `virtual:${tab.id}`
@@ -270,6 +272,13 @@ export async function closeTabWithDraftPolicy(tabId: string): Promise<boolean> {
   }
 
   if (tab.type === 'remote-file') return closeRemoteFile(tab)
+
+  if (tab.type === 'agent-role') {
+    if (!(await confirmAgentRoleDraftExit(tab.id))) return false
+    clearAgentRoleDraftController(tab.id)
+    useTabStore.getState().closeTab(tab.id)
+    return true
+  }
 
   if (tab.type !== 'editor') {
     useTabStore.getState().closeTab(tabId)

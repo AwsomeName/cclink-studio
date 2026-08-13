@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AgentRoleDraft, AgentRoleSummary, AgentSkillRef } from '@shared/agent-role'
 import { useToastStore } from '../../components/common/Toast'
 import { useAgentStore } from '../../stores/agent-store'
@@ -8,8 +8,14 @@ import { useWorkspaceStore } from '../../stores/workspace-store'
 import { notifyAgentRolesChanged } from '../agent-profiles/use-agent-profiles'
 import { useAgentSkills } from '../agent-skills/use-agent-skills'
 import { AgentRoleIcon } from './agent-role-presentation'
+import {
+  clearAgentRoleDraftController,
+  getAgentRoleDraftController,
+  registerAgentRoleDraftController,
+} from './agent-role-draft-registry'
 
 interface AgentRoleEditorProps {
+  tabId: string
   role?: AgentRoleSummary
 }
 
@@ -65,14 +71,18 @@ function draftFromRole(role?: AgentRoleSummary): AgentRoleDraft {
       }
 }
 
-export function AgentRoleEditor({ role }: AgentRoleEditorProps): React.ReactElement {
-  const [draft, setDraft] = useState<AgentRoleDraft>(() => draftFromRole(role))
+export function AgentRoleEditor({ tabId, role }: AgentRoleEditorProps): React.ReactElement {
+  const initialDraft = useMemo(() => draftFromRole(role), [role])
+  const [draft, setDraft] = useState<AgentRoleDraft>(
+    () => getAgentRoleDraftController(tabId)?.draft ?? initialDraft,
+  )
   const [saving, setSaving] = useState(false)
   const showToast = useToastStore((state) => state.show)
   const openTab = useTabStore((state) => state.openTab)
   const createConversation = useAgentStore((state) => state.createConversation)
   const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const { skills } = useAgentSkills()
+  const updateTabDirty = useTabStore((state) => state.updateTabDirty)
 
   const editing = Boolean(role)
   const canSave = useMemo(
@@ -87,31 +97,63 @@ export function AgentRoleEditor({ role }: AgentRoleEditorProps): React.ReactElem
     [draft],
   )
 
-  const save = async (): Promise<void> => {
-    if (!canSave) return
-    setSaving(true)
-    const result = role
-      ? await window.cclinkStudio.agent.updateRole(role.roleId, role.version, draft)
-      : await window.cclinkStudio.agent.createRole(draft)
-    setSaving(false)
-    if (!result.success || !result.role) {
-      showToast(result.error ?? '角色保存失败', 'error')
-      return
+  const save = useCallback(async (): Promise<boolean> => {
+    if (saving) {
+      showToast('角色正在保存，请稍候', 'error')
+      return false
     }
-    notifyAgentRolesChanged()
-    openTab({
-      type: 'agent-role',
-      title: '角色配置',
-      icon: '◇',
-      agentRole: result.role,
-    })
-    showToast(
-      role
-        ? `已保存为不可变新版本 v${result.role.version}；旧会话仍固定原版本`
-        : `已创建「${result.role.label}」`,
-      'success',
-    )
-  }
+    if (!canSave) {
+      showToast('请先填写名称、简介、目标、行为规则和边界，再保存角色', 'error')
+      return false
+    }
+    setSaving(true)
+    try {
+      const result = role
+        ? await window.cclinkStudio.agent.updateRole(role.roleId, role.version, draft)
+        : await window.cclinkStudio.agent.createRole(draft)
+      if (!result.success || !result.role) {
+        showToast(result.error ?? '角色保存失败', 'error')
+        return false
+      }
+      updateTabDirty(tabId, false)
+      clearAgentRoleDraftController(tabId)
+      notifyAgentRolesChanged()
+      openTab({
+        type: 'agent-role',
+        title: '角色配置',
+        icon: '◇',
+        agentRole: result.role,
+      })
+      showToast(
+        role
+          ? `已保存为不可变新版本 v${result.role.version}；旧会话仍固定原版本`
+          : `已创建「${result.role.label}」`,
+        'success',
+      )
+      return true
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '角色保存失败', 'error')
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }, [canSave, draft, openTab, role, saving, showToast, tabId, updateTabDirty])
+
+  const discard = useCallback((): void => {
+    setDraft(structuredClone(initialDraft))
+    updateTabDirty(tabId, false)
+    clearAgentRoleDraftController(tabId)
+  }, [initialDraft, tabId, updateTabDirty])
+
+  const dirty = useMemo(
+    () => JSON.stringify(draft) !== JSON.stringify(initialDraft),
+    [draft, initialDraft],
+  )
+
+  useEffect(() => {
+    updateTabDirty(tabId, dirty)
+    registerAgentRoleDraftController(tabId, { draft: structuredClone(draft), save, discard })
+  }, [dirty, discard, draft, save, tabId, updateTabDirty])
 
   const toggleSkill = (ref: AgentSkillRef): void => {
     setDraft((current) => {
@@ -160,7 +202,12 @@ export function AgentRoleEditor({ role }: AgentRoleEditorProps): React.ReactElem
               在新会话试用
             </button>
           )}
-          <button type="button" className="primary" disabled={!canSave || saving} onClick={save}>
+          <button
+            type="button"
+            className="primary"
+            disabled={!canSave || saving}
+            onClick={() => void save()}
+          >
             {saving ? '保存中…' : editing ? '保存为新版本' : '创建角色'}
           </button>
         </div>

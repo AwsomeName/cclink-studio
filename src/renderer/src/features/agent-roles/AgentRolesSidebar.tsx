@@ -6,6 +6,7 @@ import { useTabStore } from '../../stores/tab-store'
 import { notifyAgentRolesChanged, useAgentRoles } from '../agent-profiles/use-agent-profiles'
 import { AgentRoleIcon } from './agent-role-presentation'
 import { useToastStore } from '../../components/common/Toast'
+import { confirmAgentRoleDraftExit, openAgentRoleDetail } from './agent-role-draft-policy'
 
 export function AgentRolesSidebar(): React.ReactElement {
   const { roles, error, reload } = useAgentRoles()
@@ -15,7 +16,6 @@ export function AgentRolesSidebar(): React.ReactElement {
   const activeConversationId = useAgentStore((state) => state.activeConversationId)
   const conversation = useAgentStore((state) => state.conversations[activeConversationId])
   const defaultRoleRef = useSettingsStore((state) => state.settings.defaultAgentRoleRef)
-  const openTab = useTabStore((state) => state.openTab)
   const tabs = useTabStore((state) => state.tabs)
   const activeTabId = useTabStore((state) => state.activeTabId)
   const openRoleRef = useMemo(() => {
@@ -33,17 +33,14 @@ export function AgentRolesSidebar(): React.ReactElement {
     (role) => role.source !== 'builtin' && role.isLatest && role.archived,
   )
 
-  const openRole = (role: { roleId: string; version: number }): void =>
-    openTab({
-      type: 'agent-role',
-      title: '角色配置',
-      icon: '◇',
-      agentRole: { roleId: role.roleId, version: role.version },
-    })
+  const openRole = (role: { roleId: string; version: number }): Promise<boolean> =>
+    openAgentRoleDetail({ roleId: role.roleId, version: role.version })
 
   const importRole = async (): Promise<void> => {
     setImporting(true)
     try {
+      const roleTab = useTabStore.getState().tabs.find((tab) => tab.type === 'agent-role')
+      if (roleTab && !(await confirmAgentRoleDraftExit(roleTab.id))) return
       const selected = await window.cclinkStudio.dialog.showOpenDialog({
         title: '选择角色包中的 role.json',
         filters: [{ name: 'CCLink 角色包', extensions: ['json'] }],
@@ -93,7 +90,7 @@ export function AgentRolesSidebar(): React.ReactElement {
         return
       }
       notifyAgentRolesChanged()
-      openRole(committed.role)
+      await openRole(committed.role)
       showToast(`已导入「${committed.role.label}」v${committed.role.version}`, 'success')
     } finally {
       setImporting(false)
@@ -111,7 +108,7 @@ export function AgentRolesSidebar(): React.ReactElement {
           key={`${role.roleId}@${role.version}`}
           data-role-source={role.source}
           className={`agent-role-row${opened ? ' opened' : ''}${applied ? ' applied' : ''}`}
-          onClick={() => openRole(role)}
+          onClick={() => void openRole(role)}
           title="打开角色配置；不会自动切换当前会话"
         >
           <span className="agent-role-row-icon">
@@ -166,7 +163,7 @@ export function AgentRolesSidebar(): React.ReactElement {
       <div className="agent-role-sidebar-toolbar">
         <button
           type="button"
-          onClick={() => openRole({ roleId: '__new-local-role__', version: 0 })}
+          onClick={() => void openRole({ roleId: '__new-local-role__', version: 0 })}
         >
           ＋ 新建角色
         </button>

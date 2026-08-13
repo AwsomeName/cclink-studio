@@ -253,6 +253,48 @@ describe('registerAgentIpc', () => {
     ])
   })
 
+  it('blocks archiving the role used as the new-conversation default', () => {
+    const deps = createDeps()
+    const setArchived = vi.fn()
+    registerAgentIpc({
+      ...deps,
+      getAgentRoleRegistry: () => ({ setArchived }),
+      getDefaultAgentRoleRef: () => ({ roleId: 'local-default', version: 2 }),
+    } as never)
+
+    expect(
+      mockIpcMain.handlers.get('agent:setRoleArchived')?.(
+        { sender: 'trusted' },
+        'local-default',
+        true,
+      ),
+    ).toEqual({
+      success: false,
+      error: '该角色是新会话默认角色；请先设置其他默认角色，再归档。',
+    })
+    expect(setArchived).not.toHaveBeenCalled()
+  })
+
+  it('allows archiving a local role that is not the new-conversation default', () => {
+    const deps = createDeps()
+    const archivedRole = { roleId: 'another-local-role', version: 1, archived: true }
+    const setArchived = vi.fn(() => ({ success: true, role: archivedRole }))
+    registerAgentIpc({
+      ...deps,
+      getAgentRoleRegistry: () => ({ setArchived }),
+      getDefaultAgentRoleRef: () => ({ roleId: 'local-default', version: 2 }),
+    } as never)
+
+    expect(
+      mockIpcMain.handlers.get('agent:setRoleArchived')?.(
+        { sender: 'trusted' },
+        'another-local-role',
+        true,
+      ),
+    ).toEqual({ success: true, role: archivedRole })
+    expect(setArchived).toHaveBeenCalledWith('another-local-role', true)
+  })
+
   it('rejects credential-bearing MCP URLs before changing configuration', () => {
     const deps = createDeps()
     registerAgentIpc(deps as never)

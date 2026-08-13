@@ -76,6 +76,24 @@ describe('AgentRoleRegistry', () => {
     expect(registry.resolve(copied.role).label).toContain('副本')
   })
 
+  it('restores a legacy archived default without changing its role reference', async () => {
+    const { registry } = await createRegistry()
+    const created = await registry.create(draft())
+    await registry.setArchived(created.role!.roleId, true)
+
+    await expect(registry.restoreArchivedDefault(created.role!)).resolves.toMatchObject({
+      success: true,
+      role: {
+        roleId: created.role!.roleId,
+        version: created.role!.version,
+        archived: false,
+      },
+    })
+    expect(registry.list().find((role) => role.roleId === created.role!.roleId)).toMatchObject({
+      archived: false,
+    })
+  })
+
   it('exports and imports a package with the same content fingerprint', async () => {
     const source = await createRegistry()
     const target = await createRegistry()

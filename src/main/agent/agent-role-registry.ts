@@ -495,6 +495,12 @@ export class AgentRoleRegistry {
     }
   }
 
+  async restoreArchivedDefault(ref: AgentRoleRef): Promise<AgentRoleMutationResult | null> {
+    const record = this.snapshot.roles.find((item) => item.roleId === ref.roleId)
+    if (!record?.archived) return null
+    return this.setArchived(ref.roleId, false)
+  }
+
   async export(ref: AgentRoleRef, parentDirectory: string): Promise<AgentRoleExportResult> {
     try {
       if (!isAbsolute(parentDirectory)) throw new Error('导出目录必须是绝对路径')

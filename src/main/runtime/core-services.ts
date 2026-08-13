@@ -72,6 +72,22 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
   await runtime.settingsService.loadState()
   console.log('[CCLink Studio] 设置系统已初始化')
 
+  const restoredDefaultRole = await runtime.agentRoleRegistry?.restoreArchivedDefault(
+    runtime.settingsService.getAll().defaultAgentRoleRef,
+  )
+  if (restoredDefaultRole) {
+    if (restoredDefaultRole.success && restoredDefaultRole.role) {
+      console.warn(
+        `[CCLink Studio] 已恢复旧版本中被归档的新会话默认角色: ${restoredDefaultRole.role.roleId}`,
+      )
+    } else {
+      console.error(
+        '[CCLink Studio] 无法恢复旧版本中被归档的新会话默认角色:',
+        restoredDefaultRole.error,
+      )
+    }
+  }
+
   runtime.runtimeComponentManager = new RuntimeComponentManager(
     join(app.getPath('userData'), 'runtime-components'),
   )
@@ -304,6 +320,7 @@ export async function bootstrapMainProcessServices(
     trustedRendererGuard: runtime.trustedRendererGuard,
     getAgentBridge: () => runtime.agentBridge,
     getAgentRoleRegistry: () => runtime.agentRoleRegistry,
+    getDefaultAgentRoleRef: () => runtime.settingsService!.getAll().defaultAgentRoleRef,
     permissionManager: runtime.permissionManager,
     getMcpClientMgr: () => runtime.mcpClientMgr,
     getCapabilities: () => getAgentCapabilities(runtime),
