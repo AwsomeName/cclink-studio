@@ -280,6 +280,7 @@ export interface AgentApiContract {
     sessionId: string | null,
     configuration: import('./agent-role').AgentConversationConfiguration,
     sessionCompatibilityFingerprint?: string | null,
+    skills?: import('./agent-role').AgentSkillRef[],
   ): Promise<void>
   listRoles(): Promise<import('./agent-role').AgentRoleSummary[]>
   listSkills(): Promise<import('./agent-skill').AgentSkillSummary[]>

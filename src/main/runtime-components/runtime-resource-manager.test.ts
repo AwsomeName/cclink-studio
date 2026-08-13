@@ -187,6 +187,48 @@ describe('RuntimeResourceManager', () => {
     await expect(manager.resolve('scrcpy-server')).resolves.toMatchObject({ version: '2.3.1' })
   })
 
+  it('blocks file mutations while a business consumer holds a resource lease', async () => {
+    const root = await temporaryRoot()
+    const { manager, downloadDirect } = createFixtureManager(root)
+    await manager.initialize()
+    expect((await manager.install('scrcpy-server')).success).toBe(true)
+
+    const lease = await manager.acquire('scrcpy-server')
+    expect(lease).not.toBeNull()
+    await expect(manager.repair('scrcpy-server')).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('COMPONENT_IN_USE'),
+    })
+    await expect(manager.uninstall('scrcpy-server')).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('COMPONENT_IN_USE'),
+    })
+    expect(downloadDirect).toHaveBeenCalledTimes(1)
+
+    lease?.release()
+    lease?.release()
+    await expect(manager.uninstall('scrcpy-server')).resolves.toMatchObject({ success: true })
+  })
+
+  it('replaces a stale failure with the current integrity failure discovered by resolve', async () => {
+    const root = await temporaryRoot()
+    const { manager, downloadDirect } = createFixtureManager(root)
+    await manager.initialize()
+    expect((await manager.install('scrcpy-server')).success).toBe(true)
+    downloadDirect.mockRejectedValueOnce(
+      new RuntimeComponentInstallError('DOWNLOAD_FAILED', 'stale download failure'),
+    )
+    await manager.repair('scrcpy-server')
+
+    const resolved = await manager.resolve('scrcpy-server')
+    await writeFile(resolved!.files['scrcpy-server.jar'], 'damaged')
+    await expect(manager.resolve('scrcpy-server')).resolves.toBeNull()
+
+    const status = manager.getStatus('scrcpy-server')
+    expect(status).toMatchObject({ health: 'damaged', phase: 'failed' })
+    expect(status.failure?.message).not.toContain('stale download failure')
+  })
+
   const realSmoke = process.env.CCLINK_RUNTIME_RESOURCES_REAL_SMOKE === '1' ? it : it.skip
   realSmoke(
     'downloads and verifies all three real catalog resources',

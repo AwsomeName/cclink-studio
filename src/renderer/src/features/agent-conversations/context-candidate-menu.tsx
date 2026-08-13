@@ -104,7 +104,7 @@ export function SkillCandidateMenu({
       ) : (
         candidates.map((candidate, index) => (
           <button
-            key={candidate.id}
+            key={`${candidate.skillId}@${candidate.version}`}
             className={`agent-resource-menu-row${index === selectedIndex ? ' selected' : ''}`}
             role="option"
             aria-selected={index === selectedIndex}

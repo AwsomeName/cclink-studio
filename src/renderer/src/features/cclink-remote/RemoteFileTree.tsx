@@ -186,11 +186,7 @@ export function RemoteFileTree({
       clearRemoteFileDraftPaths(selected.path)
       useTabStore
         .getState()
-        .closeRemoteFilePaths(
-          workspaceRef.endpointId,
-          workspaceRef.workspaceId,
-          selected.path,
-        )
+        .closeRemoteFilePaths(workspaceRef.endpointId, workspaceRef.workspaceId, selected.path)
       setSelected(null)
       await loadRoot()
     } catch (mutationError) {
@@ -237,7 +233,16 @@ export function RemoteFileTree({
         <button
           type="button"
           onClick={() =>
-            void window.cclinkStudio.remote.diagnose(workspaceRef).then(setDiagnostic)
+            void window.cclinkStudio.remote
+              .diagnose(workspaceRef)
+              .then(setDiagnostic)
+              .catch((diagnosticError: unknown) =>
+                setError(
+                  diagnosticError instanceof Error
+                    ? diagnosticError.message
+                    : String(diagnosticError),
+                ),
+              )
           }
         >
           诊断

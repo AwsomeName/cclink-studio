@@ -84,6 +84,7 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
           browserManager: runtime.browserManager ?? undefined,
           browserTaskRuntime: runtime.browserTaskRuntime ?? undefined,
           usageLedgerService: runtime.usageLedgerService ?? undefined,
+          roleRegistry: runtime.agentRoleRegistry ?? undefined,
         },
       )
 

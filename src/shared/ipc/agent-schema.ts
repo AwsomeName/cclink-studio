@@ -35,6 +35,56 @@ export const agentRoleRefSchema = z
   })
   .strict()
 
+export const agentSkillRefSchema = z
+  .object({
+    skillId: boundedIdentifierSchema(),
+    version: z.number().int().positive().max(1_000_000),
+  })
+  .strict()
+
+export const agentSkillRefsSchema = z.array(agentSkillRefSchema).max(8)
+
+export const agentRoleIconSchema = z.enum([
+  'assistant',
+  'challenger',
+  'fact-checker',
+  'product',
+  'architect',
+  'governance',
+  'rights',
+])
+
+const agentRoleTextListSchema = z.array(boundedTextSchema(2_000).trim().min(1)).max(32)
+
+export const agentRoleDraftSchema = z
+  .object({
+    label: boundedTextSchema(80).trim().min(1),
+    description: boundedTextSchema(240).trim().min(1),
+    icon: agentRoleIconSchema,
+    goals: agentRoleTextListSchema.min(1),
+    suitableFor: agentRoleTextListSchema,
+    unsuitableFor: agentRoleTextListSchema,
+    instructions: agentRoleTextListSchema.min(1),
+    boundaries: agentRoleTextListSchema.min(1),
+    examples: z
+      .array(
+        z
+          .object({
+            input: boundedTextSchema(2_000).trim().min(1),
+            focus: boundedTextSchema(2_000).trim().min(1),
+          })
+          .strict(),
+      )
+      .max(16),
+    soulMarkdown: boundedTextSchema(64 * 1024)
+      .trim()
+      .min(1)
+      .optional(),
+    recommendedSkillRefs: agentSkillRefsSchema,
+    disclaimer: boundedTextSchema(2_000).trim().min(1).optional(),
+  })
+  .strict()
+
 export const agentConversationConfigurationSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -134,19 +184,7 @@ const resourcesSchema = z
   .max(100)
   .and(boundedJsonValueSchema(MAX_RESOURCE_PAYLOAD_BYTES, 'Agent 资源'))
 
-const skillsSchema = z
-  .array(
-    z
-      .object({
-        id: boundedIdentifierSchema(),
-        name: boundedIdentifierSchema(),
-        label: boundedTextSchema(512).trim().min(1),
-        description: boundedTextSchema(4_096).optional(),
-        source: z.enum(['builtin', 'user', 'workspace']).optional(),
-      })
-      .strict(),
-  )
-  .max(50)
+const skillsSchema = agentSkillRefsSchema
 
 const imagesSchema = z
   .array(

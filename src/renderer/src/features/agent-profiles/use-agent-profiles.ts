@@ -3,6 +3,12 @@ import type { AgentRoleSummary } from '@shared/agent-role'
 
 let cachedRoles: AgentRoleSummary[] | null = null
 let pendingRoles: Promise<AgentRoleSummary[]> | null = null
+const AGENT_ROLES_CHANGED_EVENT = 'cclink-studio-agent-roles-changed'
+
+export function notifyAgentRolesChanged(): void {
+  cachedRoles = null
+  window.dispatchEvent(new Event(AGENT_ROLES_CHANGED_EVENT))
+}
 
 function loadRoles(): Promise<AgentRoleSummary[]> {
   if (cachedRoles) return Promise.resolve(cachedRoles)
@@ -40,6 +46,15 @@ export function useAgentRoles(): {
       cancelled = true
     }
   }, [revision])
+
+  useEffect(() => {
+    const reloadFromRegistry = (): void => {
+      cachedRoles = null
+      setRevision((value) => value + 1)
+    }
+    window.addEventListener(AGENT_ROLES_CHANGED_EVENT, reloadFromRegistry)
+    return () => window.removeEventListener(AGENT_ROLES_CHANGED_EVENT, reloadFromRegistry)
+  }, [])
 
   return {
     roles,

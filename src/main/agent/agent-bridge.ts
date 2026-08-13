@@ -40,7 +40,8 @@ import {
   BuiltinAgentRoleRegistry,
   type BuiltinAgentRole,
 } from './agent-profile-registry'
-import { BuiltinAgentSkillRegistry } from './agent-skill-registry'
+import { BuiltinAgentSkillRegistry, type BuiltinAgentSkill } from './agent-skill-registry'
+import type { AgentRoleRegistry } from './agent-role-registry'
 import type { AgentSkillSummary } from '../../shared/agent-skill'
 import {
   agentRoleRefsEqual,
@@ -48,6 +49,7 @@ import {
   type AgentConversationConfiguration,
   type AgentRoleSummary,
   type AgentRunConfigurationReceipt,
+  type AgentSkillRef,
 } from '../../shared/agent-role'
 
 const AGENT_EVENT_CHANNELS: Record<AgentRuntimeEvent['type'], string> = {
@@ -58,6 +60,8 @@ const AGENT_EVENT_CHANNELS: Record<AgentRuntimeEvent['type'], string> = {
 }
 
 export interface AgentBridgeOptions {
+  /** 主进程角色定义唯一事实源；包含内置与 userData 本地不可变版本。 */
+  roleRegistry?: AgentRoleRegistry
   agentEngine?: 'local-claude-code'
   backendType?: 'claude-code' | 'http-api'
   /** 主进程 ClaudeRuntimeManager 已探测的 Claude Code executable 绝对路径。 */
@@ -98,9 +102,10 @@ export class AgentBridge {
   private readonly permissionManager: PermissionManager
   private readonly activeBrowserTaskIds = new Map<string, string>()
   private readonly sessionDiagnosticRefs = new SessionDiagnosticReferenceStore()
-  private readonly roleRegistry = new BuiltinAgentRoleRegistry()
+  private readonly roleRegistry: BuiltinAgentRoleRegistry | AgentRoleRegistry
   private readonly skillRegistry = new BuiltinAgentSkillRegistry()
   private readonly conversationConfigurations = new Map<string, AgentConversationConfiguration>()
+  private readonly conversationSkills = new Map<string, BuiltinAgentSkill[]>()
   private readonly deps: {
     playwrightBridge: PlaywrightBridge | null
     toolHost: McpToolHost
@@ -128,6 +133,7 @@ export class AgentBridge {
   ) {
     this.mainWindow = mainWindow
     this.permissionManager = permissionManager
+    this.roleRegistry = options?.roleRegistry ?? new BuiltinAgentRoleRegistry()
     this.deps = {
       playwrightBridge,
       toolHost,
@@ -200,6 +206,7 @@ export class AgentBridge {
       throw new Error('Agent 配置正在切换，请稍后重试')
     }
     const binding = this.bindConversationConfiguration(conversationId, context?.configuration)
+    const resolvedSkills = this.bindConversationSkills(conversationId, context?.skills ?? [])
     let runtimeSessionMode: AgentRunConfigurationReceipt['runtimeSessionMode'] = 'new'
     if (context?.sessionId !== undefined) {
       const restorableSessionId = this.resolveRestorableSessionId(
@@ -234,7 +241,15 @@ export class AgentBridge {
       await this.runtime.sendMessage(
         buildAgentMessageWithContext(message, {
           resources: context?.resources,
-          skills: context?.skills,
+          skills: resolvedSkills.map((skill) => ({
+            skillId: skill.skillId,
+            version: skill.version,
+            label: skill.label,
+            description: skill.description,
+            source: skill.source,
+            contentHash: skill.contentHash,
+            markdown: skill.markdown,
+          })),
         }),
         conversationId,
         {
@@ -258,6 +273,10 @@ export class AgentBridge {
       configurationRevision: binding.configuration.revision,
       configurationFingerprint: this.getConversationCompatibilityFingerprint(conversationId),
       runtimeSessionMode,
+      skills: resolvedSkills.map((skill) => ({
+        ref: { skillId: skill.skillId, version: skill.version },
+        contentHash: skill.contentHash,
+      })),
     }
   }
 
@@ -469,8 +488,10 @@ export class AgentBridge {
     sessionId: string | null,
     configuration: AgentConversationConfiguration,
     sessionCompatibilityFingerprint?: string | null,
+    skills: AgentSkillRef[] = [],
   ): void {
     this.bindConversationConfiguration(conversationId, configuration)
+    this.bindConversationSkills(conversationId, skills)
     this.runtime.restoreConversation(
       conversationId,
       this.resolveRestorableSessionId(conversationId, sessionId, sessionCompatibilityFingerprint),
@@ -492,6 +513,7 @@ export class AgentBridge {
     this.sessionDiagnosticRefs.delete(sessionId)
     await this.runtime.closeConversation(conversationId)
     this.conversationConfigurations.delete(conversationId)
+    this.conversationSkills.delete(conversationId)
   }
 
   /**
@@ -636,6 +658,7 @@ export class AgentBridge {
     this.sessionDiagnosticRefs.clear()
     this.runtimeListeners.clear()
     this.conversationConfigurations.clear()
+    this.conversationSkills.clear()
   }
 
   private handleRuntimeEvent(event: AgentRuntimeEvent): void {
@@ -858,12 +881,30 @@ export class AgentBridge {
     )
   }
 
+  private bindConversationSkills(
+    conversationId: string,
+    refs: AgentSkillRef[],
+  ): BuiltinAgentSkill[] {
+    const nextSkills = this.skillRegistry.resolveMany(refs)
+    const currentSkills = this.conversationSkills.get(conversationId)
+    if (currentSkills && !agentSkillSetsEqual(currentSkills, nextSkills)) {
+      if (this.runtime.isBusy(conversationId)) {
+        throw new Error('Agent 正在响应中，暂时不能修改 Skill')
+      }
+      this.runtime.resetSession(conversationId)
+    }
+    this.conversationSkills.set(conversationId, nextSkills)
+    return nextSkills
+  }
+
   private getConversationCompatibilityFingerprint(conversationId: string): string | null {
     const configuration = this.getConversationConfiguration(conversationId)
+    const skills = this.conversationSkills.get(conversationId) ?? []
     return this.roleRegistry.buildConversationCompatibilityFingerprint(
       this.sessionCompatibilityFingerprint,
       configuration.roleRef,
       configuration.revision,
+      skills.map((skill) => `${skill.skillId}@${skill.version}:${skill.contentHash}`),
     )
   }
 
@@ -877,6 +918,18 @@ export class AgentBridge {
       systemInstructions: this.roleRegistry.buildSystemInstructions(role),
     }
   }
+}
+
+function agentSkillSetsEqual(left: BuiltinAgentSkill[], right: BuiltinAgentSkill[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every(
+      (skill, index) =>
+        skill.skillId === right[index]?.skillId &&
+        skill.version === right[index]?.version &&
+        skill.contentHash === right[index]?.contentHash,
+    )
+  )
 }
 
 export function resolveCompatibleClaudeSessionId(

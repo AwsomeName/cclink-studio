@@ -430,8 +430,8 @@ export function ComponentManagementSettings(): React.ReactElement {
           <tbody>
             {rows.map((row) => {
               const currentBusy = busyOperation?.id === row.id || row.busy
-              const managedClaudeActive =
-                row.managerKind === 'claude' && claudeStatus?.active?.source === 'managed'
+              const managedClaudeSelected =
+                row.managerKind === 'claude' && claudeStatus?.selection.source === 'managed'
               const progress =
                 row.managerKind === 'claude'
                   ? managedClaudeStatus?.progress?.percent
@@ -526,9 +526,9 @@ export function ComponentManagementSettings(): React.ReactElement {
                             <button
                               type="button"
                               className="settings-secondary-btn component-row-action component-row-action-danger"
-                              disabled={Boolean(currentBusy || managedClaudeActive)}
+                              disabled={Boolean(currentBusy || managedClaudeSelected)}
                               title={
-                                managedClaudeActive
+                                managedClaudeSelected
                                   ? '请先在 Agent 设置中切换到系统或自定义 Runtime'
                                   : '卸载 Studio 管理的版本'
                               }

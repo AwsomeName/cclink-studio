@@ -51,6 +51,10 @@ export interface ResolvedRuntimeResource {
   files: Record<string, string>
 }
 
+export interface ResolvedRuntimeResourceLease extends ResolvedRuntimeResource {
+  release(): void
+}
+
 export interface RuntimeResourceManagerDependencies {
   now?: () => number
   downloadNpm?: typeof downloadPackage
@@ -67,6 +71,8 @@ export class RuntimeResourceManager {
     RuntimeResourceComponentId,
     Promise<RuntimeResourceOperationResult>
   >()
+  private readonly activeLeases = new Map<RuntimeResourceComponentId, number>()
+  private readonly mutatingComponents = new Set<RuntimeResourceComponentId>()
 
   constructor(root: string, dependencies: RuntimeResourceManagerDependencies = {}) {
     this.root = resolve(root)
@@ -111,8 +117,10 @@ export class RuntimeResourceManager {
   }
 
   install(componentId: RuntimeResourceComponentId): Promise<RuntimeResourceOperationResult> {
-    return this.startOperation(componentId, () =>
-      this.performInstall(getRuntimeResourceCatalogEntry(componentId), false),
+    return this.startOperation(
+      componentId,
+      () => this.performInstall(getRuntimeResourceCatalogEntry(componentId), false),
+      true,
     )
   }
 
@@ -134,41 +142,48 @@ export class RuntimeResourceManager {
   }
 
   repair(componentId: RuntimeResourceComponentId): Promise<RuntimeResourceOperationResult> {
-    return this.startOperation(componentId, () =>
-      this.performInstall(getRuntimeResourceCatalogEntry(componentId), true),
+    return this.startOperation(
+      componentId,
+      () => this.performInstall(getRuntimeResourceCatalogEntry(componentId), true),
+      true,
     )
   }
 
   uninstall(componentId: RuntimeResourceComponentId): Promise<RuntimeResourceOperationResult> {
-    return this.startOperation(componentId, async () => {
-      const entry = getRuntimeResourceCatalogEntry(componentId)
-      const state = this.state(componentId)
-      state.phase = 'uninstalling'
-      state.failure = null
-      state.progress = null
-      try {
-        await rm(this.versionRoot(entry), { recursive: true, force: true })
-        await rm(this.backupRoot(entry), { recursive: true, force: true })
-        state.installedVersion = null
-        state.health = 'not-installed'
-        state.phase = 'idle'
-        return { success: true, status: this.getStatus(componentId) }
-      } catch (error) {
-        const failure = failureFrom(error)
-        state.phase = 'failed'
-        state.failure = failure
-        return {
-          success: false,
-          status: this.getStatus(componentId),
-          error: `${failure.code}: ${failure.message}`,
+    return this.startOperation(
+      componentId,
+      async () => {
+        const entry = getRuntimeResourceCatalogEntry(componentId)
+        const state = this.state(componentId)
+        state.phase = 'uninstalling'
+        state.failure = null
+        state.progress = null
+        try {
+          await rm(this.versionRoot(entry), { recursive: true, force: true })
+          await rm(this.backupRoot(entry), { recursive: true, force: true })
+          state.installedVersion = null
+          state.health = 'not-installed'
+          state.phase = 'idle'
+          return { success: true, status: this.getStatus(componentId) }
+        } catch (error) {
+          const failure = failureFrom(error)
+          state.phase = 'failed'
+          state.failure = failure
+          return {
+            success: false,
+            status: this.getStatus(componentId),
+            error: `${failure.code}: ${failure.message}`,
+          }
         }
-      }
-    })
+      },
+      true,
+    )
   }
 
   private startOperation(
     componentId: RuntimeResourceComponentId,
     operation: () => Promise<RuntimeResourceOperationResult>,
+    mutatesFiles = false,
   ): Promise<RuntimeResourceOperationResult> {
     if (this.operations.has(componentId)) {
       return Promise.resolve({
@@ -177,9 +192,20 @@ export class RuntimeResourceManager {
         error: 'INSTALL_BUSY: 组件正在执行其他操作',
       })
     }
-    const promise = operation().finally(() => {
-      this.operations.delete(componentId)
-    })
+    if (mutatesFiles && (this.activeLeases.get(componentId) ?? 0) > 0) {
+      return Promise.resolve({
+        success: false,
+        status: this.getStatus(componentId),
+        error: 'COMPONENT_IN_USE: 组件正在被业务使用，请稍后重试',
+      })
+    }
+    if (mutatesFiles) this.mutatingComponents.add(componentId)
+    const promise = Promise.resolve()
+      .then(operation)
+      .finally(() => {
+        this.operations.delete(componentId)
+        if (mutatesFiles) this.mutatingComponents.delete(componentId)
+      })
     this.operations.set(componentId, promise)
     return promise
   }
@@ -196,12 +222,41 @@ export class RuntimeResourceManager {
           entry.files.map((file) => [file.installedPath, join(root, file.installedPath)]),
         ),
       }
-    } catch {
+    } catch (error) {
       const state = this.state(componentId)
       state.installedVersion = null
       state.health = (await pathExists(this.versionRoot(entry))) ? 'damaged' : 'not-installed'
       state.phase = state.health === 'damaged' ? 'failed' : 'idle'
+      state.failure = state.health === 'damaged' ? failureFrom(error) : null
       return null
+    }
+  }
+
+  async acquire(
+    componentId: RuntimeResourceComponentId,
+  ): Promise<ResolvedRuntimeResourceLease | null> {
+    if (this.mutatingComponents.has(componentId)) return null
+
+    this.activeLeases.set(componentId, (this.activeLeases.get(componentId) ?? 0) + 1)
+    let released = false
+    const release = (): void => {
+      if (released) return
+      released = true
+      const remaining = (this.activeLeases.get(componentId) ?? 1) - 1
+      if (remaining > 0) this.activeLeases.set(componentId, remaining)
+      else this.activeLeases.delete(componentId)
+    }
+
+    try {
+      const resource = await this.resolve(componentId)
+      if (!resource) {
+        release()
+        return null
+      }
+      return { ...resource, release }
+    } catch (error) {
+      release()
+      throw error
     }
   }
 

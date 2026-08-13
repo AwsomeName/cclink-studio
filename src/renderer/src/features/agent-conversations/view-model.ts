@@ -7,13 +7,7 @@ import {
 } from '../../../../shared/workspace-ref'
 import type { AgentConversationState } from '../../stores/agent-store'
 import type { AgentSkillSummary } from '@shared/agent-skill'
-import type {
-  AgentMountedResource,
-  AgentMountedResourceKind,
-  AgentMountedSkill,
-  AgentScope,
-  Tab,
-} from '../../types'
+import type { AgentMountedResource, AgentMountedResourceKind, AgentScope, Tab } from '../../types'
 
 export type SessionGroupKey = 'active' | 'today' | 'yesterday' | 'week' | 'earlier'
 export type SessionFilter = 'all' | 'workspace' | 'unbound' | 'running'
@@ -106,7 +100,7 @@ export type AgentResourceCandidate = AgentMountedResource & {
   searchText: string
 }
 
-export type AgentSkillCandidate = AgentMountedSkill & {
+export type AgentSkillCandidate = AgentSkillSummary & {
   searchText: string
 }
 
@@ -711,11 +705,7 @@ export function buildSkillCandidates(
   return skills
     .filter((skill) => skill.available)
     .map((skill) => ({
-      id: skill.skillId,
-      name: skill.name,
-      label: skill.label,
-      description: skill.description,
-      source: skill.source,
+      ...skill,
       searchText: [skill.name, skill.label, skill.description]
         .filter(Boolean)
         .join(' ')

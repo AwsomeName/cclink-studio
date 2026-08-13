@@ -2,15 +2,15 @@ import type {
   AgentConversationContinuity,
   AgentImageAttachment,
   AgentSendResource,
-  AgentSendSkill,
 } from '../../shared/ipc/agent'
 import type { AgentResourceContextSnapshot } from '../../shared/agent-resource-context'
 import type { WorkspaceRef } from '../../shared/workspace-ref'
 import type { AgentConversationConfiguration } from '../../shared/agent-role'
+import type { AgentSkillRef } from '../../shared/agent-role'
 
 export interface AgentSendMessageContext {
   resources?: AgentSendResource[]
-  skills?: AgentSendSkill[]
+  skills?: AgentSkillRef[]
   images?: AgentImageAttachment[]
   runId?: string
   sessionId?: string | null
@@ -21,6 +21,20 @@ export interface AgentSendMessageContext {
   continuity?: AgentConversationContinuity
 }
 
+type AgentCompiledMessageContext = Omit<AgentSendMessageContext, 'skills'> & {
+  skills?: AgentResolvedSkillContext[]
+}
+
+export interface AgentResolvedSkillContext {
+  skillId: string
+  version: number
+  label: string
+  description: string
+  source: 'builtin' | 'user' | 'workspace'
+  contentHash: string
+  markdown: string
+}
+
 const MAX_CONTEXT_RESOURCES = 20
 const MAX_CONTEXT_SKILLS = 8
 const MAX_FIELD_LENGTH = 180
@@ -29,7 +43,7 @@ const MAX_MESSAGE_FILE_RANGE_BYTES = 64 * 1024
 
 export function buildAgentMessageWithContext(
   message: string,
-  context?: AgentSendMessageContext,
+  context?: AgentCompiledMessageContext,
 ): string {
   const resources = normalizeResources(context?.resources)
   const skills = normalizeSkills(context?.skills)
@@ -127,13 +141,15 @@ function normalizeResources(resources?: AgentSendResource[]): AgentSendResource[
   })
 }
 
-function normalizeSkills(skills?: AgentSendSkill[]): AgentSendSkill[] {
+function normalizeSkills(skills?: AgentResolvedSkillContext[]): AgentResolvedSkillContext[] {
   return (skills ?? []).slice(0, MAX_CONTEXT_SKILLS).map((skill) => ({
-    id: truncate(skill.id),
-    name: truncate(skill.name),
+    skillId: truncate(skill.skillId),
+    version: skill.version,
     label: truncate(skill.label),
-    ...(skill.description ? { description: truncate(skill.description) } : {}),
-    ...(skill.source ? { source: skill.source } : {}),
+    description: truncate(skill.description),
+    source: skill.source,
+    contentHash: skill.contentHash,
+    markdown: skill.markdown,
   }))
 }
 

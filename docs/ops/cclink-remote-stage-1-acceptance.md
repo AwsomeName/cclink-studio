@@ -24,9 +24,18 @@
 2. 新建远程 Agent 会话，发送消息并收到流式回复/工具事件；
 3. 打开远程 Terminal，执行 `pwd`，断网恢复后确认 PTY attach 和输出续接。
 
+## 桌面端补齐记录
+
+- 远程文件编辑已接入 `Cmd/Ctrl+S`、未保存关闭确认、部分读取禁止覆盖，以及文件/目录重命名和删除后的 Tab、脏草稿联动。
+- 远程会话已接收入站 `user_text`、`agent_status`、错误状态、搜索、归档和本地恢复。会话与消息使用权限为 `0600` 的独立状态文件；access token、refresh token、IM UserSig 和完整远程身份不进入该文件。
+- 首次启动且当前状态文件不存在时，只读导入旧商业桌面目录 `cclink-state.json` 中会话和消息的白名单字段；不读取或迁移旧 Session、身份文件、密文或系统钥匙串，源文件不修改。
+- 腾讯 IM SDK 的真实掉线/恢复事件已进入统一实时生命周期。远程 PTY 在恢复后执行 attach/序列续接；关闭运行中的远程 Terminal 时由用户选择终止、保留或取消。
+- `RemoteProvider` 现在实时请求 `capability_probe`，远程 Agent 和 PTY 入口不再把“设备在线”当成功能可用；文件树提供连接、协议、文件、Agent 和 PTY 诊断。
+- 以上是桌面代码和自动化门禁完成，不替代在线设备真人验收。
+
 ## 工程验证
 
-- `pnpm verify`：通过（228 个测试文件，1324 通过，2 跳过）。
+- `pnpm verify`：通过（233 个测试文件，1346 通过，2 跳过），包含 typecheck、lint、完整测试和 build。
 - `pnpm build`：通过。
 - `CCLINK_API_URL=off pnpm smoke:local`：11/11 通过。
 - `CCLINK_API_URL=off pnpm smoke:ui`：12/12 通过。
@@ -36,4 +45,4 @@
 
 ## overlay 结论
 
-暂时不能停止旧 commercial overlay 出包。关闭条件是上述写入、远程 Agent 和远程 PTY 在同一 Studio 真实在线 Agent 上通过，并确认统一 Studio 发布路径可回滚。
+暂时不能停止旧 commercial overlay 出包。桌面端已没有已知的计划内迁移功能缺口；关闭条件仍是上述写入、远程 Agent、远程 PTY 及断线恢复在同一 Studio 真实在线 Agent 上通过，并确认统一 Studio 发布路径可回滚。云服务付费门禁尚未闭环也是独立的商业风险，不能用客户端结果替代。

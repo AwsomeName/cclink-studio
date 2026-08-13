@@ -298,6 +298,10 @@ function toSummary(role: BuiltinAgentRole): AgentRoleSummary {
   return {
     roleId: role.id,
     version: role.version,
+    source: 'builtin',
+    archived: false,
+    isLatest: true,
+    createdAt: 0,
     label: role.label,
     description: role.description,
     icon: role.icon,
@@ -382,6 +386,7 @@ export class BuiltinAgentRoleRegistry {
     runtimeCompatibilityFingerprint: string | null,
     ref: AgentRoleRef | null | undefined,
     configurationRevision = 1,
+    skillFingerprints: readonly string[] = [],
   ): string | null {
     if (!runtimeCompatibilityFingerprint) return null
     const profile = this.resolve(ref)
@@ -397,6 +402,8 @@ export class BuiltinAgentRoleRegistry {
       .update(String(AGENT_PROFILE_PROMPT_COMPILER_VERSION))
       .update('\0')
       .update(buildRoleContentHash(profile))
+      .update('\0')
+      .update(skillFingerprints.join('\0'))
       .digest('hex')
   }
 }

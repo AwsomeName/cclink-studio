@@ -77,6 +77,16 @@ test('local packaging rejects a malformed app archive before reporting success',
   assert.match(localPackageScript, /打包期间可能有文件被并发改写/)
 })
 
+test('local packaging binds the packaged app to the exact current source tree', () => {
+  assert.match(localPackageScript, /source-fingerprint\.mjs write "\$BUILD_PROVENANCE_PATH"/)
+  assert.match(
+    localPackageScript,
+    /source-fingerprint\.mjs verify-file "\$BUILD_PROVENANCE_PATH" out\/build-provenance\.json/,
+  )
+  assert.match(localPackageScript, /app\.asar\/out\/build-provenance\.json/)
+  assert.match(localPackageScript, /source-fingerprint\.mjs verify-json/)
+})
+
 test('renderer-bundled libraries are build-only dependencies', () => {
   for (const dependency of rendererBuildOnlyDependencies) {
     assert.equal(

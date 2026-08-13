@@ -1,14 +1,40 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Tab } from '../../types'
-import { DEFAULT_AGENT_ROLE_REF, agentRoleRefsEqual } from '@shared/agent-role'
+import {
+  DEFAULT_AGENT_ROLE_REF,
+  agentRoleRefsEqual,
+  agentSkillRefsEqual,
+  type AgentRoleSummary,
+} from '@shared/agent-role'
 import { useAgentStore } from '../../stores/agent-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import { useToastStore } from '../../components/common/Toast'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
-import { useAgentRoles } from '../agent-profiles/use-agent-profiles'
+import { notifyAgentRolesChanged, useAgentRoles } from '../agent-profiles/use-agent-profiles'
 import { useAgentSkills } from '../agent-skills/use-agent-skills'
 import { applyAgentRoleToConversation, getApplyAgentRoleError } from './agent-role-actions'
 import { AgentRoleIcon } from './agent-role-presentation'
+import { AgentRoleEditor } from './AgentRoleEditor'
+import { useWorkspaceStore } from '../../stores/workspace-store'
+import { useTabStore } from '../../stores/tab-store'
+import { createConversationRuntimeForWorkspace } from '../agent-conversations/view-model'
+
+function compareRoleVersions(current: AgentRoleSummary, latest: AgentRoleSummary): string[] {
+  const sections: Array<[string, unknown, unknown]> = [
+    ['名称与简介', [current.label, current.description], [latest.label, latest.description]],
+    ['目标', current.goals, latest.goals],
+    ['适用场景', current.suitableFor, latest.suitableFor],
+    ['不适用场景', current.unsuitableFor, latest.unsuitableFor],
+    ['行为规则', current.instructions, latest.instructions],
+    ['边界', current.boundaries, latest.boundaries],
+    ['示例', current.examples, latest.examples],
+    ['SOUL.md', current.soul?.contentHash ?? null, latest.soul?.contentHash ?? null],
+    ['建议 Skills', current.recommendedSkillRefs, latest.recommendedSkillRefs],
+  ]
+  return sections
+    .filter(([, left, right]) => JSON.stringify(left) !== JSON.stringify(right))
+    .map(([label]) => label)
+}
 
 export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
   const { roles, error, reload } = useAgentRoles()
@@ -20,6 +46,10 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
   const showToast = useToastStore((state) => state.show)
   const { skills, error: skillsError, reload: reloadSkills } = useAgentSkills()
   const [saving, setSaving] = useState<'conversation' | 'default' | null>(null)
+  const [editing, setEditing] = useState(false)
+  const openTab = useTabStore((state) => state.openTab)
+  const createConversation = useAgentStore((state) => state.createConversation)
+  const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const role = useMemo(
     () =>
       roles.find(
@@ -28,6 +58,12 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
       ),
     [roles, tab.agentRole],
   )
+
+  useEffect(() => setEditing(false), [tab.agentRole?.roleId, tab.agentRole?.version])
+
+  if (tab.agentRole?.roleId === '__new-local-role__') {
+    return <AgentRoleEditor />
+  }
 
   if (error) {
     return (
@@ -67,10 +103,19 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
     )
   }
 
+  if (editing && role.source !== 'builtin' && role.isLatest) {
+    return <AgentRoleEditor role={role} />
+  }
+
   const roleRef = { roleId: role.roleId, version: role.version }
   const applied = agentRoleRefsEqual(roleRef, conversation?.configuration.roleRef)
   const isDefault = agentRoleRefsEqual(roleRef, defaultRoleRef)
-  const mountedSkillIds = new Set(conversation?.mountedSkills.map((skill) => skill.id) ?? [])
+  const roleVersions = roles
+    .filter((candidate) => candidate.roleId === role.roleId)
+    .sort((left, right) => right.version - left.version)
+  const latestRole = roleVersions[0]
+  const changesFromLatest =
+    latestRole && latestRole.version !== role.version ? compareRoleVersions(role, latestRole) : []
 
   const applyToConversation = async (): Promise<void> => {
     if (!conversation || applied) return
@@ -92,6 +137,49 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
     )
   }
 
+  const copyRole = async (): Promise<void> => {
+    const result = await window.cclinkStudio.agent.copyRole(roleRef)
+    if (!result.success || !result.role) {
+      showToast(result.error ?? '复制角色失败', 'error')
+      return
+    }
+    notifyAgentRolesChanged()
+    openTab({ type: 'agent-role', title: '角色配置', icon: '◇', agentRole: result.role })
+    showToast(`已复制为本地角色「${result.role.label}」`, 'success')
+  }
+
+  const setArchived = async (): Promise<void> => {
+    const result = await window.cclinkStudio.agent.setRoleArchived(role.roleId, !role.archived)
+    if (!result.success || !result.role) {
+      showToast(result.error ?? '角色归档状态保存失败', 'error')
+      return
+    }
+    notifyAgentRolesChanged()
+    showToast(result.role.archived ? '角色已归档；已有会话仍可继续使用' : '角色已恢复', 'success')
+  }
+
+  const exportRole = async (): Promise<void> => {
+    const selected = await window.cclinkStudio.dialog.showOpenDialog({
+      title: '选择角色包导出位置',
+      selectDirectory: true,
+    })
+    if (selected.canceled || !selected.filePaths[0]) return
+    const result = await window.cclinkStudio.agent.exportRole(roleRef, selected.filePaths[0])
+    showToast(
+      result.success ? `角色包已导出到 ${result.directoryPath}` : (result.error ?? '角色导出失败'),
+      result.success ? 'success' : 'error',
+    )
+  }
+
+  const tryInNewConversation = (): void => {
+    createConversation({
+      runtime: createConversationRuntimeForWorkspace(activeWorkspaceRef),
+      roleRef,
+      activate: true,
+    })
+    showToast(`已新建会话试用「${role.label}」v${role.version}`, 'success')
+  }
+
   return (
     <div className="agent-role-detail">
       <header className="agent-role-detail-header">
@@ -100,20 +188,51 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
             <AgentRoleIcon icon={role.icon} size={27} />
           </span>
           <div>
-            <div className="agent-role-detail-eyebrow">内置角色 · v{role.version}</div>
+            <div className="agent-role-detail-eyebrow">
+              {role.source === 'builtin'
+                ? '内置角色'
+                : role.source === 'imported'
+                  ? '导入角色'
+                  : '我的角色'}{' '}
+              · v{role.version}
+              {role.archived ? ' · 已归档' : ''}
+            </div>
             <h1>{role.label}</h1>
             <p>{role.description}</p>
           </div>
         </div>
         <div className="agent-role-detail-actions">
-          <button type="button" onClick={setAsDefault} disabled={isDefault || saving !== null}>
+          <button type="button" onClick={() => void exportRole()}>
+            导出
+          </button>
+          <button type="button" onClick={() => void copyRole()}>
+            {role.source === 'builtin' ? '复制为本地角色' : '复制'}
+          </button>
+          {role.source !== 'builtin' && role.isLatest && (
+            <button type="button" onClick={() => setEditing(true)} disabled={role.archived}>
+              编辑
+            </button>
+          )}
+          {role.source !== 'builtin' && role.isLatest && (
+            <button type="button" onClick={() => void setArchived()}>
+              {role.archived ? '恢复' : '归档'}
+            </button>
+          )}
+          <button type="button" onClick={tryInNewConversation} disabled={role.archived}>
+            在新会话试用
+          </button>
+          <button
+            type="button"
+            onClick={setAsDefault}
+            disabled={role.archived || isDefault || saving !== null}
+          >
             {isDefault ? '新会话默认' : saving === 'default' ? '保存中…' : '设为新会话默认'}
           </button>
           <button
             type="button"
             className="primary"
             onClick={applyToConversation}
-            disabled={!conversation || applied || saving !== null}
+            disabled={role.archived || !conversation || applied || saving !== null}
           >
             {applied
               ? '已应用到当前会话'
@@ -129,6 +248,58 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
         <strong>{conversation?.title ?? '没有可用会话'}</strong>
         <small>切换后保留当前可见历史，但下一轮会创建新的内部运行会话；不会改变其他会话。</small>
       </div>
+
+      {roleVersions.length > 1 && (
+        <div className="agent-role-version-card">
+          <span>版本</span>
+          <select
+            value={role.version}
+            onChange={(event) => {
+              const version = Number(event.target.value)
+              openTab({
+                type: 'agent-role',
+                title: '角色配置',
+                icon: '◇',
+                agentRole: { roleId: role.roleId, version },
+              })
+            }}
+          >
+            {roleVersions.map((candidate) => (
+              <option key={candidate.version} value={candidate.version}>
+                v{candidate.version}
+                {candidate.isLatest ? ' · 最新' : ' · 历史'}
+              </option>
+            ))}
+          </select>
+          {latestRole && latestRole.version !== role.version && (
+            <button
+              type="button"
+              disabled={!conversation || saving !== null}
+              onClick={() =>
+                void applyAgentRoleToConversation(conversation!.id, latestRole).then((result) => {
+                  const failure = getApplyAgentRoleError(result)
+                  showToast(
+                    failure ?? `当前会话已显式升级到 v${latestRole.version}`,
+                    failure ? 'error' : 'success',
+                  )
+                })
+              }
+            >
+              当前会话升级到 v{latestRole.version}
+            </button>
+          )}
+          {conversation && !agentRoleRefsEqual(conversation.configuration.roleRef, roleRef) && (
+            <button type="button" onClick={() => void applyToConversation()}>
+              将当前会话切换/回滚到 v{role.version}
+            </button>
+          )}
+          {changesFromLatest.length > 0 && (
+            <small>
+              与 v{latestRole.version} 不同：{changesFromLatest.join('、')}
+            </small>
+          )}
+        </div>
+      )}
 
       <div className="agent-role-detail-grid">
         <section className="agent-role-detail-wide agent-role-overview-section">
@@ -202,7 +373,9 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
                     candidate.skillId === skillRef.skillId &&
                     candidate.version === skillRef.version,
                 )
-                const mounted = mountedSkillIds.has(skillRef.skillId)
+                const mounted =
+                  conversation?.mountedSkills.some((item) => agentSkillRefsEqual(item, skillRef)) ??
+                  false
                 return (
                   <article key={`${skillRef.skillId}@${skillRef.version}`}>
                     <div>
@@ -219,17 +392,17 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
                       disabled={!conversation || !skill?.available || mounted}
                       onClick={() => {
                         if (!conversation || !skill?.available) return
-                        addMountedSkill(
-                          {
-                            id: skill.skillId,
-                            name: skill.name,
-                            label: skill.label,
-                            description: skill.description,
-                            source: skill.source,
-                          },
+                        void addMountedSkill(
+                          { skillId: skill.skillId, version: skill.version },
                           conversation.id,
-                        )
-                        showToast(`已将「${skill.label}」挂载到当前会话`, 'success')
+                        ).then((saved) => {
+                          showToast(
+                            saved
+                              ? `已将「${skill.label}」挂载到当前会话`
+                              : 'Skill 挂载保存失败，原配置已保留',
+                            saved ? 'success' : 'error',
+                          )
+                        })
                       }}
                     >
                       {mounted ? '已挂载' : skill?.available ? '挂载到当前会话' : '不可用'}
@@ -276,6 +449,34 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
               <dt>内容指纹</dt>
               <dd title={role.contentHash}>{role.contentHash.slice(0, 12)}</dd>
             </div>
+            {conversation?.lastRunConfigurationReceipt && (
+              <>
+                <div>
+                  <dt>最近运行指纹</dt>
+                  <dd
+                    title={conversation.lastRunConfigurationReceipt.configurationFingerprint ?? ''}
+                  >
+                    {conversation.lastRunConfigurationReceipt.configurationFingerprint?.slice(
+                      0,
+                      12,
+                    ) ?? '—'}
+                  </dd>
+                </div>
+                <div>
+                  <dt>最近运行 Skills</dt>
+                  <dd>
+                    {conversation.lastRunConfigurationReceipt.skills.length > 0
+                      ? conversation.lastRunConfigurationReceipt.skills
+                          .map(
+                            (skill) =>
+                              `${skill.ref.skillId}@${skill.ref.version} · ${skill.contentHash.slice(0, 8)}`,
+                          )
+                          .join('；')
+                      : '无'}
+                  </dd>
+                </div>
+              </>
+            )}
           </dl>
         </section>
 

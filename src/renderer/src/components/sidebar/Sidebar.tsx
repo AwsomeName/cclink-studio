@@ -6,6 +6,7 @@ import {
   useAgentStore,
   useCommandStore,
   useWorkspaceStore,
+  useCclinkStore,
 } from '../../stores'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import {
@@ -114,6 +115,7 @@ export function Sidebar(): React.ReactElement {
   const openTab = useTabStore((s) => s.openTab)
   const executeCommand = useCommandStore((s) => s.executeCommand)
   const showToast = useToastStore((s) => s.show)
+  const cclinkRealtimeState = useCclinkStore((s) => s.realtime.state)
   const sidebarTitle = getSidebarTitle(activePanel, activeWorkspaceRef, workspacePath)
   const showContextMenu = useContextMenuStore((s) => s.show)
   const sidebarTarget = {
@@ -121,12 +123,38 @@ export function Sidebar(): React.ReactElement {
     workspaceKey: workspaceRefKey(activeWorkspaceRef),
     panelId: activePanel,
   }
+  const [remoteTerminalAvailable, setRemoteTerminalAvailable] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (activeWorkspaceRef.kind !== 'remote') {
+      setRemoteTerminalAvailable(true)
+      return
+    }
+    let cancelled = false
+    setRemoteTerminalAvailable(null)
+    void window.cclinkStudio.remote
+      .getStatus(activeWorkspaceRef)
+      .then((status) => {
+        if (!cancelled)
+          setRemoteTerminalAvailable(status.state === 'online' && status.capabilities.shell.pty)
+      })
+      .catch(() => {
+        if (!cancelled) setRemoteTerminalAvailable(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeWorkspaceRef, cclinkRealtimeState])
 
   const openNewTerminal = useCallback((): void => {
+    if (activeWorkspaceRef.kind === 'remote' && remoteTerminalAvailable !== true) {
+      showToast('当前 Agent 未声明远程 Workspace PTY 能力', 'error')
+      return
+    }
     const draft = buildTerminalTabDraft(activeWorkspaceRef)
     openTab(draft)
     void recordTerminalLifecycleEvent(draft.terminal, 'created', 'Terminal Tab 已创建')
-  }, [activeWorkspaceRef, openTab])
+  }, [activeWorkspaceRef, openTab, remoteTerminalAvailable, showToast])
 
   const openNewConversation = useCallback(async (): Promise<void> => {
     const result = await executeCommand('agent.newConversation', {
@@ -177,7 +205,12 @@ export function Sidebar(): React.ReactElement {
               className="sidebar-header-action"
               type="button"
               onClick={openNewTerminal}
-              title="新建 Terminal"
+              disabled={activeWorkspaceRef.kind === 'remote' && remoteTerminalAvailable !== true}
+              title={
+                activeWorkspaceRef.kind === 'remote' && remoteTerminalAvailable !== true
+                  ? '当前 Agent 未提供远程 Workspace PTY'
+                  : '新建 Terminal'
+              }
               aria-label="新建 Terminal"
             >
               <IconPlus size={14} />

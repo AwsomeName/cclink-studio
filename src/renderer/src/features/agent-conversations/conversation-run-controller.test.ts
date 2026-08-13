@@ -77,6 +77,7 @@ function createHarness(conversation = createConversation()) {
         configurationRevision: conversation.configuration.revision,
         configurationFingerprint: SESSION_COMPATIBILITY_FINGERPRINT,
         runtimeSessionMode: 'resumed',
+        skills: [],
       },
     }),
     abort: vi.fn().mockResolvedValue(undefined),

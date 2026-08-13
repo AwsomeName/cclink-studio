@@ -9,4 +9,5 @@ export interface AgentSkillSummary {
   source: AgentSkillSource
   available: boolean
   unavailableReason?: string
+  contentHash: string
 }

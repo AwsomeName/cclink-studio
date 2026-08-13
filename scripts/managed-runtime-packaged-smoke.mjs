@@ -6,6 +6,7 @@ import { basename, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { execFile } from 'node:child_process'
 import { chromium } from 'playwright-core'
+import { verifyBuildProvenance } from './source-fingerprint.mjs'
 
 const execFileAsync = promisify(execFile)
 const projectRoot = resolve(import.meta.dirname, '..')
@@ -13,6 +14,7 @@ const sourceApp = resolve(
   process.env.CCLINK_STUDIO_PACKAGED_APP_PATH ??
     join(projectRoot, 'dist/mac-arm64/CCLink Studio 开源版.app'),
 )
+const replacementSourceApp = resolve(process.env.CCLINK_STUDIO_PACKAGED_APP_B_PATH ?? sourceApp)
 const runRoot = await mkdtemp(join(tmpdir(), 'cclink-managed-packaged-smoke-'))
 const installRoot = join(runRoot, 'Applications')
 const installedApp = join(installRoot, basename(sourceApp))
@@ -59,12 +61,29 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-async function cloneApp() {
+async function cloneApp(appSource = sourceApp) {
   await rm(installedApp, { recursive: true, force: true })
-  await execFileAsync('/bin/cp', ['-cR', sourceApp, installedApp], {
+  await execFileAsync('/bin/cp', ['-cR', appSource, installedApp], {
     timeout: 5 * 60 * 1000,
     maxBuffer: 1024 * 1024,
   })
+}
+
+async function readPackagedProvenance(appPath) {
+  const executable = join(appPath, 'Contents', 'MacOS', 'CCLink Studio 开源版')
+  const { stdout } = await execFileAsync(
+    executable,
+    [
+      '-e',
+      "const fs=require('fs');process.stdout.write(fs.readFileSync(process.resourcesPath+'/app.asar/out/build-provenance.json','utf8'))",
+    ],
+    {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      timeout: 30_000,
+      maxBuffer: 1024 * 1024,
+    },
+  )
+  return JSON.parse(stdout)
 }
 
 async function waitForFile(path, timeoutMs) {
@@ -223,6 +242,16 @@ async function waitForManagedRuntimeActive(page, timeoutMs = 60_000) {
 async function main() {
   assert(process.platform === 'darwin' && process.arch === 'arm64', '仅支持 macOS arm64 验收')
   await stat(sourceApp)
+  await stat(replacementSourceApp)
+  const appAProvenance = await readPackagedProvenance(sourceApp)
+  const appBProvenance = await readPackagedProvenance(replacementSourceApp)
+  verifyBuildProvenance(appBProvenance)
+  const crossBuildUpgrade =
+    appAProvenance.gitHead !== appBProvenance.gitHead ||
+    appAProvenance.sourceFingerprint?.value !== appBProvenance.sourceFingerprint?.value
+  if (sourceApp !== replacementSourceApp) {
+    assert(crossBuildUpgrade, '指定了 App B，但两个安装包的源码指纹相同，不能算跨版本升级')
+  }
   await mkdir(installRoot, { recursive: true })
   await cloneApp()
 
@@ -293,10 +322,14 @@ async function main() {
       source: 'managed',
       version: '2.1.211',
     })
-    return { settingsResult, secretResult, connectionResult }
+    const serviceAddressResult = await window.cclinkStudio.settings.set({
+      apiBaseUrl: 'https://runtime-smoke.invalid/anthropic',
+    })
+    return { settingsResult, secretResult, connectionResult, serviceAddressResult }
   })
   assert(persistedConfig.settingsResult.success, 'App A 测试配置写入失败')
   assert(persistedConfig.secretResult.success, 'App A 测试凭证写入失败')
+  assert(persistedConfig.serviceAddressResult.success, 'App A 自定义服务地址写入失败')
   assert(
     persistedConfig.connectionResult.success &&
       !persistedConfig.connectionResult.result?.success &&
@@ -315,7 +348,7 @@ async function main() {
   await stopPackagedApp(first.browser)
 
   // Simulate the macOS update flow: the process is closed and the whole .app is replaced.
-  await cloneApp()
+  await cloneApp(replacementSourceApp)
   const second = await startPackagedApp('app-b')
   const secondRow = await openClaudeRow(second.page)
   await second.page.waitForFunction(
@@ -362,6 +395,7 @@ async function main() {
   }))
   assert(
     replacementState.settings.modelName === 'claude-sonnet-4-6' &&
+      replacementState.settings.apiBaseUrl === 'https://runtime-smoke.invalid/anthropic' &&
       replacementState.settings.permissionMode === 'strict' &&
       replacementState.settings.claudeRuntimeSource === 'managed' &&
       replacementState.settings.claudeManagedVersion === '2.1.211',
@@ -447,10 +481,18 @@ async function main() {
     undefined,
     { timeout: 30_000 },
   )
-  const occtAfterUninstall = await second.page.evaluate(async () => ({
-    resources: await window.cclinkStudio.runtimeComponents.listRuntimeResources(),
-    cad: await window.cclinkStudio.cad.getBackendStatus(),
-  }))
+  const occtAfterUninstall = await second.page.evaluate(
+    async (inputPath) => ({
+      resources: await window.cclinkStudio.runtimeComponents.listRuntimeResources(),
+      cad: await window.cclinkStudio.cad.getBackendStatus(),
+      conversion: await window.cclinkStudio.cad.convertModel({
+        inputPath,
+        targetFormat: 'stl',
+        force: true,
+      }),
+    }),
+    stepFixturePath,
+  )
   assert(
     occtAfterUninstall.resources.find((item) => item.componentId === 'occt-runtime')
       ?.installedVersion === null,
@@ -460,6 +502,33 @@ async function main() {
     occtAfterUninstall.cad.available && occtAfterUninstall.cad.source !== 'managed',
     `OCCT 卸载后没有回退随 App 资源：${JSON.stringify(occtAfterUninstall.cad)}`,
   )
+  assert(
+    occtAfterUninstall.conversion.success &&
+      occtAfterUninstall.conversion.metadata?.generator.includes('bundled'),
+    `OCCT 卸载后内置 Runtime 转换失败：${JSON.stringify(occtAfterUninstall.conversion)}`,
+  )
+
+  const scrcpyRow = await componentRow(second.page, 'Android scrcpy server')
+  await acceptNextDialog(second.page)
+  await scrcpyRow.getByRole('button', { name: '卸载', exact: true }).click()
+  await second.page.waitForFunction(
+    () => {
+      const row = Array.from(document.querySelectorAll('.component-table tbody tr')).find(
+        (candidate) => candidate.textContent?.includes('Android scrcpy server'),
+      )
+      return Boolean(row?.textContent?.includes('已安装 · 随应用'))
+    },
+    undefined,
+    { timeout: 30_000 },
+  )
+  const scrcpyResources = await second.page.evaluate(() =>
+    window.cclinkStudio.runtimeComponents.listRuntimeResources(),
+  )
+  assert(
+    scrcpyResources.find((item) => item.componentId === 'scrcpy-server')?.installedVersion === null,
+    'scrcpy 管理版本卸载状态错误',
+  )
+  await stat(join(installedApp, 'Contents', 'Resources', 'scrcpy-server.jar'))
   await second.page.evaluate(() => window.cclinkStudio.settings.clearSecret('apiKey'))
   await stopPackagedApp(second.browser)
 
@@ -468,6 +537,7 @@ async function main() {
       {
         success: true,
         packagedAppReplacement: true,
+        crossBuildUpgrade,
         reusedWithoutDownload: true,
         settingsPreserved: true,
         credentialPreserved: true,
@@ -480,6 +550,8 @@ async function main() {
         managedClaudeUninstall: true,
         credentialPreservedAfterUninstall: true,
         managedOcctUninstallFallback: true,
+        bundledOcctConversionAfterUninstall: true,
+        managedScrcpyUninstallFallback: true,
         isolatedUserData: userDataPath,
         screenshotPath,
       },

@@ -22,6 +22,7 @@ interface CclinkState {
   refreshServers(): Promise<void>
   loadSessions(ref: RemoteWorkspaceRef): Promise<void>
   createSession(ref: RemoteWorkspaceRef, name?: string): Promise<CclinkRemoteSession>
+  setSessionArchived(sessionId: string, archived: boolean): Promise<void>
   selectSession(sessionId: string | null): void
   loadMessages(sessionId: string): Promise<void>
   sendAgentMessage(ref: RemoteWorkspaceRef, sessionId: string, content: string): Promise<boolean>
@@ -160,6 +161,22 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
       throw error
     } finally {
       set({ loading: false })
+    }
+  },
+
+  setSessionArchived: async (sessionId, archived) => {
+    try {
+      const session = await window.cclinkStudio.cclink.setSessionArchived({
+        sessionId,
+        archived,
+      })
+      set((state) => ({
+        sessions: state.sessions.map((item) => (item.id === sessionId ? session : item)),
+        selectedSessionId:
+          archived && state.selectedSessionId === sessionId ? null : state.selectedSessionId,
+      }))
+    } catch (error) {
+      set({ error: message(error) })
     }
   },
 

@@ -30,11 +30,8 @@ export function toMountedResource(resource: AgentResourceCandidate): AgentMounte
 
 export function toMountedSkill(skill: AgentSkillCandidate): AgentMountedSkill {
   return {
-    id: skill.id,
-    name: skill.name,
-    label: skill.label,
-    description: skill.description,
-    source: skill.source,
+    skillId: skill.skillId,
+    version: skill.version,
   }
 }
 
@@ -91,13 +88,7 @@ export function transientMessageResources(
 }
 
 export function toSendSkills(skills: AgentMountedSkill[]): AgentSendSkill[] {
-  return skills.map((skill) => ({
-    id: skill.id,
-    name: skill.name,
-    label: skill.label,
-    description: skill.description,
-    source: skill.source,
-  }))
+  return skills.map((skill) => ({ ...skill }))
 }
 
 export function buildAgentSendPayload(

@@ -18,6 +18,7 @@ import {
 } from '../../stores'
 import type { ConversationRuntimeRef, PermissionMode } from '../../types'
 import type { ToolConfirmationRequest } from '../../types'
+import type { AgentSkillRef } from '@shared/agent-role'
 import {
   workspaceRefKey,
   workspaceRefLabel,
@@ -273,20 +274,24 @@ export function WorkbenchAgentConversation({
   )
   const handleMountSkill = useCallback(
     (skill: AgentSkillCandidate) => {
-      addMountedSkill(toMountedSkill(skill), conversationId)
+      void addMountedSkill(toMountedSkill(skill), conversationId).then((saved) => {
+        if (!saved) showToast('Skill 挂载保存失败，原配置已保留', 'error')
+      })
       setInput(stripTrailingMentionToken(conversationInput), conversationId)
       setResourceQuery(null)
       setSkillQuery(null)
       setMentionSelectedIndex(0)
       requestAnimationFrame(() => inputRef.current?.focus())
     },
-    [addMountedSkill, conversationId, conversationInput, setInput],
+    [addMountedSkill, conversationId, conversationInput, setInput, showToast],
   )
   const handleRemoveMountedSkill = useCallback(
-    (skillId: string) => {
-      removeMountedSkill(skillId, conversationId)
+    (skill: AgentSkillRef) => {
+      void removeMountedSkill(skill, conversationId).then((saved) => {
+        if (!saved) showToast('Skill 移除保存失败，原配置已保留', 'error')
+      })
     },
-    [conversationId, removeMountedSkill],
+    [conversationId, removeMountedSkill, showToast],
   )
   const handlePermissionModeChange = useCallback(
     async (nextMode: PermissionMode) => {
@@ -459,7 +464,11 @@ export function WorkbenchAgentConversation({
                 onRequestClose={() => setSkillQuery(null)}
               />
             )}
-            <MountedSkillStrip skills={mountedSkills} onRemove={handleRemoveMountedSkill} />
+            <MountedSkillStrip
+              skills={mountedSkills}
+              availableSkills={availableSkills}
+              onRemove={handleRemoveMountedSkill}
+            />
             <div className="conversation-input-card">
               <ImageAttachmentStrip images={pendingImages} onRemove={handleRemovePendingImage} />
               <textarea

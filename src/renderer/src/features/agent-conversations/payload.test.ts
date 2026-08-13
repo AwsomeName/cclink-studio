@@ -41,6 +41,20 @@ describe('buildAgentSendPayload', () => {
     })
   })
 
+  it('sends only versioned Skill references without renderer-owned content', () => {
+    const conversationId = useAgentStore.getState().createConversation({
+      mountedSkills: [{ skillId: 'grill-me', version: 1 }],
+    })
+
+    const payload = buildAgentSendPayload(
+      '评审方案',
+      useAgentStore.getState().conversations[conversationId],
+    )
+
+    expect(payload.skills).toEqual([{ skillId: 'grill-me', version: 1 }])
+    expect(JSON.stringify(payload.skills)).not.toContain('Workflow')
+  })
+
   it('includes bounded visible history and the latest todo state for recovery', () => {
     const conversationId = useAgentStore.getState().createConversation()
     const conversation = useAgentStore.getState().conversations[conversationId]!

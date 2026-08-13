@@ -144,6 +144,10 @@ describe('registerAgentIpc', () => {
       {
         roleId: 'default-assistant',
         version: 1,
+        source: 'builtin',
+        archived: false,
+        isLatest: true,
+        createdAt: 0,
         label: '默认助手',
         description: '均衡处理一般任务',
         icon: 'assistant',
@@ -162,6 +166,10 @@ describe('registerAgentIpc', () => {
       {
         roleId: 'default-assistant',
         version: 1,
+        source: 'builtin',
+        archived: false,
+        isLatest: true,
+        createdAt: 0,
         label: '默认助手',
         description: '均衡处理一般任务',
         icon: 'assistant',
@@ -179,6 +187,7 @@ describe('registerAgentIpc', () => {
     await expect(
       mockIpcMain.handlers.get('agent:sendMessage')?.({ sender: 'trusted' }, 'conversation-1', {
         message: '评估',
+        skills: [{ skillId: 'grill-me', version: 1 }],
         configuration: {
           schemaVersion: 1,
           roleRef: { roleId: 'critical-challenger', version: 1 },
@@ -191,6 +200,7 @@ describe('registerAgentIpc', () => {
       '评估',
       'conversation-1',
       expect.objectContaining({
+        skills: [{ skillId: 'grill-me', version: 1 }],
         configuration: {
           schemaVersion: 1,
           roleRef: { roleId: 'critical-challenger', version: 1 },
@@ -227,6 +237,7 @@ describe('registerAgentIpc', () => {
         description: '检查假设和失败路径',
         source: 'builtin',
         available: true,
+        contentHash: 'a'.repeat(64),
       },
     ])
     registerAgentIpc(deps as never)

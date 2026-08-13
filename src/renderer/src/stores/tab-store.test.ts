@@ -28,6 +28,36 @@ beforeEach(() => {
 })
 
 describe('useTabStore', () => {
+  it('远程文件或目录重命名后同步已打开 Tab，删除后关闭关联 Tab', () => {
+    useTabStore.setState({
+      tabs: [
+        { id: 'browser', type: 'browser', title: '浏览器', icon: '🌐' },
+        {
+          id: 'remote-file-1',
+          type: 'remote-file',
+          title: 'README.md',
+          icon: '📄',
+          remoteFile: {
+            serverId: 'agent-1',
+            workspaceId: 'workspace-1',
+            workspacePath: 'C:\\project',
+            path: 'C:\\project\\docs\\README.md',
+          },
+        },
+      ],
+      activeTabId: 'remote-file-1',
+    })
+
+    useTabStore
+      .getState()
+      .rebaseRemoteFilePaths('agent-1', 'workspace-1', 'C:\\project\\docs', 'C:\\project\\guide')
+    expect(useTabStore.getState().tabs[1].remoteFile?.path).toBe('C:\\project\\guide\\README.md')
+
+    useTabStore.getState().closeRemoteFilePaths('agent-1', 'workspace-1', 'C:\\project\\guide')
+    expect(useTabStore.getState().tabs.map((tab) => tab.id)).toEqual(['browser'])
+    expect(useTabStore.getState().activeTabId).toBe('browser')
+  })
+
   it('目录移动后同步所有关联 Tab 路径', () => {
     useTabStore.setState({
       tabs: [

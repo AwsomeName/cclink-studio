@@ -132,11 +132,65 @@ describe('IPC invoke contracts', () => {
     expect(agentIpcContracts.getStatus.parseArgs([])).toEqual([undefined])
     expect(agentIpcContracts.listRoles.parseArgs([])).toEqual([])
     expect(agentIpcContracts.listSkills.parseArgs([])).toEqual([])
+    const roleDraft = {
+      label: '本地审稿人',
+      description: '审阅内容',
+      icon: 'fact-checker' as const,
+      goals: ['给出建议'],
+      suitableFor: [],
+      unsuitableFor: [],
+      instructions: ['区分事实与观点'],
+      boundaries: ['不扩大权限'],
+      examples: [],
+      soulMarkdown: '# 原则',
+      recommendedSkillRefs: [{ skillId: 'grill-me', version: 1 }],
+    }
+    expect(agentIpcContracts.createRole.parseArgs([roleDraft])).toEqual([roleDraft])
+    expect(agentIpcContracts.updateRole.parseArgs(['local-role', 1, roleDraft])).toEqual([
+      'local-role',
+      1,
+      roleDraft,
+    ])
+    expect(
+      agentIpcContracts.exportRole.parseArgs([{ roleId: 'local-role', version: 1 }, '/tmp/roles']),
+    ).toEqual([{ roleId: 'local-role', version: 1 }, '/tmp/roles'])
+    expect(() =>
+      agentIpcContracts.createRole.parseArgs([
+        { ...roleDraft, toolPermissions: ['terminal.execute'] },
+      ]),
+    ).toThrow()
+    expect(() => agentIpcContracts.previewImportRole.parseArgs(['relative/role.json'])).toThrow()
+    expect(
+      agentIpcContracts.restoreConversation.parseArgs([
+        'conversation-1',
+        'session-1',
+        {
+          schemaVersion: 1,
+          roleRef: { roleId: 'critical-challenger', version: 1 },
+          revision: 2,
+          updatedAt: 1,
+        },
+        'a'.repeat(64),
+        [{ skillId: 'grill-me', version: 1 }],
+      ]),
+    ).toEqual([
+      'conversation-1',
+      'session-1',
+      {
+        schemaVersion: 1,
+        roleRef: { roleId: 'critical-challenger', version: 1 },
+        revision: 2,
+        updatedAt: 1,
+      },
+      'a'.repeat(64),
+      [{ skillId: 'grill-me', version: 1 }],
+    ])
     expect(
       agentIpcContracts.sendMessage.parseArgs([
         'conversation-1',
         {
           message: '评估',
+          skills: [{ skillId: 'grill-me', version: 1 }],
           configuration: {
             schemaVersion: 1,
             roleRef: { roleId: 'critical-challenger', version: 1 },
@@ -149,6 +203,7 @@ describe('IPC invoke contracts', () => {
       'conversation-1',
       {
         message: '评估',
+        skills: [{ skillId: 'grill-me', version: 1 }],
         configuration: {
           schemaVersion: 1,
           roleRef: { roleId: 'critical-challenger', version: 1 },
@@ -157,6 +212,21 @@ describe('IPC invoke contracts', () => {
         },
       },
     ])
+    expect(() =>
+      agentIpcContracts.sendMessage.parseArgs([
+        'conversation-1',
+        {
+          message: '评估',
+          skills: [
+            {
+              skillId: 'grill-me',
+              version: 1,
+              markdown: 'renderer 不得提交 Skill 内容',
+            },
+          ],
+        },
+      ]),
+    ).toThrow()
     expect(() =>
       agentIpcContracts.sendMessage.parseArgs([
         'conversation-1',

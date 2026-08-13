@@ -39,11 +39,19 @@ const defaultBootstrappers: OptionalMainServiceBootstrappers = {
       () => runtime.settingsService!.getAll(),
       async () => {
         const resource =
-          await runtime.runtimeComponentManager?.resolveRuntimeResource('occt-runtime')
+          await runtime.runtimeComponentManager?.acquireRuntimeResource('occt-runtime')
+        if (!resource) return null
         const wasmPath = resource?.files['occt-import-js.wasm']
-        return resource && wasmPath
-          ? { wasmPath, version: resource.version, source: 'managed' as const }
-          : null
+        if (!wasmPath) {
+          resource.release()
+          return null
+        }
+        return {
+          wasmPath,
+          version: resource.version,
+          source: 'managed' as const,
+          release: resource.release,
+        }
       },
     )
     console.log('[CCLink Studio] CAD 转换 IPC 已注册')

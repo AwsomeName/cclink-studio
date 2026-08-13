@@ -49,8 +49,21 @@ import { CclinkRemoteService } from '../cclink-remote/cclink-remote-service'
 import { CclinkRuntimeStateStore } from '../cclink-remote/runtime-state-store'
 import { registerCclinkRemoteIpc } from '../cclink-remote/cclink-remote-ipc'
 import { getCclinkServiceUrl } from '../cclink-remote/service-config'
+import { AgentRoleRegistry } from '../agent/agent-role-registry'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
+  try {
+    runtime.agentRoleRegistry = new AgentRoleRegistry()
+    await runtime.agentRoleRegistry.load()
+    console.log('[CCLink Studio] 本地角色注册表已初始化')
+  } catch (error) {
+    runtime.agentRoleRegistry = null
+    console.error(
+      '[CCLink Studio] 本地角色注册表初始化失败，内置角色与其他本地能力继续启动:',
+      error,
+    )
+  }
+
   runtime.credentialService = new CredentialService()
   await runtime.credentialService.load()
   console.log('[CCLink Studio] 本地凭证服务已初始化')
@@ -81,12 +94,14 @@ export async function shutdownStateServices(runtime: CclinkStudioRuntimeState): 
   await runShutdownStep('ScheduledTaskService', () => runtime.scheduledTaskService?.flush())
   await runShutdownStep('WorkspaceStateService', () => runtime.workspaceStateService?.flush())
   await runShutdownStep('UsageLedgerService', () => runtime.usageLedgerService?.flush())
+  await runShutdownStep('AgentRoleRegistry', () => runtime.agentRoleRegistry?.flush())
   runtime.workspaceStateService = null
   runtime.scheduledTaskService = null
   runtime.usageLedgerService = null
   runtime.settingsService = null
   runtime.credentialService = null
   runtime.runtimeComponentManager = null
+  runtime.agentRoleRegistry = null
 }
 
 export async function bootstrapMainProcessServices(
@@ -128,8 +143,8 @@ export async function bootstrapMainProcessServices(
       if (!agentBridge.beginConfigurationChange()) return null
       return () => agentBridge.endConfigurationChange()
     },
-    isManagedClaudeActive: () =>
-      runtime.claudeRuntimeManager?.getStatus().active?.source === 'managed',
+    isManagedClaudeSelected: () =>
+      runtime.settingsService?.getRuntimeSettings().claudeRuntimeSource === 'managed',
   })
   console.log('[CCLink Studio] Runtime 组件管理 IPC 已注册')
 
@@ -140,7 +155,13 @@ export async function bootstrapMainProcessServices(
     runtime.cclinkRemoteService = new CclinkRemoteService(
       runtime.cclinkAuthService,
       getCclinkServiceUrl(),
-      new CclinkRuntimeStateStore(cclinkStateRoot),
+      new CclinkRuntimeStateStore(cclinkStateRoot, [
+        join(
+          app.getPath('appData'),
+          app.isPackaged ? 'CCLink Studio Commercial' : 'CCLink Studio Commercial Dev',
+          'cclink-state.json',
+        ),
+      ]),
     )
     await runtime.cclinkRemoteService.initialize()
     runtime.cclinkIpcUnsubscribe = registerCclinkRemoteIpc(
@@ -282,6 +303,7 @@ export async function bootstrapMainProcessServices(
   registerAgentIpc({
     trustedRendererGuard: runtime.trustedRendererGuard,
     getAgentBridge: () => runtime.agentBridge,
+    getAgentRoleRegistry: () => runtime.agentRoleRegistry,
     permissionManager: runtime.permissionManager,
     getMcpClientMgr: () => runtime.mcpClientMgr,
     getCapabilities: () => getAgentCapabilities(runtime),

@@ -146,7 +146,12 @@ export class CadConversionService {
         error: cadError('backend-not-implemented', '托管 FreeCAD 运行时下载尚未实现。', true),
       }
     }
-    return detectOpenCascade(await this.resolveManagedOcct())
+    const managedRuntime = await this.resolveManagedOcct()
+    try {
+      return await detectOpenCascade(managedRuntime)
+    } finally {
+      managedRuntime?.release?.()
+    }
   }
 
   async getModelSupport(inputPath: string): Promise<CadModelSupport> {
@@ -337,15 +342,19 @@ export class CadConversionService {
       if (settings.cadBackend === 'occt-experimental') {
         await rm(scriptPath, { force: true }).catch(() => undefined)
         const managedRuntime = await this.resolveManagedOcct()
-        await convertStepWithOpenCascade({
-          inputPath,
-          outputPath: previewPath,
-          metadataPath,
-          previewFormat: targetFormat,
-          sourceHash,
-          diagnostics,
-          runtime: managedRuntime,
-        })
+        try {
+          await convertStepWithOpenCascade({
+            inputPath,
+            outputPath: previewPath,
+            metadataPath,
+            previewFormat: targetFormat,
+            sourceHash,
+            diagnostics,
+            runtime: managedRuntime,
+          })
+        } finally {
+          managedRuntime?.release?.()
+        }
       } else {
         if (!backendStatus.path) {
           return {

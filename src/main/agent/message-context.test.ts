@@ -146,17 +146,20 @@ describe('buildAgentMessageWithContext', () => {
     const message = buildAgentMessageWithContext('评审这个计划', {
       skills: [
         {
-          id: 'grill-me',
-          name: 'grill-me',
+          skillId: 'grill-me',
+          version: 1,
           label: 'grill-me',
           description: '用 /grilling 风格拷问方案。',
-          source: 'user',
+          source: 'builtin',
+          contentHash: 'a'.repeat(64),
+          markdown: '# 方案拷问\n\n检查假设和失败路径。',
         },
       ],
     })
 
     expect(message).toContain('"mountedSkills"')
-    expect(message).toContain('"name": "grill-me"')
+    expect(message).toContain('"skillId": "grill-me"')
+    expect(message).toContain('检查假设和失败路径')
     expect(message).toContain('Skill 表示用户希望本轮遵循的流程风格')
     expect(message).toContain('用户消息:\n评审这个计划')
   })

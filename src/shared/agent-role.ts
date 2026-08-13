@@ -24,12 +24,16 @@ export interface AgentRoleExample {
 
 export interface AgentRoleSoulSummary {
   format: 'markdown'
-  source: 'builtin'
+  source: 'builtin' | 'local' | 'imported'
   markdown: string
   contentHash: string
 }
 
 export interface AgentRoleSummary extends AgentRoleRef {
+  source: 'builtin' | 'local' | 'imported'
+  archived: boolean
+  isLatest: boolean
+  createdAt: number
   label: string
   description: string
   icon: AgentRoleIcon
@@ -44,6 +48,55 @@ export interface AgentRoleSummary extends AgentRoleRef {
   soul?: AgentRoleSoulSummary
   disclaimer?: string
 }
+
+export interface AgentRoleDraft {
+  label: string
+  description: string
+  icon: AgentRoleIcon
+  goals: string[]
+  suitableFor: string[]
+  unsuitableFor: string[]
+  instructions: string[]
+  boundaries: string[]
+  examples: AgentRoleExample[]
+  soulMarkdown?: string
+  recommendedSkillRefs: AgentSkillRef[]
+  disclaimer?: string
+}
+
+export interface AgentRoleMutationResult {
+  success: boolean
+  role?: AgentRoleSummary
+  error?: string
+}
+
+export interface AgentRoleExportResult {
+  success: boolean
+  directoryPath?: string
+  error?: string
+}
+
+export interface AgentRoleImportSkillStatus extends AgentSkillRef {
+  available: boolean
+  label?: string
+}
+
+export interface AgentRoleImportPreview {
+  token: string
+  sourceLabel: string
+  role: AgentRoleSummary
+  conflict: 'none' | 'same-content' | 'same-id'
+  skillStatuses: AgentRoleImportSkillStatus[]
+  warnings: string[]
+}
+
+export interface AgentRoleImportPreviewResult {
+  success: boolean
+  preview?: AgentRoleImportPreview
+  error?: string
+}
+
+export type AgentRoleImportDecision = 'update' | 'copy'
 
 export interface AgentConversationConfiguration {
   schemaVersion: 1
@@ -68,6 +121,12 @@ export interface AgentRunConfigurationReceipt {
   configurationRevision: number
   configurationFingerprint: string | null
   runtimeSessionMode: 'new' | 'resumed'
+  skills: AgentRunSkillReceipt[]
+}
+
+export interface AgentRunSkillReceipt {
+  ref: AgentSkillRef
+  contentHash: string
 }
 
 export const DEFAULT_AGENT_ROLE_REF: AgentRoleRef = {
@@ -92,4 +151,11 @@ export function agentRoleRefsEqual(
   right: AgentRoleRef | null | undefined,
 ): boolean {
   return left?.roleId === right?.roleId && left?.version === right?.version
+}
+
+export function agentSkillRefsEqual(
+  left: AgentSkillRef | null | undefined,
+  right: AgentSkillRef | null | undefined,
+): boolean {
+  return left?.skillId === right?.skillId && left?.version === right?.version
 }

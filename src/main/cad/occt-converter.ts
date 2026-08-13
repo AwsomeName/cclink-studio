@@ -21,6 +21,7 @@ export interface OcctRuntimeResource {
   wasmPath: string
   version: string
   source: 'managed' | 'bundled'
+  release?: () => void
 }
 
 interface OcctMesh {

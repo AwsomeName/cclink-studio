@@ -36,10 +36,7 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
   const updateTabDirty = useTabStore((state) => state.updateTabDirty)
   const dirty = content !== null && savedContent !== null && content !== savedContent
   const writable =
-    status?.state === 'online' &&
-    status.capabilities.file.write &&
-    Boolean(sha256) &&
-    complete
+    status?.state === 'online' && status.capabilities.file.write && Boolean(sha256) && complete
 
   useEffect(() => {
     updateTabDirty(tab.id, dirty)
@@ -135,7 +132,19 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
     } finally {
       setLoading(false)
     }
-  }, [content, createSession, ref, savedContent, selectedSessionId, sessions, sha256, status?.state, tab.id, tab.title, writable])
+  }, [
+    content,
+    createSession,
+    ref,
+    savedContent,
+    selectedSessionId,
+    sessions,
+    sha256,
+    status?.state,
+    tab.id,
+    tab.title,
+    writable,
+  ])
 
   useEffect(
     () =>

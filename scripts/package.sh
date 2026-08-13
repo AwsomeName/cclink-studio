@@ -77,6 +77,9 @@ fi
 # ── 2. 读取版本号（本地打包不得修改源码版本） ─────────────
 VERSION=$(node -p "require('./package.json').version")
 info "当前版本: ${BOLD}$VERSION${RESET}"
+BUILD_PROVENANCE_PATH="/tmp/cclink-studio-build-provenance-$$.json"
+trap 'rm -f "$BUILD_PROVENANCE_PATH"' EXIT
+node scripts/source-fingerprint.mjs write "$BUILD_PROVENANCE_PATH"
 
 # ── 3. 清理旧产物 ─────────────────────────────────────────
 if [ "$CLEAN" -eq 1 ]; then
@@ -90,6 +93,8 @@ fi
 # ── 4. 构建（electron-vite build） ────────────────────────
 info "构建（pnpm build → electron-vite build）..."
 pnpm build > /tmp/cclink-studio-build.log 2>&1 || { tail -30 /tmp/cclink-studio-build.log; die "构建失败，详见 /tmp/cclink-studio-build.log"; }
+node scripts/source-fingerprint.mjs verify-file "$BUILD_PROVENANCE_PATH" out/build-provenance.json \
+  || die "构建期间源码发生变化，请在工作区稳定后重新打包"
 ok "构建完成"
 
 # ── 5. 打包（electron-builder） ───────────────────────────
@@ -114,9 +119,15 @@ PACKAGED_NAME=$(ELECTRON_RUN_AS_NODE=1 "$APP_EXECUTABLE" -e \
   2>/dev/null) \
   || die "打包后的 app.asar/package.json 无法解析；打包期间可能有文件被并发改写"
 [ "$PACKAGED_NAME" = "cclink-studio" ] || die "打包后的应用元数据不正确"
+PACKAGED_PROVENANCE=$(ELECTRON_RUN_AS_NODE=1 "$APP_EXECUTABLE" -e \
+  "const fs=require('fs');process.stdout.write(fs.readFileSync(process.resourcesPath+'/app.asar/out/build-provenance.json','utf8'))" \
+  2>/dev/null) \
+  || die "打包后的源码指纹无法读取"
+node scripts/source-fingerprint.mjs verify-json "$PACKAGED_PROVENANCE" \
+  || die "打包产物不是由当前源码生成，请清理后重新打包"
 [ ! -e "$APP_PATH/Contents/Resources/agent-runtime" ] \
   || die "瘦安装包不得携带 Claude Code Runtime"
-ok "瘦安装包边界通过（Claude Code Runtime 按需安装）"
+ok "瘦安装包边界与源码指纹通过（Claude Code Runtime 按需安装）"
 
 # ── 7. 结果摘要 ───────────────────────────────────────────
 echo ""

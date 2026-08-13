@@ -5,6 +5,7 @@
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import type { TerminalSessionSnapshot } from '@shared/ipc/terminal'
 import type { TerminalCommandConfirmationRequest, TerminalTabRef } from '@shared/terminal'
+import type { AgentSkillRef } from '@shared/agent-role'
 
 export type { LocalIdentity } from '@shared/ipc/identity'
 
@@ -107,14 +108,8 @@ export interface AgentMountedResource {
   }
 }
 
-/** 会话已挂载 Skill：当前会话/当前消息使用的流程能力，长期配置仍归设置页。 */
-export interface AgentMountedSkill {
-  id: string
-  name: string
-  label: string
-  description?: string
-  source?: 'builtin' | 'user' | 'workspace'
-}
+/** 会话只持版本化 Skill 引用；内容、可用状态和指纹由主进程 Skill Registry 拥有。 */
+export type AgentMountedSkill = AgentSkillRef
 
 /** 会话运行环境 */
 export type ConversationRuntimeRef = {
@@ -154,7 +149,7 @@ export interface Tab {
   workspaceRef?: WorkspaceRef
   /** 关联的文件路径（编辑器 Tab 使用） */
   filePath?: string
-  /** CCLink 只读远程文件；内容事实由 RemoteProvider 按需读取。 */
+  /** CCLink 远程文件；内容事实和有边界的修改由 RemoteProvider 处理。 */
   remoteFile?: {
     serverId: string
     workspaceId: string

@@ -21,6 +21,7 @@ import { AdbScrcpyClient, AdbScrcpyOptions2_3 } from '@yume-chan/adb-scrcpy'
 import { AndroidMotionEventAction } from '@yume-chan/scrcpy'
 import { PushReadableStream, type MaybeConsumable } from '@yume-chan/stream-extra'
 import { NodeAdbServerConnector } from './node-adb-connector'
+import { selectScrcpyServerResource, type ScrcpyServerResource } from './scrcpy-server-resource'
 
 /** scrcpy server JAR 在设备上的路径 */
 const DEVICE_SERVER_PATH = '/data/local/tmp/scrcpy-server.jar'
@@ -36,12 +37,6 @@ function getBundledServerJarPath(): string {
     return join(process.resourcesPath, 'scrcpy-server.jar')
   }
   return join(app.getAppPath(), 'resources', 'scrcpy-server.jar')
-}
-
-export interface ScrcpyServerResource {
-  path: string
-  version: '2.3.1'
-  source: 'managed' | 'bundled'
 }
 
 /**
@@ -97,31 +92,31 @@ export class ScrcpyBridge {
 
     // 1. 验证 scrcpy-server.jar 存在
     const managedServer = await this.resolveManagedServer()
-    const server: ScrcpyServerResource = managedServer ?? {
-      path: getBundledServerJarPath(),
-      version: '2.3.1',
-      source: 'bundled',
-    }
-    const jarPath = server.path
-    if (!existsSync(jarPath)) {
-      throw new Error(
-        `scrcpy-server.jar 未找到: ${jarPath}。请确保 resources/scrcpy-server.jar 已放置。`,
+    const server = selectScrcpyServerResource(managedServer, getBundledServerJarPath())
+    try {
+      const jarPath = server.path
+      if (!existsSync(jarPath)) {
+        throw new Error(
+          `scrcpy-server.jar 未找到: ${jarPath}。请确保 resources/scrcpy-server.jar 已放置。`,
+        )
+      }
+      const jarSize = statSync(jarPath).size
+      console.log(
+        `[ScrcpyBridge] scrcpy-server.jar: ${jarPath} (${(jarSize / 1024 / 1024).toFixed(1)}MB, ${server.source})`,
       )
+
+      // 2. 通过 AdbServerClient 连接到本地 adb server
+      const adbClient = new AdbServerClient(new NodeAdbServerConnector())
+      this.adb = await adbClient.createAdb({ serial: deviceId })
+      console.log('[ScrcpyBridge] ADB 连接已建立')
+
+      // 3. 推送 scrcpy-server.jar 到设备
+      const jarStream = fileToStream(jarPath)
+      await AdbScrcpyClient.pushServer(this.adb, jarStream)
+      console.log('[ScrcpyBridge] scrcpy-server.jar 已推送到设备')
+    } finally {
+      managedServer?.release?.()
     }
-    const jarSize = statSync(jarPath).size
-    console.log(
-      `[ScrcpyBridge] scrcpy-server.jar: ${jarPath} (${(jarSize / 1024 / 1024).toFixed(1)}MB, ${server.source})`,
-    )
-
-    // 2. 通过 AdbServerClient 连接到本地 adb server
-    const adbClient = new AdbServerClient(new NodeAdbServerConnector())
-    this.adb = await adbClient.createAdb({ serial: deviceId })
-    console.log('[ScrcpyBridge] ADB 连接已建立')
-
-    // 3. 推送 scrcpy-server.jar 到设备
-    const jarStream = fileToStream(jarPath)
-    await AdbScrcpyClient.pushServer(this.adb, jarStream)
-    console.log('[ScrcpyBridge] scrcpy-server.jar 已推送到设备')
 
     // 4. 配置 scrcpy 选项
     // clientOptions.version 必须与 resources/scrcpy-server.jar 的实际版本一致，

@@ -28,6 +28,7 @@ describe('collectRestorableAgentSessions', () => {
         conversationId: assistantId,
         sessionId: 'assistant-session',
         sessionCompatibilityFingerprint,
+        skills: [],
         configuration: expect.objectContaining({
           roleRef: { roleId: 'default-assistant', version: 1 },
           revision: 1,
@@ -37,6 +38,7 @@ describe('collectRestorableAgentSessions', () => {
         conversationId: workbenchId,
         sessionId: 'workbench-session',
         sessionCompatibilityFingerprint,
+        skills: [],
         configuration: expect.objectContaining({
           roleRef: { roleId: 'default-assistant', version: 1 },
           revision: 1,

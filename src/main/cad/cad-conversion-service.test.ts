@@ -158,12 +158,14 @@ describe('CadConversionService', () => {
       managedWasmPath,
       await readFile(join(process.cwd(), 'node_modules/occt-import-js/dist/occt-import-js.wasm')),
     )
+    const release = vi.fn()
     const service = new CadConversionService(
       () => settings,
       async () => ({
         wasmPath: managedWasmPath,
         version: '0.0.23',
         source: 'managed',
+        release,
       }),
     )
     const sourcePath = join(tempDir, 'managed-cube.stp')
@@ -183,5 +185,6 @@ describe('CadConversionService', () => {
     expect(status).toMatchObject({ source: 'managed', path: managedWasmPath, version: '0.0.23' })
     expect(result.success).toBe(true)
     expect(result.metadata?.generator).toBe('OpenCascade (occt-import-js 0.0.23, managed)')
+    expect(release).toHaveBeenCalledTimes(3)
   })
 })

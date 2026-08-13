@@ -17,7 +17,17 @@ import type {
   ToolConfirmationRequest,
 } from '../agent-protocol'
 import type { WorkspaceRef } from '../workspace-ref'
-import type { AgentConversationConfiguration, AgentRoleSummary } from '../agent-role'
+import type {
+  AgentConversationConfiguration,
+  AgentRoleDraft,
+  AgentRoleExportResult,
+  AgentRoleImportDecision,
+  AgentRoleImportPreviewResult,
+  AgentRoleMutationResult,
+  AgentRoleRef,
+  AgentRoleSummary,
+  AgentSkillRef,
+} from '../agent-role'
 import type { AgentSkillSummary } from '../agent-skill'
 import type { AgentProfileRef } from '../agent-profile'
 
@@ -73,13 +83,7 @@ export interface AgentSendResource {
   }
 }
 
-export interface AgentSendSkill {
-  id: string
-  name: string
-  label: string
-  description?: string
-  source?: 'builtin' | 'user' | 'workspace'
-}
+export type AgentSendSkill = AgentSkillRef
 
 export type AgentImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
 
@@ -147,6 +151,20 @@ export interface AgentApiContract extends Omit<CoreAgentApiContract, 'sendMessag
     (message: AgentSendMessageInput): Promise<AgentCommandResult>
     (conversationId: string, message: AgentSendMessageInput): Promise<AgentCommandResult>
   }
+  createRole: (draft: AgentRoleDraft) => Promise<AgentRoleMutationResult>
+  updateRole: (
+    roleId: string,
+    baseVersion: number,
+    draft: AgentRoleDraft,
+  ) => Promise<AgentRoleMutationResult>
+  copyRole: (ref: AgentRoleRef) => Promise<AgentRoleMutationResult>
+  setRoleArchived: (roleId: string, archived: boolean) => Promise<AgentRoleMutationResult>
+  exportRole: (ref: AgentRoleRef, parentDirectory: string) => Promise<AgentRoleExportResult>
+  previewImportRole: (roleJsonPath: string) => Promise<AgentRoleImportPreviewResult>
+  commitImportRole: (
+    token: string,
+    decision: AgentRoleImportDecision,
+  ) => Promise<AgentRoleMutationResult>
 }
 
 export const agentIpc = {
@@ -169,10 +187,30 @@ export const agentIpc = {
       sessionId: string | null,
       configuration: AgentConversationConfiguration,
       sessionCompatibilityFingerprint?: string | null,
+      skills?: AgentSkillRef[],
     ],
     void
   >('agent:restoreConversation'),
   listRoles: defineIpcCall<[], AgentRoleSummary[]>('agent:listRoles'),
+  createRole: defineIpcCall<[draft: AgentRoleDraft], AgentRoleMutationResult>('agent:createRole'),
+  updateRole: defineIpcCall<
+    [roleId: string, baseVersion: number, draft: AgentRoleDraft],
+    AgentRoleMutationResult
+  >('agent:updateRole'),
+  copyRole: defineIpcCall<[ref: AgentRoleRef], AgentRoleMutationResult>('agent:copyRole'),
+  setRoleArchived: defineIpcCall<[roleId: string, archived: boolean], AgentRoleMutationResult>(
+    'agent:setRoleArchived',
+  ),
+  exportRole: defineIpcCall<[ref: AgentRoleRef, parentDirectory: string], AgentRoleExportResult>(
+    'agent:exportRole',
+  ),
+  previewImportRole: defineIpcCall<[roleJsonPath: string], AgentRoleImportPreviewResult>(
+    'agent:previewImportRole',
+  ),
+  commitImportRole: defineIpcCall<
+    [token: string, decision: AgentRoleImportDecision],
+    AgentRoleMutationResult
+  >('agent:commitImportRole'),
   listSkills: defineIpcCall<[], AgentSkillSummary[]>('agent:listSkills'),
   closeConversation: defineIpcCall<[conversationId: string], void>('agent:closeConversation'),
   getCapabilities: defineIpcCall<[], AgentCapabilityStatus[]>('agent:getCapabilities'),

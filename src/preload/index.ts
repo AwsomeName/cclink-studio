@@ -78,6 +78,7 @@ const cclinkApi: CclinkApiContract = {
   openWorkspace: (input) => invokeIpcContract(cclinkIpc.openWorkspace, input),
   listSessions: (ref) => invokeIpcContract(cclinkIpc.listSessions, ref),
   createSession: (input) => invokeIpcContract(cclinkIpc.createSession, input),
+  setSessionArchived: (input) => invokeIpcContract(cclinkIpc.setSessionArchived, input),
   listMessages: (sessionId) => invokeIpcContract(cclinkIpc.listMessages, sessionId),
   sendAgentMessage: (input) => invokeIpcContract(cclinkIpc.sendAgentMessage, input),
   onRealtimeStatus: (callback) => {

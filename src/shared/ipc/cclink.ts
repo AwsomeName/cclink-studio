@@ -17,6 +17,7 @@ export interface CclinkApiContract {
   openWorkspace(input: { serverId: string; path: string }): Promise<CclinkWorkspace>
   listSessions(ref: RemoteWorkspaceRef): Promise<CclinkRemoteSession[]>
   createSession(input: { ref: RemoteWorkspaceRef; name?: string }): Promise<CclinkRemoteSession>
+  setSessionArchived(input: { sessionId: string; archived: boolean }): Promise<CclinkRemoteSession>
   listMessages(sessionId: string): Promise<CclinkRemoteMessage[]>
   sendAgentMessage(input: {
     ref: RemoteWorkspaceRef
@@ -52,6 +53,10 @@ export const cclinkIpc = {
     [input: { ref: RemoteWorkspaceRef; name?: string }],
     CclinkRemoteSession
   >('cclink:createSession'),
+  setSessionArchived: defineIpcCall<
+    [input: { sessionId: string; archived: boolean }],
+    CclinkRemoteSession
+  >('cclink:setSessionArchived'),
   listMessages: defineIpcCall<[sessionId: string], CclinkRemoteMessage[]>('cclink:listMessages'),
   sendAgentMessage: defineIpcCall<
     [input: { ref: RemoteWorkspaceRef; sessionId: string; content: string }],

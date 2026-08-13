@@ -22,7 +22,11 @@ import {
   getManagedClaudeRuntimeCatalogEntry,
   type ManagedClaudeRuntimeCatalogEntry,
 } from './claude-runtime-catalog'
-import { RuntimeResourceManager, type ResolvedRuntimeResource } from './runtime-resource-manager'
+import {
+  RuntimeResourceManager,
+  type ResolvedRuntimeResource,
+  type ResolvedRuntimeResourceLease,
+} from './runtime-resource-manager'
 
 const execFileAsync = promisify(execFile)
 const INSTALL_RECORD_SCHEMA_VERSION = 1
@@ -157,6 +161,12 @@ export class RuntimeComponentManager {
     componentId: RuntimeResourceComponentId,
   ): Promise<ResolvedRuntimeResource | null> {
     return this.resourceManager.resolve(componentId)
+  }
+
+  acquireRuntimeResource(
+    componentId: RuntimeResourceComponentId,
+  ): Promise<ResolvedRuntimeResourceLease | null> {
+    return this.resourceManager.acquire(componentId)
   }
 
   getManagedClaudeStatus(): ManagedClaudeRuntimeStatus {

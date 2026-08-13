@@ -1,6 +1,6 @@
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import { workspaceRefKey } from '@shared/workspace-ref'
-import type { AgentMessage } from '../../types'
+import type { AgentMessage, AgentMountedSkill } from '../../types'
 import {
   DEFAULT_AGENT_ROLE_REF,
   agentRoleRefsEqual,
@@ -96,13 +96,20 @@ export function normalizeConversationSnapshot(
       configurationEvents: Array.isArray(conversation.configurationEvents)
         ? conversation.configurationEvents
         : [],
-      lastRunConfigurationReceipt: conversation.lastRunConfigurationReceipt ?? null,
+      lastRunConfigurationReceipt: conversation.lastRunConfigurationReceipt
+        ? {
+            ...conversation.lastRunConfigurationReceipt,
+            skills: Array.isArray(conversation.lastRunConfigurationReceipt.skills)
+              ? conversation.lastRunConfigurationReceipt.skills
+              : [],
+          }
+        : null,
       archivedAt: conversation.archivedAt ?? null,
       mountedResources: Array.isArray(conversation.mountedResources)
         ? conversation.mountedResources
         : [],
       pendingImages: [],
-      mountedSkills: Array.isArray(conversation.mountedSkills) ? conversation.mountedSkills : [],
+      mountedSkills: normalizeMountedSkills(conversation.mountedSkills),
       sessionId: invalidPersistedSession ? null : (conversation.sessionId ?? null),
       sessionCompatibilityFingerprint: invalidPersistedSession ? null : persistedFingerprint,
       contextUsage: invalidPersistedSession ? null : (conversation.contextUsage ?? null),
@@ -165,6 +172,26 @@ export function normalizeConversationSnapshot(
 
 function normalizeSessionCompatibilityFingerprint(value: unknown): string | null {
   return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value) ? value : null
+}
+
+function normalizeMountedSkills(value: unknown): AgentMountedSkill[] {
+  if (!Array.isArray(value)) return []
+  const refs = new Map<string, AgentMountedSkill>()
+  for (const item of value.slice(0, 8)) {
+    if (!item || typeof item !== 'object') continue
+    const candidate = item as { skillId?: unknown; version?: unknown; id?: unknown }
+    const skillIdValue =
+      typeof candidate.skillId === 'string'
+        ? candidate.skillId
+        : typeof candidate.id === 'string'
+          ? candidate.id
+          : ''
+    const skillId = skillIdValue.trim()
+    const version = candidate.version === undefined ? 1 : Number(candidate.version)
+    if (!skillId || !Number.isInteger(version) || version <= 0) continue
+    refs.set(skillId, { skillId, version })
+  }
+  return [...refs.values()]
 }
 
 function normalizeLegacyAgentProfileRef(value: unknown): AgentProfileRef {

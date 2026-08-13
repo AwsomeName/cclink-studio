@@ -7,7 +7,7 @@ import type { RuntimeComponentManager } from './runtime-component-manager'
 
 export interface RuntimeComponentsIpcDependencies {
   beginManagedClaudeMutation?: () => (() => void) | null
-  isManagedClaudeActive?: () => boolean
+  isManagedClaudeSelected?: () => boolean
 }
 
 export function registerRuntimeComponentsIpc(
@@ -28,7 +28,8 @@ export function registerRuntimeComponentsIpc(
   registerTrustedIpcContract(
     runtimeComponentsIpcContracts.installManagedClaude,
     trustedRendererGuard,
-    () => manager.installManagedClaude(),
+    () =>
+      withManagedClaudeMutationLock(manager, dependencies, () => manager.installManagedClaude()),
   )
   registerTrustedIpcContract(
     runtimeComponentsIpcContracts.repairManagedClaude,
@@ -40,7 +41,7 @@ export function registerRuntimeComponentsIpc(
     trustedRendererGuard,
     () =>
       withManagedClaudeMutationLock(manager, dependencies, () => {
-        if (dependencies.isManagedClaudeActive?.()) {
+        if (dependencies.isManagedClaudeSelected?.()) {
           return Promise.resolve({
             success: false,
             status: manager.getManagedClaudeStatus(),

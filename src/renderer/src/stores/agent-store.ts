@@ -19,6 +19,7 @@ import type { AgentImageAttachment } from '@shared/ipc/agent'
 import type { WorkspaceStateSetSectionOptions } from '@shared/ipc/workspace-state'
 import {
   agentRoleRefsEqual,
+  agentSkillRefsEqual,
   type AgentRoleRef,
   type AgentRunConfigurationReceipt,
 } from '@shared/agent-role'
@@ -67,6 +68,13 @@ function rebaseResourcePath(
   if (path === oldPrefix) return newPrefix
   if (path.startsWith(oldPrefix + '/')) return newPrefix + path.slice(oldPrefix.length)
   return path
+}
+
+function agentSkillRefListsEqual(left: AgentMountedSkill[], right: AgentMountedSkill[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((skill, index) => agentSkillRefsEqual(skill, right[index]))
+  )
 }
 
 interface AgentState {
@@ -167,8 +175,8 @@ interface AgentState {
   removePendingImage: (imageId: string, conversationId?: string) => void
   rebaseMountedResourcePaths: (oldPrefix: string, newPrefix: string) => void
   clearTransientResources: (conversationId?: string) => void
-  addMountedSkill: (skill: AgentMountedSkill, conversationId?: string) => void
-  removeMountedSkill: (skillId: string, conversationId?: string) => void
+  addMountedSkill: (skill: AgentMountedSkill, conversationId?: string) => Promise<boolean>
+  removeMountedSkill: (skill: AgentMountedSkill, conversationId?: string) => Promise<boolean>
   hydrateFromWorkspaceState: (
     value: unknown,
     options?: { workspaceRef?: WorkspaceRef; merge?: boolean },
@@ -716,7 +724,12 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     if (
       !conversation ||
       conversation.configuration.revision !== receipt.configurationRevision ||
-      !agentRoleRefsEqual(conversation.configuration.roleRef, receipt.roleRef)
+      !agentRoleRefsEqual(conversation.configuration.roleRef, receipt.roleRef) ||
+      !agentSkillRefListsEqual(
+        conversation.mountedSkills,
+        receipt.skills.map((skill) => skill.ref),
+      ) ||
+      receipt.skills.some((skill) => !/^[a-f0-9]{64}$/.test(skill.contentHash))
     ) {
       return false
     }
@@ -1243,28 +1256,88 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       })),
     ),
 
-  addMountedSkill: (skill, conversationId) =>
+  addMountedSkill: async (skill, conversationId) => {
+    const id = resolveConversationId(get(), conversationId)
+    const previous = get().conversations[id]
+    if (!previous) return false
+    if (previous.mountedSkills.some((item) => agentSkillRefsEqual(item, skill))) return true
+    const nextSkills = [
+      ...previous.mountedSkills.filter((item) => item.skillId !== skill.skillId),
+      { ...skill },
+    ]
     set((state) =>
-      updateConversation(state, conversationId, (conversation) => {
-        const existing = conversation.mountedSkills.some((item) => item.id === skill.id)
-        return {
-          ...conversation,
-          mountedSkills: existing
-            ? conversation.mountedSkills.map((item) => (item.id === skill.id ? skill : item))
-            : [...conversation.mountedSkills, skill],
-          updatedAt: Date.now(),
-        }
-      }),
-    ),
-
-  removeMountedSkill: (skillId, conversationId) =>
-    set((state) =>
-      updateConversation(state, conversationId, (conversation) => ({
+      updateConversation(state, id, (conversation) => ({
         ...conversation,
-        mountedSkills: conversation.mountedSkills.filter((item) => item.id !== skillId),
+        mountedSkills: nextSkills,
+        lastRunConfigurationReceipt: null,
+        sessionId: null,
+        sessionCompatibilityFingerprint: null,
+        contextUsage: null,
         updatedAt: Date.now(),
       })),
-    ),
+    )
+    try {
+      await persistConversationWorkspace(id)
+      return true
+    } catch {
+      set((state) =>
+        updateConversation(state, id, (conversation) =>
+          agentSkillRefListsEqual(conversation.mountedSkills, nextSkills)
+            ? {
+                ...conversation,
+                mountedSkills: previous.mountedSkills,
+                lastRunConfigurationReceipt: previous.lastRunConfigurationReceipt,
+                sessionId: previous.sessionId,
+                sessionCompatibilityFingerprint: previous.sessionCompatibilityFingerprint,
+                contextUsage: previous.contextUsage,
+                updatedAt: Date.now(),
+              }
+            : conversation,
+        ),
+      )
+      return false
+    }
+  },
+
+  removeMountedSkill: async (skill, conversationId) => {
+    const id = resolveConversationId(get(), conversationId)
+    const previous = get().conversations[id]
+    if (!previous) return false
+    const nextSkills = previous.mountedSkills.filter((item) => !agentSkillRefsEqual(item, skill))
+    if (nextSkills.length === previous.mountedSkills.length) return true
+    set((state) =>
+      updateConversation(state, id, (conversation) => ({
+        ...conversation,
+        mountedSkills: nextSkills,
+        lastRunConfigurationReceipt: null,
+        sessionId: null,
+        sessionCompatibilityFingerprint: null,
+        contextUsage: null,
+        updatedAt: Date.now(),
+      })),
+    )
+    try {
+      await persistConversationWorkspace(id)
+      return true
+    } catch {
+      set((state) =>
+        updateConversation(state, id, (conversation) =>
+          agentSkillRefListsEqual(conversation.mountedSkills, nextSkills)
+            ? {
+                ...conversation,
+                mountedSkills: previous.mountedSkills,
+                lastRunConfigurationReceipt: previous.lastRunConfigurationReceipt,
+                sessionId: previous.sessionId,
+                sessionCompatibilityFingerprint: previous.sessionCompatibilityFingerprint,
+                contextUsage: previous.contextUsage,
+                updatedAt: Date.now(),
+              }
+            : conversation,
+        ),
+      )
+      return false
+    }
+  },
 
   hydrateFromWorkspaceState: (value, options) => {
     const workspaceRef = options?.workspaceRef

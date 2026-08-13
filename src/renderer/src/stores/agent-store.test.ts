@@ -57,6 +57,39 @@ describe('useAgentStore', () => {
       expect(useAgentStore.getState().conversations['agent-default'].activeRunId).toMatch(/^run-/)
     })
 
+    it('只接受与当前角色和 Skill 引用一致的运行回执', () => {
+      const conversationId = useAgentStore.getState().activeConversationId
+      useAgentStore.setState((state) => ({
+        conversations: {
+          ...state.conversations,
+          [conversationId]: {
+            ...state.conversations[conversationId],
+            mountedSkills: [{ skillId: 'grill-me', version: 1 }],
+          },
+        },
+      }))
+      const conversation = useAgentStore.getState().conversations[conversationId]
+      const receipt = {
+        conversationId,
+        runId: 'run-1',
+        roleRef: conversation.configuration.roleRef,
+        configurationRevision: conversation.configuration.revision,
+        configurationFingerprint: 'a'.repeat(64),
+        runtimeSessionMode: 'new' as const,
+        skills: [
+          {
+            ref: { skillId: 'grill-me', version: 1 },
+            contentHash: 'b'.repeat(64),
+          },
+        ],
+      }
+
+      expect(useAgentStore.getState().setRunConfigurationReceipt(receipt)).toBe(true)
+      expect(useAgentStore.getState().setRunConfigurationReceipt({ ...receipt, skills: [] })).toBe(
+        false,
+      )
+    })
+
     it('切回项目时以主进程 busy 状态修正会话运行态', () => {
       useAgentStore.getState().beginRun()
       useAgentStore.getState().reconcileRuntimeStatus({
@@ -584,41 +617,17 @@ describe('useAgentStore', () => {
       expect(useAgentStore.getState().conversations[id].mountedResources).toEqual([file])
     })
 
-    it('挂载 Skill 时按会话去重并支持移除', () => {
+    it('挂载 Skill 时按会话去重、持久化并支持移除', async () => {
       const id = useAgentStore.getState().createConversation()
 
-      useAgentStore.getState().addMountedSkill(
-        {
-          id: 'grill-me',
-          name: 'grill-me',
-          label: 'grill-me',
-          description: '拷问方案',
-          source: 'user',
-        },
-        id,
-      )
-      useAgentStore.getState().addMountedSkill(
-        {
-          id: 'grill-me',
-          name: 'grill-me',
-          label: 'grill-me',
-          description: '更新后的拷问方案',
-          source: 'user',
-        },
-        id,
-      )
+      await useAgentStore.getState().addMountedSkill({ skillId: 'grill-me', version: 1 }, id)
+      await useAgentStore.getState().addMountedSkill({ skillId: 'grill-me', version: 1 }, id)
 
       expect(useAgentStore.getState().conversations[id].mountedSkills).toEqual([
-        {
-          id: 'grill-me',
-          name: 'grill-me',
-          label: 'grill-me',
-          description: '更新后的拷问方案',
-          source: 'user',
-        },
+        { skillId: 'grill-me', version: 1 },
       ])
 
-      useAgentStore.getState().removeMountedSkill('grill-me', id)
+      await useAgentStore.getState().removeMountedSkill({ skillId: 'grill-me', version: 1 }, id)
       expect(useAgentStore.getState().conversations[id].mountedSkills).toEqual([])
     })
   })
@@ -659,6 +668,31 @@ describe('useAgentStore', () => {
 
   describe('hydrateFromWorkspaceState', () => {
     const sessionCompatibilityFingerprint = 'a'.repeat(64)
+
+    it('把旧版 Skill 展示快照迁移为版本化引用', () => {
+      const legacy = createAgentConversationState('legacy-skill')
+      useAgentStore.getState().hydrateFromWorkspaceState({
+        conversations: {
+          'legacy-skill': {
+            ...legacy,
+            mountedSkills: [
+              {
+                id: 'grill-me',
+                name: 'grill-me',
+                label: '方案拷问',
+                description: '旧快照描述不再作为事实源',
+              },
+            ],
+          },
+        },
+        conversationOrder: ['legacy-skill'],
+        activeConversationId: 'legacy-skill',
+      } as never)
+
+      expect(useAgentStore.getState().conversations['legacy-skill'].mountedSkills).toEqual([
+        { skillId: 'grill-me', version: 1 },
+      ])
+    })
 
     it('恢复时丢弃预算中止后留下的不可续接 SDK session', () => {
       const now = Date.now()
@@ -965,6 +999,60 @@ describe('useAgentStore', () => {
   })
 
   describe('workspace persistence', () => {
+    it('Skill 挂载立即持久化并使旧 Runtime Session 失效', async () => {
+      const setSection = vi.fn().mockResolvedValue({ success: true })
+      vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+      const conversationId = useAgentStore.getState().activeConversationId
+      useAgentStore
+        .getState()
+        .setSessionId('session-before-skill-change', conversationId, 'a'.repeat(64))
+
+      await expect(
+        useAgentStore
+          .getState()
+          .addMountedSkill({ skillId: 'grill-me', version: 1 }, conversationId),
+      ).resolves.toBe(true)
+
+      expect(useAgentStore.getState().conversations[conversationId]).toMatchObject({
+        mountedSkills: [{ skillId: 'grill-me', version: 1 }],
+        sessionId: null,
+        sessionCompatibilityFingerprint: null,
+      })
+      expect(setSection).toHaveBeenCalledWith(
+        null,
+        'agentConversations',
+        expect.objectContaining({
+          conversations: expect.objectContaining({
+            [conversationId]: expect.objectContaining({
+              mountedSkills: [{ skillId: 'grill-me', version: 1 }],
+            }),
+          }),
+        }),
+        null,
+      )
+    })
+
+    it('Skill 配置持久化失败时回滚引用和 Runtime Session', async () => {
+      const setSection = vi.fn().mockRejectedValue(new Error('disk full'))
+      vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+      const conversationId = useAgentStore.getState().activeConversationId
+      useAgentStore
+        .getState()
+        .setSessionId('session-before-skill-change', conversationId, 'a'.repeat(64))
+
+      await expect(
+        useAgentStore
+          .getState()
+          .addMountedSkill({ skillId: 'grill-me', version: 1 }, conversationId),
+      ).resolves.toBe(false)
+
+      expect(useAgentStore.getState().conversations[conversationId]).toMatchObject({
+        mountedSkills: [],
+        sessionId: 'session-before-skill-change',
+        sessionCompatibilityFingerprint: 'a'.repeat(64),
+      })
+    })
+
     it('角色切换保留同一会话和历史、清空内部 session，并持久化配置事件', async () => {
       const setSection = vi.fn().mockResolvedValue({ success: true })
       vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })

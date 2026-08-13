@@ -48,6 +48,7 @@ import type { RendererWorkspaceStateFlushCoordinator } from '../workspace/render
 import type { RuntimeComponentManager } from '../runtime-components/runtime-component-manager'
 import type { CclinkAuthService } from '../cclink-remote/auth-service'
 import type { CclinkRemoteService } from '../cclink-remote/cclink-remote-service'
+import type { AgentRoleRegistry } from '../agent/agent-role-registry'
 
 export interface CclinkStudioRuntimeState {
   isDev: boolean
@@ -61,6 +62,7 @@ export interface CclinkStudioRuntimeState {
   browserInstanceStore: BrowserInstanceStore | null
   playwrightBridge: PlaywrightBridge | null
   agentBridge: AgentBridge | null
+  agentRoleRegistry: AgentRoleRegistry | null
   claudeRuntimeManager: ClaudeRuntimeManager | null
   runtimeComponentManager: RuntimeComponentManager | null
   toolHost: McpToolHost | null
@@ -118,6 +120,7 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     browserInstanceStore: null,
     playwrightBridge: null,
     agentBridge: null,
+    agentRoleRegistry: null,
     claudeRuntimeManager: null,
     runtimeComponentManager: null,
     toolHost: null,

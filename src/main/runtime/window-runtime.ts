@@ -170,9 +170,19 @@ function bootstrapAndroidWindowCapability(runtime: CclinkStudioRuntimeState): vo
   if (!mainWindow || !trustedRendererGuard) throw new Error('Android 窗口依赖尚未初始化')
   runtime.adbBridge = new AdbBridge()
   runtime.scrcpyBridge = new ScrcpyBridge(mainWindow, async () => {
-    const resource = await runtime.runtimeComponentManager?.resolveRuntimeResource('scrcpy-server')
+    const resource = await runtime.runtimeComponentManager?.acquireRuntimeResource('scrcpy-server')
+    if (!resource) return null
     const path = resource?.files['scrcpy-server.jar']
-    return resource && path ? { path, version: '2.3.1' as const, source: 'managed' as const } : null
+    if (!path) {
+      resource.release()
+      return null
+    }
+    return {
+      path,
+      version: '2.3.1' as const,
+      source: 'managed' as const,
+      release: resource.release,
+    }
   })
   runtime.activeDeviceManager = new ActiveDeviceManager()
   runtime.physicalDeviceManager = new PhysicalDeviceManager(

@@ -51,6 +51,7 @@ export const agentApi: AgentApiContract = {
     sessionId,
     configuration,
     sessionCompatibilityFingerprint,
+    skills,
   ) =>
     invokeIpcContract(
       agentIpc.restoreConversation,
@@ -58,8 +59,20 @@ export const agentApi: AgentApiContract = {
       sessionId,
       configuration,
       sessionCompatibilityFingerprint,
+      skills,
     ),
   listRoles: () => invokeIpcContract(agentIpc.listRoles),
+  createRole: (draft) => invokeIpcContract(agentIpc.createRole, draft),
+  updateRole: (roleId, baseVersion, draft) =>
+    invokeIpcContract(agentIpc.updateRole, roleId, baseVersion, draft),
+  copyRole: (ref) => invokeIpcContract(agentIpc.copyRole, ref),
+  setRoleArchived: (roleId, archived) =>
+    invokeIpcContract(agentIpc.setRoleArchived, roleId, archived),
+  exportRole: (ref, parentDirectory) =>
+    invokeIpcContract(agentIpc.exportRole, ref, parentDirectory),
+  previewImportRole: (roleJsonPath) => invokeIpcContract(agentIpc.previewImportRole, roleJsonPath),
+  commitImportRole: (token, decision) =>
+    invokeIpcContract(agentIpc.commitImportRole, token, decision),
   listSkills: () => invokeIpcContract(agentIpc.listSkills),
   closeConversation: (conversationId) =>
     invokeIpcContract(agentIpc.closeConversation, conversationId),

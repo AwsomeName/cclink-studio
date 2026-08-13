@@ -11,11 +11,22 @@ describe('BuiltinAgentSkillRegistry', () => {
         version: 1,
         source: 'builtin',
         available: true,
+        contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
       }),
     ])
     expect(registry.resolve({ skillId: 'grill-me', version: 1 })).toMatchObject({
       label: '方案拷问',
+      markdown: expect.stringContaining('## Workflow'),
     })
     expect(registry.resolve({ skillId: 'missing', version: 1 })).toBeNull()
+    expect(() => registry.resolveRequired({ skillId: 'missing', version: 1 })).toThrow(
+      'Skill 不可用',
+    )
+    expect(
+      registry.resolveMany([
+        { skillId: 'grill-me', version: 1 },
+        { skillId: 'grill-me', version: 1 },
+      ]),
+    ).toHaveLength(1)
   })
 })

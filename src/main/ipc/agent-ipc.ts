@@ -8,6 +8,7 @@
 
 import type { IpcMainInvokeEvent } from 'electron'
 import type { AgentBridge } from '../agent/agent-bridge'
+import type { AgentRoleRegistry } from '../agent/agent-role-registry'
 import { listBuiltinAgentRoles } from '../agent/agent-profile-registry'
 import { listBuiltinAgentSkills } from '../agent/agent-skill-registry'
 import type { PermissionManager } from '../mcp/permission'
@@ -35,6 +36,7 @@ import { legacyAgentProfileRefToRoleRef } from '../../shared/agent-profile'
 interface AgentIpcDeps {
   trustedRendererGuard: TrustedRendererGuard
   getAgentBridge: () => AgentBridge | null
+  getAgentRoleRegistry?: () => AgentRoleRegistry | null
   permissionManager: PermissionManager
   getMcpClientMgr: () => McpClientManager | null
   getCapabilities?: () => AgentCapabilityStatus[]
@@ -242,8 +244,70 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
   })
 
   handle(agentIpc.listRoles, () => {
+    const roleRegistry = deps.getAgentRoleRegistry?.()
+    if (roleRegistry) return roleRegistry.list()
     const agentBridge = requireAgentBridge()
     return agentBridge?.listRoles() ?? listBuiltinAgentRoles()
+  })
+
+  handle(agentIpc.createRole, (_event, draft) => {
+    const registry = deps.getAgentRoleRegistry?.()
+    return registry?.create(draft) ?? { success: false, error: '角色注册表未就绪' }
+  })
+
+  handle(agentIpc.updateRole, (_event, roleId, baseVersion, draft) => {
+    const registry = deps.getAgentRoleRegistry?.()
+    return (
+      registry?.update(roleId, baseVersion, draft) ?? {
+        success: false,
+        error: '角色注册表未就绪',
+      }
+    )
+  })
+
+  handle(agentIpc.copyRole, (_event, ref) => {
+    const registry = deps.getAgentRoleRegistry?.()
+    return registry?.copy(ref) ?? { success: false, error: '角色注册表未就绪' }
+  })
+
+  handle(agentIpc.setRoleArchived, (_event, roleId, archived) => {
+    const registry = deps.getAgentRoleRegistry?.()
+    return (
+      registry?.setArchived(roleId, archived) ?? {
+        success: false,
+        error: '角色注册表未就绪',
+      }
+    )
+  })
+
+  handle(agentIpc.exportRole, (_event, ref, parentDirectory) => {
+    const registry = deps.getAgentRoleRegistry?.()
+    return (
+      registry?.export(ref, parentDirectory) ?? {
+        success: false,
+        error: '角色注册表未就绪',
+      }
+    )
+  })
+
+  handle(agentIpc.previewImportRole, (_event, roleJsonPath) => {
+    const registry = deps.getAgentRoleRegistry?.()
+    return (
+      registry?.previewImport(roleJsonPath) ?? {
+        success: false,
+        error: '角色注册表未就绪',
+      }
+    )
+  })
+
+  handle(agentIpc.commitImportRole, (_event, token, decision) => {
+    const registry = deps.getAgentRoleRegistry?.()
+    return (
+      registry?.commitImport(token, decision) ?? {
+        success: false,
+        error: '角色注册表未就绪',
+      }
+    )
   })
 
   handle(agentIpc.listSkills, () => {
@@ -313,7 +377,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
 
   // 恢复历史会话的后端 session id
   handle(agentIpc.restoreConversation, (_event, ...args) => {
-    const [conversationId, sessionId, configuration, sessionCompatibilityFingerprint] = args
+    const [conversationId, sessionId, configuration, sessionCompatibilityFingerprint, skills] = args
     const agentBridge = requireAgentBridge()
     if (!agentBridge) return
     agentBridge.restoreConversation(
@@ -321,6 +385,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
       sessionId,
       configuration,
       sessionCompatibilityFingerprint,
+      skills,
     )
   })
 

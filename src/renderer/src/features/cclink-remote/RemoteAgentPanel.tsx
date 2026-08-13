@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CclinkRemoteMessage } from '@shared/cclink'
 import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
+import type { RemoteStatus } from '@shared/remote-protocol'
 import { useCclinkStore } from '../../stores'
 import { IconPlus, IconRobot, IconSend } from '../../components/common/Icons'
 
@@ -14,6 +15,7 @@ export function RemoteAgentPanel({
   const selectedSessionId = useCclinkStore((state) => state.selectedSessionId)
   const loading = useCclinkStore((state) => state.loading)
   const error = useCclinkStore((state) => state.error)
+  const realtimeState = useCclinkStore((state) => state.realtime.state)
   const initialize = useCclinkStore((state) => state.initialize)
   const loadSessions = useCclinkStore((state) => state.loadSessions)
   const createSession = useCclinkStore((state) => state.createSession)
@@ -22,11 +24,14 @@ export function RemoteAgentPanel({
   const sendAgentMessage = useCclinkStore((state) => state.sendAgentMessage)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [remoteStatus, setRemoteStatus] = useState<RemoteStatus | null>(null)
+  const [statusError, setStatusError] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const workspaceSessions = useMemo(
     () =>
       sessions.filter(
         (session) =>
+          session.status !== 'archived' &&
           session.serverId === workspaceRef.endpointId &&
           (session.workspaceId === workspaceRef.workspaceId ||
             session.workspacePath === workspaceRef.path),
@@ -40,14 +45,28 @@ export function RemoteAgentPanel({
   const activeMessages = activeSession ? (messages[activeSession.id] ?? []) : []
 
   useEffect(() => {
-    void initialize().then(() => loadSessions(workspaceRef))
+    void initialize().then(async () => {
+      await Promise.all([
+        loadSessions(workspaceRef),
+        window.cclinkStudio.remote
+          .getStatus(workspaceRef)
+          .then(setRemoteStatus)
+          .catch((statusFailure: unknown) =>
+            setStatusError(
+              statusFailure instanceof Error ? statusFailure.message : String(statusFailure),
+            ),
+          ),
+      ])
+    })
   }, [
     initialize,
     loadSessions,
     workspaceRef.endpointId,
     workspaceRef.path,
     workspaceRef.workspaceId,
+    realtimeState,
   ])
+  const agentAvailable = remoteStatus?.state === 'online' && remoteStatus.capabilities.agent.session
 
   useEffect(() => {
     if (activeSession && activeSession.id !== selectedSessionId) selectSession(activeSession.id)
@@ -59,6 +78,7 @@ export function RemoteAgentPanel({
   }, [activeMessages])
 
   const startSession = async (): Promise<void> => {
+    if (!agentAvailable) return
     const session = await createSession(
       workspaceRef,
       `会话 · ${workspaceRef.label || workspaceRef.path.split(/[\\/]/u).filter(Boolean).at(-1) || '远程项目'}`,
@@ -74,7 +94,7 @@ export function RemoteAgentPanel({
 
   const submit = async (): Promise<void> => {
     const content = draft.trim()
-    if (!content || sending) return
+    if (!content || sending || !agentAvailable) return
     let session = activeSession
     if (!session) session = await createSession(workspaceRef, '新远程会话')
     setSending(true)
@@ -111,7 +131,7 @@ export function RemoteAgentPanel({
         <button
           type="button"
           onClick={() => void startSession()}
-          disabled={loading}
+          disabled={loading || !agentAvailable}
           title="新建远程会话"
         >
           <IconPlus size={14} />
@@ -123,6 +143,13 @@ export function RemoteAgentPanel({
         <strong>{workspaceRef.path}</strong>
       </div>
       {error && <div className="cclink-inline-notice error">{error}</div>}
+      {(statusError || (remoteStatus && !agentAvailable)) && (
+        <div className="cclink-inline-notice error">
+          {statusError ||
+            remoteStatus?.remoteError?.message ||
+            '当前 Agent 未声明远程会话/流式消息能力'}
+        </div>
+      )}
       <div ref={listRef} className="remote-agent-messages">
         {activeMessages.length === 0 ? (
           <div className="remote-agent-empty">
@@ -137,6 +164,7 @@ export function RemoteAgentPanel({
       <div className="remote-agent-composer">
         <textarea
           value={draft}
+          disabled={!agentAvailable}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -149,7 +177,7 @@ export function RemoteAgentPanel({
         <button
           type="button"
           onClick={() => void submit()}
-          disabled={!draft.trim() || sending}
+          disabled={!draft.trim() || sending || !agentAvailable}
           title="发送"
         >
           <IconSend size={16} />

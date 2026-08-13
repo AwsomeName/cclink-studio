@@ -2618,6 +2618,28 @@ button.project-panel-row.active {
   margin: 4px 4px 0;
 }
 
+.agent-role-sidebar-toolbar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.agent-role-sidebar-toolbar button,
+.agent-role-archive-toggle {
+  min-height: 28px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.agent-role-archive-toggle {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
 .agent-role-sidebar-error {
   display: flex;
   align-items: flex-start;
@@ -2822,10 +2844,36 @@ button.project-panel-row.active {
 }
 
 .agent-role-target-card,
+.agent-role-version-card,
 .agent-role-detail-grid {
   max-width: 1000px;
   margin-right: auto;
   margin-left: auto;
+}
+
+.agent-role-version-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.agent-role-version-card select,
+.agent-role-version-card button {
+  min-height: 27px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.agent-role-version-card button {
+  padding: 3px 8px;
+  cursor: pointer;
 }
 
 .agent-role-target-card {
@@ -3022,6 +3070,119 @@ button.project-panel-row.active {
 .agent-role-detail-grid dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.agent-role-editor {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  padding: 28px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.agent-role-editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  max-width: 1000px;
+  margin: 0 auto 18px;
+}
+
+.agent-role-editor-header > div:first-child {
+  display: flex;
+  gap: 13px;
+}
+
+.agent-role-editor-header h1 {
+  margin: 3px 0;
+  font-size: 22px;
+}
+
+.agent-role-editor-header p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.agent-role-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.agent-role-editor-grid > label,
+.agent-role-editor-grid fieldset {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 13px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.agent-role-editor-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.agent-role-editor-grid input,
+.agent-role-editor-grid select,
+.agent-role-editor-grid textarea {
+  min-height: 31px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.agent-role-editor-grid textarea {
+  min-height: 90px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.agent-role-editor-grid .agent-role-editor-soul {
+  min-height: 240px;
+  font-family: var(--font-mono);
+}
+
+.agent-role-skill-check {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: row;
+  gap: 8px;
+  color: var(--text-primary);
+}
+
+.agent-role-skill-check input {
+  min-height: auto;
+}
+
+.agent-role-skill-check span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-role-skill-check small,
+.agent-role-editor-grid > label > small {
+  color: var(--text-secondary);
+}
+
+.agent-role-example-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 7px;
 }
 
 @media (max-width: 760px) {

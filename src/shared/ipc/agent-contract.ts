@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { IpcInvokeDefinition } from './contract'
 import { bindIpcParser, bindNoArgsIpc, ipcArgs } from './contract'
+import { absolutePathSchema, boundedIdentifierSchema } from './input-schema'
 import {
   agentIpc,
   agentMcpIpc,
@@ -16,7 +17,10 @@ import {
   agentConfirmationIdSchema,
   agentConversationIdSchema,
   agentPermissionModeSchema,
+  agentRoleDraftSchema,
+  agentRoleRefSchema,
   agentScopeSchema,
+  agentSkillRefsSchema,
   agentSendMessageInputSchema,
   agentToolModuleIdSchema,
   mcpServerNameSchema,
@@ -90,19 +94,55 @@ export const agentIpcContracts = {
   getScope: bindOptionalConversation(agentIpc.getScope),
   resetSession: bindOptionalConversation(agentIpc.resetSession),
   restoreConversation: bindIpcParser(agentIpc.restoreConversation, (args) => {
-    if (args.length < 3 || args.length > 4) {
-      throw new Error(`IPC ${agentIpc.restoreConversation.channel} 需要 3 或 4 个参数`)
+    if (args.length < 3 || args.length > 5) {
+      throw new Error(`IPC ${agentIpc.restoreConversation.channel} 需要 3 至 5 个参数`)
     }
     return ipcArgs(
       agentConversationIdSchema.parse(args[0]),
       nullableAgentSessionIdSchema.parse(args[1]),
       agentConversationConfigurationSchema.parse(args[2]),
-      args.length === 4
+      args.length >= 4
         ? nullableAgentSessionCompatibilityFingerprintSchema.parse(args[3])
         : undefined,
+      args.length === 5 ? agentSkillRefsSchema.parse(args[4]) : undefined,
     )
   }),
   listRoles: bindNoArgsIpc(agentIpc.listRoles),
+  createRole: bindIpcParser(agentIpc.createRole, (args) => {
+    requireArgs(args, 1, agentIpc.createRole.channel)
+    return ipcArgs(agentRoleDraftSchema.parse(args[0]))
+  }),
+  updateRole: bindIpcParser(agentIpc.updateRole, (args) => {
+    requireArgs(args, 3, agentIpc.updateRole.channel)
+    return ipcArgs(
+      boundedIdentifierSchema().parse(args[0]),
+      z.number().int().positive().max(1_000_000).parse(args[1]),
+      agentRoleDraftSchema.parse(args[2]),
+    )
+  }),
+  copyRole: bindIpcParser(agentIpc.copyRole, (args) => {
+    requireArgs(args, 1, agentIpc.copyRole.channel)
+    return ipcArgs(agentRoleRefSchema.parse(args[0]))
+  }),
+  setRoleArchived: bindIpcParser(agentIpc.setRoleArchived, (args) => {
+    requireArgs(args, 2, agentIpc.setRoleArchived.channel)
+    return ipcArgs(boundedIdentifierSchema().parse(args[0]), z.boolean().parse(args[1]))
+  }),
+  exportRole: bindIpcParser(agentIpc.exportRole, (args) => {
+    requireArgs(args, 2, agentIpc.exportRole.channel)
+    return ipcArgs(agentRoleRefSchema.parse(args[0]), absolutePathSchema.parse(args[1]))
+  }),
+  previewImportRole: bindIpcParser(agentIpc.previewImportRole, (args) => {
+    requireArgs(args, 1, agentIpc.previewImportRole.channel)
+    return ipcArgs(absolutePathSchema.parse(args[0]))
+  }),
+  commitImportRole: bindIpcParser(agentIpc.commitImportRole, (args) => {
+    requireArgs(args, 2, agentIpc.commitImportRole.channel)
+    return ipcArgs(
+      boundedIdentifierSchema().parse(args[0]),
+      z.enum(['update', 'copy']).parse(args[1]),
+    )
+  }),
   listSkills: bindNoArgsIpc(agentIpc.listSkills),
   closeConversation: bindConversation(agentIpc.closeConversation),
   getCapabilities: bindNoArgsIpc(agentIpc.getCapabilities),

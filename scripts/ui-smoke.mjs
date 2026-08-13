@@ -325,9 +325,20 @@ async function main() {
       (await page.locator('.sidebar-header-title').innerText()) === '角色',
       'role sidebar title missing',
     )
-    const roleRows = page.locator('.agent-role-row')
+    const roleRows = page.locator('.agent-role-row[data-role-source="builtin"]')
     await roleRows.first().waitFor({ state: 'visible', timeout: 10_000 })
     assert((await roleRows.count()) === 7, 'expected seven built-in roles')
+    await page.evaluate(async () => {
+      const { useAgentStore } = await import('/src/stores/agent-store.ts')
+      const state = useAgentStore.getState()
+      await state.applyRoleToConversation(
+        { roleId: 'default-assistant', version: 1 },
+        state.activeConversationId,
+      )
+    })
+    await page
+      .locator('.agent-role-row[data-role-source="builtin"].applied')
+      .waitFor({ state: 'visible', timeout: 10_000 })
 
     const appliedRow = page.locator('.agent-role-row.applied')
     assert((await appliedRow.count()) === 1, 'expected exactly one applied role')
@@ -376,7 +387,9 @@ async function main() {
       'recommended Skills section missing',
     )
     const mountSkillButton = page.getByRole('button', { name: '挂载到当前会话' })
-    await mountSkillButton.click()
+    if ((await mountSkillButton.count()) > 0) {
+      await mountSkillButton.click()
+    }
     await page.locator('.agent-skill-chip', { hasText: '方案拷问' }).waitFor({
       state: 'visible',
       timeout: 10_000,
@@ -384,6 +397,15 @@ async function main() {
     assert(
       await page.getByRole('button', { name: '已挂载' }).isDisabled(),
       'recommended Skill did not become an explicit mounted Skill',
+    )
+    const mountedSkillRefs = await page.evaluate(async () => {
+      const { useAgentStore } = await import('/src/stores/agent-store.ts')
+      const state = useAgentStore.getState()
+      return state.conversations[state.activeConversationId]?.mountedSkills ?? []
+    })
+    assert(
+      JSON.stringify(mountedSkillRefs) === JSON.stringify([{ skillId: 'grill-me', version: 1 }]),
+      'mounted Skill was not stored as a versioned reference',
     )
     const nextViewedRow = roleRows.last()
     const nextViewedLabel = await nextViewedRow.locator('strong').innerText()
@@ -400,7 +422,78 @@ async function main() {
       (await page.locator('.agent-role-row.applied strong').innerText()) === appliedLabel,
       'switching the viewed role changed the conversation configuration',
     )
-    return 'one switchable configuration tab, seven SOUL previews, and explicit Skill mounting'
+    assert(
+      await page.locator('.agent-skill-chip', { hasText: '方案拷问' }).isVisible(),
+      'viewing another role silently removed the mounted Skill',
+    )
+
+    const customRoleName = `UI Smoke 审稿人 ${Date.now()}`
+    const customRoleV2Name = `${customRoleName} v2`
+    await page.getByRole('button', { name: '＋ 新建角色' }).click()
+    await page.locator('[data-role-editor]').waitFor({ state: 'visible', timeout: 10_000 })
+    await page.getByLabel('名称').fill(customRoleName)
+    await page.getByLabel('简介').fill('验证本地角色不可变版本与持久化')
+    await page.getByLabel('目标（每行一项）').fill('给出可执行的审阅意见')
+    await page.getByLabel('行为规则（每行一项）').fill('先区分事实、推断和观点')
+    await page.getByRole('button', { name: '创建角色' }).click()
+    await page.getByRole('heading', { name: customRoleName, exact: true }).waitFor({
+      state: 'visible',
+      timeout: 10_000,
+    })
+    assert(
+      await page.locator('.agent-role-row', { hasText: customRoleName }).isVisible(),
+      'new local role missing from My Roles',
+    )
+    await page.getByRole('button', { name: '编辑', exact: true }).click()
+    await page.getByLabel('名称').fill(customRoleV2Name)
+    await page.getByRole('button', { name: '保存为新版本' }).click()
+    await page.getByRole('heading', { name: customRoleV2Name, exact: true }).waitFor({
+      state: 'visible',
+      timeout: 10_000,
+    })
+    const localVersions = await page.evaluate(async (name) => {
+      const roles = await window.cclinkStudio.agent.listRoles()
+      const latest = roles.find((role) => role.label === name)
+      return latest ? roles.filter((role) => role.roleId === latest.roleId) : []
+    }, customRoleV2Name)
+    assert(localVersions.length === 2, 'editing a local role overwrote its previous version')
+    assert(
+      localVersions.some((role) => role.version === 1 && !role.isLatest) &&
+        localVersions.some((role) => role.version === 2 && role.isLatest),
+      'local role versions do not expose immutable latest/history state',
+    )
+    await page.getByRole('button', { name: '在新会话试用' }).click()
+    const trialRoleRef = await page.evaluate(async () => {
+      const { useAgentStore } = await import('/src/stores/agent-store.ts')
+      const state = useAgentStore.getState()
+      return state.conversations[state.activeConversationId]?.configuration.roleRef
+    })
+    assert(
+      trialRoleRef?.roleId === localVersions[1].roleId && trialRoleRef?.version === 2,
+      'trial conversation did not pin the selected custom role version',
+    )
+    await page.getByRole('button', { name: '归档', exact: true }).click()
+    await page.waitForFunction(
+      () => document.querySelector('.agent-role-detail-eyebrow')?.textContent?.includes('已归档'),
+      undefined,
+      { timeout: 10_000 },
+    )
+    assert(
+      (await page.locator('.agent-role-detail-eyebrow').innerText()).includes('已归档'),
+      'archiving a role did not update the visible role state',
+    )
+    assert(
+      (
+        await page.evaluate(async () => {
+          const { useAgentStore } = await import('/src/stores/agent-store.ts')
+          const state = useAgentStore.getState()
+          return state.conversations[state.activeConversationId]?.configuration.roleRef
+        })
+      )?.roleId === localVersions[1].roleId,
+      'archiving a role invalidated an existing pinned conversation',
+    )
+    await page.getByRole('button', { name: '恢复', exact: true }).click()
+    return 'singleton role tab, seven SOUL previews, versioned Skill, and immutable local role versions'
   })
 
   await runCheck('web resources accepts a non-predefined website', async () => {

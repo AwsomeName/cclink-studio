@@ -109,7 +109,7 @@ function getStatusValue(itemId: string): { value: string; label: string } | null
   return null
 }
 
-function createForSidebar(panelId: string): void | Promise<unknown> {
+async function createForSidebar(panelId: string): Promise<void> {
   const workspaceRef = useWorkspaceStore.getState().activeWorkspaceRef
   if (panelId === 'files') {
     const workspacePath = useFsStore.getState().workspacePath
@@ -118,9 +118,16 @@ function createForSidebar(panelId: string): void | Promise<unknown> {
     return
   }
   if (panelId === 'browser') {
-    return openDefaultBrowserTab(workspaceRef)
+    await openDefaultBrowserTab(workspaceRef)
+    return
   }
   if (panelId === 'terminal') {
+    if (workspaceRef.kind === 'remote') {
+      const status = await window.cclinkStudio.remote.getStatus(workspaceRef)
+      if (status.state !== 'online' || !status.capabilities.shell.pty) {
+        throw new Error('当前 Agent 未提供远程 Workspace PTY')
+      }
+    }
     const draft = buildTerminalTabDraft(workspaceRef)
     useTabStore.getState().openTab(draft)
     void recordTerminalLifecycleEvent(draft.terminal, 'created', 'Terminal Tab 已创建')

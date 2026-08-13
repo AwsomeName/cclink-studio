@@ -80,7 +80,7 @@ describe('registerRuntimeComponentsIpc', () => {
     expect(manager.installRuntimeResource).toHaveBeenCalledWith('occt-runtime')
   })
 
-  it('blocks Claude repair during a run and uninstall while the managed runtime is active', async () => {
+  it('blocks Claude install and repair during a run and uninstall while managed is selected', async () => {
     const status = { componentId: 'claude-runtime', phase: 'installed' }
     const manager = {
       getManagedClaudeStatus: vi.fn(() => status),
@@ -96,8 +96,14 @@ describe('registerRuntimeComponentsIpc', () => {
     }
     registerRuntimeComponentsIpc(manager as never, trustedRendererGuard as never, {
       beginManagedClaudeMutation: () => null,
-      isManagedClaudeActive: () => true,
+      isManagedClaudeSelected: () => true,
     })
+
+    const installing = await mockIpcMain.handlers.get('runtime-components:installManagedClaude')?.(
+      {},
+    )
+    expect(installing).toMatchObject({ success: false, error: expect.stringContaining('正在响应') })
+    expect(manager.installManagedClaude).not.toHaveBeenCalled()
 
     const busy = await mockIpcMain.handlers.get('runtime-components:repairManagedClaude')?.({})
     expect(busy).toMatchObject({ success: false, error: expect.stringContaining('正在响应') })
@@ -106,7 +112,7 @@ describe('registerRuntimeComponentsIpc', () => {
     mockIpcMain.handlers.clear()
     registerRuntimeComponentsIpc(manager as never, trustedRendererGuard as never, {
       beginManagedClaudeMutation: () => () => undefined,
-      isManagedClaudeActive: () => true,
+      isManagedClaudeSelected: () => true,
     })
     const active = await mockIpcMain.handlers.get('runtime-components:uninstallManagedClaude')?.({})
     expect(active).toMatchObject({

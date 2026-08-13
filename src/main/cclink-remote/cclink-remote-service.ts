@@ -24,10 +24,12 @@ import type {
   CclinkTreeNode,
   CclinkWorkspace,
   CclinkWorkspaceListResponseMessage,
+} from '../../shared/cclink'
+import {
   CCLINK_MIN_PROTOCOL_VERSION,
   CCLINK_PROTOCOL_VERSION,
+  createCclinkEnvelope,
 } from '../../shared/cclink'
-import { createCclinkEnvelope } from '../../shared/cclink'
 import type { CclinkRealtimeStatus } from '../../shared/ipc/cclink'
 import type { CclinkRealtimeEvent } from '../../shared/ipc/cclink'
 import type {
@@ -211,8 +213,8 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   async listSessions(ref: RemoteWorkspaceRef): Promise<CclinkRemoteSession[]> {
-    await this.requireOnline()
-    await this.syncSessions(ref.endpointId)
+    const status = await this.connect()
+    if (status.state === 'online') await this.syncSessions(ref.endpointId).catch(() => undefined)
     return [...this.sessions.values()]
       .filter(
         (session) =>
@@ -220,6 +222,20 @@ export class CclinkRemoteService implements RemoteProvider {
           (session.workspaceId === ref.workspaceId || session.workspacePath === ref.path),
       )
       .sort((a, b) => b.updatedAt - a.updatedAt)
+  }
+
+  setSessionArchived(sessionId: string, archived: boolean): CclinkRemoteSession {
+    const session = this.sessions.get(sessionId)
+    if (!session) throw new Error('远程会话不存在')
+    const next: CclinkRemoteSession = {
+      ...session,
+      status: archived ? 'archived' : 'idle',
+      updatedAt: nowSeconds(),
+    }
+    this.sessions.set(sessionId, next)
+    this.persistState()
+    this.emitRealtime({ type: 'sessions', serverId: session.serverId, sessionId })
+    return next
   }
 
   async createSession(ref: RemoteWorkspaceRef, name?: string): Promise<CclinkRemoteSession> {
@@ -388,10 +404,7 @@ export class CclinkRemoteService implements RemoteProvider {
         context: { ...status.remoteError.context, endpointId: ref.endpointId },
       })
     }
-    return buildRemoteDiagnosticReport(
-      status,
-      this.diagnosticLog.recent(ref.endpointId),
-    )
+    return buildRemoteDiagnosticReport(status, this.diagnosticLog.recent(ref.endpointId))
   }
 
   async listFileTree(request: RemoteFileTreeRequest): Promise<RemoteFileTreeResult> {
@@ -842,20 +855,25 @@ export class CclinkRemoteService implements RemoteProvider {
         server.capabilities = {
           ...server.capabilities,
           ...response.capability_map,
-          file_tree: response.capabilities?.file?.tree ?? server.capabilities?.file_tree,
-          file_read: response.capabilities?.file?.read ?? server.capabilities?.file_read,
-          file_write: response.capabilities?.file?.write ?? server.capabilities?.file_write,
-          file_create: response.capabilities?.file?.create ?? server.capabilities?.file_create,
-          file_rename: response.capabilities?.file?.rename ?? server.capabilities?.file_rename,
-          file_delete: response.capabilities?.file?.delete ?? server.capabilities?.file_delete,
+          file_tree: (response.capabilities?.file?.tree ?? server.capabilities?.file_tree) === true,
+          file_read: (response.capabilities?.file?.read ?? server.capabilities?.file_read) === true,
+          file_write:
+            (response.capabilities?.file?.write ?? server.capabilities?.file_write) === true,
+          file_create:
+            (response.capabilities?.file?.create ?? server.capabilities?.file_create) === true,
+          file_rename:
+            (response.capabilities?.file?.rename ?? server.capabilities?.file_rename) === true,
+          file_delete:
+            (response.capabilities?.file?.delete ?? server.capabilities?.file_delete) === true,
           terminal_workspace_pty:
-            response.capabilities?.shell?.terminal_workspace_pty ??
-            server.capabilities?.terminal_workspace_pty,
+            (response.capabilities?.shell?.terminal_workspace_pty ??
+              server.capabilities?.terminal_workspace_pty) === true,
           stream_json_input:
-            response.capabilities?.agent?.stream_json_input ??
-            server.capabilities?.stream_json_input,
+            (response.capabilities?.agent?.stream_json_input ??
+              server.capabilities?.stream_json_input) === true,
           runtime_select:
-            response.capabilities?.agent?.runtime_select ?? server.capabilities?.runtime_select,
+            (response.capabilities?.agent?.runtime_select ??
+              server.capabilities?.runtime_select) === true,
         }
         server.capabilityList = response.capability_list ?? server.capabilityList
       }
@@ -1191,7 +1209,11 @@ export class CclinkRemoteService implements RemoteProvider {
   private setSessionStatus(sessionId: string, status: CclinkRemoteSession['status']): void {
     const session = this.sessions.get(sessionId)
     if (session) {
-      this.sessions.set(sessionId, { ...session, status, updatedAt: nowSeconds() })
+      this.sessions.set(sessionId, {
+        ...session,
+        status: session.status === 'archived' ? 'archived' : status,
+        updatedAt: nowSeconds(),
+      })
       this.persistState()
     }
   }

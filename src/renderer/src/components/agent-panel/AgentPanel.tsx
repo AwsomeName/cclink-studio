@@ -39,7 +39,7 @@ import {
 import type { PermissionMode } from '../../types'
 import type { BrowserActionLog, BrowserDownloadRecord, BrowserTaskRun } from '@shared/ipc/browser'
 import type { AgentCapabilityStatus } from '@shared/agent-protocol'
-import type { AgentRoleSummary } from '@shared/agent-role'
+import type { AgentRoleSummary, AgentSkillRef } from '@shared/agent-role'
 import { AgentComposerToolbar } from '../../features/agent-composer/AgentComposerToolbar'
 import { useComposerHistory } from '../../features/agent-composer/use-composer-history'
 import { TerminalConfirmationCards } from './TerminalConfirmationCards'
@@ -362,21 +362,25 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
 
   const handleMountSkill = useCallback(
     (skill: AgentSkillCandidate) => {
-      addMountedSkill(toMountedSkill(skill), activeConversationId)
+      void addMountedSkill(toMountedSkill(skill), activeConversationId).then((saved) => {
+        if (!saved) showToast('Skill 挂载保存失败，原配置已保留', 'error')
+      })
       setInput(stripTrailingMentionToken(input), activeConversationId)
       setResourceQuery(null)
       setSkillQuery(null)
       setMentionSelectedIndex(0)
       requestAnimationFrame(() => inputRef.current?.focus())
     },
-    [activeConversationId, addMountedSkill, input, setInput],
+    [activeConversationId, addMountedSkill, input, setInput, showToast],
   )
 
   const handleRemoveMountedSkill = useCallback(
-    (skillId: string) => {
-      removeMountedSkill(skillId, activeConversationId)
+    (skill: AgentSkillRef) => {
+      void removeMountedSkill(skill, activeConversationId).then((saved) => {
+        if (!saved) showToast('Skill 移除保存失败，原配置已保留', 'error')
+      })
     },
-    [activeConversationId, removeMountedSkill],
+    [activeConversationId, removeMountedSkill, showToast],
   )
 
   const handleAbort = useCallback(async () => {
@@ -824,7 +828,11 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                     onRequestClose={() => setSkillQuery(null)}
                   />
                 )}
-                <MountedSkillStrip skills={mountedSkills} onRemove={handleRemoveMountedSkill} />
+                <MountedSkillStrip
+                  skills={mountedSkills}
+                  availableSkills={availableSkills}
+                  onRemove={handleRemoveMountedSkill}
+                />
                 <ImageAttachmentStrip images={pendingImages} onRemove={handleRemovePendingImage} />
                 <textarea
                   ref={inputRef}
@@ -1065,7 +1073,11 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
             onRemove={handleRemoveMountedResource}
             onOpen={openFileRangeResource}
           />
-          <MountedSkillStrip skills={mountedSkills} onRemove={handleRemoveMountedSkill} />
+          <MountedSkillStrip
+            skills={mountedSkills}
+            availableSkills={availableSkills}
+            onRemove={handleRemoveMountedSkill}
+          />
           <div className="agent-input-card">
             <ImageAttachmentStrip images={pendingImages} onRemove={handleRemovePendingImage} />
             <button

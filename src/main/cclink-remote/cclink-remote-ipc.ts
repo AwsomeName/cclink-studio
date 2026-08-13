@@ -122,6 +122,13 @@ export function registerCclinkRemoteIpc(
     (_event, sessionId) => service.listMessages(sessionId),
   )
   registerTrustedIpcContract(
+    bindIpcParser(cclinkIpc.setSessionArchived, (args) =>
+      z.tuple([z.object({ sessionId: idSchema, archived: z.boolean() }).strict()]).parse(args),
+    ),
+    guard,
+    (_event, input) => service.setSessionArchived(input.sessionId, input.archived),
+  )
+  registerTrustedIpcContract(
     bindIpcParser(cclinkIpc.sendAgentMessage, (args) =>
       z
         .tuple([

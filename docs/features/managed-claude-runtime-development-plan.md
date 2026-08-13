@@ -1,7 +1,7 @@
 # Studio 托管 Claude Runtime 开发计划
 
-> 状态：M1/M2 已完成：arm64 真实 npm 安装、真实 API-key 文件/MCP 任务、packaged
-> `.app` 替换复用、配置/凭证保留、失败回滚和相关工程门禁均已通过；M3/M4 被外部门禁阻塞。
+> 状态：M1 已完成；M2 的同构建 `.app` 整包替换、配置/凭证保留和失败回滚已通过，真实
+> 跨构建升级样本仍待补；M3/M4 被外部门禁阻塞。
 > 最后更新：2026-08-13。
 > 架构决策：[`0007-managed-claude-runtime.md`](../decisions/0007-managed-claude-runtime.md)。
 
@@ -17,9 +17,10 @@
   Runtime、设置和凭证。
 - DMG 与 `.app` 不携带 Claude 可执行文件；首次需要时由用户从组件页按需安装。
 
-Runtime 位于 `.app` 外的 `userData`；真实 packaged smoke 已执行“安装、退出、删除并替换
-`.app`、重新打开”，确认不会重装或改写安装记录，普通设置和本地凭证也保留。当前仍不能在
-两个真实 Runtime 版本之间更新/回滚，不能宣称 x64 或公开发布验收完成。
+Runtime 位于 `.app` 外的 `userData`；真实 packaged smoke 已执行同一构建的“安装、退出、删除并
+替换 `.app`、重新打开”，确认 macOS 整包替换不会删除安装记录、普通设置或本地凭证。产物现在
+内置 Git SHA 与工作树源码指纹，旧 `dist` 无法冒充当前源码。当前仍缺少两个不同 App 构建和
+两个真实 Runtime 版本之间的更新/回滚样本，不能宣称 x64 或公开发布验收完成。
 
 ## 最终用户验收
 
@@ -58,8 +59,9 @@ Runtime 位于 `.app` 外的 `userData`；真实 packaged smoke 已执行“安�
 | M3 真实更新与回滚      | 用户功能            | 在两个真实版本间更新，坏版本回退                   | 第二兼容版本和远程签名目录就绪；mock 不计产品完成                             |
 | M4 发布验收            | 工程准备 + 用户门禁 | arm64/x64 真人安装、替换更新、断网和回退通过       | 授权/品牌结论、真实 API-key packaged query、`pnpm verify` 和受影响 smoke 通过 |
 
-M1 的真实 npm 安装、付费模型文件/MCP 任务和 M2 的 packaged `.app` 替换、配置/凭证
-保留均已通过真实应用验收。M3 没有第二兼容版本，不得只按代码完成度关闭里程碑。
+M1 的真实 npm 安装、付费模型文件/MCP 任务和 M2 的同构建 packaged `.app` 替换、配置/凭证
+保留均已通过真实应用验收；跨构建升级仍需两个不同源码指纹的 App。M3 没有第二兼容 Runtime
+版本，不得只按代码完成度关闭里程碑。
 
 ## 实施顺序
 
@@ -90,8 +92,8 @@ M1 的真实 npm 安装、付费模型文件/MCP 任务和 M2 的 packaged `.app
 - 安装后显示“已安装 · Studio 管理 / 版本 2.1.211”：通过。
 - 退出 App、创建新的开发版 App 进程并复用同一隔离 `userData`，不重新下载：通过。
 - 右侧 Agent 面板展开的 1440×920 窄工作区中，六列表格无需横向滚动：通过。
-- 从空白隔离 `userData` 启动真实 packaged App A，通过 UI 安装后退出，删除并重新复制
-  整个 `.app` 作为 App B，再次启动后不下载且安装记录逐字节不变：通过。
+- 从空白隔离 `userData` 启动真实 packaged App，通过 UI 安装后退出，删除并重新复制
+  同一构建的整个 `.app`，再次启动后不下载且安装记录逐字节不变：通过；该项不等同跨版本升级。
 - App A 写入的模型/权限设置和隔离测试凭证在 App B 中保留；测试凭证随后清除：通过。
 - managed selection 在 App B 中恢复为 active；通过 SDK 发起的无效 Key 请求得到预期
   `AUTHENTICATION_FAILED`，证明真实协议链路已启动且没有借用用户 OAuth：通过。
@@ -114,7 +116,7 @@ M1 的真实 npm 安装、付费模型文件/MCP 任务和 M2 的 packaged `.app
 - 暂存版本最终校验失败时恢复旧目录，进程在目录替换中断后从已验证备份恢复：通过。
 - 网络下载瞬断最多重试三次，integrity/签名/内容错误不重试：通过。
 - `pnpm verify`：通过（218 个测试文件、1280 个测试通过，真实网络烟测默认跳过 1 项）。
-- arm64 本地 DMG/ZIP 打包：通过；包内固定 Runtime 的版本和完整性校验通过。
+- arm64 本地 DMG 打包：通过；包内固定 Runtime 的版本和完整性校验通过。
 - packaged App 首次启动曾发现 `tar-stream` 间接依赖未进入 asar；已将缺失运行依赖固定为
   直接依赖，并以 packaged 主入口加载和真实 UI smoke 复验：通过。
 

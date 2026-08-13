@@ -109,5 +109,13 @@ describe('BuiltinAgentProfileRegistry', () => {
     expect(defaultFingerprint).toMatch(/^[a-f0-9]{64}$/)
     expect(challengerFingerprint).toMatch(/^[a-f0-9]{64}$/)
     expect(challengerFingerprint).not.toBe(defaultFingerprint)
+
+    const skillFingerprint = registry.buildConversationCompatibilityFingerprint(
+      runtimeFingerprint,
+      DEFAULT_AGENT_ROLE_REF,
+      1,
+      [`grill-me@1:${'b'.repeat(64)}`],
+    )
+    expect(skillFingerprint).not.toBe(defaultFingerprint)
   })
 })

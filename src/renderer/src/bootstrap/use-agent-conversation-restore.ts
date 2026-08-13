@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useAgentStore, type AgentConversationState } from '../stores/agent-store'
-import type { AgentConversationConfiguration } from '@shared/agent-role'
+import type { AgentConversationConfiguration, AgentSkillRef } from '@shared/agent-role'
 
 export function collectRestorableAgentSessions(
   conversations: Record<string, AgentConversationState>,
@@ -10,6 +10,7 @@ export function collectRestorableAgentSessions(
   sessionId: string
   sessionCompatibilityFingerprint: string
   configuration: AgentConversationConfiguration
+  skills: AgentSkillRef[]
 }> {
   return conversationOrder.flatMap((conversationId) => {
     const conversation = conversations[conversationId]
@@ -22,6 +23,7 @@ export function collectRestorableAgentSessions(
             sessionId: conversation.sessionId,
             sessionCompatibilityFingerprint: conversation.sessionCompatibilityFingerprint,
             configuration: conversation.configuration,
+            skills: conversation.mountedSkills,
           },
         ]
       : []
@@ -46,7 +48,8 @@ export function useAgentConversationRestore(enabled: boolean): void {
     }
 
     for (const session of sessions) {
-      const restoreKey = `${session.sessionId}:${session.sessionCompatibilityFingerprint}:${session.configuration.roleRef.roleId}@${session.configuration.roleRef.version}:${session.configuration.revision}`
+      const skillKey = session.skills.map((skill) => `${skill.skillId}@${skill.version}`).join(',')
+      const restoreKey = `${session.sessionId}:${session.sessionCompatibilityFingerprint}:${session.configuration.roleRef.roleId}@${session.configuration.roleRef.version}:${session.configuration.revision}:${skillKey}`
       if (restoredSessionsRef.current.get(session.conversationId) === restoreKey) continue
       restoredSessionsRef.current.set(session.conversationId, restoreKey)
       void window.cclinkStudio.agent
@@ -55,6 +58,7 @@ export function useAgentConversationRestore(enabled: boolean): void {
           session.sessionId,
           session.configuration,
           session.sessionCompatibilityFingerprint,
+          session.skills,
         )
         .catch(() => {
           if (restoredSessionsRef.current.get(session.conversationId) === restoreKey) {

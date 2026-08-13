@@ -17,6 +17,7 @@ beforeEach(() => {
       },
       terminal: {
         recordLifecycleEvent: vi.fn().mockResolvedValue({ success: true }),
+        terminatePty: vi.fn().mockResolvedValue({ success: true }),
       },
       webResources: {
         cancelDraft: vi.fn().mockResolvedValue({
@@ -169,6 +170,45 @@ describe('closeTabWithDraftPolicy terminal lifecycle', () => {
       },
       closePolicy: 'terminate-process',
     })
+    expect(useTabStore.getState().tabs.some((tab) => tab.id === tabId)).toBe(false)
+  })
+
+  it('关闭 running 远程 Terminal 时可明确终止远程 PTY', async () => {
+    const runtime = {
+      location: 'remote' as const,
+      transport: 'cclink' as const,
+      backend: 'remote-shell' as const,
+      workspaceRef: {
+        kind: 'remote' as const,
+        transport: 'cclink' as const,
+        endpointId: 'agent-1',
+        workspaceId: 'workspace-1',
+        path: '/srv/project',
+      },
+      cwd: '/srv/project',
+      endpointId: 'agent-1',
+    }
+    useTabStore.getState().openTab({
+      type: 'terminal',
+      title: '远程 Terminal',
+      icon: '⌨️',
+      terminal: {
+        runtime,
+        permissionPolicy: {
+          mode: 'ask-risky-command',
+          requireConfirmationFor: ['write', 'destructive', 'privileged', 'unknown'],
+        },
+        status: 'running',
+        closePolicy: 'keep-running',
+        sessionId: 'remote-terminal-running',
+      },
+    })
+    const tabId = useTabStore.getState().activeTabId!
+
+    expect(await closeTabWithDraftPolicy(tabId)).toBe(true)
+    expect(window.cclinkStudio.terminal.terminatePty).toHaveBeenCalledWith(
+      'remote-terminal-running',
+    )
     expect(useTabStore.getState().tabs.some((tab) => tab.id === tabId)).toBe(false)
   })
 })
