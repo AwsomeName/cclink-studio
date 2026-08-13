@@ -16,6 +16,7 @@ import { TerminalCommandOrchestrator } from '../terminal/terminal-command-orches
 import { CompositeTerminalExecutionAdapter } from '../terminal/terminal-composite-execution-adapter'
 import { TerminalConfirmationService } from '../terminal/terminal-confirmation-service'
 import { PtyExecutionAdapter } from '../terminal/terminal-pty-execution-adapter'
+import { CclinkTerminalExecutionAdapter } from '../terminal/terminal-cclink-execution-adapter'
 import { TerminalSessionRegistry } from '../terminal/terminal-session-registry'
 import { TerminalSessionStore } from '../terminal/terminal-session-store'
 import type { AgentCapabilityName } from '../../shared/agent-protocol'
@@ -171,8 +172,15 @@ async function bootstrapTerminalServices(runtime: CclinkStudioRuntimeState): Pro
   const localTerminalExecutionAdapter = new PtyExecutionAdapter({
     browserEnvironment: terminalBrowserEnvironment,
   })
+  const remoteTerminalExecutionAdapter = runtime.cclinkRemoteService
+    ? new CclinkTerminalExecutionAdapter(
+        runtime.cclinkRemoteService,
+        runtime.cclinkRemoteService.getRequestRouter(),
+      )
+    : undefined
   runtime.terminalExecutionAdapter = new CompositeTerminalExecutionAdapter({
     local: localTerminalExecutionAdapter,
+    remote: remoteTerminalExecutionAdapter,
   })
   runtime.terminalCommandOrchestrator = new TerminalCommandOrchestrator({
     sessionRegistry: runtime.terminalSessionRegistry,

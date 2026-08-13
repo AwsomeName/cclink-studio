@@ -209,21 +209,40 @@ describe('workspace-transition', () => {
     )
   })
 
-  it('uses the shared transition for remote refs without prematurely persisting remote state', async () => {
+  it('uses the shared transition for remote refs and keeps their projection isolated', async () => {
     const remoteRef = remoteWorkspaceRef({
       endpointId: 'agent-1',
       workspaceId: 'workspace-1',
       path: '/srv/project',
     })
+    ;(window.cclinkStudio.workspaceState.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      snapshot('cclink://agent-1/workspace-1', {
+        tabs: { tabs: [], activeTabId: null },
+        browserTabs: { tabs: {} },
+        editorDrafts: { files: {} },
+        agentConversations: {
+          conversations: {},
+          conversationOrder: [],
+          activeConversationId: null,
+        },
+      }),
+    )
     const remoteTransition = await prepareWorkspaceRuntimeTransition(remoteRef)
-    await applyWorkspaceRuntimeTransition(remoteTransition, { hydrate: false, flush: false })
+    await applyWorkspaceRuntimeTransition(remoteTransition)
+
+    expect(useTabStore.getState().tabs).toEqual([])
+    const activeConversation =
+      useAgentStore.getState().conversations[useAgentStore.getState().activeConversationId]
+    expect(activeConversation.runtime.workspaceRef).toEqual(remoteRef)
 
     const setSection = window.cclinkStudio.workspaceState.setSection as ReturnType<typeof vi.fn>
     setSection.mockClear()
     await prepareWorkspaceRuntimeTransition(localWorkspaceRef('/workspace/b'))
 
     expect(getWorkspaceStateKey()).toBe('cclink://agent-1/workspace-1')
-    expect(setSection).not.toHaveBeenCalled()
+    expect(setSection.mock.calls.some((call) => call[0] === 'cclink://agent-1/workspace-1')).toBe(
+      true,
+    )
     expect(window.cclinkStudio.workspaceState.get).toHaveBeenLastCalledWith(
       '/workspace/b',
       'local:owner-1',

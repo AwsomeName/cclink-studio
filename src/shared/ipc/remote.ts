@@ -1,6 +1,11 @@
 import type {
   RemoteFileReadRequest,
   RemoteFileReadResult,
+  RemoteFileWriteRequest,
+  RemoteFileCreateRequest,
+  RemoteFileRenameRequest,
+  RemoteFileDeleteRequest,
+  RemoteFileMutationResult,
   RemoteFileTreeRequest,
   RemoteFileTreeResult,
   RemoteStatus,
@@ -12,6 +17,10 @@ export interface RemoteApiContract {
   getStatus(ref: RemoteWorkspaceRef): Promise<RemoteStatus>
   listFileTree(request: RemoteFileTreeRequest): Promise<RemoteFileTreeResult>
   readFile(request: RemoteFileReadRequest): Promise<RemoteFileReadResult>
+  writeFile(request: RemoteFileWriteRequest): Promise<RemoteFileMutationResult>
+  createFile(request: RemoteFileCreateRequest): Promise<RemoteFileMutationResult>
+  renameFile(request: RemoteFileRenameRequest): Promise<RemoteFileMutationResult>
+  deleteFile(request: RemoteFileDeleteRequest): Promise<RemoteFileMutationResult>
 }
 
 export const remoteIpc = {
@@ -21,5 +30,17 @@ export const remoteIpc = {
   ),
   readFile: defineIpcCall<[request: RemoteFileReadRequest], RemoteFileReadResult>(
     'remote:readFile',
+  ),
+  writeFile: defineIpcCall<[request: RemoteFileWriteRequest], RemoteFileMutationResult>(
+    'remote:writeFile',
+  ),
+  createFile: defineIpcCall<[request: RemoteFileCreateRequest], RemoteFileMutationResult>(
+    'remote:createFile',
+  ),
+  renameFile: defineIpcCall<[request: RemoteFileRenameRequest], RemoteFileMutationResult>(
+    'remote:renameFile',
+  ),
+  deleteFile: defineIpcCall<[request: RemoteFileDeleteRequest], RemoteFileMutationResult>(
+    'remote:deleteFile',
   ),
 } as const

@@ -6,6 +6,10 @@ import { remoteIpc } from '../../shared/ipc/remote'
 import { CCLINK_UNCONFIGURED_MESSAGE } from './service-config'
 import { bindIpcParser } from '../../shared/ipc/contract'
 import {
+  remoteWorkspacePathSchema,
+  remoteWorkspaceRefSchema,
+} from '../../shared/ipc/workspace-ref-schema'
+import {
   registerTrustedIpcContract,
   type TrustedRendererGuard,
 } from '../ipc/trusted-renderer-guard'
@@ -14,23 +18,8 @@ import type { CclinkRemoteService } from './cclink-remote-service'
 const phoneSchema = z.string().regex(/^1[3-9]\d{9}$/u, '请输入有效的手机号')
 const codeSchema = z.string().regex(/^\d{4,8}$/u, '请输入有效的短信验证码')
 const idSchema = z.string().trim().min(1).max(256)
-export const cclinkRemotePathSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(4096)
-  .refine((value) => !value.includes('\0'), '路径包含空字符')
-export const cclinkRemoteRefSchema = z
-  .object({
-    kind: z.literal('remote'),
-    transport: z.literal('cclink'),
-    endpointId: idSchema,
-    workspaceId: idSchema,
-    path: cclinkRemotePathSchema,
-    label: z.string().max(256).optional(),
-    endpointName: z.string().max(256).optional(),
-  })
-  .strict()
+export const cclinkRemotePathSchema = remoteWorkspacePathSchema
+export const cclinkRemoteRefSchema = remoteWorkspaceRefSchema
 
 const noArgs = <T>(definition: { channel: string }) =>
   bindIpcParser<[], T>(definition, (args) => z.tuple([]).parse(args))
@@ -51,6 +40,9 @@ export function registerCclinkRemoteIpc(
   const unsubscribeStatus = service.onStatus((status) => {
     if (!mainWindow.isDestroyed())
       mainWindow.webContents.send(cclinkIpcEvents.realtimeStatus, status)
+  })
+  const unsubscribeRealtime = service.onRealtimeEvent((event) => {
+    if (!mainWindow.isDestroyed()) mainWindow.webContents.send(cclinkIpcEvents.realtimeEvent, event)
   })
 
   registerTrustedIpcContract(noArgs(authIpc.getServiceStatus), guard, () => ({
@@ -103,6 +95,49 @@ export function registerCclinkRemoteIpc(
     guard,
     (_event, input) => service.openWorkspace(input.serverId, input.path),
   )
+  registerTrustedIpcContract(
+    bindIpcParser(cclinkIpc.listSessions, (args) => z.tuple([cclinkRemoteRefSchema]).parse(args)),
+    guard,
+    (_event, ref) => service.listSessions(ref),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(cclinkIpc.createSession, (args) =>
+      z
+        .tuple([
+          z
+            .object({
+              ref: cclinkRemoteRefSchema,
+              name: z.string().trim().min(1).max(200).optional(),
+            })
+            .strict(),
+        ])
+        .parse(args),
+    ),
+    guard,
+    (_event, input) => service.createSession(input.ref, input.name),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(cclinkIpc.listMessages, (args) => z.tuple([idSchema]).parse(args)),
+    guard,
+    (_event, sessionId) => service.listMessages(sessionId),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(cclinkIpc.sendAgentMessage, (args) =>
+      z
+        .tuple([
+          z
+            .object({
+              ref: cclinkRemoteRefSchema,
+              sessionId: idSchema,
+              content: z.string().trim().min(1).max(200_000),
+            })
+            .strict(),
+        ])
+        .parse(args),
+    ),
+    guard,
+    (_event, input) => service.sendAgentMessage(input.ref, input.sessionId, input.content),
+  )
 
   registerTrustedIpcContract(
     bindIpcParser(remoteIpc.getStatus, (args) => z.tuple([cclinkRemoteRefSchema]).parse(args)),
@@ -144,6 +179,93 @@ export function registerCclinkRemoteIpc(
     guard,
     (_event, request) => service.readFile(request),
   )
+  const mutationBase = {
+    ref: cclinkRemoteRefSchema,
+    sessionId: idSchema,
+    operationId: idSchema,
+    operationCreatedAt: z.number().int().nonnegative(),
+    operationExpiresAt: z.number().int().positive(),
+  }
+  registerTrustedIpcContract(
+    bindIpcParser(remoteIpc.writeFile, (args) =>
+      z
+        .tuple([
+          z
+            .object({
+              ...mutationBase,
+              path: cclinkRemotePathSchema,
+              content: z.string().max(2 * 1024 * 1024),
+              expectedSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
+            })
+            .strict(),
+        ])
+        .parse(args),
+    ),
+    guard,
+    (_event, request) => service.writeFile(request),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(remoteIpc.createFile, (args) =>
+      z
+        .tuple([
+          z
+            .object({
+              ...mutationBase,
+              path: cclinkRemotePathSchema,
+              type: z.enum(['file', 'directory']),
+              content: z
+                .string()
+                .max(2 * 1024 * 1024)
+                .optional(),
+            })
+            .strict(),
+        ])
+        .parse(args),
+    ),
+    guard,
+    (_event, request) => service.createFile(request),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(remoteIpc.renameFile, (args) =>
+      z
+        .tuple([
+          z
+            .object({
+              ...mutationBase,
+              oldPath: cclinkRemotePathSchema,
+              newPath: cclinkRemotePathSchema,
+            })
+            .strict(),
+        ])
+        .parse(args),
+    ),
+    guard,
+    (_event, request) => service.renameFile(request),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(remoteIpc.deleteFile, (args) =>
+      z
+        .tuple([
+          z
+            .object({
+              ...mutationBase,
+              path: cclinkRemotePathSchema,
+              recursive: z.boolean().optional(),
+              expectedSha256: z
+                .string()
+                .regex(/^[a-f0-9]{64}$/iu)
+                .optional(),
+            })
+            .strict(),
+        ])
+        .parse(args),
+    ),
+    guard,
+    (_event, request) => service.deleteFile(request),
+  )
 
-  return unsubscribeStatus
+  return () => {
+    unsubscribeStatus()
+    unsubscribeRealtime()
+  }
 }

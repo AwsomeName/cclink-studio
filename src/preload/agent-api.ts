@@ -60,6 +60,7 @@ export const agentApi: AgentApiContract = {
       sessionCompatibilityFingerprint,
     ),
   listRoles: () => invokeIpcContract(agentIpc.listRoles),
+  listSkills: () => invokeIpcContract(agentIpc.listSkills),
   closeConversation: (conversationId) =>
     invokeIpcContract(agentIpc.closeConversation, conversationId),
   onStreamEvent: (callback) => {

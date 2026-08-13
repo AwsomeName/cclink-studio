@@ -88,8 +88,10 @@
 
 - 手机号登录、本地 Session 文件、token 刷新；
 - CCLink 身份、设备状态、腾讯 IM transport、request/protocol router 与实时连接；
-- `RemoteProvider`、远程项目选择、文件树与文件读取；
-- 后续按纵向闭环逐步接入远程文件修改、远程 Agent 会话与远程 PTY。
+- `RemoteProvider`、远程项目选择、文件树、文件读取与有边界的创建/修改/重命名/删除；
+- 绑定 `RemoteWorkspaceRef` 的远程 Agent 会话、流式事件和远程 PTY（含断线 attach/输出续接）。
+
+上述写入、会话和 PTY 已完成 Studio 代码及自动化门禁，但只有在已登录、已配对的真实在线 Agent 上通过客户端验收后，才能宣称用户闭环完成。
 
 该功能域只能拥有账号、设备连接、远程请求和远程会话事实。`RemoteWorkspaceRef`、Workspace、Tab、Workbench、项目条、`WorkspaceState`、RemoteProvider 契约、Terminal adapter 接入点、IPC schema、生命周期和诊断由 Studio 基础层统一拥有。
 

@@ -20,6 +20,7 @@ const { registerFloatingSurface, updateState } = vi.hoisted(() => ({
     closePanel: vi.fn(),
     check: vi.fn(),
     startDownload: vi.fn(),
+    startDownloadInBackground: vi.fn(),
     cancelDownload: vi.fn(),
     defer: vi.fn(),
     ignoreVersion: vi.fn(),

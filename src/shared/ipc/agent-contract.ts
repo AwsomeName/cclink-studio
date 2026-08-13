@@ -103,6 +103,7 @@ export const agentIpcContracts = {
     )
   }),
   listRoles: bindNoArgsIpc(agentIpc.listRoles),
+  listSkills: bindNoArgsIpc(agentIpc.listSkills),
   closeConversation: bindConversation(agentIpc.closeConversation),
   getCapabilities: bindNoArgsIpc(agentIpc.getCapabilities),
   listToolModules: bindNoArgsIpc(agentIpc.listToolModules),

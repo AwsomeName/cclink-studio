@@ -76,6 +76,10 @@ const cclinkApi: CclinkApiContract = {
   getRealtimeStatus: () => invokeIpcContract(cclinkIpc.getRealtimeStatus),
   browseDirectory: (input) => invokeIpcContract(cclinkIpc.browseDirectory, input),
   openWorkspace: (input) => invokeIpcContract(cclinkIpc.openWorkspace, input),
+  listSessions: (ref) => invokeIpcContract(cclinkIpc.listSessions, ref),
+  createSession: (input) => invokeIpcContract(cclinkIpc.createSession, input),
+  listMessages: (sessionId) => invokeIpcContract(cclinkIpc.listMessages, sessionId),
+  sendAgentMessage: (input) => invokeIpcContract(cclinkIpc.sendAgentMessage, input),
   onRealtimeStatus: (callback) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
@@ -84,12 +88,24 @@ const cclinkApi: CclinkApiContract = {
     ipcRenderer.on(cclinkIpcEvents.realtimeStatus, listener)
     return () => ipcRenderer.removeListener(cclinkIpcEvents.realtimeStatus, listener)
   },
+  onRealtimeEvent: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      event: Parameters<typeof callback>[0],
+    ): void => callback(event)
+    ipcRenderer.on(cclinkIpcEvents.realtimeEvent, listener)
+    return () => ipcRenderer.removeListener(cclinkIpcEvents.realtimeEvent, listener)
+  },
 }
 
 const remoteApi: RemoteApiContract = {
   getStatus: (ref) => invokeIpcContract(remoteIpc.getStatus, ref),
   listFileTree: (request) => invokeIpcContract(remoteIpc.listFileTree, request),
   readFile: (request) => invokeIpcContract(remoteIpc.readFile, request),
+  writeFile: (request) => invokeIpcContract(remoteIpc.writeFile, request),
+  createFile: (request) => invokeIpcContract(remoteIpc.createFile, request),
+  renameFile: (request) => invokeIpcContract(remoteIpc.renameFile, request),
+  deleteFile: (request) => invokeIpcContract(remoteIpc.deleteFile, request),
 }
 
 const credentialsApi: CredentialsApiContract = {
@@ -107,10 +123,19 @@ const credentialsApi: CredentialsApiContract = {
 
 const runtimeComponentsApi: RuntimeComponentsApiContract = {
   getManagedClaudeStatus: () => invokeIpcContract(runtimeComponentsIpc.getManagedClaudeStatus),
+  checkManagedClaude: () => invokeIpcContract(runtimeComponentsIpc.checkManagedClaude),
   installManagedClaude: () => invokeIpcContract(runtimeComponentsIpc.installManagedClaude),
+  repairManagedClaude: () => invokeIpcContract(runtimeComponentsIpc.repairManagedClaude),
+  uninstallManagedClaude: () => invokeIpcContract(runtimeComponentsIpc.uninstallManagedClaude),
   listRuntimeResources: () => invokeIpcContract(runtimeComponentsIpc.listRuntimeResources),
+  checkRuntimeResource: (componentId) =>
+    invokeIpcContract(runtimeComponentsIpc.checkRuntimeResource, componentId),
   installRuntimeResource: (componentId) =>
     invokeIpcContract(runtimeComponentsIpc.installRuntimeResource, componentId),
+  repairRuntimeResource: (componentId) =>
+    invokeIpcContract(runtimeComponentsIpc.repairRuntimeResource, componentId),
+  uninstallRuntimeResource: (componentId) =>
+    invokeIpcContract(runtimeComponentsIpc.uninstallRuntimeResource, componentId),
 }
 
 const scheduledTasksApi: ScheduledTasksApiContract = {

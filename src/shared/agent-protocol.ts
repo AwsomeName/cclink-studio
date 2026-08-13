@@ -282,6 +282,7 @@ export interface AgentApiContract {
     sessionCompatibilityFingerprint?: string | null,
   ): Promise<void>
   listRoles(): Promise<import('./agent-role').AgentRoleSummary[]>
+  listSkills(): Promise<import('./agent-skill').AgentSkillSummary[]>
   closeConversation(conversationId: string): Promise<void>
   getContextUsage(conversationId?: string): Promise<AgentContextUsageSnapshot | null>
   compactConversation(

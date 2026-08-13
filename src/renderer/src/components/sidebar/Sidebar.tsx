@@ -61,6 +61,7 @@ import { useToastStore } from '../common/Toast'
 import { openDefaultBrowserTab } from '../../features/web-resources/open-default-browser-tab'
 import { CclinkPanel } from '../../features/cclink-remote/CclinkPanel'
 import { RemoteFileTree } from '../../features/cclink-remote/RemoteFileTree'
+import { RemoteSessionsSidebar } from '../../features/cclink-remote/RemoteSessionsSidebar'
 
 function getProjectName(path: string): string {
   return path.split('/').filter(Boolean).pop() ?? path
@@ -956,6 +957,9 @@ function SessionsSidebarView({
   closeTab: ReturnType<typeof useTabStore.getState>['closeTab']
   revealConversation: () => void
 }): React.ReactElement {
+  if (workspaceRef.kind === 'remote') {
+    return <RemoteSessionsSidebar workspaceRef={workspaceRef} />
+  }
   return (
     <LocalSessionsList
       workspaceRef={workspaceRef}

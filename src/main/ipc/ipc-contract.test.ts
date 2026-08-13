@@ -102,8 +102,36 @@ describe('IPC invoke contracts', () => {
       'conversation-1',
       { message: 'hello', workspaceRef: { kind: 'local', path: '/tmp/project' } },
     ])
+    expect(
+      agentIpcContracts.sendMessage.parseArgs([
+        'conversation-remote',
+        {
+          message: '总结项目',
+          workspaceRef: {
+            kind: 'remote',
+            transport: 'cclink',
+            endpointId: 'agent-1',
+            workspaceId: 'workspace-1',
+            path: '/srv/project',
+          },
+        },
+      ]),
+    ).toEqual([
+      'conversation-remote',
+      {
+        message: '总结项目',
+        workspaceRef: {
+          kind: 'remote',
+          transport: 'cclink',
+          endpointId: 'agent-1',
+          workspaceId: 'workspace-1',
+          path: '/srv/project',
+        },
+      },
+    ])
     expect(agentIpcContracts.getStatus.parseArgs([])).toEqual([undefined])
     expect(agentIpcContracts.listRoles.parseArgs([])).toEqual([])
+    expect(agentIpcContracts.listSkills.parseArgs([])).toEqual([])
     expect(
       agentIpcContracts.sendMessage.parseArgs([
         'conversation-1',

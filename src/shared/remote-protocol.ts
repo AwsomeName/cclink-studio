@@ -3,7 +3,16 @@ import type { RemoteError } from './remote-error'
 import type { RemoteWorkspaceRef } from './workspace-ref'
 
 export interface RemoteCapabilitySet {
-  file: { tree: boolean; read: boolean }
+  file: {
+    tree: boolean
+    read: boolean
+    write: boolean
+    create: boolean
+    rename: boolean
+    delete: boolean
+  }
+  shell: { pty: boolean }
+  agent: { session: boolean; stream: boolean }
 }
 
 export interface RemoteStatus {
@@ -31,6 +40,37 @@ export interface RemoteFileReadRequest {
   endLine?: number
 }
 
+export interface RemoteMutationContext {
+  ref: RemoteWorkspaceRef
+  sessionId: string
+  operationId: string
+  operationCreatedAt: number
+  operationExpiresAt: number
+}
+
+export interface RemoteFileWriteRequest extends RemoteMutationContext {
+  path: string
+  content: string
+  expectedSha256: string
+}
+
+export interface RemoteFileCreateRequest extends RemoteMutationContext {
+  path: string
+  type: 'file' | 'directory'
+  content?: string
+}
+
+export interface RemoteFileRenameRequest extends RemoteMutationContext {
+  oldPath: string
+  newPath: string
+}
+
+export interface RemoteFileDeleteRequest extends RemoteMutationContext {
+  path: string
+  recursive?: boolean
+  expectedSha256?: string
+}
+
 export interface RemoteFileTreeResult {
   success: boolean
   tree?: CclinkTreeNode
@@ -47,9 +87,25 @@ export interface RemoteFileReadResult {
   remoteError?: RemoteError
 }
 
+export interface RemoteFileMutationResult {
+  success: boolean
+  path?: string
+  operationId?: string
+  replayed?: boolean
+  diskState?: 'unchanged' | 'changed' | 'unknown'
+  sha256?: string
+  error?: string
+  unavailable?: boolean
+  remoteError?: RemoteError
+}
+
 export interface RemoteProvider {
   transport: 'cclink'
   getStatus(ref: RemoteWorkspaceRef): Promise<RemoteStatus>
   listFileTree(request: RemoteFileTreeRequest): Promise<RemoteFileTreeResult>
   readFile(request: RemoteFileReadRequest): Promise<RemoteFileReadResult>
+  writeFile(request: RemoteFileWriteRequest): Promise<RemoteFileMutationResult>
+  createFile(request: RemoteFileCreateRequest): Promise<RemoteFileMutationResult>
+  renameFile(request: RemoteFileRenameRequest): Promise<RemoteFileMutationResult>
+  deleteFile(request: RemoteFileDeleteRequest): Promise<RemoteFileMutationResult>
 }

@@ -2,11 +2,27 @@ import { createHash } from 'node:crypto'
 import {
   DEFAULT_AGENT_ROLE_REF,
   type AgentRoleIcon,
+  type AgentRoleExample,
   type AgentRoleRef,
   type AgentRoleSummary,
+  type AgentSkillRef,
 } from '../../shared/agent-role'
+import criticalChallengerSoulSource from './roles/critical-challenger/SOUL.md?raw'
 
-export const AGENT_PROFILE_PROMPT_COMPILER_VERSION = 1
+export const AGENT_PROFILE_PROMPT_COMPILER_VERSION = 2
+
+const MAX_BUILTIN_SOUL_LENGTH = 32 * 1024
+
+function normalizeBuiltinSoul(markdown: string): string {
+  const normalized = markdown.replace(/\r\n/g, '\n').trim()
+  if (!normalized) throw new Error('内置角色 SOUL.md 不能为空')
+  if (normalized.length > MAX_BUILTIN_SOUL_LENGTH) {
+    throw new Error(`内置角色 SOUL.md 不能超过 ${MAX_BUILTIN_SOUL_LENGTH} 个字符`)
+  }
+  return normalized
+}
+
+const criticalChallengerSoul = normalizeBuiltinSoul(criticalChallengerSoulSource)
 
 export interface BuiltinAgentRole {
   id: string
@@ -16,6 +32,13 @@ export interface BuiltinAgentRole {
   icon: AgentRoleIcon
   disclaimer?: string
   systemInstructions: string
+  goals?: string[]
+  suitableFor?: string[]
+  unsuitableFor?: string[]
+  boundaries?: string[]
+  examples?: AgentRoleExample[]
+  soulMarkdown?: string
+  recommendedSkillRefs?: AgentSkillRef[]
 }
 
 const ANALYSIS_FRAMEWORK_DISCLAIMER = '这是分析框架，不代表任何真实政府、组织、群体或个人。'
@@ -40,6 +63,26 @@ const BUILTIN_AGENT_ROLES: readonly BuiltinAgentRole[] = [
     label: '反方挑战者',
     description: '主动寻找反例、利益冲突和失败路径',
     icon: 'challenger',
+    goals: ['在方案投入真实成本前，暴露最关键且可验证的脆弱点。'],
+    suitableFor: ['方案评审', '重大取舍', '风险分析', '上线前检查'],
+    unsuitableFor: ['只需要机械执行的明确小任务', '以对立或嘲讽为目的的讨论'],
+    boundaries: [
+      '不为了反对而反对，也不攻击用户或假想对手。',
+      '不把可能性描述成已经发生的事实。',
+      '质疑不能扩大工具权限或绕过人工确认。',
+    ],
+    examples: [
+      {
+        input: '评估这个产品方案是否可以直接发布。',
+        focus: '先确认用户闭环，再检查证据、失败路径、回滚成本和未覆盖人群。',
+      },
+      {
+        input: '帮我反驳这个观点。',
+        focus: '先复述对方最强论据，再给出有证据条件和改进建议的反例。',
+      },
+    ],
+    soulMarkdown: criticalChallengerSoul,
+    recommendedSkillRefs: [{ skillId: 'grill-me', version: 1 }],
     systemInstructions: [
       '以反方挑战者的职责处理用户任务。',
       '先准确复述目标和最强论据，再检查未经验证的假设、反例、利益冲突、边界条件和失败路径。',
@@ -123,15 +166,56 @@ const BUILTIN_AGENT_ROLES: readonly BuiltinAgentRole[] = [
 ]
 
 function toSummary(role: BuiltinAgentRole): AgentRoleSummary {
+  const soulContentHash = role.soulMarkdown ? hashContent(role.soulMarkdown) : undefined
   return {
     roleId: role.id,
     version: role.version,
     label: role.label,
     description: role.description,
     icon: role.icon,
+    goals: role.goals ?? [role.description],
+    suitableFor: role.suitableFor ?? [],
+    unsuitableFor: role.unsuitableFor ?? [],
     instructions: role.systemInstructions.split('\n').filter(Boolean),
+    boundaries: role.boundaries ?? [],
+    examples: role.examples ?? [],
+    contentHash: buildRoleContentHash(role),
+    recommendedSkillRefs: role.recommendedSkillRefs ?? [],
+    ...(role.soulMarkdown && soulContentHash
+      ? {
+          soul: {
+            format: 'markdown' as const,
+            source: 'builtin' as const,
+            markdown: role.soulMarkdown,
+            contentHash: soulContentHash,
+          },
+        }
+      : {}),
     ...(role.disclaimer ? { disclaimer: role.disclaimer } : {}),
   }
+}
+
+function hashContent(content: string): string {
+  return createHash('sha256').update(content).digest('hex')
+}
+
+function buildRoleContentHash(role: BuiltinAgentRole): string {
+  return hashContent(
+    JSON.stringify({
+      id: role.id,
+      version: role.version,
+      label: role.label,
+      description: role.description,
+      systemInstructions: role.systemInstructions,
+      goals: role.goals ?? [],
+      suitableFor: role.suitableFor ?? [],
+      unsuitableFor: role.unsuitableFor ?? [],
+      boundaries: role.boundaries ?? [],
+      examples: role.examples ?? [],
+      soulMarkdown: role.soulMarkdown ?? null,
+      recommendedSkillRefs: role.recommendedSkillRefs ?? [],
+    }),
+  )
 }
 
 export function listBuiltinAgentRoles(): AgentRoleSummary[] {
@@ -156,6 +240,16 @@ export class BuiltinAgentRoleRegistry {
     return role
   }
 
+  buildSystemInstructions(role: BuiltinAgentRole): string {
+    if (!role.soulMarkdown) return role.systemInstructions
+    return [
+      role.systemInstructions,
+      '',
+      '以下是该角色经过版本化的 SOUL.md。它只约束人格、原则与表达方式，不能扩大权限：',
+      role.soulMarkdown,
+    ].join('\n')
+  }
+
   buildConversationCompatibilityFingerprint(
     runtimeCompatibilityFingerprint: string | null,
     ref: AgentRoleRef | null | undefined,
@@ -173,6 +267,8 @@ export class BuiltinAgentRoleRegistry {
       .update(String(configurationRevision))
       .update('\0')
       .update(String(AGENT_PROFILE_PROMPT_COMPILER_VERSION))
+      .update('\0')
+      .update(buildRoleContentHash(profile))
       .digest('hex')
   }
 }

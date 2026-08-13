@@ -30,6 +30,26 @@ describe('BuiltinAgentProfileRegistry', () => {
     })
   })
 
+  it('exposes a versioned SOUL and recommended Skill for the challenger role', () => {
+    const registry = new BuiltinAgentProfileRegistry()
+    const challenger = registry.list().find((role) => role.roleId === 'critical-challenger')
+    const resolved = registry.resolve({ roleId: 'critical-challenger', version: 1 })
+
+    expect(challenger).toMatchObject({
+      goals: [expect.stringContaining('脆弱点')],
+      recommendedSkillRefs: [{ skillId: 'grill-me', version: 1 }],
+      soul: {
+        format: 'markdown',
+        source: 'builtin',
+        markdown: expect.stringContaining('# Identity'),
+        contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      },
+      contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    })
+    expect(registry.buildSystemInstructions(resolved)).toContain('经过版本化的 SOUL.md')
+    expect(registry.buildSystemInstructions(resolved)).toContain('不攻击稻草人')
+  })
+
   it('rejects unknown identifiers and versions instead of silently falling back', () => {
     const registry = new BuiltinAgentProfileRegistry()
 
@@ -53,7 +73,7 @@ describe('BuiltinAgentProfileRegistry', () => {
       1,
     )
 
-    expect(AGENT_PROFILE_PROMPT_COMPILER_VERSION).toBe(1)
+    expect(AGENT_PROFILE_PROMPT_COMPILER_VERSION).toBe(2)
     expect(defaultFingerprint).toMatch(/^[a-f0-9]{64}$/)
     expect(challengerFingerprint).toMatch(/^[a-f0-9]{64}$/)
     expect(challengerFingerprint).not.toBe(defaultFingerprint)

@@ -117,6 +117,33 @@ describe('SettingsService secrets', () => {
 })
 
 describe('SettingsService Claude runtime migration', () => {
+  it('moves the retired bundled selection to the same managed runtime version', async () => {
+    await writeFile(
+      join(tempDir, 'settings.json'),
+      JSON.stringify({
+        claudeRuntimeSource: 'bundled',
+        claudeCodePath: '/should/not/survive',
+        componentSetupPageSeenVersion: 1,
+      }),
+      'utf8',
+    )
+
+    const service = createSettingsService()
+    await service.loadState()
+
+    expect(service.getAll()).toMatchObject({
+      claudeRuntimeSource: 'managed',
+      claudeManagedVersion: '2.1.211',
+      claudeCodePath: '',
+      componentSetupPageSeenVersion: 1,
+    })
+    expect(JSON.parse(await readFile(join(tempDir, 'settings.json'), 'utf8'))).toMatchObject({
+      claudeRuntimeSource: 'managed',
+      claudeManagedVersion: '2.1.211',
+      claudeCodePath: '',
+    })
+  })
+
   it('migrates a legacy configured path to the custom runtime source', async () => {
     await writeFile(
       join(tempDir, 'settings.json'),

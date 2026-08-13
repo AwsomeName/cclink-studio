@@ -127,6 +127,45 @@ describe('RuntimeComponentManager', () => {
     expect(secondDownload).not.toHaveBeenCalled()
   })
 
+  it('checks, repairs, and uninstalls the managed runtime while preserving its config', async () => {
+    const root = await temporaryRoot('cclink-runtime-lifecycle-')
+    const { manager, download } = await createManager(root)
+    await manager.initialize()
+    expect((await manager.installManagedClaude()).success).toBe(true)
+
+    const healthy = await manager.checkManagedClaude()
+    expect(healthy).toMatchObject({
+      success: true,
+      status: { health: 'healthy', updateAvailable: false },
+    })
+    expect(download).toHaveBeenCalledTimes(1)
+
+    const executablePath = join(root, 'claude-runtime', 'darwin-arm64', '2.1.211', 'claude')
+    await writeFile(executablePath, 'damaged')
+    const damaged = await manager.checkManagedClaude()
+    expect(damaged).toMatchObject({
+      success: false,
+      status: { health: 'damaged', phase: 'failed', installedVersions: [] },
+    })
+
+    const repaired = await manager.repairManagedClaude()
+    expect(repaired).toMatchObject({
+      success: true,
+      status: { health: 'healthy', installedVersions: ['2.1.211'] },
+    })
+    expect(download).toHaveBeenCalledTimes(2)
+
+    const configPath = join(root, 'claude-runtime', 'darwin-arm64', 'config', 'keep-me.json')
+    await writeFile(configPath, '{}')
+    const uninstalled = await manager.uninstallManagedClaude()
+    expect(uninstalled).toMatchObject({
+      success: true,
+      status: { health: 'not-installed', installedVersions: [], phase: 'idle' },
+    })
+    await expect(readFile(configPath, 'utf8')).resolves.toBe('{}')
+    await expect(manager.resolveManagedClaude('2.1.211')).rejects.toThrow()
+  })
+
   it('restores the previous installation when final publish verification fails', async () => {
     const root = await temporaryRoot('cclink-runtime-rollback-')
     const first = await createManager(root)

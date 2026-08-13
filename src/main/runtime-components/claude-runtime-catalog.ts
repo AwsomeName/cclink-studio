@@ -1,3 +1,5 @@
+import { MANAGED_CLAUDE_RUNTIME_VERSION } from '../../shared/settings-constants'
+
 export interface ManagedClaudeRuntimeCatalogEntry {
   componentId: 'claude-runtime'
   runtimeVersion: string
@@ -15,14 +17,13 @@ export interface ManagedClaudeRuntimeCatalogEntry {
 
 const CLAUDE_2_1_211_DARWIN_ARM64: ManagedClaudeRuntimeCatalogEntry = {
   componentId: 'claude-runtime',
-  runtimeVersion: '2.1.211',
+  runtimeVersion: MANAGED_CLAUDE_RUNTIME_VERSION,
   sdkVersion: '0.3.211',
   platform: 'darwin',
   arch: 'arm64',
   packageName: '@anthropic-ai/claude-code-darwin-arm64',
-  packageVersion: '2.1.211',
-  tarballUrl:
-    'https://registry.npmjs.org/@anthropic-ai/claude-code-darwin-arm64/-/claude-code-darwin-arm64-2.1.211.tgz',
+  packageVersion: MANAGED_CLAUDE_RUNTIME_VERSION,
+  tarballUrl: `https://registry.npmjs.org/@anthropic-ai/claude-code-darwin-arm64/-/claude-code-darwin-arm64-${MANAGED_CLAUDE_RUNTIME_VERSION}.tgz`,
   tarballIntegrity:
     'sha512-ogsLXqbHlHSFE9ApgpoeoP6wXJKkcUyYM4f8rrAbTvQStvqQ/bpHLV5mgbuEGn/N9NPWBQt826bfH/XvlYi0kg==',
   binaryPath: 'package/claude',

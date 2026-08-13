@@ -43,11 +43,11 @@ export const scheduledTasksIpcEvents = {
   changed: 'scheduledTasks:changed',
 } as const
 
-const invalidOperation = async (): Promise<ScheduledTaskOperationResult> => ({
+const invalidOperation = async (error: unknown): Promise<ScheduledTaskOperationResult> => ({
   success: false,
   error: {
     code: 'SCHEDULED_TASK_INVALID',
-    message: '定时任务参数无效',
+    message: error instanceof Error ? error.message : '定时任务参数无效',
     recovery: '检查任务名称、内容、时间和工作空间后重试',
   },
 })

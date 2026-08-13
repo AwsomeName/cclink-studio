@@ -40,6 +40,8 @@ import {
   BuiltinAgentRoleRegistry,
   type BuiltinAgentRole,
 } from './agent-profile-registry'
+import { BuiltinAgentSkillRegistry } from './agent-skill-registry'
+import type { AgentSkillSummary } from '../../shared/agent-skill'
 import {
   agentRoleRefsEqual,
   createDefaultAgentConversationConfiguration,
@@ -97,6 +99,7 @@ export class AgentBridge {
   private readonly activeBrowserTaskIds = new Map<string, string>()
   private readonly sessionDiagnosticRefs = new SessionDiagnosticReferenceStore()
   private readonly roleRegistry = new BuiltinAgentRoleRegistry()
+  private readonly skillRegistry = new BuiltinAgentSkillRegistry()
   private readonly conversationConfigurations = new Map<string, AgentConversationConfiguration>()
   private readonly deps: {
     playwrightBridge: PlaywrightBridge | null
@@ -476,6 +479,10 @@ export class AgentBridge {
 
   listRoles(): AgentRoleSummary[] {
     return this.roleRegistry.list()
+  }
+
+  listSkills(): AgentSkillSummary[] {
+    return this.skillRegistry.list()
   }
 
   /** 销毁一个会话 backend（关闭历史会话时释放资源） */
@@ -867,7 +874,7 @@ export class AgentBridge {
       ref: { roleId: role.id, version: role.version },
       label: role.label,
       ...(role.disclaimer ? { disclaimer: role.disclaimer } : {}),
-      systemInstructions: role.systemInstructions,
+      systemInstructions: this.roleRegistry.buildSystemInstructions(role),
     }
   }
 }

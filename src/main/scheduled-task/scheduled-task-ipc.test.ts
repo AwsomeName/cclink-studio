@@ -53,7 +53,7 @@ describe('registerScheduledTaskIpc', () => {
       ),
     ).resolves.toMatchObject({
       success: false,
-      error: { code: 'SCHEDULED_TASK_INVALID' },
+      error: { code: 'SCHEDULED_TASK_INVALID', message: '执行时刻无效' },
     })
     expect(service.save).not.toHaveBeenCalled()
   })

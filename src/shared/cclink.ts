@@ -1,4 +1,6 @@
 import type { RemoteError } from './remote-error'
+import type { CclinkRuntimeMessage } from './cclink-runtime'
+export type * from './cclink-runtime'
 
 export interface CclinkIdentity {
   accountUserId: string
@@ -59,6 +61,53 @@ export const CCLINK_PROTOCOL_VERSION = 2
 export const CCLINK_MIN_PROTOCOL_VERSION = 2
 
 export type CclinkMessageType =
+  | 'user_text'
+  | 'stream_start'
+  | 'stream_chunk'
+  | 'stream_end'
+  | 'agent_status'
+  | 'agent_text'
+  | 'agent_tool'
+  | 'terminal_output'
+  | 'session_create'
+  | 'session_response'
+  | 'session_sync_request'
+  | 'session_sync_response'
+  | 'session_update'
+  | 'file_write_request'
+  | 'file_write_response'
+  | 'file_create_request'
+  | 'file_create_response'
+  | 'file_rename_request'
+  | 'file_rename_response'
+  | 'file_delete_request'
+  | 'file_delete_response'
+  | 'file_mutation_begin_request'
+  | 'file_mutation_begin_response'
+  | 'file_mutation_chunk_request'
+  | 'file_mutation_chunk_response'
+  | 'file_mutation_status_request'
+  | 'file_mutation_status_response'
+  | 'file_mutation_commit_request'
+  | 'file_mutation_commit_response'
+  | 'file_mutation_abort_request'
+  | 'file_mutation_abort_response'
+  | 'terminal_pty_open'
+  | 'terminal_pty_open_response'
+  | 'terminal_pty_input'
+  | 'terminal_pty_output'
+  | 'terminal_pty_state'
+  | 'terminal_pty_exit'
+  | 'terminal_pty_resize'
+  | 'terminal_pty_resize_response'
+  | 'terminal_pty_interrupt'
+  | 'terminal_pty_interrupt_response'
+  | 'terminal_pty_close'
+  | 'terminal_pty_close_response'
+  | 'terminal_pty_keepalive'
+  | 'terminal_pty_attach'
+  | 'terminal_pty_attach_response'
+  | 'terminal_pty_error'
   | 'server_meta_request'
   | 'server_meta'
   | 'workspace_list_request'
@@ -139,8 +188,56 @@ export type CclinkProtocolMessage =
   | CclinkFileTreeResponseMessage
   | CclinkFileReadResponseMessage
   | CclinkErrorMessage
+  | CclinkRuntimeMessage
 
 const MESSAGE_TYPES = new Set<CclinkMessageType>([
+  'user_text',
+  'stream_start',
+  'stream_chunk',
+  'stream_end',
+  'agent_status',
+  'agent_text',
+  'agent_tool',
+  'terminal_output',
+  'session_create',
+  'session_response',
+  'session_sync_request',
+  'session_sync_response',
+  'session_update',
+  'file_write_request',
+  'file_write_response',
+  'file_create_request',
+  'file_create_response',
+  'file_rename_request',
+  'file_rename_response',
+  'file_delete_request',
+  'file_delete_response',
+  'file_mutation_begin_request',
+  'file_mutation_begin_response',
+  'file_mutation_chunk_request',
+  'file_mutation_chunk_response',
+  'file_mutation_status_request',
+  'file_mutation_status_response',
+  'file_mutation_commit_request',
+  'file_mutation_commit_response',
+  'file_mutation_abort_request',
+  'file_mutation_abort_response',
+  'terminal_pty_open',
+  'terminal_pty_open_response',
+  'terminal_pty_input',
+  'terminal_pty_output',
+  'terminal_pty_state',
+  'terminal_pty_exit',
+  'terminal_pty_resize',
+  'terminal_pty_resize_response',
+  'terminal_pty_interrupt',
+  'terminal_pty_interrupt_response',
+  'terminal_pty_close',
+  'terminal_pty_close_response',
+  'terminal_pty_keepalive',
+  'terminal_pty_attach',
+  'terminal_pty_attach_response',
+  'terminal_pty_error',
   'server_meta_request',
   'server_meta',
   'workspace_list_request',

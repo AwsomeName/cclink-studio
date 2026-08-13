@@ -1,6 +1,6 @@
 # Agent 对话系统
 
-> 当前事实源。最后更新：2026-08-07。
+> 当前事实源。最后更新：2026-08-13。
 
 ## 概述
 
@@ -94,15 +94,19 @@ ADR 0006 已确定产品边界：CCLink 提供一致的 Agent Runtime，拥有 T
 - Composer 区域展示已挂载资源，并承载输入框、`@资源`、`/技能` 和发送。
 - 左侧 Activity Bar 的“会话”视图是 Thread Center，负责完整历史、搜索、过滤、归档和工作空间级管理。
 - Workbench 只打开同一个 Thread 的深度工作视图，关闭 Tab 不删除 Thread。
-- Skill、模型、Provider、API Key、默认模式等长期配置只放设置页。
+- Skill 的安装与长期管理，以及模型、Provider、API Key、默认模式等长期配置只放设置页；
+  Composer 负责会话级挂载，角色配置页只提供建议和显式挂载入口。
 
 详细产品模型和推进里程碑见 `docs/features/agent-panel-product-model.md`。
 
 内置角色是会话配置。当前应用提供 Composer 快速选择、Activity Bar“角色”入口、角色
-Sidebar 和只读角色配置 Tab；切换角色保留同一用户会话和可见历史，只重建目标会话的
-内部 Runtime Session。角色定义归主进程只读 Registry，会话绑定归
+Sidebar 和全局唯一的只读角色配置 Tab；点击不同角色只原位切换该 Tab 的查看目标，切换
+已应用角色时保留同一用户会话和可见历史，只重建目标会话的内部 Runtime Session。角色
+定义归主进程只读 Registry，会话绑定归
 `AgentConversationState.configuration`，每轮运行通过主进程配置回执对账。详细事实和
-验收步骤见 `docs/features/agent-role-configuration.md`。
+验收步骤见 `docs/features/agent-role-configuration.md`。“反方挑战者”已作为首个切片在同一
+配置页增加只读 `SOUL.md` 和建议 Skill；建议 Skill 必须由用户明确挂载，不能改变权限或在
+后台自动生效。其余角色和真实模型行为验收尚未完成。
 
 ## 系统架构
 

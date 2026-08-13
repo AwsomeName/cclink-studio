@@ -4,7 +4,7 @@ import { useAgentStore } from '../../stores/agent-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import { useTabStore } from '../../stores/tab-store'
 import { useAgentRoles } from '../agent-profiles/use-agent-profiles'
-import { getAgentRoleGlyph } from './agent-role-presentation'
+import { AgentRoleIcon } from './agent-role-presentation'
 
 export function AgentRolesSidebar(): React.ReactElement {
   const { roles, error, reload } = useAgentRoles()
@@ -27,12 +27,17 @@ export function AgentRolesSidebar(): React.ReactElement {
       <section className="agent-role-current-card">
         <div className="agent-role-section-label">当前会话</div>
         <strong>{conversation?.title ?? '没有可用会话'}</strong>
-        <span>
-          {currentRole
-            ? `${getAgentRoleGlyph(currentRole.icon)} ${currentRole.label}`
-            : conversation
-              ? `角色不可用 · ${conversation.configuration.roleRef.roleId}@${conversation.configuration.roleRef.version}`
-              : '请先新建会话'}
+        <span className="agent-role-current-identity">
+          {currentRole ? (
+            <>
+              <AgentRoleIcon icon={currentRole.icon} size={16} />
+              {currentRole.label}
+            </>
+          ) : conversation ? (
+            `角色不可用 · ${conversation.configuration.roleRef.roleId}@${conversation.configuration.roleRef.version}`
+          ) : (
+            '请先新建会话'
+          )}
         </span>
         {conversation?.lastRunConfigurationReceipt && (
           <small>
@@ -67,14 +72,16 @@ export function AgentRolesSidebar(): React.ReactElement {
               onClick={() =>
                 openTab({
                   type: 'agent-role',
-                  title: role.label,
-                  icon: getAgentRoleGlyph(role.icon),
+                  title: '角色配置',
+                  icon: '◇',
                   agentRole: { roleId: role.roleId, version: role.version },
                 })
               }
               title="打开角色配置；不会自动切换当前会话"
             >
-              <span className="agent-role-row-icon">{getAgentRoleGlyph(role.icon)}</span>
+              <span className="agent-role-row-icon">
+                <AgentRoleIcon icon={role.icon} size={16} />
+              </span>
               <span className="agent-role-row-main">
                 <span className="agent-role-row-head">
                   <strong>{role.label}</strong>

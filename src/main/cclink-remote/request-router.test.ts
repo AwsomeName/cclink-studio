@@ -83,4 +83,26 @@ describe('CclinkRequestRouter', () => {
     await expect(result).resolves.toMatchObject({ request_id: 'fixed' })
     router.detach()
   })
+
+  it('把无 request_id 的流式事件交给协议监听器', () => {
+    const transport = new FakeTransport()
+    const router = new CclinkRequestRouter()
+    const received: CclinkTransportEvent[] = []
+    router.onProtocolEvent((event) => received.push(event))
+    router.attach(transport)
+
+    transport.emit({
+      serverId: 'agent-1',
+      message: {
+        ...createCclinkEnvelope('stream_chunk'),
+        session_id: 'session-1',
+        msg_id: 'message-1',
+        delta: 'hello',
+      },
+    })
+
+    expect(received).toHaveLength(1)
+    expect(received[0]?.message.cc_type).toBe('stream_chunk')
+    router.detach()
+  })
 })

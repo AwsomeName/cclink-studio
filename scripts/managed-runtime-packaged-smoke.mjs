@@ -177,7 +177,10 @@ async function installRuntimeResource(page, name, expectedState) {
     { rowName: name, state: expectedState },
     { timeout: 10 * 60 * 1000 },
   )
-  assert(!(await button.isEnabled()), `${name} 安装后仍允许重复安装`)
+  assert(
+    (await row.getByRole('button', { name: '安装' }).count()) === 0,
+    `${name} 安装后仍允许重复安装`,
+  )
 }
 
 async function verifyRuntimeResource(page, name, expectedState, version) {
@@ -197,7 +200,13 @@ async function verifyRuntimeResource(page, name, expectedState, version) {
     cells.some((value) => value.includes(`版本 ${version}`)),
     `${name} 版本丢失`,
   )
-  assert(!(await row.getByRole('button', { name: '安装' }).isEnabled()), `${name} 错误要求重装`)
+  assert((await row.getByRole('button', { name: '安装' }).count()) === 0, `${name} 错误要求重装`)
+}
+
+async function acceptNextDialog(page) {
+  page.once('dialog', async (dialog) => {
+    await dialog.accept()
+  })
 }
 
 async function waitForManagedRuntimeActive(page, timeoutMs = 60_000) {
@@ -329,7 +338,7 @@ async function main() {
     '替换 .app 后 managed Runtime 版本丢失',
   )
   assert(
-    !(await secondRow.getByRole('button', { name: '安装' }).isEnabled()),
+    (await secondRow.getByRole('button', { name: '安装' }).count()) === 0,
     '替换后错误地要求重装',
   )
   assert((await readFile(installRecordPath, 'utf8')) === originalRecord, '替换后安装记录被改写')
@@ -365,6 +374,92 @@ async function main() {
     `替换 .app 后 managed Runtime 未恢复为 active：${JSON.stringify(replacementRuntime)}`,
   )
   await second.page.screenshot({ path: screenshotPath, fullPage: true })
+
+  await secondRow.getByRole('button', { name: '检查', exact: true }).click()
+  await second.page.waitForFunction(
+    () =>
+      Array.from(document.querySelectorAll('.settings-description')).some((candidate) =>
+        candidate.textContent?.includes('当前可信目录没有更新'),
+      ),
+    undefined,
+    { timeout: 30_000 },
+  )
+
+  const switchedToSystem = await second.page.evaluate(() =>
+    window.cclinkStudio.settings.set({ claudeRuntimeSource: 'system' }),
+  )
+  assert(switchedToSystem.success, `切换系统 Runtime 失败：${JSON.stringify(switchedToSystem)}`)
+  const switchedStatus = await second.page.evaluate(() =>
+    window.cclinkStudio.settings.getClaudeRuntimeStatus(),
+  )
+  assert(
+    switchedStatus.success && switchedStatus.status?.active?.source === 'system',
+    `系统 Runtime 未启用：${JSON.stringify(switchedStatus)}`,
+  )
+  await second.page.waitForFunction(
+    () => {
+      const row = Array.from(document.querySelectorAll('.component-table tbody tr')).find(
+        (candidate) => candidate.textContent?.includes('Claude Code Runtime'),
+      )
+      const button = Array.from(row?.querySelectorAll('button') ?? []).find(
+        (candidate) => candidate.textContent?.trim() === '卸载',
+      )
+      return Boolean(button && !(button instanceof HTMLButtonElement && button.disabled))
+    },
+    undefined,
+    { timeout: 30_000 },
+  )
+  await acceptNextDialog(second.page)
+  await secondRow.getByRole('button', { name: '卸载', exact: true }).click()
+  await second.page.waitForFunction(
+    () => {
+      const row = Array.from(document.querySelectorAll('.component-table tbody tr')).find(
+        (candidate) => candidate.textContent?.includes('Claude Code Runtime'),
+      )
+      return Boolean(row?.textContent?.includes('安装') && !row.textContent.includes('Studio 管理'))
+    },
+    undefined,
+    { timeout: 30_000 },
+  )
+  const uninstalledClaude = await second.page.evaluate(() =>
+    window.cclinkStudio.runtimeComponents.getManagedClaudeStatus(),
+  )
+  assert(
+    uninstalledClaude.health === 'not-installed' &&
+      uninstalledClaude.installedVersions.length === 0,
+    `Claude Runtime 卸载状态错误：${JSON.stringify(uninstalledClaude)}`,
+  )
+  const secretAfterUninstall = await second.page.evaluate(() =>
+    window.cclinkStudio.settings.getSecretStatus(),
+  )
+  assert(secretAfterUninstall.apiKeyConfigured, '卸载 Claude Runtime 错误删除了 API Key')
+
+  const occtRow = await componentRow(second.page, 'OCCT Runtime')
+  await acceptNextDialog(second.page)
+  await occtRow.getByRole('button', { name: '卸载', exact: true }).click()
+  await second.page.waitForFunction(
+    () => {
+      const row = Array.from(document.querySelectorAll('.component-table tbody tr')).find(
+        (candidate) => candidate.textContent?.includes('OCCT Runtime'),
+      )
+      return Boolean(row?.textContent?.includes('已安装 · 随应用'))
+    },
+    undefined,
+    { timeout: 30_000 },
+  )
+  const occtAfterUninstall = await second.page.evaluate(async () => ({
+    resources: await window.cclinkStudio.runtimeComponents.listRuntimeResources(),
+    cad: await window.cclinkStudio.cad.getBackendStatus(),
+  }))
+  assert(
+    occtAfterUninstall.resources.find((item) => item.componentId === 'occt-runtime')
+      ?.installedVersion === null,
+    'OCCT 管理版本卸载状态错误',
+  )
+  assert(
+    occtAfterUninstall.cad.available && occtAfterUninstall.cad.source !== 'managed',
+    `OCCT 卸载后没有回退随 App 资源：${JSON.stringify(occtAfterUninstall.cad)}`,
+  )
   await second.page.evaluate(() => window.cclinkStudio.settings.clearSecret('apiKey'))
   await stopPackagedApp(second.browser)
 
@@ -381,6 +476,10 @@ async function main() {
         installedVersion: '2.1.211',
         runtimeResourcesReused: ['OCCT 0.0.23', 'scrcpy 2.3.1', 'agent-device Helper 0.17.2'],
         managedOcctConversion: true,
+        trustedCatalogCheck: true,
+        managedClaudeUninstall: true,
+        credentialPreservedAfterUninstall: true,
+        managedOcctUninstallFallback: true,
         isolatedUserData: userDataPath,
         screenshotPath,
       },

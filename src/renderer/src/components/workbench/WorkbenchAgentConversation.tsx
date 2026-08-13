@@ -62,6 +62,7 @@ import {
   MAX_AGENT_IMAGES,
 } from '../../features/agent-conversations/image-attachments'
 import { useAgentRoles } from '../../features/agent-profiles/use-agent-profiles'
+import { useAgentSkills } from '../../features/agent-skills/use-agent-skills'
 import type { AgentRoleSummary } from '@shared/agent-role'
 import {
   applyAgentRoleToConversation,
@@ -105,6 +106,7 @@ export function WorkbenchAgentConversation({
   const loadSavedQueries = useDataSourceStore((state) => state.loadSavedQueries)
   const showToast = useToastStore((state) => state.show)
   const { roles, error: rolesError } = useAgentRoles()
+  const { skills: availableSkills, error: skillsError } = useAgentSkills()
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const [resourceQuery, setResourceQuery] = useState<string | null>(null)
   const [skillQuery, setSkillQuery] = useState<string | null>(null)
@@ -143,6 +145,10 @@ export function WorkbenchAgentConversation({
   useEffect(() => {
     if (rolesError) showToast(`角色列表加载失败: ${rolesError}`, 'error')
   }, [rolesError, showToast])
+
+  useEffect(() => {
+    if (skillsError) showToast(`Skill 列表加载失败: ${skillsError}`, 'error')
+  }, [showToast, skillsError])
 
   useEffect(() => {
     let cancelled = false
@@ -194,7 +200,10 @@ export function WorkbenchAgentConversation({
       tabs,
     ],
   )
-  const skillCandidates = useMemo(() => buildSkillCandidates(skillQuery ?? ''), [skillQuery])
+  const skillCandidates = useMemo(
+    () => buildSkillCandidates(availableSkills, skillQuery ?? ''),
+    [availableSkills, skillQuery],
+  )
   const activeMentionKind =
     resourceQuery !== null ? 'resource' : skillQuery !== null ? 'skill' : null
   const activeMentionCount =

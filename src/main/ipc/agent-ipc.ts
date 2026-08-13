@@ -9,6 +9,7 @@
 import type { IpcMainInvokeEvent } from 'electron'
 import type { AgentBridge } from '../agent/agent-bridge'
 import { listBuiltinAgentRoles } from '../agent/agent-profile-registry'
+import { listBuiltinAgentSkills } from '../agent/agent-skill-registry'
 import type { PermissionManager } from '../mcp/permission'
 import type { McpClientManager } from '../mcp/client-manager'
 import type {
@@ -127,11 +128,40 @@ function normalizeContinuity(value: unknown): AgentConversationContinuity | unde
 
 function normalizeWorkspaceRef(value: unknown): WorkspaceRef | undefined {
   if (!value || typeof value !== 'object') return undefined
-  const candidate = value as { kind?: unknown; path?: unknown }
+  const candidate = value as {
+    kind?: unknown
+    transport?: unknown
+    endpointId?: unknown
+    workspaceId?: unknown
+    path?: unknown
+    label?: unknown
+    endpointName?: unknown
+  }
   if (candidate.kind === 'global') return { kind: 'global' }
-  if (candidate.kind !== 'local' || typeof candidate.path !== 'string') return undefined
-  const path = candidate.path.trim()
-  return path ? { kind: 'local', path } : undefined
+  if (candidate.kind === 'local' && typeof candidate.path === 'string') {
+    const path = candidate.path.trim()
+    return path ? { kind: 'local', path } : undefined
+  }
+  if (
+    candidate.kind === 'remote' &&
+    candidate.transport === 'cclink' &&
+    typeof candidate.endpointId === 'string' &&
+    typeof candidate.workspaceId === 'string' &&
+    typeof candidate.path === 'string'
+  ) {
+    return {
+      kind: 'remote',
+      transport: 'cclink',
+      endpointId: candidate.endpointId.trim(),
+      workspaceId: candidate.workspaceId.trim(),
+      path: candidate.path.trim(),
+      ...(typeof candidate.label === 'string' ? { label: candidate.label } : {}),
+      ...(typeof candidate.endpointName === 'string'
+        ? { endpointName: candidate.endpointName }
+        : {}),
+    }
+  }
+  return undefined
 }
 
 /**
@@ -158,6 +188,12 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
     const conversationId = args.length === 2 ? args[0] : undefined
     const input = args.length === 2 ? args[1] : args[0]
     const payload = normalizeSendMessageInput(input)
+    if (payload.workspaceRef?.kind === 'remote') {
+      return {
+        success: false,
+        error: '远程工作区不能交给本地 Agent IPC 执行；请从 CCLink 远程会话面板发送。',
+      }
+    }
     if (payload.images?.length) {
       console.info(`[AgentIPC] 图片附件已接收: ${formatImageAttachmentDiagnostics(payload.images)}`)
     }
@@ -210,6 +246,11 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
     return agentBridge?.listRoles() ?? listBuiltinAgentRoles()
   })
 
+  handle(agentIpc.listSkills, () => {
+    const agentBridge = requireAgentBridge()
+    return agentBridge?.listSkills() ?? listBuiltinAgentSkills()
+  })
+
   handle(agentIpc.getContextUsage, async (_event, ...args) => {
     const [conversationId] = args
     const agentBridge = requireAgentBridge()
@@ -220,6 +261,12 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
   handle(agentIpc.compactConversation, async (_event, conversationId, input) => {
     const agentBridge = requireAgentBridge()
     if (!agentBridge) return { success: false, error: 'Agent 后端未就绪' }
+    if (input.workspaceRef?.kind === 'remote') {
+      return {
+        success: false,
+        error: '远程会话不属于本地 Agent IPC，不能使用本地 Agent 压缩。',
+      }
+    }
     try {
       await agentBridge.compactConversation(conversationId, {
         sessionId: input.sessionId,

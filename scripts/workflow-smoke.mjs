@@ -629,6 +629,93 @@ async function main() {
     return 'format/link/heading/quote/list/code/table/save shortcuts'
   })
 
+  await runCheck('markdown task input and nested numbered headings stay semantic', async () => {
+    const editor = page.locator('.tiptap').first()
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
+
+    await editor.click()
+    await page.keyboard.press(`${modifier}+A`)
+    await page.keyboard.type('[]')
+    await page.keyboard.press('Space')
+    await page.keyboard.type('todo')
+    const taskItem = editor.locator('ul[data-type="taskList"] > li').first()
+    assert(
+      (await taskItem.count()) === 1,
+      `[] Space did not create a task: ${await editor.innerHTML()}`,
+    )
+    assert(
+      (await taskItem.getAttribute('data-checked')) === 'false',
+      'new task was unexpectedly checked',
+    )
+
+    await page.keyboard.press(`${modifier}+A`)
+    await page.keyboard.type('first')
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('second')
+    await page.keyboard.press(`${modifier}+A`)
+    await page.keyboard.press(`${modifier}+Shift+7`)
+    await editor.locator('ol > li').nth(1).locator('p').click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Tab')
+    const nestedOrderedList = editor.locator('ol ol').first()
+    assert(
+      (await nestedOrderedList.count()) === 1,
+      `Tab did not create a nested ordered list: ${await editor.innerHTML()}`,
+    )
+    assert(
+      (await nestedOrderedList.evaluate((element) => getComputedStyle(element).listStyleType)) ===
+        'lower-alpha',
+      'second ordered-list level did not use lower-alpha markers',
+    )
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('third')
+    await page.keyboard.press('Tab')
+    const thirdLevelOrderedList = editor.locator('ol ol ol').first()
+    assert(
+      (await thirdLevelOrderedList.count()) === 1 &&
+        (await thirdLevelOrderedList.evaluate(
+          (element) => getComputedStyle(element).listStyleType,
+        )) === 'lower-roman',
+      `third ordered-list level did not use lower-roman markers: ${await editor.innerHTML()}`,
+    )
+
+    await page.keyboard.press(`${modifier}+A`)
+    await page.keyboard.type('###')
+    await page.keyboard.press('Space')
+    await page.keyboard.type('1.')
+    await page.keyboard.press('Space')
+    await page.keyboard.type('编号标题')
+    const numberedHeading = editor.locator('ol > li > h3').first()
+    assert(
+      (await numberedHeading.innerText()) === '编号标题',
+      `heading and ordered-list input rules did not compose: ${await editor.innerHTML()}`,
+    )
+
+    await page.keyboard.press(`${modifier}+S`)
+    await page.waitForFunction(
+      () => document.querySelector('.toolbar-save-state')?.textContent?.includes('已保存'),
+      null,
+      { timeout: 10_000 },
+    )
+    const saved = await page.evaluate(
+      async (path) => (await window.cclinkStudio.fs.readFile(path)).content,
+      markdownPath,
+    )
+    assert(saved.includes('1. ### 编号标题'), `saved Markdown lost the list heading: ${saved}`)
+    const notesTab = page.locator('.tab', { hasText: 'notes.md' }).first()
+    await notesTab.locator('.tab-close').click()
+    await ensureSidebarVisible(page)
+    await clickByTitle(page, '文件')
+    const notesFile = page.locator('.file-tree-item.file', { hasText: 'notes.md' }).first()
+    await notesFile.evaluate((element) => element.click())
+    await page.waitForSelector('.markdown-editor-wrapper', { timeout: 15_000 })
+    assert(
+      (await page.locator('.tiptap ol > li > h3').first().innerText()) === '编号标题',
+      'reopened Markdown lost the numbered heading structure',
+    )
+    return 'task shortcut, three numbered levels, and 1. ### heading save/reopen'
+  })
+
   await runCheck('markdown normalization stays editable after save', async () => {
     await ensureSidebarVisible(page)
     await clickByTitle(page, '文件')

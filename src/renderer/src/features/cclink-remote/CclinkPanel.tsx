@@ -198,7 +198,7 @@ function RemoteDirectoryPicker({
         endpointName: server.name,
       })
       const transition = await prepareWorkspaceRuntimeTransition(ref)
-      const applied = await applyWorkspaceRuntimeTransition(transition, { hydrate: false })
+      const applied = await applyWorkspaceRuntimeTransition(transition)
       if (!applied) throw new Error('工作空间已发生变化，请重试')
       useOpenProjectsStore.getState().addRemoteProject(ref)
       useUIStore.getState().setActivePanel('files')

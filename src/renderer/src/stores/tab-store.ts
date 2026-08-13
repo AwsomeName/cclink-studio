@@ -266,7 +266,30 @@ export const useTabStore = create<TabState>((set, get) => ({
     workspaceRef,
   }) => {
     set((state) => {
-      // forceNew 跳过所有去重
+      // 角色配置是全局唯一视图。点击不同角色只切换该视图的查看目标，
+      // 即使调用方传入 forceNew 也不能创建第二个角色配置 Tab。
+      if (type === 'agent-role' && agentRole) {
+        const existing =
+          state.tabs.find((tab) => tab.id === state.activeTabId && tab.type === 'agent-role') ??
+          state.tabs.find((tab) => tab.type === 'agent-role')
+        if (existing) {
+          const nextTabs = state.tabs
+            .filter((tab) => tab.type !== 'agent-role' || tab.id === existing.id)
+            .map((tab) =>
+              tab.id === existing.id
+                ? {
+                    ...tab,
+                    title,
+                    icon,
+                    agentRole,
+                  }
+                : tab,
+            )
+          return { tabs: nextTabs, activeTabId: existing.id }
+        }
+      }
+
+      // forceNew 跳过允许多开的 Tab 去重
       if (!forceNew) {
         if (type === 'browser' && webResourceRef) {
           const existing = state.tabs.find(
@@ -316,14 +339,6 @@ export const useTabStore = create<TabState>((set, get) => ({
             )
             return { tabs: nextTabs, activeTabId: existing.id }
           }
-        } else if (type === 'agent-role' && agentRole) {
-          const existing = state.tabs.find(
-            (tab) =>
-              tab.type === 'agent-role' &&
-              tab.agentRole?.roleId === agentRole.roleId &&
-              tab.agentRole.version === agentRole.version,
-          )
-          if (existing) return { activeTabId: existing.id }
         } else if (type === 'conversation' && conversation) {
           // 会话按来源和会话 ID 去重。
           const targetKey = getConversationKey({ type, conversation })

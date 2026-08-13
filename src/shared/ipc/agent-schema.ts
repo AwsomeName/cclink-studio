@@ -1,11 +1,11 @@
 import { z } from 'zod'
 import {
-  absolutePathSchema,
   boundedIdentifierSchema,
   boundedJsonValueSchema,
   boundedTextSchema,
   httpUrlSchema,
 } from './input-schema'
+import { workspaceRefSchema } from './workspace-ref-schema'
 
 const MAX_MESSAGE_LENGTH = 1024 * 1024
 const MAX_RESOURCE_PAYLOAD_BYTES = 5 * 1024 * 1024
@@ -43,11 +43,6 @@ export const agentConversationConfigurationSchema = z
     updatedAt: z.number().finite().nonnegative(),
   })
   .strict()
-
-const workspaceRefSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('global') }).strict(),
-  z.object({ kind: z.literal('local'), path: absolutePathSchema }).strict(),
-])
 
 const continuitySchema = z
   .object({

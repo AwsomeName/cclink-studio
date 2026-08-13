@@ -171,9 +171,7 @@ jobs:
             }
       - name: Build application
         working-directory: source
-        run: |
-          pnpm build
-          node scripts/stage-claude-runtime.mjs --arch arm64
+        run: pnpm build
       - name: Package signed and notarized application
         working-directory: source
         env:
@@ -206,6 +204,7 @@ jobs:
         run: |
           app_path="$(find dist -maxdepth 3 -type d -name '*.app' -print -quit)"
           test -n "$app_path"
+          test ! -e "$app_path/Contents/Resources/agent-runtime"
           codesign --verify --deep --strict --verbose=2 "$app_path"
           spctl --assess --type execute --verbose=2 "$app_path"
           for dmg in dist/*.dmg; do

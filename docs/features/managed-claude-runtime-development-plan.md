@@ -2,7 +2,7 @@
 
 > 状态：M1/M2 已完成：arm64 真实 npm 安装、真实 API-key 文件/MCP 任务、packaged
 > `.app` 替换复用、配置/凭证保留、失败回滚和相关工程门禁均已通过；M3/M4 被外部门禁阻塞。
-> 最后更新：2026-08-12。
+> 最后更新：2026-08-13。
 > 架构决策：[`0007-managed-claude-runtime.md`](../decisions/0007-managed-claude-runtime.md)。
 
 ## 当前用户能做什么
@@ -10,10 +10,12 @@
 - 首次启动时自动打开“组件管理”。
 - 查看当前 Claude Runtime 来源、已安装版本、限定版本和可用版本。
 - 从 npm 官方 registry 安装固定的 managed Runtime `2.1.211`，安装过程显示进度。
+- 检查本机安装完整性、修复损坏文件和卸载受管版本；修复失败保留上一健康版本。
 - 在 Agent 设置中选择“Studio 管理版本”，探测通过后启用；没有 API Key 时拒绝启用。
 - 使用已配置的国内兼容服务地址和模型，通过 managed Runtime 执行真实 Agent/MCP 任务。
 - App 进程退出、整个 `.app` 被替换并重新启动后，直接复用 `userData` 中已校验的
   Runtime、设置和凭证。
+- DMG 与 `.app` 不携带 Claude 可执行文件；首次需要时由用户从组件页按需安装。
 
 Runtime 位于 `.app` 外的 `userData`；真实 packaged smoke 已执行“安装、退出、删除并替换
 `.app`、重新打开”，确认不会重装或改写安装记录，普通设置和本地凭证也保留。当前仍不能在

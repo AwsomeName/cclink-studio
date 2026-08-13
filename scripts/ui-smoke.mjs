@@ -335,6 +335,8 @@ async function main() {
     const candidateRow = page.locator('.agent-role-row:not(.applied)').first()
     await candidateRow.click()
     await page.locator('.agent-role-detail').waitFor({ state: 'visible', timeout: 10_000 })
+    const roleConfigTabs = page.locator('.tab').filter({ hasText: '角色配置' })
+    assert((await roleConfigTabs.count()) === 1, 'expected one global role configuration tab')
     assert(
       await page.getByRole('button', { name: '应用到当前会话' }).isEnabled(),
       'role apply action is not available',
@@ -347,7 +349,43 @@ async function main() {
       await page.getByRole('button', { name: '设为新会话默认' }).isVisible(),
       'new-conversation default action missing',
     )
-    return 'seven roles, current receipt card, read-only detail, and explicit apply actions'
+    const challengerRow = roleRows.filter({ hasText: '反方挑战者' })
+    await challengerRow.click()
+    await page.locator('[data-role-soul]').waitFor({ state: 'visible', timeout: 10_000 })
+    assert(
+      await page.getByRole('heading', { name: '人格与原则 · SOUL.md' }).isVisible(),
+      'role SOUL preview missing',
+    )
+    assert(
+      await page.getByRole('heading', { name: '建议 Skills' }).isVisible(),
+      'recommended Skills section missing',
+    )
+    const mountSkillButton = page.getByRole('button', { name: '挂载到当前会话' })
+    await mountSkillButton.click()
+    await page.locator('.agent-skill-chip', { hasText: '方案拷问' }).waitFor({
+      state: 'visible',
+      timeout: 10_000,
+    })
+    assert(
+      await page.getByRole('button', { name: '已挂载' }).isDisabled(),
+      'recommended Skill did not become an explicit mounted Skill',
+    )
+    const nextViewedRow = roleRows.last()
+    const nextViewedLabel = await nextViewedRow.locator('strong').innerText()
+    await nextViewedRow.click()
+    assert(
+      (await roleConfigTabs.count()) === 1,
+      'switching roles created another configuration tab',
+    )
+    assert(
+      (await page.locator('.agent-role-row.opened strong').innerText()) === nextViewedLabel,
+      'singleton role configuration tab did not switch its viewed role',
+    )
+    assert(
+      (await page.locator('.agent-role-row.applied strong').innerText()) === appliedLabel,
+      'switching the viewed role changed the conversation configuration',
+    )
+    return 'one switchable configuration tab, SOUL preview, and explicit Skill mounting'
   })
 
   await runCheck('web resources accepts a non-predefined website', async () => {

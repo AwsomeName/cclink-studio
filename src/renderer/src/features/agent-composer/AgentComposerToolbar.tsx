@@ -33,6 +33,7 @@ import {
   getRuntimeLabel,
   PERMISSION_MODE_OPTIONS,
 } from './composer-view-model'
+import { AgentRoleIcon } from '../agent-roles/agent-role-presentation'
 
 interface AgentComposerToolbarProps {
   roleRef?: AgentRoleRef
@@ -213,7 +214,11 @@ export function AgentComposerToolbar({
               title={`当前角色: ${selectedRole?.label ?? roleRef.roleId}`}
               disabled={loading || roles.length === 0}
             >
-              <IconRobot size={13} />
+              {selectedRole ? (
+                <AgentRoleIcon icon={selectedRole.icon} size={14} />
+              ) : (
+                <IconRobot size={13} />
+              )}
               <span>{selectedRole?.label ?? '角色不可用'}</span>
               <IconChevronDown size={12} />
             </button>
@@ -236,8 +241,8 @@ export function AgentComposerToolbar({
                       if (!selected) onRoleChange(role)
                     }}
                   >
-                    <span className="agent-profile-avatar" aria-hidden="true">
-                      {role.label.slice(0, 1)}
+                    <span className="agent-profile-avatar">
+                      <AgentRoleIcon icon={role.icon} size={16} />
                     </span>
                     <span>
                       <strong>{role.label}</strong>

@@ -160,10 +160,10 @@ export async function prepareWorkspaceRuntimeTransition(
   const currentRef = useWorkspaceStore.getState().activeWorkspaceRef
   const outgoingOwnership = collectWorkspaceRuntimeResourceOwnership(currentKey)
 
-  if (options.persistCurrent !== false && key !== currentKey && currentRef.kind !== 'remote') {
+  if (options.persistCurrent !== false && key !== currentKey) {
     // 单个恢复快照写入失败不能让用户失去打开其他项目的能力。失败会由
     // persistRuntimeSections 写入框架日志，当前内存态仍保留并可继续重试。
-    await persistRuntimeSections(currentKey)
+    await persistRuntimeSections(currentKey, currentRef)
   }
 
   const snapshot = await window.cclinkStudio.workspaceState.get(key, getWorkspaceStateOwnerKey())
@@ -188,13 +188,13 @@ export async function applyWorkspaceRuntimeTransition(
   useWorkspaceStore.getState().commitActiveWorkspace(transition.ref)
 
   if (options.hydrate !== false) {
-    hydrateRuntimeSections(transition.snapshot)
+    hydrateRuntimeSections(transition.snapshot, transition.ref)
     if (terminalSessions) applyTerminalRuntimeStatuses(terminalSessions, transition.key)
     void reconcileAgentRuntimeStatuses(transition.key)
   }
 
   if (options.flush !== false) {
-    void persistRuntimeSections(transition.key)
+    void persistRuntimeSections(transition.key, transition.ref)
   }
   return true
 }

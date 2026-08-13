@@ -4,6 +4,9 @@
 - 日期：2026-07-22
 - 负责人：CCLink Studio Maintainers
 
+> 2026-08-13 更新：本 ADR 中随 `.app` 分发 Claude Code 可执行文件的决定已由 ADR 0010
+> 取代。运行时选择、探测、认证、权限、会话兼容和失败隔离规则继续有效。
+
 > 2026-07-28 更新：本 ADR 的 Runtime 来源、打包、生命周期和认证边界继续有效；其中关于 Studio 凭证使用 Electron `safeStorage` 的决定已由 ADR 0003 取代并完成代码迁移。发布验收状态见 `docs/features/local-credentials-development-plan.md`。
 
 ## 结论

@@ -9,6 +9,7 @@ export function UpdatePanel(): React.ReactElement | null {
   const close = useUpdateStore((state) => state.closePanel)
   const check = useUpdateStore((state) => state.check)
   const startDownload = useUpdateStore((state) => state.startDownload)
+  const startDownloadInBackground = useUpdateStore((state) => state.startDownloadInBackground)
   const cancelDownload = useUpdateStore((state) => state.cancelDownload)
   const defer = useUpdateStore((state) => state.defer)
   const ignoreVersion = useUpdateStore((state) => state.ignoreVersion)
@@ -152,8 +153,13 @@ export function UpdatePanel(): React.ReactElement | null {
               <button type="button" onClick={() => void defer()}>
                 稍后提醒
               </button>
-              <button type="button" className="primary" onClick={() => void startDownload()}>
-                下载更新
+              <button
+                type="button"
+                className="primary"
+                title="关闭更新面板并在后台继续下载，可从状态栏查看进度"
+                onClick={() => void startDownloadInBackground()}
+              >
+                后台下载
               </button>
             </>
           )}

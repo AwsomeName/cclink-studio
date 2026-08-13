@@ -4,9 +4,11 @@ import { DEFAULT_AGENT_ROLE_REF, agentRoleRefsEqual } from '@shared/agent-role'
 import { useAgentStore } from '../../stores/agent-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import { useToastStore } from '../../components/common/Toast'
+import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
 import { useAgentRoles } from '../agent-profiles/use-agent-profiles'
+import { useAgentSkills } from '../agent-skills/use-agent-skills'
 import { applyAgentRoleToConversation, getApplyAgentRoleError } from './agent-role-actions'
-import { getAgentRoleGlyph } from './agent-role-presentation'
+import { AgentRoleIcon } from './agent-role-presentation'
 
 export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
   const { roles, error, reload } = useAgentRoles()
@@ -14,7 +16,9 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
   const conversation = useAgentStore((state) => state.conversations[activeConversationId])
   const defaultRoleRef = useSettingsStore((state) => state.settings.defaultAgentRoleRef)
   const updateSettings = useSettingsStore((state) => state.updateSettings)
+  const addMountedSkill = useAgentStore((state) => state.addMountedSkill)
   const showToast = useToastStore((state) => state.show)
+  const { skills, error: skillsError, reload: reloadSkills } = useAgentSkills()
   const [saving, setSaving] = useState<'conversation' | 'default' | null>(null)
   const role = useMemo(
     () =>
@@ -66,6 +70,7 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
   const roleRef = { roleId: role.roleId, version: role.version }
   const applied = agentRoleRefsEqual(roleRef, conversation?.configuration.roleRef)
   const isDefault = agentRoleRefsEqual(roleRef, defaultRoleRef)
+  const mountedSkillIds = new Set(conversation?.mountedSkills.map((skill) => skill.id) ?? [])
 
   const applyToConversation = async (): Promise<void> => {
     if (!conversation || applied) return
@@ -91,7 +96,9 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
     <div className="agent-role-detail">
       <header className="agent-role-detail-header">
         <div className="agent-role-detail-title">
-          <span className="agent-role-detail-icon">{getAgentRoleGlyph(role.icon)}</span>
+          <span className="agent-role-detail-icon">
+            <AgentRoleIcon icon={role.icon} size={27} />
+          </span>
           <div>
             <div className="agent-role-detail-eyebrow">内置角色 · v{role.version}</div>
             <h1>{role.label}</h1>
@@ -124,6 +131,116 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
       </div>
 
       <div className="agent-role-detail-grid">
+        <section className="agent-role-detail-wide agent-role-overview-section">
+          <h2>角色概览</h2>
+          <div className="agent-role-overview-columns">
+            <div>
+              <h3>目标</h3>
+              <ul>
+                {role.goals.map((goal) => (
+                  <li key={goal}>{goal}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3>适合</h3>
+              {role.suitableFor.length > 0 ? (
+                <ul>
+                  {role.suitableFor.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>适用于符合该角色职责的一般任务。</p>
+              )}
+            </div>
+            <div>
+              <h3>不适合</h3>
+              {role.unsuitableFor.length > 0 ? (
+                <ul>
+                  {role.unsuitableFor.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>没有额外限制；仍需遵守角色边界与权限规则。</p>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {role.soul && (
+          <section className="agent-role-detail-wide agent-role-soul-section" data-role-soul>
+            <div className="agent-role-section-heading">
+              <div>
+                <h2>人格与原则 · SOUL.md</h2>
+                <small>内置只读内容 · 不声明工具或权限</small>
+              </div>
+              <code title={role.soul.contentHash}>{role.soul.contentHash.slice(0, 12)}</code>
+            </div>
+            <ConversationMarkdown source={role.soul.markdown} />
+          </section>
+        )}
+
+        {role.recommendedSkillRefs.length > 0 && (
+          <section className="agent-role-detail-wide agent-role-skills-section">
+            <div className="agent-role-section-heading">
+              <div>
+                <h2>建议 Skills</h2>
+                <small>只在你明确挂载后进入当前会话</small>
+              </div>
+              {skillsError && (
+                <button type="button" onClick={reloadSkills}>
+                  重新加载
+                </button>
+              )}
+            </div>
+            <div className="agent-role-skill-list">
+              {role.recommendedSkillRefs.map((skillRef) => {
+                const skill = skills.find(
+                  (candidate) =>
+                    candidate.skillId === skillRef.skillId &&
+                    candidate.version === skillRef.version,
+                )
+                const mounted = mountedSkillIds.has(skillRef.skillId)
+                return (
+                  <article key={`${skillRef.skillId}@${skillRef.version}`}>
+                    <div>
+                      <strong>{skill?.label ?? skillRef.skillId}</strong>
+                      <small>
+                        {skill
+                          ? `${skill.name} · v${skill.version} · ${skill.source}`
+                          : `${skillRef.skillId}@${skillRef.version} · 不可用`}
+                      </small>
+                      <p>{skill?.description ?? '当前安装中没有这个 Skill。'}</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!conversation || !skill?.available || mounted}
+                      onClick={() => {
+                        if (!conversation || !skill?.available) return
+                        addMountedSkill(
+                          {
+                            id: skill.skillId,
+                            name: skill.name,
+                            label: skill.label,
+                            description: skill.description,
+                            source: skill.source,
+                          },
+                          conversation.id,
+                        )
+                        showToast(`已将「${skill.label}」挂载到当前会话`, 'success')
+                      }}
+                    >
+                      {mounted ? '已挂载' : skill?.available ? '挂载到当前会话' : '不可用'}
+                    </button>
+                  </article>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
         <section>
           <h2>行为规则</h2>
           <ol>
@@ -137,6 +254,13 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
           <p>
             {role.disclaimer ?? '角色只影响分析视角与表达方式，不扩大工具、权限或数据访问范围。'}
           </p>
+          {role.boundaries.length > 0 && (
+            <ul>
+              {role.boundaries.map((boundary) => (
+                <li key={boundary}>{boundary}</li>
+              ))}
+            </ul>
+          )}
           <dl>
             <div>
               <dt>配置标识</dt>
@@ -148,8 +272,26 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
               <dt>当前会话版本</dt>
               <dd>{conversation ? `#${conversation.configuration.revision}` : '—'}</dd>
             </div>
+            <div>
+              <dt>内容指纹</dt>
+              <dd title={role.contentHash}>{role.contentHash.slice(0, 12)}</dd>
+            </div>
           </dl>
         </section>
+
+        {role.examples.length > 0 && (
+          <section className="agent-role-detail-wide agent-role-examples-section">
+            <h2>输入 / 输出关注点示例</h2>
+            <div className="agent-role-example-list">
+              {role.examples.map((example) => (
+                <article key={example.input}>
+                  <strong>{example.input}</strong>
+                  <p>{example.focus}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   )

@@ -34,10 +34,22 @@ function getTerminalCwd(workspaceRef: WorkspaceRef): string | undefined {
       return workspaceRef.path
     case 'global':
       return undefined
+    case 'remote':
+      return workspaceRef.path
   }
 }
 
 function getTerminalRuntime(workspaceRef: WorkspaceRef): TerminalTabRef['runtime'] {
+  if (workspaceRef.kind === 'remote') {
+    return {
+      location: 'remote',
+      transport: workspaceRef.transport,
+      backend: 'remote-shell',
+      workspaceRef,
+      cwd: workspaceRef.path,
+      endpointId: workspaceRef.endpointId,
+    }
+  }
   return {
     location: 'local',
     transport: 'local',

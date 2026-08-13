@@ -11,6 +11,7 @@ import { IconClock } from '../../components/common/Icons'
 import { scheduledTaskRunKey, useScheduledTaskStore } from './scheduled-task-store'
 import { useEditorStore } from '../../stores/editor-store'
 import { describeSchedule, formatNextRun } from './scheduled-task-view-model'
+import { normalizeWorkspaceRelativePath } from './scheduled-task-paths'
 import './scheduled-tasks.css'
 
 interface TaskForm {
@@ -136,9 +137,13 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
         title: form.title,
         instruction: form.instruction,
         schedule: scheduleFromForm(form),
-        resources: resourcesFromForm(form),
+        resources: resourcesFromForm(form, workspacePath),
         outputPolicy: {
-          directory: form.outputDirectory,
+          directory: normalizeWorkspaceRelativePath(
+            form.outputDirectory,
+            workspacePath,
+            '输出目录',
+          ),
           fileNameTemplate: form.fileNameTemplate,
           mode: 'create-only',
         },
@@ -376,7 +381,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
 
         <TaskSection title="绑定资源">
           <label>
-            <span>工作空间内相对路径（每行一个，可留空）</span>
+            <span>工作空间内路径（支持相对路径或绝对路径，每行一个，可留空）</span>
             <textarea
               value={form.resourcePaths}
               rows={4}
@@ -557,16 +562,21 @@ function scheduleFromForm(form: TaskForm): ScheduledTaskSchedule {
   return { kind: form.scheduleKind, time: form.time, timezone: form.timezone }
 }
 
-function resourcesFromForm(form: TaskForm): ScheduledTaskResourceRef[] {
+function resourcesFromForm(form: TaskForm, workspacePath: string): ScheduledTaskResourceRef[] {
   const paths = form.resourcePaths
     .split(/\r?\n/)
     .map((path) => path.trim())
     .filter(Boolean)
+    .map((path) => ({
+      isDirectory: path.endsWith('/') || path.endsWith('\\'),
+      path: normalizeWorkspaceRelativePath(path, workspacePath, '绑定资源'),
+    }))
+    .filter(({ path }) => path !== '.')
   return [
     { kind: 'workspace' },
     ...paths.map(
-      (path): ScheduledTaskResourceRef => ({
-        kind: path.endsWith('/') ? 'directory' : 'file',
+      ({ path, isDirectory }): ScheduledTaskResourceRef => ({
+        kind: isDirectory ? 'directory' : 'file',
         path,
       }),
     ),

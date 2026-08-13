@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { gzipSync } from 'node:zlib'
 import { pack } from 'tar-stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { RuntimeComponentInstallError } from './runtime-component-manager'
 import { RuntimeResourceManager } from './runtime-resource-manager'
 import { getRuntimeResourceCatalogEntry } from './runtime-resource-catalog'
 
@@ -135,6 +136,55 @@ describe('RuntimeResourceManager', () => {
 
     await expect(manager.resolve('scrcpy-server')).resolves.toBeNull()
     expect(manager.getStatus('scrcpy-server').installedVersion).toBeNull()
+  })
+
+  it('checks, repairs, and uninstalls a managed resource', async () => {
+    const root = await temporaryRoot()
+    const { manager, downloadDirect } = createFixtureManager(root)
+    await manager.initialize()
+    expect((await manager.install('scrcpy-server')).success).toBe(true)
+    expect(await manager.check('scrcpy-server')).toMatchObject({
+      success: true,
+      status: { health: 'healthy', updateAvailable: false },
+    })
+
+    const resolved = await manager.resolve('scrcpy-server')
+    await writeFile(resolved!.files['scrcpy-server.jar'], 'damaged')
+    expect(await manager.check('scrcpy-server')).toMatchObject({
+      success: false,
+      status: { health: 'damaged', phase: 'failed', installedVersion: null },
+    })
+
+    expect(await manager.repair('scrcpy-server')).toMatchObject({
+      success: true,
+      status: { health: 'healthy', installedVersion: '2.3.1' },
+    })
+    expect(downloadDirect).toHaveBeenCalledTimes(2)
+
+    expect(await manager.uninstall('scrcpy-server')).toMatchObject({
+      success: true,
+      status: { health: 'not-installed', installedVersion: null, phase: 'idle' },
+    })
+    await expect(manager.resolve('scrcpy-server')).resolves.toBeNull()
+  })
+
+  it('keeps the verified resource when a repair download fails', async () => {
+    const root = await temporaryRoot()
+    const { manager, downloadDirect } = createFixtureManager(root)
+    await manager.initialize()
+    expect((await manager.install('scrcpy-server')).success).toBe(true)
+    downloadDirect.mockRejectedValueOnce(
+      new RuntimeComponentInstallError('PACKAGE_INTEGRITY_FAILED', 'replacement rejected'),
+    )
+
+    const repaired = await manager.repair('scrcpy-server')
+
+    expect(repaired).toMatchObject({
+      success: false,
+      status: { health: 'healthy', installedVersion: '2.3.1' },
+      error: expect.stringContaining('已保留原版本'),
+    })
+    await expect(manager.resolve('scrcpy-server')).resolves.toMatchObject({ version: '2.3.1' })
   })
 
   const realSmoke = process.env.CCLINK_RUNTIME_RESOURCES_REAL_SMOKE === '1' ? it : it.skip

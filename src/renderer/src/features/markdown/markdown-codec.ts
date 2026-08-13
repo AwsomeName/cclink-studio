@@ -519,7 +519,7 @@ function normalizeMathExpressionContent(content: string, display: boolean): stri
 const MATH_MARKDOWN_PUNCTUATION = new Set([...`!"#%&'()*+,-./:;<=>?@[]^_\`{|}~`])
 
 export function prepareMarkdownEditorInput(source: string): string {
-  const normalized = normalizeMarkdownSource(source)
+  const normalized = expandSameLineListHeadings(normalizeMarkdownSource(source))
   const masked = maskInlineCode(maskFencedBlocks(normalized, scanMarkdownBlocks(normalized)))
   const expressions = scanMathExpressions(masked)
   if (expressions.length === 0) return normalized
@@ -541,6 +541,35 @@ export function prepareMarkdownEditorInput(source: string): string {
   }
   prepared += normalized.slice(cursor)
   return prepared
+}
+
+function expandSameLineListHeadings(source: string): string {
+  const lines = source.split('\n')
+  let activeFence: { marker: string; length: number } | null = null
+
+  return lines
+    .map((line) => {
+      if (activeFence) {
+        const closing = new RegExp(
+          `^ {0,3}${escapeRegExp(activeFence.marker)}{${activeFence.length},}\\s*$`,
+        )
+        if (closing.test(line)) activeFence = null
+        return line
+      }
+
+      const fence = FENCE_START.exec(line)
+      if (fence) {
+        activeFence = { marker: fence[1][0], length: fence[1].length }
+        return line
+      }
+
+      const match = /^(\s*)([-+*]|\d+[.)])(\s+)(#{1,6})(\s+)(.*)$/.exec(line)
+      if (!match) return line
+      const [, indent, marker, separator, heading, headingSeparator, content] = match
+      const continuationIndent = indent + ' '.repeat(marker.length + separator.length)
+      return `${indent}${marker}\n${continuationIndent}${heading}${headingSeparator}${content}`
+    })
+    .join('\n')
 }
 
 export function normalizeMarkdownEditorOutput(source: string, referenceSource?: string): string {

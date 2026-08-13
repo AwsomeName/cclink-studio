@@ -144,13 +144,12 @@ cclink-studio/
 
 ## Runtime 组件与能力插件计划
 
-Runtime 组件独立更新和能力插件尚未实现。产品边界以
+固定版本 Runtime 的按需安装和 App 替换复用已经实现；真实双版本更新与能力插件尚未实现。产品边界以
 `docs/features/runtime-components-and-capability-plugins.md` 为准，开发顺序、代码落点、
 工作量和失败矩阵以
 `docs/features/runtime-components-and-capability-plugins-development-plan.md` 为准。
 
-开始编码前必须先完成新的 ADR，处理 ADR 0002 中“Claude Runtime 只随 Studio 更新”的现行
-决定。第一版开发约束固定为：
+ADR 0007/0010 已处理 Claude Runtime 独立安装和瘦包边界。后续能力插件仍遵守：
 
 - npm 只提供维护者允许目录中的精确 tarball；客户端不运行 npm/pnpm、不解析 `latest`、
   不运行 lifecycle script。

@@ -8,6 +8,10 @@ const projectRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const packageJson = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8'))
 const builderConfig = readFileSync(join(projectRoot, 'electron-builder.yml'), 'utf8')
 const localPackageScript = readFileSync(join(projectRoot, 'scripts', 'package.sh'), 'utf8')
+const releaseWorkflow = readFileSync(
+  join(projectRoot, '.github', 'workflows', 'release-oss.yml'),
+  'utf8',
+)
 
 const rendererBuildOnlyDependencies = [
   '@tiptap/core',
@@ -56,6 +60,21 @@ test('macOS packaging produces DMG only and forbids ZIP targets', () => {
   assert.doesNotMatch(macBlock, /^    - zip$/m)
   assert.match(localPackageScript, /--config\.mac\.target=dmg/)
   assert.doesNotMatch(localPackageScript, /for TARGET in dmg zip/)
+})
+
+test('desktop packages keep Claude Runtime out of the app bundle', () => {
+  assert.doesNotMatch(builderConfig, /from: \.agent-runtime-staging/)
+  assert.doesNotMatch(builderConfig, /to: agent-runtime/)
+  assert.doesNotMatch(localPackageScript, /stage-claude-runtime\.mjs/)
+  assert.match(localPackageScript, /瘦安装包不得携带 Claude Code Runtime/)
+  assert.doesNotMatch(releaseWorkflow, /stage-claude-runtime\.mjs/)
+  assert.match(releaseWorkflow, /test ! -e "\$app_path\/Contents\/Resources\/agent-runtime"/)
+})
+
+test('local packaging rejects a malformed app archive before reporting success', () => {
+  assert.match(localPackageScript, /app\.asar\/package\.json/)
+  assert.match(localPackageScript, /JSON\.parse/)
+  assert.match(localPackageScript, /打包期间可能有文件被并发改写/)
 })
 
 test('renderer-bundled libraries are build-only dependencies', () => {

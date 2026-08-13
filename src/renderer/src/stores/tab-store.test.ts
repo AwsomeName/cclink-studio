@@ -159,22 +159,73 @@ describe('useTabStore', () => {
       expect(settingsTabs[0].settingsSection).toBe('remote-connections')
     })
 
-    it('同一角色定义只打开一个全局配置 Tab', () => {
-      const draft = {
+    it('不同角色复用同一个全局配置 Tab，并只切换查看目标', () => {
+      const firstDraft = {
         type: 'agent-role' as const,
-        title: '事实核查员',
-        icon: '✓',
+        title: '角色配置',
+        icon: '◇',
         agentRole: { roleId: 'fact-checker', version: 1 },
       }
 
-      useTabStore.getState().openTab(draft)
+      useTabStore.getState().openTab(firstDraft)
       const firstId = useTabStore.getState().activeTabId
-      useTabStore.getState().openTab(draft)
+      useTabStore.getState().openTab({
+        type: 'agent-role',
+        title: '角色配置',
+        icon: '◇',
+        agentRole: { roleId: 'public-governance', version: 1 },
+        forceNew: true,
+      })
 
       const roleTabs = useTabStore.getState().tabs.filter((tab) => tab.type === 'agent-role')
       expect(roleTabs).toHaveLength(1)
+      expect(roleTabs[0].id).toBe(firstId)
+      expect(roleTabs[0].title).toBe('角色配置')
+      expect(roleTabs[0].agentRole).toEqual({ roleId: 'public-governance', version: 1 })
       expect(roleTabs[0].workspaceRef).toBeUndefined()
       expect(useTabStore.getState().activeTabId).toBe(firstId)
+    })
+
+    it('切换角色时收敛运行中遗留的重复配置 Tab', () => {
+      useTabStore.setState({
+        tabs: [
+          { id: 'browser', type: 'browser', title: '浏览器', icon: '🌐' },
+          {
+            id: 'role-a',
+            type: 'agent-role',
+            title: '事实核查员',
+            icon: '✓',
+            agentRole: { roleId: 'fact-checker', version: 1 },
+          },
+          {
+            id: 'role-b',
+            type: 'agent-role',
+            title: '反方挑战者',
+            icon: '◇',
+            agentRole: { roleId: 'critical-challenger', version: 1 },
+          },
+        ],
+        activeTabId: 'role-b',
+      })
+
+      useTabStore.getState().openTab({
+        type: 'agent-role',
+        title: '角色配置',
+        icon: '◇',
+        agentRole: { roleId: 'product-owner', version: 1 },
+      })
+
+      const state = useTabStore.getState()
+      const roleTabs = state.tabs.filter((tab) => tab.type === 'agent-role')
+      expect(roleTabs).toHaveLength(1)
+      expect(roleTabs[0]).toEqual(
+        expect.objectContaining({
+          id: 'role-b',
+          title: '角色配置',
+          agentRole: { roleId: 'product-owner', version: 1 },
+        }),
+      )
+      expect(state.activeTabId).toBe('role-b')
     })
 
     it('forceNew 绕过 filePath 去重', () => {

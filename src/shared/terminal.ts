@@ -8,11 +8,11 @@ export interface TerminalExecutionErrorInfo {
   context?: Record<string, unknown>
 }
 
-export type TerminalRuntimeLocation = 'local'
+export type TerminalRuntimeLocation = 'local' | 'remote'
 
-export type TerminalTransport = 'local'
+export type TerminalTransport = 'local' | 'cclink'
 
-export type TerminalBackend = 'local-shell' | 'codex' | 'custom'
+export type TerminalBackend = 'local-shell' | 'remote-shell' | 'codex' | 'custom'
 
 export type TerminalStatus = 'idle' | 'starting' | 'running' | 'blocked' | 'exited' | 'error'
 

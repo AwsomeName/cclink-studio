@@ -32,6 +32,7 @@ export class CclinkRequestError extends Error {
 
 export class CclinkRequestRouter {
   private readonly pending = new Map<string, PendingRequest>()
+  private readonly protocolListeners = new Set<(event: CclinkTransportEvent) => void>()
   private transport: CclinkTransport | null = null
   private unsubscribe: (() => void) | null = null
 
@@ -56,6 +57,23 @@ export class CclinkRequestRouter {
         ),
       )
     }
+  }
+
+  onProtocolEvent(listener: (event: CclinkTransportEvent) => void): () => void {
+    this.protocolListeners.add(listener)
+    return () => this.protocolListeners.delete(listener)
+  }
+
+  async send(serverId: string, message: CclinkProtocolMessage): Promise<void> {
+    if (!this.transport) {
+      throw requestError(
+        'transport',
+        REMOTE_ERROR_CODE.TRANSPORT_UNAVAILABLE,
+        'CCLink 实时连接尚未建立',
+        true,
+      )
+    }
+    await this.transport.sendMessage(serverId, message)
   }
 
   request(
@@ -111,21 +129,24 @@ export class CclinkRequestRouter {
 
   private handleMessage(event: CclinkTransportEvent): void {
     const requestId = event.message.request_id
+    if (!isCclinkProtocolCompatible(event.message)) {
+      if (requestId) {
+        this.reject(
+          requestId,
+          requestError(
+            'remote-agent',
+            REMOTE_ERROR_CODE.PROTOCOL_INCOMPATIBLE,
+            '远程 Agent 协议版本不兼容',
+            false,
+          ),
+        )
+      }
+      return
+    }
+    for (const listener of this.protocolListeners) listener(event)
     if (!requestId) return
     const pending = this.pending.get(requestId)
     if (!pending || pending.serverId !== event.serverId) return
-    if (!isCclinkProtocolCompatible(event.message)) {
-      this.reject(
-        requestId,
-        requestError(
-          'remote-agent',
-          REMOTE_ERROR_CODE.PROTOCOL_INCOMPATIBLE,
-          '远程 Agent 协议版本不兼容',
-          false,
-        ),
-      )
-      return
-    }
     if (event.message.cc_type === 'error') {
       const response = event.message as { message?: string; code?: string; retryable?: boolean }
       this.reject(

@@ -755,13 +755,26 @@ describe('agent conversation view model', () => {
   })
 
   it('builds / skill candidates by query text', () => {
-    const candidates = buildSkillCandidates('grill')
+    const candidates = buildSkillCandidates(
+      [
+        {
+          skillId: 'grill-me',
+          version: 1,
+          name: 'grill-me',
+          label: '方案拷问',
+          description: '检查假设和失败路径',
+          source: 'builtin',
+          available: true,
+        },
+      ],
+      'grill',
+    )
 
     expect(candidates).toHaveLength(1)
     expect(candidates[0]).toMatchObject({
       id: 'grill-me',
       name: 'grill-me',
-      label: 'grill-me',
+      label: '方案拷问',
     })
   })
 

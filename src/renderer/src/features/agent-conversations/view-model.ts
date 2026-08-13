@@ -6,6 +6,7 @@ import {
   workspaceRefSourceLabel,
 } from '../../../../shared/workspace-ref'
 import type { AgentConversationState } from '../../stores/agent-store'
+import type { AgentSkillSummary } from '@shared/agent-skill'
 import type {
   AgentMountedResource,
   AgentMountedResourceKind,
@@ -108,16 +109,6 @@ export type AgentResourceCandidate = AgentMountedResource & {
 export type AgentSkillCandidate = AgentMountedSkill & {
   searchText: string
 }
-
-const DEFAULT_AGENT_SKILLS: AgentMountedSkill[] = [
-  {
-    id: 'grill-me',
-    name: 'grill-me',
-    label: 'grill-me',
-    description: '用 /grilling 风格拷问方案、假设、边界、失败路径和下一步。',
-    source: 'user',
-  },
-]
 
 const GROUP_LABELS: Record<SessionGroupKey, string> = {
   active: '当前',
@@ -712,15 +703,24 @@ export function buildResourceCandidates({
   return deduped.filter((candidate) => candidate.searchText.includes(q)).slice(0, 8)
 }
 
-export function buildSkillCandidates(query = ''): AgentSkillCandidate[] {
+export function buildSkillCandidates(
+  skills: AgentSkillSummary[],
+  query = '',
+): AgentSkillCandidate[] {
   const q = query.trim().toLowerCase()
-  return DEFAULT_AGENT_SKILLS.map((skill) => ({
-    ...skill,
-    searchText: [skill.name, skill.label, skill.description]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase(),
-  }))
+  return skills
+    .filter((skill) => skill.available)
+    .map((skill) => ({
+      id: skill.skillId,
+      name: skill.name,
+      label: skill.label,
+      description: skill.description,
+      source: skill.source,
+      searchText: [skill.name, skill.label, skill.description]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase(),
+    }))
     .filter((skill) => !q || skill.searchText.includes(q))
     .slice(0, 8)
 }

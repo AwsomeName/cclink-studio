@@ -5,6 +5,7 @@ import { ActivityBar } from './components/activity-bar/ActivityBar'
 import { Sidebar } from './components/sidebar/Sidebar'
 import { Workbench } from './components/workbench/Workbench'
 import { AgentPanel } from './components/agent-panel/AgentPanel'
+import { RemoteAgentPanel } from './features/cclink-remote/RemoteAgentPanel'
 import { StatusBar } from './components/status-bar/StatusBar'
 import { ResizeHandle } from './components/common/ResizeHandle'
 import { IconFolder, IconPanelLeft, IconPanelRight } from './components/common/Icons'
@@ -198,7 +199,11 @@ function MainLayout(): React.ReactElement {
                 <PanelErrorFallback error={e} retry={retry} title="Agent 面板" />
               )}
             >
-              <AgentPanel variant="center" />
+              {activeWorkspaceRef.kind === 'remote' ? (
+                <RemoteAgentPanel workspaceRef={activeWorkspaceRef} />
+              ) : (
+                <AgentPanel variant="center" />
+              )}
             </ErrorBoundary>
           </div>
         ) : (
@@ -239,7 +244,11 @@ function MainLayout(): React.ReactElement {
                 <PanelErrorFallback error={e} retry={retry} title="Agent 面板" />
               )}
             >
-              <AgentPanel variant="side" />
+              {activeWorkspaceRef.kind === 'remote' ? (
+                <RemoteAgentPanel workspaceRef={activeWorkspaceRef} />
+              ) : (
+                <AgentPanel variant="side" />
+              )}
             </ErrorBoundary>
           )}
         </div>

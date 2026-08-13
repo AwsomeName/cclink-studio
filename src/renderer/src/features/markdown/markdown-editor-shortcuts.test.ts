@@ -1,8 +1,12 @@
 import { Editor } from '@tiptap/core'
 import { Markdown } from '@tiptap/markdown'
+import TaskItem from '@tiptap/extension-task-item'
+import TaskList from '@tiptap/extension-task-list'
 import StarterKit from '@tiptap/starter-kit'
 import { describe, expect, it, vi } from 'vitest'
-import { handleMarkdownTabKey } from './markdown-editor-shortcuts'
+import { analyzeMarkdown, prepareMarkdownEditorInput } from './markdown-codec'
+import { applyMarkdownTaskInputShortcut, handleMarkdownTabKey } from './markdown-editor-shortcuts'
+import { MarkdownListItem } from './markdown-list-item'
 
 function createEditor(options?: {
   active?: string
@@ -153,5 +157,97 @@ describe('handleMarkdownTabKey', () => {
     expect(editor.commands.sinkListItem).toHaveBeenCalledWith('listItem')
     expect(handleMarkdownTabKey(editor, 'outdent')).toBe(true)
     expect(editor.commands.liftListItem).toHaveBeenCalledWith('listItem')
+  })
+
+  it.each([
+    ['[]', false],
+    ['[ ]', false],
+    ['[x]', true],
+    ['【】', false],
+    ['【x】', true],
+  ])('turns %s followed by Space into a task item', (marker, checked) => {
+    const editor = new Editor({
+      element: null,
+      extensions: [StarterKit, TaskList, TaskItem.configure({ nested: true })],
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: marker }] }],
+      },
+    })
+    editor.commands.setTextSelection(marker.length + 1)
+
+    expect(applyMarkdownTaskInputShortcut(editor)).toBe(true)
+    expect(editor.getJSON()).toMatchObject({
+      content: [
+        {
+          type: 'taskList',
+          content: [{ type: 'taskItem', attrs: { checked } }],
+        },
+      ],
+    })
+    editor.destroy()
+  })
+
+  it('does not turn brackets in ordinary text into a task item', () => {
+    const editor = createHeadlessMarkdownEditor('keep []')
+    editor.commands.setTextSelection(8)
+
+    expect(applyMarkdownTaskInputShortcut(editor)).toBe(false)
+    expect(editor.getMarkdown()).toBe('keep \\[\\]')
+    editor.destroy()
+  })
+
+  it('allows an ordered list to contain a heading as its first block', () => {
+    const editor = new Editor({
+      element: null,
+      extensions: [StarterKit.configure({ listItem: false }), Markdown, MarkdownListItem],
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'heading',
+            attrs: { level: 3 },
+            content: [{ type: 'text', text: '编号标题' }],
+          },
+        ],
+      },
+    })
+    editor.commands.setTextSelection(2)
+
+    expect(editor.commands.toggleOrderedList()).toBe(true)
+    expect(editor.getMarkdown()).toBe('1. ### 编号标题')
+    editor.destroy()
+  })
+
+  it('opens and preserves a same-line CommonMark list heading', () => {
+    const source = '1. ### 编号标题'
+    const editor = new Editor({
+      element: null,
+      extensions: [StarterKit.configure({ listItem: false }), Markdown, MarkdownListItem],
+      content: { type: 'doc', content: [{ type: 'paragraph' }] },
+    })
+
+    editor.commands.setContent(prepareMarkdownEditorInput(source), {
+      contentType: 'markdown',
+      emitUpdate: false,
+    })
+    const serialized = editor.getMarkdown()
+
+    expect(editor.getJSON()).toMatchObject({
+      content: [
+        {
+          type: 'orderedList',
+          content: [
+            {
+              type: 'listItem',
+              content: [{ type: 'heading', attrs: { level: 3 } }],
+            },
+          ],
+        },
+      ],
+    })
+    expect(serialized).toBe(source)
+    expect(analyzeMarkdown(source, serialized).safeToSave).toBe(true)
+    editor.destroy()
   })
 })

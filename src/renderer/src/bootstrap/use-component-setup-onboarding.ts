@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react'
 import { useSettingsStore } from '../stores/settings-store'
 import { useTabStore } from '../stores/tab-store'
 
-export const COMPONENT_SETUP_PAGE_VERSION = 1
+// v2：Claude Runtime 移出安装包，既有用户需要再次看到按需安装入口。
+export const COMPONENT_SETUP_PAGE_VERSION = 2
 
 export function shouldOpenComponentSetupPage(seenVersion: number): boolean {
   return seenVersion < COMPONENT_SETUP_PAGE_VERSION

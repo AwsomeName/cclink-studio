@@ -4,6 +4,7 @@ import { buildAgentConversationWorkspaceSnapshot, useAgentStore } from '../store
 import { useBrowserStore } from '../stores/browser-store'
 import { useEditorStore } from '../stores/editor-store'
 import { useTabStore } from '../stores/tab-store'
+import { useWorkspaceStore } from '../stores/workspace-store'
 import {
   beginWorkspaceStateRestore,
   endWorkspaceStateRestore,
@@ -17,15 +18,19 @@ import {
   scopeWorkspaceTabSnapshot,
   workspaceRefFromKey,
 } from './conversation-workspace'
-import { workspaceRefKey } from '@shared/workspace-ref'
+import { workspaceRefKey, type WorkspaceRef } from '@shared/workspace-ref'
 
 function isWorkspaceTab(tab: ReturnType<typeof useTabStore.getState>['tabs'][number]): boolean {
   return tab.type !== 'settings'
 }
 
-export function hydrateRuntimeSections(snapshot: WorkspaceStateSnapshot | null): void {
+export function hydrateRuntimeSections(
+  snapshot: WorkspaceStateSnapshot | null,
+  workspaceRefOverride?: WorkspaceRef,
+): void {
   const sections = snapshot?.sections ?? {}
-  const workspaceRef = workspaceRefFromKey(snapshot?.workspaceKey ?? snapshot?.workspacePath)
+  const workspaceRef =
+    workspaceRefOverride ?? workspaceRefFromKey(snapshot?.workspaceKey ?? snapshot?.workspacePath)
   const scopedAgentSnapshot = scopeWorkspaceAgentSnapshot(
     sections.agentConversations ?? {
       conversations: {},
@@ -73,9 +78,15 @@ export interface WorkspaceRuntimePersistenceResult {
 
 export async function persistRuntimeSections(
   workspaceKey?: string | null,
+  workspaceRefOverride?: WorkspaceRef,
 ): Promise<WorkspaceRuntimePersistenceResult> {
   const targetWorkspaceKey = workspaceKey === undefined ? getWorkspaceStateKey() : workspaceKey
-  const targetWorkspaceRef = workspaceRefFromKey(targetWorkspaceKey)
+  const activeWorkspaceRef = useWorkspaceStore.getState().activeWorkspaceRef
+  const targetWorkspaceRef =
+    workspaceRefOverride ??
+    (workspaceRefKey(activeWorkspaceRef) === targetWorkspaceKey
+      ? activeWorkspaceRef
+      : workspaceRefFromKey(targetWorkspaceKey))
   const tabState = useTabStore.getState()
   const workspaceTabs = tabState.tabs.filter(
     (tab) =>

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentRoleSummary } from '../../shared/agent-role'
+import type { AgentSkillSummary } from '../../shared/agent-skill'
 
 const mockIpcMain = vi.hoisted(() => ({
   handlers: new Map<string, (...args: any[]) => any>(),
@@ -57,6 +58,61 @@ describe('registerAgentIpc', () => {
     )
   })
 
+  it('accepts a bounded remote workspace ref but does not pass it to the local Agent', async () => {
+    const deps = createDeps()
+    registerAgentIpc(deps as never)
+
+    await expect(
+      mockIpcMain.handlers.get('agent:sendMessage')?.({ sender: 'trusted' }, 'conversation-1', {
+        message: '总结项目',
+        workspaceRef: {
+          kind: 'remote',
+          transport: 'cclink',
+          endpointId: 'agent-1',
+          workspaceId: 'workspace-1',
+          path: '/srv/project',
+          label: 'project',
+        },
+      }),
+    ).resolves.toEqual({
+      success: false,
+      error: '远程工作区不能交给本地 Agent IPC 执行；请从 CCLink 远程会话面板发送。',
+    })
+    expect(deps.agentBridge.sendMessage).not.toHaveBeenCalled()
+  })
+
+  it('does not compact a remote conversation through the local Agent', async () => {
+    const deps = createDeps()
+    registerAgentIpc(deps as never)
+
+    await expect(
+      mockIpcMain.handlers.get('agent:compactConversation')?.(
+        { sender: 'trusted' },
+        'conversation-1',
+        {
+          sessionId: 'session-1',
+          configuration: {
+            schemaVersion: 1,
+            roleRef: { roleId: 'default-assistant', version: 1 },
+            revision: 1,
+            updatedAt: 1,
+          },
+          workspaceRef: {
+            kind: 'remote',
+            transport: 'cclink',
+            endpointId: 'agent-1',
+            workspaceId: 'workspace-1',
+            path: '/srv/project',
+          },
+        },
+      ),
+    ).resolves.toEqual({
+      success: false,
+      error: '远程会话不属于本地 Agent IPC，不能使用本地 Agent 压缩。',
+    })
+    expect(deps.agentBridge.compactConversation).not.toHaveBeenCalled()
+  })
+
   it('preserves validated image attachments when forwarding to the Agent bridge', async () => {
     const deps = createDeps()
     registerAgentIpc(deps as never)
@@ -91,7 +147,14 @@ describe('registerAgentIpc', () => {
         label: '默认助手',
         description: '均衡处理一般任务',
         icon: 'assistant',
+        goals: ['完成用户任务'],
+        suitableFor: [],
+        unsuitableFor: [],
         instructions: ['均衡处理任务'],
+        boundaries: [],
+        examples: [],
+        contentHash: '0'.repeat(64),
+        recommendedSkillRefs: [],
       },
     ])
 
@@ -102,7 +165,14 @@ describe('registerAgentIpc', () => {
         label: '默认助手',
         description: '均衡处理一般任务',
         icon: 'assistant',
+        goals: ['完成用户任务'],
+        suitableFor: [],
+        unsuitableFor: [],
         instructions: ['均衡处理任务'],
+        boundaries: [],
+        examples: [],
+        contentHash: '0'.repeat(64),
+        recommendedSkillRefs: [],
       },
     ])
 
@@ -146,6 +216,32 @@ describe('registerAgentIpc', () => {
     )
   })
 
+  it('lists Skills from the Agent registry and falls back while the backend is unavailable', () => {
+    const deps = createDeps()
+    deps.agentBridge.listSkills.mockReturnValue([
+      {
+        skillId: 'grill-me',
+        version: 1,
+        name: 'grill-me',
+        label: '方案拷问',
+        description: '检查假设和失败路径',
+        source: 'builtin',
+        available: true,
+      },
+    ])
+    registerAgentIpc(deps as never)
+
+    expect(mockIpcMain.handlers.get('agent:listSkills')?.({ sender: 'trusted' })).toEqual([
+      expect.objectContaining({ skillId: 'grill-me', available: true }),
+    ])
+
+    mockIpcMain.handlers.clear()
+    registerAgentIpc({ ...deps, getAgentBridge: () => null } as never)
+    expect(mockIpcMain.handlers.get('agent:listSkills')?.({ sender: 'trusted' })).toEqual([
+      expect.objectContaining({ skillId: 'grill-me', source: 'builtin' }),
+    ])
+  })
+
   it('rejects credential-bearing MCP URLs before changing configuration', () => {
     const deps = createDeps()
     registerAgentIpc(deps as never)
@@ -168,7 +264,9 @@ describe('registerAgentIpc', () => {
 function createDeps() {
   const agentBridge = {
     sendMessage: vi.fn(async () => undefined),
+    compactConversation: vi.fn(async () => undefined),
     listRoles: vi.fn<() => AgentRoleSummary[]>(() => []),
+    listSkills: vi.fn<() => AgentSkillSummary[]>(() => []),
   }
   const mcpManager = {
     addServer: vi.fn(),

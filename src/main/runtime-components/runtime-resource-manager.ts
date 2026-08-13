@@ -41,6 +41,7 @@ interface RuntimeResourceState {
   progress: ManagedClaudeInstallProgress | null
   failure: ManagedClaudeInstallFailure | null
   installedVersion: string | null
+  health: RuntimeResourceStatus['health']
 }
 
 export interface ResolvedRuntimeResource {
@@ -62,7 +63,7 @@ export class RuntimeResourceManager {
   private readonly downloadNpm: typeof downloadPackage
   private readonly downloadDirect: typeof downloadDirectResource
   private readonly states = new Map<RuntimeResourceComponentId, RuntimeResourceState>()
-  private readonly installs = new Map<
+  private readonly operations = new Map<
     RuntimeResourceComponentId,
     Promise<RuntimeResourceOperationResult>
   >()
@@ -82,15 +83,7 @@ export class RuntimeResourceManager {
     await Promise.all(
       listRuntimeResourceCatalogEntries().map(async (entry) => {
         await this.recoverInterruptedReplacement(entry)
-        const state = this.state(entry.componentId)
-        try {
-          await this.verifyInstalledEntry(entry)
-          state.installedVersion = entry.version
-          state.phase = 'installed'
-        } catch {
-          state.installedVersion = null
-          state.phase = 'idle'
-        }
+        await this.refreshStatus(entry, false)
       }),
     )
   }
@@ -107,6 +100,8 @@ export class RuntimeResourceManager {
       displayName: entry.displayName,
       constrainedVersion: entry.version,
       availableVersion: entry.version,
+      updateAvailable: false,
+      health: state.health,
       installedVersion: state.installedVersion,
       phase: state.phase,
       activation: entry.activation,
@@ -116,17 +111,76 @@ export class RuntimeResourceManager {
   }
 
   install(componentId: RuntimeResourceComponentId): Promise<RuntimeResourceOperationResult> {
-    if (this.installs.has(componentId)) {
+    return this.startOperation(componentId, () =>
+      this.performInstall(getRuntimeResourceCatalogEntry(componentId), false),
+    )
+  }
+
+  check(componentId: RuntimeResourceComponentId): Promise<RuntimeResourceOperationResult> {
+    return this.startOperation(componentId, async () => {
+      const entry = getRuntimeResourceCatalogEntry(componentId)
+      await this.refreshStatus(entry, true)
+      const state = this.state(componentId)
+      return {
+        success: state.health !== 'damaged',
+        status: this.getStatus(componentId),
+        ...(state.health === 'damaged'
+          ? {
+              error: `${state.failure?.code ?? 'INSTALL_FAILED'}: ${state.failure?.message ?? '组件损坏'}`,
+            }
+          : {}),
+      }
+    })
+  }
+
+  repair(componentId: RuntimeResourceComponentId): Promise<RuntimeResourceOperationResult> {
+    return this.startOperation(componentId, () =>
+      this.performInstall(getRuntimeResourceCatalogEntry(componentId), true),
+    )
+  }
+
+  uninstall(componentId: RuntimeResourceComponentId): Promise<RuntimeResourceOperationResult> {
+    return this.startOperation(componentId, async () => {
+      const entry = getRuntimeResourceCatalogEntry(componentId)
+      const state = this.state(componentId)
+      state.phase = 'uninstalling'
+      state.failure = null
+      state.progress = null
+      try {
+        await rm(this.versionRoot(entry), { recursive: true, force: true })
+        await rm(this.backupRoot(entry), { recursive: true, force: true })
+        state.installedVersion = null
+        state.health = 'not-installed'
+        state.phase = 'idle'
+        return { success: true, status: this.getStatus(componentId) }
+      } catch (error) {
+        const failure = failureFrom(error)
+        state.phase = 'failed'
+        state.failure = failure
+        return {
+          success: false,
+          status: this.getStatus(componentId),
+          error: `${failure.code}: ${failure.message}`,
+        }
+      }
+    })
+  }
+
+  private startOperation(
+    componentId: RuntimeResourceComponentId,
+    operation: () => Promise<RuntimeResourceOperationResult>,
+  ): Promise<RuntimeResourceOperationResult> {
+    if (this.operations.has(componentId)) {
       return Promise.resolve({
         success: false,
         status: this.getStatus(componentId),
-        error: 'INSTALL_BUSY: 组件正在安装',
+        error: 'INSTALL_BUSY: 组件正在执行其他操作',
       })
     }
-    const promise = this.performInstall(getRuntimeResourceCatalogEntry(componentId)).finally(() => {
-      this.installs.delete(componentId)
+    const promise = operation().finally(() => {
+      this.operations.delete(componentId)
     })
-    this.installs.set(componentId, promise)
+    this.operations.set(componentId, promise)
     return promise
   }
 
@@ -145,21 +199,24 @@ export class RuntimeResourceManager {
     } catch {
       const state = this.state(componentId)
       state.installedVersion = null
-      state.phase = 'idle'
+      state.health = (await pathExists(this.versionRoot(entry))) ? 'damaged' : 'not-installed'
+      state.phase = state.health === 'damaged' ? 'failed' : 'idle'
       return null
     }
   }
 
   private async performInstall(
     entry: RuntimeResourceCatalogEntry,
+    force: boolean,
   ): Promise<RuntimeResourceOperationResult> {
     const state = this.state(entry.componentId)
     state.failure = null
     state.progress = null
     try {
       await this.recoverInterruptedReplacement(entry)
-      if (await this.resolve(entry.componentId)) {
+      if (!force && (await this.resolve(entry.componentId))) {
         state.installedVersion = entry.version
+        state.health = 'healthy'
         state.phase = 'installed'
         return { success: true, status: this.getStatus(entry.componentId) }
       }
@@ -206,11 +263,23 @@ export class RuntimeResourceManager {
       }
 
       state.installedVersion = entry.version
+      state.health = 'healthy'
       state.phase = 'installed'
       state.progress = null
       return { success: true, status: this.getStatus(entry.componentId) }
     } catch (error) {
       const failure = failureFrom(error)
+      if (force) {
+        await this.refreshStatus(entry, false)
+        if (state.health === 'healthy') {
+          state.failure = failure
+          return {
+            success: false,
+            status: this.getStatus(entry.componentId),
+            error: `${failure.code}: ${failure.message}；已保留原版本`,
+          }
+        }
+      }
       state.phase = 'failed'
       state.progress = null
       state.failure = failure
@@ -226,6 +295,32 @@ export class RuntimeResourceManager {
     const state = this.states.get(componentId)
     if (!state) throw new Error(`Runtime 资源状态不存在: ${componentId}`)
     return state
+  }
+
+  private async refreshStatus(
+    entry: RuntimeResourceCatalogEntry,
+    exposeCheckingPhase: boolean,
+  ): Promise<void> {
+    const state = this.state(entry.componentId)
+    if (exposeCheckingPhase) state.phase = 'checking'
+    state.progress = null
+    state.failure = null
+    try {
+      await this.verifyInstalledEntry(entry)
+      state.installedVersion = entry.version
+      state.health = 'healthy'
+      state.phase = 'installed'
+    } catch (error) {
+      state.installedVersion = null
+      if (await pathExists(this.versionRoot(entry))) {
+        state.health = 'damaged'
+        state.phase = 'failed'
+        state.failure = failureFrom(error)
+      } else {
+        state.health = 'not-installed'
+        state.phase = 'idle'
+      }
+    }
   }
 
   private componentRoot(entry: RuntimeResourceCatalogEntry): string {
@@ -286,7 +381,13 @@ export class RuntimeResourceManager {
 }
 
 function emptyState(): RuntimeResourceState {
-  return { phase: 'idle', progress: null, failure: null, installedVersion: null }
+  return {
+    phase: 'idle',
+    progress: null,
+    failure: null,
+    installedVersion: null,
+    health: 'not-installed',
+  }
 }
 
 async function retryDownload(operation: () => Promise<void>): Promise<void> {

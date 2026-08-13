@@ -728,6 +728,26 @@
   margin: 0.4em 0;
 }
 
+.tiptap-editor .tiptap ol ol {
+  list-style-type: lower-alpha;
+}
+
+.tiptap-editor .tiptap ol ol ol {
+  list-style-type: lower-roman;
+}
+
+.tiptap-editor .tiptap ol ol ol ol {
+  list-style-type: decimal;
+}
+
+.tiptap-editor .tiptap ol ol ol ol ol {
+  list-style-type: lower-alpha;
+}
+
+.tiptap-editor .tiptap ol ol ol ol ol ol {
+  list-style-type: lower-roman;
+}
+
 .tiptap-editor .tiptap li {
   margin: 0.15em 0;
 }

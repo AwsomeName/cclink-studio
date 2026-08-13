@@ -27,6 +27,8 @@ describe('SettingsPage secrets', () => {
     expect(markup).toContain('type="password"')
     expect(markup).toContain('value=""')
     expect(markup).toContain('测试连接')
+    expect(markup).toContain('Studio 管理版本')
+    expect(markup).not.toContain('内置固定版本')
   })
 
   it('renders separate Meshy and Jimeng credential inputs for image generation', () => {
@@ -59,8 +61,8 @@ describe('SettingsPage secrets', () => {
     expect(markup).toContain('仅 2.1.211')
     expect(markup).toContain('可用版本')
     expect(markup).toContain('操作')
-    expect(markup).toContain('安装</button>')
-    expect(markup).toContain('更新源尚未接入')
+    expect(markup).toContain('随 App 更新</button>')
+    expect(markup).toContain('未接入更新源')
     expect(markup).not.toContain('清单项目')
     expect(markup).not.toContain('恢复默认')
   })

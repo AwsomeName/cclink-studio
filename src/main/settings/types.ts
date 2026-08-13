@@ -23,6 +23,7 @@ export type {
 export {
   PROVIDER_PRESETS,
   DEFAULT_SETTINGS,
+  MANAGED_CLAUDE_RUNTIME_VERSION,
   getPresetBaseUrl,
   normalizeClaudeRuntimeSettingsUpdate,
 } from '../../shared/settings-constants'

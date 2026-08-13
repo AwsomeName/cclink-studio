@@ -1,15 +1,21 @@
-# Agent 角色中心与会话配置
+# Agent 角色中心、会话配置与角色内容模型
 
-> 状态：首版代码、全量自动化门禁与本机 UI smoke 已通过，待异机真人验收。
+> 状态：角色中心 V1 已实现并进入异机验收；Skill / `SOUL.md` 扩展已完成产品定稿，
+> “反方挑战者”首个可见纵向切片已实现，真实模型行为验收及其余六个角色尚未完成。
 >
-> 最后更新：2026-07-31。
+> 最后更新：2026-08-13。
 >
 > 关联文档：`docs/architecture.md`、`docs/features/agent-profiles.md`、
 > `docs/features/agent-system.md`、`docs/features/context-action-system.md`。
 
-2026-07-31 已确认以下产品决策：切换角色保留同一用户会话和完整可见历史，但重建内部
-Runtime Session；第一阶段只读内置角色定义，不开放自定义 prompt；只提供全局“新会话
+已确认以下产品决策：切换角色保留同一用户会话和完整可见历史，但重建内部 Runtime
+Session；中间 Workbench 全局只保留一个“角色配置”Tab，点击左侧列表只切换这个 Tab
+正在查看的角色；第一阶段只读内置角色定义，不开放自定义 prompt；只提供全局“新会话
 默认角色”，暂不增加工作空间级默认值。
+
+角色内容扩展也已定稿：角色由结构化 Manifest、可选 `SOUL.md` 和建议 Skill 引用共同描述。
+`SOUL.md` 负责身份、价值取向、表达方式和长期行为原则；Skill 负责可复用流程。二者都不能
+扩大工具权限、绕过确认或成为第二份会话配置。
 
 ## 结论
 
@@ -20,8 +26,8 @@ Workbench Tab；只更新该会话的角色配置。为避免旧角色污染后�
 当前 Claude SDK Session 失效，下一条消息在同一个用户会话内建立新的运行 Session，
 并把旧历史作为低优先级连续性上下文提供。
 
-第一阶段仍只支持七个内置角色，不开放自定义 prompt、角色市场或多角色讨论，但增加
-完整的角色工作台入口：
+当前 V1 只支持七个内置角色，不开放自定义 prompt、角色市场或多角色讨论，但提供完整的
+角色工作台入口：
 
 ```text
 Activity Bar「角色」
@@ -34,11 +40,40 @@ Composer 当前角色 Chip
       -> 与角色配置 Tab 调用同一个会话配置命令
 ```
 
-这三个入口不是三套状态：角色定义由主进程注册表拥有，会话绑定由
+这些入口不是多套状态：角色定义由主进程注册表拥有，会话绑定由
 `AgentConversationState.configuration` 唯一拥有，Sidebar、Tab 和 Composer 都只是投影
 和命令入口。
 
-## 已知问题与判断
+角色也不是“AI 员工”的轻量命名。已确认采用“领域上分离，产品上组合，交付上保持一个
+Studio”：角色是可复用人格模板；员工是未来可能引用角色、资源和能力并被持续分配工作的
+执行主体。普通会话可直接使用角色，一个角色也可被多个员工引用；AI 员工当前暂停，不进入
+本角色里程碑，完整边界见 `docs/features/ai-employees.md`。
+
+## 产品范围定稿
+
+角色中心解决四个不同问题，必须在同一配置页中呈现，但不能混成一个状态对象：
+
+| 层次          | 回答的问题                           | 是否随角色应用           | 是否改变权限 |
+| ------------- | ------------------------------------ | ------------------------ | ------------ |
+| 角色 Manifest | “这是谁、负责什么、有哪些边界？”     | 是                       | 否           |
+| `SOUL.md`     | “长期坚持什么原则、以什么方式表达？” | 是                       | 否           |
+| 建议 Skill    | “处理此类任务时可采用哪些流程？”     | 否；用户明确挂载后才生效 | 否           |
+| 会话配置      | “这个会话当前使用哪个角色版本？”     | 本身就是应用关系         | 否           |
+
+V1 当前交付角色 Manifest 的基础字段、会话应用关系、默认角色、运行回执和 Session 隔离。
+下一阶段在**同一个配置页**补充内置角色的只读 `SOUL.md` 与建议 Skill，不新增角色级 Tab，
+也不开放自定义。自定义角色包属于后续独立里程碑。
+
+### 明确不做的隐式行为
+
+- 浏览某个角色不等于应用角色。
+- 展示建议 Skill 不等于自动安装或挂载 Skill。
+- `SOUL.md` 不提供脚本、工具声明、权限声明或远程内容加载能力。
+- 切换角色不改变模型、Provider、Runtime、权限模式、工具 Scope 或外部提交确认。
+- 角色不是资源授权或员工配置；切换角色不能绑定账号、分配事务、启用定时任务或扩大能力。
+- 配置页当前查看的角色不进入会话快照；只有用户点击“应用”后才修改会话配置。
+
+## 历史问题与设计依据
 
 `v0.1.14` 的静态代码链路已经做到：
 
@@ -48,7 +83,7 @@ Composer 当前角色 Chip
 - 主进程解析角色并向 Claude Agent SDK 提交 system prompt append；
 - Session 兼容指纹包含角色 ID 和版本。
 
-但这还不能证明“第二次发送继续使用同一角色”。当前自动化只检查过单次 system prompt
+但这还不能证明“第二次发送继续使用同一角色”。当时自动化只检查过单次 system prompt
 注入，没有覆盖同一会话的连续两次 send，也没有给每轮运行返回主进程实际解析后的配置
 回执。异机体验表明，至少存在以下一种失败：
 
@@ -57,15 +92,19 @@ Composer 当前角色 Chip
 3. 角色引用持续存在，但 prompt 强度不足，模型第二轮表现退化；
 4. 产品只显示“已选择角色”，却没有可观察证据证明本轮运行采用了该配置。
 
-因此下一步不能只增加更多入口。必须先把“持久引用”“本轮实际配置”和“模型行为评估”
-拆成三个可分别验证的层次。
+因此后续设计不能只增加更多入口，必须把“持久引用”“本轮实际配置”和“模型行为评估”
+拆成三个可分别验证的层次。V1 已据此补齐运行回执和相关自动化，异机真实行为仍按下文
+验收标准确认。
 
 ## 用户端到端验收
 
-方案完成后，用户必须能在真实应用中完成以下动作：
+### V1 角色与会话配置
+
+用户必须能在真实应用中完成以下动作：
 
 1. 点击 Activity Bar 的“角色”，在 Sidebar 看到七个内置角色和当前会话角色。
-2. 点击“公共治理者”，在 Workbench 打开唯一的“角色配置 · 公共治理者”Tab。
+2. 点击“公共治理者”，在 Workbench 打开唯一的“角色配置”Tab；再点击其他角色时仍复用
+   这个 Tab，只切换其中正在查看的角色。
 3. 点击“应用到当前会话”，当前会话不新增、不分叉，原消息、草稿和资源保持不变。
 4. 在同一会话连续发送两次消息，两次运行回执都显示“公共治理者 v1”，输出持续体现该
    角色关注点。
@@ -78,17 +117,38 @@ Composer 当前角色 Chip
 
 只有引用、运行回执和真实行为三层都通过，才能声明角色持久化完成。
 
+### 下一阶段：角色内容扩展
+
+Skill / `SOUL.md` 扩展完成后，用户还必须能完成：
+
+1. 进入唯一的“角色配置”Tab，在左侧连续点击两个角色，Tab 数量保持为一个，页面内容
+   原位切换且当前会话角色不变化。
+2. 在角色配置页查看“角色概览、人格与原则、建议 Skills、行为规则、边界与版本”六类信息。
+3. 展开 `SOUL.md` 的可读预览，清楚看到来源、内容摘要和内容指纹；页面不暴露隐藏 system
+   prompt，也不执行 Markdown 中的脚本或远程引用。
+4. 点击某个建议 Skill 的“挂载到当前会话”，Composer 出现对应 Skill；只浏览或切换角色
+   时不得自动挂载、卸载或替换已有 Skill。
+5. Skill 不可用时显示“未安装/不可用”与恢复入口；角色本身仍可使用，不静默假装 Skill
+   已生效。
+6. 应用角色后连续发送两次消息，运行回执中的角色版本和角色内容指纹一致；更新角色内容
+   后下一轮必须创建新的内部 Runtime Session。
+7. 切换角色或挂载 Skill 前后，权限模式、工具 Scope 和人工确认点完全不变。
+
+以上动作通过前，只能称为“角色内容扩展候选”，不能称为 Skill / `SOUL.md` 支持完成。
+
 ## 产品概念
 
-| 概念           | 用户含义                                  | 状态所有者                             |
-| -------------- | ----------------------------------------- | -------------------------------------- |
-| 角色定义       | 一个可复用的职责、关注点和行为边界        | 主进程 `AgentRoleRegistry`             |
-| 会话配置       | 当前会话以后由哪个角色处理                | `AgentConversationState.configuration` |
-| 新会话默认配置 | 新建会话时默认选哪个角色                  | 现有 Settings 状态所有者               |
-| 用户会话       | 用户看到的消息、资源、草稿和任务历史      | Agent conversation domain              |
-| 运行 Session   | Claude SDK 为连续上下文维护的内部 Session | 主进程 Agent runtime                   |
-| Skill          | 某次任务采用的流程                        | 现有 Skill / mounted skill 边界        |
-| 权限           | Agent 实际能做什么                        | 现有权限系统和主进程硬边界             |
+| 概念           | 用户含义                                   | 状态所有者                              |
+| -------------- | ------------------------------------------ | --------------------------------------- |
+| 角色 Manifest  | 角色身份、职责、关注点、版本和行为边界     | 主进程 `AgentRoleRegistry`              |
+| `SOUL.md`      | 角色长期人格、原则、表达方式和自我约束     | 角色定义包；由 Registry 校验和编译      |
+| 建议 Skill     | 适合该角色的流程建议，需用户明确挂载才生效 | 角色定义只持引用；Skill Registry 持定义 |
+| 已挂载 Skill   | 当前会话或消息实际采用的流程               | Agent conversation / Composer domain    |
+| 会话配置       | 当前会话以后由哪个角色处理                 | `AgentConversationState.configuration`  |
+| 新会话默认配置 | 新建会话时默认选哪个角色                   | 现有 Settings 状态所有者                |
+| 用户会话       | 用户看到的消息、资源、草稿和任务历史       | Agent conversation domain               |
+| 运行 Session   | Claude SDK 为连续上下文维护的内部 Session  | 主进程 Agent runtime                    |
+| 权限           | Agent 实际能做什么                         | 现有权限系统和主进程硬边界              |
 
 最重要的边界是：**切换角色不切换用户会话，但必须切换不兼容的运行 Session。**
 
@@ -98,7 +158,7 @@ Composer 当前角色 Chip
 
 ```text
 ┌────┬──────────────────────┬──────────────────────────────────────────────┐
-│活  │ 角色                 │ 角色配置 · 公共治理者                       │
+│活  │ 角色                 │ 角色配置                                     │
 │动  │                      │                                              │
 │栏  │ 当前会话             │ [图标] 公共治理者   内置 · v1               │
 │    │  政策讨论            │ 从公共利益、执行成本和制度约束分析          │
@@ -134,7 +194,8 @@ Sidebar 分为两部分：
 - “已打开”表示 Workbench 正在查看这个角色；
 - “已应用”表示当前会话真正使用这个角色。
 
-点击角色行只打开或聚焦角色配置 Tab，不立即应用，避免浏览详情时意外改变 Agent 行为。
+点击角色行只打开或聚焦唯一的角色配置 Tab，并切换该 Tab 正在查看的角色；不立即应用，
+避免浏览详情时意外改变 Agent 行为。
 当前应用角色使用勾选标识；新会话默认角色使用独立的“默认”文字标识，不能只靠颜色。
 
 第一阶段角色只有七个，不增加搜索、分类、收藏和“新建角色”按钮。等开放自定义且数量
@@ -142,23 +203,32 @@ Sidebar 分为两部分：
 
 ### 角色配置 Tab
 
-Tab 类型为 `agent-role`，同一 `roleId@version` 全局只打开一个；它不属于某个工作空间，
-但所有“应用”动作必须明确显示当前目标会话和工作空间。
+Tab 类型为 `agent-role`，全局最多只能存在一个，不按 `roleId@version` 分页。Tab 内的
+`agentRole` 引用只是“正在查看哪个角色”的瞬时界面状态；点击左侧角色行会原位更新它，
+不会新建 Tab，也不会修改会话配置。该 Tab 不属于某个工作空间，但所有“应用”动作必须
+明确显示当前目标会话和工作空间。
 
 Tab 展示：
 
-- 名称、图标、内置标识和版本；
-- 一句话职责；
-- 适用目标与不适用场景；
-- 分析或执行清单；
-- 行为边界和安全说明；
-- 两个可验证的输入/输出关注点示例；
-- “应用到当前会话”；
-- “设为新会话默认角色”。
+- **页头**：名称、图标、内置标识、版本、一句话职责，以及“应用到当前会话”和“设为
+  新会话默认角色”。
+- **角色概览**：目标、适用场景、不适用场景和可验证的输出关注点。
+- **人格与原则**：`SOUL.md` 的安全 Markdown 预览、来源和内容指纹；当前 V1 暂只显示
+  现有行为描述，下一阶段补齐该区。
+- **建议 Skills**：Skill 名称、用途、来源、可用状态和“挂载到当前会话”；下一阶段交付。
+- **行为规则**：分析或执行清单。
+- **边界与版本**：安全说明、角色标识、当前会话配置 revision 和最近运行回执。
 
-第一阶段“配置”指配置角色的**使用关系**，不允许编辑内置定义或原始 system prompt。
+这些内容采用一个页面内的连续分区，不为“概览 / SOUL / Skill”再创建 Workbench Tab，
+也不为每个角色保存独立页面实例。左侧列表永远驱动同一个页面的查看目标。
+
+当前 V1“配置”指配置角色的**使用关系**，不允许编辑内置定义或原始 system prompt。
 角色定义内容以结构化字段透明展示，实际 system prompt 仍由主进程编译，renderer 不得
 提交 prompt 文本。
+
+下一阶段增加的 `SOUL.md` 仍是只读角色内容，不是 renderer 可直接编辑的 system prompt。
+配置页可以显示经过清洗的 Markdown 和内容指纹，但不得显示编译器附加的隐藏安全指令。
+建议 Skill 只提供显式挂载动作，不使用“已展示”冒充“已生效”。
 
 “应用到当前会话”按钮应写出目标，例如：
 
@@ -258,24 +328,91 @@ interface AgentConversationState {
 }
 ```
 
-角色定义由主进程拥有：
+当前 V1 角色定义由主进程拥有，renderer 只获得摘要：
 
 ```ts
-interface BuiltinAgentRoleDefinition {
-  ref: AgentRoleRef
+interface AgentRoleSummary extends AgentRoleRef {
   label: string
   description: string
   icon: AgentRoleIcon
-  goals: string[]
-  checklist: string[]
-  boundaries: string[]
-  examples: AgentRoleExample[]
-  compilerTemplateKey: string
+  instructions: string[]
+  disclaimer?: string
 }
 ```
 
 renderer 通过 IPC 只读取可展示描述。主进程从同一角色定义编译 system prompt，避免 UI
 说明与真实行为形成两份事实源。
+
+下一阶段扩展为以下目标模型。该模型是已确认的产品契约，不表示当前代码已经实现：
+
+```ts
+interface AgentRoleManifest extends AgentRoleRef {
+  schemaVersion: 1
+  label: string
+  description: string
+  icon: AgentRoleIcon
+  goals: string[]
+  suitableFor: string[]
+  unsuitableFor: string[]
+  instructions: string[]
+  boundaries: string[]
+  examples: AgentRoleExample[]
+  soul?: {
+    format: 'markdown'
+    source: 'builtin' | 'local-package'
+    contentHash: string
+  }
+  recommendedSkillRefs: AgentSkillRef[]
+  compilerTemplateKey: string
+}
+
+interface AgentSkillRef {
+  skillId: string
+  version?: string
+}
+```
+
+`recommendedSkillRefs` 只保存稳定引用，不复制 Skill 文本。Skill 定义、安装状态和版本解析
+必须由统一 Skill Registry 拥有；在该 Registry 成为事实源之前，不得把 renderer 当前的
+候选数组扩展成第二套角色 Skill 注册表。
+
+### `SOUL.md` 契约
+
+`SOUL.md` 是角色定义的一部分，用于表达比结构化清单更连续的人格与原则。建议结构为：
+
+```markdown
+# Identity
+
+## Purpose
+
+## Principles
+
+## Voice
+
+## Boundaries
+```
+
+约束如下：
+
+- 内置角色的 `SOUL.md` 随 App 发布并由主进程读取；renderer 只接收清洗后的可展示内容。
+- 规范文件名为 `SOUL.md`；未来导入自定义角色包时可兼容读取 `soul.md`，保存时统一规范名。
+- Markdown 只允许文本语义，不执行 HTML、脚本、命令、插件声明或远程 include。
+- `SOUL.md` 不能声明工具、权限、凭证、模型或 Provider；这类字段即使出现也必须被忽略并
+  在诊断中提示。
+- 内容大小、编码和解析失败必须有上限与明确错误；失败时不得退回一段未知旧 prompt。
+- 进入运行时的是主进程编译结果。`contentHash` 必须进入角色内容指纹；内容变化后不得
+  resume 使用旧角色内容的 Runtime Session。
+
+未来自定义角色采用本地角色包，而不是允许任意工作空间文件自动成为人格：
+
+```text
+my-role/
+├── role.json       # 结构化 Manifest 与 Skill 引用
+└── SOUL.md         # 可选的人格与原则
+```
+
+导入、编辑、信任提示和版本迁移属于自定义角色里程碑，不在当前 V1 或下一阶段的内置角色
+内容扩展中实现。
 
 新会话默认配置写入现有 Settings：
 
@@ -292,6 +429,8 @@ interface AgentRoleSettings {
 ```mermaid
 flowchart TB
     Registry["Main · AgentRoleRegistry\n内置角色定义唯一来源"]
+    Soul["Role Content · SOUL.md\n人格内容；只读、带内容指纹"]
+    Skills["Skill Registry\nSkill 定义与可用状态唯一来源"]
     Settings["Settings\n新会话默认角色"]
     Conversation["AgentConversationState.configuration\n当前会话绑定唯一来源"]
     Snapshot["WorkspaceStateService\n原子持久化会话快照"]
@@ -300,6 +439,9 @@ flowchart TB
     Runtime["Claude Runtime Session\n配置兼容时恢复，否则重建"]
 
     Registry --> UI
+    Soul --> Registry
+    Registry -->|"建议 Skill 引用"| Skills
+    Skills --> UI
     Settings --> Conversation
     Conversation --> Snapshot
     Snapshot --> Conversation
@@ -313,7 +455,12 @@ flowchart TB
 边界规则：
 
 - `AgentRoleRegistry` 只拥有定义，不拥有“当前选中角色”。
+- `SOUL.md` 是角色定义的内容资源，不拥有应用关系，也不是设置文件。
+- 角色 Manifest 只引用 Skill；Skill Registry 拥有定义和可用状态，会话拥有用户实际挂载的
+  Skill。缺少 Skill 时不得把引用复制成一份角色内 Skill 定义。
 - `AgentConversationState.configuration` 是会话绑定的唯一持久状态。
+- 唯一角色配置 Tab 的 `agentRole` / `selectedRoleRef` 只属于 renderer 视图状态，不写入
+  WorkspaceState，也不能覆盖 `AgentConversationState.configuration.roleRef`。
 - `AgentBridge` 的角色 Map 只能是当前进程的派生运行缓存，不能接受独立修改，也不能在
   renderer 缺字段时静默回退默认角色。
 - 角色变更使用显式异步 command，并立即调用原子持久化，不依赖普通消息更新顺带落盘。
@@ -331,7 +478,7 @@ interface AgentConversationRunConfiguration {
 }
 ```
 
-主进程校验后自行计算：
+V1 主进程校验后自行计算：
 
 ```text
 configurationFingerprint = hash(
@@ -342,6 +489,10 @@ configurationFingerprint = hash(
   + promptCompilerVersion
 )
 ```
+
+引入 `SOUL.md` 后，指纹必须升级并至少增加 `roleManifestHash` 与 `soulContentHash`。建议
+Skill 没有被用户挂载前不进入运行指纹；用户实际挂载的 Skill 按现有消息/会话上下文契约
+对账，不能因为它出现在建议列表就宣称已生效。
 
 主进程为每个 run 发出不含 prompt 正文的回执：
 
@@ -421,32 +572,41 @@ configuration: {
 
 ## 失败降级
 
-| 失败                    | 用户表现                      | 系统行为                           |
-| ----------------------- | ----------------------------- | ---------------------------------- |
-| 角色列表加载失败        | 角色 Sidebar 显示不可用及重试 | 其他工作台能力继续可用             |
-| 当前角色版本缺失        | 会话显示“角色不可用”          | 阻止发送，提供显式迁移             |
-| 配置持久化失败          | 应用操作失败，原角色保持      | 不重置 Session，不伪装成功         |
-| 切换时 Agent 正在运行   | 按钮禁用并说明原因            | 不修改配置；用户可先中止           |
-| 运行回执与 UI 不一致    | 本轮停止并显示诊断错误        | 不继续生成或静默降级               |
-| 新角色 Session 创建失败 | 原历史和配置保留，可重试      | 不恢复旧角色 Session               |
-| Registry 初始化失败     | Agent 角色能力 degraded       | Browser、Editor、Terminal 不受影响 |
+| 失败                                     | 用户表现                      | 系统行为                           |
+| ---------------------------------------- | ----------------------------- | ---------------------------------- |
+| 角色列表加载失败                         | 角色 Sidebar 显示不可用及重试 | 其他工作台能力继续可用             |
+| 当前角色版本缺失                         | 会话显示“角色不可用”          | 阻止发送，提供显式迁移             |
+| 配置持久化失败                           | 应用操作失败，原角色保持      | 不重置 Session，不伪装成功         |
+| 切换时 Agent 正在运行                    | 按钮禁用并说明原因            | 不修改配置；用户可先中止           |
+| 运行回执与 UI 不一致                     | 本轮停止并显示诊断错误        | 不继续生成或静默降级               |
+| 新角色 Session 创建失败                  | 原历史和配置保留，可重试      | 不恢复旧角色 Session               |
+| Registry 初始化失败                      | Agent 角色能力 degraded       | Browser、Editor、Terminal 不受影响 |
+| Manifest 声明的 `SOUL.md` 缺失或解析失败 | 人格区显示不可用和具体原因    | 阻止使用不完整版本，不回退旧内容   |
+| 建议 Skill 未安装                        | 显示未安装/不可用             | 角色仍可使用；不伪装 Skill 已挂载  |
+| Skill 挂载失败                           | 保持原会话 Skill 列表并可重试 | 不改变角色、权限或运行 Session     |
 
 ## 实现顺序
 
-### 当前实施状态（2026-07-31）
+### 当前实施状态（2026-08-13）
 
 - C1 已实现：新旧快照双读、新配置单写；同会话切换角色；运行 Session 失效；每轮发送
   配置回执；持久化失败回滚。
-- C2 已实现：Activity Bar“角色”、角色 Sidebar、全局只读角色 Tab、Composer 快速
-  选择和统一领域命令入口。
+- C2 已实现：Activity Bar“角色”、角色 Sidebar、全局唯一且可原位切换查看目标的只读
+  “角色配置”Tab、Composer 快速选择和统一领域命令入口。
 - C3 首版已实现：全局新会话默认角色、缺失版本显式不可用/迁移、列表重试和诊断投影。
+- C4 首个可见切片已实现：“反方挑战者”具备扩展 Manifest、内置只读 `SOUL.md`、建议
+  “方案拷问”Skill、显式会话挂载和角色内容指纹；其余六个角色及真实模型行为回执验收
+  尚未完成。
 - 自动化已覆盖同会话连续两次发送、每轮 prompt 注入、角色切换不分叉、配置事件、
-  Session 清空、持久化回滚、默认角色和角色 Tab 去重。
-- 工程证据：`pnpm verify` 已通过（199 个测试文件、1155 项测试），本地 smoke 10/10，
-  UI smoke 10/10；UI smoke 覆盖角色入口、七角色列表、当前应用态、只读详情，以及“打开
-  详情不会自动应用”的交互边界。
+  Session 清空、持久化回滚、默认角色和角色 Tab 全局单例。
+- 当前受影响工程证据：6 个测试文件 84 项测试、TypeScript typecheck、ESLint 和 production
+  build 通过；真实 App 的角色 smoke 已验证单例配置页、`SOUL.md` 预览和显式 Skill 挂载。
+  整套 UI smoke 当前为 10/12，失败项是网页事务恢复与主体选项超时，不在角色链路；因此
+  不能把本次全套 UI smoke 记为全绿。正式发版仍以目标 SHA 的远端普通 CI 和发布工作流
+  为事实源。
 - 尚未完成的产品证据：打包后在另一台机器执行“重启后第三次发送”与七个角色行为样例
-  的真人验收。因此在该证据补齐前，只能称为“可验收候选”，不能称为异机验收完成。
+  的真人验收；C4 尚未完成真实模型发送和其余角色。因此 V1 只能称为“可验收候选”，
+  Skill / `SOUL.md` 只能称为“首个角色可见切片”。
 
 ### C1：先修连续发送与持久化闭环
 
@@ -474,10 +634,24 @@ configuration: {
 
 用户增量：角色配置在长期使用、升级和异常场景下仍可解释、可恢复。
 
-第一阶段不做：
+### C4：角色内容、`SOUL.md` 与建议 Skill
+
+- 扩展主进程角色 Manifest 与只读 IPC，不从 renderer 接收 prompt 正文。
+- 为七个内置角色提供结构一致的 `SOUL.md`，并把内容摘要和指纹投影到唯一配置页。
+- 接入统一 Skill Registry，只在角色 Manifest 中保存建议 Skill 引用和版本约束。
+- 配置页提供显式“挂载到当前会话”，不自动安装、挂载、卸载或替换 Skill。
+- 将 Manifest / Soul 内容摘要纳入运行兼容指纹和诊断回执。
+- 覆盖缺失 Soul、Skill 不可用、内容升级、Session 失效和异机行为验收。
+
+用户增量：用户不仅知道角色名称，还能理解其人格、原则、工作方式和建议流程，并能明确
+控制哪些 Skill 真正进入当前会话。
+
+V1 与 C4 均不做：
 
 - 用户自定义角色或编辑 system prompt；
 - 角色导入导出、市场或云同步；
+- 自动读取任意工作空间中的 `SOUL.md`；
+- 根据角色自动安装或静默挂载 Skill；
 - 一个会话同时激活多个角色；
 - 角色自动协商、辩论或汇总；
 - 角色改变模型、Runtime、权限或工具 Scope；
@@ -487,11 +661,16 @@ configuration: {
 
 ### 已确认的方向
 
-1. 角色是会话配置，不是会话本身，也不是 Skill。
+1. 角色定义是可版本化内容；“当前会话使用哪个角色”才是会话配置。角色不是会话本身，
+   也不是 Skill。
 2. 切换角色不创建新用户会话，但必须隔离不兼容的 Claude Runtime Session。
-3. Activity、Sidebar、配置 Tab 和 Composer 必须共享一个配置命令和一个状态所有者。
-4. 第一阶段配置 Tab 管理“应用关系”和“新会话默认值”，不编辑内置角色定义。
-5. 连续发送的主进程运行回执是持久化验收的一部分，不能继续只凭 UI 勾选态判断。
+3. Workbench 全局只有一个角色配置 Tab；左侧角色列表只切换它的查看目标。
+4. Activity、Sidebar、配置 Tab 和 Composer 必须共享一个配置命令和一个会话状态所有者。
+5. `SOUL.md` 属于角色内容，Skill 属于流程能力；角色只引用建议 Skill，不能复制 Skill
+   定义或隐式挂载。
+6. 当前和下一阶段配置 Tab 均只读内置定义，仅管理应用关系、新会话默认值和显式 Skill
+   挂载；不编辑原始 system prompt。
+7. 连续发送的主进程运行回执是持久化验收的一部分，不能继续只凭 UI 勾选态判断。
 
 ### 已确认的产品取舍
 
@@ -501,17 +680,27 @@ configuration: {
    “设为新会话默认角色”；自定义角色另立里程碑。
 3. **默认角色作用域**：只设一个全局“新会话默认角色”，现有会话继续使用各自
    配置；暂不增加工作空间级默认值，避免三层继承关系。
+4. **Skill 生效方式**：配置页只展示建议并提供显式挂载；切换角色不自动修改用户已经
+   挂载的 Skill。
+5. **`SOUL.md` 支持方式**：先随七个内置角色只读交付，再单独设计自定义角色包；不扫描
+   工作空间，也不把任意同名文件自动当作高优先级指令。
 
 ### 最容易失败的地方
 
 - 只做左侧三个入口，没有先修第二次发送的运行事实；
 - 同一会话切换角色时继续 resume 旧 SDK Session；
 - 为 Sidebar、Tab、Composer 分别维护 selected role；
+- 把不同角色重新做成多个 Workbench 配置 Tab；
 - 角色配置 Tab 看似可编辑，实际修改不能进入主进程 prompt；
+- 展示建议 Skill 后在后台静默挂载，让用户无法判断本轮实际使用了什么；
+- 允许 `SOUL.md` 声明工具或权限，把内容文件变成权限升级通道；
+- 修改 Soul 内容却不更新指纹，继续 resume 使用旧人格的 Runtime Session；
 - 持久化失败仍更新 UI，让用户误以为配置已保存；
 - 把角色能力与权限、Scope 或 Runtime 绑定，扩大授权面；
 - 同时保留 `profileRef` 和 `configuration.roleRef` 成为两个长期状态所有者。
 
-下一步最该做的是完成全量工程门禁和本机真实 UI smoke，然后生成异机验收包。异机必须
-重点验证“同一会话连续两次发送、切换角色不分叉、重启后第三次发送”；通过前不得只凭
-UI 的“已应用”标记宣布角色持久化完成。
+下一步最该做的是补完“反方挑战者”C4 闭环中最后的真实运行证据：应用角色、显式挂载
+“方案拷问”、连续发送两次，并对账角色内容指纹、Skill 上下文和运行 Session 模式。该闭环
+通过后再批量补齐其余六个角色。与此同时，V1 异机仍必须验证“同一会话连续两次发送、
+切换角色不分叉、重启后第三次发送”；通过前不得只凭 UI 的“已应用”标记宣布角色持久化
+完成。

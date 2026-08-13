@@ -25,10 +25,19 @@ CCLink Studio 是 CCLink 唯一的 GPL-3.0-only 桌面 App。它不是“开源�
 
 ## 暂停的 AI 员工范围
 
+角色与 AI 员工采用以下统一结论：
+
+> **领域上分离，产品上组合，交付上保持一个 Studio。** 角色是可复用人格模板；员工是
+> 引用角色、资源和能力并可被持续分配工作的执行主体。
+
 旧商业规格中的“AI 员工”是面向用户的持久业务主体，不是 Agent 角色的改名。Agent 角色描述
-能力和工作方式；AI 员工在此基础上增加职责、被授权资源、工作队列、执行策略、权限边界和
-工作记录，并以稳定引用使用开源工作台提供的网站账号、事务、Agent Run、BrowserTask 和
-定时任务。
+人格、分析视角、表达方式和工作原则；AI 员工在此基础上增加稳定身份、职责、角色版本引用、
+被授权资源、允许使用的能力子集、工作队列、执行策略和工作记录。普通会话可以只使用角色，
+不需要先创建员工；一个角色也可以被多个员工复用。
+
+员工对资源和能力的“集成”只能是稳定引用、显式授权和范围收窄，不能复制定义或扩大权限。
+有效能力始终取系统可用能力、用户启用范围、员工允许范围、任务 Scope 和人工确认的交集；
+切换角色或员工不能成为权限升级通道。
 
 状态所有权保持不变：
 
@@ -37,9 +46,13 @@ CCLink Studio 是 CCLink 唯一的 GPL-3.0-only 桌面 App。它不是“开源�
   节点、证据或终态。
 - Agent、BrowserTask 和定时任务分别拥有一次执行、网页运行和触发事实；员工页面只展示
   可丢弃投影并发送受校验命令。
-- 具体运营模板、平台适配器、团队协作、AI 员工与商业模板当前全部暂停，不进入本次桌面合并。
+- 角色定义继续由 `AgentRoleRegistry` 拥有；未来员工只固定引用角色版本，不复制 Manifest、
+  `SOUL.md` 或 Skill 定义。
+- 具体运营模板、平台适配器、团队协作、AI 员工与商业模板当前全部暂停：本阶段不增加员工
+  UI、持久化、IPC、服务或排期，也不进入桌面合并。
 
 若未来重启，必须在单一 Studio 内通过稳定 contract 和 contribution 接入，不得恢复长期复制 Main、Preload 或 Renderer 整文件的商业分叉。
+完整的冻结领域边界见 `docs/features/ai-employees.md`。
 
 ## 架构宪法
 
@@ -202,6 +215,7 @@ Runtime 组件独立更新和受限能力插件的产品方案见
 和 agent-device Android Helper 的固定目录下载、校验与安装，其中 OCCT/scrcpy 已接入领域回退，
 Android Helper 仍待宿主注入接口。通用插件安装、隔离 Plugin Host、远程签名目录和真实双版本
 更新仍未实现，不能把内置 `ToolModule`、Adapter Registry 或打包资源称为插件系统。
+ADR 0010 已将 Claude 可执行文件移出 `.app`，由组件页按需安装；缺失时 Agent 单独降级。
 
 该方案不得改变以下不变量：
 
@@ -237,7 +251,12 @@ Android 是本地真机能力：只连接用户自有 USB 或 Wi-Fi ADB 真机�
 
 ## CCLink 远程功能域与暂停范围
 
-Studio 内置手机号登录、Session 文件/token 刷新、CCLink 身份与设备状态、腾讯 IM transport、request/protocol router、实时连接、RemoteProvider、远程项目选择、文件树与读取。远程写入、远程 Agent 会话和远程 PTY 只能在前一纵向闭环真实验收后继续。
+Studio 内置手机号登录、Session 文件/token 刷新、CCLink 身份与设备状态、腾讯 IM transport、request/protocol router、实时连接和 RemoteProvider。当前 Studio 代码已接入远程项目选择、文件树/读取/创建/修改/重命名/删除、远程 Agent 会话与流式事件，以及经 Studio Terminal execution adapter 路由的远程 PTY。这些能力的产品完成状态以真实在线 Agent 验收记录为准，不以代码或测试通过替代。
+
+当前所谓“商业版本”只保留这组 CCLink 托管远程能力及其服务端授权/收费事实，不代表存在
+第二套商业桌面 App。AI 员工、商业模板、运营适配器、团队协作和其他旧商业功能不进入当前
+范围；本地角色、Skill、工作空间、浏览器、事务、定时任务和其他 Studio 本地能力不得因此
+增加登录或 Pro 门控。
 
 暂停且不得迁移：WebDAV sync、桌面支付与套餐 UI、本地能力 Pro 门控、重复 updater/Terminal/orchestrator、商业层 App/Settings/Sidebar/preload/main.css 整文件快照、AI 员工、商业模板、通用插件平台和 Android SDK/AVD 托管。
 

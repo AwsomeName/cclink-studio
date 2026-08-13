@@ -69,6 +69,7 @@ import {
 } from '../../features/markdown/markdown-navigation'
 import { useConversationScroll } from '../../features/agent-conversations/use-conversation-scroll'
 import { useAgentRoles } from '../../features/agent-profiles/use-agent-profiles'
+import { useAgentSkills } from '../../features/agent-skills/use-agent-skills'
 import {
   applyAgentRoleToConversation,
   getApplyAgentRoleError,
@@ -132,6 +133,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const editorFiles = useEditorStore((s) => s.files)
   const selectedPath = useFsStore((s) => s.selectedPath)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
+  const remoteAgentUnavailable = activeWorkspaceRef.kind === 'remote'
   const browserTasks = useBrowserTaskStore((s) => s.tasks)
   const browserActionLogs = useBrowserTaskStore((s) => s.actionLogs)
   const upsertBrowserTask = useBrowserTaskStore((s) => s.upsertTask)
@@ -146,6 +148,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const loadSavedQueries = useDataSourceStore((s) => s.loadSavedQueries)
   const showToast = useToastStore((s) => s.show)
   const { roles, error: rolesError } = useAgentRoles()
+  const { skills: availableSkills, error: skillsError } = useAgentSkills()
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const conversationMainRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLDivElement>(null)
@@ -298,11 +301,15 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   }, [])
 
   const handleSend = useCallback(async () => {
+    if (remoteAgentUnavailable) {
+      showToast('远程工作区请使用 CCLink 远程会话面板', 'info')
+      return
+    }
     conversationScroll.followLatest()
     setResourceQuery(null)
     setSkillQuery(null)
     await runController.send(input)
-  }, [conversationScroll, input, runController])
+  }, [conversationScroll, input, remoteAgentUnavailable, runController, showToast])
 
   const handleCompactContext = useCallback(
     async (instructions: string) => {
@@ -672,7 +679,10 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
       }),
     [activeWorkspaceRef, dataSources, editorFiles, resourceQuery, savedQueries, selectedPath, tabs],
   )
-  const skillCandidates = useMemo(() => buildSkillCandidates(skillQuery ?? ''), [skillQuery])
+  const skillCandidates = useMemo(
+    () => buildSkillCandidates(availableSkills, skillQuery ?? ''),
+    [availableSkills, skillQuery],
+  )
   const activeMentionKind =
     resourceQuery !== null ? 'resource' : skillQuery !== null ? 'skill' : null
   const activeMentionCount =
@@ -769,6 +779,10 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     if (rolesError) showToast(`角色列表加载失败: ${rolesError}`, 'error')
   }, [rolesError, showToast])
 
+  useEffect(() => {
+    if (skillsError) showToast(`Skill 列表加载失败: ${skillsError}`, 'error')
+  }, [showToast, skillsError])
+
   if (variant === 'center' && isStartConversation) {
     return (
       <div className="agent-panel agent-panel-center">
@@ -816,6 +830,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                   ref={inputRef}
                   className="agent-start-input"
                   value={input}
+                  disabled={remoteAgentUnavailable}
                   onChange={(e) => handleInputChange(e.target.value)}
                   onKeyDown={handleKeyDown}
                   onPaste={(event) => {
@@ -839,7 +854,9 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                     event.preventDefault()
                     void handleAddImages(files)
                   }}
-                  placeholder="随心输入"
+                  placeholder={
+                    remoteAgentUnavailable ? '远程工作区请使用 CCLink 远程会话面板' : '随心输入'
+                  }
                   rows={3}
                 />
                 <AgentComposerToolbar
@@ -850,6 +867,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                   settings={settings}
                   loading={loading || contextCompacting}
                   canSend={
+                    !remoteAgentUnavailable &&
                     (Boolean(input.trim()) || pendingImages.length > 0) &&
                     !contextCompacting &&
                     Boolean(activeRole)
@@ -868,11 +886,12 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                       className="agent-start-send"
                       onClick={handleSend}
                       disabled={
+                        remoteAgentUnavailable ||
                         (!input.trim() && pendingImages.length === 0) ||
                         contextCompacting ||
                         !activeRole
                       }
-                      title="发送"
+                      title={remoteAgentUnavailable ? '请使用 CCLink 远程会话面板' : '发送'}
                     >
                       <IconSend size={16} />
                     </button>
@@ -1061,6 +1080,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
               ref={inputRef}
               className="agent-input"
               value={input}
+              disabled={remoteAgentUnavailable}
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={(event) => {
@@ -1084,7 +1104,11 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                 event.preventDefault()
                 void handleAddImages(files)
               }}
-              placeholder="输入消息，@ 挂资源，/ 挂技能..."
+              placeholder={
+                remoteAgentUnavailable
+                  ? '远程工作区请使用 CCLink 远程会话面板'
+                  : '输入消息，@ 挂资源，/ 挂技能...'
+              }
               rows={2}
             />
             <AgentComposerToolbar
@@ -1095,6 +1119,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
               settings={settings}
               loading={loading || contextCompacting}
               canSend={
+                !remoteAgentUnavailable &&
                 (Boolean(input.trim()) || pendingImages.length > 0) &&
                 !contextCompacting &&
                 Boolean(activeRole)
@@ -1118,11 +1143,12 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                     className="agent-send-btn"
                     onClick={handleSend}
                     disabled={
+                      remoteAgentUnavailable ||
                       (!input.trim() && pendingImages.length === 0) ||
                       contextCompacting ||
                       !activeRole
                     }
-                    title="发送"
+                    title={remoteAgentUnavailable ? '请使用 CCLink 远程会话面板' : '发送'}
                   >
                     <IconSend size={17} />
                   </button>

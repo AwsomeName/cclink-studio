@@ -92,13 +92,7 @@ info "构建（pnpm build → electron-vite build）..."
 pnpm build > /tmp/cclink-studio-build.log 2>&1 || { tail -30 /tmp/cclink-studio-build.log; die "构建失败，详见 /tmp/cclink-studio-build.log"; }
 ok "构建完成"
 
-# ── 5. 准备固定版本 Agent 运行时 ───────────────────────────
-info "准备 Claude Code Agent 运行时资源..."
-node scripts/stage-claude-runtime.mjs --arch "$ARCH" \
-  || die "Claude Code Agent 运行时 staging 失败"
-ok "Agent 运行时资源已验证"
-
-# ── 6. 打包（electron-builder） ───────────────────────────
+# ── 5. 打包（electron-builder） ───────────────────────────
 EB_ARGS=(--mac --arm64)
 [ -n "$COMPRESSION" ] && EB_ARGS+=("--config.compression=$COMPRESSION")
 
@@ -109,19 +103,22 @@ npx electron-builder "${EB_ARGS[@]}" "--config.mac.target=dmg" \
   || { tail -40 /tmp/cclink-studio-package.log; die "DMG 打包失败，详见 /tmp/cclink-studio-package.log"; }
 ok "打包完成"
 
-# ── 7. 验证安装包内 Agent 运行时 ──────────────────────────
+# ── 6. 验证瘦安装包边界 ───────────────────────────────────
 APP_SEARCH_ROOT="dist/mac-arm64"
 APP_PATH=$(find "$APP_SEARCH_ROOT" -maxdepth 2 -type d -name '*.app' -print -quit)
-[ -n "$APP_PATH" ] || die "未找到打包后的 .app，无法验证 Agent 运行时"
-info "验证安装包内 Claude Code Agent 运行时..."
-node scripts/stage-claude-runtime.mjs \
-  --verify-only \
-  --arch "$ARCH" \
-  --output "$APP_PATH/Contents/Resources/agent-runtime" \
-  || die "安装包内 Claude Code Agent 运行时验证失败"
-ok "安装包内 Agent 运行时可执行、版本与完整性均通过"
+[ -n "$APP_PATH" ] || die "未找到打包后的 .app"
+APP_EXECUTABLE=$(find "$APP_PATH/Contents/MacOS" -maxdepth 1 -type f -perm -100 -print -quit)
+[ -n "$APP_EXECUTABLE" ] || die "未找到打包后的主程序"
+PACKAGED_NAME=$(ELECTRON_RUN_AS_NODE=1 "$APP_EXECUTABLE" -e \
+  "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync(process.resourcesPath+'/app.asar/package.json','utf8'));process.stdout.write(pkg.name)" \
+  2>/dev/null) \
+  || die "打包后的 app.asar/package.json 无法解析；打包期间可能有文件被并发改写"
+[ "$PACKAGED_NAME" = "cclink-studio" ] || die "打包后的应用元数据不正确"
+[ ! -e "$APP_PATH/Contents/Resources/agent-runtime" ] \
+  || die "瘦安装包不得携带 Claude Code Runtime"
+ok "瘦安装包边界通过（Claude Code Runtime 按需安装）"
 
-# ── 8. 结果摘要 ───────────────────────────────────────────
+# ── 7. 结果摘要 ───────────────────────────────────────────
 echo ""
 echo -e "${GREEN}${BOLD}✅ 打包成功${RESET} — 版本 $VERSION / 架构 $ARCH"
 echo ""
@@ -135,7 +132,7 @@ echo ""
 echo -e "${CYAN}搬到另一台 Mac 的提示:${RESET}"
 echo -e "  • 本地包仅做 ad-hoc 签封、未公证 → 若 macOS 拦截，安装后执行:  ${BOLD}xattr -cr /Applications/CCLink\\ Studio\\ 开源版.app${RESET}"
 echo -e "  • 当前产物仅支持 ${BOLD}Apple Silicon arm64${RESET}"
-echo -e "  • 安装包携带固定版本 Claude Code 运行时；模型服务和 API 凭证仍由用户配置"
+echo -e "  • Claude Code Runtime 在组件管理页按需安装；模型服务和 API 凭证仍由用户配置"
 echo -e "  • 内嵌浏览器用 Electron 自带 Chromium，无需额外下载"
 
 if [ "$OPEN_FINDER" -eq 1 ]; then

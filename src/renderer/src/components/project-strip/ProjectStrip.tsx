@@ -130,7 +130,7 @@ export function ProjectStrip(): React.ReactElement {
     if (!ref) return
     try {
       const transition = await prepareWorkspaceRuntimeTransition(ref)
-      const applied = await applyWorkspaceRuntimeTransition(transition, { hydrate: false })
+      const applied = await applyWorkspaceRuntimeTransition(transition)
       if (!applied) return
       useUIStore.getState().setActivePanel('files')
       const tab = useTabStore

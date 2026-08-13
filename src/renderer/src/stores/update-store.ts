@@ -26,6 +26,7 @@ interface UpdateState {
   hydrate: () => Promise<void>
   check: () => Promise<UpdateCommandResult>
   startDownload: () => Promise<UpdateCommandResult>
+  startDownloadInBackground: () => Promise<UpdateCommandResult>
   cancelDownload: () => Promise<UpdateCommandResult>
   defer: () => Promise<UpdateCommandResult>
   ignoreVersion: () => Promise<UpdateCommandResult>
@@ -52,6 +53,10 @@ export const useUpdateStore = create<UpdateState>((set) => {
     },
     check: async () => apply(await window.cclinkStudio.update.check()),
     startDownload: async () => apply(await window.cclinkStudio.update.startDownload()),
+    startDownloadInBackground: async () => {
+      set({ panelOpen: false, manualInstallerError: null })
+      return apply(await window.cclinkStudio.update.startDownload())
+    },
     cancelDownload: async () => apply(await window.cclinkStudio.update.cancelDownload()),
     defer: async () => apply(await window.cclinkStudio.update.defer()),
     ignoreVersion: async () => apply(await window.cclinkStudio.update.ignoreVersion()),

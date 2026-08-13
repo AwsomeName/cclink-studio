@@ -143,8 +143,30 @@ async function main() {
 
   await page.locator('[aria-label="新建定时任务"]').click()
   await page.waitForSelector('.scheduled-task-tab', { timeout: 10_000 })
+  const editorScrollState = await page.locator('.scheduled-task-tab').evaluate((element) => {
+    const tab = element
+    const initialScrollTop = tab.scrollTop
+    tab.scrollTop = tab.scrollHeight
+    const result = {
+      clientHeight: tab.clientHeight,
+      scrollHeight: tab.scrollHeight,
+      scrollTop: tab.scrollTop,
+      overflowY: getComputedStyle(tab).overflowY,
+    }
+    tab.scrollTop = initialScrollTop
+    return result
+  })
+  assert(
+    editorScrollState.overflowY === 'auto' &&
+      editorScrollState.scrollHeight > editorScrollState.clientHeight &&
+      editorScrollState.scrollTop > 0,
+    `scheduled-task editor is not vertically scrollable: ${JSON.stringify(editorScrollState)}`,
+  )
   await page.getByLabel('任务名称').fill('Smoke 每周工作总结')
   await page.getByLabel('任务内容').fill('读取当前工作空间资料，并生成 create-only Markdown 周报。')
+  await page
+    .getByLabel('工作空间内路径（支持相对路径或绝对路径，每行一个，可留空）')
+    .fill(join(workspacePath, 'README.md'))
   await page.getByRole('button', { name: '保存并在此设备启用' }).click()
   await page.getByText(/已在此设备启用/).waitFor({ timeout: 10_000 })
 
@@ -156,6 +178,12 @@ async function main() {
   assert(saved.tasks.length === 1, `expected one task, got ${saved.tasks.length}`)
   assert(saved.tasks[0].definition.revision === 1, 'first revision should be 1')
   assert(saved.tasks[0].activation.enabled, 'task should be enabled on this device')
+  assert(
+    saved.tasks[0].definition.resources.some(
+      (resource) => resource.kind === 'file' && resource.path === 'README.md',
+    ),
+    'absolute resource path was not normalized inside the workspace',
+  )
 
   const taskId = saved.tasks[0].definition.id
   await page.getByRole('button', { name: '立即运行' }).click()

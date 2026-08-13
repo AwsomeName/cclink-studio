@@ -19,6 +19,9 @@ export type AgentEngine = 'local-claude-code'
 /** Claude Code 运行时来源。 */
 export type ClaudeRuntimeSource = 'bundled' | 'managed' | 'system' | 'custom'
 
+/** 当前 Studio 允许按需安装的 Claude Code Runtime 版本。 */
+export const MANAGED_CLAUDE_RUNTIME_VERSION = '2.1.211'
+
 /** 权限模式 */
 export type PermissionMode = 'auto' | 'categorized' | 'strict'
 

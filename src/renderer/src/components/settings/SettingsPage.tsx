@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_SETTINGS, PROVIDER_PRESETS, getPresetBaseUrl } from '@shared/ipc/settings'
 import type { ApiFormat, AppSettings, CadBackend, Provider } from '@shared/ipc/settings'
 import type { SettingsSecretStatus } from '@shared/ipc/settings'
-import { APP_ZOOM_LEVEL_MAX, APP_ZOOM_LEVEL_MIN } from '@shared/settings-constants'
+import {
+  APP_ZOOM_LEVEL_MAX,
+  APP_ZOOM_LEVEL_MIN,
+  MANAGED_CLAUDE_RUNTIME_VERSION,
+} from '@shared/settings-constants'
 import type {
   ClaudeRuntimeSelection,
   ClaudeRuntimeSource,
@@ -35,9 +39,6 @@ import {
   buildKeyboardContextMenuInput,
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
-
-const MANAGED_CLAUDE_RUNTIME_VERSION = '2.1.211'
-
 type SettingsSectionId =
   | 'appearance'
   | 'updates'
@@ -1161,7 +1162,6 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                       }
                     }}
                   >
-                    <option value="bundled">内置固定版本</option>
                     <option value="managed">Studio 管理版本</option>
                     <option value="system">系统安装</option>
                     <option value="custom">自定义路径</option>
@@ -1221,7 +1221,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                       className="settings-input"
                       value={claudeManagedVersion}
                       onChange={(event) => setClaudeManagedVersion(event.target.value)}
-                      placeholder="2.1.211"
+                      placeholder={MANAGED_CLAUDE_RUNTIME_VERSION}
                     />
                   </div>
                 </SettingsRow>

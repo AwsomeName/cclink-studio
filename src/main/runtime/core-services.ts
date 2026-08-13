@@ -120,7 +120,16 @@ export async function bootstrapMainProcessServices(
   registerCredentialsIpc(runtime.credentialService, runtime.trustedRendererGuard)
   console.log('[CCLink Studio] 本地凭证 IPC 已注册')
 
-  registerRuntimeComponentsIpc(runtime.runtimeComponentManager!, runtime.trustedRendererGuard)
+  registerRuntimeComponentsIpc(runtime.runtimeComponentManager!, runtime.trustedRendererGuard, {
+    beginManagedClaudeMutation: () => {
+      const agentBridge = runtime.agentBridge
+      if (!agentBridge) return () => undefined
+      if (!agentBridge.beginConfigurationChange()) return null
+      return () => agentBridge.endConfigurationChange()
+    },
+    isManagedClaudeActive: () =>
+      runtime.claudeRuntimeManager?.getStatus().active?.source === 'managed',
+  })
   console.log('[CCLink Studio] Runtime 组件管理 IPC 已注册')
 
   try {

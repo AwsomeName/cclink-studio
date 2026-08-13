@@ -37,7 +37,13 @@ describe('preload API surface', () => {
         webAffairs: expect.any(Object),
         runtimeComponents: expect.objectContaining({
           getManagedClaudeStatus: expect.any(Function),
+          checkManagedClaude: expect.any(Function),
           installManagedClaude: expect.any(Function),
+          repairManagedClaude: expect.any(Function),
+          uninstallManagedClaude: expect.any(Function),
+          checkRuntimeResource: expect.any(Function),
+          repairRuntimeResource: expect.any(Function),
+          uninstallRuntimeResource: expect.any(Function),
         }),
       }),
     )

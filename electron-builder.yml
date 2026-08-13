@@ -19,11 +19,6 @@ asarUnpack:
   # occt-import-js：OpenCascade wasm 运行时需要随 STEP/STP 转换后端一起可读
   - node_modules/occt-import-js/dist/**
 extraResources:
-  # 固定版本 Claude Code 运行时：构建前由 staging 脚本生成 manifest 与真实可执行文件
-  - from: .agent-runtime-staging
-    to: agent-runtime
-    filter:
-      - '**/*'
   - from: resources/scrcpy-server.jar
     to: scrcpy-server.jar
     filter:
@@ -39,10 +34,7 @@ mac:
   target:
     - dmg
   category: public.app-category.productivity
-  # Local builds use ad-hoc signing so macOS accepts nested executables inside the app bundle.
-  # The bundled Claude runtime keeps its upstream Anthropic Developer ID signature.
-  # The OSS Release workflow overrides this identity with its protected Developer ID.
+  # Local builds use ad-hoc signing. The OSS Release workflow overrides this identity
+  # with its protected Developer ID.
   identity: '-'
-  signIgnore:
-    - 'Contents/Resources/agent-runtime/.*'
 # 开源壳不内置生产更新源；商业版更新源与发布配置由 cclink-dev 构建层注入。

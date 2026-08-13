@@ -10,6 +10,7 @@ import type {
 
 export interface CompositeTerminalExecutionAdapterOptions {
   local: TerminalExecutionAdapter
+  remote?: TerminalExecutionAdapter
 }
 
 export class CompositeTerminalExecutionAdapter implements TerminalExecutionAdapter {
@@ -20,6 +21,7 @@ export class CompositeTerminalExecutionAdapter implements TerminalExecutionAdapt
 
   constructor(private readonly options: CompositeTerminalExecutionAdapterOptions) {
     this.bindAdapter(options.local)
+    if (options.remote) this.bindAdapter(options.remote)
   }
 
   async start(input: TerminalStartInput): Promise<TerminalStartResult> {
@@ -58,11 +60,17 @@ export class CompositeTerminalExecutionAdapter implements TerminalExecutionAdapt
     })
   }
 
-  private resolveStartAdapter(_input: TerminalStartInput): TerminalExecutionAdapter {
+  private resolveStartAdapter(input: TerminalStartInput): TerminalExecutionAdapter {
+    if (input.runtime.location === 'remote') {
+      if (!this.options.remote) throw new Error('远程 Terminal 执行后端未就绪')
+      return this.options.remote
+    }
     return this.options.local
   }
 
   private resolveSessionAdapter(sessionId: string): TerminalExecutionAdapter {
-    return this.sessionAdapters.get(sessionId) ?? this.options.local
+    const adapter = this.sessionAdapters.get(sessionId)
+    if (!adapter) throw new Error('Terminal session 不存在或尚未启动')
+    return adapter
   }
 }

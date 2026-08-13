@@ -18,6 +18,7 @@ import type {
 } from '../agent-protocol'
 import type { WorkspaceRef } from '../workspace-ref'
 import type { AgentConversationConfiguration, AgentRoleSummary } from '../agent-role'
+import type { AgentSkillSummary } from '../agent-skill'
 import type { AgentProfileRef } from '../agent-profile'
 
 export type AgentSendResourceKind =
@@ -172,6 +173,7 @@ export const agentIpc = {
     void
   >('agent:restoreConversation'),
   listRoles: defineIpcCall<[], AgentRoleSummary[]>('agent:listRoles'),
+  listSkills: defineIpcCall<[], AgentSkillSummary[]>('agent:listSkills'),
   closeConversation: defineIpcCall<[conversationId: string], void>('agent:closeConversation'),
   getCapabilities: defineIpcCall<[], AgentCapabilityStatus[]>('agent:getCapabilities'),
   listToolModules: defineIpcCall<[], AgentToolModuleStatus[]>('agent:listToolModules'),

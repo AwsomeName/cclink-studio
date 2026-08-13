@@ -39,6 +39,31 @@ export function handleMarkdownTabKey(
   return adjustMarkdownTextBlockIndent(editor, direction, tabSize)
 }
 
+const TASK_INPUT_MARKER = /^(?:\[\s*([xX]?)\]|【\s*([xX]?)\s*】)$/
+
+export function applyMarkdownTaskInputShortcut(editor: Editor): boolean {
+  const { selection } = editor.state
+  const { $from } = selection
+  if (
+    !selection.empty ||
+    $from.depth !== 1 ||
+    $from.parent.type.name !== 'paragraph' ||
+    $from.parentOffset !== $from.parent.content.size
+  ) {
+    return false
+  }
+
+  const match = TASK_INPUT_MARKER.exec($from.parent.textContent)
+  if (!match) return false
+  const checked = Boolean(match[1] || match[2])
+  return editor
+    .chain()
+    .deleteRange({ from: $from.start(), to: $from.end() })
+    .toggleTaskList()
+    .updateAttributes('taskItem', { checked })
+    .run()
+}
+
 function adjustMarkdownTextBlockIndent(
   editor: Editor,
   direction: 'indent' | 'outdent',
@@ -149,6 +174,7 @@ export const MarkdownKeyboardShortcuts = Extension.create<MarkdownKeyboardShortc
 
   addKeyboardShortcuts() {
     return {
+      Space: () => applyMarkdownTaskInputShortcut(this.editor),
       Tab: () => handleMarkdownTabKey(this.editor, 'indent', this.options.tabSize),
       'Shift-Tab': () => handleMarkdownTabKey(this.editor, 'outdent', this.options.tabSize),
       'Mod-k': () => this.options.openLinkEditor(this.editor),

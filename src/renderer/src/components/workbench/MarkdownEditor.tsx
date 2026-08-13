@@ -42,6 +42,7 @@ import {
   toggleMarkdownBlockquote,
 } from '../../features/markdown/markdown-editor-shortcuts'
 import { createMarkdownDiagnosticReport } from '../../features/markdown/markdown-diagnostic-report'
+import { MarkdownListItem } from '../../features/markdown/markdown-list-item'
 import {
   isMarkdownHydrationPending,
   setMarkdownEditorEditable,
@@ -136,10 +137,12 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       StarterKit.configure({
         codeBlock: false,
         heading: { levels: [1, 2, 3, 4, 5, 6] },
+        listItem: false,
         link: false,
         underline: false,
       }),
       Markdown,
+      MarkdownListItem,
       CodeBlockLowlight.configure({
         lowlight,
         defaultLanguage: 'plaintext',

@@ -8,7 +8,8 @@ const notarizeDmgScript = readFileSync(resolve('scripts/notarize-dmg.sh'), 'utf8
 
 test('release workflow packages only Apple Silicon on the native runner', () => {
   assert.match(workflow, /package:[\s\S]*runs-on: macos-15/)
-  assert.match(workflow, /stage-claude-runtime\.mjs --arch arm64/)
+  assert.doesNotMatch(workflow, /stage-claude-runtime\.mjs/)
+  assert.match(workflow, /test ! -e "\$app_path\/Contents\/Resources\/agent-runtime"/)
   assert.match(workflow, /--mac --arm64/)
   assert.doesNotMatch(workflow, /x64|macos-15-intel|matrix\.arch|matrix\.runner/)
 })

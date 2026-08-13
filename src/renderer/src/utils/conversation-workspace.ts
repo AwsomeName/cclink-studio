@@ -153,9 +153,11 @@ export function scopeWorkspaceEditorDraftSnapshot(
 ): unknown {
   if (!value || typeof value !== 'object') return { files: {} }
   const parsed = value as { files?: Record<string, unknown> }
-  if (!parsed.files || typeof parsed.files !== 'object' || workspaceRef.kind !== 'local') {
+  if (!parsed.files || typeof parsed.files !== 'object') {
     return value
   }
+  // 远程第一阶段只读，不应把本地编辑器草稿写入远程工作区快照。
+  if (workspaceRef.kind !== 'local') return { ...parsed, files: {} }
   const files = Object.fromEntries(
     Object.entries(parsed.files).filter(
       ([fileKey]) => fileKey.startsWith('virtual:') || isPathInside(fileKey, workspaceRef.path),

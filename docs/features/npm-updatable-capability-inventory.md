@@ -1,6 +1,6 @@
 # npm 可更新能力清单
 
-> 状态：固定版本 Runtime 首批已实现；通用能力插件和内容包尚未实现。最后更新：2026-08-12。
+> 状态：固定版本 Runtime 首批已实现，Claude 已改为按需安装；通用能力插件和内容包尚未实现。最后更新：2026-08-13。
 > 详细产品边界见 `runtime-components-and-capability-plugins.md`。
 
 ## 一句话结论
@@ -51,19 +51,19 @@ npm 可以作为内容包、能力插件和 Runtime 组件的下载源，但三�
 推荐流程：
 
 ```text
-安装包携带最低可用 Runtime
-  -> 用户离线也能打开 Studio
+瘦安装包不携带 Claude 可执行文件
+  -> 用户离线仍能打开 Studio，Agent 明确降级
   -> 首次启动并进入工作台
   -> Studio 检查维护者允许目录中的精确 npm 版本
   -> 用户确认来源、大小和权限
   -> 下载 tarball，校验 integrity、SHA-256、发布者、平台和架构
   -> 解包到 userData 的不可变版本目录
   -> probe 成功后，在安全点启用
-  -> 失败回滚上一可用版本或安装包保底版本
+  -> 失败保留上一可用 managed 版本；没有旧版本时仅 Agent 不可用
 ```
 
-Runtime 可以在首次启动后通过 npm 更新，但它仍是 Runtime 组件，不是普通插件。DMG、Installer
-或首次启动阻断页不负责联网安装，避免无网络时用户连工作台都进不去。
+Runtime 可以在首次启动后通过 npm 安装，但它仍是 Runtime 组件，不是普通插件。DMG 不携带
+Claude 可执行文件，首次启动页也不阻断工作台；本机已有 Claude 时仍可直接选择系统版本。
 
 ## 共同限制
 
@@ -78,10 +78,12 @@ Runtime 可以在首次启动后通过 npm 更新，但它仍是 Runtime 组件�
 
 ## 当前完成度
 
-当前 Studio 已能在应用内安装固定 Claude、OCCT、scrcpy 和 agent-device Helper 制品，校验后
-存入 `userData` 并在 App 覆盖升级后复用。OCCT 与 scrcpy 已由各自领域服务真实使用，损坏时
+当前 Studio 已能在应用内安装、检查、修复和卸载固定 Claude、OCCT、scrcpy 和 agent-device
+Helper 制品，校验后存入 `userData` 并在 App 覆盖升级后复用。OCCT 与 scrcpy 已由各自领域服务真实使用，损坏时
 退回随 App 资源；agent-device Helper 因上游 host 没有资源注入 contract，只能显示“已下载，
 待宿主支持”，不能宣称已激活。
 
-尚未交付：任意插件安装、隔离 Plugin Host、内容包、远程签名目录、卸载，以及两个真实版本
+Claude Code 可执行文件不再进入 `.app`；完整 App 更新只传输 Electron、Agent SDK 和宿主代码。
+
+尚未交付：任意插件安装、隔离 Plugin Host、内容包、远程签名目录，以及两个真实版本
 之间的更新/回滚。因此“固定版本独立安装和修复”已完成，“通用 npm 更新系统”尚未完成。

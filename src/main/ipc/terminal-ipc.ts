@@ -126,10 +126,6 @@ export function registerTerminalIpc(
     }
     const normalized = normalizePtyStartInput(input)
     if (!normalized) return { success: false, error: 'Terminal PTY 启动参数无效' }
-    if (normalized.runtime.location !== 'local') {
-      return { success: false, error: '当前阶段只支持本地 PTY Terminal' }
-    }
-
     if (!terminalSessionRegistry.get(normalized.terminalSessionId)) {
       terminalSessionRegistry.register({
         sessionId: normalized.terminalSessionId,

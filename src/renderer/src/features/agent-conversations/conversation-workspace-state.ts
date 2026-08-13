@@ -51,11 +51,11 @@ export function normalizeConversationSnapshot(
   }
   if (!parsed.conversations || !parsed.conversationOrder) return null
   if (parsed.conversationOrder.length === 0) {
-    const fresh = createAgentConversationState(DEFAULT_CONVERSATION_ID)
+    const fresh = createAgentConversationState(undefined, { workspaceRef })
     return {
-      conversations: { [DEFAULT_CONVERSATION_ID]: fresh },
-      conversationOrder: [DEFAULT_CONVERSATION_ID],
-      activeConversationId: DEFAULT_CONVERSATION_ID,
+      conversations: { [fresh.id]: fresh },
+      conversationOrder: [fresh.id],
+      activeConversationId: fresh.id,
     }
   }
 

@@ -74,6 +74,7 @@ async function main() {
       // 没有旧进程也可以继续。
     }
     if (!reuseUserData) await rm(userDataPath, { recursive: true, force: true })
+    await rm(logFile, { force: true })
     runRestart('start')
     started = true
 
@@ -113,7 +114,23 @@ async function main() {
     const afterInstall = await firstRow.locator('td').allTextContents()
     assertIncludes(afterInstall, '已安装 · Studio 管理', '安装完成状态没有更新')
     assertIncludes(afterInstall, '版本 2.1.211', '安装版本没有更新')
-    if (await installButton.isEnabled()) throw new Error('已安装版本仍允许重复安装')
+    if ((await firstRow.getByRole('button', { name: '安装' }).count()) !== 0) {
+      throw new Error('已安装版本仍显示安装按钮')
+    }
+    for (const action of ['检查', '修复', '卸载']) {
+      if (!(await firstRow.getByRole('button', { name: action, exact: true }).isEnabled())) {
+        throw new Error(`Claude Runtime ${action}按钮不可用`)
+      }
+    }
+    await firstRow.getByRole('button', { name: '检查', exact: true }).click()
+    await first.page.waitForFunction(
+      () =>
+        Array.from(document.querySelectorAll('.settings-description')).some((candidate) =>
+          candidate.textContent?.includes('当前可信目录没有更新'),
+        ),
+      undefined,
+      { timeout: 30_000 },
+    )
     await first.page.screenshot({ path: screenshotPath, fullPage: true })
     await first.browser.close()
 
@@ -123,6 +140,18 @@ async function main() {
     const afterReplacement = await replacementRow.locator('td').allTextContents()
     assertIncludes(afterReplacement, '已安装 · Studio 管理', '替换 App 后安装状态丢失')
     assertIncludes(afterReplacement, '版本 2.1.211', '替换 App 后版本信息丢失')
+    replacement.page.once('dialog', (dialog) => dialog.accept())
+    await replacementRow.getByRole('button', { name: '卸载', exact: true }).click()
+    await replacement.page.waitForFunction(
+      () => {
+        const row = Array.from(document.querySelectorAll('.component-table tbody tr')).find(
+          (candidate) => candidate.textContent?.includes('Claude Code Runtime'),
+        )
+        return Boolean(row?.textContent?.includes('未安装') && row.textContent.includes('安装'))
+      },
+      undefined,
+      { timeout: 30_000 },
+    )
     await replacement.browser.close()
 
     process.stdout.write(
@@ -132,6 +161,8 @@ async function main() {
           firstRunOpenedComponents: !reuseUserData,
           installedVersion: '2.1.211',
           appReplacementReuse: true,
+          updateCheck: 'no trusted update',
+          uninstall: true,
           screenshotPath,
         },
         null,

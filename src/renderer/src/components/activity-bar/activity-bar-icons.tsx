@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactElement, ReactNode } from 'react'
+import React, { type CSSProperties, type ReactElement, type ReactNode } from 'react'
 
 interface ActivityIconProps {
   size?: number

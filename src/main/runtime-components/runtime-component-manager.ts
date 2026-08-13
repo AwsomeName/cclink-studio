@@ -96,7 +96,8 @@ export class RuntimeComponentManager {
   private progress: ManagedClaudeInstallProgress | null = null
   private failure: ManagedClaudeInstallFailure | null = null
   private installedVersions: string[] = []
-  private installPromise: Promise<ManagedClaudeRuntimeOperationResult> | null = null
+  private health: ManagedClaudeRuntimeStatus['health'] = 'not-installed'
+  private operationPromise: Promise<ManagedClaudeRuntimeOperationResult> | null = null
 
   constructor(root: string, dependencies: RuntimeComponentManagerDependencies = {}) {
     this.root = resolve(root)
@@ -121,14 +122,7 @@ export class RuntimeComponentManager {
     }
     await mkdir(this.configRoot(entry), { recursive: true, mode: 0o700 })
     await this.recoverInterruptedReplacement(entry)
-    try {
-      await this.verifyInstalledEntry(entry)
-      this.installedVersions = [entry.runtimeVersion]
-      this.phase = 'installed'
-    } catch {
-      this.installedVersions = []
-      this.phase = 'idle'
-    }
+    await this.refreshManagedClaudeStatus(entry, false)
   }
 
   listRuntimeResources(): RuntimeResourceStatus[] {
@@ -139,6 +133,24 @@ export class RuntimeComponentManager {
     componentId: RuntimeResourceComponentId,
   ): Promise<RuntimeResourceOperationResult> {
     return this.resourceManager.install(componentId)
+  }
+
+  checkRuntimeResource(
+    componentId: RuntimeResourceComponentId,
+  ): Promise<RuntimeResourceOperationResult> {
+    return this.resourceManager.check(componentId)
+  }
+
+  repairRuntimeResource(
+    componentId: RuntimeResourceComponentId,
+  ): Promise<RuntimeResourceOperationResult> {
+    return this.resourceManager.repair(componentId)
+  }
+
+  uninstallRuntimeResource(
+    componentId: RuntimeResourceComponentId,
+  ): Promise<RuntimeResourceOperationResult> {
+    return this.resourceManager.uninstall(componentId)
   }
 
   resolveRuntimeResource(
@@ -156,6 +168,8 @@ export class RuntimeComponentManager {
       supported: entry !== null,
       constrainedVersion: entry?.runtimeVersion ?? null,
       availableVersion: entry?.runtimeVersion ?? null,
+      updateAvailable: false,
+      health: this.health,
       installedVersions: [...this.installedVersions],
       phase: this.phase,
       progress: this.progress ? { ...this.progress } : null,
@@ -164,17 +178,68 @@ export class RuntimeComponentManager {
   }
 
   installManagedClaude(): Promise<ManagedClaudeRuntimeOperationResult> {
-    if (this.installPromise) {
+    return this.startManagedClaudeOperation(() => this.performInstall(false))
+  }
+
+  checkManagedClaude(): Promise<ManagedClaudeRuntimeOperationResult> {
+    return this.startManagedClaudeOperation(async () => {
+      const entry = this.catalogEntry()
+      if (!entry) {
+        return this.fail('PLATFORM_UNSUPPORTED', `当前不支持 ${this.platform}-${this.arch}`)
+      }
+      await this.refreshManagedClaudeStatus(entry, true)
+      return {
+        success: this.health !== 'damaged',
+        status: this.getManagedClaudeStatus(),
+        ...(this.health === 'damaged'
+          ? {
+              error: `${this.failure?.code ?? 'INSTALL_FAILED'}: ${this.failure?.message ?? '组件损坏'}`,
+            }
+          : {}),
+      }
+    })
+  }
+
+  repairManagedClaude(): Promise<ManagedClaudeRuntimeOperationResult> {
+    return this.startManagedClaudeOperation(() => this.performInstall(true))
+  }
+
+  uninstallManagedClaude(): Promise<ManagedClaudeRuntimeOperationResult> {
+    return this.startManagedClaudeOperation(async () => {
+      const entry = this.catalogEntry()
+      if (!entry) {
+        return this.fail('PLATFORM_UNSUPPORTED', `当前不支持 ${this.platform}-${this.arch}`)
+      }
+      this.phase = 'uninstalling'
+      this.failure = null
+      this.progress = null
+      try {
+        await rm(this.versionRoot(entry), { recursive: true, force: true })
+        await rm(this.backupRoot(entry), { recursive: true, force: true })
+        this.installedVersions = []
+        this.health = 'not-installed'
+        this.phase = 'idle'
+        return { success: true, status: this.getManagedClaudeStatus() }
+      } catch (error) {
+        return this.fail('INSTALL_FAILED', `Claude Runtime 卸载失败：${describeError(error)}`)
+      }
+    })
+  }
+
+  private startManagedClaudeOperation(
+    operation: () => Promise<ManagedClaudeRuntimeOperationResult>,
+  ): Promise<ManagedClaudeRuntimeOperationResult> {
+    if (this.operationPromise) {
       return Promise.resolve({
         success: false,
         status: this.getManagedClaudeStatus(),
-        error: 'INSTALL_BUSY: Claude Runtime 正在安装',
+        error: 'INSTALL_BUSY: Claude Runtime 正在执行其他操作',
       })
     }
-    this.installPromise = this.performInstall().finally(() => {
-      this.installPromise = null
+    this.operationPromise = operation().finally(() => {
+      this.operationPromise = null
     })
-    return this.installPromise
+    return this.operationPromise
   }
 
   async resolveManagedClaude(version: string): Promise<ResolvedManagedClaudeRuntime> {
@@ -196,7 +261,7 @@ export class RuntimeComponentManager {
     }
   }
 
-  private async performInstall(): Promise<ManagedClaudeRuntimeOperationResult> {
+  private async performInstall(force: boolean): Promise<ManagedClaudeRuntimeOperationResult> {
     const entry = this.catalogEntry()
     if (!entry) {
       return this.fail('PLATFORM_UNSUPPORTED', `当前不支持 ${this.platform}-${this.arch}`)
@@ -207,9 +272,10 @@ export class RuntimeComponentManager {
     try {
       await mkdir(this.configRoot(entry), { recursive: true, mode: 0o700 })
       await this.recoverInterruptedReplacement(entry)
-      const existing = await this.tryResolve(entry)
-      if (existing) {
+      const existing = force ? null : await this.tryResolve(entry)
+      if (existing && !force) {
         this.installedVersions = [entry.runtimeVersion]
+        this.health = 'healthy'
         this.phase = 'installed'
         return { success: true, status: this.getManagedClaudeStatus() }
       }
@@ -259,11 +325,23 @@ export class RuntimeComponentManager {
       }
 
       this.installedVersions = [entry.runtimeVersion]
+      this.health = 'healthy'
       this.phase = 'installed'
       this.progress = null
       return { success: true, status: this.getManagedClaudeStatus() }
     } catch (error) {
       const failure = toInstallFailure(error)
+      if (force) {
+        await this.refreshManagedClaudeStatus(entry, false)
+        if (this.health === 'healthy') {
+          this.failure = failure
+          return {
+            success: false,
+            status: this.getManagedClaudeStatus(),
+            error: `${failure.code}: ${failure.message}；已保留原版本`,
+          }
+        }
+      }
       return this.fail(failure.code, failure.message)
     }
   }
@@ -279,6 +357,32 @@ export class RuntimeComponentManager {
       success: false,
       status: this.getManagedClaudeStatus(),
       error: `${code}: ${message}`,
+    }
+  }
+
+  private async refreshManagedClaudeStatus(
+    entry: ManagedClaudeRuntimeCatalogEntry,
+    exposeCheckingPhase: boolean,
+  ): Promise<void> {
+    if (exposeCheckingPhase) this.phase = 'checking'
+    this.progress = null
+    this.failure = null
+    try {
+      await this.verifyInstalledEntry(entry)
+      this.installedVersions = [entry.runtimeVersion]
+      this.health = 'healthy'
+      this.phase = 'installed'
+    } catch (error) {
+      this.installedVersions = []
+      if (await pathExists(this.versionRoot(entry))) {
+        const failure = toInstallFailure(error)
+        this.health = 'damaged'
+        this.phase = 'failed'
+        this.failure = failure
+      } else {
+        this.health = 'not-installed'
+        this.phase = 'idle'
+      }
     }
   }
 

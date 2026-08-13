@@ -12,11 +12,36 @@ export interface AgentRoleRef {
   version: number
 }
 
+export interface AgentSkillRef {
+  skillId: string
+  version: number
+}
+
+export interface AgentRoleExample {
+  input: string
+  focus: string
+}
+
+export interface AgentRoleSoulSummary {
+  format: 'markdown'
+  source: 'builtin'
+  markdown: string
+  contentHash: string
+}
+
 export interface AgentRoleSummary extends AgentRoleRef {
   label: string
   description: string
   icon: AgentRoleIcon
+  goals: string[]
+  suitableFor: string[]
+  unsuitableFor: string[]
   instructions: string[]
+  boundaries: string[]
+  examples: AgentRoleExample[]
+  contentHash: string
+  recommendedSkillRefs: AgentSkillRef[]
+  soul?: AgentRoleSoulSummary
   disclaimer?: string
 }
 

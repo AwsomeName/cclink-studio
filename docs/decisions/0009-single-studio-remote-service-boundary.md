@@ -64,3 +64,10 @@ ADR 0004 对不可变 Tag、凭证不入库和发布可审计性的安全要求�
 - 恶意/非主 renderer 调用远程 IPC 被拒绝，超长或越界输入被 schema 拒绝；
 - 运行受影响测试、typecheck、lint、`pnpm verify` 和无钥匙串检查；
 - 不执行 Developer ID 签名或 Apple 公证。
+
+## 实施记录（2026-08-13）
+
+- Studio 基础层已统一远程 Workspace/Tab 切换、RemoteProvider 写入契约、Terminal execution adapter 路由与受信 IPC/schema。
+- CCLink 域已接入远程会话创建/同步/流式事件、文件创建/修改/重命名/删除（包含大于 2 KiB 的分片传输）和持久远程 PTY（包含 keepalive、attach 与序列续接）。
+- 远程消息禁止经本地 `agent:sendMessage` 执行，防止远程路径意外落到本地 Agent。
+- 自动化工程门禁已通过；真实在线 Agent 上的写入、会话和 PTY 产品验收仍是 overlay 停止出包的前置条件。

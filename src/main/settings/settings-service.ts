@@ -8,7 +8,12 @@
 import { app } from 'electron'
 import { join } from 'path'
 import { readFile, writeFile } from 'fs/promises'
-import { DEFAULT_SETTINGS, normalizeClaudeRuntimeSettingsUpdate, type AppSettings } from './types'
+import {
+  DEFAULT_SETTINGS,
+  MANAGED_CLAUDE_RUNTIME_VERSION,
+  normalizeClaudeRuntimeSettingsUpdate,
+  type AppSettings,
+} from './types'
 import type { SettingsSecretKey } from '../../shared/ipc/settings'
 import type { SettingsSecretStatus } from '../../shared/ipc/settings'
 import { CredentialService } from '../credentials/credential-service'
@@ -78,6 +83,10 @@ export class SettingsService {
       }
     }
 
+    const needsClaudeRuntimeMigration =
+      settingsFileExists &&
+      (typeof parsed.claudeRuntimeSource !== 'string' || parsed.claudeRuntimeSource === 'bundled')
+
     this.store = { ...DEFAULT_SETTINGS }
     this.applyPersistedSettings(parsed)
     this.migrateClaudeRuntimeSelection(parsed)
@@ -90,8 +99,6 @@ export class SettingsService {
 
     const legacySecrets = extractLegacySecrets(parsed)
     const hasLegacySecretFields = Object.keys(parsed).some((key) => SECRET_KEYS.has(key))
-    const needsClaudeRuntimeMigration =
-      settingsFileExists && typeof parsed.claudeRuntimeSource !== 'string'
     try {
       await this.credentialService.ensureLoaded()
       if (legacySecrets.apiKey) {
@@ -300,6 +307,12 @@ export class SettingsService {
   }
 
   private migrateClaudeRuntimeSelection(parsed: Record<string, unknown>): void {
+    if (parsed.claudeRuntimeSource === 'bundled') {
+      this.store.claudeRuntimeSource = 'managed'
+      this.store.claudeManagedVersion = MANAGED_CLAUDE_RUNTIME_VERSION
+      this.store.claudeCodePath = ''
+      return
+    }
     if (typeof parsed.claudeRuntimeSource === 'string') return
     this.store.claudeRuntimeSource = this.store.claudeCodePath.trim() ? 'custom' : 'system'
   }
