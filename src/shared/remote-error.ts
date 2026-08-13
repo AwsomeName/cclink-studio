@@ -1,0 +1,27 @@
+export type RemoteErrorLayer =
+  | 'account'
+  | 'transport'
+  | 'remote-agent'
+  | 'workspace'
+  | 'file-provider'
+  | 'unknown'
+
+export interface RemoteError {
+  layer: RemoteErrorLayer
+  code: string
+  message: string
+  retryable: boolean
+  context?: Record<string, string | number | boolean | null>
+}
+
+export const REMOTE_ERROR_CODE = {
+  NOT_CONFIGURED: 'REMOTE_NOT_CONFIGURED',
+  LOGIN_REQUIRED: 'REMOTE_LOGIN_REQUIRED',
+  TRANSPORT_UNAVAILABLE: 'REMOTE_TRANSPORT_UNAVAILABLE',
+  TRANSPORT_SEND_FAILED: 'REMOTE_TRANSPORT_SEND_FAILED',
+  REQUEST_TIMEOUT: 'REMOTE_REQUEST_TIMEOUT',
+  PROTOCOL_INCOMPATIBLE: 'REMOTE_PROTOCOL_INCOMPATIBLE',
+  UNEXPECTED_RESPONSE: 'REMOTE_UNEXPECTED_RESPONSE',
+  WORKSPACE_NOT_FOUND: 'REMOTE_WORKSPACE_NOT_FOUND',
+  FILE_FAILED: 'REMOTE_FILE_FAILED',
+} as const

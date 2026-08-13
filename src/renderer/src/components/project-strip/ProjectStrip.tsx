@@ -1,14 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useAgentStore, useFsStore, useOpenProjectsStore, useWorkspaceStore } from '../../stores'
+import {
+  useAgentStore,
+  useFsStore,
+  useOpenProjectsStore,
+  useTabStore,
+  useUIStore,
+  useWorkspaceStore,
+} from '../../stores'
+import { workspaceRefKey } from '@shared/workspace-ref'
 import { getRunningProjectCounts } from '../../features/agent-conversations/project-activity'
 import { getWorkspaceStateOwnerKey } from '../../utils/workspace-state'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
-import { IconHistory, IconProjects } from '../common/Icons'
+import { IconCloud, IconHistory, IconProjects } from '../common/Icons'
 import { useToastStore } from '../common/Toast'
 import {
   buildKeyboardContextMenuInput,
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
+import {
+  applyWorkspaceRuntimeTransition,
+  prepareWorkspaceRuntimeTransition,
+} from '../../utils/workspace-transition'
 
 type DropPlacement = 'before' | 'after'
 
@@ -39,6 +51,7 @@ function buildProjectLabels(paths: string[]): Map<string, string> {
 export function ProjectStrip(): React.ReactElement {
   const openProjectPaths = useOpenProjectsStore((state) => state.openProjectPaths)
   const reorderProject = useOpenProjectsStore((state) => state.reorderProject)
+  const openRemoteWorkspaceRefs = useOpenProjectsStore((state) => state.openRemoteWorkspaceRefs)
   const recentWorkspacePaths = useFsStore((state) => state.recentWorkspacePaths)
   const openRecentWorkspace = useFsStore((state) => state.openRecentWorkspace)
   const switchingPath = useFsStore((state) => state.switchingPath)
@@ -67,6 +80,7 @@ export function ProjectStrip(): React.ReactElement {
   const suppressClickRef = useRef(false)
 
   const activePath = activeWorkspaceRef.kind === 'local' ? activeWorkspaceRef.path : null
+  const activeWorkspaceKey = workspaceRefKey(activeWorkspaceRef)
   const workspaceBusy = workspaceLoading || workspacePicking || switchingPath !== null
   const labels = useMemo(() => buildProjectLabels(openProjectPaths), [openProjectPaths])
   const runningProjectCounts = useMemo(
@@ -109,6 +123,26 @@ export function ProjectStrip(): React.ReactElement {
       showToast(reason || '项目切换失败，已保留当前现场', 'error')
     }
     return success
+  }
+
+  const activateRemoteProject = async (index: number): Promise<void> => {
+    const ref = openRemoteWorkspaceRefs[index]
+    if (!ref) return
+    try {
+      const transition = await prepareWorkspaceRuntimeTransition(ref)
+      const applied = await applyWorkspaceRuntimeTransition(transition, { hydrate: false })
+      if (!applied) return
+      useUIStore.getState().setActivePanel('files')
+      const tab = useTabStore
+        .getState()
+        .tabs.find(
+          (item) =>
+            workspaceRefKey(item.workspaceRef ?? { kind: 'global' }) === workspaceRefKey(ref),
+        )
+      if (tab) useTabStore.getState().activateTab(tab.id)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '远程项目切换失败', 'error')
+    }
   }
 
   const openHistoryProject = async (path: string): Promise<void> => {
@@ -269,6 +303,26 @@ export function ProjectStrip(): React.ReactElement {
                       {runningCount}
                     </span>
                   )}
+                </button>
+              )
+            })}
+            {openRemoteWorkspaceRefs.map((ref, index) => {
+              const key = workspaceRefKey(ref)!
+              const active = key === activeWorkspaceKey
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className={`project-strip-item ${active ? 'active' : ''}`}
+                  title={`${ref.endpointName || 'CCLink'} · ${ref.path}`}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={() => void activateRemoteProject(index)}
+                >
+                  <IconCloud size={13} />
+                  <span className="project-strip-label">
+                    {ref.label || getProjectName(ref.path)}
+                  </span>
+                  <span className="project-strip-remote-source">远程</span>
                 </button>
               )
             })}

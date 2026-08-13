@@ -23,6 +23,7 @@ export type ActivityPanel =
   | 'sessions'
   | 'agent-roles'
   | 'scheduled-tasks'
+  | 'cclink'
 
 /** Workbench Tab 类型 */
 export type TabType =
@@ -43,6 +44,7 @@ export type TabType =
   | 'web-resource'
   | 'web-affair'
   | 'agent-role'
+  | 'remote-file'
 
 export type ConversationSurface = 'assistant-panel' | 'workbench-tab'
 
@@ -152,6 +154,13 @@ export interface Tab {
   workspaceRef?: WorkspaceRef
   /** 关联的文件路径（编辑器 Tab 使用） */
   filePath?: string
+  /** CCLink 只读远程文件；内容事实由 RemoteProvider 按需读取。 */
+  remoteFile?: {
+    serverId: string
+    workspaceId: string
+    workspacePath: string
+    path: string
+  }
   /** 是否有未保存的修改 */
   dirty?: boolean
   /** 复制编辑器 Tab 时的种子内容（仅激活创建时消费一次） */

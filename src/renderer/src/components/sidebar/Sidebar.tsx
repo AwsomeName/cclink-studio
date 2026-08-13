@@ -59,6 +59,8 @@ import { createScheduledTaskTab } from '../../features/scheduled-tasks/scheduled
 import { AgentRolesSidebar } from '../../features/agent-roles/AgentRolesSidebar'
 import { useToastStore } from '../common/Toast'
 import { openDefaultBrowserTab } from '../../features/web-resources/open-default-browser-tab'
+import { CclinkPanel } from '../../features/cclink-remote/CclinkPanel'
+import { RemoteFileTree } from '../../features/cclink-remote/RemoteFileTree'
 
 function getProjectName(path: string): string {
   return path.split('/').filter(Boolean).pop() ?? path
@@ -98,6 +100,8 @@ function getSidebarTitle(
       return '定时任务'
     case 'files':
       return getWorkspaceTitle(workspaceRef, workspacePath)
+    case 'cclink':
+      return 'CCLink 远程'
   }
 }
 
@@ -267,6 +271,8 @@ function ProjectSidebarContent({
       {activePanel === 'browser' && <BrowserManagementView />}
 
       {activePanel === 'data-sources' && <DataSourcesPanel />}
+
+      {activePanel === 'cclink' && <CclinkPanel />}
 
       {activePanel === 'files' && (
         <FilesSidebarView workspaceRef={activeWorkspaceRef} workspacePath={workspacePath} />
@@ -639,6 +645,14 @@ function FilesSidebarView({
     return (
       <div className="project-panel-empty project-files-empty">
         未归档没有项目文件树，临时草稿请在会话或主工作区中打开。
+      </div>
+    )
+  }
+
+  if (workspaceRef.kind === 'remote') {
+    return (
+      <div className="sidebar-section project-files-section">
+        <RemoteFileTree workspaceRef={workspaceRef} />
       </div>
     )
   }

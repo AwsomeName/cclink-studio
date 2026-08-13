@@ -19,16 +19,15 @@ export const forbidden = [
   { label: 'old product name', pattern: /DeepInk|deepink|DEEPINK/ },
   { label: 'old private service naming', pattern: /private-serv|private service|private-service/ },
   { label: 'nonexistent split project', pattern: /cclink-cloud|cclink-agent/ },
-  { label: 'old IM credential or provider', pattern: /\bTIM\b|腾讯 IM|Tencent IM|UserSig/ },
-  { label: 'secret-bearing renderer field', pattern: /authToken|imUserSig/ },
+  {
+    label: 'secret-bearing renderer field',
+    pattern: /authToken|imUserSig|refreshToken|userSig/,
+    pathPattern: /^src\/(?:renderer|preload)\//,
+  },
   { label: 'legacy identity flow', pattern: /legacy identity|importLegacy/ },
   {
-    label: 'remote workspace residue',
-    pattern: /Remote Workspace|remote workspace|remote-session/,
-  },
-  {
     label: 'migrated store/module residue',
-    pattern: /SyncPanel|sync-store|auth-store|subscription-store|cclink-store/,
+    pattern: /SyncPanel|sync-store|subscription-store/,
   },
   {
     label: 'old artifact upload or cloud config',
@@ -82,6 +81,7 @@ function scanFile(relativePath) {
   const lines = text.split(/\r?\n/)
   for (const [lineIndex, line] of lines.entries()) {
     for (const rule of forbidden) {
+      if (rule.pathPattern && !rule.pathPattern.test(relativePath)) continue
       const match = line.match(rule.pattern)
       if (match) {
         if (scopedAllowances.get(relativePath)?.has(rule.label)) continue

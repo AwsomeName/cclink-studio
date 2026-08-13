@@ -113,15 +113,27 @@ async function main() {
     assert(shell.hasMainWindow, 'main window is missing')
     assert(shell.hasTopbar, 'topbar is missing')
     assert(shell.hasStatusBar, 'status bar is missing')
-    for (const forbidden of ['auth', 'subscription', 'sync', 'cclink', 'remote']) {
+    for (const required of ['auth', 'cclink', 'remote']) {
+      assert(shell.apiKeys.includes(required), `required preload API missing: ${required}`)
+    }
+    for (const forbidden of ['subscription', 'sync']) {
       assert(!shell.apiKeys.includes(forbidden), `forbidden preload API exposed: ${forbidden}`)
     }
-    const blockedUiCopy = ['登录 CCLink', '订阅', '配额', `Remote ${'Workspace'}`]
+    const blockedUiCopy = ['订阅', '配额', `Remote ${'Workspace'}`]
     assert(
       blockedUiCopy.every((text) => !shell.bodyText.includes(text)),
       'login or paid UI copy leaked',
     )
     return `apis=${shell.apiKeys.length}`
+  })
+
+  await runCheck('CCLink remote entry is optional and reports service configuration', async () => {
+    const status = await page.evaluate(() => window.cclinkStudio.auth.getServiceStatus())
+    assert(typeof status.configured === 'boolean', 'remote service status is not typed')
+    if (!status.configured) {
+      assert(Boolean(status.message), 'unconfigured remote service is missing degradation copy')
+    }
+    return status.configured ? 'configured' : 'unconfigured, local shell remains ready'
   })
 
   await runCheck('official integration defaults to oss no-op', async () => {

@@ -1,19 +1,17 @@
 # CCLink Studio 开发指南
 
-> 当前事实源。最后更新：2026-08-11。
+> 当前事实源。最后更新：2026-08-13。
 
 ## 结论
 
-本仓库是 CCLink Studio 的开源桌面壳。开发时默认只依赖本地能力，不假设存在官方生产 API、登录服务、订阅服务、官方消息凭证、云同步、网络工作区或商业更新源。
+本仓库是唯一 CCLink Studio 桌面 App。本地能力默认启动、免费且免登录；CCLink 账号、设备和远程工作区作为可选内置功能域，只在用户打开远程入口后初始化。缺配置、未登录和远程故障都不得影响本地功能。
 
-开源版签名、公证和 GitHub Release 由本仓库工作流处理；商业版构建、签名、公证和
-生产 API 注入由 `/Users/apple/Desktop/cclink-dev` 的独立工作流处理。CCLink
-云函数与 Agent runtime 位于 `/Users/apple/Desktop/chat-cc/deploy` 和
-`/Users/apple/Desktop/chat-cc/Agent`。
+CCLink 云函数与 Agent runtime 仍位于 `/Users/apple/Desktop/chat-cc/deploy` 和
+`/Users/apple/Desktop/chat-cc/Agent`，分别独立部署和通过现有 NPM 包发布。本次不修改它们。支付、生产秘密、Developer ID 签名和 Apple 公证不在当前实施范围。
 
 所有功能开发必须遵守 `docs/architecture.md` 的“架构宪法”。S0-S4 稳定化阶段已经关闭，后续功能可以从当前 `main` 稳定基线受控推进，但不得重新引入跨模块硬依赖、第二状态所有者或未经验证的权限扩张。
 
-第三方凭证边界见 `docs/features/local-credentials.md` 和 ADR 0003。当前实现统一使用主进程 `CredentialService`；新代码不得增加钥匙串调用、独立凭证 Store 或工作空间内凭证文件。
+第三方凭证边界见 `docs/features/local-credentials.md` 和 ADR 0003。CCLink Session 是明确例外：只用权限为 `0600` 的本地 Session 文件持久化 refresh token；access token、IM UserSig 和完整远程身份只驻留主进程内存。禁止使用或迁移任何系统钥匙串数据，旧密文只能隔离并要求重新登录。
 
 统一右键、命令面板、快捷键和工具栏入口的产品与工程事实源见 `docs/features/context-action-system.md`，区域 owner 库存见 `docs/ops/context-action-inventory.md`。新增区域只能贡献结构化 target、command 和 contribution；不得新增独立菜单 Host、第二个菜单 Store 或未登记的原生菜单。`pnpm verify:context-actions` 会执行该边界门禁。
 

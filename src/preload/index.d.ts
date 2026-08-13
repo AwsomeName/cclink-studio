@@ -23,11 +23,20 @@ import type { ScheduledTasksApiContract } from '../shared/scheduled-task/schedul
 import type { WebResourcesApiContract } from '../shared/web-resources/web-resource'
 import type { WebAffairsApiContract } from '../shared/web-affairs/web-affair'
 import type { RuntimeComponentsApiContract } from '../shared/ipc/runtime-components'
+import type { AuthApiContract } from '../shared/ipc/auth'
+import type { CclinkApiContract } from '../shared/ipc/cclink'
+import type { RemoteApiContract } from '../shared/ipc/remote'
 
 export interface CCLinkStudioAPI {
   reportWorkbenchBounds: (bounds: { x: number; y: number; width: number; height: number }) => void
 
   window: WindowApiContract
+
+  auth: AuthApiContract
+
+  cclink: CclinkApiContract
+
+  remote: RemoteApiContract
 
   browser: BrowserApiContract
 

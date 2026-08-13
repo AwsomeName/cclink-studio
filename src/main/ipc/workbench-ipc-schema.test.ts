@@ -5,6 +5,7 @@ import {
   projectOpsPublicationSchema,
   workspaceStateConversationValueSchema,
   workspaceStateValueSchema,
+  workspaceStateWorkspaceKeySchema,
 } from './workbench-ipc-schema'
 
 describe('workbench IPC schemas', () => {
@@ -34,6 +35,14 @@ describe('workbench IPC schemas', () => {
     expect(() => workspaceStateValueSchema.parse({ value: Number.NaN })).toThrow('非有限数字')
     expect(() => workspaceStateValueSchema.parse(new Date())).toThrow('普通 JSON 对象')
     expect(workspaceStateValueSchema.parse({ tabs: [] })).toEqual({ tabs: [] })
+  })
+
+  it('accepts bounded CCLink workspace keys without treating arbitrary URLs as local paths', () => {
+    expect(workspaceStateWorkspaceKeySchema.parse('cclink://agent-1/workspace-1')).toBe(
+      'cclink://agent-1/workspace-1',
+    )
+    expect(() => workspaceStateWorkspaceKeySchema.parse('https://example.com/workspace')).toThrow()
+    expect(() => workspaceStateWorkspaceKeySchema.parse('cclink://agent-1')).toThrow()
   })
 
   it('allows bounded long-running Agent history without relaxing other workspace sections', () => {

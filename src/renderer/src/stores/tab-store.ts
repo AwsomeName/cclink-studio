@@ -132,6 +132,7 @@ interface OpenTabOptions {
   title: string
   icon: string
   filePath?: string
+  remoteFile?: Tab['remoteFile']
   /** 复制编辑器 Tab 时的种子内容（仅激活创建时消费一次） */
   initialContent?: string
   /** 新建/复制浏览器 Tab 时的初始 URL（仅激活创建时消费一次） */
@@ -244,6 +245,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     title,
     icon,
     filePath,
+    remoteFile,
     initialContent,
     initialUrl,
     browserProfile,
@@ -389,6 +391,7 @@ export const useTabStore = create<TabState>((set, get) => ({
           ? {}
           : { workspaceRef: workspaceRef ?? workspaceRefFromKey(getWorkspaceStateKey()) }),
         filePath,
+        remoteFile,
         initialContent,
         initialUrl,
         browserProfile,

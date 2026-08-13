@@ -1,17 +1,17 @@
 # Official Integration Contract
 
-> Current OSS contract. Last updated: 2026-07-28.
+> Legacy assembly contract. Last updated: 2026-08-13.
 
 ## Conclusion
 
-CCLink Studio exposes a minimal, inert main-process integration contract. The OSS build
-always loads `oss-noop`; it does not ship official account, message network, entitlement,
-quota, production runtime, release provider, production endpoints, or publication secrets.
+The `OfficialIntegration` no-op seam remains temporarily for compatibility with the old
+commercial overlay, but it no longer defines the product boundary. CCLink account, device,
+realtime transport and the read-only first-stage remote workspace are now a built-in,
+optional GPL-3.0-only Studio feature domain.
 
-The current commercial build is assembled by `cclink-dev`: it copies the OSS tree into an
-isolated build directory and overlays commercial-only source, configuration, resources, scripts, and
-package metadata. The overlay is an assembly mechanism, not permission for OSS runtime files
-to import official-only implementations.
+The built-in remote domain is fail-soft: without service configuration, login, or a healthy
+remote service, Studio still starts and all local capabilities remain available. Publishing,
+production secrets, payment UI, WebDAV sync and cloud deployment remain outside this repository.
 
 ## Current Interface
 
@@ -34,7 +34,7 @@ The OSS loader in `src/main/official/official-integration-loader.ts` returns
 `createNoopOfficialIntegration()`. Runtime startup may call the two optional hooks, but the
 no-op implementation registers nothing.
 
-## OSS Status
+## Legacy Seam Status
 
 ```ts
 {
@@ -54,24 +54,26 @@ no-op implementation registers nothing.
 }
 ```
 
-Renderer access is limited to the read-only
+This legacy seam's renderer access remains limited to the read-only
 `window.cclinkStudio.official.getStatus()` probe. It contains capability booleans and a
 reason code, not credentials or account data.
 
-## Hard Boundaries
+## Current Hard Boundaries
 
-- OSS defaults contain no official production endpoint or update feed.
+- No service secret, publication credential, or commercial update feed may be embedded.
 - Local workspace, Agent, browser, editor, Terminal, data-source, and Android capabilities
-  cannot depend on the official integration being present.
+  cannot depend on CCLink configuration, login, or remote availability.
+- The built-in remote domain may own account, device connection, requests and remote-session
+  facts. Studio owns Workspace, Tab, Workbench, Terminal integration and IPC lifecycle.
 - Official IPC uses `context.ipc.handle(...)` and a bounded runtime parser.
-- Credentials never cross into preload globals, renderer-wide stores, localStorage, logs,
-  screenshots, or diagnostics.
-- OSS runtime entry points do not import account, message, entitlement, quota, official
-  runtime, release upload, signing, or notarization packages.
-- The commercial assembler must work in its isolated `.build` directory and must not patch
-  the OSS checkout in place.
+- Access tokens, IM UserSig and complete remote identity stay in main-process memory. Only the
+  refresh token uses the private local Session file.
+- System credential stores, keychain migration, Developer ID signing and notarization are forbidden.
 
-## Commercial Assembly
+## Legacy Commercial Assembly
+
+This section records the overlay that still exists during transition; it is not the target
+architecture and must not receive new product functionality.
 
 The current assembly implementation is owned by
 `cclink-dev/scripts/prepare-commercial-build.mjs`:
@@ -89,6 +91,9 @@ commercial runtime also owns private composition files through the overlay. Docu
 must not claim that replacing `official-integration-loader.ts` alone describes the complete
 commercial assembly.
 
+The overlay may stop shipping only after the single Studio app passes the real first-stage
+acceptance. Until then it remains a rollback artifact, not a second product line.
+
 ## Acceptance
 
 OSS:
@@ -99,7 +104,7 @@ pnpm verify
 pnpm smoke:standalone
 ```
 
-Commercial, from `cclink-dev`:
+Legacy overlay, while it remains in service, from `cclink-dev`:
 
 ```bash
 pnpm commercial:typecheck

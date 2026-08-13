@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalSessionSnapshot } from '@shared/ipc/terminal'
 import type { WorkspaceStateSnapshot } from '@shared/ipc/workspace-state'
-import { localWorkspaceRef } from '../../../shared/workspace-ref'
+import { localWorkspaceRef, remoteWorkspaceRef } from '../../../shared/workspace-ref'
 import { useAgentStore } from '../stores/agent-store'
 import { useBrowserStore } from '../stores/browser-store'
 import { useBrowserTaskStore } from '../stores/browser-task-store'
@@ -204,6 +204,27 @@ describe('workspace-transition', () => {
       prepareWorkspaceRuntimeTransition(localWorkspaceRef('/workspace/b')),
     ).resolves.toMatchObject({ key: '/workspace/b' })
     expect(window.cclinkStudio.workspaceState.get).toHaveBeenCalledWith(
+      '/workspace/b',
+      'local:owner-1',
+    )
+  })
+
+  it('uses the shared transition for remote refs without prematurely persisting remote state', async () => {
+    const remoteRef = remoteWorkspaceRef({
+      endpointId: 'agent-1',
+      workspaceId: 'workspace-1',
+      path: '/srv/project',
+    })
+    const remoteTransition = await prepareWorkspaceRuntimeTransition(remoteRef)
+    await applyWorkspaceRuntimeTransition(remoteTransition, { hydrate: false, flush: false })
+
+    const setSection = window.cclinkStudio.workspaceState.setSection as ReturnType<typeof vi.fn>
+    setSection.mockClear()
+    await prepareWorkspaceRuntimeTransition(localWorkspaceRef('/workspace/b'))
+
+    expect(getWorkspaceStateKey()).toBe('cclink://agent-1/workspace-1')
+    expect(setSection).not.toHaveBeenCalled()
+    expect(window.cclinkStudio.workspaceState.get).toHaveBeenLastCalledWith(
       '/workspace/b',
       'local:owner-1',
     )

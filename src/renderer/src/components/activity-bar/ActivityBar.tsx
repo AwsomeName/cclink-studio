@@ -2,19 +2,20 @@ import { useEffect, useState } from 'react'
 import { useUIStore, useTabStore } from '../../stores'
 import type { ActivityPanel } from '../../types'
 import {
-  IconFiles,
-  IconDatabase,
-  IconGlobe,
-  IconProjects,
-  IconRobot,
-  IconSettings,
-  IconSparkle,
-  IconClipboard,
-  IconTerminal,
-  IconTool,
-  IconClock,
-  IconUser,
-} from '../common/Icons'
+  ActivityAffairsIcon,
+  ActivityBrowserIcon,
+  ActivityDataSourcesIcon,
+  ActivityFilesIcon,
+  ActivityProductionIcon,
+  ActivityProjectsIcon,
+  ActivityRemoteIcon,
+  ActivityRolesIcon,
+  ActivityScheduledTasksIcon,
+  ActivitySessionsIcon,
+  ActivitySettingsIcon,
+  ActivityTerminalIcon,
+  ActivityWebAccountsIcon,
+} from './activity-bar-icons'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import {
   buildKeyboardContextMenuInput,
@@ -30,18 +31,19 @@ const MAIN_ICONS: Array<{
   label: string
 }> = [
   ...(PROJECT_ACTIVITY_ENABLED
-    ? [{ id: 'projects' as const, Icon: IconProjects, label: '项目' }]
+    ? [{ id: 'projects' as const, Icon: ActivityProjectsIcon, label: '项目' }]
     : []),
-  { id: 'sessions', Icon: IconRobot, label: '会话' },
-  { id: 'agent-roles', Icon: IconUser, label: '角色' },
-  { id: 'files', Icon: IconFiles, label: '文件' },
-  { id: 'browser', Icon: IconGlobe, label: '浏览器' },
-  { id: 'data-sources', Icon: IconDatabase, label: '数据源' },
-  { id: 'terminal', Icon: IconTerminal, label: 'Terminal' },
-  { id: 'operations', Icon: IconSparkle, label: '网站与账号' },
-  { id: 'affairs', Icon: IconClipboard, label: '事务' },
-  { id: 'scheduled-tasks', Icon: IconClock, label: '定时任务' },
-  { id: 'production', Icon: IconTool, label: '生产' },
+  { id: 'sessions', Icon: ActivitySessionsIcon, label: '会话' },
+  { id: 'agent-roles', Icon: ActivityRolesIcon, label: '角色' },
+  { id: 'files', Icon: ActivityFilesIcon, label: '文件' },
+  { id: 'cclink', Icon: ActivityRemoteIcon, label: 'CCLink 远程' },
+  { id: 'browser', Icon: ActivityBrowserIcon, label: '浏览器' },
+  { id: 'data-sources', Icon: ActivityDataSourcesIcon, label: '数据源' },
+  { id: 'terminal', Icon: ActivityTerminalIcon, label: 'Terminal' },
+  { id: 'operations', Icon: ActivityWebAccountsIcon, label: '网站与账号' },
+  { id: 'affairs', Icon: ActivityAffairsIcon, label: '事务' },
+  { id: 'scheduled-tasks', Icon: ActivityScheduledTasksIcon, label: '定时任务' },
+  { id: 'production', Icon: ActivityProductionIcon, label: '生产' },
 ]
 
 export function ActivityBar(): React.ReactElement {
@@ -103,7 +105,7 @@ export function ActivityBar(): React.ReactElement {
             aria-label={label}
             title={label}
           >
-            <Icon size={22} />
+            <Icon size={24} />
             {id === 'scheduled-tasks' && scheduledRunCount > 0 && (
               <span className="activity-bar-badge" aria-label={`${scheduledRunCount} 个任务运行中`}>
                 {scheduledRunCount > 99 ? '99+' : scheduledRunCount}
@@ -139,7 +141,7 @@ export function ActivityBar(): React.ReactElement {
           aria-label="设置"
           title="设置"
         >
-          <IconSettings size={22} />
+          <ActivitySettingsIcon size={24} />
         </button>
       </div>
     </div>

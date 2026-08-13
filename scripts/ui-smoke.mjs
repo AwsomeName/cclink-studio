@@ -132,6 +132,25 @@ async function main() {
     return 'main window ready'
   })
 
+  await runCheck('CCLink login is scoped to the remote entry and fails soft', async () => {
+    await clickByTitle(page, 'CCLink 远程')
+    const service = await page.evaluate(() => window.cclinkStudio.auth.getServiceStatus())
+    if (service.configured) {
+      await page
+        .locator('.cclink-login-card, .cclink-server-panel')
+        .first()
+        .waitFor({ state: 'visible', timeout: 10_000 })
+    } else {
+      await page
+        .locator('.cclink-panel-state', { hasText: '远程服务未配置' })
+        .waitFor({ state: 'visible', timeout: 10_000 })
+    }
+    assert(await page.locator('.main-window').isVisible(), 'remote entry replaced the local shell')
+    assert(await page.locator('.app-topbar').isVisible(), 'remote entry hid the local topbar')
+    await clickByTitle(page, '文件')
+    return service.configured ? 'remote-only login surface' : 'unconfigured degradation surface'
+  })
+
   await runCheck('topbar switches the current project conversation and reopens Agent', async () => {
     const switcher = page.locator('.conversation-quick-switcher')
     await switcher.waitFor({ state: 'visible', timeout: 10_000 })
@@ -739,9 +758,9 @@ async function main() {
     return 'editor/browser/terminal and update modal native-view occlusion'
   })
 
-  await runCheck('no paid or account UI appears during smoke', async () => {
+  await runCheck('no paid UI appears during smoke', async () => {
     const text = await page.locator('body').innerText()
-    const blockedCopy = ['登录 CCLink', '订阅', '配额', `Remote ${'Workspace'}`]
+    const blockedCopy = ['订阅', '配额', `Remote ${'Workspace'}`]
     assert(
       blockedCopy.every((item) => !text.includes(item)),
       'paid/account copy leaked into UI',

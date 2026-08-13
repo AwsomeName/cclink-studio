@@ -70,7 +70,16 @@ export const hardwarePackageEntrySchema = z
   .refine((value) => !path.isAbsolute(value), '压缩包条目必须是相对路径')
   .refine((value) => !value.split(/[\\/]+/).includes('..'), '压缩包条目不得包含路径穿越')
 
-export const workspaceStateWorkspaceKeySchema = absolutePathSchema.nullable().optional()
+const remoteWorkspaceKeySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(1_024)
+  .regex(/^cclink:\/\/[^/\s]+\/[^/\s]+$/u, '远程工作空间键无效')
+export const workspaceStateWorkspaceKeySchema = z
+  .union([absolutePathSchema, remoteWorkspaceKeySchema])
+  .nullable()
+  .optional()
 export const workspaceStateOwnerKeySchema = optionalOwnerKeySchema
 export const workspaceStateSectionSchema = z.enum([
   'layout',

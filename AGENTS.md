@@ -30,24 +30,24 @@
 
 ## 产品定位
 
-**CCLink Studio 是 CCLink 的开源桌面工作台端。**
+**CCLink Studio 是 CCLink 唯一的 GPL-3.0-only 桌面 App。**
 
-这个仓库提供可以从源码直接运行的本地桌面壳：本地工作区、内嵌浏览器、Markdown 编辑、Agent 面板、Terminal、数据源查询和 Android 真机连接能力。
+这个仓库提供可以从源码直接运行的完整桌面端：本地工作区、内嵌浏览器、Markdown 编辑、Agent 面板、Terminal、数据源查询、Android 真机连接，以及按需登录的 CCLink 托管远程入口。
 
-用户心智只有一个：登录 CCLink 后，在官方构建中看到桌面、手机、远程服务器、Agent 和任务状态。开源仓库默认不承载官方账号、消息网络、订阅、配额或生产 API。开源版与商业版各自拥有独立发布工作流；开源仓库只发布由自身不可变 Tag 构建的开源制品，发布凭证只存在于 GitHub Environment Secrets。
+用户心智和桌面产物都只有一个：启动 Studio 即可免登录使用全部本地能力；只有点击 CCLink 远程入口、使用托管远程服务时才要求登录。远程服务的授权与收费事实由 CCLink 云服务强制执行，桌面 entitlement 只能做 UI 提示，不能成为安全边界。
 
 ## 项目边界
 
-| 位置                                            | 角色                                                                                                |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `/Users/apple/Desktop/cclink-dev/cclink-studio` | 开源桌面壳。独立构建、签名、公证并发布开源版，不内置官方生产 API、登录、订阅或消息网络。           |
-| `/Users/apple/Desktop/cclink-dev`               | 闭源总控/商业版编译工作区。独立承接官方集成层、生产 API 注入、商业版签名、公证和 release 基线。    |
-| `/Users/apple/Desktop/chat-cc/deploy`           | CCLink 云函数与账号体系。                                                                           |
-| `/Users/apple/Desktop/chat-cc/Agent`            | CCLink Agent runtime。                                                                              |
+| 位置                                            | 角色                                                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `/Users/apple/Desktop/cclink-dev/cclink-studio` | 唯一桌面 App 与最终装配入口；GPL-3.0-only，拥有本地工作台及可选 CCLink 远程客户端。         |
+| `/Users/apple/Desktop/cclink-dev`               | 迁移期只读参考与云端/发布运维工作区；旧 `commercial` overlay 在 Studio 真实验收后停止出包。 |
+| `/Users/apple/Desktop/chat-cc/deploy`           | CCLink 云函数与账号体系。                                                                   |
+| `/Users/apple/Desktop/chat-cc/Agent`            | CCLink Agent runtime。                                                                      |
 
 不存在额外拆分出的云端或 Agent 独立项目。
 
-## 开源壳保留能力
+## Studio 免费本地能力
 
 - Electron + React + TypeScript 桌面工作台。
 - VSCode 风格布局：Activity Bar、Sidebar、Workbench、Agent Panel、Status Bar。
@@ -58,24 +58,40 @@
 - 本地数据源只读查询，凭证只由用户本机配置和管理。
 - Android 真机连接：只支持用户自有 USB 或 Wi-Fi ADB 真机。
 
-## 不在开源壳默认路径的能力
+以上能力全部免费且免登录。CCLink 配置缺失、未登录、token 失效、消息网络离线、远程 Agent 不兼容或云服务故障时，它们必须完整可用。
 
-以下能力必须通过 `cclink-dev` 与 `/Users/apple/Desktop/chat-cc` 侧官方集成进入，不能回流到本仓库默认路径：
+## Studio 内置的 CCLink 远程功能域
 
-- CCLink account / device / message / runtime 网络。
-- 官方消息凭证、消息路由、配对、网络运行时注册。
-- 登录、订阅、entitlement、quota、官方 feature gate。
-- 云同步、网络文件树、网络文件查看、网络 session sidebar。
-- 私有服务配置、生产 API 地址、商业版更新源及商业版发布流程。
+- 手机号登录、本地 Session 文件、token 刷新；
+- CCLink 身份、设备状态、腾讯 IM transport、request/protocol router 与实时连接；
+- `RemoteProvider`、远程项目选择、文件树与文件读取；
+- 后续按纵向闭环逐步接入远程文件修改、远程 Agent 会话与远程 PTY。
+
+该功能域只能拥有账号、设备连接、远程请求和远程会话事实。`RemoteWorkspaceRef`、Workspace、Tab、Workbench、项目条、`WorkspaceState`、RemoteProvider 契约、Terminal adapter 接入点、IPC schema、生命周期和诊断由 Studio 基础层统一拥有。
+
+## 不迁移范围
+
+- WebDAV sync；
+- PricingPage、PaymentModal、ProBadge、套餐比较和桌面支付；
+- 本地浏览器、编辑器等 Pro 门控；
+- 商业层重复 updater、重复本地 Terminal、通用 orchestrator 以及 App、Settings、Sidebar、preload、main.css 整文件快照；
+- AI 员工、商业模板和通用插件平台；
 - Android SDK 下载、AVD 创建、模拟器启动或托管设备服务。
 
-开源版发布例外由 `docs/decisions/0004-independent-edition-release-pipelines.md` 约束：不得读取 `cclink-dev`、注入商业配置或共享发布状态。
+Agent runtime 继续由 `/Users/apple/Desktop/chat-cc/Agent` 现有 NPM 包发布；CCLink 云服务继续由 `/Users/apple/Desktop/chat-cc/deploy` 独立部署。本次不得修改或迁移两者。ADR 0009 取代 ADR 0004 中“双桌面制品长期并存”的前提。
+
+## NO_SYSTEM_KEYCHAIN
+
+- 禁止 `safeStorage`、`keytar`、Apple Keychain API、`security` 命令及任何系统凭证存储；
+- 禁止读取或迁移历史钥匙串数据；旧密文只能隔离并要求重新登录；
+- Session 使用 `userData` 下权限收紧的本地文件；refresh token 可持久化，access token、IM UserSig 和完整远程身份只驻留内存；
+- 不执行 Developer ID 签名或 Apple 公证。
 
 ## 独立启动要求
 
 - `pnpm dev` 必须能直接启动开发模式。
 - `bash scripts/restart.sh restart` 必须能启动后台开发进程。
-- 默认启动不得要求存在 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent`。
+- 默认启动不得要求存在 `cclink-dev`、`chat-cc/deploy`、`chat-cc/Agent` 或 CCLink 服务配置。
 - 找不到 `adb` 时，应用仍应启动，Android 能力降级为不可用。
 
 ## 技术栈
@@ -134,8 +150,10 @@ bash scripts/restart.sh status
 
 ## 拷问重点
 
-- 是否把官方账号、消息网络、网络 runtime、订阅、配额或发布链路重新塞回了开源默认路径？
-- `preload` 是否只暴露本地安全 API 和 official no-op status probe？
-- `main/runtime` 是否只初始化本地服务和显式官方集成接口？
-- 删除商业模块后，开源版是否仍能免登录启动、打开本地工作区、运行本地 Agent、浏览器、编辑器、Terminal 和 Android 真机降级？
+- 是否让登录页或远程初始化故障挡住了本地工作台？
+- `preload` 是否只暴露有界、类型化、可信 renderer 校验后的远程 API，且不泄露 token/UserSig？
+- CCLink 功能域是否复制了 Workspace、Tab、Terminal 或本地 Agent 状态？
+- 缺配置、未登录、远程离线或协议不兼容时，本地项目、Agent、浏览器、编辑器、Terminal、数据源和 Android 是否仍可用？
+- 收费是否由服务端真正强制；客户端是否误把开发模式或网络错误当作正式授权结论？
+- 是否触碰了系统钥匙串或读取了历史密文？
 - 文档是否只描述当前事实源，不再保留研发阶段已废弃的历史路线？

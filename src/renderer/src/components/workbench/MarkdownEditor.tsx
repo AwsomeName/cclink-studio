@@ -42,7 +42,11 @@ import {
   toggleMarkdownBlockquote,
 } from '../../features/markdown/markdown-editor-shortcuts'
 import { createMarkdownDiagnosticReport } from '../../features/markdown/markdown-diagnostic-report'
-import { isMarkdownHydrationPending } from '../../features/markdown/markdown-editor-hydration'
+import {
+  isMarkdownHydrationPending,
+  setMarkdownEditorEditable,
+  shouldApplyMarkdownDocumentUpdate,
+} from '../../features/markdown/markdown-editor-hydration'
 import type { FsMarkdownDocumentInspection } from '@shared/ipc/fs'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
@@ -245,8 +249,8 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
           },
         },
       },
-      onUpdate: ({ editor: currentEditor }) => {
-        if (hydratingRef.current) return
+      onUpdate: ({ editor: currentEditor, transaction }) => {
+        if (!shouldApplyMarkdownDocumentUpdate(hydratingRef.current, transaction.docChanged)) return
         const reference = useEditorStore.getState().files[fileKeyRef.current]?.currentContent
         const markdown = normalizeMarkdownEditorOutput(currentEditor.getMarkdown(), reference)
         useEditorStore.getState().updateContent(fileKeyRef.current, markdown)
@@ -405,14 +409,14 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       setProtectedPreviewAvailable(false)
       setMarkdownDiagnosticLog(null)
       setHydratedVersion(version)
-      editor.setEditable(true)
+      setMarkdownEditorEditable(editor, true)
       return
     }
     loadedVersionRef.current = { fileKey, version }
     setHydratedVersion(null)
     setParseBlockedReason(null)
     setProtectedPreviewAvailable(false)
-    editor.setEditable(false)
+    setMarkdownEditorEditable(editor, false)
     const analysis = analyzeMarkdown(fileState.currentContent)
     const initialDiagnostics = analysis.diagnostics
     useEditorStore.getState().setDiagnostics(fileKey, initialDiagnostics)
@@ -513,7 +517,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       setProtectedPreviewAvailable(false)
       setMarkdownDiagnosticLog(null)
       setHydratedVersion(version)
-      editor.setEditable(true)
+      setMarkdownEditorEditable(editor, true)
     }
   }, [
     editor,
@@ -530,7 +534,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
 
   useEffect(() => {
     if (!editor) return
-    editor.setEditable(!parseBlockedReason)
+    setMarkdownEditorEditable(editor, !parseBlockedReason)
   }, [editor, parseBlockedReason])
 
   useEffect(() => {

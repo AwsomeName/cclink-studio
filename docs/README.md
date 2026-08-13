@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-08-11。
+> 当前事实源。最后更新：2026-08-13。
 
 ## 先读这些
 
@@ -12,6 +12,8 @@
 - `docs/development.md`：当前开发事实源。
 - `docs/ops/local-smoke-check.md`：验证 Studio 开源壳可独立启动和本地核心能力可用。
 - `docs/ops/package-target-check.md`：开源版与商业版打包目标、身份和产物交付检查。
+- `docs/ops/cclink-remote-entitlement-audit.md`：CCLink 远程服务端身份与付费门禁审计。
+- `docs/ops/cclink-remote-stage-1-acceptance.md`：单一 Studio 远程第一阶段真实 App 验收结果与未完成闭环。
 - `docs/ops/oss-release-runbook.md`：开源版打包、签名、公证、Draft 验收和公开发布手册。
 - `docs/features/desktop-release-and-updates.md`：桌面发布、自动检查、受控下载、确认安装和 U0-U5 开发计划。
 - `docs/features/desktop-update-development-plan.md`：桌面更新 U0-U5 的任务编号、代码落点、工作量、失败矩阵、真人验收和退出证据。
@@ -38,7 +40,7 @@
 
 ## 当前边界
 
-CCLink Studio 是开源桌面壳。官方账号、云函数、配对、官方消息网络、额度、商业版发布和生产 API 注入不在 OSS 默认路径里；OSS 正式 Release 由本仓库的受保护工作流独立签名、公证并创建 Draft Release。
+CCLink Studio 是唯一桌面 App。本地能力免费免登录；账号、设备、消息 transport 和远程工作区作为可选内置域，只在用户打开远程入口后启动。云服务、Agent runtime NPM 发布、支付和发布凭证仍保持独立。
 
 Studio 默认可单仓库独立启动，不要求 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent` 存在。当前凭证实现不依赖系统钥匙串，用户主动配置的第三方凭证保存在本机独立明文文件；发布验收状态见 `docs/features/local-credentials-development-plan.md`。Android 默认只支持用户自有 USB / Wi-Fi ADB 真机；缺少 adb 时只降级设备能力，不阻断启动。
 

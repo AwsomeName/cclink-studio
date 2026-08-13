@@ -70,6 +70,7 @@ const VISIBLE_ACTIVITY_PANELS = new Set<ActivityPanel>([
   'operations',
   'scheduled-tasks',
   'affairs',
+  'cclink',
 ])
 
 function normalizeActivityPanel(panel: unknown): ActivityPanel {

@@ -44,6 +44,10 @@ import { applyWindowZoomLevel } from './window-runtime'
 import { RendererWorkspaceStateFlushCoordinator } from '../workspace/renderer-workspace-state-flush'
 import { RuntimeComponentManager } from '../runtime-components/runtime-component-manager'
 import { registerRuntimeComponentsIpc } from '../runtime-components/runtime-components-ipc'
+import { CclinkAuthService } from '../cclink-remote/auth-service'
+import { CclinkRemoteService } from '../cclink-remote/cclink-remote-service'
+import { registerCclinkRemoteIpc } from '../cclink-remote/cclink-remote-ipc'
+import { getCclinkServiceUrl } from '../cclink-remote/service-config'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   runtime.credentialService = new CredentialService()
@@ -118,6 +122,28 @@ export async function bootstrapMainProcessServices(
 
   registerRuntimeComponentsIpc(runtime.runtimeComponentManager!, runtime.trustedRendererGuard)
   console.log('[CCLink Studio] Runtime 组件管理 IPC 已注册')
+
+  try {
+    runtime.cclinkAuthService = new CclinkAuthService(
+      getCclinkServiceUrl(),
+      join(app.getPath('userData'), 'cclink-remote'),
+    )
+    runtime.cclinkAuthService.initialize()
+    runtime.cclinkRemoteService = new CclinkRemoteService(
+      runtime.cclinkAuthService,
+      getCclinkServiceUrl(),
+    )
+    runtime.cclinkIpcUnsubscribe = registerCclinkRemoteIpc(
+      runtime.mainWindow,
+      runtime.cclinkRemoteService,
+      runtime.trustedRendererGuard,
+    )
+    console.log('[CCLink Studio] CCLink 远程入口已注册（按需登录）')
+  } catch (error) {
+    runtime.cclinkAuthService = null
+    runtime.cclinkRemoteService = null
+    console.error('[CCLink Studio] CCLink 远程入口初始化失败，本地能力继续启动:', error)
+  }
 
   try {
     runtime.localIdentityService = new LocalIdentityService()
@@ -336,6 +362,9 @@ export async function shutdownMainProcessServices(
   runtime.updateSnapshotUnsubscribe?.()
   runtime.updateSnapshotUnsubscribe = null
   await runShutdownStep('UpdateService', () => runtime.updateService?.stop())
+  runtime.cclinkIpcUnsubscribe?.()
+  runtime.cclinkIpcUnsubscribe = null
+  await runShutdownStep('CclinkRemoteService', () => runtime.cclinkRemoteService?.destroy())
   await runShutdownStep('PermissionManager', () => runtime.permissionManager?.destroy())
   await runShutdownStep('TerminalConfirmationService', () =>
     runtime.terminalConfirmationService?.destroy(),
@@ -351,6 +380,8 @@ export async function shutdownMainProcessServices(
   await runShutdownStep('WebResourceService', () => runtime.webResourceService?.flush())
 
   runtime.localIdentityService = null
+  runtime.cclinkAuthService = null
+  runtime.cclinkRemoteService = null
   runtime.officialIntegration = null
   runtime.fileService = null
   runtime.gitBackupService = null

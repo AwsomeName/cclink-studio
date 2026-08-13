@@ -1,8 +1,10 @@
 # ADR 0004：开源版与商业版独立发布
 
-- 状态：accepted
+- 状态：superseded by ADR 0009
 - 日期：2026-07-26
 - 负责人：CCLink Studio Maintainers
+
+> 2026-08-13：ADR 0009 已取代本文中“开源版与商业版长期维护两个桌面制品”的产品前提。不可变 Tag、凭证不入库和发布可审计性约束继续有效；旧 commercial overlay 仅保留到单一 Studio 的远程只读闭环通过真实 App 验收。
 
 ## 问题
 

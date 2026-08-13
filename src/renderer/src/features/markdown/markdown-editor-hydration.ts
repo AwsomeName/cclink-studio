@@ -1,9 +1,27 @@
+import type { Editor } from '@tiptap/core'
+
 interface MarkdownHydrationState {
   hasEditor: boolean
   hydratedVersion: string | null
   expectedVersion: string
   loadedFileKey?: string
   fileKey: string
+}
+
+export function setMarkdownEditorEditable(
+  editor: Pick<Editor, 'setEditable'>,
+  editable: boolean,
+): void {
+  // Tiptap emits an update by default even though editable is view state, not document content.
+  // Suppress it so hydration/protection transitions cannot dirty or reserialize the Markdown buffer.
+  editor.setEditable(editable, false)
+}
+
+export function shouldApplyMarkdownDocumentUpdate(
+  hydrating: boolean,
+  docChanged: boolean,
+): boolean {
+  return !hydrating && docChanged
 }
 
 export function isMarkdownHydrationPending({

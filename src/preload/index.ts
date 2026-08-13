@@ -1,4 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { authIpc, authIpcEvents, type AuthApiContract } from '../shared/ipc/auth'
+import { cclinkIpc, cclinkIpcEvents, type CclinkApiContract } from '../shared/ipc/cclink'
+import { remoteIpc, type RemoteApiContract } from '../shared/ipc/remote'
 import { officialIpc } from '../shared/ipc/official'
 import { diagnosticsIpc } from '../shared/ipc/diagnostics'
 import { settingsIpc, type SettingsApiContract } from '../shared/ipc/settings'
@@ -51,6 +54,44 @@ const settingsApi: SettingsApiContract = {
     invokeIpcContract(settingsIpc.testClaudeModelConnection, selection),
 }
 
+const authApi: AuthApiContract = {
+  getServiceStatus: () => invokeIpcContract(authIpc.getServiceStatus),
+  phoneSendCode: (phone) => invokeIpcContract(authIpc.phoneSendCode, phone),
+  phoneLogin: (phone, code) => invokeIpcContract(authIpc.phoneLogin, phone, code),
+  checkSession: () => invokeIpcContract(authIpc.checkSession),
+  logout: () => invokeIpcContract(authIpc.logout),
+  onSessionChanged: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      session: Parameters<typeof callback>[0],
+    ): void => callback(session)
+    ipcRenderer.on(authIpcEvents.sessionChanged, listener)
+    return () => ipcRenderer.removeListener(authIpcEvents.sessionChanged, listener)
+  },
+}
+
+const cclinkApi: CclinkApiContract = {
+  listServers: () => invokeIpcContract(cclinkIpc.listServers),
+  connectRealtime: () => invokeIpcContract(cclinkIpc.connectRealtime),
+  getRealtimeStatus: () => invokeIpcContract(cclinkIpc.getRealtimeStatus),
+  browseDirectory: (input) => invokeIpcContract(cclinkIpc.browseDirectory, input),
+  openWorkspace: (input) => invokeIpcContract(cclinkIpc.openWorkspace, input),
+  onRealtimeStatus: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      status: Parameters<typeof callback>[0],
+    ): void => callback(status)
+    ipcRenderer.on(cclinkIpcEvents.realtimeStatus, listener)
+    return () => ipcRenderer.removeListener(cclinkIpcEvents.realtimeStatus, listener)
+  },
+}
+
+const remoteApi: RemoteApiContract = {
+  getStatus: (ref) => invokeIpcContract(remoteIpc.getStatus, ref),
+  listFileTree: (request) => invokeIpcContract(remoteIpc.listFileTree, request),
+  readFile: (request) => invokeIpcContract(remoteIpc.readFile, request),
+}
+
 const credentialsApi: CredentialsApiContract = {
   listMetadata: () => invokeIpcContract(credentialsIpc.listMetadata),
   getStatus: () => invokeIpcContract(credentialsIpc.getStatus),
@@ -94,6 +135,12 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   reportWorkbenchBounds,
 
   window: windowApi,
+
+  auth: authApi,
+
+  cclink: cclinkApi,
+
+  remote: remoteApi,
 
   browser: browserApi,
 

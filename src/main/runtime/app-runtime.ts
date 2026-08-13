@@ -46,6 +46,8 @@ import { RuntimeCapabilityRegistry } from './capability-registry'
 import type { ServiceRegistry } from './service-registry'
 import type { RendererWorkspaceStateFlushCoordinator } from '../workspace/renderer-workspace-state-flush'
 import type { RuntimeComponentManager } from '../runtime-components/runtime-component-manager'
+import type { CclinkAuthService } from '../cclink-remote/auth-service'
+import type { CclinkRemoteService } from '../cclink-remote/cclink-remote-service'
 
 export interface CclinkStudioRuntimeState {
   isDev: boolean
@@ -98,6 +100,9 @@ export interface CclinkStudioRuntimeState {
   scheduledTaskService: ScheduledTaskService | null
   trustedRendererGuard: TrustedRendererGuard | null
   rendererWorkspaceStateFlush: RendererWorkspaceStateFlushCoordinator | null
+  cclinkAuthService: CclinkAuthService | null
+  cclinkRemoteService: CclinkRemoteService | null
+  cclinkIpcUnsubscribe: (() => void) | null
 }
 
 export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
@@ -152,5 +157,8 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     scheduledTaskService: null,
     trustedRendererGuard: null,
     rendererWorkspaceStateFlush: null,
+    cclinkAuthService: null,
+    cclinkRemoteService: null,
+    cclinkIpcUnsubscribe: null,
   }
 }

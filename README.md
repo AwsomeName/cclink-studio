@@ -1,29 +1,31 @@
 # CCLink Studio
 
-**CCLink 的开源桌面工作台端：本地 Agent、内嵌浏览器、文档编辑、文件工作空间和设备自动化外壳。**
+**CCLink 的单一开源桌面工作台：本地能力免费免登录，远程入口按需登录 CCLink。**
 
 [![GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](https://github.com/AwsomeName/cclink-studio)
 [![Electron](https://img.shields.io/badge/Electron-43.1-47848F)](https://www.electronjs.org/)
 
-CCLink Studio 是 CCLink 的桌面工作台端。这个仓库承载可以从源码直接运行的桌面壳：本地工作空间、文件、浏览器自动化、Markdown 编辑、Agent 面板、终端、数据源查询和设备连接能力。
+CCLink Studio 是 CCLink 唯一桌面 App。这个仓库承载可以从源码直接运行的本地工作台，以及可选的 CCLink 远程客户端配套。本地工作空间、Agent、浏览器、Markdown 编辑、Terminal、数据源和 Android 始终免费且不要求登录。
 
-官方账号、设备注册、配对、消息路由、官方消息凭证、订阅、配额、官方更新源、签名、公证和发布上传由 `cclink-dev` 官方构建工作区和 `/Users/apple/Desktop/chat-cc` 中的 CCLink deploy / Agent 侧实现承接。
+CCLink 云服务和远程 Agent runtime 仍由各自既有部署与 NPM 发布链路承接；本仓库不内置服务秘密、支付、签名、公证或发布凭证。
 
 ## 能力边界
 
-| 能力                                   | 开源壳状态         | 说明                                                                                    |
-| -------------------------------------- | ------------------ | --------------------------------------------------------------------------------------- |
-| 内嵌浏览器 + Playwright 自动化         | 保留               | Electron 内嵌 Chromium，Agent 可在用户监视下操作网页。                                  |
-| Markdown 编辑器                        | 保留               | Tiptap/ProseMirror，本地文件读写。                                                      |
-| 本地 Agent 面板                        | 保留               | 面向本机 Claude Code / 用户自配 API 的桌面壳能力。                                      |
-| 本地文件和工作空间                     | 保留               | 本地目录浏览、文件读写、workspace state 恢复。                                          |
-| 统一上下文操作                         | 保留               | 右键、键盘和命令入口复用同一命令事实源，按对象贡献操作并提供脱敏诊断。                  |
-| Terminal                               | 保留               | 本地 shell 和审计；网络执行链路已从开源壳默认路径移除。                                 |
-| 数据源只读查询                         | 保留               | 本地配置用户自有数据源，不内置官方云。                                                  |
-| Android 真机连接                       | 保留本地能力       | 通过用户自有 USB 或 Wi-Fi ADB 真机运行。                                                |
-| CCLink Account / Device / Message 网络 | 不在本仓库默认路径 | 由 `/Users/apple/Desktop/chat-cc/deploy` 和 `/Users/apple/Desktop/chat-cc/Agent` 承接。 |
-| 订阅、配额、支付、官方发布             | 不在本仓库默认路径 | 由 `cclink-dev` 官方集成层和 CCLink 服务端承接。                                        |
+| 能力                                   | 开源壳状态   | 说明                                                                   |
+| -------------------------------------- | ------------ | ---------------------------------------------------------------------- |
+| 内嵌浏览器 + Playwright 自动化         | 保留         | Electron 内嵌 Chromium，Agent 可在用户监视下操作网页。                 |
+| Markdown 编辑器                        | 保留         | Tiptap/ProseMirror，本地文件读写。                                     |
+| 本地 Agent 面板                        | 保留         | 面向本机 Claude Code / 用户自配 API 的桌面壳能力。                     |
+| 本地文件和工作空间                     | 保留         | 本地目录浏览、文件读写、workspace state 恢复。                         |
+| 统一上下文操作                         | 保留         | 右键、键盘和命令入口复用同一命令事实源，按对象贡献操作并提供脱敏诊断。 |
+| Terminal                               | 保留         | 本地 shell 和审计；网络执行链路已从开源壳默认路径移除。                |
+| 数据源只读查询                         | 保留         | 本地配置用户自有数据源，不内置官方云。                                 |
+| Android 真机连接                       | 保留本地能力 | 通过用户自有 USB 或 Wi-Fi ADB 真机运行。                               |
+| CCLink Account / Device / Message 网络 | 可选内置域   | 只在用户打开远程入口后登录、连接；失败不影响本地能力。                 |
+| 远程项目选择、文件树和只读文件         | 第一阶段内置 | 通过类型化 preload 和受信 IPC 接入，不复制 Workspace/Tab 状态。        |
+| 订阅、配额和付费安全边界               | 云服务负责   | 客户端只能显示提示；当前付费门禁尚未经服务端闭环验证。                 |
+| 支付 UI、WebDAV、官方发布              | 不迁移       | 云端部署、远程 Agent NPM、签名和公证仍独立。                           |
 
 ## 快速开始
 
@@ -56,7 +58,7 @@ pnpm package:local
 签名、公证、上传或生产 API 注入，也不会修改版本号。打包前后的目标校验见
 [`docs/ops/package-target-check.md`](docs/ops/package-target-check.md)。
 
-本仓库默认启动不依赖 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent`。这些目录只参与官方账号、官方运行时和发布集成。
+本仓库默认启动不依赖 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent`。缺少 CCLink 服务配置时，远程入口明确降级，但本地功能仍完整可用。
 
 验证本地桌面壳是否可独立使用：
 

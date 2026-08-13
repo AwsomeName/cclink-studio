@@ -1,36 +1,31 @@
 # CCLink Studio 架构说明
 
-> 当前事实源。最后更新：2026-08-11。
+> 当前事实源。最后更新：2026-08-13。
 
 ## 结论
 
-CCLink Studio 是 CCLink 的开源桌面工作台端，不是 CCLink Studio 接入 CCLink，也不是独立账号体系。
+CCLink Studio 是 CCLink 唯一的 GPL-3.0-only 桌面 App。它不是“开源壳 + 商业覆盖层”两套桌面产品，也不拥有独立于 CCLink 云服务的账号体系。
 
-开源仓库的目标是提供本地优先的桌面壳、浏览器/文档/Android/Terminal/Agent 工作台、MCP 工具和可扩展 IPC 边界。官方账号、云函数、配对、消息路由、额度和生产 API 注入由闭源工作区与 CCLink 主项目承接。开源版和商业版各自从自己的不可变 Tag 独立构建、签名、公证和发布。
+本仓库提供本地优先的工作台，以及按需登录的 CCLink 托管远程客户端。本地工作区、浏览器、文档、Android、Terminal、Agent、数据源和 MCP 能力免费且免登录；只有用户点击远程入口时才需要 CCLink 登录。CCLink 云服务与远程 Agent runtime 仍独立部署/发布，远程服务的授权和收费由服务端事实源强制。
 
 产品定位统一为：
 
-> 开源版提供 AI 工作台和基础工作能力；商业版提供能够被授权、被分配工作并持续交付结果的 AI 员工。
-
-其中，网站与账号、网页事务、Agent、Browser、文件、权限确认、本地调度、证据和恢复属于
-可复用的基础工作能力；商业版在这些稳定能力之上组织员工档案、职责、资源授权、事务分配、
-工作策略、官方模板与适配器、额度和结果报告。商业版只能组合基础领域，不能复制网站账号、
-事务、运行或调度状态形成第二事实源。
+> 一个 Studio App：本地能力永久免费免登录，CCLink 托管远程服务按入口登录并由服务端收费。
 
 ## 项目边界
 
-| 位置                                            | 角色                                                                                            |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `/Users/apple/Desktop/cclink-dev/cclink-studio` | 开源桌面壳。独立发布开源版，不内置官方生产 API、登录、订阅、官方消息网络或云同步。              |
-| `/Users/apple/Desktop/cclink-dev`               | 闭源总控/商业版编译工作区。独立承接官方集成层、生产 API 注入、商业版签名、公证和 release 基线。 |
-| `/Users/apple/Desktop/chat-cc/deploy`           | CCLink 云函数与账号体系。                                                                       |
-| `/Users/apple/Desktop/chat-cc/Agent`            | CCLink Agent runtime。                                                                          |
+| 位置                                            | 角色                                                                             |
+| ----------------------------------------------- | -------------------------------------------------------------------------------- |
+| `/Users/apple/Desktop/cclink-dev/cclink-studio` | 唯一桌面 App、生命周期与最终装配入口；包含免费本地能力和可选 CCLink 远程功能域。 |
+| `/Users/apple/Desktop/cclink-dev`               | 迁移期只读实现参考与云端/发布运维工作区；不再作为长期桌面源码覆盖层。            |
+| `/Users/apple/Desktop/chat-cc/deploy`           | CCLink 云函数与账号体系。                                                        |
+| `/Users/apple/Desktop/chat-cc/Agent`            | CCLink Agent runtime。                                                           |
 
 不存在额外拆分出的云端或 Agent 独立项目。
 
-## 开源工作台与商业 AI 员工边界
+## 暂停的 AI 员工范围
 
-商业版中的“AI 员工”是面向用户的持久业务主体，不是 Agent 角色的改名。Agent 角色描述
+旧商业规格中的“AI 员工”是面向用户的持久业务主体，不是 Agent 角色的改名。Agent 角色描述
 能力和工作方式；AI 员工在此基础上增加职责、被授权资源、工作队列、执行策略、权限边界和
 工作记录，并以稳定引用使用开源工作台提供的网站账号、事务、Agent Run、BrowserTask 和
 定时任务。
@@ -42,12 +37,9 @@ CCLink Studio 是 CCLink 的开源桌面工作台端，不是 CCLink Studio 接�
   节点、证据或终态。
 - Agent、BrowserTask 和定时任务分别拥有一次执行、网页运行和触发事实；员工页面只展示
   可丢弃投影并发送受校验命令。
-- 具体运营模板、平台适配器、团队协作、远程或云端执行、商业额度、订阅和结果报告由
-  `cclink-dev` 商业层承接，不进入 OSS 默认路径。
+- 具体运营模板、平台适配器、团队协作、AI 员工与商业模板当前全部暂停，不进入本次桌面合并。
 
-商业层依赖开源基础能力，开源仓库不得反向 import 商业实现。新增员工能力必须优先通过
-稳定 contract 和 contribution 接入，不得通过长期复制 Main、Preload 或 Renderer 的完整
-状态 owner 建立商业分叉。
+若未来重启，必须在单一 Studio 内通过稳定 contract 和 contribution 接入，不得恢复长期复制 Main、Preload 或 Renderer 整文件的商业分叉。
 
 ## 架构宪法
 
@@ -55,8 +47,10 @@ CCLink Studio 是 CCLink 的开源桌面工作台端，不是 CCLink Studio 接�
 
 ### 1. 单一产品边界
 
-- Studio OSS 是本地优先的 Electron 桌面工作台，必须可以单仓库、免官方账号启动。
-- 官方账号、订阅、消息网络、云同步、生产 API 和商业版发布链路只能通过官方集成层进入。
+- Studio 是本地优先的 Electron 桌面工作台，必须可以单仓库、免 CCLink 账号启动并完整使用本地能力。
+- CCLink 账号、设备/消息网络和 RemoteProvider 是 Studio 内置但可选、可降级的远程功能域；不得成为默认启动前置条件。
+- 登录只在用户进入远程入口时触发，禁止全局 LoginPage 守卫。
+- 客户端 entitlement 只能显示提示，远程服务授权与收费必须由服务端强制；开发模式和网络错误不得形成正式授权结论。
 - renderer 不得直接依赖官方实现、Node.js 或主进程内部模块。
 - 产品、工程和持久化领域统一使用“工作空间 / workspace”，不把“项目 / project”
   作为同义状态对象。当前 `projectId`、`project.json`、`ProjectStrip` 和
@@ -142,11 +136,9 @@ CCLink Studio 是 CCLink 的开源桌面工作台端，不是 CCLink Studio 接�
 
 如果需求确实需要违反上述原则，必须先在 `docs/decisions/` 新增 ADR，写清问题、选择、风险、替代方案、迁移与回收条件，并在实现前完成评审。没有 ADR 的例外视为架构缺陷，而不是默认的新模式。
 
-ADR 0003 已实施 OSS 本地明文凭证存储，并取代此前“必须使用本机加密存储”的要求。`CredentialService` 是唯一状态所有者；Agent、Git、数据源和扩展不得重新建立独立凭证 Store，`verify:credential-boundary` 负责阻止系统钥匙串依赖回流。
+ADR 0003 已实施 Studio 本地明文凭证存储，并取代此前“必须使用本机加密存储”的要求。`CredentialService` 是通用本地凭证的唯一状态所有者；CCLink refresh token 只使用 ADR 0009 规定的独立 Session 文件。`verify:credential-boundary` 负责阻止系统钥匙串依赖回流。
 
-ADR 0004 已实施开源版与商业版独立发布。OSS Release 只从本仓库不可变 Tag
-构建、签名、公证并创建 Draft Release；商业版发布仍由 `cclink-dev` 独立拥有，
-两条链路不得读取对方的凭证、配置或发布状态。
+ADR 0009 已取代 ADR 0004 的“双桌面制品长期并存”前提。不可变 Tag、发布可审计和凭证不入库的要求继续有效；旧 commercial overlay 只在首阶段真实 App 验收通过前作为回滚制品。
 
 ADR 0006 已确定 Agent 产品边界：CCLink 拥有 Thread、上下文、工具循环、MCP、权限、
 角色、调度、诊断和用量事实，用户只选择受支持的模型服务、模型与本地凭证。ACP、用户
@@ -179,9 +171,9 @@ Code backend 为唯一完整工具 Agent；供应商无关的 Model Adapter 与�
 现有 `projectId` 字段是稳定工作空间身份的兼容命名，只能封装在 Workspace/WebResource
 边界内；事务领域使用 `workspaceId`，不得由 renderer 自报或按可移动路径推断。
 
-## 开源版能力
+## Studio 本地能力
 
-CCLink Studio 开源壳保留这些本地能力：
+CCLink Studio 免费、免登录保留这些本地能力：
 
 - Electron + React + TypeScript 桌面工作台。
 - VSCode 风格布局：Activity Bar、Sidebar、Workbench、Agent Panel、Status Bar。
@@ -220,8 +212,7 @@ Android Helper 仍待宿主注入接口。通用插件安装、隔离 Plugin Hos
 - 普通能力插件必须在无 Node 的 sandbox Host 中运行，并只通过受校验 capability broker
   访问网络、工作空间和凭证用途；需要系统可执行文件的能力必须作为 Runtime 组件单独评审。
 - 新安装必须保留离线启动和内置保底或明确降级，公开源失败不能阻断工作台。
-- OSS 与商业版组件源、签名根和发布状态独立，OSS 默认路径不要求账号、私有 Registry 或
-  官方生产 API。
+- Studio 本地默认路径不要求账号、私有 Registry 或 CCLink 服务；远程客户端只在显式入口内访问公开配置的服务。
 
 ADR 0007 已取代 ADR 0002 中“内置 Claude Code 只随 Studio 更新”的限制，允许
 Studio 从受限 npm 平台包安装 managed Claude Runtime。Agent SDK 仍属于完整 App 核心代码；
@@ -239,23 +230,18 @@ Runtime 独立更新必须保持 selection、probe、generation、provenance、�
 - `bash scripts/restart.sh restart` 启动后台开发进程。
 - 默认启动不得要求存在 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent`。
 - 默认启动不得要求或主动访问 Apple Keychain、Windows Credential Manager、Linux Secret Service 等系统凭证存储。
-- 官方账号、官方运行时和生产 API 只通过官方集成层进入。开源版发布链路不得读取官方集成层。
+- CCLink 远程客户端随 Studio 源码发布，但缺少服务配置时必须明确降级；云服务凭证和授权事实不得进入客户端。
 - OSS 签名、公证和制品上传只存在于受保护的仓库 Release workflow，不得进入应用默认启动路径。
 
 Android 是本地真机能力：只连接用户自有 USB 或 Wi-Fi ADB 真机。不提供 Android SDK 下载、AVD 创建、模拟器启动或托管设备服务。找不到 `adb` 时，Studio 应继续启动，Android 设备能力降级为不可用。
 
-## 不在开源壳默认路径的能力
+## CCLink 远程功能域与暂停范围
 
-以下能力必须通过 `cclink-dev` / `chat-cc` 侧官方集成层接入：
+Studio 内置手机号登录、Session 文件/token 刷新、CCLink 身份与设备状态、腾讯 IM transport、request/protocol router、实时连接、RemoteProvider、远程项目选择、文件树与读取。远程写入、远程 Agent 会话和远程 PTY 只能在前一纵向闭环真实验收后继续。
 
-- CCLink account / device / message / runtime 网络。
-- 官方消息凭证、消息路由、配对、网络运行时注册。
-- 登录、订阅、entitlement、quota、官方 feature gate。
-- 云同步、网络文件树、网络文件查看、网络 session sidebar。
-- 私有服务配置、生产 API 地址、商业版更新源及商业版发布流程。
-- Android SDK/AVD 管理、模拟器启动、托管设备服务。
+暂停且不得迁移：WebDAV sync、桌面支付与套餐 UI、本地能力 Pro 门控、重复 updater/Terminal/orchestrator、商业层 App/Settings/Sidebar/preload/main.css 整文件快照、AI 员工、商业模板、通用插件平台和 Android SDK/AVD 托管。
 
-验收上，开源壳不应默认 import 官方账号、订阅、同步、消息网络或网络工作区实现，也不应默认暴露这些 preload API。
+Studio 基础层唯一拥有 `RemoteWorkspaceRef`、Workspace、Tab、Workbench、项目条、WorkspaceState、RemoteProvider 契约、Terminal adapter 接入点、受信 IPC/schema、生命周期和诊断；CCLink 功能域只拥有账号、设备连接、远程请求和远程会话事实。
 
 ## 运行时分层
 
@@ -276,8 +262,9 @@ main
   append-only usage ledger (statistics only; never an execution gate)
   local filesystem, editor, terminal, diagnostics, updater shell
 
-official integration layer (outside OSS default path)
-  account, entitlement, CCLink device/message/runtime network, official release
+CCLink remote feature domain (optional and degradable)
+  phone auth/session refresh, device/message transport, remote requests and sessions
+  never owns Workspace, Tab, Workbench, Terminal or local Agent state
 ```
 
 ## 状态与诊断基线
@@ -321,7 +308,8 @@ Agent 发起的浏览器任务在创建时固定 `workspaceKey`、`conversationI
 - `docs/features/runtime-components-and-capability-plugins.md`
 - `docs/features/runtime-components-and-capability-plugins-development-plan.md`
 - `docs/official-integration-contract.md`
+- `docs/decisions/0009-single-studio-remote-service-boundary.md`
 
 ## 拷问
 
-最容易出错的地方是把官方账号、消息、网络运行时或发布链路重新写进 Studio 默认路径。Studio 侧只保留本地工作台能力和清晰的官方集成接口。
+最容易出错的地方是把“一个 App”误做成“远程登录接管整个 App”，或让 CCLink 功能域复制 Workspace/Tab/Terminal 状态。必须同时证明：本地始终免登录可用、远程按入口登录、远程失败可降级、服务端而非客户端承担收费安全边界，以及 NO_SYSTEM_KEYCHAIN 没有任何例外。
