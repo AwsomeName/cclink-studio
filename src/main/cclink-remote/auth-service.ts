@@ -51,7 +51,8 @@ export class CclinkAuthService {
 
   initialize(): void {
     this.refreshToken = this.sessionStore.load()?.refreshToken ?? null
-    this.user = readJsonFile<CclinkUserProfile>(this.userFilePath)
+    this.removePersistedUserProfile()
+    this.user = null
     this.accessToken = null
     this.accessTokenExpiresAt = 0
     this.identity = null
@@ -99,9 +100,7 @@ export class CclinkAuthService {
         this.logout()
         return { loggedIn: false, user: null }
       }
-      return this.user
-        ? { loggedIn: true, user: this.user, offline: true }
-        : { loggedIn: false, user: null }
+      return { loggedIn: false, user: null, offline: true }
     }
   }
 
@@ -184,7 +183,7 @@ export class CclinkAuthService {
       throw new Error('CCLink UserSig 身份不匹配')
     const expiresAt = Date.now() + expiresIn * 1000
     this.sessionStore.save(refreshToken, expiresAt)
-    this.saveUser(user)
+    this.user = user
     this.refreshToken = refreshToken
     this.accessToken = accessToken
     this.accessTokenExpiresAt = expiresAt
@@ -202,14 +201,13 @@ export class CclinkAuthService {
     }
   }
 
-  private saveUser(user: CclinkUserProfile): void {
-    mkdirSync(this.userDataPath, { recursive: true })
-    writeFileSync(this.userFilePath, `${JSON.stringify(user, null, 2)}\n`, {
-      encoding: 'utf8',
-      mode: 0o600,
-    })
-    ensurePrivate(this.userFilePath)
-    this.user = user
+  private removePersistedUserProfile(): void {
+    if (!existsSync(this.userFilePath)) return
+    try {
+      unlinkSync(this.userFilePath)
+    } catch {
+      // 删除失败也不读取、不迁移，更不能据此恢复登录结论。
+    }
   }
 
   private getOrCreateDevice(): DeviceIdentity {

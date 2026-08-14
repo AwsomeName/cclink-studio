@@ -23,14 +23,29 @@ export function RemoteSessionsSidebar({
   const [query, setQuery] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [remoteStatus, setRemoteStatus] = useState<RemoteStatus | null>(null)
-  const visible = sessions.filter(
-    (session) =>
+  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const visible = sessions.filter((session) => {
+    const searchable = [
+      session.name,
+      session.workspacePath,
+      session.serverId,
+      session.status === 'active'
+        ? '响应中 active'
+        : session.status === 'archived'
+          ? '已归档 archived'
+          : '空闲 idle',
+      workspaceRef.endpointName ?? '',
+    ]
+      .join(' ')
+      .toLocaleLowerCase()
+    return (
       (showArchived ? session.status === 'archived' : session.status !== 'archived') &&
       session.serverId === workspaceRef.endpointId &&
       (session.workspaceId === workspaceRef.workspaceId ||
         session.workspacePath === workspaceRef.path) &&
-      session.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
-  )
+      searchable.includes(normalizedQuery)
+    )
+  })
 
   useEffect(() => {
     void loadSessions(workspaceRef)

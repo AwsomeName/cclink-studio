@@ -27,7 +27,26 @@ export type CclinkRemoteMessage =
         input?: Record<string, unknown>
         output?: string
         error?: string
+        requiresApproval?: boolean
+        approvalReason?: string
+        expiresAt?: number
+        requestId?: string
       }
+    }
+  | {
+      type: 'userQuestion'
+      id: string
+      timestamp: number
+      requestId: string
+      toolUseId: string
+      questions: Array<{
+        id: string
+        header?: string
+        question: string
+        multiSelect?: boolean
+        options?: Array<{ label: string; description?: string }>
+      }>
+      answered?: boolean
     }
   | { type: 'system'; id: string; content: string; timestamp: number; remoteError?: RemoteError }
 
@@ -131,6 +150,65 @@ export interface CclinkAgentToolMessage extends CclinkRuntimeEnvelope<'agent_too
   state: 'pending' | 'executing' | 'completed' | 'failed' | 'denied'
   output?: string
   error?: string
+  requires_approval?: boolean
+  approval_reason?: string
+  expires_at?: number
+}
+
+export interface CclinkToolApprovalResponseMessage extends CclinkRuntimeEnvelope<'tool_approval_response'> {
+  request_id: string
+  session_id: string
+  tool_use_id: string
+  approved: boolean
+  explicit_user_decision: true
+}
+
+export interface CclinkToolApprovalAckMessage extends CclinkRuntimeEnvelope<'tool_approval_ack'> {
+  request_id: string
+  session_id: string
+  tool_use_id: string
+  approved: boolean
+  status: 'accepted'
+}
+
+export interface CclinkUserQuestionMessage extends CclinkRuntimeEnvelope<'user_question'> {
+  request_id: string
+  session_id: string
+  msg_id: string
+  tool_use_id: string
+  questions: Array<{
+    id: string
+    header?: string
+    question: string
+    multiSelect?: boolean
+    options?: Array<{ label: string; description?: string }>
+  }>
+}
+
+export interface CclinkQuestionAnswerMessage extends CclinkRuntimeEnvelope<'question_answer'> {
+  request_id: string
+  session_id: string
+  tool_use_id: string
+  answers: Record<string, string>
+}
+
+export interface CclinkQuestionAnswerAckMessage extends CclinkRuntimeEnvelope<'question_answer_ack'> {
+  request_id: string
+  session_id: string
+  tool_use_id: string
+  status: 'accepted'
+}
+
+export interface CclinkPermissionRequestMessage extends CclinkRuntimeEnvelope<'permission_request'> {
+  request_id: string
+  path: string
+  operation: string
+}
+
+export interface CclinkPermissionResponseMessage extends CclinkRuntimeEnvelope<'permission_response'> {
+  request_id: string
+  approved: boolean
+  remember: boolean
 }
 
 export interface CclinkTerminalOutputMessage extends CclinkRuntimeEnvelope<'terminal_output'> {
@@ -284,6 +362,7 @@ export interface CclinkTerminalPtyOpenResponseMessage extends CclinkRuntimeEnvel
   workspace_path?: string
   terminal_seq?: number
   lease_timeout_ms?: number
+  pty_protocol_version?: number
   code?: string
   message?: string
 }
@@ -376,6 +455,13 @@ export type CclinkRuntimeMessage =
   | CclinkAgentTextMessage
   | CclinkAgentStatusMessage
   | CclinkAgentToolMessage
+  | CclinkToolApprovalResponseMessage
+  | CclinkToolApprovalAckMessage
+  | CclinkUserQuestionMessage
+  | CclinkQuestionAnswerMessage
+  | CclinkQuestionAnswerAckMessage
+  | CclinkPermissionRequestMessage
+  | CclinkPermissionResponseMessage
   | CclinkTerminalOutputMessage
   | CclinkFileWriteRequestMessage
   | CclinkFileCreateRequestMessage

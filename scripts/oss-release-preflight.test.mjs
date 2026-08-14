@@ -36,45 +36,16 @@ test('plan mode validates immutable tag inputs without release credentials', () 
     toolsDir: '/release-tools',
   })
   assert.equal(report.ready, true)
-  assert.equal(
-    report.checks.find((item) => item.id === 'developer-id-application')?.required,
-    false,
-  )
+  assert.equal(report.checks.find((item) => item.id === 'no-system-keychain')?.ok, true)
 })
 
-test('release mode requires signing and notarization credentials', () => {
+test('release mode remains credential-free and ready for ad-hoc packaging', () => {
   const sourceDir = fixture()
   const report = inspectOssReleasePreflight({
     sourceDir,
     tag: 'v1.2.3',
     mode: 'release',
     environment: {},
-    run: fakeRun(sourceDir),
-    toolsDir: '/release-tools',
-  })
-  assert.equal(report.ready, false)
-  assert.deepEqual(
-    report.checks.filter((item) => item.required && !item.ok).map((item) => item.id),
-    ['developer-id-application', 'apple-notary-credentials'],
-  )
-})
-
-test('release mode accepts complete Developer ID and API key credentials', () => {
-  const sourceDir = fixture()
-  const apiKey = resolve(sourceDir, 'AuthKey.p8')
-  writeFileSync(apiKey, 'private-key-fixture')
-  const report = inspectOssReleasePreflight({
-    sourceDir,
-    tag: 'v1.2.3',
-    mode: 'release',
-    environment: {
-      CSC_LINK: 'base64-p12',
-      CSC_KEY_PASSWORD: 'password',
-      CSC_NAME: 'Developer ID Application: Example (TEAMID)',
-      APPLE_API_KEY: apiKey,
-      APPLE_API_KEY_ID: 'KEYID',
-      APPLE_API_ISSUER: 'ISSUER',
-    },
     run: fakeRun(sourceDir),
     toolsDir: '/release-tools',
   })

@@ -1,7 +1,7 @@
 # CCLink Studio 开源版发布手册
 
-> 适用范围：`AwsomeName/cclink-studio` 的 Apple Silicon Developer ID 直接分发版。
-> 不支持 Intel/x64。商业版由 `cclink-dev` 使用独立工作流发布。
+> 适用范围：`AwsomeName/cclink-studio` 的 Apple Silicon ad-hoc 直接分发版。
+> 不支持 Intel/x64；不执行 Developer ID 签名、Apple 公证或系统钥匙串导入。
 
 ## 正式入口
 
@@ -11,7 +11,7 @@ pnpm release -- --version 0.2.0
 ```
 
 该命令要求当前 `main` 源码已有成功的普通 CI，然后只创建修改 `package.json.version`
-的版本提交和不可变 Tag，原子推送并触发 GitHub Actions，等待签名、公证和正式 Release。
+的版本提交和不可变 Tag，原子推送并触发 GitHub Actions，等待 ad-hoc 打包和正式 Release。
 全部自动门禁通过后，工作流直接公开稳定 Release；真实用户安装与更新反馈属于发布后测试。
 
 `pnpm package:local` 只生成本机未签名 arm64 测试包，不修改版本、不推送，也不得用于
@@ -29,8 +29,8 @@ pnpm release -- --version 0.2.0
 
 精确匹配的绿色普通 CI 是源码验证的唯一事实源。常规发版不得默认再次在本地运行
 `pnpm verify`、`pnpm test`、`pnpm build` 或 smoke，不得默认增加 `--local-artifacts`，也
-不得下载远端 DMG 重复执行工作流已经完成的哈希、签名、公证、Gatekeeper 或 Manifest
-检查。远端工作流运行期间只监控状态，不用等待时间扩张验证范围。
+不得下载远端 DMG 重复执行工作流已经完成的哈希、包结构或 Manifest 检查。远端工作流
+运行期间只监控状态，不用等待时间扩张验证范围。
 
 只有用户明确要求、缺少精确匹配的绿色 CI、CI/发布失败，或本次变更触及发布脚本、签名、
 公证、打包边界、更新 Manifest、发布工作流时，才升级为额外本地验证或独立产物复核；执行
@@ -38,19 +38,8 @@ pnpm release -- --version 0.2.0
 
 ## 一次性准备
 
-仓库必须存在 `studio-release` Environment，并配置：
-
-```text
-MACOS_CERTIFICATE_P12_BASE64
-MACOS_CERTIFICATE_PASSWORD
-MACOS_DEVELOPER_IDENTITY
-APPLE_API_KEY_BASE64
-APPLE_API_KEY_ID
-APPLE_API_ISSUER
-```
-
-凭证不得写入源码、`.env`、安装包、日志或诊断文件。具体材料见
-`docs/code-signing.md`。
+仓库可以保留 `studio-release` Environment 作为发布权限门禁，但不得为桌面打包配置 P12、
+Developer ID、Apple API Key 或其他系统凭证。具体边界见 `docs/code-signing.md`。
 
 发布操作者需要：
 
@@ -149,7 +138,8 @@ pnpm verify:update-manifest -- \
 在干净 Apple Silicon Mac 上：
 
 1. 下载并打开 DMG。
-2. 确认 Gatekeeper 不要求 `xattr` 或关闭安全设置。
+2. 记录 macOS 对未公证 ad-hoc App 的首次打开提示，并通过 Finder 的“打开”完成用户确认；
+   不要求用户关闭系统安全设置。
 3. 安装并启动应用。
 4. 确认名称、版本和架构正确。
 5. 验收本地 workspace、Agent、浏览器、Markdown、Terminal 和 Android 降级。
@@ -194,7 +184,7 @@ pnpm release -- --dispatch-only vX.Y.Z
 
 工作流失败时：
 
-- 凭证、Runner 或临时网络问题：修复外部状态后用 `--dispatch-only` 重试。
+- Runner 或临时网络问题：修复外部状态后用 `--dispatch-only` 重试。
 - 源码、打包配置或产物问题：修复代码后发布更高版本。
 - 公开资产不合格：不要手工覆盖或移动 Tag，修复后发布更高版本。
 
@@ -204,8 +194,7 @@ pnpm release -- --dispatch-only vX.Y.Z
 - 禁止删除、移动或复用已推送 Tag。
 - 禁止把 P12、P12 密码、P8 或 GitHub Token 写入仓库。
 - 禁止把 `pnpm package:local` 产物当正式安装包上传。
-- 禁止绕过源码 CI 的 `verify`/smoke，以及正式包的签名、公证、staple、Gatekeeper
-  或 Manifest 检查。
+- 禁止绕过源码 CI 的 `verify`/smoke，以及正式包的包结构、校验和或 Manifest 检查。
 - 禁止让开源工作流调用 `cclink-dev` 或共享商业版 Release 状态。
 
 ## 完成标准
@@ -215,7 +204,7 @@ pnpm release -- --dispatch-only vX.Y.Z
 - `main` 包含唯一版本提交，`vX.Y.Z` 指向该提交。
 - GitHub Actions 全绿。
 - arm64 DMG、checksums、build record 和 Manifest 齐全，且不存在 ZIP 资产。
-- 签名、公证、staple、Gatekeeper 和 Manifest 反向验证通过。
+- ad-hoc 包结构、校验和与 Manifest 反向验证通过。
 - 工作流已自动创建公开稳定 Release，公开 API 可见版本与四项资产。
 - 发布后的 Apple Silicon 安装与应用内更新反馈已记录；它们不阻塞公开，但发现问题必须发
   更高版本修复。

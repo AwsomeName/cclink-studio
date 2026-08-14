@@ -89,6 +89,51 @@ describe('CclinkRuntimeStateStore', () => {
     })
   })
 
+  it('递归脱敏远程工具输入、输出和错误后再落盘', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cclink-runtime-state-'))
+    roots.push(root)
+    const store = new CclinkRuntimeStateStore(root)
+    await store.save({
+      version: 1,
+      sessions: [
+        {
+          id: 'session-1',
+          name: '会话',
+          workspaceId: 'workspace-1',
+          workspacePath: '/srv/project',
+          serverId: 'agent-1',
+          status: 'idle',
+          createdAt: 1,
+          updatedAt: 2,
+          messageCount: 1,
+          contextUsage: 0,
+        },
+      ],
+      messages: {
+        'session-1': [
+          {
+            type: 'agentTool',
+            id: 'tool-message',
+            timestamp: 2,
+            tool: {
+              id: 'tool-1',
+              name: 'Bash',
+              state: 'failed',
+              input: { nested: { accessToken: 'secret-token' } },
+              output: 'Authorization: Bearer abc.def.ghi',
+              error: 'ghp_abcdefghijklmnopqrstuvwxyz',
+            },
+          },
+        ],
+      },
+    })
+    const raw = readFileSync(join(root, 'cclink-runtime-state.json'), 'utf8')
+    expect(raw).not.toContain('secret-token')
+    expect(raw).not.toContain('abc.def.ghi')
+    expect(raw).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz')
+    expect(raw).toContain('[REDACTED]')
+  })
+
   it('只读导入旧商业端 cclink-state 的非敏感会话和消息', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cclink-runtime-state-'))
     const legacyRoot = await mkdtemp(join(tmpdir(), 'cclink-commercial-state-'))

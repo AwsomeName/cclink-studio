@@ -6,6 +6,7 @@ import { officialIpc } from '../shared/ipc/official'
 import { diagnosticsIpc } from '../shared/ipc/diagnostics'
 import { settingsIpc, type SettingsApiContract } from '../shared/ipc/settings'
 import { credentialsIpc, type CredentialsApiContract } from '../shared/ipc/credentials'
+import type { TerminalApiContract } from '../shared/ipc/terminal'
 import {
   scheduledTasksIpc,
   scheduledTasksIpcEvents,
@@ -81,6 +82,9 @@ const cclinkApi: CclinkApiContract = {
   setSessionArchived: (input) => invokeIpcContract(cclinkIpc.setSessionArchived, input),
   listMessages: (sessionId) => invokeIpcContract(cclinkIpc.listMessages, sessionId),
   sendAgentMessage: (input) => invokeIpcContract(cclinkIpc.sendAgentMessage, input),
+  resolveToolApproval: (input) => invokeIpcContract(cclinkIpc.resolveToolApproval, input),
+  answerQuestion: (input) => invokeIpcContract(cclinkIpc.answerQuestion, input),
+  respondPermission: (input) => invokeIpcContract(cclinkIpc.respondPermission, input),
   onRealtimeStatus: (callback) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
@@ -108,6 +112,11 @@ const remoteApi: RemoteApiContract = {
   createFile: (request) => invokeIpcContract(remoteIpc.createFile, request),
   renameFile: (request) => invokeIpcContract(remoteIpc.renameFile, request),
   deleteFile: (request) => invokeIpcContract(remoteIpc.deleteFile, request),
+  getDraft: (input) => invokeIpcContract(remoteIpc.getDraft, input),
+  saveDraft: (draft) => invokeIpcContract(remoteIpc.saveDraft, draft),
+  deleteDraft: (input) => invokeIpcContract(remoteIpc.deleteDraft, input),
+  deleteDraftPrefix: (input) => invokeIpcContract(remoteIpc.deleteDraftPrefix, input),
+  rebaseDraftPrefix: (input) => invokeIpcContract(remoteIpc.rebaseDraftPrefix, input),
 }
 
 const credentialsApi: CredentialsApiContract = {
@@ -156,6 +165,39 @@ const scheduledTasksApi: ScheduledTasksApiContract = {
     ipcRenderer.on(scheduledTasksIpcEvents.changed, handler)
     return () => ipcRenderer.removeListener(scheduledTasksIpcEvents.changed, handler)
   },
+}
+
+const terminalApi: TerminalApiContract = {
+  onRequestCommandConfirmation: (callback) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      request: Parameters<typeof callback>[0],
+    ): void => callback(request)
+    ipcRenderer.on('terminal:requestCommandConfirmation', handler)
+    return () => ipcRenderer.removeListener('terminal:requestCommandConfirmation', handler)
+  },
+  onExecutionEvent: (callback) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      event: Parameters<typeof callback>[0],
+    ): void => callback(event)
+    ipcRenderer.on('terminal:executionEvent', handler)
+    return () => ipcRenderer.removeListener('terminal:executionEvent', handler)
+  },
+  resolveCommandConfirmation: (id, approved) =>
+    ipcRenderer.invoke('terminal:resolveCommandConfirmation', id, approved),
+  recordLifecycleEvent: (input) => ipcRenderer.invoke('terminal:recordLifecycleEvent', input),
+  submitCommand: (input) => ipcRenderer.invoke('terminal:submitCommand', input),
+  startPty: (input) => ipcRenderer.invoke('terminal:startPty', input),
+  writePty: (input) => ipcRenderer.invoke('terminal:writePty', input),
+  resizePty: (input) => ipcRenderer.invoke('terminal:resizePty', input),
+  terminatePty: (terminalSessionId) =>
+    ipcRenderer.invoke('terminal:terminatePty', terminalSessionId),
+  listSessions: () => ipcRenderer.invoke('terminal:listSessions'),
+  listAuditEvents: (filter) => ipcRenderer.invoke('terminal:listAuditEvents', filter),
+  clearAuditSession: (terminalSessionId) =>
+    ipcRenderer.invoke('terminal:clearAuditSession', terminalSessionId),
+  clearAuditEvents: () => ipcRenderer.invoke('terminal:clearAuditEvents'),
 }
 
 contextBridge.exposeInMainWorld('cclinkStudio', {
@@ -211,33 +253,7 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   dataSource: dataSourceApi,
 
   // Terminal 命令确认、执行事件与受限提交
-  terminal: {
-    onRequestCommandConfirmation: (callback: (request: any) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, request: any): void => callback(request)
-      ipcRenderer.on('terminal:requestCommandConfirmation', handler)
-      return () => ipcRenderer.removeListener('terminal:requestCommandConfirmation', handler)
-    },
-    onExecutionEvent: (callback: (event: any) => void) => {
-      const handler = (_event: Electron.IpcRendererEvent, event: any): void => callback(event)
-      ipcRenderer.on('terminal:executionEvent', handler)
-      return () => ipcRenderer.removeListener('terminal:executionEvent', handler)
-    },
-    resolveCommandConfirmation: (id: string, approved: boolean) =>
-      ipcRenderer.invoke('terminal:resolveCommandConfirmation', id, approved),
-    recordLifecycleEvent: (input: any) =>
-      ipcRenderer.invoke('terminal:recordLifecycleEvent', input),
-    submitCommand: (input: any) => ipcRenderer.invoke('terminal:submitCommand', input),
-    startPty: (input: any) => ipcRenderer.invoke('terminal:startPty', input),
-    writePty: (input: any) => ipcRenderer.invoke('terminal:writePty', input),
-    resizePty: (input: any) => ipcRenderer.invoke('terminal:resizePty', input),
-    terminatePty: (terminalSessionId: string) =>
-      ipcRenderer.invoke('terminal:terminatePty', terminalSessionId),
-    listSessions: () => ipcRenderer.invoke('terminal:listSessions'),
-    listAuditEvents: (filter?: any) => ipcRenderer.invoke('terminal:listAuditEvents', filter),
-    clearAuditSession: (terminalSessionId: string) =>
-      ipcRenderer.invoke('terminal:clearAuditSession', terminalSessionId),
-    clearAuditEvents: () => ipcRenderer.invoke('terminal:clearAuditEvents'),
-  },
+  terminal: terminalApi,
 
   // 应用设置
   settings: settingsApi,

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import type {
   CclinkProtocolMessage,
   CclinkTerminalPtyErrorMessage,
@@ -32,6 +32,9 @@ interface RemotePtySession {
   lastTerminalSeq: number
   keepaliveTimer: NodeJS.Timeout | null
   attachPromise: Promise<void> | null
+  attachRetryTimer: NodeJS.Timeout | null
+  attachAttempts: number
+  replayGapNotified: boolean
 }
 
 export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter {
@@ -66,37 +69,23 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
     if (!status.capabilities.shell.pty) {
       throw terminalError('TERMINAL_PTY_UNAVAILABLE', '当前 Agent 未声明持久远程 Terminal 能力')
     }
-    const terminalId = `term-${randomUUID()}`
-    const traceId = randomUUID()
-    const size = normalizeSize(input.size)
-    const response = (await this.client.request(
-      ref.endpointId,
-      {
-        ...createCclinkEnvelope('terminal_pty_open', { trace_id: traceId }),
-        agent_id: ref.endpointId,
-        terminal_id: terminalId,
-        workspace_id: ref.workspaceId,
-        workspace_path: ref.path,
-        cols: size.columns,
-        rows: size.rows,
-        pty_protocol_version: 1,
-      },
-      ['terminal_pty_open_response'],
-      20_000,
-    )) as CclinkTerminalPtyOpenResponseMessage
-    if (
-      response.status !== 'ok' ||
-      response.terminal_id !== terminalId ||
-      response.trace_id !== traceId ||
-      response.agent_id !== ref.endpointId ||
-      response.workspace_id !== ref.workspaceId ||
-      response.workspace_path !== ref.path
-    ) {
-      throw terminalError(
-        response.code || 'WORKSPACE_MISMATCH',
-        response.message || 'Agent 未确认远程 Terminal 的完整项目绑定',
+    const existing = this.sessions.get(input.sessionId)
+    if (existing) {
+      if (
+        existing.serverId !== ref.endpointId ||
+        existing.workspaceId !== ref.workspaceId ||
+        existing.workspacePath !== ref.path
       )
+        throw terminalError('WORKSPACE_MISMATCH', 'Terminal session 已绑定到其他远程工作空间')
+      return {
+        sessionId: input.sessionId,
+        status: 'running',
+        processId: `cclink:${ref.endpointId}:${existing.terminalId}`,
+      }
     }
+    const terminalId = stableId('term', input.sessionId, ref.endpointId, ref.workspaceId, ref.path)
+    const traceId = stableId('trace', input.sessionId, ref.endpointId, ref.workspaceId, ref.path)
+    const size = normalizeSize(input.size)
     const session: RemotePtySession = {
       localSessionId: input.sessionId,
       terminalId,
@@ -105,13 +94,76 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
       workspaceId: ref.workspaceId,
       workspacePath: ref.path,
       inputSeq: 0,
-      lastTerminalSeq: response.terminal_seq ?? 0,
+      lastTerminalSeq: 0,
       keepaliveTimer: null,
       attachPromise: null,
+      attachRetryTimer: null,
+      attachAttempts: 0,
+      replayGapNotified: false,
     }
-    session.keepaliveTimer = this.keepalive(session, response.lease_timeout_ms)
+    if (input.resume) {
+      const expectedProcessId = `cclink:${ref.endpointId}:${terminalId}`
+      if (String(input.resume.processId) !== expectedProcessId) {
+        throw terminalError(
+          'TERMINAL_LEGACY_RESUME_UNSUPPORTED',
+          '该远程 Terminal 来自旧版本，无法安全恢复；请显式重启 Terminal',
+          false,
+        )
+      }
+      this.sessions.set(input.sessionId, session)
+      this.byTerminalId.set(terminalId, session)
+      try {
+        await this.attachSession(session, false)
+      } catch (error) {
+        this.sessions.delete(input.sessionId)
+        this.byTerminalId.delete(terminalId)
+        throw error
+      }
+      const processId = `cclink:${ref.endpointId}:${terminalId}`
+      this.emit({ kind: 'started', sessionId: input.sessionId, processId, timestamp: Date.now() })
+      return { sessionId: input.sessionId, status: 'running', processId }
+    }
+    let response: CclinkTerminalPtyOpenResponseMessage
+    try {
+      response = (await this.client.request(
+        ref.endpointId,
+        {
+          ...createCclinkEnvelope('terminal_pty_open', { trace_id: traceId }),
+          agent_id: ref.endpointId,
+          terminal_id: terminalId,
+          workspace_id: ref.workspaceId,
+          workspace_path: ref.path,
+          cols: size.columns,
+          rows: size.rows,
+          pty_protocol_version: 1,
+        },
+        ['terminal_pty_open_response'],
+        20_000,
+      )) as CclinkTerminalPtyOpenResponseMessage
+    } catch (error) {
+      this.service.recordDiagnostic('terminal.open', ref.endpointId, error)
+      throw error
+    }
+    if (
+      response.status !== 'ok' ||
+      response.terminal_id !== terminalId ||
+      response.trace_id !== traceId ||
+      response.agent_id !== ref.endpointId ||
+      response.workspace_id !== ref.workspaceId ||
+      response.workspace_path !== ref.path ||
+      response.pty_protocol_version !== 1
+    ) {
+      const error = terminalError(
+        response.code || 'WORKSPACE_MISMATCH',
+        response.message || 'Agent 未确认远程 Terminal 的完整项目绑定',
+      )
+      this.service.recordDiagnostic('terminal.open', ref.endpointId, error)
+      throw error
+    }
     this.sessions.set(input.sessionId, session)
     this.byTerminalId.set(terminalId, session)
+    session.lastTerminalSeq = response.terminal_seq ?? 0
+    session.keepaliveTimer = this.keepalive(session, response.lease_timeout_ms)
     this.realtimeOnline = true
     const processId = `cclink:${ref.endpointId}:${terminalId}`
     this.emit({ kind: 'started', sessionId: input.sessionId, processId, timestamp: Date.now() })
@@ -127,29 +179,39 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
     if (Buffer.byteLength(input.data, 'utf8') > 8 * 1024) {
       throw terminalError('TERMINAL_INVALID_REQUEST', '单次远程 Terminal 输入不能超过 8 KiB')
     }
-    await this.client.send(session.serverId, {
-      ...createCclinkEnvelope('terminal_pty_input', { trace_id: session.traceId }),
-      terminal_id: session.terminalId,
-      input_seq: ++session.inputSeq,
-      data: input.data,
-    })
+    try {
+      await this.client.send(session.serverId, {
+        ...createCclinkEnvelope('terminal_pty_input', { trace_id: session.traceId }),
+        terminal_id: session.terminalId,
+        input_seq: ++session.inputSeq,
+        data: input.data,
+      })
+    } catch (error) {
+      this.service.recordDiagnostic('terminal.input', session.serverId, error)
+      throw error
+    }
   }
 
   async resize(sessionId: string, size: TerminalSize): Promise<void> {
     const session = this.requireSession(sessionId)
     const normalized = normalizeSize(size)
-    const response = (await this.client.request(
-      session.serverId,
-      {
-        ...createCclinkEnvelope('terminal_pty_resize', { trace_id: session.traceId }),
-        terminal_id: session.terminalId,
-        cols: normalized.columns,
-        rows: normalized.rows,
-      },
-      ['terminal_pty_resize_response'],
-      10_000,
-    )) as CclinkTerminalPtyResponseMessage
-    assertOperation(session, response)
+    try {
+      const response = (await this.client.request(
+        session.serverId,
+        {
+          ...createCclinkEnvelope('terminal_pty_resize', { trace_id: session.traceId }),
+          terminal_id: session.terminalId,
+          cols: normalized.columns,
+          rows: normalized.rows,
+        },
+        ['terminal_pty_resize_response'],
+        10_000,
+      )) as CclinkTerminalPtyResponseMessage
+      assertOperation(session, response)
+    } catch (error) {
+      this.service.recordDiagnostic('terminal.resize', session.serverId, error)
+      throw error
+    }
   }
 
   async terminate(sessionId: string): Promise<void> {
@@ -169,16 +231,21 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
     type: 'terminal_pty_interrupt' | 'terminal_pty_close',
     responseType: 'terminal_pty_interrupt_response' | 'terminal_pty_close_response',
   ): Promise<void> {
-    const response = (await this.client.request(
-      session.serverId,
-      {
-        ...createCclinkEnvelope(type, { trace_id: session.traceId }),
-        terminal_id: session.terminalId,
-      },
-      [responseType],
-      10_000,
-    )) as CclinkTerminalPtyResponseMessage
-    assertOperation(session, response)
+    try {
+      const response = (await this.client.request(
+        session.serverId,
+        {
+          ...createCclinkEnvelope(type, { trace_id: session.traceId }),
+          terminal_id: session.terminalId,
+        },
+        [responseType],
+        10_000,
+      )) as CclinkTerminalPtyResponseMessage
+      assertOperation(session, response)
+    } catch (error) {
+      this.service.recordDiagnostic(`terminal.${type}`, session.serverId, error)
+      throw error
+    }
   }
 
   private handleEvent(serverId: string, message: CclinkProtocolMessage): void {
@@ -187,10 +254,28 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
     if (!session || session.serverId !== serverId || message.trace_id !== session.traceId) return
     if (typeof message.terminal_seq === 'number') {
       if (message.terminal_seq <= session.lastTerminalSeq) return
-      if (message.terminal_seq > session.lastTerminalSeq + 1) {
+      if (
+        message.terminal_seq > session.lastTerminalSeq + 1 &&
+        !('replay' in message && message.replay)
+      ) {
         this.stopKeepalive(session)
         this.scheduleAttach(session)
         return
+      }
+      if (
+        message.terminal_seq > session.lastTerminalSeq + 1 &&
+        'replay' in message &&
+        message.replay &&
+        !session.replayGapNotified
+      ) {
+        session.replayGapNotified = true
+        this.emit({
+          kind: 'output',
+          sessionId: session.localSessionId,
+          data: '\r\n[远程 Terminal 的更早输出已超出重放窗口]\r\n',
+          stream: 'stderr',
+          timestamp: Date.now(),
+        })
       }
       session.lastTerminalSeq = message.terminal_seq
     }
@@ -237,9 +322,19 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
           terminal_id: session.terminalId,
           last_terminal_seq: session.lastTerminalSeq,
         })
-        .catch((error: unknown) =>
-          this.fail(session, error instanceof Error ? error.message : String(error)),
-        )
+        .catch((error: unknown) => {
+          if (!this.sessions.has(session.localSessionId)) return
+          this.service.recordDiagnostic('terminal.keepalive', session.serverId, error)
+          this.stopKeepalive(session)
+          this.emit({
+            kind: 'output',
+            sessionId: session.localSessionId,
+            data: `\r\n[远程 Terminal 连接中断：${error instanceof Error ? error.message : String(error)}]\r\n`,
+            stream: 'stderr',
+            timestamp: Date.now(),
+          })
+          this.scheduleAttach(session)
+        })
     }, interval)
     timer.unref()
     return timer
@@ -254,13 +349,20 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
   }
 
   private scheduleAttach(session: RemotePtySession): void {
-    if (!this.realtimeOnline || session.attachPromise || session.keepaliveTimer) return
-    session.attachPromise = this.attachSession(session).finally(() => {
+    if (
+      !this.realtimeOnline ||
+      session.attachPromise ||
+      session.attachRetryTimer ||
+      session.keepaliveTimer ||
+      session.attachAttempts >= 5
+    )
+      return
+    session.attachPromise = this.attachSession(session, true).finally(() => {
       session.attachPromise = null
     })
   }
 
-  private async attachSession(session: RemotePtySession): Promise<void> {
+  private async attachSession(session: RemotePtySession, retryOnFailure: boolean): Promise<void> {
     try {
       const response = (await this.client.request(
         session.serverId,
@@ -287,11 +389,32 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
           timestamp: Date.now(),
         })
       }
+      session.attachAttempts = 0
+      session.replayGapNotified = false
       if (this.realtimeOnline) session.keepaliveTimer = this.keepalive(session)
     } catch (error) {
       if (!this.sessions.has(session.localSessionId)) return
       const message = error instanceof Error ? error.message : String(error)
-      this.fail(session, message, 'TERMINAL_ATTACH_FAILED')
+      this.service.recordDiagnostic('terminal.attach', session.serverId, error)
+      if (!retryOnFailure) {
+        throw terminalError('TERMINAL_ATTACH_FAILED', message, true)
+      }
+      session.attachAttempts += 1
+      this.emit({
+        kind: 'output',
+        sessionId: session.localSessionId,
+        data: `\r\n[远程 Terminal 恢复失败（${session.attachAttempts}/5）：${message}]\r\n`,
+        stream: 'stderr',
+        timestamp: Date.now(),
+      })
+      if (session.attachAttempts < 5 && this.realtimeOnline) {
+        const delay = Math.min(30_000, 1_000 * 2 ** (session.attachAttempts - 1))
+        session.attachRetryTimer = setTimeout(() => {
+          session.attachRetryTimer = null
+          this.scheduleAttach(session)
+        }, delay)
+        session.attachRetryTimer.unref()
+      }
     }
   }
 
@@ -307,6 +430,11 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
   }
 
   private fail(session: RemotePtySession, message: string, code = 'TERMINAL_REMOTE_ERROR'): void {
+    this.service.recordDiagnostic(
+      'terminal.event',
+      session.serverId,
+      terminalError(code, message, true),
+    )
     this.finish(session, {
       kind: 'error',
       sessionId: session.localSessionId,
@@ -318,6 +446,8 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
 
   private finish(session: RemotePtySession, event: TerminalExecutionEvent): void {
     this.stopKeepalive(session)
+    if (session.attachRetryTimer) clearTimeout(session.attachRetryTimer)
+    session.attachRetryTimer = null
     this.sessions.delete(session.localSessionId)
     this.byTerminalId.delete(session.terminalId)
     this.emit(event)
@@ -326,6 +456,10 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
   private emit(event: TerminalExecutionEvent): void {
     for (const listener of this.listeners) listener(event)
   }
+}
+
+function stableId(prefix: string, ...parts: string[]): string {
+  return `${prefix}-${createHash('sha256').update(parts.join('\0')).digest('hex').slice(0, 32)}`
 }
 
 function isPtyEvent(

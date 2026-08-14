@@ -1,4 +1,5 @@
-import type { BrowserWindow } from 'electron'
+import { app, type BrowserWindow } from 'electron'
+import { join } from 'node:path'
 import { z } from 'zod'
 import { authIpc, authIpcEvents } from '../../shared/ipc/auth'
 import { cclinkIpc, cclinkIpcEvents } from '../../shared/ipc/cclink'
@@ -14,6 +15,7 @@ import {
   type TrustedRendererGuard,
 } from '../ipc/trusted-renderer-guard'
 import type { CclinkRemoteService } from './cclink-remote-service'
+import { RemoteFileDraftStore } from '../remote/remote-file-draft-store'
 
 const phoneSchema = z.string().regex(/^1[3-9]\d{9}$/u, '请输入有效的手机号')
 const codeSchema = z.string().regex(/^\d{4,8}$/u, '请输入有效的短信验证码')
@@ -29,6 +31,9 @@ export function registerCclinkRemoteIpc(
   service: CclinkRemoteService,
   guard: TrustedRendererGuard,
 ): () => void {
+  const draftStore = new RemoteFileDraftStore(
+    join(app.getPath('userData'), 'remote-workspaces', 'file-drafts.json'),
+  )
   const sendSession = (session: {
     loggedIn: boolean
     user: ReturnType<typeof service.auth.getUser>
@@ -136,7 +141,7 @@ export function registerCclinkRemoteIpc(
             .object({
               ref: cclinkRemoteRefSchema,
               sessionId: idSchema,
-              content: z.string().trim().min(1).max(200_000),
+              content: z.string().trim().min(1).max(8_192),
             })
             .strict(),
         ])
@@ -144,6 +149,53 @@ export function registerCclinkRemoteIpc(
     ),
     guard,
     (_event, input) => service.sendAgentMessage(input.ref, input.sessionId, input.content),
+  )
+  const controlBase = {
+    ref: cclinkRemoteRefSchema,
+    sessionId: idSchema,
+    requestId: idSchema,
+    toolUseId: idSchema,
+  }
+  registerTrustedIpcContract(
+    bindIpcParser(cclinkIpc.resolveToolApproval, (args) =>
+      z.tuple([z.object({ ...controlBase, approved: z.boolean() }).strict()]).parse(args),
+    ),
+    guard,
+    (_event, input) => service.resolveToolApproval(input),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(cclinkIpc.answerQuestion, (args) =>
+      z
+        .tuple([
+          z
+            .object({
+              ...controlBase,
+              answers: z.record(z.string().min(1).max(256), z.string().max(4_096)),
+            })
+            .strict(),
+        ])
+        .parse(args),
+    ),
+    guard,
+    (_event, input) => service.answerQuestion(input),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(cclinkIpc.respondPermission, (args) =>
+      z
+        .tuple([
+          z
+            .object({
+              serverId: idSchema,
+              requestId: idSchema,
+              approved: z.boolean(),
+              remember: z.boolean().optional(),
+            })
+            .strict(),
+        ])
+        .parse(args),
+    ),
+    guard,
+    (_event, input) => service.respondPermission(input),
   )
 
   registerTrustedIpcContract(
@@ -274,6 +326,67 @@ export function registerCclinkRemoteIpc(
     ),
     guard,
     (_event, request) => service.deleteFile(request),
+  )
+  const draftIdentitySchema = z
+    .object({ ref: cclinkRemoteRefSchema, path: cclinkRemotePathSchema })
+    .strict()
+  registerTrustedIpcContract(
+    bindIpcParser(remoteIpc.getDraft, (args) => z.tuple([draftIdentitySchema]).parse(args)),
+    guard,
+    (_event, input) => draftStore.get(input.ref, input.path),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(remoteIpc.saveDraft, (args) =>
+      z
+        .tuple([
+          z
+            .object({
+              ref: cclinkRemoteRefSchema,
+              path: cclinkRemotePathSchema,
+              content: z.string().max(2 * 1024 * 1024),
+              savedContent: z.string().max(2 * 1024 * 1024),
+              sha256: z.string().regex(/^[a-f0-9]{64}$/iu),
+              updatedAt: z.number().int().nonnegative(),
+            })
+            .strict(),
+        ])
+        .parse(args),
+    ),
+    guard,
+    (_event, draft) => draftStore.save(draft),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(remoteIpc.deleteDraft, (args) => z.tuple([draftIdentitySchema]).parse(args)),
+    guard,
+    (_event, input) => draftStore.delete(input.ref, input.path),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(remoteIpc.deleteDraftPrefix, (args) =>
+      z
+        .tuple([
+          z.object({ ref: cclinkRemoteRefSchema, pathPrefix: cclinkRemotePathSchema }).strict(),
+        ])
+        .parse(args),
+    ),
+    guard,
+    (_event, input) => draftStore.deletePrefix(input.ref, input.pathPrefix),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(remoteIpc.rebaseDraftPrefix, (args) =>
+      z
+        .tuple([
+          z
+            .object({
+              ref: cclinkRemoteRefSchema,
+              oldPrefix: cclinkRemotePathSchema,
+              newPrefix: cclinkRemotePathSchema,
+            })
+            .strict(),
+        ])
+        .parse(args),
+    ),
+    guard,
+    (_event, input) => draftStore.rebasePrefix(input.ref, input.oldPrefix, input.newPrefix),
   )
 
   return () => {

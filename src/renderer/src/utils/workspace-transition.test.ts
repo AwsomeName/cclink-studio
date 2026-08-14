@@ -231,9 +231,11 @@ describe('workspace-transition', () => {
     await applyWorkspaceRuntimeTransition(remoteTransition)
 
     expect(useTabStore.getState().tabs).toEqual([])
-    const activeConversation =
-      useAgentStore.getState().conversations[useAgentStore.getState().activeConversationId]
-    expect(activeConversation.runtime.workspaceRef).toEqual(remoteRef)
+    expect(
+      Object.values(useAgentStore.getState().conversations).some(
+        (conversation) => conversation.runtime.workspaceRef?.kind === 'remote',
+      ),
+    ).toBe(false)
 
     const setSection = window.cclinkStudio.workspaceState.setSection as ReturnType<typeof vi.fn>
     setSection.mockClear()

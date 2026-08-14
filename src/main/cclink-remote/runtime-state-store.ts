@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { CclinkRemoteMessage, CclinkRemoteSession } from '../../shared/cclink'
 
@@ -10,6 +10,7 @@ export interface CclinkRuntimeState {
 }
 
 const EMPTY_STATE: CclinkRuntimeState = { version: 1, sessions: [], messages: {} }
+const MAX_STATE_BYTES = 16 * 1024 * 1024
 
 export class CclinkRuntimeStateStore {
   private readonly filePath: string
@@ -25,35 +26,7 @@ export class CclinkRuntimeStateStore {
 
   async load(): Promise<CclinkRuntimeState> {
     try {
-      const parsed = JSON.parse(
-        await readFile(this.filePath, 'utf8'),
-      ) as Partial<CclinkRuntimeState>
-      if (parsed.version !== 1) return structuredClone(EMPTY_STATE)
-      const sessions = Array.isArray(parsed.sessions)
-        ? parsed.sessions.flatMap((session) => {
-            const sanitized = sanitizeSession(session)
-            return sanitized ? [sanitized] : []
-          })
-        : []
-      const sessionIds = new Set(sessions.map((session) => session.id))
-      const messages = Object.fromEntries(
-        Object.entries(parsed.messages ?? {}).flatMap(([sessionId, items]) =>
-          sessionIds.has(sessionId) && Array.isArray(items)
-            ? [
-                [
-                  sessionId,
-                  items
-                    .flatMap((message) => {
-                      const sanitized = sanitizeMessage(message)
-                      return sanitized ? [sanitized] : []
-                    })
-                    .slice(-2_000),
-                ],
-              ]
-            : [],
-        ),
-      )
-      return { version: 1, sessions, messages }
+      return await readStateFile(this.filePath)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         const imported = await this.readPreviousDesktopState()
@@ -64,6 +37,15 @@ export class CclinkRuntimeStateStore {
       }
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         console.warn('[CCLink Studio] 远程会话状态加载失败:', error)
+        const quarantinePath = `${this.filePath}.corrupt-${Date.now()}`
+        await rename(this.filePath, quarantinePath).catch(() => undefined)
+        try {
+          const recovered = await readStateFile(`${this.filePath}.bak`)
+          await this.save(recovered)
+          return recovered
+        } catch {
+          // Backup is optional; a corrupt primary remains quarantined for manual recovery.
+        }
       }
       return structuredClone(EMPTY_STATE)
     }
@@ -133,7 +115,7 @@ export class CclinkRuntimeStateStore {
   }
 
   save(state: CclinkRuntimeState): Promise<void> {
-    this.pendingSnapshot = JSON.stringify(state, null, 2)
+    this.pendingSnapshot = JSON.stringify(sanitizeState(state), null, 2)
     this.writes ??= this.drainWrites().finally(() => {
       this.writes = null
     })
@@ -151,6 +133,7 @@ export class CclinkRuntimeStateStore {
           `.cclink-runtime-state.${process.pid}.${randomUUID()}.tmp`,
         )
         await writeFile(temporary, snapshot, { encoding: 'utf8', mode: 0o600 })
+        await copyFile(this.filePath, `${this.filePath}.bak`).catch(() => undefined)
         await rename(temporary, this.filePath)
         await chmod(this.filePath, 0o600)
       } catch (error) {
@@ -228,16 +211,128 @@ function sanitizeMessage(value: unknown): CclinkRemoteMessage | null {
         name,
         state,
         ...(tool['input'] && typeof tool['input'] === 'object'
-          ? { input: tool['input'] as Record<string, unknown> }
+          ? { input: redactSecrets(tool['input']) as Record<string, unknown> }
           : {}),
         ...(typeof (tool['output'] ?? tool['result']) === 'string'
-          ? { output: String(tool['output'] ?? tool['result']) }
+          ? { output: redactString(String(tool['output'] ?? tool['result'])) }
           : {}),
-        ...(typeof tool['error'] === 'string' ? { error: tool['error'] } : {}),
+        ...(typeof tool['error'] === 'string' ? { error: redactString(tool['error']) } : {}),
+        ...(tool['requiresApproval'] === true ? { requiresApproval: true } : {}),
+        ...(typeof tool['approvalReason'] === 'string'
+          ? { approvalReason: redactString(tool['approvalReason']) }
+          : {}),
+        ...(typeof tool['expiresAt'] === 'number' ? { expiresAt: tool['expiresAt'] } : {}),
+        ...(typeof tool['requestId'] === 'string' ? { requestId: tool['requestId'] } : {}),
       },
     }
   }
+  if (
+    message['type'] === 'userQuestion' &&
+    typeof message['requestId'] === 'string' &&
+    typeof message['toolUseId'] === 'string' &&
+    Array.isArray(message['questions'])
+  ) {
+    const questions = message['questions'].flatMap((value, index) => {
+      if (!value || typeof value !== 'object') return []
+      const question = value as Record<string, unknown>
+      if (typeof question['question'] !== 'string') return []
+      return [
+        {
+          id: typeof question['id'] === 'string' ? question['id'] : `question-${index + 1}`,
+          ...(typeof question['header'] === 'string' ? { header: question['header'] } : {}),
+          question: question['question'],
+          ...(question['multiSelect'] === true ? { multiSelect: true } : {}),
+          ...(Array.isArray(question['options'])
+            ? {
+                options: question['options'].flatMap((option) => {
+                  if (!option || typeof option !== 'object') return []
+                  const item = option as Record<string, unknown>
+                  return typeof item['label'] === 'string'
+                    ? [
+                        {
+                          label: item['label'],
+                          ...(typeof item['description'] === 'string'
+                            ? { description: item['description'] }
+                            : {}),
+                        },
+                      ]
+                    : []
+                }),
+              }
+            : {}),
+        },
+      ]
+    })
+    return {
+      type: 'userQuestion',
+      id: message['id'],
+      timestamp: message['timestamp'],
+      requestId: message['requestId'],
+      toolUseId: message['toolUseId'],
+      questions,
+      ...(message['answered'] === true ? { answered: true } : {}),
+    }
+  }
   return null
+}
+
+async function readStateFile(filePath: string): Promise<CclinkRuntimeState> {
+  const info = await stat(filePath)
+  if (info.size > MAX_STATE_BYTES) throw new Error('远程会话状态超过安全大小限制')
+  const parsed = JSON.parse(await readFile(filePath, 'utf8')) as Partial<CclinkRuntimeState>
+  if (parsed.version !== 1) return structuredClone(EMPTY_STATE)
+  return sanitizeState(parsed)
+}
+
+function sanitizeState(state: Partial<CclinkRuntimeState>): CclinkRuntimeState {
+  const sessions = Array.isArray(state.sessions)
+    ? state.sessions.flatMap((session) => {
+        const sanitized = sanitizeSession(session)
+        return sanitized ? [sanitized] : []
+      })
+    : []
+  const sessionIds = new Set(sessions.map((session) => session.id))
+  const messages = Object.fromEntries(
+    Object.entries(state.messages ?? {}).flatMap(([sessionId, items]) =>
+      sessionIds.has(sessionId) && Array.isArray(items)
+        ? [
+            [
+              sessionId,
+              items
+                .flatMap((item) => {
+                  const sanitized = sanitizeMessage(item)
+                  return sanitized ? [sanitized] : []
+                })
+                .slice(-2_000),
+            ],
+          ]
+        : [],
+    ),
+  )
+  return { version: 1, sessions, messages }
+}
+
+const SENSITIVE_KEY =
+  /(password|passcode|token|authorization|api.?key|secret|usersig|cookie|session.?key|验证码)/iu
+
+function redactSecrets(value: unknown, keyName = ''): unknown {
+  if (SENSITIVE_KEY.test(keyName)) return '[REDACTED]'
+  if (Array.isArray(value)) return value.map((item) => redactSecrets(item))
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        redactSecrets(item, key),
+      ]),
+    )
+  }
+  return typeof value === 'string' ? redactString(value) : value
+}
+
+function redactString(value: string): string {
+  return value
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/giu, 'Bearer [REDACTED]')
+    .replace(/\b(sk|ghp|github_pat)_[A-Za-z0-9_-]{12,}\b/gu, '[REDACTED]')
 }
 
 function legacyWorkspaceId(serverId: string, path: string): string {

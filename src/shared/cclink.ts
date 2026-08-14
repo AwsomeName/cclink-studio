@@ -68,6 +68,13 @@ export type CclinkMessageType =
   | 'agent_status'
   | 'agent_text'
   | 'agent_tool'
+  | 'tool_approval_response'
+  | 'tool_approval_ack'
+  | 'user_question'
+  | 'question_answer'
+  | 'question_answer_ack'
+  | 'permission_request'
+  | 'permission_response'
   | 'terminal_output'
   | 'session_create'
   | 'session_response'
@@ -220,6 +227,13 @@ const MESSAGE_TYPES = new Set<CclinkMessageType>([
   'agent_status',
   'agent_text',
   'agent_tool',
+  'tool_approval_response',
+  'tool_approval_ack',
+  'user_question',
+  'question_answer',
+  'question_answer_ack',
+  'permission_request',
+  'permission_response',
   'terminal_output',
   'session_create',
   'session_response',

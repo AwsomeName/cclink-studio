@@ -27,5 +27,12 @@ describe('CCLink remote IPC schema', () => {
     ).toThrow()
     expect(() => cclinkRemotePathSchema.parse('/srv/project\0secret')).toThrow()
     expect(() => cclinkRemotePathSchema.parse(`/${'x'.repeat(4097)}`)).toThrow()
+    expect(() => cclinkRemotePathSchema.parse('C:relative\\project')).toThrow()
+    expect(() => cclinkRemotePathSchema.parse('relative/project')).toThrow()
+    expect(() => cclinkRemotePathSchema.parse('C:\\project/mixed')).toThrow()
+    expect(cclinkRemotePathSchema.parse('C:\\project\\src')).toBe('C:\\project\\src')
+    expect(cclinkRemotePathSchema.parse('\\\\server\\share\\project')).toBe(
+      '\\\\server\\share\\project',
+    )
   })
 })

@@ -19,6 +19,7 @@ describe('CclinkTerminalExecutionAdapter', () => {
         agent_id: 'agent-1',
         workspace_id: 'workspace-1',
         workspace_path: '/srv/project',
+        pty_protocol_version: 1,
         terminal_seq: 0,
       })),
       send: vi.fn(async () => undefined),
@@ -52,6 +53,17 @@ describe('CclinkTerminalExecutionAdapter', () => {
         cwd: ref.path,
       },
     })
+    const repeated = await adapter.start({
+      sessionId: 'local-session',
+      runtime: {
+        location: 'remote',
+        transport: 'cclink',
+        backend: 'remote-shell',
+        endpointId: 'agent-1',
+        workspaceRef: ref,
+        cwd: ref.path,
+      },
+    })
     const open = client.request.mock.calls[0]![1] as unknown as {
       terminal_id: string
       trace_id: string
@@ -68,6 +80,8 @@ describe('CclinkTerminalExecutionAdapter', () => {
       },
     })
     expect(result.processId).toContain('cclink:agent-1:')
+    expect(repeated.processId).toBe(result.processId)
+    expect(client.request).toHaveBeenCalledTimes(1)
     expect(events).toContainEqual(
       expect.objectContaining({
         kind: 'output',
@@ -97,6 +111,7 @@ describe('CclinkTerminalExecutionAdapter', () => {
             agent_id: 'agent-1',
             workspace_id: request.workspace_id,
             workspace_path: request.workspace_path,
+            pty_protocol_version: 1,
             terminal_seq: 7,
           }
         }

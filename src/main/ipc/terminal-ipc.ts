@@ -1,4 +1,5 @@
 import type { IpcMainInvokeEvent, WebContents } from 'electron'
+import { z } from 'zod'
 import type {
   TerminalAuditListFilter,
   TerminalLifecycleAuditInput,
@@ -30,6 +31,7 @@ import type { TerminalSessionState } from '../terminal/terminal-session-state'
 import { canTransitionTerminalStatus } from '../terminal/terminal-session-state'
 import type { TrustedRendererGuard } from './trusted-renderer-guard'
 import { registerTrustedIpcHandler } from './trusted-renderer-guard'
+import { workspaceRefSchema } from '../../shared/ipc/workspace-ref-schema'
 
 export function registerTerminalIpc(
   terminalConfirmationService: TerminalConfirmationService | null | undefined,
@@ -126,6 +128,7 @@ export function registerTerminalIpc(
     }
     const normalized = normalizePtyStartInput(input)
     if (!normalized) return { success: false, error: 'Terminal PTY 启动参数无效' }
+    const persisted = await terminalSessionStore?.getSession(normalized.terminalSessionId)
     if (!terminalSessionRegistry.get(normalized.terminalSessionId)) {
       terminalSessionRegistry.register({
         sessionId: normalized.terminalSessionId,
@@ -144,6 +147,9 @@ export function registerTerminalIpc(
         sessionId: normalized.terminalSessionId,
         runtime: normalized.runtime,
         size: normalized.size,
+        ...(persisted?.attachable && persisted.processId
+          ? { resume: { processId: persisted.processId } }
+          : {}),
       })
       return { success: true, processId: result.processId }
     } catch (error) {
@@ -309,51 +315,56 @@ function normalizeSubmitCommandInput(
 }
 
 function normalizePtyStartInput(input?: TerminalPtyStartInput): TerminalPtyStartInput | null {
-  if (!input || typeof input !== 'object') return null
-  if (typeof input.terminalSessionId !== 'string' || !input.terminalSessionId.trim()) return null
-  if (!isTerminalRuntimeRef(input.runtime)) return null
-  return {
-    terminalSessionId: input.terminalSessionId.trim(),
-    runtime: input.runtime,
-    size: normalizePtySize(input.size),
-  }
+  const parsed = terminalPtyStartSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }
 
 function normalizePtyWriteInput(input?: TerminalPtyWriteInput): TerminalPtyWriteInput | null {
-  if (!input || typeof input !== 'object') return null
-  if (typeof input.terminalSessionId !== 'string' || !input.terminalSessionId.trim()) return null
-  if (typeof input.data !== 'string' || input.data.length === 0) return null
-  return {
-    terminalSessionId: input.terminalSessionId.trim(),
-    data: input.data.slice(0, 100_000),
-  }
+  const parsed = terminalPtyWriteSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }
 
 function normalizePtyResizeInput(input?: TerminalPtyResizeInput): TerminalPtyResizeInput | null {
-  if (!input || typeof input !== 'object') return null
-  if (typeof input.terminalSessionId !== 'string' || !input.terminalSessionId.trim()) return null
-  return {
-    terminalSessionId: input.terminalSessionId.trim(),
-    size: normalizePtySize(input.size),
-  }
+  const parsed = terminalPtyResizeSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }
 
-function normalizePtySize(size: TerminalPtyStartInput['size']) {
-  return {
-    columns: clampInteger(size?.columns, 2, 500, 80),
-    rows: clampInteger(size?.rows, 2, 200, 24),
-  }
-}
-
-function clampInteger(
-  value: number | undefined,
-  min: number,
-  max: number,
-  fallback: number,
-): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
-  return Math.min(max, Math.max(min, Math.floor(value)))
-}
+const terminalIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(256)
+  .regex(/^[^\0\r\n]+$/u)
+const terminalSizeSchema = z
+  .object({
+    columns: z.number().int().min(2).max(500),
+    rows: z.number().int().min(2).max(200),
+  })
+  .strict()
+const terminalRuntimeSchema = z
+  .object({
+    location: z.enum(['local', 'remote']),
+    transport: z.enum(['local', 'cclink']),
+    backend: z.enum(['local-shell', 'remote-shell', 'codex', 'custom']),
+    workspaceRef: workspaceRefSchema,
+    cwd: z.string().min(1).max(32_768).optional(),
+    shell: z.string().min(1).max(4_096).optional(),
+    endpointId: z.string().trim().min(1).max(256).optional(),
+  })
+  .strict()
+const terminalPtyStartSchema = z
+  .object({
+    terminalSessionId: terminalIdSchema,
+    runtime: terminalRuntimeSchema,
+    size: terminalSizeSchema.optional().default({ columns: 80, rows: 24 }),
+  })
+  .strict()
+const terminalPtyWriteSchema = z
+  .object({ terminalSessionId: terminalIdSchema, data: z.string().min(1).max(100_000) })
+  .strict()
+const terminalPtyResizeSchema = z
+  .object({ terminalSessionId: terminalIdSchema, size: terminalSizeSchema })
+  .strict()
 
 function normalizePermissionPolicy(
   policy?: TerminalPermissionPolicy,

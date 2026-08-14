@@ -57,10 +57,12 @@ export function hydrateRuntimeSections(
       .hydrateFromWorkspaceState(
         scopeWorkspaceEditorDraftSnapshot(sections.editorDrafts ?? { files: {} }, workspaceRef),
       )
-    useAgentStore.getState().hydrateFromWorkspaceState(scopedAgentSnapshot.value, {
-      workspaceRef,
-      merge: true,
-    })
+    if (workspaceRef?.kind !== 'remote') {
+      useAgentStore.getState().hydrateFromWorkspaceState(scopedAgentSnapshot.value, {
+        workspaceRef,
+        merge: true,
+      })
+    }
   } finally {
     endWorkspaceStateRestore()
   }
@@ -133,14 +135,18 @@ export async function persistRuntimeSections(
       section: 'editorDrafts' as const,
       promise: persistWorkspaceSectionNow('editorDrafts', editorDrafts, targetWorkspaceKey),
     },
-    {
-      section: 'agentConversations' as const,
-      promise: persistWorkspaceSectionNow(
-        'agentConversations',
-        buildAgentConversationWorkspaceSnapshot(agentState, targetWorkspaceKey),
-        targetWorkspaceKey,
-      ),
-    },
+    ...(targetWorkspaceRef?.kind === 'remote'
+      ? []
+      : [
+          {
+            section: 'agentConversations' as const,
+            promise: persistWorkspaceSectionNow(
+              'agentConversations',
+              buildAgentConversationWorkspaceSnapshot(agentState, targetWorkspaceKey),
+              targetWorkspaceKey,
+            ),
+          },
+        ]),
   ]
   const settled = await Promise.allSettled(writes.map((write) => write.promise))
   const failures = settled.flatMap((result, index): WorkspaceRuntimePersistenceFailure[] => {
@@ -161,6 +167,7 @@ export async function persistRuntimeSections(
 export async function reconcileAgentRuntimeStatuses(
   workspaceKey: string | null = getWorkspaceStateKey(),
 ): Promise<void> {
+  if (useWorkspaceStore.getState().activeWorkspaceRef?.kind === 'remote') return
   const getStatus = window.cclinkStudio?.agent?.getStatus
 
   const state = useAgentStore.getState()

@@ -96,7 +96,10 @@ export function WorkbenchContent({
             )}
             {activeTab.type === 'agent-role' && <AgentRoleDetailTab tab={activeTab} />}
             {activeTab.type === 'remote-file' && activeTab.remoteFile && (
-              <RemoteFileViewer tab={activeTab} />
+              <RemoteFileViewer
+                key={`${activeTab.id}:${activeTab.remoteFile.serverId}:${activeTab.remoteFile.workspaceId}:${activeTab.remoteFile.path}`}
+                tab={activeTab}
+              />
             )}
             {activeTab.type === 'editor' &&
               (activeTab.filePath && isHtmlFilePath(activeTab.filePath) ? (

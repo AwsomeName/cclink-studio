@@ -153,7 +153,7 @@ export function RemoteFileTree({
       })
       if (!result.success) throw new Error(result.error || '重命名失败')
       const newPath = result.path ?? joinRemotePath(parent, name)
-      rebaseRemoteFileDraftPaths(selected.path, newPath)
+      rebaseRemoteFileDraftPaths(workspaceRef, selected.path, newPath)
       useTabStore
         .getState()
         .rebaseRemoteFilePaths(
@@ -170,20 +170,51 @@ export function RemoteFileTree({
   }
   const deleteSelected = async (): Promise<void> => {
     if (!selected || selected.path === workspaceRef.path) return
-    if (
-      !window.confirm(
-        `确定删除远程${selected.type === 'directory' ? '目录' : '文件'}“${selected.name}”？`,
+    const affectedTabs = useTabStore.getState().tabs.filter((tab) => {
+      const file = tab.remoteFile
+      return Boolean(
+        file &&
+        file.serverId === workspaceRef.endpointId &&
+        file.workspaceId === workspaceRef.workspaceId &&
+        (file.path === selected.path ||
+          file.path.startsWith(`${selected.path}/`) ||
+          file.path.startsWith(`${selected.path}\\`)),
       )
-    )
-      return
+    })
+    const dirtyCount = affectedTabs.filter((tab) => tab.dirty).length
+    const { response } = await window.cclinkStudio.dialog.showMessageBox({
+      type: 'warning',
+      title: '删除远程文件',
+      message: `确定删除远程${selected.type === 'directory' ? '目录' : '文件'}“${selected.name}”？`,
+      detail:
+        dirtyCount > 0
+          ? `其中 ${dirtyCount} 个已打开文件有未保存修改；继续会同时永久丢弃这些草稿。`
+          : '该操作会立即修改远程设备上的文件，无法从 Studio 撤销。',
+      buttons: ['取消', '确认删除'],
+      defaultId: 0,
+      cancelId: 0,
+    })
+    if (response !== 1) return
     try {
+      let expectedSha256: string | undefined
+      if (selected.type === 'file') {
+        const current = await window.cclinkStudio.remote.readFile({
+          ref: workspaceRef,
+          path: selected.path,
+        })
+        if (!current.success || !current.file?.complete || !current.file.sha256) {
+          throw new Error(current.error || '删除前无法确认远程文件版本，已停止删除')
+        }
+        expectedSha256 = current.file.sha256
+      }
       const result = await window.cclinkStudio.remote.deleteFile({
         ...(await mutationBase()),
         path: selected.path,
         recursive: selected.type === 'directory',
+        ...(expectedSha256 ? { expectedSha256 } : {}),
       })
       if (!result.success) throw new Error(result.error || '删除失败')
-      clearRemoteFileDraftPaths(selected.path)
+      clearRemoteFileDraftPaths(workspaceRef, selected.path)
       useTabStore
         .getState()
         .closeRemoteFilePaths(workspaceRef.endpointId, workspaceRef.workspaceId, selected.path)

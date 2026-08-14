@@ -16,6 +16,7 @@ export interface TerminalStartInput {
   runtime: TerminalRuntimeRef
   size?: TerminalSize
   env?: Record<string, string>
+  resume?: { processId?: string | number }
 }
 
 export interface TerminalWriteInput {

@@ -150,6 +150,8 @@ function RemoteDirectoryPicker({
   server: CclinkServer
   onBack(): void
 }): React.ReactElement {
+  const pendingPermissions = useCclinkStore((state) => state.pendingPermissions)
+  const respondPermission = useCclinkStore((state) => state.respondPermission)
   const initialPath = useMemo(
     () => server.workspaces.find((item) => item.exists !== false)?.path || '/',
     [server],
@@ -244,6 +246,32 @@ function RemoteDirectoryPicker({
         )}
       </div>
       {error && <div className="cclink-inline-notice error">{error}</div>}
+      {pendingPermissions
+        .filter((permission) => permission.serverId === server.id)
+        .map((permission) => (
+          <div key={permission.requestId} className="cclink-inline-notice warning">
+            <strong>远程设备请求目录权限</strong>
+            <span>
+              {permission.operation} · {permission.path}
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                void respondPermission(permission.serverId, permission.requestId, false)
+              }
+            >
+              拒绝
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                void respondPermission(permission.serverId, permission.requestId, true)
+              }
+            >
+              允许本次访问
+            </button>
+          </div>
+        ))}
       <button
         type="button"
         className="cclink-primary"

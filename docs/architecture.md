@@ -198,13 +198,14 @@ CCLink Studio 免费、免登录保留这些本地能力：
   `MarkdownIllustrationService` 负责文档哈希、资产写入和引用插入事务。
 - 用户自有第三方凭证的本地明文管理；凭证不依赖 CCLink 账号、云服务或系统钥匙串。
 - 本地设置、诊断、文件访问和工作台状态恢复。
-- updater 的中性检查框架，以及只针对本仓库不可变 Tag 的开源版签名、公证和制品发布链路。
+- updater 的中性检查框架，以及只针对本仓库不可变 Tag 的开源版 ad-hoc 制品发布链路。
 
 桌面发布与更新的状态所有权、发布权限边界、R0 发布基线和 U0-U5 更新验收以
 `docs/features/desktop-release-and-updates.md` 为产品事实源，任务拆解、代码落点、
 工作量、失败矩阵和验收证据以
-`docs/features/desktop-update-development-plan.md` 为执行事实源。Developer ID
-直接分发是当前默认路线；Mac App Store 需要独立 ADR。
+`docs/features/desktop-update-development-plan.md` 中早于 ADR 0009 的 Developer ID 路线不再是
+当前发布事实；当前只允许 ad-hoc 制品，不执行 Developer ID 签名或 Apple 公证。自动更新的
+信任模型必须另行收口，未完成前只可把 GitHub Release 作为手动下载安装来源。
 
 ### Runtime 组件与规划中的能力插件
 
@@ -245,7 +246,7 @@ Runtime 独立更新必须保持 selection、probe、generation、provenance、�
 - 默认启动不得要求存在 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent`。
 - 默认启动不得要求或主动访问 Apple Keychain、Windows Credential Manager、Linux Secret Service 等系统凭证存储。
 - CCLink 远程客户端随 Studio 源码发布，但缺少服务配置时必须明确降级；云服务凭证和授权事实不得进入客户端。
-- OSS 签名、公证和制品上传只存在于受保护的仓库 Release workflow，不得进入应用默认启动路径。
+- OSS Release workflow 只做 ad-hoc 打包与制品上传；不得读取签名、公证或系统钥匙串凭证。
 
 Android 是本地真机能力：只连接用户自有 USB 或 Wi-Fi ADB 真机。不提供 Android SDK 下载、AVD 创建、模拟器启动或托管设备服务。找不到 `adb` 时，Studio 应继续启动，Android 设备能力降级为不可用。
 

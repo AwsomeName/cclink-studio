@@ -12,6 +12,13 @@ interface CclinkState {
   sessions: CclinkRemoteSession[]
   messages: Record<string, CclinkRemoteMessage[]>
   selectedSessionId: string | null
+  activeSessionsRef: RemoteWorkspaceRef | null
+  pendingPermissions: Array<{
+    serverId: string
+    requestId: string
+    path: string
+    operation: string
+  }>
   initialized: boolean
   loading: boolean
   error: string | null
@@ -26,11 +33,13 @@ interface CclinkState {
   selectSession(sessionId: string | null): void
   loadMessages(sessionId: string): Promise<void>
   sendAgentMessage(ref: RemoteWorkspaceRef, sessionId: string, content: string): Promise<boolean>
+  respondPermission(serverId: string, requestId: string, approved: boolean): Promise<void>
   handleRealtimeEvent(event: CclinkRealtimeEvent): void
 }
 
 let initializePromise: Promise<void> | null = null
 let eventsInstalled = false
+let sessionsRequestGeneration = 0
 
 export const useCclinkStore = create<CclinkState>((set, get) => ({
   service: null,
@@ -40,6 +49,8 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
   sessions: [],
   messages: {},
   selectedSessionId: null,
+  activeSessionsRef: null,
+  pendingPermissions: [],
   initialized: false,
   loading: false,
   error: null,
@@ -118,6 +129,8 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
       sessions: [],
       messages: {},
       selectedSessionId: null,
+      activeSessionsRef: null,
+      pendingPermissions: [],
       error: null,
     })
   },
@@ -132,18 +145,21 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
   },
 
   loadSessions: async (ref) => {
+    const generation = ++sessionsRequestGeneration
+    set({ activeSessionsRef: ref })
     set({ loading: true, error: null })
     try {
       const sessions = await window.cclinkStudio.cclink.listSessions(ref)
+      if (generation !== sessionsRequestGeneration) return
       const selectedSessionId = sessions.some((item) => item.id === get().selectedSessionId)
         ? get().selectedSessionId
         : (sessions[0]?.id ?? null)
       set({ sessions, selectedSessionId })
       if (selectedSessionId) await get().loadMessages(selectedSessionId)
     } catch (error) {
-      set({ error: message(error) })
+      if (generation === sessionsRequestGeneration) set({ error: message(error) })
     } finally {
-      set({ loading: false })
+      if (generation === sessionsRequestGeneration) set({ loading: false })
     }
   },
 
@@ -206,8 +222,50 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
     }
   },
 
+  respondPermission: async (serverId, requestId, approved) => {
+    const result = await window.cclinkStudio.cclink.respondPermission({
+      serverId,
+      requestId,
+      approved,
+      remember: false,
+    })
+    if (!result.success) {
+      set({ error: result.error || '远程权限响应失败' })
+      return
+    }
+    set((state) => ({
+      pendingPermissions: state.pendingPermissions.filter(
+        (permission) => permission.requestId !== requestId,
+      ),
+    }))
+  },
+
   handleRealtimeEvent: (event) => {
-    if (event.type === 'sessions') return
+    if (event.type === 'permission' && event.permission) {
+      set((state) => ({
+        pendingPermissions: [
+          ...state.pendingPermissions.filter(
+            (permission) => permission.requestId !== event.permission!.requestId,
+          ),
+          { serverId: event.serverId, ...event.permission! },
+        ],
+      }))
+      return
+    }
+    if (event.type === 'sessions') {
+      const ref = get().activeSessionsRef
+      if (!ref || ref.endpointId !== event.serverId || !event.sessions) return
+      const sessions = event.sessions.filter(
+        (session) => session.workspaceId === ref.workspaceId || session.workspacePath === ref.path,
+      )
+      set((state) => ({
+        sessions,
+        selectedSessionId: sessions.some((session) => session.id === state.selectedSessionId)
+          ? state.selectedSessionId
+          : (sessions[0]?.id ?? null),
+      }))
+      return
+    }
     if (event.type !== 'conversation' || !event.sessionId) return
     set((state) => {
       const sessionId = event.sessionId!

@@ -24,19 +24,44 @@
 2. 新建远程 Agent 会话，发送消息并收到流式回复/工具事件；
 3. 打开远程 Terminal，执行 `pwd`，断网恢复后确认 PTY attach 和输出续接。
 
-## 桌面端补齐记录
+## 独立审查后的桌面端补齐记录
+
+- Session 磁盘文件只保留 refresh token；旧 `cclink-user.json` 启动时删除且不读取、不迁移，
+  用户资料、access token、IM UserSig 和完整远程身份只驻留当前进程内存。
+- 工具审批和 Agent 提问不再以“消息已发送”冒充成功：Studio 等待并校验
+  `tool_approval_ack` / `question_answer_ack` 后才更新状态；错误保持可重试。AskUserQuestion
+  使用问题文本作为 answers key，并支持以逗号分隔协议提交多选答案。
+- 首次目录浏览触发的 `permission_request` 现在直接显示在远程目录选择器中，无需先打开
+  Workspace。远程脏文件重新读取前要求确认；退出 flush 会等待尚在 debounce 窗口内的草稿
+  写盘，草稿目录移动/删除按完整 WorkspaceRef 隔离，单次写失败不会毒化后续保存队列。
 
 - 远程文件编辑已接入 `Cmd/Ctrl+S`、未保存关闭确认、部分读取禁止覆盖，以及文件/目录重命名和删除后的 Tab、脏草稿联动。
+- 远程草稿不再只驻留 renderer：现在写入 `userData/remote-workspaces/file-drafts.json`，权限
+  为 `0600`；App 重启或 renderer 重建后按 WorkspaceRef + 路径恢复，目录重命名和删除同步
+  rebase/清理。删除已打开且有脏修改的路径必须再次确认，文件删除前读取并携带当前 SHA。
 - 远程会话已接收入站 `user_text`、`agent_status`、错误状态、搜索、归档和本地恢复。会话与消息使用权限为 `0600` 的独立状态文件；access token、refresh token、IM UserSig 和完整远程身份不进入该文件。
+- 远程 Agent 已接通 `agent_tool.requires_approval`、`tool_approval_response`、`user_question`、
+  `question_answer` 与普通文件 `permission_request/permission_response`；工具输入/输出/错误在
+  落盘前递归脱敏。远端 session sync 缺项不再删除本地导入历史，实时 sessions 事件会更新 UI，
+  切换工作区的过期异步结果会被 generation 丢弃。
 - 首次启动且当前状态文件不存在时，只读导入旧商业桌面目录 `cclink-state.json` 中会话和消息的白名单字段；不读取或迁移旧 Session、身份文件、密文或系统钥匙串，源文件不修改。
-- 腾讯 IM SDK 的真实掉线/恢复事件已进入统一实时生命周期。远程 PTY 在恢复后执行 attach/序列续接；关闭运行中的远程 Terminal 时由用户选择终止、保留或取消。
-- `RemoteProvider` 现在实时请求 `capability_probe`，远程 Agent 和 PTY 入口不再把“设备在线”当成功能可用；文件树提供连接、协议、文件、Agent 和 PTY 诊断。
+- 腾讯 IM SDK 的真实掉线/恢复事件已进入统一实时生命周期。远程 PTY 对同一 Studio session
+  幂等启动，App 恢复时 attach 原 PTY，输出断档有明确提示，keepalive/attach 失败采用有界
+  指数退避且不删除映射；关闭运行中的远程 Terminal 时由用户选择终止、保留或取消。
+- `RemoteProvider` 现在实时请求 `capability_probe`，探测失败按不可用处理，实际读写、Agent 和
+  PTY 操作再次检查能力与协议；WorkspaceRef 必须同时匹配已发现/已打开的设备工作区，路径
+  schema 只接受 POSIX、Windows 盘符或 UNC 绝对路径。
+- 远程 Workspace 不再创建伪本地 Agent conversation；项目条增加远程项目移除入口；Terminal
+  preload 去掉 `any` 参数并在主进程使用严格有界 schema。
+- 正式 Release workflow 已删除 P12/系统钥匙串导入、Developer ID 签名和 Apple 公证脚本，
+  仅允许 ad-hoc DMG。现有 Developer ID 自动更新验证器因此不能算可交付更新闭环，当前正式
+  更新方式只能按手动下载安装验收。
 - 以上是桌面代码和自动化门禁完成，不替代在线设备真人验收。
 
-## 工程验证
+## 工程验证（独立审查修复后）
 
-- `pnpm verify`：通过（233 个测试文件，1346 通过，2 跳过），包含 typecheck、lint、完整测试和 build。
-- `pnpm build`：通过。
+- `pnpm verify`：通过，包含 OSS/package/credential/context/release 边界、format、typecheck、
+  lint、完整测试和 build。
 - `CCLINK_API_URL=off pnpm smoke:local`：11/11 通过。
 - `CCLINK_API_URL=off pnpm smoke:ui`：12/12 通过。
 - `CCLINK_API_URL=off pnpm smoke:workflow`：14/14 通过。
@@ -45,4 +70,7 @@
 
 ## overlay 结论
 
-暂时不能停止旧 commercial overlay 出包。桌面端已没有已知的计划内迁移功能缺口；关闭条件仍是上述写入、远程 Agent、远程 PTY 及断线恢复在同一 Studio 真实在线 Agent 上通过，并确认统一 Studio 发布路径可回滚。云服务付费门禁尚未闭环也是独立的商业风险，不能用客户端结果替代。
+暂时不能停止旧 commercial overlay 出包。独立代码审查发现的桌面端缺口已经补齐并通过自动
+门禁，但新增的审批/提问、草稿重启恢复、会话历史保留、PTY 重挂载和远程项目移除仍未在同一
+真实在线 Agent 上完成客户端验收。统一 Studio 目前只能发布 ad-hoc 手动安装包，自动更新信任
+闭环也未完成。云服务付费门禁仍没有实际拒绝证据，不能宣称收费闭环，更不能由桌面端代替。

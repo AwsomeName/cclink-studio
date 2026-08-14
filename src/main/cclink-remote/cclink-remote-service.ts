@@ -136,6 +136,25 @@ export class CclinkRemoteService implements RemoteProvider {
     return this.requestRouter
   }
 
+  recordDiagnostic(operation: string, endpointId: string, error: unknown): void {
+    const source =
+      error && typeof error === 'object' && 'remoteError' in error
+        ? (error as { remoteError?: RemoteError }).remoteError
+        : undefined
+    const normalized =
+      source ??
+      remoteError(
+        'unknown',
+        'REMOTE_OPERATION_FAILED',
+        error instanceof Error ? error.message : String(error),
+        true,
+      )
+    this.diagnosticLog.record(operation, {
+      ...normalized,
+      context: { ...normalized.context, endpointId },
+    })
+  }
+
   async connect(): Promise<CclinkRealtimeStatus> {
     if (this.status.state === 'online') return this.getRealtimeStatus()
     if (this.connecting) return this.connecting
@@ -214,7 +233,11 @@ export class CclinkRemoteService implements RemoteProvider {
 
   async listSessions(ref: RemoteWorkspaceRef): Promise<CclinkRemoteSession[]> {
     const status = await this.connect()
-    if (status.state === 'online') await this.syncSessions(ref.endpointId).catch(() => undefined)
+    if (status.state === 'online') {
+      await this.syncSessions(ref.endpointId).catch((error: unknown) => {
+        this.recordDiagnostic('session.sync', ref.endpointId, error)
+      })
+    }
     return [...this.sessions.values()]
       .filter(
         (session) =>
@@ -240,25 +263,32 @@ export class CclinkRemoteService implements RemoteProvider {
 
   async createSession(ref: RemoteWorkspaceRef, name?: string): Promise<CclinkRemoteSession> {
     await this.requireOnline()
+    await this.requireCapability(ref, 'agent.session')
     const validation = this.validateWorkspace(ref, ref.path)
     if (validation) throw new Error(validation.error || '远程工作空间不可用')
     const sessionId = `sess-${randomUUID()}`
     const requestId = randomUUID()
-    const response = (await this.requestRouter.request(
-      ref.endpointId,
-      {
-        ...createCclinkEnvelope('session_create', { request_id: requestId, trace_id: requestId }),
-        request_id: requestId,
-        session_id: sessionId,
-        workspace_id: ref.workspaceId,
-        workspace_path: ref.path,
-        name: name?.trim() || undefined,
-        workspace_restricted: true,
-        project_mode: 'remote_workspace',
-      },
-      ['session_response'],
-      20_000,
-    )) as CclinkSessionResponseMessage
+    let response: CclinkSessionResponseMessage
+    try {
+      response = (await this.requestRouter.request(
+        ref.endpointId,
+        {
+          ...createCclinkEnvelope('session_create', { request_id: requestId, trace_id: requestId }),
+          request_id: requestId,
+          session_id: sessionId,
+          workspace_id: ref.workspaceId,
+          workspace_path: ref.path,
+          name: name?.trim() || undefined,
+          workspace_restricted: true,
+          project_mode: 'remote_workspace',
+        },
+        ['session_response'],
+        20_000,
+      )) as CclinkSessionResponseMessage
+    } catch (error) {
+      this.recordDiagnostic('session.create', ref.endpointId, error)
+      throw error
+    }
     assertSessionBinding(response, ref, sessionId)
     const now = nowSeconds()
     const session: CclinkRemoteSession = {
@@ -291,8 +321,12 @@ export class CclinkRemoteService implements RemoteProvider {
   ): Promise<{ success: boolean; error?: string }> {
     try {
       await this.requireOnline()
+      await this.requireCapability(ref, 'agent.stream')
       const normalized = content.trim()
       if (!normalized) return { success: true }
+      if (Buffer.byteLength(normalized, 'utf8') > 8 * 1024) {
+        return { success: false, error: '单条远程消息不能超过 8 KiB，请拆分后发送' }
+      }
       const session = this.sessions.get(sessionId)
       if (
         !session ||
@@ -329,7 +363,135 @@ export class CclinkRemoteService implements RemoteProvider {
       })
       return { success: true }
     } catch (error) {
+      this.recordDiagnostic('agent.send', ref.endpointId, error)
       return { success: false, error: error instanceof Error ? error.message : '远程消息发送失败' }
+    }
+  }
+
+  async resolveToolApproval(input: {
+    ref: RemoteWorkspaceRef
+    sessionId: string
+    requestId: string
+    toolUseId: string
+    approved: boolean
+  }): Promise<{ success: boolean; error?: string }> {
+    try {
+      await this.requireOnline()
+      await this.requireCapability(input.ref, 'agent.session')
+      this.assertSessionMatches(input.ref, input.sessionId)
+      const response = (await this.requestRouter.request(
+        input.ref.endpointId,
+        {
+          ...createCclinkEnvelope('tool_approval_response', {
+            request_id: input.requestId,
+            trace_id: input.requestId,
+          }),
+          request_id: input.requestId,
+          session_id: input.sessionId,
+          tool_use_id: input.toolUseId,
+          approved: input.approved,
+          explicit_user_decision: true,
+        },
+        ['tool_approval_ack'],
+        15_000,
+      )) as {
+        cc_type: 'tool_approval_ack'
+        session_id?: string
+        tool_use_id?: string
+        approved?: boolean
+        status?: string
+      }
+      if (
+        response.status !== 'accepted' ||
+        response.session_id !== input.sessionId ||
+        response.tool_use_id !== input.toolUseId ||
+        response.approved !== input.approved
+      ) {
+        throw new Error('远程 Agent 返回了不匹配的审批确认')
+      }
+      this.updateToolApproval(input.sessionId, input.toolUseId, input.approved)
+      return { success: true }
+    } catch (error) {
+      this.recordDiagnostic('agent.approval', input.ref.endpointId, error)
+      return { success: false, error: error instanceof Error ? error.message : '远程审批发送失败' }
+    }
+  }
+
+  async answerQuestion(input: {
+    ref: RemoteWorkspaceRef
+    sessionId: string
+    requestId: string
+    toolUseId: string
+    answers: Record<string, string>
+  }): Promise<{ success: boolean; error?: string }> {
+    try {
+      await this.requireOnline()
+      await this.requireCapability(input.ref, 'agent.session')
+      this.assertSessionMatches(input.ref, input.sessionId)
+      const question = this.findPendingQuestion(input.sessionId, input.toolUseId)
+      const normalizedAnswers = Object.fromEntries(
+        question.questions.map((item) => {
+          const answer = input.answers[item.question] ?? input.answers[item.id]
+          if (!answer?.trim()) throw new Error(`请回答：${item.question}`)
+          return [item.question, answer.trim()]
+        }),
+      )
+      const response = (await this.requestRouter.request(
+        input.ref.endpointId,
+        {
+          ...createCclinkEnvelope('question_answer', {
+            request_id: input.requestId,
+            trace_id: input.requestId,
+          }),
+          request_id: input.requestId,
+          session_id: input.sessionId,
+          tool_use_id: input.toolUseId,
+          answers: normalizedAnswers,
+        },
+        ['question_answer_ack'],
+        15_000,
+      )) as {
+        cc_type: 'question_answer_ack'
+        session_id?: string
+        tool_use_id?: string
+        status?: string
+      }
+      if (
+        response.status !== 'accepted' ||
+        response.session_id !== input.sessionId ||
+        response.tool_use_id !== input.toolUseId
+      ) {
+        throw new Error('远程 Agent 返回了不匹配的问题确认')
+      }
+      this.markQuestionAnswered(input.sessionId, input.toolUseId)
+      return { success: true }
+    } catch (error) {
+      this.recordDiagnostic('agent.question', input.ref.endpointId, error)
+      return { success: false, error: error instanceof Error ? error.message : '远程问题回答失败' }
+    }
+  }
+
+  async respondPermission(input: {
+    serverId: string
+    requestId: string
+    approved: boolean
+    remember?: boolean
+  }): Promise<{ success: boolean; error?: string }> {
+    try {
+      await this.requireOnline()
+      if (!this.servers.has(input.serverId)) throw new Error('远程设备不存在')
+      await this.requestRouter.send(input.serverId, {
+        ...createCclinkEnvelope('permission_response', {
+          request_id: input.requestId,
+          trace_id: input.requestId,
+        }),
+        request_id: input.requestId,
+        approved: input.approved,
+        remember: input.remember === true,
+      })
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '远程权限响应失败' }
     }
   }
 
@@ -345,11 +507,10 @@ export class CclinkRemoteService implements RemoteProvider {
     )
     const compatibility = protocolCompatibility(protocolVersion, minProtocolVersion)
     const grouped = probe?.capabilities
-    const capabilityMap = probe?.capability_map ?? server?.capabilities
+    // Live capability execution is fail-closed. server_meta is discovery/UI metadata only.
+    const capabilityMap = probe?.capability_map
     const has = (key: string): boolean =>
-      capabilityMap?.[key] === true ||
-      probe?.capability_list?.includes(key) === true ||
-      server?.capabilityList?.includes(key) === true
+      capabilityMap?.[key] === true || probe?.capability_list?.includes(key) === true
     const fileCapability = (groupedKey: string, legacyKey: string): boolean =>
       online && (grouped?.file?.[groupedKey] === true || has(legacyKey))
     const sessionStreaming =
@@ -392,7 +553,16 @@ export class CclinkRemoteService implements RemoteProvider {
               true,
             ),
           }
-        : {}),
+        : !probe
+          ? {
+              remoteError: remoteError(
+                'remote-agent',
+                REMOTE_ERROR_CODE.REQUEST_TIMEOUT,
+                '远程 Agent 实时能力检查失败，已按不可用处理',
+                true,
+              ),
+            }
+          : {}),
     }
   }
 
@@ -410,17 +580,27 @@ export class CclinkRemoteService implements RemoteProvider {
   async listFileTree(request: RemoteFileTreeRequest): Promise<RemoteFileTreeResult> {
     const validation = this.validateWorkspace(request.ref, request.path ?? request.ref.path)
     if (validation) return validation
-    return this.requestFileTree(
+    try {
+      await this.requireCapability(request.ref, 'file.tree')
+    } catch (error) {
+      const result = requestFailure(error)
+      this.recordDiagnostic('file.tree', request.ref.endpointId, result)
+      return result
+    }
+    const result = await this.requestFileTree(
       request.ref.endpointId,
       request.path ?? request.ref.path,
       request.depth ?? 1,
     )
+    if (!result.success) this.recordDiagnostic('file.tree', request.ref.endpointId, result)
+    return result
   }
 
   async readFile(request: RemoteFileReadRequest): Promise<RemoteFileReadResult> {
     const validation = this.validateWorkspace(request.ref, request.path)
     if (validation) return validation
     try {
+      await this.requireCapability(request.ref, 'file.read')
       const message = {
         ...createCclinkEnvelope('file_read_request'),
         path: request.path,
@@ -431,15 +611,20 @@ export class CclinkRemoteService implements RemoteProvider {
       const response = (await this.requestRouter.request(request.ref.endpointId, message, [
         'file_read_response',
       ])) as CclinkFileReadResponseMessage
-      if (response.error)
-        return failure('file-provider', REMOTE_ERROR_CODE.FILE_FAILED, response.error, true)
+      if (response.error) {
+        const result = failure('file-provider', REMOTE_ERROR_CODE.FILE_FAILED, response.error, true)
+        this.recordDiagnostic('file.read', request.ref.endpointId, result)
+        return result
+      }
       if (Buffer.byteLength(response.content ?? '', 'utf8') > 4 * 1024 * 1024) {
-        return failure(
+        const result = failure(
           'file-provider',
           'REMOTE_FILE_TOO_LARGE',
           '远程文件超过 4 MiB 读取上限',
           false,
         )
+        this.recordDiagnostic('file.read', request.ref.endpointId, result)
+        return result
       }
       return {
         success: true,
@@ -452,11 +637,20 @@ export class CclinkRemoteService implements RemoteProvider {
         },
       }
     } catch (error) {
-      return requestFailure(error)
+      const result = requestFailure(error)
+      this.recordDiagnostic('file.read', request.ref.endpointId, result)
+      return result
     }
   }
 
   async writeFile(request: RemoteFileWriteRequest): Promise<RemoteFileMutationResult> {
+    try {
+      await this.requireCapability(request.ref, 'file.write')
+    } catch (error) {
+      const result = mutationFailure(error instanceof Error ? error.message : String(error), true)
+      this.recordDiagnostic('file.write', request.ref.endpointId, result)
+      return result
+    }
     const context = this.mutationContext(request, 'file_write')
     if (!context.ok) return context.result
     const content = Buffer.from(request.content, 'utf8')
@@ -483,6 +677,13 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   async createFile(request: RemoteFileCreateRequest): Promise<RemoteFileMutationResult> {
+    try {
+      await this.requireCapability(request.ref, 'file.create')
+    } catch (error) {
+      const result = mutationFailure(error instanceof Error ? error.message : String(error), true)
+      this.recordDiagnostic('file.create', request.ref.endpointId, result)
+      return result
+    }
     const context = this.mutationContext(request, 'file_create')
     if (!context.ok) return context.result
     const content = Buffer.from(request.content ?? '', 'utf8')
@@ -508,6 +709,13 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   async renameFile(request: RemoteFileRenameRequest): Promise<RemoteFileMutationResult> {
+    try {
+      await this.requireCapability(request.ref, 'file.rename')
+    } catch (error) {
+      const result = mutationFailure(error instanceof Error ? error.message : String(error), true)
+      this.recordDiagnostic('file.rename', request.ref.endpointId, result)
+      return result
+    }
     const context = this.mutationContext(request, 'file_rename')
     if (!context.ok) return context.result
     const message: CclinkFileRenameRequestMessage = {
@@ -520,6 +728,13 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   async deleteFile(request: RemoteFileDeleteRequest): Promise<RemoteFileMutationResult> {
+    try {
+      await this.requireCapability(request.ref, 'file.delete')
+    } catch (error) {
+      const result = mutationFailure(error instanceof Error ? error.message : String(error), true)
+      this.recordDiagnostic('file.delete', request.ref.endpointId, result)
+      return result
+    }
     const context = this.mutationContext(request, 'file_delete')
     if (!context.ok) return context.result
     const message: CclinkFileDeleteRequestMessage = {
@@ -601,7 +816,9 @@ export class CclinkRemoteService implements RemoteProvider {
         30_000,
       )) as CclinkMutationResponseMessage
       if (response.status !== 'ok') {
-        return mutationFailure(response.message || response.code || '远程文件修改失败')
+        const result = mutationFailure(response.message || response.code || '远程文件修改失败')
+        this.recordDiagnostic(`file.${expectedType}`, serverId, result)
+        return result
       }
       return {
         success: true,
@@ -612,7 +829,9 @@ export class CclinkRemoteService implements RemoteProvider {
         sha256: response.sha256,
       }
     } catch (error) {
-      return mutationFailure(error instanceof Error ? error.message : '远程文件修改失败')
+      const result = mutationFailure(error instanceof Error ? error.message : '远程文件修改失败')
+      this.recordDiagnostic(`file.${expectedType}`, serverId, result)
+      return result
     }
   }
 
@@ -836,6 +1055,30 @@ export class CclinkRemoteService implements RemoteProvider {
   private async requireOnline(): Promise<void> {
     const status = await this.connect()
     if (status.state !== 'online') throw new Error(status.error || 'CCLink 实时链路连接失败')
+  }
+
+  private async requireCapability(
+    ref: RemoteWorkspaceRef,
+    capability:
+      | 'file.tree'
+      | 'file.read'
+      | 'file.write'
+      | 'file.create'
+      | 'file.rename'
+      | 'file.delete'
+      | 'agent.session'
+      | 'agent.stream'
+      | 'shell.pty',
+  ): Promise<void> {
+    const status = await this.getStatus(ref)
+    if (status.state !== 'online') throw new Error(status.remoteError?.message || '远程设备不在线')
+    if (status.compatibility === 'upgrade-required') throw new Error('远程 Agent 协议版本不兼容')
+    const [group, name] = capability.split('.') as [
+      'file' | 'agent' | 'shell',
+      'tree' | 'read' | 'write' | 'create' | 'rename' | 'delete' | 'session' | 'stream' | 'pty',
+    ]
+    const available = (status.capabilities[group] as Record<string, boolean>)[name] === true
+    if (!available) throw new Error(`远程 Agent 未通过实时能力检查：${capability}`)
   }
 
   private async getLiveCapabilityProbe(
@@ -1077,6 +1320,10 @@ export class CclinkRemoteService implements RemoteProvider {
           input?: Record<string, unknown>
           output?: string
           error?: string
+          requires_approval?: boolean
+          approval_reason?: string
+          expires_at?: number
+          request_id?: string
         }
         const remoteMessage: CclinkRemoteMessage = {
           type: 'agentTool',
@@ -1089,6 +1336,10 @@ export class CclinkRemoteService implements RemoteProvider {
             input: event.input,
             output: event.output,
             error: event.error,
+            requiresApproval: event.requires_approval === true,
+            approvalReason: event.approval_reason,
+            expiresAt: event.expires_at,
+            requestId: event.request_id,
           },
         }
         this.appendMessage(event.session_id, remoteMessage)
@@ -1098,6 +1349,71 @@ export class CclinkRemoteService implements RemoteProvider {
           sessionId: event.session_id,
           phase: 'message',
           message: remoteMessage,
+        })
+        return
+      }
+      case 'user_question': {
+        const event = message as unknown as {
+          session_id: string
+          request_id: string
+          msg_id: string
+          tool_use_id: string
+          questions?: Array<{
+            id?: string
+            header?: string
+            question?: string
+            multiSelect?: boolean
+            options?: Array<{ label?: string; description?: string }>
+          }>
+        }
+        const questions = (event.questions ?? []).flatMap((question, index) => {
+          if (!question || typeof question.question !== 'string') return []
+          return [
+            {
+              id: question.id?.trim() || `question-${index + 1}`,
+              header: question.header,
+              question: question.question,
+              multiSelect: question.multiSelect === true,
+              options: question.options?.flatMap((option) =>
+                option && typeof option.label === 'string'
+                  ? [{ label: option.label, description: option.description }]
+                  : [],
+              ),
+            },
+          ]
+        })
+        const remoteMessage: CclinkRemoteMessage = {
+          type: 'userQuestion',
+          id: `remote-question-${event.tool_use_id || event.msg_id}`,
+          timestamp: nowSeconds(),
+          requestId: event.request_id,
+          toolUseId: event.tool_use_id,
+          questions,
+        }
+        this.appendMessage(event.session_id, remoteMessage)
+        this.emitRealtime({
+          type: 'conversation',
+          serverId,
+          sessionId: event.session_id,
+          phase: 'message',
+          message: remoteMessage,
+        })
+        return
+      }
+      case 'permission_request': {
+        const event = message as unknown as {
+          request_id: string
+          path: string
+          operation: string
+        }
+        this.emitRealtime({
+          type: 'permission',
+          serverId,
+          permission: {
+            requestId: event.request_id,
+            path: event.path,
+            operation: event.operation,
+          },
         })
         return
       }
@@ -1161,7 +1477,6 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   private applySessionSync(serverId: string, response: CclinkSessionSyncResponseMessage): void {
-    const incoming = new Set<string>()
     for (const item of response.sessions) {
       if (item.project_mode && item.project_mode !== 'remote_workspace') continue
       const createdAt = normalizeTimestamp(item.created_at ?? item.updated_at)
@@ -1178,15 +1493,10 @@ export class CclinkRemoteService implements RemoteProvider {
         messageCount: item.message_count ?? this.messages.get(item.session_id)?.length ?? 0,
         contextUsage: item.context_usage ?? 0,
       }
-      incoming.add(session.id)
       this.sessions.set(session.id, session)
     }
-    for (const session of this.sessions.values()) {
-      if (session.serverId === serverId && !incoming.has(session.id)) {
-        this.sessions.delete(session.id)
-        this.messages.delete(session.id)
-      }
-    }
+    // A sync response is only a snapshot of sessions the current Agent still knows about.
+    // Locally imported or offline-only history is retained until an explicit user deletion.
     this.persistState()
     this.emitRealtime({ type: 'sessions', serverId })
   }
@@ -1232,7 +1542,73 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   private emitRealtime(event: CclinkRealtimeEvent): void {
-    for (const listener of this.realtimeListeners) listener(event)
+    const enriched =
+      event.type === 'sessions' && !event.sessions
+        ? {
+            ...event,
+            sessions: [...this.sessions.values()]
+              .filter((session) => session.serverId === event.serverId)
+              .sort((a, b) => b.updatedAt - a.updatedAt),
+          }
+        : event
+    for (const listener of this.realtimeListeners) listener(enriched)
+  }
+
+  private assertSessionMatches(ref: RemoteWorkspaceRef, sessionId: string): CclinkRemoteSession {
+    const session = this.sessions.get(sessionId)
+    if (
+      !session ||
+      session.serverId !== ref.endpointId ||
+      (session.workspaceId !== ref.workspaceId && session.workspacePath !== ref.path)
+    ) {
+      throw new Error('远程会话与当前工作空间不匹配')
+    }
+    return session
+  }
+
+  private updateToolApproval(sessionId: string, toolUseId: string, approved: boolean): void {
+    const current = this.messages.get(sessionId) ?? []
+    this.messages.set(
+      sessionId,
+      current.map((message) =>
+        message.type === 'agentTool' && message.tool.id === toolUseId
+          ? {
+              ...message,
+              tool: {
+                ...message.tool,
+                state: approved ? ('executing' as const) : ('denied' as const),
+                requiresApproval: false,
+              },
+            }
+          : message,
+      ),
+    )
+    this.persistState()
+  }
+
+  private markQuestionAnswered(sessionId: string, toolUseId: string): void {
+    const current = this.messages.get(sessionId) ?? []
+    this.messages.set(
+      sessionId,
+      current.map((message) =>
+        message.type === 'userQuestion' && message.toolUseId === toolUseId
+          ? { ...message, answered: true }
+          : message,
+      ),
+    )
+    this.persistState()
+  }
+
+  private findPendingQuestion(
+    sessionId: string,
+    toolUseId: string,
+  ): Extract<CclinkRemoteMessage, { type: 'userQuestion' }> {
+    const question = (this.messages.get(sessionId) ?? []).find(
+      (message): message is Extract<CclinkRemoteMessage, { type: 'userQuestion' }> =>
+        message.type === 'userQuestion' && message.toolUseId === toolUseId,
+    )
+    if (!question || question.answered) throw new Error('该问题已经失效或已回答')
+    return question
   }
 
   private async refreshOnlineMetadata(): Promise<void> {
@@ -1332,6 +1708,16 @@ export class CclinkRemoteService implements RemoteProvider {
         'workspace',
         REMOTE_ERROR_CODE.WORKSPACE_NOT_FOUND,
         '远程工作空间引用无效',
+        false,
+      )
+    const registeredWorkspace = server.workspaces.some(
+      (workspace) => workspace.id === ref.workspaceId && workspace.path === ref.path,
+    )
+    if (!registeredWorkspace)
+      return failure(
+        'workspace',
+        REMOTE_ERROR_CODE.WORKSPACE_NOT_FOUND,
+        '远程工作空间尚未由当前设备列表或打开流程确认',
         false,
       )
     if (!isWithin(ref.path, path))

@@ -24,16 +24,38 @@ export interface CclinkApiContract {
     sessionId: string
     content: string
   }): Promise<{ success: boolean; error?: string }>
+  resolveToolApproval(input: {
+    ref: RemoteWorkspaceRef
+    sessionId: string
+    requestId: string
+    toolUseId: string
+    approved: boolean
+  }): Promise<{ success: boolean; error?: string }>
+  answerQuestion(input: {
+    ref: RemoteWorkspaceRef
+    sessionId: string
+    requestId: string
+    toolUseId: string
+    answers: Record<string, string>
+  }): Promise<{ success: boolean; error?: string }>
+  respondPermission(input: {
+    serverId: string
+    requestId: string
+    approved: boolean
+    remember?: boolean
+  }): Promise<{ success: boolean; error?: string }>
   onRealtimeStatus(callback: (status: CclinkRealtimeStatus) => void): () => void
   onRealtimeEvent(callback: (event: CclinkRealtimeEvent) => void): () => void
 }
 
 export interface CclinkRealtimeEvent {
-  type: 'conversation' | 'sessions' | 'server'
+  type: 'conversation' | 'sessions' | 'server' | 'permission'
   serverId: string
   sessionId?: string
   phase?: 'message' | 'started' | 'streaming' | 'completed' | 'error'
   message?: CclinkRemoteMessage
+  sessions?: CclinkRemoteSession[]
+  permission?: { requestId: string; path: string; operation: string }
 }
 
 export const cclinkIpc = {
@@ -62,6 +84,41 @@ export const cclinkIpc = {
     [input: { ref: RemoteWorkspaceRef; sessionId: string; content: string }],
     { success: boolean; error?: string }
   >('cclink:sendAgentMessage'),
+  resolveToolApproval: defineIpcCall<
+    [
+      input: {
+        ref: RemoteWorkspaceRef
+        sessionId: string
+        requestId: string
+        toolUseId: string
+        approved: boolean
+      },
+    ],
+    { success: boolean; error?: string }
+  >('cclink:resolveToolApproval'),
+  answerQuestion: defineIpcCall<
+    [
+      input: {
+        ref: RemoteWorkspaceRef
+        sessionId: string
+        requestId: string
+        toolUseId: string
+        answers: Record<string, string>
+      },
+    ],
+    { success: boolean; error?: string }
+  >('cclink:answerQuestion'),
+  respondPermission: defineIpcCall<
+    [
+      input: {
+        serverId: string
+        requestId: string
+        approved: boolean
+        remember?: boolean
+      },
+    ],
+    { success: boolean; error?: string }
+  >('cclink:respondPermission'),
 } as const
 
 export const cclinkIpcEvents = {

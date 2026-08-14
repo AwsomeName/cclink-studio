@@ -42,25 +42,31 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
     updateTabDirty(tab.id, dirty)
     if (dirty && content !== null && savedContent !== null && sha256) {
       rememberRemoteFileDraft(tab.id, {
+        ref,
         path: remoteFile.path,
         content,
         savedContent,
         sha256,
       })
-    } else if (!dirty) {
+    } else if (content !== null && savedContent !== null && !dirty) {
       clearRemoteFileDraft(tab.id)
     }
-  }, [content, dirty, remoteFile.path, savedContent, sha256, tab.id, updateTabDirty])
+  }, [content, dirty, ref, remoteFile.path, savedContent, sha256, tab.id, updateTabDirty])
 
   useEffect(() => {
     let cancelled = false
+    setContent(null)
+    setSavedContent(null)
+    setSha256(null)
+    setComplete(false)
+    setStatus(null)
     setLoading(true)
     setError(null)
     void Promise.all([
       window.cclinkStudio.remote.getStatus(ref),
       window.cclinkStudio.remote.readFile({ ref, path: remoteFile.path }),
     ])
-      .then(([nextStatus, result]) => {
+      .then(async ([nextStatus, result]) => {
         if (cancelled) return
         setStatus(nextStatus)
         if (!result.success || !result.file) throw new Error(result.error || '远程文件读取失败')
@@ -68,7 +74,8 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
         if (!result.file.complete) {
           throw new Error('远程文件只读取了部分内容，已禁止编辑以避免覆盖完整文件')
         }
-        const draft = restoreRemoteFileDraft(tab.id)
+        const draft = await restoreRemoteFileDraft(tab.id, ref, remoteFile.path)
+        if (cancelled) return
         if (draft?.path === remoteFile.path) {
           setContent(draft.content)
           setSavedContent(draft.savedContent)
@@ -164,7 +171,15 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
           <strong>{tab.title}</strong>
           <span>{remoteFile.path}</span>
         </div>
-        <button type="button" title="重新读取" onClick={() => setRevision((value) => value + 1)}>
+        <button
+          type="button"
+          title="重新读取"
+          onClick={() => {
+            if (dirty && !window.confirm('重新读取会放弃当前未保存的远程修改，是否继续？')) return
+            if (dirty) clearRemoteFileDraft(tab.id)
+            setRevision((value) => value + 1)
+          }}
+        >
           <IconRefresh size={14} />
         </button>
         <button

@@ -52,6 +52,7 @@ export function ProjectStrip(): React.ReactElement {
   const openProjectPaths = useOpenProjectsStore((state) => state.openProjectPaths)
   const reorderProject = useOpenProjectsStore((state) => state.reorderProject)
   const openRemoteWorkspaceRefs = useOpenProjectsStore((state) => state.openRemoteWorkspaceRefs)
+  const removeRemoteProject = useOpenProjectsStore((state) => state.removeRemoteProject)
   const recentWorkspacePaths = useFsStore((state) => state.recentWorkspacePaths)
   const openRecentWorkspace = useFsStore((state) => state.openRecentWorkspace)
   const switchingPath = useFsStore((state) => state.switchingPath)
@@ -143,6 +144,24 @@ export function ProjectStrip(): React.ReactElement {
     } catch (error) {
       showToast(error instanceof Error ? error.message : '远程项目切换失败', 'error')
     }
+  }
+
+  const closeRemoteProject = async (index: number): Promise<void> => {
+    const ref = openRemoteWorkspaceRefs[index]
+    if (!ref) return
+    const closingActive = workspaceRefKey(ref) === activeWorkspaceKey
+    removeRemoteProject(ref)
+    if (!closingActive) return
+    const fallbackRemote = openRemoteWorkspaceRefs.find(
+      (candidate) => workspaceRefKey(candidate) !== workspaceRefKey(ref),
+    )
+    if (fallbackRemote) {
+      const nextIndex = openRemoteWorkspaceRefs.indexOf(fallbackRemote)
+      await activateRemoteProject(nextIndex)
+      return
+    }
+    const fallbackLocal = openProjectPaths.at(-1)
+    if (fallbackLocal) await activateProject(fallbackLocal)
   }
 
   const openHistoryProject = async (path: string): Promise<void> => {
@@ -310,20 +329,30 @@ export function ProjectStrip(): React.ReactElement {
               const key = workspaceRefKey(ref)!
               const active = key === activeWorkspaceKey
               return (
-                <button
-                  key={key}
-                  type="button"
-                  className={`project-strip-item ${active ? 'active' : ''}`}
-                  title={`${ref.endpointName || 'CCLink'} · ${ref.path}`}
-                  aria-current={active ? 'page' : undefined}
-                  onClick={() => void activateRemoteProject(index)}
-                >
-                  <IconCloud size={13} />
-                  <span className="project-strip-label">
-                    {ref.label || getProjectName(ref.path)}
-                  </span>
-                  <span className="project-strip-remote-source">远程</span>
-                </button>
+                <div key={key} className="project-strip-remote-item">
+                  <button
+                    type="button"
+                    className={`project-strip-item ${active ? 'active' : ''}`}
+                    title={`${ref.endpointName || 'CCLink'} · ${ref.path}`}
+                    aria-current={active ? 'page' : undefined}
+                    onClick={() => void activateRemoteProject(index)}
+                  >
+                    <IconCloud size={13} />
+                    <span className="project-strip-label">
+                      {ref.label || getProjectName(ref.path)}
+                    </span>
+                    <span className="project-strip-remote-source">远程</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="project-strip-remote-close"
+                    aria-label={`移除远程项目 ${ref.label || getProjectName(ref.path)}`}
+                    title="从项目条移除"
+                    onClick={() => void closeRemoteProject(index)}
+                  >
+                    ×
+                  </button>
+                </div>
               )
             })}
           </div>

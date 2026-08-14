@@ -51,7 +51,6 @@ export function inspectOssReleasePreflight({
   sourceDir,
   tag,
   mode,
-  environment = process.env,
   run = command,
   toolsDir = releaseToolsDir,
 }) {
@@ -103,31 +102,7 @@ export function inspectOssReleasePreflight({
   add('source-clean', sourceClean, true, sourceClean ? 'clean' : 'dirty-or-unavailable')
   add('release-tools-clean', toolsClean, true, toolsClean ? 'clean' : 'dirty-or-unavailable')
 
-  const releaseMode = mode === 'release'
-  const developerIdParts = {
-    p12: Boolean(environment.CSC_LINK?.trim()),
-    password: Boolean(environment.CSC_KEY_PASSWORD?.trim()),
-    identity: Boolean(environment.CSC_NAME?.startsWith('Developer ID Application:')),
-  }
-  const importableDeveloperId = Object.values(developerIdParts).every(Boolean)
-  const missingDeveloperIdParts = Object.entries(developerIdParts)
-    .filter(([, present]) => !present)
-    .map(([name]) => name)
-  add(
-    'developer-id-application',
-    importableDeveloperId,
-    releaseMode,
-    importableDeveloperId
-      ? 'configured; P12 import is verified by the workflow'
-      : `missing-or-invalid=${missingDeveloperIdParts.join(',')}`,
-  )
-
-  const apiNotary =
-    Boolean(environment.APPLE_API_KEY?.trim()) &&
-    existsSync(environment.APPLE_API_KEY) &&
-    Boolean(environment.APPLE_API_KEY_ID?.trim()) &&
-    Boolean(environment.APPLE_API_ISSUER?.trim())
-  add('apple-notary-credentials', apiNotary, releaseMode, apiNotary ? 'api-key' : 'missing')
+  add('no-system-keychain', true, true, 'ad-hoc package; no credential import or notarization')
 
   const failedRequired = checks.filter((item) => item.required && !item.ok)
   return {
