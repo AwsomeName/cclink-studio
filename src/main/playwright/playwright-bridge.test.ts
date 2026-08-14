@@ -52,6 +52,14 @@ describe('PlaywrightBridge diagnostics', () => {
         timestamp: 3,
       },
       {
+        page: zhihuPage,
+        requestId: 'zhihu-cdn',
+        method: 'GET',
+        url: 'https://static.zhihu.com/app.js?token=secret',
+        status: 502,
+        timestamp: 3,
+      },
+      {
         page: baiduPage,
         requestId: 'baidu',
         method: 'GET',
@@ -66,6 +74,7 @@ describe('PlaywrightBridge diagnostics', () => {
     expect(diagnostics?.consoleErrors.map((entry) => entry.text)).toEqual(['zhihu failed'])
     expect(diagnostics?.networkIssues.map((entry) => entry.url)).toEqual([
       'https://www.zhihu.com/api/login',
+      'https://static.zhihu.com/app.js',
     ])
   })
 

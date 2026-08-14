@@ -211,6 +211,61 @@ describe('applyAgentStreamEventToStore', () => {
     expect(state.conversations[firstId].contextUsage?.percentage).toBe(30)
   })
 
+  it('把 ACP 中性文本和工具事件写入同一条 Thread', () => {
+    const conversationId = useAgentStore.getState().activeConversationId
+    const runId = useAgentStore.getState().beginRun(conversationId)
+
+    applyAgentStreamEventToStore({
+      protocol: 'studio-agent-event-v1',
+      conversationId,
+      runId,
+      sessionCompatibilityFingerprint: 'b'.repeat(64),
+      event: { type: 'session', sessionId: 'acp-session-1', state: 'created' },
+    })
+    applyAgentStreamEventToStore({
+      protocol: 'studio-agent-event-v1',
+      conversationId,
+      runId,
+      event: { type: 'text-delta', messageId: 'acp-message-1', text: '正在处理' },
+    })
+    applyAgentStreamEventToStore({
+      protocol: 'studio-agent-event-v1',
+      conversationId,
+      runId,
+      event: {
+        type: 'tool',
+        action: 'start',
+        toolCallId: 'acp-tool-1',
+        name: 'read_file',
+        status: 'in_progress',
+        input: { path: 'README.md' },
+      },
+    })
+    applyAgentStreamEventToStore({
+      protocol: 'studio-agent-event-v1',
+      conversationId,
+      runId,
+      event: {
+        type: 'tool',
+        action: 'update',
+        toolCallId: 'acp-tool-1',
+        name: 'read_file',
+        status: 'completed',
+        output: 'ok',
+      },
+    })
+    applyAgentCompleteToStore({ conversationId, runId })
+
+    const conversation = useAgentStore.getState().conversations[conversationId]
+    expect(conversation.sessionId).toBe('acp-session-1')
+    expect(conversation.messages.at(-1)?.content).toEqual([
+      { type: 'text', text: '正在处理' },
+      { type: 'tool_use', id: 'acp-tool-1', name: 'read_file', input: { path: 'README.md' } },
+      { type: 'tool_result', tool_use_id: 'acp-tool-1', content: 'ok', is_error: false },
+    ])
+    expect(conversation.loading).toBe(false)
+  })
+
   it('手动压缩事件不创建消息，并只结束对应会话的压缩运行', () => {
     const conversationId = useAgentStore.getState().activeConversationId
     const initialMessageCount = useAgentStore.getState().messages.length

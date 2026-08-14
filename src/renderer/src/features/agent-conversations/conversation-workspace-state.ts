@@ -9,6 +9,7 @@ import {
   type AgentRoleRef,
 } from '@shared/agent-role'
 import { DEFAULT_AGENT_PROFILE_REF, type AgentProfileRef } from '@shared/agent-profile'
+import { normalizeAgentRuntimeBinding } from '@shared/agent-runtime'
 import {
   createAgentConversationState,
   DEFAULT_CONVERSATION_ID,
@@ -88,6 +89,7 @@ export function normalizeConversationSnapshot(
         transport: 'local',
         backend: 'cclink-studio-agent',
       },
+      runtimeBinding: normalizeAgentRuntimeBinding(conversation.runtimeBinding),
       configuration: normalizeAgentConversationConfiguration(
         conversation.configuration,
         (conversation as AgentConversationState & { profileRef?: unknown }).profileRef,

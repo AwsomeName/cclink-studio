@@ -41,6 +41,7 @@ import type { BrowserActionLog, BrowserDownloadRecord, BrowserTaskRun } from '@s
 import type { AgentCapabilityStatus } from '@shared/agent-protocol'
 import type { AgentRoleSummary, AgentSkillRef } from '@shared/agent-role'
 import { AgentComposerToolbar } from '../../features/agent-composer/AgentComposerToolbar'
+import { DEFAULT_AGENT_RUNTIME_BINDING } from '@shared/agent-runtime'
 import { useComposerHistory } from '../../features/agent-composer/use-composer-history'
 import { TerminalConfirmationCards } from './TerminalConfirmationCards'
 import { isAgentConfirmationVisible } from '../../utils/workspace-resource-visibility'
@@ -125,6 +126,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const scope = useAgentStore((s) => s.scope)
   const createConversation = useAgentStore((s) => s.createConversation)
   const switchConversation = useAgentStore((s) => s.switchConversation)
+  const setRuntimeBinding = useAgentStore((s) => s.setRuntimeBinding)
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const openTab = useTabStore((s) => s.openTab)
@@ -644,6 +646,12 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     : []
   const workspaceName = useMemo(() => workspaceRefLabel(activeWorkspaceRef), [activeWorkspaceRef])
   const activeConversation = conversations[activeConversationId]
+  const canChangeRuntime = Boolean(
+    activeConversation &&
+    !activeConversation.loading &&
+    !activeConversation.sessionId &&
+    !activeConversation.messages.some((message) => message.role === 'user'),
+  )
   const mountedResources = activeConversation?.mountedResources ?? []
   const pendingImages = activeConversation?.pendingImages ?? []
   const mountedSkills = activeConversation?.mountedSkills ?? []
@@ -873,6 +881,11 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                   onRoleChange={(role) => void handleRoleChange(role)}
                   permissionMode={permissionMode}
                   settings={settings}
+                  runtimeBinding={
+                    activeConversation.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING
+                  }
+                  canChangeRuntime={canChangeRuntime}
+                  onRuntimeChange={(binding) => setRuntimeBinding(binding, activeConversationId)}
                   loading={loading || contextCompacting}
                   canSend={
                     !remoteAgentUnavailable &&
@@ -1129,6 +1142,9 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
               onRoleChange={(role) => void handleRoleChange(role)}
               permissionMode={permissionMode}
               settings={settings}
+              runtimeBinding={activeConversation.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING}
+              canChangeRuntime={canChangeRuntime}
+              onRuntimeChange={(binding) => setRuntimeBinding(binding, activeConversationId)}
               loading={loading || contextCompacting}
               canSend={
                 !remoteAgentUnavailable &&

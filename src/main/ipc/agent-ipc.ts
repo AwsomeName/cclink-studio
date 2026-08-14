@@ -64,6 +64,7 @@ function normalizeSendMessageInput(input: AgentSendMessageInput): AgentSendMessa
       : undefined
   return {
     message: input.message,
+    runtimeBinding: input.runtimeBinding,
     runId: typeof input.runId === 'string' && input.runId.trim() ? input.runId.trim() : undefined,
     resources: Array.isArray(input.resources) ? input.resources : undefined,
     skills: Array.isArray(input.skills) ? input.skills : undefined,
@@ -206,6 +207,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
       typeof conversationId === 'string' ? conversationId : undefined,
       {
         runId: payload.runId,
+        runtimeBinding: payload.runtimeBinding,
         resources: payload.resources,
         skills: payload.skills,
         images: payload.images,
@@ -386,7 +388,14 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
 
   // 恢复历史会话的后端 session id
   handle(agentIpc.restoreConversation, (_event, ...args) => {
-    const [conversationId, sessionId, configuration, sessionCompatibilityFingerprint, skills] = args
+    const [
+      conversationId,
+      sessionId,
+      configuration,
+      sessionCompatibilityFingerprint,
+      skills,
+      runtimeBinding,
+    ] = args
     const agentBridge = requireAgentBridge()
     if (!agentBridge) return
     agentBridge.restoreConversation(
@@ -395,6 +404,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
       configuration,
       sessionCompatibilityFingerprint,
       skills,
+      runtimeBinding,
     )
   })
 

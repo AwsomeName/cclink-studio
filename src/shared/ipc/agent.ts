@@ -15,6 +15,8 @@ import type {
   ExternalMcpServer,
   ExternalMcpServerSummary,
   ToolConfirmationRequest,
+  StudioAgentResultEventData,
+  StudioAgentStreamEventData,
 } from '../agent-protocol'
 import type { WorkspaceRef } from '../workspace-ref'
 import type {
@@ -30,6 +32,7 @@ import type {
 } from '../agent-role'
 import type { AgentSkillSummary } from '../agent-skill'
 import type { AgentProfileRef } from '../agent-profile'
+import type { AgentRuntimeBinding } from '../agent-runtime'
 
 export type AgentSendResourceKind =
   | 'file'
@@ -109,14 +112,16 @@ export interface AgentConversationContinuity {
 
 export interface AgentSendMessagePayload {
   message: string
+  /** Thread 绑定的本地 runtime；旧数据缺失时必须按 Claude Code 处理。 */
+  runtimeBinding?: AgentRuntimeBinding
   /** 当前发送对应的运行实例；用于跨项目流事件关联和丢弃过期事件。 */
   runId?: string
   resources?: AgentSendResource[]
   skills?: AgentSendSkill[]
   images?: AgentImageAttachment[]
-  /** 已持久化的 Claude session；主进程在发送前原子恢复，避免 UI 历史与后端脱节。 */
+  /** 已持久化的 runtime 原生 session；主进程在发送前原子恢复。 */
   sessionId?: string | null
-  /** 创建 sessionId 时的运行时/API/模型指纹；不匹配时主进程必须拒绝恢复。 */
+  /** 创建 sessionId 时的 runtime/API/模型指纹；不匹配时主进程必须拒绝恢复。 */
   sessionCompatibilityFingerprint?: string | null
   /** 当前会话的持久配置；主进程必须解析角色并校验 revision。 */
   configuration?: AgentConversationConfiguration
@@ -188,6 +193,7 @@ export const agentIpc = {
       configuration: AgentConversationConfiguration,
       sessionCompatibilityFingerprint?: string | null,
       skills?: AgentSkillRef[],
+      runtimeBinding?: AgentRuntimeBinding,
     ],
     void
   >('agent:restoreConversation'),
@@ -244,8 +250,8 @@ export const agentIpcEvents = {
 } as const
 
 export interface AgentIpcEventPayloads {
-  [agentIpcEvents.stream]: ClaudeStreamEventData
-  [agentIpcEvents.complete]: ClaudeResultEventData
+  [agentIpcEvents.stream]: ClaudeStreamEventData | StudioAgentStreamEventData
+  [agentIpcEvents.complete]: ClaudeResultEventData | StudioAgentResultEventData
   [agentIpcEvents.error]: AgentErrorEvent
   [agentIpcEvents.requestConfirmation]: ToolConfirmationRequest
 }

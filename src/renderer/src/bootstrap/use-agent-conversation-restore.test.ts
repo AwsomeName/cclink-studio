@@ -26,6 +26,7 @@ describe('collectRestorableAgentSessions', () => {
     expect(collectRestorableAgentSessions(state.conversations, state.conversationOrder)).toEqual([
       {
         conversationId: assistantId,
+        runtimeBinding: { kind: 'claude-code' },
         sessionId: 'assistant-session',
         sessionCompatibilityFingerprint,
         skills: [],
@@ -36,6 +37,7 @@ describe('collectRestorableAgentSessions', () => {
       },
       {
         conversationId: workbenchId,
+        runtimeBinding: { kind: 'claude-code' },
         sessionId: 'workbench-session',
         sessionCompatibilityFingerprint,
         skills: [],

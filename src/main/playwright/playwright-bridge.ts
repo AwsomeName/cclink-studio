@@ -604,7 +604,6 @@ export class PlaywrightBridge {
 
     const url = page.url()
     const title = await page.title().catch(() => '')
-    const host = safeHost(url)
     const recentConsole = this.consoleLogs
       .filter((entry) => entry.page === page)
       .filter((entry) => entry.type === 'error' || entry.type === 'warn')
@@ -621,7 +620,6 @@ export class PlaywrightBridge {
           typeof entry.status === 'number' && (entry.status >= 400 || entry.status === 0)
         return Boolean(entry.failed || statusIssue)
       })
-      .filter((entry) => !host || safeHost(entry.url) === host)
       .slice(-20)
       .map((entry) => ({
         method: entry.method,
@@ -744,14 +742,6 @@ export class PlaywrightBridge {
     this.browser = null
     this.context = null
     this.page = null
-  }
-}
-
-function safeHost(url: string): string | null {
-  try {
-    return new URL(url).host
-  } catch {
-    return null
   }
 }
 

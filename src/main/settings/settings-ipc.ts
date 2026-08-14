@@ -8,6 +8,8 @@
  */
 
 import type { SettingsService } from './settings-service'
+import { app } from 'electron'
+import { join } from 'node:path'
 import type { PermissionManager } from '../mcp/permission'
 import type { AgentBridge } from '../agent/agent-bridge'
 import {
@@ -30,6 +32,7 @@ import {
   testClaudeModelConnection,
   type ClaudeModelConnectionTestInput,
 } from '../agent/claude-model-connection-test'
+import { probeCodexAcpExecutable } from '../agent-core/backends/local-acp-backend'
 
 /** 合法的 permissionMode 值 */
 const VALID_PERMISSION_MODES = new Set<string>(['auto', 'categorized', 'strict'])
@@ -40,6 +43,7 @@ const AGENT_SETTING_KEYS = new Set([
   'claudeRuntimeSource',
   'claudeCodePath',
   'claudeManagedVersion',
+  'codexAcpPath',
   'provider',
   'apiFormat',
   'apiBaseUrl',
@@ -454,6 +458,24 @@ export function registerSettingsIpc(
         return { success: false, error: settingsIpcError(err) }
       } finally {
         modelConnectionTestPending = false
+      }
+    },
+  )
+
+  registerTrustedIpcContract(
+    settingsIpc.probeCodexAcp,
+    trustedRendererGuard,
+    async (_event, path) => {
+      try {
+        return {
+          success: true,
+          result: await probeCodexAcpExecutable({
+            executablePath: path,
+            codexHome: join(app.getPath('userData'), 'codex-acp'),
+          }),
+        }
+      } catch (err) {
+        return { success: false, error: settingsIpcError(err) }
       }
     },
   )

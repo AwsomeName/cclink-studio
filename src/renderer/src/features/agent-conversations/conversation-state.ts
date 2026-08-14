@@ -1,6 +1,7 @@
 import type { AgentContextUsageSnapshot } from '@shared/agent-protocol'
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import type { AgentImageAttachment } from '@shared/ipc/agent'
+import { DEFAULT_AGENT_RUNTIME_BINDING, type AgentRuntimeBinding } from '@shared/agent-runtime'
 import {
   createDefaultAgentConversationConfiguration,
   type AgentConversationConfiguration,
@@ -49,6 +50,7 @@ export interface AgentConversationState {
   title: string
   surface: ConversationSurface
   runtime: ConversationRuntimeRef
+  runtimeBinding?: AgentRuntimeBinding
   configuration: AgentConversationConfiguration
   configurationEvents: AgentConversationConfigurationEvent[]
   lastRunConfigurationReceipt: AgentRunConfigurationReceipt | null
@@ -86,11 +88,11 @@ function createWelcomeMessage(): AgentMessage {
     content: [
       {
         type: 'text',
-        text: '你好！我是 CCLink Studio 的本地 Agent，由 Claude Code 驱动。\n\n你可以用自然语言和我对话，我会帮你完成浏览器自动化、网页信息提取、文档编辑和本地工作区操作。\n\n试着说：「帮我打开浏览器搜索一下 CCLink Studio」',
+        text: '你好！我是 CCLink Studio 的本地 Agent。\n\n你可以用自然语言和我对话，我会帮你完成代码、文档和本地工作区任务。新 Thread 默认使用 Claude Code，也可以在发送第一条消息前选择 Codex ACP。',
       },
     ],
     rawText:
-      '你好！我是 CCLink Studio 的本地 Agent，由 Claude Code 驱动。\n\n你可以用自然语言和我对话，我会帮你完成浏览器自动化、网页信息提取、文档编辑和本地工作区操作。\n\n试着说：「帮我打开浏览器搜索一下 CCLink Studio」',
+      '你好！我是 CCLink Studio 的本地 Agent。\n\n你可以用自然语言和我对话，我会帮你完成代码、文档和本地工作区任务。新 Thread 默认使用 Claude Code，也可以在发送第一条消息前选择 Codex ACP。',
     timestamp: Date.now(),
   }
 }
@@ -100,6 +102,7 @@ export function createAgentConversationState(
   options: {
     surface?: ConversationSurface
     runtime?: ConversationRuntimeRef
+    runtimeBinding?: AgentRuntimeBinding
     workspaceRef?: WorkspaceRef
     roleRef?: AgentRoleRef
     input?: string
@@ -119,6 +122,7 @@ export function createAgentConversationState(
     title: '新会话',
     surface: options.surface ?? 'assistant-panel',
     runtime,
+    runtimeBinding: options.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING,
     configuration: createDefaultAgentConversationConfiguration(now, options.roleRef),
     configurationEvents: [],
     lastRunConfigurationReceipt: null,

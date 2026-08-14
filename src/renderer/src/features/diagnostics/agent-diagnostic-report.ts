@@ -141,6 +141,7 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
     `- UI 当前 runId：${redactText(conversation?.activeRunId ?? '无')}`,
     `- 主进程 busy：${input.agentRuntime?.busy ?? input.agentRuntime?.connected ?? 'unknown'}`,
     `- 主进程 ready：${input.agentRuntime?.ready ?? 'unknown'}`,
+    `- Agent runtime：${formatAgentRuntime(input)}`,
     `- Claude 运行时来源：${input.agentRuntime?.runtimeProvenance?.source ?? 'unknown'}`,
     `- Agent SDK 版本：${input.agentRuntime?.runtimeProvenance?.sdkVersion ?? 'unknown'}`,
     `- Claude Code 版本：${input.agentRuntime?.runtimeProvenance?.claudeCodeVersion ?? 'unknown'}`,
@@ -183,6 +184,11 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
     '## 脱敏说明',
     'password/token/cookie/authorization/api key/session/验证码/手机号/邮箱等字段已脱敏或截断。',
   ].join('\n')
+}
+
+function formatAgentRuntime(input: AgentDiagnosticReportInput): string {
+  const binding = input.agentRuntime?.runtimeBinding ?? input.conversation?.runtimeBinding
+  return binding?.kind === 'acp' ? `acp/${binding.implementationId}` : 'claude-code'
 }
 
 function formatSessionCompatibilityFingerprint(value: string | null | undefined): string {

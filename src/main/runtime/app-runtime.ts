@@ -50,6 +50,9 @@ import type { CclinkAuthService } from '../cclink-remote/auth-service'
 import type { CclinkRemoteService } from '../cclink-remote/cclink-remote-service'
 import type { AgentRoleRegistry } from '../agent/agent-role-registry'
 import type { MediaProjectService } from '../media-production/media-project-service'
+import type { MediaAssetService } from '../media-production/media-asset-service'
+import type { VideoGenerationService } from '../media-production/video-generation-service'
+import type { MediaRenderService } from '../media-production/media-render-service'
 
 export interface CclinkStudioRuntimeState {
   isDev: boolean
@@ -102,6 +105,9 @@ export interface CclinkStudioRuntimeState {
   updateSnapshotUnsubscribe: (() => void) | null
   scheduledTaskService: ScheduledTaskService | null
   mediaProjectService: MediaProjectService | null
+  mediaAssetService: MediaAssetService | null
+  videoGenerationService: VideoGenerationService | null
+  mediaRenderService: MediaRenderService | null
   mediaProjectIpcUnsubscribe: (() => void) | null
   trustedRendererGuard: TrustedRendererGuard | null
   rendererWorkspaceStateFlush: RendererWorkspaceStateFlushCoordinator | null
@@ -162,6 +168,9 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     updateSnapshotUnsubscribe: null,
     scheduledTaskService: null,
     mediaProjectService: null,
+    mediaAssetService: null,
+    videoGenerationService: null,
+    mediaRenderService: null,
     mediaProjectIpcUnsubscribe: null,
     trustedRendererGuard: null,
     rendererWorkspaceStateFlush: null,

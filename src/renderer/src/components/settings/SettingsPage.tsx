@@ -103,8 +103,8 @@ const SETTINGS_SEARCH_INDEX: Array<{
   {
     sectionId: 'agent',
     label: 'Agent 后端',
-    description: '配置本地 Claude Code 或 OpenAI 兼容 API。',
-    keywords: ['agent', 'claude', 'openai', 'model', 'api', '模型'],
+    description: '配置默认 Claude Code 和可选 Codex ACP。',
+    keywords: ['agent', 'claude', 'codex', 'acp', 'openai', 'model', 'api', '模型'],
   },
   {
     sectionId: 'agent-capabilities',
@@ -269,11 +269,17 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   const [searchQuery, setSearchQuery] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [apiKeyInput, setApiKeyInput] = useState('')
+  const [showCodexApiKey, setShowCodexApiKey] = useState(false)
+  const [codexApiKeyInput, setCodexApiKeyInput] = useState('')
+  const [codexProbeBusy, setCodexProbeBusy] = useState(false)
+  const [codexMessage, setCodexMessage] = useState<string | null>(null)
   const [showMeshyApiKey, setShowMeshyApiKey] = useState(false)
   const [meshyApiKeyInput, setMeshyApiKeyInput] = useState('')
   const [jimengAccessKeyIdInput, setJimengAccessKeyIdInput] = useState('')
   const [jimengSecretAccessKeyInput, setJimengSecretAccessKeyInput] = useState('')
   const [showJimengSecretAccessKey, setShowJimengSecretAccessKey] = useState(false)
+  const [pexelsApiKeyInput, setPexelsApiKeyInput] = useState('')
+  const [showPexelsApiKey, setShowPexelsApiKey] = useState(false)
   const [secretStatus, setSecretStatus] = useState<SettingsSecretStatus | null>(null)
   const [secretBusy, setSecretBusy] = useState(false)
   const [secretMessage, setSecretMessage] = useState<string | null>(null)
@@ -659,6 +665,63 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
     }
   }
 
+  const saveCodexApiKey = async (): Promise<void> => {
+    if (!codexApiKeyInput.trim()) return
+    setSecretBusy(true)
+    setCodexMessage(null)
+    try {
+      const result = await window.cclinkStudio.settings.setSecret('codexApiKey', codexApiKeyInput)
+      if (!result.success || !result.status) {
+        setCodexMessage(result.error ?? 'Codex API Key 保存失败')
+        return
+      }
+      setCodexApiKeyInput('')
+      setShowCodexApiKey(false)
+      setSecretStatus(result.status)
+      setCodexMessage('Codex API Key 已保存到本地凭证文件')
+    } catch (nextError: unknown) {
+      setCodexMessage(nextError instanceof Error ? nextError.message : String(nextError))
+    } finally {
+      setSecretBusy(false)
+    }
+  }
+
+  const clearCodexApiKey = async (): Promise<void> => {
+    setSecretBusy(true)
+    setCodexMessage(null)
+    try {
+      const result = await window.cclinkStudio.settings.clearSecret('codexApiKey')
+      if (!result.success || !result.status) {
+        setCodexMessage(result.error ?? 'Codex API Key 清除失败')
+        return
+      }
+      setCodexApiKeyInput('')
+      setSecretStatus(result.status)
+      setCodexMessage('Codex API Key 已清除')
+    } catch (nextError: unknown) {
+      setCodexMessage(nextError instanceof Error ? nextError.message : String(nextError))
+    } finally {
+      setSecretBusy(false)
+    }
+  }
+
+  const probeCodexAcp = async (): Promise<void> => {
+    setCodexProbeBusy(true)
+    setCodexMessage(null)
+    try {
+      const response = await window.cclinkStudio.settings.probeCodexAcp(settings.codexAcpPath)
+      if (!response.success || !response.result) {
+        setCodexMessage(response.error ?? 'Codex ACP 检测失败')
+        return
+      }
+      setCodexMessage(`可用 · Codex ACP ${response.result.version} · ${response.result.executable}`)
+    } catch (nextError: unknown) {
+      setCodexMessage(nextError instanceof Error ? nextError.message : String(nextError))
+    } finally {
+      setCodexProbeBusy(false)
+    }
+  }
+
   const saveMeshyApiKey = async (): Promise<void> => {
     if (!meshyApiKeyInput.trim()) return
     setSecretBusy(true)
@@ -747,6 +810,51 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
     }
   }
 
+  const savePexelsApiKey = async (): Promise<void> => {
+    const apiKey = pexelsApiKeyInput.trim()
+    if (!apiKey) return
+    setCredentialBusy(true)
+    setCredentialMessage(null)
+    try {
+      const result = await window.cclinkStudio.credentials.set({
+        id: 'extension:pexels:default',
+        kind: 'api-key',
+        fields: { apiKey },
+      })
+      if (!result.success) {
+        setCredentialMessage(result.error ?? 'Pexels API Key 保存失败')
+        return
+      }
+      setPexelsApiKeyInput('')
+      setShowPexelsApiKey(false)
+      setCredentialMessage('Pexels API Key 已保存到本地凭证文件')
+      await refreshCredentialStatus()
+    } catch (nextError: unknown) {
+      setCredentialMessage(nextError instanceof Error ? nextError.message : String(nextError))
+    } finally {
+      setCredentialBusy(false)
+    }
+  }
+
+  const clearPexelsApiKey = async (): Promise<void> => {
+    setCredentialBusy(true)
+    setCredentialMessage(null)
+    try {
+      const result = await window.cclinkStudio.credentials.remove('extension:pexels:default')
+      if (!result.success) {
+        setCredentialMessage(result.error ?? 'Pexels API Key 清除失败')
+        return
+      }
+      setPexelsApiKeyInput('')
+      setCredentialMessage('Pexels API Key 已清除')
+      await refreshCredentialStatus()
+    } catch (nextError: unknown) {
+      setCredentialMessage(nextError instanceof Error ? nextError.message : String(nextError))
+    } finally {
+      setCredentialBusy(false)
+    }
+  }
+
   const runCredentialAction = async (
     action: () => Promise<{ success: boolean; error?: string }>,
     successMessage: string,
@@ -805,6 +913,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
     setMeshyApiKeyInput('')
     setJimengAccessKeyIdInput('')
     setJimengSecretAccessKeyInput('')
+    setPexelsApiKeyInput('')
     setClaudeConnectionResult(null)
     await refreshSecretStatus()
     await refreshCredentialStatus()
@@ -815,6 +924,10 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       credential.id === 'extension:jimeng:default' &&
       credential.fieldNames.includes('accessKeyId') &&
       credential.fieldNames.includes('secretAccessKey'),
+  )
+  const pexelsCredentialConfigured = credentialMetadata.some(
+    (credential) =>
+      credential.id === 'extension:pexels:default' && credential.fieldNames.includes('apiKey'),
   )
   const credentialStorageAvailable =
     credentialStatus === null ||
@@ -1251,6 +1364,99 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                   </div>
                 )}
               </div>
+
+              <div className="settings-row">
+                <div className="settings-label">
+                  <span>Codex ACP（可选）</span>
+                  <span className="settings-description">
+                    不影响默认 Claude Code；只在 Thread 里主动选择 Codex ACP 时使用。
+                  </span>
+                </div>
+              </div>
+
+              <SettingsRow settingKey="codexAcpPath" settings={settings} onReset={resetOne}>
+                <div className="settings-label">
+                  <span>Codex ACP 可执行文件</span>
+                  <span className="settings-description">
+                    留空时从系统 PATH 查找；请自行安装
+                    @agentclientprotocol/codex-acp@1.3.0，当前只接受该版本。
+                  </span>
+                </div>
+                <div className="settings-control settings-control-inline">
+                  <input
+                    className="settings-input"
+                    value={settings.codexAcpPath}
+                    placeholder="codex-acp"
+                    onChange={(event) => {
+                      setCodexMessage(null)
+                      update({ codexAcpPath: event.target.value })
+                    }}
+                  />
+                  <button
+                    className="settings-secondary-btn"
+                    type="button"
+                    disabled={codexProbeBusy}
+                    onClick={() => void probeCodexAcp()}
+                  >
+                    {codexProbeBusy ? '检测中...' : '检测'}
+                  </button>
+                </div>
+              </SettingsRow>
+
+              <div className="settings-row settings-secret-row">
+                <div className="settings-label">
+                  <span>Codex API Key</span>
+                  <span className="settings-description">
+                    {secretStatus?.codexApiKeyConfigured
+                      ? '已独立保存到本地凭证文件。'
+                      : '尚未配置；不会读取 Claude 的 Key 或 Codex 登录状态。'}
+                  </span>
+                </div>
+                <div className="settings-secret-control">
+                  <div className="settings-control settings-control-inline">
+                    <input
+                      className="settings-input settings-input-apikey"
+                      type={showCodexApiKey ? 'text' : 'password'}
+                      value={codexApiKeyInput}
+                      placeholder={
+                        secretStatus?.codexApiKeyConfigured
+                          ? '输入新 Key 以替换'
+                          : '输入 OpenAI API Key'
+                      }
+                      autoComplete="off"
+                      disabled={secretBusy || secretStatus?.storageAvailable === false}
+                      onChange={(event) => setCodexApiKeyInput(event.target.value)}
+                    />
+                    <button
+                      className="settings-secondary-btn"
+                      type="button"
+                      disabled={secretBusy}
+                      onClick={() => setShowCodexApiKey((value) => !value)}
+                    >
+                      {showCodexApiKey ? '隐藏' : '显示'}
+                    </button>
+                    <button
+                      className="settings-secondary-btn"
+                      type="button"
+                      disabled={secretBusy || !codexApiKeyInput.trim()}
+                      onClick={() => void saveCodexApiKey()}
+                    >
+                      保存
+                    </button>
+                    {secretStatus?.codexApiKeyConfigured && (
+                      <button
+                        className="settings-danger-btn"
+                        type="button"
+                        disabled={secretBusy}
+                        onClick={() => void clearCodexApiKey()}
+                      >
+                        清除
+                      </button>
+                    )}
+                  </div>
+                  {codexMessage && <span className="settings-description">{codexMessage}</span>}
+                </div>
+              </div>
             </div>
           </section>
         )}
@@ -1393,6 +1599,58 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                   {credentialMessage && (
                     <span className="settings-description">{credentialMessage}</span>
                   )}
+                </div>
+              </div>
+
+              <div className="settings-row settings-secret-row">
+                <div className="settings-label">
+                  <span>Pexels 素材搜索 Key</span>
+                  <span className="settings-description">
+                    {pexelsCredentialConfigured
+                      ? '已配置；搜索结果会显示 Pexels 链接与作者署名。'
+                      : '可选。用于在宣发视频工程中搜索带来源记录的图片和视频。'}
+                  </span>
+                </div>
+                <div className="settings-secret-control">
+                  <div className="settings-control settings-control-inline">
+                    <input
+                      className="settings-input settings-input-apikey"
+                      type={showPexelsApiKey ? 'text' : 'password'}
+                      value={pexelsApiKeyInput}
+                      placeholder={
+                        pexelsCredentialConfigured ? '输入新 Key 以替换' : 'Pexels API Key'
+                      }
+                      autoComplete="off"
+                      disabled={credentialBusy || !credentialStorageAvailable}
+                      onChange={(event) => setPexelsApiKeyInput(event.target.value)}
+                    />
+                    <button
+                      className="settings-secondary-btn"
+                      type="button"
+                      disabled={credentialBusy}
+                      onClick={() => setShowPexelsApiKey((value) => !value)}
+                    >
+                      {showPexelsApiKey ? '隐藏' : '显示'}
+                    </button>
+                    <button
+                      className="settings-secondary-btn"
+                      type="button"
+                      disabled={credentialBusy || !pexelsApiKeyInput.trim()}
+                      onClick={() => void savePexelsApiKey()}
+                    >
+                      保存
+                    </button>
+                    {pexelsCredentialConfigured && (
+                      <button
+                        className="settings-danger-btn"
+                        type="button"
+                        disabled={credentialBusy}
+                        onClick={() => void clearPexelsApiKey()}
+                      >
+                        清除
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 

@@ -172,6 +172,7 @@ describe('IPC invoke contracts', () => {
         },
         'a'.repeat(64),
         [{ skillId: 'grill-me', version: 1 }],
+        { kind: 'acp', implementationId: 'codex-acp' },
       ]),
     ).toEqual([
       'conversation-1',
@@ -184,6 +185,7 @@ describe('IPC invoke contracts', () => {
       },
       'a'.repeat(64),
       [{ skillId: 'grill-me', version: 1 }],
+      { kind: 'acp', implementationId: 'codex-acp' },
     ])
     expect(
       agentIpcContracts.sendMessage.parseArgs([

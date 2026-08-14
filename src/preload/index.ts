@@ -44,6 +44,14 @@ import {
   mediaProjectsIpcEvents,
   type MediaProjectsApiContract,
 } from '../shared/media-production/media-project-contract'
+import {
+  mediaVideoIpc,
+  type MediaVideoApiContract,
+} from '../shared/media-production/video-generation-contract'
+import {
+  mediaRenderIpc,
+  type MediaRenderApiContract,
+} from '../shared/media-production/media-render-contract'
 
 const settingsApi: SettingsApiContract = {
   getAll: () => invokeIpcContract(settingsIpc.getAll),
@@ -58,6 +66,7 @@ const settingsApi: SettingsApiContract = {
   probeClaudeRuntime: (selection) => invokeIpcContract(settingsIpc.probeClaudeRuntime, selection),
   testClaudeModelConnection: (selection) =>
     invokeIpcContract(settingsIpc.testClaudeModelConnection, selection),
+  probeCodexAcp: (path) => invokeIpcContract(settingsIpc.probeCodexAcp, path),
 }
 
 const authApi: AuthApiContract = {
@@ -179,12 +188,35 @@ const mediaProjectsApi: MediaProjectsApiContract = {
   create: (input) => invokeIpcContract(mediaProjectsIpc.create, input),
   save: (input) => invokeIpcContract(mediaProjectsIpc.save, input),
   proposeStoryboard: (input) => invokeIpcContract(mediaProjectsIpc.proposeStoryboard, input),
+  importAsset: (input) => invokeIpcContract(mediaProjectsIpc.importAsset, input),
+  getImageProviders: () => invokeIpcContract(mediaProjectsIpc.getImageProviders),
+  generateSceneImage: (input) => invokeIpcContract(mediaProjectsIpc.generateSceneImage, input),
+  searchAssets: (input) => invokeIpcContract(mediaProjectsIpc.searchAssets, input),
+  addSearchCandidate: (input) => invokeIpcContract(mediaProjectsIpc.addSearchCandidate, input),
   onChanged: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, workspacePath: string): void =>
       callback(workspacePath)
     ipcRenderer.on(mediaProjectsIpcEvents.changed, handler)
     return () => ipcRenderer.removeListener(mediaProjectsIpcEvents.changed, handler)
   },
+}
+
+const mediaVideoApi: MediaVideoApiContract = {
+  getProviders: () => invokeIpcContract(mediaVideoIpc.getProviders),
+  createTask: (input) => invokeIpcContract(mediaVideoIpc.createTask, input),
+  listTasks: (workspacePath, projectId) =>
+    invokeIpcContract(mediaVideoIpc.listTasks, workspacePath, projectId),
+  retryTask: (workspacePath, taskId) =>
+    invokeIpcContract(mediaVideoIpc.retryTask, workspacePath, taskId),
+}
+
+const mediaRenderApi: MediaRenderApiContract = {
+  getRuntimeStatus: () => invokeIpcContract(mediaRenderIpc.getRuntimeStatus),
+  createTask: (input) => invokeIpcContract(mediaRenderIpc.createTask, input),
+  listTasks: (workspacePath, projectId) =>
+    invokeIpcContract(mediaRenderIpc.listTasks, workspacePath, projectId),
+  retryTask: (workspacePath, taskId) =>
+    invokeIpcContract(mediaRenderIpc.retryTask, workspacePath, taskId),
 }
 
 const terminalApi: TerminalApiContract = {
@@ -285,6 +317,8 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   scheduledTasks: scheduledTasksApi,
 
   mediaProjects: mediaProjectsApi,
+  mediaVideo: mediaVideoApi,
+  mediaRender: mediaRenderApi,
 
   update: updateApi,
 })

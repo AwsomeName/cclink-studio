@@ -27,6 +27,7 @@ import {
 import { IconCheck, IconError, IconSend, IconStop, IconTool } from '../common/Icons'
 import { ConversationShell, type ConversationShellBadgeKind } from './ConversationShell'
 import { AgentComposerToolbar } from '../../features/agent-composer/AgentComposerToolbar'
+import { DEFAULT_AGENT_RUNTIME_BINDING } from '@shared/agent-runtime'
 import { useComposerHistory } from '../../features/agent-composer/use-composer-history'
 import { MountedResourceBar } from '../../features/agent-conversations/mounted-resource-bar'
 import { MountedSkillStrip } from '../../features/agent-conversations/mounted-skill-strip'
@@ -93,6 +94,7 @@ export function WorkbenchAgentConversation({
   const removePendingImage = useAgentStore((state) => state.removePendingImage)
   const addMountedSkill = useAgentStore((state) => state.addMountedSkill)
   const removeMountedSkill = useAgentStore((state) => state.removeMountedSkill)
+  const setRuntimeBinding = useAgentStore((state) => state.setRuntimeBinding)
   const tabs = useTabStore((state) => state.tabs)
   const openTab = useTabStore((state) => state.openTab)
   const updateTabTitle = useTabStore((state) => state.updateTabTitle)
@@ -166,6 +168,12 @@ export function WorkbenchAgentConversation({
   const pendingImages = conversation?.pendingImages ?? []
   const mountedSkills = conversation?.mountedSkills ?? []
   const contextCompacting = conversation?.contextCompaction.status === 'compacting'
+  const canChangeRuntime = Boolean(
+    conversation &&
+    !conversation.loading &&
+    !conversation.sessionId &&
+    !conversation.messages.some((message) => message.role === 'user'),
+  )
   const activeRoleAvailable = roles.some(
     (role) =>
       role.roleId === conversation?.configuration.roleRef.roleId &&
@@ -505,6 +513,9 @@ export function WorkbenchAgentConversation({
                 onRoleChange={(role) => void handleRoleChange(role)}
                 permissionMode={permissionMode}
                 settings={settings}
+                runtimeBinding={conversation.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING}
+                canChangeRuntime={canChangeRuntime}
+                onRuntimeChange={(binding) => setRuntimeBinding(binding, conversationId)}
                 loading={conversation.loading || contextCompacting}
                 canSend={
                   (Boolean(conversation.input.trim()) || pendingImages.length > 0) &&

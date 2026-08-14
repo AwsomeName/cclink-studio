@@ -7,8 +7,10 @@ import type { AgentResourceContextSnapshot } from '../../shared/agent-resource-c
 import type { WorkspaceRef } from '../../shared/workspace-ref'
 import type { AgentConversationConfiguration } from '../../shared/agent-role'
 import type { AgentSkillRef } from '../../shared/agent-role'
+import type { AgentRuntimeBinding } from '../../shared/agent-runtime'
 
 export interface AgentSendMessageContext {
+  runtimeBinding?: AgentRuntimeBinding
   resources?: AgentSendResource[]
   skills?: AgentSkillRef[]
   images?: AgentImageAttachment[]

@@ -6,6 +6,7 @@ import type { AgentContextUsageSnapshot } from '@shared/agent-protocol'
 type AgentStoreSnapshot = ReturnType<typeof useAgentStore.getState>
 
 type AgentStreamEventPayload = {
+  protocol?: 'studio-agent-event-v1'
   type?: string
   subtype?: string
   session_id?: string
@@ -24,6 +25,18 @@ type AgentStreamEventPayload = {
   }
   event?: {
     type?: string
+    sessionId?: string
+    state?: 'created' | 'resumed'
+    messageId?: string | null
+    text?: string
+    action?: 'start' | 'update'
+    toolCallId?: string
+    name?: string
+    title?: string | null
+    kind?: string | null
+    status?: string | null
+    input?: unknown
+    output?: unknown
     message?: { id?: string }
     content_block?: {
       type?: string
@@ -82,6 +95,11 @@ export function applyAgentStreamEventToStore(
 ): void {
   const conversationId = event.conversationId
   if (!acceptsRunEvent(store, conversationId, event.runId)) return
+
+  if (event.protocol === 'studio-agent-event-v1') {
+    applyStudioAgentEvent(event, store)
+    return
+  }
 
   switch (event.type) {
     case 'system': {
@@ -199,6 +217,92 @@ export function applyAgentStreamEventToStore(
     case 'assistant':
       break
   }
+}
+
+function applyStudioAgentEvent(event: AgentStreamEventPayload, store: AgentStoreSnapshot): void {
+  const innerEvent = event.event
+  const conversationId = event.conversationId
+  if (!innerEvent) return
+  if (innerEvent.type === 'notice') {
+    store.addSystemMessage(innerEvent.text ?? '', conversationId)
+    return
+  }
+  if (innerEvent.type === 'session' && innerEvent.sessionId) {
+    store.setSessionId(innerEvent.sessionId, conversationId, event.sessionCompatibilityFingerprint)
+    store.setBackendState('connected', conversationId)
+    return
+  }
+  if (innerEvent.type === 'text-delta' || innerEvent.type === 'thought-delta') {
+    const id = conversationId ?? store.activeConversationId
+    const conversation = store.conversations[id]
+    if (!conversation?.streamingMessageId) {
+      store.startStreamingMessage(
+        innerEvent.messageId || `acp-${event.runId ?? Date.now()}`,
+        conversationId,
+        event.runId,
+      )
+    }
+    const latest = store.conversations[id]?.messages.at(-1)?.content.at(-1)
+    const requiredType = innerEvent.type === 'text-delta' ? 'text' : 'thinking'
+    if (latest?.type !== requiredType) {
+      store.appendContentBlock(
+        requiredType === 'text'
+          ? ({ type: 'text', text: '' } as ContentBlock)
+          : ({ type: 'thinking', thinking: '' } as ContentBlock),
+        conversationId,
+      )
+    }
+    store.appendStreamDelta(innerEvent.text ?? '', conversationId)
+    return
+  }
+  if (innerEvent.type !== 'tool' || !innerEvent.toolCallId) return
+  const id = conversationId ?? store.activeConversationId
+  const conversation = store.conversations[id]
+  if (!conversation?.streamingMessageId) {
+    store.startStreamingMessage(`acp-${event.runId ?? Date.now()}`, conversationId, event.runId)
+  }
+  const hasTool = store.conversations[id]?.messages.some((message) =>
+    message.content.some(
+      (block) => block.type === 'tool_use' && block.id === innerEvent.toolCallId,
+    ),
+  )
+  if (!hasTool) {
+    store.appendContentBlock(
+      {
+        type: 'tool_use',
+        id: innerEvent.toolCallId,
+        name: innerEvent.name || innerEvent.title || innerEvent.kind || 'Codex 工具',
+        input: toRecord(innerEvent.input),
+      },
+      conversationId,
+    )
+  }
+  if (innerEvent.status === 'completed' || innerEvent.status === 'failed') {
+    const hasResult = store.conversations[id]?.messages.some((message) =>
+      message.content.some(
+        (block) => block.type === 'tool_result' && block.tool_use_id === innerEvent.toolCallId,
+      ),
+    )
+    if (!hasResult) {
+      store.appendContentBlock(
+        {
+          type: 'tool_result',
+          tool_use_id: innerEvent.toolCallId,
+          content: formatToolResultContent(innerEvent.output),
+          is_error: innerEvent.status === 'failed',
+        },
+        conversationId,
+      )
+    }
+  }
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : value === undefined || value === null
+      ? {}
+      : { value }
 }
 
 function formatToolResultContent(content: unknown): string {

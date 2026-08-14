@@ -5,6 +5,7 @@ import {
   type SettingsSecretOperationResult,
   type ClaudeRuntimeProbeOperationResult,
   type ClaudeModelConnectionTestOperationResult,
+  type CodexAcpProbeOperationResult,
 } from './settings'
 import {
   parseSettingsKey,
@@ -12,6 +13,7 @@ import {
   parseSettingsSecretValue,
   parseSettingsUpdate,
   parseClaudeRuntimeSelection,
+  parseCodexAcpPath,
 } from './settings-schema'
 
 const invalidSettingsResult = async (): Promise<SettingsOperationResult> => ({
@@ -31,6 +33,10 @@ const invalidConnectionTestResult =
     success: false,
     error: 'Claude 模型连接测试参数无效',
   })
+const invalidCodexAcpProbeResult = async (): Promise<CodexAcpProbeOperationResult> => ({
+  success: false,
+  error: 'Codex ACP 路径参数无效',
+})
 
 function requireArgs(args: unknown[], count: number, channel: string): void {
   if (args.length !== count) throw new Error(`IPC ${channel} 需要 ${count} 个参数`)
@@ -89,5 +95,13 @@ export const settingsIpcContracts = {
       return ipcArgs(parseClaudeRuntimeSelection(args[0]))
     },
     invalidConnectionTestResult,
+  ),
+  probeCodexAcp: bindIpcParser(
+    settingsIpc.probeCodexAcp,
+    (args) => {
+      requireArgs(args, 1, settingsIpc.probeCodexAcp.channel)
+      return ipcArgs(parseCodexAcpPath(args[0]))
+    },
+    invalidCodexAcpProbeResult,
   ),
 } as const

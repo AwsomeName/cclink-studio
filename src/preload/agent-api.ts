@@ -52,6 +52,7 @@ export const agentApi: AgentApiContract = {
     configuration,
     sessionCompatibilityFingerprint,
     skills,
+    runtimeBinding,
   ) =>
     invokeIpcContract(
       agentIpc.restoreConversation,
@@ -60,6 +61,7 @@ export const agentApi: AgentApiContract = {
       configuration,
       sessionCompatibilityFingerprint,
       skills,
+      runtimeBinding,
     ),
   listRoles: () => invokeIpcContract(agentIpc.listRoles),
   createRole: (draft) => invokeIpcContract(agentIpc.createRole, draft),

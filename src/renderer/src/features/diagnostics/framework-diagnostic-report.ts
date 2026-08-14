@@ -1,4 +1,5 @@
 import type { WorkspaceStateDiagnostics } from '@shared/ipc/workspace-state'
+import type { BrowserRuntimeDiagnosticSummary } from '@shared/ipc/browser'
 import { sanitizeDiagnosticText, type DiagnosticLogSnapshot } from '@shared/diagnostics'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { APP_VERSION } from '../../app-metadata'
@@ -25,45 +26,55 @@ const MAX_LOG_ENTRIES = 200
  * 远程能力探测只记录协议 envelope，便于区分传输、关联和能力映射问题。
  */
 export async function collectFrameworkDiagnosticReport(): Promise<string> {
-  const [workspaceSection, credentialSection, scheduledTaskSection, remoteSection, mainLogSection] =
-    await Promise.all([
-      collectSection('工作台状态文件', async () =>
-        formatFrameworkWorkspaceDiagnostics(await window.cclinkStudio.workspaceState.diagnostics()),
-      ),
-      collectSection('本地凭证状态', async () => {
-        const status = await window.cclinkStudio.credentials.getStatus()
-        return [
-          `- 状态：${status.status}`,
-          `- 文件：${status.filePath}`,
-          `- 已配置：${status.configuredCount}`,
-          `- 旧版加密文件：${status.legacyEncryptedFiles.length}`,
-          ...(status.message ? [`- 提示：${status.message}`] : []),
-        ].join('\n')
-      }),
-      collectSection('定时任务框架', async () => {
-        const status = await window.cclinkStudio.scheduledTasks.getRuntimeStatus()
-        return [
-          `- Scheduler：${status.state}`,
-          `- 启动时间：${status.startedAt ?? '未启动'}`,
-          `- 最近 timer：${status.timerDueAt ?? '无'}`,
-          `- 排队数量：${status.queuedCount}`,
-          `- 当前运行：${status.runningRunId ?? '无'}`,
-          `- 已启用任务：${status.enabledCount}`,
-          `- 系统调度配置：${status.systemScheduler}`,
-          ...(status.lastError
-            ? [`- 最近失败：${status.lastError.code} · ${status.lastError.message}`]
-            : []),
-        ].join('\n')
-      }),
-      collectSection('当前远程能力探测', collectActiveRemoteDiagnostics),
-      collectSection('主进程近期框架日志', async () =>
-        formatFrameworkLogSnapshot(await window.cclinkStudio.diagnostics.getMainLogSnapshot()),
-      ),
-    ])
+  const [
+    workspaceSection,
+    credentialSection,
+    scheduledTaskSection,
+    browserSection,
+    remoteSection,
+    mainLogSection,
+  ] = await Promise.all([
+    collectSection('工作台状态文件', async () =>
+      formatFrameworkWorkspaceDiagnostics(await window.cclinkStudio.workspaceState.diagnostics()),
+    ),
+    collectSection('本地凭证状态', async () => {
+      const status = await window.cclinkStudio.credentials.getStatus()
+      return [
+        `- 状态：${status.status}`,
+        `- 文件：${status.filePath}`,
+        `- 已配置：${status.configuredCount}`,
+        `- 旧版加密文件：${status.legacyEncryptedFiles.length}`,
+        ...(status.message ? [`- 提示：${status.message}`] : []),
+      ].join('\n')
+    }),
+    collectSection('定时任务框架', async () => {
+      const status = await window.cclinkStudio.scheduledTasks.getRuntimeStatus()
+      return [
+        `- Scheduler：${status.state}`,
+        `- 启动时间：${status.startedAt ?? '未启动'}`,
+        `- 最近 timer：${status.timerDueAt ?? '无'}`,
+        `- 排队数量：${status.queuedCount}`,
+        `- 当前运行：${status.runningRunId ?? '无'}`,
+        `- 已启用任务：${status.enabledCount}`,
+        `- 系统调度配置：${status.systemScheduler}`,
+        ...(status.lastError
+          ? [`- 最近失败：${status.lastError.code} · ${status.lastError.message}`]
+          : []),
+      ].join('\n')
+    }),
+    collectSection('当前浏览器页面', collectActiveBrowserDiagnostics),
+    collectSection('当前远程能力探测', collectActiveRemoteDiagnostics),
+    collectSection('主进程近期框架日志', async () =>
+      formatFrameworkLogSnapshot(await window.cclinkStudio.diagnostics.getMainLogSnapshot()),
+    ),
+  ])
 
   const runtimeSection = collectSyncSection('当前工作台运行状态', formatRuntimeState)
   const contextActionSection = collectSyncSection('上下文操作', () =>
-    formatContextActionDiagnosticsMarkdown(useContextActionDiagnosticsStore.getState().events),
+    stripEmbeddedSectionHeading(
+      formatContextActionDiagnosticsMarkdown(useContextActionDiagnosticsStore.getState().events),
+      '上下文操作',
+    ),
   )
   const rendererLogSection = collectSyncSection('界面近期框架日志', () =>
     formatFrameworkLogSnapshot(getRendererDiagnosticLogSnapshot()),
@@ -89,6 +100,7 @@ export async function collectFrameworkDiagnosticReport(): Promise<string> {
     scheduledTaskSection,
     markdownSection,
     contextActionSection,
+    browserSection,
     remoteSection,
     rendererLogSection,
     mainLogSection,
@@ -136,6 +148,89 @@ async function collectActiveRemoteDiagnostics(): Promise<string> {
     JSON.stringify(probe?.response ?? null, null, 2),
     '```',
   ].join('\n')
+}
+
+async function collectActiveBrowserDiagnostics(): Promise<string> {
+  const tabState = useTabStore.getState()
+  const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId)
+  if (activeTab?.type !== 'browser') return '- 当前没有活跃浏览器页面'
+
+  return formatBrowserRuntimeDiagnostics(
+    await window.cclinkStudio.browser.getRuntimeDiagnostics(activeTab.id),
+  )
+}
+
+function formatBrowserRuntimeDiagnostics(summary: BrowserRuntimeDiagnosticSummary): string {
+  const lines = [
+    `- 请求 Tab：${summary.requestedTabId}`,
+    `- 可视 Tab：${summary.visibleTabId ?? '无'}`,
+    `- 当前 URL：${summary.visibleUrl ?? '无'}`,
+    `- 当前标题：${summary.visibleTitle || '无'}`,
+    `- 页面绑定：${summary.bindingStatus}`,
+    `- 浏览器 Profile：${summary.profileId ? '已配置' : '默认'}`,
+  ]
+
+  if (summary.engineVersions) {
+    lines.push(
+      `- 引擎版本：Electron ${summary.engineVersions.electron} · Chromium ${summary.engineVersions.chromium} · Node ${summary.engineVersions.node}`,
+    )
+  }
+
+  if (summary.lastClaim) {
+    lines.push(
+      `- 最近页面绑定：${summary.lastClaim.status} · ${formatBrowserTimestamp(summary.lastClaim.timestamp)}${summary.lastClaim.errorMessage ? ` · ${summary.lastClaim.errorMessage}` : ''}`,
+    )
+  } else {
+    lines.push('- 最近页面绑定：无')
+  }
+
+  if (!summary.page) {
+    lines.push('- 页面 Console：不可用', '- 页面 Network：不可用')
+    return lines.join('\n')
+  }
+
+  if (summary.page.consoleErrors.length > 0) {
+    lines.push('- 页面 Console：')
+    lines.push(
+      ...summary.page.consoleErrors
+        .slice(-10)
+        .map(
+          (entry) =>
+            `  - ${formatBrowserTimestamp(entry.timestamp)} · ${entry.type} · ${entry.text.replace(/\s+/g, ' ')}`,
+        ),
+    )
+  } else {
+    lines.push('- 页面 Console：无 error/warn')
+  }
+
+  if (summary.page.networkIssues.length > 0) {
+    lines.push('- 页面 Network：')
+    lines.push(
+      ...summary.page.networkIssues.slice(-10).map((entry) => {
+        const outcome = entry.failed
+          ? `failed:${entry.errorText ?? 'unknown'}`
+          : `status:${entry.status ?? 'unknown'}`
+        return `  - ${formatBrowserTimestamp(entry.timestamp)} · ${entry.method} · ${outcome} · ${entry.url}`
+      }),
+    )
+  } else {
+    lines.push('- 页面 Network：无失败/4xx/5xx')
+  }
+
+  if (summary.page.suspectedChallenges.length > 0) {
+    lines.push(`- 疑似页面挑战：${summary.page.suspectedChallenges.join(', ')}`)
+  }
+
+  return lines.join('\n')
+}
+
+function formatBrowserTimestamp(timestamp: number): string {
+  const date = new Date(timestamp)
+  return Number.isNaN(date.getTime()) ? String(timestamp) : date.toISOString()
+}
+
+function stripEmbeddedSectionHeading(markdown: string, title: string): string {
+  return markdown.replace(new RegExp(`^\\s*##\\s+${title}\\s*\\n?`), '')
 }
 
 function formatRuntimeState(): string {

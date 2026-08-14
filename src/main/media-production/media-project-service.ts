@@ -17,6 +17,7 @@ import type {
   SaveMediaProjectInput,
 } from '../../shared/media-production/media-project-types'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
+import { MediaAssetService } from './media-asset-service'
 
 const MEDIA_PROJECT_DIRECTORY = join('.cclink-studio', 'media-projects')
 const MAX_SOURCE_BYTES = 1_000_000
@@ -35,11 +36,15 @@ class MediaProjectServiceError extends Error {
 export class MediaProjectService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private readonly changeListeners = new Set<(workspacePath: string) => void>()
+  private readonly mediaAssetService: MediaAssetService
 
   constructor(
     private readonly workspaceStateService: WorkspaceStateService,
     private readonly now: () => number = Date.now,
-  ) {}
+    mediaAssetService?: MediaAssetService,
+  ) {
+    this.mediaAssetService = mediaAssetService ?? new MediaAssetService(workspaceStateService, now)
+  }
 
   onChanged(listener: (workspacePath: string) => void): () => void {
     this.changeListeners.add(listener)
@@ -125,6 +130,13 @@ export class MediaProjectService {
             brand: { primaryColor: '#5B8CFF', callToAction: '' },
           },
           scenes: createStoryboard(snapshot, title, input.targetDurationSeconds),
+          assets: [],
+          renderSettings: {
+            logoAssetId: null,
+            musicAssetId: null,
+            musicVolume: 0.18,
+            transition: 'cut',
+          },
           createdAt: timestamp,
           updatedAt: timestamp,
         }
@@ -166,6 +178,7 @@ export class MediaProjectService {
           updatedAt: this.now(),
           scenes: input.project.scenes.map((scene, order) => ({ ...scene, order })),
         })
+        await this.mediaAssetService.validateProjectAssets(workspacePath, project)
         await this.writeProject(workspacePath, project)
         this.notifyChanged(workspacePath)
         return { success: true, project }

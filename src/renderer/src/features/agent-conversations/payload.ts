@@ -8,6 +8,7 @@ import type {
 import type { AgentConversationState } from '../../stores/agent-store'
 import type { AgentMessage, AgentMountedResource, AgentMountedSkill } from '../../types'
 import type { AgentResourceCandidate, AgentSkillCandidate } from './view-model'
+import { DEFAULT_AGENT_RUNTIME_BINDING } from '@shared/agent-runtime'
 
 export const MAX_FILE_RANGE_BYTES = 32 * 1024
 export const MAX_FILE_RANGE_LINES = 200
@@ -98,6 +99,7 @@ export function buildAgentSendPayload(
 ): AgentSendMessagePayload {
   return {
     message,
+    runtimeBinding: conversation?.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING,
     ...(runId ? { runId } : {}),
     resources: toSendResources(conversation?.mountedResources ?? []),
     skills: toSendSkills(conversation?.mountedSkills ?? []),

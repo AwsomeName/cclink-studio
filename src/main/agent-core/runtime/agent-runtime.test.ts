@@ -182,4 +182,73 @@ describe('AgentRuntime session continuity', () => {
     ).rejects.toThrow('compact unavailable')
     expect(runtime.getStatus('conversation-1').runId).toBeNull()
   })
+
+  it('binds ACP per conversation without changing the Claude default', () => {
+    const runtime = new AgentRuntime({
+      config: { type: 'local-claude-code' },
+      deps: {} as never,
+    })
+    runtime.bindConversationBackend('codex-thread', {
+      type: 'local-acp',
+      acp: {
+        implementationId: 'codex-acp',
+        codexHome: '/tmp/codex-acp-test',
+        requestPermission: async () => false,
+      },
+    })
+
+    expect(runtime.getBackendType('codex-thread')).toBe('local-acp')
+    expect(runtime.getBackendType('claude-thread')).toBe('local-claude-code')
+  })
+
+  it('refuses to switch a conversation runtime after it owns a session', () => {
+    const runtime = new AgentRuntime({
+      config: { type: 'local-claude-code' },
+      deps: {} as never,
+    })
+    runtime.restoreConversation('conversation-1', 'session-1')
+
+    expect(() =>
+      runtime.bindConversationBackend('conversation-1', {
+        type: 'local-acp',
+        acp: {
+          implementationId: 'codex-acp',
+          codexHome: '/tmp/codex-acp-test',
+          requestPermission: async () => false,
+        },
+      }),
+    ).toThrow('不能切换')
+  })
+
+  it('reconfigures ACP conversations without replacing Claude conversations', () => {
+    const runtime = new AgentRuntime({
+      config: { type: 'local-claude-code' },
+      deps: {} as never,
+    })
+    const claude = runtime.getBackend('claude-thread') as TestBackend
+    runtime.bindConversationBackend('codex-thread', {
+      type: 'local-acp',
+      acp: {
+        implementationId: 'codex-acp',
+        codexHome: '/tmp/codex-acp-test',
+        requestPermission: async () => false,
+      },
+    })
+    const codex = runtime.getBackend('codex-thread') as TestBackend
+
+    runtime.reconfigureBackendType('local-acp', {
+      type: 'local-acp',
+      acp: {
+        implementationId: 'codex-acp',
+        apiKey: 'next-key',
+        codexHome: '/tmp/codex-acp-test',
+        requestPermission: async () => false,
+      },
+    })
+
+    expect(runtime.getBackend('claude-thread')).toBe(claude)
+    expect(runtime.getBackend('codex-thread')).not.toBe(codex)
+    expect(claude.destroy).not.toHaveBeenCalled()
+    expect(codex.destroy).toHaveBeenCalledOnce()
+  })
 })

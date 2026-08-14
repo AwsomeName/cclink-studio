@@ -3,8 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
-export type UsageSource = 'agent-model' | 'image-generation'
-export type UsageUnit = 'usd' | 'cny' | 'credit' | 'image' | 'token'
+export type UsageSource = 'agent-model' | 'image-generation' | 'video-generation'
+export type UsageUnit = 'usd' | 'cny' | 'credit' | 'image' | 'video' | 'token'
 export type UsageStatus = 'succeeded' | 'failed' | 'cancelled'
 
 export interface UsageEvent {

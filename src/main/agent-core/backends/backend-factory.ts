@@ -10,6 +10,7 @@ import {
   type BrowserAutomationHost,
   type McpConfigComposer,
 } from './local-claude-code-backend.js'
+import { LocalAcpBackend } from './local-acp-backend.js'
 
 export interface BackendFactoryDeps {
   playwrightBridge: BrowserAutomationHost
@@ -45,7 +46,17 @@ export function createBackend(config: BackendConfig, deps: BackendFactoryDeps): 
         },
       )
 
+    case 'local-acp':
+      return new LocalAcpBackend({
+        executablePath: config.acp.executablePath,
+        apiKey: config.acp.apiKey,
+        codexHome: config.acp.codexHome,
+        expectedVersion: config.acp.expectedVersion,
+        getWorkspacePath: config.acp.getWorkspacePath,
+        requestPermission: config.acp.requestPermission,
+      })
+
     default:
-      throw new Error(`未知的后端类型: ${(config as BackendConfig).type}`)
+      throw new Error(`未知的后端类型: ${(config as { type?: unknown }).type}`)
   }
 }

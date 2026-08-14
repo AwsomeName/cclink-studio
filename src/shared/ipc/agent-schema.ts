@@ -21,6 +21,11 @@ export const nullableAgentSessionCompatibilityFingerprintSchema = z
   .regex(/^[a-f0-9]{64}$/)
   .nullable()
 
+export const agentRuntimeBindingSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('claude-code') }).strict(),
+  z.object({ kind: z.literal('acp'), implementationId: z.literal('codex-acp') }).strict(),
+])
+
 export const agentProfileRefSchema = z
   .object({
     profileId: boundedIdentifierSchema(),
@@ -210,6 +215,7 @@ export const agentSendMessageInputSchema = z.union([
   z
     .object({
       message: boundedTextSchema(MAX_MESSAGE_LENGTH).trim().min(1),
+      runtimeBinding: agentRuntimeBindingSchema.optional(),
       runId: boundedIdentifierSchema().optional(),
       resources: resourcesSchema.optional(),
       skills: skillsSchema.optional(),

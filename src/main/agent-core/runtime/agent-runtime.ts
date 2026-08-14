@@ -19,6 +19,7 @@ export interface AgentRuntimeEvent {
 
 interface AgentConversation {
   backend: IAgentBackend
+  config: BackendConfig
   scope: AgentScope
   activeRunId: string | null
 }
@@ -33,10 +34,10 @@ export class AgentRuntime {
   private readonly conversations = new Map<string, AgentConversation>()
   private readonly deps: BackendFactoryDeps
   private readonly onEvent?: (event: AgentRuntimeEvent) => void
-  private currentConfig: BackendConfig
+  private defaultConfig: BackendConfig
 
   constructor(options: AgentRuntimeOptions) {
-    this.currentConfig = options.config
+    this.defaultConfig = options.config
     this.deps = options.deps
     this.onEvent = options.onEvent
     this.ensureConversation(DEFAULT_CONVERSATION_ID)
@@ -48,6 +49,30 @@ export class AgentRuntime {
 
   getBackend(conversationId = DEFAULT_CONVERSATION_ID): IAgentBackend {
     return this.ensureConversation(conversationId).backend
+  }
+
+  getBackendType(conversationId = DEFAULT_CONVERSATION_ID): BackendConfig['type'] {
+    return this.ensureConversation(conversationId).config.type
+  }
+
+  bindConversationBackend(conversationId: string, config: BackendConfig): void {
+    const existing = this.conversations.get(conversationId)
+    if (!existing) {
+      this.conversations.set(
+        conversationId,
+        this.createConversation(conversationId, { kind: 'all' }, config),
+      )
+      return
+    }
+    if (existing.config.type === config.type) return
+    if (existing.activeRunId || existing.backend.getSessionId()) {
+      throw new Error('已有消息或运行中的 Thread 不能切换 Agent runtime')
+    }
+    void existing.backend.destroy()
+    this.conversations.set(
+      conversationId,
+      this.createConversation(conversationId, existing.scope, config),
+    )
   }
 
   async sendMessage(
@@ -143,7 +168,16 @@ export class AgentRuntime {
   }
 
   switchBackend(config: BackendConfig, preserveSessions = true): void {
-    this.currentConfig = config
+    const previousDefaultType = this.defaultConfig.type
+    this.defaultConfig = config
+    this.reconfigureBackendType(previousDefaultType, config, preserveSessions)
+  }
+
+  reconfigureBackendType(
+    backendType: BackendConfig['type'],
+    config: BackendConfig,
+    preserveSessions = true,
+  ): void {
     const existing = Array.from(this.conversations.entries()).map(
       ([conversationId, conversation]) => ({
         conversationId,
@@ -151,11 +185,12 @@ export class AgentRuntime {
         sessionId: conversation.backend.getSessionId(),
         activeRunId: conversation.activeRunId,
         backend: conversation.backend,
+        config: conversation.config,
       }),
     )
-    this.conversations.clear()
 
     for (const previous of existing) {
+      if (previous.config.type !== backendType) continue
       if (previous.activeRunId) {
         this.onEvent?.({
           conversationId: previous.conversationId,
@@ -169,7 +204,7 @@ export class AgentRuntime {
         })
       }
       void previous.backend.destroy()
-      const conversation = this.createConversation(previous.conversationId, previous.scope)
+      const conversation = this.createConversation(previous.conversationId, previous.scope, config)
       conversation.backend.setSessionId?.(preserveSessions ? previous.sessionId : null)
       conversation.activeRunId = null
       const { conversationId } = previous
@@ -188,14 +223,22 @@ export class AgentRuntime {
     const existing = this.conversations.get(conversationId)
     if (existing) return existing
 
-    const conversation = this.createConversation(conversationId, { kind: 'all' })
+    const conversation = this.createConversation(
+      conversationId,
+      { kind: 'all' },
+      this.defaultConfig,
+    )
     this.conversations.set(conversationId, conversation)
     return conversation
   }
 
-  private createConversation(conversationId: string, scope: AgentScope): AgentConversation {
-    const backend = createBackend(this.currentConfig, this.deps)
-    const conversation: AgentConversation = { backend, scope, activeRunId: null }
+  private createConversation(
+    conversationId: string,
+    scope: AgentScope,
+    config: BackendConfig,
+  ): AgentConversation {
+    const backend = createBackend(config, this.deps)
+    const conversation: AgentConversation = { backend, config, scope, activeRunId: null }
     backend.onEvent((type, data) => {
       const runId = conversation.activeRunId
       this.onEvent?.({ conversationId, runId, type, data })

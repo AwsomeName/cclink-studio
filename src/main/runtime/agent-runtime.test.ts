@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../agent/agent-bridge', () => ({ AgentBridge: mocks.AgentBridge }))
+vi.mock('electron', () => ({
+  app: { getPath: () => '/tmp/cclink-studio-test' },
+}))
 
 import { createRuntimeState } from './app-runtime'
 import { bootstrapAgentRuntime } from './agent-runtime'

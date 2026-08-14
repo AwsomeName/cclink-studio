@@ -27,6 +27,8 @@ import type { AuthApiContract } from '../shared/ipc/auth'
 import type { CclinkApiContract } from '../shared/ipc/cclink'
 import type { RemoteApiContract } from '../shared/ipc/remote'
 import type { MediaProjectsApiContract } from '../shared/media-production/media-project-types'
+import type { MediaVideoApiContract } from '../shared/media-production/video-generation-types'
+import type { MediaRenderApiContract } from '../shared/media-production/media-render-types'
 
 export interface CCLinkStudioAPI {
   reportWorkbenchBounds: (bounds: { x: number; y: number; width: number; height: number }) => void
@@ -84,6 +86,10 @@ export interface CCLinkStudioAPI {
   scheduledTasks: ScheduledTasksApiContract
 
   mediaProjects: MediaProjectsApiContract
+
+  mediaVideo: MediaVideoApiContract
+
+  mediaRender: MediaRenderApiContract
 
   wechat: WechatApiContract
 

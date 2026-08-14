@@ -22,9 +22,10 @@ import { normalizeKeybindingOverrides } from '../../shared/keybindings'
 
 /** AppSettings 的合法 key 集合，用于过滤 IPC 传入的未知字段 */
 const SETTINGS_KEYS = new Set<string>(Object.keys(DEFAULT_SETTINGS))
-const SECRET_KEYS = new Set<string>(['apiKey', 'meshyApiKey'])
-const EMPTY_SECRETS = { apiKey: '', meshyApiKey: '' }
+const SECRET_KEYS = new Set<string>(['apiKey', 'codexApiKey', 'meshyApiKey'])
+const EMPTY_SECRETS = { apiKey: '', codexApiKey: '', meshyApiKey: '' }
 const AGENT_CREDENTIAL_ID = 'agent:default'
+const CODEX_ACP_CREDENTIAL_ID = 'agent:acp:codex'
 const MESHY_CREDENTIAL_ID = 'extension:meshy:default'
 
 /** 每个 key 的合法值集合（用于校验 IPC 传入的数据；数值/字符串字段不在此列） */
@@ -199,6 +200,7 @@ export class SettingsService {
     const secrets = this.getResolvedSecrets()
     return {
       apiKeyConfigured: secrets.apiKey.length > 0,
+      codexApiKeyConfigured: secrets.codexApiKey.length > 0,
       meshyApiKeyConfigured: secrets.meshyApiKey.length > 0,
       storageAvailable: status.status === 'ready' || status.status === 'conflict',
       migrationBlocked: this.migrationBlocked,
@@ -285,6 +287,7 @@ export class SettingsService {
   async reset(): Promise<AppSettings> {
     return this.enqueueMutation(async () => {
       await this.credentialService.removeCredential(AGENT_CREDENTIAL_ID)
+      await this.credentialService.removeCredential(CODEX_ACP_CREDENTIAL_ID)
       await this.credentialService.removeCredential(MESHY_CREDENTIAL_ID)
       this.migrationBlocked = false
       const nextStore = {
@@ -372,6 +375,8 @@ export class SettingsService {
     try {
       return {
         apiKey: this.credentialService.resolveCredential(AGENT_CREDENTIAL_ID)?.apiKey ?? '',
+        codexApiKey:
+          this.credentialService.resolveCredential(CODEX_ACP_CREDENTIAL_ID)?.apiKey ?? '',
         meshyApiKey: this.credentialService.resolveCredential(MESHY_CREDENTIAL_ID)?.apiKey ?? '',
       }
     } catch {
@@ -403,6 +408,7 @@ function normalizeAgentRoleRef(value: unknown): AgentRoleRef | null {
 function extractLegacySecrets(parsed: Record<string, unknown>): typeof EMPTY_SECRETS {
   return {
     apiKey: normalizeLegacySecret(parsed.apiKey),
+    codexApiKey: '',
     meshyApiKey: normalizeLegacySecret(parsed.meshyApiKey),
   }
 }
@@ -412,16 +418,25 @@ function normalizeLegacySecret(value: unknown): string {
 }
 
 function hasAnySecret(secrets: typeof EMPTY_SECRETS): boolean {
-  return secrets.apiKey.length > 0 || secrets.meshyApiKey.length > 0
+  return (
+    secrets.apiKey.length > 0 || secrets.codexApiKey.length > 0 || secrets.meshyApiKey.length > 0
+  )
 }
 
 function withoutSecrets(settings: AppSettings): Omit<AppSettings, SettingsSecretKey> {
-  const { apiKey: _apiKey, meshyApiKey: _meshyApiKey, ...persisted } = settings
+  const {
+    apiKey: _apiKey,
+    codexApiKey: _codexApiKey,
+    meshyApiKey: _meshyApiKey,
+    ...persisted
+  } = settings
   return persisted
 }
 
 function credentialIdFor(key: SettingsSecretKey): string {
-  return key === 'apiKey' ? AGENT_CREDENTIAL_ID : MESHY_CREDENTIAL_ID
+  if (key === 'codexApiKey') return CODEX_ACP_CREDENTIAL_ID
+  if (key === 'meshyApiKey') return MESHY_CREDENTIAL_ID
+  return AGENT_CREDENTIAL_ID
 }
 
 function normalizeModuleIds(value: unknown): string[] {

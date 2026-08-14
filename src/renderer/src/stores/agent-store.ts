@@ -18,6 +18,11 @@ import type { AgentContextUsageSnapshot, AgentStatus } from '@shared/agent-proto
 import type { AgentImageAttachment } from '@shared/ipc/agent'
 import type { WorkspaceStateSetSectionOptions } from '@shared/ipc/workspace-state'
 import {
+  DEFAULT_AGENT_RUNTIME_BINDING,
+  agentRuntimeBindingsEqual,
+  type AgentRuntimeBinding,
+} from '@shared/agent-runtime'
+import {
   agentRoleRefsEqual,
   agentSkillRefsEqual,
   type AgentRoleRef,
@@ -106,6 +111,7 @@ interface AgentState {
   createConversation: (options?: {
     surface?: ConversationSurface
     runtime?: ConversationRuntimeRef
+    runtimeBinding?: AgentRuntimeBinding
     activate?: boolean
     roleRef?: AgentRoleRef
     input?: string
@@ -119,6 +125,7 @@ interface AgentState {
   deleteConversation: (id: string) => Promise<void>
   renameConversation: (id: string, title: string) => void
   markAsWorkConversation: (id: string, runtime: ConversationRuntimeRef) => void
+  setRuntimeBinding: (binding: AgentRuntimeBinding, conversationId?: string) => boolean
   applyRoleToConversation: (roleRef: AgentRoleRef, conversationId?: string) => Promise<boolean>
   setRunConfigurationReceipt: (receipt: AgentRunConfigurationReceipt) => boolean
 
@@ -659,6 +666,36 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         ...mirrorActive(state, fresh),
       }
     }),
+
+  setRuntimeBinding: (binding, conversationId) => {
+    const id = resolveConversationId(get(), conversationId)
+    const conversation = get().conversations[id]
+    if (!conversation) return false
+    const hasStarted =
+      conversation.loading ||
+      Boolean(conversation.sessionId) ||
+      conversation.messages.some((message) => message.role === 'user')
+    if (hasStarted) return false
+    if (
+      agentRuntimeBindingsEqual(
+        conversation.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING,
+        binding,
+      )
+    )
+      return true
+    set((state) =>
+      updateConversation(state, id, (current) => ({
+        ...current,
+        runtimeBinding: binding,
+        sessionId: null,
+        sessionCompatibilityFingerprint: null,
+        contextUsage: null,
+        updatedAt: Date.now(),
+      })),
+    )
+    void persistConversationWorkspace(id)
+    return true
+  },
 
   applyRoleToConversation: async (roleRef, conversationId) => {
     const id = resolveConversationId(get(), conversationId)

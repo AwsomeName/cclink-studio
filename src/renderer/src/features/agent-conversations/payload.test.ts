@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAgentStore } from '../../stores/agent-store'
 import type { AgentMountedResource } from '../../types'
+import { createAgentConversationState } from './conversation-state'
 import {
   buildAgentSendPayload,
   MAX_FILE_RANGE_BYTES,
@@ -9,6 +10,18 @@ import {
 } from './payload'
 
 describe('buildAgentSendPayload', () => {
+  it('defaults old conversations to Claude Code and preserves explicit Codex ACP binding', () => {
+    const conversation = createAgentConversationState('runtime-thread')
+    expect(buildAgentSendPayload('hello', conversation).runtimeBinding).toEqual({
+      kind: 'claude-code',
+    })
+
+    conversation.runtimeBinding = { kind: 'acp', implementationId: 'codex-acp' }
+    expect(buildAgentSendPayload('hello', conversation).runtimeBinding).toEqual({
+      kind: 'acp',
+      implementationId: 'codex-acp',
+    })
+  })
   const sessionCompatibilityFingerprint = 'a'.repeat(64)
 
   beforeEach(() => {

@@ -31,6 +31,7 @@ const settingsUpdateSchema = z
       .string()
       .max(64)
       .regex(/^$|^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/),
+    codexAcpPath: pathString,
     defaultZoomMode: z.enum(['fit', 'manual']),
     defaultDeviceMode: z.enum(['desktop', 'mobile']),
     provider: z.enum([
@@ -84,7 +85,7 @@ const settingsUpdateSchema = z
   .strict()
   .partial()
 
-const settingsSecretKeySchema = z.enum(['apiKey', 'meshyApiKey'])
+const settingsSecretKeySchema = z.enum(['apiKey', 'codexApiKey', 'meshyApiKey'])
 const settingsSecretValueSchema = z.string().max(8192)
 const claudeRuntimeSelectionSchema = z.discriminatedUnion('source', [
   z.object({ source: z.literal('bundled') }).strict(),
@@ -104,6 +105,7 @@ const claudeRuntimeSelectionSchema = z.discriminatedUnion('source', [
 const settingsKeys = new Set<string>([
   ...settingsUpdateSchema.keyof().options,
   'apiKey',
+  'codexApiKey',
   'meshyApiKey',
 ])
 const settingsKeySchema = z.custom<keyof AppSettings>(
@@ -115,7 +117,7 @@ export function parseSettingsUpdate(value: unknown): Partial<AppSettings> {
   return settingsUpdateSchema.parse(value) as Partial<AppSettings>
 }
 
-export function parseSettingsSecretKey(value: unknown): 'apiKey' | 'meshyApiKey' {
+export function parseSettingsSecretKey(value: unknown): 'apiKey' | 'codexApiKey' | 'meshyApiKey' {
   return settingsSecretKeySchema.parse(value)
 }
 
@@ -129,4 +131,8 @@ export function parseSettingsKey(value: unknown): keyof AppSettings {
 
 export function parseClaudeRuntimeSelection(value: unknown) {
   return claudeRuntimeSelectionSchema.parse(value)
+}
+
+export function parseCodexAcpPath(value: unknown): string {
+  return pathString.parse(value)
 }

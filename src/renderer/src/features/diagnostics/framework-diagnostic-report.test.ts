@@ -99,6 +99,7 @@ describe('collectFrameworkDiagnosticReport', () => {
     expect(report).toContain('[WorkspaceStateService] project open failed')
     expect(report).toContain('[FsStore] 打开所选项目失败: EACCES')
     expect(report).toContain('Agent 会话恢复轨迹：已从框架报告排除')
+    expect(report.match(/## 上下文操作/g)).toHaveLength(1)
     expect(report).not.toContain('agent-private-log')
     expect(report).not.toContain('agent-renderer-private-log')
     expect(report).not.toContain('agent-recovery.json')
@@ -130,6 +131,92 @@ describe('collectFrameworkDiagnosticReport', () => {
     expect(report).toContain('- 采集失败：main unavailable')
     expect(report).toContain('- 采集失败：credentials unavailable')
     expect(report).toContain('- 采集失败：scheduler unavailable')
+  })
+
+  it('includes bounded diagnostics for the active browser page', async () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'browser-tab',
+          type: 'browser',
+          title: '登录',
+          icon: '🌐',
+          workspaceRef: localWorkspaceRef('/Users/alice/project'),
+        },
+      ],
+      activeTabId: 'browser-tab',
+    })
+    vi.stubGlobal('window', {
+      cclinkStudio: {
+        workspaceState: {
+          diagnostics: vi.fn().mockRejectedValue(new Error('workspace unavailable')),
+        },
+        diagnostics: {
+          getMainLogSnapshot: vi.fn().mockRejectedValue(new Error('main unavailable')),
+        },
+        credentials: {
+          getStatus: vi.fn().mockRejectedValue(new Error('credentials unavailable')),
+        },
+        scheduledTasks: {
+          getRuntimeStatus: vi.fn().mockRejectedValue(new Error('scheduler unavailable')),
+        },
+        browser: {
+          getRuntimeDiagnostics: vi.fn().mockResolvedValue({
+            requestedTabId: 'browser-tab',
+            visibleTabId: 'browser-tab',
+            visibleUrl: 'https://register.ccopyright.com.cn/login.html?token=secret',
+            visibleTitle: '登录',
+            profileId: 'profile-secret',
+            viewState: { viewMode: 'desktop', zoomMode: 'fit', zoomFactor: 1 },
+            popup: null,
+            playwrightTabId: 'browser-tab',
+            playwrightUrl: 'https://register.ccopyright.com.cn/login.html',
+            playwrightTitle: '登录',
+            bindingStatus: 'matched',
+            recentUrls: ['https://register.ccopyright.com.cn/login.html'],
+            lastClaim: {
+              status: 'succeeded',
+              timestamp: 1_786_750_000_000,
+              expectedUrl: 'https://register.ccopyright.com.cn/login.html',
+            },
+            session: null,
+            page: {
+              tabId: 'browser-tab',
+              url: 'https://register.ccopyright.com.cn/login.html',
+              title: '登录',
+              consoleErrors: [
+                {
+                  type: 'error',
+                  text: 'ReferenceError: getUrlRequest is not defined',
+                  timestamp: 1_786_750_001_000,
+                },
+              ],
+              networkIssues: [
+                {
+                  method: 'GET',
+                  url: 'https://static.ccopyright.com.cn/js/common.js?token=secret',
+                  status: 502,
+                  resourceType: 'script',
+                  timestamp: 1_786_750_000_500,
+                },
+              ],
+              suspectedChallenges: [],
+              pageTextSample: 'private page contents must not be exported',
+            },
+          }),
+        },
+      },
+    })
+
+    const report = await collectFrameworkDiagnosticReport()
+
+    expect(report).toContain('## 当前浏览器页面')
+    expect(report).toContain('页面绑定：matched')
+    expect(report).toContain('ReferenceError: getUrlRequest is not defined')
+    expect(report).toContain('GET · status:502 · https://static.ccopyright.com.cn/js/common.js')
+    expect(report).not.toContain('token=secret')
+    expect(report).not.toContain('profile-secret')
+    expect(report).not.toContain('private page contents')
   })
 
   it('includes the complete correlated capability response for an active remote workspace', async () => {

@@ -83,6 +83,8 @@ export interface AppSettings {
   claudeCodePath: string
   /** Studio 管理的 Claude Runtime 固定版本；仅在 claudeRuntimeSource=managed 时生效。 */
   claudeManagedVersion: string
+  /** Codex ACP 可执行文件路径；为空时按系统 PATH 探测。 */
+  codexAcpPath: string
   /** 新浏览器 Tab 默认缩放模式 */
   defaultZoomMode: ZoomMode
   /** 新浏览器 Tab 默认设备模式 */
@@ -98,6 +100,8 @@ export interface AppSettings {
   apiBaseUrl: string
   /** API 密钥 */
   apiKey: string
+  /** Codex ACP 专用 OpenAI API Key；只从本地凭证服务解析。 */
+  codexApiKey: string
   /** 模型名称 */
   modelName: string
 
@@ -223,6 +227,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   claudeRuntimeSource: 'system',
   claudeCodePath: '',
   claudeManagedVersion: '',
+  codexAcpPath: '',
   defaultZoomMode: 'fit',
   defaultDeviceMode: 'desktop',
 
@@ -230,6 +235,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   apiFormat: 'anthropic',
   apiBaseUrl: 'https://api.anthropic.com',
   apiKey: '',
+  codexApiKey: '',
   modelName: 'claude-sonnet-4-6',
 
   // Meshy

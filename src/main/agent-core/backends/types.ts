@@ -109,23 +109,38 @@ export interface AgentSendOptions {
 }
 
 /** 后端配置 */
-export interface BackendConfig {
-  type: 'local-claude-code'
-  /** Claude Code 配置 */
-  claudeCode?: {
-    /** Claude Code executable 绝对路径；为空时按 PATH 解析。 */
-    claudeCodePath?: string
-    /** 注入到子进程的环境变量。第一版默认交给 Claude Code 自身管理模型登录。 */
-    env?: Record<string, string>
-    /** Anthropic-compatible API base URL for the SDK subprocess. */
-    apiBaseUrl?: string
-    /** Anthropic-compatible API key for the SDK subprocess. */
-    apiKey?: string
-    /** Model name passed to the Claude Agent SDK query. */
-    modelName?: string
-    /** 获取当前工作区路径（用于把 Agent 的 cwd 绑定到工作区；空串=未选） */
-    getWorkspacePath?: () => string
-    /** 宿主产品/工具上下文标签；core 默认保持泛化，具体产品在宿主侧注入。 */
-    hostContext?: AgentHostContext
-  }
-}
+export type BackendConfig =
+  | {
+      type: 'local-claude-code'
+      /** Claude Code 配置 */
+      claudeCode?: {
+        /** Claude Code executable 绝对路径；为空时按 PATH 解析。 */
+        claudeCodePath?: string
+        /** 注入到子进程的环境变量。第一版默认交给 Claude Code 自身管理模型登录。 */
+        env?: Record<string, string>
+        /** Anthropic-compatible API base URL for the SDK subprocess. */
+        apiBaseUrl?: string
+        /** Anthropic-compatible API key for the SDK subprocess. */
+        apiKey?: string
+        /** Model name passed to the Claude Agent SDK query. */
+        modelName?: string
+        /** 获取当前工作区路径（用于把 Agent 的 cwd 绑定到工作区；空串=未选） */
+        getWorkspacePath?: () => string
+        /** 宿主产品/工具上下文标签；core 默认保持泛化，具体产品在宿主侧注入。 */
+        hostContext?: AgentHostContext
+      }
+    }
+  | {
+      type: 'local-acp'
+      acp: {
+        implementationId: 'codex-acp'
+        executablePath?: string
+        apiKey?: string
+        codexHome: string
+        expectedVersion?: string
+        getWorkspacePath?: () => string
+        requestPermission: (
+          request: import('./local-acp-backend.js').AcpPermissionDecisionRequest,
+        ) => Promise<boolean>
+      }
+    }

@@ -88,6 +88,33 @@ describe('SettingsService secrets', () => {
     expect(service.getSecretStatus().apiKeyConfigured).toBe(false)
   })
 
+  it('keeps the Codex ACP key separate from the Claude key', async () => {
+    const service = createSettingsService()
+    await service.loadState()
+
+    await service.setSecret('apiKey', 'claude-secret')
+    await service.setSecret('codexApiKey', 'codex-secret')
+
+    expect(service.getAll()).toMatchObject({ apiKey: '', codexApiKey: '' })
+    expect(service.getRuntimeSettings()).toMatchObject({
+      apiKey: 'claude-secret',
+      codexApiKey: 'codex-secret',
+    })
+    expect(service.getSecretStatus()).toMatchObject({
+      apiKeyConfigured: true,
+      codexApiKeyConfigured: true,
+    })
+    const settingsFile = await readFile(join(tempDir, 'settings.json'), 'utf-8')
+    expect(settingsFile).not.toContain('claude-secret')
+    expect(settingsFile).not.toContain('codex-secret')
+
+    await service.clearSecret('codexApiKey')
+    expect(service.getRuntimeSettings()).toMatchObject({
+      apiKey: 'claude-secret',
+      codexApiKey: '',
+    })
+  })
+
   it('preserves legacy plaintext when the credential file is damaged', async () => {
     const legacySettings = JSON.stringify(
       { provider: 'anthropic', apiKey: 'must-not-be-lost' },

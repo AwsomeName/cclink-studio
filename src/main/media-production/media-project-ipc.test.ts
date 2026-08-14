@@ -112,7 +112,13 @@ describe('registerMediaProjectIpc', () => {
       { workspacePath: '/Users/example/workspace', project },
     )
 
-    expect(proposalService.propose).toHaveBeenCalledWith(project)
+    expect(proposalService.propose).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ...project,
+        assets: [],
+        scenes: [expect.objectContaining({ ...project.scenes[0], assetId: null })],
+      }),
+    )
   })
 })
 
@@ -122,6 +128,7 @@ function createService() {
     get: vi.fn(async () => ({ success: true })),
     create: vi.fn(async () => ({ success: true })),
     save: vi.fn(async () => ({ success: true })),
+    importAsset: vi.fn(async () => ({ success: true })),
     onChanged: vi.fn(() => () => undefined),
   }
 }

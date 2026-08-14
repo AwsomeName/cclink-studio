@@ -1,6 +1,6 @@
 # ACP Runtime 最小开发方案
 
-> 状态：方案已确认，D0 开工中。
+> 状态：最小实现与统一自动化验证已完成；真实 API Key 验收待执行。
 > 最后更新：2026-08-14。
 > 相关事实源：[`agent-system.md`](./agent-system.md)、
 > [`agent-panel-product-model.md`](./agent-panel-product-model.md)、
@@ -349,11 +349,11 @@ Store 或 ACP 专用 renderer Store。只有当第二个 ACP Agent 或进程复�
 | D0 决策与真实探针   | 工程准备            | 无新增用户能力                                   | 新 ADR accepted；固定 `codex-acp@1.3.0`；stdio、权限、取消、恢复和 cwd 沙箱探针通过 |
 | M1 Codex 最小闭环   | 用户功能            | 空 Thread 选择 Codex，真实流式回答并可停止       | Claude 默认不变；API Key 隔离；进程失败独立降级                                     |
 | M2 工作空间代码任务 | 用户功能            | Codex 读取并修改当前工作空间文件，用户可拒绝权限 | workspace 边界、工具状态、取消竞态和 session 恢复通过                               |
-| M3 Studio MCP 切片  | 用户功能            | Codex 调用一个真实 Studio MCP 工具               | MCP token 只在活动 run 有效；不出现重复确认；其他工具不扩张                         |
-| M4 发布候选         | 工程准备 + 用户门禁 | packaged App 完成 M1-M3 真人验收                 | `pnpm verify`、受影响 smoke、断网/坏路径/崩溃/重启恢复通过                          |
+| M3 最小发布候选     | 工程准备 + 用户门禁 | packaged App 完成 M1-M2 真人验收                 | `pnpm verify`、受影响 smoke、断网/坏路径/崩溃/重启恢复通过                          |
 
-M1 之前不要先做自动安装；M2 之前不要扩展第二个 ACP Agent；M3 只接一个能够证明价值的
-Studio MCP 工具，不一次性迁移 Browser、Editor、Android 和数据源全部能力。
+M1 之前不要先做自动安装；M2 之前不要扩展第二个 ACP Agent。Studio MCP 接入不属于首版最小
+闭环：Codex 先使用自身 ACP 工具完成工作空间任务。后续只有出现明确的 Studio 专有工具需求，才以
+单工具切片另开评审，不能一次性迁移 Browser、Editor、Android 和数据源能力。
 
 ### 12.1 D0 当前证据
 
@@ -363,8 +363,23 @@ Studio MCP 工具，不一次性迁移 Browser、Editor、Android 和数据源�
   发起模型请求。
 - 2026-08-14 已真实通过 `1.3.0` 的版本、stdio、ACP v1 `initialize`、agent identity、
   API Key auth method、session resume capability 和浏览器登录隐藏检查。
-- 当前开发环境没有 `CCLINK_ACP_SMOKE_API_KEY`，因此 prompt、cancel、permission、workspace
-  外写入拒绝和 session resume 的 live 门禁尚未执行。D0 仍为进行中，不能据此进入 M1。
+- 自动化已用受控假 ACP 进程覆盖 stdio、Session、文本、工具事件、一次性权限和取消，不需要
+  API Key，也不会产生费用。
+- 真实 prompt、工作空间写入、权限拒绝和进程重启后的 Session resume 按用户要求统一放到最后，
+  只使用显式提供的 `CCLINK_ACP_SMOKE_API_KEY`；在这一步完成前不宣称真人闭环通过。
+
+### 12.2 当前实现结果
+
+- 新 Thread 和旧 Thread 都默认绑定 Claude Code；只有空 Thread 能选择 Codex ACP，发送首条消息
+  后锁定。
+- Codex ACP 路径和独立 API Key 已进入设置页；Key 只保存在现有本地凭证文件中，不进入普通
+  settings、renderer 或日志。
+- `LocalAcpBackend` 已完成固定版本探测、隔离环境、ACP initialize/auth、Session 新建/恢复、文本
+  与工具事件、一次性权限、取消和子进程清理。
+- ACP 使用新增的 `studio-agent-event-v1` 中性事件；Claude Code 原事件路径没有改写。
+- ACP 配置错误或进程失败只终止对应 Thread；Agent 启动仍以 Claude Code 为必备基线。
+- 2026-08-14 已通过 `pnpm verify`（259 个测试文件、1459 个测试通过、2 个跳过）、生产构建、
+  `git diff --check` 和 `pnpm smoke:acp-runtime`；尚未使用真实 API Key 发起付费模型请求。
 
 ## 13. 测试与失败矩阵
 
@@ -408,7 +423,7 @@ Studio MCP 工具，不一次性迁移 Browser、Editor、Android 和数据源�
 | 恢复、错误、诊断和自动化                | 3-5 人日 |
 | 真实 App 验收与缺陷修复                 | 2-4 人日 |
 
-M1-M2 合计约 13-22 人日，单人约 3-5 周。M3 Studio MCP 切片预计另需 3-5 人日。自动安装、
+M1-M2 原估算约 13-22 人日，单人约 3-5 周。Studio MCP 切片预计另需 3-5 人日。自动安装、
 ChatGPT 登录、第二 ACP Agent 和公共 Registry 不计入本估算。
 
 ## 15. 止损与替代路径
@@ -440,6 +455,6 @@ D0 出现以下任一结果时，不继续 ACP 实现：
 7. 是否在首个闭环前加入自动安装、ChatGPT 登录、远程 ACP、第二 Agent 或公共 Registry？出现
    任一项都应执行范围止损。
 
-下一步只做 D0：新增替代 ADR，并用固定版本 `codex-acp@1.3.0` 完成不接 UI 的真实协议探针。
-D0 通过
-后再开始 `LocalAcpBackend`；D0 失败则转为 Codex App Server 专用 backend 评估。
+下一步只做真实应用验收，不扩张 Runtime Registry、自动安装、Studio MCP 或第二个 ACP Agent。
+真实验收失败时先修最小闭环；只有协议本身无法满足权限、取消或 Session 恢复时，才转为 Codex
+App Server 专用 backend 评估。

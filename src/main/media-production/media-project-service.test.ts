@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 import { MediaProjectService } from './media-project-service'
+import { MediaAssetService } from './media-asset-service'
 
 let tempDirectory = ''
 let workspacePath = ''
@@ -140,6 +141,63 @@ describe('MediaProjectService', () => {
         { id: second.project.id, aspectRatio: '16:9' },
         { id: first.project.id, aspectRatio: '9:16' },
       ],
+    })
+  })
+
+  it('copies a local asset into the project and persists a valid scene binding', async () => {
+    const workspaceState = createWorkspaceStateService()
+    const assetService = new MediaAssetService(workspaceState, () => 1_000)
+    const service = new MediaProjectService(workspaceState, () => 1_000, assetService)
+    const created = await service.create(createInput())
+    if (!created.success) throw new Error('fixture creation failed')
+    const assetSource = join(tempDirectory, 'cover.png')
+    await writeFile(assetSource, Buffer.from('fake-png'))
+
+    const imported = await assetService.importAsset({
+      workspacePath,
+      projectId: created.project.id,
+      sourcePath: assetSource,
+    })
+
+    expect(imported).toMatchObject({
+      success: true,
+      asset: {
+        kind: 'image',
+        source: 'local-import',
+        fileName: 'cover.png',
+        sizeBytes: 8,
+        sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+      },
+    })
+    if (!imported.success) return
+    expect(await readFile(imported.asset.path, 'utf-8')).toBe('fake-png')
+    const duplicate = await assetService.importAsset({
+      workspacePath,
+      projectId: created.project.id,
+      sourcePath: assetSource,
+    })
+    expect(duplicate).toMatchObject({ success: true, asset: { id: imported.asset.id } })
+    const saved = await service.save({
+      workspacePath,
+      expectedRevision: 1,
+      project: {
+        ...created.project,
+        assets: [imported.asset],
+        scenes: created.project.scenes.map((scene, index) =>
+          index === 0
+            ? { ...scene, assetId: imported.asset.id, materialKind: 'workspace' as const }
+            : scene,
+        ),
+      },
+    })
+    if (!saved.success) throw new Error(JSON.stringify(saved.error))
+    expect(saved.project).toMatchObject({
+      revision: 2,
+      assets: [{ id: imported.asset.id }],
+    })
+    expect(saved.project.scenes[0]).toMatchObject({
+      assetId: imported.asset.id,
+      materialKind: 'workspace',
     })
   })
 })

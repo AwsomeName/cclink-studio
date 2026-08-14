@@ -1,6 +1,10 @@
 import { bindIpcParser, defineIpcCall, ipcArgs } from '../ipc/contract'
 import {
   parseCreateMediaProjectInput,
+  parseImportMediaProjectAssetInput,
+  parseGenerateMediaSceneImageInput,
+  parseSearchMediaAssetsInput,
+  parseAddMediaSearchCandidateInput,
   parseMediaProjectId,
   parseMediaWorkspacePath,
   parseProposeMediaStoryboardInput,
@@ -8,6 +12,13 @@ import {
 } from './media-project-schema'
 import type {
   CreateMediaProjectInput,
+  ImportMediaProjectAssetInput,
+  GenerateMediaSceneImageInput,
+  SearchMediaAssetsInput,
+  AddMediaSearchCandidateInput,
+  MediaImageProviderStatusResult,
+  MediaSearchResult,
+  MediaProjectAssetImportResult,
   MediaProjectListResult,
   MediaProjectOperationResult,
   MediaProjectsApiContract,
@@ -25,6 +36,21 @@ export const mediaProjectsIpc = {
   save: defineIpcCall<[SaveMediaProjectInput], MediaProjectOperationResult>('mediaProjects:save'),
   proposeStoryboard: defineIpcCall<[ProposeMediaStoryboardInput], MediaStoryboardProposalResult>(
     'mediaProjects:proposeStoryboard',
+  ),
+  importAsset: defineIpcCall<[ImportMediaProjectAssetInput], MediaProjectAssetImportResult>(
+    'mediaProjects:importAsset',
+  ),
+  getImageProviders: defineIpcCall<[], MediaImageProviderStatusResult>(
+    'mediaProjects:getImageProviders',
+  ),
+  generateSceneImage: defineIpcCall<[GenerateMediaSceneImageInput], MediaProjectAssetImportResult>(
+    'mediaProjects:generateSceneImage',
+  ),
+  searchAssets: defineIpcCall<[SearchMediaAssetsInput], MediaSearchResult>(
+    'mediaProjects:searchAssets',
+  ),
+  addSearchCandidate: defineIpcCall<[AddMediaSearchCandidateInput], MediaProjectAssetImportResult>(
+    'mediaProjects:addSearchCandidate',
   ),
 } as const
 
@@ -57,6 +83,35 @@ const invalidProposal = async (error: unknown): Promise<MediaStoryboardProposalR
     code: 'MEDIA_PROJECT_INVALID',
     message: error instanceof Error ? error.message : '生成分镜提案参数无效',
     recovery: '检查工程内容后重试',
+  },
+})
+
+const invalidAssetImport = async (error: unknown): Promise<MediaProjectAssetImportResult> => ({
+  success: false,
+  error: {
+    code: 'MEDIA_PROJECT_INVALID',
+    message: error instanceof Error ? error.message : '导入素材参数无效',
+    recovery: '重新选择本地图片或视频后重试',
+  },
+})
+
+const invalidImageProviders = async (): Promise<MediaImageProviderStatusResult> => ({
+  success: false,
+  providers: [],
+  error: {
+    code: 'MEDIA_PROJECT_INVALID',
+    message: '图片 Provider 状态请求无效',
+  },
+})
+
+const invalidSearch = async (error: unknown): Promise<MediaSearchResult> => ({
+  success: false,
+  provider: 'pexels',
+  configured: false,
+  candidates: [],
+  error: {
+    code: 'MEDIA_PROJECT_INVALID',
+    message: error instanceof Error ? error.message : '素材搜索参数无效',
   },
 })
 
@@ -100,6 +155,46 @@ export const mediaProjectsIpcContracts = {
       return ipcArgs(parseProposeMediaStoryboardInput(args[0]))
     },
     invalidProposal,
+  ),
+  importAsset: bindIpcParser(
+    mediaProjectsIpc.importAsset,
+    (args) => {
+      requireArgs(args, 1, mediaProjectsIpc.importAsset.channel)
+      return ipcArgs(parseImportMediaProjectAssetInput(args[0]))
+    },
+    invalidAssetImport,
+  ),
+  getImageProviders: bindIpcParser(
+    mediaProjectsIpc.getImageProviders,
+    (args) => {
+      requireArgs(args, 0, mediaProjectsIpc.getImageProviders.channel)
+      return ipcArgs()
+    },
+    invalidImageProviders,
+  ),
+  generateSceneImage: bindIpcParser(
+    mediaProjectsIpc.generateSceneImage,
+    (args) => {
+      requireArgs(args, 1, mediaProjectsIpc.generateSceneImage.channel)
+      return ipcArgs(parseGenerateMediaSceneImageInput(args[0]))
+    },
+    invalidAssetImport,
+  ),
+  searchAssets: bindIpcParser(
+    mediaProjectsIpc.searchAssets,
+    (args) => {
+      requireArgs(args, 1, mediaProjectsIpc.searchAssets.channel)
+      return ipcArgs(parseSearchMediaAssetsInput(args[0]))
+    },
+    invalidSearch,
+  ),
+  addSearchCandidate: bindIpcParser(
+    mediaProjectsIpc.addSearchCandidate,
+    (args) => {
+      requireArgs(args, 1, mediaProjectsIpc.addSearchCandidate.channel)
+      return ipcArgs(parseAddMediaSearchCandidateInput(args[0]))
+    },
+    invalidAssetImport,
   ),
 } as const
 

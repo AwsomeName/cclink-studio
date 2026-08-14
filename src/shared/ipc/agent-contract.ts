@@ -20,6 +20,7 @@ import {
   agentRoleDraftSchema,
   agentRoleRefSchema,
   agentScopeSchema,
+  agentRuntimeBindingSchema,
   agentSkillRefsSchema,
   agentSendMessageInputSchema,
   agentToolModuleIdSchema,
@@ -94,8 +95,8 @@ export const agentIpcContracts = {
   getScope: bindOptionalConversation(agentIpc.getScope),
   resetSession: bindOptionalConversation(agentIpc.resetSession),
   restoreConversation: bindIpcParser(agentIpc.restoreConversation, (args) => {
-    if (args.length < 3 || args.length > 5) {
-      throw new Error(`IPC ${agentIpc.restoreConversation.channel} 需要 3 至 5 个参数`)
+    if (args.length < 3 || args.length > 6) {
+      throw new Error(`IPC ${agentIpc.restoreConversation.channel} 需要 3 至 6 个参数`)
     }
     return ipcArgs(
       agentConversationIdSchema.parse(args[0]),
@@ -104,7 +105,8 @@ export const agentIpcContracts = {
       args.length >= 4
         ? nullableAgentSessionCompatibilityFingerprintSchema.parse(args[3])
         : undefined,
-      args.length === 5 ? agentSkillRefsSchema.parse(args[4]) : undefined,
+      args.length >= 5 ? agentSkillRefsSchema.parse(args[4]) : undefined,
+      args.length === 6 ? agentRuntimeBindingSchema.parse(args[5]) : undefined,
     )
   }),
   listRoles: bindNoArgsIpc(agentIpc.listRoles),

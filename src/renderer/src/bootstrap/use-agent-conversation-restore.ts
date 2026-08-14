@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAgentStore, type AgentConversationState } from '../stores/agent-store'
 import type { AgentConversationConfiguration, AgentSkillRef } from '@shared/agent-role'
+import { DEFAULT_AGENT_RUNTIME_BINDING, type AgentRuntimeBinding } from '@shared/agent-runtime'
 
 export function collectRestorableAgentSessions(
   conversations: Record<string, AgentConversationState>,
@@ -11,6 +12,7 @@ export function collectRestorableAgentSessions(
   sessionCompatibilityFingerprint: string
   configuration: AgentConversationConfiguration
   skills: AgentSkillRef[]
+  runtimeBinding: AgentRuntimeBinding
 }> {
   return conversationOrder.flatMap((conversationId) => {
     const conversation = conversations[conversationId]
@@ -24,6 +26,7 @@ export function collectRestorableAgentSessions(
             sessionCompatibilityFingerprint: conversation.sessionCompatibilityFingerprint,
             configuration: conversation.configuration,
             skills: conversation.mountedSkills,
+            runtimeBinding: conversation.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING,
           },
         ]
       : []
@@ -49,7 +52,11 @@ export function useAgentConversationRestore(enabled: boolean): void {
 
     for (const session of sessions) {
       const skillKey = session.skills.map((skill) => `${skill.skillId}@${skill.version}`).join(',')
-      const restoreKey = `${session.sessionId}:${session.sessionCompatibilityFingerprint}:${session.configuration.roleRef.roleId}@${session.configuration.roleRef.version}:${session.configuration.revision}:${skillKey}`
+      const runtimeKey =
+        session.runtimeBinding.kind === 'acp'
+          ? `acp:${session.runtimeBinding.implementationId}`
+          : 'claude-code'
+      const restoreKey = `${session.sessionId}:${session.sessionCompatibilityFingerprint}:${session.configuration.roleRef.roleId}@${session.configuration.roleRef.version}:${session.configuration.revision}:${skillKey}:${runtimeKey}`
       if (restoredSessionsRef.current.get(session.conversationId) === restoreKey) continue
       restoredSessionsRef.current.set(session.conversationId, restoreKey)
       void window.cclinkStudio.agent
@@ -59,6 +66,7 @@ export function useAgentConversationRestore(enabled: boolean): void {
           session.configuration,
           session.sessionCompatibilityFingerprint,
           session.skills,
+          session.runtimeBinding,
         )
         .catch(() => {
           if (restoredSessionsRef.current.get(session.conversationId) === restoreKey) {

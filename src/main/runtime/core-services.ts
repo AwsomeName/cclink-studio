@@ -53,6 +53,14 @@ import { AgentRoleRegistry } from '../agent/agent-role-registry'
 import { MediaProjectService } from '../media-production/media-project-service'
 import { registerMediaProjectIpc } from '../media-production/media-project-ipc'
 import { StoryboardProposalService } from '../media-production/storyboard-proposal-service'
+import { MediaAssetService } from '../media-production/media-asset-service'
+import { MediaImageGenerationService } from '../media-production/media-image-generation-service'
+import { MediaSearchService } from '../media-production/media-search-service'
+import { JimengVideoProvider } from '../media-production/providers/jimeng-video-provider'
+import { VideoGenerationService } from '../media-production/video-generation-service'
+import { registerVideoGenerationIpc } from '../media-production/video-generation-ipc'
+import { MediaRenderService } from '../media-production/media-render-service'
+import { registerMediaRenderIpc } from '../media-production/media-render-ipc'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   try {
@@ -105,10 +113,32 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
   await runtime.scheduledTaskService.load()
   console.log('[CCLink Studio] 定时任务定义与本机启用状态已初始化（尚未启动调度）')
 
-  runtime.mediaProjectService = new MediaProjectService(runtime.workspaceStateService)
+  runtime.mediaAssetService = new MediaAssetService(runtime.workspaceStateService)
+  runtime.mediaProjectService = new MediaProjectService(
+    runtime.workspaceStateService,
+    Date.now,
+    runtime.mediaAssetService,
+  )
   console.log('[CCLink Studio] 宣发视频工程服务已初始化')
 
   runtime.usageLedgerService = new UsageLedgerService()
+  runtime.videoGenerationService = new VideoGenerationService(
+    runtime.mediaProjectService,
+    runtime.mediaAssetService,
+    new JimengVideoProvider(() => {
+      try {
+        const credential = runtime.credentialService?.resolveCredential('extension:jimeng:default')
+        return {
+          accessKeyId: credential?.accessKeyId ?? '',
+          secretAccessKey: credential?.secretAccessKey ?? '',
+        }
+      } catch {
+        return { accessKeyId: '', secretAccessKey: '' }
+      }
+    }),
+    () => runtime.usageLedgerService,
+  )
+  runtime.mediaRenderService = new MediaRenderService(runtime.mediaProjectService)
   console.log('[CCLink Studio] 用量统计服务已初始化')
 }
 
@@ -117,12 +147,18 @@ export async function shutdownStateServices(runtime: CclinkStudioRuntimeState): 
   runtime.mediaProjectIpcUnsubscribe = null
   await runShutdownStep('ScheduledTaskService', () => runtime.scheduledTaskService?.flush())
   await runShutdownStep('MediaProjectService', () => runtime.mediaProjectService?.flush())
+  await runShutdownStep('MediaAssetService', () => runtime.mediaAssetService?.flush())
+  await runShutdownStep('VideoGenerationService', () => runtime.videoGenerationService?.flush())
+  await runShutdownStep('MediaRenderService', () => runtime.mediaRenderService?.flush())
   await runShutdownStep('WorkspaceStateService', () => runtime.workspaceStateService?.flush())
   await runShutdownStep('UsageLedgerService', () => runtime.usageLedgerService?.flush())
   await runShutdownStep('AgentRoleRegistry', () => runtime.agentRoleRegistry?.flush())
   runtime.workspaceStateService = null
   runtime.scheduledTaskService = null
   runtime.mediaProjectService = null
+  runtime.mediaAssetService = null
+  runtime.videoGenerationService = null
+  runtime.mediaRenderService = null
   runtime.usageLedgerService = null
   runtime.settingsService = null
   runtime.credentialService = null
@@ -162,8 +198,30 @@ export async function bootstrapMainProcessServices(
     runtime.trustedRendererGuard,
     runtime.mainWindow,
     new StoryboardProposalService(() => runtime.agentBridge),
+    runtime.mediaAssetService!,
+    new MediaImageGenerationService(
+      runtime.mediaProjectService!,
+      runtime.mediaAssetService!,
+      () => runtime.imageGenerationService,
+      () => runtime.usageLedgerService,
+    ),
+    new MediaSearchService(runtime.mediaAssetService!, () => {
+      try {
+        return (
+          runtime.credentialService?.resolveCredential('extension:pexels:default')?.apiKey ?? ''
+        )
+      } catch {
+        return ''
+      }
+    }),
   )
   console.log('[CCLink Studio] 宣发视频工程 IPC 已注册')
+
+  registerVideoGenerationIpc(runtime.videoGenerationService!, runtime.trustedRendererGuard)
+  console.log('[CCLink Studio] 宣发视频云端任务 IPC 已注册')
+
+  registerMediaRenderIpc(runtime.mediaRenderService!, runtime.trustedRendererGuard)
+  console.log('[CCLink Studio] 宣发视频本地渲染 IPC 已注册')
 
   registerDiagnosticsIpc(runtime.trustedRendererGuard)
   console.log('[CCLink Studio] 诊断日志 IPC 已注册')

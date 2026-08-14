@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { AgentBridge } from '../agent/agent-bridge'
 import type {
   MediaProject,
@@ -48,6 +48,7 @@ export class StoryboardProposalService {
         id: randomUUID(),
         projectId: project.id,
         baseRevision: project.revision,
+        sourceSnapshotSha256: createHash('sha256').update(project.source.snapshot).digest('hex'),
         title: output.title,
         scenes: output.scenes.map((scene, order) => ({
           ...scene,

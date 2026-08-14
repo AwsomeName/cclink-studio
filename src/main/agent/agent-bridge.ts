@@ -8,7 +8,7 @@
  */
 
 import type { BrowserWindow } from 'electron'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { PermissionManager } from '../mcp/permission'
 import type { IAgentBackend, BackendConfig, AgentSendOptions } from './backend/types'
 import {
@@ -34,6 +34,13 @@ import type {
 import { agentIpcEvents } from '../../shared/ipc/agent'
 import { SessionDiagnosticReferenceStore } from './session-diagnostic-reference-store'
 import type { ClaudeRuntimeProvenance } from '../../shared/claude-runtime'
+import {
+  DEFAULT_AGENT_RUNTIME_BINDING,
+  agentRuntimeBindingsEqual,
+  normalizeAgentRuntimeBinding,
+  type AgentRuntimeBinding,
+} from '../../shared/agent-runtime'
+import { CODEX_ACP_EXPECTED_VERSION } from '../agent-core/backends/local-acp-backend'
 import type { UsageLedgerService } from '../usage/usage-ledger-service'
 import { managedClaudeIsolationEnvironment } from './managed-claude-environment'
 import {
@@ -71,6 +78,10 @@ export interface AgentBridgeOptions {
   sessionCompatibilityFingerprint?: string
   /** 已解析运行时的安全诊断投影，不包含绝对路径。 */
   runtimeProvenance?: ClaudeRuntimeProvenance
+  /** 可选的 Codex ACP runtime；不会参与 Studio 启动门禁。 */
+  codexAcpPath?: string
+  codexApiKey?: string
+  codexHome?: string
   /** API 格式（当前本地 Agent 路径使用 Anthropic-compatible 配置） */
   apiFormat?: 'anthropic' | 'openai'
   /** API 基础地址（Anthropic 格式时注入为 ANTHROPIC_BASE_URL） */
@@ -107,6 +118,7 @@ export class AgentBridge {
   private readonly skillRegistry = new BuiltinAgentSkillRegistry()
   private readonly conversationConfigurations = new Map<string, AgentConversationConfiguration>()
   private readonly conversationSkills = new Map<string, BuiltinAgentSkill[]>()
+  private readonly conversationRuntimeBindings = new Map<string, AgentRuntimeBinding>()
   private readonly deps: {
     playwrightBridge: PlaywrightBridge | null
     toolHost: McpToolHost
@@ -119,9 +131,12 @@ export class AgentBridge {
     usageLedgerService?: UsageLedgerService
   }
   private readonly getWorkspacePath?: () => string
+  private readonly codexHome: string
   private configurationChangePending = false
   private sessionCompatibilityFingerprint: string | null
   private runtimeProvenance: ClaudeRuntimeProvenance | null
+  private defaultClaudeConfig: Extract<BackendConfig, { type: 'local-claude-code' }>
+  private acpConfig: Extract<BackendConfig, { type: 'local-acp' }>
   private readonly runtimeListeners = new Set<(event: AgentRuntimeEvent) => void>()
   private readonly rendererSuppressedConversationIds = new Set<string>()
   constructor(
@@ -148,11 +163,14 @@ export class AgentBridge {
       usageLedgerService: options?.usageLedgerService,
     }
     this.getWorkspacePath = options?.getWorkspacePath
+    this.codexHome = options?.codexHome ?? ''
     this.sessionCompatibilityFingerprint = options?.sessionCompatibilityFingerprint ?? null
     this.runtimeProvenance = options?.runtimeProvenance ?? null
+    this.defaultClaudeConfig = this.buildBackendConfig(options)
+    this.acpConfig = this.buildAcpBackendConfig(options)
 
     this.runtime = new AgentRuntime({
-      config: this.buildBackendConfig(options),
+      config: this.defaultClaudeConfig,
       deps: {
         playwrightBridge: playwrightBridge ?? { getPage: () => null },
         toolHost,
@@ -170,7 +188,9 @@ export class AgentBridge {
    * M9 开源底座只创建本机 Claude Code 后端。
    * provider/apiFormat/apiKey 字段暂保留旧设置兼容，但不再决定后端能力。
    */
-  private buildBackendConfig(options?: AgentBridgeOptions): BackendConfig {
+  private buildBackendConfig(
+    options?: AgentBridgeOptions,
+  ): Extract<BackendConfig, { type: 'local-claude-code' }> {
     return {
       type: 'local-claude-code',
       claudeCode: {
@@ -198,6 +218,24 @@ export class AgentBridge {
     }
   }
 
+  private buildAcpBackendConfig(
+    options?: Pick<AgentBridgeOptions, 'codexAcpPath' | 'codexApiKey' | 'codexHome'>,
+  ): Extract<BackendConfig, { type: 'local-acp' }> {
+    return {
+      type: 'local-acp',
+      acp: {
+        implementationId: 'codex-acp',
+        executablePath: options?.codexAcpPath,
+        apiKey: options?.codexApiKey,
+        codexHome: options?.codexHome ?? this.codexHome,
+        expectedVersion: CODEX_ACP_EXPECTED_VERSION,
+        getWorkspacePath: this.getWorkspacePath,
+        requestPermission: (request) =>
+          this.permissionManager.requestConfirmation({ ...request, allowAlways: false }),
+      },
+    }
+  }
+
   /** 发送用户消息 */
   async sendMessage(
     message: string,
@@ -207,6 +245,7 @@ export class AgentBridge {
     if (this.configurationChangePending) {
       throw new Error('Agent 配置正在切换，请稍后重试')
     }
+    this.bindConversationRuntime(conversationId, context?.runtimeBinding)
     const binding = this.bindConversationConfiguration(conversationId, context?.configuration)
     const resolvedSkills = this.bindConversationSkills(conversationId, context?.skills ?? [])
     let runtimeSessionMode: AgentRunConfigurationReceipt['runtimeSessionMode'] = 'new'
@@ -387,6 +426,9 @@ export class AgentBridge {
     conversationId: string,
     payload: AgentCompactConversationPayload,
   ): Promise<void> {
+    if (this.getConversationRuntimeBinding(conversationId).kind === 'acp') {
+      throw new Error('Codex ACP 暂不支持手动压缩上下文')
+    }
     if (this.isBusy(conversationId)) throw new Error('Agent 正在响应中，暂时不能压缩上下文')
     const binding = this.bindConversationConfiguration(conversationId, payload.configuration)
     const sessionId = payload.sessionId.trim()
@@ -494,6 +536,7 @@ export class AgentBridge {
     busy: boolean
     runId: string | null
     sessionId: string | null
+    runtimeBinding: AgentRuntimeBinding
     sessionCompatibilityFingerprint: string | null
     runtimeProvenance: ClaudeRuntimeProvenance | null
     conversationConfiguration: AgentConversationConfiguration
@@ -506,14 +549,18 @@ export class AgentBridge {
     return {
       ...status,
       busy: this.runtime.isBusy(conversationId),
+      runtimeBinding: this.getConversationRuntimeBinding(conversationId),
       sessionCompatibilityFingerprint: this.roleRegistry.buildConversationCompatibilityFingerprint(
-        this.sessionCompatibilityFingerprint,
+        this.getRuntimeCompatibilityFingerprint(conversationId),
         conversationConfiguration.roleRef,
         conversationConfiguration.revision,
       ),
       conversationConfiguration,
       profilePromptCompilerVersion: AGENT_PROFILE_PROMPT_COMPILER_VERSION,
-      runtimeProvenance: this.runtimeProvenance,
+      runtimeProvenance:
+        this.getConversationRuntimeBinding(conversationId).kind === 'claude-code'
+          ? this.runtimeProvenance
+          : null,
       sessionRef: this.getSessionDiagnosticRef(status.sessionId),
       ready: true,
     }
@@ -555,7 +602,9 @@ export class AgentBridge {
     configuration: AgentConversationConfiguration,
     sessionCompatibilityFingerprint?: string | null,
     skills: AgentSkillRef[] = [],
+    runtimeBinding?: AgentRuntimeBinding,
   ): void {
+    this.bindConversationRuntime(conversationId, runtimeBinding)
     this.bindConversationConfiguration(conversationId, configuration)
     this.bindConversationSkills(conversationId, skills)
     this.runtime.restoreConversation(
@@ -580,6 +629,7 @@ export class AgentBridge {
     await this.runtime.closeConversation(conversationId)
     this.conversationConfigurations.delete(conversationId)
     this.conversationSkills.delete(conversationId)
+    this.conversationRuntimeBindings.delete(conversationId)
   }
 
   /**
@@ -693,6 +743,9 @@ export class AgentBridge {
       apiBaseUrl?: string
       apiKey?: string
       modelName?: string
+      codexAcpPath?: string
+      codexApiKey?: string
+      codexHome?: string
       sessionCompatibilityFingerprint?: string
       runtimeProvenance?: ClaudeRuntimeProvenance
     },
@@ -706,12 +759,16 @@ export class AgentBridge {
       modelName: apiSettings.modelName,
       runtimeProvenance: apiSettings.runtimeProvenance,
     })
+    this.defaultClaudeConfig = config
     const nextFingerprint = apiSettings.sessionCompatibilityFingerprint ?? null
     const preserveSessions =
       options?.forceResetSessions !== true &&
       this.sessionCompatibilityFingerprint !== null &&
       this.sessionCompatibilityFingerprint === nextFingerprint
     this.switchBackend(config, preserveSessions)
+    const nextAcpConfig = this.buildAcpBackendConfig(apiSettings)
+    this.runtime.reconfigureBackendType('local-acp', nextAcpConfig, false)
+    this.acpConfig = nextAcpConfig
     this.sessionCompatibilityFingerprint = nextFingerprint
     this.runtimeProvenance = apiSettings.runtimeProvenance ?? null
   }
@@ -726,6 +783,7 @@ export class AgentBridge {
     this.rendererSuppressedConversationIds.clear()
     this.conversationConfigurations.clear()
     this.conversationSkills.clear()
+    this.conversationRuntimeBindings.clear()
   }
 
   private handleRuntimeEvent(event: AgentRuntimeEvent): void {
@@ -915,6 +973,44 @@ export class AgentBridge {
     )
   }
 
+  private bindConversationRuntime(
+    conversationId: string,
+    requestedBinding?: AgentRuntimeBinding,
+  ): AgentRuntimeBinding {
+    const binding = normalizeAgentRuntimeBinding(
+      requestedBinding ?? this.conversationRuntimeBindings.get(conversationId),
+    )
+    const current = this.conversationRuntimeBindings.get(conversationId)
+    if (current && !agentRuntimeBindingsEqual(current, binding)) {
+      throw new Error('已有 Thread 不能切换 Agent runtime，请新建 Thread')
+    }
+    this.runtime.bindConversationBackend(
+      conversationId,
+      binding.kind === 'acp' ? this.acpConfig : this.buildBackendConfigFromCurrentClaude(),
+    )
+    this.conversationRuntimeBindings.set(conversationId, binding)
+    return binding
+  }
+
+  private buildBackendConfigFromCurrentClaude(): Extract<
+    BackendConfig,
+    { type: 'local-claude-code' }
+  > {
+    return this.defaultClaudeConfig
+  }
+
+  private getConversationRuntimeBinding(conversationId: string): AgentRuntimeBinding {
+    return this.conversationRuntimeBindings.get(conversationId) ?? DEFAULT_AGENT_RUNTIME_BINDING
+  }
+
+  private getRuntimeCompatibilityFingerprint(conversationId: string): string | null {
+    const binding = this.getConversationRuntimeBinding(conversationId)
+    if (binding.kind === 'claude-code') return this.sessionCompatibilityFingerprint
+    return createHash('sha256')
+      .update(`local-acp|${binding.implementationId}|${CODEX_ACP_EXPECTED_VERSION}|protocol-1`)
+      .digest('hex')
+  }
+
   private bindConversationConfiguration(
     conversationId: string,
     configuration: AgentConversationConfiguration | null | undefined,
@@ -970,7 +1066,7 @@ export class AgentBridge {
     const configuration = this.getConversationConfiguration(conversationId)
     const skills = this.conversationSkills.get(conversationId) ?? []
     return this.roleRegistry.buildConversationCompatibilityFingerprint(
-      this.sessionCompatibilityFingerprint,
+      this.getRuntimeCompatibilityFingerprint(conversationId),
       configuration.roleRef,
       configuration.revision,
       skills.map((skill) => `${skill.skillId}@${skill.version}:${skill.contentHash}`),

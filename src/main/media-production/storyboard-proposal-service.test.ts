@@ -60,6 +60,7 @@ describe('StoryboardProposalService', () => {
       proposal: {
         projectId: PROJECT.id,
         baseRevision: 3,
+        sourceSnapshotSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
         title: '新产品发布',
         createdAt: 123,
         scenes: [

@@ -29,10 +29,11 @@ export interface SettingsOperationResult {
   settings?: AppSettings
 }
 
-export type SettingsSecretKey = 'apiKey' | 'meshyApiKey'
+export type SettingsSecretKey = 'apiKey' | 'codexApiKey' | 'meshyApiKey'
 
 export interface SettingsSecretStatus {
   apiKeyConfigured: boolean
+  codexApiKeyConfigured: boolean
   meshyApiKeyConfigured: boolean
   storageAvailable: boolean
   migrationBlocked: boolean
@@ -50,6 +51,12 @@ export interface ClaudeCodeStatus {
   path: string | null
   source: 'bundled' | 'configured' | 'known-path' | 'shell-path' | 'spawn-path' | 'not-found'
   error?: string
+}
+
+export interface CodexAcpProbeOperationResult {
+  success: boolean
+  error?: string
+  result?: { executable: string; version: string }
 }
 
 export interface ClaudeRuntimeStatusResult {
@@ -119,6 +126,7 @@ export interface SettingsApiContract {
   testClaudeModelConnection(
     selection: ClaudeRuntimeSelection,
   ): Promise<ClaudeModelConnectionTestOperationResult>
+  probeCodexAcp(path: string): Promise<CodexAcpProbeOperationResult>
 }
 
 export const settingsIpc = {
@@ -144,4 +152,5 @@ export const settingsIpc = {
     [ClaudeRuntimeSelection],
     ClaudeModelConnectionTestOperationResult
   >('settings:testClaudeModelConnection'),
+  probeCodexAcp: defineIpcCall<[string], CodexAcpProbeOperationResult>('settings:probeCodexAcp'),
 } as const

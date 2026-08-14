@@ -127,6 +127,31 @@ export interface ClaudeResultEventData {
   total_cost_usd: number
 }
 
+export interface StudioAgentStreamEventData {
+  protocol: 'studio-agent-event-v1'
+  conversationId?: string
+  runId?: string
+  sessionCompatibilityFingerprint?: string | null
+  event: {
+    type: 'session' | 'text-delta' | 'thought-delta' | 'tool' | 'notice'
+    [key: string]: unknown
+  }
+}
+
+export interface StudioAgentResultEventData {
+  protocol: 'studio-agent-event-v1'
+  conversationId?: string
+  runId?: string
+  sessionCompatibilityFingerprint?: string | null
+  result?: string
+  session_id?: string
+  is_error?: boolean
+  event: {
+    type: 'complete'
+    [key: string]: unknown
+  }
+}
+
 export type AgentScope =
   | { kind: 'all' }
   | { kind: 'android' }
@@ -213,6 +238,7 @@ export interface AgentStatus {
   /** 当前正在执行的运行实例。 */
   runId?: string | null
   sessionId: string | null
+  runtimeBinding?: import('./agent-runtime').AgentRuntimeBinding
   /** Runtime/API/model identity that must match before restoring sessionId. */
   sessionCompatibilityFingerprint?: string | null
   /** Built-in role configuration currently bound to this conversation. */
@@ -281,6 +307,7 @@ export interface AgentApiContract {
     configuration: import('./agent-role').AgentConversationConfiguration,
     sessionCompatibilityFingerprint?: string | null,
     skills?: import('./agent-role').AgentSkillRef[],
+    runtimeBinding?: import('./agent-runtime').AgentRuntimeBinding,
   ): Promise<void>
   listRoles(): Promise<import('./agent-role').AgentRoleSummary[]>
   listSkills(): Promise<import('./agent-skill').AgentSkillSummary[]>
@@ -291,8 +318,12 @@ export interface AgentApiContract {
     payload: AgentCompactConversationPayload,
   ): Promise<AgentCommandResult>
 
-  onStreamEvent(callback: (event: ClaudeStreamEventData) => void): () => void
-  onComplete(callback: (result: ClaudeResultEventData) => void): () => void
+  onStreamEvent(
+    callback: (event: ClaudeStreamEventData | StudioAgentStreamEventData) => void,
+  ): () => void
+  onComplete(
+    callback: (result: ClaudeResultEventData | StudioAgentResultEventData) => void,
+  ): () => void
   onError(
     callback: (error: {
       message: string

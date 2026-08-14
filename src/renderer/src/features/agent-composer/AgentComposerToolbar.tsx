@@ -12,6 +12,7 @@ import type { AgentContextUsageSnapshot } from '@shared/agent-protocol'
 import type { PermissionMode } from '../../types'
 import type { AgentContextCompactionState } from '../../stores/agent-store'
 import type { AgentRoleRef, AgentRoleSummary } from '@shared/agent-role'
+import type { AgentRuntimeBinding } from '@shared/agent-runtime'
 import {
   IconCheck,
   IconChevronDown,
@@ -41,6 +42,9 @@ interface AgentComposerToolbarProps {
   onRoleChange?: (role: AgentRoleSummary) => void
   permissionMode: PermissionMode
   settings: AppSettings
+  runtimeBinding: AgentRuntimeBinding
+  canChangeRuntime: boolean
+  onRuntimeChange: (binding: AgentRuntimeBinding) => void
   loading: boolean
   canSend: boolean
   contextUsage: AgentContextUsageSnapshot | null
@@ -63,6 +67,9 @@ export function AgentComposerToolbar({
   onRoleChange,
   permissionMode,
   settings,
+  runtimeBinding,
+  canChangeRuntime,
+  onRuntimeChange,
   loading,
   canSend,
   contextUsage,
@@ -92,8 +99,9 @@ export function AgentComposerToolbar({
     roles.find((role) => role.roleId === roleRef?.roleId && role.version === roleRef.version) ??
     null
   const selectedPermission = getPermissionModeOption(permissionMode)
-  const runtimeLabel = getRuntimeLabel(settings)
-  const runtimeDetail = getRuntimeDetail(settings)
+  const runtimeLabel = runtimeBinding.kind === 'acp' ? 'Codex ACP' : getRuntimeLabel(settings)
+  const runtimeDetail =
+    runtimeBinding.kind === 'acp' ? 'ACP · 本机进程' : getRuntimeDetail(settings)
   const claudeStatusLabel = getClaudeCodeStatusLabel(claudeStatus)
   const claudeStatusDetail = getClaudeCodeStatusDetail(claudeStatus)
   const contextPercent = Math.round(contextUsage?.percentage ?? 0)
@@ -128,9 +136,10 @@ export function AgentComposerToolbar({
   }
 
   useEffect(() => {
-    if (!runtimeOpen || claudeStatus || detectingClaude) return
+    if (!runtimeOpen || runtimeBinding.kind !== 'claude-code' || claudeStatus || detectingClaude)
+      return
     void detectClaudeCode()
-  }, [runtimeOpen, claudeStatus, detectingClaude])
+  }, [runtimeOpen, runtimeBinding.kind, claudeStatus, detectingClaude])
 
   const toggleMenu = (menu: ComposerMenuName): void => {
     setOpenMenu((current) => (current === menu ? null : menu))
@@ -430,35 +439,85 @@ export function AgentComposerToolbar({
             onRequestClose={() => setOpenMenu(null)}
           >
             <div className="agent-composer-menu-title">运行环境</div>
+            <button
+              className={runtimeBinding.kind === 'claude-code' ? 'selected' : ''}
+              disabled={!canChangeRuntime}
+              onClick={() => {
+                onRuntimeChange({ kind: 'claude-code' })
+                setOpenMenu(null)
+              }}
+            >
+              <IconRobot size={13} />
+              <span>
+                <strong>Claude Code（默认）</strong>
+                <em>Studio 直接支持的默认 runtime</em>
+              </span>
+              {runtimeBinding.kind === 'claude-code' && <IconCheck size={11} />}
+            </button>
+            <button
+              className={runtimeBinding.kind === 'acp' ? 'selected' : ''}
+              disabled={!canChangeRuntime}
+              onClick={() => {
+                onRuntimeChange({ kind: 'acp', implementationId: 'codex-acp' })
+                setOpenMenu(null)
+              }}
+            >
+              <IconRobot size={13} />
+              <span>
+                <strong>Codex ACP</strong>
+                <em>可选的平级 runtime；首条消息后锁定</em>
+              </span>
+              {runtimeBinding.kind === 'acp' && <IconCheck size={11} />}
+            </button>
             <div className="agent-runtime-card">
               <IconRobot size={14} />
               <span>
                 <strong>{runtimeLabel}</strong>
-                <em>模型、登录和 API Key 由本机 Claude Code 管理</em>
-              </span>
-            </div>
-            <div
-              className={`agent-runtime-status ${claudeStatus?.installed ? 'ready' : 'warning'}`}
-            >
-              <span className="agent-runtime-status-dot" />
-              <span>
-                <strong>{detectingClaude ? '检测中' : claudeStatusLabel}</strong>
-                <em title={claudeError ?? claudeStatusDetail}>
-                  {claudeError ?? claudeStatusDetail}
+                <em>
+                  {runtimeBinding.kind === 'acp'
+                    ? '使用设置中独立保存的 Codex API Key'
+                    : '模型、登录和 API Key 由本机 Claude Code 管理'}
                 </em>
               </span>
-              <button
-                className="agent-runtime-refresh"
-                onClick={() => void detectClaudeCode()}
-                disabled={detectingClaude}
-                title="重新检测 Claude Code"
-              >
-                <IconRefresh size={12} />
-              </button>
             </div>
+            {runtimeBinding.kind === 'claude-code' ? (
+              <div
+                className={`agent-runtime-status ${claudeStatus?.installed ? 'ready' : 'warning'}`}
+              >
+                <span className="agent-runtime-status-dot" />
+                <span>
+                  <strong>{detectingClaude ? '检测中' : claudeStatusLabel}</strong>
+                  <em title={claudeError ?? claudeStatusDetail}>
+                    {claudeError ?? claudeStatusDetail}
+                  </em>
+                </span>
+                <button
+                  className="agent-runtime-refresh"
+                  onClick={() => void detectClaudeCode()}
+                  disabled={detectingClaude}
+                  title="重新检测 Claude Code"
+                >
+                  <IconRefresh size={12} />
+                </button>
+              </div>
+            ) : (
+              <div className="agent-runtime-status ready">
+                <span className="agent-runtime-status-dot" />
+                <span>
+                  <strong>按需启动</strong>
+                  <em>{settings.codexAcpPath.trim() || '从系统 PATH 查找 codex-acp'}</em>
+                </span>
+              </div>
+            )}
             <div className="agent-runtime-facts">
               <span>
-                <strong>{getClaudeCodeSourceLabel(claudeStatus?.source ?? null)}</strong>
+                <strong>
+                  {runtimeBinding.kind === 'acp'
+                    ? settings.codexAcpPath.trim()
+                      ? '自定义路径'
+                      : '系统 PATH'
+                    : getClaudeCodeSourceLabel(claudeStatus?.source ?? null)}
+                </strong>
                 <em>来源</em>
               </span>
               <span>
@@ -475,7 +534,7 @@ export function AgentComposerToolbar({
               <IconSettings size={13} />
               <span>
                 <strong>打开 Agent 设置</strong>
-                <em>Claude Code 路径、权限和费用统计</em>
+                <em>Claude Code、Codex ACP、权限和凭证</em>
               </span>
             </button>
           </FloatingSurface>
