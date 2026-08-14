@@ -53,6 +53,9 @@ export function consumeShortcutCaptureEvent(event: KeyboardEvent): boolean {
   event.stopPropagation()
   event.stopImmediatePropagation()
   if (event.repeat) return true
+  // IME composition keystrokes are not stable shortcut input. Keep the capture
+  // session active, but do not turn an in-progress composition into a binding.
+  if (event.isComposing || event.keyCode === 229) return true
 
   if (event.key === 'Escape') {
     stopShortcutCapture()

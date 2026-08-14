@@ -30,6 +30,10 @@ describe('M5 context action maintenance gates', () => {
     expect(new Set(contextActionContributions.flatMap((item) => item.targetKinds))).toEqual(
       new Set(CONTEXT_TARGET_KINDS),
     )
+    expect(contextActionExternalCommandIds).toContain('workbench.toggleSidebar')
+    expect(contextActionCommands.some((command) => command.id === 'activity.toggleSidebar')).toBe(
+      false,
+    )
   })
 
   it('reports duplicate IDs, orphan owners, invalid groups, and uncovered targets', () => {

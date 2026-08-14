@@ -57,6 +57,17 @@ export function selectShortcutBinding(
     .sort((left, right) => SCOPE_PRIORITY[right.scope] - SCOPE_PRIORITY[left.scope])[0]
 }
 
+export function shouldSuppressShortcutForUi(input: {
+  commandId: string
+  paletteOpen: boolean
+  contextMenuOpen: boolean
+  floatingSurfaceOpen: boolean
+  dialogOpen: boolean
+}): boolean {
+  if (input.paletteOpen && input.commandId !== 'workbench.showCommands') return true
+  return input.contextMenuOpen || input.floatingSurfaceOpen || input.dialogOpen
+}
+
 export function useShortcutRouter(): void {
   const commands = useCommandStore((state) => state.commands)
   const executeCommand = useCommandStore((state) => state.executeCommand)
@@ -77,8 +88,17 @@ export function useShortcutRouter(): void {
       const binding = selectShortcutBinding(bindings, chordId, activeShortcutScopes(), editing)
       if (!binding) return
       const commandState = useCommandStore.getState()
-      if (commandState.paletteOpen && binding.commandId !== 'workbench.showCommands') return
-      if (useContextMenuStore.getState().open || isAnyFloatingSurfaceOpen()) return
+      if (
+        shouldSuppressShortcutForUi({
+          commandId: binding.commandId,
+          paletteOpen: commandState.paletteOpen,
+          contextMenuOpen: useContextMenuStore.getState().open,
+          floatingSurfaceOpen: isAnyFloatingSurfaceOpen(),
+          dialogOpen: Boolean(document.querySelector('[role="dialog"], [aria-modal="true"]')),
+        })
+      ) {
+        return
+      }
       event.preventDefault()
       event.stopPropagation()
       event.stopImmediatePropagation()

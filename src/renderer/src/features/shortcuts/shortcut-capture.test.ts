@@ -27,6 +27,8 @@ function keyboardEvent(input: Partial<KeyboardEvent>): KeyboardEvent {
     altKey: false,
     shiftKey: false,
     repeat: false,
+    isComposing: false,
+    keyCode: 0,
     preventDefault: vi.fn(),
     stopPropagation: vi.fn(),
     stopImmediatePropagation: vi.fn(),
@@ -74,6 +76,28 @@ describe('shortcut capture', () => {
     expect(onResult).toHaveBeenNthCalledWith(2, {
       kind: 'binding',
       chord: { code: 'KeyK', modifiers: ['primary'] },
+    })
+  })
+
+  it('consumes IME composition without recording a shortcut', () => {
+    const onResult = vi.fn()
+    startShortcutCapture('capture-ime', onResult)
+    const composing = keyboardEvent({
+      code: 'KeyK',
+      key: 'Process',
+      metaKey: true,
+      isComposing: true,
+      keyCode: 229,
+    })
+
+    expect(consumeShortcutCaptureEvent(composing)).toBe(true)
+    expect(composing.preventDefault).toHaveBeenCalledOnce()
+    expect(onResult).not.toHaveBeenCalled()
+
+    consumeShortcutCaptureEvent(keyboardEvent({ code: 'KeyL', key: 'l', metaKey: true }))
+    expect(onResult).toHaveBeenCalledWith({
+      kind: 'binding',
+      chord: { code: 'KeyL', modifiers: ['primary'] },
     })
   })
 })

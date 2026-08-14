@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { EffectiveKeybinding } from './keybinding-resolver'
-import { selectShortcutBinding } from './use-shortcut-router'
+import { selectShortcutBinding, shouldSuppressShortcutForUi } from './use-shortcut-router'
 
 const chord = { code: 'KeyB', modifiers: ['primary'] as const }
 
@@ -38,5 +38,31 @@ describe('selectShortcutBinding', () => {
     expect(
       selectShortcutBinding(bindings, 'primary:KeyB', new Set(['global']), true),
     ).toBeUndefined()
+  })
+})
+
+describe('shortcut UI suppression', () => {
+  it('does not route application shortcuts through an open dialog', () => {
+    expect(
+      shouldSuppressShortcutForUi({
+        commandId: 'markdown.bold',
+        paletteOpen: false,
+        contextMenuOpen: false,
+        floatingSurfaceOpen: false,
+        dialogOpen: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('lets the command-palette shortcut close the open palette', () => {
+    expect(
+      shouldSuppressShortcutForUi({
+        commandId: 'workbench.showCommands',
+        paletteOpen: true,
+        contextMenuOpen: false,
+        floatingSurfaceOpen: false,
+        dialogOpen: false,
+      }),
+    ).toBe(false)
   })
 })

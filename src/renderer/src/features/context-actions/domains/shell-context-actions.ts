@@ -173,15 +173,6 @@ export function createShellContextCommands(): Command[] {
       },
     },
     {
-      id: 'activity.toggleSidebar',
-      label: '显示或隐藏侧栏',
-      contextOnly: true,
-      category: '布局',
-      visible: (context) => activityTarget(context)?.activityId !== 'settings',
-      checked: () => useUIStore.getState().sidebarVisible,
-      action: () => useUIStore.getState().toggleSidebar(),
-    },
-    {
       id: 'sidebar.createCurrent',
       label: '新建',
       contextOnly: true,
@@ -294,7 +285,8 @@ export const shellMenuContributions: MenuContribution[] = [
     targetKinds: ['activity'],
     group: '80-layout',
     order: 10,
-    commandId: 'activity.toggleSidebar',
+    commandId: 'workbench.toggleSidebar',
+    when: (context) => activityTarget(context)?.activityId !== 'settings',
     icon: '▤',
   },
   {

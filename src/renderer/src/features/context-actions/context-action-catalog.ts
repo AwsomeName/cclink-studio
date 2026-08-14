@@ -89,5 +89,6 @@ export const contextActionContributions = [
 export const contextActionExternalCommandIds = new Set([
   'workbench.closeTab',
   'workbench.find',
+  'workbench.toggleSidebar',
   'diagnostics.copyWorkspaceState',
 ])

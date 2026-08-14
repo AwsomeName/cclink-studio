@@ -1,6 +1,7 @@
 import type { Command } from '../../stores/command-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import { useThemeStore } from '../../stores/theme-store'
+import { useUIStore } from '../../stores/ui-store'
 import {
   APP_ZOOM_LEVEL_MAX,
   APP_ZOOM_LEVEL_MIN,
@@ -36,6 +37,7 @@ export function createViewCommands(deps: ViewCommandDeps): Command[] {
         inputPolicy: 'deny',
         defaultBindings: [{ code: 'KeyB', modifiers: ['primary'] }],
       },
+      checked: () => useUIStore.getState().sidebarVisible,
       action: deps.toggleSidebar,
     },
     {
