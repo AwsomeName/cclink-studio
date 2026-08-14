@@ -1,7 +1,7 @@
 # 组件管理配置页
 
 > 状态：页面、Claude 和首批 Runtime 资源的安装、检查、修复、卸载闭环已实现；真实双版本更新和通用插件仍未实现。
-> 最后更新：2026-08-13。
+> 最后更新：2026-08-14。
 
 ## 用户现在能做什么
 
@@ -127,7 +127,7 @@ Studio 内置的可信固定目录，不访问尚未建立的远程签名目录�
 9. 退出并替换整个 packaged `.app` 后安装状态、设置、自定义国内服务地址和凭证保留，且不重新下载。
    默认 smoke 使用同一构建，只证明 macOS 整包替换不会删除 `userData`；只有通过
    `CCLINK_STUDIO_PACKAGED_APP_B_PATH` 提供源码指纹不同且 App B 对应当前源码的第二个包时，
-   才能声明跨版本升级验收。
+   才能声明跨版本升级验收。2026-08-14 已另用两个官方签名版本完成该跨版本验收。
 10. 下载瞬断自动有限重试；最终校验失败或替换中途退出时，旧安装可恢复。
 11. 启用 managed Runtime 后，在当前工作空间由 Agent 写入并读回文件，且两步都经过
     Studio MCP：2026-08-12 已用 `glm-5.2` 真实通过。
@@ -160,3 +160,17 @@ Studio 内置的可信固定目录，不访问尚未建立的远程签名目录�
   Claude 卸载、OCCT 卸载后再次 STEP 转换、scrcpy 卸载后内置 JAR 回退全部通过。
 - 本次只使用同一构建做 macOS 整包替换，结果明确记录 `crossBuildUpgrade=false`；跨版本升级
   仍未验收，也未被计入完成项。
+
+## 2026-08-14 官方跨版本验收
+
+- 使用 GitHub 公开 Release 的 Developer ID 签名、公证 `v0.1.29` 和 `v0.1.32`，在隔离
+  `userData` 中完成真实不同版本的整包替换；不是把同一个 App 克隆两次。
+- `v0.1.29` 写入模型、权限模式、自定义国内服务地址和 API Key，安装 Claude Runtime
+  `2.1.211`、OCCT `0.0.23`、scrcpy `2.3.1` 和 agent-device Helper `0.17.2`。
+- 关闭旧 App、替换整个 `.app` 并启动 `v0.1.32` 后，上述设置、凭证状态、安装版本和 managed
+  Claude active 来源全部保留，不需要重装。
+- 另从 `v0.1.29` 的真实更新服务检查、下载并打开 `v0.1.32`：下载 142,851,867 字节，
+  Manifest、SHA-256、Developer ID、Team ID、Bundle ID、版本、arm64 和 Apple 公证校验通过，
+  `openManualInstaller.ok=true`、`error=null`。
+- 该验收关闭的是“App 更新不影响用户配置和已安装固定 Runtime”的问题；Runtime 自身的第二
+  兼容版本、远程签名目录和版本回滚仍未实现，不能混为一项。

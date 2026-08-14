@@ -12,6 +12,31 @@
 - 真人或远端验收未完成时保持 `PENDING`，不能用 mock、CI 或文档替代。
 - M0 是工程准备度，不计入用户功能进度。
 
+## 2026-08-14：v0.1.32 发布故障修复验收
+
+### 用户功能结果
+
+- `v0.1.32` 已作为公开稳定 Release 发布：
+  `https://github.com/AwsomeName/cclink-studio/releases/tag/v0.1.32`。
+- 使用公开 Release 的已签名、公证 `v0.1.29` 启动真实更新服务，成功发现、下载并打开
+  `v0.1.32`；下载大小 142,851,867 字节，`openManualInstaller.ok=true`、`error=null`，未再出现
+  `publisher_mismatch`。
+- 关闭 `v0.1.29`、完整替换 `.app` 并启动 `v0.1.32` 后，模型配置、自定义服务地址、权限模式、
+  API Key 配置状态、Claude Runtime `2.1.211`、OCCT `0.0.23`、scrcpy `2.3.1` 和
+  agent-device Helper `0.17.2` 全部保留。
+
+### 工程证据
+
+- Release 源提交：`b442de8c29edb2a159f419ca6bc1761990411aef`。
+- 公开 DMG 的 checksums 与 Manifest SHA-256 一致；`hdiutil verify`、App/DMG `codesign`、
+  `stapler validate`、App/DMG `spctl` 全部通过。
+- App 与 DMG 均为 `Developer ID Application: chang liu (H4NAWHF52C)`，Team ID
+  `H4NAWHF52C`，Gatekeeper 来源为 `Notarized Developer ID`。
+- App 内 `app.asar/out/build-provenance.json` 的 `gitHead` 与 Release 源提交一致，源码指纹
+  `3ed8a119affbaaaafb8b483b9ae09bcd26a4d5f7595e91eb1ed19a61ea39a416`。
+- v0.1.30 已标记为 prerelease 并写明未签名/未公证故障；v0.1.31 已标记为 prerelease 并写明
+  缺少正式产物源码身份记录。两者均指向 v0.1.32 或更高版本。
+
 ## M0：arm64 单架构收口
 
 ### 当前状态
@@ -31,14 +56,14 @@ Draft 的签名与安装证据属于发布验收，不会重新引入 x64 路径
 
 ### 自动化证据
 
-| 日期 | 命令 | 结果 |
-| --- | --- | --- |
-| 2026-07-29 | Manifest/Provider 定向 Vitest | PASS，13/13 |
-| 2026-07-29 | `pnpm verify:release` | PASS，30/30 |
-| 2026-07-29 | `pnpm typecheck` | PASS |
-| 2026-07-29 | `pnpm lint` | PASS |
-| 2026-07-29 | `git diff --check` | PASS |
-| 2026-07-29 | `pnpm verify` | PASS，184 files / 1068 tests / production build |
+| 日期       | 命令                          | 结果                                            |
+| ---------- | ----------------------------- | ----------------------------------------------- |
+| 2026-07-29 | Manifest/Provider 定向 Vitest | PASS，13/13                                     |
+| 2026-07-29 | `pnpm verify:release`         | PASS，30/30                                     |
+| 2026-07-29 | `pnpm typecheck`              | PASS                                            |
+| 2026-07-29 | `pnpm lint`                   | PASS                                            |
+| 2026-07-29 | `git diff --check`            | PASS                                            |
+| 2026-07-29 | `pnpm verify`                 | PASS，184 files / 1068 tests / production build |
 
 ### 待完成
 
@@ -64,19 +89,19 @@ Draft 的签名与安装证据属于发布验收，不会重新引入 x64 路径
 
 ### 自动化证据
 
-| 日期 | 场景 | 结果 |
-| --- | --- | --- |
-| 2026-07-29 | 下载、校验并进入 `readyToInstall` | PASS |
-| 2026-07-29 | 关闭服务并重新创建，启动恢复 | PASS |
-| 2026-07-29 | 修改缓存 DMG 后重启 | PASS，拒绝并删除 |
-| 2026-07-29 | 当前版本追平目标版本 | PASS，回到 idle 并删除 |
-| 2026-07-29 | 错误 SHA-256 | PASS，不生成可安装文件 |
-| 2026-07-29 | 中途取消 | PASS，删除 `.part` 并回到 available |
-| 2026-07-29 | 缓存目录不可用 | PASS，Studio 启动降级为空闲状态 |
-| 2026-07-29 | 更新相关 Vitest | PASS，20/20 |
-| 2026-07-29 | `pnpm verify` | PASS，184 files / 1068 tests / production build |
-| 2026-07-29 | 隔离 Profile 真实 Electron 恢复 | PASS，状态栏和面板为 `readyToInstall` |
-| 2026-07-29 | renderer reload 后主进程快照对账 | PASS，仍显示“更新已下载” |
+| 日期       | 场景                              | 结果                                            |
+| ---------- | --------------------------------- | ----------------------------------------------- |
+| 2026-07-29 | 下载、校验并进入 `readyToInstall` | PASS                                            |
+| 2026-07-29 | 关闭服务并重新创建，启动恢复      | PASS                                            |
+| 2026-07-29 | 修改缓存 DMG 后重启               | PASS，拒绝并删除                                |
+| 2026-07-29 | 当前版本追平目标版本              | PASS，回到 idle 并删除                          |
+| 2026-07-29 | 错误 SHA-256                      | PASS，不生成可安装文件                          |
+| 2026-07-29 | 中途取消                          | PASS，删除 `.part` 并回到 available             |
+| 2026-07-29 | 缓存目录不可用                    | PASS，Studio 启动降级为空闲状态                 |
+| 2026-07-29 | 更新相关 Vitest                   | PASS，20/20                                     |
+| 2026-07-29 | `pnpm verify`                     | PASS，184 files / 1068 tests / production build |
+| 2026-07-29 | 隔离 Profile 真实 Electron 恢复   | PASS，状态栏和面板为 `readyToInstall`           |
+| 2026-07-29 | renderer reload 后主进程快照对账  | PASS，仍显示“更新已下载”                        |
 
 ### 待完成
 
@@ -89,8 +114,8 @@ M1 关闭前，只能声明自动化行为成立，不能宣称真实安装包�
 
 ### 当前状态
 
-`IN PROGRESS`。代码、定向测试和真实 Electron UI 入口通过；公开仓库当前没有
-Release，真实签名、公证 DMG 的打开与 Finder 替换待首个公开版本验收。
+`COMPLETE`。代码、真实 Electron 入口和公开签名、公证 DMG 的下载、可信校验与打开均已通过；
+整包替换后的配置和 Runtime 复用也已用两个不同官方版本验证。
 
 ### 已完成
 
@@ -104,23 +129,23 @@ Release，真实签名、公证 DMG 的打开与 Finder 替换待首个公开版
 
 ### 自动化证据
 
-| 日期 | 场景 | 结果 |
-| --- | --- | --- |
-| 2026-07-29 | M2 Verifier + Service 定向测试 | PASS，17/17 |
-| 2026-07-29 | 错 Team ID、错版本、universal/x64、多应用 | PASS，全部拒绝 |
-| 2026-07-29 | 打开前篡改 DMG | PASS，拒绝并删除缓存 |
-| 2026-07-29 | `shell.openPath` 失败后重试 | PASS，保留 ready 状态和缓存 |
-| 2026-07-29 | 隔离 Profile 真实 Electron UI | PASS，显示“打开安装包” |
-| 2026-07-29 | `pnpm typecheck` / `pnpm lint` | PASS |
-| 2026-07-29 | `pnpm verify` | PASS，185 files / 1079 tests / production build |
-| 2026-07-29 | `pnpm smoke:standalone` | PASS，10 + 6 + 14 + 4 + update recovery |
-| 2026-07-29 | 本地 arm64 ad-hoc package | PASS，Bundle ID/版本/arm64/深度签封正确 |
+| 日期       | 场景                                      | 结果                                            |
+| ---------- | ----------------------------------------- | ----------------------------------------------- |
+| 2026-07-29 | M2 Verifier + Service 定向测试            | PASS，17/17                                     |
+| 2026-07-29 | 错 Team ID、错版本、universal/x64、多应用 | PASS，全部拒绝                                  |
+| 2026-07-29 | 打开前篡改 DMG                            | PASS，拒绝并删除缓存                            |
+| 2026-07-29 | `shell.openPath` 失败后重试               | PASS，保留 ready 状态和缓存                     |
+| 2026-07-29 | 隔离 Profile 真实 Electron UI             | PASS，显示“打开安装包”                          |
+| 2026-07-29 | `pnpm typecheck` / `pnpm lint`            | PASS                                            |
+| 2026-07-29 | `pnpm verify`                             | PASS，185 files / 1079 tests / production build |
+| 2026-07-29 | `pnpm smoke:standalone`                   | PASS，10 + 6 + 14 + 4 + update recovery         |
+| 2026-07-29 | 本地 arm64 ad-hoc package                 | PASS，Bundle ID/版本/arm64/深度签封正确         |
 
 ### 待完成
 
-- [ ] 从公开 Release 下载真实签名、公证 DMG。
-- [ ] 在正式旧版点击“打开安装包”，通过所有系统检查并显示 Finder。
-- [ ] 手工替换后启动新版，确认旧缓存清理。
+- [x] 从公开 Release 下载真实签名、公证 DMG。
+- [x] 在正式旧版调用“打开安装包”，通过所有系统检查并由 macOS 成功打开。
+- [x] 完整替换 `.app` 后启动新版，确认配置、凭证状态和已安装 Runtime 保留。
 
 ## M3：安装技术闸门
 
