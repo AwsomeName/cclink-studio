@@ -663,6 +663,11 @@ async function main() {
     await page.keyboard.press(`${modifier}+A`)
     await page.keyboard.press(`${modifier}+Shift+7`)
     const secondOrderedItem = editor.locator('ol > li').nth(1).locator('p')
+    await page.waitForFunction(
+      () => document.querySelectorAll('.tiptap > ol > li').length === 2,
+      null,
+      { timeout: 5_000 },
+    )
     await secondOrderedItem.click()
     await page.waitForFunction(
       (element) => {
@@ -673,9 +678,14 @@ async function main() {
       },
       await secondOrderedItem.elementHandle(),
     )
+    // ProseMirror observes the browser selectionchange asynchronously. Keep
+    // this in sync with the list shortcut smoke above so Tab cannot race the
+    // editor's internal selection state on slower CI runners.
+    await page.waitForTimeout(100)
     await page.keyboard.press('End')
     await page.keyboard.press('Tab')
     const nestedOrderedList = editor.locator('ol ol').first()
+    await nestedOrderedList.waitFor({ state: 'attached', timeout: 5_000 })
     assert(
       (await nestedOrderedList.count()) === 1,
       `Tab did not create a nested ordered list: ${await editor.innerHTML()}`,
@@ -689,6 +699,7 @@ async function main() {
     await page.keyboard.type('third')
     await page.keyboard.press('Tab')
     const thirdLevelOrderedList = editor.locator('ol ol ol').first()
+    await thirdLevelOrderedList.waitFor({ state: 'attached', timeout: 5_000 })
     assert(
       (await thirdLevelOrderedList.count()) === 1 &&
         (await thirdLevelOrderedList.evaluate(
