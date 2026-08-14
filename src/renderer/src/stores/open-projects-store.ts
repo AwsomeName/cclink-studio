@@ -18,6 +18,7 @@ interface OpenProjectsState {
   hydrate: (paths: string[]) => void
   addProject: (path: string) => void
   addRemoteProject: (ref: RemoteWorkspaceRef) => void
+  replaceRemoteProject: (current: RemoteWorkspaceRef, confirmed: RemoteWorkspaceRef) => void
   removeRemoteProject: (ref: RemoteWorkspaceRef) => void
   removeProject: (path: string) => void
   reorderProject: (sourcePath: string, targetPath: string, placement: DropPlacement) => void
@@ -125,6 +126,21 @@ export const useOpenProjectsStore = create<OpenProjectsState>((set, get) => ({
     const key = workspaceRefKey(ref)
     if (get().openRemoteWorkspaceRefs.some((item) => workspaceRefKey(item) === key)) return
     const openRemoteWorkspaceRefs = [...get().openRemoteWorkspaceRefs, ref]
+    set({ openRemoteWorkspaceRefs })
+    persistOpenProjects(get().openProjectPaths, openRemoteWorkspaceRefs)
+  },
+
+  replaceRemoteProject: (current, confirmed) => {
+    const currentKey = workspaceRefKey(current)
+    if (!get().openRemoteWorkspaceRefs.some((item) => workspaceRefKey(item) === currentKey)) return
+    const seen = new Set<string>()
+    const openRemoteWorkspaceRefs = get().openRemoteWorkspaceRefs.flatMap((item) => {
+      const candidate = workspaceRefKey(item) === currentKey ? confirmed : item
+      const key = workspaceRefKey(candidate)
+      if (!key || seen.has(key)) return []
+      seen.add(key)
+      return [candidate]
+    })
     set({ openRemoteWorkspaceRefs })
     persistOpenProjects(get().openProjectPaths, openRemoteWorkspaceRefs)
   },

@@ -41,8 +41,7 @@ export function RemoteSessionsSidebar({
     return (
       (showArchived ? session.status === 'archived' : session.status !== 'archived') &&
       session.serverId === workspaceRef.endpointId &&
-      (session.workspaceId === workspaceRef.workspaceId ||
-        session.workspacePath === workspaceRef.path) &&
+      session.workspaceId === workspaceRef.workspaceId &&
       searchable.includes(normalizedQuery)
     )
   })

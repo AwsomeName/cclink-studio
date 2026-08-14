@@ -7,7 +7,10 @@ import {
   restoreOpenProjects,
   useOpenProjectsStore,
 } from './open-projects-store'
-import { setWorkspaceStateOwnerKey } from '../utils/workspace-state'
+import {
+  flushPendingWorkspaceStateWrites,
+  setWorkspaceStateOwnerKey,
+} from '../utils/workspace-state'
 
 describe('open-projects-store', () => {
   beforeEach(() => {
@@ -57,6 +60,34 @@ describe('open-projects-store', () => {
       '/workspace/b',
       '/workspace/c',
     ])
+  })
+
+  it('replaces a restored remote reference with the Agent-confirmed opaque workspace identity', async () => {
+    const store = useOpenProjectsStore.getState()
+    const stale = {
+      kind: 'remote' as const,
+      transport: 'cclink' as const,
+      endpointId: 'agent-1',
+      workspaceId: 'studio-local-hash',
+      path: '/srv/project',
+    }
+    const confirmed = { ...stale, workspaceId: 'ws_agent_canonical' }
+    store.addRemoteProject(stale)
+
+    store.replaceRemoteProject(stale, confirmed)
+    await flushPendingWorkspaceStateWrites()
+
+    expect(useOpenProjectsStore.getState().openRemoteWorkspaceRefs).toEqual([confirmed])
+    expect(window.cclinkStudio.workspaceState.setSection).toHaveBeenLastCalledWith(
+      null,
+      'projectStrip',
+      {
+        version: 1,
+        openProjectPaths: [],
+        openRemoteWorkspaceRefs: [confirmed],
+      },
+      null,
+    )
   })
 
   it('reorders by insertion position instead of swapping two projects', () => {

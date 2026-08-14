@@ -1,4 +1,8 @@
-import type { CclinkFileContent, CclinkTreeNode } from './cclink'
+import type {
+  CclinkCapabilityProbeResponseMessage,
+  CclinkFileContent,
+  CclinkTreeNode,
+} from './cclink'
 import type { RemoteError } from './remote-error'
 import type { RemoteWorkspaceRef } from './workspace-ref'
 
@@ -21,6 +25,14 @@ export interface RemoteStatus {
   endpointName?: string
   agentVersion?: string
   protocolVersion?: string
+  runtime?: string
+  capabilityProbe?: {
+    state: string
+    checkedAt?: string
+    stale: boolean
+    /** Exact Agent response, retained for diagnostics without capability remapping. */
+    response: CclinkCapabilityProbeResponseMessage
+  }
   compatibility: 'compatible' | 'upgrade-required' | 'unknown'
   workspacePath: string
   capabilities: RemoteCapabilitySet
@@ -96,6 +108,8 @@ export interface RemoteFileDeleteRequest extends RemoteMutationContext {
 export interface RemoteFileTreeResult {
   success: boolean
   tree?: CclinkTreeNode
+  /** Agent-owned opaque workspace identity returned by file_tree_response. */
+  workspaceId?: string
   error?: string
   unavailable?: boolean
   remoteError?: RemoteError

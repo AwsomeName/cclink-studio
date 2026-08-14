@@ -147,6 +147,7 @@ describe('CclinkRuntimeStateStore', () => {
           {
             id: 'session-legacy',
             name: '旧会话',
+            workspaceId: 'ws_agent_canonical',
             workspacePath: '/srv/project',
             serverId: 'agent-1',
             status: 'active',
@@ -175,5 +176,30 @@ describe('CclinkRuntimeStateStore', () => {
     expect(readFileSync(join(root, 'cclink-runtime-state.json'), 'utf8')).not.toContain(
       'must-not-import',
     )
+  })
+
+  it('不再为缺少 Agent workspace_id 的旧会话生成本地哈希身份', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cclink-runtime-state-'))
+    roots.push(root)
+    writeFileSync(
+      join(root, 'cclink-runtime-state.json'),
+      JSON.stringify({
+        version: 1,
+        sessions: [
+          {
+            id: 'session-without-workspace-id',
+            name: '旧会话',
+            workspacePath: '/srv/project',
+            serverId: 'agent-1',
+            createdAt: 1,
+            updatedAt: 2,
+          },
+        ],
+        messages: {},
+      }),
+      { mode: 0o600 },
+    )
+
+    await expect(new CclinkRuntimeStateStore(root).load()).resolves.toMatchObject({ sessions: [] })
   })
 })

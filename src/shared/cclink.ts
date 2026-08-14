@@ -166,6 +166,12 @@ export interface CclinkCapabilityProbeResponseMessage extends CclinkEnvelope {
   }
   capability_map?: Record<string, boolean>
   capability_list?: string[]
+  runtime?: string
+  runtime_probe?: {
+    refresh_state?: string
+    checked_at?: string | number | null
+    stale?: boolean
+  }
 }
 
 export interface CclinkWorkspaceListResponseMessage extends CclinkEnvelope {
@@ -184,6 +190,7 @@ export interface CclinkWorkspaceListResponseMessage extends CclinkEnvelope {
 
 export interface CclinkFileTreeResponseMessage extends CclinkEnvelope {
   cc_type: 'file_tree_response'
+  workspace_id?: string
   tree?: CclinkTreeNode
   path?: string
   items?: Array<{ name: string; type: 'file' | 'directory'; has_children?: boolean }>

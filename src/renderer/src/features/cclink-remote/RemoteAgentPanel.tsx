@@ -35,8 +35,7 @@ export function RemoteAgentPanel({
         (session) =>
           session.status !== 'archived' &&
           session.serverId === workspaceRef.endpointId &&
-          (session.workspaceId === workspaceRef.workspaceId ||
-            session.workspacePath === workspaceRef.path),
+          session.workspaceId === workspaceRef.workspaceId,
       ),
     [sessions, workspaceRef.endpointId, workspaceRef.path, workspaceRef.workspaceId],
   )
@@ -47,6 +46,7 @@ export function RemoteAgentPanel({
   const activeMessages = activeSession ? (messages[activeSession.id] ?? []) : []
 
   useEffect(() => {
+    setStatusError(null)
     void initialize().then(async () => {
       await Promise.all([
         loadSessions(workspaceRef),
@@ -69,6 +69,22 @@ export function RemoteAgentPanel({
     realtimeState,
   ])
   const agentAvailable = remoteStatus?.state === 'online' && remoteStatus.capabilities.agent.session
+
+  useEffect(() => {
+    if (!remoteStatus?.remoteError?.retryable) return
+    const timer = window.setTimeout(() => {
+      setStatusError(null)
+      void window.cclinkStudio.remote
+        .getStatus(workspaceRef)
+        .then(setRemoteStatus)
+        .catch((statusFailure: unknown) =>
+          setStatusError(
+            statusFailure instanceof Error ? statusFailure.message : String(statusFailure),
+          ),
+        )
+    }, 5_000)
+    return () => window.clearTimeout(timer)
+  }, [remoteStatus, workspaceRef.endpointId, workspaceRef.path, workspaceRef.workspaceId])
 
   useEffect(() => {
     if (activeSession && activeSession.id !== selectedSessionId) selectSession(activeSession.id)

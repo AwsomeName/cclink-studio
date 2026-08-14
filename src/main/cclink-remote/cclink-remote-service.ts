@@ -76,6 +76,11 @@ interface StreamBuffer {
   content: string
 }
 
+interface CapabilityProbeResult {
+  response: CclinkCapabilityProbeResponseMessage | null
+  error?: RemoteError
+}
+
 const INLINE_FILE_BYTES = 2 * 1024
 const MAX_FILE_BYTES = 2 * 1024 * 1024
 const FILE_CHUNK_BYTES = 4096 as const
@@ -94,10 +99,7 @@ export class CclinkRemoteService implements RemoteProvider {
   private sessions = new Map<string, CclinkRemoteSession>()
   private messages = new Map<string, CclinkRemoteMessage[]>()
   private streams = new Map<string, StreamBuffer>()
-  private capabilityProbes = new Map<
-    string,
-    { expiresAt: number; response: CclinkCapabilityProbeResponseMessage | null }
-  >()
+  private capabilityProbes = new Map<string, CapabilityProbeResult & { expiresAt: number }>()
   private connecting: Promise<CclinkRealtimeStatus> | null = null
   private readonly diagnosticLog = new RemoteDiagnosticLog()
 
@@ -212,9 +214,12 @@ export class CclinkRemoteService implements RemoteProvider {
     if (!result.success || !result.tree || result.tree.type !== 'directory') {
       throw new Error(result.error || '远程目录无法打开')
     }
+    if (!result.workspaceId) {
+      throw new Error('远程 Agent 未返回规范 workspace_id，无法安全打开该工作空间')
+    }
     const path = result.tree.path
     const workspace: CclinkWorkspace = {
-      id: workspaceId(serverId, path),
+      id: result.workspaceId,
       path,
       name: remotePathApi(path).basename(path) || path,
       serverId,
@@ -225,7 +230,9 @@ export class CclinkRemoteService implements RemoteProvider {
     if (server) {
       server.workspaces = [
         workspace,
-        ...server.workspaces.filter((item) => item.id !== workspace.id),
+        ...server.workspaces.filter(
+          (item) => item.id !== workspace.id && item.path !== workspace.path,
+        ),
       ]
     }
     return workspace
@@ -240,9 +247,7 @@ export class CclinkRemoteService implements RemoteProvider {
     }
     return [...this.sessions.values()]
       .filter(
-        (session) =>
-          session.serverId === ref.endpointId &&
-          (session.workspaceId === ref.workspaceId || session.workspacePath === ref.path),
+        (session) => session.serverId === ref.endpointId && session.workspaceId === ref.workspaceId,
       )
       .sort((a, b) => b.updatedAt - a.updatedAt)
   }
@@ -331,7 +336,7 @@ export class CclinkRemoteService implements RemoteProvider {
       if (
         !session ||
         session.serverId !== ref.endpointId ||
-        (session.workspaceId !== ref.workspaceId && session.workspacePath !== ref.path)
+        session.workspaceId !== ref.workspaceId
       ) {
         return { success: false, error: '远程会话与当前工作空间不匹配' }
       }
@@ -498,7 +503,8 @@ export class CclinkRemoteService implements RemoteProvider {
   async getStatus(ref: RemoteWorkspaceRef): Promise<RemoteStatus> {
     const server = this.servers.get(ref.endpointId)
     const online = server?.status === 'online' && this.status.state === 'online'
-    const probe = online ? await this.getLiveCapabilityProbe(ref.endpointId) : null
+    const probeResult = online ? await this.getLiveCapabilityProbe(ref.endpointId) : null
+    const probe = probeResult?.response ?? null
     const protocolVersion = valueAsString(
       probe?.protocolVersion ?? probe?.protocol_version ?? server?.protocolVersion,
     )
@@ -509,8 +515,10 @@ export class CclinkRemoteService implements RemoteProvider {
     const grouped = probe?.capabilities
     // Live capability execution is fail-closed. server_meta is discovery/UI metadata only.
     const capabilityMap = probe?.capability_map
-    const has = (key: string): boolean =>
-      capabilityMap?.[key] === true || probe?.capability_list?.includes(key) === true
+    const has = (...keys: string[]): boolean =>
+      keys.some(
+        (key) => capabilityMap?.[key] === true || probe?.capability_list?.includes(key) === true,
+      )
     const fileCapability = (groupedKey: string, legacyKey: string): boolean =>
       online && (grouped?.file?.[groupedKey] === true || has(legacyKey))
     const sessionStreaming =
@@ -518,14 +526,51 @@ export class CclinkRemoteService implements RemoteProvider {
       (grouped?.session?.streaming === true ||
         grouped?.agent?.stream_json_input === true ||
         grouped?.agent?.runtime_select === true ||
-        has('stream_json_input') ||
-        has('runtime_select'))
+        has('session.streaming', 'session_streaming') ||
+        has('agent.stream_json_input', 'stream_json_input') ||
+        has('agent.runtime_select', 'runtime_select'))
+    const agentVersion = valueAsString(
+      probe?.agentVersion ?? probe?.agent_version ?? server?.agentVersion,
+    )
+    const runtime = valueAsString(probe?.runtime)
+    const probeState = valueAsString(probe?.runtime_probe?.refresh_state) ?? 'unknown'
+    const capabilityUnavailable =
+      online && probe && !sessionStreaming
+        ? remoteError(
+            'remote-agent',
+            REMOTE_ERROR_CODE.CAPABILITY_UNAVAILABLE,
+            [
+              '远程 Agent 已响应能力探测，但未声明远程会话/流式消息能力',
+              agentVersion ? `Agent ${agentVersion}` : '',
+              runtime ? `runtime ${runtime}` : '',
+              probeState !== 'unknown' ? `probe ${probeState}` : '',
+            ]
+              .filter(Boolean)
+              .join(' · '),
+            probeState === 'pending' ||
+              probeState === 'refreshing' ||
+              probe?.runtime_probe?.stale === true,
+          )
+        : undefined
     return {
       ref,
       state: online ? 'online' : (server?.status ?? 'unknown'),
       endpointName: server?.name,
-      agentVersion: server?.agentVersion,
+      agentVersion,
       protocolVersion,
+      runtime,
+      ...(probe
+        ? {
+            capabilityProbe: {
+              state: probeState,
+              ...(probe.runtime_probe?.checked_at != null
+                ? { checkedAt: String(probe.runtime_probe.checked_at) }
+                : {}),
+              stale: probe.runtime_probe?.stale === true,
+              response: probe,
+            },
+          }
+        : {}),
       compatibility,
       workspacePath: ref.path,
       capabilities: {
@@ -553,16 +598,13 @@ export class CclinkRemoteService implements RemoteProvider {
               true,
             ),
           }
-        : !probe
+        : probeResult?.error
           ? {
-              remoteError: remoteError(
-                'remote-agent',
-                REMOTE_ERROR_CODE.REQUEST_TIMEOUT,
-                '远程 Agent 实时能力检查失败，已按不可用处理',
-                true,
-              ),
+              remoteError: probeResult.error,
             }
-          : {}),
+          : capabilityUnavailable
+            ? { remoteError: capabilityUnavailable }
+            : {}),
     }
   }
 
@@ -763,8 +805,7 @@ export class CclinkRemoteService implements RemoteProvider {
     if (
       !session ||
       session.serverId !== request.ref.endpointId ||
-      (session.workspaceId !== request.ref.workspaceId &&
-        session.workspacePath !== request.ref.path)
+      session.workspaceId !== request.ref.workspaceId
     ) {
       return { ok: false, result: mutationFailure('文件修改必须绑定当前远程工作空间 Session') }
     }
@@ -1081,11 +1122,11 @@ export class CclinkRemoteService implements RemoteProvider {
     if (!available) throw new Error(`远程 Agent 未通过实时能力检查：${capability}`)
   }
 
-  private async getLiveCapabilityProbe(
-    serverId: string,
-  ): Promise<CclinkCapabilityProbeResponseMessage | null> {
+  private async getLiveCapabilityProbe(serverId: string): Promise<CapabilityProbeResult> {
     const cached = this.capabilityProbes.get(serverId)
-    if (cached && cached.expiresAt > Date.now()) return cached.response
+    if (cached && cached.expiresAt > Date.now()) {
+      return { response: cached.response, ...(cached.error ? { error: cached.error } : {}) }
+    }
     try {
       const response = (await this.requestRouter.request(
         serverId,
@@ -1095,6 +1136,14 @@ export class CclinkRemoteService implements RemoteProvider {
       )) as CclinkCapabilityProbeResponseMessage
       const server = this.servers.get(serverId)
       if (server) {
+        server.agentVersion =
+          valueAsString(response.agentVersion ?? response.agent_version) ?? server.agentVersion
+        server.protocolVersion =
+          valueAsString(response.protocolVersion ?? response.protocol_version) ??
+          server.protocolVersion
+        server.minProtocolVersion =
+          valueAsString(response.minProtocolVersion ?? response.min_protocol_version) ??
+          server.minProtocolVersion
         server.capabilities = {
           ...server.capabilities,
           ...response.capability_map,
@@ -1120,11 +1169,22 @@ export class CclinkRemoteService implements RemoteProvider {
         }
         server.capabilityList = response.capability_list ?? server.capabilityList
       }
-      this.capabilityProbes.set(serverId, { expiresAt: Date.now() + 15_000, response })
-      return response
-    } catch {
-      this.capabilityProbes.set(serverId, { expiresAt: Date.now() + 5_000, response: null })
-      return null
+      const transientProbe =
+        response.runtime_probe?.refresh_state === 'pending' ||
+        response.runtime_probe?.refresh_state === 'refreshing' ||
+        response.runtime_probe?.stale === true
+      const result = { response }
+      this.capabilityProbes.set(serverId, {
+        expiresAt: Date.now() + (transientProbe ? 2_000 : 15_000),
+        ...result,
+      })
+      return result
+    } catch (error) {
+      const normalized = capabilityProbeError(error, serverId)
+      const result = { response: null, error: normalized }
+      this.capabilityProbes.set(serverId, { expiresAt: Date.now() + 5_000, ...result })
+      this.diagnosticLog.record('capability.probe', normalized)
+      return result
     }
   }
 
@@ -1479,12 +1539,25 @@ export class CclinkRemoteService implements RemoteProvider {
   private applySessionSync(serverId: string, response: CclinkSessionSyncResponseMessage): void {
     for (const item of response.sessions) {
       if (item.project_mode && item.project_mode !== 'remote_workspace') continue
+      if (!item.workspace_id) {
+        this.diagnosticLog.record(
+          'session.sync',
+          remoteError(
+            'remote-agent',
+            REMOTE_ERROR_CODE.WORKSPACE_ID_MISSING,
+            '远程会话同步结果缺少规范 workspace_id，已忽略该会话',
+            false,
+            { endpointId: serverId, sessionId: item.session_id },
+          ),
+        )
+        continue
+      }
       const createdAt = normalizeTimestamp(item.created_at ?? item.updated_at)
       const updatedAt = normalizeTimestamp(item.last_active_at ?? item.updated_at ?? createdAt)
       const session: CclinkRemoteSession = {
         id: item.session_id,
         name: item.name?.trim() || `远程会话 ${item.session_id.slice(-6)}`,
-        workspaceId: item.workspace_id || workspaceId(serverId, item.workspace_path),
+        workspaceId: item.workspace_id,
         workspacePath: item.workspace_path,
         serverId,
         status: this.sessions.get(item.session_id)?.status ?? 'idle',
@@ -1559,7 +1632,7 @@ export class CclinkRemoteService implements RemoteProvider {
     if (
       !session ||
       session.serverId !== ref.endpointId ||
-      (session.workspaceId !== ref.workspaceId && session.workspacePath !== ref.path)
+      session.workspaceId !== ref.workspaceId
     ) {
       throw new Error('远程会话与当前工作空间不匹配')
     }
@@ -1634,19 +1707,8 @@ export class CclinkRemoteService implements RemoteProvider {
               : String(response.min_protocol_version)
           server.capabilities = response.capabilities
           server.capabilityList = response.capability_list
-          server.workspaces = (response.workspaces ?? response.suggestedWorkspaces ?? []).map(
-            (workspace) => ({
-              id: workspaceId(server.id, workspace.path),
-              path: workspace.path,
-              name:
-                workspace.name ||
-                remotePathApi(workspace.path).basename(workspace.path) ||
-                workspace.path,
-              serverId: server.id,
-              kind: 'kind' in workspace ? workspace.kind : undefined,
-              exists: true,
-            }),
-          )
+          // server_meta only contains path suggestions. It must not mint a second workspace
+          // identity; canonical opaque IDs come from workspace_list/file_tree responses.
           if (supports(server, 'workspace_list')) await this.refreshWorkspaceList(server)
         }),
     )
@@ -1664,7 +1726,7 @@ export class CclinkRemoteService implements RemoteProvider {
       10_000,
     )) as CclinkWorkspaceListResponseMessage
     server.workspaces = response.workspaces
-      .filter((item) => item.exists !== false)
+      .filter((item) => item.exists !== false && item.id.trim() && item.path.trim())
       .map((item) => ({ ...item, serverId: server.id }))
   }
 
@@ -1690,7 +1752,11 @@ export class CclinkRemoteService implements RemoteProvider {
         return failure('file-provider', REMOTE_ERROR_CODE.FILE_FAILED, response.error, true)
       const tree = response.tree ?? treeFromPage(response)
       return tree
-        ? { success: true, tree }
+        ? {
+            success: true,
+            tree,
+            ...(response.workspace_id?.trim() ? { workspaceId: response.workspace_id.trim() } : {}),
+          }
         : failure('file-provider', REMOTE_ERROR_CODE.FILE_FAILED, '远程 Agent 未返回目录数据', true)
     } catch (error) {
       return requestFailure(error)
@@ -1703,13 +1769,6 @@ export class CclinkRemoteService implements RemoteProvider {
     const server = this.servers.get(ref.endpointId)
     if (!server || server.status !== 'online' || this.status.state !== 'online')
       return failure('remote-agent', 'REMOTE_SERVER_OFFLINE', '远程设备不在线', true)
-    if (workspaceId(ref.endpointId, ref.path) !== ref.workspaceId)
-      return failure(
-        'workspace',
-        REMOTE_ERROR_CODE.WORKSPACE_NOT_FOUND,
-        '远程工作空间引用无效',
-        false,
-      )
     const registeredWorkspace = server.workspaces.some(
       (workspace) => workspace.id === ref.workspaceId && workspace.path === ref.path,
     )
@@ -1777,6 +1836,23 @@ function requestFailure(error: unknown): RemoteFileTreeResult & RemoteFileReadRe
     true,
   )
 }
+
+function capabilityProbeError(error: unknown, endpointId: string): RemoteError {
+  const source =
+    error instanceof CclinkRequestError
+      ? error.remoteError
+      : remoteError(
+          'remote-agent',
+          'REMOTE_CAPABILITY_PROBE_FAILED',
+          error instanceof Error ? error.message : '远程 Agent 能力探测失败',
+          true,
+        )
+  return {
+    ...source,
+    context: { ...source.context, endpointId, operation: 'capability.probe' },
+  }
+}
+
 function failure(
   layer: RemoteError['layer'],
   code: string,
@@ -1795,11 +1871,9 @@ function remoteError(
   code: string,
   message: string,
   retryable: boolean,
+  context?: RemoteError['context'],
 ): RemoteError {
-  return { layer, code, message, retryable }
-}
-function workspaceId(serverId: string, path: string): string {
-  return createHash('sha256').update(`${serverId}\0${path}`).digest('hex').slice(0, 24)
+  return { layer, code, message, retryable, ...(context ? { context } : {}) }
 }
 function remotePathApi(path: string): typeof posix | typeof win32 {
   return /^[A-Za-z]:[\\/]/u.test(path) || (path.includes('\\') && !path.includes('/'))

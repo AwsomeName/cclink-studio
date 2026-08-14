@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CclinkServer, CclinkTreeNode } from '@shared/cclink'
-import { remoteWorkspaceRef } from '@shared/workspace-ref'
 import { useCclinkStore, useOpenProjectsStore, useUIStore } from '../../stores'
 import { IconChevronRight, IconCloud, IconFolder, IconRefresh } from '../../components/common/Icons'
 import {
   applyWorkspaceRuntimeTransition,
   prepareWorkspaceRuntimeTransition,
 } from '../../utils/workspace-transition'
+import { remoteWorkspaceRefFromAgent } from './remote-workspace-confirmation'
 
 export function CclinkPanel(): React.ReactElement {
   const state = useCclinkStore()
@@ -192,13 +192,7 @@ function RemoteDirectoryPicker({
         serverId: server.id,
         path,
       })
-      const ref = remoteWorkspaceRef({
-        endpointId: server.id,
-        workspaceId: workspace.id,
-        path: workspace.path,
-        label: workspace.name,
-        endpointName: server.name,
-      })
+      const ref = remoteWorkspaceRefFromAgent(workspace, server.name)
       const transition = await prepareWorkspaceRuntimeTransition(ref)
       const applied = await applyWorkspaceRuntimeTransition(transition)
       if (!applied) throw new Error('工作空间已发生变化，请重试')

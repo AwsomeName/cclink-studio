@@ -103,8 +103,7 @@ export function RemoteFileTree({
       (session) =>
         session.id === selectedSessionId &&
         session.serverId === workspaceRef.endpointId &&
-        (session.workspaceId === workspaceRef.workspaceId ||
-          session.workspacePath === workspaceRef.path),
+        session.workspaceId === workspaceRef.workspaceId,
     )
     return existing ?? createSession(workspaceRef, '远程文件操作')
   }

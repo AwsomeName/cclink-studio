@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createCclinkEnvelope, type CclinkProtocolMessage } from '../../shared/cclink'
+import {
+  createCclinkEnvelope,
+  type CclinkProtocolMessage,
+  type CclinkServer,
+} from '../../shared/cclink'
 import type { RemoteStatus } from '../../shared/remote-protocol'
 import { CclinkRemoteService } from './cclink-remote-service'
+import { CclinkRequestError } from './request-router'
 
 const storedSession = {
   id: 'session-1',
@@ -32,6 +37,163 @@ function createService() {
 }
 
 describe('CclinkRemoteService runtime protocol', () => {
+  it('uses the Agent-owned opaque workspace_id when opening and validating a workspace', async () => {
+    const { service } = createService()
+    installOnlineServer(service)
+    vi.spyOn(service.getRequestRouter(), 'request').mockResolvedValue({
+      ...createCclinkEnvelope('file_tree_response'),
+      workspace_id: 'ws_agent_canonical',
+      path: '/srv/project',
+      items: [],
+    })
+
+    await expect(service.openWorkspace('agent-1', '/srv/project')).resolves.toEqual({
+      id: 'ws_agent_canonical',
+      path: '/srv/project',
+      name: 'project',
+      serverId: 'agent-1',
+      kind: 'directory',
+      exists: true,
+    })
+
+    const validation = (
+      service as unknown as {
+        validateWorkspace(ref: typeof remoteRef, path: string): unknown
+      }
+    ).validateWorkspace(
+      { ...remoteRef, workspaceId: 'ws_agent_canonical' },
+      '/srv/project/README.md',
+    )
+    expect(validation).toBeNull()
+
+    const wrongIdentity = (
+      service as unknown as {
+        validateWorkspace(ref: typeof remoteRef, path: string): unknown
+      }
+    ).validateWorkspace(
+      { ...remoteRef, workspaceId: 'studio_local_hash' },
+      '/srv/project/README.md',
+    )
+    expect(wrongIdentity).toMatchObject({
+      success: false,
+      remoteError: { code: 'REMOTE_WORKSPACE_NOT_FOUND' },
+    })
+  })
+
+  it('fails closed when file_tree_response omits the canonical workspace_id', async () => {
+    const { service } = createService()
+    installOnlineServer(service)
+    vi.spyOn(service.getRequestRouter(), 'request').mockResolvedValue({
+      ...createCclinkEnvelope('file_tree_response'),
+      path: '/srv/project',
+      items: [],
+    })
+
+    await expect(service.openWorkspace('agent-1', '/srv/project')).rejects.toThrow(
+      '远程 Agent 未返回规范 workspace_id',
+    )
+  })
+
+  it('maps the latest Agent capability response and preserves probe diagnostics', async () => {
+    const { service } = createService()
+    installOnlineServer(service)
+    vi.spyOn(service.getRequestRouter(), 'request').mockResolvedValue({
+      ...createCclinkEnvelope('capability_probe_response'),
+      agentVersion: '0.8.41',
+      protocolVersion: 2,
+      runtime: 'claude_code',
+      runtime_probe: { refresh_state: 'refreshing', checked_at: 123, stale: false },
+      capabilities: {
+        agent: { runtime_select: true, stream_json_input: true },
+        session: { streaming: false },
+      },
+      capability_map: { runtime_select: true, stream_json_input: true },
+      capability_list: ['runtime_select', 'stream_json_input'],
+    })
+
+    const status = await service.getStatus(remoteRef)
+    expect(status).toMatchObject({
+      state: 'online',
+      agentVersion: '0.8.41',
+      protocolVersion: '2',
+      runtime: 'claude_code',
+      capabilityProbe: {
+        state: 'refreshing',
+        checkedAt: '123',
+        stale: false,
+        response: expect.objectContaining({
+          cc_type: 'capability_probe_response',
+          agentVersion: '0.8.41',
+          capability_list: ['runtime_select', 'stream_json_input'],
+        }),
+      },
+      capabilities: { agent: { session: true, stream: true } },
+    })
+    expect(status.remoteError).toBeUndefined()
+  })
+
+  it('preserves the capability probe transport failure instead of reporting missing capability', async () => {
+    const { service } = createService()
+    installOnlineServer(service)
+    vi.spyOn(service.getRequestRouter(), 'request').mockRejectedValue(
+      new CclinkRequestError('发送能力探测失败', {
+        layer: 'transport',
+        code: 'REMOTE_TRANSPORT_SEND_FAILED',
+        message: '发送能力探测失败',
+        retryable: true,
+      }),
+    )
+
+    await expect(service.getStatus(remoteRef)).resolves.toMatchObject({
+      state: 'online',
+      remoteError: {
+        layer: 'transport',
+        code: 'REMOTE_TRANSPORT_SEND_FAILED',
+        message: '发送能力探测失败',
+        retryable: true,
+        context: { endpointId: 'agent-1', operation: 'capability.probe' },
+      },
+    })
+  })
+
+  it('accepts a namespaced capability_map streaming signal', async () => {
+    const { service } = createService()
+    installOnlineServer(service)
+    vi.spyOn(service.getRequestRouter(), 'request').mockResolvedValue({
+      ...createCclinkEnvelope('capability_probe_response'),
+      agent_version: '0.8.41',
+      capability_map: { 'agent.stream_json_input': true },
+      capability_list: [],
+    })
+
+    await expect(service.getStatus(remoteRef)).resolves.toMatchObject({
+      capabilities: { agent: { session: true, stream: true } },
+    })
+  })
+
+  it('only reports missing Agent capability after a clean probe response has no supported signal', async () => {
+    const { service } = createService()
+    installOnlineServer(service)
+    vi.spyOn(service.getRequestRouter(), 'request').mockResolvedValue({
+      ...createCclinkEnvelope('capability_probe_response'),
+      agent_version: '0.8.41',
+      runtime: 'claude_code',
+      runtime_probe: { refresh_state: 'ready', checked_at: 456, stale: false },
+      capabilities: { agent: {}, session: { streaming: false } },
+      capability_map: {},
+      capability_list: [],
+    })
+
+    await expect(service.getStatus(remoteRef)).resolves.toMatchObject({
+      state: 'online',
+      remoteError: {
+        layer: 'remote-agent',
+        code: 'REMOTE_CAPABILITY_UNAVAILABLE',
+        retryable: false,
+      },
+    })
+  })
+
   it('保留 Agent 审批字段并把主动问题送到会话 UI', async () => {
     const { service, handle } = createService()
     await service.initialize()
@@ -187,6 +349,27 @@ describe('CclinkRemoteService runtime protocol', () => {
     )
   })
 })
+
+function installOnlineServer(
+  service: CclinkRemoteService,
+  workspaces: CclinkServer['workspaces'] = [],
+): void {
+  const internals = service as unknown as {
+    status: { state: 'online' }
+    servers: Map<string, CclinkServer>
+  }
+  internals.status = { state: 'online' }
+  internals.servers.set('agent-1', {
+    id: 'agent-1',
+    name: 'Agent 1',
+    hostname: 'agent-1',
+    os: 'Linux',
+    status: 'online',
+    agentVersion: '0.8.41',
+    lastSeen: Date.now(),
+    workspaces,
+  })
+}
 
 const remoteRef = {
   kind: 'remote' as const,

@@ -255,9 +255,7 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
     if (event.type === 'sessions') {
       const ref = get().activeSessionsRef
       if (!ref || ref.endpointId !== event.serverId || !event.sessions) return
-      const sessions = event.sessions.filter(
-        (session) => session.workspaceId === ref.workspaceId || session.workspacePath === ref.path,
-      )
+      const sessions = event.sessions.filter((session) => session.workspaceId === ref.workspaceId)
       set((state) => ({
         sessions,
         selectedSessionId: sessions.some((session) => session.id === state.selectedSessionId)

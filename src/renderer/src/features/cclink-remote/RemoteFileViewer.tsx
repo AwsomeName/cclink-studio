@@ -114,7 +114,7 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
         (item) =>
           item.id === selectedSessionId &&
           item.serverId === ref.endpointId &&
-          (item.workspaceId === ref.workspaceId || item.workspacePath === ref.path),
+          item.workspaceId === ref.workspaceId,
       )
       if (!session) session = await createSession(ref, `文件修改 · ${tab.title}`)
       const now = Date.now()

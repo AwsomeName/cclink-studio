@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { chmod, copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { CclinkRemoteMessage, CclinkRemoteSession } from '../../shared/cclink'
@@ -149,6 +149,8 @@ function sanitizeSession(value: unknown): CclinkRemoteSession | null {
   if (
     typeof session.id !== 'string' ||
     typeof session.name !== 'string' ||
+    typeof session.workspaceId !== 'string' ||
+    !session.workspaceId.trim() ||
     typeof session.workspacePath !== 'string' ||
     typeof session.serverId !== 'string' ||
     typeof session.createdAt !== 'number' ||
@@ -158,10 +160,7 @@ function sanitizeSession(value: unknown): CclinkRemoteSession | null {
   return {
     id: session.id,
     name: session.name,
-    workspaceId:
-      typeof session.workspaceId === 'string'
-        ? session.workspaceId
-        : legacyWorkspaceId(session.serverId, session.workspacePath),
+    workspaceId: session.workspaceId,
     workspacePath: session.workspacePath,
     serverId: session.serverId,
     status: session.status === 'archived' ? 'archived' : 'idle',
@@ -333,10 +332,6 @@ function redactString(value: string): string {
   return value
     .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/giu, 'Bearer [REDACTED]')
     .replace(/\b(sk|ghp|github_pat)_[A-Za-z0-9_-]{12,}\b/gu, '[REDACTED]')
-}
-
-function legacyWorkspaceId(serverId: string, path: string): string {
-  return createHash('sha256').update(`${serverId}\0${path}`).digest('hex').slice(0, 24)
 }
 
 function isToolState(

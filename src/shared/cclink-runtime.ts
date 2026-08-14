@@ -86,7 +86,7 @@ export interface CclinkSessionSyncResponseMessage extends CclinkRuntimeEnvelope<
   sessions: Array<{
     session_id: string
     name?: string
-    workspace_id?: string
+    workspace_id: string
     workspace_path: string
     project_mode?: 'remote_workspace'
     workspace_restricted?: boolean

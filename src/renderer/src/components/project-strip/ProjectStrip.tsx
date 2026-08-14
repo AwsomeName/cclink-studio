@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   useAgentStore,
+  useCclinkStore,
   useFsStore,
   useOpenProjectsStore,
   useTabStore,
@@ -21,6 +22,7 @@ import {
   applyWorkspaceRuntimeTransition,
   prepareWorkspaceRuntimeTransition,
 } from '../../utils/workspace-transition'
+import { confirmRemoteWorkspaceRef } from '../../features/cclink-remote/remote-workspace-confirmation'
 
 type DropPlacement = 'before' | 'after'
 
@@ -52,6 +54,7 @@ export function ProjectStrip(): React.ReactElement {
   const openProjectPaths = useOpenProjectsStore((state) => state.openProjectPaths)
   const reorderProject = useOpenProjectsStore((state) => state.reorderProject)
   const openRemoteWorkspaceRefs = useOpenProjectsStore((state) => state.openRemoteWorkspaceRefs)
+  const replaceRemoteProject = useOpenProjectsStore((state) => state.replaceRemoteProject)
   const removeRemoteProject = useOpenProjectsStore((state) => state.removeRemoteProject)
   const recentWorkspacePaths = useFsStore((state) => state.recentWorkspacePaths)
   const openRecentWorkspace = useFsStore((state) => state.openRecentWorkspace)
@@ -130,7 +133,10 @@ export function ProjectStrip(): React.ReactElement {
     const ref = openRemoteWorkspaceRefs[index]
     if (!ref) return
     try {
-      const transition = await prepareWorkspaceRuntimeTransition(ref)
+      await useCclinkStore.getState().initialize()
+      const confirmedRef = await confirmRemoteWorkspaceRef(ref)
+      replaceRemoteProject(ref, confirmedRef)
+      const transition = await prepareWorkspaceRuntimeTransition(confirmedRef)
       const applied = await applyWorkspaceRuntimeTransition(transition)
       if (!applied) return
       useUIStore.getState().setActivePanel('files')
@@ -138,7 +144,8 @@ export function ProjectStrip(): React.ReactElement {
         .getState()
         .tabs.find(
           (item) =>
-            workspaceRefKey(item.workspaceRef ?? { kind: 'global' }) === workspaceRefKey(ref),
+            workspaceRefKey(item.workspaceRef ?? { kind: 'global' }) ===
+            workspaceRefKey(confirmedRef),
         )
       if (tab) useTabStore.getState().activateTab(tab.id)
     } catch (error) {

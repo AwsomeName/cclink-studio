@@ -263,6 +263,8 @@ Studio 内置手机号登录、Session 文件/token 刷新、CCLink 身份与设
 
 Studio 基础层唯一拥有 `RemoteWorkspaceRef`、Workspace、Tab、Workbench、项目条、WorkspaceState、RemoteProvider 契约、Terminal adapter 接入点、受信 IPC/schema、生命周期和诊断；CCLink 功能域只拥有账号、设备连接、远程请求和远程会话事实。
 
+远程工作空间身份由 Agent 规范化路径后生成并通过 `workspace_id` 返回。Studio 必须把该值当作不透明身份保存、校验和回传，不得按路径或设备 ID 本地重算，也不得用路径相等替代身份相等。能力探测同样以运行中 Agent 的原始 `capability_probe_response` 为事实源：只有收到可关联、协议兼容的响应且所有受支持表达均为 false/缺失时，才报告能力未声明；发送失败、超时、协议不兼容和响应类型/关联错误必须保留各自诊断语义。
+
 ## 运行时分层
 
 ```text
