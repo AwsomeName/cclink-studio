@@ -9,17 +9,14 @@ const forbiddenPatterns = [
   ['Electron safeStorage', /\bsafeStorage\b/],
   ['keytar dependency', /\bkeytar\b/i],
   ['Apple Keychain reference', /\bKeychain\b|\bkeychain\b/],
-  [
-    'Apple security credential command',
-    /(^|[;&|]\s*|\n\s*)security\s+(create-keychain|unlock-keychain|import|find-identity|set-key-partition-list|list-keychains)\b/m,
-  ],
-  ['Apple notarization command', /\bnotarytool\s+submit\b|\bstapler\s+(staple|validate)\b/],
-  ['Developer ID electron-builder identity', /--config\.mac\.identity=(?!-(?:\s|$))[^\s]+/m],
   ['retired settings credential owner', /\bSettingsCredentialStore\b/],
   ['retired Git credential owner', /\bGitBackupCredentialStore\b/],
   ['retired data-source credential owner', /\bDataSourceCredentialStore\b/],
 ]
 
+// NO_SYSTEM_KEYCHAIN applies to code that can run inside Studio or become an
+// application dependency. Release CI is intentionally outside this scan: ADR
+// 0011 requires its isolated runner to use an ephemeral keychain for signing.
 const output = execFileSync(
   'git',
   [
@@ -29,9 +26,6 @@ const output = execFileSync(
     '--exclude-standard',
     '-z',
     'src',
-    'scripts',
-    '.github',
-    'electron-builder.yml',
     'package.json',
     'pnpm-lock.yaml',
   ],
@@ -44,9 +38,7 @@ for (const relativePath of output.split('\0').filter(Boolean)) {
     relativePath.endsWith('.test.ts') ||
     relativePath.endsWith('.test.tsx') ||
     relativePath.endsWith('.spec.ts') ||
-    relativePath.endsWith('.spec.tsx') ||
-    relativePath.endsWith('.test.mjs') ||
-    relativePath === 'scripts/verify-credential-boundary.mjs'
+    relativePath.endsWith('.spec.tsx')
   ) {
     continue
   }
@@ -54,20 +46,6 @@ for (const relativePath of output.split('\0').filter(Boolean)) {
   if (!existsSync(absolutePath)) continue
   const text = readFileSync(absolutePath, 'utf8')
   for (const [label, pattern] of forbiddenPatterns) {
-    const releaseTooling =
-      relativePath.startsWith('scripts/') ||
-      relativePath.startsWith('.github/') ||
-      relativePath === 'electron-builder.yml'
-    if (
-      releaseTooling &&
-      ![
-        'Apple security credential command',
-        'Apple notarization command',
-        'Developer ID electron-builder identity',
-      ].includes(label)
-    ) {
-      continue
-    }
     const match = text.match(pattern)
     if (!match) continue
     const line = text.slice(0, match.index).split(/\r?\n/).length
@@ -90,4 +68,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log('Credential boundary verification passed.')
+console.log('Application runtime credential boundary verification passed.')

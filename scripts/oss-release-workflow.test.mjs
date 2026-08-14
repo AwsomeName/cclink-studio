@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import test from 'node:test'
 
 const workflow = readFileSync(resolve('.github/workflows/release-oss.yml'), 'utf8')
+const notarizeDmgScript = readFileSync(resolve('scripts/notarize-dmg.sh'), 'utf8')
 
 test('release workflow packages only Apple Silicon on the native runner', () => {
   assert.match(workflow, /package:[\s\S]*runs-on: macos-15/)
@@ -28,10 +29,59 @@ test('release validation reuses exact successful main CI without rerunning the f
   assert.doesNotMatch(validateSection, /pnpm --dir source smoke:standalone/)
 })
 
-test('release workflow never imports credentials or notarizes', () => {
-  assert.match(workflow, /--config\.mac\.identity=-/)
-  assert.match(workflow, /--config\.mac\.notarize=false/)
-  assert.doesNotMatch(workflow, /security |notarytool|stapler|CSC_LINK|CSC_KEY_PASSWORD|CSC_NAME/)
+test('release workflow verifies the P12 password and Developer ID identity before build', () => {
+  assert.match(workflow, /security import "\$certificate_path"/)
+  assert.match(workflow, /-P "\$CSC_KEY_PASSWORD"/)
+  assert.match(workflow, /security find-identity -v -p codesigning "\$keychain_path"/)
+  assert.match(workflow, /grep -F -- "\$CSC_NAME"/)
+})
+
+test('release workflow passes electron-builder an identity without the certificate prefix', () => {
+  assert.match(workflow, /builder_identity="\$\{CSC_NAME#Developer ID Application: \}"/)
+  assert.match(workflow, /unset CSC_NAME/)
+  assert.match(workflow, /--config\.mac\.identity="\$builder_identity"/)
+  assert.match(workflow, /--config\.mac\.notarize=true/)
+  assert.doesNotMatch(workflow, /--config\.mac\.identity="\$CSC_NAME"/)
+  assert.doesNotMatch(workflow, /--config\.mac\.identity=-|--config\.mac\.notarize=false/)
+})
+
+test('release workflow embeds and verifies immutable source provenance in the signed App', () => {
+  assert.match(workflow, /source-fingerprint\.mjs write "\$provenance_path"/)
+  assert.match(
+    workflow,
+    /source-fingerprint\.mjs verify-file[\s\\]*"\$provenance_path"[\s\\]*out\/build-provenance\.json/,
+  )
+  assert.match(workflow, /app\.asar\/out\/build-provenance\.json/)
+  assert.match(workflow, /source-fingerprint\.mjs verify-json "\$packaged_provenance"/)
+
+  const writeIndex = workflow.indexOf('source-fingerprint.mjs write')
+  const buildIndex = workflow.indexOf('pnpm build', writeIndex)
+  const packageIndex = workflow.indexOf('Package signed and notarized application')
+  const packagedVerifyIndex = workflow.indexOf('source-fingerprint.mjs verify-json')
+  assert.ok(writeIndex > 0)
+  assert.ok(buildIndex > writeIndex)
+  assert.ok(packageIndex > buildIndex)
+  assert.ok(packagedVerifyIndex > packageIndex)
+})
+
+test('release workflow signs and Gatekeeper-assesses each DMG before upload', () => {
+  assert.match(workflow, /CSC_NAME: \$\{\{ secrets\.MACOS_DEVELOPER_IDENTITY \}\}/)
+  assert.match(workflow, /codesign --verify --verbose=2 "\$dmg"/)
+  assert.match(workflow, /--type open/)
+  assert.match(workflow, /context:primary-signature/)
+
+  assert.match(notarizeDmgScript, /security import "\$certificate_path"/)
+  assert.match(notarizeDmgScript, /-A[\s\S]*-t cert[\s\S]*-f pkcs12/)
+  assert.match(notarizeDmgScript, /security set-key-partition-list[\s\S]*apple-tool:,apple:/)
+  assert.match(notarizeDmgScript, /security list-keychains -d user -s "\$keychain_path"/)
+  assert.match(notarizeDmgScript, /security find-identity[\s\S]*identity_hash/)
+  assert.match(notarizeDmgScript, /--sign "\$identity_hash"/)
+  assert.doesNotMatch(notarizeDmgScript, /codesign[\s\S]*--keychain/)
+  assert.match(notarizeDmgScript, /xcrun notarytool submit "\$dmg"/)
+  assert.match(notarizeDmgScript, /xcrun stapler staple "\$dmg"/)
+  assert.match(notarizeDmgScript, /spctl[\s\S]*--type open/)
+  assert.match(workflow, /Authority=\$CSC_NAME/)
+  assert.match(workflow, /TeamIdentifier=\$expected_team_id/)
 })
 
 test('release workflow normalizes public asset names before checksums and upload', () => {

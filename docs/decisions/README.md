@@ -41,3 +41,5 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
 - `0007-managed-claude-runtime.md`：允许 Studio 从受限 npm 平台包安装并管理 Claude Runtime，保持 Agent SDK 为完整 App 核心代码，并定义 App 替换复用、会话边界和回滚门禁。
 - `0008-managed-runtime-resources.md`：允许固定目录下载安装 OCCT WASM、scrcpy server 与 agent-device Android Helper，禁止执行下载 JavaScript，并明确各领域激活、App 内回退和 Helper 待宿主支持边界。
 - `0010-thin-runtime-package.md`：Claude Runtime 不再随 `.app` 分发，改为组件页按需安装；旧 bundled 选择迁移到 managed，Agent 缺失不阻断工作台。
+- `0011-release-signing-runtime-keychain-boundary.md`：明确 NO_SYSTEM_KEYCHAIN 只约束 App
+  运行时；正式 Release 必须在隔离 CI 中使用临时钥匙串完成 Developer ID 签名和 Apple 公证。

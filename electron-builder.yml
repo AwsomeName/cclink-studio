@@ -34,7 +34,7 @@ mac:
   target:
     - dmg
   category: public.app-category.productivity
-  # All builds use ad-hoc signing only. NO_SYSTEM_KEYCHAIN forbids certificate import,
-  # Developer ID signing, and Apple notarization in both local and CI release paths.
+  # Local builds use ad-hoc signing. The OSS Release workflow overrides this identity
+  # with its protected Developer ID.
   identity: '-'
 # 开源壳不内置生产更新源；商业版更新源与发布配置由 cclink-dev 构建层注入。
