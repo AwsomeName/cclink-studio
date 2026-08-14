@@ -539,7 +539,9 @@ async function main() {
       assert(inferredName.trim().length > 0, 'account name was not prefilled from the current page')
       await accountNameInput.fill('')
       await page.getByRole('button', { name: '保存', exact: true }).click()
-      await page.getByText('请输入账号名称').waitFor({ state: 'visible', timeout: 5_000 })
+      await page
+        .getByText('请输入账号名称', { exact: true })
+        .waitFor({ state: 'visible', timeout: 5_000 })
       assert(
         (await primaryRow().count()) === 0,
         'empty account name unexpectedly created a project resource',
