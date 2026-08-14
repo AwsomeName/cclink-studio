@@ -5,6 +5,7 @@ import {
   type BrowserWindowConstructorOptions,
   type ContextMenuParams,
   type HandlerDetails,
+  type Input,
   type WebContents,
   type WindowOpenHandlerResponse,
 } from 'electron'
@@ -39,6 +40,15 @@ import {
 } from './browser-view-reconciliation'
 import { normalizeBrowserContext, showBrowserContextMenu } from './browser-context-menu'
 import { rendererBoundsToWindowDip } from './browser-view-bounds'
+import { keyChordId, normalizeKeyChord, type KeyChord } from '../../shared/keybindings'
+import type {
+  BrowserFindRequest,
+  BrowserFindRequestResult,
+  BrowserFindShortcutSyncInput,
+  BrowserFindShortcutSyncResult,
+  BrowserRuntimeIdentity,
+  BrowserStopFindRequest,
+} from '../../shared/ipc/browser'
 
 /** 移动版模拟时的目标视口宽度（CSS px，约等于 iPhone Pro 逻辑宽度） */
 const MOBILE_WIDTH = 414
@@ -68,6 +78,17 @@ export type { BrowserViewState } from '../../shared/ipc/browser'
  */
 interface ViewEntry {
   view: WebContentsView
+  /** 同 tabId 重建时变化，用于拒绝旧 renderer 请求。 */
+  runtimeGeneration: number
+  activeFind: {
+    requestToken: string
+    nativeRequestId: number
+    query: string
+    matches: number
+    activeMatchOrdinal: number
+    nativeResultReceived: boolean
+    fallbackTimer: ReturnType<typeof setTimeout> | null
+  } | null
   /** 是否已收到真实 bounds（首次加载用） */
   boundsReceived: boolean
   /** 设备模式：桌面 / 移动 */
@@ -102,6 +123,34 @@ interface ViewEntry {
     disposition: BrowserPopupDisposition
     adoptionTimer: ReturnType<typeof setTimeout> | null
   } | null
+}
+
+function browserInputToKeyChord(input: Input): KeyChord | null {
+  if (!input.code) return null
+  const mac = process.platform === 'darwin'
+  const modifiers: KeyChord['modifiers'] = []
+  if (mac ? input.meta : input.control) modifiers.push('primary')
+  if (mac && input.control) modifiers.push('control')
+  if (input.alt) modifiers.push('alt')
+  if (input.shift) modifiers.push('shift')
+  return normalizeKeyChord({ code: input.code, modifiers })
+}
+
+function acceleratorKeyCode(code: string): string | null {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3)
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5)
+  const named: Record<string, string> = {
+    Enter: 'Enter',
+    BracketLeft: '[',
+    BracketRight: ']',
+    Comma: ',',
+    Period: '.',
+    Slash: '/',
+    Backslash: '\\',
+    Minus: '-',
+    Equal: '=',
+  }
+  return named[code] ?? null
 }
 
 /**
@@ -142,11 +191,49 @@ export class BrowserManager {
   >()
   private readonly sessionDiagnostics = new BrowserSessionDiagnostics()
   private browserAuthRequestHandler: ((request: BrowserAuthRequest) => void) | null = null
+  private nextRuntimeGeneration = 1
+  private findShortcutConfig: { configVersion: number; bindings: KeyChord[] } = {
+    configVersion: 0,
+    bindings: [],
+  }
+  private findShortcutTriggerSequence = 0
 
   constructor(mainWindow: BrowserWindow, defaults?: { zoomMode?: ZoomMode; viewMode?: ViewMode }) {
     this.mainWindow = mainWindow
     if (defaults?.zoomMode) this.defaultZoomMode = defaults.zoomMode
     if (defaults?.viewMode) this.defaultViewMode = defaults.viewMode
+  }
+
+  /** Smoke-only native input path; rejected outside an isolated test userData process. */
+  dispatchFindShortcutForSmoke(tabId: string): void {
+    if (!process.env.CCLINK_STUDIO_TEST_USER_DATA_PATH) {
+      throw new Error('Browser 快捷键 smoke 输入只允许隔离测试环境')
+    }
+    const entry = this.requireActiveView(tabId)
+    const binding = this.findShortcutConfig.bindings[0]
+    if (!binding) throw new Error('Browser 查找快捷键尚未同步')
+    const keyCode = acceleratorKeyCode(binding.code)
+    if (!keyCode) return
+    const modifiers: NonNullable<Electron.InputEvent['modifiers']> = []
+    for (const modifier of binding.modifiers) {
+      if (modifier === 'primary') {
+        modifiers.push(process.platform === 'darwin' ? 'command' : 'control')
+      } else if (modifier === 'control') {
+        modifiers.push('control')
+      } else {
+        modifiers.push(modifier)
+      }
+    }
+    entry.view.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers })
+    entry.view.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
+  }
+
+  private requireActiveView(tabId: string): ViewEntry {
+    const entry = this.views.get(tabId)
+    if (!entry || this.activeViewId !== tabId || entry.workspaceKey !== this.currentWorkspaceKey) {
+      throw new Error('Browser smoke 目标已失效')
+    }
+    return entry
   }
 
   /** 安全获取主窗口（已销毁则返回 null） */
@@ -334,6 +421,8 @@ export class BrowserManager {
 
     const entry: ViewEntry = {
       view,
+      runtimeGeneration: this.nextRuntimeGeneration++,
+      activeFind: null,
       boundsReceived: false,
       viewMode: initViewMode,
       zoomMode: opts?.restore?.zoomMode ?? this.defaultZoomMode,
@@ -372,6 +461,66 @@ export class BrowserManager {
   /** 普通工作台 View 与网页 popup 共用同一套安全、导航和自动化监听。 */
   private installViewListeners(tabId: string, entry: ViewEntry): void {
     const wc = entry.view.webContents
+    wc.on('before-input-event', (event, input) => {
+      if (
+        input.type !== 'keyDown' ||
+        input.isAutoRepeat ||
+        input.isComposing ||
+        this.views.get(tabId) !== entry ||
+        this.activeViewId !== tabId ||
+        this.currentWorkspaceKey !== entry.workspaceKey
+      ) {
+        return
+      }
+      const chord = browserInputToKeyChord(input)
+      if (
+        !chord ||
+        !this.findShortcutConfig.bindings.some(
+          (binding) => keyChordId(binding) === keyChordId(chord),
+        )
+      ) {
+        return
+      }
+      event.preventDefault()
+      console.log(
+        `[BrowserShortcut] 触发 workbench.find config=${this.findShortcutConfig.configVersion} tab=${tabId} generation=${entry.runtimeGeneration}`,
+      )
+      this.win()?.webContents.send(browserIpcEvents.findShortcutTriggered, {
+        commandId: 'workbench.find',
+        configVersion: this.findShortcutConfig.configVersion,
+        triggerSequence: ++this.findShortcutTriggerSequence,
+        tabId,
+        workspaceKey: entry.workspaceKey,
+        runtimeGeneration: entry.runtimeGeneration,
+      })
+    })
+    wc.on('found-in-page', (_event, result) => {
+      if (
+        this.views.get(tabId) !== entry ||
+        !entry.activeFind ||
+        (entry.activeFind.nativeRequestId !== 0 &&
+          entry.activeFind.nativeRequestId !== result.requestId)
+      ) {
+        return
+      }
+      console.log(
+        `[BrowserFind] 结果 tab=${tabId} generation=${entry.runtimeGeneration} matches=${result.matches} active=${result.activeMatchOrdinal}`,
+      )
+      if (entry.activeFind.fallbackTimer) clearTimeout(entry.activeFind.fallbackTimer)
+      entry.activeFind.fallbackTimer = null
+      entry.activeFind.nativeResultReceived = true
+      entry.activeFind.matches = result.matches
+      entry.activeFind.activeMatchOrdinal = result.activeMatchOrdinal
+      this.win()?.webContents.send(browserIpcEvents.findResult, {
+        tabId,
+        workspaceKey: entry.workspaceKey,
+        runtimeGeneration: entry.runtimeGeneration,
+        requestToken: entry.activeFind.requestToken,
+        matches: result.matches,
+        activeMatchOrdinal: result.activeMatchOrdinal,
+        finalUpdate: result.finalUpdate,
+      })
+    })
     wc.on('will-navigate', (event, url) => {
       if (this.routeBrowserAuth(tabId, entry, url)) {
         event.preventDefault()
@@ -499,6 +648,8 @@ export class BrowserManager {
 
     const entry: ViewEntry = {
       view,
+      runtimeGeneration: this.nextRuntimeGeneration++,
+      activeFind: null,
       // Chromium 已拥有此次 popup 导航；不能由 ensureLoaded 再次 loadURL。
       boundsReceived: true,
       viewMode: sourceEntry.viewMode,
@@ -713,6 +864,7 @@ export class BrowserManager {
   private removeViewEntry(tabId: string, entry: ViewEntry): boolean {
     if (this.views.get(tabId) !== entry) return false
     if (entry.fitDebounce) clearTimeout(entry.fitDebounce)
+    if (entry.activeFind?.fallbackTimer) clearTimeout(entry.activeFind.fallbackTimer)
     if (entry.popup?.adoptionTimer) clearTimeout(entry.popup.adoptionTimer)
     entry.contextMenuToken = null
     if (entry.popup) entry.popup.adoptionTimer = null
@@ -780,6 +932,7 @@ export class BrowserManager {
     win.contentView.addChildView(entry.view)
     entry.view.setBounds(this.currentBounds)
     this.activeViewId = tabId
+    entry.view.webContents.focus()
     void this.playwrightBridge?.switchToPage(tabId).catch(() => {
       // 页面尚未 claim 时由 did-finish-load 完成绑定和激活。
     })
@@ -947,6 +1100,140 @@ export class BrowserManager {
   /** 当前真正 attach 到窗口里的可视浏览器视图 ID。 */
   getActiveViewId(): string | null {
     return this.activeViewId
+  }
+
+  syncFindShortcut(input: BrowserFindShortcutSyncInput): BrowserFindShortcutSyncResult {
+    if (input.configVersion >= this.findShortcutConfig.configVersion) {
+      this.findShortcutConfig = {
+        configVersion: input.configVersion,
+        bindings: input.bindings.map(normalizeKeyChord),
+      }
+      console.log(
+        `[BrowserShortcut] 已同步 workbench.find config=${input.configVersion} bindings=${input.bindings.length}`,
+      )
+    }
+    return { appliedConfigVersion: this.findShortcutConfig.configVersion }
+  }
+
+  getRuntimeIdentity(tabId: string): BrowserRuntimeIdentity | null {
+    const entry = this.views.get(tabId)
+    console.log(
+      `[BrowserFind] 查询 runtime tab=${tabId} found=${Boolean(entry)} active=${this.activeViewId === tabId}`,
+    )
+    if (!entry) return null
+    return {
+      tabId,
+      workspaceKey: entry.workspaceKey,
+      runtimeGeneration: entry.runtimeGeneration,
+    }
+  }
+
+  findInPage(input: BrowserFindRequest): BrowserFindRequestResult {
+    const entry = this.requireCurrentFindTarget(input)
+    const previousFind = entry.activeFind
+    if (previousFind?.fallbackTimer) clearTimeout(previousFind.fallbackTimer)
+    let activeMatchOrdinal = 1
+    if (input.findNext && previousFind?.query === input.query && previousFind.matches > 0) {
+      activeMatchOrdinal = input.forward
+        ? (previousFind.activeMatchOrdinal % previousFind.matches) + 1
+        : ((previousFind.activeMatchOrdinal + previousFind.matches - 2) % previousFind.matches) + 1
+    }
+    // Electron may emit the first found-in-page update before findInPage returns its
+    // native requestId, so publish the client correlation token first.
+    entry.activeFind = {
+      requestToken: input.requestToken,
+      nativeRequestId: 0,
+      query: input.query,
+      matches: previousFind?.query === input.query ? previousFind.matches : 0,
+      activeMatchOrdinal,
+      nativeResultReceived: false,
+      fallbackTimer: null,
+    }
+    const nativeRequestId = entry.view.webContents.findInPage(input.query, {
+      forward: input.forward,
+      findNext: input.findNext,
+    })
+    console.log(
+      `[BrowserFind] 已发起 tab=${input.tabId} generation=${input.runtimeGeneration} request=${nativeRequestId}`,
+    )
+    if (entry.activeFind?.requestToken === input.requestToken) {
+      entry.activeFind.nativeRequestId = nativeRequestId
+      if (!entry.activeFind.nativeResultReceived) {
+        entry.activeFind.fallbackTimer = setTimeout(
+          () => void this.emitFindFallback(input.tabId, entry, input.requestToken),
+          300,
+        )
+      }
+    }
+    return { accepted: true, runtimeGeneration: entry.runtimeGeneration }
+  }
+
+  stopFindInPage(input: BrowserStopFindRequest): void {
+    const entry = this.requireCurrentFindTarget(input)
+    if (entry.activeFind?.fallbackTimer) clearTimeout(entry.activeFind.fallbackTimer)
+    entry.activeFind = null
+    entry.view.webContents.stopFindInPage(input.action)
+  }
+
+  private async emitFindFallback(
+    tabId: string,
+    entry: ViewEntry,
+    requestToken: string,
+  ): Promise<void> {
+    const activeFind = entry.activeFind
+    if (
+      this.views.get(tabId) !== entry ||
+      !activeFind ||
+      activeFind.requestToken !== requestToken
+    ) {
+      return
+    }
+    activeFind.fallbackTimer = null
+    try {
+      const matches = await entry.view.webContents.executeJavaScript(
+        `(function(q){var root=document.body;if(!root||!q)return 0;var w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:function(n){var p=n.parentElement;return !p||/^(SCRIPT|STYLE|NOSCRIPT)$/.test(p.tagName)?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT;}});var total=0;var needle=q.toLocaleLowerCase();var n;while((n=w.nextNode())){var text=(n.nodeValue||'').toLocaleLowerCase();var i=0;while((i=text.indexOf(needle,i))>=0){total++;i+=Math.max(needle.length,1);}}return total;})(${JSON.stringify(activeFind.query)})`,
+      )
+      if (
+        this.views.get(tabId) !== entry ||
+        entry.activeFind !== activeFind ||
+        activeFind.requestToken !== requestToken
+      ) {
+        return
+      }
+      activeFind.matches = typeof matches === 'number' ? Math.max(0, Math.trunc(matches)) : 0
+      activeFind.activeMatchOrdinal =
+        activeFind.matches > 0
+          ? Math.min(Math.max(activeFind.activeMatchOrdinal, 1), activeFind.matches)
+          : 0
+      console.warn(
+        `[BrowserFind] 原生结果超时，使用计数降级 tab=${tabId} matches=${activeFind.matches}`,
+      )
+      this.win()?.webContents.send(browserIpcEvents.findResult, {
+        tabId,
+        workspaceKey: entry.workspaceKey,
+        runtimeGeneration: entry.runtimeGeneration,
+        requestToken,
+        matches: activeFind.matches,
+        activeMatchOrdinal: activeFind.activeMatchOrdinal,
+        finalUpdate: true,
+      })
+    } catch (error) {
+      console.warn(`[BrowserFind] 计数降级失败 tab=${tabId}:`, error)
+    }
+  }
+
+  private requireCurrentFindTarget(input: BrowserRuntimeIdentity): ViewEntry {
+    const entry = this.views.get(input.tabId)
+    if (
+      !entry ||
+      entry.runtimeGeneration !== input.runtimeGeneration ||
+      entry.workspaceKey !== input.workspaceKey ||
+      this.currentWorkspaceKey !== input.workspaceKey ||
+      this.activeViewId !== input.tabId
+    ) {
+      throw new Error('浏览器查找目标已失效')
+    }
+    return entry
   }
 
   /** 返回指定项目当前可见的浏览器；绝不回退到其他项目的活跃视图。 */

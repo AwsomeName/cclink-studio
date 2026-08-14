@@ -5,6 +5,7 @@ import type { Tab } from '../../types'
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import type { BrowserViewBinding } from '@shared/ipc/browser'
+import { useBrowserFindStore } from '../../features/browser/browser-find-store'
 
 /** 管理内嵌浏览器 WebContentsView 的创建、激活、隐藏和销毁。 */
 export function useBrowserViewLifecycle(
@@ -108,6 +109,7 @@ export function useBrowserViewLifecycle(
     const removed = prev.filter((id) => !next.includes(id))
     for (const id of removed) {
       useBrowserStore.getState().removeTab(id)
+      useBrowserFindStore.getState().remove(id)
     }
     prevBrowserIdsRef.current = next
   }, [browserTabIds])

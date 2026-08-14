@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useCommandStore } from '../../stores/command-store'
 import type { Command } from '../../stores/command-store'
 import { IconSearch } from '../common/Icons'
+import { useSettingsStore } from '../../stores/settings-store'
+import { effectiveBindingsForCommand } from '../../features/shortcuts/keybinding-resolver'
+import { formatKeyChord, isMacPlatform } from '@shared/keybindings'
 
 export function CommandPalette(): React.ReactElement {
   const paletteOpen = useCommandStore((s) => s.paletteOpen)
@@ -10,6 +13,8 @@ export function CommandPalette(): React.ReactElement {
   const closePalette = useCommandStore((s) => s.closePalette)
   const getFilteredCommands = useCommandStore((s) => s.getFilteredCommands)
   const executeCommand = useCommandStore((s) => s.executeCommand)
+  const overrides = useSettingsStore((state) => state.settings.keybindingOverrides)
+  const mac = isMacPlatform(typeof navigator === 'undefined' ? '' : navigator.platform)
 
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -119,6 +124,11 @@ export function CommandPalette(): React.ReactElement {
               {group.commands.map((cmd) => {
                 const idx = flatIndex++
                 const isSelected = idx === selectedIndex
+                const effectiveShortcut = cmd.shortcutPolicy
+                  ? effectiveBindingsForCommand(cmd, overrides)
+                      .map((binding) => formatKeyChord(binding, mac))
+                      .join(' / ')
+                  : cmd.shortcut
                 return (
                   <div
                     key={cmd.id}
@@ -128,7 +138,9 @@ export function CommandPalette(): React.ReactElement {
                     onMouseEnter={() => setSelectedIndex(idx)}
                   >
                     <span className="command-palette-label">{cmd.label}</span>
-                    {cmd.shortcut && <kbd className="command-palette-shortcut">{cmd.shortcut}</kbd>}
+                    {effectiveShortcut && (
+                      <kbd className="command-palette-shortcut">{effectiveShortcut}</kbd>
+                    )}
                   </div>
                 )
               })}

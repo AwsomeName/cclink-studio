@@ -14,7 +14,7 @@ describe('resolveEditorSaveControl', () => {
     expect(resolveEditorSaveControl('/workspace/notes.md', true)).toEqual({
       kind: 'action',
       label: '保存',
-      title: '保存 (⌘S)',
+      title: '保存',
     })
   })
 
@@ -22,7 +22,7 @@ describe('resolveEditorSaveControl', () => {
     expect(resolveEditorSaveControl(undefined, false)).toEqual({
       kind: 'action',
       label: '另存为',
-      title: '另存为 (⌘S)',
+      title: '另存为',
     })
   })
 })

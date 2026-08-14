@@ -3,9 +3,13 @@ import { isMacPlatform, keyChordFromKeyboardEvent, keyChordId } from '@shared/ke
 import { useCommandStore } from '../../stores/command-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import { useTabStore } from '../../stores/tab-store'
-import { isHtmlFilePath } from '../../utils/html-files'
+import { getEditorContextSurface } from '../context-actions/editor-context-surface'
+import { useContextMenuStore } from '../context-actions/context-menu-store'
+import { isAnyFloatingSurfaceOpen } from '../../components/common/floating-surface-registry'
 import { resolveEffectiveKeybindings } from './keybinding-resolver'
+import type { EffectiveKeybinding } from './keybinding-resolver'
 import { consumeShortcutCaptureEvent } from './shortcut-capture'
+import { recordRendererDiagnosticLog } from '../diagnostics/renderer-diagnostic-log'
 
 function isTextEditingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false
@@ -14,18 +18,43 @@ function isTextEditingTarget(target: EventTarget | null): boolean {
   )
 }
 
-function scopeIsActive(scope: string): boolean {
+function activeShortcutScopes(): Set<string> {
   const tab = useTabStore.getState().getActiveTab()
-  if (scope === 'global') return true
-  if (!tab) return false
-  if (scope === 'workbench') return true
-  if (scope === 'editor') return tab.type === 'editor'
-  if (scope === 'markdown') {
-    return tab.type === 'editor' && (!tab.filePath || !isHtmlFilePath(tab.filePath))
+  const scopes = new Set<string>(['global'])
+  if (!tab) return scopes
+  scopes.add('workbench')
+  if (tab.type === 'editor') {
+    scopes.add('editor')
+    if (getEditorContextSurface(tab.id)?.runMarkdownAction) scopes.add('markdown')
   }
-  if (scope === 'terminal') return tab.type === 'terminal'
-  if (scope === 'browser') return tab.type === 'browser'
-  return false
+  if (tab.type === 'terminal') scopes.add('terminal')
+  if (tab.type === 'browser') scopes.add('browser')
+  return scopes
+}
+
+const SCOPE_PRIORITY: Record<string, number> = {
+  markdown: 60,
+  terminal: 50,
+  browser: 50,
+  editor: 40,
+  workbench: 30,
+  global: 20,
+}
+
+export function selectShortcutBinding(
+  bindings: EffectiveKeybinding[],
+  chordId: string,
+  activeScopes: ReadonlySet<string>,
+  editing: boolean,
+): EffectiveKeybinding | undefined {
+  return bindings
+    .filter(
+      (candidate) =>
+        keyChordId(candidate.chord) === chordId &&
+        activeScopes.has(candidate.scope) &&
+        (!editing || candidate.inputPolicy === 'allow'),
+    )
+    .sort((left, right) => SCOPE_PRIORITY[right.scope] - SCOPE_PRIORITY[left.scope])[0]
 }
 
 export function useShortcutRouter(): void {
@@ -45,17 +74,24 @@ export function useShortcutRouter(): void {
       if (!chord) return
       const chordId = keyChordId(chord)
       const editing = isTextEditingTarget(event.target)
-      const binding = bindings.find(
-        (candidate) =>
-          keyChordId(candidate.chord) === chordId &&
-          scopeIsActive(candidate.scope) &&
-          (!editing || candidate.inputPolicy === 'allow'),
-      )
+      const binding = selectShortcutBinding(bindings, chordId, activeShortcutScopes(), editing)
       if (!binding) return
+      const commandState = useCommandStore.getState()
+      if (commandState.paletteOpen && binding.commandId !== 'workbench.showCommands') return
+      if (useContextMenuStore.getState().open || isAnyFloatingSurfaceOpen()) return
       event.preventDefault()
       event.stopPropagation()
       event.stopImmediatePropagation()
-      void executeCommand(binding.commandId, { source: 'shortcut' })
+      void executeCommand(binding.commandId, { source: 'shortcut' }).then((result) => {
+        if (result.ok) return
+        recordRendererDiagnosticLog('warn', [
+          '[ShortcutRouter]',
+          binding.commandId,
+          binding.scope,
+          chordId,
+          result.reason ?? 'failed',
+        ])
+      })
     }
     window.addEventListener('keydown', route, true)
     return () => window.removeEventListener('keydown', route, true)

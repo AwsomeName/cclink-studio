@@ -1,4 +1,5 @@
 import { Extension, type Editor } from '@tiptap/core'
+import type { MarkdownEditorAction } from '../context-actions/editor-context-surface'
 
 interface MarkdownKeyboardShortcutOptions {
   openLinkEditor: (editor: Editor) => boolean
@@ -147,6 +148,96 @@ export function toggleMarkdownBlockquote(editor: Editor): boolean {
   return chain.unsetBlockquote().run()
 }
 
+export function runMarkdownEditorAction(
+  editor: Editor,
+  action: MarkdownEditorAction,
+  openLinkEditor: (editor: Editor) => boolean,
+): boolean {
+  if (!editor.isEditable) return false
+  switch (action) {
+    case 'undo':
+      return editor.chain().focus().undo().run()
+    case 'redo':
+      return editor.chain().focus().redo().run()
+    case 'bold':
+      return editor.chain().focus().toggleBold().run()
+    case 'italic':
+      return editor.chain().focus().toggleItalic().run()
+    case 'strike':
+      return editor.chain().focus().toggleStrike().run()
+    case 'inline-code':
+      return editor.chain().focus().toggleCode().run()
+    case 'bullet-list':
+      return editor.chain().focus().toggleBulletList().run()
+    case 'ordered-list':
+      return editor.chain().focus().toggleOrderedList().run()
+    case 'task-list':
+      return editor.chain().focus().toggleTaskList().run()
+    case 'blockquote':
+      return toggleMarkdownBlockquote(editor)
+    case 'code-block':
+      return editor.chain().focus().toggleCodeBlock().run()
+    case 'hard-break':
+      return editor.chain().focus().setHardBreak().run()
+    case 'link':
+      return openLinkEditor(editor)
+    case 'paragraph':
+      return editor.chain().focus().setParagraph().run()
+    case 'indent-list':
+      return adjustMarkdownListIndent(editor, 'indent')
+    case 'outdent-list':
+      return adjustMarkdownListIndent(editor, 'outdent')
+    default: {
+      const match = /^heading-([1-6])$/.exec(action)
+      if (!match) return false
+      return editor
+        .chain()
+        .focus()
+        .toggleHeading({ level: Number(match[1]) as 1 | 2 | 3 | 4 | 5 | 6 })
+        .run()
+    }
+  }
+}
+
+/**
+ * Tiptap extensions ship their own fixed Mod shortcuts. The window-level router owns all
+ * configurable application chords, so a migrated legacy chord reaching ProseMirror means the
+ * user removed or changed that binding and the old built-in behavior must be suppressed.
+ */
+export const MarkdownMigratedShortcutBoundary = Extension.create({
+  name: 'markdownMigratedShortcutBoundary',
+  priority: 10_000,
+  addKeyboardShortcuts() {
+    const block = (): boolean => true
+    return {
+      'Mod-z': block,
+      'Mod-Shift-z': block,
+      'Mod-y': block,
+      'Mod-b': block,
+      'Mod-i': block,
+      'Mod-Shift-s': block,
+      'Mod-Shift-x': block,
+      'Mod-e': block,
+      'Mod-Shift-7': block,
+      'Mod-Shift-8': block,
+      'Mod-Shift-9': block,
+      'Mod-Shift-b': block,
+      'Mod-Alt-c': block,
+      'Mod-Enter': block,
+      'Mod-k': block,
+      'Mod-Alt-0': block,
+      'Mod-Alt-1': block,
+      'Mod-Alt-2': block,
+      'Mod-Alt-3': block,
+      'Mod-Alt-4': block,
+      'Mod-Alt-5': block,
+      'Mod-Alt-6': block,
+      'Mod-]': block,
+      'Mod-[': block,
+    }
+  },
+})
+
 function getDomBlockquoteSelectionPosition(editor: Editor): number | null {
   if (typeof window === 'undefined') return null
   const selection = window.getSelection()
@@ -177,12 +268,6 @@ export const MarkdownKeyboardShortcuts = Extension.create<MarkdownKeyboardShortc
       Space: () => applyMarkdownTaskInputShortcut(this.editor),
       Tab: () => handleMarkdownTabKey(this.editor, 'indent', this.options.tabSize),
       'Shift-Tab': () => handleMarkdownTabKey(this.editor, 'outdent', this.options.tabSize),
-      'Mod-k': () => this.options.openLinkEditor(this.editor),
-      'Mod-Alt-0': () => this.editor.commands.setParagraph(),
-      'Mod-Shift-b': () => toggleMarkdownBlockquote(this.editor),
-      'Mod-Shift-x': () => this.editor.commands.toggleStrike(),
-      'Mod-]': () => adjustMarkdownListIndent(this.editor, 'indent'),
-      'Mod-[': () => adjustMarkdownListIndent(this.editor, 'outdent'),
     }
   },
 })

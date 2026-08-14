@@ -4,11 +4,14 @@ import { browserDownloadIpc, browserIpc, browserTaskIpc } from './browser'
 import {
   browserCreateViewOptionsSchema,
   browserHistoryLimitSchema,
+  browserFindRequestSchema,
+  browserFindShortcutSyncSchema,
   browserIdentifierSchema,
   browserOptionalIdentifierSchema,
   browserReconcileViewsSchema,
   browserSessionDiagnosticRequestSchema,
   browserTaskGoalSchema,
+  browserStopFindRequestSchema,
   browserUrlSchema,
   browserViewModeSchema,
   browserWorkspaceKeySchema,
@@ -80,6 +83,20 @@ export const browserIpcContracts = {
       throw new Error(`IPC ${browserIpc.getActiveViewId.channel} 最多接受 1 个参数`)
     return ipcArgs(args[0] === undefined ? undefined : browserWorkspaceKeySchema.parse(args[0]))
   }),
+  syncFindShortcut: bindBrowserParser(browserIpc.syncFindShortcut, (args) => {
+    requireArgs(args, 1, browserIpc.syncFindShortcut.channel)
+    return ipcArgs(browserFindShortcutSyncSchema.parse(args[0]))
+  }),
+  getRuntimeIdentity: bindIdentifier(browserIpc.getRuntimeIdentity),
+  findInPage: bindBrowserParser(browserIpc.findInPage, (args) => {
+    requireArgs(args, 1, browserIpc.findInPage.channel)
+    return ipcArgs(browserFindRequestSchema.parse(args[0]))
+  }),
+  stopFindInPage: bindBrowserParser(browserIpc.stopFindInPage, (args) => {
+    requireArgs(args, 1, browserIpc.stopFindInPage.channel)
+    return ipcArgs(browserStopFindRequestSchema.parse(args[0]))
+  }),
+  dispatchFindShortcutForSmoke: bindIdentifier(browserIpc.dispatchFindShortcutForSmoke),
   getDiagnostics: bindIdentifier(browserIpc.getDiagnostics),
   getRuntimeDiagnostics: bindIdentifier(browserIpc.getRuntimeDiagnostics),
   getSessionDiagnostics: bindBrowserParser(browserIpc.getSessionDiagnostics, (args) => {

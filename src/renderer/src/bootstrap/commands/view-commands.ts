@@ -29,22 +29,37 @@ export function createViewCommands(deps: ViewCommandDeps): Command[] {
     {
       id: 'workbench.toggleSidebar',
       label: '切换侧栏',
-      shortcut: '⌘ B',
       category: '视图',
+      configurable: true,
+      shortcutPolicy: {
+        scope: 'global',
+        inputPolicy: 'deny',
+        defaultBindings: [{ code: 'KeyB', modifiers: ['primary'] }],
+      },
       action: deps.toggleSidebar,
     },
     {
       id: 'workbench.toggleAgentPanel',
       label: '切换 Agent 面板',
-      shortcut: '⌘ J',
       category: '视图',
+      configurable: true,
+      shortcutPolicy: {
+        scope: 'global',
+        inputPolicy: 'allow',
+        defaultBindings: [{ code: 'KeyJ', modifiers: ['primary'] }],
+      },
       action: deps.toggleAgentPanel,
     },
     {
       id: 'workbench.focusAgentPanel',
       label: '专注 Agent 对话',
-      shortcut: '⌘ ⇧ J',
       category: '视图',
+      configurable: true,
+      shortcutPolicy: {
+        scope: 'global',
+        inputPolicy: 'allow',
+        defaultBindings: [{ code: 'KeyJ', modifiers: ['primary', 'shift'] }],
+      },
       action: deps.focusAgentPanel,
     },
     {

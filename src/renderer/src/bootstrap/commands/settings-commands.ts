@@ -10,8 +10,13 @@ export function createSettingsCommands(): Command[] {
     {
       id: 'settings.open',
       label: '打开设置',
-      shortcut: '⌘ ,',
       category: '设置',
+      configurable: true,
+      shortcutPolicy: {
+        scope: 'global',
+        inputPolicy: 'allow',
+        defaultBindings: [{ code: 'Comma', modifiers: ['primary'] }],
+      },
       action: openSettings,
     },
     {

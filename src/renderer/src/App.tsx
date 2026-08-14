@@ -22,7 +22,6 @@ import { useAgentWorkContext } from './bootstrap/use-agent-work-context'
 import { useAgentStreamEvents } from './bootstrap/use-agent-stream-events'
 import { useAgentConversationRestore } from './bootstrap/use-agent-conversation-restore'
 import { useAppSession } from './bootstrap/use-app-session'
-import { useGlobalShortcuts } from './bootstrap/use-global-shortcuts'
 import { useShortcutRouter } from './features/shortcuts/use-shortcut-router'
 import { useMainProcessEvents } from './bootstrap/use-main-process-events'
 import { useRegisterCommands } from './bootstrap/use-register-commands'
@@ -36,6 +35,7 @@ import { ProjectStrip } from './components/project-strip/ProjectStrip'
 import { ConversationQuickSwitcher } from './components/topbar/ConversationQuickSwitcher'
 import { useAnyFloatingSurfaceOpen } from './components/common/floating-surface-registry'
 import { clampPanelWidth, getAgentPanelWidthBounds } from './utils/panel-layout'
+import { useBrowserFindBridge } from './features/browser/use-browser-find-bridge'
 
 /** 主布局。 */
 function MainLayout(): React.ReactElement {
@@ -83,8 +83,8 @@ function MainLayout(): React.ReactElement {
   useRegisterCommands()
   useRegisterContextActions()
   useConversationSelectionMenu()
-  useGlobalShortcuts()
   useShortcutRouter()
+  useBrowserFindBridge()
   useMainProcessEvents()
   useAgentStreamEvents()
   useAgentConversationRestore(workspaceReady)

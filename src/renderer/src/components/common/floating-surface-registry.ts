@@ -20,6 +20,10 @@ export function useAnyFloatingSurfaceOpen(): boolean {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 }
 
+export function isAnyFloatingSurfaceOpen(): boolean {
+  return activeSurfaceCount > 0
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)

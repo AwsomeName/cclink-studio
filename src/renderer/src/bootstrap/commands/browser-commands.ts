@@ -7,8 +7,13 @@ export function createBrowserCommands(): Command[] {
     {
       id: 'browser.navigate',
       label: '聚焦地址栏',
-      shortcut: '⌘ L',
       category: '浏览器',
+      configurable: true,
+      shortcutPolicy: {
+        scope: 'browser',
+        inputPolicy: 'allow',
+        defaultBindings: [{ code: 'KeyL', modifiers: ['primary'] }],
+      },
       action: () => {
         const input = document.querySelector('.url-input') as HTMLInputElement | null
         input?.focus()
@@ -18,8 +23,13 @@ export function createBrowserCommands(): Command[] {
     {
       id: 'browser.zoomIn',
       label: '放大浏览器',
-      shortcut: '⌘ =',
       category: '浏览器',
+      configurable: true,
+      shortcutPolicy: {
+        scope: 'browser',
+        inputPolicy: 'allow',
+        defaultBindings: [{ code: 'Equal', modifiers: ['primary'] }],
+      },
       action: () => {
         const tab = useTabStore.getState().getActiveTab()
         if (tab?.type === 'browser') window.cclinkStudio.browser.zoomIn(tab.id)
@@ -28,8 +38,13 @@ export function createBrowserCommands(): Command[] {
     {
       id: 'browser.zoomOut',
       label: '缩小浏览器',
-      shortcut: '⌘ -',
       category: '浏览器',
+      configurable: true,
+      shortcutPolicy: {
+        scope: 'browser',
+        inputPolicy: 'allow',
+        defaultBindings: [{ code: 'Minus', modifiers: ['primary'] }],
+      },
       action: () => {
         const tab = useTabStore.getState().getActiveTab()
         if (tab?.type === 'browser') window.cclinkStudio.browser.zoomOut(tab.id)

@@ -2,6 +2,15 @@ import type { KeyChord, KeybindingOverride } from '@shared/keybindings'
 import { keyChordId, normalizeKeyChord } from '@shared/keybindings'
 import type { Command } from '../../stores/command-store'
 
+function shortcutScopesOverlap(left: string, right: string): boolean {
+  if (left === right) return true
+  // Global commands deliberately coexist with a more specific command. The router
+  // selects the specific scope first (for example Markdown bold before sidebar toggle).
+  if (left === 'global' || right === 'global') return false
+  if (left === 'workbench' || right === 'workbench') return true
+  return (left === 'editor' && right === 'markdown') || (left === 'markdown' && right === 'editor')
+}
+
 export interface EffectiveKeybinding {
   commandId: string
   chord: KeyChord
@@ -43,11 +52,13 @@ export function findKeybindingConflicts(
 ): Command[] {
   const command = commands.find((candidate) => candidate.id === commandId)
   if (!command?.shortcutPolicy) return []
+  const commandScope = command.shortcutPolicy.scope
   const chordId = keyChordId(chord)
   return commands.filter(
     (candidate) =>
       candidate.id !== commandId &&
-      candidate.shortcutPolicy?.scope === command.shortcutPolicy?.scope &&
+      candidate.shortcutPolicy &&
+      shortcutScopesOverlap(candidate.shortcutPolicy.scope, commandScope) &&
       effectiveBindingsForCommand(candidate, overrides).some(
         (binding) => keyChordId(binding) === chordId,
       ),

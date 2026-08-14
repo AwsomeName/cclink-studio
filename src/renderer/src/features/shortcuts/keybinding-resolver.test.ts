@@ -18,6 +18,26 @@ const commands: Command[] = [
     },
   },
   {
+    id: 'markdown.findLike',
+    label: 'Markdown 命令',
+    action: vi.fn(),
+    shortcutPolicy: {
+      scope: 'markdown',
+      inputPolicy: 'allow',
+      defaultBindings: [{ code: 'KeyM', modifiers: ['primary'] }],
+    },
+  },
+  {
+    id: 'global.findLike',
+    label: '全局命令',
+    action: vi.fn(),
+    shortcutPolicy: {
+      scope: 'global',
+      inputPolicy: 'deny',
+      defaultBindings: [{ code: 'KeyM', modifiers: ['primary'] }],
+    },
+  },
+  {
     id: 'workbench.other',
     label: '另一个命令',
     action: vi.fn(),
@@ -52,5 +72,14 @@ describe('keybinding resolver', () => {
         modifiers: ['primary'],
       }).map((command) => command.id),
     ).toEqual(['workbench.other'])
+  })
+
+  it('reports overlapping workbench/Markdown scopes but permits global specificity reuse', () => {
+    expect(
+      findKeybindingConflicts(commands, [], 'workbench.find', {
+        code: 'KeyM',
+        modifiers: ['primary'],
+      }).map((command) => command.id),
+    ).toEqual(['markdown.findLike'])
   })
 })

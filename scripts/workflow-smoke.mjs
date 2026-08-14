@@ -276,6 +276,10 @@ async function main() {
       )
       await window.cclinkStudio.fs.writeFile(`${workspacePath}/todo.txt`, 'todo')
       await window.cclinkStudio.fs.writeFile(
+        `${workspacePath}/browser-find.html`,
+        '<!doctype html><html><body><h1>Browser Find Smoke</h1><p>browser needle</p><p>browser needle</p><p>browser needle</p></body></html>',
+      )
+      await window.cclinkStudio.fs.writeFile(
         `${workspacePath}/cclink-accounts.json`,
         JSON.stringify(
           {
@@ -501,6 +505,57 @@ async function main() {
     await page.locator('.markdown-find-bar').waitFor({ state: 'visible', timeout: 5_000 })
     await page.keyboard.press('Escape')
     return 'settings rebind took effect, old key stopped, and app restart preserved the new key'
+  })
+
+  await runCheck('rebound workbench find reaches source editor and Terminal', async () => {
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
+    await ensureSidebarVisible(page)
+    await clickByTitle(page, '文件')
+    const htmlFile = page
+      .locator('.file-tree-item.file', { hasText: 'browser-find.html' })
+      .first()
+    await htmlFile.waitFor({ timeout: 10_000 })
+    await htmlFile.dispatchEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      buttons: 2,
+      clientX: 24,
+      clientY: 24,
+    })
+    const openAsText = page.locator('[data-context-action="file.open-html-text"]').first()
+    await openAsText.waitFor({ timeout: 10_000 })
+    await openAsText.click()
+    const source = page.getByRole('textbox', { name: 'HTML 源码' })
+    await source.waitFor({ timeout: 10_000 })
+    await source.click()
+    await page.keyboard.press(`${modifier}+G`)
+    const sourceFind = page.getByRole('textbox', { name: '查找源码文本' })
+    await sourceFind.waitFor({ state: 'visible', timeout: 5_000 })
+    await sourceFind.fill('browser needle')
+    await page.waitForFunction(
+      () => document.querySelector('.markdown-find-count')?.textContent === '1/3',
+      null,
+      { timeout: 5_000 },
+    )
+    await page.keyboard.press('Escape')
+
+    await createTabFromMenu(page, 'Terminal')
+    const terminalTextarea = page.locator('.terminal-pty-surface .xterm-helper-textarea').first()
+    await terminalTextarea.waitFor({ state: 'attached', timeout: 15_000 })
+    await terminalTextarea.focus()
+    await page.keyboard.type("printf 'terminal-needle terminal-needle\\n'")
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(400)
+    await page.keyboard.press(`${modifier}+G`)
+    const terminalFind = page.getByRole('textbox', { name: '查找 Terminal 输出' })
+    await terminalFind.waitFor({ state: 'visible', timeout: 5_000 })
+    await terminalFind.fill('terminal-needle')
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Escape')
+
+    await page.getByRole('tab', { name: /notes\.md/ }).click()
+    return 'custom binding opened source and Terminal find without a second shortcut route'
   })
 
   await runCheck('markdown editor shortcuts preserve structure and app layout', async () => {
@@ -1102,6 +1157,122 @@ async function main() {
     const url = await page.evaluate(() => window.cclinkStudio.browser.getCurrentURL('browser'))
     assert(typeof url === 'string', 'browser current URL should be readable')
     return url || 'blank'
+  })
+
+  await runCheck('rebound find works while the Browser webpage owns focus', async () => {
+    const browserTabId = await page.evaluate(() => window.cclinkStudio.browser.getActiveViewId())
+    assert(browserTabId, 'active Browser runtime is missing')
+    const targetUrl = `file://${workspaceDir}/browser-find.html?active=${encodeURIComponent(browserTabId)}`
+    await page.evaluate(
+      async ({ tabId, url }) => window.cclinkStudio.browser.navigate(tabId, url),
+      { tabId: browserTabId, url: targetUrl },
+    )
+    const startedAt = Date.now()
+    let browserPage = null
+    while (Date.now() - startedAt < 10_000) {
+      browserPage = browser
+        .contexts()
+        .flatMap((context) => context.pages())
+        .find((candidate) => candidate.url() === targetUrl)
+      if (browserPage) break
+      await page.waitForTimeout(100)
+    }
+    assert(browserPage, 'Browser WebContents page was not visible over CDP')
+    await page.evaluate(async (tabId) => window.cclinkStudio.browser.setActive(tabId), browserTabId)
+    await browserPage.bringToFront()
+    await browserPage.locator('body').click()
+    await page.evaluate(
+      async (tabId) => window.cclinkStudio.browser.dispatchFindShortcutForSmoke(tabId),
+      browserTabId,
+    )
+
+    const browserFind = page.getByRole('textbox', { name: '在网页中查找' })
+    await browserFind.waitFor({ state: 'visible', timeout: 5_000 })
+    await page.evaluate(async () => window.cclinkStudio.window.focusRenderer())
+    await browserFind.click()
+    await page.waitForTimeout(120)
+    await browserFind.fill('browser needle')
+    try {
+      await page.waitForFunction(
+        () => document.querySelector('.browser-find-count')?.textContent === '1/3',
+        null,
+        { timeout: 5_000 },
+      )
+    } catch {
+      const findState = await page.locator('.browser-find-bar').innerText().catch(() => 'missing')
+      const findValue = await browserFind.inputValue().catch(() => 'missing')
+      throw new Error(`Browser find did not report 1/3: value=${findValue} state=${findState}`)
+    }
+    await page.getByRole('button', { name: '下一个匹配项' }).click()
+    await page.waitForFunction(
+      () => document.querySelector('.browser-find-count')?.textContent === '2/3',
+      null,
+      { timeout: 5_000 },
+    )
+    await page.getByRole('button', { name: '关闭查找' }).click()
+    return 'webpage-focused custom chord found 3 matches and moved to the second match'
+  })
+
+  await runCheck('shortcut conflict, recording guards, and defaults are recoverable', async () => {
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
+    await page.locator('.activity-bar-icon[title="设置"]').first().click()
+    await page.locator('.settings-nav-item', { hasText: '快捷键' }).click()
+    await page.waitForFunction(
+      () => document.querySelector('.keybindings-sync-status')?.textContent?.includes('已同步'),
+      null,
+      { timeout: 5_000 },
+    )
+    const findRow = page.locator('.keybindings-row', { hasText: '查找当前内容' }).first()
+    const saveRow = page.locator('.keybindings-row', { hasText: '保存当前文件' }).first()
+
+    await saveRow.getByRole('button', { name: '修改' }).click()
+    await page.keyboard.press(`${modifier}+G`)
+    const conflict = page.locator('.keybindings-conflict', { hasText: '查找当前内容' }).first()
+    await conflict.waitFor({ state: 'visible', timeout: 5_000 })
+    await conflict.getByRole('button', { name: '取消' }).click()
+
+    await saveRow.getByRole('button', { name: '修改' }).click()
+    await page.keyboard.press(`${modifier}+W`)
+    await page.waitForFunction(
+      () => document.querySelector('.keybindings-message')?.textContent?.includes('已保存'),
+      null,
+      { timeout: 5_000 },
+    )
+    assert((await page.locator('.settings-page').count()) === 1, 'recording Cmd/Ctrl+W closed Settings')
+    await saveRow.getByRole('button', { name: '恢复默认' }).click()
+
+    await saveRow.getByRole('button', { name: '修改' }).click()
+    await page.keyboard.press(`${modifier}+Q`)
+    await page.waitForFunction(
+      () => document.querySelector('.keybindings-message')?.textContent?.includes('系统保留'),
+      null,
+      { timeout: 5_000 },
+    )
+    await page.keyboard.press('Escape')
+    assert((await page.locator('.main-window').count()) === 1, 'recording Cmd/Ctrl+Q quit Studio')
+
+    const beforeReset = await page.evaluate(async () => window.cclinkStudio.settings.getAll())
+    await page.getByRole('button', { name: '全部恢复默认' }).click()
+    await page.waitForFunction(
+      async () => (await window.cclinkStudio.settings.getAll()).keybindingOverrides.length === 0,
+      null,
+      { timeout: 5_000 },
+    )
+    const afterReset = await page.evaluate(async () => window.cclinkStudio.settings.getAll())
+    const { keybindingOverrides: _beforeBindings, ...beforeOtherSettings } = beforeReset
+    const { keybindingOverrides: _afterBindings, ...afterOtherSettings } = afterReset
+    assert(
+      JSON.stringify(beforeOtherSettings) === JSON.stringify(afterOtherSettings),
+      'restoring shortcut defaults changed unrelated settings',
+    )
+    assert((await findRow.locator('kbd').innerText()).includes('F'), 'find default did not return')
+
+    await page.getByRole('tab', { name: /notes\.md/ }).click()
+    await page.locator('.tiptap').first().click()
+    await page.keyboard.press(`${modifier}+F`)
+    await page.locator('.markdown-find-bar').waitFor({ state: 'visible', timeout: 5_000 })
+    await page.keyboard.press('Escape')
+    return 'conflict was explicit; W/Q recording was safe; all-reset preserved other settings'
   })
 
   await runCheck('workbench frame context actions bind the intended target', async () => {

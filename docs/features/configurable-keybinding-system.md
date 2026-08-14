@@ -1,6 +1,6 @@
 # 可配置快捷键系统
 
-> 状态：M1 已实现并通过真实应用验收；M2、M3 尚未开始。日期：2026-08-14。
+> 状态：M1–M3 已实现，并通过真实应用 20 项统一验收。日期：2026-08-14。
 > 关联事实源：`docs/architecture.md`、`docs/features/context-action-system.md`。
 
 ## 结论
@@ -18,18 +18,23 @@ Tab Store 的当前活动对象解析既有 Editor、Terminal 或 Browser 操作
 
 ## 当前实现状态
 
-M1“本地操作面可配置查找”已经落地：设置页从 Command Registry 读取可配置命令，
-`workbench.find` 已统一 Markdown、源码编辑器和 Terminal 的查找入口；用户覆盖通过
-SettingsService 串行、原子保存。录制态由 renderer capture phase 和 main 的有时限保护共同
-拦截，避免 `Cmd/Ctrl+B/W/Q`、Escape 和 Delete 触发原业务动作。
+M1–M3 已落地：设置页从 Command Registry 读取可配置命令，用户只修改按键，
+不修改命令作用域和输入策略。`workbench.find` 统一 Markdown、源码编辑器、Terminal 和
+Browser 的查找入口；`terminal.find` 已合并。SettingsService 串行、原子保存覆盖配置。
+录制态由 renderer capture phase 和 main 的有时限保护共同拦截，避免
+`Cmd/Ctrl+B/W/Q`、Escape 和 Delete 触发原业务动作。
 
-2026-08-14 的真实应用 smoke 已验证：在设置页将查找从 `Cmd/Ctrl+F` 改为
-`Cmd/Ctrl+G` 后，旧键立即失效、新键立即打开 Markdown 查找，Studio 重启后配置仍存在，
-查找不会把文档变为未保存。`pnpm verify` 同期通过（244 个测试文件、1393 项通过、2 项跳过）。
+原来分散的保存、新建/关闭 Tab、设置、命令面板、窗口刷新、侧栏、Agent 面板、Browser 地址栏/缩放
+以及 Markdown 格式键已迁入统一 Router；旧的 `use-global-shortcuts.ts` 和组件级保存监听已删除。
+Tiptap 边界会拦住已迁移的内置键，因此用户改键后旧键不会继续触发格式。
 
-当前还不能宣称“全部快捷键可配置”或“跨全部操作面查找完成”：旧快捷键迁移属于 M2；网页
-焦点内的 Browser 查找属于 M3。源码编辑器和 Terminal 已接入统一命令与既有 surface，但本轮
-真实 App smoke 只覆盖了 Markdown 的改键闭环。
+2026-08-14 的真实应用 smoke 20/20 通过：已验证改键立即生效、旧键失效、重启持久化，
+Markdown/源码/Terminal/Browser 四个操作面查找，Browser 网页持有焦点时触发与前后定位，
+冲突提示，`Cmd/Ctrl+W/Q` 录制保护，以及“全部恢复默认”不破坏其他设置。
+`pnpm verify` 同期通过，包括边界校验、格式、lint、全量测试和生产构建。
+
+这里的“可配置快捷键”指 Command Registry 中已声明的应用命令，不包括普通输入框的
+Enter/Escape、文本复制粘贴、焦点移动和辅助功能键等控件内部键盘交互。
 
 ## 实施前问题
 
@@ -263,15 +268,16 @@ Browser 网页焦点位于独立 WebContents，renderer Router 无法直接收�
 8. 查找调用 `webContents.findInPage()` / `stopFindInPage()`；
 9. 结果事件携带 requestId 和 Browser runtime generation，只返回当前序号和总数，不返回网页正文。
 
+Electron 43 在部分 `WebContentsView + file://` 页面中会执行 `findInPage()` 却不回送
+`found-in-page`。实现保留原生查找用于高亮和定位；300ms 内没有原生结果时，main 只在
+目标 WebContents 内统计非脚本/样式文本节点的不重叠匹配数，仍然只向 renderer 返回数量和
+当前序号。新的查找、停止查找、Tab/工作区切换或 runtime 重建会清理该降级任务，旧结果
+不能污染新页面。
+
 建议契约：
 
-```text
-shortcuts:syncBrowserBindings
-shortcuts:browserTriggered
-browser:startFind
-browser:stopFind
-browser:findResult
-```
+Browser 查找契约与既有 Browser IPC 同域管理，实现落在
+`src/shared/ipc/browser.ts`、`browser-schema.ts` 和 `browser-contract.ts`；没有另建一套通用命令 IPC。
 
 Browser adapter 的同步缓存不是第二事实源。同步失败时 renderer 显示“配置已保存，但浏览器
 快捷键尚未同步”，并提供重试；其他本地能力继续使用新配置。首版不得设计通用任意命令
@@ -292,26 +298,29 @@ Browser adapter 的同步缓存不是第二事实源。同步失败时 renderer 
 
 ```text
 src/shared/keybindings.ts
-src/shared/ipc/shortcuts.ts
-src/shared/ipc/shortcuts-contract.ts
-src/shared/ipc/shortcuts-schema.ts
+src/shared/ipc/browser.ts
+src/shared/ipc/browser-contract.ts
+src/shared/ipc/browser-schema.ts
 
 src/renderer/src/features/shortcuts/
   keybinding-resolver.ts
-  shortcut-conflicts.ts
-  shortcut-context.ts
-  shortcut-router.ts
+  shortcut-capture.ts
   use-shortcut-router.ts
+
+src/renderer/src/features/browser/
+  browser-find-controller.ts
+  browser-find-store.ts
+  use-browser-find-bridge.ts
 
 src/renderer/src/components/settings/
   KeybindingsSettings.tsx
 
 src/main/browser/
-  browser-shortcut-adapter.ts
+  browser-manager.ts
 ```
 
-现有 `command-store.ts` 继续拥有命令。`use-global-shortcuts.ts` 在迁移完成后删除或仅保留引导
-到统一 Router 的薄挂载，不再包含业务 `if/else`。
+现有 `command-store.ts` 继续拥有命令。`use-global-shortcuts.ts` 已删除，App 只挂载统一
+`useShortcutRouter`。
 
 ## 实施顺序
 
@@ -329,17 +338,17 @@ src/main/browser/
 
 M1 只可命名为“本地操作面可配置查找”，不能宣称 Browser 或全部快捷键完成。
 
-### M2：收回 renderer 内既有快捷键
+### M2：收回 renderer 内既有快捷键（已完成）
 
 - 迁移保存、新建/关闭 Tab、地址栏、侧栏、Agent 面板、刷新和缩放；
 - 迁移 Markdown 格式命令并处理 `Cmd/Ctrl+B` 作用域复用；
 - 删除组件级全局监听和重复 store 直调；
 - 增加声明键位与实际路由一致性门禁。
 
-M2 必须等待 M1 真人验收通过。每迁移一个命令，就在同一批次删除它的旧入口并验证只执行
-一次；不得建立长期兼容双路由。
+实施结果：每个已迁移命令只保留 Router 入口；Markdown 保留的 Tiptap keymap 只是拦截
+已迁移的内置默认键，不执行第二套业务动作。
 
-### M3：Browser 闭环
+### M3：Browser 闭环（已完成）
 
 - 定义 configVersion、应用确认、stale tab/runtime generation 和 `workbench.find` 字面量白名单；
 - 完成 Browser Shortcut Adapter 与有界 IPC；
@@ -347,6 +356,11 @@ M2 必须等待 M1 真人验收通过。每迁移一个命令，就在同一批�
 - 浏览器查找栏显示当前/总数；
 - 自定义键位在网页获得焦点时仍生效；
 - 完成真实网页 smoke 后，才可声明 `workbench.find` 跨操作面闭环。
+
+实施结果：main 只转发字面量 `workbench.find`，renderer 和 main 双向校验
+configVersion、workspaceKey、tabId 和 runtimeGeneration。设置页显示同步状态并可手动重试。
+用于工作流 smoke 的原生按键注入 IPC 只接受 tabId，且不在隔离测试 userData 进程中会
+直接拒绝；它不接受任意 command ID。
 
 ## 自动化门禁
 

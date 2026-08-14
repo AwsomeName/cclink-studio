@@ -15,7 +15,9 @@ describe('workbench.find', () => {
       openFind,
       closeFind: vi.fn(),
     })
-    const command = createWorkbenchCommands()[0]
+    const command = createWorkbenchCommands().find(
+      (candidate) => candidate.id === 'workbench.find',
+    )!
     const context = {
       source: 'shortcut' as const,
       target: {
@@ -58,8 +60,8 @@ describe('workbench.find', () => {
       },
     }
 
-    expect(commands.map((command) => command.id)).toEqual(['workbench.find'])
-    commands[0].action(context)
+    expect(commands.some((command) => command.id === 'terminal.find')).toBe(false)
+    commands.find((command) => command.id === 'workbench.find')?.action(context)
     expect(openFind).toHaveBeenCalledOnce()
     unregister()
   })

@@ -9,8 +9,13 @@ export function createTabCommands(): Command[] {
     {
       id: 'workbench.newTab',
       label: '新建 Markdown 草稿',
-      shortcut: '⌘ T',
       category: 'Tab',
+      configurable: true,
+      shortcutPolicy: {
+        scope: 'global',
+        inputPolicy: 'allow',
+        defaultBindings: [{ code: 'KeyT', modifiers: ['primary'] }],
+      },
       action: () =>
         useTabStore
           .getState()
@@ -25,8 +30,13 @@ export function createTabCommands(): Command[] {
     {
       id: 'workbench.closeTab',
       label: '关闭当前 Tab',
-      shortcut: '⌘ W',
       category: 'Tab',
+      configurable: true,
+      shortcutPolicy: {
+        scope: 'global',
+        inputPolicy: 'allow',
+        defaultBindings: [{ code: 'KeyW', modifiers: ['primary'] }],
+      },
       contextLabel: (context) => {
         const tabId = context.target?.kind === 'tab' ? context.target.tabId : null
         const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)

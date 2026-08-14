@@ -1,5 +1,9 @@
 import { type Editor, useEditorState } from '@tiptap/react'
+import { formatKeyChord, isMacPlatform } from '@shared/keybindings'
 import { IconCheck, IconLink } from '../common/Icons'
+import { useCommandStore } from '../../stores/command-store'
+import { useSettingsStore } from '../../stores/settings-store'
+import { effectiveBindingsForCommand } from '../../features/shortcuts/keybinding-resolver'
 
 interface EditorToolbarProps {
   editor: Editor | null
@@ -16,6 +20,7 @@ interface EditorToolbarProps {
 interface ToolbarButton {
   label: React.ReactNode
   title: string
+  commandId?: string
   isActive?: () => boolean
   onClick: () => void
   disabled?: boolean
@@ -37,7 +42,7 @@ export function resolveEditorSaveControl(
   return {
     kind: 'action',
     label: filePath ? '保存' : '另存为',
-    title: filePath ? '保存 (⌘S)' : '另存为 (⌘S)',
+    title: filePath ? '保存' : '另存为',
   }
 }
 
@@ -52,6 +57,18 @@ export function EditorToolbar({
   onInsertTable,
   onEditImage,
 }: EditorToolbarProps): React.ReactElement {
+  const commands = useCommandStore((state) => state.commands)
+  const overrides = useSettingsStore((state) => state.settings.keybindingOverrides)
+  const mac = isMacPlatform(typeof navigator === 'undefined' ? '' : navigator.platform)
+  const titleWithShortcut = (title: string, commandId?: string): string => {
+    if (!commandId) return title
+    const command = commands.find((candidate) => candidate.id === commandId)
+    if (!command) return title
+    const shortcut = effectiveBindingsForCommand(command, overrides)
+      .map((binding) => formatKeyChord(binding, mac))
+      .join(' / ')
+    return shortcut ? `${title} (${shortcut})` : title
+  }
   useEditorState({
     editor,
     selector: ({ transactionNumber }) => transactionNumber,
@@ -60,67 +77,78 @@ export function EditorToolbar({
     ? [
         {
           label: '↶',
-          title: '撤销 (⌘Z)',
+          title: '撤销',
+          commandId: 'markdown.undo',
           onClick: () => editor.chain().focus().undo().run(),
           disabled: !editor.can().undo(),
         },
         {
           label: '↷',
-          title: '重做 (⌘⇧Z)',
+          title: '重做',
+          commandId: 'markdown.redo',
           onClick: () => editor.chain().focus().redo().run(),
           disabled: !editor.can().redo(),
         },
         {
           label: 'B',
-          title: '粗体 (⌘B)',
+          title: '粗体',
+          commandId: 'markdown.bold',
           isActive: () => editor.isActive('bold'),
           onClick: () => editor.chain().focus().toggleBold().run(),
         },
         {
           label: 'I',
-          title: '斜体 (⌘I)',
+          title: '斜体',
+          commandId: 'markdown.italic',
           isActive: () => editor.isActive('italic'),
           onClick: () => editor.chain().focus().toggleItalic().run(),
         },
         {
           label: 'S',
-          title: '删除线 (⌘⇧S / ⌘⇧X)',
+          title: '删除线',
+          commandId: 'markdown.strike',
           isActive: () => editor.isActive('strike'),
           onClick: () => editor.chain().focus().toggleStrike().run(),
         },
         {
           label: '</>',
-          title: '行内代码 (⌘E)',
+          title: '行内代码',
+          commandId: 'markdown.inlineCode',
           isActive: () => editor.isActive('code'),
           onClick: () => editor.chain().focus().toggleCode().run(),
         },
         {
           label: '•',
-          title: '无序列表 (⌘⇧8)',
+          title: '无序列表',
+          commandId: 'markdown.bulletList',
           isActive: () => editor.isActive('bulletList'),
           onClick: () => editor.chain().focus().toggleBulletList().run(),
         },
         {
           label: '1.',
-          title: '有序列表 (⌘⇧7)',
+          title: '有序列表',
+          commandId: 'markdown.orderedList',
           isActive: () => editor.isActive('orderedList'),
           onClick: () => editor.chain().focus().toggleOrderedList().run(),
         },
         {
           label: '☐',
-          title: '任务列表 (⌘⇧9)',
+          title: '任务列表',
+          commandId: 'markdown.taskList',
           isActive: () => editor.isActive('taskList'),
           onClick: () => editor.chain().focus().toggleTaskList().run(),
         },
         {
           label: '❝',
-          title: '引用 (⌘⇧B)',
+          title: '引用',
+          commandId: 'markdown.blockquote',
           isActive: () => editor.isActive('blockquote'),
           onClick: () => editor.chain().focus().toggleBlockquote().run(),
         },
         {
           label: '{}',
-          title: '代码块 (⌘⌥C)',
+          title: '代码块',
+          commandId: 'markdown.codeBlock',
           isActive: () => editor.isActive('codeBlock'),
           onClick: () => editor.chain().focus().toggleCodeBlock().run(),
         },
@@ -131,7 +159,8 @@ export function EditorToolbar({
         },
         {
           label: <IconLink size={13} />,
-          title: '插入或编辑链接 (⌘K)',
+          title: '插入或编辑链接',
+          commandId: 'markdown.link',
           isActive: () => editor.isActive('link'),
           onClick: onInsertLink,
         },
@@ -185,7 +214,7 @@ export function EditorToolbar({
           <button
             type="button"
             key={button.title}
-            title={button.title}
+            title={titleWithShortcut(button.title, button.commandId)}
             className={button.isActive?.() ? 'is-active' : ''}
             onClick={button.onClick}
             disabled={button.disabled}
@@ -301,7 +330,7 @@ export function EditorToolbar({
           <button
             type="button"
             className="toolbar-save-action"
-            title={saveControl.title}
+            title={titleWithShortcut(saveControl.title, 'workbench.save')}
             onClick={onSave}
           >
             {saveControl.label}

@@ -36,10 +36,10 @@ import {
 } from '../../features/markdown/markdown-navigation'
 import { MarkdownImage, resolveMarkdownImageSource } from '../../features/markdown/MarkdownImage'
 import {
-  adjustMarkdownListIndent,
   applyMarkdownLink,
   MarkdownKeyboardShortcuts,
-  toggleMarkdownBlockquote,
+  MarkdownMigratedShortcutBoundary,
+  runMarkdownEditorAction,
 } from '../../features/markdown/markdown-editor-shortcuts'
 import { createMarkdownDiagnosticReport } from '../../features/markdown/markdown-diagnostic-report'
 import { MarkdownListItem } from '../../features/markdown/markdown-list-item'
@@ -87,6 +87,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   const fileKeyRef = useRef(fileKey)
   const filePathRef = useRef(filePath)
   const tiptapEditorRef = useRef<Editor | null>(null)
+  const saveRef = useRef<() => void | Promise<void>>(() => undefined)
   fileKeyRef.current = fileKey
   filePathRef.current = filePath
 
@@ -172,6 +173,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       TableHeader,
       Link.configure({ openOnClick: false, autolink: true }),
       MarkdownKeyboardShortcuts.configure({ openLinkEditor, tabSize: editorTabSize }),
+      MarkdownMigratedShortcutBoundary,
       MarkdownSearchHighlights,
     ],
     [editorTabSize, filePath, openLinkEditor],
@@ -182,44 +184,6 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       extensions,
       editorProps: {
         attributes: { class: 'tiptap' },
-        handleKeyDown: (_view, event) => {
-          const headingShortcut = /^Digit([0-6])$/.exec(event.code)
-          if (
-            (event.metaKey || event.ctrlKey) &&
-            event.altKey &&
-            !event.shiftKey &&
-            headingShortcut &&
-            tiptapEditorRef.current
-          ) {
-            const level = Number(headingShortcut[1])
-            return level === 0
-              ? tiptapEditorRef.current.commands.setParagraph()
-              : tiptapEditorRef.current.commands.toggleHeading({
-                  level: level as 1 | 2 | 3 | 4 | 5 | 6,
-                })
-          }
-          if (
-            (event.metaKey || event.ctrlKey) &&
-            event.shiftKey &&
-            !event.altKey &&
-            event.key.toLowerCase() === 'b' &&
-            tiptapEditorRef.current
-          ) {
-            return toggleMarkdownBlockquote(tiptapEditorRef.current)
-          }
-          if (
-            (event.metaKey || event.ctrlKey) &&
-            !event.altKey &&
-            (event.code === 'BracketLeft' || event.code === 'BracketRight') &&
-            tiptapEditorRef.current
-          ) {
-            return adjustMarkdownListIndent(
-              tiptapEditorRef.current,
-              event.code === 'BracketRight' ? 'indent' : 'outdent',
-            )
-          }
-          return false
-        },
         handlePaste: (_view, event) => {
           const image = Array.from(event.clipboardData?.files ?? []).find((file) =>
             file.type.startsWith('image/'),
@@ -434,8 +398,10 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       },
       openFind,
       closeFind,
+      save: () => saveRef.current(),
+      runMarkdownAction: (action) => runMarkdownEditorAction(editor, action, openLinkEditor),
     })
-  }, [closeFind, editor, openFind, tabId])
+  }, [closeFind, editor, openFind, openLinkEditor, tabId])
 
   const saveClipboardImage = useCallback(
     async (image: File) => {
@@ -830,23 +796,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       showToast(error instanceof Error ? error.message : '保存失败', 'error')
     }
   }, [filePath, handleSaveAs, refreshResourceInspection, showToast])
-
-  useEffect(() => {
-    const save = (event: KeyboardEvent): void => {
-      if (
-        !event.defaultPrevented &&
-        (event.metaKey || event.ctrlKey) &&
-        !event.shiftKey &&
-        !event.altKey &&
-        event.key.toLowerCase() === 's'
-      ) {
-        event.preventDefault()
-        void handleSave()
-      }
-    }
-    window.addEventListener('keydown', save)
-    return () => window.removeEventListener('keydown', save)
-  }, [handleSave])
+  saveRef.current = handleSave
 
   useEffect(() => {
     useTabStore.getState().updateTabDirty(tabId, dirty)

@@ -5,8 +5,13 @@ export function createWindowCommands(): Command[] {
     {
       id: 'window.reload',
       label: '重新加载窗口',
-      shortcut: '⌘ R',
       category: '窗口',
+      configurable: true,
+      shortcutPolicy: {
+        scope: 'global',
+        inputPolicy: 'allow',
+        defaultBindings: [{ code: 'KeyR', modifiers: ['primary'] }],
+      },
       action: () => window.cclinkStudio.window.reload(),
     },
     {

@@ -1,4 +1,5 @@
 import { defineIpcCall } from './contract'
+import type { KeyChord } from '../keybindings'
 
 export type BrowserViewModeType = 'desktop' | 'mobile'
 export type BrowserZoomModeType = 'fit' | 'manual'
@@ -7,6 +8,51 @@ export interface BrowserViewState {
   viewMode: BrowserViewModeType
   zoomMode: BrowserZoomModeType
   zoomFactor: number
+}
+
+export interface BrowserFindShortcutSyncInput {
+  configVersion: number
+  /** Only the fixed command workbench.find may be forwarded by main. */
+  bindings: KeyChord[]
+}
+
+export interface BrowserFindShortcutSyncResult {
+  appliedConfigVersion: number
+}
+
+export interface BrowserRuntimeIdentity {
+  tabId: string
+  workspaceKey: string | null
+  runtimeGeneration: number
+}
+
+export interface BrowserFindShortcutTriggeredPayload extends BrowserRuntimeIdentity {
+  commandId: 'workbench.find'
+  configVersion: number
+  triggerSequence: number
+}
+
+export interface BrowserFindRequest extends BrowserRuntimeIdentity {
+  requestToken: string
+  query: string
+  forward: boolean
+  findNext: boolean
+}
+
+export interface BrowserFindRequestResult {
+  accepted: boolean
+  runtimeGeneration: number
+}
+
+export interface BrowserStopFindRequest extends BrowserRuntimeIdentity {
+  action: 'clearSelection' | 'keepSelection' | 'activateSelection'
+}
+
+export interface BrowserFindResultPayload extends BrowserRuntimeIdentity {
+  requestToken: string
+  matches: number
+  activeMatchOrdinal: number
+  finalUpdate: boolean
 }
 
 export interface BrowserCreateViewRestoreOptions {
@@ -407,6 +453,15 @@ export interface BrowserApiContract {
   capturePage: (tabId: string) => Promise<string | null>
   getCurrentURL: (tabId: string) => Promise<string>
   getActiveViewId: (workspaceKey?: string | null) => Promise<string | null>
+  syncFindShortcut: (input: BrowserFindShortcutSyncInput) => Promise<BrowserFindShortcutSyncResult>
+  getRuntimeIdentity: (tabId: string) => Promise<BrowserRuntimeIdentity | null>
+  findInPage: (input: BrowserFindRequest) => Promise<BrowserFindRequestResult>
+  stopFindInPage: (input: BrowserStopFindRequest) => Promise<void>
+  dispatchFindShortcutForSmoke: (tabId: string) => Promise<void>
+  onFindShortcutTriggered: (
+    callback: (payload: BrowserFindShortcutTriggeredPayload) => void,
+  ) => () => void
+  onFindResult: (callback: (payload: BrowserFindResultPayload) => void) => () => void
   getDiagnostics: (tabId: string) => Promise<BrowserPageDiagnosticSummary | null>
   getRuntimeDiagnostics: (tabId: string) => Promise<BrowserRuntimeDiagnosticSummary>
   getSessionDiagnostics: (
@@ -479,6 +534,17 @@ export const browserIpc = {
   getActiveViewId: defineIpcCall<[workspaceKey?: string | null], string | null>(
     'browser:getActiveViewId',
   ),
+  syncFindShortcut: defineIpcCall<[BrowserFindShortcutSyncInput], BrowserFindShortcutSyncResult>(
+    'browser:syncFindShortcut',
+  ),
+  getRuntimeIdentity: defineIpcCall<[string], BrowserRuntimeIdentity | null>(
+    'browser:getRuntimeIdentity',
+  ),
+  findInPage: defineIpcCall<[BrowserFindRequest], BrowserFindRequestResult>('browser:findInPage'),
+  stopFindInPage: defineIpcCall<[BrowserStopFindRequest], void>('browser:stopFindInPage'),
+  dispatchFindShortcutForSmoke: defineIpcCall<[string], void>(
+    'browser:dispatchFindShortcutForSmoke',
+  ),
   getDiagnostics: defineIpcCall<[string], BrowserPageDiagnosticSummary | null>(
     'browser:getDiagnostics',
   ),
@@ -540,4 +606,6 @@ export const browserIpcEvents = {
   taskChanged: 'browserTask:changed',
   actionLogChanged: 'browserActionLog:changed',
   downloadChanged: 'browserDownload:changed',
+  findShortcutTriggered: 'browser:findShortcutTriggered',
+  findResult: 'browser:findResult',
 } as const

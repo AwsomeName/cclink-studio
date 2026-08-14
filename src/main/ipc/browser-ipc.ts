@@ -113,6 +113,26 @@ export function registerBrowserIpc(
     return browserManager.getActiveViewIdForWorkspace(workspaceKey)
   })
 
+  handle(browserIpcContracts.syncFindShortcut, (_event, input) => {
+    return browserManager.syncFindShortcut(input)
+  })
+
+  handle(browserIpcContracts.getRuntimeIdentity, (_event, tabId) => {
+    return browserManager.getRuntimeIdentity(tabId)
+  })
+
+  handle(browserIpcContracts.findInPage, (_event, input) => {
+    return browserManager.findInPage(input)
+  })
+
+  handle(browserIpcContracts.stopFindInPage, (_event, input) => {
+    browserManager.stopFindInPage(input)
+  })
+
+  handle(browserIpcContracts.dispatchFindShortcutForSmoke, (_event, tabId) => {
+    browserManager.dispatchFindShortcutForSmoke(tabId)
+  })
+
   handle(browserIpcContracts.getDiagnostics, async (_event, tabId) => {
     return getPlaywrightBridge?.()?.getPageDiagnostics(tabId) ?? null
   })

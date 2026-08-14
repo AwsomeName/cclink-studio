@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { BROWSER_PROFILE_ID_MAX_LENGTH, BROWSER_PROFILE_ID_PATTERN } from '../browser-profile'
+import { isReservedKeyChord, isValidKeyChord, normalizeKeyChord } from '../keybindings'
 
 const MAX_URL_LENGTH = 32_768
 const MAX_IDENTIFIER_LENGTH = 512
@@ -119,6 +120,49 @@ export const browserZoomFactorSchema = zoomFactorSchema
 export const browserViewModeSchema = z.enum(['desktop', 'mobile'])
 export const browserHistoryLimitSchema = z.number().int().min(1).max(MAX_HISTORY_ENTRIES).optional()
 export const browserTaskGoalSchema = z.string().trim().min(1).max(4_000)
+
+const browserKeyChordSchema = z
+  .object({
+    code: z.string().min(1).max(32),
+    modifiers: z.array(z.enum(['primary', 'control', 'alt', 'shift'])).max(4),
+  })
+  .strict()
+  .transform(normalizeKeyChord)
+  .refine((value) => isValidKeyChord(value) && !isReservedKeyChord(value), '快捷键无效或被保留')
+
+export const browserFindShortcutSyncSchema = z
+  .object({
+    configVersion: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    bindings: z.array(browserKeyChordSchema).max(4),
+  })
+  .strict()
+
+const browserRuntimeIdentityFields = {
+  tabId: browserIdentifierSchema,
+  workspaceKey: browserWorkspaceKeySchema,
+  runtimeGeneration: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+}
+
+export const browserFindRequestSchema = z
+  .object({
+    ...browserRuntimeIdentityFields,
+    requestToken: browserIdentifierSchema,
+    query: z
+      .string()
+      .min(1)
+      .max(4_000)
+      .refine((value) => !value.includes('\0')),
+    forward: z.boolean(),
+    findNext: z.boolean(),
+  })
+  .strict()
+
+export const browserStopFindRequestSchema = z
+  .object({
+    ...browserRuntimeIdentityFields,
+    action: z.enum(['clearSelection', 'keepSelection', 'activateSelection']),
+  })
+  .strict()
 
 export const browserPopupDispositionSchema = z.enum([
   'default',

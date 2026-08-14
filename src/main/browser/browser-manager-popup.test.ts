@@ -47,8 +47,12 @@ const electronMocks = vi.hoisted(() => {
       }),
       getURL: vi.fn(() => webContents.currentUrl),
       getTitle: vi.fn(() => webContents.currentTitle),
+      focus: vi.fn(),
       setZoomFactor: vi.fn(),
       executeJavaScript: vi.fn().mockResolvedValue(800),
+      findInPage: vi.fn(() => 41),
+      stopFindInPage: vi.fn(),
+      sendInputEvent: vi.fn(),
       loadURL: vi.fn(async (url: string) => {
         webContents.currentUrl = url
       }),
@@ -218,6 +222,157 @@ describe('BrowserManager popup adoption', () => {
       action: 'deny',
     })
     expect(electronMocks.createdViews).toHaveLength(1)
+  })
+
+  it('forwards only the synced find chord and correlates native find results', async () => {
+    const { manager, source } = await createSource()
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: 'source-tab',
+    })
+    expect(
+      manager.syncFindShortcut({
+        configVersion: 7,
+        bindings: [{ code: 'KeyF', modifiers: ['primary'] }],
+      }),
+    ).toEqual({ appliedConfigVersion: 7 })
+
+    const preventDefault = vi.fn()
+    source.emit(
+      'before-input-event',
+      { preventDefault },
+      {
+        type: 'keyDown',
+        key: 'f',
+        code: 'KeyF',
+        isAutoRepeat: false,
+        isComposing: false,
+        shift: false,
+        control: process.platform !== 'darwin',
+        alt: false,
+        meta: process.platform === 'darwin',
+        location: 0,
+        modifiers: [],
+      },
+    )
+    expect(preventDefault).toHaveBeenCalledOnce()
+    const shortcutEvent = electronMocks.mainWebContents.send.mock.calls.find(
+      ([channel]) => channel === browserIpcEvents.findShortcutTriggered,
+    )
+    expect(shortcutEvent?.[1]).toMatchObject({
+      commandId: 'workbench.find',
+      configVersion: 7,
+      tabId: 'source-tab',
+      workspaceKey: '/workspace/a',
+    })
+
+    const identity = manager.getRuntimeIdentity('source-tab')!
+    manager.findInPage({
+      ...identity,
+      requestToken: 'request-1',
+      query: 'needle',
+      forward: true,
+      findNext: false,
+    })
+    source.emit(
+      'found-in-page',
+      {},
+      {
+        requestId: 41,
+        matches: 3,
+        activeMatchOrdinal: 1,
+        finalUpdate: true,
+      },
+    )
+    expect(electronMocks.mainWebContents.send).toHaveBeenCalledWith(
+      browserIpcEvents.findResult,
+      expect.objectContaining({ requestToken: 'request-1', matches: 3 }),
+    )
+  })
+
+  it('rejects find requests from an earlier runtime generation', async () => {
+    const { manager } = await createSource()
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: 'source-tab',
+    })
+    const staleIdentity = manager.getRuntimeIdentity('source-tab')!
+    manager.destroyView('source-tab')
+    await manager.createView('source-tab', 'https://example.com', {
+      workspaceKey: '/workspace/a',
+      profileId: 'wechat',
+    })
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: 'source-tab',
+    })
+
+    expect(() =>
+      manager.findInPage({
+        ...staleIdentity,
+        requestToken: 'stale-request',
+        query: 'needle',
+        forward: true,
+        findNext: false,
+      }),
+    ).toThrow('目标已失效')
+  })
+
+  it('returns a count-only fallback when Electron omits found-in-page', async () => {
+    vi.useFakeTimers()
+    try {
+      const { manager, source } = await createSource()
+      manager.reconcileViews({
+        workspaceKey: '/workspace/a',
+        views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+        activeTabId: 'source-tab',
+      })
+      source.executeJavaScript.mockResolvedValueOnce(3)
+
+      const identity = manager.getRuntimeIdentity('source-tab')!
+      manager.findInPage({
+        ...identity,
+        requestToken: 'fallback-request',
+        query: 'needle',
+        forward: true,
+        findNext: false,
+      })
+      await vi.advanceTimersByTimeAsync(300)
+
+      expect(source.findInPage).toHaveBeenCalledWith('needle', {
+        forward: true,
+        findNext: false,
+      })
+      expect(electronMocks.mainWebContents.send).toHaveBeenCalledWith(
+        browserIpcEvents.findResult,
+        expect.objectContaining({
+          requestToken: 'fallback-request',
+          matches: 3,
+          activeMatchOrdinal: 1,
+          finalUpdate: true,
+        }),
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects smoke-only native shortcut injection outside isolated test data', async () => {
+    const previousTestUserData = process.env.CCLINK_STUDIO_TEST_USER_DATA_PATH
+    delete process.env.CCLINK_STUDIO_TEST_USER_DATA_PATH
+    try {
+      const { manager } = await createSource()
+      expect(() => manager.dispatchFindShortcutForSmoke('source-tab')).toThrow('隔离测试环境')
+    } finally {
+      if (previousTestUserData === undefined) {
+        delete process.env.CCLINK_STUDIO_TEST_USER_DATA_PATH
+      } else {
+        process.env.CCLINK_STUDIO_TEST_USER_DATA_PATH = previousTestUserData
+      }
+    }
   })
 
   it('preserves background POST body, content type and referrer without stealing focus', async () => {

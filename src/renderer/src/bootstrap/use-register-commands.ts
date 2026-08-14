@@ -10,6 +10,7 @@ import { createTabCommands } from './commands/tab-commands'
 import { createViewCommands } from './commands/view-commands'
 import { createWindowCommands } from './commands/window-commands'
 import { createWorkbenchCommands } from './commands/workbench-commands'
+import { createMarkdownCommands } from './commands/markdown-commands'
 
 /** 注册核心命令。 */
 export function useRegisterCommands(): void {
@@ -35,6 +36,7 @@ export function useRegisterCommands(): void {
       ...createDiagnosticsCommands(),
       ...createWindowCommands(),
       ...createWorkbenchCommands(),
+      ...createMarkdownCommands(),
     ])
   }, [registerCommands, toggleSidebar, toggleAgentPanel, setAgentPanelMode, resetAgentLayout])
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { BrowserTabState } from '../../stores/browser-store'
 import type { Tab } from '../../types'
 import { useTabStore } from '../../stores/tab-store'
@@ -15,6 +15,12 @@ import {
   IconZoomOut,
 } from '../common/Icons'
 import { BrowserHistoryMenu } from './BrowserHistoryMenu'
+import { useBrowserFindStore } from '../../features/browser/browser-find-store'
+import {
+  closeBrowserFind,
+  runBrowserFind,
+  stopBrowserFindSelection,
+} from '../../features/browser/browser-find-controller'
 
 interface BrowserToolbarProps {
   tabId: string
@@ -38,6 +44,9 @@ export function BrowserToolbar({
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [duplicateAccountId, setDuplicateAccountId] = useState<string | null>(null)
+  const findSession = useBrowserFindStore((state) => state.sessions[tabId])
+  const setFindQuery = useBrowserFindStore((state) => state.setQuery)
+  const findInputRef = useRef<HTMLInputElement>(null)
   const draftId = tab.webResourceDraftRef?.draftId
 
   useEffect(() => {
@@ -46,6 +55,23 @@ export function BrowserToolbar({
     setSaveError(null)
     setDuplicateAccountId(null)
   }, [draftId])
+
+  useEffect(() => {
+    if (!findSession?.open) return
+    requestAnimationFrame(() => {
+      findInputRef.current?.focus()
+      findInputRef.current?.select()
+    })
+    if (findSession.query.trim()) {
+      void runBrowserFind(tabId, { forward: true, findNext: false }, findSession.query)
+    }
+  }, [findSession?.open])
+
+  const updateFindQuery = (value: string): void => {
+    setFindQuery(tabId, value)
+    if (value.trim()) void runBrowserFind(tabId, { forward: true, findNext: false }, value)
+    else void stopBrowserFindSelection(tabId)
+  }
 
   const saveDraft = async (duplicateResolution?: 'save-another'): Promise<void> => {
     if (!draftId || tab.workspaceRef?.kind !== 'local' || !displayName.trim()) return
@@ -122,41 +148,105 @@ export function BrowserToolbar({
         <IconRefresh size={16} />
       </button>
       <BrowserHistoryMenu onOpenUrl={onOpenUrl} />
-      <input
-        className="url-input"
-        value={browserState?.urlInput ?? ''}
-        onChange={(event) => onUrlInputChange(tabId, event.target.value)}
-        onFocus={() => {
-          void window.cclinkStudio.window.focusRenderer()
-        }}
-        onKeyDown={(event) => {
-          const primaryModifier = event.metaKey || event.ctrlKey
-          const key = event.key.toLowerCase()
+      {findSession?.open ? (
+        <div className="browser-find-bar" role="search">
+          <input
+            ref={findInputRef}
+            value={findSession.query}
+            onChange={(event) => updateFindQuery(event.target.value)}
+            onFocus={() => void window.cclinkStudio.window.focusRenderer()}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                void runBrowserFind(
+                  tabId,
+                  {
+                    forward: !event.shiftKey,
+                    findNext: findSession.matches > 0,
+                  },
+                  event.currentTarget.value,
+                )
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                void closeBrowserFind(tabId)
+              }
+            }}
+            placeholder="在网页中查找"
+            aria-label="在网页中查找"
+          />
+          <span className={findSession.error ? 'browser-find-error' : 'browser-find-count'}>
+            {findSession.error
+              ? findSession.error
+              : findSession.query
+                ? `${findSession.activeMatchOrdinal}/${findSession.matches}`
+                : '0/0'}
+          </span>
+          <button
+            type="button"
+            className="browser-find-text-button"
+            title="上一个匹配项"
+            aria-label="上一个匹配项"
+            onClick={() => void runBrowserFind(tabId, { forward: false, findNext: true })}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            className="browser-find-text-button"
+            title="下一个匹配项"
+            aria-label="下一个匹配项"
+            onClick={() => void runBrowserFind(tabId, { forward: true, findNext: true })}
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            className="browser-find-text-button"
+            title="关闭查找"
+            aria-label="关闭查找"
+            onClick={() => void closeBrowserFind(tabId)}
+          >
+            ×
+          </button>
+        </div>
+      ) : (
+        <input
+          className="url-input"
+          value={browserState?.urlInput ?? ''}
+          onChange={(event) => onUrlInputChange(tabId, event.target.value)}
+          onFocus={() => {
+            void window.cclinkStudio.window.focusRenderer()
+          }}
+          onKeyDown={(event) => {
+            const primaryModifier = event.metaKey || event.ctrlKey
+            const key = event.key.toLowerCase()
 
-          if (primaryModifier && !event.altKey && !event.shiftKey && key === 'a') {
-            event.preventDefault()
-            event.currentTarget.select()
-            return
-          }
-
-          if (primaryModifier && !event.altKey && !event.shiftKey && key === 'c') {
-            const input = event.currentTarget
-            const start = input.selectionStart ?? 0
-            const end = input.selectionEnd ?? start
-            if (end > start) {
+            if (primaryModifier && !event.altKey && !event.shiftKey && key === 'a') {
               event.preventDefault()
-              const selectedText = input.value.slice(start, end)
-              void copyTextToClipboard(selectedText).catch((error) => {
-                console.error('[BrowserToolbar] 地址复制失败:', error)
-              })
+              event.currentTarget.select()
+              return
             }
-            return
-          }
 
-          if (event.key === 'Enter') onNavigate()
-        }}
-        placeholder="输入 URL..."
-      />
+            if (primaryModifier && !event.altKey && !event.shiftKey && key === 'c') {
+              const input = event.currentTarget
+              const start = input.selectionStart ?? 0
+              const end = input.selectionEnd ?? start
+              if (end > start) {
+                event.preventDefault()
+                const selectedText = input.value.slice(start, end)
+                void copyTextToClipboard(selectedText).catch((error) => {
+                  console.error('[BrowserToolbar] 地址复制失败:', error)
+                })
+              }
+              return
+            }
+
+            if (event.key === 'Enter') onNavigate()
+          }}
+          placeholder="输入 URL..."
+        />
+      )}
 
       {draftId ? (
         showSave ? (

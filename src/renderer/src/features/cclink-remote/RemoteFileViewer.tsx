@@ -199,12 +199,6 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
           value={content}
           disabled={loading}
           onChange={(event) => setContent(event.target.value)}
-          onKeyDown={(event) => {
-            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
-              event.preventDefault()
-              void save()
-            }
-          }}
           spellCheck={false}
         />
       )}

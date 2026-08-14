@@ -5503,6 +5503,52 @@ body.is-resizing-panels .main-area > div {
   box-shadow: 0 0 0 1px var(--text-accent);
 }
 
+.browser-find-bar {
+  flex: 1;
+  min-width: 180px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--text-accent);
+  border-radius: 14px;
+  background: var(--bg-input);
+}
+
+.browser-find-bar input {
+  flex: 1;
+  min-width: 80px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.browser-find-count,
+.browser-find-error {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.browser-find-error {
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--status-error, #f47174);
+  text-overflow: ellipsis;
+}
+
+.browser-toolbar button.browser-find-text-button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 14px;
+}
+
 /* 缩放 / 设备模式控件组 */
 .browser-zoom-group,
 .browser-device-group {
@@ -10085,6 +10131,23 @@ button.file-tree-item {
   margin: 0 0 12px;
 }
 
+.keybindings-sync-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.keybindings-sync-status.is-synced {
+  color: var(--status-success, #73c991);
+}
+
+.keybindings-sync-status.is-error {
+  color: var(--status-error, #f47174);
+}
+
 .keybindings-message,
 .keybindings-conflict {
   margin-bottom: 10px;
@@ -10109,6 +10172,18 @@ button.file-tree-item {
 
 .keybindings-row {
   gap: 16px;
+}
+
+.keybindings-command-group + .keybindings-command-group {
+  margin-top: 10px;
+}
+
+.keybindings-category {
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .keybindings-command {

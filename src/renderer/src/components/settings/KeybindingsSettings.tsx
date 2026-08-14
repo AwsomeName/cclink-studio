@@ -15,6 +15,7 @@ import {
   stopShortcutCapture,
   type ShortcutCaptureResult,
 } from '../../features/shortcuts/shortcut-capture'
+import { useBrowserFindStore } from '../../features/browser/browser-find-store'
 
 const CAPTURE_TIMEOUT_MS = 30_000
 
@@ -48,6 +49,8 @@ export function KeybindingsSettings(): React.ReactElement {
   const [message, setMessage] = useState<string | null>(null)
   const [pendingConflict, setPendingConflict] = useState<PendingConflict | null>(null)
   const mac = isMacPlatform(typeof navigator === 'undefined' ? '' : navigator.platform)
+  const browserShortcutSync = useBrowserFindStore((state) => state.shortcutSync)
+  const retryBrowserShortcutSync = useBrowserFindStore((state) => state.retryShortcutSync)
 
   const configurableCommands = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -55,12 +58,29 @@ export function KeybindingsSettings(): React.ReactElement {
       .filter((command) => command.shortcutPolicy && command.configurable !== false)
       .filter((command) => {
         if (!needle) return true
-        return [command.label, command.id, command.category ?? ''].some((value) =>
+        const shortcut = effectiveBindingsForCommand(command, overrides)
+          .map((binding) => formatKeyChord(binding, mac))
+          .join(' / ')
+        return [command.label, command.id, command.category ?? '', shortcut].some((value) =>
           value.toLowerCase().includes(needle),
         )
       })
       .sort((left, right) => left.label.localeCompare(right.label, 'zh-CN'))
-  }, [commands, query])
+  }, [commands, mac, overrides, query])
+
+  const commandGroups = useMemo(() => {
+    return (Object.keys(SCOPE_LABELS) as Array<keyof typeof SCOPE_LABELS>).flatMap((scope) => {
+      const groupCommands = configurableCommands.filter(
+        (command) => command.shortcutPolicy?.scope === scope,
+      )
+      return groupCommands.length > 0 ? [[SCOPE_LABELS[scope], groupCommands] as const] : []
+    })
+  }, [configurableCommands])
+
+  const orphanOverrides = useMemo(() => {
+    const commandIds = new Set(commands.map((command) => command.id))
+    return overrides.filter((override) => !commandIds.has(override.commandId))
+  }, [commands, overrides])
 
   const stopRecording = useCallback(() => {
     const active = recordingRef.current
@@ -224,6 +244,43 @@ export function KeybindingsSettings(): React.ReactElement {
       <p className="settings-description keybindings-help">
         点击“修改”后按下新组合键。Escape 取消，Delete 清除。作用范围由命令固定，不能在这里修改。
       </p>
+      <div className={`keybindings-sync-status is-${browserShortcutSync.status}`} role="status">
+        <span>
+          浏览器网页快捷键：
+          {browserShortcutSync.status === 'synced'
+            ? `已同步（版本 ${browserShortcutSync.configVersion}）`
+            : browserShortcutSync.status === 'pending'
+              ? '同步中…'
+              : `同步失败：${browserShortcutSync.message ?? '未知错误'}`}
+        </span>
+        {browserShortcutSync.status === 'error' && (
+          <button type="button" onClick={retryBrowserShortcutSync}>
+            重试
+          </button>
+        )}
+      </div>
+      {orphanOverrides.length > 0 && (
+        <div className="keybindings-conflict" role="alert">
+          <span>
+            发现 {orphanOverrides.length} 项已不存在命令的旧配置：
+            {orphanOverrides.map((override) => override.commandId).join('、')}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              void saveOverrides(
+                overrides.filter(
+                  (override) =>
+                    !orphanOverrides.some((orphan) => orphan.commandId === override.commandId),
+                ),
+                '已清理失效的快捷键配置',
+              )
+            }
+          >
+            清理失效配置
+          </button>
+        </div>
+      )}
       {message && !pendingConflict && (
         <div className="keybindings-message" role="status">
           {message}
@@ -241,39 +298,48 @@ export function KeybindingsSettings(): React.ReactElement {
         </div>
       )}
       <div className="settings-group keybindings-list">
-        {configurableCommands.map((command) => {
-          const policy = command.shortcutPolicy
-          if (!policy) return null
-          const bindings = effectiveBindingsForCommand(command, overrides)
-          const modified = overrides.some((override) => override.commandId === command.id)
-          const isRecording = recording?.commandId === command.id
-          return (
-            <div className="settings-row keybindings-row" key={command.id}>
-              <div className="settings-label keybindings-command">
-                <span>{command.label}</span>
-                <span className="settings-description">
-                  {command.id} · {SCOPE_LABELS[policy.scope]}
-                  {modified ? ' · 已修改' : ''}
-                </span>
-              </div>
-              <div className="settings-control keybindings-actions">
-                <kbd>
-                  {isRecording
-                    ? '请按下组合键…'
-                    : bindings.length > 0
-                      ? bindings.map((binding) => formatKeyChord(binding, mac)).join(' / ')
-                      : '未设置'}
-                </kbd>
-                <button type="button" onClick={() => void beginRecording(command.id)}>
-                  {isRecording ? '录制中' : '修改'}
-                </button>
-                <button type="button" disabled={!modified} onClick={() => resetCommand(command.id)}>
-                  恢复默认
-                </button>
-              </div>
-            </div>
-          )
-        })}
+        {commandGroups.map(([category, groupCommands]) => (
+          <div className="keybindings-command-group" key={category}>
+            <div className="keybindings-category">{category}</div>
+            {groupCommands.map((command) => {
+              const policy = command.shortcutPolicy
+              if (!policy) return null
+              const bindings = effectiveBindingsForCommand(command, overrides)
+              const modified = overrides.some((override) => override.commandId === command.id)
+              const isRecording = recording?.commandId === command.id
+              return (
+                <div className="settings-row keybindings-row" key={command.id}>
+                  <div className="settings-label keybindings-command">
+                    <span>{command.label}</span>
+                    <span className="settings-description">
+                      {command.id} · {SCOPE_LABELS[policy.scope]}
+                      {modified ? ' · 已修改' : ''}
+                    </span>
+                  </div>
+                  <div className="settings-control keybindings-actions">
+                    <kbd>
+                      {isRecording
+                        ? '请按下组合键…'
+                        : bindings.length > 0
+                          ? bindings.map((binding) => formatKeyChord(binding, mac)).join(' / ')
+                          : '未设置'}
+                    </kbd>
+                    <button type="button" onClick={() => void beginRecording(command.id)}>
+                      {isRecording ? '录制中' : '修改'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!modified}
+                      onClick={() => resetCommand(command.id)}
+                    >
+                      恢复默认
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ))}
         {configurableCommands.length === 0 && (
           <div className="keybindings-empty">没有匹配的可配置命令</div>
         )}

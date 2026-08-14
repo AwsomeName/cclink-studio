@@ -9,6 +9,8 @@ import { createSettingsCommands } from './settings-commands'
 import { createTabCommands } from './tab-commands'
 import { createViewCommands } from './view-commands'
 import { createWindowCommands } from './window-commands'
+import { createWorkbenchCommands } from './workbench-commands'
+import { createMarkdownCommands } from './markdown-commands'
 import { useSettingsStore } from '../../stores/settings-store'
 import { useAgentStore } from '../../stores/agent-store'
 import { useUIStore } from '../../stores/ui-store'
@@ -30,6 +32,8 @@ function createAllCommands(): Command[] {
     ...createBrowserCommands(),
     ...createDiagnosticsCommands(),
     ...createWindowCommands(),
+    ...createWorkbenchCommands(),
+    ...createMarkdownCommands(),
   ]
 }
 
@@ -50,6 +54,16 @@ describe('bootstrap command modules', () => {
     expect(ids).toContain('diagnostics.copyWorkspaceState')
     expect(ids).toContain('diagnostics.copyFrameworkLogs')
     expect(ids).toContain('window.reload')
+    expect(ids).toContain('workbench.find')
+    expect(ids).toContain('workbench.save')
+    expect(ids).toContain('markdown.bold')
+  })
+
+  it('可配置命令的声明和实际路由只使用 shortcutPolicy', () => {
+    const configurable = createAllCommands().filter((command) => command.configurable)
+    expect(configurable.length).toBeGreaterThan(0)
+    expect(configurable.every((command) => Boolean(command.shortcutPolicy))).toBe(true)
+    expect(configurable.every((command) => command.shortcut === undefined)).toBe(true)
   })
 
   it('新建 Agent 会话绑定当前工作空间并打开右侧输入框', async () => {

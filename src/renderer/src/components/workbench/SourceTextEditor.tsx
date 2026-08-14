@@ -197,17 +197,6 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
   }, [filePath, showToast])
 
   useEffect(() => {
-    const save = (event: KeyboardEvent): void => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
-        event.preventDefault()
-        void handleSave()
-      }
-    }
-    window.addEventListener('keydown', save)
-    return () => window.removeEventListener('keydown', save)
-  }, [handleSave])
-
-  useEffect(() => {
     useTabStore.getState().updateTabDirty(tabId, fileState?.dirty ?? false)
   }, [fileState?.dirty, tabId])
 
@@ -313,8 +302,9 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
         },
         openFind,
         closeFind,
+        save: handleSave,
       }),
-    [closeFind, filePath, openFind, tabId],
+    [closeFind, filePath, handleSave, openFind, tabId],
   )
 
   const showEditorContextMenu = (

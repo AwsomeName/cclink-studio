@@ -29,6 +29,24 @@ export const browserApi: BrowserApiContract = {
   capturePage: (tabId) => invokeIpcContract(browserIpc.capturePage, tabId),
   getCurrentURL: (tabId) => invokeIpcContract(browserIpc.getCurrentURL, tabId),
   getActiveViewId: (workspaceKey) => invokeIpcContract(browserIpc.getActiveViewId, workspaceKey),
+  syncFindShortcut: (input) => invokeIpcContract(browserIpc.syncFindShortcut, input),
+  getRuntimeIdentity: (tabId) => invokeIpcContract(browserIpc.getRuntimeIdentity, tabId),
+  findInPage: (input) => invokeIpcContract(browserIpc.findInPage, input),
+  stopFindInPage: (input) => invokeIpcContract(browserIpc.stopFindInPage, input),
+  dispatchFindShortcutForSmoke: (tabId) =>
+    invokeIpcContract(browserIpc.dispatchFindShortcutForSmoke, tabId),
+  onFindShortcutTriggered: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
+      callback(payload)
+    ipcRenderer.on(browserIpcEvents.findShortcutTriggered, handler)
+    return () => ipcRenderer.removeListener(browserIpcEvents.findShortcutTriggered, handler)
+  },
+  onFindResult: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
+      callback(payload)
+    ipcRenderer.on(browserIpcEvents.findResult, handler)
+    return () => ipcRenderer.removeListener(browserIpcEvents.findResult, handler)
+  },
   getDiagnostics: (tabId) => invokeIpcContract(browserIpc.getDiagnostics, tabId),
   getRuntimeDiagnostics: (tabId) => invokeIpcContract(browserIpc.getRuntimeDiagnostics, tabId),
   getSessionDiagnostics: (request) => invokeIpcContract(browserIpc.getSessionDiagnostics, request),
