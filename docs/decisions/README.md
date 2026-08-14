@@ -43,3 +43,6 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
 - `0010-thin-runtime-package.md`：Claude Runtime 不再随 `.app` 分发，改为组件页按需安装；旧 bundled 选择迁移到 managed，Agent 缺失不阻断工作台。
 - `0011-release-signing-runtime-keychain-boundary.md`：明确 NO_SYSTEM_KEYCHAIN 只约束 App
   运行时；正式 Release 必须在隔离 CI 中使用临时钥匙串完成 Developer ID 签名和 Apple 公证。
+- `0012-controlled-peer-acp-runtime.md`：在保留 Claude Code 必备默认基线和直接 SDK 路径的前提
+  下，允许 Thread 显式选择受控、本地、Codex-only 的 ACP Runtime；不开放 Registry、任意 Agent
+  或远程 transport。

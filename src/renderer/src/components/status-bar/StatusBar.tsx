@@ -44,6 +44,7 @@ const TAB_TYPE_LABEL: Record<string, string> = {
   'scheduled-task': '定时任务',
   'web-resource': '网站与账号',
   'web-affair': '事务',
+  'media-production': '宣发视频',
 }
 
 export function StatusBar(): React.ReactElement {

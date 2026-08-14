@@ -165,6 +165,23 @@ describe('useTabStore', () => {
       expect(useTabStore.getState().tabs.filter((t) => t.type === 'editor')).toHaveLength(2)
     })
 
+    it('同一工作空间的宣发视频工程只打开一个 Tab', () => {
+      const draft = {
+        type: 'media-production' as const,
+        title: '产品发布',
+        icon: '🎬',
+        workspaceRef: { kind: 'local' as const, path: '/project' },
+        mediaProject: { projectId: '12345678-1234-1234-1234-123456789abc' },
+      }
+      useTabStore.getState().openTab(draft)
+      const firstId = useTabStore.getState().activeTabId
+      useTabStore.getState().openTab(draft)
+
+      const tabs = useTabStore.getState().tabs.filter((tab) => tab.type === 'media-production')
+      expect(tabs).toHaveLength(1)
+      expect(useTabStore.getState().activeTabId).toBe(firstId)
+    })
+
     it('settings Tab 保持单例，并更新目标设置分组', () => {
       useTabStore.getState().openTab({
         type: 'settings',

@@ -171,6 +171,8 @@ interface OpenTabOptions {
   webAffair?: Tab['webAffair']
   /** 内置 Agent 角色定义详情 */
   agentRole?: Tab['agentRole']
+  /** 宣发视频工程详情 */
+  mediaProject?: Tab['mediaProject']
   /** 强制新建，跳过所有去重 */
   forceNew?: boolean
   /** 显式指定 Tab 归属；缺省使用当前工作空间。 */
@@ -271,6 +273,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     webResource,
     webAffair,
     agentRole,
+    mediaProject,
     forceNew,
     workspaceRef,
   }) => {
@@ -409,6 +412,15 @@ export const useTabStore = create<TabState>((set, get) => ({
             )
           })
           if (existing) return { activeTabId: existing.id }
+        } else if (type === 'media-production' && mediaProject) {
+          const existing = state.tabs.find(
+            (tab) =>
+              tab.type === 'media-production' &&
+              tab.mediaProject?.projectId === mediaProject.projectId &&
+              workspaceRefKey(tab.workspaceRef ?? workspaceRefFromKey(null)) ===
+                workspaceRefKey(workspaceRef ?? workspaceRefFromKey(getWorkspaceStateKey())),
+          )
+          if (existing) return { activeTabId: existing.id }
         }
         // browser / 未命名 editor 不去重 → 可开多个
       }
@@ -439,6 +451,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         webResource,
         webAffair,
         agentRole,
+        mediaProject,
       }
       return {
         tabs: [...state.tabs, newTab],

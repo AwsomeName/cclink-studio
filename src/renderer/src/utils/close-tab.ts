@@ -7,6 +7,7 @@ import { runEditorSaveGuard } from '../features/editor-save-guard'
 import { clearRemoteFileDraft, getRemoteFileDraft } from './remote-file-draft-registry'
 import { confirmAgentRoleDraftExit } from '../features/agent-roles/agent-role-draft-policy'
 import { clearAgentRoleDraftController } from '../features/agent-roles/agent-role-draft-registry'
+import { getMediaProjectDraft } from '../features/media-production/media-project-draft-registry'
 
 function getEditorFileKey(tab: Tab): string {
   return tab.filePath ?? `virtual:${tab.id}`
@@ -233,6 +234,31 @@ async function closeScheduledTaskView(tab: Tab): Promise<boolean> {
   return true
 }
 
+async function closeMediaProjectView(tab: Tab): Promise<boolean> {
+  if (!tab.dirty) {
+    useTabStore.getState().closeTab(tab.id)
+    return true
+  }
+  const draft = getMediaProjectDraft(tab.id)
+  if (!draft) {
+    await showSaveError('宣发视频工程编辑状态不可用，已阻止关闭以避免丢失修改')
+    return false
+  }
+  const { response } = await window.cclinkStudio.dialog.showMessageBox({
+    type: 'question',
+    title: '关闭宣发视频工程',
+    message: `要保存对“${tab.title}”的修改吗？`,
+    detail: '不保存会丢弃本次未保存的分镜和品牌设置。',
+    buttons: ['保存', '不保存', '取消'],
+    defaultId: 0,
+    cancelId: 2,
+  })
+  if (response === 2) return false
+  if (response === 0 && !(await draft.save())) return false
+  useTabStore.getState().closeTab(tab.id)
+  return true
+}
+
 async function closeWebResourceDraft(tab: Tab): Promise<boolean> {
   const draftId = tab.webResourceDraftRef?.draftId
   if (!draftId || tab.workspaceRef?.kind !== 'local') return false
@@ -265,6 +291,10 @@ export async function closeTabWithDraftPolicy(tabId: string): Promise<boolean> {
 
   if (tab.type === 'scheduled-task') {
     return closeScheduledTaskView(tab)
+  }
+
+  if (tab.type === 'media-production') {
+    return closeMediaProjectView(tab)
   }
 
   if (tab.type === 'browser' && tab.webResourceDraftRef) {

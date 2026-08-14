@@ -46,6 +46,7 @@ export type TabType =
   | 'web-affair'
   | 'agent-role'
   | 'remote-file'
+  | 'media-production'
 
 export type ConversationSurface = 'assistant-panel' | 'workbench-tab'
 
@@ -220,6 +221,10 @@ export interface Tab {
   agentRole?: {
     roleId: string
     version: number
+  }
+  /** 宣发视频工程 Tab 只持有主进程工程引用。 */
+  mediaProject?: {
+    projectId: string
   }
 }
 

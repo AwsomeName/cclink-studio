@@ -63,6 +63,7 @@ import { openDefaultBrowserTab } from '../../features/web-resources/open-default
 import { CclinkPanel } from '../../features/cclink-remote/CclinkPanel'
 import { RemoteFileTree } from '../../features/cclink-remote/RemoteFileTree'
 import { RemoteSessionsSidebar } from '../../features/cclink-remote/RemoteSessionsSidebar'
+import { PromotionalVideoSidebar } from '../../features/media-production/PromotionalVideoSidebar'
 
 function getProjectName(path: string): string {
   return path.split('/').filter(Boolean).pop() ?? path
@@ -707,12 +708,14 @@ function ProductionSidebarView({
 }): React.ReactElement {
   if (workspaceRef.kind === 'local' && workspacePath) {
     return (
-      <HardwareProductionSection
-        workspacePath={workspacePath}
-        workspaceRef={workspaceRef}
-        alwaysVisible
-        defaultExpanded
-      />
+      <>
+        <PromotionalVideoSidebar workspacePath={workspacePath} workspaceRef={workspaceRef} />
+        <HardwareProductionSection
+          workspacePath={workspacePath}
+          workspaceRef={workspaceRef}
+          alwaysVisible
+        />
+      </>
     )
   }
 

@@ -39,6 +39,11 @@ import {
   runtimeComponentsIpc,
   type RuntimeComponentsApiContract,
 } from '../shared/ipc/runtime-components'
+import {
+  mediaProjectsIpc,
+  mediaProjectsIpcEvents,
+  type MediaProjectsApiContract,
+} from '../shared/media-production/media-project-contract'
 
 const settingsApi: SettingsApiContract = {
   getAll: () => invokeIpcContract(settingsIpc.getAll),
@@ -167,6 +172,21 @@ const scheduledTasksApi: ScheduledTasksApiContract = {
   },
 }
 
+const mediaProjectsApi: MediaProjectsApiContract = {
+  list: (workspacePath) => invokeIpcContract(mediaProjectsIpc.list, workspacePath),
+  get: (workspacePath, projectId) =>
+    invokeIpcContract(mediaProjectsIpc.get, workspacePath, projectId),
+  create: (input) => invokeIpcContract(mediaProjectsIpc.create, input),
+  save: (input) => invokeIpcContract(mediaProjectsIpc.save, input),
+  proposeStoryboard: (input) => invokeIpcContract(mediaProjectsIpc.proposeStoryboard, input),
+  onChanged: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, workspacePath: string): void =>
+      callback(workspacePath)
+    ipcRenderer.on(mediaProjectsIpcEvents.changed, handler)
+    return () => ipcRenderer.removeListener(mediaProjectsIpcEvents.changed, handler)
+  },
+}
+
 const terminalApi: TerminalApiContract = {
   onRequestCommandConfirmation: (callback) => {
     const handler = (
@@ -263,6 +283,8 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   workspaceState: workspaceStateApi,
 
   scheduledTasks: scheduledTasksApi,
+
+  mediaProjects: mediaProjectsApi,
 
   update: updateApi,
 })

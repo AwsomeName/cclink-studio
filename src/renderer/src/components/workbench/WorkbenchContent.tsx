@@ -48,6 +48,7 @@ import {
 import { ScheduledTaskTab } from '../../features/scheduled-tasks/ScheduledTaskTab'
 import { AgentRoleDetailTab } from '../../features/agent-roles/AgentRoleDetailTab'
 import { RemoteFileViewer } from '../../features/cclink-remote/RemoteFileViewer'
+import { MediaProductionTab } from '../../features/media-production/MediaProductionTab'
 
 const EMPTY_TERMINAL_OUTPUT_LINES: TerminalOutputLine[] = []
 
@@ -157,6 +158,9 @@ export function WorkbenchContent({
             )}
             {activeTab.type === 'web-affair' && activeTab.webAffair?.affairId === null && (
               <WebAffairDraftTab tab={activeTab} />
+            )}
+            {activeTab.type === 'media-production' && activeTab.mediaProject && (
+              <MediaProductionTab tab={activeTab} />
             )}
           </>
         )}

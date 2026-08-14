@@ -50,6 +50,9 @@ import { CclinkRuntimeStateStore } from '../cclink-remote/runtime-state-store'
 import { registerCclinkRemoteIpc } from '../cclink-remote/cclink-remote-ipc'
 import { getCclinkServiceUrl } from '../cclink-remote/service-config'
 import { AgentRoleRegistry } from '../agent/agent-role-registry'
+import { MediaProjectService } from '../media-production/media-project-service'
+import { registerMediaProjectIpc } from '../media-production/media-project-ipc'
+import { StoryboardProposalService } from '../media-production/storyboard-proposal-service'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   try {
@@ -102,17 +105,24 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
   await runtime.scheduledTaskService.load()
   console.log('[CCLink Studio] 定时任务定义与本机启用状态已初始化（尚未启动调度）')
 
+  runtime.mediaProjectService = new MediaProjectService(runtime.workspaceStateService)
+  console.log('[CCLink Studio] 宣发视频工程服务已初始化')
+
   runtime.usageLedgerService = new UsageLedgerService()
   console.log('[CCLink Studio] 用量统计服务已初始化')
 }
 
 export async function shutdownStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
+  runtime.mediaProjectIpcUnsubscribe?.()
+  runtime.mediaProjectIpcUnsubscribe = null
   await runShutdownStep('ScheduledTaskService', () => runtime.scheduledTaskService?.flush())
+  await runShutdownStep('MediaProjectService', () => runtime.mediaProjectService?.flush())
   await runShutdownStep('WorkspaceStateService', () => runtime.workspaceStateService?.flush())
   await runShutdownStep('UsageLedgerService', () => runtime.usageLedgerService?.flush())
   await runShutdownStep('AgentRoleRegistry', () => runtime.agentRoleRegistry?.flush())
   runtime.workspaceStateService = null
   runtime.scheduledTaskService = null
+  runtime.mediaProjectService = null
   runtime.usageLedgerService = null
   runtime.settingsService = null
   runtime.credentialService = null
@@ -145,6 +155,15 @@ export async function bootstrapMainProcessServices(
     runtime.mainWindow,
   )
   console.log('[CCLink Studio] 定时任务 IPC 已注册')
+
+  runtime.mediaProjectIpcUnsubscribe?.()
+  runtime.mediaProjectIpcUnsubscribe = registerMediaProjectIpc(
+    runtime.mediaProjectService!,
+    runtime.trustedRendererGuard,
+    runtime.mainWindow,
+    new StoryboardProposalService(() => runtime.agentBridge),
+  )
+  console.log('[CCLink Studio] 宣发视频工程 IPC 已注册')
 
   registerDiagnosticsIpc(runtime.trustedRendererGuard)
   console.log('[CCLink Studio] 诊断日志 IPC 已注册')

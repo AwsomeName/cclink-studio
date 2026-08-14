@@ -49,6 +49,7 @@ import type { RuntimeComponentManager } from '../runtime-components/runtime-comp
 import type { CclinkAuthService } from '../cclink-remote/auth-service'
 import type { CclinkRemoteService } from '../cclink-remote/cclink-remote-service'
 import type { AgentRoleRegistry } from '../agent/agent-role-registry'
+import type { MediaProjectService } from '../media-production/media-project-service'
 
 export interface CclinkStudioRuntimeState {
   isDev: boolean
@@ -100,6 +101,8 @@ export interface CclinkStudioRuntimeState {
   updateService: UpdateService | null
   updateSnapshotUnsubscribe: (() => void) | null
   scheduledTaskService: ScheduledTaskService | null
+  mediaProjectService: MediaProjectService | null
+  mediaProjectIpcUnsubscribe: (() => void) | null
   trustedRendererGuard: TrustedRendererGuard | null
   rendererWorkspaceStateFlush: RendererWorkspaceStateFlushCoordinator | null
   cclinkAuthService: CclinkAuthService | null
@@ -158,6 +161,8 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     updateService: null,
     updateSnapshotUnsubscribe: null,
     scheduledTaskService: null,
+    mediaProjectService: null,
+    mediaProjectIpcUnsubscribe: null,
     trustedRendererGuard: null,
     rendererWorkspaceStateFlush: null,
     cclinkAuthService: null,

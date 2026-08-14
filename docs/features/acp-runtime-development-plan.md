@@ -1,6 +1,6 @@
 # ACP Runtime 最小开发方案
 
-> 状态：评审草案，尚未开始实现。
+> 状态：方案已确认，D0 开工中。
 > 最后更新：2026-08-14。
 > 相关事实源：[`agent-system.md`](./agent-system.md)、
 > [`agent-panel-product-model.md`](./agent-panel-product-model.md)、
@@ -9,7 +9,8 @@
 
 ## 1. 结论
 
-Claude Code 与 ACP 是两个平级的 Agent Runtime：
+Claude Code 与 ACP 是 Thread 中两个平级的 Agent Runtime 选项；Claude Code 同时是 Studio
+Agent 能力的必备启动基线：
 
 ```text
 Agent Thread
@@ -18,7 +19,9 @@ Agent Thread
 ```
 
 ACP 不位于 Claude Code 上层，不代理 Claude Code，也不成为统一 Runtime 管理框架。现有 Claude
-Code 路径保持默认、直接和可独立运行；ACP 只新增一个 `IAgentBackend` 实现及其必要的协议适配。
+Code 路径保持默认、直接和可独立运行；ACP 只新增一个可选 `IAgentBackend` 实现及其必要的协议
+适配。Studio 仍先确保 Claude Code 可用；Claude Code 不可用时 Agent 整体降级，ACP 不作为绕过
+这一基线的启动兜底。反过来，ACP 缺失或故障不得影响 Claude Code。
 
 本方案选择最小纵向闭环：
 
@@ -27,7 +30,8 @@ Code 路径保持默认、直接和可独立运行；ACP 只新增一个 `IAgent
 3. 用户自行安装 `codex-acp`，Studio 只探测系统命令或用户选择的绝对路径；首版不建设自动安装。
 4. 首版只使用用户在 Studio 中显式配置的 API Key，不接入 ChatGPT 登录，不读取用户已有
    `~/.codex`，不访问系统钥匙串。
-5. 每个 Thread 在首次发送前选择 Claude Code 或 ACP；首次发送后 Runtime 绑定不可原地切换。
+5. 新建 Thread 永远从 Claude Code 开始；每个空 Thread 可在首次发送前选择 ACP，首次发送后
+   Runtime 绑定不可原地切换。首版不增加可修改的全局默认 Runtime 设置。
 6. 首版完成文本流、工具状态、权限确认、取消、工作空间绑定和会话恢复；图片、手动压缩、
    定时任务、远程 ACP、公共 Registry 和任意 Agent 配置全部后移。
 
@@ -80,15 +84,12 @@ Code 路径保持默认、直接和可独立运行；ACP 只新增一个 `IAgent
 
 ### 4.1 Runtime 是 Thread 配置，不是全局运行开关
 
-设置页只保存新 Thread 的默认值：
+Claude Code 默认值固定在产品逻辑中。设置页只保存 Codex ACP 的可执行文件路径，不保存
+`defaultAgentRuntime` 或 Agent 类型：
 
 ```typescript
-type AgentRuntimeKind = 'claude-code' | 'acp'
-
-interface AgentRuntimeDefaults {
-  defaultRuntime: AgentRuntimeKind // 默认始终是 'claude-code'
-  acpAgent: 'codex'
-  acpExecutablePath: string
+interface AcpRuntimeSettings {
+  codexAcpPath: string
 }
 ```
 
@@ -98,8 +99,6 @@ interface AgentRuntimeDefaults {
 interface AgentRuntimeBinding {
   kind: 'claude-code' | 'acp'
   implementationId: 'claude-code' | 'codex-acp'
-  sessionId: string | null
-  compatibilityFingerprint: string | null
 }
 ```
 
@@ -118,10 +117,6 @@ interface AgentRuntimeBinding {
 设置页只新增：
 
 ```text
-新会话默认 Runtime
-  Claude Code（默认）
-  Codex（ACP）
-
 Codex ACP
   可执行文件：系统命令 / 绝对路径
   状态：未探测 / 可用 / 不兼容 / 不可用
@@ -162,6 +157,10 @@ type BackendConfig =
 一个 `codex-acp` 子进程，优先换取简单的会话归属、故障隔离和清理逻辑。首版不实现多个 Thread
 共享一个 ACP 进程。
 
+`bootstrapAgentRuntime()` 继续先解析 Claude Code 并创建 `AgentBridge`，不为 ACP 拆分现有稳定
+启动链。`AgentRuntime` 只把当前全局 backend config 收窄为“默认 Claude config + Thread 显式
+ACP config”；ACP 在绑定它的 Thread 第一次发送时才探测和启动。
+
 ## 6. 最小事件契约
 
 当前 renderer 直接理解 Claude SDK 原始事件。ACP 不应伪装成 Claude `stream_event`，但首版也
@@ -187,9 +186,12 @@ type AgentBackendEvent =
 
 实施顺序：
 
-1. 先在主进程为现有 Claude backend 增加一个薄映射层，把当前事件转换为上述最小事件。
-2. renderer 改为只处理最小事件。
-3. ACP backend 把 `session/update`、prompt 终态和错误转换为同一事件。
+1. 保留 Claude backend 和 renderer 当前的原始 Claude 事件路径。
+2. ACP backend 把 `session/update`、prompt 终态和错误转换为带
+   `protocol: 'studio-agent-event-v1'` 标识的最小中性事件。
+3. renderer 增量识别 ACP 中性事件；首版允许显式双解析，不先迁移 Claude 事件。
+
+只有 ACP 闭环稳定且统一能真实减少维护成本时，才单独评审 Claude 事件迁移。
 
 不在首版统一 reasoning、plan、diff、图片、context usage 或所有 ACP 扩展。ACP tool call 的输入、
 状态和结果足以复用现有高密度工具行；更丰富的 Codex diff 展示留到真实需求出现后。
@@ -200,14 +202,17 @@ type AgentBackendEvent =
 
 每个 ACP Thread 第一次发送时：
 
-1. 主进程解析并校验 `codex-acp` 绝对路径；禁止通过 shell 字符串启动。
+1. 主进程解析并校验 `codex-acp` 绝对路径；禁止通过 shell 字符串启动。D0 固定验证
+   `@agentclientprotocol/codex-acp@1.3.0`，首版只接受明确验证过的兼容版本。
 2. 使用 `spawn(executablePath, fixedArgs, { shell: false })` 启动子进程。
 3. 子进程环境使用 allowlist，不继承 Anthropic、OpenAI、Codex 或其他模型凭证。
 4. 仅注入用户为 Codex 显式配置的 API Key。
 5. 设置 Studio 管理的隔离 `CODEX_HOME`，不读取用户 `~/.codex`。
-6. 通过 stdio 完成 ACP `initialize`。
-7. 校验协议版本、agentInfo、认证方法和必要 capability。
-8. 创建或恢复 ACP Session，并把 cwd 固定为 Thread 所属工作空间。
+6. 设置 `NO_BROWSER=1` 和 `INITIAL_AGENT_MODE=agent`；首版不设置 `CODEX_PATH`，使用
+   `codex-acp` 自带的兼容 Codex 依赖。
+7. 通过 stdio 完成 ACP `initialize`。
+8. 校验协议版本、agentInfo、认证方法和必要 capability。
+9. 创建或恢复 ACP Session，并把 cwd 固定为 Thread 所属工作空间。
 
 ### 7.2 运行
 
@@ -253,7 +258,10 @@ Studio Browser、Editor、Android 和数据源 MCP 工具不作为首版完成�
 首版复用现有确认 UI 和 `PermissionManager`，增加一个 ACP permission adapter：
 
 - ACP 请求只包含当前 Session 和当前 run 时才显示。
-- 用户允许、拒绝或取消后，原样映射到 ACP response。
+- 首版只映射 `allow_once` 和 `reject_once`；只有请求不扩大 workspace、network 或命令策略
+  边界时，才允许把现有“本会话允许”映射为 `allow_always`。
+- 网络策略 amendment、新增 writable root、exec policy amendment 和其他扩权选项首版不展示，
+  一律拒绝。
 - Runtime 自报的“只读”不能覆盖主进程对工作空间的检查。
 - 不提供 Full Access。
 - 不把 ACP 的一次批准解释成对 Studio 不可逆外部动作的批准。
@@ -262,9 +270,10 @@ Studio Browser、Editor、Android 和数据源 MCP 工具不作为首版完成�
 
 ## 9. 凭证与 NO_SYSTEM_KEYCHAIN
 
-首版只支持 API Key：
+首版只支持独立的 Codex API Key：
 
-- Key 由现有 `CredentialService` 保存。
+- Key 由现有 `CredentialService` 以独立 credential ID `agent:acp:codex` 保存，不复用当前可能
+  服务于 Anthropic 或其他 Provider 的通用 `apiKey`。
 - renderer 只知道是否已经配置。
 - Key 不进入普通设置、Thread、工作空间、命令参数或诊断。
 - 启动 ACP 前删除继承环境中的 `OPENAI_API_KEY`、`CODEX_API_KEY`、ChatGPT token 和其他
@@ -279,14 +288,15 @@ ChatGPT 登录需要让 Codex 持久化 refresh token，并改变当前“Creden
 
 ## 10. 持久化迁移
 
-只做两个新增字段：
+只做三个有界新增：
 
-1. 设置新增 `defaultAgentRuntime`，默认值为 `claude-code`。
-2. Thread 新增 `runtimeBinding`。
+1. 普通设置新增 `codexAcpPath`。
+2. `CredentialService` 新增独立的 `codexApiKey` secret，普通设置只返回是否已配置。
+3. Thread 新增 `runtimeBinding`；`sessionId` 和 `sessionCompatibilityFingerprint` 继续使用现有字段。
 
 迁移规则：
 
-- 缺少新字段的设置按 `claude-code` 处理。
+- 缺少 `codexAcpPath` 时按系统命令探测；探测失败不影响 Claude Code。
 - 缺少 `runtimeBinding` 的所有历史 Thread 按 Claude Code 处理。
 - 保留现有 `sessionId` 和 `sessionCompatibilityFingerprint` 字段名，首版不为追求命名纯度做
   大规模持久化重构。
@@ -316,7 +326,7 @@ src/main/agent/
 
 src/shared/
   agent-protocol.ts                          # minimal normalized event
-  settings-constants.ts                      # defaultAgentRuntime + ACP path
+  settings-constants.ts                      # ACP path；不增加全局 Runtime 默认值
 
 src/shared/ipc/
   agent-schema.ts
@@ -324,7 +334,7 @@ src/shared/ipc/
 
 src/renderer/src/
   stores/agent-store.ts                      # runtimeBinding 持久化
-  bootstrap/use-agent-stream-events.ts       # 处理 normalized event
+  bootstrap/use-agent-stream-events.ts       # 增量处理 ACP normalized event
   components/settings/SettingsPage.tsx       # ACP path/probe/API Key 状态
   features/agent-composer/                   # 空 Thread runtime selector
 ```
@@ -334,16 +344,27 @@ Store 或 ACP 专用 renderer Store。只有当第二个 ACP Agent 或进程复�
 
 ## 12. 实施里程碑
 
-| 阶段 | 类型 | 用户可验收结果 | 退出门禁 |
-| ---- | ---- | -------------- | -------- |
-| D0 决策与真实探针 | 工程准备 | 无新增用户能力 | 新 ADR accepted；固定 `codex-acp` 版本；stdio、权限、取消和 cwd 探针通过 |
-| M1 Codex 最小闭环 | 用户功能 | 空 Thread 选择 Codex，真实流式回答并可停止 | Claude 默认不变；API Key 隔离；进程失败独立降级 |
-| M2 工作空间代码任务 | 用户功能 | Codex 读取并修改当前工作空间文件，用户可拒绝权限 | workspace 边界、工具状态、取消竞态和 session 恢复通过 |
-| M3 Studio MCP 切片 | 用户功能 | Codex 调用一个真实 Studio MCP 工具 | MCP token 只在活动 run 有效；不出现重复确认；其他工具不扩张 |
-| M4 发布候选 | 工程准备 + 用户门禁 | packaged App 完成 M1-M3 真人验收 | `pnpm verify`、受影响 smoke、断网/坏路径/崩溃/重启恢复通过 |
+| 阶段                | 类型                | 用户可验收结果                                   | 退出门禁                                                                            |
+| ------------------- | ------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| D0 决策与真实探针   | 工程准备            | 无新增用户能力                                   | 新 ADR accepted；固定 `codex-acp@1.3.0`；stdio、权限、取消、恢复和 cwd 沙箱探针通过 |
+| M1 Codex 最小闭环   | 用户功能            | 空 Thread 选择 Codex，真实流式回答并可停止       | Claude 默认不变；API Key 隔离；进程失败独立降级                                     |
+| M2 工作空间代码任务 | 用户功能            | Codex 读取并修改当前工作空间文件，用户可拒绝权限 | workspace 边界、工具状态、取消竞态和 session 恢复通过                               |
+| M3 Studio MCP 切片  | 用户功能            | Codex 调用一个真实 Studio MCP 工具               | MCP token 只在活动 run 有效；不出现重复确认；其他工具不扩张                         |
+| M4 发布候选         | 工程准备 + 用户门禁 | packaged App 完成 M1-M3 真人验收                 | `pnpm verify`、受影响 smoke、断网/坏路径/崩溃/重启恢复通过                          |
 
 M1 之前不要先做自动安装；M2 之前不要扩展第二个 ACP Agent；M3 只接一个能够证明价值的
 Studio MCP 工具，不一次性迁移 Browser、Editor、Android 和数据源全部能力。
+
+### 12.1 D0 当前证据
+
+- 仓库以 devDependency 固定 `@agentclientprotocol/codex-acp@1.3.0`，只供开发和 CI 探针使用，
+  不进入正式 App 的 Runtime 自动安装逻辑。
+- `pnpm smoke:acp-runtime` 使用隔离 `HOME` / `CODEX_HOME` 和环境 allowlist；无 `--live` 时不
+  发起模型请求。
+- 2026-08-14 已真实通过 `1.3.0` 的版本、stdio、ACP v1 `initialize`、agent identity、
+  API Key auth method、session resume capability 和浏览器登录隐藏检查。
+- 当前开发环境没有 `CCLINK_ACP_SMOKE_API_KEY`，因此 prompt、cancel、permission、workspace
+  外写入拒绝和 session resume 的 live 门禁尚未执行。D0 仍为进行中，不能据此进入 M1。
 
 ## 13. 测试与失败矩阵
 
@@ -377,17 +398,17 @@ Studio MCP 工具，不一次性迁移 Browser、Editor、Android 和数据源�
 
 ## 14. 工作量预估
 
-| 工作项 | 预估 |
-| ------ | ---- |
-| ADR、`codex-acp` 真实协议探针 | 2-3 人日 |
-| 最小事件契约与 Claude 适配 | 2-4 人日 |
+| 工作项                                  | 预估     |
+| --------------------------------------- | -------- |
+| ADR、`codex-acp` 真实协议探针           | 2-3 人日 |
+| ACP 最小事件契约与 renderer 增量适配    | 1-2 人日 |
 | `LocalAcpBackend`、stdio、Session、取消 | 4-6 人日 |
-| Thread runtime binding、迁移和 UI 选择 | 3-5 人日 |
-| API Key、环境隔离、权限适配 | 3-5 人日 |
-| 恢复、错误、诊断和自动化 | 3-5 人日 |
-| 真实 App 验收与缺陷修复 | 2-4 人日 |
+| Thread runtime binding、迁移和 UI 选择  | 3-5 人日 |
+| API Key、环境隔离、权限适配             | 3-5 人日 |
+| 恢复、错误、诊断和自动化                | 3-5 人日 |
+| 真实 App 验收与缺陷修复                 | 2-4 人日 |
 
-M1-M2 合计约 19-32 人日，单人约 4-7 周。M3 Studio MCP 切片预计另需 3-5 人日。自动安装、
+M1-M2 合计约 13-22 人日，单人约 3-5 周。M3 Studio MCP 切片预计另需 3-5 人日。自动安装、
 ChatGPT 登录、第二 ACP Agent 和公共 Registry 不计入本估算。
 
 ## 15. 止损与替代路径
@@ -411,12 +432,14 @@ D0 出现以下任一结果时，不继续 ACP 实现：
 2. 是否为了未来可能接入多个 Agent，提前建设了 Registry、Provider 框架或进程池？首版不需要。
 3. 是否把“Codex 返回文字”当成完成？最小产品闭环至少包含真实工作空间文件任务、拒绝权限、
    取消和重启恢复。
-4. 是否让 ACP 初始化失败影响 Claude Code 或整个工作台？任何此类影响都是架构缺陷。
+4. 是否让 ACP 初始化失败影响 Claude Code 或整个工作台？任何此类影响都是架构缺陷。Claude
+   Code 仍是 Agent 必备启动基线，ACP 不承担 Claude 缺失时的兜底职责。
 5. 是否为减少代码而把 ACP 事件伪造成 Claude SDK 事件？应使用最小中性事件，而不是制造长期
    隐式兼容层。
 6. 是否读取用户已有 Codex 登录、使用系统钥匙串或继承环境凭证？首版全部禁止。
 7. 是否在首个闭环前加入自动安装、ChatGPT 登录、远程 ACP、第二 Agent 或公共 Registry？出现
    任一项都应执行范围止损。
 
-下一步只做 D0：新增替代 ADR，并用固定版本 `codex-acp` 完成不接 UI 的真实协议探针。D0 通过
+下一步只做 D0：新增替代 ADR，并用固定版本 `codex-acp@1.3.0` 完成不接 UI 的真实协议探针。
+D0 通过
 后再开始 `LocalAcpBackend`；D0 失败则转为 Codex App Server 专用 backend 评估。

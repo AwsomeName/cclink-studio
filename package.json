@@ -47,6 +47,7 @@
     "stage:agent-runtime": "node scripts/stage-claude-runtime.mjs",
     "verify:agent-runtime": "node scripts/stage-claude-runtime.mjs --verify-only",
     "smoke:agent-runtime": "node scripts/smoke-claude-runtime.mjs",
+    "smoke:acp-runtime": "node scripts/acp-runtime-probe.mjs",
     "smoke:managed-claude-runtime": "CCLINK_MANAGED_RUNTIME_REAL_SMOKE=1 vitest run src/main/runtime-components/runtime-component-manager.test.ts -t 'downloads the real constrained npm package'",
     "smoke:managed-runtime-ui": "node scripts/managed-runtime-ui-smoke.mjs",
     "smoke:managed-runtime-packaged": "node scripts/managed-runtime-packaged-smoke.mjs",
@@ -100,6 +101,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@agentclientprotocol/codex-acp": "1.3.0",
     "@tiptap/core": "^3.25.0",
     "@tiptap/extension-code-block-lowlight": "^3.25.0",
     "@tiptap/extension-image": "^3.25.0",

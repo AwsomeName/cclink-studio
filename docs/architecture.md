@@ -154,10 +154,11 @@ ADR 0003 已实施 Studio 本地明文凭证存储，并取代此前“必须使
 ADR 0009 已取代 ADR 0004 的“双桌面制品长期并存”前提。不可变 Tag、发布可审计和凭证不入库的要求继续有效；旧 commercial overlay 只在首阶段真实 App 验收通过前作为回滚制品。
 
 ADR 0006 已确定 Agent 产品边界：CCLink 拥有 Thread、上下文、工具循环、MCP、权限、
-角色、调度、诊断和用量事实，用户只选择受支持的模型服务、模型与本地凭证。ACP、用户
-自带 Agent 可执行文件和外部 Agent Registry 不进入当前路线。当前实现仍以本地 Claude
-Code backend 为唯一完整工具 Agent；供应商无关的 Model Adapter 与自有模型循环尚未交付，
-不得把 Provider 设置、HTTP 连通性或普通 Chat 宣称为该目标已经完成。
+角色、调度、诊断和用量事实，用户只选择受支持的模型服务、模型与本地凭证。ADR 0012 对
+“ACP 完全不进入路线”做了最小复审：Claude Code 仍是必备默认基线并直接使用 SDK，允许空
+Thread 显式选择经过验证的本地 Codex ACP Runtime；公共 Registry、任意 Agent executable 和
+远程 ACP 仍是非目标。供应商无关的 Model Adapter 与自有模型循环尚未交付，不得把 Provider
+设置、HTTP 连通性、普通 Chat 或单个 Codex adapter 宣称为通用多 Runtime 平台已经完成。
 
 已关闭的稳定化阶段、修复顺序和退出证据见 `docs/stabilization.md`。后续功能按本架构宪法和 `docs/development.md` 的门禁受控推进。
 

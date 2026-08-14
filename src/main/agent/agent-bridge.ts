@@ -8,6 +8,7 @@
  */
 
 import type { BrowserWindow } from 'electron'
+import { randomUUID } from 'node:crypto'
 import type { PermissionManager } from '../mcp/permission'
 import type { IAgentBackend, BackendConfig, AgentSendOptions } from './backend/types'
 import {
@@ -122,6 +123,7 @@ export class AgentBridge {
   private sessionCompatibilityFingerprint: string | null
   private runtimeProvenance: ClaudeRuntimeProvenance | null
   private readonly runtimeListeners = new Set<(event: AgentRuntimeEvent) => void>()
+  private readonly rendererSuppressedConversationIds = new Set<string>()
   constructor(
     mainWindow: BrowserWindow,
     playwrightBridge: PlaywrightBridge | null,
@@ -309,6 +311,70 @@ export class AgentBridge {
   onRuntimeEvent(listener: (event: AgentRuntimeEvent) => void): () => void {
     this.runtimeListeners.add(listener)
     return () => this.runtimeListeners.delete(listener)
+  }
+
+  /**
+   * 为应用内部能力执行一次无工具、无会话续接的文本生成。
+   * 结果不会进入普通 Agent 对话流；调用方仍需对文本做领域 schema 校验。
+   */
+  async requestInternalText(input: {
+    purpose: string
+    prompt: string
+    workspacePath?: string
+    timeoutMs?: number
+  }): Promise<string> {
+    if (this.configurationChangePending) {
+      throw new Error('Agent 配置正在切换，请稍后重试')
+    }
+    const conversationId = `internal-${input.purpose}-${randomUUID()}`
+    const runId = `run-${randomUUID()}`
+    const timeoutMs = Math.min(Math.max(input.timeoutMs ?? 180_000, 10_000), 300_000)
+    this.rendererSuppressedConversationIds.add(conversationId)
+
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let unsubscribe: () => void = () => undefined
+    try {
+      const result = new Promise<string>((resolve, reject) => {
+        const finish = (callback: () => void): void => {
+          if (timer) clearTimeout(timer)
+          unsubscribe()
+          callback()
+        }
+        unsubscribe = this.onRuntimeEvent((event) => {
+          if (event.conversationId !== conversationId || event.runId !== runId) return
+          if (event.type === 'complete') {
+            const text =
+              event.data && typeof event.data === 'object'
+                ? (event.data as { result?: unknown }).result
+                : null
+            if (typeof text !== 'string' || !text.trim()) {
+              finish(() => reject(new Error('Agent 未返回可解析的文本结果')))
+              return
+            }
+            finish(() => resolve(text.trim()))
+          } else if (event.type === 'error') {
+            finish(() => reject(new Error(this.extractErrorMessage(event.data))))
+          }
+        })
+        timer = setTimeout(() => {
+          void this.runtime.abort(conversationId).catch(() => undefined)
+          finish(() => reject(new Error('Agent 生成超时，请稍后重试')))
+        }, timeoutMs)
+      })
+
+      await this.runtime.sendMessage(input.prompt, conversationId, {
+        runId,
+        workspacePath: input.workspacePath,
+        allowedTools: [],
+        disableBuiltinTools: true,
+      })
+      return await result
+    } finally {
+      if (timer) clearTimeout(timer)
+      unsubscribe()
+      await this.runtime.closeConversation(conversationId).catch(() => undefined)
+      this.rendererSuppressedConversationIds.delete(conversationId)
+    }
   }
 
   async getContextUsage(
@@ -657,6 +723,7 @@ export class AgentBridge {
     this.activeBrowserTaskIds.clear()
     this.sessionDiagnosticRefs.clear()
     this.runtimeListeners.clear()
+    this.rendererSuppressedConversationIds.clear()
     this.conversationConfigurations.clear()
     this.conversationSkills.clear()
   }
@@ -677,7 +744,9 @@ export class AgentBridge {
     } else if (event.type === 'error') {
       this.failActiveBrowserTask(event.conversationId, event.data)
     }
-    this.forwardToRenderer(event.type, event.data, event.conversationId, event.runId)
+    if (!this.rendererSuppressedConversationIds.has(event.conversationId)) {
+      this.forwardToRenderer(event.type, event.data, event.conversationId, event.runId)
+    }
   }
 
   private recordAgentUsage(event: AgentRuntimeEvent): void {

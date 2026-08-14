@@ -6,6 +6,7 @@ import type { CommandContext } from '../../features/context-actions/context-targ
 import { useCommandStore } from '../../stores/command-store'
 import { getRemoteFileDraft } from '../../utils/remote-file-draft-registry'
 import { useBrowserFindStore } from '../../features/browser/browser-find-store'
+import { getMediaProjectDraft } from '../../features/media-production/media-project-draft-registry'
 
 function resolveFindSurface(context?: CommandContext) {
   if (context?.target?.kind === 'editor') {
@@ -55,7 +56,8 @@ export function createWorkbenchCommands(): Command[] {
         const tab = useTabStore.getState().getActiveTab()
         const enabled =
           (tab?.type === 'editor' && Boolean(getEditorContextSurface(tab.id)?.save)) ||
-          (tab?.type === 'remote-file' && Boolean(getRemoteFileDraft(tab.id)))
+          (tab?.type === 'remote-file' && Boolean(getRemoteFileDraft(tab.id))) ||
+          (tab?.type === 'media-production' && Boolean(getMediaProjectDraft(tab.id)))
         return { enabled, reason: '当前内容不支持保存' }
       },
       action: async () => {
@@ -69,6 +71,12 @@ export function createWorkbenchCommands(): Command[] {
         if (tab?.type === 'remote-file') {
           const draft = getRemoteFileDraft(tab.id)
           if (!draft) throw new Error('当前远程文件尚未就绪')
+          await draft.save()
+          return
+        }
+        if (tab?.type === 'media-production') {
+          const draft = getMediaProjectDraft(tab.id)
+          if (!draft) throw new Error('当前宣发视频工程尚未就绪')
           await draft.save()
           return
         }

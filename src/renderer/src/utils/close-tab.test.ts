@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAgentStore } from '../stores/agent-store'
 import { useTabStore } from '../stores/tab-store'
 import { closeTabWithDraftPolicy } from './close-tab'
+import { registerMediaProjectDraft } from '../features/media-production/media-project-draft-registry'
 
 beforeEach(() => {
   vi.restoreAllMocks()
@@ -256,6 +257,57 @@ describe('closeTabWithDraftPolicy scheduled task drafts', () => {
 
     expect(await closeTabWithDraftPolicy('scheduled-task')).toBe(true)
     expect(useTabStore.getState().tabs).toHaveLength(0)
+  })
+})
+
+describe('closeTabWithDraftPolicy media project drafts', () => {
+  it('keeps a dirty media project open when saving fails', async () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'media-project',
+          type: 'media-production',
+          title: '产品发布',
+          icon: '🎬',
+          dirty: true,
+          workspaceRef: { kind: 'local', path: '/workspace' },
+          mediaProject: { projectId: '11111111-1111-4111-8111-111111111111' },
+        },
+      ],
+      activeTabId: 'media-project',
+    })
+    const save = vi.fn(async () => false)
+    const unregister = registerMediaProjectDraft('media-project', { save })
+
+    expect(await closeTabWithDraftPolicy('media-project')).toBe(false)
+    expect(save).toHaveBeenCalledOnce()
+    expect(useTabStore.getState().tabs).toHaveLength(1)
+    unregister()
+  })
+
+  it('discards a dirty media project only after explicit confirmation', async () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'media-project',
+          type: 'media-production',
+          title: '产品发布',
+          icon: '🎬',
+          dirty: true,
+          workspaceRef: { kind: 'local', path: '/workspace' },
+          mediaProject: { projectId: '11111111-1111-4111-8111-111111111111' },
+        },
+      ],
+      activeTabId: 'media-project',
+    })
+    const save = vi.fn(async () => true)
+    const unregister = registerMediaProjectDraft('media-project', { save })
+    vi.mocked(window.cclinkStudio.dialog.showMessageBox).mockResolvedValueOnce({ response: 1 })
+
+    expect(await closeTabWithDraftPolicy('media-project')).toBe(true)
+    expect(save).not.toHaveBeenCalled()
+    expect(useTabStore.getState().tabs).toHaveLength(0)
+    unregister()
   })
 })
 

@@ -26,6 +26,7 @@ import type { RuntimeComponentsApiContract } from '../shared/ipc/runtime-compone
 import type { AuthApiContract } from '../shared/ipc/auth'
 import type { CclinkApiContract } from '../shared/ipc/cclink'
 import type { RemoteApiContract } from '../shared/ipc/remote'
+import type { MediaProjectsApiContract } from '../shared/media-production/media-project-types'
 
 export interface CCLinkStudioAPI {
   reportWorkbenchBounds: (bounds: { x: number; y: number; width: number; height: number }) => void
@@ -81,6 +82,8 @@ export interface CCLinkStudioAPI {
   workspaceState: WorkspaceStateApiContract
 
   scheduledTasks: ScheduledTasksApiContract
+
+  mediaProjects: MediaProjectsApiContract
 
   wechat: WechatApiContract
 
