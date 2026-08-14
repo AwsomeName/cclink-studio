@@ -82,7 +82,10 @@ export function WebResourcesSidebar({
   useEffect(
     () =>
       observeWebResourcesChanged(() => {
-        void reload()
+        void reload().catch((error) => {
+          setLoadError(error instanceof Error ? error.message : String(error))
+          console.error('[WebResources] 保存后刷新侧栏失败', error)
+        })
       }),
     [reload],
   )

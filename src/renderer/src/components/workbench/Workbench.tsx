@@ -105,15 +105,20 @@ export function Workbench({
     [executeCommand, showToast],
   )
 
-  const handleNavigate = useCallback((): void => {
-    if (!activeTabId) return
-    let url = (activeBrowserState?.urlInput ?? '').trim()
-    if (!url) return
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'https://' + url
-    }
-    window.cclinkStudio.browser.navigate(activeTabId, url)
-  }, [activeTabId, activeBrowserState])
+  const handleNavigate = useCallback(
+    (value: string): void => {
+      if (!activeTabId) return
+      let url = value.trim()
+      if (!url) return
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url
+      }
+      void window.cclinkStudio.browser.navigate(activeTabId, url).catch((error) => {
+        showToast(error instanceof Error ? error.message : String(error), 'error')
+      })
+    },
+    [activeTabId, showToast],
+  )
 
   const openNewDocument = useCallback((): void => {
     openTab({ type: 'editor', title: '未命名.md', icon: '📄', forceNew: true })

@@ -534,7 +534,17 @@ async function main() {
         { timeout: 10_000 },
       )
       await page.getByRole('button', { name: '登录完成，保存到当前项目' }).click()
-      await page.getByLabel('账号名称').fill(accountLabel)
+      const accountNameInput = page.getByLabel('账号名称')
+      const inferredName = await accountNameInput.inputValue()
+      assert(inferredName.trim().length > 0, 'account name was not prefilled from the current page')
+      await accountNameInput.fill('')
+      await page.getByRole('button', { name: '保存', exact: true }).click()
+      await page.getByText('请输入账号名称').waitFor({ state: 'visible', timeout: 5_000 })
+      assert(
+        (await primaryRow().count()) === 0,
+        'empty account name unexpectedly created a project resource',
+      )
+      await accountNameInput.fill(accountLabel)
       await page.getByRole('button', { name: '保存', exact: true }).click()
     }
 

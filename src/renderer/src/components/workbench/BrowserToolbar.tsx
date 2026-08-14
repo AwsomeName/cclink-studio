@@ -16,6 +16,7 @@ import {
 } from '../common/Icons'
 import { BrowserHistoryMenu } from './BrowserHistoryMenu'
 import { useBrowserFindStore } from '../../features/browser/browser-find-store'
+import { useToastStore } from '../common/Toast'
 import {
   closeBrowserFind,
   runBrowserFind,
@@ -27,8 +28,35 @@ interface BrowserToolbarProps {
   tab: Tab
   browserState: BrowserTabState | undefined
   onUrlInputChange: (tabId: string, value: string) => void
-  onNavigate: () => void
+  onNavigate: (value: string) => void
   onOpenUrl: (url: string) => void
+}
+
+export function shouldNavigateBrowserAddress(input: {
+  key: string
+  nativeIsComposing: boolean
+  compositionActive: boolean
+}): boolean {
+  return input.key === 'Enter' && !input.nativeIsComposing && !input.compositionActive
+}
+
+export function inferWebResourceDisplayName(
+  browserState: Pick<BrowserTabState, 'title' | 'url' | 'urlInput'> | undefined,
+): string {
+  const title = browserState?.title?.trim()
+  if (title && title !== '浏览器' && title !== '新标签页') return title.slice(0, 160)
+
+  for (const candidate of [browserState?.url, browserState?.urlInput]) {
+    if (!candidate?.trim()) continue
+    try {
+      const url = new URL(candidate)
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') continue
+      return url.hostname.replace(/^www\./, '').slice(0, 160)
+    } catch {
+      // 地址尚未形成有效网页时不猜测名称。
+    }
+  }
+  return ''
 }
 
 export function BrowserToolbar({
@@ -46,7 +74,9 @@ export function BrowserToolbar({
   const [duplicateAccountId, setDuplicateAccountId] = useState<string | null>(null)
   const findSession = useBrowserFindStore((state) => state.sessions[tabId])
   const setFindQuery = useBrowserFindStore((state) => state.setQuery)
+  const showToast = useToastStore((state) => state.show)
   const findInputRef = useRef<HTMLInputElement>(null)
+  const urlCompositionActiveRef = useRef(false)
   const draftId = tab.webResourceDraftRef?.draftId
 
   useEffect(() => {
@@ -74,21 +104,34 @@ export function BrowserToolbar({
   }
 
   const saveDraft = async (duplicateResolution?: 'save-another'): Promise<void> => {
-    if (!draftId || tab.workspaceRef?.kind !== 'local' || !displayName.trim()) return
+    if (!draftId || tab.workspaceRef?.kind !== 'local') return
+    const normalizedDisplayName = displayName.trim()
+    if (!normalizedDisplayName) {
+      setSaveError('请输入账号名称')
+      showToast('请输入账号名称后再保存', 'error')
+      console.warn('[WebResources] 保存未开始：账号名称为空', { tabId })
+      return
+    }
     setSaving(true)
     setSaveError(null)
     setDuplicateAccountId(null)
+    console.info('[WebResources] 开始保存网站账号', { tabId, duplicateResolution })
     try {
       const result = await window.cclinkStudio.webResources.saveDraft({
         workspaceRef: tab.workspaceRef,
         draftId,
         tabId,
-        displayName,
+        displayName: normalizedDisplayName,
         duplicateResolution,
       })
       if (!result.success) {
         setSaveError(result.error.message)
         setDuplicateAccountId(result.error.context?.existingAccountId ?? null)
+        showToast(result.error.message, 'error')
+        console.warn('[WebResources] 网站账号保存被拒绝', {
+          tabId,
+          code: result.error.code,
+        })
         return
       }
       const projectId = result.data.account.projectId
@@ -100,8 +143,17 @@ export function BrowserToolbar({
         webResourceRef: { projectId, accountId: result.data.account.id },
       })
       notifyWebResourcesChanged()
+      showToast('已保存到当前项目', 'success')
+      console.info('[WebResources] 网站账号保存成功', {
+        tabId,
+        accountId: result.data.account.id,
+        projectId,
+      })
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      setSaveError(message)
+      showToast(message, 'error')
+      console.error('[WebResources] 网站账号保存异常', { tabId, message })
     } finally {
       setSaving(false)
     }
@@ -215,6 +267,12 @@ export function BrowserToolbar({
           className="url-input"
           value={browserState?.urlInput ?? ''}
           onChange={(event) => onUrlInputChange(tabId, event.target.value)}
+          onCompositionStart={() => {
+            urlCompositionActiveRef.current = true
+          }}
+          onCompositionEnd={() => {
+            urlCompositionActiveRef.current = false
+          }}
           onFocus={() => {
             void window.cclinkStudio.window.focusRenderer()
           }}
@@ -242,7 +300,16 @@ export function BrowserToolbar({
               return
             }
 
-            if (event.key === 'Enter') onNavigate()
+            if (
+              shouldNavigateBrowserAddress({
+                key: event.key,
+                nativeIsComposing: event.nativeEvent.isComposing,
+                compositionActive: urlCompositionActiveRef.current,
+              })
+            ) {
+              event.preventDefault()
+              onNavigate(event.currentTarget.value)
+            }
           }}
           placeholder="输入 URL..."
         />
@@ -256,6 +323,8 @@ export function BrowserToolbar({
               maxLength={160}
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
+              aria-required="true"
+              aria-invalid={Boolean(saveError)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void saveDraft()
                 if (event.key === 'Escape') setShowSave(false)
@@ -287,8 +356,9 @@ export function BrowserToolbar({
               <button
                 type="button"
                 className="browser-resource-text-button primary"
-                disabled={saving || !displayName.trim()}
+                disabled={saving}
                 onClick={() => void saveDraft()}
+                title={!displayName.trim() ? '请输入账号名称' : '保存到当前项目'}
               >
                 {saving ? '保存中…' : '保存'}
               </button>
@@ -306,7 +376,11 @@ export function BrowserToolbar({
           <button
             type="button"
             className="browser-resource-text-button primary"
-            onClick={() => setShowSave(true)}
+            onClick={() => {
+              setDisplayName((current) => current || inferWebResourceDisplayName(browserState))
+              setSaveError(null)
+              setShowSave(true)
+            }}
           >
             登录完成，保存到当前项目
           </button>
