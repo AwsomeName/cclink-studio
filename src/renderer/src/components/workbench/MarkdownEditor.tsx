@@ -44,6 +44,12 @@ import {
 import { createMarkdownDiagnosticReport } from '../../features/markdown/markdown-diagnostic-report'
 import { MarkdownListItem } from '../../features/markdown/markdown-list-item'
 import { inspectMarkdownEditorBeforeSave } from '../../features/markdown/markdown-save-guard'
+import {
+  findMarkdownTextMatches,
+  MarkdownSearchHighlights,
+  setMarkdownSearchHighlights,
+  type MarkdownSearchMatch,
+} from '../../features/markdown/markdown-search'
 import { registerEditorSaveGuard, runEditorSaveGuard } from '../../features/editor-save-guard'
 import {
   isMarkdownHydrationPending,
@@ -76,6 +82,8 @@ interface ImageDraft {
 
 export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.ReactElement {
   const fileKey = filePath ?? `virtual:${tabId}`
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const findInputRef = useRef<HTMLInputElement | null>(null)
   const fileKeyRef = useRef(fileKey)
   const filePathRef = useRef(filePath)
   const tiptapEditorRef = useRef<Editor | null>(null)
@@ -106,6 +114,9 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   const [hydratedVersion, setHydratedVersion] = useState<string | null>(null)
   const [imageDraft, setImageDraft] = useState<ImageDraft | null>(null)
   const [linkDraft, setLinkDraft] = useState<string | null>(null)
+  const [findOpen, setFindOpen] = useState(false)
+  const [findQuery, setFindQuery] = useState('')
+  const [activeFindIndex, setActiveFindIndex] = useState(0)
   const appliedUpdateIds = useRef(new Set<string>())
   const loadedVersionRef = useRef<{ fileKey: string; version: string } | undefined>(undefined)
   const reloadGenerationRef = useRef(0)
@@ -161,6 +172,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       TableHeader,
       Link.configure({ openOnClick: false, autolink: true }),
       MarkdownKeyboardShortcuts.configure({ openLinkEditor, tabSize: editorTabSize }),
+      MarkdownSearchHighlights,
     ],
     [editorTabSize, filePath, openLinkEditor],
   )
@@ -269,6 +281,78 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     [extensions],
   )
   tiptapEditorRef.current = editor
+
+  const findMatches = useMemo(
+    () => (editor ? findMarkdownTextMatches(editor.state.doc, findQuery) : []),
+    [editor, fileState?.currentContent, findQuery],
+  )
+
+  const revealFindMatch = useCallback(
+    (match: MarkdownSearchMatch): void => {
+      if (!editor) return
+      editor.commands.setTextSelection(match)
+      editor.commands.scrollIntoView()
+    },
+    [editor],
+  )
+
+  const moveFindSelection = useCallback(
+    (direction: 1 | -1): void => {
+      if (findMatches.length === 0) return
+      const nextIndex = (activeFindIndex + direction + findMatches.length) % findMatches.length
+      setActiveFindIndex(nextIndex)
+      revealFindMatch(findMatches[nextIndex])
+    },
+    [activeFindIndex, findMatches, revealFindMatch],
+  )
+
+  const closeFind = useCallback((): void => {
+    setFindOpen(false)
+    window.requestAnimationFrame(() => editor?.commands.focus())
+  }, [editor])
+
+  useEffect(() => {
+    if (!findOpen || !findQuery || findMatches.length === 0) {
+      setActiveFindIndex(0)
+      return
+    }
+    setActiveFindIndex(0)
+    revealFindMatch(findMatches[0])
+  }, [findMatches, findOpen, findQuery, revealFindMatch])
+
+  useEffect(() => {
+    if (!editor) return
+    setMarkdownSearchHighlights(editor, findOpen ? findMatches : [], activeFindIndex)
+  }, [activeFindIndex, editor, findMatches, findOpen])
+
+  useEffect(() => {
+    const openFind = (event: KeyboardEvent): void => {
+      if (
+        !(event.metaKey || event.ctrlKey) ||
+        event.altKey ||
+        event.shiftKey ||
+        event.key.toLowerCase() !== 'f'
+      ) {
+        return
+      }
+      const wrapper = wrapperRef.current
+      if (!wrapper || wrapper.getClientRects().length === 0) return
+      event.preventDefault()
+      setFindOpen(true)
+      window.requestAnimationFrame(() => {
+        findInputRef.current?.focus()
+        findInputRef.current?.select()
+      })
+    }
+    window.addEventListener('keydown', openFind)
+    return () => window.removeEventListener('keydown', openFind)
+  }, [])
+
+  useEffect(() => {
+    setFindOpen(false)
+    setFindQuery('')
+    setActiveFindIndex(0)
+  }, [fileKey])
 
   useEffect(() => {
     if (!editor) return
@@ -933,7 +1017,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   })
 
   return (
-    <div className="markdown-editor-wrapper">
+    <div className="markdown-editor-wrapper" ref={wrapperRef}>
       <EditorToolbar
         editor={parseBlockedReason || hydrationPending ? null : editor}
         filePath={filePath}
@@ -945,6 +1029,59 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         onInsertTable={handleInsertTable}
         onEditImage={handleEditImage}
       />
+
+      {findOpen && (
+        <div className="markdown-find-bar" role="search" aria-label="在 Markdown 中查找">
+          <input
+            ref={findInputRef}
+            type="text"
+            value={findQuery}
+            aria-label="查找 Markdown 文本"
+            placeholder="查找"
+            spellCheck={false}
+            onChange={(event) => setFindQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                moveFindSelection(event.shiftKey ? -1 : 1)
+              } else if (event.key === 'Escape') {
+                event.preventDefault()
+                closeFind()
+              }
+            }}
+          />
+          <span
+            className={`markdown-find-count ${findQuery && findMatches.length === 0 ? 'empty' : ''}`}
+            role="status"
+            aria-live="polite"
+          >
+            {findQuery && findMatches.length === 0
+              ? '无结果'
+              : `${findMatches.length === 0 ? 0 : activeFindIndex + 1}/${findMatches.length}`}
+          </span>
+          <button
+            type="button"
+            aria-label="上一个匹配项"
+            title="上一个匹配项（Shift+Enter）"
+            disabled={findMatches.length === 0}
+            onClick={() => moveFindSelection(-1)}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            aria-label="下一个匹配项"
+            title="下一个匹配项（Enter）"
+            disabled={findMatches.length === 0}
+            onClick={() => moveFindSelection(1)}
+          >
+            ↓
+          </button>
+          <button type="button" aria-label="关闭查找" title="关闭（Esc）" onClick={closeFind}>
+            ×
+          </button>
+        </div>
+      )}
 
       {fileState.externalContent !== undefined && (
         <div className="markdown-conflict-banner">

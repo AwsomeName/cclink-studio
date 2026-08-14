@@ -1,6 +1,6 @@
 # CCLink Studio 开发指南
 
-> 当前事实源。最后更新：2026-08-13。
+> 当前事实源。最后更新：2026-08-14。
 
 ## 结论
 
@@ -14,6 +14,10 @@ CCLink 云函数与 Agent runtime 仍位于 `/Users/apple/Desktop/chat-cc/deploy
 第三方凭证边界见 `docs/features/local-credentials.md` 和 ADR 0003。CCLink Session 是明确例外：只用权限为 `0600` 的本地 Session 文件持久化 refresh token；access token、IM UserSig 和完整远程身份只驻留主进程内存。禁止使用或迁移任何系统钥匙串数据，旧密文只能隔离并要求重新登录。
 
 统一右键、命令面板、快捷键和工具栏入口的产品与工程事实源见 `docs/features/context-action-system.md`，区域 owner 库存见 `docs/ops/context-action-inventory.md`。新增区域只能贡献结构化 target、command 和 contribution；不得新增独立菜单 Host、第二个菜单 Store 或未登记的原生菜单。`pnpm verify:context-actions` 会执行该边界门禁。
+
+统一可配置快捷键的计划事实源见 `docs/features/configurable-keybinding-system.md`。该方案落地前，
+不得继续新增组件级 `window/document keydown` 业务快捷键；新增快捷键必须先定义稳定 command ID、
+作用域、输入框策略、冲突行为和真实应用验收动作。
 
 ## 环境准备
 

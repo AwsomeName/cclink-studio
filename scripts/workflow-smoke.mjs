@@ -361,7 +361,9 @@ async function main() {
     const editor = page.locator('.tiptap').first()
     await editor.click()
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A')
-    await page.keyboard.type('# Workflow Smoke\n\nsaved through editor')
+    await page.keyboard.type(
+      '# Workflow Smoke\n\nsaved through editor\n\nsaved through editor again',
+    )
     const saveAction = page.locator('.toolbar-save-action')
     await saveAction.waitFor({ state: 'visible', timeout: 10_000 })
     const saveLayout = await saveAction.evaluate((element) => ({
@@ -390,6 +392,57 @@ async function main() {
       'saved markdown content not found on disk',
     )
     return 'notes.md saved'
+  })
+
+  await runCheck('markdown find locates text without dirtying the document', async () => {
+    const editor = page.locator('.tiptap').first()
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
+    await editor.click()
+    await page.keyboard.press(`${modifier}+F`)
+
+    const findInput = page.getByRole('textbox', { name: '查找 Markdown 文本' })
+    await findInput.waitFor({ state: 'visible', timeout: 5_000 })
+    await page.waitForFunction(
+      () => document.activeElement?.getAttribute('aria-label') === '查找 Markdown 文本',
+      null,
+      { timeout: 5_000 },
+    )
+    assert(
+      await findInput.evaluate((element) => element === document.activeElement),
+      'find input is not focused',
+    )
+    await findInput.fill('saved through editor')
+    await page.waitForFunction(
+      () => document.querySelector('.markdown-find-count')?.textContent === '1/2',
+      null,
+      { timeout: 5_000 },
+    )
+    assert(
+      (await editor.locator('.markdown-search-match').count()) === 2,
+      'find results are not visibly highlighted',
+    )
+    assert(
+      (await editor.locator('.markdown-search-match-active').count()) === 1,
+      'find result has no active highlight',
+    )
+
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(
+      () => document.querySelector('.markdown-find-count')?.textContent === '2/2',
+    )
+    await page.keyboard.press('Shift+Enter')
+    await page.waitForFunction(
+      () => document.querySelector('.markdown-find-count')?.textContent === '1/2',
+    )
+    assert(
+      (await page.locator('.toolbar-save-state').innerText()).includes('已保存'),
+      'find navigation dirtied the Markdown document',
+    )
+
+    await page.keyboard.press('Escape')
+    await page.locator('.markdown-find-bar').waitFor({ state: 'detached', timeout: 5_000 })
+    await page.waitForFunction(() => Boolean(document.activeElement?.closest('.tiptap')))
+    return 'Cmd/Ctrl+F found 2 matches and preserved the saved state'
   })
 
   await runCheck('markdown editor shortcuts preserve structure and app layout', async () => {
