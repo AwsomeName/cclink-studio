@@ -41,6 +41,7 @@ xattr -cr /Applications/CCLink\\ Studio\\ 开源版.app
 - `.github/workflows/release-oss.yml`。
 - Developer ID Application 签名和 P12 导入校验。
 - Apple API Key 公证与 staple。
+- 构建前生成源码指纹，并从签名 App 内重新读取验证当前 Tag 与产物一致。
 - entitlements。
 - GitHub 公开稳定 Release 资产上传。
 

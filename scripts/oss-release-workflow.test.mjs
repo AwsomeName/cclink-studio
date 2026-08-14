@@ -45,6 +45,25 @@ test('release workflow passes electron-builder an identity without the certifica
   assert.doesNotMatch(workflow, /--config\.mac\.identity=-|--config\.mac\.notarize=false/)
 })
 
+test('release workflow embeds and verifies immutable source provenance in the signed App', () => {
+  assert.match(workflow, /source-fingerprint\.mjs write "\$provenance_path"/)
+  assert.match(
+    workflow,
+    /source-fingerprint\.mjs verify-file[\s\\]*"\$provenance_path"[\s\\]*out\/build-provenance\.json/,
+  )
+  assert.match(workflow, /app\.asar\/out\/build-provenance\.json/)
+  assert.match(workflow, /source-fingerprint\.mjs verify-json "\$packaged_provenance"/)
+
+  const writeIndex = workflow.indexOf('source-fingerprint.mjs write')
+  const buildIndex = workflow.indexOf('pnpm build', writeIndex)
+  const packageIndex = workflow.indexOf('Package signed and notarized application')
+  const packagedVerifyIndex = workflow.indexOf('source-fingerprint.mjs verify-json')
+  assert.ok(writeIndex > 0)
+  assert.ok(buildIndex > writeIndex)
+  assert.ok(packageIndex > buildIndex)
+  assert.ok(packagedVerifyIndex > packageIndex)
+})
+
 test('release workflow signs and Gatekeeper-assesses each DMG before upload', () => {
   assert.match(workflow, /CSC_NAME: \$\{\{ secrets\.MACOS_DEVELOPER_IDENTITY \}\}/)
   assert.match(workflow, /codesign --verify --verbose=2 "\$dmg"/)

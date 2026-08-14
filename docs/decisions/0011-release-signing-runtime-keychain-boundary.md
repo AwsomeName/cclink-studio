@@ -16,7 +16,7 @@ v0.1.30 改为 ad-hoc 公开包，而现有更新器仍正确要求 Developer ID
 
 1. 用户从已签名的旧版检查到新版并完成下载；
 2. 点击“打开安装包”后不出现 `publisher_mismatch`；
-3. DMG、App、Bundle ID、版本、arm64、Developer ID、Team ID 和 Apple 公证全部通过；
+3. DMG、App、Bundle ID、版本、arm64、Developer ID、Team ID、Apple 公证和源码身份全部通过；
 4. 替换 App 后设置、项目、凭证文件和 Runtime 组件保持不变，新版可以启动。
 
 ## 决策
@@ -31,6 +31,8 @@ v0.1.30 改为 ad-hoc 公开包，而现有更新器仍正确要求 Developer ID
    Release 前失败，不得降级发布 ad-hoc 包。
 6. 更新器继续严格校验当前 App 与候选 App 的 Developer ID、Team ID、Bundle ID、版本和架构；
    不以降低更新器校验的方式兼容未签名公开包。
+7. 正式工作流必须在构建前生成当前 Tag 的源码指纹，将其写入 App，并在签名产物上传前从
+   `app.asar` 重新读取和核验；缺失或不匹配时禁止公开 Release。
 
 ## 不变量
 
@@ -42,7 +44,9 @@ v0.1.30 改为 ad-hoc 公开包，而现有更新器仍正确要求 Developer ID
 ## 事件处理
 
 - v0.1.30 是错误的 ad-hoc 公开版本，不作为可交付的 macOS 安装/更新闭环。
-- 恢复 v0.1.29 的签名、公证工作流后发布更高修复版本。
+- v0.1.31 恢复了签名、公证和 Gatekeeper 门禁，但正式工作流遗漏了本地打包已有的源码指纹
+  写入步骤，因此只作为签名恢复证据，不作为完整发布验收闭环。
+- v0.1.32 起，签名、公证与源码身份必须在同一个正式产物上同时通过。
 - 修复版本必须从公开 Release 重新下载，并在真实 macOS 上验证 SHA-256、`codesign`、
   `stapler`、`spctl`、DMG 打开、App 启动和旧版更新路径。
 
@@ -53,4 +57,5 @@ v0.1.30 改为 ad-hoc 公开包，而现有更新器仍正确要求 Developer ID
 - `pnpm verify:credential-boundary` 证明应用运行时代码仍不访问系统钥匙串；
 - 正式包执行 `codesign --verify --deep --strict`、`xcrun stapler validate`、
   `spctl --assess --type execute` 和 DMG `spctl --assess --type open`；
+- 从正式 App 的 `app.asar/out/build-provenance.json` 读取并匹配当前 Tag 提交和源码指纹；
 - 在真实旧版中完成检查、下载、打开安装包和替换启动。

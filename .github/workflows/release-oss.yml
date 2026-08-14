@@ -171,7 +171,13 @@ jobs:
             }
       - name: Build application
         working-directory: source
-        run: pnpm build
+        run: |
+          provenance_path="$RUNNER_TEMP/cclink-studio-build-provenance.json"
+          node scripts/source-fingerprint.mjs write "$provenance_path"
+          pnpm build
+          node scripts/source-fingerprint.mjs verify-file \
+            "$provenance_path" \
+            out/build-provenance.json
       - name: Package signed and notarized application
         working-directory: source
         env:
@@ -207,6 +213,11 @@ jobs:
           app_path="$(find dist -maxdepth 3 -type d -name '*.app' -print -quit)"
           test -n "$app_path"
           test ! -e "$app_path/Contents/Resources/agent-runtime"
+          app_executable="$(find "$app_path/Contents/MacOS" -maxdepth 1 -type f -perm -100 -print -quit)"
+          test -n "$app_executable"
+          packaged_provenance="$(ELECTRON_RUN_AS_NODE=1 "$app_executable" -e \
+            "const fs=require('fs');process.stdout.write(fs.readFileSync(process.resourcesPath+'/app.asar/out/build-provenance.json','utf8'))")"
+          node scripts/source-fingerprint.mjs verify-json "$packaged_provenance"
           codesign --verify --deep --strict --verbose=2 "$app_path"
           spctl --assess --type execute --verbose=2 "$app_path"
           expected_team_id="${CSC_NAME##*(}"
