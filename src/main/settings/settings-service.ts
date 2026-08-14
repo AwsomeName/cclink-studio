@@ -7,7 +7,7 @@
 
 import { app } from 'electron'
 import { join } from 'path'
-import { readFile, writeFile } from 'fs/promises'
+import { readFile, rename, unlink, writeFile } from 'fs/promises'
 import {
   DEFAULT_SETTINGS,
   MANAGED_CLAUDE_RUNTIME_VERSION,
@@ -18,6 +18,7 @@ import type { SettingsSecretKey } from '../../shared/ipc/settings'
 import type { SettingsSecretStatus } from '../../shared/ipc/settings'
 import { CredentialService } from '../credentials/credential-service'
 import type { AgentRoleRef } from '../../shared/agent-role'
+import { normalizeKeybindingOverrides } from '../../shared/keybindings'
 
 /** AppSettings 的合法 key 集合，用于过滤 IPC 传入的未知字段 */
 const SETTINGS_KEYS = new Set<string>(Object.keys(DEFAULT_SETTINGS))
@@ -53,6 +54,8 @@ export class SettingsService {
   private storeFilePath: string
   private store: AppSettings
   private migrationBlocked = false
+  private writeQueue: Promise<void> = Promise.resolve()
+  private mutationQueue: Promise<void> = Promise.resolve()
 
   constructor(private readonly credentialService: CredentialService) {
     this.storeFilePath = join(app.getPath('userData'), 'settings.json')
@@ -148,12 +151,42 @@ export class SettingsService {
       throw new Error('本地凭证文件不可用，旧版明文凭证尚未迁移，拒绝覆盖设置文件')
     }
     const json = JSON.stringify(withoutSecrets(settings), null, 2)
-    await writeFile(this.storeFilePath, json, 'utf-8')
+    const write = this.writeQueue.then(async () => {
+      const temporaryPath = `${this.storeFilePath}.tmp-${process.pid}-${Date.now()}`
+      try {
+        await writeFile(temporaryPath, json, { encoding: 'utf-8', mode: 0o600 })
+        await rename(temporaryPath, this.storeFilePath)
+      } catch (error) {
+        await unlink(temporaryPath).catch(() => undefined)
+        throw error
+      }
+    })
+    this.writeQueue = write.catch(() => undefined)
+    await write
+  }
+
+  private enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.mutationQueue.then(operation, operation)
+    this.mutationQueue = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return result
   }
 
   /** 获取所有设置（浅拷贝） */
   getAll(): AppSettings {
-    return { ...this.store, ...EMPTY_SECRETS }
+    return {
+      ...this.store,
+      keybindingOverrides: this.store.keybindingOverrides.map((override) => ({
+        commandId: override.commandId,
+        bindings: override.bindings.map((binding) => ({
+          code: binding.code,
+          modifiers: [...binding.modifiers],
+        })),
+      })),
+      ...EMPTY_SECRETS,
+    }
   }
 
   /** 仅供主进程服务使用，禁止通过 IPC 暴露。 */
@@ -176,21 +209,25 @@ export class SettingsService {
   async setSecret(key: SettingsSecretKey, value: string): Promise<SettingsSecretStatus> {
     const normalized = normalizeLegacySecret(value)
     if (!normalized) throw new Error('凭证不能为空')
-    await this.credentialService.setCredential({
-      id: credentialIdFor(key),
-      kind: 'api-key',
-      fields: { apiKey: normalized },
+    return this.enqueueMutation(async () => {
+      await this.credentialService.setCredential({
+        id: credentialIdFor(key),
+        kind: 'api-key',
+        fields: { apiKey: normalized },
+      })
+      this.migrationBlocked = false
+      await this.saveState()
+      return this.getSecretStatus()
     })
-    this.migrationBlocked = false
-    await this.saveState()
-    return this.getSecretStatus()
   }
 
   async clearSecret(key: SettingsSecretKey): Promise<SettingsSecretStatus> {
-    await this.credentialService.removeCredential(credentialIdFor(key))
-    this.migrationBlocked = false
-    await this.saveState()
-    return this.getSecretStatus()
+    return this.enqueueMutation(async () => {
+      await this.credentialService.removeCredential(credentialIdFor(key))
+      this.migrationBlocked = false
+      await this.saveState()
+      return this.getSecretStatus()
+    })
   }
 
   /**
@@ -219,6 +256,10 @@ export class SettingsService {
         }
         continue
       }
+      if (key === 'keybindingOverrides') {
+        ;(filtered as unknown as Record<string, unknown>)[key] = normalizeKeybindingOverrides(val)
+        continue
+      }
       // 对有枚举约束的字段做值校验；其他数值/字符串字段跳过枚举检查。
       const validSet = VALID_VALUES[key]
       if (validSet && typeof val === 'string' && !validSet.has(val)) {
@@ -227,11 +268,13 @@ export class SettingsService {
       }
       ;(filtered as Record<string, unknown>)[key] = val
     }
-    const normalized = normalizeClaudeRuntimeSettingsUpdate(this.store, filtered)
-    const nextStore = { ...this.store, ...normalized }
-    await this.saveState(nextStore)
-    this.store = nextStore
-    return this.getAll()
+    return this.enqueueMutation(async () => {
+      const normalized = normalizeClaudeRuntimeSettingsUpdate(this.store, filtered)
+      const nextStore = { ...this.store, ...normalized }
+      await this.saveState(nextStore)
+      this.store = nextStore
+      return this.getAll()
+    })
   }
 
   /**
@@ -240,16 +283,18 @@ export class SettingsService {
    * @returns 默认设置
    */
   async reset(): Promise<AppSettings> {
-    await this.credentialService.removeCredential(AGENT_CREDENTIAL_ID)
-    await this.credentialService.removeCredential(MESHY_CREDENTIAL_ID)
-    this.migrationBlocked = false
-    const nextStore = {
-      ...DEFAULT_SETTINGS,
-      componentSetupPageSeenVersion: this.store.componentSetupPageSeenVersion,
-    }
-    await this.saveState(nextStore)
-    this.store = nextStore
-    return this.getAll()
+    return this.enqueueMutation(async () => {
+      await this.credentialService.removeCredential(AGENT_CREDENTIAL_ID)
+      await this.credentialService.removeCredential(MESHY_CREDENTIAL_ID)
+      this.migrationBlocked = false
+      const nextStore = {
+        ...DEFAULT_SETTINGS,
+        componentSetupPageSeenVersion: this.store.componentSetupPageSeenVersion,
+      }
+      await this.saveState(nextStore)
+      this.store = nextStore
+      return this.getAll()
+    })
   }
 
   /**
@@ -266,10 +311,12 @@ export class SettingsService {
       await this.clearSecret(key as SettingsSecretKey)
       return this.getAll()
     }
-    const nextStore = { ...this.store, [key]: DEFAULT_SETTINGS[key] }
-    await this.saveState(nextStore)
-    this.store = nextStore
-    return this.getAll()
+    return this.enqueueMutation(async () => {
+      const nextStore = { ...this.store, [key]: DEFAULT_SETTINGS[key] }
+      await this.saveState(nextStore)
+      this.store = nextStore
+      return this.getAll()
+    })
   }
 
   private applyPersistedSettings(parsed: Record<string, unknown>): void {
@@ -283,6 +330,10 @@ export class SettingsService {
       if (key === 'defaultAgentRoleRef') {
         const roleRef = normalizeAgentRoleRef(val)
         if (roleRef) this.store.defaultAgentRoleRef = roleRef
+        continue
+      }
+      if (key === 'keybindingOverrides') {
+        this.store.keybindingOverrides = normalizeKeybindingOverrides(val)
         continue
       }
       if (key === 'componentSetupPageSeenVersion') {

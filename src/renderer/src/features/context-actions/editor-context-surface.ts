@@ -4,6 +4,8 @@ export interface EditorContextSurface {
   copy: () => void | Promise<void>
   paste: () => void | Promise<void>
   selectAll: () => void
+  openFind: () => void
+  closeFind: () => void
 }
 
 const surfaces = new Map<string, EditorContextSurface>()

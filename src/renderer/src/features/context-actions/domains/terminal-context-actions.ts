@@ -144,17 +144,6 @@ export function createTerminalContextCommands(): Command[] {
       },
     },
     {
-      id: 'terminal.find',
-      label: '查找',
-      contextOnly: true,
-      category: 'Terminal',
-      action: (context) => {
-        const surface = resolveTerminal(context).surface
-        if (!surface) throw new Error('Terminal 操作面已销毁')
-        surface.openFind()
-      },
-    },
-    {
       id: 'terminal.clear',
       label: '清屏',
       contextOnly: true,
@@ -220,7 +209,7 @@ export const terminalMenuContributions: MenuContribution[] = [
     targetKinds: ['terminal'],
     group: '30-view',
     order: 10,
-    commandId: 'terminal.find',
+    commandId: 'workbench.find',
   },
   {
     id: 'terminal.clear',

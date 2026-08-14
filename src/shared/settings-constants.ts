@@ -1,5 +1,6 @@
 import { DEFAULT_AGENT_ROLE_REF, type AgentRoleRef } from './agent-role'
 import type { UpdateTrack } from './update/update-track'
+import type { KeybindingOverride } from './keybindings'
 
 export type { UpdateTrack } from './update/update-track'
 
@@ -152,6 +153,9 @@ export interface AppSettings {
 
   /** 文件树是否显示隐藏文件（. 开头） */
   showHiddenFiles: boolean
+
+  /** 用户对命令默认快捷键的覆盖；空数组表示全部使用默认值。 */
+  keybindingOverrides: KeybindingOverride[]
 }
 
 export const APP_ZOOM_LEVEL_MIN = -5
@@ -257,6 +261,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
   // 文件浏览
   showHiddenFiles: false,
+
+  // 快捷键
+  keybindingOverrides: [],
 }
 
 export function normalizeClaudeRuntimeSettingsUpdate(

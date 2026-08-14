@@ -10,7 +10,12 @@ import {
   updateSnapshotChangedEventSchema,
 } from '../shared/update'
 import type { WechatApiContract } from '../shared/ipc/wechat'
-import { windowIpc, type WindowApiContract } from '../shared/ipc/window'
+import {
+  windowIpc,
+  windowIpcEvents,
+  type ShortcutCaptureInputEvent,
+  type WindowApiContract,
+} from '../shared/ipc/window'
 import { invokeIpcContract } from './ipc-contract-client'
 
 export const windowApi: WindowApiContract = {
@@ -18,6 +23,13 @@ export const windowApi: WindowApiContract = {
   toggleDevtools: () => invokeIpcContract(windowIpc.toggleDevtools),
   reload: () => invokeIpcContract(windowIpc.reload),
   focusRenderer: () => invokeIpcContract(windowIpc.focusRenderer),
+  setShortcutCaptureGuard: (input) => invokeIpcContract(windowIpc.setShortcutCaptureGuard, input),
+  onShortcutCaptureInput: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, input: ShortcutCaptureInputEvent): void =>
+      callback(input)
+    ipcRenderer.on(windowIpcEvents.shortcutCaptureInput, handler)
+    return () => ipcRenderer.removeListener(windowIpcEvents.shortcutCaptureInput, handler)
+  },
 }
 
 export const identityApi: IdentityApiContract = {

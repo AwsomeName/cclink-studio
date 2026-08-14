@@ -23,6 +23,7 @@ import { useAgentStreamEvents } from './bootstrap/use-agent-stream-events'
 import { useAgentConversationRestore } from './bootstrap/use-agent-conversation-restore'
 import { useAppSession } from './bootstrap/use-app-session'
 import { useGlobalShortcuts } from './bootstrap/use-global-shortcuts'
+import { useShortcutRouter } from './features/shortcuts/use-shortcut-router'
 import { useMainProcessEvents } from './bootstrap/use-main-process-events'
 import { useRegisterCommands } from './bootstrap/use-register-commands'
 import { useTerminalEvents } from './bootstrap/use-terminal-events'
@@ -83,6 +84,7 @@ function MainLayout(): React.ReactElement {
   useRegisterContextActions()
   useConversationSelectionMenu()
   useGlobalShortcuts()
+  useShortcutRouter()
   useMainProcessEvents()
   useAgentStreamEvents()
   useAgentConversationRestore(workspaceReady)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEditorStore } from '../../stores/editor-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import { useTabStore } from '../../stores/tab-store'
@@ -50,6 +50,18 @@ function sourceSelectionRange(
   }
 }
 
+function findSourceTextMatches(
+  content: string,
+  query: string,
+): Array<{ from: number; to: number }> {
+  if (!query) return []
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return [...content.matchAll(new RegExp(escaped, 'giu'))].map((match) => ({
+    from: match.index,
+    to: match.index + match[0].length,
+  }))
+}
+
 export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): React.ReactElement {
   const fileState = useEditorStore((state) => state.files[filePath])
   const pendingCount = useEditorStore((state) => state.pendingUpdates.length)
@@ -59,6 +71,56 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
   const showToast = useToastStore((state) => state.show)
   const appliedUpdateIds = useRef(new Set<string>())
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const findInputRef = useRef<HTMLInputElement>(null)
+  const [findOpen, setFindOpen] = useState(false)
+  const [findQuery, setFindQuery] = useState('')
+  const [activeFindIndex, setActiveFindIndex] = useState(0)
+  const findMatches = useMemo(
+    () => findSourceTextMatches(fileState?.currentContent ?? '', findQuery),
+    [fileState?.currentContent, findQuery],
+  )
+
+  const openFind = useCallback((): void => {
+    setFindOpen(true)
+    requestAnimationFrame(() => {
+      findInputRef.current?.focus()
+      findInputRef.current?.select()
+    })
+  }, [])
+
+  const closeFind = useCallback((): void => {
+    setFindOpen(false)
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [])
+
+  const revealFindMatch = useCallback(
+    (index: number): void => {
+      const textarea = textareaRef.current
+      const match = findMatches[index]
+      if (!textarea || !match) return
+      textarea.focus()
+      textarea.setSelectionRange(match.from, match.to)
+      const line = textarea.value.slice(0, match.from).split('\n').length - 1
+      textarea.scrollTop = Math.max(0, (line - 2) * editorFontSize * 1.6)
+      requestAnimationFrame(() => findInputRef.current?.focus())
+    },
+    [editorFontSize, findMatches],
+  )
+
+  const moveFindSelection = useCallback(
+    (direction: 1 | -1): void => {
+      if (findMatches.length === 0) return
+      const index = (activeFindIndex + direction + findMatches.length) % findMatches.length
+      setActiveFindIndex(index)
+      revealFindMatch(index)
+    },
+    [activeFindIndex, findMatches.length, revealFindMatch],
+  )
+
+  useEffect(() => {
+    setActiveFindIndex(0)
+    if (findOpen && findMatches.length > 0) revealFindMatch(0)
+  }, [findMatches, findOpen, revealFindMatch])
 
   useEffect(() => {
     let disposed = false
@@ -249,8 +311,10 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
           textareaRef.current?.select()
           textareaRef.current?.focus()
         },
+        openFind,
+        closeFind,
       }),
-    [filePath, tabId],
+    [closeFind, filePath, openFind, tabId],
   )
 
   const showEditorContextMenu = (
@@ -309,6 +373,56 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
           {fileState.dirty ? '保存·' : '保存'}
         </button>
       </div>
+
+      {findOpen && (
+        <div className="markdown-find-bar" role="search" aria-label="在源码中查找">
+          <input
+            ref={findInputRef}
+            value={findQuery}
+            aria-label="查找源码文本"
+            placeholder="查找"
+            spellCheck={false}
+            onChange={(event) => setFindQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                moveFindSelection(event.shiftKey ? -1 : 1)
+              } else if (event.key === 'Escape') {
+                event.preventDefault()
+                closeFind()
+              }
+            }}
+          />
+          <span
+            className={`markdown-find-count ${findQuery && findMatches.length === 0 ? 'empty' : ''}`}
+            role="status"
+            aria-live="polite"
+          >
+            {findQuery && findMatches.length === 0
+              ? '无结果'
+              : `${findMatches.length === 0 ? 0 : activeFindIndex + 1}/${findMatches.length}`}
+          </span>
+          <button
+            type="button"
+            disabled={findMatches.length === 0}
+            onClick={() => moveFindSelection(-1)}
+            aria-label="上一个匹配项"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            disabled={findMatches.length === 0}
+            onClick={() => moveFindSelection(1)}
+            aria-label="下一个匹配项"
+          >
+            ↓
+          </button>
+          <button type="button" onClick={closeFind} aria-label="关闭查找">
+            ×
+          </button>
+        </div>
+      )}
 
       {fileState.externalContent !== undefined && (
         <div className="markdown-conflict-banner">

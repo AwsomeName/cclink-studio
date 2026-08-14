@@ -1,6 +1,6 @@
 # 可配置快捷键系统
 
-> 状态：方案，尚未实现。日期：2026-08-14。
+> 状态：M1 已实现并通过真实应用验收；M2、M3 尚未开始。日期：2026-08-14。
 > 关联事实源：`docs/architecture.md`、`docs/features/context-action-system.md`。
 
 ## 结论
@@ -16,9 +16,24 @@ Tab Store 的当前活动对象解析既有 Editor、Terminal 或 Browser 操作
 
 本方案不需要 ADR。它是在落实现有“用户命令只有一个定义源”的架构宪法，不是引入例外。
 
-## 当前问题
+## 当前实现状态
 
-当前 `Command.shortcut` 只是展示字符串，真正的快捷键分散在
+M1“本地操作面可配置查找”已经落地：设置页从 Command Registry 读取可配置命令，
+`workbench.find` 已统一 Markdown、源码编辑器和 Terminal 的查找入口；用户覆盖通过
+SettingsService 串行、原子保存。录制态由 renderer capture phase 和 main 的有时限保护共同
+拦截，避免 `Cmd/Ctrl+B/W/Q`、Escape 和 Delete 触发原业务动作。
+
+2026-08-14 的真实应用 smoke 已验证：在设置页将查找从 `Cmd/Ctrl+F` 改为
+`Cmd/Ctrl+G` 后，旧键立即失效、新键立即打开 Markdown 查找，Studio 重启后配置仍存在，
+查找不会把文档变为未保存。`pnpm verify` 同期通过（244 个测试文件、1393 项通过、2 项跳过）。
+
+当前还不能宣称“全部快捷键可配置”或“跨全部操作面查找完成”：旧快捷键迁移属于 M2；网页
+焦点内的 Browser 查找属于 M3。源码编辑器和 Terminal 已接入统一命令与既有 surface，但本轮
+真实 App smoke 只覆盖了 Markdown 的改键闭环。
+
+## 实施前问题
+
+实施前 `Command.shortcut` 只是展示字符串，真正的快捷键分散在
 `use-global-shortcuts.ts`、Markdown、源码编辑器、Tiptap 扩展和其他组件中。现状已经出现：
 
 - 命令声明了快捷键，但没有对应执行绑定；
@@ -300,7 +315,7 @@ src/main/browser/
 
 ## 实施顺序
 
-### M1：可配置查找最小闭环
+### M1：可配置查找最小闭环（已完成）
 
 - 建立 shared keybinding 类型、Resolver、冲突规则和唯一 Router；
 - 新增 `workbench.find`；

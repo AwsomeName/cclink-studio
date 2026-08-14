@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -239,6 +239,72 @@ describe('SettingsService component setup onboarding', () => {
     await service.reset()
 
     expect(service.getAll().componentSetupPageSeenVersion).toBe(1)
+  })
+})
+
+describe('SettingsService keybinding persistence', () => {
+  it('serializes concurrent setting updates without losing either change', async () => {
+    const service = createSettingsService()
+    await service.loadState()
+
+    await Promise.all([
+      service.set({ editorFontSize: 19 }),
+      service.set({
+        keybindingOverrides: [
+          {
+            commandId: 'workbench.find',
+            bindings: [{ code: 'KeyK', modifiers: ['primary'] }],
+          },
+        ],
+      }),
+    ])
+
+    const persisted = JSON.parse(await readFile(join(tempDir, 'settings.json'), 'utf8'))
+    expect(persisted).toMatchObject({
+      editorFontSize: 19,
+      keybindingOverrides: [
+        {
+          commandId: 'workbench.find',
+          bindings: [{ code: 'KeyK', modifiers: ['primary'] }],
+        },
+      ],
+    })
+    expect((await readdir(tempDir)).some((file) => file.includes('.tmp-'))).toBe(false)
+  })
+
+  it('clears only keybinding overrides when the shortcuts page restores defaults', async () => {
+    const service = createSettingsService()
+    await service.loadState()
+    await service.set({
+      editorFontSize: 21,
+      keybindingOverrides: [
+        {
+          commandId: 'workbench.find',
+          bindings: [{ code: 'KeyK', modifiers: ['primary'] }],
+        },
+      ],
+    })
+
+    await service.set({ keybindingOverrides: [] })
+
+    expect(service.getAll()).toMatchObject({ editorFontSize: 21, keybindingOverrides: [] })
+  })
+
+  it('returns a defensive copy of nested keybinding state', async () => {
+    const service = createSettingsService()
+    await service.loadState()
+    await service.set({
+      keybindingOverrides: [
+        {
+          commandId: 'workbench.find',
+          bindings: [{ code: 'KeyK', modifiers: ['primary'] }],
+        },
+      ],
+    })
+    const snapshot = service.getAll()
+    snapshot.keybindingOverrides[0].bindings[0].code = 'KeyX'
+
+    expect(service.getAll().keybindingOverrides[0].bindings[0].code).toBe('KeyK')
   })
 })
 

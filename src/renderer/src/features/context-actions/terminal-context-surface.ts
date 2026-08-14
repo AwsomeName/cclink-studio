@@ -4,6 +4,7 @@ export interface TerminalContextSurface {
   paste: () => void | Promise<void>
   clear: () => void
   openFind: () => void
+  closeFind: () => void
 }
 
 const surfaces = new Map<string, TerminalContextSurface>()

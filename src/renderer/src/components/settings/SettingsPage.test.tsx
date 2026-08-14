@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '@shared/ipc/settings'
 import { useSettingsStore } from '../../stores'
+import { useCommandStore } from '../../stores/command-store'
 import { SettingsPage } from './SettingsPage'
 
 beforeEach(() => {
@@ -12,6 +13,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS } })
+  useCommandStore.setState({ commands: [] })
 })
 
 describe('SettingsPage secrets', () => {
@@ -65,5 +67,13 @@ describe('SettingsPage secrets', () => {
     expect(markup).toContain('未接入更新源')
     expect(markup).not.toContain('清单项目')
     expect(markup).not.toContain('恢复默认')
+  })
+
+  it('renders the configurable shortcut controls instead of the old hard-coded list', () => {
+    const markup = renderToStaticMarkup(<SettingsPage initialSection="shortcuts" />)
+
+    expect(markup).toContain('搜索快捷键')
+    expect(markup).toContain('全部恢复默认')
+    expect(markup).not.toContain('新建 Tab')
   })
 })

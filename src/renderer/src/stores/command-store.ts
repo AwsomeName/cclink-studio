@@ -9,6 +9,7 @@ import {
   useContextActionDiagnosticsStore,
 } from '../features/context-actions/context-action-diagnostics'
 import { useWorkspaceStore } from './workspace-store'
+import type { CommandShortcutPolicy } from '@shared/keybindings'
 
 export type CommandRisk =
   | 'read'
@@ -25,6 +26,10 @@ export interface Command {
   label: string
   /** 快捷键（显示用） */
   shortcut?: string
+  /** 可执行、可配置快捷键的唯一声明。 */
+  shortcutPolicy?: CommandShortcutPolicy
+  /** false 时只显示默认键位，不允许用户覆盖。 */
+  configurable?: boolean
   /** 执行函数 */
   action: (context?: CommandContext) => unknown | Promise<unknown>
   /** 分组 */

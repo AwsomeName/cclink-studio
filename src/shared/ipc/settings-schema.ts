@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { AppSettings } from '../settings-constants'
 import { APP_ZOOM_LEVEL_MAX, APP_ZOOM_LEVEL_MIN } from '../settings-constants'
+import { MAX_BINDINGS_PER_COMMAND, MAX_KEYBINDING_OVERRIDES } from '../keybindings'
 
 const shortString = z.string().max(4096)
 const pathString = z.string().max(32_768)
@@ -60,6 +61,25 @@ const settingsUpdateSchema = z
     recentWorkspacePaths: z.array(pathString).max(100),
     gitBackupUsername: z.string().max(256),
     showHiddenFiles: z.boolean(),
+    keybindingOverrides: z
+      .array(
+        z
+          .object({
+            commandId: z.string().regex(/^[A-Za-z0-9._-]{1,128}$/),
+            bindings: z
+              .array(
+                z
+                  .object({
+                    code: z.string().regex(/^[A-Za-z][A-Za-z0-9]{0,31}$/),
+                    modifiers: z.array(z.enum(['primary', 'control', 'alt', 'shift'])).max(4),
+                  })
+                  .strict(),
+              )
+              .max(MAX_BINDINGS_PER_COMMAND),
+          })
+          .strict(),
+      )
+      .max(MAX_KEYBINDING_OVERRIDES),
   })
   .strict()
   .partial()

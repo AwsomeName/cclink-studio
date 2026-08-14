@@ -34,6 +34,7 @@ import {
 import { Toggle } from '../common/Toggle'
 import { AgentCapabilitiesSettings } from './AgentCapabilitiesSettings'
 import { ComponentManagementSettings } from './ComponentManagementSettings'
+import { KeybindingsSettings } from './KeybindingsSettings'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import {
   buildKeyboardContextMenuInput,
@@ -128,6 +129,12 @@ const SETTINGS_SEARCH_INDEX: Array<{
     label: '编辑器',
     description: '配置编辑器字体、字号、换行和隐藏文件显示。',
     keywords: ['editor', 'markdown', 'file', '编辑器', '文件'],
+  },
+  {
+    sectionId: 'shortcuts',
+    label: '快捷键',
+    description: '查找命令、修改组合键或恢复默认键位。',
+    keywords: ['shortcut', 'keybinding', 'command', '快捷键', '按键', '查找'],
   },
   {
     sectionId: 'cad',
@@ -1912,20 +1919,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
         {activeSection === 'shortcuts' && (
           <section className="settings-section">
             <h2>快捷键</h2>
-            <div className="settings-group">
-              <div className="settings-row">
-                <div className="settings-label">
-                  <span>命令面板</span>
-                  <span className="settings-description">Cmd+Shift+P</span>
-                </div>
-              </div>
-              <div className="settings-row">
-                <div className="settings-label">
-                  <span>新建 Tab</span>
-                  <span className="settings-description">Cmd+T</span>
-                </div>
-              </div>
-            </div>
+            <KeybindingsSettings />
           </section>
         )}
 

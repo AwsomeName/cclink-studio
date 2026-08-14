@@ -333,6 +333,10 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
         setFindOpen(true)
         requestAnimationFrame(() => findInputRef.current?.focus())
       },
+      closeFind: () => {
+        setFindOpen(false)
+        requestAnimationFrame(() => xterm.focus())
+      },
     })
 
     const resizeToContainer = (): void => {
@@ -468,7 +472,10 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
               onChange={(event) => setFindQuery(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') findNext()
-                if (event.key === 'Escape') setFindOpen(false)
+                if (event.key === 'Escape') {
+                  setFindOpen(false)
+                  requestAnimationFrame(() => xtermRef.current?.focus())
+                }
               }}
               aria-label="查找 Terminal 输出"
               placeholder="查找"
@@ -476,7 +483,14 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
             <button type="button" onClick={findNext} title="查找下一个">
               查找
             </button>
-            <button type="button" onClick={() => setFindOpen(false)} title="关闭查找">
+            <button
+              type="button"
+              onClick={() => {
+                setFindOpen(false)
+                requestAnimationFrame(() => xtermRef.current?.focus())
+              }}
+              title="关闭查找"
+            >
               ×
             </button>
           </span>

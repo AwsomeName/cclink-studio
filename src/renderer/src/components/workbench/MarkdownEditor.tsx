@@ -311,6 +311,14 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     window.requestAnimationFrame(() => editor?.commands.focus())
   }, [editor])
 
+  const openFind = useCallback((): void => {
+    setFindOpen(true)
+    window.requestAnimationFrame(() => {
+      findInputRef.current?.focus()
+      findInputRef.current?.select()
+    })
+  }, [])
+
   useEffect(() => {
     if (!findOpen || !findQuery || findMatches.length === 0) {
       setActiveFindIndex(0)
@@ -324,29 +332,6 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     if (!editor) return
     setMarkdownSearchHighlights(editor, findOpen ? findMatches : [], activeFindIndex)
   }, [activeFindIndex, editor, findMatches, findOpen])
-
-  useEffect(() => {
-    const openFind = (event: KeyboardEvent): void => {
-      if (
-        !(event.metaKey || event.ctrlKey) ||
-        event.altKey ||
-        event.shiftKey ||
-        event.key.toLowerCase() !== 'f'
-      ) {
-        return
-      }
-      const wrapper = wrapperRef.current
-      if (!wrapper || wrapper.getClientRects().length === 0) return
-      event.preventDefault()
-      setFindOpen(true)
-      window.requestAnimationFrame(() => {
-        findInputRef.current?.focus()
-        findInputRef.current?.select()
-      })
-    }
-    window.addEventListener('keydown', openFind)
-    return () => window.removeEventListener('keydown', openFind)
-  }, [])
 
   useEffect(() => {
     setFindOpen(false)
@@ -447,8 +432,10 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       selectAll: () => {
         editor.chain().focus().selectAll().run()
       },
+      openFind,
+      closeFind,
     })
-  }, [editor, tabId])
+  }, [closeFind, editor, openFind, tabId])
 
   const saveClipboardImage = useCallback(
     async (image: File) => {

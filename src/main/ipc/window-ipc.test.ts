@@ -19,7 +19,7 @@ describe('registerWindowIpc', () => {
   })
 
   it('moves native focus back to the trusted workbench renderer', () => {
-    const webContents = { focus: vi.fn() }
+    const webContents = createWebContents()
     const mainWindow = createMainWindow(webContents)
     registerWindowIpc(mainWindow as never, createGuard(webContents) as never)
 
@@ -29,7 +29,7 @@ describe('registerWindowIpc', () => {
   })
 
   it('rejects focus requests from another webContents', () => {
-    const webContents = { focus: vi.fn() }
+    const webContents = createWebContents()
     const mainWindow = createMainWindow(webContents)
     registerWindowIpc(mainWindow as never, createGuard(webContents) as never)
 
@@ -37,11 +37,58 @@ describe('registerWindowIpc', () => {
     expect(() => handler?.({ sender: {} })).toThrow('untrusted')
     expect(webContents.focus).not.toHaveBeenCalled()
   })
+
+  it('intercepts Cmd+W while recording and forwards the captured chord', () => {
+    const webContents = createWebContents()
+    const mainWindow = createMainWindow(webContents)
+    registerWindowIpc(mainWindow as never, createGuard(webContents) as never)
+
+    const guardHandler = mockIpcMain.handlers.get('window:setShortcutCaptureGuard')
+    expect(
+      guardHandler?.(
+        { sender: webContents },
+        { sessionId: 'capture-1', active: true, timeoutMs: 30_000 },
+      ),
+    ).toEqual({ success: true })
+
+    const event = { preventDefault: vi.fn() }
+    webContents.listeners.get('before-input-event')?.(event, {
+      type: 'keyDown',
+      code: 'KeyW',
+      meta: process.platform === 'darwin',
+      control: process.platform !== 'darwin',
+      alt: false,
+      shift: false,
+    })
+
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(webContents.send).toHaveBeenCalledWith('window:shortcutCaptureInput', {
+      sessionId: 'capture-1',
+      chord: { code: 'KeyW', modifiers: ['primary'] },
+    })
+  })
 })
 
-function createMainWindow(webContents: { focus: () => void }) {
+function createWebContents() {
+  return {
+    focus: vi.fn(),
+    send: vi.fn(),
+    toggleDevTools: vi.fn(),
+    listeners: new Map<string, (...args: any[]) => void>(),
+    on: vi.fn(function (
+      this: { listeners: Map<string, (...args: any[]) => void> },
+      channel,
+      listener,
+    ) {
+      this.listeners.set(channel, listener)
+    }),
+  }
+}
+
+function createMainWindow(webContents = createWebContents()) {
   return {
     webContents,
+    on: vi.fn(),
     isDestroyed: vi.fn(() => false),
     isFullScreen: vi.fn(() => false),
     setFullScreen: vi.fn(),

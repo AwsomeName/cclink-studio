@@ -10069,6 +10069,74 @@ button.file-tree-item {
   text-align: right;
 }
 
+.keybindings-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.keybindings-search {
+  flex: 1;
+  max-width: 420px;
+}
+
+.keybindings-help {
+  margin: 0 0 12px;
+}
+
+.keybindings-message,
+.keybindings-conflict {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  background: var(--bg-sidebar);
+  font-size: 12px;
+}
+
+.keybindings-conflict {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-color: var(--status-warning, #cca700);
+}
+
+.keybindings-conflict span {
+  flex: 1;
+}
+
+.keybindings-row {
+  gap: 16px;
+}
+
+.keybindings-command {
+  min-width: 0;
+}
+
+.keybindings-actions {
+  flex-shrink: 0;
+}
+
+.keybindings-actions kbd {
+  min-width: 112px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: center;
+}
+
+.keybindings-empty {
+  padding: 18px 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 /* 设置行中的输入控件区域，让 input 靠右对齐 */
 .settings-control {
   display: flex;
