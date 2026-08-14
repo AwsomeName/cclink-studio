@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       publish_release:
-        description: Build ad-hoc unsigned assets and publish a stable GitHub Release
+        description: Build signed assets and publish a stable GitHub Release
         required: true
         default: false
         type: boolean
@@ -126,33 +126,107 @@ jobs:
           cache: pnpm
           cache-dependency-path: source/pnpm-lock.yaml
       - run: pnpm --dir source install --frozen-lockfile
-      - name: Validate immutable release input
+      - name: Prepare Apple notarization key
+        env:
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY_BASE64" | base64 -D > "$key_path"
+          chmod 600 "$key_path"
+          echo "APPLE_API_KEY=$key_path" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID" >> "$GITHUB_ENV"
+          echo "APPLE_API_ISSUER=$APPLE_API_ISSUER" >> "$GITHUB_ENV"
+      - name: Validate release credentials
+        env:
+          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          CSC_NAME: ${{ secrets.MACOS_DEVELOPER_IDENTITY }}
         run: |
           node release-tools/scripts/oss-release-preflight.mjs \
             --source-dir source \
             --tag "$RELEASE_TAG" \
             --mode release
+
+          certificate_path="$RUNNER_TEMP/developer-id.p12"
+          keychain_path="$RUNNER_TEMP/release-preflight.keychain-db"
+          keychain_password="$(uuidgen)"
+          cleanup_keychain() {
+            security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
+          }
+          trap cleanup_keychain EXIT
+
+          printf '%s' "$CSC_LINK" | base64 -D > "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$CSC_KEY_PASSWORD" \
+            -T /usr/bin/codesign
+          security find-identity -v -p codesigning "$keychain_path" |
+            grep -F -- "$CSC_NAME" >/dev/null || {
+              echo "::error::The P12 does not contain the configured Developer ID identity."
+              exit 1
+            }
       - name: Build application
         working-directory: source
         run: pnpm build
-      - name: Package ad-hoc application without notarization
+      - name: Package signed and notarized application
         working-directory: source
+        env:
+          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          CSC_NAME: ${{ secrets.MACOS_DEVELOPER_IDENTITY }}
         run: |
+          builder_identity="${CSC_NAME#Developer ID Application: }"
+          if [ "$builder_identity" = "$CSC_NAME" ]; then
+            echo "::error::MACOS_DEVELOPER_IDENTITY must start with 'Developer ID Application: '."
+            exit 1
+          fi
+          unset CSC_NAME
           pnpm exec electron-builder \
             --mac --arm64 \
             --config.mac.target=dmg \
             --publish never \
-            --config.mac.identity=- \
-            --config.mac.notarize=false
-      - name: Verify packaged artifacts
+            --config.mac.identity="$builder_identity" \
+            --config.mac.hardenedRuntime=true \
+            --config.mac.notarize=true
+      - name: Notarize and staple disk image
         working-directory: source
+        env:
+          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          CSC_NAME: ${{ secrets.MACOS_DEVELOPER_IDENTITY }}
+        run: bash ../release-tools/scripts/notarize-dmg.sh dist/*.dmg
+      - name: Verify signed artifacts
+        working-directory: source
+        env:
+          CSC_NAME: ${{ secrets.MACOS_DEVELOPER_IDENTITY }}
         run: |
           app_path="$(find dist -maxdepth 3 -type d -name '*.app' -print -quit)"
           test -n "$app_path"
           test ! -e "$app_path/Contents/Resources/agent-runtime"
           codesign --verify --deep --strict --verbose=2 "$app_path"
+          spctl --assess --type execute --verbose=2 "$app_path"
+          expected_team_id="${CSC_NAME##*(}"
+          expected_team_id="${expected_team_id%)}"
+          test -n "$expected_team_id"
+          app_signature="$(codesign --display --verbose=4 "$app_path" 2>&1)"
+          grep -F -- "Authority=$CSC_NAME" <<<"$app_signature"
+          grep -F -- "TeamIdentifier=$expected_team_id" <<<"$app_signature"
           for dmg in dist/*.dmg; do
-            test -s "$dmg"
+            codesign --verify --verbose=2 "$dmg"
+            xcrun stapler validate "$dmg"
+            spctl \
+              --assess \
+              --type open \
+              --context context:primary-signature \
+              --verbose=4 \
+              "$dmg"
+            dmg_signature="$(codesign --display --verbose=4 "$dmg" 2>&1)"
+            grep -F -- "Authority=$CSC_NAME" <<<"$dmg_signature"
+            grep -F -- "TeamIdentifier=$expected_team_id" <<<"$dmg_signature"
           done
       - name: Prepare release assets
         working-directory: source

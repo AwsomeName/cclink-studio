@@ -41,7 +41,9 @@
 - 所有 renderer IPC 使用可信主 frame 校验和有界 schema。
 - renderer 不得到 access token、refresh token、IM UserSig 或完整远程身份。
 - refresh token 只存于 `userData` 下权限为 0600 的 Session 文件；access token、IM UserSig 和完整远程身份只驻留内存。
-- 严格遵守 `NO_SYSTEM_KEYCHAIN`：禁止 safeStorage、keytar、系统钥匙串 API、`security` 命令及历史钥匙串/旧密文迁移。旧密文只隔离并要求重新登录。
+- 严格遵守 `NO_SYSTEM_KEYCHAIN`：Studio 应用运行时禁止 safeStorage、keytar、系统钥匙串 API、
+  `security` 命令及历史钥匙串/旧密文迁移。旧密文只隔离并要求重新登录。隔离的正式发布
+  runner 不属于应用运行时，其签名与公证边界由 ADR 0011 定义。
 
 ## 明确不迁移
 
@@ -62,8 +64,8 @@ ADR 0004 对不可变 Tag、凭证不入库和发布可审计性的安全要求�
 - 缺少 CCLink 配置时启动成功且远程入口明确降级；
 - 登录后真实选择在线设备与目录并读取文件；
 - 恶意/非主 renderer 调用远程 IPC 被拒绝，超长或越界输入被 schema 拒绝；
-- 运行受影响测试、typecheck、lint、`pnpm verify` 和无钥匙串检查；
-- 不执行 Developer ID 签名或 Apple 公证。
+- 运行受影响测试、typecheck、lint、`pnpm verify` 和应用运行时无钥匙串检查；
+- 正式 Release 通过 Developer ID、Apple 公证、staple 和 Gatekeeper 门禁。
 
 ## 实施记录（2026-08-13）
 

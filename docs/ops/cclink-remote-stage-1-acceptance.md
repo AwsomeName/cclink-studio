@@ -53,9 +53,8 @@
   schema 只接受 POSIX、Windows 盘符或 UNC 绝对路径。
 - 远程 Workspace 不再创建伪本地 Agent conversation；项目条增加远程项目移除入口；Terminal
   preload 去掉 `any` 参数并在主进程使用严格有界 schema。
-- 正式 Release workflow 已删除 P12/系统钥匙串导入、Developer ID 签名和 Apple 公证脚本，
-  仅允许 ad-hoc DMG。现有 Developer ID 自动更新验证器因此不能算可交付更新闭环，当前正式
-  更新方式只能按手动下载安装验收。
+- 正式 Release 的 Developer ID 签名、Apple 公证、staple 与 Gatekeeper 门禁已恢复；
+  `NO_SYSTEM_KEYCHAIN` 继续只约束应用运行时，发布凭证只存在于隔离的 GitHub runner。
 - 以上是桌面代码和自动化门禁完成，不替代在线设备真人验收。
 
 ## 工程验证（独立审查修复后）
@@ -66,11 +65,13 @@
 - `CCLINK_API_URL=off pnpm smoke:ui`：12/12 通过。
 - `CCLINK_API_URL=off pnpm smoke:workflow`：14/14 通过。
 - 默认配置 `pnpm smoke:ui`：12/12 通过，远程入口显示局部登录界面。
-- `pnpm verify:credential-boundary`：通过；本次未执行 Developer ID 签名或 Apple 公证。
+- `pnpm verify:credential-boundary`：通过；应用运行时不访问系统钥匙串，正式 Release 签名边界
+  由 ADR 0011 和受保护 GitHub workflow 独立负责。
 
 ## overlay 结论
 
 暂时不能停止旧 commercial overlay 出包。独立代码审查发现的桌面端缺口已经补齐并通过自动
 门禁，但新增的审批/提问、草稿重启恢复、会话历史保留、PTY 重挂载和远程项目移除仍未在同一
-真实在线 Agent 上完成客户端验收。统一 Studio 目前只能发布 ad-hoc 手动安装包，自动更新信任
-闭环也未完成。云服务付费门禁仍没有实际拒绝证据，不能宣称收费闭环，更不能由桌面端代替。
+真实在线 Agent 上完成客户端验收。统一 Studio 的正式包恢复 Developer ID 签名与 Apple 公证；
+自动更新仍须以新修复版完成真实旧版升级验收后才能重新声明闭环。云服务付费门禁仍没有实际
+拒绝证据，不能宣称收费闭环，更不能由桌面端代替。

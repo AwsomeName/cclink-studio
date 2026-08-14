@@ -22,19 +22,20 @@
 
 - 用户要求“打包发布”“推送新版本”或同义操作时，正式入口统一使用
   `pnpm release -- --patch` 或明确版本的 `pnpm release -- --version X.Y.Z`；不要自行拼装
-  版本提交、Tag、ad-hoc 打包、上传或 GitHub Release 流程。用户已明确要求发布时即视为
+  版本提交、Tag、签名、公证、上传或 GitHub Release 流程。用户已明确要求发布时即视为
   对该次正式发布的确认，Codex 使用 `--yes`，不得再要求二次口令或发布后人工批准。
 - 常规正式发版必须复用当前 `main` 精确 SHA 已成功完成的远端普通 CI；该 CI 是源码验证
   的唯一事实源，也满足本文件“`pnpm verify` 或受影响 smoke 已通过”的工程门禁。已有匹配
   的绿色 CI 时，禁止默认再次在本地运行 `pnpm verify`、`pnpm test`、`pnpm build`、
   `smoke:*` 或其他重复验证。
 - 常规正式发版禁止默认增加 `--local-artifacts`、运行 `pnpm package:local`、下载远端 DMG
-  做二次哈希/Manifest 复核，或重复执行 GitHub Actions 已覆盖的 ad-hoc 包结构与 Manifest 检查。
+  做二次哈希/Manifest 复核，或重复执行 GitHub Actions 已覆盖的签名、公证、staple、
+  Gatekeeper 与 Manifest 检查。
 - 必要流程仅包括：确认仓库、分支、版本、工作区与目标 Tag；确认精确 SHA 的远端 CI 全绿；
   执行正式发布脚本；确认 `release-oss.yml` 最终成功并生成包含预期资产的公开稳定 Release；
   向用户给出公开地址。等待远端工作流期间只监控状态，不追加无关本地检查。
 - 只有以下情况才升级为本地全量验证、额外打包或独立下载复核：用户明确要求；没有精确匹配
-  的绿色 CI；CI/发布工作流失败；本次修改触及发布脚本、NO_SYSTEM_KEYCHAIN、打包边界、更新 Manifest
+  的绿色 CI；CI/发布工作流失败；本次修改触及发布脚本、签名、公证、打包边界、更新 Manifest
   或发布工作流。执行额外流程前必须先说明触发原因和预计价值。
 - `--no-wait` 只在用户明确要求“只触发后返回”或接受后台完成时使用；否则应等待正式工作流
   给出成功或失败结论，但不得用等待时间扩张验证范围。
@@ -107,10 +108,14 @@ Agent runtime 继续由 `/Users/apple/Desktop/chat-cc/Agent` 现有 NPM 包发�
 
 ## NO_SYSTEM_KEYCHAIN
 
-- 禁止 `safeStorage`、`keytar`、Apple Keychain API、`security` 命令及任何系统凭证存储；
+- 本节只约束 Studio 应用运行时、打包进应用的代码以及用户设备，不约束隔离的 GitHub
+  Release runner；禁止应用使用 `safeStorage`、`keytar`、Apple Keychain API、`security`
+  命令及任何系统凭证存储；
 - 禁止读取或迁移历史钥匙串数据；旧密文只能隔离并要求重新登录；
 - Session 使用 `userData` 下权限收紧的本地文件；refresh token 可持久化，access token、IM UserSig 和完整远程身份只驻留内存；
-- 不执行 Developer ID 签名或 Apple 公证。
+- 正式 Release 必须在受保护的 GitHub Environment 中使用 Developer ID 签名并完成 Apple
+  公证；证书和公证凭证只进入临时 runner/临时钥匙串，任务结束即销毁，不得进入源码、
+  App、安装包、日志或用户设备。详见 ADR 0011。
 
 ## 独立启动要求
 

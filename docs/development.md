@@ -7,7 +7,9 @@
 本仓库是唯一 CCLink Studio 桌面 App。本地能力默认启动、免费且免登录；CCLink 账号、设备和远程工作区作为可选内置功能域，只在用户打开远程入口后初始化。缺配置、未登录和远程故障都不得影响本地功能。
 
 CCLink 云函数与 Agent runtime 仍位于 `/Users/apple/Desktop/chat-cc/deploy` 和
-`/Users/apple/Desktop/chat-cc/Agent`，分别独立部署和通过现有 NPM 包发布。本次不修改它们。支付、生产秘密、Developer ID 签名和 Apple 公证不在当前实施范围。
+`/Users/apple/Desktop/chat-cc/Agent`，分别独立部署和通过现有 NPM 包发布。本次不修改它们。
+支付和生产服务秘密不在当前实施范围；桌面正式 Release 的 Developer ID 签名与 Apple 公证
+只存在于受保护的 GitHub 工作流，不进入应用运行时。
 
 所有功能开发必须遵守 `docs/architecture.md` 的“架构宪法”。S0-S4 稳定化阶段已经关闭，后续功能可以从当前 `main` 稳定基线受控推进，但不得重新引入跨模块硬依赖、第二状态所有者或未经验证的权限扩张。
 
@@ -49,8 +51,8 @@ pnpm studio:stop
 pnpm package:local
 ```
 
-本地打包只生成 arm64 ad-hoc 验收产物，不修改版本；当前正式工作流同样不得执行
-Developer ID 签名、公证或生产凭证注入。OSS 包产品名必须为 `CCLink Studio 开源版`，输出到本仓库
+本地打包只生成 arm64 开源壳验收产物，不修改版本；官方签名、公证、上传和生产 API
+注入不在本地路径。OSS 包产品名必须为 `CCLink Studio 开源版`，输出到本仓库
 `dist/`，并使用 ad-hoc 签封。执行前后必须按照
 `docs/ops/package-target-check.md` 核对目标，不能从 `cclink-dev` 父目录调用
 commercial packaging 后把商业产物当作 OSS 产物交付。
@@ -240,10 +242,10 @@ OSS 默认构建可以产出本地测试包，使用 ad-hoc 签封，但不包�
 
 开源正式包由本仓库 `.github/workflows/release-oss.yml` 从不可变 Tag 构建：
 
-- arm64 固定在 Apple Silicon runner 构建；
-- 仅使用 ad-hoc identity，不读取证书、系统钥匙串或 Apple 公证凭证；
-- 工作流校验包结构、校验和与 Manifest 后创建公开稳定 Release；
-- 因无 Developer ID 与公证，用户首次打开可能需要手动确认，自动更新暂不构成受信安装闭环。
+- `studio-release` Environment Secrets 提供受保护的签名和公证凭证。
+- arm64 固定在 Apple Silicon runner 构建。
+- 工作流完成 Developer ID 签名、Apple 公证、staple 和制品验证。
+- 工作流在全部自动门禁通过后直接创建公开稳定 Release。
 
 维护者从与 `origin/main` 一致、源码 CI 已全绿且 `package.json` 无本地改动的
 `main` 执行；其他未提交开发文件会被保留并排除在发布之外：
@@ -256,16 +258,16 @@ pnpm release -- --version 0.1.3
 
 该命令复用当前源码 SHA 已通过的普通 CI，只创建修改 `package.json.version` 的版本
 提交，在独立临时 worktree 中完成发布预检，然后创建不可变 Tag、原子推送并触发
-GitHub 发布工作流，等待公开稳定 Release 完成。线上也只生成 ad-hoc DMG；需要额外
-本地 ad-hoc 包时显式提供 `--local-artifacts`。
+GitHub 发布工作流，等待公开稳定 Release 完成。正式签名、公证和 DMG 只在线上
+执行；需要额外本地 ad-hoc 包时显式提供 `--local-artifacts`。
 若 main 与 Tag 已成功推送，但工作流触发失败，可只重试远端构建：
 
 ```bash
 pnpm release -- --dispatch-only v0.1.3
 ```
 
-命令会在全部自动门禁通过后公开稳定 Release；工作流不使用签名、公证或系统钥匙串凭证。
-真实安装与更新反馈在发布后进行，不再设置人工 Publish 步骤。
+命令会在全部自动门禁通过后公开稳定 Release，但不会把签名、公证或 GitHub 凭证写入
+源码和安装包。真实安装与更新反馈在发布后进行，不再设置人工 Publish 步骤。
 首次配置、逐步操作、验收标准和失败恢复见
 `docs/ops/oss-release-runbook.md`。
 

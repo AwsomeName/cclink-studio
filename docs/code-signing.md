@@ -1,23 +1,26 @@
-# CCLink Studio macOS ad-hoc 打包边界
+# CCLink Studio Mac 签名与公证指南
 
-> 状态：本地构建和 OSS Release 都只使用 ad-hoc 签封；禁止 Developer ID、Apple 公证、
-> 系统钥匙串和凭证导入。ADR 0009 与 NO_SYSTEM_KEYCHAIN 取代旧发布路线。
+> 状态：本地构建使用 ad-hoc 签封；唯一正式 Studio Release 由本仓库受保护的 GitHub
+> Environment 完成签名和公证。应用运行时与 CI 发布凭证边界见 ADR 0011。
 
 ## 结论
 
-开源 `cclink-studio` 不读取或保存发布证书，不导入任何系统凭证，也不执行 Developer ID
-签名或 Apple 公证。`.github/workflows/release-oss.yml` 从不可变 Tag 构建 ad-hoc arm64 DMG，
-门禁通过后可以创建公开 Release。该制品不是 Apple 信任链内的无提示安装包。
+开源 `cclink-studio` 仓库不内置 Developer ID、notarization 密钥或生产更新源。
+普通本地构建用于开发测试；开源正式包由本仓库 `.github/workflows/release-oss.yml`
+从不可变 Tag 构建，使用 `studio-release` Environment Secrets 完成签名和公证，
+并在全部自动门禁通过后创建本仓库公开稳定 Release。
+维护者的完整发布步骤和失败恢复见 `docs/ops/oss-release-runbook.md`。
 
 ## 背景
 
-普通用户要获得无警告安装通常需要 Developer ID 与 Apple 公证，但本产品决策明确禁止
-本仓库执行这两项操作。因此当前边界是：
+CCLink Studio 通过 DMG 分发时，如果要让普通用户无警告打开，需要：
 
-1. App 内嵌可执行文件只做 ad-hoc 签封；
-2. 不使用证书、P12、Apple API Key、系统钥匙串或公证；
-3. 首次打开与升级由用户手动确认；
-4. 现有要求 Developer ID 的自动更新验证器不算可交付更新闭环。
+1. Developer ID Application 证书签名。
+2. Apple notarization。
+3. 正确的 entitlements 和 hardened runtime 配置。
+
+这些材料包含发布身份和权限，只能存在于受保护的 GitHub Environment Secrets，
+不得进入 OSS 源码、默认配置、安装包或日志。
 
 ## OSS 本地构建
 
@@ -33,11 +36,24 @@ xattr -cr /Applications/CCLink\\ Studio\\ 开源版.app
 
 ## OSS Release
 
-正式工作流只执行源码/Tag 校验、arm64 构建、ad-hoc 打包、包结构与校验和检查、Release
-上传。工作流不得引用 P12、Developer ID identity、Apple API Key、`security`、notarytool
-或 stapler。若未来要改变该边界，必须由新的用户决策和 ADR 明确取代 ADR 0009。
+本仓库只维护中性的发布流程：
+
+- `.github/workflows/release-oss.yml`。
+- Developer ID Application 签名和 P12 导入校验。
+- Apple API Key 公证与 staple。
+- entitlements。
+- GitHub 公开稳定 Release 资产上传。
+
+证书、P12 密码、Apple API Key 和其他敏感值只存在于 `studio-release`
+Environment Secrets。不要把它们、生产 feed URL 或长期 GitHub Token 写回
+`cclink-studio` 默认路径。
+
+迁移期 `cclink-dev` 不拥有第二套桌面正式发布状态，也不得触发或覆盖本仓库 Release。
+
+`NO_SYSTEM_KEYCHAIN` 禁止的是 Studio 运行时访问用户钥匙串，不禁止隔离的 CI runner 使用
+临时钥匙串完成签名。临时钥匙串和凭证必须在任务结束时销毁。
 
 ## 拷问
 
-ad-hoc Release 可以发布，但不能宣称已获得 Apple 信任链，也不能把现有 Developer ID
-自动更新校验当成可用闭环。发布完成与自动更新完成是两件事。
+签名问题看起来只是打包配置，但本质是发布权限边界。源码可审计的 workflow
+可以描述流程，敏感凭证不能进入仓库；开源版与商业版也不能共享发布状态或互相触发。
