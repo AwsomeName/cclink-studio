@@ -506,36 +506,55 @@ export class CclinkRemoteService implements RemoteProvider {
     const probeResult = online ? await this.getLiveCapabilityProbe(ref.endpointId) : null
     const probe = probeResult?.response ?? null
     const protocolVersion = valueAsString(
-      probe?.protocolVersion ?? probe?.protocol_version ?? server?.protocolVersion,
+      probe?.protocolVersion ??
+        probe?.protocol_version ??
+        probe?.sender?.protocol_version ??
+        server?.protocolVersion,
     )
     const minProtocolVersion = valueAsString(
-      probe?.minProtocolVersion ?? probe?.min_protocol_version ?? server?.minProtocolVersion,
+      probe?.minProtocolVersion ??
+        probe?.min_protocol_version ??
+        probe?.sender?.min_protocol_version ??
+        server?.minProtocolVersion,
     )
     const compatibility = protocolCompatibility(protocolVersion, minProtocolVersion)
-    const grouped = probe?.capabilities
-    // Live capability execution is fail-closed. server_meta is discovery/UI metadata only.
-    const capabilityMap = probe?.capability_map
-    const has = (...keys: string[]): boolean =>
-      keys.some(
-        (key) => capabilityMap?.[key] === true || probe?.capability_list?.includes(key) === true,
-      )
+    // Live capability execution is fail-closed. Normalize every capability expression carried by
+    // the correlated probe response, including the standard sender envelope retained by bounded
+    // transports when optional probe diagnostics are omitted.
+    const capabilitySignals = collectCapabilitySignals(probe)
+    const has = (...keys: string[]): boolean => keys.some((key) => capabilitySignals.has(key))
     const fileCapability = (groupedKey: string, legacyKey: string): boolean =>
-      online && (grouped?.file?.[groupedKey] === true || has(legacyKey))
+      online && has(`file.${groupedKey}`, legacyKey)
     const sessionStreaming =
       online &&
-      (grouped?.session?.streaming === true ||
-        grouped?.agent?.stream_json_input === true ||
-        grouped?.agent?.runtime_select === true ||
-        has('session.streaming', 'session_streaming') ||
-        has('agent.stream_json_input', 'stream_json_input') ||
-        has('agent.runtime_select', 'runtime_select'))
+      has(
+        'session.streaming',
+        'session_streaming',
+        'agent.stream_json_input',
+        'stream_json_input',
+        'agent.runtime_select',
+        'runtime_select',
+      )
     const agentVersion = valueAsString(
-      probe?.agentVersion ?? probe?.agent_version ?? server?.agentVersion,
+      probe?.agentVersion ?? probe?.agent_version ?? probe?.sender?.version ?? server?.agentVersion,
     )
     const runtime = valueAsString(probe?.runtime)
     const probeState = valueAsString(probe?.runtime_probe?.refresh_state) ?? 'unknown'
+    const capabilityProbeIncomplete =
+      online && probe?.payload_truncated === true && capabilitySignals.size === 0
+        ? remoteError(
+            'remote-agent',
+            REMOTE_ERROR_CODE.CAPABILITY_PROBE_INCOMPLETE,
+            '能力探测响应不完整，Studio 无法判定远程能力，将自动重试',
+            true,
+            {
+              payloadTruncated: true,
+              truncationReason: probe.payload_truncation_reason ?? 'unknown',
+            },
+          )
+        : undefined
     const capabilityUnavailable =
-      online && probe && !sessionStreaming
+      online && probe && !capabilityProbeIncomplete && !sessionStreaming
         ? remoteError(
             'remote-agent',
             REMOTE_ERROR_CODE.CAPABILITY_UNAVAILABLE,
@@ -583,9 +602,7 @@ export class CclinkRemoteService implements RemoteProvider {
           delete: fileCapability('delete', 'file_delete'),
         },
         shell: {
-          pty:
-            online &&
-            (grouped?.shell?.terminal_workspace_pty === true || has('terminal_workspace_pty')),
+          pty: online && has('shell.terminal_workspace_pty', 'terminal_workspace_pty'),
         },
         agent: { session: sessionStreaming, stream: sessionStreaming },
       },
@@ -602,9 +619,11 @@ export class CclinkRemoteService implements RemoteProvider {
           ? {
               remoteError: probeResult.error,
             }
-          : capabilityUnavailable
-            ? { remoteError: capabilityUnavailable }
-            : {}),
+          : capabilityProbeIncomplete
+            ? { remoteError: capabilityProbeIncomplete }
+            : capabilityUnavailable
+              ? { remoteError: capabilityUnavailable }
+              : {}),
     }
   }
 
@@ -1136,43 +1155,35 @@ export class CclinkRemoteService implements RemoteProvider {
       )) as CclinkCapabilityProbeResponseMessage
       const server = this.servers.get(serverId)
       if (server) {
+        const capabilitySignals = collectCapabilitySignals(response)
         server.agentVersion =
-          valueAsString(response.agentVersion ?? response.agent_version) ?? server.agentVersion
+          valueAsString(
+            response.agentVersion ?? response.agent_version ?? response.sender?.version,
+          ) ?? server.agentVersion
         server.protocolVersion =
-          valueAsString(response.protocolVersion ?? response.protocol_version) ??
-          server.protocolVersion
+          valueAsString(
+            response.protocolVersion ??
+              response.protocol_version ??
+              response.sender?.protocol_version,
+          ) ?? server.protocolVersion
         server.minProtocolVersion =
-          valueAsString(response.minProtocolVersion ?? response.min_protocol_version) ??
-          server.minProtocolVersion
+          valueAsString(
+            response.minProtocolVersion ??
+              response.min_protocol_version ??
+              response.sender?.min_protocol_version,
+          ) ?? server.minProtocolVersion
         server.capabilities = {
           ...server.capabilities,
           ...response.capability_map,
-          file_tree: (response.capabilities?.file?.tree ?? server.capabilities?.file_tree) === true,
-          file_read: (response.capabilities?.file?.read ?? server.capabilities?.file_read) === true,
-          file_write:
-            (response.capabilities?.file?.write ?? server.capabilities?.file_write) === true,
-          file_create:
-            (response.capabilities?.file?.create ?? server.capabilities?.file_create) === true,
-          file_rename:
-            (response.capabilities?.file?.rename ?? server.capabilities?.file_rename) === true,
-          file_delete:
-            (response.capabilities?.file?.delete ?? server.capabilities?.file_delete) === true,
-          terminal_workspace_pty:
-            (response.capabilities?.shell?.terminal_workspace_pty ??
-              server.capabilities?.terminal_workspace_pty) === true,
-          stream_json_input:
-            (response.capabilities?.agent?.stream_json_input ??
-              server.capabilities?.stream_json_input) === true,
-          runtime_select:
-            (response.capabilities?.agent?.runtime_select ??
-              server.capabilities?.runtime_select) === true,
+          ...Object.fromEntries([...capabilitySignals].map((capability) => [capability, true])),
         }
-        server.capabilityList = response.capability_list ?? server.capabilityList
+        server.capabilityList = [...capabilitySignals]
       }
       const transientProbe =
         response.runtime_probe?.refresh_state === 'pending' ||
         response.runtime_probe?.refresh_state === 'refreshing' ||
-        response.runtime_probe?.stale === true
+        response.runtime_probe?.stale === true ||
+        (response.payload_truncated === true && collectCapabilitySignals(response).size === 0)
       const result = { response }
       this.capabilityProbes.set(serverId, {
         expiresAt: Date.now() + (transientProbe ? 2_000 : 15_000),
@@ -1890,6 +1901,42 @@ function supports(server: CclinkServer | undefined, capability: string): boolean
     server &&
     (server.capabilities?.[capability] === true || server.capabilityList?.includes(capability)),
   )
+}
+function collectCapabilitySignals(
+  response: CclinkCapabilityProbeResponseMessage | null | undefined,
+): Set<string> {
+  const signals = new Set<string>()
+  if (!response) return signals
+  for (const [capability, enabled] of Object.entries(response.capability_map ?? {})) {
+    if (enabled === true) signals.add(capability)
+  }
+  for (const capability of response.capability_list ?? []) {
+    if (typeof capability === 'string' && capability.trim()) signals.add(capability.trim())
+  }
+  for (const capability of response.sender?.capabilities ?? []) {
+    if (typeof capability === 'string' && capability.trim()) signals.add(capability.trim())
+  }
+  for (const [group, capabilities] of Object.entries(response.capabilities ?? {})) {
+    for (const [capability, enabled] of Object.entries(capabilities ?? {})) {
+      if (enabled !== true) continue
+      signals.add(`${group}.${capability}`)
+      const legacyCapability = GROUPED_CAPABILITY_ALIASES[`${group}.${capability}`]
+      if (legacyCapability) signals.add(legacyCapability)
+    }
+  }
+  return signals
+}
+const GROUPED_CAPABILITY_ALIASES: Readonly<Record<string, string>> = {
+  'file.tree': 'file_tree',
+  'file.read': 'file_read',
+  'file.write': 'file_write',
+  'file.create': 'file_create',
+  'file.rename': 'file_rename',
+  'file.delete': 'file_delete',
+  'shell.terminal_workspace_pty': 'terminal_workspace_pty',
+  'agent.stream_json_input': 'stream_json_input',
+  'agent.runtime_select': 'runtime_select',
+  'session.streaming': 'session_streaming',
 }
 function valueAsString(value: string | number | undefined): string | undefined {
   return value == null ? undefined : String(value)

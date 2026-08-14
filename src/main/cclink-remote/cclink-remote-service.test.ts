@@ -104,6 +104,7 @@ describe('CclinkRemoteService runtime protocol', () => {
       runtime: 'claude_code',
       runtime_probe: { refresh_state: 'refreshing', checked_at: 123, stale: false },
       capabilities: {
+        file: { write: true },
         agent: { runtime_select: true, stream_json_input: true },
         session: { streaming: false },
       },
@@ -127,9 +128,19 @@ describe('CclinkRemoteService runtime protocol', () => {
           capability_list: ['runtime_select', 'stream_json_input'],
         }),
       },
-      capabilities: { agent: { session: true, stream: true } },
+      capabilities: {
+        file: { write: true },
+        agent: { session: true, stream: true },
+      },
     })
     expect(status.remoteError).toBeUndefined()
+    expect(
+      (
+        service as unknown as {
+          servers: Map<string, CclinkServer>
+        }
+      ).servers.get('agent-1')?.capabilities?.file_write,
+    ).toBe(true)
   })
 
   it('preserves the capability probe transport failure instead of reporting missing capability', async () => {
@@ -171,6 +182,83 @@ describe('CclinkRemoteService runtime protocol', () => {
     })
   })
 
+  it('uses capability signals and version metadata retained in the sender envelope', async () => {
+    const { service } = createService()
+    installOnlineServer(service)
+    vi.spyOn(service.getRequestRouter(), 'request').mockResolvedValue({
+      ...createCclinkEnvelope('capability_probe_response'),
+      sender: {
+        kind: 'agent',
+        version: '0.8.41',
+        protocol_version: 2,
+        min_protocol_version: 2,
+        capabilities: ['file_tree', 'file_read', 'stream_json_input', 'runtime_select'],
+      },
+      payload_truncated: true,
+    })
+
+    await expect(service.getStatus(remoteRef)).resolves.toMatchObject({
+      state: 'online',
+      agentVersion: '0.8.41',
+      protocolVersion: '2',
+      compatibility: 'compatible',
+      capabilities: {
+        file: { tree: true, read: true },
+        agent: { session: true, stream: true },
+      },
+      capabilityProbe: {
+        response: expect.objectContaining({
+          sender: expect.objectContaining({
+            version: '0.8.41',
+            capabilities: expect.arrayContaining(['file_tree', 'stream_json_input']),
+          }),
+        }),
+      },
+    })
+    expect((await service.getStatus(remoteRef)).remoteError).toBeUndefined()
+  })
+
+  it('opens the remote file tree when file_tree survives only in sender capabilities', async () => {
+    const { service } = createService()
+    installOnlineServer(service, [
+      {
+        id: remoteRef.workspaceId,
+        path: remoteRef.path,
+        name: 'project',
+        serverId: remoteRef.endpointId,
+        kind: 'directory',
+        exists: true,
+      },
+    ])
+    vi.spyOn(service.getRequestRouter(), 'request')
+      .mockResolvedValueOnce({
+        ...createCclinkEnvelope('capability_probe_response'),
+        sender: {
+          kind: 'agent',
+          version: '0.8.41',
+          capabilities: ['file_tree', 'stream_json_input'],
+        },
+        payload_truncated: true,
+      })
+      .mockResolvedValueOnce({
+        ...createCclinkEnvelope('file_tree_response'),
+        workspace_id: remoteRef.workspaceId,
+        path: remoteRef.path,
+        items: [{ name: 'README.md', type: 'file' }],
+      })
+
+    await expect(
+      service.listFileTree({ ref: remoteRef, path: remoteRef.path, depth: 1 }),
+    ).resolves.toMatchObject({
+      success: true,
+      workspaceId: remoteRef.workspaceId,
+      tree: {
+        path: remoteRef.path,
+        children: [expect.objectContaining({ name: 'README.md', type: 'file' })],
+      },
+    })
+  })
+
   it('only reports missing Agent capability after a clean probe response has no supported signal', async () => {
     const { service } = createService()
     installOnlineServer(service)
@@ -190,6 +278,29 @@ describe('CclinkRemoteService runtime protocol', () => {
         layer: 'remote-agent',
         code: 'REMOTE_CAPABILITY_UNAVAILABLE',
         retryable: false,
+      },
+    })
+  })
+
+  it('does not turn a truncated probe with no capability evidence into an unsupported verdict', async () => {
+    const { service } = createService()
+    installOnlineServer(service)
+    vi.spyOn(service.getRequestRouter(), 'request').mockResolvedValue({
+      ...createCclinkEnvelope('capability_probe_response'),
+      payload_truncated: true,
+      payload_truncation_reason: 'emergency_minimal',
+    })
+
+    await expect(service.getStatus(remoteRef)).resolves.toMatchObject({
+      state: 'online',
+      remoteError: {
+        layer: 'remote-agent',
+        code: 'REMOTE_CAPABILITY_PROBE_INCOMPLETE',
+        retryable: true,
+        context: {
+          payloadTruncated: true,
+          truncationReason: 'emergency_minimal',
+        },
       },
     })
   })

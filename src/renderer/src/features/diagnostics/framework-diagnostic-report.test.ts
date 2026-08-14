@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { localWorkspaceRef } from '@shared/workspace-ref'
+import { localWorkspaceRef, remoteWorkspaceRef } from '@shared/workspace-ref'
 import { useFsStore, useTabStore, useWorkspaceStore } from '../../stores'
 import {
   recordRendererDiagnosticLog,
@@ -130,5 +130,85 @@ describe('collectFrameworkDiagnosticReport', () => {
     expect(report).toContain('- 采集失败：main unavailable')
     expect(report).toContain('- 采集失败：credentials unavailable')
     expect(report).toContain('- 采集失败：scheduler unavailable')
+  })
+
+  it('includes the complete correlated capability response for an active remote workspace', async () => {
+    const ref = remoteWorkspaceRef({
+      endpointId: 'agent-1',
+      workspaceId: 'ws-canonical',
+      path: '/srv/project',
+    })
+    useWorkspaceStore.setState({ activeWorkspaceRef: ref })
+    vi.stubGlobal('window', {
+      cclinkStudio: {
+        workspaceState: {
+          diagnostics: vi.fn().mockRejectedValue(new Error('workspace unavailable')),
+        },
+        diagnostics: {
+          getMainLogSnapshot: vi.fn().mockRejectedValue(new Error('main unavailable')),
+        },
+        credentials: {
+          getStatus: vi.fn().mockRejectedValue(new Error('credentials unavailable')),
+        },
+        scheduledTasks: {
+          getRuntimeStatus: vi.fn().mockRejectedValue(new Error('scheduler unavailable')),
+        },
+        remote: {
+          diagnose: vi.fn().mockResolvedValue({
+            ref,
+            generatedAt: 1,
+            checks: [],
+            recentErrors: [],
+            status: {
+              ref,
+              state: 'online',
+              endpointName: 'supermicro',
+              agentVersion: '0.8.41',
+              protocolVersion: '2',
+              compatibility: 'compatible',
+              workspacePath: ref.path,
+              capabilities: {
+                file: {
+                  tree: true,
+                  read: true,
+                  write: false,
+                  create: false,
+                  rename: false,
+                  delete: false,
+                },
+                shell: { pty: false },
+                agent: { session: true, stream: true },
+              },
+              capabilityProbe: {
+                state: 'unknown',
+                stale: false,
+                response: {
+                  cc_type: 'capability_probe_response',
+                  v: 2,
+                  min_v: 2,
+                  request_id: 'probe-request',
+                  trace_id: 'probe-trace',
+                  sender: {
+                    kind: 'agent',
+                    version: '0.8.41',
+                    capabilities: ['file_tree', 'stream_json_input', 'runtime_select'],
+                  },
+                  payload_truncated: true,
+                },
+              },
+            },
+          }),
+        },
+      },
+    })
+
+    const report = await collectFrameworkDiagnosticReport()
+
+    expect(report).toContain('## 当前远程能力探测')
+    expect(report).toContain('"cc_type": "capability_probe_response"')
+    expect(report).toContain('"request_id": "probe-request"')
+    expect(report).toContain('"trace_id": "probe-trace"')
+    expect(report).toContain('"stream_json_input"')
+    expect(report).toContain('"payload_truncated": true')
   })
 })

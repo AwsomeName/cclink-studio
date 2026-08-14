@@ -133,6 +133,17 @@ export interface CclinkEnvelope {
   min_v: number
   request_id?: string
   trace_id?: string
+  payload_truncated?: boolean
+  payload_truncation_reason?: string
+  sender?: {
+    kind?: string
+    version?: string
+    platform?: string
+    platform_mode?: string
+    protocol_version?: string | number
+    min_protocol_version?: string | number
+    capabilities?: string[]
+  }
 }
 
 export interface CclinkServerMetaMessage extends CclinkEnvelope {

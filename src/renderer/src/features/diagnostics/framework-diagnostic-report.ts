@@ -22,10 +22,10 @@ const MAX_LOG_ENTRIES = 200
 
 /**
  * 采集工作台框架诊断。这里故意不读取 Agent store、会话正文、思考过程或工具结果；
- * Agent 面板有独立的诊断入口，两个报告不能互相兜底混入对方的数据。
+ * 远程能力探测只记录协议 envelope，便于区分传输、关联和能力映射问题。
  */
 export async function collectFrameworkDiagnosticReport(): Promise<string> {
-  const [workspaceSection, credentialSection, scheduledTaskSection, mainLogSection] =
+  const [workspaceSection, credentialSection, scheduledTaskSection, remoteSection, mainLogSection] =
     await Promise.all([
       collectSection('工作台状态文件', async () =>
         formatFrameworkWorkspaceDiagnostics(await window.cclinkStudio.workspaceState.diagnostics()),
@@ -55,6 +55,7 @@ export async function collectFrameworkDiagnosticReport(): Promise<string> {
             : []),
         ].join('\n')
       }),
+      collectSection('当前远程能力探测', collectActiveRemoteDiagnostics),
       collectSection('主进程近期框架日志', async () =>
         formatFrameworkLogSnapshot(await window.cclinkStudio.diagnostics.getMainLogSnapshot()),
       ),
@@ -88,6 +89,7 @@ export async function collectFrameworkDiagnosticReport(): Promise<string> {
     scheduledTaskSection,
     markdownSection,
     contextActionSection,
+    remoteSection,
     rendererLogSection,
     mainLogSection,
   ]
@@ -105,6 +107,34 @@ export async function collectFrameworkDiagnosticReport(): Promise<string> {
       `## ${section.title}`,
       limitSection(sanitizeDiagnosticText(section.body, MAX_SECTION_LENGTH)),
     ]),
+  ].join('\n')
+}
+
+async function collectActiveRemoteDiagnostics(): Promise<string> {
+  const ref = useWorkspaceStore.getState().activeWorkspaceRef
+  if (ref.kind !== 'remote') return '- 当前不是远程工作区'
+
+  const report = await window.cclinkStudio.remote.diagnose(ref)
+  const probe = report.status.capabilityProbe
+  return [
+    `- 设备：${report.status.endpointName ?? ref.endpointId}`,
+    `- 状态：${report.status.state}`,
+    `- Agent 版本：${report.status.agentVersion ?? '未知'}`,
+    `- 协议版本：${report.status.protocolVersion ?? '未知'}`,
+    `- runtime：${report.status.runtime ?? '未知'}`,
+    `- 探测状态：${probe?.state ?? '无响应'}`,
+    `- 探测时间：${probe?.checkedAt ?? '未知'}`,
+    `- stale：${probe?.stale === true}`,
+    ...(report.status.remoteError
+      ? [
+          `- 错误：${report.status.remoteError.code} · ${report.status.remoteError.message}`,
+          `- 错误层：${report.status.remoteError.layer} · retryable=${report.status.remoteError.retryable}`,
+        ]
+      : []),
+    '- capability_probe_response：',
+    '```json',
+    JSON.stringify(probe?.response ?? null, null, 2),
+    '```',
   ].join('\n')
 }
 
