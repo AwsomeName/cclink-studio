@@ -191,6 +191,42 @@
   font-size: 12px;
 }
 
+.scheduled-task-save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.scheduled-task-save-status::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--text-secondary);
+  content: '';
+}
+
+.scheduled-task-save-status[data-tone='enabled']::before {
+  background: #3fb950;
+}
+
+.scheduled-task-save-status[data-tone='paused']::before {
+  background: #d29922;
+}
+
+.scheduled-task-save-status[data-tone='dirty']::before,
+.scheduled-task-save-status[data-tone='working']::before {
+  background: var(--accent-color, #3794ff);
+}
+
+.scheduled-task-save-status[data-tone='error'] {
+  color: var(--error-foreground, #f48771);
+}
+
+.scheduled-task-save-status[data-tone='error']::before {
+  background: var(--error-foreground, #f48771);
+}
+
 .scheduled-task-tab-actions {
   display: flex;
   flex: 0 0 auto;
@@ -299,6 +335,10 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+
+.scheduled-task-output-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .scheduled-task-weekdays {

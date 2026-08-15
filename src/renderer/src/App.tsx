@@ -115,8 +115,9 @@ function MainLayout(): React.ReactElement {
   )
 
   const toggleUnifiedAgentPanel = useCallback(() => {
-    toggleAgentPanel(activeTab ? 'right' : 'center')
-  }, [activeTab, toggleAgentPanel])
+    // 顶栏按钮只负责展开/收起右侧面板；center 仅由无 Tab 的系统落地页使用。
+    toggleAgentPanel('right')
+  }, [toggleAgentPanel])
 
   if (!workspaceReady) {
     return <LoadingScreen />

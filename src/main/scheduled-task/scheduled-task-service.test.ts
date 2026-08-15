@@ -54,9 +54,9 @@ describe('ScheduledTaskService', () => {
     expect(definitionText).toContain('"revision": 1')
     expect(definitionText).not.toContain('"enabled"')
     expect(activationText).toContain('"enabled": true')
-    expect(await readFile(join(workspacePath, '.git/info/exclude'), 'utf-8')).toContain(
-      '/.cclink-studio/scheduled-tasks/',
-    )
+    const localExclude = await readFile(join(workspacePath, '.git/info/exclude'), 'utf-8')
+    expect(localExclude).toContain('/.cclink-studio/scheduled-tasks/')
+    expect(localExclude).toContain('/.cclink-studio/scheduled-task-results/')
 
     const listed = await service.list(workspacePath)
     expect(listed.tasks).toHaveLength(1)

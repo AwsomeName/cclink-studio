@@ -167,8 +167,21 @@ async function main() {
   await page
     .getByLabel('工作空间内路径（支持相对路径或绝对路径，每行一个，可留空）')
     .fill(join(workspacePath, 'README.md'))
+  await page.getByLabel('结果保存方式').selectOption('history')
   await page.getByRole('button', { name: '保存并在此设备启用' }).click()
-  await page.getByText(/已在此设备启用/).waitFor({ timeout: 10_000 })
+  await page.getByText(/已保存并在此设备启用/).waitFor({ timeout: 10_000 })
+  assert(
+    (await page.locator('.tab.active .tab-dirty-dot').count()) === 0,
+    'saved scheduled-task tab still shows a dirty dot',
+  )
+  const savedTaskRow = page.locator('.scheduled-task-sidebar-item', {
+    hasText: 'Smoke 每周工作总结',
+  })
+  await savedTaskRow.waitFor({ timeout: 10_000 })
+  assert(
+    (await savedTaskRow.innerText()).includes('下次：'),
+    'enabled scheduled task did not immediately appear in the sidebar',
+  )
 
   const saved = await page.evaluate(
     (path) => window.cclinkStudio.scheduledTasks.list(path),
@@ -194,9 +207,13 @@ async function main() {
   )
   assert(run.taskRevision === 1, 'run did not pin the saved revision')
   assert(run.artifact?.relativePath, 'completed run did not expose an artifact')
+  assert(
+    run.artifact.relativePath.startsWith('.cclink-studio/scheduled-task-results/'),
+    `history result was written to an unexpected path: ${run.artifact.relativePath}`,
+  )
   const artifactContent = await readFile(join(workspacePath, run.artifact.relativePath), 'utf8')
   assert(artifactContent.trim().length > 0, 'generated Markdown is empty')
-  await page.getByRole('button', { name: new RegExp(`打开 ${run.artifact.relativePath}`) }).click()
+  await page.getByRole('button', { name: '查看运行结果' }).click()
   await page
     .locator('.tab-title', { hasText: run.artifact.relativePath.split('/').at(-1) })
     .waitFor({
@@ -205,7 +222,7 @@ async function main() {
 
   await page.locator('.tab-title', { hasText: 'Smoke 每周工作总结' }).click()
   await page.getByRole('button', { name: '暂停' }).click()
-  await page.getByText('已保存 · 此设备已暂停').waitFor({ timeout: 10_000 })
+  await page.getByRole('status').getByText('已在此设备暂停').waitFor({ timeout: 10_000 })
 
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.main-window', { timeout: 30_000 })

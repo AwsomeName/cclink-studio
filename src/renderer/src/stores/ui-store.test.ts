@@ -101,15 +101,16 @@ describe('useUIStore', () => {
       expect(useUIStore.getState().agentPanelModeSource).toBe('user')
     })
 
-    it('隐藏后恢复收起前的整个 Agent 面板布局', () => {
-      useUIStore.getState().setAgentPanelMode('right')
+    it('隐藏后按当前入口指定的布局恢复，不被旧布局记忆覆盖', () => {
+      useUIStore.getState().setAgentPanelMode('center')
       useUIStore.getState().toggleAgentPanel()
-      useUIStore.getState().toggleAgentPanel('center')
+      useUIStore.getState().toggleAgentPanel('right')
       expect(useUIStore.getState().agentPanelVisible).toBe(true)
       expect(useUIStore.getState().agentPanelMode).toBe('right')
+      expect(useUIStore.getState().agentPanelLastVisibleMode).toBe('right')
     })
 
-    it('旧隐藏状态没有布局记忆时按当前上下文恢复', () => {
+    it('隐藏状态可以由明确入口打开居中落地页', () => {
       useUIStore.setState({
         agentPanelMode: 'hidden',
         agentPanelLastVisibleMode: null,
@@ -146,7 +147,7 @@ describe('useUIStore', () => {
       expect(useUIStore.getState().agentPanelVisible).toBe(true)
     })
 
-    it('用户调整过右侧面板后，关闭最后一个 Tab 仍回到居中', () => {
+    it('用户调整过右侧面板后，empty 上下文不能覆盖用户布局', () => {
       useUIStore.setState({
         agentPanelMode: 'right',
         agentPanelLastVisibleMode: 'right',
@@ -156,8 +157,8 @@ describe('useUIStore', () => {
 
       useUIStore.getState().applySystemWorkContext('empty')
 
-      expect(useUIStore.getState().agentPanelMode).toBe('center')
-      expect(useUIStore.getState().agentPanelModeSource).toBe('system')
+      expect(useUIStore.getState().agentPanelMode).toBe('right')
+      expect(useUIStore.getState().agentPanelModeSource).toBe('user')
       expect(useUIStore.getState().agentPanelVisible).toBe(true)
     })
 
@@ -248,7 +249,7 @@ describe('useUIStore', () => {
       expect(useUIStore.getState().activePanel).toBe('files')
     })
 
-    it('隐藏快照保留收起前的右侧布局', () => {
+    it('隐藏快照不覆盖当前入口指定的右侧布局', () => {
       useUIStore.getState().hydrateFromWorkspaceState({
         agentPanelMode: 'hidden',
         agentPanelVisible: false,
@@ -256,7 +257,7 @@ describe('useUIStore', () => {
         agentPanelModeSource: 'user',
       })
 
-      useUIStore.getState().toggleAgentPanel('center')
+      useUIStore.getState().toggleAgentPanel('right')
 
       expect(useUIStore.getState().agentPanelMode).toBe('right')
       expect(useUIStore.getState().agentPanelVisible).toBe(true)

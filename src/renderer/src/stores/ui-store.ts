@@ -27,7 +27,7 @@ interface UIState {
   agentPanelWidth: number
   /** Agent 面板布局：居中入口 / 右侧协作 / 隐藏 */
   agentPanelMode: AgentPanelMode
-  /** 用户收起前最后一次可见布局；旧快照可能没有该信息。 */
+  /** 最近一次可见布局，用于快照兼容与诊断；重新展开时以当前入口指定布局为准。 */
   agentPanelLastVisibleMode: VisibleAgentPanelMode | null
   /** 布局来源：system 可自动切换，user 代表用户手动选择后锁定 */
   agentPanelModeSource: AgentPanelModeSource
@@ -250,12 +250,10 @@ export const useUIStore = create<UIState>((set) => ({
       const previousVisibleMode: VisibleAgentPanelMode | null = wasVisible
         ? (state.agentPanelMode as VisibleAgentPanelMode)
         : state.agentPanelLastVisibleMode
-      const nextMode: AgentPanelMode = wasVisible
-        ? 'hidden'
-        : (previousVisibleMode ?? preferredMode)
+      const nextMode: AgentPanelMode = wasVisible ? 'hidden' : preferredMode
       return {
         agentPanelMode: nextMode,
-        agentPanelLastVisibleMode: previousVisibleMode,
+        agentPanelLastVisibleMode: nextMode === 'hidden' ? previousVisibleMode : nextMode,
         agentPanelVisible: agentVisibleFromMode(nextMode),
         agentPanelModeSource: 'user',
       }
@@ -271,8 +269,8 @@ export const useUIStore = create<UIState>((set) => ({
     set((state) => {
       const nextMode: AgentPanelMode = context === 'empty' ? 'center' : 'right'
       if (context === 'empty') {
-        // 用户主动隐藏时保持隐藏；只要面板可见，关闭最后一个 Tab 就回到居中工作区。
-        if (state.agentPanelMode === 'hidden') return state
+        // 用户操作优先于自动落地页，避免项目切换的短暂空 Tab 覆盖顶栏按钮结果。
+        if (state.agentPanelModeSource === 'user') return state
         return {
           agentPanelMode: 'center',
           agentPanelLastVisibleMode: 'center',

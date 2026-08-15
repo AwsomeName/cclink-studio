@@ -10,6 +10,7 @@
 - `docs/stabilization.md`：已关闭的 S0-S4 稳定化阶段、工作包和退出证据。
 - `docs/decisions/`：架构原则例外和重大取舍的 ADR。
 - `docs/development.md`：当前开发事实源。
+- `docs/project-memo.md`：尚未进入正式方案或计划的候选想法备忘录，不作为当前实现事实源。
 - `docs/ops/local-smoke-check.md`：验证 Studio 开源壳可独立启动和本地核心能力可用。
 - `docs/ops/package-target-check.md`：开源版与商业版打包目标、身份和产物交付检查。
 - `docs/ops/cclink-remote-entitlement-audit.md`：CCLink 远程服务端身份与付费门禁审计。

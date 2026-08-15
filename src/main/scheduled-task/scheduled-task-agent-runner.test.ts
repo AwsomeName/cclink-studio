@@ -60,7 +60,8 @@ describe('ScheduledTaskAgentRunner', () => {
       }),
     )
     expect(result.artifact).toMatchObject({
-      relativePath: 'docs/generated/report-2026-07-29.md',
+      relativePath:
+        'docs/generated/report-00000000-0000-4000-8000-000000000001-run-1-2026-07-29.md',
       bytes: Buffer.byteLength('# Generated\n\nSafe output.\n'),
     })
     expect(await readFile(join(root, result.artifact.relativePath), 'utf-8')).toBe(
@@ -70,7 +71,10 @@ describe('ScheduledTaskAgentRunner', () => {
 
   it('refuses create-only collisions before starting Agent', async () => {
     await mkdir(join(root, 'docs/generated'), { recursive: true })
-    await writeFile(join(root, 'docs/generated/report-2026-07-29.md'), '# Existing\n')
+    await writeFile(
+      join(root, 'docs/generated/report-00000000-0000-4000-8000-000000000001-run-2-2026-07-29.md'),
+      '# Existing\n',
+    )
     const sendScheduledTaskMessage = vi.fn()
     const runner = new ScheduledTaskAgentRunner({
       onRuntimeEvent: vi.fn(),
@@ -106,7 +110,7 @@ function definition(): ScheduledTaskDefinition {
     resources: [{ kind: 'workspace' }],
     outputPolicy: {
       directory: 'docs/generated',
-      fileNameTemplate: 'report-{date}.md',
+      fileNameTemplate: 'report-{taskId}-{runId}-{date}.md',
       mode: 'create-only',
     },
     createdAt: 1,

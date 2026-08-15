@@ -23,9 +23,13 @@ interface TaskForm {
   weekdays: number[]
   timezone: string
   resourcePaths: string
+  resultMode: 'history' | 'workspace-file'
   outputDirectory: string
   fileNameTemplate: string
 }
+
+const HISTORY_OUTPUT_DIRECTORY = '.cclink-studio/scheduled-task-results'
+const HISTORY_FILE_NAME_TEMPLATE = 'task-{taskId}-{date}-{time}-{runId}.md'
 
 const WEEKDAYS = [
   { value: 1, label: '一' },
@@ -67,10 +71,11 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
   const updateTabScheduledTask = useTabStore((state) => state.updateTabScheduledTask)
   const task = tasks.find((candidate) => candidate.definition.id === taskId)
   const [form, setForm] = useState<TaskForm>(() => createDefaultForm())
-  const [baseSignature, setBaseSignature] = useState(() => formSignature(createDefaultForm()))
+  const baseSignatureRef = useRef(formSignature(form))
   const [saving, setSaving] = useState(false)
   const [runningAction, setRunningAction] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null)
   const initializedFrom = useRef<string | null>(null)
 
   useEffect(() => {
@@ -96,16 +101,21 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
     if (!sourceKey || initializedFrom.current === sourceKey) return
     const next = task ? formFromTask(task) : createDefaultForm()
     setForm(next)
-    setBaseSignature(formSignature(next))
+    baseSignatureRef.current = formSignature(next)
     updateTabDirty(tab.id, false)
     initializedFrom.current = sourceKey
   }, [tab.id, tab.scheduledTask?.draftKey, task, taskId, updateTabDirty])
 
   const currentSignature = useMemo(() => formSignature(form), [form])
+  const hasUnsavedChanges = currentSignature !== baseSignatureRef.current
   useEffect(() => {
     if (!initializedFrom.current) return
-    updateTabDirty(tab.id, currentSignature !== baseSignature)
-  }, [baseSignature, currentSignature, tab.id, updateTabDirty])
+    updateTabDirty(tab.id, currentSignature !== baseSignatureRef.current)
+  }, [currentSignature, tab.id, updateTabDirty])
+
+  useEffect(() => {
+    if (hasUnsavedChanges) setSaveFeedback(null)
+  }, [hasUnsavedChanges])
 
   if (!workspacePath) {
     return <TaskUnavailable message="这个 Tab 没有绑定本地工作空间" />
@@ -123,12 +133,12 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
   }
 
   const activation = task?.activation
-  const hasUnsavedChanges = currentSignature !== baseSignature
   const activeRun = runs.find((run) => run.status === 'queued' || run.status === 'running')
 
   const handleSave = async (enable: boolean): Promise<void> => {
     setSaving(true)
     setActionError(null)
+    setSaveFeedback(null)
     try {
       const snapshot = await save({
         workspacePath,
@@ -138,21 +148,13 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
         instruction: form.instruction,
         schedule: scheduleFromForm(form),
         resources: resourcesFromForm(form, workspacePath),
-        outputPolicy: {
-          directory: normalizeWorkspaceRelativePath(
-            form.outputDirectory,
-            workspacePath,
-            '输出目录',
-          ),
-          fileNameTemplate: form.fileNameTemplate,
-          mode: 'create-only',
-        },
+        outputPolicy: outputPolicyFromForm(form, workspacePath),
         enable,
       })
       const nextForm = formFromTask(snapshot)
       const nextSignature = formSignature(nextForm)
+      baseSignatureRef.current = nextSignature
       setForm(nextForm)
-      setBaseSignature(nextSignature)
       initializedFrom.current = `${snapshot.definition.id}:${snapshot.definition.revision}`
       updateTabScheduledTask(tab.id, {
         taskId: snapshot.definition.id,
@@ -160,6 +162,10 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
       })
       updateTabTitle(tab.id, snapshot.definition.title)
       updateTabDirty(tab.id, false)
+      setSaveFeedback(
+        snapshot.activation.enabled ? '已保存并在此设备启用' : '已保存，当前设备保持暂停',
+      )
+      await load(workspacePath)
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -171,8 +177,10 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
     if (!task) return
     setSaving(true)
     setActionError(null)
+    setSaveFeedback(null)
     try {
-      await setEnabled(workspacePath, task.definition.id, !task.activation.enabled)
+      const snapshot = await setEnabled(workspacePath, task.definition.id, !task.activation.enabled)
+      setSaveFeedback(snapshot.activation.enabled ? '已在此设备启用' : '已在此设备暂停')
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -230,11 +238,38 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
           <div>
             <h1>{task?.definition.title ?? '新建定时任务'}</h1>
             <p>
-              {activation?.enabled
-                ? `已在此设备启用 · 下次 ${formatNextRun(activation.nextRunAt)}`
-                : task
-                  ? '已保存 · 此设备已暂停'
-                  : '尚未保存 · 绑定当前工作空间'}
+              <span
+                className="scheduled-task-save-status"
+                data-tone={
+                  actionError
+                    ? 'error'
+                    : saving
+                      ? 'working'
+                      : hasUnsavedChanges
+                        ? 'dirty'
+                        : activation?.enabled
+                          ? 'enabled'
+                          : task
+                            ? 'paused'
+                            : 'draft'
+                }
+                role="status"
+                aria-live="polite"
+              >
+                {actionError
+                  ? `操作失败：${actionError}`
+                  : saving
+                    ? '正在保存…'
+                    : hasUnsavedChanges
+                      ? task
+                        ? '有未保存修改'
+                        : '尚未保存 · 绑定当前工作空间'
+                      : activation?.enabled
+                        ? `${saveFeedback ?? '已保存并在此设备启用'} · 下次 ${formatNextRun(activation.nextRunAt)}`
+                        : task
+                          ? (saveFeedback ?? '已保存 · 此设备已暂停')
+                          : '尚未保存 · 绑定当前工作空间'}
+              </span>
             </p>
           </div>
         </div>
@@ -264,7 +299,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
             disabled={saving}
             onClick={() => void handleSave(task?.activation.enabled ?? false)}
           >
-            保存
+            {saving ? '保存中…' : '保存'}
           </button>
           {!activation?.enabled && (
             <button
@@ -273,7 +308,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
               disabled={saving}
               onClick={() => void handleSave(true)}
             >
-              保存并在此设备启用
+              {saving ? '保存中…' : '保存并在此设备启用'}
             </button>
           )}
         </div>
@@ -392,26 +427,51 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
           <p className="scheduled-task-help">当前工作空间始终绑定，不能切换为全局资源。</p>
         </TaskSection>
 
-        <TaskSection title="输出">
-          <div className="scheduled-task-form-grid">
-            <label>
-              <span>工作空间内目录</span>
-              <input
-                value={form.outputDirectory}
-                placeholder="docs/周报"
-                onChange={(event) => setForm({ ...form, outputDirectory: event.target.value })}
-              />
-            </label>
-            <label>
-              <span>文件名模板</span>
-              <input
-                value={form.fileNameTemplate}
-                placeholder="report-{date}.md"
-                onChange={(event) => setForm({ ...form, fileNameTemplate: event.target.value })}
-              />
-            </label>
-          </div>
-          <p className="scheduled-task-help">首版固定为 create-only，不覆盖已有文件。</p>
+        <TaskSection title="运行结果">
+          <label>
+            <span>结果保存方式</span>
+            <select
+              value={form.resultMode}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  resultMode: event.target.value as TaskForm['resultMode'],
+                })
+              }
+            >
+              <option value="history">保留在运行历史（推荐）</option>
+              <option value="workspace-file">另存为工作空间 Markdown</option>
+            </select>
+          </label>
+          {form.resultMode === 'history' ? (
+            <p className="scheduled-task-help">
+              当前版本会把每次执行的文本结果保留在此任务的运行历史中，无需配置日志目录或文件名。
+            </p>
+          ) : (
+            <>
+              <div className="scheduled-task-form-grid scheduled-task-output-grid">
+                <label>
+                  <span>工作空间内目录</span>
+                  <input
+                    value={form.outputDirectory}
+                    placeholder="docs/周报"
+                    onChange={(event) => setForm({ ...form, outputDirectory: event.target.value })}
+                  />
+                </label>
+                <label>
+                  <span>文件名模板</span>
+                  <input
+                    value={form.fileNameTemplate}
+                    placeholder="report-{date}.md"
+                    onChange={(event) => setForm({ ...form, fileNameTemplate: event.target.value })}
+                  />
+                </label>
+              </div>
+              <p className="scheduled-task-help">
+                适用于日报、周报等需要工作空间文件的任务；只新建文件，不覆盖已有文件。
+              </p>
+            </>
+          )}
         </TaskSection>
 
         {task && (
@@ -433,7 +493,9 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
                     {run.error && <p className="scheduled-task-run-error">{run.error.message}</p>}
                     {run.artifact && (
                       <button type="button" onClick={() => void handleOpenArtifact(run)}>
-                        打开 {run.artifact.relativePath}
+                        {isHistoryResultPath(run.artifact.relativePath)
+                          ? '查看运行结果'
+                          : `打开 ${run.artifact.relativePath}`}
                       </button>
                     )}
                   </article>
@@ -513,6 +575,7 @@ function createDefaultForm(): TaskForm {
     weekdays: [1],
     timezone,
     resourcePaths: '',
+    resultMode: 'history',
     outputDirectory: 'docs/定时任务',
     fileNameTemplate: 'report-{date}.md',
   }
@@ -538,6 +601,7 @@ function formFromTask(task: ScheduledTaskSnapshot): TaskForm {
       )
       .map((resource) => resource.path)
       .join('\n'),
+    resultMode: isHistoryOutputPolicy(task.definition.outputPolicy) ? 'history' : 'workspace-file',
     outputDirectory: task.definition.outputPolicy.directory,
     fileNameTemplate: task.definition.outputPolicy.fileNameTemplate,
   }
@@ -581,6 +645,37 @@ function resourcesFromForm(form: TaskForm, workspacePath: string): ScheduledTask
       }),
     ),
   ]
+}
+
+function outputPolicyFromForm(
+  form: TaskForm,
+  workspacePath: string,
+): ScheduledTaskSnapshot['definition']['outputPolicy'] {
+  if (form.resultMode === 'history') {
+    return {
+      directory: HISTORY_OUTPUT_DIRECTORY,
+      fileNameTemplate: HISTORY_FILE_NAME_TEMPLATE,
+      mode: 'create-only',
+    }
+  }
+  return {
+    directory: normalizeWorkspaceRelativePath(form.outputDirectory, workspacePath, '输出目录'),
+    fileNameTemplate: form.fileNameTemplate,
+    mode: 'create-only',
+  }
+}
+
+function isHistoryOutputPolicy(
+  policy: ScheduledTaskSnapshot['definition']['outputPolicy'],
+): boolean {
+  return (
+    policy.directory === HISTORY_OUTPUT_DIRECTORY &&
+    policy.fileNameTemplate === HISTORY_FILE_NAME_TEMPLATE
+  )
+}
+
+function isHistoryResultPath(relativePath: string): boolean {
+  return relativePath.startsWith(`${HISTORY_OUTPUT_DIRECTORY}/`)
 }
 
 function formSignature(form: TaskForm): string {

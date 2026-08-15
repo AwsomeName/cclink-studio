@@ -643,7 +643,7 @@ export class ScheduledTaskService {
     }
     await this.updateRun(run, {
       status: 'running',
-      currentStep: 'Agent 正在读取工作空间资料并生成 Markdown',
+      currentStep: 'Agent 正在执行任务',
       startedAt: this.now(),
     })
     const runnable = this.runStore.get(run.id)
@@ -667,7 +667,7 @@ export class ScheduledTaskService {
       if (current?.status === 'running') {
         await this.updateRun(current, {
           status: 'completed',
-          currentStep: 'Markdown 已生成并通过写后校验',
+          currentStep: '任务已完成，运行结果已保存',
           finishedAt: this.now(),
           artifact: result.artifact,
         })
@@ -893,12 +893,14 @@ export class ScheduledTaskService {
     } catch (error) {
       if (!isMissingFileError(error)) throw error
     }
-    const pattern = '/.cclink-studio/scheduled-tasks/'
-    if (current.split(/\r?\n/).some((line) => line.trim() === pattern)) return
+    const patterns = ['/.cclink-studio/scheduled-tasks/', '/.cclink-studio/scheduled-task-results/']
+    const existing = new Set(current.split(/\r?\n/).map((line) => line.trim()))
+    const missing = patterns.filter((pattern) => !existing.has(pattern))
+    if (missing.length === 0) return
     const prefix = current && !current.endsWith('\n') ? '\n' : ''
     await appendFile(
       excludePath,
-      `${prefix}# CCLink Studio scheduled task definitions\n${pattern}\n`,
+      `${prefix}# CCLink Studio scheduled task data\n${missing.join('\n')}\n`,
       'utf-8',
     )
   }

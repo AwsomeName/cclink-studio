@@ -43,7 +43,12 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
     const { definition } = input
     const workspaceRoot = await realpath(definition.workspaceRef.path)
     const readRoots = await resolveReadRoots(definition, workspaceRoot)
-    const output = await resolveOutput(definition, workspaceRoot, input.scheduledFor ?? Date.now())
+    const output = await resolveOutput(
+      definition,
+      workspaceRoot,
+      input.scheduledFor ?? Date.now(),
+      input.runId,
+    )
     await assertOutputDoesNotExist(output.absolutePath)
 
     const markdown = await new Promise<string>((resolvePromise, rejectPromise) => {
@@ -154,6 +159,7 @@ async function resolveOutput(
   definition: ScheduledTaskDefinition,
   workspaceRoot: string,
   occurrenceAt: number,
+  runId: string,
 ): Promise<{ absolutePath: string; relativePath: string; canonicalDirectory: string }> {
   const outputDirectory = resolve(workspaceRoot, definition.outputPolicy.directory)
   await mkdir(outputDirectory, { recursive: true })
@@ -161,7 +167,12 @@ async function resolveOutput(
   if (!isPathWithin(workspaceRoot, canonicalDirectory)) {
     throw new Error('输出目录逃逸出工作空间')
   }
-  const fileName = renderFileName(definition.outputPolicy.fileNameTemplate, occurrenceAt)
+  const fileName = renderFileName(
+    definition.outputPolicy.fileNameTemplate,
+    occurrenceAt,
+    definition.id,
+    runId,
+  )
   const absolutePath = resolve(canonicalDirectory, fileName)
   if (!isPathWithin(canonicalDirectory, absolutePath) || basename(absolutePath) !== fileName) {
     throw new Error('输出文件路径无效')
@@ -173,7 +184,12 @@ async function resolveOutput(
   }
 }
 
-function renderFileName(template: string, timestamp: number): string {
+function renderFileName(
+  template: string,
+  timestamp: number,
+  taskId: string,
+  runId: string,
+): string {
   const date = new Date(timestamp)
   const datePart = [
     date.getFullYear(),
@@ -184,7 +200,11 @@ function renderFileName(template: string, timestamp: number): string {
     String(date.getHours()).padStart(2, '0'),
     String(date.getMinutes()).padStart(2, '0'),
   ].join('')
-  return template.replaceAll('{date}', datePart).replaceAll('{time}', timePart)
+  return template
+    .replaceAll('{taskId}', taskId)
+    .replaceAll('{runId}', runId)
+    .replaceAll('{date}', datePart)
+    .replaceAll('{time}', timePart)
 }
 
 async function assertOutputDoesNotExist(filePath: string): Promise<void> {
