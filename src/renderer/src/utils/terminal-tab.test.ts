@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTerminalTabDraft } from './terminal-tab'
+import { buildTerminalTabDraft, isInteractiveTerminalRuntime } from './terminal-tab'
 
 describe('buildTerminalTabDraft', () => {
   it('为本地工作空间创建本地 Terminal 占位 Tab', () => {
@@ -29,5 +29,32 @@ describe('buildTerminalTabDraft', () => {
     expect(draft.terminal.runtime.cwd).toBeUndefined()
     expect(draft.terminal.runtime.location).toBe('local')
     expect(draft.terminal.permissionPolicy.mode).toBe('ask-every-command')
+  })
+
+  it('远程工作空间与本地工作空间都使用统一交互式 PTY', () => {
+    const local = buildTerminalTabDraft({ kind: 'local', path: '/workspace/local' })
+    const remote = buildTerminalTabDraft({
+      kind: 'remote',
+      transport: 'cclink',
+      endpointId: 'agent-1',
+      workspaceId: 'workspace-1',
+      path: '/workspace/remote',
+    })
+
+    expect(isInteractiveTerminalRuntime(local.terminal.runtime)).toBe(true)
+    expect(isInteractiveTerminalRuntime(remote.terminal.runtime)).toBe(true)
+    expect(
+      isInteractiveTerminalRuntime({
+        ...remote.terminal.runtime,
+        location: 'local',
+        transport: 'local',
+      }),
+    ).toBe(false)
+    expect(remote.terminal.runtime).toMatchObject({
+      location: 'remote',
+      transport: 'cclink',
+      backend: 'remote-shell',
+      cwd: '/workspace/remote',
+    })
   })
 })

@@ -555,6 +555,27 @@ async function main() {
     assert(rowText.includes(accountLabel), 'saved account label is not visible')
     await primaryRow().click()
     await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+    const zoomInput = page.getByLabel('浏览器缩放百分比')
+    await zoomInput.waitFor({ state: 'visible', timeout: 10_000 })
+    await zoomInput.fill('125')
+    await zoomInput.press('Enter')
+    await page.waitForFunction(
+      async () => {
+        const viewState = await window.cclinkStudio.browser.getViewState()
+        return viewState?.zoomMode === 'manual' && Math.abs(viewState.zoomFactor - 1.25) < 0.001
+      },
+      undefined,
+      { timeout: 10_000 },
+    )
+    await page.getByRole('button', { name: '适应宽度' }).click()
+    await page.waitForFunction(
+      async () => (await window.cclinkStudio.browser.getViewState())?.zoomMode === 'fit',
+      undefined,
+      { timeout: 10_000 },
+    )
+    await page
+      .locator('.browser-zoom-value .zoom-mode-label', { hasText: '自动' })
+      .waitFor({ state: 'visible', timeout: 10_000 })
     const tabCountBeforeDraft = await page.locator('.tab').count()
     await createTabFromMenu(page, 'Markdown 草稿')
     await page.locator('.markdown-editor-wrapper').waitFor({ state: 'visible', timeout: 10_000 })

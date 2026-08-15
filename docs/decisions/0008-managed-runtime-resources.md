@@ -4,6 +4,8 @@
 - 日期：2026-08-12
 - 负责人：CCLink Studio
 
+> 2026-08-15 复审：保留本 ADR 定义的固定版本安装、修复、卸载和领域回退；暂停远程版本目录和真实双版本更新。OCCT JS/WASM、scrcpy client/server 的配套兼容关系仍是不变量。
+
 ## 问题
 
 Studio 已经随 App 携带 OCCT WASM、scrcpy server 和 agent-device Android Helper。

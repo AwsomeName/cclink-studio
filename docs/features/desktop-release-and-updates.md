@@ -72,10 +72,10 @@ GitHub Releases。
 - 第二套检查、下载或安装状态机。
 - renderer 接触下载 URL、本地安装路径、Manifest 原文或发布凭证。
 
-规划中的 Runtime 组件和能力插件不属于 App 替换资产，边界见
+固定 Runtime 组件不属于 App 替换资产；已暂停的双版本更新和能力插件边界见
 `runtime-components-and-capability-plugins.md`。它们可以复用有界下载、校验和缓存原语，但不能
 复制或接管 `UpdateService` 的应用版本、安装和重启状态，也不能通过组件包修改 Electron、
-main、preload、IPC 或主 renderer。该方案尚未实现，不改变本阶段“差分更新不做”和“完整
+main、preload、IPC 或主 renderer。暂停的扩展不改变本阶段“差分更新不做”和“完整
 App 更新只有一个状态所有者”的范围。
 
 ## 架构原则

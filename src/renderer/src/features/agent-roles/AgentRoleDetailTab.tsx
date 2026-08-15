@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Tab } from '../../types'
 import {
   DEFAULT_AGENT_ROLE_REF,
@@ -47,6 +47,7 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
   const { skills, error: skillsError, reload: reloadSkills } = useAgentSkills()
   const [saving, setSaving] = useState<'conversation' | 'default' | null>(null)
   const [editing, setEditing] = useState(false)
+  const editAfterCopyRoleId = useRef<string | null>(null)
   const openTab = useTabStore((state) => state.openTab)
   const createConversation = useAgentStore((state) => state.createConversation)
   const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
@@ -59,7 +60,11 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
     [roles, tab.agentRole],
   )
 
-  useEffect(() => setEditing(false), [tab.agentRole?.roleId, tab.agentRole?.version])
+  useEffect(() => {
+    const shouldEditCopiedRole = editAfterCopyRoleId.current === tab.agentRole?.roleId
+    editAfterCopyRoleId.current = null
+    setEditing(shouldEditCopiedRole)
+  }, [tab.agentRole?.roleId, tab.agentRole?.version])
 
   if (tab.agentRole?.roleId === '__new-local-role__') {
     return <AgentRoleEditor tabId={tab.id} />
@@ -138,15 +143,21 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
     )
   }
 
-  const copyRole = async (): Promise<void> => {
+  const copyRole = async (openEditor = false): Promise<void> => {
     const result = await window.cclinkStudio.agent.copyRole(roleRef)
     if (!result.success || !result.role) {
       showToast(result.error ?? '复制角色失败', 'error')
       return
     }
+    if (openEditor) editAfterCopyRoleId.current = result.role.roleId
     notifyAgentRolesChanged()
     openTab({ type: 'agent-role', title: '角色配置', icon: '◇', agentRole: result.role })
-    showToast(`已复制为本地角色「${result.role.label}」`, 'success')
+    showToast(
+      openEditor
+        ? `已创建可编辑副本「${result.role.label}」`
+        : `已复制为本地角色「${result.role.label}」`,
+      'success',
+    )
   }
 
   const setArchived = async (): Promise<void> => {
@@ -204,18 +215,27 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
             </div>
             <h1>{role.label}</h1>
             <p>{role.description}</p>
+            {role.source === 'builtin' && (
+              <small className="agent-role-edit-hint">
+                内置角色不会被直接覆盖；点击“编辑副本”会创建本地角色并立即进入编辑。
+              </small>
+            )}
           </div>
         </div>
         <div className="agent-role-detail-actions">
           <button type="button" onClick={() => void exportRole()}>
             导出
           </button>
-          <button type="button" onClick={() => void copyRole()}>
-            {role.source === 'builtin' ? '复制为本地角色' : '复制'}
+          <button
+            type="button"
+            className={role.source === 'builtin' ? 'agent-role-edit-action' : undefined}
+            onClick={() => void copyRole(role.source === 'builtin')}
+          >
+            {role.source === 'builtin' ? '编辑副本' : '复制'}
           </button>
           {role.source !== 'builtin' && role.isLatest && (
             <button type="button" onClick={() => setEditing(true)} disabled={role.archived}>
-              编辑
+              编辑角色
             </button>
           )}
           {role.source !== 'builtin' && role.isLatest && (

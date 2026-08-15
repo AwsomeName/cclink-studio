@@ -40,6 +40,17 @@ export function shouldNavigateBrowserAddress(input: {
   return input.key === 'Enter' && !input.nativeIsComposing && !input.compositionActive
 }
 
+const MIN_BROWSER_ZOOM_PERCENT = 30
+const MAX_BROWSER_ZOOM_PERCENT = 300
+
+export function normalizeBrowserZoomPercent(value: string): number | null {
+  const normalized = value.trim().replace(/%$/, '').trim()
+  if (!/^\d+(?:\.\d+)?$/.test(normalized)) return null
+  const percent = Number(normalized)
+  if (!Number.isFinite(percent)) return null
+  return Math.min(MAX_BROWSER_ZOOM_PERCENT, Math.max(MIN_BROWSER_ZOOM_PERCENT, Math.round(percent)))
+}
+
 export function inferWebResourceDisplayName(
   browserState: Pick<BrowserTabState, 'title' | 'url' | 'urlInput'> | undefined,
 ): string {
@@ -72,11 +83,15 @@ export function BrowserToolbar({
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [duplicateAccountId, setDuplicateAccountId] = useState<string | null>(null)
+  const zoomPercent = Math.round((browserState?.zoomFactor ?? 1) * 100)
+  const [zoomDraft, setZoomDraft] = useState(String(zoomPercent))
+  const [editingZoom, setEditingZoom] = useState(false)
   const findSession = useBrowserFindStore((state) => state.sessions[tabId])
   const setFindQuery = useBrowserFindStore((state) => state.setQuery)
   const showToast = useToastStore((state) => state.show)
   const findInputRef = useRef<HTMLInputElement>(null)
   const urlCompositionActiveRef = useRef(false)
+  const cancelZoomCommitRef = useRef(false)
   const draftId = tab.webResourceDraftRef?.draftId
 
   useEffect(() => {
@@ -96,6 +111,27 @@ export function BrowserToolbar({
       void runBrowserFind(tabId, { forward: true, findNext: false }, findSession.query)
     }
   }, [findSession?.open])
+
+  useEffect(() => {
+    if (!editingZoom) setZoomDraft(String(zoomPercent))
+  }, [editingZoom, zoomPercent])
+
+  const commitZoom = (): void => {
+    if (cancelZoomCommitRef.current) {
+      cancelZoomCommitRef.current = false
+      setEditingZoom(false)
+      setZoomDraft(String(zoomPercent))
+      return
+    }
+    const percent = normalizeBrowserZoomPercent(zoomDraft)
+    setEditingZoom(false)
+    if (percent === null) {
+      setZoomDraft(String(zoomPercent))
+      return
+    }
+    setZoomDraft(String(percent))
+    void window.cclinkStudio.browser.setZoom(tabId, percent / 100)
+  }
 
   const updateFindQuery = (value: string): void => {
     setFindQuery(tabId, value)
@@ -391,13 +427,42 @@ export function BrowserToolbar({
         <button onClick={() => window.cclinkStudio.browser.zoomOut(tabId)} title="缩小">
           <IconZoomOut size={16} />
         </button>
-        <button
-          className="zoom-label"
-          onClick={() => window.cclinkStudio.browser.resetZoom(tabId)}
-          title="点击重置为 100%"
+        <span
+          className="browser-zoom-value"
+          title={
+            browserState?.zoomMode === 'fit'
+              ? '当前为适应宽度自动缩放；输入百分比可切换为手动缩放'
+              : '输入 30–300 之间的百分比'
+          }
         >
-          {Math.round((browserState?.zoomFactor ?? 1) * 100)}%
-        </button>
+          {browserState?.zoomMode === 'fit' ? <span className="zoom-mode-label">自动</span> : null}
+          <input
+            className="zoom-percent-input"
+            value={zoomDraft}
+            inputMode="decimal"
+            aria-label="浏览器缩放百分比"
+            onFocus={(event) => {
+              cancelZoomCommitRef.current = false
+              setEditingZoom(true)
+              event.currentTarget.select()
+              void window.cclinkStudio.window.focusRenderer()
+            }}
+            onChange={(event) => setZoomDraft(event.target.value)}
+            onBlur={commitZoom}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                event.currentTarget.blur()
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                cancelZoomCommitRef.current = true
+                event.currentTarget.blur()
+              }
+            }}
+          />
+          <span className="zoom-percent-suffix">%</span>
+        </span>
         <button onClick={() => window.cclinkStudio.browser.zoomIn(tabId)} title="放大">
           <IconZoomIn size={16} />
         </button>
@@ -407,6 +472,8 @@ export function BrowserToolbar({
           }
           onClick={() => window.cclinkStudio.browser.fitWidth(tabId)}
           title="适应宽度（自动缩放以显示整页）"
+          aria-label="适应宽度"
+          aria-pressed={browserState?.zoomMode === 'fit' && browserState?.viewMode === 'desktop'}
         >
           <IconFitWidth size={16} />
         </button>

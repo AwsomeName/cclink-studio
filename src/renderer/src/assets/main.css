@@ -2847,6 +2847,14 @@ button.project-panel-row.active {
   margin: 5px 0 0;
 }
 
+.agent-role-edit-hint {
+  display: block;
+  margin-top: 7px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .agent-role-detail-actions {
   display: flex;
   gap: 8px;
@@ -2865,6 +2873,11 @@ button.project-panel-row.active {
   border-color: var(--text-accent);
   background: var(--text-accent);
   color: #fff;
+}
+
+.agent-role-detail-actions button.agent-role-edit-action {
+  border-color: var(--text-accent);
+  color: var(--text-accent);
 }
 
 .agent-role-detail-actions button:disabled {
@@ -5587,18 +5600,55 @@ body.is-resizing-panels .main-area > div {
   background: var(--bg-active);
 }
 
-/* 缩放百分比标签（可点击重置） */
-.browser-zoom-group .zoom-label {
-  font-size: 11px;
-  min-width: 40px;
-  padding: 4px 4px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
+/* 缩放百分比可直接输入；自动模式显式标记，避免把适应宽度误认为手动值。 */
+.browser-zoom-value {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
-.browser-zoom-group .zoom-label:hover {
+.browser-zoom-value:hover,
+.browser-zoom-value:focus-within {
+  border-color: var(--border-color);
+  background: var(--bg-input);
   color: var(--text-active);
+}
+
+.browser-zoom-value:focus-within {
+  border-color: var(--text-accent);
+}
+
+.browser-zoom-value .zoom-mode-label {
+  margin-right: 4px;
+  color: var(--text-accent);
+  font-size: 10px;
+}
+
+.browser-zoom-value .zoom-percent-input {
+  width: 26px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: right;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.browser-zoom-value .zoom-percent-suffix {
+  margin-left: 1px;
 }
 
 /* Workbench Content */
@@ -13571,6 +13621,54 @@ h6.file-preview-office-heading {
   border: 1px solid var(--border-color);
 }
 
+.remote-agent-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.remote-agent-status-dot,
+.remote-tool-progress > span {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--text-muted);
+}
+
+.remote-agent-status.ready .remote-agent-status-dot {
+  background: #22c55e;
+}
+
+.remote-agent-status.working .remote-agent-status-dot,
+.remote-tool-progress > span {
+  background: var(--text-accent);
+  animation: remote-agent-status-pulse 1.2s ease-in-out infinite;
+}
+
+.remote-agent-status.unavailable .remote-agent-status-dot {
+  background: #ef4444;
+}
+
+.remote-agent-status.connecting .remote-agent-status-dot {
+  background: #eab308;
+  animation: remote-agent-status-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes remote-agent-status-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .remote-agent-context {
   align-items: flex-start;
   flex-direction: column;
@@ -13587,8 +13685,6 @@ h6.file-preview-office-heading {
 .remote-agent-messages {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: 12px;
 }
 
 .remote-agent-empty {
@@ -13602,26 +13698,49 @@ h6.file-preview-office-heading {
   text-align: center;
 }
 
-.remote-agent-message {
-  max-width: 90%;
-  margin: 0 0 12px;
-  padding: 9px 11px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-secondary);
+.remote-agent-tool-message {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.remote-agent-message.user {
-  margin-left: auto;
-  background: color-mix(in srgb, var(--accent-color) 18%, var(--bg-secondary));
+.remote-tool-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  color: var(--text-secondary);
+  font-size: 11px;
 }
 
-.remote-agent-message pre {
-  margin: 0;
-  overflow: auto;
-  color: var(--text-primary);
-  font: inherit;
+.remote-tool-approval-reason,
+.remote-tool-control-error {
+  margin: 5px 0;
+  padding: 6px 8px;
+  border-left: 2px solid #eab308;
+  color: var(--text-secondary);
+  background: rgba(234, 179, 8, 0.06);
+  font-size: 11px;
   white-space: pre-wrap;
+}
+
+.remote-tool-control-error {
+  border-left-color: #ef4444;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.remote-tool-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.remote-agent-question-card {
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
 }
 
 .remote-question-item,

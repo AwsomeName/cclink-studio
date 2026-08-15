@@ -1,6 +1,6 @@
 # ADR 0007：Studio 托管的 Claude Runtime
 
-- 状态：accepted（M1/M2：arm64 安装、真实 Agent/MCP 使用与 App 替换复用已实现）
+- 状态：accepted（M1/M2：arm64 安装、真实 Agent/MCP 使用与 App 替换复用已实现；双版本独立更新自 2026-08-15 起暂停）
 - 日期：2026-08-12
 - 取代范围：ADR 0002 中“Claude Code 只能随完整 App 更新”的限制
 - 保留范围：ADR 0002 的 selection、probe、generation、provenance、认证边界和会话兼容指纹
@@ -21,9 +21,7 @@ JavaScript 插件加载，也不运行用户机器上的 npm CLI。Studio 从 np
 - managed Runtime 只使用用户明确配置的 API Key，不迁移或代理
   Claude Free/Pro/Max OAuth 凭证。
 
-当前仓库没有可用的组件目录签名私钥，也没有第二个已验证兼容版本。
-因此第一批使用随 App 发布的精确允许记录完成真实 npm 安装闭环；远程签名
-目录和两个真实版本之间的更新仍是后续发布门禁，不得用 mock 宣称完成。
+当前仓库没有可用的组件目录签名私钥，也没有第二个已验证兼容版本。因此第一批使用随 App 发布的精确允许记录完成真实 npm 安装闭环。2026-08-15 评审决定保留该闭环，暂停远程签名目录和两个真实版本之间的更新；它们不再是当前发布门禁，也不得用 mock 宣称完成。
 
 ## 用户闭环
 

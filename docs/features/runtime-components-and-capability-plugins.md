@@ -1,15 +1,20 @@
 # Runtime 组件与能力插件
 
-> 状态：方案草案，尚未实现。最后更新：2026-08-11。
-> 当前 Studio 仍通过完整应用 Release 更新程序代码；Claude Code Runtime、
-> `scrcpy-server.jar` 和 OCCT 等资源随安装包分发，尚不支持安装后独立更新。
+> 状态：固定版本 Runtime 管理已交付；远程版本目录、真实双版本更新/回滚、内容包和通用能力插件自 2026-08-15 起暂停。最后更新：2026-08-15。
+> 当前 Studio 仍通过完整应用 Release 更新程序代码；Claude Code Runtime 按需安装到 `userData`，OCCT 和 scrcpy 支持固定版本安装与随 App 资源回退，但均不支持远程新版本发现。
 > “设置 > 组件管理”的本地盘点页面已实现，交互事实见 `component-management-settings.md`。
-> 执行计划见 `runtime-components-and-capability-plugins-development-plan.md`。
+> 已暂停的参考计划见 `runtime-components-and-capability-plugins-development-plan.md`。
 
 ## 结论
 
-CCLink Studio 可以演进为“稳定核心外壳 + 可独立更新的本地 Runtime 组件 + 受限能力插件”，
-但这条路线不能变成任意 npm 包进入 Electron 主进程，也不能替代完整应用更新。
+当前产品停在“稳定核心外壳 + 可按需安装的固定 Runtime 组件”。可独立更新的 Runtime 和受限能力插件仅保留为条件性设计边界，不是当前路线图。即使未来重启，也不能让任意 npm 包进入 Electron 主进程，不能替代完整应用更新。
+
+暂停原因：
+
+- Claude CLI 与 App 内 Agent SDK、OCCT WASM 与 App 内 JavaScript 适配器、scrcpy server 与 App 内 Client 都需要配套验证，不存在无条件追新。
+- Claude 可执行文件已移出 `.app`，安装包体积与 App 替换重复传输的主要收益已经获得。
+- 小型配置和内容包体积小，单独 npm 化的产品收益不足。
+- 现有 Provider、Adapter 和 MCP 工具尚无持续独立发布需求，不值得先建设通用 Plugin Host。
 
 产品固定采用三层交付模型：
 
@@ -30,8 +35,10 @@ IPC、直接修改主 renderer、接管 Thread/Agent loop、绕过工作空间�
 
 ### 用户现在能做什么
 
-- 在设置中选择 `bundled`、`system` 或 `custom` Claude Code Runtime，并查看探测状态。
-- 使用安装包中固定版本的 Claude Code Runtime、`scrcpy-server.jar` 和 OCCT 资源。
+- 在设置中选择 `managed`、`system` 或 `custom` Claude Code Runtime，并查看探测状态。
+- 在组件页安装、检查、修复和卸载固定 Claude `2.1.211`、OCCT `0.0.23`、scrcpy `2.3.1` 和 agent-device Helper `0.17.2`。
+- 使用已安装的 managed Claude、OCCT 和 scrcpy；OCCT/scrcpy 损坏或卸载时回退到随 App 资源。
+- 替换 `.app` 后复用 `userData` 中已安装的 Runtime，不重新下载。
 - 查看和启用/禁用随 Studio 构建的 MCP `ToolModule`。
 - 在统一组件清单中查看能力类型、本地安装状态和已知版本，并重新检测 Claude 与 CAD。
 - 在缺少 adb、CAD 后端或其他可选能力时继续启动 Studio，并看到相应降级状态。
@@ -41,12 +48,14 @@ IPC、直接修改主 renderer、接管 Thread/Agent loop、绕过工作空间�
 - 在不更新 Studio 的情况下下载或切换新版 Claude Code Runtime。
 - 从 Studio 内安装、更新、回滚或卸载能力插件。
 - 从远程目录取得可更新版本、权限、兼容性和健康状态。
-- 在首次启动时从公开源取得新版 Runtime，同时保留安装包内的离线保底版本。
+- 在首次启动时从远程目录发现新版 Runtime。
 - 在插件或 Runtime 更新失败后由产品自动回退到上一已知可用版本。
 
-因此当前不得宣称 Studio 支持插件安装、npm 热更新或 Runtime 独立更新。
+因此当前只宣称“固定版本 Runtime 独立安装、修复和 App 替换复用”，不宣称插件安装、npm 热更新或 Runtime 独立版本更新。
 
-## 用户目标与端到端验收
+## 条件性重启后的用户目标与端到端验收
+
+本节是未来若通过新 ADR 重启后的验收边界，不是当前承诺或开发计划。重启前必须先证明两个真实 Runtime 版本能在现有 Host/SDK 上兼容运行，或至少一个 Provider/Adapter/MCP 存在持续独立发布的真实产品需求。
 
 ### A. 能力插件闭环
 

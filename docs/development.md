@@ -148,14 +148,11 @@ cclink-studio/
 | Schema       | Zod                           |
 | 样式         | CSS variables + component CSS |
 
-## Runtime 组件与能力插件计划
+## Runtime 组件与已暂停的能力插件扩展
 
-固定版本 Runtime 的按需安装和 App 替换复用已经实现；真实双版本更新与能力插件尚未实现。产品边界以
-`docs/features/runtime-components-and-capability-plugins.md` 为准，开发顺序、代码落点、
-工作量和失败矩阵以
-`docs/features/runtime-components-and-capability-plugins-development-plan.md` 为准。
+固定版本 Runtime 的按需安装和 App 替换复用已经实现；真实双版本更新、远程版本目录、内容包和能力插件自 2026-08-15 起暂停。产品边界以 `docs/features/runtime-components-and-capability-plugins.md` 为准；`docs/features/runtime-components-and-capability-plugins-development-plan.md` 只是重启后的冻结参考，不是当前开发计划。
 
-ADR 0007/0010 已处理 Claude Runtime 独立安装和瘦包边界。后续能力插件仍遵守：
+ADR 0007/0010 已处理 Claude Runtime 独立安装和瘦包边界。若未来通过新 ADR 重启能力插件，仍遵守：
 
 - npm 只提供维护者允许目录中的精确 tarball；客户端不运行 npm/pnpm、不解析 `latest`、
   不运行 lifecycle script。

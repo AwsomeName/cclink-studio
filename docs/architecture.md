@@ -207,16 +207,18 @@ CCLink Studio 免费、免登录保留这些本地能力：
 `docs/features/desktop-update-development-plan.md` 为执行事实源。Developer ID
 直接分发是当前默认路线；Mac App Store 需要独立 ADR。
 
-### Runtime 组件与规划中的能力插件
+### Runtime 组件与已暂停的能力插件扩展
 
-Runtime 组件独立更新和受限能力插件的产品方案见
-`docs/features/runtime-components-and-capability-plugins.md`，执行门禁与里程碑见
+Runtime 组件与受限能力插件的产品边界见
+`docs/features/runtime-components-and-capability-plugins.md`，已暂停的参考计划见
 `docs/features/runtime-components-and-capability-plugins-development-plan.md`。ADR 0007 已实现
 固定 Claude Runtime 的 npm 安装与 App 替换复用；ADR 0008 已实现 OCCT WASM、scrcpy server
 和 agent-device Android Helper 的固定目录下载、校验与安装，其中 OCCT/scrcpy 已接入领域回退，
 Android Helper 仍待宿主注入接口。通用插件安装、隔离 Plugin Host、远程签名目录和真实双版本
 更新仍未实现，不能把内置 `ToolModule`、Adapter Registry 或打包资源称为插件系统。
 ADR 0010 已将 Claude 可执行文件移出 `.app`，由组件页按需安装；缺失时 Agent 单独降级。
+
+2026-08-15 评审结论：保留上述固定版本安装与复用能力，暂停远程签名版本目录、真实双版本更新/回滚、内容包和通用 Plugin Host。当前 Runtime 均与 App 内 Host/SDK 存在版本配对，且 Claude 移出 `.app` 后的主要体积收益已获得。只有在两个真实版本通过现有 Host/SDK 兼容验收，并能解决已发生的独立发布需求时，才通过新 ADR 重启扩展。
 
 该方案不得改变以下不变量：
 
@@ -232,8 +234,7 @@ ADR 0010 已将 Claude 可执行文件移出 `.app`，由组件页按需安装�
 ADR 0007 已取代 ADR 0002 中“内置 Claude Code 只随 Studio 更新”的限制，允许
 Studio 从受限 npm 平台包安装 managed Claude Runtime。Agent SDK 仍属于完整 App 核心代码；
 Runtime 独立更新必须保持 selection、probe、generation、provenance、会话兼容指纹和
-安全点约束。当前只冻结 `2.1.211` 用于托管安装；在第二真实兼容版本和远程签名
-目录就绪前，不得宣称独立更新已交付。
+安全点约束。当前只冻结 `2.1.211` 用于托管安装；独立更新已暂停，不得宣称已交付或暗示为当前路线图。
 
 这些能力不需要用户登录 CCLink，也不依赖官方云服务。
 

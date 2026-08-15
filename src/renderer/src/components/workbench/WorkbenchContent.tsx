@@ -18,7 +18,7 @@ import { resolveConversationTab } from '../../utils/conversation-tab'
 import { submitTerminalCommand } from '../../utils/terminal-command'
 import { resolveTerminalAltArrowSequence } from '../../utils/terminal-keyboard'
 import { subscribeTerminalInputAfterReplay } from '../../utils/terminal-replay'
-import { buildTerminalTabDraft } from '../../utils/terminal-tab'
+import { buildTerminalTabDraft, isInteractiveTerminalRuntime } from '../../utils/terminal-tab'
 import { ErrorBoundary } from '../common/ErrorBoundary'
 import { PanelErrorFallback } from '../common/ErrorFallback'
 import { DataSourceQueryTab } from '../data-sources/DataSourceQueryTab'
@@ -253,13 +253,13 @@ function TerminalRecordView({ tab }: { tab: Tab }): React.ReactElement {
 }
 
 function TerminalTabContent({ tab }: { tab: Tab }): React.ReactElement {
-  if (tab.terminal?.runtime.location === 'local') {
-    return <LocalPtyTerminal tab={tab} />
+  if (tab.terminal && isInteractiveTerminalRuntime(tab.terminal.runtime)) {
+    return <PtyTerminal tab={tab} />
   }
   return <TerminalCommandPanel tab={tab} />
 }
 
-function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
+function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const xtermRef = useRef<XtermTerminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -279,6 +279,9 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
 
   useEffect(() => {
     if (!terminal?.sessionId || !terminal.runtime || !containerRef.current) return
+    let disposed = false
+    let started = false
+    let queuedInput = ''
 
     const xterm = new XtermTerminal({
       cursorBlink: true,
@@ -318,11 +321,24 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
     fitAddonRef.current = fitAddon
 
     const replayOutput = [...initialRecordOutput, ...outputLines].map((line) => line.text).join('')
+    const writeInput = (data: string): void => {
+      void window.cclinkStudio.terminal
+        .writePty({
+          terminalSessionId: terminal.sessionId!,
+          data,
+        })
+        .then((result) => {
+          if (!result.success && !disposed) {
+            xterm.write(`\r\n[Terminal 输入失败：${result.error || '执行后端不可用'}]\r\n`)
+          }
+        })
+    }
     const dataDisposable = subscribeTerminalInputAfterReplay(xterm, replayOutput, (data) => {
-      void window.cclinkStudio.terminal.writePty({
-        terminalSessionId: terminal.sessionId!,
-        data,
-      })
+      if (!started) {
+        queuedInput = `${queuedInput}${data}`.slice(-8_192)
+        return
+      }
+      writeInput(data)
     })
 
     const unregisterContextSurface = registerTerminalContextSurface(terminal.sessionId, {
@@ -395,15 +411,38 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
     resizeObserver.observe(containerRef.current)
     requestAnimationFrame(() => {
       resizeToContainer()
-      void window.cclinkStudio.terminal.startPty({
-        terminalSessionId: terminal.sessionId!,
-        runtime: terminal.runtime,
-        size: { columns: xterm.cols, rows: xterm.rows },
-      })
-      xterm.focus()
+      useTabStore.getState().updateTabTerminal(tab.id, { ...terminal, status: 'starting' })
+      void window.cclinkStudio.terminal
+        .startPty({
+          terminalSessionId: terminal.sessionId!,
+          runtime: terminal.runtime,
+          size: { columns: xterm.cols, rows: xterm.rows },
+        })
+        .then((result) => {
+          if (disposed) return
+          if (!result.success) {
+            queuedInput = ''
+            useTabStore.getState().updateTabTerminal(tab.id, { ...terminal, status: 'error' })
+            xterm.write(`\r\n[Terminal 启动失败：${result.error || '执行后端不可用'}]\r\n`)
+            return
+          }
+          useTabStore.getState().updateTabTerminal(tab.id, {
+            ...terminal,
+            status: 'running',
+            processId: result.processId ?? terminal.processId,
+          })
+          started = true
+          if (queuedInput) {
+            const pendingInput = queuedInput
+            queuedInput = ''
+            writeInput(pendingInput)
+          }
+          xterm.focus()
+        })
     })
 
     return () => {
+      disposed = true
       resizeObserver.disconnect()
       unregisterContextSurface()
       offExecutionEvent()
@@ -467,7 +506,10 @@ function LocalPtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
       }}
     >
       <div className="terminal-pty-toolbar">
-        <span>{terminal?.runtime.cwd ?? '本地 Terminal'}</span>
+        <span>
+          {terminal?.runtime.cwd ??
+            (terminal?.runtime.location === 'remote' ? '远程 Terminal' : '本地 Terminal')}
+        </span>
         {findOpen && (
           <span className="terminal-find-control">
             <input

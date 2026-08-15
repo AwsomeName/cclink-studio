@@ -4,6 +4,59 @@ import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
 import type { RemoteStatus } from '@shared/remote-protocol'
 import { useCclinkStore } from '../../stores'
 import { IconPlus, IconRobot, IconSend } from '../../components/common/Icons'
+import { ContentBlockRenderer } from '../../components/common/ConversationMessageRenderer'
+import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
+
+export interface RemoteAgentVisualStatus {
+  tone: 'connecting' | 'ready' | 'working' | 'unavailable'
+  label: string
+  detail: string
+}
+
+export function resolveRemoteAgentVisualStatus(input: {
+  statusError: string | null
+  remoteStatus: RemoteStatus | null
+  sessionStatus?: 'active' | 'idle' | 'archived'
+}): RemoteAgentVisualStatus {
+  if (input.statusError) {
+    return { tone: 'unavailable', label: 'Agent 不可用', detail: input.statusError }
+  }
+  if (!input.remoteStatus) {
+    return { tone: 'connecting', label: 'Agent 连接中', detail: '正在确认远程能力' }
+  }
+  if (input.remoteStatus.state !== 'online') {
+    return {
+      tone: 'unavailable',
+      label: 'Agent 离线',
+      detail: input.remoteStatus.remoteError?.message || '远程设备当前不可用',
+    }
+  }
+  if (input.remoteStatus.compatibility === 'upgrade-required') {
+    return {
+      tone: 'unavailable',
+      label: 'Agent 需升级',
+      detail: '远程 Agent 协议版本不兼容',
+    }
+  }
+  if (
+    !input.remoteStatus.capabilities.agent.session ||
+    !input.remoteStatus.capabilities.agent.stream
+  ) {
+    return {
+      tone: 'unavailable',
+      label: 'Agent 不可用',
+      detail: '当前 Agent 未声明远程会话/流式消息能力',
+    }
+  }
+  if (input.sessionStatus === 'active') {
+    return { tone: 'working', label: 'Agent 正在工作', detail: '正在处理当前会话' }
+  }
+  return {
+    tone: 'ready',
+    label: 'Agent 就绪',
+    detail: input.sessionStatus === 'idle' ? '等待你的消息' : '可以新建远程会话',
+  }
+}
 
 export function RemoteAgentPanel({
   workspaceRef,
@@ -68,7 +121,16 @@ export function RemoteAgentPanel({
     workspaceRef.workspaceId,
     realtimeState,
   ])
-  const agentAvailable = remoteStatus?.state === 'online' && remoteStatus.capabilities.agent.session
+  const agentAvailable =
+    remoteStatus?.state === 'online' &&
+    remoteStatus.compatibility !== 'upgrade-required' &&
+    remoteStatus.capabilities.agent.session &&
+    remoteStatus.capabilities.agent.stream
+  const agentVisualStatus = resolveRemoteAgentVisualStatus({
+    statusError,
+    remoteStatus,
+    sessionStatus: activeSession?.status,
+  })
 
   useEffect(() => {
     if (!remoteStatus?.remoteError?.retryable) return
@@ -133,6 +195,15 @@ export function RemoteAgentPanel({
           <strong>远程 Agent</strong>
           <span>{workspaceRef.endpointName || workspaceRef.endpointId}</span>
         </div>
+        <div
+          className={`remote-agent-status ${agentVisualStatus.tone}`}
+          role="status"
+          aria-live="polite"
+          title={agentVisualStatus.detail}
+        >
+          <span className="remote-agent-status-dot" />
+          <span>{agentVisualStatus.label}</span>
+        </div>
         <select
           value={activeSession?.id ?? ''}
           onChange={(event) => select(event.target.value)}
@@ -194,7 +265,7 @@ export function RemoteAgentPanel({
             </button>
           </div>
         ))}
-      <div ref={listRef} className="remote-agent-messages">
+      <div ref={listRef} className="remote-agent-messages agent-messages conversation-copy-surface">
         {activeMessages.length === 0 ? (
           <div className="remote-agent-empty">
             <IconRobot size={24} />
@@ -240,7 +311,7 @@ export function RemoteAgentPanel({
   )
 }
 
-function RemoteMessage({
+export function RemoteMessage({
   message,
   workspaceRef,
   sessionId,
@@ -254,6 +325,21 @@ function RemoteMessage({
   const [controlError, setControlError] = useState<string | null>(null)
   const [deciding, setDeciding] = useState(false)
   if (message.type === 'agentTool') {
+    const stateLabels = {
+      pending: '等待执行',
+      executing: '正在执行',
+      completed: '执行完成',
+      failed: '执行失败',
+      denied: '已拒绝',
+    } as const
+    const resultContent =
+      message.tool.error ||
+      message.tool.output ||
+      (message.tool.state === 'completed' ||
+      message.tool.state === 'failed' ||
+      message.tool.state === 'denied'
+        ? stateLabels[message.tool.state]
+        : null)
     const decide = async (approved: boolean): Promise<void> => {
       const requestId = message.tool.requestId
       if (!requestId || deciding) return
@@ -276,23 +362,55 @@ function RemoteMessage({
       }
     }
     return (
-      <div className={`remote-agent-message tool ${message.tool.state}`}>
-        <strong>{message.tool.name}</strong>
-        <span>{message.tool.state}</span>
-        {message.tool.approvalReason && <pre>{message.tool.approvalReason}</pre>}
+      <div className="agent-message assistant remote-agent-tool-message">
+        <ContentBlockRenderer
+          block={{
+            type: 'tool_use',
+            id: message.tool.id,
+            name: message.tool.name,
+            input: message.tool.input ?? {},
+          }}
+        />
+        {resultContent && (
+          <ContentBlockRenderer
+            block={{
+              type: 'tool_result',
+              tool_use_id: message.tool.id,
+              content: resultContent,
+              is_error: message.tool.state === 'failed' || message.tool.state === 'denied',
+            }}
+          />
+        )}
+        {(message.tool.state === 'pending' || message.tool.state === 'executing') && (
+          <div className={`remote-tool-progress ${message.tool.state}`} role="status">
+            <span />
+            {stateLabels[message.tool.state]}
+          </div>
+        )}
+        {message.tool.approvalReason && (
+          <div className="remote-tool-approval-reason">{message.tool.approvalReason}</div>
+        )}
         {message.tool.requiresApproval && message.tool.requestId && (
-          <div>
-            <button type="button" disabled={deciding} onClick={() => void decide(false)}>
+          <div className="remote-tool-actions">
+            <button
+              className="confirm-reject-btn"
+              type="button"
+              disabled={deciding}
+              onClick={() => void decide(false)}
+            >
               拒绝
             </button>
-            <button type="button" disabled={deciding} onClick={() => void decide(true)}>
+            <button
+              className="confirm-approve-btn"
+              type="button"
+              disabled={deciding}
+              onClick={() => void decide(true)}
+            >
               {deciding ? '等待 Agent 确认…' : '允许本次操作'}
             </button>
           </div>
         )}
-        {message.tool.output && <pre>{message.tool.output}</pre>}
-        {message.tool.error && <pre>{message.tool.error}</pre>}
-        {controlError && <pre>{controlError}</pre>}
+        {controlError && <div className="remote-tool-control-error">{controlError}</div>}
       </div>
     )
   }
@@ -306,9 +424,16 @@ function RemoteMessage({
       />
     )
   }
+  if (message.type === 'agentText') {
+    return (
+      <div className="agent-message assistant">
+        <ConversationMarkdown source={message.content} />
+      </div>
+    )
+  }
   return (
-    <div className={`remote-agent-message ${message.type}`}>
-      <pre>{message.content}</pre>
+    <div className={`agent-message ${message.type === 'user' ? 'user' : 'system'}`}>
+      <div className="content-text">{message.content}</div>
     </div>
   )
 }
@@ -351,84 +476,86 @@ function RemoteQuestion({
     }
   }
   return (
-    <div className="remote-agent-message question">
-      <strong>Agent 需要你的选择</strong>
-      {message.questions.map((question) => (
-        <div key={question.id} className="remote-question-item">
-          <span>{question.header || question.question}</span>
-          {question.header && <small>{question.question}</small>}
-          {question.options?.length && question.multiSelect ? (
-            <span className="remote-question-options">
-              {question.options.map((option) => {
-                const selected = new Set(
-                  (answers[question.question] ?? '')
-                    .split(',')
-                    .map((value) => value.trim())
-                    .filter(Boolean),
-                )
-                return (
-                  <label key={option.label}>
-                    <input
-                      type="checkbox"
-                      disabled={message.answered || submitting}
-                      checked={selected.has(option.label)}
-                      onChange={(event) => {
-                        const next = new Set(selected)
-                        if (event.target.checked) next.add(option.label)
-                        else next.delete(option.label)
-                        setAnswers((current) => ({
-                          ...current,
-                          [question.question]: [...next].join(', '),
-                        }))
-                      }}
-                    />
-                    <span>{option.label}</span>
-                    {option.description && <small>{option.description}</small>}
-                  </label>
-                )
-              })}
-            </span>
-          ) : question.options?.length ? (
-            <select
-              disabled={message.answered || submitting}
-              value={answers[question.question] ?? ''}
-              onChange={(event) =>
-                setAnswers((current) => ({
-                  ...current,
-                  [question.question]: event.target.value,
-                }))
-              }
-            >
-              <option value="">请选择</option>
-              {question.options.map((option) => (
-                <option key={option.label} value={option.label}>
-                  {option.label}
-                  {option.description ? ` · ${option.description}` : ''}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              disabled={message.answered || submitting}
-              value={answers[question.question] ?? ''}
-              onChange={(event) =>
-                setAnswers((current) => ({
-                  ...current,
-                  [question.question]: event.target.value,
-                }))
-              }
-            />
-          )}
-        </div>
-      ))}
-      <button
-        type="button"
-        disabled={!complete || message.answered || submitting}
-        onClick={() => void submit()}
-      >
-        {message.answered ? '已回答' : submitting ? '等待 Agent 确认…' : '提交回答'}
-      </button>
-      {error && <pre>{error}</pre>}
+    <div className="agent-message assistant remote-agent-question">
+      <div className="remote-agent-question-card">
+        <strong>Agent 需要你的选择</strong>
+        {message.questions.map((question) => (
+          <div key={question.id} className="remote-question-item">
+            <span>{question.header || question.question}</span>
+            {question.header && <small>{question.question}</small>}
+            {question.options?.length && question.multiSelect ? (
+              <span className="remote-question-options">
+                {question.options.map((option) => {
+                  const selected = new Set(
+                    (answers[question.question] ?? '')
+                      .split(',')
+                      .map((value) => value.trim())
+                      .filter(Boolean),
+                  )
+                  return (
+                    <label key={option.label}>
+                      <input
+                        type="checkbox"
+                        disabled={message.answered || submitting}
+                        checked={selected.has(option.label)}
+                        onChange={(event) => {
+                          const next = new Set(selected)
+                          if (event.target.checked) next.add(option.label)
+                          else next.delete(option.label)
+                          setAnswers((current) => ({
+                            ...current,
+                            [question.question]: [...next].join(', '),
+                          }))
+                        }}
+                      />
+                      <span>{option.label}</span>
+                      {option.description && <small>{option.description}</small>}
+                    </label>
+                  )
+                })}
+              </span>
+            ) : question.options?.length ? (
+              <select
+                disabled={message.answered || submitting}
+                value={answers[question.question] ?? ''}
+                onChange={(event) =>
+                  setAnswers((current) => ({
+                    ...current,
+                    [question.question]: event.target.value,
+                  }))
+                }
+              >
+                <option value="">请选择</option>
+                {question.options.map((option) => (
+                  <option key={option.label} value={option.label}>
+                    {option.label}
+                    {option.description ? ` · ${option.description}` : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                disabled={message.answered || submitting}
+                value={answers[question.question] ?? ''}
+                onChange={(event) =>
+                  setAnswers((current) => ({
+                    ...current,
+                    [question.question]: event.target.value,
+                  }))
+                }
+              />
+            )}
+          </div>
+        ))}
+        <button
+          type="button"
+          disabled={!complete || message.answered || submitting}
+          onClick={() => void submit()}
+        >
+          {message.answered ? '已回答' : submitting ? '等待 Agent 确认…' : '提交回答'}
+        </button>
+        {error && <div className="remote-tool-control-error">{error}</div>}
+      </div>
     </div>
   )
 }

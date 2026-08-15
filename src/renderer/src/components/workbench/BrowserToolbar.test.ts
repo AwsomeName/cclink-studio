@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { inferWebResourceDisplayName, shouldNavigateBrowserAddress } from './BrowserToolbar'
+import {
+  inferWebResourceDisplayName,
+  normalizeBrowserZoomPercent,
+  shouldNavigateBrowserAddress,
+} from './BrowserToolbar'
 
 describe('shouldNavigateBrowserAddress', () => {
   it('submits an ordinary Enter key', () => {
@@ -68,5 +72,22 @@ describe('inferWebResourceDisplayName', () => {
     expect(
       inferWebResourceDisplayName({ title: null, url: 'about:blank', urlInput: 'not a url' }),
     ).toBe('')
+  })
+})
+
+describe('normalizeBrowserZoomPercent', () => {
+  it('accepts a plain percentage or a trailing percent sign', () => {
+    expect(normalizeBrowserZoomPercent('125')).toBe(125)
+    expect(normalizeBrowserZoomPercent(' 80% ')).toBe(80)
+  })
+
+  it('clamps manual zoom to the browser contract range', () => {
+    expect(normalizeBrowserZoomPercent('10')).toBe(30)
+    expect(normalizeBrowserZoomPercent('500')).toBe(300)
+  })
+
+  it('rejects empty and malformed input instead of changing zoom', () => {
+    expect(normalizeBrowserZoomPercent('')).toBeNull()
+    expect(normalizeBrowserZoomPercent('100px')).toBeNull()
   })
 })

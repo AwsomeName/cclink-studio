@@ -1,4 +1,4 @@
-import type { TerminalTabRef } from '@shared/terminal'
+import type { TerminalRuntimeRef, TerminalTabRef } from '@shared/terminal'
 import type { TerminalSessionSnapshot } from '@shared/ipc/terminal'
 import type { WorkspaceRef } from '../../../shared/workspace-ref'
 import { workspaceRefLabel } from '../../../shared/workspace-ref'
@@ -18,6 +18,17 @@ export interface TerminalRecordTabDraft {
   icon: string
   terminalRecord: TerminalSessionSnapshot
   forceNew: true
+}
+
+export function isInteractiveTerminalRuntime(runtime: TerminalRuntimeRef): boolean {
+  return (
+    (runtime.location === 'local' &&
+      runtime.transport === 'local' &&
+      runtime.backend === 'local-shell') ||
+    (runtime.location === 'remote' &&
+      runtime.transport === 'cclink' &&
+      runtime.backend === 'remote-shell')
+  )
 }
 
 export function createTerminalId(prefix: string): string {
