@@ -67,7 +67,7 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
   }, [tab.agentRole?.roleId, tab.agentRole?.version])
 
   if (tab.agentRole?.roleId === '__new-local-role__') {
-    return <AgentRoleEditor tabId={tab.id} />
+    return <AgentRoleEditor key="new-local-role" tabId={tab.id} />
   }
 
   if (error) {
@@ -109,7 +109,7 @@ export function AgentRoleDetailTab({ tab }: { tab: Tab }): React.ReactElement {
   }
 
   if (editing && role.source !== 'builtin' && role.isLatest) {
-    return <AgentRoleEditor tabId={tab.id} role={role} />
+    return <AgentRoleEditor key={`${role.roleId}@${role.version}`} tabId={tab.id} role={role} />
   }
 
   const roleRef = { roleId: role.roleId, version: role.version }

@@ -427,6 +427,15 @@ async function main() {
       'viewing another role silently removed the mounted Skill',
     )
 
+    const editBuiltinCopyButton = page.getByRole('button', { name: '编辑副本', exact: true })
+    assert(await editBuiltinCopyButton.isVisible(), 'built-in role did not expose an edit entry')
+    await editBuiltinCopyButton.click()
+    await page.locator('[data-role-editor]').waitFor({ state: 'visible', timeout: 10_000 })
+    assert(
+      await page.getByRole('button', { name: '保存为新版本' }).isVisible(),
+      'editing a built-in copy did not enter the role editor',
+    )
+
     const customRoleName = `UI Smoke 审稿人 ${Date.now()}`
     const customRoleV2Name = `${customRoleName} v2`
     await page.getByRole('button', { name: '＋ 新建角色' }).click()
@@ -444,7 +453,7 @@ async function main() {
       await page.locator('.agent-role-row', { hasText: customRoleName }).isVisible(),
       'new local role missing from My Roles',
     )
-    await page.getByRole('button', { name: '编辑', exact: true }).click()
+    await page.getByRole('button', { name: '编辑角色', exact: true }).click()
     await page.getByLabel('名称').fill(customRoleV2Name)
     await page.getByRole('button', { name: '保存为新版本' }).click()
     await page.getByRole('heading', { name: customRoleV2Name, exact: true }).waitFor({
