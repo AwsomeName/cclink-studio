@@ -5,6 +5,8 @@ import type {
   ScheduledTaskSnapshot,
   ScheduledTaskRun,
 } from '@shared/scheduled-task/scheduled-task-types'
+import { calculateNextRunAt } from '@shared/scheduled-task/schedule-calculator'
+import { renderScheduledTaskFileName } from '@shared/scheduled-task/scheduled-task-file-name'
 import type { Tab } from '../../types'
 import { useTabStore } from '../../stores/tab-store'
 import { IconClock } from '../../components/common/Icons'
@@ -108,6 +110,10 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
 
   const currentSignature = useMemo(() => formSignature(form), [form])
   const hasUnsavedChanges = currentSignature !== baseSignatureRef.current
+  const fileNamePreview = useMemo(
+    () => createFileNamePreview(form, task?.definition.id ?? 'task-id'),
+    [form, task?.definition.id],
+  )
   useEffect(() => {
     if (!initializedFrom.current) return
     updateTabDirty(tab.id, currentSignature !== baseSignatureRef.current)
@@ -468,8 +474,15 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
                 </label>
               </div>
               <p className="scheduled-task-help">
-                适用于日报、周报等需要工作空间文件的任务；只新建文件，不覆盖已有文件。
+                可用变量：<code>{'{date}'}</code>、<code>{'{monthDay}'}</code>、
+                <code>{'{weekday}'}</code>、<code>{'{time}'}</code>、<code>{'{taskId}'}</code>、
+                <code>{'{runId}'}</code>。只新建文件，不覆盖已有文件。
               </p>
+              {fileNamePreview && (
+                <p className="scheduled-task-help">
+                  下次计划生成：<code>{fileNamePreview}</code>
+                </p>
+              )}
             </>
           )}
         </TaskSection>
@@ -662,6 +675,26 @@ function outputPolicyFromForm(
     directory: normalizeWorkspaceRelativePath(form.outputDirectory, workspacePath, '输出目录'),
     fileNameTemplate: form.fileNameTemplate,
     mode: 'create-only',
+  }
+}
+
+function createFileNamePreview(form: TaskForm, taskId: string): string | null {
+  if (form.resultMode !== 'workspace-file' || !form.fileNameTemplate.trim()) return null
+  try {
+    const schedule = scheduleFromForm(form)
+    const nextRunAt = calculateNextRunAt(schedule)
+    const timestamp =
+      nextRunAt ??
+      (schedule.kind === 'once' && Number.isFinite(schedule.runAt) ? schedule.runAt : Date.now())
+    return renderScheduledTaskFileName({
+      template: form.fileNameTemplate,
+      timestamp,
+      timezone: schedule.timezone,
+      taskId,
+      runId: 'run-id',
+    })
+  } catch {
+    return null
   }
 }
 

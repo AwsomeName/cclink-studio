@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateNextRunAt } from './schedule-calculator'
+import { calculateNextRunAt } from '../../shared/scheduled-task/schedule-calculator'
 
 describe('calculateNextRunAt', () => {
   it('calculates the next daily wall-clock occurrence in the declared timezone', () => {

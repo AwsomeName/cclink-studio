@@ -7,6 +7,7 @@ import type {
   ScheduledTaskArtifact,
   ScheduledTaskDefinition,
 } from '../../shared/scheduled-task/scheduled-task-types'
+import { renderScheduledTaskFileName } from '../../shared/scheduled-task/scheduled-task-file-name'
 
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024
 const RUN_TIMEOUT_MS = 10 * 60 * 1000
@@ -167,12 +168,13 @@ async function resolveOutput(
   if (!isPathWithin(workspaceRoot, canonicalDirectory)) {
     throw new Error('输出目录逃逸出工作空间')
   }
-  const fileName = renderFileName(
-    definition.outputPolicy.fileNameTemplate,
-    occurrenceAt,
-    definition.id,
+  const fileName = renderScheduledTaskFileName({
+    template: definition.outputPolicy.fileNameTemplate,
+    timestamp: occurrenceAt,
+    timezone: definition.schedule.timezone,
+    taskId: definition.id,
     runId,
-  )
+  })
   const absolutePath = resolve(canonicalDirectory, fileName)
   if (!isPathWithin(canonicalDirectory, absolutePath) || basename(absolutePath) !== fileName) {
     throw new Error('输出文件路径无效')
@@ -182,29 +184,6 @@ async function resolveOutput(
     relativePath: relative(workspaceRoot, absolutePath).replaceAll('\\', '/'),
     canonicalDirectory,
   }
-}
-
-function renderFileName(
-  template: string,
-  timestamp: number,
-  taskId: string,
-  runId: string,
-): string {
-  const date = new Date(timestamp)
-  const datePart = [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-')
-  const timePart = [
-    String(date.getHours()).padStart(2, '0'),
-    String(date.getMinutes()).padStart(2, '0'),
-  ].join('')
-  return template
-    .replaceAll('{taskId}', taskId)
-    .replaceAll('{runId}', runId)
-    .replaceAll('{date}', datePart)
-    .replaceAll('{time}', timePart)
 }
 
 async function assertOutputDoesNotExist(filePath: string): Promise<void> {

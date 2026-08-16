@@ -37,7 +37,7 @@ import type {
 } from '../../shared/scheduled-task/scheduled-task-types'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 import type { AgentBridge } from '../agent/agent-bridge'
-import { calculateNextRunAt } from './schedule-calculator'
+import { calculateNextRunAt } from '../../shared/scheduled-task/schedule-calculator'
 import {
   ScheduledTaskAgentRunner,
   type ScheduledTaskRunExecutor,

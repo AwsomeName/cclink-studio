@@ -1,7 +1,8 @@
 # 工作空间定时任务开发计划
 
-> 状态：开发中；M8.1 首个纵向切片已实现并通过自动化 App 冒烟，真人验收待执行
-> 最后更新：2026-07-29
+> 状态：首版核心闭环已实现并通过真实 App 自动验收；Agent 交互式定时任务控制面待开发，
+> 真人验收矩阵待签字
+> 最后更新：2026-08-16
 > 产品事实源：`docs/features/scheduled-tasks.md`
 > 架构约束：`docs/architecture.md`
 > 本文件负责开发顺序、任务拆解、验证和交付证据；与产品事实源冲突时，以产品事实源
@@ -19,7 +20,9 @@
 开发顺序必须先形成用户可见闭环，再补齐可靠性。共享契约、存储、状态机和测试基建
 属于工程准备度，不能单独报告为产品里程碑完成。
 
-### 1.1 当前进度快照
+### 1.1 2026-07-29 基线快照
+
+本小节保留 M8.1 开发时的历史基线；后续实现状态以产品事实源和本文件第 15 节为准。
 
 用户功能进度：
 
@@ -894,3 +897,113 @@ E0 contracts
 
 最该优先验证的是 M8.2-A：用真实 Agent 读取当前工作空间文件并写出一个受限 Markdown。
 如果这个闭环不可靠，继续开发调度、时区、通知或诊断都只是在扩大失败面。
+
+## 15. Agent 交互式定时任务控制面补充工作包
+
+### 15.1 用户结果与当前缺口
+
+当前用户可以从定时任务侧栏和 Tab 创建、启停、立即运行并查看历史，但普通 Agent 无法
+读取相同事实源。Claude Code backend 还可能暴露一套会话级原生 Cron，导致 Agent 调用
+`CronList` 后对 Studio 任务给出错误结论。
+
+本工作包的首个用户结果是：
+
+> 用户在绑定本地工作空间的 Agent Thread 中询问当前任务状态，Agent 通过 Studio 工具
+> 返回与定时任务侧栏一致的答案；模型看不到也不能调用后端原生调度能力。文件来源的
+> 账本归因由紧随其后的 ST-A2 补齐。
+
+创建、启用和外部任务迁移不进入首个切片；先关闭错误路径并形成可验收的只读纵向闭环。
+
+### 15.2 架构决定
+
+- 采用 Studio 覆盖，不合并两套调度器。
+- `ScheduledTaskService` 是唯一状态 owner；新增 MCP module 只委托现有 service。
+- 不使用工具 alias 伪装兼容，不解析 Claude 工具返回文本，不双向同步
+  `.claude/scheduled_tasks.json`。
+- 当前工作空间由 Agent backend 写入受信 `ToolExecutionContext`；工具参数不接受任意绝对
+  工作空间路径。
+- Claude、Codex ACP 和后续 backend 最终消费同一 Studio contract；backend 差异只能存在
+  于能力注入和原生能力抑制层。
+- 无需新增 ADR；该决定关闭第二状态所有者，遵守 `docs/architecture.md` 现有宪法。
+
+### 15.3 串行实施切片
+
+| ID    | 用户或工程结果       | 工作项与完成检查                                                                                                                                                                                     |
+| ----- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ST-A0 | 错误路径消失         | 普通 Claude 会话永久禁用 `CronCreate`、`CronDelete`、`CronList`、`ScheduleWakeup`、`RemoteTrigger`；关闭 `/loop` 等原生调度 Skill；Bash/文件 hook 拒绝外部调度与 `.claude/scheduled_tasks.json` 写入 |
+| ST-A1 | Agent 能查询任务     | 新增只读 `scheduled-task` ToolModule，提供 list、runtime status、单任务 runs；从受信上下文解析当前本地工作空间，注册到统一工具目录与诊断                                                             |
+| ST-A2 | Agent 能证明文件来源 | 增加按工作空间相对路径查询产物关联；只返回账本中的 task/revision/run/path/hash，找不到时返回结构化 unknown                                                                                           |
+| ST-A3 | Agent 能准备任务     | 通过统一 command 创建未启用结构化草稿并打开任务 Tab；用户查看摘要后保存/启用，Agent 不直接写 renderer Store                                                                                          |
+| ST-A4 | 后端一致             | Codex ACP 会话接入同一受限 Studio MCP；任一后端缺失能力时明确降级，不回退原生调度                                                                                                                    |
+| ST-A5 | 历史任务可控迁移     | 只读检测外部 Claude 任务，用户确认后导入为暂停任务；不自动执行、删除或持续同步                                                                                                                       |
+
+ST-A0 与 ST-A1 组成首个交付切片；ST-A2 紧随其后解决“这个文件是不是任务生成”的证据
+问题。ST-A3–A5 必须在前一切片真实 App 验收后再开始，不能并行扩大状态和权限面。
+
+### 15.4 首个切片工具契约
+
+工具名使用 Studio 领域语义，不使用 `cron`：
+
+| 工具                                | 风险 | 结果                                                            |
+| ----------------------------------- | ---- | --------------------------------------------------------------- |
+| `scheduled_task_list`               | read | 当前工作空间任务、启用状态、下次运行和最近运行摘要              |
+| `scheduled_task_get_runtime_status` | read | ready/degraded、timer 目标、队列、运行 ID、启用数量和结构化错误 |
+| `scheduled_task_list_runs`          | read | 指定当前工作空间任务的有界运行历史                              |
+| `scheduled_task_find_artifact`      | read | 工作空间相对路径对应的任务、revision、run、hash，或明确 unknown |
+
+工具不得接收或返回凭证、完整 Agent instruction、文件正文或未脱敏的其他工作空间路径。
+`taskId` 和相对路径仍需 schema 校验；返回历史必须有数量上限。
+
+### 15.5 原生能力抑制门禁
+
+仅追加 system prompt 不算修复。Claude backend 必须同时满足：
+
+1. `disallowedTools` 在所有普通会话中移除已知原生调度工具，而不是只在
+   `forceVisibleBrowser` 或 scheduled origin 生效。
+2. SDK 原生 Skill 列表不向 Studio Agent 暴露 `/loop`；Studio 显式挂载的 Skill 继续通过
+   自有 Registry 和内容 hash 注入。
+3. PreToolUse 策略阻止 Agent 通过 Bash、Write/Edit 或其他文件工具创建系统 scheduler、
+   Claude daemon 调度或 `.claude/scheduled_tasks.json`。
+4. 精确固定 Runtime/SDK 版本；升级门禁扫描新增的 Cron、Schedule、Wakeup、Trigger、
+   routine 和 daemon 调度入口，发现变化即失败并要求人工复审。
+5. 诊断报告记录 native scheduling policy 是否生效，但不输出用户命令和文件正文。
+
+### 15.6 自动化验证
+
+- 普通 Claude query 始终携带完整原生调度 denylist。
+- `allowedTools` 继续只表达免确认范围，测试不得把它误当成可见工具白名单。
+- `/loop` 和原生调度 Skill 不出现在模型可用 Skill 列表。
+- Bash 与文件工具对调度绕过路径返回稳定拒绝原因；正常工作空间命令继续可用。
+- ToolModule 只用 `ToolExecutionContext` 中的规范化本地工作空间，拒绝缺失、远程或不匹配
+  上下文。
+- list/runtime/listRuns 与 renderer IPC 对同一 service snapshot 返回一致结果。
+- artifact 查询验证 path、runId、task revision 和 SHA-256；mtime 相同但无账本记录时仍返回
+  unknown。
+- 定时任务模块失败只使该模块降级，不阻断普通 Agent、文件、Browser、Terminal 或 App
+  启动。
+- Claude SDK 升级审计 fixture 能在新增原生调度工具时失败。
+
+### 15.7 真人验收
+
+1. 在工作空间创建并启用一个任务，立即运行产生 Markdown。
+2. 在普通 Agent Thread 询问“当前有哪些定时任务”，与侧栏逐项核对名称、启用状态、下次
+   时间和最近运行。
+3. 询问“该 Markdown 是否由定时任务生成”，确认回答包含正确任务和运行引用。
+4. 对一个手工创建、mtime 相同的文件重复询问，确认 Agent 明确回答无法由账本证明。
+5. 展开 Agent 工具时间线，确认只出现 `scheduled_task_*`，没有 Cron、Wakeup、Trigger 或
+   `/loop`。
+6. 检查工作空间没有新增或修改 `.claude/scheduled_tasks.json`，系统没有新增计划任务、
+   daemon、登录项或后台 Helper。
+7. 退出 Studio 后等待到点，仍遵守既有“不运行、下次启动对账”语义。
+
+### 15.8 `/grilling` 与止损
+
+- 如果只加提示词而模型仍能调用原生工具，视为未修复。
+- 如果 ToolModule 自己保存任务副本或缓存启用状态，立即停止并删除第二 owner。
+- 如果为兼容 Claude Cron 开始设计双向同步、冲突合并或持续 watcher，立即止损；兼容只允许
+  后续一次性显式导入。
+- 如果工具从模型参数读取任意 `workspacePath`，不得进入测试阶段。
+- 如果 ST-A0/A1 完成后用户仍不能在真实 App 中问出与侧栏一致的结果，不得以单元测试或
+  MCP tools/list 成功宣称交付。
+- 如果原生能力抑制破坏正常 Agent 文件或 Bash 能力，优先收窄 hook 判定，不得回退为只靠
+  prompt。

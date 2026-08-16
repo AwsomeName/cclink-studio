@@ -1,7 +1,7 @@
 # 工作空间定时任务
 
 > 状态：首版核心闭环已实现并通过真实 App 自动验收，待真人验收矩阵签字
-> 最后更新：2026-08-15
+> 最后更新：2026-08-16
 > 关联文档：`docs/architecture.md`、`docs/features/workspace-system.md`、
 > `docs/features/agent-panel-product-model.md`、`docs/features/context-action-system.md`、
 > `docs/features/workspace-operations-assistant.md`、
@@ -38,6 +38,8 @@ macOS LaunchAgent、Windows Task Scheduler、Linux cron/systemd timer、登录�
 - 显式保存产生 revision；定义写入工作空间，本机启用状态写入 `userData`。
 - 用户可以仅保存、在此设备启用和暂停；重启后恢复定义与本机状态。
 - 用户可以立即运行已保存 revision，查看排队、运行、终态、错误和产物。
+- 另存工作空间 Markdown 时，文件名模板支持 `{date}`、`{monthDay}`、`{weekday}`、
+  `{time}`、`{taskId}` 和 `{runId}`；界面按下一次计划时间和任务时区预览文件名。
 - 受限 Agent 只获得 `editor_read/list`；全局权限模式不能扩大 scheduled allowlist。
 - Markdown 由主进程按声明目录 create-only 原子写入，并校验 UTF-8、字节数和 SHA-256。
 - 主进程只维护一个 nearest-due timer；关闭任务 Tab 不影响到点运行。
@@ -95,6 +97,9 @@ macOS LaunchAgent、Windows Task Scheduler、Linux cron/systemd timer、登录�
     会明确显示不支持，不会因 `auto` 权限模式直接执行。
 13. 用户设置一个几分钟后执行的任务并在到点前退出 Studio；任务不会由操作系统或残留
     进程执行。重新启动 Studio 后，任务显示明确的“已错过”或补执行状态。
+14. 用户把文件名模板设置为 `{monthDay}_{weekday}.md`，界面预览如
+    `0816_周日.md`；到点运行或补执行后，产物使用计划发生时间在任务时区对应的日期和
+    中文周几。
 
 只有以上流程在真实应用中通过，才能声明首版定时任务产品闭环完成。仅有调度器、
 Schema、测试或 mock 页面时，只能声明相应工程准备度通过。
@@ -311,6 +316,62 @@ Tab 包含以下区域：
 
 系统可以解析为结构化草稿，但不能未经用户查看直接启用。结构化字段才是生效事实，
 自然语言解析结果必须在 Tab 中可编辑。
+
+### Agent 交互式管理边界
+
+2026-08-16 确认采用“Studio 覆盖、单一事实源、只做一次性迁移兼容”的方案。这里的
+“覆盖”是产品语义和能力契约覆盖，不修改第三方 Runtime 本身：Claude Code、Codex ACP
+或后续模型后端都只能通过 Studio 的定时任务能力访问 `ScheduledTaskService`，不能拥有
+第二套任务定义、启用状态、触发、运行历史或产物事实。
+
+当前缺口是：定时任务到点后已经可以调用受限 Agent 执行，但普通交互式 Agent 尚未接入
+Studio 定时任务查询工具；与此同时，Claude Code Runtime 可能向模型暴露 `CronCreate`、
+`CronDelete`、`CronList`、`ScheduleWakeup`、`RemoteTrigger` 和 `/loop` 等原生调度能力。
+这些能力使用 Claude 自己的会话或 `.claude/scheduled_tasks.json`，不是 Studio 任务，不能
+用来判断侧栏任务是否生效，也不能作为 Studio 调度器的底层实现。
+
+正式边界如下：
+
+- `ScheduledTaskService` 继续是唯一 owner；Agent 工具只调用该服务，不复制状态，不经
+  renderer Store 反向推断运行事实。
+- 不合并、不双向同步、不把 Claude 原生 Cron 作为执行引擎，也不把原生工具名 alias 到
+  Studio 工具；两者的参数、生命周期、权限和历史语义不同。
+- Claude backend 必须从模型上下文和可调用工具中移除全部原生调度入口，并关闭能重新
+  引入 `/loop` 的原生调度 Skill；只写提示词不算完成。
+- Agent 的 Bash、文件写入和 Skill 路径也必须阻止创建 `.claude/scheduled_tasks.json`，
+  或通过 `crontab`、`launchctl`、`schtasks`、`systemd` timer、`at` 等路径绕过 Studio。
+- SDK 版本保持精确固定；升级 Claude Runtime/SDK 时，门禁必须审计是否新增原生调度工具
+  或调度 Skill，不能依赖当前 denylist 永久完整。
+- Agent 工具使用宿主注入并校验的当前本地工作空间，不接受模型自报任意
+  `workspacePath`；无本地工作空间时结构化降级，不搜索其他目录。
+- Codex ACP 和后续后端必须消费同一 Studio capability contract；后端缺少该 contract 时
+  应明确回答能力不可用，不能回退到后端自己的调度方案。
+
+最小纵向闭环先开放只读能力：
+
+- 列出当前工作空间任务及启用、下次运行和最近运行状态。
+- 查询调度 Runtime 状态。
+- 查询单个任务运行历史。
+- 按工作空间相对产物路径关联 `taskId → revision → runId → artifact path/hash`；证据不足
+  时明确回答“无法确认”，不能用文件时间或模型推断代替运行账本。
+
+创建和修改放在后续切片：Agent 只能准备未启用的结构化草稿并打开定时任务 Tab；用户
+查看时间、资源、输出和能力摘要后，仍通过 Studio 领域命令保存或启用。“立即运行”、
+暂停、取消和删除继续遵守现有权限与确认边界，不能由模型静默修改 JSON。
+
+对已经存在的 `.claude/scheduled_tasks.json` 只允许一次性、显式迁移：Studio 可以提示
+“检测到不由 Studio 管理的外部任务”，用户确认后导入为暂停状态的新 Studio 任务；不得
+自动执行、自动删除原文件或建立持续同步。用户在外部 Claude Code 中主动创建的任务不属于
+Studio，必须保持原样。
+
+用户验收至少包括：
+
+1. 询问 Agent“当前有哪些定时任务”，回答与当前工作空间侧栏一致。
+2. 询问某文件是否由定时任务生成，只能根据运行账本和产物 hash/path 作答。
+3. Agent 工具时间线中不再出现 Claude 原生 Cron、Wakeup、RemoteTrigger 或 `/loop`。
+4. 使用 Agent 查询 Studio 任务不会创建或修改 `.claude/scheduled_tasks.json`。
+5. 后续要求创建定时任务时只打开未启用草稿；用户确认前侧栏不显示为已启用。
+6. Studio 退出后仍遵守本文件既有语义，不因 Agent 后端改变而获得系统唤醒或后台执行。
 
 ### 复制到其他工作空间
 

@@ -1,4 +1,4 @@
-import type { ScheduledTaskSchedule } from '../../shared/scheduled-task/scheduled-task-types'
+import type { ScheduledTaskSchedule } from './scheduled-task-types'
 
 interface ZonedParts {
   year: number

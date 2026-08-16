@@ -43,10 +43,14 @@ describe('ScheduledTaskAgentRunner', () => {
       abort: vi.fn(async () => {}),
     } as never)
 
+    const taskDefinition = definition()
+    taskDefinition.schedule.timezone = 'America/Los_Angeles'
+    taskDefinition.outputPolicy.fileNameTemplate =
+      'report-{taskId}-{runId}-{date}-{monthDay}-{weekday}.md'
     const result = await runner.run({
       runId: 'run-1',
       conversationId: 'scheduled-task:run-1',
-      definition: definition(),
+      definition: taskDefinition,
       scheduledFor: Date.parse('2026-07-29T01:00:00.000Z'),
     })
     const canonicalRoot = await realpath(root)
@@ -61,7 +65,7 @@ describe('ScheduledTaskAgentRunner', () => {
     )
     expect(result.artifact).toMatchObject({
       relativePath:
-        'docs/generated/report-00000000-0000-4000-8000-000000000001-run-1-2026-07-29.md',
+        'docs/generated/report-00000000-0000-4000-8000-000000000001-run-1-2026-07-28-0728-周二.md',
       bytes: Buffer.byteLength('# Generated\n\nSafe output.\n'),
     })
     expect(await readFile(join(root, result.artifact.relativePath), 'utf-8')).toBe(
