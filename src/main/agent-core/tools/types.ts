@@ -33,6 +33,21 @@ export interface ToolDefinition {
 export interface ToolExecutionContext {
   conversationId?: string
   workspaceKey?: string | null
+  /** 宿主在启动 Agent run 时固定的工作空间；模型不能通过工具参数覆盖。 */
+  trustedWorkspace?:
+    | {
+        kind: 'local'
+        rootPath: string
+        workspaceKey: string
+      }
+    | {
+        kind: 'remote'
+        workspaceKey: string
+      }
+    | {
+        kind: 'global'
+        workspaceKey: null
+      }
   /** 当前 Agent Run，用于把首次工具调用关联到可诊断的任务。 */
   agentRunId?: string | null
   /** 当前用户目标，只在主进程的短期 MCP session 内使用。 */

@@ -67,4 +67,51 @@ describe('getAgentCapabilities', () => {
       available: true,
     })
   })
+
+  it('reports scheduled-task module and runtime degradation without a second status owner', () => {
+    const runtime = createRuntimeState(true)
+    runtime.toolHost = {
+      getRegisteredModules: () => [
+        {
+          name: 'scheduled-task',
+          enabled: true,
+          tools: [
+            {
+              name: 'scheduled_task_list',
+              description: 'list',
+              annotations: { readOnlyHint: true, destructiveHint: false },
+            },
+          ],
+        },
+      ],
+    } as never
+    runtime.scheduledTaskService = {
+      getRuntimeStatus: () => ({ state: 'ready' }),
+    } as never
+    runtime.capabilities.ready('scheduled-task')
+
+    expect(getAgentToolModules(runtime)[0]).toMatchObject({
+      id: 'scheduled-task',
+      label: '定时任务',
+      available: true,
+      tools: [{ name: 'scheduled_task_list', risk: 'read' }],
+    })
+    expect(
+      getAgentCapabilities(runtime).find((item) => item.name === 'scheduled-task'),
+    ).toMatchObject({ state: 'ready', available: true })
+
+    runtime.scheduledTaskService = {
+      getRuntimeStatus: () => ({
+        state: 'degraded',
+        lastError: { message: '运行账本损坏' },
+      }),
+    } as never
+    expect(
+      getAgentCapabilities(runtime).find((item) => item.name === 'scheduled-task'),
+    ).toMatchObject({ state: 'degraded', available: false, reason: '运行账本损坏' })
+    expect(getAgentToolModules(runtime)[0]).toMatchObject({
+      available: false,
+      reason: '运行账本损坏',
+    })
+  })
 })

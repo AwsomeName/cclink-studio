@@ -51,6 +51,7 @@ import {
 import { BuiltinAgentSkillRegistry, type BuiltinAgentSkill } from './agent-skill-registry'
 import type { AgentRoleRegistry } from './agent-role-registry'
 import type { AgentSkillSummary } from '../../shared/agent-skill'
+import { CLAUDE_NATIVE_SCHEDULING_POLICY_STATUS } from '../agent-core/backends/claude-native-scheduling-policy'
 import {
   agentRoleRefsEqual,
   createDefaultAgentConversationConfiguration,
@@ -543,6 +544,7 @@ export class AgentBridge {
     profilePromptCompilerVersion: number
     sessionRef: string | null
     ready: boolean
+    nativeSchedulingPolicy?: typeof CLAUDE_NATIVE_SCHEDULING_POLICY_STATUS
   } {
     const status = this.runtime.getStatus(conversationId)
     const conversationConfiguration = this.getConversationConfiguration(conversationId)
@@ -563,6 +565,9 @@ export class AgentBridge {
           : null,
       sessionRef: this.getSessionDiagnosticRef(status.sessionId),
       ready: true,
+      ...(this.getConversationRuntimeBinding(conversationId).kind === 'claude-code'
+        ? { nativeSchedulingPolicy: CLAUDE_NATIVE_SCHEDULING_POLICY_STATUS }
+        : {}),
     }
   }
 

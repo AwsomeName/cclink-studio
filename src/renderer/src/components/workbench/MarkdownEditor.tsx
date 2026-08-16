@@ -25,7 +25,6 @@ import {
   hashMarkdownSnapshot,
   mapTopLevelSelectionToSource,
   normalizeMarkdownEditorOutput,
-  prepareMarkdownEditorInput,
   scanMarkdownBlocks,
   type MarkdownDiagnostic,
   type MarkdownSourceRange,
@@ -43,6 +42,7 @@ import {
 } from '../../features/markdown/markdown-editor-shortcuts'
 import { createMarkdownDiagnosticReport } from '../../features/markdown/markdown-diagnostic-report'
 import { MarkdownListItem } from '../../features/markdown/markdown-list-item'
+import { parseMarkdownEditorDocument } from '../../features/markdown/markdown-editor-document'
 import { inspectMarkdownEditorBeforeSave } from '../../features/markdown/markdown-save-guard'
 import {
   findMarkdownTextMatches,
@@ -506,8 +506,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     hydratingRef.current = true
     let serialized = ''
     try {
-      editor.commands.setContent(prepareMarkdownEditorInput(fileState.currentContent), {
-        contentType: 'markdown',
+      editor.commands.setContent(parseMarkdownEditorDocument(editor, fileState.currentContent), {
         emitUpdate: false,
       })
       serialized = normalizeMarkdownEditorOutput(editor.getMarkdown(), fileState.currentContent)
@@ -713,8 +712,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         }
 
         hydratingRef.current = true
-        editor.commands.setContent(prepareMarkdownEditorInput(next), {
-          contentType: 'markdown',
+        editor.commands.setContent(parseMarkdownEditorDocument(editor, next), {
           emitUpdate: false,
         })
         editorChanged = true
@@ -732,8 +730,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         void window.cclinkStudio.editor.contentUpdateAck(update.id, true)
       } catch (error) {
         if (editorChanged) {
-          editor.commands.setContent(prepareMarkdownEditorInput(current), {
-            contentType: 'markdown',
+          editor.commands.setContent(parseMarkdownEditorDocument(editor, current), {
             emitUpdate: false,
           })
         }

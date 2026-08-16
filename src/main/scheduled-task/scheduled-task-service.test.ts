@@ -9,6 +9,7 @@ vi.mock('electron', () => ({
 
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 import { ScheduledTaskService } from './scheduled-task-service'
+import { ScheduledTaskToolModule } from '../mcp/modules/scheduled-task'
 import type {
   ScheduledTaskAgentRunInput,
   ScheduledTaskRunExecutor,
@@ -140,6 +141,85 @@ describe('ScheduledTaskService', () => {
       })
     })
     expect(run).toHaveBeenCalledTimes(1)
+  })
+
+  it('serves the same task and run facts through the read-only Agent module', async () => {
+    const executor: ScheduledTaskRunExecutor = {
+      run: vi.fn(async () => ({
+        artifact: {
+          relativePath: 'docs/周报/agent-query.md',
+          bytes: 12,
+          sha256: 'd'.repeat(64),
+        },
+      })),
+      cancel: vi.fn(async () => {}),
+    }
+    const service = createService(executor)
+    await service.load()
+    const saved = await service.save(createInput(true))
+    await service.startRuntime({} as never)
+    await service.runNow({ workspacePath, taskId: saved.task!.definition.id })
+    await vi.waitFor(async () => {
+      const history = await service.listRuns(workspacePath, saved.task!.definition.id)
+      expect(history.runs[0]?.status).toBe('completed')
+    })
+
+    const sidebarSnapshot = await service.list(workspacePath)
+    const sidebarRuns = await service.listRuns(workspacePath, saved.task!.definition.id)
+    const sidebarRuntime = service.getRuntimeStatus()
+    const module = new ScheduledTaskToolModule(service)
+    const context = {
+      trustedWorkspace: {
+        kind: 'local' as const,
+        rootPath: workspacePath,
+        workspaceKey: workspacePath,
+      },
+    }
+    const toolList = (await module.execute('scheduled_task_list', {}, context)) as {
+      tasks: Array<{
+        taskId: string
+        title: string
+        revision: number
+        enabled: boolean
+        nextRunAt: number | null
+        latestRun: { runId: string; status: string } | null
+      }>
+    }
+    const toolRuns = (await module.execute(
+      'scheduled_task_list_runs',
+      { taskId: saved.task!.definition.id, limit: 20 },
+      context,
+    )) as {
+      runs: Array<{ runId: string; taskRevision: number; status: string }>
+    }
+    const toolRuntime = (await module.execute(
+      'scheduled_task_get_runtime_status',
+      {},
+      context,
+    )) as { runtime: typeof sidebarRuntime }
+
+    expect(toolList.tasks[0]).toMatchObject({
+      taskId: sidebarSnapshot.tasks[0].definition.id,
+      title: sidebarSnapshot.tasks[0].definition.title,
+      revision: sidebarSnapshot.tasks[0].definition.revision,
+      enabled: sidebarSnapshot.tasks[0].activation.enabled,
+      nextRunAt: sidebarSnapshot.tasks[0].activation.nextRunAt,
+      latestRun: {
+        runId: sidebarSnapshot.tasks[0].latestRun?.id,
+        status: sidebarSnapshot.tasks[0].latestRun?.status,
+      },
+    })
+    expect(toolRuns.runs[0]).toMatchObject({
+      runId: sidebarRuns.runs[0].id,
+      taskRevision: sidebarRuns.runs[0].taskRevision,
+      status: sidebarRuns.runs[0].status,
+    })
+    expect(toolRuntime.runtime).toEqual(sidebarRuntime)
+    const serialized = JSON.stringify({ toolList, toolRuns, toolRuntime })
+    expect(serialized).not.toContain('读取工作空间资料并生成 Markdown 周报')
+    expect(serialized).not.toContain('agent-query.md')
+    expect(serialized).not.toContain('d'.repeat(64))
+    await service.stopRuntime()
   })
 
   it('uses one App timer to claim a due occurrence without opening the task tab', async () => {

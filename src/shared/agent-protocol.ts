@@ -182,6 +182,7 @@ export type AgentCapabilityName =
   | 'hardware'
   | 'cad'
   | 'cclink'
+  | 'scheduled-task'
   | 'mcp'
 
 export type AgentCapabilityState = 'ready' | 'degraded' | 'unavailable' | 'failed'
@@ -250,6 +251,14 @@ export interface AgentStatus {
   /** Process-local random reference for redacted diagnostic correlation. */
   sessionRef?: string | null
   ready?: boolean
+  /** Claude 原生调度封锁的安全诊断；不包含用户命令或文件正文。 */
+  nativeSchedulingPolicy?: {
+    enforced: boolean
+    deniedToolCount: number
+    loopSkillDisabled: boolean
+    sdkSkillOverride: 'off'
+    preToolUseGuard: boolean
+  }
 }
 
 export interface ExternalMcpServer {

@@ -76,6 +76,11 @@ vi.mock('../mcp/modules/agent-device', () => ({
     name = 'agent-device'
   },
 }))
+vi.mock('../mcp/modules/scheduled-task', () => ({
+  ScheduledTaskToolModule: class ScheduledTaskToolModule {
+    name = 'scheduled-task'
+  },
+}))
 vi.mock('../android/agent-device-manager', () => ({
   AgentDeviceManager: class AgentDeviceManager {
     async init(): Promise<void> {}
@@ -129,6 +134,7 @@ describe('bootstrapAutomationRuntime', () => {
     expect(mocks.registered).toEqual(
       expect.arrayContaining([
         'editor',
+        'scheduled-task',
         'hardware',
         'cad',
         'data-source',
@@ -185,5 +191,6 @@ function createAutomationRuntime() {
   runtime.scrcpyBridge = {} as never
   runtime.activeDeviceManager = {} as never
   runtime.settingsService = { getAll: () => ({ disabledAgentToolModules: [] }) } as never
+  runtime.scheduledTaskService = {} as never
   return runtime
 }

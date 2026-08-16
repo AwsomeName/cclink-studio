@@ -13,6 +13,7 @@ import { AgentDeviceManager } from '../android/agent-device-manager'
 import { AgentDeviceToolModule } from '../mcp/modules/agent-device'
 import { DataSourceToolModule } from '../mcp/modules/data-source'
 import { WebAffairToolModule } from '../mcp/modules/web-affairs'
+import { ScheduledTaskToolModule } from '../mcp/modules/scheduled-task'
 import type { ToolModule } from '../mcp/types'
 import type { AgentCapabilityName } from '../../shared/agent-protocol'
 import type { CclinkStudioRuntimeState } from './app-runtime'
@@ -111,6 +112,12 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
       console.error('[CCLink Studio] web-affairs MCP 工具模块注册失败:', error)
     }
   }
+
+  registerToolModule(
+    runtime,
+    'scheduled-task',
+    () => new ScheduledTaskToolModule(requireService(runtime.scheduledTaskService)),
+  )
 
   registerToolModule(
     runtime,

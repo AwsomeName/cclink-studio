@@ -324,11 +324,12 @@ Tab 包含以下区域：
 或后续模型后端都只能通过 Studio 的定时任务能力访问 `ScheduledTaskService`，不能拥有
 第二套任务定义、启用状态、触发、运行历史或产物事实。
 
-当前缺口是：定时任务到点后已经可以调用受限 Agent 执行，但普通交互式 Agent 尚未接入
-Studio 定时任务查询工具；与此同时，Claude Code Runtime 可能向模型暴露 `CronCreate`、
-`CronDelete`、`CronList`、`ScheduleWakeup`、`RemoteTrigger` 和 `/loop` 等原生调度能力。
-这些能力使用 Claude 自己的会话或 `.claude/scheduled_tasks.json`，不是 Studio 任务，不能
-用来判断侧栏任务是否生效，也不能作为 Studio 调度器的底层实现。
+当前事实是：定时任务到点后可以调用受限 Agent 执行；普通 Claude Agent 已接入 Studio
+只读定时任务查询工具，可以读取当前绑定本地工作空间的任务、Runtime 和运行历史。
+Claude Code Runtime 的 `CronCreate`、`CronDelete`、`CronList`、`ScheduleWakeup`、
+`RemoteTrigger` 和 `/loop` 等原生调度能力已从普通会话移除，并由 PreToolUse 策略阻止通过
+Bash 或文件工具写入外部调度配置。文件产物账本归因、Agent 创建/启用任务、Codex ACP
+接入和外部任务迁移仍未开放。
 
 正式边界如下：
 

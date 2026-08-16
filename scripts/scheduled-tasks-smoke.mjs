@@ -78,6 +78,57 @@ async function waitForTerminalRun(page, taskId, timeoutMs = 180_000) {
   throw new Error('scheduled task run did not reach a terminal state')
 }
 
+async function queryScheduledTasksThroughAgent(page) {
+  const conversationId = `scheduled-task-query-smoke-${Date.now()}`
+  const runId = `scheduled-task-query-run-${Date.now()}`
+  return page.evaluate(
+    ({ conversationId: id, runId: queryRunId, workspace }) =>
+      new Promise(async (resolve, reject) => {
+        const events = []
+        let settled = false
+        const finish = (callback, value) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timeout)
+          offStream()
+          offComplete()
+          offError()
+          callback(value)
+        }
+        const belongsToRun = (event) =>
+          event.conversationId === id && (!event.runId || event.runId === queryRunId)
+        const offStream = window.cclinkStudio.agent.onStreamEvent((event) => {
+          if (belongsToRun(event)) events.push(event)
+        })
+        const offComplete = window.cclinkStudio.agent.onComplete((result) => {
+          if (belongsToRun(result)) finish(resolve, { events, result })
+        })
+        const offError = window.cclinkStudio.agent.onError((error) => {
+          if (belongsToRun(error)) finish(reject, new Error(error.message))
+        })
+        const timeout = setTimeout(
+          () => finish(reject, new Error('ordinary Agent scheduled-task query timed out')),
+          180_000,
+        )
+        try {
+          await window.cclinkStudio.agent.setScope(id, { kind: 'all' })
+          const accepted = await window.cclinkStudio.agent.sendMessage(id, {
+            message:
+              '当前有哪些定时任务？请以 Studio 当前工作空间事实为准，列出名称、启用状态、下次运行和最近运行摘要。',
+            runId: queryRunId,
+            workspaceRef: { kind: 'local', path: workspace },
+          })
+          if (!accepted.success) {
+            finish(reject, new Error(accepted.error || 'Agent query was rejected'))
+          }
+        } catch (error) {
+          finish(reject, error)
+        }
+      }),
+    { conversationId, runId, workspace: workspacePath },
+  )
+}
+
 async function assertFileMissing(filePath, message) {
   try {
     await readFile(filePath, 'utf8')
@@ -213,6 +264,69 @@ async function main() {
   )
   const artifactContent = await readFile(join(workspacePath, run.artifact.relativePath), 'utf8')
   assert(artifactContent.trim().length > 0, 'generated Markdown is empty')
+
+  await assertFileMissing(
+    join(workspacePath, '.claude', 'scheduled_tasks.json'),
+    'Agent query precondition unexpectedly contains Claude native scheduled tasks',
+  )
+  const capabilities = await page.evaluate(async () => ({
+    status: await window.cclinkStudio.agent.getStatus(),
+    modules: await window.cclinkStudio.agent.listToolModules(),
+  }))
+  const scheduledTaskModule = capabilities.modules.find((module) => module.id === 'scheduled-task')
+  assert(
+    scheduledTaskModule?.enabled &&
+      scheduledTaskModule.available &&
+      scheduledTaskModule.tools.map((tool) => tool.name).join(',') ===
+        'scheduled_task_list,scheduled_task_get_runtime_status,scheduled_task_list_runs',
+    `scheduled-task capability is not ready: ${JSON.stringify(scheduledTaskModule)}`,
+  )
+  assert(
+    capabilities.status.nativeSchedulingPolicy?.enforced &&
+      capabilities.status.nativeSchedulingPolicy?.loopSkillDisabled &&
+      capabilities.status.nativeSchedulingPolicy?.sdkSkillOverride === 'off' &&
+      capabilities.status.nativeSchedulingPolicy?.preToolUseGuard,
+    `native scheduling policy is not enforced: ${JSON.stringify(capabilities.status.nativeSchedulingPolicy)}`,
+  )
+  const agentQuery = await queryScheduledTasksThroughAgent(page)
+  const serializedAgentQuery = JSON.stringify(agentQuery)
+  assert(
+    serializedAgentQuery.includes('scheduled_task_list'),
+    'ordinary Agent did not call the Studio scheduled-task list tool',
+  )
+  const agentAnswer = agentQuery.result?.result
+  assert(
+    typeof agentAnswer === 'string' &&
+      agentAnswer.includes('Smoke 每周工作总结') &&
+      /启用/.test(agentAnswer) &&
+      /下次/.test(agentAnswer) &&
+      /最近|完成/.test(agentAnswer),
+    `ordinary Agent did not return a user-readable task summary: ${agentAnswer || 'empty'}`,
+  )
+  assert(
+    serializedAgentQuery.includes('Smoke 每周工作总结') &&
+      serializedAgentQuery.includes(taskId) &&
+      serializedAgentQuery.includes(run.id) &&
+      serializedAgentQuery.includes('completed') &&
+      serializedAgentQuery.includes(String(saved.tasks[0].activation.nextRunAt)),
+    `Agent tool facts do not match the sidebar/service snapshot: ${serializedAgentQuery.slice(-2_000)}`,
+  )
+  for (const nativeTool of [
+    'CronCreate',
+    'CronDelete',
+    'CronList',
+    'ScheduleWakeup',
+    'RemoteTrigger',
+  ]) {
+    assert(
+      !new RegExp(`"name"\\s*:\\s*"${nativeTool}"`).test(serializedAgentQuery),
+      `ordinary Agent used native scheduling tool ${nativeTool}`,
+    )
+  }
+  await assertFileMissing(
+    join(workspacePath, '.claude', 'scheduled_tasks.json'),
+    'ordinary Agent query created Claude native scheduled tasks',
+  )
   await page.getByRole('button', { name: '查看运行结果' }).click()
   await page
     .locator('.tab-title', { hasText: run.artifact.relativePath.split('/').at(-1) })
@@ -425,7 +539,7 @@ async function main() {
   )
 
   console.log(
-    `PASS scheduled task M8.2 - manual=${run.id}, automatic=${autoRun.id}, cancelled=${cancelStarted.run.id}, denied=${unsupportedRun.id}, missed=${missedRun.id}, artifact=${run.artifact.relativePath}, systemScheduler=none`,
+    `PASS scheduled task M8.2 + ST-A0/A1 - manual=${run.id}, agentQuery=scheduled_task_list, automatic=${autoRun.id}, cancelled=${cancelStarted.run.id}, denied=${unsupportedRun.id}, missed=${missedRun.id}, artifact=${run.artifact.relativePath}, systemScheduler=none`,
   )
 }
 

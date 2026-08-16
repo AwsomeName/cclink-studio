@@ -405,7 +405,7 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
     orderedItems,
     orderedStarts,
     taskItems: lines
-      .map((line) => /^\s*[-+*]\s+\[([ xX])\]\s+/.exec(line)?.[1])
+      .map((line) => /^\s*[-+*]\s+\[([ xX])\](?:\s+|$)/.exec(line)?.[1])
       .filter((value): value is string => value !== undefined)
       .map((value) => value.toLowerCase()),
     images,
@@ -569,7 +569,9 @@ function normalizeMathExpressionContent(content: string, display: boolean): stri
 const MATH_MARKDOWN_PUNCTUATION = new Set([...`!"#%&'()*+,-./:;<=>?@[]^_\`{|}~`])
 
 export function prepareMarkdownEditorInput(source: string): string {
-  const normalized = expandSameLineListHeadings(normalizeMarkdownSource(source))
+  const normalized = normalizeEmptyTaskListItems(
+    expandSameLineListHeadings(normalizeMarkdownSource(source)),
+  )
   const masked = maskInlineCode(maskFencedBlocks(normalized, scanMarkdownBlocks(normalized)))
   const expressions = scanMathExpressions(masked)
   if (expressions.length === 0) return normalized
@@ -591,6 +593,24 @@ export function prepareMarkdownEditorInput(source: string): string {
   }
   prepared += normalized.slice(cursor)
   return prepared
+}
+
+function normalizeEmptyTaskListItems(source: string): string {
+  const lines = source.split('\n')
+  const codeLines = new Set<number>()
+  for (const token of markdownStructureParser.parse(source, {})) {
+    if ((token.type !== 'fence' && token.type !== 'code_block') || !token.map) continue
+    for (let line = token.map[0]; line < token.map[1]; line += 1) {
+      codeLines.add(line)
+    }
+  }
+
+  return lines
+    .map((line, index) => {
+      if (codeLines.has(index)) return line
+      return /^(\s*[-+*]\s+\[[ xX]\])$/.test(line) ? `${line} ` : line
+    })
+    .join('\n')
 }
 
 function expandSameLineListHeadings(source: string): string {

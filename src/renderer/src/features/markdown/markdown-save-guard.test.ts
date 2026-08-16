@@ -10,6 +10,7 @@ import Link from '@tiptap/extension-link'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import { MarkdownListItem } from './markdown-list-item'
+import { parseMarkdownEditorDocument } from './markdown-editor-document'
 import { inspectMarkdownEditorBeforeSave } from './markdown-save-guard'
 
 let editor: Editor
@@ -40,6 +41,19 @@ afterEach(() => {
 })
 
 describe('inspectMarkdownEditorBeforeSave', () => {
+  it('accepts empty ordered and task placeholders after hydration', () => {
+    const source = ['1.', '2.', '3.', '', '- [ ]', '- [ ]', '- [ ]'].join('\n')
+    editor.commands.setContent(parseMarkdownEditorDocument(editor, source), { emitUpdate: false })
+
+    const inspection = inspectMarkdownEditorBeforeSave(editor, source)
+
+    expect(inspection.safeToSave).toBe(true)
+    expect(inspection.diagnostics).toEqual([])
+    expect(inspection.markdown).toBe(
+      ['1. ', '2. ', '3. ', '', '- [ ] ', '- [ ] ', '- [ ] '].join('\n'),
+    )
+  })
+
   it('accepts a representative document after a second parse and serialization', () => {
     const source = [
       '# 文档',

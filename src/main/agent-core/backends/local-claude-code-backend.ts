@@ -18,7 +18,7 @@ import {
 import type { AgentImageAttachment } from '../../../shared/ipc/agent.js'
 import type { AgentContextUsageSnapshot } from '../../../shared/agent-protocol.js'
 import type { McpToolHost } from '../tools/tool-host.js'
-import type { ToolDefinition } from '../tools/types.js'
+import type { ToolDefinition, ToolExecutionContext } from '../tools/types.js'
 import type {
   IAgentBackend,
   AgentBackendStatus,
@@ -32,8 +32,15 @@ import {
   filterToolsByScope,
   type AgentScope,
 } from '../runtime/scope.js'
+import {
+  CLAUDE_NATIVE_SCHEDULING_TOOLS,
+  inspectNativeSchedulingToolUse,
+} from './claude-native-scheduling-policy.js'
 
-const DISALLOWED_CLAUDE_TOOLS = ['mcp__cclink_studio__browser_new_tab', 'AskUserQuestion']
+const VISIBLE_BROWSER_DISALLOWED_TOOLS = [
+  'mcp__cclink_studio__browser_new_tab',
+  'AskUserQuestion',
+] as const
 const DISALLOWED_TOOL_NAMES = new Set(['browser_new_tab'])
 type AgentQueryOperation = 'message' | 'compact'
 
@@ -262,6 +269,17 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       )
     }
 
+    if (!options?.scheduledTaskPolicy) {
+      sections.push(
+        '### CCLink Studio 定时任务',
+        '- Studio 的 ScheduledTaskService 是定时任务、启用状态、下次运行和运行历史的唯一事实源。',
+        '- 用户询问“当前有哪些定时任务”或任务运行状态时，必须使用 scheduled_task_list、scheduled_task_get_runtime_status 或 scheduled_task_list_runs；不要根据文件、记忆或 Claude 原生 Cron 推断。',
+        '- 当前只开放查询。不能通过 Agent 创建、启用、暂停、删除或立即运行任务；需要修改时请引导用户使用 Studio 定时任务侧栏和 Tab。',
+        '- 禁止使用 CronCreate、CronDelete、CronList、ScheduleWakeup、RemoteTrigger、/loop、系统计划任务或 .claude/scheduled_tasks.json。它们不属于 Studio 任务。',
+        '',
+      )
+    }
+
     // 浏览器状态 + 约定（browser / all）
     if (scope.kind === 'all' || scope.kind === 'browser') {
       sections.push(
@@ -412,11 +430,14 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
 
     // 为当前会话创建隔离的 MCP 工具会话。
     const conversationId = options?.conversationId ?? 'agent-default'
+    // 发送方携带的会话工作区优先；旧调用方继续回退到当前全局工作区。
+    const workspacePath = options?.workspacePath?.trim() || this.getWorkspacePath?.() || ''
     const workspaceKey =
       options?.resourceContext?.workspace.key ?? options?.workspacePath?.trim() ?? null
     this.mcpSessionToken = this.toolHost.createToolSession({
       conversationId,
       workspaceKey,
+      trustedWorkspace: createTrustedWorkspaceContext(options, workspacePath, workspaceKey),
       agentRunId: options?.runId ?? null,
       ...(operation === 'message' ? { agentGoal: userMessage } : {}),
       ...(options?.scheduledTaskPolicy ? { scheduledTaskPolicy: options.scheduledTaskPolicy } : {}),
@@ -432,8 +453,6 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         ? Object.keys(mcpServers).map((serverName) => `mcp__${serverName}__*`)
         : scopeToAllowedTools(this.scope)
 
-    // 发送方携带的会话工作区优先；旧调用方继续回退到当前全局工作区。
-    const workspacePath = options?.workspacePath?.trim() || this.getWorkspacePath?.() || ''
     const abortController = new AbortController()
     const sdkOptions: ClaudeAgentSdkOptions = {
       abortController,
@@ -443,15 +462,13 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       includePartialMessages: true,
       mcpServers,
       strictMcpConfig: true,
-      hooks: workspacePath
-        ? {
-            PreToolUse: [
-              {
-                hooks: [this.createWorkspaceBoundaryHook(workspacePath)],
-              },
-            ],
-          }
-        : undefined,
+      hooks: {
+        PreToolUse: [
+          {
+            hooks: [this.createStudioPreToolUseHook(workspacePath)],
+          },
+        ],
+      },
       ...(this.claudeCodePath ? { pathToClaudeCodeExecutable: this.claudeCodePath } : {}),
       allowedTools,
       stderr: (data) => {
@@ -463,12 +480,14 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         preset: 'claude_code',
         append: this.buildToolContextPrompt(options),
       },
+      settings: { skillOverrides: { loop: 'off' } },
       ...(this.modelName ? { model: this.modelName } : {}),
       ...(this.sessionId ? { resume: this.sessionId } : {}),
     }
+    sdkOptions.disallowedTools = [...CLAUDE_NATIVE_SCHEDULING_TOOLS]
     if (options?.forceVisibleBrowser || options?.disableBuiltinTools) {
       sdkOptions.tools = []
-      sdkOptions.disallowedTools = DISALLOWED_CLAUDE_TOOLS
+      sdkOptions.disallowedTools.push(...VISIBLE_BROWSER_DISALLOWED_TOOLS)
     }
 
     try {
@@ -498,10 +517,17 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     }
   }
 
-  private createWorkspaceBoundaryHook(workspacePath: string): HookCallback {
-    const workspaceRoot = resolve(workspacePath)
+  private createStudioPreToolUseHook(workspacePath: string): HookCallback {
+    const workspaceRoot = workspacePath ? resolve(workspacePath) : null
     return async (input) => {
       if (input.hook_event_name !== 'PreToolUse') return { continue: true }
+      const schedulingDenial = inspectNativeSchedulingToolUse(input.tool_name, input.tool_input)
+      if (schedulingDenial) {
+        console.warn(`[ClaudeCodeBackend] ${schedulingDenial.code}`)
+        return denyPreToolUse(schedulingDenial.reason)
+      }
+
+      if (!workspaceRoot) return { continue: true }
       const escapedPath = findEscapedAbsolutePath(input.tool_input, workspaceRoot)
       if (!escapedPath) return { continue: true }
 
@@ -510,14 +536,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         `当前会话工作区是 ${workspaceRoot}。该路径不属于本会话，可能来自失效上下文。` +
         '请放弃该路径，只在当前工作区内重新定位目标；不要扩大到用户主目录搜索。'
       console.warn(`[ClaudeCodeBackend] ${reason}`)
-      return {
-        continue: true,
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse',
-          permissionDecision: 'deny',
-          permissionDecisionReason: reason,
-        },
-      }
+      return denyPreToolUse(reason)
     }
   }
 
@@ -768,6 +787,51 @@ const FILE_PATH_INPUT_KEYS = new Set([
   'root_path',
   'rootPath',
 ])
+
+function createTrustedWorkspaceContext(
+  options: AgentSendOptions | undefined,
+  workspacePath: string,
+  workspaceKey: string | null,
+): ToolExecutionContext['trustedWorkspace'] {
+  const resourceWorkspace = options?.resourceContext?.workspace
+  if (resourceWorkspace?.ref.kind === 'remote') {
+    return {
+      kind: 'remote',
+      workspaceKey: resourceWorkspace.key ?? 'remote',
+    }
+  }
+  if (resourceWorkspace?.ref.kind === 'global') {
+    return { kind: 'global', workspaceKey: null }
+  }
+  if (resourceWorkspace?.ref.kind === 'local') {
+    return {
+      kind: 'local',
+      rootPath: resolve(
+        (resourceWorkspace.rootPath ?? workspacePath) || resourceWorkspace.ref.path,
+      ),
+      workspaceKey: resourceWorkspace.key ?? resourceWorkspace.ref.path,
+    }
+  }
+  if (workspacePath) {
+    return {
+      kind: 'local',
+      rootPath: resolve(workspacePath),
+      workspaceKey: workspaceKey ?? resolve(workspacePath),
+    }
+  }
+  return { kind: 'global', workspaceKey: null }
+}
+
+function denyPreToolUse(reason: string) {
+  return {
+    continue: true as const,
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse' as const,
+      permissionDecision: 'deny' as const,
+      permissionDecisionReason: reason,
+    },
+  }
+}
 
 function findEscapedAbsolutePath(input: unknown, workspaceRoot: string): string | null {
   if (!input || typeof input !== 'object') return null

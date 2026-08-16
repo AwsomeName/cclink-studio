@@ -22,6 +22,10 @@ const MODULE_CATALOG: Record<string, { label: string; description: string }> = {
     label: '网页事务',
     description: '读取事务事实、记录办理证据并提出待用户确认的流程变更。',
   },
+  'scheduled-task': {
+    label: '定时任务',
+    description: '只读查询当前工作空间的 Studio 定时任务、运行状态和历史。',
+  },
 }
 
 const CAPABILITY_LABELS: Record<AgentCapabilityStatus['name'], string> = {
@@ -37,6 +41,7 @@ const CAPABILITY_LABELS: Record<AgentCapabilityStatus['name'], string> = {
   hardware: 'Hardware',
   cad: 'CAD',
   cclink: 'CCLink',
+  'scheduled-task': 'Scheduled Tasks',
   mcp: 'MCP',
 }
 
@@ -44,6 +49,7 @@ const CAPABILITY_ORDER: AgentCapabilityStatus['name'][] = [
   'agent-backend',
   'mcp',
   'editor',
+  'scheduled-task',
   'terminal',
   'browser',
   'android',
@@ -68,6 +74,24 @@ export function getAgentCapabilities(runtime: CclinkStudioRuntimeState): AgentCa
               reason: '未连接用户真机',
               updatedAt: snapshot.updatedAt,
             }
+    }
+    if (name === 'scheduled-task' && snapshot.state !== 'failed') {
+      const runtimeStatus = runtime.scheduledTaskService?.getRuntimeStatus()
+      snapshot = runtimeStatus
+        ? runtimeStatus.state === 'degraded'
+          ? {
+              name,
+              state: 'degraded',
+              reason: runtimeStatus.lastError?.message ?? '定时任务 Runtime 已降级',
+              updatedAt: snapshot.updatedAt,
+            }
+          : { name, state: 'ready', updatedAt: snapshot.updatedAt }
+        : {
+            name,
+            state: 'unavailable',
+            reason: '定时任务服务未就绪',
+            updatedAt: snapshot.updatedAt,
+          }
     }
     return {
       name,
@@ -173,6 +197,17 @@ function getModuleAvailability(
       return runtime.webAffairService
         ? { available: true }
         : { available: false, reason: '事务服务未就绪' }
+    case 'scheduled-task': {
+      const status = runtime.scheduledTaskService?.getRuntimeStatus()
+      if (!status) return { available: false, reason: '定时任务服务未就绪' }
+      if (status.state === 'degraded') {
+        return {
+          available: false,
+          reason: status.lastError?.message ?? '定时任务 Runtime 已降级',
+        }
+      }
+      return { available: true }
+    }
     default:
       return { available: true }
   }

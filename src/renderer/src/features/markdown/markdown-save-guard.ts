@@ -2,10 +2,10 @@ import type { Editor } from '@tiptap/core'
 import {
   analyzeMarkdown,
   normalizeMarkdownEditorOutput,
-  prepareMarkdownEditorInput,
   type MarkdownAnalysis,
   type MarkdownDiagnostic,
 } from './markdown-codec'
+import { parseMarkdownEditorDocument } from './markdown-editor-document'
 
 export interface MarkdownSaveInspection extends MarkdownAnalysis {
   markdown: string
@@ -25,7 +25,7 @@ export function inspectMarkdownEditorBeforeSave(
   }
 
   try {
-    const reparsedDocument = editor.markdown.parse(prepareMarkdownEditorInput(markdown))
+    const reparsedDocument = parseMarkdownEditorDocument(editor, markdown)
     const reparsedMarkdown = normalizeMarkdownEditorOutput(
       editor.markdown.serialize(reparsedDocument),
       markdown,

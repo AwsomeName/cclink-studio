@@ -25,6 +25,11 @@ describe('McpToolHost tool session context', () => {
     const token = host.createToolSession({
       conversationId: 'conv-123',
       workspaceKey: '/workspace/a',
+      trustedWorkspace: {
+        kind: 'local',
+        rootPath: '/workspace/a',
+        workspaceKey: '/workspace/a',
+      },
       agentRunId: 'run-123',
       agentGoal: 'write the file',
     })
@@ -55,6 +60,11 @@ describe('McpToolHost tool session context', () => {
       {
         conversationId: 'conv-123',
         workspaceKey: '/workspace/a',
+        trustedWorkspace: {
+          kind: 'local',
+          rootPath: '/workspace/a',
+          workspaceKey: '/workspace/a',
+        },
         agentRunId: 'run-123',
         agentGoal: 'write the file',
         confirmationGranted: true,

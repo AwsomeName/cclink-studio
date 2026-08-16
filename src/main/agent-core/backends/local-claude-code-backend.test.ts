@@ -196,9 +196,19 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     expect(params.options.env.ANTHROPIC_API_KEY).toBe('test-api-key')
     expect(params.options.env.CLAUDE_AGENT_SDK_CLIENT_APP).toBe('cclink-studio/0.1.1')
     expect(params.options.tools).toBeUndefined()
-    expect(params.options.disallowedTools).toBeUndefined()
+    expect(params.options.disallowedTools).toEqual([
+      'CronCreate',
+      'CronDelete',
+      'CronList',
+      'ScheduleWakeup',
+      'RemoteTrigger',
+    ])
+    expect(params.options.skills).toBeUndefined()
+    expect(params.options.settings).toMatchObject({ skillOverrides: { loop: 'off' } })
     expect(params.options.hooks.PreToolUse).toHaveLength(1)
     expect(getSystemPromptAppend()).toContain('| browser_new_tab |')
+    expect(getSystemPromptAppend()).toContain('ScheduledTaskService 是定时任务')
+    expect(getSystemPromptAppend()).toContain('scheduled_task_list')
   })
 
   it('does not let an aborted SDK query emit into or clean up the next query', async () => {
@@ -373,6 +383,74 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     expect(result).toEqual({ continue: true })
   })
 
+  it('blocks native scheduling tools, /loop, system schedulers and Claude task files', async () => {
+    await createBackend().sendMessage('检查定时任务')
+
+    const hook = getLastQueryParams().options.hooks.PreToolUse[0].hooks[0]
+    const cases = [
+      { tool_name: 'CronList', tool_input: {} },
+      { tool_name: 'Skill', tool_input: { skill: 'loop' } },
+      { tool_name: 'Bash', tool_input: { command: 'sudo crontab -e' } },
+      { tool_name: 'Bash', tool_input: { command: 'systemctl enable report.timer' } },
+      {
+        tool_name: 'Write',
+        tool_input: {
+          file_path: '/Users/apple/Desktop/project/.claude/scheduled_tasks.json',
+          content: '{}',
+        },
+      },
+    ]
+
+    for (const [index, item] of cases.entries()) {
+      const result = await hook(
+        {
+          hook_event_name: 'PreToolUse',
+          ...item,
+          tool_use_id: `scheduling-${index}`,
+        },
+        `scheduling-${index}`,
+        { signal: new AbortController().signal },
+      )
+      expect(result.hookSpecificOutput?.permissionDecision).toBe('deny')
+      expect(result.hookSpecificOutput?.permissionDecisionReason).toMatch(
+        /(?:NATIVE_SCHEDULING|SYSTEM_SCHEDULER)/,
+      )
+    }
+  })
+
+  it('keeps ordinary workspace Bash and file writes available', async () => {
+    await createBackend().sendMessage('更新项目文件')
+
+    const hook = getLastQueryParams().options.hooks.PreToolUse[0].hooks[0]
+    await expect(
+      hook(
+        {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Bash',
+          tool_input: { command: 'pnpm test' },
+          tool_use_id: 'normal-bash',
+        },
+        'normal-bash',
+        { signal: new AbortController().signal },
+      ),
+    ).resolves.toEqual({ continue: true })
+    await expect(
+      hook(
+        {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Write',
+          tool_input: {
+            file_path: '/Users/apple/Desktop/project/docs/report.md',
+            content: 'crontab is documented here',
+          },
+          tool_use_id: 'normal-write',
+        },
+        'normal-write',
+        { signal: new AbortController().signal },
+      ),
+    ).resolves.toEqual({ continue: true })
+  })
+
   it('disables invisible browser routes when a visible browser tab is forced', async () => {
     await createBackend().sendMessage('操作这个网页', { forceVisibleBrowser: true })
 
@@ -380,6 +458,11 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     expect(params.options.tools).toEqual([])
     expect(params.options.strictMcpConfig).toBe(true)
     expect(params.options.disallowedTools).toEqual([
+      'CronCreate',
+      'CronDelete',
+      'CronList',
+      'ScheduleWakeup',
+      'RemoteTrigger',
       'mcp__cclink_studio__browser_new_tab',
       'AskUserQuestion',
     ])
@@ -413,6 +496,11 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     expect(createToolSession).toHaveBeenCalledWith({
       conversationId: 'conv-123',
       workspaceKey: '/Users/apple/Desktop/project-a',
+      trustedWorkspace: {
+        kind: 'local',
+        rootPath: '/Users/apple/Desktop/project-a',
+        workspaceKey: '/Users/apple/Desktop/project-a',
+      },
       agentRunId: null,
       agentGoal: '操作当前会话',
     })
@@ -575,10 +663,21 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
 
     await backend.compact('保留当前方案和未完成任务')
 
-    expect(getLastQueryParams()).toMatchObject({
+    const params = getLastQueryParams()
+    expect(params).toMatchObject({
       prompt: '/compact 保留当前方案和未完成任务',
       options: { resume: '123e4567-e89b-12d3-a456-426614174000' },
     })
+    expect(params.options.disallowedTools).toEqual([
+      'CronCreate',
+      'CronDelete',
+      'CronList',
+      'ScheduleWakeup',
+      'RemoteTrigger',
+    ])
+    expect(params.options.skills).toBeUndefined()
+    expect(params.options.settings).toMatchObject({ skillOverrides: { loop: 'off' } })
+    expect(params.options.hooks.PreToolUse).toHaveLength(1)
   })
 
   it('updates the stored session id from SDK init events', async () => {

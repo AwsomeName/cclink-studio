@@ -145,6 +145,7 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
     `- Claude 运行时来源：${input.agentRuntime?.runtimeProvenance?.source ?? 'unknown'}`,
     `- Agent SDK 版本：${input.agentRuntime?.runtimeProvenance?.sdkVersion ?? 'unknown'}`,
     `- Claude Code 版本：${input.agentRuntime?.runtimeProvenance?.claudeCodeVersion ?? 'unknown'}`,
+    `- 原生调度策略：${formatNativeSchedulingPolicy(input.agentRuntime)}`,
     `- 主进程当前 runId：${redactText(input.agentRuntime?.runId ?? '无')}`,
     `- 最近运行事件：${conversation?.lastRunEventAt ? formatDateTime(conversation.lastRunEventAt) : '无'}`,
     `- 最近终止原因：${conversation?.lastRunTerminalReason ?? '无'}`,
@@ -184,6 +185,14 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
     '## 脱敏说明',
     'password/token/cookie/authorization/api key/session/验证码/手机号/邮箱等字段已脱敏或截断。',
   ].join('\n')
+}
+
+function formatNativeSchedulingPolicy(status: AgentStatus | null | undefined): string {
+  const policy = status?.nativeSchedulingPolicy
+  if (!policy) return 'unknown'
+  return policy.enforced && policy.loopSkillDisabled && policy.preToolUseGuard
+    ? `enforced · deny=${policy.deniedToolCount} · loop=${policy.sdkSkillOverride}`
+    : 'degraded'
 }
 
 function formatAgentRuntime(input: AgentDiagnosticReportInput): string {

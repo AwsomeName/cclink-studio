@@ -11,6 +11,7 @@
   },
   "include": [
     "src/main/**/*.ts",
+    "src/main/agent-core/backends/claude-native-scheduling-policy.json",
     "src/shared/**/*.ts",
     "src/preload/**/*.ts"
   ]

@@ -154,6 +154,13 @@ describe('agent diagnostic report', () => {
           sdkVersion: '0.3.211',
           claudeCodeVersion: '2.1.211',
         },
+        nativeSchedulingPolicy: {
+          enforced: true,
+          deniedToolCount: 5,
+          loopSkillDisabled: true,
+          sdkSkillOverride: 'off',
+          preToolUseGuard: true,
+        },
       },
       capabilities: [
         {
@@ -332,6 +339,7 @@ describe('agent diagnostic report', () => {
     expect(markdown).toContain('ag***@example.com')
     expect(markdown).not.toContain('super-secret')
     expect(markdown).not.toContain('abcdef')
+    expect(markdown).toContain('原生调度策略：enforced · deny=5 · loop=off')
     expect(markdown).not.toContain('13812345678')
     expect(markdown).not.toContain('raw-agent-session-secret')
   })

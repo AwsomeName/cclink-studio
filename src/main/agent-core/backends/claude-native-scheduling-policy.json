@@ -1,0 +1,6 @@
+{
+  "sdkVersion": "0.3.211",
+  "deniedTools": ["CronCreate", "CronDelete", "CronList", "ScheduleWakeup", "RemoteTrigger"],
+  "disabledBundledSkills": ["loop"],
+  "toolNameAuditPattern": "cron|schedule|wakeup|trigger|routine|daemon"
+}

@@ -228,6 +228,22 @@ async function main() {
           '    return 42',
         ].join('\n'),
       )
+      await window.cclinkStudio.fs.writeFile(
+        `${workspacePath}/empty-lists.md`,
+        [
+          '## 感恩记录',
+          '',
+          '1.',
+          '2.',
+          '3.',
+          '',
+          '## 明日规划',
+          '',
+          '- [ ]',
+          '- [ ]',
+          '- [ ]',
+        ].join('\n'),
+      )
       const reportLines = [
         '# Hebbian 学习',
         '',
@@ -909,6 +925,67 @@ async function main() {
       'reopened Markdown lost the numbered heading structure',
     )
     return 'task shortcut, three numbered levels, and 1. ### heading save/reopen'
+  })
+
+  await runCheck('empty Markdown list placeholders stay editable and survive reopen', async () => {
+    await ensureSidebarVisible(page)
+    await clickByTitle(page, '文件')
+    const fileItem = page.locator('.file-tree-item.file', { hasText: 'empty-lists.md' }).first()
+    await fileItem.waitFor({ timeout: 10_000 })
+    await fileItem.evaluate((element) => element.click())
+    await page.waitForSelector('.markdown-editor-wrapper', { timeout: 15_000 })
+    assert(
+      (await page.locator('.markdown-parse-blocked').count()) === 0 &&
+        (await page.locator('.markdown-protected-preview').count()) === 0,
+      'empty list placeholders incorrectly opened in protected preview',
+    )
+
+    const editor = page.locator('.tiptap').first()
+    assert(
+      (await editor.locator(':scope > ol > li').count()) === 3,
+      'empty ordered items were lost',
+    )
+    assert(
+      (await editor.locator(':scope > ul[data-type="taskList"] > li').count()) === 3,
+      'empty task items were lost',
+    )
+    const firstOrderedParagraph = editor.locator(':scope > ol > li > p').first()
+    await firstOrderedParagraph.click()
+    await page.keyboard.type('第一件事')
+    await page.locator('.toolbar-save-action').click()
+    await page.waitForFunction(
+      () => document.querySelector('.toolbar-save-state')?.textContent?.includes('已保存'),
+      null,
+      { timeout: 10_000 },
+    )
+
+    const path = `${workspaceDir}/empty-lists.md`
+    const saved = await page.evaluate(
+      async (filePath) => (await window.cclinkStudio.fs.readFile(filePath)).content,
+      path,
+    )
+    assert(/^1\. 第一件事$/m.test(saved), `empty ordered item was not editable: ${saved}`)
+    assert(
+      /^2\. $/m.test(saved) && /^3\. $/m.test(saved),
+      'remaining empty ordered items were lost',
+    )
+    assert(
+      saved.split('\n').filter((line) => /^- \[ \] $/.test(line)).length === 3,
+      'empty task items were not preserved on disk',
+    )
+
+    const tab = page.locator('.tab', { hasText: 'empty-lists.md' }).first()
+    await tab.locator('.tab-close').click()
+    await fileItem.evaluate((element) => element.click())
+    await page.waitForSelector('.markdown-editor-wrapper', { timeout: 15_000 })
+    const reopened = page.locator('.tiptap').first()
+    assert(
+      (await page.locator('.markdown-parse-blocked').count()) === 0 &&
+        (await reopened.locator(':scope > ol > li').count()) === 3 &&
+        (await reopened.locator(':scope > ul[data-type="taskList"] > li').count()) === 3,
+      'saved empty list placeholders did not survive reopen',
+    )
+    return 'open, type, save, close, and reopen preserved empty ordered/task items'
   })
 
   await runCheck('markdown normalization stays editable after save', async () => {
