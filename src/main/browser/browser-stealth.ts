@@ -6,6 +6,11 @@ const ACCEPT_LANGUAGE = 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7'
 
 export function normalizeDesktopUserAgent(userAgent: string): string {
   return userAgent
+    // Electron inserts the packaged product token immediately before Chrome/.
+    // The production name may contain localized characters (for example
+    // `CCLinkStudio开源版/0.1.37`), so matching only the npm package name leaves
+    // a non-Chrome token visible to strict SSO/WAF implementations.
+    .replace(/\s+[^()\s/]+\/[\d.]+(?=\s+Chrome\/[\d.]+)/gi, '')
     .replace(/\s+(Electron|cclink-studio|cclinkstudio)\/[\d.]+/gi, '')
     .replace(/\s{2,}/g, ' ')
     .trim()
