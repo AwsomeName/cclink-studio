@@ -353,7 +353,12 @@ export function applyAgentErrorToStore(
     store.addSystemMessage(`上下文压缩失败: ${error.message}`, conversationId)
     return
   }
-  if (error.code === 'budget_exceeded' || error.code === 'sdk_session_invalid') {
+  if (
+    error.code === 'budget_exceeded' ||
+    error.code === 'sdk_session_invalid' ||
+    error.code === 'native_scheduling_state_detected' ||
+    error.code === 'native_scheduling_state_unverifiable'
+  ) {
     store.setSessionId(null, conversationId)
     store.setContextUsage(null, conversationId)
   }

@@ -809,6 +809,9 @@ export class AgentBridge {
     ) {
       this.rememberTrustedClaudeSession(event.conversationId)
     }
+    if (event.type === 'error' && !this.runtime.getStatus(event.conversationId).sessionId) {
+      this.trustedClaudeSessions.delete(event.conversationId)
+    }
     for (const listener of this.runtimeListeners) listener(event)
     const taskId = this.activeBrowserTaskIds.get(event.conversationId)
     if (taskId) {

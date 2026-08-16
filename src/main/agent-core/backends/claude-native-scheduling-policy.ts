@@ -1,3 +1,5 @@
+import { lstat, readlink, realpath } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
 import policyManifest from './claude-native-scheduling-policy.json'
 
 export const CLAUDE_NATIVE_SCHEDULING_TOOLS = Object.freeze([
@@ -97,6 +99,45 @@ export function inspectNativeSchedulingToolUse(
   return null
 }
 
+/**
+ * 补充纯字符串策略无法识别的实际 symlink 目标。
+ * 仅检查工具已经明确给出的文件路径或 shell 路径 token，不扫描整个工作空间。
+ */
+export async function inspectNativeSchedulingSymlinkToolUse(
+  toolName: string,
+  toolInput: unknown,
+  workspaceRoot: string,
+): Promise<NativeSchedulingDenial | null> {
+  const targets = isFileMutationTool(toolName)
+    ? collectFileTargets(toolInput)
+    : SHELL_TOOLS.has(toolName)
+      ? collectShellPathCandidates(getStringField(toolInput, 'command') ?? '')
+      : []
+  if (targets.length === 0) return null
+
+  const root = resolve(workspaceRoot)
+  for (const target of targets) {
+    const candidate = isAbsolute(target) ? resolve(target) : resolve(root, target)
+    const pathFromWorkspace = relative(root, candidate)
+    if (pathFromWorkspace.startsWith('..') || isAbsolute(pathFromWorkspace)) continue
+    try {
+      const projectedTarget = await resolveProjectedSymlinkTarget(candidate)
+      if (isExternalSchedulingFile(projectedTarget)) {
+        return denial(
+          'NATIVE_SCHEDULING_FILE_BLOCKED',
+          '已阻止通过符号链接写入 Claude 或系统调度配置；Studio 定时任务不能通过文件别名绕过。',
+        )
+      }
+    } catch {
+      return denial(
+        'NATIVE_SCHEDULING_FILE_BLOCKED',
+        '无法安全验证文件别名的最终写入目标，Studio 已按调度边界拒绝本次写入。',
+      )
+    }
+  }
+  return null
+}
+
 function isStudioFileMutationTool(toolName: string): boolean {
   return STUDIO_FILE_MUTATION_TOOLS.some(
     (name) => toolName === name || toolName.endsWith(`__${name}`),
@@ -192,6 +233,48 @@ function containsExternalSchedulingPath(command: string): boolean {
     /\/etc\/systemd\/(?:system|user)\/[^\s'"<>|;]+\.timer\b/u.test(normalized) ||
     /\/etc\/(?:crontab|cron\.(?:d|daily|hourly|monthly|weekly))(?:\/|\b)/u.test(normalized) ||
     /windows\/system32\/tasks(?:\/|\b)/u.test(normalized)
+  )
+}
+
+function collectShellPathCandidates(command: string): string[] {
+  return splitShellSegments(command.replaceAll('\\\n', ' ')).flatMap((segment) =>
+    tokenizeShellSegment(segment).flatMap((rawToken) => {
+      const token = stripQuotes(rawToken)
+        .replace(/^[<>]+/u, '')
+        .replace(/[),]+$/u, '')
+        .trim()
+      if (!token || token.startsWith('-') || /^[A-Za-z_][A-Za-z0-9_]*=/u.test(token)) return []
+      return token.includes('/') || token.startsWith('.') ? [token] : []
+    }),
+  )
+}
+
+async function resolveProjectedSymlinkTarget(candidate: string, depth = 0): Promise<string> {
+  if (depth > 16) throw new Error('符号链接层级过深')
+
+  let resolvedParent: string
+  try {
+    resolvedParent = await realpath(dirname(candidate))
+  } catch (error) {
+    if (isMissingPathError(error)) return candidate
+    throw error
+  }
+  const projected = resolve(resolvedParent, basename(candidate))
+
+  try {
+    const entry = await lstat(projected)
+    if (!entry.isSymbolicLink()) return projected
+    const linkTarget = await readlink(projected)
+    return resolveProjectedSymlinkTarget(resolve(resolvedParent, linkTarget), depth + 1)
+  } catch (error) {
+    if (isMissingPathError(error)) return projected
+    throw error
+  }
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return (
+    error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT'
   )
 }
 

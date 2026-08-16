@@ -36,6 +36,7 @@ import {
 import {
   CLAUDE_NATIVE_SCHEDULING_TOOLS,
   inspectNativeSchedulingToolUse,
+  inspectNativeSchedulingSymlinkToolUse,
 } from './claude-native-scheduling-policy.js'
 
 const VISIBLE_BROWSER_DISALLOWED_TOOLS = [
@@ -552,7 +553,15 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     const workspaceRoot = workspacePath ? resolve(workspacePath) : null
     return async (input) => {
       if (input.hook_event_name !== 'PreToolUse') return { continue: true }
-      const schedulingDenial = inspectNativeSchedulingToolUse(input.tool_name, input.tool_input)
+      const schedulingDenial =
+        inspectNativeSchedulingToolUse(input.tool_name, input.tool_input) ??
+        (workspaceRoot
+          ? await inspectNativeSchedulingSymlinkToolUse(
+              input.tool_name,
+              input.tool_input,
+              workspaceRoot,
+            )
+          : null)
       if (schedulingDenial) {
         console.warn(`[ClaudeCodeBackend] ${schedulingDenial.code}`)
         return denyPreToolUse(schedulingDenial.reason)
