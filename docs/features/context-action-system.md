@@ -222,6 +222,8 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 2. 主进程把 Electron 参数归一化为有界 `BrowserContext`。
 3. 先通知 renderer 关闭 React 菜单，再根据 link、image、selection、editable 和导航状态生成原生菜单。
 4. 菜单动作直接调用当前 `tabId` 对应的 BrowserManager/WebContents 能力，不经过 Playwright 或 CDP。
+   ADR 0013 允许 isolated world 在用户右键纯文本 HTTP(S) URL 时只建立对应文本选区，使原生
+   `context-menu` 参数可以按与真实链接相同的有界 contract 处理；它不改写 DOM 或回传正文。
 5. 需要 renderer 参与的“发送给 Agent”等动作通过 shared 事件携带 workspace/tab/profile 关联。
 6. View 销毁、Tab 重建或 Profile 变化时释放监听器并使旧 action token 失效。
 

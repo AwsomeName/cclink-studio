@@ -125,7 +125,9 @@ CCLink Studio 是 CCLink 唯一的 GPL-3.0-only 桌面 App。它不是“开源�
 - 工具栏、快捷键、命令面板和上下文菜单必须引用同一个稳定 command ID、可用条件和领域执行入口，不能分别复制业务逻辑。
 - 菜单只拥有瞬时 UI 状态；文件、Tab、Browser、Terminal、Thread 等业务副作用仍由对应领域模块拥有。
 - 各模块通过 contribution 注册上下文操作，不得持续扩张一个包含所有业务的全局菜单组件。
-- Browser `WebContentsView` 的网页菜单使用主进程原生适配器和有界 shared contract，不得依赖 DOM 注入、CDP 或高权限 preload。
+- Browser `WebContentsView` 的网页菜单使用主进程原生适配器和有界 shared contract，不得依赖
+  DOM 改写、CDP 或高权限 preload。ADR 0013 只允许无通信通道的 isolated world 按用户点击位置
+  命中纯文本 HTTP(S) URL，并继续经过现有主进程 URL 与生命周期校验。
 - 任何入口都不能绕过权限、危险操作确认或不可逆外部副作用的最终人工确认。
 - 上下文操作 owner 必须登记在 `docs/ops/context-action-inventory.md` 并通过 `pnpm verify:context-actions`；重复 command/contribution、孤儿 owner、未覆盖 target、第二个菜单 Store 或未登记原生菜单属于架构门禁失败。
 - 上下文操作诊断只记录失败分类、稳定 ID、target kind 和脱敏消息，不记录凭证、target payload 或网页正文。

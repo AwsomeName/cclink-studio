@@ -98,6 +98,34 @@ describe('browser context menu', () => {
     )
   })
 
+  it('treats an exact plain-text HTTP(S) selection as a link without accepting other text', () => {
+    const plainUrl = normalizeBrowserContext(
+      { workspaceKey: '/workspace/a', tabId: 'tab-1', profileId: null },
+      'https://example.com/',
+      { selectionText: '  https://toas.sbj.cnipa.gov.cn/toas-extra-prod/login  ' },
+    )
+    const sentence = normalizeBrowserContext(
+      { workspaceKey: '/workspace/a', tabId: 'tab-1', profileId: null },
+      'https://example.com/',
+      { selectionText: '访问 https://example.com/' },
+    )
+    const executable = normalizeBrowserContext(
+      { workspaceKey: '/workspace/a', tabId: 'tab-1', profileId: null },
+      'https://example.com/',
+      { selectionText: 'javascript:alert(1)' },
+    )
+    const editable = normalizeBrowserContext(
+      { workspaceKey: '/workspace/a', tabId: 'tab-1', profileId: null },
+      'https://example.com/',
+      { selectionText: 'https://example.com/', isEditable: true },
+    )
+
+    expect(plainUrl?.linkUrl).toBe('https://toas.sbj.cnipa.gov.cn/toas-extra-prod/login')
+    expect(sentence?.linkUrl).toBeNull()
+    expect(executable?.linkUrl).toBeNull()
+    expect(editable?.linkUrl).toBeNull()
+  })
+
   it('invalidates every callback when the bound view token is stale', () => {
     const wc = webContents()
     const requestOpenTab = vi.fn()

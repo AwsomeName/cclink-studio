@@ -46,3 +46,6 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
 - `0012-controlled-peer-acp-runtime.md`：在保留 Claude Code 必备默认基线和直接 SDK 路径的前提
   下，允许 Thread 显式选择受控、本地、Codex-only 的 ACP Runtime；不开放 Registry、任意 Agent
   或远程 transport。
+- `0013-isolated-plain-text-url-activation.md`：允许 Browser main frame 在无权限 isolated world
+  中按用户点击位置识别纯文本 HTTP(S) URL；不改写 DOM、不回传正文，仍复用现有 URL 校验、
+  Profile 和 Tab 生命周期。

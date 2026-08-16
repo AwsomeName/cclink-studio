@@ -49,8 +49,14 @@ function boundedText(value: string): string {
 
 function optionalBrowserUrl(value: string | undefined): string | null {
   if (!value) return null
-  const parsed = browserUrlSchema.safeParse(value)
+  const parsed = browserUrlSchema.safeParse(value.trim())
   return parsed.success ? parsed.data : null
+}
+
+function optionalHttpBrowserUrl(value: string | undefined): string | null {
+  const parsed = optionalBrowserUrl(value)
+  if (!parsed || parsed === 'about:blank') return null
+  return ['http:', 'https:'].includes(new URL(parsed).protocol) ? parsed : null
 }
 
 export function normalizeBrowserContext(
@@ -65,11 +71,15 @@ export function normalizeBrowserContext(
     editFlags?: Partial<BrowserContext['editFlags']>
   },
 ): BrowserContext | null {
+  const selectionText = boundedText(params.selectionText ?? '')
   const candidate = {
     ...binding,
     pageUrl,
-    selectionText: boundedText(params.selectionText ?? ''),
-    linkUrl: optionalBrowserUrl(params.linkURL),
+    selectionText,
+    // ADR 0013：isolated world 会在右键纯文本 URL 时只选中该 URL。
+    linkUrl:
+      optionalBrowserUrl(params.linkURL) ??
+      (params.isEditable === true ? null : optionalHttpBrowserUrl(selectionText)),
     srcUrl: optionalBrowserUrl(params.srcURL),
     isEditable: params.isEditable === true,
     mediaType: params.mediaType ?? 'none',
