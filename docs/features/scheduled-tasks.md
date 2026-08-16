@@ -331,7 +331,8 @@ Claude Code Runtime 的 `CronCreate`、`CronDelete`、`CronList`、`ScheduleWake
 Bash 或文件工具写入已知外部调度配置。调度策略版本进入 Claude session compatibility
 fingerprint；除此之外，session 还必须是本次主进程从 SDK `system/init` 亲自观察到的同一
 conversation session，renderer 不能用当前 fingerprint 为旧 session 自证。App 完整重启后
-Studio 对话正文仍恢复，但 Claude SDK session 从新上下文开始。工作空间存在
+Studio 对话正文仍恢复，但 Claude SDK session 从新上下文开始；backend 清空 session 时主进程
+会同步撤销内存可信记录。工作空间存在
 `.claude/scheduled_tasks.json` 时，Studio 在启动 Agent 前拒绝执行并提示用户外部处理，不
 自动删除或迁移。文件产物账本归因、Agent 创建/启用任务、Codex ACP 接入和外部任务迁移仍
 未开放。
@@ -346,6 +347,13 @@ Studio 对话正文仍恢复，但 Claude SDK session 从新上下文开始。�
   引入 `/loop` 的原生调度 Skill；只写提示词不算完成。
 - Agent 的 Bash、文件写入和 Skill 路径也必须阻止创建 `.claude/scheduled_tasks.json`，
   或通过 `crontab`、`launchctl`、`schtasks`、`systemd` timer、`at` 等路径绕过 Studio。
+- 普通文件/editor 路径及可识别 shell 路径 token 必须投影实际 symlink 目标，dangling symlink
+  不能因为目标尚不存在或 alias 位于工作空间外而绕过原生任务文件保护。受保护路径自身使用
+  `lstat` 检查，任何 symlink 都按外部原生调度状态 fail closed。
+- 普通 Claude 会话的内置文件工具和 Studio editor 工具必须把相对路径按可信工作空间解析，
+  覆盖 `filePath`、`dirPath` 等受支持路径字段，并逐段投影已有 symlink；任何投影到工作空间外
+  的读写或列目录都拒绝。校验后的规范化绝对路径通过 PreToolUse `updatedInput` 交给实际工具，
+  避免策略与执行各自解析相对路径。
 - 普通 Agent 会话的本地工作空间由 `WorkspaceStateService` 的主进程活动投影规范化并按
   conversation 固定；异步绑定提交前必须同时复核活动 generation 和已提交绑定。通用设置 IPC
   不能修改活动工作空间，合法工作空间切换通过统一 Workspace IPC 提交。Agent Runtime 状态
@@ -354,9 +362,10 @@ Studio 对话正文仍恢复，但 Claude SDK session 从新上下文开始。�
 - SDK 版本保持精确固定；升级 Claude Runtime/SDK 时，门禁必须审计是否新增原生调度工具
   或调度 Skill，不能依赖当前 denylist 永久完整。
 
-这里的 Bash 防护是有界策略，不是任意命令的完整安全沙箱。静态 PreToolUse 无法证明变量
-拼接、解释器间接执行或所有后台驻留技巧均不可绕过；若产品要求对抗性命令隔离，需要另立
-OS 沙箱和子进程生命周期托管工作包，不能靠继续增加正则宣称完成。
+这里的 Bash 防护是有界策略，不是任意命令的完整安全沙箱。文件/editor 工具已绑定工作空间，
+但静态 PreToolUse 无法证明 Bash 中的变量拼接、解释器间接执行或所有后台驻留技巧均不可绕过；
+symlink 投影同样存在检查与执行之间的 TOCTOU。若产品要求对抗性命令隔离，需要另立 OS 沙箱
+和子进程生命周期托管工作包，不能靠继续增加正则宣称完成。
 
 主进程活动工作空间投影阻止 generic settings 伪造和未提交目录查询，但它不把已完全控制的
 renderer 当作不可信 OS 进程：后者仍可调用产品本身合法的工作空间切换 IPC。若威胁模型要求

@@ -1,5 +1,5 @@
 {
-  "policyVersion": 2,
+  "policyVersion": 3,
   "sdkVersion": "0.3.211",
   "deniedTools": ["CronCreate", "CronDelete", "CronList", "ScheduleWakeup", "RemoteTrigger"],
   "disabledBundledSkills": ["loop"],

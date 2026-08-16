@@ -1,6 +1,10 @@
+import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   CLAUDE_NATIVE_SCHEDULING_TOOLS,
+  inspectNativeSchedulingSymlinkToolUse,
   inspectNativeSchedulingToolUse,
 } from './claude-native-scheduling-policy'
 
@@ -56,5 +60,64 @@ describe('Claude native scheduling policy', () => {
     ['Skill', { skill: 'grill-me' }],
   ])('allows bounded non-scheduling use through %s', (toolName, input) => {
     expect(inspectNativeSchedulingToolUse(toolName, input)).toBeNull()
+  })
+
+  it('denies real dangling symlinks that project to native scheduling state', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'cclink-scheduling-symlink-'))
+    const claudePath = join(workspacePath, '.claude')
+    await mkdir(claudePath)
+    await symlink('scheduled_tasks.json', join(claudePath, 'alias.json'))
+    try {
+      await expect(
+        inspectNativeSchedulingSymlinkToolUse(
+          'mcp__cclink_studio__editor_write',
+          { filePath: '.claude/alias.json', content: '{}' },
+          workspacePath,
+        ),
+      ).resolves.toMatchObject({ code: 'NATIVE_SCHEDULING_FILE_BLOCKED' })
+      await expect(
+        inspectNativeSchedulingSymlinkToolUse(
+          'Bash',
+          { command: "echo '{}' > .claude/alias.json" },
+          workspacePath,
+        ),
+      ).resolves.toMatchObject({ code: 'NATIVE_SCHEDULING_FILE_BLOCKED' })
+      await expect(
+        inspectNativeSchedulingSymlinkToolUse(
+          'Bash',
+          { command: "cd .claude && echo '{}' > alias.json" },
+          workspacePath,
+        ),
+      ).resolves.toMatchObject({ code: 'NATIVE_SCHEDULING_FILE_BLOCKED' })
+    } finally {
+      await rm(workspacePath, { recursive: true, force: true })
+    }
+  })
+
+  it('denies external aliases that project into protected scheduling state', async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), 'cclink-external-scheduling-alias-'))
+    const workspacePath = join(rootPath, 'workspace')
+    const externalPath = join(rootPath, 'external')
+    await Promise.all([mkdir(workspacePath), mkdir(externalPath)])
+    const aliasPath = join(externalPath, 'alias.json')
+    await symlink(join(workspacePath, '.claude', 'scheduled_tasks.json'), aliasPath)
+    try {
+      await expect(
+        inspectNativeSchedulingSymlinkToolUse(
+          'mcp__cclink_studio__editor_write',
+          { filePath: aliasPath, content: '{}' },
+          workspacePath,
+        ),
+      ).resolves.toMatchObject({ code: 'NATIVE_SCHEDULING_FILE_BLOCKED' })
+      await expect(
+        inspectNativeSchedulingSymlinkToolUse(
+          'Bash',
+          { command: `echo '{}' > ${aliasPath}` },
+          workspacePath,
+        ),
+      ).resolves.toMatchObject({ code: 'NATIVE_SCHEDULING_FILE_BLOCKED' })
+    } finally {
+      await rm(rootPath, { recursive: true, force: true })
+    }
   })
 })

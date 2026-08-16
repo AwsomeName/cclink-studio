@@ -1,5 +1,5 @@
-import { lstat, readlink, realpath } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
+import { lstat, readlink } from 'node:fs/promises'
+import { dirname, isAbsolute, parse, relative, resolve, sep } from 'node:path'
 import policyManifest from './claude-native-scheduling-policy.json'
 
 export const CLAUDE_NATIVE_SCHEDULING_TOOLS = Object.freeze([
@@ -111,15 +111,13 @@ export async function inspectNativeSchedulingSymlinkToolUse(
   const targets = isFileMutationTool(toolName)
     ? collectFileTargets(toolInput)
     : SHELL_TOOLS.has(toolName)
-      ? collectShellPathCandidates(getStringField(toolInput, 'command') ?? '')
+      ? collectShellPathCandidates(getStringField(toolInput, 'command') ?? '', workspaceRoot)
       : []
   if (targets.length === 0) return null
 
   const root = resolve(workspaceRoot)
   for (const target of targets) {
     const candidate = isAbsolute(target) ? resolve(target) : resolve(root, target)
-    const pathFromWorkspace = relative(root, candidate)
-    if (pathFromWorkspace.startsWith('..') || isAbsolute(pathFromWorkspace)) continue
     try {
       const projectedTarget = await resolveProjectedSymlinkTarget(candidate)
       if (isExternalSchedulingFile(projectedTarget)) {
@@ -236,40 +234,74 @@ function containsExternalSchedulingPath(command: string): boolean {
   )
 }
 
-function collectShellPathCandidates(command: string): string[] {
-  return splitShellSegments(command.replaceAll('\\\n', ' ')).flatMap((segment) =>
-    tokenizeShellSegment(segment).flatMap((rawToken) => {
-      const token = stripQuotes(rawToken)
-        .replace(/^[<>]+/u, '')
-        .replace(/[),]+$/u, '')
-        .trim()
-      if (!token || token.startsWith('-') || /^[A-Za-z_][A-Za-z0-9_]*=/u.test(token)) return []
-      return token.includes('/') || token.startsWith('.') ? [token] : []
-    }),
-  )
+function collectShellPathCandidates(command: string, workspaceRoot: string): string[] {
+  const candidates: string[] = []
+  let shellCwd = resolve(workspaceRoot)
+
+  for (const segment of splitShellSegments(command.replaceAll('\\\n', ' '))) {
+    const tokens = tokenizeShellSegment(segment)
+    const executableIndex = findExecutableIndex(tokens)
+    if (executableIndex === -1) continue
+    if (executableName(tokens[executableIndex]) === 'cd') {
+      const directory = normalizeShellPathToken(tokens[executableIndex + 1] ?? '')
+      if (directory)
+        shellCwd = isAbsolute(directory) ? resolve(directory) : resolve(shellCwd, directory)
+      continue
+    }
+
+    for (const rawToken of tokens.slice(executableIndex + 1)) {
+      const stripped = stripQuotes(rawToken).trim()
+      if (/^(?:>>?|<<?)$/u.test(stripped)) {
+        continue
+      }
+      const inlineRedirect = stripped.match(/^(?:>>?|<<?)(.+)$/u)?.[1]
+      const token = normalizeShellPathToken(inlineRedirect ?? stripped)
+      if (!token) continue
+      candidates.push(isAbsolute(token) ? resolve(token) : resolve(shellCwd, token))
+    }
+  }
+  return candidates
 }
 
-async function resolveProjectedSymlinkTarget(candidate: string, depth = 0): Promise<string> {
+function normalizeShellPathToken(rawToken: string): string {
+  const token = stripQuotes(rawToken)
+    .replace(/[),]+$/u, '')
+    .trim()
+  if (
+    !token ||
+    token.length > 1024 ||
+    token.startsWith('-') ||
+    /^[A-Za-z_][A-Za-z0-9_]*=/u.test(token)
+  )
+    return ''
+  return token
+}
+
+export async function resolveProjectedSymlinkTarget(candidate: string, depth = 0): Promise<string> {
   if (depth > 16) throw new Error('符号链接层级过深')
 
-  let resolvedParent: string
-  try {
-    resolvedParent = await realpath(dirname(candidate))
-  } catch (error) {
-    if (isMissingPathError(error)) return candidate
-    throw error
+  const absolute = resolve(candidate)
+  const root = parse(absolute).root
+  const segments = relative(root, absolute).split(sep).filter(Boolean)
+  let projected = root
+  for (let index = 0; index < segments.length; index += 1) {
+    projected = resolve(projected, segments[index])
+    try {
+      const entry = await lstat(projected)
+      if (!entry.isSymbolicLink()) continue
+      const linkTarget = await readlink(projected)
+      return resolveProjectedSymlinkTarget(
+        resolve(dirname(projected), linkTarget, ...segments.slice(index + 1)),
+        depth + 1,
+      )
+    } catch (error) {
+      if (isMissingPathError(error)) {
+        return resolve(projected, ...segments.slice(index + 1))
+      }
+      throw error
+    }
   }
-  const projected = resolve(resolvedParent, basename(candidate))
-
-  try {
-    const entry = await lstat(projected)
-    if (!entry.isSymbolicLink()) return projected
-    const linkTarget = await readlink(projected)
-    return resolveProjectedSymlinkTarget(resolve(resolvedParent, linkTarget), depth + 1)
-  } catch (error) {
-    if (isMissingPathError(error)) return projected
-    throw error
-  }
+  return projected
 }
 
 function isMissingPathError(error: unknown): boolean {

@@ -7,7 +7,15 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: queryMock,
 }))
 
-function createMockQuery(sessionId: string): AsyncIterable<unknown> & {
+function createMockQuery(
+  sessionId: string,
+  result: Record<string, unknown> = {
+    type: 'result',
+    subtype: 'success',
+    is_error: false,
+    result: 'ok',
+  },
+): AsyncIterable<unknown> & {
   close: ReturnType<typeof vi.fn>
   getContextUsage: ReturnType<typeof vi.fn>
 } {
@@ -16,7 +24,7 @@ function createMockQuery(sessionId: string): AsyncIterable<unknown> & {
     getContextUsage: vi.fn(async () => null),
     async *[Symbol.asyncIterator]() {
       yield { type: 'system', subtype: 'init', session_id: sessionId }
-      yield { type: 'result', subtype: 'success', is_error: false, result: 'ok' }
+      yield result
     },
   }
 }
@@ -119,6 +127,48 @@ describe('AgentBridge main-process Claude session trust', () => {
     expect(receipt.runtimeSessionMode).toBe('new')
     await vi.waitFor(() => expect(bridge.isBusy(conversationId)).toBe(false))
     expect(queryMock.mock.calls[1]?.[0].options.resume).toBeUndefined()
+    await bridge.destroy()
+  })
+
+  it('revokes process trust when the backend invalidates an observed session', async () => {
+    queryMock
+      .mockImplementationOnce(() => createMockQuery('current-session'))
+      .mockImplementationOnce(() =>
+        createMockQuery('current-session', {
+          type: 'result',
+          subtype: 'error',
+          is_error: true,
+          result: 'API Error: 400 invalid_request_error',
+        }),
+      )
+      .mockImplementationOnce(() => createMockQuery('replacement-session'))
+    const bridge = createBridge()
+    const conversationId = 'conversation-1'
+    const fingerprint = bridge.getStatus(conversationId).sessionCompatibilityFingerprint
+
+    await bridge.sendMessage('first', conversationId, {
+      workspaceRef: { kind: 'global' },
+      sessionCompatibilityFingerprint: fingerprint,
+    })
+    await vi.waitFor(() => expect(bridge.isBusy(conversationId)).toBe(false))
+
+    const invalidReceipt = await bridge.sendMessage('invalid', conversationId, {
+      workspaceRef: { kind: 'global' },
+      sessionId: 'current-session',
+      sessionCompatibilityFingerprint: fingerprint,
+    })
+    expect(invalidReceipt.runtimeSessionMode).toBe('resumed')
+    await vi.waitFor(() => expect(bridge.isBusy(conversationId)).toBe(false))
+    expect(bridge.getStatus(conversationId).sessionId).toBeNull()
+
+    const retryReceipt = await bridge.sendMessage('retry', conversationId, {
+      workspaceRef: { kind: 'global' },
+      sessionId: 'current-session',
+      sessionCompatibilityFingerprint: fingerprint,
+    })
+    expect(retryReceipt.runtimeSessionMode).toBe('new')
+    await vi.waitFor(() => expect(bridge.isBusy(conversationId)).toBe(false))
+    expect(queryMock.mock.calls[2]?.[0].options.resume).toBeUndefined()
     await bridge.destroy()
   })
 })

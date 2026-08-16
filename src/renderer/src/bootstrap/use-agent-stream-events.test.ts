@@ -332,4 +332,17 @@ describe('applyAgentStreamEventToStore', () => {
     expect(conversation.contextUsage).toBeNull()
     expect(conversation.runStatus).toBe('failed')
   })
+
+  it('检测到原生调度状态后清除 renderer 持有的 SDK session', () => {
+    const conversationId = useAgentStore.getState().activeConversationId
+    useAgentStore.getState().setSessionId('revoked-session', conversationId, 'a'.repeat(64))
+
+    applyAgentErrorToStore({
+      conversationId,
+      code: 'native_scheduling_state_detected',
+      message: '检测到 Claude 原生定时任务文件',
+    })
+
+    expect(useAgentStore.getState().conversations[conversationId].sessionId).toBeNull()
+  })
 })

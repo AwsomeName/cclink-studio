@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { McpToolHost } from '../tools/tool-host'
@@ -339,7 +339,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     expect(getLastQueryParams().options).not.toHaveProperty('pathToClaudeCodeExecutable')
   })
 
-  it('blocks built-in file tools from using absolute paths outside the conversation workspace', async () => {
+  it('blocks file tools from using absolute paths outside the conversation workspace', async () => {
     await createBackend().sendMessage('继续处理下一篇')
 
     const params = getLastQueryParams()
@@ -368,6 +368,24 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
         ),
       },
     })
+
+    const editorResult = await hook(
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'mcp__cclink_studio__editor_write',
+        tool_input: {
+          filePath: '/Users/someone-else/Documents/unrelated-project/report.md',
+          content: '# report',
+        },
+        tool_use_id: 'tool-editor-outside',
+      },
+      'tool-editor-outside',
+      { signal: new AbortController().signal },
+    )
+    expect(editorResult.hookSpecificOutput?.permissionDecision).toBe('deny')
+    expect(editorResult.hookSpecificOutput?.permissionDecisionReason).toContain(
+      '当前会话工作区是 /Users/apple/Desktop/project',
+    )
   })
 
   it('allows built-in file tools to use paths inside the conversation workspace', async () => {
@@ -387,6 +405,141 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     )
 
     expect(result).toEqual({ continue: true })
+  })
+
+  it('blocks relative file and editor paths that escape the conversation workspace', async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), 'cclink-workspace-relative-escape-'))
+    const workspacePath = join(rootPath, 'workspace')
+    const otherWorkspacePath = join(rootPath, 'other-workspace')
+    await Promise.all([mkdir(workspacePath), mkdir(otherWorkspacePath)])
+    try {
+      const { backend } = createBackendFixture(false, workspacePath)
+      await backend.sendMessage('读取项目文件')
+      const hook = getLastQueryParams().options.hooks.PreToolUse[0].hooks[0]
+
+      for (const [index, item] of [
+        {
+          tool_name: 'Read',
+          tool_input: { file_path: '../other-workspace/secret.md' },
+        },
+        {
+          tool_name: 'mcp__cclink_studio__editor_write',
+          tool_input: { filePath: '../other-workspace/secret.md', content: 'secret' },
+        },
+        {
+          tool_name: 'mcp__cclink_studio__editor_list',
+          tool_input: { dirPath: '../other-workspace' },
+        },
+      ].entries()) {
+        const result = await hook(
+          {
+            hook_event_name: 'PreToolUse',
+            ...item,
+            tool_use_id: `relative-escape-${index}`,
+          },
+          `relative-escape-${index}`,
+          { signal: new AbortController().signal },
+        )
+        expect(result.hookSpecificOutput?.permissionDecision).toBe('deny')
+        expect(result.hookSpecificOutput?.permissionDecisionReason).toContain(
+          `当前会话工作区是 ${workspacePath}`,
+        )
+      }
+    } finally {
+      await rm(rootPath, { recursive: true, force: true })
+    }
+  })
+
+  it('blocks file and editor paths whose workspace symlink resolves outside the workspace', async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), 'cclink-workspace-symlink-escape-'))
+    const workspacePath = join(rootPath, 'workspace')
+    const otherWorkspacePath = join(rootPath, 'other-workspace')
+    await Promise.all([mkdir(workspacePath), mkdir(otherWorkspacePath)])
+    await symlink(otherWorkspacePath, join(workspacePath, 'linked-project'))
+    try {
+      const { backend } = createBackendFixture(false, workspacePath)
+      await backend.sendMessage('读取项目文件')
+      const hook = getLastQueryParams().options.hooks.PreToolUse[0].hooks[0]
+
+      for (const [index, item] of [
+        {
+          tool_name: 'Read',
+          tool_input: { file_path: 'linked-project/secret.md' },
+        },
+        {
+          tool_name: 'mcp__cclink_studio__editor_write',
+          tool_input: { filePath: 'linked-project/secret.md', content: 'secret' },
+        },
+        {
+          tool_name: 'mcp__cclink_studio__editor_list',
+          tool_input: { dirPath: 'linked-project' },
+        },
+      ].entries()) {
+        const result = await hook(
+          {
+            hook_event_name: 'PreToolUse',
+            ...item,
+            tool_use_id: `symlink-escape-${index}`,
+          },
+          `symlink-escape-${index}`,
+          { signal: new AbortController().signal },
+        )
+        expect(result.hookSpecificOutput?.permissionDecision).toBe('deny')
+      }
+    } finally {
+      await rm(rootPath, { recursive: true, force: true })
+    }
+  })
+
+  it('passes the same normalized workspace path to file and editor tool execution', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'cclink-workspace-normalized-path-'))
+    try {
+      const canonicalWorkspacePath = await realpath(workspacePath)
+      const { backend } = createBackendFixture(false, workspacePath)
+      await backend.sendMessage('更新项目文件')
+      const hook = getLastQueryParams().options.hooks.PreToolUse[0].hooks[0]
+
+      const writeResult = await hook(
+        {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'mcp__cclink_studio__editor_write',
+          tool_input: { filePath: 'docs/report.md', content: '# report' },
+          tool_use_id: 'normalized-editor-write',
+        },
+        'normalized-editor-write',
+        { signal: new AbortController().signal },
+      )
+      expect(writeResult).toMatchObject({
+        continue: true,
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          updatedInput: {
+            filePath: join(canonicalWorkspacePath, 'docs', 'report.md'),
+            content: '# report',
+          },
+        },
+      })
+
+      const listResult = await hook(
+        {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'mcp__cclink_studio__editor_list',
+          tool_input: { dirPath: 'docs' },
+          tool_use_id: 'normalized-editor-list',
+        },
+        'normalized-editor-list',
+        { signal: new AbortController().signal },
+      )
+      expect(listResult).toMatchObject({
+        continue: true,
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          updatedInput: { dirPath: join(canonicalWorkspacePath, 'docs') },
+        },
+      })
+    } finally {
+      await rm(workspacePath, { recursive: true, force: true })
+    }
   })
 
   it('blocks native scheduling tools, /loop, system schedulers and Claude task files', async () => {
@@ -477,6 +630,115 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       )
     } finally {
       await rm(workspacePath, { recursive: true, force: true })
+    }
+  })
+
+  it('fails closed when the native task path itself is a dangling symlink', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'cclink-native-task-path-symlink-'))
+    await mkdir(join(workspacePath, '.claude'))
+    await symlink('../ordinary.json', join(workspacePath, '.claude', 'scheduled_tasks.json'))
+    try {
+      const { backend, createToolSession } = createBackendFixture(false, workspacePath)
+      const onEvent = vi.fn()
+      backend.onEvent(onEvent)
+      backend.setSessionId('legacy-session')
+
+      await backend.sendMessage('继续旧会话')
+
+      expect(queryMock).not.toHaveBeenCalled()
+      expect(createToolSession).not.toHaveBeenCalled()
+      expect(backend.getSessionId()).toBeNull()
+      expect(onEvent).toHaveBeenCalledWith(
+        'error',
+        expect.objectContaining({ code: 'native_scheduling_state_detected' }),
+      )
+    } finally {
+      await rm(workspacePath, { recursive: true, force: true })
+    }
+  })
+
+  it('blocks editor and Bash writes through a real dangling native scheduling symlink', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'cclink-native-scheduling-symlink-'))
+    await mkdir(join(workspacePath, '.claude'))
+    await symlink('scheduled_tasks.json', join(workspacePath, '.claude', 'alias.json'))
+    try {
+      const { backend } = createBackendFixture(false, workspacePath)
+      await backend.sendMessage('更新项目文件')
+      const hook = getLastQueryParams().options.hooks.PreToolUse[0].hooks[0]
+
+      for (const [index, item] of [
+        {
+          tool_name: 'mcp__cclink_studio__editor_write',
+          tool_input: { filePath: '.claude/alias.json', content: '{}' },
+        },
+        {
+          tool_name: 'Bash',
+          tool_input: { command: "cd .claude && echo '{}' > alias.json" },
+        },
+      ].entries()) {
+        const result = await hook(
+          {
+            hook_event_name: 'PreToolUse',
+            ...item,
+            tool_use_id: `dangling-symlink-${index}`,
+          },
+          `dangling-symlink-${index}`,
+          { signal: new AbortController().signal },
+        )
+        expect(result.hookSpecificOutput?.permissionDecision).toBe('deny')
+        expect(result.hookSpecificOutput?.permissionDecisionReason).toContain(
+          'NATIVE_SCHEDULING_FILE_BLOCKED',
+        )
+      }
+    } finally {
+      await rm(workspacePath, { recursive: true, force: true })
+    }
+  })
+
+  it('blocks external symlink aliases that project back to native or system scheduling state', async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), 'cclink-external-scheduling-symlink-'))
+    const workspacePath = join(rootPath, 'workspace')
+    const externalPath = join(rootPath, 'external')
+    await Promise.all([mkdir(workspacePath), mkdir(externalPath)])
+    const nativeAlias = join(externalPath, 'native-alias.json')
+    const systemAlias = join(externalPath, 'system-alias')
+    await symlink(join(workspacePath, '.claude', 'scheduled_tasks.json'), nativeAlias)
+    await symlink('/Library/LaunchAgents/com.example.report.plist', systemAlias)
+    try {
+      const { backend } = createBackendFixture(false, workspacePath)
+      await backend.sendMessage('更新项目文件')
+      const hook = getLastQueryParams().options.hooks.PreToolUse[0].hooks[0]
+
+      for (const [index, item] of [
+        {
+          tool_name: 'mcp__cclink_studio__editor_write',
+          tool_input: { filePath: nativeAlias, content: '{}' },
+        },
+        {
+          tool_name: 'Bash',
+          tool_input: { command: `echo '{}' > ${nativeAlias}` },
+        },
+        {
+          tool_name: 'Bash',
+          tool_input: { command: `echo plist > ${systemAlias}` },
+        },
+      ].entries()) {
+        const result = await hook(
+          {
+            hook_event_name: 'PreToolUse',
+            ...item,
+            tool_use_id: `external-symlink-${index}`,
+          },
+          `external-symlink-${index}`,
+          { signal: new AbortController().signal },
+        )
+        expect(result.hookSpecificOutput?.permissionDecision).toBe('deny')
+        expect(result.hookSpecificOutput?.permissionDecisionReason).toContain(
+          'NATIVE_SCHEDULING_FILE_BLOCKED',
+        )
+      }
+    } finally {
+      await rm(rootPath, { recursive: true, force: true })
     }
   })
 

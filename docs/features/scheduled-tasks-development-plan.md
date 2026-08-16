@@ -1035,24 +1035,37 @@ Agent 前 fail closed，不自动删除或迁移；主进程规范化并固定
 
 - Claude session 只有在本次主进程收到 SDK `system/init` 后才进入内存可信表；恢复时同时匹配
   conversationId、sessionId 和策略 fingerprint。App 完整重启后不恢复 Claude SDK session，
-  但 Studio 对话正文仍保留；renderer 读取当前 fingerprint 不能为旧 session 自证。
+  但 Studio 对话正文仍保留；renderer 读取当前 fingerprint 不能为旧 session 自证。backend
+  因原生调度状态或 SDK invalidation 清空 session 时，主进程同步撤销可信记录，renderer 也
+  清空自身 sessionId，不能在同一进程内重新提交已撤销 session。
 - `WorkspaceStateService` 维护不持久化的活动本地工作空间投影和单调 generation；Agent IPC 在
   规范化前后校验同一代投影，并在异步提交前重读 conversation 绑定。通用 `settings.set` 不再
   能修改 `lastWorkspacePath`；合法工作空间切换由统一 Workspace IPC 提交并由主进程持久化。
 - editor 写入、追加、插入和保存都必须携带 trim 后非空的显式路径，执行层不再依赖 MCP host
   是否执行 JSON Schema；策略层规范化 `.`、`..`、分隔符，并保守拒绝任何名为
-  `scheduled_tasks.json` 的写入及简单 `cd ... && mv ... scheduled_tasks.json`。
+  `scheduled_tasks.json` 的写入及简单 `cd ... && mv ... scheduled_tasks.json`。workspace-aware
+  PreToolUse 还会用 `lstat/readlink` 投影工具显式文件路径和普通 shell 路径 token 的 dangling
+  symlink 最终目标，包括工作空间外的 alias；启动检查本身使用 `lstat`，受保护路径即使是目标
+  不存在的 symlink 也会 fail closed。普通 Claude 的内置文件工具和 Studio editor 工具会把
+  `filePath`、`dirPath` 等受支持字段统一按可信工作空间解析，逐段投影 symlink，拒绝相对
+  `..` 或工作空间内 symlink 指向其他项目，并通过 PreToolUse `updatedInput` 把同一个规范化
+  绝对路径交给实际工具执行。该策略语义升级为 policy version 3。
 - Runtime 最近错误记录其工作空间来源；工作空间投影只返回同一工作空间或真正全局的错误，
   全局诊断接口保持原语义。
 
 攻击性测试覆盖旧 session 配当前 fingerprint、主进程实际观察后的同进程续接、丢弃 session
 时清空可信表、空白 editor 路径、点段/别名路径、相对 Bash 恢复、首次绑定竞态、活动工作空间
-generation 变化、generic settings 伪造和跨工作空间 Runtime error 隔离。
+generation 变化、generic settings 伪造、跨工作空间 Runtime error 隔离、真实 dangling
+symlink、受保护路径自身的 dangling symlink、工作空间外 alias，以及 backend 撤销后重新提交
+旧 session；文件/editor 工具另覆盖相对 `..` 越界、工作空间内 symlink 越界、
+`editor_list.dirPath` 和合法相对路径执行输入规范化。
 
 本切片的 Bash 防护仍按“有界 PreToolUse”定义：拒绝已知 scheduler 可执行文件、配置路径和
 常见 shell wrapper，但不宣称静态命令文本分析可以阻止所有变量拼接、解释器生成命令或后台
-进程技巧。在保留普通 Agent 任意 Bash 能力的前提下，绝对隔离需要单独的 OS 进程沙箱和子
-进程生命周期托管工作包；不得继续堆叠正则后把它描述成完整沙箱。该残余风险不允许被测试
+进程技巧；文件/editor 工具已统一显式路径的检查与执行输入，但可识别的普通 shell 路径 token
+仍只接受静态分析，且 symlink 检查存在检查与执行之间的 TOCTOU。在保留普通 Agent 任意 Bash
+能力的前提下，绝对隔离需要单独的 OS 进程
+沙箱和子进程生命周期托管工作包；不得继续堆叠正则后把它描述成完整沙箱。该残余风险不允许被测试
 全绿隐藏。另一个明确残余风险是：已控制可信 renderer 的攻击者仍可调用合法的统一工作空间
 切换 IPC；要把“用户可见切换”升级成不可伪造授权，需要单独的用户手势 capability 设计，
 不属于本次最小修复。后续若把威胁模型提升为恶意 renderer 或对抗性命令执行，必须先完成

@@ -6,7 +6,7 @@
  */
 
 import { tmpdir } from 'os'
-import { stat } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'path'
 import {
   query,
@@ -37,6 +37,7 @@ import {
   CLAUDE_NATIVE_SCHEDULING_TOOLS,
   inspectNativeSchedulingToolUse,
   inspectNativeSchedulingSymlinkToolUse,
+  resolveProjectedSymlinkTarget,
 } from './claude-native-scheduling-policy.js'
 
 const VISIBLE_BROWSER_DISALLOWED_TOOLS = [
@@ -568,11 +569,24 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       }
 
       if (!workspaceRoot) return { continue: true }
-      const escapedPath = findEscapedAbsolutePath(input.tool_input, workspaceRoot)
-      if (!escapedPath) return { continue: true }
+      const pathPolicy = await resolveWorkspaceToolInput(
+        input.tool_name,
+        input.tool_input,
+        workspaceRoot,
+      )
+      if (!pathPolicy.escapedPath && !pathPolicy.error) {
+        if (!pathPolicy.updatedInput) return { continue: true }
+        return {
+          continue: true,
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            updatedInput: pathPolicy.updatedInput,
+          },
+        }
+      }
 
       const reason =
-        `已阻止跨工作区文件访问：${escapedPath}\n` +
+        `${pathPolicy.error ? '无法安全验证文件路径' : `已阻止跨工作区文件访问：${pathPolicy.escapedPath}`}\n` +
         `当前会话工作区是 ${workspaceRoot}。该路径不属于本会话，可能来自失效上下文。` +
         '请放弃该路径，只在当前工作区内重新定位目标；不要扩大到用户主目录搜索。'
       console.warn(`[ClaudeCodeBackend] ${reason}`)
@@ -821,12 +835,35 @@ interface SdkFailureClassification {
 
 const FILE_PATH_INPUT_KEYS = new Set([
   'file_path',
+  'filePath',
   'notebook_path',
+  'notebookPath',
   'path',
   'paths',
   'root_path',
   'rootPath',
+  'dir_path',
+  'dirPath',
 ])
+
+const BUILTIN_WORKSPACE_FILE_TOOLS = new Set([
+  'Read',
+  'Write',
+  'Edit',
+  'MultiEdit',
+  'NotebookEdit',
+  'Glob',
+  'Grep',
+])
+
+const STUDIO_EDITOR_TOOLS = [
+  'editor_write',
+  'editor_append',
+  'editor_insert',
+  'editor_read',
+  'editor_list',
+  'editor_save',
+] as const
 
 function createTrustedWorkspaceContext(
   options: AgentSendOptions | undefined,
@@ -873,27 +910,70 @@ function denyPreToolUse(reason: string) {
   }
 }
 
-function findEscapedAbsolutePath(input: unknown, workspaceRoot: string): string | null {
-  if (!input || typeof input !== 'object') return null
+interface WorkspaceToolPathPolicyResult {
+  updatedInput?: Record<string, unknown>
+  escapedPath?: string
+  error?: boolean
+}
 
-  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    if (!FILE_PATH_INPUT_KEYS.has(key)) continue
-    const values = Array.isArray(value) ? value : [value]
-    for (const candidate of values) {
-      if (typeof candidate !== 'string' || !isAbsolute(candidate)) continue
-      const candidatePath = resolve(candidate)
-      const pathFromWorkspace = relative(workspaceRoot, candidatePath)
-      if (
-        pathFromWorkspace === '' ||
-        (!pathFromWorkspace.startsWith('..') && !isAbsolute(pathFromWorkspace))
-      ) {
-        continue
-      }
-      return candidate
-    }
+function isWorkspaceFileTool(toolName: string): boolean {
+  return (
+    BUILTIN_WORKSPACE_FILE_TOOLS.has(toolName) ||
+    STUDIO_EDITOR_TOOLS.some(
+      (editorTool) => toolName === editorTool || toolName.endsWith(`__${editorTool}`),
+    )
+  )
+}
+
+async function resolveWorkspaceToolInput(
+  toolName: string,
+  input: unknown,
+  workspaceRoot: string,
+): Promise<WorkspaceToolPathPolicyResult> {
+  if (!isWorkspaceFileTool(toolName) || !input || typeof input !== 'object') return {}
+
+  const original = input as Record<string, unknown>
+  const updatedInput = { ...original }
+  let changed = false
+  let canonicalRoot: string
+  try {
+    canonicalRoot = await resolveProjectedSymlinkTarget(workspaceRoot)
+  } catch {
+    return { error: true }
   }
 
-  return null
+  for (const [key, value] of Object.entries(original)) {
+    if (!FILE_PATH_INPUT_KEYS.has(key)) continue
+    const candidates = Array.isArray(value) ? value : [value]
+    const resolvedCandidates: unknown[] = []
+    for (const candidate of candidates) {
+      if (typeof candidate !== 'string' || !candidate.trim()) {
+        resolvedCandidates.push(candidate)
+        continue
+      }
+      const lexicalPath = isAbsolute(candidate)
+        ? resolve(candidate)
+        : resolve(canonicalRoot, candidate)
+      let projectedPath: string
+      try {
+        projectedPath = await resolveProjectedSymlinkTarget(lexicalPath)
+      } catch {
+        return { error: true }
+      }
+      const pathFromWorkspace = relative(canonicalRoot, projectedPath)
+      if (
+        pathFromWorkspace !== '' &&
+        (pathFromWorkspace.startsWith('..') || isAbsolute(pathFromWorkspace))
+      ) {
+        return { escapedPath: candidate }
+      }
+      resolvedCandidates.push(projectedPath)
+      if (projectedPath !== candidate) changed = true
+    }
+    updatedInput[key] = Array.isArray(value) ? resolvedCandidates : resolvedCandidates[0]
+  }
+
+  return changed ? { updatedInput } : {}
 }
 
 function classifySdkFailure(message: string): SdkFailureClassification {
@@ -958,7 +1038,7 @@ function classifySdkFailure(message: string): SdkFailureClassification {
 
 async function pathExists(path: string): Promise<boolean> {
   try {
-    await stat(path)
+    await lstat(path)
     return true
   } catch (error) {
     if (isMissingFileError(error)) return false
