@@ -107,11 +107,17 @@ async function createTabFromMenu(page, label) {
 
 async function restoreWorkspaceSettings() {
   if (!pageRef || !originalWorkspaceSettings) return
-  await pageRef.evaluate((settings) => window.cclinkStudio.settings.set(settings), {
-    lastWorkspacePath: originalWorkspaceSettings.lastWorkspacePath,
-    recentWorkspacePaths: originalWorkspaceSettings.recentWorkspacePaths,
-    keybindingOverrides: originalWorkspaceSettings.keybindingOverrides,
-  })
+  await pageRef.evaluate(async (settings) => {
+    const settingsResult = await window.cclinkStudio.settings.set({
+      recentWorkspacePaths: settings.recentWorkspacePaths,
+      keybindingOverrides: settings.keybindingOverrides,
+    })
+    if (!settingsResult.success) throw new Error(settingsResult.error || '恢复设置失败')
+    const workspaceResult = await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(
+      settings.lastWorkspacePath || null,
+    )
+    if (!workspaceResult.success) throw new Error(workspaceResult.error || '恢复工作空间失败')
+  }, originalWorkspaceSettings)
 }
 
 async function closeTemporaryWorkspaces() {
@@ -319,13 +325,15 @@ async function main() {
         workspacePath,
         ...settings.recentWorkspacePaths.filter((path) => path !== workspacePath),
       ].slice(0, 8)
-      const result = await window.cclinkStudio.settings.set({
-        lastWorkspacePath: '',
+      const settingsResult = await window.cclinkStudio.settings.set({
         recentWorkspacePaths,
         keybindingOverrides: [],
       })
+      const workspaceResult = settingsResult.success
+        ? await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(null)
+        : { success: false, error: settingsResult.error }
       return {
-        result,
+        result: workspaceResult,
         workspacePath,
         markdownPath,
         original: {
@@ -468,68 +476,74 @@ async function main() {
     return 'Cmd/Ctrl+F found 2 matches and preserved the saved state'
   })
 
-  await runCheck('find shortcut can be rebound in settings and survives an app restart', async () => {
-    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
-    await page.locator('.activity-bar-icon[title="设置"]').first().click()
-    await page.locator('.settings-nav-item', { hasText: '快捷键' }).click()
-    const findRow = page.locator('.keybindings-row', { hasText: '查找当前内容' }).first()
-    await findRow.waitFor({ state: 'visible', timeout: 5_000 })
-    await findRow.getByRole('button', { name: '修改' }).click()
-    await page.keyboard.press(`${modifier}+G`)
-    await page.waitForFunction(
-      () => document.querySelector('.keybindings-message')?.textContent?.includes('已保存'),
-      null,
-      { timeout: 5_000 },
-    )
-    const persisted = await page.evaluate(
-      async () => (await window.cclinkStudio.settings.getAll()).keybindingOverrides,
-    )
-    assert(
-      persisted.some(
-        (override) =>
-          override.commandId === 'workbench.find' &&
-          override.bindings.some(
-            (binding) =>
-              binding.code === 'KeyG' && binding.modifiers.length === 1 && binding.modifiers[0] === 'primary',
-          ),
-      ),
-      'new find binding was not persisted',
-    )
+  await runCheck(
+    'find shortcut can be rebound in settings and survives an app restart',
+    async () => {
+      const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
+      await page.locator('.activity-bar-icon[title="设置"]').first().click()
+      await page.locator('.settings-nav-item', { hasText: '快捷键' }).click()
+      const findRow = page.locator('.keybindings-row', { hasText: '查找当前内容' }).first()
+      await findRow.waitFor({ state: 'visible', timeout: 5_000 })
+      await findRow.getByRole('button', { name: '修改' }).click()
+      await page.keyboard.press(`${modifier}+G`)
+      await page.waitForFunction(
+        () => document.querySelector('.keybindings-message')?.textContent?.includes('已保存'),
+        null,
+        { timeout: 5_000 },
+      )
+      const persisted = await page.evaluate(
+        async () => (await window.cclinkStudio.settings.getAll()).keybindingOverrides,
+      )
+      assert(
+        persisted.some(
+          (override) =>
+            override.commandId === 'workbench.find' &&
+            override.bindings.some(
+              (binding) =>
+                binding.code === 'KeyG' &&
+                binding.modifiers.length === 1 &&
+                binding.modifiers[0] === 'primary',
+            ),
+        ),
+        'new find binding was not persisted',
+      )
 
-    await page.getByRole('tab', { name: /notes\.md/ }).click()
-    const editor = page.locator('.tiptap').first()
-    await editor.click()
-    await page.keyboard.press(`${modifier}+F`)
-    await page.waitForTimeout(150)
-    assert((await page.locator('.markdown-find-bar').count()) === 0, 'old find shortcut still works')
-    await page.keyboard.press(`${modifier}+G`)
-    await page.locator('.markdown-find-bar').waitFor({ state: 'visible', timeout: 5_000 })
-    await page.keyboard.press('Escape')
+      await page.getByRole('tab', { name: /notes\.md/ }).click()
+      const editor = page.locator('.tiptap').first()
+      await editor.click()
+      await page.keyboard.press(`${modifier}+F`)
+      await page.waitForTimeout(150)
+      assert(
+        (await page.locator('.markdown-find-bar').count()) === 0,
+        'old find shortcut still works',
+      )
+      await page.keyboard.press(`${modifier}+G`)
+      await page.locator('.markdown-find-bar').waitFor({ state: 'visible', timeout: 5_000 })
+      await page.keyboard.press('Escape')
 
-    const logBeforeRestart = await readLog()
-    await browser.close()
-    runRestart('restart')
-    const restartedCdpPort = await waitForCdpPort(30_000, logBeforeRestart)
-    browser = await chromium.connectOverCDP(`http://127.0.0.1:${restartedCdpPort}`)
-    page = await findRendererPage(browser)
-    pageRef = page
-    await page.setViewportSize({ width: 1440, height: 920 })
-    await page.waitForSelector('.main-window', { timeout: 15_000 })
-    await page.getByRole('tab', { name: /notes\.md/ }).click()
-    await page.locator('.tiptap').first().click()
-    await page.keyboard.press(`${modifier}+G`)
-    await page.locator('.markdown-find-bar').waitFor({ state: 'visible', timeout: 5_000 })
-    await page.keyboard.press('Escape')
-    return 'settings rebind took effect, old key stopped, and app restart preserved the new key'
-  })
+      const logBeforeRestart = await readLog()
+      await browser.close()
+      runRestart('restart')
+      const restartedCdpPort = await waitForCdpPort(30_000, logBeforeRestart)
+      browser = await chromium.connectOverCDP(`http://127.0.0.1:${restartedCdpPort}`)
+      page = await findRendererPage(browser)
+      pageRef = page
+      await page.setViewportSize({ width: 1440, height: 920 })
+      await page.waitForSelector('.main-window', { timeout: 15_000 })
+      await page.getByRole('tab', { name: /notes\.md/ }).click()
+      await page.locator('.tiptap').first().click()
+      await page.keyboard.press(`${modifier}+G`)
+      await page.locator('.markdown-find-bar').waitFor({ state: 'visible', timeout: 5_000 })
+      await page.keyboard.press('Escape')
+      return 'settings rebind took effect, old key stopped, and app restart preserved the new key'
+    },
+  )
 
   await runCheck('rebound workbench find reaches source editor and Terminal', async () => {
     const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
     await ensureSidebarVisible(page)
     await clickByTitle(page, '文件')
-    const htmlFile = page
-      .locator('.file-tree-item.file', { hasText: 'browser-find.html' })
-      .first()
+    const htmlFile = page.locator('.file-tree-item.file', { hasText: 'browser-find.html' }).first()
     await htmlFile.waitFor({ timeout: 10_000 })
     await htmlFile.dispatchEvent('contextmenu', {
       bubbles: true,
@@ -1276,7 +1290,10 @@ async function main() {
         { timeout: 5_000 },
       )
     } catch {
-      const findState = await page.locator('.browser-find-bar').innerText().catch(() => 'missing')
+      const findState = await page
+        .locator('.browser-find-bar')
+        .innerText()
+        .catch(() => 'missing')
       const findValue = await browserFind.inputValue().catch(() => 'missing')
       throw new Error(`Browser find did not report 1/3: value=${findValue} state=${findState}`)
     }
@@ -1315,7 +1332,10 @@ async function main() {
       null,
       { timeout: 5_000 },
     )
-    assert((await page.locator('.settings-page').count()) === 1, 'recording Cmd/Ctrl+W closed Settings')
+    assert(
+      (await page.locator('.settings-page').count()) === 1,
+      'recording Cmd/Ctrl+W closed Settings',
+    )
     await saveRow.getByRole('button', { name: '恢复默认' }).click()
 
     await saveRow.getByRole('button', { name: '修改' }).click()

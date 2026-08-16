@@ -102,10 +102,16 @@ async function ensureSidebarVisible(page) {
 
 async function restoreWorkspaceSettings() {
   if (!pageRef || !originalWorkspaceSettings) return
-  await pageRef.evaluate((settings) => window.cclinkStudio.settings.set(settings), {
-    lastWorkspacePath: originalWorkspaceSettings.lastWorkspacePath,
-    recentWorkspacePaths: originalWorkspaceSettings.recentWorkspacePaths,
-  })
+  await pageRef.evaluate(async (settings) => {
+    const settingsResult = await window.cclinkStudio.settings.set({
+      recentWorkspacePaths: settings.recentWorkspacePaths,
+    })
+    if (!settingsResult.success) throw new Error(settingsResult.error || '恢复设置失败')
+    const workspaceResult = await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(
+      settings.lastWorkspacePath || null,
+    )
+    if (!workspaceResult.success) throw new Error(workspaceResult.error || '恢复工作空间失败')
+  }, originalWorkspaceSettings)
 }
 
 function cleanupWorkspaceDir() {
@@ -141,12 +147,14 @@ async function main() {
         workspacePath,
         ...settings.recentWorkspacePaths.filter((path) => path !== workspacePath),
       ].slice(0, 8)
-      const result = await window.cclinkStudio.settings.set({
-        lastWorkspacePath: workspacePath,
+      const settingsResult = await window.cclinkStudio.settings.set({
         recentWorkspacePaths,
       })
+      const workspaceResult = settingsResult.success
+        ? await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(workspacePath)
+        : { success: false, error: settingsResult.error }
       return {
-        result,
+        result: workspaceResult,
         workspacePath,
         original: {
           lastWorkspacePath: /\/\.?cclink-studio-(workflow-|restore-)?smoke/.test(
