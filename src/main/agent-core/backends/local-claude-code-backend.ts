@@ -84,6 +84,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
   private stderrTail = ''
   private lastContextUsage: AgentContextUsageSnapshot | null = null
   private contextUsageRequest: Promise<AgentContextUsageSnapshot | null> | null = null
+  private contextUsageQuery: Query | null = null
   private lastContextUsageCapturedAt = 0
   /** 当前 Claude Code 进程使用的 MCP 会话 token（进程退出时释放） */
   private mcpSessionToken: string | null = null
@@ -523,16 +524,21 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
   private async consumeQuery(sdkQuery: Query, operation: AgentQueryOperation): Promise<void> {
     try {
       for await (const event of sdkQuery) {
+        // abort() 会立即释放 UI 继续发送下一轮，但 SDK 的异步迭代器仍可能吐出尾部事件。
+        // 旧 query 失去所有权后必须停止转发，否则迟到的 message_start 会重新打开 UI loading，
+        // 甚至在下一轮已经开始时污染新的 run。
+        if (this.currentQuery !== sdkQuery) break
         const record = event as Record<string, unknown>
         if (record.type === 'result') {
           await this.captureContextUsage(sdkQuery, true)
         }
+        if (this.currentQuery !== sdkQuery) break
         this.handleEvent(record, operation)
         if (this.shouldCaptureContextUsage(record)) {
           await this.captureContextUsage(sdkQuery, record.subtype === 'compact_boundary')
         }
       }
-      if (!this.aborted && !this.terminalEventEmitted) {
+      if (this.currentQuery === sdkQuery && !this.aborted && !this.terminalEventEmitted) {
         this.terminalEventEmitted = true
         this.emit('error', {
           type: 'error',
@@ -542,13 +548,13 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         })
       }
       const detail = this.stderrTail.trim()
-      if (!this.aborted && detail && !this.lastSdkErrorMessage) {
+      if (this.currentQuery === sdkQuery && !this.aborted && detail && !this.lastSdkErrorMessage) {
         console.error('[ClaudeCodeBackend] stderr:', detail)
       }
     } catch (err) {
       // Claude Agent SDK 会在已经产出 is_error result 后再次从迭代器抛出同一错误。
       // result 已经是本轮的终态，不能再向 UI 重复发送第二张错误卡。
-      if (!this.aborted && !this.terminalEventEmitted) {
+      if (this.currentQuery === sdkQuery && !this.aborted && !this.terminalEventEmitted) {
         this.terminalEventEmitted = true
         const rawMessage = err instanceof Error ? err.message : String(err)
         const failure = classifySdkFailure(rawMessage)
@@ -568,8 +574,8 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         this.currentQuery = null
         this.currentOperation = null
         this.abortController = null
+        this.cleanupMcpConfig()
       }
-      this.cleanupMcpConfig()
     }
   }
 
@@ -645,11 +651,14 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     if (!force && Date.now() - this.lastContextUsageCapturedAt < 1500) {
       return this.lastContextUsage
     }
-    if (this.contextUsageRequest) return this.contextUsageRequest
+    if (this.contextUsageRequest && this.contextUsageQuery === sdkQuery) {
+      return this.contextUsageRequest
+    }
 
-    this.contextUsageRequest = sdkQuery
+    const request = sdkQuery
       .getContextUsage()
       .then((usage) => {
+        if (sdkQuery !== this.currentQuery) return this.lastContextUsage
         const snapshot = normalizeContextUsage(usage)
         this.lastContextUsage = snapshot
         this.lastContextUsageCapturedAt = snapshot.capturedAt
@@ -664,9 +673,14 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       })
       .catch(() => this.lastContextUsage)
       .finally(() => {
-        this.contextUsageRequest = null
+        if (this.contextUsageRequest === request) {
+          this.contextUsageRequest = null
+          this.contextUsageQuery = null
+        }
       })
-    return this.contextUsageRequest
+    this.contextUsageRequest = request
+    this.contextUsageQuery = sdkQuery
+    return request
   }
 
   async abort(): Promise<void> {

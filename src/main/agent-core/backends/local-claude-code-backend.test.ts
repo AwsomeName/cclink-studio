@@ -47,6 +47,34 @@ function createMockQuery(events: Array<Record<string, unknown>> = []): AsyncIter
   }
 }
 
+function createDeferredQuery(): AsyncIterable<unknown> & {
+  close: ReturnType<typeof vi.fn>
+  getContextUsage: ReturnType<typeof vi.fn>
+  returned: ReturnType<typeof vi.fn>
+  release: (event: Record<string, unknown>) => void
+} {
+  let release: ((result: IteratorResult<unknown>) => void) | null = null
+  const returned = vi.fn(async () => ({ done: true as const, value: undefined }))
+  const iterator = {
+    next: vi.fn(
+      () =>
+        new Promise<IteratorResult<unknown>>((resolve) => {
+          release = resolve
+        }),
+    ),
+    return: returned,
+  }
+  return {
+    close: vi.fn(),
+    getContextUsage: vi.fn(async () => null),
+    returned,
+    release: (event) => release?.({ done: false, value: event }),
+    [Symbol.asyncIterator]() {
+      return iterator
+    },
+  }
+}
+
 function createTool(name: string): ToolDefinition {
   return {
     name,
@@ -171,6 +199,32 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     expect(params.options.disallowedTools).toBeUndefined()
     expect(params.options.hooks.PreToolUse).toHaveLength(1)
     expect(getSystemPromptAppend()).toContain('| browser_new_tab |')
+  })
+
+  it('does not let an aborted SDK query emit into or clean up the next query', async () => {
+    const previousQuery = createDeferredQuery()
+    const nextQuery = createDeferredQuery()
+    queryMock.mockReturnValueOnce(previousQuery).mockReturnValueOnce(nextQuery)
+    const { backend, releaseToolSession } = createBackendFixture()
+    const onEvent = vi.fn()
+    backend.onEvent(onEvent)
+
+    await backend.sendMessage('等待后终止')
+    await backend.abort()
+    await backend.sendMessage('终止后的新消息')
+    previousQuery.release({
+      type: 'stream_event',
+      event: { type: 'message_start', message: { id: 'late-message' } },
+    })
+
+    await vi.waitFor(() => expect(previousQuery.returned).toHaveBeenCalledTimes(1))
+    expect(onEvent).not.toHaveBeenCalled()
+    expect(backend.getStatus().connected).toBe(true)
+    expect(releaseToolSession).toHaveBeenCalledTimes(1)
+
+    await backend.abort()
+    expect(nextQuery.close).toHaveBeenCalledTimes(1)
+    expect(releaseToolSession).toHaveBeenCalledTimes(2)
   })
 
   it('injects a resolved role into the system prompt without changing tool permissions', async () => {

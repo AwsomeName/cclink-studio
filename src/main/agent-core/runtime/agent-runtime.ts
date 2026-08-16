@@ -241,8 +241,11 @@ export class AgentRuntime {
     const conversation: AgentConversation = { backend, config, scope, activeRunId: null }
     backend.onEvent((type, data) => {
       const runId = conversation.activeRunId
+      // 后端取消/终止后可能仍收到传输层尾部事件。没有活动 run 的事件没有状态所有权，
+      // 不能以 runId=null 转给 renderer；否则兼容旧协议的 UI 会把已终止会话重新置为运行中。
+      if (!runId) return
       this.onEvent?.({ conversationId, runId, type, data })
-      if (type === 'complete' || type === 'error') {
+      if ((type === 'complete' || type === 'error') && conversation.activeRunId === runId) {
         conversation.activeRunId = null
       }
     })

@@ -120,6 +120,24 @@ describe('AgentRuntime session continuity', () => {
     expect(runtime.getStatus('conversation-1').runId).toBeNull()
   })
 
+  it('drops backend events that arrive after the run was aborted', async () => {
+    const events: Array<{ conversationId: string; runId: string | null; type: string }> = []
+    const runtime = new AgentRuntime({
+      config: { type: 'local-claude-code' },
+      deps: {} as never,
+      onEvent: (event) => events.push(event),
+    })
+
+    await runtime.sendMessage('hello', 'conversation-1', { runId: 'run-1' })
+    await runtime.abort('conversation-1')
+
+    backends.at(-1)?.eventHandler?.('stream', { type: 'stream_event' })
+    backends.at(-1)?.eventHandler?.('complete', { total_cost_usd: 0 })
+
+    expect(events).toEqual([])
+    expect(runtime.getStatus('conversation-1').runId).toBeNull()
+  })
+
   it('emits a terminal error when backend reconfiguration interrupts an active run', async () => {
     const events: Array<{
       conversationId: string
