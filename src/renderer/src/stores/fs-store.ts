@@ -422,6 +422,7 @@ export const useFsStore = create<FsState>((set, get) => ({
           ? normalizeWorkspacePath(settings.lastWorkspacePath)
           : workspacePath
       if (!last) {
+        await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(null)
         useWorkspaceStore.getState().commitActiveWorkspace(globalWorkspaceRef())
         hydrateRuntimeSections(null)
         set({
@@ -430,9 +431,6 @@ export const useFsStore = create<FsState>((set, get) => ({
           expandedPaths: [],
           selectedPath: null,
         })
-        if (settings.lastWorkspacePath) {
-          await window.cclinkStudio.settings.set({ lastWorkspacePath: '' }).catch(() => {})
-        }
         return null
       }
 
@@ -443,17 +441,19 @@ export const useFsStore = create<FsState>((set, get) => ({
         persistPanelState: false,
       })
       if (!ok) {
+        await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(null)
         useWorkspaceStore.getState().commitActiveWorkspace(globalWorkspaceRef())
         hydrateRuntimeSections(null)
-        await window.cclinkStudio.settings.set({ lastWorkspacePath: '' }).catch(() => {})
         setWorkspaceStatePath(null)
         return null
       }
+      const activeResult = await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(last)
+      if (!activeResult.success) throw new Error(activeResult.error || '主进程无法绑定工作空间')
       useWorkspaceStore.getState().commitActiveWorkspace(localWorkspaceRef(last))
       const canonicalRecentPaths = updateRecentWorkspacePaths(get().recentWorkspacePaths, last)
       set({ recentWorkspacePaths: canonicalRecentPaths })
       await window.cclinkStudio.settings
-        .set({ lastWorkspacePath: last, recentWorkspacePaths: canonicalRecentPaths })
+        .set({ recentWorkspacePaths: canonicalRecentPaths })
         .catch(() => {})
       return last
     } catch (error) {
@@ -505,7 +505,6 @@ export const useFsStore = create<FsState>((set, get) => ({
         const recentWorkspacePaths = get().recentWorkspacePaths
         saveRecentWorkspaceFallback(recentWorkspacePaths)
         const r = await window.cclinkStudio.settings.set({
-          lastWorkspacePath: path,
           recentWorkspacePaths,
         })
         // 持久化失败不阻断当前会话（workspacePath 已生效），仅提示下次不会记住
@@ -571,9 +570,7 @@ export const useFsStore = create<FsState>((set, get) => ({
       useOpenProjectsStore.getState().addProject(resolvedPath)
       const recentWorkspacePaths = get().recentWorkspacePaths
       saveRecentWorkspaceFallback(recentWorkspacePaths)
-      await window.cclinkStudio.settings
-        .set({ lastWorkspacePath: resolvedPath, recentWorkspacePaths })
-        .catch(() => {})
+      await window.cclinkStudio.settings.set({ recentWorkspacePaths }).catch(() => {})
       return true
     } catch (err) {
       console.error('[FsStore] 打开最近项目失败:', { path, error: err })
@@ -630,7 +627,6 @@ export const useFsStore = create<FsState>((set, get) => ({
       saveRecentWorkspaceFallback(get().recentWorkspacePaths)
       await window.cclinkStudio.settings
         .set({
-          lastWorkspacePath: '',
           recentWorkspacePaths: get().recentWorkspacePaths,
         })
         .catch(() => {})

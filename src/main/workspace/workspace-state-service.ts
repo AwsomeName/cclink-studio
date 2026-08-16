@@ -17,6 +17,7 @@ import type {
   WorkspaceRecoveryTraceEntry,
   WorkspaceRecoveryTraceEvent,
   WorkspaceStateDiagnostics,
+  ActiveLocalWorkspaceSnapshot,
   WorkspaceStateLocalWorkspaceSummary,
   WorkspaceStateResolveResult,
   WorkspaceStateSnapshot,
@@ -399,6 +400,10 @@ function diagnosticFileStatus(error: unknown): WorkspaceRecoveryTraceEntry['prim
 
 /** 项目现场以项目目录为事实源；userData 只保留全局状态、项目索引和只读 fallback。 */
 export class WorkspaceStateService {
+  private activeLocalWorkspace: ActiveLocalWorkspaceSnapshot = {
+    workspacePath: null,
+    generation: 0,
+  }
   private readonly stateFilePath: string
   private readonly backupFilePath: string
   private readonly tempFilePath: string
@@ -500,6 +505,21 @@ export class WorkspaceStateService {
         error: error instanceof Error ? error.message : String(error),
       }
     }
+  }
+
+  getActiveLocalWorkspace(): ActiveLocalWorkspaceSnapshot {
+    return { ...this.activeLocalWorkspace }
+  }
+
+  async setActiveLocalWorkspace(
+    workspacePath: string | null,
+  ): Promise<ActiveLocalWorkspaceSnapshot> {
+    const canonicalPath = workspacePath ? await this.resolveLocalWorkspacePath(workspacePath) : null
+    this.activeLocalWorkspace = {
+      workspacePath: canonicalPath,
+      generation: this.activeLocalWorkspace.generation + 1,
+    }
+    return this.getActiveLocalWorkspace()
   }
 
   /** Resolve a local workspace and ensure its stable project identity exists. */

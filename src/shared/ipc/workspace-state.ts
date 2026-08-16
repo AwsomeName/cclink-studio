@@ -114,8 +114,20 @@ export interface WorkspaceStateResolveResult {
   error?: string
 }
 
+export interface ActiveLocalWorkspaceSnapshot {
+  workspacePath: string | null
+  generation: number
+}
+
+export interface ActiveLocalWorkspaceResult {
+  success: boolean
+  activeWorkspace?: ActiveLocalWorkspaceSnapshot
+  error?: string
+}
+
 export interface WorkspaceStateApiContract {
   resolveLocalWorkspace: (workspacePath: string) => Promise<WorkspaceStateResolveResult>
+  setActiveLocalWorkspace: (workspacePath: string | null) => Promise<ActiveLocalWorkspaceResult>
   get: (workspaceKey?: string | null, ownerKey?: string | null) => Promise<WorkspaceStateSnapshot>
   setSection: (
     workspaceKey: string | null | undefined,

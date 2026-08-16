@@ -58,6 +58,107 @@ describe('registerAgentIpc', () => {
     )
   })
 
+  it('rejects a renderer workspace that is not the main-process current workspace', async () => {
+    const deps = createDeps()
+    registerAgentIpc(deps as never)
+
+    await expect(
+      mockIpcMain.handlers.get('agent:sendMessage')?.({ sender: 'trusted' }, 'conversation-1', {
+        message: '列出定时任务',
+        workspaceRef: { kind: 'local', path: '/tmp/other-project' },
+      }),
+    ).resolves.toEqual({
+      success: false,
+      error: 'Agent 请求的工作空间与主进程当前工作空间不一致',
+    })
+    expect(deps.agentBridge.sendMessage).not.toHaveBeenCalled()
+  })
+
+  it('does not let a conversation change its main-process workspace binding', async () => {
+    const deps = createDeps()
+    registerAgentIpc(deps as never)
+
+    await mockIpcMain.handlers.get('agent:sendMessage')?.({ sender: 'trusted' }, 'conversation-1', {
+      message: '第一次查询',
+      workspaceRef: { kind: 'local', path: '/tmp/project' },
+    })
+    deps.setCurrentWorkspacePath('/tmp/other-project')
+    await expect(
+      mockIpcMain.handlers.get('agent:sendMessage')?.({ sender: 'trusted' }, 'conversation-1', {
+        message: '尝试切换项目',
+        workspaceRef: { kind: 'local', path: '/tmp/other-project' },
+      }),
+    ).resolves.toEqual({
+      success: false,
+      error: '当前 Agent 会话已绑定其他本地工作空间',
+    })
+    expect(deps.agentBridge.sendMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a local first bind that loses an atomic race to a global bind', async () => {
+    const deps = createDeps()
+    let releaseResolution!: () => void
+    const resolutionGate = new Promise<void>((resolve) => {
+      releaseResolution = resolve
+    })
+    deps.resolveLocalWorkspace.mockImplementation(async (workspacePath: string) => {
+      if (workspacePath === '/tmp/project') await resolutionGate
+      return { valid: true, workspacePath }
+    })
+    registerAgentIpc(deps as never)
+    const send = mockIpcMain.handlers.get('agent:sendMessage')!
+
+    const localBind = send({ sender: 'trusted' }, 'conversation-race', {
+      message: '本地查询',
+      workspaceRef: { kind: 'local', path: '/tmp/project' },
+    })
+    await vi.waitFor(() => expect(deps.resolveLocalWorkspace).toHaveBeenCalledTimes(2))
+    await expect(
+      send({ sender: 'trusted' }, 'conversation-race', {
+        message: '全局查询',
+        workspaceRef: { kind: 'global' },
+      }),
+    ).resolves.toEqual({ success: true })
+
+    releaseResolution()
+    await expect(localBind).resolves.toEqual({
+      success: false,
+      error: '当前 Agent 会话已绑定全局上下文，不能切换为本地工作空间',
+    })
+    expect(deps.agentBridge.sendMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a bind when the main-process workspace generation changes during realpath', async () => {
+    const deps = createDeps()
+    let releaseResolution!: () => void
+    const resolutionGate = new Promise<void>((resolve) => {
+      releaseResolution = resolve
+    })
+    deps.resolveLocalWorkspace.mockImplementation(async (workspacePath: string) => {
+      await resolutionGate
+      return { valid: true, workspacePath }
+    })
+    registerAgentIpc(deps as never)
+
+    const binding = mockIpcMain.handlers.get('agent:sendMessage')?.(
+      { sender: 'trusted' },
+      'conversation-generation',
+      {
+        message: '列出任务',
+        workspaceRef: { kind: 'local', path: '/tmp/project' },
+      },
+    )
+    await vi.waitFor(() => expect(deps.resolveLocalWorkspace).toHaveBeenCalledTimes(2))
+    deps.setCurrentWorkspacePath('/tmp/other-project')
+    releaseResolution()
+
+    await expect(binding).resolves.toEqual({
+      success: false,
+      error: 'Agent 绑定期间工作空间已发生变化，请重试',
+    })
+    expect(deps.agentBridge.sendMessage).not.toHaveBeenCalled()
+  })
+
   it('accepts a bounded remote workspace ref but does not pass it to the local Agent', async () => {
     const deps = createDeps()
     registerAgentIpc(deps as never)
@@ -315,6 +416,8 @@ describe('registerAgentIpc', () => {
 })
 
 function createDeps() {
+  let currentWorkspacePath = '/tmp/project'
+  let currentWorkspaceGeneration = 1
   const agentBridge = {
     sendMessage: vi.fn(async () => undefined),
     compactConversation: vi.fn(async () => undefined),
@@ -330,6 +433,18 @@ function createDeps() {
     mcpManager,
     getAgentBridge: () => agentBridge,
     getMcpClientMgr: () => mcpManager,
+    getActiveLocalWorkspace: () => ({
+      workspacePath: currentWorkspacePath,
+      generation: currentWorkspaceGeneration,
+    }),
+    setCurrentWorkspacePath: (workspacePath: string) => {
+      currentWorkspacePath = workspacePath
+      currentWorkspaceGeneration += 1
+    },
+    resolveLocalWorkspace: vi.fn(async (workspacePath: string) => ({
+      valid: true,
+      workspacePath,
+    })),
     permissionManager: {
       resolveConfirmation: vi.fn(),
       getMode: vi.fn(() => 'auto'),

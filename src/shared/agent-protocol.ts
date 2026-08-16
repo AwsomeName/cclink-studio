@@ -254,6 +254,7 @@ export interface AgentStatus {
   /** Claude 原生调度封锁的安全诊断；不包含用户命令或文件正文。 */
   nativeSchedulingPolicy?: {
     enforced: boolean
+    policyVersion?: number
     deniedToolCount: number
     loopSkillDisabled: boolean
     sdkSkillOverride: 'off'

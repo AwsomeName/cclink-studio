@@ -46,6 +46,10 @@ describe('fs-store workspace switching', () => {
           watchDir: vi.fn().mockResolvedValue(vi.fn()),
         },
         workspaceState: {
+          setActiveLocalWorkspace: vi.fn(async (workspacePath: string | null) => ({
+            success: true,
+            activeWorkspace: { workspacePath, generation: 1 },
+          })),
           resolveLocalWorkspace: vi.fn(async (path: string) => ({
             valid: true,
             workspacePath: path,
@@ -526,7 +530,7 @@ describe('fs-store workspace switching', () => {
     expect(useBrowserStore.getState().tabs).toEqual({})
     expect(useEditorStore.getState().files).toEqual({})
     expect(useAgentStore.getState().activeConversationId).not.toBe(staleConversationId)
-    expect(window.cclinkStudio.settings.set).toHaveBeenCalledWith({ lastWorkspacePath: '' })
+    expect(window.cclinkStudio.workspaceState.setActiveLocalWorkspace).toHaveBeenCalledWith(null)
   })
 
   it('refreshes root tree after renaming a root-level file', async () => {

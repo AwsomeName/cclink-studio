@@ -6,7 +6,7 @@ import { useUIStore } from '../../../stores/ui-store'
 import type { Command } from '../../../stores/command-store'
 import { useToastStore } from '../../../components/common/Toast'
 import { MAX_FILE_RANGE_BYTES, MAX_FILE_RANGE_LINES } from '../../agent-conversations/payload'
-import { hashMarkdownSnapshot } from '../../markdown/markdown-codec'
+import { hashMarkdownSnapshotSha256 } from '../../markdown/markdown-codec'
 import { focusAgentComposer } from '../../markdown/markdown-navigation'
 import { copyTextToClipboard } from '../../../utils/clipboard'
 import type { CommandContext, ContextTarget } from '../context-target'
@@ -44,7 +44,7 @@ function canUseSelection(context?: CommandContext): boolean {
   return Boolean(target && targetRange(target)?.selectedText)
 }
 
-function mountSelection(context?: CommandContext): void {
+async function mountSelection(context?: CommandContext): Promise<void> {
   const { target } = resolveSurface(context)
   const range = targetRange(target)
   if (!range) throw new Error('编辑器选区已失效')
@@ -55,11 +55,17 @@ function mountSelection(context?: CommandContext): void {
   }
 
   const agentStore = useAgentStore.getState()
+  const conversationId = agentStore.activeConversationId
   const activeConversation = agentStore.conversations[agentStore.activeConversationId]
   const activeWorkspaceKey = activeConversation?.runtime.workspaceRef
     ? workspaceRefKey(activeConversation.runtime.workspaceRef)
     : null
   if (target.workspaceKey !== activeWorkspaceKey) throw new Error('当前会话已切换到其他项目')
+  const snapshotHash = await hashMarkdownSnapshotSha256(range.sourceSnapshot)
+  resolveSurface(context)
+  if (useAgentStore.getState().activeConversationId !== conversationId) {
+    throw new Error('当前会话已切换')
+  }
   const name = target.filePath.split('/').pop() ?? '未命名'
   const resource: AgentMountedResource = {
     id: `file-range:${target.filePath || target.tabId}:${range.startLine}:${range.endLine}:${Date.now()}`,
@@ -79,11 +85,11 @@ function mountSelection(context?: CommandContext): void {
       endColumn: range.endColumn,
       selectedText: range.selectedText,
       sourceSnapshot: range.sourceSnapshot,
-      snapshotHash: hashMarkdownSnapshot(range.sourceSnapshot),
+      snapshotHash,
       dirty: target.dirty,
     },
   }
-  agentStore.addMountedResource(resource, agentStore.activeConversationId)
+  useAgentStore.getState().addMountedResource(resource, conversationId)
   useUIStore.getState().setAgentPanelMode('right', 'user')
   useToastStore.getState().show('已将编辑器选区挂到当前 Agent', 'success')
   requestAnimationFrame(focusAgentComposer)

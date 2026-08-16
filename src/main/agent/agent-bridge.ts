@@ -120,6 +120,11 @@ export class AgentBridge {
   private readonly conversationConfigurations = new Map<string, AgentConversationConfiguration>()
   private readonly conversationSkills = new Map<string, BuiltinAgentSkill[]>()
   private readonly conversationRuntimeBindings = new Map<string, AgentRuntimeBinding>()
+  /** 只允许恢复本次主进程亲自观察到的 Claude session；renderer 不能自证旧 session。 */
+  private readonly trustedClaudeSessions = new Map<
+    string,
+    { sessionId: string; compatibilityFingerprint: string }
+  >()
   private readonly deps: {
     playwrightBridge: PlaywrightBridge | null
     toolHost: McpToolHost
@@ -597,6 +602,7 @@ export class AgentBridge {
   resetSession(conversationId = DEFAULT_CONVERSATION_ID): void {
     const sessionId = this.runtime.getStatus(conversationId).sessionId
     this.sessionDiagnosticRefs.delete(sessionId)
+    this.trustedClaudeSessions.delete(conversationId)
     this.runtime.resetSession(conversationId)
   }
 
@@ -632,6 +638,7 @@ export class AgentBridge {
     const sessionId = this.runtime.getStatus(conversationId).sessionId
     this.sessionDiagnosticRefs.delete(sessionId)
     await this.runtime.closeConversation(conversationId)
+    this.trustedClaudeSessions.delete(conversationId)
     this.conversationConfigurations.delete(conversationId)
     this.conversationSkills.delete(conversationId)
     this.conversationRuntimeBindings.delete(conversationId)
@@ -736,6 +743,7 @@ export class AgentBridge {
 
   /** 切换后端（使用存储的依赖） */
   switchBackend(config: BackendConfig, preserveSessions = true): void {
+    if (!preserveSessions) this.trustedClaudeSessions.clear()
     this.runtime.switchBackend(config, preserveSessions)
   }
 
@@ -789,9 +797,18 @@ export class AgentBridge {
     this.conversationConfigurations.clear()
     this.conversationSkills.clear()
     this.conversationRuntimeBindings.clear()
+    this.trustedClaudeSessions.clear()
   }
 
   private handleRuntimeEvent(event: AgentRuntimeEvent): void {
+    if (
+      event.type === 'system' &&
+      typeof event.data === 'object' &&
+      event.data !== null &&
+      (event.data as { subtype?: unknown }).subtype === 'init'
+    ) {
+      this.rememberTrustedClaudeSession(event.conversationId)
+    }
     for (const listener of this.runtimeListeners) listener(event)
     const taskId = this.activeBrowserTaskIds.get(event.conversationId)
     if (taskId) {
@@ -971,11 +988,21 @@ export class AgentBridge {
     sessionId: string | null,
     persistedFingerprint?: string | null,
   ): string | null {
+    const trusted = this.trustedClaudeSessions.get(conversationId)
     return resolveCompatibleClaudeSessionId(
       sessionId,
       persistedFingerprint,
       this.getConversationCompatibilityFingerprint(conversationId),
+      trusted,
     )
+  }
+
+  private rememberTrustedClaudeSession(conversationId: string): void {
+    if (this.getConversationRuntimeBinding(conversationId).kind !== 'claude-code') return
+    const sessionId = this.runtime.getStatus(conversationId).sessionId?.trim()
+    const compatibilityFingerprint = this.getConversationCompatibilityFingerprint(conversationId)
+    if (!sessionId || !compatibilityFingerprint) return
+    this.trustedClaudeSessions.set(conversationId, { sessionId, compatibilityFingerprint })
   }
 
   private bindConversationRuntime(
@@ -1106,9 +1133,16 @@ export function resolveCompatibleClaudeSessionId(
   sessionId: string | null,
   persistedFingerprint: string | null | undefined,
   activeFingerprint: string | null,
+  trustedSession?: { sessionId: string; compatibilityFingerprint: string } | null,
 ): string | null {
   const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : ''
   if (!normalizedSessionId) return null
   if (!activeFingerprint || persistedFingerprint !== activeFingerprint) return null
+  if (
+    trustedSession?.sessionId !== normalizedSessionId ||
+    trustedSession.compatibilityFingerprint !== activeFingerprint
+  ) {
+    return null
+  }
   return normalizedSessionId
 }

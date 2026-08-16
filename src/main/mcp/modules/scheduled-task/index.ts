@@ -23,7 +23,7 @@ const TOOLS: ToolDefinition[] = [
   {
     name: 'scheduled_task_get_runtime_status',
     description:
-      '读取 CCLink Studio App 内定时任务 Runtime 状态，包括 ready/degraded、下个 timer、队列、当前 run、本机启用数量和结构化错误。不会注册或查询系统计划任务。',
+      '读取当前 Agent 会话所绑定工作空间的 CCLink Studio 定时任务 Runtime 投影，包括 ready/degraded、下个 timer、队列、当前 run、本机启用数量和结构化错误。不会返回其他工作空间计数，也不会注册或查询系统计划任务。',
     inputSchema: { type: 'object', properties: {} },
     annotations: { readOnlyHint: true, destructiveHint: false },
   },
@@ -61,10 +61,7 @@ export class ScheduledTaskToolModule implements ToolModule {
       case 'scheduled_task_list':
         return this.list(workspace.workspacePath)
       case 'scheduled_task_get_runtime_status':
-        return {
-          success: true,
-          runtime: this.service.getRuntimeStatus(),
-        }
+        return this.runtimeStatus(workspace.workspacePath)
       case 'scheduled_task_list_runs':
         return this.listRuns(
           workspace.workspacePath,
@@ -83,6 +80,12 @@ export class ScheduledTaskToolModule implements ToolModule {
       success: true,
       tasks: result.tasks.map(summarizeTask),
     }
+  }
+
+  private async runtimeStatus(workspacePath: string): Promise<unknown> {
+    const result = await this.service.getWorkspaceRuntimeStatus(workspacePath)
+    if (!result.success || !result.runtime) return serviceFailure(result.error)
+    return { success: true, runtime: result.runtime }
   }
 
   private async listRuns(workspacePath: string, taskId: string, limit: number): Promise<unknown> {

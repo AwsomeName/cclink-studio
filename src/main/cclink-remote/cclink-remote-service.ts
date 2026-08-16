@@ -100,6 +100,7 @@ export class CclinkRemoteService implements RemoteProvider {
   private messages = new Map<string, CclinkRemoteMessage[]>()
   private streams = new Map<string, StreamBuffer>()
   private capabilityProbes = new Map<string, CapabilityProbeResult & { expiresAt: number }>()
+  private capabilityProbeFailures = new Map<string, CapabilityProbeResult & { expiresAt: number }>()
   private connecting: Promise<CclinkRealtimeStatus> | null = null
   private readonly diagnosticLog = new RemoteDiagnosticLog()
 
@@ -1063,6 +1064,7 @@ export class CclinkRemoteService implements RemoteProvider {
     this.messages.clear()
     this.streams.clear()
     this.capabilityProbes.clear()
+    this.capabilityProbeFailures.clear()
   }
 
   async disconnect(): Promise<void> {
@@ -1144,18 +1146,39 @@ export class CclinkRemoteService implements RemoteProvider {
   private async getLiveCapabilityProbe(serverId: string): Promise<CapabilityProbeResult> {
     const cached = this.capabilityProbes.get(serverId)
     if (cached && cached.expiresAt > Date.now()) {
-      return { response: cached.response, ...(cached.error ? { error: cached.error } : {}) }
+      return { response: cached.response }
+    }
+    const cachedFailure = this.capabilityProbeFailures.get(serverId)
+    if (cachedFailure && cachedFailure.expiresAt > Date.now()) {
+      return {
+        response: cached?.response ?? null,
+        ...(cachedFailure.error ? { error: cachedFailure.error } : {}),
+      }
     }
     try {
-      const response = (await this.requestRouter.request(
+      const received = (await this.requestRouter.request(
         serverId,
         createCclinkEnvelope('capability_probe_request'),
         ['capability_probe_response'],
         3_000,
       )) as CclinkCapabilityProbeResponseMessage
+      const response = boundedCapabilityProbeResponse(received)
+      const capabilitySignals = collectCapabilitySignals(response)
+      const incomplete =
+        response.capability_probe_complete === false ||
+        (response.payload_truncated === true && capabilitySignals.size === 0)
+      if (incomplete) {
+        const error = incompleteCapabilityProbeError(response, serverId)
+        const result = { response: cached?.response ?? null, error }
+        this.capabilityProbeFailures.set(serverId, {
+          expiresAt: Date.now() + 2_000,
+          ...result,
+        })
+        this.diagnosticLog.record('capability.probe', error)
+        return result
+      }
       const server = this.servers.get(serverId)
       if (server) {
-        const capabilitySignals = collectCapabilitySignals(response)
         server.agentVersion =
           valueAsString(
             response.agentVersion ?? response.agent_version ?? response.sender?.version,
@@ -1173,7 +1196,6 @@ export class CclinkRemoteService implements RemoteProvider {
               response.sender?.min_protocol_version,
           ) ?? server.minProtocolVersion
         server.capabilities = {
-          ...server.capabilities,
           ...response.capability_map,
           ...Object.fromEntries([...capabilitySignals].map((capability) => [capability, true])),
         }
@@ -1189,11 +1211,15 @@ export class CclinkRemoteService implements RemoteProvider {
         expiresAt: Date.now() + (transientProbe ? 2_000 : 15_000),
         ...result,
       })
+      this.capabilityProbeFailures.delete(serverId)
       return result
     } catch (error) {
       const normalized = capabilityProbeError(error, serverId)
-      const result = { response: null, error: normalized }
-      this.capabilityProbes.set(serverId, { expiresAt: Date.now() + 5_000, ...result })
+      const result = { response: cached?.response ?? null, error: normalized }
+      this.capabilityProbeFailures.set(serverId, {
+        expiresAt: Date.now() + 5_000,
+        ...result,
+      })
       this.diagnosticLog.record('capability.probe', normalized)
       return result
     }
@@ -1861,6 +1887,48 @@ function capabilityProbeError(error: unknown, endpointId: string): RemoteError {
   return {
     ...source,
     context: { ...source.context, endpointId, operation: 'capability.probe' },
+  }
+}
+
+function incompleteCapabilityProbeError(
+  response: CclinkCapabilityProbeResponseMessage,
+  endpointId: string,
+): RemoteError {
+  return remoteError(
+    'remote-agent',
+    REMOTE_ERROR_CODE.CAPABILITY_PROBE_INCOMPLETE,
+    '能力探测响应不完整，Studio 已保留上一次有效能力状态并将自动重试',
+    true,
+    {
+      endpointId,
+      operation: 'capability.probe',
+      capabilityProbeComplete: response.capability_probe_complete === true,
+      payloadTruncated: response.payload_truncated === true,
+      truncationReason: response.payload_truncation_reason ?? 'unknown',
+    },
+  )
+}
+
+function boundedCapabilityProbeResponse(
+  response: CclinkCapabilityProbeResponseMessage,
+): CclinkCapabilityProbeResponseMessage {
+  const runtimeProbe = response.runtime_probe
+  if (!runtimeProbe || typeof runtimeProbe !== 'object') return response
+  return {
+    ...response,
+    runtime_probe: {
+      ...(typeof runtimeProbe.version === 'number' ? { version: runtimeProbe.version } : {}),
+      ...(typeof runtimeProbe.refresh_state === 'string'
+        ? { refresh_state: runtimeProbe.refresh_state }
+        : {}),
+      ...(runtimeProbe.checked_at === null ||
+      typeof runtimeProbe.checked_at === 'string' ||
+      typeof runtimeProbe.checked_at === 'number'
+        ? { checked_at: runtimeProbe.checked_at }
+        : {}),
+      ...(typeof runtimeProbe.stale === 'boolean' ? { stale: runtimeProbe.stale } : {}),
+      ...(typeof runtimeProbe.count === 'number' ? { count: runtimeProbe.count } : {}),
+    },
   }
 }
 

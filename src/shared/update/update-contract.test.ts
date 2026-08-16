@@ -22,6 +22,30 @@ function idleSnapshot() {
   }
 }
 
+function availableSnapshot() {
+  return {
+    ...idleSnapshot(),
+    phase: 'available',
+    operationId: 'check-1',
+    availableRelease: {
+      tag: 'v1.2.4',
+      version: '1.2.4',
+      channel: 'stable',
+      architecture: 'arm64',
+      minimumSystemVersion: '13.0',
+      publishedAt: '2026-08-16T03:25:51.000Z',
+      releaseNotes: 'Update notes',
+      prerelease: false,
+      asset: {
+        kind: 'dmg',
+        name: 'cclink-studio-1.2.4-arm64.dmg',
+        size: 1024,
+      },
+    },
+    lastCheckedAt: '2026-08-16T03:26:00.000Z',
+  }
+}
+
 describe('update contract', () => {
   it('accepts a bounded idle snapshot', () => {
     expect(parseUpdateSnapshot(idleSnapshot())).toEqual(idleSnapshot())
@@ -33,6 +57,20 @@ describe('update contract', () => {
 
   it('requires a stable operation id outside disabled and idle phases', () => {
     expect(() => parseUpdateSnapshot({ ...idleSnapshot(), phase: 'checking' })).toThrow()
+  })
+
+  it('allows a retained candidate to carry a structured refresh error', () => {
+    const snapshot = {
+      ...availableSnapshot(),
+      error: {
+        code: 'network_offline',
+        userMessage: '无法连接更新服务',
+        retryable: true,
+      },
+    }
+
+    expect(parseUpdateSnapshot(snapshot)).toEqual(snapshot)
+    expect(() => parseUpdateSnapshot({ ...idleSnapshot(), error: snapshot.error })).toThrow()
   })
 
   it('does not allow paths, URLs, manifests, or credentials in the public snapshot', () => {

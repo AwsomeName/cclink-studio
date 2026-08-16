@@ -39,6 +39,10 @@ beforeEach(() => {
   vi.stubGlobal('window', {
     cclinkStudio: {
       workspaceState: {
+        setActiveLocalWorkspace: vi.fn(async (workspacePath: string | null) => ({
+          success: true,
+          activeWorkspace: { workspacePath, generation: 1 },
+        })),
         get: vi.fn().mockResolvedValue(
           snapshot('/workspace/b', {
             tabs: {

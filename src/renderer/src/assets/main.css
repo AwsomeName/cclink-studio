@@ -9443,6 +9443,10 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   background: rgba(220, 38, 38, 0.12);
 }
 
+.update-refresh-error {
+  margin-top: 16px;
+}
+
 .update-release {
   display: flex;
   flex-direction: column;

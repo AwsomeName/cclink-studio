@@ -58,7 +58,6 @@ const settingsUpdateSchema = z
     editorLineNumbers: z.boolean(),
     appZoomLevel: z.number().finite().min(APP_ZOOM_LEVEL_MIN).max(APP_ZOOM_LEVEL_MAX),
     uiFontSize: z.number().finite().min(8).max(48),
-    lastWorkspacePath: pathString,
     recentWorkspacePaths: z.array(pathString).max(100),
     gitBackupUsername: z.string().max(256),
     showHiddenFiles: z.boolean(),

@@ -90,11 +90,24 @@ export function UpdatePanel(): React.ReactElement | null {
                     {release.architecture} · {formatBytes(release.asset.size)} ·{' '}
                     {formatDateTime(release.publishedAt)}
                   </span>
+                  {snapshot.lastCheckedAt && (
+                    <span>上次成功检查：{formatDateTime(snapshot.lastCheckedAt)}</span>
+                  )}
                 </div>
               </div>
               {release.releaseNotes && (
                 <pre className="update-release-notes">{release.releaseNotes}</pre>
               )}
+            </div>
+          )}
+
+          {snapshot.phase === 'available' && snapshot.error && release && (
+            <div className="update-error update-refresh-error" role="status">
+              <strong>未能刷新最新版本</strong>
+              <span>
+                {snapshot.error.userMessage}（{snapshot.error.code}）；已保留 v{release.version}
+                ，仍可下载或重试检查。
+              </span>
             </div>
           )}
 
@@ -147,6 +160,10 @@ export function UpdatePanel(): React.ReactElement | null {
         <footer className="update-panel-actions">
           {snapshot.phase === 'available' && (
             <>
+              <button type="button" onClick={() => void check()}>
+                <IconRefresh size={14} />
+                重新检查
+              </button>
               <button type="button" onClick={() => void ignoreVersion()}>
                 忽略此版本
               </button>

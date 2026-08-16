@@ -188,6 +188,17 @@ export interface ScheduledTaskRuntimeStatus {
   systemScheduler: 'none'
 }
 
+/** Agent 查询使用的当前工作空间投影；由 ScheduledTaskService 即时计算，不保存副本。 */
+export interface ScheduledTaskWorkspaceRuntimeStatus extends ScheduledTaskRuntimeStatus {
+  scope: 'workspace'
+}
+
+export interface ScheduledTaskWorkspaceRuntimeStatusResult {
+  success: boolean
+  runtime?: ScheduledTaskWorkspaceRuntimeStatus
+  error?: ScheduledTaskFailure
+}
+
 export interface ScheduledTasksApiContract {
   list(workspacePath: string): Promise<ScheduledTaskListResult>
   get(workspacePath: string, taskId: string): Promise<ScheduledTaskOperationResult>

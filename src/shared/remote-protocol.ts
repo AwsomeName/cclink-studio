@@ -30,7 +30,7 @@ export interface RemoteStatus {
     state: string
     checkedAt?: string
     stale: boolean
-    /** Exact Agent response, retained for diagnostics without capability remapping. */
+    /** Correlated Agent response with runtime diagnostics reduced to the bounded summary. */
     response: CclinkCapabilityProbeResponseMessage
   }
   compatibility: 'compatible' | 'upgrade-required' | 'unknown'

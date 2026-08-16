@@ -24,6 +24,7 @@ import type {
   ClaudeRuntimeStatus,
   ResolvedClaudeRuntime,
 } from '../../shared/claude-runtime'
+import { CLAUDE_NATIVE_SCHEDULING_POLICY_VERSION } from '../agent-core/backends/claude-native-scheduling-policy'
 import { detectClaudeCode, type ClaudeCodeStatus } from './claude-code-detector'
 
 const execFileAsync = promisify(execFile)
@@ -352,6 +353,7 @@ export function buildClaudeSessionCompatibilityFingerprint(
 ): string {
   return fingerprint([
     runtimeFingerprint,
+    `native-scheduling-policy:${CLAUDE_NATIVE_SCHEDULING_POLICY_VERSION}`,
     settings.apiFormat?.trim() ?? '',
     settings.apiBaseUrl?.trim() ?? '',
     settings.modelName?.trim() ?? '',

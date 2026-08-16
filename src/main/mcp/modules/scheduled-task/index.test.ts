@@ -79,6 +79,31 @@ describe('ScheduledTaskToolModule', () => {
     expect(list).not.toHaveBeenCalled()
   })
 
+  it('requests a workspace-scoped runtime projection from the service owner', async () => {
+    const getWorkspaceRuntimeStatus = vi.fn(async () => ({
+      success: true,
+      runtime: {
+        scope: 'workspace' as const,
+        state: 'ready' as const,
+        startedAt: 1,
+        timerDueAt: 2,
+        queuedCount: 0,
+        runningRunId: null,
+        enabledCount: 1,
+        systemScheduler: 'none' as const,
+      },
+    }))
+    const module = new ScheduledTaskToolModule({ getWorkspaceRuntimeStatus } as never)
+
+    await expect(
+      module.execute('scheduled_task_get_runtime_status', {}, localContext()),
+    ).resolves.toMatchObject({
+      success: true,
+      runtime: { scope: 'workspace', enabledCount: 1 },
+    })
+    expect(getWorkspaceRuntimeStatus).toHaveBeenCalledWith(workspace)
+  })
+
   it('bounds run history and strips artifact path and hash', async () => {
     const taskId = '00000000-0000-4000-8000-000000000001'
     const listRuns = vi.fn(async () => ({

@@ -18,6 +18,7 @@ const MAX_CONTINUITY_RECENT_MESSAGES = 6
 const MAX_CONTINUITY_USER_MESSAGES = 4
 const MAX_CONTINUITY_MESSAGE_LENGTH = 1200
 const MAX_CONTINUITY_TASKS = 12
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/i
 
 export function toMountedResource(resource: AgentResourceCandidate): AgentMountedResource {
   return {
@@ -56,13 +57,19 @@ export function toSendResources(resources: AgentMountedResource[]): AgentSendRes
       }
       rangeBytes += bytes
     }
+    const { snapshotHash, ...ref } = resource.ref
     return [
       {
         id: resource.id,
         kind: resource.kind,
         label: resource.label,
         detail: resource.detail,
-        ref: resource.ref,
+        ref: {
+          ...ref,
+          ...(snapshotHash && SHA256_HEX_PATTERN.test(snapshotHash)
+            ? { snapshotHash: snapshotHash.toLowerCase() }
+            : {}),
+        },
       },
     ]
   })

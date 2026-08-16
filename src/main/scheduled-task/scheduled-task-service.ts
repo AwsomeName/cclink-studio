@@ -32,6 +32,7 @@ import type {
   ScheduledTaskRunResult,
   ScheduledTaskRunTrigger,
   ScheduledTaskRuntimeStatus,
+  ScheduledTaskWorkspaceRuntimeStatusResult,
   ScheduledTaskSnapshot,
   SetScheduledTaskEnabledInput,
 } from '../../shared/scheduled-task/scheduled-task-types'
@@ -87,6 +88,8 @@ export class ScheduledTaskService {
   private runtimeState: ScheduledTaskRuntimeStatus['state'] = 'stopped'
   private runtimeStartedAt: number | null = null
   private lastRuntimeError: ScheduledTaskFailure | undefined
+  /** null 表示 Runtime 全局错误；路径表示只属于该工作空间。 */
+  private lastRuntimeErrorWorkspacePath: string | null = null
 
   constructor(
     private readonly workspaceStateService: WorkspaceStateService,
@@ -135,18 +138,21 @@ export class ScheduledTaskService {
         message: '定时任务本机状态损坏，调度已停用',
         recovery: '修复或移走 userData/scheduled-tasks 中的损坏文件后重启',
       }
+      this.lastRuntimeErrorWorkspacePath = null
       return
     }
     this.runExecutor ??= new ScheduledTaskAgentRunner(agentBridge)
     this.runtimeState = 'ready'
     this.runtimeStartedAt = this.now()
     this.lastRuntimeError = undefined
+    this.lastRuntimeErrorWorkspacePath = null
     try {
       await this.reconcileMissedOccurrences()
       this.armScheduler()
     } catch (error) {
       this.runtimeState = 'degraded'
       this.lastRuntimeError = toFailure(error)
+      this.lastRuntimeErrorWorkspacePath = null
       console.error('[ScheduledTaskService] App 内调度启动降级:', error)
     }
   }
@@ -161,6 +167,7 @@ export class ScheduledTaskService {
       message,
       recovery: '检查 Agent 设置后重试',
     }
+    this.lastRuntimeErrorWorkspacePath = null
   }
 
   async stopRuntime(): Promise<void> {
@@ -417,6 +424,51 @@ export class ScheduledTaskService {
     }
   }
 
+  async getWorkspaceRuntimeStatus(
+    workspacePath: string,
+  ): Promise<ScheduledTaskWorkspaceRuntimeStatusResult> {
+    try {
+      const context = await this.resolveWorkspace(workspacePath, false)
+      const activations = Object.values(this.activationFile.activations).filter(
+        (activation) =>
+          activation.workspaceId === context.workspaceId &&
+          activation.workspaceRef.path === context.workspacePath,
+      )
+      const queuedRuns = this.runQueue
+        .map((runId) => this.runStore.get(runId))
+        .filter((run) => run?.workspaceRef.path === context.workspacePath)
+      const runningRun = this.currentRunId ? this.runStore.get(this.currentRunId) : undefined
+      const timerDueAt =
+        this.runtimeState === 'ready'
+          ? (activations
+              .filter((activation) => activation.enabled && activation.nextRunAt !== null)
+              .map((activation) => activation.nextRunAt as number)
+              .sort((left, right) => left - right)[0] ?? null)
+          : null
+      return {
+        success: true,
+        runtime: {
+          scope: 'workspace',
+          state: this.runtimeState,
+          startedAt: this.runtimeStartedAt,
+          timerDueAt,
+          queuedCount: queuedRuns.length,
+          runningRunId:
+            runningRun?.workspaceRef.path === context.workspacePath ? runningRun.id : null,
+          enabledCount: activations.filter((activation) => activation.enabled).length,
+          ...(this.lastRuntimeError &&
+          (this.lastRuntimeErrorWorkspacePath === null ||
+            this.lastRuntimeErrorWorkspacePath === context.workspacePath)
+            ? { lastError: this.lastRuntimeError }
+            : {}),
+          systemScheduler: 'none',
+        },
+      }
+    } catch (error) {
+      return { success: false, error: toFailure(error) }
+    }
+  }
+
   async flush(): Promise<void> {
     await this.mutationQueue.catch(() => {})
     if (!this.runStoreLoadError) await this.runStore.flush()
@@ -463,6 +515,7 @@ export class ScheduledTaskService {
             : calculateNextRunAt(definition.schedule, timestamp)
       } catch (error) {
         this.lastRuntimeError = toFailure(error)
+        this.lastRuntimeErrorWorkspacePath = activation.workspaceRef.path
       }
     }
     await this.writeActivationFile()
@@ -538,6 +591,7 @@ export class ScheduledTaskService {
           }
         } catch (error) {
           this.lastRuntimeError = toFailure(error)
+          this.lastRuntimeErrorWorkspacePath = activation.workspaceRef.path
         }
       }
       await this.writeActivationFile()

@@ -162,6 +162,11 @@ export interface CclinkServerMetaMessage extends CclinkEnvelope {
 
 export interface CclinkCapabilityProbeResponseMessage extends CclinkEnvelope {
   cc_type: 'capability_probe_response'
+  capability_probe_complete?: boolean
+  status?: 'ok' | 'error'
+  code?: string
+  message?: string
+  retryable?: boolean
   agent_id?: string
   agentVersion?: string
   agent_version?: string
@@ -179,9 +184,11 @@ export interface CclinkCapabilityProbeResponseMessage extends CclinkEnvelope {
   capability_list?: string[]
   runtime?: string
   runtime_probe?: {
+    version?: number
     refresh_state?: string
     checked_at?: string | number | null
     stale?: boolean
+    count?: number
   }
 }
 

@@ -6,7 +6,29 @@ import {
 } from '../../shared/cclink'
 import type { RemoteStatus } from '../../shared/remote-protocol'
 import { CclinkRemoteService } from './cclink-remote-service'
-import { CclinkRequestError } from './request-router'
+import {
+  CclinkRequestError,
+  type CclinkTransport,
+  type CclinkTransportEvent,
+} from './request-router'
+
+class ReceivingTransport implements CclinkTransport {
+  readonly sent: Array<{ serverId: string; message: CclinkProtocolMessage }> = []
+  private readonly listeners = new Set<(event: CclinkTransportEvent) => void>()
+
+  async sendMessage(serverId: string, message: CclinkProtocolMessage): Promise<void> {
+    this.sent.push({ serverId, message })
+  }
+
+  onMessage(listener: (event: CclinkTransportEvent) => void): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  receive(serverId: string, message: CclinkProtocolMessage): void {
+    for (const listener of this.listeners) listener({ serverId, message })
+  }
+}
 
 const storedSession = {
   id: 'session-1',
@@ -102,7 +124,15 @@ describe('CclinkRemoteService runtime protocol', () => {
       agentVersion: '0.8.41',
       protocolVersion: 2,
       runtime: 'claude_code',
-      runtime_probe: { refresh_state: 'refreshing', checked_at: 123, stale: false },
+      runtime_probe: {
+        version: 1,
+        refresh_state: 'refreshing',
+        checked_at: 123,
+        stale: false,
+        count: 2,
+        env_source: 'legacy-capability-payload',
+        env_file: '/private/runtime.env',
+      } as never,
       capabilities: {
         file: { write: true },
         agent: { runtime_select: true, stream_json_input: true },
@@ -134,6 +164,13 @@ describe('CclinkRemoteService runtime protocol', () => {
       },
     })
     expect(status.remoteError).toBeUndefined()
+    expect(status.capabilityProbe?.response.runtime_probe).toEqual({
+      version: 1,
+      refresh_state: 'refreshing',
+      checked_at: 123,
+      stale: false,
+      count: 2,
+    })
     expect(
       (
         service as unknown as {
@@ -303,6 +340,151 @@ describe('CclinkRemoteService runtime protocol', () => {
         },
       },
     })
+  })
+
+  it('correlates a capability response at the real transport receiver', async () => {
+    const { service } = createService()
+    installOnlineServer(service)
+    const transport = new ReceivingTransport()
+    service.getRequestRouter().attach(transport)
+
+    const pending = service.getStatus(remoteRef)
+    await vi.waitFor(() => expect(transport.sent).toHaveLength(1))
+    const requestId = transport.sent[0]?.message.request_id
+
+    transport.receive('agent-1', {
+      ...createCclinkEnvelope('capability_probe_response'),
+      request_id: 'unrelated-request',
+      capability_probe_complete: true,
+      capability_map: { file_read: false },
+    })
+    transport.receive('agent-1', {
+      ...createCclinkEnvelope('capability_probe_response'),
+      request_id: requestId,
+      capability_probe_complete: true,
+      capability_map: { file_read: true, stream_json_input: true },
+    })
+
+    await expect(pending).resolves.toMatchObject({
+      capabilities: {
+        file: { read: true },
+        agent: { session: true, stream: true },
+      },
+      capabilityProbe: {
+        response: { request_id: requestId },
+      },
+    })
+    service.getRequestRouter().detach()
+  })
+
+  it('preserves a correlated Agent failure response at the real transport receiver', async () => {
+    const { service } = createService()
+    installOnlineServer(service)
+    const transport = new ReceivingTransport()
+    service.getRequestRouter().attach(transport)
+
+    const pending = service.getStatus(remoteRef)
+    await vi.waitFor(() => expect(transport.sent).toHaveLength(1))
+    const requestId = transport.sent[0]?.message.request_id
+    transport.receive('agent-1', {
+      ...createCclinkEnvelope('error'),
+      request_id: requestId,
+      code: 'RUNTIME_PROBE_FAILED',
+      message: 'runtime probe failed',
+      retryable: false,
+    })
+
+    await expect(pending).resolves.toMatchObject({
+      remoteError: {
+        layer: 'remote-agent',
+        code: 'RUNTIME_PROBE_FAILED',
+        message: 'runtime probe failed',
+        retryable: false,
+        context: { endpointId: 'agent-1', operation: 'capability.probe' },
+      },
+    })
+    service.getRequestRouter().detach()
+  })
+
+  it('does not overwrite PTY, file, or Markdown capability caches with an incomplete response', async () => {
+    const { service } = createService()
+    installOnlineServer(service)
+    const transport = new ReceivingTransport()
+    service.getRequestRouter().attach(transport)
+
+    const initial = service.getStatus(remoteRef)
+    await vi.waitFor(() => expect(transport.sent).toHaveLength(1))
+    const initialRequestId = transport.sent[0]?.message.request_id
+    transport.receive('agent-1', {
+      ...createCclinkEnvelope('capability_probe_response'),
+      request_id: initialRequestId,
+      capability_probe_complete: true,
+      capability_map: {
+        file_read: true,
+        file_write: true,
+        file_markdown_open_v3: true,
+        file_markdown_save_v3: true,
+        terminal_workspace_pty: true,
+        stream_json_input: true,
+      },
+      capability_list: [
+        'file_read',
+        'file_write',
+        'file_markdown_open_v3',
+        'file_markdown_save_v3',
+        'terminal_workspace_pty',
+        'stream_json_input',
+      ],
+    })
+    await expect(initial).resolves.toMatchObject({
+      capabilities: {
+        file: { read: true, write: true },
+        shell: { pty: true },
+      },
+    })
+
+    const internals = service as unknown as {
+      capabilityProbes: Map<string, { response: CclinkProtocolMessage | null; expiresAt: number }>
+      servers: Map<string, CclinkServer>
+    }
+    const validCache = internals.capabilityProbes.get('agent-1')
+    expect(validCache?.response?.request_id).toBe(initialRequestId)
+    if (validCache) validCache.expiresAt = 0
+
+    const refresh = service.getStatus(remoteRef)
+    await vi.waitFor(() => expect(transport.sent).toHaveLength(2))
+    const refreshRequestId = transport.sent[1]?.message.request_id
+    transport.receive('agent-1', {
+      ...createCclinkEnvelope('capability_probe_response'),
+      request_id: refreshRequestId,
+      capability_probe_complete: false,
+      status: 'error',
+      code: 'CAPABILITY_PROBE_INCOMPLETE',
+    })
+
+    await expect(refresh).resolves.toMatchObject({
+      capabilities: {
+        file: { read: true, write: true },
+        shell: { pty: true },
+        agent: { session: true, stream: true },
+      },
+      capabilityProbe: { response: { request_id: initialRequestId } },
+      remoteError: {
+        code: 'REMOTE_CAPABILITY_PROBE_INCOMPLETE',
+        retryable: true,
+        context: { capabilityProbeComplete: false },
+      },
+    })
+    expect(internals.capabilityProbes.get('agent-1')).toBe(validCache)
+    expect(internals.capabilityProbes.get('agent-1')?.response?.request_id).toBe(initialRequestId)
+    expect(internals.servers.get('agent-1')?.capabilities).toMatchObject({
+      file_read: true,
+      file_write: true,
+      file_markdown_open_v3: true,
+      file_markdown_save_v3: true,
+      terminal_workspace_pty: true,
+    })
+    service.getRequestRouter().detach()
   })
 
   it('保留 Agent 审批字段并把主动问题送到会话 UI', async () => {

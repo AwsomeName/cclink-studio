@@ -4,8 +4,11 @@ export const CLAUDE_NATIVE_SCHEDULING_TOOLS = Object.freeze([
   ...policyManifest.deniedTools,
 ]) as readonly string[]
 
+export const CLAUDE_NATIVE_SCHEDULING_POLICY_VERSION = policyManifest.policyVersion
+
 export const CLAUDE_NATIVE_SCHEDULING_POLICY_STATUS = Object.freeze({
   enforced: true,
+  policyVersion: CLAUDE_NATIVE_SCHEDULING_POLICY_VERSION,
   deniedToolCount: CLAUDE_NATIVE_SCHEDULING_TOOLS.length,
   loopSkillDisabled: true,
   sdkSkillOverride: 'off' as const,
@@ -14,7 +17,12 @@ export const CLAUDE_NATIVE_SCHEDULING_POLICY_STATUS = Object.freeze({
 
 const NATIVE_SCHEDULING_TOOL_SET = new Set(CLAUDE_NATIVE_SCHEDULING_TOOLS)
 const FILE_MUTATION_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
-const STUDIO_FILE_MUTATION_TOOLS = ['editor_write', 'editor_append', 'editor_save'] as const
+const STUDIO_FILE_MUTATION_TOOLS = [
+  'editor_write',
+  'editor_append',
+  'editor_insert',
+  'editor_save',
+] as const
 const FILE_TARGET_KEYS = new Set(['file_path', 'filePath', 'notebook_path', 'notebookPath', 'path'])
 const SHELL_TOOLS = new Set(['Bash', 'Shell'])
 const SHELL_WRAPPERS = new Set(['bash', 'zsh', 'sh', 'pwsh', 'powershell', 'powershell.exe'])
@@ -34,6 +42,7 @@ export type NativeSchedulingDenialCode =
   | 'NATIVE_SCHEDULING_TOOL_BLOCKED'
   | 'NATIVE_SCHEDULING_SKILL_BLOCKED'
   | 'NATIVE_SCHEDULING_FILE_BLOCKED'
+  | 'UNBOUND_EDITOR_MUTATION_BLOCKED'
   | 'SYSTEM_SCHEDULER_COMMAND_BLOCKED'
 
 export interface NativeSchedulingDenial {
@@ -61,6 +70,12 @@ export function inspectNativeSchedulingToolUse(
 
   if (isFileMutationTool(toolName)) {
     const targets = collectFileTargets(toolInput)
+    if (isStudioFileMutationTool(toolName) && targets.length === 0) {
+      return denial(
+        'UNBOUND_EDITOR_MUTATION_BLOCKED',
+        '普通 Agent 不能对未显式绑定文件路径的编辑器草稿执行写入；请先保存文件并提供明确路径。',
+      )
+    }
     if (targets.some(isExternalSchedulingFile)) {
       return denial(
         'NATIVE_SCHEDULING_FILE_BLOCKED',
@@ -82,11 +97,14 @@ export function inspectNativeSchedulingToolUse(
   return null
 }
 
-function isFileMutationTool(toolName: string): boolean {
-  return (
-    FILE_MUTATION_TOOLS.has(toolName) ||
-    STUDIO_FILE_MUTATION_TOOLS.some((name) => toolName === name || toolName.endsWith(`__${name}`))
+function isStudioFileMutationTool(toolName: string): boolean {
+  return STUDIO_FILE_MUTATION_TOOLS.some(
+    (name) => toolName === name || toolName.endsWith(`__${name}`),
   )
+}
+
+function isFileMutationTool(toolName: string): boolean {
+  return FILE_MUTATION_TOOLS.has(toolName) || isStudioFileMutationTool(toolName)
 }
 
 function denial(code: NativeSchedulingDenialCode, message: string): NativeSchedulingDenial {
@@ -105,18 +123,21 @@ function collectFileTargets(input: unknown): string[] {
   if (!input || typeof input !== 'object') return []
   return Object.entries(input as Record<string, unknown>).flatMap(([key, value]) => {
     if (!FILE_TARGET_KEYS.has(key)) return []
-    if (typeof value === 'string') return [value]
+    if (typeof value === 'string') return value.trim() ? [value.trim()] : []
     if (Array.isArray(value))
-      return value.filter((item): item is string => typeof item === 'string')
+      return value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean)
     return []
   })
 }
 
 function isExternalSchedulingFile(rawPath: string): boolean {
-  const path = rawPath.trim().replaceAll('\\', '/').toLowerCase()
+  const path = normalizePolicyPath(rawPath)
   if (!path) return false
   return (
-    /(?:^|\/)\.claude\/scheduled_tasks\.json$/.test(path) ||
+    /(?:^|\/)scheduled_tasks\.json$/.test(path) ||
     /(?:^|\/)library\/launchagents\/[^/]+\.plist$/.test(path) ||
     /(?:^|\/)\.config\/systemd\/user\/[^/]+\.timer$/.test(path) ||
     /(?:^|\/)etc\/systemd\/(?:system|user)\/[^/]+\.timer$/.test(path) ||
@@ -163,7 +184,7 @@ function isExternalSchedulerCommand(command: string): boolean {
 function containsExternalSchedulingPath(command: string): boolean {
   const normalized = command.replaceAll('\\', '/').toLowerCase()
   return (
-    /(?:^|[^a-z0-9_.-])\.claude\/scheduled_tasks\.json(?:$|[^a-z0-9_.-])/u.test(normalized) ||
+    /(?:^|[^a-z0-9_.-])scheduled_tasks\.json(?:$|[^a-z0-9_.-])/u.test(normalized) ||
     /(?:^|[^a-z0-9_.-])(?:~\/|\/[^\s'"<>|;]*\/)?library\/launchagents\/[^\s'"<>|;]+\.plist\b/u.test(
       normalized,
     ) ||
@@ -172,6 +193,16 @@ function containsExternalSchedulingPath(command: string): boolean {
     /\/etc\/(?:crontab|cron\.(?:d|daily|hourly|monthly|weekly))(?:\/|\b)/u.test(normalized) ||
     /windows\/system32\/tasks(?:\/|\b)/u.test(normalized)
   )
+}
+
+function normalizePolicyPath(rawPath: string): string {
+  const segments: string[] = []
+  for (const segment of rawPath.trim().replaceAll('\\', '/').toLowerCase().split('/')) {
+    if (!segment || segment === '.') continue
+    if (segment === '..') segments.pop()
+    else segments.push(segment)
+  }
+  return segments.join('/')
 }
 
 function splitShellSegments(command: string): string[] {

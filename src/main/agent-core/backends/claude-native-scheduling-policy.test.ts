@@ -35,6 +35,14 @@ describe('Claude native scheduling policy', () => {
       'mcp__cclink_studio__editor_write',
       { filePath: '.claude/scheduled_tasks.json', content: '{}' },
     ],
+    ['Write', { file_path: '.claude/./scheduled_tasks.json', content: '{}' }],
+    ['Write', { file_path: '.claude/sub/../scheduled_tasks.json', content: '{}' }],
+    ['Write', { file_path: 'workspace-alias/scheduled_tasks.json', content: '{}' }],
+    ['Bash', { command: 'cd .claude && mv scheduled_tasks.json.disabled scheduled_tasks.json' }],
+    ['mcp__cclink_studio__editor_write', { filePath: ' ', content: '{}' }],
+    ['mcp__cclink_studio__editor_insert', { content: '{}', position: 'end' }],
+    ['mcp__cclink_studio__editor_insert', { filePath: ' ', content: '{}', position: 'end' }],
+    ['mcp__cclink_studio__editor_save', {}],
   ])('denies %s scheduling bypasses', (toolName, input) => {
     expect(inspectNativeSchedulingToolUse(toolName, input)).not.toBeNull()
   })

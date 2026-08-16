@@ -6,7 +6,8 @@
  */
 
 import { tmpdir } from 'os'
-import { isAbsolute, relative, resolve } from 'path'
+import { stat } from 'node:fs/promises'
+import { isAbsolute, join, relative, resolve } from 'path'
 import {
   query,
   type HookCallback,
@@ -423,6 +424,37 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       return
     }
 
+    const workspacePath = options?.workspacePath?.trim() || this.getWorkspacePath?.() || ''
+    if (workspacePath) {
+      try {
+        if (await pathExists(join(workspacePath, '.claude', 'scheduled_tasks.json'))) {
+          this.sessionId = null
+          this.lastContextUsage = null
+          this.terminalEventEmitted = true
+          this.emit('error', {
+            type: 'error',
+            operation,
+            code: 'native_scheduling_state_detected',
+            message:
+              '检测到此工作空间存在 Claude 原生定时任务文件。为避免旧任务随会话恢复执行，Studio 已拒绝启动 Agent；请先在外部 Claude Code 中停用或移走该文件。',
+          })
+          return
+        }
+      } catch {
+        this.sessionId = null
+        this.lastContextUsage = null
+        this.terminalEventEmitted = true
+        this.emit('error', {
+          type: 'error',
+          operation,
+          code: 'native_scheduling_state_unverifiable',
+          message:
+            '无法确认此工作空间是否存在 Claude 原生定时任务文件，Studio 已按安全策略拒绝启动 Agent。',
+        })
+        return
+      }
+    }
+
     this.aborted = false
     this.terminalEventEmitted = false
     this.lastSdkErrorMessage = null
@@ -431,7 +463,6 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     // 为当前会话创建隔离的 MCP 工具会话。
     const conversationId = options?.conversationId ?? 'agent-default'
     // 发送方携带的会话工作区优先；旧调用方继续回退到当前全局工作区。
-    const workspacePath = options?.workspacePath?.trim() || this.getWorkspacePath?.() || ''
     const workspaceKey =
       options?.resourceContext?.workspace.key ?? options?.workspacePath?.trim() ?? null
     this.mcpSessionToken = this.toolHost.createToolSession({
@@ -914,6 +945,22 @@ function classifySdkFailure(message: string): SdkFailureClassification {
   }
 
   return { invalidatesSession: false, message }
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path)
+    return true
+  } catch (error) {
+    if (isMissingFileError(error)) return false
+    throw error
+  }
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return (
+    error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT'
+  )
 }
 
 function normalizeContextUsage(usage: {

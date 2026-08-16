@@ -11,11 +11,7 @@
 import { randomUUID } from 'node:crypto'
 import type { BrowserWindow } from 'electron'
 import type { ToolModule, ToolDefinition } from '../../types'
-import type {
-  EditorContentUpdate,
-  EditorReadRequest,
-  EditorSaveRequest,
-} from '../../../../shared/ipc/editor'
+import type { EditorReadRequest, EditorSaveRequest } from '../../../../shared/ipc/editor'
 import type { DirEntry } from '../../../fs/file-service'
 
 export interface EditorFileAccess {
@@ -41,7 +37,7 @@ const EDITOR_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'editor_write',
     description:
-      '写入完整 Markdown 文档。指定 filePath 时直接持久化到磁盘并自动创建父目录；省略 filePath 时只替换当前编辑器草稿。',
+      '写入完整 Markdown 文档。必须指定 filePath，内容直接持久化到磁盘并自动创建父目录。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -51,21 +47,20 @@ const EDITOR_TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         filePath: {
           type: 'string',
-          description: '可选的目标文件路径。省略则写入当前活跃的编辑器 Tab。',
+          description: '目标文件路径。',
         },
         title: {
           type: 'string',
           description: '创建新 Tab 时的标题（如 "Report.md"）。默认 "Untitled.md"。',
         },
       },
-      required: ['content'],
+      required: ['content', 'filePath'],
     },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
   {
     name: 'editor_append',
-    description:
-      '在 Markdown 文档末尾追加内容。指定 filePath 时直接持久化到磁盘；省略 filePath 时追加到当前编辑器草稿。',
+    description: '在 Markdown 文档末尾追加内容。必须指定 filePath，内容直接持久化到磁盘。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -75,17 +70,17 @@ const EDITOR_TOOL_DEFINITIONS: ToolDefinition[] = [
         },
         filePath: {
           type: 'string',
-          description: '可选的目标文件路径。省略则追加到当前活跃的编辑器 Tab。',
+          description: '目标文件路径。',
         },
       },
-      required: ['content'],
+      required: ['content', 'filePath'],
     },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
   {
     name: 'editor_insert',
     description:
-      '在 Markdown 文档指定位置插入内容。指定 filePath 时直接持久化到磁盘；省略 filePath 时操作当前编辑器草稿。position 可选 "start" 或 "end"。',
+      '在 Markdown 文档指定位置插入内容。必须指定 filePath，position 可选 "start" 或 "end"。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -97,8 +92,12 @@ const EDITOR_TOOL_DEFINITIONS: ToolDefinition[] = [
           type: 'string',
           description: '插入位置："start" 或 "end"。默认 "end"。',
         },
+        filePath: {
+          type: 'string',
+          description: '目标文件路径。',
+        },
       },
-      required: ['content', 'position'],
+      required: ['content', 'position', 'filePath'],
     },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
@@ -139,15 +138,16 @@ const EDITOR_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'editor_save',
-    description: '保存当前编辑器内容到磁盘。文件必须已关联文件路径。',
+    description: '保存指定编辑器文件到磁盘，必须提供 filePath。',
     inputSchema: {
       type: 'object',
       properties: {
         filePath: {
           type: 'string',
-          description: '可选的文件路径。省略则保存当前活跃的编辑器 Tab。',
+          description: '要保存的文件路径。',
         },
       },
+      required: ['filePath'],
     },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
@@ -206,43 +206,20 @@ export class EditorToolModule implements ToolModule {
   ): Promise<unknown> {
     const filePath = typeof params.filePath === 'string' ? params.filePath.trim() : ''
     const content = typeof params.content === 'string' ? params.content : ''
-    if (filePath) {
-      const nextContent = await this.resolveDiskContent(type, filePath, content, params.position)
-      await this.fileAccess.writeFile(filePath, nextContent)
-      const persisted = await this.fileAccess.readFile(filePath)
-      if (persisted.encoding !== 'utf-8' || persisted.content !== nextContent) {
-        throw new Error(`文件写入后校验失败: ${filePath}`)
-      }
-      return {
-        success: true,
-        persisted: true,
-        verified: true,
-        filePath,
-        bytes: Buffer.byteLength(nextContent, 'utf-8'),
-      }
+    if (!filePath) throw new Error('编辑器写入必须提供明确的文件路径')
+    const nextContent = await this.resolveDiskContent(type, filePath, content, params.position)
+    await this.fileAccess.writeFile(filePath, nextContent)
+    const persisted = await this.fileAccess.readFile(filePath)
+    if (persisted.encoding !== 'utf-8' || persisted.content !== nextContent) {
+      throw new Error(`文件写入后校验失败: ${filePath}`)
     }
-
-    return new Promise((resolve, reject) => {
-      const id = randomUUID()
-
-      const timeout = setTimeout(() => {
-        this.pending.delete(id)
-        reject(new Error('编辑器操作超时'))
-      }, OPERATION_TIMEOUT)
-
-      this.pending.set(id, { resolve, reject, timeout })
-
-      const payload: EditorContentUpdate = {
-        id,
-        type,
-        content,
-        position: params.position as string | undefined,
-        title: params.title as string | undefined,
-        timestamp: Date.now(),
-      }
-
-      this.mainWindow!.webContents.send('editor:contentUpdate', payload)
-    })
+    return {
+      success: true,
+      persisted: true,
+      verified: true,
+      filePath,
+      bytes: Buffer.byteLength(nextContent, 'utf-8'),
+    }
   }
 
   private async resolveDiskContent(
@@ -314,6 +291,8 @@ export class EditorToolModule implements ToolModule {
    * 请求保存编辑器
    */
   private requestSave(params: Record<string, unknown>): Promise<unknown> {
+    const filePath = typeof params.filePath === 'string' ? params.filePath.trim() : ''
+    if (!filePath) return Promise.reject(new Error('编辑器保存必须提供明确的文件路径'))
     return new Promise((resolve, reject) => {
       const id = randomUUID()
 
@@ -326,7 +305,7 @@ export class EditorToolModule implements ToolModule {
 
       const request: EditorSaveRequest = {
         id,
-        filePath: params.filePath as string | undefined,
+        filePath,
       }
       this.mainWindow!.webContents.send('editor:saveRequest', request)
     })

@@ -184,6 +184,13 @@ export async function applyWorkspaceRuntimeTransition(
     waitForOptionalRuntime('Terminal', readTerminalRuntimeStatuses()),
   ])
   if (!isWorkspaceRuntimeTransitionCurrent(transition.generation)) return false
+  const activeLocalPath = transition.ref.kind === 'local' ? transition.ref.path : null
+  const activeResult =
+    await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(activeLocalPath)
+  if (!activeResult.success || !isWorkspaceRuntimeTransitionCurrent(transition.generation)) {
+    console.warn('[WorkspaceTransition] 主进程工作空间提交失败:', activeResult.error)
+    return false
+  }
   options.commitProjection?.()
   useWorkspaceStore.getState().commitActiveWorkspace(transition.ref)
 

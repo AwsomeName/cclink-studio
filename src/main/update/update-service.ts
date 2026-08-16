@@ -30,6 +30,12 @@ const PROGRESS_EMIT_INTERVAL_MS = 200
 type SnapshotListener = (snapshot: UpdateSnapshot) => void
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>
 
+interface AvailableReleaseFallback {
+  release: ResolvedUpdateRelease
+  summary: NonNullable<UpdateSnapshot['availableRelease']>
+  lastCheckedAt: string | null
+}
+
 export interface UpdateServiceOptions {
   currentVersion: string
   architecture: UpdateArchitecture
@@ -189,18 +195,26 @@ export class UpdateService {
     if (this.snapshot.phase === 'downloading' || this.snapshot.phase === 'verifying') {
       return Promise.resolve(this.result(false))
     }
+    const fallback =
+      this.snapshot.phase === 'available' && this.snapshot.availableRelease && this.resolvedRelease
+        ? {
+            release: this.resolvedRelease,
+            summary: this.snapshot.availableRelease,
+            lastCheckedAt: this.snapshot.lastCheckedAt,
+          }
+        : null
     const operationId = randomUUID()
     this.checkController = new AbortController()
     this.setSnapshot({
       ...this.snapshot,
       phase: 'checking',
       operationId,
-      availableRelease: null,
+      availableRelease: fallback?.summary ?? null,
       progress: null,
       error: null,
     })
 
-    this.checkPromise = this.performCheck(operationId, manual).finally(() => {
+    this.checkPromise = this.performCheck(operationId, manual, fallback).finally(() => {
       this.checkPromise = null
       this.checkController = null
     })
@@ -376,7 +390,11 @@ export class UpdateService {
     return this.manualInstallerResult(true, null)
   }
 
-  private async performCheck(operationId: string, manual: boolean): Promise<UpdateCommandResult> {
+  private async performCheck(
+    operationId: string,
+    manual: boolean,
+    fallback: AvailableReleaseFallback | null,
+  ): Promise<UpdateCommandResult> {
     try {
       const result = await this.options.provider.check({
         currentVersion: this.options.currentVersion,
@@ -440,7 +458,25 @@ export class UpdateService {
     } catch (error) {
       if (this.stopped) return this.result(false)
       if (this.snapshot.operationId !== operationId) return this.result(false)
-      this.fail(operationId, mapOperationError(error, '检查更新失败'))
+      const mapped = mapOperationError(error, '检查更新失败')
+      if (fallback) {
+        this.resolvedRelease = fallback.release
+        this.setSnapshot({
+          ...this.snapshot,
+          phase: 'available',
+          operationId,
+          availableRelease: fallback.summary,
+          progress: null,
+          lastCheckedAt: fallback.lastCheckedAt,
+          error: {
+            code: mapped.code,
+            userMessage: mapped.message,
+            retryable: mapped.retryable,
+          },
+        })
+      } else {
+        this.fail(operationId, mapped)
+      }
       return this.result(false)
     }
   }

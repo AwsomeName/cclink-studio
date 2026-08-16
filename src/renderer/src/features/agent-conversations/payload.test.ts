@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { agentSendMessageInputSchema } from '@shared/ipc/agent-schema'
 import { useAgentStore } from '../../stores/agent-store'
 import type { AgentMountedResource } from '../../types'
 import { createAgentConversationState } from './conversation-state'
@@ -176,11 +177,27 @@ describe('buildAgentSendPayload', () => {
           endLine: 10,
           selectedText: '原始选区内容',
           sourceSnapshot: '## 第二节\n\n原始选区内容',
-          snapshotHash: 'snapshot-1',
+          snapshotHash: 'a'.repeat(64),
           dirty: true,
         }),
       }),
     ])
+    expect(() => agentSendMessageInputSchema.parse(payload)).not.toThrow()
+  })
+
+  it('omits invalid snapshot hashes persisted by older Studio versions', () => {
+    const conversationId = useAgentStore.getState().createConversation()
+    useAgentStore
+      .getState()
+      .addMountedResource(fileRangeResource({ snapshotHash: 'deadbeef' }), conversationId)
+
+    const payload = buildAgentSendPayload(
+      '继续整理',
+      useAgentStore.getState().conversations[conversationId],
+    )
+
+    expect(payload.resources?.[0]?.ref.snapshotHash).toBeUndefined()
+    expect(() => agentSendMessageInputSchema.parse(payload)).not.toThrow()
   })
 
   it('drops markdown selections that exceed the per-range line or byte limits', () => {
@@ -265,7 +282,7 @@ function fileRangeResource(
       endLine: 10,
       sourceSnapshot: '## 第二节\n\n原始选区内容',
       selectedText: '原始选区内容',
-      snapshotHash: 'snapshot-1',
+      snapshotHash: 'a'.repeat(64),
       dirty: true,
       ...refOverrides,
     },

@@ -62,6 +62,16 @@ function availableRelease(
   }
 }
 
+function availableReleaseAtVersion(data: Buffer, version: string) {
+  const result = availableRelease(data)
+  result.release.manifest.tag = `v${version}`
+  result.release.manifest.version = version
+  result.release.assets.dmg.downloadUrl = new URL(
+    `https://github.com/AwsomeName/cclink-studio/releases/download/v${version}/studio-arm64.dmg`,
+  )
+  return result
+}
+
 class FixtureProvider implements UpdateProvider {
   readonly id = 'fixture'
   lastInput: UpdateProviderCheckInput | null = null
@@ -149,6 +159,94 @@ describe('UpdateService', () => {
     expect(JSON.stringify(downloaded.snapshot)).not.toContain(cacheRoot)
     const releaseDirectory = await onlyReleaseDirectory(cacheRoot)
     await expect(fs.readFile(join(releaseDirectory, 'studio-arm64.dmg'))).resolves.toEqual(data)
+    await service.stop()
+  })
+
+  it('rechecks an available candidate without hiding it and replaces it with the newer release', async () => {
+    const oldData = Buffer.from('old trusted update')
+    const newData = Buffer.from('new trusted update')
+    const provider: UpdateProvider = {
+      id: 'fixture',
+      check: vi
+        .fn()
+        .mockResolvedValueOnce(availableReleaseAtVersion(oldData, '1.2.3'))
+        .mockResolvedValueOnce(availableReleaseAtVersion(newData, '1.2.4')),
+    }
+    const cacheRoot = await fs.mkdtemp(join(tmpdir(), 'cclink-update-refresh-'))
+    temporaryDirectories.push(cacheRoot)
+    const service = new UpdateService({
+      currentVersion: '1.0.0',
+      architecture: 'arm64',
+      systemVersion: '15.0',
+      cacheRoot,
+      provider,
+      fetch: async () => downloadResponse(newData),
+      automaticChecks: false,
+    })
+    await service.start()
+
+    expect((await service.check()).snapshot.availableRelease?.version).toBe('1.2.3')
+    const refreshing = service.check()
+    expect(service.getSnapshot()).toMatchObject({
+      phase: 'checking',
+      availableRelease: { version: '1.2.3' },
+      error: null,
+    })
+
+    const refreshed = await refreshing
+    expect(refreshed).toMatchObject({
+      ok: true,
+      snapshot: {
+        phase: 'available',
+        availableRelease: { version: '1.2.4' },
+        error: null,
+      },
+    })
+    expect((await service.startDownload()).snapshot.phase).toBe('readyToInstall')
+    const releaseDirectory = await onlyReleaseDirectory(cacheRoot)
+    await expect(fs.readFile(join(releaseDirectory, 'studio-arm64.dmg'))).resolves.toEqual(newData)
+    await service.stop()
+  })
+
+  it('keeps the available candidate and download path when a refresh fails', async () => {
+    const data = Buffer.from('still trusted update')
+    const provider: UpdateProvider = {
+      id: 'fixture',
+      check: vi
+        .fn()
+        .mockResolvedValueOnce(availableReleaseAtVersion(data, '1.2.3'))
+        .mockRejectedValueOnce(new Error('offline')),
+    }
+    const cacheRoot = await fs.mkdtemp(join(tmpdir(), 'cclink-update-refresh-failure-'))
+    temporaryDirectories.push(cacheRoot)
+    const service = new UpdateService({
+      currentVersion: '1.0.0',
+      architecture: 'arm64',
+      systemVersion: '15.0',
+      cacheRoot,
+      provider,
+      fetch: async () => downloadResponse(data),
+      automaticChecks: false,
+    })
+    await service.start()
+
+    const first = await service.check()
+    const failed = await service.check()
+
+    expect(failed).toMatchObject({
+      ok: false,
+      snapshot: {
+        phase: 'available',
+        availableRelease: { version: '1.2.3' },
+        lastCheckedAt: first.snapshot.lastCheckedAt,
+        error: {
+          code: 'provider_unavailable',
+          userMessage: '检查更新失败',
+          retryable: true,
+        },
+      },
+    })
+    expect((await service.startDownload()).snapshot.phase).toBe('readyToInstall')
     await service.stop()
   })
 

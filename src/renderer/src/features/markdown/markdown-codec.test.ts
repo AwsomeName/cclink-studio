@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   analyzeMarkdown,
   hashMarkdownSnapshot,
+  hashMarkdownSnapshotSha256,
   inspectMarkdownRoundTrip,
   mapTopLevelSelectionToSource,
   normalizeMarkdownEditorOutput,
@@ -554,5 +555,11 @@ describe('markdown-codec', () => {
   it('creates stable compact snapshot hashes', () => {
     expect(hashMarkdownSnapshot('same')).toBe(hashMarkdownSnapshot('same'))
     expect(hashMarkdownSnapshot('same')).not.toBe(hashMarkdownSnapshot('other'))
+  })
+
+  it('creates SHA-256 snapshot hashes for IPC resources', async () => {
+    await expect(hashMarkdownSnapshotSha256('same')).resolves.toBe(
+      '0967115f2813a3541eaef77de9d9d5773f1c0c04314b0bbfe4ff3b3b1c55b5d5',
+    )
   })
 })

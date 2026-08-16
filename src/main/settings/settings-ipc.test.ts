@@ -49,6 +49,24 @@ describe('registerSettingsIpc', () => {
     expect(settingsService.set).not.toHaveBeenCalled()
   })
 
+  it('does not let the renderer mutate the main-process workspace binding through settings', async () => {
+    const settingsService = createSettingsService()
+    registerSettingsIpc(
+      settingsService as never,
+      createGuard('trusted') as never,
+      createPermissionManager() as never,
+      () => null,
+    )
+
+    await expect(
+      mockIpcMain.handlers.get('settings:set')?.(
+        { sender: 'trusted' },
+        { lastWorkspacePath: '/tmp/other-project' },
+      ),
+    ).resolves.toEqual({ success: false, error: '设置参数无效' })
+    expect(settingsService.set).not.toHaveBeenCalled()
+  })
+
   it('persists a valid bounded settings update', async () => {
     const settingsService = createSettingsService()
     registerSettingsIpc(

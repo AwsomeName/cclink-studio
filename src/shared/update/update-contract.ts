@@ -170,11 +170,11 @@ export const updateSnapshotSchema = z
         message: '失败阶段必须包含结构化错误',
       })
     }
-    if (snapshot.phase !== 'failed' && snapshot.error) {
+    if (snapshot.phase !== 'failed' && snapshot.phase !== 'available' && snapshot.error) {
       context.addIssue({
         code: 'custom',
         path: ['error'],
-        message: '只有失败阶段可以包含结构化错误',
+        message: '只有失败阶段或保留候选的刷新失败可以包含结构化错误',
       })
     }
   })

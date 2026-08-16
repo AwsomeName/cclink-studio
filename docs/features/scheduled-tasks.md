@@ -328,8 +328,13 @@ Tab 包含以下区域：
 只读定时任务查询工具，可以读取当前绑定本地工作空间的任务、Runtime 和运行历史。
 Claude Code Runtime 的 `CronCreate`、`CronDelete`、`CronList`、`ScheduleWakeup`、
 `RemoteTrigger` 和 `/loop` 等原生调度能力已从普通会话移除，并由 PreToolUse 策略阻止通过
-Bash 或文件工具写入外部调度配置。文件产物账本归因、Agent 创建/启用任务、Codex ACP
-接入和外部任务迁移仍未开放。
+Bash 或文件工具写入已知外部调度配置。调度策略版本进入 Claude session compatibility
+fingerprint；除此之外，session 还必须是本次主进程从 SDK `system/init` 亲自观察到的同一
+conversation session，renderer 不能用当前 fingerprint 为旧 session 自证。App 完整重启后
+Studio 对话正文仍恢复，但 Claude SDK session 从新上下文开始。工作空间存在
+`.claude/scheduled_tasks.json` 时，Studio 在启动 Agent 前拒绝执行并提示用户外部处理，不
+自动删除或迁移。文件产物账本归因、Agent 创建/启用任务、Codex ACP 接入和外部任务迁移仍
+未开放。
 
 正式边界如下：
 
@@ -341,8 +346,22 @@ Bash 或文件工具写入外部调度配置。文件产物账本归因、Agent 
   引入 `/loop` 的原生调度 Skill；只写提示词不算完成。
 - Agent 的 Bash、文件写入和 Skill 路径也必须阻止创建 `.claude/scheduled_tasks.json`，
   或通过 `crontab`、`launchctl`、`schtasks`、`systemd` timer、`at` 等路径绕过 Studio。
+- 普通 Agent 会话的本地工作空间由 `WorkspaceStateService` 的主进程活动投影规范化并按
+  conversation 固定；异步绑定提交前必须同时复核活动 generation 和已提交绑定。通用设置 IPC
+  不能修改活动工作空间，合法工作空间切换通过统一 Workspace IPC 提交。Agent Runtime 状态
+  只返回该绑定工作空间的即时投影，包括工作空间隔离后的最近错误。
+- 无明确 `filePath` 的 editor 写入在普通 Agent 中拒绝，避免活跃 Tab 隐式指向受保护文件。
 - SDK 版本保持精确固定；升级 Claude Runtime/SDK 时，门禁必须审计是否新增原生调度工具
   或调度 Skill，不能依赖当前 denylist 永久完整。
+
+这里的 Bash 防护是有界策略，不是任意命令的完整安全沙箱。静态 PreToolUse 无法证明变量
+拼接、解释器间接执行或所有后台驻留技巧均不可绕过；若产品要求对抗性命令隔离，需要另立
+OS 沙箱和子进程生命周期托管工作包，不能靠继续增加正则宣称完成。
+
+主进程活动工作空间投影阻止 generic settings 伪造和未提交目录查询，但它不把已完全控制的
+renderer 当作不可信 OS 进程：后者仍可调用产品本身合法的工作空间切换 IPC。若威胁模型要求
+抵抗恶意 renderer，需要单独引入与用户手势绑定的 capability，不在本纵向切片内宣称解决。
+
 - Agent 工具使用宿主注入并校验的当前本地工作空间，不接受模型自报任意
   `workspacePath`；无本地工作空间时结构化降级，不搜索其他目录。
 - Codex ACP 和后续后端必须消费同一 Studio capability contract；后端缺少该 contract 时

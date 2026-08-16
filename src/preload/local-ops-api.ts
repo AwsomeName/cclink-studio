@@ -54,6 +54,8 @@ export const cadApi: CadApiContract = {
 export const workspaceStateApi: WorkspaceStateApiContract = {
   resolveLocalWorkspace: (workspacePath) =>
     ipcRenderer.invoke('workspaceState:resolveLocalWorkspace', workspacePath),
+  setActiveLocalWorkspace: (workspacePath) =>
+    ipcRenderer.invoke('workspaceState:setActiveLocalWorkspace', workspacePath),
   get: (workspacePath, ownerKey) =>
     ipcRenderer.invoke('workspaceState:get', workspacePath, ownerKey),
   setSection: (workspacePath, section, value, ownerKey, options) =>

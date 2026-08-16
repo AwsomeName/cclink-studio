@@ -21,6 +21,8 @@ import type {
   AgentToolModuleStatus,
 } from '../../shared/ipc/agent'
 import type { WorkspaceRef } from '../../shared/workspace-ref'
+import type { WorkspaceStateResolveResult } from '../../shared/ipc/workspace-state'
+import type { ActiveLocalWorkspaceSnapshot } from '../../shared/ipc/workspace-state'
 import { registerTrustedIpcContract, type TrustedRendererGuard } from './trusted-renderer-guard'
 import type { IpcInvokeContract } from '../../shared/ipc/contract'
 import {
@@ -43,6 +45,8 @@ interface AgentIpcDeps {
   getMcpClientMgr: () => McpClientManager | null
   getCapabilities?: () => AgentCapabilityStatus[]
   getToolModules?: () => AgentToolModuleStatus[]
+  getActiveLocalWorkspace: () => ActiveLocalWorkspaceSnapshot
+  resolveLocalWorkspace: (workspacePath: string) => Promise<WorkspaceStateResolveResult>
   setToolModuleEnabled?: (
     moduleId: string,
     enabled: boolean,
@@ -169,10 +173,77 @@ function normalizeWorkspaceRef(value: unknown): WorkspaceRef | undefined {
   return undefined
 }
 
+async function bindTrustedConversationWorkspace(
+  deps: Pick<AgentIpcDeps, 'getActiveLocalWorkspace' | 'resolveLocalWorkspace'>,
+  bindings: Map<string, WorkspaceRef>,
+  conversationId: string,
+  requested: WorkspaceRef | undefined,
+): Promise<WorkspaceRef> {
+  const existing = bindings.get(conversationId)
+  if (requested?.kind === 'remote') {
+    throw new Error('远程工作区不能绑定到本地 Agent 会话')
+  }
+  if (requested?.kind === 'global') {
+    if (existing?.kind === 'local') throw new Error('当前 Agent 会话已绑定其他本地工作空间')
+    const globalRef = { kind: 'global' } as const
+    bindings.set(conversationId, globalRef)
+    return globalRef
+  }
+  if (!requested && existing?.kind === 'global') return existing
+
+  const requestedPath = requested?.kind === 'local' ? requested.path : null
+  const existingPath = existing?.kind === 'local' ? existing.path : null
+  const activeAtStart = deps.getActiveLocalWorkspace()
+  const currentPath = activeAtStart.workspacePath?.trim() ?? ''
+  const candidatePath = requestedPath ?? existingPath ?? currentPath
+  if (!candidatePath && !requested && !existing) {
+    const globalRef = { kind: 'global' } as const
+    bindings.set(conversationId, globalRef)
+    return globalRef
+  }
+  if (!candidatePath || !currentPath) {
+    throw new Error('当前 Agent 会话没有可验证的本地工作空间')
+  }
+
+  const [candidate, current] = await Promise.all([
+    deps.resolveLocalWorkspace(candidatePath),
+    deps.resolveLocalWorkspace(currentPath),
+  ])
+  if (!candidate.valid || !candidate.workspacePath || !current.valid || !current.workspacePath) {
+    throw new Error('当前 Agent 工作空间不可用')
+  }
+  if (candidate.workspacePath !== current.workspacePath) {
+    throw new Error('Agent 请求的工作空间与主进程当前工作空间不一致')
+  }
+  const activeAtCommit = deps.getActiveLocalWorkspace()
+  if (
+    activeAtCommit.generation !== activeAtStart.generation ||
+    activeAtCommit.workspacePath !== current.workspacePath
+  ) {
+    throw new Error('Agent 绑定期间工作空间已发生变化，请重试')
+  }
+
+  const committedBinding = bindings.get(conversationId)
+  const committedPath = committedBinding?.kind === 'local' ? committedBinding.path : null
+  if (committedPath) {
+    const bound = await deps.resolveLocalWorkspace(committedPath)
+    if (!bound.valid || bound.workspacePath !== candidate.workspacePath) {
+      throw new Error('当前 Agent 会话已绑定其他本地工作空间')
+    }
+  } else if (committedBinding) {
+    throw new Error('当前 Agent 会话已绑定全局上下文，不能切换为本地工作空间')
+  }
+
+  const trusted = { kind: 'local' as const, path: candidate.workspacePath }
+  bindings.set(conversationId, trusted)
+  return trusted
+}
+
 /**
  * 注册所有 Agent 相关 IPC 处理器
  */
 export function registerAgentIpc(deps: AgentIpcDeps): void {
+  const conversationWorkspaceBindings = new Map<string, WorkspaceRef>()
   const handle = <Args extends unknown[], Result>(
     contract: IpcInvokeContract<Args, Result>,
     handler: (
@@ -199,6 +270,22 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
         error: '远程工作区不能交给本地 Agent IPC 执行；请从 CCLink 远程会话面板发送。',
       }
     }
+    const resolvedConversationId =
+      typeof conversationId === 'string' ? conversationId : 'agent-default'
+    let trustedWorkspaceRef: WorkspaceRef
+    try {
+      trustedWorkspaceRef = await bindTrustedConversationWorkspace(
+        deps,
+        conversationWorkspaceBindings,
+        resolvedConversationId,
+        payload.workspaceRef,
+      )
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
     if (payload.images?.length) {
       console.info(`[AgentIPC] 图片附件已接收: ${formatImageAttachmentDiagnostics(payload.images)}`)
     }
@@ -214,7 +301,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
         sessionId: payload.sessionId,
         sessionCompatibilityFingerprint: payload.sessionCompatibilityFingerprint,
         configuration: payload.configuration,
-        workspaceRef: payload.workspaceRef,
+        workspaceRef: trustedWorkspaceRef,
         continuity: payload.continuity,
       },
     )
@@ -343,12 +430,18 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
       }
     }
     try {
+      const trustedWorkspaceRef = await bindTrustedConversationWorkspace(
+        deps,
+        conversationWorkspaceBindings,
+        conversationId,
+        input.workspaceRef,
+      )
       await agentBridge.compactConversation(conversationId, {
         sessionId: input.sessionId,
         sessionCompatibilityFingerprint: input.sessionCompatibilityFingerprint,
         configuration: input.configuration,
         runId: input.runId,
-        workspaceRef: input.workspaceRef,
+        workspaceRef: trustedWorkspaceRef,
         instructions: input.instructions,
       })
       return { success: true }
@@ -413,6 +506,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
     const agentBridge = requireAgentBridge()
     if (!agentBridge) return
     await agentBridge.closeConversation(conversationId)
+    conversationWorkspaceBindings.delete(conversationId)
   })
 
   // 获取 Agent 可用能力状态（用于 UI 展示降级原因）

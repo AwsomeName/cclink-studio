@@ -14,10 +14,12 @@ import {
   workspaceStateWorkspaceKeySchema,
 } from '../ipc/workbench-ipc-schema'
 import { absolutePathSchema } from '../ipc/ipc-input-schema'
+import type { SettingsService } from '../settings/settings-service'
 
 export function registerWorkspaceStateIpc(
   workspaceStateService: WorkspaceStateService,
   trustedRendererGuard: TrustedRendererGuard,
+  settingsService?: SettingsService,
 ): void {
   const handle = <Args extends unknown[], Result>(
     channel: string,
@@ -26,6 +28,19 @@ export function registerWorkspaceStateIpc(
 
   handle('workspaceState:resolveLocalWorkspace', (_event, workspacePath: string) => {
     return workspaceStateService.resolveLocalWorkspace(absolutePathSchema.parse(workspacePath))
+  })
+
+  handle('workspaceState:setActiveLocalWorkspace', async (_event, workspacePath: unknown) => {
+    try {
+      const parsedPath = workspacePath === null ? null : absolutePathSchema.parse(workspacePath)
+      const activeWorkspace = await workspaceStateService.setActiveLocalWorkspace(parsedPath)
+      if (settingsService) {
+        await settingsService.set({ lastWorkspacePath: activeWorkspace.workspacePath ?? '' })
+      }
+      return { success: true, activeWorkspace }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
   })
 
   handle(

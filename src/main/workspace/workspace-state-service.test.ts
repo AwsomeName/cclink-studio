@@ -43,6 +43,21 @@ afterEach(async () => {
 })
 
 describe('WorkspaceStateService', () => {
+  it('owns a canonical, generation-stamped active local workspace projection', async () => {
+    const service = new WorkspaceStateService()
+    await service.loadState()
+
+    expect(service.getActiveLocalWorkspace()).toEqual({ workspacePath: null, generation: 0 })
+    await expect(service.setActiveLocalWorkspace(join(workspaceA, '.'))).resolves.toEqual({
+      workspacePath: workspaceA,
+      generation: 1,
+    })
+    await expect(service.setActiveLocalWorkspace(null)).resolves.toEqual({
+      workspacePath: null,
+      generation: 2,
+    })
+  })
+
   it('returns an empty global snapshot when no state file exists', async () => {
     const service = new WorkspaceStateService()
     await service.loadState()

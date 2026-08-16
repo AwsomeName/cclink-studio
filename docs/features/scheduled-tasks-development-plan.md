@@ -940,11 +940,19 @@ E0 contracts
 ST-A0 与 ST-A1 组成首个交付切片；ST-A2 紧随其后解决“这个文件是不是任务生成”的证据
 问题。ST-A3–A5 必须在前一切片真实 App 验收后再开始，不能并行扩大状态和权限面。
 
-截至 2026-08-16，ST-A0 + ST-A1 已完成实现、全量仓库门禁和真实 App 自动 smoke：普通
-Claude Agent 已通过 `ScheduledTaskService` 的只读工具返回与当前工作空间侧栏相同的任务、
-启用、下次运行和最近运行事实；原生调度工具、原生 Skill 和有界 Bash/文件绕过均已封锁。
-ST-A2–A5 未开始；ST-A2 的产物账本归因问题仍明确返回在本切片能力之外。真人仍需在自己的
-常用工作空间中复核一次侧栏显示与自然语言回答的可读性，不能用自动 smoke 替代产品体验结论。
+截至 2026-08-16，ST-A0 + ST-A1 的查询闭环、全量仓库门禁和真实 App 自动 smoke 已通过：
+普通 Claude Agent 可以通过 `ScheduledTaskService` 的只读工具返回当前工作空间的任务、启用、
+下次运行和最近运行事实。随后独立边界审查发现，首版实现仍存在旧 Claude session/持久化原生
+任务恢复风险、renderer 自报工作空间、无路径编辑器写入，以及 Runtime 返回 App 全局计数四个
+缺口；不能用此前绿灯把这些未覆盖路径视为已证明安全。
+
+最小修复保持 `ScheduledTaskService` 唯一 owner：调度策略版本进入 session compatibility
+fingerprint，升级后不恢复旧 session；发现工作空间 `.claude/scheduled_tasks.json` 时在启动
+Agent 前 fail closed，不自动删除或迁移；主进程规范化并固定
+`conversationId → WorkspaceRef`，且必须与主进程当前工作空间一致；普通 Agent 的
+`editor_insert` 以及不带明确 `filePath` 的 editor 写入全部拒绝；Agent Runtime 工具改为由
+同一 Service 即时计算当前工作空间投影。ST-A2–A5 未开始；ST-A2 的产物账本归因仍在本切片
+能力之外。真人仍需在自己的常用工作空间中复核侧栏显示与自然语言回答的可读性。
 
 ### 15.4 首个切片工具契约
 
@@ -1013,3 +1021,39 @@ ST-A2–A5 未开始；ST-A2 的产物账本归因问题仍明确返回在本切
   MCP tools/list 成功宣称交付。
 - 如果原生能力抑制破坏正常 Agent 文件或 Bash 能力，优先收窄 hook 判定，不得回退为只靠
   prompt。
+
+### 15.9 2026-08-16 边界复审与残余风险
+
+独立复审结论“正常功能可用，但首版安全边界未完全证明”成立，随后第二轮复审又确认了四类
+确定性缺口：renderer 可以把旧 sessionId 与当前可见 fingerprint 重新配对；空白 editor 路径、
+点段路径和简单相对 Bash 可以恢复原生任务文件；会话工作空间仍间接依赖 renderer 可写的
+`lastWorkspacePath` 且首次绑定有竞态；工作空间 Runtime 投影仍混入全局最近错误。此前 smoke
+在运行 Agent 前明确断言 `.claude/scheduled_tasks.json` 不存在，因此它只能证明干净工作空间
+的正常查询闭环，不能证明这些攻击边界。
+
+本轮最小修复不引入第二状态 owner，也不扩展为通用权限系统：
+
+- Claude session 只有在本次主进程收到 SDK `system/init` 后才进入内存可信表；恢复时同时匹配
+  conversationId、sessionId 和策略 fingerprint。App 完整重启后不恢复 Claude SDK session，
+  但 Studio 对话正文仍保留；renderer 读取当前 fingerprint 不能为旧 session 自证。
+- `WorkspaceStateService` 维护不持久化的活动本地工作空间投影和单调 generation；Agent IPC 在
+  规范化前后校验同一代投影，并在异步提交前重读 conversation 绑定。通用 `settings.set` 不再
+  能修改 `lastWorkspacePath`；合法工作空间切换由统一 Workspace IPC 提交并由主进程持久化。
+- editor 写入、追加、插入和保存都必须携带 trim 后非空的显式路径，执行层不再依赖 MCP host
+  是否执行 JSON Schema；策略层规范化 `.`、`..`、分隔符，并保守拒绝任何名为
+  `scheduled_tasks.json` 的写入及简单 `cd ... && mv ... scheduled_tasks.json`。
+- Runtime 最近错误记录其工作空间来源；工作空间投影只返回同一工作空间或真正全局的错误，
+  全局诊断接口保持原语义。
+
+攻击性测试覆盖旧 session 配当前 fingerprint、主进程实际观察后的同进程续接、丢弃 session
+时清空可信表、空白 editor 路径、点段/别名路径、相对 Bash 恢复、首次绑定竞态、活动工作空间
+generation 变化、generic settings 伪造和跨工作空间 Runtime error 隔离。
+
+本切片的 Bash 防护仍按“有界 PreToolUse”定义：拒绝已知 scheduler 可执行文件、配置路径和
+常见 shell wrapper，但不宣称静态命令文本分析可以阻止所有变量拼接、解释器生成命令或后台
+进程技巧。在保留普通 Agent 任意 Bash 能力的前提下，绝对隔离需要单独的 OS 进程沙箱和子
+进程生命周期托管工作包；不得继续堆叠正则后把它描述成完整沙箱。该残余风险不允许被测试
+全绿隐藏。另一个明确残余风险是：已控制可信 renderer 的攻击者仍可调用合法的统一工作空间
+切换 IPC；要把“用户可见切换”升级成不可伪造授权，需要单独的用户手势 capability 设计，
+不属于本次最小修复。后续若把威胁模型提升为恶意 renderer 或对抗性命令执行，必须先完成
+对应的 renderer capability 与 OS 沙箱工作包。

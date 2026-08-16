@@ -131,16 +131,18 @@ describe('EditorToolModule file access', () => {
     ).rejects.toThrow('文件写入后校验失败')
   })
 
-  it('未指定 filePath 时仍等待当前编辑器处理草稿', async () => {
+  it('拒绝缺失或只有空白的隐式 editor 写入路径', async () => {
     const { module, send } = createFixture()
-    const operation = module.execute('editor_write', { content: '# Draft' })
 
-    expect(send).toHaveBeenCalledWith(
-      'editor:contentUpdate',
-      expect.objectContaining({ type: 'write', content: '# Draft' }),
+    await expect(module.execute('editor_write', { content: '# Draft' })).rejects.toThrow(
+      '必须提供明确的文件路径',
     )
-    const update = send.mock.calls[0][1]
-    module.resolveOperation(update.id, { success: true })
-    await expect(operation).resolves.toEqual({ success: true })
+    await expect(
+      module.execute('editor_insert', { content: '# Draft', position: 'end', filePath: ' ' }),
+    ).rejects.toThrow('必须提供明确的文件路径')
+    await expect(module.execute('editor_save', { filePath: ' ' })).rejects.toThrow(
+      '必须提供明确的文件路径',
+    )
+    expect(send).not.toHaveBeenCalled()
   })
 })

@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { McpToolHost } from '../tools/tool-host'
 import type { ToolDefinition } from '../tools/types'
 import {
@@ -90,7 +93,10 @@ function createTool(name: string): ToolDefinition {
   }
 }
 
-function createBackendFixture(externalMcp = false): {
+function createBackendFixture(
+  externalMcp = false,
+  workspacePath = '/Users/apple/Desktop/project',
+): {
   backend: LocalClaudeCodeBackend
   createToolSession: ReturnType<typeof vi.fn>
   releaseToolSession: ReturnType<typeof vi.fn>
@@ -135,7 +141,7 @@ function createBackendFixture(externalMcp = false): {
       apiBaseUrl: 'https://open.bigmodel.cn/api/anthropic',
       apiKey: 'test-api-key',
       modelName: 'glm-4.6',
-      getWorkspacePath: () => '/Users/apple/Desktop/project',
+      getWorkspacePath: () => workspacePath,
       hostContext: {
         hostName: 'CCLink Studio',
         mcpServerName: 'cclink_studio',
@@ -399,6 +405,38 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
           content: '{}',
         },
       },
+      {
+        tool_name: 'Write',
+        tool_input: {
+          file_path: '/Users/apple/Desktop/project/.claude/sub/../scheduled_tasks.json',
+          content: '{}',
+        },
+      },
+      {
+        tool_name: 'Write',
+        tool_input: {
+          file_path: '/Users/apple/Desktop/project/claude-alias/scheduled_tasks.json',
+          content: '{}',
+        },
+      },
+      {
+        tool_name: 'Bash',
+        tool_input: {
+          command: 'cd .claude && mv scheduled_tasks.json.disabled scheduled_tasks.json',
+        },
+      },
+      {
+        tool_name: 'mcp__cclink_studio__editor_insert',
+        tool_input: { content: '{}', position: 'end' },
+      },
+      {
+        tool_name: 'mcp__cclink_studio__editor_insert',
+        tool_input: { filePath: ' ', content: '{}', position: 'end' },
+      },
+      {
+        tool_name: 'mcp__cclink_studio__editor_save',
+        tool_input: {},
+      },
     ]
 
     for (const [index, item] of cases.entries()) {
@@ -413,8 +451,32 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       )
       expect(result.hookSpecificOutput?.permissionDecision).toBe('deny')
       expect(result.hookSpecificOutput?.permissionDecisionReason).toMatch(
-        /(?:NATIVE_SCHEDULING|SYSTEM_SCHEDULER)/,
+        /(?:NATIVE_SCHEDULING|SYSTEM_SCHEDULER|UNBOUND_EDITOR_MUTATION)/,
       )
+    }
+  })
+
+  it('fails closed before resuming when a workspace contains native scheduled task state', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'cclink-native-scheduling-'))
+    await mkdir(join(workspacePath, '.claude'))
+    await writeFile(join(workspacePath, '.claude', 'scheduled_tasks.json'), '{}', 'utf8')
+    try {
+      const { backend, createToolSession } = createBackendFixture(false, workspacePath)
+      const onEvent = vi.fn()
+      backend.onEvent(onEvent)
+      backend.setSessionId('legacy-session')
+
+      await backend.sendMessage('继续旧会话')
+
+      expect(queryMock).not.toHaveBeenCalled()
+      expect(createToolSession).not.toHaveBeenCalled()
+      expect(backend.getSessionId()).toBeNull()
+      expect(onEvent).toHaveBeenCalledWith(
+        'error',
+        expect.objectContaining({ code: 'native_scheduling_state_detected' }),
+      )
+    } finally {
+      await rm(workspacePath, { recursive: true, force: true })
     }
   })
 

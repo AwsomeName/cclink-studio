@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BundledClaudeRuntimeManifest } from '../../shared/claude-runtime'
-import { ClaudeRuntimeManager, ClaudeRuntimeResolutionError } from './claude-runtime-manager'
+import {
+  buildClaudeSessionCompatibilityFingerprint,
+  ClaudeRuntimeManager,
+  ClaudeRuntimeResolutionError,
+} from './claude-runtime-manager'
+import { CLAUDE_NATIVE_SCHEDULING_POLICY_VERSION } from '../agent-core/backends/claude-native-scheduling-policy'
 
 const temporaryDirectories: string[] = []
 
@@ -29,6 +34,28 @@ afterEach(async () => {
 })
 
 describe('ClaudeRuntimeManager', () => {
+  it('binds restored sessions to the native scheduling policy epoch', () => {
+    const runtimeFingerprint = 'runtime-fingerprint'
+    const settings = {
+      apiFormat: 'anthropic',
+      apiBaseUrl: 'https://example.com',
+      modelName: 'claude-test',
+    }
+    const expected = createHash('sha256')
+      .update(
+        [
+          runtimeFingerprint,
+          `native-scheduling-policy:${CLAUDE_NATIVE_SCHEDULING_POLICY_VERSION}`,
+          settings.apiFormat,
+          settings.apiBaseUrl,
+          settings.modelName,
+        ].join('\0'),
+      )
+      .digest('hex')
+
+    expect(buildClaudeSessionCompatibilityFingerprint(runtimeFingerprint, settings)).toBe(expected)
+  })
+
   it('verifies and activates a bundled runtime without consulting the system PATH', async () => {
     const bundledRoot = await createTemporaryDirectory()
     const runtimeRoot = join(bundledRoot, 'darwin-arm64')

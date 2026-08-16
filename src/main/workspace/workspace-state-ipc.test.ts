@@ -91,6 +91,23 @@ describe('registerWorkspaceStateIpc', () => {
       null,
     )
   })
+
+  it('commits the main-process active workspace and persists only its canonical path', async () => {
+    const service = createService()
+    const settings = { set: vi.fn(async () => ({})) }
+    registerWorkspaceStateIpc(service as never, createGuard('trusted') as never, settings as never)
+
+    await expect(
+      mockIpcMain.handlers.get('workspaceState:setActiveLocalWorkspace')?.(
+        { sender: 'trusted' },
+        '/tmp/project',
+      ),
+    ).resolves.toEqual({
+      success: true,
+      activeWorkspace: { workspacePath: '/private/tmp/project', generation: 2 },
+    })
+    expect(settings.set).toHaveBeenCalledWith({ lastWorkspacePath: '/private/tmp/project' })
+  })
 })
 
 function createService() {
@@ -99,6 +116,10 @@ function createService() {
     setSection: vi.fn(async () => ({ sections: {} })),
     clear: vi.fn(async () => undefined),
     resolveLocalWorkspace: vi.fn(async () => ({ valid: true })),
+    setActiveLocalWorkspace: vi.fn(async () => ({
+      workspacePath: '/private/tmp/project',
+      generation: 2,
+    })),
     listLocalWorkspaces: vi.fn(async () => []),
     getDiagnostics: vi.fn(() => ({})),
   }

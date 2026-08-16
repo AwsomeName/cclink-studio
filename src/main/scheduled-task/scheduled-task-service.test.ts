@@ -106,6 +106,14 @@ describe('ScheduledTaskService', () => {
       success: false,
       error: { code: 'SCHEDULED_TASK_STORE_INVALID' },
     })
+    await service.startRuntime({} as never)
+    await expect(service.getWorkspaceRuntimeStatus(workspacePath)).resolves.toMatchObject({
+      success: true,
+      runtime: {
+        state: 'degraded',
+        lastError: { code: 'SCHEDULED_TASK_STORE_INVALID' },
+      },
+    })
     expect(await readFile(activationPath, 'utf-8')).toBe('{not-json')
   })
 
@@ -166,7 +174,7 @@ describe('ScheduledTaskService', () => {
 
     const sidebarSnapshot = await service.list(workspacePath)
     const sidebarRuns = await service.listRuns(workspacePath, saved.task!.definition.id)
-    const sidebarRuntime = service.getRuntimeStatus()
+    const sidebarRuntime = (await service.getWorkspaceRuntimeStatus(workspacePath)).runtime!
     const module = new ScheduledTaskToolModule(service)
     const context = {
       trustedWorkspace: {
@@ -220,6 +228,89 @@ describe('ScheduledTaskService', () => {
     expect(serialized).not.toContain('agent-query.md')
     expect(serialized).not.toContain('d'.repeat(64))
     await service.stopRuntime()
+  })
+
+  it('projects Agent runtime counts to the bound workspace without a second state owner', async () => {
+    const otherWorkspacePath = join(tempDir, 'other-workspace')
+    await mkdir(join(otherWorkspacePath, '.git/info'), { recursive: true })
+    const workspaceProjectIds = new Map([
+      [workspacePath, 'project-1'],
+      [otherWorkspacePath, 'project-2'],
+    ])
+    const service = createService(
+      undefined,
+      () => Date.parse('2026-07-29T00:00:00.000Z'),
+      workspaceProjectIds,
+    )
+    await service.load()
+    await service.save(createInput(true))
+    await service.save({
+      ...createInput(true),
+      workspacePath: otherWorkspacePath,
+      title: '其他项目任务',
+    })
+    await service.startRuntime({} as never)
+
+    expect(service.getRuntimeStatus().enabledCount).toBe(2)
+    await expect(service.getWorkspaceRuntimeStatus(workspacePath)).resolves.toMatchObject({
+      success: true,
+      runtime: { scope: 'workspace', enabledCount: 1 },
+    })
+    await expect(service.getWorkspaceRuntimeStatus(otherWorkspacePath)).resolves.toMatchObject({
+      success: true,
+      runtime: { scope: 'workspace', enabledCount: 1 },
+    })
+    await service.stopRuntime()
+  })
+
+  it('does not project another workspace activation error into the bound workspace', async () => {
+    const otherWorkspacePath = join(tempDir, 'other-workspace')
+    await mkdir(join(otherWorkspacePath, '.git/info'), { recursive: true })
+    const workspaceProjectIds = new Map([
+      [workspacePath, 'project-1'],
+      [otherWorkspacePath, 'project-2'],
+    ])
+    const now = Date.parse('2026-07-29T00:00:00.000Z')
+    const writer = createService(undefined, () => now, workspaceProjectIds)
+    await writer.load()
+    await writer.save(createInput(true))
+    const other = await writer.save({
+      ...createInput(true),
+      workspacePath: otherWorkspacePath,
+      title: '损坏的其他项目任务',
+    })
+    await writer.flush()
+
+    const activationPath = join(userDataPath, 'scheduled-tasks/activations.json')
+    const activationFile = JSON.parse(await readFile(activationPath, 'utf-8')) as {
+      activations: Record<string, { taskId: string; nextRunAt: number | null }>
+    }
+    const otherActivation = Object.values(activationFile.activations).find(
+      (activation) => activation.taskId === other.task!.definition.id,
+    )
+    expect(otherActivation).toBeDefined()
+    otherActivation!.nextRunAt = now - 1
+    await writeFile(activationPath, JSON.stringify(activationFile), 'utf-8')
+    await rm(
+      join(
+        otherWorkspacePath,
+        '.cclink-studio/scheduled-tasks',
+        `${other.task!.definition.id}.json`,
+      ),
+    )
+
+    const service = createService(undefined, () => now, workspaceProjectIds)
+    await service.load()
+    await service.startRuntime({} as never)
+    await service.stopRuntime()
+
+    const primaryRuntime = await service.getWorkspaceRuntimeStatus(workspacePath)
+    expect(primaryRuntime.success).toBe(true)
+    expect(primaryRuntime.runtime).not.toHaveProperty('lastError')
+    await expect(service.getWorkspaceRuntimeStatus(otherWorkspacePath)).resolves.toMatchObject({
+      success: true,
+      runtime: { lastError: { code: 'SCHEDULED_TASK_NOT_FOUND' } },
+    })
   })
 
   it('uses one App timer to claim a due occurrence without opening the task tab', async () => {
@@ -346,13 +437,14 @@ describe('ScheduledTaskService', () => {
 function createService(
   runExecutor?: ScheduledTaskRunExecutor,
   now: () => number = () => Date.parse('2026-07-29T00:00:00.000Z'),
+  workspaceProjectIds = new Map([[workspacePath, 'project-1']]),
 ): ScheduledTaskService {
   const workspaceStateService = {
     resolveLocalWorkspace: vi.fn(async (path: string) => ({
-      valid: path === workspacePath,
-      workspacePath: path === workspacePath ? workspacePath : null,
+      valid: workspaceProjectIds.has(path),
+      workspacePath: workspaceProjectIds.has(path) ? path : null,
     })),
-    getLocalProjectId: vi.fn(async () => 'project-1'),
+    getLocalProjectId: vi.fn(async (path: string) => workspaceProjectIds.get(path) ?? null),
   } as unknown as WorkspaceStateService
   return new ScheduledTaskService(workspaceStateService, {
     userDataPath,

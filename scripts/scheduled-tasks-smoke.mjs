@@ -156,10 +156,9 @@ async function main() {
   await page.waitForSelector('.main-window', { timeout: 30_000 })
 
   const configured = await page.evaluate(async (path) => {
-    const settings = await window.cclinkStudio.settings.set({
-      lastWorkspacePath: path,
-      recentWorkspacePaths: [path],
-    })
+    const active = await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(path)
+    if (!active.success || active.activeWorkspace?.workspacePath !== path) return false
+    const settings = await window.cclinkStudio.settings.set({ recentWorkspacePaths: [path] })
     return settings.success
   }, workspacePath)
   assert(configured, 'failed to configure smoke workspace')

@@ -107,6 +107,15 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
 
   runtime.workspaceStateService = new WorkspaceStateService()
   await runtime.workspaceStateService.loadState()
+  const restoredWorkspacePath = runtime.settingsService.getAll().lastWorkspacePath.trim()
+  if (restoredWorkspacePath) {
+    try {
+      await runtime.workspaceStateService.setActiveLocalWorkspace(restoredWorkspacePath)
+    } catch {
+      await runtime.workspaceStateService.setActiveLocalWorkspace(null)
+      await runtime.settingsService.set({ lastWorkspacePath: '' })
+    }
+  }
   console.log('[CCLink Studio] 工作台状态服务已初始化')
 
   runtime.scheduledTaskService = new ScheduledTaskService(runtime.workspaceStateService)
@@ -178,7 +187,11 @@ export async function bootstrapMainProcessServices(
     throw new Error('主窗口、可信 renderer、凭证或设置系统尚未初始化')
   }
 
-  registerWorkspaceStateIpc(runtime.workspaceStateService!, runtime.trustedRendererGuard)
+  registerWorkspaceStateIpc(
+    runtime.workspaceStateService!,
+    runtime.trustedRendererGuard,
+    runtime.settingsService,
+  )
   runtime.rendererWorkspaceStateFlush = new RendererWorkspaceStateFlushCoordinator(
     runtime.mainWindow,
     runtime.trustedRendererGuard,
@@ -402,6 +415,9 @@ export async function bootstrapMainProcessServices(
     getMcpClientMgr: () => runtime.mcpClientMgr,
     getCapabilities: () => getAgentCapabilities(runtime),
     getToolModules: () => getAgentToolModules(runtime),
+    getActiveLocalWorkspace: () => runtime.workspaceStateService!.getActiveLocalWorkspace(),
+    resolveLocalWorkspace: (workspacePath) =>
+      runtime.workspaceStateService!.resolveLocalWorkspace(workspacePath),
     setToolModuleEnabled: async (moduleId, enabled) => {
       if (!runtime.toolHost?.setModuleEnabled(moduleId, enabled)) {
         return { success: false, error: `未找到工具模块: ${moduleId}` }
