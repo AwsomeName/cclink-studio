@@ -1316,8 +1316,8 @@ async function main() {
       null,
       { timeout: 5_000 },
     )
-    const findRow = page.locator('.keybindings-row', { hasText: '查找当前内容' }).first()
-    const saveRow = page.locator('.keybindings-row', { hasText: '保存当前文件' }).first()
+    const findRow = page.locator('.keybindings-row', { hasText: 'workbench.find' }).first()
+    const saveRow = page.locator('.keybindings-row', { hasText: 'workbench.save' }).first()
 
     await saveRow.getByRole('button', { name: '修改' }).click()
     await page.keyboard.press(`${modifier}+G`)
