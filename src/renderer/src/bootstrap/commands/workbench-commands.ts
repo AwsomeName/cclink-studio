@@ -7,6 +7,7 @@ import { useCommandStore } from '../../stores/command-store'
 import { getRemoteFileDraft } from '../../utils/remote-file-draft-registry'
 import { useBrowserFindStore } from '../../features/browser/browser-find-store'
 import { getMediaProjectDraft } from '../../features/media-production/media-project-draft-registry'
+import { getScheduledTaskDraft } from '../../features/scheduled-tasks/scheduled-task-draft-registry'
 
 function resolveFindSurface(context?: CommandContext) {
   if (context?.target?.kind === 'editor') {
@@ -44,7 +45,7 @@ export function createWorkbenchCommands(): Command[] {
     },
     {
       id: 'workbench.save',
-      label: '保存当前文件',
+      label: '保存当前内容',
       category: '文件',
       configurable: true,
       shortcutPolicy: {
@@ -57,7 +58,8 @@ export function createWorkbenchCommands(): Command[] {
         const enabled =
           (tab?.type === 'editor' && Boolean(getEditorContextSurface(tab.id)?.save)) ||
           (tab?.type === 'remote-file' && Boolean(getRemoteFileDraft(tab.id))) ||
-          (tab?.type === 'media-production' && Boolean(getMediaProjectDraft(tab.id)))
+          (tab?.type === 'media-production' && Boolean(getMediaProjectDraft(tab.id))) ||
+          (tab?.type === 'scheduled-task' && Boolean(getScheduledTaskDraft(tab.id)))
         return { enabled, reason: '当前内容不支持保存' }
       },
       action: async () => {
@@ -77,6 +79,12 @@ export function createWorkbenchCommands(): Command[] {
         if (tab?.type === 'media-production') {
           const draft = getMediaProjectDraft(tab.id)
           if (!draft) throw new Error('当前宣发视频工程尚未就绪')
+          await draft.save()
+          return
+        }
+        if (tab?.type === 'scheduled-task') {
+          const draft = getScheduledTaskDraft(tab.id)
+          if (!draft) throw new Error('当前定时任务尚未就绪')
           await draft.save()
           return
         }

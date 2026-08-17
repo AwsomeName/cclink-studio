@@ -1,7 +1,7 @@
 # 定时任务验收记录
 
-> 日期：2026-07-29
-> 分支：`codex/scheduled-tasks-m8`
+> 日期：2026-08-17
+> 基线：当前 `main` 加工作树增量；`Cmd/Ctrl+S` 增量尚未进入已发布的 v0.1.41
 > 当前范围：M8.1–M8.2 首版核心闭环
 > 产品事实源：`docs/features/scheduled-tasks.md`
 
@@ -10,6 +10,9 @@
 用户现在可以在工作空间创建、保存、启停和重新打开定时任务；可以立即运行已保存
 revision，也可以在 CCLink Studio 存活期间到点自动生成经过校验的 Markdown，并从任务
 Tab 查看历史、取消运行和打开产物。
+
+当前源码还允许在定时任务 Tab 中使用统一 `workbench.save`（默认 `Cmd/Ctrl+S`）保存任务
+定义；输入框聚焦时仍生效，保存保持当前本机启用/暂停状态，不触发立即运行。
 
 CCLink Studio 完全退出后不会执行任务。真实 App 自动验收已证明到点前退出不会生成
 文件，受控 App 进程已停止，重启后单次 occurrence 显示 missed，运行时诊断报告
@@ -83,6 +86,9 @@ pnpm verify
 - 非可信 IPC sender、非法时间、非法 Markdown 输出和路径穿越。
 - preload API、Activity Bar 状态、任务历史和脱敏诊断。
 
+2026-08-17 的快捷键保存增量已通过 7 项相关 renderer 测试、Web/Node TypeScript、ESLint
+和生产构建；真实应用中的键盘操作仍列入 H11，不能用这些工程门禁代替真人验收。
+
 ## 真人验收矩阵
 
 - [ ] H1 创建、保存、关闭和重开后，revision、启用和下次运行一致。
@@ -95,7 +101,8 @@ pnpm verify
 - [ ] H8 工作空间外写入、Terminal、Browser、Android、Git、数据源均被拒绝。
 - [ ] H9 Agent 不可用、只读目录和账本损坏不阻断 Studio 其他能力。
 - [ ] H10 复制完整诊断，可定位 task/revision/run 且不含 prompt、正文或凭证。
-- [ ] H11 键盘和屏幕阅读器可完成新建、保存、立即运行、取消和打开产物。
+- [ ] H11 键盘和屏幕阅读器可完成新建、保存、立即运行、取消和打开产物；任务表单输入
+      焦点内按 `Cmd/Ctrl+S` 只保存一次，清除 dirty，且不改变启用状态或触发运行。
 - [ ] H12 Git 普通仓库与 linked worktree 只修改本地 exclude。
 
 ## 残余风险

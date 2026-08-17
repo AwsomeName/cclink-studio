@@ -1,7 +1,8 @@
 # ACP Runtime 最小开发方案
 
-> 状态：最小实现与统一自动化验证已完成；真实 API Key 验收待执行。
-> 最后更新：2026-08-14。
+> 状态：2026-08-17 起暂停并退出当前开发主线；最小实现与统一自动化验证已完成，真实 API
+> Key 验收未执行。恢复条件见 [`项目备忘录`](../project-memo.md)。
+> 最后更新：2026-08-17。
 > 相关事实源：[`agent-system.md`](./agent-system.md)、
 > [`agent-panel-product-model.md`](./agent-panel-product-model.md)、
 > [`architecture.md`](../architecture.md)、
@@ -455,6 +456,7 @@ D0 出现以下任一结果时，不继续 ACP 实现：
 7. 是否在首个闭环前加入自动安装、ChatGPT 登录、远程 ACP、第二 Agent 或公共 Registry？出现
    任一项都应执行范围止损。
 
-下一步只做真实应用验收，不扩张 Runtime Registry、自动安装、Studio MCP 或第二个 ACP Agent。
-真实验收失败时先修最小闭环；只有协议本身无法满足权限、取消或 Session 恢复时，才转为 Codex
-App Server 专用 backend 评估。
+当前不安排下一步开发或验收。以后只有在项目备忘录列出的恢复条件成立后，才重新执行真实应用
+验收；恢复前不扩张 Runtime Registry、自动安装、Studio MCP 或第二个 ACP Agent。真实验收失败
+时先修最小闭环；只有协议本身无法满足权限、取消或 Session 恢复时，才转为 Codex App Server
+专用 backend 评估。

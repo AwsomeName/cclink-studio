@@ -1,6 +1,6 @@
 # 可配置快捷键系统
 
-> 状态：M1–M3 已实现，并通过真实应用 20 项统一验收。日期：2026-08-14。
+> 状态：M1–M3 已实现，并通过真实应用 20 项统一验收。最后更新：2026-08-17。
 > 关联事实源：`docs/architecture.md`、`docs/features/context-action-system.md`。
 
 ## 结论
@@ -63,6 +63,8 @@ Enter/Escape、文本复制粘贴、焦点移动和辅助功能键等控件内�
 7. 重启 Studio 后自定义配置仍然存在。
 8. 录制或执行快捷键不会误改正文、触发保存、提交 Terminal 命令或操作网页。
 9. 输入法组合阶段、普通文本输入和弹窗键盘操作不被全局快捷键抢占。
+10. 在定时任务 Tab 的表单输入焦点内使用 `Cmd/Ctrl+S`，任务定义保存且 dirty 清除，原有
+    启用/暂停状态保持不变，也不产生运行记录。
 
 在上述真实应用验收通过前，只能声明对应工程门禁完成，不能声明可配置快捷键产品闭环完成。
 
@@ -97,13 +99,7 @@ interface KeyChord {
   modifiers: ShortcutModifier[]
 }
 
-type ShortcutScope =
-  | 'global'
-  | 'workbench'
-  | 'editor'
-  | 'markdown'
-  | 'terminal'
-  | 'browser'
+type ShortcutScope = 'global' | 'workbench' | 'editor' | 'markdown' | 'terminal' | 'browser'
 
 interface CommandShortcutPolicy {
   scope: ShortcutScope
@@ -136,15 +132,15 @@ interface Command {
 
 ## 状态所有权
 
-| 状态 | 唯一所有者 | 生命周期 |
-| --- | --- | --- |
-| 命令名称、作用域、默认键位和执行入口 | Command Registry | renderer 窗口生命周期 |
-| 用户快捷键覆盖 | SettingsService | `userData/settings.json` 持久化 |
-| 当前有效键位索引 | Keybinding Resolver 派生 | 随命令或设置变化重建 |
-| 正在录制的组合键 | Shortcut Router 的瞬时 capture session | 配置页录制期间 |
-| 当前活动对象 | 既有 Tab Store | 跟随工作台 Tab 生命周期 |
-| Markdown/Terminal/Browser 查找状态 | 既有 Editor、Terminal、Browser 操作面 | 跟随对应 Tab |
-| Browser 有效键位缓存 | main Browser Shortcut Adapter | 只作传输缓存，不持久化 |
+| 状态                                 | 唯一所有者                             | 生命周期                        |
+| ------------------------------------ | -------------------------------------- | ------------------------------- |
+| 命令名称、作用域、默认键位和执行入口 | Command Registry                       | renderer 窗口生命周期           |
+| 用户快捷键覆盖                       | SettingsService                        | `userData/settings.json` 持久化 |
+| 当前有效键位索引                     | Keybinding Resolver 派生               | 随命令或设置变化重建            |
+| 正在录制的组合键                     | Shortcut Router 的瞬时 capture session | 配置页录制期间                  |
+| 当前活动对象                         | 既有 Tab Store                         | 跟随工作台 Tab 生命周期         |
+| Markdown/Terminal/Browser 查找状态   | 既有 Editor、Terminal、Browser 操作面  | 跟随对应 Tab                    |
+| Browser 有效键位缓存                 | main Browser Shortcut Adapter          | 只作传输缓存，不持久化          |
 
 不得建立独立快捷键配置文件或第二个持久化 Store。SettingsService 继续是应用设置事实源；
 renderer 的 Resolver 只保存可重建索引。
@@ -168,8 +164,15 @@ renderer 的 Resolver 只保存可重建索引。
 - Browser 通过有界 IPC 调用 Electron `findInPage`；
 - 当前 Tab 不支持查找时，命令返回明确的 disabled reason。
 
-后续 `workbench.save`、`workbench.closeTab`、`browser.focusLocation`、编辑器格式命令按同一
-模式迁移。既有操作面只贡献领域能力，不解析全局快捷键。
+### `workbench.save`
+
+`workbench.save` 默认绑定 `Primary+S`，使用 `workbench` 作用域和 `inputPolicy: allow`，因此
+表单输入框、文本域或编辑器聚焦时仍可保存当前活动内容。命令从 Tab Store 解析 Editor、
+Remote File、宣发视频工程或定时任务操作面；各领域只注册自己的保存能力，不解析全局按键。
+
+定时任务操作面保存时保持当前 activation：已启用任务仍启用，暂停任务仍暂停；普通保存不
+触发“立即运行”，也不等同于“保存并在此设备启用”。页面普通“保存”按钮和快捷键都调用
+`workbench.save`，避免形成第二套保存入口。
 
 ## Shortcut Router
 

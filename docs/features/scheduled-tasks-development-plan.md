@@ -2,7 +2,7 @@
 
 > 状态：首版核心闭环已实现并通过真实 App 自动验收；Agent 交互式定时任务控制面待开发，
 > 真人验收矩阵待签字
-> 最后更新：2026-08-16
+> 最后更新：2026-08-17
 > 产品事实源：`docs/features/scheduled-tasks.md`
 > 架构约束：`docs/architecture.md`
 > 本文件负责开发顺序、任务拆解、验证和交付证据；与产品事实源冲突时，以产品事实源
@@ -342,7 +342,7 @@ E0 不增加用户功能，不能计入产品进度。
 - 点击 Activity Bar 的“定时任务”。
 - 在当前工作空间看到定时任务侧栏。
 - 新建并在独立 Tab 编辑任务。
-- 显式保存、在此设备启用、暂停和重新打开任务。
+- 通过页面按钮或 `Cmd/Ctrl+S` 显式保存、在此设备启用、暂停和重新打开任务。
 - 看到下次运行时间和不支持能力提示。
 
 用户此时还不能：
@@ -358,9 +358,11 @@ E0 不增加用户功能，不能计入产品进度。
 3. Tab 填写名称、指令、计划、资源和输出目录。
 4. 保存前展示结构化摘要和首版 allowlist。
 5. “保存”只保存定义。
-6. “保存并在此设备启用”保存定义并写本机 activation。
-7. 关闭 Tab 后，侧栏任务仍存在。
-8. 再次点击任务激活同一个逻辑 Tab。
+6. `Cmd/Ctrl+S` 复用统一 `workbench.save`，只保存定义并保持当前 activation；焦点位于任务
+   表单输入控件时仍然生效。
+7. “保存并在此设备启用”保存定义并写本机 activation。
+8. 关闭 Tab 后，侧栏任务仍存在。
+9. 再次点击任务激活同一个逻辑 Tab。
 
 ### 5.3 工程任务
 
@@ -372,7 +374,7 @@ E0 不增加用户功能，不能计入产品进度。
 | ST-M1-04 | IPC/preload            | shared contract、trusted sender、参数和 workspace 校验      |
 | ST-M1-05 | Activity 入口          | 新 ActivityPanel、时钟图标、命令注册                        |
 | ST-M1-06 | Sidebar                | 当前工作空间过滤、分组、空状态、搜索                        |
-| ST-M1-07 | ScheduledTask Tab      | 表单、dirty、显式保存、revision 冲突                        |
+| ST-M1-07 | ScheduledTask Tab      | 表单、dirty、统一 `workbench.save`、revision 冲突           |
 | ST-M1-08 | Tab 恢复               | workspaceRef 和 taskId 恢复；缺失任务显示可操作错误         |
 | ST-M1-09 | Context Actions        | open/enable/pause/delete/copy diagnostics 统一 contribution |
 | ST-M1-10 | 本机 exclude           | 只更新 `.git/info/exclude`，不修改 `.gitignore`             |
@@ -395,6 +397,8 @@ E0 不增加用户功能，不能计入产品进度。
 - 工作空间不可写、目录缺失和 metadata 冲突。
 - IPC 非可信 sender、非法 workspaceRef 和多余字段拒绝。
 - Tab hydrate、重复打开、dirty 和保存失败。
+- `workbench.save` 在活动定时任务 Tab 可用；默认 `Cmd/Ctrl+S` 在表单输入焦点内只调用一次
+  保存面，并保持启用/暂停状态。
 - 侧栏只投影当前工作空间。
 - command/contribution/inventory 门禁。
 
@@ -404,11 +408,13 @@ E0 不增加用户功能，不能计入产品进度。
 2. 点击时钟图标，确认侧栏为空。
 3. 新建每天 09:00 的 Markdown 周报任务。
 4. 保存但不启用，确认侧栏显示“未启用”。
-5. 在此设备启用，确认下次运行时间可见。
-6. 修改任务但不保存，关闭并重新打开前确认 dirty 提示。
-7. 保存后关闭 Tab，再从侧栏打开。
-8. 重启 Studio，确认任务、revision 和启用状态仍正确。
-9. 打开另一个工作空间，确认侧栏不显示原任务。
+5. 保持任务名称输入框焦点，按 `Cmd/Ctrl+S`，确认 dirty 消失且任务仍未启用。
+6. 在此设备启用，确认下次运行时间可见。
+7. 修改已启用任务并按 `Cmd/Ctrl+S`，确认任务仍启用且没有触发立即运行。
+8. 修改任务但不保存，关闭并重新打开前确认 dirty 提示。
+9. 保存后关闭 Tab，再从侧栏打开。
+10. 重启 Studio，确认任务、revision 和启用状态仍正确。
+11. 打开另一个工作空间，确认侧栏不显示原任务。
 
 ### 5.7 完成声明
 

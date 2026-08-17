@@ -1,7 +1,7 @@
 # 工作空间定时任务
 
 > 状态：首版核心闭环已实现并通过真实 App 自动验收，待真人验收矩阵签字
-> 最后更新：2026-08-16
+> 最后更新：2026-08-17
 > 关联文档：`docs/architecture.md`、`docs/features/workspace-system.md`、
 > `docs/features/agent-panel-product-model.md`、`docs/features/context-action-system.md`、
 > `docs/features/workspace-operations-assistant.md`、
@@ -28,7 +28,7 @@ macOS LaunchAgent、Windows Task Scheduler、Linux cron/systemd timer、登录�
 
 ## 当前实现快照
 
-截至 2026-07-29，`codex/scheduled-tasks-m8` 已形成 M8.1–M8.2 的首版纵向闭环：
+截至 2026-08-17，当前 `main` 加工作树增量已形成 M8.1–M8.2 的首版纵向闭环：
 
 - Activity Bar 已有独立时钟入口。
 - 侧栏只投影当前本地工作空间任务，并提供空状态和新建入口。
@@ -36,6 +36,8 @@ macOS LaunchAgent、Windows Task Scheduler、Linux cron/systemd timer、登录�
 - 用户可以填写名称、指令、单次/每天/工作日/每周计划和绑定路径；运行结果默认保留在
   任务历史，需要日报、周报等文件时才选择另存为工作空间 Markdown。
 - 显式保存产生 revision；定义写入工作空间，本机启用状态写入 `userData`。
+- 定时任务 Tab 已接入统一 `workbench.save`：默认 `Cmd/Ctrl+S`，输入框或文本域聚焦时
+  仍可保存；快捷键保存只保存当前定义并保持原有本机启用/暂停状态，不触发立即运行。
 - 用户可以仅保存、在此设备启用和暂停；重启后恢复定义与本机状态。
 - 用户可以立即运行已保存 revision，查看排队、运行、终态、错误和产物。
 - 另存工作空间 Markdown 时，文件名模板支持 `{date}`、`{monthDay}`、`{weekday}`、
@@ -63,18 +65,19 @@ macOS LaunchAgent、Windows Task Scheduler、Linux cron/systemd timer、登录�
 
 ## 已确认的首版决策
 
-| 决策         | 首版结论                                                     |
-| ------------ | ------------------------------------------------------------ |
-| 产品入口     | 独立 Activity Bar 按钮、当前工作空间侧栏、独立定时任务 Tab   |
-| 资源归属     | 每个定时任务严格绑定一个本地工作空间                         |
-| 调度所有者   | 当前 CCLink Studio 主进程内的 `ScheduledTaskService`         |
-| 系统集成     | 不注册系统计划任务、后台服务、登录项或常驻 Helper            |
-| App 退出     | 停止调度；运行中实例有界收束，未完成则中断，待触发项下次对账 |
-| 定义存储     | 工作空间 `.cclink-studio/scheduled-tasks/`                   |
-| 本机状态     | `userData/scheduled-tasks/` 保存启用、运行和权限事实         |
-| 保存语义     | 显式保存；每次保存形成 revision，运行固定使用已保存 revision |
-| 等待确认     | 当前运行结束为“需要处理”，用户确认后创建关联的新运行         |
-| 首个产品闭环 | 到点读取工作空间文件、在历史展示结果；可选另存 Markdown 文件 |
+| 决策         | 首版结论                                                      |
+| ------------ | ------------------------------------------------------------- |
+| 产品入口     | 独立 Activity Bar 按钮、当前工作空间侧栏、独立定时任务 Tab    |
+| 资源归属     | 每个定时任务严格绑定一个本地工作空间                          |
+| 调度所有者   | 当前 CCLink Studio 主进程内的 `ScheduledTaskService`          |
+| 系统集成     | 不注册系统计划任务、后台服务、登录项或常驻 Helper             |
+| App 退出     | 停止调度；运行中实例有界收束，未完成则中断，待触发项下次对账  |
+| 定义存储     | 工作空间 `.cclink-studio/scheduled-tasks/`                    |
+| 本机状态     | `userData/scheduled-tasks/` 保存启用、运行和权限事实          |
+| 保存语义     | 显式保存；每次保存形成 revision，运行固定使用已保存 revision  |
+| 保存快捷键   | `workbench.save`，默认 `Cmd/Ctrl+S`；保持启用状态且不运行任务 |
+| 等待确认     | 当前运行结束为“需要处理”，用户确认后创建关联的新运行          |
+| 首个产品闭环 | 到点读取工作空间文件、在历史展示结果；可选另存 Markdown 文件  |
 
 ## 产品目标与端到端验收
 
@@ -100,6 +103,9 @@ macOS LaunchAgent、Windows Task Scheduler、Linux cron/systemd timer、登录�
 14. 用户把文件名模板设置为 `{monthDay}_{weekday}.md`，界面预览如
     `0816_周日.md`；到点运行或补执行后，产物使用计划发生时间在任务时区对应的日期和
     中文周几。
+15. 用户修改一个已启用任务，在任务内容输入框保持焦点时按 `Cmd/Ctrl+S`；Tab 清除未保存
+    状态，侧栏内容刷新，任务仍保持启用且没有新增“立即运行”记录。对暂停任务重复该操作，
+    任务仍保持暂停。
 
 只有以上流程在真实应用中通过，才能声明首版定时任务产品闭环完成。仅有调度器、
 Schema、测试或 mock 页面时，只能声明相应工程准备度通过。
@@ -282,6 +288,8 @@ Tab 包含以下区域：
 - “立即运行”只运行最近已保存 revision；存在未保存修改时禁用并要求先保存。
 - 修改时间、权限或结果保存方式不会静默影响正在运行的实例。
 - “保存”只保存定义；首次启用必须使用“保存并在此设备启用”。
+- `Cmd/Ctrl+S` 与页面“保存”按钮共用 `workbench.save` 和同一个任务保存入口；它不会等同于
+  “保存并在此设备启用”，也不会触发“立即运行”。默认键位可在“设置 → 快捷键”中修改。
 - 保存新 revision 后，当前运行继续使用旧 revision，后续运行才使用新 revision。
 
 关闭 Tab 只关闭视图，不暂停、不删除定时任务，也不中止当前运行。
@@ -668,11 +676,11 @@ userData/
 
 定时任务的各入口复用统一 command：
 
-| Command ID 建议                 | 用户操作             |
+| Command ID（当前/规划）         | 用户操作             |
 | ------------------------------- | -------------------- |
 | `scheduledTask.create`          | 新建定时任务         |
 | `scheduledTask.open`            | 打开定时任务 Tab     |
-| `scheduledTask.save`            | 保存任务定义         |
+| `workbench.save`（当前已接入）  | 保存当前任务定义     |
 | `scheduledTask.enableLocal`     | 在此设备启用         |
 | `scheduledTask.pauseLocal`      | 在此设备暂停         |
 | `scheduledTask.runNow`          | 立即运行已保存版本   |
@@ -683,6 +691,10 @@ userData/
 
 工具栏、快捷键、命令面板和上下文菜单必须引用同一 command 定义和执行入口。新增 target、
 command、contribution 和 owner 必须登记到 Context Action inventory。
+
+当前普通“保存”按钮和 `Cmd/Ctrl+S` 均通过 `workbench.save` 调用当前定时任务 Tab 注册的
+领域保存面；“保存并在此设备启用”仍是显式改变 activation 的独立操作，不得复用普通保存
+快捷键静默启用任务。
 
 ## 产品里程碑
 

@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-08-14。
+> 当前事实源。最后更新：2026-08-17。
 
 ## 先读这些
 
@@ -27,7 +27,7 @@
 - `docs/ops/cclink-dev-official-integration-handoff.md`：发给 `cclink-dev` 的 official loader 接入清单。
 - `docs/features/workspace-system.md`：当前 OSS 本地工作空间模型。
 - `docs/features/context-action-system.md`：已实现的统一右键、命令与上下文操作系统。
-- `docs/features/configurable-keybinding-system.md`：尚未实现的统一可配置快捷键系统方案，定义命令事实源、作用域路由、设置页录制与冲突处理、Browser `WebContentsView` 适配和验收门禁。
+- `docs/features/configurable-keybinding-system.md`：已实现的统一可配置快捷键系统事实源，定义命令事实源、作用域路由、设置页录制与冲突处理、Browser `WebContentsView` 适配和验收门禁。
 - `docs/features/manual-git-backup.md`：已实现的单用户手动 Git 备份；真实 GitHub 人工验收仍待执行。
 - `docs/features/local-credentials.md`：已确认的 OSS 本地明文凭证产品与架构边界。
 - `docs/features/local-credentials-development-plan.md`：移除系统钥匙串依赖的 M0-M6 详细开发计划。
@@ -39,7 +39,7 @@
 - `docs/features/agent-profiles.md`：v0.1.14 旧角色方案的兼容与迁移说明。
 - `docs/features/ai-web-affairs-agent.md`：尚未实现的 AI 网页事务代理人产品事实源，定义跨运行事务、人与 AI 双向交接、外部等待、证据和恢复边界。
 - `docs/features/ai-web-affairs-agent-development-plan.md`：AI 网页事务代理人的正式开发管理事实源，统一维护当前状态、里程碑、验收、进度、风险、决策、代码落点和交付证据。
-- `docs/features/scheduled-tasks.md`：工作空间定时任务的 Activity Bar、侧栏、Workbench Tab、App 内统一调度与本机启用产品方案草稿。
+- `docs/features/scheduled-tasks.md`：工作空间定时任务的 Activity Bar、侧栏、Workbench Tab、App 内统一调度、本机启用和保存快捷键产品事实源。
 - `docs/features/scheduled-tasks-development-plan.md`：工作空间定时任务 E0、M8.1-M8.3、R1 的详细开发顺序、任务拆解和真人验收计划。
 - `docs/features/agent-device.md`：Android 真机和 agent-device 边界。
 

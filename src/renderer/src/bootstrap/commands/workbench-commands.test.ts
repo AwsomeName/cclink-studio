@@ -1,7 +1,42 @@
 import { describe, expect, it, vi } from 'vitest'
 import { registerEditorContextSurface } from '../../features/context-actions/editor-context-surface'
 import { registerTerminalContextSurface } from '../../features/context-actions/terminal-context-surface'
+import { registerScheduledTaskDraft } from '../../features/scheduled-tasks/scheduled-task-draft-registry'
+import { useTabStore } from '../../stores/tab-store'
 import { createWorkbenchCommands } from './workbench-commands'
+
+describe('workbench.save', () => {
+  it('delegates Cmd+S to the active scheduled task draft', async () => {
+    const save = vi.fn(async () => true)
+    const unregister = registerScheduledTaskDraft('scheduled-task-1', { save })
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'scheduled-task-1',
+          type: 'scheduled-task',
+          title: '每日简报',
+          icon: '🕘',
+          dirty: true,
+          workspaceRef: { kind: 'local', path: '/tmp/project' },
+          scheduledTask: { taskId: 'task-1', draftKey: 'task-1' },
+        },
+      ],
+      activeTabId: 'scheduled-task-1',
+    })
+    try {
+      const command = createWorkbenchCommands().find(
+        (candidate) => candidate.id === 'workbench.save',
+      )!
+
+      expect(command.enabled?.({ source: 'shortcut' })).toMatchObject({ enabled: true })
+      await command.action()
+      expect(save).toHaveBeenCalledOnce()
+    } finally {
+      unregister()
+      useTabStore.setState({ tabs: [], activeTabId: null })
+    }
+  })
+})
 
 describe('workbench.find', () => {
   it('delegates editor find to the existing editor surface', () => {

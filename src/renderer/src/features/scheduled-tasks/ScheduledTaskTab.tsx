@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ScheduledTaskResourceRef,
   ScheduledTaskSchedule,
@@ -12,8 +12,10 @@ import { useTabStore } from '../../stores/tab-store'
 import { IconClock } from '../../components/common/Icons'
 import { scheduledTaskRunKey, useScheduledTaskStore } from './scheduled-task-store'
 import { useEditorStore } from '../../stores/editor-store'
+import { useCommandStore } from '../../stores/command-store'
 import { describeSchedule, formatNextRun } from './scheduled-task-view-model'
 import { normalizeWorkspaceRelativePath } from './scheduled-task-paths'
+import { registerScheduledTaskDraft } from './scheduled-task-draft-registry'
 import './scheduled-tasks.css'
 
 interface TaskForm {
@@ -71,6 +73,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
   const updateTabTitle = useTabStore((state) => state.updateTabTitle)
   const updateTabDirty = useTabStore((state) => state.updateTabDirty)
   const updateTabScheduledTask = useTabStore((state) => state.updateTabScheduledTask)
+  const executeCommand = useCommandStore((state) => state.executeCommand)
   const task = tasks.find((candidate) => candidate.definition.id === taskId)
   const [form, setForm] = useState<TaskForm>(() => createDefaultForm())
   const baseSignatureRef = useRef(formSignature(form))
@@ -123,6 +126,68 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
     if (hasUnsavedChanges) setSaveFeedback(null)
   }, [hasUnsavedChanges])
 
+  const handleSave = useCallback(
+    async (enable: boolean): Promise<boolean> => {
+      if (!workspacePath || saving) return false
+      setSaving(true)
+      setActionError(null)
+      setSaveFeedback(null)
+      try {
+        const snapshot = await save({
+          workspacePath,
+          taskId: task?.definition.id,
+          expectedRevision: task?.definition.revision,
+          title: form.title,
+          instruction: form.instruction,
+          schedule: scheduleFromForm(form),
+          resources: resourcesFromForm(form, workspacePath),
+          outputPolicy: outputPolicyFromForm(form, workspacePath),
+          enable,
+        })
+        const nextForm = formFromTask(snapshot)
+        const nextSignature = formSignature(nextForm)
+        baseSignatureRef.current = nextSignature
+        setForm(nextForm)
+        initializedFrom.current = `${snapshot.definition.id}:${snapshot.definition.revision}`
+        updateTabScheduledTask(tab.id, {
+          taskId: snapshot.definition.id,
+          draftKey: snapshot.definition.id,
+        })
+        updateTabTitle(tab.id, snapshot.definition.title)
+        updateTabDirty(tab.id, false)
+        setSaveFeedback(
+          snapshot.activation.enabled ? '已保存并在此设备启用' : '已保存，当前设备保持暂停',
+        )
+        await load(workspacePath)
+        return true
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : String(error))
+        return false
+      } finally {
+        setSaving(false)
+      }
+    },
+    [
+      form,
+      load,
+      save,
+      saving,
+      tab.id,
+      task,
+      updateTabDirty,
+      updateTabScheduledTask,
+      updateTabTitle,
+      workspacePath,
+    ],
+  )
+
+  useEffect(() => {
+    if (!workspacePath || (taskId && !task)) return
+    return registerScheduledTaskDraft(tab.id, {
+      save: () => handleSave(task?.activation.enabled ?? false),
+    })
+  }, [handleSave, tab.id, task, taskId, workspacePath])
+
   if (!workspacePath) {
     return <TaskUnavailable message="这个 Tab 没有绑定本地工作空间" />
   }
@@ -140,44 +205,6 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
 
   const activation = task?.activation
   const activeRun = runs.find((run) => run.status === 'queued' || run.status === 'running')
-
-  const handleSave = async (enable: boolean): Promise<void> => {
-    setSaving(true)
-    setActionError(null)
-    setSaveFeedback(null)
-    try {
-      const snapshot = await save({
-        workspacePath,
-        taskId: task?.definition.id,
-        expectedRevision: task?.definition.revision,
-        title: form.title,
-        instruction: form.instruction,
-        schedule: scheduleFromForm(form),
-        resources: resourcesFromForm(form, workspacePath),
-        outputPolicy: outputPolicyFromForm(form, workspacePath),
-        enable,
-      })
-      const nextForm = formFromTask(snapshot)
-      const nextSignature = formSignature(nextForm)
-      baseSignatureRef.current = nextSignature
-      setForm(nextForm)
-      initializedFrom.current = `${snapshot.definition.id}:${snapshot.definition.revision}`
-      updateTabScheduledTask(tab.id, {
-        taskId: snapshot.definition.id,
-        draftKey: snapshot.definition.id,
-      })
-      updateTabTitle(tab.id, snapshot.definition.title)
-      updateTabDirty(tab.id, false)
-      setSaveFeedback(
-        snapshot.activation.enabled ? '已保存并在此设备启用' : '已保存，当前设备保持暂停',
-      )
-      await load(workspacePath)
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setSaving(false)
-    }
-  }
 
   const handleToggleEnabled = async (): Promise<void> => {
     if (!task) return
@@ -303,7 +330,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
           <button
             type="button"
             disabled={saving}
-            onClick={() => void handleSave(task?.activation.enabled ?? false)}
+            onClick={() => void executeCommand('workbench.save', { source: 'toolbar' })}
           >
             {saving ? '保存中…' : '保存'}
           </button>
