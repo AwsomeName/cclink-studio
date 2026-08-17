@@ -43,11 +43,15 @@ export function ProjectStrip(): React.ReactElement {
   const openProjectPaths = useOpenProjectsStore((state) => state.openProjectPaths)
   const reorderProject = useOpenProjectsStore((state) => state.reorderProject)
   const openRemoteWorkspaceRefs = useOpenProjectsStore((state) => state.openRemoteWorkspaceRefs)
+  const recentRemoteWorkspaceRefs = useOpenProjectsStore(
+    (state) => state.recentRemoteWorkspaceRefs,
+  )
   const removeRemoteProject = useOpenProjectsStore((state) => state.removeRemoteProject)
   const recentWorkspacePaths = useFsStore((state) => state.recentWorkspacePaths)
   const switchingPath = useFsStore((state) => state.switchingPath)
   const workspaceLoading = useFsStore((state) => state.loading)
   const workspacePicking = useFsStore((state) => state.picking)
+  const closeWorkspace = useFsStore((state) => state.closeWorkspace)
   const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const conversations = useAgentStore((state) => state.conversations)
   const showToast = useToastStore((state) => state.show)
@@ -82,6 +86,10 @@ export function ProjectStrip(): React.ReactElement {
     () => knownHistoryPaths.filter((path) => !openProjectPaths.includes(path)),
     [knownHistoryPaths, openProjectPaths],
   )
+  const historyRemoteWorkspaceRefs = useMemo(() => {
+    const openKeys = new Set(openRemoteWorkspaceRefs.map(workspaceRefKey))
+    return recentRemoteWorkspaceRefs.filter((ref) => !openKeys.has(workspaceRefKey(ref)))
+  }, [openRemoteWorkspaceRefs, recentRemoteWorkspaceRefs])
 
   useEffect(() => {
     if (!activePath) return
@@ -117,14 +125,16 @@ export function ProjectStrip(): React.ReactElement {
     }
   }
 
-  const activateRemoteProject = async (index: number): Promise<void> => {
-    const ref = openRemoteWorkspaceRefs[index]
-    if (!ref) return
+  const activateRemoteProject = async (
+    ref: (typeof openRemoteWorkspaceRefs)[number],
+  ): Promise<boolean> => {
     try {
       await openWorkspaceRef(ref)
+      return true
     } catch (error) {
       useWorkspaceOpenStore.getState().showRemote()
       showToast(error instanceof Error ? error.message : '远程项目切换失败', 'error')
+      return false
     }
   }
 
@@ -132,22 +142,39 @@ export function ProjectStrip(): React.ReactElement {
     const ref = openRemoteWorkspaceRefs[index]
     if (!ref) return
     const closingActive = workspaceRefKey(ref) === activeWorkspaceKey
-    removeRemoteProject(ref)
-    if (!closingActive) return
+    if (!closingActive) {
+      removeRemoteProject(ref)
+      return
+    }
     const fallbackRemote = openRemoteWorkspaceRefs.find(
       (candidate) => workspaceRefKey(candidate) !== workspaceRefKey(ref),
     )
+    let switched = false
     if (fallbackRemote) {
-      const nextIndex = openRemoteWorkspaceRefs.indexOf(fallbackRemote)
-      await activateRemoteProject(nextIndex)
-      return
+      switched = await activateRemoteProject(fallbackRemote)
+    } else {
+      const fallbackLocal = openProjectPaths.at(-1)
+      if (fallbackLocal) {
+        switched = await activateProject(fallbackLocal)
+      } else {
+        await closeWorkspace()
+        switched = useWorkspaceStore.getState().activeWorkspaceRef.kind === 'global'
+        if (!switched) {
+          showToast(useFsStore.getState().error || '项目关闭失败，已保留当前项目', 'error')
+        }
+      }
     }
-    const fallbackLocal = openProjectPaths.at(-1)
-    if (fallbackLocal) await activateProject(fallbackLocal)
+    if (switched) removeRemoteProject(ref)
   }
 
   const openHistoryProject = async (path: string): Promise<void> => {
     if (await activateProject(path)) setHistoryOpen(false)
+  }
+
+  const openHistoryRemoteProject = async (
+    ref: (typeof recentRemoteWorkspaceRefs)[number],
+  ): Promise<void> => {
+    if (await activateRemoteProject(ref)) setHistoryOpen(false)
   }
 
   const toggleHistory = (): void => {
@@ -317,7 +344,7 @@ export function ProjectStrip(): React.ReactElement {
                     className={`project-strip-item ${active ? 'active' : ''}`}
                     title={`${ref.endpointName || 'CCLink'} · ${ref.path}`}
                     aria-current={active ? 'page' : undefined}
-                    onClick={() => void activateRemoteProject(index)}
+                    onClick={() => void activateRemoteProject(ref)}
                   >
                     <IconCloud size={13} />
                     <span className="project-strip-label">
@@ -358,23 +385,41 @@ export function ProjectStrip(): React.ReactElement {
               <div className="project-history-list">
                 {historyLoading ? (
                   <div className="project-history-empty">正在加载历史项目…</div>
-                ) : historyProjectPaths.length > 0 ? (
-                  historyProjectPaths.map((path) => (
-                    <button
-                      key={path}
-                      type="button"
-                      className="project-history-item"
-                      title={path}
-                      disabled={workspaceBusy}
-                      onClick={() => void openHistoryProject(path)}
-                    >
-                      <IconProjects size={14} />
-                      <span className="project-history-item-main">
-                        <span>{getProjectName(path)}</span>
-                        <span>{path}</span>
-                      </span>
-                    </button>
-                  ))
+                ) : historyProjectPaths.length > 0 || historyRemoteWorkspaceRefs.length > 0 ? (
+                  <>
+                    {historyProjectPaths.map((path) => (
+                      <button
+                        key={path}
+                        type="button"
+                        className="project-history-item"
+                        title={path}
+                        disabled={workspaceBusy}
+                        onClick={() => void openHistoryProject(path)}
+                      >
+                        <IconProjects size={14} />
+                        <span className="project-history-item-main">
+                          <span>{getProjectName(path)}</span>
+                          <span>{path}</span>
+                        </span>
+                      </button>
+                    ))}
+                    {historyRemoteWorkspaceRefs.map((ref) => (
+                      <button
+                        key={workspaceRefKey(ref)!}
+                        type="button"
+                        className="project-history-item"
+                        title={`${ref.endpointName || 'CCLink'} · ${ref.path}`}
+                        disabled={workspaceBusy}
+                        onClick={() => void openHistoryRemoteProject(ref)}
+                      >
+                        <IconCloud size={14} />
+                        <span className="project-history-item-main">
+                          <span>{ref.label || getProjectName(ref.path)}</span>
+                          <span>远程 · {ref.endpointName || 'CCLink'}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </>
                 ) : (
                   <div className="project-history-empty">暂无未打开的历史项目</div>
                 )}

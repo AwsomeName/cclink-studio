@@ -46,6 +46,7 @@ describe('MarkdownListItem', () => {
       '   - 子项 12',
     ].join('\n')
 
+    expect(prepareMarkdownEditorInput(source)).toBe(source)
     const serialized = serialize(source)
 
     expect(serialized).toBe(source)
@@ -61,6 +62,7 @@ describe('MarkdownListItem', () => {
       '       - 更深子项',
     ].join('\n')
 
+    expect(prepareMarkdownEditorInput(source)).toBe(source)
     const serialized = serialize(source)
 
     expect(serialized).toBe(source)

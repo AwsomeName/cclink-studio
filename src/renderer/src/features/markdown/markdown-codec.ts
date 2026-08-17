@@ -331,6 +331,7 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
   const tableRows: number[] = []
   const tableAlignments: string[][] = []
   const listStack: Array<'ordered' | 'unordered'> = []
+  const listItemTaskStack: boolean[] = []
   const orderedStarts: number[] = []
   const images: Array<{ source: string; alt: string; title: string }> = []
   const links: Array<{ destination: string; title: string }> = []
@@ -343,6 +344,17 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
   let orderedItems = 0
 
   for (const token of tokens) {
+    if (token.type === 'list_item_open') {
+      const lineIndex = token.map?.[0]
+      listItemTaskStack.push(
+        lineIndex === undefined
+          ? false
+          : markdownTaskItemState(lines[lineIndex] ?? '') !== undefined,
+      )
+    } else if (token.type === 'list_item_close') {
+      listItemTaskStack.pop()
+    }
+
     if (token.type === 'heading_open') headings.push(Number(token.tag.slice(1)))
     else if (token.type === 'fence' || token.type === 'code_block') {
       codeBlocks.push({
@@ -376,7 +388,12 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
       else if (listStack.at(-1) === 'unordered') unorderedItems += 1
     }
 
-    if (token.type === 'inline') textContent.push(markdownInlineText(token.children ?? []))
+    if (token.type === 'inline') {
+      const inlineText = markdownInlineText(token.children ?? [])
+      textContent.push(
+        listItemTaskStack.at(-1) ? stripTaskMarkerFromInlineText(inlineText) : inlineText,
+      )
+    }
 
     for (const child of token.children ?? []) {
       if (child.type === 'image') {
@@ -405,9 +422,8 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
     orderedItems,
     orderedStarts,
     taskItems: lines
-      .map((line) => /^\s*[-+*]\s+\[([ xX])\](?:\s+|$)/.exec(line)?.[1])
-      .filter((value): value is string => value !== undefined)
-      .map((value) => value.toLowerCase()),
+      .map(markdownTaskItemState)
+      .filter((value): value is string => value !== undefined),
     images,
     links,
     mathExpressions: extractMathExpressions(
@@ -432,6 +448,16 @@ function markdownInlineText(tokens: Array<{ type: string; content: string }>): s
       return ''
     })
     .join('')
+}
+
+function stripTaskMarkerFromInlineText(value: string): string {
+  return value.replace(/^\[[ xX]\](?:\s+|$)/, '')
+}
+
+function markdownTaskItemState(line: string): string | undefined {
+  return /^((?:(?: {0,3}>)[ \t]?)*)([ \t]*)[-+*]\s+\[([ xX])\](?:\s+|$)/
+    .exec(line)?.[3]
+    ?.toLowerCase()
 }
 
 function normalizeCodeBlockLanguage(value: string): string {
@@ -570,7 +596,9 @@ const MATH_MARKDOWN_PUNCTUATION = new Set([...`!"#%&'()*+,-./:;<=>?@[]^_\`{|}~`]
 
 export function prepareMarkdownEditorInput(source: string): string {
   const normalized = normalizeEmptyTaskListItems(
-    expandSameLineListHeadings(normalizeMarkdownSource(source)),
+    expandSameLineListHeadings(
+      normalizeMarkdownTaskListIndentation(normalizeMarkdownSource(source)),
+    ),
   )
   const masked = maskInlineCode(maskFencedBlocks(normalized, scanMarkdownBlocks(normalized)))
   const expressions = scanMathExpressions(masked)
@@ -595,8 +623,116 @@ export function prepareMarkdownEditorInput(source: string): string {
   return prepared
 }
 
-function normalizeEmptyTaskListItems(source: string): string {
+/**
+ * Tiptap's task-list tokenizer treats the literal number of leading spaces as
+ * the nesting level. CommonMark is more permissive: sibling items may use a
+ * range of valid indentation widths and still belong to the same list. Feed
+ * Tiptap one canonical indentation without changing the source buffer so that
+ * valid nested task items are not flattened into escaped paragraph text.
+ */
+function normalizeMarkdownTaskListIndentation(source: string): string {
+  const singleSpaceNormalized = promoteOneSpaceNestedTaskItems(source)
+  const lines = singleSpaceNormalized.split('\n')
+  const listContexts: Array<{ indent: number; ordered: boolean }> = []
+  const itemContentIndents: number[] = []
+  const tokens = markdownStructureParser.parse(singleSpaceNormalized, {})
+
+  for (const token of tokens) {
+    if (token.type === 'bullet_list_open' || token.type === 'ordered_list_open') {
+      listContexts.push({
+        indent: itemContentIndents.at(-1) ?? 0,
+        ordered: token.type === 'ordered_list_open',
+      })
+      continue
+    }
+    if (token.type === 'bullet_list_close' || token.type === 'ordered_list_close') {
+      listContexts.pop()
+      continue
+    }
+    if (token.type === 'list_item_close') {
+      itemContentIndents.pop()
+      continue
+    }
+    if (token.type !== 'list_item_open') continue
+
+    const lineIndex = token.map?.[0]
+    const listIndent = listContexts.at(-1)?.indent ?? 0
+    if (lineIndex === undefined) {
+      itemContentIndents.push(listIndent + 2)
+      continue
+    }
+
+    const line = lines[lineIndex] ?? ''
+    const match = /^((?:(?: {0,3}>)[ \t]?)*)([ \t]*)([-+*]|\d+[.)])([ \t]+)(.*)$/.exec(line)
+    if (!match) {
+      itemContentIndents.push(listIndent + 2)
+      continue
+    }
+
+    const ordered = token.markup === '.' || token.markup === ')'
+    const sourceMarker = match[3]
+    const marker = ordered ? sourceMarker.replace(/\)$/, '.') : '-'
+    const taskItem = !ordered && /^\[[ xX]\](?:\s+|$)/.test(match[5])
+    const hasOrderedAncestor = listContexts.some((context) => context.ordered)
+    if (taskItem && !hasOrderedAncestor) {
+      lines[lineIndex] = `${match[1]}${' '.repeat(listIndent)}${marker} ${match[5]}`
+    }
+    itemContentIndents.push(listIndent + marker.length + 1)
+  }
+
+  return lines.join('\n')
+}
+
+/**
+ * A task marker indented by one space after a top-level bullet item is a common
+ * hand-written attempt at nesting. Tiptap instead treats it as paragraph text
+ * inside the preceding task and drops the bullet on serialization. Promote
+ * only that evidenced compatibility case to the canonical two-space nesting;
+ * leave standalone indented markers, ordered-list children, code blocks, and
+ * already-valid indentation to the regular Markdown parser.
+ */
+function promoteOneSpaceNestedTaskItems(source: string): string {
   const lines = source.split('\n')
+  const codeLines = markdownCodeLineIndexes(source)
+  let activeQuotePrefix: string | null = null
+  let hasTopLevelBulletParent = false
+
+  return lines
+    .map((line, index) => {
+      if (codeLines.has(index)) {
+        activeQuotePrefix = null
+        hasTopLevelBulletParent = false
+        return line
+      }
+
+      const match = /^((?:(?: {0,3}>)[ \t]?)*)( *)([-+*])([ \t]+)(.*)$/.exec(line)
+      if (match) {
+        const [, quotePrefix, indent, marker, separator, content] = match
+        if (indent.length === 0) {
+          activeQuotePrefix = quotePrefix
+          hasTopLevelBulletParent = true
+          return line
+        }
+        if (
+          indent === ' ' &&
+          hasTopLevelBulletParent &&
+          quotePrefix === activeQuotePrefix &&
+          /^\[[ xX]\](?:\s+|$)/.test(content)
+        ) {
+          return `${quotePrefix}  ${marker}${separator}${content}`
+        }
+        return line
+      }
+
+      if (isBlank(line)) return line
+      activeQuotePrefix = null
+      hasTopLevelBulletParent = false
+      return line
+    })
+    .join('\n')
+}
+
+function markdownCodeLineIndexes(source: string): Set<number> {
   const codeLines = new Set<number>()
   for (const token of markdownStructureParser.parse(source, {})) {
     if ((token.type !== 'fence' && token.type !== 'code_block') || !token.map) continue
@@ -604,6 +740,12 @@ function normalizeEmptyTaskListItems(source: string): string {
       codeLines.add(line)
     }
   }
+  return codeLines
+}
+
+function normalizeEmptyTaskListItems(source: string): string {
+  const lines = source.split('\n')
+  const codeLines = markdownCodeLineIndexes(source)
 
   return lines
     .map((line, index) => {

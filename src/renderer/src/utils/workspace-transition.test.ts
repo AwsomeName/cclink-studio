@@ -16,6 +16,7 @@ import {
 import {
   applyWorkspaceRuntimeTransition,
   beginWorkspaceRuntimeTransition,
+  cancelWorkspaceRuntimeTransition,
   collectWorkspaceRuntimeResourceOwnership,
   prepareWorkspaceRuntimeTransition,
 } from './workspace-transition'
@@ -154,6 +155,23 @@ describe('workspace-transition', () => {
     expect(staleApplied).toBe(false)
     expect(currentApplied).toBe(true)
     expect(getWorkspaceStateKey()).toBe('/workspace/c')
+  })
+
+  it('invalidates an in-flight project switch when the user cancels it', async () => {
+    const generation = beginWorkspaceRuntimeTransition()
+
+    expect(cancelWorkspaceRuntimeTransition(generation)).toBe(true)
+    expect(cancelWorkspaceRuntimeTransition(generation)).toBe(false)
+    await expect(
+      applyWorkspaceRuntimeTransition({
+        ref: localWorkspaceRef('/workspace/b'),
+        key: '/workspace/b',
+        snapshot: snapshot('/workspace/b', {}),
+        generation,
+        outgoingOwnership: collectWorkspaceRuntimeResourceOwnership('/workspace/a'),
+      }),
+    ).resolves.toBe(false)
+    expect(getWorkspaceStateKey()).toBe('/workspace/a')
   })
 
   it('does not partially commit identity or tabs when a transition becomes stale during prepare', async () => {

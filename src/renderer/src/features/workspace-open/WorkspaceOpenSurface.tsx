@@ -73,7 +73,7 @@ function WorkspaceSourceChooser({
   onOpened(): void
 }): React.ReactElement {
   const recentWorkspacePaths = useFsStore((state) => state.recentWorkspacePaths)
-  const remoteRefs = useOpenProjectsStore((state) => state.openRemoteWorkspaceRefs)
+  const remoteRefs = useOpenProjectsStore((state) => state.recentRemoteWorkspaceRefs)
   const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)

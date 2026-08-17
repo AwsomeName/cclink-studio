@@ -4,9 +4,10 @@ import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
 import { workspaceRefKey } from '@shared/workspace-ref'
 
 export interface ProjectStripSnapshot {
-  version: 1
+  version: 2
   openProjectPaths: string[]
   openRemoteWorkspaceRefs?: RemoteWorkspaceRef[]
+  recentRemoteWorkspaceRefs?: RemoteWorkspaceRef[]
 }
 
 type DropPlacement = 'before' | 'after'
@@ -14,6 +15,7 @@ type DropPlacement = 'before' | 'after'
 interface OpenProjectsState {
   openProjectPaths: string[]
   openRemoteWorkspaceRefs: RemoteWorkspaceRef[]
+  recentRemoteWorkspaceRefs: RemoteWorkspaceRef[]
   hydrated: boolean
   hydrate: (paths: string[]) => void
   addProject: (path: string) => void
@@ -70,11 +72,15 @@ export function getProjectCloseSuccessor(paths: string[], closingPath: string): 
 function persistOpenProjects(
   paths: string[],
   remoteRefs = useOpenProjectsStore.getState().openRemoteWorkspaceRefs,
+  recentRemoteRefs = useOpenProjectsStore.getState().recentRemoteWorkspaceRefs,
 ): void {
   const snapshot: ProjectStripSnapshot = {
-    version: 1,
+    version: 2,
     openProjectPaths: paths,
     ...(remoteRefs.length > 0 ? { openRemoteWorkspaceRefs: remoteRefs } : {}),
+    ...(recentRemoteRefs.length > 0
+      ? { recentRemoteWorkspaceRefs: recentRemoteRefs }
+      : {}),
   }
   persistWorkspaceSection('projectStrip', snapshot, null, null)
 }
@@ -85,9 +91,7 @@ function readProjectStripSnapshot(value: unknown): string[] {
   return normalizeOpenProjectPaths(snapshot.openProjectPaths)
 }
 
-function readRemoteProjectStripSnapshot(value: unknown): RemoteWorkspaceRef[] {
-  if (!value || typeof value !== 'object') return []
-  const refs = (value as Partial<ProjectStripSnapshot>).openRemoteWorkspaceRefs
+function normalizeRemoteWorkspaceRefs(refs: unknown): RemoteWorkspaceRef[] {
   if (!Array.isArray(refs)) return []
   const seen = new Set<string>()
   return refs.filter((ref): ref is RemoteWorkspaceRef => {
@@ -105,9 +109,24 @@ function readRemoteProjectStripSnapshot(value: unknown): RemoteWorkspaceRef[] {
   })
 }
 
+function readRemoteProjectStripSnapshot(value: unknown): RemoteWorkspaceRef[] {
+  if (!value || typeof value !== 'object') return []
+  return normalizeRemoteWorkspaceRefs(
+    (value as Partial<ProjectStripSnapshot>).openRemoteWorkspaceRefs,
+  )
+}
+
+function readRecentRemoteProjectStripSnapshot(value: unknown): RemoteWorkspaceRef[] {
+  if (!value || typeof value !== 'object') return []
+  return normalizeRemoteWorkspaceRefs(
+    (value as Partial<ProjectStripSnapshot>).recentRemoteWorkspaceRefs,
+  )
+}
+
 export const useOpenProjectsStore = create<OpenProjectsState>((set, get) => ({
   openProjectPaths: [],
   openRemoteWorkspaceRefs: [],
+  recentRemoteWorkspaceRefs: [],
   hydrated: false,
 
   hydrate: (paths) => {
@@ -124,10 +143,21 @@ export const useOpenProjectsStore = create<OpenProjectsState>((set, get) => ({
 
   addRemoteProject: (ref) => {
     const key = workspaceRefKey(ref)
-    if (get().openRemoteWorkspaceRefs.some((item) => workspaceRefKey(item) === key)) return
-    const openRemoteWorkspaceRefs = [...get().openRemoteWorkspaceRefs, ref]
-    set({ openRemoteWorkspaceRefs })
-    persistOpenProjects(get().openProjectPaths, openRemoteWorkspaceRefs)
+    const openRemoteWorkspaceRefs = get().openRemoteWorkspaceRefs.some(
+      (item) => workspaceRefKey(item) === key,
+    )
+      ? get().openRemoteWorkspaceRefs
+      : [...get().openRemoteWorkspaceRefs, ref]
+    const recentRemoteWorkspaceRefs = [
+      ref,
+      ...get().recentRemoteWorkspaceRefs.filter((item) => workspaceRefKey(item) !== key),
+    ]
+    set({ openRemoteWorkspaceRefs, recentRemoteWorkspaceRefs })
+    persistOpenProjects(
+      get().openProjectPaths,
+      openRemoteWorkspaceRefs,
+      recentRemoteWorkspaceRefs,
+    )
   },
 
   replaceRemoteProject: (current, confirmed) => {
@@ -141,8 +171,20 @@ export const useOpenProjectsStore = create<OpenProjectsState>((set, get) => ({
       seen.add(key)
       return [candidate]
     })
-    set({ openRemoteWorkspaceRefs })
-    persistOpenProjects(get().openProjectPaths, openRemoteWorkspaceRefs)
+    const confirmedKey = workspaceRefKey(confirmed)
+    const recentRemoteWorkspaceRefs = [
+      confirmed,
+      ...get().recentRemoteWorkspaceRefs.filter((item) => {
+        const key = workspaceRefKey(item)
+        return key !== currentKey && key !== confirmedKey
+      }),
+    ]
+    set({ openRemoteWorkspaceRefs, recentRemoteWorkspaceRefs })
+    persistOpenProjects(
+      get().openProjectPaths,
+      openRemoteWorkspaceRefs,
+      recentRemoteWorkspaceRefs,
+    )
   },
 
   removeRemoteProject: (ref) => {
@@ -152,7 +194,11 @@ export const useOpenProjectsStore = create<OpenProjectsState>((set, get) => ({
     )
     if (openRemoteWorkspaceRefs.length === get().openRemoteWorkspaceRefs.length) return
     set({ openRemoteWorkspaceRefs })
-    persistOpenProjects(get().openProjectPaths, openRemoteWorkspaceRefs)
+    persistOpenProjects(
+      get().openProjectPaths,
+      openRemoteWorkspaceRefs,
+      get().recentRemoteWorkspaceRefs,
+    )
   },
 
   removeProject: (path) => {
@@ -191,6 +237,11 @@ export async function restoreOpenProjects(currentWorkspacePath: string | null): 
   const snapshot = await window.cclinkStudio.workspaceState.get(null, null).catch(() => null)
   let persistedPaths = readProjectStripSnapshot(snapshot?.sections.projectStrip)
   let persistedRemoteRefs = readRemoteProjectStripSnapshot(snapshot?.sections.projectStrip)
+  let persistedRecentRemoteRefs = readRecentRemoteProjectStripSnapshot(
+    snapshot?.sections.projectStrip,
+  )
+  const snapshotVersion = (snapshot?.sections.projectStrip as { version?: unknown } | undefined)
+    ?.version
   let migratedLegacySnapshot = false
 
   // 迁移旧版按本地身份保存的项目列表；迁移后只维护应用级全局副本。
@@ -200,8 +251,13 @@ export async function restoreOpenProjects(currentWorkspacePath: string | null): 
       .catch(() => null)
     persistedPaths = readProjectStripSnapshot(legacySnapshot?.sections.projectStrip)
     persistedRemoteRefs = readRemoteProjectStripSnapshot(legacySnapshot?.sections.projectStrip)
-    migratedLegacySnapshot = persistedPaths.length > 0
+    persistedRecentRemoteRefs = readRecentRemoteProjectStripSnapshot(
+      legacySnapshot?.sections.projectStrip,
+    )
+    migratedLegacySnapshot = persistedPaths.length > 0 || persistedRemoteRefs.length > 0
   }
+  const recentRemoteWorkspaceRefs =
+    persistedRecentRemoteRefs.length > 0 ? persistedRecentRemoteRefs : persistedRemoteRefs
   const candidatePaths =
     persistedPaths.length > 0 ? persistedPaths : currentWorkspacePath ? [currentWorkspacePath] : []
   const openProjectPaths = await resolveExistingProjectPaths(candidatePaths)
@@ -214,14 +270,21 @@ export async function restoreOpenProjects(currentWorkspacePath: string | null): 
   }
 
   useOpenProjectsStore.getState().hydrate(openProjectPaths)
-  useOpenProjectsStore.setState({ openRemoteWorkspaceRefs: persistedRemoteRefs })
+  useOpenProjectsStore.setState({
+    openRemoteWorkspaceRefs: persistedRemoteRefs,
+    recentRemoteWorkspaceRefs,
+  })
 
   if (
     (migratedLegacySnapshot ||
+      snapshotVersion !== 2 ||
       JSON.stringify(openProjectPaths) !== JSON.stringify(persistedPaths)) &&
-    (persistedPaths.length > 0 || openProjectPaths.length > 0)
+    (persistedPaths.length > 0 ||
+      openProjectPaths.length > 0 ||
+      persistedRemoteRefs.length > 0 ||
+      recentRemoteWorkspaceRefs.length > 0)
   ) {
-    persistOpenProjects(openProjectPaths, persistedRemoteRefs)
+    persistOpenProjects(openProjectPaths, persistedRemoteRefs, recentRemoteWorkspaceRefs)
   }
 }
 

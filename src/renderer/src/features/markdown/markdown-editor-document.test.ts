@@ -98,11 +98,27 @@ describe('parseMarkdownEditorDocument', () => {
   })
 
   it('does not normalize task-looking text inside fenced or indented code blocks', () => {
-    const source = ['```markdown', '- [ ]', '```', '', '- [ ]'].join('\n')
+    const source = [
+      '```markdown',
+      '- [ ] 代码里的父项',
+      ' - [ ] 代码里的单空格行',
+      '```',
+      '',
+      '- [ ]',
+    ].join('\n')
 
     editor.commands.setContent(parseMarkdownEditorDocument(editor, source), { emitUpdate: false })
 
-    expect(editor.getMarkdown()).toBe(['```markdown', '- [ ]', '```', '', '- [ ] '].join('\n'))
+    expect(editor.getMarkdown()).toBe(
+      [
+        '```markdown',
+        '- [ ] 代码里的父项',
+        ' - [ ] 代码里的单空格行',
+        '```',
+        '',
+        '- [ ] ',
+      ].join('\n'),
+    )
     expect(prepareMarkdownEditorInput('    - [ ]')).toBe('    - [ ]')
   })
 
@@ -112,6 +128,71 @@ describe('parseMarkdownEditorDocument', () => {
     })
 
     expect(editor.getMarkdown()).toBe('10. \n11. ')
+  })
+
+  it('canonicalizes valid variable indentation before parsing nested task siblings', () => {
+    const source = ['- 普通项', '   - [ ] 第一项', '    - [x] 第二项'].join('\n')
+
+    expect(prepareMarkdownEditorInput(source)).toBe(
+      ['- 普通项', '  - [ ] 第一项', '  - [x] 第二项'].join('\n'),
+    )
+
+    editor.commands.setContent(parseMarkdownEditorDocument(editor, source), { emitUpdate: false })
+
+    const serialized = editor.getMarkdown()
+    expect(serialized).toBe(['- 普通项', '  - [ ] 第一项', '  - [x] 第二项'].join('\n'))
+    expect(inspectMarkdownRoundTrip(source, serialized)).toMatchObject({
+      catastrophic: false,
+      equivalent: true,
+      differences: [],
+    })
+  })
+
+  it('promotes one-space task children to a stable nested task list on load', () => {
+    const source = [
+      '- [ ] 完成最终测试验收',
+      ' - [ ] 打包正式版本',
+      ' - [ ] 更新官网下载链接',
+      ' - [ ] 应用商店正式提交',
+      '- [ ] 准备宣发材料',
+      ' - [ ] 公众号文章发布',
+    ].join('\n')
+    const canonical = [
+      '- [ ] 完成最终测试验收',
+      '  - [ ] 打包正式版本',
+      '  - [ ] 更新官网下载链接',
+      '  - [ ] 应用商店正式提交',
+      '- [ ] 准备宣发材料',
+      '  - [ ] 公众号文章发布',
+    ].join('\n')
+
+    expect(prepareMarkdownEditorInput(source)).toBe(canonical)
+
+    editor.commands.setContent(parseMarkdownEditorDocument(editor, source), { emitUpdate: false })
+
+    expect(editor.getJSON()).toMatchObject({
+      content: [
+        {
+          type: 'taskList',
+          content: [
+            {
+              type: 'taskItem',
+              content: [{ type: 'paragraph' }, { type: 'taskList' }],
+            },
+            {
+              type: 'taskItem',
+              content: [{ type: 'paragraph' }, { type: 'taskList' }],
+            },
+          ],
+        },
+      ],
+    })
+    expect(editor.getMarkdown()).toBe(canonical)
+    expect(inspectMarkdownRoundTrip(source, canonical)).toMatchObject({
+      catastrophic: false,
+      equivalent: true,
+      differences: [],
+    })
   })
 
   it('places a cursor in a repaired empty ordered item and accepts text', () => {

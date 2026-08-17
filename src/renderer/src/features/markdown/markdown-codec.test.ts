@@ -357,6 +357,20 @@ describe('markdown-codec', () => {
     expect(analyzeMarkdown(source, serialized).safeToSave).toBe(true)
   })
 
+  it('treats equivalent task marker spelling as the same visible content', () => {
+    const source = '* [X] 已完成\n+ [ ] 未完成'
+    const serialized = '- [x] 已完成\n- [ ] 未完成'
+
+    expect(analyzeMarkdown(source, serialized)).toMatchObject({
+      safeToSave: true,
+      diagnostics: [],
+    })
+  })
+
+  it('does not treat an escaped checkbox-like list prefix as task metadata', () => {
+    expect(analyzeMarkdown('- \\[X] 字面正文', '- 字面正文').safeToSave).toBe(false)
+  })
+
   it('accepts equivalent setext headings, reference links and autolinks', () => {
     const source = [
       '计划',

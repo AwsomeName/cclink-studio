@@ -209,6 +209,14 @@ async function main() {
           '',
           '- [ ] 待办',
           '',
+          '- 普通列表项',
+          '   - [ ] 嵌套待办',
+          '    - [x] 嵌套完成',
+          '',
+          '- [ ] 单空格父任务',
+          ' - [ ] 单空格子任务',
+          ' - [x] 单空格已完成子任务',
+          '',
           '7. 第七项',
           '8. 第八项',
           '',
@@ -1020,6 +1028,10 @@ async function main() {
       'multiple indented and fenced code blocks were not all rendered',
     )
     assert((await editor.locator('ol').first().getAttribute('start')) === '7', 'ordered start lost')
+    assert(
+      (await editor.locator('ul[data-type="taskList"] > li').count()) === 6,
+      'variable-indented task items did not render as checkboxes',
+    )
     assert((await editor.locator('table').count()) === 1, 'aligned table did not render')
     assert((await editor.locator('a[title="说明标题"]').count()) === 1, 'link title did not render')
     assert(
@@ -1046,6 +1058,16 @@ async function main() {
       `${workspaceDir}/roundtrip.md`,
     )
     assert(/^7\. 第七项/m.test(savedRoundtrip), 'save changed the ordered-list start')
+    assert(
+      savedRoundtrip.includes('- 普通列表项\n  - [ ] 嵌套待办\n  - [x] 嵌套完成'),
+      'save lost or misnested variable-indented task items',
+    )
+    assert(
+      savedRoundtrip.includes(
+        '- [ ] 单空格父任务\n  - [ ] 单空格子任务\n  - [x] 单空格已完成子任务',
+      ),
+      'save did not canonicalize one-space task children',
+    )
     assert(
       savedRoundtrip.includes('| :---') &&
         savedRoundtrip.includes(':---:') &&
@@ -1075,12 +1097,13 @@ async function main() {
       'reopened Markdown lost a normalized code block',
     )
     assert(
-      (await page.locator('.tiptap ol').first().getAttribute('start')) === '7' &&
+        (await page.locator('.tiptap ol').first().getAttribute('start')) === '7' &&
         (await page.locator('.tiptap table').count()) === 1 &&
-        (await page.locator('.tiptap a[title="说明标题"]').count()) === 1,
+        (await page.locator('.tiptap a[title="说明标题"]').count()) === 1 &&
+        (await page.locator('.tiptap ul[data-type="taskList"] > li').count()) === 6,
       'reopened Markdown lost an untouched structure',
     )
-    return 'single edit preserved list start, table alignment, link title, hard break, and code blocks'
+    return 'single edit preserved task nesting, list start, table alignment, link title, hard break, and code blocks'
   })
 
   await runCheck('markdown math degrades to editable text without source loss', async () => {

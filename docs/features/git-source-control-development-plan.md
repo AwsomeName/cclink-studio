@@ -266,6 +266,10 @@ docs/ops/
 - 复用并加强敏感文件检查；覆盖 staged blob 与新加入候选路径。
 - 提交成功/失败后重新读取 snapshot，不由 renderer 乐观修改 HEAD 或计数。
 - 同仓库写操作进入单一 operation queue，窗口关闭不启动新操作。
+- 状态浮层只保留事实摘要；提交表单迁入统一 Git 操作窗口，不随浮层外部点击卸载。
+- 操作窗口统一承载变更/Diff、提交、提交并推送和推送已有提交；不拆成多个连续弹窗。
+- 提交草稿按 workspace/revision 隔离；脏草稿关闭需确认，写操作执行中禁止关闭。
+- 两阶段结果必须区分“Commit 失败”“Commit 成功但 Push 失败”和“Commit/Push 全部成功”。
 
 ### 9.3 验证
 
@@ -281,6 +285,8 @@ docs/ops/
   停止提交；不注入备份专用 identity，commit hook 正常执行。
 - Electron smoke 在临时真实仓库中只提交 `tracked.txt`，确认未选择的 untracked 文件仍存在，
   且提交成功后未自动联网。
+- 交互容器仍需从状态浮层内嵌表单迁移到统一 Git 操作窗口；迁移完成前，外部点击导致草稿
+  卸载是已知产品缺口，不能视为最终交互关闭。
 
 ## 10. G4：Fetch、Push 与远程关联
 
@@ -301,6 +307,7 @@ docs/ops/
 - Push 前再次验证 HEAD、branch、upstream、ahead/behind 和 operation revision。
 - non-fast-forward、认证、网络和远程分叉返回稳定错误及脱敏诊断。
 - “提交并推送”作为两阶段事务展示：commit 成功但 Push 失败时明确显示本地提交已保留。
+- Push 进度和结果留在统一 Git 操作窗口，不只通过 toast 表达。
 
 ### 10.3 验证
 

@@ -17,12 +17,33 @@ interface GitState {
   diffLoading: boolean
   operation: 'commit' | 'push' | null
   operationError: string | null
+  operationDialogOpen: boolean
+  operationDialogTab: 'changes' | 'commit'
+  operationDialogWorkspacePath: string | null
+  operationDialogBaselineRevision: string | null
+  commitMessage: string
+  selectedCommitPaths: string[]
+  operationNotice: GitOperationNotice | null
   loadWorkspace: (workspacePath: string | null) => Promise<void>
   refresh: () => Promise<void>
   loadDiff: (path: string, area: GitChangeArea) => Promise<void>
   clearDiff: () => void
+  openOperationDialog: (tab: 'changes' | 'commit') => void
+  closeOperationDialog: () => void
+  setOperationDialogTab: (tab: 'changes' | 'commit') => void
+  setCommitMessage: (message: string) => void
+  toggleCommitPath: (path: string) => void
+  clearCommitDraft: () => void
+  acceptLatestDialogSnapshot: () => void
+  setOperationNotice: (notice: GitOperationNotice | null) => void
   commit: (message: string, pathsToStage: string[]) => Promise<GitOperationResult | null>
   push: () => Promise<GitOperationResult | null>
+}
+
+export interface GitOperationNotice {
+  tone: 'success' | 'error' | 'info'
+  title: string
+  detail?: string
 }
 
 let loadGeneration = 0
@@ -38,6 +59,13 @@ export const useGitStore = create<GitState>((set, get) => ({
   diffLoading: false,
   operation: null,
   operationError: null,
+  operationDialogOpen: false,
+  operationDialogTab: 'changes',
+  operationDialogWorkspacePath: null,
+  operationDialogBaselineRevision: null,
+  commitMessage: '',
+  selectedCommitPaths: [],
+  operationNotice: null,
 
   loadWorkspace: async (workspacePath) => {
     const generation = ++loadGeneration
@@ -53,6 +81,7 @@ export const useGitStore = create<GitState>((set, get) => ({
         diffLoading: false,
         operation: null,
         operationError: null,
+        ...emptyOperationDialogState(),
       })
       return
     }
@@ -64,6 +93,7 @@ export const useGitStore = create<GitState>((set, get) => ({
       ...(changed ? { snapshot: null } : {}),
       ...(changed ? { selectedDiff: null, diff: null, diffLoading: false } : {}),
       ...(changed ? { operation: null, operationError: null } : {}),
+      ...(changed ? emptyOperationDialogState() : {}),
     })
     await loadSnapshot(workspacePath, generation, set, get)
   },
@@ -113,6 +143,53 @@ export const useGitStore = create<GitState>((set, get) => ({
     diffGeneration += 1
     set({ selectedDiff: null, diff: null, diffLoading: false })
   },
+
+  openOperationDialog: (tab) => {
+    const { workspacePath, snapshot } = get()
+    if (!workspacePath || !snapshot || snapshot.availability !== 'available') return
+    set({
+      operationDialogOpen: true,
+      operationDialogTab: tab,
+      operationDialogWorkspacePath: workspacePath,
+      operationDialogBaselineRevision: snapshot.revision,
+      operationNotice: null,
+    })
+  },
+
+  closeOperationDialog: () => {
+    diffGeneration += 1
+    set({
+      ...emptyOperationDialogState(),
+      selectedDiff: null,
+      diff: null,
+      diffLoading: false,
+    })
+  },
+
+  setOperationDialogTab: (tab) => set({ operationDialogTab: tab }),
+  setCommitMessage: (commitMessage) => set({ commitMessage }),
+  toggleCommitPath: (path) =>
+    set((state) => ({
+      selectedCommitPaths: state.selectedCommitPaths.includes(path)
+        ? state.selectedCommitPaths.filter((selectedPath) => selectedPath !== path)
+        : [...state.selectedCommitPaths, path],
+    })),
+  clearCommitDraft: () => set({ commitMessage: '', selectedCommitPaths: [] }),
+  acceptLatestDialogSnapshot: () => {
+    const { snapshot, selectedCommitPaths } = get()
+    if (!snapshot || snapshot.availability !== 'available') return
+    const stageablePaths = new Set(
+      snapshot.changes
+        .filter((change) => !change.conflicted && (change.unstagedStatus || change.untracked))
+        .map((change) => change.path),
+    )
+    set({
+      operationDialogBaselineRevision: snapshot.revision,
+      selectedCommitPaths: selectedCommitPaths.filter((path) => stageablePaths.has(path)),
+      operationNotice: null,
+    })
+  },
+  setOperationNotice: (operationNotice) => set({ operationNotice }),
 
   commit: async (message, pathsToStage) => {
     const { workspacePath, snapshot, operation } = get()
@@ -178,6 +255,27 @@ export const useGitStore = create<GitState>((set, get) => ({
     }
   },
 }))
+
+function emptyOperationDialogState(): Pick<
+  GitState,
+  | 'operationDialogOpen'
+  | 'operationDialogTab'
+  | 'operationDialogWorkspacePath'
+  | 'operationDialogBaselineRevision'
+  | 'commitMessage'
+  | 'selectedCommitPaths'
+  | 'operationNotice'
+> {
+  return {
+    operationDialogOpen: false,
+    operationDialogTab: 'changes',
+    operationDialogWorkspacePath: null,
+    operationDialogBaselineRevision: null,
+    commitMessage: '',
+    selectedCommitPaths: [],
+    operationNotice: null,
+  }
+}
 
 async function loadSnapshot(
   workspacePath: string,

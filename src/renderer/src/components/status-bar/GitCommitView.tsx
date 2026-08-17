@@ -1,22 +1,32 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { GitChangeEntry, GitRepositorySnapshot } from '@shared/git'
-import { useGitStore } from '../../stores/git-store'
-import { useToastStore } from '../common/Toast'
+
+interface GitCommitViewProps {
+  snapshot: GitRepositorySnapshot
+  message: string
+  selectedPaths: string[]
+  operation: 'commit' | 'push' | null
+  stale: boolean
+  onMessageChange: (message: string) => void
+  onTogglePath: (path: string) => void
+  onCommit: () => void
+  onCommitAndPush: () => void
+  onPush: () => void
+}
 
 export function GitCommitView({
   snapshot,
-  onCommitted,
-}: {
-  snapshot: GitRepositorySnapshot
-  onCommitted: () => void
-}): React.ReactElement {
-  const commit = useGitStore((state) => state.commit)
-  const operation = useGitStore((state) => state.operation)
-  const operationError = useGitStore((state) => state.operationError)
-  const showToast = useToastStore((state) => state.show)
-  const [message, setMessage] = useState('')
-  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(() => new Set())
-
+  message,
+  selectedPaths,
+  operation,
+  stale,
+  onMessageChange,
+  onTogglePath,
+  onCommit,
+  onCommitAndPush,
+  onPush,
+}: GitCommitViewProps): React.ReactElement {
+  const selectedPathSet = useMemo(() => new Set(selectedPaths), [selectedPaths])
   const staged = useMemo(
     () => snapshot.changes.filter((change) => !change.conflicted && change.stagedStatus),
     [snapshot.changes],
@@ -28,28 +38,25 @@ export function GitCommitView({
       ),
     [snapshot.changes],
   )
+  const commitFileCount = new Set([
+    ...staged.map((change) => change.path),
+    ...selectedPaths,
+  ]).size
   const canCommit =
     Boolean(message.trim()) &&
-    (staged.length > 0 || selectedPaths.size > 0) &&
+    commitFileCount > 0 &&
     snapshot.conflictedCount === 0 &&
-    operation === null
-
-  const togglePath = (path: string): void => {
-    setSelectedPaths((current) => {
-      const next = new Set(current)
-      if (next.has(path)) next.delete(path)
-      else next.add(path)
-      return next
-    })
-  }
-
-  const submit = async (): Promise<void> => {
-    if (!canCommit) return
-    const result = await commit(message, [...selectedPaths])
-    if (!result) return
-    showToast(result.message, result.success ? 'success' : 'error')
-    if (result.success) onCommitted()
-  }
+    operation === null &&
+    !stale
+  const canPush =
+    Boolean(snapshot.upstream && snapshot.headOid) &&
+    (snapshot.ahead ?? 0) > 0 &&
+    (snapshot.behind ?? 0) === 0 &&
+    !snapshot.detached &&
+    operation === null &&
+    !stale
+  const canCommitAndPush =
+    canCommit && Boolean(snapshot.upstream) && (snapshot.behind ?? 0) === 0 && !snapshot.detached
 
   return (
     <div className="git-commit-view">
@@ -61,7 +68,7 @@ export function GitCommitView({
           rows={3}
           autoFocus
           disabled={operation !== null}
-          onChange={(event) => setMessage(event.target.value)}
+          onChange={(event) => onMessageChange(event.target.value)}
           placeholder="说明这次修改"
         />
       </label>
@@ -80,32 +87,52 @@ export function GitCommitView({
               <CommitFileRow
                 key={`stageable:${change.path}`}
                 change={change}
-                checked={selectedPaths.has(change.path)}
-                disabled={operation !== null}
-                onChange={() => togglePath(change.path)}
+                checked={selectedPathSet.has(change.path)}
+                disabled={operation !== null || stale}
+                onChange={() => onTogglePath(change.path)}
               />
             ))}
           </CommitGroup>
+        )}
+        {staged.length === 0 && stageable.length === 0 && (
+          <div className="git-changes-empty">没有待提交文件</div>
         )}
       </div>
 
       {snapshot.conflictedCount > 0 && (
         <div className="git-status-error">存在冲突文件，请先在 Terminal 中处理</div>
       )}
-      {operationError && <div className="git-status-error">{operationError}</div>}
 
-      <button
-        type="button"
-        className="git-status-primary-action enabled"
-        disabled={!canCommit}
-        onClick={() => void submit()}
-      >
-        {operation === 'commit'
-          ? '正在提交…'
-          : `提交 ${new Set([...staged.map((change) => change.path), ...selectedPaths]).size} 个文件`}
-      </button>
+      <div className="git-operation-actions">
+        <button
+          type="button"
+          className="git-status-primary-action enabled"
+          disabled={!canCommit}
+          onClick={onCommit}
+        >
+          {operation === 'commit' ? '正在提交…' : `提交 ${commitFileCount} 个文件`}
+        </button>
+        <button
+          type="button"
+          className="git-status-secondary-action"
+          disabled={!canCommitAndPush}
+          onClick={onCommitAndPush}
+        >
+          提交并推送
+        </button>
+        {Boolean(snapshot.upstream) && (snapshot.ahead ?? 0) > 0 && (
+          <button
+            type="button"
+            className="git-status-secondary-action"
+            disabled={!canPush}
+            onClick={onPush}
+          >
+            {operation === 'push' ? '正在 Push…' : `推送 ${snapshot.ahead} 个已有提交`}
+          </button>
+        )}
+      </div>
       <div className="git-commit-hint">
-        提交不会自动 Push；敏感文件、过期状态和缺失 identity 会停止操作。
+        只会提交已暂存文件和你勾选的完整文件；敏感文件、过期状态和缺失 identity 会停止操作。
       </div>
     </div>
   )

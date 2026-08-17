@@ -70,6 +70,12 @@ export function isWorkspaceRuntimeTransitionCurrent(generation: number): boolean
   return generation === workspaceTransitionGeneration
 }
 
+export function cancelWorkspaceRuntimeTransition(generation: number): boolean {
+  if (!isWorkspaceRuntimeTransitionCurrent(generation)) return false
+  workspaceTransitionGeneration += 1
+  return true
+}
+
 export function collectWorkspaceRuntimeResourceOwnership(
   workspaceKey: string | null,
 ): WorkspaceRuntimeResourceOwnership {

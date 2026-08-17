@@ -2,15 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import type { HTMLAttributes } from 'react'
 import type { GitRepositorySnapshot } from '@shared/git'
 import { useGitStore } from '../../stores/git-store'
-import { IconArrowLeft, IconBranch, IconChevronRight, IconRefresh } from '../common/Icons'
+import { IconBranch, IconChevronRight, IconRefresh } from '../common/Icons'
 import {
   formatGitChangeSummary,
   formatGitUpstream,
   getGitBranchLabel,
 } from './git-status-view-model'
-import { GitChangesView } from './GitChangesView'
-import { GitCommitView } from './GitCommitView'
-import { useToastStore } from '../common/Toast'
 
 interface GitStatusBarItemProps {
   workspacePath: string | null
@@ -26,13 +23,10 @@ export function GitStatusBarItem({
   const error = useGitStore((state) => state.error)
   const loadWorkspace = useGitStore((state) => state.loadWorkspace)
   const refresh = useGitStore((state) => state.refresh)
-  const clearDiff = useGitStore((state) => state.clearDiff)
-  const push = useGitStore((state) => state.push)
+  const openOperationDialog = useGitStore((state) => state.openOperationDialog)
   const operation = useGitStore((state) => state.operation)
   const operationError = useGitStore((state) => state.operationError)
-  const showToast = useToastStore((state) => state.show)
   const [open, setOpen] = useState(false)
-  const [view, setView] = useState<'summary' | 'changes' | 'commit'>('summary')
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
 
@@ -42,15 +36,7 @@ export function GitStatusBarItem({
 
   useEffect(() => {
     setOpen(false)
-    setView('summary')
-    clearDiff()
-  }, [clearDiff, workspacePath])
-
-  useEffect(() => {
-    if (open) return
-    setView('summary')
-    clearDiff()
-  }, [clearDiff, open])
+  }, [workspacePath])
 
   useEffect(() => {
     if (!workspacePath) return
@@ -91,18 +77,9 @@ export function GitStatusBarItem({
     !snapshot.detached
 
   const runPrimaryAction = async (): Promise<void> => {
-    if (primaryAction.kind === 'commit') {
-      setView('commit')
-      return
-    }
-    if (primaryAction.kind !== 'push') return
-    const result = await push()
-    if (result) showToast(result.message, result.success ? 'success' : 'error')
-  }
-
-  const runPush = async (): Promise<void> => {
-    const result = await push()
-    if (result) showToast(result.message, result.success ? 'success' : 'error')
+    if (primaryAction.kind === 'none') return
+    setOpen(false)
+    openOperationDialog('commit')
   }
 
   return (
@@ -133,27 +110,10 @@ export function GitStatusBarItem({
       </button>
 
       {open && (
-        <div
-          className={`git-status-popover ${view !== 'summary' ? 'details-open' : ''}`}
-          role="dialog"
-          aria-label="Git 状态"
-        >
+        <div className="git-status-popover" role="dialog" aria-label="Git 状态">
           <div className="git-status-popover-header">
             <div className="git-status-popover-title">
-              {view !== 'summary' && (
-                <button
-                  type="button"
-                  className="git-status-back"
-                  onClick={() => {
-                    setView('summary')
-                    clearDiff()
-                  }}
-                  aria-label="返回 Git 摘要"
-                >
-                  <IconArrowLeft size={14} />
-                </button>
-              )}
-              <strong>{view === 'changes' ? '变更' : view === 'commit' ? '提交' : 'Git'}</strong>
+              <strong>Git</strong>
             </div>
             <button
               type="button"
@@ -167,49 +127,47 @@ export function GitStatusBarItem({
             </button>
           </div>
 
-          {view === 'summary' ? (
-            <>
-              <button
-                type="button"
-                className="git-status-row git-status-row-button"
-                onClick={() => setView('changes')}
-              >
-                <span>变更</span>
-                <span className="git-status-change-summary">
-                  {formatGitChangeSummary(snapshot)} <IconChevronRight size={12} />
-                </span>
-              </button>
-              <GitStatusRow label="仓库" value={snapshot.repositoryName ?? '未知'} />
-              <GitStatusRow label="分支" value={branchLabel} />
-              <GitStatusRow label="上游" value={formatGitUpstream(snapshot)} />
+          <button
+            type="button"
+            className="git-status-row git-status-row-button"
+            onClick={() => {
+              setOpen(false)
+              openOperationDialog('changes')
+            }}
+          >
+            <span>变更</span>
+            <span className="git-status-change-summary">
+              {formatGitChangeSummary(snapshot)} <IconChevronRight size={12} />
+            </span>
+          </button>
+          <GitStatusRow label="仓库" value={snapshot.repositoryName ?? '未知'} />
+          <GitStatusRow label="分支" value={branchLabel} />
+          <GitStatusRow label="上游" value={formatGitUpstream(snapshot)} />
 
-              {(error || operationError) && (
-                <div className="git-status-error">{error ?? operationError}</div>
-              )}
-              <button
-                type="button"
-                className="git-status-primary-action enabled"
-                disabled={primaryAction.disabled}
-                title={primaryAction.reason}
-                onClick={() => void runPrimaryAction()}
-              >
-                {primaryAction.label}
-              </button>
-              {primaryAction.kind === 'commit' && canPushExisting && (
-                <button
-                  type="button"
-                  className="git-status-secondary-action"
-                  disabled={operation !== null}
-                  onClick={() => void runPush()}
-                >
-                  推送 {snapshot.ahead} 个已有提交
-                </button>
-              )}
-            </>
-          ) : view === 'changes' ? (
-            <GitChangesView snapshot={snapshot} />
-          ) : (
-            <GitCommitView snapshot={snapshot} onCommitted={() => setView('summary')} />
+          {(error || operationError) && (
+            <div className="git-status-error">{error ?? operationError}</div>
+          )}
+          <button
+            type="button"
+            className="git-status-primary-action enabled"
+            disabled={primaryAction.disabled}
+            title={primaryAction.reason}
+            onClick={() => void runPrimaryAction()}
+          >
+            {primaryAction.label}
+          </button>
+          {primaryAction.kind === 'commit' && canPushExisting && (
+            <button
+              type="button"
+              className="git-status-secondary-action"
+              disabled={operation !== null}
+              onClick={() => {
+                setOpen(false)
+                openOperationDialog('commit')
+              }}
+            >
+              推送 {snapshot.ahead} 个已有提交
+            </button>
           )}
         </div>
       )}

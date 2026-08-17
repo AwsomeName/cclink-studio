@@ -24,6 +24,7 @@ import {
 } from '../../features/context-actions/context-menu-trigger'
 import { useCommandStore } from '../../stores/command-store'
 import { GitStatusBarItem } from './GitStatusBarItem'
+import { GitOperationDialog } from './GitOperationDialog'
 
 export function StatusBar(): React.ReactElement {
   const activeTab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId))
@@ -152,6 +153,8 @@ export function StatusBar(): React.ReactElement {
           {APP_EDITION_LABEL}
         </span>
       </div>
+
+      <GitOperationDialog />
 
       {showGitDialog && (
         <div className="git-backup-dialog-overlay" onMouseDown={closeGitDialog}>

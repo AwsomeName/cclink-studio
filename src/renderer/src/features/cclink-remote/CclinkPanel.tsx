@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CclinkServer, CclinkTreeNode } from '@shared/cclink'
 import { useCclinkStore } from '../../stores'
 import { IconChevronRight, IconCloud, IconFolder, IconRefresh } from '../../components/common/Icons'
-import { beginWorkspaceRuntimeTransition } from '../../utils/workspace-transition'
+import {
+  beginWorkspaceRuntimeTransition,
+  cancelWorkspaceRuntimeTransition,
+} from '../../utils/workspace-transition'
 import { remoteWorkspaceRefFromAgent } from './remote-workspace-confirmation'
 import { openWorkspaceRef } from '../workspace-open/workspace-open-controller'
 
@@ -175,6 +178,7 @@ function RemoteDirectoryPicker({
   const [loading, setLoading] = useState(false)
   const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const openingGenerationRef = useRef<number | null>(null)
   const directories = tree?.children?.filter((item) => item.type === 'directory') ?? []
 
   const load = async (target: string): Promise<void> => {
@@ -198,10 +202,19 @@ function RemoteDirectoryPicker({
     void load(initialPath)
   }, [initialPath])
 
+  useEffect(
+    () => () => {
+      const generation = openingGenerationRef.current
+      if (generation !== null) cancelWorkspaceRuntimeTransition(generation)
+    },
+    [],
+  )
+
   const openCurrent = async (): Promise<void> => {
     setOpening(true)
     setError(null)
     const generation = beginWorkspaceRuntimeTransition()
+    openingGenerationRef.current = generation
     try {
       const workspace = await window.cclinkStudio.cclink.openWorkspace({
         serverId: server.id,
@@ -209,10 +222,12 @@ function RemoteDirectoryPicker({
       })
       const ref = remoteWorkspaceRefFromAgent(workspace, server.name)
       await openWorkspaceRef(ref, { confirmedRemote: true, generation })
+      openingGenerationRef.current = null
       onWorkspaceOpened?.()
     } catch (openError) {
       setError(openError instanceof Error ? openError.message : String(openError))
     } finally {
+      if (openingGenerationRef.current === generation) openingGenerationRef.current = null
       setOpening(false)
     }
   }
