@@ -4,7 +4,7 @@ import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
 import type { RemoteStatus } from '@shared/remote-protocol'
 import type { RemoteDiagnosticReport } from '@shared/remote-protocol'
 import { useCclinkStore } from '../../stores'
-import { IconClipboard, IconPlus, IconRobot, IconSend } from '../../components/common/Icons'
+import { IconClipboard, IconRobot, IconSend } from '../../components/common/Icons'
 import { ContentBlockRenderer } from '../../components/common/ConversationMessageRenderer'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
 import { useToastStore } from '../../components/common/Toast'
@@ -75,7 +75,6 @@ export function RemoteAgentPanel({
   const error = useCclinkStore((state) => state.error)
   const realtimeState = useCclinkStore((state) => state.realtime.state)
   const initialize = useCclinkStore((state) => state.initialize)
-  const loadSessions = useCclinkStore((state) => state.loadSessions)
   const createSession = useCclinkStore((state) => state.createSession)
   const selectSession = useCclinkStore((state) => state.selectSession)
   const loadMessages = useCclinkStore((state) => state.loadMessages)
@@ -107,22 +106,18 @@ export function RemoteAgentPanel({
 
   useEffect(() => {
     setStatusError(null)
-    void initialize().then(async () => {
-      await Promise.all([
-        loadSessions(workspaceRef),
-        window.cclinkStudio.remote
-          .getStatus(workspaceRef)
-          .then(setRemoteStatus)
-          .catch((statusFailure: unknown) =>
-            setStatusError(
-              statusFailure instanceof Error ? statusFailure.message : String(statusFailure),
-            ),
+    void initialize().then(() =>
+      window.cclinkStudio.remote
+        .getStatus(workspaceRef)
+        .then(setRemoteStatus)
+        .catch((statusFailure: unknown) =>
+          setStatusError(
+            statusFailure instanceof Error ? statusFailure.message : String(statusFailure),
           ),
-      ])
-    })
+        ),
+    )
   }, [
     initialize,
-    loadSessions,
     workspaceRef.endpointId,
     workspaceRef.path,
     workspaceRef.workspaceId,
@@ -163,21 +158,6 @@ export function RemoteAgentPanel({
     const element = listRef.current
     if (element) element.scrollTop = element.scrollHeight
   }, [activeMessages])
-
-  const startSession = async (): Promise<void> => {
-    if (!agentAvailable) return
-    const session = await createSession(
-      workspaceRef,
-      `会话 · ${workspaceRef.label || workspaceRef.path.split(/[\\/]/u).filter(Boolean).at(-1) || '远程项目'}`,
-    )
-    selectSession(session.id)
-    await loadMessages(session.id)
-  }
-
-  const select = (sessionId: string): void => {
-    selectSession(sessionId)
-    void loadMessages(sessionId)
-  }
 
   const submit = async (): Promise<void> => {
     const content = draft.trim()
@@ -253,19 +233,6 @@ export function RemoteAgentPanel({
           <span className="remote-agent-status-dot" />
           <span>{agentVisualStatus.label}</span>
         </div>
-        <select
-          value={activeSession?.id ?? ''}
-          onChange={(event) => select(event.target.value)}
-          disabled={workspaceSessions.length === 0}
-          aria-label="远程会话"
-        >
-          {workspaceSessions.length === 0 && <option value="">暂无会话</option>}
-          {workspaceSessions.map((session) => (
-            <option key={session.id} value={session.id}>
-              {session.name}
-            </option>
-          ))}
-        </select>
         <button
           type="button"
           onClick={() => void copyDiagnostics()}
@@ -274,14 +241,6 @@ export function RemoteAgentPanel({
           aria-label="复制远程 Agent 诊断日志"
         >
           <IconClipboard size={14} />
-        </button>
-        <button
-          type="button"
-          onClick={() => void startSession()}
-          disabled={loading || !agentAvailable}
-          title="新建远程会话"
-        >
-          <IconPlus size={14} />
         </button>
       </div>
 

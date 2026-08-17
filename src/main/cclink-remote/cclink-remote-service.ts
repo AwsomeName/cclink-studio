@@ -32,6 +32,11 @@ import {
 } from '../../shared/cclink'
 import type { CclinkRealtimeStatus } from '../../shared/ipc/cclink'
 import type { CclinkRealtimeEvent } from '../../shared/ipc/cclink'
+import {
+  deriveRemoteSessionTitle,
+  isGenericRemoteSessionTitle,
+  resolveRemoteSessionTitle,
+} from '../../shared/cclink-session-title'
 import type {
   RemoteAgentSessionDiagnosticEvent,
   RemoteFileReadRequest,
@@ -123,8 +128,21 @@ export class CclinkRemoteService implements RemoteProvider {
   async initialize(): Promise<void> {
     if (!this.runtimeStateStore) return
     const state = await this.runtimeStateStore.load()
-    this.sessions = new Map(state.sessions.map((session) => [session.id, session]))
     this.messages = new Map(Object.entries(state.messages))
+    let titlesChanged = false
+    this.sessions = new Map(
+      state.sessions.map((session) => {
+        if (!isGenericRemoteSessionTitle(session.name)) return [session.id, session]
+        const firstUserMessage = this.messages
+          .get(session.id)
+          ?.find((message) => message.type === 'user')
+        const title = firstUserMessage ? deriveRemoteSessionTitle(firstUserMessage.content) : null
+        if (!title) return [session.id, session]
+        titlesChanged = true
+        return [session.id, { ...session, name: title }]
+      }),
+    )
+    if (titlesChanged) await this.saveState()
   }
 
   onStatus(listener: StatusListener): () => void {
@@ -367,6 +385,7 @@ export class CclinkRemoteService implements RemoteProvider {
       }
       this.appendMessage(sessionId, userMessage)
       this.setSessionStatus(sessionId, 'active')
+      this.emitRealtime({ type: 'sessions', serverId: ref.endpointId, sessionId })
       this.emitRealtime({
         type: 'conversation',
         serverId: ref.endpointId,
@@ -1271,7 +1290,11 @@ export class CclinkRemoteService implements RemoteProvider {
         if (current) {
           this.sessions.set(update.session_id, {
             ...current,
-            name: update.name?.trim() || current.name,
+            name: resolveRemoteSessionTitle({
+              currentTitle: current.name,
+              incomingTitle: update.name,
+              sessionId: update.session_id,
+            }),
             updatedAt: nowSeconds(),
           })
           this.persistState()
@@ -1613,13 +1636,18 @@ export class CclinkRemoteService implements RemoteProvider {
       }
       const createdAt = normalizeTimestamp(item.created_at ?? item.updated_at)
       const updatedAt = normalizeTimestamp(item.last_active_at ?? item.updated_at ?? createdAt)
+      const current = this.sessions.get(item.session_id)
       const session: CclinkRemoteSession = {
         id: item.session_id,
-        name: item.name?.trim() || `远程会话 ${item.session_id.slice(-6)}`,
+        name: resolveRemoteSessionTitle({
+          currentTitle: current?.name,
+          incomingTitle: item.name,
+          sessionId: item.session_id,
+        }),
         workspaceId: item.workspace_id,
         workspacePath: item.workspace_path,
         serverId,
-        status: this.sessions.get(item.session_id)?.status ?? 'idle',
+        status: current?.status ?? 'idle',
         createdAt,
         updatedAt,
         messageCount: item.message_count ?? this.messages.get(item.session_id)?.length ?? 0,
@@ -1670,8 +1698,15 @@ export class CclinkRemoteService implements RemoteProvider {
     this.messages.set(sessionId, next)
     const session = this.sessions.get(sessionId)
     if (session) {
+      const derivedTitle =
+        message.type === 'user' &&
+        !current.some((item) => item.type === 'user') &&
+        isGenericRemoteSessionTitle(session.name)
+          ? deriveRemoteSessionTitle(message.content)
+          : null
       this.sessions.set(sessionId, {
         ...session,
+        name: derivedTitle ?? session.name,
         updatedAt: message.timestamp,
         messageCount: next.length,
       })

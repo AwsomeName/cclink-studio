@@ -43,9 +43,11 @@ const storedSession = {
   contextUsage: 0,
 }
 
-function createService() {
+function createService(
+  loadedState = { version: 1 as const, sessions: [storedSession], messages: {} },
+) {
   const store = {
-    load: vi.fn(async () => ({ version: 1 as const, sessions: [storedSession], messages: {} })),
+    load: vi.fn(async () => loadedState),
     save: vi.fn(async () => undefined),
   }
   const service = new CclinkRemoteService({} as never, null, store as never)
@@ -59,6 +61,30 @@ function createService() {
 }
 
 describe('CclinkRemoteService runtime protocol', () => {
+  it('backfills generated session names from the first persisted user message', async () => {
+    const { service, store } = createService({
+      version: 1 as const,
+      sessions: [{ ...storedSession, name: '远程会话 292188' }],
+      messages: {
+        'session-1': [
+          {
+            type: 'user' as const,
+            id: 'message-1',
+            content: '检查发布流程是否完整',
+            timestamp: 2,
+          },
+        ],
+      },
+    })
+
+    await service.initialize()
+
+    const sessions = (service as unknown as { sessions: Map<string, typeof storedSession> })
+      .sessions
+    expect(sessions.get('session-1')?.name).toBe('检查发布流程是否完整')
+    expect(store.save).toHaveBeenCalledOnce()
+  })
+
   it('uses the Agent-owned opaque workspace_id when opening and validating a workspace', async () => {
     const { service } = createService()
     installOnlineServer(service)

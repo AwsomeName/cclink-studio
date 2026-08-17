@@ -2,9 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useAgentStore } from '../../stores/agent-store'
 import { useCommandStore } from '../../stores/command-store'
 import type { AgentPanelMode } from '../../stores/ui-store'
+import { useUIStore } from '../../stores/ui-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
+import { useCclinkStore } from '../../stores/cclink-store'
 import { useToastStore } from '../common/Toast'
-import { buildQuickThreadList } from '../../features/agent-conversations/view-model'
+import {
+  buildQuickThreadList,
+  type QuickThreadStatusKind,
+} from '../../features/agent-conversations/view-model'
 import { writeConversationDragData } from '../../features/agent-conversations/conversation-workbench'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import {
@@ -14,6 +19,7 @@ import {
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { IconPlus } from '../common/Icons'
 import {
+  buildRemoteQuickSwitcherItems,
   formatQuickSwitcherTitle,
   partitionQuickSwitcherThreads,
   quickSwitcherVisibleCount,
@@ -23,6 +29,14 @@ import {
 interface ConversationQuickSwitcherProps {
   panelMode: AgentPanelMode
   panelWidth: number
+}
+
+interface QuickSwitcherItem {
+  id: string
+  title: string
+  statusKind: QuickThreadStatusKind
+  statusLabel: string
+  isActive: boolean
 }
 
 export function ConversationQuickSwitcher({
@@ -35,6 +49,15 @@ export function ConversationQuickSwitcher({
   const pendingConfirmations = useAgentStore((state) => state.pendingConfirmations)
   const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const executeCommand = useCommandStore((state) => state.executeCommand)
+  const remoteSessions = useCclinkStore((state) => state.sessions)
+  const selectedRemoteSessionId = useCclinkStore((state) => state.selectedSessionId)
+  const remoteLoading = useCclinkStore((state) => state.loading)
+  const remoteRealtimeState = useCclinkStore((state) => state.realtime.state)
+  const initializeRemote = useCclinkStore((state) => state.initialize)
+  const loadRemoteSessions = useCclinkStore((state) => state.loadSessions)
+  const selectRemoteSession = useCclinkStore((state) => state.selectSession)
+  const loadRemoteMessages = useCclinkStore((state) => state.loadMessages)
+  const setAgentPanelMode = useUIStore((state) => state.setAgentPanelMode)
   const showToast = useToastStore((state) => state.show)
   const showContextMenu = useContextMenuStore((state) => state.show)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -44,7 +67,7 @@ export function ConversationQuickSwitcher({
     (request) => request.conversationId === activeConversationId,
   ).length
 
-  const recentConversations = useMemo(() => {
+  const localConversations = useMemo(() => {
     const allConversations = buildQuickThreadList({
       conversations,
       conversationOrder,
@@ -61,8 +84,25 @@ export function ConversationQuickSwitcher({
     conversations,
     pendingConfirmationCount,
   ])
+  const workspaceRemoteSessions = useMemo(() => {
+    if (activeWorkspaceRef.kind !== 'remote') return []
+    return buildRemoteQuickSwitcherItems({
+      sessions: remoteSessions,
+      selectedSessionId: selectedRemoteSessionId,
+      endpointId: activeWorkspaceRef.endpointId,
+      workspaceId: activeWorkspaceRef.workspaceId,
+    })
+  }, [activeWorkspaceRef, remoteSessions, selectedRemoteSessionId])
+  const recentConversations: QuickSwitcherItem[] =
+    activeWorkspaceRef.kind === 'remote' ? workspaceRemoteSessions : localConversations
   const visibleCount = quickSwitcherVisibleCount(panelMode, panelWidth)
   const { visible, overflow } = partitionQuickSwitcherThreads(recentConversations, visibleCount)
+  const isRemoteWorkspace = activeWorkspaceRef.kind === 'remote'
+
+  useEffect(() => {
+    if (activeWorkspaceRef.kind !== 'remote') return
+    void initializeRemote().then(() => loadRemoteSessions(activeWorkspaceRef))
+  }, [activeWorkspaceRef, initializeRemote, loadRemoteSessions, remoteRealtimeState])
 
   useEffect(() => {
     setOverflowOpen(false)
@@ -86,6 +126,22 @@ export function ConversationQuickSwitcher({
 
   const openConversation = async (conversationId: string): Promise<void> => {
     setOverflowOpen(false)
+    if (activeWorkspaceRef.kind === 'remote') {
+      const session = remoteSessions.find(
+        (candidate) =>
+          candidate.id === conversationId &&
+          candidate.serverId === activeWorkspaceRef.endpointId &&
+          candidate.workspaceId === activeWorkspaceRef.workspaceId,
+      )
+      if (!session) {
+        showToast('远程会话已不存在', 'error')
+        return
+      }
+      selectRemoteSession(session.id)
+      await loadRemoteMessages(session.id)
+      setAgentPanelMode('right', 'user')
+      return
+    }
     const conversation = conversations[conversationId]
     if (!conversation) {
       showToast('会话已不存在', 'error')
@@ -119,6 +175,7 @@ export function ConversationQuickSwitcher({
   }
 
   const getConversationTarget = (conversationId: string) => {
+    if (isRemoteWorkspace) return null
     const conversation = conversations[conversationId]
     if (!conversation) return null
     return {
@@ -135,7 +192,7 @@ export function ConversationQuickSwitcher({
     <div
       ref={rootRef}
       className={`conversation-quick-switcher ${panelMode === 'right' ? '' : 'compact'}`}
-      aria-label="当前项目最近会话"
+      aria-label={isRemoteWorkspace ? '当前远程项目最近会话' : '当前项目最近会话'}
       onKeyDown={(event) => {
         if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
         const tabs = Array.from(
@@ -161,14 +218,16 @@ export function ConversationQuickSwitcher({
             key={conversation.id}
             type="button"
             role="tab"
-            draggable
+            draggable={!isRemoteWorkspace}
             data-conversation-id={conversation.id}
             className={`conversation-quick-tab status-${conversation.statusKind} ${conversation.isActive ? 'active' : ''}`}
             title={`${conversation.title} · ${conversation.statusLabel}`}
             aria-label={`切换到会话：${conversation.title}，${conversation.statusLabel}`}
             aria-selected={conversation.isActive}
-            aria-haspopup="menu"
-            onDragStart={(event) => writeConversationDragData(event.dataTransfer, conversation.id)}
+            aria-haspopup={isRemoteWorkspace ? undefined : 'menu'}
+            onDragStart={(event) => {
+              if (!isRemoteWorkspace) writeConversationDragData(event.dataTransfer, conversation.id)
+            }}
             onClick={() => void openConversation(conversation.id)}
             onContextMenu={(event) => {
               const target = getConversationTarget(conversation.id)
@@ -219,14 +278,15 @@ export function ConversationQuickSwitcher({
                   key={conversation.id}
                   type="button"
                   role="menuitem"
-                  draggable
+                  draggable={!isRemoteWorkspace}
                   data-conversation-id={conversation.id}
                   className={`status-${conversation.statusKind}`}
                   title={conversation.title}
-                  aria-haspopup="menu"
-                  onDragStart={(event) =>
-                    writeConversationDragData(event.dataTransfer, conversation.id)
-                  }
+                  aria-haspopup={isRemoteWorkspace ? undefined : 'menu'}
+                  onDragStart={(event) => {
+                    if (!isRemoteWorkspace)
+                      writeConversationDragData(event.dataTransfer, conversation.id)
+                  }}
                   onClick={() => void openConversation(conversation.id)}
                   onContextMenu={(event) => {
                     const target = getConversationTarget(conversation.id)
@@ -262,8 +322,9 @@ export function ConversationQuickSwitcher({
       <button
         type="button"
         className="conversation-quick-new-button"
-        title="新建会话"
-        aria-label="新建会话"
+        title={isRemoteWorkspace ? '新建远程会话' : '新建本地会话'}
+        aria-label={isRemoteWorkspace ? '新建远程会话' : '新建本地会话'}
+        disabled={isRemoteWorkspace && (remoteLoading || remoteRealtimeState !== 'online')}
         onClick={() => void createConversation()}
       >
         <IconPlus size={14} />

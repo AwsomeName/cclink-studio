@@ -5,6 +5,7 @@ import type { QuickThreadSummary } from '../../features/agent-conversations/view
 import { useAgentStore } from '../../stores/agent-store'
 import { ConversationQuickSwitcher } from './ConversationQuickSwitcher'
 import {
+  buildRemoteQuickSwitcherItems,
   formatQuickSwitcherTitle,
   partitionQuickSwitcherThreads,
   QUICK_SWITCHER_TITLE_LIMIT,
@@ -89,9 +90,53 @@ describe('conversation quick switcher', () => {
         createElement(ConversationQuickSwitcher, { panelMode: 'right', panelWidth: 560 }),
       )
       expect(markup).toContain('class="conversation-quick-new-button"')
-      expect(markup).toContain('aria-label="新建会话"')
+      expect(markup).toContain('aria-label="新建本地会话"')
     } finally {
       useAgentStore.setState(originalState, true)
     }
+  })
+
+  it('maps only the current remote workspace into the shared quick switcher model', () => {
+    const items = buildRemoteQuickSwitcherItems({
+      sessions: [
+        {
+          id: 'remote-1',
+          name: '检查发布流程',
+          workspaceId: 'workspace-1',
+          workspacePath: '/srv/project',
+          serverId: 'agent-1',
+          status: 'active',
+          createdAt: 1,
+          updatedAt: 2,
+          messageCount: 2,
+          contextUsage: 0,
+        },
+        {
+          id: 'other-workspace',
+          name: '不应出现',
+          workspaceId: 'workspace-2',
+          workspacePath: '/srv/other',
+          serverId: 'agent-1',
+          status: 'idle',
+          createdAt: 1,
+          updatedAt: 3,
+          messageCount: 0,
+          contextUsage: 0,
+        },
+      ],
+      selectedSessionId: 'remote-1',
+      endpointId: 'agent-1',
+      workspaceId: 'workspace-1',
+    })
+
+    expect(items).toEqual([
+      {
+        id: 'remote-1',
+        title: '检查发布流程',
+        statusKind: 'running',
+        statusLabel: '响应中',
+        isActive: true,
+      },
+    ])
   })
 })

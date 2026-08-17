@@ -13,9 +13,10 @@ import { createWorkbenchCommands } from './workbench-commands'
 import { createMarkdownCommands } from './markdown-commands'
 import { useSettingsStore } from '../../stores/settings-store'
 import { useAgentStore } from '../../stores/agent-store'
+import { useCclinkStore } from '../../stores/cclink-store'
 import { useUIStore } from '../../stores/ui-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
-import { localWorkspaceRef } from '@shared/workspace-ref'
+import { localWorkspaceRef, remoteWorkspaceRef } from '@shared/workspace-ref'
 
 function createAllCommands(): Command[] {
   return [
@@ -111,6 +112,38 @@ describe('bootstrap command modules', () => {
     } finally {
       vi.restoreAllMocks()
       vi.unstubAllGlobals()
+    }
+  })
+
+  it('在远程工作空间把同一新建命令路由到远程会话 owner', async () => {
+    const workspaceRef = remoteWorkspaceRef({
+      endpointId: 'agent-1',
+      workspaceId: 'workspace-1',
+      path: '/srv/project',
+      label: 'project',
+    })
+    const createSession = vi.fn(async () => ({ id: 'remote-session' }))
+    const setAgentPanelMode = vi.fn()
+
+    vi.spyOn(useWorkspaceStore, 'getState').mockReturnValue({
+      activeWorkspaceRef: workspaceRef,
+    } as ReturnType<typeof useWorkspaceStore.getState>)
+    vi.spyOn(useCclinkStore, 'getState').mockReturnValue({
+      createSession,
+    } as unknown as ReturnType<typeof useCclinkStore.getState>)
+    vi.spyOn(useUIStore, 'getState').mockReturnValue({ setAgentPanelMode } as unknown as ReturnType<
+      typeof useUIStore.getState
+    >)
+
+    try {
+      await createAgentCommands()
+        .find((command) => command.id === 'agent.newConversation')
+        ?.action({ source: 'toolbar' })
+
+      expect(createSession).toHaveBeenCalledWith(workspaceRef, '会话 · project')
+      expect(setAgentPanelMode).toHaveBeenCalledWith('right', 'user')
+    } finally {
+      vi.restoreAllMocks()
     }
   })
 
