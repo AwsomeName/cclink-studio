@@ -1,7 +1,11 @@
 import { create } from 'zustand'
 import type { AppSettings } from '../../../shared/ipc/settings'
 import type { FsCopyEntryResult, FsDirEntry } from '../../../shared/ipc/fs'
-import { globalWorkspaceRef, localWorkspaceRef } from '../../../shared/workspace-ref'
+import {
+  globalWorkspaceRef,
+  localWorkspaceRef,
+  workspaceRefKey,
+} from '../../../shared/workspace-ref'
 import {
   getWorkspaceStateOwnerKey,
   persistWorkspaceSection,
@@ -586,17 +590,21 @@ export const useFsStore = create<FsState>((set, get) => ({
 
   closeWorkspace: async () => {
     const currentPath = get().workspacePath
-    if (!currentPath) return
+    const activeWorkspaceRef = useWorkspaceStore.getState().activeWorkspaceRef
+    if (!currentPath && activeWorkspaceRef.kind !== 'remote') return
     if (get().picking || get().loading || get().switchingPath) {
       set({ error: '另一个项目正在切换，请稍候' })
       return
     }
 
-    set({ loading: true, switchingPath: currentPath, error: null, operationError: null })
-    saveFsPanelState(
-      { expandedPaths: get().expandedPaths, selectedPath: get().selectedPath },
-      currentPath,
-    )
+    const switchingToken = currentPath ?? workspaceRefKey(activeWorkspaceRef) ?? 'remote-workspace'
+    set({ loading: true, switchingPath: switchingToken, error: null, operationError: null })
+    if (currentPath) {
+      saveFsPanelState(
+        { expandedPaths: get().expandedPaths, selectedPath: get().selectedPath },
+        currentPath,
+      )
+    }
 
     try {
       const generation = beginWorkspaceRuntimeTransition()
@@ -636,7 +644,7 @@ export const useFsStore = create<FsState>((set, get) => ({
     } catch (err) {
       set({ loading: false, error: describeError(err) })
     } finally {
-      if (get().switchingPath === currentPath) {
+      if (get().switchingPath === switchingToken) {
         set({ loading: false, switchingPath: null })
       }
     }

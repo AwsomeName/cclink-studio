@@ -1,4 +1,4 @@
-import { useMemo, useState, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { localWorkspaceRef, workspaceRefKey, workspaceRefLabel } from '@shared/workspace-ref'
 import { FloatingSurface } from '../../components/common/FloatingSurface'
 import {
@@ -11,6 +11,10 @@ import {
 import { useFsStore } from '../../stores/fs-store'
 import { useOpenProjectsStore } from '../../stores/open-projects-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
+import {
+  beginWorkspaceRuntimeTransition,
+  cancelWorkspaceRuntimeTransition,
+} from '../../utils/workspace-transition'
 import { CclinkWorkspacePicker } from '../cclink-remote/CclinkPanel'
 import { openWorkspaceRef, pickLocalWorkspace } from './workspace-open-controller'
 import { useWorkspaceOpenStore } from './workspace-open-store'
@@ -77,9 +81,18 @@ function WorkspaceSourceChooser({
   const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const pendingRemoteGenerationRef = useRef<number | null>(null)
   const recentRefs = useMemo(
     () => [...recentWorkspacePaths.slice(0, 5).map(localWorkspaceRef), ...remoteRefs.slice(0, 5)],
     [recentWorkspacePaths, remoteRefs],
+  )
+
+  useEffect(
+    () => () => {
+      const generation = pendingRemoteGenerationRef.current
+      if (generation !== null) cancelWorkspaceRuntimeTransition(generation)
+    },
+    [],
   )
 
   const openLocal = async (): Promise<void> => {
@@ -106,8 +119,11 @@ function WorkspaceSourceChooser({
     }
     setBusyKey(key)
     setError(null)
+    const generation = ref.kind === 'remote' ? beginWorkspaceRuntimeTransition() : null
+    pendingRemoteGenerationRef.current = generation
     try {
-      await openWorkspaceRef(ref)
+      await openWorkspaceRef(ref, generation === null ? {} : { generation })
+      pendingRemoteGenerationRef.current = null
       onOpened()
     } catch (openError) {
       if (ref.kind === 'remote') {
@@ -116,6 +132,9 @@ function WorkspaceSourceChooser({
       }
       setError(openError instanceof Error ? openError.message : String(openError))
     } finally {
+      if (pendingRemoteGenerationRef.current === generation) {
+        pendingRemoteGenerationRef.current = null
+      }
       setBusyKey(null)
     }
   }

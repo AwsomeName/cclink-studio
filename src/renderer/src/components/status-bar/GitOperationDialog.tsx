@@ -43,8 +43,16 @@ export function GitOperationDialog(): React.ReactElement | null {
   }, [closeDialog, dirty, operation])
 
   useEffect(() => {
-    if (!dialogOpen) setConfirmDiscard(false)
-  }, [dialogOpen])
+    if (!dialogOpen) {
+      setConfirmDiscard(false)
+      return
+    }
+    const frame = window.requestAnimationFrame(() => {
+      if (tab === 'commit') dialogRef.current?.querySelector('textarea')?.focus()
+      else dialogRef.current?.focus()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [dialogOpen, tab])
 
   useEffect(() => {
     if (!dialogOpen) return

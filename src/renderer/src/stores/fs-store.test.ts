@@ -343,6 +343,35 @@ describe('fs-store workspace switching', () => {
     expect(useFsStore.getState().switchingPath).toBeNull()
   })
 
+  it('returns to the global workspace when the last active remote project is closed', async () => {
+    const remoteRef = {
+      kind: 'remote' as const,
+      transport: 'cclink' as const,
+      endpointId: 'agent-1',
+      workspaceId: 'workspace-1',
+      path: '/srv/project',
+    }
+    Object.assign(window.cclinkStudio, {
+      browser: { reconcileViews: vi.fn().mockResolvedValue(undefined) },
+      terminal: { listSessions: vi.fn().mockResolvedValue([]) },
+    })
+    useWorkspaceStore.getState().commitActiveWorkspace(remoteRef)
+    const getWorkspaceState = window.cclinkStudio.workspaceState.get as ReturnType<typeof vi.fn>
+    getWorkspaceState.mockResolvedValue(
+      snapshot(null, {
+        tabs: { tabs: [], activeTabId: null },
+        fileTree: { expandedPaths: [], selectedPath: null },
+      }),
+    )
+
+    await useFsStore.getState().closeWorkspace()
+
+    expect(useFsStore.getState().workspacePath).toBeNull()
+    expect(useWorkspaceStore.getState().activeWorkspaceRef).toEqual({ kind: 'global' })
+    expect(useFsStore.getState().loading).toBe(false)
+    expect(useFsStore.getState().switchingPath).toBeNull()
+  })
+
   it('rejects a second workspace transition while the project picker is open', async () => {
     let resolveDialog!: (value: { canceled: boolean; filePaths: string[] }) => void
     const showOpenDialog = window.cclinkStudio.dialog.showOpenDialog as ReturnType<typeof vi.fn>

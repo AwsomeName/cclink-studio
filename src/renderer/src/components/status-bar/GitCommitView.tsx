@@ -38,10 +38,7 @@ export function GitCommitView({
       ),
     [snapshot.changes],
   )
-  const commitFileCount = new Set([
-    ...staged.map((change) => change.path),
-    ...selectedPaths,
-  ]).size
+  const commitFileCount = new Set([...staged.map((change) => change.path), ...selectedPaths]).size
   const canCommit =
     Boolean(message.trim()) &&
     commitFileCount > 0 &&
@@ -118,7 +115,9 @@ export function GitCommitView({
           disabled={!canCommitAndPush}
           onClick={onCommitAndPush}
         >
-          提交并推送
+          {(snapshot.ahead ?? 0) > 0
+            ? `提交并推送（含已有 ${snapshot.ahead} 个提交）`
+            : '提交并推送'}
         </button>
         {Boolean(snapshot.upstream) && (snapshot.ahead ?? 0) > 0 && (
           <button

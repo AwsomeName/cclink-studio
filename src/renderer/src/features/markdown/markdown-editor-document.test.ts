@@ -110,16 +110,12 @@ describe('parseMarkdownEditorDocument', () => {
     editor.commands.setContent(parseMarkdownEditorDocument(editor, source), { emitUpdate: false })
 
     expect(editor.getMarkdown()).toBe(
-      [
-        '```markdown',
-        '- [ ] 代码里的父项',
-        ' - [ ] 代码里的单空格行',
-        '```',
-        '',
-        '- [ ] ',
-      ].join('\n'),
+      ['```markdown', '- [ ] 代码里的父项', ' - [ ] 代码里的单空格行', '```', '', '- [ ] '].join(
+        '\n',
+      ),
     )
     expect(prepareMarkdownEditorInput('    - [ ]')).toBe('    - [ ]')
+    expect(prepareMarkdownEditorInput(' - [ ] 独立任务')).toBe('- [ ] 独立任务')
   })
 
   it('preserves the starting number of repaired empty ordered items', () => {

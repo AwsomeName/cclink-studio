@@ -27,6 +27,13 @@ describe('git-store', () => {
       diffLoading: false,
       operation: null,
       operationError: null,
+      operationDialogOpen: false,
+      operationDialogTab: 'changes',
+      operationDialogWorkspacePath: null,
+      operationDialogBaselineRevision: null,
+      commitMessage: '',
+      selectedCommitPaths: [],
+      operationNotice: null,
     })
   })
 
@@ -96,9 +103,54 @@ describe('git-store', () => {
       diffLoading: false,
     })
   })
+
+  it('keeps the commit draft across refresh and gates it on the old revision', async () => {
+    getSnapshot
+      .mockResolvedValueOnce(snapshot(firstWorkspace, 'main', 'a'.repeat(64)))
+      .mockResolvedValueOnce(snapshot(firstWorkspace, 'main', 'b'.repeat(64)))
+
+    await useGitStore.getState().loadWorkspace(firstWorkspace)
+    useGitStore.getState().openOperationDialog('commit')
+    useGitStore.getState().setCommitMessage('keep this draft')
+    useGitStore.getState().toggleCommitPath('README.md')
+    await useGitStore.getState().refresh()
+
+    expect(useGitStore.getState()).toMatchObject({
+      operationDialogOpen: true,
+      operationDialogBaselineRevision: 'a'.repeat(64),
+      commitMessage: 'keep this draft',
+      selectedCommitPaths: ['README.md'],
+      snapshot: { revision: 'b'.repeat(64) },
+    })
+  })
+
+  it('clears dialog state and commit draft when the workspace changes', async () => {
+    getSnapshot
+      .mockResolvedValueOnce(snapshot(firstWorkspace, 'main'))
+      .mockResolvedValueOnce(snapshot(secondWorkspace, 'next'))
+
+    await useGitStore.getState().loadWorkspace(firstWorkspace)
+    useGitStore.getState().openOperationDialog('commit')
+    useGitStore.getState().setCommitMessage('workspace-specific draft')
+    useGitStore.getState().toggleCommitPath('README.md')
+    await useGitStore.getState().loadWorkspace(secondWorkspace)
+
+    expect(useGitStore.getState()).toMatchObject({
+      workspacePath: secondWorkspace,
+      operationDialogOpen: false,
+      operationDialogWorkspacePath: null,
+      operationDialogBaselineRevision: null,
+      commitMessage: '',
+      selectedCommitPaths: [],
+    })
+  })
 })
 
-function snapshot(workspacePath: string, branch: string): GitRepositorySnapshot {
+function snapshot(
+  workspacePath: string,
+  branch: string,
+  revision = 'a'.repeat(64),
+): GitRepositorySnapshot {
   return {
     workspacePath,
     availability: 'available',
@@ -121,6 +173,6 @@ function snapshot(workspacePath: string, branch: string): GitRepositorySnapshot 
     deletions: 3,
     lineStatsIncomplete: false,
     refreshedAt: '2026-08-17T10:00:00.000Z',
-    revision: 'a'.repeat(64),
+    revision,
   }
 }

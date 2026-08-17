@@ -285,8 +285,13 @@ docs/ops/
   停止提交；不注入备份专用 identity，commit hook 正常执行。
 - Electron smoke 在临时真实仓库中只提交 `tracked.txt`，确认未选择的 untracked 文件仍存在，
   且提交成功后未自动联网。
-- 交互容器仍需从状态浮层内嵌表单迁移到统一 Git 操作窗口；迁移完成前，外部点击导致草稿
-  卸载是已知产品缺口，不能视为最终交互关闭。
+- 状态浮层已经收敛为事实摘要和入口；变更/Diff、提交与 Push 进入同一个顶层操作窗口。
+- 提交信息和文件选择由 Git store 按工作空间保存；背景点击不关闭，脏草稿按 Esc/关闭时先
+  要求“继续编辑 / 放弃并关闭”，写操作进行中禁止关闭。
+- 刷新后 revision 变化会停止写操作，用户必须接受最新状态；切换工作空间会清空旧窗口和
+  草稿，不能把旧项目选择投射到新项目。
+- Electron smoke 已验证误按 Esc 草稿仍存在、单独提交、推送已有提交和“提交并推送”两条
+  写路径，未选择的 untracked 文件始终保留。
 
 ## 10. G4：Fetch、Push 与远程关联
 
@@ -322,7 +327,11 @@ docs/ops/
 - GitHub HTTPS 可在 main 内复用现有 `GIT_ASKPASS` Token，SSH/本地 remote 继续交给用户环境；
   renderer 不读取凭证。
 - Electron smoke 使用本地 bare remote 验证 commit 后 ahead=1、显式 Push 后 ahead=0、远端
-  HEAD 等于确认的本地提交，且未提交文件不妨碍 Push 已有提交。
+  HEAD 等于确认的本地提交，且未提交文件不妨碍 Push 已有提交；同一窗口的“提交并推送”也
+  已执行第二次真实 commit + Push 并完成远端 HEAD 对账。
+- 操作结果持续保留在统一窗口；两阶段实现区分提交失败、Push 失败和全部成功，Push 失败时
+  明确提示本地提交已保留。自动化尚未注入两阶段 Push 失败，仍由单元边界和后续人工失败
+  验收覆盖。
 - 尚未实现显式 Fetch、首次 remote/upstream 关联和 GitHub 名称建仓迁移；真实 HTTPS、SSH、
   认证失败、离线和 non-fast-forward 人工验收也未关闭，因此 G4 仍是部分完成。
 

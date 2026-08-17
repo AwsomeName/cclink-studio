@@ -7,9 +7,10 @@ import {
   resolveRemoteAgentVisualStatus,
   resolveRemoteStopAvailability,
   submitRemoteDraft,
+  toUnifiedRemoteMessage,
   tryAcquireRemoteSubmissionLock,
 } from './remote-agent-controller'
-import { RemoteAgentMessage } from './remote-agent-message'
+import { ConversationMessageRenderer } from '../../components/common/ConversationMessageRenderer'
 
 const workspaceRef: RemoteWorkspaceRef = {
   kind: 'remote',
@@ -116,32 +117,40 @@ describe('RemoteAgentController', () => {
 
   it('uses the same user and assistant message surfaces as local conversations', () => {
     const userHtml = renderToStaticMarkup(
-      <RemoteAgentMessage
-        message={{ type: 'user', id: 'user-1', content: '总结一下项目', timestamp: 1 }}
-        workspaceRef={workspaceRef}
-        sessionId="session-1"
-        reload={async () => undefined}
+      <ConversationMessageRenderer
+        message={toUnifiedRemoteMessage({
+          type: 'user',
+          id: 'user-1',
+          content: '总结一下项目',
+          timestamp: 1,
+        })}
+        conversationId="session-1"
+        workspaceKey="remote"
       />,
     )
     const assistantHtml = renderToStaticMarkup(
-      <RemoteAgentMessage
-        message={{ type: 'agentText', id: 'agent-1', content: '## 结论', timestamp: 2 }}
-        workspaceRef={workspaceRef}
-        sessionId="session-1"
-        reload={async () => undefined}
+      <ConversationMessageRenderer
+        message={toUnifiedRemoteMessage({
+          type: 'agentText',
+          id: 'agent-1',
+          content: '## 结论',
+          timestamp: 2,
+        })}
+        conversationId="session-1"
+        workspaceKey="remote"
       />,
     )
 
-    expect(userHtml).toContain('class="agent-message user"')
-    expect(assistantHtml).toContain('class="agent-message assistant"')
+    expect(userHtml).toContain('class="agent-message user ')
+    expect(assistantHtml).toContain('class="agent-message assistant ')
     expect(assistantHtml).toContain('<h2>结论</h2>')
     expect(`${userHtml}${assistantHtml}`).not.toContain('remote-agent-message')
   })
 
   it('renders remote tool output with the local collapsible tool treatment', () => {
     const html = renderToStaticMarkup(
-      <RemoteAgentMessage
-        message={{
+      <ConversationMessageRenderer
+        message={toUnifiedRemoteMessage({
           type: 'agentTool',
           id: 'tool-message-1',
           timestamp: 3,
@@ -152,15 +161,15 @@ describe('RemoteAgentController', () => {
             input: { command: 'ls' },
             output: 'README.md\nsrc',
           },
-        }}
-        workspaceRef={workspaceRef}
-        sessionId="session-1"
-        reload={async () => undefined}
+        })}
+        conversationId="session-1"
+        workspaceKey="remote"
       />,
     )
 
-    expect(html).toContain('class="content-tool-use"')
-    expect(html).toContain('class="content-tool-result success"')
+    expect(html).toContain('class="content-tool-group"')
+    expect(html).toContain('class="tool-group-row tool-group-row-use ')
+    expect(html).toContain('class="tool-group-row tool-group-row-result success"')
     expect(html).toContain('<details')
     expect(html).not.toContain('Bashcompleted')
   })
@@ -253,5 +262,38 @@ describe('RemoteAgentController', () => {
 
     expect(selectSession).toHaveBeenCalledWith(session.id)
     expect(sendAgentMessage).toHaveBeenCalledWith(workspaceRef, session.id, '只发到远程')
+  })
+
+  it('never falls back to the local Agent when the remote send fails', async () => {
+    const localAgentSendMessage = vi.fn()
+    const remoteSend = vi.fn().mockRejectedValue(new Error('remote offline'))
+    const session = {
+      id: 'remote-session',
+      serverId: workspaceRef.endpointId,
+      workspaceId: workspaceRef.workspaceId,
+      workspacePath: workspaceRef.path,
+      name: '远程会话',
+      status: 'idle' as const,
+      createdAt: 1,
+      updatedAt: 1,
+      messageCount: 0,
+      contextUsage: 0,
+    }
+
+    await expect(
+      submitRemoteDraft({
+        target: { ref: workspaceRef, generation: 1 },
+        workspaceRef,
+        activeSession: session,
+        content: '只允许远程发送',
+        isTargetCurrent: () => true,
+        createSession: vi.fn(),
+        selectSession: vi.fn(),
+        sendAgentMessage: remoteSend,
+      }),
+    ).resolves.toBe('rejected')
+
+    expect(remoteSend).toHaveBeenCalledTimes(1)
+    expect(localAgentSendMessage).toHaveBeenCalledTimes(0)
   })
 })

@@ -6,6 +6,7 @@ describe('StatusBar product boundary', () => {
     const source = readFileSync(new URL('./StatusBar.tsx', import.meta.url), 'utf8')
 
     expect(source).toContain('<GitStatusBarItem')
+    expect(source).toContain('<GitOperationDialog')
     expect(source).not.toContain('AGENT_STATUS_MAP')
     expect(source).not.toContain('TAB_TYPE_LABEL')
     expect(source).not.toContain('Agent 就绪')

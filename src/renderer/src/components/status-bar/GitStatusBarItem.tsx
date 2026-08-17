@@ -70,11 +70,6 @@ export function GitStatusBarItem({
 
   const branchLabel = getGitBranchLabel(snapshot)
   const primaryAction = getPrimaryAction(snapshot, operation)
-  const canPushExisting =
-    Boolean(snapshot.upstream && snapshot.headOid) &&
-    (snapshot.ahead ?? 0) > 0 &&
-    (snapshot.behind ?? 0) === 0 &&
-    !snapshot.detached
 
   const runPrimaryAction = async (): Promise<void> => {
     if (primaryAction.kind === 'none') return
@@ -156,19 +151,6 @@ export function GitStatusBarItem({
           >
             {primaryAction.label}
           </button>
-          {primaryAction.kind === 'commit' && canPushExisting && (
-            <button
-              type="button"
-              className="git-status-secondary-action"
-              disabled={operation !== null}
-              onClick={() => {
-                setOpen(false)
-                openOperationDialog('commit')
-              }}
-            >
-              推送 {snapshot.ahead} 个已有提交
-            </button>
-          )}
         </div>
       )}
     </div>
@@ -193,9 +175,13 @@ function getPrimaryAction(
     return { kind: 'none', label: 'detached HEAD，请使用 Terminal', disabled: true }
   }
   if (snapshot.changeCount > 0) {
+    const canAlsoPush =
+      Boolean(snapshot.upstream && snapshot.headOid) &&
+      (snapshot.ahead ?? 0) > 0 &&
+      (snapshot.behind ?? 0) === 0
     return {
       kind: 'commit',
-      label: '提交…',
+      label: canAlsoPush ? '提交或推送…' : '提交…',
       disabled: false,
     }
   }

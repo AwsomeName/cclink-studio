@@ -43,9 +43,7 @@ export function ProjectStrip(): React.ReactElement {
   const openProjectPaths = useOpenProjectsStore((state) => state.openProjectPaths)
   const reorderProject = useOpenProjectsStore((state) => state.reorderProject)
   const openRemoteWorkspaceRefs = useOpenProjectsStore((state) => state.openRemoteWorkspaceRefs)
-  const recentRemoteWorkspaceRefs = useOpenProjectsStore(
-    (state) => state.recentRemoteWorkspaceRefs,
-  )
+  const recentRemoteWorkspaceRefs = useOpenProjectsStore((state) => state.recentRemoteWorkspaceRefs)
   const removeRemoteProject = useOpenProjectsStore((state) => state.removeRemoteProject)
   const recentWorkspacePaths = useFsStore((state) => state.recentWorkspacePaths)
   const switchingPath = useFsStore((state) => state.switchingPath)
@@ -344,6 +342,7 @@ export function ProjectStrip(): React.ReactElement {
                     className={`project-strip-item ${active ? 'active' : ''}`}
                     title={`${ref.endpointName || 'CCLink'} · ${ref.path}`}
                     aria-current={active ? 'page' : undefined}
+                    disabled={workspaceBusy}
                     onClick={() => void activateRemoteProject(ref)}
                   >
                     <IconCloud size={13} />
@@ -357,6 +356,7 @@ export function ProjectStrip(): React.ReactElement {
                     className="project-strip-remote-close"
                     aria-label={`移除远程项目 ${ref.label || getProjectName(ref.path)}`}
                     title="从项目条移除"
+                    disabled={workspaceBusy}
                     onClick={() => void closeRemoteProject(index)}
                   >
                     ×

@@ -36,7 +36,7 @@ import {
 } from './composer-view-model'
 import { AgentRoleIcon } from '../agent-roles/agent-role-presentation'
 
-interface AgentComposerToolbarProps {
+export interface AgentComposerToolbarProps {
   roleRef?: AgentRoleRef
   roles?: AgentRoleSummary[]
   onRoleChange?: (role: AgentRoleSummary) => void
@@ -163,6 +163,7 @@ export function AgentComposerToolbar({
           />
           <button
             className="agent-composer-icon-btn"
+            data-agent-action="addContext"
             title="添加上下文"
             onClick={() => toggleMenu('add')}
             disabled={loading}
@@ -215,13 +216,18 @@ export function AgentComposerToolbar({
           </FloatingSurface>
         </div>
 
-        {roleRef && onRoleChange && (
+        {onRoleChange && (
           <div className="agent-composer-menu-wrap" ref={roleRefElement}>
             <button
               className="agent-mode-btn agent-profile-btn"
+              data-agent-action="role"
               onClick={() => toggleMenu('role')}
-              title={`当前角色: ${selectedRole?.label ?? roleRef.roleId}`}
-              disabled={loading || roles.length === 0}
+              title={
+                roleRef
+                  ? `当前角色: ${selectedRole?.label ?? roleRef.roleId}`
+                  : '当前角色不可用，请先加载角色列表'
+              }
+              disabled={loading || !roleRef || roles.length === 0}
             >
               {selectedRole ? (
                 <AgentRoleIcon icon={selectedRole.icon} size={14} />
@@ -240,7 +246,8 @@ export function AgentComposerToolbar({
             >
               <div className="agent-composer-menu-title">选择角色</div>
               {roles.map((role) => {
-                const selected = role.roleId === roleRef.roleId && role.version === roleRef.version
+                const selected =
+                  role.roleId === roleRef?.roleId && role.version === roleRef?.version
                 return (
                   <button
                     key={`${role.roleId}@${role.version}`}
@@ -269,6 +276,7 @@ export function AgentComposerToolbar({
         <div className="agent-composer-menu-wrap" ref={permissionRef}>
           <button
             className="agent-mode-btn"
+            data-agent-action="permissionMode"
             onClick={() => toggleMenu('permission')}
             title={`权限模式: ${selectedPermission.label}`}
             disabled={loading}
@@ -311,6 +319,7 @@ export function AgentComposerToolbar({
           <button
             type="button"
             className={`agent-context-usage-btn ${contextTone}`}
+            data-agent-action="contextUsage"
             style={
               {
                 '--agent-context-angle': `${Math.min(100, Math.max(0, contextPercent)) * 3.6}deg`,
@@ -424,6 +433,7 @@ export function AgentComposerToolbar({
         <div className="agent-composer-menu-wrap" ref={runtimeRef}>
           <button
             className="agent-model-btn"
+            data-agent-action="runtime"
             title="运行环境"
             onClick={() => toggleMenu('runtime')}
           >

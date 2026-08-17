@@ -11,17 +11,10 @@ import {
   useWorkspaceStore,
 } from '../../stores'
 import { workspaceRefKey, workspaceRefLabel } from '../../../../shared/workspace-ref'
-import { MountedResourceBar } from '../../features/agent-conversations/mounted-resource-bar'
-import { MountedSkillStrip } from '../../features/agent-conversations/mounted-skill-strip'
-import { ImageAttachmentStrip } from '../../features/agent-conversations/image-attachment-strip'
 import {
   importAgentImageFiles,
   MAX_AGENT_IMAGES,
 } from '../../features/agent-conversations/image-attachments'
-import {
-  ResourceCandidateMenu,
-  SkillCandidateMenu,
-} from '../../features/agent-conversations/context-candidate-menu'
 import {
   stripTrailingMentionToken,
   toMountedResource,
@@ -32,18 +25,17 @@ import {
   buildResourceCandidates,
   buildSkillCandidates,
   buildQuickThreadList,
+  buildActiveContextChips,
   createConversationRuntimeForWorkspace,
   type AgentResourceCandidate,
   type AgentSkillCandidate,
 } from '../../features/agent-conversations/view-model'
 import type { PermissionMode } from '../../types'
-import type { BrowserActionLog, BrowserDownloadRecord, BrowserTaskRun } from '@shared/ipc/browser'
+import type { BrowserTaskRun } from '@shared/ipc/browser'
 import type { AgentCapabilityStatus } from '@shared/agent-protocol'
 import type { AgentRoleSummary, AgentSkillRef } from '@shared/agent-role'
-import { AgentComposerToolbar } from '../../features/agent-composer/AgentComposerToolbar'
 import { DEFAULT_AGENT_RUNTIME_BINDING } from '@shared/agent-runtime'
 import { useComposerHistory } from '../../features/agent-composer/use-composer-history'
-import { TerminalConfirmationCards } from './TerminalConfirmationCards'
 import { isAgentConfirmationVisible } from '../../utils/workspace-resource-visibility'
 import {
   buildAgentDiagnosticMarkdown,
@@ -52,58 +44,27 @@ import {
 import { APP_VERSION } from '../../app-metadata'
 import { useToastStore } from '../common/Toast'
 import {
-  IconSparkle,
-  IconCircle,
-  IconSend,
-  IconStop,
-  IconDollar,
-  IconTool,
-  IconCheck,
-  IconError,
-  IconGlobe,
-  IconFile,
-  IconClipboard,
-} from '../common/Icons'
-import {
   AGENT_FOCUS_COMPOSER_EVENT,
   openFileRangeResource,
 } from '../../features/markdown/markdown-navigation'
-import { useConversationScroll } from '../../features/agent-conversations/use-conversation-scroll'
 import { useAgentRoles } from '../../features/agent-profiles/use-agent-profiles'
 import { useAgentSkills } from '../../features/agent-skills/use-agent-skills'
 import {
   applyAgentRoleToConversation,
   getApplyAgentRoleError,
 } from '../../features/agent-roles/agent-role-actions'
-import { AgentConversationTimeline } from '../../features/agent-roles/AgentConversationTimeline'
+import { buildAgentConversationTimeline } from '../../features/agent-roles/AgentConversationTimeline'
 import {
-  AgentComposer,
-  AgentMessageList,
-  AgentPanelSurface,
+  AgentPanelView,
   isAgentComposerCandidateSelectionKey,
-} from './agent-panel-surface'
+  type AgentPanelPermissionModel,
+  type AgentPanelTimelineItem,
+} from './agent-panel-view'
 import { RemoteAgentController } from '../../features/cclink-remote/remote-agent-controller'
+import { useTerminalConfirmationViewModels } from './terminal-confirmation-view-model'
 
 interface AgentPanelProps {
   variant?: 'center' | 'side'
-}
-
-const MIN_COMPOSER_HEIGHT = 118
-const MAX_COMPOSER_HEIGHT = 520
-const MIN_MESSAGES_HEIGHT = 180
-
-function composerHeightStorageKey(variant: NonNullable<AgentPanelProps['variant']>): string {
-  return `cclink-studio-agent-composer-height-${variant}`
-}
-
-function loadComposerHeight(variant: NonNullable<AgentPanelProps['variant']>): number | null {
-  try {
-    const value = Number(localStorage.getItem(composerHeightStorageKey(variant)))
-    if (!Number.isFinite(value) || value < MIN_COMPOSER_HEIGHT) return null
-    return Math.min(value, MAX_COMPOSER_HEIGHT)
-  } catch {
-    return null
-  }
 }
 
 export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactElement {
@@ -176,15 +137,9 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   const { roles, error: rolesError } = useAgentRoles()
   const { skills: availableSkills, error: skillsError } = useAgentSkills()
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
-  const conversationMainRef = useRef<HTMLDivElement>(null)
-  const composerRef = useRef<HTMLDivElement>(null)
-  const startComposerRef = useRef<HTMLDivElement>(null)
   const [resourceQuery, setResourceQuery] = useState<string | null>(null)
   const [skillQuery, setSkillQuery] = useState<string | null>(null)
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
-  const [composerHeight, setComposerHeight] = useState<number | null>(() =>
-    loadComposerHeight(variant),
-  )
   const pendingConfirmations = useMemo(
     () =>
       allPendingConfirmations.filter((confirmation) =>
@@ -192,14 +147,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
       ),
     [activeConversationId, allPendingConfirmations],
   )
-  const scrollRevision = useMemo(
-    () => ({ messages, pendingConfirmationCount: pendingConfirmations.length }),
-    [messages, pendingConfirmations.length],
-  )
-  const conversationScroll = useConversationScroll(
-    `${workspaceRefKey(activeWorkspaceRef) ?? '__global__'}::${activeConversationId}`,
-    scrollRevision,
-  )
+  const terminalConfirmationModels = useTerminalConfirmationViewModels()
   const runController = useMemo(
     () => createConversationRunController({ conversationId: activeConversationId }),
     [activeConversationId],
@@ -215,79 +163,6 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
       cancelled = true
     }
   }, [activeConversationId, setContextUsage])
-
-  const clampComposerHeight = useCallback((height: number): number => {
-    const mainHeight = conversationMainRef.current?.getBoundingClientRect().height ?? 0
-    const availableHeight =
-      mainHeight > 0 ? Math.max(MIN_COMPOSER_HEIGHT, mainHeight - MIN_MESSAGES_HEIGHT) : height
-    return Math.min(Math.max(height, MIN_COMPOSER_HEIGHT), MAX_COMPOSER_HEIGHT, availableHeight)
-  }, [])
-
-  const handleComposerResizeStart = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.button !== 0) return
-      event.preventDefault()
-      event.stopPropagation()
-
-      const startY = event.clientY
-      const startHeight = composerRef.current?.getBoundingClientRect().height ?? MIN_COMPOSER_HEIGHT
-      const previousCursor = document.body.style.cursor
-      const previousUserSelect = document.body.style.userSelect
-
-      document.body.classList.add('is-resizing-composer')
-      document.body.style.cursor = 'row-resize'
-      document.body.style.userSelect = 'none'
-
-      const handlePointerMove = (moveEvent: PointerEvent): void => {
-        setComposerHeight(clampComposerHeight(startHeight + startY - moveEvent.clientY))
-      }
-      const finishResize = (): void => {
-        document.body.classList.remove('is-resizing-composer')
-        document.body.style.cursor = previousCursor
-        document.body.style.userSelect = previousUserSelect
-        window.removeEventListener('pointermove', handlePointerMove)
-        window.removeEventListener('pointerup', finishResize)
-        window.removeEventListener('pointercancel', finishResize)
-      }
-
-      window.addEventListener('pointermove', handlePointerMove)
-      window.addEventListener('pointerup', finishResize)
-      window.addEventListener('pointercancel', finishResize)
-    },
-    [clampComposerHeight],
-  )
-
-  const handleComposerResizeKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
-      event.preventDefault()
-      const currentHeight =
-        composerHeight ?? composerRef.current?.getBoundingClientRect().height ?? MIN_COMPOSER_HEIGHT
-      const delta = event.key === 'ArrowUp' ? 12 : -12
-      setComposerHeight(clampComposerHeight(currentHeight + delta))
-    },
-    [clampComposerHeight, composerHeight],
-  )
-
-  useEffect(() => {
-    try {
-      const key = composerHeightStorageKey(variant)
-      if (composerHeight === null) localStorage.removeItem(key)
-      else localStorage.setItem(key, String(composerHeight))
-    } catch {
-      // localStorage 不可用时仍保留当前运行期的拖拽结果。
-    }
-  }, [composerHeight, variant])
-
-  useEffect(() => {
-    const main = conversationMainRef.current
-    if (!main || composerHeight === null) return
-    const observer = new ResizeObserver(() => {
-      setComposerHeight((height) => (height === null ? null : clampComposerHeight(height)))
-    })
-    observer.observe(main)
-    return () => observer.disconnect()
-  }, [clampComposerHeight, composerHeight])
 
   useEffect(() => {
     void refreshBrowserTasks()
@@ -327,11 +202,10 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   }, [])
 
   const handleSend = useCallback(async () => {
-    conversationScroll.followLatest()
     setResourceQuery(null)
     setSkillQuery(null)
     await runController.send(input)
-  }, [conversationScroll, input, runController])
+  }, [input, runController])
 
   const handleCompactContext = useCallback(
     async (instructions: string) => {
@@ -619,14 +493,6 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   ])
 
   // 连接状态颜色
-  const statusColor: Record<string, string> = {
-    disconnected: '#666666',
-    connecting: '#eab308',
-    connected: '#22c55e',
-    streaming: '#3b82f6',
-    error: '#ef4444',
-  }
-
   const statusText: Record<string, string> = {
     disconnected: '未连接',
     connecting: '连接中...',
@@ -641,13 +507,6 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     destructive: '破坏性',
   }
 
-  const riskColor: Record<string, string> = {
-    read: '#22c55e',
-    write: '#eab308',
-    destructive: '#ef4444',
-  }
-
-  const isStreaming = backendState === 'streaming'
   const activeBrowserTask = useMemo(() => {
     if (scope.kind !== 'browser') return null
     const tasks = Object.values(browserTasks)
@@ -655,15 +514,6 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
       .sort((a, b) => b.startedAt - a.startedAt)
     return tasks.find((task) => !isFinalBrowserTaskStatus(task.status)) ?? tasks[0] ?? null
   }, [browserTasks, scope])
-  const activeBrowserTaskLogs = activeBrowserTask
-    ? (browserActionLogs[activeBrowserTask.id] ?? []).slice(-5)
-    : []
-  const activeBrowserTaskDownloads = activeBrowserTask
-    ? activeBrowserTask.downloadIds
-        .map((downloadId) => browserDownloads[downloadId])
-        .filter(Boolean)
-        .slice(-3)
-    : []
   const workspaceName = useMemo(() => workspaceRefLabel(activeWorkspaceRef), [activeWorkspaceRef])
   const activeConversation = conversations[activeConversationId]
   const canChangeRuntime = Boolean(
@@ -806,561 +656,256 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     if (skillsError) showToast(`Skill 列表加载失败: ${skillsError}`, 'error')
   }, [showToast, skillsError])
 
-  if (variant === 'center' && isStartConversation) {
-    return (
-      <AgentPanelSurface variant="center" runtime="local">
-        <div className="agent-start-page">
-          <div className="agent-start-content">
-            <div className="agent-start-status">
-              <IconSparkle size={14} />
-              <span>Agent · {activeRole?.label ?? activeRoleRef?.roleId ?? '角色加载中'}</span>
-              <IconCircle
-                size={8}
-                filled
-                color={statusColor[backendState]}
-                className={isStreaming ? 'animate-pulse' : ''}
-              />
-              <span>{statusText[backendState]}</span>
-            </div>
-
-            <h1 className="agent-start-title">我们应该在 {workspaceName} 中构建什么？</h1>
-
-            <AgentComposer
-              containerRef={startComposerRef}
-              containerClassName="agent-start-composer"
-              textareaRef={inputRef}
-              textareaClassName="agent-start-input"
-              value={input}
-              onChange={handleInputChange}
-              onSubmit={handleSend}
-              canSubmit={
-                !loading &&
-                (Boolean(input.trim()) || pendingImages.length > 0) &&
-                !contextCompacting &&
-                Boolean(activeRole)
+  const labelRole = (roleId: string, version: number): string =>
+    roles.find((role) => role.roleId === roleId && role.version === version)?.label ??
+    `${roleId}@${version}`
+  const timeline: AgentPanelTimelineItem[] = isStartConversation
+    ? []
+    : buildAgentConversationTimeline(messages, activeConversation?.configurationEvents ?? []).map(
+        (item) =>
+          item.kind === 'message'
+            ? {
+                kind: 'message' as const,
+                id: item.value.id,
+                message: item.value,
+                conversationId: activeConversationId,
+                workspaceKey: activeConversation?.runtime.workspaceRef
+                  ? workspaceRefKey(activeConversation.runtime.workspaceRef)
+                  : null,
               }
-              submitting={loading || contextCompacting}
-              onKeyDownBeforeSubmit={handleKeyDownBeforeSubmit}
-              onPaste={(event) => {
-                const files = Array.from(event.clipboardData.files).filter((file) =>
-                  file.type.startsWith('image/'),
-                )
-                if (files.length === 0) return
-                event.preventDefault()
-                void handleAddImages(files)
-              }}
-              onDragOver={(event) => {
-                if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
-                  event.preventDefault()
-                }
-              }}
-              onDrop={(event) => {
-                const files = Array.from(event.dataTransfer.files).filter((file) =>
-                  file.type.startsWith('image/'),
-                )
-                if (files.length === 0) return
-                event.preventDefault()
-                void handleAddImages(files)
-              }}
-              placeholder="随心输入"
-              rows={3}
-              leading={
-                <>
-                  {resourceQuery !== null && (
-                    <ResourceCandidateMenu
-                      candidates={resourceCandidates}
-                      selectedIndex={mentionSelectedIndex}
-                      onActiveIndexChange={setMentionSelectedIndex}
-                      onPick={handleMountResource}
-                      anchorRef={startComposerRef}
-                      onRequestClose={() => setResourceQuery(null)}
-                    />
-                  )}
-                  {skillQuery !== null && (
-                    <SkillCandidateMenu
-                      candidates={skillCandidates}
-                      selectedIndex={mentionSelectedIndex}
-                      onActiveIndexChange={setMentionSelectedIndex}
-                      onPick={handleMountSkill}
-                      anchorRef={startComposerRef}
-                      onRequestClose={() => setSkillQuery(null)}
-                    />
-                  )}
-                  <MountedSkillStrip
-                    skills={mountedSkills}
-                    availableSkills={availableSkills}
-                    onRemove={handleRemoveMountedSkill}
-                  />
-                  <ImageAttachmentStrip
-                    images={pendingImages}
-                    onRemove={handleRemovePendingImage}
-                  />
-                </>
-              }
-              renderTrailing={({ submit, canSubmit }) => (
-                <AgentComposerToolbar
-                  roleRef={activeRoleRef}
-                  roles={roles}
-                  onRoleChange={(role) => void handleRoleChange(role)}
-                  permissionMode={permissionMode}
-                  settings={settings}
-                  runtimeBinding={
-                    activeConversation.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING
-                  }
-                  canChangeRuntime={canChangeRuntime}
-                  onRuntimeChange={(binding) => setRuntimeBinding(binding, activeConversationId)}
-                  loading={loading || contextCompacting}
-                  canSend={canSubmit}
-                  contextUsage={contextUsage}
-                  contextCompaction={contextCompaction}
-                  canCompact={Boolean(sessionId) && !loading}
-                  onCompactContext={handleCompactContext}
-                  onPermissionModeChange={handlePermissionModeChange}
-                  onOpenResourceMenu={() => setResourceQuery('')}
-                  onOpenSkillMenu={() => setSkillQuery('')}
-                  onAddImages={(files) => void handleAddImages(files)}
-                  onOpenSettings={handleOpenAgentSettings}
-                  sendButton={
-                    <button
-                      className="agent-start-send"
-                      onClick={submit}
-                      disabled={!canSubmit}
-                      title="发送"
-                    >
-                      <IconSend size={16} />
-                    </button>
-                  }
-                />
-              )}
-            />
+            : {
+                kind: 'status' as const,
+                id: item.value.id,
+                label: `角色已从「${labelRole(
+                  item.value.fromRoleRef.roleId,
+                  item.value.fromRoleRef.version,
+                )}」切换为「${labelRole(
+                  item.value.toRoleRef.roleId,
+                  item.value.toRoleRef.version,
+                )}」`,
+                detail: `配置 #${item.value.configurationRevision}`,
+              },
+      )
 
-            <div className="agent-start-hints">
-              <span>打开网页并整理资料</span>
-              <span>新建 Markdown 草稿</span>
-              <span>继续当前工作空间任务</span>
-            </div>
-          </div>
-        </div>
-      </AgentPanelSurface>
-    )
-  }
+  const permissionModels: AgentPanelPermissionModel[] = pendingConfirmations.map((request) => ({
+    id: request.id,
+    title: 'Agent 请求执行操作',
+    rows: [
+      { label: '操作', value: request.toolName },
+      {
+        label: '参数',
+        value: Object.entries(request.params)
+          .map(([key, value]) => `${key}="${String(value)}"`)
+          .join(', '),
+        monospace: true,
+      },
+      { label: '风险', value: riskLabel[request.riskLevel] },
+      ...(request.reason ? [{ label: '原因', value: request.reason }] : []),
+    ],
+    actions: [
+      {
+        id: 'approve',
+        label: '允许',
+        tone: 'approve' as const,
+        onInvoke: () => void handleConfirmApprove(request.id, false),
+      },
+      ...(request.allowAlways !== false
+        ? [
+            {
+              id: 'always',
+              label: '始终允许',
+              tone: 'always' as const,
+              onInvoke: () => void handleConfirmApprove(request.id, true),
+            },
+          ]
+        : []),
+      {
+        id: 'reject',
+        label: '拒绝',
+        tone: 'reject' as const,
+        onInvoke: () => void handleConfirmReject(request.id),
+      },
+    ],
+  }))
+
+  const activeTab = tabs.find((tab) => tab.id === activeTabId)
+  const contextChips = buildActiveContextChips({
+    activeWorkspaceRef,
+    scope,
+    activeTab,
+    tabs,
+    editorFiles,
+  })
+  const canSubmit =
+    !loading &&
+    (Boolean(input.trim()) || pendingImages.length > 0) &&
+    !contextCompacting &&
+    Boolean(activeRole)
 
   return (
-    <AgentPanelSurface variant={variant} runtime="local" mainRef={conversationMainRef}>
-      {activeBrowserTask && (
-        <BrowserTaskCard
-          task={activeBrowserTask}
-          logs={activeBrowserTaskLogs}
-          downloads={activeBrowserTaskDownloads}
-          onPause={() => {
-            void window.cclinkStudio.browser.pauseTask(activeBrowserTask.id)
-          }}
-          onResume={() => {
-            void window.cclinkStudio.browser.resumeTask(activeBrowserTask.id)
-          }}
-          onCancel={() => {
-            void window.cclinkStudio.browser.cancelTask(activeBrowserTask.id)
-          }}
-        />
-      )}
-
-      {/* 消息列表 */}
-      <AgentMessageList
-        listRef={conversationScroll.listRef}
-        onScroll={conversationScroll.onScroll}
-        onWheel={conversationScroll.onWheel}
-        onPointerDown={conversationScroll.onPointerDown}
-        onTouchStart={conversationScroll.onTouchStart}
-      >
-        <AgentConversationTimeline
-          messages={messages}
-          configurationEvents={activeConversation?.configurationEvents ?? []}
-          roles={roles}
-          conversationId={activeConversationId}
-          workspaceKey={
-            activeConversation?.runtime.workspaceRef
-              ? workspaceRefKey(activeConversation.runtime.workspaceRef)
-              : null
-          }
-        />
-
-        {/* 工具确认卡片（支持并发多个） */}
-        {pendingConfirmations.map((req) => (
-          <div key={req.id} className="tool-confirmation-card">
-            <div className="confirmation-header">
-              <IconTool size={14} />
-              请求执行操作
-            </div>
-            <div className="confirmation-body">
-              <div className="confirmation-row">
-                <span className="confirmation-label">操作:</span>
-                <span className="confirmation-value">{req.toolName}</span>
-              </div>
-              <div className="confirmation-row">
-                <span className="confirmation-label">参数:</span>
-                <span className="confirmation-value confirmation-params">
-                  {Object.entries(req.params)
-                    .map(([k, v]) => `${k}="${String(v)}"`)
-                    .join(', ')}
-                </span>
-              </div>
-              <div className="confirmation-row">
-                <span className="confirmation-label">风险:</span>
-                <span className="confirmation-value" style={{ color: riskColor[req.riskLevel] }}>
-                  {riskLabel[req.riskLevel]}
-                </span>
-              </div>
-              {req.reason ? (
-                <div className="confirmation-row">
-                  <span className="confirmation-label">原因:</span>
-                  <span className="confirmation-value">{req.reason}</span>
-                </div>
-              ) : null}
-            </div>
-            <div className="confirmation-actions">
-              <button
-                className="confirm-approve-btn"
-                onClick={() => handleConfirmApprove(req.id, false)}
-              >
-                <IconCheck size={12} />
-                允许
-              </button>
-              {req.allowAlways !== false ? (
-                <button
-                  className="confirm-always-btn"
-                  onClick={() => handleConfirmApprove(req.id, true)}
-                >
-                  始终允许
-                </button>
-              ) : null}
-              <button className="confirm-reject-btn" onClick={() => handleConfirmReject(req.id)}>
-                <IconError size={12} />
-                拒绝
-              </button>
-            </div>
-          </div>
-        ))}
-
-        <TerminalConfirmationCards />
-      </AgentMessageList>
-
-      {/* 费用显示 */}
-      {lastCost !== null && (
-        <div className="agent-cost">
-          <IconDollar size={10} />${lastCost.toFixed(4)}
-        </div>
-      )}
-
-      <div
-        className="agent-composer-resize-handle"
-        role="separator"
-        aria-label="调整消息区和输入区高度"
-        aria-orientation="horizontal"
-        aria-valuemin={MIN_COMPOSER_HEIGHT}
-        aria-valuemax={MAX_COMPOSER_HEIGHT}
-        aria-valuenow={composerHeight ?? undefined}
-        tabIndex={0}
-        title="上下拖动调整输入区高度，双击恢复默认"
-        onPointerDown={handleComposerResizeStart}
-        onKeyDown={handleComposerResizeKeyDown}
-        onDoubleClick={() => setComposerHeight(null)}
-      />
-
-      {/* 输入区域 */}
-      <AgentComposer
-        containerRef={composerRef}
-        containerClassName={`agent-composer-wrap ${composerHeight === null ? '' : 'resized'}`}
-        inputContainerClassName="agent-input-card"
-        style={composerHeight === null ? undefined : { height: composerHeight }}
-        textareaRef={inputRef}
-        textareaClassName="agent-input"
-        value={input}
-        onChange={handleInputChange}
-        onSubmit={handleSend}
-        canSubmit={
-          !loading &&
-          (Boolean(input.trim()) || pendingImages.length > 0) &&
-          !contextCompacting &&
-          Boolean(activeRole)
-        }
-        submitting={loading || contextCompacting}
-        onKeyDownBeforeSubmit={handleKeyDownBeforeSubmit}
-        onPaste={(event) => {
-          const files = Array.from(event.clipboardData.files).filter((file) =>
-            file.type.startsWith('image/'),
-          )
-          if (files.length === 0) return
-          event.preventDefault()
-          void handleAddImages(files)
-        }}
-        onDragOver={(event) => {
-          if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
-            event.preventDefault()
-          }
-        }}
-        onDrop={(event) => {
-          const files = Array.from(event.dataTransfer.files).filter((file) =>
-            file.type.startsWith('image/'),
-          )
-          if (files.length === 0) return
-          event.preventDefault()
-          void handleAddImages(files)
-        }}
-        placeholder="输入消息，@ 挂资源，/ 挂技能..."
-        rows={2}
-        leading={
-          <>
-            {resourceQuery !== null && (
-              <ResourceCandidateMenu
-                candidates={resourceCandidates}
-                selectedIndex={mentionSelectedIndex}
-                onActiveIndexChange={setMentionSelectedIndex}
-                onPick={handleMountResource}
-                anchorRef={composerRef}
-                onRequestClose={() => setResourceQuery(null)}
-              />
-            )}
-            {skillQuery !== null && (
-              <SkillCandidateMenu
-                candidates={skillCandidates}
-                selectedIndex={mentionSelectedIndex}
-                onActiveIndexChange={setMentionSelectedIndex}
-                onPick={handleMountSkill}
-                anchorRef={composerRef}
-                onRequestClose={() => setSkillQuery(null)}
-              />
-            )}
-            <MountedResourceBar
-              resources={mountedResources}
-              onRemove={handleRemoveMountedResource}
-              onOpen={openFileRangeResource}
-            />
-            <MountedSkillStrip
-              skills={mountedSkills}
-              availableSkills={availableSkills}
-              onRemove={handleRemoveMountedSkill}
-            />
-          </>
-        }
-        inputLeading={
-          <>
-            <ImageAttachmentStrip images={pendingImages} onRemove={handleRemovePendingImage} />
-            <button
-              type="button"
-              className="agent-copy-diagnostics-btn"
-              onClick={() => void handleCopyDiagnostics()}
-              title="复制 Agent 诊断日志"
-            >
-              <IconClipboard size={13} />
-            </button>
-          </>
-        }
-        renderTrailing={({ submit, canSubmit }) => (
-          <AgentComposerToolbar
-            roleRef={activeRoleRef}
-            roles={roles}
-            onRoleChange={(role) => void handleRoleChange(role)}
-            permissionMode={permissionMode}
-            settings={settings}
-            runtimeBinding={activeConversation.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING}
-            canChangeRuntime={canChangeRuntime}
-            onRuntimeChange={(binding) => setRuntimeBinding(binding, activeConversationId)}
-            loading={loading || contextCompacting}
-            canSend={canSubmit}
-            contextUsage={contextUsage}
-            contextCompaction={contextCompaction}
-            canCompact={Boolean(sessionId) && !loading}
-            onCompactContext={handleCompactContext}
-            onPermissionModeChange={handlePermissionModeChange}
-            onOpenResourceMenu={() => setResourceQuery('')}
-            onOpenSkillMenu={() => setSkillQuery('')}
-            onAddImages={(files) => void handleAddImages(files)}
-            onOpenSettings={handleOpenAgentSettings}
-            sendButton={
-              loading ? (
-                <button className="agent-abort-btn" onClick={handleAbort} title="中止">
-                  <IconStop size={15} />
-                </button>
-              ) : (
-                <button
-                  className="agent-send-btn"
-                  onClick={submit}
-                  disabled={!canSubmit}
-                  title="发送"
-                >
-                  <IconSend size={17} />
-                </button>
-              )
-            }
-          />
-        )}
-      />
-    </AgentPanelSurface>
-  )
-}
-
-function BrowserTaskCard({
-  task,
-  logs,
-  downloads,
-  onPause,
-  onResume,
-  onCancel,
-}: {
-  task: BrowserTaskRun
-  logs: BrowserActionLog[]
-  downloads: BrowserDownloadRecord[]
-  onPause: () => void
-  onResume: () => void
-  onCancel: () => void
-}): React.ReactElement {
-  const status = browserTaskStatusMeta(task.status)
-  const canPause = task.status === 'running'
-  const canResume = task.status === 'paused'
-  const canCancel = task.status === 'running' || task.status === 'paused'
-
-  return (
-    <div className={`browser-task-card browser-task-card-${task.status}`}>
-      <div className="browser-task-head">
-        <div className="browser-task-title">
-          <IconGlobe size={13} />
-          <span title={task.goal}>{task.goal}</span>
-        </div>
-        <span className="browser-task-status" style={{ color: status.color }}>
-          <IconCircle size={7} filled color={status.color} />
-          {status.label}
-        </span>
-      </div>
-
-      {logs.length > 0 && (
-        <div className="browser-task-log-list">
-          {logs.map((log) => {
-            const logMeta = browserActionStatusMeta(log.status)
-            return (
-              <div key={log.id} className="browser-task-log-row">
-                <span className="browser-task-log-status" style={{ color: logMeta.color }}>
-                  {logMeta.label}
-                </span>
-                <span className="browser-task-log-action">{log.action}</span>
-                <span className="browser-task-log-time">
-                  {formatBrowserTaskDuration(log.startedAt, log.endedAt)}
-                </span>
-              </div>
+    <AgentPanelView
+      model={{
+        runtime: 'local',
+        variant,
+        header: {
+          title: 'Agent',
+          runtimeLabel: `本地 · ${activeRole?.label ?? activeRoleRef?.roleId ?? '角色加载中'}`,
+          status: {
+            tone:
+              backendState === 'streaming'
+                ? 'working'
+                : backendState === 'connected'
+                  ? 'ready'
+                  : backendState === 'connecting'
+                    ? 'connecting'
+                    : 'unavailable',
+            label: statusText[backendState],
+            detail: `本地 Agent ${statusText[backendState]}`,
+          },
+          diagnostics: {
+            state: 'enabled',
+            label: '复制 Agent 诊断日志',
+            onInvoke: () => void handleCopyDiagnostics(),
+          },
+        },
+        contextChips,
+        notices: [
+          ...(!activeRole
+            ? [
+                {
+                  id: 'role-unavailable',
+                  tone: 'error' as const,
+                  title: '当前角色不可用',
+                  detail: '请选择可用角色后再发送消息。',
+                },
+              ]
+            : []),
+          ...(backendState === 'error'
+            ? [
+                {
+                  id: 'backend-error',
+                  tone: 'error' as const,
+                  title: '本地 Agent 连接错误',
+                  detail: '可复制诊断日志检查本地 Runtime。',
+                },
+              ]
+            : []),
+          ...(activeBrowserTask
+            ? [
+                {
+                  id: `browser-task:${activeBrowserTask.id}`,
+                  tone:
+                    activeBrowserTask.status === 'failed' ? ('error' as const) : ('info' as const),
+                  title: activeBrowserTask.goal,
+                  detail: browserTaskStatusMeta(activeBrowserTask.status).label,
+                },
+              ]
+            : []),
+        ],
+        permissions: [...permissionModels, ...terminalConfirmationModels],
+        timeline,
+        empty: {
+          title: isStartConversation ? `我们应该在 ${workspaceName} 中构建什么？` : '开始工作',
+          description: 'Agent 会以当前工作空间和上下文栏中的目标作为操作边界。',
+          suggestions: ['打开网页并整理资料', '新建 Markdown 草稿', '继续当前工作空间任务'],
+        },
+        costLabel: lastCost === null ? null : `费用 $${lastCost.toFixed(4)}`,
+        composer: {
+          textareaRef: inputRef,
+          value: input,
+          onChange: handleInputChange,
+          onSubmit: handleSend,
+          onStop: handleAbort,
+          canSubmit,
+          submitting: loading || contextCompacting,
+          stopCapability: loading
+            ? { state: 'enabled' }
+            : contextCompacting
+              ? { state: 'hidden', reason: '上下文压缩期间不能停止 Agent' }
+              : { state: 'hidden' },
+          placeholder: '输入消息，@ 挂资源，/ 挂技能；Shift+Enter 换行',
+          onKeyDownBeforeSubmit: handleKeyDownBeforeSubmit,
+          onPaste: (event) => {
+            const files = Array.from(event.clipboardData.files).filter((file) =>
+              file.type.startsWith('image/'),
             )
-          })}
-        </div>
-      )}
-
-      {task.errorMessage && (
-        <div className="browser-task-error" title={task.errorMessage}>
-          {task.failureReason ?? 'unknown'} · {task.errorMessage}
-        </div>
-      )}
-
-      {downloads.length > 0 && (
-        <div className="browser-task-downloads">
-          {downloads.map((download) => (
-            <div key={download.id} className="browser-task-download-row">
-              <div className="browser-task-download-main">
-                <IconFile size={12} />
-                <span title={download.savedPath ?? download.tempPath ?? download.suggestedFilename}>
-                  {download.suggestedFilename}
-                </span>
-                <em>{downloadStatusLabel(download)}</em>
-              </div>
-              {download.retention !== 'discarded' && (
-                <div className="browser-task-download-actions">
-                  <button
-                    disabled={download.fileMissing}
-                    onClick={() => {
-                      void window.cclinkStudio.browser.openDownload(download.id)
-                    }}
-                  >
-                    打开
-                  </button>
-                  <button
-                    disabled={download.fileMissing}
-                    onClick={() => {
-                      void window.cclinkStudio.browser.revealDownload(download.id)
-                    }}
-                  >
-                    定位
-                  </button>
-                  {download.retention === 'temporary' && (
-                    <button
-                      disabled={download.fileMissing}
-                      onClick={() => {
-                        void window.cclinkStudio.browser.keepDownloadToWorkspace(download.id)
-                      }}
-                    >
-                      保留
-                    </button>
-                  )}
-                  <button
-                    disabled={download.fileMissing}
-                    onClick={() => {
-                      void window.cclinkStudio.browser.saveDownloadAs(download.id)
-                    }}
-                  >
-                    另存为
-                  </button>
-                  {download.retention === 'temporary' && (
-                    <button
-                      className="danger"
-                      onClick={() => {
-                        void window.cclinkStudio.browser.discardDownload(download.id)
-                      }}
-                    >
-                      丢弃
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {canCancel && (
-        <div className="browser-task-actions">
-          {canPause && (
-            <button className="browser-task-btn" onClick={onPause}>
-              暂停
-            </button>
-          )}
-          {canResume && (
-            <button className="browser-task-btn" onClick={onResume}>
-              继续
-            </button>
-          )}
-          <button className="browser-task-btn danger" onClick={onCancel}>
-            <IconStop size={11} />
-            终止
-          </button>
-        </div>
-      )}
-    </div>
+            if (files.length === 0) return
+            event.preventDefault()
+            void handleAddImages(files)
+          },
+          onDragOver: (event) => {
+            if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
+              event.preventDefault()
+            }
+          },
+          onDrop: (event) => {
+            const files = Array.from(event.dataTransfer.files).filter((file) =>
+              file.type.startsWith('image/'),
+            )
+            if (files.length === 0) return
+            event.preventDefault()
+            void handleAddImages(files)
+          },
+          enhancements: {
+            resourceCandidates: {
+              open: resourceQuery !== null,
+              items: resourceCandidates,
+              selectedIndex: mentionSelectedIndex,
+              onActiveIndexChange: setMentionSelectedIndex,
+              onPick: handleMountResource,
+              onRequestClose: () => setResourceQuery(null),
+            },
+            skillCandidates: {
+              open: skillQuery !== null,
+              items: skillCandidates,
+              selectedIndex: mentionSelectedIndex,
+              onActiveIndexChange: setMentionSelectedIndex,
+              onPick: handleMountSkill,
+              onRequestClose: () => setSkillQuery(null),
+            },
+            mountedResources: {
+              items: mountedResources,
+              onRemove: handleRemoveMountedResource,
+              onOpen: openFileRangeResource,
+            },
+            mountedSkills: {
+              items: mountedSkills,
+              availableSkills,
+              onRemove: handleRemoveMountedSkill,
+            },
+            images: {
+              items: pendingImages,
+              onRemove: handleRemovePendingImage,
+            },
+          },
+          actionBar: {
+            kind: 'local',
+            toolbar: {
+              roleRef: activeRoleRef,
+              roles,
+              onRoleChange: (role) => void handleRoleChange(role),
+              permissionMode,
+              settings,
+              runtimeBinding: activeConversation.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING,
+              canChangeRuntime,
+              onRuntimeChange: (binding) => setRuntimeBinding(binding, activeConversationId),
+              loading: loading || contextCompacting,
+              contextUsage,
+              contextCompaction,
+              canCompact: Boolean(sessionId) && !loading,
+              onCompactContext: handleCompactContext,
+              onPermissionModeChange: handlePermissionModeChange,
+              onOpenResourceMenu: () => setResourceQuery(''),
+              onOpenSkillMenu: () => setSkillQuery(''),
+              onAddImages: (files) => void handleAddImages(files),
+              onOpenSettings: handleOpenAgentSettings,
+            },
+          },
+        },
+      }}
+    />
   )
 }
-
-function downloadStatusLabel(download: BrowserDownloadRecord): string {
-  if (download.fileMissing) return '已丢失'
-  if (download.retention === 'discarded') return '已丢弃'
-  if (download.retention === 'kept') return '已保留'
-  switch (download.status) {
-    case 'pending':
-      return '等待中'
-    case 'downloading':
-      return '下载中'
-    case 'completed':
-      return '临时'
-    case 'failed':
-      return '失败'
-    case 'cancelled':
-      return '已取消'
-  }
-}
-
 async function copyTextToClipboard(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text)
@@ -1395,26 +940,4 @@ function browserTaskStatusMeta(status: BrowserTaskRun['status']): { label: strin
     case 'cancelled':
       return { label: '已终止', color: '#9ca3af' }
   }
-}
-
-function browserActionStatusMeta(status: BrowserActionLog['status']): {
-  label: string
-  color: string
-} {
-  switch (status) {
-    case 'started':
-      return { label: '执行中', color: '#3b82f6' }
-    case 'succeeded':
-      return { label: '成功', color: '#22c55e' }
-    case 'failed':
-      return { label: '失败', color: '#ef4444' }
-    case 'skipped':
-      return { label: '跳过', color: '#9ca3af' }
-  }
-}
-
-function formatBrowserTaskDuration(startedAt: number, endedAt?: number): string {
-  const durationMs = Math.max(0, (endedAt ?? Date.now()) - startedAt)
-  if (durationMs < 1000) return `${durationMs}ms`
-  return `${(durationMs / 1000).toFixed(1)}s`
 }

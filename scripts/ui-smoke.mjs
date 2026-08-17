@@ -9,6 +9,7 @@ import { createSmokeRuntime } from './smoke-runtime.mjs'
 
 const { rootDir, logFile, rendererOrigin, runRestart } = createSmokeRuntime(import.meta.url)
 const keepRunning = process.argv.includes('--keep-running')
+const agentPanelOnly = process.argv.includes('--agent-panel-only')
 const uiReadyTimeoutMs = 30_000
 const results = []
 let startedBySmoke = false
@@ -157,6 +158,63 @@ async function main() {
       return { ref: state.activeWorkspaceRef, generation: state.generation }
     })
 
+    const panelProjection = async (runtime) =>
+      page.locator(`[data-agent-panel-runtime="${runtime}"]`).evaluate((panel) => {
+        const box = (selector) => {
+          const rect = panel.querySelector(selector)?.getBoundingClientRect()
+          const root = panel.getBoundingClientRect()
+          return rect
+            ? {
+                x: Math.round(rect.x - root.x),
+                y: Math.round(rect.y - root.y),
+                width: Math.round(rect.width),
+                height: Math.round(rect.height),
+              }
+            : null
+        }
+        return {
+          landmarks: [...panel.querySelectorAll('[data-agent-landmark]')].map((element) =>
+            element.getAttribute('data-agent-landmark'),
+          ),
+          actions: [...panel.querySelectorAll('[data-agent-action]')].map((element) =>
+            element.getAttribute('data-agent-action'),
+          ),
+          boxes: {
+            header: box('[data-agent-landmark="header"]'),
+            context: box('[data-agent-landmark="context"]'),
+            timeline: box('[data-agent-landmark="timeline"]'),
+            composer: box('.agent-input-card'),
+            actionBar: box('[data-agent-landmark="action-bar"]'),
+            primaryAction: box('[data-agent-action="send"], [data-agent-action="stop"]'),
+          },
+        }
+      })
+    const assertEquivalentPanel = (local, remote, variant) => {
+      assert(
+        JSON.stringify(local.landmarks) === JSON.stringify(remote.landmarks),
+        `${variant} local/remote landmark order differs`,
+      )
+      assert(
+        JSON.stringify(local.actions) === JSON.stringify(remote.actions),
+        `${variant} local/remote action order differs`,
+      )
+      for (const key of ['header', 'context', 'composer', 'actionBar', 'primaryAction']) {
+        const left = local.boxes[key]
+        const right = remote.boxes[key]
+        assert(left && right, `${variant} ${key} bounding box missing`)
+        for (const metric of ['x', 'width', 'height']) {
+          assert(
+            Math.abs(left[metric] - right[metric]) <= 1,
+            `${variant} ${key}.${metric} differs (${left[metric]} vs ${right[metric]})`,
+          )
+        }
+      }
+    }
+
+    await page.evaluate(async () => {
+      const { useUIStore } = await import('/src/stores/ui-store.ts')
+      useUIStore.getState().setAgentPanelMode('right', 'user')
+    })
     const localPanel = page.locator('[data-agent-panel-runtime="local"]')
     await localPanel.waitFor({ state: 'visible', timeout: 10_000 })
     assert((await page.locator('.agent-panel').count()) === 1, 'expected one Agent Panel root')
@@ -185,6 +243,7 @@ async function main() {
       'Shift+Enter selected a candidate instead of inserting a newline',
     )
     await localComposer.fill('')
+    const localSideProjection = await panelProjection('local')
 
     await page.evaluate(async () => {
       const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
@@ -215,6 +274,15 @@ async function main() {
       (await page.locator('.remote-agent-panel, .remote-agent-composer').count()) === 0,
       'legacy remote Panel or Composer is still rendered',
     )
+    const remoteSideProjection = await panelProjection('remote')
+    assertEquivalentPanel(localSideProjection, remoteSideProjection, 'side')
+
+    await page.evaluate(async () => {
+      const { useUIStore } = await import('/src/stores/ui-store.ts')
+      useUIStore.getState().setAgentPanelMode('center', 'user')
+    })
+    await page.locator('[data-agent-panel-variant="center"]').waitFor({ state: 'visible' })
+    const remoteCenterProjection = await panelProjection('remote')
 
     await page.evaluate(async (snapshot) => {
       const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
@@ -224,8 +292,24 @@ async function main() {
         generation: Math.max(state.generation + 1, snapshot.generation + 1),
       })
     }, originalWorkspace)
-    return 'single Panel/Composer root, composition-safe Enter, and candidate-safe Shift+Enter'
+    await page.locator('[data-agent-panel-runtime="local"]').waitFor({ state: 'visible' })
+    const localCenterProjection = await panelProjection('local')
+    assertEquivalentPanel(localCenterProjection, remoteCenterProjection, 'center')
+
+    return 'single fixed view, equivalent side/center landmarks and boxes, IME-safe Enter, and Shift+Enter'
   })
+
+  if (agentPanelOnly) {
+    await browser.close()
+    const failed = results.filter((result) => result.status === 'fail')
+    if (startedBySmoke && !keepRunning) runRestart('stop')
+    if (failed.length > 0) {
+      console.error(`\nAgent Panel UI smoke failed: ${failed.length}/${results.length}`)
+      process.exit(1)
+    }
+    console.log(`\nAgent Panel UI smoke passed: ${results.length}/${results.length}`)
+    return
+  }
 
   await runCheck('workspace opener unifies local and CCLink remote entry', async () => {
     await clickByTitle(page, '打开工作空间')
@@ -663,7 +747,10 @@ async function main() {
     assert(popoverText.includes(snapshot.repositoryName ?? ''), 'Git repository name is missing')
     assert(popoverText.includes(snapshot.upstream ?? '未设置上游'), 'Git upstream is missing')
     await popover.locator('.git-status-row-button').click()
-    const changesView = popover.locator('.git-changes-view')
+    await popover.waitFor({ state: 'hidden', timeout: 10_000 })
+    const dialog = page.locator('.git-operation-dialog')
+    await dialog.waitFor({ state: 'visible', timeout: 10_000 })
+    const changesView = dialog.locator('.git-changes-view')
     await changesView.waitFor({ state: 'visible', timeout: 10_000 })
     assert(
       (await changesView.locator('.git-change-item').count()) >= snapshot.changeCount,
@@ -676,7 +763,7 @@ async function main() {
         () =>
           Boolean(
             document.querySelector(
-              '.git-status-popover .git-diff-content, .git-status-popover .git-diff-error',
+              '.git-operation-dialog .git-diff-content, .git-operation-dialog .git-diff-error',
             ),
           ),
         undefined,
@@ -684,7 +771,7 @@ async function main() {
       )
     }
     await page.keyboard.press('Escape')
-    await popover.waitFor({ state: 'hidden', timeout: 10_000 })
+    await dialog.waitFor({ state: 'hidden', timeout: 10_000 })
     return `${snapshot.branch} · ${snapshot.changeCount} changes · +${snapshot.additions} -${snapshot.deletions}`
   })
 
@@ -717,13 +804,24 @@ async function main() {
       await trigger.click()
       const popover = page.locator('.git-status-popover')
       await popover.getByRole('button', { name: '提交…', exact: true }).click()
-      const commitView = popover.locator('.git-commit-view')
+      const dialog = page.locator('.git-operation-dialog')
+      await dialog.waitFor({ state: 'visible', timeout: 10_000 })
+      const commitView = dialog.locator('.git-commit-view')
       await commitView.waitFor({ state: 'visible', timeout: 10_000 })
       await commitView.getByRole('checkbox', { name: 'tracked.txt', exact: true }).check()
       await commitView.getByPlaceholder('说明这次修改').fill('UI smoke explicit commit')
+      await page.keyboard.press('Escape')
+      const discard = dialog.getByRole('alertdialog')
+      await discard.waitFor({ state: 'visible', timeout: 10_000 })
+      assert(
+        (await commitView.getByPlaceholder('说明这次修改').inputValue()) ===
+          'UI smoke explicit commit',
+        'closing the Git dialog discarded the draft without confirmation',
+      )
+      await discard.getByRole('button', { name: '继续编辑', exact: true }).click()
       await commitView.getByRole('button', { name: '提交 1 个文件', exact: true }).click()
-      await page
-        .locator('.toast-success', { hasText: '提交成功' })
+      await dialog
+        .locator('.git-operation-notice.success', { hasText: '提交成功' })
         .waitFor({ state: 'visible', timeout: 10_000 })
 
       const afterCommit = await page.evaluate(
@@ -736,9 +834,26 @@ async function main() {
         'unselected untracked file was unexpectedly committed',
       )
 
-      await popover.getByRole('button', { name: '推送 1 个已有提交', exact: true }).click()
-      await page
-        .locator('.toast-success', { hasText: 'Push 成功' })
+      await dialog.getByRole('button', { name: '推送 1 个已有提交', exact: true }).click()
+      await dialog
+        .locator('.git-operation-notice.success', { hasText: 'Push 成功' })
+        .waitFor({ state: 'visible', timeout: 10_000 })
+      await page.waitForFunction(
+        async (path) => (await window.cclinkStudio.git.getSnapshot(path)).ahead === 0,
+        workspacePath,
+        { timeout: 10_000 },
+      )
+
+      await writeFile(join(workspacePath, 'tracked.txt'), 'changed again\n', 'utf8')
+      await dialog.getByRole('button', { name: '刷新 Git 状态', exact: true }).click()
+      const staleAlert = dialog.locator('.git-operation-stale')
+      await staleAlert.waitFor({ state: 'visible', timeout: 10_000 })
+      await staleAlert.getByRole('button', { name: '使用最新状态', exact: true }).click()
+      await commitView.getByRole('checkbox', { name: 'tracked.txt', exact: true }).check()
+      await commitView.getByPlaceholder('说明这次修改').fill('UI smoke commit and push')
+      await commitView.getByRole('button', { name: '提交并推送', exact: true }).click()
+      await dialog
+        .locator('.git-operation-notice.success', { hasText: '提交并 Push 成功' })
         .waitFor({ state: 'visible', timeout: 10_000 })
       await page.waitForFunction(
         async (path) => (await window.cclinkStudio.git.getSnapshot(path)).ahead === 0,
@@ -750,7 +865,8 @@ async function main() {
         await runGit(fixtureRoot, ['--git-dir', remotePath, 'rev-parse', 'refs/heads/main'])
       ).stdout.trim()
       assert(localHead === remoteHead, 'remote HEAD does not match the confirmed local commit')
-      return 'selected tracked file committed, untracked file preserved, explicit upstream push verified'
+      await dialog.getByRole('button', { name: '关闭 Git 窗口', exact: true }).click()
+      return 'draft protected, selected file committed, untracked file preserved, explicit and combined push verified'
     } finally {
       await page.evaluate(async (path) => {
         const { useFsStore } = await import('/src/stores/fs-store.ts')

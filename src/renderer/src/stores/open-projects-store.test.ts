@@ -82,9 +82,10 @@ describe('open-projects-store', () => {
       null,
       'projectStrip',
       {
-        version: 1,
+        version: 2,
         openProjectPaths: [],
         openRemoteWorkspaceRefs: [confirmed],
+        recentRemoteWorkspaceRefs: [confirmed],
       },
       null,
     )
@@ -115,7 +116,7 @@ describe('open-projects-store', () => {
       null,
       'projectStrip',
       {
-        version: 1,
+        version: 2,
         openProjectPaths: ['/workspace/c', '/workspace/a', '/workspace/b'],
       },
       null,
@@ -152,7 +153,7 @@ describe('open-projects-store', () => {
       null,
       'projectStrip',
       {
-        version: 1,
+        version: 2,
         openProjectPaths: ['/workspace/a', '/workspace/b', '/workspace/c'],
       },
       null,
@@ -178,8 +179,67 @@ describe('open-projects-store', () => {
       null,
       'projectStrip',
       {
-        version: 1,
+        version: 2,
         openProjectPaths: ['/workspace/a', '/workspace/b'],
+      },
+      null,
+    )
+  })
+
+  it('keeps a removed remote project in history and promotes it when reopened', async () => {
+    const remoteA = {
+      kind: 'remote' as const,
+      transport: 'cclink' as const,
+      endpointId: 'agent-1',
+      workspaceId: 'workspace-a',
+      path: '/srv/a',
+    }
+    const remoteB = { ...remoteA, workspaceId: 'workspace-b', path: '/srv/b' }
+    const store = useOpenProjectsStore.getState()
+
+    store.addRemoteProject(remoteA)
+    store.addRemoteProject(remoteB)
+    store.removeRemoteProject(remoteA)
+
+    expect(useOpenProjectsStore.getState().openRemoteWorkspaceRefs).toEqual([remoteB])
+    expect(useOpenProjectsStore.getState().recentRemoteWorkspaceRefs).toEqual([remoteB, remoteA])
+
+    useOpenProjectsStore.getState().addRemoteProject(remoteA)
+    await flushPendingWorkspaceStateWrites()
+    expect(useOpenProjectsStore.getState().recentRemoteWorkspaceRefs).toEqual([remoteA, remoteB])
+  })
+
+  it('migrates open remote projects from version 1 into remote history', async () => {
+    const remote = {
+      kind: 'remote' as const,
+      transport: 'cclink' as const,
+      endpointId: 'agent-1',
+      workspaceId: 'workspace-a',
+      path: '/srv/a',
+    }
+    const get = window.cclinkStudio.workspaceState.get as ReturnType<typeof vi.fn>
+    get.mockResolvedValue({
+      sections: {
+        projectStrip: {
+          version: 1,
+          openProjectPaths: [],
+          openRemoteWorkspaceRefs: [remote],
+        },
+      },
+    })
+
+    await restoreOpenProjects(null)
+    await flushPendingWorkspaceStateWrites()
+
+    expect(useOpenProjectsStore.getState().recentRemoteWorkspaceRefs).toEqual([remote])
+    expect(window.cclinkStudio.workspaceState.setSection).toHaveBeenLastCalledWith(
+      null,
+      'projectStrip',
+      {
+        version: 2,
+        openProjectPaths: [],
+        openRemoteWorkspaceRefs: [remote],
+        recentRemoteWorkspaceRefs: [remote],
       },
       null,
     )

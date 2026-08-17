@@ -3,20 +3,21 @@ import type { CclinkRemoteSession } from '@shared/cclink'
 import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
 import type { RemoteStatus } from '@shared/remote-protocol'
 import type { RemoteDiagnosticReport } from '@shared/remote-protocol'
+import type { CclinkRemoteMessage } from '@shared/cclink'
 import { useCclinkStore } from '../../stores'
-import { IconClipboard, IconRobot, IconSend, IconStop } from '../../components/common/Icons'
 import { useToastStore } from '../../components/common/Toast'
 import { APP_VERSION } from '../../app-metadata'
 import { buildRemoteAgentDiagnosticMarkdown } from '../diagnostics/remote-agent-diagnostic-report'
 import { copyTextToClipboard } from '../../utils/clipboard'
 import {
-  AgentComposer,
-  AgentMessageList,
-  AgentPanelSurface,
+  AgentPanelView,
+  type AgentPanelPermissionModel,
+  type AgentPanelTimelineItem,
   type AgentPanelVariant,
-} from '../../components/agent-panel/agent-panel-surface'
+} from '../../components/agent-panel/agent-panel-view'
 import { isWorkspaceTargetCurrent, type WorkspaceTarget } from '../../stores/workspace-store'
-import { RemoteAgentMessage } from './remote-agent-message'
+import { workspaceRefKey } from '@shared/workspace-ref'
+import type { AgentMessage } from '../../types'
 
 export interface RemoteAgentVisualStatus {
   tone: 'connecting' | 'ready' | 'working' | 'unavailable'
@@ -149,8 +150,10 @@ export function RemoteAgentController({
   const [copyingDiagnostics, setCopyingDiagnostics] = useState(false)
   const [remoteStatus, setRemoteStatus] = useState<RemoteStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
+  const [controlStates, setControlStates] = useState<
+    Record<string, { submitting: boolean; error: string | null }>
+  >({})
   const submissionLockRef = useRef(false)
-  const listRef = useRef<HTMLDivElement>(null)
   const workspaceTarget = useMemo<WorkspaceTarget>(
     () => ({ ref: workspaceRef, generation: workspaceGeneration }),
     [workspaceGeneration, workspaceRef],
@@ -238,11 +241,6 @@ export function RemoteAgentController({
     if (activeSession && activeSession.id !== selectedSessionId) selectSession(activeSession.id)
   }, [activeSession, selectSession, selectedSessionId])
 
-  useEffect(() => {
-    const element = listRef.current
-    if (element) element.scrollTop = element.scrollHeight
-  }, [activeMessages])
-
   const submit = async (): Promise<void> => {
     const content = draft.trim()
     if (!content || !agentAvailable || !tryAcquireRemoteSubmissionLock(submissionLockRef)) return
@@ -309,129 +307,293 @@ export function RemoteAgentController({
     }
   }
 
-  return (
-    <AgentPanelSurface variant={variant} runtime="remote" className="agent-panel-remote">
-      <div className="remote-agent-panel-toolbar">
-        <IconRobot size={15} />
-        <div className="remote-agent-panel-heading">
-          <strong>远程 Agent</strong>
-          <span>{workspaceRef.endpointName || workspaceRef.endpointId}</span>
-        </div>
-        <div
-          className={`remote-agent-status ${agentVisualStatus.tone}`}
-          role="status"
-          aria-live="polite"
-          title={agentVisualStatus.detail}
-        >
-          <span className="remote-agent-status-dot" />
-          <span>{agentVisualStatus.label}</span>
-        </div>
-        <button
-          type="button"
-          onClick={() => void copyDiagnostics()}
-          disabled={!activeSession || copyingDiagnostics}
-          title={activeSession ? '复制远程 Agent 诊断日志' : '当前没有远程会话'}
-          aria-label="复制远程 Agent 诊断日志"
-        >
-          <IconClipboard size={14} />
-        </button>
-      </div>
+  const updateControlState = (
+    id: string,
+    next: { submitting: boolean; error: string | null },
+  ): void => setControlStates((current) => ({ ...current, [id]: next }))
 
-      <div className="remote-agent-context">
-        <span>远程 · CCLink</span>
-        <strong>{workspaceRef.path}</strong>
-      </div>
-      {error && <div className="cclink-inline-notice error">{error}</div>}
-      {(statusError || (remoteStatus && !agentAvailable)) && (
-        <div className="cclink-inline-notice error">
-          {statusError ||
-            remoteStatus?.remoteError?.message ||
-            '当前 Agent 未声明远程会话/流式消息能力'}
-        </div>
-      )}
-      {pendingPermissions
-        .filter((permission) => permission.serverId === workspaceRef.endpointId)
-        .map((permission) => (
-          <div key={permission.requestId} className="cclink-inline-notice warning">
-            <strong>远程设备请求文件权限</strong>
-            <span>
-              {permission.operation} · {permission.path}
-            </span>
-            <button
-              type="button"
-              onClick={() =>
-                void respondPermission(permission.serverId, permission.requestId, false)
-              }
-            >
-              拒绝
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                void respondPermission(permission.serverId, permission.requestId, true)
-              }
-            >
-              仅本次允许
-            </button>
-          </div>
-        ))}
-      <AgentMessageList listRef={listRef} className="remote-agent-messages">
-        {activeMessages.length === 0 ? (
-          <div className="remote-agent-empty">
-            <IconRobot size={24} />
-            <strong>{loading ? '正在同步远程会话…' : '开始远程工作'}</strong>
-            <span>会话会在当前设备上以当前远程目录作为工作目录运行。</span>
-          </div>
-        ) : (
-          activeMessages.map((message) => (
-            <RemoteAgentMessage
-              key={message.id}
-              message={message}
-              workspaceRef={workspaceRef}
-              sessionId={activeSession!.id}
-              reload={() => loadMessages(activeSession!.id)}
-            />
-          ))
-        )}
-      </AgentMessageList>
-      <AgentComposer
-        containerClassName="agent-composer-wrap agent-composer-remote"
-        inputContainerClassName="agent-input-card agent-input-card-remote"
-        textareaClassName="agent-input agent-input-remote"
-        value={draft}
-        maxLength={8192}
-        disabled={!agentAvailable}
-        onChange={setDraft}
-        onSubmit={submit}
-        canSubmit={Boolean(draft.trim()) && agentAvailable && stopAvailability.state === 'hidden'}
-        submitting={sending}
-        placeholder="发送到当前远程工作空间，Enter 发送"
-        rows={2}
-        renderTrailing={({ submit: submitMessage, canSubmit }) =>
-          stopAvailability.state === 'disabled' ? (
-            <span className="agent-disabled-action" title={stopAvailability.reason}>
-              <button
-                type="button"
-                className="agent-abort-btn"
-                disabled
-                aria-label={stopAvailability.reason}
-              >
-                <IconStop size={15} />
-              </button>
-            </span>
-          ) : (
-            <button
-              type="button"
-              className="agent-send-btn"
-              onClick={submitMessage}
-              disabled={!canSubmit}
-              title="发送"
-            >
-              <IconSend size={16} />
-            </button>
-          )
-        }
-      />
-    </AgentPanelSurface>
+  const decideToolApproval = async (
+    message: Extract<CclinkRemoteMessage, { type: 'agentTool' }>,
+    approved: boolean,
+  ): Promise<void> => {
+    if (!activeSession || !message.tool.requestId || controlStates[message.id]?.submitting) return
+    updateControlState(message.id, { submitting: true, error: null })
+    try {
+      const result = await window.cclinkStudio.cclink.resolveToolApproval({
+        ref: workspaceRef,
+        sessionId: activeSession.id,
+        requestId: message.tool.requestId,
+        toolUseId: message.tool.id,
+        approved,
+      })
+      if (!result.success) throw new Error(result.error || '远程审批发送失败')
+      await loadMessages(activeSession.id)
+      updateControlState(message.id, { submitting: false, error: null })
+    } catch (failure) {
+      updateControlState(message.id, {
+        submitting: false,
+        error: failure instanceof Error ? failure.message : String(failure),
+      })
+    }
+  }
+
+  const answerQuestion = async (
+    message: Extract<CclinkRemoteMessage, { type: 'userQuestion' }>,
+    answers: Record<string, string>,
+  ): Promise<void> => {
+    if (!activeSession || controlStates[message.id]?.submitting) return
+    updateControlState(message.id, { submitting: true, error: null })
+    try {
+      const result = await window.cclinkStudio.cclink.answerQuestion({
+        ref: workspaceRef,
+        sessionId: activeSession.id,
+        requestId: message.requestId,
+        toolUseId: message.toolUseId,
+        answers,
+      })
+      if (!result.success) throw new Error(result.error || '远程问题回答失败')
+      await loadMessages(activeSession.id)
+      updateControlState(message.id, { submitting: false, error: null })
+    } catch (failure) {
+      updateControlState(message.id, {
+        submitting: false,
+        error: failure instanceof Error ? failure.message : String(failure),
+      })
+    }
+  }
+
+  const conversationId = activeSession?.id ?? `remote:${workspaceRef.workspaceId}`
+  const remoteWorkspaceKey = workspaceRefKey(workspaceRef)
+  const timeline = activeMessages.flatMap((message): AgentPanelTimelineItem[] => {
+    if (message.type === 'userQuestion') {
+      return [
+        {
+          kind: 'question',
+          id: message.id,
+          question: {
+            id: message.id,
+            title: 'Agent 需要你的选择',
+            answered: message.answered,
+            submitting: controlStates[message.id]?.submitting,
+            error: controlStates[message.id]?.error,
+            questions: message.questions,
+            onSubmit: (answers) => void answerQuestion(message, answers),
+          },
+        },
+      ]
+    }
+    return [
+      {
+        kind: 'message',
+        id: message.id,
+        message: toUnifiedRemoteMessage(message),
+        conversationId,
+        workspaceKey: remoteWorkspaceKey,
+      },
+    ]
+  })
+  const toolPermissions: AgentPanelPermissionModel[] = activeMessages.flatMap((message) => {
+    if (
+      message.type !== 'agentTool' ||
+      !message.tool.requiresApproval ||
+      !message.tool.requestId ||
+      (message.tool.state !== 'pending' && message.tool.state !== 'executing')
+    ) {
+      return []
+    }
+    const state = controlStates[message.id]
+    return [
+      {
+        id: `tool:${message.id}`,
+        title: 'Agent 请求执行操作',
+        tone: 'warning',
+        rows: [
+          { label: '操作', value: message.tool.name },
+          { label: '参数', value: JSON.stringify(message.tool.input ?? {}), monospace: true },
+          ...(message.tool.approvalReason
+            ? [{ label: '原因', value: message.tool.approvalReason }]
+            : []),
+          ...(state?.error ? [{ label: '错误', value: state.error, tone: 'danger' as const }] : []),
+        ],
+        actions: [
+          {
+            id: 'reject',
+            label: '拒绝',
+            tone: 'reject',
+            disabled: state?.submitting,
+            onInvoke: () => void decideToolApproval(message, false),
+          },
+          {
+            id: 'approve',
+            label: state?.submitting ? '等待 Agent 确认…' : '允许本次操作',
+            tone: 'approve',
+            disabled: state?.submitting,
+            onInvoke: () => void decideToolApproval(message, true),
+          },
+        ],
+      },
+    ]
+  })
+  const filePermissions: AgentPanelPermissionModel[] = pendingPermissions
+    .filter((permission) => permission.serverId === workspaceRef.endpointId)
+    .map((permission) => ({
+      id: `file:${permission.requestId}`,
+      title: '远程设备请求文件权限',
+      tone: 'warning',
+      rows: [
+        { label: '操作', value: permission.operation },
+        { label: '路径', value: permission.path, monospace: true },
+      ],
+      actions: [
+        {
+          id: 'reject',
+          label: '拒绝',
+          tone: 'reject',
+          onInvoke: () => void respondPermission(permission.serverId, permission.requestId, false),
+        },
+        {
+          id: 'approve',
+          label: '仅本次允许',
+          tone: 'approve',
+          onInvoke: () => void respondPermission(permission.serverId, permission.requestId, true),
+        },
+      ],
+    }))
+
+  const unsupported = (reason: string) => ({ state: 'disabled' as const, reason })
+
+  return (
+    <AgentPanelView
+      model={{
+        runtime: 'remote',
+        variant,
+        header: {
+          title: 'Agent',
+          runtimeLabel: `远程 · ${workspaceRef.endpointName || workspaceRef.endpointId}`,
+          status: agentVisualStatus,
+          diagnostics: {
+            state: activeSession && !copyingDiagnostics ? 'enabled' : 'disabled',
+            reason: activeSession ? '正在复制诊断日志' : '当前没有远程会话',
+            label: '复制 Agent 诊断日志',
+            onInvoke: () => void copyDiagnostics(),
+          },
+        },
+        contextChips: [
+          {
+            id: 'workspace',
+            kind: 'workspace',
+            label: workspaceRef.path,
+            detail: 'CCLink 远程工作空间',
+          },
+          {
+            id: 'scope',
+            kind: 'scope',
+            label: '当前远程工作空间',
+            detail: '操作目标',
+          },
+        ],
+        notices: [
+          ...(error ? [{ id: 'store-error', tone: 'error' as const, title: error }] : []),
+          ...(statusError || (remoteStatus && !agentAvailable)
+            ? [
+                {
+                  id: 'remote-status',
+                  tone: 'error' as const,
+                  title: agentVisualStatus.label,
+                  detail:
+                    statusError ||
+                    remoteStatus?.remoteError?.message ||
+                    '当前 Agent 未声明远程会话/流式消息能力',
+                },
+              ]
+            : []),
+        ],
+        permissions: [...filePermissions, ...toolPermissions],
+        timeline,
+        empty: {
+          title: loading ? '正在同步会话…' : '开始工作',
+          description: 'Agent 会以当前工作空间作为操作边界。',
+          suggestions: ['分析当前工作空间', '检查最近修改', '继续已有任务'],
+        },
+        composer: {
+          value: draft,
+          maxLength: 8192,
+          disabled: !agentAvailable,
+          onChange: setDraft,
+          onSubmit: submit,
+          canSubmit: Boolean(draft.trim()) && agentAvailable && stopAvailability.state === 'hidden',
+          submitting: sending || activeSession?.status === 'active',
+          stopCapability: stopAvailability,
+          placeholder: agentAvailable
+            ? '输入消息，Enter 发送，Shift+Enter 换行'
+            : agentVisualStatus.detail,
+          actionBar: {
+            kind: 'remote',
+            runtimeLabel: 'CCLink Agent',
+            capabilities: {
+              addContext: unsupported('远程 Agent 暂不支持添加本地资源、Skill 或图片'),
+              role: unsupported('远程 Agent 暂不支持切换角色'),
+              permissionMode: unsupported('远程权限由远程 Agent 和当前确认卡管理'),
+              contextUsage: unsupported('远程上下文详情暂不可用'),
+              runtime: unsupported('远程 Runtime 由已配对设备管理'),
+            },
+          },
+        },
+      }}
+    />
   )
+}
+
+export function toUnifiedRemoteMessage(
+  message: Exclude<CclinkRemoteMessage, { type: 'userQuestion' }>,
+): AgentMessage {
+  if (message.type === 'agentTool') {
+    const stateLabels = {
+      pending: '等待执行',
+      executing: '正在执行',
+      completed: '执行完成',
+      failed: '执行失败',
+      denied: '已拒绝',
+    } as const
+    const result =
+      message.tool.error ||
+      message.tool.output ||
+      (message.tool.state === 'completed' ||
+      message.tool.state === 'failed' ||
+      message.tool.state === 'denied'
+        ? stateLabels[message.tool.state]
+        : null)
+    return {
+      id: message.id,
+      role: 'assistant',
+      timestamp: message.timestamp,
+      rawText: `${message.tool.name}${result ? `\n${result}` : ''}`,
+      isStreaming: message.tool.state === 'pending' || message.tool.state === 'executing',
+      content: [
+        {
+          type: 'tool_use',
+          id: message.tool.id,
+          name: message.tool.name,
+          input: message.tool.input ?? {},
+        },
+        ...(result
+          ? [
+              {
+                type: 'tool_result' as const,
+                tool_use_id: message.tool.id,
+                content: result,
+                is_error: message.tool.state === 'failed' || message.tool.state === 'denied',
+              },
+            ]
+          : []),
+      ],
+    }
+  }
+  return {
+    id: message.id,
+    role: message.type === 'agentText' ? 'assistant' : message.type,
+    timestamp: message.timestamp,
+    rawText: message.content,
+    content: [{ type: 'text', text: message.content }],
+  }
 }

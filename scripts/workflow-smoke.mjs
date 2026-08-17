@@ -1097,7 +1097,7 @@ async function main() {
       'reopened Markdown lost a normalized code block',
     )
     assert(
-        (await page.locator('.tiptap ol').first().getAttribute('start')) === '7' &&
+      (await page.locator('.tiptap ol').first().getAttribute('start')) === '7' &&
         (await page.locator('.tiptap table').count()) === 1 &&
         (await page.locator('.tiptap a[title="说明标题"]').count()) === 1 &&
         (await page.locator('.tiptap ul[data-type="taskList"] > li').count()) === 6,

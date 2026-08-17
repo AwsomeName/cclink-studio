@@ -1,6 +1,6 @@
 # Git 状态与提交推送
 
-> 状态：G1-G3 与“已有 upstream 的显式 Push”已通过自动化真实 App smoke；G4 远程关联/Fetch、G5 收敛待完成
+> 状态：G1-G3、统一操作窗口与“已有 upstream 的显式 Push”已通过自动化真实 App smoke；G4 远程关联/Fetch、G5 收敛待完成
 >
 > 最后更新：2026-08-17
 >
@@ -68,10 +68,14 @@ Git
 - 从“变更”查看 staged、unstaged、untracked、conflicted 分组，并打开有大小/行数上限的只读
   Diff；二进制、冲突和超限内容明确降级。
 - 状态摘要与写操作分层：小浮层只看事实，统一 Git 操作窗口承载变更、Diff、提交和 Push。
+- 关闭脏提交草稿前要求确认；刷新后状态变化会停止写操作并要求接受最新状态，切换工作空间
+  会清理旧项目草稿。
 - 保留已有 staged 内容，明确勾选要加入的完整 unstaged/untracked 文件，填写正常提交信息并
   commit；提交不会自动 Push。
 - 对已经配置 upstream、且本机已知未 behind 的当前分支显式 Push；Push 前重新验证 HEAD，
   不使用 force、delete 或任意 refspec。
+- 在统一窗口明确选择“提交并推送”，或者只 Push 已有本地提交；两阶段 Push 失败时保留已经
+  成功的本地提交并给出持续结果。
 - 切换工作空间时丢弃迟到的旧 Git 快照；非 Git、远程或父仓库子目录不显示可操作 Git 状态。
 - 状态栏不再常驻显示“Agent 就绪”和活跃 Tab 类型（例如“编辑器”）。
 - 状态栏右侧旧“备份到 Git”按钮已移除；G5 完成前侧栏兼容建仓入口仍保留。
@@ -198,7 +202,7 @@ Git 状态段可通过鼠标、Enter 或 Space 打开浮层。浮层至少包含
 | ---------------------------------- | ------------------------------------------- |
 | 有冲突                             | 禁用提交和 Push，显示冲突文件数             |
 | detached HEAD                      | 禁用快捷提交和 Push，提示先在 Terminal 处理 |
-| 有 staged/unstaged/untracked 变更  | 显示“提交…”并打开统一 Git 操作窗口           |
+| 有 staged/unstaged/untracked 变更  | 显示“提交…”并打开统一 Git 操作窗口          |
 | 工作区干净且本地 ahead > 0         | 显示“推送”                                  |
 | 有变更且本地已有未 Push 提交       | 显示“提交或推送”，进入后分别提供提交和 Push |
 | 工作区干净且 ahead = 0、behind = 0 | 显示“没有待提交或推送内容”                  |
@@ -277,8 +281,8 @@ Git 状态段可通过鼠标、Enter 或 Space 打开浮层。浮层至少包含
 | GitHub Token                     | `CredentialService`                         |
 | GitHub 账号                      | `SettingsService`                           |
 | 工作空间远程绑定兼容数据         | Git 领域持久化组件，由 Git 服务协调         |
-| 浮层开关                           | renderer 组件，可丢弃                       |
-| 操作窗口、临时选择和提交信息草稿   | renderer Git store，按工作空间隔离           |
+| 浮层开关                         | renderer 组件，可丢弃                       |
+| 操作窗口、临时选择和提交信息草稿 | renderer Git store，按工作空间隔离          |
 
 renderer 不能持久化 Git 运行事实，也不能通过文件监听推断 commit 或 Push 是否成功。
 

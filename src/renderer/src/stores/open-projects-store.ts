@@ -78,9 +78,7 @@ function persistOpenProjects(
     version: 2,
     openProjectPaths: paths,
     ...(remoteRefs.length > 0 ? { openRemoteWorkspaceRefs: remoteRefs } : {}),
-    ...(recentRemoteRefs.length > 0
-      ? { recentRemoteWorkspaceRefs: recentRemoteRefs }
-      : {}),
+    ...(recentRemoteRefs.length > 0 ? { recentRemoteWorkspaceRefs: recentRemoteRefs } : {}),
   }
   persistWorkspaceSection('projectStrip', snapshot, null, null)
 }
@@ -153,11 +151,7 @@ export const useOpenProjectsStore = create<OpenProjectsState>((set, get) => ({
       ...get().recentRemoteWorkspaceRefs.filter((item) => workspaceRefKey(item) !== key),
     ]
     set({ openRemoteWorkspaceRefs, recentRemoteWorkspaceRefs })
-    persistOpenProjects(
-      get().openProjectPaths,
-      openRemoteWorkspaceRefs,
-      recentRemoteWorkspaceRefs,
-    )
+    persistOpenProjects(get().openProjectPaths, openRemoteWorkspaceRefs, recentRemoteWorkspaceRefs)
   },
 
   replaceRemoteProject: (current, confirmed) => {
@@ -180,11 +174,7 @@ export const useOpenProjectsStore = create<OpenProjectsState>((set, get) => ({
       }),
     ]
     set({ openRemoteWorkspaceRefs, recentRemoteWorkspaceRefs })
-    persistOpenProjects(
-      get().openProjectPaths,
-      openRemoteWorkspaceRefs,
-      recentRemoteWorkspaceRefs,
-    )
+    persistOpenProjects(get().openProjectPaths, openRemoteWorkspaceRefs, recentRemoteWorkspaceRefs)
   },
 
   removeRemoteProject: (ref) => {
