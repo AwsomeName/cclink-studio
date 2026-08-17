@@ -9,6 +9,7 @@ interface GitCommitViewProps {
   stale: boolean
   onMessageChange: (message: string) => void
   onTogglePath: (path: string) => void
+  onSetPaths: (paths: string[]) => void
   onCommit: () => void
   onCommitAndPush: () => void
   onPush: () => void
@@ -22,6 +23,7 @@ export function GitCommitView({
   stale,
   onMessageChange,
   onTogglePath,
+  onSetPaths,
   onCommit,
   onCommitAndPush,
   onPush,
@@ -39,6 +41,10 @@ export function GitCommitView({
     [snapshot.changes],
   )
   const commitFileCount = new Set([...staged.map((change) => change.path), ...selectedPaths]).size
+  const selectedStageableCount = stageable.filter((change) =>
+    selectedPathSet.has(change.path),
+  ).length
+  const allStageableSelected = selectedStageableCount === stageable.length
   const canCommit =
     Boolean(message.trim()) &&
     commitFileCount > 0 &&
@@ -79,7 +85,25 @@ export function GitCommitView({
           </CommitGroup>
         )}
         {stageable.length > 0 && (
-          <CommitGroup title="选择要加入本次提交的完整文件">
+          <CommitGroup
+            title="选择要加入本次提交的完整文件"
+            action={
+              <div className="git-commit-group-actions">
+                <span>
+                  已选 {selectedStageableCount}/{stageable.length}
+                </span>
+                <button
+                  type="button"
+                  disabled={operation !== null || stale}
+                  onClick={() =>
+                    onSetPaths(allStageableSelected ? [] : stageable.map((change) => change.path))
+                  }
+                >
+                  {allStageableSelected ? '取消全选' : '全选'}
+                </button>
+              </div>
+            }
+          >
             {stageable.map((change) => (
               <CommitFileRow
                 key={`stageable:${change.path}`}
@@ -139,14 +163,19 @@ export function GitCommitView({
 
 function CommitGroup({
   title,
+  action,
   children,
 }: {
   title: string
+  action?: React.ReactNode
   children: React.ReactNode
 }): React.ReactElement {
   return (
     <section className="git-commit-group">
-      <div className="git-change-group-title">{title}</div>
+      <div className="git-change-group-title">
+        <span>{title}</span>
+        {action}
+      </div>
       {children}
     </section>
   )

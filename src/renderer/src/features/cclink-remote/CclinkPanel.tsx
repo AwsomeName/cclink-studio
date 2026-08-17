@@ -178,7 +178,7 @@ function RemoteDirectoryPicker({
   const [loading, setLoading] = useState(false)
   const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const openingGenerationRef = useRef<number | null>(null)
+  const openingOperationRef = useRef<{ generation: number; requestId: string } | null>(null)
   const directories = tree?.children?.filter((item) => item.type === 'directory') ?? []
 
   const load = async (target: string): Promise<void> => {
@@ -204,8 +204,12 @@ function RemoteDirectoryPicker({
 
   useEffect(
     () => () => {
-      const generation = openingGenerationRef.current
-      if (generation !== null) cancelWorkspaceRuntimeTransition(generation)
+      const operation = openingOperationRef.current
+      if (!operation) return
+      cancelWorkspaceRuntimeTransition(operation.generation)
+      void window.cclinkStudio.cclink
+        .cancelOpenWorkspace({ requestId: operation.requestId })
+        .catch(() => {})
     },
     [],
   )
@@ -214,20 +218,24 @@ function RemoteDirectoryPicker({
     setOpening(true)
     setError(null)
     const generation = beginWorkspaceRuntimeTransition()
-    openingGenerationRef.current = generation
+    const requestId = crypto.randomUUID()
+    openingOperationRef.current = { generation, requestId }
     try {
       const workspace = await window.cclinkStudio.cclink.openWorkspace({
         serverId: server.id,
         path,
+        requestId,
       })
       const ref = remoteWorkspaceRefFromAgent(workspace, server.name)
       await openWorkspaceRef(ref, { confirmedRemote: true, generation })
-      openingGenerationRef.current = null
+      openingOperationRef.current = null
       onWorkspaceOpened?.()
     } catch (openError) {
       setError(openError instanceof Error ? openError.message : String(openError))
     } finally {
-      if (openingGenerationRef.current === generation) openingGenerationRef.current = null
+      if (openingOperationRef.current?.generation === generation) {
+        openingOperationRef.current = null
+      }
       setOpening(false)
     }
   }

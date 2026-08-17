@@ -14,7 +14,12 @@ export interface CclinkApiContract {
   connectRealtime(): Promise<CclinkRealtimeStatus>
   getRealtimeStatus(): Promise<CclinkRealtimeStatus>
   browseDirectory(input: { serverId: string; path: string }): Promise<RemoteFileTreeResult>
-  openWorkspace(input: { serverId: string; path: string }): Promise<CclinkWorkspace>
+  openWorkspace(input: {
+    serverId: string
+    path: string
+    requestId: string
+  }): Promise<CclinkWorkspace>
+  cancelOpenWorkspace(input: { requestId: string }): Promise<{ success: boolean }>
   listSessions(ref: RemoteWorkspaceRef): Promise<CclinkRemoteSession[]>
   createSession(input: { ref: RemoteWorkspaceRef; name?: string }): Promise<CclinkRemoteSession>
   setSessionArchived(input: { sessionId: string; archived: boolean }): Promise<CclinkRemoteSession>
@@ -65,8 +70,12 @@ export const cclinkIpc = {
   browseDirectory: defineIpcCall<[input: { serverId: string; path: string }], RemoteFileTreeResult>(
     'cclink:browseDirectory',
   ),
-  openWorkspace: defineIpcCall<[input: { serverId: string; path: string }], CclinkWorkspace>(
-    'cclink:openWorkspace',
+  openWorkspace: defineIpcCall<
+    [input: { serverId: string; path: string; requestId: string }],
+    CclinkWorkspace
+  >('cclink:openWorkspace'),
+  cancelOpenWorkspace: defineIpcCall<[input: { requestId: string }], { success: boolean }>(
+    'cclink:cancelOpenWorkspace',
   ),
   listSessions: defineIpcCall<[ref: RemoteWorkspaceRef], CclinkRemoteSession[]>(
     'cclink:listSessions',

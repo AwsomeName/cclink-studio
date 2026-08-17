@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAgentStore, useFsStore, useOpenProjectsStore, useWorkspaceStore } from '../../stores'
 import { localWorkspaceRef, workspaceRefKey } from '@shared/workspace-ref'
 import { getRunningProjectCounts } from '../../features/agent-conversations/project-activity'
-import { getWorkspaceStateOwnerKey } from '../../utils/workspace-state'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import { IconCloud, IconHistory, IconProjects } from '../common/Icons'
 import { useToastStore } from '../common/Toast'
@@ -43,9 +42,8 @@ export function ProjectStrip(): React.ReactElement {
   const openProjectPaths = useOpenProjectsStore((state) => state.openProjectPaths)
   const reorderProject = useOpenProjectsStore((state) => state.reorderProject)
   const openRemoteWorkspaceRefs = useOpenProjectsStore((state) => state.openRemoteWorkspaceRefs)
-  const recentRemoteWorkspaceRefs = useOpenProjectsStore((state) => state.recentRemoteWorkspaceRefs)
+  const recentWorkspaceRefs = useOpenProjectsStore((state) => state.recentWorkspaceRefs)
   const removeRemoteProject = useOpenProjectsStore((state) => state.removeRemoteProject)
-  const recentWorkspacePaths = useFsStore((state) => state.recentWorkspacePaths)
   const switchingPath = useFsStore((state) => state.switchingPath)
   const workspaceLoading = useFsStore((state) => state.loading)
   const workspacePicking = useFsStore((state) => state.picking)
@@ -55,8 +53,6 @@ export function ProjectStrip(): React.ReactElement {
   const showToast = useToastStore((state) => state.show)
 
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [knownHistoryPaths, setKnownHistoryPaths] = useState<string[]>([])
-  const [historyLoading, setHistoryLoading] = useState(false)
   const [historyPosition, setHistoryPosition] = useState({ left: 8, top: 42 })
   const [draggingPath, setDraggingPath] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState<{
@@ -80,14 +76,13 @@ export function ProjectStrip(): React.ReactElement {
     () => getRunningProjectCounts(conversations),
     [conversations],
   )
-  const historyProjectPaths = useMemo(
-    () => knownHistoryPaths.filter((path) => !openProjectPaths.includes(path)),
-    [knownHistoryPaths, openProjectPaths],
-  )
-  const historyRemoteWorkspaceRefs = useMemo(() => {
+  const historyWorkspaceRefs = useMemo(() => {
+    const openLocalPaths = new Set(openProjectPaths)
     const openKeys = new Set(openRemoteWorkspaceRefs.map(workspaceRefKey))
-    return recentRemoteWorkspaceRefs.filter((ref) => !openKeys.has(workspaceRefKey(ref)))
-  }, [openRemoteWorkspaceRefs, recentRemoteWorkspaceRefs])
+    return recentWorkspaceRefs.filter((ref) =>
+      ref.kind === 'local' ? !openLocalPaths.has(ref.path) : !openKeys.has(workspaceRefKey(ref)),
+    )
+  }, [openProjectPaths, openRemoteWorkspaceRefs, recentWorkspaceRefs])
 
   useEffect(() => {
     if (!activePath) return
@@ -170,7 +165,7 @@ export function ProjectStrip(): React.ReactElement {
   }
 
   const openHistoryRemoteProject = async (
-    ref: (typeof recentRemoteWorkspaceRefs)[number],
+    ref: Extract<(typeof recentWorkspaceRefs)[number], { kind: 'remote' }>,
   ): Promise<void> => {
     if (await activateRemoteProject(ref)) setHistoryOpen(false)
   }
@@ -186,33 +181,6 @@ export function ProjectStrip(): React.ReactElement {
     }
     const nextOpen = !historyOpen
     setHistoryOpen(nextOpen)
-    if (!nextOpen) return
-
-    setHistoryLoading(true)
-    void window.cclinkStudio.workspaceState
-      .listLocalWorkspaces(getWorkspaceStateOwnerKey())
-      .then(async (workspaces) => {
-        const candidates = [
-          ...recentWorkspacePaths,
-          ...workspaces.map((workspace) => workspace.workspacePath),
-        ].filter((path, index, paths) => paths.indexOf(path) === index)
-        const resolvedPaths = await Promise.all(
-          candidates.map(async (path) => {
-            const result = await window.cclinkStudio.workspaceState
-              .resolveLocalWorkspace(path)
-              .catch(() => ({ valid: false, workspacePath: null }))
-            return result.valid ? result.workspacePath : null
-          }),
-        )
-        setKnownHistoryPaths(
-          resolvedPaths.filter(
-            (path, index, paths): path is string =>
-              typeof path === 'string' && paths.indexOf(path) === index,
-          ),
-        )
-      })
-      .catch(() => {})
-      .finally(() => setHistoryLoading(false))
   }
 
   const handleDragOver = (event: React.DragEvent<HTMLButtonElement>, path: string): void => {
@@ -383,27 +351,24 @@ export function ProjectStrip(): React.ReactElement {
             <div className="project-history-popover" style={historyPosition}>
               <div className="project-history-header">历史项目</div>
               <div className="project-history-list">
-                {historyLoading ? (
-                  <div className="project-history-empty">正在加载历史项目…</div>
-                ) : historyProjectPaths.length > 0 || historyRemoteWorkspaceRefs.length > 0 ? (
-                  <>
-                    {historyProjectPaths.map((path) => (
+                {historyWorkspaceRefs.length > 0 ? (
+                  historyWorkspaceRefs.map((ref) =>
+                    ref.kind === 'local' ? (
                       <button
-                        key={path}
+                        key={ref.path}
                         type="button"
                         className="project-history-item"
-                        title={path}
+                        title={ref.path}
                         disabled={workspaceBusy}
-                        onClick={() => void openHistoryProject(path)}
+                        onClick={() => void openHistoryProject(ref.path)}
                       >
                         <IconProjects size={14} />
                         <span className="project-history-item-main">
-                          <span>{getProjectName(path)}</span>
-                          <span>{path}</span>
+                          <span>{getProjectName(ref.path)}</span>
+                          <span>{ref.path}</span>
                         </span>
                       </button>
-                    ))}
-                    {historyRemoteWorkspaceRefs.map((ref) => (
+                    ) : (
                       <button
                         key={workspaceRefKey(ref)!}
                         type="button"
@@ -418,8 +383,8 @@ export function ProjectStrip(): React.ReactElement {
                           <span>远程 · {ref.endpointName || 'CCLink'}</span>
                         </span>
                       </button>
-                    ))}
-                  </>
+                    ),
+                  )
                 ) : (
                   <div className="project-history-empty">暂无未打开的历史项目</div>
                 )}

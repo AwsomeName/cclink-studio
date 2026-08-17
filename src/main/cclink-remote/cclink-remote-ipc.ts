@@ -90,15 +90,23 @@ export function registerCclinkRemoteIpc(
   registerTrustedIpcContract(noArgs(cclinkIpc.connectRealtime), guard, () => service.connect())
   registerTrustedIpcContract(noArgs(cclinkIpc.listServers), guard, () => service.listServers())
   const serverPathSchema = z.object({ serverId: idSchema, path: cclinkRemotePathSchema }).strict()
+  const openWorkspaceSchema = serverPathSchema.extend({ requestId: idSchema }).strict()
   registerTrustedIpcContract(
     bindIpcParser(cclinkIpc.browseDirectory, (args) => z.tuple([serverPathSchema]).parse(args)),
     guard,
     (_event, input) => service.browseDirectory(input.serverId, input.path),
   )
   registerTrustedIpcContract(
-    bindIpcParser(cclinkIpc.openWorkspace, (args) => z.tuple([serverPathSchema]).parse(args)),
+    bindIpcParser(cclinkIpc.openWorkspace, (args) => z.tuple([openWorkspaceSchema]).parse(args)),
     guard,
-    (_event, input) => service.openWorkspace(input.serverId, input.path),
+    (_event, input) => service.openWorkspace(input.serverId, input.path, input.requestId),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(cclinkIpc.cancelOpenWorkspace, (args) =>
+      z.tuple([z.object({ requestId: idSchema }).strict()]).parse(args),
+    ),
+    guard,
+    (_event, input) => ({ success: service.cancelOpenWorkspace(input.requestId) }),
   )
   registerTrustedIpcContract(
     bindIpcParser(cclinkIpc.listSessions, (args) => z.tuple([cclinkRemoteRefSchema]).parse(args)),

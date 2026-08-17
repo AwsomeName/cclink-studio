@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useGitStore } from '../../stores/git-store'
 import { IconBranch, IconClose, IconRefresh } from '../common/Icons'
@@ -22,6 +22,7 @@ export function GitOperationDialog(): React.ReactElement | null {
   const setTab = useGitStore((state) => state.setOperationDialogTab)
   const setMessage = useGitStore((state) => state.setCommitMessage)
   const togglePath = useGitStore((state) => state.toggleCommitPath)
+  const setCommitPaths = useGitStore((state) => state.setCommitPaths)
   const clearDraft = useGitStore((state) => state.clearCommitDraft)
   const acceptLatestSnapshot = useGitStore((state) => state.acceptLatestDialogSnapshot)
   const setNotice = useGitStore((state) => state.setOperationNotice)
@@ -29,24 +30,15 @@ export function GitOperationDialog(): React.ReactElement | null {
   const commit = useGitStore((state) => state.commit)
   const push = useGitStore((state) => state.push)
   const dialogRef = useRef<HTMLDivElement>(null)
-  const [confirmDiscard, setConfirmDiscard] = useState(false)
 
-  const dirty = Boolean(message.trim()) || selectedPaths.length > 0
   const stale = Boolean(snapshot && baselineRevision && snapshot.revision !== baselineRevision)
   const requestClose = useCallback((): void => {
     if (operation) return
-    if (dirty) {
-      setConfirmDiscard(true)
-      return
-    }
     closeDialog()
-  }, [closeDialog, dirty, operation])
+  }, [closeDialog, operation])
 
   useEffect(() => {
-    if (!dialogOpen) {
-      setConfirmDiscard(false)
-      return
-    }
+    if (!dialogOpen) return
     const frame = window.requestAnimationFrame(() => {
       if (tab === 'commit') dialogRef.current?.querySelector('textarea')?.focus()
       else dialogRef.current?.focus()
@@ -59,10 +51,6 @@ export function GitOperationDialog(): React.ReactElement | null {
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        if (confirmDiscard) {
-          setConfirmDiscard(false)
-          return
-        }
         requestClose()
         return
       }
@@ -83,7 +71,7 @@ export function GitOperationDialog(): React.ReactElement | null {
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [confirmDiscard, dialogOpen, requestClose])
+  }, [dialogOpen, requestClose])
 
   if (
     !dialogOpen ||
@@ -243,29 +231,13 @@ export function GitOperationDialog(): React.ReactElement | null {
               stale={stale}
               onMessageChange={setMessage}
               onTogglePath={togglePath}
+              onSetPaths={setCommitPaths}
               onCommit={() => void runCommit(false)}
               onCommitAndPush={() => void runCommit(true)}
               onPush={() => void runPush()}
             />
           )}
         </main>
-
-        {confirmDiscard && (
-          <div className="git-operation-discard" role="alertdialog" aria-modal="true">
-            <div>
-              <strong>放弃未提交的编辑？</strong>
-              <p>提交信息和文件选择将被清空，工作区文件不会改变。</p>
-              <div>
-                <button type="button" autoFocus onClick={() => setConfirmDiscard(false)}>
-                  继续编辑
-                </button>
-                <button type="button" className="danger" onClick={closeDialog}>
-                  放弃并关闭
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>,
     document.body,

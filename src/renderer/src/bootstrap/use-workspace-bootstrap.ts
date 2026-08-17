@@ -94,7 +94,8 @@ export function useWorkspaceBootstrap(): boolean {
         await reconcileAgentRuntimeStatuses(result.workspacePath)
         await persistRuntimeSections()
       }
-      await runOpenProjectsBootstrapOnce(useFsStore.getState().workspacePath)
+      const fsState = useFsStore.getState()
+      await runOpenProjectsBootstrapOnce(fsState.workspacePath, fsState.recentWorkspacePaths)
       if (!cancelled) setReady(true)
     }
 

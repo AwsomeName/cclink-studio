@@ -19,10 +19,12 @@ export function remoteWorkspaceRefFromAgent(
 
 export async function confirmRemoteWorkspaceRef(
   ref: RemoteWorkspaceRef,
+  requestId: string = crypto.randomUUID(),
 ): Promise<RemoteWorkspaceRef> {
   const workspace = await window.cclinkStudio.cclink.openWorkspace({
     serverId: ref.endpointId,
     path: ref.path,
+    requestId,
   })
   if (workspace.serverId !== ref.endpointId) {
     throw new Error('远程 Agent 返回了不匹配的设备身份')

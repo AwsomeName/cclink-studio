@@ -112,6 +112,7 @@ export class CclinkRemoteService implements RemoteProvider {
   private streams = new Map<string, StreamBuffer>()
   private capabilityProbes = new Map<string, CapabilityProbeResult & { expiresAt: number }>()
   private capabilityProbeFailures = new Map<string, CapabilityProbeResult & { expiresAt: number }>()
+  private readonly openWorkspaceOperations = new Map<string, { cancelled: boolean }>()
   private connecting: Promise<CclinkRealtimeStatus> | null = null
   private readonly diagnosticLog = new RemoteDiagnosticLog()
 
@@ -227,40 +228,64 @@ export class CclinkRemoteService implements RemoteProvider {
     )
   }
 
-  async browseDirectory(serverId: string, path: string): Promise<RemoteFileTreeResult> {
+  async browseDirectory(
+    serverId: string,
+    path: string,
+    requestId?: string,
+  ): Promise<RemoteFileTreeResult> {
     const server = this.servers.get(serverId)
     if (!server || server.status !== 'online')
       return failure('remote-agent', 'REMOTE_SERVER_OFFLINE', '远程设备不在线', true)
-    return this.requestFileTree(serverId, path, 1)
+    return this.requestFileTree(serverId, path, 1, requestId)
   }
 
-  async openWorkspace(serverId: string, requestedPath: string): Promise<CclinkWorkspace> {
-    const result = await this.browseDirectory(serverId, requestedPath)
-    if (!result.success || !result.tree || result.tree.type !== 'directory') {
-      throw new Error(result.error || '远程目录无法打开')
+  async openWorkspace(
+    serverId: string,
+    requestedPath: string,
+    requestId: string = randomUUID(),
+  ): Promise<CclinkWorkspace> {
+    if (this.openWorkspaceOperations.has(requestId)) throw new Error('远程打开请求标识重复')
+    const operation = { cancelled: false }
+    this.openWorkspaceOperations.set(requestId, operation)
+    try {
+      const result = await this.browseDirectory(serverId, requestedPath, requestId)
+      if (operation.cancelled) throw new Error('远程请求已取消')
+      if (!result.success || !result.tree || result.tree.type !== 'directory') {
+        throw new Error(result.error || '远程目录无法打开')
+      }
+      if (!result.workspaceId) {
+        throw new Error('远程 Agent 未返回规范 workspace_id，无法安全打开该工作空间')
+      }
+      const path = result.tree.path
+      const workspace: CclinkWorkspace = {
+        id: result.workspaceId,
+        path,
+        name: remotePathApi(path).basename(path) || path,
+        serverId,
+        kind: 'directory',
+        exists: true,
+      }
+      const server = this.servers.get(serverId)
+      if (server) {
+        server.workspaces = [
+          workspace,
+          ...server.workspaces.filter(
+            (item) => item.id !== workspace.id && item.path !== workspace.path,
+          ),
+        ]
+      }
+      return workspace
+    } finally {
+      this.openWorkspaceOperations.delete(requestId)
     }
-    if (!result.workspaceId) {
-      throw new Error('远程 Agent 未返回规范 workspace_id，无法安全打开该工作空间')
-    }
-    const path = result.tree.path
-    const workspace: CclinkWorkspace = {
-      id: result.workspaceId,
-      path,
-      name: remotePathApi(path).basename(path) || path,
-      serverId,
-      kind: 'directory',
-      exists: true,
-    }
-    const server = this.servers.get(serverId)
-    if (server) {
-      server.workspaces = [
-        workspace,
-        ...server.workspaces.filter(
-          (item) => item.id !== workspace.id && item.path !== workspace.path,
-        ),
-      ]
-    }
-    return workspace
+  }
+
+  cancelOpenWorkspace(requestId: string): boolean {
+    const operation = this.openWorkspaceOperations.get(requestId)
+    if (!operation) return false
+    operation.cancelled = true
+    this.requestRouter.cancel(requestId)
+    return true
   }
 
   async listSessions(ref: RemoteWorkspaceRef): Promise<CclinkRemoteSession[]> {
@@ -1859,12 +1884,14 @@ export class CclinkRemoteService implements RemoteProvider {
     serverId: string,
     path: string,
     depth: number,
+    requestId?: string,
   ): Promise<RemoteFileTreeResult> {
     try {
       const response = (await this.requestRouter.request(
         serverId,
         {
           ...createCclinkEnvelope('file_tree_request'),
+          ...(requestId ? { request_id: requestId, trace_id: requestId } : {}),
           path,
           depth: Math.min(Math.max(depth, 0), 3),
           file_scope: 'server',

@@ -33,6 +33,7 @@ interface GitState {
   setOperationDialogTab: (tab: 'changes' | 'commit') => void
   setCommitMessage: (message: string) => void
   toggleCommitPath: (path: string) => void
+  setCommitPaths: (paths: string[]) => void
   clearCommitDraft: () => void
   acceptLatestDialogSnapshot: () => void
   setOperationNotice: (notice: GitOperationNotice | null) => void
@@ -174,6 +175,7 @@ export const useGitStore = create<GitState>((set, get) => ({
         ? state.selectedCommitPaths.filter((selectedPath) => selectedPath !== path)
         : [...state.selectedCommitPaths, path],
     })),
+  setCommitPaths: (paths) => set({ selectedCommitPaths: [...new Set(paths)] }),
   clearCommitDraft: () => set({ commitMessage: '', selectedCommitPaths: [] }),
   acceptLatestDialogSnapshot: () => {
     const { snapshot, selectedCommitPaths } = get()

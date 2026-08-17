@@ -142,6 +142,25 @@ describe('CclinkRemoteService runtime protocol', () => {
     )
   })
 
+  it('cancels an open-workspace request without updating remembered workspaces', async () => {
+    const { service } = createService()
+    installOnlineServer(service)
+    const transport = new ReceivingTransport()
+    service.getRequestRouter().attach(transport)
+
+    const opening = service.openWorkspace('agent-1', '/srv/project', 'open-request-1')
+    await vi.waitFor(() => expect(transport.sent).toHaveLength(1))
+
+    expect(service.cancelOpenWorkspace('open-request-1')).toBe(true)
+    expect(service.cancelOpenWorkspace('missing-request')).toBe(false)
+    await expect(opening).rejects.toThrow('远程请求已取消')
+    expect(
+      (service as unknown as { servers: Map<string, CclinkServer> }).servers.get('agent-1')
+        ?.workspaces,
+    ).toEqual([])
+    service.getRequestRouter().detach()
+  })
+
   it('maps the latest Agent capability response and preserves probe diagnostics', async () => {
     const { service } = createService()
     installOnlineServer(service)

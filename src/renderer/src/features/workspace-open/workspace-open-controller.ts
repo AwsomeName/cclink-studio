@@ -17,6 +17,8 @@ export interface OpenWorkspaceRefOptions {
   confirmedRemote?: boolean
   /** 在远程发现开始前占用 generation，保证后发切换可以淘汰旧请求。 */
   generation?: number
+  /** renderer 创建的远程打开请求标识，用于跨 IPC 精确取消。 */
+  remoteRequestId?: string
 }
 
 function activateRestoredTab(ref: WorkspaceRef): void {
@@ -69,7 +71,7 @@ export async function openWorkspaceRef(
       throw new Error(state.service?.message || 'CCLink 远程服务未配置')
     }
     if (!state.session.loggedIn) throw new Error('请先登录 CCLink 远程服务')
-    confirmedRef = await confirmRemoteWorkspaceRef(ref)
+    confirmedRef = await confirmRemoteWorkspaceRef(ref, options.remoteRequestId)
   }
 
   const transition = await prepareWorkspaceRuntimeTransition(confirmedRef, { generation })

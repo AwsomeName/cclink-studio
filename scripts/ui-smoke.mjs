@@ -899,17 +899,36 @@ async function main() {
       await dialog.waitFor({ state: 'visible', timeout: 10_000 })
       const commitView = dialog.locator('.git-commit-view')
       await commitView.waitFor({ state: 'visible', timeout: 10_000 })
+      await commitView.getByRole('button', { name: '全选', exact: true }).click()
+      assert(
+        (await commitView.getByRole('checkbox', { checked: true }).count()) === 2,
+        'Git select all did not select every stageable file',
+      )
+      await commitView.getByRole('button', { name: '取消全选', exact: true }).click()
+      assert(
+        (await commitView.getByRole('checkbox', { checked: true }).count()) === 0,
+        'Git clear all left stageable files selected',
+      )
       await commitView.getByRole('checkbox', { name: 'tracked.txt', exact: true }).check()
       await commitView.getByPlaceholder('说明这次修改').fill('UI smoke explicit commit')
       await page.keyboard.press('Escape')
-      const discard = dialog.getByRole('alertdialog')
-      await discard.waitFor({ state: 'visible', timeout: 10_000 })
+      await dialog.waitFor({ state: 'hidden', timeout: 10_000 })
+      await trigger.click()
+      await page
+        .locator('.git-status-popover')
+        .getByRole('button', { name: '提交…', exact: true })
+        .click()
+      await dialog.waitFor({ state: 'visible', timeout: 10_000 })
       assert(
-        (await commitView.getByPlaceholder('说明这次修改').inputValue()) ===
-          'UI smoke explicit commit',
-        'closing the Git dialog discarded the draft without confirmation',
+        (await commitView.getByPlaceholder('说明这次修改').inputValue()) === '',
+        'closing the Git dialog kept an obsolete commit message draft',
       )
-      await discard.getByRole('button', { name: '继续编辑', exact: true }).click()
+      assert(
+        (await commitView.getByRole('checkbox', { checked: true }).count()) === 0,
+        'closing the Git dialog kept obsolete file selections',
+      )
+      await commitView.getByRole('checkbox', { name: 'tracked.txt', exact: true }).check()
+      await commitView.getByPlaceholder('说明这次修改').fill('UI smoke explicit commit')
       await commitView.getByRole('button', { name: '提交 1 个文件', exact: true }).click()
       await dialog
         .locator('.git-operation-notice.success', { hasText: '提交成功' })
@@ -957,7 +976,7 @@ async function main() {
       ).stdout.trim()
       assert(localHead === remoteHead, 'remote HEAD does not match the confirmed local commit')
       await dialog.getByRole('button', { name: '关闭 Git 窗口', exact: true }).click()
-      return 'draft protected, selected file committed, untracked file preserved, explicit and combined push verified'
+      return 'direct close cleared draft, selected file committed, untracked file preserved, explicit and combined push verified'
     } finally {
       await page.evaluate(async (path) => {
         const { useFsStore } = await import('/src/stores/fs-store.ts')

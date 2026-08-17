@@ -105,4 +105,31 @@ describe('CclinkRequestRouter', () => {
     expect(received[0]?.message.cc_type).toBe('stream_chunk')
     router.detach()
   })
+
+  it('cancels a pending request immediately and ignores its late response', async () => {
+    const transport = new FakeTransport()
+    const router = new CclinkRequestRouter()
+    router.attach(transport)
+    const result = router.request(
+      'agent-1',
+      { ...createCclinkEnvelope('file_tree_request'), request_id: 'open-request-1' },
+      ['file_tree_response'],
+    )
+    await Promise.resolve()
+
+    expect(router.cancel('open-request-1')).toBe(true)
+    expect(router.cancel('open-request-1')).toBe(false)
+    await expect(result).rejects.toMatchObject({
+      remoteError: { code: 'REMOTE_REQUEST_CANCELLED', retryable: false },
+    })
+
+    transport.emit({
+      serverId: 'agent-1',
+      message: {
+        ...createCclinkEnvelope('file_tree_response'),
+        request_id: 'open-request-1',
+      },
+    })
+    router.detach()
+  })
 })

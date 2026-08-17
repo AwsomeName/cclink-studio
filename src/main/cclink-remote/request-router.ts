@@ -127,6 +127,15 @@ export class CclinkRequestRouter {
     })
   }
 
+  cancel(requestId: string): boolean {
+    if (!this.pending.has(requestId)) return false
+    this.reject(
+      requestId,
+      requestError('transport', REMOTE_ERROR_CODE.REQUEST_CANCELLED, '远程请求已取消', false),
+    )
+    return true
+  }
+
   private handleMessage(event: CclinkTransportEvent): void {
     const requestId = event.message.request_id
     if (!isCclinkProtocolCompatible(event.message)) {

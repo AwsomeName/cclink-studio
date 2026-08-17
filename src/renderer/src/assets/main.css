@@ -9957,55 +9957,6 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   margin-top: 0;
 }
 
-.git-operation-discard {
-  position: absolute;
-  z-index: 1;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(0, 0, 0, 0.58);
-}
-
-.git-operation-discard > div {
-  width: min(390px, 100%);
-  padding: 18px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-secondary);
-  box-shadow: var(--shadow-elevated);
-}
-
-.git-operation-discard p {
-  margin: 8px 0 16px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.git-operation-discard > div > div {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.git-operation-discard button {
-  padding: 6px 10px;
-  border: 1px solid var(--border-color);
-  border-radius: 5px;
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  cursor: pointer;
-  font: inherit;
-}
-
-.git-operation-discard button.danger {
-  border-color: #b91c1c;
-  background: #991b1b;
-  color: #fff;
-}
-
 .git-commit-view {
   max-height: min(540px, calc(100vh - 136px));
   overflow: auto;
@@ -10048,6 +9999,37 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
 
 .git-commit-group + .git-commit-group {
   margin-top: 8px;
+}
+
+.git-commit-group-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+}
+
+.git-commit-group-actions span {
+  color: var(--text-muted);
+}
+
+.git-commit-group-actions button {
+  padding: 2px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+}
+
+.git-commit-group-actions button:hover:not(:disabled) {
+  border-color: var(--accent-color);
+  background: var(--bg-hover);
+}
+
+.git-commit-group-actions button:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .git-commit-file {

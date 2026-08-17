@@ -92,6 +92,7 @@ const cclinkApi: CclinkApiContract = {
   getRealtimeStatus: () => invokeIpcContract(cclinkIpc.getRealtimeStatus),
   browseDirectory: (input) => invokeIpcContract(cclinkIpc.browseDirectory, input),
   openWorkspace: (input) => invokeIpcContract(cclinkIpc.openWorkspace, input),
+  cancelOpenWorkspace: (input) => invokeIpcContract(cclinkIpc.cancelOpenWorkspace, input),
   listSessions: (ref) => invokeIpcContract(cclinkIpc.listSessions, ref),
   createSession: (input) => invokeIpcContract(cclinkIpc.createSession, input),
   setSessionArchived: (input) => invokeIpcContract(cclinkIpc.setSessionArchived, input),

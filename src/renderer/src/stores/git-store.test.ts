@@ -124,6 +124,15 @@ describe('git-store', () => {
     })
   })
 
+  it('replaces and deduplicates the commit selection for select all', () => {
+    useGitStore.getState().setCommitPaths(['a.md', 'b.md', 'a.md'])
+
+    expect(useGitStore.getState().selectedCommitPaths).toEqual(['a.md', 'b.md'])
+
+    useGitStore.getState().setCommitPaths([])
+    expect(useGitStore.getState().selectedCommitPaths).toEqual([])
+  })
+
   it('clears dialog state and commit draft when the workspace changes', async () => {
     getSnapshot
       .mockResolvedValueOnce(snapshot(firstWorkspace, 'main'))

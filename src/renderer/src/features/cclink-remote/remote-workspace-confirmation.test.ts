@@ -39,15 +39,22 @@ describe('remote workspace confirmation', () => {
     vi.stubGlobal('window', { cclinkStudio: { cclink: { openWorkspace } } })
 
     await expect(
-      confirmRemoteWorkspaceRef({
-        kind: 'remote',
-        transport: 'cclink',
-        endpointId: 'agent-1',
-        workspaceId: 'studio-local-hash',
-        path: '/srv/project',
-        endpointName: 'Agent 1',
-      }),
+      confirmRemoteWorkspaceRef(
+        {
+          kind: 'remote',
+          transport: 'cclink',
+          endpointId: 'agent-1',
+          workspaceId: 'studio-local-hash',
+          path: '/srv/project',
+          endpointName: 'Agent 1',
+        },
+        'open-request-1',
+      ),
     ).resolves.toMatchObject({ workspaceId: 'ws_agent_canonical' })
-    expect(openWorkspace).toHaveBeenCalledWith({ serverId: 'agent-1', path: '/srv/project' })
+    expect(openWorkspace).toHaveBeenCalledWith({
+      serverId: 'agent-1',
+      path: '/srv/project',
+      requestId: 'open-request-1',
+    })
   })
 })

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { localWorkspaceRef, workspaceRefKey, workspaceRefLabel } from '@shared/workspace-ref'
+import { workspaceRefKey, workspaceRefLabel } from '@shared/workspace-ref'
 import { FloatingSurface } from '../../components/common/FloatingSurface'
 import {
   IconChevronRight,
@@ -76,21 +76,24 @@ function WorkspaceSourceChooser({
   onRemote(): void
   onOpened(): void
 }): React.ReactElement {
-  const recentWorkspacePaths = useFsStore((state) => state.recentWorkspacePaths)
-  const remoteRefs = useOpenProjectsStore((state) => state.recentRemoteWorkspaceRefs)
+  const recentRefs = useOpenProjectsStore((state) => state.recentWorkspaceRefs)
   const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const pendingRemoteGenerationRef = useRef<number | null>(null)
-  const recentRefs = useMemo(
-    () => [...recentWorkspacePaths.slice(0, 5).map(localWorkspaceRef), ...remoteRefs.slice(0, 5)],
-    [recentWorkspacePaths, remoteRefs],
-  )
+  const pendingRemoteOperationRef = useRef<{
+    generation: number
+    requestId: string
+  } | null>(null)
+  const visibleRecentRefs = useMemo(() => recentRefs.slice(0, 10), [recentRefs])
 
   useEffect(
     () => () => {
-      const generation = pendingRemoteGenerationRef.current
-      if (generation !== null) cancelWorkspaceRuntimeTransition(generation)
+      const operation = pendingRemoteOperationRef.current
+      if (!operation) return
+      cancelWorkspaceRuntimeTransition(operation.generation)
+      void window.cclinkStudio.cclink
+        .cancelOpenWorkspace({ requestId: operation.requestId })
+        .catch(() => {})
     },
     [],
   )
@@ -111,7 +114,7 @@ function WorkspaceSourceChooser({
     }
   }
 
-  const openRecent = async (ref: (typeof recentRefs)[number]): Promise<void> => {
+  const openRecent = async (ref: (typeof visibleRecentRefs)[number]): Promise<void> => {
     const key = workspaceRefKey(ref) ?? 'global'
     if (key === workspaceRefKey(activeWorkspaceRef)) {
       onOpened()
@@ -119,11 +122,19 @@ function WorkspaceSourceChooser({
     }
     setBusyKey(key)
     setError(null)
-    const generation = ref.kind === 'remote' ? beginWorkspaceRuntimeTransition() : null
-    pendingRemoteGenerationRef.current = generation
+    const operation =
+      ref.kind === 'remote'
+        ? { generation: beginWorkspaceRuntimeTransition(), requestId: crypto.randomUUID() }
+        : null
+    pendingRemoteOperationRef.current = operation
     try {
-      await openWorkspaceRef(ref, generation === null ? {} : { generation })
-      pendingRemoteGenerationRef.current = null
+      await openWorkspaceRef(
+        ref,
+        operation === null
+          ? {}
+          : { generation: operation.generation, remoteRequestId: operation.requestId },
+      )
+      pendingRemoteOperationRef.current = null
       onOpened()
     } catch (openError) {
       if (ref.kind === 'remote') {
@@ -132,8 +143,8 @@ function WorkspaceSourceChooser({
       }
       setError(openError instanceof Error ? openError.message : String(openError))
     } finally {
-      if (pendingRemoteGenerationRef.current === generation) {
-        pendingRemoteGenerationRef.current = null
+      if (pendingRemoteOperationRef.current?.generation === operation?.generation) {
+        pendingRemoteOperationRef.current = null
       }
       setBusyKey(null)
     }
@@ -172,10 +183,10 @@ function WorkspaceSourceChooser({
 
       {error && <div className="workspace-open-error">{error}</div>}
 
-      {recentRefs.length > 0 && (
+      {visibleRecentRefs.length > 0 && (
         <div className="workspace-open-recent">
           <div className="workspace-open-section-title">最近打开</div>
-          {recentRefs.map((ref) => {
+          {visibleRecentRefs.map((ref) => {
             const key = workspaceRefKey(ref)!
             const remote = ref.kind === 'remote'
             return (

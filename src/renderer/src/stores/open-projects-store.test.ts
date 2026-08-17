@@ -60,6 +60,10 @@ describe('open-projects-store', () => {
       '/workspace/b',
       '/workspace/c',
     ])
+    expect(useOpenProjectsStore.getState().recentWorkspaceRefs).toEqual([
+      { kind: 'local', path: '/workspace/a' },
+      { kind: 'local', path: '/workspace/c' },
+    ])
   })
 
   it('replaces a restored remote reference with the Agent-confirmed opaque workspace identity', async () => {
@@ -82,10 +86,10 @@ describe('open-projects-store', () => {
       null,
       'projectStrip',
       {
-        version: 2,
+        version: 3,
         openProjectPaths: [],
         openRemoteWorkspaceRefs: [confirmed],
-        recentRemoteWorkspaceRefs: [confirmed],
+        recentWorkspaceRefs: [confirmed],
       },
       null,
     )
@@ -116,7 +120,7 @@ describe('open-projects-store', () => {
       null,
       'projectStrip',
       {
-        version: 2,
+        version: 3,
         openProjectPaths: ['/workspace/c', '/workspace/a', '/workspace/b'],
       },
       null,
@@ -153,8 +157,13 @@ describe('open-projects-store', () => {
       null,
       'projectStrip',
       {
-        version: 2,
+        version: 3,
         openProjectPaths: ['/workspace/a', '/workspace/b', '/workspace/c'],
+        recentWorkspaceRefs: [
+          { kind: 'local', path: '/workspace/c' },
+          { kind: 'local', path: '/workspace/a' },
+          { kind: 'local', path: '/workspace/b' },
+        ],
       },
       null,
     )
@@ -179,8 +188,12 @@ describe('open-projects-store', () => {
       null,
       'projectStrip',
       {
-        version: 2,
+        version: 3,
         openProjectPaths: ['/workspace/a', '/workspace/b'],
+        recentWorkspaceRefs: [
+          { kind: 'local', path: '/workspace/a' },
+          { kind: 'local', path: '/workspace/b' },
+        ],
       },
       null,
     )
@@ -202,11 +215,11 @@ describe('open-projects-store', () => {
     store.removeRemoteProject(remoteA)
 
     expect(useOpenProjectsStore.getState().openRemoteWorkspaceRefs).toEqual([remoteB])
-    expect(useOpenProjectsStore.getState().recentRemoteWorkspaceRefs).toEqual([remoteB, remoteA])
+    expect(useOpenProjectsStore.getState().recentWorkspaceRefs).toEqual([remoteB, remoteA])
 
     useOpenProjectsStore.getState().addRemoteProject(remoteA)
     await flushPendingWorkspaceStateWrites()
-    expect(useOpenProjectsStore.getState().recentRemoteWorkspaceRefs).toEqual([remoteA, remoteB])
+    expect(useOpenProjectsStore.getState().recentWorkspaceRefs).toEqual([remoteA, remoteB])
   })
 
   it('migrates open remote projects from version 1 into remote history', async () => {
@@ -231,17 +244,39 @@ describe('open-projects-store', () => {
     await restoreOpenProjects(null)
     await flushPendingWorkspaceStateWrites()
 
-    expect(useOpenProjectsStore.getState().recentRemoteWorkspaceRefs).toEqual([remote])
+    expect(useOpenProjectsStore.getState().recentWorkspaceRefs).toEqual([remote])
     expect(window.cclinkStudio.workspaceState.setSection).toHaveBeenLastCalledWith(
       null,
       'projectStrip',
       {
-        version: 2,
+        version: 3,
         openProjectPaths: [],
         openRemoteWorkspaceRefs: [remote],
-        recentRemoteWorkspaceRefs: [remote],
+        recentWorkspaceRefs: [remote],
       },
       null,
     )
+  })
+
+  it('keeps one recency order across local and remote workspaces', () => {
+    const remote = {
+      kind: 'remote' as const,
+      transport: 'cclink' as const,
+      endpointId: 'agent-1',
+      workspaceId: 'workspace-a',
+      path: '/srv/a',
+    }
+    const store = useOpenProjectsStore.getState()
+
+    store.addProject('/workspace/a')
+    store.addRemoteProject(remote)
+    store.addProject('/workspace/b')
+    store.addProject('/workspace/a')
+
+    expect(useOpenProjectsStore.getState().recentWorkspaceRefs).toEqual([
+      { kind: 'local', path: '/workspace/a' },
+      { kind: 'local', path: '/workspace/b' },
+      remote,
+    ])
   })
 })
