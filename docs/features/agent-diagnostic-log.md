@@ -1,7 +1,7 @@
 # Agent 与工作台统一诊断日志
 
-> 状态：D0-D3.5 已落地；D4 错误现场附件待做
-> 最后更新：2026-07-26
+> 状态：D0-D3.5 已落地；远程会话 Studio 侧第一版已实现、真人验收待做；D4 错误现场附件、远程 Agent 原始日志接口待做
+> 最后更新：2026-08-17
 > 关联文档：`docs/features/agent-system.md`、`docs/features/ai-work-browser-v0.1-tasks.md`、`docs/features/workspace-operations-assistant.md`、`docs/features/browser-automation.md`
 
 ## 结论
@@ -48,6 +48,32 @@ Agent 诊断日志不是锦上添花，而是 CCLink Studio 进入真实网页�
 | Renderer/Main 近期日志       | ✅ 已完成 | 两侧各保留最近 200 条脱敏日志，报告输出最近 100 条                                        |
 | 独立失败降级                 | ✅ 已完成 | 任一来源采集失败不影响其余章节复制                                                        |
 | 截图/DOM 摘要                | 📋 待做   | D4：用户显式选择后再保存                                                                  |
+
+## 远程 Agent 会话诊断日志
+
+### 问题记录（2026-08-17）
+
+远程 Agent 面板此前没有本地 Agent 已有的“复制诊断日志”入口。Studio 虽然能显示消息和工具
+调用，但接收 `stream_start`、`agent_status`、`stream_end` 时会丢弃用于排障的关联和终态字段，
+导致用户看到“Agent 就绪”或不完整回复后，无法复制证据判断任务是否正常结束。
+
+Studio 第一版边界：
+
+- 远程 Agent 输入区工具栏提供“复制远程 Agent 诊断日志”；
+- 主进程为每个远程会话保留当前进程内有界协议事件，包含方向、事件类型、
+  `request_id`、`trace_id`、`msg_id`、工具状态、`exit_code`、`final_state`、错误码和截断标记；
+- 诊断包合并设备/协议/能力状态、当前会话、最近消息与工具、结束判断和近期远程错误；
+- 事件不落盘、不上传，App 重启后不可恢复；已持久化的脱敏会话消息仍可复制；
+- 每个来源独立失败降级，复制前再次脱敏并限制条数和单字段长度。
+
+后续 Agent 项目需求：如果 Studio 侧事件仍不足以解释运行时内部原因，Agent 再提供显式、
+只读、按会话过滤、tail-only、服务端脱敏且有大小上限的诊断请求/响应能力。Studio 不通过
+远程 Shell 偷跑 `chatcc logs`，也不默认上传或读取整机日志。该接口尚未实现，不能把当前
+Studio 诊断包称为远程服务器原始 ChatTrace。
+
+用户验收动作：在远程会话执行一次任务，点击输入区旁的剪贴板按钮，将结果粘贴到文本编辑器；
+报告应显示当前设备、Agent 版本、会话状态、协议事件、消息/工具时间线，以及最近一次
+`stream_end` 的 `exit_code/final_state`。断网或单项采集失败时仍应复制其余章节并标明失败。
 
 ## /grilling 结论
 

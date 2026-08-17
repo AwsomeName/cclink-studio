@@ -16,7 +16,7 @@ import { defineIpcCall } from './contract'
 
 export interface RemoteApiContract {
   getStatus(ref: RemoteWorkspaceRef): Promise<RemoteStatus>
-  diagnose(ref: RemoteWorkspaceRef): Promise<RemoteDiagnosticReport>
+  diagnose(ref: RemoteWorkspaceRef, sessionId?: string): Promise<RemoteDiagnosticReport>
   listFileTree(request: RemoteFileTreeRequest): Promise<RemoteFileTreeResult>
   readFile(request: RemoteFileReadRequest): Promise<RemoteFileReadResult>
   writeFile(request: RemoteFileWriteRequest): Promise<RemoteFileMutationResult>
@@ -45,7 +45,10 @@ export interface RemoteFileDraft {
 
 export const remoteIpc = {
   getStatus: defineIpcCall<[ref: RemoteWorkspaceRef], RemoteStatus>('remote:getStatus'),
-  diagnose: defineIpcCall<[ref: RemoteWorkspaceRef], RemoteDiagnosticReport>('remote:diagnose'),
+  diagnose: defineIpcCall<
+    [ref: RemoteWorkspaceRef, sessionId: string | undefined],
+    RemoteDiagnosticReport
+  >('remote:diagnose'),
   listFileTree: defineIpcCall<[request: RemoteFileTreeRequest], RemoteFileTreeResult>(
     'remote:listFileTree',
   ),

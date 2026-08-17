@@ -204,9 +204,11 @@ export function registerCclinkRemoteIpc(
     (_event, ref) => service.getStatus(ref),
   )
   registerTrustedIpcContract(
-    bindIpcParser(remoteIpc.diagnose, (args) => z.tuple([cclinkRemoteRefSchema]).parse(args)),
+    bindIpcParser(remoteIpc.diagnose, (args) =>
+      z.tuple([cclinkRemoteRefSchema, z.union([idSchema, z.undefined()])]).parse(args),
+    ),
     guard,
-    (_event, ref) => service.diagnose(ref),
+    (_event, ref, sessionId) => service.diagnose(ref, sessionId),
   )
   registerTrustedIpcContract(
     bindIpcParser(remoteIpc.listFileTree, (args) =>

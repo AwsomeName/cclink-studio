@@ -1,6 +1,9 @@
 import type {
   CclinkCapabilityProbeResponseMessage,
   CclinkFileContent,
+  CclinkMessageType,
+  CclinkRemoteMessage,
+  CclinkRemoteSession,
   CclinkTreeNode,
 } from './cclink'
 import type { RemoteError } from './remote-error'
@@ -59,6 +62,34 @@ export interface RemoteDiagnosticReport {
   status: RemoteStatus
   checks: RemoteDiagnosticCheck[]
   recentErrors: RemoteDiagnosticEvent[]
+  agentSession?: RemoteAgentSessionDiagnosticSnapshot
+}
+
+export interface RemoteAgentSessionDiagnosticEvent {
+  timestamp: number
+  direction: 'inbound' | 'outbound'
+  type: CclinkMessageType
+  requestId?: string
+  traceId?: string
+  messageId?: string
+  status?: string
+  code?: string
+  error?: string
+  tool?: string
+  toolState?: string
+  exitCode?: number
+  finalState?: string
+  payloadTruncated?: boolean
+  count?: number
+}
+
+export interface RemoteAgentSessionDiagnosticSnapshot {
+  session: CclinkRemoteSession
+  messages: CclinkRemoteMessage[]
+  messageLimit: number
+  events: RemoteAgentSessionDiagnosticEvent[]
+  eventLimit: number
+  processLocalOnly: true
 }
 
 export interface RemoteFileTreeRequest {
@@ -138,7 +169,7 @@ export interface RemoteFileMutationResult {
 export interface RemoteProvider {
   transport: 'cclink'
   getStatus(ref: RemoteWorkspaceRef): Promise<RemoteStatus>
-  diagnose(ref: RemoteWorkspaceRef): Promise<RemoteDiagnosticReport>
+  diagnose(ref: RemoteWorkspaceRef, sessionId?: string): Promise<RemoteDiagnosticReport>
   listFileTree(request: RemoteFileTreeRequest): Promise<RemoteFileTreeResult>
   readFile(request: RemoteFileReadRequest): Promise<RemoteFileReadResult>
   writeFile(request: RemoteFileWriteRequest): Promise<RemoteFileMutationResult>

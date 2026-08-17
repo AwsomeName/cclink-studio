@@ -2,10 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CclinkRemoteMessage } from '@shared/cclink'
 import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
 import type { RemoteStatus } from '@shared/remote-protocol'
+import type { RemoteDiagnosticReport } from '@shared/remote-protocol'
 import { useCclinkStore } from '../../stores'
-import { IconPlus, IconRobot, IconSend } from '../../components/common/Icons'
+import { IconClipboard, IconPlus, IconRobot, IconSend } from '../../components/common/Icons'
 import { ContentBlockRenderer } from '../../components/common/ConversationMessageRenderer'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
+import { useToastStore } from '../../components/common/Toast'
+import { APP_VERSION } from '../../app-metadata'
+import { buildRemoteAgentDiagnosticMarkdown } from '../diagnostics/remote-agent-diagnostic-report'
+import { copyTextToClipboard } from '../../utils/clipboard'
 
 export interface RemoteAgentVisualStatus {
   tone: 'connecting' | 'ready' | 'working' | 'unavailable'
@@ -77,8 +82,10 @@ export function RemoteAgentPanel({
   const sendAgentMessage = useCclinkStore((state) => state.sendAgentMessage)
   const pendingPermissions = useCclinkStore((state) => state.pendingPermissions)
   const respondPermission = useCclinkStore((state) => state.respondPermission)
+  const showToast = useToastStore((state) => state.show)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [copyingDiagnostics, setCopyingDiagnostics] = useState(false)
   const [remoteStatus, setRemoteStatus] = useState<RemoteStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -187,6 +194,48 @@ export function RemoteAgentPanel({
     }
   }
 
+  const copyDiagnostics = async (): Promise<void> => {
+    if (!activeSession || copyingDiagnostics) return
+    setCopyingDiagnostics(true)
+    try {
+      let collectionError: string | null = null
+      let report: RemoteDiagnosticReport
+      try {
+        report = await window.cclinkStudio.remote.diagnose(workspaceRef, activeSession.id)
+      } catch (error) {
+        collectionError = error instanceof Error ? error.message : String(error)
+        report = await window.cclinkStudio.remote.diagnose(workspaceRef)
+        report = {
+          ...report,
+          agentSession: {
+            session: activeSession,
+            messages: activeMessages.slice(-100),
+            messageLimit: 100,
+            events: [],
+            eventLimit: 0,
+            processLocalOnly: true,
+          },
+        }
+      }
+      await copyTextToClipboard(
+        buildRemoteAgentDiagnosticMarkdown({
+          appVersion: APP_VERSION,
+          platform: navigator.platform,
+          report,
+          collectionError,
+        }),
+      )
+      showToast('远程 Agent 诊断日志已复制', 'success')
+    } catch (error) {
+      showToast(
+        `复制远程诊断日志失败: ${error instanceof Error ? error.message : String(error)}`,
+        'error',
+      )
+    } finally {
+      setCopyingDiagnostics(false)
+    }
+  }
+
   return (
     <div className="remote-agent-panel">
       <div className="remote-agent-panel-toolbar">
@@ -217,6 +266,15 @@ export function RemoteAgentPanel({
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          onClick={() => void copyDiagnostics()}
+          disabled={!activeSession || copyingDiagnostics}
+          title={activeSession ? '复制远程 Agent 诊断日志' : '当前没有远程会话'}
+          aria-label="复制远程 Agent 诊断日志"
+        >
+          <IconClipboard size={14} />
+        </button>
         <button
           type="button"
           onClick={() => void startSession()}

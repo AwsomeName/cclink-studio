@@ -526,6 +526,63 @@ describe('CclinkRemoteService runtime protocol', () => {
     ])
   })
 
+  it('为远程会话保留有界协议终态诊断并合并到诊断报告', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+
+    await handle({
+      ...createCclinkEnvelope('stream_start', {
+        request_id: 'request-1',
+        trace_id: 'trace-1',
+      }),
+      session_id: 'session-1',
+      msg_id: 'message-1',
+    })
+    await handle({
+      ...createCclinkEnvelope('stream_chunk'),
+      session_id: 'session-1',
+      msg_id: 'message-1',
+      delta: '第一段',
+    })
+    await handle({
+      ...createCclinkEnvelope('stream_chunk'),
+      session_id: 'session-1',
+      msg_id: 'message-1',
+      delta: '第二段',
+    })
+    await handle({
+      ...createCclinkEnvelope('stream_end', { request_id: 'request-1', trace_id: 'trace-1' }),
+      session_id: 'session-1',
+      msg_id: 'message-1',
+      exit_code: 0,
+      final_state: 'missing_final_diagnostic',
+    })
+
+    await expect(service.diagnose(remoteRef, 'session-1')).resolves.toMatchObject({
+      agentSession: {
+        session: { id: 'session-1', status: 'idle' },
+        messageLimit: 100,
+        eventLimit: 100,
+        processLocalOnly: true,
+        events: [
+          expect.objectContaining({
+            direction: 'inbound',
+            type: 'stream_start',
+            requestId: 'request-1',
+            traceId: 'trace-1',
+          }),
+          expect.objectContaining({ type: 'stream_chunk', count: 2 }),
+          expect.objectContaining({
+            type: 'stream_end',
+            exitCode: 0,
+            finalState: 'missing_final_diagnostic',
+          }),
+        ],
+      },
+    })
+  })
+
   it('只在 Agent ACK 后提交审批状态，并保留被拒绝的待审批操作', async () => {
     const { service, handle } = createService()
     await service.initialize()

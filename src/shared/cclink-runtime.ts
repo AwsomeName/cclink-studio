@@ -122,6 +122,7 @@ export interface CclinkStreamEndMessage extends CclinkRuntimeEnvelope<'stream_en
   session_id: string
   msg_id: string
   exit_code?: number
+  final_state?: string
   code?: string
   error?: string
   final_text?: string

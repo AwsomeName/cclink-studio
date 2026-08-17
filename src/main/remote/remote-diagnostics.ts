@@ -1,4 +1,5 @@
 import type {
+  RemoteAgentSessionDiagnosticSnapshot,
   RemoteDiagnosticCheck,
   RemoteDiagnosticEvent,
   RemoteDiagnosticReport,
@@ -8,6 +9,7 @@ import type {
 export function buildRemoteDiagnosticReport(
   status: RemoteStatus,
   recentErrors: RemoteDiagnosticEvent[],
+  agentSession?: RemoteAgentSessionDiagnosticSnapshot,
 ): RemoteDiagnosticReport {
   const connectionError = status.state === 'online' ? undefined : status.remoteError
   const capabilityError =
@@ -59,7 +61,14 @@ export function buildRemoteDiagnosticReport(
     ),
     capability('shell.pty', '远程 PTY', status.capabilities.shell.pty),
   ]
-  return { ref: status.ref, generatedAt: Date.now(), status, checks, recentErrors }
+  return {
+    ref: status.ref,
+    generatedAt: Date.now(),
+    status,
+    checks,
+    recentErrors,
+    ...(agentSession ? { agentSession } : {}),
+  }
 }
 
 function capability(

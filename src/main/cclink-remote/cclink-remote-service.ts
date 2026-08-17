@@ -33,6 +33,7 @@ import {
 import type { CclinkRealtimeStatus } from '../../shared/ipc/cclink'
 import type { CclinkRealtimeEvent } from '../../shared/ipc/cclink'
 import type {
+  RemoteAgentSessionDiagnosticEvent,
   RemoteFileReadRequest,
   RemoteFileReadResult,
   RemoteFileCreateRequest,
@@ -46,6 +47,7 @@ import type {
   RemoteStatus,
   RemoteDiagnosticReport,
 } from '../../shared/remote-protocol'
+import { sanitizeDiagnosticText } from '../../shared/diagnostics'
 import { REMOTE_ERROR_CODE, type RemoteError } from '../../shared/remote-error'
 import type { RemoteWorkspaceRef } from '../../shared/workspace-ref'
 import { callCclinkCloud } from './cloud-function-client'
@@ -54,7 +56,10 @@ import { CclinkRequestError, CclinkRequestRouter } from './request-router'
 import { TencentChatAdapter } from './tencent-chat-adapter'
 import { TimTransport } from './tim-transport'
 import { CclinkRuntimeStateStore } from './runtime-state-store'
-import { RemoteDiagnosticLog } from '../remote/remote-diagnostic-log'
+import {
+  REMOTE_SESSION_DIAGNOSTIC_EVENT_LIMIT,
+  RemoteDiagnosticLog,
+} from '../remote/remote-diagnostic-log'
 import { buildRemoteDiagnosticReport } from '../remote/remote-diagnostics'
 
 interface PairedAgentResponse {
@@ -86,6 +91,7 @@ const MAX_FILE_BYTES = 2 * 1024 * 1024
 const FILE_CHUNK_BYTES = 4096 as const
 const MAX_MUTATION_MESSAGE_BYTES = 11 * 1024
 const CHUNK_SEND_CONCURRENCY = 8
+const REMOTE_SESSION_DIAGNOSTIC_MESSAGE_LIMIT = 100
 
 export class CclinkRemoteService implements RemoteProvider {
   readonly transport = 'cclink' as const
@@ -352,6 +358,7 @@ export class CclinkRemoteService implements RemoteProvider {
         content: normalized,
       }
       await this.requestRouter.send(ref.endpointId, message)
+      this.recordSessionProtocolEvent(ref.endpointId, message, 'outbound')
       const userMessage: CclinkRemoteMessage = {
         type: 'user',
         id: `remote-user-${requestId}`,
@@ -628,7 +635,7 @@ export class CclinkRemoteService implements RemoteProvider {
     }
   }
 
-  async diagnose(ref: RemoteWorkspaceRef): Promise<RemoteDiagnosticReport> {
+  async diagnose(ref: RemoteWorkspaceRef, sessionId?: string): Promise<RemoteDiagnosticReport> {
     const status = await this.getStatus(ref)
     if (status.remoteError) {
       this.diagnosticLog.record('status', {
@@ -636,7 +643,21 @@ export class CclinkRemoteService implements RemoteProvider {
         context: { ...status.remoteError.context, endpointId: ref.endpointId },
       })
     }
-    return buildRemoteDiagnosticReport(status, this.diagnosticLog.recent(ref.endpointId))
+    const session = sessionId ? this.assertSessionMatches(ref, sessionId) : undefined
+    return buildRemoteDiagnosticReport(
+      status,
+      this.diagnosticLog.recent(ref.endpointId),
+      session
+        ? {
+            session: { ...session },
+            messages: this.listMessages(session.id).slice(-REMOTE_SESSION_DIAGNOSTIC_MESSAGE_LIMIT),
+            messageLimit: REMOTE_SESSION_DIAGNOSTIC_MESSAGE_LIMIT,
+            events: this.diagnosticLog.recentSession(ref.endpointId, session.id),
+            eventLimit: REMOTE_SESSION_DIAGNOSTIC_EVENT_LIMIT,
+            processLocalOnly: true,
+          }
+        : undefined,
+    )
   }
 
   async listFileTree(request: RemoteFileTreeRequest): Promise<RemoteFileTreeResult> {
@@ -1239,6 +1260,7 @@ export class CclinkRemoteService implements RemoteProvider {
     serverId: string,
     message: CclinkProtocolMessage,
   ): Promise<void> {
+    this.recordSessionProtocolEvent(serverId, message, 'inbound')
     switch (message.cc_type) {
       case 'session_sync_response':
         this.applySessionSync(serverId, message as CclinkSessionSyncResponseMessage)
@@ -1609,6 +1631,37 @@ export class CclinkRemoteService implements RemoteProvider {
     // Locally imported or offline-only history is retained until an explicit user deletion.
     this.persistState()
     this.emitRealtime({ type: 'sessions', serverId })
+  }
+
+  private recordSessionProtocolEvent(
+    serverId: string,
+    message: CclinkProtocolMessage,
+    direction: RemoteAgentSessionDiagnosticEvent['direction'],
+  ): void {
+    const payload = message as unknown as Record<string, unknown>
+    const sessionId = diagnosticString(payload['session_id'])
+    if (!sessionId) return
+    const event: RemoteAgentSessionDiagnosticEvent = {
+      timestamp: Date.now(),
+      direction,
+      type: message.cc_type,
+      ...diagnosticField('requestId', payload['request_id']),
+      ...diagnosticField('traceId', payload['trace_id']),
+      ...diagnosticField('messageId', payload['msg_id']),
+      ...diagnosticField('status', payload['status']),
+      ...diagnosticField('code', payload['code']),
+      ...diagnosticField('tool', payload['tool'] ?? payload['tool_name']),
+      ...diagnosticField('toolState', payload['state']),
+      ...diagnosticField('finalState', payload['final_state']),
+      ...(typeof payload['exit_code'] === 'number' ? { exitCode: payload['exit_code'] } : {}),
+      ...(payload['payload_truncated'] === true ? { payloadTruncated: true } : {}),
+      ...(typeof payload['error'] === 'string'
+        ? { error: sanitizeDiagnosticText(payload['error'], 500) }
+        : typeof payload['message'] === 'string' && message.cc_type === 'error'
+          ? { error: sanitizeDiagnosticText(payload['message'], 500) }
+          : {}),
+    }
+    this.diagnosticLog.recordSession(serverId, sessionId, event)
   }
 
   private appendMessage(sessionId: string, message: CclinkRemoteMessage): void {
@@ -2008,6 +2061,29 @@ const GROUPED_CAPABILITY_ALIASES: Readonly<Record<string, string>> = {
 }
 function valueAsString(value: string | number | undefined): string | undefined {
   return value == null ? undefined : String(value)
+}
+type SessionDiagnosticStringField =
+  | 'requestId'
+  | 'traceId'
+  | 'messageId'
+  | 'status'
+  | 'code'
+  | 'tool'
+  | 'toolState'
+  | 'finalState'
+function diagnosticString(value: unknown): string | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined
+  const normalized = String(value).trim()
+  return normalized ? sanitizeDiagnosticText(normalized, 500) : undefined
+}
+function diagnosticField(
+  key: SessionDiagnosticStringField,
+  value: unknown,
+): Partial<Pick<RemoteAgentSessionDiagnosticEvent, SessionDiagnosticStringField>> {
+  const normalized = diagnosticString(value)
+  return normalized
+    ? ({ [key]: normalized } as { [K in SessionDiagnosticStringField]?: string })
+    : {}
 }
 function protocolCompatibility(
   remoteVersion: string | undefined,
