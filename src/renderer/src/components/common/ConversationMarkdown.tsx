@@ -2,6 +2,9 @@ import type { ReactNode } from 'react'
 import MarkdownIt from 'markdown-it'
 import type Token from 'markdown-it/lib/token.mjs'
 import { useTabStore } from '../../stores/tab-store'
+import { copyTextToClipboard } from '../../utils/clipboard'
+import { IconClipboard } from './Icons'
+import { useToastStore } from './Toast'
 
 const conversationMarkdown = new MarkdownIt({
   html: false,
@@ -145,13 +148,7 @@ function renderLeafToken(token: Token, key: number): ReactNode {
     case 'fence':
     case 'code_block': {
       const language = token.info.trim().split(/\s+/, 1)[0]
-      return (
-        <pre key={key}>
-          <code className={language ? `language-${safeCssName(language)}` : undefined}>
-            {token.content}
-          </code>
-        </pre>
-      )
+      return <ConversationCodeBlock key={key} code={token.content} language={language} />
     }
     case 'hr':
       return <hr key={key} />
@@ -167,6 +164,43 @@ function renderLeafToken(token: Token, key: number): ReactNode {
     default:
       return token.content || null
   }
+}
+
+function ConversationCodeBlock({
+  code,
+  language,
+}: {
+  code: string
+  language: string
+}): React.ReactElement {
+  const copyLabel = language ? `复制 ${language} 代码块` : '复制代码块'
+
+  const handleCopy = async (): Promise<void> => {
+    try {
+      await copyTextToClipboard(code)
+      useToastStore.getState().show('代码块已复制', 'success')
+    } catch (error) {
+      useToastStore.getState().show(`复制失败: ${String(error)}`, 'error')
+    }
+  }
+
+  return (
+    <div className="conversation-markdown-code-block">
+      <button
+        type="button"
+        className="conversation-markdown-code-copy"
+        onClick={() => void handleCopy()}
+        title={copyLabel}
+        aria-label={copyLabel}
+      >
+        <IconClipboard size={12} />
+        <span>复制</span>
+      </button>
+      <pre>
+        <code className={language ? `language-${safeCssName(language)}` : undefined}>{code}</code>
+      </pre>
+    </div>
+  )
 }
 
 export function normalizeConversationHttpUrl(value: string | null): string | null {

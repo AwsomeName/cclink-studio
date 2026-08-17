@@ -30,7 +30,20 @@ describe('ConversationMarkdown', () => {
     expect(html).toContain('<code>code</code>')
     expect(html).toContain('<ul>')
     expect(html).toContain('<pre><code class="language-ts">const ok = true')
+    expect(html).toContain('class="conversation-markdown-code-copy"')
+    expect(html).toContain('aria-label="复制 ts 代码块"')
     expect(html).not.toContain('```')
+  })
+
+  it('adds a dedicated copy action only to block code', () => {
+    const html = renderToStaticMarkup(
+      <ConversationMarkdown source={'行内 `code`\n\n    block command'} />,
+    )
+
+    expect(html.match(/conversation-markdown-code-copy/g)).toHaveLength(1)
+    expect(html).toContain('aria-label="复制代码块"')
+    expect(html).toContain('<code>code</code>')
+    expect(html).toContain('<pre><code>block command')
   })
 
   it('keeps raw HTML inert and never loads Markdown images', () => {

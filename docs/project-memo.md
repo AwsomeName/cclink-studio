@@ -3,6 +3,60 @@
 > 本文件记录尚未进入正式方案的候选想法，以及已退出当前主线的暂缓事项；不是当前实现事实源。
 > 最后更新：2026-08-17。
 
+## Windows x64 安装包候选
+
+状态：技术可行性较高，暂未进入当前路线图；先保留为 Windows 原生构建与真人验收候选，
+不能把“生成 `.exe`”表述为 Windows 产品能力已经交付。
+
+### 评估结论
+
+- Electron Builder 可以生成 Windows NSIS 安装包，现有文件、Markdown、内嵌浏览器和多数
+  工作台代码具备跨平台基础。
+- Terminal 已有 `win32` shell、信号和浏览器启动器分支，`node-pty` 提供 Windows ConPTY
+  支持；Android/ADB 已处理 `.exe`、`LOCALAPPDATA` 和 Windows SDK 路径。
+- 当前正式打包配置、本地打包脚本、CI、Release 工作流和更新 Manifest 仍只覆盖 macOS
+  arm64 DMG。因此短期可以产出内部测试包，但不能直接追加公开稳定 Windows Release。
+- 首个目标只考虑 Windows 10/11 x64。Windows ARM64、应用内自动更新、Microsoft Store 和
+  企业 MSI/MSIX 不与首个闭环捆绑。
+
+### 用户端到端验收动作
+
+只有在干净的 Windows 10/11 x64 环境完成以下动作后，才能把候选提升为 Windows Beta：
+
+1. 用户下载并安装 NSIS `.exe`，首次启动无需 CCLink 登录或远程服务配置。
+2. 用户打开本地目录，创建、编辑、保存 Markdown，重启后工作区和 Tab 正常恢复。
+3. 用户打开内嵌浏览器并加载网页，再启动 Terminal 执行一条 `cmd` 或 PowerShell 命令。
+4. 未安装 ADB、未登录 CCLink、远程服务离线时，本地工作台仍可使用且错误明确降级。
+5. 安装 Windows 可用的 Claude Code 运行时后，用户能让本地 Agent 读取并修改一个工作区
+   文件，权限拒绝和停止操作可用，Agent 故障不影响编辑器、浏览器和 Terminal。
+6. 安装、升级或卸载不会删除用户工作区、普通设置、凭证或会话数据。
+
+### 实现前必须关闭的缺口
+
+- 在 Windows GitHub runner 原生安装依赖、构建和打包，避免把含 `node-pty` 原生依赖的
+  macOS 交叉构建当作正式事实；为 Windows 增加独立的产物结构和启动 smoke。
+- 把 Claude Code 自动发现从 Homebrew 路径和 `/bin/zsh` 扩展到 Windows，并为受管 Runtime
+  增加经过哈希、版本和平台校验的 `win32-x64` 目录项；没有 Runtime 时 Agent 必须单独
+  降级，不能阻止工作台启动。
+- 真人核对 `hiddenInset` 标题栏、窗口关闭/最小化、拖拽区域、Cmd/Ctrl 提示、中文路径和
+  长路径；不能只靠 renderer 单元测试判断 Windows 窗口可用。
+- 验证 `%APPDATA%` 下明文凭证与 refresh token 文件的 Windows ACL、原子替换和诊断脱敏
+  符合现有安全声明，不得引入 Windows Credential Manager、`safeStorage` 或第二凭证 Store。
+- 公开发布前单独决定 Authenticode 签名、SmartScreen 预期、Release runner 权限和 Windows
+  更新资产格式；继续由现有 `UpdateService` 与正式 Release 工作流统一拥有状态和发布事实，
+  不引入第二 updater 或旁路上传流程。
+
+### 建议恢复顺序与止损点
+
+1. 先做 Windows x64 内部技术预览：原生 CI 生成 unsigned NSIS 包，只验证安装、启动、
+   Markdown、浏览器和 Terminal。预估 1–2 个工作日。
+2. 技术预览通过后再补本地 Agent、凭证权限、窗口体验和打包 smoke，形成可真人验收的
+   Beta 候选。预估再增加 3–5 个工作日。
+3. 只有 Beta 验收通过且确有 Windows 用户需求，才投入签名、公开发布和更新链；预计完整
+   公开版本总投入约 1–2 周，签名主体审核等外部等待时间另计。
+4. 若同一原生依赖或启动阻塞连续失败两次，先保留“便携/内部测试包”作为替代路径并重新
+   评估投入，不为了证明 Electron 能出包而扩张发布主线。
+
 ## ACP Runtime：Codex 接入暂缓
 
 状态：低优先级，退出当前开发主线；不继续真实 API Key 验收、发布准备或能力扩展。
