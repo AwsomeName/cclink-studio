@@ -467,6 +467,7 @@ export function RemoteAgentController({
       model={{
         runtime: 'remote',
         variant,
+        timelineKey: `remote:${remoteWorkspaceKey}:${activeSession?.id ?? 'pending'}`,
         header: {
           title: 'Agent',
           runtimeLabel: `远程 · ${workspaceRef.endpointName || workspaceRef.endpointId}`,
@@ -508,6 +509,7 @@ export function RemoteAgentController({
               ]
             : []),
         ],
+        activities: [],
         permissions: [...filePermissions, ...toolPermissions],
         timeline,
         empty: {

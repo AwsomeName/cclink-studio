@@ -173,6 +173,7 @@ async function main() {
             : null
         }
         return {
+          rootWidth: Math.round(panel.getBoundingClientRect().width),
           landmarks: [...panel.querySelectorAll('[data-agent-landmark]')].map((element) =>
             element.getAttribute('data-agent-landmark'),
           ),
@@ -186,6 +187,11 @@ async function main() {
             composer: box('.agent-input-card'),
             actionBar: box('[data-agent-landmark="action-bar"]'),
             primaryAction: box('[data-agent-action="send"], [data-agent-action="stop"]'),
+            addContextAction: box('[data-agent-action="addContext"]'),
+            roleAction: box('[data-agent-action="role"]'),
+            permissionAction: box('[data-agent-action="permissionMode"]'),
+            contextUsageAction: box('[data-agent-action="contextUsage"]'),
+            runtimeAction: box('[data-agent-action="runtime"]'),
           },
         }
       })
@@ -202,13 +208,46 @@ async function main() {
         const left = local.boxes[key]
         const right = remote.boxes[key]
         assert(left && right, `${variant} ${key} bounding box missing`)
-        for (const metric of ['x', 'width', 'height']) {
+        for (const metric of ['height']) {
           assert(
             Math.abs(left[metric] - right[metric]) <= 1,
             `${variant} ${key}.${metric} differs (${left[metric]} vs ${right[metric]})`,
           )
         }
+        const leftPosition =
+          key === 'primaryAction' ? local.rootWidth - left.x - left.width : left.x
+        const rightPosition =
+          key === 'primaryAction' ? remote.rootWidth - right.x - right.width : right.x
+        assert(
+          Math.abs(leftPosition - rightPosition) <= 1,
+          `${variant} ${key} position/inset differs (${leftPosition} vs ${rightPosition})`,
+        )
+        const leftWidth = key === 'primaryAction' ? left.width : local.rootWidth - left.width
+        const rightWidth = key === 'primaryAction' ? right.width : remote.rootWidth - right.width
+        assert(
+          Math.abs(leftWidth - rightWidth) <= 1,
+          `${variant} ${key} width/inset differs (${leftWidth} vs ${rightWidth})`,
+        )
       }
+      for (const key of [
+        'addContextAction',
+        'roleAction',
+        'permissionAction',
+        'contextUsageAction',
+        'runtimeAction',
+      ]) {
+        const left = local.boxes[key]
+        const right = remote.boxes[key]
+        assert(left && right, `${variant} ${key} bounding box missing`)
+        assert(
+          Math.abs(left.height - right.height) <= 1,
+          `${variant} ${key}.height differs (${left.height} vs ${right.height})`,
+        )
+      }
+      assert(
+        remote.boxes.addContextAction.width === remote.boxes.addContextAction.height,
+        `${variant} remote add-context action is not a square icon button`,
+      )
     }
 
     await page.evaluate(async () => {
@@ -277,26 +316,78 @@ async function main() {
     const remoteSideProjection = await panelProjection('remote')
     assertEquivalentPanel(localSideProjection, remoteSideProjection, 'side')
 
-    await page.evaluate(async () => {
-      const { useUIStore } = await import('/src/stores/ui-store.ts')
-      useUIStore.getState().setAgentPanelMode('center', 'user')
-    })
-    await page.locator('[data-agent-panel-variant="center"]').waitFor({ state: 'visible' })
-    const remoteCenterProjection = await panelProjection('remote')
+    if (!agentPanelOnly) {
+      await page.evaluate(async (snapshot) => {
+        const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+        const state = useWorkspaceStore.getState()
+        useWorkspaceStore.setState({
+          activeWorkspaceRef: snapshot.ref,
+          generation: Math.max(state.generation + 1, snapshot.generation + 1),
+        })
+      }, originalWorkspace)
+      return 'single fixed side view, equivalent landmarks and boxes, IME-safe Enter, and Shift+Enter'
+    }
 
-    await page.evaluate(async (snapshot) => {
+    // center 是无 Workbench Tab 的首次会话 surface；先回到本地并清空 smoke Tab 投影。
+    await page.evaluate(async () => {
       const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
       const state = useWorkspaceStore.getState()
       useWorkspaceStore.setState({
-        activeWorkspaceRef: snapshot.ref,
-        generation: Math.max(state.generation + 1, snapshot.generation + 1),
+        activeWorkspaceRef: { kind: 'global' },
+        generation: state.generation + 1,
       })
-    }, originalWorkspace)
-    await page.locator('[data-agent-panel-runtime="local"]').waitFor({ state: 'visible' })
+    })
+    await page.locator('[data-agent-panel-runtime="local"]').waitFor({
+      state: 'visible',
+      timeout: 10_000,
+    })
+    await page.waitForTimeout(1_000)
+    await page.evaluate(async () => {
+      const { useUIStore } = await import('/src/stores/ui-store.ts')
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      useTabStore.setState({ tabs: [], activeTabId: null })
+      useUIStore.setState({
+        agentPanelMode: 'center',
+        agentPanelLastVisibleMode: 'center',
+        agentPanelVisible: true,
+        agentPanelModeSource: 'user',
+        sidebarVisible: false,
+        sidebarWidth: 250,
+      })
+    })
+    await page.waitForTimeout(200)
+    const localCenterPanel = page.locator(
+      '[data-agent-panel-runtime="local"][data-agent-panel-variant="center"]',
+    )
+    assert(
+      (await localCenterPanel.count()) === 1 && (await localCenterPanel.isVisible()),
+      'local center Agent Panel is missing',
+    )
     const localCenterProjection = await panelProjection('local')
+
+    await page.evaluate(async () => {
+      const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+      const state = useWorkspaceStore.getState()
+      useWorkspaceStore.setState({
+        activeWorkspaceRef: {
+          kind: 'remote',
+          transport: 'cclink',
+          endpointId: 'ui-smoke-endpoint',
+          endpointName: 'UI Smoke',
+          workspaceId: 'ui-smoke-workspace',
+          path: '/ui-smoke-workspace',
+        },
+        generation: state.generation + 1,
+      })
+    })
+    const remoteCenterPanel = page.locator(
+      '[data-agent-panel-runtime="remote"][data-agent-panel-variant="center"]',
+    )
+    await remoteCenterPanel.waitFor({ state: 'visible', timeout: 10_000 })
+    const remoteCenterProjection = await panelProjection('remote')
     assertEquivalentPanel(localCenterProjection, remoteCenterProjection, 'center')
 
-    return 'single fixed view, equivalent side/center landmarks and boxes, IME-safe Enter, and Shift+Enter'
+    return 'single fixed side/center view, equivalent landmarks and boxes, IME-safe Enter, and Shift+Enter'
   })
 
   if (agentPanelOnly) {

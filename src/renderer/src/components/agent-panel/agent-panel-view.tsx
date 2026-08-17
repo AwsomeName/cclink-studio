@@ -6,8 +6,12 @@ import {
   type ClipboardEventHandler,
   type DragEventHandler,
   type KeyboardEvent,
+  type PointerEventHandler,
   type ReactElement,
   type Ref,
+  type TouchEventHandler,
+  type UIEventHandler,
+  type WheelEventHandler,
 } from 'react'
 import type { AgentMessage } from '../../types'
 import type { AgentContextChip } from '../../features/agent-conversations/view-model'
@@ -44,6 +48,7 @@ import {
   AgentComposerToolbar,
   type AgentComposerToolbarProps,
 } from '../../features/agent-composer/AgentComposerToolbar'
+import { useConversationScroll } from '../../features/agent-conversations/use-conversation-scroll'
 
 export type AgentPanelVariant = 'center' | 'side'
 export type AgentPanelRuntime = 'local' | 'remote'
@@ -74,6 +79,30 @@ export interface AgentPanelNoticeModel {
   tone: 'info' | 'warning' | 'error'
   title: string
   detail?: string
+}
+
+export interface AgentPanelActivityAction {
+  id: string
+  label: string
+  tone?: 'default' | 'danger'
+  disabled?: boolean
+  onInvoke(): void
+}
+
+export interface AgentPanelActivityModel {
+  id: string
+  title: string
+  status: string
+  tone: 'info' | 'warning' | 'error' | 'success'
+  detail?: string
+  rows: Array<{
+    id: string
+    label: string
+    detail?: string
+    meta?: string
+    actions?: AgentPanelActivityAction[]
+  }>
+  actions: AgentPanelActivityAction[]
 }
 
 export interface AgentPanelPermissionModel {
@@ -194,9 +223,11 @@ export interface AgentPanelComposerModel {
 export interface AgentPanelViewModel {
   runtime: AgentPanelRuntime
   variant: AgentPanelVariant
+  timelineKey: string
   header: AgentPanelHeaderModel
   contextChips: AgentContextChip[]
   notices: AgentPanelNoticeModel[]
+  activities: AgentPanelActivityModel[]
   permissions: AgentPanelPermissionModel[]
   timeline: AgentPanelTimelineItem[]
   empty: AgentPanelEmptyModel
@@ -234,6 +265,24 @@ export function resolveAgentComposerKeyDecision(input: {
   return 'none'
 }
 
+export function agentPanelMessageRevision(message: AgentMessage): string {
+  const contentRevision = message.content
+    .map((block) => {
+      switch (block.type) {
+        case 'text':
+          return `text:${block.text}`
+        case 'thinking':
+          return `thinking:${block.thinking}`
+        case 'tool_use':
+          return `tool-use:${block.id}:${block.name}:${block._rawInputJson ?? JSON.stringify(block.input)}`
+        case 'tool_result':
+          return `tool-result:${block.tool_use_id}:${block.is_error ? 'error' : 'success'}:${block.content}`
+      }
+    })
+    .join('|')
+  return `${message.id}:${message.isStreaming ? 'streaming' : 'settled'}:${contentRevision}`
+}
+
 const MIN_COMPOSER_HEIGHT = 118
 const MAX_COMPOSER_HEIGHT = 520
 const MIN_MESSAGES_HEIGHT = 180
@@ -254,12 +303,17 @@ function loadComposerHeight(variant: AgentPanelVariant): number | null {
 
 export function AgentPanelView({ model }: { model: AgentPanelViewModel }): ReactElement {
   const mainRef = useRef<HTMLDivElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const element = listRef.current
-    if (element) element.scrollTop = element.scrollHeight
-  }, [model.timeline, model.permissions])
+  const timelineRevision = model.timeline
+    .map((item) =>
+      item.kind === 'message'
+        ? agentPanelMessageRevision(item.message)
+        : item.kind === 'question'
+          ? `${item.id}:${item.question.title}:${item.question.questions.map((question) => question.question).join(',')}:${item.question.submitting ? 'submitting' : ''}`
+          : `${item.id}:${item.label}:${item.detail ?? ''}`,
+    )
+    .concat(model.permissions.map((permission) => permission.id))
+    .join('|')
+  const conversationScroll = useConversationScroll(model.timelineKey, timelineRevision)
 
   return (
     <div
@@ -270,8 +324,20 @@ export function AgentPanelView({ model }: { model: AgentPanelViewModel }): React
       <div className="agent-conversation-main" ref={mainRef}>
         <PanelHeader model={model.header} />
         <ContextBar chips={model.contextChips} />
-        <NoticePermissionArea notices={model.notices} permissions={model.permissions} />
-        <MessageTimeline items={model.timeline} empty={model.empty} listRef={listRef} />
+        <NoticePermissionArea
+          notices={model.notices}
+          activities={model.activities}
+          permissions={model.permissions}
+        />
+        <MessageTimeline
+          items={model.timeline}
+          empty={model.empty}
+          listRef={conversationScroll.listRef}
+          onScroll={conversationScroll.onScroll}
+          onWheel={conversationScroll.onWheel}
+          onPointerDown={conversationScroll.onPointerDown}
+          onTouchStart={conversationScroll.onTouchStart}
+        />
         {model.costLabel ? <div className="agent-cost">{model.costLabel}</div> : null}
         <ComposerFrame model={model.composer} variant={model.variant} mainRef={mainRef} />
       </div>
@@ -327,9 +393,11 @@ export function ContextBar({ chips }: { chips: AgentContextChip[] }): ReactEleme
 
 export function NoticePermissionArea({
   notices,
+  activities,
   permissions,
 }: {
   notices: AgentPanelNoticeModel[]
+  activities: AgentPanelActivityModel[]
   permissions: AgentPanelPermissionModel[]
 }): ReactElement {
   return (
@@ -340,10 +408,55 @@ export function NoticePermissionArea({
           {notice.detail ? <span>{notice.detail}</span> : null}
         </div>
       ))}
+      {activities.map((activity) => (
+        <ActivityCard key={activity.id} model={activity} />
+      ))}
       {permissions.map((permission) => (
         <PermissionCard key={permission.id} model={permission} />
       ))}
     </section>
+  )
+}
+
+function ActivityCard({ model }: { model: AgentPanelActivityModel }): ReactElement {
+  const renderActions = (actions: AgentPanelActivityAction[]): ReactElement | null =>
+    actions.length > 0 ? (
+      <div className="agent-panel-activity-actions">
+        {actions.map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            className={action.tone === 'danger' ? 'danger' : undefined}
+            disabled={action.disabled}
+            onClick={action.onInvoke}
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+    ) : null
+
+  return (
+    <div className={`agent-panel-activity ${model.tone}`}>
+      <div className="agent-panel-activity-heading">
+        <strong title={model.title}>{model.title}</strong>
+        <span>{model.status}</span>
+      </div>
+      {model.detail ? <p>{model.detail}</p> : null}
+      {model.rows.length > 0 ? (
+        <div className="agent-panel-activity-rows">
+          {model.rows.map((row) => (
+            <div className="agent-panel-activity-row" key={row.id}>
+              <span title={row.label}>{row.label}</span>
+              {row.detail ? <em>{row.detail}</em> : null}
+              {row.meta ? <small>{row.meta}</small> : null}
+              {renderActions(row.actions ?? [])}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {renderActions(model.actions)}
+    </div>
   )
 }
 
@@ -388,16 +501,28 @@ export function MessageTimeline({
   items,
   empty,
   listRef,
+  onScroll,
+  onWheel,
+  onPointerDown,
+  onTouchStart,
 }: {
   items: AgentPanelTimelineItem[]
   empty: AgentPanelEmptyModel
   listRef?: Ref<HTMLDivElement>
+  onScroll?: UIEventHandler<HTMLDivElement>
+  onWheel?: WheelEventHandler<HTMLDivElement>
+  onPointerDown?: PointerEventHandler<HTMLDivElement>
+  onTouchStart?: TouchEventHandler<HTMLDivElement>
 }): ReactElement {
   return (
     <div
       ref={listRef}
       className="agent-messages conversation-copy-surface"
       data-agent-landmark="timeline"
+      onScroll={onScroll}
+      onWheel={onWheel}
+      onPointerDown={onPointerDown}
+      onTouchStart={onTouchStart}
     >
       {items.length === 0 ? (
         <EmptyState model={empty} />
@@ -769,6 +894,7 @@ export function ActionBar({
     label: string,
     icon: ReactElement,
     className = 'agent-mode-btn',
+    showLabel = true,
   ): ReactElement | null => {
     const capability = remote.capabilities[id]
     if (capability.state === 'hidden') return null
@@ -781,7 +907,7 @@ export function ActionBar({
         title={capability.reason || label}
       >
         {icon}
-        <span>{label}</span>
+        {showLabel ? <span>{label}</span> : null}
       </button>
     )
   }
@@ -794,12 +920,13 @@ export function ActionBar({
           '添加上下文',
           <IconPlus size={16} />,
           'agent-composer-icon-btn',
+          false,
         )}
         {capabilityButton('role', '角色', <IconRobot size={13} />)}
         {capabilityButton('permissionMode', '权限', <IconCircle size={8} />)}
       </div>
       <div className="agent-composer-tools">
-        {capabilityButton('contextUsage', '–', <span />, 'agent-context-usage-btn')}
+        {capabilityButton('contextUsage', '–', <span>–</span>, 'agent-context-usage-btn', false)}
         {capabilityButton(
           'runtime',
           remote.runtimeLabel,

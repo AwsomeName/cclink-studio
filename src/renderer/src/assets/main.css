@@ -6573,6 +6573,105 @@ body.is-resizing-panels .main-area > div {
   background: rgba(239, 68, 68, 0.07);
 }
 
+.agent-panel-activity {
+  margin-top: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.agent-panel-activity.warning {
+  border-color: rgba(234, 179, 8, 0.4);
+}
+
+.agent-panel-activity.error {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.agent-panel-activity.success {
+  border-color: rgba(34, 197, 94, 0.32);
+}
+
+.agent-panel-activity-heading,
+.agent-panel-activity-row,
+.agent-panel-activity-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.agent-panel-activity-heading {
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.agent-panel-activity-heading strong,
+.agent-panel-activity-row > span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-panel-activity > p {
+  margin: 7px 10px 0;
+  color: #ef4444;
+}
+
+.agent-panel-activity-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px 10px;
+}
+
+.agent-panel-activity-row em,
+.agent-panel-activity-row small {
+  flex-shrink: 0;
+  font-style: normal;
+}
+
+.agent-panel-activity-actions {
+  justify-content: flex-end;
+  padding: 7px 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.agent-panel-activity-row .agent-panel-activity-actions {
+  padding: 0;
+  border: 0;
+}
+
+.agent-panel-activity-actions button {
+  padding: 3px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.agent-panel-activity-actions button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.agent-panel-activity-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.agent-panel-activity-actions button.danger {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+}
+
 .agent-panel-notice-area .tool-confirmation-card {
   margin: 8px 0 0;
 }
@@ -7878,205 +7977,6 @@ body.is-resizing-panels .main-area > div {
 .agent-panel-side .agent-profile-btn > span,
 .agent-panel-side .agent-profile-btn > svg:last-child {
   display: none;
-}
-
-.browser-task-card {
-  margin: 8px 10px 0;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: var(--bg-secondary);
-  overflow: hidden;
-}
-
-.browser-task-card-running {
-  border-color: rgba(59, 130, 246, 0.35);
-}
-
-.browser-task-card-paused {
-  border-color: rgba(234, 179, 8, 0.35);
-}
-
-.browser-task-card-failed {
-  border-color: rgba(239, 68, 68, 0.35);
-}
-
-.browser-task-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.browser-task-title {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.browser-task-title span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.browser-task-status {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-}
-
-.browser-task-log-list {
-  padding: 6px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.browser-task-log-row {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 42px;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.browser-task-log-status,
-.browser-task-log-time {
-  white-space: nowrap;
-}
-
-.browser-task-log-action {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-primary);
-  font-family: 'SF Mono', 'Menlo', monospace;
-  font-size: 10px;
-}
-
-.browser-task-error {
-  margin: 0 10px 6px;
-  padding: 6px 8px;
-  border-radius: 4px;
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.browser-task-downloads {
-  padding: 0 10px 7px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.browser-task-download-row {
-  padding: 6px 8px;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  background: var(--bg-primary);
-}
-
-.browser-task-download-main {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--text-primary);
-}
-
-.browser-task-download-main span {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.browser-task-download-main em {
-  flex-shrink: 0;
-  color: var(--text-secondary);
-  font-style: normal;
-  font-size: 10px;
-}
-
-.browser-task-download-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.browser-task-download-actions button {
-  padding: 3px 7px;
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-size: 10px;
-  cursor: pointer;
-}
-
-.browser-task-download-actions button:hover {
-  background: var(--bg-hover);
-}
-
-.browser-task-download-actions button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.browser-task-download-actions button:disabled:hover {
-  background: var(--bg-secondary);
-}
-
-.browser-task-download-actions button.danger {
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.35);
-}
-
-.browser-task-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  padding: 7px 10px;
-  border-top: 1px solid var(--border-color);
-}
-
-.browser-task-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.browser-task-btn:hover {
-  background: var(--bg-hover);
-}
-
-.browser-task-btn.danger {
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.35);
 }
 
 /* 工具确认卡片 */

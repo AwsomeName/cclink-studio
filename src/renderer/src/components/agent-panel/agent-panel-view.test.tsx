@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   AgentPanelView,
+  agentPanelMessageRevision,
   isAgentComposerCandidateSelectionKey,
   resolveAgentComposerKeyDecision,
   type AgentPanelViewModel,
@@ -17,6 +18,27 @@ afterAll(() => {
 })
 
 describe('AgentPanelView product contract', () => {
+  it('changes the timeline revision when a tool result changes inside the same message', () => {
+    const message = {
+      id: 'tool-message',
+      role: 'assistant' as const,
+      content: [
+        {
+          type: 'tool_result' as const,
+          tool_use_id: 'tool-1',
+          content: '运行中',
+        },
+      ],
+      rawText: '',
+      timestamp: 1,
+      isStreaming: true,
+    }
+    const before = agentPanelMessageRevision(message)
+    message.content[0].content = '已完成'
+
+    expect(agentPanelMessageRevision(message)).not.toBe(before)
+  })
+
   it('never submits an IME candidate confirmation and preserves Shift+Enter', () => {
     const base = {
       key: 'Enter',
@@ -40,10 +62,10 @@ describe('AgentPanelView product contract', () => {
     (scenario) => {
       const local = renderToStaticMarkup(<AgentPanelView model={model('local', scenario)} />)
       const remote = renderToStaticMarkup(<AgentPanelView model={model('remote', scenario)} />)
-    const landmarks = (html: string): string[] =>
-      [...html.matchAll(/data-agent-landmark="([^"]+)"/gu)].map((match) => match[1])
-    const actions = (html: string): string[] =>
-      [...html.matchAll(/data-agent-action="([^"]+)"/gu)].map((match) => match[1])
+      const landmarks = (html: string): string[] =>
+        [...html.matchAll(/data-agent-landmark="([^"]+)"/gu)].map((match) => match[1])
+      const actions = (html: string): string[] =>
+        [...html.matchAll(/data-agent-action="([^"]+)"/gu)].map((match) => match[1])
 
       expect(landmarks(local)).toEqual([
         'header',
@@ -89,6 +111,7 @@ function model(
   return {
     runtime,
     variant: 'side',
+    timelineKey: `${runtime}:conversation`,
     header: {
       title: 'Agent',
       runtimeLabel: runtime,
@@ -100,6 +123,7 @@ function model(
       scenario === 'error'
         ? [{ id: 'error', tone: 'error', title: 'Agent 离线', detail: '连接失败' }]
         : [],
+    activities: [],
     permissions:
       scenario === 'permission'
         ? [

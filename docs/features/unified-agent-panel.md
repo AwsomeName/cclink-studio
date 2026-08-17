@@ -1,6 +1,6 @@
 # 本地与远程 Agent Panel 统一方案
 
-> 状态：UAP-1 代码与自动化门禁已完成；本地、侧栏和远程入口已使用同一个 Agent Panel/Composer，旧远程 Panel、textarea 和键盘实现已删除。真实中文输入法与已配对远程 Agent 的真人验收仍是产品完成门禁。UAP-2 远程事务强化仍须通过本文契约门禁。最后更新：2026-08-17。
+> 状态：UAP-1 已实现唯一固定 `AgentPanelView` 且自动化门禁通过，等待真实应用真人验收；验收前不得宣称产品统一完成。UAP-2 远程事务强化不属于本次实现，仍须通过本文契约门禁。最后更新：2026-08-17。
 
 ## 结论
 
@@ -13,7 +13,7 @@ Studio 应只保留一个面向用户的 `AgentPanel`。本地与 CCLink 远程�
 失败生命周期。
 
 本地 Panel 已有正确的 IME composing 保护。远程 Enter 误发送不需要再设计一套键盘
-策略；当远程直接渲染由本地现有实现提取出的同一个 `AgentComposer` 时，它必须自然继承
+策略；当远程直接渲染 `AgentPanelView` 内唯一的 `ComposerFrame` 时，它必须自然继承
 这一行为。另外抽取纯键盘决策函数可以是组件内部重构手段，但不是用户闭环、不是里程碑，
 也不得允许本地/远程两个 Composer 继续并存。
 
@@ -45,25 +45,32 @@ UAP-2 门禁全部关闭前
 
 ## 当前实施情况
 
-UAP-1 已完成代码收口：`App.tsx` 的 center/side 两个装配位置都只渲染 `AgentPanel`；该唯一
-入口按正式 `WorkspaceRef + generation` 选择本地或远程薄 controller，而两个 controller 都
-渲染同一个 `AgentPanelSurface`、`AgentMessageList` 和 `AgentComposer`。本地 center、local side
-和 remote 三个 Agent Panel 生产入口中只有一个 textarea 实现。Workbench 内独立打开的 Agent
-conversation tab 不属于本次 Panel surface 统一范围。旧 `RemoteAgentPanel`、独立远程
-textarea/Enter handler 和对应根样式已经删除。
+UAP-1 已完成候选实现收口：`App.tsx` 的 center/side 两个装配位置都只渲染 `AgentPanel`；该
+唯一入口按正式 `WorkspaceRef + generation` 选择本地或远程薄 controller，而两个 controller
+只能提交封闭 view model、capability 和事件回调给唯一固定的 `AgentPanelView`。布局由
+`PanelHeader`、`ContextBar`、`MessageTimeline`、`NoticePermissionArea`、`EmptyState`、
+`ComposerFrame` 和 `ActionBar` 固定拥有，不接受 controller 自定义 class、slot、children 或
+整段 JSX。local-center 不再保留 `agent-start-*` 输入区；local-center、local-side、
+remote-center 和 remote-side 的生产路径只有一个 textarea 和一套键盘实现。
+
+Workbench 内独立打开的 `WorkbenchAgentConversation` tab 是另一项待决 surface，不属于本次
+Agent Panel surface；因此不能用它否定本次 Panel 收口，也不能据此声称整个应用只有一个 Agent
+输入框。旧 `AgentPanelSurface`、`RemoteAgentMessage`、远程独立 toolbar/composer、
+`agent-start-*` JSX 与仅服务于这些布局的样式已经删除。
 
 因此原缺陷的修复方式不是给远程复制一份 IME 判断，而是让本地与远程共同继承
-`AgentComposer` 的唯一键盘策略：composition 期间和 `keyCode === 229` 时忽略 Enter，
+`ComposerFrame` 的唯一键盘策略：composition 期间和 `keyCode === 229` 时忽略 Enter，
 `Shift+Enter` 保持换行，只有非组合态 Enter 才提交。远程 controller 只调用
 `cclink-store.sendAgentMessage`，并在创建会话前、创建成功后/发送前重验捕获的 workspace
 target；架构回归测试同时断言远程路径不引用本地 `agent.sendMessage`。
 
-2026-08-17 自动化证据：`pnpm verify` 通过（281 个测试文件、1620 个测试通过、2 个既有跳过，
-并包含 typecheck、lint 和生产构建）；`pnpm smoke:ui` 16/16 通过真实 Electron UI 装配检查，
-确认本地与远程投影都只有一个 Panel/Composer，验证合成 composition/229 Enter 不清空草稿，
-并验证 `/` 候选菜单打开时 `Shift+Enter` 插入换行而不选择候选。合成事件不能替代操作系统中文
-输入法，也不能证明真实在线远程 Agent 已接收消息，所以本文“用户可执行验收”第 1 至 4 项仍须
-在已登录、已配对设备上真人执行后，才能宣布产品闭环完成。
+2026-08-18 本次候选实现的工程证据：`pnpm verify` 通过（282 个测试文件、1636 个测试通过、
+2 个既有跳过，并包含边界检查、format、lint、typecheck 和生产构建）；完整
+`pnpm smoke:ui` 16/16 通过；Agent Panel 专项 Electron smoke 3/3 通过，实际切换四个 Panel
+入口并比较标题、上下文、时间线、Composer、ActionBar、主要动作的 DOM 顺序与 bounding box。
+组件测试用本地/远程对等 view model 覆盖空闲、有消息、运行中、错误和权限状态。合成事件不能
+替代操作系统中文输入法，也不能证明真实在线远程 Agent 已接收消息，所以本文“用户可执行验收”
+仍须在已登录、已配对设备上真人执行后，才能宣布产品闭环完成。
 
 历史根因是远程 Agent 为保证协议隔离而以独立 `RemoteAgentPanel` 最小闭环接入，后来只复用
 了部分消息投影，没有及时收口 Composer 与 Panel 生命周期。协议隔离本身仍保留；被删除的是
@@ -105,7 +112,7 @@ workspace 基础层定义正式 generation 的创建、读取和失效语义，�
 校验。UAP-1/UAP-2 都不得借用 `cclink-store` 该私有计数器。
 
 UAP-1 不合并或复制草稿 owner：本地继续使用 `agent-store` 的 per-conversation input，
-远程继续由当前领域 owner 提供受控 value/onChange。两者都渲染同一个 `AgentComposer`，不再
+远程继续由当前领域 owner 提供受控 value/onChange。两者都渲染同一个 `ComposerFrame`，不再
 保留远程 textarea 或键盘处理。UAP-2 前再把远程草稿收口为由 `cclink-store` 按精确
 workspace/session target 唯一拥有；迁移不得出现双写期。
 
@@ -114,12 +121,16 @@ workspace/session target 唯一拥有；迁移不得出现双写期。
 ```text
 App
 └─ AgentPanel                         唯一产品入口
-   ├─ ConversationShell              通用标题、状态、错误和布局
-   ├─ AgentMessageList               通用消息与工具结果展示
-   ├─ AgentComposer                  通用输入、IME、快捷键和发送/停止
-   └─ AgentPanelRuntimeAdapter
-      ├─ LocalAgentPanelAdapter      agent-store / local run controller
-      └─ RemoteAgentPanelAdapter     cclink-store / remote protocol
+   ├─ LocalAgentPanelController      agent-store / local run controller
+   ├─ RemoteAgentPanelController     cclink-store / remote protocol
+   └─ AgentPanelView                 唯一固定产品骨架
+      ├─ PanelHeader
+      ├─ ContextBar
+      ├─ MessageTimeline
+      ├─ NoticePermissionArea
+      ├─ EmptyState
+      ├─ ComposerFrame
+      └─ ActionBar
 ```
 
 `App.tsx` 不再渲染两个完整 Panel。允许保留两个薄 controller/hook 绑定各自 store，但它们
@@ -546,12 +557,12 @@ UAP-2 开始前必须形成可审查的 owner matrix 和测试，至少证明：
 
 ### UAP-1：原子统一 Agent Panel
 
-> 实施状态：代码完成，自动化门禁通过；等待本文真人验收后关闭产品门禁。
+> 实施状态：候选代码与自动化门禁已完成；等待真人验收关闭产品门禁。
 
 这是首个也是唯一的 UI 迁移工作包，不再拆成“先共享键盘函数”、“再共享
 Composer”、“最后删旧 Panel”三个可独立停留的阶段。以下改动必须在同一工作包中完成：
 
-- 从已正确处理 IME 的本地实现提取唯一 `AgentComposer`；local-center、local-side 和
+- 从已正确处理 IME 的本地实现提取唯一 `ComposerFrame`；local-center、local-side 和
   remote 都渲染该组件，候选确认、Enter、Shift+Enter、历史导航和粘贴均没有第二实现；
 - 提取唯一 `AgentPanel` view，统一 `ConversationShell`、消息列表、工具结果、错误/空状态、
   Composer 和通用操作位置；
@@ -562,8 +573,9 @@ Composer”、“最后删旧 Panel”三个可独立停留的阶段。以下改
   远程失败不得调用本地 owner；
 - UAP-1 不新建宽泛的跨 runtime command facade，不伪造 `submitted/running` 等远程证据；
   attempt/operation result 和 verified event 契约在 UAP-2 由唯一 owner 实现；
-- 远程特有连接状态和权限 surface 只能通过有界 slot 注入，不在通用 JSX 中复制一套
-  remote 分支；未支持的能力按 availability 隐藏或禁用，不静默丢弃 payload；
+- 远程连接、错误和权限事实只能通过封闭的 notice/permission view model 进入固定区域；
+  controller 不得注入 slot、children、class 或 JSX。未支持的能力按 availability 隐藏或禁用，
+  不静默丢弃 payload；
 - `App.tsx` 只渲染 `AgentPanel`，并在同一工作包删除完整 `RemoteAgentPanel`、其独立 textarea/
   键盘处理以及只为它存在的重复 CSS；
 - 禁止通过 feature flag、隐藏组件、旧 controller 渲染新 JSX 或双写保留两套 Panel 路径。
@@ -607,10 +619,11 @@ UAP-2 是事务正确性和可观测性强化，不是第二次 UI 统一。UAP-
 
 - 本地修改性工具继续复用现有 permission manager 和 conversation run controller。
 - 远程权限请求继续由 CCLink 远程事实源拥有。当前 realtime permission 只有 server ID、
-  request ID、path 和 operation，没有可验证的 workspace/session 绑定；UAP-2 不把它合并为
-  宣称展示目标工作空间的通用确认卡，只保留有界的远程权限 surface。
-- 若要统一远程权限卡，必须先扩展远程协议与 shared contract，加入可验证的 workspace/session
-  绑定，并按本文止损条件重新评审。
+  request ID、path 和 operation，没有可验证的 workspace/session 绑定；它可以投影进统一
+  `NoticePermissionArea` 的固定卡片外观，但卡片只能显示协议实际提供的操作和路径，不能声称
+  已验证当前 workspace/session 身份。
+- 若要让远程权限卡展示具体 workspace/session 身份，必须先扩展远程协议与 shared contract，
+  加入可验证绑定，并按本文止损条件重新评审。
 - 统一 UI 不得统一或扩大权限；本地批准不能复用于远程，远程批准也不能写成本地默认设置。
 - 只有协议提供可验证身份时，确认卡才能展示具体目标工作空间；否则必须明确标为未验证，
   不能根据当前 Panel、路径或 endpoint 猜测。
@@ -619,7 +632,7 @@ UAP-2 是事务正确性和可观测性强化，不是第二次 UI 统一。UAP-
 
 自动化至少覆盖：
 
-- 同一 `AgentComposer` 分别绑定本地与远程 controller 时的 composition、Enter、Shift+Enter、
+- 同一 `ComposerFrame` 分别绑定本地与远程 controller 时的 composition、Enter、Shift+Enter、
   `keyCode === 229`、候选菜单、历史导航、图片粘贴、流式编辑和重复提交测试；
 - 本地与远程 adapter 的 session/message/status/action 映射测试；
 - 同一 Panel view 分别绑定 local/remote adapter 的组件测试；

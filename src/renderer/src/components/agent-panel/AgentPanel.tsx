@@ -31,7 +31,7 @@ import {
   type AgentSkillCandidate,
 } from '../../features/agent-conversations/view-model'
 import type { PermissionMode } from '../../types'
-import type { BrowserTaskRun } from '@shared/ipc/browser'
+import type { BrowserActionLog, BrowserDownloadRecord, BrowserTaskRun } from '@shared/ipc/browser'
 import type { AgentCapabilityStatus } from '@shared/agent-protocol'
 import type { AgentRoleSummary, AgentSkillRef } from '@shared/agent-role'
 import { DEFAULT_AGENT_RUNTIME_BINDING } from '@shared/agent-runtime'
@@ -57,6 +57,7 @@ import { buildAgentConversationTimeline } from '../../features/agent-roles/Agent
 import {
   AgentPanelView,
   isAgentComposerCandidateSelectionKey,
+  type AgentPanelActivityModel,
   type AgentPanelPermissionModel,
   type AgentPanelTimelineItem,
 } from './agent-panel-view'
@@ -514,6 +515,130 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
       .sort((a, b) => b.startedAt - a.startedAt)
     return tasks.find((task) => !isFinalBrowserTaskStatus(task.status)) ?? tasks[0] ?? null
   }, [browserTasks, scope])
+  const activeBrowserTaskLogs = activeBrowserTask
+    ? (browserActionLogs[activeBrowserTask.id] ?? []).slice(-5)
+    : []
+  const activeBrowserTaskDownloads = activeBrowserTask
+    ? activeBrowserTask.downloadIds
+        .map((downloadId) => browserDownloads[downloadId])
+        .filter(Boolean)
+        .slice(-3)
+    : []
+  const browserActivities: AgentPanelActivityModel[] = activeBrowserTask
+    ? [
+        {
+          id: `browser-task:${activeBrowserTask.id}`,
+          title: activeBrowserTask.goal,
+          status: browserTaskStatusMeta(activeBrowserTask.status).label,
+          tone:
+            activeBrowserTask.status === 'failed'
+              ? 'error'
+              : activeBrowserTask.status === 'paused'
+                ? 'warning'
+                : activeBrowserTask.status === 'completed'
+                  ? 'success'
+                  : 'info',
+          detail: activeBrowserTask.errorMessage
+            ? `${activeBrowserTask.failureReason ?? 'unknown'} · ${activeBrowserTask.errorMessage}`
+            : undefined,
+          rows: [
+            ...activeBrowserTaskLogs.map((log) => ({
+              id: `log:${log.id}`,
+              label: log.action,
+              detail: browserActionStatusLabel(log),
+              meta: formatBrowserTaskDuration(log.startedAt, log.endedAt),
+            })),
+            ...activeBrowserTaskDownloads.map((download) => ({
+              id: `download:${download.id}`,
+              label: download.suggestedFilename,
+              detail: downloadStatusLabel(download),
+              actions:
+                download.retention === 'discarded'
+                  ? []
+                  : [
+                      {
+                        id: 'open',
+                        label: '打开',
+                        disabled: download.fileMissing,
+                        onInvoke: () => void window.cclinkStudio.browser.openDownload(download.id),
+                      },
+                      {
+                        id: 'reveal',
+                        label: '定位',
+                        disabled: download.fileMissing,
+                        onInvoke: () =>
+                          void window.cclinkStudio.browser.revealDownload(download.id),
+                      },
+                      ...(download.retention === 'temporary'
+                        ? [
+                            {
+                              id: 'keep',
+                              label: '保留',
+                              disabled: download.fileMissing,
+                              onInvoke: () =>
+                                void window.cclinkStudio.browser.keepDownloadToWorkspace(
+                                  download.id,
+                                ),
+                            },
+                          ]
+                        : []),
+                      {
+                        id: 'save-as',
+                        label: '另存为',
+                        disabled: download.fileMissing,
+                        onInvoke: () =>
+                          void window.cclinkStudio.browser.saveDownloadAs(download.id),
+                      },
+                      ...(download.retention === 'temporary'
+                        ? [
+                            {
+                              id: 'discard',
+                              label: '丢弃',
+                              tone: 'danger' as const,
+                              onInvoke: () =>
+                                void window.cclinkStudio.browser.discardDownload(download.id),
+                            },
+                          ]
+                        : []),
+                    ],
+            })),
+          ],
+          actions: [
+            ...(activeBrowserTask.status === 'running'
+              ? [
+                  {
+                    id: 'pause',
+                    label: '暂停',
+                    onInvoke: () =>
+                      void window.cclinkStudio.browser.pauseTask(activeBrowserTask.id),
+                  },
+                ]
+              : []),
+            ...(activeBrowserTask.status === 'paused'
+              ? [
+                  {
+                    id: 'resume',
+                    label: '继续',
+                    onInvoke: () =>
+                      void window.cclinkStudio.browser.resumeTask(activeBrowserTask.id),
+                  },
+                ]
+              : []),
+            ...(activeBrowserTask.status === 'running' || activeBrowserTask.status === 'paused'
+              ? [
+                  {
+                    id: 'cancel',
+                    label: '终止',
+                    tone: 'danger' as const,
+                    onInvoke: () =>
+                      void window.cclinkStudio.browser.cancelTask(activeBrowserTask.id),
+                  },
+                ]
+              : []),
+          ],
+        },
+      ]
+    : []
   const workspaceName = useMemo(() => workspaceRefLabel(activeWorkspaceRef), [activeWorkspaceRef])
   const activeConversation = conversations[activeConversationId]
   const canChangeRuntime = Boolean(
@@ -747,6 +872,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
       model={{
         runtime: 'local',
         variant,
+        timelineKey: `local:${workspaceRefKey(activeWorkspaceRef)}:${activeConversationId}`,
         header: {
           title: 'Agent',
           runtimeLabel: `本地 · ${activeRole?.label ?? activeRoleRef?.roleId ?? '角色加载中'}`,
@@ -790,18 +916,8 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
                 },
               ]
             : []),
-          ...(activeBrowserTask
-            ? [
-                {
-                  id: `browser-task:${activeBrowserTask.id}`,
-                  tone:
-                    activeBrowserTask.status === 'failed' ? ('error' as const) : ('info' as const),
-                  title: activeBrowserTask.goal,
-                  detail: browserTaskStatusMeta(activeBrowserTask.status).label,
-                },
-              ]
-            : []),
         ],
+        activities: browserActivities,
         permissions: [...permissionModels, ...terminalConfirmationModels],
         timeline,
         empty: {
@@ -939,5 +1055,42 @@ function browserTaskStatusMeta(status: BrowserTaskRun['status']): { label: strin
       return { label: '失败', color: '#ef4444' }
     case 'cancelled':
       return { label: '已终止', color: '#9ca3af' }
+  }
+}
+
+function browserActionStatusLabel(log: BrowserActionLog): string {
+  switch (log.status) {
+    case 'started':
+      return '进行中'
+    case 'succeeded':
+      return '完成'
+    case 'failed':
+      return '失败'
+    case 'skipped':
+      return '跳过'
+  }
+}
+
+function formatBrowserTaskDuration(startedAt: number, endedAt?: number): string {
+  const duration = Math.max(0, (endedAt ?? Date.now()) - startedAt)
+  if (duration < 1_000) return `${duration}ms`
+  return `${(duration / 1_000).toFixed(duration < 10_000 ? 1 : 0)}s`
+}
+
+function downloadStatusLabel(download: BrowserDownloadRecord): string {
+  if (download.fileMissing) return '已丢失'
+  if (download.retention === 'discarded') return '已丢弃'
+  if (download.retention === 'kept') return '已保留'
+  switch (download.status) {
+    case 'pending':
+      return '等待中'
+    case 'downloading':
+      return '下载中'
+    case 'completed':
+      return '临时'
+    case 'failed':
+      return '失败'
+    case 'cancelled':
+      return '已取消'
   }
 }
