@@ -11,12 +11,14 @@ import { createViewCommands } from './view-commands'
 import { createWindowCommands } from './window-commands'
 import { createWorkbenchCommands } from './workbench-commands'
 import { createMarkdownCommands } from './markdown-commands'
+import { createWorkspaceCommands } from './workspace-commands'
 import { useSettingsStore } from '../../stores/settings-store'
 import { useAgentStore } from '../../stores/agent-store'
 import { useCclinkStore } from '../../stores/cclink-store'
 import { useUIStore } from '../../stores/ui-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { localWorkspaceRef, remoteWorkspaceRef } from '@shared/workspace-ref'
+import { useWorkspaceOpenStore } from '../../features/workspace-open/workspace-open-store'
 
 function createAllCommands(): Command[] {
   return [
@@ -35,6 +37,7 @@ function createAllCommands(): Command[] {
     ...createWindowCommands(),
     ...createWorkbenchCommands(),
     ...createMarkdownCommands(),
+    ...createWorkspaceCommands(),
   ]
 }
 
@@ -58,6 +61,7 @@ describe('bootstrap command modules', () => {
     expect(ids).toContain('workbench.find')
     expect(ids).toContain('workbench.save')
     expect(ids).toContain('markdown.bold')
+    expect(ids).toContain('workspace.open')
   })
 
   it('可配置命令的声明和实际路由只使用 shortcutPolicy', () => {
@@ -65,6 +69,17 @@ describe('bootstrap command modules', () => {
     expect(configurable.length).toBeGreaterThan(0)
     expect(configurable.every((command) => Boolean(command.shortcutPolicy))).toBe(true)
     expect(configurable.every((command) => command.shortcut === undefined)).toBe(true)
+  })
+
+  it('通过唯一 workspace.open 命令打开统一入口', async () => {
+    useWorkspaceOpenStore.getState().close()
+
+    await createWorkspaceCommands()
+      .find((command) => command.id === 'workspace.open')
+      ?.action({ source: 'toolbar' })
+
+    expect(useWorkspaceOpenStore.getState()).toMatchObject({ open: true, step: 'sources' })
+    useWorkspaceOpenStore.getState().close()
   })
 
   it('新建 Agent 会话绑定当前工作空间并打开右侧输入框', async () => {

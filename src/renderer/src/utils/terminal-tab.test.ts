@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { isTerminalFinalStatus } from '@shared/terminal'
 import { buildTerminalTabDraft, isInteractiveTerminalRuntime } from './terminal-tab'
 
 describe('buildTerminalTabDraft', () => {
   it('为本地工作空间创建本地 Terminal 占位 Tab', () => {
     const draft = buildTerminalTabDraft({ kind: 'local', path: '/Users/apple/project' })
+    const nextDraft = buildTerminalTabDraft({ kind: 'local', path: '/Users/apple/project' })
 
     expect(draft.type).toBe('terminal')
     expect(draft.forceNew).toBe(true)
@@ -20,6 +22,7 @@ describe('buildTerminalTabDraft', () => {
     expect(draft.terminal.closePolicy).toBe('terminate-process')
     expect(draft.terminal.sessionId).toMatch(/^terminal-session-/)
     expect(draft.terminal.auditLogId).toMatch(/^terminal-audit-/)
+    expect(nextDraft.terminal.sessionId).not.toBe(draft.terminal.sessionId)
   })
 
   it('未归档工作空间不设置 cwd 且采用每条命令确认', () => {
@@ -56,5 +59,14 @@ describe('buildTerminalTabDraft', () => {
       backend: 'remote-shell',
       cwd: '/workspace/remote',
     })
+  })
+
+  it('把 exited 和 error 视为不可再次启动的终态', () => {
+    expect(isTerminalFinalStatus('exited')).toBe(true)
+    expect(isTerminalFinalStatus('error')).toBe(true)
+    expect(isTerminalFinalStatus('idle')).toBe(false)
+    expect(isTerminalFinalStatus('starting')).toBe(false)
+    expect(isTerminalFinalStatus('running')).toBe(false)
+    expect(isTerminalFinalStatus('blocked')).toBe(false)
   })
 })

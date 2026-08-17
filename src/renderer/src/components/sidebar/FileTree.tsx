@@ -130,7 +130,7 @@ export function FileTree(): React.ReactElement {
   const error = useFsStore((s) => s.error)
   const operationError = useFsStore((s) => s.operationError)
   const picking = useFsStore((s) => s.picking)
-  const openWorkspacePicker = useFsStore((s) => s.openWorkspacePicker)
+  const executeCommand = useCommandStore((s) => s.executeCommand)
   const toggleDir = useFsStore((s) => s.toggleDir)
   const editingPath = useFsStore((s) => s.editingPath)
   const newFolderParent = useFsStore((s) => s.newFolderParent)
@@ -150,6 +150,9 @@ export function FileTree(): React.ReactElement {
   const pendingRefreshDirsRef = useRef<Set<string>>(new Set())
   const [draggingPath, setDraggingPath] = useState<string | null>(null)
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null)
+  const showWorkspaceOpen = (): void => {
+    void executeCommand('workspace.open', { source: 'toolbar' })
+  }
 
   useEffect(() => {
     const el = treeRef.current
@@ -312,10 +315,10 @@ export function FileTree(): React.ReactElement {
         <div className="file-tree-empty-hint">{error}</div>
         <button
           className="file-tree-empty-btn"
-          onClick={() => openWorkspacePicker()}
+          onClick={showWorkspaceOpen}
           disabled={loading || picking}
         >
-          重新选择工作空间文件夹
+          重新选择工作空间
         </button>
       </div>
     )
@@ -326,13 +329,13 @@ export function FileTree(): React.ReactElement {
       <div className="file-tree-empty">
         <IconFolder size={28} />
         <div className="file-tree-empty-title">尚未打开工作空间</div>
-        <div className="file-tree-empty-hint">打开一个文件夹作为工作空间</div>
+        <div className="file-tree-empty-hint">打开本地文件夹或 CCLink 远程目录</div>
         <button
           className="file-tree-empty-btn"
-          onClick={() => openWorkspacePicker()}
+          onClick={showWorkspaceOpen}
           disabled={loading || picking}
         >
-          打开工作空间文件夹
+          打开工作空间
         </button>
       </div>
     )

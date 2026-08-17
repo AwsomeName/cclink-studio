@@ -16,6 +16,12 @@ export type TerminalBackend = 'local-shell' | 'remote-shell' | 'codex' | 'custom
 
 export type TerminalStatus = 'idle' | 'starting' | 'running' | 'blocked' | 'exited' | 'error'
 
+export function isTerminalFinalStatus(
+  status: TerminalStatus,
+): status is Extract<TerminalStatus, 'exited' | 'error'> {
+  return status === 'exited' || status === 'error'
+}
+
 export type TerminalPermissionRisk =
   | 'read'
   | 'write'

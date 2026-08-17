@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useFsStore, useTabStore, useUIStore, useWorkspaceStore } from './stores'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCommandStore, useFsStore, useTabStore, useUIStore, useWorkspaceStore } from './stores'
 import { useThemeStore } from './stores/theme-store'
 import { ActivityBar } from './components/activity-bar/ActivityBar'
 import { Sidebar } from './components/sidebar/Sidebar'
@@ -36,6 +36,8 @@ import { ConversationQuickSwitcher } from './components/topbar/ConversationQuick
 import { useAnyFloatingSurfaceOpen } from './components/common/floating-surface-registry'
 import { clampPanelWidth, getAgentPanelWidthBounds } from './utils/panel-layout'
 import { useBrowserFindBridge } from './features/browser/use-browser-find-bridge'
+import { WorkspaceOpenSurface } from './features/workspace-open/WorkspaceOpenSurface'
+import { useWorkspaceOpenStore } from './features/workspace-open/workspace-open-store'
 
 /** 主布局。 */
 function MainLayout(): React.ReactElement {
@@ -50,15 +52,18 @@ function MainLayout(): React.ReactElement {
   const setAgentPanelWidth = useUIStore((s) => s.setAgentPanelWidth)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
   const toggleAgentPanel = useUIStore((s) => s.toggleAgentPanel)
-  const openWorkspacePicker = useFsStore((s) => s.openWorkspacePicker)
   const workspaceLoading = useFsStore((s) => s.loading)
   const workspacePicking = useFsStore((s) => s.picking)
+  const executeCommand = useCommandStore((s) => s.executeCommand)
+  const workspaceOpen = useWorkspaceOpenStore((s) => s.open)
+  const closeWorkspaceOpen = useWorkspaceOpenStore((s) => s.close)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const contextMenuOpen = useContextMenuStore((s) => s.open)
   const [tabCreateMenuOpen, setTabCreateMenuOpen] = useState(false)
   const [panelResizing, setPanelResizing] = useState(false)
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
   const floatingSurfaceOpen = useAnyFloatingSurfaceOpen()
+  const workspaceOpenButtonRef = useRef<HTMLButtonElement>(null)
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const agentInCenter = agentPanelMode === 'center'
@@ -135,14 +140,22 @@ function MainLayout(): React.ReactElement {
             <IconPanelLeft size={15} />
           </button>
           <button
+            ref={workspaceOpenButtonRef}
             className="app-topbar-open-project"
             type="button"
-            onClick={() => void openWorkspacePicker()}
+            onClick={() => {
+              if (workspaceOpen) {
+                closeWorkspaceOpen()
+                return
+              }
+              void executeCommand('workspace.open', { source: 'toolbar' })
+            }}
             disabled={workspaceLoading || workspacePicking}
-            title="打开项目"
+            title="打开工作空间"
+            aria-expanded={workspaceOpen}
           >
             <IconFolder size={14} />
-            <span>打开项目</span>
+            <span>打开工作空间</span>
           </button>
         </div>
         <ProjectStrip />
@@ -260,6 +273,7 @@ function MainLayout(): React.ReactElement {
       <StatusBar />
       <CommandPalette />
       <ContextMenuHost />
+      <WorkspaceOpenSurface anchorRef={workspaceOpenButtonRef} />
       <Toast />
     </div>
   )

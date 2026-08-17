@@ -140,6 +140,8 @@ describe('CclinkTerminalExecutionAdapter', () => {
       })),
     }
     const adapter = new CclinkTerminalExecutionAdapter(service as never, client as never)
+    const events: unknown[] = []
+    adapter.onEvent((event) => events.push(event))
     const ref = {
       kind: 'remote' as const,
       transport: 'cclink' as const,
@@ -169,5 +171,181 @@ describe('CclinkTerminalExecutionAdapter', () => {
         last_terminal_seq: 7,
       }),
     )
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        kind: 'output',
+        data: '\r\n[远程 Terminal 重连成功]\r\n',
+      }),
+    )
+  })
+
+  it('Agent 确认原 PTY 不存在后结束旧 session 而不是再次 open', async () => {
+    const statusListeners: Array<(status: { state: string }) => void> = []
+    const client = {
+      onProtocolEvent: vi.fn(() => () => undefined),
+      request: vi.fn(async (_serverId, message: CclinkProtocolMessage) => {
+        const request = message as CclinkProtocolMessage & {
+          terminal_id: string
+          workspace_id?: string
+          workspace_path?: string
+        }
+        if (request.cc_type === 'terminal_pty_open') {
+          return {
+            ...createCclinkEnvelope('terminal_pty_open_response', {
+              trace_id: request.trace_id,
+            }),
+            status: 'ok',
+            terminal_id: request.terminal_id,
+            agent_id: 'agent-1',
+            workspace_id: request.workspace_id,
+            workspace_path: request.workspace_path,
+            pty_protocol_version: 1,
+            terminal_seq: 0,
+          }
+        }
+        return {
+          ...createCclinkEnvelope('terminal_pty_attach_response', {
+            trace_id: request.trace_id,
+          }),
+          status: 'error',
+          terminal_id: request.terminal_id,
+          code: 'TERMINAL_NOT_FOUND',
+          message: 'Terminal was not found',
+        }
+      }),
+      send: vi.fn(async () => undefined),
+    }
+    const service = {
+      getRealtimeStatus: vi.fn(() => ({ state: 'online' })),
+      onStatus: vi.fn((listener) => {
+        statusListeners.push(listener)
+        return () => undefined
+      }),
+      getStatus: vi.fn(async () => ({
+        state: 'online',
+        capabilities: { shell: { pty: true } },
+      })),
+      recordDiagnostic: vi.fn(),
+    }
+    const adapter = new CclinkTerminalExecutionAdapter(service as never, client as never)
+    const events: unknown[] = []
+    adapter.onEvent((event) => events.push(event))
+    const ref = {
+      kind: 'remote' as const,
+      transport: 'cclink' as const,
+      endpointId: 'agent-1',
+      workspaceId: 'workspace-1',
+      path: '/srv/project',
+    }
+    await adapter.start({
+      sessionId: 'local-session',
+      runtime: {
+        location: 'remote',
+        transport: 'cclink',
+        backend: 'remote-shell',
+        endpointId: 'agent-1',
+        workspaceRef: ref,
+        cwd: ref.path,
+      },
+    })
+
+    statusListeners[0]!({ state: 'offline' })
+    statusListeners[0]!({ state: 'online' })
+    await vi.waitFor(() =>
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          kind: 'error',
+          message: '远程 Terminal 无法恢复：Terminal was not found',
+          executionError: expect.objectContaining({ code: 'TERMINAL_NOT_FOUND', retryable: false }),
+        }),
+      ),
+    )
+
+    expect(client.request).toHaveBeenCalledTimes(2)
+    await expect(
+      adapter.write({ sessionId: 'local-session', data: '\r', actor: 'user' }),
+    ).rejects.toThrow('远程 Terminal 不存在或已经退出')
+  })
+
+  it('连续五次可重试 attach 失败后结束旧 session', async () => {
+    vi.useFakeTimers()
+    try {
+      const statusListeners: Array<(status: { state: string }) => void> = []
+      const client = {
+        onProtocolEvent: vi.fn(() => () => undefined),
+        request: vi.fn(async (_serverId, message: CclinkProtocolMessage) => {
+          const request = message as CclinkProtocolMessage & {
+            terminal_id: string
+            workspace_id?: string
+            workspace_path?: string
+          }
+          if (request.cc_type !== 'terminal_pty_open') throw new Error('request timeout')
+          return {
+            ...createCclinkEnvelope('terminal_pty_open_response', {
+              trace_id: request.trace_id,
+            }),
+            status: 'ok',
+            terminal_id: request.terminal_id,
+            agent_id: 'agent-1',
+            workspace_id: request.workspace_id,
+            workspace_path: request.workspace_path,
+            pty_protocol_version: 1,
+            terminal_seq: 0,
+          }
+        }),
+        send: vi.fn(async () => undefined),
+      }
+      const service = {
+        getRealtimeStatus: vi.fn(() => ({ state: 'online' })),
+        onStatus: vi.fn((listener) => {
+          statusListeners.push(listener)
+          return () => undefined
+        }),
+        getStatus: vi.fn(async () => ({
+          state: 'online',
+          capabilities: { shell: { pty: true } },
+        })),
+        recordDiagnostic: vi.fn(),
+      }
+      const adapter = new CclinkTerminalExecutionAdapter(service as never, client as never)
+      const events: unknown[] = []
+      adapter.onEvent((event) => events.push(event))
+      const ref = {
+        kind: 'remote' as const,
+        transport: 'cclink' as const,
+        endpointId: 'agent-1',
+        workspaceId: 'workspace-1',
+        path: '/srv/project',
+      }
+      await adapter.start({
+        sessionId: 'local-session',
+        runtime: {
+          location: 'remote',
+          transport: 'cclink',
+          backend: 'remote-shell',
+          endpointId: 'agent-1',
+          workspaceRef: ref,
+          cwd: ref.path,
+        },
+      })
+
+      statusListeners[0]!({ state: 'offline' })
+      statusListeners[0]!({ state: 'online' })
+      await vi.runAllTimersAsync()
+
+      expect(client.request).toHaveBeenCalledTimes(6)
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          kind: 'error',
+          message: '远程 Terminal 连续 5 次恢复失败：request timeout',
+          executionError: expect.objectContaining({ retryable: false }),
+        }),
+      )
+      await expect(
+        adapter.write({ sessionId: 'local-session', data: '\r', actor: 'user' }),
+      ).rejects.toThrow('远程 Terminal 不存在或已经退出')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

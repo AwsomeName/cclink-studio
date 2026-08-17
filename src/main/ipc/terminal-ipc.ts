@@ -10,13 +10,14 @@ import type {
   TerminalSessionSnapshot,
   TerminalSubmitCommandInput,
 } from '../../shared/ipc/terminal'
-import type {
-  TerminalCommandActor,
-  TerminalExecutionEvent,
-  TerminalPermissionMode,
-  TerminalPermissionPolicy,
-  TerminalPermissionRisk,
-  TerminalRuntimeRef,
+import {
+  isTerminalFinalStatus,
+  type TerminalCommandActor,
+  type TerminalExecutionEvent,
+  type TerminalPermissionMode,
+  type TerminalPermissionPolicy,
+  type TerminalPermissionRisk,
+  type TerminalRuntimeRef,
 } from '../../shared/terminal'
 import type { TerminalAuditStore } from '../terminal/terminal-audit-store'
 import type { TerminalCommandOrchestrator } from '../terminal/terminal-command-orchestrator'
@@ -129,11 +130,25 @@ export function registerTerminalIpc(
     const normalized = normalizePtyStartInput(input)
     if (!normalized) return { success: false, error: 'Terminal PTY 启动参数无效' }
     const persisted = await terminalSessionStore?.getSession(normalized.terminalSessionId)
-    if (!terminalSessionRegistry.get(normalized.terminalSessionId)) {
+    const registered = terminalSessionRegistry.get(normalized.terminalSessionId)
+    if (
+      (registered && isTerminalFinalStatus(registered.status)) ||
+      (persisted && isTerminalFinalStatus(persisted.status))
+    ) {
+      return {
+        success: false,
+        error: 'Terminal session 已结束；请创建新的 Terminal session',
+      }
+    }
+    if (!registered) {
       terminalSessionRegistry.register({
         sessionId: normalized.terminalSessionId,
         runtime: normalized.runtime,
       })
+    }
+    const startingSession = terminalSessionRegistry.get(normalized.terminalSessionId)
+    if (startingSession?.status === 'idle') {
+      terminalSessionRegistry.transition(normalized.terminalSessionId, 'starting')
     }
     await terminalSessionStore?.upsertSession({
       sessionId: normalized.terminalSessionId,
@@ -153,9 +168,22 @@ export function registerTerminalIpc(
       })
       return { success: true, processId: result.processId }
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const failedSession = terminalSessionRegistry.get(normalized.terminalSessionId)
+      if (failedSession && canTransitionTerminalStatus(failedSession.status, 'error')) {
+        terminalSessionRegistry.transition(normalized.terminalSessionId, 'error', {
+          errorMessage: message,
+        })
+      }
+      await terminalSessionStore?.patchSession({
+        sessionId: normalized.terminalSessionId,
+        status: 'error',
+        attachable: false,
+        errorMessage: message,
+      })
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       }
     }
   })

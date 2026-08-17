@@ -11,6 +11,13 @@ import { useToastStore } from '../../components/common/Toast'
 import { APP_VERSION } from '../../app-metadata'
 import { buildRemoteAgentDiagnosticMarkdown } from '../diagnostics/remote-agent-diagnostic-report'
 import { copyTextToClipboard } from '../../utils/clipboard'
+import {
+  AgentComposer,
+  AgentMessageList,
+  AgentPanelSurface,
+  type AgentPanelVariant,
+} from '../../components/agent-panel/AgentPanelSurface'
+import { isWorkspaceTargetCurrent, type WorkspaceTarget } from '../../stores/workspace-store'
 
 export interface RemoteAgentVisualStatus {
   tone: 'connecting' | 'ready' | 'working' | 'unavailable'
@@ -63,10 +70,14 @@ export function resolveRemoteAgentVisualStatus(input: {
   }
 }
 
-export function RemoteAgentPanel({
+export function RemoteAgentPanelController({
   workspaceRef,
+  workspaceGeneration,
+  variant,
 }: {
   workspaceRef: RemoteWorkspaceRef
+  workspaceGeneration: number
+  variant: AgentPanelVariant
 }): React.ReactElement {
   const sessions = useCclinkStore((state) => state.sessions)
   const messages = useCclinkStore((state) => state.messages)
@@ -88,6 +99,10 @@ export function RemoteAgentPanel({
   const [remoteStatus, setRemoteStatus] = useState<RemoteStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const workspaceTarget = useMemo<WorkspaceTarget>(
+    () => ({ ref: workspaceRef, generation: workspaceGeneration }),
+    [workspaceGeneration, workspaceRef],
+  )
   const workspaceSessions = useMemo(
     () =>
       sessions.filter(
@@ -105,17 +120,25 @@ export function RemoteAgentPanel({
   const activeMessages = activeSession ? (messages[activeSession.id] ?? []) : []
 
   useEffect(() => {
+    let cancelled = false
     setStatusError(null)
     void initialize().then(() =>
       window.cclinkStudio.remote
         .getStatus(workspaceRef)
-        .then(setRemoteStatus)
-        .catch((statusFailure: unknown) =>
-          setStatusError(
-            statusFailure instanceof Error ? statusFailure.message : String(statusFailure),
-          ),
-        ),
+        .then((status) => {
+          if (!cancelled) setRemoteStatus(status)
+        })
+        .catch((statusFailure: unknown) => {
+          if (!cancelled) {
+            setStatusError(
+              statusFailure instanceof Error ? statusFailure.message : String(statusFailure),
+            )
+          }
+        }),
     )
+    return () => {
+      cancelled = true
+    }
   }, [
     initialize,
     workspaceRef.endpointId,
@@ -136,18 +159,26 @@ export function RemoteAgentPanel({
 
   useEffect(() => {
     if (!remoteStatus?.remoteError?.retryable) return
+    let cancelled = false
     const timer = window.setTimeout(() => {
       setStatusError(null)
       void window.cclinkStudio.remote
         .getStatus(workspaceRef)
-        .then(setRemoteStatus)
-        .catch((statusFailure: unknown) =>
-          setStatusError(
-            statusFailure instanceof Error ? statusFailure.message : String(statusFailure),
-          ),
-        )
+        .then((status) => {
+          if (!cancelled) setRemoteStatus(status)
+        })
+        .catch((statusFailure: unknown) => {
+          if (!cancelled) {
+            setStatusError(
+              statusFailure instanceof Error ? statusFailure.message : String(statusFailure),
+            )
+          }
+        })
     }, 5_000)
-    return () => window.clearTimeout(timer)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
   }, [remoteStatus, workspaceRef.endpointId, workspaceRef.path, workspaceRef.workspaceId])
 
   useEffect(() => {
@@ -162,13 +193,17 @@ export function RemoteAgentPanel({
   const submit = async (): Promise<void> => {
     const content = draft.trim()
     if (!content || sending || !agentAvailable) return
-    let session = activeSession
-    if (!session) session = await createSession(workspaceRef, '新远程会话')
+    if (!isWorkspaceTargetCurrent(workspaceTarget)) return
     setSending(true)
-    setDraft('')
     try {
+      let session = activeSession
+      if (!session) session = await createSession(workspaceRef, '新远程会话', { select: false })
+      if (!isWorkspaceTargetCurrent(workspaceTarget)) return
+      if (session.id !== selectedSessionId) selectSession(session.id)
       const sent = await sendAgentMessage(workspaceRef, session.id, content)
-      if (!sent) setDraft(content)
+      if (sent) {
+        setDraft((current) => (current.trim() === content ? '' : current))
+      }
     } finally {
       setSending(false)
     }
@@ -217,7 +252,11 @@ export function RemoteAgentPanel({
   }
 
   return (
-    <div className="remote-agent-panel">
+    <AgentPanelSurface
+      variant={variant}
+      runtime="remote"
+      className="agent-panel-remote"
+    >
       <div className="remote-agent-panel-toolbar">
         <IconRobot size={15} />
         <div className="remote-agent-panel-heading">
@@ -282,7 +321,7 @@ export function RemoteAgentPanel({
             </button>
           </div>
         ))}
-      <div ref={listRef} className="remote-agent-messages agent-messages conversation-copy-surface">
+      <AgentMessageList listRef={listRef} className="remote-agent-messages">
         {activeMessages.length === 0 ? (
           <div className="remote-agent-empty">
             <IconRobot size={24} />
@@ -300,31 +339,33 @@ export function RemoteAgentPanel({
             />
           ))
         )}
-      </div>
-      <div className="remote-agent-composer">
-        <textarea
-          value={draft}
-          maxLength={8192}
-          disabled={!agentAvailable}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault()
-              void submit()
-            }
-          }}
-          placeholder="发送到当前远程项目，Enter 发送"
-        />
-        <button
-          type="button"
-          onClick={() => void submit()}
-          disabled={!draft.trim() || sending || !agentAvailable}
-          title="发送"
-        >
-          <IconSend size={16} />
-        </button>
-      </div>
-    </div>
+      </AgentMessageList>
+      <AgentComposer
+        containerClassName="agent-composer-wrap agent-composer-remote"
+        inputContainerClassName="agent-input-card agent-input-card-remote"
+        textareaClassName="agent-input agent-input-remote"
+        value={draft}
+        maxLength={8192}
+        disabled={!agentAvailable}
+        onChange={setDraft}
+        onSubmit={submit}
+        canSubmit={Boolean(draft.trim()) && agentAvailable}
+        submitting={sending}
+        placeholder="发送到当前远程工作空间，Enter 发送"
+        rows={2}
+        renderTrailing={({ submit: submitMessage, canSubmit }) => (
+          <button
+            type="button"
+            className="agent-send-btn"
+            onClick={submitMessage}
+            disabled={!canSubmit}
+            title="发送"
+          >
+            <IconSend size={16} />
+          </button>
+        )}
+      />
+    </AgentPanelSurface>
   )
 }
 

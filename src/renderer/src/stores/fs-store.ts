@@ -278,7 +278,7 @@ interface FsState {
     settings?: AppSettings | null,
   ) => Promise<string | null>
   /** 弹出文件夹选择对话框选择工作区，成功后持久化 */
-  openWorkspacePicker: () => Promise<void>
+  openWorkspacePicker: () => Promise<boolean>
   /** 切换到最近打开过的工作区路径 */
   openRecentWorkspace: (path: string) => Promise<boolean>
   /** 切换到未归档，回到隐藏系统工作空间 */
@@ -465,15 +465,15 @@ export const useFsStore = create<FsState>((set, get) => ({
   },
 
   openWorkspacePicker: async () => {
-    if (get().picking || get().loading || get().switchingPath) return
+    if (get().picking || get().loading || get().switchingPath) return false
+    const generation = beginWorkspaceRuntimeTransition()
     set({ picking: true, error: null, operationError: null })
     try {
       const result = await window.cclinkStudio.dialog.showOpenDialog({
         selectDirectory: true,
         title: '选择工作空间文件夹',
       })
-      if (result.canceled || result.filePaths.length === 0) return
-      const generation = beginWorkspaceRuntimeTransition()
+      if (result.canceled || result.filePaths.length === 0) return false
       const path = await resolveWorkspaceCandidate(result.filePaths[0]!)
       if (!path || !isWorkspaceRuntimeTransitionCurrent(generation)) {
         if (!path) {
@@ -482,20 +482,20 @@ export const useFsStore = create<FsState>((set, get) => ({
           })
           set({ error: '无法打开所选工作空间' })
         }
-        return
+        return false
       }
       set({ switchingPath: path })
       const transition = await prepareWorkspaceRuntimeTransition(localWorkspaceRef(path), {
         generation,
       })
-      if (!isWorkspaceRuntimeTransitionCurrent(generation)) return
+      if (!isWorkspaceRuntimeTransitionCurrent(generation)) return false
       set({ loading: true })
       const prepared = await prepareWorkspaceTree(
         path,
         transition.snapshot?.sections.fileTree,
         get(),
       )
-      if (!isWorkspaceRuntimeTransitionCurrent(generation)) return
+      if (!isWorkspaceRuntimeTransitionCurrent(generation)) return false
       const applied = await applyWorkspaceRuntimeTransition(transition, {
         commitProjection: () => commitPreparedWorkspaceTree(prepared, set),
       })
@@ -511,12 +511,15 @@ export const useFsStore = create<FsState>((set, get) => ({
         if (!r.success) {
           set({ error: '无法记住此工作空间，下次启动需重新选择' })
         }
+        return true
       } else {
         console.warn('[FsStore] 打开所选项目失败：工作台运行时切换未能应用', { path })
+        return false
       }
     } catch (err) {
       console.error('[FsStore] 打开所选项目失败:', err)
       set({ error: describeError(err) })
+      return false
     } finally {
       set({ loading: false, picking: false, switchingPath: null })
     }

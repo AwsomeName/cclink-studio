@@ -3,7 +3,7 @@ import { Terminal as XtermTerminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { TerminalSubmitCommandResult } from '@shared/ipc/terminal'
-import type { TerminalExecutionEvent } from '@shared/terminal'
+import { isTerminalFinalStatus, type TerminalExecutionEvent } from '@shared/terminal'
 import type { Tab } from '../../types'
 import {
   workspaceRefKey,
@@ -276,6 +276,15 @@ function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
       ? (tab.terminalRecord?.outputBuffer?.filter((line) => line.kind !== 'input') ??
         EMPTY_TERMINAL_OUTPUT_LINES)
       : EMPTY_TERMINAL_OUTPUT_LINES
+  const terminalFinal = terminal ? isTerminalFinalStatus(terminal.status) : false
+  const terminalEndedRef = useRef(terminalFinal)
+  terminalEndedRef.current = terminalFinal
+
+  useEffect(() => {
+    if (!terminalFinal || !xtermRef.current) return
+    xtermRef.current.options.disableStdin = true
+    xtermRef.current.options.cursorBlink = false
+  }, [terminalFinal])
 
   useEffect(() => {
     if (!terminal?.sessionId || !terminal.runtime || !containerRef.current) return
@@ -284,7 +293,8 @@ function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
     let queuedInput = ''
 
     const xterm = new XtermTerminal({
-      cursorBlink: true,
+      cursorBlink: !terminalEndedRef.current,
+      disableStdin: terminalEndedRef.current,
       // PTY 已负责换行转换；保留 \r 语义才能正确渲染 scp 等原地刷新的进度行。
       convertEol: false,
       fontFamily: 'Menlo, Monaco, "SF Mono", "Cascadia Mono", "Roboto Mono", Consolas, monospace',
@@ -334,6 +344,7 @@ function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
         })
     }
     const dataDisposable = subscribeTerminalInputAfterReplay(xterm, replayOutput, (data) => {
+      if (terminalEndedRef.current) return
       if (!started) {
         queuedInput = `${queuedInput}${data}`.slice(-8_192)
         return
@@ -362,10 +373,12 @@ function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
     const resizeToContainer = (): void => {
       try {
         fitAddon.fit()
-        void window.cclinkStudio.terminal.resizePty({
-          terminalSessionId: terminal.sessionId!,
-          size: { columns: xterm.cols, rows: xterm.rows },
-        })
+        if (!terminalEndedRef.current) {
+          void window.cclinkStudio.terminal.resizePty({
+            terminalSessionId: terminal.sessionId!,
+            size: { columns: xterm.cols, rows: xterm.rows },
+          })
+        }
       } catch {
         // xterm 尚未完成布局时 fit 可能失败；下一次 ResizeObserver 会重试。
       }
@@ -376,7 +389,7 @@ function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
       if (!sequence) return true
       event.preventDefault()
       event.stopPropagation()
-      if (event.type === 'keydown') {
+      if (event.type === 'keydown' && !terminalEndedRef.current) {
         void window.cclinkStudio.terminal.writePty({
           terminalSessionId: terminal.sessionId!,
           data: sequence,
@@ -386,6 +399,7 @@ function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
     })
 
     const resizeDisposable = xterm.onResize((size) => {
+      if (terminalEndedRef.current) return
       void window.cclinkStudio.terminal.resizePty({
         terminalSessionId: terminal.sessionId!,
         size: { columns: size.cols, rows: size.rows },
@@ -398,8 +412,18 @@ function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
         if (event.kind === 'output') {
           xterm.write(event.data)
         } else if (event.kind === 'error') {
+          terminalEndedRef.current = true
+          started = false
+          queuedInput = ''
+          xterm.options.disableStdin = true
+          xterm.options.cursorBlink = false
           xterm.write(`\r\n${event.message}\r\n`)
         } else if (event.kind === 'exit') {
+          terminalEndedRef.current = true
+          started = false
+          queuedInput = ''
+          xterm.options.disableStdin = true
+          xterm.options.cursorBlink = false
           xterm.write(
             `\r\n[进程已退出${typeof event.exitCode === 'number' ? `，退出码 ${event.exitCode}` : ''}${event.signal ? `，信号 ${event.signal}` : ''}]\r\n`,
           )
@@ -411,6 +435,7 @@ function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
     resizeObserver.observe(containerRef.current)
     requestAnimationFrame(() => {
       resizeToContainer()
+      if (terminalEndedRef.current) return
       useTabStore.getState().updateTabTerminal(tab.id, { ...terminal, status: 'starting' })
       void window.cclinkStudio.terminal
         .startPty({
@@ -510,6 +535,7 @@ function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
           {terminal?.runtime.cwd ??
             (terminal?.runtime.location === 'remote' ? '远程 Terminal' : '本地 Terminal')}
         </span>
+        {terminalFinal && <span title="旧 session 不会再次启动">已结束 · 请重启 Terminal</span>}
         {findOpen && (
           <span className="terminal-find-control">
             <input

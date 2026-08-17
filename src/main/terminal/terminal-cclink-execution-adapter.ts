@@ -391,6 +391,15 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
       }
       session.attachAttempts = 0
       session.replayGapNotified = false
+      if (retryOnFailure && !response.replay_truncated) {
+        this.emit({
+          kind: 'output',
+          sessionId: session.localSessionId,
+          data: '\r\n[远程 Terminal 重连成功]\r\n',
+          stream: 'stderr',
+          timestamp: Date.now(),
+        })
+      }
       if (this.realtimeOnline) session.keepaliveTimer = this.keepalive(session)
     } catch (error) {
       if (!this.sessions.has(session.localSessionId)) return
@@ -400,6 +409,11 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
         throw terminalError('TERMINAL_ATTACH_FAILED', message, true)
       }
       session.attachAttempts += 1
+      const code = terminalExecutionErrorCode(error)
+      if (isTerminalAttachFinalError(code)) {
+        this.fail(session, `远程 Terminal 无法恢复：${message}`, code, false)
+        return
+      }
       this.emit({
         kind: 'output',
         sessionId: session.localSessionId,
@@ -414,6 +428,8 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
           this.scheduleAttach(session)
         }, delay)
         session.attachRetryTimer.unref()
+      } else if (session.attachAttempts >= 5) {
+        this.fail(session, `远程 Terminal 连续 5 次恢复失败：${message}`, code, false)
       }
     }
   }
@@ -429,17 +445,22 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
     return session
   }
 
-  private fail(session: RemotePtySession, message: string, code = 'TERMINAL_REMOTE_ERROR'): void {
+  private fail(
+    session: RemotePtySession,
+    message: string,
+    code = 'TERMINAL_REMOTE_ERROR',
+    retryable = true,
+  ): void {
     this.service.recordDiagnostic(
       'terminal.event',
       session.serverId,
-      terminalError(code, message, true),
+      terminalError(code, message, retryable),
     )
     this.finish(session, {
       kind: 'error',
       sessionId: session.localSessionId,
       message,
-      executionError: terminalErrorInfo(code, message, true),
+      executionError: terminalErrorInfo(code, message, retryable),
       timestamp: Date.now(),
     })
   }
@@ -536,4 +557,22 @@ function terminalError(
   return Object.assign(new Error(message), {
     executionError: terminalErrorInfo(code, message, retryable),
   })
+}
+
+function terminalExecutionErrorCode(error: unknown): string {
+  if (!error || typeof error !== 'object') return 'TERMINAL_ATTACH_FAILED'
+  const executionError = (error as { executionError?: { code?: unknown } }).executionError
+  if (typeof executionError?.code === 'string') return executionError.code
+  const remoteError = (error as { remoteError?: { code?: unknown } }).remoteError
+  return typeof remoteError?.code === 'string' ? remoteError.code : 'TERMINAL_ATTACH_FAILED'
+}
+
+function isTerminalAttachFinalError(code: string): boolean {
+  return [
+    'TERMINAL_NOT_FOUND',
+    'TERMINAL_LEASE_EXPIRED',
+    'TERMINAL_FORBIDDEN',
+    'TERMINAL_CONFLICT',
+    'WORKSPACE_MISMATCH',
+  ].includes(code)
 }

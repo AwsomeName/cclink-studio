@@ -1,12 +1,16 @@
 # Terminal Tab 模型与权限审计
 
-> 当前事实源。最后更新：2026-07-16。
+> 当前事实源。最后更新：2026-08-17。
 
 ## 结论
 
-CCLink Studio OSS 当前只承诺本地受控 Terminal：本地 PTY、本地 shell、权限确认、审计、session 状态、输出事件和只读诊断。
+CCLink Studio 默认提供免登录的本地受控 Terminal：本地 PTY、本地 shell、权限确认、审计、
+session 状态、输出事件和只读诊断。用户进入已登录、已配对的 CCLink 远程工作空间时，同一套
+Terminal 状态机可以选择 CCLink 远程 PTY adapter；远程能力失败不得影响本地 Terminal。
 
-网络执行、官方单命令执行、entitlement、网络 PTY、直连网络运行时都不属于开源壳默认能力，不能把官方 runtime adapter 加回 Studio 默认路径。
+官方单命令执行、通用直连网络 runtime 和客户端 entitlement 安全边界仍不属于本地默认能力。
+CCLink 远程 PTY 只能通过 Studio 统一 Terminal adapter 接入，不得复制 Tab、session、审计或
+生命周期状态。
 
 ## 产品定位
 
@@ -15,6 +19,7 @@ Terminal 是当前工作空间里的高风险 Tab 类型，不是全局黑箱，
 用户心智：
 
 - 本地工作空间打开的是本机 Terminal。
+- 远程工作空间只在用户明确进入 CCLink 远程入口后打开对应 Agent 的远程 Terminal。
 - Terminal 默认从当前工作空间路径启动。
 - Terminal 跟 Markdown、Browser、Android、Conversation 一样，是工作空间内的工作现场。
 - 活进程才叫可恢复；已退出或 App 重启后的 session 只能作为只读记录查看。
@@ -44,7 +49,7 @@ interface TerminalTabRef {
 }
 ```
 
-当前 OSS runtime 边界：
+本地默认 runtime 边界：
 
 ```text
 runtime
@@ -54,6 +59,18 @@ runtime
 ├─ workspaceRef
 ├─ cwd
 └─ shell
+```
+
+可选 CCLink 远程 runtime 边界：
+
+```text
+runtime
+├─ location: remote
+├─ transport: cclink
+├─ backend: remote-shell
+├─ RemoteWorkspaceRef
+├─ endpointId
+└─ cwd
 ```
 
 约束：
@@ -183,9 +200,41 @@ idle
 补充规则：
 
 - `exited / error` 是终态，不能恢复为 `running`。
+- 一个 Terminal session ID 只对应一次 PTY 生命周期；进入 `exited / error` 后不得再次用该
+  session ID 启动 PTY。新进程必须创建新的 session ID，并由此生成新的远程 Terminal ID。
 - 同状态迁移允许，用于刷新 `processId / lastCommand / updatedAt` 等元信息。
 - `idle -> blocked -> idle` 只用于 shell 进程尚未启动前先请求命令确认。
 - 应用重启后，旧活跃进程降级为不可 attach 的只读记录。
+
+## 远程 PTY 断线与 Terminal ID 复用缺陷
+
+2026-08-17 真实远程 Terminal 验收发现：腾讯 IM keepalive 请求超时后，远端 PTY 被结束并
+进入 Agent tombstone；Studio 随后的视图重建仍以原 session ID 调用 `startPty`。CCLink
+adapter 会把 session ID、endpoint、workspace 和 path 确定性映射为同一个 Terminal ID，
+因此 Agent 正确返回 `TERMINAL_CONFLICT: Terminal ID was already used by a recent PTY`。
+
+本缺陷的状态所有者和修复边界如下：
+
+- `TerminalSessionRegistry / TerminalSessionStore` 继续是 session 状态事实源。
+- 临时断线只能对仍存活的原 Terminal ID 执行 `attach`，不能创建第二个 PTY。
+- `exited / error` session 是只读终态；renderer 挂载、窗口重建和项目切换不得再次启动它。
+- 用户明确执行“重启 Terminal”时结束旧生命周期并创建新 session；新 session 才能 `open`。
+- Agent tombstone 是防止迟到或重复请求误建 PTY 的安全边界，不通过删除 tombstone、放宽
+  冲突或每次请求随机换 ID 来掩盖 Studio 生命周期错误。
+- 远程失败只降级当前 Terminal，不阻断本地工作区、编辑器、Agent、浏览器或本地 Terminal。
+
+用户端到端验收动作：
+
+1. 在真实在线 Agent 上打开远程 Terminal，运行能持续输出并可识别进程连续性的命令。
+2. 短暂中断并恢复 IM transport，确认 Studio attach 原 PTY，命令和输出从断点继续。
+3. 让远端 PTY 确实退出或超过 lease，确认旧 Tab 保持 `exited / error` 且只读，不再发送
+   `terminal_pty_open`，也不再出现 Terminal ID 冲突。
+4. 明确执行“重启 Terminal”，确认 Studio 创建新 session/Terminal ID 并成功得到新 shell；
+   旧输出仍保留为审计记录。
+5. 对旧终态 Tab 执行窗口重建、项目切换和反复挂载，确认均不会复用旧 Terminal ID。
+
+修复状态：Studio 代码与自动化门禁已完成；真实在线 Agent 断网验收仍待执行。在第 1-5 步
+真人验收通过前，只能声明工程修复完成，不能声明远程 Terminal 用户闭环完成。
 
 ## 执行编排器
 
@@ -248,7 +297,7 @@ error
 
 ## 错误模型
 
-OSS Terminal 使用中性的本地 execution error。
+Terminal 使用统一 execution error；CCLink adapter 额外保留脱敏、结构化的远程错误码。
 
 错误来源包括：
 
@@ -261,11 +310,13 @@ OSS Terminal 使用中性的本地 execution error。
 - 本地 shell 启动失败。
 - 本地进程写入、resize 或 terminate 失败。
 
-不要在 OSS 默认路径重新引入网络 provider 错误模型。
+不要让远程错误模型接管本地默认路径，也不得把 token、UserSig 或远程身份写入 Terminal
+错误、输出或诊断。
 
 ## 已落地
 
 - 本地 PTY：`node-pty + @xterm/xterm + @xterm/addon-fit`。
+- CCLink 远程 PTY：确定性 Terminal ID、keepalive、断线 attach、输出重放和工作空间绑定校验。
 - raw input、resize、基础交互式程序。
 - 本地 shell 启动、写入、终止。
 - session registry、session store、状态机。
@@ -278,13 +329,12 @@ OSS Terminal 使用中性的本地 execution error。
 
 ## 未落地
 
-- 网络执行。
 - 官方单命令执行。
-- 直连网络运行时。
-- 网络 PTY。
-- 网络执行事件回传。
+- 通用直连网络运行时。
 - 官方 entitlement gate。
 - 完整按工作空间/session 深筛的审计页面。
+- CCLink 远程 PTY 的真实在线 Agent 全失败矩阵验收仍需持续补齐；自动化测试不能替代真人
+  断网、lease 到期和进程连续性验收。
 
 ## 拷问
 

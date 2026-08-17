@@ -1,14 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  useAgentStore,
-  useCclinkStore,
-  useFsStore,
-  useOpenProjectsStore,
-  useTabStore,
-  useUIStore,
-  useWorkspaceStore,
-} from '../../stores'
-import { workspaceRefKey } from '@shared/workspace-ref'
+import { useAgentStore, useFsStore, useOpenProjectsStore, useWorkspaceStore } from '../../stores'
+import { localWorkspaceRef, workspaceRefKey } from '@shared/workspace-ref'
 import { getRunningProjectCounts } from '../../features/agent-conversations/project-activity'
 import { getWorkspaceStateOwnerKey } from '../../utils/workspace-state'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
@@ -18,11 +10,8 @@ import {
   buildKeyboardContextMenuInput,
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
-import {
-  applyWorkspaceRuntimeTransition,
-  prepareWorkspaceRuntimeTransition,
-} from '../../utils/workspace-transition'
-import { confirmRemoteWorkspaceRef } from '../../features/cclink-remote/remote-workspace-confirmation'
+import { openWorkspaceRef } from '../../features/workspace-open/workspace-open-controller'
+import { useWorkspaceOpenStore } from '../../features/workspace-open/workspace-open-store'
 
 type DropPlacement = 'before' | 'after'
 
@@ -54,10 +43,8 @@ export function ProjectStrip(): React.ReactElement {
   const openProjectPaths = useOpenProjectsStore((state) => state.openProjectPaths)
   const reorderProject = useOpenProjectsStore((state) => state.reorderProject)
   const openRemoteWorkspaceRefs = useOpenProjectsStore((state) => state.openRemoteWorkspaceRefs)
-  const replaceRemoteProject = useOpenProjectsStore((state) => state.replaceRemoteProject)
   const removeRemoteProject = useOpenProjectsStore((state) => state.removeRemoteProject)
   const recentWorkspacePaths = useFsStore((state) => state.recentWorkspacePaths)
-  const openRecentWorkspace = useFsStore((state) => state.openRecentWorkspace)
   const switchingPath = useFsStore((state) => state.switchingPath)
   const workspaceLoading = useFsStore((state) => state.loading)
   const workspacePicking = useFsStore((state) => state.picking)
@@ -121,34 +108,22 @@ export function ProjectStrip(): React.ReactElement {
 
   const activateProject = async (path: string): Promise<boolean> => {
     if (activePath === path) return true
-    const success = await openRecentWorkspace(path)
-    if (!success) {
-      const reason = useFsStore.getState().error
-      showToast(reason || '项目切换失败，已保留当前现场', 'error')
+    try {
+      await openWorkspaceRef(localWorkspaceRef(path))
+      return true
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '项目切换失败，已保留当前现场', 'error')
+      return false
     }
-    return success
   }
 
   const activateRemoteProject = async (index: number): Promise<void> => {
     const ref = openRemoteWorkspaceRefs[index]
     if (!ref) return
     try {
-      await useCclinkStore.getState().initialize()
-      const confirmedRef = await confirmRemoteWorkspaceRef(ref)
-      replaceRemoteProject(ref, confirmedRef)
-      const transition = await prepareWorkspaceRuntimeTransition(confirmedRef)
-      const applied = await applyWorkspaceRuntimeTransition(transition)
-      if (!applied) return
-      useUIStore.getState().setActivePanel('files')
-      const tab = useTabStore
-        .getState()
-        .tabs.find(
-          (item) =>
-            workspaceRefKey(item.workspaceRef ?? { kind: 'global' }) ===
-            workspaceRefKey(confirmedRef),
-        )
-      if (tab) useTabStore.getState().activateTab(tab.id)
+      await openWorkspaceRef(ref)
     } catch (error) {
+      useWorkspaceOpenStore.getState().showRemote()
       showToast(error instanceof Error ? error.message : '远程项目切换失败', 'error')
     }
   }

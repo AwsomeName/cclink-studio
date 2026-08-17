@@ -313,6 +313,149 @@ describe('registerTerminalIpc', () => {
     expect(terminalSessionStore.appendInput).not.toHaveBeenCalled()
   })
 
+  it.each(['exited', 'error'] as const)(
+    'does not restart a terminal session after it reaches %s',
+    async (status) => {
+      const terminalSessionRegistry = {
+        get: vi.fn(() => ({ sessionId: 'terminal-1', status })),
+        register: vi.fn(),
+        transition: vi.fn(),
+      } as any
+      const terminalExecutionAdapter = {
+        onEvent: vi.fn(),
+        start: vi.fn(),
+      } as any
+      const terminalSessionStore = {
+        getSession: vi.fn(async () => ({ sessionId: 'terminal-1', status })),
+        upsertSession: vi.fn(),
+      } as any
+
+      registerTerminalIpc(
+        { resolveConfirmation: vi.fn() } as any,
+        { listEvents: vi.fn() } as any,
+        terminalSessionRegistry,
+        undefined,
+        terminalExecutionAdapter,
+        undefined,
+        terminalSessionStore,
+      )
+
+      await expect(
+        mockIpcMain.handlers.get('terminal:startPty')?.(
+          {},
+          {
+            terminalSessionId: 'terminal-1',
+            runtime: terminalRuntime,
+            size: { columns: 120, rows: 32 },
+          },
+        ),
+      ).resolves.toEqual({
+        success: false,
+        error: 'Terminal session 已结束；请创建新的 Terminal session',
+      })
+      expect(terminalExecutionAdapter.start).not.toHaveBeenCalled()
+      expect(terminalSessionStore.upsertSession).not.toHaveBeenCalled()
+    },
+  )
+
+  it('does not register a persisted terminal session that already exited', async () => {
+    const terminalSessionRegistry = {
+      get: vi.fn(() => null),
+      register: vi.fn(),
+      transition: vi.fn(),
+    } as any
+    const terminalExecutionAdapter = {
+      onEvent: vi.fn(),
+      start: vi.fn(),
+    } as any
+    const terminalSessionStore = {
+      getSession: vi.fn(async () => ({ sessionId: 'terminal-1', status: 'exited' })),
+      upsertSession: vi.fn(),
+    } as any
+
+    registerTerminalIpc(
+      { resolveConfirmation: vi.fn() } as any,
+      { listEvents: vi.fn() } as any,
+      terminalSessionRegistry,
+      undefined,
+      terminalExecutionAdapter,
+      undefined,
+      terminalSessionStore,
+    )
+
+    await expect(
+      mockIpcMain.handlers.get('terminal:startPty')?.(
+        {},
+        {
+          terminalSessionId: 'terminal-1',
+          runtime: terminalRuntime,
+          size: { columns: 120, rows: 32 },
+        },
+      ),
+    ).resolves.toEqual({
+      success: false,
+      error: 'Terminal session 已结束；请创建新的 Terminal session',
+    })
+    expect(terminalSessionRegistry.register).not.toHaveBeenCalled()
+    expect(terminalExecutionAdapter.start).not.toHaveBeenCalled()
+  })
+
+  it('records a PTY start failure as a terminal session final state', async () => {
+    let session: any = null
+    const terminalSessionRegistry = {
+      get: vi.fn(() => session),
+      register: vi.fn((input) => {
+        session = { ...input, status: 'idle' }
+      }),
+      transition: vi.fn((_sessionId, status, patch = {}) => {
+        session = { ...session, ...patch, status }
+        return session
+      }),
+    } as any
+    const terminalExecutionAdapter = {
+      onEvent: vi.fn(),
+      start: vi.fn(async () => {
+        throw new Error('remote open failed')
+      }),
+    } as any
+    const terminalSessionStore = {
+      getSession: vi.fn(async () => null),
+      upsertSession: vi.fn(async () => undefined),
+      patchSession: vi.fn(async () => undefined),
+    } as any
+
+    registerTerminalIpc(
+      { resolveConfirmation: vi.fn() } as any,
+      { listEvents: vi.fn() } as any,
+      terminalSessionRegistry,
+      undefined,
+      terminalExecutionAdapter,
+      undefined,
+      terminalSessionStore,
+    )
+
+    await expect(
+      mockIpcMain.handlers.get('terminal:startPty')?.(
+        {},
+        {
+          terminalSessionId: 'terminal-1',
+          runtime: terminalRuntime,
+          size: { columns: 120, rows: 32 },
+        },
+      ),
+    ).resolves.toEqual({ success: false, error: 'remote open failed' })
+    expect(terminalSessionRegistry.transition).toHaveBeenNthCalledWith(1, 'terminal-1', 'starting')
+    expect(terminalSessionRegistry.transition).toHaveBeenNthCalledWith(2, 'terminal-1', 'error', {
+      errorMessage: 'remote open failed',
+    })
+    expect(terminalSessionStore.patchSession).toHaveBeenCalledWith({
+      sessionId: 'terminal-1',
+      status: 'error',
+      attachable: false,
+      errorMessage: 'remote open failed',
+    })
+  })
+
   it('rejects terminal command submission when orchestrator is unavailable', async () => {
     registerTerminalIpc({ resolveConfirmation: vi.fn() } as any, { listEvents: vi.fn() } as any)
 

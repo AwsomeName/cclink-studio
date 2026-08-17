@@ -132,6 +132,33 @@ async function main() {
     return 'main window ready'
   })
 
+  await runCheck('workspace opener unifies local and CCLink remote entry', async () => {
+    await clickByTitle(page, '打开工作空间')
+    const opener = page.locator('.workspace-open-surface')
+    await opener.waitFor({ state: 'visible', timeout: 10_000 })
+    assert(
+      await opener.getByRole('button', { name: /本地文件夹/ }).isVisible(),
+      'local workspace source is missing',
+    )
+    assert(
+      await opener.getByRole('button', { name: /CCLink 远程/ }).isVisible(),
+      'CCLink remote source is missing',
+    )
+
+    await opener.getByRole('button', { name: /CCLink 远程/ }).click()
+    await opener
+      .locator('.cclink-login-card, .cclink-server-panel, .cclink-panel-state')
+      .first()
+      .waitFor({ state: 'visible', timeout: 10_000 })
+    assert(await page.locator('.main-window').isVisible(), 'remote source replaced the local shell')
+
+    await opener.getByRole('button', { name: '返回来源选择' }).click()
+    await opener.getByRole('button', { name: /本地文件夹/ }).waitFor({ state: 'visible' })
+    await opener.getByRole('button', { name: '关闭打开工作空间' }).click()
+    await opener.waitFor({ state: 'hidden' })
+    return 'shared source chooser and scoped remote step'
+  })
+
   await runCheck('CCLink login is scoped to the remote entry and fails soft', async () => {
     await clickByTitle(page, 'CCLink 远程')
     const service = await page.evaluate(() => window.cclinkStudio.auth.getServiceStatus())

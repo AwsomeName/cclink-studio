@@ -76,6 +76,11 @@ import {
   getApplyAgentRoleError,
 } from '../../features/agent-roles/agent-role-actions'
 import { AgentConversationTimeline } from '../../features/agent-roles/AgentConversationTimeline'
+import {
+  AgentComposer,
+  AgentMessageList,
+  AgentPanelSurface,
+} from './AgentPanelSurface'
 
 interface AgentPanelProps {
   variant?: 'center' | 'side'
@@ -99,7 +104,7 @@ function loadComposerHeight(variant: NonNullable<AgentPanelProps['variant']>): n
   }
 }
 
-export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactElement {
+function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React.ReactElement {
   const conversations = useAgentStore((s) => s.conversations)
   const conversationOrder = useAgentStore((s) => s.conversationOrder)
   const activeConversationId = useAgentStore((s) => s.activeConversationId)
@@ -135,7 +140,6 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
   const editorFiles = useEditorStore((s) => s.files)
   const selectedPath = useFsStore((s) => s.selectedPath)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
-  const remoteAgentUnavailable = activeWorkspaceRef.kind === 'remote'
   const browserTasks = useBrowserTaskStore((s) => s.tasks)
   const browserActionLogs = useBrowserTaskStore((s) => s.actionLogs)
   const upsertBrowserTask = useBrowserTaskStore((s) => s.upsertTask)
@@ -734,26 +738,24 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
     setMentionSelectedIndex((index) => Math.min(index, activeMentionCount - 1))
   }, [activeMentionCount])
 
-  // 键盘事件：候选菜单优先；流式输出期间仍允许编辑草稿，但不提交。
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.nativeEvent.isComposing) return
-
+  // 候选菜单和历史导航先于通用 Composer 的 Enter 提交策略。
+  const handleKeyDownBeforeSubmit = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
       if (activeMentionKind && activeMentionCount > 0) {
         if (e.key === 'ArrowDown') {
           e.preventDefault()
           setMentionSelectedIndex((index) => (index + 1) % activeMentionCount)
-          return
+          return true
         }
         if (e.key === 'ArrowUp') {
           e.preventDefault()
           setMentionSelectedIndex((index) => (index - 1 + activeMentionCount) % activeMentionCount)
-          return
+          return true
         }
         if (e.key === 'Enter' || e.key === 'Tab') {
           e.preventDefault()
           handlePickSelectedMention()
-          return
+          return true
         }
       }
 
@@ -762,23 +764,16 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
         setResourceQuery(null)
         setSkillQuery(null)
         setMentionSelectedIndex(0)
-        return
+        return true
       }
 
-      if (handleComposerHistoryKeyDown(e)) return
-      if (loading) return
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault()
-        handleSend()
-      }
+      return handleComposerHistoryKeyDown(e)
     },
     [
       activeMentionCount,
       activeMentionKind,
       handleComposerHistoryKeyDown,
       handlePickSelectedMention,
-      handleSend,
-      loading,
     ],
   )
   const isStartConversation =
@@ -797,84 +792,96 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
 
   if (variant === 'center' && isStartConversation) {
     return (
-      <div className="agent-panel agent-panel-center">
-        <div className="agent-conversation-main">
-          <div className="agent-start-page">
-            <div className="agent-start-content">
-              <div className="agent-start-status">
-                <IconSparkle size={14} />
-                <span>Agent · {activeRole?.label ?? activeRoleRef?.roleId ?? '角色加载中'}</span>
-                <IconCircle
-                  size={8}
-                  filled
-                  color={statusColor[backendState]}
-                  className={isStreaming ? 'animate-pulse' : ''}
-                />
-                <span>{statusText[backendState]}</span>
-              </div>
+      <AgentPanelSurface variant="center" runtime="local">
+        <div className="agent-start-page">
+          <div className="agent-start-content">
+            <div className="agent-start-status">
+              <IconSparkle size={14} />
+              <span>Agent · {activeRole?.label ?? activeRoleRef?.roleId ?? '角色加载中'}</span>
+              <IconCircle
+                size={8}
+                filled
+                color={statusColor[backendState]}
+                className={isStreaming ? 'animate-pulse' : ''}
+              />
+              <span>{statusText[backendState]}</span>
+            </div>
 
-              <h1 className="agent-start-title">我们应该在 {workspaceName} 中构建什么？</h1>
+            <h1 className="agent-start-title">我们应该在 {workspaceName} 中构建什么？</h1>
 
-              <div ref={startComposerRef} className="agent-start-composer">
-                {resourceQuery !== null && (
-                  <ResourceCandidateMenu
-                    candidates={resourceCandidates}
-                    selectedIndex={mentionSelectedIndex}
-                    onActiveIndexChange={setMentionSelectedIndex}
-                    onPick={handleMountResource}
-                    anchorRef={startComposerRef}
-                    onRequestClose={() => setResourceQuery(null)}
+            <AgentComposer
+              containerRef={startComposerRef}
+              containerClassName="agent-start-composer"
+              textareaRef={inputRef}
+              textareaClassName="agent-start-input"
+              value={input}
+              onChange={handleInputChange}
+              onSubmit={handleSend}
+              canSubmit={
+                !loading &&
+                (Boolean(input.trim()) || pendingImages.length > 0) &&
+                !contextCompacting &&
+                Boolean(activeRole)
+              }
+              submitting={loading || contextCompacting}
+              onKeyDownBeforeSubmit={handleKeyDownBeforeSubmit}
+              onPaste={(event) => {
+                const files = Array.from(event.clipboardData.files).filter((file) =>
+                  file.type.startsWith('image/'),
+                )
+                if (files.length === 0) return
+                event.preventDefault()
+                void handleAddImages(files)
+              }}
+              onDragOver={(event) => {
+                if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
+                  event.preventDefault()
+                }
+              }}
+              onDrop={(event) => {
+                const files = Array.from(event.dataTransfer.files).filter((file) =>
+                  file.type.startsWith('image/'),
+                )
+                if (files.length === 0) return
+                event.preventDefault()
+                void handleAddImages(files)
+              }}
+              placeholder="随心输入"
+              rows={3}
+              leading={
+                <>
+                  {resourceQuery !== null && (
+                    <ResourceCandidateMenu
+                      candidates={resourceCandidates}
+                      selectedIndex={mentionSelectedIndex}
+                      onActiveIndexChange={setMentionSelectedIndex}
+                      onPick={handleMountResource}
+                      anchorRef={startComposerRef}
+                      onRequestClose={() => setResourceQuery(null)}
+                    />
+                  )}
+                  {skillQuery !== null && (
+                    <SkillCandidateMenu
+                      candidates={skillCandidates}
+                      selectedIndex={mentionSelectedIndex}
+                      onActiveIndexChange={setMentionSelectedIndex}
+                      onPick={handleMountSkill}
+                      anchorRef={startComposerRef}
+                      onRequestClose={() => setSkillQuery(null)}
+                    />
+                  )}
+                  <MountedSkillStrip
+                    skills={mountedSkills}
+                    availableSkills={availableSkills}
+                    onRemove={handleRemoveMountedSkill}
                   />
-                )}
-                {skillQuery !== null && (
-                  <SkillCandidateMenu
-                    candidates={skillCandidates}
-                    selectedIndex={mentionSelectedIndex}
-                    onActiveIndexChange={setMentionSelectedIndex}
-                    onPick={handleMountSkill}
-                    anchorRef={startComposerRef}
-                    onRequestClose={() => setSkillQuery(null)}
+                  <ImageAttachmentStrip
+                    images={pendingImages}
+                    onRemove={handleRemovePendingImage}
                   />
-                )}
-                <MountedSkillStrip
-                  skills={mountedSkills}
-                  availableSkills={availableSkills}
-                  onRemove={handleRemoveMountedSkill}
-                />
-                <ImageAttachmentStrip images={pendingImages} onRemove={handleRemovePendingImage} />
-                <textarea
-                  ref={inputRef}
-                  className="agent-start-input"
-                  value={input}
-                  disabled={remoteAgentUnavailable}
-                  onChange={(e) => handleInputChange(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  onPaste={(event) => {
-                    const files = Array.from(event.clipboardData.files).filter((file) =>
-                      file.type.startsWith('image/'),
-                    )
-                    if (files.length === 0) return
-                    event.preventDefault()
-                    void handleAddImages(files)
-                  }}
-                  onDragOver={(event) => {
-                    if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
-                      event.preventDefault()
-                    }
-                  }}
-                  onDrop={(event) => {
-                    const files = Array.from(event.dataTransfer.files).filter((file) =>
-                      file.type.startsWith('image/'),
-                    )
-                    if (files.length === 0) return
-                    event.preventDefault()
-                    void handleAddImages(files)
-                  }}
-                  placeholder={
-                    remoteAgentUnavailable ? '远程工作区请使用 CCLink 远程会话面板' : '随心输入'
-                  }
-                  rows={3}
-                />
+                </>
+              }
+              renderTrailing={({ submit, canSubmit }) => (
                 <AgentComposerToolbar
                   roleRef={activeRoleRef}
                   roles={roles}
@@ -887,12 +894,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                   canChangeRuntime={canChangeRuntime}
                   onRuntimeChange={(binding) => setRuntimeBinding(binding, activeConversationId)}
                   loading={loading || contextCompacting}
-                  canSend={
-                    !remoteAgentUnavailable &&
-                    (Boolean(input.trim()) || pendingImages.length > 0) &&
-                    !contextCompacting &&
-                    Boolean(activeRole)
-                  }
+                  canSend={canSubmit}
                   contextUsage={contextUsage}
                   contextCompaction={contextCompaction}
                   canCompact={Boolean(sessionId) && !loading}
@@ -905,36 +907,30 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                   sendButton={
                     <button
                       className="agent-start-send"
-                      onClick={handleSend}
-                      disabled={
-                        remoteAgentUnavailable ||
-                        (!input.trim() && pendingImages.length === 0) ||
-                        contextCompacting ||
-                        !activeRole
-                      }
-                      title={remoteAgentUnavailable ? '请使用 CCLink 远程会话面板' : '发送'}
+                      onClick={submit}
+                      disabled={!canSubmit}
+                      title="发送"
                     >
                       <IconSend size={16} />
                     </button>
                   }
                 />
-              </div>
+              )}
+            />
 
-              <div className="agent-start-hints">
-                <span>打开网页并整理资料</span>
-                <span>新建 Markdown 草稿</span>
-                <span>继续当前工作空间任务</span>
-              </div>
+            <div className="agent-start-hints">
+              <span>打开网页并整理资料</span>
+              <span>新建 Markdown 草稿</span>
+              <span>继续当前工作空间任务</span>
             </div>
           </div>
         </div>
-      </div>
+      </AgentPanelSurface>
     )
   }
 
   return (
-    <div className={`agent-panel agent-panel-${variant}`}>
-      <div className="agent-conversation-main" ref={conversationMainRef}>
+    <AgentPanelSurface variant={variant} runtime="local" mainRef={conversationMainRef}>
         {activeBrowserTask && (
           <BrowserTaskCard
             task={activeBrowserTask}
@@ -953,9 +949,8 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
         )}
 
         {/* 消息列表 */}
-        <div
-          className="agent-messages conversation-copy-surface"
-          ref={conversationScroll.listRef}
+        <AgentMessageList
+          listRef={conversationScroll.listRef}
           onScroll={conversationScroll.onScroll}
           onWheel={conversationScroll.onWheel}
           onPointerDown={conversationScroll.onPointerDown}
@@ -1031,7 +1026,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
           ))}
 
           <TerminalConfirmationCards />
-        </div>
+        </AgentMessageList>
 
         {/* 费用显示 */}
         {lastCost !== null && (
@@ -1056,86 +1051,95 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
         />
 
         {/* 输入区域 */}
-        <div
-          ref={composerRef}
-          className={`agent-composer-wrap ${composerHeight === null ? '' : 'resized'}`}
+        <AgentComposer
+          containerRef={composerRef}
+          containerClassName={`agent-composer-wrap ${composerHeight === null ? '' : 'resized'}`}
+          inputContainerClassName="agent-input-card"
           style={composerHeight === null ? undefined : { height: composerHeight }}
-        >
-          {resourceQuery !== null && (
-            <ResourceCandidateMenu
-              candidates={resourceCandidates}
-              selectedIndex={mentionSelectedIndex}
-              onActiveIndexChange={setMentionSelectedIndex}
-              onPick={handleMountResource}
-              anchorRef={composerRef}
-              onRequestClose={() => setResourceQuery(null)}
-            />
-          )}
-          {skillQuery !== null && (
-            <SkillCandidateMenu
-              candidates={skillCandidates}
-              selectedIndex={mentionSelectedIndex}
-              onActiveIndexChange={setMentionSelectedIndex}
-              onPick={handleMountSkill}
-              anchorRef={composerRef}
-              onRequestClose={() => setSkillQuery(null)}
-            />
-          )}
-          <MountedResourceBar
-            resources={mountedResources}
-            onRemove={handleRemoveMountedResource}
-            onOpen={openFileRangeResource}
-          />
-          <MountedSkillStrip
-            skills={mountedSkills}
-            availableSkills={availableSkills}
-            onRemove={handleRemoveMountedSkill}
-          />
-          <div className="agent-input-card">
-            <ImageAttachmentStrip images={pendingImages} onRemove={handleRemovePendingImage} />
-            <button
-              type="button"
-              className="agent-copy-diagnostics-btn"
-              onClick={() => void handleCopyDiagnostics()}
-              title="复制 Agent 诊断日志"
-            >
-              <IconClipboard size={13} />
-            </button>
-            <textarea
-              ref={inputRef}
-              className="agent-input"
-              value={input}
-              disabled={remoteAgentUnavailable}
-              onChange={(e) => handleInputChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onPaste={(event) => {
-                const files = Array.from(event.clipboardData.files).filter((file) =>
-                  file.type.startsWith('image/'),
-                )
-                if (files.length === 0) return
-                event.preventDefault()
-                void handleAddImages(files)
-              }}
-              onDragOver={(event) => {
-                if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
-                  event.preventDefault()
-                }
-              }}
-              onDrop={(event) => {
-                const files = Array.from(event.dataTransfer.files).filter((file) =>
-                  file.type.startsWith('image/'),
-                )
-                if (files.length === 0) return
-                event.preventDefault()
-                void handleAddImages(files)
-              }}
-              placeholder={
-                remoteAgentUnavailable
-                  ? '远程工作区请使用 CCLink 远程会话面板'
-                  : '输入消息，@ 挂资源，/ 挂技能...'
-              }
-              rows={2}
-            />
+          textareaRef={inputRef}
+          textareaClassName="agent-input"
+          value={input}
+          onChange={handleInputChange}
+          onSubmit={handleSend}
+          canSubmit={
+            !loading &&
+            (Boolean(input.trim()) || pendingImages.length > 0) &&
+            !contextCompacting &&
+            Boolean(activeRole)
+          }
+          submitting={loading || contextCompacting}
+          onKeyDownBeforeSubmit={handleKeyDownBeforeSubmit}
+          onPaste={(event) => {
+            const files = Array.from(event.clipboardData.files).filter((file) =>
+              file.type.startsWith('image/'),
+            )
+            if (files.length === 0) return
+            event.preventDefault()
+            void handleAddImages(files)
+          }}
+          onDragOver={(event) => {
+            if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
+              event.preventDefault()
+            }
+          }}
+          onDrop={(event) => {
+            const files = Array.from(event.dataTransfer.files).filter((file) =>
+              file.type.startsWith('image/'),
+            )
+            if (files.length === 0) return
+            event.preventDefault()
+            void handleAddImages(files)
+          }}
+          placeholder="输入消息，@ 挂资源，/ 挂技能..."
+          rows={2}
+          leading={
+            <>
+              {resourceQuery !== null && (
+                <ResourceCandidateMenu
+                  candidates={resourceCandidates}
+                  selectedIndex={mentionSelectedIndex}
+                  onActiveIndexChange={setMentionSelectedIndex}
+                  onPick={handleMountResource}
+                  anchorRef={composerRef}
+                  onRequestClose={() => setResourceQuery(null)}
+                />
+              )}
+              {skillQuery !== null && (
+                <SkillCandidateMenu
+                  candidates={skillCandidates}
+                  selectedIndex={mentionSelectedIndex}
+                  onActiveIndexChange={setMentionSelectedIndex}
+                  onPick={handleMountSkill}
+                  anchorRef={composerRef}
+                  onRequestClose={() => setSkillQuery(null)}
+                />
+              )}
+              <MountedResourceBar
+                resources={mountedResources}
+                onRemove={handleRemoveMountedResource}
+                onOpen={openFileRangeResource}
+              />
+              <MountedSkillStrip
+                skills={mountedSkills}
+                availableSkills={availableSkills}
+                onRemove={handleRemoveMountedSkill}
+              />
+            </>
+          }
+          inputLeading={
+            <>
+              <ImageAttachmentStrip images={pendingImages} onRemove={handleRemovePendingImage} />
+              <button
+                type="button"
+                className="agent-copy-diagnostics-btn"
+                onClick={() => void handleCopyDiagnostics()}
+                title="复制 Agent 诊断日志"
+              >
+                <IconClipboard size={13} />
+              </button>
+            </>
+          }
+          renderTrailing={({ submit, canSubmit }) => (
             <AgentComposerToolbar
               roleRef={activeRoleRef}
               roles={roles}
@@ -1146,12 +1150,7 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
               canChangeRuntime={canChangeRuntime}
               onRuntimeChange={(binding) => setRuntimeBinding(binding, activeConversationId)}
               loading={loading || contextCompacting}
-              canSend={
-                !remoteAgentUnavailable &&
-                (Boolean(input.trim()) || pendingImages.length > 0) &&
-                !contextCompacting &&
-                Boolean(activeRole)
-              }
+              canSend={canSubmit}
               contextUsage={contextUsage}
               contextCompaction={contextCompaction}
               canCompact={Boolean(sessionId) && !loading}
@@ -1169,24 +1168,18 @@ export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactEl
                 ) : (
                   <button
                     className="agent-send-btn"
-                    onClick={handleSend}
-                    disabled={
-                      remoteAgentUnavailable ||
-                      (!input.trim() && pendingImages.length === 0) ||
-                      contextCompacting ||
-                      !activeRole
-                    }
-                    title={remoteAgentUnavailable ? '请使用 CCLink 远程会话面板' : '发送'}
+                    onClick={submit}
+                    disabled={!canSubmit}
+                    title="发送"
                   >
                     <IconSend size={17} />
                   </button>
                 )
               }
             />
-          </div>
-        </div>
-      </div>
-    </div>
+          )}
+        />
+    </AgentPanelSurface>
   )
 }
 

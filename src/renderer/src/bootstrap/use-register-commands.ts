@@ -11,6 +11,7 @@ import { createViewCommands } from './commands/view-commands'
 import { createWindowCommands } from './commands/window-commands'
 import { createWorkbenchCommands } from './commands/workbench-commands'
 import { createMarkdownCommands } from './commands/markdown-commands'
+import { createWorkspaceCommands } from './commands/workspace-commands'
 
 /** 注册核心命令。 */
 export function useRegisterCommands(): void {
@@ -37,6 +38,7 @@ export function useRegisterCommands(): void {
       ...createWindowCommands(),
       ...createWorkbenchCommands(),
       ...createMarkdownCommands(),
+      ...createWorkspaceCommands(),
     ])
   }, [registerCommands, toggleSidebar, toggleAgentPanel, setAgentPanelMode, resetAgentLayout])
 }

@@ -64,6 +64,7 @@ import { CclinkPanel } from '../../features/cclink-remote/CclinkPanel'
 import { RemoteFileTree } from '../../features/cclink-remote/RemoteFileTree'
 import { RemoteSessionsSidebar } from '../../features/cclink-remote/RemoteSessionsSidebar'
 import { PromotionalVideoSidebar } from '../../features/media-production/PromotionalVideoSidebar'
+import { openWorkspaceRef } from '../../features/workspace-open/workspace-open-controller'
 
 function getProjectName(path: string): string {
   return path.split('/').filter(Boolean).pop() ?? path
@@ -260,8 +261,6 @@ function ProjectSidebarContent({
   activePanel: ActivityPanel
 }): React.ReactElement {
   const workspacePath = useFsStore((s) => s.workspacePath)
-  const openWorkspacePicker = useFsStore((s) => s.openWorkspacePicker)
-  const openRecentWorkspace = useFsStore((s) => s.openRecentWorkspace)
   const closeWorkspace = useFsStore((s) => s.closeWorkspace)
   const recentWorkspacePaths = useFsStore((s) => s.recentWorkspacePaths)
   const loading = useFsStore((s) => s.loading)
@@ -279,6 +278,20 @@ function ProjectSidebarContent({
   const renameConversation = useAgentStore((s) => s.renameConversation)
   const setAgentPanelMode = useUIStore((s) => s.setAgentPanelMode)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
+  const executeCommand = useCommandStore((s) => s.executeCommand)
+  const showToast = useToastStore((s) => s.show)
+  const showWorkspaceOpen = (): void => {
+    void executeCommand('workspace.open', { source: 'toolbar' })
+  }
+  const openLocalWorkspace = async (path: string): Promise<boolean> => {
+    try {
+      await openWorkspaceRef(localWorkspaceRef(path))
+      return true
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '工作空间切换失败', 'error')
+      return false
+    }
+  }
   const projectTabs = tabs.filter((tab) => tab.type !== 'settings' && tab.type !== 'agent-role')
   const sessionGroups = getWorkspaceConversationGroups(
     conversationOrder,
@@ -297,8 +310,8 @@ function ProjectSidebarContent({
           projectTabsCount={projectTabs.length}
           activeWorkspaceKey={workspaceRefKey(activeWorkspaceRef)}
           activeWorkspaceKind={activeWorkspaceRef.kind}
-          openWorkspacePicker={openWorkspacePicker}
-          openRecentWorkspace={openRecentWorkspace}
+          showWorkspaceOpen={showWorkspaceOpen}
+          openLocalWorkspace={openLocalWorkspace}
           closeWorkspace={closeWorkspace}
         />
       )}
@@ -355,8 +368,8 @@ function ProjectsSidebarView({
   projectTabsCount,
   activeWorkspaceKey,
   activeWorkspaceKind,
-  openWorkspacePicker,
-  openRecentWorkspace,
+  showWorkspaceOpen,
+  openLocalWorkspace,
   closeWorkspace,
 }: {
   workspacePath: string | null
@@ -367,8 +380,8 @@ function ProjectsSidebarView({
   projectTabsCount: number
   activeWorkspaceKey: string | null
   activeWorkspaceKind: 'local' | 'remote' | 'global'
-  openWorkspacePicker: () => Promise<void>
-  openRecentWorkspace: (path: string) => Promise<boolean>
+  showWorkspaceOpen: () => void
+  openLocalWorkspace: (path: string) => Promise<boolean>
   closeWorkspace: () => Promise<void>
 }): React.ReactElement {
   const setActivePanel = useUIStore((s) => s.setActivePanel)
@@ -384,17 +397,11 @@ function ProjectsSidebarView({
         <span className="project-panel-header-title">项目</span>
         <button
           className="project-panel-open-button"
-          onClick={() => {
-            void openWorkspacePicker().then(() => {
-              if (useWorkspaceStore.getState().activeWorkspaceRef.kind === 'local') {
-                activateFilesPanel()
-              }
-            })
-          }}
+          onClick={showWorkspaceOpen}
           disabled={loading || picking || switching}
-          title="打开项目"
+          title="打开工作空间"
         >
-          打开项目
+          打开工作空间
         </button>
       </div>
       <div className="sidebar-section project-panel-list-section">
@@ -407,8 +414,8 @@ function ProjectsSidebarView({
           projectTabsCount={projectTabsCount}
           activeWorkspaceKey={activeWorkspaceKey}
           activeWorkspaceKind={activeWorkspaceKind}
-          openWorkspacePicker={openWorkspacePicker}
-          openRecentWorkspace={openRecentWorkspace}
+          showWorkspaceOpen={showWorkspaceOpen}
+          openLocalWorkspace={openLocalWorkspace}
           closeWorkspace={closeWorkspace}
           onPicked={activateFilesPanel}
           showAddButton={false}
@@ -1022,8 +1029,8 @@ function ProjectListSection({
   projectTabsCount,
   activeWorkspaceKey,
   activeWorkspaceKind,
-  openWorkspacePicker,
-  openRecentWorkspace,
+  showWorkspaceOpen,
+  openLocalWorkspace,
   closeWorkspace,
   onPicked,
   showAddButton = true,
@@ -1036,8 +1043,8 @@ function ProjectListSection({
   projectTabsCount?: number
   activeWorkspaceKey: string | null
   activeWorkspaceKind: 'local' | 'remote' | 'global'
-  openWorkspacePicker: () => Promise<void>
-  openRecentWorkspace: (path: string) => Promise<boolean>
+  showWorkspaceOpen: () => void
+  openLocalWorkspace: (path: string) => Promise<boolean>
   closeWorkspace: () => Promise<void>
   onPicked: () => void
   showAddButton?: boolean
@@ -1065,7 +1072,7 @@ function ProjectListSection({
                     onPicked()
                     return
                   }
-                  void openRecentWorkspace(path).then((success) => {
+                  void openLocalWorkspace(path).then((success) => {
                     if (success) onPicked()
                   })
                 }}
@@ -1134,20 +1141,14 @@ function ProjectListSection({
       {showAddButton && (
         <button
           className="project-panel-project-item add"
-          onClick={() => {
-            void openWorkspacePicker().then(() => {
-              if (useWorkspaceStore.getState().activeWorkspaceRef.kind === 'local') {
-                onPicked()
-              }
-            })
-          }}
+          onClick={showWorkspaceOpen}
           disabled={loading || picking || switching}
-          title="打开项目"
+          title="打开工作空间"
         >
           <IconPlus size={14} />
           <span className="project-panel-row-main">
-            <span className="project-panel-row-title">打开项目</span>
-            <span className="project-panel-row-meta">选择一个本地项目文件夹</span>
+            <span className="project-panel-row-title">打开工作空间</span>
+            <span className="project-panel-row-meta">选择本地文件夹或 CCLink 远程目录</span>
           </span>
         </button>
       )}

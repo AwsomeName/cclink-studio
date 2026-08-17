@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CclinkServer, CclinkTreeNode } from '@shared/cclink'
-import { useCclinkStore, useOpenProjectsStore, useUIStore } from '../../stores'
+import { useCclinkStore } from '../../stores'
 import { IconChevronRight, IconCloud, IconFolder, IconRefresh } from '../../components/common/Icons'
-import {
-  applyWorkspaceRuntimeTransition,
-  prepareWorkspaceRuntimeTransition,
-} from '../../utils/workspace-transition'
+import { beginWorkspaceRuntimeTransition } from '../../utils/workspace-transition'
 import { remoteWorkspaceRefFromAgent } from './remote-workspace-confirmation'
+import { openWorkspaceRef } from '../workspace-open/workspace-open-controller'
 
 export function CclinkPanel(): React.ReactElement {
+  return <CclinkWorkspacePicker />
+}
+
+export function CclinkWorkspacePicker({
+  onWorkspaceOpened,
+}: {
+  onWorkspaceOpened?: () => void
+}): React.ReactElement {
   const state = useCclinkStore()
   const [phone, setPhone] = useState('')
   const [code, setCode] = useState('')
@@ -92,7 +98,13 @@ export function CclinkPanel(): React.ReactElement {
   }
 
   if (selectedServer) {
-    return <RemoteDirectoryPicker server={selectedServer} onBack={() => setSelectedServer(null)} />
+    return (
+      <RemoteDirectoryPicker
+        server={selectedServer}
+        onBack={() => setSelectedServer(null)}
+        onWorkspaceOpened={onWorkspaceOpened}
+      />
+    )
   }
 
   return (
@@ -146,9 +158,11 @@ export function CclinkPanel(): React.ReactElement {
 function RemoteDirectoryPicker({
   server,
   onBack,
+  onWorkspaceOpened,
 }: {
   server: CclinkServer
   onBack(): void
+  onWorkspaceOpened?: () => void
 }): React.ReactElement {
   const pendingPermissions = useCclinkStore((state) => state.pendingPermissions)
   const respondPermission = useCclinkStore((state) => state.respondPermission)
@@ -187,17 +201,15 @@ function RemoteDirectoryPicker({
   const openCurrent = async (): Promise<void> => {
     setOpening(true)
     setError(null)
+    const generation = beginWorkspaceRuntimeTransition()
     try {
       const workspace = await window.cclinkStudio.cclink.openWorkspace({
         serverId: server.id,
         path,
       })
       const ref = remoteWorkspaceRefFromAgent(workspace, server.name)
-      const transition = await prepareWorkspaceRuntimeTransition(ref)
-      const applied = await applyWorkspaceRuntimeTransition(transition)
-      if (!applied) throw new Error('工作空间已发生变化，请重试')
-      useOpenProjectsStore.getState().addRemoteProject(ref)
-      useUIStore.getState().setActivePanel('files')
+      await openWorkspaceRef(ref, { confirmedRemote: true, generation })
+      onWorkspaceOpened?.()
     } catch (openError) {
       setError(openError instanceof Error ? openError.message : String(openError))
     } finally {
