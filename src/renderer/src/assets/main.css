@@ -7007,28 +7007,6 @@ body.is-resizing-panels .main-area > div {
   background: transparent;
 }
 
-.agent-copy-diagnostics-btn {
-  position: absolute;
-  top: 7px;
-  right: 7px;
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.agent-copy-diagnostics-btn:hover {
-  border-color: var(--border-color);
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
 .agent-resource-bar-label {
   flex-shrink: 0;
   color: var(--text-muted);

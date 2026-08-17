@@ -1231,7 +1231,7 @@ async function main() {
       'copied Markdown diagnostic omitted the blocking reason',
     )
 
-    const copyAll = page.locator('.agent-copy-diagnostics-btn')
+    const copyAll = page.locator('[data-agent-action="diagnostics"]')
     await copyAll.waitFor({ timeout: 10_000 })
     await copyAll.click()
     const agentDiagnostic = await page.evaluate(() => navigator.clipboard.readText())
@@ -1575,6 +1575,14 @@ async function main() {
       await page.keyboard.press('Escape')
 
       const message = page.locator('.agent-message').first()
+      if ((await message.count()) === 0) {
+        const composer = page.locator('[data-agent-landmark="composer"] textarea').first()
+        const send = page.locator('[data-agent-action="send"]').first()
+        await composer.waitFor({ state: 'visible', timeout: 10_000 })
+        await composer.fill('Workflow smoke message context target')
+        await send.waitFor({ state: 'visible', timeout: 10_000 })
+        await send.click()
+      }
       await message.waitFor({ timeout: 10_000 })
       await message.click({ button: 'right' })
       await page.locator('[data-context-action="message.quote"]').waitFor({ timeout: 10_000 })
