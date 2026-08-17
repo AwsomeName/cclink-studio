@@ -86,6 +86,13 @@ export type AgentComposerKeyDecision =
   | 'block-submit'
   | 'none'
 
+export function isAgentComposerCandidateSelectionKey(input: {
+  key: string
+  shiftKey: boolean
+}): boolean {
+  return input.key === 'Tab' || (input.key === 'Enter' && !input.shiftKey)
+}
+
 export function resolveAgentComposerKeyDecision(input: {
   key: string
   shiftKey: boolean

@@ -71,6 +71,16 @@ export function resolveRemoteAgentVisualStatus(input: {
 
 export type RemoteDraftSubmissionResult = 'submitted' | 'rejected' | 'stale-target'
 
+export interface RemoteSubmissionLock {
+  current: boolean
+}
+
+export function tryAcquireRemoteSubmissionLock(lock: RemoteSubmissionLock): boolean {
+  if (lock.current) return false
+  lock.current = true
+  return true
+}
+
 export function resolveRemoteStopAvailability(
   sessionStatus: CclinkRemoteSession['status'] | undefined,
 ): { state: 'disabled'; reason: string } | { state: 'hidden' } {
@@ -139,6 +149,7 @@ export function RemoteAgentController({
   const [copyingDiagnostics, setCopyingDiagnostics] = useState(false)
   const [remoteStatus, setRemoteStatus] = useState<RemoteStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
+  const submissionLockRef = useRef(false)
   const listRef = useRef<HTMLDivElement>(null)
   const workspaceTarget = useMemo<WorkspaceTarget>(
     () => ({ ref: workspaceRef, generation: workspaceGeneration }),
@@ -234,7 +245,7 @@ export function RemoteAgentController({
 
   const submit = async (): Promise<void> => {
     const content = draft.trim()
-    if (!content || sending || !agentAvailable) return
+    if (!content || !agentAvailable || !tryAcquireRemoteSubmissionLock(submissionLockRef)) return
     setSending(true)
     try {
       const result = await submitRemoteDraft({
@@ -251,6 +262,7 @@ export function RemoteAgentController({
         setDraft((current) => (current.trim() === content ? '' : current))
       }
     } finally {
+      submissionLockRef.current = false
       setSending(false)
     }
   }

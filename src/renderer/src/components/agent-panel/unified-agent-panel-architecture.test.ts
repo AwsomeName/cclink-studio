@@ -13,7 +13,7 @@ describe('unified Agent Panel production boundary', () => {
     expect(appSource.match(/<AgentPanel variant=/gu)).toHaveLength(2)
   })
 
-  it('keeps the only Agent textarea and Enter submission policy in AgentComposer', () => {
+  it('keeps the Agent Panel production path on one textarea and Enter submission policy', () => {
     const surfaceSource = read('./agent-panel-surface.tsx')
     const localControllerSource = read('./AgentPanel.tsx')
     const remoteControllerSource = read('../../features/cclink-remote/remote-agent-controller.tsx')

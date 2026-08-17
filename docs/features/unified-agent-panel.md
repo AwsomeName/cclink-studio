@@ -47,8 +47,10 @@ UAP-2 门禁全部关闭前
 
 UAP-1 已完成代码收口：`App.tsx` 的 center/side 两个装配位置都只渲染 `AgentPanel`；该唯一
 入口按正式 `WorkspaceRef + generation` 选择本地或远程薄 controller，而两个 controller 都
-渲染同一个 `AgentPanelSurface`、`AgentMessageList` 和 `AgentComposer`。生产代码中只有一个
-Agent textarea。旧 `RemoteAgentPanel`、独立远程 textarea/Enter handler 和对应根样式已经删除。
+渲染同一个 `AgentPanelSurface`、`AgentMessageList` 和 `AgentComposer`。本地 center、local side
+和 remote 三个 Agent Panel 生产入口中只有一个 textarea 实现。Workbench 内独立打开的 Agent
+conversation tab 不属于本次 Panel surface 统一范围。旧 `RemoteAgentPanel`、独立远程
+textarea/Enter handler 和对应根样式已经删除。
 
 因此原缺陷的修复方式不是给远程复制一份 IME 判断，而是让本地与远程共同继承
 `AgentComposer` 的唯一键盘策略：composition 期间和 `keyCode === 229` 时忽略 Enter，
@@ -56,11 +58,12 @@ Agent textarea。旧 `RemoteAgentPanel`、独立远程 textarea/Enter handler �
 `cclink-store.sendAgentMessage`，并在创建会话前、创建成功后/发送前重验捕获的 workspace
 target；架构回归测试同时断言远程路径不引用本地 `agent.sendMessage`。
 
-2026-08-17 自动化证据：`pnpm verify` 通过（281 个测试文件、1615 个测试通过、2 个既有跳过，
-并包含 typecheck、lint 和生产构建）；`pnpm smoke:ui` 通过真实 Electron UI 装配检查，确认本地
-与远程投影都只有一个 Panel/Composer，并验证合成 composition/229 Enter 不清空草稿。合成事件
-不能替代操作系统中文输入法，也不能证明真实在线远程 Agent 已接收消息，所以本文“用户可执行
-验收”第 1 至 4 项仍须在已登录、已配对设备上真人执行后，才能宣布产品闭环完成。
+2026-08-17 自动化证据：`pnpm verify` 通过（281 个测试文件、1620 个测试通过、2 个既有跳过，
+并包含 typecheck、lint 和生产构建）；`pnpm smoke:ui` 16/16 通过真实 Electron UI 装配检查，
+确认本地与远程投影都只有一个 Panel/Composer，验证合成 composition/229 Enter 不清空草稿，
+并验证 `/` 候选菜单打开时 `Shift+Enter` 插入换行而不选择候选。合成事件不能替代操作系统中文
+输入法，也不能证明真实在线远程 Agent 已接收消息，所以本文“用户可执行验收”第 1 至 4 项仍须
+在已登录、已配对设备上真人执行后，才能宣布产品闭环完成。
 
 历史根因是远程 Agent 为保证协议隔离而以独立 `RemoteAgentPanel` 最小闭环接入，后来只复用
 了部分消息投影，没有及时收口 Composer 与 Panel 生命周期。协议隔离本身仍保留；被删除的是
@@ -643,8 +646,8 @@ UAP-2 是事务正确性和可观测性强化，不是第二次 UI 统一。UAP-
 - BrowserWindow 销毁不承诺恢复 draft/UI operation；重建后不自动重试，只从权威消息事实恢复；
 - 上述所有失败路径以及远程离线/协议不兼容时，本地 `agent.sendMessage` 调用次数严格为零；
 - 工作空间快速切换、远程过期响应、target/generation 重验和草稿隔离测试；
-- 生产代码只存在一个 `AgentPanel` view 和一个 `AgentComposer`，不再导入或渲染完整
-  `RemoteAgentPanel`、独立远程 textarea 或第二键盘 handler 的架构回归检查；
+- Agent Panel 生产路径只存在一个 `AgentPanel` view 和一个 `AgentComposer`，不再导入或渲染
+  完整 `RemoteAgentPanel`、独立远程 textarea 或第二键盘 handler 的架构回归检查；
 - 受影响测试、typecheck、lint 和 `pnpm verify`。
 
 真人验收必须使用至少一种会产生 composition 事件的中文输入法分别验证本地和真实远程

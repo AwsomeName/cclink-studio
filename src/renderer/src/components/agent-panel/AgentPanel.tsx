@@ -76,7 +76,12 @@ import {
   getApplyAgentRoleError,
 } from '../../features/agent-roles/agent-role-actions'
 import { AgentConversationTimeline } from '../../features/agent-roles/AgentConversationTimeline'
-import { AgentComposer, AgentMessageList, AgentPanelSurface } from './agent-panel-surface'
+import {
+  AgentComposer,
+  AgentMessageList,
+  AgentPanelSurface,
+  isAgentComposerCandidateSelectionKey,
+} from './agent-panel-surface'
 import { RemoteAgentController } from '../../features/cclink-remote/remote-agent-controller'
 
 interface AgentPanelProps {
@@ -763,7 +768,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
           setMentionSelectedIndex((index) => (index - 1 + activeMentionCount) % activeMentionCount)
           return true
         }
-        if (e.key === 'Enter' || e.key === 'Tab') {
+        if (isAgentComposerCandidateSelectionKey(e)) {
           e.preventDefault()
           handlePickSelectedMention()
           return true

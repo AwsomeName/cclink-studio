@@ -176,6 +176,15 @@ async function main() {
       (await localComposer.inputValue()) === '输入法候选',
       'IME candidate confirmation submitted or cleared the local draft',
     )
+    await localComposer.fill('/')
+    const skillCandidates = page.locator('.agent-skill-menu [role="option"]')
+    await skillCandidates.first().waitFor({ state: 'visible', timeout: 10_000 })
+    await localComposer.press('Shift+Enter')
+    assert(
+      (await localComposer.inputValue()) === '/\n',
+      'Shift+Enter selected a candidate instead of inserting a newline',
+    )
+    await localComposer.fill('')
 
     await page.evaluate(async () => {
       const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
@@ -215,7 +224,7 @@ async function main() {
         generation: Math.max(state.generation + 1, snapshot.generation + 1),
       })
     }, originalWorkspace)
-    return 'single Panel/Composer root and composition-safe Enter'
+    return 'single Panel/Composer root, composition-safe Enter, and candidate-safe Shift+Enter'
   })
 
   await runCheck('workspace opener unifies local and CCLink remote entry', async () => {

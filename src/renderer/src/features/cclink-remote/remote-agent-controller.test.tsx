@@ -7,6 +7,7 @@ import {
   resolveRemoteAgentVisualStatus,
   resolveRemoteStopAvailability,
   submitRemoteDraft,
+  tryAcquireRemoteSubmissionLock,
 } from './remote-agent-controller'
 import { RemoteAgentMessage } from './remote-agent-message'
 
@@ -102,6 +103,15 @@ describe('RemoteAgentController', () => {
       reason: '当前远程 Agent 不支持停止',
     })
     expect(resolveRemoteStopAvailability('idle')).toEqual({ state: 'hidden' })
+  })
+
+  it('rejects a consecutive remote submit until the active submission releases its lock', () => {
+    const lock = { current: false }
+
+    expect(tryAcquireRemoteSubmissionLock(lock)).toBe(true)
+    expect(tryAcquireRemoteSubmissionLock(lock)).toBe(false)
+    lock.current = false
+    expect(tryAcquireRemoteSubmissionLock(lock)).toBe(true)
   })
 
   it('uses the same user and assistant message surfaces as local conversations', () => {

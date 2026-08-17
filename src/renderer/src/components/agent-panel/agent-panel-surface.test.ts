@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   AgentComposer,
   AgentPanelSurface,
+  isAgentComposerCandidateSelectionKey,
   resolveAgentComposerKeyDecision,
 } from './agent-panel-surface'
 
@@ -52,6 +53,12 @@ describe('AgentComposer keyboard policy', () => {
     expect(resolveAgentComposerKeyDecision({ ...base, shiftKey: true })).toBe('none')
     expect(resolveAgentComposerKeyDecision({ ...base, canSubmit: false })).toBe('block-submit')
     expect(resolveAgentComposerKeyDecision({ ...base, handledBeforeSubmit: true })).toBe('handled')
+  })
+
+  it('keeps Shift+Enter as a newline while a candidate menu is open', () => {
+    expect(isAgentComposerCandidateSelectionKey({ key: 'Enter', shiftKey: false })).toBe(true)
+    expect(isAgentComposerCandidateSelectionKey({ key: 'Enter', shiftKey: true })).toBe(false)
+    expect(isAgentComposerCandidateSelectionKey({ key: 'Tab', shiftKey: false })).toBe(true)
   })
 
   it('renders the same Panel and Composer roots for either runtime', () => {
