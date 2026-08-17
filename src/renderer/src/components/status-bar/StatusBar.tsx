@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import {
-  useAgentStore,
   useFsStore,
   useTabStore,
   useBrowserStore,
@@ -8,7 +7,7 @@ import {
   useWorkspaceStore,
   useGitBackupStore,
 } from '../../stores'
-import { IconClipboard, IconLink, IconRobot, IconCircle, IconProjects } from '../common/Icons'
+import { IconClipboard, IconLink, IconProjects } from '../common/Icons'
 import { useToastStore } from '../common/Toast'
 import {
   workspaceRefKey,
@@ -24,31 +23,9 @@ import {
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
 import { useCommandStore } from '../../stores/command-store'
-
-/** Agent 状态 → 显示文本 */
-const AGENT_STATUS_MAP: Record<string, { text: string; color: string }> = {
-  disconnected: { text: 'Agent 未连接', color: '#6b7280' },
-  connecting: { text: 'Agent 连接中...', color: '#facc15' },
-  connected: { text: 'Agent 就绪', color: '#22c55e' },
-  streaming: { text: 'Agent 响应中...', color: '#3b82f6' },
-  error: { text: 'Agent 连接失败', color: '#ef4444' },
-}
-
-/** Tab 类型 → 显示名称 */
-const TAB_TYPE_LABEL: Record<string, string> = {
-  browser: '浏览器',
-  editor: '编辑器',
-  preview: '预览',
-  'data-source-query': '数据源查询',
-  'data-source-result': '数据源结果',
-  'scheduled-task': '定时任务',
-  'web-resource': '网站与账号',
-  'web-affair': '事务',
-  'media-production': '宣发视频',
-}
+import { GitStatusBarItem } from './GitStatusBarItem'
 
 export function StatusBar(): React.ReactElement {
-  const backendState = useAgentStore((s) => s.backendState)
   const activeTab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId))
   const currentUrl = useBrowserStore((s) =>
     activeTab?.type === 'browser' ? s.tabs[activeTab.id]?.url : undefined,
@@ -59,21 +36,17 @@ export function StatusBar(): React.ReactElement {
   const updateSnapshot = useUpdateStore((state) => state.snapshot)
   const openUpdatePanel = useUpdateStore((state) => state.openPanel)
   const showToast = useToastStore((s) => s.show)
-  const gitProjectStatus = useGitBackupStore((s) => s.projectStatus)
   const gitBusy = useGitBackupStore((s) => s.busy)
   const gitError = useGitBackupStore((s) => s.error)
   const showGitDialog = useGitBackupStore((s) => s.dialogOpen)
   const repositoryInput = useGitBackupStore((s) => s.repositoryInput)
   const loadGitWorkspace = useGitBackupStore((s) => s.loadWorkspace)
-  const requestGitBackup = useGitBackupStore((s) => s.requestBackup)
   const submitFirstGitBackup = useGitBackupStore((s) => s.submitFirstBackup)
   const setRepositoryInput = useGitBackupStore((s) => s.setRepositoryInput)
   const closeGitDialog = useGitBackupStore((s) => s.closeDialog)
   const showContextMenu = useContextMenuStore((s) => s.show)
   const executeCommand = useCommandStore((s) => s.executeCommand)
 
-  const agentStatus = AGENT_STATUS_MAP[backendState] ?? AGENT_STATUS_MAP.disconnected
-  const tabLabel = activeTab ? (TAB_TYPE_LABEL[activeTab.type] ?? activeTab.title) : ''
   const workspaceKey = workspaceRefKey(activeWorkspaceRef)
 
   const showStatusMenu = (
@@ -107,12 +80,6 @@ export function StatusBar(): React.ReactElement {
     void loadGitWorkspace(workspacePath)
   }, [loadGitWorkspace, workspacePath])
 
-  const handleGitBackupClick = async (): Promise<void> => {
-    if (!workspacePath) return
-    const result = await requestGitBackup(workspacePath)
-    if (result) showToast(result.message, result.success ? 'success' : 'error')
-  }
-
   const handleFirstGitBackup = async (): Promise<void> => {
     const result = await submitFirstGitBackup()
     if (result) showToast(result.message, result.success ? 'success' : 'error')
@@ -121,12 +88,7 @@ export function StatusBar(): React.ReactElement {
   return (
     <>
       <div className="status-bar">
-        {/* 左侧：Agent 状态 */}
-        <span className="status-bar-item" {...statusContextProps('agent')}>
-          <IconRobot size={12} />
-          {agentStatus.text}
-          <IconCircle size={6} filled color={agentStatus.color} />
-        </span>
+        <GitStatusBarItem workspacePath={workspacePath} contextProps={statusContextProps('git')} />
 
         {switchingPath && (
           <span
@@ -136,13 +98,6 @@ export function StatusBar(): React.ReactElement {
           >
             <IconProjects size={12} />
             正在切换到 {switchingPath.split('/').filter(Boolean).at(-1) ?? switchingPath}...
-          </span>
-        )}
-
-        {/* 活跃 Tab 信息 */}
-        {tabLabel && (
-          <span className="status-bar-item" {...statusContextProps('active-tab')}>
-            {tabLabel}
           </span>
         )}
 
@@ -176,31 +131,6 @@ export function StatusBar(): React.ReactElement {
           <IconClipboard size={12} />
           框架日志
         </button>
-
-        {workspacePath && (
-          <button
-            type="button"
-            className={`status-bar-item git-backup-status ${gitError ? 'error' : ''}`}
-            disabled={gitBusy || !gitProjectStatus || Boolean(gitProjectStatus.error)}
-            title={
-              gitError ??
-              gitProjectStatus?.error ??
-              gitProjectStatus?.repositoryLabel ??
-              '将当前项目全部可备份变更提交并 Push'
-            }
-            onClick={() => void handleGitBackupClick()}
-            {...statusContextProps('git-backup')}
-          >
-            <IconLink size={12} />
-            {gitBusy
-              ? 'Git 备份中…'
-              : gitError
-                ? 'Git 备份失败'
-                : gitProjectStatus?.lastBackupAt
-                  ? `Git 已备份 · ${formatBackupTime(gitProjectStatus.lastBackupAt)}`
-                  : '备份到 Git'}
-          </button>
-        )}
 
         <button
           type="button"
@@ -289,10 +219,4 @@ function truncateUrl(url: string): string {
   } catch {
     return url.slice(0, 40) + (url.length > 40 ? '...' : '')
   }
-}
-
-function formatBackupTime(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '已完成'
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }

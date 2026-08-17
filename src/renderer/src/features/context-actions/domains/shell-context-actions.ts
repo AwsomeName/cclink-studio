@@ -6,6 +6,7 @@ import { useBrowserStore } from '../../../stores/browser-store'
 import type { Command } from '../../../stores/command-store'
 import { useFsStore } from '../../../stores/fs-store'
 import { useGitBackupStore } from '../../../stores/git-backup-store'
+import { useGitStore } from '../../../stores/git-store'
 import { useTabStore } from '../../../stores/tab-store'
 import { useUIStore } from '../../../stores/ui-store'
 import { useUpdateStore } from '../../../stores/update-store'
@@ -90,6 +91,20 @@ function getStatusValue(itemId: string): { value: string; label: string } | null
         ? `已备份: ${state.projectStatus.lastBackupAt}`
         : '尚未备份'
     return { value, label: 'Git 备份状态' }
+  }
+  if (itemId === 'git') {
+    const snapshot = useGitStore.getState().snapshot
+    if (!snapshot || snapshot.availability !== 'available') return null
+    const branch = snapshot.detached
+      ? `detached@${snapshot.headOid?.slice(0, 7) ?? 'HEAD'}`
+      : (snapshot.branch ?? '未命名分支')
+    const upstream = snapshot.upstream
+      ? `${snapshot.upstream} ↑${snapshot.ahead ?? 0} ↓${snapshot.behind ?? 0}`
+      : '无上游'
+    return {
+      value: `${branch} · ${snapshot.changeCount} 个变更 · +${snapshot.additions} -${snapshot.deletions} · ${upstream}`,
+      label: 'Git 状态',
+    }
   }
   if (itemId === 'update') {
     const state = useUpdateStore.getState()

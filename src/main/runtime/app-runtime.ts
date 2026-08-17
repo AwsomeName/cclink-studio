@@ -38,6 +38,7 @@ import type { TerminalCommandOrchestrator } from '../terminal/terminal-command-o
 import type { TerminalExecutionAdapter } from '../terminal/terminal-execution-adapter'
 import type { OfficialIntegration } from '../official/official-integration'
 import type { GitBackupService } from '../git-backup/git-backup-service'
+import type { GitWorkspaceService } from '../git/git-workspace-service'
 import type { FileService } from '../fs/file-service'
 import type { TrustedRendererGuard } from '../ipc/trusted-renderer-guard'
 import type { UpdateService } from '../update/update-service'
@@ -100,6 +101,7 @@ export interface CclinkStudioRuntimeState {
   terminalCommandOrchestrator: TerminalCommandOrchestrator | null
   terminalExecutionAdapter: TerminalExecutionAdapter | null
   officialIntegration: OfficialIntegration | null
+  gitWorkspaceService: GitWorkspaceService | null
   gitBackupService: GitBackupService | null
   updateService: UpdateService | null
   updateSnapshotUnsubscribe: (() => void) | null
@@ -163,6 +165,7 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     terminalCommandOrchestrator: null,
     terminalExecutionAdapter: null,
     officialIntegration: null,
+    gitWorkspaceService: null,
     gitBackupService: null,
     updateService: null,
     updateSnapshotUnsubscribe: null,

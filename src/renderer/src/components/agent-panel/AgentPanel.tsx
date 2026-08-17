@@ -76,11 +76,8 @@ import {
   getApplyAgentRoleError,
 } from '../../features/agent-roles/agent-role-actions'
 import { AgentConversationTimeline } from '../../features/agent-roles/AgentConversationTimeline'
-import {
-  AgentComposer,
-  AgentMessageList,
-  AgentPanelSurface,
-} from './AgentPanelSurface'
+import { AgentComposer, AgentMessageList, AgentPanelSurface } from './agent-panel-surface'
+import { RemoteAgentController } from '../../features/cclink-remote/remote-agent-controller'
 
 interface AgentPanelProps {
   variant?: 'center' | 'side'
@@ -102,6 +99,24 @@ function loadComposerHeight(variant: NonNullable<AgentPanelProps['variant']>): n
   } catch {
     return null
   }
+}
+
+export function AgentPanel({ variant = 'side' }: AgentPanelProps): React.ReactElement {
+  const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
+  const workspaceGeneration = useWorkspaceStore((state) => state.generation)
+
+  if (activeWorkspaceRef.kind === 'remote') {
+    return (
+      <RemoteAgentController
+        key={`${workspaceRefKey(activeWorkspaceRef)}::${workspaceGeneration}`}
+        workspaceRef={activeWorkspaceRef}
+        workspaceGeneration={workspaceGeneration}
+        variant={variant}
+      />
+    )
+  }
+
+  return <LocalAgentPanelController variant={variant} />
 }
 
 function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React.ReactElement {
@@ -307,15 +322,11 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   }, [])
 
   const handleSend = useCallback(async () => {
-    if (remoteAgentUnavailable) {
-      showToast('远程工作区请使用 CCLink 远程会话面板', 'info')
-      return
-    }
     conversationScroll.followLatest()
     setResourceQuery(null)
     setSkillQuery(null)
     await runController.send(input)
-  }, [conversationScroll, input, remoteAgentUnavailable, runController, showToast])
+  }, [conversationScroll, input, runController])
 
   const handleCompactContext = useCallback(
     async (instructions: string) => {
@@ -931,254 +942,254 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
 
   return (
     <AgentPanelSurface variant={variant} runtime="local" mainRef={conversationMainRef}>
-        {activeBrowserTask && (
-          <BrowserTaskCard
-            task={activeBrowserTask}
-            logs={activeBrowserTaskLogs}
-            downloads={activeBrowserTaskDownloads}
-            onPause={() => {
-              void window.cclinkStudio.browser.pauseTask(activeBrowserTask.id)
-            }}
-            onResume={() => {
-              void window.cclinkStudio.browser.resumeTask(activeBrowserTask.id)
-            }}
-            onCancel={() => {
-              void window.cclinkStudio.browser.cancelTask(activeBrowserTask.id)
-            }}
-          />
-        )}
+      {activeBrowserTask && (
+        <BrowserTaskCard
+          task={activeBrowserTask}
+          logs={activeBrowserTaskLogs}
+          downloads={activeBrowserTaskDownloads}
+          onPause={() => {
+            void window.cclinkStudio.browser.pauseTask(activeBrowserTask.id)
+          }}
+          onResume={() => {
+            void window.cclinkStudio.browser.resumeTask(activeBrowserTask.id)
+          }}
+          onCancel={() => {
+            void window.cclinkStudio.browser.cancelTask(activeBrowserTask.id)
+          }}
+        />
+      )}
 
-        {/* 消息列表 */}
-        <AgentMessageList
-          listRef={conversationScroll.listRef}
-          onScroll={conversationScroll.onScroll}
-          onWheel={conversationScroll.onWheel}
-          onPointerDown={conversationScroll.onPointerDown}
-          onTouchStart={conversationScroll.onTouchStart}
-        >
-          <AgentConversationTimeline
-            messages={messages}
-            configurationEvents={activeConversation?.configurationEvents ?? []}
-            roles={roles}
-            conversationId={activeConversationId}
-            workspaceKey={
-              activeConversation?.runtime.workspaceRef
-                ? workspaceRefKey(activeConversation.runtime.workspaceRef)
-                : null
-            }
-          />
+      {/* 消息列表 */}
+      <AgentMessageList
+        listRef={conversationScroll.listRef}
+        onScroll={conversationScroll.onScroll}
+        onWheel={conversationScroll.onWheel}
+        onPointerDown={conversationScroll.onPointerDown}
+        onTouchStart={conversationScroll.onTouchStart}
+      >
+        <AgentConversationTimeline
+          messages={messages}
+          configurationEvents={activeConversation?.configurationEvents ?? []}
+          roles={roles}
+          conversationId={activeConversationId}
+          workspaceKey={
+            activeConversation?.runtime.workspaceRef
+              ? workspaceRefKey(activeConversation.runtime.workspaceRef)
+              : null
+          }
+        />
 
-          {/* 工具确认卡片（支持并发多个） */}
-          {pendingConfirmations.map((req) => (
-            <div key={req.id} className="tool-confirmation-card">
-              <div className="confirmation-header">
-                <IconTool size={14} />
-                请求执行操作
-              </div>
-              <div className="confirmation-body">
-                <div className="confirmation-row">
-                  <span className="confirmation-label">操作:</span>
-                  <span className="confirmation-value">{req.toolName}</span>
-                </div>
-                <div className="confirmation-row">
-                  <span className="confirmation-label">参数:</span>
-                  <span className="confirmation-value confirmation-params">
-                    {Object.entries(req.params)
-                      .map(([k, v]) => `${k}="${String(v)}"`)
-                      .join(', ')}
-                  </span>
-                </div>
-                <div className="confirmation-row">
-                  <span className="confirmation-label">风险:</span>
-                  <span className="confirmation-value" style={{ color: riskColor[req.riskLevel] }}>
-                    {riskLabel[req.riskLevel]}
-                  </span>
-                </div>
-                {req.reason ? (
-                  <div className="confirmation-row">
-                    <span className="confirmation-label">原因:</span>
-                    <span className="confirmation-value">{req.reason}</span>
-                  </div>
-                ) : null}
-              </div>
-              <div className="confirmation-actions">
-                <button
-                  className="confirm-approve-btn"
-                  onClick={() => handleConfirmApprove(req.id, false)}
-                >
-                  <IconCheck size={12} />
-                  允许
-                </button>
-                {req.allowAlways !== false ? (
-                  <button
-                    className="confirm-always-btn"
-                    onClick={() => handleConfirmApprove(req.id, true)}
-                  >
-                    始终允许
-                  </button>
-                ) : null}
-                <button className="confirm-reject-btn" onClick={() => handleConfirmReject(req.id)}>
-                  <IconError size={12} />
-                  拒绝
-                </button>
-              </div>
+        {/* 工具确认卡片（支持并发多个） */}
+        {pendingConfirmations.map((req) => (
+          <div key={req.id} className="tool-confirmation-card">
+            <div className="confirmation-header">
+              <IconTool size={14} />
+              请求执行操作
             </div>
-          ))}
-
-          <TerminalConfirmationCards />
-        </AgentMessageList>
-
-        {/* 费用显示 */}
-        {lastCost !== null && (
-          <div className="agent-cost">
-            <IconDollar size={10} />${lastCost.toFixed(4)}
-          </div>
-        )}
-
-        <div
-          className="agent-composer-resize-handle"
-          role="separator"
-          aria-label="调整消息区和输入区高度"
-          aria-orientation="horizontal"
-          aria-valuemin={MIN_COMPOSER_HEIGHT}
-          aria-valuemax={MAX_COMPOSER_HEIGHT}
-          aria-valuenow={composerHeight ?? undefined}
-          tabIndex={0}
-          title="上下拖动调整输入区高度，双击恢复默认"
-          onPointerDown={handleComposerResizeStart}
-          onKeyDown={handleComposerResizeKeyDown}
-          onDoubleClick={() => setComposerHeight(null)}
-        />
-
-        {/* 输入区域 */}
-        <AgentComposer
-          containerRef={composerRef}
-          containerClassName={`agent-composer-wrap ${composerHeight === null ? '' : 'resized'}`}
-          inputContainerClassName="agent-input-card"
-          style={composerHeight === null ? undefined : { height: composerHeight }}
-          textareaRef={inputRef}
-          textareaClassName="agent-input"
-          value={input}
-          onChange={handleInputChange}
-          onSubmit={handleSend}
-          canSubmit={
-            !loading &&
-            (Boolean(input.trim()) || pendingImages.length > 0) &&
-            !contextCompacting &&
-            Boolean(activeRole)
-          }
-          submitting={loading || contextCompacting}
-          onKeyDownBeforeSubmit={handleKeyDownBeforeSubmit}
-          onPaste={(event) => {
-            const files = Array.from(event.clipboardData.files).filter((file) =>
-              file.type.startsWith('image/'),
-            )
-            if (files.length === 0) return
-            event.preventDefault()
-            void handleAddImages(files)
-          }}
-          onDragOver={(event) => {
-            if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
-              event.preventDefault()
-            }
-          }}
-          onDrop={(event) => {
-            const files = Array.from(event.dataTransfer.files).filter((file) =>
-              file.type.startsWith('image/'),
-            )
-            if (files.length === 0) return
-            event.preventDefault()
-            void handleAddImages(files)
-          }}
-          placeholder="输入消息，@ 挂资源，/ 挂技能..."
-          rows={2}
-          leading={
-            <>
-              {resourceQuery !== null && (
-                <ResourceCandidateMenu
-                  candidates={resourceCandidates}
-                  selectedIndex={mentionSelectedIndex}
-                  onActiveIndexChange={setMentionSelectedIndex}
-                  onPick={handleMountResource}
-                  anchorRef={composerRef}
-                  onRequestClose={() => setResourceQuery(null)}
-                />
-              )}
-              {skillQuery !== null && (
-                <SkillCandidateMenu
-                  candidates={skillCandidates}
-                  selectedIndex={mentionSelectedIndex}
-                  onActiveIndexChange={setMentionSelectedIndex}
-                  onPick={handleMountSkill}
-                  anchorRef={composerRef}
-                  onRequestClose={() => setSkillQuery(null)}
-                />
-              )}
-              <MountedResourceBar
-                resources={mountedResources}
-                onRemove={handleRemoveMountedResource}
-                onOpen={openFileRangeResource}
-              />
-              <MountedSkillStrip
-                skills={mountedSkills}
-                availableSkills={availableSkills}
-                onRemove={handleRemoveMountedSkill}
-              />
-            </>
-          }
-          inputLeading={
-            <>
-              <ImageAttachmentStrip images={pendingImages} onRemove={handleRemovePendingImage} />
+            <div className="confirmation-body">
+              <div className="confirmation-row">
+                <span className="confirmation-label">操作:</span>
+                <span className="confirmation-value">{req.toolName}</span>
+              </div>
+              <div className="confirmation-row">
+                <span className="confirmation-label">参数:</span>
+                <span className="confirmation-value confirmation-params">
+                  {Object.entries(req.params)
+                    .map(([k, v]) => `${k}="${String(v)}"`)
+                    .join(', ')}
+                </span>
+              </div>
+              <div className="confirmation-row">
+                <span className="confirmation-label">风险:</span>
+                <span className="confirmation-value" style={{ color: riskColor[req.riskLevel] }}>
+                  {riskLabel[req.riskLevel]}
+                </span>
+              </div>
+              {req.reason ? (
+                <div className="confirmation-row">
+                  <span className="confirmation-label">原因:</span>
+                  <span className="confirmation-value">{req.reason}</span>
+                </div>
+              ) : null}
+            </div>
+            <div className="confirmation-actions">
               <button
-                type="button"
-                className="agent-copy-diagnostics-btn"
-                onClick={() => void handleCopyDiagnostics()}
-                title="复制 Agent 诊断日志"
+                className="confirm-approve-btn"
+                onClick={() => handleConfirmApprove(req.id, false)}
               >
-                <IconClipboard size={13} />
+                <IconCheck size={12} />
+                允许
               </button>
-            </>
+              {req.allowAlways !== false ? (
+                <button
+                  className="confirm-always-btn"
+                  onClick={() => handleConfirmApprove(req.id, true)}
+                >
+                  始终允许
+                </button>
+              ) : null}
+              <button className="confirm-reject-btn" onClick={() => handleConfirmReject(req.id)}>
+                <IconError size={12} />
+                拒绝
+              </button>
+            </div>
+          </div>
+        ))}
+
+        <TerminalConfirmationCards />
+      </AgentMessageList>
+
+      {/* 费用显示 */}
+      {lastCost !== null && (
+        <div className="agent-cost">
+          <IconDollar size={10} />${lastCost.toFixed(4)}
+        </div>
+      )}
+
+      <div
+        className="agent-composer-resize-handle"
+        role="separator"
+        aria-label="调整消息区和输入区高度"
+        aria-orientation="horizontal"
+        aria-valuemin={MIN_COMPOSER_HEIGHT}
+        aria-valuemax={MAX_COMPOSER_HEIGHT}
+        aria-valuenow={composerHeight ?? undefined}
+        tabIndex={0}
+        title="上下拖动调整输入区高度，双击恢复默认"
+        onPointerDown={handleComposerResizeStart}
+        onKeyDown={handleComposerResizeKeyDown}
+        onDoubleClick={() => setComposerHeight(null)}
+      />
+
+      {/* 输入区域 */}
+      <AgentComposer
+        containerRef={composerRef}
+        containerClassName={`agent-composer-wrap ${composerHeight === null ? '' : 'resized'}`}
+        inputContainerClassName="agent-input-card"
+        style={composerHeight === null ? undefined : { height: composerHeight }}
+        textareaRef={inputRef}
+        textareaClassName="agent-input"
+        value={input}
+        onChange={handleInputChange}
+        onSubmit={handleSend}
+        canSubmit={
+          !loading &&
+          (Boolean(input.trim()) || pendingImages.length > 0) &&
+          !contextCompacting &&
+          Boolean(activeRole)
+        }
+        submitting={loading || contextCompacting}
+        onKeyDownBeforeSubmit={handleKeyDownBeforeSubmit}
+        onPaste={(event) => {
+          const files = Array.from(event.clipboardData.files).filter((file) =>
+            file.type.startsWith('image/'),
+          )
+          if (files.length === 0) return
+          event.preventDefault()
+          void handleAddImages(files)
+        }}
+        onDragOver={(event) => {
+          if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
+            event.preventDefault()
           }
-          renderTrailing={({ submit, canSubmit }) => (
-            <AgentComposerToolbar
-              roleRef={activeRoleRef}
-              roles={roles}
-              onRoleChange={(role) => void handleRoleChange(role)}
-              permissionMode={permissionMode}
-              settings={settings}
-              runtimeBinding={activeConversation.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING}
-              canChangeRuntime={canChangeRuntime}
-              onRuntimeChange={(binding) => setRuntimeBinding(binding, activeConversationId)}
-              loading={loading || contextCompacting}
-              canSend={canSubmit}
-              contextUsage={contextUsage}
-              contextCompaction={contextCompaction}
-              canCompact={Boolean(sessionId) && !loading}
-              onCompactContext={handleCompactContext}
-              onPermissionModeChange={handlePermissionModeChange}
-              onOpenResourceMenu={() => setResourceQuery('')}
-              onOpenSkillMenu={() => setSkillQuery('')}
-              onAddImages={(files) => void handleAddImages(files)}
-              onOpenSettings={handleOpenAgentSettings}
-              sendButton={
-                loading ? (
-                  <button className="agent-abort-btn" onClick={handleAbort} title="中止">
-                    <IconStop size={15} />
-                  </button>
-                ) : (
-                  <button
-                    className="agent-send-btn"
-                    onClick={submit}
-                    disabled={!canSubmit}
-                    title="发送"
-                  >
-                    <IconSend size={17} />
-                  </button>
-                )
-              }
+        }}
+        onDrop={(event) => {
+          const files = Array.from(event.dataTransfer.files).filter((file) =>
+            file.type.startsWith('image/'),
+          )
+          if (files.length === 0) return
+          event.preventDefault()
+          void handleAddImages(files)
+        }}
+        placeholder="输入消息，@ 挂资源，/ 挂技能..."
+        rows={2}
+        leading={
+          <>
+            {resourceQuery !== null && (
+              <ResourceCandidateMenu
+                candidates={resourceCandidates}
+                selectedIndex={mentionSelectedIndex}
+                onActiveIndexChange={setMentionSelectedIndex}
+                onPick={handleMountResource}
+                anchorRef={composerRef}
+                onRequestClose={() => setResourceQuery(null)}
+              />
+            )}
+            {skillQuery !== null && (
+              <SkillCandidateMenu
+                candidates={skillCandidates}
+                selectedIndex={mentionSelectedIndex}
+                onActiveIndexChange={setMentionSelectedIndex}
+                onPick={handleMountSkill}
+                anchorRef={composerRef}
+                onRequestClose={() => setSkillQuery(null)}
+              />
+            )}
+            <MountedResourceBar
+              resources={mountedResources}
+              onRemove={handleRemoveMountedResource}
+              onOpen={openFileRangeResource}
             />
-          )}
-        />
+            <MountedSkillStrip
+              skills={mountedSkills}
+              availableSkills={availableSkills}
+              onRemove={handleRemoveMountedSkill}
+            />
+          </>
+        }
+        inputLeading={
+          <>
+            <ImageAttachmentStrip images={pendingImages} onRemove={handleRemovePendingImage} />
+            <button
+              type="button"
+              className="agent-copy-diagnostics-btn"
+              onClick={() => void handleCopyDiagnostics()}
+              title="复制 Agent 诊断日志"
+            >
+              <IconClipboard size={13} />
+            </button>
+          </>
+        }
+        renderTrailing={({ submit, canSubmit }) => (
+          <AgentComposerToolbar
+            roleRef={activeRoleRef}
+            roles={roles}
+            onRoleChange={(role) => void handleRoleChange(role)}
+            permissionMode={permissionMode}
+            settings={settings}
+            runtimeBinding={activeConversation.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING}
+            canChangeRuntime={canChangeRuntime}
+            onRuntimeChange={(binding) => setRuntimeBinding(binding, activeConversationId)}
+            loading={loading || contextCompacting}
+            canSend={canSubmit}
+            contextUsage={contextUsage}
+            contextCompaction={contextCompaction}
+            canCompact={Boolean(sessionId) && !loading}
+            onCompactContext={handleCompactContext}
+            onPermissionModeChange={handlePermissionModeChange}
+            onOpenResourceMenu={() => setResourceQuery('')}
+            onOpenSkillMenu={() => setSkillQuery('')}
+            onAddImages={(files) => void handleAddImages(files)}
+            onOpenSettings={handleOpenAgentSettings}
+            sendButton={
+              loading ? (
+                <button className="agent-abort-btn" onClick={handleAbort} title="中止">
+                  <IconStop size={15} />
+                </button>
+              ) : (
+                <button
+                  className="agent-send-btn"
+                  onClick={submit}
+                  disabled={!canSubmit}
+                  title="发送"
+                >
+                  <IconSend size={17} />
+                </button>
+              )
+            }
+          />
+        )}
+      />
     </AgentPanelSurface>
   )
 }

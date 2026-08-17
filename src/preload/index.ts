@@ -17,6 +17,7 @@ import { androidApi } from './android-api'
 import { browserApi, reportWorkbenchBounds } from './browser-api'
 import { dataSourceApi } from './data-source-api'
 import { fsApi } from './fs-api'
+import { gitApi } from './git-api'
 import {
   cadApi,
   gitBackupApi,
@@ -281,6 +282,8 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   credentials: credentialsApi,
 
   fs: fsApi,
+
+  git: gitApi,
 
   projectOps: projectOpsApi,
 

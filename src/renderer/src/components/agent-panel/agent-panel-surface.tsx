@@ -15,7 +15,7 @@ export interface AgentPanelSurfaceProps {
   runtime: 'local' | 'remote'
   mainRef?: Ref<HTMLDivElement>
   className?: string
-  children: ReactNode
+  children?: ReactNode
 }
 
 export function AgentPanelSurface({
@@ -79,7 +79,12 @@ export function AgentMessageList({
   )
 }
 
-export type AgentComposerKeyDecision = 'ignore-composition' | 'handled' | 'submit' | 'none'
+export type AgentComposerKeyDecision =
+  | 'ignore-composition'
+  | 'handled'
+  | 'submit'
+  | 'block-submit'
+  | 'none'
 
 export function resolveAgentComposerKeyDecision(input: {
   key: string
@@ -91,7 +96,9 @@ export function resolveAgentComposerKeyDecision(input: {
 }): AgentComposerKeyDecision {
   if (input.isComposing || input.keyCode === 229) return 'ignore-composition'
   if (input.handledBeforeSubmit) return 'handled'
-  if (input.key === 'Enter' && !input.shiftKey && input.canSubmit) return 'submit'
+  if (input.key === 'Enter' && !input.shiftKey) {
+    return input.canSubmit ? 'submit' : 'block-submit'
+  }
   return 'none'
 }
 
@@ -157,8 +164,7 @@ export function AgentComposer({
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
-      const isComposition =
-        event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229
+      const isComposition = event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229
       if (isComposition) return
 
       const handledBeforeSubmit = onKeyDownBeforeSubmit?.(event) ?? false
@@ -170,9 +176,9 @@ export function AgentComposer({
         handledBeforeSubmit,
         canSubmit: !disabled && !submitting && canSubmit,
       })
-      if (decision !== 'submit') return
+      if (decision !== 'submit' && decision !== 'block-submit') return
       event.preventDefault()
-      submit()
+      if (decision === 'submit') submit()
     },
     [canSubmit, disabled, onKeyDownBeforeSubmit, submit, submitting],
   )

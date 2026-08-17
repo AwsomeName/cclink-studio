@@ -456,6 +456,24 @@ export function IconLink(p: IconProps = defaults): React.ReactElement {
   )
 }
 
+/** Git 分支 */
+export function IconBranch(p: IconProps = defaults): React.ReactElement {
+  return I(
+    p,
+    <>
+      <circle cx="4" cy="3" r="1.5" stroke="currentColor" strokeWidth="1.15" />
+      <circle cx="4" cy="13" r="1.5" stroke="currentColor" strokeWidth="1.15" />
+      <circle cx="12" cy="5" r="1.5" stroke="currentColor" strokeWidth="1.15" />
+      <path
+        d="M4 4.5v7M5.5 8h2A4.5 4.5 0 0 0 12 3.5"
+        stroke="currentColor"
+        strokeWidth="1.15"
+        strokeLinecap="round"
+      />
+    </>,
+  )
+}
+
 /** 机器人 */
 export function IconRobot(p: IconProps = defaults): React.ReactElement {
   return I(

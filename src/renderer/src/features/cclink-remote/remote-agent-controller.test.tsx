@@ -3,7 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { RemoteStatus } from '@shared/remote-protocol'
 import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
-import { RemoteMessage, resolveRemoteAgentVisualStatus } from './RemoteAgentPanel'
+import {
+  resolveRemoteAgentVisualStatus,
+  resolveRemoteStopAvailability,
+  submitRemoteDraft,
+} from './remote-agent-controller'
+import { RemoteAgentMessage } from './remote-agent-message'
 
 const workspaceRef: RemoteWorkspaceRef = {
   kind: 'remote',
@@ -33,7 +38,7 @@ afterAll(() => {
   vi.unstubAllGlobals()
 })
 
-describe('RemoteAgentPanel', () => {
+describe('RemoteAgentController', () => {
   it('exposes the active remote session as a working Agent state', () => {
     expect(
       resolveRemoteAgentVisualStatus({
@@ -91,9 +96,17 @@ describe('RemoteAgentPanel', () => {
     ).toMatchObject({ tone: 'unavailable', label: 'Agent 需升级' })
   })
 
+  it('keeps the expected stop control visible but disabled while remote work is active', () => {
+    expect(resolveRemoteStopAvailability('active')).toEqual({
+      state: 'disabled',
+      reason: '当前远程 Agent 不支持停止',
+    })
+    expect(resolveRemoteStopAvailability('idle')).toEqual({ state: 'hidden' })
+  })
+
   it('uses the same user and assistant message surfaces as local conversations', () => {
     const userHtml = renderToStaticMarkup(
-      <RemoteMessage
+      <RemoteAgentMessage
         message={{ type: 'user', id: 'user-1', content: '总结一下项目', timestamp: 1 }}
         workspaceRef={workspaceRef}
         sessionId="session-1"
@@ -101,7 +114,7 @@ describe('RemoteAgentPanel', () => {
       />,
     )
     const assistantHtml = renderToStaticMarkup(
-      <RemoteMessage
+      <RemoteAgentMessage
         message={{ type: 'agentText', id: 'agent-1', content: '## 结论', timestamp: 2 }}
         workspaceRef={workspaceRef}
         sessionId="session-1"
@@ -117,7 +130,7 @@ describe('RemoteAgentPanel', () => {
 
   it('renders remote tool output with the local collapsible tool treatment', () => {
     const html = renderToStaticMarkup(
-      <RemoteMessage
+      <RemoteAgentMessage
         message={{
           type: 'agentTool',
           id: 'tool-message-1',
@@ -140,5 +153,95 @@ describe('RemoteAgentPanel', () => {
     expect(html).toContain('class="content-tool-result success"')
     expect(html).toContain('<details')
     expect(html).not.toContain('Bashcompleted')
+  })
+
+  it('fails closed before creating or sending when the captured workspace target is stale', async () => {
+    const createSession = vi.fn()
+    const selectSession = vi.fn()
+    const sendAgentMessage = vi.fn()
+
+    await expect(
+      submitRemoteDraft({
+        target: { ref: workspaceRef, generation: 1 },
+        workspaceRef,
+        activeSession: null,
+        content: '不应发送',
+        isTargetCurrent: () => false,
+        createSession,
+        selectSession,
+        sendAgentMessage,
+      }),
+    ).resolves.toBe('stale-target')
+
+    expect(createSession).not.toHaveBeenCalled()
+    expect(selectSession).not.toHaveBeenCalled()
+    expect(sendAgentMessage).not.toHaveBeenCalled()
+  })
+
+  it('keeps a newly created idle session but does not send after the target becomes stale', async () => {
+    const session = {
+      id: 'session-created',
+      serverId: workspaceRef.endpointId,
+      workspaceId: workspaceRef.workspaceId,
+      workspacePath: workspaceRef.path,
+      name: '新远程会话',
+      status: 'idle' as const,
+      createdAt: 1,
+      updatedAt: 1,
+      messageCount: 0,
+      contextUsage: 0,
+    }
+    let validationCount = 0
+    const selectSession = vi.fn()
+    const sendAgentMessage = vi.fn()
+
+    await expect(
+      submitRemoteDraft({
+        target: { ref: workspaceRef, generation: 1 },
+        workspaceRef,
+        activeSession: null,
+        content: '切换期间不发送',
+        isTargetCurrent: () => ++validationCount === 1,
+        createSession: vi.fn().mockResolvedValue(session),
+        selectSession,
+        sendAgentMessage,
+      }),
+    ).resolves.toBe('stale-target')
+
+    expect(selectSession).not.toHaveBeenCalled()
+    expect(sendAgentMessage).not.toHaveBeenCalled()
+  })
+
+  it('submits only through the captured remote workspace and session owner', async () => {
+    const session = {
+      id: 'session-1',
+      serverId: workspaceRef.endpointId,
+      workspaceId: workspaceRef.workspaceId,
+      workspacePath: workspaceRef.path,
+      name: '远程会话',
+      status: 'idle' as const,
+      createdAt: 1,
+      updatedAt: 1,
+      messageCount: 0,
+      contextUsage: 0,
+    }
+    const selectSession = vi.fn()
+    const sendAgentMessage = vi.fn().mockResolvedValue(true)
+
+    await expect(
+      submitRemoteDraft({
+        target: { ref: workspaceRef, generation: 4 },
+        workspaceRef,
+        activeSession: session,
+        content: '只发到远程',
+        isTargetCurrent: () => true,
+        createSession: vi.fn(),
+        selectSession,
+        sendAgentMessage,
+      }),
+    ).resolves.toBe('submitted')
+
+    expect(selectSession).toHaveBeenCalledWith(session.id)
+    expect(sendAgentMessage).toHaveBeenCalledWith(workspaceRef, session.id, '只发到远程')
   })
 })

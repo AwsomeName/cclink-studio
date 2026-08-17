@@ -29,6 +29,8 @@ import { createTrustedIpcRegistrar } from '../ipc/trusted-renderer-guard'
 import { getAgentCapabilities, getAgentToolModules } from './agent-capabilities'
 import { GitBackupService } from '../git-backup/git-backup-service'
 import { registerGitBackupIpc } from '../git-backup/git-backup-ipc'
+import { GitWorkspaceService } from '../git/git-workspace-service'
+import { registerGitIpc } from '../git/git-ipc'
 import type { CclinkStudioRuntimeState } from './app-runtime'
 import { bootstrapOptionalMainServices } from './optional-main-services'
 import { runShutdownStep } from './shutdown'
@@ -321,6 +323,29 @@ export async function bootstrapMainProcessServices(
   console.log('[CCLink Studio] 文件系统 IPC 已注册')
 
   try {
+    runtime.gitWorkspaceService = new GitWorkspaceService(runtime.workspaceStateService!, {
+      resolveAuthentication: async (remoteUrl) => {
+        try {
+          const parsed = new URL(remoteUrl)
+          if (parsed.protocol !== 'https:' || parsed.hostname.toLowerCase() !== 'github.com') {
+            return null
+          }
+          const username = runtime.settingsService?.getAll().gitBackupUsername.trim() ?? ''
+          const token = runtime.credentialService?.resolveCredential('git:github')?.token ?? ''
+          return username && token ? { username, token } : null
+        } catch {
+          return null
+        }
+      },
+    })
+    registerGitIpc(runtime.gitWorkspaceService, runtime.trustedRendererGuard)
+    console.log('[CCLink Studio] Git 工作空间状态服务已初始化')
+  } catch (error) {
+    runtime.gitWorkspaceService = null
+    console.error('[CCLink Studio] Git 状态服务初始化失败，其他本地能力继续启动:', error)
+  }
+
+  try {
     runtime.gitBackupService = new GitBackupService(
       runtime.settingsService,
       runtime.workspaceStateService!,
@@ -526,6 +551,7 @@ export async function shutdownMainProcessServices(
   runtime.cclinkRemoteService = null
   runtime.officialIntegration = null
   runtime.fileService = null
+  runtime.gitWorkspaceService = null
   runtime.gitBackupService = null
   runtime.projectOpsService = null
   runtime.webResourceService = null

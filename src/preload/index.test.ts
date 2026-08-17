@@ -33,6 +33,12 @@ describe('preload API surface', () => {
         android: expect.any(Object),
         dataSource: expect.any(Object),
         diagnostics: expect.any(Object),
+        git: expect.objectContaining({
+          getSnapshot: expect.any(Function),
+          getDiff: expect.any(Function),
+          commit: expect.any(Function),
+          push: expect.any(Function),
+        }),
         scheduledTasks: expect.any(Object),
         webAffairs: expect.any(Object),
         runtimeComponents: expect.objectContaining({

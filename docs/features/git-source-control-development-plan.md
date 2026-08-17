@@ -1,6 +1,6 @@
 # Git 状态与提交推送开发计划
 
-> 状态：计划已确认，尚未开始实现
+> 状态：E0/G1-G3 与 G4 已配置 upstream Push 已通过自动化真实 App smoke；G4 剩余项、G5 与真人验收待完成
 >
 > 最后更新：2026-08-17
 >
@@ -26,32 +26,41 @@ shared contract、主进程 service、parser、store 和测试基建属于工程
 
 ### 2.1 用户功能进度
 
+- 本地 Git 根工作空间左下角已显示分支、去重变更数和已知增删行数，点击可打开 Git 浮层。
+- 浮层已显示仓库、分支、upstream 和本机已知 ahead/behind，并支持刷新、Esc 和焦点恢复。
+- 已可查看分组变更和有界只读 Diff，明确选择完整文件、填写信息并安全 commit。
+- 已配置 upstream 的分支可显式 Push；有未提交变化时仍可单独 Push 已有本地提交。
+- 状态栏已删除常驻 Agent 正常状态和活跃 Tab 类型；非 Git 或越界父仓库不显示 Git 段。
 - 用户当前可以使用旧“备份到 Git”执行整工作空间提交和 Push。
-- 用户当前看不到分支、上游、变更清单、Diff、ahead/behind 或正常提交表单。
-- 状态栏当前常驻显示 Agent 状态、活跃 Tab 类型和工作空间信息。
-- 旧 Git 备份同时出现在状态栏和“网站与账号”侧栏，尚未统一为 Git 状态入口。
+- 状态栏右侧旧 Git 备份按钮已删除；“网站与账号”侧栏兼容建仓卡片仍待迁移。
+- 新入口尚不能关联首次 remote/upstream 或显式 Fetch；这些仍需 Terminal 或兼容入口。
 - 真实 GitHub HTTPS 和 SSH Agent 的现有备份人工验收仍未关闭。
 
-因此目前不能宣称 Git 状态、可控提交或 Push 产品闭环完成。
+因此 G1-G3 与配置好 upstream 的 Push 自动化真实 App 验收已通过，但尚缺最终提交 SHA 和
+真人验收；G4 远程关联/Fetch 与 G5 收敛仍未完成。
 
 ### 2.2 工程准备度
 
 - 已有受控 `execFile` Git 执行器、Git 检测、初始化、status、commit、remote 和 Push 基础代码。
 - 已有 GitHub 私有建仓客户端、统一明文凭证、`GIT_ASKPASS` 和输出脱敏。
 - 已有可信 renderer IPC guard、工作空间 realpath/稳定 ID 和 Git 备份自动化测试。
-- 现有 Git IPC 仍有重复通道字符串，Git 状态和备份编排尚未拆分唯一 owner。
+- 已新增 shared Git snapshot contract、`GitWorkspaceService`、可信 IPC、renderer generation guard
+  和 porcelain v2/numstat parser；Git 状态由新 service 单一拥有。
+- 新 service 已拥有 snapshot、Diff、commit 和已配置 upstream Push；写操作按仓库串行，使用
+  expected revision/HEAD 并在成功或失败后读取真实 Git 重新对账。
+- 旧 Git 备份 API 和状态在 G5 前兼容保留，GitHub 建仓/首次关联尚未迁入新 owner。
 - 当前工作区存在其他正在进行的用户改动；实现时必须避免覆盖或混入无关修改。
 
 ## 3. 总体里程碑
 
-| 类别     | 阶段 | 用户可见结果                                                    | 估算工作量 |
-| -------- | ---- | --------------------------------------------------------------- | ---------- |
-| 工程前置 | E0   | 无新增用户能力；冻结 contract、Git 命令语义和 fixture           | 1–2 人日   |
-| 用户功能 | G1   | 左下角显示分支、变更数、行数；点击查看 Git 浮层                 | 3–5 人日   |
-| 用户功能 | G2   | 查看分组变更和只读 Diff，二进制/大文件有明确降级                | 3–5 人日   |
-| 用户功能 | G3   | 选择完整文件、填写提交信息并安全完成本地 commit                 | 4–6 人日   |
-| 用户功能 | G4   | 显式 Fetch/Push、关联远程，认证和分叉失败可恢复                 | 4–6 人日   |
-| 收敛验收 | G5   | 旧备份入口移除、GitHub 建仓能力迁入、真实 HTTPS/SSH 验收关闭    | 3–5 人日   |
+| 类别     | 阶段 | 用户可见结果                                                 | 估算工作量 |
+| -------- | ---- | ------------------------------------------------------------ | ---------- |
+| 工程前置 | E0   | 无新增用户能力；冻结 contract、Git 命令语义和 fixture        | 1–2 人日   |
+| 用户功能 | G1   | 左下角显示分支、变更数、行数；点击查看 Git 浮层              | 3–5 人日   |
+| 用户功能 | G2   | 查看分组变更和只读 Diff，二进制/大文件有明确降级             | 3–5 人日   |
+| 用户功能 | G3   | 选择完整文件、填写提交信息并安全完成本地 commit              | 4–6 人日   |
+| 用户功能 | G4   | 显式 Fetch/Push、关联远程，认证和分叉失败可恢复              | 4–6 人日   |
+| 收敛验收 | G5   | 旧备份入口移除、GitHub 建仓能力迁入、真实 HTTPS/SSH 验收关闭 | 3–5 人日   |
 
 总计约 18–29 人日，按一名熟悉当前 Electron、Workspace、Context Action、凭证和 Git 备份代码
 的工程师估算。真实远程、网络故障和 SSH/GitHub 人工验收等待时间不计入纯工程时间。
@@ -136,15 +145,15 @@ docs/ops/
 
 ### 5.1 状态所有权
 
-| 状态                         | 唯一事实源                                  | renderer 行为                |
-| ---------------------------- | ------------------------------------------- | ---------------------------- |
-| repo root、HEAD、branch      | 本机 Git + `GitWorkspaceService`            | 只展示                       |
-| index、working tree、冲突    | 本机 Git + `GitWorkspaceService`            | 只展示并发有界 command       |
-| Diff                         | `GitWorkspaceService` 按需读取              | 短期缓存，可随时丢弃         |
-| active Git operation         | `GitWorkspaceService`                       | 展示 busy，不自行判断终态    |
-| GitHub Token                 | `CredentialService`                         | 不读取明文                   |
-| GitHub username              | `SettingsService`                           | 设置草稿                     |
-| popover、选择、commit 草稿   | renderer `git-store`                        | 可丢弃，不写入工作空间       |
+| 状态                       | 唯一事实源                       | renderer 行为             |
+| -------------------------- | -------------------------------- | ------------------------- |
+| repo root、HEAD、branch    | 本机 Git + `GitWorkspaceService` | 只展示                    |
+| index、working tree、冲突  | 本机 Git + `GitWorkspaceService` | 只展示并发有界 command    |
+| Diff                       | `GitWorkspaceService` 按需读取   | 短期缓存，可随时丢弃      |
+| active Git operation       | `GitWorkspaceService`            | 展示 busy，不自行判断终态 |
+| GitHub Token               | `CredentialService`              | 不读取明文                |
+| GitHub username            | `SettingsService`                | 设置草稿                  |
+| popover、选择、commit 草稿 | renderer `git-store`             | 可丢弃，不写入工作空间    |
 
 ## 6. E0：工程前置，不计产品进度
 
@@ -196,6 +205,15 @@ docs/ops/
 - Electron smoke 使用两个真实临时仓库验证切换和计数。
 - 当前真实仓库人工对照 `git status` 与 `git diff --numstat`。
 
+### 7.4 当前结果（2026-08-17）
+
+- shared contract、parser、service、preload、renderer store、状态栏和浮层已落地。
+- parser/service/store/Status Bar 测试已通过。
+- Electron UI smoke 16/16 通过；真实当前仓库显示分支、变化和已知行数，浮层和
+  Esc 关闭路径通过，且“Agent 就绪”“编辑器”不再出现。
+- 尚未形成最终 commit SHA，也未由真人逐项执行 7.1 全部边界样本，因此记录为“G1 自动化
+  真实 App 验收通过”，不提前声明 G1 最终关闭。
+
 ## 8. G2：变更清单与只读 Diff
 
 ### 8.1 用户验收动作
@@ -219,6 +237,14 @@ docs/ops/
 - 文本、CRLF、非 UTF-8、binary、rename、删除、untracked 和超限 fixture 测试。
 - Diff IPC 越界、过期 revision 和工作空间切换测试。
 - UI smoke 覆盖从左下角进入清单并打开真实 Diff。
+
+### 8.4 当前结果（2026-08-17）
+
+- staged/unstaged/untracked/conflicted 分组和 rename 旧路径已进入 snapshot；同一路径可以在
+  staged 与 unstaged 两组分别出现。
+- tracked Diff 使用有界 `git diff`，untracked 使用工作空间根内真实路径读取；二进制、冲突、
+  越界、过期、4000 行或 256 KiB 上限均有结构化降级。
+- Electron smoke 已从左下角进入真实变更清单并选择文件展示 Diff。
 
 ## 9. G3：可控本地提交
 
@@ -247,6 +273,15 @@ docs/ops/
 - 敏感文件、Shell 注入路径、非 ASCII 路径和 stale revision 测试。
 - Electron smoke 完成“查看 → 选择 → 填信息 → commit → 状态归零/更新”。
 
+### 9.4 当前结果（2026-08-17）
+
+- 提交表单保留已有 staged 内容；unstaged/untracked 默认不选，只有用户勾选的完整路径进入
+  `git add -- <paths>`，partial staged 未勾选时只提交原 index 内容。
+- 空信息、空 index、冲突、detached、过期 revision、敏感路径、缺失 identity 和并发操作会
+  停止提交；不注入备份专用 identity，commit hook 正常执行。
+- Electron smoke 在临时真实仓库中只提交 `tracked.txt`，确认未选择的 untracked 文件仍存在，
+  且提交成功后未自动联网。
+
 ## 10. G4：Fetch、Push 与远程关联
 
 ### 10.1 用户验收动作
@@ -272,6 +307,17 @@ docs/ops/
 - 本地 bare remote 覆盖 push、ahead、behind、diverged、non-fast-forward 和重试。
 - HTTPS askpass、SSH fixture、Token/URL/stderr 脱敏测试。
 - 真实 GitHub HTTPS 与真实 SSH Agent 人工验收，结果记录到 acceptance 文档。
+
+### 10.4 当前结果（2026-08-17）
+
+- 已完成配置好 upstream 的当前 HEAD 显式 Push；使用参数数组和固定
+  `HEAD:refs/heads/<upstream branch>`，不提供 force、delete 或任意 refspec。
+- GitHub HTTPS 可在 main 内复用现有 `GIT_ASKPASS` Token，SSH/本地 remote 继续交给用户环境；
+  renderer 不读取凭证。
+- Electron smoke 使用本地 bare remote 验证 commit 后 ahead=1、显式 Push 后 ahead=0、远端
+  HEAD 等于确认的本地提交，且未提交文件不妨碍 Push 已有提交。
+- 尚未实现显式 Fetch、首次 remote/upstream 关联和 GitHub 名称建仓迁移；真实 HTTPS、SSH、
+  认证失败、离线和 non-fast-forward 人工验收也未关闭，因此 G4 仍是部分完成。
 
 ## 11. G5：旧备份收敛与完整验收
 
@@ -308,27 +354,27 @@ docs/ops/
 
 ## 12. 测试矩阵
 
-| 维度       | 必测样本                                                                 |
-| ---------- | ------------------------------------------------------------------------ |
-| 仓库       | clean、unborn、detached、parent root、nested、worktree、bare remote      |
-| 变更       | add、modify、delete、rename、untracked、binary、partial staged、conflict |
-| 路径       | 空格、中文、换行、短横线前缀、符号链接、工作空间外                      |
-| 分支       | 无 upstream、ahead、behind、diverged、upstream 删除                      |
-| 写操作     | stale revision、并发、hook 失败、identity 缺失、磁盘只读                |
-| 远程       | HTTPS、SSH、认证失败、离线、超时、non-fast-forward、大文件拒绝          |
-| 生命周期   | 启动、窗口重建、工作空间切换、操作中切换、退出                          |
-| 安全       | Token 脱敏、URL 脱敏、敏感文件、Shell 注入、越界 repo root              |
+| 维度     | 必测样本                                                                 |
+| -------- | ------------------------------------------------------------------------ |
+| 仓库     | clean、unborn、detached、parent root、nested、worktree、bare remote      |
+| 变更     | add、modify、delete、rename、untracked、binary、partial staged、conflict |
+| 路径     | 空格、中文、换行、短横线前缀、符号链接、工作空间外                       |
+| 分支     | 无 upstream、ahead、behind、diverged、upstream 删除                      |
+| 写操作   | stale revision、并发、hook 失败、identity 缺失、磁盘只读                 |
+| 远程     | HTTPS、SSH、认证失败、离线、超时、non-fast-forward、大文件拒绝           |
+| 生命周期 | 启动、窗口重建、工作空间切换、操作中切换、退出                           |
+| 安全     | Token 脱敏、URL 脱敏、敏感文件、Shell 注入、越界 repo root               |
 
 ## 13. 风险与止损点
 
-| 风险                                   | 止损条件与替代路径                                             |
-| -------------------------------------- | -------------------------------------------------------------- |
-| porcelain/parser 兼容耗时超过两次失败 | 固定最低 Git 版本和 fixture，先交付支持矩阵，不写脆弱文本解析  |
-| partial staged 难以安全保留            | G3 首版只允许 commit staged，暂缓自动 stage unstaged           |
-| Diff 大文件拖垮 renderer               | 降低硬上限并显示外部/Terminal 查看提示，不扩建流式 Diff 引擎   |
-| 远程认证差异扩张                       | 保留 HTTPS GitHub + 本机 SSH 两条已知路径，其他 remote 仅诊断   |
-| 旧备份迁移影响现有用户                 | G5 前保留旧入口兼容，不在 G1-G4 提前删除持久化数据              |
-| 当前脏工作区与实现冲突                 | 独立提交精确文件，避免格式化或覆盖无关在途改动                 |
+| 风险                                  | 止损条件与替代路径                                            |
+| ------------------------------------- | ------------------------------------------------------------- |
+| porcelain/parser 兼容耗时超过两次失败 | 固定最低 Git 版本和 fixture，先交付支持矩阵，不写脆弱文本解析 |
+| partial staged 难以安全保留           | G3 首版只允许 commit staged，暂缓自动 stage unstaged          |
+| Diff 大文件拖垮 renderer              | 降低硬上限并显示外部/Terminal 查看提示，不扩建流式 Diff 引擎  |
+| 远程认证差异扩张                      | 保留 HTTPS GitHub + 本机 SSH 两条已知路径，其他 remote 仅诊断 |
+| 旧备份迁移影响现有用户                | G5 前保留旧入口兼容，不在 G1-G4 提前删除持久化数据            |
+| 当前脏工作区与实现冲突                | 独立提交精确文件，避免格式化或覆盖无关在途改动                |
 
 ## 14. /grilling
 

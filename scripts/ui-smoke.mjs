@@ -1,5 +1,9 @@
 #!/usr/bin/env node
-import { readFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
 import { chromium } from 'playwright-core'
 import { createSmokeRuntime } from './smoke-runtime.mjs'
 
@@ -8,6 +12,7 @@ const keepRunning = process.argv.includes('--keep-running')
 const uiReadyTimeoutMs = 30_000
 const results = []
 let startedBySmoke = false
+const execFileAsync = promisify(execFile)
 
 function pass(name, detail = '') {
   results.push({ name, status: 'pass', detail })
@@ -27,7 +32,7 @@ async function readLog() {
   return readFile(logFile, 'utf8').catch(() => '')
 }
 
-async function waitForCdpPort(timeoutMs = 30_000, previousLog = '') {
+async function waitForCdpPort(timeoutMs = 45_000, previousLog = '') {
   const startedAt = Date.now()
   while (Date.now() - startedAt < timeoutMs) {
     const completeLog = await readLog()
@@ -75,12 +80,16 @@ async function createTabFromMenu(page, label) {
   await menu.locator('button', { hasText: label }).first().click()
 }
 
+async function runGit(cwd, args) {
+  return execFileAsync('git', args, { cwd, encoding: 'utf8' })
+}
+
 async function main() {
   const initialLog = await readLog()
   runRestart('restart')
   startedBySmoke = true
 
-  const cdpPort = await waitForCdpPort(30_000, initialLog)
+  const cdpPort = await waitForCdpPort(45_000, initialLog)
   let browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`)
   let page = await findRendererPage(browser)
   await page.setViewportSize({ width: 1440, height: 920 })
@@ -130,6 +139,83 @@ async function main() {
     )
     assert(!text.includes('登录 CCLink'), 'login copy should not block the shell')
     return 'main window ready'
+  })
+
+  await runCheck('local and remote use one Agent Panel and IME-safe Composer', async () => {
+    const panelToggle = page.locator('.app-topbar-right .app-topbar-icon')
+    if ((await panelToggle.getAttribute('title')) === '展开 Agent 面板') {
+      await panelToggle.click()
+    }
+
+    const originalWorkspace = await page.evaluate(async () => {
+      const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+      const state = useWorkspaceStore.getState()
+      useWorkspaceStore.setState({
+        activeWorkspaceRef: { kind: 'global' },
+        generation: state.generation + 1,
+      })
+      return { ref: state.activeWorkspaceRef, generation: state.generation }
+    })
+
+    const localPanel = page.locator('[data-agent-panel-runtime="local"]')
+    await localPanel.waitFor({ state: 'visible', timeout: 10_000 })
+    assert((await page.locator('.agent-panel').count()) === 1, 'expected one Agent Panel root')
+    const localComposer = localPanel.locator('textarea.agent-input, textarea.agent-start-input')
+    await localComposer.waitFor({ state: 'visible', timeout: 10_000 })
+    assert((await localComposer.count()) === 1, 'local runtime rendered more than one Composer')
+    await localComposer.fill('输入法候选')
+    await localComposer.dispatchEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 229,
+      isComposing: true,
+      bubbles: true,
+    })
+    await page.waitForTimeout(100)
+    assert(
+      (await localComposer.inputValue()) === '输入法候选',
+      'IME candidate confirmation submitted or cleared the local draft',
+    )
+
+    await page.evaluate(async () => {
+      const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+      const state = useWorkspaceStore.getState()
+      useWorkspaceStore.setState({
+        activeWorkspaceRef: {
+          kind: 'remote',
+          transport: 'cclink',
+          endpointId: 'ui-smoke-endpoint',
+          endpointName: 'UI Smoke',
+          workspaceId: 'ui-smoke-workspace',
+          path: '/ui-smoke-workspace',
+        },
+        generation: state.generation + 1,
+      })
+    })
+    const remotePanel = page.locator('[data-agent-panel-runtime="remote"]')
+    await remotePanel.waitFor({ state: 'visible', timeout: 10_000 })
+    assert(
+      (await page.locator('.agent-panel').count()) === 1,
+      'remote runtime duplicated Panel roots',
+    )
+    assert(
+      (await remotePanel.locator('textarea.agent-input').count()) === 1,
+      'remote runtime did not reuse AgentComposer',
+    )
+    assert(
+      (await page.locator('.remote-agent-panel, .remote-agent-composer').count()) === 0,
+      'legacy remote Panel or Composer is still rendered',
+    )
+
+    await page.evaluate(async (snapshot) => {
+      const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+      const state = useWorkspaceStore.getState()
+      useWorkspaceStore.setState({
+        activeWorkspaceRef: snapshot.ref,
+        generation: Math.max(state.generation + 1, snapshot.generation + 1),
+      })
+    }, originalWorkspace)
+    return 'single Panel/Composer root and composition-safe Enter'
   })
 
   await runCheck('workspace opener unifies local and CCLink remote entry', async () => {
@@ -532,6 +618,139 @@ async function main() {
     return 'singleton role tab, seven SOUL previews, versioned Skill, and immutable local role versions'
   })
 
+  await runCheck('status bar shows the current Git repository fact', async () => {
+    const projectOpened = await page.evaluate(async (workspacePath) => {
+      const { useFsStore } = await import('/src/stores/fs-store.ts')
+      return useFsStore.getState().openRecentWorkspace(workspacePath)
+    }, rootDir)
+    assert(projectOpened, 'Git smoke workspace could not be opened')
+
+    const snapshot = await page.evaluate(
+      (workspacePath) => window.cclinkStudio.git.getSnapshot(workspacePath),
+      rootDir,
+    )
+    assert(snapshot.availability === 'available', `Git snapshot unavailable: ${snapshot.error}`)
+
+    const trigger = page.locator('.git-status-trigger')
+    await trigger.waitFor({ state: 'visible', timeout: 10_000 })
+    const triggerText = await trigger.innerText()
+    assert(triggerText.includes(snapshot.branch ?? ''), 'status bar branch does not match Git')
+    assert(
+      triggerText.includes(String(snapshot.changeCount)),
+      'status bar change count does not match Git',
+    )
+    const statusBarText = await page.locator('.status-bar').innerText()
+    assert(!statusBarText.includes('Agent 就绪'), 'redundant Agent ready status is still visible')
+    assert(!statusBarText.includes('编辑器'), 'redundant active Tab type is still visible')
+    assert(
+      !statusBarText.includes('备份到 Git'),
+      'legacy Git backup status action is still visible',
+    )
+
+    await trigger.click()
+    const popover = page.locator('.git-status-popover')
+    await popover.waitFor({ state: 'visible', timeout: 10_000 })
+    const popoverText = await popover.innerText()
+    assert(popoverText.includes(snapshot.repositoryName ?? ''), 'Git repository name is missing')
+    assert(popoverText.includes(snapshot.upstream ?? '未设置上游'), 'Git upstream is missing')
+    await popover.locator('.git-status-row-button').click()
+    const changesView = popover.locator('.git-changes-view')
+    await changesView.waitFor({ state: 'visible', timeout: 10_000 })
+    assert(
+      (await changesView.locator('.git-change-item').count()) >= snapshot.changeCount,
+      'Git grouped changes are incomplete',
+    )
+    const readableChange = changesView.locator('.git-change-item:not(:has(.status-u))').first()
+    if ((await readableChange.count()) > 0) {
+      await readableChange.click()
+      await page.waitForFunction(
+        () =>
+          Boolean(
+            document.querySelector(
+              '.git-status-popover .git-diff-content, .git-status-popover .git-diff-error',
+            ),
+          ),
+        undefined,
+        { timeout: 10_000 },
+      )
+    }
+    await page.keyboard.press('Escape')
+    await popover.waitFor({ state: 'hidden', timeout: 10_000 })
+    return `${snapshot.branch} · ${snapshot.changeCount} changes · +${snapshot.additions} -${snapshot.deletions}`
+  })
+
+  await runCheck('Git commit and push preserve explicit file selection', async () => {
+    const fixtureRoot = await mkdtemp(join(homedir(), '.cclink-studio-ui-git-'))
+    const workspacePath = join(fixtureRoot, 'workspace')
+    const remotePath = join(fixtureRoot, 'remote.git')
+    try {
+      await mkdir(workspacePath)
+      await runGit(fixtureRoot, ['init', '--bare', remotePath])
+      await runGit(workspacePath, ['init', '-b', 'main'])
+      await runGit(workspacePath, ['config', 'user.name', 'UI Smoke'])
+      await runGit(workspacePath, ['config', 'user.email', 'ui-smoke@example.com'])
+      await writeFile(join(workspacePath, 'tracked.txt'), 'initial\n', 'utf8')
+      await runGit(workspacePath, ['add', 'tracked.txt'])
+      await runGit(workspacePath, ['commit', '-m', 'initial'])
+      await runGit(workspacePath, ['remote', 'add', 'origin', remotePath])
+      await runGit(workspacePath, ['push', '-u', 'origin', 'main'])
+      await writeFile(join(workspacePath, 'tracked.txt'), 'changed\n', 'utf8')
+      await writeFile(join(workspacePath, 'leave-untracked.txt'), 'keep local\n', 'utf8')
+
+      const opened = await page.evaluate(async (path) => {
+        const { useFsStore } = await import('/src/stores/fs-store.ts')
+        return useFsStore.getState().openRecentWorkspace(path)
+      }, workspacePath)
+      assert(opened, 'temporary Git workspace could not be opened')
+
+      const trigger = page.locator('.git-status-trigger')
+      await trigger.waitFor({ state: 'visible', timeout: 10_000 })
+      await trigger.click()
+      const popover = page.locator('.git-status-popover')
+      await popover.getByRole('button', { name: '提交…', exact: true }).click()
+      const commitView = popover.locator('.git-commit-view')
+      await commitView.waitFor({ state: 'visible', timeout: 10_000 })
+      await commitView.getByRole('checkbox', { name: 'tracked.txt', exact: true }).check()
+      await commitView.getByPlaceholder('说明这次修改').fill('UI smoke explicit commit')
+      await commitView.getByRole('button', { name: '提交 1 个文件', exact: true }).click()
+      await page
+        .locator('.toast-success', { hasText: '提交成功' })
+        .waitFor({ state: 'visible', timeout: 10_000 })
+
+      const afterCommit = await page.evaluate(
+        (path) => window.cclinkStudio.git.getSnapshot(path),
+        workspacePath,
+      )
+      assert(afterCommit.ahead === 1, 'local commit did not become one commit ahead')
+      assert(
+        afterCommit.changes.some((change) => change.path === 'leave-untracked.txt'),
+        'unselected untracked file was unexpectedly committed',
+      )
+
+      await popover.getByRole('button', { name: '推送 1 个已有提交', exact: true }).click()
+      await page
+        .locator('.toast-success', { hasText: 'Push 成功' })
+        .waitFor({ state: 'visible', timeout: 10_000 })
+      await page.waitForFunction(
+        async (path) => (await window.cclinkStudio.git.getSnapshot(path)).ahead === 0,
+        workspacePath,
+        { timeout: 10_000 },
+      )
+      const localHead = (await runGit(workspacePath, ['rev-parse', 'HEAD'])).stdout.trim()
+      const remoteHead = (
+        await runGit(fixtureRoot, ['--git-dir', remotePath, 'rev-parse', 'refs/heads/main'])
+      ).stdout.trim()
+      assert(localHead === remoteHead, 'remote HEAD does not match the confirmed local commit')
+      return 'selected tracked file committed, untracked file preserved, explicit upstream push verified'
+    } finally {
+      await page.evaluate(async (path) => {
+        const { useFsStore } = await import('/src/stores/fs-store.ts')
+        return useFsStore.getState().openRecentWorkspace(path)
+      }, rootDir)
+      await rm(fixtureRoot, { recursive: true, force: true })
+    }
+  })
+
   await runCheck('web resources accepts a non-predefined website', async () => {
     const projectOpened = await page.evaluate(async (workspacePath) => {
       const { useFsStore } = await import('/src/stores/fs-store.ts')
@@ -627,7 +846,7 @@ async function main() {
     await browser.close()
     const resourceRestartLog = await readLog()
     runRestart('restart')
-    const restartedCdpPort = await waitForCdpPort(30_000, resourceRestartLog)
+    const restartedCdpPort = await waitForCdpPort(45_000, resourceRestartLog)
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${restartedCdpPort}`)
     page = await findRendererPage(browser)
     await page.setViewportSize({ width: 1440, height: 920 })
@@ -698,7 +917,7 @@ async function main() {
     await browser.close()
     const affairRestartLog = await readLog()
     runRestart('restart')
-    const restartedCdpPort = await waitForCdpPort(30_000, affairRestartLog)
+    const restartedCdpPort = await waitForCdpPort(45_000, affairRestartLog)
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${restartedCdpPort}`)
     page = await findRendererPage(browser)
     await page.setViewportSize({ width: 1440, height: 920 })

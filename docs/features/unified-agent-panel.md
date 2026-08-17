@@ -1,6 +1,6 @@
 # 本地与远程 Agent Panel 统一方案
 
-> 状态：方案已纠偏；不再以独立 IME 补丁或共享键盘函数作为产品阶段。首个工作包直接原子统一 Agent Panel/Composer 并删除远程重复 UI；远程事务强化仍须通过本文契约门禁。最后更新：2026-08-17。
+> 状态：UAP-1 代码与自动化门禁已完成；本地、侧栏和远程入口已使用同一个 Agent Panel/Composer，旧远程 Panel、textarea 和键盘实现已删除。真实中文输入法与已配对远程 Agent 的真人验收仍是产品完成门禁。UAP-2 远程事务强化仍须通过本文契约门禁。最后更新：2026-08-17。
 
 ## 结论
 
@@ -43,19 +43,28 @@ UAP-2 门禁全部关闭前
 
 只有上述真实应用验收和受影响自动化门禁均通过，才能声明统一 Agent Panel 完成。
 
-## 当前情况与问题
+## 当前实施情况
 
-当前 App 外壳已经统一，但 Agent Panel 仍按 `WorkspaceRef.kind` 二选一渲染：本地使用
-`AgentPanel`，远程使用 `RemoteAgentPanel`。两者分别维护输入框、草稿、发送状态、会话选择、
-消息加载和样式。消息气泡与部分顶部会话投影已经开始复用，但 Composer 和核心交互仍然分叉。
+UAP-1 已完成代码收口：`App.tsx` 的 center/side 两个装配位置都只渲染 `AgentPanel`；该唯一
+入口按正式 `WorkspaceRef + generation` 选择本地或远程薄 controller，而两个 controller 都
+渲染同一个 `AgentPanelSurface`、`AgentMessageList` 和 `AgentComposer`。生产代码中只有一个
+Agent textarea。旧 `RemoteAgentPanel`、独立远程 textarea/Enter handler 和对应根样式已经删除。
 
-已确认的直接缺陷是：本地 `AgentPanel` 的键盘处理会检查 IME composing 状态，远程
-`RemoteAgentPanel` 的 Enter 处理没有同等保护。用户使用输入法按 Enter 确认候选时，远程
-Panel 会把该按键当作发送。这不是单独的文案或 CSS 问题，而是两套交互实现产生的行为漂移。
+因此原缺陷的修复方式不是给远程复制一份 IME 判断，而是让本地与远程共同继承
+`AgentComposer` 的唯一键盘策略：composition 期间和 `keyCode === 229` 时忽略 Enter，
+`Shift+Enter` 保持换行，只有非组合态 Enter 才提交。远程 controller 只调用
+`cclink-store.sendAgentMessage`，并在创建会话前、创建成功后/发送前重验捕获的 workspace
+target；架构回归测试同时断言远程路径不引用本地 `agent.sendMessage`。
 
-远程 Panel 最初作为 CCLink 远程会话最小纵向闭环直接接入，确保远程消息不会误走本地
-`agent:sendMessage`。协议隔离是正确约束，但实现把运行时隔离扩大成了完整 UI 隔离；后续只
-局部统一消息展示和会话入口，没有收口 Composer、交互策略和 Panel 生命周期。
+2026-08-17 自动化证据：`pnpm verify` 通过（281 个测试文件、1615 个测试通过、2 个既有跳过，
+并包含 typecheck、lint 和生产构建）；`pnpm smoke:ui` 通过真实 Electron UI 装配检查，确认本地
+与远程投影都只有一个 Panel/Composer，并验证合成 composition/229 Enter 不清空草稿。合成事件
+不能替代操作系统中文输入法，也不能证明真实在线远程 Agent 已接收消息，所以本文“用户可执行
+验收”第 1 至 4 项仍须在已登录、已配对设备上真人执行后，才能宣布产品闭环完成。
+
+历史根因是远程 Agent 为保证协议隔离而以独立 `RemoteAgentPanel` 最小闭环接入，后来只复用
+了部分消息投影，没有及时收口 Composer 与 Panel 生命周期。协议隔离本身仍保留；被删除的是
+重复 UI 和重复交互策略，不是本地/远程各自的运行时与状态 owner。
 
 ## 能力边界与状态所有权
 
@@ -533,6 +542,8 @@ UAP-2 开始前必须形成可审查的 owner matrix 和测试，至少证明：
 ## 实施顺序
 
 ### UAP-1：原子统一 Agent Panel
+
+> 实施状态：代码完成，自动化门禁通过；等待本文真人验收后关闭产品门禁。
 
 这是首个也是唯一的 UI 迁移工作包，不再拆成“先共享键盘函数”、“再共享
 Composer”、“最后删旧 Panel”三个可独立停留的阶段。以下改动必须在同一工作包中完成：
