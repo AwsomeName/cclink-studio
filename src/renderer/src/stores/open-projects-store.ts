@@ -336,8 +336,13 @@ export async function restoreOpenProjects(
     ).map(localWorkspaceRef),
     ...(persistedRecentRemoteRefs.length > 0 ? persistedRecentRemoteRefs : persistedRemoteRefs),
   ])
+  // The local settings list remains the compatibility/recovery source for
+  // installations that predate the unified v3 project-strip snapshot. Merge it
+  // before validating paths: a v3 snapshot can contain only stale temporary or
+  // deleted paths, and choosing it solely because it is non-empty would hide a
+  // still-valid local project from History.
   let recentWorkspaceRefs = await resolveRecentWorkspaceRefs(
-    persistedRecentRefs.length > 0 ? persistedRecentRefs : migrationRecentRefs,
+    normalizeRecentWorkspaceRefs([...migrationRecentRefs, ...persistedRecentRefs]),
   )
   if (currentWorkspacePath && openProjectPaths.includes(currentWorkspacePath)) {
     recentWorkspaceRefs = promoteRecentWorkspace(

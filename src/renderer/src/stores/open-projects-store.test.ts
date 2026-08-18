@@ -258,6 +258,47 @@ describe('open-projects-store', () => {
     )
   })
 
+  it('recovers valid local history when the persisted v3 recent path is stale', async () => {
+    const remote = {
+      kind: 'remote' as const,
+      transport: 'cclink' as const,
+      endpointId: 'agent-1',
+      workspaceId: 'workspace-a',
+      path: '/srv/a',
+    }
+    const get = window.cclinkStudio.workspaceState.get as ReturnType<typeof vi.fn>
+    get.mockResolvedValue({
+      sections: {
+        projectStrip: {
+          version: 3,
+          openProjectPaths: [],
+          recentWorkspaceRefs: [
+            { kind: 'local', path: '/workspace/missing' },
+            remote,
+          ],
+        },
+      },
+    })
+
+    await restoreOpenProjects(null, ['/workspace/recovered'])
+    await flushPendingWorkspaceStateWrites()
+
+    expect(useOpenProjectsStore.getState().recentWorkspaceRefs).toEqual([
+      { kind: 'local', path: '/workspace/recovered' },
+      remote,
+    ])
+    expect(window.cclinkStudio.workspaceState.setSection).toHaveBeenLastCalledWith(
+      null,
+      'projectStrip',
+      {
+        version: 3,
+        openProjectPaths: [],
+        recentWorkspaceRefs: [{ kind: 'local', path: '/workspace/recovered' }, remote],
+      },
+      null,
+    )
+  })
+
   it('keeps one recency order across local and remote workspaces', () => {
     const remote = {
       kind: 'remote' as const,
