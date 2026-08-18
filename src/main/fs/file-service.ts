@@ -285,6 +285,13 @@ export class FileService {
     await writeFile(safe, content, 'utf-8')
   }
 
+  /** 新建空文件；目标已存在时拒绝，避免文件树“新建”静默截断原文件。 */
+  async createFile(filePath: string): Promise<void> {
+    const safe = this.validatePath(filePath)
+    await mkdir(dirname(safe), { recursive: true })
+    await writeFile(safe, '', { encoding: 'utf-8', flag: 'wx' })
+  }
+
   async saveTextDocument(input: {
     filePath: string
     content: string

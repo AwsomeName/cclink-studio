@@ -116,6 +116,10 @@ async function closeNamedEditorFile(tab: Tab, fileKey: string): Promise<boolean>
     try {
       const result = await editorStore.saveFile(fileKey)
       if (result !== 'saved') return false
+      // Saving writes the snapshot captured at the start of the request. If the
+      // user edits again while that request is in flight, EditorStore preserves
+      // the newer buffer as dirty. Do not destroy that newer draft.
+      if (useEditorStore.getState().files[fileKey]?.dirty) return false
       editorStore.closeFile(fileKey)
       useTabStore.getState().closeTab(tab.id)
       return true

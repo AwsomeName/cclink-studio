@@ -67,6 +67,78 @@ describe('closeTabWithDraftPolicy editor conflicts', () => {
     expect(useTabStore.getState().tabs).toHaveLength(1)
     expect(useEditorStore.getState().files[filePath]?.currentContent).toBe('# Unsaved draft')
   })
+
+  it('keeps edits made while save-and-close is in flight', async () => {
+    const filePath = '/workspace/notes.md'
+    useEditorStore.setState({
+      files: {
+        [filePath]: {
+          savedContent: '# Old',
+          currentContent: '# Saving snapshot',
+          dirty: true,
+          loading: false,
+          versionHash: 'old-hash',
+        },
+      },
+      pendingUpdates: [],
+    })
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'markdown-editor',
+          type: 'editor',
+          title: 'notes.md',
+          icon: '📝',
+          filePath,
+        },
+      ],
+      activeTabId: 'markdown-editor',
+    })
+
+    let finishSave!: (value: {
+      status: 'saved'
+      snapshot: {
+        path: string
+        content: string
+        size: number
+        modifiedAt: number
+        hash: string
+      }
+    }) => void
+    const saveTextDocument = vi.fn(
+      () =>
+        new Promise<Parameters<typeof finishSave>[0]>((resolve) => {
+          finishSave = resolve
+        }),
+    )
+    ;(
+      window.cclinkStudio as unknown as {
+        fs: { saveTextDocument: typeof saveTextDocument }
+      }
+    ).fs = { saveTextDocument }
+
+    const closePromise = closeTabWithDraftPolicy('markdown-editor')
+    await vi.waitFor(() => expect(saveTextDocument).toHaveBeenCalledOnce())
+    useEditorStore.getState().updateContent(filePath, '# Edited while saving')
+    finishSave({
+      status: 'saved',
+      snapshot: {
+        path: filePath,
+        content: '# Saving snapshot',
+        size: 17,
+        modifiedAt: Date.now(),
+        hash: 'saved-hash',
+      },
+    })
+
+    await expect(closePromise).resolves.toBe(false)
+    expect(useTabStore.getState().tabs).toHaveLength(1)
+    expect(useEditorStore.getState().files[filePath]).toMatchObject({
+      savedContent: '# Saving snapshot',
+      currentContent: '# Edited while saving',
+      dirty: true,
+    })
+  })
 })
 
 describe('closeTabWithDraftPolicy conversation lifecycle', () => {

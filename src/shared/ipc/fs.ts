@@ -229,6 +229,7 @@ export interface FsApiContract {
   readTextDocument: (filePath: string) => Promise<FsTextDocumentSnapshot>
   renderFile: (filePath: string) => Promise<FsRenderResult>
   writeFile: (filePath: string, content: string) => Promise<void>
+  createFile: (filePath: string) => Promise<void>
   saveTextDocument: (input: FsSaveTextDocumentInput) => Promise<FsSaveTextDocumentResult>
   importDocumentAsset: (documentPath: string, sourcePath: string) => Promise<FsDocumentAssetResult>
   saveDocumentAsset: (input: FsSaveDocumentAssetInput) => Promise<FsDocumentAssetResult>
@@ -258,6 +259,7 @@ export const fsIpc = {
   readTextDocument: defineIpcCall<[string], FsTextDocumentSnapshot>('fs:readTextDocument'),
   renderFile: defineIpcCall<[string], FsRenderResult>('fs:renderFile'),
   writeFile: defineIpcCall<[string, string], void>('fs:writeFile'),
+  createFile: defineIpcCall<[string], void>('fs:createFile'),
   saveTextDocument: defineIpcCall<[FsSaveTextDocumentInput], FsSaveTextDocumentResult>(
     'fs:saveTextDocument',
   ),

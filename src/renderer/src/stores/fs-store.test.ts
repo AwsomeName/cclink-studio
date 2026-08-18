@@ -43,6 +43,7 @@ describe('fs-store workspace switching', () => {
           }),
           mkdir: vi.fn().mockResolvedValue(undefined),
           writeFile: vi.fn().mockResolvedValue(undefined),
+          createFile: vi.fn().mockResolvedValue(undefined),
           watchDir: vi.fn().mockResolvedValue(vi.fn()),
         },
         workspaceState: {
@@ -95,6 +96,21 @@ describe('fs-store workspace switching', () => {
     vi.unstubAllGlobals()
     setWorkspaceStatePath(null)
     setWorkspaceStateOwnerKey(null)
+  })
+
+  it('creates a new file through the exclusive create API', async () => {
+    useFsStore.setState({
+      workspacePath: '/Users/apple/project',
+      newFolderParent: '/Users/apple/project',
+      editingPath: '__new_file__',
+    })
+
+    await useFsStore.getState().confirmNewFile('notes.md')
+
+    expect(window.cclinkStudio.fs.createFile).toHaveBeenCalledWith('/Users/apple/project/notes.md')
+    expect(window.cclinkStudio.fs.writeFile).not.toHaveBeenCalled()
+    expect(useFsStore.getState().selectedPath).toBe('/Users/apple/project/notes.md')
+    expect(useFsStore.getState().operationError).toBeNull()
   })
 
   it('re-enters a local project with the owner-scoped conversation snapshot', async () => {

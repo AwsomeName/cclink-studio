@@ -35,6 +35,18 @@ afterEach(async () => {
 })
 
 describe('FileService', () => {
+  it('creates files exclusively without truncating an existing target', async () => {
+    const service = new FileService()
+    const nestedPath = join(tempDir, 'notes', 'new.md')
+
+    await service.createFile(nestedPath)
+    await expect(readFile(nestedPath, 'utf-8')).resolves.toBe('')
+    await writeFile(nestedPath, '# Existing content', 'utf-8')
+
+    await expect(service.createFile(nestedPath)).rejects.toThrow('EEXIST')
+    await expect(readFile(nestedPath, 'utf-8')).resolves.toBe('# Existing content')
+  })
+
   it('moves files without overwriting an existing target', async () => {
     const service = new FileService()
     const sourceDir = join(tempDir, 'source')

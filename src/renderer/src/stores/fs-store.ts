@@ -1043,7 +1043,7 @@ export const useFsStore = create<FsState>((set, get) => ({
     const newPath = parentPath === '/' ? '/' + trimmedName : parentPath + '/' + trimmedName
     set({ editingPath: null, newFolderParent: null })
     try {
-      await window.cclinkStudio.fs.writeFile(newPath, '')
+      await window.cclinkStudio.fs.createFile(newPath)
       await get().refreshDir(parentPath)
       set({ selectedPath: newPath, operationError: null })
       saveFsPanelState(

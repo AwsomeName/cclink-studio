@@ -9,6 +9,7 @@ export const fsApi: FsApiContract = {
   readTextDocument: (filePath) => invokeIpcContract(fsIpc.readTextDocument, filePath),
   renderFile: (filePath) => invokeIpcContract(fsIpc.renderFile, filePath),
   writeFile: (filePath, content) => invokeIpcContract(fsIpc.writeFile, filePath, content),
+  createFile: (filePath) => invokeIpcContract(fsIpc.createFile, filePath),
   saveTextDocument: (input) => invokeIpcContract(fsIpc.saveTextDocument, input),
   importDocumentAsset: (documentPath, sourcePath) =>
     invokeIpcContract(fsIpc.importDocumentAsset, documentPath, sourcePath),

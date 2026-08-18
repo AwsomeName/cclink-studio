@@ -601,9 +601,6 @@ function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
             </button>
           </span>
         )}
-        <button type="button" onClick={() => xtermRef.current?.focus()} title="聚焦 Terminal">
-          聚焦
-        </button>
       </div>
       <div ref={containerRef} className="terminal-pty-surface" />
     </div>

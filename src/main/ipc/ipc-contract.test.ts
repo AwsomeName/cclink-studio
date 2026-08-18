@@ -79,6 +79,9 @@ describe('IPC invoke contracts', () => {
     expect(fsIpcContracts.readFile.parseArgs(['/workspace/note.md'])).toEqual([
       '/workspace/note.md',
     ])
+    expect(fsIpcContracts.createFile.parseArgs(['/workspace/new.md'])).toEqual([
+      '/workspace/new.md',
+    ])
     expect(
       fsIpcContracts.saveTextDocument.parseArgs([
         { filePath: '/workspace/note.md', content: '# Note', force: true },

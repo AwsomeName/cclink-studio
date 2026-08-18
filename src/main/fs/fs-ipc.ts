@@ -66,6 +66,10 @@ export function registerFsIpc(
     await fs.writeFile(filePath, content)
   })
 
+  handle(fsIpc.createFile, async (_event, filePath) => {
+    await fs.createFile(filePath)
+  })
+
   handle(fsIpc.saveTextDocument, async (_event, input) => fs.saveTextDocument(input))
 
   handle(fsIpc.importDocumentAsset, async (_event, documentPath, sourcePath) => {

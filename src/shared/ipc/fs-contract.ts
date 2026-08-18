@@ -45,6 +45,7 @@ export const fsIpcContracts = {
     requireArgs(args, 2, fsIpc.writeFile.channel)
     return ipcArgs(fsPathSchema.parse(args[0]), fsTextContentSchema.parse(args[1]))
   }),
+  createFile: bindPath(fsIpc.createFile),
   saveTextDocument: bindIpcParser(fsIpc.saveTextDocument, (args) => {
     requireArgs(args, 1, fsIpc.saveTextDocument.channel)
     return ipcArgs(fsSaveTextDocumentSchema.parse(args[0]))
