@@ -664,7 +664,11 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         window.cclinkStudio.editor.saveResult(
           request.id,
           result === 'saved',
-          result === 'conflict' ? '文件已被外部修改' : undefined,
+          result === 'conflict'
+            ? '文件已被外部修改'
+            : result === 'moved'
+              ? '文件在保存期间已移动，请在新位置重新保存'
+              : undefined,
         )
       } catch (error) {
         window.cclinkStudio.editor.saveResult(
@@ -779,6 +783,8 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       const result = await useEditorStore.getState().saveFile(filePath)
       if (result === 'conflict') {
         showToast('文件已被外部修改，请选择重新载入、另存为或覆盖', 'error')
+      } else if (result === 'moved') {
+        showToast('文件在保存期间已移动，请在新位置重新保存', 'error')
       } else {
         showToast('已保存', 'success')
         await refreshResourceInspection()
@@ -923,7 +929,11 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
 
   const handleOverwrite = useCallback(async () => {
     if (!filePath) return
-    await useEditorStore.getState().saveFile(filePath, { force: true })
+    const result = await useEditorStore.getState().saveFile(filePath, { force: true })
+    if (result === 'moved') {
+      showToast('文件在保存期间已移动，请在新位置重新保存', 'error')
+      return
+    }
     showToast('已覆盖磁盘版本', 'success')
   }, [filePath, showToast])
 

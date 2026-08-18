@@ -1,6 +1,6 @@
 # Markdown 编辑器产品与架构审查及稳定化方案
 
-> 状态：审查与文档状态更正已完成；四条已知 P0 数据损坏路径已完成最小修复和回归覆盖，A3/A5/A7/A9 真实应用验收与 P1 稳定化仍待完成。
+> 状态：审查与文档状态更正已完成；四类已识别 P0 的具体触发路径已有最小防护和回归覆盖，但这不代表所有 P0 或保存生命周期已经闭合；A3/A5/A7/A9 真实应用验收与 P1 稳定化仍待完成。
 > 审查日期：2026-08-18。
 > 审查范围：Markdown 打开、编辑、保存、关闭、恢复、外部冲突、Agent 操作、资源组、文件类型路由、状态所有权、IPC、生命周期与测试门禁。
 > 本文是本轮 Markdown 稳定化的整改事实源；产品支持范围仍以 `docs/features/markdown-wysiwyg.md` 为准，但其中“首轮完成”的声明在本文退出条件满足前暂停生效。
@@ -8,7 +8,7 @@
 ## 结论
 
 当前 Markdown 只形成了窄范围 happy path：用户可以打开支持范围内的普通 Markdown，使用
-Tiptap 所见即所得编辑，并在没有外部并发、Agent 写入、快速重复保存或大资源压力时手动保存。
+Tiptap 所见即所得编辑，并在没有外部并发、Agent 写入、路径迁移或大资源压力时手动保存。
 
 当前仍不能可靠完成：
 
@@ -21,9 +21,9 @@ Tiptap 所见即所得编辑，并在没有外部并发、Agent 写入、快速�
 因此，当前实现不得继续标记为“Markdown S 级完成”或“可发布稳定闭环”。问题并非一个
 Tiptap 兼容 bug，而是缺少统一的文档会话领域：Tiptap、`editor-store`、磁盘和 Agent 工具
 分别拥有部分正文事实，并通过 React 组件生命周期和文件监听器做隐式同步。已经发现的
-本轮已封闭已知的错目标覆盖、冲突关闭丢草稿、保存期间新编辑被关闭和同名新建截断路径，
-但 Agent 直写、后台会话路由、快速重复保存、文件路由、保真边界与资源预算等问题仍是缺少
-统一文档会话领域的直接结果。
+本轮为错目标覆盖、冲突关闭丢草稿、保存期间新编辑被关闭、同路径双保存/双关闭乱序和同名
+新建截断增加了最小防护，但不得据此推断“所有已知 P0 已封闭”。Agent 直写、后台会话路由、
+跨来源 revision、文件路由、保真边界与资源预算等问题仍是缺少统一文档会话领域的直接结果。
 
 ## 用户端到端验收基线
 
@@ -83,6 +83,14 @@ Tiptap 兼容 bug，而是缺少统一的文档会话领域：Tiptap、`editor-s
 1. 用户快速连续触发两次保存，Studio 只形成有序保存，不把自身写入误报为外部冲突。
 2. 用户选择“保存并关闭”后，在保存完成前继续输入。
 3. 旧保存响应不得关闭 Tab；新输入保持 dirty，可以继续保存。
+4. 用户快速触发两次“保存并关闭”时，同一路径的保存按请求顺序执行；较新的草稿最后落盘，
+   旧请求不能在其后覆盖磁盘或销毁状态。
+5. 保存期间关闭并重开文件或迁移路径时，旧响应不得复活旧 session；排队保存必须跟随当前
+   路径继续串行。
+6. 文件监听读取磁盘期间继续编辑，或关闭后重开同一路径时，旧外部变更响应不得覆盖新草稿，
+   也不得向新 session 注入旧冲突。
+7. “保存并关闭”等待期间重命名文件时，保存必须返回明确的路径迁移结果；Tab 和新路径草稿
+   保持打开，用户可在新位置重新保存。
 
 ### A8：大图片降级
 
@@ -181,6 +189,68 @@ pnpm verify
 通过、2 项跳过，格式、lint、边界检查和生产构建均成功。该结果只证明工程门禁和局部预期
 成立，不代替 A1-A9 真实应用验收；后续精确 SHA 的远端 CI 与发布门禁仍需全部通过。
 
+第三轮针对双保存/双关闭复审执行：
+
+```bash
+pnpm exec vitest run \
+  src/renderer/src/stores/editor-store.test.ts \
+  src/renderer/src/utils/close-tab.test.ts
+pnpm typecheck
+pnpm verify
+```
+
+定向结果为 2 个测试文件、27 项测试全部通过；完整 `pnpm verify` 为 284 个测试文件、1658 项
+通过、2 项跳过，格式、lint、类型检查、边界检查和生产构建成功。新增测试证明同一路径第二次
+保存会等待第一次完成，并使用最新草稿与第一次返回的 hash；双“保存并关闭”不会发生完成
+乱序。Electron 真人验收仍未执行。
+
+第四轮针对旧响应与路径迁移复审执行：
+
+```bash
+pnpm exec vitest run \
+  src/renderer/src/stores/editor-store.test.ts \
+  src/renderer/src/utils/close-tab.test.ts
+pnpm typecheck
+pnpm verify
+```
+
+结果为 2 个测试文件、29 项测试全部通过，renderer 与 node TypeScript 检查通过。新增回归覆盖
+旧保存响应不能覆盖关闭后重开的新 session，以及迁移前后的保存共享同一条顺序队列。完整
+`pnpm verify` 复跑通过：284 个测试文件、1660 项通过、2 项跳过，格式、lint、类型检查、边界
+检查和生产构建成功。第一次完整执行曾在无关的媒体渲染用例超时，单独复跑及随后完整复跑均
+通过。该结果仍不代替 Electron 真人 A1-A9 验收。
+
+第五轮针对外部变更检查竞态执行：
+
+```bash
+pnpm exec vitest run \
+  src/renderer/src/stores/editor-store.test.ts \
+  src/renderer/src/utils/close-tab.test.ts
+pnpm typecheck
+pnpm verify
+```
+
+定向结果为 2 个测试文件、31 项测试全部通过；完整 `pnpm verify` 为 284 个测试文件、1662 项
+通过、2 项跳过，格式、lint、类型检查、边界检查和生产构建成功。新增回归分别覆盖同一 session
+读取磁盘期间产生编辑，以及关闭重开后旧 session 的外部变更响应返回。主进程 rename 与已在途
+旧路径写入的真实交错仍未由该结果覆盖。
+
+第六轮针对“保存并关闭”与路径迁移竞态执行：
+
+```bash
+pnpm exec vitest run \
+  src/renderer/src/stores/editor-store.test.ts \
+  src/renderer/src/utils/close-tab.test.ts
+pnpm typecheck
+pnpm verify
+```
+
+定向结果为 2 个测试文件、32 项测试全部通过；完整 `pnpm verify` 为 284 个测试文件、1663 项
+通过、2 项跳过，格式、lint、类型检查、边界检查和生产构建成功。`saveFile()` 现在会在 guard 后
+及磁盘响应后校验 session 当前路径，路径变化时返回 `moved`；关闭流程不会再把旧键缺失视为
+clean。新增关闭回归覆盖 guard 等待期间重命名，已有队列回归同时覆盖磁盘写入在途期间迁移。
+主进程 rename/save 仍不是同一事务，Electron 真实文件系统交错仍需人工或集成验收。
+
 ## 产品逻辑问题
 
 ### P0-1（已最小修复）：Agent 保存可能把当前文档写入另一个目标文件
@@ -220,7 +290,9 @@ pnpm verify
 流程此前只检查旧保存请求返回 `'saved'`，随后直接删除文件状态和 Tab。
 
 最小修复：旧保存成功后，关闭流程再次读取 Store 的最新文件状态；只要最新状态仍 dirty，
-就保留 Tab 和草稿。该修复封闭当前关闭入口，但不替代后续 per-session 保存队列和 generation。
+就保留 Tab 和草稿。同一路径的 `saveFile()` 通过共享队列串行执行，排队请求取得执行权后才
+读取最新草稿和 hash，阻止旧保存晚于新保存落盘。该修复覆盖本地 Store 的双保存/双关闭，
+但不替代跨 Agent、文件监听、路径迁移和窗口生命周期的 session generation。
 
 ### P0-4（已最小修复）：新建同名文件可能静默清空已有文件
 
@@ -228,6 +300,16 @@ pnpm verify
 
 最小修复：新增主进程 `fs:createFile` 有界 IPC，使用 `flag: 'wx'` 排他创建；目标已存在时返回
 失败，renderer 保留原文件并显示已有的同名目标错误。普通保存和明确覆盖仍保留原语义。
+
+### P0-5（已最小修复）：外部变更旧响应可能覆盖新草稿
+
+证据：`checkExternalChange()` 此前在读取磁盘前捕获文件状态，异步读取完成后仍使用旧
+`dirty` 和旧 session 决定自动重载。读取期间继续编辑，或关闭后重开同一路径时，旧快照可能
+覆盖新草稿或向新会话写入旧冲突。
+
+最小修复：读取前捕获当前 session 身份，读取完成后重新校验最新 session，并基于最新
+`versionHash` 和 `dirty` 决策；自动重载和冲突回写的 Store updater 也再次校验 session。该修复
+只约束 renderer 外部变更检查，不替代主进程文件操作事务或 Electron 文件监听真人验收。
 
 ### P1-1：Agent 写入绕过 Markdown 安全边界
 
@@ -272,11 +354,16 @@ Agent prompt 宣称编辑器支持“完整 Markdown”，实际 WYSIWYG 会拒�
 结果是 Agent 可以成功写出 Studio 随后无法编辑的文件，真实项目中的常见 Markdown 也可能
 直接落入只读错误态。
 
-### P1-5：保存没有串行生命周期
+### P1-5（已局部修复）：保存生命周期仍不完整
 
-`editor-store` 没有 `saving` 状态、保存 generation 或 per-file mutex。快速连续保存可能携带同
-一个旧 `expectedHash` 并发执行，第二次请求可能把第一次自身写入误判为外部修改。保存过程中
-的新编辑虽然部分得到保留，但保存状态、冲突提示和调用方返回仍不稳定。
+`editor-store` 已为同一路径增加进程内保存队列，连续保存不再并发携带同一个旧 hash，排队
+请求会读取前一次保存后的最新 hash 和草稿。当前 renderer 会为每个打开周期分配不持久化的
+session 身份，保存响应只有在该 session 仍位于请求路径时才可回写；`rebaseFilePaths()` 和
+`relocateMarkdownFile()` 也会迁移同一文件的保存队列。保存期间路径变化会返回明确的 `moved`
+结果；“保存并关闭”按原 session 定位最新文件状态，不再把旧路径键缺失误判为 clean。这只
+修复 renderer Store 内的响应归属、请求顺序和关闭权限；当前仍没有可观察的 `saving` 状态、
+跨进程 revision/generation 或取消协议，也没有把 Agent、主进程路径事务、文件监听和窗口
+生命周期纳入同一协议，因此不能标记为完整解决。
 
 ### P1-6：图片加载没有资源预算
 
@@ -574,6 +661,7 @@ adapter contribution 实现，工具栏不再直接复制 `editor.chain()` 业�
 - `editor_save` 只接受精确匹配的 session target；不匹配立即失败；
 - close policy 必须检查 `SaveDocumentResult.status === 'saved' | 'not-dirty'` 才能关闭；
 - 旧保存成功后必须再次检查最新 dirty/revision，再决定是否关闭；
+- 同一路径保存必须串行，排队请求在执行时读取最新草稿和 hash；
 - 冲突、失败、取消均保留 Tab 和草稿；
 - 文件树新建必须使用主进程排他创建，目标存在时明确失败；
 - 增加相关单元测试与真实应用回归。

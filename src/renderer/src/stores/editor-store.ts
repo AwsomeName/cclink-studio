@@ -25,6 +25,8 @@ import { isWorkspaceStateRestoring, persistWorkspaceSection } from '../utils/wor
 
 /** 单个文件的编辑器状态 */
 export interface EditorFileState {
+  /** 仅用于当前 renderer 生命周期；关闭后重开会获得新身份，不持久化。 */
+  sessionId?: number
   /** 上次保存/加载时的 Markdown 内容 */
   savedContent: string
   /** 当前 Markdown 内容（与 savedContent 不同 = dirty） */
@@ -67,7 +69,10 @@ interface EditorState {
   updateContent: (filePath: string, markdown: string) => void
 
   /** 保存文件：写入磁盘，清 dirty */
-  saveFile: (filePath: string, options?: { force?: boolean }) => Promise<'saved' | 'conflict'>
+  saveFile: (
+    filePath: string,
+    options?: { force?: boolean },
+  ) => Promise<'saved' | 'conflict' | 'moved'>
 
   /** 重新从磁盘载入文件 */
   reloadFile: (filePath: string) => Promise<void>
@@ -151,6 +156,7 @@ function normalizeEditorDrafts(value: unknown): Record<string, EditorFileState> 
   for (const [key, file] of Object.entries(parsed.files ?? {})) {
     if (!file || typeof file.currentContent !== 'string') continue
     files[key] = {
+      sessionId: createEditorFileSessionId(),
       savedContent: typeof file.savedContent === 'string' ? file.savedContent : '',
       currentContent: file.currentContent,
       dirty: Boolean(file.dirty),
@@ -179,7 +185,8 @@ function getPersistableEditorFiles(
   const result: Record<string, EditorFileState> = {}
   for (const [key, file] of Object.entries(files)) {
     if (key.startsWith('virtual:') || file.dirty) {
-      result[key] = { ...file, loading: false }
+      const { sessionId: _sessionId, ...persistable } = file
+      result[key] = { ...persistable, loading: false }
     }
   }
   return result
@@ -192,6 +199,85 @@ function saveStoredEditorFiles(state: EditorState): void {
     persistWorkspaceSection('editorDrafts', { files })
   } catch {
     // WorkspaceState 镜像失败不应影响当前编辑器状态。
+  }
+}
+
+const pendingFileSaves = new Map<string, Promise<void>>()
+let editorFileSessionSequence = 0
+
+function createEditorFileSessionId(): number {
+  editorFileSessionSequence += 1
+  return editorFileSessionSequence
+}
+
+function ensureEditorFileSessionId(
+  filePath: string,
+  set: (updater: (state: EditorState) => Partial<EditorState> | EditorState) => void,
+  get: () => EditorState,
+): number | undefined {
+  const existing = get().files[filePath]
+  if (!existing) return undefined
+  if (existing.sessionId !== undefined) return existing.sessionId
+  const sessionId = createEditorFileSessionId()
+  set((state) => {
+    const file = state.files[filePath]
+    if (!file || file.sessionId !== undefined) return state
+    return {
+      files: {
+        ...state.files,
+        [filePath]: { ...file, sessionId },
+      },
+    }
+  })
+  return get().files[filePath]?.sessionId
+}
+
+function findEditorFileSession(
+  files: Record<string, EditorFileState>,
+  sessionId: number,
+): [filePath: string, file: EditorFileState] | undefined {
+  return Object.entries(files).find(([, file]) => file.sessionId === sessionId)
+}
+
+function rebasePendingFileSavePaths(oldPrefix: string, newPrefix: string): void {
+  for (const [path, pending] of [...pendingFileSaves]) {
+    const nextPath = rebasePath(path, oldPrefix, newPrefix)
+    if (!nextPath || nextPath === path) continue
+    pendingFileSaves.delete(path)
+    const existing = pendingFileSaves.get(nextPath)
+    if (!existing || existing === pending) {
+      pendingFileSaves.set(nextPath, pending)
+      continue
+    }
+    const combined = Promise.all([existing, pending]).then(() => undefined)
+    pendingFileSaves.set(nextPath, combined)
+    void combined.finally(() => {
+      if (pendingFileSaves.get(nextPath) === combined) pendingFileSaves.delete(nextPath)
+    })
+  }
+}
+
+/**
+ * Serialize saves for one file so an older request can never finish after a
+ * newer request and overwrite its disk snapshot. The operation reads EditorStore
+ * only after it owns the turn, so a queued save captures the latest draft/hash.
+ */
+async function serializeFileSave<T>(filePath: string, operation: () => Promise<T>): Promise<T> {
+  const previous = pendingFileSaves.get(filePath)
+  let release!: () => void
+  const current = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  pendingFileSaves.set(filePath, current)
+
+  if (previous) await previous
+  try {
+    return await operation()
+  } finally {
+    release()
+    for (const [path, pending] of pendingFileSaves) {
+      if (pending === current) pendingFileSaves.delete(path)
+    }
   }
 }
 
@@ -214,12 +300,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   openFile: async (filePath) => {
     const existing = get().files[filePath]
     if (existing?.dirty) return
+    const sessionId = createEditorFileSessionId()
 
     // 先标记 loading
     set((state) => ({
       files: {
         ...state.files,
         [filePath]: {
+          sessionId,
           savedContent: '',
           currentContent: '',
           dirty: false,
@@ -231,28 +319,36 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     try {
       const snapshot = await readTextSnapshot(filePath)
-      set((state) => ({
-        files: {
-          ...state.files,
-          [filePath]: fileStateFromSnapshot(snapshot, state.files[filePath]?.diagnostics ?? []),
-        },
-      }))
+      set((state) => {
+        const current = state.files[filePath]
+        if (current?.sessionId !== sessionId) return state
+        return {
+          files: {
+            ...state.files,
+            [filePath]: fileStateFromSnapshot(snapshot, current.diagnostics ?? [], sessionId),
+          },
+        }
+      })
     } catch (err) {
       console.error('[EditorStore] 打开文件失败:', filePath, err)
       // 加载失败时创建空文件状态
-      set((state) => ({
-        files: {
-          ...state.files,
-          [filePath]: {
-            savedContent: '',
-            currentContent: '',
-            dirty: false,
-            loading: false,
-            diagnostics: [],
-            error: err instanceof Error ? err.message : '打开文件失败',
+      set((state) => {
+        if (state.files[filePath]?.sessionId !== sessionId) return state
+        return {
+          files: {
+            ...state.files,
+            [filePath]: {
+              sessionId,
+              savedContent: '',
+              currentContent: '',
+              dirty: false,
+              loading: false,
+              diagnostics: [],
+              error: err instanceof Error ? err.message : '打开文件失败',
+            },
           },
-        },
-      }))
+        }
+      })
     }
   },
 
@@ -280,141 +376,182 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     })
   },
 
-  saveFile: async (filePath, options) => {
-    if (!get().files[filePath]) return 'saved'
-    const guardResult = runEditorSaveGuard(filePath)
-    if (guardResult) await guardResult
-    const file = get().files[filePath]
-    if (!file) return 'saved'
-    const blockingDiagnostic = file.diagnostics?.find(
-      (diagnostic) => diagnostic.severity === 'error',
-    )
-    if (blockingDiagnostic) {
-      throw new Error(blockingDiagnostic.message)
-    }
+  saveFile: (requestedPath, options) => {
+    const sessionId = ensureEditorFileSessionId(requestedPath, set, get)
+    if (sessionId === undefined) return Promise.resolve('saved')
+    return serializeFileSave(requestedPath, async () => {
+      const located = findEditorFileSession(get().files, sessionId)
+      if (!located) return 'moved'
+      const [filePath] = located
+      const guardResult = runEditorSaveGuard(filePath)
+      if (guardResult) await guardResult
+      const guarded = findEditorFileSession(get().files, sessionId)
+      if (!guarded) return 'moved'
+      const [guardedPath, file] = guarded
+      if (guardedPath !== filePath) return 'moved'
+      const blockingDiagnostic = file.diagnostics?.find(
+        (diagnostic) => diagnostic.severity === 'error',
+      )
+      if (blockingDiagnostic) {
+        throw new Error(blockingDiagnostic.message)
+      }
 
-    try {
-      const fsApi = window.cclinkStudio.fs
-      if (fsApi.saveTextDocument) {
-        const result = await fsApi.saveTextDocument({
-          filePath,
-          content: file.currentContent,
-          expectedHash: file.versionHash,
-          force: options?.force,
-        })
-        if (result.status === 'conflict') {
-          set((state) => ({
-            files: {
-              ...state.files,
-              [filePath]: {
-                ...state.files[filePath],
-                externalContent: result.current
-                  ? editorContent(result.current.path, result.current.content)
-                  : '',
-                externalHash: result.current?.hash,
-                modifiedAt: result.current?.modifiedAt,
-                error: '文件已被外部修改',
+      try {
+        const fsApi = window.cclinkStudio.fs
+        if (fsApi.saveTextDocument) {
+          const result = await fsApi.saveTextDocument({
+            filePath,
+            content: file.currentContent,
+            expectedHash: file.versionHash,
+            force: options?.force,
+          })
+          const completed = findEditorFileSession(get().files, sessionId)
+          if (!completed || completed[0] !== filePath) return 'moved'
+          if (result.status === 'conflict') {
+            set((state) => {
+              const latest = state.files[filePath]
+              if (latest?.sessionId !== sessionId) return state
+              return {
+                files: {
+                  ...state.files,
+                  [filePath]: {
+                    ...latest,
+                    externalContent: result.current
+                      ? editorContent(result.current.path, result.current.content)
+                      : '',
+                    externalHash: result.current?.hash,
+                    modifiedAt: result.current?.modifiedAt,
+                    error: '文件已被外部修改',
+                  },
+                },
+              }
+            })
+            return 'conflict'
+          }
+          set((state) => {
+            const latest = state.files[filePath]
+            if (latest?.sessionId !== sessionId) return state
+            const savedContent = file.currentContent
+            const currentContent = latest?.currentContent ?? savedContent
+            const snapshotState = fileStateFromSnapshot(
+              result.snapshot,
+              latest.diagnostics ?? [],
+              sessionId,
+            )
+            return {
+              files: {
+                ...state.files,
+                [filePath]: {
+                  ...snapshotState,
+                  // The snapshot may contain controlled metadata or normalized
+                  // line endings. Keep the exact editor buffer as the new local
+                  // baseline so Markdown hydration does not rewrite the document
+                  // immediately after its own save.
+                  savedContent,
+                  currentContent,
+                  dirty: currentContent !== savedContent,
+                },
               },
-            },
-          }))
-          return 'conflict'
+            }
+          })
+          return 'saved'
         }
+
+        await fsApi.writeFile(filePath, file.currentContent)
+        const completed = findEditorFileSession(get().files, sessionId)
+        if (!completed || completed[0] !== filePath) return 'moved'
         set((state) => {
           const latest = state.files[filePath]
-          const savedContent = file.currentContent
-          const currentContent = latest?.currentContent ?? savedContent
-          const snapshotState = fileStateFromSnapshot(result.snapshot, latest?.diagnostics ?? [])
+          if (latest?.sessionId !== sessionId) return state
+          const currentContent = latest?.currentContent ?? file.currentContent
           return {
             files: {
               ...state.files,
               [filePath]: {
-                ...snapshotState,
-                // The snapshot may contain controlled metadata or normalized
-                // line endings. Keep the exact editor buffer as the new local
-                // baseline so Markdown hydration does not rewrite the document
-                // immediately after its own save.
-                savedContent,
+                ...latest,
+                savedContent: file.currentContent,
                 currentContent,
-                dirty: currentContent !== savedContent,
+                dirty: currentContent !== file.currentContent,
+                loading: false,
+                externalContent: undefined,
+                externalHash: undefined,
+                error: undefined,
               },
             },
           }
         })
         return 'saved'
-      }
-
-      await fsApi.writeFile(filePath, file.currentContent)
-      set((state) => {
-        const latest = state.files[filePath]
-        const currentContent = latest?.currentContent ?? file.currentContent
-        return {
-          files: {
-            ...state.files,
-            [filePath]: {
-              ...latest,
-              savedContent: file.currentContent,
-              currentContent,
-              dirty: currentContent !== file.currentContent,
-              loading: false,
-              externalContent: undefined,
-              externalHash: undefined,
-              error: undefined,
+      } catch (err) {
+        console.error('[EditorStore] 保存文件失败:', filePath, err)
+        set((state) => {
+          if (state.files[filePath]?.sessionId !== sessionId) return state
+          return {
+            files: {
+              ...state.files,
+              [filePath]: {
+                ...state.files[filePath],
+                error: err instanceof Error ? err.message : '保存文件失败',
+              },
             },
-          },
-        }
-      })
-      return 'saved'
-    } catch (err) {
-      console.error('[EditorStore] 保存文件失败:', filePath, err)
-      set((state) => ({
-        files: {
-          ...state.files,
-          [filePath]: {
-            ...state.files[filePath],
-            error: err instanceof Error ? err.message : '保存文件失败',
-          },
-        },
-      }))
-      throw err
-    }
+          }
+        })
+        throw err
+      }
+    })
   },
 
   reloadFile: async (filePath) => {
+    const sessionId = ensureEditorFileSessionId(filePath, set, get)
+    if (sessionId === undefined) return
     const snapshot = await readTextSnapshot(filePath)
-    set((state) => ({
-      files: {
-        ...state.files,
-        [filePath]: fileStateFromSnapshot(snapshot, state.files[filePath]?.diagnostics ?? []),
-      },
-    }))
+    set((state) => {
+      const current = state.files[filePath]
+      if (current?.sessionId !== sessionId) return state
+      return {
+        files: {
+          ...state.files,
+          [filePath]: fileStateFromSnapshot(snapshot, current.diagnostics ?? [], sessionId),
+        },
+      }
+    })
   },
 
   checkExternalChange: async (filePath) => {
-    const current = get().files[filePath]
-    if (!current) return 'same'
+    const sessionId = ensureEditorFileSessionId(filePath, set, get)
+    if (sessionId === undefined) return 'same'
     const snapshot = await readTextSnapshot(filePath)
-    if (!current.versionHash || snapshot.hash === current.versionHash) return 'same'
-    if (!current.dirty) {
-      set((state) => ({
-        files: {
-          ...state.files,
-          [filePath]: fileStateFromSnapshot(snapshot, state.files[filePath]?.diagnostics ?? []),
-        },
-      }))
+    const latest = get().files[filePath]
+    if (latest?.sessionId !== sessionId) return 'same'
+    if (!latest.versionHash || snapshot.hash === latest.versionHash) return 'same'
+    if (!latest.dirty) {
+      set((state) => {
+        const current = state.files[filePath]
+        if (current?.sessionId !== sessionId || current.dirty) return state
+        return {
+          files: {
+            ...state.files,
+            [filePath]: fileStateFromSnapshot(snapshot, current.diagnostics ?? [], sessionId),
+          },
+        }
+      })
       return 'reloaded'
     }
-    set((state) => ({
-      files: {
-        ...state.files,
-        [filePath]: {
-          ...state.files[filePath],
-          externalContent: snapshot.content,
-          externalHash: snapshot.hash,
-          modifiedAt: snapshot.modifiedAt,
-          error: '文件已被外部修改',
+    set((state) => {
+      const current = state.files[filePath]
+      if (current?.sessionId !== sessionId) return state
+      return {
+        files: {
+          ...state.files,
+          [filePath]: {
+            ...current,
+            externalContent: snapshot.content,
+            externalHash: snapshot.hash,
+            modifiedAt: snapshot.modifiedAt,
+            error: '文件已被外部修改',
+          },
         },
-      },
-    }))
+      }
+    })
     return 'conflict'
   },
 
@@ -485,6 +622,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   rebaseFilePaths: (oldPrefix, newPrefix) => {
     if (oldPrefix === newPrefix) return
+    rebasePendingFileSavePaths(oldPrefix, newPrefix)
     set((state) => {
       let changed = false
       const files: Record<string, EditorFileState> = {}
@@ -504,6 +642,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   relocateMarkdownFile: (oldPath, newPath, snapshot) => {
+    rebasePendingFileSavePaths(oldPath, newPath)
     set((state) => {
       const existing = state.files[oldPath]
       const nextSavedContent = editorContent(newPath, snapshot.content)
@@ -548,6 +687,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         files: {
           ...state.files,
           [key]: {
+            sessionId: createEditorFileSessionId(),
             savedContent: '',
             currentContent: seed,
             dirty: seed !== '',
@@ -587,12 +727,14 @@ async function readTextSnapshot(filePath: string): Promise<FsTextDocumentSnapsho
 function fileStateFromSnapshot(
   snapshot: FsTextDocumentSnapshot,
   diagnostics: MarkdownDiagnostic[] = [],
+  sessionId = createEditorFileSessionId(),
 ): EditorFileState {
   const content = editorContent(snapshot.path, snapshot.content)
   const sourceLineOffset = isMarkdownDocumentPath(snapshot.path)
     ? cclinkMarkdownMetadataLineOffset(snapshot.content)
     : 0
   return {
+    sessionId,
     savedContent: content,
     currentContent: content,
     dirty: false,

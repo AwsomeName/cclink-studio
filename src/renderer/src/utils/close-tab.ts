@@ -114,13 +114,25 @@ async function closeNamedEditorFile(tab: Tab, fileKey: string): Promise<boolean>
 
   if (response === 0) {
     try {
-      const result = await editorStore.saveFile(fileKey)
+      const saving = editorStore.saveFile(fileKey)
+      const sessionId = useEditorStore.getState().files[fileKey]?.sessionId
+      const result = await saving
+      if (result === 'moved') {
+        await showSaveError(new Error('文件在保存期间已移动，请在新位置重新保存'))
+        return false
+      }
       if (result !== 'saved') return false
       // Saving writes the snapshot captured at the start of the request. If the
       // user edits again while that request is in flight, EditorStore preserves
-      // the newer buffer as dirty. Do not destroy that newer draft.
-      if (useEditorStore.getState().files[fileKey]?.dirty) return false
-      editorStore.closeFile(fileKey)
+      // newer buffer as dirty. Resolve by session because a path migration may
+      // have happened while saving; never treat a missing old key as clean.
+      const latestFiles = useEditorStore.getState().files
+      const latestEntry =
+        sessionId === undefined
+          ? ([fileKey, latestFiles[fileKey]] as const)
+          : Object.entries(latestFiles).find(([, candidate]) => candidate.sessionId === sessionId)
+      if (!latestEntry?.[1] || latestEntry[1].dirty) return false
+      editorStore.closeFile(latestEntry[0])
       useTabStore.getState().closeTab(tab.id)
       return true
     } catch (error) {

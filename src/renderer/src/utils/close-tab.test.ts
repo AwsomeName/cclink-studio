@@ -4,6 +4,7 @@ import { useEditorStore } from '../stores/editor-store'
 import { useTabStore } from '../stores/tab-store'
 import { closeTabWithDraftPolicy } from './close-tab'
 import { registerMediaProjectDraft } from '../features/media-production/media-project-draft-registry'
+import { registerEditorSaveGuard } from '../features/editor-save-guard'
 
 beforeEach(() => {
   vi.restoreAllMocks()
@@ -138,6 +139,170 @@ describe('closeTabWithDraftPolicy editor conflicts', () => {
       currentContent: '# Edited while saving',
       dirty: true,
     })
+  })
+
+  it('keeps the renamed tab and draft when the path moves during the save guard', async () => {
+    const oldPath = '/workspace/notes.md'
+    const newPath = '/workspace/renamed.md'
+    useEditorStore.setState({
+      files: {
+        [oldPath]: {
+          savedContent: '# Old',
+          currentContent: '# Unsaved draft',
+          dirty: true,
+          loading: false,
+          versionHash: 'base-hash',
+        },
+      },
+      pendingUpdates: [],
+    })
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'markdown-editor',
+          type: 'editor',
+          title: 'notes.md',
+          icon: '📝',
+          filePath: oldPath,
+        },
+      ],
+      activeTabId: 'markdown-editor',
+    })
+
+    let finishGuard!: () => void
+    const guard = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishGuard = resolve
+        }),
+    )
+    const unregister = registerEditorSaveGuard(oldPath, guard)
+    const saveTextDocument = vi.fn()
+    ;(
+      window.cclinkStudio as unknown as {
+        fs: { saveTextDocument: typeof saveTextDocument }
+      }
+    ).fs = { saveTextDocument }
+
+    try {
+      const closing = closeTabWithDraftPolicy('markdown-editor')
+      await vi.waitFor(() => expect(guard).toHaveBeenCalledOnce())
+      useEditorStore.getState().rebaseFilePaths(oldPath, newPath)
+      useTabStore.getState().rebaseFilePaths(oldPath, newPath)
+      finishGuard()
+
+      await expect(closing).resolves.toBe(false)
+      expect(saveTextDocument).not.toHaveBeenCalled()
+      expect(useTabStore.getState().tabs).toEqual([
+        expect.objectContaining({ id: 'markdown-editor', filePath: newPath }),
+      ])
+      expect(useEditorStore.getState().files[oldPath]).toBeUndefined()
+      expect(useEditorStore.getState().files[newPath]).toMatchObject({
+        currentContent: '# Unsaved draft',
+        dirty: true,
+      })
+    } finally {
+      unregister()
+    }
+  })
+
+  it('serializes repeated save-and-close requests so the newer draft is saved last', async () => {
+    const filePath = '/workspace/notes.md'
+    useEditorStore.setState({
+      files: {
+        [filePath]: {
+          savedContent: '# Old',
+          currentContent: '# First draft',
+          dirty: true,
+          loading: false,
+          versionHash: 'base-hash',
+        },
+      },
+      pendingUpdates: [],
+    })
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'markdown-editor',
+          type: 'editor',
+          title: 'notes.md',
+          icon: '📝',
+          filePath,
+        },
+      ],
+      activeTabId: 'markdown-editor',
+    })
+
+    type SavedResult = {
+      status: 'saved'
+      snapshot: {
+        path: string
+        content: string
+        size: number
+        modifiedAt: number
+        hash: string
+      }
+    }
+    let finishFirst!: (value: SavedResult) => void
+    let finishSecond!: (value: SavedResult) => void
+    const saveTextDocument = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<SavedResult>((resolve) => {
+            finishFirst = resolve
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<SavedResult>((resolve) => {
+            finishSecond = resolve
+          }),
+      )
+    ;(
+      window.cclinkStudio as unknown as {
+        fs: { saveTextDocument: typeof saveTextDocument }
+      }
+    ).fs = { saveTextDocument }
+
+    const firstClose = closeTabWithDraftPolicy('markdown-editor')
+    await vi.waitFor(() => expect(saveTextDocument).toHaveBeenCalledOnce())
+    useEditorStore.getState().updateContent(filePath, '# Newer draft')
+    const secondClose = closeTabWithDraftPolicy('markdown-editor')
+
+    expect(saveTextDocument).toHaveBeenCalledOnce()
+    finishFirst({
+      status: 'saved',
+      snapshot: {
+        path: filePath,
+        content: '# First draft',
+        size: 13,
+        modifiedAt: 2,
+        hash: 'first-hash',
+      },
+    })
+    await expect(firstClose).resolves.toBe(false)
+    await vi.waitFor(() => expect(saveTextDocument).toHaveBeenCalledTimes(2))
+    expect(saveTextDocument).toHaveBeenLastCalledWith({
+      filePath,
+      content: '# Newer draft',
+      expectedHash: 'first-hash',
+    })
+
+    finishSecond({
+      status: 'saved',
+      snapshot: {
+        path: filePath,
+        content: '# Newer draft',
+        size: 13,
+        modifiedAt: 3,
+        hash: 'second-hash',
+      },
+    })
+    await expect(secondClose).resolves.toBe(true)
+
+    expect(useTabStore.getState().tabs).toHaveLength(0)
+    expect(useEditorStore.getState().files[filePath]).toBeUndefined()
   })
 })
 

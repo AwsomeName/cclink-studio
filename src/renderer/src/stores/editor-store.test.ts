@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FsSaveTextDocumentResult } from '@shared/ipc/fs'
+import type { FsSaveTextDocumentResult, FsTextDocumentSnapshot } from '@shared/ipc/fs'
 import { useEditorStore } from './editor-store'
 import { registerEditorSaveGuard } from '../features/editor-save-guard'
 
@@ -120,6 +120,332 @@ describe('useEditorStore', () => {
       expect(file.currentContent).toBe('# Newer draft')
       expect(file.dirty).toBe(true)
     })
+
+    it('serializes saves for one file and lets the queued save capture the latest revision', async () => {
+      let resolveFirst!: (result: FsSaveTextDocumentResult) => void
+      let resolveSecond!: (result: FsSaveTextDocumentResult) => void
+      const saveTextDocument = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise<FsSaveTextDocumentResult>((resolve) => {
+              resolveFirst = resolve
+            }),
+        )
+        .mockImplementationOnce(
+          () =>
+            new Promise<FsSaveTextDocumentResult>((resolve) => {
+              resolveSecond = resolve
+            }),
+        )
+      vi.stubGlobal('window', { cclinkStudio: { fs: { saveTextDocument } } })
+      useEditorStore.setState({
+        files: {
+          '/project/notes.md': {
+            savedContent: '# Old',
+            currentContent: '# First draft',
+            dirty: true,
+            loading: false,
+            versionHash: 'base-hash',
+          },
+        },
+        pendingUpdates: [],
+      })
+
+      const firstSave = useEditorStore.getState().saveFile('/project/notes.md')
+      await vi.waitFor(() => expect(saveTextDocument).toHaveBeenCalledOnce())
+      useEditorStore.getState().updateContent('/project/notes.md', '# Newer draft')
+      const secondSave = useEditorStore.getState().saveFile('/project/notes.md')
+
+      expect(saveTextDocument).toHaveBeenCalledOnce()
+      resolveFirst({
+        status: 'saved',
+        snapshot: {
+          path: '/project/notes.md',
+          content: '# First draft',
+          size: 13,
+          modifiedAt: 2,
+          hash: 'first-hash',
+        },
+      })
+      await expect(firstSave).resolves.toBe('saved')
+      await vi.waitFor(() => expect(saveTextDocument).toHaveBeenCalledTimes(2))
+      expect(saveTextDocument).toHaveBeenLastCalledWith({
+        filePath: '/project/notes.md',
+        content: '# Newer draft',
+        expectedHash: 'first-hash',
+      })
+
+      resolveSecond({
+        status: 'saved',
+        snapshot: {
+          path: '/project/notes.md',
+          content: '# Newer draft',
+          size: 13,
+          modifiedAt: 3,
+          hash: 'second-hash',
+        },
+      })
+      await expect(secondSave).resolves.toBe('saved')
+
+      expect(useEditorStore.getState().files['/project/notes.md']).toMatchObject({
+        savedContent: '# Newer draft',
+        currentContent: '# Newer draft',
+        dirty: false,
+        versionHash: 'second-hash',
+      })
+    })
+
+    it('does not let an old save response overwrite a reopened file session', async () => {
+      let resolveSave!: (result: FsSaveTextDocumentResult) => void
+      const saveTextDocument = vi.fn(
+        () =>
+          new Promise<FsSaveTextDocumentResult>((resolve) => {
+            resolveSave = resolve
+          }),
+      )
+      const readTextDocument = vi.fn().mockResolvedValue({
+        path: '/project/notes.md',
+        content: '# Reopened from disk',
+        size: 20,
+        modifiedAt: 3,
+        hash: 'reopened-hash',
+      })
+      vi.stubGlobal('window', {
+        cclinkStudio: { fs: { saveTextDocument, readTextDocument } },
+      })
+      useEditorStore.setState({
+        files: {
+          '/project/notes.md': {
+            savedContent: '# Old',
+            currentContent: '# Saving draft',
+            dirty: true,
+            loading: false,
+            versionHash: 'base-hash',
+          },
+        },
+        pendingUpdates: [],
+      })
+
+      const saving = useEditorStore.getState().saveFile('/project/notes.md')
+      await vi.waitFor(() => expect(saveTextDocument).toHaveBeenCalledOnce())
+      const oldSessionId = useEditorStore.getState().files['/project/notes.md'].sessionId
+      useEditorStore.getState().closeFile('/project/notes.md')
+      await useEditorStore.getState().openFile('/project/notes.md')
+      const reopenedSessionId = useEditorStore.getState().files['/project/notes.md'].sessionId
+
+      expect(reopenedSessionId).not.toBe(oldSessionId)
+      resolveSave({
+        status: 'saved',
+        snapshot: {
+          path: '/project/notes.md',
+          content: '# Saving draft',
+          size: 14,
+          modifiedAt: 4,
+          hash: 'old-save-hash',
+        },
+      })
+      await saving
+
+      expect(useEditorStore.getState().files['/project/notes.md']).toMatchObject({
+        sessionId: reopenedSessionId,
+        savedContent: '# Reopened from disk',
+        currentContent: '# Reopened from disk',
+        dirty: false,
+        versionHash: 'reopened-hash',
+      })
+    })
+
+    it('moves the save queue with a rebased file session', async () => {
+      const resolvers: Array<(result: FsSaveTextDocumentResult) => void> = []
+      const saveTextDocument = vi.fn(
+        () =>
+          new Promise<FsSaveTextDocumentResult>((resolve) => {
+            resolvers.push(resolve)
+          }),
+      )
+      vi.stubGlobal('window', { cclinkStudio: { fs: { saveTextDocument } } })
+      useEditorStore.setState({
+        files: {
+          '/project/notes.md': {
+            savedContent: '# Old',
+            currentContent: '# First draft',
+            dirty: true,
+            loading: false,
+            versionHash: 'base-hash',
+          },
+        },
+        pendingUpdates: [],
+      })
+
+      const firstSave = useEditorStore.getState().saveFile('/project/notes.md')
+      await vi.waitFor(() => expect(saveTextDocument).toHaveBeenCalledOnce())
+      useEditorStore.getState().updateContent('/project/notes.md', '# Newer draft')
+      const queuedBeforeMove = useEditorStore.getState().saveFile('/project/notes.md')
+      useEditorStore.getState().rebaseFilePaths('/project/notes.md', '/project/renamed.md')
+      const queuedAfterMove = useEditorStore.getState().saveFile('/project/renamed.md')
+
+      expect(saveTextDocument).toHaveBeenCalledOnce()
+      resolvers[0]({
+        status: 'saved',
+        snapshot: {
+          path: '/project/notes.md',
+          content: '# First draft',
+          size: 13,
+          modifiedAt: 2,
+          hash: 'first-hash',
+        },
+      })
+      await expect(firstSave).resolves.toBe('moved')
+      await vi.waitFor(() => expect(saveTextDocument).toHaveBeenCalledTimes(2))
+      expect(saveTextDocument).toHaveBeenLastCalledWith({
+        filePath: '/project/renamed.md',
+        content: '# Newer draft',
+        expectedHash: 'base-hash',
+      })
+
+      resolvers[1]({
+        status: 'saved',
+        snapshot: {
+          path: '/project/renamed.md',
+          content: '# Newer draft',
+          size: 13,
+          modifiedAt: 3,
+          hash: 'renamed-hash',
+        },
+      })
+      await queuedBeforeMove
+      await vi.waitFor(() => expect(saveTextDocument).toHaveBeenCalledTimes(3))
+      expect(saveTextDocument).toHaveBeenLastCalledWith({
+        filePath: '/project/renamed.md',
+        content: '# Newer draft',
+        expectedHash: 'renamed-hash',
+      })
+
+      resolvers[2]({
+        status: 'saved',
+        snapshot: {
+          path: '/project/renamed.md',
+          content: '# Newer draft',
+          size: 13,
+          modifiedAt: 4,
+          hash: 'final-hash',
+        },
+      })
+      await queuedAfterMove
+
+      expect(useEditorStore.getState().files['/project/notes.md']).toBeUndefined()
+      expect(useEditorStore.getState().files['/project/renamed.md']).toMatchObject({
+        savedContent: '# Newer draft',
+        currentContent: '# Newer draft',
+        dirty: false,
+        versionHash: 'final-hash',
+      })
+    })
+  })
+
+  describe('checkExternalChange', () => {
+    it('preserves edits made while the external snapshot is being read', async () => {
+      let resolveRead!: (snapshot: FsTextDocumentSnapshot) => void
+      const readTextDocument = vi.fn(
+        () =>
+          new Promise<FsTextDocumentSnapshot>((resolve) => {
+            resolveRead = resolve
+          }),
+      )
+      vi.stubGlobal('window', { cclinkStudio: { fs: { readTextDocument } } })
+      useEditorStore.setState({
+        files: {
+          '/project/notes.md': {
+            savedContent: '# Base',
+            currentContent: '# Base',
+            dirty: false,
+            loading: false,
+            versionHash: 'base-hash',
+          },
+        },
+        pendingUpdates: [],
+      })
+
+      const checking = useEditorStore.getState().checkExternalChange('/project/notes.md')
+      await vi.waitFor(() => expect(readTextDocument).toHaveBeenCalledOnce())
+      useEditorStore.getState().updateContent('/project/notes.md', '# New draft')
+      resolveRead({
+        path: '/project/notes.md',
+        content: '# External',
+        size: 10,
+        modifiedAt: 2,
+        hash: 'external-hash',
+      })
+
+      await expect(checking).resolves.toBe('conflict')
+      expect(useEditorStore.getState().files['/project/notes.md']).toMatchObject({
+        savedContent: '# Base',
+        currentContent: '# New draft',
+        dirty: true,
+        versionHash: 'base-hash',
+        externalContent: '# External',
+        externalHash: 'external-hash',
+      })
+    })
+
+    it('ignores an external snapshot from a closed file session', async () => {
+      let resolveOldRead!: (snapshot: FsTextDocumentSnapshot) => void
+      const readTextDocument = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise<FsTextDocumentSnapshot>((resolve) => {
+              resolveOldRead = resolve
+            }),
+        )
+        .mockResolvedValueOnce({
+          path: '/project/notes.md',
+          content: '# Reopened',
+          size: 10,
+          modifiedAt: 3,
+          hash: 'reopened-hash',
+        })
+      vi.stubGlobal('window', { cclinkStudio: { fs: { readTextDocument } } })
+      useEditorStore.setState({
+        files: {
+          '/project/notes.md': {
+            savedContent: '# Base',
+            currentContent: '# Base',
+            dirty: false,
+            loading: false,
+            versionHash: 'base-hash',
+          },
+        },
+        pendingUpdates: [],
+      })
+
+      const checking = useEditorStore.getState().checkExternalChange('/project/notes.md')
+      await vi.waitFor(() => expect(readTextDocument).toHaveBeenCalledOnce())
+      const oldSessionId = useEditorStore.getState().files['/project/notes.md'].sessionId
+      useEditorStore.getState().closeFile('/project/notes.md')
+      await useEditorStore.getState().openFile('/project/notes.md')
+      useEditorStore.getState().updateContent('/project/notes.md', '# Reopened draft')
+      const reopenedSessionId = useEditorStore.getState().files['/project/notes.md'].sessionId
+
+      expect(reopenedSessionId).not.toBe(oldSessionId)
+      resolveOldRead({
+        path: '/project/notes.md',
+        content: '# External from old session',
+        size: 27,
+        modifiedAt: 4,
+        hash: 'external-hash',
+      })
+
+      await expect(checking).resolves.toBe('same')
+      expect(useEditorStore.getState().files['/project/notes.md']).toMatchObject({
+        sessionId: reopenedSessionId,
+        savedContent: '# Reopened',
+        currentContent: '# Reopened draft',
+        dirty: true,
+        versionHash: 'reopened-hash',
+      })
+    })
   })
 
   describe('initVirtualFile', () => {
@@ -161,20 +487,23 @@ describe('useEditorStore', () => {
       })
 
       const files = useEditorStore.getState().files
-      expect(files['virtual:note']).toEqual({
+      expect(files['virtual:note']).toMatchObject({
         savedContent: '',
         currentContent: '# 未命名',
         dirty: true,
         loading: false,
         diagnostics: [],
       })
-      expect(files['/docs/plan.md']).toEqual({
+      expect(files['/docs/plan.md']).toMatchObject({
         savedContent: 'old',
         currentContent: 'new',
         dirty: true,
         loading: false,
         diagnostics: [],
       })
+      expect(files['virtual:note'].sessionId).toBeTypeOf('number')
+      expect(files['/docs/plan.md'].sessionId).toBeTypeOf('number')
+      expect(files['virtual:note'].sessionId).not.toBe(files['/docs/plan.md'].sessionId)
     })
 
     it('空文件快照会清空当前编辑器状态', () => {
