@@ -49,3 +49,5 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
 - `0013-isolated-plain-text-url-activation.md`：允许 Browser main frame 在无权限 isolated world
   中按用户点击位置识别纯文本 HTTP(S) URL；不改写 DOM、不回传正文，仍复用现有 URL 校验、
   Profile 和 Tab 生命周期。
+- `0014-global-web-account-catalog.md`：网站、主体、账号、Profile/Session 和运营矩阵改为本机
+  Studio 全局资源；事务继续属于项目，AI 是否可以调用账号保持未决且不得默认放开。

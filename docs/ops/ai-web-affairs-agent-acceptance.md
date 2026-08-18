@@ -1,5 +1,11 @@
 # AI 网页事务代理人验收手册
 
+> 历史状态：本手册保存 2026-08-05“账号属于项目”的 W1–A4 验收口径，已由
+> `docs/decisions/0014-global-web-account-catalog.md` 取代，不得继续作为当前账号产品验收。
+> 全局账号、跨项目 Profile/Session、运营矩阵和项目事务引用的当前验收链见
+> `docs/features/global-web-accounts-development-plan.md` 第 2、6、8 节。AI 是否可以调用账号
+> 暂未决定，本文旧 AI 步骤不能被重新解释为授权。
+
 > 当前范围：W1–A4“项目网站资源 Tab、持久事务、AI 交接、外部等待和动态流程”
 > 当前状态：2026-08-05 W1-A–W1-C 与 A1–A4 的既定实现已结束并进入统一
 > Acceptance；全量自动化门禁已通过，真实需登录网站真人验收待执行

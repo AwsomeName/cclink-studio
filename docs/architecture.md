@@ -1,6 +1,6 @@
 # CCLink Studio 架构说明
 
-> 当前事实源。最后更新：2026-08-13。
+> 当前事实源。最后更新：2026-08-18。
 
 ## 结论
 
@@ -166,26 +166,38 @@ Thread 显式选择经过验证的本地 Codex ACP Runtime；公共 Registry、�
 
 ## 网站账号与网页事务领域
 
-“网站与账号”和“事务”是两个独立领域，均只管理当前本地工作空间：
+“网站与账号”和“事务”是两个独立领域，但作用域不同。ADR 0014 将网站账号从单一工作空间
+资源调整为 Studio 本机全局资源；事务继续只属于当前本地工作空间：
 
-- `WebResourceService` 是正式网站账号元数据、工作空间归属、Browser Profile 绑定和未保存
+- `WebResourceService` 是全局网站、主体、账号、运营矩阵、Browser Profile 绑定和未保存
   草稿清理账本的唯一 owner；Cookie/Session 仍由 `BrowserManager` 持有，密码和 Token
-  不进入资源快照。
+  不进入资源快照。工作空间不得复制或重新拥有全局账号。
 - `WebAffairService` 是事务、流程版本、节点、Attempt、人工交接、证据、等待计划和流程
-  建议的唯一 owner；renderer、Agent、BrowserTask 和模板只持有引用或可丢弃投影。
-- renderer 只提交 `workspaceRef + accountId`。侧栏、事务资源区、账号详情和 AI Attempt
-  统一调用主进程 `resolveLaunch`；主进程解析稳定工作空间身份并校验账号归属后，才返回
-  URL、Profile 和 `webResourceRef`。renderer 不得按当前 Tab、URL 或 Profile 猜账号。
+  建议的唯一 owner，并继续以稳定 `workspaceId` 隔离事务、本地物料和证据；renderer、
+  Agent、BrowserTask 和模板只持有引用或可丢弃投影。
+- “网站与账号”侧栏查询全局 WebResource Snapshot。用户手动打开账号时，renderer 提交
+  `workspaceRef + accountId`，主进程解析全局账号、URL 和唯一 Profile，Workspace/Tab 层
+  只在当前工作空间创建或激活 Browser Tab 投影。renderer 不得按当前 Tab、URL 或 Profile
+  猜账号，也不得移动其他工作空间的 Tab。
 - 新建账号先创建临时 Browser 草稿和独立 Profile，登录后只以一个显示名称保存；主进程
-  从真实 Browser View 反查 URL、标题和 Profile。关闭未保存 Tab 会清理 Profile，异常
-  退出遗留项由启动对账继续清理。正式资源与 Session 不随 Tab 关闭而删除。
+  从真实 Browser View 反查 URL、标题和 Profile。草稿记录可以保留发起工作空间用于 Tab
+  和清理对账，但保存结果进入全局账号库。关闭未保存 Tab 会清理 Profile，异常退出遗留项
+  由启动对账继续清理；正式资源与 Session 不随 Tab、工作空间或项目删除而删除。
+- Browser Tab 保存全局 `accountId` 与当前工作空间归属，只是可丢弃运行投影；同一账号在
+  多个工作空间可以分别拥有 Tab，但必须复用一个正式 Profile/Session。
+- 事务可以保存全局账号或运营矩阵的稳定引用，但不复制账号、Profile 或 Session。运营矩阵
+  只保存账号 ID 和版本；矩阵变化不得静默扩大既有事务绑定范围。
+- AI 是否可以读取、打开或操作全局账号尚未形成产品决定。账号全局化不得通过删除原项目
+  校验而自动扩大 Agent、MCP、BrowserTask 或定时任务的调用范围；相关路径保持 fail-closed，
+  直到产品事实源和 ADR 另行确认。
 - 一次网页执行由 Attempt 记录。人工接管和交还是持久状态转换；应用重启会把未结束运行
   标为中断。进入外部等待时当前 Attempt 结束；到期或错过后才能创建新的检查 Attempt，
   不用常驻 Agent 伪装后台跟踪。
 - 最终外部动作继续受产品级确认卡约束；同节点同流程版本的副作用 key 阻止重复确认。
 
-现有 `projectId` 字段是稳定工作空间身份的兼容命名，只能封装在 Workspace/WebResource
-边界内；事务领域使用 `workspaceId`，不得由 renderer 自报或按可移动路径推断。
+现有 `WebAccount.projectId` 是待迁移的 v2 账号所有权字段，不能继续成为新增事实；v3 迁移
+必须保留原 `accountId`、`browserProfileId`、事务引用和回滚备份，疑似重复账号不得自动
+合并。事务领域继续使用 `workspaceId`，不得由 renderer 自报或按可移动路径推断。
 
 ## Studio 本地能力
 
@@ -304,6 +316,7 @@ CCLink remote feature domain (optional and degradable)
 | BrowserTask        | `BrowserTaskRuntime` 的 task/action 状态             | `browser-task-store`                 | 当前进程内可诊断任务；终态不伪装为持久后台任务                   |
 | Terminal           | `TerminalSessionRegistry` / `TerminalSessionStore`   | Terminal Tab 与 renderer store       | 主进程 session record；工作空间恢复后通过 `listSessions` 对账    |
 | Usage              | `UsageLedgerService` 的追加事件                      | 会话费用与 credits 的只读投影        | `{userData}/usage-events.jsonl`；统计失败不得阻断能力调用        |
+| WebResource        | `WebResourceService` 的全局账号、矩阵和 Profile 引用 | 全局侧栏与工作空间 Browser Tab 投影  | `{userData}/web-resources/`；v2→v3 原子迁移和备份恢复            |
 | WebAffair          | `WebAffairService` 的流程版本、Attempt、等待和证据   | 事务列表、流程图与节点详情只读投影   | `{userData}/web-affairs/web-affairs.json`；v1 迁移、原子备份恢复 |
 
 网页事务的 BrowserTask、AgentRun、Profile、定时唤醒、模板和平台适配器都只保存自身事实或
