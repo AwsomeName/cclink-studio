@@ -13180,6 +13180,18 @@ button.file-tree-item {
   overflow: visible;
 }
 
+.terminal-pty-toolbar .terminal-restart-control {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.terminal-restart-control > span {
+  color: var(--text-secondary);
+}
+
 .terminal-find-control input {
   width: min(220px, 40vw);
   height: 24px;
@@ -13209,6 +13221,11 @@ button.file-tree-item {
 .terminal-pty-toolbar button:hover {
   color: var(--text-primary);
   border-color: var(--text-accent);
+}
+
+.terminal-pty-toolbar button:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .terminal-pty-surface {

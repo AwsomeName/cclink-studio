@@ -390,9 +390,15 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
 
     if (token.type === 'inline') {
       const inlineText = markdownInlineText(token.children ?? [])
-      textContent.push(
-        listItemTaskStack.at(-1) ? stripTaskMarkerFromInlineText(inlineText) : inlineText,
-      )
+      const visibleText = listItemTaskStack.at(-1)
+        ? stripTaskMarkerFromInlineText(inlineText)
+        : inlineText
+      // Markdown authors and rich-text editors commonly use NBSP-only paragraphs
+      // as visual spacers. Tiptap may merge or drop those paragraphs depending on
+      // their neighbours, just as it does ordinary blank lines. They must not make
+      // an otherwise lossless document read-only, while whitespace inside real
+      // content remains part of the critical signature.
+      if (visibleText.trim().length > 0) textContent.push(visibleText)
     }
 
     for (const child of token.children ?? []) {
@@ -633,51 +639,39 @@ export function prepareMarkdownEditorInput(source: string): string {
 function normalizeMarkdownTaskListIndentation(source: string): string {
   const singleSpaceNormalized = promoteOneSpaceNestedTaskItems(source)
   const lines = singleSpaceNormalized.split('\n')
-  const listContexts: Array<{ indent: number; ordered: boolean }> = []
-  const itemContentIndents: number[] = []
+  const listContexts: Array<'ordered' | 'unordered'> = []
   const tokens = markdownStructureParser.parse(singleSpaceNormalized, {})
 
   for (const token of tokens) {
     if (token.type === 'bullet_list_open' || token.type === 'ordered_list_open') {
-      listContexts.push({
-        indent: itemContentIndents.at(-1) ?? 0,
-        ordered: token.type === 'ordered_list_open',
-      })
+      listContexts.push(token.type === 'ordered_list_open' ? 'ordered' : 'unordered')
       continue
     }
     if (token.type === 'bullet_list_close' || token.type === 'ordered_list_close') {
       listContexts.pop()
       continue
     }
-    if (token.type === 'list_item_close') {
-      itemContentIndents.pop()
-      continue
-    }
     if (token.type !== 'list_item_open') continue
 
     const lineIndex = token.map?.[0]
-    const listIndent = listContexts.at(-1)?.indent ?? 0
-    if (lineIndex === undefined) {
-      itemContentIndents.push(listIndent + 2)
-      continue
-    }
+    if (lineIndex === undefined) continue
 
     const line = lines[lineIndex] ?? ''
     const match = /^((?:(?: {0,3}>)[ \t]?)*)([ \t]*)([-+*]|\d+[.)])([ \t]+)(.*)$/.exec(line)
-    if (!match) {
-      itemContentIndents.push(listIndent + 2)
-      continue
-    }
+    if (!match) continue
 
     const ordered = token.markup === '.' || token.markup === ')'
     const sourceMarker = match[3]
     const marker = ordered ? sourceMarker.replace(/\)$/, '.') : '-'
     const taskItem = !ordered && /^\[[ xX]\](?:\s+|$)/.test(match[5])
-    const hasOrderedAncestor = listContexts.some((context) => context.ordered)
-    if (taskItem && !hasOrderedAncestor) {
-      lines[lineIndex] = `${match[1]}${' '.repeat(listIndent)}${marker} ${match[5]}`
+    if (taskItem) {
+      // Tiptap's task tokenizer uses two literal spaces per logical list level.
+      // Its ordered-list tokenizer removes two spaces rather than the marker's
+      // full content indent, so CommonMark's three/four-space children otherwise
+      // become one-space pseudo-children and collapse during serialization.
+      const tiptapIndent = Math.max(0, listContexts.length - 1) * 2
+      lines[lineIndex] = `${match[1]}${' '.repeat(tiptapIndent)}${marker} ${match[5]}`
     }
-    itemContentIndents.push(listIndent + marker.length + 1)
   }
 
   return lines.join('\n')

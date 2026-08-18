@@ -1424,7 +1424,61 @@ async function main() {
       initialTerminalCount,
       { timeout: 10_000 },
     )
-    return 'editor/browser/terminal and update modal native-view occlusion'
+    await page.locator('.terminal-pty-surface .xterm').waitFor({ timeout: 10_000 })
+    const initialTerminal = await page.evaluate(async () => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      const state = useTabStore.getState()
+      const active = state.tabs.find((tab) => tab.id === state.activeTabId)
+      return active?.type === 'terminal'
+        ? {
+            tabId: active.id,
+            sessionId: active.terminal?.sessionId,
+            auditLogId: active.terminal?.auditLogId,
+          }
+        : null
+    })
+    assert(initialTerminal?.sessionId, 'new terminal session identity is missing')
+    await page.evaluate(
+      (sessionId) =>
+        window.cclinkStudio.terminal.writePty({ terminalSessionId: sessionId, data: 'exit\r' }),
+      initialTerminal.sessionId,
+    )
+    const restartButton = page.locator('button[title="重新启动 Terminal"]')
+    await restartButton.waitFor({ state: 'visible', timeout: 10_000 })
+    await restartButton.click()
+    await page.waitForFunction(
+      async ({ tabId, sessionId }) => {
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        const active = useTabStore.getState().tabs.find((tab) => tab.id === tabId)
+        return active?.terminal?.sessionId !== sessionId && active?.terminal?.status === 'running'
+      },
+      initialTerminal,
+      { timeout: 10_000 },
+    )
+    const restartedTerminal = await page.evaluate(async (tabId) => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      const state = useTabStore.getState()
+      const active = state.tabs.find((tab) => tab.id === tabId)
+      return {
+        sessionId: active?.terminal?.sessionId,
+        auditLogId: active?.terminal?.auditLogId,
+        status: active?.terminal?.status,
+        hasTerminalRecord: Boolean(active?.terminalRecord),
+      }
+    }, initialTerminal.tabId)
+    assert(
+      restartedTerminal.sessionId !== initialTerminal.sessionId,
+      'terminal restart reused the final session identity',
+    )
+    assert(
+      restartedTerminal.auditLogId !== initialTerminal.auditLogId,
+      'terminal restart reused the final audit identity',
+    )
+    assert(
+      !restartedTerminal.hasTerminalRecord,
+      'terminal restart retained a stale history snapshot',
+    )
+    return 'editor/browser/terminal, one-click terminal restart, and update modal native-view occlusion'
   })
 
   await runCheck('no paid UI appears during smoke', async () => {

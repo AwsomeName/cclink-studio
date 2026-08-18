@@ -1,4 +1,5 @@
 import { workspaceRefKey } from '@shared/workspace-ref'
+import { isTerminalFinalStatus } from '@shared/terminal'
 import type { Command } from '../../../stores/command-store'
 import { useAgentStore } from '../../../stores/agent-store'
 import { useTabStore } from '../../../stores/tab-store'
@@ -61,11 +62,18 @@ async function terminateTerminal(context?: CommandContext): Promise<void> {
 
 async function restartTerminal(context?: CommandContext): Promise<void> {
   const initial = resolveTerminal(context)
-  if (!(await confirmTerminalAction('重启 Terminal', '确认结束当前进程并启动新 Terminal？'))) return
+  if (
+    !isTerminalFinalStatus(initial.tab.terminal!.status) &&
+    !(await confirmTerminalAction('重启 Terminal', '确认结束当前进程并启动新 Terminal？'))
+  ) {
+    return
+  }
   const { tab } = resolveTerminal(context)
-  const result = await window.cclinkStudio.terminal.terminatePty(initial.target.sessionId)
-  if (!result.success) throw new Error(result.error ?? 'Terminal 重启前终止失败')
-  await recordTerminalLifecycleEvent(tab.terminal, 'terminated', '由上下文菜单重启')
+  const shouldTerminate = !isTerminalFinalStatus(tab.terminal!.status)
+  if (shouldTerminate) {
+    const result = await window.cclinkStudio.terminal.terminatePty(initial.target.sessionId)
+    if (!result.success) throw new Error(result.error ?? 'Terminal 重启前终止失败')
+  }
   const nextTerminal = {
     ...tab.terminal!,
     sessionId: createTerminalId('terminal-session'),
@@ -74,7 +82,11 @@ async function restartTerminal(context?: CommandContext): Promise<void> {
     processId: undefined,
   }
   useTabStore.getState().updateTabTerminal(tab.id, nextTerminal)
-  await recordTerminalLifecycleEvent(nextTerminal, 'created', '由上下文菜单重启')
+  const source = context?.source === 'toolbar' ? '工具栏' : '上下文菜单'
+  if (shouldTerminate) {
+    await recordTerminalLifecycleEvent(tab.terminal, 'terminated', `由${source}重启`)
+  }
+  await recordTerminalLifecycleEvent(nextTerminal, 'created', `由${source}重新启动`)
 }
 
 function mountTerminalSelection(context?: CommandContext): void {
@@ -169,6 +181,13 @@ export function createTerminalContextCommands(): Command[] {
       contextOnly: true,
       category: 'Terminal',
       risk: 'destructive',
+      enabled: (context) => {
+        const status = terminalTarget(context)?.status
+        return {
+          enabled: Boolean(status && !['idle', 'starting'].includes(status)),
+          reason: 'Terminal 正在启动',
+        }
+      },
       action: restartTerminal,
     },
     {

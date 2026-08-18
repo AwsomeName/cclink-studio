@@ -394,7 +394,7 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 - Browser 网页使用主进程原生菜单；Electron `context-menu` 参数先归一化为严格、有界的 `BrowserContext`，菜单打开和执行均绑定 workspace、tab、profile 与一次性 action token，不依赖 CDP 或页面脚本注入。
 - Browser 的新 Tab 操作显式继承当前 Profile；发送选区、链接、图片或页面给 Agent 只挂载资源并聚焦 Composer，不自动发送消息。
 - Source/Markdown 编辑器已接入剪切、复制、粘贴、全选、选区挂载以及链接/图片源复制，并保留编辑器自身输入与选区语义。
-- Terminal 已接入复制、粘贴、查找、清屏、发送选区、重启和终止；粘贴只写入 PTY 输入且不附加回车，重启/终止在确认后再次校验当前 workspace、tab 与 session，并记录生命周期审计。
+- Terminal 已接入复制、粘贴、查找、清屏、发送选区、重启和终止；粘贴只写入 PTY 输入且不附加回车。运行态重启/终止在确认后再次校验当前 workspace、tab 与 session；终态工具栏“重新启动”不重复终止或确认，直接创建新 session，并记录生命周期审计。
 - Agent Thread 已接入打开、重命名、停止当前 run、复制诊断和归档/恢复；停止命令执行前重新核对 `runId`。消息已接入复制、复制 Markdown 和引用到 Composer，引用不会触发发送。
 - 2026-07-22 全新 detached worktree 自动门禁：`pnpm install --frozen-lockfile`、`pnpm verify` 通过（151 files / 902 tests），`pnpm smoke:standalone` 通过（local 9/9、UI 6/6、workflow 7/7、restore 4/4）。
 - `docs/ops/context-action-m3-acceptance.md` 的 H1-H4 已由真人逐项确认：Browser Profile 与登录态保持，Terminal 粘贴及终止确认正确，Agent 引用与 run 停止不产生旁路副作用，工作空间切换时旧菜单失效且各工作空间运行现场不串。

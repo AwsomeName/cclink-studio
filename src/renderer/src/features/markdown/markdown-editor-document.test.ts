@@ -191,6 +191,89 @@ describe('parseMarkdownEditorDocument', () => {
     })
   })
 
+  it('preserves sibling task items nested below ordered milestones', () => {
+    const source = [
+      '1. ⏳ Android正式发布 - 08-11（本周一）',
+      '   - [ ] 完成最终测试验收',
+      '   - [ ] 打包正式版本',
+      '   - [ ] 更新官网下载链接',
+      '   - [ ] 应用商店正式提交（腾讯、小米、荣耀、华为）',
+      '2. ⏳ 开始正式宣发 - 08-12（本周二）',
+      '   - [ ] 准备宣发材料',
+      '   - [ ] 公众号文章发布',
+      '   - [ ] 搜索平台提交（Google、百度、Bing）',
+      '   - [ ] 社交媒体推广',
+    ].join('\n')
+    const parserInput = [
+      '1. ⏳ Android正式发布 - 08-11（本周一）',
+      '  - [ ] 完成最终测试验收',
+      '  - [ ] 打包正式版本',
+      '  - [ ] 更新官网下载链接',
+      '  - [ ] 应用商店正式提交（腾讯、小米、荣耀、华为）',
+      '2. ⏳ 开始正式宣发 - 08-12（本周二）',
+      '  - [ ] 准备宣发材料',
+      '  - [ ] 公众号文章发布',
+      '  - [ ] 搜索平台提交（Google、百度、Bing）',
+      '  - [ ] 社交媒体推广',
+    ].join('\n')
+
+    expect(prepareMarkdownEditorInput(source)).toBe(parserInput)
+
+    editor.commands.setContent(parseMarkdownEditorDocument(editor, source), { emitUpdate: false })
+
+    expect(editor.getJSON()).toMatchObject({
+      content: [
+        {
+          type: 'orderedList',
+          content: [
+            { type: 'listItem', content: [{ type: 'paragraph' }, { type: 'taskList' }] },
+            { type: 'listItem', content: [{ type: 'paragraph' }, { type: 'taskList' }] },
+          ],
+        },
+      ],
+    })
+    const serialized = editor.getMarkdown()
+    expect(serialized).toBe(source)
+    expect(inspectMarkdownRoundTrip(source, serialized)).toMatchObject({
+      catastrophic: false,
+      equivalent: true,
+      differences: [],
+    })
+  })
+
+  it('treats non-breaking-space-only paragraphs as empty spacers during round-trip checks', () => {
+    const source = [
+      '## 强调事项',
+      '',
+      '\u00a0',
+      '',
+      '\u00a0',
+      '',
+      '## 长期目标梳理',
+      '',
+      '- CCLink',
+      '- Studio SEO',
+      '',
+      '\u00a0',
+      '',
+      '## 一日生活作息',
+    ].join('\n')
+
+    editor.commands.setContent(parseMarkdownEditorDocument(editor, source), { emitUpdate: false })
+
+    const serialized = editor.getMarkdown()
+    expect(serialized).not.toBe(source)
+    expect(inspectMarkdownRoundTrip(source, serialized)).toMatchObject({
+      catastrophic: false,
+      equivalent: true,
+      differences: [],
+    })
+    expect(inspectMarkdownRoundTrip('正文\u00a0内容', '正文内容')).toMatchObject({
+      equivalent: false,
+      differences: [expect.objectContaining({ key: 'textContent' })],
+    })
+  })
+
   it('places a cursor in a repaired empty ordered item and accepts text', () => {
     editor.commands.setContent(parseMarkdownEditorDocument(editor, '1.\n2.'), {
       emitUpdate: false,

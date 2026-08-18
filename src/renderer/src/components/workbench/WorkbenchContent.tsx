@@ -11,6 +11,7 @@ import {
   workspaceRefSourceLabel,
 } from '../../../../shared/workspace-ref'
 import { useTabStore } from '../../stores/tab-store'
+import { useCommandStore } from '../../stores/command-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import { useTerminalStore } from '../../stores/terminal-store'
@@ -49,6 +50,7 @@ import { ScheduledTaskTab } from '../../features/scheduled-tasks/ScheduledTaskTa
 import { AgentRoleDetailTab } from '../../features/agent-roles/AgentRoleDetailTab'
 import { RemoteFileViewer } from '../../features/cclink-remote/RemoteFileViewer'
 import { MediaProductionTab } from '../../features/media-production/MediaProductionTab'
+import { useToastStore } from '../common/Toast'
 
 const EMPTY_TERMINAL_OUTPUT_LINES: TerminalOutputLine[] = []
 
@@ -266,6 +268,10 @@ function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
   const findInputRef = useRef<HTMLInputElement | null>(null)
   const [findOpen, setFindOpen] = useState(false)
   const [findQuery, setFindQuery] = useState('')
+  const [restartPending, setRestartPending] = useState(false)
+  const restartPendingRef = useRef(false)
+  const executeCommand = useCommandStore((state) => state.executeCommand)
+  const showToast = useToastStore((state) => state.show)
   const terminal = tab.terminal
   const outputBySessionId = useTerminalStore((state) => state.outputBySessionId)
   const outputLines = terminal?.sessionId
@@ -513,6 +519,22 @@ function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
     })
   }
 
+  const restartTerminal = async (): Promise<void> => {
+    if (!terminal?.sessionId || restartPendingRef.current) return
+    restartPendingRef.current = true
+    setRestartPending(true)
+    try {
+      const result = await executeCommand('terminal.restart', {
+        source: 'toolbar',
+        target: terminalTarget(),
+      })
+      if (!result.ok) showToast(result.message ?? 'Terminal 重新启动失败', 'error')
+    } finally {
+      restartPendingRef.current = false
+      setRestartPending(false)
+    }
+  }
+
   return (
     <div
       className="terminal-pty-shell"
@@ -535,7 +557,19 @@ function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
           {terminal?.runtime.cwd ??
             (terminal?.runtime.location === 'remote' ? '远程 Terminal' : '本地 Terminal')}
         </span>
-        {terminalFinal && <span title="旧 session 不会再次启动">已结束 · 请重启 Terminal</span>}
+        {terminalFinal && (
+          <span className="terminal-restart-control" title="旧 session 不会再次启动">
+            <span>{terminal?.status === 'error' ? '启动失败' : '已结束'}</span>
+            <button
+              type="button"
+              disabled={restartPending}
+              onClick={() => void restartTerminal()}
+              title={terminal?.status === 'error' ? '重试启动 Terminal' : '重新启动 Terminal'}
+            >
+              {restartPending ? '启动中…' : terminal?.status === 'error' ? '重试启动' : '重新启动'}
+            </button>
+          </span>
+        )}
         {findOpen && (
           <span className="terminal-find-control">
             <input

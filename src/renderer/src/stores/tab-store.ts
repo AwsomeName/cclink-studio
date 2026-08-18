@@ -573,7 +573,16 @@ export const useTabStore = create<TabState>((set, get) => ({
 
   updateTabTerminal: (id, terminal) =>
     set((state) => ({
-      tabs: state.tabs.map((t) => (t.id === id ? { ...t, terminal } : t)),
+      tabs: state.tabs.map((tab) =>
+        tab.id === id
+          ? {
+              ...tab,
+              terminal,
+              terminalRecord:
+                tab.terminal?.sessionId !== terminal.sessionId ? undefined : tab.terminalRecord,
+            }
+          : tab,
+      ),
     })),
 
   reconcileTerminalSession: (session) =>

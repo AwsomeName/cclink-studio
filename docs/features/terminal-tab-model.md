@@ -202,6 +202,10 @@ idle
 - `exited / error` 是终态，不能恢复为 `running`。
 - 一个 Terminal session ID 只对应一次 PTY 生命周期；进入 `exited / error` 后不得再次用该
   session ID 启动 PTY。新进程必须创建新的 session ID，并由此生成新的远程 Terminal ID。
+- `exited / error` 状态在 Terminal 工具栏显示“重新启动 / 重试启动”；终态没有活跃进程，
+  单击后直接创建新 session，不再对旧 session 发送终止请求或重复确认。
+- `running / blocked` 状态的“重启 Terminal”仍需确认并先终止活跃进程；`idle / starting`
+  状态禁止重复重启，避免并发创建多个 PTY。
 - 同状态迁移允许，用于刷新 `processId / lastCommand / updatedAt` 等元信息。
 - `idle -> blocked -> idle` 只用于 shell 进程尚未启动前先请求命令确认。
 - 应用重启后，旧活跃进程降级为不可 attach 的只读记录。
@@ -323,6 +327,7 @@ Terminal 使用统一 execution error；CCLink adapter 额外保留脱敏、结�
 - 命令权限判定、确认服务、审计写入。
 - preload API：`window.cclinkStudio.terminal.*`。
 - Terminal Tab 受控命令输入和输出面板。
+- 终态 Terminal 工具栏一键重新启动，并与上下文菜单复用统一重启命令。
 - 活跃 Terminal 关闭确认。
 - 设置页 Terminal 审计诊断。
 - 单元测试覆盖权限、确认、审计、session、orchestrator、本地 shell、PTY、IPC、renderer store 和 Tab 生命周期。
