@@ -16,7 +16,9 @@ import { useCommandStore } from '../../stores/command-store'
 import { useToastStore } from '../common/Toast'
 import {
   hasConversationDragData,
+  openRemoteConversationInWorkbench,
   readConversationDragData,
+  readRemoteConversationDragData,
 } from '../../features/agent-conversations/conversation-workbench'
 import { openDefaultBrowserTab } from '../../features/web-resources/open-default-browser-tab'
 
@@ -81,6 +83,18 @@ export function Workbench({
       event.preventDefault()
       event.stopPropagation()
       setConversationDropActive(false)
+      const remoteDrag = readRemoteConversationDragData(event.dataTransfer)
+      if (remoteDrag) {
+        const currentWorkspaceRef = useWorkspaceStore.getState().activeWorkspaceRef
+        if (
+          currentWorkspaceRef.kind !== 'remote' ||
+          workspaceRefKey(currentWorkspaceRef) !== remoteDrag.workspaceKey ||
+          !openRemoteConversationInWorkbench(remoteDrag.sessionId, currentWorkspaceRef)
+        ) {
+          showToast('远程会话已不存在或已切换工作空间', 'error')
+        }
+        return
+      }
       const conversationId = readConversationDragData(event.dataTransfer)
       const conversation = conversationId
         ? useAgentStore.getState().conversations[conversationId]

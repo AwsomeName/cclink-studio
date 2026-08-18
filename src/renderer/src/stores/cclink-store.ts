@@ -33,7 +33,7 @@ interface CclinkState {
     name?: string,
     options?: { select?: boolean },
   ): Promise<CclinkRemoteSession>
-  setSessionArchived(sessionId: string, archived: boolean): Promise<void>
+  setSessionArchived(sessionId: string, archived: boolean): Promise<boolean>
   selectSession(sessionId: string | null): void
   loadMessages(sessionId: string): Promise<void>
   sendAgentMessage(ref: RemoteWorkspaceRef, sessionId: string, content: string): Promise<boolean>
@@ -195,8 +195,10 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
         selectedSessionId:
           archived && state.selectedSessionId === sessionId ? null : state.selectedSessionId,
       }))
+      return true
     } catch (error) {
       set({ error: message(error) })
+      return false
     }
   },
 

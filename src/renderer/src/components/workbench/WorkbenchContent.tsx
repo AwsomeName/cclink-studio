@@ -49,6 +49,7 @@ import {
 import { ScheduledTaskTab } from '../../features/scheduled-tasks/ScheduledTaskTab'
 import { AgentRoleDetailTab } from '../../features/agent-roles/AgentRoleDetailTab'
 import { RemoteFileViewer } from '../../features/cclink-remote/RemoteFileViewer'
+import { RemoteAgentController } from '../../features/cclink-remote/remote-agent-controller'
 import { MediaProductionTab } from '../../features/media-production/MediaProductionTab'
 import { useToastStore } from '../common/Toast'
 
@@ -70,6 +71,7 @@ export function WorkbenchContent({
   const browserPreviewDataUrl = useContextMenuStore((state) => state.browserPreviewDataUrl)
   const clearBrowserPreview = useContextMenuStore((state) => state.clearBrowserPreview)
   const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
+  const workspaceGeneration = useWorkspaceStore((state) => state.generation)
 
   useEffect(() => {
     if (contextMenuOpen || !browserPreviewDataUrl) return
@@ -140,6 +142,17 @@ export function WorkbenchContent({
                 conversationId={conversationTarget.conversationId}
               />
             )}
+            {activeTab.type === 'remote-conversation' &&
+              activeTab.remoteConversation &&
+              activeTab.workspaceRef?.kind === 'remote' && (
+                <RemoteAgentController
+                  key={`${workspaceRefKey(activeTab.workspaceRef)}::${activeTab.remoteConversation.sessionId}`}
+                  workspaceRef={activeTab.workspaceRef}
+                  workspaceGeneration={workspaceGeneration}
+                  variant="center"
+                  sessionId={activeTab.remoteConversation.sessionId}
+                />
+              )}
             {activeTab.type === 'hardware-gerber' && activeTab.hardwareGerber && (
               <GerberLayerPreview
                 key={`${activeTab.hardwareGerber.packagePath}:${activeTab.hardwareGerber.entry ?? ''}`}

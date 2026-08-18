@@ -36,6 +36,7 @@ export type TabType =
   | 'android'
   | 'model'
   | 'conversation'
+  | 'remote-conversation'
   | 'hardware-gerber'
   | 'terminal'
   | 'terminal-record'
@@ -184,6 +185,10 @@ export interface Tab {
   }
   /** 通用会话 Tab 引用 */
   conversation?: ConversationTabRef
+  /** CCLink 远程会话 Tab 只保留远程 session 引用；消息与运行态仍由 cclink-store 拥有。 */
+  remoteConversation?: {
+    sessionId: string
+  }
   /** 设置页目标分组 */
   settingsSection?: string
   /** Gerber 生产包层预览 */

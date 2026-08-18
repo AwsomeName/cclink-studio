@@ -126,10 +126,13 @@ export function RemoteAgentController({
   workspaceRef,
   workspaceGeneration,
   variant,
+  sessionId,
 }: {
   workspaceRef: RemoteWorkspaceRef
   workspaceGeneration: number
   variant: AgentPanelVariant
+  /** Workbench Tab 可锁定一个远程会话，不改写右侧 Agent 面板的全局选中态。 */
+  sessionId?: string
 }): React.ReactElement {
   const sessions = useCclinkStore((state) => state.sessions)
   const messages = useCclinkStore((state) => state.messages)
@@ -168,11 +171,13 @@ export function RemoteAgentController({
       ),
     [sessions, workspaceRef.endpointId, workspaceRef.path, workspaceRef.workspaceId],
   )
-  const activeSession =
-    workspaceSessions.find((session) => session.id === selectedSessionId) ??
-    workspaceSessions[0] ??
-    null
+  const activeSession = sessionId
+    ? (workspaceSessions.find((session) => session.id === sessionId) ?? null)
+    : (workspaceSessions.find((session) => session.id === selectedSessionId) ??
+      workspaceSessions[0] ??
+      null)
   const activeMessages = activeSession ? (messages[activeSession.id] ?? []) : []
+  const activeSessionId = activeSession?.id ?? null
 
   useEffect(() => {
     let cancelled = false
@@ -205,12 +210,20 @@ export function RemoteAgentController({
     remoteStatus?.state === 'online' &&
     remoteStatus.compatibility !== 'upgrade-required' &&
     remoteStatus.capabilities.agent.session &&
-    remoteStatus.capabilities.agent.stream
-  const agentVisualStatus = resolveRemoteAgentVisualStatus({
-    statusError,
-    remoteStatus,
-    sessionStatus: activeSession?.status,
-  })
+    remoteStatus.capabilities.agent.stream &&
+    (!sessionId || Boolean(activeSession))
+  const agentVisualStatus =
+    sessionId && !activeSession
+      ? {
+          tone: 'unavailable' as const,
+          label: '会话不可用',
+          detail: loading ? '正在加载远程会话' : '远程会话已不存在或已归档',
+        }
+      : resolveRemoteAgentVisualStatus({
+          statusError,
+          remoteStatus,
+          sessionStatus: activeSession?.status,
+        })
   const stopAvailability = resolveRemoteStopAvailability(activeSession?.status)
 
   useEffect(() => {
@@ -238,8 +251,13 @@ export function RemoteAgentController({
   }, [remoteStatus, workspaceRef.endpointId, workspaceRef.path, workspaceRef.workspaceId])
 
   useEffect(() => {
-    if (activeSession && activeSession.id !== selectedSessionId) selectSession(activeSession.id)
-  }, [activeSession, selectSession, selectedSessionId])
+    if (!activeSessionId) return
+    if (sessionId) {
+      void loadMessages(activeSessionId)
+      return
+    }
+    if (activeSessionId !== selectedSessionId) selectSession(activeSessionId)
+  }, [activeSessionId, loadMessages, selectSession, selectedSessionId, sessionId])
 
   const submit = async (): Promise<void> => {
     const content = draft.trim()
@@ -253,7 +271,7 @@ export function RemoteAgentController({
         content,
         isTargetCurrent: isWorkspaceTargetCurrent,
         createSession,
-        selectSession,
+        selectSession: sessionId ? () => undefined : selectSession,
         sendAgentMessage,
       })
       if (result === 'submitted') {

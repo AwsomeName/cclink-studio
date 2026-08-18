@@ -1,7 +1,16 @@
 import { useAgentStore } from '../../stores/agent-store'
+import { useCclinkStore } from '../../stores/cclink-store'
 import { useTabStore } from '../../stores/tab-store'
+import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
+import { workspaceRefKey } from '@shared/workspace-ref'
 
 export const CONVERSATION_DRAG_TYPE = 'application/x-cclink-conversation-id'
+export const REMOTE_CONVERSATION_DRAG_TYPE = 'application/x-cclink-remote-conversation'
+
+export interface RemoteConversationDragData {
+  sessionId: string
+  workspaceKey: string
+}
 
 export function writeConversationDragData(
   dataTransfer: DataTransfer,
@@ -17,7 +26,43 @@ export function readConversationDragData(dataTransfer: DataTransfer): string | n
 }
 
 export function hasConversationDragData(dataTransfer: DataTransfer): boolean {
-  return Array.from(dataTransfer.types).includes(CONVERSATION_DRAG_TYPE)
+  const types = Array.from(dataTransfer.types)
+  return types.includes(CONVERSATION_DRAG_TYPE) || types.includes(REMOTE_CONVERSATION_DRAG_TYPE)
+}
+
+export function writeRemoteConversationDragData(
+  dataTransfer: DataTransfer,
+  sessionId: string,
+  workspaceRef: RemoteWorkspaceRef,
+): void {
+  dataTransfer.effectAllowed = 'copy'
+  dataTransfer.setData(
+    REMOTE_CONVERSATION_DRAG_TYPE,
+    JSON.stringify({ sessionId, workspaceKey: workspaceRefKey(workspaceRef) }),
+  )
+}
+
+export function readRemoteConversationDragData(
+  dataTransfer: DataTransfer,
+): RemoteConversationDragData | null {
+  const raw = dataTransfer.getData(REMOTE_CONVERSATION_DRAG_TYPE)
+  if (!raw || raw.length > 2_048) return null
+  try {
+    const value = JSON.parse(raw) as Partial<RemoteConversationDragData>
+    if (
+      typeof value.sessionId !== 'string' ||
+      !value.sessionId.trim() ||
+      value.sessionId.length > 256 ||
+      typeof value.workspaceKey !== 'string' ||
+      !value.workspaceKey.trim() ||
+      value.workspaceKey.length > 1_024
+    ) {
+      return null
+    }
+    return { sessionId: value.sessionId, workspaceKey: value.workspaceKey }
+  } catch {
+    return null
+  }
 }
 
 export function openConversationInWorkbench(conversationId: string): boolean {
@@ -34,6 +79,31 @@ export function openConversationInWorkbench(conversationId: string): boolean {
       runtime: conversation.runtime,
       sessionId: conversation.id,
     },
+  })
+  return true
+}
+
+export function openRemoteConversationInWorkbench(
+  sessionId: string,
+  workspaceRef: RemoteWorkspaceRef,
+): boolean {
+  const session = useCclinkStore
+    .getState()
+    .sessions.find(
+      (candidate) =>
+        candidate.id === sessionId &&
+        candidate.status !== 'archived' &&
+        candidate.serverId === workspaceRef.endpointId &&
+        candidate.workspaceId === workspaceRef.workspaceId,
+    )
+  if (!session) return false
+
+  useTabStore.getState().openTab({
+    type: 'remote-conversation',
+    title: session.name,
+    icon: '☁️',
+    workspaceRef,
+    remoteConversation: { sessionId },
   })
   return true
 }

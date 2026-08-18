@@ -10,7 +10,10 @@ import {
   buildQuickThreadList,
   type QuickThreadStatusKind,
 } from '../../features/agent-conversations/view-model'
-import { writeConversationDragData } from '../../features/agent-conversations/conversation-workbench'
+import {
+  writeConversationDragData,
+  writeRemoteConversationDragData,
+} from '../../features/agent-conversations/conversation-workbench'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import {
   buildKeyboardContextMenuInput,
@@ -175,7 +178,22 @@ export function ConversationQuickSwitcher({
   }
 
   const getConversationTarget = (conversationId: string) => {
-    if (isRemoteWorkspace) return null
+    if (activeWorkspaceRef.kind === 'remote') {
+      const session = remoteSessions.find(
+        (candidate) =>
+          candidate.id === conversationId &&
+          candidate.serverId === activeWorkspaceRef.endpointId &&
+          candidate.workspaceId === activeWorkspaceRef.workspaceId,
+      )
+      if (!session) return null
+      return {
+        kind: 'remote-thread' as const,
+        workspaceKey: workspaceKey!,
+        sessionId: session.id,
+        endpointId: activeWorkspaceRef.endpointId,
+        workspaceId: activeWorkspaceRef.workspaceId,
+      }
+    }
     const conversation = conversations[conversationId]
     if (!conversation) return null
     return {
@@ -218,15 +236,23 @@ export function ConversationQuickSwitcher({
             key={conversation.id}
             type="button"
             role="tab"
-            draggable={!isRemoteWorkspace}
+            draggable
             data-conversation-id={conversation.id}
             className={`conversation-quick-tab status-${conversation.statusKind} ${conversation.isActive ? 'active' : ''}`}
             title={`${conversation.title} · ${conversation.statusLabel}`}
             aria-label={`切换到会话：${conversation.title}，${conversation.statusLabel}`}
             aria-selected={conversation.isActive}
-            aria-haspopup={isRemoteWorkspace ? undefined : 'menu'}
+            aria-haspopup="menu"
             onDragStart={(event) => {
-              if (!isRemoteWorkspace) writeConversationDragData(event.dataTransfer, conversation.id)
+              if (activeWorkspaceRef.kind === 'remote') {
+                writeRemoteConversationDragData(
+                  event.dataTransfer,
+                  conversation.id,
+                  activeWorkspaceRef,
+                )
+              } else {
+                writeConversationDragData(event.dataTransfer, conversation.id)
+              }
             }}
             onClick={() => void openConversation(conversation.id)}
             onContextMenu={(event) => {
@@ -278,14 +304,21 @@ export function ConversationQuickSwitcher({
                   key={conversation.id}
                   type="button"
                   role="menuitem"
-                  draggable={!isRemoteWorkspace}
+                  draggable
                   data-conversation-id={conversation.id}
                   className={`status-${conversation.statusKind}`}
                   title={conversation.title}
-                  aria-haspopup={isRemoteWorkspace ? undefined : 'menu'}
+                  aria-haspopup="menu"
                   onDragStart={(event) => {
-                    if (!isRemoteWorkspace)
+                    if (activeWorkspaceRef.kind === 'remote') {
+                      writeRemoteConversationDragData(
+                        event.dataTransfer,
+                        conversation.id,
+                        activeWorkspaceRef,
+                      )
+                    } else {
                       writeConversationDragData(event.dataTransfer, conversation.id)
+                    }
                   }}
                   onClick={() => void openConversation(conversation.id)}
                   onContextMenu={(event) => {

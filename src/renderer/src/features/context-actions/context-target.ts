@@ -47,6 +47,13 @@ export type ContextTarget =
       activeRunId?: string | null
     }
   | {
+      kind: 'remote-thread'
+      workspaceKey: string
+      sessionId: string
+      endpointId: string
+      workspaceId: string
+    }
+  | {
       kind: 'message'
       workspaceKey: string | null
       conversationId: string
@@ -155,6 +162,7 @@ export const CONTEXT_TARGET_KINDS = [
   'status-item',
   'layout',
   'thread',
+  'remote-thread',
   'message',
   'editor',
   'terminal',

@@ -4,6 +4,7 @@ import { localWorkspaceRef, remoteWorkspaceRef } from '@shared/workspace-ref'
 import { useAgentStore } from '../../stores/agent-store'
 import { useBrowserStore } from '../../stores/browser-store'
 import { useBrowserTaskStore } from '../../stores/browser-task-store'
+import { useCclinkStore } from '../../stores/cclink-store'
 import { useEditorStore } from '../../stores/editor-store'
 import { useOpenProjectsStore } from '../../stores/open-projects-store'
 import { useTabStore } from '../../stores/tab-store'
@@ -58,6 +59,10 @@ beforeEach(() => {
       },
       browser: { reconcileViews: vi.fn(async () => undefined) },
       terminal: { listSessions: vi.fn(async () => []) },
+      cclink: {
+        openWorkspace: vi.fn(),
+        listServers: vi.fn(),
+      },
     },
   })
   vi.stubGlobal('localStorage', {
@@ -69,6 +74,7 @@ beforeEach(() => {
   useAgentStore.setState(useAgentStore.getInitialState(), true)
   useBrowserStore.setState(useBrowserStore.getInitialState(), true)
   useBrowserTaskStore.setState(useBrowserTaskStore.getInitialState(), true)
+  useCclinkStore.setState(useCclinkStore.getInitialState(), true)
   useEditorStore.setState(useEditorStore.getInitialState(), true)
   useOpenProjectsStore.setState(useOpenProjectsStore.getInitialState(), true)
   useTabStore.setState(useTabStore.getInitialState(), true)
@@ -117,5 +123,41 @@ describe('workspace-open-controller', () => {
     )
     expect(useWorkspaceStore.getState().activeWorkspaceRef).toEqual(localRef)
     expect(useOpenProjectsStore.getState().openRemoteWorkspaceRefs).toEqual([])
+  })
+
+  it('refreshes a stale startup device projection once before failing over to UI', async () => {
+    const openWorkspace = window.cclinkStudio.cclink.openWorkspace as ReturnType<typeof vi.fn>
+    const listServers = window.cclinkStudio.cclink.listServers as ReturnType<typeof vi.fn>
+    openWorkspace.mockRejectedValueOnce(new Error('远程设备不在线')).mockResolvedValueOnce({
+      id: remoteA.workspaceId,
+      path: remoteA.path,
+      name: 'A',
+      serverId: remoteA.endpointId,
+      kind: 'directory',
+      exists: true,
+    })
+    listServers.mockResolvedValue([
+      {
+        id: remoteA.endpointId,
+        name: 'Agent A',
+        hostname: 'agent-a',
+        os: 'linux',
+        status: 'online',
+        agentVersion: '1.0.0',
+        lastSeen: Date.now(),
+        workspaces: [],
+      },
+    ])
+    useCclinkStore.setState({
+      initialized: true,
+      service: { configured: true },
+      session: { loggedIn: true, user: null },
+      realtime: { state: 'online' },
+    })
+
+    await expect(openWorkspaceRef(remoteA)).resolves.toMatchObject(remoteA)
+    expect(listServers).toHaveBeenCalledOnce()
+    expect(openWorkspace).toHaveBeenCalledTimes(2)
+    expect(useWorkspaceStore.getState().activeWorkspaceRef).toMatchObject(remoteA)
   })
 })

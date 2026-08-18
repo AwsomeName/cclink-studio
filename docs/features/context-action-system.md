@@ -128,6 +128,13 @@ type ContextTarget =
     }
   | { kind: 'terminal'; workspaceKey: string; tabId?: string; sessionId: string }
   | { kind: 'thread'; workspaceKey: string; conversationId: string }
+  | {
+      kind: 'remote-thread'
+      workspaceKey: string
+      sessionId: string
+      endpointId: string
+      workspaceId: string
+    }
   | { kind: 'message'; workspaceKey: string; conversationId: string; messageId: string }
   | { kind: 'data-source'; workspaceKey: string; dataSourceId: string }
   | { kind: 'status-item'; itemId: string; workspaceKey: string | null }

@@ -12,6 +12,10 @@ import {
   createThreadContextCommands,
   threadMenuContributions,
 } from './domains/thread-context-actions'
+import {
+  createRemoteThreadContextCommands,
+  remoteThreadMenuContributions,
+} from './domains/remote-thread-context-actions'
 import { createShellContextCommands, shellMenuContributions } from './domains/shell-context-actions'
 import {
   createEditorContextCommands,
@@ -56,6 +60,7 @@ export const contextActionCommands = [
   ...createProjectContextCommands(),
   ...createSelectionContextCommands(),
   ...createThreadContextCommands(),
+  ...createRemoteThreadContextCommands(),
   ...createShellContextCommands(),
   ...createEditorContextCommands(),
   ...createTerminalContextCommands(),
@@ -74,6 +79,7 @@ export const contextActionContributions = [
   ...projectMenuContributions,
   ...selectionMenuContributions,
   ...threadMenuContributions,
+  ...remoteThreadMenuContributions,
   ...shellMenuContributions,
   ...editorMenuContributions,
   ...terminalMenuContributions,

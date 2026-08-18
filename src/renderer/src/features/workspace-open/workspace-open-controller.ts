@@ -9,6 +9,7 @@ import { confirmRemoteWorkspaceRef } from '../cclink-remote/remote-workspace-con
 import {
   applyWorkspaceRuntimeTransition,
   beginWorkspaceRuntimeTransition,
+  isWorkspaceRuntimeTransitionCurrent,
   prepareWorkspaceRuntimeTransition,
 } from '../../utils/workspace-transition'
 
@@ -66,12 +67,26 @@ export async function openWorkspaceRef(
   let confirmedRef: RemoteWorkspaceRef = ref
   if (!options.confirmedRemote) {
     await useCclinkStore.getState().initialize()
-    const state = useCclinkStore.getState()
+    let state = useCclinkStore.getState()
     if (!state.service?.configured) {
       throw new Error(state.service?.message || 'CCLink 远程服务未配置')
     }
     if (!state.session.loggedIn) throw new Error('请先登录 CCLink 远程服务')
-    confirmedRef = await confirmRemoteWorkspaceRef(ref, options.remoteRequestId)
+    try {
+      confirmedRef = await confirmRemoteWorkspaceRef(ref, options.remoteRequestId)
+    } catch (error) {
+      // 启动后首次远程打开可能命中尚未刷新的设备在线投影。只对该可恢复失败刷新并重试一次。
+      const failure = error instanceof Error ? error.message : String(error)
+      if (!failure.includes('远程设备不在线')) throw error
+      await state.refreshServers()
+      if (!isWorkspaceRuntimeTransitionCurrent(generation)) {
+        throw new Error('远程项目打开已取消')
+      }
+      state = useCclinkStore.getState()
+      const server = state.servers.find((candidate) => candidate.id === ref.endpointId)
+      if (server?.status !== 'online') throw error
+      confirmedRef = await confirmRemoteWorkspaceRef(ref, options.remoteRequestId)
+    }
   }
 
   const transition = await prepareWorkspaceRuntimeTransition(confirmedRef, { generation })

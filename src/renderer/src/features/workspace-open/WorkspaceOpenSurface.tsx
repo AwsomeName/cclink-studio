@@ -137,10 +137,6 @@ function WorkspaceSourceChooser({
       pendingRemoteOperationRef.current = null
       onOpened()
     } catch (openError) {
-      if (ref.kind === 'remote') {
-        onRemote()
-        return
-      }
       setError(openError instanceof Error ? openError.message : String(openError))
     } finally {
       if (pendingRemoteOperationRef.current?.generation === operation?.generation) {

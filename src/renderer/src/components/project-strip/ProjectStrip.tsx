@@ -10,7 +10,6 @@ import {
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
 import { openWorkspaceRef } from '../../features/workspace-open/workspace-open-controller'
-import { useWorkspaceOpenStore } from '../../features/workspace-open/workspace-open-store'
 
 type DropPlacement = 'before' | 'after'
 
@@ -125,8 +124,10 @@ export function ProjectStrip(): React.ReactElement {
       await openWorkspaceRef(ref)
       return true
     } catch (error) {
-      useWorkspaceOpenStore.getState().showRemote()
-      showToast(error instanceof Error ? error.message : '远程项目切换失败', 'error')
+      showToast(
+        error instanceof Error ? `远程项目切换失败：${error.message}` : '远程项目切换失败',
+        'error',
+      )
       return false
     }
   }

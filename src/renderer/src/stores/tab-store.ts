@@ -67,6 +67,14 @@ function getConversationKey(tab: Pick<Tab, 'type' | 'conversation'>): string | n
   return null
 }
 
+function getRemoteConversationKey(
+  tab: Pick<Tab, 'type' | 'workspaceRef' | 'remoteConversation'>,
+): string | null {
+  if (tab.type !== 'remote-conversation' || !tab.remoteConversation) return null
+  const workspaceKey = workspaceRefKey(tab.workspaceRef ?? workspaceRefFromKey(null))
+  return `${workspaceKey ?? 'global'}:${tab.remoteConversation.sessionId}`
+}
+
 function getDataSourceQueryKey(query: Tab['dataSourceQuery']): string | null {
   if (!query) return null
   return [
@@ -153,6 +161,8 @@ interface OpenTabOptions {
   }
   /** 通用会话 Tab 引用 */
   conversation?: ConversationTabRef
+  /** CCLink 远程会话 Tab 引用 */
+  remoteConversation?: Tab['remoteConversation']
   /** 设置页目标分组 */
   settingsSection?: string
   /** Gerber 生产包层预览 */
@@ -264,6 +274,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     webResourceDraftRef,
     restore,
     conversation,
+    remoteConversation,
     settingsSection,
     hardwareGerber,
     terminal,
@@ -365,6 +376,14 @@ export const useTabStore = create<TabState>((set, get) => ({
           if (existing) {
             return { activeTabId: existing.id }
           }
+        } else if (type === 'remote-conversation' && remoteConversation) {
+          const targetKey = getRemoteConversationKey({
+            type,
+            workspaceRef: workspaceRef ?? workspaceRefFromKey(getWorkspaceStateKey()),
+            remoteConversation,
+          })
+          const existing = state.tabs.find((tab) => getRemoteConversationKey(tab) === targetKey)
+          if (existing) return { activeTabId: existing.id }
         } else if (type === 'hardware-gerber' && hardwareGerber) {
           const existing = state.tabs.find(
             (t) =>
@@ -442,6 +461,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         webResourceDraftRef,
         restore,
         conversation,
+        remoteConversation,
         settingsSection,
         hardwareGerber,
         terminal,
