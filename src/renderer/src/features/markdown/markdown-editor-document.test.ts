@@ -274,6 +274,25 @@ describe('parseMarkdownEditorDocument', () => {
     })
   })
 
+  it('keeps editor-generated email and URL autolinks structurally equivalent', () => {
+    const source = ['联系邮箱：shenxinzhizao@163.com', '', '开发者社区：http://Dev.to'].join('\n')
+
+    editor.commands.setContent(parseMarkdownEditorDocument(editor, source), { emitUpdate: false })
+
+    expect(editor.getMarkdown()).toBe(
+      [
+        '联系邮箱：[shenxinzhizao@163.com](mailto:shenxinzhizao@163.com)',
+        '',
+        '开发者社区：[http://Dev.to](http://Dev.to)',
+      ].join('\n'),
+    )
+    expect(inspectMarkdownRoundTrip(source, editor.getMarkdown())).toMatchObject({
+      catastrophic: false,
+      equivalent: true,
+      differences: [],
+    })
+  })
+
   it('places a cursor in a repaired empty ordered item and accepts text', () => {
     editor.commands.setContent(parseMarkdownEditorDocument(editor, '1.\n2.'), {
       emitUpdate: false,

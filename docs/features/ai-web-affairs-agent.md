@@ -1,8 +1,8 @@
 # AI 网页事务代理人
 
-> 状态：产品方案已于 2026-08-18 调整为“网站与账号全局复用、事务继续属于项目”；
-> 现有项目账号实现只作为迁移基线，不能代表当前产品方案完成。AI 是否可以调用全局账号
-> 暂未决定，不得在账号全局化施工中默认放开；开发顺序见
+> 状态：“网站与账号全局复用、事务继续属于项目”已完成代码闭环并进入统一验收；
+> 真人真实登录复测完成前不宣称产品里程碑 Complete。AI 是否可以调用全局账号暂未决定，当前 UI 和
+> 主进程均 fail-closed；开发顺序见
 > `docs/features/global-web-accounts-development-plan.md` 和
 > `docs/features/ai-web-affairs-agent-development-plan.md`
 > 最后更新：2026-08-18

@@ -262,11 +262,6 @@ export class WebResourceService {
     return { success: true, data: structuredClone(this.snapshot) }
   }
 
-  /** @deprecated Compatibility shim; the catalog is global and no longer filtered by project. */
-  getProjectSnapshot(_projectId: string): WebResourceOperationResult<WebResourceSnapshot> {
-    return this.getSnapshot()
-  }
-
   async createConnection(
     rawInput: CreateWebConnectionInput,
     _projectId: string,
@@ -438,24 +433,12 @@ export class WebResourceService {
       }
       const now = new Date().toISOString()
       const archived = { ...current, archivedAt: now, updatedAt: now }
-      const accountGroups = this.snapshot.accountGroups.map((group) => {
-        if (group.archivedAt || !group.accountIds.includes(accountId)) return group
-        const accountIds = group.accountIds.filter((id) => id !== accountId)
-        return {
-          ...group,
-          revision: group.revision + 1,
-          accountIds: accountIds.length > 0 ? accountIds : group.accountIds,
-          archivedAt: accountIds.length > 0 ? undefined : now,
-          updatedAt: now,
-        }
-      })
       const next = {
         ...this.snapshot,
         revision: this.snapshot.revision + 1,
         accountGroups: this.snapshot.accountGroups.map((item) =>
           item.id === archived.id ? archived : item,
         ),
-        accountGroups,
       }
       await this.store.save(next)
       this.snapshot = next
@@ -477,10 +460,22 @@ export class WebResourceService {
       }
       const now = new Date().toISOString()
       const archived = { ...current, archivedAt: now, updatedAt: now }
+      const accountGroups = this.snapshot.accountGroups.map((group) => {
+        if (group.archivedAt || !group.accountIds.includes(accountId)) return group
+        const accountIds = group.accountIds.filter((id) => id !== accountId)
+        return {
+          ...group,
+          revision: group.revision + 1,
+          accountIds: accountIds.length > 0 ? accountIds : group.accountIds,
+          archivedAt: accountIds.length > 0 ? undefined : now,
+          updatedAt: now,
+        }
+      })
       const next = {
         ...this.snapshot,
         revision: this.snapshot.revision + 1,
         accounts: this.snapshot.accounts.map((item) => (item.id === archived.id ? archived : item)),
+        accountGroups,
       }
       await this.store.save(next)
       this.snapshot = next

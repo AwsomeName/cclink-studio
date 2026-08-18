@@ -498,7 +498,6 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       setMarkdownDiagnosticLog(report)
       setHydratedVersion(version)
       console.error('[MarkdownEditor] Markdown 预检查失败\n' + report)
-      showToast(reason, 'error')
       return
     }
 
@@ -539,7 +538,6 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       setMarkdownDiagnosticLog(report)
       setHydratedVersion(version)
       console.error('[MarkdownEditor] Markdown 解析器运行失败\n' + report)
-      showToast(reason, 'error')
       return
     } finally {
       hydratingRef.current = false
@@ -568,7 +566,6 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       setMarkdownDiagnosticLog(report)
       setHydratedVersion(version)
       console.error('[MarkdownEditor] Markdown 往返检查失败\n' + report)
-      showToast(reason, 'error')
     } else {
       setParseBlockedReason(null)
       setProtectedPreviewAvailable(false)
@@ -586,7 +583,6 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     fileState?.versionHash,
     filePath,
     hydratedVersion,
-    showToast,
   ])
 
   useEffect(() => {
@@ -918,14 +914,39 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   }, [filePath, showToast])
 
   const handleCopyDiagnosticLog = useCallback(async () => {
-    if (!markdownDiagnosticLog) return
+    const current = useEditorStore.getState().files[fileKey]
+    const currentDiagnostics = current?.diagnostics ?? []
+    if (!markdownDiagnosticLog && currentDiagnostics.length === 0) return
+    let serialized: string | undefined
     try {
-      await copyTextToClipboard(markdownDiagnosticLog)
+      serialized = editor
+        ? normalizeMarkdownEditorOutput(editor.getMarkdown(), current?.currentContent)
+        : undefined
+    } catch {
+      serialized = undefined
+    }
+    const report =
+      markdownDiagnosticLog ??
+      createMarkdownDiagnosticReport({
+        filePath,
+        stage: serialized === undefined ? 'preflight' : 'roundtrip',
+        trigger: reloadGenerationRef.current > 0 ? 'reload' : 'open',
+        source: current?.currentContent ?? '',
+        serialized,
+        diagnostics: currentDiagnostics,
+        versionHash: current?.versionHash,
+        modifiedAt: current?.modifiedAt,
+        dirty: current?.dirty ?? false,
+        reloadGeneration: reloadGenerationRef.current,
+        editorJson: editor?.getJSON(),
+      })
+    try {
+      await copyTextToClipboard(report)
       showToast('Markdown 诊断日志已复制', 'success')
     } catch {
       showToast('诊断日志复制失败', 'error')
     }
-  }, [markdownDiagnosticLog, showToast])
+  }, [editor, fileKey, filePath, markdownDiagnosticLog, showToast])
 
   const handleOverwrite = useCallback(async () => {
     if (!filePath) return
@@ -961,6 +982,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         filePath={filePath}
         dirty={dirty}
         diagnosticsCount={diagnostics.length}
+        onCopyDiagnostics={() => void handleCopyDiagnosticLog()}
         onSave={() => void handleSave()}
         onInsertLink={handleInsertLink}
         onInsertImage={() => void handleInsertImage()}
@@ -1046,17 +1068,6 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         </div>
       )}
 
-      {diagnostics.length > 0 && (
-        <details className="markdown-diagnostics">
-          <summary>兼容性提示 ({diagnostics.length})</summary>
-          {diagnostics.map((diagnostic, index) => (
-            <div key={`${diagnostic.code}-${index}`} className={diagnostic.severity}>
-              {diagnostic.message}
-            </div>
-          ))}
-        </details>
-      )}
-
       <div className="markdown-editor-body">
         {loadError ? (
           <div className="markdown-parse-blocked">
@@ -1073,53 +1084,18 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
           </div>
         ) : hydrationPending ? (
           <div className="editor-loading">正在渲染 Markdown...</div>
-        ) : parseBlockedReason && !protectedPreviewAvailable ? (
-          <div className="markdown-parse-blocked">
-            <strong>文档未被改写</strong>
-            <span>{parseBlockedReason}</span>
-            {filePath && (
-              <button type="button" onClick={() => void handleReload()}>
-                重新载入磁盘版本
-              </button>
-            )}
-            {markdownDiagnosticLog && (
-              <button type="button" onClick={() => void handleCopyDiagnosticLog()}>
-                复制诊断日志
-              </button>
-            )}
+        ) : parseBlockedReason && !protectedPreviewAvailable ? null : (
+          <div
+            className={`tiptap-editor${editorWordWrap ? '' : ' no-wrap'}${parseBlockedReason ? ' protected' : ''}`}
+            style={
+              {
+                '--markdown-font-family': editorFontFamily,
+                '--markdown-font-size': `${editorFontSize}px`,
+              } as React.CSSProperties
+            }
+          >
+            {editor && <EditorContent editor={editor} />}
           </div>
-        ) : (
-          <>
-            {parseBlockedReason && (
-              <div className="markdown-protected-preview" role="status">
-                <div>
-                  <strong>只读预览，原文件未被改写</strong>
-                  <span>{parseBlockedReason}</span>
-                </div>
-                {filePath && (
-                  <button type="button" onClick={() => void handleReload()}>
-                    重新读取并检查
-                  </button>
-                )}
-                {markdownDiagnosticLog && (
-                  <button type="button" onClick={() => void handleCopyDiagnosticLog()}>
-                    复制诊断日志
-                  </button>
-                )}
-              </div>
-            )}
-            <div
-              className={`tiptap-editor${editorWordWrap ? '' : ' no-wrap'}${parseBlockedReason ? ' protected' : ''}`}
-              style={
-                {
-                  '--markdown-font-family': editorFontFamily,
-                  '--markdown-font-size': `${editorFontSize}px`,
-                } as React.CSSProperties
-              }
-            >
-              {editor && <EditorContent editor={editor} />}
-            </div>
-          </>
         )}
       </div>
 

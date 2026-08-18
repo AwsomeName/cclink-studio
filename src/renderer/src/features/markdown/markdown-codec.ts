@@ -1,5 +1,6 @@
 import { stripCclinkMarkdownMetadata } from '@shared/markdown-document'
 import MarkdownIt from 'markdown-it'
+import { marked } from 'marked'
 
 export type MarkdownBlockKind =
   | 'frontmatter'
@@ -334,7 +335,7 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
   const listItemTaskStack: boolean[] = []
   const orderedStarts: number[] = []
   const images: Array<{ source: string; alt: string; title: string }> = []
-  const links: Array<{ destination: string; title: string }> = []
+  const links = extractMarkdownLinks(normalized)
   const textContent: string[] = []
   let activeTableRows: number | null = null
   let activeTableAlignments: string[] | null = null
@@ -408,11 +409,6 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
           alt: child.content ?? '',
           title: child.attrGet('title') ?? '',
         })
-      } else if (child.type === 'link_open') {
-        links.push({
-          destination: normalizeMarkdownDestination(child.attrGet('href') ?? ''),
-          title: child.attrGet('title') ?? '',
-        })
       }
     }
   }
@@ -437,6 +433,24 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
     ),
     textContent,
   }
+}
+
+/**
+ * Tiptap's Markdown extension parses with Marked. Link structure must use that
+ * same lexer: markdown-it and Marked disagree on autolinks next to CJK
+ * punctuation, which previously made an unchanged email address look like a
+ * newly inserted link and forced the document into read-only protection.
+ */
+function extractMarkdownLinks(source: string): Array<{ destination: string; title: string }> {
+  const links: Array<{ destination: string; title: string }> = []
+  marked.walkTokens(marked.lexer(source), (token) => {
+    if (token.type !== 'link') return
+    links.push({
+      destination: normalizeMarkdownDestination(token.href),
+      title: token.title ?? '',
+    })
+  })
+  return links
 }
 
 function markdownTableAlignment(style: string): string {

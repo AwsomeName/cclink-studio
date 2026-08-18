@@ -10,7 +10,15 @@ import { createSmokeRuntime } from './smoke-runtime.mjs'
 const { rootDir, logFile, rendererOrigin, runRestart } = createSmokeRuntime(import.meta.url)
 const keepRunning = process.argv.includes('--keep-running')
 const agentPanelOnly = process.argv.includes('--agent-panel-only')
+const webAffairsOnly = process.argv.includes('--web-affairs-only')
 const uiReadyTimeoutMs = 30_000
+const webAffairsChecks = new Set([
+  'main renderer enforces its CSP source boundary',
+  'first screen has no login wall',
+  'global web resources reuse one account and matrix across projects',
+  'web affair persists a five-node workflow and node progress',
+  'web affair exposes A2-A4 handoff, wait, template, and flow-diff controls',
+])
 const results = []
 let startedBySmoke = false
 const execFileAsync = promisify(execFile)
@@ -62,6 +70,7 @@ async function findRendererPage(browser) {
 }
 
 async function runCheck(name, fn) {
+  if (webAffairsOnly && !webAffairsChecks.has(name)) return
   try {
     const detail = await fn()
     pass(name, detail)
@@ -1043,7 +1052,9 @@ async function main() {
     await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
     const rowText = await primaryRow().innerText()
     assert(rowText.includes(accountLabel), 'saved account label is not visible')
-    await primaryRow().click()
+    await primaryRow()
+      .locator('.web-resource-row-open')
+      .evaluate((element) => element.click())
     await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
     const zoomInput = page.getByLabel('浏览器缩放百分比')
     await zoomInput.waitFor({ state: 'visible', timeout: 10_000 })
@@ -1071,7 +1082,9 @@ async function main() {
     await page.locator('.markdown-editor-wrapper').waitFor({ state: 'visible', timeout: 10_000 })
     const tabCountWithDraft = await page.locator('.tab').count()
     assert(tabCountWithDraft === tabCountBeforeDraft + 1, 'draft tab did not open')
-    await primaryRow().click()
+    await primaryRow()
+      .locator('.web-resource-row-open')
+      .evaluate((element) => element.click())
     await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
     assert(
       (await page.locator('.tab').count()) === tabCountWithDraft,
@@ -1116,7 +1129,9 @@ async function main() {
       await clickByTitle(page, '网站与账号')
       await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
       await matrixRow().waitFor({ state: 'visible', timeout: 10_000 })
-      await primaryRow().click()
+      await primaryRow()
+        .locator('.web-resource-row-open')
+        .evaluate((element) => element.click())
       await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
       const secondProjection = await page.evaluate(async () => {
         const { useTabStore } = await import('/src/stores/tab-store.ts')

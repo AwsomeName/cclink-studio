@@ -207,7 +207,7 @@ describe('WebResourceService', () => {
       success: true,
       data: { account: { browserProfileId: second.data.browserProfileId } },
     })
-    expect(service.getProjectSnapshot(PROJECT_ID)).toMatchObject({
+    expect(service.getSnapshot()).toMatchObject({
       success: true,
       data: {
         accounts: [
@@ -236,7 +236,7 @@ describe('WebResourceService', () => {
       data: { draftId: begun.data.draftId, cleaned: true },
     })
     expect(cleanupProfile).toHaveBeenCalledWith(begun.data.browserProfileId)
-    expect(service.getProjectSnapshot(PROJECT_ID)).toMatchObject({
+    expect(service.getSnapshot()).toMatchObject({
       success: true,
       data: { accounts: [] },
     })
@@ -366,9 +366,6 @@ describe('WebResourceService', () => {
       success: false,
       error: { code: 'DUPLICATE_ACCOUNT' },
     })
-    expect(service.getProjectSnapshot(PROJECT_ID)).toEqual(
-      service.getProjectSnapshot(OTHER_PROJECT_ID),
-    )
     expect(service.getSnapshot()).toMatchObject({
       success: true,
       data: {

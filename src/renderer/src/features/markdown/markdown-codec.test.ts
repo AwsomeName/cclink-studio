@@ -396,6 +396,40 @@ describe('markdown-codec', () => {
     })
   })
 
+  it('uses the editor parser semantics for email autolinks beside CJK punctuation', () => {
+    const source = ['联系邮箱：shenxinzhizao@163.com', '', '开发者社区：http://Dev.to'].join('\n')
+    const serialized = [
+      '联系邮箱：[shenxinzhizao@163.com](mailto:shenxinzhizao@163.com)',
+      '',
+      '开发者社区：[http://Dev.to](http://Dev.to)',
+    ].join('\n')
+
+    expect(inspectMarkdownRoundTrip(source, serialized)).toMatchObject({
+      catastrophic: false,
+      equivalent: true,
+      differences: [],
+    })
+    expect(analyzeMarkdown(source, serialized)).toMatchObject({
+      safeToSave: true,
+      diagnostics: [],
+    })
+  })
+
+  it('still blocks a real link destination change', () => {
+    const source = '[联系邮箱](mailto:old@example.com)'
+    const serialized = '[联系邮箱](mailto:new@example.com)'
+
+    expect(analyzeMarkdown(source, serialized)).toMatchObject({
+      safeToSave: false,
+      diagnostics: [
+        expect.objectContaining({
+          code: 'structural-roundtrip-mismatch',
+          message: expect.stringContaining('链接'),
+        }),
+      ],
+    })
+  })
+
   it('accepts equivalent indented, fenced and plain-language code blocks', () => {
     const source = [
       '缩进代码：',

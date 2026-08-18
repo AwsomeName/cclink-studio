@@ -10,6 +10,7 @@ interface EditorToolbarProps {
   filePath?: string
   dirty: boolean
   diagnosticsCount: number
+  onCopyDiagnostics: () => void
   onSave: () => void
   onInsertLink: () => void
   onInsertImage: () => void
@@ -51,6 +52,7 @@ export function EditorToolbar({
   filePath,
   dirty,
   diagnosticsCount,
+  onCopyDiagnostics,
   onSave,
   onInsertLink,
   onInsertImage,
@@ -312,9 +314,15 @@ export function EditorToolbar({
 
       <div className="toolbar-trailing">
         {diagnosticsCount > 0 && (
-          <span className="toolbar-diagnostics" title="文档包含兼容性提示">
+          <button
+            type="button"
+            className="toolbar-diagnostics"
+            title="点击复制完整诊断日志"
+            aria-label={`${diagnosticsCount} 项提示，点击复制完整诊断日志`}
+            onClick={onCopyDiagnostics}
+          >
             {diagnosticsCount} 项提示
-          </span>
+          </button>
         )}
         {saveControl.kind === 'status' ? (
           <span
