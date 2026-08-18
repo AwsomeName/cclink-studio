@@ -114,7 +114,8 @@ async function closeNamedEditorFile(tab: Tab, fileKey: string): Promise<boolean>
 
   if (response === 0) {
     try {
-      await editorStore.saveFile(fileKey)
+      const result = await editorStore.saveFile(fileKey)
+      if (result !== 'saved') return false
       editorStore.closeFile(fileKey)
       useTabStore.getState().closeTab(tab.id)
       return true

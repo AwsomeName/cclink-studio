@@ -15,6 +15,7 @@ import {
 } from '../../features/context-actions/context-menu-trigger'
 import { registerEditorContextSurface } from '../../features/context-actions/editor-context-surface'
 import { copyTextToClipboard } from '../../utils/clipboard'
+import { resolveMountedEditorSaveTarget } from '../../features/editor-save-target'
 
 interface SourceTextEditorProps {
   filePath: string
@@ -206,20 +207,18 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
       window.cclinkStudio.editor.readResponse(request.id, content)
     })
     const offSave = window.cclinkStudio.editor.onSaveRequest(async (request) => {
-      const targetPath = request.filePath ?? filePath
+      const target = resolveMountedEditorSaveTarget(request.filePath, filePath)
+      if (!target.ok) {
+        window.cclinkStudio.editor.saveResult(request.id, false, target.error)
+        return
+      }
       try {
-        if (targetPath === filePath) {
-          const result = await useEditorStore.getState().saveFile(filePath)
-          window.cclinkStudio.editor.saveResult(
-            request.id,
-            result === 'saved',
-            result === 'conflict' ? '文件已被外部修改' : undefined,
-          )
-        } else {
-          const content = useEditorStore.getState().files[filePath]?.currentContent ?? ''
-          await window.cclinkStudio.fs.saveTextDocument({ filePath: targetPath, content })
-          window.cclinkStudio.editor.saveResult(request.id, true)
-        }
+        const result = await useEditorStore.getState().saveFile(target.filePath)
+        window.cclinkStudio.editor.saveResult(
+          request.id,
+          result === 'saved',
+          result === 'conflict' ? '文件已被外部修改' : undefined,
+        )
       } catch (error) {
         window.cclinkStudio.editor.saveResult(
           request.id,

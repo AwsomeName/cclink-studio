@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAgentStore } from '../stores/agent-store'
+import { useEditorStore } from '../stores/editor-store'
 import { useTabStore } from '../stores/tab-store'
 import { closeTabWithDraftPolicy } from './close-tab'
 import { registerMediaProjectDraft } from '../features/media-production/media-project-draft-registry'
@@ -7,6 +8,7 @@ import { registerMediaProjectDraft } from '../features/media-production/media-pr
 beforeEach(() => {
   vi.restoreAllMocks()
   useAgentStore.setState(useAgentStore.getInitialState(), true)
+  useEditorStore.setState(useEditorStore.getInitialState(), true)
   useTabStore.setState({
     tabs: [{ id: 'browser', type: 'browser', title: '浏览器', icon: '🌐' }],
     activeTabId: 'browser',
@@ -27,6 +29,43 @@ beforeEach(() => {
         }),
       },
     },
+  })
+})
+
+describe('closeTabWithDraftPolicy editor conflicts', () => {
+  it('keeps the tab and draft when save reports an external conflict', async () => {
+    const filePath = '/workspace/notes.md'
+    useEditorStore.setState({
+      files: {
+        [filePath]: {
+          savedContent: '# Old',
+          currentContent: '# Unsaved draft',
+          dirty: true,
+          loading: false,
+        },
+      },
+      pendingUpdates: [],
+    })
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'markdown-editor',
+          type: 'editor',
+          title: 'notes.md',
+          icon: '📝',
+          filePath,
+        },
+      ],
+      activeTabId: 'markdown-editor',
+    })
+    const saveFile = vi
+      .spyOn(useEditorStore.getState(), 'saveFile')
+      .mockResolvedValueOnce('conflict')
+
+    expect(await closeTabWithDraftPolicy('markdown-editor')).toBe(false)
+    expect(saveFile).toHaveBeenCalledWith(filePath)
+    expect(useTabStore.getState().tabs).toHaveLength(1)
+    expect(useEditorStore.getState().files[filePath]?.currentContent).toBe('# Unsaved draft')
   })
 })
 

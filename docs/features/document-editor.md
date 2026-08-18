@@ -1,6 +1,8 @@
 # CCLink Studio 文档编辑器
 
-> 状态：Markdown S 级首轮实现与集中验收已完成；AI 写作辅助仍属后续专项。
+> 状态：Markdown 首轮功能已实现，但 2026-08-18 审查发现阻断性产品与架构问题，当前不再
+> 视为 S 级稳定完成；整改事实源为
+> `docs/features/markdown-editor-review-and-stabilization-plan.md`。AI 写作辅助仍属后续专项。
 > Markdown S 级产品规格：`docs/features/markdown-wysiwyg.md`。
 > 多格式 S 级状态：`docs/features/wysiwyg-editor.md`。
 

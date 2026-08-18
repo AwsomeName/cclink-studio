@@ -51,6 +51,7 @@ import {
   type MarkdownSearchMatch,
 } from '../../features/markdown/markdown-search'
 import { registerEditorSaveGuard, runEditorSaveGuard } from '../../features/editor-save-guard'
+import { resolveMountedEditorSaveTarget } from '../../features/editor-save-target'
 import {
   isMarkdownHydrationPending,
   setMarkdownEditorEditable,
@@ -653,25 +654,18 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       window.cclinkStudio.editor.readResponse(request.id, content)
     })
     const offSave = window.cclinkStudio.editor.onSaveRequest(async (request) => {
-      const targetPath = request.filePath ?? filePathRef.current
-      if (!targetPath) {
-        window.cclinkStudio.editor.saveResult(request.id, false, '无文件路径')
+      const target = resolveMountedEditorSaveTarget(request.filePath, filePathRef.current)
+      if (!target.ok) {
+        window.cclinkStudio.editor.saveResult(request.id, false, target.error)
         return
       }
       try {
-        if (targetPath === filePathRef.current) {
-          const result = await useEditorStore.getState().saveFile(targetPath)
-          window.cclinkStudio.editor.saveResult(
-            request.id,
-            result === 'saved',
-            result === 'conflict' ? '文件已被外部修改' : undefined,
-          )
-        } else {
-          await runEditorSaveGuard(fileKeyRef.current)
-          const content = useEditorStore.getState().files[fileKeyRef.current]?.currentContent ?? ''
-          await window.cclinkStudio.fs.saveTextDocument({ filePath: targetPath, content })
-          window.cclinkStudio.editor.saveResult(request.id, true)
-        }
+        const result = await useEditorStore.getState().saveFile(target.filePath)
+        window.cclinkStudio.editor.saveResult(
+          request.id,
+          result === 'saved',
+          result === 'conflict' ? '文件已被外部修改' : undefined,
+        )
       } catch (error) {
         window.cclinkStudio.editor.saveResult(
           request.id,
