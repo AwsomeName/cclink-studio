@@ -272,10 +272,7 @@ describe('open-projects-store', () => {
         projectStrip: {
           version: 3,
           openProjectPaths: [],
-          recentWorkspaceRefs: [
-            { kind: 'local', path: '/workspace/missing' },
-            remote,
-          ],
+          recentWorkspaceRefs: [{ kind: 'local', path: '/workspace/missing' }, remote],
         },
       },
     })
