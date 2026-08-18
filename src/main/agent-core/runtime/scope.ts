@@ -14,6 +14,8 @@ export type { AgentScope } from '../../../shared/agent-protocol'
 
 /** 默认作用域：全部 */
 export const DEFAULT_SCOPE: AgentScope = { kind: 'all' }
+const WEB_ACCOUNT_CATALOG_TOOL = 'web_accounts_list'
+const WEB_ACCOUNT_CATALOG_MCP_TOOL = `mcp__cclink_studio__${WEB_ACCOUNT_CATALOG_TOOL}`
 
 /**
  * 把作用域映射为 Claude Code 的 --allowedTools glob 列表
@@ -27,15 +29,20 @@ export function scopeToAllowedTools(scope: AgentScope): string[] {
     case 'all':
       return ['mcp__cclink_studio__*']
     case 'browser':
-      return ['mcp__cclink_studio__browser_*']
+      return ['mcp__cclink_studio__browser_*', WEB_ACCOUNT_CATALOG_MCP_TOOL]
     case 'android':
       // android_* 与 agent_device_* 并存（互补：语义 UI 感知 + 坐标操作）
-      return ['mcp__cclink_studio__android_*', 'mcp__cclink_studio__agent_device_*']
+      return [
+        'mcp__cclink_studio__android_*',
+        'mcp__cclink_studio__agent_device_*',
+        WEB_ACCOUNT_CATALOG_MCP_TOOL,
+      ]
     case 'editor':
       return [
         'mcp__cclink_studio__editor_*',
         'mcp__cclink_studio__image_generation_status',
         'mcp__cclink_studio__markdown_illustrate',
+        WEB_ACCOUNT_CATALOG_MCP_TOOL,
       ]
   }
 }
@@ -46,6 +53,7 @@ export function scopeToAllowedTools(scope: AgentScope): string[] {
  * 按工具名前缀判断，与 scopeToAllowedTools 的 glob 语义保持一致。
  */
 export function toolBelongsToScope(toolName: string, scope: AgentScope): boolean {
+  if (toolName === WEB_ACCOUNT_CATALOG_TOOL) return true
   switch (scope.kind) {
     case 'all':
       return true

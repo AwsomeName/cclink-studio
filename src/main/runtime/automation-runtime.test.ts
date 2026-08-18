@@ -118,6 +118,15 @@ describe('bootstrapAutomationRuntime', () => {
     expect(mocks.registered).not.toContain('browser')
   })
 
+  it('registers the read-only global web account catalog when the service is available', async () => {
+    const runtime = createAutomationRuntime()
+    runtime.webResourceService = { getSnapshot: vi.fn() } as never
+
+    await bootstrapAutomationRuntime(runtime)
+
+    expect(mocks.registered).toContain('web-resources')
+  })
+
   it('continues registering later modules when one optional module fails', async () => {
     mocks.meshyFails = true
     const runtime = createAutomationRuntime()

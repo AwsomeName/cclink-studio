@@ -13,6 +13,7 @@ import { AgentDeviceManager } from '../android/agent-device-manager'
 import { AgentDeviceToolModule } from '../mcp/modules/agent-device'
 import { DataSourceToolModule } from '../mcp/modules/data-source'
 import { WebAffairToolModule } from '../mcp/modules/web-affairs'
+import { WebResourceToolModule } from '../mcp/modules/web-resources'
 import { ScheduledTaskToolModule } from '../mcp/modules/scheduled-task'
 import type { ToolModule } from '../mcp/types'
 import type { AgentCapabilityName } from '../../shared/agent-protocol'
@@ -110,6 +111,15 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
       )
     } catch (error) {
       console.error('[CCLink Studio] web-affairs MCP 工具模块注册失败:', error)
+    }
+  }
+
+  if (runtime.webResourceService) {
+    try {
+      runtime.toolHost.registerModule(new WebResourceToolModule(runtime.webResourceService))
+      console.log('[CCLink Studio] web-resources MCP 只读工具模块已注册')
+    } catch (error) {
+      console.error('[CCLink Studio] web-resources MCP 工具模块注册失败:', error)
     }
   }
 
