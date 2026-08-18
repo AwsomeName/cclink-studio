@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import type {
   WebAccount,
+  WebAccountGroup,
   WebPrincipalKind,
-  WebResourceProjectSnapshot,
+  WebResourceSnapshot,
   WebsiteResource,
 } from '@shared/web-resources/web-resource-types'
 import type { WorkspaceRef } from '@shared/workspace-ref'
@@ -31,7 +32,7 @@ export function WebResourcesSidebar({
   workspaceRef: WorkspaceRef
   workspacePath?: string | null
 }): React.ReactElement {
-  const [snapshot, setSnapshot] = useState<WebResourceProjectSnapshot | null>(null)
+  const [snapshot, setSnapshot] = useState<WebResourceSnapshot | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [showImportForm, setShowImportForm] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -39,6 +40,10 @@ export function WebResourcesSidebar({
   const [importPrincipalKind, setImportPrincipalKind] = useState<WebPrincipalKind>('company')
   const [importPrincipalName, setImportPrincipalName] = useState('')
   const [importMessage, setImportMessage] = useState<string | null>(null)
+  const [showGroupForm, setShowGroupForm] = useState(false)
+  const [editingGroup, setEditingGroup] = useState<WebAccountGroup | null>(null)
+  const [groupName, setGroupName] = useState('')
+  const [groupAccountIds, setGroupAccountIds] = useState<string[]>([])
   const [loginStatuses, setLoginStatuses] = useState<Record<string, WebResourceLoginObservation>>(
     {},
   )
@@ -47,19 +52,16 @@ export function WebResourcesSidebar({
     if (!snapshot) return []
     const websiteById = new Map(snapshot.websites.map((website) => [website.id, website]))
     const principalById = new Map(snapshot.principals.map((principal) => [principal.id, principal]))
-    return snapshot.accounts.flatMap((account) => {
-      const website = websiteById.get(account.websiteId)
-      const principal = principalById.get(account.principalId)
-      return website && principal ? [{ account, website, principalName: principal.name }] : []
-    })
+    return snapshot.accounts
+      .filter((account) => !account.archivedAt)
+      .flatMap((account) => {
+        const website = websiteById.get(account.websiteId)
+        const principal = principalById.get(account.principalId)
+        return website && principal ? [{ account, website, principalName: principal.name }] : []
+      })
   }, [snapshot])
 
   const reload = useCallback(async (): Promise<void> => {
-    if (workspaceRef.kind !== 'local') {
-      setSnapshot(null)
-      setLoadError(null)
-      return
-    }
     const result = await window.cclinkStudio.webResources.getSnapshot({ workspaceRef })
     if (!result.success) {
       setLoadError(result.error.message)
@@ -127,6 +129,10 @@ export function WebResourcesSidebar({
   }, [refreshLoginStatuses])
 
   const beginDraft = async (): Promise<void> => {
+    if (workspaceRef.kind !== 'local') {
+      setLoadError('请先打开一个本地项目，再添加网站与账号')
+      return
+    }
     setSaving(true)
     setLoadError(null)
     try {
@@ -141,8 +147,8 @@ export function WebResourcesSidebar({
 
   const openAccount = async ({ account }: AccountRow): Promise<void> => {
     setLoadError(null)
-    if (!account.projectId) {
-      setLoadError(`账号“${account.label}”尚未归属当前项目`)
+    if (workspaceRef.kind !== 'local') {
+      setLoadError(`请先打开本地项目，再打开账号“${account.label}”`)
       return
     }
     try {
@@ -166,24 +172,6 @@ export function WebResourcesSidebar({
       }
       await reload()
       await refreshLoginStatuses()
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const claimLegacyConnections = async (): Promise<void> => {
-    setSaving(true)
-    setLoadError(null)
-    try {
-      const result = await window.cclinkStudio.webResources.claimLegacyConnections({ workspaceRef })
-      if (!result.success) {
-        setLoadError(result.error.message)
-        return
-      }
-      setImportMessage(`已将 ${result.data.claimedCount} 个旧网站账号归入当前项目`)
-      await reload()
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -219,18 +207,98 @@ export function WebResourcesSidebar({
     }
   }
 
-  if (workspaceRef.kind !== 'local') {
-    return (
-      <div className="web-resources-sidebar">
-        <div className="web-resources-empty">请先打开一个本地项目，再添加网站与账号。</div>
-      </div>
+  const resetGroupForm = (): void => {
+    setShowGroupForm(false)
+    setEditingGroup(null)
+    setGroupName('')
+    setGroupAccountIds([])
+  }
+
+  const editGroup = (group?: WebAccountGroup): void => {
+    setEditingGroup(group ?? null)
+    setGroupName(group?.name ?? '')
+    setGroupAccountIds(group?.accountIds ?? [])
+    setShowGroupForm(true)
+  }
+
+  const saveGroup = async (event: FormEvent): Promise<void> => {
+    event.preventDefault()
+    setSaving(true)
+    setLoadError(null)
+    try {
+      const result = editingGroup
+        ? await window.cclinkStudio.webResources.updateAccountGroup({
+            groupId: editingGroup.id,
+            expectedRevision: editingGroup.revision,
+            name: groupName,
+            accountIds: groupAccountIds,
+          })
+        : await window.cclinkStudio.webResources.createAccountGroup({
+            name: groupName,
+            accountIds: groupAccountIds,
+          })
+      if (!result.success) {
+        setLoadError(result.error.message)
+        return
+      }
+      resetGroupForm()
+      await reload()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const archiveGroup = async (group: WebAccountGroup): Promise<void> => {
+    if (!window.confirm(`归档运营矩阵“${group.name}”？历史引用会保留。`)) return
+    const result = await window.cclinkStudio.webResources.archiveAccountGroup({ groupId: group.id })
+    if (!result.success) setLoadError(result.error.message)
+    else await reload()
+  }
+
+  const archiveAccount = async (row: AccountRow): Promise<void> => {
+    if (!window.confirm(`归档账号“${row.account.label}”？历史事务引用会保留。`)) return
+    const result = await window.cclinkStudio.webResources.archiveAccount({
+      accountId: row.account.id,
+    })
+    if (!result.success) setLoadError(result.error.message)
+    else await reload()
+  }
+
+  const duplicateSets = useMemo(() => {
+    const sets = new Map<string, AccountRow[]>()
+    for (const row of rows) {
+      const key = `${row.account.websiteId}:${row.account.principalId}:${row.account.label.trim().toLocaleLowerCase()}`
+      sets.set(key, [...(sets.get(key) ?? []), row])
+    }
+    return [...sets.values()].filter((items) => items.length > 1)
+  }, [rows])
+
+  const mergeDuplicates = async (primary: AccountRow, duplicates: AccountRow[]): Promise<void> => {
+    if (
+      !window.confirm(`保留“${primary.account.label}”并合并其他 ${duplicates.length} 个重复账号？`)
     )
+      return
+    for (const duplicate of duplicates) {
+      const result = await window.cclinkStudio.webResources.mergeAccounts({
+        primaryAccountId: primary.account.id,
+        duplicateAccountId: duplicate.account.id,
+      })
+      if (!result.success) {
+        setLoadError(result.error.message)
+        return
+      }
+    }
+    await reload()
   }
 
   return (
     <div className="web-resources-sidebar">
       <div className="web-resources-toolbar">
-        <button type="button" disabled={saving} onClick={() => void beginDraft()}>
+        <button
+          type="button"
+          disabled={saving || workspaceRef.kind !== 'local'}
+          onClick={() => void beginDraft()}
+        >
           <IconPlus size={14} />
           {saving ? '正在打开…' : '添加网站与账号'}
         </button>
@@ -242,13 +310,64 @@ export function WebResourcesSidebar({
           >
             {checkingLogin ? '核验中…' : '刷新状态'}
           </button>
-          {workspacePath ? (
+          <button type="button" onClick={() => editGroup()}>
+            新建矩阵
+          </button>
+          {workspaceRef.kind === 'local' && workspacePath ? (
             <button type="button" onClick={() => setShowImportForm((value) => !value)}>
               导入
             </button>
           ) : null}
         </span>
       </div>
+
+      {workspaceRef.kind !== 'local' ? (
+        <div className="web-resources-empty">全局账号可查看；打开本地项目后可添加或打开账号。</div>
+      ) : null}
+
+      {showGroupForm ? (
+        <form className="web-resources-form" onSubmit={(event) => void saveGroup(event)}>
+          <div className="web-resources-import-title">
+            {editingGroup ? '编辑运营矩阵' : '新建运营矩阵'}
+          </div>
+          <label>
+            矩阵名称
+            <input
+              required
+              maxLength={160}
+              value={groupName}
+              onChange={(event) => setGroupName(event.target.value)}
+            />
+          </label>
+          <fieldset className="web-resource-group-accounts">
+            <legend>选择账号</legend>
+            {rows.map((row) => (
+              <label key={row.account.id}>
+                <input
+                  type="checkbox"
+                  checked={groupAccountIds.includes(row.account.id)}
+                  onChange={(event) =>
+                    setGroupAccountIds((current) =>
+                      event.target.checked
+                        ? [...current, row.account.id]
+                        : current.filter((id) => id !== row.account.id),
+                    )
+                  }
+                />
+                {row.website.name} · {row.account.label}
+              </label>
+            ))}
+          </fieldset>
+          <div className="web-resources-form-actions">
+            <button type="button" onClick={resetGroupForm}>
+              取消
+            </button>
+            <button type="submit" disabled={saving || groupAccountIds.length === 0}>
+              {saving ? '保存中…' : '保存'}
+            </button>
+          </div>
+        </form>
+      ) : null}
 
       {showImportForm && workspacePath ? (
         <form
@@ -292,14 +411,27 @@ export function WebResourcesSidebar({
 
       {loadError ? <div className="web-resources-error">{loadError}</div> : null}
       {importMessage ? <div className="web-resources-success">{importMessage}</div> : null}
-      {snapshot && snapshot.unassignedAccountCount > 0 ? (
-        <div className="web-resources-legacy-notice">
-          <span>发现 {snapshot.unassignedAccountCount} 个旧网站账号尚未归属项目。</span>
-          <button type="button" disabled={saving} onClick={() => void claimLegacyConnections()}>
-            归入当前项目
-          </button>
+      {duplicateSets.map((items) => (
+        <div className="web-resources-legacy-notice" key={items[0].account.id}>
+          <span>
+            发现 {items.length} 个可能重复的“{items[0].account.label}”。
+          </span>
+          {items.map((primary, index) => (
+            <button
+              type="button"
+              key={primary.account.id}
+              onClick={() =>
+                void mergeDuplicates(
+                  primary,
+                  items.filter((item) => item !== primary),
+                )
+              }
+            >
+              保留第 {index + 1} 项
+            </button>
+          ))}
         </div>
-      ) : null}
+      ))}
       {!snapshot && !loadError ? (
         <div className="web-resources-empty">正在读取网站与账号</div>
       ) : null}
@@ -346,12 +478,40 @@ export function WebResourcesSidebar({
                   确认登录
                 </button>
               ) : null}
+              <button
+                type="button"
+                className="web-resource-row-confirm"
+                disabled={saving}
+                onClick={() => void archiveAccount(row)}
+              >
+                归档
+              </button>
             </div>
           )
         })}
       </div>
+      {snapshot && snapshot.accountGroups.filter((group) => !group.archivedAt).length > 0 ? (
+        <div className="web-resource-groups">
+          <div className="web-resources-import-title">运营矩阵</div>
+          {snapshot.accountGroups
+            .filter((group) => !group.archivedAt)
+            .map((group) => (
+              <div className="web-resource-group-row" key={group.id}>
+                <span>
+                  {group.name} · {group.accountIds.length} 个账号 · v{group.revision}
+                </span>
+                <button type="button" onClick={() => editGroup(group)}>
+                  编辑
+                </button>
+                <button type="button" onClick={() => void archiveGroup(group)}>
+                  归档
+                </button>
+              </div>
+            ))}
+        </div>
+      ) : null}
       <div className="web-resources-boundary">
-        密码与 Cookie 不存入项目资源；登录由隔离的本机浏览器环境持有。
+        账号目录全局共用；密码与 Cookie 不进入项目，登录由唯一的本机隔离浏览器环境持有。
       </div>
     </div>
   )

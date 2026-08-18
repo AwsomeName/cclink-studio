@@ -133,6 +133,7 @@ export interface WebAffairDraftState {
   objective: string
   principalId: string
   accountIds: string[]
+  accountGroupIds: string[]
   materialPaths: string[]
   nodeTitles: string[]
   templateRef?: {
@@ -166,9 +167,8 @@ export interface Tab {
   initialUrl?: string
   /** 浏览器持久化 Profile，用于隔离平台登录态。 */
   browserProfile?: string | null
-  /** 项目网站账号资源引用；Browser Tab 只是该资源的可关闭运行投影。 */
+  /** 全局网站账号资源引用；Browser Tab 只是当前工作空间的可关闭运行投影。 */
   webResourceRef?: {
-    projectId: string
     accountId: string
   }
   /** 尚未保存的网站账号草稿；不进入 WorkspaceState。 */

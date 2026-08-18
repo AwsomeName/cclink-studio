@@ -14,6 +14,12 @@ import type { CommandContext, ContextTarget } from '../context-target'
 import type { MenuContribution } from '../menu-contribution-registry'
 
 type FileTarget = Extract<ContextTarget, { kind: 'file' }>
+type TabTarget = Extract<ContextTarget, { kind: 'tab' }>
+
+interface LocalPathTarget {
+  path: string
+  workspacePath: string | null
+}
 
 function fileTarget(context?: CommandContext): FileTarget | null {
   return context?.target?.kind === 'file' ? context.target : null
@@ -29,6 +35,36 @@ function requireFileTarget(context?: CommandContext): FileTarget {
   ) {
     throw new Error('文件或目录已不存在')
   }
+  return target
+}
+
+function tabTarget(context?: CommandContext): TabTarget | null {
+  return context?.target?.kind === 'tab' ? context.target : null
+}
+
+function resolveLocalPathTarget(context?: CommandContext): LocalPathTarget | null {
+  const file = fileTarget(context)
+  if (file) {
+    return { path: file.path, workspacePath: file.workspaceKey }
+  }
+
+  const target = tabTarget(context)
+  if (!target) return null
+  const tab = useTabStore.getState().tabs.find((item) => item.id === target.tabId)
+  if (!tab?.filePath || tab.type === 'remote-file' || tab.remoteFile) return null
+  return {
+    path: tab.filePath,
+    workspacePath: tab.workspaceRef?.kind === 'local' ? tab.workspaceRef.path : target.workspaceKey,
+  }
+}
+
+function requireLocalPathTarget(context?: CommandContext): LocalPathTarget {
+  if (context?.target?.kind === 'file') {
+    const target = requireFileTarget(context)
+    return { path: target.path, workspacePath: target.workspaceKey }
+  }
+  const target = resolveLocalPathTarget(context)
+  if (!target) throw new Error('当前标签页没有本地文件路径')
   return target
 }
 
@@ -248,19 +284,18 @@ export function createFileContextCommands(): Command[] {
       label: '复制绝对路径',
       contextOnly: true,
       category: '文件',
-      action: (context) => copyText(requireFileTarget(context).path, '已复制绝对路径'),
+      visible: (context) => Boolean(resolveLocalPathTarget(context)),
+      action: (context) => copyText(requireLocalPathTarget(context).path, '已复制绝对路径'),
     },
     {
       id: 'fileTree.copyRelativePath',
       label: '复制相对路径',
       contextOnly: true,
       category: '文件',
+      visible: (context) => Boolean(resolveLocalPathTarget(context)),
       action: (context) => {
-        const target = requireFileTarget(context)
-        const relativePath = toWorkspaceRelativePath(
-          target.path,
-          useFsStore.getState().workspacePath,
-        )
+        const target = requireLocalPathTarget(context)
+        const relativePath = toWorkspaceRelativePath(target.path, target.workspacePath)
         return copyText(
           relativePath,
           relativePath === target.path ? '已复制路径' : '已复制相对路径',

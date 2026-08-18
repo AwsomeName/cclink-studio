@@ -160,7 +160,7 @@ export function WebResourceDetailTab({ accountId }: { accountId: string }): Reac
             value={observation ? new Date(observation.checkedAt).toLocaleString() : '尚未核验'}
           />
           <p className="web-resource-session-note">
-            这里只展示脱敏诊断。密码不保存在项目资源中，登录状态由本机隔离环境持有。
+            这里只展示脱敏诊断。密码不保存在资源目录中，登录状态由全局唯一的本机隔离环境持有。
           </p>
         </section>
       </div>

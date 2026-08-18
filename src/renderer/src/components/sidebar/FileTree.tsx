@@ -19,6 +19,7 @@ import { getModelFileIcon, getTabTypeForFile, isModelFileExtension } from '../..
 import { isGerberFileExtension } from '../../utils/hardware-files'
 import { buildHtmlBrowserTabDraft, isHtmlFileExtension } from '../../utils/html-files'
 import { getFileTreeRefreshDirectory } from './file-tree-watch'
+import { shouldClearFileTreeSelectionOnBlur } from './file-tree-selection'
 import { resolveFileTreeClipboardShortcut } from './file-tree-shortcuts'
 import { findFileTreeNode, resolveFileTreeCreationParent } from '../../utils/workspace-tree'
 import { useCommandStore } from '../../stores/command-store'
@@ -342,7 +343,19 @@ export function FileTree(): React.ReactElement {
   }
 
   return (
-    <div className="file-tree-shell">
+    <div
+      className="file-tree-shell"
+      onBlur={(event) => {
+        if (
+          shouldClearFileTreeSelectionOnBlur(
+            event.relatedTarget,
+            (target) => target instanceof Node && event.currentTarget.contains(target),
+          )
+        ) {
+          setSelectedPath(null)
+        }
+      }}
+    >
       <div className="file-tree-toolbar">
         <button
           className="file-tree-toolbar-btn"
@@ -381,6 +394,9 @@ export function FileTree(): React.ReactElement {
       <div
         className={`file-tree ${dropTargetPath === workspacePath ? 'drop-target-root' : ''}`}
         ref={treeRef}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setSelectedPath(null)
+        }}
         onKeyDown={(event) => {
           const shortcut = resolveFileTreeClipboardShortcut({
             key: event.key,

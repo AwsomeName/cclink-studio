@@ -113,7 +113,6 @@ export const webPrincipalSchema = z
 export const webAccountSchema = z
   .object({
     id: uuidSchema,
-    projectId: uuidSchema.nullable(),
     websiteId: uuidSchema,
     principalId: uuidSchema,
     label: trimmedText(160, '账号名称'),
@@ -123,6 +122,20 @@ export const webAccountSchema = z
     ),
     loginHint: optionalTrimmedText(500, '登录提示'),
     loginConfirmedAt: timestampSchema.optional(),
+    archivedAt: timestampSchema.optional(),
+    mergedIntoAccountId: uuidSchema.optional(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+  })
+  .strict()
+
+export const webAccountGroupSchema = z
+  .object({
+    id: uuidSchema,
+    name: trimmedText(160, '运营矩阵名称'),
+    revision: z.number().int().positive(),
+    accountIds: z.array(uuidSchema).min(1).max(200),
+    archivedAt: timestampSchema.optional(),
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
   })
@@ -130,11 +143,27 @@ export const webAccountSchema = z
 
 export const webResourceSnapshotSchema = z
   .object({
-    schemaVersion: z.literal(2),
+    schemaVersion: z.literal(3),
     revision: z.number().int().nonnegative(),
     websites: z.array(websiteResourceSchema).max(1_000),
     principals: z.array(webPrincipalSchema).max(500),
     accounts: z.array(webAccountSchema).max(2_000),
+    accountGroups: z.array(webAccountGroupSchema).max(500),
+  })
+  .strict()
+
+const webAccountV2Schema = webAccountSchema
+  .omit({ archivedAt: true, mergedIntoAccountId: true })
+  .extend({ projectId: uuidSchema.nullable() })
+  .strict()
+
+const webResourceSnapshotV2Schema = z
+  .object({
+    schemaVersion: z.literal(2),
+    revision: z.number().int().nonnegative(),
+    websites: z.array(websiteResourceSchema).max(1_000),
+    principals: z.array(webPrincipalSchema).max(500),
+    accounts: z.array(webAccountV2Schema).max(2_000),
   })
   .strict()
 
@@ -145,7 +174,11 @@ const webResourceSnapshotV1Schema = z
     websites: z.array(websiteResourceSchema).max(1_000),
     principals: z.array(webPrincipalSchema).max(500),
     accounts: z
-      .array(webAccountSchema.omit({ projectId: true, loginConfirmedAt: true }).strict())
+      .array(
+        webAccountSchema
+          .omit({ loginConfirmedAt: true, archivedAt: true, mergedIntoAccountId: true })
+          .strict(),
+      )
       .max(2_000),
   })
   .strict()
@@ -184,9 +217,39 @@ export function parseWebResourceSnapshot(value: unknown) {
     const legacy = webResourceSnapshotV1Schema.parse(value)
     return webResourceSnapshotSchema.parse({
       ...legacy,
-      schemaVersion: 2,
-      accounts: legacy.accounts.map((account) => ({ ...account, projectId: null })),
+      schemaVersion: 3,
+      accountGroups: [],
+    })
+  }
+  if (version === 2) {
+    const legacy = webResourceSnapshotV2Schema.parse(value)
+    return webResourceSnapshotSchema.parse({
+      ...legacy,
+      schemaVersion: 3,
+      accounts: legacy.accounts.map(({ projectId: _projectId, ...account }) => account),
+      accountGroups: [],
     })
   }
   return webResourceSnapshotSchema.parse(value)
 }
+
+export const createWebAccountGroupInputSchema = z
+  .object({
+    name: trimmedText(160, '运营矩阵名称'),
+    accountIds: z
+      .array(uuidSchema)
+      .min(1)
+      .max(200)
+      .transform((items) => [...new Set(items)]),
+  })
+  .strict()
+
+export const updateWebAccountGroupInputSchema = createWebAccountGroupInputSchema
+  .extend({ groupId: uuidSchema, expectedRevision: z.number().int().positive() })
+  .strict()
+
+export const archiveWebAccountGroupInputSchema = z.object({ groupId: uuidSchema }).strict()
+export const archiveWebAccountInputSchema = z.object({ accountId: uuidSchema }).strict()
+export const mergeWebAccountsInputSchema = z
+  .object({ primaryAccountId: uuidSchema, duplicateAccountId: uuidSchema })
+  .strict()

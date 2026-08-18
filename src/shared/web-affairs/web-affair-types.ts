@@ -165,6 +165,13 @@ export interface WebAffairTemplateRef {
   version: number
 }
 
+export interface WebAffairAccountGroupBinding {
+  groupId: string
+  groupRevision: number
+  /** Membership snapshot: later group edits do not silently alter an existing affair. */
+  accountIds: string[]
+}
+
 export interface WebAffairEvent {
   id: string
   type:
@@ -198,6 +205,7 @@ export interface WebAffair {
   principalId: string
   websiteIds: string[]
   accountIds: string[]
+  accountGroupBindings?: WebAffairAccountGroupBinding[]
   materials: WebAffairMaterialRef[]
   flow: WebAffairFlow
   attempts: WebAffairAttempt[]
@@ -250,6 +258,7 @@ export interface CreateWebAffairInput {
   objective: string
   principalId: string
   accountIds: string[]
+  accountGroupIds?: string[]
   materialPaths: string[]
   nodeTitles: string[]
   workspaceRef: WorkspaceRef

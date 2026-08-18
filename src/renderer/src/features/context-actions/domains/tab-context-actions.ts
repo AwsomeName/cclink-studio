@@ -16,6 +16,12 @@ function tabIdFromContext(context?: CommandContext): string | null {
   return context?.target?.kind === 'tab' ? context.target.tabId : null
 }
 
+function isLocalFileBackedTab(context: CommandContext): boolean {
+  const tabId = tabIdFromContext(context)
+  const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
+  return Boolean(tab?.filePath && tab.type !== 'remote-file' && !tab.remoteFile)
+}
+
 export async function renameWorkbenchTab(
   tabId: string,
   requestedTitle: string | null,
@@ -202,6 +208,24 @@ export const tabMenuContributions: MenuContribution[] = [
     order: 10,
     commandId: 'workbench.duplicateTab',
     icon: '📋',
+  },
+  {
+    id: 'tab.copy-absolute-path',
+    targetKinds: ['tab'],
+    group: '40-copy',
+    order: 20,
+    commandId: 'fileTree.copyAbsolutePath',
+    icon: '📋',
+    when: isLocalFileBackedTab,
+  },
+  {
+    id: 'tab.copy-relative-path',
+    targetKinds: ['tab'],
+    group: '40-copy',
+    order: 30,
+    commandId: 'fileTree.copyRelativePath',
+    icon: '↳',
+    when: isLocalFileBackedTab,
   },
   {
     id: 'tab.close',

@@ -16,13 +16,20 @@ import type {
   WebResourceOperationResult,
   WebResourceLaunchDescriptor,
   WebResourceProjectScopeInput,
-  WebResourceProjectSnapshot,
+  WebResourceSnapshot,
+  WebAccount,
+  WebAccountGroup,
+  CreateWebAccountGroupInput,
+  UpdateWebAccountGroupInput,
+  ArchiveWebAccountGroupInput,
+  ArchiveWebAccountInput,
+  MergeWebAccountsInput,
 } from './web-resource-types'
 
 export interface WebResourcesApiContract {
   getSnapshot(
     input: WebResourceProjectScopeInput,
-  ): Promise<WebResourceOperationResult<WebResourceProjectSnapshot>>
+  ): Promise<WebResourceOperationResult<WebResourceSnapshot>>
   createConnection(
     input: CreateWebConnectionInput,
   ): Promise<WebResourceOperationResult<WebResourceConnection>>
@@ -47,12 +54,23 @@ export interface WebResourcesApiContract {
   importProjectOpsConfig(
     input: ImportProjectOpsConfigInput,
   ): Promise<WebResourceOperationResult<ImportProjectOpsConfigSummary>>
+  createAccountGroup(
+    input: CreateWebAccountGroupInput,
+  ): Promise<WebResourceOperationResult<WebAccountGroup>>
+  updateAccountGroup(
+    input: UpdateWebAccountGroupInput,
+  ): Promise<WebResourceOperationResult<WebAccountGroup>>
+  archiveAccountGroup(
+    input: ArchiveWebAccountGroupInput,
+  ): Promise<WebResourceOperationResult<WebAccountGroup>>
+  archiveAccount(input: ArchiveWebAccountInput): Promise<WebResourceOperationResult<WebAccount>>
+  mergeAccounts(input: MergeWebAccountsInput): Promise<WebResourceOperationResult<WebAccount>>
 }
 
 export const webResourcesIpc = {
   getSnapshot: defineIpcCall<
     [WebResourceProjectScopeInput],
-    WebResourceOperationResult<WebResourceProjectSnapshot>
+    WebResourceOperationResult<WebResourceSnapshot>
   >('webResources:getSnapshot'),
   createConnection: defineIpcCall<
     [CreateWebConnectionInput],
@@ -86,4 +104,22 @@ export const webResourcesIpc = {
     [ImportProjectOpsConfigInput],
     WebResourceOperationResult<ImportProjectOpsConfigSummary>
   >('webResources:importProjectOpsConfig'),
+  createAccountGroup: defineIpcCall<
+    [CreateWebAccountGroupInput],
+    WebResourceOperationResult<WebAccountGroup>
+  >('webResources:createAccountGroup'),
+  updateAccountGroup: defineIpcCall<
+    [UpdateWebAccountGroupInput],
+    WebResourceOperationResult<WebAccountGroup>
+  >('webResources:updateAccountGroup'),
+  archiveAccountGroup: defineIpcCall<
+    [ArchiveWebAccountGroupInput],
+    WebResourceOperationResult<WebAccountGroup>
+  >('webResources:archiveAccountGroup'),
+  archiveAccount: defineIpcCall<[ArchiveWebAccountInput], WebResourceOperationResult<WebAccount>>(
+    'webResources:archiveAccount',
+  ),
+  mergeAccounts: defineIpcCall<[MergeWebAccountsInput], WebResourceOperationResult<WebAccount>>(
+    'webResources:mergeAccounts',
+  ),
 } as const

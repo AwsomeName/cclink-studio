@@ -15,6 +15,7 @@ export function createEmptyWebAffairDraft(): WebAffairDraftState {
     objective: '',
     principalId: '',
     accountIds: [],
+    accountGroupIds: [],
     materialPaths: [],
     nodeTitles: [...DEFAULT_WEB_AFFAIR_NODE_TITLES],
   }
@@ -46,6 +47,7 @@ export function isWebAffairDraftEmpty(draft: WebAffairDraftState): boolean {
     draft.objective.trim().length === 0 &&
     draft.principalId.length === 0 &&
     draft.accountIds.length === 0 &&
+    draft.accountGroupIds.length === 0 &&
     draft.materialPaths.length === 0
   )
 }

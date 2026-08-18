@@ -1,5 +1,9 @@
 import { bindIpcParser, ipcArgs } from '../ipc/contract'
 import {
+  archiveWebAccountGroupInputSchema,
+  archiveWebAccountInputSchema,
+  createWebAccountGroupInputSchema,
+  mergeWebAccountsInputSchema,
   parseCancelWebResourceDraftInput,
   parseConfirmWebConnectionLoginInput,
   parseCreateWebConnectionInput,
@@ -7,6 +11,7 @@ import {
   parseResolveWebResourceLaunchInput,
   parseSaveWebResourceDraftInput,
   parseWebResourceProjectScopeInput,
+  updateWebAccountGroupInputSchema,
 } from './web-resource-schema'
 import { webResourcesIpc } from './web-resource'
 import type {
@@ -117,5 +122,55 @@ export const webResourcesIpcContracts = {
       success: false,
       error: { code: 'INVALID_INPUT', message: '导入参数无效' },
     }),
+  ),
+  createAccountGroup: bindIpcParser(
+    webResourcesIpc.createAccountGroup,
+    (args) => {
+      if (args.length !== 1) {
+        throw new Error(`IPC ${webResourcesIpc.createAccountGroup.channel} 需要 1 个参数`)
+      }
+      return ipcArgs(createWebAccountGroupInputSchema.parse(args[0]))
+    },
+    invalidInputResult,
+  ),
+  updateAccountGroup: bindIpcParser(
+    webResourcesIpc.updateAccountGroup,
+    (args) => {
+      if (args.length !== 1) {
+        throw new Error(`IPC ${webResourcesIpc.updateAccountGroup.channel} 需要 1 个参数`)
+      }
+      return ipcArgs(updateWebAccountGroupInputSchema.parse(args[0]))
+    },
+    invalidInputResult,
+  ),
+  archiveAccountGroup: bindIpcParser(
+    webResourcesIpc.archiveAccountGroup,
+    (args) => {
+      if (args.length !== 1) {
+        throw new Error(`IPC ${webResourcesIpc.archiveAccountGroup.channel} 需要 1 个参数`)
+      }
+      return ipcArgs(archiveWebAccountGroupInputSchema.parse(args[0]))
+    },
+    invalidInputResult,
+  ),
+  archiveAccount: bindIpcParser(
+    webResourcesIpc.archiveAccount,
+    (args) => {
+      if (args.length !== 1) {
+        throw new Error(`IPC ${webResourcesIpc.archiveAccount.channel} 需要 1 个参数`)
+      }
+      return ipcArgs(archiveWebAccountInputSchema.parse(args[0]))
+    },
+    invalidInputResult,
+  ),
+  mergeAccounts: bindIpcParser(
+    webResourcesIpc.mergeAccounts,
+    (args) => {
+      if (args.length !== 1) {
+        throw new Error(`IPC ${webResourcesIpc.mergeAccounts.channel} 需要 1 个参数`)
+      }
+      return ipcArgs(mergeWebAccountsInputSchema.parse(args[0]))
+    },
+    invalidInputResult,
   ),
 } as const

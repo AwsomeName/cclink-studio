@@ -9,7 +9,6 @@ const launch: WebResourceLaunchDescriptor = {
   entryUrl: 'https://appstoreconnect.apple.com/apps',
   browserProfileId: 'release-profile',
   webResourceRef: {
-    projectId: '44444444-4444-4444-8444-444444444444',
     accountId: '33333333-3333-4333-8333-333333333333',
   },
 }
@@ -45,7 +44,6 @@ describe('ensureWebResourceTab', () => {
         initialUrl: 'https://appstoreconnect.apple.com/apps',
         browserProfile: 'release-profile',
         webResourceRef: {
-          projectId: '44444444-4444-4444-8444-444444444444',
           accountId: '33333333-3333-4333-8333-333333333333',
         },
         workspaceRef,
@@ -53,13 +51,13 @@ describe('ensureWebResourceTab', () => {
     ])
   })
 
-  it('surfaces the main-process project guard and does not create a tab', async () => {
+  it('surfaces a missing global account and does not create a tab', async () => {
     vi.stubGlobal('window', {
       cclinkStudio: {
         webResources: {
           resolveLaunch: vi.fn().mockResolvedValue({
             success: false,
-            error: { code: 'RESOURCE_NOT_FOUND', message: '当前项目的网站账号不存在' },
+            error: { code: 'RESOURCE_NOT_FOUND', message: '网站账号不存在或已归档' },
           }),
         },
       },
@@ -67,7 +65,7 @@ describe('ensureWebResourceTab', () => {
 
     await expect(
       resolveAndOpenWebResourceTab(launch.webResourceRef.accountId, workspaceRef),
-    ).rejects.toThrow('当前项目的网站账号不存在')
+    ).rejects.toThrow('网站账号不存在或已归档')
     expect(useTabStore.getState().tabs).toEqual([])
   })
 })

@@ -43,9 +43,10 @@ export function WebAffairNodeActions({
   const materialNames = affair.materials
     .filter((item) => node.materialIds.includes(item.id))
     .map((item) => item.name)
-  const canStart =
+  const accountReadyToStart =
     (node.status === 'ready' || node.status === 'failed' || isDueCheck) &&
     Boolean(account && website && principal)
+  const canStart = false
   const isAttemptActive =
     attempt &&
     !['waiting-external', 'succeeded', 'failed', 'cancelled', 'interrupted'].includes(
@@ -325,6 +326,13 @@ export function WebAffairNodeActions({
             {isDueCheck ? '开始复查' : '交给 AI'}
           </button>
         )
+      ) : null}
+
+      {accountReadyToStart && !isAttemptActive ? (
+        <small>
+          AI
+          调用全局账号的权限方案尚未确认。请先在上方点击账号人工打开网页，并用节点状态记录办理结果。
+        </small>
       ) : null}
 
       {isAttemptActive ? (

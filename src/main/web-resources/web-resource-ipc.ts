@@ -4,7 +4,7 @@ import type {
   ImportProjectOpsConfigSummary,
   WebResourceConnection,
   WebResourceOperationResult,
-  WebResourceProjectSnapshot,
+  WebResourceSnapshot,
   WebResourceProjectScopeInput,
 } from '../../shared/web-resources/web-resource-types'
 import {
@@ -36,12 +36,10 @@ export function registerWebResourceIpc(
   registerTrustedIpcContract(
     webResourcesIpcContracts.getSnapshot,
     trustedRendererGuard,
-    async (_event, input): Promise<WebResourceOperationResult<WebResourceProjectSnapshot>> => {
+    async (_event, _input): Promise<WebResourceOperationResult<WebResourceSnapshot>> => {
       const service = getService()
-      const projectId = await resolveProjectId(input, getWorkspaceStateService())
       if (!service) return unavailable()
-      if (!projectId.success) return projectId
-      return service.getProjectSnapshot(projectId.data)
+      return service.getSnapshot()
     },
   )
 
@@ -111,7 +109,7 @@ export function registerWebResourceIpc(
       const projectId = await resolveProjectId(input, getWorkspaceStateService())
       if (!service) return unavailable()
       if (!projectId.success) return projectId
-      return service.resolveLaunch(projectId.data, input.accountId)
+      return service.resolveLaunch(input.accountId)
     },
   )
 
@@ -120,10 +118,8 @@ export function registerWebResourceIpc(
     trustedRendererGuard,
     async (_event, input): Promise<WebResourceOperationResult<WebResourceConnection>> => {
       const service = getService()
-      const projectId = await resolveProjectId(input, getWorkspaceStateService())
       if (!service) return unavailable()
-      if (!projectId.success) return projectId
-      return service.confirmLogin(projectId.data, input.accountId)
+      return service.confirmLogin(input.accountId)
     },
   )
 
@@ -230,6 +226,36 @@ export function registerWebResourceIpc(
         }
       }
     },
+  )
+
+  registerTrustedIpcContract(
+    webResourcesIpcContracts.createAccountGroup,
+    trustedRendererGuard,
+    async (_event, input) => getService()?.createAccountGroup(input) ?? unavailable(),
+  )
+
+  registerTrustedIpcContract(
+    webResourcesIpcContracts.updateAccountGroup,
+    trustedRendererGuard,
+    async (_event, input) => getService()?.updateAccountGroup(input) ?? unavailable(),
+  )
+
+  registerTrustedIpcContract(
+    webResourcesIpcContracts.archiveAccountGroup,
+    trustedRendererGuard,
+    async (_event, input) => getService()?.archiveAccountGroup(input.groupId) ?? unavailable(),
+  )
+
+  registerTrustedIpcContract(
+    webResourcesIpcContracts.archiveAccount,
+    trustedRendererGuard,
+    async (_event, input) => getService()?.archiveAccount(input.accountId) ?? unavailable(),
+  )
+
+  registerTrustedIpcContract(
+    webResourcesIpcContracts.mergeAccounts,
+    trustedRendererGuard,
+    async (_event, input) => getService()?.mergeAccounts(input) ?? unavailable(),
   )
 }
 

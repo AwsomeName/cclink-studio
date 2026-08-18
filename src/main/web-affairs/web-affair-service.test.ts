@@ -9,6 +9,7 @@ import { WebAffairStore } from './web-affair-store'
 const PRINCIPAL_ID = '11111111-1111-4111-8111-111111111111'
 const WEBSITE_ID = '22222222-2222-4222-8222-222222222222'
 const ACCOUNT_ID = '33333333-3333-4333-8333-333333333333'
+const ACCOUNT_GROUP_ID = '55555555-5555-4555-8555-555555555555'
 const WORKSPACE_ID = '11111111-1111-4111-8111-111111111111'
 const WORKSPACE_REF = { kind: 'local' as const, path: '/tmp/workspace' }
 const OTHER_WORKSPACE_ID = '44444444-4444-4444-8444-444444444444'
@@ -49,6 +50,37 @@ describe('WebAffairService', () => {
     expect(reloaded.getSnapshot()).toMatchObject({
       success: true,
       data: { revision: 1, affairs: [{ title: 'App 上架' }] },
+    })
+  })
+
+  it('stores a versioned membership snapshot when an affair references a global account group', async () => {
+    const resources = resourceSnapshot()
+    resources.accountGroups = [
+      {
+        id: ACCOUNT_GROUP_ID,
+        name: '国内发布矩阵',
+        revision: 4,
+        accountIds: [ACCOUNT_ID],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]
+    const service = new WebAffairService(() => resources, new WebAffairStore(filePath))
+    await service.load()
+    const created = await service.createAffair(
+      { ...validInput(), accountIds: [], accountGroupIds: [ACCOUNT_GROUP_ID] },
+      WORKSPACE_ID,
+    )
+
+    expect(created).toMatchObject({
+      success: true,
+      data: {
+        workspaceId: WORKSPACE_ID,
+        accountIds: [ACCOUNT_ID],
+        accountGroupBindings: [
+          { groupId: ACCOUNT_GROUP_ID, groupRevision: 4, accountIds: [ACCOUNT_ID] },
+        ],
+      },
     })
   })
 
@@ -105,13 +137,38 @@ describe('WebAffairService', () => {
     })
   })
 
-  it('isolates affairs and account references by stable workspace id', async () => {
+  it('fails closed when AI account invocation has not been enabled', async () => {
+    const service = new WebAffairService(() => resourceSnapshot(), new WebAffairStore(filePath))
+    await service.load()
+    const created = await service.createAffair(validInput(), WORKSPACE_ID)
+    if (!created.success) throw new Error(created.error.message)
+
+    await expect(
+      service.startAttempt(
+        {
+          workspaceRef: WORKSPACE_REF,
+          affairId: created.data.id,
+          nodeId: created.data.flow.nodes[0].id,
+          accountId: ACCOUNT_ID,
+        },
+        WORKSPACE_ID,
+      ),
+    ).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'INVALID_RESOURCE_REFERENCE',
+        message: '全局账号的 AI 调用权限尚未确认；请先人工打开网页办理',
+      },
+    })
+  })
+
+  it('keeps affairs project-owned while allowing the same global account in each project', async () => {
     const service = createService(filePath)
     await service.load()
 
     await expect(service.createAffair(validInput(), OTHER_WORKSPACE_ID)).resolves.toMatchObject({
-      success: false,
-      error: { code: 'INVALID_RESOURCE_REFERENCE' },
+      success: true,
+      data: { workspaceId: OTHER_WORKSPACE_ID },
     })
 
     const created = await service.createAffair(validInput(), WORKSPACE_ID)
@@ -122,7 +179,7 @@ describe('WebAffairService', () => {
     })
     expect(service.getProjectSnapshot(OTHER_WORKSPACE_ID)).toMatchObject({
       success: true,
-      data: { affairs: [] },
+      data: { affairs: [{ title: 'App 上架' }] },
     })
 
     if (!created.success) throw new Error(created.error.message)
@@ -143,7 +200,7 @@ describe('WebAffairService', () => {
     if (unchanged.success) expect(unchanged.data.affairs[0].flow.nodes[0].status).toBe('ready')
   })
 
-  it('lists legacy affairs and only assigns one after explicit current-workspace validation', async () => {
+  it('lists legacy affairs and assigns one to the selected project while keeping global account refs', async () => {
     const service = createService(filePath)
     await service.load()
     const created = await service.createAffair(validInput(), WORKSPACE_ID)
@@ -179,29 +236,19 @@ describe('WebAffairService', () => {
         ],
       },
     })
-    await expect(
-      reloaded.claimLegacyAffair(
-        { workspaceRef: OTHER_WORKSPACE_REF, affairId: created.data.id },
-        OTHER_WORKSPACE_ID,
-      ),
-    ).resolves.toMatchObject({
-      success: false,
-      error: { code: 'INVALID_RESOURCE_REFERENCE' },
-    })
-
     const claimed = await reloaded.claimLegacyAffair(
-      { workspaceRef: WORKSPACE_REF, affairId: created.data.id },
-      WORKSPACE_ID,
+      { workspaceRef: OTHER_WORKSPACE_REF, affairId: created.data.id },
+      OTHER_WORKSPACE_ID,
     )
     expect(claimed).toMatchObject({
       success: true,
       data: {
-        workspaceId: WORKSPACE_ID,
-        workspaceRef: WORKSPACE_REF,
+        workspaceId: OTHER_WORKSPACE_ID,
+        workspaceRef: OTHER_WORKSPACE_REF,
         events: expect.arrayContaining([expect.objectContaining({ type: 'workspace-assigned' })]),
       },
     })
-    expect(reloaded.getProjectSnapshot(WORKSPACE_ID)).toMatchObject({
+    expect(reloaded.getProjectSnapshot(OTHER_WORKSPACE_ID)).toMatchObject({
       success: true,
       data: { unassignedAffairCount: 0, unassignedAffairs: [], affairs: [{ id: created.data.id }] },
     })
@@ -599,7 +646,32 @@ describe('WebAffairService', () => {
 })
 
 function createService(filePath: string): WebAffairService {
-  return new WebAffairService(() => resourceSnapshot(), new WebAffairStore(filePath))
+  return new WebAffairService(
+    () => resourceSnapshot(),
+    new WebAffairStore(filePath),
+    undefined,
+    undefined,
+    (_workspaceId, accountId) => {
+      const resources = resourceSnapshot()
+      const account = resources.accounts.find((item) => item.id === accountId)
+      const website = resources.websites.find((item) => item.id === account?.websiteId)
+      if (!account || !website) {
+        return {
+          success: false,
+          error: { code: 'RESOURCE_NOT_FOUND', message: '网站账号不存在' },
+        }
+      }
+      return {
+        success: true,
+        data: {
+          webResourceRef: { accountId: account.id },
+          title: website.name,
+          entryUrl: website.entryUrl,
+          browserProfileId: account.browserProfileId,
+        },
+      }
+    },
+  )
 }
 
 function validInput() {
@@ -617,7 +689,7 @@ function validInput() {
 function resourceSnapshot(): WebResourceSnapshot {
   const now = new Date().toISOString()
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     revision: 1,
     websites: [
       {
@@ -641,7 +713,6 @@ function resourceSnapshot(): WebResourceSnapshot {
     accounts: [
       {
         id: ACCOUNT_ID,
-        projectId: '11111111-1111-4111-8111-111111111111',
         websiteId: WEBSITE_ID,
         principalId: PRINCIPAL_ID,
         label: 'Release',
@@ -650,6 +721,7 @@ function resourceSnapshot(): WebResourceSnapshot {
         updatedAt: now,
       },
     ],
+    accountGroups: [],
   }
 }
 

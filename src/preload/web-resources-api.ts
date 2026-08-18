@@ -13,4 +13,9 @@ export const webResourcesApi: WebResourcesApiContract = {
     invokeIpcContract(webResourcesIpc.claimLegacyConnections, input),
   importProjectOpsConfig: (input) =>
     invokeIpcContract(webResourcesIpc.importProjectOpsConfig, input),
+  createAccountGroup: (input) => invokeIpcContract(webResourcesIpc.createAccountGroup, input),
+  updateAccountGroup: (input) => invokeIpcContract(webResourcesIpc.updateAccountGroup, input),
+  archiveAccountGroup: (input) => invokeIpcContract(webResourcesIpc.archiveAccountGroup, input),
+  archiveAccount: (input) => invokeIpcContract(webResourcesIpc.archiveAccount, input),
+  mergeAccounts: (input) => invokeIpcContract(webResourcesIpc.mergeAccounts, input),
 }

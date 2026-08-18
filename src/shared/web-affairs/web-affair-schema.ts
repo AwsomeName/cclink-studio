@@ -67,8 +67,13 @@ export const createWebAffairInputSchema = z
     principalId: uuidSchema,
     accountIds: z
       .array(uuidSchema)
-      .max(32)
+      .max(200)
       .transform((items) => [...new Set(items)]),
+    accountGroupIds: z
+      .array(uuidSchema)
+      .max(32)
+      .transform((items) => [...new Set(items)])
+      .optional(),
     materialPaths: z
       .array(absolutePathSchema)
       .max(64)
@@ -109,7 +114,7 @@ const reviseFlowNodeInputSchema = z
     description: optionalTrimmedText(2_000, '节点说明'),
     type: webAffairNodeTypeSchema,
     executor: webAffairNodeExecutorSchema,
-    accountIds: z.array(uuidSchema).max(32),
+    accountIds: z.array(uuidSchema).max(200),
     materialIds: z.array(uuidSchema).max(64),
     successCriteria: z.array(trimmedText(500, '成功判据')).min(1).max(20),
   })
@@ -296,7 +301,7 @@ const webAffairNodeSchema = z
     description: optionalTrimmedText(2_000, '节点说明'),
     status: webAffairNodeStatusSchema,
     executor: webAffairNodeExecutorSchema,
-    accountIds: z.array(uuidSchema).max(32),
+    accountIds: z.array(uuidSchema).max(200),
     materialIds: z.array(uuidSchema).max(64),
     successCriteria: z.array(trimmedText(500, '成功判据')).max(20),
     availableTransitions: z.array(webAffairNodeStatusSchema).max(10),
@@ -425,7 +430,19 @@ const webAffairSchema = z
     status: webAffairStatusSchema,
     principalId: uuidSchema,
     websiteIds: z.array(uuidSchema).max(64),
-    accountIds: z.array(uuidSchema).max(32),
+    accountIds: z.array(uuidSchema).max(200),
+    accountGroupBindings: z
+      .array(
+        z
+          .object({
+            groupId: uuidSchema,
+            groupRevision: positiveVersionSchema,
+            accountIds: z.array(uuidSchema).min(1).max(200),
+          })
+          .strict(),
+      )
+      .max(32)
+      .optional(),
     materials: z.array(webAffairMaterialSchema).max(64),
     flow: z
       .object({

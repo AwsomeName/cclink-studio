@@ -73,7 +73,6 @@ describe('WebResourceService', () => {
       data: {
         website: { name: 'App Store Connect' },
         account: {
-          projectId: PROJECT_ID,
           label: '张三公司',
           browserProfileId: begun.data.browserProfileId,
           loginConfirmedAt: expect.any(String),
@@ -295,30 +294,90 @@ describe('WebResourceService', () => {
     })
   })
 
-  it('isolates website-account connections by stable project id', async () => {
+  it('versions global account groups and preserves aliases when duplicate accounts are merged', async () => {
     const service = new WebResourceService(new WebResourceStore(storePath))
     await service.load()
+    const primary = await service.createConnection(baseInput, PROJECT_ID, 'apple-release')
+    const duplicate = await service.createConnection(
+      { ...baseInput, accountLabel: 'Release account duplicate' },
+      OTHER_PROJECT_ID,
+      'apple-release-duplicate',
+    )
+    if (!primary.success || !duplicate.success) throw new Error('测试账号创建失败')
 
-    await service.createConnection(baseInput, PROJECT_ID, 'shared-profile-name')
-    await service.createConnection(baseInput, OTHER_PROJECT_ID, 'shared-profile-name')
+    const createdGroup = await service.createAccountGroup({
+      name: '国内发布矩阵',
+      accountIds: [primary.data.account.id, duplicate.data.account.id],
+    })
+    expect(createdGroup).toMatchObject({ success: true, data: { revision: 1 } })
+    if (!createdGroup.success) return
 
-    expect(service.getProjectSnapshot(PROJECT_ID)).toMatchObject({
+    await expect(
+      service.updateAccountGroup({
+        groupId: createdGroup.data.id,
+        expectedRevision: 99,
+        name: '过期修改',
+        accountIds: [primary.data.account.id],
+      }),
+    ).resolves.toMatchObject({ success: false, error: { code: 'REVISION_CONFLICT' } })
+
+    const merged = await service.mergeAccounts({
+      primaryAccountId: primary.data.account.id,
+      duplicateAccountId: duplicate.data.account.id,
+    })
+    expect(merged).toMatchObject({
+      success: true,
+      data: { mergedIntoAccountId: primary.data.account.id, archivedAt: expect.any(String) },
+    })
+    expect(service.resolveLaunch(duplicate.data.account.id)).toMatchObject({
       success: true,
       data: {
-        projectId: PROJECT_ID,
-        accounts: [{ projectId: PROJECT_ID, label: 'Release account' }],
+        browserProfileId: 'apple-release',
+        webResourceRef: { accountId: primary.data.account.id },
       },
     })
-    expect(service.getProjectSnapshot(OTHER_PROJECT_ID)).toMatchObject({
+    expect(service.getSnapshot()).toMatchObject({
       success: true,
       data: {
-        projectId: OTHER_PROJECT_ID,
-        accounts: [{ projectId: OTHER_PROJECT_ID, label: 'Release account' }],
+        accountGroups: [
+          {
+            id: createdGroup.data.id,
+            revision: 2,
+            accountIds: [primary.data.account.id],
+          },
+        ],
       },
     })
   })
 
-  it('loads v1 accounts as unassigned and only exposes them after an explicit claim', async () => {
+  it('keeps one global account identity across project contexts', async () => {
+    const service = new WebResourceService(new WebResourceStore(storePath))
+    await service.load()
+
+    const first = await service.createConnection(baseInput, PROJECT_ID, 'shared-profile-name')
+    const duplicate = await service.createConnection(
+      baseInput,
+      OTHER_PROJECT_ID,
+      'shared-profile-name',
+    )
+
+    expect(first).toMatchObject({ success: true })
+    expect(duplicate).toMatchObject({
+      success: false,
+      error: { code: 'DUPLICATE_ACCOUNT' },
+    })
+    expect(service.getProjectSnapshot(PROJECT_ID)).toEqual(
+      service.getProjectSnapshot(OTHER_PROJECT_ID),
+    )
+    expect(service.getSnapshot()).toMatchObject({
+      success: true,
+      data: {
+        accounts: [{ label: 'Release account', browserProfileId: 'shared-profile-name' }],
+      },
+    })
+  })
+
+  it('migrates v1 accounts into the global catalog without changing ids or profiles', async () => {
     const now = new Date().toISOString()
     const websiteId = '33333333-3333-4333-8333-333333333333'
     const principalId = '44444444-4444-4444-8444-444444444444'
@@ -364,23 +423,29 @@ describe('WebResourceService', () => {
 
     const service = new WebResourceService(new WebResourceStore(storePath))
     await service.load()
-    expect(service.getProjectSnapshot(PROJECT_ID)).toMatchObject({
+    expect(service.getSnapshot()).toMatchObject({
       success: true,
-      data: { accounts: [], unassignedAccountCount: 1 },
+      data: {
+        schemaVersion: 3,
+        revision: 7,
+        accounts: [{ id: accountId, browserProfileId: 'legacy-profile' }],
+        accountGroups: [],
+      },
     })
 
     await expect(service.claimLegacyConnections(PROJECT_ID)).resolves.toEqual({
       success: true,
-      data: { claimedCount: 1 },
-    })
-    expect(service.getProjectSnapshot(PROJECT_ID)).toMatchObject({
-      success: true,
-      data: { accounts: [{ id: accountId, projectId: PROJECT_ID }], unassignedAccountCount: 0 },
+      data: { claimedCount: 0 },
     })
     expect(JSON.parse(await readFile(storePath, 'utf8'))).toMatchObject({
-      schemaVersion: 2,
-      revision: 8,
-      accounts: [{ id: accountId, projectId: PROJECT_ID }],
+      schemaVersion: 3,
+      revision: 7,
+      accounts: [{ id: accountId, browserProfileId: 'legacy-profile' }],
+      accountGroups: [],
+    })
+    expect(JSON.parse(await readFile(`${storePath}.bak`, 'utf8'))).toMatchObject({
+      schemaVersion: 1,
+      accounts: [{ id: accountId, browserProfileId: 'legacy-profile' }],
     })
   })
 

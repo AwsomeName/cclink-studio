@@ -50,9 +50,22 @@ export function WebAffairDraftTab({ tab }: { tab: Tab }): React.ReactElement {
   }, [workspaceRef])
 
   const accounts = useMemo(
-    () => resources?.accounts.filter((account) => account.principalId === draft.principalId) ?? [],
+    () =>
+      resources?.accounts.filter(
+        (account) => !account.archivedAt && account.principalId === draft.principalId,
+      ) ?? [],
     [draft.principalId, resources],
   )
+  const accountGroups = useMemo(() => {
+    if (!resources || !draft.principalId) return []
+    const activeIds = new Set(accounts.map((account) => account.id))
+    return resources.accountGroups.filter(
+      (group) =>
+        !group.archivedAt &&
+        group.accountIds.length > 0 &&
+        group.accountIds.every((id) => activeIds.has(id)),
+    )
+  }, [accounts, draft.principalId, resources])
 
   if (!workspaceRef || !affairRef || affairRef.affairId) {
     return <div className="web-affair-tab-state error">新建事务 Tab 缺少有效的工作空间绑定。</div>
@@ -111,6 +124,7 @@ export function WebAffairDraftTab({ tab }: { tab: Tab }): React.ReactElement {
         objective: draft.objective,
         principalId: draft.principalId,
         accountIds: draft.accountIds,
+        accountGroupIds: draft.accountGroupIds,
         materialPaths: draft.materialPaths,
         nodeTitles: draft.nodeTitles.map((item) => item.trim()).filter(Boolean),
         workspaceRef,
@@ -205,7 +219,11 @@ export function WebAffairDraftTab({ tab }: { tab: Tab }): React.ReactElement {
                 required
                 value={draft.principalId}
                 onChange={(event) =>
-                  patchDraft({ principalId: event.target.value, accountIds: [] })
+                  patchDraft({
+                    principalId: event.target.value,
+                    accountIds: [],
+                    accountGroupIds: [],
+                  })
                 }
               >
                 <option value="">请选择主体</option>
@@ -216,7 +234,7 @@ export function WebAffairDraftTab({ tab }: { tab: Tab }): React.ReactElement {
                 ))}
               </select>
               {!loading && resources?.principals.length === 0 ? (
-                <small>当前项目还没有业务主体，请先在“网站与账号”中添加。</small>
+                <small>全局账号目录还没有业务主体，请先在“网站与账号”中添加。</small>
               ) : null}
             </label>
             <fieldset>
@@ -238,6 +256,29 @@ export function WebAffairDraftTab({ tab }: { tab: Tab }): React.ReactElement {
                 ))
               ) : (
                 <small>{draft.principalId ? '该主体还没有网站账号。' : '请先选择主体。'}</small>
+              )}
+            </fieldset>
+            <fieldset>
+              <legend>引用运营矩阵（可选）</legend>
+              {accountGroups.length > 0 ? (
+                accountGroups.map((group) => (
+                  <label key={group.id}>
+                    <input
+                      type="checkbox"
+                      checked={draft.accountGroupIds.includes(group.id)}
+                      onChange={(event) =>
+                        patchDraft({
+                          accountGroupIds: event.target.checked
+                            ? [...draft.accountGroupIds, group.id]
+                            : draft.accountGroupIds.filter((id) => id !== group.id),
+                        })
+                      }
+                    />
+                    {group.name} · {group.accountIds.length} 个账号 · v{group.revision}
+                  </label>
+                ))
+              ) : (
+                <small>当前主体没有可用运营矩阵。</small>
               )}
             </fieldset>
             <div className="web-affair-draft-materials wide">

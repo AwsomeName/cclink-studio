@@ -986,7 +986,7 @@ async function main() {
     }
   })
 
-  await runCheck('web resources accepts a non-predefined website', async () => {
+  await runCheck('global web resources reuse one account and matrix across projects', async () => {
     const projectOpened = await page.evaluate(async (workspacePath) => {
       const { useFsStore } = await import('/src/stores/fs-store.ts')
       return useFsStore.getState().openRecentWorkspace(workspacePath)
@@ -1023,7 +1023,7 @@ async function main() {
         undefined,
         { timeout: 10_000 },
       )
-      await page.getByRole('button', { name: '登录完成，保存到当前项目' }).click()
+      await page.getByRole('button', { name: '登录完成，保存为全局账号' }).click()
       const accountNameInput = page.getByLabel('账号名称')
       const inferredName = await accountNameInput.inputValue()
       assert(inferredName.trim().length > 0, 'account name was not prefilled from the current page')
@@ -1078,6 +1078,71 @@ async function main() {
       'reopening one website account created a duplicate Browser Tab',
     )
 
+    const matrixName = 'UI Smoke Matrix'
+    const matrixRow = () => page.locator('.web-resource-group-row', { hasText: matrixName })
+    if ((await matrixRow().count()) === 0) {
+      await page.getByRole('button', { name: '新建矩阵' }).click()
+      const matrixForm = page.locator('.web-resources-form', { hasText: '新建运营矩阵' })
+      await matrixForm.getByLabel('矩阵名称').fill(matrixName)
+      await matrixForm
+        .locator('label', { hasText: accountLabel })
+        .locator('input[type="checkbox"]')
+        .check()
+      await matrixForm.getByRole('button', { name: '保存', exact: true }).click()
+    }
+    await matrixRow().waitFor({ state: 'visible', timeout: 10_000 })
+
+    const globalIdentity = await page.evaluate(async (label) => {
+      const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+      const snapshot = await window.cclinkStudio.webResources.getSnapshot({
+        workspaceRef: useWorkspaceStore.getState().activeWorkspaceRef,
+      })
+      if (!snapshot.success) throw new Error(snapshot.error.message)
+      const account = snapshot.data.accounts.find(
+        (item) => item.label === label && !item.archivedAt,
+      )
+      if (!account) throw new Error('global smoke account missing')
+      return { accountId: account.id, browserProfileId: account.browserProfileId }
+    }, accountLabel)
+    const secondProjectPath = join(rootDir, 'ui-smoke-project-b')
+    await mkdir(secondProjectPath, { recursive: true })
+    await writeFile(join(secondProjectPath, 'README.md'), '# UI Smoke Project B\n', 'utf8')
+    try {
+      const openedSecond = await page.evaluate(async (workspacePath) => {
+        const { useFsStore } = await import('/src/stores/fs-store.ts')
+        return useFsStore.getState().openRecentWorkspace(workspacePath)
+      }, secondProjectPath)
+      assert(openedSecond, 'second smoke project could not be opened')
+      await clickByTitle(page, '网站与账号')
+      await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
+      await matrixRow().waitFor({ state: 'visible', timeout: 10_000 })
+      await primaryRow().click()
+      await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+      const secondProjection = await page.evaluate(async () => {
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        const state = useTabStore.getState()
+        const tab = state.tabs.find((item) => item.id === state.activeTabId)
+        return {
+          accountId: tab?.webResourceRef?.accountId,
+          browserProfileId: tab?.browserProfile,
+          workspacePath: tab?.workspaceRef?.kind === 'local' ? tab.workspaceRef.path : null,
+        }
+      })
+      assert(
+        secondProjection.accountId === globalIdentity.accountId &&
+          secondProjection.browserProfileId === globalIdentity.browserProfileId &&
+          secondProjection.workspacePath === secondProjectPath,
+        'second project did not create its own Tab projection over the same global profile',
+      )
+    } finally {
+      await page.evaluate(async (workspacePath) => {
+        const { useFsStore } = await import('/src/stores/fs-store.ts')
+        return useFsStore.getState().openRecentWorkspace(workspacePath)
+      }, rootDir)
+      await rm(secondProjectPath, { recursive: true, force: true })
+      await clickByTitle(page, '网站与账号')
+    }
+
     await browser.close()
     const resourceRestartLog = await readLog()
     runRestart('restart')
@@ -1094,7 +1159,7 @@ async function main() {
         .evaluate((element) => element.click())
     }
     await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
-    return 'project-scoped resource, direct Browser Tab launch/focus, and restart persistence verified'
+    return 'one global account/profile, per-project Tab projection, matrix visibility, and restart persistence verified'
   })
 
   await runCheck('web affair persists a five-node workflow and node progress', async () => {
@@ -1105,7 +1170,7 @@ async function main() {
       'web affairs panel missing',
     )
 
-    const affairTitle = 'UI Smoke Web Affair'
+    const affairTitle = 'UI Smoke Web Affair Global v3'
     const affairRow = () => page.locator('.web-affair-row', { hasText: affairTitle })
     if ((await affairRow().count()) === 0) {
       await page.getByRole('button', { name: '新建事务' }).click()
@@ -1121,6 +1186,8 @@ async function main() {
       await form.getByLabel('代表的业务主体').selectOption({ label: 'UI Smoke Account' })
       const account = form.locator('.web-affairs-account-choice', { hasText: 'UI Smoke Account' })
       if ((await account.count()) > 0) await account.first().locator('input').check()
+      const matrix = form.locator('label', { hasText: 'UI Smoke Matrix' })
+      if ((await matrix.count()) > 0) await matrix.locator('input[type="checkbox"]').check()
       await form.getByRole('button', { name: '创建事务' }).click()
     } else {
       await affairRow().click()
@@ -1131,6 +1198,10 @@ async function main() {
     assert(tabText.includes('相关资源'), 'affair resources section missing')
     assert(tabText.includes('整体流程'), 'affair flow section missing')
     assert(tabText.includes('节点办理情况'), 'affair node detail section missing')
+    assert(
+      tabText.includes('运营矩阵快照') && tabText.includes('UI Smoke Matrix'),
+      'affair did not preserve the selected global matrix binding snapshot',
+    )
     assert((await page.locator('.web-affair-flow-step').count()) === 5, 'expected five flow nodes')
 
     const firstNode = page.locator('.web-affair-flow-step button').first()
@@ -1236,14 +1307,13 @@ async function main() {
       })
       await webFormNode.waitFor({ timeout: 10_000 })
       await webFormNode.click()
-      await page.getByRole('button', { name: '交给 AI' }).click()
-      const preflight = page.locator('.web-affair-confirm-card', { hasText: '执行前账号核验' })
-      await preflight.waitFor({ timeout: 10_000 })
+      await page
+        .getByText('AI 调用全局账号的权限方案尚未确认。', { exact: false })
+        .waitFor({ timeout: 10_000 })
       assert(
-        (await preflight.innerText()).includes('UI Smoke Account'),
-        'preflight account identity missing',
+        (await page.getByRole('button', { name: '交给 AI' }).count()) === 0,
+        'AI account invocation was exposed before the product boundary was decided',
       )
-      await preflight.getByRole('button', { name: '取消' }).click()
 
       const tabCountBeforeResourceLaunch = await page.locator('.tab').count()
       await page
@@ -1321,7 +1391,7 @@ async function main() {
       await proposal.waitFor({ timeout: 10_000 })
       await proposal.getByRole('button', { name: '拒绝' }).click()
       await proposal.waitFor({ state: 'detached', timeout: 10_000 })
-      return 'A2 preflight, A3 wait, A4 template/editor/proposal controls verified'
+      return 'AI account access fail-closed, manual account handoff, A3 wait, and A4 flow controls verified'
     },
   )
 

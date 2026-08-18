@@ -10,7 +10,7 @@ import { parseWebResourceSnapshot } from '../../shared/web-resources/web-resourc
 const MAX_STORE_BYTES = 2 * 1024 * 1024
 
 type SnapshotReadResult =
-  | { kind: 'valid'; snapshot: WebResourceSnapshot }
+  | { kind: 'valid'; snapshot: WebResourceSnapshot; sourceVersion: number }
   | { kind: 'missing' }
   | { kind: 'invalid'; error: Error }
 
@@ -30,7 +30,10 @@ export class WebResourceStore {
 
   async load(): Promise<WebResourceSnapshot> {
     const primary = await this.readSnapshot(this.filePath)
-    if (primary.kind === 'valid') return primary.snapshot
+    if (primary.kind === 'valid') {
+      if (primary.sourceVersion < 3) await this.persist(primary.snapshot, true)
+      return primary.snapshot
+    }
 
     const backup = await this.readSnapshot(this.backupPath)
     if (backup.kind === 'valid') {
@@ -60,7 +63,9 @@ export class WebResourceStore {
         throw new Error(`资源文件超过 ${MAX_STORE_BYTES} 字节限制`)
       }
       const raw = await readFile(path, 'utf8')
-      return { kind: 'valid', snapshot: parseWebResourceSnapshot(JSON.parse(raw)) }
+      const decoded = JSON.parse(raw) as { schemaVersion?: unknown }
+      const sourceVersion = typeof decoded.schemaVersion === 'number' ? decoded.schemaVersion : 0
+      return { kind: 'valid', snapshot: parseWebResourceSnapshot(decoded), sourceVersion }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return { kind: 'missing' }

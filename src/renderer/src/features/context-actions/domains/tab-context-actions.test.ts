@@ -2,9 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAgentStore } from '../../../stores/agent-store'
 import { useFsStore } from '../../../stores/fs-store'
 import { useTabStore } from '../../../stores/tab-store'
-import { createTabContextCommands, renameWorkbenchTab } from './tab-context-actions'
+import { resolveMenuContributions } from '../menu-contribution-registry'
+import { createFileContextCommands } from './file-context-actions'
+import {
+  createTabContextCommands,
+  renameWorkbenchTab,
+  tabMenuContributions,
+} from './tab-context-actions'
 
 beforeEach(() => {
+  vi.unstubAllGlobals()
   useTabStore.setState(useTabStore.getInitialState(), true)
   useAgentStore.setState(useAgentStore.getInitialState(), true)
   useFsStore.setState(useFsStore.getInitialState(), true)
@@ -137,5 +144,79 @@ describe('tab management context commands', () => {
     })
 
     expect(useTabStore.getState().tabs.map((tab) => tab.id)).toEqual([second])
+  })
+})
+
+describe('file-backed tab path context commands', () => {
+  it('copies the absolute and workspace-relative file paths through the shared file commands', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    useFsStore.setState({ workspacePath: '/project' })
+    useTabStore.getState().openTab({
+      type: 'editor',
+      title: 'note.md',
+      icon: '📄',
+      filePath: '/project/docs/note.md',
+      workspaceRef: { kind: 'local', path: '/project' },
+    })
+    const tab = useTabStore.getState().tabs[0]
+    const context = {
+      source: 'context-menu' as const,
+      target: {
+        kind: 'tab' as const,
+        workspaceKey: '/project',
+        tabId: tab.id,
+        tabType: tab.type,
+      },
+    }
+    const commands = createFileContextCommands()
+
+    await commands.find((item) => item.id === 'fileTree.copyAbsolutePath')!.action(context)
+    await commands.find((item) => item.id === 'fileTree.copyRelativePath')!.action(context)
+
+    expect(writeText).toHaveBeenNthCalledWith(1, '/project/docs/note.md')
+    expect(writeText).toHaveBeenNthCalledWith(2, 'docs/note.md')
+  })
+
+  it('shows path actions only for local file-backed tabs', () => {
+    useTabStore.getState().openTab({
+      type: 'editor',
+      title: 'note.md',
+      icon: '📄',
+      filePath: '/project/note.md',
+      workspaceRef: { kind: 'local', path: '/project' },
+    })
+    useTabStore.getState().openTab({
+      type: 'remote-file',
+      title: 'remote.md',
+      icon: '📄',
+      filePath: '/remote.md',
+      workspaceRef: {
+        kind: 'remote',
+        transport: 'cclink',
+        endpointId: 'endpoint-1',
+        workspaceId: 'workspace-1',
+        path: '/remote',
+      },
+      remoteFile: {
+        serverId: 'endpoint-1',
+        workspaceId: 'workspace-1',
+        workspacePath: '/remote',
+        path: '/remote.md',
+      },
+    })
+    const [localTab, remoteTab] = useTabStore.getState().tabs
+    const contributionIds = (tabId: string, workspaceKey: string) =>
+      resolveMenuContributions(tabMenuContributions, {
+        source: 'context-menu',
+        target: { kind: 'tab', workspaceKey, tabId, tabType: 'editor' },
+      }).map((item) => item.id)
+
+    expect(contributionIds(localTab.id, '/project')).toEqual(
+      expect.arrayContaining(['tab.copy-absolute-path', 'tab.copy-relative-path']),
+    )
+    expect(contributionIds(remoteTab.id, 'cclink://endpoint-1/workspace-1')).not.toEqual(
+      expect.arrayContaining(['tab.copy-absolute-path', 'tab.copy-relative-path']),
+    )
   })
 })

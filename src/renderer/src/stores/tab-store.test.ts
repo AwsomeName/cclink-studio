@@ -441,7 +441,7 @@ describe('useTabStore', () => {
       expect(resourceTabs[0].webResource).toEqual({ accountId: 'account-1' })
     })
 
-    it('网站账号浏览器 Tab 按 projectId 和 accountId 聚焦复用', () => {
+    it('网站账号浏览器 Tab 在各工作空间按全局 accountId 聚焦复用', () => {
       const workspaceRef = { kind: 'local' as const, path: '/tmp/project-a' }
       useTabStore.getState().openTab({
         type: 'browser',
@@ -449,7 +449,7 @@ describe('useTabStore', () => {
         icon: '🌐',
         initialUrl: 'https://appstoreconnect.apple.com/apps',
         browserProfile: 'profile-a',
-        webResourceRef: { projectId: 'project-a', accountId: 'account-1' },
+        webResourceRef: { accountId: 'account-1' },
         workspaceRef,
       })
       const firstId = useTabStore.getState().activeTabId
@@ -460,7 +460,7 @@ describe('useTabStore', () => {
         icon: '🌐',
         initialUrl: 'https://appstoreconnect.apple.com/apps/changed',
         browserProfile: 'profile-a',
-        webResourceRef: { projectId: 'project-a', accountId: 'account-1' },
+        webResourceRef: { accountId: 'account-1' },
         workspaceRef,
       })
       expect(useTabStore.getState().activeTabId).toBe(firstId)
@@ -471,7 +471,7 @@ describe('useTabStore', () => {
         icon: '🌐',
         initialUrl: 'https://appstoreconnect.apple.com/apps',
         browserProfile: 'profile-b',
-        webResourceRef: { projectId: 'project-b', accountId: 'account-1' },
+        webResourceRef: { accountId: 'account-1' },
         workspaceRef: { kind: 'local', path: '/tmp/project-b' },
       })
 
@@ -497,14 +497,14 @@ describe('useTabStore', () => {
         title: 'App Store Connect',
         initialUrl: 'https://appstoreconnect.apple.com/apps',
         browserProfile: 'web-draft-profile',
-        webResourceRef: { projectId: 'project-a', accountId: 'account-1' },
+        webResourceRef: { accountId: 'account-1' },
       })
 
       expect(useTabStore.getState().tabs.find((tab) => tab.id === tabId)).toMatchObject({
         title: 'App Store Connect',
         initialUrl: 'https://appstoreconnect.apple.com/apps',
         browserProfile: 'web-draft-profile',
-        webResourceRef: { projectId: 'project-a', accountId: 'account-1' },
+        webResourceRef: { accountId: 'account-1' },
       })
       expect(
         useTabStore.getState().tabs.find((tab) => tab.id === tabId)?.webResourceDraftRef,

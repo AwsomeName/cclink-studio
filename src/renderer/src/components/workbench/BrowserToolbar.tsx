@@ -170,20 +170,17 @@ export function BrowserToolbar({
         })
         return
       }
-      const projectId = result.data.account.projectId
-      if (!projectId) throw new Error('保存结果未归属当前项目')
       useTabStore.getState().bindWebResourceDraft(tabId, {
         title: result.data.website.name,
         initialUrl: result.data.website.entryUrl,
         browserProfile: result.data.account.browserProfileId,
-        webResourceRef: { projectId, accountId: result.data.account.id },
+        webResourceRef: { accountId: result.data.account.id },
       })
       notifyWebResourcesChanged()
-      showToast('已保存到当前项目', 'success')
+      showToast('已保存到全局网站与账号', 'success')
       console.info('[WebResources] 网站账号保存成功', {
         tabId,
         accountId: result.data.account.id,
-        projectId,
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -394,7 +391,7 @@ export function BrowserToolbar({
                 className="browser-resource-text-button primary"
                 disabled={saving}
                 onClick={() => void saveDraft()}
-                title={!displayName.trim() ? '请输入账号名称' : '保存到当前项目'}
+                title={!displayName.trim() ? '请输入账号名称' : '保存为全局账号'}
               >
                 {saving ? '保存中…' : '保存'}
               </button>
@@ -418,7 +415,7 @@ export function BrowserToolbar({
               setShowSave(true)
             }}
           >
-            登录完成，保存到当前项目
+            登录完成，保存为全局账号
           </button>
         )
       ) : null}

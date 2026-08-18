@@ -85,7 +85,11 @@ function getDataSourceQueryKey(query: Tab['dataSourceQuery']): string | null {
 }
 
 function normalizePersistedTab(tab: Tab): Tab {
-  return { ...tab, dirty: false }
+  return {
+    ...tab,
+    dirty: false,
+    webResourceRef: tab.webResourceRef ? { accountId: tab.webResourceRef.accountId } : undefined,
+  }
 }
 
 function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeTabId'> | null {
@@ -325,8 +329,9 @@ export const useTabStore = create<TabState>((set, get) => ({
           const existing = state.tabs.find(
             (tab) =>
               tab.type === 'browser' &&
-              tab.webResourceRef?.projectId === webResourceRef.projectId &&
-              tab.webResourceRef.accountId === webResourceRef.accountId,
+              tab.webResourceRef?.accountId === webResourceRef.accountId &&
+              workspaceRefKey(tab.workspaceRef ?? workspaceRefFromKey(null)) ===
+                workspaceRefKey(workspaceRef ?? workspaceRefFromKey(null)),
           )
           if (existing) return { activeTabId: existing.id }
         }

@@ -22,8 +22,6 @@ export interface WebPrincipal {
 
 export interface WebAccount {
   id: string
-  /** Stable project identity. `null` is reserved for migrated v1 records awaiting user assignment. */
-  projectId: string | null
   websiteId: string
   principalId: string
   label: string
@@ -31,21 +29,31 @@ export interface WebAccount {
   browserProfileId: string
   loginHint?: string
   loginConfirmedAt?: string
+  /** Soft deletion keeps historical affairs and audit references readable. */
+  archivedAt?: string
+  /** A merged account remains as an alias so old references keep resolving. */
+  mergedIntoAccountId?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WebAccountGroup {
+  id: string
+  name: string
+  revision: number
+  accountIds: string[]
+  archivedAt?: string
   createdAt: string
   updatedAt: string
 }
 
 export interface WebResourceSnapshot {
-  schemaVersion: 2
+  schemaVersion: 3
   revision: number
   websites: WebsiteResource[]
   principals: WebPrincipal[]
   accounts: WebAccount[]
-}
-
-export interface WebResourceProjectSnapshot extends WebResourceSnapshot {
-  projectId: string
-  unassignedAccountCount: number
+  accountGroups: WebAccountGroup[]
 }
 
 export interface WebResourceProjectScopeInput {
@@ -83,7 +91,6 @@ export interface ResolveWebResourceLaunchInput extends WebResourceProjectScopeIn
 /** Main-process-authoritative descriptor used to open a saved website account. */
 export interface WebResourceLaunchDescriptor {
   webResourceRef: {
-    projectId: string
     accountId: string
   }
   title: string
@@ -132,6 +139,29 @@ export interface ClaimLegacyWebConnectionsSummary {
   claimedCount: number
 }
 
+export interface CreateWebAccountGroupInput {
+  name: string
+  accountIds: string[]
+}
+
+export interface UpdateWebAccountGroupInput extends CreateWebAccountGroupInput {
+  groupId: string
+  expectedRevision: number
+}
+
+export interface ArchiveWebAccountGroupInput {
+  groupId: string
+}
+
+export interface ArchiveWebAccountInput {
+  accountId: string
+}
+
+export interface MergeWebAccountsInput {
+  primaryAccountId: string
+  duplicateAccountId: string
+}
+
 export type WebResourceErrorCode =
   | 'INVALID_INPUT'
   | 'DUPLICATE_ACCOUNT'
@@ -144,6 +174,8 @@ export type WebResourceErrorCode =
   | 'RESOURCE_NOT_FOUND'
   | 'DRAFT_NOT_FOUND'
   | 'DRAFT_MISMATCH'
+  | 'REVISION_CONFLICT'
+  | 'AI_ACCOUNT_ACCESS_UNDECIDED'
   | 'INVALID_BROWSER_STATE'
   | 'CLEANUP_FAILED'
   | 'UNKNOWN'
@@ -161,9 +193,10 @@ export type WebResourceOperationResult<T> =
   | { success: false; error: WebResourceOperationError }
 
 export const EMPTY_WEB_RESOURCE_SNAPSHOT: WebResourceSnapshot = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   revision: 0,
   websites: [],
   principals: [],
   accounts: [],
+  accountGroups: [],
 }

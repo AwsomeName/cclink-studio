@@ -112,28 +112,13 @@ export class WebAffairService {
     private readonly resolveWebResourceLaunch: (
       workspaceId: string,
       accountId: string,
-    ) => WebResourceOperationResult<WebResourceLaunchDescriptor> = (workspaceId, accountId) => {
-      const resources = this.getWebResources()
-      const account = resources?.accounts.find(
-        (item) => item.id === accountId && item.projectId === workspaceId,
-      )
-      const website = resources?.websites.find((item) => item.id === account?.websiteId)
-      if (!account || !website) {
-        return {
-          success: false,
-          error: { code: 'RESOURCE_NOT_FOUND', message: '当前项目的网站账号不存在' },
-        }
-      }
-      return {
-        success: true,
-        data: {
-          webResourceRef: { projectId: workspaceId, accountId: account.id },
-          title: website.name,
-          entryUrl: website.entryUrl,
-          browserProfileId: account.browserProfileId,
-        },
-      }
-    },
+    ) => WebResourceOperationResult<WebResourceLaunchDescriptor> = () => ({
+      success: false,
+      error: {
+        code: 'AI_ACCOUNT_ACCESS_UNDECIDED',
+        message: '全局账号的 AI 调用权限尚未确认；请先人工打开网页办理',
+      },
+    }),
   ) {}
 
   async load(): Promise<void> {
@@ -262,7 +247,16 @@ export class WebAffairService {
 
     const resources = this.getWebResources()
     const principal = resources?.principals.find((item) => item.id === input.principalId)
-    const accounts = input.accountIds.map((id) =>
+    const groups = (input.accountGroupIds ?? []).map((id) =>
+      resources?.accountGroups.find((item) => item.id === id && !item.archivedAt),
+    )
+    if (groups.some((group) => !group)) {
+      return this.resourceError('所选运营矩阵不存在或已归档')
+    }
+    const effectiveAccountIds = [
+      ...new Set([...input.accountIds, ...groups.flatMap((group) => group?.accountIds ?? [])]),
+    ]
+    const accounts = effectiveAccountIds.map((id) =>
       resources?.accounts.find((item) => item.id === id),
     )
     if (!resources || !principal || accounts.some((account) => !account)) {
@@ -271,8 +265,8 @@ export class WebAffairService {
     if (accounts.some((account) => account?.principalId !== principal.id)) {
       return this.resourceError('所选账号不属于当前业务主体')
     }
-    if (accounts.some((account) => account?.projectId !== workspaceId)) {
-      return this.resourceError('所选账号不属于当前工作空间')
+    if (accounts.some((account) => account?.archivedAt)) {
+      return this.resourceError('所选账号已归档')
     }
 
     const now = this.timestamp()
@@ -296,7 +290,7 @@ export class WebAffairService {
         catalogId: definition?.id,
         status: index === 0 ? 'ready' : 'blocked',
         executor: definition?.executor ?? 'user',
-        accountIds: input.accountIds,
+        accountIds: effectiveAccountIds,
         materialIds: materials.map((material) => material.id),
         successCriteria: definition?.successCriteria,
         now,
@@ -310,7 +304,18 @@ export class WebAffairService {
       status: 'active',
       principalId: principal.id,
       websiteIds: [...new Set(accounts.flatMap((account) => (account ? [account.websiteId] : [])))],
-      accountIds: [...input.accountIds],
+      accountIds: effectiveAccountIds,
+      accountGroupBindings: groups.flatMap((group) =>
+        group
+          ? [
+              {
+                groupId: group.id,
+                groupRevision: group.revision,
+                accountIds: [...group.accountIds],
+              },
+            ]
+          : [],
+      ),
       materials,
       flow: {
         version: 1,
@@ -353,8 +358,8 @@ export class WebAffairService {
     if (!resources || !principal || accounts.some((account) => !account)) {
       return this.resourceError('旧事务的主体或账号已失效，请先在“网站与账号”处理')
     }
-    if (accounts.some((account) => account?.projectId !== workspaceId)) {
-      return this.resourceError('请先把该事务引用的旧网站账号归入当前项目')
+    if (accounts.some((account) => account?.archivedAt)) {
+      return this.resourceError('旧事务引用的网站账号已归档')
     }
     if (accounts.some((account) => account?.principalId !== affair.principalId)) {
       return this.resourceError('旧事务的账号与业务主体不一致，不能直接归属')
@@ -505,7 +510,7 @@ export class WebAffairService {
     if (
       !account ||
       !website ||
-      account.projectId !== affair.workspaceId ||
+      Boolean(account.archivedAt) ||
       account.principalId !== affair.principalId ||
       !node.accountIds.includes(account.id)
     ) {

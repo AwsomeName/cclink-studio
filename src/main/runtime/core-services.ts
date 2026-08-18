@@ -396,14 +396,13 @@ export async function bootstrapMainProcessServices(
           })
         }
       },
-      (workspaceId, accountId) =>
-        runtime.webResourceService?.resolveLaunch(workspaceId, accountId) ?? {
-          success: false,
-          error: {
-            code: 'SERVICE_UNAVAILABLE',
-            message: '网站与账号服务当前不可用',
-          },
+      () => ({
+        success: false,
+        error: {
+          code: 'AI_ACCOUNT_ACCESS_UNDECIDED',
+          message: '全局账号的 AI 调用权限尚未确认；请先人工打开网页办理',
         },
+      }),
     )
     await runtime.webAffairService.load()
     console.log('[CCLink Studio] 事务服务已初始化')

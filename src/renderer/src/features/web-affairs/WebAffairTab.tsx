@@ -65,6 +65,11 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
   const principal = resources?.principals.find((item) => item.id === affair?.principalId)
   const accounts = resources?.accounts.filter((item) => affair?.accountIds.includes(item.id)) ?? []
   const websites = resources?.websites.filter((item) => affair?.websiteIds.includes(item.id)) ?? []
+  const accountGroups =
+    affair?.accountGroupBindings?.map((binding) => ({
+      binding,
+      group: resources?.accountGroups.find((item) => item.id === binding.groupId),
+    })) ?? []
   const selectedAccounts =
     accounts.filter((account) => selectedNode?.accountIds.includes(account.id)) ?? []
   const selectedMaterials =
@@ -196,6 +201,17 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
               <span>暂未关联</span>
             )}
           </div>
+          <ResourceCard
+            title="运营矩阵快照"
+            items={
+              accountGroups.length > 0
+                ? accountGroups.map(
+                    ({ binding, group }) =>
+                      `${group?.name ?? '矩阵已归档'} · v${binding.groupRevision} · ${binding.accountIds.length} 个账号`,
+                  )
+                : ['暂未关联']
+            }
+          />
           <ResourceCard
             title="本地物料"
             items={

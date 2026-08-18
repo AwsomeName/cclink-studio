@@ -2435,6 +2435,8 @@ button.project-panel-row.active {
 
 .web-resources-toolbar-actions {
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 5px;
 }
 
@@ -2655,6 +2657,66 @@ button.project-panel-row.active {
   background: transparent;
   color: var(--accent-color);
   cursor: pointer;
+}
+
+.web-resource-group-accounts {
+  display: flex;
+  max-height: 150px;
+  flex-direction: column;
+  gap: 5px;
+  overflow: auto;
+  margin: 0;
+  padding: 7px;
+  border: 1px solid var(--border-color);
+}
+
+.web-resource-group-accounts legend {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.web-resource-group-accounts label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.web-resource-group-accounts input[type='checkbox'] {
+  width: auto;
+  height: auto;
+}
+
+.web-resource-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.web-resource-group-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.web-resource-group-row span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-resource-group-row button {
+  border: 0;
+  background: transparent;
+  color: var(--accent-color);
+  cursor: pointer;
+  font-size: 10px;
 }
 
 .web-resource-detail,
