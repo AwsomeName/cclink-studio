@@ -21,6 +21,8 @@ describe('unified Agent Panel production boundary', () => {
     expect(viewSource.match(/<textarea/gu)).toHaveLength(1)
     expect(viewSource).toContain('nativeEvent.isComposing')
     expect(viewSource).toContain('nativeEvent.keyCode === 229')
+    expect(viewSource).toContain('onPointerDown={focusRenderer}')
+    expect(viewSource).toContain('onFocus={focusRenderer}')
     expect(viewSource).toContain('export function PanelHeader')
     expect(viewSource).toContain('export function ContextBar')
     expect(viewSource).toContain('export function MessageTimeline')

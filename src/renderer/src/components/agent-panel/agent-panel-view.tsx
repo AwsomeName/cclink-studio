@@ -670,8 +670,21 @@ export function ComposerFrame({
   mainRef: Ref<HTMLDivElement>
 }): ReactElement {
   const composerRef = useRef<HTMLDivElement>(null)
+  const rendererFocusRequestPendingRef = useRef(false)
   const resolvedMainRef = mainRef as React.RefObject<HTMLDivElement | null>
   const [height, setHeight] = useState<number | null>(() => loadComposerHeight(variant))
+  const focusRenderer = useCallback(() => {
+    if (rendererFocusRequestPendingRef.current) return
+    rendererFocusRequestPendingRef.current = true
+    void window.cclinkStudio.window
+      .focusRenderer()
+      .catch((error) => {
+        console.warn('[AgentComposer] 输入焦点切回工作台失败:', error)
+      })
+      .finally(() => {
+        rendererFocusRequestPendingRef.current = false
+      })
+  }, [])
   const clampHeight = useCallback(
     (nextHeight: number): number => {
       const mainHeight = resolvedMainRef.current?.getBoundingClientRect().height ?? 0
@@ -819,6 +832,8 @@ export function ComposerFrame({
             value={model.value}
             disabled={model.disabled}
             maxLength={model.maxLength}
+            onPointerDown={focusRenderer}
+            onFocus={focusRenderer}
             onChange={(event) => model.onChange(event.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={model.onPaste}
