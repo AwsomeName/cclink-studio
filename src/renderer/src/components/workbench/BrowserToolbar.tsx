@@ -27,6 +27,8 @@ interface BrowserToolbarProps {
   tabId: string
   tab: Tab
   browserState: BrowserTabState | undefined
+  autoFocusAddress?: boolean
+  onAddressFocusHandled?: (tabId: string) => void
   onUrlInputChange: (tabId: string, value: string) => void
   onNavigate: (value: string) => void
   onOpenUrl: (url: string) => void
@@ -74,6 +76,8 @@ export function BrowserToolbar({
   tabId,
   tab,
   browserState,
+  autoFocusAddress = false,
+  onAddressFocusHandled,
   onUrlInputChange,
   onNavigate,
   onOpenUrl,
@@ -90,6 +94,7 @@ export function BrowserToolbar({
   const setFindQuery = useBrowserFindStore((state) => state.setQuery)
   const showToast = useToastStore((state) => state.show)
   const findInputRef = useRef<HTMLInputElement>(null)
+  const urlInputRef = useRef<HTMLInputElement>(null)
   const urlCompositionActiveRef = useRef(false)
   const cancelZoomCommitRef = useRef(false)
   const draftId = tab.webResourceDraftRef?.draftId
@@ -111,6 +116,32 @@ export function BrowserToolbar({
       void runBrowserFind(tabId, { forward: true, findNext: false }, findSession.query)
     }
   }, [findSession?.open])
+
+  useEffect(() => {
+    if (!autoFocusAddress || findSession?.open) return
+    let cancelled = false
+    let animationFrame = 0
+
+    void window.cclinkStudio.window
+      .focusRenderer()
+      .catch((error) => {
+        console.warn('[BrowserToolbar] 新标签页焦点切回工作台失败:', error)
+      })
+      .then(() => {
+        if (cancelled) return
+        animationFrame = requestAnimationFrame(() => {
+          if (cancelled) return
+          urlInputRef.current?.focus()
+          urlInputRef.current?.select()
+          if (browserState?.ready) onAddressFocusHandled?.(tabId)
+        })
+      })
+
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(animationFrame)
+    }
+  }, [autoFocusAddress, browserState?.ready, findSession?.open, onAddressFocusHandled, tabId])
 
   useEffect(() => {
     if (!editingZoom) setZoomDraft(String(zoomPercent))
@@ -297,6 +328,7 @@ export function BrowserToolbar({
         </div>
       ) : (
         <input
+          ref={urlInputRef}
           className="url-input"
           value={browserState?.urlInput ?? ''}
           onChange={(event) => onUrlInputChange(tabId, event.target.value)}

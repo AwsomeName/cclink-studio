@@ -40,6 +40,7 @@ import {
 } from './browser-view-reconciliation'
 import { normalizeBrowserContext, showBrowserContextMenu } from './browser-context-menu'
 import { installPlainTextLinkSupport } from './browser-plain-text-links'
+import { installHorizontalPanSupport } from './browser-horizontal-pan'
 import { rendererBoundsToWindowDip } from './browser-view-bounds'
 import { keyChordId, normalizeKeyChord, type KeyChord } from '../../shared/keybindings'
 import type {
@@ -558,6 +559,12 @@ export class BrowserManager {
     wc.once('destroyed', () => this.handleWebContentsDestroyed(tabId, entry))
     // 每次页面加载完成后，按当前模式重新计算并应用缩放
     wc.on('did-finish-load', () => {
+      void installHorizontalPanSupport(wc).catch((error) =>
+        console.warn(
+          `[BrowserManager] 横向滑动增强降级 tabId=${tabId}:`,
+          error instanceof Error ? error.message : 'unknown',
+        ),
+      )
       void installPlainTextLinkSupport(wc).catch((error) =>
         console.warn(
           `[BrowserManager] 纯文本 URL 增强降级 tabId=${tabId}:`,

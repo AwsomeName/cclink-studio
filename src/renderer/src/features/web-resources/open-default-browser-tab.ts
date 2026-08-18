@@ -1,6 +1,8 @@
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import { useTabStore } from '../../stores/tab-store'
 
+export const EMPTY_BROWSER_TAB_URL = 'about:blank'
+
 export interface OpenDefaultBrowserTabResult {
   tabId: string
   saveable: boolean
@@ -31,6 +33,7 @@ export async function openDefaultBrowserTab(
           browserProfile: result.data.browserProfileId,
           webResourceDraftRef: { draftId: result.data.draftId },
           workspaceRef,
+          initialUrl: EMPTY_BROWSER_TAB_URL,
           forceNew: true,
         })
         return { tabId: getOpenedTabId(), saveable: true }
@@ -41,6 +44,7 @@ export async function openDefaultBrowserTab(
         title: '浏览器',
         icon: '🌐',
         workspaceRef,
+        initialUrl: EMPTY_BROWSER_TAB_URL,
         forceNew: true,
       })
       return { tabId: getOpenedTabId(), saveable: false, error: result.error.message }
@@ -50,6 +54,7 @@ export async function openDefaultBrowserTab(
         title: '浏览器',
         icon: '🌐',
         workspaceRef,
+        initialUrl: EMPTY_BROWSER_TAB_URL,
         forceNew: true,
       })
       return {
@@ -65,6 +70,7 @@ export async function openDefaultBrowserTab(
     title: '浏览器',
     icon: '🌐',
     workspaceRef,
+    initialUrl: EMPTY_BROWSER_TAB_URL,
     forceNew: true,
   })
   return { tabId: getOpenedTabId(), saveable: false, error: '请先打开一个本地项目' }

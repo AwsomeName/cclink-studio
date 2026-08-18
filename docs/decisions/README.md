@@ -51,3 +51,6 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
   Profile 和 Tab 生命周期。
 - `0014-global-web-account-catalog.md`：网站、主体、账号、Profile/Session 和运营矩阵改为本机
   Studio 全局资源；事务继续属于项目，AI 是否可以调用账号保持未决且不得默认放开。
+- `0015-isolated-horizontal-pan-fallback.md`：允许 Browser main frame 在无权限 isolated world
+  中为被网站隐藏的横向范围提供触控板和 Shift + 滚轮兜底；不改写 DOM、不回传网页内容，
+  Chromium 原生滚动行为优先。

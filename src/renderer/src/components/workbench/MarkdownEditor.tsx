@@ -67,6 +67,10 @@ import {
   publishMarkdownDiagnosticReport,
   recordRendererDiagnosticLog,
 } from '../../features/diagnostics/renderer-diagnostic-log'
+import {
+  openHttpUrlInNewBrowserTab,
+  resolveBrowserLinkClick,
+} from '../../features/browser/browser-link-navigation'
 
 const lowlight = createLowlight(common)
 
@@ -204,6 +208,13 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
           return true
         },
         handleDOMEvents: {
+          click: (_view, event) => {
+            const link = resolveBrowserLinkClick(event)
+            if (!link) return false
+            event.preventDefault()
+            openHttpUrlInNewBrowserTab({ ...link, sourceTabId: tabId })
+            return true
+          },
           contextmenu: (_view, event) => {
             const range = currentWysiwygSelection()
             const element = event.target instanceof Element ? event.target : null

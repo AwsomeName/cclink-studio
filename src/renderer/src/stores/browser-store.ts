@@ -9,6 +9,7 @@ export type ZoomMode = BrowserZoomModeType
 
 /** 默认首页 */
 const DEFAULT_URL = 'https://www.baidu.com'
+const EMPTY_TAB_URL = 'about:blank'
 
 /** 单个浏览器 Tab 的状态（每个浏览器 Tab 对应一个独立视图） */
 export interface BrowserTabState {
@@ -77,7 +78,7 @@ interface BrowserState {
 function defaultTab(url: string = DEFAULT_URL): BrowserTabState {
   return {
     url,
-    urlInput: url,
+    urlInput: url === EMPTY_TAB_URL ? '' : url,
     title: null,
     faviconUrl: null,
     viewMode: 'desktop',
@@ -104,7 +105,7 @@ function normalizeBrowserSnapshot(value: unknown): {
     const history = Array.isArray(tab.history) && tab.history.length > 0 ? tab.history : [tab.url]
     tabs[id] = {
       url: tab.url,
-      urlInput: tab.urlInput || tab.url,
+      urlInput: tab.url === EMPTY_TAB_URL ? '' : tab.urlInput || tab.url,
       title: typeof tab.title === 'string' && tab.title.trim() ? tab.title.trim() : null,
       faviconUrl:
         typeof tab.faviconUrl === 'string' && tab.faviconUrl.trim() ? tab.faviconUrl : null,
@@ -195,7 +196,7 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
           [tabId]: {
             ...tab,
             url,
-            urlInput: url,
+            urlInput: url === EMPTY_TAB_URL ? '' : url,
             history: nav?.history?.length ? nav.history : tab.history,
             historyIndex:
               typeof nav?.historyIndex === 'number' ? nav.historyIndex : tab.historyIndex,

@@ -1,10 +1,11 @@
 # 可分离 Workbench Tab 与辅助窗口
 
-> 状态：产品评估通过，推荐分阶段推进；尚未实现，ADR、P0 技术验证和任何用户闭环均未开始。
+> 状态：Conditional Go；当前只允许开展 P0 技术验证，P0 通过和 ADR 完成前不得启动 Browser M1。
+> 功能尚未实现，任何用户闭环均未开始。
 >
 > 创建时间：2026-08-18。
 >
-> 本文同时保存产品决策、架构建议和参考推进计划。进入正式施工后，应新增 ADR 固化多窗口
+> 本文同时保存产品决策、架构建议和参考推进计划。P0 通过后、M1 施工前必须新增 ADR 固化多窗口
 > 状态所有权；若任务规模继续扩大，再拆出独立 development plan，本文保留产品事实源。
 
 ## 1. 结论
@@ -13,19 +14,21 @@ CCLink Studio 应支持把 Workbench Tab 移入独立顶层辅助窗口，以便
 Terminal 或 Agent 会话放到副屏，同时继续在主窗口处理其他工作。
 
 这个方向产品价值高、与 Studio 的多工作现场定位一致，Electron 平台也提供必要的多窗口和
-`WebContentsView` 组合能力，因此结论为 **Go**。但当前实现是“单 `BrowserWindow` + 单
-renderer 状态树 + 单窗口原生能力宿主”，不能把它当作只改 Tab 拖拽事件的小功能。
+`WebContentsView` 组合 API，因此结论为 **Conditional Go**。Electron 43 并未明确保证既有
+`WebContentsView` 跨窗口迁移后不重载且保持同一 Playwright Page；当前实现又是“单
+`BrowserWindow` + 单 renderer 状态树 + 单窗口原生能力宿主”。在 P0 用当前锁定版本证明核心
+不变量前，只允许做验证，不允许直接开工 M1。
 
 推荐采用以下交付策略：
 
 1. 最终产品目标仍是“所有经过适配的 Workbench Tab 都可以移动到辅助窗口”。
-2. 首个用户里程碑只命名为“Browser 辅助窗口”，不宣称通用 Tab 已完成。
-3. P0 先证明既有 Browser `WebContentsView` 可以跨窗口迁移并保持 WebContents、Profile、
-   Playwright Page 和稳定 tabId；P0 只是工程验证，不是用户功能进度。
-4. Browser M1 形成完整纵向闭环后，再逐类支持 Editor、Terminal、Conversation 和草稿型
-   业务 Tab。
-5. 拖出只是快捷入口；右键菜单和命令面板必须复用同一个 `workbench.moveTabToNewWindow`
-   命令，不能把核心能力藏在鼠标手势中。
+2. 当前唯一授权工作是 P0：证明既有 Browser `WebContentsView` 可以 A -> B -> A 跨窗口迁移，
+   并保持 WebContents、Session、Profile、Playwright Page 和稳定 tabId，且全过程不重载。
+3. P0 通过后先写 ADR，再决定是否启动 M1；P0 只是工程验证，不是用户功能进度。
+4. 首个用户里程碑只命名为“Browser 辅助窗口”，先提供右键/命令入口，不宣称通用 Tab 或拖出
+   手势已完成。
+5. Browser M1 真人验收通过后再接入拖出手势，并逐类支持 Editor、Terminal、Conversation 和
+   草稿型业务 Tab；拖拽最终仍复用 `workbench.moveTabToNewWindow`，不复制迁移逻辑。
 
 ## 2. 用户现在能做什么、还不能做什么
 
@@ -112,8 +115,8 @@ renderer 状态树 + 单窗口原生能力宿主”，不能把它当作只改 T
 首个产品里程碑严格限定为 Browser：
 
 1. 用户在工作空间 A 打开一个已登录网页，产生滚动位置、页面历史和未提交表单状态。
-2. 用户右键 Browser Tab 选择“移至新窗口”，或把 Tab 拖到主窗口外。
-3. 辅助窗口在鼠标所在显示器的可见区域出现；主窗口的 TabBar 不再显示该 Browser Tab。
+2. 用户右键 Browser Tab 选择“移至新窗口”，也可以从命令面板执行同一命令。
+3. 辅助窗口在源窗口所在显示器的可见区域出现；主窗口的 TabBar 不再显示该 Browser Tab。
 4. 页面不重载，原 Profile/Session、滚动、表单、历史、WebContents、Playwright Page 和 tabId 均
    保持；浏览器自动化继续精确寻址同一 Page。
 5. 用户把窗口移动到副屏，并在主窗口继续操作 Editor。
@@ -124,8 +127,9 @@ renderer 状态树 + 单窗口原生能力宿主”，不能把它当作只改 T
 9. 用户显式关闭返回后的 Browser Tab，对应 View、WebContents、Playwright Page 和任务关联按现有
    规则释放。
 
-M1 不要求恢复上次退出时的分离位置，也不要求把第二个 Tab 拖入已有辅助窗口。正常退出时必须
-确保逻辑 Tab 仍进入 workspace 恢复快照，并在下次启动至少安全恢复到主窗口。
+M1 不要求拖出手势、恢复上次退出时的分离位置，也不要求把第二个 Tab 拖入已有辅助窗口。正常
+退出时必须确保逻辑 Tab 仍进入 workspace 恢复快照，并在下次启动至少安全恢复到主窗口。拖出
+手势在 M1 真人验收通过后接入同一命令。
 
 ## 7. 关键产品拷问与推荐答案
 
@@ -260,9 +264,9 @@ Context Actions、Shortcut Router 和多个全局 Store。直接在辅助窗口�
 
 ## 9. 推荐架构
 
-### 9.1 先写 ADR
+### 9.1 P0 后再写 ADR
 
-进入实现前新增 ADR，至少决定：
+P0 成功只证明平台路线可行，不自动授权 M1。P0 证据完成后、进入 M1 实现前新增 ADR，至少决定：
 
 - 逻辑 Tab descriptor、窗口 placement、窗口 bounds 和 renderer projection 的唯一 owner；
 - 主窗口与辅助窗口的生命周期及 App quit 语义；
@@ -273,9 +277,15 @@ Context Actions、Shortcut Router 和多个全局 Store。直接在辅助窗口�
 
 推荐 ADR 不把多窗口作为架构宪法例外，而是通过新的单一 owner 扩展现有边界。
 
-### 9.2 `WorkbenchWindowService`
+### 9.2 `WorkbenchWindowService` 与主进程 `WorkbenchTabModel`
 
-主进程新增唯一窗口编排 owner。建议模型：
+主进程拆分两个互不重叠的 owner：
+
+- `WorkbenchWindowService` 只拥有窗口注册、window role、Tab placement/order 和移动事务。
+- `WorkbenchTabModel` 唯一拥有逻辑 Tab identity/descriptor、workspace membership，并作为
+  WorkspaceState Tab section 的单一持久化 writer。
+
+建议窗口与 placement 模型：
 
 ```ts
 type WorkbenchWindowRole = 'main' | 'auxiliary'
@@ -302,8 +312,12 @@ interface TabPlacement {
 }
 ```
 
-该服务只拥有窗口、Tab descriptor/placement 和迁移事务，不复制 Browser、Terminal、Agent、
-WebAffair 或 Editor 领域运行事实。renderer `tab-store` 改为按 `windowId` 投影该窗口可见 Tab。
+`WorkbenchWindowService` 是 placement/order/active window state 的运行时 owner，但不拥有逻辑
+Tab descriptor，也不直接写 Tab WorkspaceState；它通过稳定 tabId 引用 `WorkbenchTabModel`。
+`WorkbenchTabModel` 不创建或销毁 BrowserWindow，也不能反向成为第二个 placement owner；持久化
+时由它串行写入自身 descriptor 与 WindowService 提供的 placement snapshot。两者都不拥有 Browser、
+Terminal、Agent、WebAffair 或 Editor 领域运行事实。renderer `tab-store` 改为按 `windowId` 接收
+只读/命令式投影，不能再各自覆盖写完整 Tab snapshot。
 
 ### 9.3 窗口角色与 renderer 入口
 
@@ -328,10 +342,14 @@ WebAffair 或 Editor 领域运行事实。renderer `tab-store` 改为按 `window
 - `window:updateAuxiliaryBounds`
 - `window:getPlacementSnapshot`
 - `window:placementChanged`
+- `tabModel:getWindowProjection`
+- `tabModel:projectionChanged`
 
 所有输入在主进程重新解析 tabId、workspaceKey、sourceWindowId 和 generation；renderer 不能自报
 Profile、Session、WebContents ID 或目标权限。关闭 Tab 继续执行统一
-`workbench.closeTab` command 和领域 draft policy，不在 Window IPC 内建立第二套关闭逻辑。
+`workbench.closeTab` command 和领域 draft policy，不在 Window IPC 内建立第二套关闭逻辑。所有
+Tab descriptor/active/order 持久化由主进程 `WorkbenchTabModel` 串行合并并写入；renderer 只提交
+有界 command 或领域快照，不能提交整份 workspace Tab section。
 
 ### 9.5 两阶段移动事务
 
@@ -434,9 +452,10 @@ Adapter 不拥有 window placement，也不复制领域事实。未注册 adapte
 
 ### 9.10 命令与拖拽
 
-- 新增稳定命令 `workbench.moveTabToNewWindow`、`workbench.returnTabToMainWindow`；后续新增
+- M1 新增稳定命令 `workbench.moveTabToNewWindow`、`workbench.returnTabToMainWindow`；后续新增
   `workbench.moveTabToWindow`。
-- Tab Context Action、命令面板、快捷键和拖出手势只引用命令，不复制迁移逻辑。
+- M1 只开放 Tab Context Action 和命令面板，先验收迁移语义；拖出手势不属于 M1 退出门槛。
+- M1 真人验收通过后，拖出手势只引用同一个命令，不复制迁移逻辑。
 - HTML Drag 结束时 renderer 只上报 tabId 和受控意图；主进程使用 source window bounds 与当前
   cursor/display 重新判断是否真的离开窗口。
 - 拖拽取消、落回原 TabBar、目标不支持或坐标无效时不创建窗口。
@@ -447,12 +466,12 @@ Adapter 不拥有 window placement，也不复制领域事实。未注册 adapte
 | 阶段 | Tab 类型                                                                                                                                | 支持门槛                                                                  |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | P0   | 仅测试 Browser runtime                                                                                                                  | 同一 WebContents/View 跨窗口来回迁移；Profile、Page、tabId 和事件路由保持 |
-| M1   | `browser`                                                                                                                               | 完成第 6 节真人闭环；工作空间切换不销毁副窗口页面                         |
+| M1   | `browser`                                                                                                                               | 右键/命令完成第 6 节真人闭环；工作空间切换不销毁副窗口页面                |
 | M2a  | `terminal`、`terminal-record`                                                                                                           | PTY 不重启；输出补发无重无漏；输入只到 owner window；记录只读恢复         |
 | M2b  | `editor`、`preview`、`file-preview`、`model`、`hardware-gerber`、`remote-file`                                                          | Editor 保留 dirty/基线/光标/选区/undo；只读 surface 可重建且状态定义明确  |
 | M3   | `conversation`、`remote-conversation`                                                                                                   | run/session 不重启；stream sequence 对账；确认卡、取消和诊断路由正确      |
 | M3   | `settings`、`data-source-query`、`data-source-result`、`scheduled-task`、`web-resource`、`web-affair`、`agent-role`、`media-production` | 草稿、单例页、查询结果、上传/渲染进度和领域事件逐项定义 owner 与恢复      |
-| M4   | 已支持的全部类型                                                                                                                        | 拖入已有窗口、辅助窗口多 Tab、重启恢复、显示器回收、跨平台验收            |
+| M4   | 已支持的全部类型                                                                                                                        | 拖出/拖入已有窗口、辅助窗口多 Tab、重启恢复、显示器回收、跨平台验收       |
 
 `android` 暂不自动进入任何阶段。Android display、scrcpy、输入、旋转和设备 session 当前也绑定
 单窗口能力，只有完成独立 adapter 评审和真机迁移验收后才能加入支持矩阵。
@@ -461,7 +480,7 @@ Adapter 不拥有 window placement，也不复制领域事实。未注册 adapte
 
 以下为一名熟悉当前代码库的工程师参考估算，不作为承诺排期：
 
-### P0：跨窗口 Browser 技术验证，2–4 天
+### P0：跨窗口 Browser 技术验证，4–7 天
 
 - 在隔离分支/测试入口创建第二个受控窗口。
 - 把同一个 Browser View 从主窗口移到辅助窗口，再移回。
@@ -475,11 +494,12 @@ Adapter 不拥有 window placement，也不复制领域事实。未注册 adapte
 - 失败但存在不重载的官方支持替代：更新 ADR 后重新估算。
 - 只能关闭并重载页面：Browser M1 No-Go，不用缩水语义冒充移动。
 
-### M1：Browser 辅助窗口，2–3 周
+### M1：Browser 辅助窗口，4–6 周
 
-- ADR、Window Registry、可信多 renderer、AuxiliaryLayout。
+- ADR、Window Registry、主进程 WorkbenchTabModel/单一持久化 writer、可信多 renderer、
+  AuxiliaryLayout。
 - BrowserManager 多 host、owner event routing 和两阶段迁移。
-- 统一命令、右键入口、拖出入口、关闭送回和失败回滚。
+- 统一命令、右键入口、关闭送回和失败回滚；拖出入口后置到 M1 真人验收之后。
 - 工作空间切换、主/辅窗口焦点、缩放、上下文菜单和自动化关联。
 - Browser M1 真人闭环与受影响工程门禁。
 
@@ -503,8 +523,9 @@ Adapter 不拥有 window placement，也不复制领域事实。未注册 adapte
 - 显式 always-on-top/compact mode（若产品仍需要）。
 - macOS、Windows、Linux 平台差异和完整真实 App 验收。
 
-完整通用能力参考为 10–16 人周，其中 Editor undo/selection、会话流对账和草稿型页面是主要不确定
-项；Browser M1 可以独立交付，不必等待所有类型。
+完整通用能力在 P0 前只能粗估为 13–20+ 人周，其中主进程 Tab Model、Editor undo/selection、
+会话流对账和草稿型页面是主要不确定项；必须在 P0 和 Browser M1 后重新估算。Browser M1 可以
+独立交付，不必等待所有类型。
 
 ## 12. P0 必须证明什么
 
@@ -632,6 +653,8 @@ M1 仍必须补一个真实已登录网站的人工验收。
 - 第 12 节问题全部有可复现证据。
 - 结论明确为继续、替代或 No-Go；不能把未知项留给 M1 顺便解决。
 - P0 没有扩散为全部 Tab、恢复系统或通用 Layout 重构。
+- P0 通过只授权编写/评审 ADR；ADR 未明确 Window owner、Tab owner、单一 writer、权限和回滚语义
+  前仍不得启动 M1。
 
 ### Browser M1 退出
 
@@ -640,6 +663,7 @@ M1 仍必须补一个真实已登录网站的人工验收。
 - 主窗口工作空间切换不影响辅助窗口。
 - 关闭送回、显式关闭和迁移失败回滚均有证据。
 - `pnpm verify`、受影响 smoke 和架构复审通过。
+- 拖出手势不属于 M1 完成声明；只能在上述闭环通过后作为同一命令的新入口接入。
 
 ### 通用能力退出
 
@@ -650,8 +674,8 @@ M1 仍必须补一个真实已登录网站的人工验收。
 
 ## 19. 独立审查必须继续拷问
 
-- `WorkbenchWindowService` 是否真的只有一个 placement owner，还是 renderer 仍能绕过它直接改变
-  Tab 归属或覆盖 WorkspaceState？
+- `WorkbenchWindowService` 是否只拥有窗口/placement，`WorkbenchTabModel` 是否唯一拥有逻辑 Tab 和
+  持久化，还是 renderer 仍能绕过两者改变归属或覆盖 WorkspaceState？
 - BrowserManager 从单 host 改成多 host 后，是否仍存在任何读取“全局当前窗口/当前 workspace/当前
   Page”的路径？
 - P0 是否真实保留 WebContents 和 Playwright Page，还是测试只验证了相同 URL/Profile？
@@ -660,7 +684,8 @@ M1 仍必须补一个真实已登录网站的人工验收。
 - 事件路由是否有 sequence/generation 证据证明无重无漏，而不是依赖“通常很快”？
 - Editor、Agent、Terminal 和草稿型页面是否逐项证明状态保真，还是通过通用序列化假设它们相同？
 - 窗口 crash、App quit 和显示器拔出后，运行事实、投影和持久化最终是否能确定归属？
-- 自动化是否只证明 command，而真人验收是否真正覆盖了拖出手势和双屏交互？
+- 自动化是否只证明 command；M1 真人验收是否覆盖真实双屏交互，后续拖出阶段是否另行覆盖真实
+  拖出手势？
 - 团队是否把 ADR、Schema、测试数量或 P0 spike 当成用户功能进度？Browser M1 真人闭环完成前，
   用户功能进度仍然是未交付。
 

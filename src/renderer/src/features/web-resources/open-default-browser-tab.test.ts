@@ -40,6 +40,7 @@ describe('openDefaultBrowserTab', () => {
         browserProfile: 'web-draft-profile',
         webResourceDraftRef: { draftId: 'draft-id' },
         workspaceRef,
+        initialUrl: 'about:blank',
       }),
     ])
   })
@@ -62,6 +63,7 @@ describe('openDefaultBrowserTab', () => {
         type: 'browser',
         title: '浏览器',
         workspaceRef,
+        initialUrl: 'about:blank',
       }),
     ])
     expect(useTabStore.getState().tabs[0].webResourceDraftRef).toBeUndefined()
@@ -72,5 +74,8 @@ describe('openDefaultBrowserTab', () => {
 
     expect(beginDraft).not.toHaveBeenCalled()
     expect(result).toMatchObject({ saveable: false, error: '请先打开一个本地项目' })
+    expect(useTabStore.getState().tabs[0]).toEqual(
+      expect.objectContaining({ initialUrl: 'about:blank' }),
+    )
   })
 })

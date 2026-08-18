@@ -45,6 +45,7 @@ export function Workbench({
   const setBrowserUrlInput = useBrowserStore((s) => s.setUrlInput)
   const contentRef = useRef<HTMLDivElement>(null)
   const [conversationDropActive, setConversationDropActive] = useState(false)
+  const [addressFocusRequestTabId, setAddressFocusRequestTabId] = useState<string | null>(null)
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
   const isBrowserTab = activeTab?.type === 'browser'
@@ -140,11 +141,24 @@ export function Workbench({
 
   const openNewBrowser = useCallback((): void => {
     void openDefaultBrowserTab(activeWorkspaceRef).then((result) => {
+      setAddressFocusRequestTabId(result.tabId)
       if (!result.saveable) {
         showToast(`已打开普通浏览器；当前无法保存到项目：${result.error}`, 'info')
       }
     })
   }, [activeWorkspaceRef, showToast])
+
+  const handleAddressFocusHandled = useCallback((tabId: string): void => {
+    setAddressFocusRequestTabId((requestedTabId) =>
+      requestedTabId === tabId ? null : requestedTabId,
+    )
+  }, [])
+
+  useEffect(() => {
+    if (addressFocusRequestTabId && activeTabId !== addressFocusRequestTabId) {
+      setAddressFocusRequestTabId(null)
+    }
+  }, [activeTabId, addressFocusRequestTabId])
 
   const openNewConversation = useCallback((): void => {
     const conversationId = createConversation({
@@ -251,6 +265,8 @@ export function Workbench({
           tabId={activeTabId}
           tab={activeTab}
           browserState={activeBrowserState}
+          autoFocusAddress={addressFocusRequestTabId === activeTabId}
+          onAddressFocusHandled={handleAddressFocusHandled}
           onUrlInputChange={setBrowserUrlInput}
           onNavigate={handleNavigate}
           onOpenUrl={openBrowserUrl}

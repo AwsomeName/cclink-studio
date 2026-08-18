@@ -31,6 +31,16 @@ describe('useBrowserStore', () => {
       expect(existing.url).toBe('https://www.baidu.com')
     })
 
+    it('keeps an about:blank tab address empty for immediate paste', () => {
+      const tab = useBrowserStore.getState().ensureTab('blank-browser', 'about:blank')
+
+      expect(tab.url).toBe('about:blank')
+      expect(tab.urlInput).toBe('')
+
+      useBrowserStore.getState().setUrl('blank-browser', 'about:blank')
+      expect(useBrowserStore.getState().tabs['blank-browser'].urlInput).toBe('')
+    })
+
     it('不存在则用默认值创建（指定 initialUrl）', () => {
       const tab = useBrowserStore.getState().ensureTab('tab-2', 'https://github.com')
       expect(tab.url).toBe('https://github.com')

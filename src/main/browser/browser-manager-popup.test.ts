@@ -191,13 +191,18 @@ describe('BrowserManager popup adoption', () => {
     expect(manager.getActiveViewId()).toBe(popupTabId)
   })
 
-  it('installs plain-text URL handling in an isolated world after the page loads', async () => {
+  it('installs bounded page interaction fallbacks in isolated worlds after load', async () => {
     const { source } = await createSource()
 
     source.emit('did-finish-load')
     await vi.waitFor(() => {
       expect(source.executeJavaScriptInIsolatedWorld).toHaveBeenCalledWith(expect.any(Number), [
         expect.objectContaining({ code: expect.stringContaining('urlAtPoint') }),
+      ])
+      expect(source.executeJavaScriptInIsolatedWorld).toHaveBeenCalledWith(expect.any(Number), [
+        expect.objectContaining({
+          code: expect.stringContaining('__cclinkHorizontalPanInstalled'),
+        }),
       ])
     })
   })

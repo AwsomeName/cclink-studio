@@ -289,6 +289,8 @@ JSON.stringify({
 1. **适应宽度（默认 `fit`）**：`setZoomFactor(paneWidth / scrollWidth)`，只缩不放大。
 2. **手动缩放**：工具栏 ± / 百分比。
 3. **移动版**：iOS Safari UA + 重载，约 414px 视口并填满面板。
+4. **横向滑动兜底**：手动缩放后若网站用 `overflow-x: hidden` 隐藏了仍存在的横向范围，
+   触控板左右滑动或 Shift + 滚轮仍可查看两侧内容；正常网页滚动行为优先。
 
 详见 `.cursor/rules/embedded-browser-viewport.mdc`。
 

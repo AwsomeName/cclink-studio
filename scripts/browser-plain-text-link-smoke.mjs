@@ -108,7 +108,7 @@ async function main() {
     await window.cclinkStudio.fs.mkdir(path)
     await window.cclinkStudio.fs.writeFile(
       htmlPath,
-      '<!doctype html><html><body><p>系统访问地址：<u><span id="plain-url" style="color: blue">https://example.com/plain-text-target</span></u>。</p><a id="real-link" href="#native-link">真实链接</a></body></html>',
+      '<!doctype html><html><body style="margin: 0; overflow-x: hidden"><main style="width: 1800px; padding: 24px"><p>系统访问地址：<u><span id="plain-url" style="color: blue">https://example.com/plain-text-target</span></u>。</p><a id="real-link" href="#native-link">真实链接</a></main></body></html>',
     )
     const { useFsStore } = await import('/src/stores/fs-store.ts')
     const opened = await useFsStore.getState().openRecentWorkspace(path)
@@ -132,6 +132,15 @@ async function main() {
   const browserPage = await waitForBrowserPage(sourceUrl)
   const sourceTabId = await page.evaluate(() => window.cclinkStudio.browser.getActiveViewId())
   assert(sourceTabId, 'source Browser tab is not active')
+
+  await page.evaluate((tabId) => window.cclinkStudio.browser.setZoom(tabId, 1), sourceTabId)
+  await browserPage.mouse.move(300, 150)
+  await browserPage.mouse.wheel(240, 0)
+  await browserPage.waitForFunction(() => (document.scrollingElement?.scrollLeft ?? 0) > 0)
+  await browserPage.evaluate(() => {
+    if (document.scrollingElement) document.scrollingElement.scrollLeft = 0
+  })
+  console.log('PASS hidden horizontal overflow responds to trackpad-style wheel input')
 
   const nativeCount = await browserTabCount()
   await browserPage.locator('#real-link').click()
