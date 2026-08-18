@@ -1095,7 +1095,22 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
           </div>
         ) : hydrationPending ? (
           <div className="editor-loading">正在渲染 Markdown...</div>
-        ) : parseBlockedReason && !protectedPreviewAvailable ? null : (
+        ) : parseBlockedReason && !protectedPreviewAvailable ? (
+          <div className="markdown-parse-blocked">
+            <strong>文档未被改写</strong>
+            <span>{parseBlockedReason}</span>
+            {filePath && (
+              <button type="button" onClick={() => void handleReload()}>
+                重新载入磁盘版本
+              </button>
+            )}
+            {markdownDiagnosticLog && (
+              <button type="button" onClick={() => void handleCopyDiagnosticLog()}>
+                复制诊断日志
+              </button>
+            )}
+          </div>
+        ) : (
           <div
             className={`tiptap-editor${editorWordWrap ? '' : ' no-wrap'}${parseBlockedReason ? ' protected' : ''}`}
             style={
