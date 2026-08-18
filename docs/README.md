@@ -30,7 +30,7 @@
 - `docs/features/unified-agent-panel.md`：本地/远程 Agent Panel 统一方案；UAP-1 必须原子切换为单一 Panel/Composer 并删除远程重复 UI，不以独立 IME 补丁代替统一；UAP-2 再按契约强化远程事务生命周期。
 - `docs/features/context-action-system.md`：已实现的统一右键、命令与上下文操作系统。
 - `docs/features/configurable-keybinding-system.md`：已实现的统一可配置快捷键系统事实源，定义命令事实源、作用域路由、设置页录制与冲突处理、Browser `WebContentsView` 适配和验收门禁。
-- `docs/features/detachable-workbench-tabs.md`：Conditional Go、尚未实现的可分离 Workbench Tab 与辅助窗口方案；当前只允许 Browser P0，P0 与 ADR 通过前不得启动 M1。
+- `docs/features/detachable-workbench-tabs.md`：方案文档审查通过、项目 Conditional Go；Browser P0a/P0b 可以开始，P0 与 ADR 通过前不得启动 M1。
 - `docs/features/git-source-control.md`：已确认、尚未实现的左下角 Git 状态、变更 Diff、可控提交、显式 Push 和旧备份收敛产品事实源。
 - `docs/features/git-source-control-development-plan.md`：Git 状态与提交推送 E0、G1-G5 开发顺序、用户验收、失败矩阵和退出门禁。
 - `docs/features/manual-git-backup.md`：已实现的单用户手动 Git 备份；真实 GitHub 人工验收仍待执行。
@@ -42,7 +42,8 @@
 - `docs/features/agent-role-configuration.md`：Agent 角色中心事实源；包含已实现待异机验收的会话配置、全局单例配置页、运行回执和 Session 隔离，Skill / `SOUL.md` 内容扩展，以及 AI 员工暂停后的 R0-R4 角色开发里程碑。
 - `docs/features/ai-employees.md`：已确认但暂停的 AI 员工领域边界；角色与员工分离、产品组合、单一 Studio 交付，当前商业范围仅保留 CCLink 托管远程功能。
 - `docs/features/agent-profiles.md`：v0.1.14 旧角色方案的兼容与迁移说明。
-- `docs/features/ai-web-affairs-agent.md`：AI 网页事务代理人产品事实源；网站与账号按 ADR 0014 调整为全局资源库，事务继续属于项目，AI 调用账号暂未决定。
+- `docs/features/ai-web-affairs-agent.md`：AI 网页事务代理人产品事实源；网站与账号按 ADR 0014
+  全局管理，事务继续属于项目，Agent 账号执行按 ADR 0016 使用明确任务、显式账号和人工接管。
 - `docs/features/global-web-accounts-development-plan.md`：全局网站账号、跨项目 Profile/Session 复用、运营矩阵、v2→v3 迁移和事务引用兼容的 E0、G1–G4、T1、R1 正式施工计划。
 - `docs/features/ai-web-affairs-agent-development-plan.md`：AI 网页事务代理人的开发管理事实源；保留项目账号和事务历史证据，当前账号施工以全局账号专项计划为准。
 - `docs/features/scheduled-tasks.md`：工作空间定时任务的 Activity Bar、侧栏、Workbench Tab、App 内统一调度、本机启用和保存快捷键产品事实源。

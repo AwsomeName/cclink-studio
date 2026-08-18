@@ -50,7 +50,9 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
   中按用户点击位置识别纯文本 HTTP(S) URL；不改写 DOM、不回传正文，仍复用现有 URL 校验、
   Profile 和 Tab 生命周期。
 - `0014-global-web-account-catalog.md`：网站、主体、账号、Profile/Session 和运营矩阵改为本机
-  Studio 全局资源；事务继续属于项目，AI 是否可以调用账号保持未决且不得默认放开。
+  Studio 全局资源；事务继续属于项目，账号执行边界由后续 ADR 0016 补充。
 - `0015-isolated-horizontal-pan-fallback.md`：允许 Browser main frame 在无权限 isolated world
   中为被网站隐藏的横向范围提供触控板和 Shift + 滚轮兜底；不改写 DOM、不回传网页内容，
   Chromium 原生滚动行为优先。
+- `0016-agent-web-account-execution.md`：Agent 在用户明确任务中使用显式全局账号打开可见
+  Browser Tab 并执行通用网页操作；登录验证和敏感最终动作转人工接管，模型不取得秘密值。

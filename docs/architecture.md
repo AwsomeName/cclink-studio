@@ -188,9 +188,17 @@ Thread 显式选择经过验证的本地 Codex ACP Runtime；公共 Registry、�
   多个工作空间可以分别拥有 Tab，但必须复用一个正式 Profile/Session。
 - 事务可以保存全局账号或运营矩阵的稳定引用，但不复制账号、Profile 或 Session。运营矩阵
   只保存账号 ID 和版本；矩阵变化不得静默扩大既有事务绑定范围。
-- AI 是否可以读取、打开或操作全局账号尚未形成产品决定。账号全局化不得通过删除原项目
-  校验而自动扩大 Agent、MCP、BrowserTask 或定时任务的调用范围；相关路径保持 fail-closed，
-  直到产品事实源和 ADR 另行确认。
+- ADR 0016 允许 Agent 在用户明确交代的任务中使用显式全局 `accountId` 打开登录环境并通过
+  可见 Browser Tab 执行读取、点击、填写、上传和下载。账号目录可见本身仍不是执行授权；
+  账号有歧义、已归档、实时身份无法核验或运行关联不完整时必须 fail-closed。
+- Agent 账号执行必须复用人工启动的同一账号解析和 Workspace/Tab 投影入口：主进程校验
+  `accountId`，renderer 只负责在当前工作空间创建或激活可见 Tab，BrowserTask 在创建时固定
+  `accountId + tabId + profileId + conversationId + agentRunId`。模型永远不取得 Profile、密码、
+  Cookie、Token 或验证码，也不得通过全局活跃页面、URL 或 Cookie 猜测账号。
+- 用户明确任务覆盖普通网页操作；对外提交、发布、发送、删除、注销、法律声明、付款、
+  电子签名和账号安全变更由 `PermissionManager` 进入人工接管并由用户完成，验证码、扫码、
+  人脸和 2FA 同样只允许人工处理。首版同一账号只允许一个 Agent BrowserTask 执行，不开放
+  矩阵批量执行。
 - 一次网页执行由 Attempt 记录。人工接管和交还是持久状态转换；应用重启会把未结束运行
   标为中断。进入外部等待时当前 Attempt 结束；到期或错过后才能创建新的检查 Attempt，
   不用常驻 Agent 伪装后台跟踪。

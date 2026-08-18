@@ -1,7 +1,7 @@
 # 可分离 Workbench Tab 与辅助窗口
 
-> 状态：Conditional Go；当前只允许开展 P0 技术验证，P0 通过和 ADR 完成前不得启动 Browser M1。
-> 功能尚未实现，任何用户闭环均未开始。
+> 状态：方案文档审查通过，项目 Conditional Go；P0 可以开始，P0 通过和 ADR 完成前不得启动
+> Browser M1。功能尚未实现，任何用户闭环均未开始。
 >
 > 创建时间：2026-08-18。
 >
@@ -22,8 +22,9 @@ Terminal 或 Agent 会话放到副屏，同时继续在主窗口处理其他工�
 推荐采用以下交付策略：
 
 1. 最终产品目标仍是“所有经过适配的 Workbench Tab 都可以移动到辅助窗口”。
-2. 当前唯一授权工作是 P0：证明既有 Browser `WebContentsView` 可以 A -> B -> A 跨窗口迁移，
-   并保持 WebContents、Session、Profile、Playwright Page 和稳定 tabId，且全过程不重载。
+2. 当前唯一授权工作是 P0a/P0b：先证明既有 Browser `WebContentsView` 可以 A -> B -> A 跨窗口
+   迁移并保持核心身份且不重载，再用最小宿主验证 popup、focus、事件路由和泄漏；不得提前实现
+   BrowserManager 多 host 或其他 M1 基础设施。
 3. P0 通过后先写 ADR，再决定是否启动 M1；P0 只是工程验证，不是用户功能进度。
 4. 首个用户里程碑只命名为“Browser 辅助窗口”，先提供右键/命令入口，不宣称通用 Tab 或拖出
    手势已完成。
@@ -461,17 +462,39 @@ Adapter 不拥有 window placement，也不复制领域事实。未注册 adapte
 - 拖拽取消、落回原 TabBar、目标不支持或坐标无效时不创建窗口。
 - 对尚未适配的 Tab，菜单项显示禁用原因；拖出时 Tab 回弹并显示一次简短 toast。
 
+### 9.11 无合法源窗口时的 Browser Recovery Host
+
+如果 View 已从源窗口移除，而 source window 同时销毁、target attach 又失败，单纯“保持 runtime”
+没有可验证的 native host 和恢复路径。ADR 必须在 M1 前确定承载方案。
+
+推荐主线是主进程按需创建一个 `BrowserRecoveryHost`：
+
+- 使用隐藏 `BaseWindow` 或经 P0 证明等价的最小 native host，不加载 renderer，不使用 preload，
+  不显示给用户。
+- 只在 source/target 都无法合法承载 View 的回滚路径创建，把同一个 View 临时 attach 到 recovery
+  host，保留 WebContents、Session 和 Page 身份。
+- WindowService 继续拥有 placement transaction，BrowserManager 继续拥有 View runtime；recovery
+  host 只提供临时 native attachment，不成为第三个 Browser 或 Tab 状态 owner。
+- 主窗口或新的安全 target ready 后立即把 View 移出 recovery host；设置有界恢复期限、状态诊断和
+  明确的“等待窗口恢复/恢复失败”语义。
+- App quit、恢复成功和恢复最终失败都必须显式 remove child view，并按真实 Tab 关闭/保留决策释放
+  WebContents；Electron `BaseWindow` 关闭不会自动销毁 child WebContents，不能依赖隐式清理。
+
+如果 P0 证明 View 在无 host 状态下同样可以安全保活，ADR 可以选择更小方案，但必须用 crash/
+destroy 证据说明最终 owner 和恢复时序；不能把“对象还在内存”当作用户可恢复能力。
+
 ## 10. 分阶段支持矩阵
 
-| 阶段 | Tab 类型                                                                                                                                | 支持门槛                                                                  |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| P0   | 仅测试 Browser runtime                                                                                                                  | 同一 WebContents/View 跨窗口来回迁移；Profile、Page、tabId 和事件路由保持 |
-| M1   | `browser`                                                                                                                               | 右键/命令完成第 6 节真人闭环；工作空间切换不销毁副窗口页面                |
-| M2a  | `terminal`、`terminal-record`                                                                                                           | PTY 不重启；输出补发无重无漏；输入只到 owner window；记录只读恢复         |
-| M2b  | `editor`、`preview`、`file-preview`、`model`、`hardware-gerber`、`remote-file`                                                          | Editor 保留 dirty/基线/光标/选区/undo；只读 surface 可重建且状态定义明确  |
-| M3   | `conversation`、`remote-conversation`                                                                                                   | run/session 不重启；stream sequence 对账；确认卡、取消和诊断路由正确      |
-| M3   | `settings`、`data-source-query`、`data-source-result`、`scheduled-task`、`web-resource`、`web-affair`、`agent-role`、`media-production` | 草稿、单例页、查询结果、上传/渲染进度和领域事件逐项定义 owner 与恢复      |
-| M4   | 已支持的全部类型                                                                                                                        | 拖出/拖入已有窗口、辅助窗口多 Tab、重启恢复、显示器回收、跨平台验收       |
+| 阶段 | Tab 类型                                                                                                                                | 支持门槛                                                                   |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| P0a  | 仅测试 Browser runtime                                                                                                                  | 同一 View A -> B -> A；WebContents/Session/Page/tabId 不变、不重载、可回滚 |
+| P0b  | 最小测试宿主                                                                                                                            | popup、focus、最小 owner 事件路由和显式释放无泄漏                          |
+| M1   | `browser`                                                                                                                               | 右键/命令完成第 6 节真人闭环；所有 M1 发布平台通过核心正确性门禁           |
+| M2a  | `terminal`、`terminal-record`                                                                                                           | PTY 不重启；输出补发无重无漏；输入只到 owner window；记录只读恢复          |
+| M2b  | `editor`、`preview`、`file-preview`、`model`、`hardware-gerber`、`remote-file`                                                          | Editor 保留 dirty/基线/光标/选区/undo；只读 surface 可重建且状态定义明确   |
+| M3   | `conversation`、`remote-conversation`                                                                                                   | run/session 不重启；stream sequence 对账；确认卡、取消和诊断路由正确       |
+| M3   | `settings`、`data-source-query`、`data-source-result`、`scheduled-task`、`web-resource`、`web-affair`、`agent-role`、`media-production` | 草稿、单例页、查询结果、上传/渲染进度和领域事件逐项定义 owner 与恢复       |
+| M4   | 已支持的全部类型                                                                                                                        | 拖出/拖入、多 Tab、重启/显示器恢复和各平台完整体验                         |
 
 `android` 暂不自动进入任何阶段。Android display、scrcpy、输入、旋转和设备 session 当前也绑定
 单窗口能力，只有完成独立 adapter 评审和真机迁移验收后才能加入支持矩阵。
@@ -482,15 +505,28 @@ Adapter 不拥有 window placement，也不复制领域事实。未注册 adapte
 
 ### P0：跨窗口 Browser 技术验证，4–7 天
 
-- 在隔离分支/测试入口创建第二个受控窗口。
-- 把同一个 Browser View 从主窗口移到辅助窗口，再移回。
-- 验证 WebContents ID、Profile、scroll/form/history、popup/opener、Playwright Page/tabId。
-- 验证 owner window bounds、focus、context menu、find、URL/meta event。
-- 写出成功证据或明确失败点和替代路线。
+#### P0a：核心身份与回滚，2–3 天
+
+- 在隔离测试入口创建 A/B 两个最小受控 native window，不加载完整第二套 Studio App。
+- 把同一个 Browser View 从 A 移到 B，再移回 A。
+- 验证 WebContents、Session/partition、CDP target/Playwright Page 和稳定 tabId 全程保持同一身份。
+- 用导航计数和页面内不可恢复现场证明没有 reload、re-navigation 或重建。
+- 注入一次 target attach 失败，证明同一个 View 可以回滚到 A。
+
+P0a 失败立即停止，不继续 P0b，不写多窗口生产基础设施。
+
+#### P0b：最小窗口交互与释放，2–4 天
+
+- 只在最小测试宿主验证 popup/`window.opener`、focus、一个 owner-routed 测试事件。
+- 验证 A -> B -> A 后 listener 不重复，旧 owner 不再接收事件。
+- 显式关闭临时窗口/View/WebContents，检查无残留 child view、timer、listener 和 CDP/Page 注册。
+- 验证 source window 销毁时 View 能进入候选 Recovery Host 或等价安全承载点，再恢复到合法窗口。
+- 写出成功证据、平台范围、未知项和明确失败点，不把 auth、download、workspace reconcile 或完整
+  BrowserManager 事件路由带入 P0。
 
 退出门禁：
 
-- 成功：允许进入 ADR 最终决策和 M1。
+- P0a/P0b 成功：只允许进入 ADR 编写与评审，不授权 M1。
 - 失败但存在不重载的官方支持替代：更新 ADR 后重新估算。
 - 只能关闭并重载页面：Browser M1 No-Go，不用缩水语义冒充移动。
 
@@ -521,7 +557,8 @@ Adapter 不拥有 window placement，也不复制领域事实。未注册 adapte
 - 把 Tab 拖入已有辅助窗口、跨窗口排序和空窗口回收。
 - 辅助窗口多 Tab、恢复位置/显示器/placement、可见区域纠正。
 - 显式 always-on-top/compact mode（若产品仍需要）。
-- macOS、Windows、Linux 平台差异和完整真实 App 验收。
+- macOS、Windows、Linux 的拖拽、DPI、显示器恢复和窗口交互体验收尾；不能把 M1 基本不重载、
+  可回滚和状态归属正确性推迟到这里。
 
 完整通用能力在 P0 前只能粗估为 13–20+ 人周，其中主进程 Tab Model、Editor undo/selection、
 会话流对账和草稿型页面是主要不确定项；必须在 P0 和 Browser M1 后重新估算。Browser M1 可以
@@ -529,38 +566,44 @@ Adapter 不拥有 window placement，也不复制领域事实。未注册 adapte
 
 ## 12. P0 必须证明什么
 
-P0 是整个方案的止损门，不允许扩张为通用多窗口重构。必须回答：
+P0 是整个方案的止损门，不允许扩张为通用多窗口重构或提前实现半个 M1。
+
+### 12.1 P0a：核心身份与回滚
 
 1. Electron 43 下，同一个 `WebContentsView` 能否从窗口 A 的 `contentView` 移除并挂到窗口 B，
    再挂回 A？
-2. 迁移是否触发 reload、WebContents 重建、renderer crash、Profile/Session 变化或 Page Visibility
-   异常？
-3. PlaywrightBridge 的原 tabId -> Page 映射是否保持，运行中的 BrowserTask 是否继续精确寻址？
-4. popup、`window.opener`、POST 页面、`about:blank`、页面侧 `window.close()` 是否保持原语义？
-5. bounds、zoom、find、context menu、keyboard focus、download 和 auth routing 是否可以按 owner
-   window 正确工作？
-6. 辅助 renderer crash、窗口关闭和主窗口 workspace 切换时，View 是否能回滚且不泄漏？
-7. WebContents/View 的显式释放是否对称，窗口关闭是否留下内存、CDP target 或 listener？
+2. WebContents ID、Session/partition、CDP target/Playwright Page 和稳定 tabId 是否逐项保持同一身份？
+3. 导航计数、页面内状态和事件是否证明没有 reload、re-navigation 或 renderer 重建？
+4. target attach 失败时，同一个 View 是否可以回到 A，且原运行时仍可交互？
 
-P0 最好使用本地可控页面加现有 BrowserManager/Playwright 测试，不使用真实账号作为唯一证据；
-M1 仍必须补一个真实已登录网站的人工验收。
+### 12.2 P0b：最小交互、Recovery Host 和释放
+
+1. 最小 popup/`window.opener` 语义和 focus 是否在 A -> B -> A 后仍成立？
+2. 一个带 owner windowId/generation 的测试事件是否只发给当前 owner，旧 owner listener 是否释放？
+3. source window 销毁且 target attach 失败时，View 能否进入候选 Recovery Host/等价承载点并恢复？
+4. 显式结束测试后，child view、WebContents、timer、listener、CDP target 和 Page 注册是否全部释放？
+
+P0 使用本地可控页面和最小 native host，不使用真实账号作为唯一证据，也不要求验证完整 auth、
+download、BrowserTask event、renderer crash recovery 或 workspace reconcile。这些属于 ADR/M1；M1
+仍必须补真实已登录网站和生产事件路由验收。
 
 ## 13. 失败矩阵
 
-| 失败场景                              | 推荐行为                                                                |
-| ------------------------------------- | ----------------------------------------------------------------------- |
-| 辅助 BrowserWindow 创建失败           | 原 Tab 不动；结构化 `window-create-failed`                              |
-| 辅助 renderer 未 ready/超时           | 销毁目标窗口；placement 回滚；原 Tab 保持                               |
-| View 从源窗口 detach 失败             | 不提交迁移；恢复源 active/bounds                                        |
-| View 已 detach、目标 attach 失败      | 优先重新 attach 源窗口；失败时保持 runtime 并显示恢复入口，不能销毁页面 |
-| source renderer 在迁移中 reload/crash | main owner 取消或接管事务；目标未 commit 不显示半成品                   |
-| target renderer crash                 | Browser/Terminal/Agent 运行事实继续存在；尝试送回主窗口                 |
-| 主窗口切换 workspace                  | 只更新主窗口 host；不 reconcile 其他窗口 View                           |
-| 辅助窗口关闭                          | 非 App quit 时送回；显式“关闭 Tab”才执行领域清理                        |
-| App 正常退出                          | M1 保存逻辑 Tab 可恢复；M4 保存并恢复 placement                         |
-| 显示器拔出                            | M4 把窗口 bounds 回收到最近可见 display；运行事实不中断                 |
-| 过期/重复 transfer event              | generation/transferId 幂等拒绝并记录脱敏诊断                            |
-| 不支持的 Tab 被拖出                   | 不创建窗口；回弹并说明尚未支持                                          |
+| 失败场景                              | 推荐行为                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------ |
+| 辅助 BrowserWindow 创建失败           | 原 Tab 不动；结构化 `window-create-failed`                               |
+| 辅助 renderer 未 ready/超时           | 销毁目标窗口；placement 回滚；原 Tab 保持                                |
+| View 从源窗口 detach 失败             | 不提交迁移；恢复源 active/bounds                                         |
+| View 已 detach、目标 attach 失败      | 优先重新 attach 源窗口；源窗口无效则进入 Recovery Host，再恢复到合法窗口 |
+| source window 同时销毁                | View 进入主进程 Recovery Host/ADR 等价承载点，不能成为无 owner 悬空对象  |
+| source renderer 在迁移中 reload/crash | main owner 取消或接管事务；目标未 commit 不显示半成品                    |
+| target renderer crash                 | Browser/Terminal/Agent 运行事实继续存在；尝试送回主窗口                  |
+| 主窗口切换 workspace                  | 只更新主窗口 host；不 reconcile 其他窗口 View                            |
+| 辅助窗口关闭                          | 非 App quit 时送回；显式“关闭 Tab”才执行领域清理                         |
+| App 正常退出                          | M1 保存逻辑 Tab 可恢复；M4 保存并恢复 placement                          |
+| 显示器拔出                            | M4 把窗口 bounds 回收到最近可见 display；运行事实不中断                  |
+| 过期/重复 transfer event              | generation/transferId 幂等拒绝并记录脱敏诊断                             |
+| 不支持的 Tab 被拖出                   | 不创建窗口；回弹并说明尚未支持                                           |
 
 ## 14. 诊断要求
 
@@ -606,6 +649,9 @@ M1 仍必须补一个真实已登录网站的人工验收。
 - 多窗口/辅助窗口新增独立 smoke，不依赖人工鼠标拖拽作为唯一自动门禁；自动测试可以调用同一个
   command，真人再验证拖拽手势。
 - 真实应用端到端验收通过前，只能报告工程准备度，不能宣称对应产品能力完成。
+- M1 准备发布到哪个平台，哪个平台就必须通过核心“不重载、同一身份、失败可回滚、状态归属正确”
+  门禁；如果当前只发布 macOS，Windows/Linux 不得宣称 M1 已支持。M4 只承接拖拽、DPI、显示器恢复
+  等完整体验，不能补做基本正确性。
 
 ## 16. 风险分级
 
@@ -650,7 +696,7 @@ M1 仍必须补一个真实已登录网站的人工验收。
 
 ### P0 退出
 
-- 第 12 节问题全部有可复现证据。
+- P0a 先通过；失败立即止损。P0a 通过后 P0b 与第 12 节问题全部有可复现证据。
 - 结论明确为继续、替代或 No-Go；不能把未知项留给 M1 顺便解决。
 - P0 没有扩散为全部 Tab、恢复系统或通用 Layout 重构。
 - P0 通过只授权编写/评审 ADR；ADR 未明确 Window owner、Tab owner、单一 writer、权限和回滚语义
@@ -663,6 +709,8 @@ M1 仍必须补一个真实已登录网站的人工验收。
 - 主窗口工作空间切换不影响辅助窗口。
 - 关闭送回、显式关闭和迁移失败回滚均有证据。
 - `pnpm verify`、受影响 smoke 和架构复审通过。
+- 所有计划发布 M1 的平台均已通过核心不重载、身份连续、失败回滚和归属正确性门禁；未验证平台
+  不进入支持声明。
 - 拖出手势不属于 M1 完成声明；只能在上述闭环通过后作为同一命令的新入口接入。
 
 ### 通用能力退出
