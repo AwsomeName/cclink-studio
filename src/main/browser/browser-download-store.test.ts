@@ -53,6 +53,34 @@ afterEach(async () => {
 })
 
 describe('BrowserDownloadStore', () => {
+  it('routes download updates to the current tab owner before falling back to main', async () => {
+    const send = vi.fn()
+    const ownerSend = vi.fn(() => true)
+    const store = new BrowserDownloadStore(
+      { isDestroyed: () => false, webContents: { send } } as any,
+      () => workspaceDir,
+      ownerSend,
+    )
+    stores.push(store)
+    await store.load()
+
+    await store.startDownload({
+      id: 'download-owner',
+      trigger: 'user',
+      tabId: 'browser-detached',
+      workspaceKey: null,
+      sourceUrl: 'https://example.test/file.pdf',
+      suggestedFilename: 'file.pdf',
+    })
+
+    expect(ownerSend).toHaveBeenCalledWith(
+      'browser-detached',
+      'browserDownload:changed',
+      expect.any(Object),
+    )
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('stores agent downloads in the task temporary directory', async () => {
     const { store } = createStore()
     await store.load()

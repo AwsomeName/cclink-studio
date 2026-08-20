@@ -1,7 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import { app, shell } from 'electron'
 import { basename, dirname, join } from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { copyFile, mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises'
 import {
   browserIpcEvents,
@@ -28,6 +28,7 @@ export class BrowserDownloadStore {
   constructor(
     private readonly mainWindow: BrowserWindow,
     private readonly getWorkspacePath?: () => string | null | undefined,
+    private readonly sendToTabOwner?: (tabId: string, channel: string, payload: unknown) => boolean,
   ) {}
 
   async load(): Promise<void> {
@@ -58,7 +59,18 @@ export class BrowserDownloadStore {
   async startDownload(
     options: StartDownloadOptions,
   ): Promise<{ record: BrowserDownloadRecord; targetPath: string }> {
-    const targetPath = await this.resolveInitialPath(options)
+    return this.startDownloadNow(options)
+  }
+
+  /**
+   * Electron 的 will-download 回调要求同步设置 savePath；因此下载记录和目标路径必须在
+   * 回调返回前准备完成。目录很小且只在用户触发下载时执行，同步文件检查的边界可控。
+   */
+  startDownloadNow(options: StartDownloadOptions): {
+    record: BrowserDownloadRecord
+    targetPath: string
+  } {
+    const targetPath = this.resolveInitialPathNow(options)
     const record: BrowserDownloadRecord = {
       id: options.id,
       trigger: options.trigger,
@@ -186,12 +198,21 @@ export class BrowserDownloadStore {
     shell.showItemInFolder(path)
   }
 
-  private async resolveInitialPath(options: StartDownloadOptions): Promise<string> {
+  private resolveInitialPathNow(options: StartDownloadOptions): string {
     const folderName =
       options.trigger === 'agent'
         ? join(app.getPath('userData'), 'agent-downloads', options.taskRunId ?? 'unassigned')
         : app.getPath('downloads')
-    return this.uniquePath(folderName, options.suggestedFilename)
+    mkdirSync(folderName, { recursive: true })
+    const safeName = sanitizeFilename(options.suggestedFilename || 'download')
+    const parsed = splitFilename(safeName)
+    let candidate = join(folderName, safeName)
+    let index = 1
+    while (existsSync(candidate)) {
+      candidate = join(folderName, `${parsed.name}-${index}${parsed.ext}`)
+      index += 1
+    }
+    return candidate
   }
 
   private async uniquePath(folderPath: string, suggestedFilename: string): Promise<string> {
@@ -229,6 +250,7 @@ export class BrowserDownloadStore {
   private emitDownloadChanged(record: BrowserDownloadRecord): void {
     if (this.mainWindow.isDestroyed()) return
     const payload: BrowserDownloadChangedPayload = { download: this.serializeRecord(record) }
+    if (this.sendToTabOwner?.(record.tabId, browserIpcEvents.downloadChanged, payload)) return
     this.mainWindow.webContents.send(browserIpcEvents.downloadChanged, payload)
   }
 

@@ -6,7 +6,7 @@ import {
   type Download,
 } from 'playwright-core'
 import { randomUUID } from 'node:crypto'
-import type { WebContents } from 'electron'
+import type { DownloadItem, Session, WebContents } from 'electron'
 import type { BrowserDownloadStore } from '../browser/browser-download-store'
 import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
 import type { BrowserPageDiagnosticSummary } from '../../shared/ipc/browser'
@@ -89,6 +89,19 @@ export class PlaywrightBridge {
   private downloadIds = new WeakMap<Download, string>()
   /** 已安装监听器的页面，避免 claim/register 重复绑定 */
   private listenedPages = new WeakSet<Page>()
+  /** Electron WebContents → 逻辑 Tab；Session 下载事件以此确定 owner。 */
+  private electronTabByWebContentsId = new Map<number, string>()
+  private electronWebContentsIdByTab = new Map<string, number>()
+  /** 每个 Electron Session 只安装一个权威下载监听器。 */
+  private electronDownloadSessionHandlers = new Map<
+    Session,
+    (event: Electron.Event, item: DownloadItem, webContents: WebContents) => void
+  >()
+  /** Electron 下载记录先于 Playwright download 事件创建；按 Tab 排队完成 ID 关联。 */
+  private pendingElectronDownloads = new Map<
+    string,
+    Array<{ id: string; url: string; filename: string }>
+  >()
 
   constructor(
     private readonly browserDownloadStore?: BrowserDownloadStore | null,
@@ -240,18 +253,26 @@ export class PlaywrightBridge {
   }
 
   private async captureDownload(page: Page, download: Download): Promise<string> {
-    const downloadId = this.registerDownload(download)
     const tabId = this.getTabIdForPage(page) ?? this.activeTabId ?? 'unbound'
-    const task = this.browserTaskRuntime?.getActiveTaskForTab(tabId)
+    const pending = this.takePendingElectronDownload(
+      tabId,
+      download.url(),
+      download.suggestedFilename(),
+    )
+    const downloadId = this.registerDownload(download, pending?.id)
 
     console.log(
       `[CCLink Studio] 下载已捕获: id=${downloadId}, filename=${download.suggestedFilename()}`,
     )
 
-    if (!this.browserDownloadStore) {
+    // Electron Session 是真实文件落盘和完成状态的事实源。没有 Store（例如独立单测）时，
+    // Playwright 仍保留 Download 引用供 wait/info/save 工具使用。
+    if (!this.browserDownloadStore || pending) {
       return downloadId
     }
 
+    // 兜底：极早期未 claim 的页面没有 Electron Tab 映射时，保留旧的 Playwright 保存路径。
+    const task = this.browserTaskRuntime?.getActiveTaskForTab(tabId)
     try {
       const { targetPath } = await this.browserDownloadStore.startDownload({
         id: downloadId,
@@ -364,6 +385,7 @@ export class PlaywrightBridge {
     webContents: WebContents,
     expectedUrl?: string,
   ): Promise<Page> {
+    this.bindElectronDownloadOwner(tabId, webContents)
     const pending = this.viewClaims.get(tabId)
     if (pending?.webContents === webContents) return pending.promise
 
@@ -468,6 +490,14 @@ export class PlaywrightBridge {
   unregisterPage(tabId: string): void {
     this.pages.delete(tabId)
     this.claimedViewTabIds.delete(tabId)
+    const webContentsId = this.electronWebContentsIdByTab.get(tabId)
+    if (webContentsId !== undefined) {
+      this.electronWebContentsIdByTab.delete(tabId)
+      if (this.electronTabByWebContentsId.get(webContentsId) === tabId) {
+        this.electronTabByWebContentsId.delete(webContentsId)
+      }
+    }
+    this.pendingElectronDownloads.delete(tabId)
     if (this.activeTabId === tabId) {
       const remaining = Array.from(this.pages.keys())
       this.activeTabId = remaining.length > 0 ? remaining[0] : null
@@ -720,6 +750,72 @@ export class PlaywrightBridge {
     this.browserDownloadStore?.markDownloadSavedAs(downloadId, path)
   }
 
+  private bindElectronDownloadOwner(tabId: string, webContents: WebContents): void {
+    const previousWebContentsId = this.electronWebContentsIdByTab.get(tabId)
+    if (previousWebContentsId !== undefined && previousWebContentsId !== webContents.id) {
+      this.electronTabByWebContentsId.delete(previousWebContentsId)
+    }
+    this.electronWebContentsIdByTab.set(tabId, webContents.id)
+    this.electronTabByWebContentsId.set(webContents.id, tabId)
+
+    if (!this.browserDownloadStore) return
+    const electronSession = webContents.session
+    if (this.electronDownloadSessionHandlers.has(electronSession)) return
+
+    const handler = (
+      _event: Electron.Event,
+      item: DownloadItem,
+      sourceWebContents: WebContents,
+    ): void => {
+      const ownerTabId = this.electronTabByWebContentsId.get(sourceWebContents.id)
+      if (!ownerTabId) return
+      const task = this.browserTaskRuntime?.getActiveTaskForTab(ownerTabId)
+      const downloadId = randomUUID()
+      const filename = item.getFilename()
+      const url = item.getURL()
+      const { targetPath } = this.browserDownloadStore!.startDownloadNow({
+        id: downloadId,
+        trigger: task ? 'agent' : 'user',
+        taskRunId: task?.id,
+        tabId: ownerTabId,
+        workspaceKey: null,
+        sourceUrl: url,
+        suggestedFilename: filename,
+      })
+      if (task) this.browserTaskRuntime?.addDownload(task.id, downloadId)
+      const pending = this.pendingElectronDownloads.get(ownerTabId) ?? []
+      pending.push({ id: downloadId, url, filename })
+      this.pendingElectronDownloads.set(ownerTabId, pending)
+      item.setSavePath(targetPath)
+      item.once('done', (_doneEvent, state) => {
+        if (state === 'completed') {
+          this.browserDownloadStore?.completeDownload(downloadId, targetPath)
+        } else {
+          this.browserDownloadStore?.failDownload(
+            downloadId,
+            new Error(`Electron 下载${state === 'cancelled' ? '已取消' : '已中断'}`),
+          )
+        }
+      })
+    }
+    electronSession.on('will-download', handler)
+    this.electronDownloadSessionHandlers.set(electronSession, handler)
+  }
+
+  private takePendingElectronDownload(
+    tabId: string,
+    url: string,
+    filename: string,
+  ): { id: string; url: string; filename: string } | null {
+    const pending = this.pendingElectronDownloads.get(tabId)
+    if (!pending?.length) return null
+    const index = pending.findIndex((entry) => entry.url === url && entry.filename === filename)
+    if (index < 0) return null
+    const [matched] = pending.splice(index, 1)
+    if (pending.length === 0) this.pendingElectronDownloads.delete(tabId)
+    return matched ?? null
+  }
+
   // ── 生命周期 ──────────────────────────────
 
   /**
@@ -734,6 +830,13 @@ export class PlaywrightBridge {
     this.networkLog = []
     this.routeHandlers.clear()
     this.downloads.clear()
+    for (const [electronSession, handler] of this.electronDownloadSessionHandlers) {
+      electronSession.removeListener('will-download', handler)
+    }
+    this.electronDownloadSessionHandlers.clear()
+    this.electronTabByWebContentsId.clear()
+    this.electronWebContentsIdByTab.clear()
+    this.pendingElectronDownloads.clear()
     this.activeTabId = null
     this.dialogAutoAction = null
     this.dialogAutoText = null

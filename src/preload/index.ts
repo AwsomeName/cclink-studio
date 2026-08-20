@@ -53,6 +53,18 @@ import {
   mediaRenderIpc,
   type MediaRenderApiContract,
 } from '../shared/media-production/media-render-contract'
+import {
+  workbenchBrowserStateIpc,
+  workbenchTabModelIpc,
+  type WorkbenchTabStateApiContract,
+} from '../shared/ipc/workbench-tab-model'
+import {
+  workbenchPlacementChangedSchema,
+  workbenchWindowIpc,
+  workbenchWindowIpcEvents,
+  workbenchWindowProjectionSchema,
+  type WorkbenchWindowApiContract,
+} from '../shared/ipc/workbench-window'
 
 const settingsApi: SettingsApiContract = {
   getAll: () => invokeIpcContract(settingsIpc.getAll),
@@ -221,6 +233,50 @@ const mediaRenderApi: MediaRenderApiContract = {
     invokeIpcContract(mediaRenderIpc.retryTask, workspacePath, taskId),
 }
 
+const workbenchTabsApi: WorkbenchTabStateApiContract = {
+  getProjection: (input) => invokeIpcContract(workbenchTabModelIpc.getProjection, input),
+  applyDelta: (input) => invokeIpcContract(workbenchTabModelIpc.applyDelta, input),
+  getBrowserProjection: (input) =>
+    invokeIpcContract(workbenchBrowserStateIpc.getBrowserProjection, input),
+  applyBrowserDelta: (input) =>
+    invokeIpcContract(workbenchBrowserStateIpc.applyBrowserDelta, input),
+  getBookmarks: (input) => invokeIpcContract(workbenchBrowserStateIpc.getBookmarks, input),
+  replaceBookmarks: (input) => invokeIpcContract(workbenchBrowserStateIpc.replaceBookmarks, input),
+}
+
+const workbenchWindowApi: WorkbenchWindowApiContract = {
+  getBootstrap: () => invokeIpcContract(workbenchWindowIpc.getBootstrap),
+  getProjection: () => invokeIpcContract(workbenchWindowIpc.getProjection),
+  moveTabToNewWindow: (input) => invokeIpcContract(workbenchWindowIpc.moveTabToNewWindow, input),
+  returnTabToMain: (input) => invokeIpcContract(workbenchWindowIpc.returnTabToMain, input),
+  auxiliaryReady: (input) => invokeIpcContract(workbenchWindowIpc.auxiliaryReady, input),
+  updateBounds: (input) => invokeIpcContract(workbenchWindowIpc.updateBounds, input),
+  browserCommand: (input) => invokeIpcContract(workbenchWindowIpc.browserCommand, input),
+  onProjectionChanged: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const parsed = workbenchWindowProjectionSchema.safeParse(value)
+      if (parsed.success) callback(parsed.data)
+    }
+    ipcRenderer.on(workbenchWindowIpcEvents.projectionChanged, handler)
+    return () => ipcRenderer.removeListener(workbenchWindowIpcEvents.projectionChanged, handler)
+  },
+  onPlacementChanged: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const parsed = workbenchPlacementChangedSchema.safeParse(value)
+      if (parsed.success) callback(parsed.data)
+    }
+    ipcRenderer.on(workbenchWindowIpcEvents.placementChanged, handler)
+    return () => ipcRenderer.removeListener(workbenchWindowIpcEvents.placementChanged, handler)
+  },
+  onUrlChanged: browserApi.onUrlChanged,
+  onPageMetaChanged: browserApi.onPageMetaChanged,
+  onFindShortcutTriggered: browserApi.onFindShortcutTriggered,
+  onFindResult: browserApi.onFindResult,
+  onTaskChanged: browserApi.onTaskChanged,
+  onDownloadChanged: browserApi.onDownloadChanged,
+  onNativeContextMenuOpened: browserApi.onNativeContextMenuOpened,
+}
+
 const terminalApi: TerminalApiContract = {
   onRequestCommandConfirmation: (callback) => {
     const handler = (
@@ -317,6 +373,10 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   runtimeComponents: runtimeComponentsApi,
 
   workspaceState: workspaceStateApi,
+
+  workbenchTabs: workbenchTabsApi,
+
+  workbenchWindow: workbenchWindowApi,
 
   scheduledTasks: scheduledTasksApi,
 

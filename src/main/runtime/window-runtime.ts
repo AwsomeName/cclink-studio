@@ -19,9 +19,14 @@ import {
 } from '../ipc/trusted-renderer-guard'
 import type { CclinkStudioRuntimeState } from './app-runtime'
 import { runShutdownStep } from './shutdown'
+import { WorkbenchWindowService } from '../workbench/workbench-window-service'
+import { BrowserRecoveryHostRegistry } from '../workbench/browser-recovery-host-registry'
+import { DetachableBrowserWindowController } from '../workbench/detachable-browser-window-controller'
+import { createAuxiliaryBrowserWindow } from '../workbench/auxiliary-browser-window'
 
 interface CreateWindowRuntimeOptions {
   preloadPath: string
+  auxiliaryPreloadPath?: string
   rendererUrl?: string
   rendererHtmlPath: string
 }
@@ -51,14 +56,55 @@ export function createWindowRuntime(
       rendererHtmlPath: options.rendererHtmlPath,
     }),
   )
+  runtime.workbenchWindowService = new WorkbenchWindowService()
+  const mainWorkbenchWindow = runtime.workbenchWindowService.registerWindow({
+    windowId: 'main',
+    role: 'main',
+    workspaceKey: null,
+  })
+  runtime.mainWindow.webContents.on('did-finish-load', () => {
+    try {
+      runtime.workbenchWindowService?.markWindowReady('main', mainWorkbenchWindow.generation)
+    } catch (error) {
+      console.error('[WorkbenchWindow] 主窗口 ready 状态更新失败:', error)
+    }
+  })
 
   runtime.mainWindow.on('closed', () => {
+    const mainEntry = runtime.workbenchWindowService?.getWindow('main')
+    if (mainEntry && mainEntry.state !== 'closed' && mainEntry.state !== 'failed') {
+      runtime.workbenchWindowService?.closeWindow('main')
+    }
     runtime.mainWindow = null
   })
 
   registerDialogIpc(runtime.mainWindow, runtime.trustedRendererGuard)
   registerWindowIpc(runtime.mainWindow, runtime.trustedRendererGuard)
   bootstrapWindowCapabilities(runtime)
+  if (
+    runtime.browserManager &&
+    runtime.workbenchTabModel &&
+    runtime.workbenchWindowService &&
+    runtime.trustedRendererGuard
+  ) {
+    runtime.browserRecoveryHosts = new BrowserRecoveryHostRegistry(runtime.browserManager)
+    runtime.detachableBrowserWindows = new DetachableBrowserWindowController({
+      mainWindow: runtime.mainWindow,
+      browserManager: runtime.browserManager,
+      tabModel: runtime.workbenchTabModel,
+      windowService: runtime.workbenchWindowService,
+      trustedRenderers: runtime.trustedRendererGuard,
+      recoveryHosts: runtime.browserRecoveryHosts,
+      createAuxiliaryWindow: () =>
+        createAuxiliaryBrowserWindow({
+          isDev: runtime.isDev,
+          preloadPath: options.auxiliaryPreloadPath ?? options.preloadPath,
+          rendererUrl: options.rendererUrl,
+          rendererHtmlPath: options.rendererHtmlPath,
+        }),
+    })
+    runtime.detachableBrowserWindows.registerIpc()
+  }
 }
 
 /** 设置主 renderer 缩放，并让已挂载的原生 Browser View 立即进入同一坐标系。 */
@@ -74,6 +120,9 @@ export function applyWindowZoomLevel(runtime: CclinkStudioRuntimeState, zoomLeve
 }
 
 export async function destroyWindowRuntime(runtime: CclinkStudioRuntimeState): Promise<void> {
+  await runShutdownStep('DetachableBrowserWindowController', () =>
+    runtime.detachableBrowserWindows?.destroy(),
+  )
   await runShutdownStep('BrowserAuthProcessService', () =>
     runtime.browserAuthProcessService?.destroy(),
   )
@@ -89,6 +138,9 @@ export async function destroyWindowRuntime(runtime: CclinkStudioRuntimeState): P
   })
 
   runtime.mainWindow = null
+  runtime.detachableBrowserWindows = null
+  runtime.browserRecoveryHosts = null
+  runtime.workbenchWindowService = null
   runtime.trustedRendererGuard = null
   runtime.browserManager = null
   runtime.browserTaskRuntime = null
@@ -143,10 +195,16 @@ function bootstrapBrowserWindowCapability(runtime: CclinkStudioRuntimeState): vo
   runtime.browserManager.attachBrowserAuthRequestHandler((request) =>
     runtime.browserAuthProcessService?.open(request),
   )
-  runtime.browserTaskRuntime = new BrowserTaskRuntime(mainWindow)
+  runtime.browserTaskRuntime = new BrowserTaskRuntime(
+    mainWindow,
+    (tabId, channel, payload) =>
+      runtime.browserManager?.sendToTabOwner(tabId, channel, payload) ?? false,
+  )
   runtime.browserDownloadStore = new BrowserDownloadStore(
     mainWindow,
     () => runtime.settingsService?.getAll().lastWorkspacePath ?? null,
+    (tabId, channel, payload) =>
+      runtime.browserManager?.sendToTabOwner(tabId, channel, payload) ?? false,
   )
   void runtime.browserDownloadStore
     .load()

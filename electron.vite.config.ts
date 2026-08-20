@@ -4,6 +4,12 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import type { Plugin } from 'vite'
 
+// electron-vite 5 isolatedEntries writes progress through TTY-only methods even in CI.
+// Provide no-op fallbacks so the required sandbox-safe single-file preload build is deterministic.
+process.stdout.clearLine ??= (() => true) as typeof process.stdout.clearLine
+process.stdout.cursorTo ??= (() => true) as typeof process.stdout.cursorTo
+process.stdout.moveCursor ??= (() => true) as typeof process.stdout.moveCursor
+
 const rendererStoreDir = `${resolve(__dirname, 'src/renderer/src/stores')}${sep}`
 const configuredRendererPort = Number(process.env.CCLINK_STUDIO_RENDERER_PORT)
 const rendererServer =
@@ -71,12 +77,18 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [
-      externalizeDepsPlugin({
-        // Sandboxed preload cannot resolve package dependencies at runtime.
-        exclude: ['zod'],
-      }),
-    ],
+    build: {
+      // Sandboxed preload cannot require shared local chunks. Keep main and auxiliary
+      // entries fully bundled and isolated even though they share typed IPC contracts.
+      isolatedEntries: true,
+      externalizeDeps: false,
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/preload/index.ts'),
+          auxiliary: resolve(__dirname, 'src/preload/auxiliary.ts'),
+        },
+      },
+    },
   },
   renderer: {
     server: rendererServer,

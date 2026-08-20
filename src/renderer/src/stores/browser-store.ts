@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import type { BrowserViewModeType, BrowserZoomModeType } from '@shared/ipc/browser'
-import { isWorkspaceStateRestoring, persistWorkspaceSection } from '../utils/workspace-state'
+import {
+  getWorkspaceStateKey,
+  getWorkspaceStateOwnerKey,
+  isWorkspaceStateRestoring,
+} from '../utils/workspace-state'
+import { syncWorkbenchBookmarks, syncWorkbenchBrowserState } from '../utils/workbench-browser-state'
 
 /** 设备模式：桌面 / 移动 */
 export type ViewMode = BrowserViewModeType
@@ -153,7 +158,10 @@ function saveStoredBrowserTabs(state: BrowserState): void {
     for (const [id, tab] of Object.entries(state.tabs)) {
       tabs[id] = { ...tab, ready: false }
     }
-    persistWorkspaceSection('browserTabs', { tabs, bookmarks: state.bookmarks })
+    const workspaceKey = getWorkspaceStateKey()
+    const ownerKey = getWorkspaceStateOwnerKey()
+    syncWorkbenchBrowserState({ workspaceKey, ownerKey, tabs })
+    syncWorkbenchBookmarks({ workspaceKey, ownerKey, bookmarks: state.bookmarks })
   } catch {
     // WorkspaceState 镜像失败不应影响当前浏览器状态。
   }

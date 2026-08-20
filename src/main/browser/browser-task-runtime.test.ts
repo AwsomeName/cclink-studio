@@ -11,6 +11,24 @@ function createRuntime(): { runtime: BrowserTaskRuntime; send: ReturnType<typeof
 }
 
 describe('BrowserTaskRuntime', () => {
+  it('routes task events to the current tab owner before falling back to main', () => {
+    const ownerSend = vi.fn(() => true)
+    const send = vi.fn()
+    const runtime = new BrowserTaskRuntime(
+      { isDestroyed: () => false, webContents: { send } } as any,
+      ownerSend,
+    )
+
+    runtime.startTask({ tabId: 'browser-detached', goal: 'inspect' })
+
+    expect(ownerSend).toHaveBeenCalledWith(
+      'browser-detached',
+      'browserTask:changed',
+      expect.any(Object),
+    )
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('starts one active task per tab and cancels the previous task', () => {
     const { runtime } = createRuntime()
 

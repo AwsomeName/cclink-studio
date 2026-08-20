@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Page } from 'playwright-core'
 import { PlaywrightBridge } from './playwright-bridge'
 
@@ -107,5 +107,62 @@ describe('PlaywrightBridge diagnostics', () => {
     bridge.registerPage(page, 'browser-popup-stable')
     internals.claimedViewTabIds.add('browser-popup-stable')
     expect(await bridge.waitForClaimedPageId(page, 0)).toBe('browser-popup-stable')
+  })
+
+  it('uses the Electron Session as the authoritative download lifecycle for a claimed tab', async () => {
+    const downloadStore = {
+      startDownloadNow: vi.fn().mockReturnValue({
+        record: { id: 'electron-download' },
+        targetPath: '/tmp/agent-downloads/file.txt',
+      }),
+      completeDownload: vi.fn(),
+      failDownload: vi.fn(),
+    }
+    const taskRuntime = {
+      getActiveTaskForTab: vi.fn().mockReturnValue({ id: 'task-a' }),
+      addDownload: vi.fn(),
+    }
+    const electronSession = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+    }
+    const webContents = { id: 42, session: electronSession }
+    const page = fakePage('https://example.com', 'Example')
+    const bridge = new PlaywrightBridge(downloadStore as any, taskRuntime as any)
+    ;(bridge as any).context = { pages: () => [page] }
+    bridge.registerPage(page, 'detached-tab')
+
+    await bridge.claimPageForView('detached-tab', webContents as any)
+
+    const handler = electronSession.on.mock.calls.find(([event]) => event === 'will-download')?.[1]
+    expect(handler).toBeTypeOf('function')
+    const item = {
+      getFilename: () => 'file.txt',
+      getURL: () => 'https://example.com/file.txt',
+      setSavePath: vi.fn(),
+      once: vi.fn(),
+    }
+    handler({}, item, webContents)
+
+    expect(downloadStore.startDownloadNow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: 'agent',
+        taskRunId: 'task-a',
+        tabId: 'detached-tab',
+        sourceUrl: 'https://example.com/file.txt',
+        suggestedFilename: 'file.txt',
+      }),
+    )
+    expect(item.setSavePath).toHaveBeenCalledWith('/tmp/agent-downloads/file.txt')
+    const done = item.once.mock.calls.find(([event]) => event === 'done')?.[1]
+    done({}, 'completed')
+    expect(downloadStore.completeDownload).toHaveBeenCalledWith(
+      expect.any(String),
+      '/tmp/agent-downloads/file.txt',
+    )
+    expect(taskRuntime.addDownload).toHaveBeenCalledWith('task-a', expect.any(String))
+
+    await bridge.disconnect()
+    expect(electronSession.removeListener).toHaveBeenCalledWith('will-download', handler)
   })
 })

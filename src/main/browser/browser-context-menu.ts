@@ -264,5 +264,11 @@ export function showBrowserContextMenu(
   window: Electron.BrowserWindow,
   options: BrowserContextMenuOptions,
 ): void {
-  Menu.buildFromTemplate(buildBrowserContextMenuTemplate(options)).popup({ window })
+  const menu = Menu.buildFromTemplate(buildBrowserContextMenuTemplate(options))
+  menu.popup({ window })
+  if (process.env.CCLINK_STUDIO_TEST_USER_DATA_PATH) {
+    // Playwright's page-level Escape cannot dismiss a native macOS menu. The isolated smoke still
+    // proves that the real menu was built and opened, then closes it so later window checks can run.
+    setTimeout(() => menu.closePopup(window), 50)
+  }
 }

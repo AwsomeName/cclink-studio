@@ -22,7 +22,10 @@ export class BrowserTaskRuntime {
   private readonly actionLogs = new Map<string, BrowserActionLog[]>()
   private readonly actionLogById = new Map<string, BrowserActionLog>()
 
-  constructor(private readonly mainWindow: BrowserWindow) {}
+  constructor(
+    private readonly mainWindow: BrowserWindow,
+    private readonly sendToTabOwner?: (tabId: string, channel: string, payload: unknown) => boolean,
+  ) {}
 
   startTask(options: StartBrowserTaskOptions): BrowserTaskRun {
     const existing = this.getActiveTaskForTab(options.tabId)
@@ -237,6 +240,7 @@ export class BrowserTaskRuntime {
     const payload: BrowserTaskChangedPayload = {
       task: cloneTask(task),
     }
+    if (this.sendToTabOwner?.(task.tabId, browserIpcEvents.taskChanged, payload)) return
     this.mainWindow.webContents.send(browserIpcEvents.taskChanged, payload)
   }
 
@@ -245,6 +249,7 @@ export class BrowserTaskRuntime {
     const payload: BrowserActionLogChangedPayload = {
       log: { ...log },
     }
+    if (this.sendToTabOwner?.(log.tabId, browserIpcEvents.actionLogChanged, payload)) return
     this.mainWindow.webContents.send(browserIpcEvents.actionLogChanged, payload)
   }
 }

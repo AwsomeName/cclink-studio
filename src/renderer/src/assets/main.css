@@ -1624,6 +1624,57 @@ button.sidebar-section-header-button {
   border-top: 1px solid var(--border-subtle);
 }
 
+.browser-sidebar-history-section {
+  margin-top: 4px;
+  padding-top: 3px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.browser-sidebar-history-list {
+  max-height: min(300px, 36vh);
+  overflow-y: auto;
+}
+
+.browser-sidebar-text-action {
+  margin-left: auto;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.browser-sidebar-text-action:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.browser-sidebar-text-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.browser-sidebar-retry {
+  width: calc(100% - 16px);
+  margin: 4px 8px;
+  padding: 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.browser-sidebar-retry:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
 .sidebar-item {
   padding: 4px 16px 4px 32px;
   cursor: pointer;

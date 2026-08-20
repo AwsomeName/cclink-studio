@@ -30,6 +30,8 @@ import type { RemoteApiContract } from '../shared/ipc/remote'
 import type { MediaProjectsApiContract } from '../shared/media-production/media-project-types'
 import type { MediaVideoApiContract } from '../shared/media-production/video-generation-types'
 import type { MediaRenderApiContract } from '../shared/media-production/media-render-types'
+import type { WorkbenchTabStateApiContract } from '../shared/ipc/workbench-tab-model'
+import type { WorkbenchWindowApiContract } from '../shared/ipc/workbench-window'
 
 export interface CCLinkStudioAPI {
   reportWorkbenchBounds: (bounds: { x: number; y: number; width: number; height: number }) => void
@@ -86,6 +88,10 @@ export interface CCLinkStudioAPI {
 
   workspaceState: WorkspaceStateApiContract
 
+  workbenchTabs: WorkbenchTabStateApiContract
+
+  workbenchWindow: WorkbenchWindowApiContract
+
   scheduledTasks: ScheduledTasksApiContract
 
   mediaProjects: MediaProjectsApiContract
@@ -102,5 +108,6 @@ export interface CCLinkStudioAPI {
 declare global {
   interface Window {
     cclinkStudio: CCLinkStudioAPI
+    cclinkAuxiliary?: WorkbenchWindowApiContract
   }
 }

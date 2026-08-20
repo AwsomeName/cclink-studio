@@ -1,0 +1,116 @@
+.auxiliary-browser-window {
+  display: grid;
+  grid-template-rows: 42px 42px auto minmax(0, 1fr);
+  width: 100vw;
+  height: 100vh;
+  color: var(--text-primary, #d4d4d4);
+  background: var(--bg-primary, #1e1e1e);
+  overflow: hidden;
+}
+
+.auxiliary-browser-titlebar,
+.auxiliary-browser-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border-color, #333);
+}
+
+.auxiliary-browser-titlebar {
+  padding-left: 78px;
+  -webkit-app-region: drag;
+}
+
+.auxiliary-browser-titlebar button,
+.auxiliary-browser-toolbar button,
+.auxiliary-browser-toolbar input {
+  -webkit-app-region: no-drag;
+}
+
+.auxiliary-browser-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.auxiliary-browser-window button,
+.auxiliary-browser-window input {
+  color: inherit;
+  background: var(--bg-secondary, #252526);
+  border: 1px solid var(--border-color, #3c3c3c);
+  border-radius: 4px;
+  height: 28px;
+}
+
+.auxiliary-browser-window button {
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.auxiliary-browser-window button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.auxiliary-browser-toolbar input {
+  min-width: 0;
+  flex: 1;
+  padding: 0 9px;
+  outline: none;
+}
+
+.auxiliary-browser-toolbar input:focus {
+  border-color: var(--accent-color, #007acc);
+}
+
+.auxiliary-browser-error {
+  padding: 6px 12px;
+  color: #f48771;
+  background: #3a1d1d;
+  font-size: 12px;
+}
+
+.auxiliary-browser-activity {
+  display: flex;
+  gap: 12px;
+  padding: 5px 12px;
+  color: var(--text-secondary, #a7a7a7);
+  background: var(--bg-secondary, #252526);
+  border-bottom: 1px solid var(--border-color, #333);
+  font-size: 12px;
+}
+
+.auxiliary-browser-notices:empty {
+  display: none;
+}
+
+.auxiliary-browser-find {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-color, #333);
+  background: var(--bg-secondary, #252526);
+  font-size: 12px;
+}
+
+.auxiliary-browser-find input {
+  width: min(280px, 45vw);
+  padding: 0 8px;
+}
+
+.auxiliary-browser-find button {
+  width: 28px;
+  padding: 0;
+}
+
+.auxiliary-browser-surface {
+  min-width: 0;
+  min-height: 0;
+  background: #fff;
+}

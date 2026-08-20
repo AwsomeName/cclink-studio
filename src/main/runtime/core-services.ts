@@ -63,6 +63,9 @@ import { VideoGenerationService } from '../media-production/video-generation-ser
 import { registerVideoGenerationIpc } from '../media-production/video-generation-ipc'
 import { MediaRenderService } from '../media-production/media-render-service'
 import { registerMediaRenderIpc } from '../media-production/media-render-ipc'
+import { WorkbenchTabModel } from '../workbench/workbench-tab-model'
+import { registerWorkbenchTabModelIpc } from '../workbench/workbench-tab-model-ipc'
+import { BrowserBookmarkModel } from '../workbench/browser-bookmark-model'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   try {
@@ -109,6 +112,8 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
 
   runtime.workspaceStateService = new WorkspaceStateService()
   await runtime.workspaceStateService.loadState()
+  runtime.workbenchTabModel = new WorkbenchTabModel(runtime.workspaceStateService)
+  runtime.browserBookmarkModel = new BrowserBookmarkModel(runtime.workspaceStateService)
   const restoredWorkspacePath = runtime.settingsService.getAll().lastWorkspacePath.trim()
   if (restoredWorkspacePath) {
     try {
@@ -165,6 +170,8 @@ export async function shutdownStateServices(runtime: CclinkStudioRuntimeState): 
   await runShutdownStep('UsageLedgerService', () => runtime.usageLedgerService?.flush())
   await runShutdownStep('AgentRoleRegistry', () => runtime.agentRoleRegistry?.flush())
   runtime.workspaceStateService = null
+  runtime.workbenchTabModel = null
+  runtime.browserBookmarkModel = null
   runtime.scheduledTaskService = null
   runtime.mediaProjectService = null
   runtime.mediaAssetService = null
@@ -193,6 +200,11 @@ export async function bootstrapMainProcessServices(
     runtime.workspaceStateService!,
     runtime.trustedRendererGuard,
     runtime.settingsService,
+  )
+  registerWorkbenchTabModelIpc(
+    runtime.workbenchTabModel!,
+    runtime.browserBookmarkModel!,
+    runtime.trustedRendererGuard,
   )
   runtime.rendererWorkspaceStateFlush = new RendererWorkspaceStateFlushCoordinator(
     runtime.mainWindow,

@@ -1,7 +1,7 @@
 # 可分离 Workbench Tab 与辅助窗口
 
-> 状态：方案文档审查通过，项目 Conditional Go；P0 可以开始，P0 通过和 ADR 完成前不得启动
-> Browser M1。功能尚未实现，任何用户闭环均未开始。
+> 状态：方案文档、P0a/P0b 与 ADR 0017 已通过；Browser-only M1 生产实现和真实 App 自动 smoke
+> 已完成。物理双屏与用户自有真实账号真人签收仍待执行，因此最终用户交付仍为 Conditional Go。
 >
 > 创建时间：2026-08-18。
 >
@@ -14,18 +14,20 @@ CCLink Studio 应支持把 Workbench Tab 移入独立顶层辅助窗口，以便
 Terminal 或 Agent 会话放到副屏，同时继续在主窗口处理其他工作。
 
 这个方向产品价值高、与 Studio 的多工作现场定位一致，Electron 平台也提供必要的多窗口和
-`WebContentsView` 组合 API，因此结论为 **Conditional Go**。Electron 43 并未明确保证既有
-`WebContentsView` 跨窗口迁移后不重载且保持同一 Playwright Page；当前实现又是“单
-`BrowserWindow` + 单 renderer 状态树 + 单窗口原生能力宿主”。在 P0 用当前锁定版本证明核心
-不变量前，只允许做验证，不允许直接开工 M1。
+`WebContentsView` 组合 API，因此结论为 **Conditional Go**。Electron 43 文档未明确保证既有
+`WebContentsView` 跨窗口迁移后不重载且保持同一 Playwright Page；P0 已在 Electron 43.1.1 / macOS
+arm64 证明同一 View/WebContents/Session/CDP target/Page 可以不重载迁移、回滚并经过隐藏 Recovery
+Host。生产实现现已采用主进程 WindowService/TabModel、最小辅助 renderer、多 host BrowserManager
+和每 View 独立 Recovery Host；当前只支持 Browser M1，不授权拖拽或其他 Tab 类型。
 
 推荐采用以下交付策略：
 
 1. 最终产品目标仍是“所有经过适配的 Workbench Tab 都可以移动到辅助窗口”。
-2. 当前唯一授权工作是 P0a/P0b：先证明既有 Browser `WebContentsView` 可以 A -> B -> A 跨窗口
-   迁移并保持核心身份且不重载，再用最小宿主验证 popup、focus、事件路由和泄漏；不得提前实现
-   BrowserManager 多 host 或其他 M1 基础设施。
-3. P0 通过后先写 ADR，再决定是否启动 M1；P0 只是工程验证，不是用户功能进度。
+2. P0a/P0b 已通过，可复现证据见
+   `docs/ops/detachable-workbench-tabs-p0-acceptance.md`；P0 只是工程验证，不是用户功能进度。
+3. ADR 0017 已 accepted，Browser M1 已按主进程 owner、单 writer、可信 renderer、两阶段迁移和
+   Recovery Host 实施；统一验收证据见
+   `docs/ops/detachable-workbench-tabs-m1-acceptance.md`。任何偏离必须先复审 ADR。
 4. 首个用户里程碑只命名为“Browser 辅助窗口”，先提供右键/命令入口，不宣称通用 Tab 或拖出
    手势已完成。
 5. Browser M1 真人验收通过后再接入拖出手势，并逐类支持 Editor、Terminal、Conversation 和
@@ -38,18 +40,19 @@ Terminal 或 Agent 会话放到副屏，同时继续在主窗口处理其他工�
 - 在同一个主窗口的 TabBar 内拖拽 Tab 调整顺序。
 - 同时打开 Browser、Editor、Terminal、Conversation 和其他 Workbench Tab，并在一个窗口内
   切换。
+- 从 Browser Tab 统一右键菜单或命令面板执行“移至新窗口”，在辅助窗口继续浏览，并通过按钮或
+  关闭辅助窗口把同一 Browser Tab 送回主窗口。
 - Browser、Terminal 和 Agent 的后台运行事实由现有主进程领域 owner 继续维护；切换工作空间
   只改变可见投影，不应终止后台任务。
 
 ### 2.2 用户现在还不能做什么
 
 - 把任意 Tab 拖出主窗口形成独立窗口。
-- 把 Browser 放到副屏并在主窗口切换工作空间后继续保留原页面。
-- 从右键菜单或命令面板把 Tab 移入、移回辅助窗口。
+- 分离 Browser 以外的 Editor、Terminal、Conversation 或其他 Tab。
 - 恢复上次退出时的辅助窗口位置、显示器和 Tab 分布。
 
-本文通过不代表这些能力已经实现。只有对应阶段真实 App 验收和工程门禁同时通过，才能声明
-对应用户能力完成。
+Browser M1 生产实现和真实 App 自动门禁已通过；物理双屏与用户自有真实账号真人签收记录见
+`docs/ops/detachable-workbench-tabs-m1-acceptance.md`。该签收完成前仍不能声明副屏用户闭环最终交付。
 
 ## 3. 产品术语和心智
 
@@ -696,6 +699,8 @@ download、BrowserTask event、renderer crash recovery 或 workspace reconcile�
 
 ### P0 退出
 
+- 2026-08-19 已在 Electron 43.1.1 / macOS arm64 通过；证据与统一命令见
+  `docs/ops/detachable-workbench-tabs-p0-acceptance.md`。
 - P0a 先通过；失败立即止损。P0a 通过后 P0b 与第 12 节问题全部有可复现证据。
 - 结论明确为继续、替代或 No-Go；不能把未知项留给 M1 顺便解决。
 - P0 没有扩散为全部 Tab、恢复系统或通用 Layout 重构。

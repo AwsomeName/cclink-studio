@@ -1,5 +1,12 @@
-import { ipcMain, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import {
+  ipcMain,
+  type BrowserWindow,
+  type IpcMainEvent,
+  type IpcMainInvokeEvent,
+  type WebContents,
+} from 'electron'
 import type { IpcInvokeContract } from '../../shared/ipc/contract'
+import type { WorkbenchWindowRole } from '../../shared/ipc/workbench-window'
 
 type TrustedRendererEvent = IpcMainInvokeEvent | IpcMainEvent
 
@@ -16,6 +23,27 @@ export interface TrustedRendererGuard {
   assert(event: TrustedRendererEvent): void
   isTrusted(event: TrustedRendererEvent): boolean
   readonly ipcRegistrations?: TrustedIpcRegistrationScope
+}
+
+export interface TrustedRendererIdentity {
+  windowId: string
+  role: WorkbenchWindowRole
+  webContents: WebContents
+}
+
+export interface TrustedRendererRegistry extends TrustedRendererGuard {
+  register(input: {
+    windowId: string
+    role: WorkbenchWindowRole
+    webContents: WebContents
+    rendererEntryUrl: string
+    isHostDestroyed?: () => boolean
+  }): () => void
+  resolve(event: TrustedRendererEvent): TrustedRendererIdentity | null
+  assertRole(
+    event: TrustedRendererEvent,
+    allowedRoles: readonly WorkbenchWindowRole[],
+  ): TrustedRendererIdentity
 }
 
 export interface TrustedIpcRegistrar {
@@ -74,26 +102,81 @@ export class TrustedIpcRegistrationScope {
   }
 }
 
-export function createTrustedRendererGuard(
-  mainWindow: BrowserWindow,
-  rendererEntryUrl: string,
-): TrustedRendererGuard {
+export function createTrustedRendererRegistry(): TrustedRendererRegistry {
   const ipcRegistrations = new TrustedIpcRegistrationScope()
+  const entriesByWebContents = new Map<
+    WebContents,
+    TrustedRendererIdentity & {
+      rendererEntryUrl: string
+      isHostDestroyed?: () => boolean
+    }
+  >()
+  const entriesByWindowId = new Map<string, WebContents>()
+  const resolve = (event: TrustedRendererEvent): TrustedRendererIdentity | null => {
+    const entry = entriesByWebContents.get(event.sender)
+    if (!entry || entry.isHostDestroyed?.()) return null
+    if (entry.webContents.isDestroyed()) return null
+    if (!event.senderFrame || event.senderFrame !== entry.webContents.mainFrame) return null
+    if (!isAllowedMainRendererUrl(event.senderFrame.url, entry.rendererEntryUrl)) return null
+    return {
+      windowId: entry.windowId,
+      role: entry.role,
+      webContents: entry.webContents,
+    }
+  }
   const isTrusted = (event: TrustedRendererEvent): boolean => {
-    if (mainWindow.isDestroyed()) return false
-    const trustedWebContents = mainWindow.webContents
-    if (trustedWebContents.isDestroyed()) return false
-    if (event.sender !== trustedWebContents) return false
-    if (!event.senderFrame || event.senderFrame !== trustedWebContents.mainFrame) return false
-    return isAllowedMainRendererUrl(event.senderFrame.url, rendererEntryUrl)
+    return resolve(event)?.role === 'main'
   }
   return {
     ipcRegistrations,
+    register(input): () => void {
+      if (entriesByWindowId.has(input.windowId)) {
+        throw new Error(`可信窗口 ID 重复注册: ${input.windowId}`)
+      }
+      if (entriesByWebContents.has(input.webContents)) {
+        throw new Error(`可信 WebContents 重复注册: ${input.windowId}`)
+      }
+      const entry = { ...input }
+      entriesByWebContents.set(input.webContents, entry)
+      entriesByWindowId.set(input.windowId, input.webContents)
+      let disposed = false
+      return () => {
+        if (disposed) return
+        disposed = true
+        if (entriesByWebContents.get(input.webContents) === entry) {
+          entriesByWebContents.delete(input.webContents)
+        }
+        if (entriesByWindowId.get(input.windowId) === input.webContents) {
+          entriesByWindowId.delete(input.windowId)
+        }
+      }
+    },
+    resolve,
+    assertRole(event, allowedRoles): TrustedRendererIdentity {
+      const identity = resolve(event)
+      if (!identity || !allowedRoles.includes(identity.role)) throw new UntrustedIpcSenderError()
+      return identity
+    },
     isTrusted,
     assert(event): void {
       if (!isTrusted(event)) throw new UntrustedIpcSenderError()
     },
   }
+}
+
+export function createTrustedRendererGuard(
+  mainWindow: BrowserWindow,
+  rendererEntryUrl: string,
+): TrustedRendererRegistry {
+  const registry = createTrustedRendererRegistry()
+  registry.register({
+    windowId: 'main',
+    role: 'main',
+    webContents: mainWindow.webContents,
+    rendererEntryUrl,
+    isHostDestroyed: () => mainWindow.isDestroyed(),
+  })
+  return registry
 }
 
 export function registerTrustedIpcHandler<Args extends unknown[], Result>(

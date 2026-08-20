@@ -291,6 +291,8 @@ JSON.stringify({
 3. **移动版**：iOS Safari UA + 重载，约 414px 视口并填满面板。
 4. **横向滑动兜底**：手动缩放后若网站用 `overflow-x: hidden` 隐藏了仍存在的横向范围，
    触控板左右滑动或 Shift + 滚轮仍可查看两侧内容；正常网页滚动行为优先。
+5. **触控板捏合缩放**：Browser `WebContents` 显式启用 Electron visual zoom（30%–300%）；
+   双指捏合保持原生连续手势，不复用离散的工具栏缩放步长。
 
 详见 `.cursor/rules/embedded-browser-viewport.mdc`。
 

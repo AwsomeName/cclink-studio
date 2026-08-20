@@ -11,6 +11,7 @@ vi.mock('electron', () => ({ ipcMain: mockIpcMain }))
 
 import {
   createTrustedRendererGuard,
+  createTrustedRendererRegistry,
   createTrustedIpcRegistrar,
   disposeTrustedIpcRegistrations,
   isAllowedMainRendererUrl,
@@ -54,6 +55,59 @@ describe('TrustedRendererGuard', () => {
     expect(() => guard.assert({ sender: webContents, senderFrame: mainFrame } as never)).toThrow(
       'IPC 调用方不是受信任的工作台主页面',
     )
+  })
+
+  it('keeps existing IPC main-only while allowing explicit auxiliary role checks', () => {
+    const mainFrame = { url: 'http://localhost:5173/' }
+    const mainContents = { isDestroyed: () => false, mainFrame }
+    const auxiliaryFrame = { url: 'http://localhost:5173/' }
+    const auxiliaryContents = { isDestroyed: () => false, mainFrame: auxiliaryFrame }
+    const registry = createTrustedRendererRegistry()
+    registry.register({
+      windowId: 'main',
+      role: 'main',
+      webContents: mainContents as never,
+      rendererEntryUrl: 'http://localhost:5173/',
+    })
+    registry.register({
+      windowId: 'aux-1',
+      role: 'auxiliary',
+      webContents: auxiliaryContents as never,
+      rendererEntryUrl: 'http://localhost:5173/',
+    })
+    const auxiliaryEvent = {
+      sender: auxiliaryContents,
+      senderFrame: auxiliaryFrame,
+    } as never
+
+    expect(registry.isTrusted(auxiliaryEvent)).toBe(false)
+    expect(() => registry.assert(auxiliaryEvent)).toThrow('IPC 调用方不是受信任')
+    expect(registry.assertRole(auxiliaryEvent, ['auxiliary'])).toMatchObject({
+      windowId: 'aux-1',
+      role: 'auxiliary',
+    })
+    expect(() => registry.assertRole(auxiliaryEvent, ['main'])).toThrow('IPC 调用方不是受信任')
+  })
+
+  it('unregisters exact auxiliary WebContents without trusting a spoofed frame', () => {
+    const frame = { url: 'file:///app/index.html#auxiliary' }
+    const webContents = { isDestroyed: () => false, mainFrame: frame }
+    const registry = createTrustedRendererRegistry()
+    const unregister = registry.register({
+      windowId: 'aux-1',
+      role: 'auxiliary',
+      webContents: webContents as never,
+      rendererEntryUrl: 'file:///app/index.html',
+    })
+
+    expect(
+      registry.resolve({ sender: webContents, senderFrame: { url: frame.url } } as never),
+    ).toBeNull()
+    expect(registry.resolve({ sender: webContents, senderFrame: frame } as never)).toMatchObject({
+      windowId: 'aux-1',
+    })
+    unregister()
+    expect(registry.resolve({ sender: webContents, senderFrame: frame } as never)).toBeNull()
   })
 
   it('checks the guard before invoking a registered handler', () => {

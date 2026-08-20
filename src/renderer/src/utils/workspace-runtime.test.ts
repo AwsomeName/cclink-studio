@@ -16,10 +16,68 @@ import {
 import { setWorkspaceStatePath } from './workspace-state'
 
 beforeEach(() => {
+  const workbenchProjection = {
+    workspaceKey: '/workspace/a',
+    ownerKey: null,
+    revision: 0,
+    tabs: [],
+    activeTabId: null,
+  }
   vi.stubGlobal('window', {
     cclinkStudio: {
       workspaceState: {
         setSection: vi.fn().mockResolvedValue({ success: true }),
+      },
+      workbenchTabs: {
+        getProjection: vi.fn(async (input) => ({ ...workbenchProjection, ...input })),
+        applyDelta: vi.fn(async (input) => {
+          const tabs = input.orderedTabIds.map(
+            (tabId: string) => input.upserts.find((tab: { id: string }) => tab.id === tabId)!,
+          )
+          return {
+            success: true,
+            projection: {
+              workspaceKey: input.workspaceKey,
+              ownerKey: input.ownerKey,
+              revision: input.expectedRevision + 1,
+              tabs,
+              activeTabId: input.activeTabId,
+            },
+          }
+        }),
+        getBrowserProjection: vi.fn(async (input) => ({
+          ...input,
+          revision: 0,
+          tabs: {},
+        })),
+        applyBrowserDelta: vi.fn(async (input) => ({
+          success: true,
+          projection: {
+            workspaceKey: input.workspaceKey,
+            ownerKey: input.ownerKey,
+            revision: input.expectedRevision + 1,
+            tabs: Object.fromEntries(
+              input.upserts.map((item: { tabId: string; projection: unknown }) => [
+                item.tabId,
+                item.projection,
+              ]),
+            ),
+          },
+        })),
+        getBookmarks: vi.fn(async (input) => ({
+          ...input,
+          revision: 0,
+          bookmarks: [],
+        })),
+        replaceBookmarks: vi.fn(async (input) => ({
+          success: true,
+          projection: {
+            workspaceKey: input.workspaceKey,
+            ownerKey: input.ownerKey,
+            revision: input.expectedRevision + 1,
+            bookmarks: input.bookmarks,
+          },
+        })),
       },
       terminal: {
         listSessions: vi.fn().mockResolvedValue([]),
@@ -44,7 +102,7 @@ afterEach(() => {
 })
 
 describe('workspace-runtime', () => {
-  it('保存和恢复工作空间运行态时，项目 Tab 与工作会话跟随工作空间快照切换', () => {
+  it('保存和恢复工作空间运行态时，项目 Tab 与工作会话跟随工作空间快照切换', async () => {
     const conversationId = useAgentStore.getState().createConversation({
       surface: 'workbench-tab',
       runtime: {
@@ -70,13 +128,14 @@ describe('workspace-runtime', () => {
     })
     useTabStore.getState().openTab({ type: 'settings', title: '设置', icon: '⚙️' })
 
-    persistRuntimeSections('/workspace/a')
+    await persistRuntimeSections('/workspace/a')
 
     const setSection = window.cclinkStudio.workspaceState.setSection as ReturnType<typeof vi.fn>
-    const tabsPayload = setSection.mock.calls.find((call) => call[1] === 'tabs')?.[2]
+    const applyDelta = window.cclinkStudio.workbenchTabs.applyDelta as ReturnType<typeof vi.fn>
+    const tabsPayload = applyDelta.mock.calls.at(-1)?.[0]
     const agentPayload = setSection.mock.calls.find((call) => call[1] === 'agentConversations')?.[2]
 
-    expect(tabsPayload.tabs.map((tab: { type: string }) => tab.type)).toEqual(['conversation'])
+    expect(tabsPayload.upserts.map((tab: { type: string }) => tab.type)).toEqual(['conversation'])
     expect(agentPayload.conversations[conversationId].surface).toBe('workbench-tab')
 
     hydrateRuntimeSections({
@@ -118,7 +177,9 @@ describe('workspace-runtime', () => {
 
   it('hydrate 期间不触发 store 订阅持久化，避免恢复中间态写回', () => {
     const setSection = window.cclinkStudio.workspaceState.setSection as ReturnType<typeof vi.fn>
+    const applyDelta = window.cclinkStudio.workbenchTabs.applyDelta as ReturnType<typeof vi.fn>
     setSection.mockClear()
+    applyDelta.mockClear()
 
     hydrateRuntimeSections({
       version: 1,
@@ -156,9 +217,10 @@ describe('workspace-runtime', () => {
     })
 
     expect(setSection).not.toHaveBeenCalled()
+    expect(applyDelta).not.toHaveBeenCalled()
   })
 
-  it('runtime store 只写 WorkspaceState，不再写全局 localStorage 镜像', () => {
+  it('runtime store 只通过主进程 owner 写状态，不再写全局 localStorage 镜像', async () => {
     const setSection = window.cclinkStudio.workspaceState.setSection as ReturnType<typeof vi.fn>
     const setLocalStorage = localStorage.setItem as ReturnType<typeof vi.fn>
     setSection.mockClear()
@@ -168,10 +230,13 @@ describe('workspace-runtime', () => {
     useTabStore.getState().openTab({ type: 'browser', title: '浏览器', icon: '🌐' })
     useEditorStore.getState().initVirtualFile('virtual:draft', 'draft')
     useAgentStore.getState().createConversation({ activate: true })
+    await persistRuntimeSections('/workspace/a')
 
     expect(setSection.mock.calls.map((call) => call[1])).toEqual(
-      expect.arrayContaining(['browserTabs', 'tabs', 'editorDrafts', 'agentConversations']),
+      expect.arrayContaining(['editorDrafts', 'agentConversations']),
     )
+    expect(window.cclinkStudio.workbenchTabs.applyDelta).toHaveBeenCalled()
+    expect(window.cclinkStudio.workbenchTabs.applyBrowserDelta).toHaveBeenCalled()
     expect(setLocalStorage).not.toHaveBeenCalled()
   })
 
@@ -202,17 +267,26 @@ describe('workspace-runtime', () => {
       },
     })
     const setSection = window.cclinkStudio.workspaceState.setSection as ReturnType<typeof vi.fn>
+    const applyDelta = window.cclinkStudio.workbenchTabs.applyDelta as ReturnType<typeof vi.fn>
+    const applyBrowserDelta = window.cclinkStudio.workbenchTabs.applyBrowserDelta as ReturnType<
+      typeof vi.fn
+    >
     setSection.mockClear()
+    applyDelta.mockClear()
+    applyBrowserDelta.mockClear()
 
     await persistRuntimeSections('/workspace/a')
 
-    const tabsPayload = setSection.mock.calls.find((call) => call[1] === 'tabs')?.[2]
-    const browserPayload = setSection.mock.calls.find((call) => call[1] === 'browserTabs')?.[2]
+    const tabsPayload = applyDelta.mock.calls.at(-1)?.[0]
+    const browserPayload = applyBrowserDelta.mock.calls.at(-1)?.[0]
     expect(tabsPayload).toMatchObject({
-      tabs: [{ id: 'browser-a' }],
+      upserts: [{ id: 'browser-a' }],
+      orderedTabIds: ['browser-a'],
       activeTabId: 'browser-a',
     })
-    expect(Object.keys(browserPayload.tabs)).toEqual(['browser-a'])
+    expect(browserPayload.upserts.map((item: { tabId: string }) => item.tabId)).toEqual([
+      'browser-a',
+    ])
   })
 
   it('单个状态分区保存失败时记录具体分区并允许项目切换继续', async () => {
@@ -236,7 +310,8 @@ describe('workspace-runtime', () => {
         },
       ],
     })
-    expect(setSection).toHaveBeenCalledTimes(4)
+    expect(setSection).toHaveBeenCalledTimes(2)
+    expect(window.cclinkStudio.workbenchTabs.getProjection).toHaveBeenCalled()
     expect(error).toHaveBeenCalledWith(
       '[WorkspaceRuntime] 工作台状态分区保存失败，项目切换继续:',
       expect.objectContaining({ section: 'agentConversations' }),

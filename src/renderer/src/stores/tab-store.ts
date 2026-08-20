@@ -6,9 +6,10 @@ import { useEditorStore } from './editor-store'
 import { getModelFileIcon, getTabTypeForFile } from '../utils/model-files'
 import {
   getWorkspaceStateKey,
+  getWorkspaceStateOwnerKey,
   isWorkspaceStateRestoring,
-  persistWorkspaceSection,
 } from '../utils/workspace-state'
+import { syncWorkbenchTabProjection } from '../utils/workbench-tab-model'
 import { workspaceRefFromKey } from '../utils/conversation-workspace'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { isHtmlFilePath } from '../utils/html-files'
@@ -129,7 +130,9 @@ function saveStoredTabs(state: TabState): void {
         ? state.activeTabId
         : (projectTabs[0]?.id ?? null)
 
-    persistWorkspaceSection('tabs', {
+    syncWorkbenchTabProjection({
+      workspaceKey: activeWorkspaceKey,
+      ownerKey: getWorkspaceStateOwnerKey(),
       tabs: projectTabs,
       activeTabId: projectActiveTabId,
     })
@@ -214,7 +217,7 @@ interface TabState {
   /** 关闭 Tab */
   closeTab: (id: string) => void
   /** 激活 Tab */
-  activateTab: (id: string) => void
+  activateTab: (id: string | null) => void
   /** 拖拽排序：把 fromId 移动到 toId 的位置 */
   reorderTabs: (fromId: string, toId: string) => void
   /** 更新 Tab 标题 */

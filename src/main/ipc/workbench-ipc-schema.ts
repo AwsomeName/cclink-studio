@@ -85,6 +85,7 @@ export const workspaceStateSectionSchema = z.enum([
   'layout',
   'tabs',
   'browserTabs',
+  'browserBookmarks',
   'editorDrafts',
   'fileTree',
   'search',

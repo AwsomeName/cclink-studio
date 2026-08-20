@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-08-18。
+> 当前事实源。最后更新：2026-08-19。
 
 ## 先读这些
 
@@ -30,7 +30,12 @@
 - `docs/features/unified-agent-panel.md`：本地/远程 Agent Panel 统一方案；UAP-1 必须原子切换为单一 Panel/Composer 并删除远程重复 UI，不以独立 IME 补丁代替统一；UAP-2 再按契约强化远程事务生命周期。
 - `docs/features/context-action-system.md`：已实现的统一右键、命令与上下文操作系统。
 - `docs/features/configurable-keybinding-system.md`：已实现的统一可配置快捷键系统事实源，定义命令事实源、作用域路由、设置页录制与冲突处理、Browser `WebContentsView` 适配和验收门禁。
-- `docs/features/detachable-workbench-tabs.md`：方案文档审查通过、项目 Conditional Go；Browser P0a/P0b 可以开始，P0 与 ADR 通过前不得启动 M1。
+- `docs/features/detachable-workbench-tabs.md`：方案、P0a/P0b 与 ADR 0017 已通过；Browser-only M1
+  生产实现和真实 App 自动门禁已完成，物理双屏/真实账号真人签收待执行，拖拽和其他 Tab 类型仍未授权。
+- `docs/ops/detachable-workbench-tabs-p0-acceptance.md`：Electron 43.1.1 / macOS arm64 的跨窗口
+  Browser 身份、回滚、Recovery Host、事件路由与释放证据。
+- `docs/ops/detachable-workbench-tabs-m1-acceptance.md`：Browser-only M1 的生产能力、真实 App 7/7
+  自动验收、故障门禁和待执行物理双屏真人签收。
 - `docs/features/git-source-control.md`：已确认、尚未实现的左下角 Git 状态、变更 Diff、可控提交、显式 Push 和旧备份收敛产品事实源。
 - `docs/features/git-source-control-development-plan.md`：Git 状态与提交推送 E0、G1-G5 开发顺序、用户验收、失败矩阵和退出门禁。
 - `docs/features/manual-git-backup.md`：已实现的单用户手动 Git 备份；真实 GitHub 人工验收仍待执行。

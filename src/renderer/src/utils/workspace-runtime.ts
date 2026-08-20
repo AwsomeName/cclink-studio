@@ -9,6 +9,7 @@ import {
   beginWorkspaceStateRestore,
   endWorkspaceStateRestore,
   getWorkspaceStateKey,
+  getWorkspaceStateOwnerKey,
   persistWorkspaceSectionNow,
 } from './workspace-state'
 import {
@@ -19,6 +20,8 @@ import {
   workspaceRefFromKey,
 } from './conversation-workspace'
 import { workspaceRefKey, type WorkspaceRef } from '@shared/workspace-ref'
+import { syncWorkbenchTabProjectionNow } from './workbench-tab-model'
+import { syncWorkbenchBookmarksNow, syncWorkbenchBrowserStateNow } from './workbench-browser-state'
 
 function isWorkspaceTab(tab: ReturnType<typeof useTabStore.getState>['tabs'][number]): boolean {
   return tab.type !== 'settings'
@@ -46,11 +49,23 @@ export function hydrateRuntimeSections(
   )
   beginWorkspaceStateRestore()
   try {
-    useBrowserStore
-      .getState()
-      .hydrateFromWorkspaceState(
-        scopeWorkspaceBrowserSnapshot(sections.browserTabs ?? { tabs: {} }, scopedTabsSnapshot),
-      )
+    const browserTabsSection =
+      sections.browserTabs && typeof sections.browserTabs === 'object'
+        ? sections.browserTabs
+        : { tabs: {} }
+    const browserBookmarksSection =
+      sections.browserBookmarks && typeof sections.browserBookmarks === 'object'
+        ? sections.browserBookmarks
+        : null
+    useBrowserStore.getState().hydrateFromWorkspaceState(
+      scopeWorkspaceBrowserSnapshot(
+        {
+          ...browserTabsSection,
+          ...(browserBookmarksSection ?? {}),
+        },
+        scopedTabsSnapshot,
+      ),
+    )
     useTabStore.getState().hydrateFromWorkspaceState(scopedTabsSnapshot)
     useEditorStore
       .getState()
@@ -69,7 +84,7 @@ export function hydrateRuntimeSections(
 }
 
 export interface WorkspaceRuntimePersistenceFailure {
-  section: 'tabs' | 'browserTabs' | 'editorDrafts' | 'agentConversations'
+  section: 'tabs' | 'browserTabs' | 'browserBookmarks' | 'editorDrafts' | 'agentConversations'
   message: string
 }
 
@@ -117,19 +132,28 @@ export async function persistRuntimeSections(
   const writes = [
     {
       section: 'tabs' as const,
-      promise: persistWorkspaceSectionNow(
-        'tabs',
-        { tabs: workspaceTabs, activeTabId },
-        targetWorkspaceKey,
-      ),
+      promise: syncWorkbenchTabProjectionNow({
+        workspaceKey: targetWorkspaceKey,
+        ownerKey: getWorkspaceStateOwnerKey(),
+        tabs: workspaceTabs,
+        activeTabId,
+      }),
     },
     {
       section: 'browserTabs' as const,
-      promise: persistWorkspaceSectionNow(
-        'browserTabs',
-        { tabs: browserTabs, bookmarks: browserBookmarks },
-        targetWorkspaceKey,
-      ),
+      promise: syncWorkbenchBrowserStateNow({
+        workspaceKey: targetWorkspaceKey,
+        ownerKey: getWorkspaceStateOwnerKey(),
+        tabs: browserTabs,
+      }),
+    },
+    {
+      section: 'browserBookmarks' as const,
+      promise: syncWorkbenchBookmarksNow({
+        workspaceKey: targetWorkspaceKey,
+        ownerKey: getWorkspaceStateOwnerKey(),
+        bookmarks: browserBookmarks,
+      }),
     },
     {
       section: 'editorDrafts' as const,

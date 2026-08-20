@@ -840,7 +840,12 @@ export class BrowserToolModule implements ToolModule {
       workspaceKey === undefined ||
       this.browserManager?.isWorkspaceActive?.(workspaceKey) !== false
     ) {
-      this.browserManager?.setActive(tabId)
+      const ownerWindowId = this.browserManager?.getViewOwnerWindowId?.(tabId)
+      if (ownerWindowId && this.browserManager?.setActiveForWindow) {
+        this.browserManager.setActiveForWindow(ownerWindowId, tabId)
+      } else {
+        this.browserManager?.setActive(tabId)
+      }
     }
     try {
       await this.playwrightBridge.switchToPage(tabId)

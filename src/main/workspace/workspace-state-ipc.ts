@@ -66,6 +66,15 @@ export function registerWorkspaceStateIpc(
       try {
         const parsedWorkspaceKey = workspaceStateWorkspaceKeySchema.parse(workspaceKey)
         const parsedSection = workspaceStateSectionSchema.parse(section)
+        if (
+          parsedSection === 'tabs' ||
+          parsedSection === 'browserTabs' ||
+          parsedSection === 'browserBookmarks'
+        ) {
+          throw new Error(
+            `${parsedSection} 已由主进程 Workbench model 单独拥有，renderer 不得直接写入`,
+          )
+        }
         const parsedValue = parseWorkspaceStateSectionValue(parsedSection, value)
         const parsedOwnerKey = workspaceStateOwnerKeySchema.parse(ownerKey)
         const parsedOptions = workspaceStateSetSectionOptionsSchema.parse(options)

@@ -3,6 +3,8 @@ import { flushAgentConversationWorkspaceState } from '../stores/agent-store'
 import { recordRendererDiagnosticLog } from '../features/diagnostics/renderer-diagnostic-log'
 import { flushPendingWorkspaceStateWrites } from '../utils/workspace-state'
 import { flushRemoteFileDrafts } from '../utils/remote-file-draft-registry'
+import { flushPendingWorkbenchTabWrites } from '../utils/workbench-tab-model'
+import { flushPendingWorkbenchBrowserWrites } from '../utils/workbench-browser-state'
 
 /** 主进程关闭窗口前，确保 renderer 尚未送达的最终工作空间快照已经写盘。 */
 export function useWorkspaceStateFlush(): void {
@@ -21,6 +23,8 @@ export function useWorkspaceStateFlush(): void {
         let success = false
         try {
           await flushAgentConversationWorkspaceState()
+          await flushPendingWorkbenchTabWrites()
+          await flushPendingWorkbenchBrowserWrites()
           await flushPendingWorkspaceStateWrites()
           await flushRemoteFileDrafts()
           success = true

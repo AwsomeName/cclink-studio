@@ -93,6 +93,7 @@ export const contextActionContributions = [
 ]
 
 export const contextActionExternalCommandIds = new Set([
+  'workbench.moveTabToNewWindow',
   'workbench.closeTab',
   'workbench.find',
   'workbench.toggleSidebar',

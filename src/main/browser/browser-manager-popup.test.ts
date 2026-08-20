@@ -50,6 +50,7 @@ const electronMocks = vi.hoisted(() => {
       getTitle: vi.fn(() => webContents.currentTitle),
       focus: vi.fn(),
       setZoomFactor: vi.fn(),
+      setVisualZoomLevelLimits: vi.fn().mockResolvedValue(undefined),
       executeJavaScript: vi.fn().mockResolvedValue(800),
       findInPage: vi.fn(() => 41),
       stopFindInPage: vi.fn(),
@@ -81,25 +82,28 @@ const electronMocks = vi.hoisted(() => {
     }
   }
 
-  const mainWebContents = {
-    send: vi.fn(),
-    getZoomFactor: vi.fn(() => 1),
-  }
-  const mainWindow = {
-    webContents: mainWebContents,
+  const makeBrowserWindow = () => ({
+    webContents: {
+      send: vi.fn(),
+      getZoomFactor: vi.fn(() => 1),
+      isDestroyed: vi.fn(() => false),
+    },
     contentView: {
       addChildView: vi.fn(),
       removeChildView: vi.fn(),
     },
     isDestroyed: vi.fn(() => false),
     getContentBounds: vi.fn(() => ({ width: 1200, height: 800 })),
-  }
+  })
+  const mainWindow = makeBrowserWindow()
+  const mainWebContents = mainWindow.webContents
 
   return {
     createdViews,
     defaultSession,
     mainWebContents,
     mainWindow,
+    makeBrowserWindow,
     makeWebContents,
     WebContentsView,
     session: {
@@ -205,6 +209,12 @@ describe('BrowserManager popup adoption', () => {
         }),
       ])
     })
+  })
+
+  it('enables native trackpad pinch zoom for each browser WebContents', async () => {
+    const { source } = await createSource()
+
+    expect(source.setVisualZoomLevelLimits).toHaveBeenCalledWith(0.3, 3)
   })
 
   it('removes the runtime and notifies renderer when popup calls window.close', async () => {
@@ -452,5 +462,93 @@ describe('BrowserManager popup adoption', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('moves the same runtime between native hosts and routes events only to its owner', async () => {
+    const { manager, source } = await createSource()
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: 'source-tab',
+    })
+    const view = electronMocks.createdViews[0]
+    const identityBefore = manager.getRuntimeIdentity('source-tab')
+    const auxiliaryWindow = electronMocks.makeBrowserWindow()
+    manager.registerHost('aux-1', auxiliaryWindow as never, '/workspace/a')
+    manager.updateBoundsForWindow('aux-1', { x: 0, y: 72, width: 900, height: 600 })
+
+    manager.transferViewToHost('source-tab', 'main', 'aux-1')
+
+    expect(manager.getViewOwnerWindowId('source-tab')).toBe('aux-1')
+    expect(manager.getRuntimeIdentity('source-tab')).toEqual(identityBefore)
+    expect(auxiliaryWindow.contentView.addChildView).toHaveBeenCalledWith(view)
+    expect(source.close).not.toHaveBeenCalled()
+    const loadCountAfterMove = source.loadURL.mock.calls.length
+
+    electronMocks.mainWebContents.send.mockClear()
+    source.emit('page-title-updated', {}, 'Moved page')
+    expect(auxiliaryWindow.webContents.send).toHaveBeenCalledWith(
+      browserIpcEvents.pageMetaChanged,
+      expect.objectContaining({ tabId: 'source-tab', title: 'Moved page' }),
+    )
+    expect(electronMocks.mainWebContents.send).not.toHaveBeenCalled()
+
+    manager.reconcileViews({ workspaceKey: '/workspace/a', views: [], activeTabId: null })
+    expect(manager.getViewOwnerWindowId('source-tab')).toBe('aux-1')
+    expect(source.close).not.toHaveBeenCalled()
+
+    manager.transferViewToHost('source-tab', 'aux-1', 'main')
+    expect(manager.getViewOwnerWindowId('source-tab')).toBe('main')
+    expect(manager.getRuntimeIdentity('source-tab')).toEqual(identityBefore)
+    expect(source.loadURL).toHaveBeenCalledTimes(loadCountAfterMove)
+  })
+
+  it('rolls a failed target attach back to the source host', async () => {
+    const { manager, source } = await createSource()
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: 'source-tab',
+    })
+    const view = electronMocks.createdViews[0]
+    const auxiliaryWindow = electronMocks.makeBrowserWindow()
+    auxiliaryWindow.contentView.addChildView.mockImplementationOnce(() => {
+      throw new Error('target attach failed')
+    })
+    manager.registerHost('aux-failing', auxiliaryWindow as never, '/workspace/a')
+
+    expect(() => manager.transferViewToHost('source-tab', 'main', 'aux-failing')).toThrow(
+      'target attach failed',
+    )
+    expect(manager.getViewOwnerWindowId('source-tab')).toBe('main')
+    expect(electronMocks.mainWindow.contentView.addChildView).toHaveBeenCalledWith(view)
+    expect(source.close).not.toHaveBeenCalled()
+  })
+
+  it('adopts a popup from a single-tab auxiliary host into the main host projection', async () => {
+    const { manager, source } = await createSource()
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: 'source-tab',
+    })
+    const auxiliaryWindow = electronMocks.makeBrowserWindow()
+    manager.registerHost('aux-popup', auxiliaryWindow as never, '/workspace/a')
+    manager.transferViewToHost('source-tab', 'main', 'aux-popup')
+    electronMocks.mainWebContents.send.mockClear()
+    auxiliaryWindow.webContents.send.mockClear()
+
+    const response = source.windowOpenHandler?.(popupDetails())
+    response.createWindow({ webContents: electronMocks.makeWebContents(source.session) })
+    const popupEvent = electronMocks.mainWebContents.send.mock.calls.find(
+      ([channel]) => channel === browserIpcEvents.popupCreated,
+    )
+
+    expect(popupEvent?.[1]).toMatchObject({ workspaceKey: '/workspace/a' })
+    expect(auxiliaryWindow.webContents.send).not.toHaveBeenCalledWith(
+      browserIpcEvents.popupCreated,
+      expect.anything(),
+    )
+    expect(manager.getViewOwnerWindowId(popupEvent?.[1].tabId)).toBe('main')
   })
 })

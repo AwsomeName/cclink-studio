@@ -5,6 +5,7 @@ export type WorkspaceStateSection =
   | 'layout'
   | 'tabs'
   | 'browserTabs'
+  | 'browserBookmarks'
   | 'editorDrafts'
   | 'fileTree'
   | 'search'

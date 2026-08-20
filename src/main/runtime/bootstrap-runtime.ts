@@ -12,6 +12,7 @@ import { bootstrapAgentRuntime, shutdownAgentRuntime } from './agent-runtime'
 
 export interface RuntimeWindowOptions {
   preloadPath: string
+  auxiliaryPreloadPath?: string
   rendererUrl?: string
   rendererHtmlPath: string
 }

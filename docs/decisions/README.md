@@ -56,3 +56,6 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
   Chromium 原生滚动行为优先。
 - `0016-agent-web-account-execution.md`：Agent 在用户明确任务中使用显式全局账号打开可见
   Browser Tab 并执行通用网页操作；登录验证和敏感最终动作转人工接管，模型不取得秘密值。
+- `0017-main-owned-detachable-workbench-tabs.md`：以 WindowService、TabModel 和 BrowserManager 三个
+  互不重叠的主进程 owner 实现 Browser Tab 辅助窗口，并固化单 writer、可信 renderer、两阶段
+  迁移、Recovery Host、关闭送回和失败回滚语义。

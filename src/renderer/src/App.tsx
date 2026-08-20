@@ -37,6 +37,8 @@ import { clampPanelWidth, getAgentPanelWidthBounds } from './utils/panel-layout'
 import { useBrowserFindBridge } from './features/browser/use-browser-find-bridge'
 import { WorkspaceOpenSurface } from './features/workspace-open/WorkspaceOpenSurface'
 import { useWorkspaceOpenStore } from './features/workspace-open/workspace-open-store'
+import { useWorkbenchWindowEvents } from './bootstrap/use-workbench-window-events'
+import { AuxiliaryBrowserLayout } from './components/workbench/AuxiliaryBrowserLayout'
 
 /** 主布局。 */
 function MainLayout(): React.ReactElement {
@@ -85,6 +87,7 @@ function MainLayout(): React.ReactElement {
   }, [])
 
   useRegisterCommands()
+  useWorkbenchWindowEvents()
   useRegisterContextActions()
   useConversationSelectionMenu()
   useShortcutRouter()
@@ -271,7 +274,7 @@ function MainLayout(): React.ReactElement {
 }
 
 /** 根组件：开源壳只要求桌面 preload 可用，不要求 CCLink 登录态。 */
-function App(): React.ReactElement {
+function MainApp(): React.ReactElement {
   const cclinkStudioApiAvailable =
     typeof window !== 'undefined' &&
     Boolean(window.cclinkStudio?.identity && window.cclinkStudio?.settings)
@@ -297,6 +300,13 @@ function App(): React.ReactElement {
   }
 
   return <MainLayout />
+}
+
+function App(): React.ReactElement {
+  if (typeof window !== 'undefined' && window.cclinkAuxiliary) {
+    return <AuxiliaryBrowserLayout api={window.cclinkAuxiliary} />
+  }
+  return <MainApp />
 }
 
 export default App

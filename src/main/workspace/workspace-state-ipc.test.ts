@@ -92,6 +92,25 @@ describe('registerWorkspaceStateIpc', () => {
     )
   })
 
+  it('rejects renderer writes to the main-owned tabs section', async () => {
+    const service = createService()
+    registerWorkspaceStateIpc(service as never, createGuard('trusted') as never)
+
+    await expect(
+      mockIpcMain.handlers.get('workspaceState:setSection')?.(
+        { sender: 'trusted' },
+        '/tmp/project',
+        'tabs',
+        { tabs: [] },
+        null,
+      ),
+    ).resolves.toEqual({
+      success: false,
+      error: '保存 tabs 失败：tabs 已由主进程 Workbench model 单独拥有，renderer 不得直接写入',
+    })
+    expect(service.setSection).not.toHaveBeenCalled()
+  })
+
   it('commits the main-process active workspace and persists only its canonical path', async () => {
     const service = createService()
     const settings = { set: vi.fn(async () => ({})) }

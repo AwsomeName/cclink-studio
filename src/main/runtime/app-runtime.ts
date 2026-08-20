@@ -40,7 +40,7 @@ import type { OfficialIntegration } from '../official/official-integration'
 import type { GitBackupService } from '../git-backup/git-backup-service'
 import type { GitWorkspaceService } from '../git/git-workspace-service'
 import type { FileService } from '../fs/file-service'
-import type { TrustedRendererGuard } from '../ipc/trusted-renderer-guard'
+import type { TrustedRendererRegistry } from '../ipc/trusted-renderer-guard'
 import type { UpdateService } from '../update/update-service'
 import type { ScheduledTaskService } from '../scheduled-task/scheduled-task-service'
 import { RuntimeCapabilityRegistry } from './capability-registry'
@@ -54,6 +54,11 @@ import type { MediaProjectService } from '../media-production/media-project-serv
 import type { MediaAssetService } from '../media-production/media-asset-service'
 import type { VideoGenerationService } from '../media-production/video-generation-service'
 import type { MediaRenderService } from '../media-production/media-render-service'
+import type { WorkbenchTabModel } from '../workbench/workbench-tab-model'
+import type { WorkbenchWindowService } from '../workbench/workbench-window-service'
+import type { BrowserBookmarkModel } from '../workbench/browser-bookmark-model'
+import type { BrowserRecoveryHostRegistry } from '../workbench/browser-recovery-host-registry'
+import type { DetachableBrowserWindowController } from '../workbench/detachable-browser-window-controller'
 
 export interface CclinkStudioRuntimeState {
   isDev: boolean
@@ -84,6 +89,11 @@ export interface CclinkStudioRuntimeState {
   settingsService: SettingsService | null
   credentialService: CredentialService | null
   workspaceStateService: WorkspaceStateService | null
+  workbenchTabModel: WorkbenchTabModel | null
+  workbenchWindowService: WorkbenchWindowService | null
+  browserRecoveryHosts: BrowserRecoveryHostRegistry | null
+  detachableBrowserWindows: DetachableBrowserWindowController | null
+  browserBookmarkModel: BrowserBookmarkModel | null
   meshyService: MeshyService | null
   imageGenerationService: ImageGenerationService | null
   markdownIllustrationService: MarkdownIllustrationService | null
@@ -111,7 +121,7 @@ export interface CclinkStudioRuntimeState {
   videoGenerationService: VideoGenerationService | null
   mediaRenderService: MediaRenderService | null
   mediaProjectIpcUnsubscribe: (() => void) | null
-  trustedRendererGuard: TrustedRendererGuard | null
+  trustedRendererGuard: TrustedRendererRegistry | null
   rendererWorkspaceStateFlush: RendererWorkspaceStateFlushCoordinator | null
   cclinkAuthService: CclinkAuthService | null
   cclinkRemoteService: CclinkRemoteService | null
@@ -148,6 +158,11 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     settingsService: null,
     credentialService: null,
     workspaceStateService: null,
+    workbenchTabModel: null,
+    workbenchWindowService: null,
+    browserRecoveryHosts: null,
+    detachableBrowserWindows: null,
+    browserBookmarkModel: null,
     meshyService: null,
     imageGenerationService: null,
     markdownIllustrationService: null,

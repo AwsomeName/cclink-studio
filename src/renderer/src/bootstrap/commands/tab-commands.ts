@@ -3,6 +3,11 @@ import { useTabStore } from '../../stores/tab-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { openDefaultBrowserTab } from '../../features/web-resources/open-default-browser-tab'
 import { closeTabWithDraftPolicy } from '../../utils/close-tab'
+import { workspaceRefKey } from '@shared/workspace-ref'
+import { isDetachedFromMain, useWorkbenchWindowStore } from '../../stores/workbench-window-store'
+import { flushPendingWorkbenchTabWrites } from '../../utils/workbench-tab-model'
+import { flushPendingWorkbenchBrowserWrites } from '../../utils/workbench-browser-state'
+import { getWorkspaceStateOwnerKey } from '../../utils/workspace-state'
 
 export function createTabCommands(): Command[] {
   return [
@@ -58,6 +63,58 @@ export function createTabCommands(): Command[] {
         const { activeTabId } = useTabStore.getState()
         const tabId = context?.target?.kind === 'tab' ? context.target.tabId : activeTabId
         if (tabId) return closeTabWithDraftPolicy(tabId)
+      },
+    },
+    {
+      id: 'workbench.moveTabToNewWindow',
+      label: '移至新窗口',
+      category: 'Tab',
+      enabled: (context) => {
+        const state = useTabStore.getState()
+        const tabId = context.target?.kind === 'tab' ? context.target.tabId : state.activeTabId
+        const tab = state.tabs.find((item) => item.id === tabId)
+        const placement = tabId ? useWorkbenchWindowStore.getState().placements[tabId] : undefined
+        return {
+          enabled: Boolean(tab?.type === 'browser' && !isDetachedFromMain(placement)),
+          reason: tab?.type === 'browser' ? '标签页已在独立窗口' : '当前仅支持 Browser Tab',
+        }
+      },
+      action: async (context) => {
+        const tabStore = useTabStore.getState()
+        const tabId = context?.target?.kind === 'tab' ? context.target.tabId : tabStore.activeTabId
+        const tab = tabStore.tabs.find((item) => item.id === tabId)
+        if (!tabId || tab?.type !== 'browser') throw new Error('当前仅支持 Browser Tab')
+        const placement = useWorkbenchWindowStore.getState().placements[tabId]
+        if (isDetachedFromMain(placement)) throw new Error('标签页已在独立窗口')
+
+        const wasActive = tabStore.activeTabId === tabId
+        if (wasActive) {
+          const fallback = tabStore.tabs.find((item) => item.id !== tabId)
+          tabStore.activateTab(fallback?.id ?? null)
+        }
+        await flushPendingWorkbenchTabWrites()
+        await flushPendingWorkbenchBrowserWrites()
+        const result = await window.cclinkStudio.workbenchWindow.moveTabToNewWindow({
+          tabId,
+          workspaceKey: workspaceRefKey(
+            tab.workspaceRef ?? useWorkspaceStore.getState().activeWorkspaceRef,
+          ),
+          ownerKey: getWorkspaceStateOwnerKey(),
+          sourceWindowId: 'main',
+          expectedGeneration: placement?.generation ?? 0,
+        })
+        if (!result.success) {
+          if (wasActive) useTabStore.getState().activateTab(tabId)
+          throw new Error(result.error.message)
+        }
+        const moved = result.projection.tabs[0]
+        useWorkbenchWindowStore.getState().applyPlacement({
+          tabId,
+          workspaceKey: moved.workspaceKey,
+          windowId: result.projection.window.windowId,
+          generation: moved.generation,
+          state: 'attached',
+        })
       },
     },
     {

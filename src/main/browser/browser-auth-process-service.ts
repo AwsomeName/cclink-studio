@@ -63,7 +63,7 @@ export class BrowserAuthProcessService {
       if (this.activeChild !== child) return
       this.activeChild = null
       this.activeChildKind = null
-      if (!this.mainWindow.isDestroyed()) {
+      if (!this.browserManager.focusTabOwner(request.tabId) && !this.mainWindow.isDestroyed()) {
         if (this.mainWindow.isMinimized()) this.mainWindow.restore()
         this.mainWindow.show()
         this.mainWindow.focus()
@@ -146,13 +146,15 @@ export class BrowserAuthProcessService {
     message: BrowserAuthChildMessage,
   ): Promise<void> {
     if (message.type === 'browser-auth-cancelled') {
-      if (!this.mainWindow.isDestroyed()) this.mainWindow.focus()
+      if (!this.browserManager.focusTabOwner(message.tabId) && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.focus()
+      }
       return
     }
 
     try {
       await this.browserManager.completeBrowserAuth(message)
-      if (!this.mainWindow.isDestroyed()) {
+      if (!this.browserManager.focusTabOwner(message.tabId) && !this.mainWindow.isDestroyed()) {
         if (this.mainWindow.isMinimized()) this.mainWindow.restore()
         this.mainWindow.show()
         this.mainWindow.focus()

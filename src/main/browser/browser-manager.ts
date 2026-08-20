@@ -1,4 +1,5 @@
 import {
+  BaseWindow,
   BrowserWindow,
   WebContentsView,
   session,
@@ -76,10 +77,12 @@ export type { BrowserViewState } from '../../shared/ipc/browser'
  * 单个浏览器视图的运行时状态
  *
  * 每个 Tab 对应一个独立的 WebContentsView，各自维护导航历史、缩放、设备模式。
- * 同一时刻只有一个视图 attach 到窗口（由 activeViewId 标记），其余保持 warm。
+ * 每个窗口同一时刻只有一个视图 attach（由该 host 的 activeViewId 标记），其余保持 warm。
  */
 interface ViewEntry {
   view: WebContentsView
+  /** 当前 native host；移动时只改 owner，不重建 View/WebContents。 */
+  ownerWindowId: string
   /** 同 tabId 重建时变化，用于拒绝旧 renderer 请求。 */
   runtimeGeneration: number
   activeFind: {
@@ -127,6 +130,19 @@ interface ViewEntry {
   } | null
 }
 
+interface BrowserViewHost {
+  windowId: string
+  nativeWindow: BaseWindow
+  /** Recovery Host intentionally has no renderer or preload. */
+  rendererWindow: BrowserWindow | null
+  workspaceKey: string | null
+  activeViewId: string | null
+  currentBounds: BrowserBounds
+  currentRendererBounds: BrowserBounds
+}
+
+const MAIN_BROWSER_HOST_ID = 'main'
+
 function browserInputToKeyChord(input: Input): KeyChord | null {
   if (!input.code) return null
   const mac = process.platform === 'darwin'
@@ -164,15 +180,8 @@ function acceleratorKeyCode(code: string): string | null {
 export class BrowserManager {
   /** tabId → 视图运行时状态 */
   private views = new Map<string, ViewEntry>()
-  /** 当前 attach 到窗口的视图 tabId（一次只能 attach 一个） */
-  private activeViewId: string | null = null
-  /** renderer 最近声明的当前项目；与 Playwright 当前页、BrowserView 活跃页分开维护。 */
-  private currentWorkspaceKey: string | null = null
-  private mainWindow: BrowserWindow
-  /** 内容区坐标（全局，所有视图共享同一矩形） */
-  private currentBounds = { x: 0, y: 0, width: 0, height: 0 }
-  /** renderer 最近上报的 CSS 坐标；应用缩放变化时据此立即重算原生 View。 */
-  private currentRendererBounds = { x: 0, y: 0, width: 0, height: 0 }
+  /** windowId → 明确的 native host；不存在“最后一个窗口”隐式回退。 */
+  private readonly hosts = new Map<string, BrowserViewHost>()
   /** 新建视图的默认状态（从设置继承） */
   private defaultViewMode: ViewMode = 'desktop'
   private defaultZoomMode: ZoomMode = 'fit'
@@ -180,6 +189,7 @@ export class BrowserManager {
   private playwrightBridge: PlaywrightBridge | null = null
   /** view 被销毁时回调（tabId）—— AgentBridge / TaskRuntime 等据此清理状态 */
   private readonly viewDestroyedCallbacks = new Set<(tabId: string) => void>()
+  private readonly mainWorkspaceChangedCallbacks = new Set<(workspaceKey: string | null) => void>()
   /** 浏览历史存储（晚绑定）。项目浏览器现场由 WorkspaceState 负责。 */
   private instanceStore: BrowserInstanceStore | null = null
   private readonly lastClaimByTab = new Map<
@@ -201,7 +211,7 @@ export class BrowserManager {
   private findShortcutTriggerSequence = 0
 
   constructor(mainWindow: BrowserWindow, defaults?: { zoomMode?: ZoomMode; viewMode?: ViewMode }) {
-    this.mainWindow = mainWindow
+    this.registerHost(MAIN_BROWSER_HOST_ID, mainWindow, null)
     if (defaults?.zoomMode) this.defaultZoomMode = defaults.zoomMode
     if (defaults?.viewMode) this.defaultViewMode = defaults.viewMode
   }
@@ -232,7 +242,8 @@ export class BrowserManager {
 
   private requireActiveView(tabId: string): ViewEntry {
     const entry = this.views.get(tabId)
-    if (!entry || this.activeViewId !== tabId || entry.workspaceKey !== this.currentWorkspaceKey) {
+    const host = entry ? this.hosts.get(entry.ownerWindowId) : null
+    if (!entry || host?.activeViewId !== tabId || entry.workspaceKey !== host.workspaceKey) {
       throw new Error('Browser smoke 目标已失效')
     }
     return entry
@@ -240,12 +251,15 @@ export class BrowserManager {
 
   /** 安全获取主窗口（已销毁则返回 null） */
   private win(): BrowserWindow | null {
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) return null
-    return this.mainWindow
+    const window = this.hosts.get(MAIN_BROWSER_HOST_ID)?.rendererWindow
+    return !window || window.isDestroyed() ? null : window
   }
 
-  private resolveRendererBounds(bounds: BrowserBounds): BrowserBounds {
-    const win = this.win()
+  private resolveRendererBounds(
+    bounds: BrowserBounds,
+    windowId = MAIN_BROWSER_HOST_ID,
+  ): BrowserBounds {
+    const win = this.hosts.get(windowId)?.rendererWindow
     if (!win) return rendererBoundsToWindowDip(bounds, 1)
     try {
       const contentBounds = win.getContentBounds()
@@ -256,6 +270,170 @@ export class BrowserManager {
     } catch {
       return rendererBoundsToWindowDip(bounds, 1)
     }
+  }
+
+  registerHost(windowId: string, browserWindow: BrowserWindow, workspaceKey: string | null): void {
+    const existing = this.hosts.get(windowId)
+    if (existing && existing.nativeWindow !== browserWindow) {
+      throw new Error(`Browser host 已注册: ${windowId}`)
+    }
+    this.hosts.set(windowId, {
+      windowId,
+      nativeWindow: browserWindow,
+      rendererWindow: browserWindow,
+      workspaceKey,
+      activeViewId: existing?.activeViewId ?? null,
+      currentBounds: existing?.currentBounds ?? { x: 0, y: 0, width: 0, height: 0 },
+      currentRendererBounds: existing?.currentRendererBounds ?? {
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+      },
+    })
+  }
+
+  registerRecoveryHost(
+    windowId: string,
+    nativeWindow: BaseWindow,
+    workspaceKey: string | null,
+  ): void {
+    const existing = this.hosts.get(windowId)
+    if (existing && existing.nativeWindow !== nativeWindow) {
+      throw new Error(`Browser recovery host 已注册: ${windowId}`)
+    }
+    this.hosts.set(windowId, {
+      windowId,
+      nativeWindow,
+      rendererWindow: null,
+      workspaceKey,
+      activeViewId: existing?.activeViewId ?? null,
+      currentBounds: existing?.currentBounds ?? { x: 0, y: 0, width: 1, height: 1 },
+      currentRendererBounds: existing?.currentRendererBounds ?? {
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+      },
+    })
+  }
+
+  unregisterHost(windowId: string): string[] {
+    if (windowId === MAIN_BROWSER_HOST_ID && this.hosts.size > 1) {
+      // 主窗口重建由 WindowService 协调；这里仍精确移除，绝不把 aux 当 main。
+    }
+    const host = this.hosts.get(windowId)
+    if (!host) return []
+    const ownedTabIds = [...this.views]
+      .filter(([, entry]) => entry.ownerWindowId === windowId)
+      .map(([tabId]) => tabId)
+    for (const tabId of ownedTabIds) {
+      const entry = this.views.get(tabId)
+      if (!entry) continue
+      try {
+        host.nativeWindow.contentView.removeChildView(entry.view)
+      } catch {
+        // host 可能已销毁；返回 ownedTabIds 交给 WindowService 进入恢复路径。
+      }
+    }
+    this.hosts.delete(windowId)
+    return ownedTabIds
+  }
+
+  private hostWindow(windowId: string): BaseWindow | null {
+    const window = this.hosts.get(windowId)?.nativeWindow
+    return !window || window.isDestroyed() ? null : window
+  }
+
+  private hostForEntry(entry: ViewEntry): BrowserViewHost | null {
+    const host = this.hosts.get(entry.ownerWindowId)
+    return host && !host.nativeWindow.isDestroyed() ? host : null
+  }
+
+  private sendToOwner(entry: ViewEntry, channel: string, payload: unknown): void {
+    const host = this.hostForEntry(entry)
+    const webContents = host?.rendererWindow?.webContents
+    if (!webContents || webContents.isDestroyed()) return
+    webContents.send(channel, payload)
+  }
+
+  sendToTabOwner(tabId: string, channel: string, payload: unknown): boolean {
+    const entry = this.views.get(tabId)
+    if (!entry) return false
+    const host = this.hostForEntry(entry)
+    const webContents = host?.rendererWindow?.webContents
+    if (!webContents || webContents.isDestroyed()) return false
+    webContents.send(channel, payload)
+    return true
+  }
+
+  focusTabOwner(tabId: string): boolean {
+    const entry = this.views.get(tabId)
+    const window = entry ? this.hostForEntry(entry)?.rendererWindow : null
+    if (!window || window.isDestroyed()) return false
+    if (window.isMinimized()) window.restore()
+    window.show()
+    window.focus()
+    return true
+  }
+
+  /** Existing main-renderer IPC aliases; auxiliary paths always address an explicit host. */
+  private get activeViewId(): string | null {
+    return this.hosts.get(MAIN_BROWSER_HOST_ID)?.activeViewId ?? null
+  }
+
+  private set activeViewId(tabId: string | null) {
+    const host = this.hosts.get(MAIN_BROWSER_HOST_ID)
+    if (host) host.activeViewId = tabId
+  }
+
+  private get currentWorkspaceKey(): string | null {
+    return this.hosts.get(MAIN_BROWSER_HOST_ID)?.workspaceKey ?? null
+  }
+
+  private set currentWorkspaceKey(workspaceKey: string | null) {
+    const host = this.hosts.get(MAIN_BROWSER_HOST_ID)
+    if (!host || host.workspaceKey === workspaceKey) return
+    host.workspaceKey = workspaceKey
+    for (const callback of this.mainWorkspaceChangedCallbacks) callback(workspaceKey)
+  }
+
+  onMainWorkspaceChanged(callback: (workspaceKey: string | null) => void): () => void {
+    this.mainWorkspaceChangedCallbacks.add(callback)
+    callback(this.currentWorkspaceKey)
+    return () => this.mainWorkspaceChangedCallbacks.delete(callback)
+  }
+
+  private get currentBounds(): BrowserBounds {
+    return (
+      this.hosts.get(MAIN_BROWSER_HOST_ID)?.currentBounds ?? {
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+      }
+    )
+  }
+
+  private set currentBounds(bounds: BrowserBounds) {
+    const host = this.hosts.get(MAIN_BROWSER_HOST_ID)
+    if (host) host.currentBounds = bounds
+  }
+
+  private get currentRendererBounds(): BrowserBounds {
+    return (
+      this.hosts.get(MAIN_BROWSER_HOST_ID)?.currentRendererBounds ?? {
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+      }
+    )
+  }
+
+  private set currentRendererBounds(bounds: BrowserBounds) {
+    const host = this.hosts.get(MAIN_BROWSER_HOST_ID)
+    if (host) host.currentRendererBounds = bounds
   }
 
   /**
@@ -303,7 +481,9 @@ export class BrowserManager {
         this.playwrightBridge.unregisterPage(tabId)
         throw new Error(`浏览器 View 已在 claim 期间销毁: ${tabId}`)
       }
-      if (this.activeViewId === tabId) await this.playwrightBridge.switchToPage(tabId)
+      if (this.hostForEntry(entry)?.activeViewId === tabId) {
+        await this.playwrightBridge.switchToPage(tabId)
+      }
       this.lastClaimByTab.set(tabId, {
         status: 'succeeded',
         timestamp: Date.now(),
@@ -423,6 +603,7 @@ export class BrowserManager {
 
     const entry: ViewEntry = {
       view,
+      ownerWindowId: MAIN_BROWSER_HOST_ID,
       runtimeGeneration: this.nextRuntimeGeneration++,
       activeFind: null,
       boundsReceived: false,
@@ -463,14 +644,24 @@ export class BrowserManager {
   /** 普通工作台 View 与网页 popup 共用同一套安全、导航和自动化监听。 */
   private installViewListeners(tabId: string, entry: ViewEntry): void {
     const wc = entry.view.webContents
+    // Electron 默认关闭 visual zoom；显式开放后触控板 pinch 才能连续缩放网页。
+    void wc
+      .setVisualZoomLevelLimits(MIN_ZOOM, MAX_ZOOM)
+      .catch((error) =>
+        console.warn(
+          `[BrowserManager] 触控板缩放降级 tabId=${tabId}:`,
+          error instanceof Error ? error.message : 'unknown',
+        ),
+      )
     wc.on('before-input-event', (event, input) => {
+      const ownerHost = this.hostForEntry(entry)
       if (
         input.type !== 'keyDown' ||
         input.isAutoRepeat ||
         input.isComposing ||
         this.views.get(tabId) !== entry ||
-        this.activeViewId !== tabId ||
-        this.currentWorkspaceKey !== entry.workspaceKey
+        ownerHost?.activeViewId !== tabId ||
+        ownerHost.workspaceKey !== entry.workspaceKey
       ) {
         return
       }
@@ -487,7 +678,7 @@ export class BrowserManager {
       console.log(
         `[BrowserShortcut] 触发 workbench.find config=${this.findShortcutConfig.configVersion} tab=${tabId} generation=${entry.runtimeGeneration}`,
       )
-      this.win()?.webContents.send(browserIpcEvents.findShortcutTriggered, {
+      this.sendToOwner(entry, browserIpcEvents.findShortcutTriggered, {
         commandId: 'workbench.find',
         configVersion: this.findShortcutConfig.configVersion,
         triggerSequence: ++this.findShortcutTriggerSequence,
@@ -513,7 +704,7 @@ export class BrowserManager {
       entry.activeFind.nativeResultReceived = true
       entry.activeFind.matches = result.matches
       entry.activeFind.activeMatchOrdinal = result.activeMatchOrdinal
-      this.win()?.webContents.send(browserIpcEvents.findResult, {
+      this.sendToOwner(entry, browserIpcEvents.findResult, {
         tabId,
         workspaceKey: entry.workspaceKey,
         runtimeGeneration: entry.runtimeGeneration,
@@ -591,7 +782,7 @@ export class BrowserManager {
   ): WindowOpenHandlerResponse {
     if (
       this.views.get(sourceTabId) !== sourceEntry ||
-      !this.win() ||
+      !this.hostForEntry(sourceEntry) ||
       this.routeBrowserAuth(sourceTabId, sourceEntry, details.url) ||
       !isSupportedBrowserUrl(details.url)
     ) {
@@ -625,7 +816,7 @@ export class BrowserManager {
     details: HandlerDetails,
     options: BrowserWindowConstructorOptions,
   ): WebContents {
-    if (this.views.get(sourceTabId) !== sourceEntry || !this.win()) {
+    if (this.views.get(sourceTabId) !== sourceEntry || !this.hostForEntry(sourceEntry)) {
       throw new Error('来源浏览器 Tab 已失效，无法创建 popup')
     }
 
@@ -648,6 +839,12 @@ export class BrowserManager {
     const tabId = `browser-popup-${randomUUID()}`
     const popupUrl = details.url || 'about:blank'
     const desktopUA = sourceEntry.desktopUA
+    // M1 auxiliary windows are single-tab. A child popup becomes a normal main-host Tab
+    // while retaining the source Session/opener relationship and stable Browser runtime.
+    const popupOwnerWindowId =
+      sourceEntry.ownerWindowId !== MAIN_BROWSER_HOST_ID && this.hostWindow(MAIN_BROWSER_HOST_ID)
+        ? MAIN_BROWSER_HOST_ID
+        : sourceEntry.ownerWindowId
     if (view.webContents.session !== sourceEntry.view.webContents.session) {
       view.webContents.close()
       throw new Error('popup Session 未继承来源 Profile，已拒绝创建')
@@ -662,6 +859,7 @@ export class BrowserManager {
 
     const entry: ViewEntry = {
       view,
+      ownerWindowId: popupOwnerWindowId,
       runtimeGeneration: this.nextRuntimeGeneration++,
       activeFind: null,
       // Chromium 已拥有此次 popup 导航；不能由 ensureLoaded 再次 loadURL。
@@ -701,10 +899,10 @@ export class BrowserManager {
       if (current !== entry || current.popup?.adoptionState !== 'pending') return
       console.warn(`[BrowserManager] popup 接纳超时，已清理 tabId=${tabId}`)
       this.destroyView(tabId)
-      this.emitRuntimeTabClosed(tabId, entry.workspaceKey)
+      this.emitRuntimeTabClosed(tabId, entry.workspaceKey, entry.ownerWindowId)
     }, POPUP_ADOPTION_TIMEOUT_MS)
 
-    this.win()?.webContents.send(browserIpcEvents.popupCreated, {
+    this.sendToOwner(entry, browserIpcEvents.popupCreated, {
       tabId,
       url: popupUrl,
       workspaceKey: entry.workspaceKey,
@@ -733,8 +931,9 @@ export class BrowserManager {
   }
 
   private openContextMenu(tabId: string, entry: ViewEntry, params: ContextMenuParams): void {
-    const win = this.win()
-    if (!win || this.views.get(tabId) !== entry) return
+    const host = this.hostForEntry(entry)
+    const win = host?.rendererWindow
+    if (!host || !win || this.views.get(tabId) !== entry) return
     const context = normalizeBrowserContext(
       {
         workspaceKey: entry.workspaceKey,
@@ -758,8 +957,8 @@ export class BrowserManager {
       return Boolean(
         current === entry &&
         current.contextMenuToken === token &&
-        this.currentWorkspaceKey === entry.workspaceKey &&
-        this.activeViewId === tabId &&
+        host.workspaceKey === entry.workspaceKey &&
+        host.activeViewId === tabId &&
         current.profileId === context.profileId,
       )
     }
@@ -808,20 +1007,19 @@ export class BrowserManager {
         visitedAt: Date.now(),
       })
     }
-    const win = this.win()
-    if (win)
-      win.webContents.send(browserIpcEvents.urlChanged, {
+    if (entry)
+      this.sendToOwner(entry, browserIpcEvents.urlChanged, {
         tabId,
         url,
-        history: entry?.history ?? [url],
-        historyIndex: entry?.historyIndex ?? 0,
+        history: entry.history,
+        historyIndex: entry.historyIndex,
       })
   }
 
   private emitPageMeta(tabId: string, meta: { title?: string; faviconUrl?: string | null }): void {
-    const win = this.win()
-    if (!win) return
-    win.webContents.send(browserIpcEvents.pageMetaChanged, { tabId, ...meta })
+    const entry = this.views.get(tabId)
+    if (!entry) return
+    this.sendToOwner(entry, browserIpcEvents.pageMetaChanged, { tabId, ...meta })
   }
 
   /**
@@ -834,9 +1032,10 @@ export class BrowserManager {
     entry.boundsReceived = true
     // 即使 renderer 尚未上报真实 bounds，也先用 1x1 临时区域加载页面。
     // 否则 Electron 会暴露一个空 URL 的 CDP target，Playwright connectOverCDP 可能卡住。
+    const hostBounds = this.hostForEntry(entry)?.currentBounds
     const bounds =
-      this.currentBounds.width > 0 && this.currentBounds.height > 0
-        ? this.currentBounds
+      hostBounds && hostBounds.width > 0 && hostBounds.height > 0
+        ? hostBounds
         : { x: 0, y: 0, width: 1, height: 1 }
     entry.view.setBounds(bounds)
     void entry.view.webContents.loadURL(entry.pendingUrl)
@@ -847,9 +1046,9 @@ export class BrowserManager {
     const entry = this.views.get(tabId)
     if (!entry?.popup) throw new Error('待接纳 popup 不存在')
     if (entry.popup.adoptionState === 'adopted') return
-    if (entry.workspaceKey !== this.currentWorkspaceKey) {
+    if (entry.workspaceKey !== this.hostForEntry(entry)?.workspaceKey) {
       this.destroyView(tabId)
-      this.emitRuntimeTabClosed(tabId, entry.workspaceKey)
+      this.emitRuntimeTabClosed(tabId, entry.workspaceKey, entry.ownerWindowId)
       throw new Error('popup 来源工作空间已切换')
     }
     entry.popup.adoptionState = 'adopted'
@@ -862,16 +1061,30 @@ export class BrowserManager {
     const entry = this.views.get(tabId)
     if (!entry?.popup) return
     this.destroyView(tabId)
-    this.emitRuntimeTabClosed(tabId, entry.workspaceKey)
+    this.emitRuntimeTabClosed(tabId, entry.workspaceKey, entry.ownerWindowId)
   }
 
   private handleWebContentsDestroyed(tabId: string, entry: ViewEntry): void {
     if (!this.removeViewEntry(tabId, entry)) return
-    this.emitRuntimeTabClosed(tabId, entry.workspaceKey)
+    this.emitRuntimeTabClosed(tabId, entry.workspaceKey, entry.ownerWindowId)
   }
 
-  private emitRuntimeTabClosed(tabId: string, workspaceKey: string | null): void {
-    this.win()?.webContents.send(browserIpcEvents.runtimeTabClosed, { tabId, workspaceKey })
+  private emitRuntimeTabClosed(
+    tabId: string,
+    workspaceKey: string | null,
+    ownerWindowId = MAIN_BROWSER_HOST_ID,
+  ): void {
+    const host = this.hosts.get(ownerWindowId)
+    const rendererWindow = host?.rendererWindow
+    if (
+      !host ||
+      !rendererWindow ||
+      host.nativeWindow.isDestroyed() ||
+      rendererWindow.webContents.isDestroyed()
+    ) {
+      return
+    }
+    rendererWindow.webContents.send(browserIpcEvents.runtimeTabClosed, { tabId, workspaceKey })
   }
 
   /** 从 BrowserManager 和所有下游注册表移除 ViewEntry；不负责关闭 WebContents 本身。 */
@@ -883,16 +1096,16 @@ export class BrowserManager {
     entry.contextMenuToken = null
     if (entry.popup) entry.popup.adoptionTimer = null
 
-    const win = this.win()
-    if (win) {
+    const host = this.hosts.get(entry.ownerWindowId)
+    if (host && !host.nativeWindow.isDestroyed()) {
       try {
-        win.contentView.removeChildView(entry.view)
+        host.nativeWindow.contentView.removeChildView(entry.view)
       } catch {
         // 窗口可能已销毁，忽略
       }
     }
     this.views.delete(tabId)
-    if (this.activeViewId === tabId) this.activeViewId = null
+    if (host?.activeViewId === tabId) host.activeViewId = null
 
     this.playwrightBridge?.unregisterPage(tabId)
     for (const cb of this.viewDestroyedCallbacks) cb(tabId)
@@ -916,12 +1129,18 @@ export class BrowserManager {
    * @param tabId 目标视图 tabId；null = 全部隐藏
    */
   setActive(tabId: string | null): void {
-    const win = this.win()
-    if (!win) return
+    this.setActiveForWindow(MAIN_BROWSER_HOST_ID, tabId)
+  }
+
+  setActiveForWindow(windowId: string, tabId: string | null): void {
+    const host = this.hosts.get(windowId)
+    const win = this.hostWindow(windowId)
+    if (!host || !win) return
 
     // activeViewId 可能因旧异步调用或 removeChildView 异常失真。
     // 每次都遍历并 detach 非目标视图，避免原生 View 盖到编辑器/其他项目 Tab 上。
     for (const [viewId, entry] of this.views) {
+      if (entry.ownerWindowId !== windowId) continue
       if (viewId !== tabId) {
         try {
           win.contentView.removeChildView(entry.view)
@@ -932,20 +1151,23 @@ export class BrowserManager {
     }
 
     if (!tabId) {
-      this.activeViewId = null
+      host.activeViewId = null
       return
     }
 
     const entry = this.views.get(tabId)
     if (!entry) {
       // 视图尚未创建（createView 尚未到达），记下活跃标记，createView 时会处理
-      this.activeViewId = tabId
+      host.activeViewId = tabId
       return
+    }
+    if (entry.ownerWindowId !== windowId) {
+      throw new Error(`Browser View 不属于目标 host: tab=${tabId} window=${windowId}`)
     }
 
     win.contentView.addChildView(entry.view)
-    entry.view.setBounds(this.currentBounds)
-    this.activeViewId = tabId
+    entry.view.setBounds(host.currentBounds)
+    host.activeViewId = tabId
     entry.view.webContents.focus()
     void this.playwrightBridge?.switchToPage(tabId).catch(() => {
       // 页面尚未 claim 时由 did-finish-load 完成绑定和激活。
@@ -958,6 +1180,97 @@ export class BrowserManager {
     this.emitState(tabId)
   }
 
+  transferViewToHost(
+    tabId: string,
+    sourceWindowId: string,
+    targetWindowId: string,
+    options: { activate?: boolean } = {},
+  ): void {
+    const entry = this.views.get(tabId)
+    if (!entry) throw new Error(`Browser View 不存在: ${tabId}`)
+    if (entry.ownerWindowId !== sourceWindowId) {
+      throw new Error(`Browser View source 不匹配: tab=${tabId} source=${sourceWindowId}`)
+    }
+    const source = this.hosts.get(sourceWindowId)
+    const target = this.hosts.get(targetWindowId)
+    const sourceWindow = this.hostWindow(sourceWindowId)
+    const targetWindow = this.hostWindow(targetWindowId)
+    if (!source || !sourceWindow) throw new Error(`Browser source host 不可用: ${sourceWindowId}`)
+    if (!target || !targetWindow) throw new Error(`Browser target host 不可用: ${targetWindowId}`)
+
+    sourceWindow.contentView.removeChildView(entry.view)
+    if (source.activeViewId === tabId) source.activeViewId = null
+    try {
+      const activate = options.activate ?? true
+      if (activate) targetWindow.contentView.addChildView(entry.view)
+      entry.ownerWindowId = targetWindowId
+      if (activate) {
+        target.activeViewId = tabId
+        entry.view.setBounds(
+          target.currentBounds.width > 0 && target.currentBounds.height > 0
+            ? target.currentBounds
+            : { x: 0, y: 0, width: 1, height: 1 },
+        )
+        entry.view.webContents.focus()
+        void this.playwrightBridge?.switchToPage(tabId).catch(() => undefined)
+        this.ensureLoaded(tabId)
+        void this.applyZoom(tabId, false)
+      }
+      this.emitState(tabId)
+    } catch (error) {
+      try {
+        sourceWindow.contentView.addChildView(entry.view)
+        entry.ownerWindowId = sourceWindowId
+        source.activeViewId = tabId
+        entry.view.setBounds(source.currentBounds)
+      } catch (rollbackError) {
+        throw new Error(
+          `Browser View attach 与 source rollback 均失败: attach=${formatError(error)} rollback=${formatError(rollbackError)}`,
+        )
+      }
+      throw error
+    }
+  }
+
+  /**
+   * Emergency attachment used only after the source host is already unavailable.
+   * Unlike a normal transfer it cannot roll back to source, so the caller must provide
+   * a live Recovery Host before invoking it.
+   */
+  recoverViewToHost(tabId: string, sourceWindowId: string, recoveryWindowId: string): void {
+    const entry = this.views.get(tabId)
+    if (!entry) throw new Error(`Browser View 不存在: ${tabId}`)
+    if (entry.ownerWindowId !== sourceWindowId) {
+      throw new Error(`Browser View recovery source 不匹配: tab=${tabId} source=${sourceWindowId}`)
+    }
+    const source = this.hosts.get(sourceWindowId)
+    const recovery = this.hosts.get(recoveryWindowId)
+    const recoveryWindow = this.hostWindow(recoveryWindowId)
+    if (!recovery || !recoveryWindow) {
+      throw new Error(`Browser Recovery Host 不可用: ${recoveryWindowId}`)
+    }
+    if (source && !source.nativeWindow.isDestroyed()) {
+      try {
+        source.nativeWindow.contentView.removeChildView(entry.view)
+      } catch {
+        // Source is already unreliable; the recovery attachment below is the authority.
+      }
+    }
+    recoveryWindow.contentView.addChildView(entry.view)
+    if (source?.activeViewId === tabId) source.activeViewId = null
+    entry.ownerWindowId = recoveryWindowId
+    recovery.activeViewId = tabId
+    entry.view.setBounds({ x: 0, y: 0, width: 1, height: 1 })
+  }
+
+  getViewOwnerWindowId(tabId: string): string | null {
+    return this.views.get(tabId)?.ownerWindowId ?? null
+  }
+
+  getHostWorkspaceKey(windowId: string): string | null | undefined {
+    return this.hosts.get(windowId)?.workspaceKey
+  }
+
   /** 让 renderer 声明当前工作区允许存在和显示的浏览器视图。 */
   reconcileViews(options: BrowserReconcileViewsOptions): void {
     this.currentWorkspaceKey = options.workspaceKey
@@ -965,6 +1278,7 @@ export class BrowserManager {
       options.views.map(({ tabId, profileId }) => [tabId, normalizeBrowserProfileId(profileId)]),
     )
     for (const [tabId, entry] of [...this.views]) {
+      if (entry.ownerWindowId !== MAIN_BROWSER_HOST_ID) continue
       if (entry.popup?.adoptionState === 'pending') {
         const rendererDeclaredPopup = expectedProfileByTabId.has(tabId)
         const bindingMismatch =
@@ -973,7 +1287,7 @@ export class BrowserManager {
             entry.profileId !== expectedProfileByTabId.get(tabId))
         if (bindingMismatch) {
           this.destroyView(tabId)
-          this.emitRuntimeTabClosed(tabId, entry.workspaceKey)
+          this.emitRuntimeTabClosed(tabId, entry.workspaceKey, entry.ownerWindowId)
         }
         // 接纳 IPC 与 renderer effect 异步竞速期间，pending View 不能按孤儿销毁。
         continue
@@ -1002,21 +1316,30 @@ export class BrowserManager {
    * 由渲染进程通过 IPC 上报 Workbench 区域坐标，作用于当前活跃视图
    */
   updateBounds(bounds: { x: number; y: number; width: number; height: number }): void {
-    this.currentRendererBounds = bounds
-    this.currentBounds = this.resolveRendererBounds(bounds)
-    if (!this.activeViewId) return
-    const entry = this.views.get(this.activeViewId)
+    this.updateBoundsForWindow(MAIN_BROWSER_HOST_ID, bounds)
+  }
+
+  updateBoundsForWindow(
+    windowId: string,
+    bounds: { x: number; y: number; width: number; height: number },
+  ): void {
+    const host = this.hosts.get(windowId)
+    if (!host) return
+    host.currentRendererBounds = bounds
+    host.currentBounds = this.resolveRendererBounds(bounds, windowId)
+    if (!host.activeViewId) return
+    const entry = this.views.get(host.activeViewId)
     if (!entry) return
 
     // 首次收到真实 bounds → 触发加载
     if (!entry.boundsReceived) {
-      this.ensureLoaded(this.activeViewId)
+      this.ensureLoaded(host.activeViewId)
       return
     }
 
     // bounds 立即生效，保证 resize 跟手；缩放重算防抖处理
-    entry.view.setBounds(this.currentBounds)
-    this.scheduleFit(this.activeViewId)
+    entry.view.setBounds(host.currentBounds)
+    this.scheduleFit(host.activeViewId)
   }
 
   /** 主窗口界面缩放变化后，先用最近一次 CSS 坐标重算，等待 renderer 上报最终布局。 */
@@ -1047,9 +1370,10 @@ export class BrowserManager {
   private async applyZoom(tabId: string, rebase = false): Promise<void> {
     const entry = this.views.get(tabId)
     if (!entry) return
+    const host = this.hostForEntry(entry)
     // 仅对活跃视图应用（非活跃视图会在 setActive 时重算）
-    if (this.activeViewId !== tabId) return
-    const paneWidth = this.currentBounds.width
+    if (host?.activeViewId !== tabId) return
+    const paneWidth = host.currentBounds.width
     if (paneWidth <= 0) return
     const wc = entry.view.webContents
 
@@ -1089,9 +1413,12 @@ export class BrowserManager {
 
   /** 把指定视图的状态同步给渲染进程 */
   private emitState(tabId: string): void {
-    const win = this.win()
-    if (!win) return
-    win.webContents.send(browserIpcEvents.viewStateChanged, { tabId, ...this.getState(tabId) })
+    const entry = this.views.get(tabId)
+    if (!entry) return
+    this.sendToOwner(entry, browserIpcEvents.viewStateChanged, {
+      tabId,
+      ...this.getState(tabId),
+    })
   }
 
   /** 获取指定视图状态 */
@@ -1131,8 +1458,9 @@ export class BrowserManager {
 
   getRuntimeIdentity(tabId: string): BrowserRuntimeIdentity | null {
     const entry = this.views.get(tabId)
+    const ownerHost = entry ? this.hostForEntry(entry) : null
     console.log(
-      `[BrowserFind] 查询 runtime tab=${tabId} found=${Boolean(entry)} active=${this.activeViewId === tabId}`,
+      `[BrowserFind] 查询 runtime tab=${tabId} found=${Boolean(entry)} active=${ownerHost?.activeViewId === tabId}`,
     )
     if (!entry) return null
     return {
@@ -1222,7 +1550,7 @@ export class BrowserManager {
       console.warn(
         `[BrowserFind] 原生结果超时，使用计数降级 tab=${tabId} matches=${activeFind.matches}`,
       )
-      this.win()?.webContents.send(browserIpcEvents.findResult, {
+      this.sendToOwner(entry, browserIpcEvents.findResult, {
         tabId,
         workspaceKey: entry.workspaceKey,
         runtimeGeneration: entry.runtimeGeneration,
@@ -1238,12 +1566,13 @@ export class BrowserManager {
 
   private requireCurrentFindTarget(input: BrowserRuntimeIdentity): ViewEntry {
     const entry = this.views.get(input.tabId)
+    const host = entry ? this.hostForEntry(entry) : null
     if (
       !entry ||
       entry.runtimeGeneration !== input.runtimeGeneration ||
       entry.workspaceKey !== input.workspaceKey ||
-      this.currentWorkspaceKey !== input.workspaceKey ||
-      this.activeViewId !== input.tabId
+      host?.workspaceKey !== input.workspaceKey ||
+      host.activeViewId !== input.tabId
     ) {
       throw new Error('浏览器查找目标已失效')
     }
@@ -1252,10 +1581,14 @@ export class BrowserManager {
 
   /** 返回指定项目当前可见的浏览器；绝不回退到其他项目的活跃视图。 */
   getActiveViewIdForWorkspace(workspaceKey: string | null): string | null {
-    if (!this.activeViewId) return null
-    return this.views.get(this.activeViewId)?.workspaceKey === workspaceKey
-      ? this.activeViewId
-      : null
+    for (const host of this.hosts.values()) {
+      if (!host.activeViewId || host.workspaceKey !== workspaceKey) continue
+      const entry = this.views.get(host.activeViewId)
+      if (entry?.workspaceKey === workspaceKey && entry.ownerWindowId === host.windowId) {
+        return host.activeViewId
+      }
+    }
+    return null
   }
 
   /** 返回项目内可继续执行的浏览器，允许它处于后台但不改变 UI 激活态。 */
@@ -1268,7 +1601,7 @@ export class BrowserManager {
   }
 
   isWorkspaceActive(workspaceKey: string | null): boolean {
-    return this.currentWorkspaceKey === workspaceKey
+    return [...this.hosts.values()].some((host) => host.workspaceKey === workspaceKey)
   }
 
   /** 查询 Tab 的真实项目归属；undefined 表示视图不存在。 */
@@ -1306,9 +1639,10 @@ export class BrowserManager {
     const deadline = Date.now() + timeoutMs
     let lastRequestAt = 0
     let tabId = this.getViewIdForWorkspace(workspaceKey)
-    if (!tabId && !this.isWorkspaceActive(workspaceKey)) return null
+    const mainHost = this.hosts.get(MAIN_BROWSER_HOST_ID)
+    if (!tabId && mainHost?.workspaceKey !== workspaceKey) return null
     while (!tabId && Date.now() < deadline) {
-      if (this.isWorkspaceActive(workspaceKey) && Date.now() - lastRequestAt >= 500) {
+      if (mainHost?.workspaceKey === workspaceKey && Date.now() - lastRequestAt >= 500) {
         this.win()?.webContents.send(browserIpcEvents.requestOpenTab, {
           initialUrl: DEFAULT_URL,
           workspaceKey,
@@ -1354,7 +1688,10 @@ export class BrowserManager {
     if (!entry) throw new Error(`可视浏览器 Tab 不存在: ${tabId}`)
     if (!this.playwrightBridge) throw new Error('Playwright 尚未连接')
 
-    if (this.isWorkspaceActive(entry.workspaceKey)) this.setActive(tabId)
+    const ownerHost = this.hostForEntry(entry)
+    if (ownerHost?.activeViewId !== tabId && entry.ownerWindowId === MAIN_BROWSER_HOST_ID) {
+      this.setActive(tabId)
+    }
     let lastError: unknown = null
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
@@ -1583,9 +1920,12 @@ export class BrowserManager {
     session: BrowserSessionDiagnosticSummary | null
   }> {
     const entry = this.views.get(tabId)
+    const visibleTabId = entry
+      ? (this.hosts.get(entry.ownerWindowId)?.activeViewId ?? null)
+      : this.activeViewId
     if (!entry) {
       return {
-        visibleTabId: this.activeViewId,
+        visibleTabId,
         visibleUrl: null,
         visibleTitle: null,
         profileId: null,
@@ -1607,7 +1947,7 @@ export class BrowserManager {
     )
 
     return {
-      visibleTabId: this.activeViewId,
+      visibleTabId,
       visibleUrl,
       visibleTitle: entry.view.webContents.getTitle() || null,
       profileId: entry.profileId,
@@ -1640,7 +1980,11 @@ export class BrowserManager {
     }
     this.activeViewId = null
     this.browserAuthRequestHandler = null
-    // 清空 mainWindow 引用，防止后续访问已销毁的窗口
-    this.mainWindow = null as unknown as BrowserWindow
+    this.mainWorkspaceChangedCallbacks.clear()
+    this.hosts.clear()
   }
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

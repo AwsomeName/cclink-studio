@@ -289,6 +289,40 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     expect(page.click).toHaveBeenCalledWith('#login')
   })
 
+  it('keeps automation attached to a Browser View owned by an auxiliary window', async () => {
+    const page = {
+      url: () => 'https://detached.example/',
+      click: vi.fn().mockResolvedValue(undefined),
+    }
+    const bridge = {
+      getPage: () => page,
+      getPageById: vi.fn().mockReturnValue(page),
+      getActiveTabId: () => 'detached-tab',
+      switchToPage: vi.fn().mockResolvedValue(undefined),
+    }
+    const browserManager = {
+      getActiveViewId: () => null,
+      getViewOwnerWindowId: vi.fn().mockReturnValue('aux-detached-tab'),
+      setActiveForWindow: vi.fn(),
+      setActive: vi.fn(),
+      getCurrentURL: () => 'https://detached.example/',
+    }
+    const module = new BrowserToolModule(bridge as any, null, browserManager as any)
+
+    await expect(module.execute('browser_click', { selector: '#download' })).resolves.toEqual({
+      clicked: '#download',
+    })
+
+    expect(browserManager.getViewOwnerWindowId).toHaveBeenCalledWith('detached-tab')
+    expect(browserManager.setActiveForWindow).toHaveBeenCalledWith(
+      'aux-detached-tab',
+      'detached-tab',
+    )
+    expect(browserManager.setActive).not.toHaveBeenCalled()
+    expect(bridge.switchToPage).toHaveBeenCalledWith('detached-tab')
+    expect(page.click).toHaveBeenCalledWith('#download')
+  })
+
   it('fails interaction actions when Playwright is pointed at a different page than the visible view', async () => {
     const page = {
       url: () => 'https://www.zhihu.com/signin',

@@ -15,6 +15,7 @@ import {
 } from '../../features/context-actions/context-menu-trigger'
 import type { TerminalStatus } from '@shared/terminal'
 import type { TerminalSessionSnapshot } from '@shared/ipc/terminal'
+import type { BrowserHistoryEntry } from '@shared/ipc/browser'
 import type { WorkspaceRef } from '../../../../shared/workspace-ref'
 import {
   localWorkspaceRef,
@@ -56,6 +57,7 @@ import {
   getBrowserUrlLabel,
 } from './browser-sidebar-view-model'
 import { ScheduledTasksSidebar } from '../../features/scheduled-tasks/ScheduledTasksSidebar'
+import { BrowserHistorySection } from './browser-history-section'
 import { createScheduledTaskTab } from '../../features/scheduled-tasks/scheduled-task-view-model'
 import { AgentRolesSidebar } from '../../features/agent-roles/AgentRolesSidebar'
 import { useToastStore } from '../common/Toast'
@@ -436,6 +438,10 @@ function BrowserManagementView(): React.ReactElement {
   const removeBookmark = useBrowserStore((s) => s.removeBookmark)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const showContextMenu = useContextMenuStore((s) => s.show)
+  const showToast = useToastStore((s) => s.show)
+  const [history, setHistory] = useState<BrowserHistoryEntry[]>([])
+  const [historyLoading, setHistoryLoading] = useState(true)
+  const [historyError, setHistoryError] = useState<string | null>(null)
   const workspaceKey = workspaceRefKey(activeWorkspaceRef)
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
   const browserWorkbenchTabs = useMemo(
@@ -451,6 +457,25 @@ function BrowserManagementView(): React.ReactElement {
     activateTab(currentBrowserTab.id)
     return currentBrowserTab.id
   }
+
+  const loadHistory = useCallback(async (): Promise<void> => {
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      setHistory(await window.cclinkStudio.browser.listHistory(50))
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadHistory()
+    return window.cclinkStudio.browser.onUrlChanged(() => {
+      void loadHistory()
+    })
+  }, [loadHistory])
 
   const openNewBrowser = (): void => {
     void openDefaultBrowserTab(activeWorkspaceRef).then((result) => {
@@ -476,6 +501,43 @@ function BrowserManagementView(): React.ReactElement {
       forceNew: true,
       workspaceRef: activeWorkspaceRef,
     })
+  }
+
+  const openHistoryEntry = (entry: BrowserHistoryEntry): void => {
+    const existing = browserWorkbenchTabs.find((tab) => browserTabs[tab.id]?.url === entry.url)
+    if (existing) {
+      activateTab(existing.id)
+      return
+    }
+    const currentState = currentBrowserTab ? browserTabs[currentBrowserTab.id] : null
+    if (currentBrowserTab && currentState?.ready) {
+      activateTab(currentBrowserTab.id)
+      void window.cclinkStudio.browser.navigate(currentBrowserTab.id, entry.url).catch((error) => {
+        showToast(error instanceof Error ? error.message : String(error), 'error')
+      })
+      return
+    }
+    openTab({
+      type: 'browser',
+      title: entry.title?.trim() || '浏览器',
+      icon: '🌐',
+      initialUrl: entry.url,
+      forceNew: true,
+      workspaceRef: activeWorkspaceRef,
+    })
+  }
+
+  const clearHistory = async (): Promise<void> => {
+    setHistoryLoading(true)
+    try {
+      await window.cclinkStudio.browser.clearHistory()
+      setHistory([])
+      setHistoryError(null)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : String(error), 'error')
+    } finally {
+      setHistoryLoading(false)
+    }
   }
 
   return (
@@ -672,6 +734,15 @@ function BrowserManagementView(): React.ReactElement {
           {bookmarks.length === 0 && <div className="project-panel-empty">暂无项目收藏</div>}
         </div>
       </div>
+
+      <BrowserHistorySection
+        history={history}
+        loading={historyLoading}
+        error={historyError}
+        onOpen={openHistoryEntry}
+        onClear={() => void clearHistory()}
+        onRetry={() => void loadHistory()}
+      />
     </div>
   )
 }

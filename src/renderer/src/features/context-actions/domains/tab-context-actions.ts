@@ -228,6 +228,18 @@ export const tabMenuContributions: MenuContribution[] = [
     when: isLocalFileBackedTab,
   },
   {
+    id: 'tab.move-to-new-window',
+    targetKinds: ['tab'],
+    group: '90-manage',
+    order: 5,
+    commandId: 'workbench.moveTabToNewWindow',
+    icon: '↗',
+    when: (context) => {
+      const tabId = tabIdFromContext(context)
+      return useTabStore.getState().tabs.find((tab) => tab.id === tabId)?.type === 'browser'
+    },
+  },
+  {
     id: 'tab.close',
     targetKinds: ['tab'],
     group: '90-manage',

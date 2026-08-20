@@ -21,6 +21,7 @@ import {
   readRemoteConversationDragData,
 } from '../../features/agent-conversations/conversation-workbench'
 import { openDefaultBrowserTab } from '../../features/web-resources/open-default-browser-tab'
+import { isDetachedFromMain, useWorkbenchWindowStore } from '../../stores/workbench-window-store'
 
 interface WorkbenchProps {
   tabCreateMenuOpen: boolean
@@ -31,7 +32,9 @@ export function Workbench({
   tabCreateMenuOpen,
   onTabCreateMenuOpenChange,
 }: WorkbenchProps): React.ReactElement {
-  const tabs = useTabStore((s) => s.tabs)
+  const allTabs = useTabStore((s) => s.tabs)
+  const placements = useWorkbenchWindowStore((s) => s.placements)
+  const tabs = allTabs.filter((tab) => !isDetachedFromMain(placements[tab.id]))
   const activeTabId = useTabStore((s) => s.activeTabId)
   const activateTab = useTabStore((s) => s.activateTab)
   const reorderTabs = useTabStore((s) => s.reorderTabs)

@@ -58,6 +58,7 @@ function startMainApplication(): void {
   const runtime = createRuntimeState(!app.isPackaged)
   const windowOptions = {
     preloadPath: join(__dirname, '../preload/index.js'),
+    auxiliaryPreloadPath: join(__dirname, '../preload/auxiliary.js'),
     rendererUrl: process.env['ELECTRON_RENDERER_URL'],
     rendererHtmlPath: join(__dirname, '../renderer/index.html'),
   }
