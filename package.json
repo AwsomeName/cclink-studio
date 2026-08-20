@@ -1,7 +1,7 @@
 {
   "name": "cclink-studio",
   "productName": "CCLink Studio 开源版",
-  "version": "0.1.51",
+  "version": "0.1.52",
   "packageManager": "pnpm@11.5.0",
   "description": "An open-source AI-powered desktop workspace — embedded browser, document editor, and AI agent, all in one.",
   "main": "./out/main/index.js",
