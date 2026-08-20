@@ -23,6 +23,7 @@ const electronMocks = vi.hoisted(() => {
       executeJavaScriptInIsolatedWorld: vi.fn().mockResolvedValue(undefined),
       currentUrl: '',
       currentTitle: '',
+      currentZoom: 1,
       userAgent: 'Mozilla/5.0 Chrome/150.0 Electron/43.1.1',
       windowOpenHandler: null as null | ((details: any) => any),
       on: vi.fn((event: string, listener: Listener) => {
@@ -49,7 +50,9 @@ const electronMocks = vi.hoisted(() => {
       getURL: vi.fn(() => webContents.currentUrl),
       getTitle: vi.fn(() => webContents.currentTitle),
       focus: vi.fn(),
-      setZoomFactor: vi.fn(),
+      setZoomFactor: vi.fn((factor: number) => {
+        webContents.currentZoom = factor
+      }),
       setVisualZoomLevelLimits: vi.fn().mockResolvedValue(undefined),
       executeJavaScript: vi.fn().mockResolvedValue(800),
       findInPage: vi.fn(() => 41),
@@ -160,6 +163,61 @@ describe('BrowserManager popup adoption', () => {
     })
     return { manager, source: electronMocks.createdViews[0].webContents }
   }
+
+  it('remeasures fit width at 100% so widening a pane can escape a previous 30% zoom', async () => {
+    vi.useFakeTimers()
+    try {
+      const { manager, source } = await createSource()
+      manager.updateBounds({ x: 0, y: 72, width: 300, height: 600 })
+      source.executeJavaScript.mockImplementation(async () =>
+        source.currentZoom === 1 ? 1_000 : 3_000,
+      )
+
+      manager.reconcileViews({
+        workspaceKey: '/workspace/a',
+        views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+        activeTabId: 'source-tab',
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(manager.getState('source-tab')?.zoomFactor).toBe(0.3)
+
+      manager.updateBounds({ x: 0, y: 72, width: 900, height: 600 })
+      await vi.advanceTimersByTimeAsync(120)
+
+      expect(manager.getState('source-tab')?.zoomFactor).toBe(0.9)
+      expect(source.setZoomFactor.mock.calls.slice(-2)).toEqual([[1], [0.9]])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not let an older fit-width measurement overwrite a newer manual zoom', async () => {
+    let resolveMeasurement!: (width: number) => void
+    const measurement = new Promise<number>((resolve) => {
+      resolveMeasurement = resolve
+    })
+    const { manager, source } = await createSource()
+    manager.updateBounds({ x: 0, y: 72, width: 600, height: 600 })
+    source.executeJavaScript.mockReturnValueOnce(measurement)
+
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: 'source-tab',
+    })
+    manager.setZoom('source-tab', 1.2)
+    expect(manager.getState('source-tab')?.zoomFactor).toBe(1.2)
+
+    resolveMeasurement(1_200)
+    await measurement
+    await Promise.resolve()
+
+    expect(manager.getState('source-tab')).toMatchObject({
+      zoomMode: 'manual',
+      zoomFactor: 1.2,
+    })
+    expect(source.currentZoom).toBe(1.2)
+  })
 
   it('creates a WebContentsView runtime and requests a workbench tab instead of a BrowserWindow', async () => {
     const { manager, source } = await createSource()

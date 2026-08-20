@@ -105,6 +105,8 @@ interface ViewEntry {
   manualZoom: number
   /** 当前实际生效的缩放系数 */
   effectiveZoom: number
+  /** 缩放重算代次；用于阻止旧的异步适宽结果覆盖新操作。 */
+  zoomRequestGeneration: number
   /** 桌面版原始 UA（切回桌面时还原） */
   desktopUA: string
   /** 适应宽度重算的防抖定时器 */
@@ -612,6 +614,7 @@ export class BrowserManager {
       zoomMode: opts?.restore?.zoomMode ?? this.defaultZoomMode,
       manualZoom: opts?.restore?.manualZoom ?? 1,
       effectiveZoom: 1,
+      zoomRequestGeneration: 0,
       desktopUA,
       fitDebounce: null,
       pendingUrl: safeInitialUrl ?? DEFAULT_URL,
@@ -763,7 +766,7 @@ export class BrowserManager {
           error instanceof Error ? error.message : 'unknown',
         ),
       )
-      void this.applyZoom(tabId, true)
+      void this.applyZoom(tabId)
       // 页面加载完成 → 把该 view claim 为 Playwright Page（绑定 tabId）。
       // 仅在绑定了 PlaywrightBridge 后生效；幂等（claimPageForView 跳过已绑定的 key）。
       // 失败仅记录日志，不阻塞 UI——Agent 寻址在下次 did-finish-load 重试。
@@ -869,6 +872,7 @@ export class BrowserManager {
       zoomMode: sourceEntry.zoomMode,
       manualZoom: sourceEntry.manualZoom,
       effectiveZoom: sourceEntry.effectiveZoom,
+      zoomRequestGeneration: 0,
       desktopUA,
       fitDebounce: null,
       pendingUrl: popupUrl,
@@ -1177,7 +1181,7 @@ export class BrowserManager {
     // 首次激活时加载页面；之后保持 warm 状态
     this.ensureLoaded(tabId)
     // 重新计算缩放（适配当前面板宽度）
-    void this.applyZoom(tabId, false)
+    void this.applyZoom(tabId)
     this.emitState(tabId)
   }
 
@@ -1215,7 +1219,7 @@ export class BrowserManager {
         entry.view.webContents.focus()
         void this.playwrightBridge?.switchToPage(tabId).catch(() => undefined)
         this.ensureLoaded(tabId)
-        void this.applyZoom(tabId, false)
+        void this.applyZoom(tabId)
       }
       this.emitState(tabId)
     } catch (error) {
@@ -1362,18 +1366,19 @@ export class BrowserManager {
   private scheduleFit(tabId: string): void {
     const entry = this.views.get(tabId)
     if (!entry) return
+    // bounds 已变化，立即使正在等待 DOM 测量的旧请求失效。
+    entry.zoomRequestGeneration += 1
     if (entry.fitDebounce) clearTimeout(entry.fitDebounce)
     entry.fitDebounce = setTimeout(() => {
-      void this.applyZoom(tabId, false)
+      void this.applyZoom(tabId)
     }, 120)
   }
 
   /**
    * 按当前 viewMode / zoomMode 计算并应用缩放系数
    * @param tabId 目标视图
-   * @param rebase 是否以 1 倍为基准重新测量内容宽度（首次加载 / 切换到适应模式时用）
    */
-  private async applyZoom(tabId: string, rebase = false): Promise<void> {
+  private async applyZoom(tabId: string): Promise<void> {
     const entry = this.views.get(tabId)
     if (!entry) return
     const host = this.hostForEntry(entry)
@@ -1382,6 +1387,7 @@ export class BrowserManager {
     const paneWidth = host.currentBounds.width
     if (paneWidth <= 0) return
     const wc = entry.view.webContents
+    const requestGeneration = ++entry.zoomRequestGeneration
 
     let factor = 1
     try {
@@ -1389,8 +1395,9 @@ export class BrowserManager {
         // 移动版：把约 414px 的移动视口放大填满面板
         factor = paneWidth / MOBILE_WIDTH
       } else if (entry.zoomMode === 'fit') {
-        // 适应宽度：测量内容真实宽度，缩小到刚好放下（只缩不放大）
-        if (rebase) wc.setZoomFactor(1)
+        // 适应宽度必须始终在 100% 下测量。否则缩小后的 CSS 视口会变宽，
+        // scrollWidth 将把旧缩放系数反馈给下一次计算，导致 30% 等状态自我锁死。
+        wc.setZoomFactor(1)
         const contentWidth = await this.measureContentWidth(tabId)
         factor = contentWidth > paneWidth ? paneWidth / contentWidth : 1
       } else {
@@ -1399,6 +1406,16 @@ export class BrowserManager {
       }
     } catch {
       factor = entry.zoomMode === 'manual' ? entry.manualZoom : 1
+    }
+
+    const currentEntry = this.views.get(tabId)
+    const currentHost = currentEntry ? this.hostForEntry(currentEntry) : null
+    if (
+      currentEntry !== entry ||
+      entry.zoomRequestGeneration !== requestGeneration ||
+      currentHost?.activeViewId !== tabId
+    ) {
+      return
     }
 
     factor = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, factor))
@@ -1748,7 +1765,7 @@ export class BrowserManager {
     const entry = this.views.get(tabId)
     if (!entry) return
     entry.zoomMode = 'fit'
-    void this.applyZoom(tabId, true)
+    void this.applyZoom(tabId)
   }
 
   // ─────────────────────── 设备模式 ───────────────────────
@@ -1758,6 +1775,7 @@ export class BrowserManager {
     const entry = this.views.get(tabId)
     if (!entry) return
     if (mode === entry.viewMode) return
+    entry.zoomRequestGeneration += 1
     entry.viewMode = mode
     entry.view.webContents.setUserAgent(mode === 'mobile' ? MOBILE_UA : entry.desktopUA)
     // 重新加载，让站点按新 UA 返回对应布局；加载完成后 did-finish-load 会应用缩放
