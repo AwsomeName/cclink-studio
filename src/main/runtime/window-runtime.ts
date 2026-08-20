@@ -124,13 +124,15 @@ export function handleMainWindowClosed(
   requestQuit()
 }
 
-/** 设置主 renderer 缩放，并让已挂载的原生 Browser View 立即进入同一坐标系。 */
+/**
+ * 设置主 renderer 缩放。Browser View 由 renderer 完成新布局后的 bounds 上报对齐；
+ * 不能用旧 CSS bounds 乘新缩放系数做中间刷新，否则会先错位一次再跳回正确位置。
+ */
 export function applyWindowZoomLevel(runtime: CclinkStudioRuntimeState, zoomLevel: number): void {
   const mainWindow = runtime.mainWindow
   if (!mainWindow || mainWindow.isDestroyed()) return
   try {
     mainWindow.webContents.setZoomLevel(zoomLevel)
-    runtime.browserManager?.refreshBoundsForWindowZoom()
   } catch (error) {
     console.warn('[CCLink Studio] 应用界面缩放失败，保留当前缩放:', error)
   }

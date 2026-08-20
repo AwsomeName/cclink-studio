@@ -5914,6 +5914,10 @@ body.is-resizing-panels .main-area > div {
 .browser-zoom-value {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  box-sizing: border-box;
+  width: 70px;
+  flex: 0 0 70px;
   height: 26px;
   padding: 0 5px;
   border: 1px solid transparent;

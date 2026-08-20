@@ -180,12 +180,39 @@ describe('BrowserManager popup adoption', () => {
       })
       await vi.advanceTimersByTimeAsync(0)
       expect(manager.getState('source-tab')?.zoomFactor).toBe(0.3)
+      source.setZoomFactor.mockClear()
 
       manager.updateBounds({ x: 0, y: 72, width: 900, height: 600 })
       await vi.advanceTimersByTimeAsync(120)
 
       expect(manager.getState('source-tab')?.zoomFactor).toBe(0.9)
-      expect(source.setZoomFactor.mock.calls.slice(-2)).toEqual([[1], [0.9]])
+      expect(source.setZoomFactor.mock.calls).toEqual([[0.9]])
+      expect(source.executeJavaScript).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('remeasures at unit zoom when a previously fitting pane becomes narrower', async () => {
+    vi.useFakeTimers()
+    try {
+      const { manager, source } = await createSource()
+      manager.updateBounds({ x: 0, y: 72, width: 900, height: 600 })
+      source.executeJavaScript.mockResolvedValueOnce(800).mockResolvedValueOnce(1_000)
+
+      manager.reconcileViews({
+        workspaceKey: '/workspace/a',
+        views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+        activeTabId: 'source-tab',
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(manager.getState('source-tab')?.zoomFactor).toBe(1)
+
+      manager.updateBounds({ x: 0, y: 72, width: 600, height: 600 })
+      await vi.advanceTimersByTimeAsync(120)
+
+      expect(manager.getState('source-tab')?.zoomFactor).toBe(0.6)
+      expect(source.executeJavaScript).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
     }

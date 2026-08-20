@@ -107,6 +107,8 @@ interface ViewEntry {
   effectiveZoom: number
   /** 缩放重算代次；用于阻止旧的异步适宽结果覆盖新操作。 */
   zoomRequestGeneration: number
+  /** 最近一次在 100% 缩放下得到的适宽测量，避免 resize 时反复闪回 100%。 */
+  fitWidthMeasurement: { contentWidth: number; paneWidth: number } | null
   /** 桌面版原始 UA（切回桌面时还原） */
   desktopUA: string
   /** 适应宽度重算的防抖定时器 */
@@ -615,6 +617,7 @@ export class BrowserManager {
       manualZoom: opts?.restore?.manualZoom ?? 1,
       effectiveZoom: 1,
       zoomRequestGeneration: 0,
+      fitWidthMeasurement: null,
       desktopUA,
       fitDebounce: null,
       pendingUrl: safeInitialUrl ?? DEFAULT_URL,
@@ -754,6 +757,7 @@ export class BrowserManager {
     wc.once('destroyed', () => this.handleWebContentsDestroyed(tabId, entry))
     // 每次页面加载完成后，按当前模式重新计算并应用缩放
     wc.on('did-finish-load', () => {
+      entry.fitWidthMeasurement = null
       void installHorizontalPanSupport(wc).catch((error) =>
         console.warn(
           `[BrowserManager] 横向滑动增强降级 tabId=${tabId}:`,
@@ -873,6 +877,7 @@ export class BrowserManager {
       manualZoom: sourceEntry.manualZoom,
       effectiveZoom: sourceEntry.effectiveZoom,
       zoomRequestGeneration: 0,
+      fitWidthMeasurement: null,
       desktopUA,
       fitDebounce: null,
       pendingUrl: popupUrl,
@@ -1352,16 +1357,6 @@ export class BrowserManager {
     this.scheduleFit(host.activeViewId)
   }
 
-  /** 主窗口界面缩放变化后，先用最近一次 CSS 坐标重算，等待 renderer 上报最终布局。 */
-  refreshBoundsForWindowZoom(): void {
-    this.currentBounds = this.resolveRendererBounds(this.currentRendererBounds)
-    if (!this.activeViewId) return
-    const entry = this.views.get(this.activeViewId)
-    if (!entry?.boundsReceived) return
-    entry.view.setBounds(this.currentBounds)
-    this.scheduleFit(this.activeViewId)
-  }
-
   /** 防抖触发缩放重算（resize 期间高频调用，避免抖动） */
   private scheduleFit(tabId: string): void {
     const entry = this.views.get(tabId)
@@ -1390,16 +1385,30 @@ export class BrowserManager {
     const requestGeneration = ++entry.zoomRequestGeneration
 
     let factor = 1
+    let nextFitWidthMeasurement: ViewEntry['fitWidthMeasurement'] = null
     try {
       if (entry.viewMode === 'mobile') {
         // 移动版：把约 414px 的移动视口放大填满面板
         factor = paneWidth / MOBILE_WIDTH
       } else if (entry.zoomMode === 'fit') {
-        // 适应宽度必须始终在 100% 下测量。否则缩小后的 CSS 视口会变宽，
-        // scrollWidth 将把旧缩放系数反馈给下一次计算，导致 30% 等状态自我锁死。
-        wc.setZoomFactor(1)
-        const contentWidth = await this.measureContentWidth(tabId)
-        factor = contentWidth > paneWidth ? paneWidth / contentWidth : 1
+        let measurement = entry.fitWidthMeasurement
+        const measuredOverflow = measurement && measurement.contentWidth > measurement.paneWidth
+        // 已知固定宽内容时可直接复用基准宽度；已知页面可自适应时，
+        // 面板变宽也无需重测。只有“之前能放下，现在变窄”才需在 100% 下重测。
+        const needsUnitMeasurement =
+          !measurement || (!measuredOverflow && paneWidth < measurement.paneWidth)
+        if (needsUnitMeasurement) {
+          // 缩小后的 CSS 视口会变宽，直接读 scrollWidth 会导致 30% 自我锁死。
+          // 测量结果缓存后，后续 resize 不再反复把用户可见页面切回 100%。
+          wc.setZoomFactor(1)
+          measurement = {
+            contentWidth: await this.measureContentWidth(tabId),
+            paneWidth,
+          }
+          nextFitWidthMeasurement = measurement
+        }
+        if (!measurement) throw new Error('适宽测量未生成')
+        factor = measurement.contentWidth > paneWidth ? paneWidth / measurement.contentWidth : 1
       } else {
         // 手动缩放
         factor = entry.manualZoom
@@ -1419,6 +1428,8 @@ export class BrowserManager {
     }
 
     factor = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, factor))
+    // 测量只在上方代次校验通过后才能成为该 View 的新基准。
+    if (nextFitWidthMeasurement) entry.fitWidthMeasurement = nextFitWidthMeasurement
     wc.setZoomFactor(factor)
     entry.effectiveZoom = factor
     this.emitState(tabId)

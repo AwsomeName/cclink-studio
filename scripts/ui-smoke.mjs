@@ -1195,6 +1195,9 @@ async function main() {
     await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
     const zoomInput = page.getByLabel('浏览器缩放百分比')
     await zoomInput.waitFor({ state: 'visible', timeout: 10_000 })
+    const zoomGroup = page.locator('.browser-zoom-group')
+    const fitZoomGroupBounds = await zoomGroup.boundingBox()
+    assert(fitZoomGroupBounds, 'fit zoom controls have no visible bounds')
     await zoomInput.fill('125')
     await zoomInput.press('Enter')
     await page.waitForFunction(
@@ -1204,6 +1207,13 @@ async function main() {
       },
       undefined,
       { timeout: 10_000 },
+    )
+    const manualZoomGroupBounds = await zoomGroup.boundingBox()
+    assert(manualZoomGroupBounds, 'manual zoom controls have no visible bounds')
+    assert(
+      Math.abs(manualZoomGroupBounds.x - fitZoomGroupBounds.x) <= 1 &&
+        Math.abs(manualZoomGroupBounds.width - fitZoomGroupBounds.width) <= 1,
+      'zoom controls shifted horizontally when fit mode changed to manual mode',
     )
     await page.getByRole('button', { name: '适应宽度' }).click()
     await page.waitForFunction(

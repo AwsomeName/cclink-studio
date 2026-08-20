@@ -429,10 +429,11 @@
   color: var(--error-foreground, #f85149);
 }
 
-.scheduled-task-run-actions {
+.scheduled-task-run > .scheduled-task-run-actions {
   margin-top: 10px;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 14px;
 }
 

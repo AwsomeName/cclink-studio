@@ -69,7 +69,7 @@ describe('bootstrapWindowCapabilities', () => {
 })
 
 describe('applyWindowZoomLevel', () => {
-  it('updates the main renderer and immediately refreshes native browser bounds', () => {
+  it('lets the renderer report final browser bounds instead of projecting stale coordinates', () => {
     const runtime = createRuntimeState(true)
     const setZoomLevel = vi.fn()
     const refreshBoundsForWindowZoom = vi.fn()
@@ -82,7 +82,7 @@ describe('applyWindowZoomLevel', () => {
     applyWindowZoomLevel(runtime, -1)
 
     expect(setZoomLevel).toHaveBeenCalledWith(-1)
-    expect(refreshBoundsForWindowZoom).toHaveBeenCalledOnce()
+    expect(refreshBoundsForWindowZoom).not.toHaveBeenCalled()
   })
 })
 

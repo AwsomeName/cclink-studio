@@ -286,7 +286,9 @@ JSON.stringify({
 
 已在 `BrowserManager` 实现，**不要**通过改 DIP、加倍 width 或改坐标上报来「修」：
 
-1. **适应宽度（默认 `fit`）**：`setZoomFactor(paneWidth / scrollWidth)`，只缩不放大。
+1. **适应宽度（默认 `fit`）**：在 100% 下测量内容宽度后执行
+   `setZoomFactor(paneWidth / scrollWidth)`，只缩不放大。该基准测量按页面缓存，面板拉伸时直接重算目标比例，
+   不得反复把用户可见页面切回 100% 作为中间帧。
 2. **手动缩放**：工具栏 ± / 百分比。
 3. **移动版**：iOS Safari UA + 重载，约 414px 视口并填满面板。
 4. **横向滑动兜底**：手动缩放后若网站用 `overflow-x: hidden` 隐藏了仍存在的横向范围，

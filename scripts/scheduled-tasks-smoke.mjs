@@ -428,7 +428,25 @@ async function main() {
     hasText: '不支持 Terminal',
   })
   await failedRunCard.waitFor({ timeout: 10_000 })
-  await failedRunCard.getByRole('button', { name: '复制日志' }).click()
+  const copyLogButton = failedRunCard.getByRole('button', { name: '复制日志' })
+  const copyLogAlignment = await failedRunCard.evaluate((card) => {
+    const actions = card.querySelector('.scheduled-task-run-actions')
+    const button = actions?.querySelector('button')
+    if (!actions || !button) return null
+    const cardBounds = card.getBoundingClientRect()
+    const buttonBounds = button.getBoundingClientRect()
+    return {
+      justifyContent: getComputedStyle(actions).justifyContent,
+      rightInset: cardBounds.right - buttonBounds.right,
+    }
+  })
+  assert(
+    copyLogAlignment?.justifyContent === 'flex-end' &&
+      copyLogAlignment.rightInset >= 8 &&
+      copyLogAlignment.rightInset <= 18,
+    `copy-log action is not right aligned: ${JSON.stringify(copyLogAlignment)}`,
+  )
+  await copyLogButton.click()
   await page.getByText('定时任务运行日志已复制').waitFor({ timeout: 5_000 })
   const copiedFailureLog = await page.evaluate(() => navigator.clipboard.readText())
   assert(
