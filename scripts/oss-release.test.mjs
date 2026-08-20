@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import test from 'node:test'
 
 import {
+  assertReleaseCommitLease,
+  assertReleaseSourceLease,
   compareStableVersions,
   createWorkflowDispatchPayload,
   incrementPatch,
@@ -40,14 +42,45 @@ test('keeps local artifacts opt-in and commits only the version file before push
   const versionCommit = releaseScript.indexOf(
     "git(['commit', '--only', 'package.json', '-m', `chore: prepare ${tag}`])",
   )
-  const atomicPush = releaseScript.indexOf(
-    "git(['push', '--atomic', 'origin', 'HEAD:refs/heads/main', `refs/tags/${tag}`])",
-  )
+  const atomicPush = releaseScript.indexOf('`${releaseSha}:refs/heads/main`,')
 
   assert.ok(versionCommit > 0)
   assert.ok(localPackageGuard > versionCommit)
   assert.ok(localPackage > localPackageGuard)
   assert.ok(atomicPush > versionCommit)
+  assert.doesNotMatch(releaseScript, /'HEAD:refs\/heads\/main'/)
+  assert.match(releaseScript, /acquireReleaseLock\(\)/)
+  assert.match(releaseScript, /assertCurrentSourceLease\(sourceSha\)/)
+})
+
+test('release source lease rejects local or remote main drift', () => {
+  const sourceSha = 'a'.repeat(40)
+  const driftedSha = 'b'.repeat(40)
+
+  assert.doesNotThrow(() => assertReleaseSourceLease(sourceSha, sourceSha, sourceSha))
+  assert.throws(
+    () => assertReleaseSourceLease(sourceSha, driftedSha, sourceSha),
+    /版本提交前发生漂移/,
+  )
+  assert.throws(
+    () => assertReleaseSourceLease(sourceSha, sourceSha, driftedSha),
+    /版本提交前发生漂移/,
+  )
+})
+
+test('release commit lease requires the green source as parent and unchanged remote main', () => {
+  const sourceSha = 'a'.repeat(40)
+  const driftedSha = 'b'.repeat(40)
+
+  assert.doesNotThrow(() => assertReleaseCommitLease(sourceSha, sourceSha, sourceSha))
+  assert.throws(
+    () => assertReleaseCommitLease(sourceSha, driftedSha, sourceSha),
+    /版本提交期间发生漂移/,
+  )
+  assert.throws(
+    () => assertReleaseCommitLease(sourceSha, sourceSha, driftedSha),
+    /版本提交期间发生漂移/,
+  )
 })
 
 test('git version-only commit preserves unrelated staged work', () => {

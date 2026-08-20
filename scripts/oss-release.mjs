@@ -2,9 +2,11 @@
 
 import { spawnSync } from 'node:child_process'
 import {
+  closeSync,
   copyFileSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -212,6 +214,22 @@ export function isVersionOnlyPackageChange(before, after, targetVersion) {
   return JSON.stringify(after) === JSON.stringify({ ...before, version: targetVersion })
 }
 
+export function assertReleaseSourceLease(expectedSourceSha, currentHead, remoteMain) {
+  if (currentHead !== expectedSourceSha || remoteMain !== expectedSourceSha) {
+    throw new Error(
+      `发布源码在版本提交前发生漂移:\nexpected=${expectedSourceSha}\nHEAD=${currentHead}\norigin/main=${remoteMain}`,
+    )
+  }
+}
+
+export function assertReleaseCommitLease(expectedSourceSha, releaseParent, remoteMain) {
+  if (releaseParent !== expectedSourceSha || remoteMain !== expectedSourceSha) {
+    throw new Error(
+      `发布源码在版本提交期间发生漂移:\nexpected parent=${expectedSourceSha}\nactual parent=${releaseParent}\norigin/main=${remoteMain}`,
+    )
+  }
+}
+
 function assertRepositoryRemote() {
   const remote = git(['remote', 'get-url', 'origin'], { capture: true, quiet: true }).stdout
   const expected = new RegExp(
@@ -249,6 +267,50 @@ function assertLatestMain() {
     console.log(ignoredChanges)
   }
   return head
+}
+
+function getRemoteMainSha() {
+  const output = git(['ls-remote', '--heads', 'origin', 'refs/heads/main'], {
+    capture: true,
+    quiet: true,
+  }).stdout
+  const sha = output.split(/\s+/, 1)[0]
+  if (!/^[0-9a-f]{40}$/i.test(sha)) throw new Error('无法读取远端 main SHA')
+  return sha
+}
+
+function assertCurrentSourceLease(sourceSha) {
+  const currentHead = git(['rev-parse', 'HEAD'], { capture: true, quiet: true }).stdout
+  assertReleaseSourceLease(sourceSha, currentHead, getRemoteMainSha())
+}
+
+function acquireReleaseLock() {
+  const gitCommonDir = git(['rev-parse', '--git-common-dir'], {
+    capture: true,
+    quiet: true,
+  }).stdout
+  const lockPath = resolve(projectRoot, gitCommonDir, 'cclink-release.lock')
+  let fileDescriptor
+  try {
+    fileDescriptor = openSync(lockPath, 'wx', 0o600)
+    writeFileSync(
+      fileDescriptor,
+      `${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })}\n`,
+    )
+    closeSync(fileDescriptor)
+  } catch (error) {
+    if (fileDescriptor !== undefined) closeSync(fileDescriptor)
+    if (error?.code === 'EEXIST') {
+      const holder = readFileSync(lockPath, 'utf8').trim()
+      throw new Error(`已有正式发布正在占用仓库: ${holder || lockPath}`)
+    }
+    rmSync(lockPath, { force: true })
+    throw error
+  }
+  console.log(`\n已获取发布锁: ${lockPath}`)
+  return () => {
+    rmSync(lockPath, { force: true })
+  }
 }
 
 function assertTagAvailable(tag) {
@@ -482,62 +544,81 @@ async function printReleaseSummary(tag, token) {
 }
 
 async function release(options) {
-  const sourceSha = assertLatestMain()
-  const currentVersion = readPackageAt(sourceSha).version
-  const targetVersion = options.patch ? incrementPatch(currentVersion) : options.version
-  if (compareStableVersions(targetVersion, currentVersion) <= 0) {
-    throw new Error(`目标版本必须高于当前版本: ${currentVersion} -> ${targetVersion}`)
-  }
-  const tag = `v${targetVersion}`
-  assertTagAvailable(tag)
-  await confirmRelease(tag, false, options.yes)
-
-  const token = getGitHubToken()
-  await assertSuccessfulSourceCi(sourceSha, token)
-
-  const packagePath = resolve(projectRoot, 'package.json')
-  prepareReleaseVersion(packagePath, targetVersion, () => {
-    git(['diff', '--check', '--', 'package.json'])
-    git(['commit', '--only', 'package.json', '-m', `chore: prepare ${tag}`])
-  })
-  const releaseSha = git(['rev-parse', 'HEAD'], { capture: true, quiet: true }).stdout
-  const releaseChanges = git(['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'], {
-    capture: true,
-    quiet: true,
-  }).stdout
-  if (releaseChanges !== 'package.json') {
-    throw new Error(`版本提交包含了 package.json 以外的文件:\n${releaseChanges}`)
-  }
-  if (
-    !isVersionOnlyPackageChange(
-      readPackageAt(`${releaseSha}^`),
-      readPackageAt(releaseSha),
-      targetVersion,
-    )
-  ) {
-    throw new Error('版本提交修改了 package.json.version 以外的字段')
-  }
-  git(['tag', '-a', tag, '-m', `CCLink Studio 开源版 ${tag}`])
-  withReleaseWorktree(releaseSha, (worktreePath) => {
-    run(
-      process.execPath,
-      ['scripts/oss-release-preflight.mjs', '--source-dir', '.', '--tag', tag, '--mode', 'plan'],
-      { cwd: worktreePath },
-    )
-    if (options.localArtifacts) {
-      run('pnpm', ['install', '--frozen-lockfile'], { cwd: worktreePath })
-      run('pnpm', ['package:local', '--', '--no-install'], { cwd: worktreePath })
-      copyLocalArtifacts(worktreePath)
+  const releaseLock = acquireReleaseLock()
+  try {
+    const sourceSha = assertLatestMain()
+    const currentVersion = readPackageAt(sourceSha).version
+    const targetVersion = options.patch ? incrementPatch(currentVersion) : options.version
+    if (compareStableVersions(targetVersion, currentVersion) <= 0) {
+      throw new Error(`目标版本必须高于当前版本: ${currentVersion} -> ${targetVersion}`)
     }
-  })
-  git(['push', '--atomic', 'origin', 'HEAD:refs/heads/main', `refs/tags/${tag}`])
+    const tag = `v${targetVersion}`
+    assertTagAvailable(tag)
+    await confirmRelease(tag, false, options.yes)
 
-  const startedAt = Date.now()
-  await dispatchWorkflow(tag, token)
-  console.log(`\n已触发 ${tag} 的 release-oss 工作流。`)
-  if (!options.wait) return
-  await waitForWorkflow({ sourceSha: releaseSha, token, startedAt })
-  await printReleaseSummary(tag, token)
+    const token = getGitHubToken()
+    await assertSuccessfulSourceCi(sourceSha, token)
+    assertCurrentSourceLease(sourceSha)
+
+    const packagePath = resolve(projectRoot, 'package.json')
+    prepareReleaseVersion(packagePath, targetVersion, () => {
+      assertCurrentSourceLease(sourceSha)
+      git(['diff', '--check', '--', 'package.json'])
+      git(['commit', '--only', 'package.json', '-m', `chore: prepare ${tag}`])
+    })
+    const releaseSha = git(['rev-parse', 'HEAD'], { capture: true, quiet: true }).stdout
+    const releaseParent = git(['rev-parse', `${releaseSha}^`], {
+      capture: true,
+      quiet: true,
+    }).stdout
+    assertReleaseCommitLease(sourceSha, releaseParent, getRemoteMainSha())
+    const releaseChanges = git(['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'], {
+      capture: true,
+      quiet: true,
+    }).stdout
+    if (releaseChanges !== 'package.json') {
+      throw new Error(`版本提交包含了 package.json 以外的文件:\n${releaseChanges}`)
+    }
+    if (
+      !isVersionOnlyPackageChange(
+        readPackageAt(`${releaseSha}^`),
+        readPackageAt(releaseSha),
+        targetVersion,
+      )
+    ) {
+      throw new Error('版本提交修改了 package.json.version 以外的字段')
+    }
+    git(['tag', '-a', tag, '-m', `CCLink Studio 开源版 ${tag}`])
+    withReleaseWorktree(releaseSha, (worktreePath) => {
+      run(
+        process.execPath,
+        ['scripts/oss-release-preflight.mjs', '--source-dir', '.', '--tag', tag, '--mode', 'plan'],
+        { cwd: worktreePath },
+      )
+      if (options.localArtifacts) {
+        run('pnpm', ['install', '--frozen-lockfile'], { cwd: worktreePath })
+        run('pnpm', ['package:local', '--', '--no-install'], { cwd: worktreePath })
+        copyLocalArtifacts(worktreePath)
+      }
+    })
+    const currentReleaseSha = git(['rev-parse', 'HEAD'], { capture: true, quiet: true }).stdout
+    if (currentReleaseSha !== releaseSha) {
+      throw new Error(
+        `版本提交后本地 main 发生漂移:\nexpected=${releaseSha}\nHEAD=${currentReleaseSha}`,
+      )
+    }
+    assertReleaseCommitLease(sourceSha, releaseParent, getRemoteMainSha())
+    git(['push', '--atomic', 'origin', `${releaseSha}:refs/heads/main`, `refs/tags/${tag}`])
+
+    const startedAt = Date.now()
+    await dispatchWorkflow(tag, token)
+    console.log(`\n已触发 ${tag} 的 release-oss 工作流。`)
+    if (!options.wait) return
+    await waitForWorkflow({ sourceSha: releaseSha, token, startedAt })
+    await printReleaseSummary(tag, token)
+  } finally {
+    releaseLock()
+  }
 }
 
 async function dispatchOnly(options) {

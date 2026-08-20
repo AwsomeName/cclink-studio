@@ -31,8 +31,31 @@ jobs:
 
   smoke:
     needs: verify
+    name: smoke (${{ matrix.id }})
     runs-on: macos-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: local
+            command: pnpm smoke:local
+            auth_profile_only: ''
+          - id: ui
+            command: pnpm smoke:ui
+            auth_profile_only: ''
+          - id: workflow
+            command: pnpm smoke:workflow
+            auth_profile_only: ''
+          - id: restore
+            command: pnpm smoke:restore
+            auth_profile_only: ''
+          - id: update-recovery
+            command: pnpm smoke:update-recovery
+            auth_profile_only: ''
+          - id: auth-window
+            command: pnpm smoke:auth-window
+            auth_profile_only: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -45,18 +68,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Configure isolated smoke runtime
         run: |
-          echo "CCLINK_STUDIO_RUN_DIR=$RUNNER_TEMP/cclink-studio-dev" >> "$GITHUB_ENV"
-          echo "CCLINK_STUDIO_LOG_FILE=$RUNNER_TEMP/cclink-studio-dev/cclink-studio-dev.log" >> "$GITHUB_ENV"
-          echo "CCLINK_STUDIO_SCREEN_NAME=cclink-studio-ci" >> "$GITHUB_ENV"
-      - run: pnpm smoke:standalone
-      - name: Verify deterministic auth profile and window mechanism
-        run: pnpm smoke:auth-window
+          echo "CCLINK_STUDIO_RUN_DIR=$RUNNER_TEMP/cclink-studio-${{ matrix.id }}" >> "$GITHUB_ENV"
+          echo "CCLINK_STUDIO_LOG_FILE=$RUNNER_TEMP/cclink-studio-${{ matrix.id }}/cclink-studio-dev.log" >> "$GITHUB_ENV"
+          echo "CCLINK_STUDIO_SCREEN_NAME=cclink-studio-ci-${{ matrix.id }}" >> "$GITHUB_ENV"
+      - name: Run ${{ matrix.id }} smoke
+        run: ${{ matrix.command }}
         env:
-          CCLINK_AUTH_SMOKE_PROFILE_ONLY: '1'
+          CCLINK_AUTH_SMOKE_PROFILE_ONLY: ${{ matrix.auth_profile_only }}
       - name: Upload smoke logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: cclink-studio-smoke-logs
-          path: ${{ runner.temp }}/cclink-studio-dev
+          name: cclink-studio-smoke-logs-${{ matrix.id }}
+          path: ${{ runner.temp }}/cclink-studio-${{ matrix.id }}
           if-no-files-found: ignore

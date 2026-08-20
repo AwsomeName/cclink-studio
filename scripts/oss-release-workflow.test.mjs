@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import test from 'node:test'
 
 const workflow = readFileSync(resolve('.github/workflows/release-oss.yml'), 'utf8')
+const ciWorkflow = readFileSync(resolve('.github/workflows/ci.yml'), 'utf8')
 const notarizeDmgScript = readFileSync(resolve('scripts/notarize-dmg.sh'), 'utf8')
 
 test('release workflow packages only Apple Silicon on the native runner', () => {
@@ -27,6 +28,23 @@ test('release validation reuses exact successful main CI without rerunning the f
   assert.match(validateSection, /\.head_sha == \$sha/)
   assert.doesNotMatch(validateSection, /pnpm --dir source verify/)
   assert.doesNotMatch(validateSection, /pnpm --dir source smoke:standalone/)
+})
+
+test('source CI runs isolated smoke groups in parallel instead of one serial chain', () => {
+  assert.match(ciWorkflow, /strategy:\n\s+fail-fast: false\n\s+matrix:/)
+  for (const command of [
+    'pnpm smoke:local',
+    'pnpm smoke:ui',
+    'pnpm smoke:workflow',
+    'pnpm smoke:restore',
+    'pnpm smoke:update-recovery',
+    'pnpm smoke:auth-window',
+  ]) {
+    assert.match(ciWorkflow, new RegExp(`command: ${command.replaceAll(':', '\\:')}`))
+  }
+  assert.match(ciWorkflow, /cclink-studio-\$\{\{ matrix\.id \}\}/)
+  assert.match(ciWorkflow, /cclink-studio-smoke-logs-\$\{\{ matrix\.id \}\}/)
+  assert.doesNotMatch(ciWorkflow, /pnpm smoke:standalone/)
 })
 
 test('release workflow verifies the P12 password and Developer ID identity before build', () => {

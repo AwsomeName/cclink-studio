@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFile } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -12,15 +13,18 @@ const keepRunning = process.argv.includes('--keep-running')
 const agentPanelOnly = process.argv.includes('--agent-panel-only')
 const webAffairsOnly = process.argv.includes('--web-affairs-only')
 const uiReadyTimeoutMs = 30_000
+const globalWebResourcesCheck = 'global web resources reuse one account and matrix across projects'
+const webAffairPersistenceCheck = 'web affair persists a five-node workflow and node progress'
 const webAffairsChecks = new Set([
   'main renderer enforces its CSP source boundary',
   'first screen has no login wall',
-  'global web resources reuse one account and matrix across projects',
-  'web affair persists a five-node workflow and node progress',
+  globalWebResourcesCheck,
+  webAffairPersistenceCheck,
   'web affair exposes A2-A4 handoff, wait, template, and flow-diff controls',
 ])
 const results = []
 let startedBySmoke = false
+let webFixtureServer
 const execFileAsync = promisify(execFile)
 
 function pass(name, detail = '') {
@@ -31,6 +35,11 @@ function pass(name, detail = '') {
 function fail(name, error) {
   results.push({ name, status: 'fail', detail: error.message || String(error) })
   console.error(`FAIL ${name} - ${error.message || String(error)}`)
+}
+
+function skip(name, dependency) {
+  results.push({ name, status: 'skip', detail: `blocked by ${dependency}` })
+  console.warn(`SKIP ${name} - blocked by ${dependency}`)
 }
 
 function assert(condition, message) {
@@ -69,14 +78,52 @@ async function findRendererPage(browser) {
   throw new Error(`Renderer page ${rendererOrigin}/ not found`)
 }
 
-async function runCheck(name, fn) {
+async function runCheck(name, fn, options = {}) {
   if (webAffairsOnly && !webAffairsChecks.has(name)) return
+  const blockedBy = (options.dependsOn ?? []).find(
+    (dependency) => results.find((result) => result.name === dependency)?.status !== 'pass',
+  )
+  if (blockedBy) {
+    skip(name, blockedBy)
+    return
+  }
   try {
     const detail = await fn()
     pass(name, detail)
   } catch (error) {
     fail(name, error)
   }
+}
+
+async function startWebFixture() {
+  webFixtureServer = createServer((_request, response) => {
+    response.writeHead(200, {
+      'cache-control': 'no-store',
+      'content-type': 'text/html; charset=utf-8',
+    })
+    response.end(`<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="utf-8"><title>CCLink UI Smoke Fixture</title></head>
+  <body><main>CCLink UI Smoke Fixture</main></body>
+</html>`)
+  })
+  await new Promise((resolve, reject) => {
+    webFixtureServer.once('error', reject)
+    webFixtureServer.listen(0, '127.0.0.1', resolve)
+  })
+  const address = webFixtureServer.address()
+  if (!address || typeof address === 'string') throw new Error('local web fixture has no TCP port')
+  return `http://127.0.0.1:${address.port}`
+}
+
+async function stopWebFixture() {
+  const server = webFixtureServer
+  webFixtureServer = undefined
+  if (!server) return
+  server.closeAllConnections?.()
+  await new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()))
+  })
 }
 
 async function clickByTitle(page, title) {
@@ -105,6 +152,7 @@ async function main() {
   await page.setViewportSize({ width: 1440, height: 920 })
   await page.waitForLoadState('domcontentloaded')
   await page.waitForSelector('.main-window', { timeout: uiReadyTimeoutMs })
+  const webFixtureOrigin = await startWebFixture()
 
   await runCheck('main renderer enforces its CSP source boundary', async () => {
     const responsePromise = page.waitForResponse(
@@ -995,7 +1043,7 @@ async function main() {
     }
   })
 
-  await runCheck('global web resources reuse one account and matrix across projects', async () => {
+  await runCheck(globalWebResourcesCheck, async () => {
     const projectOpened = await page.evaluate(async (workspacePath) => {
       const { useFsStore } = await import('/src/stores/fs-store.ts')
       return useFsStore.getState().openRecentWorkspace(workspacePath)
@@ -1009,7 +1057,7 @@ async function main() {
       'web resources panel missing',
     )
 
-    const ordinaryTabId = await page.evaluate(async () => {
+    const ordinaryTabId = await page.evaluate(async (fixtureOrigin) => {
       const [{ useTabStore }, { useWorkspaceStore }] = await Promise.all([
         import('/src/stores/tab-store.ts'),
         import('/src/stores/workspace-store.ts'),
@@ -1018,12 +1066,12 @@ async function main() {
         type: 'browser',
         title: '普通 Web Tab',
         icon: '🌐',
-        initialUrl: 'https://example.com/ordinary-web-tab',
+        initialUrl: `${fixtureOrigin}/ordinary-web-tab`,
         workspaceRef: useWorkspaceStore.getState().activeWorkspaceRef,
         forceNew: true,
       })
       return useTabStore.getState().activeTabId
-    })
+    }, webFixtureOrigin)
     assert(ordinaryTabId, 'ordinary web tab was not created')
     await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
     await page.waitForFunction(
@@ -1074,21 +1122,22 @@ async function main() {
         (await page.locator('.web-resources-form:not(.web-resources-import-form)').count()) === 0,
         'adding a website account opened a sidebar form',
       )
-      await page.locator('.url-input').fill('https://example.com/cclink-web-affairs-smoke')
+      const accountFixtureUrl = `${webFixtureOrigin}/cclink-web-affairs-smoke`
+      await page.locator('.url-input').fill(accountFixtureUrl)
       await page.locator('.url-input').press('Enter')
       await page.waitForFunction(
-        async () => {
+        async (expectedUrl) => {
           const { useTabStore } = await import('/src/stores/tab-store.ts')
           const tabId = useTabStore.getState().activeTabId
           if (!tabId) return false
           const diagnostic = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
-          return diagnostic.visibleUrl?.includes('example.com/cclink-web-affairs-smoke') ?? false
+          return diagnostic.visibleUrl === expectedUrl
         },
-        undefined,
+        accountFixtureUrl,
         { timeout: 10_000 },
       )
       await page.waitForFunction(
-        async () => {
+        async (expectedUrl) => {
           const [{ useTabStore }, { useBrowserStore }] = await Promise.all([
             import('/src/stores/tab-store.ts'),
             import('/src/stores/browser-store.ts'),
@@ -1096,19 +1145,14 @@ async function main() {
           const tabId = useTabStore.getState().activeTabId
           if (!tabId) return false
           const state = useBrowserStore.getState().tabs[tabId]
-          return [state?.url, state?.urlInput].some((value) =>
-            value?.includes('example.com/cclink-web-affairs-smoke'),
-          )
+          return [state?.url, state?.urlInput].some((value) => value === expectedUrl)
         },
-        undefined,
+        accountFixtureUrl,
         { timeout: 10_000 },
       )
       await page.waitForFunction(
-        () =>
-          document
-            .querySelector('.url-input')
-            ?.value.includes('example.com/cclink-web-affairs-smoke') ?? false,
-        undefined,
+        (expectedUrl) => document.querySelector('.url-input')?.value === expectedUrl,
+        accountFixtureUrl,
         { timeout: 10_000 },
       )
       await page.getByRole('button', { name: '登录完成，保存账号和登录状态' }).click()
@@ -1270,86 +1314,93 @@ async function main() {
     return 'ordinary Web Tab save action, isolated draft Profile, one global account/profile, per-project Tab projection, matrix visibility, and restart persistence verified'
   })
 
-  await runCheck('web affair persists a five-node workflow and node progress', async () => {
-    await clickByTitle(page, '事务')
-    await page.waitForTimeout(200)
-    assert(
-      (await page.locator('.sidebar-header-title').innerText()) === '事务',
-      'web affairs panel missing',
-    )
-
-    const affairTitle = 'UI Smoke Web Affair Global v3'
-    const affairRow = () => page.locator('.web-affair-row', { hasText: affairTitle })
-    if ((await affairRow().count()) === 0) {
-      await page.getByRole('button', { name: '新建事务' }).click()
+  await runCheck(
+    webAffairPersistenceCheck,
+    async () => {
+      await clickByTitle(page, '事务')
+      await page.waitForTimeout(200)
       assert(
-        (await page.locator('.web-affairs-form').count()) === 0,
-        'transaction creation form leaked into the sidebar',
+        (await page.locator('.sidebar-header-title').innerText()) === '事务',
+        'web affairs panel missing',
       )
-      await page.locator('.web-affair-draft-tab').waitFor({ state: 'visible', timeout: 10_000 })
-      const form = page.locator('.web-affair-draft-form')
-      await form.waitFor({ state: 'visible', timeout: 10_000 })
-      await form.getByLabel('事务名称').fill(affairTitle)
-      await form.getByLabel('最终目标').fill('验证事务列表、流程、节点详情和重启恢复')
-      await form.getByLabel('代表的业务主体').selectOption({ label: 'UI Smoke Account' })
-      const account = form.locator('.web-affairs-account-choice', { hasText: 'UI Smoke Account' })
-      if ((await account.count()) > 0) await account.first().locator('input').check()
-      const matrix = form.locator('label', { hasText: 'UI Smoke Matrix' })
-      if ((await matrix.count()) > 0) await matrix.locator('input[type="checkbox"]').check()
-      await form.getByRole('button', { name: '创建事务' }).click()
-    } else {
-      await affairRow().click()
-    }
 
-    await page.locator('.web-affair-tab').waitFor({ state: 'visible', timeout: 10_000 })
-    const tabText = await page.locator('.web-affair-tab').innerText()
-    assert(tabText.includes('相关资源'), 'affair resources section missing')
-    assert(tabText.includes('整体流程'), 'affair flow section missing')
-    assert(tabText.includes('节点办理情况'), 'affair node detail section missing')
-    assert(
-      tabText.includes('运营矩阵快照') && tabText.includes('UI Smoke Matrix'),
-      'affair did not preserve the selected global matrix binding snapshot',
-    )
-    assert((await page.locator('.web-affair-flow-step').count()) === 5, 'expected five flow nodes')
+      const affairTitle = 'UI Smoke Web Affair Global v3'
+      const affairRow = () => page.locator('.web-affair-row', { hasText: affairTitle })
+      if ((await affairRow().count()) === 0) {
+        await page.getByRole('button', { name: '新建事务' }).click()
+        assert(
+          (await page.locator('.web-affairs-form').count()) === 0,
+          'transaction creation form leaked into the sidebar',
+        )
+        await page.locator('.web-affair-draft-tab').waitFor({ state: 'visible', timeout: 10_000 })
+        const form = page.locator('.web-affair-draft-form')
+        await form.waitFor({ state: 'visible', timeout: 10_000 })
+        await form.getByLabel('事务名称').fill(affairTitle)
+        await form.getByLabel('最终目标').fill('验证事务列表、流程、节点详情和重启恢复')
+        await form.getByLabel('代表的业务主体').selectOption({ label: 'UI Smoke Account' })
+        const account = form.locator('.web-affairs-account-choice', { hasText: 'UI Smoke Account' })
+        if ((await account.count()) > 0) await account.first().locator('input').check()
+        const matrix = form.locator('label', { hasText: 'UI Smoke Matrix' })
+        if ((await matrix.count()) > 0) await matrix.locator('input[type="checkbox"]').check()
+        await form.getByRole('button', { name: '创建事务' }).click()
+      } else {
+        await affairRow().click()
+      }
 
-    const firstNode = page.locator('.web-affair-flow-step button').first()
-    const secondNode = page.locator('.web-affair-flow-step button').nth(1)
-    if (!(await firstNode.evaluate((element) => element.classList.contains('completed')))) {
-      await firstNode.click()
-      await page.getByLabel('更新办理状态').selectOption('completed')
-      await page.getByLabel(/结果或卡点说明/).fill('UI smoke 已核对第一节点')
-      await page.getByRole('button', { name: '保存节点进度' }).click()
-      await page.waitForFunction(() =>
-        document.querySelector('.web-affair-flow-step button')?.classList.contains('completed'),
+      await page.locator('.web-affair-tab').waitFor({ state: 'visible', timeout: 10_000 })
+      const tabText = await page.locator('.web-affair-tab').innerText()
+      assert(tabText.includes('相关资源'), 'affair resources section missing')
+      assert(tabText.includes('整体流程'), 'affair flow section missing')
+      assert(tabText.includes('节点办理情况'), 'affair node detail section missing')
+      assert(
+        tabText.includes('运营矩阵快照') && tabText.includes('UI Smoke Matrix'),
+        'affair did not preserve the selected global matrix binding snapshot',
       )
-    }
-    assert(
-      await secondNode.evaluate((element) => element.classList.contains('ready')),
-      'completing the first node did not unlock the second node',
-    )
+      assert(
+        (await page.locator('.web-affair-flow-step').count()) === 5,
+        'expected five flow nodes',
+      )
 
-    await browser.close()
-    const affairRestartLog = await readLog()
-    runRestart('restart')
-    const restartedCdpPort = await waitForCdpPort(45_000, affairRestartLog)
-    browser = await chromium.connectOverCDP(`http://127.0.0.1:${restartedCdpPort}`)
-    page = await findRendererPage(browser)
-    await page.setViewportSize({ width: 1440, height: 920 })
-    await page.waitForLoadState('domcontentloaded')
-    await page.waitForSelector('.main-window', { timeout: uiReadyTimeoutMs })
-    await page.locator('.web-affair-tab', { hasText: affairTitle }).waitFor({
-      state: 'visible',
-      timeout: 10_000,
-    })
-    if ((await page.locator('.sidebar-header-title', { hasText: '事务' }).count()) === 0) {
-      await page
-        .locator('[title="事务"]')
-        .first()
-        .evaluate((element) => element.click())
-    }
-    await affairRow().waitFor({ state: 'visible', timeout: 10_000 })
-    return 'five-node affair, progress transition, and app restart persistence verified'
-  })
+      const firstNode = page.locator('.web-affair-flow-step button').first()
+      const secondNode = page.locator('.web-affair-flow-step button').nth(1)
+      if (!(await firstNode.evaluate((element) => element.classList.contains('completed')))) {
+        await firstNode.click()
+        await page.getByLabel('更新办理状态').selectOption('completed')
+        await page.getByLabel(/结果或卡点说明/).fill('UI smoke 已核对第一节点')
+        await page.getByRole('button', { name: '保存节点进度' }).click()
+        await page.waitForFunction(() =>
+          document.querySelector('.web-affair-flow-step button')?.classList.contains('completed'),
+        )
+      }
+      assert(
+        await secondNode.evaluate((element) => element.classList.contains('ready')),
+        'completing the first node did not unlock the second node',
+      )
+
+      await browser.close()
+      const affairRestartLog = await readLog()
+      runRestart('restart')
+      const restartedCdpPort = await waitForCdpPort(45_000, affairRestartLog)
+      browser = await chromium.connectOverCDP(`http://127.0.0.1:${restartedCdpPort}`)
+      page = await findRendererPage(browser)
+      await page.setViewportSize({ width: 1440, height: 920 })
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForSelector('.main-window', { timeout: uiReadyTimeoutMs })
+      await page.locator('.web-affair-tab', { hasText: affairTitle }).waitFor({
+        state: 'visible',
+        timeout: 10_000,
+      })
+      if ((await page.locator('.sidebar-header-title', { hasText: '事务' }).count()) === 0) {
+        await page
+          .locator('[title="事务"]')
+          .first()
+          .evaluate((element) => element.click())
+      }
+      await affairRow().waitFor({ state: 'visible', timeout: 10_000 })
+      return 'five-node affair, progress transition, and app restart persistence verified'
+    },
+    { dependsOn: [globalWebResourcesCheck] },
+  )
 
   await runCheck(
     'web affair exposes A2-A4 handoff, wait, template, and flow-diff controls',
@@ -1501,6 +1552,7 @@ async function main() {
       await proposal.waitFor({ state: 'detached', timeout: 10_000 })
       return 'AI account access fail-closed, manual account handoff, A3 wait, and A4 flow controls verified'
     },
+    { dependsOn: [globalWebResourcesCheck, webAffairPersistenceCheck] },
   )
 
   await runCheck('settings page opens and searches locally', async () => {
@@ -1670,17 +1722,26 @@ async function main() {
   })
 
   await browser.close()
+  await stopWebFixture()
 
   const failed = results.filter((result) => result.status === 'fail')
+  const skipped = results.filter((result) => result.status === 'skip')
   if (startedBySmoke && !keepRunning) runRestart('stop')
   if (failed.length > 0) {
-    console.error(`\nUI smoke failed: ${failed.length}/${results.length}`)
+    console.error(
+      `\nUI smoke failed: ${failed.length} failed, ${skipped.length} skipped, ${results.length} total`,
+    )
     process.exit(1)
   }
   console.log(`\nUI smoke passed: ${results.length}/${results.length}`)
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
+  try {
+    await stopWebFixture()
+  } catch {
+    // best effort cleanup
+  }
   if (startedBySmoke && !keepRunning) {
     try {
       runRestart('stop')
