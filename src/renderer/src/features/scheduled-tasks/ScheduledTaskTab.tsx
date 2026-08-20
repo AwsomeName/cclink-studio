@@ -13,9 +13,15 @@ import { IconClock } from '../../components/common/Icons'
 import { scheduledTaskRunKey, useScheduledTaskStore } from './scheduled-task-store'
 import { useEditorStore } from '../../stores/editor-store'
 import { useCommandStore } from '../../stores/command-store'
+import { useToastStore } from '../../components/common/Toast'
+import { copyTextToClipboard } from '../../utils/clipboard'
 import { describeSchedule, formatNextRun } from './scheduled-task-view-model'
 import { normalizeWorkspaceRelativePath } from './scheduled-task-paths'
 import { registerScheduledTaskDraft } from './scheduled-task-draft-registry'
+import {
+  collectScheduledTaskRunDiagnosticReport,
+  shouldOfferScheduledTaskRunLog,
+} from './scheduled-task-run-diagnostic-report'
 import './scheduled-tasks.css'
 
 interface TaskForm {
@@ -74,6 +80,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
   const updateTabDirty = useTabStore((state) => state.updateTabDirty)
   const updateTabScheduledTask = useTabStore((state) => state.updateTabScheduledTask)
   const executeCommand = useCommandStore((state) => state.executeCommand)
+  const showToast = useToastStore((state) => state.show)
   const task = tasks.find((candidate) => candidate.definition.id === taskId)
   const [form, setForm] = useState<TaskForm>(() => createDefaultForm())
   const baseSignatureRef = useRef(formSignature(form))
@@ -261,6 +268,20 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
       filePath,
     })
     await useEditorStore.getState().openFile(filePath)
+  }
+
+  const handleCopyRunLog = async (run: ScheduledTaskRun): Promise<void> => {
+    if (!task) return
+    try {
+      const report = await collectScheduledTaskRunDiagnosticReport(task, run)
+      await copyTextToClipboard(report)
+      showToast('定时任务运行日志已复制', 'success')
+    } catch (error) {
+      showToast(
+        `复制定时任务运行日志失败：${error instanceof Error ? error.message : String(error)}`,
+        'error',
+      )
+    }
   }
 
   return (
@@ -531,13 +552,11 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
                     </div>
                     <p>{run.currentStep}</p>
                     {run.error && <p className="scheduled-task-run-error">{run.error.message}</p>}
-                    {run.artifact && (
-                      <button type="button" onClick={() => void handleOpenArtifact(run)}>
-                        {isHistoryResultPath(run.artifact.relativePath)
-                          ? '查看运行结果'
-                          : `打开 ${run.artifact.relativePath}`}
-                      </button>
-                    )}
+                    <ScheduledTaskRunActions
+                      run={run}
+                      onCopyLog={handleCopyRunLog}
+                      onOpenArtifact={handleOpenArtifact}
+                    />
                   </article>
                 ))}
               </div>
@@ -545,6 +564,34 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
           </TaskSection>
         )}
       </main>
+    </div>
+  )
+}
+
+export function ScheduledTaskRunActions({
+  run,
+  onCopyLog,
+  onOpenArtifact,
+}: {
+  run: ScheduledTaskRun
+  onCopyLog: (run: ScheduledTaskRun) => Promise<void>
+  onOpenArtifact: (run: ScheduledTaskRun) => Promise<void>
+}): React.ReactElement | null {
+  if (!shouldOfferScheduledTaskRunLog(run) && !run.artifact) return null
+  return (
+    <div className="scheduled-task-run-actions">
+      {shouldOfferScheduledTaskRunLog(run) && (
+        <button type="button" onClick={() => void onCopyLog(run)}>
+          复制日志
+        </button>
+      )}
+      {run.artifact && (
+        <button type="button" onClick={() => void onOpenArtifact(run)}>
+          {isHistoryResultPath(run.artifact.relativePath)
+            ? '查看运行结果'
+            : `打开 ${run.artifact.relativePath}`}
+        </button>
+      )}
     </div>
   )
 }

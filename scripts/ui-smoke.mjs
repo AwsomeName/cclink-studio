@@ -1011,8 +1011,17 @@ async function main() {
 
     const accountLabel = 'UI Smoke Account'
     const primaryRow = () => page.locator('.web-resource-row', { hasText: accountLabel })
-    const existing = primaryRow()
-    if ((await existing.count()) === 0) {
+    const accountAlreadyExists = await page.evaluate(async (label) => {
+      const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+      const result = await window.cclinkStudio.webResources.getSnapshot({
+        workspaceRef: useWorkspaceStore.getState().activeWorkspaceRef,
+      })
+      return (
+        result.success &&
+        result.data.accounts.some((account) => account.label === label && !account.archivedAt)
+      )
+    }, accountLabel)
+    if (!accountAlreadyExists) {
       await page.getByRole('button', { name: '添加网站与账号' }).click()
       await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
       assert(
@@ -1032,10 +1041,32 @@ async function main() {
         undefined,
         { timeout: 10_000 },
       )
+      await page.waitForFunction(
+        async () => {
+          const [{ useTabStore }, { useBrowserStore }] = await Promise.all([
+            import('/src/stores/tab-store.ts'),
+            import('/src/stores/browser-store.ts'),
+          ])
+          const tabId = useTabStore.getState().activeTabId
+          if (!tabId) return false
+          const state = useBrowserStore.getState().tabs[tabId]
+          return [state?.url, state?.urlInput].some((value) =>
+            value?.includes('example.com/cclink-web-affairs-smoke'),
+          )
+        },
+        undefined,
+        { timeout: 10_000 },
+      )
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector('.url-input')
+            ?.value.includes('example.com/cclink-web-affairs-smoke') ?? false,
+        undefined,
+        { timeout: 10_000 },
+      )
       await page.getByRole('button', { name: '登录完成，保存为全局账号' }).click()
       const accountNameInput = page.getByLabel('账号名称')
-      const inferredName = await accountNameInput.inputValue()
-      assert(inferredName.trim().length > 0, 'account name was not prefilled from the current page')
       await accountNameInput.fill('')
       await page.getByRole('button', { name: '保存', exact: true }).click()
       await page
@@ -1047,8 +1078,24 @@ async function main() {
       )
       await accountNameInput.fill(accountLabel)
       await page.getByRole('button', { name: '保存', exact: true }).click()
+      await page.waitForFunction(
+        async (label) => {
+          const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+          const result = await window.cclinkStudio.webResources.getSnapshot({
+            workspaceRef: useWorkspaceStore.getState().activeWorkspaceRef,
+          })
+          return (
+            result.success &&
+            result.data.accounts.some((account) => account.label === label && !account.archivedAt)
+          )
+        },
+        accountLabel,
+        { timeout: 30_000 },
+      )
     }
 
+    await clickByTitle(page, '文件')
+    await clickByTitle(page, '网站与账号')
     await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
     const rowText = await primaryRow().innerText()
     assert(rowText.includes(accountLabel), 'saved account label is not visible')

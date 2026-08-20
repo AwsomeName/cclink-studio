@@ -429,8 +429,14 @@
   color: var(--error-foreground, #f85149);
 }
 
-.scheduled-task-run button {
+.scheduled-task-run-actions {
   margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.scheduled-task-run .scheduled-task-run-actions button {
   border: 0;
   padding: 0;
   background: transparent;

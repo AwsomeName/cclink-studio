@@ -419,6 +419,29 @@ async function main() {
     unsupportedRun.status === 'failed' && unsupportedRun.error?.message.includes('不支持 Terminal'),
     'unsupported Terminal action did not fail closed',
   )
+  const unsupportedTaskRow = page.locator('.scheduled-task-sidebar-item', {
+    hasText: 'Smoke 禁止 Terminal',
+  })
+  await unsupportedTaskRow.waitFor({ timeout: 10_000 })
+  await unsupportedTaskRow.click()
+  const failedRunCard = page.locator('.scheduled-task-run.failed', {
+    hasText: '不支持 Terminal',
+  })
+  await failedRunCard.waitFor({ timeout: 10_000 })
+  await failedRunCard.getByRole('button', { name: '复制日志' }).click()
+  await page.getByText('定时任务运行日志已复制').waitFor({ timeout: 5_000 })
+  const copiedFailureLog = await page.evaluate(() => navigator.clipboard.readText())
+  assert(
+    copiedFailureLog.includes('# CCLink Studio 定时任务运行日志') &&
+      copiedFailureLog.includes(unsupportedRun.id) &&
+      copiedFailureLog.includes('SCHEDULED_TASK_INVALID') &&
+      copiedFailureLog.includes('不支持 Terminal'),
+    `failed run log was not copied with actionable facts: ${copiedFailureLog.slice(0, 1_000)}`,
+  )
+  assert(
+    !copiedFailureLog.includes('运行 Terminal 命令并生成 Markdown。'),
+    'scheduled task instruction leaked into the copied failure log',
+  )
 
   const cancelSaved = await page.evaluate((path) => {
     return window.cclinkStudio.scheduledTasks.save({
