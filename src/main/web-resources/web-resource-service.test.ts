@@ -41,6 +41,27 @@ afterEach(async () => {
 })
 
 describe('WebResourceService', () => {
+  it('adopts an ordinary tab Profile without replacing its login environment', async () => {
+    const draftPath = join(tempDir, 'web-resource-drafts.json')
+    const service = new WebResourceService(
+      new WebResourceStore(storePath),
+      new WebResourceDraftStore(draftPath),
+    )
+    await service.load()
+
+    const begun = await service.beginDraft(PROJECT_ID, 'ordinary-tab-profile')
+    const repeated = await service.beginDraft(PROJECT_ID, 'ordinary-tab-profile')
+
+    expect(begun).toMatchObject({
+      success: true,
+      data: { browserProfileId: 'ordinary-tab-profile' },
+    })
+    expect(repeated).toEqual(begun)
+    expect(JSON.parse(await readFile(draftPath, 'utf8'))).toMatchObject({
+      records: [{ browserProfileId: 'ordinary-tab-profile' }],
+    })
+  })
+
   it('turns one observed browser draft into a confirmed project resource using the same profile', async () => {
     const draftPath = join(tempDir, 'web-resource-drafts.json')
     const service = new WebResourceService(

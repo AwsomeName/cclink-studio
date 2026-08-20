@@ -431,7 +431,6 @@ function BrowserManagementView(): React.ReactElement {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const activateTab = useTabStore((s) => s.activateTab)
-  const openTab = useTabStore((s) => s.openTab)
   const browserTabs = useBrowserStore((s) => s.tabs)
   const bookmarks = useBrowserStore((s) => s.bookmarks)
   const addBookmark = useBrowserStore((s) => s.addBookmark)
@@ -493,13 +492,13 @@ function BrowserManagementView(): React.ReactElement {
       activateTab(existing.id)
       return
     }
-    openTab({
-      type: 'browser',
-      title: bookmark.title,
-      icon: '🌐',
+    void openDefaultBrowserTab(activeWorkspaceRef, {
       initialUrl: bookmark.url,
-      forceNew: true,
-      workspaceRef: activeWorkspaceRef,
+      title: bookmark.title,
+    }).then((result) => {
+      if (!result.saveable) {
+        showToast(`已打开普通浏览器；当前无法保存账号：${result.error}`, 'info')
+      }
     })
   }
 
@@ -517,13 +516,13 @@ function BrowserManagementView(): React.ReactElement {
       })
       return
     }
-    openTab({
-      type: 'browser',
-      title: entry.title?.trim() || '浏览器',
-      icon: '🌐',
+    void openDefaultBrowserTab(activeWorkspaceRef, {
       initialUrl: entry.url,
-      forceNew: true,
-      workspaceRef: activeWorkspaceRef,
+      title: entry.title?.trim() || '浏览器',
+    }).then((result) => {
+      if (!result.saveable) {
+        showToast(`已打开普通浏览器；当前无法保存账号：${result.error}`, 'info')
+      }
     })
   }
 

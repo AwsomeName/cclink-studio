@@ -57,9 +57,44 @@ export class WebResourceService {
 
   async beginDraft(
     workspaceId: string,
+    existingBrowserProfileId?: string | null,
   ): Promise<WebResourceOperationResult<BeginWebResourceDraftResult>> {
     return this.mutate(async () => {
       if (!this.snapshot) return this.unavailable()
+      if (existingBrowserProfileId) {
+        const saved = this.getConnectionByProfile(existingBrowserProfileId)
+        if (saved) {
+          return {
+            success: false,
+            error: {
+              code: 'DUPLICATE_ACCOUNT',
+              message: '当前登录环境已经保存为全局账号',
+              context: { existingAccountId: saved.account.id },
+            },
+          }
+        }
+        const existingDraft = this.drafts.find(
+          (item) => item.browserProfileId === existingBrowserProfileId,
+        )
+        if (existingDraft) {
+          if (existingDraft.workspaceId !== workspaceId) {
+            return {
+              success: false,
+              error: {
+                code: 'DRAFT_MISMATCH',
+                message: '当前登录环境正在另一个项目中保存',
+              },
+            }
+          }
+          return {
+            success: true,
+            data: {
+              draftId: existingDraft.id,
+              browserProfileId: existingDraft.browserProfileId,
+            },
+          }
+        }
+      }
       if (this.drafts.length >= 200) {
         return {
           success: false,
@@ -71,7 +106,7 @@ export class WebResourceService {
       const record: WebResourceDraftRecord = {
         id,
         workspaceId,
-        browserProfileId: `web-draft-${id}`,
+        browserProfileId: existingBrowserProfileId ?? `web-draft-${id}`,
         state: 'open',
         createdAt: now,
         updatedAt: now,

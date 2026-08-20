@@ -243,6 +243,14 @@ interface TabState {
   updateTabScheduledTask: (id: string, scheduledTask: NonNullable<Tab['scheduledTask']>) => void
   /** 新事务草稿和持久事务共用同一 Tab；创建成功后原地绑定事务。 */
   updateTabWebAffair: (id: string, webAffair: NonNullable<Tab['webAffair']>) => void
+  /** 将普通 Browser Tab 绑定到主进程已创建的网站账号草稿。 */
+  attachWebResourceDraft: (
+    id: string,
+    binding: {
+      draftId: string
+      browserProfile: string
+    },
+  ) => boolean
   /** 将网站账号草稿原地转为正式 Browser Tab。 */
   bindWebResourceDraft: (
     id: string,
@@ -643,6 +651,29 @@ export const useTabStore = create<TabState>((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, webAffair } : tab)),
     })),
+
+  attachWebResourceDraft: (id, binding) => {
+    let attached = false
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (
+          tab.id !== id ||
+          tab.type !== 'browser' ||
+          tab.webResourceRef ||
+          tab.webResourceDraftRef
+        ) {
+          return tab
+        }
+        attached = true
+        return {
+          ...tab,
+          browserProfile: binding.browserProfile,
+          webResourceDraftRef: { draftId: binding.draftId },
+        }
+      }),
+    }))
+    return attached
+  },
 
   bindWebResourceDraft: (id, binding) =>
     set((state) => ({

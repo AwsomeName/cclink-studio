@@ -9,6 +9,11 @@ export interface OpenDefaultBrowserTabResult {
   error?: string
 }
 
+export interface OpenDefaultBrowserTabOptions {
+  initialUrl?: string
+  title?: string
+}
+
 function getOpenedTabId(): string {
   const tabId = useTabStore.getState().activeTabId
   if (!tabId) throw new Error('浏览器 Tab 创建失败')
@@ -21,19 +26,22 @@ function getOpenedTabId(): string {
  */
 export async function openDefaultBrowserTab(
   workspaceRef: WorkspaceRef,
+  options: OpenDefaultBrowserTabOptions = {},
 ): Promise<OpenDefaultBrowserTabResult> {
+  const initialUrl = options.initialUrl ?? EMPTY_BROWSER_TAB_URL
+  const title = options.title?.trim() || '浏览器'
   if (workspaceRef.kind === 'local') {
     try {
       const result = await window.cclinkStudio.webResources.beginDraft({ workspaceRef })
       if (result.success) {
         useTabStore.getState().openTab({
           type: 'browser',
-          title: '浏览器',
+          title,
           icon: '🌐',
           browserProfile: result.data.browserProfileId,
           webResourceDraftRef: { draftId: result.data.draftId },
           workspaceRef,
-          initialUrl: EMPTY_BROWSER_TAB_URL,
+          initialUrl,
           forceNew: true,
         })
         return { tabId: getOpenedTabId(), saveable: true }
@@ -41,20 +49,20 @@ export async function openDefaultBrowserTab(
 
       useTabStore.getState().openTab({
         type: 'browser',
-        title: '浏览器',
+        title,
         icon: '🌐',
         workspaceRef,
-        initialUrl: EMPTY_BROWSER_TAB_URL,
+        initialUrl,
         forceNew: true,
       })
       return { tabId: getOpenedTabId(), saveable: false, error: result.error.message }
     } catch (error) {
       useTabStore.getState().openTab({
         type: 'browser',
-        title: '浏览器',
+        title,
         icon: '🌐',
         workspaceRef,
-        initialUrl: EMPTY_BROWSER_TAB_URL,
+        initialUrl,
         forceNew: true,
       })
       return {
@@ -67,10 +75,10 @@ export async function openDefaultBrowserTab(
 
   useTabStore.getState().openTab({
     type: 'browser',
-    title: '浏览器',
+    title,
     icon: '🌐',
     workspaceRef,
-    initialUrl: EMPTY_BROWSER_TAB_URL,
+    initialUrl,
     forceNew: true,
   })
   return { tabId: getOpenedTabId(), saveable: false, error: '请先打开一个本地项目' }

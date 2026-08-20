@@ -69,6 +69,26 @@ describe('openDefaultBrowserTab', () => {
     expect(useTabStore.getState().tabs[0].webResourceDraftRef).toBeUndefined()
   })
 
+  it('loads an ordinary web target inside the same saveable draft flow', async () => {
+    beginDraft.mockResolvedValue({
+      success: true,
+      data: { draftId: 'ordinary-draft', browserProfileId: 'ordinary-profile' },
+    })
+
+    const result = await openDefaultBrowserTab(workspaceRef, {
+      initialUrl: 'https://www.oschina.net/',
+      title: '开源中国',
+    })
+
+    expect(result.saveable).toBe(true)
+    expect(useTabStore.getState().tabs[0]).toMatchObject({
+      title: '开源中国',
+      initialUrl: 'https://www.oschina.net/',
+      browserProfile: 'ordinary-profile',
+      webResourceDraftRef: { draftId: 'ordinary-draft' },
+    })
+  })
+
   it('opens a plain browser outside a local project', async () => {
     const result = await openDefaultBrowserTab(globalWorkspaceRef())
 

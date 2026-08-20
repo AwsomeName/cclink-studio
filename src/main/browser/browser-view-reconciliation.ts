@@ -21,3 +21,14 @@ export function shouldRecreateBrowserViewForBinding(options: {
     options.currentProfileId !== options.requestedProfileId
   )
 }
+
+export function resolveDraftAdoptionProfileId(
+  tabId: string,
+  views: Array<{ tabId: string; profileId: string | null }>,
+): string | null {
+  const profileId = views.find((view) => view.tabId === tabId)?.profileId ?? null
+  if (!profileId) return null
+  return views.some((view) => view.tabId !== tabId && view.profileId === profileId)
+    ? null
+    : profileId
+}

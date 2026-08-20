@@ -1009,6 +1009,52 @@ async function main() {
       'web resources panel missing',
     )
 
+    const ordinaryTabId = await page.evaluate(async () => {
+      const [{ useTabStore }, { useWorkspaceStore }] = await Promise.all([
+        import('/src/stores/tab-store.ts'),
+        import('/src/stores/workspace-store.ts'),
+      ])
+      useTabStore.getState().openTab({
+        type: 'browser',
+        title: '普通 Web Tab',
+        icon: '🌐',
+        initialUrl: 'https://example.com/ordinary-web-tab',
+        workspaceRef: useWorkspaceStore.getState().activeWorkspaceRef,
+        forceNew: true,
+      })
+      return useTabStore.getState().activeTabId
+    })
+    assert(ordinaryTabId, 'ordinary web tab was not created')
+    await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+    await page.waitForFunction(
+      async (tabId) => (await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)).viewState,
+      ordinaryTabId,
+      { timeout: 10_000 },
+    )
+    const saveLoginButton = page.getByRole('button', {
+      name: '登录完成，保存账号和登录状态',
+    })
+    await saveLoginButton.waitFor({ state: 'visible', timeout: 10_000 })
+    await saveLoginButton.click()
+    await page.waitForFunction(
+      async (tabId) => {
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
+        if (!tab?.webResourceDraftRef || !tab.browserProfile) return false
+        const runtime = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
+        return runtime.profileId === tab.browserProfile
+      },
+      ordinaryTabId,
+      { timeout: 10_000 },
+    )
+    assert(
+      await page.evaluate(async (tabId) => {
+        const { closeTabWithDraftPolicy } = await import('/src/utils/close-tab.ts')
+        return closeTabWithDraftPolicy(tabId)
+      }, ordinaryTabId),
+      'ordinary web tab draft did not close cleanly',
+    )
+
     const accountLabel = 'UI Smoke Account'
     const primaryRow = () => page.locator('.web-resource-row', { hasText: accountLabel })
     const accountAlreadyExists = await page.evaluate(async (label) => {
@@ -1065,7 +1111,7 @@ async function main() {
         undefined,
         { timeout: 10_000 },
       )
-      await page.getByRole('button', { name: '登录完成，保存为全局账号' }).click()
+      await page.getByRole('button', { name: '登录完成，保存账号和登录状态' }).click()
       const accountNameInput = page.getByLabel('账号名称')
       await accountNameInput.fill('')
       await page.getByRole('button', { name: '保存', exact: true }).click()
@@ -1221,7 +1267,7 @@ async function main() {
         .evaluate((element) => element.click())
     }
     await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
-    return 'one global account/profile, per-project Tab projection, matrix visibility, and restart persistence verified'
+    return 'ordinary Web Tab save action, isolated draft Profile, one global account/profile, per-project Tab projection, matrix visibility, and restart persistence verified'
   })
 
   await runCheck('web affair persists a five-node workflow and node progress', async () => {

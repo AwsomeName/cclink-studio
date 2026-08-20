@@ -511,6 +511,35 @@ describe('useTabStore', () => {
       ).toBeUndefined()
     })
 
+    it('普通 Browser Tab 可以原地接入主进程创建的账号草稿', () => {
+      useTabStore.getState().openTab({
+        type: 'browser',
+        title: '普通网页',
+        icon: '🌐',
+        browserProfile: 'ordinary-profile',
+        workspaceRef: { kind: 'local', path: '/tmp/project-a' },
+        forceNew: true,
+      })
+      const tabId = useTabStore.getState().activeTabId!
+
+      expect(
+        useTabStore.getState().attachWebResourceDraft(tabId, {
+          draftId: 'draft-ordinary',
+          browserProfile: 'ordinary-profile',
+        }),
+      ).toBe(true)
+      expect(useTabStore.getState().tabs.find((tab) => tab.id === tabId)).toMatchObject({
+        browserProfile: 'ordinary-profile',
+        webResourceDraftRef: { draftId: 'draft-ordinary' },
+      })
+      expect(
+        useTabStore.getState().attachWebResourceDraft(tabId, {
+          draftId: 'draft-other',
+          browserProfile: 'other-profile',
+        }),
+      ).toBe(false)
+    })
+
     it('网页事务 Tab 按 affairId 去重', () => {
       useTabStore.getState().openTab({
         type: 'web-affair',

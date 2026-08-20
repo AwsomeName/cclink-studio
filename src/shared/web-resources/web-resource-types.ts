@@ -60,7 +60,13 @@ export interface WebResourceProjectScopeInput {
   workspaceRef: WorkspaceRef
 }
 
-export type BeginWebResourceDraftInput = WebResourceProjectScopeInput
+export interface BeginWebResourceDraftInput extends WebResourceProjectScopeInput {
+  /**
+   * 可选的现有 Browser Tab。主进程只用它反查该 Tab 独占的真实 Profile；renderer
+   * 不能直接指定要保存的登录环境，共享 Profile 也不能交给单个草稿拥有。
+   */
+  tabId?: string
+}
 
 export interface BeginWebResourceDraftResult {
   draftId: string

@@ -54,6 +54,13 @@ export const webResourceProjectScopeInputSchema = z
   .object({ workspaceRef: workspaceRefSchema })
   .strict()
 
+export const beginWebResourceDraftInputSchema = z
+  .object({
+    workspaceRef: workspaceRefSchema,
+    tabId: trimmedText(160, '浏览器标签页').optional(),
+  })
+  .strict()
+
 export const saveWebResourceDraftInputSchema = z
   .object({
     workspaceRef: workspaceRefSchema,
@@ -189,6 +196,10 @@ export function parseCreateWebConnectionInput(value: unknown) {
 
 export function parseWebResourceProjectScopeInput(value: unknown) {
   return webResourceProjectScopeInputSchema.parse(value)
+}
+
+export function parseBeginWebResourceDraftInput(value: unknown) {
+  return beginWebResourceDraftInputSchema.parse(value)
 }
 
 export function parseSaveWebResourceDraftInput(value: unknown) {

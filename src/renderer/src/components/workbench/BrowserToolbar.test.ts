@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  canSaveBrowserTabAsWebResource,
   inferWebResourceDisplayName,
   normalizeBrowserZoomPercent,
   shouldNavigateBrowserAddress,
 } from './BrowserToolbar'
+import { globalWorkspaceRef, localWorkspaceRef } from '@shared/workspace-ref'
 
 describe('shouldNavigateBrowserAddress', () => {
   it('submits an ordinary Enter key', () => {
@@ -72,6 +74,32 @@ describe('inferWebResourceDisplayName', () => {
     expect(
       inferWebResourceDisplayName({ title: null, url: 'about:blank', urlInput: 'not a url' }),
     ).toBe('')
+  })
+})
+
+describe('canSaveBrowserTabAsWebResource', () => {
+  it('keeps the save-account action visible on an ordinary local web tab', () => {
+    expect(
+      canSaveBrowserTabAsWebResource({
+        workspaceRef: localWorkspaceRef('/workspace/current'),
+      }),
+    ).toBe(true)
+  })
+
+  it('does not offer a second save action for an already-bound account or global tab', () => {
+    expect(
+      canSaveBrowserTabAsWebResource({
+        workspaceRef: localWorkspaceRef('/workspace/current'),
+        webResourceRef: { accountId: 'account-1' },
+      }),
+    ).toBe(false)
+    expect(canSaveBrowserTabAsWebResource({ workspaceRef: globalWorkspaceRef() })).toBe(false)
+    expect(
+      canSaveBrowserTabAsWebResource({
+        workspaceRef: localWorkspaceRef('/workspace/current'),
+        filePath: '/workspace/current/preview.html',
+      }),
+    ).toBe(false)
   })
 })
 

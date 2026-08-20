@@ -2,6 +2,7 @@ import { bindIpcParser, ipcArgs } from '../ipc/contract'
 import {
   archiveWebAccountGroupInputSchema,
   archiveWebAccountInputSchema,
+  parseBeginWebResourceDraftInput,
   createWebAccountGroupInputSchema,
   mergeWebAccountsInputSchema,
   parseCancelWebResourceDraftInput,
@@ -55,7 +56,7 @@ export const webResourcesIpcContracts = {
       if (args.length !== 1) {
         throw new Error(`IPC ${webResourcesIpc.beginDraft.channel} 需要 1 个参数`)
       }
-      return ipcArgs(parseWebResourceProjectScopeInput(args[0]))
+      return ipcArgs(parseBeginWebResourceDraftInput(args[0]))
     },
     invalidInputResult,
   ),

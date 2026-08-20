@@ -85,6 +85,55 @@ describe('registerWebResourceIpc', () => {
     })
   })
 
+  it('derives an ordinary tab Profile in main before creating its save draft', async () => {
+    const service = { beginDraft: vi.fn(async () => ({ success: true, data: {} })) }
+    const browserManager = {
+      getDraftAdoptionProfileId: vi.fn(() => 'ordinary-profile'),
+    }
+    registerWebResourceIpc(
+      () => service as never,
+      () => null,
+      () => createWorkspaceState() as never,
+      createGuard('trusted') as never,
+      () => browserManager as never,
+    )
+
+    await expect(
+      mockIpcMain.handlers.get('webResources:beginDraft')?.(
+        { sender: 'trusted' },
+        { ...PROJECT_SCOPE, tabId: 'ordinary-tab' },
+      ),
+    ).resolves.toMatchObject({ success: true })
+    expect(browserManager.getDraftAdoptionProfileId).toHaveBeenCalledWith(
+      'ordinary-tab',
+      '/Users/example/project',
+    )
+    expect(service.beginDraft).toHaveBeenCalledWith(PROJECT_ID, 'ordinary-profile')
+  })
+
+  it('rejects a stale or cross-workspace ordinary tab before creating a draft', async () => {
+    const service = { beginDraft: vi.fn() }
+    const browserManager = { getDraftAdoptionProfileId: vi.fn(() => undefined) }
+    registerWebResourceIpc(
+      () => service as never,
+      () => null,
+      () => createWorkspaceState() as never,
+      createGuard('trusted') as never,
+      () => browserManager as never,
+    )
+
+    await expect(
+      mockIpcMain.handlers.get('webResources:beginDraft')?.(
+        { sender: 'trusted' },
+        { ...PROJECT_SCOPE, tabId: 'stale-tab' },
+      ),
+    ).resolves.toMatchObject({
+      success: false,
+      error: { code: 'INVALID_BROWSER_STATE' },
+    })
+    expect(service.beginDraft).not.toHaveBeenCalled()
+  })
+
   it('imports a valid legacy project config idempotently and preserves its Profile ids', async () => {
     const service = {
       createConnection: vi

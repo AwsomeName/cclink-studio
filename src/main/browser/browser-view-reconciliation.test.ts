@@ -1,8 +1,32 @@
 import { describe, expect, it } from 'vitest'
 import {
+  resolveDraftAdoptionProfileId,
   shouldDestroyBrowserViewDuringReconcile,
   shouldRecreateBrowserViewForBinding,
 } from './browser-view-reconciliation'
+
+describe('resolveDraftAdoptionProfileId', () => {
+  it('only adopts a persistent Profile owned by the target tab alone', () => {
+    expect(
+      resolveDraftAdoptionProfileId('ordinary', [
+        { tabId: 'ordinary', profileId: 'ordinary-profile' },
+        { tabId: 'other', profileId: 'other-profile' },
+      ]),
+    ).toBe('ordinary-profile')
+  })
+
+  it('rejects default and shared Profiles so one draft cannot clear another tab session', () => {
+    expect(
+      resolveDraftAdoptionProfileId('default', [{ tabId: 'default', profileId: null }]),
+    ).toBeNull()
+    expect(
+      resolveDraftAdoptionProfileId('popup', [
+        { tabId: 'source', profileId: 'shared-profile' },
+        { tabId: 'popup', profileId: 'shared-profile' },
+      ]),
+    ).toBeNull()
+  })
+})
 
 describe('shouldDestroyBrowserViewDuringReconcile', () => {
   it('preserves browser views owned by a background workspace', () => {

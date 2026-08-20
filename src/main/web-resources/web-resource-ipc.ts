@@ -15,6 +15,7 @@ import type { WebResourceService } from './web-resource-service'
 import type { ProjectOpsService } from '../project-ops/project-ops-service'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 import type { BrowserManager } from '../browser/browser-manager'
+import { workspaceRefKey } from '../../shared/workspace-ref'
 
 function unavailable<T>(): WebResourceOperationResult<T> {
   return {
@@ -60,10 +61,26 @@ export function registerWebResourceIpc(
     trustedRendererGuard,
     async (_event, input) => {
       const service = getService()
+      const browserManager = getBrowserManager()
       const projectId = await resolveProjectId(input, getWorkspaceStateService())
       if (!service) return unavailable()
       if (!projectId.success) return projectId
-      return service.beginDraft(projectId.data)
+      const adoptableProfileId = input.tabId
+        ? browserManager?.getDraftAdoptionProfileId(
+            input.tabId,
+            workspaceRefKey(input.workspaceRef),
+          )
+        : undefined
+      if (input.tabId && adoptableProfileId === undefined) {
+        return {
+          success: false,
+          error: {
+            code: 'INVALID_BROWSER_STATE',
+            message: '当前浏览器标签页已切换或尚未就绪，请重试',
+          },
+        }
+      }
+      return service.beginDraft(projectId.data, adoptableProfileId)
     },
   )
 

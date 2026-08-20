@@ -235,9 +235,13 @@ export function Workbench({
         window.cclinkStudio.browser.navigate(activeTabId, url)
         return
       }
-      openTab({ type: 'browser', title: '浏览器', icon: '🌐', initialUrl: url, forceNew: true })
+      void openDefaultBrowserTab(activeWorkspaceRef, { initialUrl: url }).then((result) => {
+        if (!result.saveable) {
+          showToast(`已打开普通浏览器；当前无法保存账号：${result.error}`, 'info')
+        }
+      })
     },
-    [activeTabId, isBrowserTab, openTab],
+    [activeTabId, activeWorkspaceRef, isBrowserTab, showToast],
   )
 
   return (

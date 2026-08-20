@@ -36,6 +36,7 @@ import {
 } from './browser-auth-contract'
 import { BrowserSessionDiagnostics } from './browser-session-diagnostics'
 import {
+  resolveDraftAdoptionProfileId,
   shouldDestroyBrowserViewDuringReconcile,
   shouldRecreateBrowserViewForBinding,
 } from './browser-view-reconciliation'
@@ -1897,6 +1898,26 @@ export class BrowserManager {
     await browserSession.clearCache()
     await browserSession.cookies.flushStore()
     await browserSession.flushStorageData()
+  }
+
+  /**
+   * 只有当前 Tab 独占的持久 Profile 才能直接转为可清理的网站账号草稿。
+   * popup/新 Tab 可能继承来源 Profile；共享环境不能交给单个草稿拥有，否则关闭草稿会
+   * 连带清除其他 Tab 的登录状态。
+   */
+  getDraftAdoptionProfileId(
+    tabId: string,
+    expectedWorkspaceKey: string | null,
+  ): string | null | undefined {
+    const target = this.views.get(tabId)
+    if (!target || target.workspaceKey !== expectedWorkspaceKey) return undefined
+    return resolveDraftAdoptionProfileId(
+      tabId,
+      [...this.views].map(([viewTabId, entry]) => ({
+        tabId: viewTabId,
+        profileId: entry.profileId,
+      })),
+    )
   }
 
   /** 返回诊断所需的真实视图、Profile 和 Cookie 元数据，不暴露 Cookie 值。 */
