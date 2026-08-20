@@ -41,15 +41,18 @@ M1 完成声明。
 
 ### 1. 三个互不重叠的主进程 owner
 
-1. `WorkbenchWindowService` 唯一拥有顶层窗口注册、稳定 `windowId`、role、bounds/display hint、
-   窗口内 Tab placement/order/active、generation 和移动事务状态。它不拥有逻辑 Tab descriptor，
-   不直接写 WorkspaceState，也不拥有 Browser runtime。
-2. `WorkbenchTabModel` 唯一拥有逻辑 `tabId`、descriptor、tab type、workspace membership 和
-   WorkspaceState Tab section 写入。它从 WindowService 读取一致的 placement snapshot，并作为
-   唯一串行、原子持久化 writer；renderer 不再提交整份 Tab/WorkspaceState 快照。
+1. `WorkbenchWindowService` 是**进入分离生命周期后**的 Browser Tab placement ledger：拥有顶层窗口
+   注册、稳定 `windowId`、role、已 seed placement 的相对 order、generation 和移动事务状态。它不
+   镜像主工作台全部 Tab，也不是全局 active Tab 或原生 active View 的事实源；不拥有逻辑 Tab
+   descriptor，不直接写 WorkspaceState，也不拥有 Browser runtime。
+2. `WorkbenchTabModel` 唯一拥有逻辑 `tabId`、descriptor、tab type、workspace membership、主工作台
+   Tab order/active 和 WorkspaceState Tab section 写入，并作为唯一串行、原子持久化 writer；
+   renderer 不再提交整份 Tab/WorkspaceState 快照。
 3. `BrowserManager` 继续唯一拥有 Browser `WebContentsView`、WebContents、Profile/Session、
-   Playwright Page 和 popup/runtime 监听器。它新增按 `windowId` 索引的 host registry，并在每个
-   Browser entry 上保存当前 `ownerWindowId`；它不拥有窗口 placement 或 workspace descriptor。
+   Playwright Page、popup/runtime 监听器以及每个 native host 当前实际 active View。它按
+   `windowId` 索引 host registry，并在每个 Browser entry 上保存当前 `ownerWindowId`；IPC placement
+   投影的 `active` 由这个原生事实派生，但 BrowserManager 不拥有逻辑 placement 或 workspace
+   descriptor。
 
 三者只通过稳定 ID、共享 contract 和显式 transition 协作。任何 renderer store 都是可丢弃只读
 投影，不能反向成为第四个 owner。placement 中的 `workspaceKey` 只是从 TabModel descriptor 复制的
@@ -99,12 +102,14 @@ owner；不得在每个窗口重复 `ipcMain.handle`，也不得向所有 truste
 4. BrowserManager 设置 target bounds 并确认 View/WebContents/Page 身份与 owner；target renderer
    回执 attachment ready 后，WindowService 原子提交 placement generation，TabModel 持久化新投影。
 5. source 删除旧投影，target renderer 接收 committed generation，辅助窗口显示并取得 native/page
-   focus。焦点失败只形成可诊断 UX 降级，不回滚已经确认身份连续的 runtime。
+   focus。纯焦点失败只形成可诊断 UX 降级；target show/renderer/projection 在 commit 后失效时必须
+   新建反向补偿 transaction，不能调用原 transaction 的 rollback。
 
 target create/ready 前失败时 source 不动。remove 后 attach 失败时优先重新 attach source；source
 仍合法且回滚成功前不创建第二 runtime、不 reload URL。重复 `transferId`、过期 generation、错误
 source 或已关闭 target 都幂等拒绝。commit 前失败走 rollback；commit 后 target renderer/window
-失效走新的补偿性 `returning` transaction，不能把 generation 倒写成旧值。
+失效走新的补偿性 `returning` transaction，补偿自身失败时才进入 Recovery Host；每个终态
+transaction 在诊断发出后释放，不能把 generation 倒写成旧值或无限保留历史记录。
 
 ### 5. Recovery Host
 
@@ -164,7 +169,9 @@ source 或已关闭 target 都幂等拒绝。commit 前失败走 rollback；comm
 - 现有 `browserTabs` section 同时包含 Tab 恢复状态和书签，M1 必须先做可回滚 schema 拆分：
   `tabs` 与 `browserTabs.tabs` 由 TabModel 写；`browserTabs.bookmarks` 迁移到独立
   `browserBookmarks` section，由窄作用域的主进程 `BrowserBookmarkModel` 拥有和写入。TabModel 不
-  拥有书签，BookmarkModel 不拥有 Tab。迁移保留原 section/备份直至新快照成功。
+  拥有书签，BookmarkModel 不拥有 Tab。迁移保留原 section/备份直至新快照成功；成功后在同一
+  WorkspaceState 串行队列中原子移除 `browserTabs.bookmarks` 保护副本，清理失败可重试且不回删
+  已写入的独立 section。
 - main renderer 对 Tab 标题、active、Browser URL 输入投影、view/zoom/history 或书签的修改使用
   类型化 command；对应主进程 model 校验 workspace/tab/generation 后写入。通用
   `workspaceState:setSection` 对 `tabs`、`browserTabs` 和 `browserBookmarks` fail-closed，避免旧
@@ -189,7 +196,8 @@ source 或已关闭 target 都幂等拒绝。commit 前失败走 rollback；comm
 5. 关闭窗口与关闭 Tab 是两个动作；前者送回，后者才执行领域销毁和 draft policy。
 6. 未注册 Tab adapter、未知 renderer、过期 generation 和越权 scope 全部 fail-closed。
 7. 多窗口失败只能降级 Browser/该 Tab，不阻断本地 Editor、Agent、Terminal、数据源或 Android。
-8. 所有窗口、IPC、listener、View、WebContents 和 Recovery Host 都有对称、幂等释放路径。
+8. 所有窗口、终态 transfer、IPC、listener、View、WebContents 和 Recovery Host 都有对称、幂等
+   释放路径；关闭的辅助窗口与历史 transfer 不得形成无界内存账本。
 9. 不扩张外部不可逆动作的人工确认边界，不触碰系统钥匙串。
 
 ## 备选方案

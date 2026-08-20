@@ -170,6 +170,7 @@ describe('WorkbenchTabModel', () => {
       { bookmarks: [bookmark('legacy'), bookmark('new')] },
       null,
     )
+    expect(workspaceState.clearLegacyBrowserBookmarks).toHaveBeenCalledWith('/workspace-a', null)
   })
 
   it('keeps legacy bookmarks visible and retries when the first migration write fails', async () => {
@@ -203,6 +204,26 @@ describe('WorkbenchTabModel', () => {
 
     await expect(model.getProjection('/workspace-a')).resolves.toMatchObject({ bookmarks: [] })
     expect(workspaceState.setSection).not.toHaveBeenCalled()
+    expect(workspaceState.clearLegacyBrowserBookmarks).toHaveBeenCalledWith('/workspace-a', null)
+  })
+
+  it('retries legacy cleanup without risking the migrated bookmark section', async () => {
+    const workspaceState = createWorkspaceState(
+      { tabs: [], activeTabId: null },
+      { tabs: {}, bookmarks: [bookmark('legacy')] },
+      { bookmarks: [bookmark('legacy')] },
+    )
+    workspaceState.clearLegacyBrowserBookmarks.mockRejectedValueOnce(new Error('file locked'))
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const model = new BrowserBookmarkModel(workspaceState as never)
+
+    await model.getProjection('/workspace-a')
+    await model.getProjection('/workspace-a')
+
+    expect(workspaceState.setSection).not.toHaveBeenCalled()
+    expect(workspaceState.clearLegacyBrowserBookmarks).toHaveBeenCalledTimes(2)
+    expect(consoleError).toHaveBeenCalledOnce()
+    consoleError.mockRestore()
   })
 })
 
@@ -216,6 +237,7 @@ function createWorkspaceState(
       sections: { tabs: tabsSection, browserTabs, browserBookmarks },
     })),
     setSection: vi.fn(async () => ({ sections: { tabs: tabsSection } })),
+    clearLegacyBrowserBookmarks: vi.fn(async () => ({ sections: { tabs: tabsSection } })),
   }
 }
 

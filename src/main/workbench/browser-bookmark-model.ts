@@ -12,6 +12,7 @@ interface BookmarkState {
   revision: number
   bookmarks: WorkbenchBrowserBookmark[]
   migrationPending: boolean
+  legacyCleanupPending: boolean
 }
 
 /** Main-process semantic owner and writer for workspace Browser bookmarks. */
@@ -65,6 +66,7 @@ export class BrowserBookmarkModel {
       }
       const next = { ...current, revision: current.revision + 1, bookmarks }
       next.migrationPending = false
+      if (next.legacyCleanupPending) await this.tryCleanupLegacy(next)
       this.states.set(keyOf(input.workspaceKey, input.ownerKey), next)
       return this.toProjection(next)
     })
@@ -79,6 +81,7 @@ export class BrowserBookmarkModel {
     const existing = this.states.get(key)
     if (existing) {
       if (existing.migrationPending) await this.tryMigrateLegacy(existing)
+      else if (existing.legacyCleanupPending) await this.tryCleanupLegacy(existing)
       return existing
     }
     const snapshot = await this.workspaceStateService.getSnapshot(workspaceKey, ownerKey)
@@ -91,9 +94,11 @@ export class BrowserBookmarkModel {
       revision: 0,
       bookmarks: hasIndependentSection ? current : legacy,
       migrationPending: !hasIndependentSection && legacy.length > 0,
+      legacyCleanupPending: hasIndependentSection && legacy.length > 0,
     }
     this.states.set(key, state)
     if (state.migrationPending) await this.tryMigrateLegacy(state)
+    else if (state.legacyCleanupPending) await this.tryCleanupLegacy(state)
     return state
   }
 
@@ -105,10 +110,28 @@ export class BrowserBookmarkModel {
         { bookmarks: state.bookmarks },
         state.ownerKey,
       )
-      state.migrationPending = false
     } catch (error) {
       console.error(
         '[BrowserBookmark] 旧版书签迁移失败；已保留 browserTabs 原始数据，稍后重试:',
+        error,
+      )
+      return
+    }
+    state.migrationPending = false
+    state.legacyCleanupPending = true
+    await this.tryCleanupLegacy(state)
+  }
+
+  private async tryCleanupLegacy(state: BookmarkState): Promise<void> {
+    try {
+      await this.workspaceStateService.clearLegacyBrowserBookmarks(
+        state.workspaceKey,
+        state.ownerKey,
+      )
+      state.legacyCleanupPending = false
+    } catch (error) {
+      console.error(
+        '[BrowserBookmark] 新版书签已安全写入，但旧 browserTabs 保护副本清理失败；稍后重试:',
         error,
       )
     }

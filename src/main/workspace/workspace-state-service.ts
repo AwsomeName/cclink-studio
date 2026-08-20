@@ -616,6 +616,52 @@ export class WorkspaceStateService {
     }
   }
 
+  /**
+   * Remove the legacy browserTabs.bookmarks safety copy only after BrowserBookmarkModel has
+   * durably written browserBookmarks. The mutation is computed inside the workspace queue so
+   * a concurrent Browser Tab projection write cannot be overwritten by a stale snapshot.
+   */
+  async clearLegacyBrowserBookmarks(
+    workspaceKey: string | null | undefined,
+    ownerKey?: string | null,
+  ): Promise<WorkspaceStateSnapshot> {
+    if (!workspaceKey || !isAbsolute(workspaceKey)) {
+      this.assertCentralStateAvailable()
+      return this.trackOperation(
+        this.enqueueWorkspaceMutation(getWorkspaceId(workspaceKey, ownerKey), async () => {
+          const current = this.getCentralSnapshot(workspaceKey, ownerKey)
+          const browserTabs = removeLegacyBrowserBookmarks(current.sections.browserTabs)
+          if (isDeepStrictEqual(current.sections.browserTabs, browserTabs)) return current
+          const next = this.withSection(current, workspaceKey, ownerKey, 'browserTabs', browserTabs)
+          this.state.workspaces[next.workspaceId] = next
+          await this.saveState()
+          return next
+        }),
+      )
+    }
+
+    const inputQueueKey = `input:${getWorkspaceId(workspaceKey, ownerKey)}`
+    return this.trackOperation(
+      this.enqueueWorkspaceMutation(inputQueueKey, async () => {
+        const workspacePath = await this.resolveLocalWorkspacePath(workspaceKey)
+        return this.enqueueWorkspaceMutation(getWorkspaceId(workspacePath, ownerKey), async () => {
+          const current = await this.getLocalSnapshot(workspacePath, ownerKey, workspaceKey, false)
+          const browserTabs = removeLegacyBrowserBookmarks(current.sections.browserTabs)
+          if (isDeepStrictEqual(current.sections.browserTabs, browserTabs)) return current
+          const next = this.withSection(
+            current,
+            workspacePath,
+            ownerKey,
+            'browserTabs',
+            browserTabs,
+          )
+          await this.persistLocalSnapshot(workspacePath, ownerKey, next)
+          return next
+        })
+      }),
+    )
+  }
+
   async clear(workspaceKey?: string | null, ownerKey?: string | null): Promise<void> {
     if (!workspaceKey || !isAbsolute(workspaceKey)) {
       this.assertCentralStateAvailable()
@@ -1499,4 +1545,12 @@ function protectLegacyBrowserBookmarks(currentValue: unknown, nextValue: unknown
   const next = nextValue as Record<string, unknown>
   if (Array.isArray(next.bookmarks)) return nextValue
   return { ...next, bookmarks: structuredClone(legacyBookmarks) }
+}
+
+function removeLegacyBrowserBookmarks(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+  if (!Object.prototype.hasOwnProperty.call(value, 'bookmarks')) return value
+  const next = { ...(value as Record<string, unknown>) }
+  delete next.bookmarks
+  return next
 }

@@ -108,6 +108,40 @@ describe('WorkbenchWindowService', () => {
     })
   })
 
+  it('releases terminal transfers and closed auxiliary windows', () => {
+    const service = setup()
+    service.registerWindow({
+      windowId: 'aux-1',
+      role: 'auxiliary',
+      workspaceKey: '/workspace-a',
+      state: 'ready',
+    })
+    const move = service.beginTransfer({
+      tabId: 'browser-1',
+      sourceWindowId: 'main',
+      targetWindowId: 'aux-1',
+      expectedGeneration: 1,
+      direction: 'move',
+    })
+    service.commitTransfer(move.transferId)
+    expect(() => service.releaseWindow('aux-1')).toThrow('仍存活的窗口不能释放')
+    service.releaseTransfer(move.transferId)
+    expect(service.getTransfer(move.transferId)).toBeNull()
+
+    const returning = service.beginTransfer({
+      tabId: 'browser-1',
+      sourceWindowId: 'aux-1',
+      targetWindowId: 'main',
+      expectedGeneration: 2,
+      direction: 'return',
+    })
+    service.commitTransfer(returning.transferId)
+    service.releaseTransfer(returning.transferId)
+    service.closeWindow('aux-1')
+    service.releaseWindow('aux-1')
+    expect(service.getWindow('aux-1')).toBeNull()
+  })
+
   it('enters an explicit recovery placement when source and target are unavailable', () => {
     const service = setup()
     service.registerWindow({
@@ -231,7 +265,6 @@ function setup(): WorkbenchWindowService {
     tabId: 'browser-1',
     workspaceKey: '/workspace-a',
     windowId: 'main',
-    active: true,
   })
   return service
 }

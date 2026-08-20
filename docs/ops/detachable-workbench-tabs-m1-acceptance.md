@@ -3,7 +3,8 @@
 - 日期：2026-08-20
 - 平台：macOS arm64，Electron 43.1.1
 - 范围：Browser-only M1；右键/命令入口，不含拖出手势、其他 Tab 类型和辅助窗口恢复
-- 自动化结论：真实 Studio App smoke 12/12 通过，`pnpm verify` 通过
+- 自动化结论：真实 Studio App smoke 12/12 通过；`pnpm verify` 通过（296 个测试文件，1747 项
+  通过、2 项跳过，TypeScript 与生产构建通过）
 - 产品结论：工程实现完成；物理双屏与用户自有真实账号真人验收尚未执行，最终用户交付仍为 Conditional Go
 
 ## 用户现在能做什么
@@ -70,12 +71,19 @@ source、target、Recovery Host 间迁移、回滚和释放；证据见
 - source 与 target 同时失效后进入每 View 独立 Recovery Host，再恢复到合法窗口；
 - 已提交迁移后辅助窗口突然失效，也会先把 native View 收拢到 Recovery Host，再以更高 generation
   恢复逻辑 placement，不允许旧事件反向覆盖；
+- `commitTransfer` 已改变状态后才抛错，以及后续 `show`、placement publish、projection/send 抛错时，
+  原 transaction 不再 rollback；系统创建更高 generation 的反向补偿 transaction，并验证 native
+  owner 与逻辑 placement 一致；
+- Recovery Host 送回发生逻辑 commit 故障时，native View 会补偿回 Recovery Host；两边保持
+  `recovering`，不会形成 View 已在 main、placement 仍在 recovery 的分裂状态；
 - BrowserManager 多 host attach 失败回滚、owner 路由、popup、find 和显式释放；
 - BrowserTask 与下载事件按当前 Tab owner 路由；
 - renderer 不能绕过主进程 TabModel/BrowserModel 成为第二持久化 writer；
 - 主 renderer reload 先水合 placement 快照再启动 Browser 生命周期，返回事件按实际 active View
   同步 Tab 高亮；
 - 旧版书签首次迁移写入失败时，WorkspaceState 仍保留 `browserTabs.bookmarks`，后续读取重试迁移；
+  新 section 成功后原子清理 legacy 副本，清理失败独立重试且不覆盖并发 Browser Tab 写入；
+- 终态 transfer 与不再拥有 placement 的已关闭辅助窗口会从内存账本释放；
 - 主窗口关闭会先销毁辅助窗口控制器，再请求 App quit，辅助窗口不能以“关闭送回”拦截退出；
 - auxiliary preload 独立构建，无共享 preload chunk，可信 renderer 权限按角色收窄。
 

@@ -60,6 +60,12 @@ Browser View；已提交迁移后的窗口失效走 Recovery Host 与递增 gene
 legacy 数据并重试。真实 App smoke 已扩为 12/12，完整 `pnpm verify` 已通过。以上仍不能替代物理
 双屏和用户自有真实账号真人签收。
 
+同日第二轮异常事务复审进一步修正：pre-commit failure 才能 rollback 原 transaction；commit 后的
+`show/publish/projection/send` 故障必须创建反向补偿 transaction，Recovery Host 送回失败也要补偿
+native owner。WindowService 的事实边界已收窄为“进入分离生命周期后的 Browser placement/
+generation ledger”，完整 Tab order/active 属于 TabModel，native host active View 属于 BrowserManager。
+终态 transfer、关闭窗口和已安全迁移的 legacy 书签副本均有清理路径与故障注入覆盖。
+
 ## 3. 产品术语和心智
 
 正式术语使用：
@@ -291,9 +297,12 @@ P0 成功只证明平台路线可行，不自动授权 M1。P0 证据完成后�
 
 主进程拆分两个互不重叠的 owner：
 
-- `WorkbenchWindowService` 只拥有窗口注册、window role、Tab placement/order 和移动事务。
-- `WorkbenchTabModel` 唯一拥有逻辑 Tab identity/descriptor、workspace membership，并作为
-  WorkspaceState Tab section 的单一持久化 writer。
+- `WorkbenchWindowService` 只拥有窗口注册，以及进入分离生命周期后的 Browser Tab placement、
+  相对 order、generation 和移动事务账本；它不镜像主工作台全部 Tab，也不拥有全局 active。
+- `WorkbenchTabModel` 唯一拥有逻辑 Tab identity/descriptor、workspace membership、主工作台
+  order/active，并作为 WorkspaceState Tab section 的单一持久化 writer。
+- `BrowserManager` 拥有每个 native host 的实际 active View；placement IPC 中的 `active` 由该事实
+  派生，不能反向把 WindowService 描述成第二个原生 active owner。
 
 建议窗口与 placement 模型：
 
@@ -305,7 +314,6 @@ interface WorkbenchWindowEntry {
   role: WorkbenchWindowRole
   workspaceKey: string | null
   orderedTabIds: string[]
-  activeTabId: string | null
   generation: number
   state: 'creating' | 'ready' | 'closing' | 'closed' | 'failed'
   bounds: { x: number; y: number; width: number; height: number }
@@ -322,8 +330,9 @@ interface TabPlacement {
 }
 ```
 
-`WorkbenchWindowService` 是 placement/order/active window state 的运行时 owner，但不拥有逻辑
-Tab descriptor，也不直接写 Tab WorkspaceState；它通过稳定 tabId 引用 `WorkbenchTabModel`。
+`WorkbenchWindowService` 是已 seed、可分离 Browser placement/generation 的运行时 ledger，但不
+拥有逻辑 Tab descriptor、完整主工作台 order/active，也不直接写 Tab WorkspaceState；它通过稳定
+tabId 引用 `WorkbenchTabModel`。
 `WorkbenchTabModel` 不创建或销毁 BrowserWindow，也不能反向成为第二个 placement owner；持久化
 时由它串行写入自身 descriptor 与 WindowService 提供的 placement snapshot。两者都不拥有 Browser、
 Terminal、Agent、WebAffair 或 Editor 领域运行事实。renderer `tab-store` 改为按 `windowId` 接收

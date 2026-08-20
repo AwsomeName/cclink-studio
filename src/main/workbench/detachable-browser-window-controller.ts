@@ -126,7 +126,7 @@ export class DetachableBrowserWindowController {
       windowId: window.windowId,
       role: window.role,
       workspaceKey: window.workspaceKey,
-      activeTabId: window.activeTabId,
+      activeTabId: this.options.browserManager.getActiveViewIdForWindow(window.windowId),
       generation: window.generation,
     }
   }
@@ -145,6 +145,7 @@ export class DetachableBrowserWindowController {
     let auxiliary: AuxiliaryEntry | null = null
     let transfer: TabTransfer | null = null
     let failurePhase: 'preparing' | 'creating-window' | 'moving' = 'preparing'
+    let committed: TabPlacement | null = null
     try {
       const tabProjection = await this.resolveBrowserTabProjection(
         input.tabId,
@@ -166,7 +167,6 @@ export class DetachableBrowserWindowController {
           tabId: input.tabId,
           workspaceKey: input.workspaceKey,
           windowId: input.sourceWindowId,
-          active: true,
         })
         this.publishPlacement(placement)
       }
@@ -186,12 +186,29 @@ export class DetachableBrowserWindowController {
       await auxiliary.handle.load()
       await withTimeout(auxiliary.ready, this.readyTimeoutMs, '辅助窗口 ready 超时')
       this.options.browserManager.transferViewToHost(input.tabId, input.sourceWindowId, windowId)
-      const committed = this.options.windowService.commitTransfer(transfer.transferId)
+      committed = this.options.windowService.commitTransfer(transfer.transferId)
+    } catch (error) {
+      if (transfer) {
+        try {
+          await this.restoreAfterTransferFailure(transfer, error)
+        } catch (recoveryError) {
+          this.releaseTransferIfTerminal(transfer.transferId)
+          if (auxiliary) this.disposeAuxiliaryIfUnowned(auxiliary.windowId)
+          return failureResult(recoveryError, transfer.transferId, 'recovery')
+        }
+        this.releaseTransferIfTerminal(transfer.transferId)
+      }
+      if (auxiliary) this.disposeAuxiliaryIfUnowned(auxiliary.windowId)
+      return failureResult(error, transfer?.transferId, failurePhase)
+    }
+
+    let projection: WorkbenchWindowProjection
+    try {
       auxiliary.tabProjection = { ...auxiliary.tabProjection, generation: committed.generation }
       auxiliary.handle.window.show()
       this.publishPlacement(committed)
-      const projection = this.getProjection({
-        windowId,
+      projection = this.getProjection({
+        windowId: auxiliary.windowId,
         role: 'auxiliary',
         webContents: auxiliary.handle.window.webContents,
       })
@@ -199,25 +216,27 @@ export class DetachableBrowserWindowController {
         workbenchWindowIpcEvents.projectionChanged,
         projection,
       )
-      return { success: true, transferId: transfer.transferId, projection }
     } catch (error) {
-      if (transfer) {
-        try {
-          await this.rollbackOrRecover(transfer, error)
-        } catch (recoveryError) {
-          if (auxiliary) this.disposeAuxiliary(auxiliary.windowId)
-          return failureResult(recoveryError, transfer.transferId, 'recovery')
-        }
+      try {
+        await this.compensateCommittedTransfer(transfer, error)
+      } catch (recoveryError) {
+        this.releaseTransferIfTerminal(transfer.transferId)
+        this.disposeAuxiliaryIfUnowned(auxiliary.windowId)
+        return failureResult(recoveryError, transfer.transferId, 'recovery')
       }
-      if (auxiliary) this.disposeAuxiliary(auxiliary.windowId)
-      return failureResult(error, transfer?.transferId, failurePhase)
+      this.releaseTransferIfTerminal(transfer.transferId)
+      this.disposeAuxiliaryIfUnowned(auxiliary.windowId)
+      return failureResult(error, transfer.transferId, failurePhase)
     }
+    this.releaseTransferIfTerminal(transfer.transferId)
+    return { success: true, transferId: transfer.transferId, projection }
   }
 
   async returnTabToMain(input: WorkbenchReturnTabInput): Promise<WorkbenchWindowCommandResult> {
     const auxiliary = this.auxiliaries.get(input.sourceWindowId)
     if (!auxiliary || auxiliary.tabProjection.tabId !== input.tabId) return notFound()
     let transfer: TabTransfer | null = null
+    let committed: TabPlacement | null = null
     try {
       transfer = this.options.windowService.beginTransfer({
         tabId: input.tabId,
@@ -232,9 +251,24 @@ export class DetachableBrowserWindowController {
       this.options.browserManager.transferViewToHost(input.tabId, input.sourceWindowId, 'main', {
         activate,
       })
-      const committed = this.options.windowService.commitTransfer(transfer.transferId)
+      committed = this.options.windowService.commitTransfer(transfer.transferId)
+    } catch (error) {
+      if (transfer) {
+        try {
+          await this.restoreAfterTransferFailure(transfer, error)
+        } catch (recoveryError) {
+          this.releaseTransferIfTerminal(transfer.transferId)
+          return failureResult(recoveryError, transfer.transferId, 'recovery')
+        }
+        this.releaseTransferIfTerminal(transfer.transferId)
+      }
+      return failureResult(error, transfer?.transferId)
+    }
+
+    let projection: WorkbenchWindowProjection
+    try {
       this.publishPlacement(committed)
-      const projection: WorkbenchWindowProjection = {
+      projection = {
         window: this.getBootstrap({
           windowId: 'main',
           role: 'main',
@@ -245,18 +279,19 @@ export class DetachableBrowserWindowController {
           .getPlacementSnapshot()
           .map((placement) => this.toPlacementPayload(placement)),
       }
-      this.disposeAuxiliary(input.sourceWindowId)
-      return { success: true, transferId: transfer.transferId, projection }
     } catch (error) {
-      if (transfer) {
-        try {
-          await this.rollbackOrRecover(transfer, error)
-        } catch (recoveryError) {
-          return failureResult(recoveryError, transfer.transferId, 'recovery')
-        }
+      try {
+        await this.compensateCommittedTransfer(transfer, error)
+      } catch (recoveryError) {
+        this.releaseTransferIfTerminal(transfer.transferId)
+        return failureResult(recoveryError, transfer.transferId, 'recovery')
       }
-      return failureResult(error, transfer?.transferId)
+      this.releaseTransferIfTerminal(transfer.transferId)
+      return failureResult(error, transfer.transferId)
     }
+    this.releaseTransferIfTerminal(transfer.transferId)
+    this.disposeAuxiliary(input.sourceWindowId)
+    return { success: true, transferId: transfer.transferId, projection }
   }
 
   private createAuxiliary(
@@ -431,7 +466,131 @@ export class DetachableBrowserWindowController {
     }
   }
 
+  private async restoreAfterTransferFailure(transfer: TabTransfer, cause: unknown): Promise<void> {
+    const current = this.options.windowService.getTransfer(transfer.transferId)
+    if (current?.state === 'committed') {
+      await this.compensateCommittedTransfer(current, cause)
+      return
+    }
+    await this.rollbackOrRecover(transfer, cause)
+  }
+
+  /** A committed transfer is immutable; reversing it always uses a new generation/transaction. */
+  private async compensateCommittedTransfer(
+    committedTransfer: TabTransfer,
+    cause: unknown,
+  ): Promise<void> {
+    const currentPlacement = this.options.windowService.getPlacement(committedTransfer.tabId)
+    if (!currentPlacement) throw new Error(`Tab placement 已丢失: ${committedTransfer.tabId}`)
+    if (
+      currentPlacement.windowId === committedTransfer.sourceWindowId &&
+      currentPlacement.state === 'attached'
+    ) {
+      return
+    }
+    if (
+      currentPlacement.windowId !== committedTransfer.targetWindowId ||
+      currentPlacement.state !== 'attached'
+    ) {
+      throw new WorkbenchWindowTransitionError(
+        'invalid-source',
+        `已提交迁移的补偿 source 已失效: ${committedTransfer.tabId}`,
+      )
+    }
+
+    let compensation: TabTransfer | null = null
+    try {
+      compensation = this.options.windowService.beginTransfer({
+        tabId: committedTransfer.tabId,
+        sourceWindowId: committedTransfer.targetWindowId,
+        targetWindowId: committedTransfer.sourceWindowId,
+        expectedGeneration: currentPlacement.generation,
+        direction: committedTransfer.direction === 'move' ? 'return' : 'move',
+      })
+      const ownerWindowId = this.options.browserManager.getViewOwnerWindowId(
+        committedTransfer.tabId,
+      )
+      if (ownerWindowId !== committedTransfer.targetWindowId) {
+        throw new Error(
+          `Browser runtime 与 committed placement owner 不一致: ${committedTransfer.tabId}`,
+        )
+      }
+      const activate =
+        this.options.browserManager.getHostWorkspaceKey(committedTransfer.sourceWindowId) ===
+        committedTransfer.workspaceKey
+      this.options.browserManager.transferViewToHost(
+        committedTransfer.tabId,
+        committedTransfer.targetWindowId,
+        committedTransfer.sourceWindowId,
+        { activate },
+      )
+      let restored: TabPlacement
+      try {
+        restored = this.options.windowService.commitTransfer(compensation.transferId)
+      } catch (error) {
+        const current = this.options.windowService.getTransfer(compensation.transferId)
+        if (current?.state !== 'committed') throw error
+        restored = this.options.windowService.getPlacement(committedTransfer.tabId)!
+      }
+      this.publishPlacementBestEffort(restored, '已提交迁移补偿通知失败')
+    } catch (compensationError) {
+      if (compensation) {
+        await this.rollbackOrRecover(compensation, compensationError)
+      } else {
+        await this.recoverCommittedPlacement(committedTransfer, compensationError)
+      }
+      console.error('[WorkbenchWindow] 已提交迁移已进入补偿路径', {
+        cause,
+        compensationError,
+      })
+      throw compensationError
+    } finally {
+      if (compensation) this.releaseTransferIfTerminal(compensation.transferId)
+    }
+  }
+
+  private async recoverCommittedPlacement(transfer: TabTransfer, cause: unknown): Promise<void> {
+    const placement = this.options.windowService.getPlacement(transfer.tabId)
+    const ownerWindowId = this.options.browserManager.getViewOwnerWindowId(transfer.tabId)
+    if (!placement || !ownerWindowId)
+      throw new Error(`Browser runtime owner 已丢失: ${transfer.tabId}`)
+    this.options.recoveryHosts.recover(transfer.tabId, ownerWindowId, transfer.workspaceKey)
+    let recovering: TabPlacement
+    try {
+      recovering = this.options.windowService.recoverPlacementAfterWindowLoss(
+        transfer.tabId,
+        placement.windowId,
+      )
+    } catch (placementError) {
+      try {
+        this.options.recoveryHosts.restore(transfer.tabId, placement.windowId)
+      } catch (nativeRollbackError) {
+        try {
+          recovering = this.options.windowService.recoverPlacementAfterWindowLoss(
+            transfer.tabId,
+            placement.windowId,
+          )
+        } catch (retryError) {
+          console.error('[WorkbenchWindow] committed recovery 无法对齐 owner', {
+            cause,
+            placementError,
+            nativeRollbackError,
+            retryError,
+          })
+          throw retryError
+        }
+        this.publishPlacementBestEffort(recovering, 'committed recovery 重试通知失败')
+        await this.tryRestoreRecovery(transfer.tabId)
+        return
+      }
+      throw placementError
+    }
+    this.publishPlacementBestEffort(recovering, 'committed recovery 通知失败')
+    await this.tryRestoreRecovery(transfer.tabId)
+  }
+
   private async rollbackOrRecover(transfer: TabTransfer, cause: unknown): Promise<void> {
+    let rolledBack: TabPlacement
     try {
       const ownerWindowId = this.options.browserManager.getViewOwnerWindowId(transfer.tabId)
       if (!ownerWindowId) throw new Error(`Browser runtime owner 已丢失: ${transfer.tabId}`)
@@ -446,30 +605,53 @@ export class DetachableBrowserWindowController {
           { activate },
         )
       }
-      const placement = this.options.windowService.rollbackTransfer(transfer.transferId)
-      this.publishPlacement(placement)
-      return
+      rolledBack = this.options.windowService.rollbackTransfer(transfer.transferId)
     } catch (rollbackError) {
       const ownerWindowId = this.options.browserManager.getViewOwnerWindowId(transfer.tabId)
       if (!ownerWindowId) throw rollbackError
       try {
         this.options.recoveryHosts.recover(transfer.tabId, ownerWindowId, transfer.workspaceKey)
         const placement = this.options.windowService.enterRecovery(transfer.transferId)
-        this.publishPlacement(placement)
+        this.publishPlacementBestEffort(placement, 'rollback recovery 通知失败')
         await this.tryRestoreRecovery(transfer.tabId)
       } catch (recoveryError) {
         console.error('[WorkbenchWindow] recovery 失败', { cause, rollbackError, recoveryError })
         throw recoveryError
       }
+      return
     }
+    this.publishPlacementBestEffort(rolledBack, 'rollback 通知失败')
   }
 
   private async tryRestoreRecovery(tabId: string): Promise<void> {
     const main = this.options.windowService.getWindow('main')
     if (!main || main.state !== 'ready' || this.options.mainWindow.isDestroyed()) return
+    const recovering = this.options.windowService.getPlacement(tabId)
+    if (!recovering || recovering.state !== 'recovering') return
     this.options.recoveryHosts.restore(tabId, 'main')
-    const placement = this.options.windowService.restoreRecovery(tabId, 'main')
-    this.publishPlacement(placement)
+    let placement: TabPlacement
+    try {
+      placement = this.options.windowService.restoreRecovery(tabId, 'main')
+    } catch (placementError) {
+      try {
+        this.options.recoveryHosts.recover(tabId, 'main', recovering.workspaceKey)
+      } catch (nativeRollbackError) {
+        try {
+          placement = this.options.windowService.restoreRecovery(tabId, 'main')
+        } catch (retryError) {
+          console.error('[WorkbenchWindow] Recovery Host 送回无法对齐 owner', {
+            placementError,
+            nativeRollbackError,
+            retryError,
+          })
+          throw retryError
+        }
+        this.publishPlacementBestEffort(placement, 'recovery restore 重试通知失败')
+        return
+      }
+      throw placementError
+    }
+    this.publishPlacementBestEffort(placement, 'recovery restore 通知失败')
   }
 
   private async recoverLostAuxiliary(entry: AuxiliaryEntry, cause: unknown): Promise<void> {
@@ -490,7 +672,7 @@ export class DetachableBrowserWindowController {
         tabId,
         entry.windowId,
       )
-      this.publishPlacement(recovering)
+      this.publishPlacementBestEffort(recovering, '辅助窗口失效恢复通知失败')
       this.disposeAuxiliary(entry.windowId)
       await this.tryRestoreRecovery(tabId)
     } catch (error) {
@@ -511,6 +693,16 @@ export class DetachableBrowserWindowController {
     const auxiliary = this.auxiliaries.get(placement.windowId)
     if (auxiliary && !auxiliary.handle.window.webContents.isDestroyed()) {
       auxiliary.handle.window.webContents.send(workbenchWindowIpcEvents.placementChanged, payload)
+    }
+  }
+
+  private publishPlacementBestEffort(placement: TabPlacement, message: string): void {
+    try {
+      this.publishPlacement(placement)
+    } catch (error) {
+      // Placement/native owner consistency is already committed. Renderer can rehydrate this
+      // generation through getProjection; a notification failure must not start another rollback.
+      console.error(`[WorkbenchWindow] ${message}`, error)
     }
   }
 
@@ -540,6 +732,27 @@ export class DetachableBrowserWindowController {
       this.options.windowService.closeWindow(windowId)
     }
     if (!entry.handle.window.isDestroyed()) entry.handle.window.destroy()
+    const closed = this.options.windowService.getWindow(windowId)
+    const stillOwnsPlacement = this.options.windowService
+      .getPlacementSnapshot()
+      .some((placement) => placement.windowId === windowId)
+    if (closed && !stillOwnsPlacement && (closed.state === 'closed' || closed.state === 'failed')) {
+      this.options.windowService.releaseWindow(windowId)
+    }
+  }
+
+  private disposeAuxiliaryIfUnowned(windowId: string): void {
+    const entry = this.auxiliaries.get(windowId)
+    if (!entry) return
+    const placement = this.options.windowService.getPlacement(entry.tabProjection.tabId)
+    if (placement?.windowId === windowId) return
+    this.disposeAuxiliary(windowId)
+  }
+
+  private releaseTransferIfTerminal(transferId: string): void {
+    const transfer = this.options.windowService.getTransfer(transferId)
+    if (!transfer || transfer.state === 'preparing' || transfer.state === 'target-ready') return
+    this.options.windowService.releaseTransfer(transferId)
   }
 
   destroy(): void {

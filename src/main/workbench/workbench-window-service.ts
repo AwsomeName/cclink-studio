@@ -9,7 +9,6 @@ export interface WorkbenchWindowEntry {
   role: WorkbenchWindowRole
   workspaceKey: string | null
   orderedTabIds: string[]
-  activeTabId: string | null
   generation: number
   state: WorkbenchWindowState
 }
@@ -53,8 +52,9 @@ export class WorkbenchWindowTransitionError extends Error {
 }
 
 /**
- * Main-process owner for user-visible windows, Tab placement, and transfer generations.
- * It deliberately knows nothing about Browser WebContents or persisted Tab descriptors.
+ * Main-process ledger for windows and Browser Tabs that entered the detachable lifecycle.
+ * BrowserManager remains the native host/active-view owner; this service owns only the
+ * detachable placement/order generations and transfer state for seeded Tabs.
  */
 export class WorkbenchWindowService {
   private readonly windows = new Map<string, WorkbenchWindowEntry>()
@@ -80,7 +80,6 @@ export class WorkbenchWindowService {
       role: input.role,
       workspaceKey: input.workspaceKey,
       orderedTabIds: [],
-      activeTabId: null,
       generation: (existing?.generation ?? 0) + 1,
       state: input.state ?? 'creating',
     }
@@ -123,7 +122,6 @@ export class WorkbenchWindowService {
   closeWindow(windowId: string, failed = false): void {
     const entry = this.requireWindow(windowId)
     entry.state = failed ? 'failed' : 'closed'
-    entry.activeTabId = null
     entry.orderedTabIds = []
   }
 
@@ -132,7 +130,6 @@ export class WorkbenchWindowService {
     workspaceKey: string | null
     windowId: string
     index?: number
-    active?: boolean
   }): TabPlacement {
     const window = this.requireReadyWindow(input.windowId)
     const existingTransfer = this.activeTransferByTab.get(input.tabId)
@@ -149,7 +146,6 @@ export class WorkbenchWindowService {
       window.orderedTabIds.length,
     )
     window.orderedTabIds.splice(index, 0, input.tabId)
-    if (input.active || !window.activeTabId) window.activeTabId = input.tabId
     const placement: TabPlacement = {
       tabId: input.tabId,
       workspaceKey: input.workspaceKey,
@@ -233,7 +229,6 @@ export class WorkbenchWindowService {
     }
     this.removeTabFromWindow(transfer.sourceWindowId, transfer.tabId)
     target.orderedTabIds.push(transfer.tabId)
-    target.activeTabId = transfer.tabId
     placement.windowId = transfer.targetWindowId
     placement.index = target.orderedTabIds.length - 1
     placement.state = 'attached'
@@ -261,7 +256,6 @@ export class WorkbenchWindowService {
     this.activeTransferByTab.delete(transfer.tabId)
     const source = this.requireWindow(transfer.sourceWindowId)
     if (!source.orderedTabIds.includes(transfer.tabId)) source.orderedTabIds.push(transfer.tabId)
-    source.activeTabId ??= transfer.tabId
     this.reindexWindow(source.windowId)
     return { ...placement }
   }
@@ -317,7 +311,6 @@ export class WorkbenchWindowService {
     }
     const target = this.requireReadyWindow(targetWindowId)
     if (!target.orderedTabIds.includes(tabId)) target.orderedTabIds.push(tabId)
-    target.activeTabId ??= tabId
     placement.windowId = targetWindowId
     placement.state = 'attached'
     placement.generation += 1
@@ -342,6 +335,39 @@ export class WorkbenchWindowService {
 
   getPlacementSnapshot(): TabPlacement[] {
     return [...this.placements.values()].map((placement) => ({ ...placement }))
+  }
+
+  /** Release a terminal transaction after its command/fault diagnostic has been emitted. */
+  releaseTransfer(transferId: string): void {
+    const transfer = this.requireTransfer(transferId)
+    if (transfer.state === 'preparing' || transfer.state === 'target-ready') {
+      throw new WorkbenchWindowTransitionError(
+        'invalid-transfer-state',
+        `进行中的迁移不能释放: ${transferId}`,
+      )
+    }
+    if (this.activeTransferByTab.get(transfer.tabId) === transferId) {
+      this.activeTransferByTab.delete(transfer.tabId)
+    }
+    this.transfers.delete(transferId)
+  }
+
+  /** Closed auxiliary windows are not retained as an unbounded historical registry. */
+  releaseWindow(windowId: string): void {
+    const window = this.requireWindow(windowId)
+    if (window.state !== 'closed' && window.state !== 'failed') {
+      throw new WorkbenchWindowTransitionError(
+        'invalid-transfer-state',
+        `仍存活的窗口不能释放: ${windowId}`,
+      )
+    }
+    if ([...this.placements.values()].some((placement) => placement.windowId === windowId)) {
+      throw new WorkbenchWindowTransitionError(
+        'invalid-transfer-state',
+        `仍拥有 placement 的窗口不能释放: ${windowId}`,
+      )
+    }
+    this.windows.delete(windowId)
   }
 
   private requireWindow(windowId: string): WorkbenchWindowEntry {
@@ -383,7 +409,6 @@ export class WorkbenchWindowService {
     const window = this.windows.get(windowId)
     if (!window) return
     window.orderedTabIds = window.orderedTabIds.filter((id) => id !== tabId)
-    if (window.activeTabId === tabId) window.activeTabId = window.orderedTabIds[0] ?? null
     this.reindexWindow(windowId)
   }
 

@@ -204,6 +204,9 @@ describe('DetachableBrowserWindowController', () => {
       windowId: 'main',
       generation: 3,
     })
+    expect(harness.windowService.getTransfer(moved.transferId)).toBeNull()
+    if (returned.success) expect(harness.windowService.getTransfer(returned.transferId)).toBeNull()
+    expect(harness.windowService.getWindow(auxiliaryId)).toBeNull()
   })
 
   it('rolls a ready timeout back to main and publishes the new generation for retry', async () => {
@@ -281,6 +284,59 @@ describe('DetachableBrowserWindowController', () => {
     expect(harness.browserManager.transferViewToHost).toHaveBeenCalledTimes(2)
   })
 
+  it('uses a new transaction when move fails after the original commit', async () => {
+    const harness = createHarness({ ready: true })
+    const commitTransfer = harness.windowService.commitTransfer.bind(harness.windowService)
+    vi.spyOn(harness.windowService, 'commitTransfer').mockImplementationOnce((transferId) => {
+      commitTransfer(transferId)
+      throw new Error('fault injected after commit')
+    })
+
+    const result = await harness.controller.moveTabToNewWindow({
+      tabId: 'browser-1',
+      workspaceKey: '/workspace/a',
+      sourceWindowId: 'main',
+      expectedGeneration: 0,
+    })
+
+    expect(result).toMatchObject({ success: false, error: { code: 'attach-failed' } })
+    expect(harness.ownerByTab.get('browser-1')).toBe('main')
+    expect(harness.windowService.getPlacement('browser-1')).toMatchObject({
+      windowId: 'main',
+      generation: 3,
+      state: 'attached',
+    })
+    expect(harness.browserManager.transferViewToHost).toHaveBeenCalledTimes(2)
+    if (!result.success && result.error.transferId) {
+      expect(harness.windowService.getTransfer(result.error.transferId)).toBeNull()
+    }
+    expect(harness.auxiliaryWindow.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('compensates with a new transaction when auxiliary show fails after commit', async () => {
+    const harness = createHarness({ ready: true })
+    harness.auxiliaryWindow.show.mockImplementationOnce(() => {
+      throw new Error('native show failed')
+    })
+
+    const result = await harness.controller.moveTabToNewWindow({
+      tabId: 'browser-1',
+      workspaceKey: '/workspace/a',
+      sourceWindowId: 'main',
+      expectedGeneration: 0,
+    })
+
+    expect(result).toMatchObject({ success: false, error: { code: 'attach-failed' } })
+    expect(harness.ownerByTab.get('browser-1')).toBe('main')
+    expect(harness.windowService.getPlacement('browser-1')).toMatchObject({
+      windowId: 'main',
+      generation: 3,
+      state: 'attached',
+    })
+    expect(harness.browserManager.transferViewToHost).toHaveBeenCalledTimes(2)
+    expect(harness.auxiliaryWindow.destroy).toHaveBeenCalledOnce()
+  })
+
   it('compensates back to the auxiliary owner when return commit fails', async () => {
     const harness = createHarness({ ready: true })
     const moved = await harness.controller.moveTabToNewWindow({
@@ -305,6 +361,36 @@ describe('DetachableBrowserWindowController', () => {
     expect(harness.ownerByTab.get('browser-1')).toBe(moved.projection.window.windowId)
     expect(harness.windowService.getPlacement('browser-1')).toMatchObject({
       windowId: moved.projection.window.windowId,
+      state: 'attached',
+    })
+    expect(harness.auxiliaryWindow.destroy).not.toHaveBeenCalled()
+  })
+
+  it('compensates return when placement publication fails after commit', async () => {
+    const harness = createHarness({ ready: true })
+    const moved = await harness.controller.moveTabToNewWindow({
+      tabId: 'browser-1',
+      workspaceKey: '/workspace/a',
+      sourceWindowId: 'main',
+      expectedGeneration: 0,
+    })
+    expect(moved.success).toBe(true)
+    if (!moved.success) return
+    harness.mainWindow.webContents.send.mockImplementationOnce(() => {
+      throw new Error('main renderer unavailable')
+    })
+
+    const result = await harness.controller.returnTabToMain({
+      tabId: 'browser-1',
+      sourceWindowId: moved.projection.window.windowId,
+      expectedGeneration: 2,
+    })
+
+    expect(result).toMatchObject({ success: false, error: { code: 'attach-failed' } })
+    expect(harness.ownerByTab.get('browser-1')).toBe(moved.projection.window.windowId)
+    expect(harness.windowService.getPlacement('browser-1')).toMatchObject({
+      windowId: moved.projection.window.windowId,
+      generation: 4,
       state: 'attached',
     })
     expect(harness.auxiliaryWindow.destroy).not.toHaveBeenCalled()
@@ -351,6 +437,33 @@ describe('DetachableBrowserWindowController', () => {
       state: 'attached',
       generation: 4,
     })
+  })
+
+  it('keeps native and logical ownership in Recovery Host when restore commit fails', async () => {
+    const harness = createHarness({ ready: true })
+    const moved = await harness.controller.moveTabToNewWindow({
+      tabId: 'browser-1',
+      workspaceKey: '/workspace/a',
+      sourceWindowId: 'main',
+      expectedGeneration: 0,
+    })
+    expect(moved.success).toBe(true)
+    vi.spyOn(harness.windowService, 'restoreRecovery').mockImplementationOnce(() => {
+      throw new Error('restore placement failed')
+    })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    harness.auxiliaryWindow.emit('closed')
+
+    await vi.waitFor(() =>
+      expect(harness.windowService.getPlacement('browser-1')).toMatchObject({
+        windowId: 'recovery:browser-1',
+        state: 'recovering',
+      }),
+    )
+    expect(harness.ownerByTab.get('browser-1')).toBe('recovery:browser-1')
+    expect(consoleError).toHaveBeenCalled()
+    consoleError.mockRestore()
   })
 
   it('records a Recovery Host placement when attach fails after both user hosts are lost', async () => {

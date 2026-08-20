@@ -396,6 +396,29 @@ describe('WorkspaceStateService', () => {
     })
   })
 
+  it('atomically removes the migrated legacy bookmark copy without losing concurrent tabs', async () => {
+    const service = new WorkspaceStateService()
+    await service.loadState()
+    await service.setSection(workspaceA, 'browserTabs', {
+      tabs: { old: { url: 'https://old.example' } },
+      bookmarks: [{ id: 'legacy', url: 'https://legacy.example' }],
+    })
+    await service.setSection(workspaceA, 'browserBookmarks', {
+      bookmarks: [{ id: 'legacy', url: 'https://legacy.example' }],
+    })
+
+    await Promise.all([
+      service.clearLegacyBrowserBookmarks(workspaceA),
+      service.setSection(workspaceA, 'browserTabs', {
+        tabs: { current: { url: 'https://current.example' } },
+      }),
+    ])
+
+    expect((await service.getSnapshot(workspaceA)).sections.browserTabs).toEqual({
+      tabs: { current: { url: 'https://current.example' } },
+    })
+  })
+
   it('stores local project state under the project hidden directory', async () => {
     const service = new WorkspaceStateService()
     await service.loadState()
