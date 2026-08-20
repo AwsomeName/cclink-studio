@@ -1,4 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  getMainDiagnosticLogSnapshot,
+  resetMainDiagnosticLogForTest,
+} from '../diagnostics/main-diagnostic-log'
 import { DetachableBrowserWindowController } from './detachable-browser-window-controller'
 import { WorkbenchWindowService } from './workbench-window-service'
 
@@ -36,6 +40,9 @@ function createHarness(
   options: {
     ready?: boolean
     createWindowFails?: boolean
+    windowRegistrationFails?: boolean
+    registerHostFails?: boolean
+    trustRegistrationFails?: boolean
     attachFails?: boolean
     loseBothHostsOnAttach?: boolean
   } = {},
@@ -49,7 +56,16 @@ function createHarness(
     workspaceKey: '/workspace/a',
     state: 'ready',
   })
+  if (options.windowRegistrationFails) {
+    const registerWindow = windowService.registerWindow.bind(windowService)
+    vi.spyOn(windowService, 'registerWindow').mockImplementation((input) => {
+      const registered = registerWindow(input)
+      if (input.role === 'auxiliary') throw new Error('window ledger registration failed')
+      return registered
+    })
+  }
   const ownerByTab = new Map([['browser-1', 'main']])
+  const registeredHosts = new Set<string>()
   const mainWorkspaceListeners = new Set<(workspaceKey: string | null) => void>()
   const browserManager = {
     getViewOwnerWindowId: vi.fn((tabId: string) => ownerByTab.get(tabId) ?? null),
@@ -62,8 +78,14 @@ function createHarness(
       callback('/workspace/a')
       return () => mainWorkspaceListeners.delete(callback)
     }),
-    registerHost: vi.fn(),
-    unregisterHost: vi.fn(),
+    registerHost: vi.fn((windowId: string) => {
+      registeredHosts.add(windowId)
+      if (options.registerHostFails) throw new Error('host registration failed')
+    }),
+    unregisterHost: vi.fn((windowId: string) => {
+      registeredHosts.delete(windowId)
+      return []
+    }),
     transferViewToHost: vi.fn((tabId: string, source: string, target: string) => {
       if (ownerByTab.get(tabId) !== source) throw new Error('wrong source')
       if (options.attachFails && source === 'main' && target.startsWith('aux-')) {
@@ -81,6 +103,9 @@ function createHarness(
     goBack: vi.fn(),
     goForward: vi.fn(),
     reload: vi.fn(),
+    getRuntimeIdentity: vi.fn((tabId: string) =>
+      ownerByTab.has(tabId) ? { tabId, workspaceKey: '/workspace/a', runtimeGeneration: 1 } : null,
+    ),
   }
   const tabModel = {
     getProjection: vi.fn().mockResolvedValue({
@@ -109,7 +134,10 @@ function createHarness(
     }),
   }
   const trustedRenderers = {
-    register: vi.fn(() => vi.fn()),
+    register: vi.fn(() => {
+      if (options.trustRegistrationFails) throw new Error('trust registration failed')
+      return vi.fn()
+    }),
     ipcRegistrations: { handle: vi.fn() },
   }
   const recoveryHosts = { recover: vi.fn(), restore: vi.fn(), destroy: vi.fn() }
@@ -156,11 +184,15 @@ function createHarness(
     browserManager,
     ownerByTab,
     recoveryHosts,
+    registeredHosts,
+    createAuxiliaryWindow,
     mainWorkspaceListeners,
   }
 }
 
 describe('DetachableBrowserWindowController', () => {
+  beforeEach(() => resetMainDiagnosticLogForTest())
+
   it('keeps the main WindowService workspace projection synchronized in the main process', () => {
     const harness = createHarness()
     for (const listener of harness.mainWorkspaceListeners) listener('/workspace/b')
@@ -207,6 +239,13 @@ describe('DetachableBrowserWindowController', () => {
     expect(harness.windowService.getTransfer(moved.transferId)).toBeNull()
     if (returned.success) expect(harness.windowService.getTransfer(returned.transferId)).toBeNull()
     expect(harness.windowService.getWindow(auxiliaryId)).toBeNull()
+    const transferLogs = getMainDiagnosticLogSnapshot().entries.filter((entry) =>
+      entry.message.includes('[WorkbenchTransfer]'),
+    )
+    expect(transferLogs).toHaveLength(2)
+    expect(transferLogs[0]?.message).toContain('"identityMatched":true')
+    expect(transferLogs[0]?.message).toContain('"finalOwnerWindowId":"' + auxiliaryId + '"')
+    expect(transferLogs[0]?.message).toContain('"phaseDurationsMs"')
   })
 
   it('rolls a ready timeout back to main and publishes the new generation for retry', async () => {
@@ -245,6 +284,57 @@ describe('DetachableBrowserWindowController', () => {
     expect(harness.windowService.getPlacement('browser-1')).toMatchObject({ windowId: 'main' })
   })
 
+  it('releases a partially written WindowService entry when registration throws', async () => {
+    const harness = createHarness({ windowRegistrationFails: true })
+    const result = await harness.controller.moveTabToNewWindow({
+      tabId: 'browser-1',
+      workspaceKey: '/workspace/a',
+      sourceWindowId: 'main',
+      expectedGeneration: 0,
+    })
+
+    expect(result).toMatchObject({ success: false, error: { code: 'window-create-failed' } })
+    const auxiliaryId = harness.createAuxiliaryWindow.mock.calls[0]?.[0]
+    expect(auxiliaryId).toMatch(/^aux-/)
+    expect(harness.windowService.getWindow(auxiliaryId!)).toBeNull()
+    expect(harness.auxiliaryWindow.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('releases a partially registered auxiliary when Browser host registration fails', async () => {
+    const harness = createHarness({ registerHostFails: true })
+    const result = await harness.controller.moveTabToNewWindow({
+      tabId: 'browser-1',
+      workspaceKey: '/workspace/a',
+      sourceWindowId: 'main',
+      expectedGeneration: 0,
+    })
+
+    expect(result).toMatchObject({ success: false, error: { code: 'window-create-failed' } })
+    expect(harness.registeredHosts.size).toBe(0)
+    expect(harness.browserManager.unregisterHost).toHaveBeenCalledOnce()
+    expect(harness.auxiliaryWindow.destroy).toHaveBeenCalledOnce()
+    expect(
+      harness.windowService
+        .getPlacementSnapshot()
+        .every((placement) => !placement.windowId.startsWith('aux-')),
+    ).toBe(true)
+  })
+
+  it('releases the native window, host, and ledger when trust registration fails', async () => {
+    const harness = createHarness({ trustRegistrationFails: true })
+    const result = await harness.controller.moveTabToNewWindow({
+      tabId: 'browser-1',
+      workspaceKey: '/workspace/a',
+      sourceWindowId: 'main',
+      expectedGeneration: 0,
+    })
+
+    expect(result).toMatchObject({ success: false, error: { code: 'window-create-failed' } })
+    expect(harness.registeredHosts.size).toBe(0)
+    expect(harness.browserManager.unregisterHost).toHaveBeenCalledOnce()
+    expect(harness.auxiliaryWindow.destroy).toHaveBeenCalledOnce()
+  })
+
   it('rolls a target attach failure back while the source remains available', async () => {
     const harness = createHarness({ ready: true, attachFails: true })
     const result = await harness.controller.moveTabToNewWindow({
@@ -261,6 +351,41 @@ describe('DetachableBrowserWindowController', () => {
       state: 'attached',
     })
     expect(harness.auxiliaryWindow.destroy).toHaveBeenCalledOnce()
+    expect(
+      getMainDiagnosticLogSnapshot().entries.some(
+        (entry) =>
+          entry.message.includes('[WorkbenchTransfer]') &&
+          entry.message.includes('"rollbackResult":"succeeded"') &&
+          entry.message.includes('"ownerMatchedPlacement":true'),
+      ),
+    ).toBe(true)
+  })
+
+  it('does not fail a committed move when terminal diagnostic collection fails', async () => {
+    const harness = createHarness({ ready: true })
+    harness.browserManager.getRuntimeIdentity
+      .mockImplementationOnce((tabId: string) => ({
+        tabId,
+        workspaceKey: '/workspace/a',
+        runtimeGeneration: 1,
+      }))
+      .mockImplementationOnce(() => {
+        throw new Error('diagnostic identity unavailable')
+      })
+
+    const result = await harness.controller.moveTabToNewWindow({
+      tabId: 'browser-1',
+      workspaceKey: '/workspace/a',
+      sourceWindowId: 'main',
+      expectedGeneration: 0,
+    })
+
+    expect(result.success).toBe(true)
+    expect(
+      getMainDiagnosticLogSnapshot().entries.some((entry) =>
+        entry.message.includes('diagnostic-collection-failed'),
+      ),
+    ).toBe(true)
   })
 
   it('compensates the native owner when move commit fails after attach', async () => {
