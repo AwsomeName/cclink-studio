@@ -16,6 +16,7 @@ import {
   parseArgs,
   prepareReleaseVersion,
   resolveRemoteTagCommit,
+  resolveSourceCiState,
   selectSuccessfulWorkflowRun,
 } from './oss-release.mjs'
 
@@ -224,6 +225,50 @@ test('reuses only a successful main push CI run for the exact source commit', ()
 
   assert.equal(selectSuccessfulWorkflowRun(runs, sourceSha), expected)
   assert.equal(selectSuccessfulWorkflowRun(runs, 'b'.repeat(40)), undefined)
+})
+
+test('waits for the exact main CI and fails closed when that run completes unsuccessfully', () => {
+  const sourceSha = 'a'.repeat(40)
+  const base = {
+    id: 3,
+    head_sha: sourceSha,
+    head_branch: 'main',
+    event: 'push',
+    html_url: 'https://example.test/actions/3',
+  }
+
+  assert.deepEqual(resolveSourceCiState([], sourceSha), {
+    state: 'waiting',
+    run: undefined,
+  })
+  assert.deepEqual(
+    resolveSourceCiState([{ ...base, status: 'in_progress', conclusion: null }], sourceSha),
+    { state: 'waiting', run: { ...base, status: 'in_progress', conclusion: null } },
+  )
+  assert.equal(
+    resolveSourceCiState([{ ...base, status: 'completed', conclusion: 'success' }], sourceSha)
+      .state,
+    'success',
+  )
+  assert.equal(
+    resolveSourceCiState([{ ...base, status: 'completed', conclusion: 'failure' }], sourceSha)
+      .state,
+    'failed',
+  )
+  assert.equal(
+    resolveSourceCiState(
+      [
+        {
+          ...base,
+          head_sha: 'b'.repeat(40),
+          status: 'completed',
+          conclusion: 'success',
+        },
+      ],
+      sourceSha,
+    ).state,
+    'waiting',
+  )
 })
 
 test('accepts only a package version mutation in the release commit', () => {

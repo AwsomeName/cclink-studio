@@ -25,6 +25,8 @@ const repository = {
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const stableVersionPattern = /^(\d+)\.(\d+)\.(\d+)$/
 const stableTagPattern = /^v(\d+\.\d+\.\d+)$/
+const sourceCiWaitTimeoutMs = 45 * 60 * 1_000
+const sourceCiPollIntervalMs = 10_000
 
 export function parseArgs(argv) {
   const normalizedArgv = argv[0] === '--' ? argv.slice(1) : argv
@@ -207,6 +209,18 @@ export function selectSuccessfulWorkflowRun(runs, sourceSha) {
       run.status === 'completed' &&
       run.conclusion === 'success',
   )
+}
+
+export function resolveSourceCiState(runs, sourceSha) {
+  const run = runs.find(
+    (candidate) =>
+      candidate.head_sha === sourceSha &&
+      candidate.head_branch === 'main' &&
+      candidate.event === 'push',
+  )
+  if (!run) return { state: 'waiting', run: undefined }
+  if (run.status !== 'completed') return { state: 'waiting', run }
+  return run.conclusion === 'success' ? { state: 'success', run } : { state: 'failed', run }
 }
 
 export function isVersionOnlyPackageChange(before, after, targetVersion) {
@@ -431,20 +445,40 @@ async function dispatchWorkflow(tag, token) {
   )
 }
 
-async function assertSuccessfulSourceCi(sourceSha, token) {
-  const response = await githubRequest(
-    `/repos/${repository.owner}/${repository.name}/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=50`,
-    token,
-  )
-  const run = selectSuccessfulWorkflowRun(response.workflow_runs ?? [], sourceSha)
-  if (!run) {
-    throw new Error(
-      `main 当前源码还没有成功完成 CI，不能发布:\nSHA=${sourceSha}\n` +
-        `https://github.com/${repository.owner}/${repository.name}/actions/workflows/ci.yml`,
+async function waitForSuccessfulSourceCi(sourceSha, token) {
+  const deadline = Date.now() + sourceCiWaitTimeoutMs
+  let previousState = ''
+  while (Date.now() < deadline) {
+    const response = await githubRequest(
+      `/repos/${repository.owner}/${repository.name}/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=50`,
+      token,
     )
+    const result = resolveSourceCiState(response.workflow_runs ?? [], sourceSha)
+    if (result.state === 'success') {
+      console.log(`\n已复用 main 源码 CI: ${result.run.html_url}`)
+      return result.run
+    }
+    if (result.state === 'failed') {
+      throw new Error(
+        `main 当前源码 CI 未通过，不能发布: ${result.run.conclusion ?? 'unknown'}\n` +
+          `SHA=${sourceSha}\n${result.run.html_url}`,
+      )
+    }
+
+    assertCurrentSourceLease(sourceSha)
+    const state = result.run ? `${result.run.status}/${result.run.conclusion ?? '-'}` : 'waiting'
+    if (state !== previousState) {
+      console.log(
+        `\n等待 main 源码 CI: ${state}${result.run?.html_url ? `\n${result.run.html_url}` : ''}`,
+      )
+      previousState = state
+    }
+    await delay(sourceCiPollIntervalMs)
   }
-  console.log(`\n已复用 main 源码 CI: ${run.html_url}`)
-  return run
+  throw new Error(
+    `等待 main 当前源码 CI 超时，不能发布:\nSHA=${sourceSha}\n` +
+      `https://github.com/${repository.owner}/${repository.name}/actions/workflows/ci.yml`,
+  )
 }
 
 function withReleaseWorktree(ref, callback) {
@@ -557,7 +591,7 @@ async function release(options) {
     await confirmRelease(tag, false, options.yes)
 
     const token = getGitHubToken()
-    await assertSuccessfulSourceCi(sourceSha, token)
+    await waitForSuccessfulSourceCi(sourceSha, token)
     assertCurrentSourceLease(sourceSha)
 
     const packagePath = resolve(projectRoot, 'package.json')

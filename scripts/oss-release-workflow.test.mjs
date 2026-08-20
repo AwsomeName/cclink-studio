@@ -44,6 +44,7 @@ test('source CI runs isolated smoke groups in parallel instead of one serial cha
   }
   assert.match(ciWorkflow, /cclink-studio-\$\{\{ matrix\.id \}\}/)
   assert.match(ciWorkflow, /cclink-studio-smoke-logs-\$\{\{ matrix\.id \}\}/)
+  assert.doesNotMatch(ciWorkflow, /\n\s+needs: verify/)
   assert.doesNotMatch(ciWorkflow, /pnpm smoke:standalone/)
 })
 

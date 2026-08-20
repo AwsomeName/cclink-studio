@@ -10,8 +10,9 @@ pnpm release -- --patch
 pnpm release -- --version 0.2.0
 ```
 
-该命令要求当前 `main` 源码已有成功的普通 CI，然后只创建修改 `package.json.version`
-的版本提交和不可变 Tag，原子推送并触发 GitHub Actions，等待签名、公证和正式 Release。
+该命令要求当前 `main` 源码已有成功或正在运行的普通 CI；正在运行时会有界等待同一 SHA，
+成功后只创建修改 `package.json.version` 的版本提交和不可变 Tag，原子推送并触发
+GitHub Actions，等待签名、公证和正式 Release。CI 失败、超时或远端 `main` 漂移时停止。
 全部自动门禁通过后，工作流直接公开稳定 Release；真实用户安装与更新反馈属于发布后测试。
 
 `pnpm package:local` 只生成本机未签名 arm64 测试包，不修改版本、不推送，也不得用于
@@ -23,7 +24,7 @@ pnpm release -- --version 0.2.0
 
 常规版本发布只执行以下闭环：
 
-1. 确认当前 `main` 精确 SHA 已有成功的远端普通 CI。
+1. 确认当前 `main` 精确 SHA 已触发远端普通 CI；若仍在运行，发布命令会自动等待。
 2. 运行 `pnpm release -- --patch` 或指定更高的稳定版本。
 3. 等待 `release-oss.yml` 完成，并确认公开稳定 Release 包含规定的四项 arm64 资产。
 
@@ -65,7 +66,7 @@ credential helper，不配置成仓库文件或环境变量。
 ## 发布前
 
 1. 确认当前目录是开源仓库，不是 `cclink-dev` 商业版工作区。
-2. 确认 `main` 与 `origin/main` 一致，且该源码提交的普通 CI 已全绿。
+2. 确认 `main` 与 `origin/main` 一致，且该源码提交的普通 CI 已触发。
 3. 确认 `package.json` 没有未提交改动；其他本地改动可以保留，但不会进入发布。
 4. 确认目标版本高于当前稳定版本，且本地和远端不存在同名 Tag。
 
@@ -96,7 +97,7 @@ release vX.Y.Z
 
 确认后依次执行：
 
-1. 校验当前 `main` 与 `origin/main` 一致，并查找该 SHA 的成功 CI。
+1. 校验当前 `main` 与 `origin/main` 一致，并查找或等待该 SHA 的 CI 成功。
 2. 仅更新 `package.json.version`。
 3. 使用 `git commit --only package.json` 创建 `chore: prepare vX.Y.Z` 提交。
 4. 创建 annotated `vX.Y.Z` Tag。

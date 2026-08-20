@@ -269,8 +269,8 @@ pnpm release -- --version 0.1.13
 
 固定流程：
 
-1. 安装锁定依赖，执行 `pnpm verify` 和 `pnpm smoke:standalone`。
-2. 写入目标版本；若显式要求本地产物，则生成同版本 ad-hoc arm64 DMG，失败时恢复版本并停止。
+1. 复用当前 `main` 精确 SHA 的普通 CI；CI 正在运行时有界等待，失败、超时或源码漂移时停止。
+2. 写入目标版本；只有显式要求本地产物时才生成同版本 ad-hoc arm64 DMG。
 3. 创建版本提交和 annotated Tag。
 4. 原子推送 `main` 与 Tag。
 5. 触发 `release-oss.yml`，在 `macos-15` 重新构建 arm64 正式候选包。
@@ -282,6 +282,9 @@ pnpm release -- --version 0.1.13
 版本、不推送，也不是正式发布入口。`pnpm release` 默认不重复生成本地验收包；远程从
 不可变 Tag 独立构建签名公证包并在门禁通过后公开。详细操作见
 `docs/ops/oss-release-runbook.md`。
+
+普通 CI 中 `verify` 与六组隔离 smoke 并发启动；smoke 之间不共享 userData、端口或进程。
+正式 Release 仍串行执行签名、App 公证、DMG 公证和 Gatekeeper/Manifest 门禁。
 
 ## 开发里程碑
 
