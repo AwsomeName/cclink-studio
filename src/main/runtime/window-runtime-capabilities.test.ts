@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createRuntimeState } from './app-runtime'
-import { applyWindowZoomLevel, bootstrapWindowCapabilities } from './window-runtime'
+import {
+  applyWindowZoomLevel,
+  bootstrapWindowCapabilities,
+  handleMainWindowClosed,
+} from './window-runtime'
 
 describe('bootstrapWindowCapabilities', () => {
   it('continues Android startup after Browser initialization fails', () => {
@@ -79,6 +83,29 @@ describe('applyWindowZoomLevel', () => {
 
     expect(setZoomLevel).toHaveBeenCalledWith(-1)
     expect(refreshBoundsForWindowZoom).toHaveBeenCalledOnce()
+  })
+})
+
+describe('handleMainWindowClosed', () => {
+  it('requests app shutdown even while auxiliary windows still exist', () => {
+    const runtime = createRuntimeState(true)
+    const closeWindow = vi.fn()
+    const destroyDetachableWindows = vi.fn()
+    const requestQuit = vi.fn()
+    runtime.mainWindow = {} as never
+    runtime.workbenchWindowService = {
+      getWindow: () => ({ state: 'ready' }),
+      closeWindow,
+    } as never
+    runtime.detachableBrowserWindows = { destroy: destroyDetachableWindows } as never
+
+    handleMainWindowClosed(runtime, requestQuit)
+
+    expect(closeWindow).toHaveBeenCalledWith('main')
+    expect(destroyDetachableWindows).toHaveBeenCalledOnce()
+    expect(runtime.detachableBrowserWindows).toBeNull()
+    expect(runtime.mainWindow).toBeNull()
+    expect(requestQuit).toHaveBeenCalledOnce()
   })
 })
 

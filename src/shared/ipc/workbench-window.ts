@@ -43,10 +43,23 @@ export const workbenchBrowserTabProjectionSchema = z
   .strict()
 export type WorkbenchBrowserTabProjection = z.infer<typeof workbenchBrowserTabProjectionSchema>
 
+export const workbenchPlacementChangedSchema = z
+  .object({
+    tabId: stableIdSchema,
+    workspaceKey: workspaceKeySchema,
+    windowId: stableIdSchema,
+    generation: generationSchema,
+    state: z.enum(['attached', 'moving', 'returning', 'recovering']),
+    active: z.boolean(),
+  })
+  .strict()
+export type WorkbenchPlacementChanged = z.infer<typeof workbenchPlacementChangedSchema>
+
 export const workbenchWindowProjectionSchema = z
   .object({
     window: workbenchWindowBootstrapSchema,
     tabs: z.array(workbenchBrowserTabProjectionSchema).max(500),
+    placements: z.array(workbenchPlacementChangedSchema).max(500),
   })
   .strict()
   .superRefine((projection, context) => {
@@ -55,17 +68,6 @@ export const workbenchWindowProjectionSchema = z
     }
   })
 export type WorkbenchWindowProjection = z.infer<typeof workbenchWindowProjectionSchema>
-
-export const workbenchPlacementChangedSchema = z
-  .object({
-    tabId: stableIdSchema,
-    workspaceKey: workspaceKeySchema,
-    windowId: stableIdSchema,
-    generation: generationSchema,
-    state: z.enum(['attached', 'moving', 'returning', 'recovering']),
-  })
-  .strict()
-export type WorkbenchPlacementChanged = z.infer<typeof workbenchPlacementChangedSchema>
 
 export const workbenchMoveTabInputSchema = z
   .object({

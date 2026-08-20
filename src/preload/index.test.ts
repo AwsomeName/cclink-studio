@@ -61,6 +61,7 @@ describe('preload API surface', () => {
     expect(api.window).toEqual(
       expect.objectContaining({
         toggleFullscreen: expect.any(Function),
+        requestClose: expect.any(Function),
         focusRenderer: expect.any(Function),
       }),
     )

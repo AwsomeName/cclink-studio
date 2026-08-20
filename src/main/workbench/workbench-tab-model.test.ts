@@ -171,11 +171,50 @@ describe('WorkbenchTabModel', () => {
       null,
     )
   })
+
+  it('keeps legacy bookmarks visible and retries when the first migration write fails', async () => {
+    const workspaceState = createWorkspaceState(
+      { tabs: [], activeTabId: null },
+      { tabs: {}, bookmarks: [bookmark('legacy')] },
+    )
+    workspaceState.setSection.mockRejectedValueOnce(new Error('disk full'))
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const model = new BrowserBookmarkModel(workspaceState as never)
+
+    await expect(model.getProjection('/workspace-a')).resolves.toMatchObject({
+      bookmarks: [expect.objectContaining({ id: 'legacy' })],
+    })
+    await expect(model.getProjection('/workspace-a')).resolves.toMatchObject({
+      bookmarks: [expect.objectContaining({ id: 'legacy' })],
+    })
+
+    expect(workspaceState.setSection).toHaveBeenCalledTimes(2)
+    expect(consoleError).toHaveBeenCalledOnce()
+    consoleError.mockRestore()
+  })
+
+  it('does not resurrect legacy bookmarks after the independent section was cleared', async () => {
+    const workspaceState = createWorkspaceState(
+      { tabs: [], activeTabId: null },
+      { tabs: {}, bookmarks: [bookmark('legacy')] },
+      { bookmarks: [] },
+    )
+    const model = new BrowserBookmarkModel(workspaceState as never)
+
+    await expect(model.getProjection('/workspace-a')).resolves.toMatchObject({ bookmarks: [] })
+    expect(workspaceState.setSection).not.toHaveBeenCalled()
+  })
 })
 
-function createWorkspaceState(tabsSection: unknown, browserTabs: unknown = { tabs: {} }) {
+function createWorkspaceState(
+  tabsSection: unknown,
+  browserTabs: unknown = { tabs: {} },
+  browserBookmarks?: unknown,
+) {
   return {
-    getSnapshot: vi.fn(async () => ({ sections: { tabs: tabsSection, browserTabs } })),
+    getSnapshot: vi.fn(async () => ({
+      sections: { tabs: tabsSection, browserTabs, browserBookmarks },
+    })),
     setSection: vi.fn(async () => ({ sections: { tabs: tabsSection } })),
   }
 }

@@ -11,6 +11,7 @@ interface BookmarkState {
   ownerKey: string | null
   revision: number
   bookmarks: WorkbenchBrowserBookmark[]
+  migrationPending: boolean
 }
 
 /** Main-process semantic owner and writer for workspace Browser bookmarks. */
@@ -63,6 +64,7 @@ export class BrowserBookmarkModel {
         )
       }
       const next = { ...current, revision: current.revision + 1, bookmarks }
+      next.migrationPending = false
       this.states.set(keyOf(input.workspaceKey, input.ownerKey), next)
       return this.toProjection(next)
     })
@@ -75,18 +77,41 @@ export class BrowserBookmarkModel {
   private async load(workspaceKey: string | null, ownerKey: string | null): Promise<BookmarkState> {
     const key = keyOf(workspaceKey, ownerKey)
     const existing = this.states.get(key)
-    if (existing) return existing
+    if (existing) {
+      if (existing.migrationPending) await this.tryMigrateLegacy(existing)
+      return existing
+    }
     const snapshot = await this.workspaceStateService.getSnapshot(workspaceKey, ownerKey)
+    const hasIndependentSection = hasBookmarkSection(snapshot.sections.browserBookmarks)
     const current = normalizeBookmarks(snapshot.sections.browserBookmarks)
     const legacy = normalizeBookmarks(snapshot.sections.browserTabs)
     const state: BookmarkState = {
       workspaceKey,
       ownerKey,
       revision: 0,
-      bookmarks: current.length > 0 ? current : legacy,
+      bookmarks: hasIndependentSection ? current : legacy,
+      migrationPending: !hasIndependentSection && legacy.length > 0,
     }
     this.states.set(key, state)
+    if (state.migrationPending) await this.tryMigrateLegacy(state)
     return state
+  }
+
+  private async tryMigrateLegacy(state: BookmarkState): Promise<void> {
+    try {
+      await this.workspaceStateService.setSection(
+        state.workspaceKey,
+        'browserBookmarks',
+        { bookmarks: state.bookmarks },
+        state.ownerKey,
+      )
+      state.migrationPending = false
+    } catch (error) {
+      console.error(
+        '[BrowserBookmark] 旧版书签迁移失败；已保留 browserTabs 原始数据，稍后重试:',
+        error,
+      )
+    }
   }
 
   private toProjection(state: BookmarkState): WorkbenchBrowserBookmarkSnapshot {
@@ -123,6 +148,14 @@ function normalizeBookmarks(value: unknown): WorkbenchBrowserBookmark[] {
     const parsed = workbenchBrowserBookmarkSchema.safeParse(bookmark)
     return parsed.success ? [parsed.data] : []
   })
+}
+
+function hasBookmarkSection(value: unknown): boolean {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    Array.isArray((value as { bookmarks?: unknown }).bookmarks),
+  )
 }
 
 function keyOf(workspaceKey: string | null, ownerKey: string | null): string {

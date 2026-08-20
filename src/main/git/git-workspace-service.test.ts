@@ -5,6 +5,9 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// 该文件会并行启动多组真实 Git 子进程；整套测试高负载下 5s 默认预算不足。
+vi.setConfig({ testTimeout: 15_000, hookTimeout: 15_000 })
+
 const execFileAsync = promisify(execFile)
 const mockPaths = vi.hoisted(() => ({ userData: '' }))
 

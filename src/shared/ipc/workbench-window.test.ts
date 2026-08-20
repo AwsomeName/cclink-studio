@@ -30,6 +30,16 @@ describe('workbench window IPC contract', () => {
             browserProfile: null,
           },
         ],
+        placements: [
+          {
+            tabId: 'browser-1',
+            workspaceKey: '/workspace-a',
+            windowId: 'aux-1',
+            generation: 2,
+            state: 'attached',
+            active: true,
+          },
+        ],
       }),
     ).toMatchObject({ window: { role: 'auxiliary' }, tabs: [{ tabId: 'browser-1' }] })
   })
@@ -56,6 +66,7 @@ describe('workbench window IPC contract', () => {
           generation: 1,
         },
         tabs: [browserProjection('browser-1'), browserProjection('browser-2')],
+        placements: [],
       }),
     ).toThrow()
   })

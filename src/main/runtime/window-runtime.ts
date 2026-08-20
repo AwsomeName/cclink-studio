@@ -1,3 +1,4 @@
+import { app } from 'electron'
 import { BrowserManager } from '../browser/browser-manager'
 import { BrowserTaskRuntime } from '../browser/browser-task-runtime'
 import { BrowserDownloadStore } from '../browser/browser-download-store'
@@ -71,11 +72,7 @@ export function createWindowRuntime(
   })
 
   runtime.mainWindow.on('closed', () => {
-    const mainEntry = runtime.workbenchWindowService?.getWindow('main')
-    if (mainEntry && mainEntry.state !== 'closed' && mainEntry.state !== 'failed') {
-      runtime.workbenchWindowService?.closeWindow('main')
-    }
-    runtime.mainWindow = null
+    handleMainWindowClosed(runtime)
   })
 
   registerDialogIpc(runtime.mainWindow, runtime.trustedRendererGuard)
@@ -105,6 +102,25 @@ export function createWindowRuntime(
     })
     runtime.detachableBrowserWindows.registerIpc()
   }
+}
+
+export function handleMainWindowClosed(
+  runtime: CclinkStudioRuntimeState,
+  requestQuit: () => void = () => app.quit(),
+): void {
+  const mainEntry = runtime.workbenchWindowService?.getWindow('main')
+  if (mainEntry && mainEntry.state !== 'closed' && mainEntry.state !== 'failed') {
+    runtime.workbenchWindowService?.closeWindow('main')
+  }
+  runtime.mainWindow = null
+  try {
+    runtime.detachableBrowserWindows?.destroy()
+  } catch (error) {
+    console.error('[WorkbenchWindow] 主窗口关闭时释放辅助窗口失败:', error)
+  }
+  runtime.detachableBrowserWindows = null
+  runtime.browserRecoveryHosts = null
+  requestQuit()
 }
 
 /** 设置主 renderer 缩放，并让已挂载的原生 Browser View 立即进入同一坐标系。 */

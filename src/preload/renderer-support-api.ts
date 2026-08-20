@@ -22,6 +22,7 @@ export const windowApi: WindowApiContract = {
   toggleFullscreen: () => invokeIpcContract(windowIpc.toggleFullscreen),
   toggleDevtools: () => invokeIpcContract(windowIpc.toggleDevtools),
   reload: () => invokeIpcContract(windowIpc.reload),
+  requestClose: () => invokeIpcContract(windowIpc.requestClose),
   focusRenderer: () => invokeIpcContract(windowIpc.focusRenderer),
   setShortcutCaptureGuard: (input) => invokeIpcContract(windowIpc.setShortcutCaptureGuard, input),
   onShortcutCaptureInput: (callback) => {

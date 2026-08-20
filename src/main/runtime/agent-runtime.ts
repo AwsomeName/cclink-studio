@@ -93,7 +93,7 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
 
       if (runtime.browserManager) {
         runtime.browserManager.onViewDestroyed((tabId) =>
-          runtime.agentBridge!.invalidateBrowserScope(tabId),
+          runtime.agentBridge?.invalidateBrowserScope(tabId),
         )
       }
       runtime.capabilities.ready('agent-backend')

@@ -24,6 +24,7 @@ export interface WindowApiContract {
   toggleFullscreen: () => Promise<ToggleFullscreenResult>
   toggleDevtools: () => Promise<WindowOperationResult>
   reload: () => Promise<WindowOperationResult>
+  requestClose: () => Promise<WindowOperationResult>
   focusRenderer: () => Promise<WindowOperationResult>
   setShortcutCaptureGuard: (input: ShortcutCaptureGuardInput) => Promise<WindowOperationResult>
   onShortcutCaptureInput: (callback: (event: ShortcutCaptureInputEvent) => void) => () => void
@@ -33,6 +34,7 @@ export const windowIpc = {
   toggleFullscreen: defineNoArgsIpc<ToggleFullscreenResult>('window:toggleFullscreen'),
   toggleDevtools: defineNoArgsIpc<WindowOperationResult>('window:toggleDevtools'),
   reload: defineNoArgsIpc<WindowOperationResult>('window:reload'),
+  requestClose: defineNoArgsIpc<WindowOperationResult>('window:requestClose'),
   focusRenderer: defineNoArgsIpc<WindowOperationResult>('window:focusRenderer'),
   setShortcutCaptureGuard: defineIpcInvoke<[ShortcutCaptureGuardInput], WindowOperationResult>(
     'window:setShortcutCaptureGuard',

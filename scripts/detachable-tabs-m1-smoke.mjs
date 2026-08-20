@@ -92,6 +92,29 @@ async function waitForPage(browser, predicate, timeoutMs = 20_000) {
   throw new Error('Expected CDP page did not appear')
 }
 
+async function waitForCleanAppExit(previousLog, cdpPort, timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const complete = await readLog()
+    const latest =
+      previousLog && complete.startsWith(previousLog)
+        ? complete.slice(previousLog.length)
+        : complete
+    let cdpStopped = false
+    try {
+      const response = await fetch(`http://127.0.0.1:${cdpPort}/json/version`, {
+        signal: AbortSignal.timeout(500),
+      })
+      cdpStopped = !response.ok
+    } catch {
+      cdpStopped = true
+    }
+    if (latest.includes('[CCLink Studio] 优雅退出完成') && cdpStopped) return
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+  throw new Error('Electron CDP endpoint remained reachable after main window close')
+}
+
 async function check(name, operation) {
   try {
     const detail = await operation()
@@ -141,6 +164,7 @@ try {
   const initialLog = await readLog()
   runRestart('start')
   const cdpPort = await waitForCdpPort(initialLog)
+  let activeCdpPort = cdpPort
   const mcpPort = await waitForMcpPort(initialLog)
   browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`)
   mainPage = await waitForPage(browser, (page) => page.url().startsWith(`${rendererOrigin}/`))
@@ -241,6 +265,29 @@ try {
       return mainProjection.windowId
     },
   )
+
+  await check('reload the main renderer without duplicating the detached Tab', async () => {
+    await mainPage.reload({ waitUntil: 'domcontentloaded' })
+    await mainPage.waitForSelector('.main-window', { timeout: 30_000 })
+    await mainPage.waitForFunction(
+      async (id) => {
+        const { useWorkbenchWindowStore } = await import('/src/stores/workbench-window-store.ts')
+        return useWorkbenchWindowStore.getState().placements[id]?.windowId.startsWith('aux-')
+      },
+      tabId,
+      { timeout: 10_000 },
+    )
+    assert(
+      (await mainPage.getByRole('tab').filter({ hasText: 'Detachable M1' }).count()) === 0,
+      'Detached Browser Tab was rendered again after main reload',
+    )
+    assert(!browserPage.isClosed(), 'Detached Browser Page closed during main reload')
+    assert(
+      (await browserPage.locator('#draft').inputValue()) === 'unsent draft',
+      'Detached Browser state changed during main reload',
+    )
+    return 'placement hydrated before Browser reconciliation; no duplicate Tab appeared'
+  })
 
   await check(
     'keep the main Workbench usable for real Editor input while Browser is detached',
@@ -476,7 +523,9 @@ try {
     await mainPage.waitForFunction(
       async (id) => {
         const { useWorkbenchWindowStore } = await import('/src/stores/workbench-window-store.ts')
-        return useWorkbenchWindowStore.getState().placements[id]?.windowId === 'main'
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        const placement = useWorkbenchWindowStore.getState().placements[id]
+        return placement?.windowId === 'main' && placement.active && useTabStore.getState().activeTabId === id
       },
       tabId,
       { timeout: 10_000 },
@@ -489,7 +538,7 @@ try {
       JSON.stringify(identityAfterNativeClose) === JSON.stringify(identityBefore),
       'Native auxiliary close destroyed or rebuilt the Browser runtime',
     )
-    return 'command palette moved the Tab and native close compensated to main'
+    return 'native close returned the Page and synchronized the highlighted active Tab'
   })
 
   let restoredBrowserPage
@@ -508,6 +557,7 @@ try {
 
     runRestart('restart')
     const restartedCdpPort = await waitForCdpPort(previousLog)
+    activeCdpPort = restartedCdpPort
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${restartedCdpPort}`)
     mainPage = await waitForPage(browser, (page) => page.url().startsWith(`${rendererOrigin}/`))
     await mainPage.waitForSelector('.main-window', { timeout: 30_000 })
@@ -572,6 +622,48 @@ try {
     }, tabId)
     assert(!tabStillPresent, 'Logical Browser Tab survived explicit close')
     return 'runtime removed, Page closed and task cancelled with tab_closed'
+  })
+
+  await check('close the main window with an auxiliary open and exit the App cleanly', async () => {
+    const shutdownTabId = await mainPage.evaluate(async (url) => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+      useTabStore.getState().openTab({
+        type: 'browser',
+        title: 'Detachable Shutdown',
+        icon: '🌐',
+        initialUrl: url,
+        workspaceRef: useWorkspaceStore.getState().activeWorkspaceRef,
+        forceNew: true,
+      })
+      return useTabStore.getState().activeTabId
+    }, testUrl)
+    assert(shutdownTabId, 'Shutdown Browser tab was not created')
+    await mainPage.waitForFunction(
+      async (id) => Boolean(await window.cclinkStudio.browser.getRuntimeIdentity(id)),
+      shutdownTabId,
+      { timeout: 15_000 },
+    )
+    const shutdownTab = mainPage
+      .getByRole('tab')
+      .filter({ hasText: 'Detachable Shutdown' })
+      .first()
+    await shutdownTab.click({ button: 'right' })
+    await mainPage.getByRole('menu', { name: '上下文菜单' }).waitFor({ state: 'visible' })
+    await mainPage.getByRole('menuitem', { name: '移至新窗口' }).click()
+    const shutdownAuxiliary = await waitForPage(
+      browser,
+      (page) => page.url().startsWith(`${rendererOrigin}/`) && page.url().includes('#auxiliary'),
+    )
+    await shutdownAuxiliary.waitForSelector('.auxiliary-browser-window', { timeout: 10_000 })
+
+    const beforeCloseLog = await readLog()
+    const closeResult = await mainPage.evaluate(() => window.cclinkStudio.window.requestClose())
+    assert(closeResult.success, 'Trusted main renderer close request was rejected')
+    await waitForCleanAppExit(beforeCloseLog, activeCdpPort)
+    const shutdownLog = await readLog()
+    assert(shutdownLog.includes('[CCLink Studio] 优雅退出完成'), 'App did not complete graceful shutdown')
+    return 'main close requested App quit; auxiliary did not orphan the process'
   })
 } finally {
   if (browser) await browser.close().catch(() => undefined)

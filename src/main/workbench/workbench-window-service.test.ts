@@ -144,6 +144,36 @@ describe('WorkbenchWindowService', () => {
     })
   })
 
+  it('recovers a committed placement after its auxiliary window is lost', () => {
+    const service = setup()
+    service.registerWindow({
+      windowId: 'aux-1',
+      role: 'auxiliary',
+      workspaceKey: '/workspace-a',
+      state: 'ready',
+    })
+    const move = service.beginTransfer({
+      tabId: 'browser-1',
+      sourceWindowId: 'main',
+      targetWindowId: 'aux-1',
+      expectedGeneration: 1,
+      direction: 'move',
+    })
+    service.commitTransfer(move.transferId)
+    service.closeWindow('aux-1', true)
+
+    expect(service.recoverPlacementAfterWindowLoss('browser-1', 'aux-1')).toMatchObject({
+      windowId: 'recovery:browser-1',
+      state: 'recovering',
+      generation: 3,
+    })
+    expect(service.restoreRecovery('browser-1', 'main')).toMatchObject({
+      windowId: 'main',
+      state: 'attached',
+      generation: 4,
+    })
+  })
+
   it('rejects stale generations, wrong sources, and concurrent transfers', () => {
     const service = setup()
     service.registerWindow({

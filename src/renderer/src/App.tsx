@@ -87,7 +87,7 @@ function MainLayout(): React.ReactElement {
   }, [])
 
   useRegisterCommands()
-  useWorkbenchWindowEvents()
+  const workbenchWindowReady = useWorkbenchWindowEvents()
   useRegisterContextActions()
   useConversationSelectionMenu()
   useShortcutRouter()
@@ -104,7 +104,7 @@ function MainLayout(): React.ReactElement {
       : activeTab,
     tabs,
     activeWorkspaceRef,
-    workspaceReady,
+    workspaceReady && workbenchWindowReady,
   )
 
   const handleSidebarResize = useCallback(
@@ -126,7 +126,7 @@ function MainLayout(): React.ReactElement {
     toggleAgentPanel('right')
   }, [toggleAgentPanel])
 
-  if (!workspaceReady) {
+  if (!workspaceReady || !workbenchWindowReady) {
     return <LoadingScreen />
   }
 

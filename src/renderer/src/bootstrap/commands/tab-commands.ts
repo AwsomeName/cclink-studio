@@ -107,14 +107,12 @@ export function createTabCommands(): Command[] {
           if (wasActive) useTabStore.getState().activateTab(tabId)
           throw new Error(result.error.message)
         }
-        const moved = result.projection.tabs[0]
-        useWorkbenchWindowStore.getState().applyPlacement({
-          tabId,
-          workspaceKey: moved.workspaceKey,
-          windowId: result.projection.window.windowId,
-          generation: moved.generation,
-          state: 'attached',
-        })
+        const movedPlacement = result.projection.placements.find(
+          (candidate) => candidate.tabId === tabId,
+        )
+        if (movedPlacement) {
+          useWorkbenchWindowStore.getState().applyPlacement(movedPlacement)
+        }
       },
     },
     {

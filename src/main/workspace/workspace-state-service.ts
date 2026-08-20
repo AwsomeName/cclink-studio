@@ -994,6 +994,9 @@ export class WorkspaceStateService {
     value: unknown,
     options?: WorkspaceStateSetSectionOptions,
   ): unknown {
+    if (section === 'browserTabs') {
+      return protectLegacyBrowserBookmarks(current.sections.browserTabs, value)
+    }
     if (section !== 'agentConversations') return value
     const result = protectConversationHistory(
       current.sections.agentConversations,
@@ -1486,4 +1489,14 @@ export class WorkspaceStateService {
     })
     await rename(this.tempFilePath, this.stateFilePath)
   }
+}
+
+function protectLegacyBrowserBookmarks(currentValue: unknown, nextValue: unknown): unknown {
+  if (!currentValue || typeof currentValue !== 'object') return nextValue
+  const legacyBookmarks = (currentValue as { bookmarks?: unknown }).bookmarks
+  if (!Array.isArray(legacyBookmarks) || legacyBookmarks.length === 0) return nextValue
+  if (!nextValue || typeof nextValue !== 'object' || Array.isArray(nextValue)) return currentValue
+  const next = nextValue as Record<string, unknown>
+  if (Array.isArray(next.bookmarks)) return nextValue
+  return { ...next, bookmarks: structuredClone(legacyBookmarks) }
 }

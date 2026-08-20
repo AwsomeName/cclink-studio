@@ -38,6 +38,16 @@ describe('registerWindowIpc', () => {
     expect(webContents.focus).not.toHaveBeenCalled()
   })
 
+  it('routes a trusted close request through BrowserWindow.close', () => {
+    const webContents = createWebContents()
+    const mainWindow = createMainWindow(webContents)
+    registerWindowIpc(mainWindow as never, createGuard(webContents) as never)
+
+    const handler = mockIpcMain.handlers.get('window:requestClose')
+    expect(handler?.({ sender: webContents })).toEqual({ success: true })
+    expect(mainWindow.close).toHaveBeenCalledOnce()
+  })
+
   it('intercepts Cmd+W while recording and forwards the captured chord', () => {
     const webContents = createWebContents()
     const mainWindow = createMainWindow(webContents)
@@ -93,6 +103,7 @@ function createMainWindow(webContents = createWebContents()) {
     isFullScreen: vi.fn(() => false),
     setFullScreen: vi.fn(),
     reload: vi.fn(),
+    close: vi.fn(),
   }
 }
 

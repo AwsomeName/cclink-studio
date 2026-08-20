@@ -54,6 +54,12 @@ Host。生产实现现已采用主进程 WindowService/TabModel、最小辅助 r
 Browser M1 生产实现和真实 App 自动门禁已通过；物理双屏与用户自有真实账号真人签收记录见
 `docs/ops/detachable-workbench-tabs-m1-acceptance.md`。该签收完成前仍不能声明副屏用户闭环最终交付。
 
+2026-08-20 异常路径复审已关闭五项发布阻断：主窗口关闭会先释放辅助窗口拦截器再退出；主 renderer
+刷新会先水合 placement 投影，避免重复 Tab；同工作空间关闭辅助窗口后，Tab 高亮服从实际 active
+Browser View；已提交迁移后的窗口失效走 Recovery Host 与递增 generation；旧书签迁移失败时保留
+legacy 数据并重试。真实 App smoke 已扩为 12/12，完整 `pnpm verify` 已通过。以上仍不能替代物理
+双屏和用户自有真实账号真人签收。
+
 ## 3. 产品术语和心智
 
 正式术语使用：

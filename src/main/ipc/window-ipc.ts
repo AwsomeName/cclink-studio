@@ -77,6 +77,12 @@ export function registerWindowIpc(
     return { success: true }
   })
 
+  registerTrustedIpcContract(windowIpc.requestClose, trustedRendererGuard, () => {
+    if (mainWindow.isDestroyed()) return { success: false }
+    mainWindow.close()
+    return { success: true }
+  })
+
   registerTrustedIpcContract(windowIpc.focusRenderer, trustedRendererGuard, () => {
     if (mainWindow.isDestroyed()) return { success: false }
     mainWindow.webContents.focus()

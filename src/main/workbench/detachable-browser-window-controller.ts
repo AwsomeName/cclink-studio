@@ -40,6 +40,7 @@ interface AuxiliaryEntry {
   rejectReady: (error: Error) => void
   disposeTrust: () => void
   closingForDispose: boolean
+  recoveryInFlight: boolean
 }
 
 interface ControllerOptions {
@@ -133,7 +134,11 @@ export class DetachableBrowserWindowController {
   private getProjection(identity: TrustedRendererIdentity): WorkbenchWindowProjection {
     const window = this.getBootstrap(identity)
     const auxiliary = this.auxiliaries.get(identity.windowId)
-    return { window, tabs: auxiliary ? [auxiliary.tabProjection] : [] }
+    const placements = this.options.windowService
+      .getPlacementSnapshot()
+      .filter((placement) => identity.role === 'main' || placement.windowId === identity.windowId)
+      .map((placement) => this.toPlacementPayload(placement))
+    return { window, tabs: auxiliary ? [auxiliary.tabProjection] : [], placements }
   }
 
   async moveTabToNewWindow(input: WorkbenchMoveTabInput): Promise<WorkbenchWindowCommandResult> {
@@ -236,6 +241,9 @@ export class DetachableBrowserWindowController {
           webContents: this.options.mainWindow.webContents,
         }),
         tabs: [],
+        placements: this.options.windowService
+          .getPlacementSnapshot()
+          .map((placement) => this.toPlacementPayload(placement)),
       }
       this.disposeAuxiliary(input.sourceWindowId)
       return { success: true, transferId: transfer.transferId, projection }
@@ -286,6 +294,7 @@ export class DetachableBrowserWindowController {
       rejectReady,
       disposeTrust,
       closingForDispose: false,
+      recoveryInFlight: false,
     }
     this.auxiliaries.set(windowId, entry)
     handle.window.on('close', (event) => {
@@ -300,6 +309,8 @@ export class DetachableBrowserWindowController {
         tabId: tabProjection.tabId,
         sourceWindowId: windowId,
         expectedGeneration: placement.generation,
+      }).then((result) => {
+        if (!result.success) void this.recoverLostAuxiliary(entry, result.error)
       })
     })
     handle.window.webContents.on('render-process-gone', () => {
@@ -310,10 +321,14 @@ export class DetachableBrowserWindowController {
         tabId: tabProjection.tabId,
         sourceWindowId: windowId,
         expectedGeneration: placement.generation,
+      }).then((result) => {
+        if (!result.success) void this.recoverLostAuxiliary(entry, result.error)
       })
     })
     handle.window.on('closed', () => {
-      if (!entry.closingForDispose) entry.rejectReady(new Error('辅助窗口已关闭'))
+      if (entry.closingForDispose || this.disposed) return
+      entry.rejectReady(new Error('辅助窗口已关闭'))
+      void this.recoverLostAuxiliary(entry, new Error('辅助窗口意外关闭'))
     })
     return entry
   }
@@ -457,14 +472,36 @@ export class DetachableBrowserWindowController {
     this.publishPlacement(placement)
   }
 
-  private publishPlacement(placement: TabPlacement): void {
-    const payload: WorkbenchPlacementChanged = {
-      tabId: placement.tabId,
-      workspaceKey: placement.workspaceKey,
-      windowId: placement.windowId,
-      generation: placement.generation,
-      state: placement.state,
+  private async recoverLostAuxiliary(entry: AuxiliaryEntry, cause: unknown): Promise<void> {
+    if (entry.recoveryInFlight || entry.closingForDispose || this.disposed) return
+    const tabId = entry.tabProjection.tabId
+    const placement = this.options.windowService.getPlacement(tabId)
+    if (!placement || placement.windowId !== entry.windowId) return
+    entry.recoveryInFlight = true
+    try {
+      const window = this.options.windowService.getWindow(entry.windowId)
+      if (window && window.state !== 'closed' && window.state !== 'failed') {
+        this.options.windowService.closeWindow(entry.windowId, true)
+      }
+      const ownerWindowId = this.options.browserManager.getViewOwnerWindowId(tabId)
+      if (!ownerWindowId) throw new Error(`Browser runtime owner 已丢失: ${tabId}`)
+      this.options.recoveryHosts.recover(tabId, ownerWindowId, placement.workspaceKey)
+      const recovering = this.options.windowService.recoverPlacementAfterWindowLoss(
+        tabId,
+        entry.windowId,
+      )
+      this.publishPlacement(recovering)
+      this.disposeAuxiliary(entry.windowId)
+      await this.tryRestoreRecovery(tabId)
+    } catch (error) {
+      console.error('[WorkbenchWindow] 辅助窗口失效恢复失败', { cause, error })
+    } finally {
+      entry.recoveryInFlight = false
     }
+  }
+
+  private publishPlacement(placement: TabPlacement): void {
+    const payload = this.toPlacementPayload(placement)
     if (
       !this.options.mainWindow.isDestroyed() &&
       !this.options.mainWindow.webContents.isDestroyed()
@@ -474,6 +511,20 @@ export class DetachableBrowserWindowController {
     const auxiliary = this.auxiliaries.get(placement.windowId)
     if (auxiliary && !auxiliary.handle.window.webContents.isDestroyed()) {
       auxiliary.handle.window.webContents.send(workbenchWindowIpcEvents.placementChanged, payload)
+    }
+  }
+
+  private toPlacementPayload(placement: TabPlacement): WorkbenchPlacementChanged {
+    return {
+      tabId: placement.tabId,
+      workspaceKey: placement.workspaceKey,
+      windowId: placement.windowId,
+      generation: placement.generation,
+      state: placement.state,
+      active:
+        placement.state === 'attached' &&
+        this.options.browserManager.getActiveViewIdForWindow(placement.windowId) ===
+          placement.tabId,
     }
   }
 

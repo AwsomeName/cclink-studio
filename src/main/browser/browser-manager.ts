@@ -1267,6 +1267,11 @@ export class BrowserManager {
     return this.views.get(tabId)?.ownerWindowId ?? null
   }
 
+  /** 返回指定窗口实际 attach 的 Browser View；用于校准 renderer 的激活投影。 */
+  getActiveViewIdForWindow(windowId: string): string | null {
+    return this.hosts.get(windowId)?.activeViewId ?? null
+  }
+
   getHostWorkspaceKey(windowId: string): string | null | undefined {
     return this.hosts.get(windowId)?.workspaceKey
   }

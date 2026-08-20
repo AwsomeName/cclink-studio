@@ -369,6 +369,33 @@ describe('WorkspaceStateService', () => {
     expect(sections.agentConversations).toEqual({ conversationOrder: ['agent-a'] })
   })
 
+  it('preserves legacy bookmarks when Browser Tab state is rewritten during migration', async () => {
+    const service = new WorkspaceStateService()
+    await service.loadState()
+    const legacyBookmarks = [
+      {
+        id: 'legacy',
+        url: 'https://legacy.example',
+        title: 'Legacy',
+        faviconUrl: null,
+        createdAt: 1,
+      },
+    ]
+    await service.setSection(workspaceA, 'browserTabs', {
+      tabs: { old: { url: 'https://old.example' } },
+      bookmarks: legacyBookmarks,
+    })
+
+    await service.setSection(workspaceA, 'browserTabs', {
+      tabs: { current: { url: 'https://current.example' } },
+    })
+
+    expect((await service.getSnapshot(workspaceA)).sections.browserTabs).toEqual({
+      tabs: { current: { url: 'https://current.example' } },
+      bookmarks: legacyBookmarks,
+    })
+  })
+
   it('stores local project state under the project hidden directory', async () => {
     const service = new WorkspaceStateService()
     await service.loadState()

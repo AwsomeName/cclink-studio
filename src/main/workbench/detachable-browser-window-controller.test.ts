@@ -53,6 +53,9 @@ function createHarness(
   const mainWorkspaceListeners = new Set<(workspaceKey: string | null) => void>()
   const browserManager = {
     getViewOwnerWindowId: vi.fn((tabId: string) => ownerByTab.get(tabId) ?? null),
+    getActiveViewIdForWindow: vi.fn(
+      (windowId: string) => [...ownerByTab].find(([, owner]) => owner === windowId)?.[0] ?? null,
+    ),
     getHostWorkspaceKey: vi.fn(() => '/workspace/a'),
     onMainWorkspaceChanged: vi.fn((callback: (workspaceKey: string | null) => void) => {
       mainWorkspaceListeners.add(callback)
@@ -110,6 +113,13 @@ function createHarness(
     ipcRegistrations: { handle: vi.fn() },
   }
   const recoveryHosts = { recover: vi.fn(), restore: vi.fn(), destroy: vi.fn() }
+  recoveryHosts.recover.mockImplementation((tabId: string) => {
+    ownerByTab.set(tabId, `recovery:${tabId}`)
+    return `recovery:${tabId}`
+  })
+  recoveryHosts.restore.mockImplementation((tabId: string, targetWindowId: string) => {
+    ownerByTab.set(tabId, targetWindowId)
+  })
   const controllerRef: { current?: DetachableBrowserWindowController } = {}
   const createAuxiliaryWindow = vi.fn((windowId: string) => {
     if (options.createWindowFails) throw new Error('native window creation failed')
@@ -177,6 +187,9 @@ describe('DetachableBrowserWindowController', () => {
       windowId: auxiliaryId,
       generation: 2,
     })
+    expect(moved.projection.placements).toEqual([
+      expect.objectContaining({ tabId: 'browser-1', windowId: auxiliaryId, active: true }),
+    ])
 
     const returned = await harness.controller.returnTabToMain({
       tabId: 'browser-1',
@@ -313,6 +326,30 @@ describe('DetachableBrowserWindowController', () => {
     expect(harness.windowService.getPlacement('browser-1')).toMatchObject({
       windowId: 'main',
       state: 'attached',
+    })
+  })
+
+  it('uses Recovery Host when a committed auxiliary window closes unexpectedly', async () => {
+    const harness = createHarness({ ready: true })
+    const moved = await harness.controller.moveTabToNewWindow({
+      tabId: 'browser-1',
+      workspaceKey: '/workspace/a',
+      sourceWindowId: 'main',
+      expectedGeneration: 0,
+    })
+    expect(moved.success).toBe(true)
+
+    harness.auxiliaryWindow.emit('closed')
+    await vi.waitFor(() => expect(harness.ownerByTab.get('browser-1')).toBe('main'))
+    expect(harness.recoveryHosts.recover).toHaveBeenCalledWith(
+      'browser-1',
+      expect.stringMatching(/^aux-/),
+      '/workspace/a',
+    )
+    expect(harness.windowService.getPlacement('browser-1')).toMatchObject({
+      windowId: 'main',
+      state: 'attached',
+      generation: 4,
     })
   })
 

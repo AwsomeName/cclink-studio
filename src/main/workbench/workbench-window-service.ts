@@ -284,6 +284,29 @@ export class WorkbenchWindowService {
     return { ...placement }
   }
 
+  /** 窗口在已提交迁移后突然失效时，直接把其 placement 收拢到 Recovery Host。 */
+  recoverPlacementAfterWindowLoss(tabId: string, failedWindowId: string): TabPlacement {
+    const placement = this.requirePlacement(tabId)
+    if (placement.windowId !== failedWindowId) {
+      throw new WorkbenchWindowTransitionError(
+        'invalid-source',
+        `失效窗口不再拥有 Tab placement: ${tabId}`,
+      )
+    }
+    const transferId = this.activeTransferByTab.get(tabId)
+    if (transferId) {
+      const transfer = this.requireTransfer(transferId)
+      transfer.state = 'recovering'
+      this.activeTransferByTab.delete(tabId)
+    }
+    this.removeTabFromWindow(failedWindowId, tabId)
+    placement.windowId = `recovery:${tabId}`
+    placement.index = 0
+    placement.state = 'recovering'
+    placement.generation += 1
+    return { ...placement }
+  }
+
   restoreRecovery(tabId: string, targetWindowId: string): TabPlacement {
     const placement = this.requirePlacement(tabId)
     if (placement.state !== 'recovering' || placement.windowId !== `recovery:${tabId}`) {
