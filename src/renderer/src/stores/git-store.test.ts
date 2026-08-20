@@ -112,7 +112,7 @@ describe('git-store', () => {
     await useGitStore.getState().loadWorkspace(firstWorkspace)
     useGitStore.getState().openOperationDialog('commit')
     useGitStore.getState().setCommitMessage('keep this draft')
-    useGitStore.getState().toggleCommitPath('README.md')
+    useGitStore.getState().setCommitPaths(['README.md'])
     await useGitStore.getState().refresh()
 
     expect(useGitStore.getState()).toMatchObject({
@@ -133,6 +133,35 @@ describe('git-store', () => {
     expect(useGitStore.getState().selectedCommitPaths).toEqual([])
   })
 
+  it('includes every unstaged path when the compact commit menu opens', async () => {
+    getSnapshot.mockResolvedValue({
+      ...snapshot(firstWorkspace, 'main'),
+      changes: [
+        {
+          path: 'README.md',
+          originalPath: null,
+          stagedStatus: null,
+          unstagedStatus: 'M',
+          untracked: false,
+          conflicted: false,
+        },
+        {
+          path: 'new-file.md',
+          originalPath: null,
+          stagedStatus: null,
+          unstagedStatus: '?',
+          untracked: true,
+          conflicted: false,
+        },
+      ],
+    })
+
+    await useGitStore.getState().loadWorkspace(firstWorkspace)
+    useGitStore.getState().openOperationDialog('commit')
+
+    expect(useGitStore.getState().selectedCommitPaths).toEqual(['README.md', 'new-file.md'])
+  })
+
   it('clears dialog state and commit draft when the workspace changes', async () => {
     getSnapshot
       .mockResolvedValueOnce(snapshot(firstWorkspace, 'main'))
@@ -141,7 +170,7 @@ describe('git-store', () => {
     await useGitStore.getState().loadWorkspace(firstWorkspace)
     useGitStore.getState().openOperationDialog('commit')
     useGitStore.getState().setCommitMessage('workspace-specific draft')
-    useGitStore.getState().toggleCommitPath('README.md')
+    useGitStore.getState().setCommitPaths(['README.md'])
     await useGitStore.getState().loadWorkspace(secondWorkspace)
 
     expect(useGitStore.getState()).toMatchObject({

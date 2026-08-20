@@ -324,6 +324,8 @@ export type BrowserPopupDisposition =
 /** BrowserManager 已创建、等待 renderer 接纳为可见工作台 Tab 的 popup。 */
 export interface BrowserPopupCreatedPayload {
   tabId: string
+  /** 创建此 popup 的工作台 Browser Tab；renderer 用它继承账号/草稿投影。 */
+  sourceTabId: string
   url: string
   workspaceKey: string | null
   profileId: string | null
@@ -357,6 +359,7 @@ export function parseBrowserPopupCreatedPayload(value: unknown): BrowserPopupCre
   const payload = value as Partial<BrowserPopupCreatedPayload>
   if (
     !isBoundedBrowserEventString(payload.tabId, 512) ||
+    !isBoundedBrowserEventString(payload.sourceTabId, 512) ||
     !isBoundedBrowserEventString(payload.url, 32_768) ||
     (payload.workspaceKey !== null && !isBoundedBrowserEventString(payload.workspaceKey, 32_768)) ||
     (payload.profileId !== null && !isBoundedBrowserEventString(payload.profileId, 128)) ||

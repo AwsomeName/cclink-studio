@@ -318,7 +318,6 @@ export function ProjectStrip(): React.ReactElement {
                     <span className="project-strip-label">
                       {ref.label || getProjectName(ref.path)}
                     </span>
-                    <span className="project-strip-remote-source">远程</span>
                   </button>
                   <button
                     type="button"

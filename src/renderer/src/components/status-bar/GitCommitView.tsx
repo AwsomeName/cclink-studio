@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import type { GitChangeEntry, GitRepositorySnapshot } from '@shared/git'
+import type { GitRepositorySnapshot } from '@shared/git'
+import { IconCheck, IconCloud } from '../common/Icons'
 
 interface GitCommitViewProps {
   snapshot: GitRepositorySnapshot
@@ -8,7 +9,6 @@ interface GitCommitViewProps {
   operation: 'commit' | 'push' | null
   stale: boolean
   onMessageChange: (message: string) => void
-  onTogglePath: (path: string) => void
   onSetPaths: (paths: string[]) => void
   onCommit: () => void
   onCommitAndPush: () => void
@@ -22,34 +22,35 @@ export function GitCommitView({
   operation,
   stale,
   onMessageChange,
-  onTogglePath,
   onSetPaths,
   onCommit,
   onCommitAndPush,
   onPush,
 }: GitCommitViewProps): React.ReactElement {
   const selectedPathSet = useMemo(() => new Set(selectedPaths), [selectedPaths])
-  const staged = useMemo(
-    () => snapshot.changes.filter((change) => !change.conflicted && change.stagedStatus),
-    [snapshot.changes],
-  )
-  const stageable = useMemo(
+  const stagedPaths = useMemo(
     () =>
-      snapshot.changes.filter(
-        (change) => !change.conflicted && (change.unstagedStatus || change.untracked),
-      ),
+      snapshot.changes
+        .filter((change) => !change.conflicted && change.stagedStatus)
+        .map((change) => change.path),
     [snapshot.changes],
   )
-  const commitFileCount = new Set([...staged.map((change) => change.path), ...selectedPaths]).size
-  const selectedStageableCount = stageable.filter((change) =>
-    selectedPathSet.has(change.path),
-  ).length
-  const allStageableSelected = selectedStageableCount === stageable.length
+  const stageablePaths = useMemo(
+    () =>
+      snapshot.changes
+        .filter((change) => !change.conflicted && (change.unstagedStatus || change.untracked))
+        .map((change) => change.path),
+    [snapshot.changes],
+  )
+  const selectedStageableCount = stageablePaths.filter((path) => selectedPathSet.has(path)).length
+  const includesUnstaged =
+    stageablePaths.length > 0 && selectedStageableCount === stageablePaths.length
+  const commitFileCount = new Set([...stagedPaths, ...selectedPaths]).size
   const canCommit =
-    Boolean(message.trim()) &&
     commitFileCount > 0 &&
     snapshot.conflictedCount === 0 &&
     operation === null &&
+    !snapshot.detached &&
     !stale
   const canPush =
     Boolean(snapshot.upstream && snapshot.headOid) &&
@@ -58,146 +59,136 @@ export function GitCommitView({
     !snapshot.detached &&
     operation === null &&
     !stale
-  const canCommitAndPush =
-    canCommit && Boolean(snapshot.upstream) && (snapshot.behind ?? 0) === 0 && !snapshot.detached
+  const canCommitAndPush = canCommit && Boolean(snapshot.upstream) && (snapshot.behind ?? 0) === 0
+
+  const handleMessageKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey) || !canCommit) return
+    event.preventDefault()
+    onCommit()
+  }
 
   return (
     <div className="git-commit-view">
-      <label className="git-commit-message">
-        <span>提交信息</span>
-        <textarea
-          value={message}
-          maxLength={1000}
-          rows={3}
-          autoFocus
-          disabled={operation !== null}
-          onChange={(event) => onMessageChange(event.target.value)}
-          placeholder="说明这次修改"
+      <input
+        className="git-commit-message-input"
+        type="text"
+        value={message}
+        maxLength={1000}
+        autoFocus
+        disabled={operation !== null}
+        onChange={(event) => onMessageChange(event.target.value)}
+        onKeyDown={handleMessageKeyDown}
+        placeholder="提交信息（留空将自动生成）"
+        aria-label="提交信息"
+      />
+
+      <label className={`git-include-unstaged ${stageablePaths.length === 0 ? 'disabled' : ''}`}>
+        <input
+          type="checkbox"
+          aria-label="包含未暂存的更改"
+          checked={includesUnstaged}
+          disabled={stageablePaths.length === 0 || operation !== null || stale}
+          onChange={() => onSetPaths(includesUnstaged ? [] : stageablePaths)}
         />
+        <span>包含未暂存的更改</span>
+        <span className="git-commit-line-summary" aria-label="变更行数">
+          <span className="additions">+{snapshot.additions}</span>
+          <span className="deletions">-{snapshot.deletions}</span>
+        </span>
       </label>
 
-      <div className="git-commit-files">
-        {staged.length > 0 && (
-          <CommitGroup title="已暂存，将保留现有 index 意图">
-            {staged.map((change) => (
-              <CommitFileRow key={`staged:${change.path}`} change={change} checked disabled />
-            ))}
-          </CommitGroup>
-        )}
-        {stageable.length > 0 && (
-          <CommitGroup
-            title="选择要加入本次提交的完整文件"
-            action={
-              <div className="git-commit-group-actions">
-                <span>
-                  已选 {selectedStageableCount}/{stageable.length}
-                </span>
-                <button
-                  type="button"
-                  disabled={operation !== null || stale}
-                  onClick={() =>
-                    onSetPaths(allStageableSelected ? [] : stageable.map((change) => change.path))
-                  }
-                >
-                  {allStageableSelected ? '取消全选' : '全选'}
-                </button>
-              </div>
-            }
-          >
-            {stageable.map((change) => (
-              <CommitFileRow
-                key={`stageable:${change.path}`}
-                change={change}
-                checked={selectedPathSet.has(change.path)}
-                disabled={operation !== null || stale}
-                onChange={() => onTogglePath(change.path)}
-              />
-            ))}
-          </CommitGroup>
-        )}
-        {staged.length === 0 && stageable.length === 0 && (
-          <div className="git-changes-empty">没有待提交文件</div>
-        )}
+      <div className="git-compact-actions">
+        <button
+          type="button"
+          aria-label="提交"
+          disabled={!canCommit}
+          title={getCommitDisabledReason(snapshot, stale, commitFileCount)}
+          onClick={onCommit}
+        >
+          <IconCheck size={17} />
+          <span>{operation === 'commit' ? '正在提交…' : '提交'}</span>
+          <kbd>⌘↵</kbd>
+        </button>
+        <button
+          type="button"
+          aria-label="提交并推送"
+          disabled={!canCommitAndPush}
+          title={getCommitAndPushDisabledReason(snapshot, stale, commitFileCount)}
+          onClick={onCommitAndPush}
+        >
+          <IconCloud size={17} />
+          <span>提交并推送</span>
+        </button>
+        <button
+          type="button"
+          aria-label="推送"
+          disabled={!canPush}
+          title={getPushDisabledReason(snapshot, stale)}
+          onClick={onPush}
+        >
+          <IconCloud size={17} />
+          <span>{operation === 'push' ? '正在推送…' : '推送'}</span>
+          {(snapshot.ahead ?? 0) > 0 && <em>{snapshot.ahead}</em>}
+        </button>
       </div>
 
       {snapshot.conflictedCount > 0 && (
         <div className="git-status-error">存在冲突文件，请先在 Terminal 中处理</div>
       )}
-
-      <div className="git-operation-actions">
-        <button
-          type="button"
-          className="git-status-primary-action enabled"
-          disabled={!canCommit}
-          onClick={onCommit}
-        >
-          {operation === 'commit' ? '正在提交…' : `提交 ${commitFileCount} 个文件`}
-        </button>
-        <button
-          type="button"
-          className="git-status-secondary-action"
-          disabled={!canCommitAndPush}
-          onClick={onCommitAndPush}
-        >
-          {(snapshot.ahead ?? 0) > 0
-            ? `提交并推送（含已有 ${snapshot.ahead} 个提交）`
-            : '提交并推送'}
-        </button>
-        {Boolean(snapshot.upstream) && (snapshot.ahead ?? 0) > 0 && (
-          <button
-            type="button"
-            className="git-status-secondary-action"
-            disabled={!canPush}
-            onClick={onPush}
-          >
-            {operation === 'push' ? '正在 Push…' : `推送 ${snapshot.ahead} 个已有提交`}
-          </button>
-        )}
-      </div>
-      <div className="git-commit-hint">
-        只会提交已暂存文件和你勾选的完整文件；敏感文件、过期状态和缺失 identity 会停止操作。
-      </div>
+      {commitFileCount === 0 && snapshot.conflictedCount === 0 && (
+        <div className="git-compact-hint">没有可提交的更改</div>
+      )}
     </div>
   )
 }
 
-function CommitGroup({
-  title,
-  action,
-  children,
-}: {
-  title: string
-  action?: React.ReactNode
-  children: React.ReactNode
-}): React.ReactElement {
-  return (
-    <section className="git-commit-group">
-      <div className="git-change-group-title">
-        <span>{title}</span>
-        {action}
-      </div>
-      {children}
-    </section>
-  )
+export function createDefaultCommitMessage(
+  snapshot: GitRepositorySnapshot,
+  selectedPaths: string[],
+): string {
+  const selectedPathSet = new Set(selectedPaths)
+  const paths = snapshot.changes
+    .filter(
+      (change) => !change.conflicted && (change.stagedStatus || selectedPathSet.has(change.path)),
+    )
+    .map((change) => change.path)
+  const uniquePaths = [...new Set(paths)]
+  if (uniquePaths.length === 1) return `更新 ${uniquePaths[0]}`
+  if (uniquePaths.length > 1) return `更新 ${uniquePaths.length} 个文件`
+  return '更新项目文件'
 }
 
-function CommitFileRow({
-  change,
-  checked,
-  disabled,
-  onChange,
-}: {
-  change: GitChangeEntry
-  checked: boolean
-  disabled: boolean
-  onChange?: () => void
-}): React.ReactElement {
-  const partial = Boolean(change.stagedStatus && change.unstagedStatus)
-  return (
-    <label className="git-commit-file" title={change.path}>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} />
-      <span>{change.path}</span>
-      {partial && <em>部分暂存</em>}
-    </label>
-  )
+function getCommitDisabledReason(
+  snapshot: GitRepositorySnapshot,
+  stale: boolean,
+  commitFileCount: number,
+): string | undefined {
+  if (stale) return 'Git 状态已变化，请先确认最新状态'
+  if (snapshot.detached) return 'detached HEAD 不支持快捷提交'
+  if (snapshot.conflictedCount > 0) return '存在冲突文件，请先处理冲突'
+  if (commitFileCount === 0) return '没有可提交的更改'
+  return undefined
+}
+
+function getCommitAndPushDisabledReason(
+  snapshot: GitRepositorySnapshot,
+  stale: boolean,
+  commitFileCount: number,
+): string | undefined {
+  const commitReason = getCommitDisabledReason(snapshot, stale, commitFileCount)
+  if (commitReason) return commitReason
+  if (!snapshot.upstream) return '当前分支没有上游，请先在 Terminal 中设置'
+  if ((snapshot.behind ?? 0) > 0) return '远程包含新提交，请先同步'
+  return undefined
+}
+
+function getPushDisabledReason(
+  snapshot: GitRepositorySnapshot,
+  stale: boolean,
+): string | undefined {
+  if (stale) return 'Git 状态已变化，请先确认最新状态'
+  if (!snapshot.upstream) return '当前分支没有上游'
+  if ((snapshot.behind ?? 0) > 0) return '远程包含新提交，请先同步'
+  if ((snapshot.ahead ?? 0) === 0) return '没有待推送的提交'
+  return undefined
 }

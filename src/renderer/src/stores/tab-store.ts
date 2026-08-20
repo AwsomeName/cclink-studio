@@ -211,6 +211,8 @@ interface TabState {
     title: string
     initialUrl: string
     browserProfile: string | null
+    webResourceRef?: Tab['webResourceRef']
+    webResourceDraftRef?: Tab['webResourceDraftRef']
     workspaceRef: NonNullable<Tab['workspaceRef']>
     activate: boolean
   }) => boolean
@@ -496,7 +498,16 @@ export const useTabStore = create<TabState>((set, get) => ({
     })
   },
 
-  adoptBrowserRuntimeTab: ({ id, title, initialUrl, browserProfile, workspaceRef, activate }) => {
+  adoptBrowserRuntimeTab: ({
+    id,
+    title,
+    initialUrl,
+    browserProfile,
+    webResourceRef,
+    webResourceDraftRef,
+    workspaceRef,
+    activate,
+  }) => {
     let accepted = false
     set((state) => {
       const existing = state.tabs.find((tab) => tab.id === id)
@@ -517,6 +528,8 @@ export const useTabStore = create<TabState>((set, get) => ({
         icon: '🌐',
         initialUrl,
         browserProfile,
+        webResourceRef,
+        webResourceDraftRef,
         workspaceRef,
       }
       return {
@@ -676,20 +689,28 @@ export const useTabStore = create<TabState>((set, get) => ({
   },
 
   bindWebResourceDraft: (id, binding) =>
-    set((state) => ({
-      tabs: state.tabs.map((tab) =>
-        tab.id === id
-          ? {
-              ...tab,
-              title: binding.title,
-              initialUrl: binding.initialUrl,
-              browserProfile: binding.browserProfile,
-              webResourceRef: binding.webResourceRef,
-              webResourceDraftRef: undefined,
-            }
-          : tab,
-      ),
-    })),
+    set((state) => {
+      const target = state.tabs.find((tab) => tab.id === id)
+      const draftId = target?.webResourceDraftRef?.draftId
+      return {
+        tabs: state.tabs.map((tab) => {
+          const sharesDraft =
+            Boolean(draftId) &&
+            tab.type === 'browser' &&
+            tab.webResourceDraftRef?.draftId === draftId
+          if (tab.id !== id && !sharesDraft) return tab
+          return {
+            ...tab,
+            ...(tab.id === id
+              ? { title: binding.title, initialUrl: binding.initialUrl }
+              : undefined),
+            browserProfile: binding.browserProfile,
+            webResourceRef: binding.webResourceRef,
+            webResourceDraftRef: undefined,
+          }
+        }),
+      }
+    }),
 
   rebaseFilePaths: (oldPrefix, newPrefix) => {
     if (oldPrefix === newPrefix) return

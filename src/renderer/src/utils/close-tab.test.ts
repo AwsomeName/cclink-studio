@@ -588,6 +588,36 @@ describe('closeTabWithDraftPolicy media project drafts', () => {
 })
 
 describe('closeTabWithDraftPolicy website-account drafts', () => {
+  it('closes one shared popup without clearing the still-used login environment', async () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'source',
+          type: 'browser',
+          title: '博客园',
+          icon: '🌐',
+          workspaceRef: { kind: 'local', path: '/workspace' },
+          browserProfile: 'web-draft-profile',
+          webResourceDraftRef: { draftId: 'draft-1' },
+        },
+        {
+          id: 'popup',
+          type: 'browser',
+          title: '博客园登录',
+          icon: '🌐',
+          workspaceRef: { kind: 'local', path: '/workspace' },
+          browserProfile: 'web-draft-profile',
+          webResourceDraftRef: { draftId: 'draft-1' },
+        },
+      ],
+      activeTabId: 'popup',
+    })
+
+    expect(await closeTabWithDraftPolicy('popup')).toBe(true)
+    expect(window.cclinkStudio.webResources.cancelDraft).not.toHaveBeenCalled()
+    expect(useTabStore.getState().tabs).toEqual([expect.objectContaining({ id: 'source' })])
+  })
+
   it('cleans the isolated draft before closing its Browser Tab', async () => {
     useTabStore.setState({
       tabs: [

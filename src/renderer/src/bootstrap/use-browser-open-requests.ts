@@ -61,11 +61,25 @@ export function adoptRequestedBrowserPopup(payload: BrowserPopupCreatedPayload):
     return false
   }
 
-  const accepted = useTabStore.getState().adoptBrowserRuntimeTab({
+  const tabState = useTabStore.getState()
+  const sourceTab = tabState.tabs.find((tab) => tab.id === payload.sourceTabId)
+  const inheritsWebResource =
+    sourceTab?.type === 'browser' &&
+    sourceTab.workspaceRef !== undefined &&
+    workspaceRefKey(sourceTab.workspaceRef) === payload.workspaceKey &&
+    (sourceTab.browserProfile ?? null) === payload.profileId
+
+  const accepted = tabState.adoptBrowserRuntimeTab({
     id: payload.tabId,
     title: '浏览器',
     initialUrl: payload.url,
     browserProfile: payload.profileId,
+    ...(inheritsWebResource
+      ? {
+          webResourceRef: sourceTab.webResourceRef,
+          webResourceDraftRef: sourceTab.webResourceDraftRef,
+        }
+      : {}),
     workspaceRef: activeWorkspaceRef,
     activate: payload.activate,
   })

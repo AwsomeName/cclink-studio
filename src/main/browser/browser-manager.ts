@@ -940,6 +940,7 @@ export class BrowserManager {
 
     this.sendToOwner(entry, browserIpcEvents.popupCreated, {
       tabId,
+      sourceTabId,
       url: popupUrl,
       workspaceKey: entry.workspaceKey,
       profileId: entry.profileId,
@@ -1366,8 +1367,10 @@ export class BrowserManager {
   ): void {
     const host = this.hosts.get(windowId)
     if (!host) return
+    const previousBounds = host.currentBounds
     host.currentRendererBounds = bounds
-    host.currentBounds = this.resolveRendererBounds(bounds, windowId)
+    const nextBounds = this.resolveRendererBounds(bounds, windowId)
+    host.currentBounds = nextBounds
     if (!host.activeViewId) return
     const entry = this.views.get(host.activeViewId)
     if (!entry) return
@@ -1378,8 +1381,17 @@ export class BrowserManager {
       return
     }
 
+    if (
+      previousBounds.x === nextBounds.x &&
+      previousBounds.y === nextBounds.y &&
+      previousBounds.width === nextBounds.width &&
+      previousBounds.height === nextBounds.height
+    ) {
+      return
+    }
+
     // bounds 立即生效，保证 resize 跟手；缩放重算防抖处理
-    entry.view.setBounds(host.currentBounds)
+    entry.view.setBounds(nextBounds)
     this.scheduleFit(host.activeViewId)
   }
 

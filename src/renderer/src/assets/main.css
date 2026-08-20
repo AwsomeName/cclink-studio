@@ -245,13 +245,6 @@
 .remote-tree-spacer {
   width: 12px;
 }
-.project-strip-remote-source {
-  padding: 1px 4px;
-  border-radius: 3px;
-  color: var(--text-secondary);
-  background: var(--bg-tertiary);
-  font-size: 9px;
-}
 .remote-file-viewer {
   display: flex;
   height: 100%;
@@ -9913,6 +9906,13 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   box-shadow: var(--shadow-elevated);
 }
 
+.git-operation-dialog.compact {
+  width: min(580px, calc(100vw - 48px));
+  min-height: 0;
+  max-height: min(620px, calc(100vh - 48px));
+  border-radius: 18px;
+}
+
 .git-operation-header {
   display: flex;
   flex: 0 0 auto;
@@ -9926,6 +9926,21 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
 .git-operation-header h2 {
   margin: 0 0 7px;
   font-size: 16px;
+}
+
+.git-operation-heading {
+  min-width: 0;
+}
+
+.git-operation-dialog.compact .git-operation-header {
+  align-items: center;
+  padding: 15px 18px 8px;
+  border-bottom: 0;
+}
+
+.git-operation-dialog.compact .git-operation-repository {
+  color: var(--text-primary);
+  font-size: 13px;
 }
 
 .git-operation-repository {
@@ -10060,127 +10075,146 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   overflow: visible;
 }
 
-.git-operation-actions {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  margin-top: 10px;
+.git-operation-dialog.compact .git-operation-content {
+  flex: 0 1 auto;
+  padding: 0 0 10px;
+  overflow: auto;
 }
 
-.git-operation-actions .git-status-primary-action,
-.git-operation-actions .git-status-secondary-action {
-  min-width: 0;
-  flex: 1;
-  margin-top: 0;
+.git-operation-dialog.compact .git-operation-notice,
+.git-operation-dialog.compact .git-operation-stale {
+  margin: 8px 14px 2px;
 }
 
 .git-commit-view {
-  max-height: min(540px, calc(100vh - 136px));
-  overflow: auto;
+  color: var(--text-primary);
 }
 
-.git-commit-message {
-  display: grid;
-  gap: 6px;
-  color: var(--text-secondary);
-  font-size: 11px;
-}
-
-.git-commit-message textarea {
+.git-commit-message-input {
   width: 100%;
-  min-height: 70px;
-  resize: vertical;
-  border: 1px solid var(--border-color);
-  border-radius: 5px;
+  height: 54px;
+  padding: 0 20px;
+  border: 0;
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 0;
   outline: none;
-  background: var(--bg-primary);
+  background: transparent;
   color: var(--text-primary);
   font: inherit;
-  line-height: 1.45;
-  padding: 8px;
+  font-size: 14px;
 }
 
-.git-commit-message textarea:focus {
-  border-color: var(--accent-color);
+.git-commit-message-input::placeholder {
+  color: var(--text-muted);
 }
 
-.git-commit-files {
-  max-height: 280px;
-  margin-top: 10px;
-  overflow: auto;
-  border: 1px solid var(--border-color);
-  border-radius: 5px;
-  background: var(--bg-primary);
-  padding: 6px;
+.git-commit-message-input:focus {
+  border-bottom-color: color-mix(in srgb, var(--accent-color) 60%, var(--border-color));
 }
 
-.git-commit-group + .git-commit-group {
-  margin-top: 8px;
+.git-include-unstaged {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 10px;
+  padding: 10px;
+  border-radius: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
 }
 
-.git-commit-group-actions {
+.git-include-unstaged:hover:not(.disabled) {
+  background: var(--bg-hover);
+}
+
+.git-include-unstaged.disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.git-include-unstaged input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent-color);
+}
+
+.git-commit-line-summary {
   display: inline-flex;
+  margin-left: auto;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.git-commit-line-summary .additions {
+  color: #22c55e;
+}
+
+.git-commit-line-summary .deletions {
+  color: #ef4444;
+}
+
+.git-compact-actions {
+  padding: 0 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.git-compact-actions button {
+  display: grid;
+  width: 100%;
+  min-height: 46px;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+
+.git-compact-actions button:hover:not(:disabled),
+.git-compact-actions button:focus-visible:not(:disabled) {
+  outline: none;
+  background: var(--bg-hover);
+}
+
+.git-compact-actions button:disabled {
+  color: var(--text-muted);
+  cursor: default;
+  opacity: 0.55;
+}
+
+.git-compact-actions kbd {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
   font-weight: 400;
 }
 
-.git-commit-group-actions span {
-  color: var(--text-muted);
-}
-
-.git-commit-group-actions button {
-  padding: 2px 7px;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
+.git-compact-actions em {
+  min-width: 20px;
+  padding: 2px 6px;
+  border-radius: 999px;
   background: var(--bg-tertiary);
-  color: var(--text-primary);
-  cursor: pointer;
-  font: inherit;
-}
-
-.git-commit-group-actions button:hover:not(:disabled) {
-  border-color: var(--accent-color);
-  background: var(--bg-hover);
-}
-
-.git-commit-group-actions button:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-
-.git-commit-file {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 6px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.git-commit-file:hover {
-  background: var(--bg-hover);
-}
-
-.git-commit-file > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.git-commit-file em {
-  color: #facc15;
+  color: var(--text-secondary);
   font-size: 10px;
   font-style: normal;
+  text-align: center;
 }
 
-.git-commit-hint {
-  margin-top: 7px;
+.git-compact-hint {
+  padding: 6px 20px 0;
   color: var(--text-muted);
-  font-size: 10px;
-  line-height: 1.45;
+  font-size: 11px;
 }
 
 .git-changes-view {
@@ -10326,10 +10360,6 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   .git-operation-dialog {
     width: calc(100vw - 24px);
     max-height: calc(100vh - 24px);
-  }
-
-  .git-operation-actions {
-    flex-direction: column;
   }
 
   .git-changes-view {

@@ -279,6 +279,13 @@ async function closeMediaProjectView(tab: Tab): Promise<boolean> {
 async function closeWebResourceDraft(tab: Tab): Promise<boolean> {
   const draftId = tab.webResourceDraftRef?.draftId
   if (!draftId || tab.workspaceRef?.kind !== 'local') return false
+  const sharedDraftTabs = useTabStore
+    .getState()
+    .tabs.filter((item) => item.id !== tab.id && item.webResourceDraftRef?.draftId === draftId)
+  if (sharedDraftTabs.length > 0) {
+    useTabStore.getState().closeTab(tab.id)
+    return true
+  }
   try {
     const result = await window.cclinkStudio.webResources.cancelDraft({
       workspaceRef: tab.workspaceRef,

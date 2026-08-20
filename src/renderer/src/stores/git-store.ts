@@ -32,7 +32,6 @@ interface GitState {
   closeOperationDialog: () => void
   setOperationDialogTab: (tab: 'changes' | 'commit') => void
   setCommitMessage: (message: string) => void
-  toggleCommitPath: (path: string) => void
   setCommitPaths: (paths: string[]) => void
   clearCommitDraft: () => void
   acceptLatestDialogSnapshot: () => void
@@ -148,11 +147,15 @@ export const useGitStore = create<GitState>((set, get) => ({
   openOperationDialog: (tab) => {
     const { workspacePath, snapshot } = get()
     if (!workspacePath || !snapshot || snapshot.availability !== 'available') return
+    const stageablePaths = snapshot.changes
+      .filter((change) => !change.conflicted && (change.unstagedStatus || change.untracked))
+      .map((change) => change.path)
     set({
       operationDialogOpen: true,
       operationDialogTab: tab,
       operationDialogWorkspacePath: workspacePath,
       operationDialogBaselineRevision: snapshot.revision,
+      selectedCommitPaths: tab === 'commit' ? stageablePaths : get().selectedCommitPaths,
       operationNotice: null,
     })
   },
@@ -169,12 +172,6 @@ export const useGitStore = create<GitState>((set, get) => ({
 
   setOperationDialogTab: (tab) => set({ operationDialogTab: tab }),
   setCommitMessage: (commitMessage) => set({ commitMessage }),
-  toggleCommitPath: (path) =>
-    set((state) => ({
-      selectedCommitPaths: state.selectedCommitPaths.includes(path)
-        ? state.selectedCommitPaths.filter((selectedPath) => selectedPath !== path)
-        : [...state.selectedCommitPaths, path],
-    })),
   setCommitPaths: (paths) => set({ selectedCommitPaths: [...new Set(paths)] }),
   clearCommitDraft: () => set({ commitMessage: '', selectedCommitPaths: [] }),
   acceptLatestDialogSnapshot: () => {

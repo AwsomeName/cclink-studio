@@ -113,15 +113,60 @@ describe('openRequestedBrowserTab', () => {
 })
 
 describe('browser popup projection', () => {
+  it('inherits the source account draft so saving never replaces the logged-in Profile', () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'browser-a',
+          type: 'browser',
+          title: '博客园登录',
+          icon: 'B',
+          workspaceRef,
+          browserProfile: 'web-draft-cnblogs',
+          webResourceDraftRef: { draftId: 'draft-cnblogs' },
+        },
+      ],
+      activeTabId: 'browser-a',
+    })
+
+    expect(
+      adoptRequestedBrowserPopup({
+        tabId: 'browser-popup-login',
+        sourceTabId: 'browser-a',
+        url: 'https://account.cnblogs.com/register',
+        workspaceKey: '/workspace/a',
+        profileId: 'web-draft-cnblogs',
+        disposition: 'foreground-tab',
+        activate: true,
+      }),
+    ).toBe(true)
+
+    expect(useTabStore.getState().tabs.at(-1)).toMatchObject({
+      id: 'browser-popup-login',
+      browserProfile: 'web-draft-cnblogs',
+      webResourceDraftRef: { draftId: 'draft-cnblogs' },
+    })
+  })
+
   it('adopts a foreground popup with the runtime tabId and inherited profile', async () => {
     useTabStore.setState({
-      tabs: [{ id: 'browser-a', type: 'browser', title: '公众号', icon: 'B', workspaceRef }],
+      tabs: [
+        {
+          id: 'browser-a',
+          type: 'browser',
+          title: '公众号',
+          icon: 'B',
+          workspaceRef,
+          browserProfile: 'wechat',
+        },
+      ],
       activeTabId: 'browser-a',
     })
 
     expect(
       adoptRequestedBrowserPopup({
         tabId: 'browser-popup-1',
+        sourceTabId: 'browser-a',
         url: 'https://mp.weixin.qq.com/cgi-bin/appmsg',
         workspaceKey: '/workspace/a',
         profileId: 'wechat',
@@ -154,6 +199,7 @@ describe('browser popup projection', () => {
 
     adoptRequestedBrowserPopup({
       tabId: 'browser-popup-background',
+      sourceTabId: 'browser-a',
       url: 'https://example.com/background',
       workspaceKey: '/workspace/a',
       profileId: null,
@@ -169,6 +215,7 @@ describe('browser popup projection', () => {
     expect(
       adoptRequestedBrowserPopup({
         tabId: 'browser-popup-wrong-workspace',
+        sourceTabId: 'browser-a',
         url: 'https://example.com/',
         workspaceKey: '/workspace/b',
         profileId: null,

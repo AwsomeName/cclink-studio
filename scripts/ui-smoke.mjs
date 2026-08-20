@@ -12,6 +12,7 @@ const { rootDir, logFile, rendererOrigin, runRestart } = createSmokeRuntime(impo
 const keepRunning = process.argv.includes('--keep-running')
 const agentPanelOnly = process.argv.includes('--agent-panel-only')
 const webAffairsOnly = process.argv.includes('--web-affairs-only')
+const gitOnly = process.argv.includes('--git-only')
 const uiReadyTimeoutMs = 30_000
 const globalWebResourcesCheck = 'global web resources reuse one account and matrix across projects'
 const webAffairPersistenceCheck = 'web affair persists a five-node workflow and node progress'
@@ -21,6 +22,10 @@ const webAffairsChecks = new Set([
   globalWebResourcesCheck,
   webAffairPersistenceCheck,
   'web affair exposes A2-A4 handoff, wait, template, and flow-diff controls',
+])
+const gitChecks = new Set([
+  'status bar shows the current Git repository fact',
+  'Git compact commit menu executes commit and push actions',
 ])
 const results = []
 let startedBySmoke = false
@@ -44,6 +49,13 @@ function skip(name, dependency) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
+}
+
+function readPngDimensions(dataUrl) {
+  assert(dataUrl?.startsWith('data:image/png;base64,'), 'browser capture is not a PNG data URL')
+  const bytes = Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64')
+  assert(bytes.length >= 24, 'browser capture PNG is truncated')
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
 }
 
 async function readLog() {
@@ -80,6 +92,7 @@ async function findRendererPage(browser) {
 
 async function runCheck(name, fn, options = {}) {
   if (webAffairsOnly && !webAffairsChecks.has(name)) return
+  if (gitOnly && !gitChecks.has(name)) return
   const blockedBy = (options.dependsOn ?? []).find(
     (dependency) => results.find((result) => result.name === dependency)?.status !== 'pass',
   )
@@ -96,15 +109,25 @@ async function runCheck(name, fn, options = {}) {
 }
 
 async function startWebFixture() {
-  webFixtureServer = createServer((_request, response) => {
+  webFixtureServer = createServer((request, response) => {
     response.writeHead(200, {
       'cache-control': 'no-store',
       'content-type': 'text/html; charset=utf-8',
+      ...(request.url === '/login-popup-source'
+        ? { 'set-cookie': 'cclink_auth_marker=logged-in; Path=/; HttpOnly; SameSite=Lax' }
+        : {}),
     })
     response.end(`<!doctype html>
 <html lang="zh-CN">
   <head><meta charset="utf-8"><title>CCLink UI Smoke Fixture</title></head>
-  <body><main>CCLink UI Smoke Fixture</main></body>
+  <body>
+    <main>CCLink UI Smoke Fixture</main>
+    ${
+      request.url === '/login-popup-source'
+        ? '<button id="open-login" onclick="window.open(\'/login-popup-target\', \'_blank\')">打开登录页</button>'
+        : ''
+    }
+  </body>
 </html>`)
   })
   await new Promise((resolve, reject) => {
@@ -923,7 +946,7 @@ async function main() {
     return `${snapshot.branch} · ${snapshot.changeCount} changes · +${snapshot.additions} -${snapshot.deletions}`
   })
 
-  await runCheck('Git commit and push preserve explicit file selection', async () => {
+  await runCheck('Git compact commit menu executes commit and push actions', async () => {
     const fixtureRoot = await mkdtemp(join(homedir(), '.cclink-studio-ui-git-'))
     const workspacePath = join(fixtureRoot, 'workspace')
     const remotePath = join(fixtureRoot, 'remote.git')
@@ -939,6 +962,7 @@ async function main() {
       await runGit(workspacePath, ['remote', 'add', 'origin', remotePath])
       await runGit(workspacePath, ['push', '-u', 'origin', 'main'])
       await writeFile(join(workspacePath, 'tracked.txt'), 'changed\n', 'utf8')
+      await runGit(workspacePath, ['add', 'tracked.txt'])
       await writeFile(join(workspacePath, 'leave-untracked.txt'), 'keep local\n', 'utf8')
 
       const opened = await page.evaluate(async (path) => {
@@ -956,18 +980,24 @@ async function main() {
       await dialog.waitFor({ state: 'visible', timeout: 10_000 })
       const commitView = dialog.locator('.git-commit-view')
       await commitView.waitFor({ state: 'visible', timeout: 10_000 })
-      await commitView.getByRole('button', { name: '全选', exact: true }).click()
       assert(
-        (await commitView.getByRole('checkbox', { checked: true }).count()) === 2,
-        'Git select all did not select every stageable file',
+        await dialog.evaluate((element) => element.classList.contains('compact')),
+        'Git commit dialog is not compact',
       )
-      await commitView.getByRole('button', { name: '取消全选', exact: true }).click()
+      const compactBox = await dialog.boundingBox()
       assert(
-        (await commitView.getByRole('checkbox', { checked: true }).count()) === 0,
-        'Git clear all left stageable files selected',
+        compactBox && compactBox.width <= 620 && compactBox.height < 500,
+        'Git commit dialog is still oversized',
       )
-      await commitView.getByRole('checkbox', { name: 'tracked.txt', exact: true }).check()
-      await commitView.getByPlaceholder('说明这次修改').fill('UI smoke explicit commit')
+      const includeUnstaged = commitView.getByRole('checkbox', {
+        name: '包含未暂存的更改',
+        exact: true,
+      })
+      assert(
+        await includeUnstaged.isChecked(),
+        'Git compact menu did not include unstaged changes by default',
+      )
+      await commitView.getByPlaceholder('提交信息（留空将自动生成）').fill('discarded draft')
       await page.keyboard.press('Escape')
       await dialog.waitFor({ state: 'hidden', timeout: 10_000 })
       await trigger.click()
@@ -977,16 +1007,15 @@ async function main() {
         .click()
       await dialog.waitFor({ state: 'visible', timeout: 10_000 })
       assert(
-        (await commitView.getByPlaceholder('说明这次修改').inputValue()) === '',
+        (await commitView.getByPlaceholder('提交信息（留空将自动生成）').inputValue()) === '',
         'closing the Git dialog kept an obsolete commit message draft',
       )
       assert(
-        (await commitView.getByRole('checkbox', { checked: true }).count()) === 0,
-        'closing the Git dialog kept obsolete file selections',
+        await includeUnstaged.isChecked(),
+        'reopening the Git dialog did not restore the default include behavior',
       )
-      await commitView.getByRole('checkbox', { name: 'tracked.txt', exact: true }).check()
-      await commitView.getByPlaceholder('说明这次修改').fill('UI smoke explicit commit')
-      await commitView.getByRole('button', { name: '提交 1 个文件', exact: true }).click()
+      await includeUnstaged.uncheck()
+      await commitView.getByRole('button', { name: '提交', exact: true }).click()
       await dialog
         .locator('.git-operation-notice.success', { hasText: '提交成功' })
         .waitFor({ state: 'visible', timeout: 10_000 })
@@ -1000,8 +1029,12 @@ async function main() {
         afterCommit.changes.some((change) => change.path === 'leave-untracked.txt'),
         'unselected untracked file was unexpectedly committed',
       )
+      const generatedMessage = (
+        await runGit(workspacePath, ['log', '-1', '--pretty=%s'])
+      ).stdout.trim()
+      assert(generatedMessage === '更新 tracked.txt', 'empty commit message was not generated')
 
-      await dialog.getByRole('button', { name: '推送 1 个已有提交', exact: true }).click()
+      await dialog.getByRole('button', { name: '推送', exact: true }).click()
       await dialog
         .locator('.git-operation-notice.success', { hasText: 'Push 成功' })
         .waitFor({ state: 'visible', timeout: 10_000 })
@@ -1012,12 +1045,17 @@ async function main() {
       )
 
       await writeFile(join(workspacePath, 'tracked.txt'), 'changed again\n', 'utf8')
-      await dialog.getByRole('button', { name: '刷新 Git 状态', exact: true }).click()
-      const staleAlert = dialog.locator('.git-operation-stale')
-      await staleAlert.waitFor({ state: 'visible', timeout: 10_000 })
-      await staleAlert.getByRole('button', { name: '使用最新状态', exact: true }).click()
-      await commitView.getByRole('checkbox', { name: 'tracked.txt', exact: true }).check()
-      await commitView.getByPlaceholder('说明这次修改').fill('UI smoke commit and push')
+      await dialog.getByRole('button', { name: '关闭 Git 窗口', exact: true }).click()
+      await page.evaluate(async () => {
+        const { useGitStore } = await import('/src/stores/git-store.ts')
+        await useGitStore.getState().refresh()
+      })
+      await trigger.click()
+      await page
+        .locator('.git-status-popover')
+        .getByRole('button', { name: '提交…', exact: true })
+        .click()
+      await dialog.waitFor({ state: 'visible', timeout: 10_000 })
       await commitView.getByRole('button', { name: '提交并推送', exact: true }).click()
       await dialog
         .locator('.git-operation-notice.success', { hasText: '提交并 Push 成功' })
@@ -1033,13 +1071,13 @@ async function main() {
       ).stdout.trim()
       assert(localHead === remoteHead, 'remote HEAD does not match the confirmed local commit')
       await dialog.getByRole('button', { name: '关闭 Git 窗口', exact: true }).click()
-      return 'direct close cleared draft, selected file committed, untracked file preserved, explicit and combined push verified'
+      return 'compact layout, default include toggle, generated message, commit, push, and combined action verified'
     } finally {
       await page.evaluate(async (path) => {
         const { useFsStore } = await import('/src/stores/fs-store.ts')
         return useFsStore.getState().openRecentWorkspace(path)
       }, rootDir)
-      await rm(fixtureRoot, { recursive: true, force: true })
+      await rm(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
     }
   })
 
@@ -1057,50 +1095,130 @@ async function main() {
       'web resources panel missing',
     )
 
-    const ordinaryTabId = await page.evaluate(async (fixtureOrigin) => {
-      const [{ useTabStore }, { useWorkspaceStore }] = await Promise.all([
-        import('/src/stores/tab-store.ts'),
-        import('/src/stores/workspace-store.ts'),
-      ])
-      useTabStore.getState().openTab({
-        type: 'browser',
+    const draftBrowser = await page.evaluate(async (fixtureOrigin) => {
+      const [{ openDefaultBrowserTab }, { useTabStore }, { useWorkspaceStore }] = await Promise.all(
+        [
+          import('/src/features/web-resources/open-default-browser-tab.ts'),
+          import('/src/stores/tab-store.ts'),
+          import('/src/stores/workspace-store.ts'),
+        ],
+      )
+      const result = await openDefaultBrowserTab(useWorkspaceStore.getState().activeWorkspaceRef, {
+        initialUrl: `${fixtureOrigin}/login-popup-source`,
         title: '普通 Web Tab',
-        icon: '🌐',
-        initialUrl: `${fixtureOrigin}/ordinary-web-tab`,
-        workspaceRef: useWorkspaceStore.getState().activeWorkspaceRef,
-        forceNew: true,
       })
-      return useTabStore.getState().activeTabId
+      const tab = useTabStore.getState().tabs.find((item) => item.id === result.tabId)
+      return {
+        tabId: result.tabId,
+        saveable: result.saveable,
+        profileId: tab?.browserProfile ?? null,
+        draftId: tab?.webResourceDraftRef?.draftId ?? null,
+      }
     }, webFixtureOrigin)
-    assert(ordinaryTabId, 'ordinary web tab was not created')
+    assert(draftBrowser.saveable, 'ordinary web tab did not start with a saveable login session')
+    assert(draftBrowser.profileId, 'ordinary web tab has no isolated login Profile')
+    assert(draftBrowser.draftId, 'ordinary web tab has no account draft')
     await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
     await page.waitForFunction(
-      async (tabId) => (await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)).viewState,
-      ordinaryTabId,
+      async (tabId) =>
+        (await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)).visibleUrl?.endsWith(
+          '/login-popup-source',
+        ),
+      draftBrowser.tabId,
       { timeout: 10_000 },
+    )
+
+    const sourcePage = await (async () => {
+      const startedAt = Date.now()
+      while (Date.now() - startedAt < 10_000) {
+        const candidate = browser
+          .contexts()
+          .flatMap((context) => context.pages())
+          .find((item) => item.url() === `${webFixtureOrigin}/login-popup-source`)
+        if (candidate) return candidate
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+      throw new Error('embedded browser fixture page was not found over CDP')
+    })()
+    await sourcePage.locator('#open-login').click()
+    const popupTab = await page.waitForFunction(
+      async ({ sourceTabId, draftId }) => {
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        const popup = useTabStore
+          .getState()
+          .tabs.find(
+            (item) => item.id !== sourceTabId && item.webResourceDraftRef?.draftId === draftId,
+          )
+        return popup
+          ? {
+              tabId: popup.id,
+              profileId: popup.browserProfile ?? null,
+              draftId: popup.webResourceDraftRef?.draftId ?? null,
+            }
+          : null
+      },
+      { sourceTabId: draftBrowser.tabId, draftId: draftBrowser.draftId },
+      { timeout: 10_000 },
+    )
+    const popup = await popupTab.jsonValue()
+    assert(popup?.profileId === draftBrowser.profileId, 'login popup replaced the source Profile')
+    assert(popup?.draftId === draftBrowser.draftId, 'login popup lost the source account draft')
+
+    const runtimeBeforeSave = await page.evaluate(
+      (tabId) => window.cclinkStudio.browser.getRuntimeDiagnostics(tabId),
+      popup.tabId,
+    )
+    assert(
+      runtimeBeforeSave.session?.likelyAuthCookies.some(
+        (cookie) => cookie.name === 'cclink_auth_marker',
+      ),
+      'login marker cookie was not present before saving',
     )
     const saveLoginButton = page.getByRole('button', {
       name: '登录完成，保存账号和登录状态',
     })
     await saveLoginButton.waitFor({ state: 'visible', timeout: 10_000 })
     await saveLoginButton.click()
+    await page.locator('.browser-resource-save').waitFor({ state: 'visible', timeout: 10_000 })
+    const runtimeAfterSaveClick = await page.evaluate(
+      (tabId) => window.cclinkStudio.browser.getRuntimeDiagnostics(tabId),
+      popup.tabId,
+    )
+    assert(
+      runtimeAfterSaveClick.profileId === runtimeBeforeSave.profileId,
+      'save click changed Profile',
+    )
+    assert(
+      runtimeAfterSaveClick.visibleUrl === runtimeBeforeSave.visibleUrl,
+      'save click replaced the logged-in page',
+    )
+    assert(
+      runtimeAfterSaveClick.session?.likelyAuthCookies.some(
+        (cookie) => cookie.name === 'cclink_auth_marker',
+      ),
+      'save click removed the login cookie',
+    )
     await page.waitForFunction(
       async (tabId) => {
-        const { useTabStore } = await import('/src/stores/tab-store.ts')
-        const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
-        if (!tab?.webResourceDraftRef || !tab.browserProfile) return false
         const runtime = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
-        return runtime.profileId === tab.browserProfile
+        return runtime.viewState?.zoomMode === 'fit' && runtime.viewState.zoomFactor >= 0.99
       },
-      ordinaryTabId,
+      popup.tabId,
       { timeout: 10_000 },
     )
     assert(
       await page.evaluate(async (tabId) => {
         const { closeTabWithDraftPolicy } = await import('/src/utils/close-tab.ts')
         return closeTabWithDraftPolicy(tabId)
-      }, ordinaryTabId),
-      'ordinary web tab draft did not close cleanly',
+      }, popup.tabId),
+      'shared login popup did not close cleanly',
+    )
+    assert(
+      await page.evaluate(async (tabId) => {
+        const { closeTabWithDraftPolicy } = await import('/src/utils/close-tab.ts')
+        return closeTabWithDraftPolicy(tabId)
+      }, draftBrowser.tabId),
+      'ordinary web tab draft did not clean up after its last tab closed',
     )
 
     const accountLabel = 'UI Smoke Account'
@@ -1182,6 +1300,17 @@ async function main() {
         accountLabel,
         { timeout: 30_000 },
       )
+      await page.waitForFunction(
+        async () => {
+          const { useTabStore } = await import('/src/stores/tab-store.ts')
+          const tabId = useTabStore.getState().activeTabId
+          if (!tabId) return false
+          const runtime = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
+          return runtime.viewState?.zoomMode === 'fit' && runtime.viewState.zoomFactor >= 0.99
+        },
+        undefined,
+        { timeout: 10_000 },
+      )
     }
 
     await clickByTitle(page, '文件')
@@ -1198,6 +1327,70 @@ async function main() {
     const zoomGroup = page.locator('.browser-zoom-group')
     const fitZoomGroupBounds = await zoomGroup.boundingBox()
     assert(fitZoomGroupBounds, 'fit zoom controls have no visible bounds')
+    const activeBrowserTabId = await page.evaluate(async () => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      return useTabStore.getState().activeTabId
+    })
+    assert(activeBrowserTabId, 'saved account Browser Tab is not active')
+    const baselineCapture = readPngDimensions(
+      await page.evaluate(
+        async (tabId) => window.cclinkStudio.browser.capturePage(tabId),
+        activeBrowserTabId,
+      ),
+    )
+    const baselineWorkbenchWidth = await page
+      .locator('.workbench-content')
+      .evaluate((element) => element.getBoundingClientRect().width)
+    await page.evaluate(async () => {
+      const { useSettingsStore } = await import('/src/stores/settings-store.ts')
+      await useSettingsStore.getState().updateSettings({ appZoomLevel: -5 })
+    })
+    await page.waitForFunction(
+      (previousWidth) =>
+        document.querySelector('.workbench-content')?.getBoundingClientRect().width >
+        previousWidth * 2,
+      baselineWorkbenchWidth,
+      { timeout: 10_000 },
+    )
+    const reducedAppZoomCapture = readPngDimensions(
+      await page.evaluate(
+        async (tabId) => window.cclinkStudio.browser.capturePage(tabId),
+        activeBrowserTabId,
+      ),
+    )
+    assert(
+      reducedAppZoomCapture.width > baselineCapture.width,
+      `Browser View stayed narrow after app zoom settled: ${baselineCapture.width} -> ${reducedAppZoomCapture.width}`,
+    )
+    await page.evaluate(async () => {
+      const { useSettingsStore } = await import('/src/stores/settings-store.ts')
+      await useSettingsStore.getState().updateSettings({ appZoomLevel: 0 })
+    })
+    await page.waitForFunction(
+      (previousWidth) =>
+        Math.abs(
+          (document.querySelector('.workbench-content')?.getBoundingClientRect().width ?? 0) -
+            previousWidth,
+        ) <= 2,
+      baselineWorkbenchWidth,
+      { timeout: 10_000 },
+    )
+    await page.waitForFunction(
+      async ({ tabId, expectedWidth }) => {
+        const dataUrl = await window.cclinkStudio.browser.capturePage(tabId)
+        if (!dataUrl?.startsWith('data:image/png;base64,')) return false
+        const binary = atob(dataUrl.slice(dataUrl.indexOf(',') + 1))
+        if (binary.length < 24) return false
+        const width =
+          ((binary.charCodeAt(16) << 24) >>> 0) |
+          (binary.charCodeAt(17) << 16) |
+          (binary.charCodeAt(18) << 8) |
+          binary.charCodeAt(19)
+        return Math.abs(width - expectedWidth) <= 4
+      },
+      { tabId: activeBrowserTabId, expectedWidth: baselineCapture.width },
+      { timeout: 10_000 },
+    )
     await zoomInput.fill('125')
     await zoomInput.press('Enter')
     await page.waitForFunction(
@@ -1356,7 +1549,7 @@ async function main() {
         .evaluate((element) => element.click())
     }
     await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
-    return 'ordinary Web Tab save action, isolated draft Profile, one global account/profile, per-project Tab projection, matrix visibility, and restart persistence verified'
+    return 'ordinary Web Tab and login popup keep one Profile/cookie through save, with global account reuse, matrix visibility, and restart persistence verified'
   })
 
   await runCheck(

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useGitStore } from '../../stores/git-store'
 import { IconBranch, IconClose, IconRefresh } from '../common/Icons'
 import { GitChangesView } from './GitChangesView'
-import { GitCommitView } from './GitCommitView'
+import { createDefaultCommitMessage, GitCommitView } from './GitCommitView'
 import { formatGitUpstream, getGitBranchLabel } from './git-status-view-model'
 
 export function GitOperationDialog(): React.ReactElement | null {
@@ -21,7 +21,6 @@ export function GitOperationDialog(): React.ReactElement | null {
   const closeDialog = useGitStore((state) => state.closeOperationDialog)
   const setTab = useGitStore((state) => state.setOperationDialogTab)
   const setMessage = useGitStore((state) => state.setCommitMessage)
-  const togglePath = useGitStore((state) => state.toggleCommitPath)
   const setCommitPaths = useGitStore((state) => state.setCommitPaths)
   const clearDraft = useGitStore((state) => state.clearCommitDraft)
   const acceptLatestSnapshot = useGitStore((state) => state.acceptLatestDialogSnapshot)
@@ -40,7 +39,8 @@ export function GitOperationDialog(): React.ReactElement | null {
   useEffect(() => {
     if (!dialogOpen) return
     const frame = window.requestAnimationFrame(() => {
-      if (tab === 'commit') dialogRef.current?.querySelector('textarea')?.focus()
+      if (tab === 'commit')
+        dialogRef.current?.querySelector<HTMLInputElement>('input[type="text"]')?.focus()
       else dialogRef.current?.focus()
     })
     return () => window.cancelAnimationFrame(frame)
@@ -85,7 +85,8 @@ export function GitOperationDialog(): React.ReactElement | null {
   const runCommit = async (pushAfterCommit: boolean): Promise<void> => {
     if (stale || operation) return
     setNotice(null)
-    const result = await commit(message, selectedPaths)
+    const resolvedMessage = message.trim() || createDefaultCommitMessage(snapshot, selectedPaths)
+    const result = await commit(resolvedMessage, selectedPaths)
     if (!result) {
       setNotice({
         tone: 'error',
@@ -143,33 +144,40 @@ export function GitOperationDialog(): React.ReactElement | null {
     <div className="git-operation-overlay" onMouseDown={() => dialogRef.current?.focus()}>
       <div
         ref={dialogRef}
-        className="git-operation-dialog"
+        className={`git-operation-dialog ${tab === 'commit' ? 'compact' : ''}`}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="git-operation-title"
+        aria-label={tab === 'commit' ? 'Git 提交' : undefined}
+        aria-labelledby={tab === 'changes' ? 'git-operation-title' : undefined}
         tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="git-operation-header">
-          <div>
-            <h2 id="git-operation-title">Git</h2>
+          <div className="git-operation-heading">
+            {tab === 'changes' && <h2 id="git-operation-title">Git</h2>}
             <div className="git-operation-repository" title={snapshot.repositoryRoot ?? undefined}>
               <IconBranch size={14} />
               <strong>{getGitBranchLabel(snapshot)}</strong>
-              <span>{snapshot.repositoryName ?? '未知仓库'}</span>
-              <span>{formatGitUpstream(snapshot)}</span>
+              {tab === 'changes' && (
+                <>
+                  <span>{snapshot.repositoryName ?? '未知仓库'}</span>
+                  <span>{formatGitUpstream(snapshot)}</span>
+                </>
+              )}
             </div>
           </div>
           <div className="git-operation-header-actions">
-            <button
-              type="button"
-              disabled={loading || operation !== null}
-              onClick={() => void refresh()}
-              aria-label="刷新 Git 状态"
-              title="刷新 Git 状态"
-            >
-              <IconRefresh size={15} />
-            </button>
+            {tab === 'changes' && (
+              <button
+                type="button"
+                disabled={loading || operation !== null}
+                onClick={() => void refresh()}
+                aria-label="刷新 Git 状态"
+                title="刷新 Git 状态"
+              >
+                <IconRefresh size={15} />
+              </button>
+            )}
             <button
               type="button"
               disabled={operation !== null}
@@ -182,24 +190,9 @@ export function GitOperationDialog(): React.ReactElement | null {
           </div>
         </header>
 
-        <nav className="git-operation-tabs" aria-label="Git 操作">
-          <button
-            type="button"
-            className={tab === 'changes' ? 'active' : ''}
-            aria-current={tab === 'changes' ? 'page' : undefined}
-            onClick={() => setTab('changes')}
-          >
-            变更 {snapshot.changeCount}
-          </button>
-          <button
-            type="button"
-            className={tab === 'commit' ? 'active' : ''}
-            aria-current={tab === 'commit' ? 'page' : undefined}
-            onClick={() => setTab('commit')}
-          >
-            提交与推送
-          </button>
-        </nav>
+        {tab === 'changes' && (
+          <GitOperationTabs tab={tab} changeCount={snapshot.changeCount} onTabChange={setTab} />
+        )}
 
         {stale && (
           <div className="git-operation-stale" role="alert">
@@ -230,7 +223,6 @@ export function GitOperationDialog(): React.ReactElement | null {
               operation={operation}
               stale={stale}
               onMessageChange={setMessage}
-              onTogglePath={togglePath}
               onSetPaths={setCommitPaths}
               onCommit={() => void runCommit(false)}
               onCommitAndPush={() => void runCommit(true)}
@@ -241,5 +233,36 @@ export function GitOperationDialog(): React.ReactElement | null {
       </div>
     </div>,
     document.body,
+  )
+}
+
+function GitOperationTabs({
+  tab,
+  changeCount,
+  onTabChange,
+}: {
+  tab: 'changes' | 'commit'
+  changeCount: number
+  onTabChange: (tab: 'changes' | 'commit') => void
+}): React.ReactElement {
+  return (
+    <nav className="git-operation-tabs" aria-label="Git 操作">
+      <button
+        type="button"
+        className={tab === 'changes' ? 'active' : ''}
+        aria-current={tab === 'changes' ? 'page' : undefined}
+        onClick={() => onTabChange('changes')}
+      >
+        变更 {changeCount}
+      </button>
+      <button
+        type="button"
+        className={tab === 'commit' ? 'active' : ''}
+        aria-current={tab === 'commit' ? 'page' : undefined}
+        onClick={() => onTabChange('commit')}
+      >
+        提交与推送
+      </button>
+    </nav>
   )
 }

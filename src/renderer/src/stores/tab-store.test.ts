@@ -511,6 +511,50 @@ describe('useTabStore', () => {
       ).toBeUndefined()
     })
 
+    it('同一登录环境的来源页和 popup 一起转为正式账号', () => {
+      useTabStore.setState({
+        tabs: [
+          {
+            id: 'source',
+            type: 'browser',
+            title: '博客园',
+            icon: '🌐',
+            browserProfile: 'web-draft-cnblogs',
+            webResourceDraftRef: { draftId: 'draft-cnblogs' },
+          },
+          {
+            id: 'popup',
+            type: 'browser',
+            title: '博客园登录',
+            icon: '🌐',
+            browserProfile: 'web-draft-cnblogs',
+            webResourceDraftRef: { draftId: 'draft-cnblogs' },
+          },
+        ],
+        activeTabId: 'popup',
+      })
+
+      useTabStore.getState().bindWebResourceDraft('popup', {
+        title: '博客园',
+        initialUrl: 'https://www.cnblogs.com/',
+        browserProfile: 'web-draft-cnblogs',
+        webResourceRef: { accountId: 'account-cnblogs' },
+      })
+
+      expect(useTabStore.getState().tabs).toEqual([
+        expect.objectContaining({
+          id: 'source',
+          webResourceRef: { accountId: 'account-cnblogs' },
+          webResourceDraftRef: undefined,
+        }),
+        expect.objectContaining({
+          id: 'popup',
+          webResourceRef: { accountId: 'account-cnblogs' },
+          webResourceDraftRef: undefined,
+        }),
+      ])
+    })
+
     it('普通 Browser Tab 可以原地接入主进程创建的账号草稿', () => {
       useTabStore.getState().openTab({
         type: 'browser',

@@ -196,6 +196,25 @@ describe('BrowserManager popup adoption', () => {
     }
   })
 
+  it('does not touch the native view again when stabilized bounds are unchanged', async () => {
+    const { manager } = await createSource()
+    manager.updateBounds({ x: 0, y: 72, width: 600, height: 600 })
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: 'source-tab',
+    })
+    const view = electronMocks.createdViews[0]
+    view.setBounds.mockClear()
+
+    manager.updateBounds({ x: 0, y: 72, width: 600, height: 600 })
+    expect(view.setBounds).not.toHaveBeenCalled()
+
+    manager.updateBounds({ x: 0, y: 72, width: 620, height: 600 })
+    expect(view.setBounds).toHaveBeenCalledOnce()
+    expect(view.setBounds).toHaveBeenCalledWith({ x: 0, y: 72, width: 620, height: 600 })
+  })
+
   it('remeasures at unit zoom when a previously fitting pane becomes narrower', async () => {
     vi.useFakeTimers()
     try {
@@ -264,6 +283,7 @@ describe('BrowserManager popup adoption', () => {
       ([channel]) => channel === browserIpcEvents.popupCreated,
     )
     expect(popupEvent?.[1]).toMatchObject({
+      sourceTabId: 'source-tab',
       url: 'https://mp.weixin.qq.com/cgi-bin/appmsg',
       workspaceKey: '/workspace/a',
       profileId: 'wechat',
