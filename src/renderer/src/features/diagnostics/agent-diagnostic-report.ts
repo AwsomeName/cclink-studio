@@ -131,6 +131,9 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
       ? runtime.recentUrls.map((url) => `  - ${redactUrl(url)}`)
       : ['  - 无']),
     '',
+    '## 浏览器适宽',
+    ...formatFitWidthDiagnostics(runtime),
+    '',
     '## 登录态',
     ...formatSessionDiagnostics(runtime, input.pageDiagnostics),
     '',
@@ -185,6 +188,29 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
     '## 脱敏说明',
     'password/token/cookie/authorization/api key/session/验证码/手机号/邮箱等字段已脱敏或截断。',
   ].join('\n')
+}
+
+function formatFitWidthDiagnostics(
+  runtime: BrowserRuntimeDiagnosticSummary | null | undefined,
+): string[] {
+  const fit = runtime?.fitWidth
+  if (!fit) return ['- 无诊断']
+  return [
+    `- 触发/状态：${fit.trigger} / ${fit.status}`,
+    `- 文档代次：${fit.documentGeneration}`,
+    `- Pane/View：${fit.paneWidth}px / ${fit.viewBounds.width}x${fit.viewBounds.height}`,
+    `- 内容宽度：${fit.contentWidth ?? 'unknown'}`,
+    `- Raw/Applied/Actual：${fit.rawFactor ?? 'unknown'} / ${fit.appliedFactor} / ${fit.actualZoomFactor}`,
+    `- Visual Scale（复位前/实际）：${fit.visualScaleBeforeReset ?? 'unknown'} / ${fit.actualVisualScale ?? 'unknown'}`,
+    `- 拒绝原因：${fit.rejectionReason ?? '无'}`,
+    '- 采样：',
+    ...(fit.samples.length > 0
+      ? fit.samples.map(
+          (sample) =>
+            `  - +${sample.offsetMs}ms viewport=${sample.viewportWidth} root=${sample.rootWidth} body=${sample.bodyWidth}`,
+        )
+      : ['  - 无']),
+  ]
 }
 
 function formatNativeSchedulingPolicy(status: AgentStatus | null | undefined): string {

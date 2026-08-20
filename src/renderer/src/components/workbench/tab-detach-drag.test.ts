@@ -1,75 +1,41 @@
 import { describe, expect, it } from 'vitest'
-import { resolveTabDetachDropPoint } from './tab-detach-drag'
+import { shouldRequestTabDetach } from './tab-detach-drag'
 
-const windowBounds = { x: 100, y: 80, width: 1200, height: 800 }
-
-describe('resolveTabDetachDropPoint', () => {
-  it('detaches a Browser Tab released beyond the source window, including a left display', () => {
+describe('shouldRequestTabDetach', () => {
+  it('requests main-process arbitration for an unhandled Browser drag end', () => {
     expect(
-      resolveTabDetachDropPoint({
+      shouldRequestTabDetach({
         tabType: 'browser',
-        screenPoint: { x: -600, y: 300 },
-        clientPoint: { x: -700, y: 220 },
-        windowBounds,
         handledInsideTabBar: false,
         cancelled: false,
       }),
-    ).toEqual({ x: -600, y: 300 })
+    ).toBe(true)
   })
 
-  it('keeps in-window drops and tab reorders attached', () => {
+  it('does not request arbitration after an in-bar drop', () => {
     expect(
-      resolveTabDetachDropPoint({
+      shouldRequestTabDetach({
         tabType: 'browser',
-        screenPoint: { x: 500, y: 300 },
-        clientPoint: { x: 400, y: 220 },
-        windowBounds,
-        handledInsideTabBar: false,
-        cancelled: false,
-      }),
-    ).toBeNull()
-    expect(
-      resolveTabDetachDropPoint({
-        tabType: 'browser',
-        screenPoint: { x: 1400, y: 300 },
-        clientPoint: { x: 1300, y: 220 },
-        windowBounds,
         handledInsideTabBar: true,
         cancelled: false,
       }),
-    ).toBeNull()
+    ).toBe(false)
   })
 
-  it('rejects unsupported tabs and Chromium zero-coordinate cancellation artifacts', () => {
+  it('rejects unsupported tabs and cancelled drags without reading renderer coordinates', () => {
     expect(
-      resolveTabDetachDropPoint({
+      shouldRequestTabDetach({
         tabType: 'editor',
-        screenPoint: { x: 1400, y: 300 },
-        clientPoint: { x: 1300, y: 220 },
-        windowBounds,
         handledInsideTabBar: false,
         cancelled: false,
       }),
-    ).toBeNull()
+    ).toBe(false)
     expect(
-      resolveTabDetachDropPoint({
+      shouldRequestTabDetach({
         tabType: 'browser',
-        screenPoint: { x: 0, y: 0 },
-        clientPoint: { x: 0, y: 0 },
-        windowBounds,
-        handledInsideTabBar: false,
-        cancelled: false,
-      }),
-    ).toBeNull()
-    expect(
-      resolveTabDetachDropPoint({
-        tabType: 'browser',
-        screenPoint: { x: 1400, y: 300 },
-        clientPoint: { x: 1300, y: 220 },
-        windowBounds,
         handledInsideTabBar: false,
         cancelled: true,
       }),
-    ).toBeNull()
+    ).toBe(false)
   })
 })

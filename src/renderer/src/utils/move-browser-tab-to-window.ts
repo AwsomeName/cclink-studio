@@ -46,3 +46,11 @@ export async function moveBrowserTabToNewWindow(
     throw error
   }
 }
+
+/** Renderer reports drag end; main process owns native cursor/window-bound arbitration. */
+export async function moveBrowserTabFromDragEnd(tabId: string): Promise<boolean> {
+  const dropPoint = await window.cclinkStudio.workbenchWindow.getTabDetachDropPoint()
+  if (!dropPoint) return false
+  await moveBrowserTabToNewWindow(tabId, dropPoint)
+  return true
+}

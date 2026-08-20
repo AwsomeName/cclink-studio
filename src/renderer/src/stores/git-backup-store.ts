@@ -113,7 +113,6 @@ export const useGitBackupStore = create<GitBackupState>((set, get) => ({
 
   setRepositoryInput: (repositoryInput) => set({ repositoryInput }),
   closeDialog: () => {
-    if (get().busy) return
     set({ dialogOpen: false, repositoryInput: '', error: null })
   },
 }))

@@ -8,6 +8,8 @@ import {
   formatGitUpstream,
   getGitBranchLabel,
 } from './git-status-view-model'
+import { useEscapeDismiss } from '../common/dismissable-layer'
+import { useFloatingSurfaceRegistration } from '../common/floating-surface-registry'
 
 interface GitStatusBarItemProps {
   workspacePath: string | null
@@ -29,6 +31,12 @@ export function GitStatusBarItem({
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+
+  useFloatingSurfaceRegistration(open)
+  useEscapeDismiss(open, () => {
+    setOpen(false)
+    triggerRef.current?.focus()
+  })
 
   useEffect(() => {
     void loadWorkspace(workspacePath)
@@ -53,16 +61,9 @@ export function GitStatusBarItem({
       if (rootRef.current?.contains(event.target as Node)) return
       setOpen(false)
     }
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return
-      setOpen(false)
-      triggerRef.current?.focus()
-    }
     document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
     }
   }, [open])
 

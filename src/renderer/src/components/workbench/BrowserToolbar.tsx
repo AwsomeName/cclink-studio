@@ -22,6 +22,7 @@ import {
   runBrowserFind,
   stopBrowserFindSelection,
 } from '../../features/browser/browser-find-controller'
+import { useEscapeDismiss } from '../common/dismissable-layer'
 
 interface BrowserToolbarProps {
   tabId: string
@@ -106,6 +107,8 @@ export function BrowserToolbar({
   const cancelZoomCommitRef = useRef(false)
   const draftId = tab.webResourceDraftRef?.draftId
   const canSaveAsWebResource = canSaveBrowserTabAsWebResource(tab)
+
+  useEscapeDismiss(showSave, () => setShowSave(false))
 
   useEffect(() => {
     setShowSave(false)

@@ -132,6 +132,18 @@ describe('git-backup-store', () => {
     })
   })
 
+  it('lets Escape-style dismissal hide the dialog while backup continues', () => {
+    useGitBackupStore.setState({ dialogOpen: true, repositoryInput: 'octocat/project', busy: true })
+
+    useGitBackupStore.getState().closeDialog()
+
+    expect(useGitBackupStore.getState()).toMatchObject({
+      dialogOpen: false,
+      repositoryInput: '',
+      busy: true,
+    })
+  })
+
   it('does not let a completed backup overwrite the next workspace state', async () => {
     let finishBackup: ((result: GitBackupRunResult) => void) | undefined
     backup.mockImplementation(

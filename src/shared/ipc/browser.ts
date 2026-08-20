@@ -258,6 +258,42 @@ export interface BrowserSessionDiagnosticRequest {
   profileId?: string | null
 }
 
+export interface BrowserFitWidthDiagnosticSample {
+  offsetMs: number
+  viewportWidth: number
+  rootWidth: number
+  bodyWidth: number
+}
+
+export interface BrowserFitWidthDiagnosticSummary {
+  trigger:
+    | 'activation'
+    | 'bounds'
+    | 'did-finish-load'
+    | 'did-navigate-in-page'
+    | 'manual-fit'
+    | 'stabilization-retry'
+  status: 'accepted' | 'cached' | 'rejected' | 'manual'
+  timestamp: number
+  documentGeneration: number
+  paneWidth: number
+  viewBounds: BrowserBounds
+  contentWidth: number | null
+  rawFactor: number | null
+  appliedFactor: number
+  actualZoomFactor: number
+  visualScaleBeforeReset?: number | null
+  actualVisualScale?: number | null
+  rejectionReason?:
+    | 'insufficient-samples'
+    | 'viewport-mismatch'
+    | 'unstable-content-width'
+    | 'auto-fit-too-small'
+    | 'visual-scale-reset-failed'
+    | 'measurement-failed'
+  samples: BrowserFitWidthDiagnosticSample[]
+}
+
 export interface BrowserRuntimeDiagnosticSummary {
   requestedTabId: string
   visibleTabId: string | null
@@ -285,6 +321,7 @@ export interface BrowserRuntimeDiagnosticSummary {
     expectedUrl: string
     errorMessage?: string
   } | null
+  fitWidth: BrowserFitWidthDiagnosticSummary | null
   session: BrowserSessionDiagnosticSummary | null
   page: BrowserPageDiagnosticSummary | null
 }

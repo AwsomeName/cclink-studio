@@ -5,8 +5,9 @@
 - 负责人：CCLink Studio Maintainers
 - 前置证据：`docs/ops/detachable-workbench-tabs-p0-acceptance.md`
 - 审查：P0a/P0b、状态 owner、单 writer、权限、Recovery Host、关闭/回滚和平台门禁均已明确
-- 实施证据：`docs/ops/detachable-workbench-tabs-m1-acceptance.md`；生产实现与真实 App 自动门禁
-  已通过，物理双屏/真实账号真人签收仍待执行
+- 实施证据：`docs/ops/detachable-workbench-tabs-m1-acceptance.md`；2026-08-20 正式包复审已撤销
+  “生产实现完成”的结论。主进程迁移事务可保留，可见布局和主进程拖拽裁决修复已通过受影响
+  工程门禁；真人拖出仍待验收
 
 ## 问题
 
@@ -36,6 +37,18 @@ Browser M1 只在以下端到端动作全部成立时交付：
 
 Browser 拖出手势作为 M1 通过后的入口扩展复用同一 transaction，不改变 owner 决策。多 Tab 辅助
 窗口、重启恢复 placement、Editor/Terminal/Conversation 仍不属于 Browser M1 完成声明。
+
+2026-08-20 补充输入裁决边界：HTML Drag and Drop 只负责 renderer 内同栏排序和报告拖拽结束，
+不得以 renderer `DragEvent.screenX/clientX` 或 `window.screenX/outerWidth` 作为窗口外松手事实。
+主进程必须从可信 main sender 处理拖拽结束请求，使用 Electron `screen.getCursorScreenPoint()` 与
+source `BrowserWindow.getBounds()` 裁决，并把主进程取得的 DIP 坐标传给既有迁移 transaction。
+CDP/Playwright mouse 不移动系统光标，因此不能作为该路径的真人证据。
+
+2026-08-20 补充缩放所有权边界：Electron page zoom 与 Chromium visual/pinch page scale 是两套
+独立状态；`WebContents.getZoomFactor()` 不能证明实际 visual scale。BrowserManager 作为 Browser
+缩放唯一 owner，在应用自动/手动缩放以及迁移激活时必须从主进程串行复位 visual page scale，并
+把复位前/后值纳入诊断。迁移不得重载页面来掩盖比例异常，renderer 和辅助窗口也不得各自维护第二
+套缩放事实。
 
 ## 决策
 

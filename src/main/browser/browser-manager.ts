@@ -44,12 +44,15 @@ import { normalizeBrowserContext, showBrowserContextMenu } from './browser-conte
 import { installPlainTextLinkSupport } from './browser-plain-text-links'
 import { installHorizontalPanSupport } from './browser-horizontal-pan'
 import { rendererBoundsToWindowDip } from './browser-view-bounds'
+import { resetVisualPageScale } from './browser-visual-page-scale'
 import { keyChordId, normalizeKeyChord, type KeyChord } from '../../shared/keybindings'
 import type {
   BrowserFindRequest,
   BrowserFindRequestResult,
   BrowserFindShortcutSyncInput,
   BrowserFindShortcutSyncResult,
+  BrowserFitWidthDiagnosticSample,
+  BrowserFitWidthDiagnosticSummary,
   BrowserRuntimeIdentity,
   BrowserStopFindRequest,
 } from '../../shared/ipc/browser'
@@ -63,30 +66,23 @@ const MOBILE_UA =
 const MIN_ZOOM = 0.3
 const MAX_ZOOM = 3
 const ZOOM_STEP = 0.1
+/** 自动适宽低于 50% 时文字已不可用，改用 100% + 横向滑动兜底。 */
+const MIN_TRUSTED_AUTO_FIT_ZOOM = 0.5
+const FIT_RETRY_DELAYS_MS = [750, 1_500] as const
+const FIT_SAMPLE_DELAYS_MS = [250, 500] as const
 /** 与页面 main world 隔离的适宽测量上下文。 */
 const FIT_WIDTH_MEASUREMENT_WORLD_ID = 10_139
 /**
- * setZoomFactor() 会先更新 WebContents 缩放状态，Chromium 布局则可能到后续帧才生效。
- * 等待两帧后再读 scrollWidth，避免把旧 30% 视口误当成 100% 内容宽度。
+ * 页面只做单次同步快照；三次采样由主进程调度，避免后台 WebContents 内的
+ * requestAnimationFrame / setTimeout 被 Chromium 节流后只返回一次假稳定值。
  */
 export const FIT_WIDTH_MEASUREMENT_SCRIPT = String.raw`
-(() => new Promise((resolve) => {
-  let settled = false
-  let timeoutId = 0
-  const measure = () => {
-    if (settled) return
-    settled = true
-    if (timeoutId) globalThis.clearTimeout(timeoutId)
-    const rootWidth = document.documentElement ? document.documentElement.scrollWidth : 0
-    const bodyWidth = document.body ? document.body.scrollWidth : 0
-    resolve(Math.max(rootWidth, bodyWidth))
-  }
-  timeoutId = globalThis.setTimeout(measure, 100)
-  if (typeof globalThis.requestAnimationFrame !== 'function') {
-    globalThis.queueMicrotask(measure)
-    return
-  }
-  globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(measure))
+(() => ({
+  viewportWidth: document.documentElement
+    ? document.documentElement.clientWidth
+    : (globalThis.visualViewport ? globalThis.visualViewport.width : globalThis.innerWidth),
+  rootWidth: document.documentElement ? document.documentElement.scrollWidth : 0,
+  bodyWidth: document.body ? document.body.scrollWidth : 0,
 }))()
 `
 /** 默认首页 */
@@ -99,6 +95,80 @@ export type ViewMode = BrowserViewModeType
 /** 缩放模式：适应宽度（自动） / 手动 */
 export type ZoomMode = BrowserZoomModeType
 export type { BrowserViewState } from '../../shared/ipc/browser'
+
+type FitWidthTrigger = BrowserFitWidthDiagnosticSummary['trigger']
+
+interface FitWidthMeasurement {
+  contentWidth: number
+  paneWidth: number
+  documentGeneration: number
+  samples: BrowserFitWidthDiagnosticSample[]
+}
+
+function stableFitWidthMeasurement(
+  value: unknown,
+  paneWidth: number,
+  documentGeneration: number,
+):
+  | { measurement: FitWidthMeasurement; rejectionReason?: never }
+  | {
+      measurement: null
+      rejectionReason: NonNullable<BrowserFitWidthDiagnosticSummary['rejectionReason']>
+      samples: BrowserFitWidthDiagnosticSample[]
+    } {
+  const samples: BrowserFitWidthDiagnosticSample[] =
+    typeof value === 'number'
+      ? [0, 250, 750].map((offsetMs) => ({
+          offsetMs,
+          viewportWidth: paneWidth,
+          rootWidth: value,
+          bodyWidth: value,
+        }))
+      : Array.isArray(value)
+        ? value
+            .map((sample) => {
+              if (!sample || typeof sample !== 'object') return null
+              const candidate = sample as Partial<BrowserFitWidthDiagnosticSample>
+              if (
+                !Number.isFinite(candidate.offsetMs) ||
+                !Number.isFinite(candidate.viewportWidth) ||
+                !Number.isFinite(candidate.rootWidth) ||
+                !Number.isFinite(candidate.bodyWidth)
+              ) {
+                return null
+              }
+              return {
+                offsetMs: candidate.offsetMs!,
+                viewportWidth: candidate.viewportWidth!,
+                rootWidth: candidate.rootWidth!,
+                bodyWidth: candidate.bodyWidth!,
+              }
+            })
+            .filter((sample): sample is BrowserFitWidthDiagnosticSample => sample !== null)
+        : []
+
+  if (samples.length < 3) {
+    return { measurement: null, rejectionReason: 'insufficient-samples', samples }
+  }
+  const tail = samples.slice(-2)
+  const viewportTolerance = Math.max(4, paneWidth * 0.02)
+  if (tail.some((sample) => Math.abs(sample.viewportWidth - paneWidth) > viewportTolerance)) {
+    return { measurement: null, rejectionReason: 'viewport-mismatch', samples }
+  }
+  const widths = tail.map((sample) => Math.max(sample.rootWidth, sample.bodyWidth))
+  const contentTolerance = Math.max(8, paneWidth * 0.02)
+  if (Math.abs(widths[0] - widths[1]) > contentTolerance) {
+    return { measurement: null, rejectionReason: 'unstable-content-width', samples }
+  }
+  return {
+    measurement: {
+      contentWidth: Math.max(...widths),
+      paneWidth,
+      documentGeneration,
+      samples,
+    },
+  }
+}
 
 /**
  * 单个浏览器视图的运行时状态
@@ -133,8 +203,12 @@ interface ViewEntry {
   effectiveZoom: number
   /** 缩放重算代次；用于阻止旧的异步适宽结果覆盖新操作。 */
   zoomRequestGeneration: number
-  /** 最近一次在 100% 缩放下得到的适宽测量，避免 resize 时反复闪回 100%。 */
-  fitWidthMeasurement: { contentWidth: number; paneWidth: number } | null
+  /** 当前主框架代次内，在 100% 下连续稳定采样后得到的适宽测量。 */
+  fitWidthMeasurement: FitWidthMeasurement | null
+  fitDocumentGeneration: number
+  fitRetryCount: number
+  fitRetryTimer: ReturnType<typeof setTimeout> | null
+  lastFitDiagnostic: BrowserFitWidthDiagnosticSummary | null
   /** 桌面版原始 UA（切回桌面时还原） */
   desktopUA: string
   /** 适应宽度重算的防抖定时器 */
@@ -644,6 +718,10 @@ export class BrowserManager {
       effectiveZoom: 1,
       zoomRequestGeneration: 0,
       fitWidthMeasurement: null,
+      fitDocumentGeneration: 0,
+      fitRetryCount: 0,
+      fitRetryTimer: null,
+      lastFitDiagnostic: null,
       desktopUA,
       fitDebounce: null,
       pendingUrl: safeInitialUrl ?? DEFAULT_URL,
@@ -771,8 +849,17 @@ export class BrowserManager {
       if (new URL(url).protocol === 'file:') event.preventDefault()
     })
     wc.setWindowOpenHandler((details) => this.handleWindowOpen(tabId, entry, details))
+    wc.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+      if (!isMainFrame || isInPlace) return
+      this.beginFitNavigation(tabId, entry)
+    })
     wc.on('did-navigate', (_event, url) => this.onNavigate(tabId, url))
-    wc.on('did-navigate-in-page', (_event, url) => this.onNavigate(tabId, url))
+    wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+      this.onNavigate(tabId, url)
+      if (!isMainFrame) return
+      this.beginFitNavigation(tabId, entry)
+      void this.applyZoom(tabId, 'did-navigate-in-page')
+    })
     wc.on('page-title-updated', (_event, title) => {
       this.emitPageMeta(tabId, { title })
     })
@@ -783,7 +870,9 @@ export class BrowserManager {
     wc.once('destroyed', () => this.handleWebContentsDestroyed(tabId, entry))
     // 每次页面加载完成后，按当前模式重新计算并应用缩放
     wc.on('did-finish-load', () => {
+      this.clearFitTimers(entry)
       entry.fitWidthMeasurement = null
+      entry.fitRetryCount = 0
       void installHorizontalPanSupport(wc).catch((error) =>
         console.warn(
           `[BrowserManager] 横向滑动增强降级 tabId=${tabId}:`,
@@ -796,7 +885,7 @@ export class BrowserManager {
           error instanceof Error ? error.message : 'unknown',
         ),
       )
-      void this.applyZoom(tabId)
+      void this.applyZoom(tabId, 'did-finish-load')
       // 页面加载完成 → 把该 view claim 为 Playwright Page（绑定 tabId）。
       // 仅在绑定了 PlaywrightBridge 后生效；幂等（claimPageForView 跳过已绑定的 key）。
       // 失败仅记录日志，不阻塞 UI——Agent 寻址在下次 did-finish-load 重试。
@@ -904,6 +993,10 @@ export class BrowserManager {
       effectiveZoom: sourceEntry.effectiveZoom,
       zoomRequestGeneration: 0,
       fitWidthMeasurement: null,
+      fitDocumentGeneration: 0,
+      fitRetryCount: 0,
+      fitRetryTimer: null,
+      lastFitDiagnostic: null,
       desktopUA,
       fitDebounce: null,
       pendingUrl: popupUrl,
@@ -1127,7 +1220,7 @@ export class BrowserManager {
   /** 从 BrowserManager 和所有下游注册表移除 ViewEntry；不负责关闭 WebContents 本身。 */
   private removeViewEntry(tabId: string, entry: ViewEntry): boolean {
     if (this.views.get(tabId) !== entry) return false
-    if (entry.fitDebounce) clearTimeout(entry.fitDebounce)
+    this.clearFitTimers(entry)
     if (entry.activeFind?.fallbackTimer) clearTimeout(entry.activeFind.fallbackTimer)
     if (entry.popup?.adoptionTimer) clearTimeout(entry.popup.adoptionTimer)
     entry.contextMenuToken = null
@@ -1213,7 +1306,7 @@ export class BrowserManager {
     // 首次激活时加载页面；之后保持 warm 状态
     this.ensureLoaded(tabId)
     // 重新计算缩放（适配当前面板宽度）
-    void this.applyZoom(tabId)
+    void this.applyZoom(tabId, 'activation')
     this.emitState(tabId)
   }
 
@@ -1251,7 +1344,7 @@ export class BrowserManager {
         entry.view.webContents.focus()
         void this.playwrightBridge?.switchToPage(tabId).catch(() => undefined)
         this.ensureLoaded(tabId)
-        void this.applyZoom(tabId)
+        void this.applyZoom(tabId, 'activation')
       }
       this.emitState(tabId)
     } catch (error) {
@@ -1392,26 +1485,65 @@ export class BrowserManager {
 
     // bounds 立即生效，保证 resize 跟手；缩放重算防抖处理
     entry.view.setBounds(nextBounds)
-    this.scheduleFit(host.activeViewId)
+    this.scheduleFit(host.activeViewId, 'bounds')
+  }
+
+  private clearFitTimers(entry: ViewEntry): void {
+    if (entry.fitDebounce) clearTimeout(entry.fitDebounce)
+    if (entry.fitRetryTimer) clearTimeout(entry.fitRetryTimer)
+    entry.fitDebounce = null
+    entry.fitRetryTimer = null
+  }
+
+  /** 新主框架或页内导航立即回到 100%，旧页面测量不得跨文档复用。 */
+  private beginFitNavigation(tabId: string, entry: ViewEntry): void {
+    if (this.views.get(tabId) !== entry) return
+    entry.zoomRequestGeneration += 1
+    entry.fitDocumentGeneration += 1
+    entry.fitWidthMeasurement = null
+    entry.fitRetryCount = 0
+    this.clearFitTimers(entry)
+    const host = this.hostForEntry(entry)
+    if (entry.zoomMode !== 'fit' || host?.activeViewId !== tabId) return
+    entry.view.webContents.setZoomFactor(1)
+    entry.effectiveZoom = 1
+    this.emitState(tabId)
   }
 
   /** 防抖触发缩放重算（resize 期间高频调用，避免抖动） */
-  private scheduleFit(tabId: string): void {
+  private scheduleFit(tabId: string, trigger: FitWidthTrigger): void {
     const entry = this.views.get(tabId)
     if (!entry) return
     // bounds 已变化，立即使正在等待 DOM 测量的旧请求失效。
     entry.zoomRequestGeneration += 1
     if (entry.fitDebounce) clearTimeout(entry.fitDebounce)
     entry.fitDebounce = setTimeout(() => {
-      void this.applyZoom(tabId)
+      entry.fitDebounce = null
+      void this.applyZoom(tabId, trigger)
     }, 120)
+  }
+
+  private scheduleFitRetry(tabId: string, entry: ViewEntry): void {
+    if (
+      entry.zoomMode !== 'fit' ||
+      entry.fitRetryTimer ||
+      entry.fitRetryCount >= FIT_RETRY_DELAYS_MS.length
+    ) {
+      return
+    }
+    const delay = FIT_RETRY_DELAYS_MS[entry.fitRetryCount]
+    entry.fitRetryCount += 1
+    entry.fitRetryTimer = setTimeout(() => {
+      entry.fitRetryTimer = null
+      void this.applyZoom(tabId, 'stabilization-retry')
+    }, delay)
   }
 
   /**
    * 按当前 viewMode / zoomMode 计算并应用缩放系数
    * @param tabId 目标视图
    */
-  private async applyZoom(tabId: string): Promise<void> {
+  private async applyZoom(tabId: string, trigger: FitWidthTrigger): Promise<void> {
     const entry = this.views.get(tabId)
     if (!entry) return
     const host = this.hostForEntry(entry)
@@ -1423,36 +1555,93 @@ export class BrowserManager {
     const requestGeneration = ++entry.zoomRequestGeneration
 
     let factor = 1
+    let visualScaleBeforeReset: number | null = null
+    let actualVisualScale: number | null = null
+    let rawFactor: number | null = null
+    let contentWidth: number | null = null
+    let samples: BrowserFitWidthDiagnosticSample[] = []
+    let fitStatus: BrowserFitWidthDiagnosticSummary['status'] = 'manual'
+    let rejectionReason: BrowserFitWidthDiagnosticSummary['rejectionReason']
     let nextFitWidthMeasurement: ViewEntry['fitWidthMeasurement'] = null
+    let visualScaleResetFailed = false
     try {
-      if (entry.viewMode === 'mobile') {
+      // Chromium 的 visual/pinch zoom 与 Electron page zoom 独立。缩放模式由
+      // BrowserManager 统一持有时，先清掉残留 visual scale，避免 toolbar 显示
+      // 100% 但页面实际仍停在 30%，也避免该状态随 WebContentsView 迁移。
+      const visualReset = await resetVisualPageScale(wc.debugger)
+      visualScaleBeforeReset = visualReset.before
+      actualVisualScale = visualReset.after
+    } catch (error) {
+      visualScaleResetFailed = true
+      console.warn(
+        `[BrowserManager] visual scale 复位失败 tabId=${tabId}:`,
+        error instanceof Error ? error.message : 'unknown',
+      )
+    }
+    try {
+      if (visualScaleResetFailed && entry.zoomMode === 'fit') {
+        fitStatus = 'rejected'
+        rejectionReason = 'visual-scale-reset-failed'
+        factor = 1
+      } else if (entry.viewMode === 'mobile') {
         // 移动版：把约 414px 的移动视口放大填满面板
         factor = paneWidth / MOBILE_WIDTH
       } else if (entry.zoomMode === 'fit') {
-        let measurement = entry.fitWidthMeasurement
+        let measurement =
+          entry.fitWidthMeasurement?.documentGeneration === entry.fitDocumentGeneration
+            ? entry.fitWidthMeasurement
+            : null
         const measuredOverflow = measurement && measurement.contentWidth > measurement.paneWidth
-        // 已知固定宽内容时可直接复用基准宽度；已知页面可自适应时，
-        // 面板变宽也无需重测。只有“之前能放下，现在变窄”才需在 100% 下重测。
+        // 当前文档的稳定固定宽内容可直接复用；响应式页面在面板变窄时重新测量。
         const needsUnitMeasurement =
           !measurement || (!measuredOverflow && paneWidth < measurement.paneWidth)
         if (needsUnitMeasurement) {
-          // 缩小后的 CSS 视口会变宽，直接读 scrollWidth 会导致 30% 自我锁死。
-          // 测量结果缓存后，后续 resize 不再反复把用户可见页面切回 100%。
+          // 测量期间明确保持 100%，不让旧页面的错误 factor 继续显示。
           wc.setZoomFactor(1)
-          measurement = {
-            contentWidth: await this.measureContentWidth(tabId),
+          entry.effectiveZoom = 1
+          this.emitState(tabId)
+          const resolved = stableFitWidthMeasurement(
+            await this.measureContentWidth(tabId),
             paneWidth,
+            entry.fitDocumentGeneration,
+          )
+          if (!resolved.measurement) {
+            samples = resolved.samples
+            rejectionReason = resolved.rejectionReason
+            measurement = null
+          } else {
+            measurement = resolved.measurement
+            samples = measurement.samples
+            nextFitWidthMeasurement = measurement
           }
-          nextFitWidthMeasurement = measurement
         }
-        if (!measurement) throw new Error('适宽测量未生成')
-        factor = measurement.contentWidth > paneWidth ? paneWidth / measurement.contentWidth : 1
+        if (measurement) {
+          contentWidth = measurement.contentWidth
+          samples = measurement.samples
+          rawFactor = contentWidth > paneWidth ? paneWidth / contentWidth : 1
+          if (rawFactor < MIN_TRUSTED_AUTO_FIT_ZOOM) {
+            rejectionReason = 'auto-fit-too-small'
+            nextFitWidthMeasurement = null
+            factor = 1
+            fitStatus = 'rejected'
+          } else {
+            factor = rawFactor
+            fitStatus = nextFitWidthMeasurement ? 'accepted' : 'cached'
+          }
+        } else {
+          factor = 1
+          fitStatus = 'rejected'
+        }
       } else {
         // 手动缩放
         factor = entry.manualZoom
       }
     } catch {
       factor = entry.zoomMode === 'manual' ? entry.manualZoom : 1
+      if (entry.zoomMode === 'fit') {
+        fitStatus = 'rejected'
+        rejectionReason = 'measurement-failed'
+      }
     }
 
     const currentEntry = this.views.get(tabId)
@@ -1466,22 +1655,81 @@ export class BrowserManager {
     }
 
     factor = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, factor))
-    // 测量只在上方代次校验通过后才能成为该 View 的新基准。
-    if (nextFitWidthMeasurement) entry.fitWidthMeasurement = nextFitWidthMeasurement
+    let viewBounds = host.currentBounds
+    try {
+      viewBounds = entry.view.getBounds()
+    } catch {
+      // 测试替身或已销毁 View 使用当前 host bounds 作为诊断降级。
+    }
+    if (entry.zoomMode === 'fit') {
+      entry.lastFitDiagnostic = {
+        trigger,
+        status: fitStatus,
+        timestamp: Date.now(),
+        documentGeneration: entry.fitDocumentGeneration,
+        paneWidth,
+        viewBounds,
+        contentWidth,
+        rawFactor,
+        appliedFactor: factor,
+        actualZoomFactor: factor,
+        visualScaleBeforeReset,
+        actualVisualScale,
+        ...(rejectionReason ? { rejectionReason } : {}),
+        samples,
+      }
+      if (fitStatus === 'accepted' && nextFitWidthMeasurement) {
+        if (entry.fitRetryTimer) clearTimeout(entry.fitRetryTimer)
+        entry.fitRetryTimer = null
+        entry.fitWidthMeasurement = nextFitWidthMeasurement
+        entry.fitRetryCount = 0
+      } else if (fitStatus === 'rejected') {
+        entry.fitWidthMeasurement = null
+        this.scheduleFitRetry(tabId, entry)
+      }
+    } else {
+      entry.lastFitDiagnostic = {
+        trigger,
+        status: 'manual',
+        timestamp: Date.now(),
+        documentGeneration: entry.fitDocumentGeneration,
+        paneWidth,
+        viewBounds,
+        contentWidth: null,
+        rawFactor: null,
+        appliedFactor: factor,
+        actualZoomFactor: factor,
+        visualScaleBeforeReset,
+        actualVisualScale,
+        samples: [],
+      }
+    }
     wc.setZoomFactor(factor)
+    if (entry.lastFitDiagnostic) entry.lastFitDiagnostic.actualZoomFactor = wc.getZoomFactor()
     entry.effectiveZoom = factor
     this.emitState(tabId)
   }
 
-  /** 测量指定视图当前页面的真实内容宽度（CSS px） */
-  private async measureContentWidth(tabId: string): Promise<number> {
+  /** 由主进程调度三次页面快照，不依赖可能被节流的页面定时器。 */
+  private async measureContentWidth(tabId: string): Promise<unknown> {
     const entry = this.views.get(tabId)
-    if (!entry) return 0
-    const result = await entry.view.webContents.executeJavaScriptInIsolatedWorld(
-      FIT_WIDTH_MEASUREMENT_WORLD_ID,
-      [{ code: FIT_WIDTH_MEASUREMENT_SCRIPT }],
-    )
-    return typeof result === 'number' ? result : 0
+    if (!entry) return []
+    const capture = (): Promise<unknown> =>
+      entry.view.webContents.executeJavaScriptInIsolatedWorld(FIT_WIDTH_MEASUREMENT_WORLD_ID, [
+        { code: FIT_WIDTH_MEASUREMENT_SCRIPT },
+      ])
+    const first = await capture()
+    // 保留数字/数组形式，便于兼容旧运行时与稳定的单元测试替身。
+    if (typeof first === 'number' || Array.isArray(first)) return first
+
+    const startedAt = Date.now()
+    const samples: unknown[] = [{ ...(first as object), offsetMs: 0 }]
+    for (const delay of FIT_SAMPLE_DELAYS_MS) {
+      await new Promise((resolve) => setTimeout(resolve, delay))
+      const sample = await capture()
+      samples.push({ ...(sample as object), offsetMs: Date.now() - startedAt })
+    }
+    return samples
   }
 
   /** 把指定视图的状态同步给渲染进程 */
@@ -1786,9 +2034,14 @@ export class BrowserManager {
   setZoom(tabId: string, factor: number): void {
     const entry = this.views.get(tabId)
     if (!entry) return
+    this.clearFitTimers(entry)
+    entry.zoomRequestGeneration += 1
     entry.zoomMode = 'manual'
     entry.manualZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, factor))
-    void this.applyZoom(tabId)
+    // toolbar 状态立即响应；applyZoom 再将同一个 factor 下发给 WebContents。
+    entry.effectiveZoom = entry.manualZoom
+    this.emitState(tabId)
+    void this.applyZoom(tabId, 'manual-fit')
   }
 
   /** 放大一档 */
@@ -1814,8 +2067,11 @@ export class BrowserManager {
   setFitWidth(tabId: string): void {
     const entry = this.views.get(tabId)
     if (!entry) return
+    this.clearFitTimers(entry)
+    entry.fitWidthMeasurement = null
+    entry.fitRetryCount = 0
     entry.zoomMode = 'fit'
-    void this.applyZoom(tabId)
+    void this.applyZoom(tabId, 'manual-fit')
   }
 
   // ─────────────────────── 设备模式 ───────────────────────
@@ -1843,7 +2099,15 @@ export class BrowserManager {
     await assertBrowserUrlAccess(url, entry.workspaceKey)
     entry.pendingUrl = url
     entry.url = url
-    await entry.view.webContents.loadURL(url)
+    try {
+      await entry.view.webContents.loadURL(url)
+    } catch (error) {
+      // Chromium 会在重定向、页面自行替换导航或更新的用户导航抢占当前请求时，
+      // 以 ERR_ABORTED 拒绝旧 loadURL Promise。它表示旧请求被取消，不等于最终页面加载失败；
+      // did-navigate/did-fail-load 仍负责发布真实页面结果，辅助窗口不应显示原始 IPC 红条。
+      if (isNavigationAborted(error)) return
+      throw error
+    }
   }
 
   /** 后退 */
@@ -2011,6 +2275,7 @@ export class BrowserManager {
       expectedUrl: string
       errorMessage?: string
     } | null
+    fitWidth: BrowserFitWidthDiagnosticSummary | null
     session: BrowserSessionDiagnosticSummary | null
   }> {
     const entry = this.views.get(tabId)
@@ -2028,6 +2293,7 @@ export class BrowserManager {
         recentUrls: [],
         engineVersions: this.getEngineVersions(),
         lastClaim: this.lastClaimByTab.get(tabId) ?? null,
+        fitWidth: null,
         session: null,
       }
     }
@@ -2055,6 +2321,7 @@ export class BrowserManager {
       recentUrls: entry.history.slice(-10),
       engineVersions: this.getEngineVersions(),
       lastClaim: this.lastClaimByTab.get(tabId) ?? null,
+      fitWidth: entry.lastFitDiagnostic,
       session: sessionDiagnostics,
     }
   }
@@ -2081,4 +2348,10 @@ export class BrowserManager {
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function isNavigationAborted(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const candidate = error as { code?: unknown; errno?: unknown }
+  return candidate.code === 'ERR_ABORTED' || candidate.errno === -3
 }

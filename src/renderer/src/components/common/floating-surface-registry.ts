@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 
 let activeSurfaceCount = 0
 const listeners = new Set<() => void>()
@@ -18,6 +18,13 @@ export function registerFloatingSurface(): () => void {
 
 export function useAnyFloatingSurfaceOpen(): boolean {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+}
+
+export function useFloatingSurfaceRegistration(open: boolean): void {
+  useEffect(() => {
+    if (!open) return
+    return registerFloatingSurface()
+  }, [open])
 }
 
 export function isAnyFloatingSurfaceOpen(): boolean {

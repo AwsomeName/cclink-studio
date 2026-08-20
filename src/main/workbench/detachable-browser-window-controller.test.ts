@@ -23,6 +23,7 @@ function fakeWindow() {
   }
   const window = {
     webContents,
+    getBounds: vi.fn(() => ({ x: 100, y: 80, width: 1200, height: 800 })),
     show: vi.fn(),
     destroy: vi.fn(),
     isDestroyed: vi.fn(() => false),
@@ -45,6 +46,7 @@ function createHarness(
     trustRegistrationFails?: boolean
     attachFails?: boolean
     loseBothHostsOnAttach?: boolean
+    cursorPoint?: { x: number; y: number }
   } = {},
 ) {
   const mainWindow = fakeWindow()
@@ -134,6 +136,11 @@ function createHarness(
     }),
   }
   const trustedRenderers = {
+    assertRole: vi.fn(() => ({
+      windowId: 'main',
+      role: 'main',
+      webContents: mainWindow.webContents,
+    })),
     register: vi.fn(() => {
       if (options.trustRegistrationFails) throw new Error('trust registration failed')
       return vi.fn()
@@ -173,6 +180,7 @@ function createHarness(
     trustedRenderers: trustedRenderers as never,
     recoveryHosts: recoveryHosts as never,
     createAuxiliaryWindow: createAuxiliaryWindow as never,
+    getCursorScreenPoint: () => options.cursorPoint ?? { x: 1400, y: 300 },
     readyTimeoutMs: 20,
   })
   controllerRef.current = controller
@@ -187,6 +195,7 @@ function createHarness(
     registeredHosts,
     createAuxiliaryWindow,
     mainWorkspaceListeners,
+    trustedRenderers,
   }
 }
 
@@ -199,6 +208,23 @@ describe('DetachableBrowserWindowController', () => {
     expect(harness.windowService.getWindow('main')?.workspaceKey).toBe('/workspace/b')
     harness.controller.destroy()
     expect(harness.mainWorkspaceListeners.size).toBe(0)
+  })
+
+  it('arbitrates drag-end cursor position in main against native BrowserWindow bounds', async () => {
+    const outside = createHarness({ cursorPoint: { x: -600, y: 300 } })
+    outside.controller.registerIpc()
+    const outsideHandler = outside.trustedRenderers.ipcRegistrations.handle.mock.calls.find(
+      ([channel]) => channel === 'workbenchWindow:getTabDetachDropPoint',
+    )?.[1]
+    expect(await outsideHandler?.({})).toEqual({ x: -600, y: 300 })
+    expect(outside.mainWindow.getBounds).toHaveBeenCalledOnce()
+
+    const inside = createHarness({ cursorPoint: { x: 500, y: 300 } })
+    inside.controller.registerIpc()
+    const insideHandler = inside.trustedRenderers.ipcRegistrations.handle.mock.calls.find(
+      ([channel]) => channel === 'workbenchWindow:getTabDetachDropPoint',
+    )?.[1]
+    expect(await insideHandler?.({})).toBeNull()
   })
 
   it('moves Browser runtime after auxiliary ready and returns it without destroying the tab', async () => {

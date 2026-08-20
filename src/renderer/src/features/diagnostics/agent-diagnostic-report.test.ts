@@ -219,6 +219,24 @@ describe('agent diagnostic report', () => {
           expectedUrl: 'https://www.zhihu.com/signin',
           errorMessage: 'target mismatch',
         },
+        fitWidth: {
+          trigger: 'did-finish-load',
+          status: 'rejected',
+          timestamp: new Date('2026-07-15T10:54:31+08:00').getTime(),
+          documentGeneration: 2,
+          paneWidth: 633,
+          viewBounds: { x: 413, y: 120, width: 633, height: 728 },
+          contentWidth: 2110,
+          rawFactor: 0.3,
+          appliedFactor: 1,
+          actualZoomFactor: 1,
+          rejectionReason: 'auto-fit-too-small',
+          samples: [
+            { offsetMs: 0, viewportWidth: 633, rootWidth: 2110, bodyWidth: 633 },
+            { offsetMs: 250, viewportWidth: 633, rootWidth: 2110, bodyWidth: 633 },
+            { offsetMs: 750, viewportWidth: 633, rootWidth: 2110, bodyWidth: 633 },
+          ],
+        },
         session: {
           partition: 'persist:cclink-studio-profile-zhihu',
           persistent: true,
@@ -318,6 +336,9 @@ describe('agent diagnostic report', () => {
     expect(markdown).toContain('疑似挑战：auth_required, captcha_or_bot_check')
     expect(markdown).toContain('绑定状态：tab_mismatch')
     expect(markdown).toContain('浏览器内核：Electron 43.1.1 / Chromium 150.0.7871.114')
+    expect(markdown).toContain('Raw/Applied/Actual：0.3 / 1 / 1')
+    expect(markdown).toContain('拒绝原因：auto-fit-too-small')
+    expect(markdown).toContain('+750ms viewport=633 root=2110 body=633')
     expect(markdown).toContain('Session 兼容指纹：aaaaaaaaaaaa...')
     expect(markdown).toContain('角色 Prompt 编译器：1')
     expect(markdown).toContain('Claude 运行时来源：bundled')
@@ -416,6 +437,7 @@ describe('agent diagnostic report', () => {
       bindingStatus: 'matched',
       recentUrls: [],
       lastClaim: null,
+      fitWidth: null,
       session: null,
       page: null,
     }

@@ -1,7 +1,9 @@
 # 可分离 Workbench Tab 与辅助窗口
 
-> 状态：方案文档、P0a/P0b 与 ADR 0017 已通过；Browser-only M1 生产实现和真实 App 自动 smoke
-> 已完成。物理双屏与用户自有真实账号真人签收仍待执行，因此最终用户交付仍为 Conditional Go。
+> 状态：方案文档、P0a/P0b 与 ADR 0017 已通过；Browser-only M1 的主进程迁移事务已实现。
+> 2026-08-20 对 v0.1.51 正式包的复审发现辅助窗口网页区域为 0 高度，且 CDP mouse smoke
+> 不能证明 macOS 真人拖出成立。当前修复候选已通过受影响单测、TypeScript 和带可见尺寸断言的
+> 真实 App smoke；真人拖出完成前，Browser 辅助窗口最终用户交付仍为 No-Go。
 >
 > 创建时间：2026-08-18。
 >
@@ -36,12 +38,9 @@ Host。生产实现现已采用主进程 WindowService/TabModel、最小辅助 r
 
 ### 2.1 用户现在能做什么
 
-- 在同一个主窗口的 TabBar 内拖拽 Tab 调整顺序；把 Browser Tab 拖出主窗口并在外部松手时，
-  同一 Browser Tab 会移动到松手所在显示器的独立窗口。
+- 在同一个主窗口的 TabBar 内拖拽 Tab 调整顺序。
 - 同时打开 Browser、Editor、Terminal、Conversation 和其他 Workbench Tab，并在一个窗口内
   切换。
-- 从 Browser Tab 统一右键菜单或命令面板执行“移至新窗口”，在辅助窗口继续浏览，并通过按钮或
-  关闭辅助窗口把同一 Browser Tab 送回主窗口。
 - Browser、Terminal 和 Agent 的后台运行事实由现有主进程领域 owner 继续维护；切换工作空间
   只改变可见投影，不应终止后台任务。
 
@@ -50,9 +49,51 @@ Host。生产实现现已采用主进程 WindowService/TabModel、最小辅助 r
 - 把 Browser 以外的任意 Tab 拖出主窗口形成独立窗口。
 - 分离 Browser 以外的 Editor、Terminal、Conversation 或其他 Tab。
 - 恢复上次退出时的辅助窗口位置、显示器和 Tab 分布。
+- 把修复候选视为已经完成真人验收。右键/命令入口已通过真实 App 自动化并得到非零网页区域，
+  但尚未由用户在当前开发版中签收。
+- 把任何 CDP mouse smoke 当作 macOS 真人拖出证据。当前实现已删除 renderer 坐标裁决并改由
+  主进程读取系统光标和真实窗口 bounds，但该系统光标路径仍必须真人拖出验收。
 
-Browser M1 生产实现和真实 App 自动门禁已通过；物理双屏与用户自有真实账号真人签收记录见
-`docs/ops/detachable-workbench-tabs-m1-acceptance.md`。该签收完成前仍不能声明副屏用户闭环最终交付。
+Browser M1 的核心迁移事务和状态保持门禁曾通过，但该自动化没有检查网页 surface 的可见尺寸，
+并错误地把 Playwright over CDP 的 mouse 注入描述为真人拖拽。修复、受影响工程门禁和真人验收
+记录见 `docs/ops/detachable-workbench-tabs-m1-acceptance.md`；完成前不得声明 Browser 辅助窗口可交付。
+
+### 2.3 2026-08-20 正式包复审与修复方案
+
+在 v0.1.51 正式 DMG、隔离 `userData` 以及真实用户状态副本上复现到同一结果：右键“移至新窗口”
+会创建辅助窗口、提交 placement、保持相同 `tabId`/WebContents/Playwright Page，但
+`.auxiliary-browser-surface` 的实际尺寸为 `1100 × 0`。仅在运行时把 surface 固定到 Grid 第四行后，
+其尺寸立即变为 `1100 × 676`，同一 WebContents 获得有效视口，没有 reload 或重建。
+
+修复按以下边界实施：
+
+1. 显式固定辅助窗口 titlebar、toolbar、notices 和 browser surface 的 Grid 行；空 notices 是否
+   `display:none` 不得改变 browser surface 的行归属。
+2. 真实 App smoke 必须断言 browser surface 的宽高均大于 0；只看到辅助 renderer 外壳、projection
+   或存活 Page 不能判定用户可见。
+3. renderer 拖拽结束只提交有界信号，不再提交或裁决 `screenX/clientX/window.screenX`。主进程使用
+   `screen.getCursorScreenPoint()` 与 source `BrowserWindow.getBounds()` 在同一 DIP 坐标系判定窗口外
+   松手，并把该点作为辅助窗口 placement 输入。
+4. Playwright mouse 只保留为 renderer/事务诊断，不计入真人拖出证据。macOS 单屏窗口外松手、
+   物理双屏跨屏松手和 Escape/同栏排序必须由真人验收。
+
+实施结果：辅助窗口四个区域已显式固定 Grid 行，renderer 不再读取拖拽坐标，主进程新增系统
+cursor/window bounds 裁决。受影响 4 个测试文件共 29 项通过，TypeScript 主进程与 renderer
+类型检查通过；更新后的真实 App smoke 12/12 通过，右键生产入口创建的 browser surface 实测为
+`1100 × 676`，同一 Page/Session/表单/滚动和 runtime identity 保持。以上是工程候选证据，不替代
+真人拖出和当前用户环境签收。
+
+当前用户随后确认 Tab 已能进入辅助窗口，但真实截图暴露出第二个独立问题：Electron
+`getZoomFactor()` 已为 1 时，Chromium `visualViewport.scale` 仍可能保留为 0.3，因此网页看起来仍
+缩成一角。BrowserManager 现把 visual page scale 纳入主进程缩放所有权，每次应用自动/手动缩放及
+迁移激活时先串行复位为 1，并在诊断中分别记录复位前/后的值。更新后的真实 App smoke 会在迁移前
+故意制造 30% visual scale，迁移后断言同一 Page 不重载且 visual scale 恢复为 1；该回归 12/12
+通过；当前用户随后以第二张真人截图签收了单屏辅助窗口的正常显示比例。
+
+用户随后以第二张真人截图确认辅助窗口已按正常比例显示网页，同时暴露了一个独立的导航误报：页面
+成功打开百度，但被替代的旧 `loadURL()` 返回 `ERR_ABORTED (-3)`，辅助 renderer 将其显示为红条。
+BrowserManager 现将该取消结果视为非致命，真实网络失败仍继续上报；辅助窗口不再把成功导航描述成
+失败。
 
 2026-08-20 异常路径复审已关闭五项发布阻断：主窗口关闭会先释放辅助窗口拦截器再退出；主 renderer
 刷新会先水合 placement 投影，避免重复 Tab；同工作空间关闭辅助窗口后，Tab 高亮服从实际 active

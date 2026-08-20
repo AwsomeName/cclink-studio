@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app, screen } from 'electron'
 import { BrowserManager } from '../browser/browser-manager'
 import { BrowserTaskRuntime } from '../browser/browser-task-runtime'
 import { BrowserDownloadStore } from '../browser/browser-download-store'
@@ -100,6 +100,7 @@ export function createWindowRuntime(
           rendererHtmlPath: options.rendererHtmlPath,
           dropPoint,
         }),
+      getCursorScreenPoint: () => screen.getCursorScreenPoint(),
     })
     runtime.detachableBrowserWindows.registerIpc()
   }

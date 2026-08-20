@@ -212,6 +212,16 @@ try {
       assert(sessionCookie?.value === 'authenticated', 'Authenticated Session cookie was not set')
       await mainPage.evaluate((id) => window.cclinkStudio.browser.setZoom(id, 1.2), tabId)
       zoomBefore = await browserPage.evaluate(() => window.devicePixelRatio)
+      const visualZoomSession = await browserPage.context().newCDPSession(browserPage)
+      await visualZoomSession.send('Emulation.setPageScaleFactor', { pageScaleFactor: 0.3 })
+      await visualZoomSession.detach()
+      const visualScaleBeforeMove = await browserPage.evaluate(
+        () => window.visualViewport?.scale ?? 1,
+      )
+      assert(
+        Math.abs(visualScaleBeforeMove - 0.3) < 0.001,
+        `Visual zoom precondition failed: ${visualScaleBeforeMove}`,
+      )
       const task = await mainPage.evaluate(
         (id) => window.cclinkStudio.browser.startTask(id, 'detachable owner routing smoke'),
         tabId,
@@ -227,29 +237,22 @@ try {
 
   let auxiliaryPage
   await check(
-    'drag the real Browser Tab outside the main window into the minimal auxiliary renderer',
+    'move the Browser Tab through the production context-menu command into a visible auxiliary surface',
     async () => {
       const browserTab = mainPage.getByRole('tab').filter({ hasText: 'Detachable M1' }).first()
-      const tabBounds = await browserTab.boundingBox()
-      const viewport = await mainPage.evaluate(() => ({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      }))
-      assert(tabBounds, 'Browser Tab drag geometry was unavailable')
-      await mainPage.mouse.move(
-        tabBounds.x + tabBounds.width / 2,
-        tabBounds.y + tabBounds.height / 2,
-      )
-      await mainPage.mouse.down()
-      await mainPage.mouse.move(viewport.width + 120, tabBounds.y + tabBounds.height / 2, {
-        steps: 12,
-      })
-      await mainPage.mouse.up()
+      await browserTab.click({ button: 'right' })
+      await mainPage.getByRole('menu', { name: '上下文菜单' }).waitFor({ state: 'visible' })
+      await mainPage.getByRole('menuitem', { name: '移至新窗口' }).click()
       auxiliaryPage = await waitForPage(
         browser,
         (page) => page.url().startsWith(`${rendererOrigin}/`) && page.url().includes('#auxiliary'),
       )
       await auxiliaryPage.waitForSelector('.auxiliary-browser-window', { timeout: 10_000 })
+      const surfaceBounds = await auxiliaryPage.locator('.auxiliary-browser-surface').boundingBox()
+      assert(
+        surfaceBounds && surfaceBounds.width > 0 && surfaceBounds.height > 0,
+        `Auxiliary Browser surface is not visible: ${JSON.stringify(surfaceBounds)}`,
+      )
       const preloadReady = await auxiliaryPage.evaluate(() => Boolean(window.cclinkAuxiliary))
       assert(preloadReady, 'Minimal auxiliary preload was not exposed')
       await auxiliaryPage.evaluate(() => {
@@ -273,7 +276,7 @@ try {
         return useWorkbenchWindowStore.getState().placements[id]
       }, tabId)
       assert(mainProjection?.windowId.startsWith('aux-'), 'Main renderer did not hide detached tab')
-      return `${mainProjection.windowId} via drag-out`
+      return `${mainProjection.windowId} with ${surfaceBounds.width}x${surfaceBounds.height} surface`
     },
   )
 
@@ -352,7 +355,20 @@ try {
       assert(authenticated, 'Authenticated Session was lost')
       const zoomAfter = await browserPage.evaluate(() => window.devicePixelRatio)
       assert(Math.abs(zoomAfter - zoomBefore) < 0.001, 'Browser zoom state changed')
-      return 'same Page and runtime generation'
+      const visualScaleAfter = await browserPage.evaluate(() => window.visualViewport?.scale ?? 1)
+      assert(
+        Math.abs(visualScaleAfter - 1) < 0.001,
+        `Detached Browser retained stale visual zoom: ${visualScaleAfter}`,
+      )
+      const runtimeDiagnostic = await mainPage.evaluate(
+        (id) => window.cclinkStudio.browser.getRuntimeDiagnostics(id),
+        tabId,
+      )
+      assert(
+        Math.abs((runtimeDiagnostic.fitWidth?.actualVisualScale ?? 0) - 1) < 0.001,
+        `Main diagnostics missed visual zoom reset: ${JSON.stringify(runtimeDiagnostic.fitWidth)}`,
+      )
+      return 'same Page/runtime generation; visual scale reset to 1'
     },
   )
 

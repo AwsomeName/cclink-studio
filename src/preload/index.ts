@@ -63,7 +63,7 @@ import {
   workbenchWindowIpc,
   workbenchWindowIpcEvents,
   workbenchWindowProjectionSchema,
-  type WorkbenchWindowApiContract,
+  type WorkbenchMainWindowApiContract,
 } from '../shared/ipc/workbench-window'
 
 const settingsApi: SettingsApiContract = {
@@ -244,9 +244,10 @@ const workbenchTabsApi: WorkbenchTabStateApiContract = {
   replaceBookmarks: (input) => invokeIpcContract(workbenchBrowserStateIpc.replaceBookmarks, input),
 }
 
-const workbenchWindowApi: WorkbenchWindowApiContract = {
+const workbenchWindowApi: WorkbenchMainWindowApiContract = {
   getBootstrap: () => invokeIpcContract(workbenchWindowIpc.getBootstrap),
   getProjection: () => invokeIpcContract(workbenchWindowIpc.getProjection),
+  getTabDetachDropPoint: () => invokeIpcContract(workbenchWindowIpc.getTabDetachDropPoint),
   moveTabToNewWindow: (input) => invokeIpcContract(workbenchWindowIpc.moveTabToNewWindow, input),
   returnTabToMain: (input) => invokeIpcContract(workbenchWindowIpc.returnTabToMain, input),
   auxiliaryReady: (input) => invokeIpcContract(workbenchWindowIpc.auxiliaryReady, input),

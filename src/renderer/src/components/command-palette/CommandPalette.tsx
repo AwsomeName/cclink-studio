@@ -5,6 +5,8 @@ import { IconSearch } from '../common/Icons'
 import { useSettingsStore } from '../../stores/settings-store'
 import { effectiveBindingsForCommand } from '../../features/shortcuts/keybinding-resolver'
 import { formatKeyChord, isMacPlatform } from '@shared/keybindings'
+import { useEscapeDismiss } from '../common/dismissable-layer'
+import { useFloatingSurfaceRegistration } from '../common/floating-surface-registry'
 
 export function CommandPalette(): React.ReactElement {
   const paletteOpen = useCommandStore((s) => s.paletteOpen)
@@ -19,6 +21,9 @@ export function CommandPalette(): React.ReactElement {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const selectedRef = useRef<HTMLDivElement>(null)
+
+  useFloatingSurfaceRegistration(paletteOpen)
+  useEscapeDismiss(paletteOpen, closePalette)
 
   const filtered = getFilteredCommands()
 
@@ -100,7 +105,13 @@ export function CommandPalette(): React.ReactElement {
 
   return (
     <div className="command-palette-overlay" onClick={closePalette}>
-      <div className="command-palette" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="command-palette"
+        role="dialog"
+        aria-modal="true"
+        aria-label="命令面板"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* 搜索输入 */}
         <div className="command-palette-input">
           <IconSearch size={16} />

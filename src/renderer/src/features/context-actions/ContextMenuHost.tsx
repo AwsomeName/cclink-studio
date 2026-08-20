@@ -10,6 +10,7 @@ import { findBoundaryEnabledIndex, findNextEnabledIndex, fitMenuPosition } from 
 import { targetMatchesWorkspace, type CommandContext } from './context-target'
 import { resolveContextMenu, type ResolvedContextMenuItem } from './resolve-context-menu'
 import { useContextActionDiagnosticsStore } from './context-action-diagnostics'
+import { useEscapeDismiss } from '../../components/common/dismissable-layer'
 
 export function ContextMenuHost(): React.ReactElement | null {
   const open = useContextMenuStore((state) => state.open)
@@ -32,6 +33,17 @@ export function ContextMenuHost(): React.ReactElement | null {
   const inputRef = useRef<HTMLInputElement>(null)
   const [position, setPosition] = useState({ left: x, top: y })
   const [selectedIndex, setSelectedIndex] = useState(0)
+
+  useEscapeDismiss(open, () => {
+    if (editingContributionId) {
+      cancelInlineEdit()
+      requestAnimationFrame(() => {
+        menuRef.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]')[selectedIndex]?.focus()
+      })
+      return
+    }
+    hide('escape')
+  })
 
   const context = useMemo<CommandContext | null>(
     () => (target ? { source: 'context-menu', target } : null),
@@ -117,18 +129,6 @@ export function ContextMenuHost(): React.ReactElement | null {
       window.removeEventListener('blur', handleBlur)
     }
   }, [hide, open])
-
-  useEffect(() => {
-    if (!open || editingContributionId) return
-    const handleGlobalEscape = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      event.stopPropagation()
-      hide('escape')
-    }
-    document.addEventListener('keydown', handleGlobalEscape, true)
-    return () => document.removeEventListener('keydown', handleGlobalEscape, true)
-  }, [editingContributionId, hide, open])
 
   if (!open || !context || !target || items.length === 0) return null
 

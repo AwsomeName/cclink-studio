@@ -18,8 +18,13 @@
 }
 
 .auxiliary-browser-titlebar {
+  grid-row: 1;
   padding-left: 78px;
   -webkit-app-region: drag;
+}
+
+.auxiliary-browser-toolbar {
+  grid-row: 2;
 }
 
 .auxiliary-browser-titlebar button,
@@ -88,6 +93,10 @@
   display: none;
 }
 
+.auxiliary-browser-notices {
+  grid-row: 3;
+}
+
 .auxiliary-browser-find {
   display: flex;
   justify-content: flex-end;
@@ -110,6 +119,7 @@
 }
 
 .auxiliary-browser-surface {
+  grid-row: 4;
   min-width: 0;
   min-height: 0;
   background: #fff;

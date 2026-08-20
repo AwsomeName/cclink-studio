@@ -628,6 +628,87 @@ describe('CclinkRemoteService runtime protocol', () => {
     })
   })
 
+  it('不会把 agent_text 的最终结论和 stream_end.final_text 保存两遍', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+
+    await handle({
+      ...createCclinkEnvelope('agent_text', {
+        request_id: 'request-1',
+        trace_id: 'trace-1',
+      }),
+      session_id: 'session-1',
+      msg_id: 'message-1-seg199',
+      content: '全部任务完成。',
+    })
+    const streamEnd = {
+      ...createCclinkEnvelope('stream_end', {
+        request_id: 'request-1',
+        trace_id: 'trace-1',
+      }),
+      session_id: 'session-1',
+      msg_id: 'message-1',
+      final_text: '全部任务完成。',
+    }
+    await handle(streamEnd)
+    await handle(streamEnd)
+
+    expect(service.listMessages('session-1')).toEqual([
+      expect.objectContaining({
+        type: 'agentText',
+        id: 'remote-agent-message-1-seg199',
+        content: '全部任务完成。',
+      }),
+    ])
+  })
+
+  it('保留过程消息和两次独立请求中相同的回答', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+
+    for (const message of [
+      {
+        ...createCclinkEnvelope('agent_text'),
+        session_id: 'session-1',
+        msg_id: 'message-1-seg198',
+        content: '正在收尾。',
+      },
+      {
+        ...createCclinkEnvelope('agent_text'),
+        session_id: 'session-1',
+        msg_id: 'message-1-seg199',
+        content: '全部任务完成。',
+      },
+      {
+        ...createCclinkEnvelope('stream_end'),
+        session_id: 'session-1',
+        msg_id: 'message-1',
+        final_text: '全部任务完成。',
+      },
+      {
+        ...createCclinkEnvelope('agent_text'),
+        session_id: 'session-1',
+        msg_id: 'message-2-seg1',
+        content: '全部任务完成。',
+      },
+      {
+        ...createCclinkEnvelope('stream_end'),
+        session_id: 'session-1',
+        msg_id: 'message-2',
+        final_text: '全部任务完成。',
+      },
+    ]) {
+      await handle(message)
+    }
+
+    expect(
+      service
+        .listMessages('session-1')
+        .filter((message) => message.type === 'agentText')
+        .map((message) => message.content),
+    ).toEqual(['正在收尾。', '全部任务完成。', '全部任务完成。'])
+  })
+
   it('只在 Agent ACK 后提交审批状态，并保留被拒绝的待审批操作', async () => {
     const { service, handle } = createService()
     await service.initialize()

@@ -25,6 +25,8 @@ import {
 import { useCommandStore } from '../../stores/command-store'
 import { GitStatusBarItem } from './GitStatusBarItem'
 import { GitOperationDialog } from './GitOperationDialog'
+import { useEscapeDismiss } from '../common/dismissable-layer'
+import { useFloatingSurfaceRegistration } from '../common/floating-surface-registry'
 
 export function StatusBar(): React.ReactElement {
   const activeTab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId))
@@ -49,6 +51,9 @@ export function StatusBar(): React.ReactElement {
   const executeCommand = useCommandStore((s) => s.executeCommand)
 
   const workspaceKey = workspaceRefKey(activeWorkspaceRef)
+
+  useFloatingSurfaceRegistration(showGitDialog)
+  useEscapeDismiss(showGitDialog, closeGitDialog)
 
   const showStatusMenu = (
     itemId: string,
@@ -160,13 +165,16 @@ export function StatusBar(): React.ReactElement {
         <div className="git-backup-dialog-overlay" onMouseDown={closeGitDialog}>
           <form
             className="git-backup-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="git-backup-dialog-title"
             onMouseDown={(event) => event.stopPropagation()}
             onSubmit={(event) => {
               event.preventDefault()
               void handleFirstGitBackup()
             }}
           >
-            <h2>备份到 Git</h2>
+            <h2 id="git-backup-dialog-title">备份到 Git</h2>
             <p>填写完整远程仓库地址，或者只填写 GitHub 项目名。</p>
             <input
               autoFocus
@@ -177,7 +185,7 @@ export function StatusBar(): React.ReactElement {
             />
             {gitError && <div className="git-backup-dialog-error">{gitError}</div>}
             <div className="git-backup-dialog-actions">
-              <button type="button" disabled={gitBusy} onClick={closeGitDialog}>
+              <button type="button" onClick={closeGitDialog}>
                 取消
               </button>
               <button type="submit" disabled={gitBusy || !repositoryInput.trim()}>

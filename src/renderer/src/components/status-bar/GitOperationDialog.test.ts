@@ -14,4 +14,11 @@ describe('GitOperationDialog product boundary', () => {
     expect(source).toContain('本地提交已保留')
     expect(source).not.toContain('onMouseDown={closeDialog}')
   })
+
+  it('hides the native browser view while the Git dialog is open', () => {
+    const source = readFileSync(new URL('./GitOperationDialog.tsx', import.meta.url), 'utf8')
+
+    expect(source).toContain('useFloatingSurfaceRegistration(dialogOpen)')
+    expect(source).toContain('useEscapeDismiss(dialogOpen, requestClose)')
+  })
 })

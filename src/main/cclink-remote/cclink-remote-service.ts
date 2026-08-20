@@ -1450,7 +1450,10 @@ export class CclinkRemoteService implements RemoteProvider {
         this.streams.delete(key)
         const finalText = event.final_text ?? buffer?.content ?? ''
         let remoteMessage: CclinkRemoteMessage | undefined
-        if (finalText) {
+        const repeatedTerminalText = finalText
+          ? this.hasRepeatedTerminalText(event.session_id, event.msg_id, finalText)
+          : false
+        if (finalText && !repeatedTerminalText) {
           remoteMessage = {
             type: 'agentText',
             id: `remote-agent-${event.msg_id}`,
@@ -1715,6 +1718,22 @@ export class CclinkRemoteService implements RemoteProvider {
           : {}),
     }
     this.diagnosticLog.recordSession(serverId, sessionId, event)
+  }
+
+  private hasRepeatedTerminalText(
+    sessionId: string,
+    streamMessageId: string,
+    content: string,
+  ): boolean {
+    const segmentPrefix = `remote-agent-${streamMessageId}-seg`
+    const messages = this.messages.get(sessionId) ?? []
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index]
+      if (message.type !== 'agentText' || message.content !== content) continue
+      const segment = message.id.slice(segmentPrefix.length)
+      if (message.id.startsWith(segmentPrefix) && /^\d+$/u.test(segment)) return true
+    }
+    return false
   }
 
   private appendMessage(sessionId: string, message: CclinkRemoteMessage): void {

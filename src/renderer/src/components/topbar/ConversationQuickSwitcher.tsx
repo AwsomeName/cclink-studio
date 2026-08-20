@@ -21,6 +21,8 @@ import {
 } from '../../features/context-actions/context-menu-trigger'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { IconPlus } from '../common/Icons'
+import { useEscapeDismiss } from '../common/dismissable-layer'
+import { useFloatingSurfaceRegistration } from '../common/floating-surface-registry'
 import {
   buildRemoteQuickSwitcherItems,
   formatQuickSwitcherTitle,
@@ -65,6 +67,8 @@ export function ConversationQuickSwitcher({
   const showContextMenu = useContextMenuStore((state) => state.show)
   const rootRef = useRef<HTMLDivElement>(null)
   const [overflowOpen, setOverflowOpen] = useState(false)
+  useFloatingSurfaceRegistration(overflowOpen)
+  useEscapeDismiss(overflowOpen, () => setOverflowOpen(false))
   const workspaceKey = workspaceRefKey(activeWorkspaceRef)
   const pendingConfirmationCount = pendingConfirmations.filter(
     (request) => request.conversationId === activeConversationId,
@@ -116,14 +120,9 @@ export function ConversationQuickSwitcher({
     const handlePointerDown = (event: MouseEvent): void => {
       if (!rootRef.current?.contains(event.target as Node)) setOverflowOpen(false)
     }
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setOverflowOpen(false)
-    }
     document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
     }
   }, [overflowOpen])
 

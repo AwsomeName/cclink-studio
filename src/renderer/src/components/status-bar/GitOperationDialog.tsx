@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useGitStore } from '../../stores/git-store'
 import { IconBranch, IconClose, IconRefresh } from '../common/Icons'
+import { useEscapeDismiss } from '../common/dismissable-layer'
+import { useFloatingSurfaceRegistration } from '../common/floating-surface-registry'
 import { GitChangesView } from './GitChangesView'
 import { createDefaultCommitMessage, GitCommitView } from './GitCommitView'
 import { formatGitUpstream, getGitBranchLabel } from './git-status-view-model'
@@ -32,9 +34,11 @@ export function GitOperationDialog(): React.ReactElement | null {
 
   const stale = Boolean(snapshot && baselineRevision && snapshot.revision !== baselineRevision)
   const requestClose = useCallback((): void => {
-    if (operation) return
     closeDialog()
-  }, [closeDialog, operation])
+  }, [closeDialog])
+
+  useFloatingSurfaceRegistration(dialogOpen)
+  useEscapeDismiss(dialogOpen, requestClose)
 
   useEffect(() => {
     if (!dialogOpen) return
@@ -49,11 +53,6 @@ export function GitOperationDialog(): React.ReactElement | null {
   useEffect(() => {
     if (!dialogOpen) return
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        requestClose()
-        return
-      }
       if (event.key !== 'Tab') return
       const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
         'button:not(:disabled), textarea:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])',
@@ -71,7 +70,7 @@ export function GitOperationDialog(): React.ReactElement | null {
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [dialogOpen, requestClose])
+  }, [dialogOpen])
 
   if (
     !dialogOpen ||
@@ -178,13 +177,7 @@ export function GitOperationDialog(): React.ReactElement | null {
                 <IconRefresh size={15} />
               </button>
             )}
-            <button
-              type="button"
-              disabled={operation !== null}
-              onClick={requestClose}
-              aria-label="关闭 Git 窗口"
-              title="关闭"
-            >
+            <button type="button" onClick={requestClose} aria-label="关闭 Git 窗口" title="关闭">
               <IconClose size={15} />
             </button>
           </div>

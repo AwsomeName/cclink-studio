@@ -13,6 +13,7 @@ const keepRunning = process.argv.includes('--keep-running')
 const agentPanelOnly = process.argv.includes('--agent-panel-only')
 const webAffairsOnly = process.argv.includes('--web-affairs-only')
 const gitOnly = process.argv.includes('--git-only')
+const dismissableOnly = process.argv.includes('--dismissable-only')
 const uiReadyTimeoutMs = 30_000
 const globalWebResourcesCheck = 'global web resources reuse one account and matrix across projects'
 const webAffairPersistenceCheck = 'web affair persists a five-node workflow and node progress'
@@ -27,6 +28,7 @@ const gitChecks = new Set([
   'status bar shows the current Git repository fact',
   'Git compact commit menu executes commit and push actions',
 ])
+const dismissableChecks = new Set(['Escape closes only the topmost Studio popup'])
 const results = []
 let startedBySmoke = false
 let webFixtureServer
@@ -93,6 +95,7 @@ async function findRendererPage(browser) {
 async function runCheck(name, fn, options = {}) {
   if (webAffairsOnly && !webAffairsChecks.has(name)) return
   if (gitOnly && !gitChecks.has(name)) return
+  if (dismissableOnly && !dismissableChecks.has(name)) return
   const blockedBy = (options.dependsOn ?? []).find(
     (dependency) => results.find((result) => result.name === dependency)?.status !== 'pass',
   )
@@ -220,6 +223,41 @@ async function main() {
     )
     assert(!text.includes('登录 CCLink'), 'login copy should not block the shell')
     return 'main window ready'
+  })
+
+  await runCheck('Escape closes only the topmost Studio popup', async () => {
+    await page.evaluate(async () => {
+      const { useWorkspaceOpenStore } =
+        await import('/src/features/workspace-open/workspace-open-store.ts')
+      useWorkspaceOpenStore.getState().show()
+    })
+    const workspaceOpener = page.locator('.workspace-open-surface')
+    await workspaceOpener.waitFor({ state: 'visible', timeout: 10_000 })
+
+    await page.evaluate(async () => {
+      const { useCommandStore } = await import('/src/stores/command-store.ts')
+      useCommandStore.getState().togglePalette()
+    })
+    const commandPalette = page.locator('.command-palette')
+    await commandPalette.waitFor({ state: 'visible', timeout: 10_000 })
+
+    await page.keyboard.press('Escape')
+    await commandPalette.waitFor({ state: 'hidden', timeout: 10_000 })
+    assert(await workspaceOpener.isVisible(), 'Escape also closed the lower workspace popup')
+
+    await page.keyboard.press('Escape')
+    await workspaceOpener.waitFor({ state: 'hidden', timeout: 10_000 })
+
+    await page.evaluate(async () => {
+      const { useUpdateStore } = await import('/src/stores/update-store.ts')
+      useUpdateStore.getState().openPanel()
+    })
+    const updatePanel = page.locator('.update-panel')
+    await updatePanel.waitFor({ state: 'visible', timeout: 10_000 })
+    await page.keyboard.press('Escape')
+    await updatePanel.waitFor({ state: 'hidden', timeout: 10_000 })
+
+    return 'nested workspace/command layers and the update dialog close one layer per Escape'
   })
 
   await runCheck('local and remote use one Agent Panel and IME-safe Composer', async () => {
@@ -971,6 +1009,24 @@ async function main() {
       }, workspacePath)
       assert(opened, 'temporary Git workspace could not be opened')
 
+      const browserTabId = await page.evaluate(async () => {
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        useTabStore.getState().openTab({
+          type: 'browser',
+          title: 'Git native view occlusion fixture',
+          icon: '🌐',
+          initialUrl: 'about:blank',
+          forceNew: true,
+        })
+        return useTabStore.getState().activeTabId
+      })
+      assert(browserTabId, 'browser tab did not become active for Git occlusion coverage')
+      await page.waitForFunction(
+        async (tabId) => (await window.cclinkStudio.browser.getActiveViewId()) === tabId,
+        browserTabId,
+        { timeout: 10_000 },
+      )
+
       const trigger = page.locator('.git-status-trigger')
       await trigger.waitFor({ state: 'visible', timeout: 10_000 })
       await trigger.click()
@@ -978,6 +1034,11 @@ async function main() {
       await popover.getByRole('button', { name: '提交…', exact: true }).click()
       const dialog = page.locator('.git-operation-dialog')
       await dialog.waitFor({ state: 'visible', timeout: 10_000 })
+      await page.waitForFunction(
+        async () => (await window.cclinkStudio.browser.getActiveViewId()) === null,
+        undefined,
+        { timeout: 10_000 },
+      )
       const commitView = dialog.locator('.git-commit-view')
       await commitView.waitFor({ state: 'visible', timeout: 10_000 })
       assert(

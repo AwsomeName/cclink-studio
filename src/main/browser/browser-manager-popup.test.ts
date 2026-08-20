@@ -49,11 +49,33 @@ const electronMocks = vi.hoisted(() => {
       }),
       getURL: vi.fn(() => webContents.currentUrl),
       getTitle: vi.fn(() => webContents.currentTitle),
+      getZoomFactor: vi.fn(() => webContents.currentZoom),
       focus: vi.fn(),
       setZoomFactor: vi.fn((factor: number) => {
         webContents.currentZoom = factor
       }),
       setVisualZoomLevelLimits: vi.fn().mockResolvedValue(undefined),
+      debugger: {
+        attached: false,
+        visualScale: 1,
+        isAttached: vi.fn(() => webContents.debugger.attached),
+        attach: vi.fn(() => {
+          webContents.debugger.attached = true
+        }),
+        detach: vi.fn(() => {
+          webContents.debugger.attached = false
+        }),
+        sendCommand: vi.fn(async (method: string, params?: { pageScaleFactor?: number }) => {
+          if (method === 'Runtime.evaluate') {
+            return { result: { value: webContents.debugger.visualScale } }
+          }
+          if (method === 'Emulation.setPageScaleFactor') {
+            webContents.debugger.visualScale = params?.pageScaleFactor ?? 1
+            return {}
+          }
+          throw new Error(`unexpected debugger command: ${method}`)
+        }),
+      },
       executeJavaScript: vi.fn().mockResolvedValue(800),
       findInPage: vi.fn(() => 41),
       stopFindInPage: vi.fn(),
@@ -164,7 +186,7 @@ describe('BrowserManager popup adoption', () => {
     return { manager, source: electronMocks.createdViews[0].webContents }
   }
 
-  it('remeasures fit width at 100% so widening a pane can escape a previous 30% zoom', async () => {
+  it('rejects an unusable automatic 30% result and recovers after the pane widens', async () => {
     vi.useFakeTimers()
     try {
       const { manager, source } = await createSource()
@@ -179,21 +201,113 @@ describe('BrowserManager popup adoption', () => {
         activeTabId: 'source-tab',
       })
       await vi.advanceTimersByTimeAsync(0)
-      expect(manager.getState('source-tab')?.zoomFactor).toBe(0.3)
+      expect(manager.getState('source-tab')?.zoomFactor).toBe(1)
+      await expect(manager.getRuntimeDiagnostics('source-tab')).resolves.toMatchObject({
+        fitWidth: {
+          status: 'rejected',
+          rejectionReason: 'auto-fit-too-small',
+          rawFactor: 0.3,
+          appliedFactor: 1,
+        },
+      })
       source.setZoomFactor.mockClear()
 
       manager.updateBounds({ x: 0, y: 72, width: 900, height: 600 })
       await vi.advanceTimersByTimeAsync(120)
 
       expect(manager.getState('source-tab')?.zoomFactor).toBe(0.9)
-      expect(source.setZoomFactor.mock.calls).toEqual([[0.9]])
-      expect(source.executeJavaScriptInIsolatedWorld).toHaveBeenCalledOnce()
+      expect(source.setZoomFactor.mock.calls).toEqual([[1], [0.9]])
+      expect(source.executeJavaScriptInIsolatedWorld).toHaveBeenCalledTimes(2)
       expect(source.executeJavaScriptInIsolatedWorld).toHaveBeenCalledWith(expect.any(Number), [
         { code: FIT_WIDTH_MEASUREMENT_SCRIPT },
       ])
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('ignores a transient first width and accepts only the stable tail samples', async () => {
+    const { manager, source } = await createSource()
+    manager.updateBounds({ x: 0, y: 72, width: 600, height: 600 })
+    source.executeJavaScriptInIsolatedWorld.mockResolvedValueOnce([
+      { offsetMs: 0, viewportWidth: 600, rootWidth: 4_000, bodyWidth: 4_000 },
+      { offsetMs: 250, viewportWidth: 600, rootWidth: 1_000, bodyWidth: 1_000 },
+      { offsetMs: 750, viewportWidth: 600, rootWidth: 1_000, bodyWidth: 1_000 },
+    ])
+
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: 'source-tab',
+    })
+
+    await vi.waitFor(() => expect(manager.getState('source-tab')?.zoomFactor).toBe(0.6))
+    await expect(manager.getRuntimeDiagnostics('source-tab')).resolves.toMatchObject({
+      fitWidth: {
+        status: 'accepted',
+        contentWidth: 1_000,
+        rawFactor: 0.6,
+        appliedFactor: 0.6,
+      },
+    })
+    manager.destroy()
+  })
+
+  it('keeps 100% and refuses to cache an unstable page width', async () => {
+    vi.useFakeTimers()
+    try {
+      const { manager, source } = await createSource()
+      manager.updateBounds({ x: 0, y: 72, width: 600, height: 600 })
+      source.executeJavaScriptInIsolatedWorld.mockResolvedValueOnce([
+        { offsetMs: 0, viewportWidth: 600, rootWidth: 4_000, bodyWidth: 4_000 },
+        { offsetMs: 250, viewportWidth: 600, rootWidth: 3_000, bodyWidth: 3_000 },
+        { offsetMs: 750, viewportWidth: 600, rootWidth: 1_000, bodyWidth: 1_000 },
+      ])
+
+      manager.reconcileViews({
+        workspaceKey: '/workspace/a',
+        views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+        activeTabId: 'source-tab',
+      })
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(manager.getState('source-tab')?.zoomFactor).toBe(1)
+      await expect(manager.getRuntimeDiagnostics('source-tab')).resolves.toMatchObject({
+        fitWidth: {
+          status: 'rejected',
+          rejectionReason: 'unstable-content-width',
+          appliedFactor: 1,
+        },
+      })
+      manager.destroy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('invalidates fit width and remeasures after a main-frame in-page navigation', async () => {
+    const { manager, source } = await createSource()
+    manager.updateBounds({ x: 0, y: 72, width: 900, height: 600 })
+    source.executeJavaScriptInIsolatedWorld.mockResolvedValueOnce(800).mockResolvedValueOnce(1_000)
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: 'source-tab',
+    })
+    await vi.waitFor(() => expect(manager.getState('source-tab')?.zoomFactor).toBe(1))
+
+    source.emit('did-navigate-in-page', {}, 'https://mp.weixin.qq.com/#next', true)
+
+    await vi.waitFor(() => expect(manager.getState('source-tab')?.zoomFactor).toBe(0.9))
+    expect(source.executeJavaScriptInIsolatedWorld).toHaveBeenCalledTimes(2)
+    await expect(manager.getRuntimeDiagnostics('source-tab')).resolves.toMatchObject({
+      fitWidth: {
+        trigger: 'did-navigate-in-page',
+        status: 'accepted',
+        documentGeneration: 1,
+      },
+    })
+    manager.destroy()
   })
 
   it('does not touch the native view again when stabilized bounds are unchanged', async () => {
@@ -261,7 +375,7 @@ describe('BrowserManager popup adoption', () => {
 
     resolveMeasurement(1_200)
     await measurement
-    await Promise.resolve()
+    await vi.waitFor(() => expect(source.currentZoom).toBe(1.2))
 
     expect(manager.getState('source-tab')).toMatchObject({
       zoomMode: 'manual',
@@ -325,6 +439,51 @@ describe('BrowserManager popup adoption', () => {
     const { source } = await createSource()
 
     expect(source.setVisualZoomLevelLimits).toHaveBeenCalledWith(0.3, 3)
+  })
+
+  it('resets independent Chromium visual zoom when fit width is applied', async () => {
+    const { manager, source } = await createSource()
+    manager.updateBounds({ x: 0, y: 72, width: 600, height: 600 })
+    source.debugger.visualScale = 0.3
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: 'source-tab',
+    })
+
+    await vi.waitFor(() => expect(source.debugger.visualScale).toBe(1))
+    await expect(manager.getRuntimeDiagnostics('source-tab')).resolves.toMatchObject({
+      fitWidth: {
+        visualScaleBeforeReset: 0.3,
+        actualVisualScale: 1,
+      },
+    })
+  })
+
+  it('does not surface a superseded ERR_ABORTED navigation as a page failure', async () => {
+    const { manager, source } = await createSource()
+    source.loadURL.mockRejectedValueOnce(
+      Object.assign(new Error("ERR_ABORTED (-3) loading 'https://www.baidu.com/'"), {
+        code: 'ERR_ABORTED',
+        errno: -3,
+      }),
+    )
+
+    await expect(manager.navigate('source-tab', 'https://www.baidu.com/')).resolves.toBeUndefined()
+  })
+
+  it('still surfaces a real navigation failure', async () => {
+    const { manager, source } = await createSource()
+    source.loadURL.mockRejectedValueOnce(
+      Object.assign(new Error("ERR_NAME_NOT_RESOLVED loading 'https://invalid.example/'"), {
+        code: 'ERR_NAME_NOT_RESOLVED',
+        errno: -105,
+      }),
+    )
+
+    await expect(manager.navigate('source-tab', 'https://invalid.example/')).rejects.toMatchObject({
+      code: 'ERR_NAME_NOT_RESOLVED',
+    })
   })
 
   it('removes the runtime and notifies renderer when popup calls window.close', async () => {

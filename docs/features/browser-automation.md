@@ -296,6 +296,12 @@ JSON.stringify({
 5. **触控板捏合缩放**：Browser `WebContents` 显式启用 Electron visual zoom（30%–300%）；
    双指捏合保持原生连续手势，不复用离散的工具栏缩放步长。
 
+> **30% 回归保护（2026-08-20 关闭）**：博客园登录页的页面外溢元素会让根节点
+> `scrollWidth` 从真实可见的 `633px` 变为 `2110px`，旧适宽算法因此精确应用 30%。
+> 现行实现通过连续稳定采样、pane/viewport 一致性校验、低于 50% 拒绝并回退 100%、
+> 导航代次失效与完整诊断关闭该问题。事故事实、禁止盲修要求和回归门禁见
+> `docs/testing/browser-fit-width-30-percent.md`。
+
 详见 `.cursor/rules/embedded-browser-viewport.mdc`。
 
 ## 安全考量

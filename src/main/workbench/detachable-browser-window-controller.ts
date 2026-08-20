@@ -32,6 +32,7 @@ import {
 import type { AuxiliaryBrowserWindowHandle } from './auxiliary-browser-window'
 import { BrowserRecoveryHostRegistry } from './browser-recovery-host-registry'
 import { recordMainDiagnosticLog } from '../diagnostics/main-diagnostic-log'
+import { resolveNativeTabDetachDropPoint } from './tab-detach-cursor'
 
 interface AuxiliaryEntry {
   windowId: string
@@ -85,6 +86,7 @@ interface ControllerOptions {
     windowId: string,
     dropPoint?: WorkbenchWindowDropPoint,
   ) => AuxiliaryBrowserWindowHandle
+  getCursorScreenPoint: () => WorkbenchWindowDropPoint
   readyTimeoutMs?: number
 }
 
@@ -115,6 +117,10 @@ export class DetachableBrowserWindowController {
     this.handle(workbenchWindowIpc.getProjection, (event) =>
       this.getProjection(this.options.trustedRenderers.assertRole(event, ['main', 'auxiliary'])),
     )
+    this.handle(workbenchWindowIpc.getTabDetachDropPoint, (event) => {
+      this.options.trustedRenderers.assertRole(event, ['main'])
+      return this.getTabDetachDropPoint()
+    })
     this.handle(workbenchWindowIpc.moveTabToNewWindow, (event, input) => {
       const identity = this.options.trustedRenderers.assertRole(event, ['main'])
       if (input.sourceWindowId !== identity.windowId) return invalidSource()
@@ -174,6 +180,14 @@ export class DetachableBrowserWindowController {
       .filter((placement) => identity.role === 'main' || placement.windowId === identity.windowId)
       .map((placement) => this.toPlacementPayload(placement))
     return { window, tabs: auxiliary ? [auxiliary.tabProjection] : [], placements }
+  }
+
+  private getTabDetachDropPoint(): WorkbenchWindowDropPoint | null {
+    if (this.options.mainWindow.isDestroyed()) return null
+    return resolveNativeTabDetachDropPoint(
+      this.options.getCursorScreenPoint(),
+      this.options.mainWindow.getBounds(),
+    )
   }
 
   async moveTabToNewWindow(input: WorkbenchMoveTabInput): Promise<WorkbenchWindowCommandResult> {

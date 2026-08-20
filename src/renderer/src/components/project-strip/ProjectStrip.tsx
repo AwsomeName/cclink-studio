@@ -10,6 +10,8 @@ import {
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
 import { openWorkspaceRef } from '../../features/workspace-open/workspace-open-controller'
+import { useEscapeDismiss } from '../common/dismissable-layer'
+import { useFloatingSurfaceRegistration } from '../common/floating-surface-registry'
 
 type DropPlacement = 'before' | 'after'
 
@@ -67,6 +69,12 @@ export function ProjectStrip(): React.ReactElement {
   const draggingPathRef = useRef<string | null>(null)
   const suppressClickRef = useRef(false)
 
+  useFloatingSurfaceRegistration(historyOpen)
+  useEscapeDismiss(historyOpen, () => {
+    setHistoryOpen(false)
+    historyButtonRef.current?.focus()
+  })
+
   const activePath = activeWorkspaceRef.kind === 'local' ? activeWorkspaceRef.path : null
   const activeWorkspaceKey = workspaceRefKey(activeWorkspaceRef)
   const workspaceBusy = workspaceLoading || workspacePicking || switchingPath !== null
@@ -95,14 +103,9 @@ export function ProjectStrip(): React.ReactElement {
     const handlePointerDown = (event: MouseEvent): void => {
       if (!historyRef.current?.contains(event.target as Node)) setHistoryOpen(false)
     }
-    const handleEscape = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setHistoryOpen(false)
-    }
     document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleEscape)
     return () => {
       document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleEscape)
     }
   }, [historyOpen])
 

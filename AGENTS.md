@@ -190,3 +190,24 @@ bash scripts/restart.sh status
 - 收费是否由服务端真正强制；客户端是否误把开发模式或网络错误当作正式授权结论？
 - 是否触碰了系统钥匙串或读取了历史密文？
 - 文档是否只描述当前事实源，不再保留研发阶段已废弃的历史路线？
+
+## 内嵌浏览器 30% 缩放事故记忆（已关闭，禁止回归）
+
+- 2026-08-20 真实根因已定位：博客园登录页的可见 pane、`documentElement.clientWidth`
+  和 body 均为 `633px`，但页面外溢元素把 `documentElement.scrollWidth` 撑到 `2110px`。
+  旧代码直接应用 `633 / 2110 = 0.3`，又缓存该值，因此新页被锁在 30%。
+- 现行不变式：导航先恢复 100%；主进程调度三次隔离世界快照；只接受与 pane
+  匹配且后两次稳定的测量；自动适宽结果低于 50% 时拒绝应用和缓存，保持
+  100% 并使用横向滑动降级；主框架及页内导航都使旧测量失效。
+- 运行时诊断必须保留 trigger、导航代次、pane/View bounds、三次样本、raw/applied
+  factor、拒绝原因、`WebContents.getZoomFactor()` 以及 visual scale 复位前/后值，不得回退成只看
+  toolbar 百分比。Electron page zoom 与 Chromium visual/pinch scale 是两套状态；只有
+  `getZoomFactor() === 1` 不能证明用户实际看到 100%。
+- BrowserManager 应用自动/手动缩放和跨 host 激活时，必须从主进程串行复位 Chromium visual page
+  scale；renderer 或辅助窗口不得成为第二缩放 owner。迁移不得通过 reload 掩盖比例异常。
+- `24a3e4ea`、`151b1aeb`、`f3240667`、`0a328c67` 证明单纯重测、缓存、增加
+  `requestAnimationFrame` 或跳过重复 bounds 不能关闭问题。后续禁止未取真实宽度证据就调延时或
+  缩放阈值。
+- 回归验收见 `docs/testing/browser-fit-width-30-percent.md`。变更该链路后，mock 单测不足以
+  证明无回归，必须在真实 Electron `WebContentsView` 中重跑新 Tab、页内导航、面板变宽、
+  手动 30% 恢复和重启恢复。

@@ -15,7 +15,8 @@ import {
   type FloatingSurfacePlacement,
   type FloatingSurfacePosition,
 } from './floating-surface-position'
-import { registerFloatingSurface } from './floating-surface-registry'
+import { useFloatingSurfaceRegistration } from './floating-surface-registry'
+import { useEscapeDismiss } from './dismissable-layer'
 
 interface FloatingSurfaceProps {
   anchorRef: RefObject<HTMLElement | null>
@@ -101,11 +102,8 @@ export function FloatingSurface({
     }
   }, [anchorRef, open, updatePosition])
 
-  useEffect(() => {
-    if (!open) return
-
-    return registerFloatingSurface()
-  }, [open])
+  useFloatingSurfaceRegistration(open)
+  useEscapeDismiss(open, onRequestClose)
 
   useEffect(() => {
     if (!open) return
@@ -115,15 +113,9 @@ export function FloatingSurface({
       if (anchorRef.current?.contains(target) || surfaceRef.current?.contains(target)) return
       onRequestClose()
     }
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onRequestClose()
-    }
-
     document.addEventListener('pointerdown', handlePointerDown, true)
-    document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown, true)
-      document.removeEventListener('keydown', handleKeyDown)
     }
   }, [anchorRef, onRequestClose, open])
 

@@ -297,18 +297,41 @@ function sanitizeState(state: Partial<CclinkRuntimeState>): CclinkRuntimeState {
         ? [
             [
               sessionId,
-              items
-                .flatMap((item) => {
+              collapseRepeatedTerminalMessages(
+                items.flatMap((item) => {
                   const sanitized = sanitizeMessage(item)
                   return sanitized ? [sanitized] : []
-                })
-                .slice(-2_000),
+                }),
+              ).slice(-2_000),
             ],
           ]
         : [],
     ),
   )
   return { version: 1, sessions, messages }
+}
+
+function collapseRepeatedTerminalMessages(messages: CclinkRemoteMessage[]): CclinkRemoteMessage[] {
+  const collapsed: CclinkRemoteMessage[] = []
+  for (const message of messages) {
+    const previous = collapsed.at(-1)
+    if (
+      previous?.type === 'agentText' &&
+      message.type === 'agentText' &&
+      previous.content === message.content &&
+      isSegmentOf(previous.id, message.id)
+    ) {
+      collapsed[collapsed.length - 1] = message
+      continue
+    }
+    collapsed.push(message)
+  }
+  return collapsed
+}
+
+function isSegmentOf(segmentMessageId: string, terminalMessageId: string): boolean {
+  const prefix = `${terminalMessageId}-seg`
+  return segmentMessageId.startsWith(prefix) && /^\d+$/u.test(segmentMessageId.slice(prefix.length))
 }
 
 const SENSITIVE_KEY =

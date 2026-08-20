@@ -89,6 +89,53 @@ describe('CclinkRuntimeStateStore', () => {
     })
   })
 
+  it('加载时清理旧版本保存的相邻终态重复消息', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cclink-runtime-state-'))
+    roots.push(root)
+    writeFileSync(
+      join(root, 'cclink-runtime-state.json'),
+      JSON.stringify({
+        version: 1,
+        sessions: [
+          {
+            id: 'session-1',
+            name: '项目会话',
+            workspaceId: 'workspace-1',
+            workspacePath: '/srv/project',
+            serverId: 'agent-1',
+            status: 'idle',
+            createdAt: 1,
+            updatedAt: 2,
+            messageCount: 2,
+            contextUsage: 0,
+          },
+        ],
+        messages: {
+          'session-1': [
+            {
+              type: 'agentText',
+              id: 'remote-agent-message-1-seg199',
+              content: '全部任务完成。',
+              timestamp: 2,
+            },
+            {
+              type: 'agentText',
+              id: 'remote-agent-message-1',
+              content: '全部任务完成。',
+              timestamp: 2,
+            },
+          ],
+        },
+      }),
+      { mode: 0o600 },
+    )
+
+    const loaded = await new CclinkRuntimeStateStore(root).load()
+    expect(loaded.messages['session-1']).toEqual([
+      expect.objectContaining({ id: 'remote-agent-message-1', content: '全部任务完成。' }),
+    ])
+  })
+
   it('递归脱敏远程工具输入、输出和错误后再落盘', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cclink-runtime-state-'))
     roots.push(root)

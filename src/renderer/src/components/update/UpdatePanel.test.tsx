@@ -3,8 +3,9 @@ import * as React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { UpdateSnapshot } from '@shared/update'
 
-const { registerFloatingSurface, updateState } = vi.hoisted(() => ({
-  registerFloatingSurface: vi.fn(() => vi.fn()),
+const { useEscapeDismiss, useFloatingSurfaceRegistration, updateState } = vi.hoisted(() => ({
+  useEscapeDismiss: vi.fn(),
+  useFloatingSurfaceRegistration: vi.fn(),
   updateState: {
     snapshot: {
       schemaVersion: 1,
@@ -37,7 +38,8 @@ vi.mock('react', async (importOriginal) => ({
   useEffect: (effect: () => void | (() => void)) => effect(),
 }))
 
-vi.mock('../common/floating-surface-registry', () => ({ registerFloatingSurface }))
+vi.mock('../common/dismissable-layer', () => ({ useEscapeDismiss }))
+vi.mock('../common/floating-surface-registry', () => ({ useFloatingSurfaceRegistration }))
 
 vi.mock('../../stores/update-store', () => ({
   useUpdateStore: (selector: (state: typeof updateState) => unknown) => selector(updateState),
@@ -49,7 +51,8 @@ vi.stubGlobal('React', React)
 
 describe('UpdatePanel native browser occlusion', () => {
   beforeEach(() => {
-    registerFloatingSurface.mockClear()
+    useEscapeDismiss.mockClear()
+    useFloatingSurfaceRegistration.mockClear()
     updateState.panelOpen = false
     updateState.snapshot = {
       schemaVersion: 1,
@@ -67,14 +70,16 @@ describe('UpdatePanel native browser occlusion', () => {
 
   it('does not suspend the native browser view while closed', () => {
     expect(UpdatePanel()).toBeNull()
-    expect(registerFloatingSurface).not.toHaveBeenCalled()
+    expect(useFloatingSurfaceRegistration).toHaveBeenCalledWith(false)
+    expect(useEscapeDismiss).toHaveBeenCalledWith(false, updateState.closePanel)
   })
 
   it('registers as a floating surface while open so the native browser view is hidden', () => {
     updateState.panelOpen = true
 
     expect(UpdatePanel()).not.toBeNull()
-    expect(registerFloatingSurface).toHaveBeenCalledTimes(1)
+    expect(useFloatingSurfaceRegistration).toHaveBeenCalledWith(true)
+    expect(useEscapeDismiss).toHaveBeenCalledWith(true, updateState.closePanel)
   })
 
   it('offers an explicit recheck and shows the last successful check for a candidate', () => {

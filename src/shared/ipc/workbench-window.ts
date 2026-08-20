@@ -177,6 +177,9 @@ export type WorkbenchWindowCommandResult =
 export const workbenchWindowIpc = {
   getBootstrap: defineNoArgsIpc<WorkbenchWindowBootstrap>('workbenchWindow:getBootstrap'),
   getProjection: defineNoArgsIpc<WorkbenchWindowProjection>('workbenchWindow:getProjection'),
+  getTabDetachDropPoint: defineNoArgsIpc<WorkbenchWindowDropPoint | null>(
+    'workbenchWindow:getTabDetachDropPoint',
+  ),
   moveTabToNewWindow: defineIpcInvoke<[WorkbenchMoveTabInput], WorkbenchWindowCommandResult>(
     'workbenchWindow:moveTabToNewWindow',
     (args) => ipcArgs(workbenchMoveTabInputSchema.parse(args[0])),
@@ -226,4 +229,9 @@ export interface WorkbenchWindowApiContract {
   onNativeContextMenuOpened: (
     callback: (payload: BrowserNativeContextMenuOpenedPayload) => void,
   ) => () => void
+}
+
+export interface WorkbenchMainWindowApiContract extends WorkbenchWindowApiContract {
+  /** Main process samples the native cursor and source BrowserWindow bounds in screen DIP space. */
+  getTabDetachDropPoint: () => Promise<WorkbenchWindowDropPoint | null>
 }

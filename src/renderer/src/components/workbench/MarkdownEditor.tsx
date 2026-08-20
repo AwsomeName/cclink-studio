@@ -19,6 +19,8 @@ import { useSettingsStore } from '../../stores/settings-store'
 import { useCommandStore } from '../../stores/command-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useToastStore } from '../common/Toast'
+import { useEscapeDismiss } from '../common/dismissable-layer'
+import { useFloatingSurfaceRegistration } from '../common/floating-surface-registry'
 import { EditorToolbar } from './EditorToolbar'
 import {
   analyzeMarkdown,
@@ -120,6 +122,9 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   const [hydratedVersion, setHydratedVersion] = useState<string | null>(null)
   const [imageDraft, setImageDraft] = useState<ImageDraft | null>(null)
   const [linkDraft, setLinkDraft] = useState<string | null>(null)
+  useFloatingSurfaceRegistration(linkDraft !== null || imageDraft !== null)
+  useEscapeDismiss(linkDraft !== null, () => setLinkDraft(null))
+  useEscapeDismiss(imageDraft !== null, () => setImageDraft(null))
   const [findOpen, setFindOpen] = useState(false)
   const [findQuery, setFindQuery] = useState('')
   const [activeFindIndex, setActiveFindIndex] = useState(0)

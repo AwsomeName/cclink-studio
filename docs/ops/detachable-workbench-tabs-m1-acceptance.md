@@ -3,22 +3,72 @@
 - 日期：2026-08-20
 - 平台：macOS arm64，Electron 43.1.1
 - 范围：Browser-only；右键、命令和拖出入口，不含其他 Tab 类型和辅助窗口恢复
-- 自动化结论：真实 Studio App smoke 12/12 通过；`pnpm verify` 通过（296 个测试文件，1747 项
-  通过、2 项跳过，TypeScript 与生产构建通过）
-- 产品结论：工程实现完成；物理双屏与用户自有真实账号真人验收尚未执行，最终用户交付仍为 Conditional Go
+- 自动化结论：历史结论已失效；当前修复候选的受影响单测 29/29、TypeScript 和增加可见尺寸
+  断言后的真实 Studio App smoke 12/12 通过，surface 实测 `1100 × 676`；比例修复新增相关测试
+  25/25 通过，更新后的 smoke 继续 12/12 通过
+- 产品结论：用户已确认 Tab 能移入辅助窗口；首轮真人截图发现独立 visual scale 仍停在 30%，修复
+  后的第二张真人截图已显示正常比例网页。当前用户单屏移动与比例签收通过；物理双屏拖出仍待验收，
+  最终用户交付仍为 No-Go
 
-## 用户现在能做什么
+## 用户现在能做什么、还不能做什么
 
-用户可以把 Browser Tab 拖出主窗口松手，也可以在统一上下文操作或命令面板执行“移至新窗口”，把既有
-`WebContentsView` 移入最小辅助窗口；原 Tab 不在主窗口重复显示。辅助窗口支持地址导航、前进、
-后退、刷新、页面查找、popup、原生网页右键菜单、BrowserTask/下载状态提示和“送回主窗口”。关闭
-辅助窗口也会送回，而不会销毁 Browser runtime。
+主进程已经能够把既有 `WebContentsView` 移入辅助 host，并保持相同 WebContents、Session、
+Playwright Page、runtime generation 和 `tabId`；关闭/崩溃补偿与 Recovery Host 事务仍可保留。
 
-主窗口切换工作空间时，辅助窗口继续属于原工作空间。迁移复用同一个 View、WebContents、Session、
-Playwright Page、runtime generation 和 `tabId`，不通过 URL 重建页面。renderer 只消费主进程投影；
-Tab/Browser 持久化仍由主进程单一 writer 完成。
+当前修复候选已在隔离真实 App 中通过右键生产入口显示完整网页区域；用户仍不能把它视为已完成：
+当前用户已确认 Tab 能移动，且修复后的第二张真人截图显示页面比例正常；物理双屏拖出仍没有有效
+证据。Editor、Terminal、Conversation 等其他 Tab 和辅助窗口位置恢复仍不支持。
 
-用户目前不能分离 Editor、Terminal、Conversation 等其他 Tab，也不能恢复上次退出时的辅助窗口位置。
+## 2026-08-20 当前用户比例异常与修复
+
+用户截图证明辅助窗口及网页 surface 已真实可见，但博客园登录页约以 30% 显示。主进程同一时刻
+记录 `pane=1100`、`View=1100×676`、`raw=0.29997`、`applied=1`、
+`WebContents.getZoomFactor()=1`；直接读取页面却得到 `visualViewport.scale=0.3`。这证明旧诊断遗漏了
+Chromium visual/pinch zoom，不能再用 `getZoomFactor()` 单值宣称实际比例为 100%。
+
+BrowserManager 现会在每次应用缩放时串行执行 `Emulation.setPageScaleFactor(1)`，并记录
+`visualScaleBeforeReset` 与 `actualVisualScale`。迁移仍保留同一 WebContentsView，不通过重载掩盖
+比例问题。真实开发版已验证 `0.3 → 1`；更新后的 M1 smoke 在迁移前故意建立 30% visual scale，
+迁移后断言同一 Page/runtime、表单、滚动、Session 保持且 visual scale 为 1，12/12 通过。
+
+同一轮用户复验还发现：辅助窗口导航到百度时页面已经成功显示，但旧 `loadURL()` Promise 因导航
+被替代而以 `ERR_ABORTED (-3)` 结束，renderer 将原始 IPC 异常显示成红条。BrowserManager 现只把
+该导航取消视为非致命；DNS、网络等真实失败继续抛出。相关测试同时覆盖“取消不报错”和“真实失败
+仍报错”。
+
+## 2026-08-20 正式包失败证据
+
+只读审查使用 v0.1.51 正式 DMG、隔离 profile 和真实用户状态副本完成，未修改仓库代码或真实
+`userData`：
+
+1. 真实右键菜单“移至新窗口”成功进入主进程 transaction，主窗口 Tab 消失，辅助 renderer
+   ready，placement 与 native owner 均指向同一个辅助窗口。
+2. 同一 Browser WebContents、URL、标题和 `tabId` 保持，说明核心迁移没有失败。
+3. `.auxiliary-browser-window` 为 `1100 × 760`，Grid 计算行为 `42px 42px 0px 676px`，但空
+   `.auxiliary-browser-notices` 因 `display:none` 被移出 Grid 后，browser surface 自动占据第三行，
+   实际尺寸为 `1100 × 0`。
+4. 只在运行时注入 `.auxiliary-browser-surface { grid-row: 4; }` 后，surface 立即变为
+   `1100 × 676`，原 WebContents 获得有效视口，没有 reload 或 Page 重建。
+5. 历史 smoke 只等待 `.auxiliary-browser-window` 出现、projection 改变和 Page 身份存活，没有断言
+   surface 宽高，因此构成右键/命令路径假阳性；Playwright over CDP mouse 也不能移动 macOS 系统
+   光标，不能证明真人拖出。
+
+修复验收要求：显式 Grid 行归属；smoke 断言 surface 宽高大于 0；主进程用系统 cursor 与真实
+window bounds 裁决；真人完成单屏窗口外松手、物理双屏跨屏松手、Escape 取消和同栏排序。
+
+## 2026-08-20 修复候选结果
+
+- titlebar、toolbar、notices 和 browser surface 显式固定到 Grid 第 1–4 行；空 notices 不再改变
+  surface 行归属。
+- renderer 只判断 Browser 类型、同栏 drop 和 Escape 取消，不再读取 `screenX/clientX` 或 renderer
+  window bounds；可信 main IPC 请求由主进程读取 Electron 系统 cursor 和 source BrowserWindow
+  bounds 后返回窗口外 DIP 点。
+- `tab-detach-cursor`、controller IPC、renderer drag eligibility 与 shared contract 相关测试共
+  29/29 通过；`pnpm typecheck` 通过。
+- `pnpm smoke:detachable-tabs-m1` 12/12 通过。第一条迁移路径改为生产右键菜单，并强制断言
+  `.auxiliary-browser-surface` 宽高大于 0；本次实测 `1100 × 676`。
+- 未运行 Playwright mouse 拖出，也不把自动化描述为真人拖出。下一步由用户在当前开发版执行本文
+  真人门禁。
 
 ## 真实 App 自动验收
 
@@ -32,13 +82,14 @@ pnpm smoke:detachable-tabs-m1
 
 1. 在隔离 Studio App 中创建真实 Browser View，建立 HttpOnly 登录 Session、未提交表单、滚动位置、
    `history.pushState` 历史、手动缩放、易失 JavaScript 状态和 BrowserTask。
-2. 通过真实 Playwright mouse drag 把 Browser Tab 拖出主窗口，打开最小辅助 renderer；主窗口投影
-   隐藏原 Tab，辅助窗口按有界 drop point 选择显示器和可见位置。
+2. 通过生产 Tab 右键菜单执行“移至新窗口”，断言辅助 renderer 与 browser surface 均可见且
+   surface 宽高大于 0；不使用 Playwright mouse 模拟真人拖出。
 3. Browser 分离后刷新主 renderer；placement 在 Browser reconcile 前由主进程快照恢复，主窗口不
    重复显示或重建已分离 Tab，原 Browser Page 与表单保持。
 4. Browser 分离期间在主窗口创建真实 Editor Tab，并在 Tiptap 中输入文本；Browser Page 不受影响。
-5. 迁移前后 Playwright Page 对象与 runtime identity 完全相同；Session、历史、表单、滚动、缩放和
-   JavaScript 状态均保持。
+5. 迁移前后 Playwright Page 对象与 runtime identity 完全相同；Session、历史、表单、滚动、page
+   zoom 和 JavaScript 状态均保持；自动化还会在迁移前注入 30% visual scale，并断言迁移激活后由
+   BrowserManager 复位到 1，避免 toolbar 显示 100% 而页面实际仍是 30%。
 6. 分离后继续通过真实 MCP `browser_click`/`browser_wait_for_download` 操作同一 Page；下载由
    Electron Session 落盘并完成，且与 BrowserTask 关联。BrowserTask、下载、原生右键菜单、查找结果
    均只路由到当前辅助窗口 owner；popup 依 M1 单 Tab 策略接纳到主窗口。
@@ -120,8 +171,11 @@ pnpm verify
 
 - P0a/P0b：Go。
 - ADR 0017：accepted。
-- Browser M1 生产实现：完成。
-- Browser M1 自动化真实 App 门禁：Go（12/12）。
+- Browser M1 核心迁移事务：保留。
+- Browser M1 用户可见辅助窗口：当前用户单屏移动、可见 surface 与正常比例真人签收 Go；物理双屏
+  Pending。
+- Browser M1 受影响自动化真实 App 门禁：Go（12/12，包含非零 surface 与 visual scale 复位断言）。
 - 物理双屏/真实账号真人签收：Pending。
-- Browser M1 最终用户交付：Conditional Go。
-- Browser 拖出手势：Go；其他 Tab 类型、跨窗口拖入和 placement 恢复仍为 No-Go。
+- Browser M1 最终用户交付：No-Go。
+- Browser 拖出手势：主进程裁决工程候选已完成，真人验收 Pending；其他 Tab 类型、跨窗口拖入和
+  placement 恢复仍为 No-Go。
