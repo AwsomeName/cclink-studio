@@ -462,6 +462,20 @@ describe('BrowserManager popup adoption', () => {
 
   it('does not surface a superseded ERR_ABORTED navigation as a page failure', async () => {
     const { manager, source } = await createSource()
+    source.loadURL.mockImplementationOnce(async () => {
+      source.currentUrl = 'https://www.baidu.com/'
+      throw Object.assign(new Error("ERR_ABORTED (-3) loading 'https://www.baidu.com/'"), {
+        code: 'ERR_ABORTED',
+        errno: -3,
+      })
+    })
+
+    await expect(manager.navigate('source-tab', 'https://www.baidu.com/')).resolves.toBeUndefined()
+  })
+
+  it('still surfaces ERR_ABORTED when the WebContents never reached the requested URL', async () => {
+    const { manager, source } = await createSource()
+    source.currentUrl = 'about:blank'
     source.loadURL.mockRejectedValueOnce(
       Object.assign(new Error("ERR_ABORTED (-3) loading 'https://www.baidu.com/'"), {
         code: 'ERR_ABORTED',
@@ -469,7 +483,9 @@ describe('BrowserManager popup adoption', () => {
       }),
     )
 
-    await expect(manager.navigate('source-tab', 'https://www.baidu.com/')).resolves.toBeUndefined()
+    await expect(manager.navigate('source-tab', 'https://www.baidu.com/')).rejects.toMatchObject({
+      code: 'ERR_ABORTED',
+    })
   })
 
   it('still surfaces a real navigation failure', async () => {

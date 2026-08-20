@@ -32,9 +32,9 @@ BrowserManager 现会在每次应用缩放时串行执行 `Emulation.setPageScal
 迁移后断言同一 Page/runtime、表单、滚动、Session 保持且 visual scale 为 1，12/12 通过。
 
 同一轮用户复验还发现：辅助窗口导航到百度时页面已经成功显示，但旧 `loadURL()` Promise 因导航
-被替代而以 `ERR_ABORTED (-3)` 结束，renderer 将原始 IPC 异常显示成红条。BrowserManager 现只把
-该导航取消视为非致命；DNS、网络等真实失败继续抛出。相关测试同时覆盖“取消不报错”和“真实失败
-仍报错”。
+被替代而以 `ERR_ABORTED (-3)` 结束，renderer 将原始 IPC 异常显示成红条。BrowserManager 只在
+WebContents 已实际到达请求目标时把该导航取消视为非致命；仍停在旧页的 abort 以及 DNS、网络等
+真实失败继续抛出。相关测试同时覆盖“成功后的取消不报错”和“未到目标/真实失败仍报错”。
 
 ## 2026-08-20 正式包失败证据
 

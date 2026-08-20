@@ -42,6 +42,7 @@ function pass(name, detail = '') {
 function fail(name, error) {
   results.push({ name, status: 'fail', detail: error.message || String(error) })
   console.error(`FAIL ${name} - ${error.message || String(error)}`)
+  if (error instanceof Error && error.stack) console.error(error.stack)
 }
 
 function skip(name, dependency) {

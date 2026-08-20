@@ -2105,7 +2105,13 @@ export class BrowserManager {
       // Chromium 会在重定向、页面自行替换导航或更新的用户导航抢占当前请求时，
       // 以 ERR_ABORTED 拒绝旧 loadURL Promise。它表示旧请求被取消，不等于最终页面加载失败；
       // did-navigate/did-fail-load 仍负责发布真实页面结果，辅助窗口不应显示原始 IPC 红条。
-      if (isNavigationAborted(error)) return
+      if (isNavigationAborted(error)) {
+        // loadURL 的 rejection 可能早于 did-navigate/URL 状态发布一个事件循环；只在真实
+        // WebContents 已到达目标时把它认作“旧 Promise 被替代”。仍停在旧页的 abort 必须上抛，
+        // 否则会把真正没有发生的导航伪装成成功。
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        if (sameNavigationDestination(entry.view.webContents.getURL(), url)) return
+      }
       throw error
     }
   }
@@ -2354,4 +2360,16 @@ function isNavigationAborted(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
   const candidate = error as { code?: unknown; errno?: unknown }
   return candidate.code === 'ERR_ABORTED' || candidate.errno === -3
+}
+
+function sameNavigationDestination(currentUrl: string, requestedUrl: string): boolean {
+  try {
+    const current = new URL(currentUrl)
+    const requested = new URL(requestedUrl)
+    current.hash = ''
+    requested.hash = ''
+    return current.href === requested.href
+  } catch {
+    return currentUrl === requestedUrl
+  }
 }
