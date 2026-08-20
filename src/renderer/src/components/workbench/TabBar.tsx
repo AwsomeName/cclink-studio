@@ -5,6 +5,8 @@ import { BrowserFavicon } from '../common/BrowserFavicon'
 import { useBrowserStore } from '../../stores/browser-store'
 import { getBrowserDisplayTitle } from '../sidebar/browser-sidebar-view-model'
 import { isContextMenuKeyboardEvent } from '../../features/context-actions/context-menu-trigger'
+import type { WorkbenchWindowDropPoint } from '@shared/ipc/workbench-window'
+import { resolveTabDetachDropPoint } from './tab-detach-drag'
 
 const TAB_ICONS: Record<string, string> = {
   browser: '🌐',
@@ -39,6 +41,7 @@ interface TabBarProps {
   onActivate: (tabId: string) => void
   onClose: (tabId: string) => void
   onReorder: (fromId: string, toId: string) => void
+  onDetach: (tabId: string, dropPoint: WorkbenchWindowDropPoint) => void
   onNewDocument: () => void
   onNewBrowser: () => void
   onNewConversation: () => void
@@ -55,6 +58,7 @@ export function TabBar({
   onActivate,
   onClose,
   onReorder,
+  onDetach,
   onNewDocument,
   onNewBrowser,
   onNewConversation,
@@ -69,9 +73,13 @@ export function TabBar({
   const [createMenuPosition, setCreateMenuPosition] = useState({ left: 0, top: 0 })
   const createMenuRef = useRef<HTMLDivElement>(null)
   const createButtonRef = useRef<HTMLButtonElement>(null)
+  const dropHandledInsideTabBarRef = useRef(false)
+  const dragCancelledRef = useRef(false)
 
   const handleDragStart = useCallback((event: React.DragEvent, id: string): void => {
     setDraggingId(id)
+    dropHandledInsideTabBarRef.current = false
+    dragCancelledRef.current = false
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/tab-id', id)
   }, [])
@@ -91,6 +99,7 @@ export function TabBar({
     (event: React.DragEvent, id: string): void => {
       event.preventDefault()
       const fromId = event.dataTransfer.getData('text/tab-id') || draggingId
+      dropHandledInsideTabBarRef.current = true
       setDragOverId(null)
       setDraggingId(null)
       if (fromId && fromId !== id) {
@@ -100,10 +109,37 @@ export function TabBar({
     [draggingId, onReorder],
   )
 
-  const handleDragEnd = useCallback((): void => {
-    setDraggingId(null)
-    setDragOverId(null)
-  }, [])
+  const handleDragEnd = useCallback(
+    (event: React.DragEvent, tab: Tab): void => {
+      const dropPoint = resolveTabDetachDropPoint({
+        tabType: tab.type,
+        screenPoint: { x: event.screenX, y: event.screenY },
+        clientPoint: { x: event.clientX, y: event.clientY },
+        windowBounds: {
+          x: window.screenX,
+          y: window.screenY,
+          width: window.outerWidth,
+          height: window.outerHeight,
+        },
+        handledInsideTabBar: dropHandledInsideTabBarRef.current,
+        cancelled: dragCancelledRef.current,
+      })
+      dropHandledInsideTabBarRef.current = false
+      dragCancelledRef.current = false
+      setDraggingId(null)
+      setDragOverId(null)
+      if (dropPoint) onDetach(tab.id, dropPoint)
+    },
+    [onDetach],
+  )
+
+  useEffect(() => {
+    const handleDragCancel = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && draggingId) dragCancelledRef.current = true
+    }
+    window.addEventListener('keydown', handleDragCancel, true)
+    return () => window.removeEventListener('keydown', handleDragCancel, true)
+  }, [draggingId])
 
   useEffect(() => {
     if (!createMenuOpen) return
@@ -152,7 +188,7 @@ export function TabBar({
           onDragStart={(event) => handleDragStart(event, tab.id)}
           onDragOver={(event) => handleDragOver(event, tab.id)}
           onDrop={(event) => handleDrop(event, tab.id)}
-          onDragEnd={handleDragEnd}
+          onDragEnd={(event) => handleDragEnd(event, tab)}
           onClick={() => onActivate(tab.id)}
           onContextMenu={(event) => {
             event.preventDefault()

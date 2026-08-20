@@ -17,6 +17,15 @@ const stableIdSchema = z.string().trim().min(1).max(200)
 const workspaceKeySchema = z.string().trim().min(1).max(4096).nullable()
 const ownerKeySchema = z.string().trim().min(1).max(512).nullable()
 const generationSchema = z.number().int().nonnegative()
+const screenCoordinateSchema = z.number().finite().int().min(-100_000).max(100_000)
+
+export const workbenchWindowDropPointSchema = z
+  .object({
+    x: screenCoordinateSchema,
+    y: screenCoordinateSchema,
+  })
+  .strict()
+export type WorkbenchWindowDropPoint = z.infer<typeof workbenchWindowDropPointSchema>
 
 export const workbenchWindowBootstrapSchema = z
   .object({
@@ -76,6 +85,7 @@ export const workbenchMoveTabInputSchema = z
     ownerKey: ownerKeySchema.optional(),
     sourceWindowId: stableIdSchema,
     expectedGeneration: generationSchema,
+    dropPoint: workbenchWindowDropPointSchema.optional(),
   })
   .strict()
 export type WorkbenchMoveTabInput = z.infer<typeof workbenchMoveTabInputSchema>

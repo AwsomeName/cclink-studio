@@ -208,12 +208,17 @@ describe('DetachableBrowserWindowController', () => {
       workspaceKey: '/workspace/a',
       sourceWindowId: 'main',
       expectedGeneration: 0,
+      dropPoint: { x: 2100, y: 300 },
     })
 
     expect(moved.success).toBe(true)
     if (!moved.success) return
     const auxiliaryId = moved.projection.window.windowId
     expect(harness.ownerByTab.get('browser-1')).toBe(auxiliaryId)
+    expect(harness.createAuxiliaryWindow).toHaveBeenCalledWith(auxiliaryId, {
+      x: 2100,
+      y: 300,
+    })
     expect(harness.auxiliaryWindow.show).toHaveBeenCalledOnce()
     expect(harness.windowService.getPlacement('browser-1')).toMatchObject({
       windowId: auxiliaryId,

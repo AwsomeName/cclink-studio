@@ -22,6 +22,8 @@ import {
 } from '../../features/agent-conversations/conversation-workbench'
 import { openDefaultBrowserTab } from '../../features/web-resources/open-default-browser-tab'
 import { isDetachedFromMain, useWorkbenchWindowStore } from '../../stores/workbench-window-store'
+import { moveBrowserTabToNewWindow } from '../../utils/move-browser-tab-to-window'
+import type { WorkbenchWindowDropPoint } from '@shared/ipc/workbench-window'
 
 interface WorkbenchProps {
   tabCreateMenuOpen: boolean
@@ -201,6 +203,15 @@ export function Workbench({
     void closeTabWithDraftPolicy(tabId)
   }, [])
 
+  const handleDetachTab = useCallback(
+    (tabId: string, dropPoint: WorkbenchWindowDropPoint): void => {
+      void moveBrowserTabToNewWindow(tabId, dropPoint).catch((error) => {
+        showToast(error instanceof Error ? error.message : String(error), 'error')
+      })
+    },
+    [showToast],
+  )
+
   const handleShowTabMenu = useCallback(
     async (tabId: string, x: number, y: number, focusReturn: HTMLElement): Promise<void> => {
       let browserPreviewDataUrl: string | null = null
@@ -257,6 +268,7 @@ export function Workbench({
         onActivate={activateTab}
         onClose={handleCloseTab}
         onReorder={reorderTabs}
+        onDetach={handleDetachTab}
         onNewDocument={openNewDocument}
         onNewBrowser={openNewBrowser}
         onNewConversation={openNewConversation}

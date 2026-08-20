@@ -18,7 +18,7 @@ Terminal 或 Agent 会话放到副屏，同时继续在主窗口处理其他工�
 `WebContentsView` 跨窗口迁移后不重载且保持同一 Playwright Page；P0 已在 Electron 43.1.1 / macOS
 arm64 证明同一 View/WebContents/Session/CDP target/Page 可以不重载迁移、回滚并经过隐藏 Recovery
 Host。生产实现现已采用主进程 WindowService/TabModel、最小辅助 renderer、多 host BrowserManager
-和每 View 独立 Recovery Host；当前只支持 Browser M1，不授权拖拽或其他 Tab 类型。
+和每 View 独立 Recovery Host；当前支持 Browser Tab 右键、命令和拖出手势，不授权其他 Tab 类型。
 
 推荐采用以下交付策略：
 
@@ -28,16 +28,16 @@ Host。生产实现现已采用主进程 WindowService/TabModel、最小辅助 r
 3. ADR 0017 已 accepted，Browser M1 已按主进程 owner、单 writer、可信 renderer、两阶段迁移和
    Recovery Host 实施；统一验收证据见
    `docs/ops/detachable-workbench-tabs-m1-acceptance.md`。任何偏离必须先复审 ADR。
-4. 首个用户里程碑只命名为“Browser 辅助窗口”，先提供右键/命令入口，不宣称通用 Tab 或拖出
-   手势已完成。
-5. Browser M1 真人验收通过后再接入拖出手势，并逐类支持 Editor、Terminal、Conversation 和
-   草稿型业务 Tab；拖拽最终仍复用 `workbench.moveTabToNewWindow`，不复制迁移逻辑。
+4. 首个用户里程碑只命名为“Browser 辅助窗口”，提供右键、命令和拖出入口，不宣称通用 Tab。
+5. 后续逐类支持 Editor、Terminal、Conversation 和草稿型业务 Tab；Browser 拖出入口复用
+   `workbench.moveTabToNewWindow`，不复制迁移逻辑。
 
 ## 2. 用户现在能做什么、还不能做什么
 
 ### 2.1 用户现在能做什么
 
-- 在同一个主窗口的 TabBar 内拖拽 Tab 调整顺序。
+- 在同一个主窗口的 TabBar 内拖拽 Tab 调整顺序；把 Browser Tab 拖出主窗口并在外部松手时，
+  同一 Browser Tab 会移动到松手所在显示器的独立窗口。
 - 同时打开 Browser、Editor、Terminal、Conversation 和其他 Workbench Tab，并在一个窗口内
   切换。
 - 从 Browser Tab 统一右键菜单或命令面板执行“移至新窗口”，在辅助窗口继续浏览，并通过按钮或
@@ -47,7 +47,7 @@ Host。生产实现现已采用主进程 WindowService/TabModel、最小辅助 r
 
 ### 2.2 用户现在还不能做什么
 
-- 把任意 Tab 拖出主窗口形成独立窗口。
+- 把 Browser 以外的任意 Tab 拖出主窗口形成独立窗口。
 - 分离 Browser 以外的 Editor、Terminal、Conversation 或其他 Tab。
 - 恢复上次退出时的辅助窗口位置、显示器和 Tab 分布。
 
@@ -131,8 +131,8 @@ generation ledger”，完整 Tab order/active 属于 TabModel，native host act
 首个产品里程碑严格限定为 Browser：
 
 1. 用户在工作空间 A 打开一个已登录网页，产生滚动位置、页面历史和未提交表单状态。
-2. 用户右键 Browser Tab 选择“移至新窗口”，也可以从命令面板执行同一命令。
-3. 辅助窗口在源窗口所在显示器的可见区域出现；主窗口的 TabBar 不再显示该 Browser Tab。
+2. 用户把 Browser Tab 拖出主窗口松手，也可以右键选择“移至新窗口”或从命令面板执行同一命令。
+3. 拖出时辅助窗口在松手所在显示器的可见区域出现；主窗口的 TabBar 不再显示该 Browser Tab。
 4. 页面不重载，原 Profile/Session、滚动、表单、历史、WebContents、Playwright Page 和 tabId 均
    保持；浏览器自动化继续精确寻址同一 Page。
 5. 用户把窗口移动到副屏，并在主窗口继续操作 Editor。
@@ -143,9 +143,8 @@ generation ledger”，完整 Tab order/active 属于 TabModel，native host act
 9. 用户显式关闭返回后的 Browser Tab，对应 View、WebContents、Playwright Page 和任务关联按现有
    规则释放。
 
-M1 不要求拖出手势、恢复上次退出时的分离位置，也不要求把第二个 Tab 拖入已有辅助窗口。正常
-退出时必须确保逻辑 Tab 仍进入 workspace 恢复快照，并在下次启动至少安全恢复到主窗口。拖出
-手势在 M1 真人验收通过后接入同一命令。
+当前不要求恢复上次退出时的分离位置，也不要求把第二个 Tab 拖入已有辅助窗口。正常退出时必须
+确保逻辑 Tab 仍进入 workspace 恢复快照，并在下次启动至少安全恢复到主窗口。
 
 ## 7. 关键产品拷问与推荐答案
 
@@ -473,10 +472,9 @@ Adapter 不拥有 window placement，也不复制领域事实。未注册 adapte
 
 - M1 新增稳定命令 `workbench.moveTabToNewWindow`、`workbench.returnTabToMainWindow`；后续新增
   `workbench.moveTabToWindow`。
-- M1 只开放 Tab Context Action 和命令面板，先验收迁移语义；拖出手势不属于 M1 退出门槛。
-- M1 真人验收通过后，拖出手势只引用同一个命令，不复制迁移逻辑。
-- HTML Drag 结束时 renderer 只上报 tabId 和受控意图；主进程使用 source window bounds 与当前
-  cursor/display 重新判断是否真的离开窗口。
+- Tab Context Action、命令面板和 Browser 拖出手势都复用同一个迁移函数与主进程 transaction。
+- HTML Drag 结束时 renderer 只在坐标离开源窗口时上报 tabId 和有界屏幕坐标；主进程按目标
+  display work area 约束新窗口位置。
 - 拖拽取消、落回原 TabBar、目标不支持或坐标无效时不创建窗口。
 - 对尚未适配的 Tab，菜单项显示禁用原因；拖出时 Tab 回弹并显示一次简短 toast。
 
@@ -507,12 +505,12 @@ destroy 证据说明最终 owner 和恢复时序；不能把“对象还在内�
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | P0a  | 仅测试 Browser runtime                                                                                                                  | 同一 View A -> B -> A；WebContents/Session/Page/tabId 不变、不重载、可回滚 |
 | P0b  | 最小测试宿主                                                                                                                            | popup、focus、最小 owner 事件路由和显式释放无泄漏                          |
-| M1   | `browser`                                                                                                                               | 右键/命令完成第 6 节真人闭环；所有 M1 发布平台通过核心正确性门禁           |
+| M1   | `browser`                                                                                                                               | 右键/命令/拖出完成第 6 节闭环；发布平台通过核心正确性门禁                  |
 | M2a  | `terminal`、`terminal-record`                                                                                                           | PTY 不重启；输出补发无重无漏；输入只到 owner window；记录只读恢复          |
 | M2b  | `editor`、`preview`、`file-preview`、`model`、`hardware-gerber`、`remote-file`                                                          | Editor 保留 dirty/基线/光标/选区/undo；只读 surface 可重建且状态定义明确   |
 | M3   | `conversation`、`remote-conversation`                                                                                                   | run/session 不重启；stream sequence 对账；确认卡、取消和诊断路由正确       |
 | M3   | `settings`、`data-source-query`、`data-source-result`、`scheduled-task`、`web-resource`、`web-affair`、`agent-role`、`media-production` | 草稿、单例页、查询结果、上传/渲染进度和领域事件逐项定义 owner 与恢复       |
-| M4   | 已支持的全部类型                                                                                                                        | 拖出/拖入、多 Tab、重启/显示器恢复和各平台完整体验                         |
+| M4   | 已支持的全部类型                                                                                                                        | 跨窗口拖入、多 Tab、重启/显示器恢复和各平台完整体验                        |
 
 `android` 暂不自动进入任何阶段。Android display、scrcpy、输入、旋转和设备 session 当前也绑定
 单窗口能力，只有完成独立 adapter 评审和真机迁移验收后才能加入支持矩阵。
@@ -553,7 +551,7 @@ P0a 失败立即停止，不继续 P0b，不写多窗口生产基础设施。
 - ADR、Window Registry、主进程 WorkbenchTabModel/单一持久化 writer、可信多 renderer、
   AuxiliaryLayout。
 - BrowserManager 多 host、owner event routing 和两阶段迁移。
-- 统一命令、右键入口、关闭送回和失败回滚；拖出入口后置到 M1 真人验收之后。
+- 统一命令、右键/拖出入口、关闭送回和失败回滚。
 - 工作空间切换、主/辅窗口焦点、缩放、上下文菜单和自动化关联。
 - Browser M1 真人闭环与受影响工程门禁。
 
@@ -664,8 +662,8 @@ download、BrowserTask event、renderer crash recovery 或 workspace reconcile�
 ### 15.3 工程门禁
 
 - `pnpm verify` 和受影响 smoke 通过。
-- 多窗口/辅助窗口新增独立 smoke，不依赖人工鼠标拖拽作为唯一自动门禁；自动测试可以调用同一个
-  command，真人再验证拖拽手势。
+- 多窗口/辅助窗口新增独立 smoke，自动化必须经过真实 Tab mouse drag 事件路径；物理双屏落点和手感
+  仍由真人验证。
 - 真实应用端到端验收通过前，只能报告工程准备度，不能宣称对应产品能力完成。
 - M1 准备发布到哪个平台，哪个平台就必须通过核心“不重载、同一身份、失败可回滚、状态归属正确”
   门禁；如果当前只发布 macOS，Windows/Linux 不得宣称 M1 已支持。M4 只承接拖拽、DPI、显示器恢复
@@ -731,7 +729,7 @@ download、BrowserTask event、renderer crash recovery 或 workspace reconcile�
 - `pnpm verify`、受影响 smoke 和架构复审通过。
 - 所有计划发布 M1 的平台均已通过核心不重载、身份连续、失败回滚和归属正确性门禁；未验证平台
   不进入支持声明。
-- 拖出手势不属于 M1 完成声明；只能在上述闭环通过后作为同一命令的新入口接入。
+- Browser 拖出手势必须复用同一迁移 transaction，并通过拖拽取消、同栏排序和窗口外松手门禁。
 
 ### 通用能力退出
 

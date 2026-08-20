@@ -92,12 +92,13 @@ export function createWindowRuntime(
       windowService: runtime.workbenchWindowService,
       trustedRenderers: runtime.trustedRendererGuard,
       recoveryHosts: runtime.browserRecoveryHosts,
-      createAuxiliaryWindow: () =>
+      createAuxiliaryWindow: (_windowId, dropPoint) =>
         createAuxiliaryBrowserWindow({
           isDev: runtime.isDev,
           preloadPath: options.auxiliaryPreloadPath ?? options.preloadPath,
           rendererUrl: options.rendererUrl,
           rendererHtmlPath: options.rendererHtmlPath,
+          dropPoint,
         }),
     })
     runtime.detachableBrowserWindows.registerIpc()

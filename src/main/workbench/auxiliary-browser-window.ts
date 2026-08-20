@@ -1,14 +1,20 @@
-import { BrowserWindow, session, type Session } from 'electron'
+import { BrowserWindow, screen, session, type Session } from 'electron'
 import { pathToFileURL } from 'node:url'
+import type { WorkbenchWindowDropPoint } from '../../shared/ipc/workbench-window'
 import { isAllowedMainRendererUrl } from '../ipc/trusted-renderer-guard'
 import { buildMainRendererCsp } from '../runtime/main-window'
 import { APP_DISPLAY_NAME } from '../runtime/app-metadata'
+import {
+  defaultAuxiliaryWindowSize,
+  resolveAuxiliaryWindowBounds,
+} from './auxiliary-window-placement'
 
 export interface AuxiliaryBrowserWindowOptions {
   isDev: boolean
   preloadPath: string
   rendererUrl?: string
   rendererHtmlPath: string
+  dropPoint?: WorkbenchWindowDropPoint
 }
 
 export interface AuxiliaryBrowserWindowHandle {
@@ -26,11 +32,16 @@ export function createAuxiliaryBrowserWindow(
   const rendererEntryUrl = resolveAuxiliaryRendererEntryUrl(options)
   const auxiliarySession = session.fromPartition('cclink-auxiliary-ui')
   installAuxiliaryRendererCsp(auxiliarySession, rendererEntryUrl, options.isDev)
+  const initialBounds = options.dropPoint
+    ? resolveAuxiliaryWindowBounds(
+        options.dropPoint,
+        screen.getDisplayNearestPoint(options.dropPoint).workArea,
+      )
+    : defaultAuxiliaryWindowSize
   const window = new BrowserWindow({
-    width: 1100,
-    height: 760,
-    minWidth: 560,
-    minHeight: 360,
+    ...initialBounds,
+    minWidth: Math.min(560, initialBounds.width),
+    minHeight: Math.min(360, initialBounds.height),
     show: false,
     title: `${APP_DISPLAY_NAME} — 浏览器`,
     titleBarStyle: 'hiddenInset',

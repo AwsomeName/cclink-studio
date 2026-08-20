@@ -34,8 +34,8 @@ Browser M1 只在以下端到端动作全部成立时交付：
 6. target 创建、ready 或 attach 失败时，Tab 回到 source；source 同时失效时进入 Recovery Host 并
    恢复到合法窗口，不能丢页面现场或形成无 owner runtime。
 
-拖出手势、多 Tab 辅助窗口、重启恢复 placement、Editor/Terminal/Conversation 不属于 Browser
-M1 完成声明。
+Browser 拖出手势作为 M1 通过后的入口扩展复用同一 transaction，不改变 owner 决策。多 Tab 辅助
+窗口、重启恢复 placement、Editor/Terminal/Conversation 仍不属于 Browser M1 完成声明。
 
 ## 决策
 
@@ -238,7 +238,8 @@ transaction 在诊断发出后释放，不能把 generation 倒写成旧值或�
    adapter。
 5. 接入隐藏 auxiliary renderer、两阶段 move/return 和 production 事件路由；最后开放统一上下文
    操作/命令入口。
-6. 完成 macOS 真实 App 验收与受影响 smoke/`pnpm verify`。M1 通过后才能考虑拖出手势或其他 Tab。
+6. 完成 macOS 真实 App 验收与受影响 smoke/`pnpm verify`；Browser 拖出入口通过后，其他 Tab 仍需
+   独立 adapter 与状态保真验收。
 
 每一步都必须保持普通单窗口 Browser 可用；新服务初始化失败时禁用“移至新窗口”并给出可诊断
 原因，不阻断 Studio 启动。

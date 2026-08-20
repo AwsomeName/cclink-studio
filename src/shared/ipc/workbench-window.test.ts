@@ -72,12 +72,30 @@ describe('workbench window IPC contract', () => {
   })
 
   it('rejects unknown fields and stale-shaped generations before handlers run', () => {
+    expect(
+      workbenchMoveTabInputSchema.parse({
+        tabId: 'browser-1',
+        workspaceKey: '/workspace-a',
+        sourceWindowId: 'main',
+        expectedGeneration: 0,
+        dropPoint: { x: -1200, y: 320 },
+      }),
+    ).toMatchObject({ dropPoint: { x: -1200, y: 320 } })
     expect(() =>
       workbenchMoveTabInputSchema.parse({
         tabId: 'browser-1',
         workspaceKey: '/workspace-a',
         sourceWindowId: 'main',
         expectedGeneration: -1,
+      }),
+    ).toThrow()
+    expect(() =>
+      workbenchMoveTabInputSchema.parse({
+        tabId: 'browser-1',
+        workspaceKey: '/workspace-a',
+        sourceWindowId: 'main',
+        expectedGeneration: 0,
+        dropPoint: { x: Number.POSITIVE_INFINITY, y: 0 },
       }),
     ).toThrow()
     expect(() =>

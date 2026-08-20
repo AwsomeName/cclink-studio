@@ -2,14 +2,14 @@
 
 - 日期：2026-08-20
 - 平台：macOS arm64，Electron 43.1.1
-- 范围：Browser-only M1；右键/命令入口，不含拖出手势、其他 Tab 类型和辅助窗口恢复
+- 范围：Browser-only；右键、命令和拖出入口，不含其他 Tab 类型和辅助窗口恢复
 - 自动化结论：真实 Studio App smoke 12/12 通过；`pnpm verify` 通过（296 个测试文件，1747 项
   通过、2 项跳过，TypeScript 与生产构建通过）
 - 产品结论：工程实现完成；物理双屏与用户自有真实账号真人验收尚未执行，最终用户交付仍为 Conditional Go
 
 ## 用户现在能做什么
 
-用户可以在 Browser Tab 的统一上下文操作或命令面板执行“移至新窗口”，把既有
+用户可以把 Browser Tab 拖出主窗口松手，也可以在统一上下文操作或命令面板执行“移至新窗口”，把既有
 `WebContentsView` 移入最小辅助窗口；原 Tab 不在主窗口重复显示。辅助窗口支持地址导航、前进、
 后退、刷新、页面查找、popup、原生网页右键菜单、BrowserTask/下载状态提示和“送回主窗口”。关闭
 辅助窗口也会送回，而不会销毁 Browser runtime。
@@ -18,8 +18,7 @@
 Playwright Page、runtime generation 和 `tabId`，不通过 URL 重建页面。renderer 只消费主进程投影；
 Tab/Browser 持久化仍由主进程单一 writer 完成。
 
-用户目前还不能通过拖动 Tab 直接创建窗口，也不能分离 Editor、Terminal、Conversation 等其他 Tab。
-M1 不恢复上次退出时的辅助窗口位置。
+用户目前不能分离 Editor、Terminal、Conversation 等其他 Tab，也不能恢复上次退出时的辅助窗口位置。
 
 ## 真实 App 自动验收
 
@@ -33,7 +32,8 @@ pnpm smoke:detachable-tabs-m1
 
 1. 在隔离 Studio App 中创建真实 Browser View，建立 HttpOnly 登录 Session、未提交表单、滚动位置、
    `history.pushState` 历史、手动缩放、易失 JavaScript 状态和 BrowserTask。
-2. 在真实 Browser Tab 右键菜单点击“移至新窗口”，打开最小辅助 renderer；主窗口投影隐藏原 Tab。
+2. 通过真实 Playwright mouse drag 把 Browser Tab 拖出主窗口，打开最小辅助 renderer；主窗口投影
+   隐藏原 Tab，辅助窗口按有界 drop point 选择显示器和可见位置。
 3. Browser 分离后刷新主 renderer；placement 在 Browser reconcile 前由主进程快照恢复，主窗口不
    重复显示或重建已分离 Tab，原 Browser Page 与表单保持。
 4. Browser 分离期间在主窗口创建真实 Editor Tab，并在 Tiptap 中输入文本；Browser Page 不受影响。
@@ -124,4 +124,4 @@ pnpm verify
 - Browser M1 自动化真实 App 门禁：Go（12/12）。
 - 物理双屏/真实账号真人签收：Pending。
 - Browser M1 最终用户交付：Conditional Go。
-- 拖出手势、其他 Tab 类型、placement 恢复：仍为 No-Go，必须另行授权。
+- Browser 拖出手势：Go；其他 Tab 类型、跨窗口拖入和 placement 恢复仍为 No-Go。

@@ -227,13 +227,24 @@ try {
 
   let auxiliaryPage
   await check(
-    'move through the real Tab context menu into the minimal auxiliary renderer',
+    'drag the real Browser Tab outside the main window into the minimal auxiliary renderer',
     async () => {
       const browserTab = mainPage.getByRole('tab').filter({ hasText: 'Detachable M1' }).first()
-      await browserTab.click({ button: 'right' })
-      const contextMenu = mainPage.getByRole('menu', { name: '上下文菜单' })
-      await contextMenu.waitFor({ state: 'visible', timeout: 5_000 })
-      await mainPage.getByRole('menuitem', { name: '移至新窗口' }).click()
+      const tabBounds = await browserTab.boundingBox()
+      const viewport = await mainPage.evaluate(() => ({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      }))
+      assert(tabBounds, 'Browser Tab drag geometry was unavailable')
+      await mainPage.mouse.move(
+        tabBounds.x + tabBounds.width / 2,
+        tabBounds.y + tabBounds.height / 2,
+      )
+      await mainPage.mouse.down()
+      await mainPage.mouse.move(viewport.width + 120, tabBounds.y + tabBounds.height / 2, {
+        steps: 12,
+      })
+      await mainPage.mouse.up()
       auxiliaryPage = await waitForPage(
         browser,
         (page) => page.url().startsWith(`${rendererOrigin}/`) && page.url().includes('#auxiliary'),
@@ -262,7 +273,7 @@ try {
         return useWorkbenchWindowStore.getState().placements[id]
       }, tabId)
       assert(mainProjection?.windowId.startsWith('aux-'), 'Main renderer did not hide detached tab')
-      return mainProjection.windowId
+      return `${mainProjection.windowId} via drag-out`
     },
   )
 
@@ -525,7 +536,11 @@ try {
         const { useWorkbenchWindowStore } = await import('/src/stores/workbench-window-store.ts')
         const { useTabStore } = await import('/src/stores/tab-store.ts')
         const placement = useWorkbenchWindowStore.getState().placements[id]
-        return placement?.windowId === 'main' && placement.active && useTabStore.getState().activeTabId === id
+        return (
+          placement?.windowId === 'main' &&
+          placement.active &&
+          useTabStore.getState().activeTabId === id
+        )
       },
       tabId,
       { timeout: 10_000 },
@@ -644,10 +659,7 @@ try {
       shutdownTabId,
       { timeout: 15_000 },
     )
-    const shutdownTab = mainPage
-      .getByRole('tab')
-      .filter({ hasText: 'Detachable Shutdown' })
-      .first()
+    const shutdownTab = mainPage.getByRole('tab').filter({ hasText: 'Detachable Shutdown' }).first()
     await shutdownTab.click({ button: 'right' })
     await mainPage.getByRole('menu', { name: '上下文菜单' }).waitFor({ state: 'visible' })
     await mainPage.getByRole('menuitem', { name: '移至新窗口' }).click()
@@ -662,7 +674,10 @@ try {
     assert(closeResult.success, 'Trusted main renderer close request was rejected')
     await waitForCleanAppExit(beforeCloseLog, activeCdpPort)
     const shutdownLog = await readLog()
-    assert(shutdownLog.includes('[CCLink Studio] 优雅退出完成'), 'App did not complete graceful shutdown')
+    assert(
+      shutdownLog.includes('[CCLink Studio] 优雅退出完成'),
+      'App did not complete graceful shutdown',
+    )
     return 'main close requested App quit; auxiliary did not orphan the process'
   })
 } finally {

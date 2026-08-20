@@ -13,6 +13,7 @@ import {
   type WorkbenchReturnTabInput,
   type WorkbenchWindowBootstrap,
   type WorkbenchWindowCommandResult,
+  type WorkbenchWindowDropPoint,
   type WorkbenchWindowProjection,
 } from '../../shared/ipc/workbench-window'
 import type { IpcInvokeContract } from '../../shared/ipc/contract'
@@ -80,7 +81,10 @@ interface ControllerOptions {
   windowService: WorkbenchWindowService
   trustedRenderers: TrustedRendererRegistry
   recoveryHosts: BrowserRecoveryHostRegistry
-  createAuxiliaryWindow: (windowId: string) => AuxiliaryBrowserWindowHandle
+  createAuxiliaryWindow: (
+    windowId: string,
+    dropPoint?: WorkbenchWindowDropPoint,
+  ) => AuxiliaryBrowserWindowHandle
   readyTimeoutMs?: number
 }
 
@@ -208,7 +212,7 @@ export class DetachableBrowserWindowController {
       const windowId = `aux-${randomUUID()}`
       failurePhase = 'creating-window'
       createStartedAt = Date.now()
-      auxiliary = this.createAuxiliary(windowId, tabProjection, input.workspaceKey)
+      auxiliary = this.createAuxiliary(windowId, tabProjection, input.workspaceKey, input.dropPoint)
       failurePhase = 'moving'
       transfer = this.options.windowService.beginTransfer({
         tabId: input.tabId,
@@ -349,8 +353,9 @@ export class DetachableBrowserWindowController {
     windowId: string,
     tabProjection: WorkbenchBrowserTabProjection,
     workspaceKey: string | null,
+    dropPoint?: WorkbenchWindowDropPoint,
   ): AuxiliaryEntry {
-    const handle = this.options.createAuxiliaryWindow(windowId)
+    const handle = this.options.createAuxiliaryWindow(windowId, dropPoint)
     let disposeTrust: (() => void) | null = null
     let entry: AuxiliaryEntry | null = null
     try {
