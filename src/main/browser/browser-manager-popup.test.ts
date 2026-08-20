@@ -20,7 +20,7 @@ const electronMocks = vi.hoisted(() => {
     const onceListeners = new Map<string, Listener[]>()
     const webContents = {
       session: browserSession,
-      executeJavaScriptInIsolatedWorld: vi.fn().mockResolvedValue(undefined),
+      executeJavaScriptInIsolatedWorld: vi.fn().mockResolvedValue(800),
       currentUrl: '',
       currentTitle: '',
       currentZoom: 1,
@@ -130,7 +130,7 @@ vi.mock('electron', () => ({
 }))
 
 import { browserIpcEvents } from '../../shared/ipc/browser'
-import { BrowserManager } from './browser-manager'
+import { BrowserManager, FIT_WIDTH_MEASUREMENT_SCRIPT } from './browser-manager'
 
 const popupDetails = (overrides: Record<string, unknown> = {}) => ({
   url: 'https://mp.weixin.qq.com/cgi-bin/appmsg',
@@ -169,7 +169,7 @@ describe('BrowserManager popup adoption', () => {
     try {
       const { manager, source } = await createSource()
       manager.updateBounds({ x: 0, y: 72, width: 300, height: 600 })
-      source.executeJavaScript.mockImplementation(async () =>
+      source.executeJavaScriptInIsolatedWorld.mockImplementation(async () =>
         source.currentZoom === 1 ? 1_000 : 3_000,
       )
 
@@ -187,7 +187,10 @@ describe('BrowserManager popup adoption', () => {
 
       expect(manager.getState('source-tab')?.zoomFactor).toBe(0.9)
       expect(source.setZoomFactor.mock.calls).toEqual([[0.9]])
-      expect(source.executeJavaScript).toHaveBeenCalledOnce()
+      expect(source.executeJavaScriptInIsolatedWorld).toHaveBeenCalledOnce()
+      expect(source.executeJavaScriptInIsolatedWorld).toHaveBeenCalledWith(expect.any(Number), [
+        { code: FIT_WIDTH_MEASUREMENT_SCRIPT },
+      ])
     } finally {
       vi.useRealTimers()
     }
@@ -198,7 +201,9 @@ describe('BrowserManager popup adoption', () => {
     try {
       const { manager, source } = await createSource()
       manager.updateBounds({ x: 0, y: 72, width: 900, height: 600 })
-      source.executeJavaScript.mockResolvedValueOnce(800).mockResolvedValueOnce(1_000)
+      source.executeJavaScriptInIsolatedWorld
+        .mockResolvedValueOnce(800)
+        .mockResolvedValueOnce(1_000)
 
       manager.reconcileViews({
         workspaceKey: '/workspace/a',
@@ -212,7 +217,7 @@ describe('BrowserManager popup adoption', () => {
       await vi.advanceTimersByTimeAsync(120)
 
       expect(manager.getState('source-tab')?.zoomFactor).toBe(0.6)
-      expect(source.executeJavaScript).toHaveBeenCalledTimes(2)
+      expect(source.executeJavaScriptInIsolatedWorld).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
     }
@@ -225,7 +230,7 @@ describe('BrowserManager popup adoption', () => {
     })
     const { manager, source } = await createSource()
     manager.updateBounds({ x: 0, y: 72, width: 600, height: 600 })
-    source.executeJavaScript.mockReturnValueOnce(measurement)
+    source.executeJavaScriptInIsolatedWorld.mockReturnValueOnce(measurement)
 
     manager.reconcileViews({
       workspaceKey: '/workspace/a',

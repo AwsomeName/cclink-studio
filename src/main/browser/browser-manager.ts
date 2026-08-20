@@ -63,6 +63,32 @@ const MOBILE_UA =
 const MIN_ZOOM = 0.3
 const MAX_ZOOM = 3
 const ZOOM_STEP = 0.1
+/** 与页面 main world 隔离的适宽测量上下文。 */
+const FIT_WIDTH_MEASUREMENT_WORLD_ID = 10_139
+/**
+ * setZoomFactor() 会先更新 WebContents 缩放状态，Chromium 布局则可能到后续帧才生效。
+ * 等待两帧后再读 scrollWidth，避免把旧 30% 视口误当成 100% 内容宽度。
+ */
+export const FIT_WIDTH_MEASUREMENT_SCRIPT = String.raw`
+(() => new Promise((resolve) => {
+  let settled = false
+  let timeoutId = 0
+  const measure = () => {
+    if (settled) return
+    settled = true
+    if (timeoutId) globalThis.clearTimeout(timeoutId)
+    const rootWidth = document.documentElement ? document.documentElement.scrollWidth : 0
+    const bodyWidth = document.body ? document.body.scrollWidth : 0
+    resolve(Math.max(rootWidth, bodyWidth))
+  }
+  timeoutId = globalThis.setTimeout(measure, 100)
+  if (typeof globalThis.requestAnimationFrame !== 'function') {
+    globalThis.queueMicrotask(measure)
+    return
+  }
+  globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(measure))
+}))()
+`
 /** 默认首页 */
 const DEFAULT_URL = 'https://www.baidu.com'
 /** renderer 未接纳 popup 时的有界清理窗口，避免不可见 WebContents 泄漏。 */
@@ -1439,8 +1465,9 @@ export class BrowserManager {
   private async measureContentWidth(tabId: string): Promise<number> {
     const entry = this.views.get(tabId)
     if (!entry) return 0
-    const result = await entry.view.webContents.executeJavaScript(
-      '(function(){var d=document;return Math.max(d.documentElement?d.documentElement.scrollWidth:0, d.body?d.body.scrollWidth:0);})()',
+    const result = await entry.view.webContents.executeJavaScriptInIsolatedWorld(
+      FIT_WIDTH_MEASUREMENT_WORLD_ID,
+      [{ code: FIT_WIDTH_MEASUREMENT_SCRIPT }],
     )
     return typeof result === 'number' ? result : 0
   }

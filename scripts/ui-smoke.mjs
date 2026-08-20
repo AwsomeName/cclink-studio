@@ -1221,6 +1221,41 @@ async function main() {
       undefined,
       { timeout: 10_000 },
     )
+    await zoomInput.fill('30')
+    await zoomInput.press('Enter')
+    await page.waitForFunction(
+      async () => {
+        const viewState = await window.cclinkStudio.browser.getViewState()
+        return viewState?.zoomMode === 'manual' && Math.abs(viewState.zoomFactor - 0.3) < 0.001
+      },
+      undefined,
+      { timeout: 10_000 },
+    )
+    const reloadTarget = await page.evaluate(async () => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      const tabId = useTabStore.getState().activeTabId
+      if (!tabId) throw new Error('no active Browser Tab for fit-width reload regression')
+      const before = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
+      await window.cclinkStudio.browser.reload(tabId)
+      return { tabId, previousClaimAt: before.lastClaim?.timestamp ?? 0 }
+    })
+    await page.waitForFunction(
+      async ({ tabId, previousClaimAt }) => {
+        const diagnostic = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
+        return (diagnostic.lastClaim?.timestamp ?? 0) > previousClaimAt
+      },
+      reloadTarget,
+      { timeout: 10_000 },
+    )
+    await page.getByRole('button', { name: '适应宽度' }).click()
+    await page.waitForFunction(
+      async () => {
+        const viewState = await window.cclinkStudio.browser.getViewState()
+        return viewState?.zoomMode === 'fit' && viewState.zoomFactor >= 0.99
+      },
+      undefined,
+      { timeout: 10_000 },
+    )
     await page
       .locator('.browser-zoom-value .zoom-mode-label', { hasText: '自动' })
       .waitFor({ state: 'visible', timeout: 10_000 })
