@@ -47,9 +47,17 @@ export async function moveBrowserTabToNewWindow(
   }
 }
 
-/** Renderer reports drag end; main process owns native cursor/window-bound arbitration. */
-export async function moveBrowserTabFromDragEnd(tabId: string): Promise<boolean> {
-  const dropPoint = await window.cclinkStudio.workbenchWindow.getTabDetachDropPoint()
+export async function beginBrowserTabDetachDrag(tabId: string): Promise<void> {
+  await window.cclinkStudio.workbenchWindow.beginTabDetachDrag({ tabId })
+}
+
+export async function cancelBrowserTabDetachDrag(tabId: string): Promise<void> {
+  await window.cclinkStudio.workbenchWindow.cancelTabDetachDrag({ tabId })
+}
+
+/** Pointer release is only a signal; main owns the native cursor/window-bound arbitration. */
+export async function moveBrowserTabFromPointerRelease(tabId: string): Promise<boolean> {
+  const dropPoint = await window.cclinkStudio.workbenchWindow.finishTabDetachDrag({ tabId })
   if (!dropPoint) return false
   await moveBrowserTabToNewWindow(tabId, dropPoint)
   return true

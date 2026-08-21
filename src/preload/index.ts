@@ -60,6 +60,7 @@ import {
 } from '../shared/ipc/workbench-tab-model'
 import {
   workbenchPlacementChangedSchema,
+  workbenchTabDetachReleasedSchema,
   workbenchWindowIpc,
   workbenchWindowIpcEvents,
   workbenchWindowProjectionSchema,
@@ -247,7 +248,9 @@ const workbenchTabsApi: WorkbenchTabStateApiContract = {
 const workbenchWindowApi: WorkbenchMainWindowApiContract = {
   getBootstrap: () => invokeIpcContract(workbenchWindowIpc.getBootstrap),
   getProjection: () => invokeIpcContract(workbenchWindowIpc.getProjection),
-  getTabDetachDropPoint: () => invokeIpcContract(workbenchWindowIpc.getTabDetachDropPoint),
+  beginTabDetachDrag: (input) => invokeIpcContract(workbenchWindowIpc.beginTabDetachDrag, input),
+  finishTabDetachDrag: (input) => invokeIpcContract(workbenchWindowIpc.finishTabDetachDrag, input),
+  cancelTabDetachDrag: (input) => invokeIpcContract(workbenchWindowIpc.cancelTabDetachDrag, input),
   moveTabToNewWindow: (input) => invokeIpcContract(workbenchWindowIpc.moveTabToNewWindow, input),
   returnTabToMain: (input) => invokeIpcContract(workbenchWindowIpc.returnTabToMain, input),
   auxiliaryReady: (input) => invokeIpcContract(workbenchWindowIpc.auxiliaryReady, input),
@@ -268,6 +271,14 @@ const workbenchWindowApi: WorkbenchMainWindowApiContract = {
     }
     ipcRenderer.on(workbenchWindowIpcEvents.placementChanged, handler)
     return () => ipcRenderer.removeListener(workbenchWindowIpcEvents.placementChanged, handler)
+  },
+  onTabDetachReleased: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const parsed = workbenchTabDetachReleasedSchema.safeParse(value)
+      if (parsed.success) callback(parsed.data)
+    }
+    ipcRenderer.on(workbenchWindowIpcEvents.tabDetachReleased, handler)
+    return () => ipcRenderer.removeListener(workbenchWindowIpcEvents.tabDetachReleased, handler)
   },
   onUrlChanged: browserApi.onUrlChanged,
   onPageMetaChanged: browserApi.onPageMetaChanged,

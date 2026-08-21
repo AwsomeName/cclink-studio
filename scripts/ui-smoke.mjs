@@ -14,6 +14,7 @@ const agentPanelOnly = process.argv.includes('--agent-panel-only')
 const webAffairsOnly = process.argv.includes('--web-affairs-only')
 const gitOnly = process.argv.includes('--git-only')
 const dismissableOnly = process.argv.includes('--dismissable-only')
+const tabCreateOnly = process.argv.includes('--tab-create-only')
 const uiReadyTimeoutMs = 30_000
 const globalWebResourcesCheck = 'global web resources reuse one account and matrix across projects'
 const webAffairPersistenceCheck = 'web affair persists a five-node workflow and node progress'
@@ -29,6 +30,7 @@ const gitChecks = new Set([
   'Git compact commit menu executes commit and push actions',
 ])
 const dismissableChecks = new Set(['Escape closes only the topmost Studio popup'])
+const tabCreateChecks = new Set(['tab create menu opens editor, browser, and terminal tabs'])
 const results = []
 let startedBySmoke = false
 let webFixtureServer
@@ -97,6 +99,7 @@ async function runCheck(name, fn, options = {}) {
   if (webAffairsOnly && !webAffairsChecks.has(name)) return
   if (gitOnly && !gitChecks.has(name)) return
   if (dismissableOnly && !dismissableChecks.has(name)) return
+  if (tabCreateOnly && !tabCreateChecks.has(name)) return
   const blockedBy = (options.dependsOn ?? []).find(
     (dependency) => results.find((result) => result.name === dependency)?.status !== 'pass',
   )
@@ -1010,17 +1013,17 @@ async function main() {
       }, workspacePath)
       assert(opened, 'temporary Git workspace could not be opened')
 
-      const browserTabId = await page.evaluate(async () => {
+      const browserTabId = await page.evaluate(async (initialUrl) => {
         const { useTabStore } = await import('/src/stores/tab-store.ts')
         useTabStore.getState().openTab({
           type: 'browser',
           title: 'Git native view occlusion fixture',
           icon: '🌐',
-          initialUrl: 'about:blank',
+          initialUrl,
           forceNew: true,
         })
         return useTabStore.getState().activeTabId
-      })
+      }, `${webFixtureOrigin}/git-native-view-occlusion`)
       assert(browserTabId, 'browser tab did not become active for Git occlusion coverage')
       await page.waitForFunction(
         async (tabId) => (await window.cclinkStudio.browser.getActiveViewId()) === tabId,
@@ -1905,6 +1908,39 @@ async function main() {
     )
     assert(await page.locator('.markdown-editor-wrapper').count(), 'markdown editor did not open')
 
+    const recentUrl = `${webFixtureOrigin}/new-tab-recent`
+    const seededBrowserTabId = await page.evaluate(async (initialUrl) => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      useTabStore.getState().openTab({
+        type: 'browser',
+        title: '最近访问测试页',
+        icon: '🌐',
+        initialUrl,
+        forceNew: true,
+      })
+      return useTabStore.getState().activeTabId
+    }, recentUrl)
+    assert(seededBrowserTabId, 'recent browser fixture did not become active')
+    await page.waitForFunction(
+      async (tabId) => (await window.cclinkStudio.browser.getActiveViewId()) === tabId,
+      seededBrowserTabId,
+      { timeout: 10_000 },
+    )
+    await page.waitForFunction(
+      async (tabId) =>
+        (await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)).visibleUrl?.endsWith(
+          '/new-tab-recent',
+        ),
+      seededBrowserTabId,
+      { timeout: 10_000 },
+    )
+    await page.waitForFunction(
+      async (url) =>
+        (await window.cclinkStudio.browser.listHistory(20)).some((entry) => entry.url === url),
+      recentUrl,
+      { timeout: 10_000 },
+    )
+
     const initialBrowserCount = await page.locator('.tab-title', { hasText: '浏览器' }).count()
     await page.locator('.tab-new-browser-button').click()
     await page.waitForFunction(
@@ -1923,6 +1959,32 @@ async function main() {
       return active?.type === 'browser' ? active.id : null
     })
     assert(activeBrowserTabId, 'new browser tab did not become active')
+    await page.waitForFunction(
+      async () => (await window.cclinkStudio.browser.getActiveViewId()) === null,
+      undefined,
+      { timeout: 10_000 },
+    )
+    const recentPage = page.locator('.browser-new-tab')
+    await recentPage.waitFor({ state: 'visible', timeout: 10_000 })
+    await page.waitForFunction(
+      () => !document.querySelector('.browser-new-tab-empty')?.textContent?.includes('正在加载'),
+      undefined,
+      { timeout: 10_000 },
+    )
+    const recentCards = recentPage.locator('.browser-new-tab-card')
+    assert((await recentCards.count()) <= 8, 'new tab rendered more than eight recent addresses')
+    const renderedRecentUrls = await recentCards.evaluateAll((cards) =>
+      cards.map((card) => card.getAttribute('title')),
+    )
+    const storedRecentUrls = await page.evaluate(async () =>
+      (await window.cclinkStudio.browser.listHistory(8)).map((entry) => entry.url),
+    )
+    assert(
+      renderedRecentUrls.includes(recentUrl),
+      `new tab omitted the seeded recent address: ${JSON.stringify({ renderedRecentUrls, storedRecentUrls })}`,
+    )
+    const recentCard = recentPage.locator(`.browser-new-tab-card[title="${recentUrl}"]`)
+    await recentCard.click()
     await page.waitForFunction(
       async (tabId) => (await window.cclinkStudio.browser.getActiveViewId()) === tabId,
       activeBrowserTabId,
@@ -2021,7 +2083,7 @@ async function main() {
       !restartedTerminal.hasTerminalRecord,
       'terminal restart retained a stale history snapshot',
     )
-    return 'editor/browser/terminal, one-click terminal restart, and update modal native-view occlusion'
+    return 'editor/browser/terminal, recent-address new tab, one-click terminal restart, and update modal native-view occlusion'
   })
 
   await runCheck('no paid UI appears during smoke', async () => {

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import type { BrowserWindow, IpcMainInvokeEvent, MouseInputEvent } from 'electron'
 import type { BrowserRuntimeIdentity } from '../../shared/ipc/browser'
 import {
   workbenchWindowIpc,
@@ -11,6 +11,7 @@ import {
   type WorkbenchMoveTabInput,
   type WorkbenchPlacementChanged,
   type WorkbenchReturnTabInput,
+  type WorkbenchTabDetachDragInput,
   type WorkbenchWindowBootstrap,
   type WorkbenchWindowCommandResult,
   type WorkbenchWindowDropPoint,
@@ -75,6 +76,19 @@ interface TransferDiagnosticContext {
   failure: string | null
 }
 
+interface TabDetachDragSession {
+  tabId: string
+  startedAt: number
+  sampleCount: number
+  sawOutside: boolean
+  lastOutsidePoint: WorkbenchWindowDropPoint | null
+  sampleTimer: ReturnType<typeof setInterval>
+  timeoutTimer: ReturnType<typeof setTimeout>
+}
+
+const TAB_DETACH_SAMPLE_INTERVAL_MS = 50
+const TAB_DETACH_SESSION_TIMEOUT_MS = 30_000
+
 interface ControllerOptions {
   mainWindow: BrowserWindow
   browserManager: BrowserManager
@@ -96,7 +110,18 @@ export class DetachableBrowserWindowController {
   private readonly transferDiagnostics = new Map<string, TransferDiagnosticContext>()
   private readonly readyTimeoutMs: number
   private readonly disposeMainWorkspaceSync: () => void
+  private tabDetachDragSession: TabDetachDragSession | null = null
   private disposed = false
+
+  private readonly handleMainMouseEvent = (_event: Electron.Event, mouse: MouseInputEvent): void => {
+    if (mouse.type !== 'mouseUp' || (mouse.button && mouse.button !== 'left')) return
+    const completed = this.completeTabDetachDrag('native-mouse-up')
+    if (!completed?.dropPoint || this.options.mainWindow.webContents.isDestroyed()) return
+    this.options.mainWindow.webContents.send(workbenchWindowIpcEvents.tabDetachReleased, {
+      tabId: completed.tabId,
+      dropPoint: completed.dropPoint,
+    })
+  }
 
   constructor(private readonly options: ControllerOptions) {
     this.readyTimeoutMs = options.readyTimeoutMs ?? 5_000
@@ -108,6 +133,7 @@ export class DetachableBrowserWindowController {
         }
       },
     )
+    options.mainWindow.webContents.on('before-mouse-event', this.handleMainMouseEvent)
   }
 
   registerIpc(): void {
@@ -117,9 +143,19 @@ export class DetachableBrowserWindowController {
     this.handle(workbenchWindowIpc.getProjection, (event) =>
       this.getProjection(this.options.trustedRenderers.assertRole(event, ['main', 'auxiliary'])),
     )
-    this.handle(workbenchWindowIpc.getTabDetachDropPoint, (event) => {
+    this.handle(workbenchWindowIpc.beginTabDetachDrag, (event, input) => {
       this.options.trustedRenderers.assertRole(event, ['main'])
-      return this.getTabDetachDropPoint()
+      this.beginTabDetachDrag(input)
+      return { success: true as const }
+    })
+    this.handle(workbenchWindowIpc.finishTabDetachDrag, (event, input) => {
+      this.options.trustedRenderers.assertRole(event, ['main'])
+      return this.finishTabDetachDrag(input)
+    })
+    this.handle(workbenchWindowIpc.cancelTabDetachDrag, (event, input) => {
+      this.options.trustedRenderers.assertRole(event, ['main'])
+      this.cancelTabDetachDrag(input, 'renderer-cancel')
+      return { success: true as const }
     })
     this.handle(workbenchWindowIpc.moveTabToNewWindow, (event, input) => {
       const identity = this.options.trustedRenderers.assertRole(event, ['main'])
@@ -182,12 +218,109 @@ export class DetachableBrowserWindowController {
     return { window, tabs: auxiliary ? [auxiliary.tabProjection] : [], placements }
   }
 
-  private getTabDetachDropPoint(): WorkbenchWindowDropPoint | null {
-    if (this.options.mainWindow.isDestroyed()) return null
-    return resolveNativeTabDetachDropPoint(
+  private beginTabDetachDrag(input: WorkbenchTabDetachDragInput): void {
+    if (this.options.browserManager.getViewOwnerWindowId(input.tabId) !== 'main') {
+      throw new Error(`Browser Tab 不属于主窗口: ${input.tabId}`)
+    }
+    this.clearTabDetachDragSession('superseded')
+    const session: TabDetachDragSession = {
+      tabId: input.tabId,
+      startedAt: Date.now(),
+      sampleCount: 0,
+      sawOutside: false,
+      lastOutsidePoint: null,
+      sampleTimer: setInterval(() => this.sampleTabDetachCursor(), TAB_DETACH_SAMPLE_INTERVAL_MS),
+      timeoutTimer: setTimeout(() => {
+        this.clearTabDetachDragSession('timeout')
+      }, TAB_DETACH_SESSION_TIMEOUT_MS),
+    }
+    session.sampleTimer.unref?.()
+    session.timeoutTimer.unref?.()
+    this.tabDetachDragSession = session
+    this.sampleTabDetachCursor()
+    recordMainDiagnosticLog('info', [
+      '[TabDetachDrag]',
+      { phase: 'begin', tabId: input.tabId, sourceWindowId: 'main' },
+    ])
+  }
+
+  private finishTabDetachDrag(input: WorkbenchTabDetachDragInput): WorkbenchWindowDropPoint | null {
+    const completed = this.completeTabDetachDrag('renderer-pointer-up', input.tabId)
+    return completed?.dropPoint ?? null
+  }
+
+  private cancelTabDetachDrag(input: WorkbenchTabDetachDragInput, reason: string): void {
+    if (this.tabDetachDragSession?.tabId !== input.tabId) return
+    this.clearTabDetachDragSession(reason)
+  }
+
+  private sampleTabDetachCursor(): WorkbenchWindowDropPoint | null {
+    const session = this.tabDetachDragSession
+    if (!session || this.options.mainWindow.isDestroyed()) return null
+    const dropPoint = resolveNativeTabDetachDropPoint(
       this.options.getCursorScreenPoint(),
       this.options.mainWindow.getBounds(),
     )
+    session.sampleCount += 1
+    if (dropPoint) {
+      session.sawOutside = true
+      session.lastOutsidePoint = dropPoint
+    }
+    return dropPoint
+  }
+
+  private completeTabDetachDrag(
+    trigger: 'native-mouse-up' | 'renderer-pointer-up',
+    expectedTabId?: string,
+  ): { tabId: string; dropPoint: WorkbenchWindowDropPoint | null } | null {
+    const session = this.tabDetachDragSession
+    if (!session || (expectedTabId && session.tabId !== expectedTabId)) return null
+    const dropPoint = this.sampleTabDetachCursor()
+    const diagnostic = {
+      phase: 'finish',
+      trigger,
+      tabId: session.tabId,
+      sourceWindowId: 'main',
+      durationMs: Date.now() - session.startedAt,
+      sampleCount: session.sampleCount,
+      sawOutside: session.sawOutside,
+      lastOutsidePoint: session.lastOutsidePoint,
+      dropPoint,
+      sourceBounds: this.options.mainWindow.isDestroyed()
+        ? null
+        : this.options.mainWindow.getBounds(),
+    }
+    this.disposeTabDetachDragSession()
+    recordMainDiagnosticLog('info', ['[TabDetachDrag]', diagnostic])
+    return { tabId: session.tabId, dropPoint }
+  }
+
+  private clearTabDetachDragSession(reason: string): void {
+    const session = this.tabDetachDragSession
+    if (!session) return
+    const diagnostic = {
+      phase: 'cancel',
+      reason,
+      tabId: session.tabId,
+      sourceWindowId: 'main',
+      durationMs: Date.now() - session.startedAt,
+      sampleCount: session.sampleCount,
+      sawOutside: session.sawOutside,
+      lastOutsidePoint: session.lastOutsidePoint,
+    }
+    this.disposeTabDetachDragSession()
+    recordMainDiagnosticLog(reason === 'timeout' ? 'warn' : 'info', [
+      '[TabDetachDrag]',
+      diagnostic,
+    ])
+  }
+
+  private disposeTabDetachDragSession(): void {
+    const session = this.tabDetachDragSession
+    if (!session) return
+    clearInterval(session.sampleTimer)
+    clearTimeout(session.timeoutTimer)
+    this.tabDetachDragSession = null
   }
 
   async moveTabToNewWindow(input: WorkbenchMoveTabInput): Promise<WorkbenchWindowCommandResult> {
@@ -997,6 +1130,11 @@ export class DetachableBrowserWindowController {
 
   destroy(): void {
     this.disposed = true
+    this.options.mainWindow.webContents.removeListener(
+      'before-mouse-event',
+      this.handleMainMouseEvent,
+    )
+    this.clearTabDetachDragSession('controller-destroy')
     this.disposeMainWorkspaceSync()
     for (const windowId of [...this.auxiliaries.keys()]) this.disposeAuxiliary(windowId)
     this.transferDiagnostics.clear()

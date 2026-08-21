@@ -1,10 +1,18 @@
 interface TabDetachDragInput {
   tabType: string
-  handledInsideTabBar: boolean
+  releasedInsideTabBar: boolean
   cancelled: boolean
 }
 
-/** Renderer only decides whether this drag end is eligible for main-process cursor arbitration. */
+export function hasExceededTabDragThreshold(
+  start: { x: number; y: number },
+  current: { x: number; y: number },
+  threshold = 5,
+): boolean {
+  return Math.hypot(current.x - start.x, current.y - start.y) >= threshold
+}
+
+/** Renderer only decides eligibility; main owns the native release point and window bounds. */
 export function shouldRequestTabDetach(input: TabDetachDragInput): boolean {
-  return input.tabType === 'browser' && !input.handledInsideTabBar && !input.cancelled
+  return input.tabType === 'browser' && !input.releasedInsideTabBar && !input.cancelled
 }

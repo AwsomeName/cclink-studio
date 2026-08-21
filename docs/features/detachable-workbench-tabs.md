@@ -4,6 +4,8 @@
 > 2026-08-20 对 v0.1.51 正式包的复审发现辅助窗口网页区域为 0 高度，且 CDP mouse smoke
 > 不能证明 macOS 真人拖出成立。当前修复候选已通过受影响单测、TypeScript 和带可见尺寸断言的
 > 真实 App smoke；真人拖出完成前，Browser 辅助窗口最终用户交付仍为 No-Go。
+> 2026-08-21 用户真人复验确认右键入口可用、拖出入口仍失败。旧 HTML `dragend` 触发层已被
+> Pointer Capture 与主进程原生 mouse-up 双结束信号替换；当前仍是待真人复验的修复候选。
 >
 > 创建时间：2026-08-18。
 >
@@ -51,8 +53,9 @@ Host。生产实现现已采用主进程 WindowService/TabModel、最小辅助 r
 - 恢复上次退出时的辅助窗口位置、显示器和 Tab 分布。
 - 把修复候选视为已经完成真人验收。右键/命令入口已通过真实 App 自动化并得到非零网页区域，
   但尚未由用户在当前开发版中签收。
-- 把任何 CDP mouse smoke 当作 macOS 真人拖出证据。当前实现已删除 renderer 坐标裁决并改由
-  主进程读取系统光标和真实窗口 bounds，但该系统光标路径仍必须真人拖出验收。
+- 把任何 CDP mouse smoke 当作 macOS 真人拖出证据。当前实现已删除 HTML `dragend` 依赖和
+  renderer 坐标裁决，改由 Pointer Capture 保持拖动并由主进程读取系统光标和真实窗口 bounds；
+  该路径仍必须真人拖出验收。
 
 Browser M1 的核心迁移事务和状态保持门禁曾通过，但该自动化没有检查网页 surface 的可见尺寸，
 并错误地把 Playwright over CDP 的 mouse 注入描述为真人拖拽。修复、受影响工程门禁和真人验收
@@ -71,14 +74,17 @@ Browser M1 的核心迁移事务和状态保持门禁曾通过，但该自动化
    `display:none` 不得改变 browser surface 的行归属。
 2. 真实 App smoke 必须断言 browser surface 的宽高均大于 0；只看到辅助 renderer 外壳、projection
    或存活 Page 不能判定用户可见。
-3. renderer 拖拽结束只提交有界信号，不再提交或裁决 `screenX/clientX/window.screenX`。主进程使用
+3. renderer 只提交有界的 Pointer 拖动会话信号，不再提交或裁决
+   `screenX/clientX/window.screenX`。主进程同时接收原生 mouse-up 与 renderer pointer-up，使用
    `screen.getCursorScreenPoint()` 与 source `BrowserWindow.getBounds()` 在同一 DIP 坐标系判定窗口外
    松手，并把该点作为辅助窗口 placement 输入。
 4. Playwright mouse 只保留为 renderer/事务诊断，不计入真人拖出证据。macOS 单屏窗口外松手、
    物理双屏跨屏松手和 Escape/同栏排序必须由真人验收。
 
 实施结果：辅助窗口四个区域已显式固定 Grid 行，renderer 不再读取拖拽坐标，主进程新增系统
-cursor/window bounds 裁决。受影响 4 个测试文件共 29 项通过，TypeScript 主进程与 renderer
+cursor/window bounds 裁决。2026-08-21 又移除了真人失败的 HTML `draggable/dragend` 入口，改为
+Pointer Capture 和主进程原生 mouse-up 双结束信号，并为每次会话记录 begin/finish/cancel、触发源、
+采样数、是否出界和最终 bounds。原有受影响 4 个测试文件共 29 项通过，TypeScript 主进程与 renderer
 类型检查通过；更新后的真实 App smoke 12/12 通过，右键生产入口创建的 browser surface 实测为
 `1100 × 676`，同一 Page/Session/表单/滚动和 runtime identity 保持。以上是工程候选证据，不替代
 真人拖出和当前用户环境签收。
@@ -280,8 +286,9 @@ M1 退出时至少把逻辑 Tab 安全恢复到 workspace 快照，下次启动�
 ### 8.1 当前 Tab 模型
 
 `src/renderer/src/types/index.ts` 定义 20 种 `TabType`。`tab-store` 保存当前 renderer 的 Tab 列表
-和 activeTabId，并把当前工作空间 Tab 写入 WorkspaceState。现有 TabBar 的 HTML Drag and Drop
-只处理同一数组内 `reorderTabs(fromId, toId)`；`dragend` 只清理 UI 状态。
+和 activeTabId，并把当前工作空间 Tab 写入 WorkspaceState。TabBar 使用 Pointer Capture 处理同一
+数组内 `reorderTabs(fromId, toId)`；Browser 拖出只开启有界主进程会话，不使用 HTML Drag and Drop
+的 `dragend` 或 renderer 屏幕坐标。
 
 差距：多窗口后不能让多个 renderer 各自持有并覆盖写入同一 workspace 的完整 Tab 快照，否则会
 形成第二状态所有者和最后写入者覆盖。

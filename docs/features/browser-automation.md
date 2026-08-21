@@ -1,6 +1,6 @@
 # 内嵌浏览器 & Playwright 自动化
 
-> 状态：已实现。最后更新：2026-07-28。
+> 状态：主体已实现；HTTP Basic Auth P1 缺陷待修复。最后更新：2026-08-21。
 
 ## 概述
 
@@ -217,6 +217,8 @@ app.on('ready', () => {
 - [ ] 网页自身 `window.open` / `target=_blank` 接管为工作台 Tab（开发方案见 `browser-popup-tabs-development-plan.md`）
 - [x] 下载管理（`browser_wait_for_download`/`save_download`）
 - [ ] 代理设置
+- [ ] HTTP Basic Auth challenge 交互（P1 缺陷与修复方案见
+      `docs/testing/browser-http-basic-auth.md`）
 - [x] 与 Agent 对话面板联动（工具调用桥接，46 个 `browser_*` 工具）
 
 ### P2 — 高级
@@ -311,3 +313,14 @@ JSON.stringify({
 - Playwright 操作范围仅限于当前 WebContentsView
 - 网络请求不经过主进程代理（避免性能瓶颈）
 - Cookie 和登录态隔离（不与系统 Chrome 共享）
+
+## 已知缺陷：HTTP Basic Auth challenge 被默认取消
+
+Studio `0.1.54` 的受管 `WebContentsView` 没有监听 Electron `login` 事件。使用 FRP 管理面板等
+HTTP Basic Auth 的站点返回 `401 + WWW-Authenticate` 后，Electron 按默认行为取消认证，用户
+看不到用户名/密码输入框。该问题与网页登录表单、CCLink 远程登录、V2EX Google 登录和
+Playwright Page claim 不同。
+
+缺陷证据、选定解决方案、明文 HTTP 风险、生命周期约束和真人验收门禁见
+`docs/testing/browser-http-basic-auth.md`。在真实 Electron `WebContentsView` 和真实 FRP 面板
+验收完成前，不得把此能力标记为已支持。

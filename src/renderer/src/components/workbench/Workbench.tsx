@@ -22,7 +22,13 @@ import {
 } from '../../features/agent-conversations/conversation-workbench'
 import { openDefaultBrowserTab } from '../../features/web-resources/open-default-browser-tab'
 import { isDetachedFromMain, useWorkbenchWindowStore } from '../../stores/workbench-window-store'
-import { moveBrowserTabFromDragEnd } from '../../utils/move-browser-tab-to-window'
+import {
+  beginBrowserTabDetachDrag,
+  cancelBrowserTabDetachDrag,
+  moveBrowserTabFromPointerRelease,
+  moveBrowserTabToNewWindow,
+} from '../../utils/move-browser-tab-to-window'
+import { isBrowserNewTabUrl } from '../../features/browser/browser-new-tab'
 
 interface WorkbenchProps {
   tabCreateMenuOpen: boolean
@@ -56,6 +62,8 @@ export function Workbench({
   const isBrowserTab = activeTab?.type === 'browser'
   const isAndroidTab = activeTab?.type === 'android'
   const activeBrowserState = activeTabId ? browserTabs[activeTabId] : undefined
+  const showBrowserNewTab =
+    isBrowserTab && isBrowserNewTabUrl(activeBrowserState?.url ?? activeTab?.initialUrl)
 
   useWorkbenchBounds(contentRef, tabBarRef)
   useBrowserEvents()
@@ -205,10 +213,35 @@ export function Workbench({
 
   const handleDetachTab = useCallback(
     (tabId: string): void => {
-      void moveBrowserTabFromDragEnd(tabId).catch((error) => {
+      void moveBrowserTabFromPointerRelease(tabId).catch((error) => {
         showToast(error instanceof Error ? error.message : String(error), 'error')
       })
     },
+    [showToast],
+  )
+
+  const handleDetachDragStart = useCallback(
+    (tabId: string): void => {
+      void beginBrowserTabDetachDrag(tabId).catch((error) => {
+        showToast(error instanceof Error ? error.message : String(error), 'error')
+      })
+    },
+    [showToast],
+  )
+
+  const handleDetachDragCancel = useCallback((tabId: string): void => {
+    void cancelBrowserTabDetachDrag(tabId).catch((error) => {
+      console.warn('[Workbench] 取消 Browser Tab 拖出会话失败:', error)
+    })
+  }, [])
+
+  useEffect(
+    () =>
+      window.cclinkStudio.workbenchWindow.onTabDetachReleased(({ tabId, dropPoint }) => {
+        void moveBrowserTabToNewWindow(tabId, dropPoint).catch((error) => {
+          showToast(error instanceof Error ? error.message : String(error), 'error')
+        })
+      }),
     [showToast],
   )
 
@@ -269,6 +302,8 @@ export function Workbench({
         onActivate={activateTab}
         onClose={handleCloseTab}
         onReorder={reorderTabs}
+        onDetachDragStart={handleDetachDragStart}
+        onDetachDragCancel={handleDetachDragCancel}
         onDetach={handleDetachTab}
         onNewDocument={openNewDocument}
         onNewBrowser={openNewBrowser}
@@ -295,7 +330,13 @@ export function Workbench({
 
       {isAndroidTab && <AndroidToolbar />}
 
-      <WorkbenchContent activeTab={activeTab} isBrowserTab={isBrowserTab} contentRef={contentRef} />
+      <WorkbenchContent
+        activeTab={activeTab}
+        isBrowserTab={isBrowserTab}
+        showBrowserNewTab={showBrowserNewTab}
+        onOpenBrowserUrl={openBrowserUrl}
+        contentRef={contentRef}
+      />
     </div>
   )
 }

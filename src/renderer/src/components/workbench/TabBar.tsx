@@ -1,11 +1,18 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+} from 'react'
 import type { Tab } from '../../types'
 import { IconClose, IconFile, IconGlobe, IconPlus, IconRobot, IconTerminal } from '../common/Icons'
 import { BrowserFavicon } from '../common/BrowserFavicon'
 import { useBrowserStore } from '../../stores/browser-store'
 import { getBrowserDisplayTitle } from '../sidebar/browser-sidebar-view-model'
 import { isContextMenuKeyboardEvent } from '../../features/context-actions/context-menu-trigger'
-import { shouldRequestTabDetach } from './tab-detach-drag'
+import { hasExceededTabDragThreshold, shouldRequestTabDetach } from './tab-detach-drag'
 import { useEscapeDismiss } from '../common/dismissable-layer'
 
 const TAB_ICONS: Record<string, string> = {
@@ -18,6 +25,16 @@ const TAB_ICONS: Record<string, string> = {
   conversation: '🤖',
   'remote-conversation': '☁️',
   terminal: '⌨️',
+}
+
+function getPointerDropTabId(clientX: number, clientY: number): string | null {
+  if (clientX < 0 || clientY < 0 || clientX >= window.innerWidth || clientY >= window.innerHeight) {
+    return null
+  }
+  const tab = document
+    .elementFromPoint(clientX, clientY)
+    ?.closest<HTMLElement>('[data-workbench-tab-id]')
+  return tab?.dataset.workbenchTabId ?? null
 }
 
 function WorkbenchTabIcon({ tab }: { tab: Tab }): React.ReactElement {
@@ -42,6 +59,8 @@ interface TabBarProps {
   onActivate: (tabId: string) => void
   onClose: (tabId: string) => void
   onReorder: (fromId: string, toId: string) => void
+  onDetachDragStart: (tabId: string) => void
+  onDetachDragCancel: (tabId: string) => void
   onDetach: (tabId: string) => void
   onNewDocument: () => void
   onNewBrowser: () => void
@@ -60,6 +79,8 @@ export function TabBar({
   onActivate,
   onClose,
   onReorder,
+  onDetachDragStart,
+  onDetachDragCancel,
   onDetach,
   onNewDocument,
   onNewBrowser,
@@ -75,70 +96,119 @@ export function TabBar({
   const [createMenuPosition, setCreateMenuPosition] = useState({ left: 0, top: 0 })
   const createMenuRef = useRef<HTMLDivElement>(null)
   const createButtonRef = useRef<HTMLButtonElement>(null)
-  const dropHandledInsideTabBarRef = useRef(false)
-  const dragCancelledRef = useRef(false)
+  const pointerDragRef = useRef<{
+    tab: Tab
+    pointerId: number
+    startX: number
+    startY: number
+    dragging: boolean
+    cancelled: boolean
+    captureElement: HTMLElement
+  } | null>(null)
+  const suppressClickTabIdRef = useRef<string | null>(null)
 
   useEscapeDismiss(createMenuOpen, () => {
     onCreateMenuOpenChange(false)
     createButtonRef.current?.focus()
   })
 
-  const handleDragStart = useCallback((event: React.DragEvent, id: string): void => {
-    setDraggingId(id)
-    dropHandledInsideTabBarRef.current = false
-    dragCancelledRef.current = false
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/tab-id', id)
+  const resetPointerDrag = useCallback((): void => {
+    pointerDragRef.current = null
+    setDraggingId(null)
+    setDragOverId(null)
   }, [])
 
-  const handleDragOver = useCallback(
-    (event: React.DragEvent, id: string): void => {
-      if (draggingId && draggingId !== id) {
-        event.preventDefault()
-        event.dataTransfer.dropEffect = 'move'
-        setDragOverId(id)
+  const handlePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>, tab: Tab): void => {
+      if (event.button !== 0 || (event.target as Element).closest('.tab-close')) return
+      pointerDragRef.current = {
+        tab,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        dragging: false,
+        cancelled: false,
+        captureElement: event.currentTarget,
       }
+      event.currentTarget.setPointerCapture(event.pointerId)
     },
-    [draggingId],
+    [],
   )
 
-  const handleDrop = useCallback(
-    (event: React.DragEvent, id: string): void => {
+  const handlePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>): void => {
+      const drag = pointerDragRef.current
+      if (!drag || drag.pointerId !== event.pointerId || drag.cancelled) return
+      if (
+        !drag.dragging &&
+        !hasExceededTabDragThreshold(
+          { x: drag.startX, y: drag.startY },
+          { x: event.clientX, y: event.clientY },
+        )
+      ) {
+        return
+      }
+      if (!drag.dragging) {
+        drag.dragging = true
+        setDraggingId(drag.tab.id)
+        if (drag.tab.type === 'browser') onDetachDragStart(drag.tab.id)
+      }
       event.preventDefault()
-      const fromId = event.dataTransfer.getData('text/tab-id') || draggingId
-      dropHandledInsideTabBarRef.current = true
-      setDragOverId(null)
-      setDraggingId(null)
-      if (fromId && fromId !== id) {
-        onReorder(fromId, id)
-      }
+      const dropTabId = getPointerDropTabId(event.clientX, event.clientY)
+      setDragOverId(dropTabId && dropTabId !== drag.tab.id ? dropTabId : null)
     },
-    [draggingId, onReorder],
+    [onDetachDragStart],
   )
 
-  const handleDragEnd = useCallback(
-    (tab: Tab): void => {
-      const shouldDetach = shouldRequestTabDetach({
-        tabType: tab.type,
-        handledInsideTabBar: dropHandledInsideTabBarRef.current,
-        cancelled: dragCancelledRef.current,
-      })
-      dropHandledInsideTabBarRef.current = false
-      dragCancelledRef.current = false
-      setDraggingId(null)
-      setDragOverId(null)
-      if (shouldDetach) onDetach(tab.id)
+  const finishPointerDrag = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>, pointerCancelled: boolean): void => {
+      const drag = pointerDragRef.current
+      if (!drag || drag.pointerId !== event.pointerId) return
+      const wasDragging = drag.dragging
+      const cancelled = drag.cancelled || pointerCancelled
+      const dropTabId = getPointerDropTabId(event.clientX, event.clientY)
+      const releasedInsideTabBar = Boolean(dropTabId)
+      if (wasDragging) {
+        suppressClickTabIdRef.current = drag.tab.id
+        if (drag.tab.type === 'browser' && (cancelled || releasedInsideTabBar)) {
+          onDetachDragCancel(drag.tab.id)
+        }
+        if (!cancelled && dropTabId && dropTabId !== drag.tab.id) {
+          onReorder(drag.tab.id, dropTabId)
+        }
+        if (
+          shouldRequestTabDetach({
+            tabType: drag.tab.type,
+            releasedInsideTabBar,
+            cancelled,
+          })
+        ) {
+          onDetach(drag.tab.id)
+        }
+      }
+      if (drag.captureElement.hasPointerCapture(drag.pointerId)) {
+        drag.captureElement.releasePointerCapture(drag.pointerId)
+      }
+      resetPointerDrag()
     },
-    [onDetach],
+    [onDetach, onDetachDragCancel, onReorder, resetPointerDrag],
   )
 
   useEffect(() => {
     const handleDragCancel = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && draggingId) dragCancelledRef.current = true
+      const drag = pointerDragRef.current
+      if (event.key !== 'Escape' || !drag?.dragging) return
+      drag.cancelled = true
+      suppressClickTabIdRef.current = drag.tab.id
+      if (drag.tab.type === 'browser') onDetachDragCancel(drag.tab.id)
+      if (drag.captureElement.hasPointerCapture(drag.pointerId)) {
+        drag.captureElement.releasePointerCapture(drag.pointerId)
+      }
+      resetPointerDrag()
     }
     window.addEventListener('keydown', handleDragCancel, true)
     return () => window.removeEventListener('keydown', handleDragCancel, true)
-  }, [draggingId])
+  }, [onDetachDragCancel, resetPointerDrag])
 
   useEffect(() => {
     if (!createMenuOpen) return
@@ -182,16 +252,23 @@ export function TabBar({
       {tabs.map((tab) => (
         <div
           key={tab.id}
+          data-workbench-tab-id={tab.id}
           className={`tab ${activeTabId === tab.id ? 'active' : ''} ${draggingId === tab.id ? 'dragging' : ''} ${dragOverId === tab.id ? 'drop-target' : ''}`}
-          draggable
           role="tab"
           tabIndex={activeTabId === tab.id ? 0 : -1}
           aria-selected={activeTabId === tab.id}
-          onDragStart={(event) => handleDragStart(event, tab.id)}
-          onDragOver={(event) => handleDragOver(event, tab.id)}
-          onDrop={(event) => handleDrop(event, tab.id)}
-          onDragEnd={() => handleDragEnd(tab)}
-          onClick={() => onActivate(tab.id)}
+          onPointerDown={(event) => handlePointerDown(event, tab)}
+          onPointerMove={handlePointerMove}
+          onPointerUp={(event) => finishPointerDrag(event, false)}
+          onPointerCancel={(event) => finishPointerDrag(event, true)}
+          onClick={(event) => {
+            if (suppressClickTabIdRef.current === tab.id) {
+              suppressClickTabIdRef.current = null
+              event.preventDefault()
+              return
+            }
+            onActivate(tab.id)
+          }}
           onContextMenu={(event) => {
             event.preventDefault()
             onShowMenu(tab.id, event.clientX, event.clientY, event.currentTarget)

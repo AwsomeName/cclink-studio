@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { shouldRequestTabDetach } from './tab-detach-drag'
+import { hasExceededTabDragThreshold, shouldRequestTabDetach } from './tab-detach-drag'
 
 describe('shouldRequestTabDetach', () => {
   it('requests main-process arbitration for an unhandled Browser drag end', () => {
     expect(
       shouldRequestTabDetach({
         tabType: 'browser',
-        handledInsideTabBar: false,
+        releasedInsideTabBar: false,
         cancelled: false,
       }),
     ).toBe(true)
@@ -16,7 +16,7 @@ describe('shouldRequestTabDetach', () => {
     expect(
       shouldRequestTabDetach({
         tabType: 'browser',
-        handledInsideTabBar: true,
+        releasedInsideTabBar: true,
         cancelled: false,
       }),
     ).toBe(false)
@@ -26,16 +26,21 @@ describe('shouldRequestTabDetach', () => {
     expect(
       shouldRequestTabDetach({
         tabType: 'editor',
-        handledInsideTabBar: false,
+        releasedInsideTabBar: false,
         cancelled: false,
       }),
     ).toBe(false)
     expect(
       shouldRequestTabDetach({
         tabType: 'browser',
-        handledInsideTabBar: false,
+        releasedInsideTabBar: false,
         cancelled: true,
       }),
     ).toBe(false)
+  })
+
+  it('starts a custom pointer drag only after the movement threshold', () => {
+    expect(hasExceededTabDragThreshold({ x: 10, y: 10 }, { x: 13, y: 14 })).toBe(true)
+    expect(hasExceededTabDragThreshold({ x: 10, y: 10 }, { x: 12, y: 12 })).toBe(false)
   })
 })

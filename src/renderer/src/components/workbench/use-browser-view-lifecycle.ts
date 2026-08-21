@@ -6,6 +6,7 @@ import type { WorkspaceRef } from '@shared/workspace-ref'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import type { BrowserViewBinding } from '@shared/ipc/browser'
 import { useBrowserFindStore } from '../../features/browser/browser-find-store'
+import { isBrowserNewTabUrl } from '../../features/browser/browser-new-tab'
 
 /** 管理内嵌浏览器 WebContentsView 的创建、激活、隐藏和销毁。 */
 export function useBrowserViewLifecycle(
@@ -17,11 +18,16 @@ export function useBrowserViewLifecycle(
   const ensureBrowserTab = useBrowserStore((s) => s.ensureTab)
   const setBrowserTabReady = useBrowserStore((s) => s.setReady)
   const activeTabId = activeTab?.id
+  const activeBrowserUrl = useBrowserStore((state) =>
+    activeTabId ? state.tabs[activeTabId]?.url : undefined,
+  )
   const activeWorkspaceKey = workspaceRefKey(workspaceRef)
   const isBrowserTab =
     activeTab?.type === 'browser' &&
     Boolean(activeTab.workspaceRef) &&
     workspaceRefKey(activeTab.workspaceRef!) === activeWorkspaceKey
+  const showNativeBrowserView =
+    isBrowserTab && !isBrowserNewTabUrl(activeBrowserUrl ?? activeTab?.initialUrl)
   const browserViewBindingKey = useMemo(
     () =>
       JSON.stringify(
@@ -77,7 +83,7 @@ export function useBrowserViewLifecycle(
         await window.cclinkStudio.browser.reconcileViews({
           workspaceKey: activeWorkspaceKey,
           views: browserViews,
-          activeTabId,
+          activeTabId: showNativeBrowserView ? activeTabId : null,
         })
         return
       }
@@ -101,6 +107,7 @@ export function useBrowserViewLifecycle(
     ensureBrowserTab,
     isBrowserTab,
     setBrowserTabReady,
+    showNativeBrowserView,
   ])
 
   useEffect(() => {

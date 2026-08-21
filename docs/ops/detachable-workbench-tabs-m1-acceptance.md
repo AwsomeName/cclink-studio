@@ -19,6 +19,25 @@ Playwright Page、runtime generation 和 `tabId`；关闭/崩溃补偿与 Recove
 当前用户已确认 Tab 能移动，且修复后的第二张真人截图显示页面比例正常；物理双屏拖出仍没有有效
 证据。Editor、Terminal、Conversation 等其他 Tab 和辅助窗口位置恢复仍不支持。
 
+## 2026-08-21 真人拖出失败与新修复候选
+
+用户再次真人复验后确认：右键“移至新窗口”可用，但直接把 Browser Tab 拖出主窗口没有任何结果。
+因此上一轮“主进程拖拽裁决工程候选已完成”的判断被真实失败推翻；这不是测试问题，也不能继续称为
+可交付。
+
+失败链路的具体缺陷是：renderer 仍以 React 元素的 HTML5 `dragend` 作为唯一完成入口，主进程只在
+该事件到达后读取一次系统光标。把坐标从 renderer 移到主进程只修正了坐标所有权，没有解决 macOS
+原生拖动越出窗口后结束事件是否可靠到达的问题。
+
+新修复候选移除 Tab 的 HTML `draggable/dragend`：TabBar 使用 Pointer Capture 完成移动阈值、同栏
+排序、Escape 和 pointer cancel；Browser 拖动超过阈值后建立主进程会话。主进程每 50ms 采样系统
+cursor，并同时接受 `webContents` 原生 mouse-up 与 renderer pointer-up，先到者使用真实
+`BrowserWindow` bounds 裁决并结束会话。每次 begin/finish/cancel 都记录触发源、采样数、是否曾出界、
+最终落点和 source bounds，30 秒超时强制释放。迁移仍复用已由右键真人验证的同一事务。
+
+当前工程证据：受影响的拖拽 eligibility、主进程 native cursor 和 controller 测试 27/27 通过，
+TypeScript 通过。真人单屏窗口外松手、Escape 和同栏排序复验前，本节结论仍为修复候选而不是完成。
+
 ## 2026-08-20 当前用户比例异常与修复
 
 用户截图证明辅助窗口及网页 surface 已真实可见，但博客园登录页约以 30% 显示。主进程同一时刻
@@ -177,5 +196,5 @@ pnpm verify
 - Browser M1 受影响自动化真实 App 门禁：Go（12/12，包含非零 surface 与 visual scale 复位断言）。
 - 物理双屏/真实账号真人签收：Pending。
 - Browser M1 最终用户交付：No-Go。
-- Browser 拖出手势：主进程裁决工程候选已完成，真人验收 Pending；其他 Tab 类型、跨窗口拖入和
-  placement 恢复仍为 No-Go。
+- Browser 拖出手势：旧 HTML `dragend` 方案已被真人否决；Pointer Capture + 主进程原生 mouse-up
+  修复候选待真人复验。其他 Tab 类型、跨窗口拖入和 placement 恢复仍为 No-Go。

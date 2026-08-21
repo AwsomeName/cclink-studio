@@ -27,6 +27,21 @@ export const workbenchWindowDropPointSchema = z
   .strict()
 export type WorkbenchWindowDropPoint = z.infer<typeof workbenchWindowDropPointSchema>
 
+export const workbenchTabDetachDragInputSchema = z
+  .object({
+    tabId: stableIdSchema,
+  })
+  .strict()
+export type WorkbenchTabDetachDragInput = z.infer<typeof workbenchTabDetachDragInputSchema>
+
+export const workbenchTabDetachReleasedSchema = z
+  .object({
+    tabId: stableIdSchema,
+    dropPoint: workbenchWindowDropPointSchema,
+  })
+  .strict()
+export type WorkbenchTabDetachReleased = z.infer<typeof workbenchTabDetachReleasedSchema>
+
 export const workbenchWindowBootstrapSchema = z
   .object({
     windowId: stableIdSchema,
@@ -177,8 +192,20 @@ export type WorkbenchWindowCommandResult =
 export const workbenchWindowIpc = {
   getBootstrap: defineNoArgsIpc<WorkbenchWindowBootstrap>('workbenchWindow:getBootstrap'),
   getProjection: defineNoArgsIpc<WorkbenchWindowProjection>('workbenchWindow:getProjection'),
-  getTabDetachDropPoint: defineNoArgsIpc<WorkbenchWindowDropPoint | null>(
-    'workbenchWindow:getTabDetachDropPoint',
+  beginTabDetachDrag: defineIpcInvoke<[WorkbenchTabDetachDragInput], { success: true }>(
+    'workbenchWindow:beginTabDetachDrag',
+    (args) => ipcArgs(workbenchTabDetachDragInputSchema.parse(args[0])),
+  ),
+  finishTabDetachDrag: defineIpcInvoke<
+    [WorkbenchTabDetachDragInput],
+    WorkbenchWindowDropPoint | null
+  >(
+    'workbenchWindow:finishTabDetachDrag',
+    (args) => ipcArgs(workbenchTabDetachDragInputSchema.parse(args[0])),
+  ),
+  cancelTabDetachDrag: defineIpcInvoke<[WorkbenchTabDetachDragInput], { success: true }>(
+    'workbenchWindow:cancelTabDetachDrag',
+    (args) => ipcArgs(workbenchTabDetachDragInputSchema.parse(args[0])),
   ),
   moveTabToNewWindow: defineIpcInvoke<[WorkbenchMoveTabInput], WorkbenchWindowCommandResult>(
     'workbenchWindow:moveTabToNewWindow',
@@ -206,6 +233,7 @@ export const workbenchWindowIpcEvents = {
   projectionChanged: 'workbenchWindow:projectionChanged',
   placementChanged: 'workbenchWindow:placementChanged',
   recoveryChanged: 'workbenchWindow:recoveryChanged',
+  tabDetachReleased: 'workbenchWindow:tabDetachReleased',
 } as const
 
 export interface WorkbenchWindowApiContract {
@@ -232,6 +260,10 @@ export interface WorkbenchWindowApiContract {
 }
 
 export interface WorkbenchMainWindowApiContract extends WorkbenchWindowApiContract {
-  /** Main process samples the native cursor and source BrowserWindow bounds in screen DIP space. */
-  getTabDetachDropPoint: () => Promise<WorkbenchWindowDropPoint | null>
+  beginTabDetachDrag: (input: WorkbenchTabDetachDragInput) => Promise<{ success: true }>
+  finishTabDetachDrag: (
+    input: WorkbenchTabDetachDragInput,
+  ) => Promise<WorkbenchWindowDropPoint | null>
+  cancelTabDetachDrag: (input: WorkbenchTabDetachDragInput) => Promise<{ success: true }>
+  onTabDetachReleased: (callback: (payload: WorkbenchTabDetachReleased) => void) => () => void
 }

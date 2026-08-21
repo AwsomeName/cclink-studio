@@ -52,18 +52,23 @@ import { RemoteFileViewer } from '../../features/cclink-remote/RemoteFileViewer'
 import { RemoteAgentController } from '../../features/cclink-remote/remote-agent-controller'
 import { MediaProductionTab } from '../../features/media-production/MediaProductionTab'
 import { useToastStore } from '../common/Toast'
+import { BrowserNewTabPage } from './BrowserNewTabPage'
 
 const EMPTY_TERMINAL_OUTPUT_LINES: TerminalOutputLine[] = []
 
 interface WorkbenchContentProps {
   activeTab: Tab | undefined
   isBrowserTab: boolean
+  showBrowserNewTab: boolean
+  onOpenBrowserUrl: (url: string) => void
   contentRef: RefObject<HTMLDivElement | null>
 }
 
 export function WorkbenchContent({
   activeTab,
   isBrowserTab,
+  showBrowserNewTab,
+  onOpenBrowserUrl,
   contentRef,
 }: WorkbenchContentProps): React.ReactElement {
   const conversationTarget = activeTab ? resolveConversationTab(activeTab) : null
@@ -94,6 +99,7 @@ export function WorkbenchContent({
             draggable={false}
           />
         )}
+        {isBrowserTab && showBrowserNewTab && <BrowserNewTabPage onOpenUrl={onOpenBrowserUrl} />}
         {!isBrowserTab && activeTab && (
           <>
             {activeTab.type === 'settings' && (

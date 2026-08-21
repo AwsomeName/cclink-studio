@@ -58,6 +58,7 @@ import {
 } from './browser-sidebar-view-model'
 import { ScheduledTasksSidebar } from '../../features/scheduled-tasks/ScheduledTasksSidebar'
 import { BrowserHistorySection } from './browser-history-section'
+import { notifyBrowserHistoryChanged } from '../../features/browser/browser-history-events'
 import { createScheduledTaskTab } from '../../features/scheduled-tasks/scheduled-task-view-model'
 import { AgentRolesSidebar } from '../../features/agent-roles/AgentRolesSidebar'
 import { useToastStore } from '../common/Toast'
@@ -532,6 +533,7 @@ function BrowserManagementView(): React.ReactElement {
       await window.cclinkStudio.browser.clearHistory()
       setHistory([])
       setHistoryError(null)
+      notifyBrowserHistoryChanged()
     } catch (error) {
       showToast(error instanceof Error ? error.message : String(error), 'error')
     } finally {

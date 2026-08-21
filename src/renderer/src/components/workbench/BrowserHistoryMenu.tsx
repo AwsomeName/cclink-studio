@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import type { BrowserHistoryEntry } from '@shared/ipc/browser'
 import { IconGlobe, IconHistory } from '../common/Icons'
 import { FloatingSurface } from '../common/FloatingSurface'
+import { notifyBrowserHistoryChanged } from '../../features/browser/browser-history-events'
 
 interface BrowserHistoryMenuProps {
   onOpenUrl: (url: string) => void
@@ -27,6 +28,7 @@ export function BrowserHistoryMenu({ onOpenUrl }: BrowserHistoryMenuProps): Reac
   const clearHistory = async (): Promise<void> => {
     await window.cclinkStudio.browser.clearHistory()
     setHistory([])
+    notifyBrowserHistoryChanged()
   }
 
   return (

@@ -17,6 +17,12 @@ function fakeWindow() {
     on: vi.fn((event: string, listener: Listener) => {
       webContentsListeners.set(event, [...(webContentsListeners.get(event) ?? []), listener])
     }),
+    removeListener: vi.fn((event: string, listener: Listener) => {
+      webContentsListeners.set(
+        event,
+        (webContentsListeners.get(event) ?? []).filter((candidate) => candidate !== listener),
+      )
+    }),
     emit(event: string, ...args: any[]) {
       for (const listener of webContentsListeners.get(event) ?? []) listener(...args)
     },
@@ -210,21 +216,50 @@ describe('DetachableBrowserWindowController', () => {
     expect(harness.mainWorkspaceListeners.size).toBe(0)
   })
 
-  it('arbitrates drag-end cursor position in main against native BrowserWindow bounds', async () => {
+  it('arbitrates pointer release in main against native BrowserWindow bounds', async () => {
     const outside = createHarness({ cursorPoint: { x: -600, y: 300 } })
     outside.controller.registerIpc()
-    const outsideHandler = outside.trustedRenderers.ipcRegistrations.handle.mock.calls.find(
-      ([channel]) => channel === 'workbenchWindow:getTabDetachDropPoint',
+    const outsideBegin = outside.trustedRenderers.ipcRegistrations.handle.mock.calls.find(
+      ([channel]) => channel === 'workbenchWindow:beginTabDetachDrag',
     )?.[1]
-    expect(await outsideHandler?.({})).toEqual({ x: -600, y: 300 })
-    expect(outside.mainWindow.getBounds).toHaveBeenCalledOnce()
+    const outsideFinish = outside.trustedRenderers.ipcRegistrations.handle.mock.calls.find(
+      ([channel]) => channel === 'workbenchWindow:finishTabDetachDrag',
+    )?.[1]
+    await outsideBegin?.({}, { tabId: 'browser-1' })
+    expect(await outsideFinish?.({}, { tabId: 'browser-1' })).toEqual({ x: -600, y: 300 })
+    expect(outside.mainWindow.getBounds).toHaveBeenCalled()
 
     const inside = createHarness({ cursorPoint: { x: 500, y: 300 } })
     inside.controller.registerIpc()
-    const insideHandler = inside.trustedRenderers.ipcRegistrations.handle.mock.calls.find(
-      ([channel]) => channel === 'workbenchWindow:getTabDetachDropPoint',
+    const insideBegin = inside.trustedRenderers.ipcRegistrations.handle.mock.calls.find(
+      ([channel]) => channel === 'workbenchWindow:beginTabDetachDrag',
     )?.[1]
-    expect(await insideHandler?.({})).toBeNull()
+    const insideFinish = inside.trustedRenderers.ipcRegistrations.handle.mock.calls.find(
+      ([channel]) => channel === 'workbenchWindow:finishTabDetachDrag',
+    )?.[1]
+    await insideBegin?.({}, { tabId: 'browser-1' })
+    expect(await insideFinish?.({}, { tabId: 'browser-1' })).toBeNull()
+  })
+
+  it('uses the native main-process mouse-up event when renderer pointer-up is absent', async () => {
+    const harness = createHarness({ cursorPoint: { x: 1400, y: 300 } })
+    harness.controller.registerIpc()
+    const begin = harness.trustedRenderers.ipcRegistrations.handle.mock.calls.find(
+      ([channel]) => channel === 'workbenchWindow:beginTabDetachDrag',
+    )?.[1]
+    await begin?.({}, { tabId: 'browser-1' })
+
+    harness.mainWindow.webContents.emit('before-mouse-event', {}, {
+      type: 'mouseUp',
+      button: 'left',
+      x: 0,
+      y: 0,
+    })
+
+    expect(harness.mainWindow.webContents.send).toHaveBeenCalledWith(
+      'workbenchWindow:tabDetachReleased',
+      { tabId: 'browser-1', dropPoint: { x: 1400, y: 300 } },
+    )
   })
 
   it('moves Browser runtime after auxiliary ready and returns it without destroying the tab', async () => {
