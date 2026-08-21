@@ -73,15 +73,20 @@ describe('registerBrowserIpc', () => {
     const listener = mockIpcMain.listeners.get('workbench:bounds')
 
     listener?.({ sender: 'other' }, { x: 0, y: 0, width: 100, height: 100 })
-    listener?.({ sender: 'trusted' }, { x: 0, y: 0, width: Infinity, height: 100 })
+    listener?.(
+      { sender: 'trusted' },
+      { x: 0, y: 0, width: Infinity, height: 100, protectedTop: 30 },
+    )
+    listener?.({ sender: 'trusted' }, { x: 0, y: 0, width: 100, height: 100 })
     expect(browserManager.updateBounds).not.toHaveBeenCalled()
 
-    listener?.({ sender: 'trusted' }, { x: 0, y: 0, width: 100, height: 100 })
+    listener?.({ sender: 'trusted' }, { x: 0, y: 0, width: 100, height: 100, protectedTop: 30 })
     expect(browserManager.updateBounds).toHaveBeenCalledWith({
       x: 0,
       y: 0,
       width: 100,
       height: 100,
+      protectedTop: 30,
     })
   })
 })
