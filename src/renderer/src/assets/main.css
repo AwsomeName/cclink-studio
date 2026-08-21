@@ -9783,6 +9783,7 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
 /* ====== Status Bar ====== */
 
 .status-bar {
+  position: relative;
   height: var(--statusbar-height);
   min-height: var(--statusbar-height);
   background: var(--bg-statusbar);
@@ -13916,16 +13917,18 @@ button.context-menu-item {
 /* ─── Toast 提示 ──────────────────────────────────── */
 
 .toast {
-  position: fixed;
-  bottom: 40px;
+  position: absolute;
+  top: 0;
+  bottom: 0;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border-radius: var(--radius-md);
-  font-size: 13px;
+  gap: 5px;
+  max-width: min(760px, 58vw);
+  padding: 0 10px;
+  border-radius: 0;
+  font-size: 12px;
   color: #ffffff;
   z-index: 10001;
   box-shadow: var(--shadow-elevated);
@@ -13945,18 +13948,25 @@ button.context-menu-item {
 }
 
 .toast-icon {
-  font-size: 16px;
+  font-size: 12px;
   flex-shrink: 0;
+}
+
+.toast-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(12px);
+    transform: translateX(-50%);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateX(-50%);
   }
 }
 

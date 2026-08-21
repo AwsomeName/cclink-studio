@@ -15,7 +15,6 @@ import { ContextMenuHost } from './features/context-actions/ContextMenuHost'
 import { useContextMenuStore } from './features/context-actions/context-menu-store'
 import { useRegisterContextActions } from './features/context-actions/use-register-context-actions'
 import { useConversationSelectionMenu } from './features/context-actions/use-conversation-selection-menu'
-import { Toast } from './components/common/Toast'
 import LoadingScreen from './components/loading/LoadingScreen'
 import { useAgentWorkContext } from './bootstrap/use-agent-work-context'
 import { useAgentStreamEvents } from './bootstrap/use-agent-stream-events'
@@ -270,7 +269,6 @@ function MainLayout(): React.ReactElement {
       <CommandPalette />
       <ContextMenuHost />
       <WorkspaceOpenSurface anchorRef={workspaceOpenButtonRef} />
-      <Toast />
     </div>
   )
 }

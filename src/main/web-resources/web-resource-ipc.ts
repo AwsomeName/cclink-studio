@@ -86,7 +86,7 @@ export function registerWebResourceIpc(
           error: {
             code: 'INVALID_BROWSER_STATE',
             message:
-              '当前页面使用默认或共享登录环境，不能在不丢失登录状态的情况下转为独立账号。页面和登录状态已保留，请从“网站与账号”添加后再登录保存。',
+              '账号未保存：当前页面使用默认或共享登录环境，不能安全转为独立账号；页面和登录状态已保留。请从“网站与账号”添加后重新登录。',
           },
         }
       }

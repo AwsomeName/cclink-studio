@@ -2,7 +2,7 @@
  * 轻量 Toast 提示组件
  *
  * 全局单例，通过 useToastStore.show(message, type) 调用。
- * 3 秒后自动消失。
+ * 普通提示 3 秒后自动消失；错误提示保留 8 秒，确保状态栏中的完整原因可被读到。
  */
 
 import { create } from 'zustand'
@@ -26,10 +26,13 @@ export const useToastStore = create<ToastState>((set) => ({
   show: (message, type = 'info') => {
     if (toastTimer) clearTimeout(toastTimer)
     set({ message, type, visible: true })
-    toastTimer = setTimeout(() => {
-      set({ visible: false })
-      toastTimer = null
-    }, 3000)
+    toastTimer = setTimeout(
+      () => {
+        set({ visible: false })
+        toastTimer = null
+      },
+      type === 'error' ? 8000 : 3000,
+    )
   },
 }))
 
@@ -43,7 +46,11 @@ export function Toast(): React.ReactElement | null {
   if (!visible) return null
 
   return (
-    <div className={`toast toast-${type}`}>
+    <div
+      className={`toast toast-${type}`}
+      role={type === 'error' ? 'alert' : 'status'}
+      title={message}
+    >
       <span className="toast-icon">
         {type === 'success' && '✅'}
         {type === 'error' && '❌'}

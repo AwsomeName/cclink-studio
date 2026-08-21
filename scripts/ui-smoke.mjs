@@ -1225,12 +1225,30 @@ async function main() {
       ),
       'shared Profile login marker was not present before saving',
     )
-    await page
-      .getByRole('button', { name: '登录完成，保存账号和登录状态' })
-      .click()
-    await page
-      .getByText(/页面和登录状态已保留/)
-      .waitFor({ state: 'visible', timeout: 5_000 })
+    await page.getByRole('button', { name: '登录完成，保存账号和登录状态' }).click()
+    const sharedProfileNotice = page.locator('.status-bar .toast-error')
+    await sharedProfileNotice.waitFor({ state: 'visible', timeout: 5_000 })
+    assert(
+      (await sharedProfileNotice.textContent())?.includes('账号未保存') &&
+        (await sharedProfileNotice.textContent())?.includes('页面和登录状态已保留'),
+      'shared Profile rejection did not explain that the login state was preserved',
+    )
+    assert(
+      await page.evaluate(() => {
+        const notice = document.querySelector('.status-bar .toast-error')
+        const statusBar = document.querySelector('.status-bar')
+        if (!(notice instanceof HTMLElement)) return false
+        if (!(statusBar instanceof HTMLElement)) return false
+        const noticeRect = notice.getBoundingClientRect()
+        const statusRect = statusBar.getBoundingClientRect()
+        return (
+          noticeRect.top >= statusRect.top - 1 &&
+          noticeRect.bottom <= statusRect.bottom + 1 &&
+          Math.abs(noticeRect.left + noticeRect.width / 2 - window.innerWidth / 2) <= 1
+        )
+      }),
+      'shared Profile rejection was not centered inside the bottom status bar',
+    )
     const sharedRuntimeAfterSave = await page.evaluate(
       (tabId) => window.cclinkStudio.browser.getRuntimeDiagnostics(tabId),
       sharedBrowser.sourceTabId,

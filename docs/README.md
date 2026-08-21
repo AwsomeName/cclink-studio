@@ -52,6 +52,8 @@
 - `docs/features/global-web-accounts-development-plan.md`：全局网站账号、跨项目 Profile/Session 复用、运营矩阵、v2→v3 迁移和事务引用兼容的 E0、G1–G4、T1、R1 正式施工计划。
 - `docs/testing/browser-http-basic-auth.md`：内嵌浏览器 HTTP Basic Auth challenge 被 Electron 默认取消的
   P1 缺陷记录、凭证安全边界、修复方案和真实 FRP 验收门禁。
+- `docs/testing/browser-tab-bar-native-view-occlusion.md`：`v0.1.54` 内嵌浏览器原生层覆盖 Tab 栏、
+  当前本地与后台打开远程项目状态误判的事故记录，以及 `v0.1.55` 不可回归约束。
 - `docs/features/ai-web-affairs-agent-development-plan.md`：AI 网页事务代理人的开发管理事实源；保留项目账号和事务历史证据，当前账号施工以全局账号专项计划为准。
 - `docs/features/scheduled-tasks.md`：工作空间定时任务的 Activity Bar、侧栏、Workbench Tab、App 内统一调度、本机启用和保存快捷键产品事实源。
 - `docs/features/scheduled-tasks-development-plan.md`：工作空间定时任务 E0、M8.1-M8.3、R1 的详细开发顺序、任务拆解和真人验收计划。
@@ -59,7 +61,7 @@
 
 ## 当前边界
 
-CCLink Studio 是唯一桌面 App。本地能力免费免登录；账号、设备、消息 transport 和远程工作区作为可选内置域，只在用户打开远程入口后启动。云服务、Agent runtime NPM 发布、支付和发布凭证仍保持独立。
+CCLink Studio 是唯一桌面 App。本地能力免费免登录；账号、设备、消息 transport 和远程工作区作为可选内置域，只在用户明确进入远程入口，或项目条仍有打开的远程工作空间时按需启动。当前激活本地工作空间与后台打开远程工作空间可以同时成立，连接不会改变本地工作空间类型。云服务、Agent runtime NPM 发布、支付和发布凭证仍保持独立。
 
 Studio 默认可单仓库独立启动，不要求 `cclink-dev`、`chat-cc/deploy` 或 `chat-cc/Agent` 存在。当前凭证实现不依赖系统钥匙串，用户主动配置的第三方凭证保存在本机独立明文文件；发布验收状态见 `docs/features/local-credentials-development-plan.md`。Android 默认只支持用户自有 USB / Wi-Fi ADB 真机；缺少 adb 时只降级设备能力，不阻断启动。
 
@@ -78,7 +80,7 @@ Studio 默认可单仓库独立启动，不要求 `cclink-dev`、`chat-cc/deploy
 - 本地验收与发布：`docs/ops/local-smoke-check.md`、`docs/ops/oss-release-runbook.md`、`docs/features/desktop-release-and-updates.md`。
 - 桌面更新验收证据：`docs/ops/desktop-update-acceptance.md`。
 - 官方集成：`docs/official-integration-contract.md`、`docs/ops/cclink-dev-official-integration-handoff.md`。
-- 工作台能力：`docs/features/workspace-system.md`、`docs/features/recent-session-switcher.md`、`docs/features/unified-agent-panel.md`、`docs/features/context-action-system.md`、`docs/features/configurable-keybinding-system.md`、`docs/features/detachable-workbench-tabs.md`、`docs/features/local-credentials.md`、`docs/features/local-credentials-development-plan.md`、`docs/features/git-source-control.md`、`docs/features/git-source-control-development-plan.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/agent-role-configuration.md`、`docs/features/ai-employees.md`、`docs/features/agent-profiles.md`、`docs/features/ai-web-affairs-agent.md`、`docs/features/global-web-accounts-development-plan.md`、`docs/features/ai-web-affairs-agent-development-plan.md`、`docs/features/browser-automation.md`、`docs/testing/browser-http-basic-auth.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/markdown-auto-illustration.md`、`docs/features/promotional-video-workbench.md`、`docs/features/scheduled-tasks.md`、`docs/features/scheduled-tasks-development-plan.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`、`docs/features/runtime-components-and-capability-plugins.md`、`docs/features/runtime-components-and-capability-plugins-development-plan.md`。
+- 工作台能力：`docs/features/workspace-system.md`、`docs/features/recent-session-switcher.md`、`docs/features/unified-agent-panel.md`、`docs/features/context-action-system.md`、`docs/features/configurable-keybinding-system.md`、`docs/features/detachable-workbench-tabs.md`、`docs/features/local-credentials.md`、`docs/features/local-credentials-development-plan.md`、`docs/features/git-source-control.md`、`docs/features/git-source-control-development-plan.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/agent-role-configuration.md`、`docs/features/ai-employees.md`、`docs/features/agent-profiles.md`、`docs/features/ai-web-affairs-agent.md`、`docs/features/global-web-accounts-development-plan.md`、`docs/features/ai-web-affairs-agent-development-plan.md`、`docs/features/browser-automation.md`、`docs/testing/browser-http-basic-auth.md`、`docs/testing/browser-tab-bar-native-view-occlusion.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/markdown-auto-illustration.md`、`docs/features/promotional-video-workbench.md`、`docs/features/scheduled-tasks.md`、`docs/features/scheduled-tasks-development-plan.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`、`docs/features/runtime-components-and-capability-plugins.md`、`docs/features/runtime-components-and-capability-plugins-development-plan.md`。
 - 行业能力：数据源、硬件工作空间、FPC 改版、CAD 转换、工作空间内运营助手。
 
 架构、开发和功能规格描述当前事实；`docs/decisions/` 和带日期的 `docs/ops/`

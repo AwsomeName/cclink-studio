@@ -154,7 +154,7 @@ describe('registerWebResourceIpc', () => {
       success: false,
       error: {
         code: 'INVALID_BROWSER_STATE',
-        message: expect.stringContaining('页面和登录状态已保留'),
+        message: expect.stringMatching(/账号未保存.*页面和登录状态已保留/),
       },
     })
     expect(service.beginDraft).not.toHaveBeenCalled()

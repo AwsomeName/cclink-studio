@@ -63,6 +63,9 @@ CCLink Studio 是 CCLink 唯一的 GPL-3.0-only 桌面 App。它不是“开源�
 - Studio 是本地优先的 Electron 桌面工作台，必须可以单仓库、免 CCLink 账号启动并完整使用本地能力。
 - CCLink 账号、设备/消息网络和 RemoteProvider 是 Studio 内置但可选、可降级的远程功能域；不得成为默认启动前置条件。
 - 登录只在用户进入远程入口时触发，禁止全局 LoginPage 守卫。
+- 恢复历史登录 Session 本身不得启动 CCLink realtime；当前为远程工作空间、项目条仍有打开的
+  远程工作空间，或用户明确进入远程入口时，才构成连接理由。当前激活本地工作空间与后台仍有
+  打开远程工作空间可以同时成立，诊断不得把两者混为一谈。
 - 客户端 entitlement 只能显示提示，远程服务授权与收费必须由服务端强制；开发模式和网络错误不得形成正式授权结论。
 - renderer 不得直接依赖官方实现、Node.js 或主进程内部模块。
 - 产品、工程和持久化领域统一使用“工作空间 / workspace”，不把“项目 / project”
@@ -129,6 +132,10 @@ CCLink Studio 是 CCLink 唯一的 GPL-3.0-only 桌面 App。它不是“开源�
   DOM 改写、CDP 或高权限 preload。ADR 0013 允许无通信通道的 isolated world 按用户点击位置
   命中纯文本 HTTP(S) URL，并继续经过现有主进程 URL 与生命周期校验；ADR 0015 仅允许同等隔离的
   监听器为被网站隐藏的横向滚动范围提供手势兜底，不读取或回传网页内容。
+- Browser `WebContentsView` 不属于 renderer DOM，必须由 `BrowserManager` 在主进程独占 bounds
+  所有权。renderer 上报必须携带工作台顶部保护线，主进程完成 zoom/DIP 换算后再次裁剪；原生
+  View 的显示和点击区域不得进入 Tab 栏或浏览器工具栏。回归与事故证据见
+  `docs/testing/browser-tab-bar-native-view-occlusion.md`。
 - 任何入口都不能绕过权限、危险操作确认或不可逆外部副作用的最终人工确认。
 - 上下文操作 owner 必须登记在 `docs/ops/context-action-inventory.md` 并通过 `pnpm verify:context-actions`；重复 command/contribution、孤儿 owner、未覆盖 target、第二个菜单 Store 或未登记原生菜单属于架构门禁失败。
 - 上下文操作诊断只记录失败分类、稳定 ID、target kind 和脱敏消息，不记录凭证、target payload 或网页正文。

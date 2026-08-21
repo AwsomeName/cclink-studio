@@ -8,7 +8,7 @@ import {
   useGitBackupStore,
 } from '../../stores'
 import { IconClipboard, IconLink, IconProjects } from '../common/Icons'
-import { useToastStore } from '../common/Toast'
+import { Toast, useToastStore } from '../common/Toast'
 import {
   workspaceRefKey,
   workspaceRefLabel,
@@ -94,6 +94,7 @@ export function StatusBar(): React.ReactElement {
   return (
     <>
       <div className="status-bar">
+        <Toast />
         <GitStatusBarItem workspacePath={workspacePath} contextProps={statusContextProps('git')} />
 
         {switchingPath && (
