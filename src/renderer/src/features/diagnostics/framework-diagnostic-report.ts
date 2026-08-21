@@ -204,6 +204,15 @@ function formatBrowserRuntimeDiagnostics(summary: BrowserRuntimeDiagnosticSummar
     lines.push('- 最近页面绑定：无')
   }
 
+  if (summary.httpAuth) {
+    const auth = summary.httpAuth
+    lines.push(
+      `- HTTP 认证：${auth.outcome} · ${formatBrowserTimestamp(auth.timestamp)} · ${auth.origin} · realm=${auth.realm} · transport=${auth.transport} · attempt=${auth.attempt}${auth.reason ? ` · reason=${auth.reason}` : ''}`,
+    )
+  } else {
+    lines.push('- HTTP 认证：无')
+  }
+
   if (summary.layout) {
     lines.push(
       `- 浏览器布局：renderer=${JSON.stringify(summary.layout.rendererBounds)} native=${JSON.stringify(summary.layout.nativeBounds)} protectedTop=${summary.layout.protectedTop} nativeProtectedTop=${summary.layout.nativeProtectedTop} overlapsProtectedTop=${summary.layout.overlapsProtectedTop}`,

@@ -60,6 +60,7 @@
     "smoke:restore": "node scripts/restore-smoke.mjs",
     "smoke:scheduled-tasks": "node scripts/scheduled-tasks-smoke.mjs",
     "smoke:auth-window": "node scripts/auth-window-smoke.cjs",
+    "smoke:browser-http-auth": "node scripts/browser-http-auth-smoke.cjs",
     "smoke:detachable-tabs-p0a": "node scripts/detachable-tabs-p0.cjs --controller-phase=p0a",
     "smoke:detachable-tabs-p0b": "node scripts/detachable-tabs-p0.cjs --controller-phase=p0b",
     "smoke:detachable-tabs-p0": "node scripts/detachable-tabs-p0.cjs --controller-phase=all",

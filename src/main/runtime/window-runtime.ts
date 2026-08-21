@@ -220,6 +220,14 @@ function bootstrapBrowserWindowCapability(runtime: CclinkStudioRuntimeState): vo
   runtime.browserManager.attachBrowserAuthRequestHandler((request) =>
     runtime.browserAuthProcessService?.open(request),
   )
+  runtime.browserManager.attachBrowserHttpAuthRequestHandler((request, callback) => {
+    const service = runtime.browserAuthProcessService
+    if (!service) {
+      callback()
+      return
+    }
+    service.openHttpBasic(request, callback)
+  })
   runtime.browserTaskRuntime = new BrowserTaskRuntime(
     mainWindow,
     (tabId, channel, payload) =>
@@ -240,6 +248,9 @@ function bootstrapBrowserWindowCapability(runtime: CclinkStudioRuntimeState): vo
     .catch((error) => console.error('[CCLink Studio] Browser 下载状态加载失败:', error))
   runtime.browserManager.onViewDestroyed((tabId) =>
     runtime.browserTaskRuntime?.cancelTasksForTab(tabId, 'tab_closed'),
+  )
+  runtime.browserManager.onViewDestroyed((tabId) =>
+    runtime.browserAuthProcessService?.cancelHttpBasicForTab(tabId),
   )
   registerBrowserIpc(
     runtime.browserManager,

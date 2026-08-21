@@ -13,20 +13,38 @@ import { parseBrowserAuthChildOptions } from './browser/browser-auth-contract'
 import { configureBrowserAuthChildApp, runBrowserAuthChild } from './browser/browser-auth-child'
 import { parseCleanBrowserChildOptions } from './browser/clean-browser-contract'
 import { configureCleanBrowserChildApp, runCleanBrowserChild } from './browser/clean-browser-child'
+import { parseBrowserHttpAuthChildOptions } from '../shared/ipc/browser-http-auth'
+import {
+  configureBrowserHttpAuthChildApp,
+  runBrowserHttpAuthChild,
+} from './browser/browser-http-auth-child'
 import { parseTerminalBrowserOpenUrl } from './terminal/terminal-browser-launcher'
 import { installMainDiagnosticCapture } from './diagnostics/main-diagnostic-log'
 
 installMainDiagnosticCapture()
 
 const browserAuthChildOptions = parseBrowserAuthChildOptions(process.argv)
+const browserHttpAuthChildOptions = parseBrowserHttpAuthChildOptions(process.argv)
 const cleanBrowserChildOptions = parseCleanBrowserChildOptions(process.argv)
 
 if (browserAuthChildOptions) {
   startBrowserAuthChild()
+} else if (browserHttpAuthChildOptions) {
+  startBrowserHttpAuthChild()
 } else if (cleanBrowserChildOptions) {
   startCleanBrowserChild()
 } else {
   startMainApplication()
+}
+
+function startBrowserHttpAuthChild(): void {
+  configureBrowserHttpAuthChildApp(app, browserHttpAuthChildOptions!)
+  registerProcessErrorHandlers()
+
+  void app.whenReady().then(async () => {
+    await runBrowserHttpAuthChild(browserHttpAuthChildOptions!)
+  })
+  app.on('window-all-closed', () => app.quit())
 }
 
 function startBrowserAuthChild(): void {

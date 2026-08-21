@@ -49,6 +49,13 @@ import {
 } from './browser-view-bounds'
 import { resetVisualPageScale } from './browser-visual-page-scale'
 import { keyChordId, normalizeKeyChord, type KeyChord } from '../../shared/keybindings'
+import {
+  createBrowserHttpAuthRequest,
+  resolveBrowserHttpAuthOrigin,
+  type BrowserHttpAuthDiagnosticSummary,
+  type BrowserHttpAuthOutcome,
+  type BrowserHttpAuthRequest,
+} from '../../shared/ipc/browser-http-auth'
 import type {
   BrowserFindRequest,
   BrowserFindRequestResult,
@@ -208,6 +215,8 @@ interface ViewEntry {
   zoomRequestGeneration: number
   /** 当前主框架代次内，在 100% 下连续稳定采样后得到的适宽测量。 */
   fitWidthMeasurement: FitWidthMeasurement | null
+  /** 当前顶层导航允许响应的 HTTP auth origin；页面稳定后立即清空。 */
+  httpAuthNavigationOrigin: string | null
   fitDocumentGeneration: number
   fitRetryCount: number
   fitRetryTimer: ReturnType<typeof setTimeout> | null
@@ -313,6 +322,13 @@ export class BrowserManager {
   >()
   private readonly sessionDiagnostics = new BrowserSessionDiagnostics()
   private browserAuthRequestHandler: ((request: BrowserAuthRequest) => void) | null = null
+  private browserHttpAuthRequestHandler:
+    | ((
+        request: BrowserHttpAuthRequest,
+        callback: (username?: string, password?: string) => void,
+      ) => void)
+    | null = null
+  private readonly lastHttpAuthByTab = new Map<string, BrowserHttpAuthDiagnosticSummary>()
   private nextRuntimeGeneration = 1
   private findShortcutConfig: { configVersion: number; bindings: KeyChord[] } = {
     configVersion: 0,
@@ -586,6 +602,15 @@ export class BrowserManager {
     this.browserAuthRequestHandler = handler
   }
 
+  attachBrowserHttpAuthRequestHandler(
+    handler: (
+      request: BrowserHttpAuthRequest,
+      callback: (username?: string, password?: string) => void,
+    ) => void,
+  ): void {
+    this.browserHttpAuthRequestHandler = handler
+  }
+
   /**
    * 把某 view 的 webContents claim 为 Playwright Page，绑定到 tabId。
    * 期望在页面加载完成后调用（URL 匹配更稳）。失败抛错由调用方处理。
@@ -731,6 +756,7 @@ export class BrowserManager {
       effectiveZoom: 1,
       zoomRequestGeneration: 0,
       fitWidthMeasurement: null,
+      httpAuthNavigationOrigin: null,
       fitDocumentGeneration: 0,
       fitRetryCount: 0,
       fitRetryTimer: null,
@@ -838,6 +864,49 @@ export class BrowserManager {
         finalUpdate: result.finalUpdate,
       })
     })
+    wc.on('login', (event, details, authInfo, callback) => {
+      const request = createBrowserHttpAuthRequest({
+        requestId: randomUUID(),
+        tabId,
+        runtimeGeneration: entry.runtimeGeneration,
+        url: details.url,
+        scheme: authInfo.scheme,
+        isProxy: authInfo.isProxy,
+        realm: authInfo.realm,
+      })
+      if (
+        !request ||
+        !this.browserHttpAuthRequestHandler ||
+        this.views.get(tabId) !== entry ||
+        entry.httpAuthNavigationOrigin !== request.origin
+      ) {
+        return
+      }
+
+      event.preventDefault()
+      let settled = false
+      const complete = (username?: string, password?: string): void => {
+        if (settled) return
+        settled = true
+        const current = this.views.get(tabId)
+        if (
+          current !== entry ||
+          current.runtimeGeneration !== request.runtimeGeneration ||
+          current.httpAuthNavigationOrigin !== request.origin
+        ) {
+          callback()
+          return
+        }
+        callback(username, password)
+      }
+      try {
+        this.browserHttpAuthRequestHandler(request, complete)
+      } catch (error) {
+        this.recordHttpAuthOutcome(request, 'cancelled', 1, 'handler-failed')
+        complete()
+        console.error('[BrowserHttpAuth] 认证请求处理失败:', error)
+      }
+    })
     wc.on('will-navigate', (event, url) => {
       if (this.routeBrowserAuth(tabId, entry, url)) {
         event.preventDefault()
@@ -862,11 +931,17 @@ export class BrowserManager {
       if (new URL(url).protocol === 'file:') event.preventDefault()
     })
     wc.setWindowOpenHandler((details) => this.handleWindowOpen(tabId, entry, details))
-    wc.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+    wc.on('did-start-navigation', (_event, url, isInPlace, isMainFrame) => {
       if (!isMainFrame || isInPlace) return
+      entry.httpAuthNavigationOrigin = resolveBrowserHttpAuthOrigin(url)
       this.beginFitNavigation(tabId, entry)
     })
-    wc.on('did-navigate', (_event, url) => this.onNavigate(tabId, url))
+    wc.on('did-navigate', (_event, url) => {
+      const completedOrigin = resolveBrowserHttpAuthOrigin(url)
+      entry.httpAuthNavigationOrigin = null
+      this.markHttpAuthAuthenticated(tabId, entry, completedOrigin)
+      this.onNavigate(tabId, url)
+    })
     wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
       this.onNavigate(tabId, url)
       if (!isMainFrame) return
@@ -883,6 +958,7 @@ export class BrowserManager {
     wc.once('destroyed', () => this.handleWebContentsDestroyed(tabId, entry))
     // 每次页面加载完成后，按当前模式重新计算并应用缩放
     wc.on('did-finish-load', () => {
+      entry.httpAuthNavigationOrigin = null
       this.clearFitTimers(entry)
       entry.fitWidthMeasurement = null
       entry.fitRetryCount = 0
@@ -1006,6 +1082,7 @@ export class BrowserManager {
       effectiveZoom: sourceEntry.effectiveZoom,
       zoomRequestGeneration: 0,
       fitWidthMeasurement: null,
+      httpAuthNavigationOrigin: null,
       fitDocumentGeneration: 0,
       fitRetryCount: 0,
       fitRetryTimer: null,
@@ -1248,6 +1325,7 @@ export class BrowserManager {
       }
     }
     this.views.delete(tabId)
+    this.lastHttpAuthByTab.delete(tabId)
     if (host?.activeViewId === tabId) host.activeViewId = null
 
     this.playwrightBridge?.unregisterPage(tabId)
@@ -2264,6 +2342,49 @@ export class BrowserManager {
     await entry.view.webContents.loadURL(returnUrl)
   }
 
+  recordHttpAuthOutcome(
+    request: BrowserHttpAuthRequest,
+    outcome: BrowserHttpAuthOutcome,
+    attempt: number,
+    reason?: string,
+  ): void {
+    const entry = this.views.get(request.tabId)
+    if (!entry || entry.runtimeGeneration !== request.runtimeGeneration) return
+    this.lastHttpAuthByTab.set(request.tabId, {
+      timestamp: Date.now(),
+      tabId: request.tabId,
+      runtimeGeneration: request.runtimeGeneration,
+      origin: request.origin,
+      realm: request.realm,
+      transport: request.transport,
+      attempt: Math.max(1, Math.min(3, Math.trunc(attempt))),
+      outcome,
+      ...(reason ? { reason: sanitizeHttpAuthDiagnosticText(reason) } : {}),
+    })
+  }
+
+  private markHttpAuthAuthenticated(
+    tabId: string,
+    entry: ViewEntry,
+    completedOrigin: string | null,
+  ): void {
+    const diagnostic = this.lastHttpAuthByTab.get(tabId)
+    if (
+      !diagnostic ||
+      diagnostic.outcome !== 'submitted' ||
+      diagnostic.runtimeGeneration !== entry.runtimeGeneration ||
+      diagnostic.origin !== completedOrigin
+    ) {
+      return
+    }
+    this.lastHttpAuthByTab.set(tabId, {
+      ...diagnostic,
+      timestamp: Date.now(),
+      outcome: 'authenticated',
+      reason: undefined,
+    })
+  }
+
   /** 查询指定持久化 Profile 的 Cookie 元数据；不需要先创建可见 BrowserView。 */
   async getSessionDiagnostics(
     url: string,
@@ -2335,6 +2456,7 @@ export class BrowserManager {
       errorMessage?: string
     } | null
     fitWidth: BrowserFitWidthDiagnosticSummary | null
+    httpAuth: BrowserHttpAuthDiagnosticSummary | null
     layout: {
       rendererBounds: BrowserBounds
       nativeBounds: BrowserBounds
@@ -2360,6 +2482,7 @@ export class BrowserManager {
         engineVersions: this.getEngineVersions(),
         lastClaim: this.lastClaimByTab.get(tabId) ?? null,
         fitWidth: null,
+        httpAuth: this.lastHttpAuthByTab.get(tabId) ?? null,
         layout: null,
         session: null,
       }
@@ -2390,6 +2513,7 @@ export class BrowserManager {
       engineVersions: this.getEngineVersions(),
       lastClaim: this.lastClaimByTab.get(tabId) ?? null,
       fitWidth: entry.lastFitDiagnostic,
+      httpAuth: this.lastHttpAuthByTab.get(tabId) ?? null,
       layout: host
         ? {
             rendererBounds: host.currentRendererBounds,
@@ -2418,6 +2542,8 @@ export class BrowserManager {
     }
     this.activeViewId = null
     this.browserAuthRequestHandler = null
+    this.browserHttpAuthRequestHandler = null
+    this.lastHttpAuthByTab.clear()
     this.mainWorkspaceChangedCallbacks.clear()
     this.hosts.clear()
   }
@@ -2443,4 +2569,12 @@ function sameNavigationDestination(currentUrl: string, requestedUrl: string): bo
   } catch {
     return currentUrl === requestedUrl
   }
+}
+
+function sanitizeHttpAuthDiagnosticText(value: string): string {
+  return value
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 128)
 }

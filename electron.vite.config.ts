@@ -86,6 +86,7 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/preload/index.ts'),
           auxiliary: resolve(__dirname, 'src/preload/auxiliary.ts'),
+          browserHttpAuth: resolve(__dirname, 'src/preload/browser-http-auth.ts'),
         },
       },
     },

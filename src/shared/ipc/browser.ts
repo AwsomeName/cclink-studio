@@ -1,5 +1,6 @@
 import { defineIpcCall } from './contract'
 import type { KeyChord } from '../keybindings'
+import type { BrowserHttpAuthDiagnosticSummary } from './browser-http-auth'
 
 export type BrowserViewModeType = 'desktop' | 'mobile'
 export type BrowserZoomModeType = 'fit' | 'manual'
@@ -335,6 +336,7 @@ export interface BrowserRuntimeDiagnosticSummary {
     errorMessage?: string
   } | null
   fitWidth: BrowserFitWidthDiagnosticSummary | null
+  httpAuth?: BrowserHttpAuthDiagnosticSummary | null
   session: BrowserSessionDiagnosticSummary | null
   page: BrowserPageDiagnosticSummary | null
 }

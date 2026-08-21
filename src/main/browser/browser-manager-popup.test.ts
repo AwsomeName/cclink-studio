@@ -836,4 +836,99 @@ describe('BrowserManager popup adoption', () => {
     )
     expect(manager.getViewOwnerWindowId(popupEvent?.[1].tabId)).toBe('main')
   })
+
+  it('routes a top-level Basic Auth challenge and marks a successful navigation authenticated', async () => {
+    const { manager, source } = await createSource()
+    let complete: ((username?: string, password?: string) => void) | undefined
+    let request:
+      | Parameters<Parameters<BrowserManager['attachBrowserHttpAuthRequestHandler']>[0]>[0]
+      | undefined
+    manager.attachBrowserHttpAuthRequestHandler((nextRequest, callback) => {
+      request = nextRequest
+      complete = callback
+      manager.recordHttpAuthOutcome(nextRequest, 'prompted', 1)
+    })
+    const preventDefault = vi.fn()
+    const electronCallback = vi.fn()
+
+    source.emit('did-start-navigation', {}, 'http://frp.example:7500/dashboard', false, true)
+    source.emit(
+      'login',
+      { preventDefault },
+      { url: 'http://frp.example:7500/dashboard' },
+      { scheme: 'basic', isProxy: false, realm: 'Restricted' },
+      electronCallback,
+    )
+
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(request).toMatchObject({
+      tabId: 'source-tab',
+      origin: 'http://frp.example:7500',
+      realm: 'Restricted',
+      transport: 'insecure-http',
+    })
+    manager.recordHttpAuthOutcome(request!, 'submitted', 1)
+    complete?.('admin', 'secret')
+    expect(electronCallback).toHaveBeenCalledWith('admin', 'secret')
+
+    source.emit('did-navigate', {}, 'http://frp.example:7500/dashboard')
+    await expect(manager.getRuntimeDiagnostics('source-tab')).resolves.toMatchObject({
+      httpAuth: {
+        origin: 'http://frp.example:7500',
+        realm: 'Restricted',
+        outcome: 'authenticated',
+      },
+    })
+    manager.destroy()
+  })
+
+  it('does not intercept proxy, unsupported, or cross-origin authentication challenges', async () => {
+    const { manager, source } = await createSource()
+    const handler = vi.fn()
+    manager.attachBrowserHttpAuthRequestHandler(handler)
+    source.emit('did-start-navigation', {}, 'https://frp.example/', false, true)
+
+    for (const [url, scheme, isProxy] of [
+      ['https://frp.example/', 'basic', true],
+      ['https://frp.example/', 'digest', false],
+      ['https://attacker.example/', 'basic', false],
+    ] as const) {
+      const preventDefault = vi.fn()
+      source.emit(
+        'login',
+        { preventDefault },
+        { url },
+        { scheme, isProxy, realm: 'Restricted' },
+        vi.fn(),
+      )
+      expect(preventDefault).not.toHaveBeenCalled()
+    }
+
+    expect(handler).not.toHaveBeenCalled()
+    manager.destroy()
+  })
+
+  it('cancels a Basic Auth callback when the target Browser runtime is gone', async () => {
+    const { manager, source } = await createSource()
+    let complete: ((username?: string, password?: string) => void) | undefined
+    manager.attachBrowserHttpAuthRequestHandler((_request, callback) => {
+      complete = callback
+    })
+    const electronCallback = vi.fn()
+    source.emit('did-start-navigation', {}, 'https://frp.example/', false, true)
+    source.emit(
+      'login',
+      { preventDefault: vi.fn() },
+      { url: 'https://frp.example/' },
+      { scheme: 'basic', isProxy: false, realm: 'Restricted' },
+      electronCallback,
+    )
+
+    manager.destroyView('source-tab')
+    complete?.('admin', 'must-not-be-forwarded')
+
+    expect(electronCallback).toHaveBeenCalledOnce()
+    expect(electronCallback).toHaveBeenCalledWith()
+    manager.destroy()
+  })
 })
