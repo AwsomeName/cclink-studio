@@ -2195,10 +2195,21 @@ export class BrowserManager {
 
   /** 捕获当前网页画面，供原生 View 暂时隐藏时作为无闪烁占位。 */
   async capturePage(tabId: string): Promise<string | null> {
-    const entry = this.views.get(tabId)
-    if (!entry || entry.view.webContents.isDestroyed()) return null
-    const image = await entry.view.webContents.capturePage()
-    return image.isEmpty() ? null : image.toDataURL()
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const entry = this.views.get(tabId)
+      if (!entry || entry.view.webContents.isDestroyed()) return null
+      try {
+        const image = await entry.view.webContents.capturePage()
+        return image.isEmpty() ? null : image.toDataURL()
+      } catch (error) {
+        if (attempt === 3) {
+          console.warn(`[BrowserManager] 网页占位截图失败 tabId=${tabId}:`, error)
+          return null
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50 * attempt))
+      }
+    }
+    return null
   }
 
   /** 获取当前 URL（优先实时读取，回退到记录值） */

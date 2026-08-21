@@ -189,14 +189,18 @@ Profile/Session 引用、页面实际账号身份、错误文案和截图。不�
 - 修正：主进程现在只允许独占持久 Profile 原地转为草稿；默认、共享、失效或跨项目 Profile
   一律在修改 Tab 绑定前拒绝。拒绝结果明确说明页面和登录状态已保留，并引导从“网站与账号”
   创建独立登录环境；不得切换 Profile、重建 View 或刷新页面。
-- 状态：代码与文档已修正，定向自动测试通过后进入真人复测；包含修复的新版本实际点击仍不
-  刷新、不掉登录之前，本问题不得标记 `Complete`。
+- 状态：代码、文档和 Electron 回归场景已修正；定向测试与类型检查通过。专项 UI smoke
+  已通过新增的共享 Profile 登录现场断言。包含修复的新版本实际点击仍不刷新、不掉登录
+  之前，本问题不得标记 `Complete`。
 
 ## 9. 当前自动化证据
 
-- 2026-08-21 登录现场保护修复：`web-resource-ipc` 与 Browser View Profile 绑定定向测试
-  14/14 通过；覆盖默认/共享 Profile 在调用服务前原地拒绝、独占 Profile 原样接管，以及
-  Profile 绑定不匹配时必须重建 View 的既有门禁。真人第三方账号复测前不替代产品验收。
+- 2026-08-21 登录现场保护修复：Toolbar、`web-resource-ipc` 与 Browser View Profile 绑定
+  定向测试 26/26 通过，Web/Node TypeScript 和相关 Lint 通过；覆盖默认/共享 Profile 在调用
+  服务前原地拒绝、独占 Profile 原样接管，以及 Profile 绑定不匹配时必须重建 View 的既有
+  门禁。Electron smoke 已加入“共享 Profile + 已有登录 Cookie + 点击保存”的原场景，要求
+  URL/Profile/Cookie 均不变化且不得创建草稿；专项 UI smoke 通过。真人第三方账号复测前
+  不替代产品验收。
 - 2026-08-21 Agent 账号执行 X0–X5：68 项定向测试、TypeScript、Lint 和 `pnpm verify` 通过；
   覆盖可信账号启动、项目/Profile 精确绑定、同账号互斥、已登记 Tab 旁路拒绝、秘密字段/
   整页 HTML/敏感 URL 负向、工作区与符号链接材料边界、最终动作暂停、人工交还重观察、事务

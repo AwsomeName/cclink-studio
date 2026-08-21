@@ -1274,8 +1274,13 @@ async function main() {
   })
 
   await runCheck('rebound find works while the Browser webpage owns focus', async () => {
-    const browserTabId = await page.evaluate(() => window.cclinkStudio.browser.getActiveViewId())
-    assert(browserTabId, 'active Browser runtime is missing')
+    const browserTabId = await page.evaluate(async () => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      const state = useTabStore.getState()
+      const tab = state.tabs.find((item) => item.id === state.activeTabId)
+      return tab?.type === 'browser' ? tab.id : null
+    })
+    assert(browserTabId, 'active Browser tab is missing')
     const targetUrl = `file://${workspaceDir}/browser-find.html?active=${encodeURIComponent(browserTabId)}`
     await page.evaluate(
       async ({ tabId, url }) => window.cclinkStudio.browser.navigate(tabId, url),
@@ -1292,7 +1297,10 @@ async function main() {
       await page.waitForTimeout(100)
     }
     assert(browserPage, 'Browser WebContents page was not visible over CDP')
-    await page.evaluate(async (tabId) => window.cclinkStudio.browser.setActive(tabId), browserTabId)
+    await page.evaluate(
+      async (tabId) => window.cclinkStudio.browser.setActive(tabId),
+      browserTabId,
+    )
     await browserPage.bringToFront()
     await browserPage.locator('body').click()
     await page.evaluate(

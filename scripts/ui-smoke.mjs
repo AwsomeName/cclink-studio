@@ -1160,6 +1160,111 @@ async function main() {
       'web resources panel missing',
     )
 
+    const sharedBrowser = await page.evaluate(async (fixtureOrigin) => {
+      const [{ useTabStore }, { useWorkspaceStore }] = await Promise.all([
+        import('/src/stores/tab-store.ts'),
+        import('/src/stores/workspace-store.ts'),
+      ])
+      const tabState = useTabStore.getState()
+      const workspaceRef = useWorkspaceStore.getState().activeWorkspaceRef
+      const profileId = `smoke-shared-login-${Date.now()}`
+      tabState.openTab({
+        type: 'browser',
+        title: '已登录的普通页面',
+        icon: '🌐',
+        initialUrl: `${fixtureOrigin}/login-popup-source`,
+        browserProfile: profileId,
+        workspaceRef,
+        forceNew: true,
+      })
+      const sourceTabId = useTabStore.getState().activeTabId
+      tabState.openTab({
+        type: 'browser',
+        title: '共享登录环境页面',
+        icon: '🌐',
+        initialUrl: `${fixtureOrigin}/login-popup-target`,
+        browserProfile: profileId,
+        workspaceRef,
+        forceNew: true,
+      })
+      const siblingTabId = useTabStore.getState().activeTabId
+      return { sourceTabId, siblingTabId, profileId }
+    }, webFixtureOrigin)
+    assert(sharedBrowser.sourceTabId, 'shared Profile source tab was not created')
+    assert(sharedBrowser.siblingTabId, 'shared Profile sibling tab was not created')
+    await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+    await page.waitForFunction(
+      async ({ tabId, expectedUrl }) =>
+        (await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)).visibleUrl === expectedUrl,
+      {
+        tabId: sharedBrowser.siblingTabId,
+        expectedUrl: `${webFixtureOrigin}/login-popup-target`,
+      },
+      { timeout: 10_000 },
+    )
+    await page.evaluate(async (tabId) => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      useTabStore.getState().activateTab(tabId)
+    }, sharedBrowser.sourceTabId)
+    await page.waitForFunction(
+      async ({ tabId, expectedUrl }) =>
+        (await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)).visibleUrl === expectedUrl,
+      {
+        tabId: sharedBrowser.sourceTabId,
+        expectedUrl: `${webFixtureOrigin}/login-popup-source`,
+      },
+      { timeout: 10_000 },
+    )
+    const sharedRuntimeBeforeSave = await page.evaluate(
+      (tabId) => window.cclinkStudio.browser.getRuntimeDiagnostics(tabId),
+      sharedBrowser.sourceTabId,
+    )
+    assert(
+      sharedRuntimeBeforeSave.session?.likelyAuthCookies.some(
+        (cookie) => cookie.name === 'cclink_auth_marker',
+      ),
+      'shared Profile login marker was not present before saving',
+    )
+    await page
+      .getByRole('button', { name: '登录完成，保存账号和登录状态' })
+      .click()
+    await page
+      .getByText(/页面和登录状态已保留/)
+      .waitFor({ state: 'visible', timeout: 5_000 })
+    const sharedRuntimeAfterSave = await page.evaluate(
+      (tabId) => window.cclinkStudio.browser.getRuntimeDiagnostics(tabId),
+      sharedBrowser.sourceTabId,
+    )
+    assert(
+      sharedRuntimeAfterSave.profileId === sharedRuntimeBeforeSave.profileId,
+      'rejected shared Profile save changed Profile',
+    )
+    assert(
+      sharedRuntimeAfterSave.visibleUrl === sharedRuntimeBeforeSave.visibleUrl,
+      'rejected shared Profile save reloaded or replaced the logged-in page',
+    )
+    assert(
+      sharedRuntimeAfterSave.session?.likelyAuthCookies.some(
+        (cookie) => cookie.name === 'cclink_auth_marker',
+      ),
+      'rejected shared Profile save removed the login cookie',
+    )
+    const sharedProjectionAfterSave = await page.evaluate(async (tabId) => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
+      return tab ? { hasDraft: Boolean(tab.webResourceDraftRef) } : null
+    }, sharedBrowser.sourceTabId)
+    assert(
+      sharedProjectionAfterSave && !sharedProjectionAfterSave.hasDraft,
+      'rejected shared Profile save attached an account draft',
+    )
+    await page.evaluate(({ sourceTabId, siblingTabId }) => {
+      return import('/src/stores/tab-store.ts').then(({ useTabStore }) => {
+        if (sourceTabId) useTabStore.getState().closeTab(sourceTabId)
+        if (siblingTabId) useTabStore.getState().closeTab(siblingTabId)
+      })
+    }, sharedBrowser)
+
     const draftBrowser = await page.evaluate(async (fixtureOrigin) => {
       const [{ openDefaultBrowserTab }, { useTabStore }, { useWorkspaceStore }] = await Promise.all(
         [
@@ -1769,13 +1874,25 @@ async function main() {
       })
       await webFormNode.waitFor({ timeout: 10_000 })
       await webFormNode.click()
-      await page
-        .getByText('AI 调用全局账号的权限方案尚未确认。', { exact: false })
-        .waitFor({ timeout: 10_000 })
+      const startAiButton = page.getByRole('button', { name: '交给 AI', exact: true })
+      await startAiButton.waitFor({ timeout: 10_000 })
+      await startAiButton.click()
+      const preflight = page.locator('.web-affair-confirm-card', { hasText: '执行前账号核验' })
+      await preflight.waitFor({ timeout: 10_000 })
+      const confirmAiButton = preflight.getByRole('button', {
+        name: '确认并交给 AI',
+        exact: true,
+      })
       assert(
-        (await page.getByRole('button', { name: '交给 AI' }).count()) === 0,
-        'AI account invocation was exposed before the product boundary was decided',
+        await confirmAiButton.isDisabled(),
+        'AI account invocation skipped the explicit login and principal confirmation',
       )
+      await preflight.getByRole('checkbox').check()
+      assert(
+        await confirmAiButton.isEnabled(),
+        'confirmed account preflight did not enable the Agent handoff',
+      )
+      await preflight.getByRole('button', { name: '取消', exact: true }).click()
 
       const tabCountBeforeResourceLaunch = await page.locator('.tab').count()
       await page
@@ -1853,7 +1970,7 @@ async function main() {
       await proposal.waitFor({ timeout: 10_000 })
       await proposal.getByRole('button', { name: '拒绝' }).click()
       await proposal.waitFor({ state: 'detached', timeout: 10_000 })
-      return 'AI account access fail-closed, manual account handoff, A3 wait, and A4 flow controls verified'
+      return 'AI account preflight, manual account handoff, A3 wait, and A4 flow controls verified'
     },
     { dependsOn: [globalWebResourcesCheck, webAffairPersistenceCheck] },
   )
