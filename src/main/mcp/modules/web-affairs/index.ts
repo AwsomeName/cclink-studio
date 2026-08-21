@@ -95,7 +95,15 @@ export class WebAffairToolModule implements ToolModule {
       if (!snapshot.success) return snapshot
       const affair = snapshot.data.affairs.find((item) => item.id === params['affairId'])
       return affair
-        ? { success: true, data: affair }
+        ? {
+            success: true,
+            data: affair.attempts
+              ? {
+                  ...affair,
+                  attempts: affair.attempts.map(({ profileId: _profileId, ...attempt }) => attempt),
+                }
+              : affair,
+          }
         : { success: false, error: { code: 'NOT_FOUND', message: '事务不存在' } }
     }
     if (toolName === 'web_affair_propose_flow_diff') {

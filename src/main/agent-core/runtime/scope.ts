@@ -15,6 +15,7 @@ export type { AgentScope } from '../../../shared/agent-protocol'
 /** 默认作用域：全部 */
 export const DEFAULT_SCOPE: AgentScope = { kind: 'all' }
 const WEB_ACCOUNT_CATALOG_TOOL = 'web_accounts_list'
+const WEB_ACCOUNT_OPEN_TOOL = 'web_account_open'
 const WEB_ACCOUNT_CATALOG_MCP_TOOL = `mcp__cclink_studio__${WEB_ACCOUNT_CATALOG_TOOL}`
 
 /**
@@ -29,7 +30,11 @@ export function scopeToAllowedTools(scope: AgentScope): string[] {
     case 'all':
       return ['mcp__cclink_studio__*']
     case 'browser':
-      return ['mcp__cclink_studio__browser_*', WEB_ACCOUNT_CATALOG_MCP_TOOL]
+      return [
+        'mcp__cclink_studio__browser_*',
+        WEB_ACCOUNT_CATALOG_MCP_TOOL,
+        `mcp__cclink_studio__${WEB_ACCOUNT_OPEN_TOOL}`,
+      ]
     case 'android':
       // android_* 与 agent_device_* 并存（互补：语义 UI 感知 + 坐标操作）
       return [
@@ -54,6 +59,7 @@ export function scopeToAllowedTools(scope: AgentScope): string[] {
  */
 export function toolBelongsToScope(toolName: string, scope: AgentScope): boolean {
   if (toolName === WEB_ACCOUNT_CATALOG_TOOL) return true
+  if (toolName === WEB_ACCOUNT_OPEN_TOOL) return scope.kind === 'all' || scope.kind === 'browser'
   switch (scope.kind) {
     case 'all':
       return true

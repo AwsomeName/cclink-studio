@@ -169,9 +169,13 @@ describe('conversation workspace scoping', () => {
           '/workspace/b/b.md': { dirty: true },
           'virtual:draft': { dirty: true },
         },
+        markdownViewStates: {
+          '/workspace/a/a.md': { scrollTop: 100 },
+          '/workspace/b/b.md': { scrollTop: 200 },
+        },
       },
       workspaceRef,
-    ) as { files: Record<string, unknown> }
+    ) as { files: Record<string, unknown>; markdownViewStates: Record<string, unknown> }
 
     expect(Object.keys((scopedAgent.value as { conversations: object }).conversations)).toEqual([
       'keep',
@@ -184,5 +188,6 @@ describe('conversation workspace scoping', () => {
     ])
     expect(Object.keys(scopedBrowser.tabs)).toEqual(['browser-a'])
     expect(Object.keys(scopedDrafts.files)).toEqual(['/workspace/a/a.md', 'virtual:draft'])
+    expect(Object.keys(scopedDrafts.markdownViewStates)).toEqual(['/workspace/a/a.md'])
   })
 })

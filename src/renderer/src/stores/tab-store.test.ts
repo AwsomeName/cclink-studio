@@ -24,7 +24,7 @@ beforeEach(() => {
   useBrowserStore.setState({
     tabs: { browser: browserTab() },
   })
-  useEditorStore.setState({ files: {}, pendingUpdates: [] })
+  useEditorStore.setState({ files: {}, markdownViewStates: {}, pendingUpdates: [] })
 })
 
 describe('useTabStore', () => {

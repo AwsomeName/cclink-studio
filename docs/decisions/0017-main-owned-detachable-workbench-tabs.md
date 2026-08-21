@@ -8,7 +8,8 @@
 - 实施证据：`docs/ops/detachable-workbench-tabs-m1-acceptance.md`；2026-08-20 正式包复审已撤销
   “生产实现完成”的结论。主进程迁移事务可保留，可见布局和主进程拖拽裁决修复已通过受影响
   工程门禁；2026-08-21 真人复验又证明 HTML `dragend` 触发层失败，Pointer Capture 修复候选待
-  真人签收
+  真人签收；v0.1.54 诊断又证明未持久化网站账号草稿被误判为非 Browser，transient projection
+  修复候选已通过受影响工程门禁，仍待真人签收
 
 ## 问题
 
@@ -73,6 +74,13 @@ renderer pointer-up 两个结束信号先到者裁决。不得以 renderer `scre
 投影，不能反向成为第四个 owner。placement 中的 `workspaceKey` 只是从 TabModel descriptor 复制的
 校验字段；两者不一致时 transition fail-closed，以 TabModel 的 workspace membership 为事实源。
 
+网站账号流程中的 `webResourceDraftRef` Browser 按设计不进入持久化 TabModel，但它仍可能拥有合法
+的 BrowserManager runtime。移动这类临时 Tab 时，TabModel 缺少 descriptor 不能直接等同于“不是
+Browser”：可信 main renderer 可以提交有界的 transient display seed；主进程必须先以
+BrowserManager 校验实际 runtime、原生 owner 和 workspace，再用 seed 形成仅供本次迁移的投影。
+若 TabModel 已有 descriptor，则它仍然优先且非 Browser 类型不得被 seed 覆盖。该 seed 不写入
+WorkspaceState，不成为新的状态 owner。
+
 ### 2. 窗口角色和 renderer 权限
 
 - 窗口角色只有 `main` 与 `auxiliary`。M1 每个辅助窗口只承载一个 Browser Tab。
@@ -85,8 +93,9 @@ renderer pointer-up 两个结束信号先到者裁决。不得以 renderer `scre
 - 辅助窗口保持 `sandbox: true`、`contextIsolation: true`、`nodeIntegration: false`。preload 即使
   复用，handler 也必须按 exact sender、role、当前 `tabId` scope 和 generation 检查；未知命令
   fail-closed。
-- renderer 只能提交有界 command；不能提交 Profile、Session、WebContents ID、Cookie、token、
-  UserSig、页面正文或目标权限。
+- renderer 只能提交有界 command。临时 Browser 草稿迁移允许提交经过 schema 限长的 Profile 标识，
+  但主进程只在 BrowserManager 已确认同一 runtime/owner/workspace 时采用；renderer 不能提交
+  Session、WebContents ID、Cookie、token、UserSig、页面正文或目标权限。
 - 现有 `TrustedRendererGuard` 的默认权限仍是 main-only；迁移成 registry 后，既有 filesystem、Agent、
   Terminal、设置和全量 WorkspaceState IPC 不自动开放给 auxiliary。只有 contract 显式列出
   `auxiliary` role 且 scope 校验通过时才能调用。

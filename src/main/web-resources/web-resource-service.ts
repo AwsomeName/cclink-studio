@@ -287,6 +287,21 @@ export class WebResourceService {
     }
   }
 
+  /** 仅供主进程执行边界识别登记账号 Tab；不得把 Profile 反查能力暴露给模型。 */
+  resolveAccountIdByProfile(browserProfileId: string | null | undefined): string | null {
+    if (!browserProfileId) return null
+    return (
+      this.snapshot?.accounts.find((account) => account.browserProfileId === browserProfileId)
+        ?.id ?? null
+    )
+  }
+
+  /** 未保存登录草稿永远不能成为 Agent 执行目标。 */
+  isDraftProfile(browserProfileId: string | null | undefined): boolean {
+    if (!browserProfileId) return false
+    return this.drafts.some((draft) => draft.browserProfileId === browserProfileId)
+  }
+
   getSnapshot(): WebResourceOperationResult<WebResourceSnapshot> {
     if (!this.snapshot) {
       return {

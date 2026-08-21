@@ -53,6 +53,8 @@ function createHarness(
     attachFails?: boolean
     loseBothHostsOnAttach?: boolean
     cursorPoint?: { x: number; y: number }
+    tabDescriptorMissing?: boolean
+    browserProjectionMissing?: boolean
   } = {},
 ) {
   const mainWindow = fakeWindow()
@@ -120,25 +122,29 @@ function createHarness(
       workspaceKey: '/workspace/a',
       ownerKey: null,
       revision: 1,
-      tabs: [{ id: 'browser-1', type: 'browser', title: 'Example', icon: '🌐' }],
-      activeTabId: 'browser-1',
+      tabs: options.tabDescriptorMissing
+        ? []
+        : [{ id: 'browser-1', type: 'browser', title: 'Example', icon: '🌐' }],
+      activeTabId: options.tabDescriptorMissing ? null : 'browser-1',
     }),
     getBrowserProjection: vi.fn().mockResolvedValue({
       workspaceKey: '/workspace/a',
       ownerKey: null,
       revision: 1,
-      tabs: {
-        'browser-1': {
-          url: 'https://example.com',
-          urlInput: 'https://example.com',
-          viewMode: 'desktop',
-          zoomMode: 'fit',
-          zoomFactor: 1,
-          history: ['https://example.com'],
-          historyIndex: 0,
-          ready: false,
-        },
-      },
+      tabs: options.browserProjectionMissing
+        ? {}
+        : {
+            'browser-1': {
+              url: 'https://example.com',
+              urlInput: 'https://example.com',
+              viewMode: 'desktop',
+              zoomMode: 'fit',
+              zoomFactor: 1,
+              history: ['https://example.com'],
+              historyIndex: 0,
+              ready: false,
+            },
+          },
     }),
   }
   const trustedRenderers = {
@@ -216,6 +222,14 @@ describe('DetachableBrowserWindowController', () => {
     expect(harness.mainWorkspaceListeners.size).toBe(0)
   })
 
+  it('does not touch main WebContents listeners after the native window is destroyed', () => {
+    const harness = createHarness()
+    harness.mainWindow.webContents.isDestroyed.mockReturnValue(true)
+
+    expect(() => harness.controller.destroy()).not.toThrow()
+    expect(harness.mainWindow.webContents.removeListener).not.toHaveBeenCalled()
+  })
+
   it('arbitrates pointer release in main against native BrowserWindow bounds', async () => {
     const outside = createHarness({ cursorPoint: { x: -600, y: 300 } })
     outside.controller.registerIpc()
@@ -249,12 +263,16 @@ describe('DetachableBrowserWindowController', () => {
     )?.[1]
     await begin?.({}, { tabId: 'browser-1' })
 
-    harness.mainWindow.webContents.emit('before-mouse-event', {}, {
-      type: 'mouseUp',
-      button: 'left',
-      x: 0,
-      y: 0,
-    })
+    harness.mainWindow.webContents.emit(
+      'before-mouse-event',
+      {},
+      {
+        type: 'mouseUp',
+        button: 'left',
+        x: 0,
+        y: 0,
+      },
+    )
 
     expect(harness.mainWindow.webContents.send).toHaveBeenCalledWith(
       'workbenchWindow:tabDetachReleased',
@@ -312,6 +330,58 @@ describe('DetachableBrowserWindowController', () => {
     expect(transferLogs[0]?.message).toContain('"identityMatched":true')
     expect(transferLogs[0]?.message).toContain('"finalOwnerWindowId":"' + auxiliaryId + '"')
     expect(transferLogs[0]?.message).toContain('"phaseDurationsMs"')
+  })
+
+  it('moves a transient Browser runtime that is intentionally absent from persisted TabModel', async () => {
+    const harness = createHarness({
+      ready: true,
+      tabDescriptorMissing: true,
+      browserProjectionMissing: true,
+    })
+    const moved = await harness.controller.moveTabToNewWindow({
+      tabId: 'browser-1',
+      workspaceKey: '/workspace/a',
+      sourceWindowId: 'main',
+      expectedGeneration: 0,
+      transientTabSeed: {
+        title: '网站账号草稿',
+        icon: '🌐',
+        initialUrl: 'about:blank',
+        browserProfile: 'draft-profile',
+      },
+    })
+
+    expect(moved.success).toBe(true)
+    if (!moved.success) return
+    expect(moved.projection.tabs).toEqual([
+      expect.objectContaining({
+        tabId: 'browser-1',
+        title: '网站账号草稿',
+        initialUrl: 'about:blank',
+        browserProfile: 'draft-profile',
+      }),
+    ])
+    expect(
+      getMainDiagnosticLogSnapshot().entries.some((entry) =>
+        entry.message.includes('transient-browser-projection'),
+      ),
+    ).toBe(true)
+  })
+
+  it('does not accept a transient seed without a main-owned Browser runtime', async () => {
+    const harness = createHarness({ tabDescriptorMissing: true })
+    harness.ownerByTab.delete('browser-1')
+
+    const moved = await harness.controller.moveTabToNewWindow({
+      tabId: 'browser-1',
+      workspaceKey: '/workspace/a',
+      sourceWindowId: 'main',
+      expectedGeneration: 0,
+      transientTabSeed: { title: '伪造 Browser', icon: '🌐' },
+    })
+
+    expect(moved).toMatchObject({ success: false, error: { code: 'invalid-source' } })
+    expect(harness.createAuxiliaryWindow).not.toHaveBeenCalled()
   })
 
   it('rolls a ready timeout back to main and publishes the new generation for retry', async () => {
@@ -430,6 +500,11 @@ describe('DetachableBrowserWindowController', () => {
   it('does not fail a committed move when terminal diagnostic collection fails', async () => {
     const harness = createHarness({ ready: true })
     harness.browserManager.getRuntimeIdentity
+      .mockImplementationOnce((tabId: string) => ({
+        tabId,
+        workspaceKey: '/workspace/a',
+        runtimeGeneration: 1,
+      }))
       .mockImplementationOnce((tabId: string) => ({
         tabId,
         workspaceKey: '/workspace/a',

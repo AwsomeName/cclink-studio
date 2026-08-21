@@ -245,7 +245,6 @@ export function BrowserToolbar({
 
     setPreparingSave(true)
     setSaveError(null)
-    const previousProfile = tab.browserProfile ?? null
     try {
       const result = await window.cclinkStudio.webResources.beginDraft({
         workspaceRef: tab.workspaceRef,
@@ -279,6 +278,10 @@ export function BrowserToolbar({
         }
         setSaveError(result.error.message)
         showToast(result.error.message, 'error')
+        console.warn('[WebResources] 当前登录现场无法安全转为账号草稿', {
+          tabId,
+          code: result.error.code,
+        })
         return
       }
 
@@ -288,10 +291,6 @@ export function BrowserToolbar({
       })
       if (!attached) return
 
-      if (previousProfile !== result.data.browserProfileId) {
-        showToast('已切换到独立账号环境，请登录后再保存', 'info')
-        return
-      }
       setDisplayName((current) => current || inferWebResourceDisplayName(browserState))
       setShowSave(true)
     } catch (error) {

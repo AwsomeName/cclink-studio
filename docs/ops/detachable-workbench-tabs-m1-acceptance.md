@@ -3,12 +3,12 @@
 - 日期：2026-08-20
 - 平台：macOS arm64，Electron 43.1.1
 - 范围：Browser-only；右键、命令和拖出入口，不含其他 Tab 类型和辅助窗口恢复
-- 自动化结论：历史结论已失效；当前修复候选的受影响单测 29/29、TypeScript 和增加可见尺寸
-  断言后的真实 Studio App smoke 12/12 通过，surface 实测 `1100 × 676`；比例修复新增相关测试
-  25/25 通过，更新后的 smoke 继续 12/12 通过
-- 产品结论：用户已确认 Tab 能移入辅助窗口；首轮真人截图发现独立 visual scale 仍停在 30%，修复
-  后的第二张真人截图已显示正常比例网页。当前用户单屏移动与比例签收通过；物理双屏拖出仍待验收，
-  最终用户交付仍为 No-Go
+- 自动化结论：历史结论已失效；当前右键与拖出修复候选的受影响单测 83/83、TypeScript 和增加可见
+  尺寸断言后的真实 Studio App smoke 12/12 通过，surface 实测 `1100 × 676`；smoke 首个 Tab 现为
+  生产路径中的未持久化网站账号草稿 Browser
+- 产品结论：用户曾确认普通 Tab 能移入辅助窗口且比例已恢复正常，但 v0.1.54 的网站账号草稿 Tab
+  又暴露右键必失败；该路径已修复并通过自动门禁，仍待当前开发版真人复验。物理双屏拖出同样待
+  真人验收，最终用户交付仍为 No-Go
 
 ## 用户现在能做什么、还不能做什么
 
@@ -35,8 +35,35 @@ cursor，并同时接受 `webContents` 原生 mouse-up 与 renderer pointer-up�
 `BrowserWindow` bounds 裁决并结束会话。每次 begin/finish/cancel 都记录触发源、采样数、是否曾出界、
 最终落点和 source bounds，30 秒超时强制释放。迁移仍复用已由右键真人验证的同一事务。
 
-当前工程证据：受影响的拖拽 eligibility、主进程 native cursor 和 controller 测试 27/27 通过，
-TypeScript 通过。真人单屏窗口外松手、Escape 和同栏排序复验前，本节结论仍为修复候选而不是完成。
+当前工程证据：受影响的拖拽 eligibility、主进程 native cursor 和 controller 测试 28/28 通过，
+TypeScript 通过；真实开发版的页内 CDP 诊断只用于确认 Tab 已无 `draggable`、Pointer 阈值成功建立
+主进程会话且 native mouse-up 能结束会话，窗口内松手得到 `dropPoint=null`。该诊断没有移动系统
+光标，不计作拖出证据。真人单屏窗口外松手、Escape 和同栏排序复验前，本节结论仍为修复候选而
+不是完成。
+
+## 2026-08-21 v0.1.54 右键失败与修复
+
+用户从 v0.1.54 导出的真实诊断日志连续记录 4 次
+`workbench.moveTabToNewWindow · 只有 Browser Tab 可移至新窗口`。失败 Tab 在 renderer 中确实是
+Browser，且 BrowserManager 已拥有对应运行时；因此这不是菜单点击失败，也不是页面未 claim 导致，
+而是主进程迁移前的类型识别错误。
+
+根因是网站账号流程创建的 Browser 带 `webResourceDraftRef`。`tab-store` 按设计不把这种临时草稿
+写入持久化 TabModel，但旧迁移事务只查询 TabModel descriptor；结果是主进程面对真实存在的
+Browser `WebContentsView` 仍得到“Tab 不存在”，并误报为非 Browser。旧 M1 smoke 创建的是普通、
+可持久化 Browser，所以没有覆盖该生产路径，属于测试缺口。
+
+修复保持既有三个 owner 不变：持久化 Tab 仍以 TabModel descriptor 为准；只有 descriptor 缺失时，
+可信 main renderer 才随 move command 提供经过 schema 限长的临时标题、图标、当前 URL 和 Profile
+标识。主进程在使用该 seed 前必须同时确认 BrowserManager 中存在对应 Browser runtime、当前原生
+owner 正是请求窗口、runtime workspace 与请求 workspace 完全一致。已有非 Browser descriptor
+不能被 seed 覆盖，renderer 也不能提交 Session、Cookie、WebContents ID 或其他敏感运行事实。
+
+受影响自动测试增加了两道反例：真实草稿 Browser 可迁移；只有伪造 seed、没有主进程 Browser
+runtime 时必须以 `invalid-source` 拒绝。真实 App M1 smoke 的首个 Tab 也改为先带
+`webResourceDraftRef`，通过生产右键菜单迁移成功后才转成普通持久 Tab，再继续 renderer reload、
+工作空间切换、App restart 和清理门禁；干净隔离环境最终 12/12 通过。该 smoke 能证明本次右键故障
+路径已经覆盖，但仍不能替代真人窗口外拖出证据。
 
 ## 2026-08-20 当前用户比例异常与修复
 

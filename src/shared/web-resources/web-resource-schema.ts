@@ -20,6 +20,10 @@ const workspaceRefSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('global') }).strict(),
 ])
 
+const agentWorkspaceRefSchema = z
+  .object({ kind: z.literal('local'), path: trimmedText(4_096, '项目路径') })
+  .strict()
+
 const httpUrlSchema = trimmedText(2_048, '网站地址').refine((value) => {
   try {
     const url = new URL(value)
@@ -82,6 +86,38 @@ export const cancelWebResourceDraftInputSchema = z
 export const resolveWebResourceLaunchInputSchema = z
   .object({ workspaceRef: workspaceRefSchema, accountId: uuidSchema })
   .strict()
+
+export const agentWebResourceLaunchRequestSchema = z
+  .object({
+    requestId: uuidSchema,
+    workspaceRef: agentWorkspaceRefSchema,
+    workspaceKey: trimmedText(4_096, '项目标识'),
+    descriptor: z
+      .object({
+        webResourceRef: z.object({ accountId: uuidSchema }).strict(),
+        title: trimmedText(160, '标签页标题'),
+        entryUrl: httpUrlSchema,
+        browserProfileId: trimmedText(BROWSER_PROFILE_ID_MAX_LENGTH, 'Browser Profile').regex(
+          BROWSER_PROFILE_ID_PATTERN,
+        ),
+      })
+      .strict(),
+  })
+  .strict()
+
+export const agentWebResourceLaunchAcknowledgementSchema = z
+  .object({
+    requestId: uuidSchema,
+    success: z.boolean(),
+    tabId: trimmedText(160, '浏览器标签页').optional(),
+    errorMessage: optionalTrimmedText(1_000, '失败原因'),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.success && !value.tabId) {
+      context.addIssue({ code: 'custom', path: ['tabId'], message: '成功响应必须包含标签页' })
+    }
+  })
 
 export const confirmWebConnectionLoginInputSchema = z
   .object({ workspaceRef: workspaceRefSchema, accountId: uuidSchema })
@@ -212,6 +248,14 @@ export function parseCancelWebResourceDraftInput(value: unknown) {
 
 export function parseResolveWebResourceLaunchInput(value: unknown) {
   return resolveWebResourceLaunchInputSchema.parse(value)
+}
+
+export function parseAgentWebResourceLaunchRequest(value: unknown) {
+  return agentWebResourceLaunchRequestSchema.parse(value)
+}
+
+export function parseAgentWebResourceLaunchAcknowledgement(value: unknown) {
+  return agentWebResourceLaunchAcknowledgementSchema.parse(value)
 }
 
 export function parseConfirmWebConnectionLoginInput(value: unknown) {

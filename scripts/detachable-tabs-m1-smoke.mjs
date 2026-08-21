@@ -187,6 +187,7 @@ try {
           title: 'Detachable M1',
           icon: '🌐',
           initialUrl: url,
+          webResourceDraftRef: { draftId: 'detachable-smoke-draft' },
           workspaceRef,
           forceNew: true,
         })
@@ -276,7 +277,17 @@ try {
         return useWorkbenchWindowStore.getState().placements[id]
       }, tabId)
       assert(mainProjection?.windowId.startsWith('aux-'), 'Main renderer did not hide detached tab')
-      return `${mainProjection.windowId} with ${surfaceBounds.width}x${surfaceBounds.height} surface`
+      await mainPage.evaluate(async (id) => {
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        const { flushPendingWorkbenchTabWrites } = await import('/src/utils/workbench-tab-model.ts')
+        useTabStore.setState((state) => ({
+          tabs: state.tabs.map((tab) =>
+            tab.id === id ? { ...tab, webResourceDraftRef: undefined } : tab,
+          ),
+        }))
+        await flushPendingWorkbenchTabWrites()
+      }, tabId)
+      return `${mainProjection.windowId} with ${surfaceBounds.width}x${surfaceBounds.height} surface; transient draft move succeeded before persistence`
     },
   )
 

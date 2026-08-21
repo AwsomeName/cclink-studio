@@ -90,6 +90,10 @@ interface ImageDraft {
 export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.ReactElement {
   const fileKey = filePath ?? `virtual:${tabId}`
   const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const scrollSaveTimerRef = useRef<number | null>(null)
+  const latestScrollTopRef = useRef(0)
+  const restoringScrollRef = useRef(false)
   const findInputRef = useRef<HTMLInputElement | null>(null)
   const fileKeyRef = useRef(fileKey)
   const filePathRef = useRef(filePath)
@@ -974,6 +978,94 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     showToast('已覆盖磁盘版本', 'success')
   }, [filePath, showToast])
 
+  const expectedVersion = fileState
+    ? `${fileKey}:${fileState.versionHash ?? hashMarkdownSnapshot(fileState.savedContent)}`
+    : ''
+  const hydrationPending =
+    !fileState ||
+    fileState.loading ||
+    isMarkdownHydrationPending({
+      hasEditor: Boolean(editor),
+      hydratedVersion,
+      expectedVersion,
+      loadedFileKey: loadedVersionRef.current?.fileKey,
+      fileKey,
+    })
+
+  const persistScrollPosition = useCallback((key: string, scrollTop: number): void => {
+    useEditorStore.getState().updateMarkdownViewState(key, scrollTop)
+  }, [])
+
+  const cancelScrollRestoration = useCallback((): void => {
+    if (restoringScrollRef.current && scrollContainerRef.current) {
+      latestScrollTopRef.current = scrollContainerRef.current.scrollTop
+    }
+    restoringScrollRef.current = false
+  }, [])
+
+  const handleEditorScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>): void => {
+      if (restoringScrollRef.current) return
+      latestScrollTopRef.current = event.currentTarget.scrollTop
+      if (scrollSaveTimerRef.current !== null) {
+        window.clearTimeout(scrollSaveTimerRef.current)
+      }
+      scrollSaveTimerRef.current = window.setTimeout(() => {
+        scrollSaveTimerRef.current = null
+        persistScrollPosition(fileKeyRef.current, latestScrollTopRef.current)
+      }, 750)
+    },
+    [persistScrollPosition],
+  )
+
+  useEffect(() => {
+    const savedScrollTop = useEditorStore.getState().markdownViewStates[fileKey]?.scrollTop ?? 0
+    latestScrollTopRef.current = savedScrollTop
+    return () => {
+      if (scrollSaveTimerRef.current !== null) {
+        window.clearTimeout(scrollSaveTimerRef.current)
+        scrollSaveTimerRef.current = null
+      }
+      persistScrollPosition(fileKey, latestScrollTopRef.current)
+    }
+  }, [fileKey, persistScrollPosition])
+
+  useEffect(() => {
+    if (!editor || hydrationPending) return
+    const container = scrollContainerRef.current
+    if (!container) return
+    const savedScrollTop = latestScrollTopRef.current
+    if (savedScrollTop <= 0) {
+      container.scrollTop = 0
+      latestScrollTopRef.current = 0
+      restoringScrollRef.current = false
+      return
+    }
+
+    restoringScrollRef.current = true
+    latestScrollTopRef.current = savedScrollTop
+    let frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => {
+        container.scrollTop = savedScrollTop
+      })
+    })
+    const content = editor.view.dom
+    const observer = new ResizeObserver(() => {
+      if (!restoringScrollRef.current) return
+      container.scrollTop = savedScrollTop
+      if (Math.abs(container.scrollTop - savedScrollTop) < 1) {
+        restoringScrollRef.current = false
+        observer.disconnect()
+      }
+    })
+    observer.observe(content)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      observer.disconnect()
+      restoringScrollRef.current = false
+    }
+  }, [editor, fileKey, hydrationPending])
+
   if (fileState?.loading || !fileState) {
     return (
       <div className="markdown-editor-wrapper">
@@ -981,15 +1073,6 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       </div>
     )
   }
-
-  const expectedVersion = `${fileKey}:${fileState.versionHash ?? hashMarkdownSnapshot(fileState.savedContent)}`
-  const hydrationPending = isMarkdownHydrationPending({
-    hasEditor: Boolean(editor),
-    hydratedVersion,
-    expectedVersion,
-    loadedFileKey: loadedVersionRef.current?.fileKey,
-    fileKey,
-  })
 
   return (
     <div className="markdown-editor-wrapper" ref={wrapperRef}>
@@ -1117,7 +1200,13 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
           </div>
         ) : (
           <div
+            ref={scrollContainerRef}
             className={`tiptap-editor${editorWordWrap ? '' : ' no-wrap'}${parseBlockedReason ? ' protected' : ''}`}
+            onScroll={handleEditorScroll}
+            onWheelCapture={cancelScrollRestoration}
+            onTouchStartCapture={cancelScrollRestoration}
+            onPointerDownCapture={cancelScrollRestoration}
+            onKeyDownCapture={cancelScrollRestoration}
             style={
               {
                 '--markdown-font-family': editorFontFamily,

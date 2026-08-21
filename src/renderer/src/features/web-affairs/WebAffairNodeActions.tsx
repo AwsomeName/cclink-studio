@@ -5,7 +5,6 @@ import { useAgentStore, useWorkspaceStore } from '../../stores'
 import { useUIStore } from '../../stores/ui-store'
 import { createConversationRunController } from '../agent-conversations/conversation-run-controller'
 import { createConversationRuntimeForWorkspace } from '../agent-conversations/view-model'
-import { resolveAndOpenWebResourceTab } from '../web-resources/web-resource-tab'
 
 export function WebAffairNodeActions({
   affair,
@@ -46,7 +45,7 @@ export function WebAffairNodeActions({
   const accountReadyToStart =
     (node.status === 'ready' || node.status === 'failed' || isDueCheck) &&
     Boolean(account && website && principal)
-  const canStart = false
+  const canStart = accountReadyToStart
   const isAttemptActive =
     attempt &&
     !['waiting-external', 'succeeded', 'failed', 'cancelled', 'interrupted'].includes(
@@ -79,17 +78,11 @@ export function WebAffairNodeActions({
     onChanged(started.data)
 
     try {
-      const tabId = await resolveAndOpenWebResourceTab(account.id, workspaceRef)
-      await waitForBrowser(tabId)
-
       const agentStore = useAgentStore.getState()
       const conversationId = agentStore.createConversation({
         runtime: createConversationRuntimeForWorkspace(workspaceRef),
         activate: true,
       })
-      const scope = { kind: 'browser' as const, instanceId: tabId }
-      useAgentStore.getState().setScope(scope, conversationId)
-      await window.cclinkStudio.agent.setScope(conversationId, scope)
       useUIStore.getState().setAgentPanelMode('right', 'user')
       const result = await createConversationRunController({ conversationId }).send(
         buildAttemptPrompt(
@@ -104,12 +97,12 @@ export function WebAffairNodeActions({
       if (result.status !== 'accepted' || !result.runId) {
         throw new Error(result.status === 'failed' ? result.error : 'Agent 未接受事务节点')
       }
-      const browserTask = await waitForBrowserTask(tabId)
+      const browserTask = await waitForConversationBrowserTask(conversationId, account.id)
       const bound = await window.cclinkStudio.webAffairs.bindAttempt({
         workspaceRef,
         affairId: affair.id,
         attemptId: createdAttempt.id,
-        tabId,
+        tabId: browserTask.tabId,
         conversationId,
         agentRunId: result.runId,
         browserTaskRunId: browserTask.id,
@@ -171,29 +164,6 @@ export function WebAffairNodeActions({
     setNote('')
   }
 
-  const confirmFinal = async (): Promise<void> => {
-    if (!attempt) return
-    const summary = note.trim()
-    if (!summary) throw new Error('请填写本次最终动作的确认摘要')
-    const result = await window.cclinkStudio.webAffairs.confirmFinalAction({
-      workspaceRef,
-      affairId: affair.id,
-      attemptId: attempt.id,
-      summary,
-    })
-    if (!result.success) throw new Error(result.error.message)
-    onChanged(result.data)
-    if (attempt.conversationId) {
-      const sent = await createConversationRunController({
-        conversationId: attempt.conversationId,
-      }).send(
-        `用户已在事务确认卡中明确确认最终动作：“${summary}”。现在仅执行这一个动作，随后重新读取页面结果；没有申请号、回执或明确页面证据时不得标记完成。`,
-      )
-      if (sent.status === 'failed') throw new Error(sent.error)
-    }
-    setNote('')
-  }
-
   const finishManually = async (outcome: 'succeeded' | 'failed'): Promise<void> => {
     if (!attempt) return
     const summary = note.trim()
@@ -201,6 +171,15 @@ export function WebAffairNodeActions({
     const url = attempt.tabId
       ? await window.cclinkStudio.browser.getCurrentURL(attempt.tabId).catch(() => undefined)
       : undefined
+    if (outcome === 'succeeded' && node.catalogId === 'final-confirmation') {
+      const confirmed = await window.cclinkStudio.webAffairs.confirmFinalAction({
+        workspaceRef,
+        affairId: affair.id,
+        attemptId: attempt.id,
+        summary: `用户已人工完成最终动作：${summary}`,
+      })
+      if (!confirmed.success) throw new Error(confirmed.error.message)
+    }
     const result = await window.cclinkStudio.webAffairs.finishAttempt({
       workspaceRef,
       affairId: affair.id,
@@ -328,13 +307,6 @@ export function WebAffairNodeActions({
         )
       ) : null}
 
-      {accountReadyToStart && !isAttemptActive ? (
-        <small>
-          AI
-          调用全局账号的权限方案尚未确认。请先在上方点击账号人工打开网页，并用节点状态记录办理结果。
-        </small>
-      ) : null}
-
       {isAttemptActive ? (
         <>
           <textarea
@@ -354,11 +326,6 @@ export function WebAffairNodeActions({
                 接管网页
               </button>
             )}
-            {attempt.status !== 'waiting-human' && !attempt.finalActionConfirmedAt ? (
-              <button type="button" disabled={busy} onClick={() => void run(confirmFinal)}>
-                确认最终动作
-              </button>
-            ) : null}
             <button
               type="button"
               disabled={busy}
@@ -374,11 +341,7 @@ export function WebAffairNodeActions({
               记录失败
             </button>
           </div>
-          {attempt.finalActionConfirmedAt ? (
-            <small>
-              最终动作已于 {new Date(attempt.finalActionConfirmedAt).toLocaleString()} 确认
-            </small>
-          ) : null}
+          <small>提交、发布、支付、删除、签署等最终动作只能由用户在可见网页中完成。</small>
         </>
       ) : null}
 
@@ -494,10 +457,11 @@ function buildAttemptPrompt(
     `事务目标：${affair.objective}`,
     `节点：${node.title}`,
     `账号：${accountLabel}；入口：${entryUrl}`,
+    `第一步必须调用 web_account_open，accountId=${node.accountIds[0] ?? ''}。不要自行新建 Tab 或猜测登录环境。`,
     `成功判据：${node.successCriteria.join('；')}`,
     '先用 web_affair_get 重新读取主进程事实，再观察当前网页。只执行低风险、可撤销的填写或查询。',
     '遇到扫码、验证码、主体不确定、材料变化或页面不确定时停止并要求用户接管。',
-    '任何不可逆外部提交前必须停止，等待事务 Tab 的产品级确认卡；不能仅依赖工具权限确认。',
+    '任何不可逆外部提交必须停止并要求用户接管；即使用户交还，也不能由 Agent 执行最终动作。',
     '页面流程与当前流程不一致时，用 web_affair_propose_flow_diff 提交建议，不要直接覆盖历史。',
     isDueCheck
       ? '这是一次到期复查。读取官网当前状态后，用 web_affair_complete_check 记录状态未变化、已通过或被驳回；必须附官网原文摘要和当前 URL。'
@@ -505,25 +469,21 @@ function buildAttemptPrompt(
   ].join('\n')
 }
 
-async function waitForBrowser(tabId: string): Promise<void> {
-  for (let index = 0; index < 30; index += 1) {
-    try {
-      await window.cclinkStudio.browser.getCurrentURL(tabId)
-      return
-    } catch {
-      await delay(100)
-    }
-  }
-  throw new Error('浏览器现场创建超时')
-}
-
-async function waitForBrowserTask(tabId: string) {
-  for (let index = 0; index < 30; index += 1) {
-    const task = await window.cclinkStudio.browser.getActiveTaskForTab(tabId)
+async function waitForConversationBrowserTask(conversationId: string, accountId: string) {
+  for (let index = 0; index < 80; index += 1) {
+    const task = (await window.cclinkStudio.browser.listTasks())
+      .slice()
+      .reverse()
+      .find(
+        (candidate) =>
+          candidate.correlation?.conversationId === conversationId &&
+          candidate.correlation.accountId === accountId &&
+          (candidate.status === 'running' || candidate.status === 'paused'),
+      )
     if (task) return task
     await delay(100)
   }
-  throw new Error('BrowserTaskRun 关联超时')
+  throw new Error('Agent 未能打开并绑定指定登记账号')
 }
 
 function delay(ms: number): Promise<void> {

@@ -1,6 +1,7 @@
 import type { WorkbenchWindowDropPoint } from '@shared/ipc/workbench-window'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { useTabStore } from '../stores/tab-store'
+import { useBrowserStore } from '../stores/browser-store'
 import { useWorkspaceStore } from '../stores/workspace-store'
 import { isDetachedFromMain, useWorkbenchWindowStore } from '../stores/workbench-window-store'
 import { flushPendingWorkbenchBrowserWrites } from './workbench-browser-state'
@@ -35,6 +36,12 @@ export async function moveBrowserTabToNewWindow(
       sourceWindowId: 'main',
       expectedGeneration: placement?.generation ?? 0,
       dropPoint,
+      transientTabSeed: {
+        title: tab.title,
+        icon: tab.icon,
+        initialUrl: useBrowserStore.getState().tabs[tabId]?.url ?? tab.initialUrl,
+        browserProfile: tab.browserProfile ?? null,
+      },
     })
     if (!result.success) throw new Error(result.error.message)
     const movedPlacement = result.projection.placements.find(

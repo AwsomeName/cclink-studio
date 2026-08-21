@@ -125,11 +125,17 @@ export interface BrowserTaskRun {
     agentRunId: string | null
     agentSessionRef: string | null
     profileId: string | null
+    /** 登记账号任务专用。模型只能看到 accountId，不能看到 profileId。 */
+    accountId?: string
+    allowedOrigins?: string[]
     affairId?: string
     affairNodeId?: string
     affairAttemptId?: string
   }
   status: BrowserTaskStatus
+  /** 人工接管交还后，Agent 必须先读取当前页面才能继续写操作。 */
+  reobservationRequired?: boolean
+  takeoverReason?: string
   startedAt: number
   endedAt?: number
   failureReason?: BrowserTaskFailureReason

@@ -2002,6 +2002,22 @@ export class BrowserManager {
     return tabId
   }
 
+  /** 等待 renderer 把指定账号 Tab 绑定到精确的项目和隔离 Profile。 */
+  async waitForViewBinding(
+    tabId: string,
+    workspaceKey: string | null,
+    profileId: string | null,
+    timeoutMs = 8_000,
+  ): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      const view = this.views.get(tabId)
+      if (view?.workspaceKey === workspaceKey && view.profileId === profileId) return true
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    return false
+  }
+
   /** 列出真实可视浏览器 View，不依赖 Playwright 是否已完成 claim。 */
   listViews(): Array<{ tabId: string; url: string; title: string }> {
     const activeWorkspaceKey = this.activeViewId

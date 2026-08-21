@@ -113,7 +113,10 @@ export class DetachableBrowserWindowController {
   private tabDetachDragSession: TabDetachDragSession | null = null
   private disposed = false
 
-  private readonly handleMainMouseEvent = (_event: Electron.Event, mouse: MouseInputEvent): void => {
+  private readonly handleMainMouseEvent = (
+    _event: Electron.Event,
+    mouse: MouseInputEvent,
+  ): void => {
     if (mouse.type !== 'mouseUp' || (mouse.button && mouse.button !== 'left')) return
     const completed = this.completeTabDetachDrag('native-mouse-up')
     if (!completed?.dropPoint || this.options.mainWindow.webContents.isDestroyed()) return
@@ -309,10 +312,7 @@ export class DetachableBrowserWindowController {
       lastOutsidePoint: session.lastOutsidePoint,
     }
     this.disposeTabDetachDragSession()
-    recordMainDiagnosticLog(reason === 'timeout' ? 'warn' : 'info', [
-      '[TabDetachDrag]',
-      diagnostic,
-    ])
+    recordMainDiagnosticLog(reason === 'timeout' ? 'warn' : 'info', ['[TabDetachDrag]', diagnostic])
   }
 
   private disposeTabDetachDragSession(): void {
@@ -331,14 +331,19 @@ export class DetachableBrowserWindowController {
     let failurePhase: 'preparing' | 'creating-window' | 'moving' = 'preparing'
     let committed: TabPlacement | null = null
     try {
+      if (this.options.browserManager.getViewOwnerWindowId(input.tabId) !== input.sourceWindowId) {
+        return invalidSource()
+      }
+      const runtimeIdentity = this.options.browserManager.getRuntimeIdentity(input.tabId)
+      if (!runtimeIdentity || runtimeIdentity.workspaceKey !== input.workspaceKey) {
+        return invalidSource()
+      }
       const tabProjection = await this.resolveBrowserTabProjection(
         input.tabId,
         input.workspaceKey,
         input.ownerKey ?? null,
+        input.transientTabSeed,
       )
-      if (this.options.browserManager.getViewOwnerWindowId(input.tabId) !== input.sourceWindowId) {
-        return invalidSource()
-      }
       let placement = this.options.windowService.getPlacement(input.tabId)
       if (!placement) {
         if (input.expectedGeneration !== 0) {
@@ -694,28 +699,42 @@ export class DetachableBrowserWindowController {
     tabId: string,
     workspaceKey: string | null,
     ownerKey: string | null,
+    transientTabSeed?: WorkbenchMoveTabInput['transientTabSeed'],
   ): Promise<WorkbenchBrowserTabProjection> {
     const [tabs, browser] = await Promise.all([
       this.options.tabModel.getProjection(workspaceKey, ownerKey),
       this.options.tabModel.getBrowserProjection(workspaceKey, ownerKey),
     ])
     const descriptor = tabs.tabs.find((tab) => tab.id === tabId)
-    if (!descriptor || descriptor.type !== 'browser') {
+    if (descriptor && descriptor.type !== 'browser') {
       throw new Error(`只有 Browser Tab 可移至新窗口: ${tabId}`)
+    }
+    if (!descriptor && !transientTabSeed) {
+      throw new Error(`只有 Browser Tab 可移至新窗口: ${tabId}`)
+    }
+    if (!descriptor) {
+      recordMainDiagnosticLog('info', [
+        '[WorkbenchTransfer] transient-browser-projection',
+        { tabId, workspaceKeyRef: workspaceKeyRef(workspaceKey) },
+      ])
     }
     const browserProjection = browser.tabs[tabId]
     return {
       tabId,
       type: 'browser',
-      title: String(descriptor.title),
-      icon: String(descriptor.icon),
+      title: String(descriptor?.title ?? transientTabSeed?.title),
+      icon: String(descriptor?.icon ?? transientTabSeed?.icon),
       workspaceKey,
       generation: 0,
       initialUrl:
         browserProjection?.url ||
-        (typeof descriptor.initialUrl === 'string' ? descriptor.initialUrl : undefined),
+        (typeof descriptor?.initialUrl === 'string'
+          ? descriptor.initialUrl
+          : transientTabSeed?.initialUrl),
       browserProfile:
-        typeof descriptor.browserProfile === 'string' ? descriptor.browserProfile : null,
+        typeof descriptor?.browserProfile === 'string'
+          ? descriptor.browserProfile
+          : (transientTabSeed?.browserProfile ?? null),
     }
   }
 
@@ -1130,10 +1149,12 @@ export class DetachableBrowserWindowController {
 
   destroy(): void {
     this.disposed = true
-    this.options.mainWindow.webContents.removeListener(
-      'before-mouse-event',
-      this.handleMainMouseEvent,
-    )
+    if (!this.options.mainWindow.webContents.isDestroyed()) {
+      this.options.mainWindow.webContents.removeListener(
+        'before-mouse-event',
+        this.handleMainMouseEvent,
+      )
+    }
     this.clearTabDetachDragSession('controller-destroy')
     this.disposeMainWorkspaceSync()
     for (const windowId of [...this.auxiliaries.keys()]) this.disposeAuxiliary(windowId)

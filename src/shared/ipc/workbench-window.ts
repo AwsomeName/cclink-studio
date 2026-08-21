@@ -67,6 +67,18 @@ export const workbenchBrowserTabProjectionSchema = z
   .strict()
 export type WorkbenchBrowserTabProjection = z.infer<typeof workbenchBrowserTabProjectionSchema>
 
+export const workbenchTransientBrowserTabSeedSchema = z
+  .object({
+    title: z.string().max(500),
+    icon: z.string().max(200),
+    initialUrl: z.string().max(16_384).optional(),
+    browserProfile: z.string().trim().min(1).max(200).nullable().optional(),
+  })
+  .strict()
+export type WorkbenchTransientBrowserTabSeed = z.infer<
+  typeof workbenchTransientBrowserTabSeedSchema
+>
+
 export const workbenchPlacementChangedSchema = z
   .object({
     tabId: stableIdSchema,
@@ -101,6 +113,7 @@ export const workbenchMoveTabInputSchema = z
     sourceWindowId: stableIdSchema,
     expectedGeneration: generationSchema,
     dropPoint: workbenchWindowDropPointSchema.optional(),
+    transientTabSeed: workbenchTransientBrowserTabSeedSchema.optional(),
   })
   .strict()
 export type WorkbenchMoveTabInput = z.infer<typeof workbenchMoveTabInputSchema>
@@ -199,9 +212,8 @@ export const workbenchWindowIpc = {
   finishTabDetachDrag: defineIpcInvoke<
     [WorkbenchTabDetachDragInput],
     WorkbenchWindowDropPoint | null
-  >(
-    'workbenchWindow:finishTabDetachDrag',
-    (args) => ipcArgs(workbenchTabDetachDragInputSchema.parse(args[0])),
+  >('workbenchWindow:finishTabDetachDrag', (args) =>
+    ipcArgs(workbenchTabDetachDragInputSchema.parse(args[0])),
   ),
   cancelTabDetachDrag: defineIpcInvoke<[WorkbenchTabDetachDragInput], { success: true }>(
     'workbenchWindow:cancelTabDetachDrag',

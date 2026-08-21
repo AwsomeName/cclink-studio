@@ -29,6 +29,7 @@ import { useWorkspaceBootstrap } from './bootstrap/use-workspace-bootstrap'
 import { useWorkspaceStateFlush } from './bootstrap/use-workspace-state-flush'
 import { useBrowserViewLifecycle } from './components/workbench/use-browser-view-lifecycle'
 import { useBrowserOpenRequests } from './bootstrap/use-browser-open-requests'
+import { useAgentWebResourceLaunchRequests } from './bootstrap/use-agent-web-resource-launch-requests'
 import { useComponentSetupOnboarding } from './bootstrap/use-component-setup-onboarding'
 import { ProjectStrip } from './components/project-strip/ProjectStrip'
 import { ConversationQuickSwitcher } from './components/topbar/ConversationQuickSwitcher'
@@ -98,6 +99,7 @@ function MainLayout(): React.ReactElement {
   useTerminalEvents()
   useAgentWorkContext(workspaceReady)
   useBrowserOpenRequests(workspaceReady)
+  useAgentWebResourceLaunchRequests(workspaceReady)
   useBrowserViewLifecycle(
     agentInCenter || floatingSurfaceOpen || panelResizing || contextMenuOpen || tabCreateMenuOpen
       ? undefined

@@ -134,6 +134,32 @@ describe('registerWebResourceIpc', () => {
     expect(service.beginDraft).not.toHaveBeenCalled()
   })
 
+  it('preserves a logged-in default or shared Profile instead of replacing and reloading it', async () => {
+    const service = { beginDraft: vi.fn() }
+    const browserManager = { getDraftAdoptionProfileId: vi.fn(() => null) }
+    registerWebResourceIpc(
+      () => service as never,
+      () => null,
+      () => createWorkspaceState() as never,
+      createGuard('trusted') as never,
+      () => browserManager as never,
+    )
+
+    await expect(
+      mockIpcMain.handlers.get('webResources:beginDraft')?.(
+        { sender: 'trusted' },
+        { ...PROJECT_SCOPE, tabId: 'logged-in-shared-tab' },
+      ),
+    ).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: 'INVALID_BROWSER_STATE',
+        message: expect.stringContaining('页面和登录状态已保留'),
+      },
+    })
+    expect(service.beginDraft).not.toHaveBeenCalled()
+  })
+
   it('imports a valid legacy project config idempotently and preserves its Profile ids', async () => {
     const service = {
       createConnection: vi

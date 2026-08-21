@@ -24,6 +24,7 @@ import { WorkbenchWindowService } from '../workbench/workbench-window-service'
 import { BrowserRecoveryHostRegistry } from '../workbench/browser-recovery-host-registry'
 import { DetachableBrowserWindowController } from '../workbench/detachable-browser-window-controller'
 import { createAuxiliaryBrowserWindow } from '../workbench/auxiliary-browser-window'
+import { AgentWebResourceLaunchCoordinator } from '../web-resources/agent-web-resource-launch-coordinator'
 
 interface CreateWindowRuntimeOptions {
   preloadPath: string
@@ -140,6 +141,9 @@ export function applyWindowZoomLevel(runtime: CclinkStudioRuntimeState, zoomLeve
 }
 
 export async function destroyWindowRuntime(runtime: CclinkStudioRuntimeState): Promise<void> {
+  await runShutdownStep('AgentWebResourceLaunchCoordinator', () =>
+    runtime.agentWebResourceLaunchCoordinator?.dispose(),
+  )
   await runShutdownStep('DetachableBrowserWindowController', () =>
     runtime.detachableBrowserWindows?.destroy(),
   )
@@ -164,6 +168,7 @@ export async function destroyWindowRuntime(runtime: CclinkStudioRuntimeState): P
   runtime.trustedRendererGuard = null
   runtime.browserManager = null
   runtime.browserTaskRuntime = null
+  runtime.agentWebResourceLaunchCoordinator = null
   runtime.browserDownloadStore = null
   runtime.browserAuthProcessService = null
   runtime.browserInstanceStore = null
@@ -219,6 +224,10 @@ function bootstrapBrowserWindowCapability(runtime: CclinkStudioRuntimeState): vo
     mainWindow,
     (tabId, channel, payload) =>
       runtime.browserManager?.sendToTabOwner(tabId, channel, payload) ?? false,
+  )
+  runtime.agentWebResourceLaunchCoordinator = new AgentWebResourceLaunchCoordinator(
+    mainWindow,
+    trustedRendererGuard,
   )
   runtime.browserDownloadStore = new BrowserDownloadStore(
     mainWindow,

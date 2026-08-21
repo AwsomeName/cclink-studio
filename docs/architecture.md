@@ -196,7 +196,8 @@ Thread 显式选择经过验证的本地 Codex ACP Runtime；公共 Registry、�
   `accountId + tabId + profileId + conversationId + agentRunId`。模型永远不取得 Profile、密码、
   Cookie、Token 或验证码，也不得通过全局活跃页面、URL 或 Cookie 猜测账号。
 - 用户明确任务覆盖普通网页操作；对外提交、发布、发送、删除、注销、法律声明、付款、
-  电子签名和账号安全变更由 `PermissionManager` 进入人工接管并由用户完成，验证码、扫码、
+  电子签名和账号安全变更由 Browser 工具动作守卫暂停 BrowserTask 并进入人工接管，
+  `PermissionManager` 的通用确认不能覆盖这条产品级禁令；验证码、扫码、
   人脸和 2FA 同样只允许人工处理。首版同一账号只允许一个 Agent BrowserTask 执行，不开放
   矩阵批量执行。
 - 一次网页执行由 Attempt 记录。人工接管和交还是持久状态转换；应用重启会把未结束运行

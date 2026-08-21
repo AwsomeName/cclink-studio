@@ -165,4 +165,75 @@ describe('BrowserTaskRuntime', () => {
       }),
     ).toContain('[redacted]')
   })
+
+  it('leases one registered account to one Agent conversation and releases it on completion', () => {
+    const { runtime } = createRuntime()
+    const correlation = {
+      workspaceKey: '/workspace-a',
+      conversationId: 'conversation-a',
+      agentRunId: 'run-a',
+      agentSessionRef: null,
+      profileId: 'profile-a',
+      accountId: 'account-a',
+      allowedOrigins: ['https://example.com'],
+    }
+    const first = runtime.startTask({ tabId: 'browser-a', goal: 'inspect', correlation })
+
+    expect(() =>
+      runtime.startTask({
+        tabId: 'browser-b',
+        goal: 'other',
+        correlation: { ...correlation, conversationId: 'conversation-b' },
+      }),
+    ).toThrow('另一个 Agent 任务')
+
+    runtime.finishTask(first.id)
+    expect(() =>
+      runtime.startTask({
+        tabId: 'browser-b',
+        goal: 'other',
+        correlation: { ...correlation, conversationId: 'conversation-b' },
+      }),
+    ).not.toThrow()
+  })
+
+  it('requires re-observation after human takeover is returned', () => {
+    const { runtime } = createRuntime()
+    const task = runtime.startTask({ tabId: 'browser', goal: 'fill form' })
+
+    runtime.pauseForTakeover(task.id, '需要验证码')
+    const resumed = runtime.resumeTask(task.id)
+    expect(resumed.reobservationRequired).toBe(true)
+    expect(resumed.takeoverReason).toBe('需要验证码')
+
+    const reobserved = runtime.markReobserved(task.id)
+    expect(reobserved.reobservationRequired).toBe(false)
+    expect(reobserved.takeoverReason).toBeUndefined()
+  })
+
+  it('adds the user-confirmed current origin when an account task is handed back', () => {
+    const { runtime } = createRuntime()
+    const task = runtime.startTask({
+      tabId: 'browser',
+      goal: 'continue on redirected provider page',
+      correlation: {
+        workspaceKey: '/workspace-a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        agentSessionRef: null,
+        profileId: 'profile-a',
+        accountId: 'account-a',
+        allowedOrigins: ['https://accounts.example.com'],
+      },
+    })
+    runtime.pauseForTakeover(task.id, '跨站身份确认')
+
+    const resumed = runtime.resumeTask(task.id, 'https://console.example.net/application/1')
+
+    expect(resumed.correlation?.allowedOrigins).toEqual([
+      'https://accounts.example.com',
+      'https://console.example.net',
+    ])
+    expect(resumed.reobservationRequired).toBe(true)
+  })
 })

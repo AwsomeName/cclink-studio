@@ -70,7 +70,9 @@ BrowserTask 不能在执行中改用全局活跃页面。
 - `BrowserTask` 只拥有一次网页执行、页面关联、暂停和动作日志；同一账号首版只允许一个
   Agent BrowserTask 执行，冲突时明确等待或拒绝，不并发写网页。
 - `WebAffairService` 继续唯一拥有事务、流程节点、Attempt、人工交接、证据和等待状态。
-- `PermissionManager` 继续承担当次敏感动作的阻断和人工接管入口，不新增永久账号授权 Store。
+- Browser 工具动作守卫承担账号任务的产品级敏感动作阻断并暂停 BrowserTask；
+  `PermissionManager` 仍负责通用工具确认，但其确认不能授权 Agent 执行账号任务的最终动作。
+  不新增永久账号授权 Store。
 - 进入人工接管时 Agent 运行可以结束或暂停；交还时必须新观察页面。进入外部等待时当前
   BrowserTask 和 AgentRun 结束，后续检查创建新运行，不保留假运行。
 

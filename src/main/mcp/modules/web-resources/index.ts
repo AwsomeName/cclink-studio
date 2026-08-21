@@ -1,5 +1,8 @@
 import type { WebResourceService } from '../../../web-resources/web-resource-service'
-import type { ToolDefinition, ToolModule } from '../../types'
+import type { BrowserManager } from '../../../browser/browser-manager'
+import type { BrowserTaskRuntime } from '../../../browser/browser-task-runtime'
+import type { AgentWebResourceLaunchCoordinator } from '../../../web-resources/agent-web-resource-launch-coordinator'
+import type { ToolDefinition, ToolExecutionContext, ToolModule } from '../../types'
 
 const TOOLS: ToolDefinition[] = [
   {
@@ -17,18 +20,43 @@ const TOOLS: ToolDefinition[] = [
     },
     annotations: { readOnlyHint: true, destructiveHint: false },
   },
+  {
+    name: 'web_account_open',
+    description:
+      '在当前项目中打开用户明确指定的已登记网站账号，并把后续浏览器操作绑定到该账号的隔离登录环境。只接收 web_accounts_list 返回的 accountId；不会返回密码、Cookie、Token、登录提示或 Browser Profile。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        accountId: { type: 'string', description: 'web_accounts_list 返回的账号 ID' },
+      },
+      required: ['accountId'],
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false },
+  },
 ]
+
+interface WebResourceToolExecutionDependencies {
+  launchCoordinator: AgentWebResourceLaunchCoordinator
+  browserManager: BrowserManager
+  browserTaskRuntime: BrowserTaskRuntime
+}
 
 export class WebResourceToolModule implements ToolModule {
   readonly name = 'web-resources'
   readonly tools = TOOLS
 
-  constructor(private readonly service: WebResourceService) {}
+  constructor(
+    private readonly service: WebResourceService,
+    private readonly execution?: WebResourceToolExecutionDependencies,
+  ) {}
 
-  async execute(toolName: string, params: Record<string, unknown>): Promise<unknown> {
-    if (toolName !== 'web_accounts_list') {
-      throw new Error(`未知网站账号工具: ${toolName}`)
-    }
+  async execute(
+    toolName: string,
+    params: Record<string, unknown>,
+    context?: ToolExecutionContext,
+  ): Promise<unknown> {
+    if (toolName === 'web_account_open') return this.openAccount(params, context)
+    if (toolName !== 'web_accounts_list') throw new Error(`未知网站账号工具: ${toolName}`)
 
     const snapshot = this.service.getSnapshot()
     if (!snapshot.success) return snapshot
@@ -94,6 +122,73 @@ export class WebResourceToolModule implements ToolModule {
         accountGroups,
         notice:
           '这是登记元数据和用户确认记录，不是实时网页身份校验；读取结果不授予打开或操作账号的权限。',
+      },
+    }
+  }
+
+  private async openAccount(
+    params: Record<string, unknown>,
+    context?: ToolExecutionContext,
+  ): Promise<unknown> {
+    if (!this.execution) throw new Error('网站账号执行能力当前不可用')
+    if (context?.scheduledTaskPolicy) throw new Error('定时任务当前不能打开网站账号')
+    if (!context?.conversationId || context.trustedWorkspace?.kind !== 'local') {
+      throw new Error('只有绑定本地项目的交互式 Agent 会话可以打开网站账号')
+    }
+    const accountId = typeof params['accountId'] === 'string' ? params['accountId'] : ''
+    if (!accountId) throw new Error('accountId 不能为空')
+
+    const launch = this.service.resolveLaunch(accountId)
+    if (!launch.success) return launch
+    const snapshot = this.service.getSnapshot()
+    if (!snapshot.success) return snapshot
+    const account = snapshot.data.accounts.find(
+      (candidate) => candidate.id === accountId && !candidate.archivedAt,
+    )
+    if (!account) throw new Error('网站账号不存在或已归档')
+    const website = snapshot.data.websites.find((candidate) => candidate.id === account.websiteId)
+    const principal = snapshot.data.principals.find(
+      (candidate) => candidate.id === account.principalId,
+    )
+
+    this.execution.browserTaskRuntime.cancelTaskForConversation(context.conversationId)
+    const opened = await this.execution.launchCoordinator.requestLaunch(
+      { kind: 'local', path: context.trustedWorkspace.rootPath },
+      launch.data,
+    )
+    const bound = await this.execution.browserManager.waitForViewBinding(
+      opened.tabId,
+      context.trustedWorkspace.workspaceKey,
+      launch.data.browserProfileId,
+    )
+    if (!bound) throw new Error('账号 Tab 未能绑定到预期项目和隔离登录环境')
+
+    const origin = new URL(launch.data.entryUrl).origin
+    const task = this.execution.browserTaskRuntime.startTask({
+      tabId: opened.tabId,
+      goal: context.agentGoal || `办理 ${website?.name ?? account.label} 网页事务`,
+      correlation: {
+        workspaceKey: context.trustedWorkspace.workspaceKey,
+        conversationId: context.conversationId,
+        agentRunId: context.agentRunId ?? null,
+        agentSessionRef: null,
+        profileId: launch.data.browserProfileId,
+        accountId,
+        allowedOrigins: [origin],
+      },
+    })
+    return {
+      success: true,
+      data: {
+        accountId,
+        accountName: account.label,
+        websiteName: website?.name ?? '未知网站',
+        websiteOrigin: origin,
+        principalName: principal?.name ?? '未知主体',
+        tabId: opened.tabId,
+        browserTaskId: task.id,
+        loginStatus: account.loginConfirmedAt ? 'user-confirmed' : 'not-confirmed',
+        notice: '账号已在当前项目的可见 Tab 中打开；登录状态仍需以网页当前显示为准。',
       },
     }
   }

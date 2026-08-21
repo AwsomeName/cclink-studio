@@ -87,6 +87,7 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
           runtime.playwrightBridge!,
           runtime.browserTaskRuntime,
           runtime.browserManager,
+          runtime.webResourceService,
         ),
     )
   }
@@ -116,8 +117,20 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
 
   if (runtime.webResourceService) {
     try {
-      runtime.toolHost.registerModule(new WebResourceToolModule(runtime.webResourceService))
-      console.log('[CCLink Studio] web-resources MCP 只读工具模块已注册')
+      const execution =
+        runtime.agentWebResourceLaunchCoordinator &&
+        runtime.browserManager &&
+        runtime.browserTaskRuntime
+          ? {
+              launchCoordinator: runtime.agentWebResourceLaunchCoordinator,
+              browserManager: runtime.browserManager,
+              browserTaskRuntime: runtime.browserTaskRuntime,
+            }
+          : undefined
+      runtime.toolHost.registerModule(
+        new WebResourceToolModule(runtime.webResourceService, execution),
+      )
+      console.log('[CCLink Studio] web-resources MCP 目录与受控打开工具模块已注册')
     } catch (error) {
       console.error('[CCLink Studio] web-resources MCP 工具模块注册失败:', error)
     }

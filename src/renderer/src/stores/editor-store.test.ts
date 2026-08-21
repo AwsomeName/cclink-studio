@@ -4,7 +4,7 @@ import { useEditorStore } from './editor-store'
 import { registerEditorSaveGuard } from '../features/editor-save-guard'
 
 beforeEach(() => {
-  useEditorStore.setState({ files: {}, pendingUpdates: [] })
+  useEditorStore.setState({ files: {}, markdownViewStates: {}, pendingUpdates: [] })
 })
 
 afterEach(() => {
@@ -506,6 +506,20 @@ describe('useEditorStore', () => {
       expect(files['virtual:note'].sessionId).not.toBe(files['/docs/plan.md'].sessionId)
     })
 
+    it('从工作台快照恢复 Markdown 阅读位置并忽略非法值', () => {
+      useEditorStore.getState().hydrateFromWorkspaceState({
+        files: {},
+        markdownViewStates: {
+          '/docs/plan.md': { scrollTop: 840, updatedAt: 123 },
+          '/docs/broken.md': { scrollTop: -10, updatedAt: 124 },
+        },
+      })
+
+      expect(useEditorStore.getState().markdownViewStates).toEqual({
+        '/docs/plan.md': { scrollTop: 840, updatedAt: 123 },
+      })
+    })
+
     it('空文件快照会清空当前编辑器状态', () => {
       useEditorStore.setState({
         files: {
@@ -645,6 +659,9 @@ describe('useEditorStore', () => {
             timestamp: 1,
           },
         ],
+        markdownViewStates: {
+          '/project/docs/note.md': { scrollTop: 640, updatedAt: 1 },
+        },
       })
 
       useEditorStore.getState().rebaseFilePaths('/project/docs', '/project/archive/docs')
@@ -656,6 +673,10 @@ describe('useEditorStore', () => {
       expect(useEditorStore.getState().pendingUpdates[0].filePath).toBe(
         '/project/archive/docs/note.md',
       )
+      expect(
+        useEditorStore.getState().markdownViewStates['/project/archive/docs/note.md']?.scrollTop,
+      ).toBe(640)
+      expect(useEditorStore.getState().markdownViewStates['/project/docs/note.md']).toBeUndefined()
     })
 
     it('Markdown 资源组重命名后保留 dirty 草稿并重写资源引用', () => {

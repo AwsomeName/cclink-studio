@@ -130,6 +130,169 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     expect(page.click).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps registered-account tasks from exposing session data or executing final actions', async () => {
+    const accountTask = {
+      id: 'task-a',
+      tabId: 'account-tab',
+      goal: '办理事务',
+      status: 'running',
+      startedAt: Date.now(),
+      downloadIds: [],
+      correlation: {
+        workspaceKey: '/workspace/a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        agentSessionRef: null,
+        profileId: 'profile-a',
+        accountId: 'account-a',
+        allowedOrigins: ['https://example.com'],
+      },
+    }
+    const page = {
+      url: () => 'https://example.com/form',
+      evaluate: vi.fn().mockResolvedValue({ sensitive: true, label: '提交申请' }),
+      click: vi.fn(),
+    }
+    const bridge = {
+      getPage: () => page,
+      getPageById: () => page,
+      switchToPage: vi.fn().mockResolvedValue(undefined),
+    }
+    const browserTaskRuntime = {
+      getActiveTaskForConversation: vi.fn().mockReturnValue(accountTask),
+      assertCanRunAction: vi.fn().mockReturnValue(accountTask),
+      pauseForTakeover: vi.fn(),
+    }
+    const browserManager = {
+      getViewWorkspaceKey: () => '/workspace/a',
+      getViewProfileId: () => 'profile-a',
+      isWorkspaceActive: () => true,
+      setActive: vi.fn(),
+      getCurrentURL: () => 'https://example.com/form',
+    }
+    const module = new BrowserToolModule(
+      bridge as any,
+      browserTaskRuntime as any,
+      browserManager as any,
+    )
+    const context = { conversationId: 'conversation-a', workspaceKey: '/workspace/a' }
+
+    await expect(module.execute('browser_get_cookies', {}, context)).rejects.toThrow(
+      '避免泄露登录态',
+    )
+    await expect(module.execute('browser_click', { selector: '#submit' }, context)).rejects.toThrow(
+      '敏感最终动作',
+    )
+    expect(browserTaskRuntime.pauseForTakeover).toHaveBeenCalledWith(
+      'task-a',
+      '检测到敏感最终动作（提交申请）',
+    )
+    expect(page.click).not.toHaveBeenCalled()
+  })
+
+  it('requires a fresh read before writing after human handback', async () => {
+    const accountTask = {
+      id: 'task-a',
+      tabId: 'account-tab',
+      goal: '继续办理',
+      status: 'running',
+      reobservationRequired: true,
+      startedAt: Date.now(),
+      downloadIds: [],
+      correlation: {
+        workspaceKey: '/workspace/a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        agentSessionRef: null,
+        profileId: 'profile-a',
+        accountId: 'account-a',
+        allowedOrigins: ['https://example.com'],
+      },
+    }
+    const page = { url: () => 'https://example.com/form', fill: vi.fn() }
+    const module = new BrowserToolModule(
+      {
+        getPage: () => page,
+        getPageById: () => page,
+        switchToPage: vi.fn().mockResolvedValue(undefined),
+      } as any,
+      {
+        getActiveTaskForConversation: () => accountTask,
+        assertCanRunAction: () => accountTask,
+      } as any,
+      {
+        getViewWorkspaceKey: () => '/workspace/a',
+        getViewProfileId: () => 'profile-a',
+        isWorkspaceActive: () => true,
+        setActive: vi.fn(),
+        getCurrentURL: () => 'https://example.com/form',
+      } as any,
+    )
+
+    await expect(
+      module.execute(
+        'browser_fill',
+        { selector: '#name', value: '张三公司' },
+        { conversationId: 'conversation-a', workspaceKey: '/workspace/a' },
+      ),
+    ).rejects.toThrow('必须先截图或读取当前页面')
+    expect(page.fill).not.toHaveBeenCalled()
+  })
+
+  it('does not return full HTML or read secret fields from a registered account page', async () => {
+    const accountTask = {
+      id: 'task-a',
+      tabId: 'account-tab',
+      goal: 'read status',
+      status: 'running',
+      startedAt: Date.now(),
+      downloadIds: [],
+      correlation: {
+        workspaceKey: '/workspace/a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        agentSessionRef: null,
+        profileId: 'profile-a',
+        accountId: 'account-a',
+        allowedOrigins: ['https://example.com'],
+      },
+    }
+    const page = {
+      url: () => 'https://example.com/status',
+      evaluate: vi.fn().mockResolvedValue(true),
+      content: vi.fn(),
+      inputValue: vi.fn(),
+    }
+    const module = new BrowserToolModule(
+      {
+        getPage: () => page,
+        getPageById: () => page,
+        switchToPage: vi.fn().mockResolvedValue(undefined),
+      } as any,
+      {
+        getActiveTaskForConversation: () => accountTask,
+        assertCanRunAction: () => accountTask,
+      } as any,
+      {
+        getViewWorkspaceKey: () => '/workspace/a',
+        getViewProfileId: () => 'profile-a',
+        isWorkspaceActive: () => true,
+        setActive: vi.fn(),
+        getCurrentURL: () => 'https://example.com/status',
+      } as any,
+    )
+    const context = { conversationId: 'conversation-a', workspaceKey: '/workspace/a' }
+
+    await expect(module.execute('browser_extract', {}, context)).rejects.toThrow(
+      '不能返回整页 HTML',
+    )
+    await expect(
+      module.execute('browser_input_value', { selector: '#password' }, context),
+    ).rejects.toThrow('不能读取密码')
+    expect(page.content).not.toHaveBeenCalled()
+    expect(page.inputValue).not.toHaveBeenCalled()
+  })
+
   it('navigate uses the visible BrowserManager view instead of a hidden Playwright page', async () => {
     const bridge = {
       getPage: () => null,
@@ -255,6 +418,64 @@ describe('BrowserToolModule 可视浏览器同步', () => {
         profileId: 'profile-a',
       },
     })
+  })
+
+  it('does not let a browser-scoped Agent bypass web_account_open on a registered profile', async () => {
+    const browserTaskRuntime = {
+      getActiveTaskForConversation: vi.fn().mockReturnValue(null),
+      startTask: vi.fn(),
+    }
+    const browserManager = {
+      getViewIdForWorkspace: () => 'registered-tab',
+      getViewProfileId: () => 'registered-profile',
+    }
+    const module = new BrowserToolModule(
+      mockBridge,
+      browserTaskRuntime as any,
+      browserManager as any,
+      { isDraftProfile: () => false, resolveAccountIdByProfile: () => 'account-a' } as any,
+    )
+
+    await expect(
+      module.execute(
+        'browser_navigate',
+        { url: 'https://example.com/' },
+        { conversationId: 'conversation-a', workspaceKey: '/workspace/a' },
+      ),
+    ).rejects.toThrow('请先调用 web_account_open')
+    expect(browserTaskRuntime.startTask).not.toHaveBeenCalled()
+  })
+
+  it('keeps unsaved login drafts and unverifiable isolated profiles fail-closed', async () => {
+    const browserTaskRuntime = {
+      getActiveTaskForConversation: vi.fn().mockReturnValue(null),
+      startTask: vi.fn(),
+    }
+    const browserManager = {
+      getViewIdForWorkspace: () => 'draft-tab',
+      getViewProfileId: () => 'web-draft-a',
+    }
+    const context = { conversationId: 'conversation-a', workspaceKey: '/workspace/a' }
+    const draftModule = new BrowserToolModule(
+      mockBridge,
+      browserTaskRuntime as any,
+      browserManager as any,
+      { isDraftProfile: () => true, resolveAccountIdByProfile: () => null } as any,
+    )
+    await expect(
+      draftModule.execute('browser_navigate', { url: 'https://example.com/' }, context),
+    ).rejects.toThrow('尚未保存的登录草稿')
+
+    const unavailableModule = new BrowserToolModule(
+      mockBridge,
+      browserTaskRuntime as any,
+      browserManager as any,
+      null,
+    )
+    await expect(
+      unavailableModule.execute('browser_navigate', { url: 'https://example.com/' }, context),
+    ).rejects.toThrow('无法验证当前隔离登录环境')
+    expect(browserTaskRuntime.startTask).not.toHaveBeenCalled()
   })
 
   it('interaction actions claim the visible page and retry automatically', async () => {

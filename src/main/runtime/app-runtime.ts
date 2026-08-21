@@ -26,6 +26,7 @@ import type { MarkdownIllustrationService } from '../image-generation/markdown-i
 import type { UsageLedgerService } from '../usage/usage-ledger-service'
 import type { ProjectOpsService } from '../project-ops/project-ops-service'
 import type { WebResourceService } from '../web-resources/web-resource-service'
+import type { AgentWebResourceLaunchCoordinator } from '../web-resources/agent-web-resource-launch-coordinator'
 import type { WebAffairService } from '../web-affairs/web-affair-service'
 import type { HardwareService } from '../hardware/hardware-service'
 import type { CadConversionService } from '../cad/cad-conversion-service'
@@ -100,6 +101,7 @@ export interface CclinkStudioRuntimeState {
   usageLedgerService: UsageLedgerService | null
   projectOpsService: ProjectOpsService | null
   webResourceService: WebResourceService | null
+  agentWebResourceLaunchCoordinator: AgentWebResourceLaunchCoordinator | null
   webAffairService: WebAffairService | null
   hardwareService: HardwareService | null
   cadConversionService: CadConversionService | null
@@ -169,6 +171,7 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     usageLedgerService: null,
     projectOpsService: null,
     webResourceService: null,
+    agentWebResourceLaunchCoordinator: null,
     webAffairService: null,
     hardwareService: null,
     cadConversionService: null,

@@ -1,12 +1,11 @@
 # AI 网页事务代理人
 
-> 状态：“网站与账号全局复用、事务继续属于项目”已完成代码闭环并进入统一验收；
-> 真人真实登录复测完成前不宣称产品里程碑 Complete。Agent 已允许只读查看登记账号的安全
-> 元数据；Agent 使用指定账号打开登录环境、操作网页和人工接管的产品方案已经确认，但代码
-> 尚未交付，当前执行入口继续 fail-closed；开发顺序见
+> 状态：“网站与账号全局复用、事务继续属于项目”和 Agent 账号执行 X0–X5 已完成代码闭环
+> 并进入统一验收；真人真实登录复测完成前不宣称产品里程碑 Complete。Agent 可查看安全
+> 账号目录、打开指定账号、受控操作网页并与用户交接；开发与验收顺序见
 > `docs/features/global-web-accounts-development-plan.md` 和
 > `docs/features/ai-web-affairs-agent-development-plan.md`
-> 最后更新：2026-08-18
+> 最后更新：2026-08-21
 > 关联文档：`docs/architecture.md`、`docs/features/ai-work-browser.md`、
 > `docs/features/browser-automation.md`、`docs/features/agent-system.md`、
 > `docs/features/scheduled-tasks.md`、`docs/features/local-credentials.md`、
@@ -810,6 +809,8 @@ Mock、单元测试和静态流程模板只能证明工程准备度。
     并获得全局稳定账号引用后，才能进入资源选择器或由 Agent 调用。
 18. 关闭未保存 Tab 或保存失败时是否会留下孤儿 Profile 或丢失当前登录现场？不能；取消
     必须有界清理，保存失败必须保留现场并允许重试。
+    对默认或多个 Tab 共享的旧登录环境，点击保存也不得通过切换 Profile、重建 View 或刷新
+    页面来制造草稿；无法安全接管时必须原地拒绝并保留现有登录状态。
 19. 所有项目都能看到账号，是否意味着 Agent 可以自行选择任意账号？不能；Agent 只能使用
     用户当前任务或事务节点明确选择的账号，存在歧义必须询问。
 20. 同一真实账号在旧项目中存在多个记录，是否可以按名称或 URL 自动合并？不能；必须保留

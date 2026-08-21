@@ -129,4 +129,91 @@ describe('WebResourceToolModule', () => {
       data: { accountCount: 1, accounts: [{ accountName: '旧账号', archived: true }] },
     })
   })
+
+  it('opens one explicit account through the trusted visible-tab bridge without exposing profile data', async () => {
+    const accountId = '4fa85f64-5717-4562-b3fc-2c963f66afa6'
+    const resolveLaunch = vi.fn(() => ({
+      success: true as const,
+      data: {
+        webResourceRef: { accountId },
+        title: 'Apple Developer',
+        entryUrl: 'https://developer.apple.com/account/private',
+        browserProfileId: 'secret-profile-id',
+      },
+    }))
+    const getSnapshot = vi.fn(() => ({
+      success: true as const,
+      data: {
+        schemaVersion: 3 as const,
+        revision: 1,
+        websites: [
+          {
+            id: 'website-1',
+            name: 'Apple Developer',
+            origin: 'https://developer.apple.com',
+            entryUrl: 'https://developer.apple.com/account/private',
+          },
+        ],
+        principals: [{ id: 'principal-1', kind: 'company', name: '张三公司' }],
+        accounts: [
+          {
+            id: accountId,
+            websiteId: 'website-1',
+            principalId: 'principal-1',
+            label: '发行账号',
+            browserProfileId: 'secret-profile-id',
+            loginConfirmedAt: '2026-08-18T01:00:00.000Z',
+          },
+        ],
+        accountGroups: [],
+      },
+    }))
+    const requestLaunch = vi.fn().mockResolvedValue({ tabId: 'account-tab' })
+    const waitForViewBinding = vi.fn().mockResolvedValue(true)
+    const startTask = vi.fn().mockReturnValue({ id: 'browser-task' })
+    const module = new WebResourceToolModule({ resolveLaunch, getSnapshot } as never, {
+      launchCoordinator: { requestLaunch } as never,
+      browserManager: { waitForViewBinding } as never,
+      browserTaskRuntime: {
+        cancelTaskForConversation: vi.fn(),
+        startTask,
+      } as never,
+    })
+
+    const result = await module.execute(
+      'web_account_open',
+      { accountId },
+      {
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        agentGoal: '检查苹果审核状态',
+        trustedWorkspace: {
+          kind: 'local',
+          rootPath: '/workspace/a',
+          workspaceKey: '/workspace/a',
+        },
+      },
+    )
+
+    expect(requestLaunch).toHaveBeenCalledWith(
+      { kind: 'local', path: '/workspace/a' },
+      expect.objectContaining({ browserProfileId: 'secret-profile-id' }),
+    )
+    expect(waitForViewBinding).toHaveBeenCalledWith(
+      'account-tab',
+      '/workspace/a',
+      'secret-profile-id',
+    )
+    expect(startTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'account-tab',
+        correlation: expect.objectContaining({ accountId, profileId: 'secret-profile-id' }),
+      }),
+    )
+    expect(JSON.stringify(result)).not.toContain('secret-profile-id')
+    expect(result).toMatchObject({
+      success: true,
+      data: { accountId, tabId: 'account-tab', browserTaskId: 'browser-task' },
+    })
+  })
 })

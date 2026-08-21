@@ -255,7 +255,11 @@ export function registerBrowserIpc(
 
   handle(browserTaskIpcContracts.resume, (_event, taskRunId) => {
     if (!taskRuntime) throw new Error('浏览器任务运行时未初始化')
-    return taskRuntime.resumeTask(taskRunId)
+    const task = taskRuntime.getTask(taskRunId)
+    const currentUrl = task?.correlation?.accountId
+      ? browserManager.getCurrentURL(task.tabId)
+      : undefined
+    return taskRuntime.resumeTask(taskRunId, currentUrl)
   })
 
   handle(browserTaskIpcContracts.cancel, (_event, taskRunId) => {

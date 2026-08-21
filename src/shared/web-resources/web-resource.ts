@@ -1,4 +1,5 @@
 import { defineIpcCall } from '../ipc/contract'
+import type { WorkspaceRef } from '../workspace-ref'
 import type {
   ClaimLegacyWebConnectionsInput,
   ClaimLegacyWebConnectionsSummary,
@@ -26,7 +27,23 @@ import type {
   MergeWebAccountsInput,
 } from './web-resource-types'
 
+export interface AgentWebResourceLaunchRequest {
+  requestId: string
+  workspaceRef: WorkspaceRef
+  workspaceKey: string
+  descriptor: WebResourceLaunchDescriptor
+}
+
+export interface AgentWebResourceLaunchAcknowledgement {
+  requestId: string
+  success: boolean
+  tabId?: string
+  errorMessage?: string
+}
+
 export interface WebResourcesApiContract {
+  onAgentLaunchRequest(callback: (request: AgentWebResourceLaunchRequest) => void): () => void
+  acknowledgeAgentLaunch(acknowledgement: AgentWebResourceLaunchAcknowledgement): void
   getSnapshot(
     input: WebResourceProjectScopeInput,
   ): Promise<WebResourceOperationResult<WebResourceSnapshot>>
@@ -66,6 +83,11 @@ export interface WebResourcesApiContract {
   archiveAccount(input: ArchiveWebAccountInput): Promise<WebResourceOperationResult<WebAccount>>
   mergeAccounts(input: MergeWebAccountsInput): Promise<WebResourceOperationResult<WebAccount>>
 }
+
+export const webResourcesIpcEvents = {
+  agentLaunchRequested: 'webResources:agentLaunchRequested',
+  agentLaunchAcknowledged: 'webResources:agentLaunchAcknowledged',
+} as const
 
 export const webResourcesIpc = {
   getSnapshot: defineIpcCall<

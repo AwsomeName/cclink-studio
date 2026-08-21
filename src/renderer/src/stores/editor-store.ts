@@ -49,11 +49,20 @@ export interface EditorFileState {
   error?: string
 }
 
+export interface MarkdownViewState {
+  /** Markdown 滚动容器相对文档顶部的位置。 */
+  scrollTop: number
+  /** 用于限制持久化条目数量，避免长期使用后无界增长。 */
+  updatedAt: number
+}
+
 export type { EditorContentUpdate } from '@shared/ipc/editor'
 
 interface EditorState {
   /** 打开的文件状态：filePath → EditorFileState */
   files: Record<string, EditorFileState>
+  /** Markdown 阅读现场：filePath / virtual tab key → scroll state */
+  markdownViewStates: Record<string, MarkdownViewState>
   /** Agent 推送的内容更新队列 */
   pendingUpdates: EditorContentUpdate[]
 
@@ -112,6 +121,9 @@ interface EditorState {
 
   /** 从主进程 WorkspaceState 恢复编辑器草稿 */
   hydrateFromWorkspaceState: (value: unknown) => void
+
+  /** 记录 Markdown 阅读位置；正文生命周期不拥有该视图状态。 */
+  updateMarkdownViewState: (fileKey: string, scrollTop: number) => void
 }
 
 function normalizeMarkdownDiagnostics(diagnostics: MarkdownDiagnostic[]): MarkdownDiagnostic[] {
@@ -148,10 +160,22 @@ function sameMarkdownDiagnostics(left: MarkdownDiagnostic[], right: MarkdownDiag
   )
 }
 
-function normalizeEditorDrafts(value: unknown): Record<string, EditorFileState> | null {
+interface EditorWorkspaceSnapshot {
+  files: Record<string, EditorFileState>
+  markdownViewStates: Record<string, MarkdownViewState>
+}
+
+function normalizeEditorWorkspaceSnapshot(value: unknown): EditorWorkspaceSnapshot | null {
   if (!value || typeof value !== 'object') return null
-  const parsed = value as { files?: Record<string, EditorFileState> }
-  if (parsed.files && Object.keys(parsed.files).length === 0) return {}
+  const parsed = value as {
+    files?: Record<string, EditorFileState>
+    markdownViewStates?: Record<string, MarkdownViewState>
+  }
+  const hasFiles = Boolean(parsed.files && typeof parsed.files === 'object')
+  const hasViewStates = Boolean(
+    parsed.markdownViewStates && typeof parsed.markdownViewStates === 'object',
+  )
+  if (!hasFiles && !hasViewStates) return null
   const files: Record<string, EditorFileState> = {}
   for (const [key, file] of Object.entries(parsed.files ?? {})) {
     if (!file || typeof file.currentContent !== 'string') continue
@@ -176,7 +200,16 @@ function normalizeEditorDrafts(value: unknown): Record<string, EditorFileState> 
       ...(typeof file.error === 'string' ? { error: file.error } : {}),
     }
   }
-  return Object.keys(files).length > 0 ? files : null
+  const markdownViewStates: Record<string, MarkdownViewState> = {}
+  for (const [key, viewState] of Object.entries(parsed.markdownViewStates ?? {})) {
+    if (!viewState || typeof viewState !== 'object') continue
+    if (!Number.isFinite(viewState.scrollTop) || viewState.scrollTop < 0) continue
+    markdownViewStates[key] = {
+      scrollTop: viewState.scrollTop,
+      updatedAt: Number.isFinite(viewState.updatedAt) ? viewState.updatedAt : 0,
+    }
+  }
+  return { files, markdownViewStates }
 }
 
 function getPersistableEditorFiles(
@@ -196,7 +229,7 @@ function saveStoredEditorFiles(state: EditorState): void {
   try {
     if (isWorkspaceStateRestoring()) return
     const files = getPersistableEditorFiles(state.files)
-    persistWorkspaceSection('editorDrafts', { files })
+    persistWorkspaceSection('editorDrafts', { files, markdownViewStates: state.markdownViewStates })
   } catch {
     // WorkspaceState 镜像失败不应影响当前编辑器状态。
   }
@@ -295,6 +328,7 @@ function rebasePath(
 export const useEditorStore = create<EditorState>((set, get) => ({
   // 编辑器草稿按工作空间恢复，避免全局 localStorage 把其他项目草稿带入当前项目。
   files: {},
+  markdownViewStates: {},
   pendingUpdates: [],
 
   openFile: async (filePath) => {
@@ -637,7 +671,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         changed = true
         return { ...update, filePath }
       })
-      return changed ? { files, pendingUpdates } : state
+      const markdownViewStates: Record<string, MarkdownViewState> = {}
+      for (const [path, viewState] of Object.entries(state.markdownViewStates)) {
+        const nextPath = rebasePath(path, oldPrefix, newPrefix) ?? path
+        if (nextPath !== path) changed = true
+        markdownViewStates[nextPath] = viewState
+      }
+      return changed ? { files, markdownViewStates, pendingUpdates } : state
     })
   },
 
@@ -675,7 +715,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const pendingUpdates = state.pendingUpdates.map((update) =>
         update.filePath === oldPath ? { ...update, filePath: newPath } : update,
       )
-      return { files, pendingUpdates }
+      const { [oldPath]: movedViewState, ...remainingViewStates } = state.markdownViewStates
+      const markdownViewStates = movedViewState
+        ? { ...remainingViewStates, [newPath]: movedViewState }
+        : state.markdownViewStates
+      return { files, markdownViewStates, pendingUpdates }
     })
   },
 
@@ -700,9 +744,25 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   hydrateFromWorkspaceState: (value) => {
-    const files = normalizeEditorDrafts(value)
-    if (!files) return
-    set({ files })
+    const snapshot = normalizeEditorWorkspaceSnapshot(value)
+    if (!snapshot) return
+    set(snapshot)
+  },
+
+  updateMarkdownViewState: (fileKey, scrollTop) => {
+    if (!Number.isFinite(scrollTop) || scrollTop < 0) return
+    set((state) => {
+      const previous = state.markdownViewStates[fileKey]
+      if (previous && Math.abs(previous.scrollTop - scrollTop) < 1) return state
+      const entries = Object.entries({
+        ...state.markdownViewStates,
+        [fileKey]: { scrollTop, updatedAt: Date.now() },
+      })
+      const markdownViewStates = Object.fromEntries(
+        entries.sort(([, left], [, right]) => right.updatedAt - left.updatedAt).slice(0, 200),
+      )
+      return { markdownViewStates }
+    })
   },
 }))
 

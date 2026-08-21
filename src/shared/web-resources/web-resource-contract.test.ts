@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { webResourcesIpcContracts } from './web-resource-contract'
+import {
+  parseAgentWebResourceLaunchAcknowledgement,
+  parseAgentWebResourceLaunchRequest,
+} from './web-resource-schema'
 
 describe('web resources IPC contract', () => {
   it('accepts an arbitrary http website and trims user-entered metadata', () => {
@@ -130,5 +134,33 @@ describe('web resources IPC contract', () => {
     expect(() => webResourcesIpcContracts.beginDraft.parseArgs([])).toThrow()
     expect(() => webResourcesIpcContracts.saveDraft.parseArgs([])).toThrow()
     expect(() => webResourcesIpcContracts.importProjectOpsConfig.parseArgs([])).toThrow()
+  })
+
+  it('keeps Agent launch requests local, explicit and strictly acknowledged', () => {
+    const requestId = '11111111-1111-4111-8111-111111111111'
+    expect(
+      parseAgentWebResourceLaunchRequest({
+        requestId,
+        workspaceRef: { kind: 'local', path: '/workspace/a' },
+        workspaceKey: '/workspace/a',
+        descriptor: {
+          webResourceRef: { accountId: '22222222-2222-4222-8222-222222222222' },
+          title: '示例网站',
+          entryUrl: 'https://example.com/account',
+          browserProfileId: 'web-account-a',
+        },
+      }),
+    ).toMatchObject({ requestId, workspaceRef: { kind: 'local' } })
+    expect(() =>
+      parseAgentWebResourceLaunchRequest({
+        requestId,
+        workspaceRef: { kind: 'global' },
+        workspaceKey: '/workspace/a',
+        descriptor: {},
+      }),
+    ).toThrow()
+    expect(() => parseAgentWebResourceLaunchAcknowledgement({ requestId, success: true })).toThrow(
+      '成功响应必须包含标签页',
+    )
   })
 })

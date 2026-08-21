@@ -152,18 +152,29 @@ export function scopeWorkspaceEditorDraftSnapshot(
   workspaceRef: WorkspaceRef,
 ): unknown {
   if (!value || typeof value !== 'object') return { files: {} }
-  const parsed = value as { files?: Record<string, unknown> }
-  if (!parsed.files || typeof parsed.files !== 'object') {
+  const parsed = value as {
+    files?: Record<string, unknown>
+    markdownViewStates?: Record<string, unknown>
+  }
+  if (
+    (!parsed.files || typeof parsed.files !== 'object') &&
+    (!parsed.markdownViewStates || typeof parsed.markdownViewStates !== 'object')
+  ) {
     return value
   }
   // 远程第一阶段只读，不应把本地编辑器草稿写入远程工作区快照。
-  if (workspaceRef.kind !== 'local') return { ...parsed, files: {} }
+  if (workspaceRef.kind !== 'local') return { ...parsed, files: {}, markdownViewStates: {} }
   const files = Object.fromEntries(
-    Object.entries(parsed.files).filter(
+    Object.entries(parsed.files ?? {}).filter(
       ([fileKey]) => fileKey.startsWith('virtual:') || isPathInside(fileKey, workspaceRef.path),
     ),
   )
-  return { ...parsed, files }
+  const markdownViewStates = Object.fromEntries(
+    Object.entries(parsed.markdownViewStates ?? {}).filter(
+      ([fileKey]) => fileKey.startsWith('virtual:') || isPathInside(fileKey, workspaceRef.path),
+    ),
+  )
+  return { ...parsed, files, markdownViewStates }
 }
 
 function isTabCompatibleWithWorkspace(

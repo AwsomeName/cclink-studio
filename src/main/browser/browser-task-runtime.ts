@@ -19,6 +19,7 @@ const FINAL_STATUSES = new Set<BrowserTaskStatus>(['completed', 'failed', 'cance
 export class BrowserTaskRuntime {
   private readonly tasks = new Map<string, BrowserTaskRun>()
   private readonly activeTaskByTab = new Map<string, string>()
+  private readonly activeTaskByAccount = new Map<string, string>()
   private readonly actionLogs = new Map<string, BrowserActionLog[]>()
   private readonly actionLogById = new Map<string, BrowserActionLog>()
 
@@ -28,6 +29,17 @@ export class BrowserTaskRuntime {
   ) {}
 
   startTask(options: StartBrowserTaskOptions): BrowserTaskRun {
+    const accountId = options.correlation?.accountId
+    if (accountId) {
+      const leasedTaskId = this.activeTaskByAccount.get(accountId)
+      const leasedTask = leasedTaskId ? this.tasks.get(leasedTaskId) : undefined
+      if (leasedTask && !FINAL_STATUSES.has(leasedTask.status)) {
+        if (leasedTask.correlation?.conversationId !== options.correlation?.conversationId) {
+          throw new Error('该账号正在由另一个 Agent 任务使用，请先完成或取消原任务')
+        }
+        this.cancelTask(leasedTask.id)
+      }
+    }
     const existing = this.getActiveTaskForTab(options.tabId)
     if (existing && !FINAL_STATUSES.has(existing.status)) {
       this.cancelTask(existing.id)
@@ -44,6 +56,7 @@ export class BrowserTaskRuntime {
     }
     this.tasks.set(task.id, task)
     this.activeTaskByTab.set(task.tabId, task.id)
+    if (accountId) this.activeTaskByAccount.set(accountId, task.id)
     this.emitTaskChanged(task)
     return cloneTask(task)
   }
@@ -99,11 +112,45 @@ export class BrowserTaskRuntime {
   }
 
   pauseTask(taskRunId: string): BrowserTaskRun {
-    return this.transition(taskRunId, 'paused')
+    return this.transition(taskRunId, 'paused', { reobservationRequired: true })
   }
 
-  resumeTask(taskRunId: string): BrowserTaskRun {
+  pauseForTakeover(taskRunId: string, reason: string): BrowserTaskRun {
+    return this.transition(taskRunId, 'paused', {
+      reobservationRequired: true,
+      takeoverReason: reason,
+    })
+  }
+
+  resumeTask(taskRunId: string, userConfirmedUrl?: string): BrowserTaskRun {
+    const task = this.requireTask(taskRunId)
+    if (task.correlation?.accountId && userConfirmedUrl) {
+      try {
+        const parsed = new URL(userConfirmedUrl)
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          const allowedOrigins = new Set(task.correlation.allowedOrigins ?? [])
+          allowedOrigins.add(parsed.origin)
+          task.correlation = { ...task.correlation, allowedOrigins: [...allowedOrigins] }
+        }
+      } catch {
+        // 非网页 URL 不扩张账号边界，仍可恢复到原 Origin 后继续。
+      }
+    }
     return this.transition(taskRunId, 'running')
+  }
+
+  markReobserved(taskRunId: string): BrowserTaskRun {
+    const task = this.requireTask(taskRunId)
+    if (!task.reobservationRequired) return cloneTask(task)
+    task.reobservationRequired = false
+    task.takeoverReason = undefined
+    this.emitTaskChanged(task)
+    return cloneTask(task)
+  }
+
+  cancelTaskForConversation(conversationId: string): void {
+    const task = this.getActiveTaskForConversation(conversationId)
+    if (task) this.cancelTask(task.id)
   }
 
   finishTask(taskRunId: string): BrowserTaskRun {
@@ -219,6 +266,12 @@ export class BrowserTaskRuntime {
     } else {
       this.activeTaskByTab.set(task.tabId, task.id)
     }
+    if (FINAL_STATUSES.has(status)) {
+      const accountId = task.correlation?.accountId
+      if (accountId && this.activeTaskByAccount.get(accountId) === task.id) {
+        this.activeTaskByAccount.delete(accountId)
+      }
+    }
     this.emitTaskChanged(task)
     return cloneTask(task)
   }
@@ -257,7 +310,14 @@ export class BrowserTaskRuntime {
 function cloneTask(task: BrowserTaskRun): BrowserTaskRun {
   return {
     ...task,
-    correlation: task.correlation ? { ...task.correlation } : undefined,
+    correlation: task.correlation
+      ? {
+          ...task.correlation,
+          allowedOrigins: task.correlation.allowedOrigins
+            ? [...task.correlation.allowedOrigins]
+            : undefined,
+        }
+      : undefined,
     downloadIds: [...task.downloadIds],
   }
 }

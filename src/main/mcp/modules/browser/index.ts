@@ -17,6 +17,42 @@ import type { BrowserTaskRuntime } from '../../../browser/browser-task-runtime'
 import type { BrowserManager } from '../../../browser/browser-manager'
 import { classifyBrowserError } from '../../../browser/browser-task-errors'
 import { summarizeBrowserActionParams } from '../../../browser/browser-task-runtime'
+import type { BrowserTaskRun } from '../../../../shared/ipc/browser'
+import { realpath } from 'node:fs/promises'
+import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import type { WebResourceService } from '../../../web-resources/web-resource-service'
+
+const ACCOUNT_FORBIDDEN_ACTIONS = new Set([
+  'evaluate',
+  'getCookies',
+  'setCookie',
+  'clearCookies',
+  'getNetworkLogs',
+  'interceptRequest',
+  'mockResponse',
+  'clearIntercepts',
+  'setAutoDialog',
+  'newTab',
+  'closeTab',
+  'switchTab',
+  'listTabs',
+  'mouseClick',
+  'frameExecute',
+  'getConsoleLogs',
+  'listFrames',
+  'waitForPopup',
+])
+const ACCOUNT_OBSERVATION_ACTIONS = new Set([
+  'screenshot',
+  'extract',
+  'title',
+  'inputValue',
+  'waitForSelector',
+  'waitForNavigation',
+  'getTabInfo',
+  'frameContent',
+  'downloadInfo',
+])
 
 /**
  * 46 个浏览器工具定义
@@ -641,6 +677,7 @@ export class BrowserToolModule implements ToolModule {
     private playwrightBridge: PlaywrightBridge,
     private browserTaskRuntime?: BrowserTaskRuntime | null,
     private browserManager?: BrowserManager | null,
+    private webResourceService?: WebResourceService | null,
   ) {}
 
   async getExecutionPolicy(
@@ -657,6 +694,11 @@ export class BrowserToolModule implements ToolModule {
       context,
     )
     if (!tabId) return null
+
+    const task = context?.conversationId
+      ? this.browserTaskRuntime?.getActiveTaskForConversation(context.conversationId)
+      : null
+    if (task?.correlation?.accountId) return null
 
     await this.syncVisibleTab(tabId, true, hasWorkspaceContext ? workspaceKey : undefined).catch(
       () => undefined,
@@ -713,19 +755,22 @@ export class BrowserToolModule implements ToolModule {
     const page = visibleTabId ? this.getPageForTab(visibleTabId) : this.playwrightBridge.getPage()
     const tabId =
       visibleTabId ?? (hasWorkspaceContext ? null : this.playwrightBridge.getActiveTabId())
-    const mandatoryConfirmationReason = await this.getV2exSubmissionConfirmationReason(
-      actionType,
-      params,
-      page,
-      tabId,
-    )
+    const correlatedTask = context?.conversationId
+      ? this.browserTaskRuntime?.getActiveTaskForConversation(context.conversationId)
+      : null
+    const mandatoryConfirmationReason = correlatedTask?.correlation?.accountId
+      ? null
+      : await this.getV2exSubmissionConfirmationReason(actionType, params, page, tabId)
     if (mandatoryConfirmationReason && context?.confirmationGranted !== true) {
       throw new Error(`${mandatoryConfirmationReason}，必须先取得本次用户确认`)
     }
     let actionLogId: string | null = null
+    let activeTask: BrowserTaskRun | null = null
     if (tabId) {
       const task = this.browserTaskRuntime?.assertCanRunAction(tabId)
       if (task) {
+        activeTask = task
+        await this.assertAccountActionAllowed(task, actionType, params, page, context)
         const log = this.browserTaskRuntime!.startActionLog({
           taskRunId: task.id,
           tabId,
@@ -747,7 +792,13 @@ export class BrowserToolModule implements ToolModule {
       if (actionLogId) {
         this.browserTaskRuntime!.succeedActionLog(actionLogId)
       }
-      return result
+      if (activeTask?.correlation?.accountId && ACCOUNT_OBSERVATION_ACTIONS.has(actionType)) {
+        this.browserTaskRuntime?.markReobserved(activeTask.id)
+      }
+      if (activeTask?.correlation?.accountId) {
+        this.assertAccountOrigin(activeTask, tabId, actionType)
+      }
+      return activeTask?.correlation?.accountId ? this.sanitizeAccountActionResult(result) : result
     } catch (error) {
       if (actionLogId) {
         this.browserTaskRuntime!.failActionLog(actionLogId, {
@@ -757,6 +808,207 @@ export class BrowserToolModule implements ToolModule {
       }
       throw error
     }
+  }
+
+  private async assertAccountActionAllowed(
+    task: BrowserTaskRun,
+    actionType: string,
+    params: Record<string, unknown>,
+    page: ReturnType<PlaywrightBridge['getPage']>,
+    context?: ToolExecutionContext,
+  ): Promise<void> {
+    if (!task.correlation?.accountId) return
+    const actualProfileId = this.browserManager?.getViewProfileId(task.tabId)
+    if (actualProfileId !== task.correlation.profileId) {
+      throw new Error('账号任务的隔离登录环境绑定已失效，已拒绝继续操作')
+    }
+    if (ACCOUNT_FORBIDDEN_ACTIONS.has(actionType)) {
+      throw new Error(`登记账号任务不开放 ${actionType}，以避免泄露登录态或绕过可见操作`)
+    }
+    if (task.reobservationRequired && !ACCOUNT_OBSERVATION_ACTIONS.has(actionType)) {
+      throw new Error('人工接管已交还；Agent 必须先截图或读取当前页面，再继续填写和操作')
+    }
+    if (actionType === 'extract' && !String(params.selector ?? '').trim()) {
+      throw new Error('登记账号任务提取页面时必须指定可见内容选择器，不能返回整页 HTML')
+    }
+    if (actionType === 'frameContent' && !String(params.selector ?? '').trim()) {
+      throw new Error('登记账号任务提取 iframe 时必须指定可见内容选择器，不能返回整页 HTML')
+    }
+    if (actionType === 'inputValue' || actionType === 'fill') {
+      await this.assertAccountFieldSafe(actionType, params, page)
+    }
+    if (actionType === 'navigate') {
+      const url = String(params.url ?? '')
+      if (!this.isAllowedAccountUrl(task, url)) {
+        this.browserTaskRuntime?.pauseForTakeover(task.id, '目标网址超出登记账号边界')
+        throw new Error('目标网址超出登记账号边界，任务已暂停，请人工确认后接管')
+      }
+    }
+    if (actionType === 'uploadFile') {
+      await this.assertWorkspacePaths(params.paths, context, '上传材料', true)
+    }
+    if (actionType === 'saveDownload') {
+      await this.assertWorkspacePaths([params.path], context, '保存下载', false)
+    }
+    if (actionType === 'handleDialog' && params.action === 'accept') {
+      this.browserTaskRuntime?.pauseForTakeover(task.id, '网页确认对话框需要人工处理')
+      throw new Error('网页确认对话框需要人工接管，任务已暂停')
+    }
+    const sensitiveReason = await this.getGenericSensitiveActionReason(actionType, params, page)
+    if (sensitiveReason) {
+      this.browserTaskRuntime?.pauseForTakeover(task.id, sensitiveReason)
+      throw new Error(`${sensitiveReason}；任务已暂停，请由用户在可见页面完成后交还`)
+    }
+  }
+
+  private async assertWorkspacePaths(
+    rawPaths: unknown,
+    context: ToolExecutionContext | undefined,
+    label: string,
+    mustExist: boolean,
+  ): Promise<void> {
+    if (context?.trustedWorkspace?.kind !== 'local' || !Array.isArray(rawPaths)) {
+      throw new Error(`${label}仅允许使用当前本地项目内的路径`)
+    }
+    const workspaceRoot = context.trustedWorkspace.rootPath
+    const root = await realpath(resolve(workspaceRoot)).catch(() => resolve(workspaceRoot))
+    for (const value of rawPaths) {
+      if (typeof value !== 'string' || !isAbsolute(value)) {
+        throw new Error(`${label}路径必须是当前项目内的绝对路径`)
+      }
+      const candidate = resolve(value)
+      const checkedPath = mustExist
+        ? await realpath(candidate).catch(() => {
+            throw new Error(`${label}文件不存在或不可访问`)
+          })
+        : resolve(
+            await realpath(dirname(candidate)).catch(() => {
+              throw new Error(`${label}目录不存在或不可访问`)
+            }),
+            candidate.split(/[/\\]/u).at(-1) ?? '',
+          )
+      const relation = relative(root, checkedPath)
+      if (relation.startsWith('..') || isAbsolute(relation)) {
+        throw new Error(`${label}路径超出当前项目，已拒绝访问`)
+      }
+    }
+  }
+
+  private async assertAccountFieldSafe(
+    actionType: string,
+    params: Record<string, unknown>,
+    page: ReturnType<PlaywrightBridge['getPage']>,
+  ): Promise<void> {
+    if (!page) throw new Error('可视浏览器页面尚未就绪')
+    const selector = String(params.selector ?? '')
+    const sensitive = await page
+      .evaluate((targetSelector) => {
+        const target = document.querySelector(targetSelector)
+        if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement)) {
+          return false
+        }
+        const signature = [
+          target.getAttribute('type'),
+          target.getAttribute('name'),
+          target.getAttribute('id'),
+          target.getAttribute('autocomplete'),
+          target.getAttribute('aria-label'),
+        ]
+          .filter(Boolean)
+          .join(' ')
+        return /password|passwd|pwd|token|secret|cookie|authorization|api[-_ ]?key|otp|one-time|验证码/i.test(
+          signature,
+        )
+      }, selector)
+      .catch(() => true)
+    if (sensitive) {
+      throw new Error(
+        `登记账号任务不能${actionType === 'fill' ? '填写' : '读取'}密码、Token、验证码或其他秘密字段`,
+      )
+    }
+  }
+
+  private sanitizeAccountActionResult(result: unknown): unknown {
+    if (!result || typeof result !== 'object' || Array.isArray(result)) return result
+    const sanitized: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(result)) {
+      if (/password|passwd|pwd|token|secret|cookie|authorization|api[-_]?key/i.test(key)) {
+        sanitized[key] = '[redacted]'
+      } else if ((key === 'url' || key.endsWith('Url')) && typeof value === 'string') {
+        sanitized[key] = redactSensitiveUrl(value)
+      } else {
+        sanitized[key] = value
+      }
+    }
+    return sanitized
+  }
+
+  private isAllowedAccountUrl(task: BrowserTaskRun, rawUrl: string): boolean {
+    try {
+      const origin = new URL(rawUrl).origin
+      return task.correlation?.allowedOrigins?.includes(origin) === true
+    } catch {
+      return false
+    }
+  }
+
+  private assertAccountOrigin(
+    task: BrowserTaskRun,
+    tabId: string | null,
+    actionType: string,
+  ): void {
+    if (!tabId || actionType === 'goBack' || actionType === 'goForward') return
+    const currentUrl = this.browserManager?.getCurrentURL(tabId) ?? ''
+    if (!currentUrl || this.isAllowedAccountUrl(task, currentUrl)) return
+    this.browserTaskRuntime?.pauseForTakeover(task.id, '页面已跳转到登记账号边界之外')
+    throw new Error('页面已跳转到登记账号边界之外，任务已暂停，请人工确认')
+  }
+
+  private async getGenericSensitiveActionReason(
+    actionType: string,
+    params: Record<string, unknown>,
+    page: ReturnType<PlaywrightBridge['getPage']>,
+  ): Promise<string | null> {
+    if (!page || !['click', 'press', 'pressKey'].includes(actionType)) return null
+    if ((actionType === 'press' || actionType === 'pressKey') && params.key !== 'Enter') return null
+    const result = await page
+      .evaluate(
+        ({ action, selector }) => {
+          let element: Element | null = null
+          try {
+            element =
+              action === 'pressKey'
+                ? document.activeElement
+                : selector
+                  ? document.querySelector(selector)
+                  : null
+          } catch {
+            return { sensitive: true, label: '无法识别的提交控件' }
+          }
+          const target = element?.closest('button, input, a, [role="button"]') ?? element
+          const label = String(
+            target?.getAttribute('value') ||
+              target?.getAttribute('aria-label') ||
+              target?.textContent ||
+              '',
+          ).trim()
+          const lower = label.toLowerCase()
+          if (/草稿|暂存|save\s+draft|draft/.test(lower)) return { sensitive: false, label }
+          const type = (target?.getAttribute('type') || '').toLowerCase()
+          const sensitive =
+            type === 'submit' ||
+            /提交|发布|确认|支付|付款|删除|注销|签署|授权|同意|submit|publish|confirm|pay|delete|sign|authorize|approve/.test(
+              lower,
+            ) ||
+            action === 'pressKey'
+          return { sensitive, label }
+        },
+        { action: actionType, selector: String(params.selector ?? '') },
+      )
+      .catch(() => ({ sensitive: true, label: '无法确认的网页动作' }))
+    return result.sensitive
+      ? `检测到敏感最终动作${result.label ? `（${result.label}）` : ''}`
+      : null
   }
 
   private async resolveTargetTab(
@@ -810,6 +1062,19 @@ export class BrowserToolModule implements ToolModule {
     if (!conversationId || !this.browserTaskRuntime) return
     if (this.browserTaskRuntime.getActiveTaskForConversation(conversationId)) return
 
+    const profileId = this.browserManager?.getViewProfileId(tabId) ?? null
+    if (profileId && this.webResourceService === null) {
+      throw new Error('网站与账号服务不可用，无法验证当前隔离登录环境，已拒绝 Agent 操作')
+    }
+    if (this.webResourceService?.isDraftProfile(profileId)) {
+      throw new Error('当前 Tab 是尚未保存的登录草稿，不能交给 Agent 操作')
+    }
+    if (this.webResourceService?.resolveAccountIdByProfile(profileId)) {
+      throw new Error(
+        '当前 Tab 属于已登记账号；请先调用 web_account_open 绑定明确 accountId，不能绕过账号执行边界',
+      )
+    }
+
     const goal = context.agentGoal?.trim().replace(/\s+/g, ' ').slice(0, 200)
     this.browserTaskRuntime.startTask({
       tabId,
@@ -819,7 +1084,7 @@ export class BrowserToolModule implements ToolModule {
         conversationId,
         agentRunId: context.agentRunId ?? null,
         agentSessionRef: null,
-        profileId: this.browserManager?.getViewProfileId(tabId) ?? null,
+        profileId,
       },
     })
   }
@@ -1076,4 +1341,18 @@ function safeUrlPath(url: string): string {
 
 function isV2exPublishingPath(path: string): boolean {
   return /^\/new(?:\/|$)/.test(path) || /^\/t\/\d+/.test(path) || /^\/(?:edit|update)\//.test(path)
+}
+
+function redactSensitiveUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl)
+    for (const key of [...url.searchParams.keys()]) {
+      if (/token|secret|key|code|signature|credential|session|auth/i.test(key)) {
+        url.searchParams.set(key, '[redacted]')
+      }
+    }
+    return url.toString()
+  } catch {
+    return rawUrl
+  }
 }
