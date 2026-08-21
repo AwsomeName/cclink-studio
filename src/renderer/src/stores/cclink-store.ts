@@ -23,6 +23,7 @@ interface CclinkState {
   loading: boolean
   error: string | null
   initialize(): Promise<void>
+  connectRealtime(): Promise<boolean>
   sendCode(phone: string): Promise<{ success: boolean; error?: string }>
   login(phone: string, code: string): Promise<boolean>
   logout(): Promise<void>
@@ -78,11 +79,7 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
         }
         const session = await window.cclinkStudio.auth.checkSession()
         set({ service, session })
-        if (session.loggedIn && !session.offline) {
-          const realtime = await window.cclinkStudio.cclink.connectRealtime()
-          set({ realtime })
-          if (realtime.state === 'online') await get().refreshServers()
-        }
+        // 恢复登录状态本身不启动腾讯 IM；显式远程入口和已打开远程项目由生命周期控制器决定连接。
         set({ initialized: true })
       } catch (error) {
         set({ error: message(error), initialized: true })
@@ -97,6 +94,29 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
     }
   },
 
+  connectRealtime: async () => {
+    await get().initialize()
+    const state = get()
+    if (!state.service?.configured || !state.session.loggedIn || state.session.offline) return false
+    if (state.realtime.state === 'online') return true
+    set({ loading: true, error: null })
+    try {
+      const realtime = await window.cclinkStudio.cclink.connectRealtime()
+      set({ realtime })
+      if (realtime.state !== 'online') {
+        set({ error: realtime.error || '远程连接失败' })
+        return false
+      }
+      await get().refreshServers()
+      return true
+    } catch (error) {
+      set({ error: message(error) })
+      return false
+    } finally {
+      set({ loading: false })
+    }
+  },
+
   sendCode: (phone) => window.cclinkStudio.auth.phoneSendCode(phone),
 
   login: async (phone, code) => {
@@ -108,14 +128,7 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
         return false
       }
       set({ session: { loggedIn: true, user: result.user } })
-      const realtime = await window.cclinkStudio.cclink.connectRealtime()
-      set({ realtime })
-      if (realtime.state !== 'online') {
-        set({ error: realtime.error || '远程连接失败' })
-        return false
-      }
-      await get().refreshServers()
-      return true
+      return get().connectRealtime()
     } catch (error) {
       set({ error: message(error) })
       return false

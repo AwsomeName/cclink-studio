@@ -55,6 +55,10 @@ export const browserBoundsSchema = z
   })
   .strict()
 
+export const browserWorkbenchBoundsSchema = browserBoundsSchema.extend({
+  protectedTop: z.number().finite().min(0).max(100_000),
+})
+
 const zoomFactorSchema = z.number().finite().min(0.3).max(3)
 
 export const browserCreateViewOptionsSchema = z

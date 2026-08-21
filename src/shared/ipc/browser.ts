@@ -309,6 +309,13 @@ export interface BrowserRuntimeDiagnosticSummary {
   playwrightUrl: string | null
   playwrightTitle: string | null
   bindingStatus: BrowserBindingStatus
+  layout: {
+    rendererBounds: BrowserBounds
+    nativeBounds: BrowserBounds
+    protectedTop: number
+    nativeProtectedTop: number
+    overlapsProtectedTop: boolean
+  } | null
   engineVersions?: {
     electron: string
     chromium: string
@@ -476,6 +483,11 @@ export interface BrowserBounds {
   y: number
   width: number
   height: number
+}
+
+/** 主窗口 Browser View 的内容区，以及不得覆盖的工作台顶栏下边界。 */
+export interface BrowserWorkbenchBounds extends BrowserBounds {
+  protectedTop: number
 }
 
 export interface BrowserApiContract {

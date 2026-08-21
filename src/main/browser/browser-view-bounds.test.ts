@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { rendererBoundsToWindowDip } from './browser-view-bounds'
+import {
+  clampBrowserBoundsBelowProtectedTop,
+  rendererBoundsToWindowDip,
+} from './browser-view-bounds'
 
 describe('rendererBoundsToWindowDip', () => {
   it('converts renderer CSS coordinates with the main window zoom factor', () => {
@@ -27,5 +30,17 @@ describe('rendererBoundsToWindowDip', () => {
         height: 240,
       }),
     ).toEqual({ x: 0, y: 90, width: 640, height: 150 })
+  })
+
+  it('never lets a native browser view cover the protected workbench chrome', () => {
+    expect(
+      clampBrowserBoundsBelowProtectedTop({ x: 200, y: 72, width: 900, height: 700 }, 108),
+    ).toEqual({ x: 200, y: 108, width: 900, height: 664 })
+  })
+
+  it('keeps an already safe browser view unchanged', () => {
+    expect(
+      clampBrowserBoundsBelowProtectedTop({ x: 200, y: 140, width: 900, height: 640 }, 108),
+    ).toEqual({ x: 200, y: 140, width: 900, height: 640 })
   })
 })

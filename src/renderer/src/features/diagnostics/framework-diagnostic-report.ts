@@ -3,7 +3,14 @@ import type { BrowserRuntimeDiagnosticSummary } from '@shared/ipc/browser'
 import { sanitizeDiagnosticText, type DiagnosticLogSnapshot } from '@shared/diagnostics'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { APP_VERSION } from '../../app-metadata'
-import { useFsStore, useTabStore, useUpdateStore, useWorkspaceStore } from '../../stores'
+import {
+  useCclinkStore,
+  useFsStore,
+  useOpenProjectsStore,
+  useTabStore,
+  useUpdateStore,
+  useWorkspaceStore,
+} from '../../stores'
 import {
   formatContextActionDiagnosticsMarkdown,
   useContextActionDiagnosticsStore,
@@ -124,11 +131,24 @@ export async function collectFrameworkDiagnosticReport(): Promise<string> {
 
 async function collectActiveRemoteDiagnostics(): Promise<string> {
   const ref = useWorkspaceStore.getState().activeWorkspaceRef
-  if (ref.kind !== 'remote') return '- 当前不是远程工作区'
+  const openRemoteCount = useOpenProjectsStore.getState().openRemoteWorkspaceRefs.length
+  const realtimeState = useCclinkStore.getState().realtime.state
+  if (ref.kind !== 'remote') {
+    return [
+      '- 当前激活：本地工作区',
+      `- 项目条中已打开远程工作区：${openRemoteCount}`,
+      `- CCLink 实时连接：${realtimeState}`,
+      ...(openRemoteCount > 0
+        ? ['- 说明：实时连接服务于仍然打开的远程项目，不改变当前本地项目的类型']
+        : []),
+    ].join('\n')
+  }
 
   const report = await window.cclinkStudio.remote.diagnose(ref)
   const probe = report.status.capabilityProbe
   return [
+    `- 项目条中已打开远程工作区：${openRemoteCount}`,
+    `- CCLink 实时连接：${realtimeState}`,
     `- 设备：${report.status.endpointName ?? ref.endpointId}`,
     `- 状态：${report.status.state}`,
     `- Agent 版本：${report.status.agentVersion ?? '未知'}`,
@@ -184,6 +204,14 @@ function formatBrowserRuntimeDiagnostics(summary: BrowserRuntimeDiagnosticSummar
     lines.push('- 最近页面绑定：无')
   }
 
+  if (summary.layout) {
+    lines.push(
+      `- 浏览器布局：renderer=${JSON.stringify(summary.layout.rendererBounds)} native=${JSON.stringify(summary.layout.nativeBounds)} protectedTop=${summary.layout.protectedTop} nativeProtectedTop=${summary.layout.nativeProtectedTop} overlapsProtectedTop=${summary.layout.overlapsProtectedTop}`,
+    )
+  } else {
+    lines.push('- 浏览器布局：不可用')
+  }
+
   if (!summary.page) {
     lines.push('- 页面 Console：不可用', '- 页面 Network：不可用')
     return lines.join('\n')
@@ -235,6 +263,7 @@ function stripEmbeddedSectionHeading(markdown: string, title: string): string {
 
 function formatRuntimeState(): string {
   const fs = useFsStore.getState()
+  const projects = useOpenProjectsStore.getState()
   const tabState = useTabStore.getState()
   const workspace = useWorkspaceStore.getState()
   const update = useUpdateStore.getState().snapshot
@@ -247,6 +276,7 @@ function formatRuntimeState(): string {
 
   return [
     `- 工作空间：${workspaceRefKey(workspace.activeWorkspaceRef) ?? '未归档'}`,
+    `- 已打开项目：本地=${projects.openProjectPaths.length} 远程=${projects.openRemoteWorkspaceRefs.length}`,
     `- 文件系统：loading=${fs.loading} picking=${fs.picking} switching=${fs.switchingPath ?? '无'}`,
     `- 项目错误：${fs.error ?? '无'}`,
     `- 文件操作错误：${fs.operationError ?? '无'}`,

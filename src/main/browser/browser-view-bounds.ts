@@ -40,3 +40,17 @@ export function rendererBoundsToWindowDip(
     height: clamp(scaled.height, 0, maxHeight - y),
   }
 }
+
+/** 裁掉越过工作台工具栏/Tab 栏保护线的原生 View 区域。 */
+export function clampBrowserBoundsBelowProtectedTop(
+  bounds: BrowserBounds,
+  protectedTop: number,
+): BrowserBounds {
+  const bottom = bounds.y + bounds.height
+  const y = Math.max(bounds.y, Math.round(protectedTop))
+  return {
+    ...bounds,
+    y,
+    height: Math.max(0, bottom - y),
+  }
+}

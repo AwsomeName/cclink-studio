@@ -72,6 +72,10 @@ export async function openWorkspaceRef(
       throw new Error(state.service?.message || 'CCLink 远程服务未配置')
     }
     if (!state.session.loggedIn) throw new Error('请先登录 CCLink 远程服务')
+    if (!(await state.connectRealtime())) {
+      throw new Error(useCclinkStore.getState().error || 'CCLink 远程连接失败')
+    }
+    state = useCclinkStore.getState()
     try {
       confirmedRef = await confirmRemoteWorkspaceRef(ref, options.remoteRequestId)
     } catch (error) {

@@ -5,13 +5,13 @@ import {
   browserIpcEvents,
   browserTaskIpc,
   type BrowserApiContract,
-  type BrowserBounds,
+  type BrowserWorkbenchBounds,
   parseBrowserPopupCreatedPayload,
   parseBrowserRuntimeTabClosedPayload,
 } from '../shared/ipc/browser'
 import { invokeIpcContract } from './ipc-contract-client'
 
-export const reportWorkbenchBounds = (bounds: BrowserBounds): void =>
+export const reportWorkbenchBounds = (bounds: BrowserWorkbenchBounds): void =>
   ipcRenderer.send(browserIpcEvents.workbenchBounds, bounds)
 
 export const browserApi: BrowserApiContract = {

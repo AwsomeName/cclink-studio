@@ -140,7 +140,7 @@ export function RemoteAgentController({
   const loading = useCclinkStore((state) => state.loading)
   const error = useCclinkStore((state) => state.error)
   const realtimeState = useCclinkStore((state) => state.realtime.state)
-  const initialize = useCclinkStore((state) => state.initialize)
+  const connectRealtime = useCclinkStore((state) => state.connectRealtime)
   const createSession = useCclinkStore((state) => state.createSession)
   const selectSession = useCclinkStore((state) => state.selectSession)
   const loadMessages = useCclinkStore((state) => state.loadMessages)
@@ -182,25 +182,27 @@ export function RemoteAgentController({
   useEffect(() => {
     let cancelled = false
     setStatusError(null)
-    void initialize().then(() =>
-      window.cclinkStudio.remote
-        .getStatus(workspaceRef)
-        .then((status) => {
-          if (!cancelled) setRemoteStatus(status)
-        })
-        .catch((statusFailure: unknown) => {
-          if (!cancelled) {
-            setStatusError(
-              statusFailure instanceof Error ? statusFailure.message : String(statusFailure),
-            )
-          }
-        }),
-    )
+    void (async () => {
+      try {
+        const connected = await connectRealtime()
+        if (!connected) {
+          throw new Error(useCclinkStore.getState().error || 'CCLink 远程连接失败')
+        }
+        const status = await window.cclinkStudio.remote.getStatus(workspaceRef)
+        if (!cancelled) setRemoteStatus(status)
+      } catch (statusFailure) {
+        if (!cancelled) {
+          setStatusError(
+            statusFailure instanceof Error ? statusFailure.message : String(statusFailure),
+          )
+        }
+      }
+    })()
     return () => {
       cancelled = true
     }
   }, [
-    initialize,
+    connectRealtime,
     workspaceRef.endpointId,
     workspaceRef.path,
     workspaceRef.workspaceId,

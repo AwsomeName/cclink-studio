@@ -203,6 +203,7 @@ describe('agent diagnostic report', () => {
         playwrightUrl: 'https://www.baidu.com',
         playwrightTitle: '百度一下',
         bindingStatus: 'tab_mismatch',
+        layout: null,
         engineVersions: {
           electron: '43.1.1',
           chromium: '150.0.7871.114',
@@ -435,6 +436,7 @@ describe('agent diagnostic report', () => {
       playwrightUrl: 'https://example.com',
       playwrightTitle: 'Example',
       bindingStatus: 'matched',
+      layout: null,
       recentUrls: [],
       lastClaim: null,
       fitWidth: null,

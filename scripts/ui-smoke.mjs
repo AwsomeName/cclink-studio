@@ -1928,6 +1928,19 @@ async function main() {
       activeBrowserTabId,
       { timeout: 10_000 },
     )
+    await page.waitForFunction(
+      async (tabId) => {
+        const layout = (await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)).layout
+        return (
+          layout !== null &&
+          !layout.overlapsProtectedTop &&
+          layout.rendererBounds.y >= layout.protectedTop &&
+          layout.nativeBounds.y >= layout.nativeProtectedTop
+        )
+      },
+      activeBrowserTabId,
+      { timeout: 10_000 },
+    )
 
     await page.locator('[title="检查和下载 CCLink Studio 更新"]').click()
     const browserUpdatePanel = page.locator('.update-panel')

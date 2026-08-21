@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { localWorkspaceRef, remoteWorkspaceRef } from '@shared/workspace-ref'
-import { useFsStore, useTabStore, useWorkspaceStore } from '../../stores'
+import {
+  useCclinkStore,
+  useFsStore,
+  useOpenProjectsStore,
+  useTabStore,
+  useWorkspaceStore,
+} from '../../stores'
 import {
   recordRendererDiagnosticLog,
   resetRendererDiagnosticsForTest,
@@ -15,6 +21,8 @@ describe('collectFrameworkDiagnosticReport', () => {
       platform: 'darwin',
     })
     useWorkspaceStore.setState({ activeWorkspaceRef: localWorkspaceRef('/Users/alice/project') })
+    useOpenProjectsStore.setState(useOpenProjectsStore.getInitialState(), true)
+    useCclinkStore.setState(useCclinkStore.getInitialState(), true)
     useFsStore.setState({
       workspacePath: '/Users/alice/project',
       loading: false,
@@ -30,6 +38,17 @@ describe('collectFrameworkDiagnosticReport', () => {
   })
 
   it('collects framework state and filters Agent runtime logs', async () => {
+    useOpenProjectsStore.setState({
+      openProjectPaths: ['/Users/alice/project'],
+      openRemoteWorkspaceRefs: [
+        remoteWorkspaceRef({
+          endpointId: 'agent-1',
+          workspaceId: 'workspace-1',
+          path: '/srv/project',
+        }),
+      ],
+    })
+    useCclinkStore.setState({ realtime: { state: 'online' } })
     vi.stubGlobal('window', {
       cclinkStudio: {
         workspaceState: {
@@ -99,6 +118,9 @@ describe('collectFrameworkDiagnosticReport', () => {
     expect(report).toContain('[WorkspaceStateService] project open failed')
     expect(report).toContain('[FsStore] 打开所选项目失败: EACCES')
     expect(report).toContain('Agent 会话恢复轨迹：已从框架报告排除')
+    expect(report).toContain('已打开项目：本地=1 远程=1')
+    expect(report).toContain('项目条中已打开远程工作区：1')
+    expect(report).toContain('实时连接服务于仍然打开的远程项目')
     expect(report.match(/## 上下文操作/g)).toHaveLength(1)
     expect(report).not.toContain('agent-private-log')
     expect(report).not.toContain('agent-renderer-private-log')

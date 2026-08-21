@@ -43,7 +43,10 @@ import {
 import { normalizeBrowserContext, showBrowserContextMenu } from './browser-context-menu'
 import { installPlainTextLinkSupport } from './browser-plain-text-links'
 import { installHorizontalPanSupport } from './browser-horizontal-pan'
-import { rendererBoundsToWindowDip } from './browser-view-bounds'
+import {
+  clampBrowserBoundsBelowProtectedTop,
+  rendererBoundsToWindowDip,
+} from './browser-view-bounds'
 import { resetVisualPageScale } from './browser-visual-page-scale'
 import { keyChordId, normalizeKeyChord, type KeyChord } from '../../shared/keybindings'
 import type {
@@ -244,6 +247,8 @@ interface BrowserViewHost {
   activeViewId: string | null
   currentBounds: BrowserBounds
   currentRendererBounds: BrowserBounds
+  protectedTop: number
+  nativeProtectedTop: number
 }
 
 const MAIN_BROWSER_HOST_ID = 'main'
@@ -377,6 +382,10 @@ export class BrowserManager {
     }
   }
 
+  private resolveRendererY(value: number, windowId = MAIN_BROWSER_HOST_ID): number {
+    return this.resolveRendererBounds({ x: 0, y: value, width: 0, height: 0 }, windowId).y
+  }
+
   registerHost(windowId: string, browserWindow: BrowserWindow, workspaceKey: string | null): void {
     const existing = this.hosts.get(windowId)
     if (existing && existing.nativeWindow !== browserWindow) {
@@ -395,6 +404,8 @@ export class BrowserManager {
         width: 0,
         height: 0,
       },
+      protectedTop: existing?.protectedTop ?? 0,
+      nativeProtectedTop: existing?.nativeProtectedTop ?? 0,
     })
   }
 
@@ -420,6 +431,8 @@ export class BrowserManager {
         width: 1,
         height: 1,
       },
+      protectedTop: existing?.protectedTop ?? 0,
+      nativeProtectedTop: existing?.nativeProtectedTop ?? 0,
     })
   }
 
@@ -1450,20 +1463,33 @@ export class BrowserManager {
    * 更新内容区坐标（全局）
    * 由渲染进程通过 IPC 上报 Workbench 区域坐标，作用于当前活跃视图
    */
-  updateBounds(bounds: { x: number; y: number; width: number; height: number }): void {
-    this.updateBoundsForWindow(MAIN_BROWSER_HOST_ID, bounds)
+  updateBounds(bounds: {
+    x: number
+    y: number
+    width: number
+    height: number
+    protectedTop?: number
+  }): void {
+    this.updateBoundsForWindow(MAIN_BROWSER_HOST_ID, bounds, bounds.protectedTop)
   }
 
   updateBoundsForWindow(
     windowId: string,
     bounds: { x: number; y: number; width: number; height: number },
+    protectedTop = bounds.y,
   ): void {
     const host = this.hosts.get(windowId)
     if (!host) return
     const previousBounds = host.currentBounds
     host.currentRendererBounds = bounds
-    const nextBounds = this.resolveRendererBounds(bounds, windowId)
+    const nativeProtectedTop = this.resolveRendererY(protectedTop, windowId)
+    const nextBounds = clampBrowserBoundsBelowProtectedTop(
+      this.resolveRendererBounds(bounds, windowId),
+      nativeProtectedTop,
+    )
     host.currentBounds = nextBounds
+    host.protectedTop = protectedTop
+    host.nativeProtectedTop = nativeProtectedTop
     if (!host.activeViewId) return
     const entry = this.views.get(host.activeViewId)
     if (!entry) return
@@ -2282,6 +2308,13 @@ export class BrowserManager {
       errorMessage?: string
     } | null
     fitWidth: BrowserFitWidthDiagnosticSummary | null
+    layout: {
+      rendererBounds: BrowserBounds
+      nativeBounds: BrowserBounds
+      protectedTop: number
+      nativeProtectedTop: number
+      overlapsProtectedTop: boolean
+    } | null
     session: BrowserSessionDiagnosticSummary | null
   }> {
     const entry = this.views.get(tabId)
@@ -2300,12 +2333,14 @@ export class BrowserManager {
         engineVersions: this.getEngineVersions(),
         lastClaim: this.lastClaimByTab.get(tabId) ?? null,
         fitWidth: null,
+        layout: null,
         session: null,
       }
     }
 
     const visibleUrl = entry.view.webContents.getURL() || entry.url || null
     const browserSession = entry.view.webContents.session
+    const host = this.hosts.get(entry.ownerWindowId)
     const sessionDiagnostics = await this.sessionDiagnostics.describe(
       browserSession,
       entry.profileId,
@@ -2328,6 +2363,15 @@ export class BrowserManager {
       engineVersions: this.getEngineVersions(),
       lastClaim: this.lastClaimByTab.get(tabId) ?? null,
       fitWidth: entry.lastFitDiagnostic,
+      layout: host
+        ? {
+            rendererBounds: host.currentRendererBounds,
+            nativeBounds: host.currentBounds,
+            protectedTop: host.protectedTop,
+            nativeProtectedTop: host.nativeProtectedTop,
+            overlapsProtectedTop: host.currentBounds.y < host.nativeProtectedTop,
+          }
+        : null,
       session: sessionDiagnostics,
     }
   }

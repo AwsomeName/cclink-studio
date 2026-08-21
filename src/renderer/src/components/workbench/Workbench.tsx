@@ -48,6 +48,7 @@ export function Workbench({
   const browserTabs = useBrowserStore((s) => s.tabs)
   const setBrowserUrlInput = useBrowserStore((s) => s.setUrlInput)
   const contentRef = useRef<HTMLDivElement>(null)
+  const tabBarRef = useRef<HTMLDivElement>(null)
   const [conversationDropActive, setConversationDropActive] = useState(false)
   const [addressFocusRequestTabId, setAddressFocusRequestTabId] = useState<string | null>(null)
 
@@ -56,7 +57,7 @@ export function Workbench({
   const isAndroidTab = activeTab?.type === 'android'
   const activeBrowserState = activeTabId ? browserTabs[activeTabId] : undefined
 
-  useWorkbenchBounds(contentRef)
+  useWorkbenchBounds(contentRef, tabBarRef)
   useBrowserEvents()
   useEditorContentUpdates()
 
@@ -262,6 +263,7 @@ export function Workbench({
       onDrop={(event) => void handleConversationDrop(event)}
     >
       <TabBar
+        tabBarRef={tabBarRef}
         tabs={tabs}
         activeTabId={activeTabId}
         onActivate={activateTab}

@@ -16,7 +16,7 @@ import {
   registerTrustedIpcListener,
   type TrustedRendererGuard,
 } from './trusted-renderer-guard'
-import { browserBoundsSchema } from './browser-ipc-schema'
+import { browserWorkbenchBoundsSchema } from './browser-ipc-schema'
 
 /**
  * 注册浏览器相关的 IPC 处理器
@@ -45,7 +45,7 @@ export function registerBrowserIpc(
     browserIpcEvents.workbenchBounds,
     trustedRendererGuard,
     (_event, bounds) => {
-      const parsed = browserBoundsSchema.safeParse(bounds)
+      const parsed = browserWorkbenchBoundsSchema.safeParse(bounds)
       if (!parsed.success) {
         console.warn('[BrowserIpc] 已丢弃非法 workbench bounds')
         return

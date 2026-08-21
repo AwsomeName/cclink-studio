@@ -24,6 +24,7 @@ import {
   reconcileTerminalRuntimeStatuses,
 } from '../utils/workspace-runtime'
 import { runOpenProjectsBootstrapOnce } from '../stores/open-projects-store'
+import { restoreCclinkConnectionForOpenProjects } from '../features/cclink-remote/cclink-connection-policy'
 
 export type { WorkspaceBootstrapDeps } from './workspace-bootstrap-core'
 export { restoreWorkspaceState } from './workspace-bootstrap-core'
@@ -96,7 +97,11 @@ export function useWorkspaceBootstrap(): boolean {
       }
       const fsState = useFsStore.getState()
       await runOpenProjectsBootstrapOnce(fsState.workspacePath, fsState.recentWorkspacePaths)
-      if (!cancelled) setReady(true)
+      if (!cancelled) {
+        setReady(true)
+        // 本地工作台先就绪；后台只为确实仍处于“打开”状态的远程项目恢复连接。
+        void restoreCclinkConnectionForOpenProjects()
+      }
     }
 
     void bootstrap()

@@ -1,6 +1,6 @@
 import type { AgentApiContract } from '../shared/ipc/agent'
 import type { AndroidApiContract } from '../shared/ipc/android'
-import type { BrowserApiContract } from '../shared/ipc/browser'
+import type { BrowserApiContract, BrowserWorkbenchBounds } from '../shared/ipc/browser'
 import type { CadApiContract } from '../shared/ipc/cad'
 import type { DataSourceApiContract } from '../shared/ipc/data-source'
 import type { DiagnosticsApiContract } from '../shared/ipc/diagnostics'
@@ -37,7 +37,7 @@ import type {
 } from '../shared/ipc/workbench-window'
 
 export interface CCLinkStudioAPI {
-  reportWorkbenchBounds: (bounds: { x: number; y: number; width: number; height: number }) => void
+  reportWorkbenchBounds: (bounds: BrowserWorkbenchBounds) => void
 
   window: WindowApiContract
 

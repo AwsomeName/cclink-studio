@@ -110,6 +110,25 @@ export function CclinkWorkspacePicker({
     )
   }
 
+  if (state.realtime.state !== 'online') {
+    return (
+      <div className="cclink-panel-state">
+        <IconCloud size={26} />
+        <strong>CCLink 远程连接未启动</strong>
+        <span>明确连接，或存在已打开的远程工作区时，才会启动远程实时通道。</span>
+        {state.error && <span>{state.error}</span>}
+        <button
+          className="cclink-primary"
+          type="button"
+          disabled={state.loading}
+          onClick={() => void state.connectRealtime()}
+        >
+          {state.loading ? '连接中…' : '连接 CCLink 远程服务'}
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="cclink-server-panel">
       <div className="cclink-account-row">

@@ -1,5 +1,6 @@
 import { useEffect, type RefObject } from 'react'
 import { useSettingsStore } from '../../stores/settings-store'
+import type { BrowserWorkbenchBounds } from '@shared/ipc/browser'
 
 interface BoundsStabilizerScheduler {
   requestFrame: (callback: FrameRequestCallback) => number
@@ -50,27 +51,54 @@ export function createBoundsStabilizer(
   return { schedule, dispose: cancelPending }
 }
 
+interface ElementBounds {
+  left: number
+  top: number
+  right: number
+  bottom: number
+  width: number
+  height: number
+}
+
+/** renderer 先裁一次，保证上报值本身不会越过 Tab 栏和浏览器工具栏。 */
+export function resolveSafeWorkbenchBounds(
+  content: ElementBounds,
+  tabBar: ElementBounds,
+): BrowserWorkbenchBounds {
+  const protectedTop = Math.max(Math.ceil(tabBar.bottom), Math.ceil(content.top))
+  const y = Math.max(Math.round(content.top), protectedTop)
+  const bottom = Math.round(content.bottom)
+  return {
+    x: Math.round(content.left),
+    y,
+    width: Math.max(0, Math.round(content.width)),
+    height: Math.max(0, bottom - y),
+    protectedTop,
+  }
+}
+
 /** 将 React 内容区域尺寸同步给主进程 WebContentsView。 */
-export function useWorkbenchBounds(contentRef: RefObject<HTMLDivElement | null>): void {
+export function useWorkbenchBounds(
+  contentRef: RefObject<HTMLDivElement | null>,
+  tabBarRef: RefObject<HTMLDivElement | null>,
+): void {
   const appZoomLevel = useSettingsStore((state) => state.settings.appZoomLevel)
 
   useEffect(() => {
     const el = contentRef.current
-    if (!el) return
+    const tabBar = tabBarRef.current
+    if (!el || !tabBar) return
 
     const reportBounds = (): void => {
-      const rect = el.getBoundingClientRect()
-      window.cclinkStudio.reportWorkbenchBounds({
-        x: Math.round(rect.left),
-        y: Math.round(rect.top),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      })
+      window.cclinkStudio.reportWorkbenchBounds(
+        resolveSafeWorkbenchBounds(el.getBoundingClientRect(), tabBar.getBoundingClientRect()),
+      )
     }
 
     const stabilizer = createBoundsStabilizer(reportBounds)
     const observer = new ResizeObserver(stabilizer.schedule)
     observer.observe(el)
+    observer.observe(tabBar)
     stabilizer.schedule()
     window.addEventListener('resize', stabilizer.schedule)
     window.addEventListener('focus', stabilizer.schedule)
@@ -83,5 +111,5 @@ export function useWorkbenchBounds(contentRef: RefObject<HTMLDivElement | null>)
       window.removeEventListener('pageshow', stabilizer.schedule)
       observer.disconnect()
     }
-  }, [appZoomLevel, contentRef])
+  }, [appZoomLevel, contentRef, tabBarRef])
 }

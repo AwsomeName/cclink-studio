@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { Tab } from '../../types'
 import { IconClose, IconFile, IconGlobe, IconPlus, IconRobot, IconTerminal } from '../common/Icons'
 import { BrowserFavicon } from '../common/BrowserFavicon'
@@ -36,6 +36,7 @@ function WorkbenchTabTitle({ tab }: { tab: Tab }): React.ReactElement {
 }
 
 interface TabBarProps {
+  tabBarRef: RefObject<HTMLDivElement | null>
   tabs: Tab[]
   activeTabId: string | null
   onActivate: (tabId: string) => void
@@ -53,6 +54,7 @@ interface TabBarProps {
 }
 
 export function TabBar({
+  tabBarRef,
   tabs,
   activeTabId,
   onActivate,
@@ -173,7 +175,10 @@ export function TabBar({
   }
 
   return (
-    <div className={`tab-bar ${conversationDropActive ? 'conversation-drop-target' : ''}`}>
+    <div
+      ref={tabBarRef}
+      className={`tab-bar ${conversationDropActive ? 'conversation-drop-target' : ''}`}
+    >
       {tabs.map((tab) => (
         <div
           key={tab.id}
