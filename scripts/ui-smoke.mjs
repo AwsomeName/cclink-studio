@@ -56,6 +56,14 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
+async function selectSmokeBusinessSubject(form) {
+  const select = form.getByLabel('代表的业务主体')
+  const option = select.locator('option').filter({ hasText: 'UI Smoke Account' }).first()
+  const value = await option.getAttribute('value')
+  assert(value, 'UI Smoke account is missing from the business subject selector')
+  await select.selectOption(value)
+}
+
 function readPngDimensions(dataUrl) {
   assert(dataUrl?.startsWith('data:image/png;base64,'), 'browser capture is not a PNG data URL')
   const bytes = Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64')
@@ -1014,15 +1022,18 @@ async function main() {
       assert(opened, 'temporary Git workspace could not be opened')
 
       const browserTabId = await page.evaluate(async (initialUrl) => {
-        const { useTabStore } = await import('/src/stores/tab-store.ts')
-        useTabStore.getState().openTab({
-          type: 'browser',
-          title: 'Git native view occlusion fixture',
-          icon: '🌐',
-          initialUrl,
-          forceNew: true,
-        })
-        return useTabStore.getState().activeTabId
+        const [{ openDefaultBrowserTab }, { useWorkspaceStore }] = await Promise.all([
+          import('/src/features/web-resources/open-default-browser-tab.ts'),
+          import('/src/stores/workspace-store.ts'),
+        ])
+        const result = await openDefaultBrowserTab(
+          useWorkspaceStore.getState().activeWorkspaceRef,
+          {
+            title: 'Git native view occlusion fixture',
+            initialUrl,
+          },
+        )
+        return result.tabId
       }, `${webFixtureOrigin}/git-native-view-occlusion`)
       assert(browserTabId, 'browser tab did not become active for Git occlusion coverage')
       await page.waitForFunction(
@@ -1996,7 +2007,7 @@ async function main() {
         await form.waitFor({ state: 'visible', timeout: 10_000 })
         await form.getByLabel('事务名称').fill(affairTitle)
         await form.getByLabel('最终目标').fill('验证事务列表、流程、节点详情和重启恢复')
-        await form.getByLabel('代表的业务主体').selectOption({ label: 'UI Smoke Account' })
+        await selectSmokeBusinessSubject(form)
         const account = form.locator('.web-affairs-account-choice', { hasText: 'UI Smoke Account' })
         if ((await account.count()) > 0) await account.first().locator('input').check()
         const matrix = form.locator('label', { hasText: 'UI Smoke Matrix' })
@@ -2083,7 +2094,7 @@ async function main() {
         const form = page.locator('.web-affair-draft-form')
         await form.getByLabel('事务名称').fill(affairTitle)
         await form.getByLabel('最终目标').fill('验证 AI 交接、外部等待、模板和动态流程入口')
-        await form.getByLabel('代表的业务主体').selectOption({ label: 'UI Smoke Account' })
+        await selectSmokeBusinessSubject(form)
         const account = form.locator('.web-affairs-account-choice', { hasText: 'UI Smoke Account' })
         await account.first().locator('input').check()
         await form.getByLabel('业务模板（可选）').selectOption('generic-web-affair@1')
@@ -2278,15 +2289,15 @@ async function main() {
 
     const recentUrl = `${webFixtureOrigin}/new-tab-recent`
     const seededBrowserTabId = await page.evaluate(async (initialUrl) => {
-      const { useTabStore } = await import('/src/stores/tab-store.ts')
-      useTabStore.getState().openTab({
-        type: 'browser',
+      const [{ openDefaultBrowserTab }, { useWorkspaceStore }] = await Promise.all([
+        import('/src/features/web-resources/open-default-browser-tab.ts'),
+        import('/src/stores/workspace-store.ts'),
+      ])
+      const result = await openDefaultBrowserTab(useWorkspaceStore.getState().activeWorkspaceRef, {
         title: '最近访问测试页',
-        icon: '🌐',
         initialUrl,
-        forceNew: true,
       })
-      return useTabStore.getState().activeTabId
+      return result.tabId
     }, recentUrl)
     assert(seededBrowserTabId, 'recent browser fixture did not become active')
     await page.waitForFunction(
