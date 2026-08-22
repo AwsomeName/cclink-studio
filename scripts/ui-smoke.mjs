@@ -1342,26 +1342,31 @@ async function main() {
     await agentLink.waitFor({ state: 'visible', timeout: 10_000 })
     await agentLink.click()
 
-    const draftBrowserHandle = await page.waitForFunction(
+    await page.waitForFunction(
       async (expectedUrl) => {
         const { useTabStore } = await import('/src/stores/tab-store.ts')
         const tabId = useTabStore.getState().activeTabId
         const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
-        if (!tab?.webResourceDraftRef || tab.initialUrl !== expectedUrl) return null
-        return {
-          tabId,
-          saveable: true,
-          profileId: tab.browserProfile ?? null,
-          draftId: tab.webResourceDraftRef.draftId,
-        }
+        return Boolean(
+          tab?.webResourceDraftRef && tab.browserProfile && tab.initialUrl === expectedUrl,
+        )
       },
       `${webFixtureOrigin}/login-popup-source`,
       { timeout: 10_000 },
     )
-    const draftBrowser = await draftBrowserHandle.jsonValue()
-    assert(draftBrowser.saveable, 'Agent link did not start with a saveable login session')
-    assert(draftBrowser.profileId, 'Agent link has no isolated login Profile')
-    assert(draftBrowser.draftId, 'Agent link has no account draft')
+    const draftBrowser = await page.evaluate(async () => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      const state = useTabStore.getState()
+      const tab = state.tabs.find((item) => item.id === state.activeTabId)
+      return tab?.webResourceDraftRef && tab.browserProfile
+        ? {
+            tabId: tab.id,
+            profileId: tab.browserProfile,
+            draftId: tab.webResourceDraftRef.draftId,
+          }
+        : null
+    })
+    assert(draftBrowser, 'Agent link did not start with a complete saveable login session')
     await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
     await page.waitForFunction(
       async (tabId) =>
@@ -1845,25 +1850,18 @@ async function main() {
     })
     await markdownLink.waitFor({ state: 'visible', timeout: 10_000 })
     await markdownLink.click()
-    const markdownDraftHandle = await page.waitForFunction(
+    await page.waitForFunction(
       async ({ expectedUrl, editorTabId }) => {
         const { useTabStore } = await import('/src/stores/tab-store.ts')
         const state = useTabStore.getState()
         const tab = state.tabs.find((item) => item.id === state.activeTabId)
-        if (
-          !tab ||
-          tab.id === editorTabId ||
-          tab.initialUrl !== expectedUrl ||
-          !tab.webResourceDraftRef ||
-          !tab.browserProfile
-        ) {
-          return null
-        }
-        return {
-          tabId: tab.id,
-          profileId: tab.browserProfile,
-          draftId: tab.webResourceDraftRef.draftId,
-        }
+        return Boolean(
+          tab &&
+          tab.id !== editorTabId &&
+          tab.initialUrl === expectedUrl &&
+          tab.webResourceDraftRef &&
+          tab.browserProfile,
+        )
       },
       {
         expectedUrl: `${webFixtureOrigin}/markdown-link-target`,
@@ -1871,8 +1869,19 @@ async function main() {
       },
       { timeout: 10_000 },
     )
-    const markdownDraft = await markdownDraftHandle.jsonValue()
-    assert(markdownDraft?.profileId, 'Markdown DOM link has no isolated Profile')
+    const markdownDraft = await page.evaluate(async () => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      const state = useTabStore.getState()
+      const tab = state.tabs.find((item) => item.id === state.activeTabId)
+      return tab?.webResourceDraftRef && tab.browserProfile
+        ? {
+            tabId: tab.id,
+            profileId: tab.browserProfile,
+            draftId: tab.webResourceDraftRef.draftId,
+          }
+        : null
+    })
+    assert(markdownDraft, 'Markdown DOM link has no complete isolated Profile binding')
     await page.evaluate(
       async ({ draftTabId, editorTabId }) => {
         const [{ closeTabWithDraftPolicy }, { useTabStore }] = await Promise.all([
