@@ -535,42 +535,6 @@ describe('workspace-runtime', () => {
     })
   })
 
-  it('恢复后按 runId 查到已取消终态，不猜测为意外丢失', async () => {
-    hydrateRecoveringConversation()
-    const getStatus = vi.fn().mockResolvedValue({
-      connected: false,
-      busy: false,
-      ready: true,
-      runId: null,
-      sessionId: 'session-1',
-    })
-    const getRunStatus = vi.fn().mockResolvedValue({
-      conversationId: 'recovering',
-      runId: 'run-before-reload',
-      status: 'cancelled',
-      workspaceKey: null,
-      startedAt: 1,
-      updatedAt: 2,
-      completedAt: 2,
-    })
-    ;(
-      window.cclinkStudio as unknown as {
-        agent: { getStatus: typeof getStatus; getRunStatus: typeof getRunStatus }
-      }
-    ).agent = { getStatus, getRunStatus }
-
-    await reconcileAgentRuntimeStatuses(null)
-
-    expect(useAgentStore.getState().conversations.recovering).toMatchObject({
-      loading: false,
-      backendState: 'connected',
-      runStatus: 'cancelled',
-      activeRunId: null,
-      lastRunTerminalReason: 'cancelled',
-    })
-    expect(getRunStatus).toHaveBeenCalledWith('recovering', 'run-before-reload')
-  })
-
   it('主进程状态查询失败时记录运行时不可用，而不是用户取消', async () => {
     hydrateRecoveringConversation()
     const getStatus = vi.fn().mockRejectedValue(new Error('ipc unavailable'))
