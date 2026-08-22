@@ -1854,13 +1854,14 @@ async function main() {
           !tab ||
           tab.id === editorTabId ||
           tab.initialUrl !== expectedUrl ||
-          !tab.webResourceDraftRef
+          !tab.webResourceDraftRef ||
+          !tab.browserProfile
         ) {
           return null
         }
         return {
           tabId: tab.id,
-          profileId: tab.browserProfile ?? null,
+          profileId: tab.browserProfile,
           draftId: tab.webResourceDraftRef.draftId,
         }
       },
