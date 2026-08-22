@@ -54,6 +54,7 @@ beforeEach(() => {
                   title: 'B',
                   icon: '🌐',
                   browserProfile: 'v2ex',
+                  webResourceRef: { accountId: 'account-v2ex' },
                   workspaceRef: localWorkspaceRef('/workspace/b'),
                 },
               ],
@@ -92,7 +93,17 @@ beforeEach(() => {
   useTabStore.setState(
     {
       ...useTabStore.getInitialState(),
-      tabs: [{ id: 'browser-a', type: 'browser', title: 'A', icon: '🌐' }],
+      tabs: [
+        {
+          id: 'browser-a',
+          type: 'browser',
+          title: 'A',
+          icon: '🌐',
+          browserProfile: 'account-a-profile',
+          webResourceRef: { accountId: 'account-a' },
+          workspaceRef: localWorkspaceRef('/workspace/a'),
+        },
+      ],
       activeTabId: 'browser-a',
     },
     true,
@@ -344,6 +355,8 @@ describe('workspace-transition', () => {
             type: 'browser',
             title: 'Browser B',
             icon: 'browser',
+            browserProfile: 'account-b-profile',
+            webResourceRef: { accountId: 'account-b' },
             workspaceRef: workspaceB,
           },
           {
@@ -412,7 +425,7 @@ describe('workspace-transition', () => {
 
     expect(window.cclinkStudio.browser.reconcileViews).toHaveBeenLastCalledWith({
       workspaceKey: '/workspace/b',
-      views: [{ tabId: 'browser-b', profileId: null }],
+      views: [{ tabId: 'browser-b', profileId: 'account-b-profile' }],
       activeTabId: null,
     })
     expect(useTabStore.getState().tabs.map((tab) => tab.id)).toEqual(['browser-b', 'terminal-b'])

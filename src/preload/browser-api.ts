@@ -18,6 +18,7 @@ export const browserApi: BrowserApiContract = {
   createView: (tabId, initialUrl, opts) =>
     invokeIpcContract(browserIpc.createView, tabId, initialUrl, opts),
   destroyView: (tabId) => invokeIpcContract(browserIpc.destroyView, tabId),
+  beginPopupAdoption: (tabId) => invokeIpcContract(browserIpc.beginPopupAdoption, tabId),
   acceptPopup: (tabId) => invokeIpcContract(browserIpc.acceptPopup, tabId),
   rejectPopup: (tabId) => invokeIpcContract(browserIpc.rejectPopup, tabId),
   setActive: (tabId) => invokeIpcContract(browserIpc.setActive, tabId),

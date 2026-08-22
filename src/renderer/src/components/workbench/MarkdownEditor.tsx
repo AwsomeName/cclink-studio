@@ -221,7 +221,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
             const link = resolveBrowserLinkClick(event)
             if (!link) return false
             event.preventDefault()
-            openHttpUrlInNewBrowserTab({ ...link, sourceTabId: tabId })
+            void openHttpUrlInNewBrowserTab({ ...link, sourceTabId: tabId })
             return true
           },
           contextmenu: (_view, event) => {

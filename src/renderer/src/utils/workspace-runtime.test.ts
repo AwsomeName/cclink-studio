@@ -3,6 +3,7 @@ import { useAgentStore } from '../stores/agent-store'
 import { useBrowserStore } from '../stores/browser-store'
 import { useEditorStore } from '../stores/editor-store'
 import { useTabStore } from '../stores/tab-store'
+import { useWorkbenchWindowStore } from '../stores/workbench-window-store'
 import {
   applyAgentCompleteToStore,
   applyAgentStreamEventToStore,
@@ -94,6 +95,7 @@ beforeEach(() => {
   useBrowserStore.setState(useBrowserStore.getInitialState(), true)
   useEditorStore.setState(useEditorStore.getInitialState(), true)
   useAgentStore.setState(useAgentStore.getInitialState(), true)
+  useWorkbenchWindowStore.setState({ placements: {} })
 })
 
 afterEach(() => {
@@ -152,6 +154,8 @@ describe('workspace-runtime', () => {
               type: 'browser',
               title: 'B',
               icon: '🌐',
+              browserProfile: 'account-b-profile',
+              webResourceRef: { accountId: 'account-b' },
               workspaceRef: { kind: 'local', path: '/workspace/b' },
             },
           ],
@@ -220,6 +224,68 @@ describe('workspace-runtime', () => {
     expect(applyDelta).not.toHaveBeenCalled()
   })
 
+  it('切到其他项目再切回时，保留独立窗口中未存档的账号草稿 Tab', () => {
+    const workspaceA = { kind: 'local' as const, path: '/workspace/a' }
+    const workspaceB = { kind: 'local' as const, path: '/workspace/b' }
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'detached-draft-a',
+          type: 'browser',
+          title: '项目 A 未存档网页',
+          icon: '🌐',
+          workspaceRef: workspaceA,
+          browserProfile: 'draft-profile-a',
+          webResourceDraftRef: { draftId: 'draft-a' },
+        },
+      ],
+      activeTabId: null,
+    })
+    useWorkbenchWindowStore.getState().applyPlacement({
+      tabId: 'detached-draft-a',
+      workspaceKey: '/workspace/a',
+      windowId: 'aux-a',
+      generation: 1,
+      state: 'attached',
+      active: true,
+    })
+
+    hydrateRuntimeSections(
+      workspaceSnapshot('/workspace/b', {
+        tabs: {
+          tabs: [
+            {
+              id: 'file-b',
+              type: 'editor',
+              title: '项目 B',
+              icon: '📄',
+              filePath: '/workspace/b/README.md',
+              workspaceRef: workspaceB,
+            },
+          ],
+          activeTabId: 'file-b',
+        },
+      }),
+    )
+
+    expect(useTabStore.getState().tabs.map((tab) => tab.id)).toEqual(['detached-draft-a', 'file-b'])
+    expect(useTabStore.getState().activeTabId).toBe('file-b')
+
+    hydrateRuntimeSections(workspaceSnapshot('/workspace/a', {}))
+
+    expect(useTabStore.getState()).toMatchObject({
+      activeTabId: null,
+      tabs: [
+        {
+          id: 'detached-draft-a',
+          workspaceRef: workspaceA,
+          browserProfile: 'draft-profile-a',
+          webResourceDraftRef: { draftId: 'draft-a' },
+        },
+      ],
+    })
+  })
+
   it('runtime store 只通过主进程 owner 写状态，不再写全局 localStorage 镜像', async () => {
     const setSection = window.cclinkStudio.workspaceState.setSection as ReturnType<typeof vi.fn>
     const setLocalStorage = localStorage.setItem as ReturnType<typeof vi.fn>
@@ -227,7 +293,14 @@ describe('workspace-runtime', () => {
     setLocalStorage.mockClear()
 
     useBrowserStore.getState().ensureTab('browser-a', 'https://example.com')
-    useTabStore.getState().openTab({ type: 'browser', title: '浏览器', icon: '🌐' })
+    useTabStore.getState().openTab({
+      type: 'browser',
+      title: '浏览器',
+      icon: '🌐',
+      browserProfile: 'account-a-profile',
+      webResourceRef: { accountId: 'account-a' },
+      workspaceRef: { kind: 'local', path: '/workspace/a' },
+    })
     useEditorStore.getState().initVirtualFile('virtual:draft', 'draft')
     useAgentStore.getState().createConversation({ activate: true })
     await persistRuntimeSections('/workspace/a')
@@ -460,6 +533,42 @@ describe('workspace-runtime', () => {
       streamingMessageId: null,
       lastRunTerminalReason: 'runtime-lost',
     })
+  })
+
+  it('恢复后按 runId 查到已取消终态，不猜测为意外丢失', async () => {
+    hydrateRecoveringConversation()
+    const getStatus = vi.fn().mockResolvedValue({
+      connected: false,
+      busy: false,
+      ready: true,
+      runId: null,
+      sessionId: 'session-1',
+    })
+    const getRunStatus = vi.fn().mockResolvedValue({
+      conversationId: 'recovering',
+      runId: 'run-before-reload',
+      status: 'cancelled',
+      workspaceKey: null,
+      startedAt: 1,
+      updatedAt: 2,
+      completedAt: 2,
+    })
+    ;(
+      window.cclinkStudio as unknown as {
+        agent: { getStatus: typeof getStatus; getRunStatus: typeof getRunStatus }
+      }
+    ).agent = { getStatus, getRunStatus }
+
+    await reconcileAgentRuntimeStatuses(null)
+
+    expect(useAgentStore.getState().conversations.recovering).toMatchObject({
+      loading: false,
+      backendState: 'connected',
+      runStatus: 'cancelled',
+      activeRunId: null,
+      lastRunTerminalReason: 'cancelled',
+    })
+    expect(getRunStatus).toHaveBeenCalledWith('recovering', 'run-before-reload')
   })
 
   it('主进程状态查询失败时记录运行时不可用，而不是用户取消', async () => {

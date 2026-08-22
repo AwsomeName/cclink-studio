@@ -22,7 +22,7 @@ function getOpenedTabId(): string {
 
 /**
  * 打开默认浏览器 Tab，并在本地项目中复用网站账号草稿的独立登录环境。
- * 服务不可用或没有本地项目时仍打开普通浏览器，避免账号能力阻断基础浏览器。
+ * 服务不可用或没有本地项目时仍保留基础网页浏览，避免账号能力阻断浏览器。
  */
 export async function openDefaultBrowserTab(
   workspaceRef: WorkspaceRef,
@@ -54,6 +54,7 @@ export async function openDefaultBrowserTab(
         workspaceRef,
         initialUrl,
         forceNew: true,
+        allowDegradedBrowser: true,
       })
       return { tabId: getOpenedTabId(), saveable: false, error: result.error.message }
     } catch (error) {
@@ -64,6 +65,7 @@ export async function openDefaultBrowserTab(
         workspaceRef,
         initialUrl,
         forceNew: true,
+        allowDegradedBrowser: true,
       })
       return {
         tabId: getOpenedTabId(),

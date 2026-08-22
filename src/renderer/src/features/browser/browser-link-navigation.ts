@@ -1,6 +1,8 @@
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import { useTabStore } from '../../stores/tab-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
+import { useToastStore } from '../../components/common/Toast'
+import { openDefaultBrowserTab } from '../web-resources/open-default-browser-tab'
 
 export interface BrowserLinkTarget {
   url: string
@@ -28,11 +30,11 @@ export function resolveBrowserLinkClick(event: MouseEvent): BrowserLinkTarget | 
   }
 }
 
-export function openHttpUrlInNewBrowserTab(input: {
+export async function openHttpUrlInNewBrowserTab(input: {
   url: string
   title?: string
   sourceTabId?: string
-}): boolean {
+}): Promise<boolean> {
   const url = normalizeHttpUrl(input.url)
   if (!url) return false
 
@@ -41,13 +43,12 @@ export function openHttpUrlInNewBrowserTab(input: {
     tabState.tabs.find((tab) => tab.id === input.sourceTabId)?.workspaceRef ??
     useWorkspaceStore.getState().activeWorkspaceRef
 
-  tabState.openTab({
-    type: 'browser',
-    title: input.title?.trim().slice(0, 40) || '链接',
-    icon: '🌐',
+  const result = await openDefaultBrowserTab(sourceWorkspaceRef, {
     initialUrl: url,
-    workspaceRef: sourceWorkspaceRef,
-    forceNew: true,
+    title: input.title?.trim().slice(0, 40) || '链接',
   })
+  if (!result.saveable) {
+    useToastStore.getState().show(`网页已打开，但账号保存环境创建失败：${result.error}`, 'error')
+  }
   return true
 }

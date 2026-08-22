@@ -159,6 +159,30 @@ describe('useTabStore', () => {
       expect(useTabStore.getState().tabs.length).toBe(len0 + 2)
     })
 
+    it('本地 Browser Tab 拒绝 Profile-only，并只允许统一入口显式降级', () => {
+      expect(() =>
+        useTabStore.getState().openTab({
+          type: 'browser',
+          title: 'Profile-only',
+          icon: '🌐',
+          initialUrl: 'https://example.com/',
+          browserProfile: 'profile-only',
+          workspaceRef: { kind: 'local', path: '/workspace' },
+        }),
+      ).toThrow('拒绝创建未绑定账号或草稿')
+
+      expect(() =>
+        useTabStore.getState().openTab({
+          type: 'browser',
+          title: '服务降级网页',
+          icon: '🌐',
+          initialUrl: 'https://example.com/',
+          workspaceRef: { kind: 'local', path: '/workspace' },
+          allowDegradedBrowser: true,
+        }),
+      ).not.toThrow()
+    })
+
     it('两个未命名编辑器可共存', () => {
       useTabStore.getState().openTab({ type: 'editor', title: '未命名.md', icon: '📄' })
       useTabStore.getState().openTab({ type: 'editor', title: '未命名.md', icon: '📄' })
@@ -555,14 +579,19 @@ describe('useTabStore', () => {
       ])
     })
 
-    it('普通 Browser Tab 可以原地接入主进程创建的账号草稿', () => {
-      useTabStore.getState().openTab({
-        type: 'browser',
-        title: '普通网页',
-        icon: '🌐',
-        browserProfile: 'ordinary-profile',
-        workspaceRef: { kind: 'local', path: '/tmp/project-a' },
-        forceNew: true,
+    it('运行中遗留的 Profile-only Tab 可以原地接入主进程创建的账号草稿', () => {
+      useTabStore.setState({
+        tabs: [
+          {
+            id: 'legacy-profile-only',
+            type: 'browser',
+            title: '遗留网页',
+            icon: '🌐',
+            browserProfile: 'ordinary-profile',
+            workspaceRef: { kind: 'local', path: '/tmp/project-a' },
+          },
+        ],
+        activeTabId: 'legacy-profile-only',
       })
       const tabId = useTabStore.getState().activeTabId!
 
@@ -739,7 +768,21 @@ describe('useTabStore', () => {
   })
 
   describe('duplicateTab', () => {
-    it('浏览器 → 克隆当前 URL 为新 Tab', () => {
+    it('浏览器 → 克隆当前 URL，并继承同一个账号草稿和登录环境', () => {
+      useTabStore.setState({
+        tabs: [
+          {
+            id: 'browser',
+            type: 'browser',
+            title: '浏览器',
+            icon: '🌐',
+            browserProfile: 'draft-profile',
+            webResourceDraftRef: { draftId: 'draft-1' },
+            workspaceRef: { kind: 'local', path: '/workspace' },
+          },
+        ],
+        activeTabId: 'browser',
+      })
       useBrowserStore.setState({
         tabs: {
           browser: browserTab({
@@ -758,6 +801,8 @@ describe('useTabStore', () => {
       const clone = tabs[tabs.length - 1]
       expect(clone.type).toBe('browser')
       expect(clone.initialUrl).toBe('https://github.com')
+      expect(clone.browserProfile).toBe('draft-profile')
+      expect(clone.webResourceDraftRef).toEqual({ draftId: 'draft-1' })
     })
 
     it('编辑器 → 克隆当前内容为未命名副本', () => {
@@ -799,7 +844,14 @@ describe('useTabStore', () => {
     it('从工作台快照恢复 Tab 顺序和活跃 Tab', () => {
       useTabStore.getState().hydrateFromWorkspaceState({
         tabs: [
-          { id: 'browser', type: 'browser', title: '浏览器', icon: '🌐' },
+          {
+            id: 'browser',
+            type: 'browser',
+            title: '浏览器',
+            icon: '🌐',
+            browserProfile: 'saved-profile',
+            webResourceRef: { accountId: 'account-1' },
+          },
           { id: 'doc-1', type: 'editor', title: '计划.md', icon: '📄', filePath: '/docs/plan.md' },
           {
             id: 'conversation-1',
@@ -833,6 +885,105 @@ describe('useTabStore', () => {
         },
         sessionId: 'session-1',
       })
+    })
+
+    it('切换项目时保留独立窗口持有的账号草稿，但不把它设为新项目活跃 Tab', () => {
+      const workspaceA = { kind: 'local' as const, path: '/workspace/a' }
+      const workspaceB = { kind: 'local' as const, path: '/workspace/b' }
+      useTabStore.setState({
+        tabs: [
+          {
+            id: 'detached-draft-a',
+            type: 'browser',
+            title: '项目 A 草稿',
+            icon: '🌐',
+            workspaceRef: workspaceA,
+            browserProfile: 'draft-profile-a',
+            webResourceDraftRef: { draftId: 'draft-a' },
+          },
+        ],
+        activeTabId: null,
+      })
+
+      useTabStore.getState().hydrateFromWorkspaceState(
+        {
+          tabs: [
+            {
+              id: 'file-b',
+              type: 'editor',
+              title: '项目 B',
+              icon: '📄',
+              filePath: '/workspace/b/README.md',
+              workspaceRef: workspaceB,
+            },
+          ],
+          activeTabId: 'file-b',
+        },
+        { preserveTabIds: ['detached-draft-a'] },
+      )
+
+      expect(useTabStore.getState()).toMatchObject({
+        activeTabId: 'file-b',
+        tabs: [
+          {
+            id: 'detached-draft-a',
+            workspaceRef: workspaceA,
+            browserProfile: 'draft-profile-a',
+            webResourceDraftRef: { draftId: 'draft-a' },
+          },
+          { id: 'file-b', workspaceRef: workspaceB },
+        ],
+      })
+    })
+
+    it('升级后不恢复无归属或仅有 Profile 的本地网页 Tab', () => {
+      useTabStore.getState().hydrateFromWorkspaceState({
+        tabs: [
+          {
+            id: 'legacy-browser',
+            type: 'browser',
+            title: '旧普通浏览器',
+            icon: '🌐',
+            initialUrl: 'https://example.com/',
+            workspaceRef: { kind: 'local', path: '/workspace' },
+          },
+          {
+            id: 'profile-only-browser',
+            type: 'browser',
+            title: 'Profile-only',
+            icon: '🌐',
+            initialUrl: 'https://example.com/profile-only',
+            browserProfile: 'profile-only',
+            workspaceRef: { kind: 'local', path: '/workspace' },
+          },
+          {
+            id: 'saved-browser',
+            type: 'browser',
+            title: '已保存账号',
+            icon: '🌐',
+            initialUrl: 'https://example.com/account',
+            browserProfile: 'saved-profile',
+            webResourceRef: { accountId: 'account-saved' },
+            workspaceRef: { kind: 'local', path: '/workspace' },
+          },
+          {
+            id: 'local-html',
+            type: 'browser',
+            title: '本地预览',
+            icon: '🌐',
+            initialUrl: 'file:///workspace/report.html',
+            filePath: '/workspace/report.html',
+            workspaceRef: { kind: 'local', path: '/workspace' },
+          },
+        ],
+        activeTabId: 'legacy-browser',
+      })
+
+      expect(useTabStore.getState().tabs.map((tab) => tab.id)).toEqual([
+        'saved-browser',
+        'local-html',
+      ])
+      expect(useTabStore.getState().activeTabId).toBe('saved-browser')
     })
 
     it('Terminal Tab 快照保留权限、审计和关闭语义', () => {
@@ -877,7 +1028,14 @@ describe('useTabStore', () => {
     it('快照 activeTabId 无效时回退到第一个 Tab', () => {
       useTabStore.getState().hydrateFromWorkspaceState({
         tabs: [
-          { id: 'browser', type: 'browser', title: '浏览器', icon: '🌐' },
+          {
+            id: 'browser',
+            type: 'browser',
+            title: '浏览器',
+            icon: '🌐',
+            browserProfile: 'saved-profile',
+            webResourceRef: { accountId: 'account-1' },
+          },
           { id: 'doc-1', type: 'editor', title: '计划.md', icon: '📄' },
         ],
         activeTabId: 'missing',

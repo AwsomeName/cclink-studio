@@ -89,6 +89,8 @@ export class PlaywrightBridge {
   private downloadIds = new WeakMap<Download, string>()
   /** 已安装监听器的页面，避免 claim/register 重复绑定 */
   private listenedPages = new WeakSet<Page>()
+  /** 已安装 popup 监听器的 CDP Context；账号 Profile 可能在运行时增加多个 Context。 */
+  private observedContexts = new WeakSet<BrowserContext>()
   /** Electron WebContents → 逻辑 Tab；Session 下载事件以此确定 owner。 */
   private electronTabByWebContentsId = new Map<number, string>()
   private electronWebContentsIdByTab = new Map<string, number>()
@@ -116,40 +118,49 @@ export class PlaywrightBridge {
       headers: { Connection: 'keep-alive' },
     })
 
-    const contexts = this.browser.contexts()
-    if (contexts.length > 0) {
-      this.context = contexts[0]
-      const pages = this.context.pages()
+    const contexts = this.refreshContexts()
+    this.context = contexts[0] ?? null
+    const pages = contexts.flatMap((context) => context.pages())
 
-      console.log(`[CCLink Studio] 发现 ${pages.length} 个页面:`)
-      for (const p of pages) {
-        console.log(`  - ${p.url()}`)
-      }
+    console.log(`[CCLink Studio] 发现 ${contexts.length} 个 Context、${pages.length} 个页面:`)
+    for (const p of pages) {
+      console.log(`  - ${p.url()}`)
     }
+  }
 
-    // 监听 context 上的新页面事件（弹窗、window.open 等）
-    if (this.context) {
-      this.context.on('page', async (newPage) => {
-        for (const existing of this.pages.values()) {
-          if (existing === newPage) {
-            console.log(`[CCLink Studio] 新页面已在注册表，跳过自动注册: url=${newPage.url()}`)
-            return
-          }
-        }
+  /**
+   * Electron 的持久 Session/Profile 会投影为多个 CDP BrowserContext。Context 还可能在
+   * Playwright 连接后才出现，因此认领页面前必须重新读取，而不能永久固定 contexts()[0]。
+   */
+  private refreshContexts(): BrowserContext[] {
+    const contexts = this.browser?.contexts() ?? (this.context ? [this.context] : [])
+    for (const context of contexts) this.observeContext(context)
+    return contexts
+  }
 
-        const opener = await newPage.opener().catch(() => null)
-        if (!opener || !Array.from(this.pages.values()).includes(opener)) {
-          console.log(
-            `[CCLink Studio] 未绑定 CDP 页面，等待 BrowserManager claim: url=${newPage.url()}`,
-          )
+  private observeContext(context: BrowserContext): void {
+    if (this.observedContexts.has(context)) return
+    this.observedContexts.add(context)
+    context.on('page', async (newPage) => {
+      for (const existing of this.pages.values()) {
+        if (existing === newPage) {
+          console.log(`[CCLink Studio] 新页面已在注册表，跳过自动注册: url=${newPage.url()}`)
           return
         }
+      }
 
-        // 所有来自可见 Browser View 的 popup 都由 BrowserManager 分配稳定 tabId。
-        // 这里不能先注册随机 ID，否则会短暂形成第二套 Tab 事实源。
-        console.log(`[CCLink Studio] popup 等待 BrowserManager claim: url=${newPage.url()}`)
-      })
-    }
+      const opener = await newPage.opener().catch(() => null)
+      if (!opener || !Array.from(this.pages.values()).includes(opener)) {
+        console.log(
+          `[CCLink Studio] 未绑定 CDP 页面，等待 BrowserManager claim: url=${newPage.url()}`,
+        )
+        return
+      }
+
+      // 所有来自可见 Browser View 的 popup 都由 BrowserManager 分配稳定 tabId。
+      // 这里不能先注册随机 ID，否则会短暂形成第二套 Tab 事实源。
+      console.log(`[CCLink Studio] popup 等待 BrowserManager claim: url=${newPage.url()}`)
+    })
   }
 
   /**
@@ -325,7 +336,10 @@ export class PlaywrightBridge {
    * 获取 BrowserContext（用于 Cookie、新建 Tab 等操作）
    */
   getContext(): BrowserContext | null {
-    return this.context
+    const activePage = this.getActivePage()
+    return activePage && typeof activePage.context === 'function'
+      ? activePage.context()
+      : this.context
   }
 
   // ── 多 Tab 管理 ──────────────────────────────
@@ -367,11 +381,11 @@ export class PlaywrightBridge {
   /**
    * 为一个 WebContentsView 认领（claim）对应的 Playwright Page，绑定到给定 tabId。
    *
-   * WebContentsView 的页面会作为 CDP target 出现在默认 context 中。本方法从
-   * `context.pages()` 找到与该 webContents 匹配的 Page：
+   * WebContentsView 的页面会作为 CDP target 出现在其 Session/Profile 对应的 context 中。
+   * 本方法从全部 `browser.contexts()` 找到与该 webContents 匹配的 Page：
    *   1. 首选按 targetId 匹配（最稳，1:1）；
    *   2. 兜底按 URL 匹配（首次加载完成后）；
-   *   3. 仍找不到则轮询 context.pages()（页面可能延迟出现）。
+   *   3. 仍找不到则轮询全部 context（页面或 Profile 可能延迟出现）。
    *
    * 命中后用 tabId 注册（覆盖该 key 下的旧 Page），保证 BrowserManager tabId 与
    * Playwright 注册表 key 严格对齐。绝不静默绑错页——找不到时抛错由调用方处理。
@@ -403,8 +417,8 @@ export class PlaywrightBridge {
     webContents: WebContents,
     expectedUrl?: string,
   ): Promise<Page> {
-    const context = this.context
-    if (!context) throw new Error('Playwright context 未就绪，无法 claim page')
+    if (!this.browser && !this.context)
+      throw new Error('Playwright context 未就绪，无法 claim page')
 
     // 已绑定过同 key 的 Page：直接返回（幂等，避免重复监听）
     const existing = this.pages.get(tabId)
@@ -412,8 +426,10 @@ export class PlaywrightBridge {
       return existing
     }
 
+    let ambiguousUrlMatches = 0
     const matchPage = (): Page | null => {
-      const pages = context.pages()
+      const contexts = this.refreshContexts()
+      const pages = contexts.flatMap((context) => context.pages())
       // 1. 按 targetId 匹配（webContents 有 devtools targetId）
       const targetId = this.webContentsTargetId(webContents)
       if (targetId) {
@@ -423,11 +439,13 @@ export class PlaywrightBridge {
       // 2. 按 URL 兜底匹配（排除 about:blank / 空页面）
       if (expectedUrl) {
         const norm = expectedUrl.replace(/\/$/, '')
-        const byUrl = pages.find((p) => {
+        const byUrl = pages.filter((p) => {
           const u = p.url().replace(/\/$/, '')
           return u && u !== 'about:blank' && u === norm
         })
-        if (byUrl) return byUrl
+        ambiguousUrlMatches = byUrl.length
+        // 多个 Profile 打开相同 URL 时不得猜测账号；等待 targetId 或明确失败。
+        if (byUrl.length === 1) return byUrl[0]
       }
       return null
     }
@@ -447,9 +465,13 @@ export class PlaywrightBridge {
     }
 
     if (!page) {
+      const contexts = this.refreshContexts()
+      const pageCount = contexts.reduce((total, current) => total + current.pages().length, 0)
+      const ambiguity =
+        ambiguousUrlMatches > 1 ? `，URL 在 ${ambiguousUrlMatches} 个 Context/Page 中重复` : ''
       throw new Error(
         `claimPageForView 找不到匹配的 Playwright Page（tabId=${tabId}, url=${expectedUrl ?? 'n/a'}）` +
-          `。当前 context.pages()=${context.pages().length} 个`,
+          `。当前 contexts=${contexts.length} 个、pages=${pageCount} 个${ambiguity}`,
       )
     }
 

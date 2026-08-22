@@ -119,6 +119,7 @@ export function buildBrowserContextMenuTemplate({
       initialUrl: url,
       workspaceKey: context.workspaceKey,
       profileId: context.profileId,
+      sourceTabId: context.tabId,
       forceNew: true,
     })
   const send = (

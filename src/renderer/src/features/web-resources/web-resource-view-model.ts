@@ -63,7 +63,8 @@ export function getWebResourceLoginStatus(
   if (!observation) return 'checking'
   if (observation.status === 'error') return 'error'
   if (loginConfirmedAt) {
-    return observation.status === 'not-authenticated' ? 'not-authenticated' : 'authenticated'
+    if (observation.status === 'authenticated') return 'authenticated'
+    return observation.status === 'not-authenticated' ? 'not-authenticated' : 'session-data'
   }
   return observation.status === 'authenticated' || observation.status === 'session-data'
     ? 'session-data'

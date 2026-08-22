@@ -97,8 +97,10 @@ export const FIT_WIDTH_MEASUREMENT_SCRIPT = String.raw`
 `
 /** 默认首页 */
 const DEFAULT_URL = 'https://www.baidu.com'
-/** renderer 未接纳 popup 时的有界清理窗口，避免不可见 WebContents 泄漏。 */
-const POPUP_ADOPTION_TIMEOUT_MS = 10_000
+/** renderer 必须在此时间内回应已开始接管，避免无主 WebContents 泄漏。 */
+const POPUP_ADOPTION_START_TIMEOUT_MS = 10_000
+/** 跨项目切换可能包含持久化、远程请求和运行态对账；已接管 popup 使用独立有界租约。 */
+const POPUP_ADOPTION_COMPLETION_TIMEOUT_MS = 5 * 60_000
 
 /** 设备模式：桌面 / 移动 */
 export type ViewMode = BrowserViewModeType
@@ -241,7 +243,7 @@ interface ViewEntry {
   contextMenuToken: string | null
   /** 仅 popup View 存在；普通工作台 View 为 null。 */
   popup: {
-    adoptionState: 'pending' | 'adopted'
+    adoptionState: 'pending' | 'adopting' | 'adopted'
     disposition: BrowserPopupDisposition
     adoptionTimer: ReturnType<typeof setTimeout> | null
   } | null
@@ -1116,10 +1118,10 @@ export class BrowserManager {
     popup.adoptionTimer = setTimeout(() => {
       const current = this.views.get(tabId)
       if (current !== entry || current.popup?.adoptionState !== 'pending') return
-      console.warn(`[BrowserManager] popup 接纳超时，已清理 tabId=${tabId}`)
+      console.warn(`[BrowserManager] popup 未开始接管，已超时清理 tabId=${tabId}`)
       this.destroyView(tabId)
       this.emitRuntimeTabClosed(tabId, entry.workspaceKey, entry.ownerWindowId)
-    }, POPUP_ADOPTION_TIMEOUT_MS)
+    }, POPUP_ADOPTION_START_TIMEOUT_MS)
 
     this.sendToOwner(entry, browserIpcEvents.popupCreated, {
       tabId,
@@ -1187,7 +1189,18 @@ export class BrowserManager {
       webContents: entry.view.webContents,
       validate,
       requestOpenTab: (request) => {
-        if (validate()) win.webContents.send(browserIpcEvents.requestOpenTab, request)
+        if (!validate()) return
+        // Workbench Tab 状态只由主 renderer 拥有。Browser View 拆到辅助窗口后，
+        // 原生菜单仍在辅助窗口弹出，但“新建 Tab”必须回到主窗口统一创建；
+        // 辅助 renderer 没有 Tab Store，也不应成为第二个状态所有者。
+        const mainWindow = this.hosts.get(MAIN_BROWSER_HOST_ID)?.rendererWindow
+        if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
+        mainWindow.webContents.send(browserIpcEvents.requestOpenTab, request)
+        if (entry.ownerWindowId !== MAIN_BROWSER_HOST_ID) {
+          if (mainWindow.isMinimized()) mainWindow.restore()
+          mainWindow.show()
+          mainWindow.focus()
+        }
       },
       requestAgentMount: (request) => {
         if (validate()) win.webContents.send(browserIpcEvents.contextAgentRequest, request)
@@ -1261,7 +1274,24 @@ export class BrowserManager {
     void entry.view.webContents.loadURL(entry.pendingUrl)
   }
 
-  /** renderer 已创建同 ID 的工作台 Tab，pending runtime 进入正常对账生命周期。 */
+  /** renderer 已收到 popup 并开始切换项目；将 10 秒首次响应窗切换为有界完成租约。 */
+  beginPopupAdoption(tabId: string): void {
+    const entry = this.views.get(tabId)
+    if (!entry?.popup) throw new Error('待接纳 popup 不存在')
+    if (entry.popup.adoptionState === 'adopted') return
+    if (entry.popup.adoptionState === 'adopting') return
+    if (entry.popup.adoptionTimer) clearTimeout(entry.popup.adoptionTimer)
+    entry.popup.adoptionState = 'adopting'
+    entry.popup.adoptionTimer = setTimeout(() => {
+      const current = this.views.get(tabId)
+      if (current !== entry || current.popup?.adoptionState !== 'adopting') return
+      console.warn(`[BrowserManager] popup 接管未完成，已超时清理 tabId=${tabId}`)
+      this.destroyView(tabId)
+      this.emitRuntimeTabClosed(tabId, entry.workspaceKey, entry.ownerWindowId)
+    }, POPUP_ADOPTION_COMPLETION_TIMEOUT_MS)
+  }
+
+  /** renderer 已创建同 ID 的工作台 Tab，runtime 进入正常对账生命周期。 */
   acceptPopup(tabId: string): void {
     const entry = this.views.get(tabId)
     if (!entry?.popup) throw new Error('待接纳 popup 不存在')
@@ -1274,6 +1304,11 @@ export class BrowserManager {
     entry.popup.adoptionState = 'adopted'
     if (entry.popup.adoptionTimer) clearTimeout(entry.popup.adoptionTimer)
     entry.popup.adoptionTimer = null
+    // 前台 popup 必须真正出现在用户眼前。尤其来源位于单 Tab 辅助窗口时，popup 会被
+    // 投影到主窗口；仅激活 renderer Tab 不会让被遮挡/最小化的主窗口自动置前。
+    if (entry.popup.disposition !== 'background-tab' && !this.focusTabOwner(tabId)) {
+      console.warn(`[BrowserManager] 前台 popup 已接纳但 owner 窗口无法置前 tabId=${tabId}`)
+    }
   }
 
   /** renderer 无法安全投影该 popup，立即释放 runtime。 */
@@ -1505,7 +1540,7 @@ export class BrowserManager {
     )
     for (const [tabId, entry] of [...this.views]) {
       if (entry.ownerWindowId !== MAIN_BROWSER_HOST_ID) continue
-      if (entry.popup?.adoptionState === 'pending') {
+      if (entry.popup && entry.popup.adoptionState !== 'adopted') {
         const rendererDeclaredPopup = expectedProfileByTabId.has(tabId)
         const bindingMismatch =
           rendererDeclaredPopup &&
@@ -2440,7 +2475,7 @@ export class BrowserManager {
     profileId: string | null
     viewState: BrowserViewState | null
     popup: {
-      adoptionState: 'pending' | 'adopted'
+      adoptionState: 'pending' | 'adopting' | 'adopted'
       disposition: BrowserPopupDisposition
     } | null
     recentUrls: string[]

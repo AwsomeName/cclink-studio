@@ -109,6 +109,36 @@ describe('PlaywrightBridge diagnostics', () => {
     expect(await bridge.waitForClaimedPageId(page, 0)).toBe('browser-popup-stable')
   })
 
+  it('claims a visible Page from a later BrowserContext and uses its Context when active', async () => {
+    const bridge = new PlaywrightBridge()
+    const emptyContext = { pages: () => [], on: vi.fn() }
+    const targetContext = { pages: vi.fn(), on: vi.fn() }
+    const page = {
+      ...fakePage('https://ziyuan.baidu.com/', '百度搜索资源平台'),
+      _guid: 'baidu-target',
+      context: () => targetContext,
+      bringToFront: vi.fn(),
+    } as unknown as Page
+    targetContext.pages.mockReturnValue([page])
+    const electronSession = { on: vi.fn(), removeListener: vi.fn() }
+    const webContents = { id: 84, session: electronSession, _targetId: 'baidu-target' }
+    const internals = bridge as unknown as {
+      browser: { contexts: () => unknown[] }
+      context: unknown
+    }
+    internals.browser = { contexts: () => [emptyContext, targetContext] }
+    internals.context = emptyContext
+
+    await expect(
+      bridge.claimPageForView('baidu-tab', webContents as any, 'https://ziyuan.baidu.com/'),
+    ).resolves.toBe(page)
+    await bridge.switchToPage('baidu-tab')
+
+    expect(bridge.getContext()).toBe(targetContext)
+    expect(emptyContext.on).toHaveBeenCalledWith('page', expect.any(Function))
+    expect(targetContext.on).toHaveBeenCalledWith('page', expect.any(Function))
+  })
+
   it('uses the Electron Session as the authoritative download lifecycle for a claimed tab', async () => {
     const downloadStore = {
       startDownloadNow: vi.fn().mockReturnValue({

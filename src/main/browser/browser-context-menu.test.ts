@@ -85,6 +85,7 @@ describe('browser context menu', () => {
       initialUrl: 'https://www.v2ex.com/t/1',
       workspaceKey: '/workspace/a',
       profileId: 'v2ex',
+      sourceTabId: 'tab-1',
       forceNew: true,
     })
     expect(requestAgentMount).toHaveBeenCalledWith(

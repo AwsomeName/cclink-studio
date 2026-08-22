@@ -62,6 +62,7 @@ export const browserIpcContracts = {
     )
   }),
   destroyView: bindIdentifier(browserIpc.destroyView),
+  beginPopupAdoption: bindIdentifier(browserIpc.beginPopupAdoption),
   acceptPopup: bindIdentifier(browserIpc.acceptPopup),
   rejectPopup: bindIdentifier(browserIpc.rejectPopup),
   setActive: bindOptionalIdentifier(browserIpc.setActive),

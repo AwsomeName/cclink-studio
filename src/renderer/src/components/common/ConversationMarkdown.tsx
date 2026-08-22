@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import MarkdownIt from 'markdown-it'
 import type Token from 'markdown-it/lib/token.mjs'
-import { useTabStore } from '../../stores/tab-store'
+import { openHttpUrlInNewBrowserTab } from '../../features/browser/browser-link-navigation'
 import { copyTextToClipboard } from '../../utils/clipboard'
 import { IconClipboard } from './Icons'
 import { useToastStore } from './Toast'
@@ -97,12 +97,9 @@ function renderContainerToken(token: Token, children: ReactNode[], key: number):
         title={token.attrGet('title') ?? undefined}
         onClick={(event) => {
           event.preventDefault()
-          useTabStore.getState().openTab({
-            type: 'browser',
+          void openHttpUrlInNewBrowserTab({
+            url: href,
             title: linkTitle(children),
-            icon: '🌐',
-            initialUrl: href,
-            forceNew: true,
           })
         }}
       >

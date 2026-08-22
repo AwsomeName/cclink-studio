@@ -65,6 +65,10 @@ export function registerBrowserIpc(
     browserManager.destroyView(tabId)
   })
 
+  handle(browserIpcContracts.beginPopupAdoption, (_event, tabId) => {
+    browserManager.beginPopupAdoption(tabId)
+  })
+
   handle(browserIpcContracts.acceptPopup, (_event, tabId) => {
     browserManager.acceptPopup(tabId)
   })

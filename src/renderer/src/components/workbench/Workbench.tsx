@@ -156,7 +156,7 @@ export function Workbench({
     void openDefaultBrowserTab(activeWorkspaceRef).then((result) => {
       setAddressFocusRequestTabId(result.tabId)
       if (!result.saveable) {
-        showToast(`已打开普通浏览器；当前无法保存到项目：${result.error}`, 'info')
+        showToast(`网页已打开；账号保存能力暂不可用：${result.error}`, 'info')
       }
     })
   }, [activeWorkspaceRef, showToast])
@@ -275,17 +275,19 @@ export function Workbench({
 
   const openBrowserUrl = useCallback(
     (url: string): void => {
-      if (activeTabId && isBrowserTab) {
+      // 新标签页自身已经是统一入口创建的草稿时，直接在该草稿内导航；
+      // 已保存账号、降级页或其他 Browser Tab 不得被“最近访问”改造成另一个网站。
+      if (activeTabId && activeTab?.type === 'browser' && activeTab.webResourceDraftRef) {
         window.cclinkStudio.browser.navigate(activeTabId, url)
         return
       }
       void openDefaultBrowserTab(activeWorkspaceRef, { initialUrl: url }).then((result) => {
         if (!result.saveable) {
-          showToast(`已打开普通浏览器；当前无法保存账号：${result.error}`, 'info')
+          showToast(`网页已打开；账号保存能力暂不可用：${result.error}`, 'info')
         }
       })
     },
-    [activeTabId, activeWorkspaceRef, isBrowserTab, showToast],
+    [activeTab, activeTabId, activeWorkspaceRef, showToast],
   )
 
   return (

@@ -49,7 +49,20 @@ const electronMocks = vi.hoisted(() => {
       }),
       getURL: vi.fn(() => webContents.currentUrl),
       getTitle: vi.fn(() => webContents.currentTitle),
+      isDestroyed: vi.fn(() => false),
       getZoomFactor: vi.fn(() => webContents.currentZoom),
+      canGoBack: vi.fn(() => false),
+      canGoForward: vi.fn(() => false),
+      goBack: vi.fn(),
+      goForward: vi.fn(),
+      reload: vi.fn(),
+      undo: vi.fn(),
+      redo: vi.fn(),
+      cut: vi.fn(),
+      copy: vi.fn(),
+      paste: vi.fn(),
+      delete: vi.fn(),
+      selectAll: vi.fn(),
       focus: vi.fn(),
       setZoomFactor: vi.fn((factor: number) => {
         webContents.currentZoom = factor
@@ -92,6 +105,7 @@ const electronMocks = vi.hoisted(() => {
     webContents: ReturnType<typeof makeWebContents>
     setBounds: ReturnType<typeof vi.fn>
   }> = []
+  const builtMenuTemplates: any[][] = []
 
   class WebContentsView {
     webContents: ReturnType<typeof makeWebContents>
@@ -118,6 +132,10 @@ const electronMocks = vi.hoisted(() => {
       removeChildView: vi.fn(),
     },
     isDestroyed: vi.fn(() => false),
+    isMinimized: vi.fn(() => false),
+    restore: vi.fn(),
+    show: vi.fn(),
+    focus: vi.fn(),
     getContentBounds: vi.fn(() => ({ width: 1200, height: 800 })),
   })
   const mainWindow = makeBrowserWindow()
@@ -125,6 +143,7 @@ const electronMocks = vi.hoisted(() => {
 
   return {
     createdViews,
+    builtMenuTemplates,
     defaultSession,
     mainWebContents,
     mainWindow,
@@ -148,7 +167,12 @@ vi.mock('electron', () => ({
   WebContentsView: electronMocks.WebContentsView,
   session: electronMocks.session,
   clipboard: { writeText: vi.fn() },
-  Menu: { buildFromTemplate: vi.fn(() => ({ popup: vi.fn() })) },
+  Menu: {
+    buildFromTemplate: vi.fn((template: any[]) => {
+      electronMocks.builtMenuTemplates.push(template)
+      return { popup: vi.fn() }
+    }),
+  },
 }))
 
 import { browserIpcEvents } from '../../shared/ipc/browser'
@@ -167,6 +191,7 @@ describe('BrowserManager popup adoption', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     electronMocks.createdViews.length = 0
+    electronMocks.builtMenuTemplates.length = 0
   })
 
   async function createSource(): Promise<{
@@ -749,6 +774,60 @@ describe('BrowserManager popup adoption', () => {
     }
   })
 
+  it('keeps a claimed popup alive beyond ten seconds while workspace adoption is running', async () => {
+    vi.useFakeTimers()
+    try {
+      const { manager, source } = await createSource()
+      const response = source.windowOpenHandler?.(popupDetails())
+      const popupWebContents = electronMocks.makeWebContents(source.session)
+      response.createWindow({ webContents: popupWebContents })
+      const popupEvent = electronMocks.mainWebContents.send.mock.calls.find(
+        ([channel]) => channel === browserIpcEvents.popupCreated,
+      )
+      const popupTabId = popupEvent?.[1].tabId as string
+
+      manager.beginPopupAdoption(popupTabId)
+      vi.advanceTimersByTime(60_000)
+
+      expect(popupWebContents.close).not.toHaveBeenCalled()
+      await expect(manager.getRuntimeDiagnostics(popupTabId)).resolves.toMatchObject({
+        popup: { adoptionState: 'adopting' },
+      })
+
+      manager.acceptPopup(popupTabId)
+      vi.advanceTimersByTime(5 * 60_000)
+      expect(popupWebContents.close).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still closes a claimed popup when renderer never completes adoption', async () => {
+    vi.useFakeTimers()
+    try {
+      const { manager, source } = await createSource()
+      const response = source.windowOpenHandler?.(popupDetails())
+      const popupWebContents = electronMocks.makeWebContents(source.session)
+      response.createWindow({ webContents: popupWebContents })
+      const popupEvent = electronMocks.mainWebContents.send.mock.calls.find(
+        ([channel]) => channel === browserIpcEvents.popupCreated,
+      )
+      const popupTabId = popupEvent?.[1].tabId as string
+
+      manager.beginPopupAdoption(popupTabId)
+      vi.advanceTimersByTime(4 * 60_000)
+      manager.beginPopupAdoption(popupTabId)
+      vi.advanceTimersByTime(60_000)
+
+      expect(popupWebContents.close).toHaveBeenCalledOnce()
+      expect(manager.listViewsForWorkspace('/workspace/a')).toEqual([
+        expect.objectContaining({ tabId: 'source-tab' }),
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('moves the same runtime between native hosts and routes events only to its owner', async () => {
     const { manager, source } = await createSource()
     manager.reconcileViews({
@@ -786,6 +865,56 @@ describe('BrowserManager popup adoption', () => {
     expect(manager.getViewOwnerWindowId('source-tab')).toBe('main')
     expect(manager.getRuntimeIdentity('source-tab')).toEqual(identityBefore)
     expect(source.loadURL).toHaveBeenCalledTimes(loadCountAfterMove)
+  })
+
+  it('routes a detached window native-menu new Tab request to the main Tab owner', async () => {
+    const { manager, source } = await createSource()
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: 'source-tab',
+    })
+    const auxiliaryWindow = electronMocks.makeBrowserWindow()
+    manager.registerHost('aux-context-menu', auxiliaryWindow as never, '/workspace/a')
+    manager.transferViewToHost('source-tab', 'main', 'aux-context-menu')
+    electronMocks.mainWebContents.send.mockClear()
+    auxiliaryWindow.webContents.send.mockClear()
+
+    source.emit(
+      'context-menu',
+      {},
+      {
+        selectionText: '',
+        linkURL: 'https://mp.weixin.qq.com/cgi-bin/appmsg?t=detached',
+        srcURL: '',
+        isEditable: false,
+        mediaType: 'none',
+        editFlags: {},
+      },
+    )
+    const openLink = electronMocks.builtMenuTemplates
+      .at(-1)
+      ?.find((item) => item.id === 'open-link')
+    expect(openLink).toBeDefined()
+
+    openLink.click({}, auxiliaryWindow, {})
+
+    expect(electronMocks.mainWebContents.send).toHaveBeenCalledWith(
+      browserIpcEvents.requestOpenTab,
+      {
+        initialUrl: 'https://mp.weixin.qq.com/cgi-bin/appmsg?t=detached',
+        workspaceKey: '/workspace/a',
+        profileId: 'wechat',
+        sourceTabId: 'source-tab',
+        forceNew: true,
+      },
+    )
+    expect(auxiliaryWindow.webContents.send).not.toHaveBeenCalledWith(
+      browserIpcEvents.requestOpenTab,
+      expect.anything(),
+    )
+    expect(electronMocks.mainWindow.show).toHaveBeenCalledOnce()
+    expect(electronMocks.mainWindow.focus).toHaveBeenCalledOnce()
   })
 
   it('rolls a failed target attach back to the source host', async () => {
@@ -834,7 +963,14 @@ describe('BrowserManager popup adoption', () => {
       browserIpcEvents.popupCreated,
       expect.anything(),
     )
-    expect(manager.getViewOwnerWindowId(popupEvent?.[1].tabId)).toBe('main')
+    const popupTabId = popupEvent?.[1].tabId as string
+    expect(manager.getViewOwnerWindowId(popupTabId)).toBe('main')
+
+    manager.acceptPopup(popupTabId)
+
+    expect(electronMocks.mainWindow.show).toHaveBeenCalledOnce()
+    expect(electronMocks.mainWindow.focus).toHaveBeenCalledOnce()
+    expect(auxiliaryWindow.show).not.toHaveBeenCalled()
   })
 
   it('routes a top-level Basic Auth challenge and marks a successful navigation authenticated', async () => {

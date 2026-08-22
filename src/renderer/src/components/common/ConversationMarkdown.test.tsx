@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
@@ -16,6 +17,12 @@ afterAll(() => {
 })
 
 describe('ConversationMarkdown', () => {
+  it('Agent 消息链接必须复用统一账号浏览器入口，不能直接创建普通 Browser Tab', () => {
+    const source = readFileSync(new URL('./ConversationMarkdown.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('openHttpUrlInNewBrowserTab')
+    expect(source).not.toContain('useTabStore.getState().openTab')
+  })
+
   it('renders common Markdown structures as semantic React elements', () => {
     const html = renderToStaticMarkup(
       <ConversationMarkdown

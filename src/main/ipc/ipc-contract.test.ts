@@ -278,6 +278,9 @@ describe('IPC invoke contracts', () => {
     expect(browserIpcContracts.acceptPopup.parseArgs(['browser-popup-1'])).toEqual([
       'browser-popup-1',
     ])
+    expect(browserIpcContracts.beginPopupAdoption.parseArgs(['browser-popup-1'])).toEqual([
+      'browser-popup-1',
+    ])
     expect(browserIpcContracts.listHistory.parseArgs([])).toEqual([undefined])
     expect(
       browserIpcContracts.getSessionDiagnostics.parseArgs([

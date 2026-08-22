@@ -273,6 +273,8 @@ describe('fs-store workspace switching', () => {
           type: 'browser',
           title: 'A',
           icon: 'browser',
+          browserProfile: 'account-a-profile',
+          webResourceRef: { accountId: 'account-a' },
           workspaceRef: { kind: 'local', path: currentPath },
         },
       ],
@@ -288,6 +290,8 @@ describe('fs-store workspace switching', () => {
               type: 'browser',
               title: 'B',
               icon: 'browser',
+              browserProfile: 'account-b-profile',
+              webResourceRef: { accountId: 'account-b' },
               workspaceRef: { kind: 'local', path: nextPath },
             },
           ],
@@ -533,7 +537,14 @@ describe('fs-store workspace switching', () => {
       .commitActiveWorkspace({ kind: 'local', path: missingWorkspacePath })
     const staleConversationId = useAgentStore.getState().createConversation({ activate: true })
     useBrowserStore.getState().ensureTab('stale-browser', 'https://stale.example')
-    useTabStore.getState().openTab({ type: 'browser', title: 'Stale', icon: '🌐' })
+    useTabStore.getState().openTab({
+      type: 'browser',
+      title: 'Stale',
+      icon: '🌐',
+      browserProfile: 'stale-profile',
+      webResourceRef: { accountId: 'stale-account' },
+      workspaceRef: { kind: 'local', path: missingWorkspacePath },
+    })
     useEditorStore.getState().initVirtualFile('virtual:stale', 'stale draft')
 
     const getAll = window.cclinkStudio.settings.getAll as ReturnType<typeof vi.fn>

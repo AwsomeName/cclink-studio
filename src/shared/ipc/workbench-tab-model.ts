@@ -6,6 +6,10 @@ const workspaceKeySchema = z.string().trim().min(1).max(4096).nullable()
 const ownerKeySchema = z.string().trim().min(1).max(512).nullable()
 const jsonRecordSchema = z.record(z.string(), z.json())
 
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 export const workbenchTabDescriptorSchema = jsonRecordSchema.superRefine((value, context) => {
   for (const field of ['id', 'type', 'title', 'icon'] as const) {
     const candidate = value[field]
@@ -16,6 +20,29 @@ export const workbenchTabDescriptorSchema = jsonRecordSchema.superRefine((value,
         message: `Tab descriptor 缺少 ${field}`,
       })
     }
+  }
+
+  if (value.type !== 'browser') return
+  const workspaceRef = value.workspaceRef
+  const isLocalBrowser = isJsonObject(workspaceRef) && workspaceRef.kind === 'local'
+  if (!isLocalBrowser || typeof value.filePath === 'string') return
+
+  const hasProfile =
+    typeof value.browserProfile === 'string' && Boolean(value.browserProfile.trim())
+  const hasAccount =
+    isJsonObject(value.webResourceRef) &&
+    typeof value.webResourceRef.accountId === 'string' &&
+    Boolean(value.webResourceRef.accountId.trim())
+  const hasDraft =
+    isJsonObject(value.webResourceDraftRef) &&
+    typeof value.webResourceDraftRef.draftId === 'string' &&
+    Boolean(value.webResourceDraftRef.draftId.trim())
+  if (!hasProfile || Number(hasAccount) + Number(hasDraft) !== 1) {
+    context.addIssue({
+      code: 'custom',
+      path: ['browserProfile'],
+      message: '本地 Browser Tab 必须绑定且只能绑定一个网站账号或账号草稿',
+    })
   }
 })
 export type WorkbenchTabDescriptor = z.infer<typeof workbenchTabDescriptorSchema>

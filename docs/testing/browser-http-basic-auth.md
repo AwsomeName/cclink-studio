@@ -1,6 +1,6 @@
 # 内嵌浏览器 HTTP Basic Auth 登录被取消：缺陷记录与修复方案
 
-状态：**Open · P1 用户阻塞缺陷**
+状态：**Implemented · P1 · 等待真实 FRP 人工验收后关闭**
 
 发现时间：2026-08-21  
 影响版本：至少 `0.1.54`  
@@ -9,9 +9,11 @@
 
 ## 用户现在能做什么、还不能做什么
 
-用户可以在 Studio Browser Tab 中导航到受保护地址，但目前不能看到或填写 HTTP Basic Auth
-用户名和密码。服务端返回认证挑战后，Electron 默认取消认证，页面停留在地址标题、空白页或
-`Unauthorized` 状态。
+代码修复后，用户在 Studio Browser Tab 打开受保护地址时会看到独立的用户名/密码窗口；正确提交
+后原 Tab 继续加载。公网明文 HTTP 必须先勾选风险确认，凭证只用于当前挑战，不保存。
+
+受控的真实 Electron `WebContentsView` 已验证“错误密码再次挑战 → 正确密码进入受保护页面”。
+用户真实 FRP 地址尚未在本次开发中输入真实凭证，因此在完成本文第 9 项前仍不能把缺陷标为 Closed。
 
 这不是 CCLink 远程账号登录失败，也不是 FRP 跳过了登录；FRP 使用浏览器原生认证挑战，
 不是 HTML 登录表单。
@@ -110,16 +112,17 @@ HTTP 变安全，也不能替代服务器 HTTPS 配置。
 
 ### 1. 状态所有权
 
-| 状态                                      | 唯一所有者                             | 生命周期                             |
-| ----------------------------------------- | -------------------------------------- | ------------------------------------ |
-| Browser View、Session、URL、owner window  | `BrowserManager`                       | 跟随 Browser Tab/WebContents         |
-| 一次性 challenge callback、尝试次数、超时 | 新的 `BrowserHttpAuthService`          | 单次 challenge；导航/移动/关闭时取消 |
-| 凭证输入草稿                              | 隔离的认证对话框 renderer 组件本地状态 | 对话框关闭即销毁                     |
-| Cookie/Chromium 进程内认证缓存            | Electron Session                       | 不复制到资源或工作区状态             |
-| 安全诊断摘要                              | `BrowserManager` 诊断投影              | 有界数量、完全脱敏                   |
+| 状态                                      | 唯一所有者                               | 生命周期                           |
+| ----------------------------------------- | ---------------------------------------- | ---------------------------------- |
+| Browser View、Session、URL、owner window  | `BrowserManager`                         | 跟随 Browser Tab/WebContents       |
+| 一次性 challenge callback、尝试次数、超时 | `BrowserAuthProcessService` 的 HTTP 模式 | 单次 challenge；关闭/失效/超时取消 |
+| 凭证输入草稿                              | 隔离认证子进程的页面局部状态             | 窗口关闭即销毁                     |
+| Cookie/Chromium 进程内认证缓存            | Electron Session                         | 不复制到资源或工作区状态           |
+| 安全诊断摘要                              | `BrowserManager` 诊断投影                | 有界数量、完全脱敏                 |
 
-`BrowserHttpAuthService` 只拥有认证交互事务，不成为第二个 Browser/Profile/Session owner。
-现有 V2EX `BrowserAuthProcessService` 保持专用职责，不扩成混合认证中心。
+复用现有 V2EX 登录所用的 `BrowserAuthProcessService` 和独立 Electron 子进程基础设施，但不复用
+V2EX 的站点判断、Google 跳转或 Cookie 回写契约。新增的 `http-basic` 子模式只持有一次性 challenge
+callback；它不会成为第二个 Browser/Profile/Session owner。
 
 ### 2. 主进程 challenge 路由
 
@@ -130,60 +133,60 @@ HTTP 变安全，也不能替代服务器 HTTPS 配置。
 2. 复用 `did-start-navigation(..., isMainFrame)` 建立的当前顶层导航代次，校验 `ViewEntry`、`tabId`、
    `runtimeGeneration`、owner window 和 challenge URL 仍一致；
 3. 拒绝代理、非 `basic`、没有活动顶层导航代次，以及 challenge host/port 与目标 origin 不一致的请求；
-4. 生成随机 `challengeId`，把 callback 交给 `BrowserHttpAuthService`，不把 callback 或凭证交给
+4. 生成随机 `requestId`，把 callback 交给 `BrowserAuthProcessService`，不把 callback 或凭证交给
    renderer Store；
-5. 服务向当前 owner window 打开应用自有的模态认证对话框；提交时再次验证对话框 sender、
-   challenge ID、Tab generation、origin 和 owner；
+5. 服务沿用 V2EX 登录的独立子进程模式，打开一个应用自有认证窗口；提交时再次验证窗口 sender、
+   request ID、Tab generation 和 origin；
 6. 校验通过后只调用一次 `callback(username, password)`；取消、超时、Tab 移动、导航代次变化、
    WebContents/owner window 销毁时调用无参数 callback 并释放；
 7. 相同 Tab generation + origin + realm 再次 challenge 视为上次凭证被拒绝。不得自动重放密码；
    重新显示错误状态并让用户决定是否再次输入。
 
-同一 owner window 同时只显示一个认证对话框；其他 challenge 有界排队或明确取消，禁止全局单例
-把主窗口和辅助窗口的请求互相覆盖。
+同一 Tab 同时只保留一个 Basic Auth challenge；新的 challenge 会先取消旧 callback。不同 Tab 的
+事务以 `tabId + runtimeGeneration` 隔离，不能互相提交凭证。
 
 ### 3. 隔离认证对话框
 
-使用应用内独立的 modal `BrowserWindow`，父窗口必须是当前 Browser owner。对话框加载本地 renderer
-入口并满足：
+使用与 V2EX 登录相同的独立 Electron 子进程，再由该进程创建只加载本地 `data:` 页面的
+`BrowserWindow`。这样认证页面崩溃或退出不会污染主工作台进程。窗口满足：
 
 - `sandbox: true`、`contextIsolation: true`、`nodeIntegration: false`；
-- 使用单独的最小 preload，只暴露“读取当前安全 challenge 摘要、提交、取消”三个有 schema 的能力；
+- 使用单独的最小 preload，只允许当前页面提交或取消一个有 schema 的 challenge；
 - 不暴露工作区、文件、Terminal、Agent、Cookie、Browser 自动化或通用 dialog API；
 - 主进程按精确的 prompt `WebContents`、main frame URL 和 `challengeId` 校验 IPC sender；
 - 页面只显示规范化 origin、realm、是否明文 HTTP 和尝试失败状态；realm 去除控制字符、限制长度并
   按纯文本渲染；
 - 用户名和密码只保存在组件局部内存，不进入 Zustand、localStorage、表单自动完成、剪贴板、
   错误对象、遥测或日志；密码输入框默认禁止显示明文；
-- 对话框关闭时清空输入并销毁 renderer；网页 `WebContentsView` 不能覆盖模态窗口。
+- 使用临时 `userData` 目录和非持久 Session；窗口/子进程退出后清理，网页 `WebContentsView` 不能
+  覆盖该顶层窗口。
 
-建议新增独立 preload 构建入口，而不是复用拥有完整桌面 API 的 `src/preload/index.ts`。
+实现使用独立 preload 构建入口，没有复用拥有完整桌面 API 的 `src/preload/index.ts`。
 
 ### 4. 失败降级与生命周期
 
-- 对话框创建失败：取消本次 challenge，在 Browser 工具栏显示“无法打开认证对话框”；其他能力不受影响。
+- 对话框创建失败：取消本次 challenge并记录脱敏原因；其他能力不受影响。
 - 120 秒无响应：取消 challenge 并销毁对话框；不得无限持有 Electron callback。
 - 用户连续失败：每次都清空密码，最多连续显示三次；之后取消并要求用户刷新后重新发起，避免认证循环。
-- owner window 变化：取消旧 challenge，不迁移包含输入草稿的对话框；用户在新 owner 中刷新后重新认证。
+- Tab/WebContents 销毁：立即取消 callback 并终止对应认证子进程；运行时代次或导航 origin 已变化时，
+  即使旧窗口后来提交，凭证也不会转发给失效页面。
 - App/Browser capability shutdown：先取消全部 callback，再移除 listener、IPC 和 prompt window，保证启动/停止对称。
 - Playwright 未连接或 claim 失败：人工 Basic Auth 仍应工作；认证不能依赖 CDP/Page。
 
 ### 5. 诊断
 
-为 Browser 诊断增加 `lastHttpAuthChallenge`，只记录：
+Browser 诊断增加了 `httpAuth` 摘要，只记录：
 
 ```ts
 type BrowserHttpAuthDiagnostic = {
   timestamp: number
   tabId: string
-  ownerWindowId: string
   runtimeGeneration: number
   origin: string
-  scheme: 'basic' | 'unsupported'
   realm: string
   transport: 'https' | 'loopback-http' | 'insecure-http'
   attempt: number
-  outcome: 'prompted' | 'submitted' | 'cancelled' | 'rejected' | 'timed-out' | 'unsupported'
+  outcome: 'prompted' | 'submitted' | 'cancelled' | 'rejected' | 'authenticated'
   reason?: string
 }
 ```
@@ -192,42 +195,42 @@ type BrowserHttpAuthDiagnostic = {
 Authorization/Proxy-Authorization header、callback 参数、Cookie 值或对输入做哈希。诊断报告还应
 区分“HTTP auth challenge 已取消”和“Playwright Page claim 失败”，避免再次把两个问题混为一谈。
 
-## 代码落点
-
-建议按以下最小范围实现：
+## 已实现的代码落点
 
 - `src/shared/ipc/browser-http-auth.ts`：安全 challenge 投影和 submit/cancel contract/schema；
-- `src/main/browser/browser-http-auth-service.ts`：pending callback、modal、超时、重试和清理；
+- `src/main/browser/browser-auth-process-service.ts`：复用既有 V2EX 认证子进程协调器，增加独立的
+  HTTP Basic callback、超时、三次重试和清理；
+- `src/main/browser/browser-http-auth-child.ts`：不加载远程网页的最小凭证窗口；
 - `src/main/browser/browser-manager.ts`：局部 `login` listener、Tab/owner/generation 校验和安全诊断；
-- `src/preload/browser-http-auth.ts`：认证窗口的最小 contextBridge；
-- `src/renderer/src/features/browser-http-auth/BrowserHttpAuthPrompt.tsx`：局部输入状态与风险提示；
+- `src/preload/browser-http-auth.ts`：认证窗口的最小 IPC 提交入口；
 - `electron.vite.config.ts`：新增隔离 preload entry；
-- `src/main/runtime/window-runtime.ts` / `app-runtime.ts`：服务创建、依赖注入、失败降级和对称销毁；
+- `src/main/runtime/window-runtime.ts` / `src/main/index.ts`：依赖注入、子进程入口和对称销毁；
 - Browser IPC/诊断 contract：只增加脱敏状态，不暴露凭证；
 - 对应 contract、service、BrowserManager 和真实 Electron smoke 测试。
 
 这条链路不需要修改 CCLink 远程域、`WebResourceService`、`CredentialService`、Playwright 工具或
 Agent runtime。
 
-## 工程实施顺序
+## 已完成的工程验证
 
-1. 建立本地受控 Basic Auth fixture，固定 401 challenge、正确凭证、错误凭证和取消行为。
-2. 一次完成主窗口 HTTPS/loopback 最小纵向闭环：listener → 隔离 prompt → callback → 受保护页面。
-3. 补公网 HTTP 风险确认、错误重试、超时和完全脱敏诊断。
-4. 补辅助窗口 owner、Tab 移动、WebContents/window 销毁与 Browser capability shutdown 对账。
-5. 运行受影响单测、typecheck 和真实 Electron `WebContentsView` smoke，再执行本文开头的真实 FRP
-   人工验收。没有真实 App 结果时，本缺陷状态保持 Open。
+- Contract 与 `BrowserManager` 受影响测试：33 项通过；
+- `pnpm build` 通过，独立 `out/preload/browserHttpAuth.js` 已生成；
+- `pnpm smoke:browser-http-auth` 通过真实 Electron `WebContentsView`：第一次错误密码触发第二次
+  challenge，第二次正确密码进入受保护页面，且 `did-start-navigation` 发生在 `login` 前；
+- 定向 ESLint 与 `git diff --check` 通过。
+
+这些结果证明实现链路可运行，但不能代替用户真实 FRP 地址的最终验收。
 
 ## 被否决的方案
 
-| 方案                                  | 否决原因                                                                                   |
-| ------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 把 `username:password@host` 写入 URL  | 会进入地址栏、历史、错误或日志，现代 Chromium 兼容性也不可靠                               |
-| 用 Playwright 处理登录框              | Basic Auth 在 DOM/Page 之前发生；当前 Page claim 失败时更不能依赖自动化                    |
-| 全局 `app.on('login')` 自动填固定凭证 | 会扩大到代理、UtilityProcess 和非 Browser 内容，无法证明作用域正确                         |
-| 扩展 V2EX Google 登录子进程           | 现有流程以站点 Cookie 回写结束，和绑定当前 WebContents callback 的 Basic Auth 生命周期不同 |
-| 默认保存到 CredentialService          | 超出最小闭环，引入 host/realm/profile 绑定、轮换、删除和跨工作空间授权问题                 |
-| 对公网 HTTP 静默提交                  | Basic Auth 不加密密码，违背最小权限与明确风险确认原则                                      |
+| 方案                                    | 否决原因                                                                        |
+| --------------------------------------- | ------------------------------------------------------------------------------- |
+| 把 `username:password@host` 写入 URL    | 会进入地址栏、历史、错误或日志，现代 Chromium 兼容性也不可靠                    |
+| 用 Playwright 处理登录框                | Basic Auth 在 DOM/Page 之前发生；当前 Page claim 失败时更不能依赖自动化         |
+| 全局 `app.on('login')` 自动填固定凭证   | 会扩大到代理、UtilityProcess 和非 Browser 内容，无法证明作用域正确              |
+| 直接把 Basic Auth 塞进 V2EX Cookie 契约 | 两者结束条件不同；本实现只复用进程/窗口基础设施，使用独立 child mode 和消息契约 |
+| 默认保存到 CredentialService            | 超出最小闭环，引入 host/realm/profile 绑定、轮换、删除和跨工作空间授权问题      |
+| 对公网 HTTP 静默提交                    | Basic Auth 不加密密码，违背最小权限与明确风险确认原则                           |
 
 ## 关闭条件
 

@@ -50,12 +50,12 @@ Profile、Session、POST、referrer、`window.opener` 与 Playwright Page 语义
 
 | 状态                                | 唯一所有者                          | 说明                                                    |
 | ----------------------------------- | ----------------------------------- | ------------------------------------------------------- |
-| popup WebContents / WebContentsView | `BrowserManager`                    | 创建、接纳等待、激活与销毁                              |
+| popup WebContents / WebContentsView | `BrowserManager`                    | 创建、接管租约、激活与销毁                              |
 | 可见工作台 Tab                      | renderer `tab-store`                | Browser runtime 的可丢弃投影和工作空间持久化            |
 | Profile / Session                   | `BrowserManager` + Electron session | 必须继承来源 View，不接受网页或 renderer 自报           |
 | Playwright Page 映射                | `PlaywrightBridge`                  | 使用 BrowserManager 分配的稳定 tabId，不另建可见 Tab ID |
 
-不得新增第二个 popup Store。popup 的 `pending/adopted` 状态属于 `BrowserManager` 的 ViewEntry；
+不得新增第二个 popup Store。popup 的 `pending/adopting/adopted` 状态属于 `BrowserManager` 的 ViewEntry；
 renderer 只通过受校验 contract 接纳或拒绝投影。
 
 ### 权限面
@@ -76,6 +76,8 @@ page requests popup
   -> createWindow returns an adopted WebContentsView.webContents
   -> ViewEntry enters pending
   -> main emits popupCreated
+  -> renderer acknowledges beginPopupAdoption within 10 seconds
+  -> ViewEntry enters adopting while any source-workspace switch completes
   -> renderer adds a Browser Tab using the exact tabId
   -> renderer accepts popup
   -> ViewEntry enters adopted and normal reconcile owns it
@@ -83,10 +85,13 @@ page requests popup
 
 失败与清理：
 
-- renderer 拒绝、工作空间已切换或接纳超时：主进程关闭 pending View。
+- renderer 必须在 10 秒内确认已开始接管；该 10 秒只是首次响应窗，不得作为跨项目
+  切换的完成时限。
+- 开始接管后由主进程持有独立、有界的完成租约；当前上限为 5 分钟。renderer 拒绝、
+  项目切换失败或完成租约超时时，主进程关闭 View。
 - WebContents 在网页侧自行关闭：主进程删除 runtime，并通知 renderer 删除 Tab 投影。
 - renderer 主动关闭 Tab：沿用 `destroyView`，同时清理 Playwright 与 Agent 绑定。
-- `reconcileViews` 在接纳握手期间不得把 pending View 当作孤儿销毁。
+- `reconcileViews` 在接管握手期间不得把 pending/adopting View 当作孤儿销毁。
 - 主窗口销毁时仍由 `BrowserManager.destroy()` 对称释放全部 View 和 timer。
 
 ## 契约
@@ -96,6 +101,7 @@ page requests popup
 - `BrowserPopupCreatedPayload`：`tabId`、`url`、`workspaceKey`、`profileId`、
   `disposition`、`activate`。
 - `browser:popupCreated`：main -> renderer。
+- `browser:beginPopupAdoption(tabId)`：renderer -> main，在切换项目之前延长为接管完成租约。
 - `browser:acceptPopup(tabId)`：renderer -> main。
 - `browser:rejectPopup(tabId)`：renderer -> main。
 - `browser:runtimeTabClosed`：main -> renderer，处理网页侧 `window.close()`。
@@ -133,7 +139,8 @@ M1 未通过真人验收前不得把功能标记为完成；M2 未完成前不�
 | background disposition                   | 新建但不抢占当前 Tab                          |
 | popup `window.close()`                   | runtime 和 UI Tab 同时消失                    |
 | 来源 Tab 关闭                            | 子页面按 Chromium opener 生命周期关闭或被对账 |
-| 工作空间切换竞态                         | 不跨工作空间展示；pending 最终释放            |
+| 工作空间切换竞态                         | 不跨工作空间展示；pending/adopting 最终释放   |
+| 跨项目切换超过 10 秒                    | popup 不提前关闭，切换后正常接纳             |
 | 非法协议 / `file:`                       | 拒绝，不创建 View                             |
 | 认证 URL                                 | 继续进入独立认证流程                          |
 | 同 Profile / 不同 Profile                | 登录态继承 / 隔离正确                         |
@@ -146,7 +153,7 @@ M1 未通过真人验收前不得把功能标记为完成；M2 未完成前不�
 - tabId、workspaceKey 是否匹配；
 - Profile ID（不含 Cookie 值）；
 - disposition；
-- `pending/adopted`；
+- `pending/adopting/adopted`；
 - 创建、接纳、拒绝、超时和自关闭原因；
 - Playwright claim 是否成功。
 

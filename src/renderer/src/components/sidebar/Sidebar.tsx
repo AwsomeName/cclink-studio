@@ -480,9 +480,7 @@ function BrowserManagementView(): React.ReactElement {
   const openNewBrowser = (): void => {
     void openDefaultBrowserTab(activeWorkspaceRef).then((result) => {
       if (!result.saveable) {
-        useToastStore
-          .getState()
-          .show(`已打开普通浏览器；当前无法保存到项目：${result.error}`, 'info')
+        useToastStore.getState().show(`网页已打开；账号保存能力暂不可用：${result.error}`, 'info')
       }
     })
   }
@@ -498,7 +496,7 @@ function BrowserManagementView(): React.ReactElement {
       title: bookmark.title,
     }).then((result) => {
       if (!result.saveable) {
-        showToast(`已打开普通浏览器；当前无法保存账号：${result.error}`, 'info')
+        showToast(`网页已打开；账号保存能力暂不可用：${result.error}`, 'info')
       }
     })
   }
@@ -509,20 +507,12 @@ function BrowserManagementView(): React.ReactElement {
       activateTab(existing.id)
       return
     }
-    const currentState = currentBrowserTab ? browserTabs[currentBrowserTab.id] : null
-    if (currentBrowserTab && currentState?.ready) {
-      activateTab(currentBrowserTab.id)
-      void window.cclinkStudio.browser.navigate(currentBrowserTab.id, entry.url).catch((error) => {
-        showToast(error instanceof Error ? error.message : String(error), 'error')
-      })
-      return
-    }
     void openDefaultBrowserTab(activeWorkspaceRef, {
       initialUrl: entry.url,
       title: entry.title?.trim() || '浏览器',
     }).then((result) => {
       if (!result.saveable) {
-        showToast(`已打开普通浏览器；当前无法保存账号：${result.error}`, 'info')
+        showToast(`网页已打开；账号保存能力暂不可用：${result.error}`, 'info')
       }
     })
   }

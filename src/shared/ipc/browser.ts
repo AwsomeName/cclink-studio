@@ -309,7 +309,7 @@ export interface BrowserRuntimeDiagnosticSummary {
   profileId: string | null
   viewState: BrowserViewState | null
   popup: {
-    adoptionState: 'pending' | 'adopted'
+    adoptionState: 'pending' | 'adopting' | 'adopted'
     disposition: BrowserPopupDisposition
   } | null
   playwrightTabId: string | null
@@ -360,8 +360,10 @@ export interface BrowserOpenTabRequest {
   initialUrl?: string
   /** 发起浏览器任务的项目；renderer 只能在同一项目内响应。 */
   workspaceKey: string | null
-  /** 新 Tab 必须继承来源页面的持久化 Profile。 */
+  /** 新 Tab 必须继承来源页面的持久化 Profile。存在时必须同时提供 sourceTabId。 */
   profileId?: string | null
+  /** 来源 Browser Tab；renderer 用它继承账号或草稿归属，禁止只继承 Profile。 */
+  sourceTabId?: string
   /** 原生网页菜单显式要求新建 Tab 时不得复用当前页面。 */
   forceNew?: boolean
 }
@@ -501,6 +503,7 @@ export interface BrowserWorkbenchBounds extends BrowserBounds {
 export interface BrowserApiContract {
   createView: (tabId: string, initialUrl?: string, opts?: BrowserCreateViewOptions) => Promise<void>
   destroyView: (tabId: string) => Promise<void>
+  beginPopupAdoption: (tabId: string) => Promise<void>
   acceptPopup: (tabId: string) => Promise<void>
   rejectPopup: (tabId: string) => Promise<void>
   setActive: (tabId: string | null) => Promise<void>
@@ -581,6 +584,7 @@ export const browserIpc = {
     void
   >('browser:createView'),
   destroyView: defineIpcCall<[string], void>('browser:destroyView'),
+  beginPopupAdoption: defineIpcCall<[string], void>('browser:beginPopupAdoption'),
   acceptPopup: defineIpcCall<[string], void>('browser:acceptPopup'),
   rejectPopup: defineIpcCall<[string], void>('browser:rejectPopup'),
   setActive: defineIpcCall<[string | null], void>('browser:setActive'),

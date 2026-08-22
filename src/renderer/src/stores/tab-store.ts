@@ -93,12 +93,30 @@ function normalizePersistedTab(tab: Tab): Tab {
   }
 }
 
+function hasValidBrowserResourceBinding(
+  tab: Pick<Tab, 'browserProfile' | 'webResourceRef' | 'webResourceDraftRef'>,
+): boolean {
+  const hasProfile = typeof tab.browserProfile === 'string' && Boolean(tab.browserProfile.trim())
+  const bindingCount =
+    Number(Boolean(tab.webResourceRef)) + Number(Boolean(tab.webResourceDraftRef))
+  return hasProfile && bindingCount === 1
+}
+
+function isRestorableBrowserTab(tab: Tab): boolean {
+  if (tab.type !== 'browser') return true
+  if (tab.filePath || tab.workspaceRef?.kind === 'remote') return true
+  return hasValidBrowserResourceBinding(tab)
+}
+
 function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeTabId'> | null {
   if (!value || typeof value !== 'object') return null
   const parsed = value as { tabs?: Tab[]; activeTabId?: string | null }
   const tabs = (parsed.tabs ?? [])
     .filter((tab): tab is Tab => Boolean(tab?.id && tab.type && tab.title && tab.icon))
     .filter((tab) => !tab.webResourceDraftRef)
+    // 旧版本会持久化没有隔离 Profile 的本地网页 Tab。继续恢复它们会重新制造
+    // “普通浏览器 / 网站账号”两套用户路径；历史记录仍由 BrowserManager 单独保留。
+    .filter(isRestorableBrowserTab)
     .filter(
       (tab) =>
         tab.type !== 'scheduled-task' ||
@@ -117,7 +135,10 @@ function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeT
 function saveStoredTabs(state: TabState): void {
   try {
     if (isWorkspaceStateRestoring()) return
-    const allTabs = state.tabs.filter((tab) => !tab.webResourceDraftRef).map(normalizePersistedTab)
+    const allTabs = state.tabs
+      .filter((tab) => !tab.webResourceDraftRef)
+      .filter(isRestorableBrowserTab)
+      .map(normalizePersistedTab)
     const activeWorkspaceKey = getWorkspaceStateKey()
     const projectTabs = allTabs.filter(
       (tab) =>
@@ -194,6 +215,8 @@ interface OpenTabOptions {
   forceNew?: boolean
   /** 显式指定 Tab 归属；缺省使用当前工作空间。 */
   workspaceRef?: Tab['workspaceRef']
+  /** 账号服务失败时由统一入口显式降级；不得被其他生产入口使用。 */
+  allowDegradedBrowser?: boolean
 }
 
 interface TabState {
@@ -269,8 +292,8 @@ interface TabState {
   duplicateTab: (id: string) => void
   /** 获取当前活跃 Tab */
   getActiveTab: () => Tab | undefined
-  /** 从主进程 WorkspaceState 恢复 Tab 列表 */
-  hydrateFromWorkspaceState: (value: unknown) => void
+  /** 从主进程 WorkspaceState 恢复 Tab 列表；独立窗口持有的 Tab 可跨项目切换保留。 */
+  hydrateFromWorkspaceState: (value: unknown, options?: { preserveTabIds?: string[] }) => void
 }
 
 export const useTabStore = create<TabState>((set, get) => ({
@@ -304,7 +327,23 @@ export const useTabStore = create<TabState>((set, get) => ({
     mediaProject,
     forceNew,
     workspaceRef,
+    allowDegradedBrowser,
   }) => {
+    const resolvedWorkspaceRef = workspaceRef ?? workspaceRefFromKey(getWorkspaceStateKey())
+    const isExplicitDegradedBrowser =
+      allowDegradedBrowser === true &&
+      browserProfile == null &&
+      !webResourceRef &&
+      !webResourceDraftRef
+    if (
+      type === 'browser' &&
+      resolvedWorkspaceRef.kind === 'local' &&
+      !filePath &&
+      !hasValidBrowserResourceBinding({ browserProfile, webResourceRef, webResourceDraftRef }) &&
+      !isExplicitDegradedBrowser
+    ) {
+      throw new Error('拒绝创建未绑定账号或草稿的本地 Browser Tab')
+    }
     set((state) => {
       // 角色配置是全局唯一视图。点击不同角色只切换该视图的查看目标，
       // 即使调用方传入 forceNew 也不能创建第二个角色配置 Tab。
@@ -469,7 +508,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         icon,
         ...(type === 'settings' || type === 'agent-role'
           ? {}
-          : { workspaceRef: workspaceRef ?? workspaceRefFromKey(getWorkspaceStateKey()) }),
+          : { workspaceRef: resolvedWorkspaceRef }),
         filePath,
         remoteFile,
         initialContent,
@@ -510,6 +549,19 @@ export const useTabStore = create<TabState>((set, get) => ({
   }) => {
     let accepted = false
     set((state) => {
+      const bindingIsValid = hasValidBrowserResourceBinding({
+        browserProfile,
+        webResourceRef,
+        webResourceDraftRef,
+      })
+      const isExplicitDegradedPopup =
+        workspaceRef.kind === 'local' &&
+        browserProfile === null &&
+        !webResourceRef &&
+        !webResourceDraftRef
+      if (workspaceRef.kind === 'local' && !bindingIsValid && !isExplicitDegradedPopup) {
+        return state
+      }
       const existing = state.tabs.find((tab) => tab.id === id)
       if (existing) {
         accepted =
@@ -750,6 +802,8 @@ export const useTabStore = create<TabState>((set, get) => ({
         forceNew: true,
         initialUrl: url,
         browserProfile: tab.browserProfile ?? null,
+        webResourceRef: tab.webResourceRef,
+        webResourceDraftRef: tab.webResourceDraftRef,
         workspaceRef: tab.workspaceRef,
       })
     } else if (tab.type === 'editor') {
@@ -772,12 +826,17 @@ export const useTabStore = create<TabState>((set, get) => ({
     return state.tabs.find((t) => t.id === state.activeTabId)
   },
 
-  hydrateFromWorkspaceState: (value) => {
+  hydrateFromWorkspaceState: (value, options) => {
     const next = normalizeTabsSnapshot(value)
     if (!next) return
     set((state) => {
       const globalTabs = state.tabs.filter((tab) => !isProjectTab(tab))
-      const tabs = [...globalTabs, ...next.tabs]
+      const incomingIds = new Set(next.tabs.map((tab) => tab.id))
+      const preserveTabIds = new Set(options?.preserveTabIds ?? [])
+      const preservedDetachedTabs = state.tabs.filter(
+        (tab) => isProjectTab(tab) && preserveTabIds.has(tab.id) && !incomingIds.has(tab.id),
+      )
+      const tabs = [...globalTabs, ...preservedDetachedTabs, ...next.tabs]
       const activeTabId =
         state.activeTabId && globalTabs.some((tab) => tab.id === state.activeTabId)
           ? state.activeTabId

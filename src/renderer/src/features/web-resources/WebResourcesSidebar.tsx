@@ -137,7 +137,7 @@ export function WebResourcesSidebar({
     setLoadError(null)
     try {
       const result = await openDefaultBrowserTab(workspaceRef)
-      if (!result.saveable) setLoadError(`已打开普通浏览器；${result.error}`)
+      if (!result.saveable) setLoadError(`网页已打开；账号保存能力暂不可用：${result.error}`)
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error))
     } finally {
