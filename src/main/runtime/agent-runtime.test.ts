@@ -79,6 +79,7 @@ describe('bootstrapAgentRuntime', () => {
     await bootstrapAgentRuntime(runtime)
 
     expect(mocks.AgentBridge).not.toHaveBeenCalled()
+    expect(runtime.agentRuntimeStateStore).not.toBeNull()
     expect(runtime.capabilities.get('agent-backend')).toMatchObject({
       state: 'unavailable',
       reason: 'Agent 核心依赖未就绪',
@@ -118,6 +119,7 @@ describe('bootstrapAgentRuntime', () => {
     await bootstrapAgentRuntime(runtime)
 
     expect(mocks.AgentBridge).not.toHaveBeenCalled()
+    expect(runtime.agentRuntimeStateStore).not.toBeNull()
     expect(reportFailure).toHaveBeenCalledWith({
       code: 'AUTH_REQUIRED',
       message: expect.stringContaining('不能使用 Claude 订阅登录'),

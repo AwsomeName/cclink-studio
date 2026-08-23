@@ -723,6 +723,7 @@ export class BrowserToolModule implements ToolModule {
     params: Record<string, unknown>,
     context?: ToolExecutionContext,
   ): Promise<unknown> {
+    context?.abortSignal?.throwIfAborted()
     const actionType = toolNameToActionType(toolName)
     const {
       tabId: visibleTabId,
@@ -782,6 +783,7 @@ export class BrowserToolModule implements ToolModule {
     }
 
     try {
+      context?.abortSignal?.throwIfAborted()
       const result = await this.executeVisibleBrowserAction(
         actionType,
         params,

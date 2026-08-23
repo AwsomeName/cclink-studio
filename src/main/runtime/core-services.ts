@@ -52,6 +52,7 @@ import { CclinkRuntimeStateStore } from '../cclink-remote/runtime-state-store'
 import { registerCclinkRemoteIpc } from '../cclink-remote/cclink-remote-ipc'
 import { getCclinkServiceUrl } from '../cclink-remote/service-config'
 import { AgentRoleRegistry } from '../agent/agent-role-registry'
+import { AgentRuntimeStateStore } from '../agent/agent-runtime-state-store'
 import { MediaProjectService } from '../media-production/media-project-service'
 import { registerMediaProjectIpc } from '../media-production/media-project-ipc'
 import { StoryboardProposalService } from '../media-production/storyboard-proposal-service'
@@ -68,6 +69,12 @@ import { registerWorkbenchTabModelIpc } from '../workbench/workbench-tab-model-i
 import { BrowserBookmarkModel } from '../workbench/browser-bookmark-model'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
+  runtime.agentRuntimeStateStore ??= new AgentRuntimeStateStore(
+    join(app.getPath('userData'), 'agent-runtime', 'state.json'),
+  )
+  await runtime.agentRuntimeStateStore.load()
+  console.log('[CCLink Studio] Agent run 状态账本已初始化')
+
   try {
     runtime.agentRoleRegistry = new AgentRoleRegistry()
     await runtime.agentRoleRegistry.load()
@@ -169,6 +176,7 @@ export async function shutdownStateServices(runtime: CclinkStudioRuntimeState): 
   await runShutdownStep('WorkspaceStateService', () => runtime.workspaceStateService?.flush())
   await runShutdownStep('UsageLedgerService', () => runtime.usageLedgerService?.flush())
   await runShutdownStep('AgentRoleRegistry', () => runtime.agentRoleRegistry?.flush())
+  await runShutdownStep('AgentRuntimeStateStore', () => runtime.agentRuntimeStateStore?.flush())
   runtime.workspaceStateService = null
   runtime.workbenchTabModel = null
   runtime.browserBookmarkModel = null
@@ -182,6 +190,7 @@ export async function shutdownStateServices(runtime: CclinkStudioRuntimeState): 
   runtime.credentialService = null
   runtime.runtimeComponentManager = null
   runtime.agentRoleRegistry = null
+  runtime.agentRuntimeStateStore = null
 }
 
 export async function bootstrapMainProcessServices(
@@ -443,6 +452,7 @@ export async function bootstrapMainProcessServices(
   registerAgentIpc({
     trustedRendererGuard: runtime.trustedRendererGuard,
     getAgentBridge: () => runtime.agentBridge,
+    getAgentRuntimeStateStore: () => runtime.agentRuntimeStateStore,
     getAgentRoleRegistry: () => runtime.agentRoleRegistry,
     getDefaultAgentRoleRef: () => runtime.settingsService!.getAll().defaultAgentRoleRef,
     permissionManager: runtime.permissionManager,

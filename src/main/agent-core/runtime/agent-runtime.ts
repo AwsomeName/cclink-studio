@@ -22,6 +22,7 @@ interface AgentConversation {
   config: BackendConfig
   scope: AgentScope
   activeRunId: string | null
+  cancellingRunId: string | null
 }
 
 export interface AgentRuntimeOptions {
@@ -81,13 +82,21 @@ export class AgentRuntime {
     options?: AgentSendOptions,
   ): Promise<void> {
     const conversation = this.ensureConversation(conversationId)
-    conversation.activeRunId =
-      options?.runId ?? `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    await conversation.backend.sendMessage(message, {
-      ...options,
-      conversationId,
-      runId: conversation.activeRunId,
-    })
+    if (conversation.activeRunId || conversation.backend.getStatus().connected) {
+      throw new Error('Agent 当前 Thread 已有活动任务，请等待完成或取消后重试')
+    }
+    const runId = options?.runId ?? `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    conversation.activeRunId = runId
+    try {
+      await conversation.backend.sendMessage(message, {
+        ...options,
+        conversationId,
+        runId,
+      })
+    } catch (error) {
+      if (conversation.activeRunId === runId) conversation.activeRunId = null
+      throw error
+    }
   }
 
   async compactConversation(
@@ -98,6 +107,9 @@ export class AgentRuntime {
     const conversation = this.ensureConversation(conversationId)
     if (!conversation.backend.compact) {
       throw new Error('当前 Agent 后端不支持手动压缩上下文')
+    }
+    if (conversation.activeRunId || conversation.backend.getStatus().connected) {
+      throw new Error('Agent 当前 Thread 已有活动任务，请等待完成或取消后重试')
     }
     conversation.activeRunId =
       options?.runId ?? `compact-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -119,10 +131,38 @@ export class AgentRuntime {
     return (await this.ensureConversation(conversationId).backend.getContextUsage?.()) ?? null
   }
 
-  async abort(conversationId = DEFAULT_CONVERSATION_ID): Promise<void> {
+  /** 在取消状态持久化期间保留 run 所有权，防止尾部终态事件提前释放它。 */
+  reserveCancellation(conversationId: string, runId: string): void {
     const conversation = this.ensureConversation(conversationId)
-    await conversation.backend.abort()
-    conversation.activeRunId = null
+    if (conversation.activeRunId !== runId) {
+      throw new Error(`目标 run 当前不在执行: ${runId}`)
+    }
+    if (conversation.cancellingRunId && conversation.cancellingRunId !== runId) {
+      throw new Error(`另一个 run 正在取消: ${conversation.cancellingRunId}`)
+    }
+    conversation.cancellingRunId = runId
+  }
+
+  releaseCancellationReservation(conversationId: string, runId: string): void {
+    const conversation = this.ensureConversation(conversationId)
+    if (conversation.cancellingRunId === runId) conversation.cancellingRunId = null
+  }
+
+  async abort(conversationId = DEFAULT_CONVERSATION_ID, runId?: string): Promise<void> {
+    const conversation = this.ensureConversation(conversationId)
+    if (!runId) throw new Error('取消任务必须提供 runId')
+    if (conversation.activeRunId !== runId) {
+      throw new Error(`目标 run 当前不在执行: ${runId}`)
+    }
+    this.reserveCancellation(conversationId, runId)
+    try {
+      await conversation.backend.abort()
+    } catch (error) {
+      if (conversation.cancellingRunId === runId) conversation.cancellingRunId = null
+      throw error
+    }
+    if (conversation.activeRunId === runId) conversation.activeRunId = null
+    if (conversation.cancellingRunId === runId) conversation.cancellingRunId = null
   }
 
   getStatus(
@@ -238,14 +278,24 @@ export class AgentRuntime {
     config: BackendConfig,
   ): AgentConversation {
     const backend = createBackend(config, this.deps)
-    const conversation: AgentConversation = { backend, config, scope, activeRunId: null }
+    const conversation: AgentConversation = {
+      backend,
+      config,
+      scope,
+      activeRunId: null,
+      cancellingRunId: null,
+    }
     backend.onEvent((type, data) => {
       const runId = conversation.activeRunId
       // 后端取消/终止后可能仍收到传输层尾部事件。没有活动 run 的事件没有状态所有权，
       // 不能以 runId=null 转给 renderer；否则兼容旧协议的 UI 会把已终止会话重新置为运行中。
       if (!runId) return
       this.onEvent?.({ conversationId, runId, type, data })
-      if ((type === 'complete' || type === 'error') && conversation.activeRunId === runId) {
+      if (
+        (type === 'complete' || type === 'error') &&
+        conversation.activeRunId === runId &&
+        conversation.cancellingRunId !== runId
+      ) {
         conversation.activeRunId = null
       }
     })

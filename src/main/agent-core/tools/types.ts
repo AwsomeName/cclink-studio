@@ -63,6 +63,8 @@ export interface ToolExecutionContext {
   }
   /** 工具宿主已为本次调用取得显式用户确认。 */
   confirmationGranted?: boolean
+  /** run 取消时触发；执行时间较长的模块应协作停止尚未提交的工作。 */
+  abortSignal?: AbortSignal
 }
 
 export interface ToolExecutionPolicy {

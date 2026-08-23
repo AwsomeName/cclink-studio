@@ -23,6 +23,7 @@ export type AgentRunStatus =
   | 'idle'
   | 'starting'
   | 'running'
+  | 'cancelling'
   | 'completed'
   | 'failed'
   | 'cancelled'

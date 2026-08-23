@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useAgentStore } from '../stores/agent-store'
 import type { ContentBlock, PermissionMode, ToolConfirmationRequest } from '../types'
-import type { AgentContextUsageSnapshot } from '@shared/agent-protocol'
+import type { AgentContextUsageSnapshot, AgentRuntimeRunRecord } from '@shared/agent-protocol'
 
 type AgentStoreSnapshot = ReturnType<typeof useAgentStore.getState>
 
@@ -353,13 +353,12 @@ export function applyAgentErrorToStore(
     store.addSystemMessage(`上下文压缩失败: ${error.message}`, conversationId)
     return
   }
-  if (
+  const runtimeSessionInvalid =
     error.code === 'budget_exceeded' ||
     error.code === 'sdk_session_invalid' ||
     error.code === 'native_scheduling_state_detected' ||
     error.code === 'native_scheduling_state_unverifiable'
-  ) {
-    store.setSessionId(null, conversationId)
+  if (runtimeSessionInvalid) {
     store.setContextUsage(null, conversationId)
   }
   store.cancelStreaming(
@@ -367,7 +366,26 @@ export function applyAgentErrorToStore(
     error.code === 'stream_ended_without_result' ? 'stream-ended' : 'error',
     error.runId,
   )
-  store.addSystemMessage(`连接错误: ${error.message}`, conversationId)
+  store.addSystemMessage(
+    `连接错误: ${error.message}${
+      runtimeSessionInvalid ? '；旧 Runtime Session 已保留，未自动创建新会话' : ''
+    }`,
+    conversationId,
+  )
+}
+
+export function applyAgentRunStatusToStore(
+  record: AgentRuntimeRunRecord,
+  store: AgentStoreSnapshot = useAgentStore.getState(),
+): void {
+  const conversation = store.conversations[record.conversationId]
+  if (!conversation || conversation.activeRunId !== record.runId) return
+  store.applyRuntimeRunStatus(record)
+  if (record.status === 'cancelled') {
+    store.addSystemMessage('已确认 Runtime 停止，当前任务已取消', record.conversationId)
+  } else if (record.status === 'failed' && record.errorMessage) {
+    store.addSystemMessage(`任务失败: ${record.errorMessage}`, record.conversationId)
+  }
 }
 
 /** 全局订阅 Agent 后端事件，并写入会话 store。 */
@@ -385,6 +403,10 @@ export function useAgentStreamEvents(): void {
       applyAgentErrorToStore(error)
     })
 
+    const offRunStatus = window.cclinkStudio.agent.onRunStatus((record) => {
+      applyAgentRunStatusToStore(record)
+    })
+
     const offConfirmation = window.cclinkStudio.agent.onRequestConfirmation(
       (request: ToolConfirmationRequest) => {
         useAgentStore.getState().addPendingConfirmation(request)
@@ -399,6 +421,7 @@ export function useAgentStreamEvents(): void {
       offStream()
       offComplete()
       offError()
+      offRunStatus()
       offConfirmation()
     }
   }, [])

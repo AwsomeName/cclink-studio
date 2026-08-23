@@ -14,7 +14,11 @@ import type {
   ConversationSurface,
 } from '../types'
 import type { WorkspaceRef } from '@shared/workspace-ref'
-import type { AgentContextUsageSnapshot, AgentStatus } from '@shared/agent-protocol'
+import type {
+  AgentContextUsageSnapshot,
+  AgentRuntimeRunRecord,
+  AgentStatus,
+} from '@shared/agent-protocol'
 import type { AgentImageAttachment } from '@shared/ipc/agent'
 import type { WorkspaceStateSetSectionOptions } from '@shared/ipc/workspace-state'
 import {
@@ -143,6 +147,8 @@ interface AgentState {
   appendStreamDelta: (delta: string, conversationId?: string) => void
   appendContentBlock: (block: ContentBlock, conversationId?: string) => void
   finishStreamingMessage: (conversationId?: string, runId?: string) => void
+  markRunCancelling: (conversationId: string, runId: string) => void
+  applyRuntimeRunStatus: (record: AgentRuntimeRunRecord) => void
   cancelStreaming: (
     conversationId?: string,
     reason?: AgentRunTerminalReason,
@@ -948,6 +954,74 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       }),
     ),
 
+  markRunCancelling: (conversationId, runId) =>
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => {
+        if (conversation.activeRunId !== runId) return conversation
+        const now = Date.now()
+        return {
+          ...conversation,
+          loading: true,
+          runStatus: 'cancelling',
+          activeRunId: runId,
+          lastRunEventAt: now,
+          lastRunTerminalReason: null,
+          updatedAt: now,
+        }
+      }),
+    ),
+
+  applyRuntimeRunStatus: (record) =>
+    set((state) => ({
+      ...updateConversation(state, record.conversationId, (conversation) => {
+        if (conversation.activeRunId !== record.runId) return conversation
+        const now = Date.now()
+        if (record.status === 'running' || record.status === 'cancelling') {
+          return {
+            ...conversation,
+            loading: true,
+            backendState: 'streaming' as AgentBackendState,
+            runStatus: record.status,
+            lastRunEventAt: now,
+            lastRunTerminalReason: null,
+            updatedAt: now,
+          }
+        }
+        const failed = record.status === 'failed'
+        return {
+          ...conversation,
+          messages: conversation.messages.map((message) =>
+            message.isStreaming ? { ...message, isStreaming: false } : message,
+          ),
+          streamingMessageId: null,
+          loading: false,
+          backendState: failed ? 'error' : ('connected' as AgentBackendState),
+          runStatus:
+            record.status === 'succeeded'
+              ? 'completed'
+              : record.status === 'cancelled'
+                ? 'cancelled'
+                : 'failed',
+          activeRunId: null,
+          lastRunEventAt: now,
+          lastRunTerminalReason:
+            record.status === 'succeeded'
+              ? 'completed'
+              : record.status === 'cancelled'
+                ? 'cancelled'
+                : 'error',
+          updatedAt: now,
+        }
+      }),
+      pendingConfirmations:
+        record.status === 'cancelled' || record.status === 'failed'
+          ? state.pendingConfirmations.filter(
+              (request) =>
+                request.conversationId !== record.conversationId || request.runId !== record.runId,
+            )
+          : state.pendingConfirmations,
+    })),
+
   cancelStreaming: (conversationId, reason = 'cancelled', runId) =>
     set((state) =>
       updateConversation(state, conversationId, (conversation) => {
@@ -1118,6 +1192,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           conversation.loading ||
           conversation.runStatus === 'starting' ||
           conversation.runStatus === 'running' ||
+          conversation.runStatus === 'cancelling' ||
           Boolean(conversation.activeRunId)
         if (!awaitingRuntimeReconciliation) {
           return runtimeSession.sessionId !== conversation.sessionId ||

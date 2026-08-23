@@ -18,6 +18,30 @@ ACP（Agent Client Protocol）、用户自带 Agent 可执行文件、Agent Regi
 本 ADR 接受未来的产品与架构方向，不代表自有模型循环或多模型完整工具 Agent 已经交付，
 也不取代 ADR 0002 对 Claude Code Runtime 来源、打包、认证、切换和诊断的约束。
 
+### 2026-08-22 本地运行面复审补充
+
+Studio 已有主进程本地 Agent，可免 CCLink 登录完成启动、发送、流式回复和兼容 Session 续聊。
+不再为同一能力新增 `chatcc cclink-studio --local-runtime`；`chatcc cclink-studio` 仍只是远程
+debug/integration surface。第二服务会成为 run/session、取消和终态的竞争所有者，违反本 ADR。
+
+已在同一主进程 Agent Runtime 中实现并自动验证四项修复：
+
+1. 主进程原子接受 run；同一 Thread 同时只允许一个活动 run，重复发送明确拒绝且不得覆盖；
+2. 取消先进入 `cancelling`，按目标 run 幂等重试；只有 Runtime 请求确实结束才写
+   `cancelled` 并释放；
+3. 主进程持久拥有每个 run 的唯一 `succeeded`、`failed` 或 `cancelled` 终态，renderer
+   断开、窗口重建或 Studio 重开后仍可查询；
+4. 明确请求恢复的 Claude Session 无法恢复时返回失败，不静默改成新 Session。Session
+   必须绑定原 conversation、工作区、Runtime/Provider/模型、角色和 Skill；新 Session
+   必须由用户显式新建 Thread、重置或确认。
+
+首批实现与真实验收只承诺 Claude Code / Claude Agent SDK。复用现有 `conversationId`、
+`runId` 和 IPC，不新增 loopback HTTP/SSE、token、端口或第二任务账本。其他已存在的 runtime
+能力不因本补充删除，但不纳入这批闭环声明。
+
+产品结论仍受真实 Studio + Claude Runtime 验收门禁限制：自动化通过不等于真实
+Runtime 协议、进程退出和应用重开已完成端到端验收。
+
 ## 用户目标与端到端验收
 
 目标能力完成后，用户必须能在真实应用中执行以下动作：

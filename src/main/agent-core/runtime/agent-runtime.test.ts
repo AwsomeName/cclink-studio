@@ -129,7 +129,7 @@ describe('AgentRuntime session continuity', () => {
     })
 
     await runtime.sendMessage('hello', 'conversation-1', { runId: 'run-1' })
-    await runtime.abort('conversation-1')
+    await runtime.abort('conversation-1', 'run-1')
 
     backends.at(-1)?.eventHandler?.('stream', { type: 'stream_event' })
     backends.at(-1)?.eventHandler?.('complete', { total_cost_usd: 0 })

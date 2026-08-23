@@ -10,7 +10,8 @@ export function getRunningProjectCounts(
     const running =
       conversation.loading ||
       conversation.runStatus === 'starting' ||
-      conversation.runStatus === 'running'
+      conversation.runStatus === 'running' ||
+      conversation.runStatus === 'cancelling'
     if (!running || conversation.archivedAt || workspaceRef?.kind !== 'local') continue
     counts.set(workspaceRef.path, (counts.get(workspaceRef.path) ?? 0) + 1)
   }

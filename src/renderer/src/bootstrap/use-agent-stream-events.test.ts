@@ -4,6 +4,7 @@ import { useUIStore } from '../stores/ui-store'
 import {
   applyAgentCompleteToStore,
   applyAgentErrorToStore,
+  applyAgentRunStatusToStore,
   applyAgentStreamEventToStore,
 } from './use-agent-stream-events'
 
@@ -13,6 +14,45 @@ beforeEach(() => {
 })
 
 describe('applyAgentStreamEventToStore', () => {
+  it('只在 Runtime 确认后把 cancelling run 收敛为已取消', () => {
+    const conversationId = useAgentStore.getState().activeConversationId
+    const runId = useAgentStore.getState().beginRun(conversationId)
+    useAgentStore.getState().markRunCancelling(conversationId, runId)
+    useAgentStore.getState().addPendingConfirmation({
+      id: 'confirmation-1',
+      conversationId,
+      runId,
+      toolName: 'editor_write',
+      params: {},
+      riskLevel: 'write',
+    })
+
+    expect(useAgentStore.getState().conversations[conversationId]).toMatchObject({
+      loading: true,
+      runStatus: 'cancelling',
+      activeRunId: runId,
+    })
+    applyAgentRunStatusToStore({
+      conversationId,
+      runId,
+      status: 'cancelled',
+      workspaceKey: null,
+      startedAt: 1,
+      updatedAt: 2,
+      completedAt: 2,
+    })
+
+    const state = useAgentStore.getState()
+    expect(state.conversations[conversationId]).toMatchObject({
+      loading: false,
+      runStatus: 'cancelled',
+      activeRunId: null,
+      lastRunTerminalReason: 'cancelled',
+    })
+    expect(state.pendingConfirmations).toEqual([])
+    expect(state.conversations[conversationId].messages.at(-1)?.rawText).toContain('Runtime 停止')
+  })
+
   it('Agent 面板隐藏时，流式消息仍写入当前会话', () => {
     useUIStore.getState().setAgentPanelMode('hidden', 'user')
     const conversationId = useAgentStore.getState().activeConversationId
@@ -303,7 +343,7 @@ describe('applyAgentStreamEventToStore', () => {
     expect(conversation.activeRunId).toBeNull()
   })
 
-  it('预算中止后清除不可安全恢复的 SDK session 和上下文用量', () => {
+  it('预算中止后保留失效 Session 作为严格续聊边界，但清除用量', () => {
     const conversationId = useAgentStore.getState().activeConversationId
     useAgentStore.getState().setSessionId('session-with-dangling-tools', conversationId)
     useAgentStore.getState().setContextUsage(
@@ -328,12 +368,12 @@ describe('applyAgentStreamEventToStore', () => {
     })
 
     const conversation = useAgentStore.getState().conversations[conversationId]
-    expect(conversation.sessionId).toBeNull()
+    expect(conversation.sessionId).toBe('session-with-dangling-tools')
     expect(conversation.contextUsage).toBeNull()
     expect(conversation.runStatus).toBe('failed')
   })
 
-  it('检测到原生调度状态后清除 renderer 持有的 SDK session', () => {
+  it('检测到原生调度状态后不静默丢弃 renderer 持有的 SDK session', () => {
     const conversationId = useAgentStore.getState().activeConversationId
     useAgentStore.getState().setSessionId('revoked-session', conversationId, 'a'.repeat(64))
 
@@ -343,6 +383,9 @@ describe('applyAgentStreamEventToStore', () => {
       message: '检测到 Claude 原生定时任务文件',
     })
 
-    expect(useAgentStore.getState().conversations[conversationId].sessionId).toBeNull()
+    expect(useAgentStore.getState().conversations[conversationId].sessionId).toBe('revoked-session')
+    expect(
+      useAgentStore.getState().conversations[conversationId].messages.at(-1)?.rawText,
+    ).toContain('未自动创建新会话')
   })
 })

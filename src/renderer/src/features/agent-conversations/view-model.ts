@@ -813,7 +813,12 @@ function quickThreadStatus(
   if (conversation.loading || conversation.backendState === 'streaming') {
     return {
       kind: 'running',
-      label: conversation.runStatus === 'starting' ? '启动中' : '执行中',
+      label:
+        conversation.runStatus === 'starting'
+          ? '启动中'
+          : conversation.runStatus === 'cancelling'
+            ? '正在停止'
+            : '执行中',
     }
   }
   if (conversation.runStatus === 'completed') return { kind: 'completed', label: '已完成' }

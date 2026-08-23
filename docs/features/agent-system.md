@@ -1,6 +1,6 @@
 # Agent 对话系统
 
-> 当前事实源。最后更新：2026-08-13。
+> 当前事实源。最后更新：2026-08-22。
 
 ## 概述
 
@@ -54,6 +54,34 @@ claude login
 > **当前阶段**：本仓库已经具备 Agent 内核、Claude Code 后端、Runtime
 > 选择与探测、设置页、会话持久化、流式事件、工具桥接、权限确认、诊断和图片输入。
 > HTTP API / OpenAI 兼容直连暂不作为完整工具 Agent。
+
+### 本地 Runtime 闭环复审（2026-08-22）
+
+Studio 已经用主进程 `AgentBridge -> AgentRuntime -> LocalClaudeCodeBackend` 提供本地 Agent，
+默认启动不依赖 CCLink 登录、配对、腾讯 IM、业务云或外部 `chatcc-agent` 服务。因此不新增
+`chatcc cclink-studio --local-runtime`，现有 `chatcc cclink-studio` 继续只服务远程调试与
+集成。建立第二套本地服务会复制 Thread/run/Session 生命周期和错误语义，不符合 ADR 0006
+的单一运行事实源。
+
+现有能力与本次修复状态必须分开描述：
+
+- 已有：未登录启动、本地发送、Claude 流式事件，以及兼容 Session 的续聊；
+- 已实现：主进程 run ledger 原子拒绝同 Thread 并发、重复 ID 和停止中的新 run；
+- 已实现：精确取消先进入 `cancelling`，等 Runtime 读取循环退出才写 `cancelled`；
+- 已实现：近期 run 和唯一终态由主进程原子持久化，可按 run 查询并在重开后对账；
+- 已实现：旧 Session 恢复严格校验 conversation、工作区、Runtime 和完整配置指纹，
+  恢复失败可见且不自动创建新 Session。
+
+第一批只修 Claude Code / Claude Agent SDK 主线，复用现有 `conversationId`、`runId`、IPC、
+Thread 和 Session 字段：主进程原子接受每个 run 并拒绝同 Thread 覆盖；取消先进入
+`cancelling`，确认请求结束后才写 `cancelled`；近期 run
+由主进程原子持久化并可查询唯一 `succeeded/failed/cancelled`；携带非空 Session 的严格续聊
+失败时不得自动或在下一次普通发送中静默开新 Session。Browser、MCP、文件、Terminal、权限
+UI、其他 runtime 和远程通信均不在本批新增范围，已有能力不删除。
+
+这四项通过自动化还不算产品完成。必须在真实 Studio + 真实 Claude Runtime 中验证重复发送、重复取消、
+取消/完成竞态、renderer 重建、应用重开、有效续聊和无效 Session 拒绝，并证明每个 run 最终
+只有一个终态。
 
 ### 产品方向：CCLink Agent + 可替换模型服务
 
@@ -527,8 +555,8 @@ interface Message {
 | Provider 与 API Key                   | 已实现 | Key 由主进程 `CredentialService` 保存           |
 | 工具调用与权限确认                    | 已实现 | 修改性和高风险操作按权限模型确认                |
 | Browser、Editor、FS、Terminal 工具    | 已实现 | 通过主进程和 MCP 边界调用                       |
-| 工作空间会话持久化                    | 已实现 | Thread 随工作空间保存和恢复                     |
-| 取消、错误状态和诊断复制              | 已实现 | 诊断默认脱敏                                    |
+| 工作空间 Thread 持久化                 | 已实现 | 可见消息可恢复；Runtime Session 按主进程信任严格恢复 |
+| 取消、错误状态和诊断复制              | 已实现 | 精确取消、`cancelling` 和近期持久终态；真实 Runtime 待验收 |
 | 图片输入                              | 已实现 | PNG/JPEG/GIF/WebP；单条最多 5 张、单张最多 5 MB |
 | HTTP/OpenAI Compatible 完整工具 Agent | 未实现 | 不与普通 Chat Completion 混为一谈               |
 | ACP / 用户自带 Agent                  | 非目标 | CCLink 提供 Agent Runtime，用户只选择模型服务   |

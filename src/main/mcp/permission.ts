@@ -124,6 +124,17 @@ export class PermissionManager {
     })
   }
 
+  cancelForRun(conversationId: string, runId: string): void {
+    for (const [id, pending] of this.pending) {
+      if (pending.request.conversationId !== conversationId || pending.request.runId !== runId) {
+        continue
+      }
+      clearTimeout(pending.timeout)
+      this.pending.delete(id)
+      pending.resolve(false)
+    }
+  }
+
   /**
    * 用户确认/拒绝（由渲染进程 IPC 调用）
    *

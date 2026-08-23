@@ -37,7 +37,18 @@ afterEach(() => {
 
 describe('Agent content context actions', () => {
   it('stops only the run id captured by the thread target', async () => {
-    const abort = vi.fn().mockResolvedValue(undefined)
+    const abort = vi.fn().mockResolvedValue({
+      accepted: true,
+      run: {
+        conversationId: 'thread-1',
+        runId: 'run-1',
+        status: 'cancelling',
+        workspaceKey: '/workspace/a',
+        startedAt: 1,
+        updatedAt: 2,
+        completedAt: null,
+      },
+    })
     vi.stubGlobal('window', {
       cclinkStudio: { agent: { abort } },
       dispatchEvent: vi.fn(),
@@ -68,8 +79,12 @@ describe('Agent content context actions', () => {
 
     await command.action(context)
 
-    expect(abort).toHaveBeenCalledWith('thread-1')
-    expect(useAgentStore.getState().conversations['thread-1'].activeRunId).toBeNull()
+    expect(abort).toHaveBeenCalledWith('thread-1', 'run-1')
+    expect(useAgentStore.getState().conversations['thread-1']).toMatchObject({
+      activeRunId: 'run-1',
+      runStatus: 'cancelling',
+      loading: true,
+    })
   })
 
   it('disables a stop action after the thread run changes', () => {

@@ -85,6 +85,8 @@ export interface ClaudeCodeBackendOptions {
 
 export class LocalClaudeCodeBackend implements IAgentBackend {
   private currentQuery: Query | null = null
+  private currentQueryDone: Promise<void> | null = null
+  private abortPromise: Promise<void> | null = null
   private currentOperation: AgentQueryOperation | null = null
   private abortController: AbortController | null = null
   private sessionId: string | null = null
@@ -148,12 +150,14 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     this.scope = scope
   }
 
-  /** 释放本轮 MCP 工具会话。 */
-  private cleanupMcpConfig(): void {
-    if (this.mcpSessionToken) {
-      this.toolHost.releaseToolSession(this.mcpSessionToken)
-      this.mcpSessionToken = null
-    }
+  /** 释放本轮 MCP 工具会话；取消时返回所有在途本机工具的排空结果。 */
+  private cleanupMcpConfig(cancelled = false): Promise<void> {
+    const token = this.mcpSessionToken
+    if (!token) return Promise.resolve()
+    this.mcpSessionToken = null
+    if (cancelled) return this.toolHost.cancelToolSession(token)
+    this.toolHost.releaseToolSession(token)
+    return Promise.resolve()
   }
 
   private emit(type: 'stream' | 'complete' | 'error' | 'system', data: unknown): void {
@@ -538,9 +542,11 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       this.currentQuery = sdkQuery
       this.currentOperation = operation
       this.abortController = abortController
-      void this.consumeQuery(sdkQuery, operation)
+      const queryDone = this.consumeQuery(sdkQuery, operation)
+      this.currentQueryDone = queryDone
+      void queryDone
     } catch (err) {
-      this.cleanupMcpConfig()
+      void this.cleanupMcpConfig()
       this.terminalEventEmitted = true
       this.emit('error', {
         type: 'error',
@@ -597,9 +603,8 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
   private async consumeQuery(sdkQuery: Query, operation: AgentQueryOperation): Promise<void> {
     try {
       for await (const event of sdkQuery) {
-        // abort() 会立即释放 UI 继续发送下一轮，但 SDK 的异步迭代器仍可能吐出尾部事件。
-        // 旧 query 失去所有权后必须停止转发，否则迟到的 message_start 会重新打开 UI loading，
-        // 甚至在下一轮已经开始时污染新的 run。
+        // abort() 期间 run 仍保持 cancelling 所有权，直到迭代器退出。
+        // 这些检查仍要保留，防止传输层在 query 被替换或销毁后转发迟到事件。
         if (this.currentQuery !== sdkQuery) break
         const record = event as Record<string, unknown>
         if (record.type === 'result') {
@@ -647,7 +652,8 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         this.currentQuery = null
         this.currentOperation = null
         this.abortController = null
-        this.cleanupMcpConfig()
+        this.currentQueryDone = null
+        void this.cleanupMcpConfig()
       }
     }
   }
@@ -757,13 +763,24 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
   }
 
   async abort(): Promise<void> {
-    this.aborted = true
-    this.abortController?.abort()
-    this.currentQuery?.close()
-    this.currentQuery = null
-    this.currentOperation = null
-    this.abortController = null
-    this.cleanupMcpConfig()
+    if (this.abortPromise) return this.abortPromise
+    const sdkQuery = this.currentQuery
+    if (!sdkQuery) return
+    const queryDone = this.currentQueryDone
+    const abortController = this.abortController
+    const operation = (async () => {
+      this.aborted = true
+      const toolCallsDone = this.cleanupMcpConfig(true)
+      abortController?.abort()
+      sdkQuery.close()
+      if (queryDone) await queryDone
+      await toolCallsDone
+    })()
+    const trackedAbort = operation.finally(() => {
+      if (this.abortPromise === trackedAbort) this.abortPromise = null
+    })
+    this.abortPromise = trackedAbort
+    return trackedAbort
   }
 
   getStatus(): AgentBackendStatus {

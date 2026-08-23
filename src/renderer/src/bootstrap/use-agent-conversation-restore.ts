@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useAgentStore, type AgentConversationState } from '../stores/agent-store'
 import type { AgentConversationConfiguration, AgentSkillRef } from '@shared/agent-role'
 import { DEFAULT_AGENT_RUNTIME_BINDING, type AgentRuntimeBinding } from '@shared/agent-runtime'
+import { workspaceRefKey, type WorkspaceRef } from '@shared/workspace-ref'
 
 export function collectRestorableAgentSessions(
   conversations: Record<string, AgentConversationState>,
@@ -13,6 +14,7 @@ export function collectRestorableAgentSessions(
   configuration: AgentConversationConfiguration
   skills: AgentSkillRef[]
   runtimeBinding: AgentRuntimeBinding
+  workspaceRef?: WorkspaceRef
 }> {
   return conversationOrder.flatMap((conversationId) => {
     const conversation = conversations[conversationId]
@@ -27,6 +29,7 @@ export function collectRestorableAgentSessions(
             configuration: conversation.configuration,
             skills: conversation.mountedSkills,
             runtimeBinding: conversation.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING,
+            workspaceRef: conversation.runtime.workspaceRef,
           },
         ]
       : []
@@ -56,7 +59,8 @@ export function useAgentConversationRestore(enabled: boolean): void {
         session.runtimeBinding.kind === 'acp'
           ? `acp:${session.runtimeBinding.implementationId}`
           : 'claude-code'
-      const restoreKey = `${session.sessionId}:${session.sessionCompatibilityFingerprint}:${session.configuration.roleRef.roleId}@${session.configuration.roleRef.version}:${session.configuration.revision}:${skillKey}:${runtimeKey}`
+      const workspaceKey = session.workspaceRef ? workspaceRefKey(session.workspaceRef) : 'unbound'
+      const restoreKey = `${session.sessionId}:${session.sessionCompatibilityFingerprint}:${session.configuration.roleRef.roleId}@${session.configuration.roleRef.version}:${session.configuration.revision}:${skillKey}:${runtimeKey}:${workspaceKey}`
       if (restoredSessionsRef.current.get(session.conversationId) === restoreKey) continue
       restoredSessionsRef.current.set(session.conversationId, restoreKey)
       void window.cclinkStudio.agent
@@ -67,11 +71,17 @@ export function useAgentConversationRestore(enabled: boolean): void {
           session.sessionCompatibilityFingerprint,
           session.skills,
           session.runtimeBinding,
+          session.workspaceRef,
         )
-        .catch(() => {
-          if (restoredSessionsRef.current.get(session.conversationId) === restoreKey) {
-            restoredSessionsRef.current.delete(session.conversationId)
-          }
+        .catch((error) => {
+          if (restoredSessionsRef.current.get(session.conversationId) !== restoreKey) return
+          const message = error instanceof Error ? error.message : String(error)
+          useAgentStore
+            .getState()
+            .addSystemMessage(
+              `旧 Runtime Session 恢复失败：${message}。未自动创建新会话。`,
+              session.conversationId,
+            )
         })
     }
   }, [conversationOrder, conversations, enabled])

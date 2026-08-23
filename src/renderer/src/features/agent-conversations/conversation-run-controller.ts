@@ -1,4 +1,8 @@
-import type { AgentCommandResult, AgentCompactConversationPayload } from '@shared/agent-protocol'
+import type {
+  AgentAbortResult,
+  AgentCommandResult,
+  AgentCompactConversationPayload,
+} from '@shared/agent-protocol'
 import type { AgentSendMessageInput } from '@shared/ipc/agent'
 import type { AgentBackendState, AgentMountedResource } from '../../types'
 import type { AgentRunConfigurationReceipt } from '@shared/agent-role'
@@ -28,7 +32,7 @@ interface ConversationRunAgentApi {
     conversationId: string,
     message: AgentSendMessageInput,
   ) => Promise<AgentCommandResult>
-  abort: (conversationId?: string) => Promise<void>
+  abort: (conversationId: string, runId: string) => Promise<AgentAbortResult>
   compactConversation: (
     conversationId: string,
     payload: AgentCompactConversationPayload,
@@ -50,6 +54,8 @@ interface ConversationRunStore {
     reason?: AgentRunTerminalReason,
     runId?: string,
   ) => void
+  markRunCancelling: (conversationId: string, runId: string) => void
+  applyRuntimeRunStatus: (record: NonNullable<AgentAbortResult['run']>) => void
   setBackendState: (state: AgentBackendState, conversationId?: string) => void
   clearTransientResources: (conversationId?: string) => void
   setRunConfigurationReceipt: (receipt: AgentRunConfigurationReceipt) => boolean
@@ -67,8 +73,6 @@ interface ConversationRunControllerOptions {
   getStore?: () => ConversationRunStore
   agentApi?: ConversationRunAgentApi
 }
-
-const abortingConversations = new Set<string>()
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -127,11 +131,15 @@ export function createConversationRunController({
           !result.configurationReceipt ||
           !store.setRunConfigurationReceipt(result.configurationReceipt)
         ) {
-          const error = '本轮 Agent 实际角色配置与当前会话不一致，已停止运行'
-          await agentApi.abort(conversationId).catch(() => undefined)
-          store.cancelStreaming(conversationId, 'error', runId)
-          store.addSystemMessage(error, conversationId)
-          store.setBackendState('error', conversationId)
+          const error = '本轮 Agent 实际角色配置与当前会话不一致，已请求停止运行'
+          const abortResult = await agentApi.abort(conversationId, runId).catch(() => null)
+          if (abortResult?.run) store.applyRuntimeRunStatus(abortResult.run)
+          if (abortResult?.accepted) {
+            store.markRunCancelling(conversationId, runId)
+            store.addSystemMessage(`${error}；正在等待 Runtime 退出确认`, conversationId)
+          } else {
+            store.addSystemMessage(`${error}；但未能确认停止 Runtime`, conversationId)
+          }
           return { status: 'failed', error, runId }
         }
         store.clearTransientResources(conversationId)
@@ -150,23 +158,22 @@ export function createConversationRunController({
       const conversation = store.conversations[conversationId]
       if (!conversation) return { status: 'ignored', reason: 'missing' }
       if (!conversation.activeRunId) return { status: 'ignored', reason: 'no-active-run' }
-      if (abortingConversations.has(conversationId)) {
-        return { status: 'ignored', reason: 'aborting' }
-      }
-
       const runId = conversation.activeRunId
-      abortingConversations.add(conversationId)
       try {
-        await agentApi.abort(conversationId)
-        store.cancelStreaming(conversationId, 'cancelled', runId)
-        store.addSystemMessage('已手动中止当前任务', conversationId)
+        const result = await agentApi.abort(conversationId, runId)
+        if (result.run) store.applyRuntimeRunStatus(result.run)
+        if (!result.accepted) {
+          const error = result.error ?? '目标任务已不在运行'
+          return { status: 'failed', error, runId }
+        }
+        if (result.run?.status === 'cancelling') {
+          store.markRunCancelling(conversationId, runId)
+        }
         return { status: 'accepted', runId }
       } catch (cause) {
         const error = errorMessage(cause)
         store.addSystemMessage(`中止失败: ${error}`, conversationId)
         return { status: 'failed', error, runId }
-      } finally {
-        abortingConversations.delete(conversationId)
       }
     },
 

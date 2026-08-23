@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { AgentBridge } from './agent-bridge'
+import { AgentRuntimeStateStore } from './agent-runtime-state-store'
 
 const queryMock = vi.hoisted(() => vi.fn())
 
@@ -29,7 +33,7 @@ function createMockQuery(
   }
 }
 
-function createBridge(): AgentBridge {
+function createBridge(runtimeStateStore?: AgentRuntimeStateStore): AgentBridge {
   return new AgentBridge(
     {
       isDestroyed: () => false,
@@ -41,6 +45,7 @@ function createBridge(): AgentBridge {
       getAllTools: () => [],
       createToolSession: vi.fn(() => 'mcp-session'),
       releaseToolSession: vi.fn(),
+      cancelToolSession: vi.fn(),
     } as never,
     { requestConfirmation: vi.fn() } as never,
     {
@@ -51,7 +56,7 @@ function createBridge(): AgentBridge {
       }),
     } as never,
     null,
-    { sessionCompatibilityFingerprint: 'runtime-fingerprint' },
+    { sessionCompatibilityFingerprint: 'runtime-fingerprint', runtimeStateStore },
   )
 }
 
@@ -60,7 +65,7 @@ describe('AgentBridge main-process Claude session trust', () => {
     queryMock.mockReset()
   })
 
-  it('rejects a renderer-paired old session but resumes a session observed in this process', async () => {
+  it('rejects a renderer-paired old session and resumes only a session observed by this runtime', async () => {
     queryMock
       .mockImplementationOnce(() => createMockQuery('current-session'))
       .mockImplementationOnce(() => createMockQuery('current-session'))
@@ -68,9 +73,17 @@ describe('AgentBridge main-process Claude session trust', () => {
     const conversationId = 'conversation-1'
     const fingerprint = bridge.getStatus(conversationId).sessionCompatibilityFingerprint
 
+    await expect(
+      bridge.sendMessage('untrusted', conversationId, {
+        workspaceRef: { kind: 'global' },
+        sessionId: 'old-session',
+        sessionCompatibilityFingerprint: fingerprint,
+      }),
+    ).rejects.toThrow('Runtime Session')
+
     const firstReceipt = await bridge.sendMessage('first', conversationId, {
       workspaceRef: { kind: 'global' },
-      sessionId: 'old-session',
+      sessionId: null,
       sessionCompatibilityFingerprint: fingerprint,
     })
 
@@ -91,7 +104,7 @@ describe('AgentBridge main-process Claude session trust', () => {
     await bridge.destroy()
   })
 
-  it('clears process trust when a backend switch drops sessions', async () => {
+  it('rejects a previously trusted session when a backend switch drops sessions', async () => {
     queryMock
       .mockImplementationOnce(() => createMockQuery('current-session'))
       .mockImplementationOnce(() => createMockQuery('replacement-session'))
@@ -118,9 +131,16 @@ describe('AgentBridge main-process Claude session trust', () => {
       },
       false,
     )
+    await expect(
+      bridge.sendMessage('stale', conversationId, {
+        workspaceRef: { kind: 'global' },
+        sessionId: 'current-session',
+        sessionCompatibilityFingerprint: fingerprint,
+      }),
+    ).rejects.toThrow('Runtime Session')
     const receipt = await bridge.sendMessage('second', conversationId, {
       workspaceRef: { kind: 'global' },
-      sessionId: 'current-session',
+      sessionId: null,
       sessionCompatibilityFingerprint: fingerprint,
     })
 
@@ -161,14 +181,67 @@ describe('AgentBridge main-process Claude session trust', () => {
     await vi.waitFor(() => expect(bridge.isBusy(conversationId)).toBe(false))
     expect(bridge.getStatus(conversationId).sessionId).toBeNull()
 
+    await expect(
+      bridge.sendMessage('stale retry', conversationId, {
+        workspaceRef: { kind: 'global' },
+        sessionId: 'current-session',
+        sessionCompatibilityFingerprint: fingerprint,
+      }),
+    ).rejects.toThrow('Runtime Session')
     const retryReceipt = await bridge.sendMessage('retry', conversationId, {
       workspaceRef: { kind: 'global' },
-      sessionId: 'current-session',
+      sessionId: null,
       sessionCompatibilityFingerprint: fingerprint,
     })
     expect(retryReceipt.runtimeSessionMode).toBe('new')
     await vi.waitFor(() => expect(bridge.isBusy(conversationId)).toBe(false))
     expect(queryMock.mock.calls[2]?.[0].options.resume).toBeUndefined()
     await bridge.destroy()
+  })
+
+  it('restores persisted trust only for the original workspace and runtime binding', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'cclink-agent-session-trust-'))
+    const filePath = join(directory, 'state.json')
+    try {
+      queryMock
+        .mockImplementationOnce(() => createMockQuery('persisted-session'))
+        .mockImplementationOnce(() => createMockQuery('persisted-session'))
+      const firstStore = new AgentRuntimeStateStore(filePath)
+      await firstStore.load()
+      const firstBridge = createBridge(firstStore)
+      const fingerprint = firstBridge.getStatus('conversation-1').sessionCompatibilityFingerprint
+      await firstBridge.sendMessage('first', 'conversation-1', {
+        workspaceRef: { kind: 'global' },
+        sessionId: null,
+      })
+      await vi.waitFor(() => expect(firstBridge.isBusy('conversation-1')).toBe(false))
+      await firstBridge.destroy()
+
+      const restartedStore = new AgentRuntimeStateStore(filePath)
+      await restartedStore.load()
+      const restartedBridge = createBridge(restartedStore)
+      await expect(
+        restartedBridge.sendMessage('wrong workspace', 'conversation-1', {
+          runId: 'wrong-workspace-run',
+          workspaceRef: { kind: 'local', path: '/different-workspace' },
+          sessionId: 'persisted-session',
+          sessionCompatibilityFingerprint: fingerprint,
+        }),
+      ).rejects.toThrow('Runtime Session')
+
+      await expect(
+        restartedBridge.sendMessage('resume', 'conversation-1', {
+          runId: 'resume-run',
+          workspaceRef: { kind: 'global' },
+          sessionId: 'persisted-session',
+          sessionCompatibilityFingerprint: fingerprint,
+        }),
+      ).resolves.toMatchObject({ runtimeSessionMode: 'resumed' })
+      await vi.waitFor(() => expect(restartedBridge.isBusy('conversation-1')).toBe(false))
+      expect(queryMock.mock.calls[1]?.[0].options.resume).toBe('persisted-session')
+      await restartedBridge.destroy()
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   })
 })

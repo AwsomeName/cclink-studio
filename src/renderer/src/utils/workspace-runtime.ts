@@ -23,6 +23,7 @@ import {
 import { workspaceRefKey, type WorkspaceRef } from '@shared/workspace-ref'
 import { syncWorkbenchTabProjectionNow } from './workbench-tab-model'
 import { syncWorkbenchBookmarksNow, syncWorkbenchBrowserStateNow } from './workbench-browser-state'
+import { applyAgentRunStatusToStore } from '../bootstrap/use-agent-stream-events'
 
 function isWorkspaceTab(tab: ReturnType<typeof useTabStore.getState>['tabs'][number]): boolean {
   return tab.type !== 'settings'
@@ -198,6 +199,7 @@ export async function reconcileAgentRuntimeStatuses(
 ): Promise<void> {
   if (useWorkspaceStore.getState().activeWorkspaceRef?.kind === 'remote') return
   const getStatus = window.cclinkStudio?.agent?.getStatus
+  const getRunStatus = window.cclinkStudio?.agent?.getRunStatus
 
   const state = useAgentStore.getState()
   const conversationIds = state.conversationOrder.filter((conversationId) => {
@@ -217,6 +219,10 @@ export async function reconcileAgentRuntimeStatuses(
             observedRunId: conversation?.activeRunId ?? null,
             observedEventAt: conversation?.lastRunEventAt ?? null,
             status: await getStatus(conversationId),
+            run:
+              conversation?.activeRunId && getRunStatus
+                ? await getRunStatus(conversationId, conversation.activeRunId).catch(() => null)
+                : null,
           }
         }),
       )
@@ -232,6 +238,16 @@ export async function reconcileAgentRuntimeStatuses(
         current?.lastRunEventAt !== result.value.observedEventAt
       ) {
         continue
+      }
+      if (result.value.run) {
+        applyAgentRunStatusToStore(result.value.run)
+        if (
+          result.value.run.status === 'succeeded' ||
+          result.value.run.status === 'failed' ||
+          result.value.run.status === 'cancelled'
+        ) {
+          continue
+        }
       }
       useAgentStore.getState().reconcileRuntimeStatus(result.value.status, conversationId)
       continue

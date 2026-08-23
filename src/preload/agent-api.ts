@@ -37,8 +37,10 @@ function setScope(
 
 export const agentApi: AgentApiContract = {
   sendMessage,
-  abort: (conversationId) => invokeIpcContract(agentIpc.abort, conversationId),
+  abort: (conversationId, runId) => invokeIpcContract(agentIpc.abort, conversationId, runId),
   getStatus: (conversationId) => invokeIpcContract(agentIpc.getStatus, conversationId),
+  getRunStatus: (conversationId, runId) =>
+    invokeIpcContract(agentIpc.getRunStatus, conversationId, runId),
   getContextUsage: (conversationId?: string) =>
     invokeIpcContract(agentIpc.getContextUsage, conversationId),
   compactConversation: (conversationId, payload) =>
@@ -53,6 +55,7 @@ export const agentApi: AgentApiContract = {
     sessionCompatibilityFingerprint,
     skills,
     runtimeBinding,
+    workspaceRef,
   ) =>
     invokeIpcContract(
       agentIpc.restoreConversation,
@@ -62,6 +65,7 @@ export const agentApi: AgentApiContract = {
       sessionCompatibilityFingerprint,
       skills,
       runtimeBinding,
+      workspaceRef,
     ),
   listRoles: () => invokeIpcContract(agentIpc.listRoles),
   createRole: (draft) => invokeIpcContract(agentIpc.createRole, draft),
@@ -101,6 +105,14 @@ export const agentApi: AgentApiContract = {
     ): void => callback(data)
     ipcRenderer.on(agentIpcEvents.error, listener)
     return () => ipcRenderer.removeListener(agentIpcEvents.error, listener)
+  },
+  onRunStatus: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: Parameters<typeof callback>[0],
+    ): void => callback(data)
+    ipcRenderer.on(agentIpcEvents.runStatus, listener)
+    return () => ipcRenderer.removeListener(agentIpcEvents.runStatus, listener)
   },
   getCapabilities: () => invokeIpcContract(agentIpc.getCapabilities),
   listToolModules: () => invokeIpcContract(agentIpc.listToolModules),

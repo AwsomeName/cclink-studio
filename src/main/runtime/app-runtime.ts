@@ -6,6 +6,7 @@ import type { BrowserAuthProcessService } from '../browser/browser-auth-process-
 import type { BrowserInstanceStore } from '../persistence/browser-instance-store'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
 import type { AgentBridge } from '../agent/agent-bridge'
+import type { AgentRuntimeStateStore } from '../agent/agent-runtime-state-store'
 import type { ClaudeRuntimeManager } from '../agent/claude-runtime-manager'
 import type { McpToolHost } from '../mcp/tool-host'
 import type { PermissionManager } from '../mcp/permission'
@@ -73,6 +74,7 @@ export interface CclinkStudioRuntimeState {
   browserInstanceStore: BrowserInstanceStore | null
   playwrightBridge: PlaywrightBridge | null
   agentBridge: AgentBridge | null
+  agentRuntimeStateStore: AgentRuntimeStateStore | null
   agentRoleRegistry: AgentRoleRegistry | null
   claudeRuntimeManager: ClaudeRuntimeManager | null
   runtimeComponentManager: RuntimeComponentManager | null
@@ -143,6 +145,7 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     browserInstanceStore: null,
     playwrightBridge: null,
     agentBridge: null,
+    agentRuntimeStateStore: null,
     agentRoleRegistry: null,
     claudeRuntimeManager: null,
     runtimeComponentManager: null,

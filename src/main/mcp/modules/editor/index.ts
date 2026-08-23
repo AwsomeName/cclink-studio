@@ -10,7 +10,7 @@
 
 import { randomUUID } from 'node:crypto'
 import type { BrowserWindow } from 'electron'
-import type { ToolModule, ToolDefinition } from '../../types'
+import type { ToolModule, ToolDefinition, ToolExecutionContext } from '../../types'
 import type { EditorReadRequest, EditorSaveRequest } from '../../../../shared/ipc/editor'
 import type { DirEntry } from '../../../fs/file-service'
 
@@ -172,7 +172,12 @@ export class EditorToolModule implements ToolModule {
     this.fileAccess = fileAccess
   }
 
-  async execute(toolName: string, params: Record<string, unknown>): Promise<unknown> {
+  async execute(
+    toolName: string,
+    params: Record<string, unknown>,
+    context?: ToolExecutionContext,
+  ): Promise<unknown> {
+    context?.abortSignal?.throwIfAborted()
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       throw new Error('主窗口不可用')
     }
@@ -181,11 +186,11 @@ export class EditorToolModule implements ToolModule {
 
     switch (action) {
       case 'write':
-        return this.sendContentUpdate('write', params)
+        return this.sendContentUpdate('write', params, context?.abortSignal)
       case 'append':
-        return this.sendContentUpdate('append', params)
+        return this.sendContentUpdate('append', params, context?.abortSignal)
       case 'insert':
-        return this.sendContentUpdate('insert', params)
+        return this.sendContentUpdate('insert', params, context?.abortSignal)
       case 'read':
         return this.requestRead(params)
       case 'list':
@@ -203,11 +208,13 @@ export class EditorToolModule implements ToolModule {
   private async sendContentUpdate(
     type: 'write' | 'append' | 'insert',
     params: Record<string, unknown>,
+    abortSignal?: AbortSignal,
   ): Promise<unknown> {
     const filePath = typeof params.filePath === 'string' ? params.filePath.trim() : ''
     const content = typeof params.content === 'string' ? params.content : ''
     if (!filePath) throw new Error('编辑器写入必须提供明确的文件路径')
     const nextContent = await this.resolveDiskContent(type, filePath, content, params.position)
+    abortSignal?.throwIfAborted()
     await this.fileAccess.writeFile(filePath, nextContent)
     const persisted = await this.fileAccess.readFile(filePath)
     if (persisted.encoding !== 'utf-8' || persisted.content !== nextContent) {

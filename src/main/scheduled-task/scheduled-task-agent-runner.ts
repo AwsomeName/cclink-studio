@@ -79,7 +79,7 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
         }
       })
       const timeout = setTimeout(() => {
-        void this.agentBridge.abort(input.conversationId)
+        void this.agentBridge.abort(input.conversationId, input.runId)
         settle(() => rejectPromise(new Error('定时任务 Agent 运行超时')))
       }, RUN_TIMEOUT_MS)
       this.active.set(input.runId, {
@@ -134,7 +134,7 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
     clearTimeout(active.timeout)
     active.unsubscribe()
     this.active.delete(runId)
-    await this.agentBridge.abort(active.conversationId)
+    await this.agentBridge.abort(active.conversationId, runId)
     active.reject(new Error('定时任务运行已取消'))
   }
 }

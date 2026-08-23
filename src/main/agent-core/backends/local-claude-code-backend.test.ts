@@ -58,6 +58,7 @@ function createDeferredQuery(): AsyncIterable<unknown> & {
 } {
   let release: ((result: IteratorResult<unknown>) => void) | null = null
   const returned = vi.fn(async () => ({ done: true as const, value: undefined }))
+  const close = vi.fn(() => release?.({ done: true, value: undefined }))
   const iterator = {
     next: vi.fn(
       () =>
@@ -68,7 +69,7 @@ function createDeferredQuery(): AsyncIterable<unknown> & {
     return: returned,
   }
   return {
-    close: vi.fn(),
+    close,
     getContextUsage: vi.fn(async () => null),
     returned,
     release: (event) => release?.({ done: false, value: event }),
@@ -100,6 +101,7 @@ function createBackendFixture(
   backend: LocalClaudeCodeBackend
   createToolSession: ReturnType<typeof vi.fn>
   releaseToolSession: ReturnType<typeof vi.fn>
+  cancelToolSession: ReturnType<typeof vi.fn>
   composeMcpConfig: ReturnType<typeof vi.fn>
 } {
   const playwrightBridge: BrowserAutomationHost = {
@@ -107,10 +109,12 @@ function createBackendFixture(
   }
   const createToolSession = vi.fn(() => 'mcp-session-1')
   const releaseToolSession = vi.fn()
+  const cancelToolSession = vi.fn()
   const toolHost = {
     getPort: () => 39876,
     createToolSession,
     releaseToolSession,
+    cancelToolSession,
     getAllTools: () => [
       createTool('browser_navigate'),
       createTool('browser_new_tab'),
@@ -150,7 +154,7 @@ function createBackendFixture(
     },
   )
 
-  return { backend, createToolSession, releaseToolSession, composeMcpConfig }
+  return { backend, createToolSession, releaseToolSession, cancelToolSession, composeMcpConfig }
 }
 
 function createBackend(): LocalClaudeCodeBackend {
@@ -221,7 +225,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     const previousQuery = createDeferredQuery()
     const nextQuery = createDeferredQuery()
     queryMock.mockReturnValueOnce(previousQuery).mockReturnValueOnce(nextQuery)
-    const { backend, releaseToolSession } = createBackendFixture()
+    const { backend, releaseToolSession, cancelToolSession } = createBackendFixture()
     const onEvent = vi.fn()
     backend.onEvent(onEvent)
 
@@ -233,14 +237,43 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       event: { type: 'message_start', message: { id: 'late-message' } },
     })
 
-    await vi.waitFor(() => expect(previousQuery.returned).toHaveBeenCalledTimes(1))
+    expect(previousQuery.close).toHaveBeenCalledTimes(1)
     expect(onEvent).not.toHaveBeenCalled()
     expect(backend.getStatus().connected).toBe(true)
-    expect(releaseToolSession).toHaveBeenCalledTimes(1)
+    expect(cancelToolSession).toHaveBeenCalledTimes(1)
+    expect(releaseToolSession).not.toHaveBeenCalled()
 
     await backend.abort()
     expect(nextQuery.close).toHaveBeenCalledTimes(1)
-    expect(releaseToolSession).toHaveBeenCalledTimes(2)
+    expect(cancelToolSession).toHaveBeenCalledTimes(2)
+    expect(releaseToolSession).not.toHaveBeenCalled()
+  })
+
+  it('does not finish abort until in-flight Studio tools have drained', async () => {
+    const query = createDeferredQuery()
+    queryMock.mockReturnValue(query)
+    const { backend, cancelToolSession } = createBackendFixture()
+    let finishToolDrain!: () => void
+    cancelToolSession.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishToolDrain = resolve
+      }),
+    )
+
+    await backend.sendMessage('执行工具后取消')
+    let abortSettled = false
+    const abort = backend.abort().finally(() => {
+      abortSettled = true
+    })
+    await vi.waitFor(() => expect(query.close).toHaveBeenCalledTimes(1))
+    await Promise.resolve()
+    expect(abortSettled).toBe(false)
+
+    finishToolDrain()
+    await abort
+
+    expect(abortSettled).toBe(true)
+    expect(cancelToolSession).toHaveBeenCalledWith('mcp-session-1')
   })
 
   it('injects a resolved role into the system prompt without changing tool permissions', async () => {
@@ -324,6 +357,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       getPort: () => 39876,
       createToolSession: () => 'mcp-session-1',
       releaseToolSession: vi.fn(),
+      cancelToolSession: vi.fn(),
       getAllTools: () => [],
     } as unknown as McpToolHost
     const backend = new LocalClaudeCodeBackend(

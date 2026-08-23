@@ -31,6 +31,7 @@ import {
   nullableAgentSessionCompatibilityFingerprintSchema,
   optionalAgentConversationIdSchema,
 } from './agent-schema'
+import { workspaceRefSchema } from './workspace-ref-schema'
 
 function requireArgs(args: unknown[], count: number, channel: string): void {
   if (args.length !== count) throw new Error(`IPC ${channel} 需要 ${count} 个参数`)
@@ -75,8 +76,21 @@ export const agentIpcContracts = {
     },
     (error) => Promise.reject(error),
   ),
-  abort: bindOptionalConversation(agentIpc.abort),
+  abort: bindIpcParser(agentIpc.abort, (args) => {
+    requireArgs(args, 2, agentIpc.abort.channel)
+    return ipcArgs(
+      agentConversationIdSchema.parse(args[0]),
+      boundedIdentifierSchema().parse(args[1]),
+    )
+  }),
   getStatus: bindOptionalConversation(agentIpc.getStatus),
+  getRunStatus: bindIpcParser(agentIpc.getRunStatus, (args) => {
+    requireArgs(args, 2, agentIpc.getRunStatus.channel)
+    return ipcArgs(
+      agentConversationIdSchema.parse(args[0]),
+      boundedIdentifierSchema().parse(args[1]),
+    )
+  }),
   getContextUsage: bindOptionalConversation(agentIpc.getContextUsage),
   compactConversation: bindIpcParser(agentIpc.compactConversation, (args) => {
     requireArgs(args, 2, agentIpc.compactConversation.channel)
@@ -95,10 +109,10 @@ export const agentIpcContracts = {
   getScope: bindOptionalConversation(agentIpc.getScope),
   resetSession: bindOptionalConversation(agentIpc.resetSession),
   restoreConversation: bindIpcParser(agentIpc.restoreConversation, (args) => {
-    if (args.length < 3 || args.length > 6) {
-      throw new Error(`IPC ${agentIpc.restoreConversation.channel} 需要 3 至 6 个参数`)
+    if (args.length < 3 || args.length > 7) {
+      throw new Error(`IPC ${agentIpc.restoreConversation.channel} 需要 3 至 7 个参数`)
     }
-    return ipcArgs(
+    const parsed = ipcArgs(
       agentConversationIdSchema.parse(args[0]),
       nullableAgentSessionIdSchema.parse(args[1]),
       agentConversationConfigurationSchema.parse(args[2]),
@@ -106,8 +120,11 @@ export const agentIpcContracts = {
         ? nullableAgentSessionCompatibilityFingerprintSchema.parse(args[3])
         : undefined,
       args.length >= 5 ? agentSkillRefsSchema.parse(args[4]) : undefined,
-      args.length === 6 ? agentRuntimeBindingSchema.parse(args[5]) : undefined,
+      args.length >= 6 ? agentRuntimeBindingSchema.parse(args[5]) : undefined,
     )
+    return args.length === 7
+      ? ipcArgs(...parsed, workspaceRefSchema.optional().parse(args[6]))
+      : parsed
   }),
   listRoles: bindNoArgsIpc(agentIpc.listRoles),
   createRole: bindIpcParser(agentIpc.createRole, (args) => {

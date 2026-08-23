@@ -28,8 +28,10 @@ import { buildAgentMessageWithContext, type AgentSendMessageContext } from './me
 import { buildAgentResourceContext } from './resource-context'
 import { workspaceRefKey } from '../../shared/workspace-ref'
 import type {
+  AgentAbortResult,
   AgentCompactConversationPayload,
   AgentContextUsageSnapshot,
+  AgentRuntimeRunRecord,
 } from '../../shared/agent-protocol'
 import { agentIpcEvents } from '../../shared/ipc/agent'
 import { SessionDiagnosticReferenceStore } from './session-diagnostic-reference-store'
@@ -42,6 +44,7 @@ import {
 } from '../../shared/agent-runtime'
 import { CODEX_ACP_EXPECTED_VERSION } from '../agent-core/backends/local-acp-backend'
 import type { UsageLedgerService } from '../usage/usage-ledger-service'
+import { AgentRuntimeStateStore, type TrustedAgentSessionRecord } from './agent-runtime-state-store'
 import { managedClaudeIsolationEnvironment } from './managed-claude-environment'
 import {
   AGENT_PROFILE_PROMPT_COMPILER_VERSION,
@@ -107,6 +110,8 @@ export interface AgentBridgeOptions {
   browserTaskRuntime?: BrowserTaskRuntime
   /** 只记录、不控制调用的统一用量账本。 */
   usageLedgerService?: UsageLedgerService
+  /** 主进程近期 run 与可信 Runtime Session 的持久状态仓库。 */
+  runtimeStateStore?: AgentRuntimeStateStore
 }
 
 export class AgentBridge {
@@ -120,11 +125,8 @@ export class AgentBridge {
   private readonly conversationConfigurations = new Map<string, AgentConversationConfiguration>()
   private readonly conversationSkills = new Map<string, BuiltinAgentSkill[]>()
   private readonly conversationRuntimeBindings = new Map<string, AgentRuntimeBinding>()
-  /** 只允许恢复本次主进程亲自观察到的 Claude session；renderer 不能自证旧 session。 */
-  private readonly trustedClaudeSessions = new Map<
-    string,
-    { sessionId: string; compatibilityFingerprint: string }
-  >()
+  /** 主进程观察并验证过的 Claude session 缓存；持久信任由 runtimeStateStore 提供。 */
+  private readonly trustedClaudeSessions = new Map<string, TrustedAgentSessionRecord>()
   private readonly deps: {
     playwrightBridge: PlaywrightBridge | null
     toolHost: McpToolHost
@@ -145,6 +147,9 @@ export class AgentBridge {
   private acpConfig: Extract<BackendConfig, { type: 'local-acp' }>
   private readonly runtimeListeners = new Set<(event: AgentRuntimeEvent) => void>()
   private readonly rendererSuppressedConversationIds = new Set<string>()
+  private readonly runtimeStateStore: AgentRuntimeStateStore
+  private readonly conversationWorkspaceKeys = new Map<string, string | null>()
+  private readonly cancellingRuns = new Map<string, Promise<void>>()
   constructor(
     mainWindow: BrowserWindow,
     playwrightBridge: PlaywrightBridge | null,
@@ -154,6 +159,7 @@ export class AgentBridge {
     adbBridge: AdbBridge | null,
     options?: AgentBridgeOptions,
   ) {
+    this.runtimeStateStore = options?.runtimeStateStore ?? new AgentRuntimeStateStore()
     this.mainWindow = mainWindow
     this.permissionManager = permissionManager
     this.roleRegistry = options?.roleRegistry ?? new BuiltinAgentRoleRegistry()
@@ -254,37 +260,55 @@ export class AgentBridge {
     this.bindConversationRuntime(conversationId, context?.runtimeBinding)
     const binding = this.bindConversationConfiguration(conversationId, context?.configuration)
     const resolvedSkills = this.bindConversationSkills(conversationId, context?.skills ?? [])
+    const runId = context?.runId?.trim() || `run-${randomUUID()}`
+    const workspaceKey = context?.workspaceRef ? workspaceRefKey(context.workspaceRef) : null
+    this.conversationWorkspaceKeys.set(conversationId, workspaceKey)
     let runtimeSessionMode: AgentRunConfigurationReceipt['runtimeSessionMode'] = 'new'
-    if (context?.sessionId !== undefined) {
-      const restorableSessionId = this.resolveRestorableSessionId(
-        conversationId,
-        context.sessionId,
-        context.sessionCompatibilityFingerprint,
-      )
-      this.runtime.restoreConversation(conversationId, restorableSessionId)
-      runtimeSessionMode = restorableSessionId ? 'resumed' : 'new'
-    }
-    const sendPlan = this.resolveSendPlan(conversationId, context)
-    if (sendPlan.options.forceVisibleBrowser) {
-      await this.syncVisibleBrowserPage(sendPlan.browserTabId, sendPlan.workspaceKey)
-    }
-    const resourceContext = await buildAgentResourceContext({
-      message,
-      scope: this.runtime.getScope(conversationId),
-      browserTabId: sendPlan.browserTabId,
-      context,
-      browserManager: this.deps.browserManager,
-      playwrightBridge: this.deps.playwrightBridge,
-      settings: this.deps.getSettingsSnapshot?.() ?? DEFAULT_SETTINGS,
-    })
-    this.startBrowserTaskIfNeeded(
-      conversationId,
-      message,
-      sendPlan.browserTabId,
-      sendPlan.workspaceKey,
-      context?.runId ?? null,
-    )
+    await this.runtimeStateStore.beginRun({ conversationId, runId, workspaceKey })
     try {
+      if (this.runtime.isBusy(conversationId)) {
+        const error = new Error('Agent 当前 Thread 已有活动任务，请等待完成或取消后重试')
+        await this.runtimeStateStore.finishRun(conversationId, runId, 'failed', {
+          code: 'run_already_active',
+          message: error.message,
+        })
+        throw error
+      }
+      if (context?.sessionId !== undefined && context.sessionId !== null) {
+        const restorableSessionId = this.resolveRestorableSessionId(
+          conversationId,
+          context.sessionId,
+          context.sessionCompatibilityFingerprint,
+          workspaceKey,
+        )
+        if (!restorableSessionId) {
+          throw new Error('请求的 Runtime Session 无法在当前工作区和运行时中恢复')
+        }
+        this.runtime.restoreConversation(conversationId, restorableSessionId)
+        runtimeSessionMode = 'resumed'
+      } else if (context?.sessionId === null) {
+        this.runtime.restoreConversation(conversationId, null)
+      }
+      const sendPlan = this.resolveSendPlan(conversationId, context)
+      if (sendPlan.options.forceVisibleBrowser) {
+        await this.syncVisibleBrowserPage(sendPlan.browserTabId, sendPlan.workspaceKey)
+      }
+      const resourceContext = await buildAgentResourceContext({
+        message,
+        scope: this.runtime.getScope(conversationId),
+        browserTabId: sendPlan.browserTabId,
+        context,
+        browserManager: this.deps.browserManager,
+        playwrightBridge: this.deps.playwrightBridge,
+        settings: this.deps.getSettingsSnapshot?.() ?? DEFAULT_SETTINGS,
+      })
+      this.startBrowserTaskIfNeeded(
+        conversationId,
+        message,
+        sendPlan.browserTabId,
+        sendPlan.workspaceKey,
+        runId,
+      )
       await this.runtime.sendMessage(
         buildAgentMessageWithContext(message, {
           resources: context?.resources,
@@ -301,7 +325,7 @@ export class AgentBridge {
         conversationId,
         {
           ...sendPlan.options,
-          runId: context?.runId,
+          runId,
           images: context?.images,
           workspacePath: resourceContext.workspace.rootPath ?? undefined,
           resourceContext,
@@ -311,11 +335,15 @@ export class AgentBridge {
       )
     } catch (error) {
       this.failActiveBrowserTask(conversationId, error)
+      await this.runtimeStateStore.finishRun(conversationId, runId, 'failed', {
+        code: 'run_start_failed',
+        message: this.extractErrorMessage(error),
+      })
       throw error
     }
     return {
       conversationId,
-      runId: context?.runId ?? 'untracked',
+      runId,
       roleRef: binding.configuration.roleRef,
       configurationRevision: binding.configuration.revision,
       configurationFingerprint: this.getConversationCompatibilityFingerprint(conversationId),
@@ -336,21 +364,36 @@ export class AgentBridge {
     taskRevision: number
     readRoots: string[]
   }): Promise<void> {
-    await this.runtime.sendMessage(input.message, input.conversationId, {
+    const workspaceKey = workspaceRefKey({ kind: 'local', path: input.workspacePath })
+    this.conversationWorkspaceKeys.set(input.conversationId, workspaceKey)
+    await this.runtimeStateStore.beginRun({
+      conversationId: input.conversationId,
       runId: input.runId,
-      workspacePath: input.workspacePath,
-      allowedTools: ['mcp__cclink_studio__editor_read', 'mcp__cclink_studio__editor_list'],
-      disableBuiltinTools: true,
-      scheduledTaskPolicy: {
-        origin: 'scheduled-task',
-        taskId: input.taskId,
-        taskRevision: input.taskRevision,
-        runId: input.runId,
-        workspaceRoot: input.workspacePath,
-        readRoots: input.readRoots,
-        allowedTools: ['editor_read', 'editor_list'],
-      },
+      workspaceKey,
     })
+    try {
+      await this.runtime.sendMessage(input.message, input.conversationId, {
+        runId: input.runId,
+        workspacePath: input.workspacePath,
+        allowedTools: ['mcp__cclink_studio__editor_read', 'mcp__cclink_studio__editor_list'],
+        disableBuiltinTools: true,
+        scheduledTaskPolicy: {
+          origin: 'scheduled-task',
+          taskId: input.taskId,
+          taskRevision: input.taskRevision,
+          runId: input.runId,
+          workspaceRoot: input.workspacePath,
+          readRoots: input.readRoots,
+          allowedTools: ['editor_read', 'editor_list'],
+        },
+      })
+    } catch (error) {
+      await this.runtimeStateStore.finishRun(input.conversationId, input.runId, 'failed', {
+        code: 'run_start_failed',
+        message: this.extractErrorMessage(error),
+      })
+      throw error
+    }
   }
 
   onRuntimeEvent(listener: (event: AgentRuntimeEvent) => void): () => void {
@@ -402,7 +445,7 @@ export class AgentBridge {
           }
         })
         timer = setTimeout(() => {
-          void this.runtime.abort(conversationId).catch(() => undefined)
+          void this.runtime.abort(conversationId, runId).catch(() => undefined)
           finish(() => reject(new Error('Agent 生成超时，请稍后重试')))
         }, timeoutMs)
       })
@@ -443,22 +486,39 @@ export class AgentBridge {
       conversationId,
       sessionId,
       payload.sessionCompatibilityFingerprint,
+      payload.workspaceRef ? workspaceRefKey(payload.workspaceRef) : null,
     )
     if (!compatibleSessionId) {
       throw new Error(
         '当前 Claude SDK session 与已启用的 Agent 运行时不兼容，请发送新消息开始新会话',
       )
     }
-    this.runtime.restoreConversation(conversationId, compatibleSessionId)
     const workspacePath =
       payload.workspaceRef?.kind === 'local'
         ? payload.workspaceRef.path
         : this.getWorkspacePath?.() || undefined
-    await this.runtime.compactConversation(conversationId, payload.instructions, {
-      runId: payload.runId,
-      workspacePath,
-      agentProfile: this.toAgentRoleContext(binding.role),
+    const workspaceKey = payload.workspaceRef ? workspaceRefKey(payload.workspaceRef) : null
+    const runId = payload.runId?.trim() || `compact-${randomUUID()}`
+    this.conversationWorkspaceKeys.set(conversationId, workspaceKey)
+    await this.runtimeStateStore.beginRun({
+      conversationId,
+      runId,
+      workspaceKey,
     })
+    try {
+      this.runtime.restoreConversation(conversationId, compatibleSessionId)
+      await this.runtime.compactConversation(conversationId, payload.instructions, {
+        runId,
+        workspacePath,
+        agentProfile: this.toAgentRoleContext(binding.role),
+      })
+    } catch (error) {
+      await this.runtimeStateStore.finishRun(conversationId, runId, 'failed', {
+        code: 'run_start_failed',
+        message: this.extractErrorMessage(error),
+      })
+      throw error
+    }
   }
 
   private resolveSendPlan(
@@ -530,10 +590,76 @@ export class AgentBridge {
     }
   }
 
-  /** 中止当前响应 */
-  async abort(conversationId = DEFAULT_CONVERSATION_ID): Promise<void> {
+  /** 精确取消指定 run；命令只发起取消，终态由 Runtime 结束确认后写入。 */
+  async abort(conversationId: string, runId: string): Promise<AgentAbortResult> {
+    const existing = this.runtimeStateStore.getRun(conversationId, runId)
+    if (!existing) return { accepted: false, run: null, error: '未找到目标 Agent run' }
+    if (
+      existing.status === 'succeeded' ||
+      existing.status === 'failed' ||
+      existing.status === 'cancelled'
+    ) {
+      return { accepted: existing.status === 'cancelled', run: existing }
+    }
+    const key = `${conversationId}\0${runId}`
+    if (existing.status === 'cancelling' && this.cancellingRuns.has(key)) {
+      return { accepted: true, run: existing }
+    }
+    if (this.runtime.getStatus(conversationId).runId !== runId) {
+      return { accepted: false, run: existing, error: '目标 run 当前不由该 Runtime 执行' }
+    }
+
+    this.runtime.reserveCancellation(conversationId, runId)
+    let cancelling: AgentRuntimeRunRecord | null
+    try {
+      cancelling = await this.runtimeStateStore.markCancelling(conversationId, runId)
+    } catch (error) {
+      this.runtime.releaseCancellationReservation(conversationId, runId)
+      throw error
+    }
+    if (!cancelling) {
+      this.runtime.releaseCancellationReservation(conversationId, runId)
+      return { accepted: false, run: null, error: '未找到目标 Agent run' }
+    }
+    if (cancelling.status !== 'cancelling') {
+      this.runtime.releaseCancellationReservation(conversationId, runId)
+      return {
+        accepted: cancelling.status === 'cancelled',
+        run: cancelling,
+        error: cancelling.status === 'cancelled' ? undefined : '目标任务已自然结束',
+      }
+    }
+    this.permissionManager.cancelForRun(conversationId, runId)
     this.cancelActiveBrowserTask(conversationId)
-    await this.runtime.abort(conversationId)
+    this.forwardRunStatus(cancelling)
+
+    if (!this.cancellingRuns.has(key)) {
+      const cancellation = this.runtime
+        .abort(conversationId, runId)
+        .then(async () => {
+          const terminal = await this.runtimeStateStore.finishRun(
+            conversationId,
+            runId,
+            'cancelled',
+          )
+          if (terminal) this.forwardRunStatus(terminal)
+        })
+        .catch((error) => {
+          console.warn(
+            `[AgentBridge] run 取消尚未确认 conversation=${conversationId} run=${runId}:`,
+            this.extractErrorMessage(error),
+          )
+        })
+        .finally(() => {
+          if (this.cancellingRuns.get(key) === cancellation) this.cancellingRuns.delete(key)
+        })
+      this.cancellingRuns.set(key, cancellation)
+    }
+    return { accepted: true, run: cancelling }
+  }
+
+  getRunStatus(conversationId: string, runId: string): AgentRuntimeRunRecord | null {
+    return this.runtimeStateStore.getRun(conversationId, runId)
   }
 
   /** 获取后端状态 */
@@ -557,11 +683,7 @@ export class AgentBridge {
       ...status,
       busy: this.runtime.isBusy(conversationId),
       runtimeBinding: this.getConversationRuntimeBinding(conversationId),
-      sessionCompatibilityFingerprint: this.roleRegistry.buildConversationCompatibilityFingerprint(
-        this.getRuntimeCompatibilityFingerprint(conversationId),
-        conversationConfiguration.roleRef,
-        conversationConfiguration.revision,
-      ),
+      sessionCompatibilityFingerprint: this.getConversationCompatibilityFingerprint(conversationId),
       conversationConfiguration,
       profilePromptCompilerVersion: AGENT_PROFILE_PROMPT_COMPILER_VERSION,
       runtimeProvenance:
@@ -603,6 +725,7 @@ export class AgentBridge {
     const sessionId = this.runtime.getStatus(conversationId).sessionId
     this.sessionDiagnosticRefs.delete(sessionId)
     this.trustedClaudeSessions.delete(conversationId)
+    void this.runtimeStateStore.clearSession(conversationId)
     this.runtime.resetSession(conversationId)
   }
 
@@ -614,14 +737,26 @@ export class AgentBridge {
     sessionCompatibilityFingerprint?: string | null,
     skills: AgentSkillRef[] = [],
     runtimeBinding?: AgentRuntimeBinding,
+    workspaceKey: string | null = null,
   ): void {
     this.bindConversationRuntime(conversationId, runtimeBinding)
     this.bindConversationConfiguration(conversationId, configuration)
     this.bindConversationSkills(conversationId, skills)
-    this.runtime.restoreConversation(
+    if (sessionId === null) {
+      this.runtime.restoreConversation(conversationId, null)
+      return
+    }
+    const compatibleSessionId = this.resolveRestorableSessionId(
       conversationId,
-      this.resolveRestorableSessionId(conversationId, sessionId, sessionCompatibilityFingerprint),
+      sessionId,
+      sessionCompatibilityFingerprint,
+      workspaceKey,
     )
+    if (!compatibleSessionId) {
+      throw new Error('请求的 Runtime Session 无法在当前工作区和运行时中恢复')
+    }
+    this.conversationWorkspaceKeys.set(conversationId, workspaceKey)
+    this.runtime.restoreConversation(conversationId, compatibleSessionId)
   }
 
   listRoles(): AgentRoleSummary[] {
@@ -634,11 +769,19 @@ export class AgentBridge {
 
   /** 销毁一个会话 backend（关闭历史会话时释放资源） */
   async closeConversation(conversationId = DEFAULT_CONVERSATION_ID): Promise<void> {
+    const status = this.runtime.getStatus(conversationId)
+    if (status.runId) {
+      await this.abort(conversationId, status.runId)
+      const cancellation = this.cancellingRuns.get(`${conversationId}\0${status.runId}`)
+      if (cancellation) await cancellation
+    }
     this.cancelActiveBrowserTask(conversationId)
-    const sessionId = this.runtime.getStatus(conversationId).sessionId
+    const sessionId = status.sessionId
     this.sessionDiagnosticRefs.delete(sessionId)
     await this.runtime.closeConversation(conversationId)
     this.trustedClaudeSessions.delete(conversationId)
+    await this.runtimeStateStore.clearSession(conversationId)
+    this.conversationWorkspaceKeys.delete(conversationId)
     this.conversationConfigurations.delete(conversationId)
     this.conversationSkills.delete(conversationId)
     this.conversationRuntimeBindings.delete(conversationId)
@@ -743,7 +886,12 @@ export class AgentBridge {
 
   /** 切换后端（使用存储的依赖） */
   switchBackend(config: BackendConfig, preserveSessions = true): void {
-    if (!preserveSessions) this.trustedClaudeSessions.clear()
+    if (!preserveSessions) {
+      this.trustedClaudeSessions.clear()
+      for (const conversationId of this.runtime.getConversationIds()) {
+        void this.runtimeStateStore.clearSession(conversationId)
+      }
+    }
     this.runtime.switchBackend(config, preserveSessions)
   }
 
@@ -790,6 +938,8 @@ export class AgentBridge {
   async destroy(): Promise<void> {
     this.mainWindow = null
     await this.runtime.destroy()
+    await Promise.allSettled(this.cancellingRuns.values())
+    await this.runtimeStateStore.flush()
     this.activeBrowserTaskIds.clear()
     this.sessionDiagnosticRefs.clear()
     this.runtimeListeners.clear()
@@ -797,6 +947,8 @@ export class AgentBridge {
     this.conversationConfigurations.clear()
     this.conversationSkills.clear()
     this.conversationRuntimeBindings.clear()
+    this.conversationWorkspaceKeys.clear()
+    this.cancellingRuns.clear()
     this.trustedClaudeSessions.clear()
   }
 
@@ -807,11 +959,54 @@ export class AgentBridge {
       event.data !== null &&
       (event.data as { subtype?: unknown }).subtype === 'init'
     ) {
-      this.rememberTrustedClaudeSession(event.conversationId)
+      void this.rememberTrustedClaudeSession(event.conversationId)
     }
     if (event.type === 'error' && !this.runtime.getStatus(event.conversationId).sessionId) {
       this.trustedClaudeSessions.delete(event.conversationId)
+      void this.runtimeStateStore.clearSession(event.conversationId)
     }
+    if ((event.type === 'complete' || event.type === 'error') && event.runId) {
+      const tracked = this.runtimeStateStore.getRun(event.conversationId, event.runId)
+      if (tracked) {
+        void this.persistAndDeliverTerminalEvent(event, tracked)
+        return
+      }
+    }
+    this.deliverRuntimeEvent(event)
+  }
+
+  private async persistAndDeliverTerminalEvent(
+    event: AgentRuntimeEvent,
+    tracked: AgentRuntimeRunRecord,
+  ): Promise<void> {
+    try {
+      // 取消流程独占 cancelled 终态：Runtime 的尾部 complete/error 不能绕过
+      // backend.abort() 对 Query 退出和在途 Studio 工具排空的等待。
+      if (tracked.status === 'cancelling') return
+      const failed = event.type === 'error' || this.isErrorResult(event.data)
+      const terminal = await this.runtimeStateStore.finishRun(
+        event.conversationId,
+        event.runId!,
+        failed ? 'failed' : 'succeeded',
+        failed
+          ? {
+              code: this.extractErrorCode(event.data) ?? 'runtime_error',
+              message: this.extractErrorMessage(event.data),
+            }
+          : undefined,
+      )
+      this.deliverRuntimeEvent(event)
+      if (terminal) this.forwardRunStatus(terminal)
+    } catch (error) {
+      console.error(
+        `[AgentBridge] 写入 run 终态失败 conversation=${event.conversationId} run=${event.runId}:`,
+        this.extractErrorMessage(error),
+      )
+      this.deliverRuntimeEvent(event)
+    }
+  }
+
+  private deliverRuntimeEvent(event: AgentRuntimeEvent): void {
     for (const listener of this.runtimeListeners) listener(event)
     const taskId = this.activeBrowserTaskIds.get(event.conversationId)
     if (taskId) {
@@ -953,6 +1148,12 @@ export class AgentBridge {
     return String(error)
   }
 
+  private extractErrorCode(error: unknown): string | null {
+    if (!error || typeof error !== 'object' || !('code' in error)) return null
+    const code = (error as { code?: unknown }).code
+    return typeof code === 'string' && code.trim() ? code.trim() : null
+  }
+
   /** 将后端事件转发到渲染进程 */
   private forwardToRenderer(
     type: AgentRuntimeEvent['type'],
@@ -986,12 +1187,27 @@ export class AgentBridge {
     }
   }
 
+  private forwardRunStatus(run: AgentRuntimeRunRecord): void {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
+    this.mainWindow.webContents.send(agentIpcEvents.runStatus, run)
+  }
+
   private resolveRestorableSessionId(
     conversationId: string,
     sessionId: string | null,
     persistedFingerprint?: string | null,
+    workspaceKey?: string | null,
   ): string | null {
-    const trusted = this.trustedClaudeSessions.get(conversationId)
+    const trusted =
+      this.trustedClaudeSessions.get(conversationId) ??
+      this.runtimeStateStore.getSession(conversationId)
+    if (
+      !trusted ||
+      trusted.workspaceKey !== (workspaceKey ?? null) ||
+      trusted.runtimeBindingKey !== this.getRuntimeBindingKey(conversationId)
+    ) {
+      return null
+    }
     return resolveCompatibleClaudeSessionId(
       sessionId,
       persistedFingerprint,
@@ -1000,12 +1216,26 @@ export class AgentBridge {
     )
   }
 
-  private rememberTrustedClaudeSession(conversationId: string): void {
+  private async rememberTrustedClaudeSession(conversationId: string): Promise<void> {
     if (this.getConversationRuntimeBinding(conversationId).kind !== 'claude-code') return
     const sessionId = this.runtime.getStatus(conversationId).sessionId?.trim()
     const compatibilityFingerprint = this.getConversationCompatibilityFingerprint(conversationId)
     if (!sessionId || !compatibilityFingerprint) return
-    this.trustedClaudeSessions.set(conversationId, { sessionId, compatibilityFingerprint })
+    const record: TrustedAgentSessionRecord = {
+      conversationId,
+      sessionId,
+      compatibilityFingerprint,
+      workspaceKey: this.conversationWorkspaceKeys.get(conversationId) ?? null,
+      runtimeBindingKey: this.getRuntimeBindingKey(conversationId),
+      updatedAt: Date.now(),
+    }
+    this.trustedClaudeSessions.set(conversationId, record)
+    await this.runtimeStateStore.rememberSession(record)
+  }
+
+  private getRuntimeBindingKey(conversationId: string): string {
+    const binding = this.getConversationRuntimeBinding(conversationId)
+    return binding.kind === 'acp' ? `acp:${binding.implementationId}` : 'claude-code'
   }
 
   private bindConversationRuntime(

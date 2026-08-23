@@ -49,6 +49,7 @@ describe('McpToolHost tool session context', () => {
     expect(requestConfirmation).toHaveBeenCalledWith(
       expect.objectContaining<ToolConfirmationInput>({
         conversationId: 'conv-123',
+        runId: 'run-123',
         toolName: 'test_write',
         params: { value: 1 },
         riskLevel: 'write',
@@ -57,7 +58,7 @@ describe('McpToolHost tool session context', () => {
     expect(execute).toHaveBeenCalledWith(
       'test_write',
       { value: 1 },
-      {
+      expect.objectContaining({
         conversationId: 'conv-123',
         workspaceKey: '/workspace/a',
         trustedWorkspace: {
@@ -68,8 +69,133 @@ describe('McpToolHost tool session context', () => {
         agentRunId: 'run-123',
         agentGoal: 'write the file',
         confirmationGranted: true,
-      },
+        abortSignal: expect.any(AbortSignal),
+      }),
     )
+  })
+
+  it('cancels a pending confirmation for the exact run before the tool can execute', async () => {
+    let resolveConfirmation!: (approved: boolean) => void
+    const requestConfirmation = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveConfirmation = resolve
+        }),
+    )
+    const cancelForRun = vi.fn((conversationId: string, runId: string) => {
+      expect({ conversationId, runId }).toEqual({
+        conversationId: 'conversation-1',
+        runId: 'run-1',
+      })
+      resolveConfirmation(false)
+    })
+    const execute = vi.fn(async () => ({ ok: true }))
+    host = new McpToolHost({
+      needsConfirmation: () => true,
+      requestConfirmation,
+      cancelForRun,
+    })
+    host.registerModule(createModule(execute))
+    const port = await host.start()
+    const token = host.createToolSession({
+      conversationId: 'conversation-1',
+      workspaceKey: '/workspace/a',
+      agentRunId: 'run-1',
+    })
+    const responsePromise = callMcp(port, token, 'tools/call', {
+      name: 'test_write',
+      arguments: { value: 1 },
+    })
+    await vi.waitFor(() => expect(requestConfirmation).toHaveBeenCalledTimes(1))
+
+    await host.cancelToolSession(token)
+    const response = await responsePromise
+
+    expect(cancelForRun).toHaveBeenCalledWith('conversation-1', 'run-1')
+    expect(response.result.isError).toBe(true)
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('signals an already-started cooperative tool when its exact run is cancelled', async () => {
+    let observedSignal: AbortSignal | undefined
+    const execute = vi.fn(
+      async (
+        _toolName: string,
+        _args: Record<string, unknown>,
+        context?: { abortSignal?: AbortSignal },
+      ) =>
+        new Promise<never>((_resolve, reject) => {
+          observedSignal = context?.abortSignal
+          context?.abortSignal?.addEventListener('abort', () => reject(new Error('tool aborted')), {
+            once: true,
+          })
+        }),
+    )
+    host = new McpToolHost({
+      needsConfirmation: () => false,
+      requestConfirmation: vi.fn(async () => true),
+    })
+    host.registerModule(createModule(execute))
+    const port = await host.start()
+    const token = host.createToolSession({
+      conversationId: 'conversation-1',
+      workspaceKey: '/workspace/a',
+      agentRunId: 'run-1',
+    })
+    const responsePromise = callMcp(port, token, 'tools/call', {
+      name: 'test_write',
+      arguments: { value: 1 },
+    })
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1))
+
+    const cancellation = host.cancelToolSession(token)
+    const response = await responsePromise
+    await cancellation
+
+    expect(observedSignal?.aborted).toBe(true)
+    expect(response.result.isError).toBe(true)
+    expect(response.result.content[0]?.text).toContain('tool aborted')
+  })
+
+  it('keeps cancellation pending until a signal-ignorant in-flight tool settles', async () => {
+    let finishTool!: (value: { ok: boolean }) => void
+    const execute = vi.fn(
+      () =>
+        new Promise<{ ok: boolean }>((resolve) => {
+          finishTool = resolve
+        }),
+    )
+    host = new McpToolHost({
+      needsConfirmation: () => false,
+      requestConfirmation: vi.fn(async () => true),
+    })
+    host.registerModule(createModule(execute))
+    const port = await host.start()
+    const token = host.createToolSession({
+      conversationId: 'conversation-1',
+      workspaceKey: '/workspace/a',
+      agentRunId: 'run-1',
+    })
+    const responsePromise = callMcp(port, token, 'tools/call', {
+      name: 'test_write',
+      arguments: { value: 1 },
+    })
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1))
+
+    let cancellationSettled = false
+    const cancellation = host.cancelToolSession(token).finally(() => {
+      cancellationSettled = true
+    })
+    await Promise.resolve()
+    expect(cancellationSettled).toBe(false)
+
+    finishTool({ ok: true })
+    await cancellation
+    const response = await responsePromise
+
+    expect(cancellationSettled).toBe(true)
+    expect(response.result.isError).toBe(true)
+    expect(response.result.content[0]?.text).toContain('run 已取消')
   })
 
   it('enforces a module runtime policy even when global auto mode allows the tool', async () => {
@@ -206,7 +332,9 @@ describe('McpToolHost tool session context', () => {
   })
 })
 
-function createModule(execute = vi.fn(async () => ({ ok: true }))): ToolModule {
+function createModule(
+  execute: ToolModule['execute'] = vi.fn(async () => ({ ok: true })),
+): ToolModule {
   return {
     name: 'test',
     tools: [

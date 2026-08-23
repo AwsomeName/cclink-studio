@@ -3,12 +3,14 @@ export * from '../agent-protocol'
 import { defineIpcCall } from './contract'
 import type {
   AgentApiContract as CoreAgentApiContract,
+  AgentAbortResult,
   AgentCapabilityStatus,
   AgentCommandResult,
   AgentCompactConversationPayload,
   AgentContextUsageSnapshot,
   AgentScope,
   AgentStatus,
+  AgentRuntimeRunRecord,
   AgentToolModuleStatus,
   ClaudeResultEventData,
   ClaudeStreamEventData,
@@ -174,8 +176,12 @@ export interface AgentApiContract extends Omit<CoreAgentApiContract, 'sendMessag
 
 export const agentIpc = {
   sendMessage: defineIpcCall<AgentSendMessageArgs, AgentCommandResult>('agent:sendMessage'),
-  abort: defineIpcCall<[conversationId?: string], void>('agent:abort'),
+  abort: defineIpcCall<[conversationId: string, runId: string], AgentAbortResult>('agent:abort'),
   getStatus: defineIpcCall<[conversationId?: string], AgentStatus>('agent:getStatus'),
+  getRunStatus: defineIpcCall<
+    [conversationId: string, runId: string],
+    AgentRuntimeRunRecord | null
+  >('agent:getRunStatus'),
   getContextUsage: defineIpcCall<[conversationId?: string], AgentContextUsageSnapshot | null>(
     'agent:getContextUsage',
   ),
@@ -194,6 +200,7 @@ export const agentIpc = {
       sessionCompatibilityFingerprint?: string | null,
       skills?: AgentSkillRef[],
       runtimeBinding?: AgentRuntimeBinding,
+      workspaceRef?: WorkspaceRef,
     ],
     void
   >('agent:restoreConversation'),
@@ -246,6 +253,7 @@ export const agentIpcEvents = {
   stream: 'agent:stream',
   complete: 'agent:complete',
   error: 'agent:error',
+  runStatus: 'agent:runStatus',
   requestConfirmation: 'agent:requestConfirmation',
 } as const
 
@@ -253,5 +261,6 @@ export interface AgentIpcEventPayloads {
   [agentIpcEvents.stream]: ClaudeStreamEventData | StudioAgentStreamEventData
   [agentIpcEvents.complete]: ClaudeResultEventData | StudioAgentResultEventData
   [agentIpcEvents.error]: AgentErrorEvent
+  [agentIpcEvents.runStatus]: AgentRuntimeRunRecord
   [agentIpcEvents.requestConfirmation]: ToolConfirmationRequest
 }

@@ -161,6 +161,7 @@ export type AgentScope =
 export interface ToolConfirmationRequest {
   id: string
   conversationId?: string
+  runId?: string
   toolName: string
   params: Record<string, unknown>
   riskLevel: 'read' | 'write' | 'destructive'
@@ -201,6 +202,27 @@ export interface AgentCommandResult {
   success: boolean
   error?: string
   configurationReceipt?: import('./agent-role').AgentRunConfigurationReceipt
+}
+
+export type AgentRuntimeRunStatus = 'running' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled'
+
+/** 主进程持久拥有的单轮运行事实；不包含消息正文、凭证或原生 Session ID。 */
+export interface AgentRuntimeRunRecord {
+  conversationId: string
+  runId: string
+  status: AgentRuntimeRunStatus
+  workspaceKey: string | null
+  startedAt: number
+  updatedAt: number
+  completedAt: number | null
+  errorCode?: string
+  errorMessage?: string
+}
+
+export interface AgentAbortResult {
+  accepted: boolean
+  run: AgentRuntimeRunRecord | null
+  error?: string
 }
 
 export interface AgentContextUsageCategory {
@@ -303,8 +325,9 @@ export interface AgentApiContract {
     (message: string): Promise<AgentCommandResult>
     (conversationId: string, message: string): Promise<AgentCommandResult>
   }
-  abort(conversationId?: string): Promise<void>
+  abort(conversationId: string, runId: string): Promise<AgentAbortResult>
   getStatus(conversationId?: string): Promise<AgentStatus>
+  getRunStatus(conversationId: string, runId: string): Promise<AgentRuntimeRunRecord | null>
   setScope: {
     (scope: AgentScope): Promise<boolean>
     (conversationId: string, scope: AgentScope): Promise<boolean>
@@ -318,6 +341,7 @@ export interface AgentApiContract {
     sessionCompatibilityFingerprint?: string | null,
     skills?: import('./agent-role').AgentSkillRef[],
     runtimeBinding?: import('./agent-runtime').AgentRuntimeBinding,
+    workspaceRef?: import('./workspace-ref').WorkspaceRef,
   ): Promise<void>
   listRoles(): Promise<import('./agent-role').AgentRoleSummary[]>
   listSkills(): Promise<import('./agent-skill').AgentSkillSummary[]>
@@ -343,6 +367,7 @@ export interface AgentApiContract {
       operation?: 'message' | 'compact'
     }) => void,
   ): () => void
+  onRunStatus(callback: (run: AgentRuntimeRunRecord) => void): () => void
 
   getCapabilities(): Promise<AgentCapabilityStatus[]>
   listToolModules(): Promise<AgentToolModuleStatus[]>

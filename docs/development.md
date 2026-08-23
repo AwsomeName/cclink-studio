@@ -1,10 +1,15 @@
 # CCLink Studio 开发指南
 
-> 当前事实源。最后更新：2026-08-17。
+> 当前事实源。最后更新：2026-08-22。
 
 ## 结论
 
 本仓库是唯一 CCLink Studio 桌面 App。本地能力默认启动、免费且免登录；CCLink 账号、设备和远程工作区作为可选内置功能域，只在用户打开远程入口后初始化。缺配置、未登录和远程故障都不得影响本地功能。
+
+本地主进程 Agent 是 Studio 本地聊天的唯一运行面。开发本地发送、流、取消、run 终态或
+Claude Session 恢复时，必须扩展现有 Agent IPC/Runtime，不得新增
+`chatcc cclink-studio --local-runtime` 或其他并行本地服务。现有 `chatcc cclink-studio`
+只属于远程 debug/integration；2026-08-22 的闭环范围见 `docs/features/agent-system.md`。
 
 CCLink 云函数与 Agent runtime 仍位于 `/Users/apple/Desktop/chat-cc/deploy` 和
 `/Users/apple/Desktop/chat-cc/Agent`，分别独立部署和通过现有 NPM 包发布。本次不修改它们。

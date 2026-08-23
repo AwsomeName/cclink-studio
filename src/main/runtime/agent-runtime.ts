@@ -7,8 +7,14 @@ import {
   ClaudeRuntimeResolutionError,
 } from '../agent/claude-runtime-manager'
 import type { CclinkStudioRuntimeState } from './app-runtime'
+import { AgentRuntimeStateStore } from '../agent/agent-runtime-state-store'
 
 export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): Promise<void> {
+  runtime.agentRuntimeStateStore ??= new AgentRuntimeStateStore(
+    join(app.getPath('userData'), 'agent-runtime', 'state.json'),
+  )
+  await runtime.agentRuntimeStateStore.load()
+
   if (
     runtime.mainWindow &&
     runtime.toolHost &&
@@ -88,6 +94,7 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
           browserTaskRuntime: runtime.browserTaskRuntime ?? undefined,
           usageLedgerService: runtime.usageLedgerService ?? undefined,
           roleRegistry: runtime.agentRoleRegistry ?? undefined,
+          runtimeStateStore: runtime.agentRuntimeStateStore,
         },
       )
 

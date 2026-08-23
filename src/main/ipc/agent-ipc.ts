@@ -8,6 +8,7 @@
 
 import type { IpcMainInvokeEvent } from 'electron'
 import type { AgentBridge } from '../agent/agent-bridge'
+import type { AgentRuntimeStateStore } from '../agent/agent-runtime-state-store'
 import type { AgentRoleRegistry } from '../agent/agent-role-registry'
 import { listBuiltinAgentRoles } from '../agent/agent-profile-registry'
 import { listBuiltinAgentSkills } from '../agent/agent-skill-registry'
@@ -21,6 +22,7 @@ import type {
   AgentToolModuleStatus,
 } from '../../shared/ipc/agent'
 import type { WorkspaceRef } from '../../shared/workspace-ref'
+import { workspaceRefKey } from '../../shared/workspace-ref'
 import type { WorkspaceStateResolveResult } from '../../shared/ipc/workspace-state'
 import type { ActiveLocalWorkspaceSnapshot } from '../../shared/ipc/workspace-state'
 import { registerTrustedIpcContract, type TrustedRendererGuard } from './trusted-renderer-guard'
@@ -39,6 +41,7 @@ import { legacyAgentProfileRefToRoleRef } from '../../shared/agent-profile'
 interface AgentIpcDeps {
   trustedRendererGuard: TrustedRendererGuard
   getAgentBridge: () => AgentBridge | null
+  getAgentRuntimeStateStore?: () => AgentRuntimeStateStore | null
   getAgentRoleRegistry?: () => AgentRoleRegistry | null
   getDefaultAgentRoleRef?: () => AgentRoleRef
   permissionManager: PermissionManager
@@ -310,10 +313,10 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
 
   // 中止当前 AI 响应
   handle(agentIpc.abort, async (_event, ...args) => {
-    const [conversationId] = args
+    const [conversationId, runId] = args
     const agentBridge = requireAgentBridge()
-    if (!agentBridge) return
-    await agentBridge.abort(conversationId)
+    if (!agentBridge) return { accepted: false, run: null, error: 'Agent 后端未就绪' }
+    return agentBridge.abort(conversationId, runId)
   })
 
   // 获取 AI 后端状态
@@ -332,6 +335,15 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
       }
     }
     return agentBridge.getStatus(conversationId)
+  })
+
+  handle(agentIpc.getRunStatus, (_event, conversationId, runId) => {
+    const agentBridge = requireAgentBridge()
+    return (
+      agentBridge?.getRunStatus(conversationId, runId) ??
+      deps.getAgentRuntimeStateStore?.()?.getRun(conversationId, runId) ??
+      null
+    )
   })
 
   handle(agentIpc.listRoles, () => {
@@ -480,7 +492,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
   })
 
   // 恢复历史会话的后端 session id
-  handle(agentIpc.restoreConversation, (_event, ...args) => {
+  handle(agentIpc.restoreConversation, async (_event, ...args) => {
     const [
       conversationId,
       sessionId,
@@ -488,9 +500,16 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
       sessionCompatibilityFingerprint,
       skills,
       runtimeBinding,
+      workspaceRef,
     ] = args
     const agentBridge = requireAgentBridge()
     if (!agentBridge) return
+    const trustedWorkspaceRef = await bindTrustedConversationWorkspace(
+      deps,
+      conversationWorkspaceBindings,
+      conversationId,
+      workspaceRef,
+    )
     agentBridge.restoreConversation(
       conversationId,
       sessionId,
@@ -498,6 +517,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
       sessionCompatibilityFingerprint,
       skills,
       runtimeBinding,
+      workspaceRefKey(trustedWorkspaceRef),
     )
   })
 

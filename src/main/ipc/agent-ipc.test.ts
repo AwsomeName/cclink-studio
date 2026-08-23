@@ -41,6 +41,63 @@ describe('registerAgentIpc', () => {
     expect(deps.agentBridge.sendMessage).not.toHaveBeenCalled()
   })
 
+  it('forwards exact cancellation and run-status queries with both identifiers', async () => {
+    const deps = createDeps()
+    const run = {
+      conversationId: 'conversation-1',
+      runId: 'run-1',
+      status: 'cancelling' as const,
+      workspaceKey: null,
+      startedAt: 1,
+      updatedAt: 2,
+      completedAt: null,
+    }
+    deps.agentBridge.abort.mockResolvedValue({ accepted: true, run })
+    deps.agentBridge.getRunStatus.mockReturnValue(run)
+    registerAgentIpc(deps as never)
+
+    await expect(
+      mockIpcMain.handlers.get('agent:abort')?.({ sender: 'trusted' }, 'conversation-1', 'run-1'),
+    ).resolves.toEqual({ accepted: true, run })
+    expect(deps.agentBridge.abort).toHaveBeenCalledWith('conversation-1', 'run-1')
+    expect(
+      mockIpcMain.handlers.get('agent:getRunStatus')?.(
+        { sender: 'trusted' },
+        'conversation-1',
+        'run-1',
+      ),
+    ).toEqual(run)
+  })
+
+  it('queries the persisted run ledger while the Agent backend is unavailable', () => {
+    const deps = createDeps()
+    const run = {
+      conversationId: 'conversation-1',
+      runId: 'run-before-restart',
+      status: 'failed' as const,
+      workspaceKey: null,
+      startedAt: 1,
+      updatedAt: 2,
+      completedAt: 2,
+      errorCode: 'runtime_owner_lost',
+    }
+    const getRun = vi.fn(() => run)
+    registerAgentIpc({
+      ...deps,
+      getAgentBridge: () => null,
+      getAgentRuntimeStateStore: () => ({ getRun }),
+    } as never)
+
+    expect(
+      mockIpcMain.handlers.get('agent:getRunStatus')?.(
+        { sender: 'trusted' },
+        'conversation-1',
+        'run-before-restart',
+      ),
+    ).toEqual(run)
+    expect(getRun).toHaveBeenCalledWith('conversation-1', 'run-before-restart')
+  })
+
   it('normalizes a valid bounded message before forwarding it', async () => {
     const deps = createDeps()
     registerAgentIpc(deps as never)
@@ -420,6 +477,8 @@ function createDeps() {
   let currentWorkspaceGeneration = 1
   const agentBridge = {
     sendMessage: vi.fn(async () => undefined),
+    abort: vi.fn(),
+    getRunStatus: vi.fn(),
     compactConversation: vi.fn(async () => undefined),
     listRoles: vi.fn<() => AgentRoleSummary[]>(() => []),
     listSkills: vi.fn<() => AgentSkillSummary[]>(() => []),

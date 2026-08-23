@@ -61,6 +61,8 @@ function createHarness(conversation = createConversation()) {
     addSystemMessage: vi.fn(),
     beginRun: vi.fn(() => 'run-1'),
     cancelStreaming: vi.fn(),
+    markRunCancelling: vi.fn(),
+    applyRuntimeRunStatus: vi.fn(),
     setBackendState: vi.fn(),
     clearTransientResources: vi.fn(),
     beginContextCompaction: vi.fn(() => 'compact-1'),
@@ -80,7 +82,18 @@ function createHarness(conversation = createConversation()) {
         skills: [],
       },
     }),
-    abort: vi.fn().mockResolvedValue(undefined),
+    abort: vi.fn().mockResolvedValue({
+      accepted: true,
+      run: {
+        conversationId: 'agent-1',
+        runId: 'run-active',
+        status: 'cancelling',
+        workspaceKey: null,
+        startedAt: 1,
+        updatedAt: 2,
+        completedAt: null,
+      },
+    }),
     compactConversation: vi.fn().mockResolvedValue({ success: true }),
   }
   const controller = createConversationRunController({
@@ -137,7 +150,7 @@ describe('conversation-run-controller', () => {
       status: 'failed',
       error: expect.stringContaining('实际角色配置'),
     })
-    expect(agentApi.abort).toHaveBeenCalledWith('agent-1')
+    expect(agentApi.abort).toHaveBeenCalledWith('agent-1', 'run-1')
     expect(store.clearTransientResources).not.toHaveBeenCalled()
   })
 
@@ -216,25 +229,24 @@ describe('conversation-run-controller', () => {
     expect(store.clearTransientResources).not.toHaveBeenCalled()
   })
 
-  it('重复取消同一会话时只向后端发送一次请求', async () => {
-    let resolveAbort: (() => void) | undefined
+  it('停止请求只进入 cancelling，且允许对同一 run 再次取消', async () => {
     const { store, agentApi, controller } = createHarness(
       createConversation({ loading: true, activeRunId: 'run-active' }),
     )
-    agentApi.abort.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveAbort = resolve
-        }),
-    )
 
-    const first = controller.abort()
-    await expect(controller.abort()).resolves.toEqual({ status: 'ignored', reason: 'aborting' })
-    expect(agentApi.abort).toHaveBeenCalledTimes(1)
-    resolveAbort?.()
-    await expect(first).resolves.toEqual({ status: 'accepted', runId: 'run-active' })
-    expect(store.cancelStreaming).toHaveBeenCalledWith('agent-1', 'cancelled', 'run-active')
-    expect(store.addSystemMessage).toHaveBeenCalledTimes(1)
+    await expect(controller.abort()).resolves.toEqual({
+      status: 'accepted',
+      runId: 'run-active',
+    })
+    await expect(controller.abort()).resolves.toEqual({
+      status: 'accepted',
+      runId: 'run-active',
+    })
+    expect(agentApi.abort).toHaveBeenCalledTimes(2)
+    expect(agentApi.abort).toHaveBeenNthCalledWith(1, 'agent-1', 'run-active')
+    expect(store.markRunCancelling).toHaveBeenCalledWith('agent-1', 'run-active')
+    expect(store.cancelStreaming).not.toHaveBeenCalled()
+    expect(store.addSystemMessage).not.toHaveBeenCalled()
   })
 
   it('取消失败时保留运行投影并返回错误', async () => {

@@ -1,6 +1,6 @@
 # CCLink Studio 架构说明
 
-> 当前事实源。最后更新：2026-08-18。
+> 当前事实源。最后更新：2026-08-23。
 
 ## 结论
 
@@ -231,6 +231,37 @@ CCLink Studio 免费、免登录保留这些本地能力：
 - 用户自有第三方凭证的本地明文管理；凭证不依赖 CCLink 账号、云服务或系统钥匙串。
 - 本地设置、诊断、文件访问和工作台状态恢复。
 - updater 的中性检查框架，以及只针对本仓库不可变 Tag 的开源版签名、公证和制品发布链路。
+
+### 本地 Agent 的唯一运行面
+
+Studio 主进程内的 Agent Runtime 是本地 Thread、run、Claude Session、取消、错误和诊断的
+唯一运行事实源。它已经支持免 CCLink 登录启动、本地聊天、流式回复和兼容 Session 续聊；
+本地 Agent 不依赖 `/Users/apple/Desktop/chat-cc` 的 Agent daemon、配对、腾讯 IM 或业务云。
+
+2026-08-22 复审否决了新增 `chatcc cclink-studio --local-runtime` 的方案。该服务会复制
+Studio 已有的进程生命周期、会话、取消和恢复状态，违反“状态只有一个所有者”。现有
+`chatcc cclink-studio` 只保留为远程 Agent 的显式 debug/integration surface，不参与本地
+Agent 启动。
+
+四项修复已进入代码与自动化验证，但在真实 Studio + Claude Runtime 验收完成前，
+不能写成产品闭环：
+
+1. 主进程持久 run ledger 原子接收单活动 run，重复 ID、同 Thread 并发和
+   `cancelling` 期间的新运行均拒绝，不排队、不覆盖。
+2. 取消 IPC 必须带 `conversationId + runId`；请求后先保持 `cancelling`，等待中的同 run
+   工具确认同时失效。工具宿主按 run 跟踪所有已开始的 Studio 工具调用，发送协作式取消信号
+   并等待它们全部返回；只有 Claude Query 读取循环和在途工具都结束后才写 `cancelled`。工具
+   忽略信号时继续保持 `cancelling`；取消期间迟到的 Runtime `complete`/`error` 不得抢写终态
+   或释放 run，`cancelled` 只由取消流程写入。已经提交的不可逆副作用不伪装回滚。
+3. 主进程持久近期 run 和唯一终态，renderer 可按 `conversationId + runId` 查询；
+   账本独立于 Claude 后端启动，Claude 不可用时仍可查询；重开时失去 Runtime 所有权的遗留
+   非终态会以 `runtime_owner_lost` 明确失败，终态竞态只广播一次。
+4. 非空 Claude Session 采用严格恢复，必须匹配 conversation、工作区、Runtime binding、
+   Provider/模型、角色和 Skill 指纹；失败明确报错并保留旧 ID，不自动创建新 Session。
+
+第一批修复与真实验收只覆盖现有 Claude Code / Claude Agent SDK 主线。不得借机新建本地
+HTTP/SSE 服务、token、端口、任务队列或第二状态账本；其他已存在的 runtime 选择不在这批
+保证范围内，也不因本决策删除。
 
 桌面发布与更新的状态所有权、发布权限边界、R0 发布基线和 U0-U5 更新验收以
 `docs/features/desktop-release-and-updates.md` 为产品事实源，任务拆解、代码落点、

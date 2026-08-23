@@ -24,6 +24,7 @@ import type { ToolModule, ToolDefinition, ToolAnnotations, ToolExecutionContext 
 
 export interface ToolConfirmationInput {
   conversationId?: string
+  runId?: string
   toolName: string
   params: Record<string, unknown>
   riskLevel: 'read' | 'write' | 'destructive'
@@ -34,6 +35,7 @@ export interface ToolConfirmationInput {
 export interface ToolPermissionController {
   needsConfirmation(toolName: string, annotations: ToolAnnotations | undefined): boolean
   requestConfirmation(request: ToolConfirmationInput): Promise<boolean>
+  cancelForRun?(conversationId: string, runId: string): void
 }
 
 /** JSON-RPC 请求 */
@@ -69,6 +71,10 @@ export class McpToolHost {
   private readonly permissionManager: ToolPermissionController
   /** 单轮 Agent 进程 → CCLink Studio 会话的短期映射 */
   private readonly toolSessions = new Map<string, ToolExecutionContext>()
+  private readonly toolSessionAbortControllers = new Map<string, AbortController>()
+  private readonly cancelledToolSessions = new WeakSet<ToolExecutionContext>()
+  /** 已进入本机工具处理链的调用；取消终态必须等这些调用全部结束。 */
+  private readonly activeToolCalls = new WeakMap<ToolExecutionContext, Set<Promise<unknown>>>()
 
   constructor(permissionManager: ToolPermissionController) {
     this.permissionManager = permissionManager
@@ -134,13 +140,31 @@ export class McpToolHost {
    */
   createToolSession(context: Omit<ToolExecutionContext, 'confirmationGranted'>): string {
     const token = randomUUID()
-    this.toolSessions.set(token, { ...context })
+    const abortController = new AbortController()
+    this.toolSessions.set(token, { ...context, abortSignal: abortController.signal })
+    this.toolSessionAbortControllers.set(token, abortController)
     return token
   }
 
   /** 释放一轮 MCP 工具会话。 */
   releaseToolSession(token: string): void {
     this.toolSessions.delete(token)
+    this.toolSessionAbortControllers.delete(token)
+  }
+
+  /** 取消中的 run 会撤销等待确认、通知在途工具，并等待所有本机工具调用真正结束。 */
+  async cancelToolSession(token: string): Promise<void> {
+    const context = this.toolSessions.get(token)
+    this.toolSessions.delete(token)
+    this.toolSessionAbortControllers.get(token)?.abort()
+    this.toolSessionAbortControllers.delete(token)
+    if (!context) return
+    this.cancelledToolSessions.add(context)
+    if (context.conversationId && context.agentRunId) {
+      this.permissionManager.cancelForRun?.(context.conversationId, context.agentRunId)
+    }
+    const activeCalls = this.activeToolCalls.get(context)
+    if (activeCalls?.size) await Promise.allSettled([...activeCalls])
   }
 
   /**
@@ -222,7 +246,9 @@ export class McpToolHost {
       this.httpServer.close()
       this.httpServer = null
     }
+    for (const controller of this.toolSessionAbortControllers.values()) controller.abort()
     this.toolSessions.clear()
+    this.toolSessionAbortControllers.clear()
     console.log('[McpToolHost] 已关闭')
   }
 
@@ -282,7 +308,10 @@ export class McpToolHost {
 
           const toolName = callParams.name
           const args = callParams.arguments ?? {}
-          const result = await this.handleToolCall(toolName, args, context)
+          const result = await this.trackToolCall(
+            context,
+            this.handleToolCall(toolName, args, context),
+          )
           return jsonRpcResult(id, result)
         }
 
@@ -310,6 +339,7 @@ export class McpToolHost {
     args: Record<string, unknown>,
     context: McpRequestContext,
   ): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> {
+    if (this.cancelledToolSessions.has(context)) return cancelledToolResult()
     const scheduledPolicyFailure = await validateScheduledTaskToolCall(toolName, args, context)
     if (scheduledPolicyFailure) {
       return {
@@ -354,6 +384,7 @@ export class McpToolHost {
       if (confirmationRequired) {
         const approved = await this.permissionManager.requestConfirmation({
           conversationId: context.conversationId,
+          runId: context.agentRunId ?? undefined,
           toolName,
           params: args,
           riskLevel: executionPolicy?.riskLevel ?? getRiskLevel(annotations),
@@ -367,15 +398,18 @@ export class McpToolHost {
             isError: true,
           }
         }
+        if (this.cancelledToolSessions.has(context)) return cancelledToolResult()
         confirmationGranted = true
       }
 
       // 执行工具
+      if (this.cancelledToolSessions.has(context)) return cancelledToolResult()
       const result = await module.execute(
         toolName,
         args,
         confirmationGranted ? { ...context, confirmationGranted: true } : context,
       )
+      if (this.cancelledToolSessions.has(context)) return cancelledToolResult()
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
       }
@@ -385,6 +419,20 @@ export class McpToolHost {
         isError: true,
       }
     }
+  }
+
+  private trackToolCall<T>(context: ToolExecutionContext, operation: Promise<T>): Promise<T> {
+    let activeCalls = this.activeToolCalls.get(context)
+    if (!activeCalls) {
+      activeCalls = new Set()
+      this.activeToolCalls.set(context, activeCalls)
+    }
+    const tracked = operation.finally(() => {
+      activeCalls!.delete(tracked)
+      if (activeCalls!.size === 0) this.activeToolCalls.delete(context)
+    })
+    activeCalls.add(tracked)
+    return tracked
   }
 
   private getToolsForContext(context: McpRequestContext): ToolDefinition[] {
@@ -416,6 +464,16 @@ export class McpToolHost {
       })
       req.on('error', reject)
     })
+  }
+}
+
+function cancelledToolResult(): {
+  content: Array<{ type: 'text'; text: string }>
+  isError: true
+} {
+  return {
+    content: [{ type: 'text', text: 'Agent run 已取消，工具调用未执行' }],
+    isError: true,
   }
 }
 

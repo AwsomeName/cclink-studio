@@ -73,6 +73,7 @@ export function normalizeConversationSnapshot(
     const awaitingRuntimeReconciliation =
       conversation.runStatus === 'starting' ||
       conversation.runStatus === 'running' ||
+      conversation.runStatus === 'cancelling' ||
       (conversation.loading === true &&
         Boolean(conversation.activeRunId || conversation.streamingMessageId))
     const updatedAt = Number.isFinite(conversation.updatedAt)
