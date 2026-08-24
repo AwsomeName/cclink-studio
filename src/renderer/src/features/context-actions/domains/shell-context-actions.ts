@@ -30,7 +30,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   browser: '浏览器',
   'data-sources': '数据源',
   terminal: 'Terminal',
-  operations: '运营',
+  operations: '网站与账号',
   production: '生产',
   'scheduled-tasks': '定时任务',
   settings: '设置',

@@ -16,7 +16,6 @@ const expectedRendererContextMenuOwners = new Set([
   'src/renderer/src/components/settings/SettingsPage.tsx',
   'src/renderer/src/components/sidebar/FileTree.tsx',
   'src/renderer/src/components/sidebar/HardwareProductionSection.tsx',
-  'src/renderer/src/components/sidebar/ProjectOperationsSection.tsx',
   'src/renderer/src/components/sidebar/Sidebar.tsx',
   'src/renderer/src/components/status-bar/StatusBar.tsx',
   'src/renderer/src/components/topbar/ConversationQuickSwitcher.tsx',

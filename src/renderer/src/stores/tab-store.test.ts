@@ -159,7 +159,7 @@ describe('useTabStore', () => {
       expect(useTabStore.getState().tabs.length).toBe(len0 + 2)
     })
 
-    it('本地 Browser Tab 拒绝 Profile-only，并只允许统一入口显式降级', () => {
+    it('本地 Browser Tab 允许普通模式并拒绝 Profile-only', () => {
       expect(() =>
         useTabStore.getState().openTab({
           type: 'browser',
@@ -169,16 +169,15 @@ describe('useTabStore', () => {
           browserProfile: 'profile-only',
           workspaceRef: { kind: 'local', path: '/workspace' },
         }),
-      ).toThrow('拒绝创建未绑定账号或草稿')
+      ).toThrow('Profile 与账号归属不一致')
 
       expect(() =>
         useTabStore.getState().openTab({
           type: 'browser',
-          title: '服务降级网页',
+          title: '普通浏览',
           icon: '🌐',
           initialUrl: 'https://example.com/',
           workspaceRef: { kind: 'local', path: '/workspace' },
-          allowDegradedBrowser: true,
         }),
       ).not.toThrow()
     })
@@ -579,40 +578,6 @@ describe('useTabStore', () => {
       ])
     })
 
-    it('运行中遗留的 Profile-only Tab 可以原地接入主进程创建的账号草稿', () => {
-      useTabStore.setState({
-        tabs: [
-          {
-            id: 'legacy-profile-only',
-            type: 'browser',
-            title: '遗留网页',
-            icon: '🌐',
-            browserProfile: 'ordinary-profile',
-            workspaceRef: { kind: 'local', path: '/tmp/project-a' },
-          },
-        ],
-        activeTabId: 'legacy-profile-only',
-      })
-      const tabId = useTabStore.getState().activeTabId!
-
-      expect(
-        useTabStore.getState().attachWebResourceDraft(tabId, {
-          draftId: 'draft-ordinary',
-          browserProfile: 'ordinary-profile',
-        }),
-      ).toBe(true)
-      expect(useTabStore.getState().tabs.find((tab) => tab.id === tabId)).toMatchObject({
-        browserProfile: 'ordinary-profile',
-        webResourceDraftRef: { draftId: 'draft-ordinary' },
-      })
-      expect(
-        useTabStore.getState().attachWebResourceDraft(tabId, {
-          draftId: 'draft-other',
-          browserProfile: 'other-profile',
-        }),
-      ).toBe(false)
-    })
-
     it('网页事务 Tab 按 affairId 去重', () => {
       useTabStore.getState().openTab({
         type: 'web-affair',
@@ -936,7 +901,7 @@ describe('useTabStore', () => {
       })
     })
 
-    it('升级后不恢复无归属或仅有 Profile 的本地网页 Tab', () => {
+    it('恢复普通浏览和已保存账号，但丢弃 Profile-only 本地网页 Tab', () => {
       useTabStore.getState().hydrateFromWorkspaceState({
         tabs: [
           {
@@ -980,10 +945,11 @@ describe('useTabStore', () => {
       })
 
       expect(useTabStore.getState().tabs.map((tab) => tab.id)).toEqual([
+        'legacy-browser',
         'saved-browser',
         'local-html',
       ])
-      expect(useTabStore.getState().activeTabId).toBe('saved-browser')
+      expect(useTabStore.getState().activeTabId).toBe('legacy-browser')
     })
 
     it('Terminal Tab 快照保留权限、审计和关闭语义', () => {

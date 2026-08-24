@@ -6,6 +6,9 @@
 > `docs/features/global-web-accounts-development-plan.md` 第 2、6、8 节。Agent 调用账号已由
 > ADR 0016 决定，X0–X5 已形成代码闭环并进入统一验收；新执行链的验收见
 > `docs/features/ai-web-affairs-agent-development-plan.md` 第 16 节，本文旧 AI 步骤不能替代。
+> 2026-08-24 普通浏览会话模式已更正：本文 2026-08-21 “所有网页入口创建账号草稿”的记录
+> 仅是历史证据，不再执行。当前验收以
+> `docs/testing/browser-session-mode-separation.md` 为准。
 
 ## 0. 2026-08-18 当前全局账号验收口径
 
@@ -195,22 +198,16 @@ Profile/Session 引用、页面实际账号身份、错误文案和截图。不�
   已通过新增的共享 Profile 登录现场断言。包含修复的新版本实际点击仍不刷新、不掉登录
   之前，本问题不得标记 `Complete`。
 
-#### 2026-08-21 · Agent 链接仍创建旧“普通浏览器”路径
+#### 2026-08-21 · Agent/Markdown 入口分叉（已被 2026-08-24 规则取代）
 
-- 根因：产品文档已经要求 Browser 与网站账号入口合并，但 Agent 消息和 Markdown 链接仍直接
-  创建无 Profile Browser Tab；此前验收只覆盖侧栏、历史和 Workbench，漏掉了真实 Agent 入口。
-- 修正：所有本地 HTTP(S) 新建入口统一创建可保存草稿和隔离 Profile；popup 与复制页继承
-  来源引用；旧版本无 Profile 本地网页 Tab 不再恢复，浏览历史继续保留。
-- 必验：从 Agent 消息点击链接，完成登录并保存，侧栏出现账号；整个过程不得刷新、掉登录或
-  提示改走另一种 Browser 模式。Markdown 链接重复一次；更新后旧无 Profile Tab 不应恢复。
-- 独立复审补充：首次修正后仍存在只带 Profile、没有账号/草稿引用的第三种 Tab；原生网页
-  菜单、历史/Workbench URL 和持久化契约均可触发，因此当时不具备正式真人验收条件。
-- 二次修正：Tab Store、运行时接管、持久化恢复和 IPC Schema 统一拒绝第三种状态；原生新
-  标签继承来源账号/草稿，历史和 Workbench URL 不再改写已保存账号 Tab。
-- 自动化状态：真实 Electron 中分别点击 Agent 消息和 Markdown 编辑器链接；Agent 链路完成
-  登录、popup 和保存，并断言 URL、Profile、Cookie、页面实例在提交前后不变。专项 smoke
-  5/5、全量测试 315 个文件通过（1873 通过、2 跳过）。工程门禁已恢复，可以进入真人验收；
-  真人在包含修复的新版本完成上述链路前仍不得标记 `Complete`。
+- 当时确实存在不同入口创建不同 Tab 形态的问题，但把所有链接强制改成独立账号草稿又造成
+  同站新标签重复登录，因此该方案不再是当前验收目标。
+- 当前规则只有一个 Browser 和一套 Tab 生命周期：未指定账号的 Agent/Markdown 链接进入
+  “默认环境”；明确 `accountId` 的 Agent 任务进入对应已保存账号；只有“添加网站与账号”
+  创建“新账号环境”。popup、复制和网页新标签继承来源环境。
+- 当前必验改为：默认环境的同站链接保持登录；明确账号的 Agent 调用固定该账号 Profile；
+  新账号环境保存前后不换 Profile、不刷新、不丢登录。验收步骤以
+  `docs/testing/browser-session-mode-separation.md` 为准。
 
 #### 2026-08-22 · 独立窗口右键新建 Tab
 

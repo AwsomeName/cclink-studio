@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  canSaveBrowserTabAsWebResource,
+  getBrowserEnvironmentLabel,
   inferWebResourceDisplayName,
   normalizeBrowserZoomPercent,
   shouldNavigateBrowserAddress,
 } from './BrowserToolbar'
-import { globalWorkspaceRef, localWorkspaceRef } from '@shared/workspace-ref'
 
 describe('shouldNavigateBrowserAddress', () => {
   it('submits an ordinary Enter key', () => {
@@ -77,29 +76,40 @@ describe('inferWebResourceDisplayName', () => {
   })
 })
 
-describe('canSaveBrowserTabAsWebResource', () => {
-  it('keeps the save-account action visible on an ordinary local web tab', () => {
+describe('getBrowserEnvironmentLabel', () => {
+  it('distinguishes ordinary browsing, new accounts, and saved accounts', () => {
+    expect(getBrowserEnvironmentLabel({ title: '浏览器', browserProfile: null })).toBe('默认环境')
     expect(
-      canSaveBrowserTabAsWebResource({
-        workspaceRef: localWorkspaceRef('/workspace/current'),
+      getBrowserEnvironmentLabel({
+        title: '登录页',
+        browserProfile: 'draft-profile',
+        webResourceDraftRef: { draftId: 'draft-1' },
       }),
-    ).toBe(true)
-  })
-
-  it('does not offer a second save action for an already-bound account or global tab', () => {
+    ).toBe('新账号环境')
     expect(
-      canSaveBrowserTabAsWebResource({
-        workspaceRef: localWorkspaceRef('/workspace/current'),
+      getBrowserEnvironmentLabel({
+        title: '百度资源平台',
+        browserProfile: 'account-profile',
         webResourceRef: { accountId: 'account-1' },
       }),
-    ).toBe(false)
-    expect(canSaveBrowserTabAsWebResource({ workspaceRef: globalWorkspaceRef() })).toBe(false)
+    ).toBe('账号 · 百度资源平台')
     expect(
-      canSaveBrowserTabAsWebResource({
-        workspaceRef: localWorkspaceRef('/workspace/current'),
-        filePath: '/workspace/current/preview.html',
+      getBrowserEnvironmentLabel(
+        {
+          title: '百度资源平台',
+          browserProfile: 'account-profile',
+          webResourceRef: { accountId: 'account-1' },
+        },
+        '运营账号 A',
+      ),
+    ).toBe('账号 · 运营账号 A')
+    expect(
+      getBrowserEnvironmentLabel({
+        title: '坏状态',
+        browserProfile: null,
+        webResourceRef: { accountId: 'account-without-profile' },
       }),
-    ).toBe(false)
+    ).toBe('环境异常')
   })
 })
 

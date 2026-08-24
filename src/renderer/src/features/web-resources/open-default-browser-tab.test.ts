@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { globalWorkspaceRef, localWorkspaceRef } from '@shared/workspace-ref'
 import { useTabStore } from '../../stores/tab-store'
-import { openDefaultBrowserTab } from './open-default-browser-tab'
+import { openDefaultBrowserTab, openWebAccountDraftTab } from './open-default-browser-tab'
 
 const workspaceRef = localWorkspaceRef('/workspace/current')
 const beginDraft = vi.fn()
@@ -22,80 +22,86 @@ afterEach(() => {
 })
 
 describe('openDefaultBrowserTab', () => {
-  it('opens the default tab with the existing save-to-project draft flow', async () => {
+  it('opens ordinary browsing without creating an account draft', async () => {
+    const result = await openDefaultBrowserTab(workspaceRef)
+
+    expect(beginDraft).not.toHaveBeenCalled()
+    expect(useTabStore.getState().tabs).toEqual([
+      expect.objectContaining({
+        id: result.tabId,
+        type: 'browser',
+        title: '浏览器',
+        browserProfile: null,
+        webResourceRef: undefined,
+        webResourceDraftRef: undefined,
+        workspaceRef,
+        initialUrl: 'about:blank',
+      }),
+    ])
+  })
+
+  it('loads ordinary web targets in the shared default environment', async () => {
+    await openDefaultBrowserTab(workspaceRef, {
+      initialUrl: 'https://www.oschina.net/',
+      title: '开源中国',
+    })
+
+    expect(useTabStore.getState().tabs[0]).toMatchObject({
+      title: '开源中国',
+      initialUrl: 'https://www.oschina.net/',
+      browserProfile: null,
+    })
+  })
+
+  it('keeps ordinary browsing available outside a local project', async () => {
+    const result = await openDefaultBrowserTab(globalWorkspaceRef())
+
+    expect(beginDraft).not.toHaveBeenCalled()
+    expect(result.tabId).toBeTruthy()
+    expect(useTabStore.getState().tabs[0]).toEqual(
+      expect.objectContaining({ initialUrl: 'about:blank', browserProfile: null }),
+    )
+  })
+})
+
+describe('openWebAccountDraftTab', () => {
+  it('creates an isolated Profile only for explicit account creation', async () => {
     beginDraft.mockResolvedValue({
       success: true,
       data: { draftId: 'draft-id', browserProfileId: 'web-draft-profile' },
     })
 
-    const result = await openDefaultBrowserTab(workspaceRef)
+    const result = await openWebAccountDraftTab(workspaceRef)
 
     expect(beginDraft).toHaveBeenCalledWith({ workspaceRef })
-    expect(result.saveable).toBe(true)
-    expect(useTabStore.getState().tabs).toEqual([
-      expect.objectContaining({
-        id: result.tabId,
-        type: 'browser',
-        title: '浏览器',
-        browserProfile: 'web-draft-profile',
-        webResourceDraftRef: { draftId: 'draft-id' },
-        workspaceRef,
-        initialUrl: 'about:blank',
-      }),
-    ])
+    expect(result.success).toBe(true)
+    expect(useTabStore.getState().tabs[0]).toMatchObject({
+      id: result.tabId,
+      browserProfile: 'web-draft-profile',
+      webResourceDraftRef: { draftId: 'draft-id' },
+    })
   })
 
-  it('keeps the basic browser available when the account service is unavailable', async () => {
+  it('does not silently fall back to ordinary browsing when draft creation fails', async () => {
     beginDraft.mockResolvedValue({
       success: false,
       error: { code: 'SERVICE_UNAVAILABLE', message: '网站与账号服务尚未就绪' },
     })
 
-    const result = await openDefaultBrowserTab(workspaceRef)
-
-    expect(result).toMatchObject({
-      saveable: false,
+    await expect(openWebAccountDraftTab(workspaceRef)).resolves.toMatchObject({
+      success: false,
       error: '网站与账号服务尚未就绪',
     })
-    expect(useTabStore.getState().tabs).toEqual([
-      expect.objectContaining({
-        id: result.tabId,
-        type: 'browser',
-        title: '浏览器',
-        workspaceRef,
-        initialUrl: 'about:blank',
-      }),
-    ])
-    expect(useTabStore.getState().tabs[0].webResourceDraftRef).toBeUndefined()
+    expect(useTabStore.getState().tabs).toEqual([])
   })
 
-  it('loads an ordinary web target inside the same saveable draft flow', async () => {
-    beginDraft.mockResolvedValue({
-      success: true,
-      data: { draftId: 'ordinary-draft', browserProfileId: 'ordinary-profile' },
+  it('does not open a tab when account creation has no local project', async () => {
+    await expect(openWebAccountDraftTab(globalWorkspaceRef())).resolves.toEqual({
+      tabId: '',
+      success: false,
+      error: '请先打开一个本地项目',
     })
-
-    const result = await openDefaultBrowserTab(workspaceRef, {
-      initialUrl: 'https://www.oschina.net/',
-      title: '开源中国',
-    })
-
-    expect(result.saveable).toBe(true)
-    expect(useTabStore.getState().tabs[0]).toMatchObject({
-      title: '开源中国',
-      initialUrl: 'https://www.oschina.net/',
-      browserProfile: 'ordinary-profile',
-      webResourceDraftRef: { draftId: 'ordinary-draft' },
-    })
-  })
-
-  it('opens a plain browser outside a local project', async () => {
-    const result = await openDefaultBrowserTab(globalWorkspaceRef())
-
     expect(beginDraft).not.toHaveBeenCalled()
-    expect(result).toMatchObject({ saveable: false, error: '请先打开一个本地项目' })
-    expect(useTabStore.getState().tabs[0]).toEqual(
-      expect.objectContaining({ initialUrl: 'about:blank' }),
-    )
+    expect(useTabStore.getState().tabs).toEqual([])
   })
 })

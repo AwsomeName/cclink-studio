@@ -686,6 +686,31 @@ describe('agent conversation view model', () => {
     })
   })
 
+  it('does not offer an unsaved login draft as an Agent browser resource', () => {
+    const candidates = buildResourceCandidates({
+      activeWorkspaceRef: workspace,
+      tabs: [
+        {
+          id: 'draft-browser',
+          type: 'browser',
+          title: '百度登录',
+          icon: 'G',
+          webResourceDraftRef: { draftId: 'draft-baidu' },
+        },
+        {
+          id: 'saved-browser',
+          type: 'browser',
+          title: '百度站长',
+          icon: 'G',
+          webResourceRef: { accountId: 'baidu-account' },
+        },
+      ],
+    })
+
+    expect(candidates.map((candidate) => candidate.id)).toContain('browser:saved-browser')
+    expect(candidates.map((candidate) => candidate.id)).not.toContain('browser:draft-browser')
+  })
+
   it('builds data source candidates when filtering by @ query', () => {
     const candidates = buildResourceCandidates({
       activeWorkspaceRef: workspace,

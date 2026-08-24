@@ -17,7 +17,7 @@ afterAll(() => {
 })
 
 describe('ConversationMarkdown', () => {
-  it('Agent 消息链接必须复用统一账号浏览器入口，不能直接创建普通 Browser Tab', () => {
+  it('Agent 消息链接必须通过统一路由打开普通 Browser Tab', () => {
     const source = readFileSync(new URL('./ConversationMarkdown.tsx', import.meta.url), 'utf8')
     expect(source).toContain('openHttpUrlInNewBrowserTab')
     expect(source).not.toContain('useTabStore.getState().openTab')

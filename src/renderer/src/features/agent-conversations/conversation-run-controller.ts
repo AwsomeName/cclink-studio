@@ -12,6 +12,8 @@ import {
   type AgentRunTerminalReason,
 } from '../../stores/agent-store'
 import { buildAgentSendPayload, transientMessageResources } from './payload'
+import { useTabStore } from '../../stores/tab-store'
+import type { Tab } from '../../types'
 
 export type ConversationCommandIgnoreReason =
   | 'empty'
@@ -71,6 +73,7 @@ interface ConversationRunStore {
 interface ConversationRunControllerOptions {
   conversationId: string
   getStore?: () => ConversationRunStore
+  getTabs?: () => Tab[]
   agentApi?: ConversationRunAgentApi
 }
 
@@ -91,6 +94,7 @@ export interface ConversationRunController {
 export function createConversationRunController({
   conversationId,
   getStore = useAgentStore.getState,
+  getTabs = () => useTabStore.getState().tabs,
   agentApi = getDefaultAgentApi(),
 }: ConversationRunControllerOptions): ConversationRunController {
   return {
@@ -104,6 +108,15 @@ export function createConversationRunController({
       if (conversation.archivedAt) return { status: 'ignored', reason: 'archived' }
       if (conversation.loading || conversation.contextCompaction.status === 'compacting') {
         return { status: 'ignored', reason: 'busy' }
+      }
+
+      const draftTab = findMountedLoginDraft(conversation, getTabs())
+      if (draftTab) {
+        const error =
+          `“${draftTab.title || '当前浏览器'}”还是未保存的登录草稿，Agent 不能操作。` +
+          '请先在浏览器顶部点击“登录完成，保存账号和登录状态”，保存后再发送。'
+        store.addSystemMessage(error, conversationId)
+        return { status: 'failed', error }
       }
 
       store.setInput('', conversationId)
@@ -212,4 +225,22 @@ export function createConversationRunController({
       }
     },
   }
+}
+
+function findMountedLoginDraft(conversation: AgentConversationState, tabs: Tab[]): Tab | null {
+  const browserTabIds = new Set<string>()
+  if (conversation.scope.kind === 'browser') {
+    browserTabIds.add(conversation.scope.instanceId)
+  }
+  for (const resource of conversation.mountedResources) {
+    if ((resource.kind === 'browser' || resource.ref.type === 'browser') && resource.ref.tabId) {
+      browserTabIds.add(resource.ref.tabId)
+    }
+  }
+  return (
+    tabs.find(
+      (tab) =>
+        tab.type === 'browser' && Boolean(tab.webResourceDraftRef) && browserTabIds.has(tab.id),
+    ) ?? null
+  )
 }

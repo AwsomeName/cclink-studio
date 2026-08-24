@@ -30,15 +30,10 @@ class FakeElement {
 }
 
 beforeEach(() => {
-  const beginDraft = vi.fn().mockResolvedValue({
-    success: true,
-    data: { draftId: 'draft-link', browserProfileId: 'profile-link' },
-  })
   vi.stubGlobal('Element', FakeElement)
   vi.stubGlobal('window', {
     cclinkStudio: {
       workspaceState: { setSection: vi.fn().mockResolvedValue({ success: true }) },
-      webResources: { beginDraft },
     },
   })
   useTabStore.setState({ tabs: [], activeTabId: null })
@@ -71,7 +66,7 @@ describe('browser link navigation', () => {
     expect(resolveBrowserLinkClick({ button: 1, target } as unknown as MouseEvent)).toBeNull()
   })
 
-  it('opens Agent and Markdown links through the unified saveable account environment', async () => {
+  it('opens Agent and Markdown links in ordinary browsing when the source is not a Browser', async () => {
     const documentWorkspace = localWorkspaceRef('/workspace/document')
     useTabStore.setState({
       tabs: [
@@ -100,9 +95,40 @@ describe('browser link navigation', () => {
         title: '文章链接',
         initialUrl: 'https://example.com/article',
         workspaceRef: documentWorkspace,
-        browserProfile: 'profile-link',
-        webResourceDraftRef: { draftId: 'draft-link' },
+        browserProfile: null,
       }),
     )
+  })
+
+  it('inherits the source Browser account environment when opening a new tab', async () => {
+    const sourceWorkspace = localWorkspaceRef('/workspace/source')
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'browser-source',
+          type: 'browser',
+          title: '账号来源',
+          icon: '🌐',
+          workspaceRef: sourceWorkspace,
+          browserProfile: 'account-profile',
+          webResourceRef: { accountId: 'account-1' },
+        },
+      ],
+      activeTabId: 'browser-source',
+    })
+
+    await expect(
+      openHttpUrlInNewBrowserTab({
+        url: 'https://example.com/next',
+        sourceTabId: 'browser-source',
+      }),
+    ).resolves.toBe(true)
+
+    expect(useTabStore.getState().tabs.at(-1)).toMatchObject({
+      initialUrl: 'https://example.com/next',
+      browserProfile: 'account-profile',
+      webResourceRef: { accountId: 'account-1' },
+      workspaceRef: sourceWorkspace,
+    })
   })
 })

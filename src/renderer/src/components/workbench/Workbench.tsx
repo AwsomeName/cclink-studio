@@ -155,11 +155,8 @@ export function Workbench({
   const openNewBrowser = useCallback((): void => {
     void openDefaultBrowserTab(activeWorkspaceRef).then((result) => {
       setAddressFocusRequestTabId(result.tabId)
-      if (!result.saveable) {
-        showToast(`网页已打开；账号保存能力暂不可用：${result.error}`, 'info')
-      }
     })
-  }, [activeWorkspaceRef, showToast])
+  }, [activeWorkspaceRef])
 
   const handleAddressFocusHandled = useCallback((tabId: string): void => {
     setAddressFocusRequestTabId((requestedTabId) =>
@@ -281,13 +278,9 @@ export function Workbench({
         window.cclinkStudio.browser.navigate(activeTabId, url)
         return
       }
-      void openDefaultBrowserTab(activeWorkspaceRef, { initialUrl: url }).then((result) => {
-        if (!result.saveable) {
-          showToast(`网页已打开；账号保存能力暂不可用：${result.error}`, 'info')
-        }
-      })
+      void openDefaultBrowserTab(activeWorkspaceRef, { initialUrl: url })
     },
-    [activeTab, activeTabId, activeWorkspaceRef, showToast],
+    [activeTab, activeTabId, activeWorkspaceRef],
   )
 
   return (

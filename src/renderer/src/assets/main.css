@@ -5765,6 +5765,7 @@ body.is-resizing-panels .main-area > div {
 }
 
 .browser-resource-save {
+  flex: 0 1 auto;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -5772,7 +5773,9 @@ body.is-resizing-panels .main-area > div {
 }
 
 .browser-resource-save input {
+  flex: 0 1 150px;
   width: 150px;
+  min-width: 72px;
   height: 28px;
   padding: 0 8px;
   border: 1px solid var(--border-color);
@@ -5784,6 +5787,19 @@ body.is-resizing-panels .main-area > div {
 .browser-resource-save span {
   color: var(--status-error, #f47174);
   font-size: 11px;
+}
+
+.browser-environment-badge {
+  flex: 0 0 auto;
+  max-width: 100px;
+  overflow: hidden;
+  padding: 3px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .browser-toolbar button.browser-resource-text-button {
@@ -5804,6 +5820,7 @@ body.is-resizing-panels .main-area > div {
 
 .url-input {
   flex: 1;
+  min-width: 80px;
   height: 28px;
   font-size: 13px;
   padding: 0 10px;

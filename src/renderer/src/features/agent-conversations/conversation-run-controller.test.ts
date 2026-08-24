@@ -99,12 +99,78 @@ function createHarness(conversation = createConversation()) {
   const controller = createConversationRunController({
     conversationId: 'agent-1',
     getStore: () => store,
+    getTabs: () => [],
     agentApi,
   })
   return { store, agentApi, controller }
 }
 
 describe('conversation-run-controller', () => {
+  it('未保存的登录草稿被挂载时在启动 Agent 前给出明确保存指引', async () => {
+    const conversation = createConversation({
+      mountedResources: [
+        {
+          id: 'browser:draft-tab',
+          kind: 'browser',
+          label: '百度登录',
+          ref: { type: 'browser', tabId: 'draft-tab' },
+        },
+      ],
+    })
+    const { store, agentApi } = createHarness(conversation)
+    const controller = createConversationRunController({
+      conversationId: 'agent-1',
+      getStore: () => store,
+      getTabs: () => [
+        {
+          id: 'draft-tab',
+          type: 'browser',
+          title: '百度登录',
+          icon: 'G',
+          webResourceDraftRef: { draftId: 'draft-baidu' },
+        },
+      ],
+      agentApi,
+    })
+
+    await expect(controller.send('打开百度站长')).resolves.toMatchObject({
+      status: 'failed',
+      error: expect.stringContaining('登录完成，保存账号和登录状态'),
+    })
+    expect(store.addSystemMessage).toHaveBeenCalledWith(
+      expect.stringContaining('Agent 不能操作'),
+      'agent-1',
+    )
+    expect(store.setInput).not.toHaveBeenCalled()
+    expect(store.addUserMessage).not.toHaveBeenCalled()
+    expect(store.beginRun).not.toHaveBeenCalled()
+    expect(agentApi.sendMessage).not.toHaveBeenCalled()
+  })
+
+  it('浏览器 scope 指向未保存登录草稿时同样拒绝启动 Agent', async () => {
+    const conversation = createConversation({
+      scope: { kind: 'browser', instanceId: 'draft-tab' },
+    })
+    const { store, agentApi } = createHarness(conversation)
+    const controller = createConversationRunController({
+      conversationId: 'agent-1',
+      getStore: () => store,
+      getTabs: () => [
+        {
+          id: 'draft-tab',
+          type: 'browser',
+          title: '百度登录',
+          icon: 'G',
+          webResourceDraftRef: { draftId: 'draft-baidu' },
+        },
+      ],
+      agentApi,
+    })
+
+    await expect(controller.send('继续操作')).resolves.toMatchObject({ status: 'failed' })
+    expect(agentApi.sendMessage).not.toHaveBeenCalled()
+  })
+
   it('发送消息时原子写入投影、启动 run 并调用后端', async () => {
     const { store, agentApi, controller } = createHarness()
 

@@ -37,11 +37,13 @@ export const workbenchTabDescriptorSchema = jsonRecordSchema.superRefine((value,
     isJsonObject(value.webResourceDraftRef) &&
     typeof value.webResourceDraftRef.draftId === 'string' &&
     Boolean(value.webResourceDraftRef.draftId.trim())
-  if (!hasProfile || Number(hasAccount) + Number(hasDraft) !== 1) {
+  const isOrdinary = !hasProfile && !hasAccount && !hasDraft
+  const isOwnedProfile = hasProfile && Number(hasAccount) + Number(hasDraft) === 1
+  if (!isOrdinary && !isOwnedProfile) {
     context.addIssue({
       code: 'custom',
       path: ['browserProfile'],
-      message: '本地 Browser Tab 必须绑定且只能绑定一个网站账号或账号草稿',
+      message: '本地 Browser Tab 必须是普通浏览，或绑定且只能绑定一个网站账号/账号草稿',
     })
   }
 })

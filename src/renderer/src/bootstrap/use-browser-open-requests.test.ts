@@ -69,7 +69,7 @@ describe('openRequestedBrowserTab', () => {
     expect(useTabStore.getState().tabs).toHaveLength(2)
   })
 
-  it('creates a saveable browser tab when the workspace has none', async () => {
+  it('creates an ordinary browser tab when the workspace has none', async () => {
     useTabStore.setState({
       tabs: [{ id: 'file-a', type: 'editor', title: '文件', icon: 'F', workspaceRef }],
       activeTabId: 'file-a',
@@ -85,8 +85,7 @@ describe('openRequestedBrowserTab', () => {
       type: 'browser',
       initialUrl: 'https://www.baidu.com/',
       workspaceRef,
-      browserProfile: 'profile-request',
-      webResourceDraftRef: { draftId: 'draft-request' },
+      browserProfile: null,
     })
     expect(state.activeTabId).toBe(state.tabs.at(-1)?.id)
   })

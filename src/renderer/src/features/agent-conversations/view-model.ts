@@ -876,6 +876,7 @@ function tabResourceCandidate(tab: Tab): AgentResourceCandidate | null {
           : { type: 'tab', tabId: tab.id },
       })
     case 'browser':
+      if (tab.webResourceDraftRef) return null
       return createResourceCandidate({
         id: `browser:${tab.id}`,
         kind: 'browser',

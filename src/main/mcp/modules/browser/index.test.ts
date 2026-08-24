@@ -363,7 +363,7 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     expect(browserManager.waitForActiveViewForWorkspace).not.toHaveBeenCalled()
   })
 
-  it('creates and attributes a browser task on the first navigate tool call', async () => {
+  it('lets an Agent without an account use the ordinary browser session', async () => {
     const bridge = {
       getPage: () => null,
       getActiveTabId: () => null,
@@ -382,12 +382,13 @@ describe('BrowserToolModule 可视浏览器同步', () => {
       navigate: vi.fn().mockResolvedValue(undefined),
       getCurrentURL: vi.fn().mockReturnValue('https://example.com/'),
       getTitle: vi.fn().mockReturnValue('Example'),
-      getViewProfileId: vi.fn().mockReturnValue('profile-a'),
+      getViewProfileId: vi.fn().mockReturnValue(null),
     }
     const module = new BrowserToolModule(
       bridge as any,
       browserTaskRuntime as any,
       browserManager as any,
+      null,
     )
 
     await expect(
@@ -415,7 +416,7 @@ describe('BrowserToolModule 可视浏览器同步', () => {
         conversationId: 'conversation-a',
         agentRunId: 'run-a',
         agentSessionRef: null,
-        profileId: 'profile-a',
+        profileId: null,
       },
     })
   })

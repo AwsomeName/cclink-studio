@@ -17,7 +17,7 @@ import {
 } from './web-resource-view-model'
 import { resolveAndOpenWebResourceTab } from './web-resource-tab'
 import { observeWebResourcesChanged } from './web-resource-events'
-import { openDefaultBrowserTab } from './open-default-browser-tab'
+import { openWebAccountDraftTab } from './open-default-browser-tab'
 
 interface AccountRow {
   account: WebAccount
@@ -136,8 +136,8 @@ export function WebResourcesSidebar({
     setSaving(true)
     setLoadError(null)
     try {
-      const result = await openDefaultBrowserTab(workspaceRef)
-      if (!result.saveable) setLoadError(`网页已打开；账号保存能力暂不可用：${result.error}`)
+      const result = await openWebAccountDraftTab(workspaceRef)
+      if (!result.success) setLoadError(`账号环境创建失败：${result.error}`)
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error))
     } finally {

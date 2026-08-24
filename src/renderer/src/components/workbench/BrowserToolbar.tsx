@@ -23,6 +23,7 @@ import {
   stopBrowserFindSelection,
 } from '../../features/browser/browser-find-controller'
 import { useEscapeDismiss } from '../common/dismissable-layer'
+import { getBrowserTabMode } from '../../features/browser/browser-tab-mode'
 
 interface BrowserToolbarProps {
   tabId: string
@@ -73,10 +74,15 @@ export function inferWebResourceDisplayName(
   return ''
 }
 
-export function canSaveBrowserTabAsWebResource(
-  tab: Pick<Tab, 'workspaceRef' | 'webResourceRef' | 'filePath'>,
-): boolean {
-  return tab.workspaceRef?.kind === 'local' && !tab.webResourceRef && !tab.filePath
+export function getBrowserEnvironmentLabel(
+  tab: Pick<Tab, 'title' | 'browserProfile' | 'webResourceRef' | 'webResourceDraftRef'>,
+  accountLabel?: string | null,
+): string {
+  const mode = getBrowserTabMode(tab)
+  if (mode === 'ordinary') return '默认环境'
+  if (mode === 'account-draft') return '新账号环境'
+  if (mode === 'account') return `账号 · ${accountLabel?.trim() || tab.title}`
+  return '环境异常'
 }
 
 export function BrowserToolbar({
@@ -92,9 +98,9 @@ export function BrowserToolbar({
   const [showSave, setShowSave] = useState(false)
   const [displayName, setDisplayName] = useState('')
   const [saving, setSaving] = useState(false)
-  const [preparingSave, setPreparingSave] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [duplicateAccountId, setDuplicateAccountId] = useState<string | null>(null)
+  const [accountLabel, setAccountLabel] = useState<string | null>(null)
   const zoomPercent = Math.round((browserState?.zoomFactor ?? 1) * 100)
   const [zoomDraft, setZoomDraft] = useState(String(zoomPercent))
   const [editingZoom, setEditingZoom] = useState(false)
@@ -106,7 +112,7 @@ export function BrowserToolbar({
   const urlCompositionActiveRef = useRef(false)
   const cancelZoomCommitRef = useRef(false)
   const draftId = tab.webResourceDraftRef?.draftId
-  const canSaveAsWebResource = canSaveBrowserTabAsWebResource(tab)
+  const environmentLabel = getBrowserEnvironmentLabel(tab, accountLabel)
 
   useEscapeDismiss(showSave, () => setShowSave(false))
 
@@ -116,6 +122,31 @@ export function BrowserToolbar({
     setSaveError(null)
     setDuplicateAccountId(null)
   }, [tabId])
+
+  useEffect(() => {
+    const accountId = tab.webResourceRef?.accountId
+    if (!accountId || !tab.workspaceRef) {
+      setAccountLabel(null)
+      return
+    }
+    let cancelled = false
+    void window.cclinkStudio.webResources
+      .getSnapshot({ workspaceRef: tab.workspaceRef })
+      .then((result) => {
+        if (cancelled) return
+        setAccountLabel(
+          result.success
+            ? (result.data.accounts.find((account) => account.id === accountId)?.label ?? null)
+            : null,
+        )
+      })
+      .catch(() => {
+        if (!cancelled) setAccountLabel(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [tab.webResourceRef?.accountId, tab.workspaceRef])
 
   useEffect(() => {
     if (!findSession?.open) return
@@ -185,9 +216,9 @@ export function BrowserToolbar({
     if (!draftId || tab.workspaceRef?.kind !== 'local') return
     const normalizedDisplayName = displayName.trim()
     if (!normalizedDisplayName) {
-      setSaveError('请输入账号名称')
-      showToast('请输入账号名称后再保存', 'error')
-      console.warn('[WebResources] 保存未开始：账号名称为空', { tabId })
+      setSaveError('请输入账号显示名称')
+      showToast('请输入账号显示名称后再保存', 'error')
+      console.warn('[WebResources] 保存未开始：账号显示名称为空', { tabId })
       return
     }
     setSaving(true)
@@ -234,72 +265,11 @@ export function BrowserToolbar({
     }
   }
 
-  const prepareSave = async (): Promise<void> => {
-    if (tab.workspaceRef?.kind !== 'local' || tab.webResourceRef) return
-    if (draftId) {
-      setDisplayName((current) => current || inferWebResourceDisplayName(browserState))
-      setSaveError(null)
-      setShowSave(true)
-      return
-    }
-
-    setPreparingSave(true)
+  const prepareSave = (): void => {
+    if (!draftId || tab.workspaceRef?.kind !== 'local' || tab.webResourceRef) return
+    setDisplayName((current) => current || inferWebResourceDisplayName(browserState))
     setSaveError(null)
-    try {
-      const result = await window.cclinkStudio.webResources.beginDraft({
-        workspaceRef: tab.workspaceRef,
-        tabId,
-      })
-      if (!result.success) {
-        const existingAccountId = result.error.context?.existingAccountId
-        if (existingAccountId) {
-          const launch = await window.cclinkStudio.webResources.resolveLaunch({
-            workspaceRef: tab.workspaceRef,
-            accountId: existingAccountId,
-          })
-          if (launch.success) {
-            const currentTab = useTabStore.getState().tabs.find((item) => item.id === tabId)
-            if (
-              currentTab?.type !== 'browser' ||
-              currentTab.webResourceRef ||
-              currentTab.webResourceDraftRef
-            ) {
-              return
-            }
-            useTabStore.getState().bindWebResourceDraft(tabId, {
-              title: launch.data.title,
-              initialUrl: launch.data.entryUrl,
-              browserProfile: launch.data.browserProfileId,
-              webResourceRef: launch.data.webResourceRef,
-            })
-            showToast('当前登录环境已关联到已保存账号', 'info')
-            return
-          }
-        }
-        setSaveError(result.error.message)
-        showToast(result.error.message, 'error')
-        console.warn('[WebResources] 当前登录现场无法安全转为账号草稿', {
-          tabId,
-          code: result.error.code,
-        })
-        return
-      }
-
-      const attached = useTabStore.getState().attachWebResourceDraft(tabId, {
-        draftId: result.data.draftId,
-        browserProfile: result.data.browserProfileId,
-      })
-      if (!attached) return
-
-      setDisplayName((current) => current || inferWebResourceDisplayName(browserState))
-      setShowSave(true)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setSaveError(message)
-      showToast(message, 'error')
-    } finally {
-      setPreparingSave(false)
-    }
+    setShowSave(true)
   }
 
   const openExistingAccount = async (): Promise<void> => {
@@ -459,6 +429,10 @@ export function BrowserToolbar({
         />
       )}
 
+      <span className="browser-environment-badge" title={`当前登录环境：${environmentLabel}`}>
+        {environmentLabel}
+      </span>
+
       {draftId ? (
         showSave ? (
           <div className="browser-resource-save">
@@ -466,15 +440,18 @@ export function BrowserToolbar({
               autoFocus
               maxLength={160}
               value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
+              onChange={(event) => {
+                setDisplayName(event.target.value)
+                if (saveError) setSaveError(null)
+              }}
               aria-required="true"
               aria-invalid={Boolean(saveError)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void saveDraft()
                 if (event.key === 'Escape') setShowSave(false)
               }}
-              placeholder="账号名称"
-              aria-label="账号名称"
+              placeholder="账号显示名称（如张三公司）"
+              aria-label="账号显示名称"
             />
             {saveError ? <span title={saveError}>{saveError}</span> : null}
             {duplicateAccountId ? (
@@ -502,7 +479,7 @@ export function BrowserToolbar({
                 className="browser-resource-text-button primary"
                 disabled={saving}
                 onClick={() => void saveDraft()}
-                title={!displayName.trim() ? '请输入账号名称' : '保存为全局账号'}
+                title={!displayName.trim() ? '请输入账号显示名称' : '保存为全局账号'}
               >
                 {saving ? '保存中…' : '保存'}
               </button>
@@ -520,21 +497,11 @@ export function BrowserToolbar({
           <button
             type="button"
             className="browser-resource-text-button primary"
-            onClick={() => void prepareSave()}
+            onClick={prepareSave}
           >
             登录完成，保存账号和登录状态
           </button>
         )
-      ) : canSaveAsWebResource ? (
-        <button
-          type="button"
-          className="browser-resource-text-button primary"
-          disabled={preparingSave}
-          onClick={() => void prepareSave()}
-          title={saveError ?? '保存当前网站账号和独立登录状态'}
-        >
-          {preparingSave ? '正在准备…' : '登录完成，保存账号和登录状态'}
-        </button>
       ) : null}
 
       <div className="browser-zoom-group">

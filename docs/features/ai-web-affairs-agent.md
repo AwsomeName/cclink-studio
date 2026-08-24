@@ -5,7 +5,7 @@
 > 账号目录、打开指定账号、受控操作网页并与用户交接；开发与验收顺序见
 > `docs/features/global-web-accounts-development-plan.md` 和
 > `docs/features/ai-web-affairs-agent-development-plan.md`
-> 最后更新：2026-08-21
+> 最后更新：2026-08-24
 > 关联文档：`docs/architecture.md`、`docs/features/ai-work-browser.md`、
 > `docs/features/browser-automation.md`、`docs/features/agent-system.md`、
 > `docs/features/scheduled-tasks.md`、`docs/features/local-credentials.md`、
@@ -409,20 +409,23 @@ Apple Developer    张三公司 · 已登录
 CCLink 国内推广     4 个账号
 ```
 
+- 产品只有一个内嵌 Browser、一个 Tab 生命周期和一个 `BrowserManager`。“浏览器”侧栏负责
+  当前项目的网页现场、历史和收藏；“网站与账号”侧栏负责全局命名账号、登录状态和运营矩阵。
+  两个入口最终打开同一种 Browser Tab，不存在第二套“账号浏览器”或隐藏浏览器。
 - 侧栏展示全局网站账号和运营矩阵；切换项目不切换资源集合。
 - 用户可以添加任意网站；同一网站的不同账号分别拥有全局稳定 ID 和独立登录环境。
-- 在任意本地项目中，所有 HTTP(S) 网页入口都进入同一个浏览器创建入口，包括“添加网站与
-  账号”、手动新建、浏览器历史或书签、Agent 消息链接、Markdown 链接和主进程网页打开请求；
-  入口自动创建尚未归属正式资源的临时隔离登录环境，Tab 顶部直接显示“登录完成，保存账号”。
-  产品中不存在可让用户选择或误入的“普通/共享浏览器 Tab”和“网站账号 Tab”两套模式。
-- 生产代码不得绕过统一入口直接创建本地 HTTP(S) Browser Tab；已保存账号打开时复用该账号
-  Profile，草稿及其 popup/复制页继承同一草稿引用。本地 HTML 预览和远程工作空间浏览器不属于
-  网站账号新建流程。账号服务降级时可以保留基础网页浏览，但必须明确提示当前无法保存账号，
-  不能把降级路径包装成第二种产品模式。
-- 本地 HTTP(S) Browser Tab 的可持久正常形态只有两种：`Profile + accountId` 或
-  `Profile + draftId`，且二者不能并存。只带 Profile 的第三种状态必须在 Tab Store、运行时
-  接管、持久化恢复和 IPC 契约处统一拒绝；不得靠入口约定维持。原生新标签、popup 和复制页
-  必须继承来源引用，来源不可信时拒绝创建。
+- 同一种本地 HTTP(S) Browser Tab 有三种明确登录环境：无 Profile/无账号引用的默认环境、
+  `Profile + accountId` 的已保存账号，以及 `Profile + draftId` 的新账号草稿。普通浏览使用
+  `BrowserManager` 的默认持久 Session；多个普通 Tab 和应用重启后继续共享该登录状态。
+- 手动新建、浏览器历史或书签、未指定账号的 Agent 消息链接、Markdown 链接和无显式 Profile
+  的主进程网页打开请求都进入普通浏览，不依赖 `WebResourceService`，也不自动创建账号草稿。
+  只有用户明确点击“添加网站与账号”时才调用 `beginDraft()`，创建独立登录环境并显示保存入口。
+- 已保存账号打开时复用该账号 Profile；草稿及其 popup/复制页继承同一草稿引用；普通网页的
+  popup、复制页和原生“在新标签页中打开”继续继承默认 Session。来源带有非法 Profile/引用
+  组合时拒绝创建。本地 HTML 预览和远程工作空间浏览器不属于网站账号新建流程。
+- Profile-only、同时绑定账号和草稿、无 Profile 却绑定引用仍是非法状态，必须在 Tab Store、
+  运行时接管、持久化恢复和 IPC 契约处统一拒绝。普通浏览不是 Profile-only；它明确使用默认
+  Session。Agent 明确指定账号时继续通过账号授权链执行，未指定账号时使用普通环境。
 - Browser View 拆到独立窗口后，原生菜单仍在当前窗口显示，但“新建 Tab”必须回到主窗口的
   唯一 Tab Store 执行，并继承来源账号/草稿和 Profile；辅助窗口不得持有第二套 Tab 列表或
   静默吞掉统一创建命令。
@@ -436,14 +439,14 @@ CCLink 国内推广     4 个账号
 - A 的独立窗口若是未保存账号草稿，项目切换期间必须保留其 Profile 和草稿引用，但不得
   将它显示在 B 的主窗口、写入 B 的项目快照或暴露给事务/AI；切回 A 后继续按原草稿生命
   周期处理。
-- 历史和 Workbench URL 打开不同网址时只能复用尚未保存的草稿，否则必须新建隔离草稿，
-  不得把已保存账号 Tab 改写成其他网站；当前 Tab 地址栏中的用户显式导航不受此限制。
-- 旧版本遗留的本地无 Profile 网页 Tab 升级后不恢复，避免继续进入已废弃路径；浏览历史仍由
-  浏览器历史列表保留。侧栏不得展开创建表单，也不得提前出现未保存资源。
+- 历史和 Workbench URL 打开不同网址时创建新的普通 Tab，不得改写已保存账号或账号草稿；
+  当前 Tab 地址栏中的用户显式导航仍属于当前 Tab 的既有环境。
+- 普通 Browser Tab 和已保存账号 Tab 参与工作空间恢复；未保存账号草稿继续按既有清理策略
+  处理。侧栏不得展开创建表单，也不得提前出现未保存资源。
 - 用户在 Browser Tab 中输入网址并完成真实登录；扫码、验证码、2FA 和隐私授权都在网页
   现场由用户处理。
 - 登录完成后，用户点击 Browser 顶部“保存账号”。系统从当前 Tab 自动取得网站名称、
-  当前 URL 和登录环境，只要求用户确认一个侧栏显示名称；能够识别账号名称时
+  当前 URL 和登录环境，只要求用户确认一个“账号显示名称”（例如张三公司）；能够识别账号名称时
   应自动预填。
 - 保存成功后，当前 Browser Tab 原地绑定全局稳定的网站账号资源，所有项目侧栏读取同一
   资源；不得再打开账号详情页或遗留创建表单 Tab。

@@ -54,6 +54,8 @@
   P1 缺陷记录、凭证安全边界、修复方案和真实 FRP 验收门禁。
 - `docs/testing/browser-tab-bar-native-view-occlusion.md`：`v0.1.54` 内嵌浏览器原生层覆盖 Tab 栏、
   当前本地与后台打开远程项目状态误判的事故记录，以及 `v0.1.55` 不可回归约束。
+- `docs/testing/browser-session-mode-separation.md`：普通浏览、已保存账号和添加新账号三种 Session
+  模式的事故根因、架构边界与真人端到端验收步骤。
 - `docs/features/ai-web-affairs-agent-development-plan.md`：AI 网页事务代理人的开发管理事实源；保留项目账号和事务历史证据，当前账号施工以全局账号专项计划为准。
 - `docs/features/scheduled-tasks.md`：工作空间定时任务的 Activity Bar、侧栏、Workbench Tab、App 内统一调度、本机启用和保存快捷键产品事实源。
 - `docs/features/scheduled-tasks-development-plan.md`：工作空间定时任务 E0、M8.1-M8.3、R1 的详细开发顺序、任务拆解和真人验收计划。

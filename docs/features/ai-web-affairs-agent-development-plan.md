@@ -3,7 +3,7 @@
 > 文档版本：2.3
 > 基线状态：X0–X5 已形成代码纵向闭环并进入统一验收；真实账号、真实登录态、真实网页
 > 副作用边界和重启恢复尚未完成真人验收，因此不得标记产品里程碑 Complete。
-> 最后更新：2026-08-21
+> 最后更新：2026-08-24
 > 产品事实源：`docs/features/ai-web-affairs-agent.md`
 > 架构约束：`docs/architecture.md`
 > 全局账号专项计划：`docs/features/global-web-accounts-development-plan.md`
@@ -11,6 +11,11 @@
 > `docs/decisions/0016-agent-web-account-execution.md`
 > 本文件是计划、里程碑、验收、进度、风险和交付证据的唯一开发管理事实源；与产品
 > 事实源冲突时，以产品事实源为准。
+
+> 2026-08-24 会话模式更正：普通网页不再自动创建账号草稿。当前“普通浏览、已保存账号、
+> 添加新账号”三种模式以及端到端验收以
+> `docs/testing/browser-session-mode-separation.md` 和全局账号专项计划的最新章节为准；本文后续
+> 2026-08-21 的“所有网页入口创建草稿”内容仅保留为历史施工记录。
 
 ## 0. 项目状态
 

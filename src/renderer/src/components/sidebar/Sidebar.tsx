@@ -478,11 +478,7 @@ function BrowserManagementView(): React.ReactElement {
   }, [loadHistory])
 
   const openNewBrowser = (): void => {
-    void openDefaultBrowserTab(activeWorkspaceRef).then((result) => {
-      if (!result.saveable) {
-        useToastStore.getState().show(`网页已打开；账号保存能力暂不可用：${result.error}`, 'info')
-      }
-    })
+    void openDefaultBrowserTab(activeWorkspaceRef)
   }
 
   const openBookmark = (bookmark: (typeof bookmarks)[number]): void => {
@@ -494,10 +490,6 @@ function BrowserManagementView(): React.ReactElement {
     void openDefaultBrowserTab(activeWorkspaceRef, {
       initialUrl: bookmark.url,
       title: bookmark.title,
-    }).then((result) => {
-      if (!result.saveable) {
-        showToast(`网页已打开；账号保存能力暂不可用：${result.error}`, 'info')
-      }
     })
   }
 
@@ -510,10 +502,6 @@ function BrowserManagementView(): React.ReactElement {
     void openDefaultBrowserTab(activeWorkspaceRef, {
       initialUrl: entry.url,
       title: entry.title?.trim() || '浏览器',
-    }).then((result) => {
-      if (!result.saveable) {
-        showToast(`网页已打开；账号保存能力暂不可用：${result.error}`, 'info')
-      }
     })
   }
 

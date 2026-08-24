@@ -119,12 +119,9 @@ export async function openRequestedBrowserTab(request: BrowserOpenTabRequest): P
     return
   }
 
-  const result = await openDefaultBrowserTab(activeWorkspaceRef, {
+  await openDefaultBrowserTab(activeWorkspaceRef, {
     initialUrl: request.initialUrl,
   })
-  if (!result.saveable) {
-    useToastStore.getState().show(`网页已打开，但账号保存环境创建失败：${result.error}`, 'error')
-  }
 }
 
 export async function adoptRequestedBrowserPopup(

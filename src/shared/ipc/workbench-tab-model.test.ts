@@ -11,14 +11,14 @@ const localBrowser = {
 }
 
 describe('workbenchTabDescriptorSchema Browser ownership', () => {
-  it('rejects local Profile-only and unbound Browser descriptors', () => {
+  it('accepts ordinary local browsing and rejects Profile-only descriptors', () => {
     expect(
       workbenchTabDescriptorSchema.safeParse({
         ...localBrowser,
         browserProfile: 'profile-only',
       }).success,
     ).toBe(false)
-    expect(workbenchTabDescriptorSchema.safeParse(localBrowser).success).toBe(false)
+    expect(workbenchTabDescriptorSchema.safeParse(localBrowser).success).toBe(true)
   })
 
   it('accepts exactly one account or draft binding with its Profile', () => {

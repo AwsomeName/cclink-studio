@@ -113,13 +113,6 @@ export type ContextTarget =
       recordId: string
     }
   | {
-      kind: 'operations-platform'
-      workspaceKey: string
-      workspacePath: string
-      platformId: string
-      platformName: string
-    }
-  | {
       kind: 'production'
       workspaceKey: string
       workspacePath: string
@@ -171,7 +164,6 @@ export const CONTEXT_TARGET_KINDS = [
   'data-collection',
   'saved-query',
   'data-record',
-  'operations-platform',
   'production',
   'android',
   'setting',

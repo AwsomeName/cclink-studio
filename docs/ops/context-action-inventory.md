@@ -8,7 +8,7 @@ CCLink Studio 只有一个 renderer 菜单 Host、一个瞬时菜单 Store 和�
 
 当前维护门禁统计：
 
-- Renderer context-menu owner：20 个组件文件。
+- Renderer context-menu owner：19 个组件文件。
 - Browser 原生菜单 owner：1 个主进程文件。
 - ContextMenu Store owner：1 个。
 - 结构化 `ContextTarget`：22 种，全部有 contribution 覆盖。
@@ -47,14 +47,13 @@ CCLink Studio 只有一个 renderer 菜单 Host、一个瞬时菜单 Store 和�
 | -------- | ------------------------------------------------- | ------------------------------- | ---------------------------------- |
 | 数据源   | `data-source` / `data-collection` / `saved-query` | `DataSourcesPanel.tsx`          | 只读查询、稳定标识和连接状态       |
 | 数据记录 | `data-record`                                     | `DataSourceQueryTab.tsx`        | 复制当前记录、挂载但不自动发送     |
-| 运营平台 | `operations-platform`                             | `ProjectOperationsSection.tsx`  | 准备会话、配置和状态；不发布       |
 | 硬件生产 | `production`                                      | `HardwareProductionSection.tsx` | 扫描、检查、本地报告；不下单       |
 | Android  | `android`                                         | `AndroidDisplay.tsx`            | 当前 Tab 的连接/断开与能力降级     |
 | 设置项   | `setting`                                         | `SettingsPage.tsx`              | 安全重置和非敏感 key；凭证行不绑定 |
 
 ## 其他绑定组件
 
-- `DataSourcesPanel.tsx`、`DataSourceQueryTab.tsx`、`ProjectOperationsSection.tsx`、`HardwareProductionSection.tsx`、`AndroidDisplay.tsx` 和 `SettingsPage.tsx` 是领域 target adapter。
+- `DataSourcesPanel.tsx`、`DataSourceQueryTab.tsx`、`HardwareProductionSection.tsx`、`AndroidDisplay.tsx` 和 `SettingsPage.tsx` 是领域 target adapter。
 - `ConversationMessageRenderer.tsx` 只解析消息 target；业务动作仍由 Agent 领域 command 拥有。
 - `ResizeHandle.tsx` 只解析布局 target；不拥有 Sidebar 或 Agent 状态。
 

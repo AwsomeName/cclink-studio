@@ -180,6 +180,13 @@ Thread 显式选择经过验证的本地 Codex ACP Runtime；公共 Registry、�
 - `WebResourceService` 是全局网站、主体、账号、运营矩阵、Browser Profile 绑定和未保存
   草稿清理账本的唯一 owner；Cookie/Session 仍由 `BrowserManager` 持有，密码和 Token
   不进入资源快照。工作空间不得复制或重新拥有全局账号。
+- 产品与代码都只有一个 Browser 能力：浏览器侧栏与“网站与账号”侧栏共享同一个 Tab Store、
+  `BrowserManager`、popup/新标签链路和恢复生命周期；后者只管理命名账号资源，不得再创建
+  第二种 Browser Tab 或第二套窗口/Session owner。
+- 普通网页使用 `BrowserManager` 的默认持久 Session，不属于 `WebResourceService` 账号资源；
+  普通 Tab 以“无 Profile、无账号/草稿引用”表示并可随工作空间恢复。只有用户明确“添加网站
+  与账号”时才创建隔离草稿 Profile；已保存账号继续使用各自 Profile，三者不得静默互相转换
+  或复制 Cookie。
 - `WebAffairService` 是事务、流程版本、节点、Attempt、人工交接、证据、等待计划和流程
   建议的唯一 owner，并继续以稳定 `workspaceId` 隔离事务、本地物料和证据；renderer、
   Agent、BrowserTask 和模板只持有引用或可丢弃投影。
@@ -360,7 +367,7 @@ CCLink remote feature domain (optional and degradable)
 | ------------------ | ---------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------- |
 | workspace/tab      | `workspace-transition` 的 generation 与单一提交事务  | `workspace-store` / `tab-store`      | `WorkspaceStateService` 按 workspace 分区                        |
 | Agent conversation | main Agent runtime 的 run/session                    | `agent-store` 的消息与可见运行状态   | workspace conversation snapshot；恢复后与 main 状态对账          |
-| Browser/Profile    | `BrowserManager` 的 Tab 绑定与 Electron 持久 Session | Browser Tab 的 URL/Profile/View 状态 | Profile partition 保存 Cookie/localStorage，Tab 快照只保存绑定   |
+| Browser/Profile    | `BrowserManager` 的 Tab 绑定与 Electron 持久 Session | Browser Tab 的 URL/Profile/View 状态 | 默认 partition 恢复普通登录；账号 Profile partition 隔离持久化  |
 | BrowserTask        | `BrowserTaskRuntime` 的 task/action 状态             | `browser-task-store`                 | 当前进程内可诊断任务；终态不伪装为持久后台任务                   |
 | Terminal           | `TerminalSessionRegistry` / `TerminalSessionStore`   | Terminal Tab 与 renderer store       | 主进程 session record；工作空间恢复后通过 `listSessions` 对账    |
 | Usage              | `UsageLedgerService` 的追加事件                      | 会话费用与 credits 的只读投影        | `{userData}/usage-events.jsonl`；统计失败不得阻断能力调用        |

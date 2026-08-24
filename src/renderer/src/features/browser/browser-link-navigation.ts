@@ -3,6 +3,7 @@ import { useTabStore } from '../../stores/tab-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useToastStore } from '../../components/common/Toast'
 import { openDefaultBrowserTab } from '../web-resources/open-default-browser-tab'
+import { getBrowserTabMode } from './browser-tab-mode'
 
 export interface BrowserLinkTarget {
   url: string
@@ -39,16 +40,33 @@ export async function openHttpUrlInNewBrowserTab(input: {
   if (!url) return false
 
   const tabState = useTabStore.getState()
+  const sourceTab = tabState.tabs.find((tab) => tab.id === input.sourceTabId)
   const sourceWorkspaceRef: WorkspaceRef =
-    tabState.tabs.find((tab) => tab.id === input.sourceTabId)?.workspaceRef ??
-    useWorkspaceStore.getState().activeWorkspaceRef
+    sourceTab?.workspaceRef ?? useWorkspaceStore.getState().activeWorkspaceRef
 
-  const result = await openDefaultBrowserTab(sourceWorkspaceRef, {
+  if (sourceTab?.type === 'browser') {
+    const mode = getBrowserTabMode(sourceTab)
+    if (mode === 'invalid') {
+      useToastStore.getState().show('未打开新页面：来源浏览器登录环境不完整', 'error')
+      return false
+    }
+    tabState.openTab({
+      type: 'browser',
+      title: input.title?.trim().slice(0, 40) || '链接',
+      icon: '🌐',
+      initialUrl: url,
+      browserProfile: sourceTab.browserProfile ?? null,
+      webResourceRef: sourceTab.webResourceRef,
+      webResourceDraftRef: sourceTab.webResourceDraftRef,
+      workspaceRef: sourceWorkspaceRef,
+      forceNew: true,
+    })
+    return true
+  }
+
+  await openDefaultBrowserTab(sourceWorkspaceRef, {
     initialUrl: url,
     title: input.title?.trim().slice(0, 40) || '链接',
   })
-  if (!result.saveable) {
-    useToastStore.getState().show(`网页已打开，但账号保存环境创建失败：${result.error}`, 'error')
-  }
   return true
 }
