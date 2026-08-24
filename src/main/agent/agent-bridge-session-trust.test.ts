@@ -200,7 +200,7 @@ describe('AgentBridge main-process Claude session trust', () => {
   })
 
   it('restores persisted trust only for the original workspace and runtime binding', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'cclink-agent-session-trust-'))
+    const directory = await mkdtemp(join(tmpdir(), 'studio-agent-session-trust-'))
     const filePath = join(directory, 'state.json')
     try {
       queryMock

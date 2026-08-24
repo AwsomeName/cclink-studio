@@ -46,7 +46,7 @@ describe('AgentRuntimeStateStore', () => {
   })
 
   it('persists terminal state and repairs an owned run as failed after a main-process restart', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'cclink-agent-runtime-state-'))
+    const directory = await mkdtemp(join(tmpdir(), 'studio-agent-runtime-state-'))
     temporaryDirectories.push(directory)
     const filePath = join(directory, 'state.json')
     const first = new AgentRuntimeStateStore(filePath)
