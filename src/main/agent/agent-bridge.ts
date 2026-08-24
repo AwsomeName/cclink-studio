@@ -44,6 +44,7 @@ import {
 } from '../../shared/agent-runtime'
 import { CODEX_ACP_EXPECTED_VERSION } from '../agent-core/backends/local-acp-backend'
 import type { UsageLedgerService } from '../usage/usage-ledger-service'
+import type { CclinkAgentService, CclinkAgentEndpoint } from './cclink-agent-service'
 import { AgentRuntimeStateStore, type TrustedAgentSessionRecord } from './agent-runtime-state-store'
 import { managedClaudeIsolationEnvironment } from './managed-claude-environment'
 import {
@@ -112,6 +113,13 @@ export interface AgentBridgeOptions {
   usageLedgerService?: UsageLedgerService
   /** 主进程近期 run 与可信 Runtime Session 的持久状态仓库。 */
   runtimeStateStore?: AgentRuntimeStateStore
+  /** 显式实验开关启动的本机 chatcc HTTP/SSE 服务；不参与默认 Claude 路径。 */
+  experimentalCclinkAgent?: CclinkAgentEndpoint & { service: CclinkAgentService }
+}
+
+export interface AgentBridgeDestroyOptions {
+  /** App 退出时只持久化所有权状态并发出停止信号，不等待不可控的在途工作。 */
+  waitForActiveRuns?: boolean
 }
 
 export class AgentBridge {
@@ -143,8 +151,9 @@ export class AgentBridge {
   private configurationChangePending = false
   private sessionCompatibilityFingerprint: string | null
   private runtimeProvenance: ClaudeRuntimeProvenance | null
-  private defaultClaudeConfig: Extract<BackendConfig, { type: 'local-claude-code' }>
+  private defaultAgentConfig: BackendConfig
   private acpConfig: Extract<BackendConfig, { type: 'local-acp' }>
+  private readonly cclinkAgentService: CclinkAgentService | null
   private readonly runtimeListeners = new Set<(event: AgentRuntimeEvent) => void>()
   private readonly rendererSuppressedConversationIds = new Set<string>()
   private readonly runtimeStateStore: AgentRuntimeStateStore
@@ -178,11 +187,12 @@ export class AgentBridge {
     this.codexHome = options?.codexHome ?? ''
     this.sessionCompatibilityFingerprint = options?.sessionCompatibilityFingerprint ?? null
     this.runtimeProvenance = options?.runtimeProvenance ?? null
-    this.defaultClaudeConfig = this.buildBackendConfig(options)
+    this.defaultAgentConfig = this.buildBackendConfig(options)
     this.acpConfig = this.buildAcpBackendConfig(options)
+    this.cclinkAgentService = options?.experimentalCclinkAgent?.service ?? null
 
     this.runtime = new AgentRuntime({
-      config: this.defaultClaudeConfig,
+      config: this.defaultAgentConfig,
       deps: {
         playwrightBridge: playwrightBridge ?? { getPage: () => null },
         toolHost,
@@ -200,9 +210,18 @@ export class AgentBridge {
    * M9 开源底座只创建本机 Claude Code 后端。
    * provider/apiFormat/apiKey 字段暂保留旧设置兼容，但不再决定后端能力。
    */
-  private buildBackendConfig(
-    options?: AgentBridgeOptions,
-  ): Extract<BackendConfig, { type: 'local-claude-code' }> {
+  private buildBackendConfig(options?: AgentBridgeOptions): BackendConfig {
+    if (options?.experimentalCclinkAgent) {
+      return {
+        type: 'cclink-agent',
+        cclinkAgent: {
+          baseUrl: options.experimentalCclinkAgent.baseUrl,
+          token: options.experimentalCclinkAgent.token,
+          runtimeId: options.experimentalCclinkAgent.runtimeId,
+          getWorkspacePath: this.getWorkspacePath,
+        },
+      }
+    }
     return {
       type: 'local-claude-code',
       claudeCode: {
@@ -608,6 +627,14 @@ export class AgentBridge {
     if (this.runtime.getStatus(conversationId).runId !== runId) {
       return { accepted: false, run: existing, error: '目标 run 当前不由该 Runtime 执行' }
     }
+    if (!this.runtime.supportsExactCancellation(conversationId)) {
+      return {
+        accepted: false,
+        run: existing,
+        error:
+          'cclink-agent HTTP/SSE 服务缺少按 request_id 精确取消接口；Studio 未把断开流伪装成取消完成',
+      }
+    }
 
     this.runtime.reserveCancellation(conversationId, runId)
     let cancelling: AgentRuntimeRunRecord | null
@@ -687,12 +714,12 @@ export class AgentBridge {
       conversationConfiguration,
       profilePromptCompilerVersion: AGENT_PROFILE_PROMPT_COMPILER_VERSION,
       runtimeProvenance:
-        this.getConversationRuntimeBinding(conversationId).kind === 'claude-code'
+        this.runtime.getBackendType(conversationId) === 'local-claude-code'
           ? this.runtimeProvenance
           : null,
       sessionRef: this.getSessionDiagnosticRef(status.sessionId),
       ready: true,
-      ...(this.getConversationRuntimeBinding(conversationId).kind === 'claude-code'
+      ...(this.runtime.getBackendType(conversationId) === 'local-claude-code'
         ? { nativeSchedulingPolicy: CLAUDE_NATIVE_SCHEDULING_POLICY_STATUS }
         : {}),
     }
@@ -771,7 +798,10 @@ export class AgentBridge {
   async closeConversation(conversationId = DEFAULT_CONVERSATION_ID): Promise<void> {
     const status = this.runtime.getStatus(conversationId)
     if (status.runId) {
-      await this.abort(conversationId, status.runId)
+      const aborted = await this.abort(conversationId, status.runId)
+      if (!aborted.accepted) {
+        throw new Error(aborted.error ?? '活动 Agent run 无法安全取消')
+      }
       const cancellation = this.cancellingRuns.get(`${conversationId}\0${status.runId}`)
       if (cancellation) await cancellation
     }
@@ -912,6 +942,12 @@ export class AgentBridge {
     },
     options?: { forceResetSessions?: boolean },
   ): void {
+    if (this.defaultAgentConfig.type === 'cclink-agent') {
+      const nextAcpConfig = this.buildAcpBackendConfig(apiSettings)
+      this.runtime.reconfigureBackendType('local-acp', nextAcpConfig, false)
+      this.acpConfig = nextAcpConfig
+      return
+    }
     const config = this.buildBackendConfig({
       agentEngine: 'local-claude-code',
       claudeCodePath: apiSettings.claudeCodePath,
@@ -920,7 +956,7 @@ export class AgentBridge {
       modelName: apiSettings.modelName,
       runtimeProvenance: apiSettings.runtimeProvenance,
     })
-    this.defaultClaudeConfig = config
+    this.defaultAgentConfig = config
     const nextFingerprint = apiSettings.sessionCompatibilityFingerprint ?? null
     const preserveSessions =
       options?.forceResetSessions !== true &&
@@ -934,12 +970,23 @@ export class AgentBridge {
     this.runtimeProvenance = apiSettings.runtimeProvenance ?? null
   }
 
-  /** 销毁资源 */
-  async destroy(): Promise<void> {
+  /** 销毁资源；普通调用严格等待，只有 App 明确退出时允许脱离未完成 run。 */
+  async destroy(options: AgentBridgeDestroyOptions = {}): Promise<void> {
     this.mainWindow = null
-    await this.runtime.destroy()
-    await Promise.allSettled(this.cancellingRuns.values())
-    await this.runtimeStateStore.flush()
+    if (options.waitForActiveRuns === false) {
+      // 先持久化 running/cancelling。Runtime 与工具若无法结束，下次启动会对账为
+      // runtime_owner_lost；这里仍发出停止信号，但不能让 will-quit 无限等待。
+      await this.runtimeStateStore.flush()
+      void this.runtime.destroy().catch((error) => {
+        console.warn('[AgentBridge] App 退出时 Runtime 后台清理未完成:', error)
+      })
+      await this.cclinkAgentService?.stop()
+    } else {
+      await this.runtime.destroy()
+      await this.cclinkAgentService?.stop()
+      await Promise.allSettled(this.cancellingRuns.values())
+      await this.runtimeStateStore.flush()
+    }
     this.activeBrowserTaskIds.clear()
     this.sessionDiagnosticRefs.clear()
     this.runtimeListeners.clear()
@@ -972,7 +1019,7 @@ export class AgentBridge {
         return
       }
     }
-    this.deliverRuntimeEvent(event)
+    this.deliverRuntimeEvent(this.normalizeBrowserTerminalEvent(event))
   }
 
   private async persistAndDeliverTerminalEvent(
@@ -983,19 +1030,20 @@ export class AgentBridge {
       // 取消流程独占 cancelled 终态：Runtime 的尾部 complete/error 不能绕过
       // backend.abort() 对 Query 退出和在途 Studio 工具排空的等待。
       if (tracked.status === 'cancelling') return
-      const failed = event.type === 'error' || this.isErrorResult(event.data)
+      const terminalEvent = this.normalizeBrowserTerminalEvent(event)
+      const failed = terminalEvent.type === 'error' || this.isErrorResult(terminalEvent.data)
       const terminal = await this.runtimeStateStore.finishRun(
-        event.conversationId,
-        event.runId!,
+        terminalEvent.conversationId,
+        terminalEvent.runId!,
         failed ? 'failed' : 'succeeded',
         failed
           ? {
-              code: this.extractErrorCode(event.data) ?? 'runtime_error',
-              message: this.extractErrorMessage(event.data),
+              code: this.extractErrorCode(terminalEvent.data) ?? 'runtime_error',
+              message: this.extractErrorMessage(terminalEvent.data),
             }
           : undefined,
       )
-      this.deliverRuntimeEvent(event)
+      this.deliverRuntimeEvent(terminalEvent)
       if (terminal) this.forwardRunStatus(terminal)
     } catch (error) {
       console.error(
@@ -1024,6 +1072,26 @@ export class AgentBridge {
     }
     if (!this.rendererSuppressedConversationIds.has(event.conversationId)) {
       this.forwardToRenderer(event.type, event.data, event.conversationId, event.runId)
+    }
+  }
+
+  private normalizeBrowserTerminalEvent(event: AgentRuntimeEvent): AgentRuntimeEvent {
+    if (event.type !== 'complete' || this.isErrorResult(event.data)) return event
+    const taskId = this.resolveActiveBrowserTaskId(event.conversationId)
+    if (!taskId || !this.deps.browserTaskRuntime) return event
+    const actionLogs = this.deps.browserTaskRuntime.listActionLogs(taskId)
+    if (actionLogs.some((log) => log.status === 'succeeded')) return event
+
+    return {
+      ...event,
+      type: 'error',
+      data: {
+        type: 'error',
+        code: 'visible_browser_action_not_verified',
+        message:
+          'Agent 没有在绑定的可见浏览器 Tab 完成任何可验证操作，本轮已判定失败。' +
+          '页面没有被打开或修改；请检查登录草稿是否已保存，或根据浏览器工具的失败信息处理。',
+      },
     }
   }
 
@@ -1234,6 +1302,9 @@ export class AgentBridge {
   }
 
   private getRuntimeBindingKey(conversationId: string): string {
+    if (this.runtime.getBackendType(conversationId) === 'cclink-agent') {
+      return 'cclink-agent:http-sse:1'
+    }
     const binding = this.getConversationRuntimeBinding(conversationId)
     return binding.kind === 'acp' ? `acp:${binding.implementationId}` : 'claude-code'
   }
@@ -1251,17 +1322,14 @@ export class AgentBridge {
     }
     this.runtime.bindConversationBackend(
       conversationId,
-      binding.kind === 'acp' ? this.acpConfig : this.buildBackendConfigFromCurrentClaude(),
+      binding.kind === 'acp' ? this.acpConfig : this.buildBackendConfigFromCurrentAgent(),
     )
     this.conversationRuntimeBindings.set(conversationId, binding)
     return binding
   }
 
-  private buildBackendConfigFromCurrentClaude(): Extract<
-    BackendConfig,
-    { type: 'local-claude-code' }
-  > {
-    return this.defaultClaudeConfig
+  private buildBackendConfigFromCurrentAgent(): BackendConfig {
+    return this.defaultAgentConfig
   }
 
   private getConversationRuntimeBinding(conversationId: string): AgentRuntimeBinding {

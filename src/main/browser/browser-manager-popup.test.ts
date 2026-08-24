@@ -211,6 +211,58 @@ describe('BrowserManager popup adoption', () => {
     return { manager, source: electronMocks.createdViews[0].webContents }
   }
 
+  it('selects the ordinary environment for an Agent even when an account Tab is active', async () => {
+    const manager = new BrowserManager(electronMocks.mainWindow as never)
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [
+        { tabId: 'ordinary-tab', profileId: null },
+        { tabId: 'account-tab', profileId: 'account-profile' },
+      ],
+      activeTabId: null,
+    })
+    await manager.createView('ordinary-tab', 'https://example.com/default', {
+      workspaceKey: '/workspace/a',
+      profileId: null,
+    })
+    await manager.createView('account-tab', 'https://example.com/account', {
+      workspaceKey: '/workspace/a',
+      profileId: 'account-profile',
+    })
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [
+        { tabId: 'ordinary-tab', profileId: null },
+        { tabId: 'account-tab', profileId: 'account-profile' },
+      ],
+      activeTabId: 'account-tab',
+    })
+
+    expect(manager.getActiveViewIdForWorkspace('/workspace/a')).toBe('account-tab')
+    expect(manager.getViewIdForWorkspace('/workspace/a')).toBe('ordinary-tab')
+  })
+
+  it('does not treat an account environment as an ordinary Agent target', async () => {
+    const manager = new BrowserManager(electronMocks.mainWindow as never)
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'account-tab', profileId: 'account-profile' }],
+      activeTabId: null,
+    })
+    await manager.createView('account-tab', 'https://example.com/account', {
+      workspaceKey: '/workspace/a',
+      profileId: 'account-profile',
+    })
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'account-tab', profileId: 'account-profile' }],
+      activeTabId: 'account-tab',
+    })
+
+    expect(manager.getActiveViewIdForWorkspace('/workspace/a')).toBe('account-tab')
+    expect(manager.getViewIdForWorkspace('/workspace/a')).toBeNull()
+  })
+
   it('rejects an unusable automatic 30% result and recovers after the pane widens', async () => {
     vi.useFakeTimers()
     try {

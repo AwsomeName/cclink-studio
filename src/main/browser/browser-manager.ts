@@ -2051,12 +2051,17 @@ export class BrowserManager {
     return null
   }
 
-  /** 返回项目内可继续执行的浏览器，允许它处于后台但不改变 UI 激活态。 */
+  /**
+   * 返回项目内可供未指定网站账号的 Agent 使用的默认环境浏览器。
+   * 账号和草稿 Profile 只能由显式账号调用链选择，不能因当前可见而被隐式复用。
+   */
   getViewIdForWorkspace(workspaceKey: string | null): string | null {
+    const activeTabId = this.getActiveViewIdForWorkspace(workspaceKey)
+    if (activeTabId && this.views.get(activeTabId)?.profileId === null) return activeTabId
     return (
-      this.getActiveViewIdForWorkspace(workspaceKey) ??
-      [...this.views].find(([, entry]) => entry.workspaceKey === workspaceKey)?.[0] ??
-      null
+      [...this.views].find(
+        ([, entry]) => entry.workspaceKey === workspaceKey && entry.profileId === null,
+      )?.[0] ?? null
     )
   }
 
@@ -2091,7 +2096,7 @@ export class BrowserManager {
     return this.activeViewId
   }
 
-  /** 等待指定项目的浏览器；后台项目只复用已有 View，不会在当前 UI 新建。 */
+  /** 等待指定项目的默认环境浏览器；账号环境不能满足未指定账号的 Agent 请求。 */
   async waitForActiveViewForWorkspace(
     workspaceKey: string | null,
     timeoutMs = 2500,

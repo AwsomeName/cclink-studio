@@ -1,10 +1,22 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentBridge } from './agent-bridge'
 import { AgentRuntimeStateStore } from './agent-runtime-state-store'
 
 const queryMock = vi.hoisted(() => vi.fn())
+const temporaryDirectories: string[] = []
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({ query: queryMock }))
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => rm(directory, { recursive: true, force: true })),
+  )
+})
 
 function createBlockingQuery(): AsyncIterable<unknown> & {
   close: ReturnType<typeof vi.fn>
@@ -292,5 +304,40 @@ describe('AgentBridge run lifecycle', () => {
       }),
     )
     await bridge.destroy()
+  })
+
+  it('lets App shutdown detach an unresponsive tool and repairs the run on restart', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'cclink-agent-exit-'))
+    temporaryDirectories.push(directory)
+    const filePath = join(directory, 'state.json')
+    const runtimeStateStore = new AgentRuntimeStateStore(filePath)
+    await runtimeStateStore.load()
+    const query = createBlockingQuery()
+    queryMock.mockReturnValue(query)
+    const cancelToolSession = vi.fn(() => new Promise<void>(() => undefined))
+    const { bridge } = createBridge({ cancelForRun: vi.fn() }, runtimeStateStore, cancelToolSession)
+
+    await bridge.sendMessage('first', 'conversation-1', {
+      runId: 'run-never-settles',
+      workspaceRef: { kind: 'global' },
+      sessionId: null,
+    })
+    await bridge.abort('conversation-1', 'run-never-settles')
+    query.releaseDone()
+    await Promise.resolve()
+
+    await expect(bridge.destroy({ waitForActiveRuns: false })).resolves.toBeUndefined()
+    expect(runtimeStateStore.getRun('conversation-1', 'run-never-settles')).toMatchObject({
+      status: 'cancelling',
+      completedAt: null,
+    })
+
+    const restarted = new AgentRuntimeStateStore(filePath)
+    await restarted.load()
+    expect(restarted.getRun('conversation-1', 'run-never-settles')).toMatchObject({
+      status: 'failed',
+      errorCode: 'runtime_owner_lost',
+      completedAt: expect.any(Number),
+    })
   })
 })

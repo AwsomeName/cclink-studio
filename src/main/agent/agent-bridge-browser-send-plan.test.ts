@@ -55,6 +55,53 @@ describe('AgentBridge browser send plan', () => {
     })
     expect(finishTask).toHaveBeenCalledWith('lazy-task')
   })
+
+  it('turns a claimed browser completion into failure when no visible action succeeded', () => {
+    const bridge = createBridge(
+      { kind: 'all' },
+      {},
+      {
+        getActiveTaskForConversation: () => ({ id: 'browser-task' }),
+        listActionLogs: () => [
+          { id: 'failed-action', taskRunId: 'browser-task', status: 'failed' },
+        ],
+      },
+    )
+
+    expect(
+      bridge.normalizeBrowserTerminalEvent({
+        conversationId: 'conversation-a',
+        runId: 'run-a',
+        type: 'complete',
+        data: { result: '已经打开百度站长' },
+      }),
+    ).toMatchObject({
+      type: 'error',
+      data: {
+        code: 'visible_browser_action_not_verified',
+        message: expect.stringContaining('页面没有被打开或修改'),
+      },
+    })
+  })
+
+  it('keeps browser completion only after a visible Studio action succeeds', () => {
+    const bridge = createBridge(
+      { kind: 'all' },
+      {},
+      {
+        getActiveTaskForConversation: () => ({ id: 'browser-task' }),
+        listActionLogs: () => [{ id: 'ok-action', taskRunId: 'browser-task', status: 'succeeded' }],
+      },
+    )
+    const event = {
+      conversationId: 'conversation-a',
+      runId: 'run-a',
+      type: 'complete' as const,
+      data: { result: '已经打开百度站长' },
+    }
+
+    expect(bridge.normalizeBrowserTerminalEvent(event)).toBe(event)
+  })
 })
 
 function createBridge(
@@ -71,6 +118,17 @@ function createBridge(
     workspaceKey: string | null
   }
   finishActiveBrowserTask: (conversationId: string) => void
+  normalizeBrowserTerminalEvent: (event: {
+    conversationId: string
+    runId: string | null
+    type: 'stream' | 'complete' | 'error' | 'system'
+    data: unknown
+  }) => {
+    conversationId: string
+    runId: string | null
+    type: 'stream' | 'complete' | 'error' | 'system'
+    data: unknown
+  }
 } {
   const bridge = Object.create(AgentBridge.prototype) as Record<string, unknown>
   bridge.runtime = {

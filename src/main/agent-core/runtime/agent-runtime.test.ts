@@ -138,6 +138,19 @@ describe('AgentRuntime session continuity', () => {
     expect(runtime.getStatus('conversation-1').runId).toBeNull()
   })
 
+  it('reports when a backend cannot prove exact cancellation', () => {
+    const runtime = new AgentRuntime({
+      config: { type: 'local-claude-code' },
+      deps: {} as never,
+    })
+    const backend = runtime.getBackend('conversation-1') as TestBackend & {
+      exactCancellationSupported?: boolean
+    }
+    backend.exactCancellationSupported = false
+
+    expect(runtime.supportsExactCancellation('conversation-1')).toBe(false)
+  })
+
   it('emits a terminal error when backend reconfiguration interrupts an active run', async () => {
     const events: Array<{
       conversationId: string

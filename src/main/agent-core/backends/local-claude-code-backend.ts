@@ -43,6 +43,9 @@ import {
 const VISIBLE_BROWSER_DISALLOWED_TOOLS = [
   'mcp__cclink_studio__browser_new_tab',
   'AskUserQuestion',
+  'WebSearch',
+  'WebFetch',
+  'webReader',
 ] as const
 const DISALLOWED_TOOL_NAMES = new Set(['browser_new_tab'])
 type AgentQueryOperation = 'message' | 'compact'
@@ -502,7 +505,12 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       hooks: {
         PreToolUse: [
           {
-            hooks: [this.createStudioPreToolUseHook(workspacePath)],
+            hooks: [
+              this.createStudioPreToolUseHook(
+                workspacePath,
+                options?.forceVisibleBrowser === true || options?.disableBuiltinTools === true,
+              ),
+            ],
           },
         ],
       },
@@ -556,10 +564,20 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     }
   }
 
-  private createStudioPreToolUseHook(workspacePath: string): HookCallback {
+  private createStudioPreToolUseHook(
+    workspacePath: string,
+    visibleBrowserOnly: boolean,
+  ): HookCallback {
     const workspaceRoot = workspacePath ? resolve(workspacePath) : null
     return async (input) => {
       if (input.hook_event_name !== 'PreToolUse') return { continue: true }
+      if (visibleBrowserOnly && isInvisibleWebTool(input.tool_name)) {
+        const reason =
+          '当前任务已绑定 CCLink Studio 可见浏览器 Tab，禁止使用站外 WebReader/WebFetch/WebSearch。' +
+          '请只使用 browser_* 工具操作并验证左侧可见页面；如果可见操作失败，必须如实报告失败。'
+        console.warn(`[ClaudeCodeBackend] ${reason}`)
+        return denyPreToolUse(reason)
+      }
       const schedulingDenial =
         inspectNativeSchedulingToolUse(input.tool_name, input.tool_input) ??
         (workspaceRoot
@@ -808,6 +826,11 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     await this.abort()
     this.eventHandler = null
   }
+}
+
+function isInvisibleWebTool(toolName: string): boolean {
+  const normalized = toolName.replace(/[^a-z]/gi, '').toLowerCase()
+  return normalized === 'webreader' || normalized === 'webfetch' || normalized === 'websearch'
 }
 
 function createSdkPrompt(

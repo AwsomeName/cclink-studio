@@ -9,7 +9,9 @@
 本地主进程 Agent 是 Studio 本地聊天的唯一运行面。开发本地发送、流、取消、run 终态或
 Claude Session 恢复时，必须扩展现有 Agent IPC/Runtime，不得新增
 `chatcc cclink-studio --local-runtime` 或其他并行本地服务。现有 `chatcc cclink-studio`
-只属于远程 debug/integration；2026-08-22 的闭环范围见 `docs/features/agent-system.md`。
+默认只属于远程 debug/integration；ADR 0018 允许通过显式环境开关把该现有 loopback surface
+作为默认关闭的实验 `IAgentBackend`，但 Studio 仍独占 Thread/run/Session 状态，且不得伪造
+缺失的取消与状态能力。2026-08-22 的正式闭环范围见 `docs/features/agent-system.md`。
 
 CCLink 云函数与 Agent runtime 仍位于 `/Users/apple/Desktop/chat-cc/deploy` 和
 `/Users/apple/Desktop/chat-cc/Agent`，分别独立部署和通过现有 NPM 包发布。本次不修改它们。

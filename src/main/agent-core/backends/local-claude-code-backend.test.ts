@@ -823,6 +823,9 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       'RemoteTrigger',
       'mcp__cclink_studio__browser_new_tab',
       'AskUserQuestion',
+      'WebSearch',
+      'WebFetch',
+      'webReader',
     ])
 
     const prompt = getSystemPromptAppend()
@@ -830,6 +833,25 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     expect(prompt).toContain('只有 URL host 已匹配目标站点时')
     expect(prompt).toContain('不要调用 AskUserQuestion')
     expect(prompt).not.toContain('| browser_new_tab |')
+
+    const hook = params.options.hooks.PreToolUse[0].hooks[0]
+    await expect(
+      hook(
+        {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'webReader',
+          tool_input: { url: 'https://ziyuan.baidu.com/' },
+          tool_use_id: 'server-reader',
+        },
+        'server-reader',
+        { signal: new AbortController().signal },
+      ),
+    ).resolves.toMatchObject({
+      hookSpecificOutput: {
+        permissionDecision: 'deny',
+        permissionDecisionReason: expect.stringContaining('可见浏览器 Tab'),
+      },
+    })
   })
 
   it('allows enabled external MCP servers in the all scope', async () => {

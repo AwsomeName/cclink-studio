@@ -12,13 +12,22 @@ const ignoredFiles = new Set(['pnpm-lock.yaml', 'verify-oss-boundary.mjs'])
 // 旧产品名只允许存在于显式迁移模块，不能回流到业务代码、测试或产品文档。
 const scopedAllowances = new Map([
   ['src/main/migrations/project-ops-legacy-account-paths.ts', new Set(['old product name'])],
-  ['scripts/verify-oss-boundary.test.mjs', new Set(['old artifact upload or cloud config'])],
+  [
+    'scripts/verify-oss-boundary.test.mjs',
+    new Set(['old artifact upload or cloud config', 'nonexistent split project']),
+  ],
 ])
 
 export const forbidden = [
   { label: 'old product name', pattern: /DeepInk|deepink|DEEPINK/ },
   { label: 'old private service naming', pattern: /private-serv|private service|private-service/ },
-  { label: 'nonexistent split project', pattern: /cclink-cloud|cclink-agent/ },
+  {
+    label: 'nonexistent split project',
+    // `cclink-agent` is also the explicit ID of ADR 0018's in-process backend adapter.
+    // Keep rejecting repository/directory claims without banning that bounded identifier.
+    pattern:
+      /cclink-cloud|(?:^|[\\/])cclink-agent(?:[\\/]|$)|cclink-agent\s+(?:repo|repository|project|项目|仓库)/i,
+  },
   {
     label: 'secret-bearing renderer field',
     pattern: /authToken|imUserSig|refreshToken|userSig/,

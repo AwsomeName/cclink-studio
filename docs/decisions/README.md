@@ -59,3 +59,6 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
 - `0017-main-owned-detachable-workbench-tabs.md`：以 WindowService、TabModel 和 BrowserManager 三个
   互不重叠的主进程 owner 实现 Browser Tab 辅助窗口，并固化单 writer、可信 renderer、两阶段
   迁移、Recovery Host、关闭送回和失败回滚语义。
+- `0018-experimental-cclink-agent-http-backend.md`：允许显式实验开关启动 Studio-owned 的
+  loopback chatcc HTTP/SSE 文本适配器；Studio 继续独占 Thread/run/Session 状态，缺失精确取消和
+  状态查询时 fail-closed，默认 Claude 路径不变。

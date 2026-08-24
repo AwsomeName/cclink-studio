@@ -248,7 +248,17 @@ Studio 主进程内的 Agent Runtime 是本地 Thread、run、Claude Session、�
 2026-08-22 复审否决了新增 `chatcc cclink-studio --local-runtime` 的方案。该服务会复制
 Studio 已有的进程生命周期、会话、取消和恢复状态，违反“状态只有一个所有者”。现有
 `chatcc cclink-studio` 只保留为远程 Agent 的显式 debug/integration surface，不参与本地
-Agent 启动。
+Agent 默认启动。
+
+ADR 0018 在 2026-08-24 接受一个默认关闭的最小实验例外：显式设置
+`CCLINK_STUDIO_EXPERIMENTAL_AGENT_BACKEND=cclink-agent` 时，Studio 启动并拥有现有
+`chatcc cclink-studio` loopback HTTP/SSE 进程，把它作为 `IAgentBackend` 的文本执行适配器。
+Studio 仍唯一拥有 Thread、run ledger、终态、Session 绑定、兼容指纹和 renderer 事件；服务不
+拥有或持久化第二份 Studio 产品状态。实验目标只含发送、文本流、保存 `runtime_session_id` 和
+第二轮续聊，不接工具/权限。2026-08-24 真实 smoke 证明现有 chatcc SSE 未返回 Runtime Session
+ID，因此当前只能声明服务启动和文本流，不能声明两轮续聊完成。服务还缺少按 `request_id`
+精确取消与状态查询，Studio 必须明确拒绝取消，不能以断流伪造 `cancelled`。普通启动和 Claude
+Code 默认后端保持不变。
 
 四项修复已进入代码与自动化验证，但在真实 Studio + Claude Runtime 验收完成前，
 不能写成产品闭环：
@@ -259,16 +269,18 @@ Agent 启动。
    工具确认同时失效。工具宿主按 run 跟踪所有已开始的 Studio 工具调用，发送协作式取消信号
    并等待它们全部返回；只有 Claude Query 读取循环和在途工具都结束后才写 `cancelled`。工具
    忽略信号时继续保持 `cancelling`；取消期间迟到的 Runtime `complete`/`error` 不得抢写终态
-   或释放 run，`cancelled` 只由取消流程写入。已经提交的不可逆副作用不伪装回滚。
+   或释放 run，`cancelled` 只由取消流程写入。唯一例外是用户明确退出 App：主进程先刷盘
+   `running/cancelling`，发出停止信号但不等待不可控工具；下次启动将遗留 run 对账为
+   `failed/runtime_owner_lost`。已经提交的不可逆副作用不伪装回滚。
 3. 主进程持久近期 run 和唯一终态，renderer 可按 `conversationId + runId` 查询；
    账本独立于 Claude 后端启动，Claude 不可用时仍可查询；重开时失去 Runtime 所有权的遗留
    非终态会以 `runtime_owner_lost` 明确失败，终态竞态只广播一次。
 4. 非空 Claude Session 采用严格恢复，必须匹配 conversation、工作区、Runtime binding、
    Provider/模型、角色和 Skill 指纹；失败明确报错并保留旧 ID，不自动创建新 Session。
 
-第一批修复与真实验收只覆盖现有 Claude Code / Claude Agent SDK 主线。不得借机新建本地
-HTTP/SSE 服务、token、端口、任务队列或第二状态账本；其他已存在的 runtime 选择不在这批
-保证范围内，也不因本决策删除。
+第一批修复与真实验收只覆盖现有 Claude Code / Claude Agent SDK 主线。除 ADR 0018 的显式、
+loopback、默认关闭实验适配器外，不得借机新建本地 HTTP/SSE 服务、token、端口、任务队列或
+第二状态账本；其他已存在的 runtime 选择不在这批保证范围内，也不因本决策删除。
 
 桌面发布与更新的状态所有权、发布权限边界、R0 发布基线和 U0-U5 更新验收以
 `docs/features/desktop-release-and-updates.md` 为产品事实源，任务拆解、代码落点、

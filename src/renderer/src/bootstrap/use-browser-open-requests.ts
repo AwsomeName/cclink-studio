@@ -16,6 +16,7 @@ import { focusAgentComposer } from '../features/markdown/markdown-navigation'
 import { useToastStore } from '../components/common/Toast'
 import { openDefaultBrowserTab } from '../features/web-resources/open-default-browser-tab'
 import { openWorkspaceRef } from '../features/workspace-open/workspace-open-controller'
+import { getBrowserTabMode } from '../features/browser/browser-tab-mode'
 
 function requestedWorkspaceRef(workspaceKey: string | null): WorkspaceRef | null {
   if (!workspaceKey) return null
@@ -64,31 +65,39 @@ export async function openRequestedBrowserTab(request: BrowserOpenTabRequest): P
   if (!activeWorkspaceRef) return
   const tabState = useTabStore.getState()
   const activeWorkspaceKey = workspaceRefKey(activeWorkspaceRef)
+  const hasRequestedProfile = request.profileId !== null && request.profileId !== undefined
+  if (hasRequestedProfile && !request.profileId?.trim()) {
+    useToastStore.getState().show('未打开新页面：登录环境标识无效', 'error')
+    return
+  }
+  const isReusableRequestTarget = (tab: (typeof tabState.tabs)[number]): boolean => {
+    if (
+      tab.type !== 'browser' ||
+      !tab.workspaceRef ||
+      workspaceRefKey(tab.workspaceRef) !== activeWorkspaceKey
+    ) {
+      return false
+    }
+    const mode = getBrowserTabMode(tab)
+    return hasRequestedProfile
+      ? tab.browserProfile === request.profileId && (mode === 'account' || mode === 'account-draft')
+      : mode === 'ordinary'
+  }
 
   const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId)
-  if (
-    !request.forceNew &&
-    activeTab?.type === 'browser' &&
-    activeTab.workspaceRef &&
-    workspaceRefKey(activeTab.workspaceRef) === activeWorkspaceKey
-  ) {
+  if (!request.forceNew && activeTab && isReusableRequestTarget(activeTab)) {
     return
   }
 
   const existingBrowserTab = !request.forceNew
-    ? tabState.tabs.find(
-        (tab) =>
-          tab.type === 'browser' &&
-          tab.workspaceRef &&
-          workspaceRefKey(tab.workspaceRef) === activeWorkspaceKey,
-      )
+    ? tabState.tabs.find(isReusableRequestTarget)
     : undefined
   if (existingBrowserTab) {
     tabState.activateTab(existingBrowserTab.id)
     return
   }
 
-  if (request.profileId) {
+  if (hasRequestedProfile && request.profileId) {
     const sourceTab = request.sourceTabId
       ? tabState.tabs.find((tab) => tab.id === request.sourceTabId)
       : undefined

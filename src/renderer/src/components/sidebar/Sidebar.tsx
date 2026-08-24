@@ -52,6 +52,7 @@ import {
 } from '../../utils/terminal-tab'
 import { recordTerminalLifecycleEvent } from '../../utils/terminal-lifecycle'
 import {
+  findOrdinaryBrowserTabByUrl,
   getBrowserDisplayTitle,
   getBrowserTabsForWorkspace,
   getBrowserUrlLabel,
@@ -482,7 +483,7 @@ function BrowserManagementView(): React.ReactElement {
   }
 
   const openBookmark = (bookmark: (typeof bookmarks)[number]): void => {
-    const existing = browserWorkbenchTabs.find((tab) => browserTabs[tab.id]?.url === bookmark.url)
+    const existing = findOrdinaryBrowserTabByUrl(browserWorkbenchTabs, browserTabs, bookmark.url)
     if (existing) {
       activateTab(existing.id)
       return
@@ -494,7 +495,7 @@ function BrowserManagementView(): React.ReactElement {
   }
 
   const openHistoryEntry = (entry: BrowserHistoryEntry): void => {
-    const existing = browserWorkbenchTabs.find((tab) => browserTabs[tab.id]?.url === entry.url)
+    const existing = findOrdinaryBrowserTabByUrl(browserWorkbenchTabs, browserTabs, entry.url)
     if (existing) {
       activateTab(existing.id)
       return

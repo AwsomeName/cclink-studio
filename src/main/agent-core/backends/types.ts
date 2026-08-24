@@ -32,6 +32,9 @@ export interface AgentHostContext {
 
 /** AI 后端接口 — 所有后端必须实现 */
 export interface IAgentBackend {
+  /** false 时宿主必须拒绝取消请求，不能把传输断开伪装成 Runtime 已取消。 */
+  readonly exactCancellationSupported?: boolean
+
   /** 启动后端（如需要初始化连接） */
   start?(): Promise<void>
 
@@ -142,5 +145,14 @@ export type BackendConfig =
         requestPermission: (
           request: import('./local-acp-backend.js').AcpPermissionDecisionRequest,
         ) => Promise<boolean>
+      }
+    }
+  | {
+      type: 'cclink-agent'
+      cclinkAgent: {
+        baseUrl: string
+        token: string
+        runtimeId: string
+        getWorkspacePath?: () => string
       }
     }

@@ -48,6 +48,7 @@
     "stage:agent-runtime": "node scripts/stage-claude-runtime.mjs",
     "verify:agent-runtime": "node scripts/stage-claude-runtime.mjs --verify-only",
     "smoke:agent-runtime": "node scripts/smoke-claude-runtime.mjs",
+    "smoke:cclink-agent": "node scripts/cclink-agent-smoke.mjs",
     "smoke:acp-runtime": "node scripts/acp-runtime-probe.mjs",
     "smoke:managed-claude-runtime": "CCLINK_MANAGED_RUNTIME_REAL_SMOKE=1 vitest run src/main/runtime-components/runtime-component-manager.test.ts -t 'downloads the real constrained npm package'",
     "smoke:managed-runtime-ui": "node scripts/managed-runtime-ui-smoke.mjs",

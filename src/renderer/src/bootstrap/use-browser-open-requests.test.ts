@@ -69,6 +69,68 @@ describe('openRequestedBrowserTab', () => {
     expect(useTabStore.getState().tabs).toHaveLength(2)
   })
 
+  it('ignores the active account Tab and activates the existing ordinary Tab for Agent browsing', async () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'browser-default',
+          type: 'browser',
+          title: '默认环境',
+          icon: 'B',
+          workspaceRef,
+          browserProfile: null,
+        },
+        {
+          id: 'browser-account',
+          type: 'browser',
+          title: '账号环境',
+          icon: 'B',
+          workspaceRef,
+          browserProfile: 'account-profile',
+          webResourceRef: { accountId: 'account-a' },
+        },
+      ],
+      activeTabId: 'browser-account',
+    })
+
+    await openRequestedBrowserTab({
+      initialUrl: 'https://www.baidu.com/',
+      workspaceKey: '/workspace/a',
+    })
+
+    expect(useTabStore.getState().activeTabId).toBe('browser-default')
+    expect(useTabStore.getState().tabs).toHaveLength(2)
+  })
+
+  it('creates an ordinary Tab when the workspace only has an account Tab', async () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'browser-account',
+          type: 'browser',
+          title: '账号环境',
+          icon: 'B',
+          workspaceRef,
+          browserProfile: 'account-profile',
+          webResourceRef: { accountId: 'account-a' },
+        },
+      ],
+      activeTabId: 'browser-account',
+    })
+
+    await openRequestedBrowserTab({
+      initialUrl: 'https://www.baidu.com/',
+      workspaceKey: '/workspace/a',
+    })
+
+    expect(useTabStore.getState().tabs).toHaveLength(2)
+    expect(useTabStore.getState().tabs.at(-1)).toMatchObject({
+      type: 'browser',
+      browserProfile: null,
+      initialUrl: 'https://www.baidu.com/',
+    })
+  })
+
   it('creates an ordinary browser tab when the workspace has none', async () => {
     useTabStore.setState({
       tabs: [{ id: 'file-a', type: 'editor', title: '文件', icon: 'F', workspaceRef }],

@@ -165,6 +165,10 @@ export class AgentRuntime {
     if (conversation.cancellingRunId === runId) conversation.cancellingRunId = null
   }
 
+  supportsExactCancellation(conversationId = DEFAULT_CONVERSATION_ID): boolean {
+    return this.ensureConversation(conversationId).backend.exactCancellationSupported !== false
+  }
+
   getStatus(
     conversationId = DEFAULT_CONVERSATION_ID,
   ): AgentBackendStatus & { runId: string | null } {

@@ -21,6 +21,19 @@ describe('workbenchTabDescriptorSchema Browser ownership', () => {
     expect(workbenchTabDescriptorSchema.safeParse(localBrowser).success).toBe(true)
   })
 
+  it('rejects empty Profile and malformed owner references instead of restoring them as ordinary', () => {
+    for (const binding of [
+      { browserProfile: '' },
+      { browserProfile: '   ' },
+      { webResourceRef: { accountId: '' } },
+      { webResourceDraftRef: { draftId: '' } },
+    ]) {
+      expect(workbenchTabDescriptorSchema.safeParse({ ...localBrowser, ...binding }).success).toBe(
+        false,
+      )
+    }
+  })
+
   it('accepts exactly one account or draft binding with its Profile', () => {
     expect(
       workbenchTabDescriptorSchema.safeParse({

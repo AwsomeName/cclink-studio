@@ -11,6 +11,7 @@ import {
   type McpConfigComposer,
 } from './local-claude-code-backend.js'
 import { LocalAcpBackend } from './local-acp-backend.js'
+import { CclinkAgentBackend } from './cclink-agent-backend.js'
 
 export interface BackendFactoryDeps {
   playwrightBridge: BrowserAutomationHost
@@ -55,6 +56,9 @@ export function createBackend(config: BackendConfig, deps: BackendFactoryDeps): 
         getWorkspacePath: config.acp.getWorkspacePath,
         requestPermission: config.acp.requestPermission,
       })
+
+    case 'cclink-agent':
+      return new CclinkAgentBackend(config.cclinkAgent)
 
     default:
       throw new Error(`未知的后端类型: ${(config as { type?: unknown }).type}`)

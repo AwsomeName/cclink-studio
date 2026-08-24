@@ -24,6 +24,10 @@ Studio 已有主进程本地 Agent，可免 CCLink 登录完成启动、发送�
 不再为同一能力新增 `chatcc cclink-studio --local-runtime`；`chatcc cclink-studio` 仍只是远程
 debug/integration surface。第二服务会成为 run/session、取消和终态的竞争所有者，违反本 ADR。
 
+2026-08-24 的 ADR 0018 只复审上述补充的绝对禁令：显式实验开关可让 Studio 启停现有 loopback
+surface 并把它作为无产品状态的文本执行适配器。Thread、run、终态和 Session 绑定仍由 Studio
+独占；服务缺少精确取消/状态查询时必须明确暴露为不支持。默认路径和本 ADR 其余结论不变。
+
 已在同一主进程 Agent Runtime 中实现并自动验证四项修复：
 
 1. 主进程原子接受 run；同一 Thread 同时只允许一个活动 run，重复发送明确拒绝且不得覆盖；

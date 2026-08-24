@@ -35,6 +35,10 @@ describe('browser tab mode', () => {
   })
 
   it('treats malformed restored references as invalid instead of throwing', () => {
+    expect(getBrowserTabMode({ browserProfile: '' })).toBe('invalid')
+    expect(getBrowserTabMode({ browserProfile: '   ' })).toBe('invalid')
+    expect(getBrowserTabMode({ webResourceRef: { accountId: '' } })).toBe('invalid')
+    expect(getBrowserTabMode({ webResourceDraftRef: { draftId: '' } })).toBe('invalid')
     expect(
       getBrowserTabMode({
         browserProfile: 'profile-a',

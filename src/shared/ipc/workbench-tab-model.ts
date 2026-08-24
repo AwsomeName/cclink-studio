@@ -27,18 +27,23 @@ export const workbenchTabDescriptorSchema = jsonRecordSchema.superRefine((value,
   const isLocalBrowser = isJsonObject(workspaceRef) && workspaceRef.kind === 'local'
   if (!isLocalBrowser || typeof value.filePath === 'string') return
 
-  const hasProfile =
+  const profileIsAbsent = value.browserProfile === null || value.browserProfile === undefined
+  const accountIsAbsent = value.webResourceRef === null || value.webResourceRef === undefined
+  const draftIsAbsent =
+    value.webResourceDraftRef === null || value.webResourceDraftRef === undefined
+  const hasValidProfile =
     typeof value.browserProfile === 'string' && Boolean(value.browserProfile.trim())
-  const hasAccount =
+  const hasValidAccount =
     isJsonObject(value.webResourceRef) &&
     typeof value.webResourceRef.accountId === 'string' &&
     Boolean(value.webResourceRef.accountId.trim())
-  const hasDraft =
+  const hasValidDraft =
     isJsonObject(value.webResourceDraftRef) &&
     typeof value.webResourceDraftRef.draftId === 'string' &&
     Boolean(value.webResourceDraftRef.draftId.trim())
-  const isOrdinary = !hasProfile && !hasAccount && !hasDraft
-  const isOwnedProfile = hasProfile && Number(hasAccount) + Number(hasDraft) === 1
+  const isOrdinary = profileIsAbsent && accountIsAbsent && draftIsAbsent
+  const isOwnedProfile =
+    hasValidProfile && ((hasValidAccount && draftIsAbsent) || (accountIsAbsent && hasValidDraft))
   if (!isOrdinary && !isOwnedProfile) {
     context.addIssue({
       code: 'custom',

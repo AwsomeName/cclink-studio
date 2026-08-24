@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { globalWorkspaceRef, localWorkspaceRef } from '@shared/workspace-ref'
 import type { Tab } from '../../types'
 import {
+  findOrdinaryBrowserTabByUrl,
   getBrowserDisplayTitle,
   getBrowserTabsForWorkspace,
   getBrowserUrlLabel,
@@ -33,5 +34,38 @@ describe('browser sidebar view model', () => {
   it('默认标题跟随网页，手动重命名始终优先', () => {
     expect(getBrowserDisplayTitle('浏览器', 'Example Page')).toBe('Example Page')
     expect(getBrowserDisplayTitle('运营看板', 'Example Page')).toBe('运营看板')
+  })
+
+  it('书签和历史只复用同 URL 的默认环境 Tab', () => {
+    const sameUrlTabs: Tab[] = [
+      {
+        id: 'account',
+        type: 'browser',
+        title: '账号环境',
+        icon: 'B',
+        workspaceRef: projectA,
+        browserProfile: 'account-profile',
+        webResourceRef: { accountId: 'account-a' },
+      },
+      {
+        id: 'ordinary',
+        type: 'browser',
+        title: '默认环境',
+        icon: 'B',
+        workspaceRef: projectA,
+        browserProfile: null,
+      },
+    ]
+    const browserTabs = {
+      account: { url: 'https://example.com/' },
+      ordinary: { url: 'https://example.com/' },
+    }
+
+    expect(findOrdinaryBrowserTabByUrl(sameUrlTabs, browserTabs, 'https://example.com/')?.id).toBe(
+      'ordinary',
+    )
+    expect(
+      findOrdinaryBrowserTabByUrl(sameUrlTabs.slice(0, 1), browserTabs, 'https://example.com/'),
+    ).toBeUndefined()
   })
 })
