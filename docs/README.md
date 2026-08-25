@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-08-21。
+> 当前事实源。最后更新：2026-08-25。
 
 ## 先读这些
 
@@ -52,6 +52,8 @@
 - `docs/features/global-web-accounts-development-plan.md`：全局网站账号、跨项目 Profile/Session 复用、运营矩阵、v2→v3 迁移和事务引用兼容的 E0、G1–G4、T1、R1 正式施工计划。
 - `docs/testing/browser-http-basic-auth.md`：内嵌浏览器 HTTP Basic Auth challenge 被 Electron 默认取消的
   P1 缺陷记录、凭证安全边界、修复方案和真实 FRP 验收门禁。
+- `docs/testing/browser-playwright-cdp-recovery.md`：`v0.1.58` 可见 Browser 正常但 Playwright/CDP
+  自动化断线后无法自愈的 P1 缺陷证据、正式修复方案、任务终态边界和真实 Electron 验收门禁。
 - `docs/testing/browser-tab-bar-native-view-occlusion.md`：`v0.1.54` 内嵌浏览器原生层覆盖 Tab 栏、
   当前本地与后台打开远程项目状态误判的事故记录，以及 `v0.1.55` 不可回归约束。
 - `docs/testing/browser-session-mode-separation.md`：普通浏览、已保存账号和添加新账号三种 Session
@@ -82,7 +84,7 @@ Studio 默认可单仓库独立启动，不要求 `cclink-dev`、`chat-cc/deploy
 - 本地验收与发布：`docs/ops/local-smoke-check.md`、`docs/ops/oss-release-runbook.md`、`docs/features/desktop-release-and-updates.md`。
 - 桌面更新验收证据：`docs/ops/desktop-update-acceptance.md`。
 - 官方集成：`docs/official-integration-contract.md`、`docs/ops/cclink-dev-official-integration-handoff.md`。
-- 工作台能力：`docs/features/workspace-system.md`、`docs/features/recent-session-switcher.md`、`docs/features/unified-agent-panel.md`、`docs/features/context-action-system.md`、`docs/features/configurable-keybinding-system.md`、`docs/features/detachable-workbench-tabs.md`、`docs/features/local-credentials.md`、`docs/features/local-credentials-development-plan.md`、`docs/features/git-source-control.md`、`docs/features/git-source-control-development-plan.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/agent-role-configuration.md`、`docs/features/ai-employees.md`、`docs/features/agent-profiles.md`、`docs/features/ai-web-affairs-agent.md`、`docs/features/global-web-accounts-development-plan.md`、`docs/features/ai-web-affairs-agent-development-plan.md`、`docs/features/browser-automation.md`、`docs/testing/browser-http-basic-auth.md`、`docs/testing/browser-tab-bar-native-view-occlusion.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/markdown-auto-illustration.md`、`docs/features/promotional-video-workbench.md`、`docs/features/scheduled-tasks.md`、`docs/features/scheduled-tasks-development-plan.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`、`docs/features/runtime-components-and-capability-plugins.md`、`docs/features/runtime-components-and-capability-plugins-development-plan.md`。
+- 工作台能力：`docs/features/workspace-system.md`、`docs/features/recent-session-switcher.md`、`docs/features/unified-agent-panel.md`、`docs/features/context-action-system.md`、`docs/features/configurable-keybinding-system.md`、`docs/features/detachable-workbench-tabs.md`、`docs/features/local-credentials.md`、`docs/features/local-credentials-development-plan.md`、`docs/features/git-source-control.md`、`docs/features/git-source-control-development-plan.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/agent-role-configuration.md`、`docs/features/ai-employees.md`、`docs/features/agent-profiles.md`、`docs/features/ai-web-affairs-agent.md`、`docs/features/global-web-accounts-development-plan.md`、`docs/features/ai-web-affairs-agent-development-plan.md`、`docs/features/browser-automation.md`、`docs/testing/browser-http-basic-auth.md`、`docs/testing/browser-playwright-cdp-recovery.md`、`docs/testing/browser-tab-bar-native-view-occlusion.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/markdown-auto-illustration.md`、`docs/features/promotional-video-workbench.md`、`docs/features/scheduled-tasks.md`、`docs/features/scheduled-tasks-development-plan.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`、`docs/features/runtime-components-and-capability-plugins.md`、`docs/features/runtime-components-and-capability-plugins-development-plan.md`。
 - 行业能力：数据源、硬件工作空间、FPC 改版、CAD 转换、工作空间内运营助手。
 
 架构、开发和功能规格描述当前事实；`docs/decisions/` 和带日期的 `docs/ops/`

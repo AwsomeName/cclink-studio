@@ -112,6 +112,21 @@ async function main() {
     !(await page.locator('body').innerText()).includes('登录后继续'),
     'unexpected CCLink login wall',
   )
+  const authSession = await page.evaluate(() => window.cclinkStudio.auth.checkSession())
+  assert(!authSession.loggedIn && !authSession.user, 'cclink-agent smoke must run while logged out')
+  const workspace = await page.evaluate(async (path) => {
+    const resolved = await window.cclinkStudio.workspaceState.resolveLocalWorkspace(path)
+    if (!resolved.valid || !resolved.workspacePath) return resolved
+    const activated = await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(
+      resolved.workspacePath,
+    )
+    return { ...resolved, activated }
+  }, workspacePath)
+  assert(workspace.valid && workspace.workspacePath, 'smoke workspace is unavailable')
+  assert(
+    workspace.activated?.success,
+    workspace.activated?.error || 'smoke workspace activation failed',
+  )
 
   const first = await runTurn(page, {
     id: conversationId,
@@ -125,6 +140,7 @@ async function main() {
     (id) => window.cclinkStudio.agent.getStatus(id),
     conversationId,
   )
+  assert(String(first.result?.result || '').includes('已记住'), 'first turn did not confirm memory')
   assert(firstStatus.sessionId, 'first turn did not persist runtime session id')
   assert(
     first.events.some(
@@ -156,6 +172,8 @@ async function main() {
       {
         success: true,
         ccLinkLoginRequired: false,
+        ccLinkLoggedIn: false,
+        workspacePath: workspace.workspacePath,
         streamedFirstTurn: true,
         sessionIdPersisted: true,
         secondTurnContinued: true,

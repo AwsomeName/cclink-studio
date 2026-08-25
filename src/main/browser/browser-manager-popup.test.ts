@@ -512,10 +512,32 @@ describe('BrowserManager popup adoption', () => {
     })
   })
 
-  it('enables native trackpad pinch zoom for each browser WebContents', async () => {
+  it('allows bounded native pinch requests before routing them through BrowserManager', async () => {
     const { source } = await createSource()
 
     expect(source.setVisualZoomLevelLimits).toHaveBeenCalledWith(0.3, 3)
+  })
+
+  it('routes native zoom requests back through the manager-owned zoom state', async () => {
+    const { manager, source } = await createSource()
+    manager.updateBounds({ x: 0, y: 72, width: 600, height: 600 })
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: 'source-tab',
+    })
+    source.debugger.visualScale = 0.3
+
+    source.emit('zoom-changed', {}, 'out')
+
+    expect(manager.getState('source-tab')).toMatchObject({
+      zoomMode: 'manual',
+      zoomFactor: 0.9,
+    })
+    await vi.waitFor(() => {
+      expect(source.currentZoom).toBe(0.9)
+      expect(source.debugger.visualScale).toBe(1)
+    })
   })
 
   it('resets independent Chromium visual zoom when fit width is applied', async () => {

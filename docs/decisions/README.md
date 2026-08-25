@@ -62,3 +62,6 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
 - `0018-experimental-cclink-agent-http-backend.md`：允许显式实验开关启动 Studio-owned 的
   loopback chatcc HTTP/SSE 文本适配器；Studio 继续独占 Thread/run/Session 状态，缺失精确取消和
   状态查询时 fail-closed，默认 Claude 路径不变。
+- `0019-freeze-cclink-agent-runtime-unification.md`：冻结把 `cclink-agent` 继续迁移为 Studio 本地
+  默认 Runtime/控制面的路线；保留默认关闭实验和验收证据，未来若恢复则优先从“Studio 控制本地
+  Agent、cclink-agent 只转发消息”的边界重新评审。

@@ -796,7 +796,7 @@ export class BrowserManager {
   /** 普通工作台 View 与网页 popup 共用同一套安全、导航和自动化监听。 */
   private installViewListeners(tabId: string, entry: ViewEntry): void {
     const wc = entry.view.webContents
-    // Electron 默认关闭 visual zoom；显式开放后触控板 pinch 才能连续缩放网页。
+    // Electron 默认关闭 visual zoom；显式开放请求范围，再由下方 zoom-changed 收回统一状态。
     void wc
       .setVisualZoomLevelLimits(MIN_ZOOM, MAX_ZOOM)
       .catch((error) =>
@@ -805,6 +805,21 @@ export class BrowserManager {
           error instanceof Error ? error.message : 'unknown',
         ),
       )
+    wc.on('zoom-changed', (_event, zoomDirection) => {
+      const ownerHost = this.hostForEntry(entry)
+      if (
+        this.views.get(tabId) !== entry ||
+        ownerHost?.activeViewId !== tabId ||
+        ownerHost.workspaceKey !== entry.workspaceKey
+      ) {
+        return
+      }
+      // Chromium can apply wheel/trackpad zoom outside BrowserManager, leaving the toolbar and
+      // fixed-position dialogs on different effective scales. Convert the native request into the
+      // manager-owned manual zoom path; applyZoom also serially clears independent visual scale.
+      if (zoomDirection === 'in') this.zoomIn(tabId)
+      else if (zoomDirection === 'out') this.zoomOut(tabId)
+    })
     wc.on('before-input-event', (event, input) => {
       const ownerHost = this.hostForEntry(entry)
       if (

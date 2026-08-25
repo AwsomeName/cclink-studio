@@ -1,7 +1,9 @@
 # 实验性 cclink-agent 后端
 
-> 当前状态：默认关闭；Studio 适配器能启动服务并接收文本流，但现有 chatcc SSE 不返回
-> `runtime_session_id`，两轮 Session 续聊真实闭环尚未完成。
+> 当前状态：默认关闭；`chatcc-agent 0.8.49` 已返回 `runtime_session_id`，
+> 未登录真实 Electron 两轮文本续聊验收通过。这不改变 Claude Code 默认后端。
+> 2026-08-25 起该路线冻结：只保留实验和验收证据，不继续补运行控制、工具/权限或默认切换。
+> 详见 ADR 0019。
 
 ## 启用方式
 
@@ -21,11 +23,10 @@ pnpm dev
 实验模式在整次 App 生命周期内替换本地 Claude backend，但不改变持久默认值，也不增加 UI 选择。
 请使用新建的本地 Thread 验收；不要拿已有 Claude Session 的历史 Thread 测试。
 
-## 未登录真人验收
+## 未登录真实 App 验收
 
-以下是 Agent 补齐 SSE Session ID 后的正式验收步骤。以当前 `chatcc-agent 0.8.42` 执行时，
-第 4 步结束会明确显示 `cclink_agent_session_id_missing`，第 5 步不能继续；这是已知真实阻塞，
-不得记录为通过。
+以下步骤已使用 `chatcc-agent 0.8.49` 执行通过。`0.8.42` 的 Session ID 缺失只保留为
+历史失败证据，不再是当前阻塞。
 
 1. 确认 Studio 未登录 CCLink；选择一个本地工作区后退出 Studio。
 2. 用上面的环境变量启动 Studio。终端应出现
@@ -42,20 +43,33 @@ pnpm dev
 
 ## 当前不支持
 
-- 当前 chatcc SSE 成功终态没有 `runtime_session_id`，因此首轮不能安全保存 Session；
+以下能力是冻结边界，不是当前开发队列或待立即修复的发布阻塞：
+
 - 按 `request_id` 精确取消；
 - 服务侧单次 run 状态查询和断线恢复；
 - Studio 工具、MCP 与权限确认桥接；
 - 上下文压缩、图片、定时任务和外部远程 URL；
 - App 运行中切换服务 workspace root。
 
-缺失接口及精确语义见 ADR 0018。Studio 会明确拒绝不受支持的取消，不会把 SSE 断开写成
-`cancelled`。
+冻结范围及历史接口设想见 ADR 0018 和 ADR 0019。Studio 会明确拒绝不受支持的取消，不会把
+SSE 断开写成 `cancelled`。
 
 ## 2026-08-24 测试结果
 
 - Studio 定向自动化：子进程启停、loopback 限制、分片 SSE、理想协议下两轮 ID 回传、无 ID
   fail-closed、取消拒绝和默认路径隔离通过；
-- 真实 Electron + 本机 chatcc：Studio 启动、未出现 CCLink 登录墙、服务/runtime 探测和首轮
-  文本流通过；首轮成功终态因缺少 `runtime_session_id` 失败，第二轮未执行；
-- 结论：工程适配器可验证，用户两轮最小闭环 blocked，等待 Agent SSE 契约补齐后重跑本节步骤。
+- 历史失败：本机 `chatcc-agent 0.8.42` 首轮文本流到达，但 SSE `done` 缺少
+  `runtime_session_id`，Studio 以 `cclink_agent_session_id_missing` 失败关闭，未执行第二轮；
+- 0.8.49 环境：全局 CLI 位于
+  `/Users/apple/.local/node-v22.22.2-darwin-arm64/bin/chatcc`，`chatcc --version` 返回 `0.8.49`；
+- 未登录前置：真实 Electron 使用全新隔离 `userData`，`auth.checkSession()` 返回
+  `loggedIn: false`，且目录中不存在 `cclink-session.json`；当前本地工作区由主进程成功绑定；
+- 两轮对话：首轮回复包含“已记住”并以 `text-delta` 事件到达，Studio 保存服务返回的
+  Session ID；同一 conversation 第二轮回复包含“海盐蓝”，run 终态为 `succeeded`；
+- 生命周期：验收退出后无 `chatcc cclink-studio` 残留进程；不带实验环境变量重启时，
+  日志为 `Agent 后端就绪 (local-claude-code, system, Claude Code 2.1.122)`；
+- 最终真实 App smoke：`pnpm smoke:cclink-agent` 通过，证据目录为
+  `/tmp/cclink-agent-0849-final3.tFQ2Nz`；默认后端复核证据目录为
+  `/tmp/cclink-agent-default-check.0PC5XL`。
+- 结论：用户现在可在显式实验开关下完成未登录两轮文本续聊；默认后端未切换。精确取消、
+  服务侧 run 恢复和工具/权限闭环仍不支持。

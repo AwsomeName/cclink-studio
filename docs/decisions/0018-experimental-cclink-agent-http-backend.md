@@ -1,10 +1,14 @@
 # ADR 0018：实验性 cclink-agent HTTP/SSE 后端
 
 - 状态：accepted（实验性、默认关闭）
-- 实施状态：Studio 适配器工程门禁已通过；现有 chatcc SSE 缺少 Session ID，真实最小闭环 blocked
+- 实施状态：`chatcc-agent 0.8.49` 下的未登录两轮文本/Session 最小闭环已通过；
+  后端仍默认关闭；后续默认切换、运行控制与工具桥接已由 ADR 0019 冻结
 - 日期：2026-08-24
 - 负责人：CCLink Studio Maintainers
 - 复审：ADR 0006 的 2026-08-22 本地运行面补充
+
+> 2026-08-25：本 ADR 已完成的实验实现和验收事实继续有效，但不得据此继续扩张
+> `cclink-agent` 的 Studio 本地控制职责。冻结原因、原始需求和恢复条件见 ADR 0019。
 
 ## 用户验收目标
 
@@ -61,11 +65,13 @@ ADR 0006 曾否决新增并行本地 Runtime 服务，因为第二服务可能�
 | HTTP 请求与 SSE socket              | `CclinkAgentBackend`                                      | 不持久化                            |
 | chatcc 子进程启停                   | `CclinkAgentService`，由 `AgentBridge.destroy()` 对称释放 | 不持久化                            |
 
-## 缺失的最小 Agent 接口
+## Agent 接口状态与冻结边界
 
-现有服务没有以下接口，因此本次不能宣称两轮续聊、取消和服务侧 run 状态闭环：
+最初缺口及当前状态如下。第 1 项已在 `chatcc-agent 0.8.49` 满足并通过真实两轮续聊；
+第 2-4 项未完成，并已由 ADR 0019 冻结，不再作为当前开发队列；它们不影响已经成立的
+文本/Session 最小闭环结论：
 
-1. `POST /cclink-studio/v1/runtime/session` 的 SSE 成功终态必须返回实际
+1. **0.8.49 已满足**：`POST /cclink-studio/v1/runtime/session` 的 SSE 成功终态必须返回实际
    `runtime_session_id`
    - 可在首个已知 Session 的事件中发送，也可放入唯一 `done`；
    - 必须取 `runRuntimeSession()` 最终返回值，不能回显请求体中首轮为空的字段；
@@ -115,4 +121,11 @@ ADR 0006 曾否决新增并行本地 Runtime 服务，因为第二服务可能�
 增量已到达，但 SSE `done` 没有 `runtime_session_id`，Studio 返回
 `cclink_agent_session_id_missing`。同时检查只读源码工作区的 `0.8.48`，其
 `runRuntimeSession()` 虽返回 ID，SSE route 仍丢弃该返回值并以请求体生成 `done`。因此这不是
-Studio 可安全推断或降级的问题；Agent 补齐第 1 项后才能重跑两轮真人验收。
+Studio 可安全推断或降级的问题；这是 0.8.49 补齐第 1 项前的历史阻塞。
+
+2026-08-24 同日升级到全局 `chatcc-agent 0.8.49` 后，使用全新隔离 `userData`
+重跑真实 Electron smoke：CCLink Session 为未登录且无持久 Session 文件；首轮回复“已记住”并保存
+`runtime_session_id`；第二轮在同一 conversation 回复“海盐蓝”且 run 为 `succeeded`；退出后无
+`chatcc cclink-studio` 残留进程。不带实验变量重启时日志仍为
+`local-claude-code, system, Claude Code 2.1.122`，因此默认后端未切换。详细证据见
+`docs/features/experimental-cclink-agent-backend.md`。
