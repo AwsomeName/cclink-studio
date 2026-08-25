@@ -5,6 +5,16 @@ export function classifyBrowserError(error: unknown): BrowserTaskFailureReason {
   const normalized = message.toLowerCase()
 
   if (
+    normalized.includes('browser_automation_unavailable') ||
+    normalized.includes('playwright') ||
+    normalized.includes('cdp') ||
+    normalized.includes('browser has been closed') ||
+    normalized.includes('connection closed')
+  ) {
+    return 'automation_unavailable'
+  }
+
+  if (
     normalized.includes('target closed') ||
     normalized.includes('page closed') ||
     normalized.includes('tab closed')

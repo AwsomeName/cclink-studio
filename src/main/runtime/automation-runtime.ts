@@ -20,6 +20,11 @@ import type { AgentCapabilityName } from '../../shared/agent-protocol'
 import type { CclinkStudioRuntimeState } from './app-runtime'
 import { runShutdownStep } from './shutdown'
 
+const browserCdpRecoverySmokeHandlers = new WeakMap<
+  CclinkStudioRuntimeState,
+  (message: unknown) => void
+>()
+
 export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeState): Promise<void> {
   if (
     !runtime.mainWindow ||
@@ -60,6 +65,10 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
       runtime.playwrightBridge = new PlaywrightBridge(
         runtime.browserDownloadStore,
         runtime.browserTaskRuntime,
+        {
+          ready: () => runtime.capabilities.ready('browser'),
+          failed: (error) => runtime.capabilities.failed('browser', error),
+        },
       )
       await runtime.playwrightBridge.connect(cdpPort)
       console.log('[CCLink Studio] Playwright 已连接')
@@ -67,6 +76,7 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
       if (runtime.browserManager) {
         runtime.browserManager.attachPlaywright(runtime.playwrightBridge)
       }
+      registerBrowserCdpRecoverySmoke(runtime)
       runtime.capabilities.ready('browser')
     } catch (error) {
       await runtime.playwrightBridge?.disconnect().catch(() => undefined)
@@ -215,6 +225,7 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
 }
 
 export async function shutdownAutomationRuntime(runtime: CclinkStudioRuntimeState): Promise<void> {
+  unregisterBrowserCdpRecoverySmoke(runtime)
   await runShutdownStep('EditorModule', () => runtime.editorModule?.destroy())
   await runShutdownStep('AgentDeviceManager', () => runtime.agentDeviceManager?.destroy())
   await runShutdownStep('McpToolHost', () => runtime.toolHost?.stop())
@@ -224,6 +235,62 @@ export async function shutdownAutomationRuntime(runtime: CclinkStudioRuntimeStat
   runtime.agentDeviceManager = null
   runtime.toolHost = null
   runtime.playwrightBridge = null
+}
+
+function registerBrowserCdpRecoverySmoke(runtime: CclinkStudioRuntimeState): void {
+  const token = process.env.CCLINK_STUDIO_BROWSER_CDP_RECOVERY_SMOKE_TOKEN
+  if (
+    process.env.CCLINK_STUDIO_BROWSER_CDP_RECOVERY_SMOKE !== '1' ||
+    !process.env.CCLINK_STUDIO_TEST_USER_DATA_PATH ||
+    !token ||
+    !process.send
+  ) {
+    return
+  }
+  unregisterBrowserCdpRecoverySmoke(runtime)
+  const handler = (message: unknown): void => {
+    if (!message || typeof message !== 'object') return
+    const request = message as {
+      type?: unknown
+      token?: unknown
+      generation?: unknown
+    }
+    if (
+      request.type !== 'cclink-browser-cdp-recovery-disconnect' ||
+      request.token !== token ||
+      typeof request.generation !== 'number'
+    ) {
+      return
+    }
+    const generation = request.generation
+    void (async () => {
+      try {
+        const bridge = runtime.playwrightBridge
+        if (!bridge) throw new Error('PlaywrightBridge 不可用')
+        await bridge.disconnectTransportForSmoke(generation)
+        process.send?.({
+          type: 'cclink-browser-cdp-recovery-disconnected',
+          token,
+          generation,
+        })
+      } catch (error) {
+        process.send?.({
+          type: 'cclink-browser-cdp-recovery-error',
+          token,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    })()
+  }
+  process.on('message', handler)
+  browserCdpRecoverySmokeHandlers.set(runtime, handler)
+}
+
+function unregisterBrowserCdpRecoverySmoke(runtime: CclinkStudioRuntimeState): void {
+  const handler = browserCdpRecoverySmokeHandlers.get(runtime)
+  if (!handler) return
+  process.removeListener('message', handler)
+  browserCdpRecoverySmokeHandlers.delete(runtime)
 }
 
 function registerToolModule(

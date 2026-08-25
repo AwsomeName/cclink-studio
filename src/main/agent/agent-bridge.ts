@@ -1056,19 +1056,19 @@ export class AgentBridge {
 
   private deliverRuntimeEvent(event: AgentRuntimeEvent): void {
     for (const listener of this.runtimeListeners) listener(event)
-    const taskId = this.activeBrowserTaskIds.get(event.conversationId)
-    if (taskId) {
+    const taskId = this.resolveBrowserTaskIdForEvent(event)
+    if (taskId && event.type !== 'complete' && event.type !== 'error') {
       this.syncActiveBrowserTaskCorrelation(event.conversationId, taskId, event.runId)
     }
     if (event.type === 'complete') {
       this.recordAgentUsage(event)
       if (this.isErrorResult(event.data)) {
-        this.failActiveBrowserTask(event.conversationId, event.data)
+        this.failActiveBrowserTask(event.conversationId, event.data, taskId)
       } else {
-        this.finishActiveBrowserTask(event.conversationId)
+        this.finishActiveBrowserTask(event.conversationId, taskId)
       }
     } else if (event.type === 'error') {
-      this.failActiveBrowserTask(event.conversationId, event.data)
+      this.failActiveBrowserTask(event.conversationId, event.data, taskId)
     }
     if (!this.rendererSuppressedConversationIds.has(event.conversationId)) {
       this.forwardToRenderer(event.type, event.data, event.conversationId, event.runId)
@@ -1077,20 +1077,49 @@ export class AgentBridge {
 
   private normalizeBrowserTerminalEvent(event: AgentRuntimeEvent): AgentRuntimeEvent {
     if (event.type !== 'complete' || this.isErrorResult(event.data)) return event
-    const taskId = this.resolveActiveBrowserTaskId(event.conversationId)
+    const taskId = this.resolveBrowserTaskIdForEvent(event)
     if (!taskId || !this.deps.browserTaskRuntime) return event
+    const task =
+      this.deps.browserTaskRuntime.getTask?.(taskId) ??
+      this.deps.browserTaskRuntime.getActiveTaskForConversation(event.conversationId)
+    if (!task) return event
+    if (task.status === 'failed' || task.status === 'cancelled') {
+      return this.browserCompletionError(
+        event,
+        'browser_task_not_successful',
+        `关联 BrowserTask 已${task.status === 'failed' ? '失败' : '取消'}，Agent 本轮不能标记成功。`,
+      )
+    }
+    if (task.reobservationRequired) {
+      return this.browserCompletionError(
+        event,
+        'browser_reobservation_required',
+        '浏览器动作结果仍未知，Agent 必须先重新截图或读取页面后才能完成本轮。',
+      )
+    }
     const actionLogs = this.deps.browserTaskRuntime.listActionLogs(taskId)
     if (actionLogs.some((log) => log.status === 'succeeded')) return event
 
+    return this.browserCompletionError(
+      event,
+      'visible_browser_action_not_verified',
+      'Agent 没有在绑定的可见浏览器 Tab 完成任何可验证操作，本轮已判定失败。' +
+        '页面没有被打开或修改；请检查登录草稿是否已保存，或根据浏览器工具的失败信息处理。',
+    )
+  }
+
+  private browserCompletionError(
+    event: AgentRuntimeEvent,
+    code: string,
+    message: string,
+  ): AgentRuntimeEvent {
     return {
       ...event,
       type: 'error',
       data: {
         type: 'error',
-        code: 'visible_browser_action_not_verified',
-        message:
-          'Agent 没有在绑定的可见浏览器 Tab 完成任何可验证操作，本轮已判定失败。' +
-          '页面没有被打开或修改；请检查登录草稿是否已保存，或根据浏览器工具的失败信息处理。',
+        code,
+        message,
       },
     }
   }
@@ -1149,12 +1178,17 @@ export class AgentBridge {
     this.activeBrowserTaskIds.set(conversationId, task.id)
   }
 
-  private finishActiveBrowserTask(conversationId: string): void {
-    const taskId = this.resolveActiveBrowserTaskId(conversationId)
+  private finishActiveBrowserTask(conversationId: string, resolvedTaskId?: string | null): void {
+    const taskId =
+      resolvedTaskId === undefined
+        ? this.resolveActiveBrowserTaskId(conversationId)
+        : resolvedTaskId
     if (!taskId) return
-    this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
+    if (resolvedTaskId === undefined) this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
     this.deps.browserTaskRuntime?.finishTask(taskId)
-    this.activeBrowserTaskIds.delete(conversationId)
+    if (this.activeBrowserTaskIds.get(conversationId) === taskId) {
+      this.activeBrowserTaskIds.delete(conversationId)
+    }
   }
 
   private cancelActiveBrowserTask(conversationId: string): void {
@@ -1165,15 +1199,24 @@ export class AgentBridge {
     this.activeBrowserTaskIds.delete(conversationId)
   }
 
-  private failActiveBrowserTask(conversationId: string, error: unknown): void {
-    const taskId = this.resolveActiveBrowserTaskId(conversationId)
+  private failActiveBrowserTask(
+    conversationId: string,
+    error: unknown,
+    resolvedTaskId?: string | null,
+  ): void {
+    const taskId =
+      resolvedTaskId === undefined
+        ? this.resolveActiveBrowserTaskId(conversationId)
+        : resolvedTaskId
     if (!taskId) return
-    this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
+    if (resolvedTaskId === undefined) this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
     this.deps.browserTaskRuntime?.failTask(taskId, {
       reason: 'unknown',
       errorMessage: this.extractErrorMessage(error),
     })
-    this.activeBrowserTaskIds.delete(conversationId)
+    if (this.activeBrowserTaskIds.get(conversationId) === taskId) {
+      this.activeBrowserTaskIds.delete(conversationId)
+    }
   }
 
   private resolveActiveBrowserTaskId(conversationId: string): string | null {
@@ -1182,6 +1225,14 @@ export class AgentBridge {
       this.deps.browserTaskRuntime?.getActiveTaskForConversation(conversationId)?.id ??
       null
     )
+  }
+
+  private resolveBrowserTaskIdForEvent(event: AgentRuntimeEvent): string | null {
+    const runtime = this.deps.browserTaskRuntime
+    if (event.runId && runtime?.getTaskForAgentRun) {
+      return runtime.getTaskForAgentRun(event.conversationId, event.runId)?.id ?? null
+    }
+    return this.resolveActiveBrowserTaskId(event.conversationId)
   }
 
   private syncActiveBrowserTaskCorrelation(

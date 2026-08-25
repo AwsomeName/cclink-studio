@@ -102,6 +102,93 @@ describe('AgentBridge browser send plan', () => {
 
     expect(bridge.normalizeBrowserTerminalEvent(event)).toBe(event)
   })
+
+  it.each(['failed', 'cancelled'] as const)(
+    'blocks Agent success when the exact BrowserTask is %s',
+    (status) => {
+      const task = { id: 'browser-task', status, reobservationRequired: false }
+      const bridge = createBridge(
+        { kind: 'all' },
+        {},
+        {
+          getTaskForAgentRun: () => task,
+          getTask: () => task,
+          listActionLogs: () => [
+            { id: 'ok-action', taskRunId: 'browser-task', status: 'succeeded' },
+          ],
+        },
+      )
+
+      expect(
+        bridge.normalizeBrowserTerminalEvent({
+          conversationId: 'conversation-a',
+          runId: 'run-a',
+          type: 'complete',
+          data: { result: 'done' },
+        }),
+      ).toMatchObject({
+        type: 'error',
+        data: { code: 'browser_task_not_successful' },
+      })
+    },
+  )
+
+  it('blocks Agent success while a dispatched result still requires re-observation', () => {
+    const task = {
+      id: 'browser-task',
+      status: 'running',
+      reobservationRequired: true,
+    }
+    const bridge = createBridge(
+      { kind: 'all' },
+      {},
+      {
+        getTaskForAgentRun: () => task,
+        getTask: () => task,
+        listActionLogs: () => [{ id: 'ok-action', taskRunId: 'browser-task', status: 'succeeded' }],
+      },
+    )
+
+    expect(
+      bridge.normalizeBrowserTerminalEvent({
+        conversationId: 'conversation-a',
+        runId: 'run-a',
+        type: 'complete',
+        data: { result: 'done' },
+      }),
+    ).toMatchObject({
+      type: 'error',
+      data: { code: 'browser_reobservation_required' },
+    })
+  })
+
+  it('uses the event run id instead of a newer active BrowserTask', () => {
+    const oldTask = { id: 'old-task', status: 'failed' }
+    const currentTask = { id: 'current-task', status: 'running' }
+    const bridge = createBridge(
+      { kind: 'all' },
+      {},
+      {
+        getTaskForAgentRun: (_conversationId: string, runId: string) =>
+          runId === 'run-old' ? oldTask : currentTask,
+        getTask: (taskId: string) => (taskId === 'old-task' ? oldTask : currentTask),
+        getActiveTaskForConversation: () => currentTask,
+        listActionLogs: () => [{ id: 'ok', taskRunId: 'old-task', status: 'succeeded' }],
+      },
+    )
+
+    expect(
+      bridge.normalizeBrowserTerminalEvent({
+        conversationId: 'conversation-a',
+        runId: 'run-old',
+        type: 'complete',
+        data: { result: 'late success' },
+      }),
+    ).toMatchObject({
+      type: 'error',
+      data: { code: 'browser_task_not_successful' },
+    })
+  })
 })
 
 function createBridge(

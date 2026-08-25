@@ -4,6 +4,10 @@ import {
   type BrowserContext,
   type Page,
   type Download,
+  type ConsoleMessage,
+  type Request,
+  type Response,
+  type Dialog,
 } from 'playwright-core'
 import { randomUUID } from 'node:crypto'
 import type { DownloadItem, Session, WebContents } from 'electron'
@@ -42,6 +46,46 @@ interface ScopedNetworkLogEntry extends NetworkLogEntry {
   page: Page
 }
 
+interface PageBinding {
+  page: Page
+  generation: number
+  webContentsId: number
+}
+
+interface PageClaimSample {
+  contexts: number
+  pages: number
+}
+
+interface PlaywrightConnectionDiagnostics {
+  isConnected: boolean
+  connectionGeneration: number
+  contextCount: number
+  pageCount: number
+  reconnectInFlight: boolean
+  lastDisconnectedAt: number | null
+  lastReconnectAt: number | null
+  lastReconnectTrigger: string | null
+  lastReconnectError: string | null
+  forcedByEmptyContexts: boolean
+}
+
+const CDP_CONNECT_TIMEOUT_MS = 5_000
+
+class PageClaimError extends Error {
+  constructor(
+    message: string,
+    readonly samples: PageClaimSample[],
+  ) {
+    super(message)
+    this.name = 'PageClaimError'
+  }
+
+  get hasOnlyEmptyContexts(): boolean {
+    return this.samples.length > 0 && this.samples.every((sample) => sample.contexts === 0)
+  }
+}
+
 /**
  * 路由拦截处理器
  */
@@ -51,6 +95,11 @@ export interface RouteHandler {
   headers?: Record<string, string>
   body?: string
   contentType?: string
+}
+
+export interface PlaywrightBridgeConnectionObserver {
+  ready(): void
+  failed(error: unknown): void
 }
 
 /**
@@ -63,15 +112,32 @@ export class PlaywrightBridge {
   private browser: Browser | null = null
   private context: BrowserContext | null = null
   private page: Page | null = null
+  private cdpPort: number | null = null
+  private connectionGeneration = 0
+  private reconnectPromise: Promise<void> | null = null
+  private stopping = false
+  private lastDisconnectedAt: number | null = null
+  private lastReconnectAt: number | null = null
+  private lastReconnectTrigger: string | null = null
+  private lastReconnectError: string | null = null
+  private forcedByEmptyContexts = false
+  private readonly reconnectedCallbacks = new Set<(generation: number) => void>()
+  private browserDisconnectedHandler: (() => void) | null = null
+  private readonly contextPageHandlers = new Map<BrowserContext, (page: Page) => void>()
+  private readonly pageListenerDisposers = new Map<Page, Array<() => void>>()
 
   /** 多 Tab 注册表：tabId → Page */
   private pages: Map<string, Page> = new Map()
+  private pageBindings = new Map<string, PageBinding>()
   /** 当前活跃 Tab ID */
   private activeTabId: string | null = null
   /** BrowserManager 已正式 claim 的可见 View ID；临时 popup ID 不进入此集合。 */
   private claimedViewTabIds = new Set<string>()
   /** 同一 View 的加载事件可能并发触发 claim；按 tabId + WebContents 合并。 */
-  private viewClaims = new Map<string, { webContents: WebContents; promise: Promise<Page> }>()
+  private viewClaims = new Map<
+    string,
+    { webContents: WebContents; generation: number; promise: Promise<Page> }
+  >()
 
   /** 控制台日志缓冲 */
   private consoleLogs: ScopedConsoleLogEntry[] = []
@@ -108,40 +174,199 @@ export class PlaywrightBridge {
   constructor(
     private readonly browserDownloadStore?: BrowserDownloadStore | null,
     private readonly browserTaskRuntime?: BrowserTaskRuntime | null,
+    private readonly connectionObserver?: PlaywrightBridgeConnectionObserver | null,
   ) {}
 
   /**
    * 通过 CDP 连接到内嵌的 Chromium
    */
   async connect(cdpPort: number): Promise<void> {
-    this.browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`, {
-      headers: { Connection: 'keep-alive' },
-    })
+    this.cdpPort = cdpPort
+    this.stopping = false
+    await this.ensureConnected('initial_connect', true)
+  }
 
-    const contexts = this.refreshContexts()
-    this.context = contexts[0] ?? null
-    const pages = contexts.flatMap((context) => context.pages())
+  async ensureConnected(trigger = 'tool_preflight', force = false): Promise<void> {
+    if (this.stopping) throw new Error('PlaywrightBridge 正在停止')
+    if (!force && this.isConnected()) return
+    if (this.reconnectPromise) return this.reconnectPromise
+    if (this.cdpPort === null) throw new Error('Playwright CDP 端口尚未配置')
 
-    console.log(`[CCLink Studio] 发现 ${contexts.length} 个 Context、${pages.length} 个页面:`)
-    for (const p of pages) {
-      console.log(`  - ${p.url()}`)
+    const reconnect = this.performReconnect(trigger)
+    this.reconnectPromise = reconnect
+    try {
+      await reconnect
+    } finally {
+      if (this.reconnectPromise === reconnect) this.reconnectPromise = null
     }
+  }
+
+  isConnected(): boolean {
+    try {
+      return this.browser?.isConnected() === true
+    } catch {
+      return false
+    }
+  }
+
+  getConnectionGeneration(): number {
+    return this.connectionGeneration
+  }
+
+  isConnectionLoss(error: unknown, dispatchedGeneration: number): boolean {
+    if (dispatchedGeneration !== this.connectionGeneration || !this.isConnected()) return true
+    const message = error instanceof Error ? error.message : String(error ?? '')
+    return /connection closed|browser has been closed|target closed|page closed|cdp|playwright.*disconnect/iu.test(
+      message,
+    )
+  }
+
+  onReconnected(callback: (generation: number) => void): () => void {
+    this.reconnectedCallbacks.add(callback)
+    return () => this.reconnectedCallbacks.delete(callback)
+  }
+
+  getConnectionDiagnostics(): PlaywrightConnectionDiagnostics {
+    const contexts = this.browser?.contexts() ?? []
+    return {
+      isConnected: this.isConnected(),
+      connectionGeneration: this.connectionGeneration,
+      contextCount: contexts.length,
+      pageCount: contexts.reduce((count, current) => count + current.pages().length, 0),
+      reconnectInFlight: this.reconnectPromise !== null,
+      lastDisconnectedAt: this.lastDisconnectedAt,
+      lastReconnectAt: this.lastReconnectAt,
+      lastReconnectTrigger: this.lastReconnectTrigger,
+      lastReconnectError: this.lastReconnectError,
+      forcedByEmptyContexts: this.forcedByEmptyContexts,
+    }
+  }
+
+  private async performReconnect(trigger: string): Promise<void> {
+    const generation = ++this.connectionGeneration
+    const oldBrowser = this.browser
+    this.lastReconnectTrigger = trigger
+    this.forcedByEmptyContexts = trigger === 'live_view_with_empty_contexts'
+    // 先把本次 Promise 安装为 single-flight，再释放旧 transport，避免 disconnected 同步回调重入。
+    await Promise.resolve()
+    this.clearPlaywrightProjection(oldBrowser)
+    if (oldBrowser?.isConnected()) await this.closeClientTransport(oldBrowser)
+
+    try {
+      const browser = await chromium.connectOverCDP(`http://127.0.0.1:${this.cdpPort}`, {
+        headers: { Connection: 'keep-alive' },
+        timeout: CDP_CONNECT_TIMEOUT_MS,
+      })
+      if (generation !== this.connectionGeneration || this.stopping) {
+        await this.closeClientTransport(browser)
+        throw new Error('Playwright 连接已被更新的 generation 作废')
+      }
+
+      this.browser = browser
+      this.browserDisconnectedHandler = () => {
+        if (generation !== this.connectionGeneration || this.stopping || this.browser !== browser) {
+          return
+        }
+        this.lastDisconnectedAt = Date.now()
+        void this.ensureConnected('disconnected').catch((error) => {
+          console.error('[CCLink Studio] Playwright 断线重连失败:', error)
+        })
+      }
+      browser.on('disconnected', this.browserDisconnectedHandler)
+
+      const contexts = this.refreshContexts(generation)
+      this.context = contexts[0] ?? null
+      const pages = contexts.flatMap((context) => context.pages())
+      this.lastReconnectAt = Date.now()
+      this.lastReconnectError = null
+      this.connectionObserver?.ready()
+
+      console.log(
+        `[CCLink Studio] Playwright generation=${generation} 已连接，发现 ${contexts.length} 个 Context、${pages.length} 个页面`,
+      )
+      setTimeout(() => {
+        if (generation !== this.connectionGeneration || this.stopping) return
+        for (const callback of this.reconnectedCallbacks) callback(generation)
+      }, 0)
+    } catch (error) {
+      if (generation === this.connectionGeneration) {
+        this.browser = null
+        this.context = null
+        this.page = null
+        this.lastReconnectError = error instanceof Error ? error.message : String(error)
+        this.connectionObserver?.failed(error)
+      }
+      throw error
+    }
+  }
+
+  private clearPlaywrightProjection(oldBrowser: Browser | null): void {
+    if (oldBrowser && this.browserDisconnectedHandler) {
+      oldBrowser.removeListener('disconnected', this.browserDisconnectedHandler)
+    }
+    this.browserDisconnectedHandler = null
+    for (const [context, handler] of this.contextPageHandlers) {
+      context.removeListener('page', handler)
+    }
+    this.contextPageHandlers.clear()
+    for (const disposers of this.pageListenerDisposers.values()) {
+      for (const dispose of disposers) dispose()
+    }
+    this.pageListenerDisposers.clear()
+    this.listenedPages = new WeakSet<Page>()
+    this.observedContexts = new WeakSet<BrowserContext>()
+    this.pages.clear()
+    this.pageBindings.clear()
+    this.claimedViewTabIds.clear()
+    this.viewClaims.clear()
+    this.consoleLogs = []
+    this.networkLog = []
+    this.routeHandlers.clear()
+    this.downloads.clear()
+    this.downloadIds = new WeakMap<Download, string>()
+    this.activeTabId = null
+    this.page = null
+    this.context = null
+    if (this.browser === oldBrowser) this.browser = null
+  }
+
+  private async closeClientTransport(browser: Browser): Promise<void> {
+    // connectOverCDP 创建的 BrowserProcess.close 只关闭该 CDP WebSocket transport；
+    // 不向 Electron Chromium 发送 Browser.close。真实 smoke 会同时证明原 target 仍存活。
+    await browser.close({ reason: 'CCLink Studio Playwright client transport closed' })
+  }
+
+  /** 仅供隔离 smoke 断开 Studio 自己的 Playwright client，不关闭 Electron Chromium。 */
+  async disconnectTransportForSmoke(expectedGeneration: number): Promise<void> {
+    if (
+      process.env.CCLINK_STUDIO_BROWSER_CDP_RECOVERY_SMOKE !== '1' ||
+      !process.env.CCLINK_STUDIO_TEST_USER_DATA_PATH
+    ) {
+      throw new Error('Playwright transport 断线入口只允许隔离的 Browser CDP recovery smoke')
+    }
+    if (expectedGeneration !== this.connectionGeneration) {
+      throw new Error('Playwright transport smoke generation 已失效')
+    }
+    const browser = this.browser
+    if (!browser) throw new Error('Playwright transport 尚未连接')
+    await this.closeClientTransport(browser)
   }
 
   /**
    * Electron 的持久 Session/Profile 会投影为多个 CDP BrowserContext。Context 还可能在
    * Playwright 连接后才出现，因此认领页面前必须重新读取，而不能永久固定 contexts()[0]。
    */
-  private refreshContexts(): BrowserContext[] {
+  private refreshContexts(generation = this.connectionGeneration): BrowserContext[] {
     const contexts = this.browser?.contexts() ?? (this.context ? [this.context] : [])
-    for (const context of contexts) this.observeContext(context)
+    for (const context of contexts) this.observeContext(context, generation)
     return contexts
   }
 
-  private observeContext(context: BrowserContext): void {
+  private observeContext(context: BrowserContext, generation: number): void {
     if (this.observedContexts.has(context)) return
     this.observedContexts.add(context)
-    context.on('page', async (newPage) => {
+    const handler = async (newPage: Page): Promise<void> => {
+      if (generation !== this.connectionGeneration || this.stopping) return
       for (const existing of this.pages.values()) {
         if (existing === newPage) {
           console.log(`[CCLink Studio] 新页面已在注册表，跳过自动注册: url=${newPage.url()}`)
@@ -160,18 +385,26 @@ export class PlaywrightBridge {
       // 所有来自可见 Browser View 的 popup 都由 BrowserManager 分配稳定 tabId。
       // 这里不能先注册随机 ID，否则会短暂形成第二套 Tab 事实源。
       console.log(`[CCLink Studio] popup 等待 BrowserManager claim: url=${newPage.url()}`)
-    })
+    }
+    context.on('page', handler)
+    this.contextPageHandlers.set(context, handler)
   }
 
   /**
    * 为页面设置事件监听器（控制台、网络、对话框、下载）
    */
-  private setupPageListeners(page: Page): void {
+  private setupPageListeners(page: Page, generation: number): void {
     if (this.listenedPages.has(page)) return
     this.listenedPages.add(page)
+    const disposers: Array<() => void> = []
+    const listen = (event: string, handler: (...args: any[]) => void): void => {
+      page.on(event as any, handler)
+      disposers.push(() => page.removeListener(event as any, handler))
+    }
 
     // 控制台日志
-    page.on('console', (msg) => {
+    listen('console', (msg: ConsoleMessage) => {
+      if (generation !== this.connectionGeneration || this.stopping) return
       this.consoleLogs.push({
         page,
         type: msg.type() as ConsoleLogEntry['type'],
@@ -185,7 +418,8 @@ export class PlaywrightBridge {
     })
 
     // 页面错误
-    page.on('pageerror', (err) => {
+    listen('pageerror', (err: Error) => {
+      if (generation !== this.connectionGeneration || this.stopping) return
       this.consoleLogs.push({
         page,
         type: 'error',
@@ -195,7 +429,8 @@ export class PlaywrightBridge {
     })
 
     // 网络请求
-    page.on('request', (req) => {
+    listen('request', (req: Request) => {
+      if (generation !== this.connectionGeneration || this.stopping) return
       this.networkLog.push({
         page,
         requestId: req.url() + '::' + Date.now(),
@@ -210,7 +445,8 @@ export class PlaywrightBridge {
       }
     })
 
-    page.on('requestfailed', (req) => {
+    listen('requestfailed', (req: Request) => {
+      if (generation !== this.connectionGeneration || this.stopping) return
       this.networkLog.push({
         page,
         requestId: req.url() + '::failed::' + Date.now(),
@@ -227,7 +463,8 @@ export class PlaywrightBridge {
     })
 
     // 网络响应
-    page.on('response', (res) => {
+    listen('response', (res: Response) => {
+      if (generation !== this.connectionGeneration || this.stopping) return
       const url = res.url()
       const status = res.status()
       // 更新最近的匹配条目
@@ -244,7 +481,8 @@ export class PlaywrightBridge {
     })
 
     // 对话框自动处理
-    page.on('dialog', async (dialog) => {
+    listen('dialog', async (dialog: Dialog) => {
+      if (generation !== this.connectionGeneration || this.stopping) return
       if (this.dialogAutoAction) {
         console.log(
           `[CCLink Studio] 自动处理对话框: type=${dialog.type()}, message=${dialog.message()}`,
@@ -258,9 +496,11 @@ export class PlaywrightBridge {
     })
 
     // 下载事件
-    page.on('download', (download) => {
+    listen('download', (download: Download) => {
+      if (generation !== this.connectionGeneration || this.stopping) return
       void this.captureDownload(page, download)
     })
+    this.pageListenerDisposers.set(page, disposers)
   }
 
   private async captureDownload(page: Page, download: Download): Promise<string> {
@@ -352,28 +592,47 @@ export class PlaywrightBridge {
    *            用 tabId 作 key 让 Agent 作用域选择器能按用户可见的 Tab 定位到 Page。
    * @returns 实际使用的 tabId（= key 或生成的 randomUUID）
    */
-  registerPage(page: Page, key?: string): string {
+  registerPage(
+    page: Page,
+    key?: string,
+    generation = this.connectionGeneration,
+    webContentsId = key ? (this.electronWebContentsIdByTab.get(key) ?? -1) : -1,
+  ): string {
     const tabId = key ?? randomUUID()
     for (const [existingTabId, existingPage] of this.pages) {
       if (existingPage === page && existingTabId !== tabId) {
         this.pages.delete(existingTabId)
+        this.pageBindings.delete(existingTabId)
         this.claimedViewTabIds.delete(existingTabId)
       }
     }
     this.pages.set(tabId, page)
+    this.pageBindings.set(tabId, { page, generation, webContentsId })
 
     // 设置事件监听
-    this.setupPageListeners(page)
+    this.setupPageListeners(page, generation)
 
     // 页面关闭时清理
-    page.on('close', () => {
+    const closeHandler = (): void => {
+      const binding = this.pageBindings.get(tabId)
+      if (
+        generation !== this.connectionGeneration ||
+        binding?.page !== page ||
+        binding.generation !== generation ||
+        binding.webContentsId !== webContentsId
+      ) {
+        return
+      }
       this.pages.delete(tabId)
+      this.pageBindings.delete(tabId)
       this.claimedViewTabIds.delete(tabId)
       if (this.activeTabId === tabId) {
         const remaining = Array.from(this.pages.keys())
         this.activeTabId = remaining.length > 0 ? remaining[0] : null
       }
-    })
+    }
+    page.on('close', closeHandler)
+    this.pageListenerDisposers.get(page)?.push(() => page.removeListener('close', closeHandler))
 
     return tabId
   }
@@ -398,15 +657,45 @@ export class PlaywrightBridge {
     tabId: string,
     webContents: WebContents,
     expectedUrl?: string,
+    allowEmptyContextReconnect = true,
+  ): Promise<Page> {
+    return this.claimPageForViewInternal(
+      tabId,
+      webContents,
+      expectedUrl,
+      allowEmptyContextReconnect,
+    )
+  }
+
+  private async claimPageForViewInternal(
+    tabId: string,
+    webContents: WebContents,
+    expectedUrl: string | undefined,
+    allowEmptyContextReconnect: boolean,
   ): Promise<Page> {
     this.bindElectronDownloadOwner(tabId, webContents)
+    await this.ensureConnected('claim_preflight')
+    const generation = this.connectionGeneration
     const pending = this.viewClaims.get(tabId)
-    if (pending?.webContents === webContents) return pending.promise
+    if (pending?.webContents === webContents && pending.generation === generation) {
+      return pending.promise
+    }
 
-    const promise = this.performPageClaim(tabId, webContents, expectedUrl)
-    this.viewClaims.set(tabId, { webContents, promise })
+    const promise = this.performPageClaim(tabId, webContents, expectedUrl, generation)
+    this.viewClaims.set(tabId, { webContents, generation, promise })
     try {
       return await promise
+    } catch (error) {
+      if (
+        allowEmptyContextReconnect &&
+        error instanceof PageClaimError &&
+        error.hasOnlyEmptyContexts &&
+        !webContents.isDestroyed()
+      ) {
+        await this.ensureConnected('live_view_with_empty_contexts', true)
+        return this.claimPageForViewInternal(tabId, webContents, expectedUrl, false)
+      }
+      throw error
     } finally {
       if (this.viewClaims.get(tabId)?.promise === promise) this.viewClaims.delete(tabId)
     }
@@ -416,20 +705,34 @@ export class PlaywrightBridge {
     tabId: string,
     webContents: WebContents,
     expectedUrl?: string,
+    generation = this.connectionGeneration,
   ): Promise<Page> {
-    if (!this.browser && !this.context)
+    if (!this.browser && !this.context) {
       throw new Error('Playwright context 未就绪，无法 claim page')
+    }
 
     // 已绑定过同 key 的 Page：直接返回（幂等，避免重复监听）
     const existing = this.pages.get(tabId)
-    if (existing && !existing.isClosed()) {
+    const existingBinding = this.pageBindings.get(tabId)
+    if (
+      existing &&
+      !existing.isClosed() &&
+      existingBinding?.page === existing &&
+      existingBinding.generation === generation &&
+      existingBinding.webContentsId === webContents.id
+    ) {
       return existing
     }
 
     let ambiguousUrlMatches = 0
+    const samples: PageClaimSample[] = []
     const matchPage = (): Page | null => {
+      if (generation !== this.connectionGeneration || this.stopping) {
+        throw new Error('Playwright claim 已被更新的 generation 作废')
+      }
       const contexts = this.refreshContexts()
       const pages = contexts.flatMap((context) => context.pages())
+      samples.push({ contexts: contexts.length, pages: pages.length })
       // 1. 按 targetId 匹配（webContents 有 devtools targetId）
       const targetId = this.webContentsTargetId(webContents)
       if (targetId) {
@@ -469,14 +772,18 @@ export class PlaywrightBridge {
       const pageCount = contexts.reduce((total, current) => total + current.pages().length, 0)
       const ambiguity =
         ambiguousUrlMatches > 1 ? `，URL 在 ${ambiguousUrlMatches} 个 Context/Page 中重复` : ''
-      throw new Error(
+      throw new PageClaimError(
         `claimPageForView 找不到匹配的 Playwright Page（tabId=${tabId}, url=${expectedUrl ?? 'n/a'}）` +
           `。当前 contexts=${contexts.length} 个、pages=${pageCount} 个${ambiguity}`,
+        samples,
       )
     }
 
+    if (generation !== this.connectionGeneration || this.stopping || webContents.isDestroyed()) {
+      throw new Error('Playwright claim 完成时目标 View 或 generation 已失效')
+    }
     // 用 tabId 注册（覆盖旧 key），监听 + 关闭清理由 registerPage 负责
-    this.registerPage(page, tabId)
+    this.registerPage(page, tabId, generation, webContents.id)
     this.claimedViewTabIds.add(tabId)
     console.log(
       `[CCLink Studio] view 已 claim 为 Playwright Page: tabId=${tabId}, url=${page.url()}`,
@@ -511,6 +818,7 @@ export class PlaywrightBridge {
    */
   unregisterPage(tabId: string): void {
     this.pages.delete(tabId)
+    this.pageBindings.delete(tabId)
     this.claimedViewTabIds.delete(tabId)
     const webContentsId = this.electronWebContentsIdByTab.get(tabId)
     if (webContentsId !== undefined) {
@@ -634,19 +942,31 @@ export class PlaywrightBridge {
     playwrightTabId: string | null
     playwrightUrl: string | null
     playwrightTitle: string | null
+    automationConnection: PlaywrightConnectionDiagnostics & {
+      boundGeneration: number | null
+      boundWebContentsId: number | null
+    }
   }> {
     const page = this.pages.get(tabId)
+    const binding = this.pageBindings.get(tabId)
+    const automationConnection = {
+      ...this.getConnectionDiagnostics(),
+      boundGeneration: binding?.generation ?? null,
+      boundWebContentsId: binding?.webContentsId ?? null,
+    }
     if (!page || page.isClosed()) {
       return {
         playwrightTabId: this.activeTabId,
         playwrightUrl: null,
         playwrightTitle: null,
+        automationConnection,
       }
     }
     return {
       playwrightTabId: this.getTabIdForPage(page) ?? this.activeTabId,
       playwrightUrl: page.url(),
       playwrightTitle: await page.title().catch(() => ''),
+      automationConnection,
     }
   }
 
@@ -844,14 +1164,16 @@ export class PlaywrightBridge {
    * 断开连接（不关闭 Electron 的 Chromium）
    */
   async disconnect(): Promise<void> {
-    // 清空所有状态
-    this.pages.clear()
-    this.claimedViewTabIds.clear()
-    this.viewClaims.clear()
-    this.consoleLogs = []
-    this.networkLog = []
-    this.routeHandlers.clear()
-    this.downloads.clear()
+    this.stopping = true
+    this.connectionGeneration += 1
+    const browser = this.browser
+    this.clearPlaywrightProjection(browser)
+    if (browser?.isConnected()) await this.closeClientTransport(browser)
+    await this.reconnectPromise?.catch(() => undefined)
+    this.reconnectPromise = null
+    this.reconnectedCallbacks.clear()
+
+    // Electron Session 下载监听器属于 Bridge 生命周期，在 App 停止时对称释放。
     for (const [electronSession, handler] of this.electronDownloadSessionHandlers) {
       electronSession.removeListener('will-download', handler)
     }
@@ -859,14 +1181,9 @@ export class PlaywrightBridge {
     this.electronTabByWebContentsId.clear()
     this.electronWebContentsIdByTab.clear()
     this.pendingElectronDownloads.clear()
-    this.activeTabId = null
     this.dialogAutoAction = null
     this.dialogAutoText = null
-
-    // 注意：不能调用 browser.close()，那会关闭 Electron 本身
-    this.browser = null
-    this.context = null
-    this.page = null
+    this.cdpPort = null
   }
 }
 

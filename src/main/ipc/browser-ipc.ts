@@ -149,6 +149,7 @@ export function registerBrowserIpc(
           playwrightTabId: null,
           playwrightUrl: null,
           playwrightTitle: null,
+          automationConnection: undefined,
         }),
       getPlaywrightBridge?.()?.getPageDiagnostics(tabId) ?? Promise.resolve(null),
     ])

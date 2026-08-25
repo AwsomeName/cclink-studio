@@ -308,6 +308,7 @@ export class BrowserManager {
   private defaultZoomMode: ZoomMode = 'fit'
   /** PlaywrightBridge（晚绑定，CDP 连上后注入）；用于让 Agent 工具按 tabId 寻址到 Page */
   private playwrightBridge: PlaywrightBridge | null = null
+  private detachPlaywrightReconnectListener: (() => void) | null = null
   /** view 被销毁时回调（tabId）—— AgentBridge / TaskRuntime 等据此清理状态 */
   private readonly viewDestroyedCallbacks = new Set<(tabId: string) => void>()
   private readonly mainWorkspaceChangedCallbacks = new Set<(workspaceKey: string | null) => void>()
@@ -467,6 +468,11 @@ export class BrowserManager {
       const entry = this.views.get(tabId)
       if (!entry) continue
       try {
+        entry.view.setVisible(false)
+      } catch {
+        // host 可能已销毁；removeChildView 与恢复路径继续兜底。
+      }
+      try {
         host.nativeWindow.contentView.removeChildView(entry.view)
       } catch {
         // host 可能已销毁；返回 ownedTabIds 交给 WindowService 进入恢复路径。
@@ -579,7 +585,11 @@ export class BrowserManager {
    * 由 index.ts 在 connect() 之后调用本方法注入。注入后会为已存在的视图补 claim。
    */
   attachPlaywright(bridge: PlaywrightBridge): void {
+    this.detachPlaywrightReconnectListener?.()
     this.playwrightBridge = bridge
+    this.detachPlaywrightReconnectListener = bridge.onReconnected((generation) => {
+      void this.reclaimPlaywrightPages(generation)
+    })
     // Playwright 连接后，为已存在的项目浏览器视图补做显式 claim。
     for (const [tabId, entry] of this.views) {
       // 不 await：claim 失败仅记录日志，不阻塞 UI
@@ -588,6 +598,22 @@ export class BrowserManager {
       )
     }
     console.log(`[BrowserManager] PlaywrightBridge 已绑定，补 claim ${this.views.size} 个视图`)
+  }
+
+  private async reclaimPlaywrightPages(generation: number): Promise<void> {
+    const bridge = this.playwrightBridge
+    if (!bridge || bridge.getConnectionGeneration() !== generation) return
+    const claims = [...this.views].map(async ([tabId, entry]) => {
+      try {
+        await this.claimViewPage(tabId, entry, false)
+      } catch (error) {
+        console.warn(
+          `[BrowserManager] Playwright 重连后 claim 失败 generation=${generation} tabId=${tabId}:`,
+          formatError(error),
+        )
+      }
+    })
+    await Promise.all(claims)
   }
 
   /** 注册 view 销毁回调（AgentBridge 据此把失效的 browser scope 降级） */
@@ -617,11 +643,20 @@ export class BrowserManager {
    * 把某 view 的 webContents claim 为 Playwright Page，绑定到 tabId。
    * 期望在页面加载完成后调用（URL 匹配更稳）。失败抛错由调用方处理。
    */
-  private async claimViewPage(tabId: string, entry: ViewEntry): Promise<void> {
+  private async claimViewPage(
+    tabId: string,
+    entry: ViewEntry,
+    allowEmptyContextReconnect = true,
+  ): Promise<void> {
     if (!this.playwrightBridge) return
     const url = entry.view.webContents.getURL() || entry.pendingUrl
     try {
-      await this.playwrightBridge.claimPageForView(tabId, entry.view.webContents, url)
+      await this.playwrightBridge.claimPageForView(
+        tabId,
+        entry.view.webContents,
+        url,
+        allowEmptyContextReconnect,
+      )
       if (this.views.get(tabId) !== entry) {
         this.playwrightBridge.unregisterPage(tabId)
         throw new Error(`浏览器 View 已在 claim 期间销毁: ${tabId}`)
@@ -732,6 +767,10 @@ export class BrowserManager {
         ...(viewSession ? { session: viewSession } : {}),
       },
     })
+    // 新建 View 在成为 host 的明确 active target 前不得参与原生合成。只依赖
+    // removeChildView 会让“层级已脱离”和“实际仍在绘制”共享一个不可观测假设；
+    // setVisible 则提供独立且可诊断的原生可见性门禁。
+    view.setVisible(false)
 
     installBrowserCompatibilityHeaders(view.webContents.session)
     this.sessionDiagnostics.observe(view.webContents.session, profileId)
@@ -1082,6 +1121,7 @@ export class BrowserManager {
       sourceEntry.viewMode === 'mobile' ? MOBILE_UA : normalizeDesktopUserAgent(desktopUA),
     )
     view.setBounds({ x: 0, y: 0, width: 1, height: 1 })
+    view.setVisible(false)
 
     installBrowserCompatibilityHeaders(view.webContents.session)
     this.sessionDiagnostics.observe(view.webContents.session, sourceEntry.profileId)
@@ -1369,6 +1409,11 @@ export class BrowserManager {
     const host = this.hosts.get(entry.ownerWindowId)
     if (host && !host.nativeWindow.isDestroyed()) {
       try {
+        entry.view.setVisible(false)
+      } catch {
+        // WebContents 可能已经先销毁；移除引用继续完成对称清理。
+      }
+      try {
         host.nativeWindow.contentView.removeChildView(entry.view)
       } catch {
         // 窗口可能已销毁，忽略
@@ -1414,9 +1459,20 @@ export class BrowserManager {
       if (entry.ownerWindowId !== windowId) continue
       if (viewId !== tabId) {
         try {
+          entry.view.setVisible(false)
+        } catch (error) {
+          console.warn(
+            `[BrowserManager] 隐藏非目标 View 失败 tabId=${viewId} windowId=${windowId}:`,
+            formatError(error),
+          )
+        }
+        try {
           win.contentView.removeChildView(entry.view)
-        } catch {
-          // 忽略
+        } catch (error) {
+          console.warn(
+            `[BrowserManager] 移除非目标 View 失败 tabId=${viewId} windowId=${windowId}:`,
+            formatError(error),
+          )
         }
       }
     }
@@ -1438,6 +1494,7 @@ export class BrowserManager {
 
     win.contentView.addChildView(entry.view)
     entry.view.setBounds(host.currentBounds)
+    entry.view.setVisible(true)
     host.activeViewId = tabId
     entry.view.webContents.focus()
     void this.playwrightBridge?.switchToPage(tabId).catch(() => {
@@ -1469,6 +1526,7 @@ export class BrowserManager {
     if (!source || !sourceWindow) throw new Error(`Browser source host 不可用: ${sourceWindowId}`)
     if (!target || !targetWindow) throw new Error(`Browser target host 不可用: ${targetWindowId}`)
 
+    entry.view.setVisible(false)
     sourceWindow.contentView.removeChildView(entry.view)
     if (source.activeViewId === tabId) source.activeViewId = null
     try {
@@ -1482,6 +1540,7 @@ export class BrowserManager {
             ? target.currentBounds
             : { x: 0, y: 0, width: 1, height: 1 },
         )
+        entry.view.setVisible(true)
         entry.view.webContents.focus()
         void this.playwrightBridge?.switchToPage(tabId).catch(() => undefined)
         this.ensureLoaded(tabId)
@@ -1494,6 +1553,7 @@ export class BrowserManager {
         entry.ownerWindowId = sourceWindowId
         source.activeViewId = tabId
         entry.view.setBounds(source.currentBounds)
+        entry.view.setVisible(true)
       } catch (rollbackError) {
         throw new Error(
           `Browser View attach 与 source rollback 均失败: attach=${formatError(error)} rollback=${formatError(rollbackError)}`,
@@ -1522,6 +1582,11 @@ export class BrowserManager {
     }
     if (source && !source.nativeWindow.isDestroyed()) {
       try {
+        entry.view.setVisible(false)
+      } catch {
+        // Source is already unreliable; the recovery attachment below is the authority.
+      }
+      try {
         source.nativeWindow.contentView.removeChildView(entry.view)
       } catch {
         // Source is already unreliable; the recovery attachment below is the authority.
@@ -1532,6 +1597,7 @@ export class BrowserManager {
     entry.ownerWindowId = recoveryWindowId
     recovery.activeViewId = tabId
     entry.view.setBounds({ x: 0, y: 0, width: 1, height: 1 })
+    entry.view.setVisible(true)
   }
 
   getViewOwnerWindowId(tabId: string): string | null {
@@ -2492,6 +2558,10 @@ export class BrowserManager {
     visibleTabId: string | null
     visibleUrl: string | null
     visibleTitle: string | null
+    webContentsId: number | null
+    ownerWindowId: string | null
+    nativeViewAttached: boolean | null
+    nativeViewVisible: boolean | null
     profileId: string | null
     viewState: BrowserViewState | null
     popup: {
@@ -2530,6 +2600,10 @@ export class BrowserManager {
         visibleTabId,
         visibleUrl: null,
         visibleTitle: null,
+        webContentsId: null,
+        ownerWindowId: null,
+        nativeViewAttached: null,
+        nativeViewVisible: null,
         profileId: null,
         viewState: null,
         popup: null,
@@ -2546,6 +2620,16 @@ export class BrowserManager {
     const visibleUrl = entry.view.webContents.getURL() || entry.url || null
     const browserSession = entry.view.webContents.session
     const host = this.hosts.get(entry.ownerWindowId)
+    let nativeViewAttached: boolean | null = null
+    let nativeViewVisible: boolean | null = null
+    try {
+      nativeViewAttached = host
+        ? host.nativeWindow.contentView.children.includes(entry.view)
+        : false
+      nativeViewVisible = entry.view.getVisible()
+    } catch {
+      // 销毁竞态本身就是诊断事实；null 与明确 false 分开。
+    }
     const sessionDiagnostics = await this.sessionDiagnostics.describe(
       browserSession,
       entry.profileId,
@@ -2556,6 +2640,10 @@ export class BrowserManager {
       visibleTabId,
       visibleUrl,
       visibleTitle: entry.view.webContents.getTitle() || null,
+      webContentsId: entry.view.webContents.id,
+      ownerWindowId: entry.ownerWindowId,
+      nativeViewAttached,
+      nativeViewVisible,
       profileId: entry.profileId,
       viewState: this.getState(tabId),
       popup: entry.popup
@@ -2592,6 +2680,9 @@ export class BrowserManager {
 
   /** 销毁所有视图并清空窗口引用 */
   destroy(): void {
+    this.detachPlaywrightReconnectListener?.()
+    this.detachPlaywrightReconnectListener = null
+    this.playwrightBridge = null
     for (const tabId of [...this.views.keys()]) {
       this.destroyView(tabId)
     }

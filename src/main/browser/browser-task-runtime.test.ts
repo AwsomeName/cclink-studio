@@ -211,6 +211,57 @@ describe('BrowserTaskRuntime', () => {
     expect(reobserved.takeoverReason).toBeUndefined()
   })
 
+  it('keeps a dispatched unknown result running until a successful observation', () => {
+    const { runtime } = createRuntime()
+    const task = runtime.startTask({ tabId: 'browser', goal: 'submit form' })
+
+    const blocked = runtime.markActionResultUnknown(task.id, 'connection lost')
+    expect(blocked).toMatchObject({
+      status: 'running',
+      reobservationRequired: true,
+      actionResultUnknown: true,
+    })
+
+    const observed = runtime.markReobserved(task.id)
+    expect(observed).toMatchObject({
+      status: 'running',
+      reobservationRequired: false,
+      actionResultUnknown: false,
+    })
+  })
+
+  it('finds the exact BrowserTask for an Agent run including terminal tasks', () => {
+    const { runtime } = createRuntime()
+    const first = runtime.startTask({
+      tabId: 'browser-a',
+      goal: 'first',
+      correlation: {
+        workspaceKey: null,
+        conversationId: 'conversation-a',
+        agentRunId: 'run-old',
+        agentSessionRef: null,
+        profileId: null,
+      },
+    })
+    runtime.failTask(first.id, { reason: 'automation_unavailable' })
+    runtime.startTask({
+      tabId: 'browser-b',
+      goal: 'second',
+      correlation: {
+        workspaceKey: null,
+        conversationId: 'conversation-a',
+        agentRunId: 'run-current',
+        agentSessionRef: null,
+        profileId: null,
+      },
+    })
+
+    expect(runtime.getTaskForAgentRun('conversation-a', 'run-old')).toMatchObject({
+      id: first.id,
+      status: 'failed',
+    })
+  })
+
   it('adds the user-confirmed current origin when an account task is handed back', () => {
     const { runtime } = createRuntime()
     const task = runtime.startTask({

@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import type { Page } from 'playwright-core'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core'
 import { PlaywrightBridge } from './playwright-bridge'
 
 function fakePage(url: string, title: string): Page {
@@ -10,10 +10,16 @@ function fakePage(url: string, title: string): Page {
     evaluate: async () => '登录页面',
     addInitScript: async () => undefined,
     on: () => undefined,
+    removeListener: () => undefined,
   } as unknown as Page
 }
 
 describe('PlaywrightBridge diagnostics', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
   it('keeps console and network diagnostics scoped to the requested page', async () => {
     const bridge = new PlaywrightBridge()
     const zhihuPage = fakePage('https://www.zhihu.com/signin', '知乎登录')
@@ -121,12 +127,20 @@ describe('PlaywrightBridge diagnostics', () => {
     } as unknown as Page
     targetContext.pages.mockReturnValue([page])
     const electronSession = { on: vi.fn(), removeListener: vi.fn() }
-    const webContents = { id: 84, session: electronSession, _targetId: 'baidu-target' }
+    const webContents = {
+      id: 84,
+      session: electronSession,
+      _targetId: 'baidu-target',
+      isDestroyed: () => false,
+    }
     const internals = bridge as unknown as {
-      browser: { contexts: () => unknown[] }
+      browser: { contexts: () => unknown[]; isConnected: () => boolean }
       context: unknown
     }
-    internals.browser = { contexts: () => [emptyContext, targetContext] }
+    internals.browser = {
+      contexts: () => [emptyContext, targetContext],
+      isConnected: () => true,
+    }
     internals.context = emptyContext
 
     await expect(
@@ -156,13 +170,18 @@ describe('PlaywrightBridge diagnostics', () => {
       on: vi.fn(),
       removeListener: vi.fn(),
     }
-    const webContents = { id: 42, session: electronSession }
+    const webContents = { id: 42, session: electronSession, isDestroyed: () => false }
     const page = fakePage('https://example.com', 'Example')
     const bridge = new PlaywrightBridge(downloadStore as any, taskRuntime as any)
-    ;(bridge as any).context = { pages: () => [page] }
+    ;(bridge as any).context = { pages: () => [page], on: vi.fn(), removeListener: vi.fn() }
+    ;(bridge as any).browser = {
+      contexts: () => [(bridge as any).context],
+      isConnected: () => true,
+      close: vi.fn().mockResolvedValue(undefined),
+    }
     bridge.registerPage(page, 'detached-tab')
 
-    await bridge.claimPageForView('detached-tab', webContents as any)
+    await bridge.claimPageForView('detached-tab', webContents as any, 'https://example.com')
 
     const handler = electronSession.on.mock.calls.find(([event]) => event === 'will-download')?.[1]
     expect(handler).toBeTypeOf('function')
@@ -195,4 +214,149 @@ describe('PlaywrightBridge diagnostics', () => {
     await bridge.disconnect()
     expect(electronSession.removeListener).toHaveBeenCalledWith('will-download', handler)
   })
+
+  it('uses one bounded native CDP connection for concurrent recovery requests', async () => {
+    const browser = fakeBrowser([])
+    const connect = vi
+      .spyOn(chromium, 'connectOverCDP')
+      .mockResolvedValue(browser as unknown as Browser)
+    const bridge = new PlaywrightBridge()
+
+    await Promise.all([bridge.connect(9333), bridge.ensureConnected('parallel_tool')])
+
+    expect(connect).toHaveBeenCalledTimes(1)
+    expect(connect).toHaveBeenCalledWith('http://127.0.0.1:9333', {
+      headers: { Connection: 'keep-alive' },
+      timeout: 5_000,
+    })
+    expect(bridge.getConnectionGeneration()).toBe(1)
+    await bridge.disconnect()
+  })
+
+  it('reconnects from the disconnected event and clears stale route state', async () => {
+    const firstBrowser = fakeBrowser([])
+    const secondBrowser = fakeBrowser([])
+    vi.spyOn(chromium, 'connectOverCDP')
+      .mockResolvedValueOnce(firstBrowser)
+      .mockResolvedValueOnce(secondBrowser)
+    const bridge = new PlaywrightBridge()
+    await bridge.connect(9334)
+    bridge.setRouteHandler('**/api/**', { action: 'block' })
+
+    firstBrowser.emitDisconnected()
+
+    await vi.waitFor(() => expect(bridge.isConnected()).toBe(true))
+    expect(bridge.getConnectionGeneration()).toBe(2)
+    expect(bridge.getRoutePatterns()).toEqual([])
+    await bridge.disconnect()
+  })
+
+  it('forces one reconnect when a live View continuously sees zero contexts', async () => {
+    vi.useFakeTimers()
+    const emptyBrowser = fakeBrowser([])
+    const page = eventPage('https://example.com/', 'Example', 'target-a')
+    const recoveredContext = fakeContext([page])
+    const recoveredBrowser = fakeBrowser([recoveredContext])
+    vi.spyOn(chromium, 'connectOverCDP')
+      .mockResolvedValueOnce(emptyBrowser as unknown as Browser)
+      .mockResolvedValueOnce(recoveredBrowser as unknown as Browser)
+    const bridge = new PlaywrightBridge()
+    await bridge.connect(9444)
+    const webContents = {
+      id: 77,
+      _targetId: 'target-a',
+      session: { on: vi.fn(), removeListener: vi.fn() },
+      isDestroyed: () => false,
+    }
+
+    const claim = bridge.claimPageForView('live-tab', webContents as never, 'https://example.com/')
+    await vi.advanceTimersByTimeAsync(1_100)
+
+    await expect(claim).resolves.toBe(page)
+    expect(bridge.getConnectionGeneration()).toBe(2)
+    expect(bridge.getConnectionDiagnostics()).toMatchObject({
+      forcedByEmptyContexts: true,
+      contextCount: 1,
+      pageCount: 1,
+    })
+    await bridge.disconnect()
+  })
+
+  it('ignores a late close callback from an older generation', () => {
+    const bridge = new PlaywrightBridge()
+    const oldPage = eventPage('https://old.example/', 'Old')
+    const newPage = eventPage('https://new.example/', 'New')
+    bridge.registerPage(oldPage, 'stable-tab', 1, 42)
+    ;(bridge as never as { connectionGeneration: number }).connectionGeneration = 2
+    bridge.registerPage(newPage, 'stable-tab', 2, 42)
+
+    oldPage.emit('close')
+
+    expect(bridge.getPageById('stable-tab')).toBe(newPage)
+  })
 })
+
+function fakeContext(pages: Page[]): BrowserContext {
+  const listeners = new Map<string, Set<(...args: unknown[]) => void>>()
+  return {
+    pages: () => pages,
+    on: (event: string, listener: (...args: unknown[]) => void) => {
+      const current = listeners.get(event) ?? new Set()
+      current.add(listener)
+      listeners.set(event, current)
+      return undefined as never
+    },
+    removeListener: (event: string, listener: (...args: unknown[]) => void) => {
+      listeners.get(event)?.delete(listener)
+      return undefined as never
+    },
+  } as unknown as BrowserContext
+}
+
+function fakeBrowser(contexts: BrowserContext[]): Browser & { emitDisconnected(): void } {
+  let connected = true
+  const disconnected = new Set<() => void>()
+  const browser = {
+    contexts: () => contexts,
+    isConnected: () => connected,
+    on: (event: string, listener: () => void) => {
+      if (event === 'disconnected') disconnected.add(listener)
+    },
+    removeListener: (event: string, listener: () => void) => {
+      if (event === 'disconnected') disconnected.delete(listener)
+    },
+    emitDisconnected: () => {
+      connected = false
+      for (const listener of disconnected) listener()
+    },
+    close: async () => browser.emitDisconnected(),
+  }
+  return browser as unknown as Browser & { emitDisconnected(): void }
+}
+
+function eventPage(
+  url: string,
+  title: string,
+  targetId?: string,
+): Page & { emit(event: string): void } {
+  const listeners = new Map<string, Set<(...args: unknown[]) => void>>()
+  return {
+    _target: targetId ? { _targetId: targetId } : undefined,
+    isClosed: () => false,
+    url: () => url,
+    title: async () => title,
+    context: () => fakeContext([]),
+    bringToFront: async () => undefined,
+    on: (event: string, listener: (...args: unknown[]) => void) => {
+      const current = listeners.get(event) ?? new Set()
+      current.add(listener)
+      listeners.set(event, current)
+    },
+    removeListener: (event: string, listener: (...args: unknown[]) => void) => {
+      listeners.get(event)?.delete(listener)
+    },
+    emit: (event: string) => {
+      for (const listener of listeners.get(event) ?? []) listener()
+    },
+  } as unknown as Page & { emit(event: string): void }
+}

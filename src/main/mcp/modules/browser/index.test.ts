@@ -239,6 +239,45 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     expect(page.fill).not.toHaveBeenCalled()
   })
 
+  it('uses the shared re-observation allowlist and rejects downloadInfo', async () => {
+    const task = {
+      id: 'task-a',
+      tabId: 'browser-a',
+      goal: 'recover',
+      status: 'running',
+      reobservationRequired: true,
+      startedAt: 1,
+      downloadIds: [],
+      correlation: { conversationId: 'conversation-a', workspaceKey: '/workspace/a' },
+    }
+    const page = { url: () => 'https://example.com/', isClosed: () => false }
+    const module = new BrowserToolModule(
+      {
+        getPage: () => page,
+        getPageById: () => page,
+        switchToPage: vi.fn().mockResolvedValue(undefined),
+      } as any,
+      {
+        getActiveTaskForConversation: () => task,
+        assertCanRunAction: () => task,
+      } as any,
+      {
+        getViewWorkspaceKey: () => '/workspace/a',
+        isWorkspaceActive: () => true,
+        setActive: vi.fn(),
+        getCurrentURL: () => 'https://example.com/',
+      } as any,
+    )
+
+    await expect(
+      module.execute(
+        'browser_download_info',
+        { downloadId: 'download-a' },
+        { conversationId: 'conversation-a', workspaceKey: '/workspace/a' },
+      ),
+    ).rejects.toThrow('必须先截图或读取当前页面')
+  })
+
   it('does not return full HTML or read secret fields from a registered account page', async () => {
     const accountTask = {
       id: 'task-a',
@@ -294,15 +333,24 @@ describe('BrowserToolModule 可视浏览器同步', () => {
   })
 
   it('navigate uses the visible BrowserManager view instead of a hidden Playwright page', async () => {
+    const page = { isClosed: () => false, url: () => 'https://www.zhihu.com/signin' }
+    let claimed = false
     const bridge = {
-      getPage: () => null,
+      getPage: () => (claimed ? page : null),
+      getPageById: () => (claimed ? page : null),
       getActiveTabId: () => 'hidden-tab',
-      switchToPage: vi.fn().mockRejectedValue(new Error('not claimed')),
+      switchToPage: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('not claimed'))
+        .mockResolvedValue(undefined),
     }
     const browserManager = {
       getActiveViewId: () => 'visible-tab',
       setActive: vi.fn(),
       navigate: vi.fn().mockResolvedValue(undefined),
+      ensurePlaywrightPage: vi.fn().mockImplementation(async () => {
+        claimed = true
+      }),
       getCurrentURL: () => 'https://www.zhihu.com/signin',
       getTitle: () => '知乎 - 有问题，就会有答案',
     }
@@ -364,10 +412,16 @@ describe('BrowserToolModule 可视浏览器同步', () => {
   })
 
   it('lets an Agent without an account use the ordinary browser session', async () => {
+    const page = { isClosed: () => false, url: () => 'https://example.com/' }
+    let claimed = false
     const bridge = {
-      getPage: () => null,
+      getPage: () => (claimed ? page : null),
+      getPageById: () => (claimed ? page : null),
       getActiveTabId: () => null,
-      switchToPage: vi.fn().mockRejectedValue(new Error('not claimed yet')),
+      switchToPage: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('not claimed yet'))
+        .mockResolvedValue(undefined),
     }
     const browserTaskRuntime = {
       getActiveTaskForConversation: vi.fn().mockReturnValue(null),
@@ -383,6 +437,9 @@ describe('BrowserToolModule 可视浏览器同步', () => {
       getCurrentURL: vi.fn().mockReturnValue('https://example.com/'),
       getTitle: vi.fn().mockReturnValue('Example'),
       getViewProfileId: vi.fn().mockReturnValue(null),
+      ensurePlaywrightPage: vi.fn().mockImplementation(async () => {
+        claimed = true
+      }),
     }
     const module = new BrowserToolModule(
       bridge as any,
@@ -511,6 +568,84 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     expect(page.click).toHaveBeenCalledWith('#login')
   })
 
+  it('marks a dispatched write result unknown after a transport loss without replaying it', async () => {
+    const task = {
+      id: 'task-a',
+      tabId: 'visible-tab',
+      goal: 'click once',
+      status: 'running',
+      startedAt: 1,
+      downloadIds: [],
+    }
+    const page = {
+      url: () => 'https://example.com/',
+      click: vi.fn().mockRejectedValue(new Error('Target closed after dispatch')),
+    }
+    const markActionResultUnknown = vi.fn()
+    const bridge = {
+      getPage: () => page,
+      getPageById: () => page,
+      getActiveTabId: () => 'visible-tab',
+      getConnectionGeneration: () => 3,
+      isConnectionLoss: () => true,
+      switchToPage: vi.fn().mockResolvedValue(undefined),
+    }
+    const runtime = {
+      assertCanRunAction: () => task,
+      startActionLog: () => ({ id: 'log-a' }),
+      failActionLog: vi.fn(),
+      markActionResultUnknown,
+    }
+    const manager = {
+      getActiveViewId: () => 'visible-tab',
+      setActive: vi.fn(),
+      getCurrentURL: () => 'https://example.com/',
+    }
+    const module = new BrowserToolModule(bridge as any, runtime as any, manager as any)
+
+    await expect(module.execute('browser_click', { selector: '#submit' })).rejects.toMatchObject({
+      code: 'action_result_unknown_after_disconnect',
+    })
+    expect(page.click).toHaveBeenCalledTimes(1)
+    expect(markActionResultUnknown).toHaveBeenCalledWith(
+      'task-a',
+      expect.stringContaining('结果未知'),
+    )
+  })
+
+  it.each([
+    ['browser_navigate', 'navigate', { url: 'https://example.com/next' }],
+    ['browser_go_back', 'goBack', {}],
+    ['browser_go_forward', 'goForward', {}],
+    ['browser_reload', 'reload', {}],
+  ])(
+    'checks automation binding after %s and never replays it',
+    async (toolName, method, params) => {
+      const bridge = {
+        getPage: () => null,
+        getPageById: () => null,
+        getActiveTabId: () => 'visible-tab',
+        switchToPage: vi.fn().mockResolvedValue(undefined),
+      }
+      const command = vi.fn().mockResolvedValue(undefined)
+      const manager = {
+        getActiveViewId: () => 'visible-tab',
+        setActive: vi.fn(),
+        [method]: command,
+        ensurePlaywrightPage: vi.fn().mockRejectedValue(new Error('contexts=0')),
+        getCurrentURL: () => 'https://example.com/next',
+        getTitle: () => 'Example',
+      }
+      const module = new BrowserToolModule(bridge as any, null, manager as any)
+
+      await expect(module.execute(toolName, params)).rejects.toMatchObject({
+        code: 'browser_automation_unavailable',
+        commandDispatched: true,
+      })
+      expect(command).toHaveBeenCalledTimes(1)
+    },
+  )
+
   it('keeps automation attached to a Browser View owned by an auxiliary window', async () => {
     const page = {
       url: () => 'https://detached.example/',
@@ -594,8 +729,11 @@ describe('BrowserToolModule 可视浏览器同步', () => {
   })
 
   it('uses a background project view without attaching it to the current project UI', async () => {
+    const page = { isClosed: () => false, url: () => 'https://a.example/next' }
+    let claimed = false
     const bridge = {
-      getPage: () => null,
+      getPage: () => (claimed ? page : null),
+      getPageById: () => (claimed ? page : null),
       getActiveTabId: () => 'project-b-tab',
       switchToPage: vi.fn().mockResolvedValue(undefined),
     }
@@ -607,6 +745,9 @@ describe('BrowserToolModule 可视浏览器同步', () => {
       navigate: vi.fn().mockResolvedValue(undefined),
       getCurrentURL: vi.fn().mockReturnValue('https://a.example/next'),
       getTitle: vi.fn().mockReturnValue('Project A'),
+      ensurePlaywrightPage: vi.fn().mockImplementation(async () => {
+        claimed = true
+      }),
     }
     const module = new BrowserToolModule(bridge as any, null, browserManager as any)
 

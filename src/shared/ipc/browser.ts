@@ -111,6 +111,7 @@ export type BrowserTaskFailureReason =
   | 'auth_required'
   | 'captcha_or_bot_check'
   | 'download_failed'
+  | 'automation_unavailable'
   | 'user_interrupted'
   | 'tab_closed'
   | 'unknown'
@@ -136,6 +137,8 @@ export interface BrowserTaskRun {
   status: BrowserTaskStatus
   /** 人工接管交还后，Agent 必须先读取当前页面才能继续写操作。 */
   reobservationRequired?: boolean
+  /** 自动化断线发生在动作派发后，动作是否生效未知；只能通过重新观察解除。 */
+  actionResultUnknown?: boolean
   takeoverReason?: string
   startedAt: number
   endedAt?: number
@@ -306,6 +309,10 @@ export interface BrowserRuntimeDiagnosticSummary {
   visibleTabId: string | null
   visibleUrl: string | null
   visibleTitle: string | null
+  webContentsId?: number | null
+  ownerWindowId?: string | null
+  nativeViewAttached?: boolean | null
+  nativeViewVisible?: boolean | null
   profileId: string | null
   viewState: BrowserViewState | null
   popup: {
@@ -315,6 +322,20 @@ export interface BrowserRuntimeDiagnosticSummary {
   playwrightTabId: string | null
   playwrightUrl: string | null
   playwrightTitle: string | null
+  automationConnection?: {
+    isConnected: boolean
+    connectionGeneration: number
+    contextCount: number
+    pageCount: number
+    reconnectInFlight: boolean
+    lastDisconnectedAt: number | null
+    lastReconnectAt: number | null
+    lastReconnectTrigger: string | null
+    lastReconnectError: string | null
+    forcedByEmptyContexts: boolean
+    boundGeneration: number | null
+    boundWebContentsId: number | null
+  }
   bindingStatus: BrowserBindingStatus
   layout: {
     rendererBounds: BrowserBounds

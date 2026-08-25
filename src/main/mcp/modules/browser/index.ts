@@ -42,7 +42,7 @@ const ACCOUNT_FORBIDDEN_ACTIONS = new Set([
   'listFrames',
   'waitForPopup',
 ])
-const ACCOUNT_OBSERVATION_ACTIONS = new Set([
+export const BROWSER_REOBSERVATION_ACTIONS = new Set([
   'screenshot',
   'extract',
   'title',
@@ -51,8 +51,28 @@ const ACCOUNT_OBSERVATION_ACTIONS = new Set([
   'waitForNavigation',
   'getTabInfo',
   'frameContent',
-  'downloadInfo',
 ])
+
+class BrowserAutomationUnavailableError extends Error {
+  readonly code = 'browser_automation_unavailable'
+
+  constructor(
+    message: string,
+    readonly commandDispatched: boolean,
+  ) {
+    super(message)
+    this.name = 'BrowserAutomationUnavailableError'
+  }
+}
+
+class BrowserActionResultUnknownError extends Error {
+  readonly code = 'action_result_unknown_after_disconnect'
+
+  constructor(message: string) {
+    super(message)
+    this.name = 'BrowserActionResultUnknownError'
+  }
+}
 
 /**
  * 46 个浏览器工具定义
@@ -746,11 +766,28 @@ export class BrowserToolModule implements ToolModule {
       if (actionType !== 'listTabs') {
         this.ensureAgentBrowserTask(visibleTabId, toolName, context)
       }
-      await this.syncVisibleTab(
-        visibleTabId,
-        requiresPlaywrightPage(actionType),
-        hasWorkspaceContext ? workspaceKey : undefined,
-      )
+      try {
+        await this.playwrightBridge.ensureConnected?.('tool_preflight')
+        await this.syncVisibleTab(
+          visibleTabId,
+          requiresPlaywrightPage(actionType),
+          hasWorkspaceContext ? workspaceKey : undefined,
+        )
+      } catch (error) {
+        const task = context?.conversationId
+          ? this.browserTaskRuntime?.getActiveTaskForConversation(context.conversationId)
+          : null
+        if (task) {
+          this.browserTaskRuntime?.failTask(task.id, {
+            reason: 'automation_unavailable',
+            errorMessage: error instanceof Error ? error.message : String(error),
+          })
+        }
+        throw new BrowserAutomationUnavailableError(
+          `浏览器自动化连接恢复失败: ${error instanceof Error ? error.message : String(error)}`,
+          false,
+        )
+      }
     }
 
     const page = visibleTabId ? this.getPageForTab(visibleTabId) : this.playwrightBridge.getPage()
@@ -771,6 +808,9 @@ export class BrowserToolModule implements ToolModule {
       const task = this.browserTaskRuntime?.assertCanRunAction(tabId)
       if (task) {
         activeTask = task
+        if (task.reobservationRequired && !BROWSER_REOBSERVATION_ACTIONS.has(actionType)) {
+          throw new Error('上次浏览器动作结果未知；Agent 必须先截图或读取当前页面，再继续操作')
+        }
         await this.assertAccountActionAllowed(task, actionType, params, page, context)
         const log = this.browserTaskRuntime!.startActionLog({
           taskRunId: task.id,
@@ -782,6 +822,8 @@ export class BrowserToolModule implements ToolModule {
       }
     }
 
+    let dispatched = false
+    const dispatchedGeneration = this.playwrightBridge.getConnectionGeneration?.() ?? 0
     try {
       context?.abortSignal?.throwIfAborted()
       const result = await this.executeVisibleBrowserAction(
@@ -790,11 +832,14 @@ export class BrowserToolModule implements ToolModule {
         page,
         tabId,
         hasWorkspaceContext ? workspaceKey : undefined,
+        () => {
+          dispatched = true
+        },
       )
       if (actionLogId) {
         this.browserTaskRuntime!.succeedActionLog(actionLogId)
       }
-      if (activeTask?.correlation?.accountId && ACCOUNT_OBSERVATION_ACTIONS.has(actionType)) {
+      if (activeTask && BROWSER_REOBSERVATION_ACTIONS.has(actionType)) {
         this.browserTaskRuntime?.markReobserved(activeTask.id)
       }
       if (activeTask?.correlation?.accountId) {
@@ -807,6 +852,21 @@ export class BrowserToolModule implements ToolModule {
           reason: classifyBrowserError(error),
           errorMessage: error instanceof Error ? error.message : String(error),
         })
+      }
+      if (activeTask && error instanceof BrowserAutomationUnavailableError) {
+        this.browserTaskRuntime?.failTask(activeTask.id, {
+          reason: 'automation_unavailable',
+          errorMessage: error.message,
+        })
+      } else if (
+        activeTask &&
+        dispatched &&
+        !this.isReadOnlyTool(toolName) &&
+        (this.playwrightBridge.isConnectionLoss?.(error, dispatchedGeneration) ?? false)
+      ) {
+        const message = '浏览器动作派发后自动化连接中断，结果未知；请重新截图确认页面状态'
+        this.browserTaskRuntime?.markActionResultUnknown(activeTask.id, message)
+        throw new BrowserActionResultUnknownError(message)
       }
       throw error
     }
@@ -826,9 +886,6 @@ export class BrowserToolModule implements ToolModule {
     }
     if (ACCOUNT_FORBIDDEN_ACTIONS.has(actionType)) {
       throw new Error(`登记账号任务不开放 ${actionType}，以避免泄露登录态或绕过可见操作`)
-    }
-    if (task.reobservationRequired && !ACCOUNT_OBSERVATION_ACTIONS.has(actionType)) {
-      throw new Error('人工接管已交还；Agent 必须先截图或读取当前页面，再继续填写和操作')
     }
     if (actionType === 'extract' && !String(params.selector ?? '').trim()) {
       throw new Error('登记账号任务提取页面时必须指定可见内容选择器，不能返回整页 HTML')
@@ -1131,6 +1188,7 @@ export class BrowserToolModule implements ToolModule {
     page: ReturnType<PlaywrightBridge['getPage']>,
     tabId: string | null,
     workspaceKey?: string | null,
+    onDispatch?: () => void,
   ): Promise<unknown> {
     if (workspaceKey !== undefined && actionType === 'newTab') {
       throw new Error('Agent 不能创建脱离项目归属的浏览器 Tab，请由工作台新建浏览器')
@@ -1163,7 +1221,9 @@ export class BrowserToolModule implements ToolModule {
         case 'navigate': {
           const url = String(params.url ?? '')
           if (!url) throw new Error('必须提供目标 URL')
+          onDispatch?.()
           await this.browserManager.navigate(tabId, url)
+          await this.confirmAutomationBinding(tabId, true)
           return {
             tabId,
             url: this.browserManager.getCurrentURL(tabId),
@@ -1171,21 +1231,27 @@ export class BrowserToolModule implements ToolModule {
           }
         }
         case 'goBack':
+          onDispatch?.()
           this.browserManager.goBack(tabId)
+          await this.confirmAutomationBinding(tabId, true)
           return {
             tabId,
             url: this.browserManager.getCurrentURL(tabId),
             title: this.browserManager.getTitle(tabId),
           }
         case 'goForward':
+          onDispatch?.()
           this.browserManager.goForward(tabId)
+          await this.confirmAutomationBinding(tabId, true)
           return {
             tabId,
             url: this.browserManager.getCurrentURL(tabId),
             title: this.browserManager.getTitle(tabId),
           }
         case 'reload':
+          onDispatch?.()
           this.browserManager.reload(tabId)
+          await this.confirmAutomationBinding(tabId, true)
           return {
             tabId,
             url: this.browserManager.getCurrentURL(tabId),
@@ -1209,7 +1275,28 @@ export class BrowserToolModule implements ToolModule {
     if (!page) {
       throw new Error('可视浏览器页面尚未就绪，请稍后自动重试')
     }
+    onDispatch?.()
     return executePlaywrightAction(page, { type: actionType, ...params }, this.playwrightBridge)
+  }
+
+  private async confirmAutomationBinding(tabId: string, commandDispatched: boolean): Promise<void> {
+    try {
+      await this.playwrightBridge.ensureConnected?.('native_navigation_postcheck')
+      if (!this.browserManager) throw new Error('BrowserManager 不可用')
+      await this.browserManager.ensurePlaywrightPage(tabId)
+      await this.playwrightBridge.switchToPage(tabId)
+      const page = this.getPageForTab(tabId)
+      if (!page || page.isClosed()) throw new Error('目标 Tab 没有可用的 Playwright Page')
+    } catch (error) {
+      throw new BrowserAutomationUnavailableError(
+        `可视页面动作已经派发，但自动化未能重新绑定: ${error instanceof Error ? error.message : String(error)}`,
+        commandDispatched,
+      )
+    }
+  }
+
+  private isReadOnlyTool(toolName: string): boolean {
+    return this.tools.find((tool) => tool.name === toolName)?.annotations.readOnlyHint === true
   }
 
   private assertPlaywrightMatchesVisibleTab(

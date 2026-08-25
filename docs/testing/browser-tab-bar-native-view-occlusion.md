@@ -47,8 +47,11 @@ CCLink 连接没有合法的远程项目使用者。修复关闭的是已确认�
   `nativeBounds.y >= nativeProtectedTop`。
 - `BrowserManager` 继续是原生 View bounds 的唯一 owner；renderer 只能报告布局事实，不能
   直接拥有或修正原生 View。
+- 原生 View 的显示采用双门禁：非当前目标先 `setVisible(false)`，再从 host 层级移除；只有
+  当前 host 的明确 active target 才能在完成 attach 与 bounds 后 `setVisible(true)`。浮层、
+  编辑器或其他 Tab 不得只依赖 `removeChildView` 推断网页已经停止绘制。
 - 框架诊断必须并列输出 renderer bounds、native bounds、`protectedTop`、
-  `nativeProtectedTop` 和 `overlapsProtectedTop`。
+  `nativeProtectedTop`、`overlapsProtectedTop`，以及原生 View 的实际 attached/visible 状态。
 
 禁止使用以下方式“修复”：
 

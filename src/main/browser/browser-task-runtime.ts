@@ -92,6 +92,17 @@ export class BrowserTaskRuntime {
     return task ? cloneTask(task) : null
   }
 
+  getTaskForAgentRun(conversationId: string, agentRunId: string): BrowserTaskRun | null {
+    const task = Array.from(this.tasks.values())
+      .reverse()
+      .find(
+        (candidate) =>
+          candidate.correlation?.conversationId === conversationId &&
+          candidate.correlation.agentRunId === agentRunId,
+      )
+    return task ? cloneTask(task) : null
+  }
+
   assertCanRunAction(tabId: string): BrowserTaskRun | null {
     const taskId = this.activeTaskByTab.get(tabId)
     if (!taskId) return null
@@ -143,7 +154,18 @@ export class BrowserTaskRuntime {
     const task = this.requireTask(taskRunId)
     if (!task.reobservationRequired) return cloneTask(task)
     task.reobservationRequired = false
+    task.actionResultUnknown = false
     task.takeoverReason = undefined
+    this.emitTaskChanged(task)
+    return cloneTask(task)
+  }
+
+  markActionResultUnknown(taskRunId: string, errorMessage?: string): BrowserTaskRun {
+    const task = this.requireTask(taskRunId)
+    if (FINAL_STATUSES.has(task.status)) return cloneTask(task)
+    task.reobservationRequired = true
+    task.actionResultUnknown = true
+    task.errorMessage = errorMessage
     this.emitTaskChanged(task)
     return cloneTask(task)
   }
