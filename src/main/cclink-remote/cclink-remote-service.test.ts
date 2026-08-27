@@ -571,6 +571,83 @@ describe('CclinkRemoteService runtime protocol', () => {
     ])
   })
 
+  it('执行中事件未明确撤销时保留同一工具的待审批状态', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+
+    await handle({
+      ...createCclinkEnvelope('agent_tool', { request_id: 'approval-request' }),
+      session_id: 'session-1',
+      msg_id: 'message-approval',
+      tool: 'ExitPlanMode',
+      tool_use_id: 'tool-approval',
+      state: 'pending',
+      requires_approval: true,
+      approval_reason: '需要确认实施计划',
+      expires_at: 123456,
+    })
+    await handle({
+      ...createCclinkEnvelope('agent_tool'),
+      session_id: 'session-1',
+      msg_id: 'message-approval',
+      tool: 'ExitPlanMode',
+      tool_use_id: 'tool-approval',
+      state: 'executing',
+    })
+
+    expect(service.listMessages('session-1')).toEqual([
+      expect.objectContaining({
+        type: 'agentTool',
+        tool: expect.objectContaining({
+          id: 'tool-approval',
+          state: 'executing',
+          requiresApproval: true,
+          requestId: 'approval-request',
+          approvalReason: '需要确认实施计划',
+          expiresAt: 123456,
+        }),
+      }),
+    ])
+  })
+
+  it('明确撤销或工具进入终态后不再保留待审批状态', async () => {
+    const createPendingTool = () => ({
+      ...createCclinkEnvelope('agent_tool', { request_id: 'approval-request' }),
+      session_id: 'session-1',
+      msg_id: 'message-approval',
+      tool: 'ExitPlanMode',
+      tool_use_id: 'tool-approval',
+      state: 'pending' as const,
+      requires_approval: true,
+    })
+
+    const explicitRevocation = createService()
+    await explicitRevocation.service.initialize()
+    await explicitRevocation.handle(createPendingTool())
+    await explicitRevocation.handle({
+      ...createPendingTool(),
+      state: 'executing',
+      requires_approval: false,
+    })
+    expect(explicitRevocation.service.listMessages('session-1')[0]).toMatchObject({
+      type: 'agentTool',
+      tool: { state: 'executing', requiresApproval: false },
+    })
+
+    const completedTool = createService()
+    await completedTool.service.initialize()
+    await completedTool.handle(createPendingTool())
+    await completedTool.handle({
+      ...createPendingTool(),
+      state: 'completed',
+      requires_approval: undefined,
+    })
+    expect(completedTool.service.listMessages('session-1')[0]).toMatchObject({
+      type: 'agentTool',
+      tool: { state: 'completed', requiresApproval: false },
+    })
+  })
+
   it('为远程会话保留有界协议终态诊断并合并到诊断报告', async () => {
     const { service, handle } = createService()
     await service.initialize()

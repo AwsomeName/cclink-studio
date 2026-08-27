@@ -1495,9 +1495,18 @@ export class CclinkRemoteService implements RemoteProvider {
           expires_at?: number
           request_id?: string
         }
+        const messageId = `remote-tool-${event.tool_use_id || event.msg_id}`
+        const previousMessage = (this.messages.get(event.session_id) ?? []).find(
+          (item): item is Extract<CclinkRemoteMessage, { type: 'agentTool' }> =>
+            item.id === messageId && item.type === 'agentTool',
+        )
+        const preservesPendingApproval =
+          (event.state === 'pending' || event.state === 'executing') &&
+          event.requires_approval !== false &&
+          previousMessage?.tool.requiresApproval === true
         const remoteMessage: CclinkRemoteMessage = {
           type: 'agentTool',
-          id: `remote-tool-${event.tool_use_id || event.msg_id}`,
+          id: messageId,
           timestamp: nowSeconds(),
           tool: {
             id: event.tool_use_id,
@@ -1506,10 +1515,16 @@ export class CclinkRemoteService implements RemoteProvider {
             input: event.input,
             output: event.output,
             error: event.error,
-            requiresApproval: event.requires_approval === true,
-            approvalReason: event.approval_reason,
-            expiresAt: event.expires_at,
-            requestId: event.request_id,
+            requiresApproval: event.requires_approval === true || preservesPendingApproval,
+            approvalReason:
+              event.approval_reason ??
+              (preservesPendingApproval ? previousMessage.tool.approvalReason : undefined),
+            expiresAt:
+              event.expires_at ??
+              (preservesPendingApproval ? previousMessage.tool.expiresAt : undefined),
+            requestId:
+              event.request_id ??
+              (preservesPendingApproval ? previousMessage.tool.requestId : undefined),
           },
         }
         this.appendMessage(event.session_id, remoteMessage)
