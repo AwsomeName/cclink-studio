@@ -36,6 +36,7 @@ import {
 import { invokeIpcContract } from './ipc-contract-client'
 import { webResourcesApi } from './web-resources-api'
 import { webAffairsApi } from './web-affairs-api'
+import { articlePublishingApi } from './article-publishing-api'
 import {
   runtimeComponentsIpc,
   type RuntimeComponentsApiContract,
@@ -359,6 +360,8 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   webResources: webResourcesApi,
 
   webAffairs: webAffairsApi,
+
+  articlePublishing: articlePublishingApi,
 
   gitBackup: gitBackupApi,
 

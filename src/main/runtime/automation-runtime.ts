@@ -135,6 +135,9 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
               launchCoordinator: runtime.agentWebResourceLaunchCoordinator,
               browserManager: runtime.browserManager,
               browserTaskRuntime: runtime.browserTaskRuntime,
+              webAffairService: runtime.webAffairService ?? undefined,
+              resolveWorkspaceId: async (workspacePath: string) =>
+                runtime.workspaceStateService?.getLocalProjectId(workspacePath) ?? null,
             }
           : undefined
       runtime.toolHost.registerModule(

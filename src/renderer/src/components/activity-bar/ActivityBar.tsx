@@ -3,6 +3,7 @@ import { useUIStore, useTabStore } from '../../stores'
 import type { ActivityPanel } from '../../types'
 import {
   ActivityAffairsIcon,
+  ActivityArticlePublishingIcon,
   ActivityBrowserIcon,
   ActivityDataSourcesIcon,
   ActivityFilesIcon,
@@ -63,6 +64,7 @@ const MAIN_ICON_GROUPS: Array<{
     id: 'flows',
     label: '流程',
     items: [
+      { id: 'article-publishing', Icon: ActivityArticlePublishingIcon, label: '文章发布' },
       { id: 'affairs', Icon: ActivityAffairsIcon, label: '事务' },
       { id: 'scheduled-tasks', Icon: ActivityScheduledTasksIcon, label: '定时任务' },
       { id: 'production', Icon: ActivityProductionIcon, label: '生产' },

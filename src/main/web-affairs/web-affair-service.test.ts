@@ -208,7 +208,7 @@ describe('WebAffairService', () => {
     await service.flush()
 
     await new WebAffairStore(filePath).save({
-      schemaVersion: 3,
+      schemaVersion: 4,
       revision: 2,
       affairs: [
         {

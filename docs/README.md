@@ -42,7 +42,7 @@
 - `docs/features/local-credentials.md`：已确认的 OSS 本地明文凭证产品与架构边界。
 - `docs/features/local-credentials-development-plan.md`：移除系统钥匙串依赖的 M0-M6 详细开发计划。
 - `docs/features/markdown-auto-illustration.md`：Markdown 自动配图的产品边界、MCP 工具、资产事务和失败降级。
-- `docs/features/article-platform-publishing.md`：已确认、尚未实现的独立文章发布中心方案；Activity Bar 入口和侧栏历史连接专用控制 Tab、平台适配器、可见网页与发布 Agent，第一目标平台为 CSDN。
+- `docs/features/article-platform-publishing.md`：已进入首版实现的独立文章发布中心；Activity Bar 入口和侧栏历史连接专用控制 Tab、持久发布事务、可见网页与发布 Agent，第一目标平台为 CSDN，真实站点闭环仍待验收。
 - `docs/features/article-platform-publishing-development-plan.md`：CSDN 单篇图文发布的最小纵向研发计划；分离工程门禁、用户增量、真实发布闭环、失败恢复和交付验收。
 - `docs/features/promotional-video-workbench.md`：宣发视频工作台产品事实源，定义稿件、分镜、素材、AI 生成、合成和导出的用户闭环与架构边界。
 - `docs/features/promotional-video-development-plan.md`：宣发视频 M0-M6 开发事实源；M0 已完成，后续连续推进 Agent 分镜、素材、国内云视频、合成导出和统一验收。

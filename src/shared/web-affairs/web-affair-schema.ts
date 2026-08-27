@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { absolutePathSchema } from '../ipc/input-schema'
+import { articlePublishingStateSchema } from '../article-publishing/article-publishing-schema'
 
 const trimmedText = (maxLength: number, label: string): z.ZodString =>
   z.string().trim().min(1, `${label}不能为空`).max(maxLength, `${label}过长`)
@@ -424,6 +425,7 @@ const webAffairEventSchema = z
 const webAffairSchema = z
   .object({
     id: uuidSchema,
+    kind: z.enum(['generic', 'article-publishing']),
     workspaceId: uuidSchema.nullable(),
     title: trimmedText(160, '事务名称'),
     objective: trimmedText(4_000, '事务目标'),
@@ -455,16 +457,33 @@ const webAffairSchema = z
     waitPlans: z.array(webAffairWaitPlanSchema).max(40),
     flowProposals: z.array(webAffairFlowProposalSchema).max(500),
     templateRef: templateRefSchema.optional(),
+    articlePublishing: articlePublishingStateSchema.optional(),
     events: z.array(webAffairEventSchema).max(2_000),
     workspaceRef: workspaceRefSchema,
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
   })
   .strict()
+  .superRefine((value, context) => {
+    if (value.kind === 'article-publishing' && !value.articlePublishing) {
+      context.addIssue({
+        code: 'custom',
+        path: ['articlePublishing'],
+        message: '文章发布事务缺少领域状态',
+      })
+    }
+    if (value.kind === 'generic' && value.articlePublishing) {
+      context.addIssue({
+        code: 'custom',
+        path: ['articlePublishing'],
+        message: '通用事务不能保存文章发布领域状态',
+      })
+    }
+  })
 
 export const webAffairSnapshotSchema = z
   .object({
-    schemaVersion: z.literal(3),
+    schemaVersion: z.literal(4),
     revision: z.number().int().nonnegative(),
     affairs: z.array(webAffairSchema).max(1_000),
   })
@@ -485,6 +504,16 @@ export function parseWebAffairSnapshot(value: unknown) {
 function migrateSnapshot(value: unknown): unknown {
   if (!value || typeof value !== 'object') return value
   const snapshot = structuredClone(value) as Record<string, unknown>
+  if (snapshot['schemaVersion'] === 3) {
+    const affairs = Array.isArray(snapshot['affairs']) ? snapshot['affairs'] : []
+    for (const item of affairs) {
+      if (!item || typeof item !== 'object') continue
+      const affair = item as Record<string, unknown>
+      affair['kind'] = 'generic'
+    }
+    snapshot['schemaVersion'] = 4
+    return snapshot
+  }
   if (snapshot['schemaVersion'] === 2) {
     const affairs = Array.isArray(snapshot['affairs']) ? snapshot['affairs'] : []
     for (const item of affairs) {
@@ -494,7 +523,7 @@ function migrateSnapshot(value: unknown): unknown {
       affair['workspaceRef'] ??= { kind: 'global' }
     }
     snapshot['schemaVersion'] = 3
-    return snapshot
+    return migrateSnapshot(snapshot)
   }
   if (snapshot['schemaVersion'] !== 1) return snapshot
   const affairs = Array.isArray(snapshot['affairs']) ? snapshot['affairs'] : []

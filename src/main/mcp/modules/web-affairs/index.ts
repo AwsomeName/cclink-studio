@@ -70,6 +70,69 @@ const TOOLS: ToolDefinition[] = [
     },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
+  {
+    name: 'article_publishing_report_checkpoint',
+    description:
+      '报告文章发布固定步骤的状态。只能更新当前事务和 Attempt 中已经定义的检查点；完成必须附带重新观察到的证据。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        affairId: { type: 'string' },
+        attemptId: { type: 'string' },
+        stepId: { type: 'string' },
+        status: {
+          type: 'string',
+          enum: [
+            'running',
+            'waiting-platform',
+            'verifying',
+            'completed',
+            'retryable-failed',
+            'result-unknown',
+            'needs-reconcile',
+            'waiting-human',
+            'failed',
+          ],
+        },
+        evidence: { type: 'string' },
+        outputRefs: { type: 'object' },
+        error: { type: 'object' },
+      },
+      required: ['affairId', 'attemptId', 'stepId', 'status'],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  },
+  {
+    name: 'article_publishing_report_asset',
+    description:
+      '报告一张正文图片的上传状态。必须按 uploading→waiting-platform→verifying→uploaded 顺序；uploaded 必须附平台 URL 和页面核验证据，单图最多三次安全尝试。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        affairId: { type: 'string' },
+        attemptId: { type: 'string' },
+        assetId: { type: 'string' },
+        status: {
+          type: 'string',
+          enum: [
+            'uploading',
+            'waiting-platform',
+            'verifying',
+            'uploaded',
+            'retryable-failed',
+            'result-unknown',
+            'reconciling',
+            'failed',
+          ],
+        },
+        platformUrl: { type: 'string' },
+        evidence: { type: 'string' },
+        error: { type: 'object' },
+      },
+      required: ['affairId', 'attemptId', 'assetId', 'status'],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  },
 ]
 
 export class WebAffairToolModule implements ToolModule {
@@ -125,6 +188,18 @@ export class WebAffairToolModule implements ToolModule {
     }
     if (toolName === 'web_affair_complete_check') {
       return this.service.completeCheck({ ...params, workspaceRef } as never, workspaceId)
+    }
+    if (toolName === 'article_publishing_report_checkpoint') {
+      return this.service.reportArticlePublishingCheckpoint(
+        { ...params, workspaceRef } as never,
+        workspaceId,
+      )
+    }
+    if (toolName === 'article_publishing_report_asset') {
+      return this.service.reportArticlePublishingAsset(
+        { ...params, workspaceRef } as never,
+        workspaceId,
+      )
     }
     throw new Error(`未知网页事务工具: ${toolName}`)
   }

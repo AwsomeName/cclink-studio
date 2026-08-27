@@ -1,4 +1,5 @@
 import type { WorkspaceRef } from '../workspace-ref'
+import type { ArticlePublishingState } from '../article-publishing/article-publishing-types'
 
 export type WebAffairStatus =
   | 'draft'
@@ -197,6 +198,7 @@ export interface WebAffairEvent {
 
 export interface WebAffair {
   id: string
+  kind: 'generic' | 'article-publishing'
   /** Stable local workspace identity. `null` is reserved for migrated legacy affairs. */
   workspaceId: string | null
   title: string
@@ -212,6 +214,7 @@ export interface WebAffair {
   waitPlans: WebAffairWaitPlan[]
   flowProposals: WebAffairFlowProposal[]
   templateRef?: WebAffairTemplateRef
+  articlePublishing?: ArticlePublishingState
   events: WebAffairEvent[]
   workspaceRef: WorkspaceRef
   createdAt: string
@@ -219,7 +222,7 @@ export interface WebAffair {
 }
 
 export interface WebAffairSnapshot {
-  schemaVersion: 3
+  schemaVersion: 4
   revision: number
   affairs: WebAffair[]
 }
@@ -427,7 +430,7 @@ export type WebAffairOperationResult<T> =
   | { success: false; error: WebAffairOperationError }
 
 export const EMPTY_WEB_AFFAIR_SNAPSHOT: WebAffairSnapshot = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   revision: 0,
   affairs: [],
 }

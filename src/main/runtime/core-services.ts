@@ -11,6 +11,8 @@ import { registerWebResourceIpc } from '../web-resources/web-resource-ipc'
 import { WebAffairService } from '../web-affairs/web-affair-service'
 import { registerWebAffairIpc } from '../web-affairs/web-affair-ipc'
 import { webAffairsIpcEvents } from '../../shared/web-affairs/web-affair'
+import { ArticlePublishingService } from '../article-publishing/article-publishing-service'
+import { registerArticlePublishingIpc } from '../article-publishing/article-publishing-ipc'
 import { registerWechatIPC } from '../ipc/wechat-ipc'
 import { SettingsService } from '../settings/settings-service'
 import { registerSettingsIpc } from '../settings/settings-ipc'
@@ -437,6 +439,17 @@ export async function bootstrapMainProcessServices(
   )
   console.log('[CCLink Studio] 事务 IPC 已注册')
 
+  runtime.articlePublishingService =
+    runtime.fileService && runtime.webAffairService
+      ? new ArticlePublishingService(runtime.fileService, runtime.webAffairService)
+      : null
+  registerArticlePublishingIpc(
+    () => runtime.articlePublishingService,
+    () => runtime.workspaceStateService,
+    runtime.trustedRendererGuard,
+  )
+  console.log('[CCLink Studio] 文章发布 IPC 已注册')
+
   try {
     registerWechatIPC(runtime.trustedRendererGuard)
     console.log('[CCLink Studio] 微信格式转换 IPC 已注册')
@@ -575,6 +588,7 @@ export async function shutdownMainProcessServices(
   runtime.projectOpsService = null
   runtime.webResourceService = null
   runtime.webAffairService = null
+  runtime.articlePublishingService = null
   runtime.permissionManager = null
   runtime.mcpClientMgr = null
   runtime.cadConversionService = null

@@ -23,6 +23,7 @@ import type { WorkspaceStateApiContract } from '../shared/ipc/workspace-state'
 import type { ScheduledTasksApiContract } from '../shared/scheduled-task/scheduled-task-types'
 import type { WebResourcesApiContract } from '../shared/web-resources/web-resource'
 import type { WebAffairsApiContract } from '../shared/web-affairs/web-affair'
+import type { ArticlePublishingApiContract } from '../shared/article-publishing/article-publishing-contract'
 import type { RuntimeComponentsApiContract } from '../shared/ipc/runtime-components'
 import type { AuthApiContract } from '../shared/ipc/auth'
 import type { CclinkApiContract } from '../shared/ipc/cclink'
@@ -76,6 +77,8 @@ export interface CCLinkStudioAPI {
   webResources: WebResourcesApiContract
 
   webAffairs: WebAffairsApiContract
+
+  articlePublishing: ArticlePublishingApiContract
 
   hardware: HardwareApiContract
 

@@ -145,6 +145,17 @@ export function ActivityAffairsIcon(props: ActivityIconProps): ReactElement {
   )
 }
 
+export function ActivityArticlePublishingIcon(props: ActivityIconProps): ReactElement {
+  return ActivityIcon(
+    props,
+    <>
+      <path d="M5 3.5h10l4 4v13H5v-17Z" />
+      <path d="M15 3.5v4h4M8 11h8M8 14h6" />
+      <path d="m11 18 2 2 4-4" />
+    </>,
+  )
+}
+
 export function ActivityScheduledTasksIcon(props: ActivityIconProps): ReactElement {
   return ActivityIcon(
     props,

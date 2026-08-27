@@ -1,7 +1,7 @@
 # 文章发布中心最小研发计划
 
-> 文档版本：1.1
-> 状态：Ready，等待独立评审；尚未开始实现
+> 文档版本：1.2
+> 状态：M1 已实现，M2/M3 基础已接入；真实 CSDN 闭环与真人验收待完成
 > 最后更新：2026-08-27
 > 产品事实源：`docs/features/article-platform-publishing.md`
 > 架构约束：`docs/architecture.md`、`docs/decisions/0016-agent-web-account-execution.md`
@@ -342,11 +342,11 @@ Markdown。页面不匹配时 fail-closed。
 
 | 类别     | 阶段 | 用户可见结果                                      | 状态    | 估算     |
 | -------- | ---- | ------------------------------------------------- | ------- | -------- |
-| 工程准备 | E0   | 无新增用户能力；真实页证据和 contract 冻结        | Ready   | 1 人日   |
-| 用户增量 | M1   | 能从独立入口配置并保存一条 CSDN 发布草稿          | Pending | 2–3 人日 |
-| 用户闭环 | M2   | Agent 完成真实发布；图片有等待、核验和有界重试    | Pending | 4–6 人日 |
-| 可靠闭环 | M3   | 原 Attempt 断点恢复、人工卡点、防重和统一诊断可用 | Pending | 2–3 人日 |
-| 交付验收 | R1   | 真实 App 验收、受影响 smoke 和 `pnpm verify` 通过 | Pending | 1–2 人日 |
+| 工程准备 | E0   | contract、迁移和安全失败边界已固化；真实页证据待补 | In Progress | 1 人日   |
+| 用户增量 | M1   | 能从独立入口配置并保存一条 CSDN 发布草稿           | Complete    | 2–3 人日 |
+| 用户闭环 | M2   | Agent 完成真实发布；图片有等待、核验和有界重试     | In Progress | 4–6 人日 |
+| 可靠闭环 | M3   | 原 Attempt 断点恢复、人工卡点、防重和统一诊断可用  | In Progress | 2–3 人日 |
+| 交付验收 | R1   | 真实 App 验收、受影响 smoke 和 `pnpm verify` 通过  | Acceptance  | 1–2 人日 |
 
 以一名熟悉现有 WebAffair、BrowserTask 和 Agent runtime 的工程师估算，共 10–15 人日。CSDN 页面
 结构、风控或真实账号等待不计入纯编码时间；同一阻塞连续失败两次即触发止损，不用调整超时或放宽

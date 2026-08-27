@@ -2,6 +2,7 @@ import type { WebResourceService } from '../../../web-resources/web-resource-ser
 import type { BrowserManager } from '../../../browser/browser-manager'
 import type { BrowserTaskRuntime } from '../../../browser/browser-task-runtime'
 import type { AgentWebResourceLaunchCoordinator } from '../../../web-resources/agent-web-resource-launch-coordinator'
+import type { WebAffairService } from '../../../web-affairs/web-affair-service'
 import type { ToolDefinition, ToolExecutionContext, ToolModule } from '../../types'
 
 const TOOLS: ToolDefinition[] = [
@@ -28,6 +29,8 @@ const TOOLS: ToolDefinition[] = [
       type: 'object',
       properties: {
         accountId: { type: 'string', description: 'web_accounts_list 返回的账号 ID' },
+        affairId: { type: 'string', description: '可选：结构化网页事务 UUID' },
+        attemptId: { type: 'string', description: '可选：与 affairId 同时提供的当前 Attempt UUID' },
       },
       required: ['accountId'],
     },
@@ -39,6 +42,8 @@ interface WebResourceToolExecutionDependencies {
   launchCoordinator: AgentWebResourceLaunchCoordinator
   browserManager: BrowserManager
   browserTaskRuntime: BrowserTaskRuntime
+  webAffairService?: WebAffairService
+  resolveWorkspaceId?: (workspacePath: string) => Promise<string | null>
 }
 
 export class WebResourceToolModule implements ToolModule {
@@ -177,6 +182,44 @@ export class WebResourceToolModule implements ToolModule {
         allowedOrigins: [origin],
       },
     })
+    const affairId = typeof params['affairId'] === 'string' ? params['affairId'] : ''
+    const attemptId = typeof params['attemptId'] === 'string' ? params['attemptId'] : ''
+    if (Boolean(affairId) !== Boolean(attemptId)) {
+      this.execution.browserTaskRuntime.cancelTask(task.id)
+      throw new Error('affairId 和 attemptId 必须同时提供')
+    }
+    if (affairId && attemptId) {
+      if (!this.execution.webAffairService || !this.execution.resolveWorkspaceId) {
+        this.execution.browserTaskRuntime.cancelTask(task.id)
+        throw new Error('网页事务关联服务当前不可用')
+      }
+      const workspaceId = await this.execution.resolveWorkspaceId(context.trustedWorkspace.rootPath)
+      if (!workspaceId || !context.agentRunId) {
+        this.execution.browserTaskRuntime.cancelTask(task.id)
+        throw new Error('当前 Agent Run 无法绑定网页事务')
+      }
+      const boundAffair = await this.execution.webAffairService.bindAttempt(
+        {
+          workspaceRef: { kind: 'local', path: context.trustedWorkspace.rootPath },
+          affairId,
+          attemptId,
+          tabId: opened.tabId,
+          conversationId: context.conversationId,
+          agentRunId: context.agentRunId,
+          browserTaskRunId: task.id,
+        },
+        workspaceId,
+      )
+      if (!boundAffair.success) {
+        this.execution.browserTaskRuntime.cancelTask(task.id)
+        throw new Error(boundAffair.error.message)
+      }
+      this.execution.browserTaskRuntime.updateCorrelation(task.id, {
+        affairId,
+        affairNodeId: boundAffair.data.flow.nodes[0]?.id,
+        affairAttemptId: attemptId,
+      })
+    }
     return {
       success: true,
       data: {

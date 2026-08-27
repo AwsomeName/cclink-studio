@@ -1019,5 +1019,49 @@ describe('useTabStore', () => {
       expect(useTabStore.getState().tabs).toEqual([])
       expect(useTabStore.getState().activeTabId).toBeNull()
     })
+
+    it('同一文章发布事务只打开一个控制 Tab', () => {
+      const options = {
+        type: 'article-publishing' as const,
+        title: '发布 · Article',
+        icon: '📰',
+        workspaceRef: { kind: 'local' as const, path: '/workspace' },
+        articlePublishing: { affairId: 'affair-1' },
+      }
+
+      useTabStore.getState().openTab(options)
+      const firstId = useTabStore.getState().activeTabId
+      useTabStore.getState().openTab(options)
+
+      expect(
+        useTabStore.getState().tabs.filter((tab) => tab.type === 'article-publishing'),
+      ).toHaveLength(1)
+      expect(useTabStore.getState().activeTabId).toBe(firstId)
+    })
+
+    it('恢复时丢弃空白文章发布页并保留已绑定事务', () => {
+      useTabStore.getState().hydrateFromWorkspaceState({
+        tabs: [
+          {
+            id: 'article-draft',
+            type: 'article-publishing',
+            title: '新建文章发布',
+            icon: '📰',
+            articlePublishing: { affairId: null, draftKey: 'draft-1' },
+          },
+          {
+            id: 'article-task',
+            type: 'article-publishing',
+            title: '发布 · Article',
+            icon: '📰',
+            articlePublishing: { affairId: 'affair-1' },
+          },
+        ],
+        activeTabId: 'article-draft',
+      })
+
+      expect(useTabStore.getState().tabs).toEqual([expect.objectContaining({ id: 'article-task' })])
+      expect(useTabStore.getState().activeTabId).toBe('article-task')
+    })
   })
 })

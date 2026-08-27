@@ -113,6 +113,12 @@ function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeT
         tab.type !== 'scheduled-task' ||
         (typeof tab.scheduledTask?.taskId === 'string' && Boolean(tab.scheduledTask.taskId)),
     )
+    .filter(
+      (tab) =>
+        tab.type !== 'article-publishing' ||
+        (typeof tab.articlePublishing?.affairId === 'string' &&
+          Boolean(tab.articlePublishing.affairId)),
+    )
     .map(normalizeFileTab)
   if (tabs.length === 0 && Array.isArray(parsed.tabs)) return { tabs: [], activeTabId: null }
   if (tabs.length === 0) return null
@@ -128,6 +134,9 @@ function saveStoredTabs(state: TabState): void {
     if (isWorkspaceStateRestoring()) return
     const allTabs = state.tabs
       .filter((tab) => !tab.webResourceDraftRef)
+      .filter(
+        (tab) => tab.type !== 'article-publishing' || Boolean(tab.articlePublishing?.affairId),
+      )
       .filter(isRestorableBrowserTab)
       .map(normalizePersistedTab)
     const activeWorkspaceKey = getWorkspaceStateKey()
@@ -198,6 +207,8 @@ interface OpenTabOptions {
   webResource?: Tab['webResource']
   /** 持久网页事务详情 */
   webAffair?: Tab['webAffair']
+  /** 文章发布事务控制页 */
+  articlePublishing?: Tab['articlePublishing']
   /** 内置 Agent 角色定义详情 */
   agentRole?: Tab['agentRole']
   /** 宣发视频工程详情 */
@@ -257,6 +268,11 @@ interface TabState {
   updateTabScheduledTask: (id: string, scheduledTask: NonNullable<Tab['scheduledTask']>) => void
   /** 新事务草稿和持久事务共用同一 Tab；创建成功后原地绑定事务。 */
   updateTabWebAffair: (id: string, webAffair: NonNullable<Tab['webAffair']>) => void
+  /** 新建文章发布页保存后原地绑定唯一持久事务。 */
+  updateTabArticlePublishing: (
+    id: string,
+    articlePublishing: NonNullable<Tab['articlePublishing']>,
+  ) => void
   /** 将网站账号草稿原地转为正式 Browser Tab。 */
   bindWebResourceDraft: (
     id: string,
@@ -304,6 +320,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     scheduledTask,
     webResource,
     webAffair,
+    articlePublishing,
     agentRole,
     mediaProject,
     forceNew,
@@ -462,6 +479,19 @@ export const useTabStore = create<TabState>((set, get) => ({
             )
           })
           if (existing) return { activeTabId: existing.id }
+        } else if (type === 'article-publishing' && articlePublishing) {
+          const existing = state.tabs.find((tab) => {
+            if (tab.type !== 'article-publishing' || !tab.articlePublishing) return false
+            if (articlePublishing.affairId) {
+              return tab.articlePublishing.affairId === articlePublishing.affairId
+            }
+            return (
+              tab.articlePublishing.affairId === null &&
+              workspaceRefKey(tab.workspaceRef ?? workspaceRefFromKey(null)) ===
+                workspaceRefKey(workspaceRef ?? workspaceRefFromKey(getWorkspaceStateKey()))
+            )
+          })
+          if (existing) return { activeTabId: existing.id }
         } else if (type === 'media-production' && mediaProject) {
           const existing = state.tabs.find(
             (tab) =>
@@ -501,6 +531,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         scheduledTask,
         webResource,
         webAffair,
+        articlePublishing,
         agentRole,
         mediaProject,
       }
@@ -684,6 +715,13 @@ export const useTabStore = create<TabState>((set, get) => ({
   updateTabWebAffair: (id, webAffair) =>
     set((state) => ({
       tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, webAffair } : tab)),
+    })),
+
+  updateTabArticlePublishing: (id, articlePublishing) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === id ? { ...tab, articlePublishing, dirty: false } : tab,
+      ),
     })),
 
   bindWebResourceDraft: (id, binding) =>

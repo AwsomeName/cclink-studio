@@ -29,6 +29,7 @@ import type { ProjectOpsService } from '../project-ops/project-ops-service'
 import type { WebResourceService } from '../web-resources/web-resource-service'
 import type { AgentWebResourceLaunchCoordinator } from '../web-resources/agent-web-resource-launch-coordinator'
 import type { WebAffairService } from '../web-affairs/web-affair-service'
+import type { ArticlePublishingService } from '../article-publishing/article-publishing-service'
 import type { HardwareService } from '../hardware/hardware-service'
 import type { CadConversionService } from '../cad/cad-conversion-service'
 import type { DataSourceService } from '../data-source/data-source-service'
@@ -105,6 +106,7 @@ export interface CclinkStudioRuntimeState {
   webResourceService: WebResourceService | null
   agentWebResourceLaunchCoordinator: AgentWebResourceLaunchCoordinator | null
   webAffairService: WebAffairService | null
+  articlePublishingService: ArticlePublishingService | null
   hardwareService: HardwareService | null
   cadConversionService: CadConversionService | null
   dataSourceService: DataSourceService | null
@@ -176,6 +178,7 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     webResourceService: null,
     agentWebResourceLaunchCoordinator: null,
     webAffairService: null,
+    articlePublishingService: null,
     hardwareService: null,
     cadConversionService: null,
     dataSourceService: null,

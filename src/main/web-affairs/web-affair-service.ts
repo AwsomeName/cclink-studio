@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import type {
@@ -55,6 +55,14 @@ import {
   updateWebAffairNodeInputSchema,
 } from '../../shared/web-affairs/web-affair-schema'
 import { WebAffairStore } from './web-affair-store'
+import type {
+  ArticlePublishingFields,
+  ArticlePublishingSourcePreview,
+  ArticlePublishingState,
+  ReportArticlePublishingAssetInput,
+  ReportArticlePublishingCheckpointInput,
+} from '../../shared/article-publishing/article-publishing-types'
+import { articlePublishingStateSchema } from '../../shared/article-publishing/article-publishing-schema'
 
 const AFFAIR_LIMIT = 1_000
 const EVENT_LIMIT = 2_000
@@ -141,7 +149,7 @@ export class WebAffairService {
     return {
       success: true,
       data: {
-        schemaVersion: 3,
+        schemaVersion: 4,
         revision: result.data.revision,
         workspaceId,
         affairs: result.data.affairs.filter((affair) => affair.workspaceId === workspaceId),
@@ -168,6 +176,45 @@ export class WebAffairService {
 
   createAffair(input: CreateWebAffairInput, workspaceId: string) {
     return this.enqueue(() => this.createAffairNow(input, workspaceId))
+  }
+
+  createArticlePublishingAffair(
+    input: {
+      preview: ArticlePublishingSourcePreview
+      accountId: string
+      fields: ArticlePublishingFields
+      workspaceRef: CreateWebAffairInput['workspaceRef']
+    },
+    workspaceId: string,
+  ) {
+    return this.enqueue(() => this.createArticlePublishingAffairNow(input, workspaceId))
+  }
+
+  resumeArticlePublishingAttempt(affairId: string, attemptId: string, workspaceId: string) {
+    return this.enqueueScoped(affairId, workspaceId, () =>
+      this.resumeArticlePublishingAttemptNow(affairId, attemptId),
+    )
+  }
+
+  markArticlePublishingAttemptStarted(affairId: string, attemptId: string, workspaceId: string) {
+    return this.enqueueScoped(affairId, workspaceId, () =>
+      this.markArticlePublishingAttemptStartedNow(affairId, attemptId),
+    )
+  }
+
+  reportArticlePublishingCheckpoint(
+    input: ReportArticlePublishingCheckpointInput,
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(input.affairId, workspaceId, () =>
+      this.reportArticlePublishingCheckpointNow(input),
+    )
+  }
+
+  reportArticlePublishingAsset(input: ReportArticlePublishingAssetInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () =>
+      this.reportArticlePublishingAssetNow(input),
+    )
   }
 
   claimLegacyAffair(input: ClaimLegacyWebAffairInput, workspaceId: string) {
@@ -298,6 +345,7 @@ export class WebAffairService {
     })
     const affair: WebAffair = {
       id: randomUUID(),
+      kind: 'generic',
       workspaceId,
       title: input.title,
       objective: input.objective,
@@ -331,6 +379,131 @@ export class WebAffairService {
       flowProposals: [],
       templateRef: input.templateRef,
       events: [this.event('created', `事务已创建，共 ${nodes.length} 个流程节点`, now)],
+      workspaceRef: input.workspaceRef,
+      createdAt: now,
+      updatedAt: now,
+    }
+    return this.persistNewAffair(affair)
+  }
+
+  private async createArticlePublishingAffairNow(
+    input: {
+      preview: ArticlePublishingSourcePreview
+      accountId: string
+      fields: ArticlePublishingFields
+      workspaceRef: CreateWebAffairInput['workspaceRef']
+    },
+    workspaceId: string,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    if (!this.snapshot) return this.unavailable()
+    if (this.snapshot.affairs.length >= AFFAIR_LIMIT) return this.limit('事务数量已达到限制')
+    if (input.preview.blockers.length > 0) return this.invalid(input.preview.blockers.join('；'))
+    const resources = this.getWebResources()
+    const account = resources?.accounts.find(
+      (item) => item.id === input.accountId && !item.archivedAt && !item.mergedIntoAccountId,
+    )
+    const website = resources?.websites.find((item) => item.id === account?.websiteId)
+    if (!account || !website) return this.resourceError('所选 CSDN 账号不存在或已归档')
+    let hostname = ''
+    try {
+      hostname = new URL(website.origin).hostname.toLowerCase()
+    } catch {
+      return this.resourceError('所选网站 Origin 无效')
+    }
+    if (hostname !== 'csdn.net' && !hostname.endsWith('.csdn.net')) {
+      return this.resourceError('首版只能选择 CSDN 账号')
+    }
+    if (
+      input.fields.coverAssetId &&
+      !input.preview.assets.some(
+        (asset) => asset.id === input.fields.coverAssetId && asset.kind === 'local',
+      )
+    ) {
+      return this.invalid('所选封面已经失效，请重新选择')
+    }
+
+    const now = this.timestamp()
+    const localAssets = input.preview.assets.filter((asset) => asset.kind === 'local')
+    const materialPaths = [
+      input.preview.source.markdownPath,
+      ...localAssets.map((asset) => asset.sourcePath),
+    ]
+    const materials = await Promise.all(
+      [...new Set(materialPaths)].map((path) => this.createMaterial(path, now)),
+    )
+    if (materials.some((material) => material.state !== 'available')) {
+      return this.resourceError('Markdown 或正文图片已经不可用，请重新选择文章')
+    }
+    const scopeHash = createHash('sha256')
+      .update(
+        JSON.stringify({
+          sourceHash: input.preview.source.contentHash,
+          accountId: input.accountId,
+          fields: input.fields,
+          adapterId: 'csdn',
+          adapterVersion: 1,
+        }),
+      )
+      .digest('hex')
+    const checkpoints: ArticlePublishingState['checkpoints'] = [
+      ['open-editor', '打开 CSDN 编辑页', 'reconcile-then-run'],
+      ['verify-account', '核验账号与页面', 'reconcile-then-run'],
+      ['upload-assets', '上传并核验正文图片', 'skip-if-verified'],
+      ['fill-body', '填写并核验正文', 'reconcile-then-run'],
+      ['fill-fields', '填写平台字段', 'reconcile-then-run'],
+      ['save-draft', '保存并复核草稿', 'reconcile-then-run'],
+      ['publish', '执行常规单篇发布', 'manual-only'],
+      ['verify-publication', '核验文章结果', 'manual-only'],
+    ].map(([stepId, label, resumePolicy]) => ({
+      stepId,
+      label,
+      inputHash: scopeHash,
+      adapterVersion: 1,
+      status: 'pending',
+      resumePolicy: resumePolicy as ArticlePublishingState['checkpoints'][number]['resumePolicy'],
+      attemptCount: 0,
+      evidence: [],
+    }))
+    const articlePublishing = articlePublishingStateSchema.parse({
+      adapterId: 'csdn',
+      adapterVersion: 1,
+      source: input.preview.source,
+      accountId: input.accountId,
+      websiteId: website.id,
+      fields: input.fields,
+      assets: input.preview.assets,
+      checkpoints,
+      execution: { status: 'draft' },
+      publication: { status: 'not-started' },
+    })
+    const node = this.createNode({
+      title: '发布文章到 CSDN',
+      description: '按冻结文章、账号和平台字段执行；特殊卡点转人工。',
+      type: 'web-task',
+      status: 'ready',
+      executor: 'ai',
+      accountIds: [account.id],
+      materialIds: materials.map((material) => material.id),
+      successCriteria: ['全部正文图片已经后置核验', '发布结果 URL 可复核'],
+      now,
+    })
+    const affair: WebAffair = {
+      id: randomUUID(),
+      kind: 'article-publishing',
+      workspaceId,
+      title: input.fields.title,
+      objective: `将 ${input.preview.source.markdownPath} 发布到 CSDN`,
+      status: 'active',
+      principalId: account.principalId,
+      websiteIds: [website.id],
+      accountIds: [account.id],
+      materials,
+      flow: { version: 1, nodes: [node], edges: [] },
+      attempts: [],
+      waitPlans: [],
+      flowProposals: [],
+      articlePublishing,
+      events: [this.event('created', 'CSDN 文章发布事务已创建', now)],
       workspaceRef: input.workspaceRef,
       createdAt: now,
       updatedAt: now,
@@ -589,6 +762,20 @@ export class WebAffairService {
             }
           : item,
       ),
+      ...(found.affair.articlePublishing
+        ? {
+            articlePublishing: {
+              ...found.affair.articlePublishing,
+              execution: {
+                ...found.affair.articlePublishing.execution,
+                status: 'running' as const,
+                currentAttemptId: found.attempt.id,
+                lastAgentRunId: input.agentRunId,
+                lastBrowserTaskRunId: input.browserTaskRunId,
+              },
+            },
+          }
+        : {}),
       updatedAt: now,
     })
   }
@@ -731,6 +918,24 @@ export class WebAffairService {
         error: { code: 'CONFIRMATION_REQUIRED', message: '最终提交必须先由用户确认' },
       }
     }
+    if (input.outcome === 'succeeded' && found.affair.articlePublishing) {
+      if (!input.url) {
+        return {
+          success: false,
+          error: { code: 'EVIDENCE_REQUIRED', message: '文章发布成功必须取得可复核 URL' },
+        }
+      }
+      if (
+        found.affair.articlePublishing.assets.some(
+          (asset) => asset.kind === 'local' && asset.status !== 'uploaded',
+        )
+      ) {
+        return {
+          success: false,
+          error: { code: 'EVIDENCE_REQUIRED', message: '仍有正文图片没有完成后置核验' },
+        }
+      }
+    }
     const now = this.timestamp()
     const evidence = {
       id: randomUUID(),
@@ -776,6 +981,32 @@ export class WebAffairService {
       attempts,
       flow: { ...found.affair.flow, nodes },
       status: this.deriveAffairStatus(nodes),
+      ...(found.affair.articlePublishing
+        ? {
+            articlePublishing: {
+              ...found.affair.articlePublishing,
+              execution: {
+                ...found.affair.articlePublishing.execution,
+                status:
+                  input.outcome === 'succeeded'
+                    ? ('published' as const)
+                    : input.outcome === 'interrupted'
+                      ? ('interrupted' as const)
+                      : input.outcome === 'failed'
+                        ? ('failed' as const)
+                        : found.affair.articlePublishing.execution.status,
+              },
+              publication:
+                input.outcome === 'succeeded'
+                  ? {
+                      status: 'published' as const,
+                      url: input.url,
+                      observedAt: now,
+                    }
+                  : found.affair.articlePublishing.publication,
+            },
+          }
+        : {}),
       events: this.appendEvent(
         found.affair,
         this.event('attempt-finished', `${node.title}：${input.outcome}，${input.summary}`, now, {
@@ -1393,6 +1624,27 @@ export class WebAffairService {
         status: 'needs-attention' as const,
         attempts,
         flow: { ...affair.flow, nodes },
+        ...(affair.articlePublishing
+          ? {
+              articlePublishing: {
+                ...affair.articlePublishing,
+                assets: affair.articlePublishing.assets.map((asset) =>
+                  ['uploading', 'waiting-platform', 'verifying'].includes(asset.status)
+                    ? { ...asset, status: 'reconciling' as const }
+                    : asset,
+                ),
+                checkpoints: affair.articlePublishing.checkpoints.map((checkpoint) =>
+                  ['running', 'waiting-platform', 'verifying'].includes(checkpoint.status)
+                    ? { ...checkpoint, status: 'needs-reconcile' as const }
+                    : checkpoint,
+                ),
+                execution: {
+                  ...affair.articlePublishing.execution,
+                  status: 'interrupted' as const,
+                },
+              },
+            }
+          : {}),
         events: interrupted.reduce(
           (events, attempt) =>
             this.appendEvent(
@@ -1564,6 +1816,308 @@ export class WebAffairService {
       ),
       events: this.appendEvent(affair, input.event),
       updatedAt: input.now,
+    })
+  }
+
+  private async resumeArticlePublishingAttemptNow(
+    affairId: string,
+    attemptId: string,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const found = this.findAttempt(affairId, attemptId)
+    if (!found?.affair.articlePublishing || found.affair.kind !== 'article-publishing') {
+      return this.notFound('文章发布 Attempt 不存在')
+    }
+    if (found.attempt.status !== 'interrupted') {
+      return this.transitionError('只有已中断的文章发布 Attempt 可以原地恢复')
+    }
+    const now = this.timestamp()
+    const publishing = found.affair.articlePublishing
+    const checkpoints = publishing.checkpoints.map((checkpoint) =>
+      ['running', 'waiting-platform', 'verifying'].includes(checkpoint.status)
+        ? { ...checkpoint, status: 'needs-reconcile' as const, finishedAt: undefined }
+        : checkpoint,
+    )
+    const currentStep = checkpoints.find((checkpoint) => checkpoint.status !== 'completed')
+    const nodes = found.affair.flow.nodes.map((node) =>
+      node.id === found.attempt.nodeId
+        ? {
+            ...node,
+            status: 'running' as const,
+            executor: 'ai' as const,
+            lastResultNote: '正在从已确认检查点恢复',
+            availableTransitions: [...ALLOWED_TRANSITIONS.running],
+            updatedAt: now,
+          }
+        : node,
+    )
+    const attempts = found.affair.attempts.map((attempt) =>
+      attempt.id === found.attempt.id
+        ? {
+            ...attempt,
+            status: 'preparing' as const,
+            endedAt: undefined,
+            failureMessage: undefined,
+            tabId: undefined,
+            conversationId: undefined,
+            agentRunId: undefined,
+            browserTaskRunId: undefined,
+          }
+        : attempt,
+    )
+    return this.persistAffair({
+      ...found.affair,
+      status: 'active',
+      flow: { ...found.affair.flow, nodes },
+      attempts,
+      articlePublishing: {
+        ...publishing,
+        assets: publishing.assets.map((asset) =>
+          ['uploading', 'waiting-platform', 'verifying'].includes(asset.status)
+            ? { ...asset, status: 'reconciling' as const }
+            : asset,
+        ),
+        checkpoints,
+        execution: {
+          ...publishing.execution,
+          status: 'running',
+          currentAttemptId: found.attempt.id,
+          currentStepId: currentStep?.stepId,
+          lastAgentRunId: undefined,
+          lastBrowserTaskRunId: undefined,
+        },
+      },
+      events: this.appendEvent(
+        found.affair,
+        this.event(
+          'attempt-returned',
+          '文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask',
+          now,
+          { nodeId: found.attempt.nodeId, attemptId: found.attempt.id },
+        ),
+      ),
+      updatedAt: now,
+    })
+  }
+
+  private async markArticlePublishingAttemptStartedNow(
+    affairId: string,
+    attemptId: string,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const found = this.findAttempt(affairId, attemptId)
+    if (!found?.affair.articlePublishing || found.affair.kind !== 'article-publishing') {
+      return this.notFound('文章发布 Attempt 不存在')
+    }
+    const now = this.timestamp()
+    const publishing = found.affair.articlePublishing
+    const currentStep = publishing.checkpoints.find(
+      (checkpoint) => checkpoint.status !== 'completed',
+    )
+    const checkpoints = publishing.checkpoints.map((checkpoint) =>
+      checkpoint.stepId === currentStep?.stepId && checkpoint.status === 'pending'
+        ? {
+            ...checkpoint,
+            status: 'running' as const,
+            attemptCount: checkpoint.attemptCount + 1,
+            startedAt: now,
+          }
+        : checkpoint,
+    )
+    return this.persistAffair({
+      ...found.affair,
+      articlePublishing: {
+        ...publishing,
+        checkpoints,
+        execution: {
+          ...publishing.execution,
+          status: 'running',
+          currentAttemptId: found.attempt.id,
+          currentStepId: currentStep?.stepId,
+        },
+      },
+      updatedAt: now,
+    })
+  }
+
+  private async reportArticlePublishingCheckpointNow(
+    input: ReportArticlePublishingCheckpointInput,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const found = this.findAttempt(input.affairId, input.attemptId)
+    const publishing = found?.affair.articlePublishing
+    if (!found || !publishing || found.affair.kind !== 'article-publishing') {
+      return this.notFound('文章发布 Attempt 不存在')
+    }
+    if (publishing.execution.currentAttemptId !== input.attemptId) {
+      return this.transitionError('报告的 Attempt 不是当前发布事务')
+    }
+    const checkpoint = publishing.checkpoints.find((item) => item.stepId === input.stepId)
+    if (!checkpoint) return this.notFound('文章发布检查点不存在')
+    const now = this.timestamp()
+    const checkpoints = publishing.checkpoints.map((item) =>
+      item.stepId === input.stepId
+        ? {
+            ...item,
+            status: input.status,
+            attemptCount:
+              input.status === 'running' && item.status !== 'running'
+                ? item.attemptCount + 1
+                : item.attemptCount,
+            startedAt: input.status === 'running' ? (item.startedAt ?? now) : item.startedAt,
+            finishedAt: ['completed', 'failed'].includes(input.status) ? now : undefined,
+            outputRefs: input.outputRefs ?? item.outputRefs,
+            evidence: input.evidence
+              ? [...item.evidence, input.evidence].slice(-40)
+              : item.evidence,
+            error: input.error,
+          }
+        : item,
+    )
+    const nextStep = checkpoints.find((item) => item.status !== 'completed')
+    const executionStatus: ArticlePublishingState['execution']['status'] =
+      input.status === 'waiting-human'
+        ? 'waiting-human'
+        : input.status === 'result-unknown'
+          ? 'result-unknown'
+          : input.status === 'failed'
+            ? 'failed'
+            : 'running'
+    return this.persistAffair({
+      ...found.affair,
+      status:
+        executionStatus === 'waiting-human' || executionStatus === 'result-unknown'
+          ? 'needs-attention'
+          : executionStatus === 'failed'
+            ? 'failed'
+            : 'active',
+      articlePublishing: {
+        ...publishing,
+        checkpoints,
+        execution: {
+          ...publishing.execution,
+          status: executionStatus,
+          currentStepId: nextStep?.stepId,
+        },
+      },
+      events: this.appendEvent(
+        found.affair,
+        this.event(
+          'node-status-changed',
+          `文章发布步骤 ${checkpoint.label} → ${input.status}`,
+          now,
+          { nodeId: found.attempt.nodeId, attemptId: found.attempt.id },
+        ),
+      ),
+      updatedAt: now,
+    })
+  }
+
+  private async reportArticlePublishingAssetNow(
+    input: ReportArticlePublishingAssetInput,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const found = this.findAttempt(input.affairId, input.attemptId)
+    const publishing = found?.affair.articlePublishing
+    if (!found || !publishing || found.affair.kind !== 'article-publishing') {
+      return this.notFound('文章发布 Attempt 不存在')
+    }
+    if (publishing.execution.currentAttemptId !== input.attemptId) {
+      return this.transitionError('报告的 Attempt 不是当前发布事务')
+    }
+    const target = publishing.assets.find((asset) => asset.id === input.assetId)
+    if (!target || target.kind !== 'local') return this.notFound('正文图片不存在')
+    const now = this.timestamp()
+    const activeAttempt = target.uploadAttempts[target.uploadAttempts.length - 1]
+    let uploadAttempts = target.uploadAttempts
+    let nextStatus = input.status
+
+    if (input.status === 'uploading') {
+      if (!['pending', 'retryable-failed', 'reconciling'].includes(target.status)) {
+        return this.transitionError('当前图片状态不能开始新的上传尝试')
+      }
+      if (target.uploadAttempts.length >= 3) {
+        return this.transitionError('当前图片已达到 3 次尝试上限，需要人工处理')
+      }
+      uploadAttempts = [
+        ...target.uploadAttempts,
+        {
+          number: target.uploadAttempts.length + 1,
+          status: 'uploading' as const,
+          startedAt: now,
+          evidence: input.evidence ? [input.evidence] : [],
+        },
+      ]
+    } else {
+      if (!activeAttempt) return this.transitionError('图片尚未开始上传')
+      const allowedPrevious: Partial<
+        Record<typeof input.status, ArticlePublishingState['assets'][number]['status'][]>
+      > = {
+        'waiting-platform': ['uploading'],
+        verifying: ['waiting-platform', 'reconciling'],
+        uploaded: ['verifying', 'reconciling'],
+        'retryable-failed': ['uploading', 'waiting-platform', 'verifying', 'reconciling'],
+        'result-unknown': ['uploading', 'waiting-platform', 'verifying'],
+        failed: ['uploading', 'waiting-platform', 'verifying', 'reconciling'],
+      }
+      const previous = allowedPrevious[input.status]
+      if (previous && !previous.includes(target.status)) {
+        return this.transitionError(`图片状态不能从 ${target.status} 进入 ${input.status}`)
+      }
+      if (input.status === 'uploaded' && (!input.platformUrl || !input.evidence)) {
+        return this.transitionError('图片成功必须包含平台 URL 和页面核验证据')
+      }
+      if (
+        input.status === 'uploaded' &&
+        target.status !== 'verifying' &&
+        target.status !== 'reconciling'
+      ) {
+        return this.transitionError('图片必须经过页面核验后才能标记成功')
+      }
+      if (input.status === 'retryable-failed' && activeAttempt.number >= 3) nextStatus = 'failed'
+      uploadAttempts = target.uploadAttempts.map((attempt, index) =>
+        index === target.uploadAttempts.length - 1
+          ? {
+              ...attempt,
+              status:
+                input.status === 'uploaded'
+                  ? ('succeeded' as const)
+                  : input.status === 'reconciling'
+                    ? attempt.status
+                    : (nextStatus as typeof attempt.status),
+              finishedAt: ['uploaded', 'retryable-failed', 'result-unknown', 'failed'].includes(
+                nextStatus,
+              )
+                ? now
+                : attempt.finishedAt,
+              evidence: input.evidence
+                ? [...attempt.evidence, input.evidence].slice(-40)
+                : attempt.evidence,
+              error: input.error,
+            }
+          : attempt,
+      )
+    }
+    const assets = publishing.assets.map((asset) =>
+      asset.id === target.id
+        ? {
+            ...asset,
+            status: nextStatus,
+            platformUrl: input.status === 'uploaded' ? input.platformUrl : asset.platformUrl,
+            verifiedAt: input.status === 'uploaded' ? now : asset.verifiedAt,
+            uploadAttempts,
+          }
+        : asset,
+    )
+    return this.persistAffair({
+      ...found.affair,
+      articlePublishing: { ...publishing, assets },
+      events: this.appendEvent(
+        found.affair,
+        this.event(
+          'node-status-changed',
+          `正文图片 ${target.displayPath} → ${nextStatus}（第 ${uploadAttempts.length}/3 次）`,
+          now,
+          { nodeId: found.attempt.nodeId, attemptId: found.attempt.id },
+        ),
+      ),
+      updatedAt: now,
     })
   }
 

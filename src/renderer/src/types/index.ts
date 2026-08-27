@@ -21,6 +21,7 @@ export type ActivityPanel =
   | 'terminal'
   | 'operations'
   | 'affairs'
+  | 'article-publishing'
   | 'sessions'
   | 'agent-roles'
   | 'scheduled-tasks'
@@ -45,6 +46,7 @@ export type TabType =
   | 'scheduled-task'
   | 'web-resource'
   | 'web-affair'
+  | 'article-publishing'
   | 'agent-role'
   | 'remote-file'
   | 'media-production'
@@ -221,6 +223,11 @@ export interface Tab {
     affairId: string | null
     draftKey?: string
     draft?: WebAffairDraftState
+  }
+  /** 一个文章发布 Tab 一一绑定一个持久事务；null 只表示尚未选定输入的临时新建页。 */
+  articlePublishing?: {
+    affairId: string | null
+    draftKey?: string
   }
   /** 内置 Agent 角色定义详情。 */
   agentRole?: {

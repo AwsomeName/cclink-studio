@@ -42,6 +42,8 @@ import type { ActivityPanel } from '../../types'
 import { FileTree } from './FileTree'
 import { WebResourcesSidebar } from '../../features/web-resources/WebResourcesSidebar'
 import { WebAffairsSidebar } from '../../features/web-affairs/WebAffairsSidebar'
+import { ArticlePublishingSidebar } from '../../features/article-publishing/ArticlePublishingSidebar'
+import { createArticlePublishingDraftTab } from '../../features/article-publishing/article-publishing-tab'
 import { HardwareProductionSection } from './HardwareProductionSection'
 import { DataSourcesPanel } from '../data-sources/DataSourcesPanel'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -100,6 +102,8 @@ function getSidebarTitle(
       return '网站与账号'
     case 'affairs':
       return '事务'
+    case 'article-publishing':
+      return '文章发布'
     case 'sessions':
       return '会话'
     case 'agent-roles':
@@ -179,6 +183,11 @@ export function Sidebar(): React.ReactElement {
     openTab(createScheduledTaskTab(workspacePath))
   }, [activeWorkspaceRef.kind, openTab, workspacePath])
 
+  const openNewArticlePublishing = useCallback((): void => {
+    if (activeWorkspaceRef.kind !== 'local') return
+    openTab(createArticlePublishingDraftTab(activeWorkspaceRef))
+  }, [activeWorkspaceRef, openTab])
+
   return (
     <div
       className="sidebar"
@@ -230,6 +239,18 @@ export function Sidebar(): React.ReactElement {
               disabled={!workspacePath || activeWorkspaceRef.kind !== 'local'}
               title="新建定时任务"
               aria-label="新建定时任务"
+            >
+              <IconPlus size={14} />
+            </button>
+          )}
+          {activePanel === 'article-publishing' && (
+            <button
+              className="sidebar-header-action"
+              type="button"
+              onClick={openNewArticlePublishing}
+              disabled={activeWorkspaceRef.kind !== 'local'}
+              title="新建文章发布"
+              aria-label="新建文章发布"
             >
               <IconPlus size={14} />
             </button>
@@ -342,6 +363,9 @@ function ProjectSidebarContent({
 
       {activePanel === 'scheduled-tasks' && <ScheduledTasksSidebar workspacePath={workspacePath} />}
       {activePanel === 'affairs' && <WebAffairsSidebar workspaceRef={activeWorkspaceRef} />}
+      {activePanel === 'article-publishing' && (
+        <ArticlePublishingSidebar workspaceRef={activeWorkspaceRef} />
+      )}
 
       {activePanel === 'sessions' && (
         <SessionsSidebarView

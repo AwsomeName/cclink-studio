@@ -14,12 +14,13 @@ describe('getStaleWebAffairTabIds', () => {
       { id: 'editor', type: 'editor', title: 'file', icon: 'f', workspaceRef },
     ] satisfies Tab[]
     const snapshot = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       revision: 1,
       workspaceId: 'workspace-a-id',
       unassignedAffairCount: 1,
+      unassignedAffairs: [],
       affairs: [{ id: 'affair-a' }],
-    } as WebAffairProjectSnapshot
+    } as unknown as WebAffairProjectSnapshot
 
     expect(getStaleWebAffairTabIds(tabs, snapshot, workspaceRef)).toEqual(['stale', 'legacy'])
   })

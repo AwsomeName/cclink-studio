@@ -26,6 +26,7 @@ import { DataSourceQueryTab } from '../data-sources/DataSourceQueryTab'
 import { WebResourceDetailTab } from '../../features/web-resources/WebResourceDetailTab'
 import { WebAffairTab } from '../../features/web-affairs/WebAffairTab'
 import { WebAffairDraftTab } from '../../features/web-affairs/WebAffairDraftTab'
+import { ArticlePublishingTab } from '../../features/article-publishing/ArticlePublishingTab'
 import { SettingsPage } from '../settings/SettingsPage'
 import { FilePreview } from './FilePreview'
 import { AndroidDisplay } from './AndroidDisplay'
@@ -179,6 +180,9 @@ export function WorkbenchContent({
             )}
             {activeTab.type === 'web-affair' && activeTab.webAffair?.affairId === null && (
               <WebAffairDraftTab tab={activeTab} />
+            )}
+            {activeTab.type === 'article-publishing' && activeTab.articlePublishing && (
+              <ArticlePublishingTab tab={activeTab} />
             )}
             {activeTab.type === 'media-production' && activeTab.mediaProject && (
               <MediaProductionTab tab={activeTab} />
