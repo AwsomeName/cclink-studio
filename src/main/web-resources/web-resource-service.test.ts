@@ -41,6 +41,39 @@ afterEach(async () => {
 })
 
 describe('WebResourceService', () => {
+  it('renames an account without changing its website or isolated Browser Profile', async () => {
+    const service = new WebResourceService(new WebResourceStore(storePath))
+    await service.load()
+    const created = await service.createConnection(baseInput, PROJECT_ID, 'apple-release')
+    expect(created.success).toBe(true)
+    if (!created.success) return
+
+    const updated = await service.updateAccount({
+      accountId: created.data.account.id,
+      label: '13800138000',
+    })
+
+    expect(updated).toMatchObject({
+      success: true,
+      data: {
+        id: created.data.account.id,
+        label: '13800138000',
+        browserProfileId: 'apple-release',
+      },
+    })
+    expect(service.getSnapshot()).toMatchObject({
+      success: true,
+      data: {
+        revision: 2,
+        accounts: [{ label: '13800138000', browserProfileId: 'apple-release' }],
+      },
+    })
+    expect(JSON.parse(await readFile(storePath, 'utf8'))).toMatchObject({
+      revision: 2,
+      accounts: [{ label: '13800138000', browserProfileId: 'apple-release' }],
+    })
+  })
+
   it('adopts an ordinary tab Profile without replacing its login environment', async () => {
     const draftPath = join(tempDir, 'web-resource-drafts.json')
     const service = new WebResourceService(

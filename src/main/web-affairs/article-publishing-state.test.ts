@@ -29,6 +29,25 @@ describe('article publishing persistent state', () => {
     await rm(directory, { recursive: true, force: true })
   })
 
+  it('persists a saved draft and reloads it into project history', async () => {
+    const created = await createDraftTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+
+    const reloaded = createService(directory)
+    await reloaded.load()
+    const snapshot = reloaded.getProjectSnapshot(WORKSPACE_ID)
+    expect(snapshot.success).toBe(true)
+    if (!snapshot.success) return
+    expect(snapshot.data.affairs).toHaveLength(1)
+    expect(snapshot.data.affairs[0]).toMatchObject({
+      id: created.affairId,
+      kind: 'article-publishing',
+      title: 'Article',
+      articlePublishing: { execution: { status: 'draft' } },
+    })
+    await reloaded.flush()
+  })
+
   it('requires waiting and verification evidence before an image becomes uploaded', async () => {
     const { service, affairId, attemptId, assetId } = await createStartedTask(
       directory,
@@ -203,7 +222,34 @@ describe('article publishing persistent state', () => {
 })
 
 async function createStartedTask(directory: string, sourcePath: string, imagePath: string) {
-  const service = new WebAffairService(
+  const created = await createDraftTask(directory, sourcePath, imagePath)
+  const started = await created.service.startAttempt(
+    {
+      workspaceRef: { kind: 'local', path: directory },
+      affairId: created.affairId,
+      nodeId: created.nodeId,
+      accountId: ACCOUNT_ID,
+    },
+    WORKSPACE_ID,
+  )
+  if (!started.success) throw new Error(started.error.message)
+  const attemptId = started.data.attempts[0].id
+  const marked = await created.service.markArticlePublishingAttemptStarted(
+    created.affairId,
+    attemptId,
+    WORKSPACE_ID,
+  )
+  if (!marked.success) throw new Error(marked.error.message)
+  return {
+    service: created.service,
+    affairId: created.affairId,
+    attemptId,
+    assetId: created.assetId,
+  }
+}
+
+function createService(directory: string): WebAffairService {
+  return new WebAffairService(
     () => resources(),
     new WebAffairStore(join(directory, 'affairs.json')),
     undefined,
@@ -218,6 +264,10 @@ async function createStartedTask(directory: string, sourcePath: string, imagePat
       },
     }),
   )
+}
+
+async function createDraftTask(directory: string, sourcePath: string, imagePath: string) {
+  const service = createService(directory)
   await service.load()
   const preview: ArticlePublishingSourcePreview = {
     source: {
@@ -255,27 +305,10 @@ async function createStartedTask(directory: string, sourcePath: string, imagePat
     WORKSPACE_ID,
   )
   if (!created.success) throw new Error(created.error.message)
-  const started = await service.startAttempt(
-    {
-      workspaceRef: { kind: 'local', path: directory },
-      affairId: created.data.id,
-      nodeId: created.data.flow.nodes[0].id,
-      accountId: ACCOUNT_ID,
-    },
-    WORKSPACE_ID,
-  )
-  if (!started.success) throw new Error(started.error.message)
-  const attemptId = started.data.attempts[0].id
-  const marked = await service.markArticlePublishingAttemptStarted(
-    created.data.id,
-    attemptId,
-    WORKSPACE_ID,
-  )
-  if (!marked.success) throw new Error(marked.error.message)
   return {
     service,
     affairId: created.data.id,
-    attemptId,
+    nodeId: created.data.flow.nodes[0].id,
     assetId: preview.assets[0].id,
   }
 }

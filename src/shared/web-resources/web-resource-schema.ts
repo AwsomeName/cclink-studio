@@ -123,6 +123,13 @@ export const confirmWebConnectionLoginInputSchema = z
   .object({ workspaceRef: workspaceRefSchema, accountId: uuidSchema })
   .strict()
 
+export const updateWebAccountInputSchema = z
+  .object({
+    accountId: uuidSchema,
+    label: trimmedText(160, '账号名称'),
+  })
+  .strict()
+
 export const importProjectOpsConfigInputSchema = z
   .object({
     workspacePath: trimmedText(4_096, '工作空间路径'),

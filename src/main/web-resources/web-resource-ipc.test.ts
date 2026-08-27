@@ -85,6 +85,30 @@ describe('registerWebResourceIpc', () => {
     })
   })
 
+  it('validates and forwards an account label update', async () => {
+    const service = {
+      updateAccount: vi.fn(async (input) => ({ success: true, data: input })),
+    }
+    registerWebResourceIpc(
+      () => service as never,
+      () => null,
+      () => createWorkspaceState() as never,
+      createGuard('trusted') as never,
+    )
+    const input = {
+      accountId: '11111111-1111-4111-8111-111111111111',
+      label: ' 13800138000 ',
+    }
+
+    await expect(
+      mockIpcMain.handlers.get('webResources:updateAccount')?.({ sender: 'trusted' }, input),
+    ).resolves.toMatchObject({ success: true, data: { label: '13800138000' } })
+    expect(service.updateAccount).toHaveBeenCalledWith({
+      accountId: input.accountId,
+      label: '13800138000',
+    })
+  })
+
   it('derives an ordinary tab Profile in main before creating its save draft', async () => {
     const service = { beginDraft: vi.fn(async () => ({ success: true, data: {} })) }
     const browserManager = {

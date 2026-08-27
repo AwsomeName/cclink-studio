@@ -25,6 +25,7 @@ import type {
   ArchiveWebAccountGroupInput,
   ArchiveWebAccountInput,
   MergeWebAccountsInput,
+  UpdateWebAccountInput,
 } from './web-resource-types'
 
 export interface AgentWebResourceLaunchRequest {
@@ -65,6 +66,7 @@ export interface WebResourcesApiContract {
   confirmLogin(
     input: ConfirmWebConnectionLoginInput,
   ): Promise<WebResourceOperationResult<WebResourceConnection>>
+  updateAccount(input: UpdateWebAccountInput): Promise<WebResourceOperationResult<WebAccount>>
   claimLegacyConnections(
     input: ClaimLegacyWebConnectionsInput,
   ): Promise<WebResourceOperationResult<ClaimLegacyWebConnectionsSummary>>
@@ -118,6 +120,9 @@ export const webResourcesIpc = {
     [ConfirmWebConnectionLoginInput],
     WebResourceOperationResult<WebResourceConnection>
   >('webResources:confirmLogin'),
+  updateAccount: defineIpcCall<[UpdateWebAccountInput], WebResourceOperationResult<WebAccount>>(
+    'webResources:updateAccount',
+  ),
   claimLegacyConnections: defineIpcCall<
     [ClaimLegacyWebConnectionsInput],
     WebResourceOperationResult<ClaimLegacyWebConnectionsSummary>

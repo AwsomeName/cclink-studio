@@ -26,17 +26,33 @@ export class WebAffairStore {
 
   async load(): Promise<WebAffairSnapshot> {
     const primary = await this.readSnapshot(this.filePath)
-    if (primary.kind === 'valid') return primary.snapshot
+    if (primary.kind === 'valid') {
+      console.info('[WebAffairStore] 事务数据已加载', {
+        filePath: this.filePath,
+        revision: primary.snapshot.revision,
+        affairCount: primary.snapshot.affairs.length,
+      })
+      return primary.snapshot
+    }
 
     const backup = await this.readSnapshot(this.backupPath)
     if (backup.kind === 'valid') {
       await this.persist(backup.snapshot, false)
+      console.warn('[WebAffairStore] 主文件不可用，已从备份恢复事务数据', {
+        filePath: this.filePath,
+        backupPath: this.backupPath,
+        revision: backup.snapshot.revision,
+        affairCount: backup.snapshot.affairs.length,
+      })
       return backup.snapshot
     }
 
     if (primary.kind === 'invalid' || backup.kind === 'invalid') {
       throw new Error('事务数据文件损坏；原文件已保留，请从诊断或备份恢复')
     }
+    console.info('[WebAffairStore] 未找到事务数据，以空历史启动', {
+      filePath: this.filePath,
+    })
     return structuredClone(EMPTY_WEB_AFFAIR_SNAPSHOT)
   }
 
@@ -79,6 +95,11 @@ export class WebAffairStore {
       }
       await writeFile(temporaryPath, serialized, { encoding: 'utf8', mode: 0o600 })
       await rename(temporaryPath, this.filePath)
+      console.info('[WebAffairStore] 事务数据已持久化', {
+        filePath: this.filePath,
+        revision: snapshot.revision,
+        affairCount: snapshot.affairs.length,
+      })
     }
     const pending = this.saveQueue.then(persist, persist)
     this.saveQueue = pending.catch(() => undefined)

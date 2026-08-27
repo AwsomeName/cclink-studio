@@ -63,6 +63,7 @@ import type {
   ReportArticlePublishingCheckpointInput,
 } from '../../shared/article-publishing/article-publishing-types'
 import { articlePublishingStateSchema } from '../../shared/article-publishing/article-publishing-schema'
+import { CSDN_ARTICLE_PUBLISHING_PLAN } from '../../shared/article-publishing/article-publishing-plan'
 
 const AFFAIR_LIMIT = 1_000
 const EVENT_LIMIT = 2_000
@@ -445,25 +446,18 @@ export class WebAffairService {
         }),
       )
       .digest('hex')
-    const checkpoints: ArticlePublishingState['checkpoints'] = [
-      ['open-editor', '打开 CSDN 编辑页', 'reconcile-then-run'],
-      ['verify-account', '核验账号与页面', 'reconcile-then-run'],
-      ['upload-assets', '上传并核验正文图片', 'skip-if-verified'],
-      ['fill-body', '填写并核验正文', 'reconcile-then-run'],
-      ['fill-fields', '填写平台字段', 'reconcile-then-run'],
-      ['save-draft', '保存并复核草稿', 'reconcile-then-run'],
-      ['publish', '执行常规单篇发布', 'manual-only'],
-      ['verify-publication', '核验文章结果', 'manual-only'],
-    ].map(([stepId, label, resumePolicy]) => ({
-      stepId,
-      label,
-      inputHash: scopeHash,
-      adapterVersion: 1,
-      status: 'pending',
-      resumePolicy: resumePolicy as ArticlePublishingState['checkpoints'][number]['resumePolicy'],
-      attemptCount: 0,
-      evidence: [],
-    }))
+    const checkpoints: ArticlePublishingState['checkpoints'] = CSDN_ARTICLE_PUBLISHING_PLAN.map(
+      ({ stepId, label, resumePolicy }) => ({
+        stepId,
+        label,
+        inputHash: scopeHash,
+        adapterVersion: 1,
+        status: 'pending',
+        resumePolicy,
+        attemptCount: 0,
+        evidence: [],
+      }),
+    )
     const articlePublishing = articlePublishingStateSchema.parse({
       adapterId: 'csdn',
       adapterVersion: 1,

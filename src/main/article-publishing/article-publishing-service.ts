@@ -81,7 +81,10 @@ export class ArticlePublishingService {
     if (!parsed.success || parsed.data.workspaceRef.kind !== 'local') {
       return invalid('文章发布草稿参数无效')
     }
-    const previewResult = await this.inspectSource(parsed.data)
+    const previewResult = await this.inspectSource({
+      workspaceRef: parsed.data.workspaceRef,
+      markdownPath: parsed.data.markdownPath,
+    })
     if (!previewResult.success) return previewResult
     if (previewResult.data.blockers.length > 0) {
       return invalid(previewResult.data.blockers.join('；'))

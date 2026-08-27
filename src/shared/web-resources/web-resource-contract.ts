@@ -13,6 +13,7 @@ import {
   parseSaveWebResourceDraftInput,
   parseWebResourceProjectScopeInput,
   updateWebAccountGroupInputSchema,
+  updateWebAccountInputSchema,
 } from './web-resource-schema'
 import { webResourcesIpc } from './web-resource'
 import type {
@@ -97,6 +98,16 @@ export const webResourcesIpcContracts = {
         throw new Error(`IPC ${webResourcesIpc.confirmLogin.channel} 需要 1 个参数`)
       }
       return ipcArgs(parseConfirmWebConnectionLoginInput(args[0]))
+    },
+    invalidInputResult,
+  ),
+  updateAccount: bindIpcParser(
+    webResourcesIpc.updateAccount,
+    (args) => {
+      if (args.length !== 1) {
+        throw new Error(`IPC ${webResourcesIpc.updateAccount.channel} 需要 1 个参数`)
+      }
+      return ipcArgs(updateWebAccountInputSchema.parse(args[0]))
     },
     invalidInputResult,
   ),

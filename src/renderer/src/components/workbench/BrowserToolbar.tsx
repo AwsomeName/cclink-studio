@@ -55,25 +55,6 @@ export function normalizeBrowserZoomPercent(value: string): number | null {
   return Math.min(MAX_BROWSER_ZOOM_PERCENT, Math.max(MIN_BROWSER_ZOOM_PERCENT, Math.round(percent)))
 }
 
-export function inferWebResourceDisplayName(
-  browserState: Pick<BrowserTabState, 'title' | 'url' | 'urlInput'> | undefined,
-): string {
-  const title = browserState?.title?.trim()
-  if (title && title !== '浏览器' && title !== '新标签页') return title.slice(0, 160)
-
-  for (const candidate of [browserState?.url, browserState?.urlInput]) {
-    if (!candidate?.trim()) continue
-    try {
-      const url = new URL(candidate)
-      if (url.protocol !== 'http:' && url.protocol !== 'https:') continue
-      return url.hostname.replace(/^www\./, '').slice(0, 160)
-    } catch {
-      // 地址尚未形成有效网页时不猜测名称。
-    }
-  }
-  return ''
-}
-
 export function getBrowserEnvironmentLabel(
   tab: Pick<Tab, 'title' | 'browserProfile' | 'webResourceRef' | 'webResourceDraftRef'>,
   accountLabel?: string | null,
@@ -267,7 +248,6 @@ export function BrowserToolbar({
 
   const prepareSave = (): void => {
     if (!draftId || tab.workspaceRef?.kind !== 'local' || tab.webResourceRef) return
-    setDisplayName((current) => current || inferWebResourceDisplayName(browserState))
     setSaveError(null)
     setShowSave(true)
   }
@@ -450,8 +430,8 @@ export function BrowserToolbar({
                 if (event.key === 'Enter') void saveDraft()
                 if (event.key === 'Escape') setShowSave(false)
               }}
-              placeholder="账号显示名称（如张三公司）"
-              aria-label="账号显示名称"
+              placeholder="手机号或平台用户名（用于区分账号）"
+              aria-label="账号手机号或平台用户名"
             />
             {saveError ? <span title={saveError}>{saveError}</span> : null}
             {duplicateAccountId ? (

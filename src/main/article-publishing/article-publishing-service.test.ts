@@ -4,6 +4,54 @@ import { ArticlePublishingService } from './article-publishing-service'
 const WORKSPACE_REF = { kind: 'local' as const, path: '/workspace' }
 
 describe('ArticlePublishingService', () => {
+  it('creates a task after re-inspecting only the Markdown source fields', async () => {
+    const markdown = '# 可执行文章\n\n摘要。'
+    const fileService = {
+      readTextDocument: vi.fn(async () => ({
+        path: '/workspace/article.md',
+        content: markdown,
+        size: Buffer.byteLength(markdown),
+        modifiedAt: 123,
+        hash: 'c'.repeat(64),
+      })),
+    }
+    const webAffairService = {
+      createArticlePublishingAffair: vi.fn(async (input) => ({
+        success: true,
+        data: { id: '33333333-3333-4333-8333-333333333333', input },
+      })),
+    }
+    const service = new ArticlePublishingService(
+      fileService as never,
+      webAffairService as never,
+      async (path) => path,
+    )
+
+    const result = await service.createTask(
+      {
+        workspaceRef: WORKSPACE_REF,
+        markdownPath: '/workspace/article.md',
+        accountId: '22222222-2222-4222-8222-222222222222',
+        fields: {
+          title: '可执行文章',
+          summary: '摘要。',
+          tags: ['Electron'],
+          category: '',
+        },
+      },
+      '11111111-1111-4111-8111-111111111111',
+    )
+
+    expect(result.success).toBe(true)
+    expect(webAffairService.createArticlePublishingAffair).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: '22222222-2222-4222-8222-222222222222',
+        preview: expect.objectContaining({ title: '可执行文章', blockers: [] }),
+      }),
+      '11111111-1111-4111-8111-111111111111',
+    )
+  })
+
   it('extracts title and deduplicates inline, reference and HTML image occurrences by content hash', async () => {
     const markdown = [
       '---',

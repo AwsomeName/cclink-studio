@@ -32,6 +32,7 @@ export const webResourcesApi: WebResourcesApiContract = {
   cancelDraft: (input) => invokeIpcContract(webResourcesIpc.cancelDraft, input),
   resolveLaunch: (input) => invokeIpcContract(webResourcesIpc.resolveLaunch, input),
   confirmLogin: (input) => invokeIpcContract(webResourcesIpc.confirmLogin, input),
+  updateAccount: (input) => invokeIpcContract(webResourcesIpc.updateAccount, input),
   claimLegacyConnections: (input) =>
     invokeIpcContract(webResourcesIpc.claimLegacyConnections, input),
   importProjectOpsConfig: (input) =>

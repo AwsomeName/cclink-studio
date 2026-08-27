@@ -5,6 +5,7 @@ import type {
   CancelWebResourceDraftResult,
   CreateWebConnectionInput,
   SaveWebResourceDraftInput,
+  UpdateWebAccountInput,
   WebAccount,
   WebAccountGroup,
   WebResourceConnection,
@@ -17,6 +18,7 @@ import {
   mergeWebAccountsInputSchema,
   parseCreateWebConnectionInput,
   updateWebAccountGroupInputSchema,
+  updateWebAccountInputSchema,
 } from '../../shared/web-resources/web-resource-schema'
 import { WebResourceStore } from './web-resource-store'
 import { WebResourceDraftStore, type WebResourceDraftRecord } from './web-resource-draft-store'
@@ -380,6 +382,64 @@ export class WebResourceService {
           account: structuredClone(confirmed),
         },
       }
+    })
+  }
+
+  async updateAccount(
+    rawInput: UpdateWebAccountInput,
+  ): Promise<WebResourceOperationResult<WebAccount>> {
+    return this.mutate(async () => {
+      if (!this.snapshot) return this.unavailable()
+      const parsed = updateWebAccountInputSchema.safeParse(rawInput)
+      if (!parsed.success) {
+        return {
+          success: false,
+          error: {
+            code: 'INVALID_INPUT',
+            message: '请输入 1–160 个字符的账号手机号或平台用户名',
+          },
+        }
+      }
+      const current = this.snapshot.accounts.find(
+        (item) => item.id === parsed.data.accountId && !item.archivedAt,
+      )
+      if (!current) {
+        return {
+          success: false,
+          error: { code: 'RESOURCE_NOT_FOUND', message: '网站账号不存在或已归档' },
+        }
+      }
+      const duplicate = this.snapshot.accounts.find(
+        (item) =>
+          item.id !== current.id &&
+          !item.archivedAt &&
+          item.websiteId === current.websiteId &&
+          item.principalId === current.principalId &&
+          normalizedKey(item.label) === normalizedKey(parsed.data.label),
+      )
+      if (duplicate) {
+        return {
+          success: false,
+          error: {
+            code: 'DUPLICATE_ACCOUNT',
+            message: '该网站已存在同名账号',
+            context: { existingAccountId: duplicate.id },
+          },
+        }
+      }
+      const updated: WebAccount = {
+        ...current,
+        label: parsed.data.label,
+        updatedAt: new Date().toISOString(),
+      }
+      const next: WebResourceSnapshot = {
+        ...this.snapshot,
+        revision: this.snapshot.revision + 1,
+        accounts: this.snapshot.accounts.map((item) => (item.id === updated.id ? updated : item)),
+      }
+      await this.store.save(next)
+      this.snapshot = next
+      return { success: true, data: structuredClone(updated) }
     })
   }
 

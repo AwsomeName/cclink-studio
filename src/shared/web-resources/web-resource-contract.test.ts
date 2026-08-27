@@ -128,11 +128,24 @@ describe('web resources IPC contract', () => {
     ).toThrow()
   })
 
+  it('accepts a bounded account label update and rejects extra fields', () => {
+    const accountId = '11111111-1111-4111-8111-111111111111'
+    expect(
+      webResourcesIpcContracts.updateAccount.parseArgs([{ accountId, label: ' 13800138000 ' }]),
+    ).toEqual([{ accountId, label: '13800138000' }])
+    expect(() =>
+      webResourcesIpcContracts.updateAccount.parseArgs([
+        { accountId, label: '13800138000', browserProfileId: 'must-not-change' },
+      ]),
+    ).toThrow()
+  })
+
   it('does not accept extra arguments on any channel', () => {
     expect(() => webResourcesIpcContracts.getSnapshot.parseArgs(['extra'])).toThrow()
     expect(() => webResourcesIpcContracts.createConnection.parseArgs([])).toThrow()
     expect(() => webResourcesIpcContracts.beginDraft.parseArgs([])).toThrow()
     expect(() => webResourcesIpcContracts.saveDraft.parseArgs([])).toThrow()
+    expect(() => webResourcesIpcContracts.updateAccount.parseArgs([])).toThrow()
     expect(() => webResourcesIpcContracts.importProjectOpsConfig.parseArgs([])).toThrow()
   })
 

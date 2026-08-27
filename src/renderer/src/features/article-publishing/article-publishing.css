@@ -72,6 +72,21 @@
   resize: vertical;
 }
 
+.article-publishing-account-identity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px 12px;
+  margin-top: 4px;
+}
+.article-publishing-account-identity label {
+  margin: 0;
+}
+.article-publishing-account-identity small {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+}
+
 .article-publishing-alert {
   max-width: 980px;
   margin: 0 auto 14px;

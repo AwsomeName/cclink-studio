@@ -151,6 +151,12 @@ export function registerWebResourceIpc(
   )
 
   registerTrustedIpcContract(
+    webResourcesIpcContracts.updateAccount,
+    trustedRendererGuard,
+    async (_event, input) => getService()?.updateAccount(input) ?? unavailable(),
+  )
+
+  registerTrustedIpcContract(
     webResourcesIpcContracts.claimLegacyConnections,
     trustedRendererGuard,
     async (

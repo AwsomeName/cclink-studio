@@ -12,6 +12,10 @@ export function createArticleMarkdownOpenDialogOptions(
   }
 }
 
+export function formatArticlePublishingAccountOption(accountLabel: string): string {
+  return `CSDN · ${accountLabel.trim()}`
+}
+
 export function createArticlePublishingDraftTab(workspaceRef: WorkspaceRef): {
   type: 'article-publishing'
   title: string

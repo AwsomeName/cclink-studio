@@ -120,6 +120,11 @@ export interface ConfirmWebConnectionLoginInput extends WebResourceProjectScopeI
   accountId: string
 }
 
+export interface UpdateWebAccountInput {
+  accountId: string
+  label: string
+}
+
 export type ClaimLegacyWebConnectionsInput = WebResourceProjectScopeInput
 
 export interface WebResourceConnection {

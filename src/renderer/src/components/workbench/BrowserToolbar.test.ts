@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   getBrowserEnvironmentLabel,
-  inferWebResourceDisplayName,
   normalizeBrowserZoomPercent,
   shouldNavigateBrowserAddress,
 } from './BrowserToolbar'
@@ -45,34 +44,6 @@ describe('shouldNavigateBrowserAddress', () => {
         compositionActive: false,
       }),
     ).toBe(false)
-  })
-})
-
-describe('inferWebResourceDisplayName', () => {
-  it('prefills the account name from the visible page title', () => {
-    expect(
-      inferWebResourceDisplayName({
-        title: 'V2EX',
-        url: 'https://www.v2ex.com/',
-        urlInput: 'https://www.v2ex.com/',
-      }),
-    ).toBe('V2EX')
-  })
-
-  it('falls back to a readable hostname', () => {
-    expect(
-      inferWebResourceDisplayName({
-        title: null,
-        url: 'https://www.example.com/account',
-        urlInput: 'https://www.example.com/account',
-      }),
-    ).toBe('example.com')
-  })
-
-  it('does not invent a name for an invalid address', () => {
-    expect(
-      inferWebResourceDisplayName({ title: null, url: 'about:blank', urlInput: 'not a url' }),
-    ).toBe('')
   })
 })
 
