@@ -162,6 +162,39 @@ describe('AgentBridge browser send plan', () => {
     })
   })
 
+  it('reports a human takeover pause without calling it an unknown browser result', () => {
+    const task = {
+      id: 'browser-task',
+      status: 'paused',
+      reobservationRequired: true,
+      takeoverReason: '网页验证码需要人工处理',
+    }
+    const bridge = createBridge(
+      { kind: 'all' },
+      {},
+      {
+        getTaskForAgentRun: () => task,
+        getTask: () => task,
+        listActionLogs: () => [],
+      },
+    )
+
+    expect(
+      bridge.normalizeBrowserTerminalEvent({
+        conversationId: 'conversation-a',
+        runId: 'run-a',
+        type: 'complete',
+        data: { result: '请用户接管' },
+      }),
+    ).toMatchObject({
+      type: 'error',
+      data: {
+        code: 'browser_task_waiting_human',
+        message: expect.stringContaining('网页验证码需要人工处理'),
+      },
+    })
+  })
+
   it('uses the event run id instead of a newer active BrowserTask', () => {
     const oldTask = { id: 'old-task', status: 'failed' }
     const currentTask = { id: 'current-task', status: 'running' }

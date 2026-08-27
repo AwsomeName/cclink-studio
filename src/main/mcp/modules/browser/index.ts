@@ -21,6 +21,7 @@ import type { BrowserTaskRun } from '../../../../shared/ipc/browser'
 import { realpath } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import type { WebResourceService } from '../../../web-resources/web-resource-service'
+import type { WebAffairService } from '../../../web-affairs/web-affair-service'
 
 const ACCOUNT_FORBIDDEN_ACTIONS = new Set([
   'evaluate',
@@ -42,6 +43,7 @@ const ACCOUNT_FORBIDDEN_ACTIONS = new Set([
   'listFrames',
   'waitForPopup',
 ])
+const ARTICLE_IMAGE_UPLOAD_CONFIRM_INTENT = 'article-image-upload-confirm'
 export const BROWSER_REOBSERVATION_ACTIONS = new Set([
   'screenshot',
   'extract',
@@ -159,10 +161,18 @@ const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
   // ── 交互工具（写入操作） ──────────────────
   {
     name: 'browser_click',
-    description: '点击页面上匹配 CSS 选择器的元素',
+    description:
+      '点击页面上匹配 Playwright 选择器的元素。文章发布事务在确认 CSDN 图片编辑弹窗时，必须显式传入 intent=article-image-upload-confirm；该意图只放行当前 upload-assets 步骤，不会放行最终发布。',
     inputSchema: {
       type: 'object',
-      properties: { selector: { type: 'string', description: 'CSS 选择器' } },
+      properties: {
+        selector: { type: 'string', description: 'Playwright 选择器' },
+        intent: {
+          type: 'string',
+          enum: [ARTICLE_IMAGE_UPLOAD_CONFIRM_INTENT],
+          description: '可选的受控动作意图；仅用于已绑定文章发布事务中的 CSDN 图片确认上传',
+        },
+      },
       required: ['selector'],
     },
     annotations: { readOnlyHint: false, destructiveHint: false },
@@ -697,6 +707,8 @@ export class BrowserToolModule implements ToolModule {
     private browserTaskRuntime?: BrowserTaskRuntime | null,
     private browserManager?: BrowserManager | null,
     private webResourceService?: WebResourceService | null,
+    private webAffairService?: WebAffairService | null,
+    private resolveWorkspaceId?: ((workspacePath: string) => Promise<string | null>) | null,
   ) {}
 
   async getExecutionPolicy(
@@ -912,11 +924,104 @@ export class BrowserToolModule implements ToolModule {
       this.browserTaskRuntime?.pauseForTakeover(task.id, '网页确认对话框需要人工处理')
       throw new Error('网页确认对话框需要人工接管，任务已暂停')
     }
-    const sensitiveReason = await this.getGenericSensitiveActionReason(actionType, params, page)
+    const articleImageUploadConfirmation = await this.assertArticleImageUploadConfirmationAllowed(
+      task,
+      actionType,
+      params,
+      page,
+      context,
+    )
+    const sensitiveReason = articleImageUploadConfirmation
+      ? null
+      : await this.getGenericSensitiveActionReason(actionType, params, page)
     if (sensitiveReason) {
       this.browserTaskRuntime?.pauseForTakeover(task.id, sensitiveReason)
       throw new Error(`${sensitiveReason}；任务已暂停，请由用户在可见页面完成后交还`)
     }
+  }
+
+  private async assertArticleImageUploadConfirmationAllowed(
+    task: BrowserTaskRun,
+    actionType: string,
+    params: Record<string, unknown>,
+    page: ReturnType<PlaywrightBridge['getPage']>,
+    context?: ToolExecutionContext,
+  ): Promise<boolean> {
+    if (params.intent !== ARTICLE_IMAGE_UPLOAD_CONFIRM_INTENT) return false
+    if (
+      actionType !== 'click' ||
+      !page ||
+      !task.correlation?.accountId ||
+      !task.correlation.affairId ||
+      !task.correlation.affairAttemptId ||
+      !this.webAffairService ||
+      !this.resolveWorkspaceId ||
+      context?.trustedWorkspace?.kind !== 'local'
+    ) {
+      throw new Error('文章图片上传确认缺少可信事务、账号或本地工作空间绑定')
+    }
+
+    const workspaceId = await this.resolveWorkspaceId(context.trustedWorkspace.rootPath)
+    if (!workspaceId) throw new Error('文章图片上传确认无法解析当前本地工作空间')
+    const snapshot = this.webAffairService.getProjectSnapshot(workspaceId)
+    if (!snapshot.success) throw new Error(snapshot.error.message)
+    const affair = snapshot.data.affairs.find(
+      (candidate) => candidate.id === task.correlation?.affairId,
+    )
+    const publishing = affair?.articlePublishing
+    if (
+      affair?.kind !== 'article-publishing' ||
+      !publishing ||
+      publishing.adapterId !== 'csdn' ||
+      publishing.accountId !== task.correlation.accountId ||
+      publishing.execution.currentAttemptId !== task.correlation.affairAttemptId ||
+      publishing.execution.currentStepId !== 'upload-assets' ||
+      publishing.execution.status !== 'running'
+    ) {
+      throw new Error('文章图片上传确认与当前 CSDN 发布事务或 upload-assets 步骤不一致')
+    }
+
+    let hostname = ''
+    try {
+      hostname = new URL(page.url()).hostname.toLowerCase()
+    } catch {
+      throw new Error('文章图片上传确认无法核验当前页面地址')
+    }
+    if (hostname !== 'csdn.net' && !hostname.endsWith('.csdn.net')) {
+      throw new Error('文章图片上传确认只允许在 CSDN 页面执行')
+    }
+
+    const selector = String(params.selector ?? '').trim()
+    if (!selector) throw new Error('文章图片上传确认必须提供明确的按钮选择器')
+    const locator = page.locator(selector)
+    if ((await locator.count()) !== 1 || !(await locator.isVisible())) {
+      throw new Error('文章图片上传确认按钮必须唯一且当前可见')
+    }
+    const control = await locator.evaluate((element) => {
+      const target = element.closest('button, input, [role="button"]') ?? element
+      const label = String(
+        target.getAttribute('value') ||
+          target.getAttribute('aria-label') ||
+          target.textContent ||
+          '',
+      )
+        .replace(/\s+/gu, '')
+        .trim()
+      const dialog = target.closest('.el-dialog, [role="dialog"], [aria-modal="true"]')
+      const dialogText = String(dialog?.textContent ?? '').replace(/\s+/gu, '')
+      return {
+        label,
+        isImageEditor:
+          Boolean(dialog) &&
+          dialogText.includes('图片编辑') &&
+          dialogText.includes('封面图预览') &&
+          Boolean(dialog?.querySelector('img, canvas')),
+      }
+    })
+    if (control.label !== '确认上传' || !control.isImageEditor) {
+      throw new Error('当前控件不是可核验的 CSDN 图片编辑确认按钮')
+    }
+    return true
   }
 
   private async assertWorkspacePaths(

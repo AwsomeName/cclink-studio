@@ -110,6 +110,36 @@ describe('applyAgentStreamEventToStore', () => {
     expect(lastMessage.rawText).toBe('连接错误: network down')
   })
 
+  it('把浏览器人工接管显示为任务暂停，而不是连接错误', () => {
+    const conversationId = useAgentStore.getState().activeConversationId
+
+    applyAgentErrorToStore({
+      conversationId,
+      code: 'browser_task_waiting_human',
+      message: '浏览器任务已暂停，等待用户处理：网页验证码需要人工处理',
+    })
+
+    const conversation = useAgentStore.getState().conversations[conversationId]
+    expect(conversation.messages.at(-1)?.rawText).toBe(
+      '任务暂停: 浏览器任务已暂停，等待用户处理：网页验证码需要人工处理',
+    )
+  })
+
+  it('把浏览器结果待核验显示为任务待核验，而不是连接错误', () => {
+    const conversationId = useAgentStore.getState().activeConversationId
+
+    applyAgentErrorToStore({
+      conversationId,
+      code: 'browser_reobservation_required',
+      message: '浏览器动作结果仍未知，必须重新读取页面',
+    })
+
+    const conversation = useAgentStore.getState().conversations[conversationId]
+    expect(conversation.messages.at(-1)?.rawText).toBe(
+      '任务待核验: 浏览器动作结果仍未知，必须重新读取页面',
+    )
+  })
+
   it('忽略已经被新运行替代的迟到完成事件', () => {
     const conversationId = useAgentStore.getState().activeConversationId
     const oldRunId = useAgentStore.getState().beginRun(conversationId)

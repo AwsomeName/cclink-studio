@@ -98,6 +98,9 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
           runtime.browserTaskRuntime,
           runtime.browserManager,
           runtime.webResourceService,
+          runtime.webAffairService,
+          async (workspacePath) =>
+            runtime.workspaceStateService?.getLocalProjectId(workspacePath) ?? null,
         ),
     )
   }

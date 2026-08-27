@@ -190,6 +190,194 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     expect(page.click).not.toHaveBeenCalled()
   })
 
+  it('allows only the explicit CSDN image confirmation inside the active upload-assets step', async () => {
+    const selector = 'button:has-text("确认上传")'
+    const accountTask = {
+      id: 'task-a',
+      tabId: 'account-tab',
+      goal: '发布 CSDN 文章',
+      status: 'running',
+      startedAt: Date.now(),
+      downloadIds: [],
+      correlation: {
+        workspaceKey: '/workspace/a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        agentSessionRef: null,
+        profileId: 'profile-a',
+        accountId: 'account-a',
+        allowedOrigins: ['https://mp.csdn.net'],
+        affairId: 'affair-a',
+        affairAttemptId: 'attempt-a',
+      },
+    }
+    const locator = {
+      count: vi.fn().mockResolvedValue(1),
+      isVisible: vi.fn().mockResolvedValue(true),
+      evaluate: vi.fn().mockResolvedValue({ label: '确认上传', isImageEditor: true }),
+    }
+    const page = {
+      url: () => 'https://mp.csdn.net/mp_blog/creation/editor',
+      locator: vi.fn().mockReturnValue(locator),
+      click: vi.fn().mockResolvedValue(undefined),
+      evaluate: vi.fn(),
+    }
+    const bridge = {
+      getPage: () => page,
+      getPageById: () => page,
+      switchToPage: vi.fn().mockResolvedValue(undefined),
+    }
+    const browserTaskRuntime = {
+      getActiveTaskForConversation: vi.fn().mockReturnValue(accountTask),
+      assertCanRunAction: vi.fn().mockReturnValue(accountTask),
+      startActionLog: vi.fn().mockReturnValue({ id: 'action-a' }),
+      succeedActionLog: vi.fn(),
+    }
+    const browserManager = {
+      getViewWorkspaceKey: () => '/workspace/a',
+      getViewProfileId: () => 'profile-a',
+      isWorkspaceActive: () => true,
+      setActive: vi.fn(),
+      getCurrentURL: () => 'https://mp.csdn.net/mp_blog/creation/editor',
+    }
+    const webAffairService = {
+      getProjectSnapshot: vi.fn().mockReturnValue({
+        success: true,
+        data: {
+          affairs: [
+            {
+              id: 'affair-a',
+              kind: 'article-publishing',
+              articlePublishing: {
+                adapterId: 'csdn',
+                accountId: 'account-a',
+                execution: {
+                  currentAttemptId: 'attempt-a',
+                  currentStepId: 'upload-assets',
+                  status: 'running',
+                },
+              },
+            },
+          ],
+        },
+      }),
+    }
+    const module = new BrowserToolModule(
+      bridge as any,
+      browserTaskRuntime as any,
+      browserManager as any,
+      null,
+      webAffairService as any,
+      async () => 'workspace-a-id',
+    )
+    const context = {
+      conversationId: 'conversation-a',
+      workspaceKey: '/workspace/a',
+      trustedWorkspace: {
+        kind: 'local' as const,
+        rootPath: '/workspace/a',
+        workspaceKey: '/workspace/a',
+      },
+    }
+
+    await expect(
+      module.execute(
+        'browser_click',
+        { selector, intent: 'article-image-upload-confirm' },
+        context,
+      ),
+    ).resolves.toEqual({ clicked: selector })
+    expect(page.click).toHaveBeenCalledWith(selector)
+    expect(page.evaluate).not.toHaveBeenCalled()
+  })
+
+  it('rejects the image confirmation intent outside the upload-assets step', async () => {
+    const accountTask = {
+      id: 'task-a',
+      tabId: 'account-tab',
+      goal: '发布 CSDN 文章',
+      status: 'running',
+      startedAt: Date.now(),
+      downloadIds: [],
+      correlation: {
+        workspaceKey: '/workspace/a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        agentSessionRef: null,
+        profileId: 'profile-a',
+        accountId: 'account-a',
+        allowedOrigins: ['https://mp.csdn.net'],
+        affairId: 'affair-a',
+        affairAttemptId: 'attempt-a',
+      },
+    }
+    const page = {
+      url: () => 'https://mp.csdn.net/mp_blog/creation/editor',
+      click: vi.fn(),
+    }
+    const module = new BrowserToolModule(
+      {
+        getPage: () => page,
+        getPageById: () => page,
+        switchToPage: vi.fn().mockResolvedValue(undefined),
+      } as any,
+      {
+        getActiveTaskForConversation: () => accountTask,
+        assertCanRunAction: () => accountTask,
+      } as any,
+      {
+        getViewWorkspaceKey: () => '/workspace/a',
+        getViewProfileId: () => 'profile-a',
+        isWorkspaceActive: () => true,
+        setActive: vi.fn(),
+      } as any,
+      null,
+      {
+        getProjectSnapshot: () => ({
+          success: true,
+          data: {
+            affairs: [
+              {
+                id: 'affair-a',
+                kind: 'article-publishing',
+                articlePublishing: {
+                  adapterId: 'csdn',
+                  accountId: 'account-a',
+                  execution: {
+                    currentAttemptId: 'attempt-a',
+                    currentStepId: 'publish',
+                    status: 'running',
+                  },
+                },
+              },
+            ],
+          },
+        }),
+      } as any,
+      async () => 'workspace-a-id',
+    )
+
+    await expect(
+      module.execute(
+        'browser_click',
+        {
+          selector: 'button:has-text("确认上传")',
+          intent: 'article-image-upload-confirm',
+        },
+        {
+          conversationId: 'conversation-a',
+          workspaceKey: '/workspace/a',
+          trustedWorkspace: {
+            kind: 'local',
+            rootPath: '/workspace/a',
+            workspaceKey: '/workspace/a',
+          },
+        },
+      ),
+    ).rejects.toThrow('upload-assets 步骤不一致')
+    expect(page.click).not.toHaveBeenCalled()
+  })
+
   it('requires a fresh read before writing after human handback', async () => {
     const accountTask = {
       id: 'task-a',

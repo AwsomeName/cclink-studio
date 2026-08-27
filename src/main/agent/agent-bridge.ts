@@ -1090,6 +1090,13 @@ export class AgentBridge {
         `关联 BrowserTask 已${task.status === 'failed' ? '失败' : '取消'}，Agent 本轮不能标记成功。`,
       )
     }
+    if (task.status === 'paused' && task.takeoverReason) {
+      return this.browserCompletionError(
+        event,
+        'browser_task_waiting_human',
+        `浏览器任务已暂停，等待用户处理：${task.takeoverReason}`,
+      )
+    }
     if (task.reobservationRequired) {
       return this.browserCompletionError(
         event,

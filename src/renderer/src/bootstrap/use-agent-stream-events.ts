@@ -366,8 +366,14 @@ export function applyAgentErrorToStore(
     error.code === 'stream_ended_without_result' ? 'stream-ended' : 'error',
     error.runId,
   )
+  const errorPrefix =
+    error.code === 'browser_task_waiting_human'
+      ? '任务暂停'
+      : error.code === 'browser_reobservation_required'
+        ? '任务待核验'
+        : '连接错误'
   store.addSystemMessage(
-    `连接错误: ${error.message}${
+    `${errorPrefix}: ${error.message}${
       runtimeSessionInvalid ? '；旧 Runtime Session 已保留，未自动创建新会话' : ''
     }`,
     conversationId,
