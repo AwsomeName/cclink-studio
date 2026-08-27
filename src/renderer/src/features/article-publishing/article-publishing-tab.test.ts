@@ -3,6 +3,7 @@ import { CSDN_ARTICLE_PUBLISHING_PLAN } from '@shared/article-publishing/article
 import {
   createArticleMarkdownOpenDialogOptions,
   formatArticlePublishingAccountOption,
+  getArticlePublishingFileDetails,
 } from './article-publishing-tab'
 
 describe('article publishing Markdown picker', () => {
@@ -24,6 +25,30 @@ describe('article publishing account option', () => {
   it('uses the account identifier instead of a captured webpage title', () => {
     expect(formatArticlePublishingAccountOption(' 13800138000 ')).toBe('CSDN · 13800138000')
     expect(formatArticlePublishingAccountOption('13800138000')).not.toContain('首页-CSDN创作中心')
+  })
+})
+
+describe('article publishing file details', () => {
+  it('separates the file name, workspace location, and absolute path', () => {
+    expect(
+      getArticlePublishingFileDetails(
+        '/Users/apple/project/articles/assets/cover.png',
+        '/Users/apple/project',
+      ),
+    ).toEqual({
+      fileName: 'cover.png',
+      workspaceRelativePath: 'articles/assets/cover.png',
+      absolutePath: '/Users/apple/project/articles/assets/cover.png',
+    })
+  })
+
+  it('keeps an out-of-workspace path explicit instead of inventing a relative location', () => {
+    expect(
+      getArticlePublishingFileDetails('/Users/apple/shared/cover.png', '/Users/apple/project'),
+    ).toMatchObject({
+      fileName: 'cover.png',
+      workspaceRelativePath: null,
+    })
   })
 })
 

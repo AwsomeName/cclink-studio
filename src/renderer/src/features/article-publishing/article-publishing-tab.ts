@@ -16,6 +16,35 @@ export function formatArticlePublishingAccountOption(accountLabel: string): stri
   return `CSDN · ${accountLabel.trim()}`
 }
 
+export interface ArticlePublishingFileDetails {
+  fileName: string
+  workspaceRelativePath: string | null
+  absolutePath: string
+}
+
+export function getArticlePublishingFileDetails(
+  filePath: string,
+  workspacePath: string,
+): ArticlePublishingFileDetails {
+  const normalizedFilePath = filePath.replaceAll('\\', '/')
+  const normalizedWorkspacePath = workspacePath.replaceAll('\\', '/').replace(/\/+$/u, '')
+  const fileName = normalizedFilePath.split('/').filter(Boolean).at(-1) ?? filePath
+  const comparisonFilePath = /^[A-Za-z]:\//u.test(normalizedFilePath)
+    ? normalizedFilePath.toLowerCase()
+    : normalizedFilePath
+  const comparisonWorkspacePath = /^[A-Za-z]:\//u.test(normalizedWorkspacePath)
+    ? normalizedWorkspacePath.toLowerCase()
+    : normalizedWorkspacePath
+  const workspacePrefix = `${comparisonWorkspacePath}/`
+  const workspaceRelativePath = comparisonFilePath.startsWith(workspacePrefix)
+    ? normalizedFilePath.slice(normalizedWorkspacePath.length + 1)
+    : comparisonFilePath === comparisonWorkspacePath
+      ? fileName
+      : null
+
+  return { fileName, workspaceRelativePath, absolutePath: filePath }
+}
+
 export function createArticlePublishingDraftTab(workspaceRef: WorkspaceRef): {
   type: 'article-publishing'
   title: string

@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ArticlePublishingSourcePreview } from '@shared/article-publishing/article-publishing-types'
+import type {
+  ArticlePublishingAsset,
+  ArticlePublishingSourcePreview,
+} from '@shared/article-publishing/article-publishing-types'
 import { CSDN_ARTICLE_PUBLISHING_PLAN } from '@shared/article-publishing/article-publishing-plan'
 import type { WebAffair } from '@shared/web-affairs/web-affair-types'
 import type { WebResourceSnapshot } from '@shared/web-resources/web-resource-types'
@@ -15,6 +18,7 @@ import { copyTextToClipboard } from '../../utils/clipboard'
 import {
   createArticleMarkdownOpenDialogOptions,
   formatArticlePublishingAccountOption,
+  getArticlePublishingFileDetails,
 } from './article-publishing-tab'
 import './article-publishing.css'
 
@@ -326,7 +330,11 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           <button type="button" onClick={() => void selectMarkdown()} disabled={busy}>
             {preview ? '重新选择 Markdown' : '选择 Markdown…'}
           </button>
-          {preview ? <SourcePreview preview={preview} /> : <p>从当前工作空间选择一篇 Markdown。</p>}
+          {preview ? (
+            <SourcePreview preview={preview} workspacePath={workspaceRef.path} />
+          ) : (
+            <p>从当前工作空间选择一篇 Markdown。</p>
+          )}
         </section>
         <section className="article-publishing-card">
           <h2>2. 发布目标</h2>
@@ -467,6 +475,15 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   }
   const publishing = affair.articlePublishing
   const canStart = ['draft', 'interrupted', 'failed'].includes(publishing.execution.status)
+  const savedWebsite = resources?.websites.find((website) => website.id === publishing.websiteId)
+  const savedAccount = resources?.accounts.find((account) => account.id === publishing.accountId)
+  const sourceDetails = getArticlePublishingFileDetails(
+    publishing.source.markdownPath,
+    workspaceRef.path,
+  )
+  const coverAsset = publishing.fields.coverAssetId
+    ? publishing.assets.find((asset) => asset.id === publishing.fields.coverAssetId)
+    : null
   return (
     <div className="article-publishing-page">
       <header className="article-publishing-header">
@@ -498,6 +515,51 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       {error ? <div className="article-publishing-alert error">{error}</div> : null}
       {notice ? <div className="article-publishing-alert">{notice}</div> : null}
       <section className="article-publishing-card">
+        <h2>已保存配置</h2>
+        <div className="article-publishing-config-grid">
+          <div className="article-publishing-config-item wide">
+            <span>Markdown 文件</span>
+            <strong>{sourceDetails.fileName}</strong>
+            <code>{sourceDetails.workspaceRelativePath ?? '不在当前工作空间内'}</code>
+            <small title={sourceDetails.absolutePath}>{sourceDetails.absolutePath}</small>
+          </div>
+          <div className="article-publishing-config-item">
+            <span>网站</span>
+            <strong>{savedWebsite?.name ?? 'CSDN'}</strong>
+            <small>{savedWebsite?.origin ?? 'https://www.csdn.net'}</small>
+          </div>
+          <div className="article-publishing-config-item">
+            <span>账号</span>
+            <strong>{savedAccount?.label ?? '账号信息加载中或已失效'}</strong>
+            <small>ID {publishing.accountId}</small>
+          </div>
+          <div className="article-publishing-config-item wide">
+            <span>发布标题</span>
+            <strong>{publishing.fields.title}</strong>
+          </div>
+          <div className="article-publishing-config-item wide">
+            <span>摘要</span>
+            <p>{publishing.fields.summary || '未填写'}</p>
+          </div>
+          <div className="article-publishing-config-item">
+            <span>标签</span>
+            <strong>{publishing.fields.tags.join('、') || '未填写'}</strong>
+          </div>
+          <div className="article-publishing-config-item">
+            <span>分类</span>
+            <strong>{publishing.fields.category || '未填写'}</strong>
+          </div>
+          <div className="article-publishing-config-item wide">
+            <span>封面</span>
+            <strong>{coverAsset?.displayPath ?? '未选择'}</strong>
+          </div>
+        </div>
+      </section>
+      <section className="article-publishing-card">
+        <h2>正文图片（{publishing.assets.length}）</h2>
+        <ArticleAssetList assets={publishing.assets} workspacePath={workspaceRef.path} />
+      </section>
+      <section className="article-publishing-card">
         <h2>执行计划</h2>
         <div className="article-publishing-checkpoints">
           {publishing.checkpoints.map((checkpoint, index) => (
@@ -516,30 +578,6 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
             </div>
           ))}
         </div>
-      </section>
-      <section className="article-publishing-card">
-        <h2>正文图片</h2>
-        {publishing.assets.length === 0 ? (
-          <p>正文没有图片。</p>
-        ) : (
-          <div className="article-publishing-assets">
-            {publishing.assets.map((asset) => (
-              <div key={asset.id} className={`article-publishing-asset ${asset.status}`}>
-                <strong>{asset.displayPath}</strong>
-                <span>
-                  {asset.kind === 'remote'
-                    ? '外链保留'
-                    : (CHECKPOINT_LABELS[asset.status] ?? asset.status)}
-                </span>
-                <small>
-                  {asset.kind === 'local'
-                    ? `${asset.uploadAttempts.length}/3 次 · ${asset.occurrences.length} 个位置`
-                    : asset.platformUrl}
-                </small>
-              </div>
-            ))}
-          </div>
-        )}
       </section>
       <div className="article-publishing-footer">
         <span>
@@ -565,18 +603,24 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
 
 function SourcePreview({
   preview,
+  workspacePath,
 }: {
   preview: ArticlePublishingSourcePreview
+  workspacePath: string
 }): React.ReactElement {
+  const sourceDetails = getArticlePublishingFileDetails(preview.source.markdownPath, workspacePath)
   return (
     <div className="article-publishing-source-preview">
       <strong>{preview.title}</strong>
-      <code>{preview.source.markdownPath}</code>
+      <span>文件名：{sourceDetails.fileName}</span>
+      <code>工作空间位置：{sourceDetails.workspaceRelativePath}</code>
+      <code>完整路径：{sourceDetails.absolutePath}</code>
       <span>
         哈希 {preview.source.contentHash.slice(0, 12)} · {(preview.source.size / 1024).toFixed(1)}{' '}
         KB
       </span>
-      <span>{preview.assets.length} 个去重图片资源</span>
+      <strong>正文图片（{preview.assets.length} 个去重资源）</strong>
+      <ArticleAssetList assets={preview.assets} workspacePath={workspacePath} />
       {preview.blockers.map((blocker) => (
         <p className="article-publishing-error" key={blocker}>
           {blocker}
@@ -587,6 +631,61 @@ function SourcePreview({
           {warning}
         </p>
       ))}
+    </div>
+  )
+}
+
+function ArticleAssetList({
+  assets,
+  workspacePath,
+}: {
+  assets: ArticlePublishingAsset[]
+  workspacePath: string
+}): React.ReactElement {
+  if (assets.length === 0) return <p>正文没有图片。</p>
+  return (
+    <div className="article-publishing-assets">
+      {assets.map((asset) => {
+        const details = getArticlePublishingFileDetails(asset.sourcePath, workspacePath)
+        return (
+          <div key={asset.id} className={`article-publishing-asset ${asset.status}`}>
+            <strong>{asset.kind === 'local' ? details.fileName : asset.displayPath}</strong>
+            <span>
+              {asset.kind === 'remote'
+                ? '外链保留'
+                : (CHECKPOINT_LABELS[asset.status] ?? asset.status)}
+            </span>
+            {asset.kind === 'local' ? (
+              <dl>
+                <dt>Markdown 引用路径</dt>
+                <dd>{asset.displayPath}</dd>
+                <dt>工作空间位置</dt>
+                <dd>{details.workspaceRelativePath ?? '不在当前工作空间内'}</dd>
+                <dt>完整路径</dt>
+                <dd title={details.absolutePath}>{details.absolutePath}</dd>
+                <dt>文件信息</dt>
+                <dd>
+                  {asset.mediaType ?? '未知类型'}
+                  {typeof asset.size === 'number' ? ` · ${(asset.size / 1024).toFixed(1)} KB` : ''}
+                  {' · '}
+                  {asset.uploadAttempts.length}/3 次上传尝试
+                </dd>
+                <dt>正文位置</dt>
+                <dd>
+                  {asset.occurrences.map((occurrence, index) => (
+                    <span key={`${occurrence.start}:${occurrence.end}`}>
+                      引用 {index + 1}：{occurrence.alt || '无替代文本'}（字符 {occurrence.start}–
+                      {occurrence.end}）
+                    </span>
+                  ))}
+                </dd>
+              </dl>
+            ) : (
+              <small title={asset.sourcePath}>{asset.sourcePath}</small>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
