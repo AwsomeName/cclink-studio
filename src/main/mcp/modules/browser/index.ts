@@ -49,7 +49,6 @@ export const BROWSER_REOBSERVATION_ACTIONS = new Set([
   'inputValue',
   'waitForSelector',
   'waitForNavigation',
-  'getTabInfo',
   'frameContent',
 ])
 

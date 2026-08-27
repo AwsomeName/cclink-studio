@@ -311,8 +311,6 @@ export interface BrowserRuntimeDiagnosticSummary {
   visibleTitle: string | null
   webContentsId?: number | null
   ownerWindowId?: string | null
-  nativeViewAttached?: boolean | null
-  nativeViewVisible?: boolean | null
   profileId: string | null
   viewState: BrowserViewState | null
   popup: {

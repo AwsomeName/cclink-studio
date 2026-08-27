@@ -46,4 +46,21 @@ describe('unified Agent Panel production boundary', () => {
     expect(viewSource).not.toContain('inputContainerClassName')
     expect(viewSource).not.toMatch(/children\??:/u)
   })
+
+  it('copies the unified diagnostic report from both Agent entries', () => {
+    const localControllerSource = read('./AgentPanel.tsx')
+    const remoteControllerSource = read('../../features/cclink-remote/remote-agent-controller.tsx')
+
+    expect(localControllerSource).toContain(
+      "from '../../features/diagnostics/unified-diagnostic-report'",
+    )
+    expect(localControllerSource).toContain('await collectUnifiedDiagnosticReport({')
+    expect(localControllerSource).toContain('await copyTextToClipboard(diagnosticReport)')
+    expect(localControllerSource).not.toContain('await copyTextToClipboard(agentReport)')
+    expect(remoteControllerSource).toContain("from '../diagnostics/unified-diagnostic-report'")
+    expect(remoteControllerSource).toContain(
+      'await collectUnifiedDiagnosticReport({ agentReport })',
+    )
+    expect(remoteControllerSource).toContain('await copyTextToClipboard(diagnosticReport)')
+  })
 })

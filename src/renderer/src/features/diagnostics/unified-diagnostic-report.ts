@@ -58,7 +58,7 @@ export async function collectUnifiedDiagnosticReport(
             : []),
         ].join('\n')
       }),
-      collectSection('主进程近期日志', async () =>
+      collectSection('主进程近期框架日志', async () =>
         formatLogSnapshot(await window.cclinkStudio.diagnostics.getMainLogSnapshot()),
       ),
     ])
@@ -66,7 +66,7 @@ export async function collectUnifiedDiagnosticReport(
   const contextActionSection = collectSyncSection('上下文操作', () =>
     formatContextActionDiagnosticsMarkdown(useContextActionDiagnosticsStore.getState().events),
   )
-  const rendererLogSection = collectSyncSection('Renderer 近期日志', () =>
+  const rendererLogSection = collectSyncSection('界面近期框架日志', () =>
     formatLogSnapshot(getRendererDiagnosticLogSnapshot()),
   )
   const markdownSection = collectSyncSection('Markdown', () => {

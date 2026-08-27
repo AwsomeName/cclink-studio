@@ -105,41 +105,6 @@ async function main() {
   const baselinePageState = await readPageState(target)
   const baselineTargetId = await resolveTargetId(externalBrowser, fixture.url)
 
-  const updatePanel = renderer.locator('.update-panel')
-  await renderer.locator('[title="检查和下载 CCLink Studio 更新"]').click()
-  await updatePanel.waitFor({ state: 'visible', timeout: 10_000 })
-  const modalHiddenDiagnostics = await waitForDiagnostics(renderer, tabId, (value) => {
-    return (
-      value.visibleTabId === null &&
-      value.nativeViewAttached === false &&
-      value.nativeViewVisible === false
-    )
-  })
-  assert(
-    modalHiddenDiagnostics.webContentsId === baselineDiagnostics.webContentsId,
-    'hiding the native View recreated WebContents',
-  )
-  await updatePanel.locator('.update-panel-header button[title="关闭"]').click()
-  await waitForDiagnostics(renderer, tabId, (value) => {
-    return (
-      value.visibleTabId === tabId &&
-      value.nativeViewAttached === true &&
-      value.nativeViewVisible === true
-    )
-  })
-  await assertIdentityPreserved({
-    renderer,
-    target,
-    fixtureUrl: fixture.url,
-    beforeDiagnostics: baselineDiagnostics,
-    afterDiagnostics: await renderer.evaluate(
-      (id) => window.cclinkStudio.browser.getRuntimeDiagnostics(id),
-      tabId,
-    ),
-    beforePageState: baselinePageState,
-    beforeTargetId: baselineTargetId,
-  })
-
   await disconnectInternalTransport(
     child,
     baselineDiagnostics.automationConnection.connectionGeneration,
@@ -274,7 +239,6 @@ async function main() {
         targetId: baselineTargetId,
         ownerMigration: ['main', detachedDiagnostics.ownerWindowId, 'main'],
         preserved: [
-          'native-modal-occlusion',
           'url',
           'webContentsId',
           'targetId',

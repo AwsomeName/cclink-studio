@@ -1,7 +1,7 @@
 # Agent 与工作台统一诊断日志
 
 > 状态：D0-D3.5 已落地；远程会话 Studio 侧第一版已实现、真人验收待做；D4 错误现场附件、远程 Agent 原始日志接口待做
-> 最后更新：2026-08-17
+> 最后更新：2026-08-27
 > 关联文档：`docs/features/agent-system.md`、`docs/features/ai-work-browser-v0.1-tasks.md`、`docs/features/workspace-operations-assistant.md`、`docs/features/browser-automation.md`
 
 ## 结论
@@ -35,7 +35,7 @@ Agent 诊断日志不是锦上添花，而是 CCLink Studio 进入真实网页�
 | ---------------------------- | --------- | ----------------------------------------------------------------------------------------- |
 | Markdown 诊断包格式          | ✅ 已完成 | `buildAgentDiagnosticMarkdown` 输出固定结构                                               |
 | 脱敏规则                     | ✅ 已完成 | 覆盖 cookie/token/password/验证码/API key/手机号/邮箱等常见模式                           |
-| Agent 面板复制按钮           | ✅ 已完成 | Agent 输入框旁原剪贴板按钮一次复制完整诊断日志                                            |
+| Agent 面板复制按钮           | ✅ 已完成 | Agent 输入框旁原剪贴板按钮一次复制 Agent 关键现场和工作台框架日志                         |
 | 浏览器任务日志合并           | ✅ 已完成 | 汇总 `BrowserTaskRun`、`BrowserActionLog`、下载记录                                       |
 | 复制反馈                     | ✅ 已完成 | 成功/失败 toast                                                                           |
 | console/network/page summary | ✅ 已完成 | 只读 `browser:getDiagnostics` 汇总 console、network、疑似登录/验证码/风控                 |
@@ -48,6 +48,11 @@ Agent 诊断日志不是锦上添花，而是 CCLink Studio 进入真实网页�
 | Renderer/Main 近期日志       | ✅ 已完成 | 两侧各保留最近 200 条脱敏日志，报告输出最近 100 条                                        |
 | 独立失败降级                 | ✅ 已完成 | 任一来源采集失败不影响其余章节复制                                                        |
 | 截图/DOM 摘要                | 📋 待做   | D4：用户显式选择后再保存                                                                  |
+
+2026-08-27 对账发现本地和远程 Agent 面板入口都只复制各自的 Agent 报告，没有调用已经存在的
+`collectUnifiedDiagnosticReport`，导致文档承诺的工作台、Markdown、Renderer 和主进程框架日志没有
+进入用户实际复制的诊断包。两个入口现已统一接入同一采集器；任一框架来源采集失败时只在对应章节
+标记失败，Agent 关键现场仍然保留。架构回归测试禁止再次直接复制裸 `agentReport`。
 
 ## 远程 Agent 会话诊断日志
 

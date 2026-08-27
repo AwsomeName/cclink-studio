@@ -125,7 +125,10 @@ export async function persistRuntimeSections(
   )
   const browserBookmarks = useBrowserStore.getState().bookmarks
   const editorDrafts = scopeWorkspaceEditorDraftSnapshot(
-    { files: useEditorStore.getState().files },
+    {
+      files: useEditorStore.getState().files,
+      markdownViewStates: useEditorStore.getState().markdownViewStates,
+    },
     targetWorkspaceRef,
   )
   const activeTabId =

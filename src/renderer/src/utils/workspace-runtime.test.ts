@@ -313,6 +313,27 @@ describe('workspace-runtime', () => {
     expect(setLocalStorage).not.toHaveBeenCalled()
   })
 
+  it('持久化项目快照时保留该项目的 Markdown 滚动位置', async () => {
+    useEditorStore.setState({
+      markdownViewStates: {
+        '/workspace/a/README.md': { scrollTop: 640, updatedAt: 10 },
+        '/workspace/b/README.md': { scrollTop: 320, updatedAt: 20 },
+      },
+    })
+    const setSection = window.cclinkStudio.workspaceState.setSection as ReturnType<typeof vi.fn>
+    setSection.mockClear()
+
+    await persistRuntimeSections('/workspace/a')
+
+    const editorDrafts = setSection.mock.calls.find((call) => call[1] === 'editorDrafts')?.[2]
+    expect(editorDrafts).toEqual({
+      files: {},
+      markdownViewStates: {
+        '/workspace/a/README.md': { scrollTop: 640, updatedAt: 10 },
+      },
+    })
+  })
+
   it('持久化指定项目时过滤其他项目的 Tab 和浏览器状态', async () => {
     useTabStore.setState({
       tabs: [

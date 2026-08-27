@@ -20,6 +20,7 @@ import {
   collectWorkspaceRuntimeResourceOwnership,
   prepareWorkspaceRuntimeTransition,
 } from './workspace-transition'
+import { registerMarkdownViewStateFlusher } from '../features/markdown/markdown-view-state-lifecycle'
 
 function snapshot(
   workspaceKey: string | null,
@@ -142,6 +143,26 @@ describe('workspace-transition', () => {
       activeTabId: null,
     })
     expect(setSection.mock.calls.every((call) => call[0] === '/workspace/b')).toBe(true)
+  })
+
+  it('切换项目前强制采样尚在防抖期的 Markdown 滚动位置', async () => {
+    const unregister = registerMarkdownViewStateFlusher(() => {
+      useEditorStore.getState().updateMarkdownViewState('/workspace/a/README.md', 880)
+    })
+
+    try {
+      await prepareWorkspaceRuntimeTransition(localWorkspaceRef('/workspace/b'))
+    } finally {
+      unregister()
+    }
+
+    const setSection = window.cclinkStudio.workspaceState.setSection as ReturnType<typeof vi.fn>
+    const editorDrafts = setSection.mock.calls.find(
+      (call) => call[0] === '/workspace/a' && call[1] === 'editorDrafts',
+    )?.[2]
+    expect(editorDrafts.markdownViewStates).toEqual({
+      '/workspace/a/README.md': expect.objectContaining({ scrollTop: 880 }),
+    })
   })
 
   it('drops a completed transition when a newer project switch has already started', async () => {

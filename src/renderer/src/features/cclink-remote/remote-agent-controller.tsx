@@ -8,6 +8,7 @@ import { useCclinkStore } from '../../stores'
 import { useToastStore } from '../../components/common/Toast'
 import { APP_VERSION } from '../../app-metadata'
 import { buildRemoteAgentDiagnosticMarkdown } from '../diagnostics/remote-agent-diagnostic-report'
+import { collectUnifiedDiagnosticReport } from '../diagnostics/unified-diagnostic-report'
 import { copyTextToClipboard } from '../../utils/clipboard'
 import {
   AgentPanelView,
@@ -308,15 +309,15 @@ export function RemoteAgentController({
           },
         }
       }
-      await copyTextToClipboard(
-        buildRemoteAgentDiagnosticMarkdown({
-          appVersion: APP_VERSION,
-          platform: navigator.platform,
-          report,
-          collectionError,
-        }),
-      )
-      showToast('远程 Agent 诊断日志已复制', 'success')
+      const agentReport = buildRemoteAgentDiagnosticMarkdown({
+        appVersion: APP_VERSION,
+        platform: navigator.platform,
+        report,
+        collectionError,
+      })
+      const diagnosticReport = await collectUnifiedDiagnosticReport({ agentReport })
+      await copyTextToClipboard(diagnosticReport)
+      showToast('完整诊断日志已复制', 'success')
     } catch (error) {
       showToast(
         `复制远程诊断日志失败: ${error instanceof Error ? error.message : String(error)}`,
@@ -495,7 +496,7 @@ export function RemoteAgentController({
           diagnostics: {
             state: activeSession && !copyingDiagnostics ? 'enabled' : 'disabled',
             reason: activeSession ? '正在复制诊断日志' : '当前没有远程会话',
-            label: '复制 Agent 诊断日志',
+            label: '复制完整诊断日志',
             onInvoke: () => void copyDiagnostics(),
           },
         },

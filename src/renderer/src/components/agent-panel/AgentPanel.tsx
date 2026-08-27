@@ -41,6 +41,7 @@ import {
   buildAgentDiagnosticMarkdown,
   selectDiagnosticBrowserTask,
 } from '../../features/diagnostics/agent-diagnostic-report'
+import { collectUnifiedDiagnosticReport } from '../../features/diagnostics/unified-diagnostic-report'
 import { APP_VERSION } from '../../app-metadata'
 import { useToastStore } from '../common/Toast'
 import {
@@ -428,8 +429,13 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     })
 
     try {
-      await copyTextToClipboard(agentReport)
-      showToast('Agent 诊断日志已复制', 'success')
+      const activeFilePath = tabs.find((tab) => tab.id === activeTabId)?.filePath ?? null
+      const diagnosticReport = await collectUnifiedDiagnosticReport({
+        agentReport,
+        activeFilePath,
+      })
+      await copyTextToClipboard(diagnosticReport)
+      showToast('完整诊断日志已复制', 'success')
     } catch (err) {
       showToast(`复制诊断日志失败: ${String(err)}`, 'error')
     }
@@ -890,7 +896,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
           },
           diagnostics: {
             state: 'enabled',
-            label: '复制 Agent 诊断日志',
+            label: '复制完整诊断日志',
             onInvoke: () => void handleCopyDiagnostics(),
           },
         },

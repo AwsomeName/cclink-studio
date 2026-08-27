@@ -816,6 +816,25 @@ export class PlaywrightBridge {
   /**
    * 移除页面注册
    */
+  getPageBindingIdentity(tabId: string): PageBinding | null {
+    const binding = this.pageBindings.get(tabId)
+    return binding ? { ...binding } : null
+  }
+
+  unregisterPageIfMatches(tabId: string, expected: PageBinding): boolean {
+    const binding = this.pageBindings.get(tabId)
+    if (
+      !binding ||
+      binding.page !== expected.page ||
+      binding.generation !== expected.generation ||
+      binding.webContentsId !== expected.webContentsId
+    ) {
+      return false
+    }
+    this.unregisterPage(tabId)
+    return true
+  }
+
   unregisterPage(tabId: string): void {
     this.pages.delete(tabId)
     this.pageBindings.delete(tabId)

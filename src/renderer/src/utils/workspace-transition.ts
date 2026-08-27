@@ -14,6 +14,7 @@ import {
   readTerminalRuntimeStatuses,
   reconcileAgentRuntimeStatuses,
 } from './workspace-runtime'
+import { flushMountedMarkdownViewStates } from '../features/markdown/markdown-view-state-lifecycle'
 
 export interface WorkspaceRuntimeTransition {
   ref: WorkspaceRef
@@ -167,6 +168,9 @@ export async function prepareWorkspaceRuntimeTransition(
   const outgoingOwnership = collectWorkspaceRuntimeResourceOwnership(currentKey)
 
   if (options.persistCurrent !== false && key !== currentKey) {
+    // Markdown 滚动位置在组件内防抖；项目切换前必须先采样 DOM，
+    // 再由统一 WorkspaceState 所有者持久化出站快照。
+    flushMountedMarkdownViewStates()
     // 单个恢复快照写入失败不能让用户失去打开其他项目的能力。失败会由
     // persistRuntimeSections 写入框架日志，当前内存态仍保留并可继续重试。
     await persistRuntimeSections(currentKey, currentRef)

@@ -73,6 +73,8 @@ import {
   openHttpUrlInNewBrowserTab,
   resolveBrowserLinkClick,
 } from '../../features/browser/browser-link-navigation'
+import { registerMarkdownViewStateFlusher } from '../../features/markdown/markdown-view-state-lifecycle'
+import { getWorkspaceStateKey } from '../../utils/workspace-state'
 
 const lowlight = createLowlight(common)
 
@@ -110,6 +112,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   const editorTabSize = useSettingsStore((state) => state.settings.editorTabSize)
   const editorWordWrap = useSettingsStore((state) => state.settings.editorWordWrap)
   const showToast = useToastStore((state) => state.show)
+  const activeWorkspaceKey = useWorkspaceStore((state) => workspaceRefKey(state.activeWorkspaceRef))
   const dirty = fileState?.dirty ?? false
   const diagnostics = fileState?.diagnostics ?? []
   const loadError =
@@ -1018,17 +1021,35 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     [persistScrollPosition],
   )
 
+  const flushScrollPosition = useCallback((): void => {
+    if (scrollSaveTimerRef.current !== null) {
+      window.clearTimeout(scrollSaveTimerRef.current)
+      scrollSaveTimerRef.current = null
+    }
+    if (!restoringScrollRef.current && scrollContainerRef.current) {
+      latestScrollTopRef.current = scrollContainerRef.current.scrollTop
+    }
+    persistScrollPosition(fileKeyRef.current, latestScrollTopRef.current)
+  }, [persistScrollPosition])
+
+  useEffect(() => registerMarkdownViewStateFlusher(flushScrollPosition), [flushScrollPosition])
+
   useEffect(() => {
     const savedScrollTop = useEditorStore.getState().markdownViewStates[fileKey]?.scrollTop ?? 0
     latestScrollTopRef.current = savedScrollTop
+    const ownerWorkspaceKey = activeWorkspaceKey
     return () => {
       if (scrollSaveTimerRef.current !== null) {
         window.clearTimeout(scrollSaveTimerRef.current)
         scrollSaveTimerRef.current = null
       }
-      persistScrollPosition(fileKey, latestScrollTopRef.current)
+      // 项目切换在 React 卸载旧编辑器前已 hydrate 新项目 Store。
+      // 切换边界会主动 flush，此时不能再把旧项目位置写入新项目。
+      if (getWorkspaceStateKey() === ownerWorkspaceKey) {
+        persistScrollPosition(fileKey, latestScrollTopRef.current)
+      }
     }
-  }, [fileKey, persistScrollPosition])
+  }, [activeWorkspaceKey, fileKey, persistScrollPosition])
 
   useEffect(() => {
     if (!editor || hydrationPending) return

@@ -492,11 +492,11 @@ try {
         await auxiliaryPage.locator('.auxiliary-browser-window').isVisible(),
         'Auxiliary shell disappeared',
       )
-      const tabVisibleInB = await mainPage
-        .getByRole('tab')
-        .filter({ hasText: 'Detachable M1' })
-        .count()
-      assert(tabVisibleInB === 0, 'Workspace A Browser leaked into workspace B UI')
+      const tabPresentInB = await mainPage.evaluate(async (id) => {
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        return useTabStore.getState().tabs.some((tab) => tab.id === id)
+      }, tabId)
+      assert(!tabPresentInB, 'Workspace A Browser leaked into workspace B renderer projection')
       const marker = await browserPage.evaluate(() => window.__volatileMarker)
       assert(marker === 'preserve-me', 'Browser state changed after workspace switch')
       return 'auxiliary remains bound to original workspace'
@@ -525,11 +525,11 @@ try {
         'Return rebuilt runtime',
       )
       assert(!browserPage.isClosed(), 'Browser Page closed during return')
-      const returnedTabVisibleInB = await mainPage
-        .getByRole('tab')
-        .filter({ hasText: 'Detachable M1' })
-        .count()
-      assert(returnedTabVisibleInB === 0, 'Returned workspace A Tab leaked into workspace B UI')
+      const leakedIntoB = await mainPage.evaluate(async (id) => {
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        return useTabStore.getState().tabs.some((tab) => tab.id === id)
+      }, tabId)
+      assert(!leakedIntoB, 'Returned workspace A Tab leaked into workspace B')
 
       const switchedBack = await switchWorkspaceInApp(mainPage, { kind: 'global' })
       assert(switchedBack, 'Production workspace transition back to A was rejected')

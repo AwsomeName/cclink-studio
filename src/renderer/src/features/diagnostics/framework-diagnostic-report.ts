@@ -19,7 +19,6 @@ import {
   getMarkdownDiagnosticReport,
   getRendererDiagnosticLogSnapshot,
 } from './renderer-diagnostic-log'
-import { isAnyFloatingSurfaceOpen } from '../../components/common/floating-surface-registry'
 
 interface DiagnosticSection {
   title: string
@@ -188,7 +187,6 @@ function formatBrowserRuntimeDiagnostics(summary: BrowserRuntimeDiagnosticSummar
     `- 当前 URL：${summary.visibleUrl ?? '无'}`,
     `- 当前标题：${summary.visibleTitle || '无'}`,
     `- 页面绑定：${summary.bindingStatus}`,
-    `- 原生 View：owner=${summary.ownerWindowId ?? '无'} hostActive=${summary.visibleTabId ?? '无'} attached=${summary.nativeViewAttached ?? '未知'} visible=${summary.nativeViewVisible ?? '未知'} webContentsId=${summary.webContentsId ?? '无'}`,
     `- 浏览器 Profile：${summary.profileId ? '已配置' : '默认'}`,
   ]
 
@@ -277,8 +275,7 @@ function formatRuntimeState(): string {
   const projects = useOpenProjectsStore.getState()
   const tabState = useTabStore.getState()
   const workspace = useWorkspaceStore.getState()
-  const updateState = useUpdateStore.getState()
-  const update = updateState.snapshot
+  const update = useUpdateStore.getState().snapshot
   const frameworkTabs = tabState.tabs.filter((tab) => tab.type !== 'conversation')
   const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId)
   const tabTypeCounts = frameworkTabs.reduce<Record<string, number>>((counts, tab) => {
@@ -295,8 +292,7 @@ function formatRuntimeState(): string {
     `- 文件树：根节点=${fs.tree.length} 已展开=${fs.expandedPaths.length} 最近项目=${fs.recentWorkspacePaths.length}`,
     `- 非 Agent Tab：总数=${frameworkTabs.length} 类型=${JSON.stringify(tabTypeCounts)}`,
     `- 当前 Tab：${activeTab?.type === 'conversation' ? 'Agent（细节已省略）' : (activeTab?.type ?? '无')}`,
-    `- 界面浮层：active=${isAnyFloatingSurfaceOpen()} updatePanelOpen=${updateState.panelOpen}`,
-    `- 更新：phase=${update.phase} error=${update.error ? JSON.stringify(update.error) : '无'}`,
+    `- 更新：phase=${update.phase} error=${update.error ?? '无'}`,
   ].join('\n')
 }
 

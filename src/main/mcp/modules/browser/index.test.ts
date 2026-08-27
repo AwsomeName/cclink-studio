@@ -239,7 +239,7 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     expect(page.fill).not.toHaveBeenCalled()
   })
 
-  it('uses the shared re-observation allowlist and rejects downloadInfo', async () => {
+  it('uses the shared re-observation allowlist and rejects actions without Page observation', async () => {
     const task = {
       id: 'task-a',
       tabId: 'browser-a',
@@ -250,11 +250,10 @@ describe('BrowserToolModule 可视浏览器同步', () => {
       downloadIds: [],
       correlation: { conversationId: 'conversation-a', workspaceKey: '/workspace/a' },
     }
-    const page = { url: () => 'https://example.com/', isClosed: () => false }
     const module = new BrowserToolModule(
       {
-        getPage: () => page,
-        getPageById: () => page,
+        getPage: () => null,
+        getPageById: () => null,
         switchToPage: vi.fn().mockResolvedValue(undefined),
       } as any,
       {
@@ -273,6 +272,13 @@ describe('BrowserToolModule 可视浏览器同步', () => {
       module.execute(
         'browser_download_info',
         { downloadId: 'download-a' },
+        { conversationId: 'conversation-a', workspaceKey: '/workspace/a' },
+      ),
+    ).rejects.toThrow('必须先截图或读取当前页面')
+    await expect(
+      module.execute(
+        'browser_get_tab_info',
+        {},
         { conversationId: 'conversation-a', workspaceKey: '/workspace/a' },
       ),
     ).rejects.toThrow('必须先截图或读取当前页面')

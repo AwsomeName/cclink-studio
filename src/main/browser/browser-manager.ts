@@ -468,11 +468,6 @@ export class BrowserManager {
       const entry = this.views.get(tabId)
       if (!entry) continue
       try {
-        entry.view.setVisible(false)
-      } catch {
-        // host 可能已销毁；removeChildView 与恢复路径继续兜底。
-      }
-      try {
         host.nativeWindow.contentView.removeChildView(entry.view)
       } catch {
         // host 可能已销毁；返回 ownedTabIds 交给 WindowService 进入恢复路径。
@@ -651,14 +646,17 @@ export class BrowserManager {
     if (!this.playwrightBridge) return
     const url = entry.view.webContents.getURL() || entry.pendingUrl
     try {
-      await this.playwrightBridge.claimPageForView(
+      const claimedPage = await this.playwrightBridge.claimPageForView(
         tabId,
         entry.view.webContents,
         url,
         allowEmptyContextReconnect,
       )
+      const claimedBinding = this.playwrightBridge.getPageBindingIdentity(tabId)
       if (this.views.get(tabId) !== entry) {
-        this.playwrightBridge.unregisterPage(tabId)
+        if (claimedBinding?.page === claimedPage) {
+          this.playwrightBridge.unregisterPageIfMatches(tabId, claimedBinding)
+        }
         throw new Error(`浏览器 View 已在 claim 期间销毁: ${tabId}`)
       }
       if (this.hostForEntry(entry)?.activeViewId === tabId) {
@@ -767,11 +765,6 @@ export class BrowserManager {
         ...(viewSession ? { session: viewSession } : {}),
       },
     })
-    // 新建 View 在成为 host 的明确 active target 前不得参与原生合成。只依赖
-    // removeChildView 会让“层级已脱离”和“实际仍在绘制”共享一个不可观测假设；
-    // setVisible 则提供独立且可诊断的原生可见性门禁。
-    view.setVisible(false)
-
     installBrowserCompatibilityHeaders(view.webContents.session)
     this.sessionDiagnostics.observe(view.webContents.session, profileId)
 
@@ -1121,7 +1114,6 @@ export class BrowserManager {
       sourceEntry.viewMode === 'mobile' ? MOBILE_UA : normalizeDesktopUserAgent(desktopUA),
     )
     view.setBounds({ x: 0, y: 0, width: 1, height: 1 })
-    view.setVisible(false)
 
     installBrowserCompatibilityHeaders(view.webContents.session)
     this.sessionDiagnostics.observe(view.webContents.session, sourceEntry.profileId)
@@ -1409,11 +1401,6 @@ export class BrowserManager {
     const host = this.hosts.get(entry.ownerWindowId)
     if (host && !host.nativeWindow.isDestroyed()) {
       try {
-        entry.view.setVisible(false)
-      } catch {
-        // WebContents 可能已经先销毁；移除引用继续完成对称清理。
-      }
-      try {
         host.nativeWindow.contentView.removeChildView(entry.view)
       } catch {
         // 窗口可能已销毁，忽略
@@ -1459,20 +1446,9 @@ export class BrowserManager {
       if (entry.ownerWindowId !== windowId) continue
       if (viewId !== tabId) {
         try {
-          entry.view.setVisible(false)
-        } catch (error) {
-          console.warn(
-            `[BrowserManager] 隐藏非目标 View 失败 tabId=${viewId} windowId=${windowId}:`,
-            formatError(error),
-          )
-        }
-        try {
           win.contentView.removeChildView(entry.view)
-        } catch (error) {
-          console.warn(
-            `[BrowserManager] 移除非目标 View 失败 tabId=${viewId} windowId=${windowId}:`,
-            formatError(error),
-          )
+        } catch {
+          // 忽略
         }
       }
     }
@@ -1494,7 +1470,6 @@ export class BrowserManager {
 
     win.contentView.addChildView(entry.view)
     entry.view.setBounds(host.currentBounds)
-    entry.view.setVisible(true)
     host.activeViewId = tabId
     entry.view.webContents.focus()
     void this.playwrightBridge?.switchToPage(tabId).catch(() => {
@@ -1526,7 +1501,6 @@ export class BrowserManager {
     if (!source || !sourceWindow) throw new Error(`Browser source host 不可用: ${sourceWindowId}`)
     if (!target || !targetWindow) throw new Error(`Browser target host 不可用: ${targetWindowId}`)
 
-    entry.view.setVisible(false)
     sourceWindow.contentView.removeChildView(entry.view)
     if (source.activeViewId === tabId) source.activeViewId = null
     try {
@@ -1540,7 +1514,6 @@ export class BrowserManager {
             ? target.currentBounds
             : { x: 0, y: 0, width: 1, height: 1 },
         )
-        entry.view.setVisible(true)
         entry.view.webContents.focus()
         void this.playwrightBridge?.switchToPage(tabId).catch(() => undefined)
         this.ensureLoaded(tabId)
@@ -1553,7 +1526,6 @@ export class BrowserManager {
         entry.ownerWindowId = sourceWindowId
         source.activeViewId = tabId
         entry.view.setBounds(source.currentBounds)
-        entry.view.setVisible(true)
       } catch (rollbackError) {
         throw new Error(
           `Browser View attach 与 source rollback 均失败: attach=${formatError(error)} rollback=${formatError(rollbackError)}`,
@@ -1582,11 +1554,6 @@ export class BrowserManager {
     }
     if (source && !source.nativeWindow.isDestroyed()) {
       try {
-        entry.view.setVisible(false)
-      } catch {
-        // Source is already unreliable; the recovery attachment below is the authority.
-      }
-      try {
         source.nativeWindow.contentView.removeChildView(entry.view)
       } catch {
         // Source is already unreliable; the recovery attachment below is the authority.
@@ -1597,7 +1564,6 @@ export class BrowserManager {
     entry.ownerWindowId = recoveryWindowId
     recovery.activeViewId = tabId
     entry.view.setBounds({ x: 0, y: 0, width: 1, height: 1 })
-    entry.view.setVisible(true)
   }
 
   getViewOwnerWindowId(tabId: string): string | null {
@@ -2560,8 +2526,6 @@ export class BrowserManager {
     visibleTitle: string | null
     webContentsId: number | null
     ownerWindowId: string | null
-    nativeViewAttached: boolean | null
-    nativeViewVisible: boolean | null
     profileId: string | null
     viewState: BrowserViewState | null
     popup: {
@@ -2602,8 +2566,6 @@ export class BrowserManager {
         visibleTitle: null,
         webContentsId: null,
         ownerWindowId: null,
-        nativeViewAttached: null,
-        nativeViewVisible: null,
         profileId: null,
         viewState: null,
         popup: null,
@@ -2620,16 +2582,6 @@ export class BrowserManager {
     const visibleUrl = entry.view.webContents.getURL() || entry.url || null
     const browserSession = entry.view.webContents.session
     const host = this.hosts.get(entry.ownerWindowId)
-    let nativeViewAttached: boolean | null = null
-    let nativeViewVisible: boolean | null = null
-    try {
-      nativeViewAttached = host
-        ? host.nativeWindow.contentView.children.includes(entry.view)
-        : false
-      nativeViewVisible = entry.view.getVisible()
-    } catch {
-      // 销毁竞态本身就是诊断事实；null 与明确 false 分开。
-    }
     const sessionDiagnostics = await this.sessionDiagnostics.describe(
       browserSession,
       entry.profileId,
@@ -2642,8 +2594,6 @@ export class BrowserManager {
       visibleTitle: entry.view.webContents.getTitle() || null,
       webContentsId: entry.view.webContents.id,
       ownerWindowId: entry.ownerWindowId,
-      nativeViewAttached,
-      nativeViewVisible,
       profileId: entry.profileId,
       viewState: this.getState(tabId),
       popup: entry.popup

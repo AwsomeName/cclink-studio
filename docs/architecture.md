@@ -1,6 +1,6 @@
 # CCLink Studio 架构说明
 
-> 当前事实源。最后更新：2026-08-23。
+> 当前事实源。最后更新：2026-08-27。
 
 ## 结论
 
@@ -105,11 +105,15 @@ CCLink Studio 是 CCLink 唯一的 GPL-3.0-only 桌面 App。它不是“开源�
 - 跨 store 协作通过显式 command、service 或 transition 完成，禁止多个 store 相互修改内部状态形成隐式事务。
 - 持久化写入必须串行、原子、可迁移、可恢复；快照型分区在写入进行中只保留最新待写值，不能把 Agent 流式中间态排成无界磁盘队列；切换工作空间时必须验证旧任务、视图和监听器已经解绑。
 
-### 7. 外部副作用由人确认
+### 7. 外部副作用需要有界授权，特殊卡点由人处理
 
-- AI 可以准备内容、填写表单和执行可撤销的本地步骤。
-- 发帖、评论、发送消息、付款、删除远端数据和其他不可逆外部提交，必须在最后一步由用户明确确认。
-- 权限模式不能绕过这一产品级确认边界。
+- AI 可以准备内容、填写表单，并在用户明确授权的任务范围内执行目标动作。
+- 结构化产品已经向用户展示目标网站、账号、对象、内容或材料快照、预期结果和影响范围时，用户
+  点击“开始执行”或等价动作即构成本次有界授权；与该快照完全一致的单对象常规发帖、提交或发送
+  不因位于流程末尾而机械地再次确认。
+- 验证码、扫码、人脸、电子签名、付款、法律或版权声明、账号/权限/所有权变更、破坏性删除、批量
+  影响、授权范围变化，以及系统无法可靠判断后果的动作必须暂停并由用户处理；未知默认暂停。
+- 通用权限模式不能扩大任务授权、替用户作出人工专属声明或绕过平台风控；用户始终可以主动接管。
 
 ### 8. 可观测性是功能的一部分
 
@@ -136,7 +140,7 @@ CCLink Studio 是 CCLink 唯一的 GPL-3.0-only 桌面 App。它不是“开源�
   所有权。renderer 上报必须携带工作台顶部保护线，主进程完成 zoom/DIP 换算后再次裁剪；原生
   View 的显示和点击区域不得进入 Tab 栏或浏览器工具栏。回归与事故证据见
   `docs/testing/browser-tab-bar-native-view-occlusion.md`。
-- 任何入口都不能绕过权限、危险操作确认或不可逆外部副作用的最终人工确认。
+- 任何入口都不能绕过权限、有界任务授权、特殊敏感动作阻断或人工接管边界。
 - 上下文操作 owner 必须登记在 `docs/ops/context-action-inventory.md` 并通过 `pnpm verify:context-actions`；重复 command/contribution、孤儿 owner、未覆盖 target、第二个菜单 Store 或未登记原生菜单属于架构门禁失败。
 - 上下文操作诊断只记录失败分类、稳定 ID、target kind 和脱敏消息，不记录凭证、target payload 或网页正文。
 
@@ -218,6 +222,11 @@ Thread 显式选择经过验证的本地 Codex ACP Runtime；公共 Registry、�
   标为中断。进入外部等待时当前 Attempt 结束；到期或错过后才能创建新的检查 Attempt，
   不用常驻 Agent 伪装后台跟踪。
 - 最终外部动作继续受产品级确认卡约束；同节点同流程版本的副作用 key 阻止重复确认。
+
+> 2026-08-27 边界修订：ADR 0016 已把目标规则收窄为“明确任务执行 + 特殊卡点人工接管”。结构化
+> 产品中与用户启动快照完全一致的单对象常规目标动作不再仅因位于流程末尾而强制人工；验证码、
+> 法律/财务/账号后果、破坏性或批量影响、范围变化和未知动作仍必须暂停。当前稳定基线的动作守卫
+> 尚未完成该三态迁移，因此在迁移和真人验收前，运行时仍可能按旧规则把发布、提交或发送转人工。
 
 现有 `WebAccount.projectId` 是待迁移的 v2 账号所有权字段，不能继续成为新增事实；v3 迁移
 必须保留原 `accountId`、`browserProfileId`、事务引用和回滚备份，疑似重复账号不得自动
@@ -385,7 +394,7 @@ CCLink remote feature domain (optional and degradable)
 | ------------------ | ---------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------- |
 | workspace/tab      | `workspace-transition` 的 generation 与单一提交事务  | `workspace-store` / `tab-store`      | `WorkspaceStateService` 按 workspace 分区                        |
 | Agent conversation | main Agent runtime 的 run/session                    | `agent-store` 的消息与可见运行状态   | workspace conversation snapshot；恢复后与 main 状态对账          |
-| Browser/Profile    | `BrowserManager` 的 Tab 绑定与 Electron 持久 Session | Browser Tab 的 URL/Profile/View 状态 | 默认 partition 恢复普通登录；账号 Profile partition 隔离持久化  |
+| Browser/Profile    | `BrowserManager` 的 Tab 绑定与 Electron 持久 Session | Browser Tab 的 URL/Profile/View 状态 | 默认 partition 恢复普通登录；账号 Profile partition 隔离持久化   |
 | BrowserTask        | `BrowserTaskRuntime` 的 task/action 状态             | `browser-task-store`                 | 当前进程内可诊断任务；终态不伪装为持久后台任务                   |
 | Terminal           | `TerminalSessionRegistry` / `TerminalSessionStore`   | Terminal Tab 与 renderer store       | 主进程 session record；工作空间恢复后通过 `listSessions` 对账    |
 | Usage              | `UsageLedgerService` 的追加事件                      | 会话费用与 credits 的只读投影        | `{userData}/usage-events.jsonl`；统计失败不得阻断能力调用        |

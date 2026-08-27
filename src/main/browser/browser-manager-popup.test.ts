@@ -104,19 +104,12 @@ const electronMocks = vi.hoisted(() => {
   const createdViews: Array<{
     webContents: ReturnType<typeof makeWebContents>
     setBounds: ReturnType<typeof vi.fn>
-    setVisible: ReturnType<typeof vi.fn>
-    getVisible: ReturnType<typeof vi.fn>
   }> = []
   const builtMenuTemplates: any[][] = []
 
   class WebContentsView {
     webContents: ReturnType<typeof makeWebContents>
     setBounds = vi.fn()
-    visible = true
-    setVisible = vi.fn((visible: boolean) => {
-      this.visible = visible
-    })
-    getVisible = vi.fn(() => this.visible)
 
     constructor(options: {
       webContents?: ReturnType<typeof makeWebContents>
@@ -128,34 +121,23 @@ const electronMocks = vi.hoisted(() => {
     }
   }
 
-  const makeBrowserWindow = () => {
-    const children: WebContentsView[] = []
-    return {
-      webContents: {
-        send: vi.fn(),
-        getZoomFactor: vi.fn(() => 1),
-        isDestroyed: vi.fn(() => false),
-      },
-      contentView: {
-        children,
-        addChildView: vi.fn((view: WebContentsView) => {
-          const existingIndex = children.indexOf(view)
-          if (existingIndex >= 0) children.splice(existingIndex, 1)
-          children.push(view)
-        }),
-        removeChildView: vi.fn((view: WebContentsView) => {
-          const index = children.indexOf(view)
-          if (index >= 0) children.splice(index, 1)
-        }),
-      },
+  const makeBrowserWindow = () => ({
+    webContents: {
+      send: vi.fn(),
+      getZoomFactor: vi.fn(() => 1),
       isDestroyed: vi.fn(() => false),
-      isMinimized: vi.fn(() => false),
-      restore: vi.fn(),
-      show: vi.fn(),
-      focus: vi.fn(),
-      getContentBounds: vi.fn(() => ({ width: 1200, height: 800 })),
-    }
-  }
+    },
+    contentView: {
+      addChildView: vi.fn(),
+      removeChildView: vi.fn(),
+    },
+    isDestroyed: vi.fn(() => false),
+    isMinimized: vi.fn(() => false),
+    restore: vi.fn(),
+    show: vi.fn(),
+    focus: vi.fn(),
+    getContentBounds: vi.fn(() => ({ width: 1200, height: 800 })),
+  })
   const mainWindow = makeBrowserWindow()
   const mainWebContents = mainWindow.webContents
 
@@ -210,7 +192,6 @@ describe('BrowserManager popup adoption', () => {
     vi.clearAllMocks()
     electronMocks.createdViews.length = 0
     electronMocks.builtMenuTemplates.length = 0
-    electronMocks.mainWindow.contentView.children.length = 0
   })
 
   async function createSource(): Promise<{
@@ -229,63 +210,6 @@ describe('BrowserManager popup adoption', () => {
     })
     return { manager, source: electronMocks.createdViews[0].webContents }
   }
-
-  it('uses native visibility as a second gate when a floating surface hides the browser', async () => {
-    const { manager } = await createSource()
-    const view = electronMocks.createdViews[0]
-
-    expect(view.getVisible()).toBe(false)
-
-    manager.reconcileViews({
-      workspaceKey: '/workspace/a',
-      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
-      activeTabId: 'source-tab',
-    })
-    expect(view.getVisible()).toBe(true)
-    await expect(manager.getRuntimeDiagnostics('source-tab')).resolves.toMatchObject({
-      visibleTabId: 'source-tab',
-      nativeViewAttached: true,
-      nativeViewVisible: true,
-    })
-
-    manager.reconcileViews({
-      workspaceKey: '/workspace/a',
-      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
-      activeTabId: null,
-    })
-    expect(view.setVisible).toHaveBeenLastCalledWith(false)
-    await expect(manager.getRuntimeDiagnostics('source-tab')).resolves.toMatchObject({
-      visibleTabId: null,
-      nativeViewAttached: false,
-      nativeViewVisible: false,
-    })
-  })
-
-  it('stays visually hidden even when native detachment fails', async () => {
-    const { manager } = await createSource()
-    const view = electronMocks.createdViews[0]
-    manager.reconcileViews({
-      workspaceKey: '/workspace/a',
-      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
-      activeTabId: 'source-tab',
-    })
-    electronMocks.mainWindow.contentView.removeChildView.mockImplementationOnce(() => {
-      throw new Error('native detach failed')
-    })
-
-    manager.reconcileViews({
-      workspaceKey: '/workspace/a',
-      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
-      activeTabId: null,
-    })
-
-    expect(view.getVisible()).toBe(false)
-    await expect(manager.getRuntimeDiagnostics('source-tab')).resolves.toMatchObject({
-      visibleTabId: null,
-      nativeViewAttached: true,
-      nativeViewVisible: false,
-    })
-  })
 
   it('selects the ordinary environment for an Agent even when an account Tab is active', async () => {
     const manager = new BrowserManager(electronMocks.mainWindow as never)

@@ -294,6 +294,32 @@ describe('PlaywrightBridge diagnostics', () => {
 
     expect(bridge.getPageById('stable-tab')).toBe(newPage)
   })
+
+  it('does not unregister a newer binding when an older claim cleanup arrives late', () => {
+    const bridge = new PlaywrightBridge()
+    const oldPage = eventPage('https://old.example/', 'Old')
+    const newPage = eventPage('https://new.example/', 'New')
+    bridge.registerPage(oldPage, 'stable-tab', 1, 42)
+    const oldBinding = bridge.getPageBindingIdentity('stable-tab')!
+    bridge.registerPage(newPage, 'stable-tab', 2, 42)
+
+    expect(bridge.unregisterPageIfMatches('stable-tab', oldBinding)).toBe(false)
+    expect(bridge.getPageById('stable-tab')).toBe(newPage)
+  })
+
+  it('requires Page, generation and WebContents identity for conditional unregister', () => {
+    const bridge = new PlaywrightBridge()
+    const page = eventPage('https://example.com/', 'Current')
+    bridge.registerPage(page, 'stable-tab', 3, 42)
+    const binding = bridge.getPageBindingIdentity('stable-tab')!
+
+    expect(bridge.unregisterPageIfMatches('stable-tab', { ...binding, generation: 2 })).toBe(false)
+    expect(bridge.unregisterPageIfMatches('stable-tab', { ...binding, webContentsId: 99 })).toBe(
+      false,
+    )
+    expect(bridge.unregisterPageIfMatches('stable-tab', binding)).toBe(true)
+    expect(bridge.getPageById('stable-tab')).toBeNull()
+  })
 })
 
 function fakeContext(pages: Page[]): BrowserContext {

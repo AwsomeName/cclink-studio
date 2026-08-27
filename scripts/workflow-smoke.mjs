@@ -1236,12 +1236,17 @@ async function main() {
     await copyAll.click()
     const agentDiagnostic = await page.evaluate(() => navigator.clipboard.readText())
     assert(
-      agentDiagnostic.includes('# CCLink Studio 诊断日志'),
-      'Agent diagnostic button did not copy the Agent report',
+      agentDiagnostic.startsWith('# CCLink Studio 完整诊断日志') &&
+        agentDiagnostic.includes('## Agent 与当前会话') &&
+        agentDiagnostic.includes('# CCLink Studio 诊断日志'),
+      'Agent diagnostic button did not copy the unified report with the Agent section',
     )
     assert(
-      !agentDiagnostic.includes('# CCLink Studio 框架诊断日志'),
-      'Agent diagnostic button unexpectedly copied the framework report',
+      agentDiagnostic.includes('## Markdown') &&
+        agentDiagnostic.includes('"reportType": "cclink-markdown-render-diagnostic"') &&
+        agentDiagnostic.includes('## 界面近期框架日志') &&
+        agentDiagnostic.includes('## 主进程近期框架日志'),
+      'Agent diagnostic button omitted Markdown or framework logs',
     )
 
     const copyFramework = page.locator('.framework-diagnostics-status')
@@ -1262,7 +1267,7 @@ async function main() {
         frameworkDiagnostic.includes('## 主进程近期框架日志'),
       'framework report omitted process logs',
     )
-    return 'reload generated a fresh report and Agent/framework diagnostics stayed separated'
+    return 'reload generated a fresh report and the Agent copy included framework diagnostics'
   })
 
   await runCheck('browser tab is available from the workbench', async () => {
@@ -1297,10 +1302,7 @@ async function main() {
       await page.waitForTimeout(100)
     }
     assert(browserPage, 'Browser WebContents page was not visible over CDP')
-    await page.evaluate(
-      async (tabId) => window.cclinkStudio.browser.setActive(tabId),
-      browserTabId,
-    )
+    await page.evaluate(async (tabId) => window.cclinkStudio.browser.setActive(tabId), browserTabId)
     await browserPage.bringToFront()
     await browserPage.locator('body').click()
     await page.evaluate(

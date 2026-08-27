@@ -5,7 +5,6 @@ import {
   useFsStore,
   useOpenProjectsStore,
   useTabStore,
-  useUpdateStore,
   useWorkspaceStore,
 } from '../../stores'
 import {
@@ -36,7 +35,6 @@ describe('collectFrameworkDiagnosticReport', () => {
       recentWorkspacePaths: ['/Users/alice/project'],
     })
     useTabStore.setState({ tabs: [], activeTabId: null })
-    useUpdateStore.setState({ panelOpen: false })
   })
 
   it('collects framework state and filters Agent runtime logs', async () => {
@@ -116,7 +114,6 @@ describe('collectFrameworkDiagnosticReport', () => {
     const report = await collectFrameworkDiagnosticReport()
 
     expect(report).toContain('# CCLink Studio 框架诊断日志')
-    expect(report).toContain('- 界面浮层：active=false updatePanelOpen=false')
     expect(report).toContain('打开项目失败: EACCES')
     expect(report).toContain('[WorkspaceStateService] project open failed')
     expect(report).toContain('[FsStore] 打开所选项目失败: EACCES')
@@ -191,10 +188,6 @@ describe('collectFrameworkDiagnosticReport', () => {
             visibleTabId: 'browser-tab',
             visibleUrl: 'https://register.ccopyright.com.cn/login.html?token=secret',
             visibleTitle: '登录',
-            webContentsId: 42,
-            ownerWindowId: 'main',
-            nativeViewAttached: true,
-            nativeViewVisible: true,
             profileId: 'profile-secret',
             viewState: { viewMode: 'desktop', zoomMode: 'fit', zoomFactor: 1 },
             popup: null,
@@ -241,9 +234,6 @@ describe('collectFrameworkDiagnosticReport', () => {
 
     expect(report).toContain('## 当前浏览器页面')
     expect(report).toContain('页面绑定：matched')
-    expect(report).toContain(
-      '- 原生 View：owner=main hostActive=browser-tab attached=true visible=true webContentsId=42',
-    )
     expect(report).toContain('ReferenceError: getUrlRequest is not defined')
     expect(report).toContain('GET · status:502 · https://static.ccopyright.com.cn/js/common.js')
     expect(report).not.toContain('token=secret')

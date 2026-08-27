@@ -207,7 +207,6 @@ const BROWSER_REOBSERVATION_ACTIONS = new Set([
   'inputValue',
   'waitForSelector',
   'waitForNavigation',
-  'getTabInfo',
   'frameContent',
 ])
 ```
@@ -335,7 +334,7 @@ timeout、连接错误或重连后仍无法 claim 才进入失败终态。现有
 ### M2：完成门禁、迁移组合和真人验收
 
 - 修正 BrowserTask/Agent 完成门禁和最小诊断。
-- 跑 CDP recovery smoke 与 detachable-tab smoke 组合。
+- 跑 CDP recovery smoke 的主窗口与辅助窗口迁移组合。
 - 在真实 CSDN 页面完成真人验收。
 
 退出条件：自动门禁与真人验收均通过，才能把本文状态改为 Closed。
@@ -346,7 +345,6 @@ timeout、连接错误或重连后仍无法 claim 才进入失败终态。现有
 pnpm typecheck
 pnpm test
 pnpm smoke:browser-cdp-recovery
-pnpm smoke:detachable-tabs-m1
 pnpm verify
 ```
 
@@ -357,8 +355,6 @@ pnpm verify
 - `pnpm smoke:browser-cdp-recovery` 通过：Studio 内部连接在主窗口和辅助窗口各断开一次，
   generation 为 `1 → 2 → 3`；外部 CDP 观察连接持续可用，WebContents、target、Profile、Cookie、
   未提交表单、滚动位置、boot ID 和 `performance.timeOrigin` 均未变化，且 Tab 成功回迁主窗口。
-- `pnpm smoke:detachable-tabs-m1` 在全新隔离运行目录通过 `12/12`；暂停后恢复的 BrowserTask 先通过
-  `browser_screenshot` 重新观察，再继续下载等写动作，未放宽结果未知门禁。
 - CSDN 已登录文章编辑页的真人验收尚未执行，因此当前状态保持 Implemented，不能改为 Closed。
 
 ## 本次明确不做
