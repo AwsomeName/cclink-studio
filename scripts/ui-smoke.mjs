@@ -1500,7 +1500,7 @@ async function main() {
       ),
       'save click removed the login cookie',
     )
-    const accountNameInput = page.getByLabel('账号显示名称')
+    const accountNameInput = page.getByLabel('账号手机号或平台用户名')
     await accountNameInput.fill('')
     await page.getByRole('button', { name: '保存', exact: true }).click()
     await page
@@ -1633,7 +1633,7 @@ async function main() {
         { timeout: 10_000 },
       )
       await page.getByRole('button', { name: '登录完成，保存账号和登录状态' }).click()
-      const accountNameInput = page.getByLabel('账号显示名称')
+      const accountNameInput = page.getByLabel('账号手机号或平台用户名')
       await accountNameInput.fill('')
       await page.getByRole('button', { name: '保存', exact: true }).click()
       await page
