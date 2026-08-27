@@ -1,7 +1,7 @@
 import {
   articlePublishingIpc,
   type ArticlePublishingApiContract,
-} from '../shared/article-publishing/article-publishing-contract'
+} from '../shared/article-publishing/article-publishing'
 import { invokeIpcContract } from './ipc-contract-client'
 
 export const articlePublishingApi: ArticlePublishingApiContract = {
