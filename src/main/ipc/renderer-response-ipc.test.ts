@@ -33,6 +33,24 @@ describe('renderer response IPC boundaries', () => {
     expect(mocks.dialog.showOpenDialog).not.toHaveBeenCalled()
   })
 
+  it('passes a validated default directory to the native open dialog', async () => {
+    const mainWindow = createWindow()
+    mocks.dialog.showOpenDialog.mockResolvedValue({ canceled: true, filePaths: [] })
+    registerDialogIpc(mainWindow as never, createGuard('trusted') as never)
+
+    await mocks.handlers.get('dialog:showOpenDialog')?.(
+      { sender: 'trusted' },
+      { title: '选择 Markdown', defaultPath: '/workspace/project' },
+    )
+
+    expect(mocks.dialog.showOpenDialog).toHaveBeenCalledWith(mainWindow, {
+      title: '选择 Markdown',
+      defaultPath: '/workspace/project',
+      properties: ['openFile'],
+      filters: undefined,
+    })
+  })
+
   it('rejects oversized editor responses before resolving an Agent operation', () => {
     const editor = { resolveOperation: vi.fn(), rejectOperation: vi.fn() }
     registerEditorIpc(editor as never, createGuard('trusted') as never)

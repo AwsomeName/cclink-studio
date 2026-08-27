@@ -7,6 +7,7 @@ export interface DialogFileFilter {
 
 export interface OpenDialogOptions {
   title?: string
+  defaultPath?: string
   multiSelections?: boolean
   /** 选择目录而非文件（用于选择工作区根目录）。 */
   selectDirectory?: boolean

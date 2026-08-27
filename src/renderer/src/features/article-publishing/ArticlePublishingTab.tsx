@@ -10,6 +10,7 @@ import { createConversationRuntimeForWorkspace } from '../agent-conversations/vi
 import { createConversationRunController } from '../agent-conversations/conversation-run-controller'
 import { resolveAndOpenWebResourceTab } from '../web-resources/web-resource-tab'
 import { copyTextToClipboard } from '../../utils/clipboard'
+import { createArticleMarkdownOpenDialogOptions } from './article-publishing-tab'
 import './article-publishing.css'
 
 const CHECKPOINT_LABELS: Record<string, string> = {
@@ -99,10 +100,9 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   }
 
   const selectMarkdown = async (): Promise<void> => {
-    const selected = await window.cclinkStudio.dialog.showOpenDialog({
-      title: '选择要发布的 Markdown',
-      filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
-    })
+    const selected = await window.cclinkStudio.dialog.showOpenDialog(
+      createArticleMarkdownOpenDialogOptions(workspaceRef),
+    )
     const markdownPath = selected.filePaths[0]
     if (selected.canceled || !markdownPath) return
     setBusy(true)

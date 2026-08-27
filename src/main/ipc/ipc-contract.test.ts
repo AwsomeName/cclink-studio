@@ -68,6 +68,9 @@ describe('IPC invoke contracts', () => {
     ).resolves.toEqual({ success: false, error: '设置参数无效' })
 
     expect(dialogIpc.showOpenDialog.parseArgs([])).toEqual([undefined])
+    expect(dialogIpc.showOpenDialog.parseArgs([{ defaultPath: '/workspace/project' }])).toEqual([
+      { defaultPath: '/workspace/project' },
+    ])
     expect(dialogIpc.showMessageBox.parseArgs([{ message: '确认继续？' }])).toEqual([
       { message: '确认继续？' },
     ])

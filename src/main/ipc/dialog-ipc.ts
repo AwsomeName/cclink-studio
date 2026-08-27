@@ -32,6 +32,7 @@ export function registerDialogIpc(
       }
       const result = await dialog.showOpenDialog(mainWindow, {
         title: options?.title ?? (options?.selectDirectory ? '选择文件夹' : '选择文件'),
+        defaultPath: options?.defaultPath,
         properties: options?.selectDirectory
           ? ['openDirectory']
           : ['openFile', ...(options?.multiSelections ? ['multiSelections' as const] : [])],

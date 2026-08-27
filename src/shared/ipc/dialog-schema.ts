@@ -21,6 +21,7 @@ const dialogFiltersSchema = z.array(dialogFilterSchema).max(64).optional()
 export const openDialogOptionsSchema = z
   .object({
     title: boundedText(512).optional(),
+    defaultPath: boundedText(32_768).optional(),
     multiSelections: z.boolean().optional(),
     selectDirectory: z.boolean().optional(),
     filters: dialogFiltersSchema,
