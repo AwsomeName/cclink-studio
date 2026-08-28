@@ -16,12 +16,14 @@ import type {
   InspectArticlePublishingSourceInput,
   ReportArticlePublishingAssetInput,
   ReportArticlePublishingCheckpointInput,
+  RecoverArticlePublishingTaskLaunchInput,
   StartArticlePublishingTaskInput,
   StartArticlePublishingTaskResult,
 } from '../../shared/article-publishing/article-publishing-types'
 import {
   createArticlePublishingTaskInputSchema,
   inspectArticlePublishingSourceInputSchema,
+  recoverArticlePublishingTaskLaunchInputSchema,
   reportArticlePublishingAssetInputSchema,
   reportArticlePublishingCheckpointInputSchema,
   startArticlePublishingTaskInputSchema,
@@ -189,6 +191,17 @@ export class ArticlePublishingService {
     const parsed = reportArticlePublishingCheckpointInputSchema.safeParse(input)
     if (!parsed.success) return Promise.resolve(invalid('文章发布检查点参数无效'))
     return this.webAffairService.reportArticlePublishingCheckpoint(parsed.data, workspaceId)
+  }
+
+  recoverTaskLaunch(input: RecoverArticlePublishingTaskLaunchInput, workspaceId: string) {
+    const parsed = recoverArticlePublishingTaskLaunchInputSchema.safeParse(input)
+    if (!parsed.success) return Promise.resolve(invalid('文章发布启动恢复参数无效'))
+    return this.webAffairService.interruptArticlePublishingLaunch(
+      parsed.data.affairId,
+      parsed.data.attemptId,
+      parsed.data.reason,
+      workspaceId,
+    )
   }
 
   reportAsset(input: ReportArticlePublishingAssetInput, workspaceId: string) {

@@ -22,6 +22,19 @@ export interface ArticlePublishingFileDetails {
   absolutePath: string
 }
 
+type ArticlePublishingAgentStartResult =
+  | { status: 'accepted' }
+  | { status: 'ignored'; reason: string }
+  | { status: 'failed'; error: string }
+
+export function getArticlePublishingAgentStartError(
+  result: ArticlePublishingAgentStartResult,
+): string | null {
+  if (result.status === 'accepted') return null
+  if (result.status === 'failed') return result.error
+  return `Agent 未接收发布任务（${result.reason}）`
+}
+
 export function getArticlePublishingFileDetails(
   filePath: string,
   workspacePath: string,

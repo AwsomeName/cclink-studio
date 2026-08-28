@@ -48,6 +48,19 @@ export function registerArticlePublishingIpc(
     },
   )
   registerTrustedIpcContract(
+    articlePublishingIpcContracts.recoverTaskLaunch,
+    trustedRendererGuard,
+    async (_event, input) => {
+      const resolved = await resolveWorkspaceId(input.workspaceRef, getWorkspaceStateService())
+      const service = getService()
+      return resolved.success && service
+        ? service.recoverTaskLaunch(input, resolved.data)
+        : resolved.success
+          ? unavailable()
+          : resolved
+    },
+  )
+  registerTrustedIpcContract(
     articlePublishingIpcContracts.reportCheckpoint,
     trustedRendererGuard,
     async (_event, input) => {

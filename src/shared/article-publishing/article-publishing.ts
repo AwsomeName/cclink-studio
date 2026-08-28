@@ -5,6 +5,7 @@ import type {
   ArticlePublishingSourcePreview,
   CreateArticlePublishingTaskInput,
   InspectArticlePublishingSourceInput,
+  RecoverArticlePublishingTaskLaunchInput,
   ReportArticlePublishingAssetInput,
   ReportArticlePublishingCheckpointInput,
   StartArticlePublishingTaskInput,
@@ -24,6 +25,10 @@ export const articlePublishingIpc = {
     [StartArticlePublishingTaskInput],
     WebAffairOperationResult<StartArticlePublishingTaskResult>
   >('articlePublishing:startTask'),
+  recoverTaskLaunch: defineIpcCall<
+    [RecoverArticlePublishingTaskLaunchInput],
+    WebAffairOperationResult<WebAffair>
+  >('articlePublishing:recoverTaskLaunch'),
   reportCheckpoint: defineIpcCall<
     [ReportArticlePublishingCheckpointInput],
     WebAffairOperationResult<WebAffair>

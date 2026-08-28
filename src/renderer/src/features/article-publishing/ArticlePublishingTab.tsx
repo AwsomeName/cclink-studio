@@ -18,6 +18,7 @@ import { copyTextToClipboard } from '../../utils/clipboard'
 import {
   createArticleMarkdownOpenDialogOptions,
   formatArticlePublishingAccountOption,
+  getArticlePublishingAgentStartError,
   getArticlePublishingFileDetails,
 } from './article-publishing-tab'
 import './article-publishing.css'
@@ -183,31 +184,99 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     const taskId = targetAffair.id
     const publishing = targetAffair.articlePublishing
     if (!taskId || !publishing) return
-    const result = await window.cclinkStudio.articlePublishing.startTask({
-      workspaceRef,
-      affairId: taskId,
-    })
-    if (!result.success) throw new Error(result.error.message)
-    await resolveAndOpenWebResourceTab(publishing.accountId, workspaceRef)
-    activateTab(tab.id)
-    const agent = useAgentStore.getState()
-    const nextConversationId = agent.createConversation({
-      runtime: createConversationRuntimeForWorkspace(workspaceRef),
-      activate: true,
-    })
-    agent.renameConversation(nextConversationId, `发布文章 · ${targetAffair.title} · CSDN`)
-    useUIStore.getState().setAgentPanelMode('right', 'user')
-    setConversationId(nextConversationId)
-    const sent = await createConversationRunController({
-      conversationId: nextConversationId,
-    }).send(result.data.agentPrompt)
-    if (sent.status === 'failed') throw new Error(sent.error)
-    setAffair(result.data.affair)
-    setNotice(
-      result.data.resumed
-        ? '已恢复原发布 Attempt，并创建新的 Agent Run 从待对账检查点继续。'
-        : '发布 Attempt、可见网页和专属 Agent 已启动。',
-    )
+    let attemptId: string | null = null
+    let stage = '恢复发布事务'
+    try {
+      console.info('[ArticlePublishing] 启动阶段', { taskId, stage })
+      const result = await window.cclinkStudio.articlePublishing.startTask({
+        workspaceRef,
+        affairId: taskId,
+      })
+      if (!result.success) throw new Error(result.error.message)
+      attemptId = result.data.attemptId
+
+      stage = '打开账号网页'
+      console.info('[ArticlePublishing] 启动阶段', { taskId, attemptId, stage })
+      await resolveAndOpenWebResourceTab(publishing.accountId, workspaceRef)
+      activateTab(tab.id)
+
+      stage = '创建 Agent 会话'
+      console.info('[ArticlePublishing] 启动阶段', { taskId, attemptId, stage })
+      const agent = useAgentStore.getState()
+      const nextConversationId = agent.createConversation({
+        runtime: createConversationRuntimeForWorkspace(workspaceRef),
+        activate: true,
+      })
+      agent.renameConversation(nextConversationId, `发布文章 · ${targetAffair.title} · CSDN`)
+      useUIStore.getState().setAgentPanelMode('right', 'user')
+      setConversationId(nextConversationId)
+
+      stage = '发送 Agent 任务'
+      console.info('[ArticlePublishing] 启动阶段', {
+        taskId,
+        attemptId,
+        conversationId: nextConversationId,
+        stage,
+      })
+      const sent = await createConversationRunController({
+        conversationId: nextConversationId,
+      }).send(result.data.agentPrompt)
+      const sendError = getArticlePublishingAgentStartError(sent)
+      if (sendError) throw new Error(sendError)
+
+      console.info('[ArticlePublishing] Agent 已接收发布任务', {
+        taskId,
+        attemptId,
+        conversationId: nextConversationId,
+        agentRunId: sent.status === 'accepted' ? sent.runId : undefined,
+      })
+      setAffair(result.data.affair)
+      setNotice(
+        result.data.resumed
+          ? '已恢复原发布 Attempt，并创建新的 Agent Run 从待对账检查点继续。'
+          : '发布 Attempt、可见网页和专属 Agent 已启动。',
+      )
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : String(reason)
+      if (!attemptId) throw reason
+      console.error('[ArticlePublishing] Agent 启动未完成，正在恢复事务', {
+        taskId,
+        attemptId,
+        stage,
+        message,
+      })
+      const recovered = await window.cclinkStudio.articlePublishing
+        .recoverTaskLaunch({
+          workspaceRef,
+          affairId: taskId,
+          attemptId,
+          reason: `${stage}：${message}`.slice(0, 1_000),
+        })
+        .catch((recoveryReason) => ({
+          success: false as const,
+          error: {
+            code: 'IPC_FAILED',
+            message:
+              recoveryReason instanceof Error ? recoveryReason.message : String(recoveryReason),
+          },
+        }))
+      if (recovered.success) {
+        setAffair(recovered.data)
+        console.warn('[ArticlePublishing] 启动失败事务已恢复为可继续状态', {
+          taskId,
+          attemptId,
+          stage,
+        })
+        throw new Error(`${stage}失败：${message}；发布任务已保留，可点击“从中断处继续”重试`)
+      }
+      console.error('[ArticlePublishing] 启动失败后的事务恢复也失败', {
+        taskId,
+        attemptId,
+        stage,
+        recoveryError: recovered.error.message,
+      })
+      throw new Error(`${stage}失败：${message}；恢复任务状态失败：${recovered.error.message}`)
+    }
   }
 
   const startTask = async (): Promise<void> => {

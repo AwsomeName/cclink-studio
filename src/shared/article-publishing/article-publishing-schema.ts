@@ -197,6 +197,15 @@ export const startArticlePublishingTaskInputSchema = z
   .object({ workspaceRef: workspaceRefSchema, affairId: uuidSchema })
   .strict()
 
+export const recoverArticlePublishingTaskLaunchInputSchema = z
+  .object({
+    workspaceRef: workspaceRefSchema,
+    affairId: uuidSchema,
+    attemptId: uuidSchema,
+    reason: z.string().trim().min(1).max(1_000),
+  })
+  .strict()
+
 export const reportArticlePublishingCheckpointInputSchema = z
   .object({
     workspaceRef: workspaceRefSchema,

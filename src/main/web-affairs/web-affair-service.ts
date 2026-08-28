@@ -209,6 +209,17 @@ export class WebAffairService {
     )
   }
 
+  interruptArticlePublishingLaunch(
+    affairId: string,
+    attemptId: string,
+    reason: string,
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(affairId, workspaceId, () =>
+      this.interruptArticlePublishingLaunchNow(affairId, attemptId, reason),
+    )
+  }
+
   reportArticlePublishingCheckpoint(
     input: ReportArticlePublishingCheckpointInput,
     workspaceId: string,
@@ -2033,6 +2044,82 @@ export class WebAffairService {
           currentStepId: currentStep?.stepId,
         },
       },
+      updatedAt: now,
+    })
+  }
+
+  private async interruptArticlePublishingLaunchNow(
+    affairId: string,
+    attemptId: string,
+    reason: string,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const found = this.findAttempt(affairId, attemptId)
+    const publishing = found?.affair.articlePublishing
+    if (!found || !publishing || found.affair.kind !== 'article-publishing') {
+      return this.notFound('文章发布 Attempt 不存在')
+    }
+    if (
+      publishing.execution.currentAttemptId !== attemptId ||
+      !['preparing', 'running-ai'].includes(found.attempt.status)
+    ) {
+      return this.transitionError('只有尚未成功启动 Agent 的文章发布 Attempt 可以恢复')
+    }
+    const now = this.timestamp()
+    const currentStepId = publishing.execution.currentStepId
+    return this.persistAffair({
+      ...found.affair,
+      status: 'needs-attention',
+      flow: {
+        ...found.affair.flow,
+        nodes: found.affair.flow.nodes.map((node) =>
+          node.id === found.attempt.nodeId
+            ? {
+                ...node,
+                status: 'waiting-human' as const,
+                lastResultNote: 'Agent 启动失败，已保留现场供原 Attempt 重试',
+                availableTransitions: [...ALLOWED_TRANSITIONS['waiting-human']],
+                updatedAt: now,
+              }
+            : node,
+        ),
+      },
+      attempts: found.affair.attempts.map((attempt) =>
+        attempt.id === attemptId
+          ? {
+              ...attempt,
+              status: 'interrupted' as const,
+              failureMessage: reason,
+              endedAt: now,
+            }
+          : attempt,
+      ),
+      articlePublishing: {
+        ...publishing,
+        assets: publishing.assets.map((asset) =>
+          ['uploading', 'waiting-platform', 'verifying'].includes(asset.status)
+            ? { ...asset, status: 'reconciling' as const }
+            : asset,
+        ),
+        checkpoints: publishing.checkpoints.map((checkpoint) =>
+          checkpoint.stepId === currentStepId &&
+          ['running', 'waiting-platform', 'verifying'].includes(checkpoint.status)
+            ? { ...checkpoint, status: 'needs-reconcile' as const, finishedAt: undefined }
+            : checkpoint,
+        ),
+        execution: {
+          ...publishing.execution,
+          status: 'interrupted',
+          lastAgentRunId: undefined,
+          lastBrowserTaskRunId: undefined,
+        },
+      },
+      events: this.appendEvent(
+        found.affair,
+        this.event('attempt-finished', `Agent 启动失败，已恢复为可继续状态：${reason}`, now, {
+          nodeId: found.attempt.nodeId,
+          attemptId,
+        }),
+      ),
       updatedAt: now,
     })
   }

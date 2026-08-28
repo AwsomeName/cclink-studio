@@ -255,6 +255,55 @@ describe('article publishing persistent state', () => {
     expect(resumed.data.articlePublishing?.checkpoints[0].status).toBe('needs-reconcile')
   })
 
+  it('keeps the same Attempt retryable when Agent launch fails', async () => {
+    const created = await createDraftTask(directory, sourcePath, imagePath)
+    const started = await created.service.startAttempt(
+      {
+        workspaceRef: { kind: 'local', path: directory },
+        affairId: created.affairId,
+        nodeId: created.nodeId,
+        accountId: ACCOUNT_ID,
+      },
+      WORKSPACE_ID,
+    )
+    expect(started.success).toBe(true)
+    if (!started.success) return
+    const attemptId = started.data.attempts[0].id
+    const marked = await created.service.markArticlePublishingAttemptStarted(
+      created.affairId,
+      attemptId,
+      WORKSPACE_ID,
+    )
+    expect(marked.success).toBe(true)
+
+    const recovered = await created.service.interruptArticlePublishingLaunch(
+      created.affairId,
+      attemptId,
+      '发送 Agent 任务：runtime offline',
+      WORKSPACE_ID,
+    )
+    expect(recovered.success).toBe(true)
+    if (!recovered.success) return
+    expect(recovered.data.articlePublishing?.execution.status).toBe('interrupted')
+    expect(recovered.data.articlePublishing?.checkpoints[0].status).toBe('needs-reconcile')
+    expect(recovered.data.attempts).toHaveLength(1)
+    expect(recovered.data.attempts[0]).toMatchObject({
+      id: attemptId,
+      status: 'interrupted',
+      failureMessage: '发送 Agent 任务：runtime offline',
+    })
+
+    const resumed = await created.service.resumeArticlePublishingAttempt(
+      created.affairId,
+      attemptId,
+      WORKSPACE_ID,
+    )
+    expect(resumed.success).toBe(true)
+    if (!resumed.success) return
+    expect(resumed.data.attempts).toHaveLength(1)
+    expect(resumed.data.attempts[0]).toMatchObject({ id: attemptId, status: 'preparing' })
+  })
+
   it('records the publication side effect before a final click can be dispatched', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
     const workspaceRef = { kind: 'local' as const, path: directory }

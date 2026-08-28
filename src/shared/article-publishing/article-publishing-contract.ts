@@ -5,6 +5,7 @@ import { articlePublishingIpc } from './article-publishing'
 import {
   createArticlePublishingTaskInputSchema,
   inspectArticlePublishingSourceInputSchema,
+  recoverArticlePublishingTaskLaunchInputSchema,
   reportArticlePublishingAssetInputSchema,
   reportArticlePublishingCheckpointInputSchema,
   startArticlePublishingTaskInputSchema,
@@ -35,6 +36,10 @@ export const articlePublishingIpcContracts = {
   ),
   createTask: bindSingle(articlePublishingIpc.createTask, createArticlePublishingTaskInputSchema),
   startTask: bindSingle(articlePublishingIpc.startTask, startArticlePublishingTaskInputSchema),
+  recoverTaskLaunch: bindSingle(
+    articlePublishingIpc.recoverTaskLaunch,
+    recoverArticlePublishingTaskLaunchInputSchema,
+  ),
   reportCheckpoint: bindSingle(
     articlePublishingIpc.reportCheckpoint,
     reportArticlePublishingCheckpointInputSchema,

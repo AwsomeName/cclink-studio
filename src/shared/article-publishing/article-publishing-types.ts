@@ -149,6 +149,13 @@ export interface StartArticlePublishingTaskResult {
   agentPrompt: string
 }
 
+export interface RecoverArticlePublishingTaskLaunchInput {
+  workspaceRef: WorkspaceRef
+  affairId: string
+  attemptId: string
+  reason: string
+}
+
 export interface ReportArticlePublishingCheckpointInput {
   workspaceRef: WorkspaceRef
   affairId: string
@@ -179,6 +186,9 @@ export interface ArticlePublishingApiContract {
   startTask(
     input: StartArticlePublishingTaskInput,
   ): Promise<WebAffairOperationResult<StartArticlePublishingTaskResult>>
+  recoverTaskLaunch(
+    input: RecoverArticlePublishingTaskLaunchInput,
+  ): Promise<WebAffairOperationResult<WebAffair>>
   reportCheckpoint(
     input: ReportArticlePublishingCheckpointInput,
   ): Promise<WebAffairOperationResult<WebAffair>>

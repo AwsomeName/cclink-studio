@@ -3,6 +3,7 @@ import { CSDN_ARTICLE_PUBLISHING_PLAN } from '@shared/article-publishing/article
 import {
   createArticleMarkdownOpenDialogOptions,
   formatArticlePublishingAccountOption,
+  getArticlePublishingAgentStartError,
   getArticlePublishingFileDetails,
 } from './article-publishing-tab'
 
@@ -64,5 +65,20 @@ describe('article publishing execution plan', () => {
       '执行常规单篇发布',
       '核验文章结果',
     ])
+  })
+})
+
+describe('article publishing Agent launch result', () => {
+  it('rejects ignored sends instead of pretending the Agent started', () => {
+    expect(getArticlePublishingAgentStartError({ status: 'ignored', reason: 'busy' })).toBe(
+      'Agent 未接收发布任务（busy）',
+    )
+  })
+
+  it('accepts only a confirmed Agent run', () => {
+    expect(getArticlePublishingAgentStartError({ status: 'accepted' })).toBeNull()
+    expect(
+      getArticlePublishingAgentStartError({ status: 'failed', error: 'runtime offline' }),
+    ).toBe('runtime offline')
   })
 })
