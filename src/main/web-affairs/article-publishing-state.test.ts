@@ -219,6 +219,103 @@ describe('article publishing persistent state', () => {
     })
     await reloaded.flush()
   })
+
+  it('returns a waiting-human article task to the same Attempt for fresh observation', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const handedOff = await created.service.handoffAttempt(
+      {
+        workspaceRef: { kind: 'local', path: directory },
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        reason: '需要用户处理验证码',
+      },
+      WORKSPACE_ID,
+    )
+    expect(handedOff.success).toBe(true)
+    if (!handedOff.success) return
+    expect(handedOff.data.articlePublishing?.execution.status).toBe('waiting-human')
+    expect(handedOff.data.attempts[0].status).toBe('waiting-human')
+
+    const resumed = await created.service.resumeArticlePublishingAfterHandoff(
+      created.affairId,
+      created.attemptId,
+      WORKSPACE_ID,
+    )
+    expect(resumed.success).toBe(true)
+    if (!resumed.success) return
+    expect(resumed.data.attempts).toHaveLength(1)
+    expect(resumed.data.attempts[0]).toMatchObject({
+      id: created.attemptId,
+      status: 'preparing',
+    })
+    expect(resumed.data.articlePublishing?.execution).toMatchObject({
+      status: 'running',
+      currentAttemptId: created.attemptId,
+    })
+    expect(resumed.data.articlePublishing?.checkpoints[0].status).toBe('needs-reconcile')
+  })
+
+  it('records the publication side effect before a final click can be dispatched', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const workspaceRef = { kind: 'local' as const, path: directory }
+    for (const update of [
+      { status: 'uploading' as const },
+      { status: 'waiting-platform' as const, evidence: 'file accepted' },
+      { status: 'verifying' as const, evidence: 'editor node visible' },
+      {
+        status: 'uploaded' as const,
+        platformUrl: 'https://img-blog.csdnimg.cn/published.png',
+        evidence: 'platform URL verified',
+      },
+    ]) {
+      const updated = await created.service.reportArticlePublishingAsset(
+        {
+          workspaceRef,
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          assetId: created.assetId,
+          ...update,
+        },
+        WORKSPACE_ID,
+      )
+      expect(updated.success).toBe(true)
+    }
+    const snapshot = created.service.getProjectSnapshot(WORKSPACE_ID)
+    expect(snapshot.success).toBe(true)
+    if (!snapshot.success) return
+    const affair = snapshot.data.affairs[0]
+    for (const checkpoint of affair.articlePublishing?.checkpoints ?? []) {
+      if (checkpoint.stepId === 'publish') break
+      const completed = await created.service.reportArticlePublishingCheckpoint(
+        {
+          workspaceRef,
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          stepId: checkpoint.stepId,
+          status: 'completed',
+          evidence: `${checkpoint.stepId} verified`,
+        },
+        WORKSPACE_ID,
+      )
+      expect(completed.success).toBe(true)
+    }
+
+    const marked = await created.service.markArticlePublishingPublicationDispatched(
+      created.affairId,
+      created.attemptId,
+      WORKSPACE_ID,
+    )
+    expect(marked.success).toBe(true)
+    if (!marked.success) return
+    expect(marked.data.articlePublishing?.publication.status).toBe('dispatched')
+
+    const duplicate = await created.service.markArticlePublishingPublicationDispatched(
+      created.affairId,
+      created.attemptId,
+      WORKSPACE_ID,
+    )
+    expect(duplicate).toMatchObject({ success: false, error: { code: 'INVALID_TRANSITION' } })
+  })
 })
 
 async function createStartedTask(directory: string, sourcePath: string, imagePath: string) {
@@ -240,6 +337,19 @@ async function createStartedTask(directory: string, sourcePath: string, imagePat
     WORKSPACE_ID,
   )
   if (!marked.success) throw new Error(marked.error.message)
+  const bound = await created.service.bindAttempt(
+    {
+      workspaceRef: { kind: 'local', path: directory },
+      affairId: created.affairId,
+      attemptId,
+      tabId: 'tab-article',
+      conversationId: 'conversation-article',
+      agentRunId: 'run-article',
+      browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+    },
+    WORKSPACE_ID,
+  )
+  if (!bound.success) throw new Error(bound.error.message)
   return {
     service: created.service,
     affairId: created.affairId,

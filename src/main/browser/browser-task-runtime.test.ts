@@ -197,6 +197,32 @@ describe('BrowserTaskRuntime', () => {
     ).not.toThrow()
   })
 
+  it('replaces a paused BrowserTask only when resuming the same affair Attempt', () => {
+    const { runtime } = createRuntime()
+    const correlation = {
+      workspaceKey: '/workspace-a',
+      conversationId: 'conversation-a',
+      agentRunId: 'run-a',
+      agentSessionRef: null,
+      profileId: 'profile-a',
+      accountId: 'account-a',
+      allowedOrigins: ['https://mp.csdn.net'],
+      affairId: 'affair-a',
+      affairAttemptId: 'attempt-a',
+    }
+    const first = runtime.startTask({ tabId: 'browser-a', goal: 'publish', correlation })
+    runtime.pauseForTakeover(first.id, '需要用户处理')
+
+    const resumed = runtime.startTask({
+      tabId: 'browser-a',
+      goal: 'continue publish',
+      correlation: { ...correlation, conversationId: 'conversation-b', agentRunId: 'run-b' },
+    })
+
+    expect(runtime.getTask(first.id)?.status).toBe('cancelled')
+    expect(resumed.status).toBe('running')
+  })
+
   it('requires re-observation after human takeover is returned', () => {
     const { runtime } = createRuntime()
     const task = runtime.startTask({ tabId: 'browser', goal: 'fill form' })
@@ -286,5 +312,29 @@ describe('BrowserTaskRuntime', () => {
       'https://console.example.net',
     ])
     expect(resumed.reobservationRequired).toBe(true)
+  })
+
+  it('does not expand a structured affair origin boundary from a generic Browser resume', () => {
+    const { runtime } = createRuntime()
+    const task = runtime.startTask({
+      tabId: 'browser',
+      goal: 'publish article',
+      correlation: {
+        workspaceKey: '/workspace-a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        agentSessionRef: null,
+        profileId: 'profile-a',
+        accountId: 'account-a',
+        allowedOrigins: ['https://mp.csdn.net'],
+        affairId: 'affair-a',
+        affairAttemptId: 'attempt-a',
+      },
+    })
+    runtime.pauseForTakeover(task.id, 'unknown page')
+
+    const resumed = runtime.resumeTask(task.id, 'https://untrusted.example/path')
+
+    expect(resumed.correlation?.allowedOrigins).toEqual(['https://mp.csdn.net'])
   })
 })

@@ -132,6 +132,8 @@ describe('WebResourceToolModule', () => {
 
   it('opens one explicit account through the trusted visible-tab bridge without exposing profile data', async () => {
     const accountId = '4fa85f64-5717-4562-b3fc-2c963f66afa6'
+    const affairId = '11111111-1111-4111-8111-111111111111'
+    const attemptId = '22222222-2222-4222-8222-222222222222'
     const resolveLaunch = vi.fn(() => ({
       success: true as const,
       data: {
@@ -171,18 +173,31 @@ describe('WebResourceToolModule', () => {
     const requestLaunch = vi.fn().mockResolvedValue({ tabId: 'account-tab' })
     const waitForViewBinding = vi.fn().mockResolvedValue(true)
     const startTask = vi.fn().mockReturnValue({ id: 'browser-task' })
+    const updateCorrelation = vi.fn()
+    const resolveAllowedOrigins = vi
+      .fn()
+      .mockResolvedValue(['https://mp.csdn.net', 'https://app-blog.csdn.net'])
     const module = new WebResourceToolModule({ resolveLaunch, getSnapshot } as never, {
       launchCoordinator: { requestLaunch } as never,
       browserManager: { waitForViewBinding } as never,
       browserTaskRuntime: {
         cancelTaskForConversation: vi.fn(),
         startTask,
+        updateCorrelation,
       } as never,
+      webAffairService: {
+        bindAttempt: vi.fn().mockResolvedValue({
+          success: true,
+          data: { flow: { nodes: [{ id: 'node-a' }] } },
+        }),
+      } as never,
+      resolveWorkspaceId: async () => 'workspace-a-id',
+      articlePublishingBrowserPolicy: { resolveAllowedOrigins } as never,
     })
 
     const result = await module.execute(
       'web_account_open',
-      { accountId },
+      { accountId, affairId, attemptId },
       {
         conversationId: 'conversation-a',
         agentRunId: 'run-a',
@@ -208,6 +223,21 @@ describe('WebResourceToolModule', () => {
       expect.objectContaining({
         tabId: 'account-tab',
         correlation: expect.objectContaining({ accountId, profileId: 'secret-profile-id' }),
+      }),
+    )
+    expect(resolveAllowedOrigins).toHaveBeenCalledWith({
+      workspacePath: '/workspace/a',
+      affairId,
+      attemptId,
+      accountId,
+    })
+    expect(startTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        correlation: expect.objectContaining({
+          affairId,
+          affairAttemptId: attemptId,
+          allowedOrigins: ['https://mp.csdn.net', 'https://app-blog.csdn.net'],
+        }),
       }),
     )
     expect(JSON.stringify(result)).not.toContain('secret-profile-id')

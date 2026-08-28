@@ -11,6 +11,7 @@ interface CclinkState {
   servers: CclinkServer[]
   sessions: CclinkRemoteSession[]
   messages: Record<string, CclinkRemoteMessage[]>
+  remoteAgentDrafts: Record<string, string>
   selectedSessionId: string | null
   activeSessionsRef: RemoteWorkspaceRef | null
   pendingPermissions: Array<{
@@ -38,6 +39,8 @@ interface CclinkState {
   selectSession(sessionId: string | null): void
   loadMessages(sessionId: string): Promise<void>
   sendAgentMessage(ref: RemoteWorkspaceRef, sessionId: string, content: string): Promise<boolean>
+  setRemoteAgentDraft(workspaceKey: string, content: string): void
+  clearRemoteAgentDraft(workspaceKey: string, submittedContent?: string): void
   respondPermission(serverId: string, requestId: string, approved: boolean): Promise<void>
   handleRealtimeEvent(event: CclinkRealtimeEvent): void
 }
@@ -53,6 +56,7 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
   servers: [],
   sessions: [],
   messages: {},
+  remoteAgentDrafts: {},
   selectedSessionId: null,
   activeSessionsRef: null,
   pendingPermissions: [],
@@ -145,6 +149,7 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
       servers: [],
       sessions: [],
       messages: {},
+      remoteAgentDrafts: {},
       selectedSessionId: null,
       activeSessionsRef: null,
       pendingPermissions: [],
@@ -240,6 +245,25 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
       return false
     }
   },
+
+  setRemoteAgentDraft: (workspaceKey, content) =>
+    set((state) => ({
+      remoteAgentDrafts: {
+        ...state.remoteAgentDrafts,
+        [workspaceKey]: content,
+      },
+    })),
+
+  clearRemoteAgentDraft: (workspaceKey, submittedContent) =>
+    set((state) => {
+      const current = state.remoteAgentDrafts[workspaceKey]
+      if (submittedContent !== undefined && current?.trim() !== submittedContent.trim())
+        return state
+      if (current === undefined) return state
+      const remoteAgentDrafts = { ...state.remoteAgentDrafts }
+      delete remoteAgentDrafts[workspaceKey]
+      return { remoteAgentDrafts }
+    }),
 
   respondPermission: async (serverId, requestId, approved) => {
     const result = await window.cclinkStudio.cclink.respondPermission({

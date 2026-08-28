@@ -21,7 +21,7 @@ import type { BrowserTaskRun } from '../../../../shared/ipc/browser'
 import { realpath } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import type { WebResourceService } from '../../../web-resources/web-resource-service'
-import type { WebAffairService } from '../../../web-affairs/web-affair-service'
+import type { ArticlePublishingBrowserPolicy } from '../../../article-publishing/article-publishing-browser-policy'
 
 const ACCOUNT_FORBIDDEN_ACTIONS = new Set([
   'evaluate',
@@ -43,7 +43,6 @@ const ACCOUNT_FORBIDDEN_ACTIONS = new Set([
   'listFrames',
   'waitForPopup',
 ])
-const ARTICLE_IMAGE_UPLOAD_CONFIRM_INTENT = 'article-image-upload-confirm'
 export const BROWSER_REOBSERVATION_ACTIONS = new Set([
   'screenshot',
   'extract',
@@ -161,17 +160,11 @@ const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
   // ── 交互工具（写入操作） ──────────────────
   {
     name: 'browser_click',
-    description:
-      '点击页面上匹配 Playwright 选择器的元素。文章发布事务在确认 CSDN 图片编辑弹窗时，必须显式传入 intent=article-image-upload-confirm；该意图只放行当前 upload-assets 步骤，不会放行最终发布。',
+    description: '点击页面上匹配 Playwright 选择器的唯一可见元素。',
     inputSchema: {
       type: 'object',
       properties: {
         selector: { type: 'string', description: 'Playwright 选择器' },
-        intent: {
-          type: 'string',
-          enum: [ARTICLE_IMAGE_UPLOAD_CONFIRM_INTENT],
-          description: '可选的受控动作意图；仅用于已绑定文章发布事务中的 CSDN 图片确认上传',
-        },
       },
       required: ['selector'],
     },
@@ -707,8 +700,7 @@ export class BrowserToolModule implements ToolModule {
     private browserTaskRuntime?: BrowserTaskRuntime | null,
     private browserManager?: BrowserManager | null,
     private webResourceService?: WebResourceService | null,
-    private webAffairService?: WebAffairService | null,
-    private resolveWorkspaceId?: ((workspacePath: string) => Promise<string | null>) | null,
+    private articlePublishingBrowserPolicy?: ArticlePublishingBrowserPolicy | null,
   ) {}
 
   async getExecutionPolicy(
@@ -822,6 +814,9 @@ export class BrowserToolModule implements ToolModule {
         if (task.reobservationRequired && !BROWSER_REOBSERVATION_ACTIONS.has(actionType)) {
           throw new Error('上次浏览器动作结果未知；Agent 必须先截图或读取当前页面，再继续操作')
         }
+        if (task.correlation?.accountId) {
+          await this.assertAccountOrigin(task, tabId, actionType, context, 'before')
+        }
         await this.assertAccountActionAllowed(task, actionType, params, page, context)
         const log = this.browserTaskRuntime!.startActionLog({
           taskRunId: task.id,
@@ -854,7 +849,7 @@ export class BrowserToolModule implements ToolModule {
         this.browserTaskRuntime?.markReobserved(activeTask.id)
       }
       if (activeTask?.correlation?.accountId) {
-        this.assertAccountOrigin(activeTask, tabId, actionType)
+        await this.assertAccountOrigin(activeTask, tabId, actionType, context, 'after')
       }
       return activeTask?.correlation?.accountId ? this.sanitizeAccountActionResult(result) : result
     } catch (error) {
@@ -910,7 +905,12 @@ export class BrowserToolModule implements ToolModule {
     if (actionType === 'navigate') {
       const url = String(params.url ?? '')
       if (!this.isAllowedAccountUrl(task, url)) {
-        this.browserTaskRuntime?.pauseForTakeover(task.id, '目标网址超出登记账号边界')
+        await this.pauseForTakeover(
+          task,
+          context,
+          `目标网址超出当前任务允许的网站范围（origin=${safeUrlOrigin(url)}）`,
+          actionType,
+        )
         throw new Error('目标网址超出登记账号边界，任务已暂停，请人工确认后接管')
       }
     }
@@ -920,108 +920,29 @@ export class BrowserToolModule implements ToolModule {
     if (actionType === 'saveDownload') {
       await this.assertWorkspacePaths([params.path], context, '保存下载', false)
     }
-    if (actionType === 'handleDialog' && params.action === 'accept') {
-      this.browserTaskRuntime?.pauseForTakeover(task.id, '网页确认对话框需要人工处理')
-      throw new Error('网页确认对话框需要人工接管，任务已暂停')
-    }
-    const articleImageUploadConfirmation = await this.assertArticleImageUploadConfirmationAllowed(
+    const articleDecision = await this.articlePublishingBrowserPolicy?.classifyAction(
       task,
       actionType,
       params,
       page,
       context,
     )
-    const sensitiveReason = articleImageUploadConfirmation
-      ? null
-      : await this.getGenericSensitiveActionReason(actionType, params, page)
+    if (articleDecision) {
+      if (articleDecision.kind === 'handoff' || articleDecision.kind === 'unknown') {
+        await this.pauseForTakeover(task, context, articleDecision.reason, actionType)
+        throw new Error(`${articleDecision.reason}；任务已暂停，请由用户在可见页面完成后交还`)
+      }
+      return
+    }
+    if (actionType === 'handleDialog' && params.action === 'accept') {
+      await this.pauseForTakeover(task, context, '网页确认对话框需要人工处理', actionType)
+      throw new Error('网页确认对话框需要人工接管，任务已暂停')
+    }
+    const sensitiveReason = await this.getGenericSensitiveActionReason(actionType, params, page)
     if (sensitiveReason) {
-      this.browserTaskRuntime?.pauseForTakeover(task.id, sensitiveReason)
+      await this.pauseForTakeover(task, context, sensitiveReason, actionType)
       throw new Error(`${sensitiveReason}；任务已暂停，请由用户在可见页面完成后交还`)
     }
-  }
-
-  private async assertArticleImageUploadConfirmationAllowed(
-    task: BrowserTaskRun,
-    actionType: string,
-    params: Record<string, unknown>,
-    page: ReturnType<PlaywrightBridge['getPage']>,
-    context?: ToolExecutionContext,
-  ): Promise<boolean> {
-    if (params.intent !== ARTICLE_IMAGE_UPLOAD_CONFIRM_INTENT) return false
-    if (
-      actionType !== 'click' ||
-      !page ||
-      !task.correlation?.accountId ||
-      !task.correlation.affairId ||
-      !task.correlation.affairAttemptId ||
-      !this.webAffairService ||
-      !this.resolveWorkspaceId ||
-      context?.trustedWorkspace?.kind !== 'local'
-    ) {
-      throw new Error('文章图片上传确认缺少可信事务、账号或本地工作空间绑定')
-    }
-
-    const workspaceId = await this.resolveWorkspaceId(context.trustedWorkspace.rootPath)
-    if (!workspaceId) throw new Error('文章图片上传确认无法解析当前本地工作空间')
-    const snapshot = this.webAffairService.getProjectSnapshot(workspaceId)
-    if (!snapshot.success) throw new Error(snapshot.error.message)
-    const affair = snapshot.data.affairs.find(
-      (candidate) => candidate.id === task.correlation?.affairId,
-    )
-    const publishing = affair?.articlePublishing
-    if (
-      affair?.kind !== 'article-publishing' ||
-      !publishing ||
-      publishing.adapterId !== 'csdn' ||
-      publishing.accountId !== task.correlation.accountId ||
-      publishing.execution.currentAttemptId !== task.correlation.affairAttemptId ||
-      publishing.execution.currentStepId !== 'upload-assets' ||
-      publishing.execution.status !== 'running'
-    ) {
-      throw new Error('文章图片上传确认与当前 CSDN 发布事务或 upload-assets 步骤不一致')
-    }
-
-    let hostname = ''
-    try {
-      hostname = new URL(page.url()).hostname.toLowerCase()
-    } catch {
-      throw new Error('文章图片上传确认无法核验当前页面地址')
-    }
-    if (hostname !== 'csdn.net' && !hostname.endsWith('.csdn.net')) {
-      throw new Error('文章图片上传确认只允许在 CSDN 页面执行')
-    }
-
-    const selector = String(params.selector ?? '').trim()
-    if (!selector) throw new Error('文章图片上传确认必须提供明确的按钮选择器')
-    const locator = page.locator(selector)
-    if ((await locator.count()) !== 1 || !(await locator.isVisible())) {
-      throw new Error('文章图片上传确认按钮必须唯一且当前可见')
-    }
-    const control = await locator.evaluate((element) => {
-      const target = element.closest('button, input, [role="button"]') ?? element
-      const label = String(
-        target.getAttribute('value') ||
-          target.getAttribute('aria-label') ||
-          target.textContent ||
-          '',
-      )
-        .replace(/\s+/gu, '')
-        .trim()
-      const dialog = target.closest('.el-dialog, [role="dialog"], [aria-modal="true"]')
-      const dialogText = String(dialog?.textContent ?? '').replace(/\s+/gu, '')
-      return {
-        label,
-        isImageEditor:
-          Boolean(dialog) &&
-          dialogText.includes('图片编辑') &&
-          dialogText.includes('封面图预览') &&
-          Boolean(dialog?.querySelector('img, canvas')),
-      }
-    })
-    if (control.label !== '确认上传' || !control.isImageEditor) {
-      throw new Error('当前控件不是可核验的 CSDN 图片编辑确认按钮')
-    }
-    return true
   }
 
   private async assertWorkspacePaths(
@@ -1115,16 +1036,45 @@ export class BrowserToolModule implements ToolModule {
     }
   }
 
-  private assertAccountOrigin(
+  private async assertAccountOrigin(
     task: BrowserTaskRun,
     tabId: string | null,
     actionType: string,
-  ): void {
+    context: ToolExecutionContext | undefined,
+    phase: 'before' | 'after',
+  ): Promise<void> {
     if (!tabId || actionType === 'goBack' || actionType === 'goForward') return
     const currentUrl = this.browserManager?.getCurrentURL(tabId) ?? ''
     if (!currentUrl || this.isAllowedAccountUrl(task, currentUrl)) return
-    this.browserTaskRuntime?.pauseForTakeover(task.id, '页面已跳转到登记账号边界之外')
+    await this.pauseForTakeover(
+      task,
+      context,
+      `页面在动作${phase === 'before' ? '前' : '后'}超出当前任务允许的网站范围（origin=${safeUrlOrigin(currentUrl)}）`,
+      actionType,
+    )
     throw new Error('页面已跳转到登记账号边界之外，任务已暂停，请人工确认')
+  }
+
+  private async pauseForTakeover(
+    task: BrowserTaskRun,
+    context: ToolExecutionContext | undefined,
+    reason: string,
+    actionType: string,
+  ): Promise<void> {
+    this.browserTaskRuntime?.pauseForTakeover(task.id, reason)
+    console.warn(
+      task.correlation?.affairId
+        ? '[ArticlePublishing] 浏览器动作转人工'
+        : '[BrowserTask] 浏览器动作转人工',
+      {
+        affairId: task.correlation?.affairId ?? null,
+        attemptId: task.correlation?.affairAttemptId ?? null,
+        browserTaskId: task.id,
+        actionType,
+        reason,
+      },
+    )
+    await this.articlePublishingBrowserPolicy?.recordHandoff(task, context, reason)
   }
 
   private async getGenericSensitiveActionReason(
@@ -1529,6 +1479,14 @@ function safeUrlPath(url: string): string {
     return new URL(url).pathname
   } catch {
     return ''
+  }
+}
+
+function safeUrlOrigin(url: string): string {
+  try {
+    return new URL(url).origin
+  } catch {
+    return 'invalid'
   }
 }
 

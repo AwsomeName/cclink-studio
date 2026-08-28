@@ -474,7 +474,9 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     return <div className="article-publishing-state">{error ?? '正在读取发布事务…'}</div>
   }
   const publishing = affair.articlePublishing
-  const canStart = ['draft', 'interrupted', 'failed'].includes(publishing.execution.status)
+  const canStart = ['draft', 'waiting-human', 'interrupted', 'failed'].includes(
+    publishing.execution.status,
+  )
   const savedWebsite = resources?.websites.find((website) => website.id === publishing.websiteId)
   const savedAccount = resources?.accounts.find((account) => account.id === publishing.accountId)
   const sourceDetails = getArticlePublishingFileDetails(
@@ -592,9 +594,11 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         >
           {busy
             ? '启动中…'
-            : publishing.execution.status === 'interrupted'
-              ? '从中断处继续'
-              : '开始执行'}
+            : publishing.execution.status === 'waiting-human'
+              ? '交还 Agent 并继续'
+              : publishing.execution.status === 'interrupted'
+                ? '从中断处继续'
+                : '开始执行'}
         </button>
       </div>
     </div>

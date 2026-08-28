@@ -3,6 +3,7 @@ import type { BrowserManager } from '../../../browser/browser-manager'
 import type { BrowserTaskRuntime } from '../../../browser/browser-task-runtime'
 import type { AgentWebResourceLaunchCoordinator } from '../../../web-resources/agent-web-resource-launch-coordinator'
 import type { WebAffairService } from '../../../web-affairs/web-affair-service'
+import type { ArticlePublishingBrowserPolicy } from '../../../article-publishing/article-publishing-browser-policy'
 import type { ToolDefinition, ToolExecutionContext, ToolModule } from '../../types'
 
 const TOOLS: ToolDefinition[] = [
@@ -44,6 +45,7 @@ interface WebResourceToolExecutionDependencies {
   browserTaskRuntime: BrowserTaskRuntime
   webAffairService?: WebAffairService
   resolveWorkspaceId?: (workspacePath: string) => Promise<string | null>
+  articlePublishingBrowserPolicy?: ArticlePublishingBrowserPolicy
 }
 
 export class WebResourceToolModule implements ToolModule {
@@ -168,7 +170,24 @@ export class WebResourceToolModule implements ToolModule {
     )
     if (!bound) throw new Error('账号 Tab 未能绑定到预期项目和隔离登录环境')
 
+    const affairId = typeof params['affairId'] === 'string' ? params['affairId'] : ''
+    const attemptId = typeof params['attemptId'] === 'string' ? params['attemptId'] : ''
+    if (Boolean(affairId) !== Boolean(attemptId)) {
+      throw new Error('affairId 和 attemptId 必须同时提供')
+    }
     const origin = new URL(launch.data.entryUrl).origin
+    const articleOrigins =
+      affairId && attemptId
+        ? await this.execution.articlePublishingBrowserPolicy?.resolveAllowedOrigins({
+            workspacePath: context.trustedWorkspace.rootPath,
+            affairId,
+            attemptId,
+            accountId,
+          })
+        : null
+    if (articleOrigins?.length === 0) {
+      throw new Error('文章发布任务状态已过期或与当前 Agent 不一致')
+    }
     const task = this.execution.browserTaskRuntime.startTask({
       tabId: opened.tabId,
       goal: context.agentGoal || `办理 ${website?.name ?? account.label} 网页事务`,
@@ -179,15 +198,10 @@ export class WebResourceToolModule implements ToolModule {
         agentSessionRef: null,
         profileId: launch.data.browserProfileId,
         accountId,
-        allowedOrigins: [origin],
+        allowedOrigins: articleOrigins ?? [origin],
+        ...(affairId && attemptId ? { affairId, affairAttemptId: attemptId } : {}),
       },
     })
-    const affairId = typeof params['affairId'] === 'string' ? params['affairId'] : ''
-    const attemptId = typeof params['attemptId'] === 'string' ? params['attemptId'] : ''
-    if (Boolean(affairId) !== Boolean(attemptId)) {
-      this.execution.browserTaskRuntime.cancelTask(task.id)
-      throw new Error('affairId 和 attemptId 必须同时提供')
-    }
     if (affairId && attemptId) {
       if (!this.execution.webAffairService || !this.execution.resolveWorkspaceId) {
         this.execution.browserTaskRuntime.cancelTask(task.id)

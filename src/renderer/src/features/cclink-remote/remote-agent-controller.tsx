@@ -135,6 +135,7 @@ export function RemoteAgentController({
   /** Workbench Tab 可锁定一个远程会话，不改写右侧 Agent 面板的全局选中态。 */
   sessionId?: string
 }): React.ReactElement {
+  const remoteWorkspaceKey = workspaceRefKey(workspaceRef)!
   const sessions = useCclinkStore((state) => state.sessions)
   const messages = useCclinkStore((state) => state.messages)
   const selectedSessionId = useCclinkStore((state) => state.selectedSessionId)
@@ -148,8 +149,10 @@ export function RemoteAgentController({
   const sendAgentMessage = useCclinkStore((state) => state.sendAgentMessage)
   const pendingPermissions = useCclinkStore((state) => state.pendingPermissions)
   const respondPermission = useCclinkStore((state) => state.respondPermission)
+  const draft = useCclinkStore((state) => state.remoteAgentDrafts[remoteWorkspaceKey] ?? '')
+  const setRemoteAgentDraft = useCclinkStore((state) => state.setRemoteAgentDraft)
+  const clearRemoteAgentDraft = useCclinkStore((state) => state.clearRemoteAgentDraft)
   const showToast = useToastStore((state) => state.show)
-  const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [copyingDiagnostics, setCopyingDiagnostics] = useState(false)
   const [remoteStatus, setRemoteStatus] = useState<RemoteStatus | null>(null)
@@ -278,7 +281,7 @@ export function RemoteAgentController({
         sendAgentMessage,
       })
       if (result === 'submitted') {
-        setDraft((current) => (current.trim() === content ? '' : current))
+        clearRemoteAgentDraft(remoteWorkspaceKey, content)
       }
     } finally {
       submissionLockRef.current = false
@@ -384,7 +387,6 @@ export function RemoteAgentController({
   }
 
   const conversationId = activeSession?.id ?? `remote:${workspaceRef.workspaceId}`
-  const remoteWorkspaceKey = workspaceRefKey(workspaceRef)
   const timeline = activeMessages.flatMap((message): AgentPanelTimelineItem[] => {
     if (message.type === 'userQuestion') {
       return [
@@ -542,7 +544,7 @@ export function RemoteAgentController({
           value: draft,
           maxLength: 8192,
           disabled: !agentAvailable,
-          onChange: setDraft,
+          onChange: (content) => setRemoteAgentDraft(remoteWorkspaceKey, content),
           onSubmit: submit,
           canSubmit: Boolean(draft.trim()) && agentAvailable && stopAvailability.state === 'hidden',
           submitting: sending || activeSession?.status === 'active',

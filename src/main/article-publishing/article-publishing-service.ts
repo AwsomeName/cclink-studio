@@ -140,6 +140,13 @@ export class ArticlePublishingService {
         workspaceId,
       )
       resumed = true
+    } else if (currentAttempt && publishing.execution.status === 'waiting-human') {
+      result = await this.webAffairService.resumeArticlePublishingAfterHandoff(
+        affair.id,
+        currentAttempt.id,
+        workspaceId,
+      )
+      resumed = true
     } else if (
       currentAttempt &&
       !['failed', 'cancelled', 'succeeded'].includes(currentAttempt.status)
@@ -400,10 +407,10 @@ function buildAgentPrompt(
     `从检查点 ${firstIncomplete?.stepId ?? 'verify-publication'} 开始；已完成检查点和已核验图片不得重放。`,
     `先调用 web_account_open，并同时传入 accountId、affairId、attemptId，使 BrowserTask 绑定本发布事务；再调用 web_affair_get 读取冻结状态。`,
     `图片共有 ${localAssets.length} 张。每张上传必须依次报告 uploading、waiting-platform、verifying；只有重新读取编辑器取得平台 URL 和页面证据后才能报告 uploaded。`,
-    `在 upload-assets 步骤点击 CSDN“图片编辑”弹窗的“确认上传”时，调用 browser_click 并显式传入 intent=article-image-upload-confirm；该意图不适用于“发布博客”等最终动作。`,
+    `文章发布动作由主进程根据当前事务、步骤、账号、页面和适配器三态核验；普通“确认上传”和已授权的单篇常规发布可继续，人工专属或未知动作会自动暂停。`,
     `单图最多 3 次安全尝试；派发后结果不明必须报告 result-unknown 并先对账，禁止盲目重复上传。`,
     `验证码、风控、法律/版权声明、账号或内容不一致、未知页面必须暂停给用户。`,
-    `当前版本若最终发布动作被通用守卫阻断，不要绕过；保留草稿并说明卡点。`,
+    `发布动作派发后必须立即进入结果核验；断线或证据不足只报告 result-unknown，禁止再次点击发布。`,
   ].join('\n')
 }
 

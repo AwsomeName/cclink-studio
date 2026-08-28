@@ -620,7 +620,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
                   },
                 ]
               : []),
-            ...(activeBrowserTask.status === 'paused'
+            ...(activeBrowserTask.status === 'paused' && !activeBrowserTask.correlation?.affairId
               ? [
                   {
                     id: 'resume',

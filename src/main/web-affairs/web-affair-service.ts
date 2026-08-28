@@ -197,6 +197,12 @@ export class WebAffairService {
     )
   }
 
+  resumeArticlePublishingAfterHandoff(affairId: string, attemptId: string, workspaceId: string) {
+    return this.enqueueScoped(affairId, workspaceId, () =>
+      this.resumeArticlePublishingAfterHandoffNow(affairId, attemptId),
+    )
+  }
+
   markArticlePublishingAttemptStarted(affairId: string, attemptId: string, workspaceId: string) {
     return this.enqueueScoped(affairId, workspaceId, () =>
       this.markArticlePublishingAttemptStartedNow(affairId, attemptId),
@@ -215,6 +221,16 @@ export class WebAffairService {
   reportArticlePublishingAsset(input: ReportArticlePublishingAssetInput, workspaceId: string) {
     return this.enqueueScoped(input.affairId, workspaceId, () =>
       this.reportArticlePublishingAssetNow(input),
+    )
+  }
+
+  markArticlePublishingPublicationDispatched(
+    affairId: string,
+    attemptId: string,
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(affairId, workspaceId, () =>
+      this.markArticlePublishingPublicationDispatchedNow(affairId, attemptId),
     )
   }
 
@@ -784,6 +800,18 @@ export class WebAffairService {
     if (!['preparing', 'running-ai', 'verifying'].includes(found.attempt.status))
       return this.transitionError('当前 Attempt 不能接管')
     const now = this.timestamp()
+    const publishing = found.affair.articlePublishing
+    const articlePublishing = publishing
+      ? {
+          ...publishing,
+          checkpoints: publishing.checkpoints.map((checkpoint) =>
+            checkpoint.stepId === publishing.execution.currentStepId
+              ? { ...checkpoint, status: 'waiting-human' as const }
+              : checkpoint,
+          ),
+          execution: { ...publishing.execution, status: 'waiting-human' as const },
+        }
+      : undefined
     return this.persistAttemptChange(found.affair, found.attempt, {
       attempt: {
         ...found.attempt,
@@ -797,6 +825,7 @@ export class WebAffairService {
         attemptId: found.attempt.id,
       }),
       now,
+      articlePublishing,
     })
   }
 
@@ -1789,6 +1818,7 @@ export class WebAffairService {
       nodeStatus: WebAffairNodeStatus
       event: WebAffairEvent
       now: string
+      articlePublishing?: ArticlePublishingState
     },
   ): Promise<WebAffairOperationResult<WebAffair>> {
     const nodes = affair.flow.nodes.map((node) =>
@@ -1808,8 +1838,83 @@ export class WebAffairService {
       attempts: affair.attempts.map((attempt) =>
         attempt.id === current.id ? input.attempt : attempt,
       ),
+      ...(input.articlePublishing ? { articlePublishing: input.articlePublishing } : {}),
       events: this.appendEvent(affair, input.event),
       updatedAt: input.now,
+    })
+  }
+
+  private async resumeArticlePublishingAfterHandoffNow(
+    affairId: string,
+    attemptId: string,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const found = this.findAttempt(affairId, attemptId)
+    const publishing = found?.affair.articlePublishing
+    if (!found || !publishing || found.affair.kind !== 'article-publishing') {
+      return this.notFound('文章发布 Attempt 不存在')
+    }
+    if (
+      publishing.execution.status !== 'waiting-human' ||
+      !['waiting-human', 'running-ai'].includes(found.attempt.status)
+    ) {
+      return this.transitionError('只有待人工处理的文章发布 Attempt 可以交还 Agent')
+    }
+    const now = this.timestamp()
+    const currentStepId = publishing.execution.currentStepId
+    const checkpoints = publishing.checkpoints.map((checkpoint) =>
+      checkpoint.stepId === currentStepId && checkpoint.status === 'waiting-human'
+        ? { ...checkpoint, status: 'needs-reconcile' as const, finishedAt: undefined }
+        : checkpoint,
+    )
+    const nodes = found.affair.flow.nodes.map((node) =>
+      node.id === found.attempt.nodeId
+        ? {
+            ...node,
+            status: 'running' as const,
+            executor: 'ai' as const,
+            lastResultNote: '用户已处理人工卡点，等待 Agent 重新观察',
+            availableTransitions: [...ALLOWED_TRANSITIONS.running],
+            updatedAt: now,
+          }
+        : node,
+    )
+    return this.persistAffair({
+      ...found.affair,
+      status: 'active',
+      flow: { ...found.affair.flow, nodes },
+      attempts: found.affair.attempts.map((attempt) =>
+        attempt.id === found.attempt.id
+          ? {
+              ...attempt,
+              status: 'preparing' as const,
+              returnedAt: now,
+              tabId: undefined,
+              conversationId: undefined,
+              agentRunId: undefined,
+              browserTaskRunId: undefined,
+            }
+          : attempt,
+      ),
+      articlePublishing: {
+        ...publishing,
+        checkpoints,
+        execution: {
+          ...publishing.execution,
+          status: 'running',
+          lastAgentRunId: undefined,
+          lastBrowserTaskRunId: undefined,
+        },
+      },
+      events: this.appendEvent(
+        found.affair,
+        this.event(
+          'attempt-returned',
+          '用户已处理文章发布人工卡点；恢复同一 Attempt 并要求新 Agent 重新观察',
+          now,
+          { nodeId: found.attempt.nodeId, attemptId: found.attempt.id },
+        ),
+      ),
+      updatedAt: now,
     })
   }
 
@@ -2110,6 +2215,47 @@ export class WebAffairService {
           now,
           { nodeId: found.attempt.nodeId, attemptId: found.attempt.id },
         ),
+      ),
+      updatedAt: now,
+    })
+  }
+
+  private async markArticlePublishingPublicationDispatchedNow(
+    affairId: string,
+    attemptId: string,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const found = this.findAttempt(affairId, attemptId)
+    const publishing = found?.affair.articlePublishing
+    if (!found || !publishing || found.affair.kind !== 'article-publishing') {
+      return this.notFound('文章发布 Attempt 不存在')
+    }
+    if (
+      publishing.execution.currentAttemptId !== attemptId ||
+      publishing.execution.currentStepId !== 'publish' ||
+      publishing.execution.status !== 'running' ||
+      found.attempt.status !== 'running-ai'
+    ) {
+      return this.transitionError('发布动作与当前文章发布检查点不一致')
+    }
+    if (publishing.publication.status !== 'not-started') {
+      return this.transitionError('发布动作已经派发或结果未知，只允许重新核验')
+    }
+    if (publishing.assets.some((asset) => asset.kind === 'local' && asset.status !== 'uploaded')) {
+      return this.transitionError('正文图片尚未全部核验，不能登记发布动作')
+    }
+    const now = this.timestamp()
+    return this.persistAffair({
+      ...found.affair,
+      articlePublishing: {
+        ...publishing,
+        publication: { ...publishing.publication, status: 'dispatched' },
+      },
+      events: this.appendEvent(
+        found.affair,
+        this.event('node-status-changed', '常规单篇发布动作已登记派发，后续只能核验结果', now, {
+          nodeId: found.attempt.nodeId,
+          attemptId: found.attempt.id,
+        }),
       ),
       updatedAt: now,
     })

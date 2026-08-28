@@ -19,6 +19,7 @@ import type { ToolModule } from '../mcp/types'
 import type { AgentCapabilityName } from '../../shared/agent-protocol'
 import type { CclinkStudioRuntimeState } from './app-runtime'
 import { runShutdownStep } from './shutdown'
+import { ArticlePublishingBrowserPolicy } from '../article-publishing/article-publishing-browser-policy'
 
 const browserCdpRecoverySmokeHandlers = new WeakMap<
   CclinkStudioRuntimeState,
@@ -88,6 +89,15 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
 
   if (!runtime.toolHost) return
 
+  const articlePublishingBrowserPolicy =
+    runtime.webAffairService && runtime.workspaceStateService
+      ? new ArticlePublishingBrowserPolicy(
+          runtime.webAffairService,
+          async (workspacePath) =>
+            runtime.workspaceStateService?.getLocalProjectId(workspacePath) ?? null,
+        )
+      : null
+
   if (runtime.playwrightBridge) {
     registerToolModule(
       runtime,
@@ -98,9 +108,7 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
           runtime.browserTaskRuntime,
           runtime.browserManager,
           runtime.webResourceService,
-          runtime.webAffairService,
-          async (workspacePath) =>
-            runtime.workspaceStateService?.getLocalProjectId(workspacePath) ?? null,
+          articlePublishingBrowserPolicy,
         ),
     )
   }
@@ -141,6 +149,7 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
               webAffairService: runtime.webAffairService ?? undefined,
               resolveWorkspaceId: async (workspacePath: string) =>
                 runtime.workspaceStateService?.getLocalProjectId(workspacePath) ?? null,
+              articlePublishingBrowserPolicy: articlePublishingBrowserPolicy ?? undefined,
             }
           : undefined
       runtime.toolHost.registerModule(

@@ -1,0 +1,208 @@
+import { describe, expect, it, vi } from 'vitest'
+import {
+  ArticlePublishingBrowserPolicy,
+  CSDN_ARTICLE_SUPPORTED_ORIGINS,
+} from './article-publishing-browser-policy'
+
+function createPolicy(options?: {
+  stepId?: string
+  publicationStatus?: string
+  assetStatus?: string
+  executionStatus?: string
+}) {
+  const markArticlePublishingPublicationDispatched = vi.fn().mockResolvedValue({
+    success: true,
+    data: {},
+  })
+  const handoffAttempt = vi.fn().mockResolvedValue({ success: true, data: {} })
+  const webAffairService = {
+    getProjectSnapshot: vi.fn().mockReturnValue({
+      success: true,
+      data: {
+        affairs: [
+          {
+            id: 'affair-a',
+            kind: 'article-publishing',
+            attempts: [{ id: 'attempt-a', accountId: 'account-a', status: 'running-ai' }],
+            articlePublishing: {
+              adapterId: 'csdn',
+              adapterVersion: 1,
+              accountId: 'account-a',
+              assets: [{ kind: 'local', status: options?.assetStatus ?? 'uploaded' }],
+              execution: {
+                status: options?.executionStatus ?? 'running',
+                currentAttemptId: 'attempt-a',
+                currentStepId: options?.stepId ?? 'upload-assets',
+              },
+              publication: { status: options?.publicationStatus ?? 'not-started' },
+            },
+          },
+        ],
+      },
+    }),
+    markArticlePublishingPublicationDispatched,
+    handoffAttempt,
+  }
+  return {
+    policy: new ArticlePublishingBrowserPolicy(
+      webAffairService as never,
+      async () => 'workspace-a',
+    ),
+    webAffairService,
+  }
+}
+
+const task = {
+  id: 'task-a',
+  tabId: 'tab-a',
+  goal: 'publish',
+  status: 'running',
+  startedAt: 1,
+  downloadIds: [],
+  correlation: {
+    workspaceKey: '/workspace',
+    conversationId: 'conversation-a',
+    agentRunId: 'run-a',
+    agentSessionRef: null,
+    profileId: 'profile-a',
+    accountId: 'account-a',
+    affairId: 'affair-a',
+    affairAttemptId: 'attempt-a',
+  },
+} as const
+
+const context = {
+  trustedWorkspace: {
+    kind: 'local' as const,
+    rootPath: '/workspace',
+    workspaceKey: '/workspace',
+  },
+}
+
+describe('ArticlePublishingBrowserPolicy', () => {
+  it('returns the bounded multi-origin CSDN execution scope', async () => {
+    const { policy } = createPolicy()
+
+    await expect(
+      policy.resolveAllowedOrigins({
+        workspacePath: '/workspace',
+        affairId: 'affair-a',
+        attemptId: 'attempt-a',
+        accountId: 'account-a',
+      }),
+    ).resolves.toEqual([...CSDN_ARTICLE_SUPPORTED_ORIGINS])
+  })
+
+  it('allows a unique visible confirm-upload control located with Playwright syntax', async () => {
+    const { policy } = createPolicy()
+    const locator = {
+      count: vi.fn().mockResolvedValue(1),
+      isVisible: vi.fn().mockResolvedValue(true),
+      evaluate: vi.fn().mockResolvedValue({ label: '确认上传', type: '', role: 'button' }),
+    }
+    const page = {
+      url: () => 'https://app-blog.csdn.net/csdn/aiChatNew',
+      locator: vi.fn().mockReturnValue(locator),
+    }
+
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'click',
+        { selector: 'button:has-text("确认上传")' },
+        page as never,
+        context,
+      ),
+    ).resolves.toEqual({ kind: 'allow' })
+  })
+
+  it('hands legal and account-impact controls to the user', async () => {
+    const { policy } = createPolicy()
+    const page = {
+      url: () => 'https://app-blog.csdn.net/csdn/aiChatNew',
+      locator: () => ({
+        count: async () => 1,
+        isVisible: async () => true,
+        evaluate: async () => ({ label: '确认原创声明', type: '', role: 'button' }),
+      }),
+    }
+
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'click',
+        { selector: 'button:has-text("确认原创声明")' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({ kind: 'handoff' })
+  })
+
+  it('persists a one-shot marker before allowing the authorized final publication', async () => {
+    const { policy, webAffairService } = createPolicy({ stepId: 'publish' })
+    const page = {
+      url: () => 'https://app-blog.csdn.net/csdn/aiChatNew',
+      locator: () => ({
+        count: async () => 1,
+        isVisible: async () => true,
+        evaluate: async () => ({ label: '发布博客', type: 'submit', role: 'button' }),
+      }),
+    }
+
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'click',
+        { selector: 'button:has-text("发布博客")' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({ kind: 'allow-once' })
+    expect(webAffairService.markArticlePublishingPublicationDispatched).toHaveBeenCalledWith(
+      'affair-a',
+      'attempt-a',
+      'workspace-a',
+    )
+  })
+
+  it('stops page mutations on a supported origin when the page is not an editor page', async () => {
+    const { policy } = createPolicy()
+    const page = { url: () => 'https://app-blog.csdn.net/account/settings' }
+
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'fill',
+        { selector: 'input', value: 'article title' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({ kind: 'unknown' })
+  })
+
+  it('fails closed instead of falling back to generic account rules for a stale article task', async () => {
+    const { policy } = createPolicy({ executionStatus: 'waiting-human' })
+    const page = { url: () => 'https://app-blog.csdn.net/csdn/aiChatNew' }
+
+    await expect(
+      policy.resolveAllowedOrigins({
+        workspacePath: '/workspace',
+        affairId: 'affair-a',
+        attemptId: 'attempt-a',
+        accountId: 'account-a',
+      }),
+    ).resolves.toEqual([])
+    await expect(
+      policy.classifyAction(task as never, 'fill', {}, page as never, context),
+    ).resolves.toMatchObject({ kind: 'unknown' })
+  })
+
+  it('keeps verification checkpoints read-only', async () => {
+    const { policy } = createPolicy({ stepId: 'verify-publication' })
+    const page = { url: () => 'https://blog.csdn.net/example/article/details/1' }
+
+    await expect(
+      policy.classifyAction(task as never, 'click', { selector: 'button' }, page as never, context),
+    ).resolves.toMatchObject({ kind: 'unknown' })
+  })
+})

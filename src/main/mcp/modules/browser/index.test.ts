@@ -190,7 +190,7 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     expect(page.click).not.toHaveBeenCalled()
   })
 
-  it('allows only the explicit CSDN image confirmation inside the active upload-assets step', async () => {
+  it('uses the article policy for Playwright selectors instead of the generic keyword guard', async () => {
     const selector = 'button:has-text("确认上传")'
     const accountTask = {
       id: 'task-a',
@@ -206,19 +206,13 @@ describe('BrowserToolModule 可视浏览器同步', () => {
         agentSessionRef: null,
         profileId: 'profile-a',
         accountId: 'account-a',
-        allowedOrigins: ['https://mp.csdn.net'],
+        allowedOrigins: ['https://mp.csdn.net', 'https://app-blog.csdn.net'],
         affairId: 'affair-a',
         affairAttemptId: 'attempt-a',
       },
     }
-    const locator = {
-      count: vi.fn().mockResolvedValue(1),
-      isVisible: vi.fn().mockResolvedValue(true),
-      evaluate: vi.fn().mockResolvedValue({ label: '确认上传', isImageEditor: true }),
-    }
     const page = {
-      url: () => 'https://mp.csdn.net/mp_blog/creation/editor',
-      locator: vi.fn().mockReturnValue(locator),
+      url: () => 'https://app-blog.csdn.net/csdn/aiChatNew',
       click: vi.fn().mockResolvedValue(undefined),
       evaluate: vi.fn(),
     }
@@ -238,37 +232,18 @@ describe('BrowserToolModule 可视浏览器同步', () => {
       getViewProfileId: () => 'profile-a',
       isWorkspaceActive: () => true,
       setActive: vi.fn(),
-      getCurrentURL: () => 'https://mp.csdn.net/mp_blog/creation/editor',
+      getCurrentURL: () => 'https://app-blog.csdn.net/csdn/aiChatNew',
     }
-    const webAffairService = {
-      getProjectSnapshot: vi.fn().mockReturnValue({
-        success: true,
-        data: {
-          affairs: [
-            {
-              id: 'affair-a',
-              kind: 'article-publishing',
-              articlePublishing: {
-                adapterId: 'csdn',
-                accountId: 'account-a',
-                execution: {
-                  currentAttemptId: 'attempt-a',
-                  currentStepId: 'upload-assets',
-                  status: 'running',
-                },
-              },
-            },
-          ],
-        },
-      }),
+    const articlePolicy = {
+      classifyAction: vi.fn().mockResolvedValue({ kind: 'allow' }),
+      recordHandoff: vi.fn(),
     }
     const module = new BrowserToolModule(
       bridge as any,
       browserTaskRuntime as any,
       browserManager as any,
       null,
-      webAffairService as any,
-      async () => 'workspace-a-id',
+      articlePolicy as any,
     )
     const context = {
       conversationId: 'conversation-a',
@@ -280,18 +255,15 @@ describe('BrowserToolModule 可视浏览器同步', () => {
       },
     }
 
-    await expect(
-      module.execute(
-        'browser_click',
-        { selector, intent: 'article-image-upload-confirm' },
-        context,
-      ),
-    ).resolves.toEqual({ clicked: selector })
+    await expect(module.execute('browser_click', { selector }, context)).resolves.toEqual({
+      clicked: selector,
+    })
     expect(page.click).toHaveBeenCalledWith(selector)
     expect(page.evaluate).not.toHaveBeenCalled()
+    expect(articlePolicy.classifyAction).toHaveBeenCalled()
   })
 
-  it('rejects the image confirmation intent outside the upload-assets step', async () => {
+  it('pauses and persists a handoff returned by the article policy', async () => {
     const accountTask = {
       id: 'task-a',
       tabId: 'account-tab',
@@ -306,15 +278,17 @@ describe('BrowserToolModule 可视浏览器同步', () => {
         agentSessionRef: null,
         profileId: 'profile-a',
         accountId: 'account-a',
-        allowedOrigins: ['https://mp.csdn.net'],
+        allowedOrigins: ['https://mp.csdn.net', 'https://app-blog.csdn.net'],
         affairId: 'affair-a',
         affairAttemptId: 'attempt-a',
       },
     }
     const page = {
-      url: () => 'https://mp.csdn.net/mp_blog/creation/editor',
+      url: () => 'https://app-blog.csdn.net/csdn/aiChatNew',
       click: vi.fn(),
     }
+    const pauseForTakeover = vi.fn()
+    const recordHandoff = vi.fn().mockResolvedValue(undefined)
     const module = new BrowserToolModule(
       {
         getPage: () => page,
@@ -324,45 +298,30 @@ describe('BrowserToolModule 可视浏览器同步', () => {
       {
         getActiveTaskForConversation: () => accountTask,
         assertCanRunAction: () => accountTask,
+        pauseForTakeover,
       } as any,
       {
         getViewWorkspaceKey: () => '/workspace/a',
         getViewProfileId: () => 'profile-a',
         isWorkspaceActive: () => true,
         setActive: vi.fn(),
+        getCurrentURL: () => 'https://app-blog.csdn.net/csdn/aiChatNew',
       } as any,
       null,
       {
-        getProjectSnapshot: () => ({
-          success: true,
-          data: {
-            affairs: [
-              {
-                id: 'affair-a',
-                kind: 'article-publishing',
-                articlePublishing: {
-                  adapterId: 'csdn',
-                  accountId: 'account-a',
-                  execution: {
-                    currentAttemptId: 'attempt-a',
-                    currentStepId: 'publish',
-                    status: 'running',
-                  },
-                },
-              },
-            ],
-          },
+        classifyAction: vi.fn().mockResolvedValue({
+          kind: 'handoff',
+          reason: '版权声明必须由用户处理',
         }),
+        recordHandoff,
       } as any,
-      async () => 'workspace-a-id',
     )
 
     await expect(
       module.execute(
         'browser_click',
         {
-          selector: 'button:has-text("确认上传")',
-          intent: 'article-image-upload-confirm',
+          selector: 'button:has-text("确认原创")',
         },
         {
           conversationId: 'conversation-a',
@@ -374,7 +333,9 @@ describe('BrowserToolModule 可视浏览器同步', () => {
           },
         },
       ),
-    ).rejects.toThrow('upload-assets 步骤不一致')
+    ).rejects.toThrow('版权声明必须由用户处理')
+    expect(pauseForTakeover).toHaveBeenCalledWith('task-a', '版权声明必须由用户处理')
+    expect(recordHandoff).toHaveBeenCalled()
     expect(page.click).not.toHaveBeenCalled()
   })
 

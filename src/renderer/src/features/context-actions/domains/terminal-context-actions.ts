@@ -2,8 +2,10 @@ import { workspaceRefKey } from '@shared/workspace-ref'
 import { isTerminalFinalStatus } from '@shared/terminal'
 import type { Command } from '../../../stores/command-store'
 import { useAgentStore } from '../../../stores/agent-store'
+import { useCclinkStore } from '../../../stores/cclink-store'
 import { useTabStore } from '../../../stores/tab-store'
 import { useUIStore } from '../../../stores/ui-store'
+import { useWorkspaceStore } from '../../../stores/workspace-store'
 import { useToastStore } from '../../../components/common/Toast'
 import { focusAgentComposer } from '../../markdown/markdown-navigation'
 import { recordTerminalLifecycleEvent } from '../../../utils/terminal-lifecycle'
@@ -14,6 +16,28 @@ import type { MenuContribution } from '../menu-contribution-registry'
 
 function terminalTarget(context?: CommandContext) {
   return context?.target?.kind === 'terminal' ? context.target : null
+}
+
+const REMOTE_AGENT_MESSAGE_MAX_BYTES = 8 * 1024
+
+export function appendRemoteTerminalSelectionDraft(
+  currentDraft: string,
+  selectionText: string,
+): string {
+  if (!selectionText.trim()) throw new Error('Terminal 选区为空')
+  const normalizedSelection = selectionText.replace(/\r\n/gu, '\n').replace(/\n+$/u, '')
+  const terminalContext = [
+    '以下是我从当前远程 Terminal 选中的只读输出，请把它作为上下文分析：',
+    '<terminal_output>',
+    normalizedSelection,
+    '</terminal_output>',
+  ].join('\n')
+  const normalizedDraft = currentDraft.trimEnd()
+  const nextDraft = normalizedDraft ? `${normalizedDraft}\n\n${terminalContext}` : terminalContext
+  if (new TextEncoder().encode(nextDraft.trim()).byteLength > REMOTE_AGENT_MESSAGE_MAX_BYTES) {
+    throw new Error('选区加上当前输入超过远程消息 8 KiB 限制，请缩小 Terminal 选区')
+  }
+  return nextDraft
 }
 
 function resolveTerminal(context?: CommandContext) {
@@ -90,10 +114,30 @@ async function restartTerminal(context?: CommandContext): Promise<void> {
 }
 
 function mountTerminalSelection(context?: CommandContext): void {
-  const { target, surface } = resolveTerminal(context)
+  const { target, tab, surface } = resolveTerminal(context)
   const selectionText = surface?.getSelectionText() ?? ''
   if (!selectionText || selectionText !== target.selectionText) {
     throw new Error('Terminal 选区已变化')
+  }
+  if (tab.terminal!.runtime.workspaceRef.kind === 'remote') {
+    const activeWorkspaceRef = useWorkspaceStore.getState().activeWorkspaceRef
+    if (
+      !target.workspaceKey ||
+      activeWorkspaceRef.kind !== 'remote' ||
+      workspaceRefKey(activeWorkspaceRef) !== target.workspaceKey
+    ) {
+      throw new Error('当前远程 Agent 已切换到其他项目')
+    }
+    const cclinkStore = useCclinkStore.getState()
+    const nextDraft = appendRemoteTerminalSelectionDraft(
+      cclinkStore.remoteAgentDrafts[target.workspaceKey] ?? '',
+      selectionText,
+    )
+    cclinkStore.setRemoteAgentDraft(target.workspaceKey, nextDraft)
+    useUIStore.getState().setAgentPanelMode('right', 'user')
+    useToastStore.getState().show('已将 Terminal 选区加入远程 Agent 输入', 'success')
+    requestAnimationFrame(focusAgentComposer)
+    return
   }
   const agentStore = useAgentStore.getState()
   const conversation = agentStore.conversations[agentStore.activeConversationId]

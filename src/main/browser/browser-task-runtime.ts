@@ -34,7 +34,15 @@ export class BrowserTaskRuntime {
       const leasedTaskId = this.activeTaskByAccount.get(accountId)
       const leasedTask = leasedTaskId ? this.tasks.get(leasedTaskId) : undefined
       if (leasedTask && !FINAL_STATUSES.has(leasedTask.status)) {
-        if (leasedTask.correlation?.conversationId !== options.correlation?.conversationId) {
+        const resumesSameAffairAttempt =
+          leasedTask.status === 'paused' &&
+          Boolean(options.correlation?.affairId) &&
+          leasedTask.correlation?.affairId === options.correlation?.affairId &&
+          leasedTask.correlation?.affairAttemptId === options.correlation?.affairAttemptId
+        if (
+          leasedTask.correlation?.conversationId !== options.correlation?.conversationId &&
+          !resumesSameAffairAttempt
+        ) {
           throw new Error('该账号正在由另一个 Agent 任务使用，请先完成或取消原任务')
         }
         this.cancelTask(leasedTask.id)
@@ -135,7 +143,7 @@ export class BrowserTaskRuntime {
 
   resumeTask(taskRunId: string, userConfirmedUrl?: string): BrowserTaskRun {
     const task = this.requireTask(taskRunId)
-    if (task.correlation?.accountId && userConfirmedUrl) {
+    if (task.correlation?.accountId && !task.correlation.affairId && userConfirmedUrl) {
       try {
         const parsed = new URL(userConfirmedUrl)
         if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {

@@ -13,6 +13,6 @@ export const CSDN_ARTICLE_PUBLISHING_PLAN = [
   { stepId: 'fill-body', label: '填写并核验正文', resumePolicy: 'reconcile-then-run' },
   { stepId: 'fill-fields', label: '填写平台字段', resumePolicy: 'reconcile-then-run' },
   { stepId: 'save-draft', label: '保存并复核草稿', resumePolicy: 'reconcile-then-run' },
-  { stepId: 'publish', label: '执行常规单篇发布', resumePolicy: 'manual-only' },
+  { stepId: 'publish', label: '执行常规单篇发布', resumePolicy: 'reconcile-then-run' },
   { stepId: 'verify-publication', label: '核验文章结果', resumePolicy: 'manual-only' },
 ] as const satisfies readonly ArticlePublishingPlanStep[]

@@ -113,4 +113,22 @@ describe('cclink session selection ownership', () => {
 
     expect(useCclinkStore.getState().selectedSessionId).toBe(created.id)
   })
+
+  it('keeps remote Agent drafts scoped by workspace and only clears the submitted version', () => {
+    const store = useCclinkStore.getState()
+    store.setRemoteAgentDraft('workspace-a', 'first draft')
+    store.setRemoteAgentDraft('workspace-b', 'other project')
+    store.setRemoteAgentDraft('workspace-a', 'edited while sending')
+
+    store.clearRemoteAgentDraft('workspace-a', 'first draft')
+    expect(useCclinkStore.getState().remoteAgentDrafts).toEqual({
+      'workspace-a': 'edited while sending',
+      'workspace-b': 'other project',
+    })
+
+    store.clearRemoteAgentDraft('workspace-a', 'edited while sending')
+    expect(useCclinkStore.getState().remoteAgentDrafts).toEqual({
+      'workspace-b': 'other project',
+    })
+  })
 })
