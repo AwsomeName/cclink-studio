@@ -30,8 +30,11 @@ import {
   CCLINK_PROTOCOL_VERSION,
   createCclinkEnvelope,
 } from '../../shared/cclink'
-import type { CclinkRealtimeStatus } from '../../shared/ipc/cclink'
-import type { CclinkRealtimeEvent } from '../../shared/ipc/cclink'
+import type {
+  CclinkImageUploadProgress,
+  CclinkRealtimeEvent,
+  CclinkRealtimeStatus,
+} from '../../shared/ipc/cclink'
 import {
   deriveRemoteSessionTitle,
   isGenericRemoteSessionTitle,
@@ -55,6 +58,7 @@ import type {
 import { sanitizeDiagnosticText } from '../../shared/diagnostics'
 import { REMOTE_ERROR_CODE, type RemoteError } from '../../shared/remote-error'
 import type { RemoteWorkspaceRef } from '../../shared/workspace-ref'
+import type { TransientImageAttachment } from '../../shared/image-attachment'
 import { callCclinkCloud } from './cloud-function-client'
 import { CclinkAuthService } from './auth-service'
 import { CclinkRequestError, CclinkRequestRouter } from './request-router'
@@ -78,6 +82,7 @@ interface PairedAgentResponse {
 
 type StatusListener = (status: CclinkRealtimeStatus) => void
 type RealtimeListener = (event: CclinkRealtimeEvent) => void
+type ImageUploadListener = (progress: CclinkImageUploadProgress) => void
 
 interface StreamBuffer {
   serverId: string
@@ -108,6 +113,8 @@ export class CclinkRemoteService implements RemoteProvider {
   private status: CclinkRealtimeStatus = { state: 'idle' }
   private readonly statusListeners = new Set<StatusListener>()
   private readonly realtimeListeners = new Set<RealtimeListener>()
+  private readonly imageUploadListeners = new Set<ImageUploadListener>()
+  private readonly imageUploads = new Map<string, AbortController>()
   private servers = new Map<string, CclinkServer>()
   private sessions = new Map<string, CclinkRemoteSession>()
   private messages = new Map<string, CclinkRemoteMessage[]>()
@@ -115,6 +122,9 @@ export class CclinkRemoteService implements RemoteProvider {
   private capabilityProbes = new Map<string, CapabilityProbeResult & { expiresAt: number }>()
   private capabilityProbeFailures = new Map<string, CapabilityProbeResult & { expiresAt: number }>()
   private readonly openWorkspaceOperations = new Map<string, { cancelled: boolean }>()
+  private readonly activeAgentRequests = new Map<string, string>()
+  private readonly stoppedAgentRequestIds = new Map<string, string[]>()
+  private readonly stoppedAgentSessionsWithoutRequest = new Set<string>()
   private connecting: Promise<CclinkRealtimeStatus> | null = null
   private readonly diagnosticLog = new RemoteDiagnosticLog()
 
@@ -132,20 +142,42 @@ export class CclinkRemoteService implements RemoteProvider {
     if (!this.runtimeStateStore) return
     const state = await this.runtimeStateStore.load()
     this.messages = new Map(Object.entries(state.messages))
-    let titlesChanged = false
+    let stateChanged = false
     this.sessions = new Map(
       state.sessions.map((session) => {
-        if (!isGenericRemoteSessionTitle(session.name)) return [session.id, session]
+        let nextSession = session
+        if (session.status === 'active') {
+          const timestamp = nowSeconds()
+          const currentMessages = this.messages.get(session.id) ?? []
+          const recoveryMessage: CclinkRemoteMessage = {
+            type: 'system',
+            id: `remote-tracking-reset-${session.id}-${timestamp}`,
+            content:
+              'Studio 已在重启后停止跟踪上一条远程任务；这不代表远端已取消，继续发送前请确认远端状态。',
+            timestamp,
+          }
+          const nextMessages = [...currentMessages, recoveryMessage].slice(-2_000)
+          this.messages.set(session.id, nextMessages)
+          nextSession = {
+            ...session,
+            status: 'idle',
+            updatedAt: timestamp,
+            messageCount: nextMessages.length,
+          }
+          this.stoppedAgentSessionsWithoutRequest.add(session.id)
+          stateChanged = true
+        }
+        if (!isGenericRemoteSessionTitle(nextSession.name)) return [session.id, nextSession]
         const firstUserMessage = this.messages
           .get(session.id)
           ?.find((message) => message.type === 'user')
         const title = firstUserMessage ? deriveRemoteSessionTitle(firstUserMessage.content) : null
-        if (!title) return [session.id, session]
-        titlesChanged = true
-        return [session.id, { ...session, name: title }]
+        if (!title) return [session.id, nextSession]
+        stateChanged = true
+        return [session.id, { ...nextSession, name: title }]
       }),
     )
-    if (titlesChanged) await this.saveState()
+    if (stateChanged) await this.saveState()
   }
 
   onStatus(listener: StatusListener): () => void {
@@ -156,6 +188,18 @@ export class CclinkRemoteService implements RemoteProvider {
   onRealtimeEvent(listener: RealtimeListener): () => void {
     this.realtimeListeners.add(listener)
     return () => this.realtimeListeners.delete(listener)
+  }
+
+  onImageUploadProgress(listener: ImageUploadListener): () => void {
+    this.imageUploadListeners.add(listener)
+    return () => this.imageUploadListeners.delete(listener)
+  }
+
+  cancelAgentImageUpload(uploadId: string): boolean {
+    const controller = this.imageUploads.get(uploadId)
+    if (!controller) return false
+    controller.abort()
+    return true
   }
 
   getRealtimeStatus(): CclinkRealtimeStatus {
@@ -375,12 +419,22 @@ export class CclinkRemoteService implements RemoteProvider {
     ref: RemoteWorkspaceRef,
     sessionId: string,
     content: string,
+    images: TransientImageAttachment[] = [],
+    imageUploadId?: string,
   ): Promise<{ success: boolean; error?: string }> {
+    let uploadController: AbortController | null = null
+    if (images.length > 0 && imageUploadId) {
+      if (this.imageUploads.has(imageUploadId)) {
+        return { success: false, error: '图片上传任务 ID 正在使用' }
+      }
+      uploadController = new AbortController()
+      this.imageUploads.set(imageUploadId, uploadController)
+    }
     try {
       await this.requireOnline()
       await this.requireCapability(ref, 'agent.stream')
       const normalized = content.trim()
-      if (!normalized) return { success: true }
+      if (!normalized && images.length === 0) return { success: true }
       if (Buffer.byteLength(normalized, 'utf8') > 8 * 1024) {
         return { success: false, error: '单条远程消息不能超过 8 KiB，请拆分后发送' }
       }
@@ -392,6 +446,55 @@ export class CclinkRemoteService implements RemoteProvider {
       ) {
         return { success: false, error: '远程会话与当前工作空间不匹配' }
       }
+      const imageUrls: string[] = []
+      if (images.length > 0) {
+        if (!imageUploadId) return { success: false, error: '远程图片消息缺少上传任务 ID' }
+        await this.requireCapability(ref, 'agent.imageInput')
+        if (!uploadController) return { success: false, error: '图片上传任务初始化失败' }
+        const totalBytes = imageTotalBytes(images)
+        let completedBytes = 0
+        this.emitImageUploadProgress({
+          uploadId: imageUploadId,
+          imageIndex: 0,
+          imageCount: images.length,
+          loadedBytes: 0,
+          totalBytes,
+          percent: 0,
+          phase: 'preparing',
+        })
+        for (const [index, image] of images.entries()) {
+          uploadController.signal.throwIfAborted()
+          imageUrls.push(
+            await this.requestRouter.uploadImage(ref.endpointId, image, {
+              signal: uploadController.signal,
+              onProgress: (loaded) => {
+                const aggregateLoaded = Math.min(totalBytes, completedBytes + loaded)
+                this.emitImageUploadProgress({
+                  uploadId: imageUploadId,
+                  imageId: image.id,
+                  imageIndex: index + 1,
+                  imageCount: images.length,
+                  loadedBytes: aggregateLoaded,
+                  totalBytes,
+                  percent: Math.round((aggregateLoaded / totalBytes) * 100),
+                  phase: 'uploading',
+                })
+              },
+            }),
+          )
+          completedBytes += image.size
+        }
+        uploadController.signal.throwIfAborted()
+        this.emitImageUploadProgress({
+          uploadId: imageUploadId,
+          imageIndex: images.length,
+          imageCount: images.length,
+          loadedBytes: totalBytes,
+          totalBytes,
+          percent: 100,
+          phase: 'sending',
+        })
+      }
       const requestId = randomUUID()
       const message = {
         ...createCclinkEnvelope('user_text', { request_id: requestId, trace_id: requestId }),
@@ -401,13 +504,17 @@ export class CclinkRemoteService implements RemoteProvider {
         workspace_path: ref.path,
         project_mode: 'remote_workspace' as const,
         content: normalized,
+        ...(imageUrls.length > 0 ? { images: imageUrls } : {}),
       }
+      uploadController?.signal.throwIfAborted()
       await this.requestRouter.send(ref.endpointId, message)
       this.recordSessionProtocolEvent(ref.endpointId, message, 'outbound')
+      this.activeAgentRequests.set(sessionId, requestId)
+      this.stoppedAgentSessionsWithoutRequest.delete(sessionId)
       const userMessage: CclinkRemoteMessage = {
         type: 'user',
         id: `remote-user-${requestId}`,
-        content: normalized,
+        content: normalized || `图片消息（${imageUrls.length} 张）`,
         timestamp: nowSeconds(),
       }
       this.appendMessage(sessionId, userMessage)
@@ -420,11 +527,88 @@ export class CclinkRemoteService implements RemoteProvider {
         phase: 'started',
         message: userMessage,
       })
+      if (imageUploadId && images.length > 0) {
+        const totalBytes = imageTotalBytes(images)
+        this.emitImageUploadProgress({
+          uploadId: imageUploadId,
+          imageIndex: images.length,
+          imageCount: images.length,
+          loadedBytes: totalBytes,
+          totalBytes,
+          percent: 100,
+          phase: 'completed',
+        })
+      }
       return { success: true }
     } catch (error) {
-      this.recordDiagnostic('agent.send', ref.endpointId, error)
-      return { success: false, error: error instanceof Error ? error.message : '远程消息发送失败' }
+      const cancelled = uploadController?.signal.aborted === true
+      const errorMessage = cancelled
+        ? '图片上传已取消'
+        : error instanceof Error
+          ? error.message
+          : '远程消息发送失败'
+      if (!cancelled) this.recordDiagnostic('agent.send', ref.endpointId, error)
+      if (imageUploadId && images.length > 0) {
+        const totalBytes = imageTotalBytes(images)
+        this.emitImageUploadProgress({
+          uploadId: imageUploadId,
+          imageIndex: 0,
+          imageCount: images.length,
+          loadedBytes: 0,
+          totalBytes,
+          percent: 0,
+          phase: cancelled ? 'cancelled' : 'failed',
+          error: errorMessage,
+        })
+      }
+      return { success: false, error: errorMessage }
+    } finally {
+      if (imageUploadId && this.imageUploads.get(imageUploadId) === uploadController) {
+        this.imageUploads.delete(imageUploadId)
+      }
     }
+  }
+
+  stopTrackingAgentRun(
+    ref: RemoteWorkspaceRef,
+    sessionId: string,
+  ): { success: boolean; error?: string } {
+    const session = this.assertSessionMatches(ref, sessionId)
+    if (session.status !== 'active') return { success: true }
+
+    const activeRequest = this.activeAgentRequests.get(sessionId)
+    if (activeRequest) {
+      const stopped = this.stoppedAgentRequestIds.get(sessionId) ?? []
+      this.stoppedAgentRequestIds.set(
+        sessionId,
+        [...stopped.filter((requestId) => requestId !== activeRequest), activeRequest].slice(-16),
+      )
+    } else {
+      this.stoppedAgentSessionsWithoutRequest.add(sessionId)
+    }
+    this.activeAgentRequests.delete(sessionId)
+    for (const [key, stream] of this.streams) {
+      if (stream.sessionId === sessionId && stream.serverId === ref.endpointId)
+        this.streams.delete(key)
+    }
+
+    const systemMessage: CclinkRemoteMessage = {
+      type: 'system',
+      id: `remote-tracking-stopped-${activeRequest ?? randomUUID()}`,
+      content: '已停止在 Studio 中跟踪这条远程任务；这不代表远端已取消，继续发送前请确认远端状态。',
+      timestamp: nowSeconds(),
+    }
+    this.appendMessage(sessionId, systemMessage)
+    this.setSessionStatus(sessionId, 'idle')
+    this.emitRealtime({ type: 'sessions', serverId: ref.endpointId, sessionId })
+    this.emitRealtime({
+      type: 'conversation',
+      serverId: ref.endpointId,
+      sessionId,
+      phase: 'untracked',
+      message: systemMessage,
+    })
+    return { success: true }
   }
 
   async resolveToolApproval(input: {
@@ -589,6 +773,7 @@ export class CclinkRemoteService implements RemoteProvider {
         'agent.runtime_select',
         'runtime_select',
       )
+    const imageInput = online && has('file.image_input', 'agent.image_input', 'image_input')
     const agentVersion = valueAsString(
       probe?.agentVersion ?? probe?.agent_version ?? probe?.sender?.version ?? server?.agentVersion,
     )
@@ -658,7 +843,7 @@ export class CclinkRemoteService implements RemoteProvider {
         shell: {
           pty: online && has('shell.terminal_workspace_pty', 'terminal_workspace_pty'),
         },
-        agent: { session: sessionStreaming, stream: sessionStreaming },
+        agent: { session: sessionStreaming, stream: sessionStreaming, imageInput },
       },
       ...(!online
         ? {
@@ -1259,6 +1444,7 @@ export class CclinkRemoteService implements RemoteProvider {
     this.servers.clear()
     this.statusListeners.clear()
     this.realtimeListeners.clear()
+    this.imageUploadListeners.clear()
     this.sessions.clear()
     this.messages.clear()
     this.streams.clear()
@@ -1267,6 +1453,8 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   async disconnect(): Promise<void> {
+    for (const controller of this.imageUploads.values()) controller.abort()
+    this.imageUploads.clear()
     this.timStatusUnsubscribe?.()
     this.timStatusUnsubscribe = null
     this.requestRouter.detach()
@@ -1329,6 +1517,7 @@ export class CclinkRemoteService implements RemoteProvider {
       | 'file.delete'
       | 'agent.session'
       | 'agent.stream'
+      | 'agent.imageInput'
       | 'shell.pty',
   ): Promise<void> {
     const status = await this.getStatus(ref)
@@ -1336,7 +1525,18 @@ export class CclinkRemoteService implements RemoteProvider {
     if (status.compatibility === 'upgrade-required') throw new Error('远程 Agent 协议版本不兼容')
     const [group, name] = capability.split('.') as [
       'file' | 'agent' | 'shell',
-      'tree' | 'read' | 'write' | 'create' | 'rename' | 'delete' | 'session' | 'stream' | 'pty',
+      (
+        | 'tree'
+        | 'read'
+        | 'write'
+        | 'create'
+        | 'rename'
+        | 'delete'
+        | 'session'
+        | 'stream'
+        | 'imageInput'
+        | 'pty'
+      ),
     ]
     const available = (status.capabilities[group] as Record<string, boolean>)[name] === true
     if (!available) throw new Error(`远程 Agent 未通过实时能力检查：${capability}`)
@@ -1439,6 +1639,7 @@ export class CclinkRemoteService implements RemoteProvider {
     message: CclinkProtocolMessage,
   ): Promise<void> {
     this.recordSessionProtocolEvent(serverId, message, 'inbound')
+    if (this.shouldIgnoreStoppedAgentEvent(message)) return
     switch (message.cc_type) {
       case 'session_sync_response':
         this.applySessionSync(serverId, message as CclinkSessionSyncResponseMessage)
@@ -1529,6 +1730,7 @@ export class CclinkRemoteService implements RemoteProvider {
               }
             : undefined
         if (remoteMessage) this.appendMessage(event.session_id, remoteMessage)
+        if (!active) this.settleAgentRequest(event.session_id, message)
         this.emitRealtime({
           type: 'conversation',
           serverId,
@@ -1605,6 +1807,7 @@ export class CclinkRemoteService implements RemoteProvider {
           this.appendMessage(event.session_id, remoteMessage)
         }
         this.setSessionStatus(event.session_id, 'idle')
+        this.settleAgentRequest(event.session_id, message)
         this.emitRealtime({
           type: 'conversation',
           serverId,
@@ -1781,6 +1984,7 @@ export class CclinkRemoteService implements RemoteProvider {
         }
         this.appendMessage(event.session_id, remoteMessage)
         this.setSessionStatus(event.session_id, 'idle')
+        this.settleAgentRequest(event.session_id, message)
         this.emitRealtime({
           type: 'conversation',
           serverId,
@@ -1792,6 +1996,45 @@ export class CclinkRemoteService implements RemoteProvider {
       }
       default:
         return
+    }
+  }
+
+  private shouldIgnoreStoppedAgentEvent(message: CclinkProtocolMessage): boolean {
+    if (
+      ![
+        'stream_start',
+        'stream_chunk',
+        'stream_end',
+        'agent_status',
+        'agent_text',
+        'agent_tool',
+        'user_question',
+        'user_text',
+        'error',
+      ].includes(message.cc_type)
+    ) {
+      return false
+    }
+    const payload = message as unknown as Record<string, unknown>
+    const sessionId = typeof payload['session_id'] === 'string' ? payload['session_id'] : null
+    if (!sessionId) return false
+    const requestId = typeof payload['request_id'] === 'string' ? payload['request_id'] : null
+    const traceId = typeof payload['trace_id'] === 'string' ? payload['trace_id'] : null
+    const stopped = this.stoppedAgentRequestIds.get(sessionId) ?? []
+    if ((requestId && stopped.includes(requestId)) || (traceId && stopped.includes(traceId))) {
+      return true
+    }
+    return this.stoppedAgentSessionsWithoutRequest.has(sessionId)
+  }
+
+  private settleAgentRequest(sessionId: string, message: CclinkProtocolMessage): void {
+    const active = this.activeAgentRequests.get(sessionId)
+    if (!active) return
+    const payload = message as unknown as Record<string, unknown>
+    const requestId = typeof payload['request_id'] === 'string' ? payload['request_id'] : null
+    const traceId = typeof payload['trace_id'] === 'string' ? payload['trace_id'] : null
+    if (!requestId || requestId === active || traceId === active) {
+      this.activeAgentRequests.delete(sessionId)
     }
   }
 
@@ -1943,6 +2186,10 @@ export class CclinkRemoteService implements RemoteProvider {
           }
         : event
     for (const listener of this.realtimeListeners) listener(enriched)
+  }
+
+  private emitImageUploadProgress(progress: CclinkImageUploadProgress): void {
+    for (const listener of this.imageUploadListeners) listener(progress)
   }
 
   private assertSessionMatches(ref: RemoteWorkspaceRef, sessionId: string): CclinkRemoteSession {
@@ -2482,6 +2729,10 @@ function indexesFromRanges(
     }
   }
   return [...new Set(indexes)]
+}
+
+function imageTotalBytes(images: TransientImageAttachment[]): number {
+  return images.reduce((sum, image) => sum + image.size, 0)
 }
 
 function transferResult(

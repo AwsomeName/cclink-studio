@@ -112,6 +112,8 @@ const cclinkApi: CclinkApiContract = {
   setSessionArchived: (input) => invokeIpcContract(cclinkIpc.setSessionArchived, input),
   listMessages: (sessionId) => invokeIpcContract(cclinkIpc.listMessages, sessionId),
   sendAgentMessage: (input) => invokeIpcContract(cclinkIpc.sendAgentMessage, input),
+  cancelAgentImageUpload: (input) => invokeIpcContract(cclinkIpc.cancelAgentImageUpload, input),
+  stopTrackingAgentRun: (input) => invokeIpcContract(cclinkIpc.stopTrackingAgentRun, input),
   resolveToolApproval: (input) => invokeIpcContract(cclinkIpc.resolveToolApproval, input),
   answerQuestion: (input) => invokeIpcContract(cclinkIpc.answerQuestion, input),
   respondPermission: (input) => invokeIpcContract(cclinkIpc.respondPermission, input),
@@ -130,6 +132,14 @@ const cclinkApi: CclinkApiContract = {
     ): void => callback(event)
     ipcRenderer.on(cclinkIpcEvents.realtimeEvent, listener)
     return () => ipcRenderer.removeListener(cclinkIpcEvents.realtimeEvent, listener)
+  },
+  onImageUploadProgress: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      progress: Parameters<typeof callback>[0],
+    ): void => callback(progress)
+    ipcRenderer.on(cclinkIpcEvents.imageUploadProgress, listener)
+    return () => ipcRenderer.removeListener(cclinkIpcEvents.imageUploadProgress, listener)
   },
 }
 

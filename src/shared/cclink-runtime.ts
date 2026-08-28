@@ -105,6 +105,7 @@ export interface CclinkUserTextMessage extends CclinkRuntimeEnvelope<'user_text'
   workspace_path: string
   project_mode: 'remote_workspace'
   content: string
+  images?: string[]
 }
 
 export interface CclinkStreamStartMessage extends CclinkRuntimeEnvelope<'stream_start'> {

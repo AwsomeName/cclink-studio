@@ -7365,6 +7365,26 @@ body.is-resizing-panels .main-area > div {
   background: rgba(52, 52, 52, 0.96);
 }
 
+.agent-upload-progress {
+  display: grid;
+  gap: 5px;
+  padding: 7px 10px 2px;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.agent-upload-progress > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agent-upload-progress progress {
+  width: 100%;
+  height: 4px;
+  accent-color: var(--text-accent);
+}
+
 .agent-resource-chip {
   min-width: 0;
   max-width: 180px;

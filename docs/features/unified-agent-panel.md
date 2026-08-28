@@ -1,6 +1,6 @@
 # 本地与远程 Agent Panel 统一方案
 
-> 状态：UAP-1 已实现唯一固定 `AgentPanelView` 且自动化门禁通过，等待真实应用真人验收；验收前不得宣称产品统一完成。UAP-2 远程事务强化不属于本次实现，仍须通过本文契约门禁。最后更新：2026-08-17。
+> 状态：UAP-1 已实现唯一固定 `AgentPanelView` 且自动化门禁通过，等待真实应用真人验收；远程图片输入候选实现已接通 Studio、腾讯 IM/COS 与 `user_text.images`，仍须在真实在线 Agent 上验收。验收前不得宣称产品统一或远程图片闭环完成。UAP-2 远程事务强化不属于本次实现，仍须通过本文契约门禁。最后更新：2026-08-28。
 
 ## 结论
 
@@ -38,8 +38,13 @@ UAP-2 门禁全部关闭前
    切回本地工作空间后本地 Agent 仍可正常使用。
 5. 对远程运行时不适用的图片、资源、Skill、Runtime 选择或其他能力，Panel 可以隐藏对应
    动作，原因进入诊断；对用户合理期待但暂时不可用的动作，Panel 必须禁用并显示原因。运行中
-   Agent 的停止属于用户合理期待的通用动作，远程协议不支持时必须显示 disabled 状态及原因，
-   不能隐藏。所有动作都不得伪装成功，也不得回退到本地 Agent 执行。
+   Agent 的停止属于用户合理期待的通用动作；远程协议不支持可靠 cancel 时显示“停止等待”，
+   只收敛 Studio 跟踪状态并明确提示不代表远端已取消。所有动作都不得伪装成功，也不得回退到
+   本地 Agent 执行。
+6. 在声明 `image_input` 的真实在线远程 Agent 会话中，直接粘贴系统截图、拖入图片或点击
+   “添加图片”后，Composer 显示缩略图并允许删除；可以只发图片，也可以同时输入文字。发送后
+   Agent 能识别图片内容。单张超过 5 MiB、超过 5 张、格式不支持、上传失败或远程能力缺失时，
+   UI 明确报错并保留尚未确认提交的文字和图片，不得发送不含图片的半条 `user_text`。
 
 只有上述真实应用验收和受影响自动化门禁均通过，才能声明统一 Agent Panel 完成。
 
@@ -75,6 +80,18 @@ target；架构回归测试同时断言远程路径不引用本地 `agent.sendMe
 历史根因是远程 Agent 为保证协议隔离而以独立 `RemoteAgentPanel` 最小闭环接入，后来只复用
 了部分消息投影，没有及时收口 Composer 与 Panel 生命周期。协议隔离本身仍保留；被删除的是
 重复 UI 和重复交互策略，不是本地/远程各自的运行时与状态 owner。
+
+2026-08-28 远程图片输入候选实现：远程 controller 复用统一 Composer 的粘贴、拖放、文件选择和
+缩略图区域，图片草稿按远程工作空间仅驻留 renderer 内存；main IPC 严格限制 PNG/JPEG/GIF/WebP、
+单张 5 MiB、最多 5 张。remote service 只在实时能力探测包含 `image_input` 时发送，先通过腾讯
+IM 图片消息上传到 COS，拿到 HTTPS URL 后再一次性发送 `user_text.images`；任一图片上传失败时
+不发送 `user_text`，renderer 保留原草稿供人工重试。base64 图片、UserSig 与 COS 签名上传 URL
+不进入 session 历史或诊断；图片 URL 也不写入 Studio 本地消息投影。该候选已覆盖 IPC、能力映射、
+上传路由、失败原子性、草稿隔离和 UI 提交测试。腾讯 Chat Web SDK 在独立 VM realm 中加载，
+所需 `window`、`Image`、XHR 与 WebSocket shim 不写入 Electron 主进程全局对象；上传字节进度经
+有界 IPC 投影到 Composer。上传阶段可由用户取消，取消会中止当前 XHR，且禁止继续发送
+`user_text` 或写入会话历史；图片已全部上传并进入最终消息发送阶段后不再伪装成可取消。真实腾讯
+IM/COS 与 Agent 图片识别仍以本节第 6 条真人验收为产品完成门禁。
 
 ## 能力边界与状态所有权
 
@@ -492,10 +509,12 @@ availability、payload 与 result。禁止同时用 `capabilities.cancel` 和可
 期待但当前不可用的动作必须使用 `disabled`，并在 UI 中展示 `reason`。
 
 停止是统一 Agent Panel 的通用预期：只要当前 operation 处于
-submitted/running/unknown/untracked，停止控件都不能 hidden。远程协议尚无停止能力时使用
-`{ state: 'disabled', reason: '当前远程 Agent 不支持停止' }`；只有正式 capability 和 target-bound
-停止命令均存在时才可 enabled；`untracked` 固定 disabled，并说明“已停止跟踪，无法安全定位要
-停止的远程运行”。
+submitted/running/unknown/untracked，停止控件都不能 hidden。当前远程协议尚无可靠 cancel，
+运行中控件因此明确命名为“停止等待”：它只把绑定当前 request/trace 的 Studio 跟踪投影收敛，
+写入“这不代表远端已取消”的系统提示，并允许用户在确认远端状态后继续发送；旧 request/trace
+的迟到事件不得重新激活会话。未来只有正式 capability 和 target-bound 停止命令均存在时，才能
+把该动作称为远程停止；`untracked` 固定 disabled，并说明“已停止跟踪，无法安全定位要停止的
+远程运行”。
 
 ### Operation registry 生命周期
 
@@ -609,6 +628,11 @@ UAP-2 是事务正确性和可观测性强化，不是第二次 UI 统一。UAP-
   由同一个 owner 原子迁移到返回的 session ID。
 - 发送结果：只有 target 匹配的 `submitted` 才清理原 target 草稿。结果未知时保留草稿、显示
   可能重复的风险并禁止自动重试；不得把 transport 已提交伪装成远程 Agent 已接收或已执行。
+- 图片发送：图片上传和最终 `user_text` 是两个 transport 动作；任一上传失败时不发送
+  `user_text`，并保留图片草稿。若图片已上传而最终 `user_text` 失败，不自动重试，避免重复提交；
+  用户可在原 target 明确人工重试。上传任务由 remote service 持有唯一 `AbortController`，renderer
+  只持有不可复用的 upload ID；取消、断线和 service 销毁都会中止底层请求。能力缺失时图片入口
+  disabled，不得丢弃图片或改走本地 Agent。
 - Panel 卸载、StrictMode 重挂载或窗口重建：不得重复注册远程事件或本地 stream listener。
 - BrowserWindow/renderer/App 销毁是本方案明确的草稿与 UI operation 不可恢复边界。新 renderer
   只从 remote service 重建已持久化 session/message 投影，不恢复旧草稿、不自动重试，也不把
@@ -634,6 +658,10 @@ UAP-2 是事务正确性和可观测性强化，不是第二次 UI 统一。UAP-
 
 - 同一 `ComposerFrame` 分别绑定本地与远程 controller 时的 composition、Enter、Shift+Enter、
   `keyCode === 229`、候选菜单、历史导航、图片粘贴、流式编辑和重复提交测试；
+- 远程图片覆盖图片-only/文字加图片、格式/大小/数量 IPC 拒绝、`image_input` 能力映射、Agent ID
+  到 IM peer 路由、腾讯上传插件、HTTPS URL 提取、任一上传失败不发送 `user_text` 且不写历史、
+  成功时 `user_text.images` 顺序与图片顺序一致、字节进度顺序、取消中止 XHR，以及真实 SDK 隔离
+  加载前后主进程 `window`/`Image`/XHR/WebSocket 属性描述符不变；
 - 本地与远程 adapter 的 session/message/status/action 映射测试；
 - 同一 Panel view 分别绑定 local/remote adapter 的组件测试；
 - 创建会话期间切换、发送期间切换、超时/结果未知、远程 session 已归档、同 endpoint 多
@@ -655,7 +683,8 @@ UAP-2 是事务正确性和可观测性强化，不是第二次 UI 统一。UAP-
   reset 清理和 deadline 后迟到 settle 不复活 record；
 - TTL/归档/endpoint 移除/service reset 使 renderer 非 terminal operation 收敛为对应 untracked；
   registry-full 拒绝不遗留 submitting 投影，snapshot 重同步可修复漏失通知；
-- 运行中远程 Agent 不支持停止时，停止按钮 disabled 且展示原因，不能 hidden；
+- 运行中远程 Agent 尚无 cancel capability 时，“停止等待”可收敛 Studio 跟踪状态，并明确提示
+  不代表远端已取消；旧 request/trace 的迟到事件不能复活会话；
 - BrowserWindow 销毁不承诺恢复 draft/UI operation；重建后不自动重试，只从权威消息事实恢复；
 - 上述所有失败路径以及远程离线/协议不兼容时，本地 `agent.sendMessage` 调用次数严格为零；
 - 工作空间快速切换、远程过期响应、target/generation 重验和草稿隔离测试；

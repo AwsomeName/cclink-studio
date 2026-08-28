@@ -2,13 +2,23 @@ import { randomUUID } from 'node:crypto'
 import type { CclinkMessageType, CclinkProtocolMessage } from '../../shared/cclink'
 import { isCclinkProtocolCompatible } from '../../shared/cclink'
 import { REMOTE_ERROR_CODE, type RemoteError } from '../../shared/remote-error'
+import type { TransientImageAttachment } from '../../shared/image-attachment'
 
 export interface CclinkTransportEvent {
   serverId: string
   message: CclinkProtocolMessage
 }
+export interface ImageUploadOptions {
+  signal?: AbortSignal
+  onProgress?(loaded: number, total: number): void
+}
 export interface CclinkTransport {
   sendMessage(serverId: string, message: CclinkProtocolMessage): Promise<void>
+  uploadImage?(
+    serverId: string,
+    image: TransientImageAttachment,
+    options?: ImageUploadOptions,
+  ): Promise<string>
   onMessage(listener: (event: CclinkTransportEvent) => void): () => void
 }
 
@@ -74,6 +84,22 @@ export class CclinkRequestRouter {
       )
     }
     await this.transport.sendMessage(serverId, message)
+  }
+
+  async uploadImage(
+    serverId: string,
+    image: TransientImageAttachment,
+    options: ImageUploadOptions = {},
+  ): Promise<string> {
+    if (!this.transport?.uploadImage) {
+      throw requestError(
+        'transport',
+        REMOTE_ERROR_CODE.CAPABILITY_UNAVAILABLE,
+        '当前 CCLink 实时链路不支持图片上传',
+        false,
+      )
+    }
+    return this.transport.uploadImage(serverId, image, options)
   }
 
   request(

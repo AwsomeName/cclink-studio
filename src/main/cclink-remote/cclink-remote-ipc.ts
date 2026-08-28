@@ -20,8 +20,47 @@ import { RemoteFileDraftStore } from '../remote/remote-file-draft-store'
 const phoneSchema = z.string().regex(/^1[3-9]\d{9}$/u, '请输入有效的手机号')
 const codeSchema = z.string().regex(/^\d{4,8}$/u, '请输入有效的短信验证码')
 const idSchema = z.string().trim().min(1).max(256)
+const uploadIdSchema = z.string().uuid()
+const maxRemoteImageBytes = 5 * 1024 * 1024
+const remoteImageSchema = z
+  .object({
+    id: idSchema,
+    name: z.string().trim().min(1).max(512),
+    mediaType: z.enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp']),
+    data: z
+      .string()
+      .min(1)
+      .max(Math.ceil(maxRemoteImageBytes / 3) * 4)
+      .regex(/^[A-Za-z0-9+/]+={0,2}$/u, '图片数据不是有效 Base64'),
+    size: z.number().int().positive().max(maxRemoteImageBytes),
+  })
+  .strict()
 export const cclinkRemotePathSchema = remoteWorkspacePathSchema
 export const cclinkRemoteRefSchema = remoteWorkspaceRefSchema
+export const cclinkSendAgentMessageInputSchema = z
+  .object({
+    ref: cclinkRemoteRefSchema,
+    sessionId: idSchema,
+    content: z.string().trim().max(8_192),
+    images: z.array(remoteImageSchema).max(5).optional(),
+    imageUploadId: uploadIdSchema.optional(),
+  })
+  .strict()
+  .refine((input) => Boolean(input.content || input.images?.length), {
+    message: '远程消息必须包含文字或图片',
+  })
+  .refine((input) => !input.images?.length || Boolean(input.imageUploadId), {
+    message: '远程图片消息缺少上传任务 ID',
+  })
+export const cclinkStopTrackingAgentRunInputSchema = z
+  .object({
+    ref: cclinkRemoteRefSchema,
+    sessionId: idSchema,
+  })
+  .strict()
+export const cclinkCancelAgentImageUploadInputSchema = z
+  .object({ uploadId: uploadIdSchema })
+  .strict()
 
 const noArgs = <T>(definition: { channel: string }) =>
   bindIpcParser<[], T>(definition, (args) => z.tuple([]).parse(args))
@@ -48,6 +87,10 @@ export function registerCclinkRemoteIpc(
   })
   const unsubscribeRealtime = service.onRealtimeEvent((event) => {
     if (!mainWindow.isDestroyed()) mainWindow.webContents.send(cclinkIpcEvents.realtimeEvent, event)
+  })
+  const unsubscribeImageUpload = service.onImageUploadProgress((progress) => {
+    if (!mainWindow.isDestroyed())
+      mainWindow.webContents.send(cclinkIpcEvents.imageUploadProgress, progress)
   })
 
   registerTrustedIpcContract(noArgs(authIpc.getServiceStatus), guard, () => ({
@@ -143,20 +186,31 @@ export function registerCclinkRemoteIpc(
   )
   registerTrustedIpcContract(
     bindIpcParser(cclinkIpc.sendAgentMessage, (args) =>
-      z
-        .tuple([
-          z
-            .object({
-              ref: cclinkRemoteRefSchema,
-              sessionId: idSchema,
-              content: z.string().trim().min(1).max(8_192),
-            })
-            .strict(),
-        ])
-        .parse(args),
+      z.tuple([cclinkSendAgentMessageInputSchema]).parse(args),
     ),
     guard,
-    (_event, input) => service.sendAgentMessage(input.ref, input.sessionId, input.content),
+    (_event, input) =>
+      service.sendAgentMessage(
+        input.ref,
+        input.sessionId,
+        input.content,
+        input.images,
+        input.imageUploadId,
+      ),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(cclinkIpc.cancelAgentImageUpload, (args) =>
+      z.tuple([cclinkCancelAgentImageUploadInputSchema]).parse(args),
+    ),
+    guard,
+    (_event, input) => ({ success: service.cancelAgentImageUpload(input.uploadId) }),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(cclinkIpc.stopTrackingAgentRun, (args) =>
+      z.tuple([cclinkStopTrackingAgentRunInputSchema]).parse(args),
+    ),
+    guard,
+    (_event, input) => service.stopTrackingAgentRun(input.ref, input.sessionId),
   )
   const controlBase = {
     ref: cclinkRemoteRefSchema,
@@ -402,5 +456,6 @@ export function registerCclinkRemoteIpc(
   return () => {
     unsubscribeStatus()
     unsubscribeRealtime()
+    unsubscribeImageUpload()
   }
 }

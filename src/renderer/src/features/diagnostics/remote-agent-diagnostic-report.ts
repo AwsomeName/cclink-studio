@@ -74,13 +74,21 @@ function assessEnding(
   sessionStatus: 'active' | 'idle' | 'archived' | undefined,
   events: RemoteAgentSessionDiagnosticEvent[],
 ): string {
+  const latestOutbound = [...events]
+    .reverse()
+    .find((event) => event.direction === 'outbound' && event.type === 'user_text')
   const terminal = [...events]
     .reverse()
     .find(
       (event) =>
-        event.type === 'stream_end' ||
-        (event.type === 'agent_status' &&
-          ['idle', 'completed', 'failed', 'error'].includes(event.status ?? '')),
+        (event.type === 'stream_end' ||
+          (event.type === 'agent_status' &&
+            ['idle', 'completed', 'failed', 'error'].includes(event.status ?? ''))) &&
+        (!latestOutbound ||
+          ((event.requestId === latestOutbound.requestId ||
+            event.traceId === latestOutbound.requestId ||
+            (!event.requestId && !event.traceId)) &&
+            event.timestamp >= latestOutbound.timestamp)),
     )
   if (terminal) {
     const details = [

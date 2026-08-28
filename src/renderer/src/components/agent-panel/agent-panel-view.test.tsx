@@ -88,8 +88,22 @@ describe('AgentPanelView product contract', () => {
       expect(actions(local)).toEqual(actions(remote))
       expect(local.match(/<textarea/gu)).toHaveLength(1)
       expect(remote.match(/<textarea/gu)).toHaveLength(1)
+      if (scenario === 'running') expect(remote).toContain('aria-label="停止等待"')
     },
   )
+
+  it('shows image upload progress and exposes a dedicated cancel action', () => {
+    const uploadModel = model('remote', 'running')
+    uploadModel.composer.uploadProgress = { label: '正在上传第 1/2 张图片', percent: 42 }
+    uploadModel.composer.stopLabel = '取消图片上传'
+
+    const html = renderToStaticMarkup(<AgentPanelView model={uploadModel} />)
+
+    expect(html).toContain('正在上传第 1/2 张图片')
+    expect(html).toContain('42%')
+    expect(html).toContain('value="42"')
+    expect(html).toContain('aria-label="取消图片上传"')
+  })
 })
 
 function model(
@@ -169,8 +183,11 @@ function model(
       submitting: scenario === 'running',
       stopCapability:
         scenario === 'running'
-          ? { state: 'disabled', reason: '当前 Runtime 不支持停止' }
+          ? runtime === 'remote'
+            ? { state: 'enabled' }
+            : { state: 'disabled', reason: '当前 Runtime 不支持停止' }
           : { state: 'hidden' },
+      stopLabel: runtime === 'remote' ? '停止等待' : undefined,
       onChange: () => undefined,
       onSubmit: () => undefined,
       actionBar: remoteActionBar,

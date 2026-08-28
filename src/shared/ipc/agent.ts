@@ -1,6 +1,7 @@
 export * from '../agent-protocol'
 
 import { defineIpcCall } from './contract'
+import type { ImageAttachmentMediaType, TransientImageAttachment } from '../image-attachment'
 import type {
   AgentApiContract as CoreAgentApiContract,
   AgentAbortResult,
@@ -90,16 +91,8 @@ export interface AgentSendResource {
 
 export type AgentSendSkill = AgentSkillRef
 
-export type AgentImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
-
-export interface AgentImageAttachment {
-  id: string
-  name: string
-  mediaType: AgentImageMediaType
-  /** Raw base64 without a data URL prefix. It is transient and must not enter workspace snapshots. */
-  data: string
-  size: number
-}
+export type AgentImageMediaType = ImageAttachmentMediaType
+export type AgentImageAttachment = TransientImageAttachment
 
 export interface AgentConversationContinuity {
   recentMessages: Array<{

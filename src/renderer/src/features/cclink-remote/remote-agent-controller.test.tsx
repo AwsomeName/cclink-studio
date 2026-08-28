@@ -28,7 +28,7 @@ const onlineStatus: RemoteStatus = {
   capabilities: {
     file: { tree: true, read: true, write: true, create: true, rename: true, delete: true },
     shell: { pty: true },
-    agent: { session: true, stream: true },
+    agent: { session: true, stream: true, imageInput: true },
   },
 }
 
@@ -98,11 +98,8 @@ describe('RemoteAgentController', () => {
     ).toMatchObject({ tone: 'unavailable', label: 'Agent 需升级' })
   })
 
-  it('keeps the expected stop control visible but disabled while remote work is active', () => {
-    expect(resolveRemoteStopAvailability('active')).toEqual({
-      state: 'disabled',
-      reason: '当前远程 Agent 不支持停止',
-    })
+  it('allows the user to stop Studio tracking while remote work is active', () => {
+    expect(resolveRemoteStopAvailability('active')).toEqual({ state: 'enabled' })
     expect(resolveRemoteStopAvailability('idle')).toEqual({ state: 'hidden' })
   })
 
@@ -262,6 +259,52 @@ describe('RemoteAgentController', () => {
 
     expect(selectSession).toHaveBeenCalledWith(session.id)
     expect(sendAgentMessage).toHaveBeenCalledWith(workspaceRef, session.id, '只发到远程')
+  })
+
+  it('submits an image-only draft through the captured remote session', async () => {
+    const session = {
+      id: 'session-image',
+      serverId: workspaceRef.endpointId,
+      workspaceId: workspaceRef.workspaceId,
+      workspacePath: workspaceRef.path,
+      name: '远程会话',
+      status: 'idle' as const,
+      createdAt: 1,
+      updatedAt: 1,
+      messageCount: 0,
+      contextUsage: 0,
+    }
+    const image = {
+      id: 'image-1',
+      name: 'screen.png',
+      mediaType: 'image/png' as const,
+      data: 'AQID',
+      size: 3,
+    }
+    const sendAgentMessage = vi.fn().mockResolvedValue(true)
+
+    await expect(
+      submitRemoteDraft({
+        target: { ref: workspaceRef, generation: 4 },
+        workspaceRef,
+        activeSession: session,
+        content: '',
+        images: [image],
+        imageUploadId: '6e168c6e-82d8-4c8c-8092-1a3666704368',
+        isTargetCurrent: () => true,
+        createSession: vi.fn(),
+        selectSession: vi.fn(),
+        sendAgentMessage,
+      }),
+    ).resolves.toBe('submitted')
+
+    expect(sendAgentMessage).toHaveBeenCalledWith(
+      workspaceRef,
+      session.id,
+      '',
+      [image],
+      '6e168c6e-82d8-4c8c-8092-1a3666704368',
+    )
   })
 
   it('never falls back to the local Agent when the remote send fails', async () => {

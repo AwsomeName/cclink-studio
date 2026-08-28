@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CclinkRemoteSession } from '@shared/cclink'
+import type { CclinkImageUploadProgress } from '@shared/ipc/cclink'
 import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
 import type { RemoteStatus } from '@shared/remote-protocol'
 import type { RemoteDiagnosticReport } from '@shared/remote-protocol'
@@ -19,6 +20,8 @@ import {
 import { isWorkspaceTargetCurrent, type WorkspaceTarget } from '../../stores/workspace-store'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import type { AgentMessage } from '../../types'
+import { importAgentImageFiles, MAX_AGENT_IMAGES } from '../agent-conversations/image-attachments'
+import type { TransientImageAttachment } from '@shared/image-attachment'
 
 export interface RemoteAgentVisualStatus {
   tone: 'connecting' | 'ready' | 'working' | 'unavailable'
@@ -85,9 +88,9 @@ export function tryAcquireRemoteSubmissionLock(lock: RemoteSubmissionLock): bool
 
 export function resolveRemoteStopAvailability(
   sessionStatus: CclinkRemoteSession['status'] | undefined,
-): { state: 'disabled'; reason: string } | { state: 'hidden' } {
+): { state: 'enabled' } | { state: 'hidden' } {
   if (sessionStatus === 'active') {
-    return { state: 'disabled', reason: '当前远程 Agent 不支持停止' }
+    return { state: 'enabled' }
   }
   return { state: 'hidden' }
 }
@@ -97,6 +100,8 @@ export async function submitRemoteDraft(input: {
   workspaceRef: RemoteWorkspaceRef
   activeSession: CclinkRemoteSession | null
   content: string
+  images?: TransientImageAttachment[]
+  imageUploadId?: string
   isTargetCurrent(target: WorkspaceTarget): boolean
   createSession(
     ref: RemoteWorkspaceRef,
@@ -104,7 +109,13 @@ export async function submitRemoteDraft(input: {
     options: { select: false },
   ): Promise<CclinkRemoteSession>
   selectSession(sessionId: string): void
-  sendAgentMessage(ref: RemoteWorkspaceRef, sessionId: string, content: string): Promise<boolean>
+  sendAgentMessage(
+    ref: RemoteWorkspaceRef,
+    sessionId: string,
+    content: string,
+    images?: TransientImageAttachment[],
+    imageUploadId?: string,
+  ): Promise<boolean>
 }): Promise<RemoteDraftSubmissionResult> {
   if (!input.isTargetCurrent(input.target)) return 'stale-target'
 
@@ -116,7 +127,15 @@ export async function submitRemoteDraft(input: {
     if (!input.isTargetCurrent(input.target)) return 'stale-target'
 
     input.selectSession(session.id)
-    const sent = await input.sendAgentMessage(input.workspaceRef, session.id, input.content)
+    const sent = input.images?.length
+      ? await input.sendAgentMessage(
+          input.workspaceRef,
+          session.id,
+          input.content,
+          input.images,
+          input.imageUploadId,
+        )
+      : await input.sendAgentMessage(input.workspaceRef, session.id, input.content)
     return sent ? 'submitted' : 'rejected'
   } catch {
     return 'rejected'
@@ -147,13 +166,22 @@ export function RemoteAgentController({
   const selectSession = useCclinkStore((state) => state.selectSession)
   const loadMessages = useCclinkStore((state) => state.loadMessages)
   const sendAgentMessage = useCclinkStore((state) => state.sendAgentMessage)
+  const stopTrackingAgentRun = useCclinkStore((state) => state.stopTrackingAgentRun)
   const pendingPermissions = useCclinkStore((state) => state.pendingPermissions)
   const respondPermission = useCclinkStore((state) => state.respondPermission)
   const draft = useCclinkStore((state) => state.remoteAgentDrafts[remoteWorkspaceKey] ?? '')
+  const pendingImages = useCclinkStore((state) => state.remoteAgentImages[remoteWorkspaceKey] ?? [])
   const setRemoteAgentDraft = useCclinkStore((state) => state.setRemoteAgentDraft)
   const clearRemoteAgentDraft = useCclinkStore((state) => state.clearRemoteAgentDraft)
+  const addRemoteAgentImages = useCclinkStore((state) => state.addRemoteAgentImages)
+  const removeRemoteAgentImage = useCclinkStore((state) => state.removeRemoteAgentImage)
+  const clearRemoteAgentImages = useCclinkStore((state) => state.clearRemoteAgentImages)
   const showToast = useToastStore((state) => state.show)
   const [sending, setSending] = useState(false)
+  const [imageUploadProgress, setImageUploadProgress] = useState<CclinkImageUploadProgress | null>(
+    null,
+  )
+  const [stopping, setStopping] = useState(false)
   const [copyingDiagnostics, setCopyingDiagnostics] = useState(false)
   const [remoteStatus, setRemoteStatus] = useState<RemoteStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
@@ -161,6 +189,7 @@ export function RemoteAgentController({
     Record<string, { submitting: boolean; error: string | null }>
   >({})
   const submissionLockRef = useRef(false)
+  const imageUploadIdRef = useRef<string | null>(null)
   const workspaceTarget = useMemo<WorkspaceTarget>(
     () => ({ ref: workspaceRef, generation: workspaceGeneration }),
     [workspaceGeneration, workspaceRef],
@@ -218,6 +247,7 @@ export function RemoteAgentController({
     remoteStatus.capabilities.agent.session &&
     remoteStatus.capabilities.agent.stream &&
     (!sessionId || Boolean(activeSession))
+  const imageInputAvailable = agentAvailable && remoteStatus?.capabilities.agent.imageInput === true
   const agentVisualStatus =
     sessionId && !activeSession
       ? {
@@ -257,6 +287,13 @@ export function RemoteAgentController({
   }, [remoteStatus, workspaceRef.endpointId, workspaceRef.path, workspaceRef.workspaceId])
 
   useEffect(() => {
+    const unsubscribe = window.cclinkStudio.cclink.onImageUploadProgress((progress) => {
+      if (progress.uploadId === imageUploadIdRef.current) setImageUploadProgress(progress)
+    })
+    return unsubscribe
+  }, [])
+
+  useEffect(() => {
     if (!activeSessionId) return
     if (sessionId) {
       void loadMessages(activeSessionId)
@@ -267,14 +304,36 @@ export function RemoteAgentController({
 
   const submit = async (): Promise<void> => {
     const content = draft.trim()
-    if (!content || !agentAvailable || !tryAcquireRemoteSubmissionLock(submissionLockRef)) return
+    const submittedImages = [...pendingImages]
+    const imageUploadId = submittedImages.length > 0 ? crypto.randomUUID() : undefined
+    if (
+      (!content && submittedImages.length === 0) ||
+      !agentAvailable ||
+      (submittedImages.length > 0 && !imageInputAvailable) ||
+      !tryAcquireRemoteSubmissionLock(submissionLockRef)
+    )
+      return
     setSending(true)
+    if (imageUploadId) {
+      imageUploadIdRef.current = imageUploadId
+      setImageUploadProgress({
+        uploadId: imageUploadId,
+        imageIndex: 0,
+        imageCount: submittedImages.length,
+        loadedBytes: 0,
+        totalBytes: submittedImages.reduce((sum, image) => sum + image.size, 0),
+        percent: 0,
+        phase: 'preparing',
+      })
+    }
     try {
       const result = await submitRemoteDraft({
         target: workspaceTarget,
         workspaceRef,
         activeSession,
         content,
+        images: submittedImages,
+        imageUploadId,
         isTargetCurrent: isWorkspaceTargetCurrent,
         createSession,
         selectSession: sessionId ? () => undefined : selectSession,
@@ -282,10 +341,59 @@ export function RemoteAgentController({
       })
       if (result === 'submitted') {
         clearRemoteAgentDraft(remoteWorkspaceKey, content)
+        clearRemoteAgentImages(
+          remoteWorkspaceKey,
+          submittedImages.map((image) => image.id),
+        )
       }
     } finally {
+      imageUploadIdRef.current = null
+      setImageUploadProgress(null)
       submissionLockRef.current = false
       setSending(false)
+    }
+  }
+
+  const cancelImageUpload = async (): Promise<void> => {
+    const uploadId = imageUploadIdRef.current
+    if (!uploadId || imageUploadProgress?.phase === 'sending') return
+    await window.cclinkStudio.cclink.cancelAgentImageUpload({ uploadId })
+  }
+
+  const addImages = useCallback(
+    async (files: File[]) => {
+      if (!imageInputAvailable) {
+        showToast('当前远程 Agent 未声明图片输入能力', 'error')
+        return
+      }
+      const result = await importAgentImageFiles(files, MAX_AGENT_IMAGES - pendingImages.length)
+      if (result.attachments.length > 0) {
+        addRemoteAgentImages(remoteWorkspaceKey, result.attachments)
+      }
+      if (result.errors.length > 0) showToast(result.errors.join('\n'), 'error')
+    },
+    [
+      addRemoteAgentImages,
+      imageInputAvailable,
+      pendingImages.length,
+      remoteWorkspaceKey,
+      showToast,
+    ],
+  )
+
+  const stopTracking = async (): Promise<void> => {
+    if (!activeSession || activeSession.status !== 'active' || stopping) return
+    setStopping(true)
+    try {
+      const stopped = await stopTrackingAgentRun(workspaceRef, activeSession.id)
+      showToast(
+        stopped
+          ? '已停止在 Studio 中跟踪；这不代表远端已取消'
+          : useCclinkStore.getState().error || '停止跟踪远程任务失败',
+        stopped ? 'success' : 'error',
+      )
+    } finally {
+      setStopping(false)
     }
   }
 
@@ -546,17 +654,70 @@ export function RemoteAgentController({
           disabled: !agentAvailable,
           onChange: (content) => setRemoteAgentDraft(remoteWorkspaceKey, content),
           onSubmit: submit,
-          canSubmit: Boolean(draft.trim()) && agentAvailable && stopAvailability.state === 'hidden',
+          onStop: imageUploadIdRef.current ? cancelImageUpload : stopTracking,
+          stopLabel: imageUploadIdRef.current ? '取消图片上传' : '停止等待',
+          canSubmit:
+            (Boolean(draft.trim()) || pendingImages.length > 0) &&
+            agentAvailable &&
+            (pendingImages.length === 0 || imageInputAvailable) &&
+            stopAvailability.state === 'hidden',
           submitting: sending || activeSession?.status === 'active',
-          stopCapability: stopAvailability,
+          stopCapability: imageUploadIdRef.current
+            ? imageUploadProgress?.phase === 'sending'
+              ? { state: 'disabled', reason: '图片已上传，正在发送消息' }
+              : { state: 'enabled' }
+            : stopping && stopAvailability.state === 'enabled'
+              ? { state: 'disabled', reason: '正在停止跟踪' }
+              : stopAvailability,
+          uploadProgress: imageUploadProgress
+            ? {
+                label:
+                  imageUploadProgress.phase === 'sending'
+                    ? '图片已上传，正在发送消息…'
+                    : `正在上传第 ${Math.max(1, imageUploadProgress.imageIndex)}/${imageUploadProgress.imageCount} 张图片`,
+                percent: imageUploadProgress.percent,
+              }
+            : undefined,
           placeholder: agentAvailable
-            ? '输入消息，Enter 发送，Shift+Enter 换行'
+            ? imageInputAvailable
+              ? '输入消息或粘贴图片，Enter 发送，Shift+Enter 换行'
+              : '输入消息，Enter 发送，Shift+Enter 换行'
             : agentVisualStatus.detail,
+          onPaste: (event) => {
+            const files = Array.from(event.clipboardData.files).filter((file) =>
+              file.type.startsWith('image/'),
+            )
+            if (files.length === 0) return
+            event.preventDefault()
+            void addImages(files)
+          },
+          onDragOver: (event) => {
+            if (Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) {
+              event.preventDefault()
+            }
+          },
+          onDrop: (event) => {
+            const files = Array.from(event.dataTransfer.files).filter((file) =>
+              file.type.startsWith('image/'),
+            )
+            if (files.length === 0) return
+            event.preventDefault()
+            void addImages(files)
+          },
+          enhancements: {
+            images: {
+              items: pendingImages,
+              onRemove: (imageId) => removeRemoteAgentImage(remoteWorkspaceKey, imageId),
+            },
+          },
           actionBar: {
             kind: 'remote',
             runtimeLabel: 'CCLink Agent',
+            onAddImages: (files) => void addImages(files),
             capabilities: {
-              addContext: unsupported('远程 Agent 暂不支持添加本地资源、Skill 或图片'),
+              addContext: imageInputAvailable
+                ? { state: 'enabled' }
+                : unsupported('当前远程 Agent 未声明图片输入能力'),
               role: unsupported('远程 Agent 暂不支持切换角色'),
               permissionMode: unsupported('远程权限由远程 Agent 和当前确认卡管理'),
               contextUsage: unsupported('远程上下文详情暂不可用'),

@@ -3,6 +3,7 @@ import type { CclinkRemoteMessage, CclinkRemoteSession, CclinkServer } from '@sh
 import type { AuthServiceStatus, AuthSession } from '@shared/ipc/auth'
 import type { CclinkRealtimeEvent, CclinkRealtimeStatus } from '@shared/ipc/cclink'
 import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
+import type { TransientImageAttachment } from '@shared/image-attachment'
 
 interface CclinkState {
   service: AuthServiceStatus | null
@@ -12,6 +13,7 @@ interface CclinkState {
   sessions: CclinkRemoteSession[]
   messages: Record<string, CclinkRemoteMessage[]>
   remoteAgentDrafts: Record<string, string>
+  remoteAgentImages: Record<string, TransientImageAttachment[]>
   selectedSessionId: string | null
   activeSessionsRef: RemoteWorkspaceRef | null
   pendingPermissions: Array<{
@@ -38,9 +40,19 @@ interface CclinkState {
   setSessionArchived(sessionId: string, archived: boolean): Promise<boolean>
   selectSession(sessionId: string | null): void
   loadMessages(sessionId: string): Promise<void>
-  sendAgentMessage(ref: RemoteWorkspaceRef, sessionId: string, content: string): Promise<boolean>
+  sendAgentMessage(
+    ref: RemoteWorkspaceRef,
+    sessionId: string,
+    content: string,
+    images?: TransientImageAttachment[],
+    imageUploadId?: string,
+  ): Promise<boolean>
+  stopTrackingAgentRun(ref: RemoteWorkspaceRef, sessionId: string): Promise<boolean>
   setRemoteAgentDraft(workspaceKey: string, content: string): void
   clearRemoteAgentDraft(workspaceKey: string, submittedContent?: string): void
+  addRemoteAgentImages(workspaceKey: string, images: TransientImageAttachment[]): void
+  removeRemoteAgentImage(workspaceKey: string, imageId: string): void
+  clearRemoteAgentImages(workspaceKey: string, submittedImageIds?: string[]): void
   respondPermission(serverId: string, requestId: string, approved: boolean): Promise<void>
   handleRealtimeEvent(event: CclinkRealtimeEvent): void
 }
@@ -57,6 +69,7 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
   sessions: [],
   messages: {},
   remoteAgentDrafts: {},
+  remoteAgentImages: {},
   selectedSessionId: null,
   activeSessionsRef: null,
   pendingPermissions: [],
@@ -150,6 +163,7 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
       sessions: [],
       messages: {},
       remoteAgentDrafts: {},
+      remoteAgentImages: {},
       selectedSessionId: null,
       activeSessionsRef: null,
       pendingPermissions: [],
@@ -231,14 +245,43 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
     }
   },
 
-  sendAgentMessage: async (ref, sessionId, content) => {
+  sendAgentMessage: async (ref, sessionId, content, images, imageUploadId) => {
     set({ error: null })
     try {
-      const result = await window.cclinkStudio.cclink.sendAgentMessage({ ref, sessionId, content })
+      const result = await window.cclinkStudio.cclink.sendAgentMessage({
+        ref,
+        sessionId,
+        content,
+        ...(images?.length ? { images } : {}),
+        ...(imageUploadId ? { imageUploadId } : {}),
+      })
       if (!result.success) {
         set({ error: result.error || '远程消息发送失败' })
         return false
       }
+      return true
+    } catch (error) {
+      set({ error: message(error) })
+      return false
+    }
+  },
+
+  stopTrackingAgentRun: async (ref, sessionId) => {
+    set({ error: null })
+    try {
+      const result = await window.cclinkStudio.cclink.stopTrackingAgentRun({ ref, sessionId })
+      if (!result.success) {
+        set({ error: result.error || '停止跟踪远程任务失败' })
+        return false
+      }
+      set((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === sessionId && session.status === 'active'
+            ? { ...session, status: 'idle' as const }
+            : session,
+        ),
+      }))
+      await get().loadMessages(sessionId)
       return true
     } catch (error) {
       set({ error: message(error) })
@@ -263,6 +306,43 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
       const remoteAgentDrafts = { ...state.remoteAgentDrafts }
       delete remoteAgentDrafts[workspaceKey]
       return { remoteAgentDrafts }
+    }),
+
+  addRemoteAgentImages: (workspaceKey, images) =>
+    set((state) => {
+      const next = [...(state.remoteAgentImages[workspaceKey] ?? [])]
+      for (const image of images) {
+        const existingIndex = next.findIndex((item) => item.id === image.id)
+        if (existingIndex >= 0) next[existingIndex] = image
+        else if (next.length < 5) next.push(image)
+      }
+      return {
+        remoteAgentImages: { ...state.remoteAgentImages, [workspaceKey]: next },
+      }
+    }),
+
+  removeRemoteAgentImage: (workspaceKey, imageId) =>
+    set((state) => {
+      const next = (state.remoteAgentImages[workspaceKey] ?? []).filter(
+        (image) => image.id !== imageId,
+      )
+      const remoteAgentImages = { ...state.remoteAgentImages }
+      if (next.length > 0) remoteAgentImages[workspaceKey] = next
+      else delete remoteAgentImages[workspaceKey]
+      return { remoteAgentImages }
+    }),
+
+  clearRemoteAgentImages: (workspaceKey, submittedImageIds) =>
+    set((state) => {
+      if (!state.remoteAgentImages[workspaceKey]) return state
+      const submitted = submittedImageIds ? new Set(submittedImageIds) : null
+      const next = submitted
+        ? state.remoteAgentImages[workspaceKey].filter((image) => !submitted.has(image.id))
+        : []
+      const remoteAgentImages = { ...state.remoteAgentImages }
+      if (next.length > 0) remoteAgentImages[workspaceKey] = next
+      else delete remoteAgentImages[workspaceKey]
+      return { remoteAgentImages }
     }),
 
   respondPermission: async (serverId, requestId, approved) => {

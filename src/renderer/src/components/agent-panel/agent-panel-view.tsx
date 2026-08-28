@@ -49,6 +49,7 @@ import {
   type AgentComposerToolbarProps,
 } from '../../features/agent-composer/AgentComposerToolbar'
 import { useConversationScroll } from '../../features/agent-conversations/use-conversation-scroll'
+import { AGENT_IMAGE_ACCEPT } from '../../features/agent-conversations/image-attachments'
 
 export type AgentPanelVariant = 'center' | 'side'
 export type AgentPanelRuntime = 'local' | 'remote'
@@ -196,7 +197,9 @@ export interface AgentPanelComposerModel {
   onChange(value: string): void
   onSubmit(): void | Promise<void>
   onStop?(): void | Promise<void>
+  stopLabel?: string
   stopCapability: AgentPanelCapability
+  uploadProgress?: { label: string; percent: number }
   onKeyDownBeforeSubmit?(event: KeyboardEvent<HTMLTextAreaElement>): boolean
   onPaste?: ClipboardEventHandler<HTMLTextAreaElement>
   onDragOver?: DragEventHandler<HTMLTextAreaElement>
@@ -210,6 +213,7 @@ export interface AgentPanelComposerModel {
     | {
         kind: 'remote'
         runtimeLabel: string
+        onAddImages?: (files: File[]) => void
         capabilities: {
           addContext: AgentPanelCapability
           role: AgentPanelCapability
@@ -826,6 +830,15 @@ export function ComposerFrame({
               onRemove={enhancements.images.onRemove}
             />
           ) : null}
+          {model.uploadProgress ? (
+            <div className="agent-upload-progress" aria-live="polite">
+              <div>
+                <span>{model.uploadProgress.label}</span>
+                <span>{model.uploadProgress.percent}%</span>
+              </div>
+              <progress max={100} value={model.uploadProgress.percent} />
+            </div>
+          ) : null}
           <textarea
             ref={model.textareaRef}
             className="agent-input"
@@ -856,6 +869,8 @@ export function ActionBar({
   model: AgentPanelComposerModel
   submit(): void
 }): ReactElement {
+  const remoteImageInputRef = useRef<HTMLInputElement>(null)
+  const stopLabel = model.stopLabel || '停止'
   const primaryAction =
     model.submitting && model.stopCapability.state !== 'hidden' ? (
       <span
@@ -863,7 +878,7 @@ export function ActionBar({
         title={
           model.stopCapability.state === 'disabled'
             ? model.stopCapability.reason || '当前不能停止'
-            : '停止'
+            : stopLabel
         }
       >
         <button
@@ -872,7 +887,11 @@ export function ActionBar({
           data-agent-action="stop"
           onClick={() => void model.onStop?.()}
           disabled={model.stopCapability.state !== 'enabled'}
-          aria-label={model.stopCapability.reason || '停止'}
+          aria-label={
+            model.stopCapability.state === 'disabled'
+              ? model.stopCapability.reason || '当前不能停止'
+              : stopLabel
+          }
         >
           <IconStop size={15} />
         </button>
@@ -910,6 +929,7 @@ export function ActionBar({
     icon: ReactElement,
     className = 'agent-mode-btn',
     showLabel = true,
+    onClick?: () => void,
   ): ReactElement | null => {
     const capability = remote.capabilities[id]
     if (capability.state === 'hidden') return null
@@ -920,6 +940,7 @@ export function ActionBar({
         data-agent-action={id}
         disabled={capability.state !== 'enabled'}
         title={capability.reason || label}
+        onClick={onClick}
       >
         {icon}
         {showLabel ? <span>{label}</span> : null}
@@ -930,12 +951,25 @@ export function ActionBar({
   return (
     <div className="agent-composer-toolbar" data-agent-landmark="action-bar">
       <div className="agent-composer-tools">
+        <input
+          ref={remoteImageInputRef}
+          type="file"
+          accept={AGENT_IMAGE_ACCEPT}
+          multiple
+          hidden
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? [])
+            event.target.value = ''
+            if (files.length > 0) remote.onAddImages?.(files)
+          }}
+        />
         {capabilityButton(
           'addContext',
-          '添加上下文',
+          '添加图片',
           <IconPlus size={16} />,
           'agent-composer-icon-btn',
           false,
+          () => remoteImageInputRef.current?.click(),
         )}
         {capabilityButton('role', '角色', <IconRobot size={13} />)}
         {capabilityButton('permissionMode', '权限', <IconCircle size={8} />)}

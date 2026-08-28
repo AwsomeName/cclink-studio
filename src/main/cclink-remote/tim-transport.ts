@@ -1,11 +1,17 @@
 import type { CclinkIdentity, CclinkProtocolMessage } from '../../shared/cclink'
 import { isCclinkMessage } from '../../shared/cclink'
-import type { CclinkTransport, CclinkTransportEvent } from './request-router'
+import type { CclinkTransport, CclinkTransportEvent, ImageUploadOptions } from './request-router'
+import type { TransientImageAttachment } from '../../shared/image-attachment'
 
 export interface TimAdapter {
   login(options: { sdkAppId: number; userId: string; userSig: string }): Promise<void>
   logout(): Promise<void>
   sendCustomMessage(peerId: string, payload: string): Promise<void>
+  uploadImage?(
+    peerId: string,
+    image: TransientImageAttachment,
+    options?: ImageUploadOptions,
+  ): Promise<string>
   onCustomMessage(listener: (message: { from: string; payload: string }) => void): () => void
   onStatus(listener: (status: 'online' | 'offline') => void): () => void
 }
@@ -49,6 +55,16 @@ export class TimTransport implements CclinkTransport {
       this.serverToPeer.get(serverId) ?? serverId,
       JSON.stringify(message),
     )
+  }
+
+  async uploadImage(
+    serverId: string,
+    image: TransientImageAttachment,
+    options: ImageUploadOptions = {},
+  ): Promise<string> {
+    if (!this.online) throw new Error('CCLink TIM transport 未登录')
+    if (!this.adapter.uploadImage) throw new Error('当前腾讯 IM 适配器不支持图片上传')
+    return this.adapter.uploadImage(this.serverToPeer.get(serverId) ?? serverId, image, options)
   }
 
   onMessage(listener: (event: CclinkTransportEvent) => void): () => void {

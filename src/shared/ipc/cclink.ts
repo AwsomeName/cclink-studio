@@ -2,10 +2,23 @@ import type { CclinkServer, CclinkWorkspace } from '../cclink'
 import type { CclinkRemoteMessage, CclinkRemoteSession } from '../cclink-runtime'
 import type { RemoteWorkspaceRef } from '../workspace-ref'
 import type { RemoteFileTreeResult } from '../remote-protocol'
+import type { TransientImageAttachment } from '../image-attachment'
 import { defineIpcCall } from './contract'
 
 export interface CclinkRealtimeStatus {
   state: 'idle' | 'connecting' | 'online' | 'offline' | 'error'
+  error?: string
+}
+
+export interface CclinkImageUploadProgress {
+  uploadId: string
+  imageId?: string
+  imageIndex: number
+  imageCount: number
+  loadedBytes: number
+  totalBytes: number
+  percent: number
+  phase: 'preparing' | 'uploading' | 'sending' | 'completed' | 'cancelled' | 'failed'
   error?: string
 }
 
@@ -28,6 +41,13 @@ export interface CclinkApiContract {
     ref: RemoteWorkspaceRef
     sessionId: string
     content: string
+    images?: TransientImageAttachment[]
+    imageUploadId?: string
+  }): Promise<{ success: boolean; error?: string }>
+  cancelAgentImageUpload(input: { uploadId: string }): Promise<{ success: boolean }>
+  stopTrackingAgentRun(input: {
+    ref: RemoteWorkspaceRef
+    sessionId: string
   }): Promise<{ success: boolean; error?: string }>
   resolveToolApproval(input: {
     ref: RemoteWorkspaceRef
@@ -51,13 +71,14 @@ export interface CclinkApiContract {
   }): Promise<{ success: boolean; error?: string }>
   onRealtimeStatus(callback: (status: CclinkRealtimeStatus) => void): () => void
   onRealtimeEvent(callback: (event: CclinkRealtimeEvent) => void): () => void
+  onImageUploadProgress(callback: (progress: CclinkImageUploadProgress) => void): () => void
 }
 
 export interface CclinkRealtimeEvent {
   type: 'conversation' | 'sessions' | 'server' | 'permission'
   serverId: string
   sessionId?: string
-  phase?: 'message' | 'started' | 'streaming' | 'completed' | 'error'
+  phase?: 'message' | 'started' | 'streaming' | 'completed' | 'error' | 'untracked'
   message?: CclinkRemoteMessage
   sessions?: CclinkRemoteSession[]
   permission?: { requestId: string; path: string; operation: string }
@@ -90,9 +111,24 @@ export const cclinkIpc = {
   >('cclink:setSessionArchived'),
   listMessages: defineIpcCall<[sessionId: string], CclinkRemoteMessage[]>('cclink:listMessages'),
   sendAgentMessage: defineIpcCall<
-    [input: { ref: RemoteWorkspaceRef; sessionId: string; content: string }],
+    [
+      input: {
+        ref: RemoteWorkspaceRef
+        sessionId: string
+        content: string
+        images?: TransientImageAttachment[]
+        imageUploadId?: string
+      },
+    ],
     { success: boolean; error?: string }
   >('cclink:sendAgentMessage'),
+  cancelAgentImageUpload: defineIpcCall<[input: { uploadId: string }], { success: boolean }>(
+    'cclink:cancelAgentImageUpload',
+  ),
+  stopTrackingAgentRun: defineIpcCall<
+    [input: { ref: RemoteWorkspaceRef; sessionId: string }],
+    { success: boolean; error?: string }
+  >('cclink:stopTrackingAgentRun'),
   resolveToolApproval: defineIpcCall<
     [
       input: {
@@ -133,4 +169,5 @@ export const cclinkIpc = {
 export const cclinkIpcEvents = {
   realtimeStatus: 'cclink:realtimeStatus',
   realtimeEvent: 'cclink:realtimeEvent',
+  imageUploadProgress: 'cclink:imageUploadProgress',
 } as const

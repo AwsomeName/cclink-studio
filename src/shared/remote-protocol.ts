@@ -19,7 +19,7 @@ export interface RemoteCapabilitySet {
     delete: boolean
   }
   shell: { pty: boolean }
-  agent: { session: boolean; stream: boolean }
+  agent: { session: boolean; stream: boolean; imageInput?: boolean }
 }
 
 export interface RemoteStatus {

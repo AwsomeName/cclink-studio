@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createCclinkEnvelope,
   type CclinkProtocolMessage,
+  type CclinkRemoteMessage,
+  type CclinkRemoteSession,
   type CclinkServer,
 } from '../../shared/cclink'
 import type { RemoteStatus } from '../../shared/remote-protocol'
@@ -11,14 +13,26 @@ import {
   CclinkRequestError,
   type CclinkTransport,
   type CclinkTransportEvent,
+  type ImageUploadOptions,
 } from './request-router'
 
 class ReceivingTransport implements CclinkTransport {
   readonly sent: Array<{ serverId: string; message: CclinkProtocolMessage }> = []
+  readonly uploadedImages: Array<{ serverId: string; imageId: string }> = []
   private readonly listeners = new Set<(event: CclinkTransportEvent) => void>()
 
   async sendMessage(serverId: string, message: CclinkProtocolMessage): Promise<void> {
     this.sent.push({ serverId, message })
+  }
+
+  async uploadImage(
+    serverId: string,
+    image: { id: string; size: number },
+    options: ImageUploadOptions = {},
+  ): Promise<string> {
+    this.uploadedImages.push({ serverId, imageId: image.id })
+    options.onProgress?.(image.size, image.size)
+    return `https://cos.example/${image.id}.png`
   }
 
   onMessage(listener: (event: CclinkTransportEvent) => void): () => void {
@@ -45,7 +59,11 @@ const storedSession = {
 }
 
 function createService(
-  loadedState = { version: 1 as const, sessions: [storedSession], messages: {} },
+  loadedState: {
+    version: 1
+    sessions: CclinkRemoteSession[]
+    messages: Record<string, CclinkRemoteMessage[]>
+  } = { version: 1, sessions: [storedSession], messages: {} },
 ) {
   const store = {
     load: vi.fn(async () => loadedState),
@@ -184,8 +202,8 @@ describe('CclinkRemoteService runtime protocol', () => {
         agent: { runtime_select: true, stream_json_input: true },
         session: { streaming: false },
       },
-      capability_map: { runtime_select: true, stream_json_input: true },
-      capability_list: ['runtime_select', 'stream_json_input'],
+      capability_map: { runtime_select: true, stream_json_input: true, image_input: true },
+      capability_list: ['runtime_select', 'stream_json_input', 'image_input'],
     })
 
     const status = await service.getStatus(remoteRef)
@@ -201,12 +219,12 @@ describe('CclinkRemoteService runtime protocol', () => {
         response: expect.objectContaining({
           cc_type: 'capability_probe_response',
           agentVersion: '0.8.41',
-          capability_list: ['runtime_select', 'stream_json_input'],
+          capability_list: ['runtime_select', 'stream_json_input', 'image_input'],
         }),
       },
       capabilities: {
         file: { write: true },
-        agent: { session: true, stream: true },
+        agent: { session: true, stream: true, imageInput: true },
       },
     })
     expect(status.remoteError).toBeUndefined()
@@ -224,6 +242,230 @@ describe('CclinkRemoteService runtime protocol', () => {
         }
       ).servers.get('agent-1')?.capabilities?.file_write,
     ).toBe(true)
+  })
+
+  it('uploads remote images before sending their URLs in user_text', async () => {
+    const { service } = createService()
+    await service.initialize()
+    installOnlineServer(service)
+    const transport = new ReceivingTransport()
+    service.getRequestRouter().attach(transport)
+    vi.spyOn(service, 'getStatus').mockResolvedValue({
+      ...onlineStatus,
+      capabilities: {
+        ...onlineStatus.capabilities,
+        agent: { session: true, stream: true, imageInput: true },
+      },
+    })
+    const image = {
+      id: 'image-1',
+      name: 'screen.png',
+      mediaType: 'image/png' as const,
+      data: 'AQID',
+      size: 3,
+    }
+    const progress: Array<{ phase: string; percent: number }> = []
+    service.onImageUploadProgress((event) =>
+      progress.push({ phase: event.phase, percent: event.percent }),
+    )
+
+    await expect(
+      service.sendAgentMessage(
+        remoteRef,
+        'session-1',
+        '',
+        [image],
+        '6e168c6e-82d8-4c8c-8092-1a3666704368',
+      ),
+    ).resolves.toEqual({ success: true })
+
+    expect(transport.uploadedImages).toEqual([{ serverId: 'agent-1', imageId: 'image-1' }])
+    expect(transport.sent).toHaveLength(1)
+    expect(transport.sent[0]?.message).toMatchObject({
+      cc_type: 'user_text',
+      session_id: 'session-1',
+      content: '',
+      images: ['https://cos.example/image-1.png'],
+    })
+    expect(service.listMessages('session-1').at(-1)).toMatchObject({
+      type: 'user',
+      content: '图片消息（1 张）',
+    })
+    expect(progress).toEqual([
+      { phase: 'preparing', percent: 0 },
+      { phase: 'uploading', percent: 100 },
+      { phase: 'sending', percent: 100 },
+      { phase: 'completed', percent: 100 },
+    ])
+    service.getRequestRouter().detach()
+  })
+
+  it('aborts the active image request and never sends user_text after cancellation', async () => {
+    const { service } = createService()
+    await service.initialize()
+    installOnlineServer(service)
+    vi.spyOn(service, 'getStatus').mockResolvedValue({
+      ...onlineStatus,
+      capabilities: {
+        ...onlineStatus.capabilities,
+        agent: { session: true, stream: true, imageInput: true },
+      },
+    })
+    const router = service.getRequestRouter()
+    let signal: AbortSignal | undefined
+    let markUploadStarted!: () => void
+    const uploadStarted = new Promise<void>((resolve) => {
+      markUploadStarted = resolve
+    })
+    vi.spyOn(router, 'uploadImage').mockImplementation(async (_serverId, _image, options) => {
+      signal = options?.signal
+      markUploadStarted()
+      await new Promise<void>((_resolve, reject) => {
+        options?.signal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('Aborted', 'AbortError')),
+          { once: true },
+        )
+      })
+      return 'https://cos.example/unreachable.png'
+    })
+    const send = vi.spyOn(router, 'send')
+    const progress = vi.fn()
+    service.onImageUploadProgress(progress)
+    const uploadId = 'a0169001-5981-4a0c-bc93-d35ab73777bb'
+    const sending = service.sendAgentMessage(
+      remoteRef,
+      'session-1',
+      '',
+      [{ id: 'image-1', name: 'screen.png', mediaType: 'image/png', data: 'AQID', size: 3 }],
+      uploadId,
+    )
+
+    await uploadStarted
+    expect(signal?.aborted).toBe(false)
+    expect(service.cancelAgentImageUpload(uploadId)).toBe(true)
+    await expect(sending).resolves.toEqual({ success: false, error: '图片上传已取消' })
+
+    expect(signal?.aborted).toBe(true)
+    expect(send).not.toHaveBeenCalled()
+    expect(service.listMessages('session-1')).toEqual([])
+    expect(progress).toHaveBeenLastCalledWith(
+      expect.objectContaining({ uploadId, phase: 'cancelled', error: '图片上传已取消' }),
+    )
+    expect(service.cancelAgentImageUpload(uploadId)).toBe(false)
+  })
+
+  it('stops local tracking without claiming remote cancellation and ignores late stopped events', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+    installOnlineServer(service)
+    const transport = new ReceivingTransport()
+    service.getRequestRouter().attach(transport)
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+
+    await expect(service.sendAgentMessage(remoteRef, 'session-1', '执行长任务')).resolves.toEqual({
+      success: true,
+    })
+    const requestId = transport.sent[0]?.message.request_id
+    expect(requestId).toBeTruthy()
+
+    expect(service.stopTrackingAgentRun(remoteRef, 'session-1')).toEqual({ success: true })
+    expect(transport.sent).toHaveLength(1)
+    expect(
+      (
+        service as unknown as {
+          sessions: Map<string, typeof storedSession>
+        }
+      ).sessions.get('session-1')?.status,
+    ).toBe('idle')
+    expect(service.listMessages('session-1').at(-1)).toMatchObject({
+      type: 'system',
+      content: expect.stringContaining('不代表远端已取消'),
+    })
+
+    await handle({
+      ...createCclinkEnvelope('stream_start', { request_id: requestId, trace_id: requestId }),
+      session_id: 'session-1',
+      msg_id: 'late-message',
+    })
+    await handle({
+      ...createCclinkEnvelope('stream_end', { request_id: requestId, trace_id: requestId }),
+      session_id: 'session-1',
+      msg_id: 'late-message',
+      final_text: '迟到结果不应重新关联',
+    })
+
+    expect(
+      (
+        service as unknown as {
+          sessions: Map<string, typeof storedSession>
+        }
+      ).sessions.get('session-1')?.status,
+    ).toBe('idle')
+    expect(service.listMessages('session-1')).not.toContainEqual(
+      expect.objectContaining({ content: '迟到结果不应重新关联' }),
+    )
+    service.getRequestRouter().detach()
+  })
+
+  it('reconciles a persisted active session after Studio loses runtime ownership', async () => {
+    const { service, store } = createService({
+      version: 1 as const,
+      sessions: [{ ...storedSession, status: 'active' as const }],
+      messages: {},
+    })
+
+    await service.initialize()
+
+    expect(
+      (
+        service as unknown as {
+          sessions: Map<string, typeof storedSession>
+        }
+      ).sessions.get('session-1')?.status,
+    ).toBe('idle')
+    expect(service.listMessages('session-1').at(-1)).toMatchObject({
+      type: 'system',
+      content: expect.stringContaining('重启后停止跟踪'),
+    })
+    expect(store.save).toHaveBeenCalledOnce()
+  })
+
+  it('does not send a partial user_text or append history when image upload fails', async () => {
+    const { service } = createService()
+    await service.initialize()
+    installOnlineServer(service)
+    vi.spyOn(service, 'getStatus').mockResolvedValue({
+      ...onlineStatus,
+      capabilities: {
+        ...onlineStatus.capabilities,
+        agent: { session: true, stream: true, imageInput: true },
+      },
+    })
+    const router = service.getRequestRouter()
+    vi.spyOn(router, 'uploadImage').mockRejectedValue(new Error('COS upload failed'))
+    const send = vi.spyOn(router, 'send')
+
+    await expect(
+      service.sendAgentMessage(
+        remoteRef,
+        'session-1',
+        '分析截图',
+        [
+          {
+            id: 'image-1',
+            name: 'screen.png',
+            mediaType: 'image/png',
+            data: 'AQID',
+            size: 3,
+          },
+        ],
+        '6c26020a-1e3f-41f2-a00d-4e6623ad5514',
+      ),
+    ).resolves.toEqual({ success: false, error: 'COS upload failed' })
+
+    expect(send).not.toHaveBeenCalled()
+    expect(service.listMessages('session-1')).toEqual([])
   })
 
   it('preserves the capability probe transport failure instead of reporting missing capability', async () => {

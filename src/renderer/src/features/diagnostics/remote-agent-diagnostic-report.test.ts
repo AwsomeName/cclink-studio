@@ -107,4 +107,30 @@ describe('remote Agent diagnostic report', () => {
     })
     expect(markdown).toContain('Studio 显示已结束，但当前进程没有捕获结束事件')
   })
+
+  it('does not use an older request terminal event to close the latest outbound turn', () => {
+    const markdown = buildRemoteAgentDiagnosticMarkdown({
+      appVersion: '0.1.42',
+      platform: 'Linux',
+      report: {
+        ...report,
+        agentSession: {
+          ...report.agentSession!,
+          session: { ...report.agentSession!.session, status: 'active' },
+          events: [
+            ...report.agentSession!.events,
+            {
+              timestamp: 1_700_000_000_200,
+              direction: 'outbound',
+              type: 'user_text',
+              requestId: 'request-2',
+            },
+          ],
+        },
+      },
+    })
+
+    expect(markdown).toContain('结束判断：仍在运行，尚未收到结束事件')
+    expect(markdown).not.toContain('结束判断：已收到结束事件')
+  })
 })
