@@ -217,11 +217,18 @@ export interface CclinkFileTreeResponseMessage extends CclinkEnvelope {
 
 export interface CclinkFileReadResponseMessage extends CclinkEnvelope {
   cc_type: 'file_read_response'
-  path: string
-  content: string
-  total_lines: number
+  path?: string
+  content?: string
+  total_lines?: number
+  start_line?: number
+  end_line?: number
   has_more?: boolean
   content_sha256?: string
+  content_truncated?: boolean
+  content_bytes?: number
+  is_binary?: boolean
+  size?: number
+  mime_type?: string
   error?: string
 }
 

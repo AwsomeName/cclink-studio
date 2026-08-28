@@ -97,6 +97,8 @@ const FILE_CHUNK_BYTES = 4096 as const
 const MAX_MUTATION_MESSAGE_BYTES = 11 * 1024
 const CHUNK_SEND_CONCURRENCY = 8
 const REMOTE_SESSION_DIAGNOSTIC_MESSAGE_LIMIT = 100
+const REMOTE_FILE_READ_PAGE_LINES = 100
+const MAX_REMOTE_FILE_READ_ATTEMPTS = 4096
 
 export class CclinkRemoteService implements RemoteProvider {
   readonly transport = 'cclink' as const
@@ -728,46 +730,178 @@ export class CclinkRemoteService implements RemoteProvider {
     if (validation) return validation
     try {
       await this.requireCapability(request.ref, 'file.read')
-      const message = {
-        ...createCclinkEnvelope('file_read_request'),
-        path: request.path,
-        start_line: request.startLine,
-        end_line: request.endLine,
-        file_scope: 'server',
-      }
-      const response = (await this.requestRouter.request(request.ref.endpointId, message, [
-        'file_read_response',
-      ])) as CclinkFileReadResponseMessage
-      if (response.error) {
-        const result = failure('file-provider', REMOTE_ERROR_CODE.FILE_FAILED, response.error, true)
-        this.recordDiagnostic('file.read', request.ref.endpointId, result)
-        return result
-      }
-      if (Buffer.byteLength(response.content ?? '', 'utf8') > 4 * 1024 * 1024) {
-        const result = failure(
-          'file-provider',
-          'REMOTE_FILE_TOO_LARGE',
-          '远程文件超过 4 MiB 读取上限',
+      const firstLine = normalizePositiveLine(request.startLine) ?? 1
+      const requestedEndLine = normalizePositiveLine(request.endLine)
+      if (requestedEndLine !== undefined && requestedEndLine < firstLine) {
+        return this.fileReadFailure(
+          request.ref.endpointId,
+          REMOTE_ERROR_CODE.FILE_PROTOCOL_INVALID,
+          '远程文件读取范围无效',
           false,
         )
-        this.recordDiagnostic('file.read', request.ref.endpointId, result)
-        return result
       }
-      return {
-        success: true,
-        file: {
-          path: response.path,
-          content: response.content,
-          totalLines: response.total_lines,
-          complete: response.has_more !== true,
-          ...(response.content_sha256 ? { sha256: response.content_sha256 } : {}),
-        },
+
+      const chunks: string[] = []
+      let nextLine = firstLine
+      let pageLineLimit = REMOTE_FILE_READ_PAGE_LINES
+      let totalLines: number | null = null
+      let sha256: string | null = null
+      let accumulatedBytes = 0
+
+      for (let attempt = 0; attempt < MAX_REMOTE_FILE_READ_ATTEMPTS; attempt += 1) {
+        const endLine = Math.min(
+          nextLine + pageLineLimit - 1,
+          requestedEndLine ?? Number.MAX_SAFE_INTEGER,
+        )
+        const message = {
+          ...createCclinkEnvelope('file_read_request'),
+          path: request.path,
+          start_line: nextLine,
+          end_line: endLine,
+          file_scope: 'server',
+        }
+        const response = (await this.requestRouter.request(request.ref.endpointId, message, [
+          'file_read_response',
+        ])) as CclinkFileReadResponseMessage
+
+        if (response.error) {
+          return this.fileReadFailure(
+            request.ref.endpointId,
+            REMOTE_ERROR_CODE.FILE_FAILED,
+            response.error,
+            true,
+          )
+        }
+        if (response.is_binary === true) {
+          return this.fileReadFailure(
+            request.ref.endpointId,
+            REMOTE_ERROR_CODE.FILE_FAILED,
+            '远程文件是二进制文件，无法在文本编辑器中打开',
+            false,
+          )
+        }
+        if (response.content_truncated === true || response.payload_truncated === true) {
+          if (pageLineLimit === 1) {
+            return this.fileReadFailure(
+              request.ref.endpointId,
+              REMOTE_ERROR_CODE.FILE_READ_INCOMPLETE,
+              '远程文件包含超过消息上限的单行，无法安全读取完整内容',
+              false,
+            )
+          }
+          pageLineLimit = Math.max(1, Math.floor(pageLineLimit / 2))
+          continue
+        }
+
+        const responseTotalLines = normalizePositiveLine(response.total_lines)
+        const responseStartLine = normalizePositiveLine(response.start_line) ?? nextLine
+        const responseEndLine =
+          normalizePositiveLine(response.end_line) ??
+          (responseTotalLines === undefined ? undefined : Math.min(endLine, responseTotalLines))
+        if (
+          response.content === undefined ||
+          response.path !== request.path ||
+          responseTotalLines === undefined ||
+          responseStartLine !== nextLine ||
+          responseEndLine === undefined ||
+          responseEndLine < responseStartLine ||
+          responseEndLine > endLine ||
+          responseEndLine > responseTotalLines
+        ) {
+          return this.fileReadFailure(
+            request.ref.endpointId,
+            REMOTE_ERROR_CODE.FILE_PROTOCOL_INVALID,
+            '远程 Agent 返回了无效的文件分页响应',
+            true,
+          )
+        }
+        if (totalLines !== null && responseTotalLines !== totalLines) {
+          return this.fileReadFailure(
+            request.ref.endpointId,
+            REMOTE_ERROR_CODE.FILE_CHANGED_DURING_READ,
+            '远程文件在读取过程中发生变化，请重新读取',
+            true,
+          )
+        }
+        totalLines = responseTotalLines
+        if (sha256 !== null && response.content_sha256 !== sha256) {
+          return this.fileReadFailure(
+            request.ref.endpointId,
+            REMOTE_ERROR_CODE.FILE_CHANGED_DURING_READ,
+            '远程文件在读取过程中发生变化，请重新读取',
+            true,
+          )
+        }
+        if (sha256 === null && response.content_sha256) sha256 = response.content_sha256
+
+        const separatorBytes = chunks.length > 0 ? 1 : 0
+        accumulatedBytes += separatorBytes + Buffer.byteLength(response.content, 'utf8')
+        if (accumulatedBytes > MAX_FILE_BYTES) {
+          return this.fileReadFailure(
+            request.ref.endpointId,
+            REMOTE_ERROR_CODE.FILE_TOO_LARGE,
+            '远程文件超过 2 MiB 读取上限',
+            false,
+          )
+        }
+        chunks.push(response.content)
+
+        const hasMore = response.has_more === true || responseEndLine < responseTotalLines
+        const reachedRequestedEnd =
+          requestedEndLine !== undefined && responseEndLine >= requestedEndLine
+        if (!hasMore || reachedRequestedEnd) {
+          const content = chunks.join('\n')
+          const complete = firstLine === 1 && !hasMore
+          if (
+            complete &&
+            sha256 !== null &&
+            createHash('sha256').update(Buffer.from(content, 'utf8')).digest('hex') !== sha256
+          ) {
+            return this.fileReadFailure(
+              request.ref.endpointId,
+              REMOTE_ERROR_CODE.FILE_READ_INCOMPLETE,
+              '远程文件内容校验失败，请重新读取',
+              true,
+            )
+          }
+          return {
+            success: true,
+            file: {
+              path: request.path,
+              content,
+              totalLines,
+              complete,
+              ...(sha256 ? { sha256 } : {}),
+            },
+          }
+        }
+
+        nextLine = responseEndLine + 1
+        pageLineLimit = REMOTE_FILE_READ_PAGE_LINES
       }
+
+      return this.fileReadFailure(
+        request.ref.endpointId,
+        REMOTE_ERROR_CODE.FILE_READ_INCOMPLETE,
+        '远程文件分页数量超过安全上限，无法读取完整内容',
+        false,
+      )
     } catch (error) {
       const result = requestFailure(error)
       this.recordDiagnostic('file.read', request.ref.endpointId, result)
       return result
     }
+  }
+
+  private fileReadFailure(
+    endpointId: string,
+    code: string,
+    message: string,
+    retryable: boolean,
+  ): RemoteFileReadResult {
+    const result = failure('file-provider', code, message, retryable)
+    this.recordDiagnostic('file.read', endpointId, result)
+    return result
   }
 
   async writeFile(request: RemoteFileWriteRequest): Promise<RemoteFileMutationResult> {
@@ -2107,6 +2241,9 @@ function remotePathApi(path: string): typeof posix | typeof win32 {
   return /^[A-Za-z]:[\\/]/u.test(path) || (path.includes('\\') && !path.includes('/'))
     ? win32
     : posix
+}
+function normalizePositiveLine(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : undefined
 }
 function isWithin(root: string, path: string): boolean {
   const api = remotePathApi(root)

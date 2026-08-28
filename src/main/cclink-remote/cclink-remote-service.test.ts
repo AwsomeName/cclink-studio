@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createCclinkEnvelope,
@@ -339,6 +340,155 @@ describe('CclinkRemoteService runtime protocol', () => {
         children: [expect.objectContaining({ name: 'README.md', type: 'file' })],
       },
     })
+  })
+
+  it('reads every remote file page before returning editable content', async () => {
+    const { service } = createService()
+    installOnlineServer(service, [remoteWorkspace])
+    const lines = Array.from({ length: 101 }, (_, index) => `line ${index + 1}`)
+    const content = lines.join('\n')
+    const sha256 = createHash('sha256').update(content).digest('hex')
+    const request = vi
+      .spyOn(service.getRequestRouter(), 'request')
+      .mockResolvedValueOnce(readCapabilityResponse())
+      .mockResolvedValueOnce({
+        ...createCclinkEnvelope('file_read_response'),
+        path: remoteFilePath,
+        content: lines.slice(0, 100).join('\n'),
+        total_lines: lines.length,
+        start_line: 1,
+        end_line: 100,
+        has_more: true,
+        content_sha256: sha256,
+      })
+      .mockResolvedValueOnce({
+        ...createCclinkEnvelope('file_read_response'),
+        path: remoteFilePath,
+        content: lines[100],
+        total_lines: lines.length,
+        start_line: 101,
+        end_line: 101,
+        has_more: false,
+        content_sha256: sha256,
+      })
+
+    await expect(service.readFile({ ref: remoteRef, path: remoteFilePath })).resolves.toEqual({
+      success: true,
+      file: {
+        path: remoteFilePath,
+        content,
+        totalLines: 101,
+        complete: true,
+        sha256,
+      },
+    })
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      'agent-1',
+      expect.objectContaining({ start_line: 1, end_line: 100 }),
+      ['file_read_response'],
+    )
+    expect(request).toHaveBeenNthCalledWith(
+      3,
+      'agent-1',
+      expect.objectContaining({ start_line: 101, end_line: 200 }),
+      ['file_read_response'],
+    )
+  })
+
+  it('retries a transport-truncated file page with a smaller line window', async () => {
+    const { service } = createService()
+    installOnlineServer(service, [remoteWorkspace])
+    const lines = Array.from({ length: 101 }, (_, index) => `line ${index + 1}`)
+    const content = lines.join('\n')
+    const sha256 = createHash('sha256').update(content).digest('hex')
+    const request = vi
+      .spyOn(service.getRequestRouter(), 'request')
+      .mockResolvedValueOnce(readCapabilityResponse())
+      .mockResolvedValueOnce({
+        ...createCclinkEnvelope('file_read_response'),
+        path: remoteFilePath,
+        content: 'partial transport payload',
+        content_truncated: true,
+        total_lines: lines.length,
+        start_line: 1,
+        end_line: 100,
+        has_more: true,
+        content_sha256: sha256,
+      })
+      .mockResolvedValueOnce({
+        ...createCclinkEnvelope('file_read_response'),
+        path: remoteFilePath,
+        content: lines.slice(0, 50).join('\n'),
+        total_lines: lines.length,
+        start_line: 1,
+        end_line: 50,
+        has_more: true,
+        content_sha256: sha256,
+      })
+      .mockResolvedValueOnce({
+        ...createCclinkEnvelope('file_read_response'),
+        path: remoteFilePath,
+        content: lines.slice(50).join('\n'),
+        total_lines: lines.length,
+        start_line: 51,
+        end_line: 101,
+        has_more: false,
+        content_sha256: sha256,
+      })
+
+    await expect(service.readFile({ ref: remoteRef, path: remoteFilePath })).resolves.toMatchObject(
+      {
+        success: true,
+        file: { content, complete: true, sha256 },
+      },
+    )
+    expect(request).toHaveBeenNthCalledWith(
+      3,
+      'agent-1',
+      expect.objectContaining({ start_line: 1, end_line: 50 }),
+      ['file_read_response'],
+    )
+  })
+
+  it('fails closed when the remote file changes between pages', async () => {
+    const { service } = createService()
+    installOnlineServer(service, [remoteWorkspace])
+    const request = vi.spyOn(service.getRequestRouter(), 'request')
+    request
+      .mockResolvedValueOnce(readCapabilityResponse())
+      .mockResolvedValueOnce({
+        ...createCclinkEnvelope('file_read_response'),
+        path: remoteFilePath,
+        content: 'first page',
+        total_lines: 101,
+        start_line: 1,
+        end_line: 100,
+        has_more: true,
+        content_sha256: 'a'.repeat(64),
+      })
+      .mockResolvedValueOnce({
+        ...createCclinkEnvelope('file_read_response'),
+        path: remoteFilePath,
+        content: 'changed page',
+        total_lines: 101,
+        start_line: 101,
+        end_line: 101,
+        has_more: false,
+        content_sha256: 'b'.repeat(64),
+      })
+
+    await expect(service.readFile({ ref: remoteRef, path: remoteFilePath })).resolves.toMatchObject(
+      {
+        success: false,
+        unavailable: false,
+        remoteError: {
+          layer: 'file-provider',
+          code: 'REMOTE_FILE_CHANGED_DURING_READ',
+          retryable: true,
+        },
+      },
+    )
   })
 
   it('only reports missing Agent capability after a clean probe response has no supported signal', async () => {
@@ -930,6 +1080,26 @@ const remoteRef = {
   endpointId: 'agent-1',
   workspaceId: 'workspace-1',
   path: '/srv/project',
+}
+
+const remoteWorkspace = {
+  id: remoteRef.workspaceId,
+  path: remoteRef.path,
+  name: 'project',
+  serverId: remoteRef.endpointId,
+  kind: 'directory',
+  exists: true,
+}
+
+const remoteFilePath = '/srv/project/README.md'
+
+function readCapabilityResponse(): CclinkProtocolMessage {
+  return {
+    ...createCclinkEnvelope('capability_probe_response'),
+    capability_probe_complete: true,
+    capability_map: { file_read: true, stream_json_input: true },
+    capability_list: ['file_read', 'stream_json_input'],
+  }
 }
 
 const onlineStatus: RemoteStatus = {
