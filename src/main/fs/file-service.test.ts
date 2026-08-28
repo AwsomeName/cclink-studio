@@ -66,6 +66,18 @@ describe('FileService', () => {
     await expect(readFile(sourcePath, 'utf-8')).resolves.toBe('new source')
   })
 
+  it('renames files without overwriting an existing target', async () => {
+    const service = new FileService()
+    const sourcePath = join(tempDir, 'source.txt')
+    const targetPath = join(tempDir, 'target.txt')
+    await writeFile(sourcePath, 'source', 'utf-8')
+    await writeFile(targetPath, 'target', 'utf-8')
+
+    await expect(service.rename(sourcePath, targetPath)).rejects.toThrow('EEXIST')
+    await expect(readFile(sourcePath, 'utf-8')).resolves.toBe('source')
+    await expect(readFile(targetPath, 'utf-8')).resolves.toBe('target')
+  })
+
   it('copies files and directories without overwriting existing entries', async () => {
     const service = new FileService()
     const sourceFile = join(tempDir, 'note.txt')

@@ -237,6 +237,16 @@ function saveStoredEditorFiles(state: EditorState): void {
 
 const pendingFileSaves = new Map<string, Promise<void>>()
 let editorFileSessionSequence = 0
+let editorRelocationSequence = 0
+
+interface EditorFileRelocationLock {
+  id: number
+  sourcePrefix: string
+  completion: Promise<void>
+  release: () => void
+}
+
+const editorFileRelocationLocks = new Map<number, EditorFileRelocationLock>()
 
 function createEditorFileSessionId(): number {
   editorFileSessionSequence += 1
@@ -270,6 +280,49 @@ function findEditorFileSession(
   sessionId: number,
 ): [filePath: string, file: EditorFileState] | undefined {
   return Object.entries(files).find(([, file]) => file.sessionId === sessionId)
+}
+
+function isPathWithinPrefix(path: string, prefix: string): boolean {
+  return path === prefix || path.startsWith(prefix + '/')
+}
+
+function findEditorFileRelocationLock(filePath: string): EditorFileRelocationLock | undefined {
+  return Array.from(editorFileRelocationLocks.values()).find((lock) =>
+    isPathWithinPrefix(filePath, lock.sourcePrefix),
+  )
+}
+
+/**
+ * Freeze saves below a path before a file/directory relocation reaches the main process.
+ * Existing saves are allowed to finish; later saves wait until the editor session has either
+ * moved to the committed path or the relocation has failed before touching disk.
+ */
+export async function beginEditorFileRelocation(sourcePrefix: string): Promise<number> {
+  editorRelocationSequence += 1
+  const id = editorRelocationSequence
+  let release!: () => void
+  const completion = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  editorFileRelocationLocks.set(id, { id, sourcePrefix, completion, release })
+
+  try {
+    const pending = Array.from(pendingFileSaves.entries())
+      .filter(([filePath]) => isPathWithinPrefix(filePath, sourcePrefix))
+      .map(([, save]) => save)
+    await Promise.all(pending)
+    return id
+  } catch (error) {
+    endEditorFileRelocation(id)
+    throw error
+  }
+}
+
+export function endEditorFileRelocation(id: number): void {
+  const lock = editorFileRelocationLocks.get(id)
+  if (!lock) return
+  editorFileRelocationLocks.delete(id)
+  lock.release()
 }
 
 function rebasePendingFileSavePaths(oldPrefix: string, newPrefix: string): void {
@@ -413,6 +466,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   saveFile: (requestedPath, options) => {
     const sessionId = ensureEditorFileSessionId(requestedPath, set, get)
     if (sessionId === undefined) return Promise.resolve('saved')
+    const relocationLock = findEditorFileRelocationLock(requestedPath)
+    if (relocationLock) {
+      return relocationLock.completion.then(() => {
+        const located = findEditorFileSession(get().files, sessionId)
+        if (!located) return 'moved'
+        return get().saveFile(located[0], options)
+      })
+    }
     return serializeFileSave(requestedPath, async () => {
       const located = findEditorFileSession(get().files, sessionId)
       if (!located) return 'moved'

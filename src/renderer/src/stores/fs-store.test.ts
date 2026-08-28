@@ -10,6 +10,20 @@ import { useWorkspaceStore } from './workspace-store'
 import { setWorkspaceStateOwnerKey, setWorkspaceStatePath } from '../utils/workspace-state'
 import { toLocalFileUrl } from '../utils/html-files'
 
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
 function snapshot(
   workspaceKey: string | null,
   sections: Record<string, unknown>,
@@ -93,6 +107,7 @@ describe('fs-store workspace switching', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
     setWorkspaceStatePath(null)
     setWorkspaceStateOwnerKey(null)
@@ -660,6 +675,159 @@ describe('fs-store workspace switching', () => {
       browserTab.id,
       toLocalFileUrl(`${workspacePath}/05-c c lin k`),
     )
+  })
+
+  it('keeps a disk rename successful when Browser navigation cannot reload the local file', async () => {
+    const workspacePath = '/Users/apple/project'
+    const sourcePath = `${workspacePath}/index.html`
+    const targetPath = `${workspacePath}/renamed.html`
+    const navigate = window.cclinkStudio.browser.navigate as ReturnType<typeof vi.fn>
+    navigate.mockRejectedValue(new Error('browser view unavailable'))
+    useFsStore.setState({ workspacePath, tree: [] })
+    useTabStore.getState().openTab({
+      type: 'browser',
+      title: 'index.html',
+      icon: '🌐',
+      filePath: sourcePath,
+      forceNew: true,
+    })
+    const browserTab = useTabStore.getState().tabs.find((tab) => tab.type === 'browser')!
+    useBrowserStore.getState().ensureTab(browserTab.id, toLocalFileUrl(sourcePath))
+
+    await expect(useFsStore.getState().confirmRename(sourcePath, 'renamed.html')).resolves.toBe(
+      true,
+    )
+
+    expect(useTabStore.getState().tabs.find((tab) => tab.id === browserTab.id)?.filePath).toBe(
+      targetPath,
+    )
+    expect(useBrowserStore.getState().tabs[browserTab.id]?.url).toBe(toLocalFileUrl(targetPath))
+    expect(useFsStore.getState().operationError).toContain('重命名已完成')
+  })
+
+  it('reports projection recovery instead of disk failure when WorkspaceState persistence fails', async () => {
+    const workspacePath = '/Users/apple/project'
+    const sourcePath = `${workspacePath}/note.txt`
+    const targetPath = `${workspacePath}/renamed.txt`
+    const setSection = window.cclinkStudio.workspaceState.setSection as ReturnType<typeof vi.fn>
+    setSection.mockResolvedValue({ success: false, error: 'state file unavailable' })
+    useFsStore.setState({ workspacePath, tree: [] })
+    useTabStore.getState().openTab({
+      type: 'editor',
+      title: 'note.txt',
+      icon: '📄',
+      filePath: sourcePath,
+    })
+
+    await expect(useFsStore.getState().confirmRename(sourcePath, 'renamed.txt')).resolves.toBe(true)
+
+    expect(window.cclinkStudio.fs.rename).toHaveBeenCalledWith(sourcePath, targetPath)
+    expect(useTabStore.getState().tabs[0]?.filePath).toBe(targetPath)
+    expect(useFsStore.getState().operationError).toContain('重命名已完成')
+  })
+
+  it('keeps the committed rename projected when the follow-up directory refresh fails', async () => {
+    const workspacePath = '/Users/apple/project'
+    const sourcePath = `${workspacePath}/note.txt`
+    const targetPath = `${workspacePath}/renamed.txt`
+    const readDir = window.cclinkStudio.fs.readDir as ReturnType<typeof vi.fn>
+    readDir
+      .mockResolvedValueOnce([
+        {
+          name: 'note.txt',
+          path: sourcePath,
+          type: 'file',
+          size: 1,
+          modifiedAt: 1,
+        },
+      ])
+      .mockRejectedValueOnce(new Error('temporary refresh failure'))
+
+    await useFsStore.getState().setWorkspace(workspacePath)
+    useFsStore.getState().setSelectedPath(sourcePath)
+
+    await expect(useFsStore.getState().confirmRename(sourcePath, 'renamed.txt')).resolves.toBe(true)
+
+    expect(useFsStore.getState().tree).toEqual([
+      expect.objectContaining({ name: 'renamed.txt', path: targetPath }),
+    ])
+    expect(useFsStore.getState().selectedPath).toBe(targetPath)
+    expect(useFsStore.getState().operationError).toContain('重命名已完成')
+  })
+
+  it('retries an idempotent Store projection after the disk rename has committed', async () => {
+    const workspacePath = '/Users/apple/project'
+    const sourcePath = `${workspacePath}/note.txt`
+    const targetPath = `${workspacePath}/renamed.txt`
+    const readDir = window.cclinkStudio.fs.readDir as ReturnType<typeof vi.fn>
+    readDir.mockResolvedValue([])
+    useFsStore.setState({ workspacePath, tree: [] })
+    useTabStore.getState().openTab({
+      type: 'editor',
+      title: 'note.txt',
+      icon: '📄',
+      filePath: sourcePath,
+    })
+    const tabState = useTabStore.getState()
+    const originalRebase = tabState.rebaseFilePaths
+    const rebase = vi
+      .spyOn(tabState, 'rebaseFilePaths')
+      .mockImplementationOnce(() => {
+        throw new Error('injected tab projection failure')
+      })
+      .mockImplementation(originalRebase)
+
+    await expect(useFsStore.getState().confirmRename(sourcePath, 'renamed.txt')).resolves.toBe(true)
+
+    expect(rebase).toHaveBeenCalledTimes(2)
+    expect(useTabStore.getState().tabs[0]?.filePath).toBe(targetPath)
+    expect(useFsStore.getState().operationError).toBeNull()
+  })
+
+  it('queues a save requested during rename and writes it to the committed path', async () => {
+    const workspacePath = '/Users/apple/project'
+    const sourcePath = `${workspacePath}/note.txt`
+    const targetPath = `${workspacePath}/renamed.txt`
+    const renameGate = deferred<void>()
+    const rename = window.cclinkStudio.fs.rename as ReturnType<typeof vi.fn>
+    rename.mockImplementation(() => renameGate.promise)
+    const saveTextDocument = vi.fn().mockResolvedValue({
+      status: 'saved',
+      snapshot: {
+        path: targetPath,
+        content: 'unsaved edit',
+        size: 12,
+        modifiedAt: 2,
+        hash: 'saved-hash',
+      },
+    })
+    Object.assign(window.cclinkStudio.fs, { saveTextDocument })
+    useFsStore.setState({ workspacePath, tree: [] })
+    useEditorStore.setState({
+      files: {
+        [sourcePath]: {
+          savedContent: 'saved',
+          currentContent: 'unsaved edit',
+          dirty: true,
+          loading: false,
+        },
+      },
+      pendingUpdates: [],
+    })
+
+    const renamePromise = useFsStore.getState().confirmRename(sourcePath, 'renamed.txt')
+    await vi.waitFor(() => expect(rename).toHaveBeenCalledWith(sourcePath, targetPath))
+    const savePromise = useEditorStore.getState().saveFile(sourcePath)
+    expect(saveTextDocument).not.toHaveBeenCalled()
+
+    renameGate.resolve()
+    await expect(renamePromise).resolves.toBe(true)
+    await expect(savePromise).resolves.toBe('saved')
+    expect(saveTextDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: targetPath, content: 'unsaved edit' }),
+    )
+    expect(useEditorStore.getState().files[sourcePath]).toBeUndefined()
+    expect(useEditorStore.getState().files[targetPath]?.dirty).toBe(false)
   })
 
   it('moves an open dirty markdown file and rebases its tab and editor buffer', async () => {

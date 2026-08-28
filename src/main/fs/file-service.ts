@@ -588,6 +588,15 @@ export class FileService {
   async rename(oldPath: string, newPath: string): Promise<void> {
     const safeOld = this.validatePath(oldPath)
     const safeNew = this.validatePath(newPath)
+    if (safeOld === safeNew) return
+    const targetParent = await stat(dirname(safeNew))
+    if (!targetParent.isDirectory()) throw new Error('ENOTDIR: 重命名目标不是文件夹')
+    try {
+      await stat(safeNew)
+      throw new Error('EEXIST: 目标文件夹中已存在同名文件或文件夹')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
     await rename(safeOld, safeNew)
   }
 

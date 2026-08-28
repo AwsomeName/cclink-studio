@@ -8,6 +8,7 @@ import {
 } from '../../../shared/workspace-ref'
 import {
   getWorkspaceStateOwnerKey,
+  persistWorkspaceSectionNow,
   persistWorkspaceSection,
   setWorkspaceStatePath,
 } from '../utils/workspace-state'
@@ -33,14 +34,13 @@ import {
   type FileTreeNode,
   type WorkspaceTreeProjection,
 } from '../utils/workspace-tree'
-import { useAgentStore } from './agent-store'
-import { useBrowserStore } from './browser-store'
 import { useOpenProjectsStore } from './open-projects-store'
-import { useEditorStore } from './editor-store'
-import { useTabStore } from './tab-store'
 import { useWorkspaceStore } from './workspace-store'
 import { isMarkdownDocumentPath } from '@shared/markdown-document'
-import { toLocalFileUrl } from '../utils/html-files'
+import {
+  executeFileRelocationTransition,
+  type FileRelocationMove,
+} from '../features/file-relocation/file-relocation-transition'
 
 /** setWorkspace 的最新请求序号（模块级，用于丢弃过期的并发结果，避免竞态） */
 let setWorkspaceSeq = 0
@@ -74,33 +74,6 @@ function replacePathPrefix(
   if (path === oldPrefix) return newPrefix
   if (path.startsWith(oldPrefix + '/')) return newPrefix + path.slice(oldPrefix.length)
   return path
-}
-
-function updateRenamedTabTitle(filePath: string): void {
-  const tabStore = useTabStore.getState()
-  for (const tab of tabStore.tabs) {
-    if (tab.filePath === filePath) {
-      tabStore.updateTabTitle(tab.id, baseName(filePath))
-    }
-  }
-}
-
-function syncRenamedBrowserFileTabs(oldPath: string, newPath: string): void {
-  const oldUrl = toLocalFileUrl(oldPath)
-  const newUrl = toLocalFileUrl(newPath)
-  const browserStore = useBrowserStore.getState()
-  for (const tab of useTabStore.getState().tabs) {
-    if (tab.type !== 'browser' || tab.filePath !== newPath) continue
-    const browserTab = browserStore.tabs[tab.id]
-    if (!browserTab || browserTab.url !== oldUrl) continue
-    browserStore.setUrl(tab.id, newUrl, {
-      history: browserTab.history.map((url) => (url === oldUrl ? newUrl : url)),
-      historyIndex: browserTab.historyIndex,
-    })
-    void window.cclinkStudio.browser
-      .navigate(tab.id, newUrl)
-      .catch((error) => console.warn('[fs-store] 本地 HTML 重命名后重新导航失败:', error))
-  }
 }
 
 /** 把任意错误归一化为用户可读文案，并友好化沙箱越界等常见错误 */
@@ -228,6 +201,109 @@ function replaceDirectoryChildren(
   return changed ? nextNodes : nodes
 }
 
+function sortFileTreeNodes(nodes: FileTreeNode[]): FileTreeNode[] {
+  return [...nodes].sort((left, right) => {
+    if (left.type !== right.type) return left.type === 'directory' ? -1 : 1
+    return left.name.localeCompare(right.name)
+  })
+}
+
+function rebaseFileTreeNode(
+  node: FileTreeNode,
+  sourcePath: string,
+  targetPath: string,
+): FileTreeNode {
+  const path = replacePathPrefix(node.path, sourcePath, targetPath) ?? node.path
+  const children = node.children?.map((child) => rebaseFileTreeNode(child, sourcePath, targetPath))
+  if (path === node.path && children === node.children) return node
+  return {
+    ...node,
+    name: node.path === sourcePath ? baseName(targetPath) : node.name,
+    path,
+    children,
+  }
+}
+
+function removeFileTreeNode(
+  nodes: FileTreeNode[],
+  sourcePath: string,
+): { nodes: FileTreeNode[]; removed: FileTreeNode | null } {
+  let removed: FileTreeNode | null = null
+  const next: FileTreeNode[] = []
+  for (const node of nodes) {
+    if (node.path === sourcePath) {
+      removed = node
+      continue
+    }
+    if (!removed && node.children) {
+      const childResult = removeFileTreeNode(node.children, sourcePath)
+      if (childResult.removed) {
+        removed = childResult.removed
+        next.push({ ...node, children: childResult.nodes })
+        continue
+      }
+    }
+    next.push(node)
+  }
+  return { nodes: removed ? next : nodes, removed }
+}
+
+function insertFileTreeNode(
+  nodes: FileTreeNode[],
+  parentPath: string,
+  workspacePath: string,
+  node: FileTreeNode,
+): FileTreeNode[] {
+  if (parentPath === workspacePath) {
+    if (nodes.some((candidate) => candidate.path === node.path)) return nodes
+    return sortFileTreeNodes([...nodes, node])
+  }
+  let changed = false
+  const next = nodes.map((candidate) => {
+    if (candidate.path === parentPath) {
+      if (!candidate.children || candidate.children.some((child) => child.path === node.path)) {
+        return candidate
+      }
+      changed = true
+      return { ...candidate, children: sortFileTreeNodes([...candidate.children, node]) }
+    }
+    if (!candidate.children) return candidate
+    const children = insertFileTreeNode(candidate.children, parentPath, workspacePath, node)
+    if (children === candidate.children) return candidate
+    changed = true
+    return { ...candidate, children }
+  })
+  return changed ? next : nodes
+}
+
+function projectFileTreeRelocation(
+  tree: FileTreeNode[],
+  workspacePath: string,
+  move: FileRelocationMove,
+): FileTreeNode[] {
+  if (findFileTreeNode(tree, move.targetPath)) return tree
+  const sourceParent = parentDir(move.sourcePath)
+  const targetParent = parentDir(move.targetPath)
+  if (sourceParent === targetParent) {
+    const rebase = (nodes: FileTreeNode[]): FileTreeNode[] =>
+      sortFileTreeNodes(
+        nodes.map((node) =>
+          node.path === move.sourcePath
+            ? rebaseFileTreeNode(node, move.sourcePath, move.targetPath)
+            : node.children
+              ? { ...node, children: rebase(node.children) }
+              : node,
+        ),
+      )
+    return rebase(tree)
+  }
+
+  const removed = removeFileTreeNode(tree, move.sourcePath)
+  if (!removed.removed) return tree
+  const relocated = rebaseFileTreeNode(removed.removed, move.sourcePath, move.targetPath)
+  return insertFileTreeNode(removed.nodes, targetParent, workspacePath, relocated)
+}
+
 export type { FileTreeNode } from '../utils/workspace-tree'
 
 export interface FileClipboardEntry {
@@ -288,7 +364,7 @@ interface FsState {
   /** 切换到未归档，回到隐藏系统工作空间 */
   closeWorkspace: () => Promise<void>
   /** 刷新指定目录 */
-  refreshDir: (dirPath: string) => Promise<void>
+  refreshDir: (dirPath: string) => Promise<boolean>
   /** 刷新整个工作区文件树，并恢复已展开目录 */
   refreshWorkspace: () => Promise<void>
   /** 展开/折叠目录 */
@@ -669,9 +745,11 @@ export const useFsStore = create<FsState>((set, get) => ({
             : replaceDirectoryChildren(state.tree, dirPath, newChildren)
         return tree === state.tree ? state : { tree }
       })
+      return true
     } catch (err) {
       // 子目录加载失败（如无权限）不应污染全局 error（会让 FileTree 切错误态隐藏整棵树），静默即可
       console.warn('[fs-store] refreshDir 失败:', dirPath, err)
+      return false
     }
   },
 
@@ -798,55 +876,76 @@ export const useFsStore = create<FsState>((set, get) => ({
       return true
     }
     try {
-      let companionMove: { oldPath: string; newPath: string } | null = null
-      if (
-        isMarkdownDocumentPath(oldPath) &&
-        isMarkdownDocumentPath(newPath) &&
-        window.cclinkStudio.fs.relocateMarkdownDocument
-      ) {
-        const result = await window.cclinkStudio.fs.relocateMarkdownDocument({
-          sourcePath: oldPath,
-          targetPath: newPath,
-        })
-        useEditorStore.getState().relocateMarkdownFile(oldPath, newPath, result.snapshot)
-        if (result.oldAssetDir && result.newAssetDir) {
-          companionMove = { oldPath: result.oldAssetDir, newPath: result.newAssetDir }
-          useEditorStore.getState().rebaseFilePaths(result.oldAssetDir, result.newAssetDir)
-          useTabStore.getState().rebaseFilePaths(result.oldAssetDir, result.newAssetDir)
-          useAgentStore
-            .getState()
-            .rebaseMountedResourcePaths(result.oldAssetDir, result.newAssetDir)
-        }
-      } else {
-        await window.cclinkStudio.fs.rename(oldPath, newPath)
-        useEditorStore.getState().rebaseFilePaths(oldPath, newPath)
-      }
-      useTabStore.getState().rebaseFilePaths(oldPath, newPath)
-      useAgentStore.getState().rebaseMountedResourcePaths(oldPath, newPath)
-      updateRenamedTabTitle(newPath)
-      syncRenamedBrowserFileTabs(oldPath, newPath)
-      await get().refreshDir(parent)
-      set((state) => {
-        const expandedPaths = state.expandedPaths.map((path) => {
-          const rebased = replacePathPrefix(path, oldPath, newPath) ?? path
-          return companionMove
-            ? (replacePathPrefix(rebased, companionMove.oldPath, companionMove.newPath) ?? rebased)
-            : rebased
-        })
-        let selectedPath = replacePathPrefix(state.selectedPath, oldPath, newPath)
-        if (companionMove) {
-          selectedPath = replacePathPrefix(
-            selectedPath,
-            companionMove.oldPath,
-            companionMove.newPath,
+      const workspacePath = get().workspacePath
+      if (!workspacePath) throw new Error('当前没有打开的工作空间')
+      const result = await executeFileRelocationTransition({
+        workspacePath,
+        sourcePath: oldPath,
+        targetPath: newPath,
+        commitDisk: async () => {
+          if (
+            isMarkdownDocumentPath(oldPath) &&
+            isMarkdownDocumentPath(newPath) &&
+            window.cclinkStudio.fs.relocateMarkdownDocument
+          ) {
+            const relocated = await window.cclinkStudio.fs.relocateMarkdownDocument({
+              sourcePath: oldPath,
+              targetPath: newPath,
+            })
+            return {
+              snapshot: relocated.snapshot,
+              companionMoves:
+                relocated.oldAssetDir && relocated.newAssetDir
+                  ? [
+                      {
+                        sourcePath: relocated.oldAssetDir,
+                        targetPath: relocated.newAssetDir,
+                      },
+                    ]
+                  : [],
+            }
+          }
+          await window.cclinkStudio.fs.rename(oldPath, newPath)
+          return {}
+        },
+        applyFileSystemProjection: (moves) =>
+          set((state) => {
+            const tree = moves.reduce(
+              (current, move) => projectFileTreeRelocation(current, workspacePath, move),
+              state.tree,
+            )
+            const expandedPaths = state.expandedPaths.map((path) =>
+              moves.reduce(
+                (current, move) =>
+                  replacePathPrefix(current, move.sourcePath, move.targetPath) ?? current,
+                path,
+              ),
+            )
+            const selectedPath = moves.reduce<string | null>(
+              (current, move) => replacePathPrefix(current, move.sourcePath, move.targetPath),
+              state.selectedPath,
+            )
+            return { tree, expandedPaths, selectedPath }
+          }),
+        verifyFileSystemProjection: () => get().refreshDir(parent),
+        persistFileSystemProjection: async () => {
+          saveFsPanelState(
+            { expandedPaths: get().expandedPaths, selectedPath: get().selectedPath },
+            workspacePath,
           )
-        }
-        return { expandedPaths, selectedPath, operationError: null }
+          await persistWorkspaceSectionNow(
+            'fileTree',
+            { expandedPaths: get().expandedPaths, selectedPath: get().selectedPath },
+            workspacePath,
+          )
+        },
       })
-      saveFsPanelState(
-        { expandedPaths: get().expandedPaths, selectedPath: get().selectedPath },
-        get().workspacePath,
-      )
+      set({
+        operationError:
+          result.warnings.length > 0
+            ? '重命名已完成，但界面刷新或状态保存未完全成功；请刷新项目'
+            : null,
+      })
       return true
     } catch (err) {
       await get().refreshDir(parent)
@@ -946,63 +1045,82 @@ export const useFsStore = create<FsState>((set, get) => ({
     }
 
     try {
-      let companionMove: { oldPath: string; newPath: string } | null = null
-      if (
-        isMarkdownDocumentPath(sourcePath) &&
-        isMarkdownDocumentPath(destinationPath) &&
-        window.cclinkStudio.fs.relocateMarkdownDocument
-      ) {
-        const result = await window.cclinkStudio.fs.relocateMarkdownDocument({
-          sourcePath,
-          targetPath: destinationPath,
-        })
-        useEditorStore.getState().relocateMarkdownFile(sourcePath, destinationPath, result.snapshot)
-        if (result.oldAssetDir && result.newAssetDir) {
-          companionMove = { oldPath: result.oldAssetDir, newPath: result.newAssetDir }
-          useEditorStore.getState().rebaseFilePaths(result.oldAssetDir, result.newAssetDir)
-          useTabStore.getState().rebaseFilePaths(result.oldAssetDir, result.newAssetDir)
-          useAgentStore
-            .getState()
-            .rebaseMountedResourcePaths(result.oldAssetDir, result.newAssetDir)
-        }
-      } else {
-        await window.cclinkStudio.fs.move(sourcePath, destinationPath)
-        useEditorStore.getState().rebaseFilePaths(sourcePath, destinationPath)
-      }
-      useTabStore.getState().rebaseFilePaths(sourcePath, destinationPath)
-      useAgentStore.getState().rebaseMountedResourcePaths(sourcePath, destinationPath)
-      updateRenamedTabTitle(destinationPath)
-      syncRenamedBrowserFileTabs(sourcePath, destinationPath)
-      set((state) => {
-        const expandedPaths = state.expandedPaths
-          .map((path) => {
-            const rebased = replacePathPrefix(path, sourcePath, destinationPath) ?? path
-            return companionMove
-              ? (replacePathPrefix(rebased, companionMove.oldPath, companionMove.newPath) ??
-                  rebased)
-              : rebased
-          })
-          .filter((path, index, paths) => paths.indexOf(path) === index)
-        if (!expandedPaths.includes(targetDir)) expandedPaths.push(targetDir)
-        let selectedPath = replacePathPrefix(state.selectedPath, sourcePath, destinationPath)
-        if (companionMove) {
-          selectedPath = replacePathPrefix(
-            selectedPath,
-            companionMove.oldPath,
-            companionMove.newPath,
-          )
-        }
-        return {
-          expandedPaths,
-          selectedPath,
-          operationError: null,
-        }
-      })
-      await get().refreshWorkspace()
-      saveFsPanelState(
-        { expandedPaths: get().expandedPaths, selectedPath: get().selectedPath },
+      const sourceParent = parentDir(sourcePath)
+      const result = await executeFileRelocationTransition({
         workspacePath,
-      )
+        sourcePath,
+        targetPath: destinationPath,
+        commitDisk: async () => {
+          if (
+            isMarkdownDocumentPath(sourcePath) &&
+            isMarkdownDocumentPath(destinationPath) &&
+            window.cclinkStudio.fs.relocateMarkdownDocument
+          ) {
+            const relocated = await window.cclinkStudio.fs.relocateMarkdownDocument({
+              sourcePath,
+              targetPath: destinationPath,
+            })
+            return {
+              snapshot: relocated.snapshot,
+              companionMoves:
+                relocated.oldAssetDir && relocated.newAssetDir
+                  ? [
+                      {
+                        sourcePath: relocated.oldAssetDir,
+                        targetPath: relocated.newAssetDir,
+                      },
+                    ]
+                  : [],
+            }
+          }
+          await window.cclinkStudio.fs.move(sourcePath, destinationPath)
+          return {}
+        },
+        applyFileSystemProjection: (moves) =>
+          set((state) => {
+            const tree = moves.reduce(
+              (current, move) => projectFileTreeRelocation(current, workspacePath, move),
+              state.tree,
+            )
+            const expandedPaths = state.expandedPaths
+              .map((path) =>
+                moves.reduce(
+                  (current, move) =>
+                    replacePathPrefix(current, move.sourcePath, move.targetPath) ?? current,
+                  path,
+                ),
+              )
+              .filter((path, index, paths) => paths.indexOf(path) === index)
+            if (!expandedPaths.includes(targetDir)) expandedPaths.push(targetDir)
+            const selectedPath = moves.reduce<string | null>(
+              (current, move) => replacePathPrefix(current, move.sourcePath, move.targetPath),
+              state.selectedPath,
+            )
+            return { tree, expandedPaths, selectedPath }
+          }),
+        verifyFileSystemProjection: async () => {
+          const directories = Array.from(new Set([sourceParent, targetDir]))
+          const verified = await Promise.all(directories.map((path) => get().refreshDir(path)))
+          return verified.every(Boolean)
+        },
+        persistFileSystemProjection: async () => {
+          saveFsPanelState(
+            { expandedPaths: get().expandedPaths, selectedPath: get().selectedPath },
+            workspacePath,
+          )
+          await persistWorkspaceSectionNow(
+            'fileTree',
+            { expandedPaths: get().expandedPaths, selectedPath: get().selectedPath },
+            workspacePath,
+          )
+        },
+      })
+      set({
+        operationError:
+          result.warnings.length > 0
+            ? '移动已完成，但界面刷新或状态保存未完全成功；请刷新项目'
+            : null,
+      })
       return true
     } catch (err) {
       await get().refreshWorkspace()
