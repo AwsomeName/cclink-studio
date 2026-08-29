@@ -9,11 +9,12 @@
 > 不能替代当前工作树的新一轮收敛和验收。
 
 > 补救结果：P0-P5 代码迁移与自动化工程门禁已顺序完成，生产 main/preload 裸 channel 临时 allowlist
-> 已收敛为空；全量现行 invoke 库存校验 shared definition、唯一 handler 与 preload consumer，保留
-> 事件库存记录 producer、真实 renderer consumer、disposer 与 payload 边界。Terminal、Android/Scrcpy、
+> 已收敛为空；全量现行 invoke 库存校验 shared definition、唯一 handler 与 preload consumer，全部
+> 45 个生产事件库存记录 definition、producer、真实 consumer、disposer 与 payload 边界，并由生产
+> 边界引用扫描禁止未登记常量绕过。Terminal、Android/Scrcpy、
 > 数据源及后续 32 个保留 invoke 已迁移，无生产者的 Editor `contentUpdate/contentUpdateAck` 已删除。
 > `pnpm verify` 通过 332 个
-> 测试文件/2041 项测试（2 项跳过），受影响本地 smoke 通过。Android
+> 测试文件/2043 项测试（2 项跳过），受影响本地 smoke 通过。Android
 > 完整 Terminal、Android 真机和真实只读数据源真人验收待环境具备后补，不由 mock 或构建结果代替，
 > 因此不写成 P1-P3 阶段退出。
 

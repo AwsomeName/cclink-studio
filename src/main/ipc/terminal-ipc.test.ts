@@ -324,7 +324,7 @@ describe('registerTerminalIpc', () => {
           workspaceKey: 123,
           permissionPolicy: {
             mode: 'ask-risky-command',
-            requireConfirmationFor: ['write', 'write', 'not-risk'],
+            requireConfirmationFor: ['write', 'write'],
             allowlist: [' pwd ', ''],
             denylist: [' rm -rf   dist '],
           },

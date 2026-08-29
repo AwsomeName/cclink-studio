@@ -96,6 +96,8 @@ IPC 请求/响应完成：
 
 **数据流**：`editor_write/append/insert` → 主进程文件服务写入并回读校验；无明确文件路径的
 `editor_read` → `editor:readRequest/readResponse`；`editor_save` → `editor:saveRequest/saveResult`。
+read/save 订阅允许 Markdown 与源码编辑器等 consumer 并存；每个 disposer 只移除自身 handler，后
+订阅不会替换已有订阅。
 历史 `editor:contentUpdate/contentUpdateAck` 没有 main 生产者，已作为死接口删除，不再作为产品能力
 或 renderer API 对外声明。
 

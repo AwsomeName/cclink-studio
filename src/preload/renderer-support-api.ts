@@ -12,7 +12,7 @@ import type { UpdateApiContract } from '../shared/ipc/update'
 import {
   parseUpdateSnapshot,
   updateIpc,
-  updateSnapshotChangedChannel,
+  updateIpcEvents,
   updateSnapshotChangedEventSchema,
 } from '../shared/update'
 import { wechatIpc, type WechatApiContract } from '../shared/ipc/wechat'
@@ -56,12 +56,7 @@ export const wechatApi: WechatApiContract = {
 
 type OwnedEditorListener = (event: Electron.IpcRendererEvent, ...args: unknown[]) => void
 
-const ownedEditorListeners = new Map<string, OwnedEditorListener>()
-
-function replaceOwnedEditorListener(channel: string, listener: OwnedEditorListener): () => void {
-  const previous = ownedEditorListeners.get(channel)
-  if (previous) ipcRenderer.removeListener(channel, previous)
-  ownedEditorListeners.set(channel, listener)
+function registerOwnedEditorListener(channel: string, listener: OwnedEditorListener): () => void {
   ipcRenderer.on(channel, listener)
 
   let disposed = false
@@ -69,7 +64,6 @@ function replaceOwnedEditorListener(channel: string, listener: OwnedEditorListen
     if (disposed) return
     disposed = true
     ipcRenderer.removeListener(channel, listener)
-    if (ownedEditorListeners.get(channel) === listener) ownedEditorListeners.delete(channel)
   }
 }
 
@@ -79,7 +73,7 @@ export const editorApi: EditorApiContract = {
       const request = parseEditorReadRequest(data)
       if (request) callback(request)
     }
-    return replaceOwnedEditorListener(editorIpcEvents.readRequest, handler)
+    return registerOwnedEditorListener(editorIpcEvents.readRequest, handler)
   },
   readResponse: (id, content) => invokeIpcContract(editorIpc.readResponse, id, content),
   onSaveRequest: (callback) => {
@@ -87,7 +81,7 @@ export const editorApi: EditorApiContract = {
       const request = parseEditorSaveRequest(data)
       if (request) callback(request)
     }
-    return replaceOwnedEditorListener(editorIpcEvents.saveRequest, handler)
+    return registerOwnedEditorListener(editorIpcEvents.saveRequest, handler)
   },
   saveResult: (id, success, error) => invokeIpcContract(editorIpc.saveResult, id, success, error),
 }
@@ -107,7 +101,7 @@ export const updateApi: UpdateApiContract = {
       _event: Electron.IpcRendererEvent,
       value: Parameters<typeof callback>[0],
     ): void => callback(updateSnapshotChangedEventSchema.parse(value))
-    ipcRenderer.on(updateSnapshotChangedChannel, handler)
-    return () => ipcRenderer.removeListener(updateSnapshotChangedChannel, handler)
+    ipcRenderer.on(updateIpcEvents.snapshotChanged, handler)
+    return () => ipcRenderer.removeListener(updateIpcEvents.snapshotChanged, handler)
   },
 }

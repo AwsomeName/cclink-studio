@@ -168,10 +168,11 @@ S0 绿色只表示恢复可信基线。Markdown 注入、明文密钥、Agent �
 2026-08-29 补救结果：P0-P5 代码迁移与自动化工程门禁已顺序完成，Terminal、Android/Scrcpy、数据源和后续 32 个保留 invoke
 均改从 shared 轻量 definition 派生；无生产者的 Editor `contentUpdate/contentUpdateAck` 已删除，
 生产 main/preload 裸 channel allowlist 已收敛为空；全量现行 invoke 库存会校验 shared definition、
-唯一 handler 与 preload consumer，保留事件库存记录 producer、真实 renderer consumer、disposer 和
-payload 边界。Terminal lifecycle/submit 和保留事件补齐有界 parse-first 校验，Android 异常断连会
-先释放本地 decoder、stream 与 listener。当前工作树 `pnpm verify` 通过
-332 个测试文件/2041 项测试（2 项跳过），`smoke:local` 11/11、`smoke:workflow` 21/21、
+唯一 handler 与 preload consumer，全部 45 个生产事件库存记录 definition、producer、真实 consumer、
+disposer 和 payload 边界，并由生产边界引用扫描禁止未登记常量绕过。Terminal 全部 invoke 都校验
+参数数量，lifecycle/submit、权限规则和审计过滤器补齐有界 parse-first 校验；Editor read/save 同
+channel 多订阅并存且精确释放；Android 异常断连会先释放本地 decoder、stream 与 listener。当前工作树 `pnpm verify` 通过
+332 个测试文件/2043 项测试（2 项跳过），`smoke:local` 11/11、`smoke:workflow` 21/21、
 `smoke:restore` 4/4、`smoke:update-recovery` 1/1 通过。S3.2 工程覆盖据此再次关闭，但不等于专项
 方案的 P1-P3 阶段退出；完整 Terminal、Android 真机和真实只读数据源真人验收待具备环境后补，
 不计为已经完成的用户功能验收。全新 Profile 的全量 UI

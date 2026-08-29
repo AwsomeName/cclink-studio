@@ -244,7 +244,6 @@ export const workbenchWindowIpc = {
 export const workbenchWindowIpcEvents = {
   projectionChanged: 'workbenchWindow:projectionChanged',
   placementChanged: 'workbenchWindow:placementChanged',
-  recoveryChanged: 'workbenchWindow:recoveryChanged',
   tabDetachReleased: 'workbenchWindow:tabDetachReleased',
 } as const
 

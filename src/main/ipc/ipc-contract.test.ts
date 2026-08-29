@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import ts from 'typescript'
 import { agentIpcContracts, agentMcpIpcContracts } from '../../shared/ipc/agent-contract'
@@ -52,12 +52,12 @@ import { webResourcesIpc } from '../../shared/web-resources/web-resource'
 import { webAffairsIpcContracts } from '../../shared/web-affairs/web-affair-contract'
 import { webAffairsIpc } from '../../shared/web-affairs/web-affair'
 import {
-  ipcEventFlowInventory,
   ipcInvokeContractInventory,
   legacyIpcChannels,
   legacyIpcEventFlowInventory,
   legacyIpcNamespaceInventory,
 } from './ipc-contract-legacy-inventory'
+import { ipcEventFlowInventory } from './ipc-event-flow-inventory'
 
 describe('IPC invoke contracts', () => {
   it('rejects unexpected arguments for no-argument channels', () => {
@@ -207,6 +207,40 @@ describe('IPC invoke contracts', () => {
         },
       ]),
     ).toThrow()
+    expect(() =>
+      terminalIpcContracts.submitCommand.parseArgs([
+        {
+          terminalSessionId: 'terminal-1',
+          command: 'pwd',
+          actor: 'user',
+          permissionPolicy: {
+            mode: 'ask-risky-command',
+            requireConfirmationFor: ['not-a-risk'],
+          },
+        },
+      ]),
+    ).toThrow()
+    expect(() =>
+      terminalIpcContracts.recordLifecycleEvent.parseArgs([
+        {
+          terminalSessionId: 'terminal-1',
+          kind: 'created',
+          unexpected: { nested: 'x'.repeat(100_001) },
+        },
+      ]),
+    ).toThrow()
+    expect(terminalIpcContracts.listAuditEvents.parseArgs([])).toEqual([undefined])
+    expect(
+      terminalIpcContracts.listAuditEvents.parseArgs([
+        { terminalSessionId: 'terminal-1', workspaceKey: 123, limit: 2.8 },
+      ]),
+    ).toEqual([{ terminalSessionId: 'terminal-1', workspaceKey: 123, limit: 2.8 }])
+    expect(() =>
+      terminalIpcContracts.listAuditEvents.parseArgs([{ nested: { unbounded: true } }]),
+    ).toThrow()
+    expect(() => terminalIpcContracts.listAuditEvents.parseArgs([{}, {}])).toThrow()
+    expect(() => terminalIpcContracts.listSessions.parseArgs(['unexpected'])).toThrow()
+    expect(() => terminalIpcContracts.clearAuditEvents.parseArgs(['unexpected'])).toThrow()
     await expect(
       terminalIpcContracts.startPty.mapParseError?.(
         captureError(() => terminalIpcContracts.startPty.parseArgs([{ terminalSessionId: '' }])),
@@ -600,7 +634,7 @@ describe('IPC invoke contracts', () => {
       ...collectFiles(resolve(process.cwd(), 'src/preload')),
     ].filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
     const rawBoundaryPattern =
-      /(?:ipcMain\.(?:handle|on)|registerTrustedIpc(?:Handler|Listener)|webContents\.send|ipcRenderer\.(?:invoke|send|on|once|removeListener|removeAllListeners)|replaceOwnedEditorListener)\(\s*['"]([^'"]+)['"]/gu
+      /(?:ipcMain\.(?:handle|on)|registerTrustedIpc(?:Handler|Listener)|webContents\.send|ipcRenderer\.(?:invoke|send|on|once|removeListener|removeAllListeners)|registerOwnedEditorListener)\(\s*['"]([^'"]+)['"]/gu
     const violations: string[] = []
 
     for (const file of productionFiles) {
@@ -661,7 +695,7 @@ describe('IPC invoke contracts', () => {
     )
     const channels = new Set<string>()
     const literalCallPattern =
-      /(?:ipcRenderer\.(?:invoke|send|on|once|removeListener|removeAllListeners)|replaceOwnedEditorListener)\(\s*['"]([^'"]+)['"]/gu
+      /(?:ipcRenderer\.(?:invoke|send|on|once|removeListener|removeAllListeners)|registerOwnedEditorListener)\(\s*['"]([^'"]+)['"]/gu
 
     for (const file of preloadFiles) {
       const source = readFileSync(file, 'utf8')
@@ -728,15 +762,24 @@ describe('IPC invoke contracts', () => {
     }
   })
 
-  it('records every retained convergence event with producer, consumer and disposer evidence', () => {
+  it('records every production event with producer, consumer and disposer evidence', () => {
     expect(ipcEventFlowInventory.length).toBeGreaterThan(0)
     expect(new Set(ipcEventFlowInventory.map((entry) => entry.channel)).size).toBe(
       ipcEventFlowInventory.length,
     )
+    expect([...collectDeclaredIpcEvents(resolve(process.cwd(), 'src/shared'))].sort()).toEqual(
+      ipcEventFlowInventory.map((entry) => entry.channel).sort(),
+    )
+    const inventoriedReferences = new Set(
+      ipcEventFlowInventory.map((entry) => `${entry.definitionName}.${entry.key}`),
+    )
+    expect(collectUninventoriedEventReferences(inventoriedReferences)).toEqual([])
 
     for (const event of ipcEventFlowInventory) {
+      const definitionSource = readFileSync(resolve(process.cwd(), event.definitionFile), 'utf8')
+      expect(definitionSource).toContain(`'${event.channel}'`)
       const symbol = event.channel.split(/[:.]/u).at(-1)!
-      const evidenceTerms = event.evidenceTerms ?? [symbol]
+      const evidenceTerms = [symbol, event.key, ...event.evidenceTerms]
       for (const files of [
         event.producerFiles,
         event.bridgeFiles,
@@ -793,6 +836,94 @@ function collectDeclaredIpcChannels(directory: string): Set<string> {
   }
 
   return channels
+}
+
+function collectDeclaredIpcEvents(directory: string): Set<string> {
+  const channels = new Set<string>()
+
+  for (const file of collectFiles(directory).filter(
+    (candidate) => candidate.endsWith('.ts') && !candidate.endsWith('.test.ts'),
+  )) {
+    const sourceFile = ts.createSourceFile(
+      file,
+      readFileSync(file, 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.name.text.endsWith('IpcEvents') &&
+        node.initializer
+      ) {
+        const initializer = ts.isAsExpression(node.initializer)
+          ? node.initializer.expression
+          : node.initializer
+        if (ts.isObjectLiteralExpression(initializer)) {
+          for (const property of initializer.properties) {
+            if (ts.isPropertyAssignment(property) && ts.isStringLiteralLike(property.initializer)) {
+              channels.add(property.initializer.text)
+            }
+          }
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sourceFile)
+  }
+
+  return channels
+}
+
+function collectUninventoriedEventReferences(inventoried: ReadonlySet<string>): string[] {
+  const violations: string[] = []
+  const allowedDynamicReferences = new Set([
+    'src/main/agent/agent-bridge.ts:channel',
+    'src/main/browser/browser-manager.ts:channel',
+    'src/main/ipc/trusted-renderer-guard.ts:channel',
+    'src/main/terminal/terminal-confirmation-service.ts:TERMINAL_CONFIRMATION_CHANNEL',
+    'src/preload/renderer-support-api.ts:channel',
+  ])
+
+  for (const file of [
+    ...collectFiles(resolve(process.cwd(), 'src/main')),
+    ...collectFiles(resolve(process.cwd(), 'src/preload')),
+  ].filter((candidate) => candidate.endsWith('.ts') && !candidate.endsWith('.test.ts'))) {
+    const sourceFile = ts.createSourceFile(
+      file,
+      readFileSync(file, 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const projectFile = relative(process.cwd(), file)
+    const visit = (node: ts.Node): void => {
+      if (!ts.isCallExpression(node) || node.arguments.length === 0) {
+        ts.forEachChild(node, visit)
+        return
+      }
+      const expressionText = node.expression.getText(sourceFile)
+      const isEventBoundary =
+        /ipcRenderer\.(?:on|once|send|removeListener|removeAllListeners)$/u.test(expressionText) ||
+        /(?:^|\.)webContents\??\.send$/u.test(expressionText) ||
+        expressionText === 'sender.send' ||
+        expressionText === 'registerTrustedIpcListener' ||
+        expressionText === 'ipcMain.on'
+      if (isEventBoundary) {
+        const channelExpression = node.arguments[0]!.getText(sourceFile)
+        if (
+          !inventoried.has(channelExpression) &&
+          !allowedDynamicReferences.has(`${projectFile}:${channelExpression}`)
+        ) {
+          violations.push(`${projectFile}:${channelExpression}`)
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sourceFile)
+  }
+
+  return violations.sort()
 }
 
 function captureError(action: () => unknown): unknown {

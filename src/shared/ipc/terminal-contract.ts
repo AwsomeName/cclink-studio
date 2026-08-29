@@ -1,10 +1,5 @@
 import { z } from 'zod'
-import {
-  bindIpcParser,
-  ipcArgs,
-  type IpcInvokeContract,
-  type IpcInvokeDefinition,
-} from './contract'
+import { bindIpcParser, bindNoArgsIpc, ipcArgs } from './contract'
 import {
   terminalIpc,
   type TerminalAuditListFilter,
@@ -17,12 +12,6 @@ import { workspaceRefSchema } from './workspace-ref-schema'
 
 function requireArgs(args: unknown[], count: number, channel: string): void {
   if (args.length !== count) throw new Error(`IPC ${channel} 需要 ${count} 个参数`)
-}
-
-function bindLegacyNoArgs<Result>(
-  definition: IpcInvokeDefinition<[], Result>,
-): IpcInvokeContract<[], Result> {
-  return bindIpcParser(definition, () => ipcArgs())
 }
 
 const terminalIdSchema = z
@@ -62,56 +51,58 @@ const terminalPtyResizeSchema = z
   .object({ terminalSessionId: terminalIdSchema, size: terminalSizeSchema })
   .strict()
 
-const legacyBoundedRuleListSchema = z
-  .array(z.unknown())
-  .max(256)
-  .superRefine((values, context) => {
-    if (values.some((value) => typeof value === 'string' && value.length > 4_096)) {
-      context.addIssue({ code: 'custom', message: 'Terminal 权限规则超过大小限制' })
-    }
-  })
+const terminalPermissionRiskSchema = z.enum([
+  'read',
+  'write',
+  'network',
+  'destructive',
+  'privileged',
+  'unknown',
+])
+const terminalPermissionRuleSchema = z.string().max(4_096)
+const terminalPermissionRuleListSchema = z.array(terminalPermissionRuleSchema).max(256)
 const terminalPermissionPolicySchema = z
   .object({
     mode: z.enum(['read-only', 'ask-every-command', 'ask-risky-command', 'trusted-session']),
-    requireConfirmationFor: legacyBoundedRuleListSchema.optional(),
-    allowlist: legacyBoundedRuleListSchema.optional(),
-    denylist: legacyBoundedRuleListSchema.optional(),
+    requireConfirmationFor: z.array(terminalPermissionRiskSchema).max(256),
+    allowlist: terminalPermissionRuleListSchema.optional(),
+    denylist: terminalPermissionRuleListSchema.optional(),
   })
-  .passthrough()
+  .strict()
+// 旧 handler 会把非字符串 primitive 归一为 null；保留该兼容，但拒绝任意对象/数组。
+const terminalWorkspaceKeySchema = z.union([
+  z.string().max(32_768),
+  z.number().finite(),
+  z.boolean(),
+  z.null(),
+])
 const terminalLifecycleAuditInputSchema = z
   .object({
     terminalSessionId: z.string().min(1).max(256),
-    workspaceKey: z
-      .unknown()
-      .superRefine((value, context) => {
-        if (typeof value === 'string' && value.length > 32_768) {
-          context.addIssue({ code: 'custom', message: 'workspaceKey 超过大小限制' })
-        }
-      })
-      .optional(),
+    workspaceKey: terminalWorkspaceKeySchema.optional(),
     kind: z.enum(['created', 'closed', 'terminated']),
     message: z.string().max(100_000).optional(),
     runtime: terminalRuntimeSchema.optional(),
     permissionPolicy: terminalPermissionPolicySchema.optional(),
     closePolicy: z.enum(['close-view', 'terminate-process', 'keep-running']).optional(),
   })
-  .passthrough()
+  .strict()
 const terminalSubmitCommandInputSchema = z
   .object({
     terminalSessionId: z.string().min(1).max(256),
     command: z.string().min(1).max(100_000),
     actor: z.enum(['user', 'agent', 'system']),
     permissionPolicy: terminalPermissionPolicySchema,
-    workspaceKey: z
-      .unknown()
-      .superRefine((value, context) => {
-        if (typeof value === 'string' && value.length > 32_768) {
-          context.addIssue({ code: 'custom', message: 'workspaceKey 超过大小限制' })
-        }
-      })
-      .optional(),
+    workspaceKey: terminalWorkspaceKeySchema.optional(),
   })
-  .passthrough()
+  .strict()
+const terminalAuditListFilterSchema = z
+  .object({
+    terminalSessionId: terminalIdSchema.optional(),
+    workspaceKey: terminalWorkspaceKeySchema.optional(),
+    limit: z.number().finite().min(0).max(5_000).optional(),
+  })
+  .strict()
 
 function parseSingleObject<T>(args: unknown[], channel: string): T {
   requireArgs(args, 1, channel)
@@ -211,9 +202,16 @@ export const terminalIpcContracts = {
       error: 'terminalSessionId 不能为空',
     }),
   ),
-  listSessions: bindLegacyNoArgs(terminalIpc.listSessions),
+  listSessions: bindNoArgsIpc(terminalIpc.listSessions),
   listAuditEvents: bindIpcParser(terminalIpc.listAuditEvents, (args) => {
-    return ipcArgs(args[0] as TerminalAuditListFilter | undefined)
+    if (args.length > 1) {
+      throw new Error(`IPC ${terminalIpc.listAuditEvents.channel} 最多接受 1 个参数`)
+    }
+    return ipcArgs(
+      args[0] === undefined
+        ? undefined
+        : (terminalAuditListFilterSchema.parse(args[0]) as TerminalAuditListFilter),
+    )
   }),
   clearAuditSession: bindIpcParser(
     terminalIpc.clearAuditSession,
@@ -226,5 +224,5 @@ export const terminalIpcContracts = {
       error: 'terminalSessionId 不能为空',
     }),
   ),
-  clearAuditEvents: bindLegacyNoArgs(terminalIpc.clearAuditEvents),
+  clearAuditEvents: bindNoArgsIpc(terminalIpc.clearAuditEvents),
 } as const

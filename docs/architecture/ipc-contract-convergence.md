@@ -54,14 +54,16 @@ P0-P5 的代码迁移与自动化工程门禁已按顺序完成，未引入新 I
   不可用”时参数错误优先。凭证值不进入 parse 错误，配置与审计不落明文的既有测试继续通过。
 - 全量 invoke 库存从 shared definition 生成，并记录 owner、唯一 handler 文件、preload consumer、
   parser 与 registration scope；测试扫描全部 shared definition，缺登记、缺 handler、重复 handler 或
-  缺 preload consumer 均失败。保留事件另行记录 producer、preload bridge、真实 renderer consumer、
-  disposer 与 payload 边界；空 legacy allowlist 只表示没有遗留裸 channel，不能替代现行库存。
+  缺 preload consumer 均失败。全部 45 个生产事件另行记录 definition、producer、preload bridge、
+  真实 consumer、disposer 与 payload 边界；测试同时扫描事件声明和生产 IPC 边界引用，未登记事件、
+  本地常量绕过或死事件会失败。空 legacy allowlist 只表示没有遗留裸 channel，不能替代现行库存。
 - 全仓生产 main/preload IPC 边界继续机器扫描，新增裸 `ipcMain`、trusted registrar、
   `webContents.send` 或 `ipcRenderer` channel 字面量会直接失败；preload 不得导入本次新增的 main-only
-  contract。Terminal lifecycle/submit 的完整输入先做结构与大小校验，再判断服务状态；Terminal、
-  Android 和 Editor 的保留 main→renderer payload 在 preload 做有界校验。
+  contract。Terminal 全部 invoke 都校验参数数量，lifecycle/submit、权限规则和审计过滤器在服务判断
+  前完成结构与大小校验；Terminal、Android 和 Editor 的保留 main→renderer payload 在 preload 做
+  有界校验。Editor read/save 支持同 channel 多订阅并存，每个 disposer 只释放自身 handler。
 
-当前工程证据：`pnpm verify` 通过 332 个测试文件、2041 项测试（2 项跳过），lint、类型检查和生产
+当前工程证据：`pnpm verify` 通过 332 个测试文件、2043 项测试（2 项跳过），lint、类型检查和生产
 构建通过；`smoke:local` 11/11、`smoke:workflow` 21/21、`smoke:restore` 4/4、
 `smoke:update-recovery` 1/1 通过。全新临时 Profile 的 `smoke:ui` 通过 13/17；失败的 4 项集中在
 Remote Agent Panel、会话快捷入口、Activity Bar 和角色中心，均不经过本次迁移的 IPC 域，作为独立

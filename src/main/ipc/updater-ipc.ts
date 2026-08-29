@@ -1,9 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import {
-  updateIpc,
-  updateSnapshotChangedChannel,
-  updateSnapshotChangedEventSchema,
-} from '../../shared/update'
+import { updateIpc, updateIpcEvents, updateSnapshotChangedEventSchema } from '../../shared/update'
 import type { UpdateService } from '../update/update-service'
 import { registerTrustedIpcContract, type TrustedRendererGuard } from './trusted-renderer-guard'
 
@@ -39,6 +35,6 @@ export function registerUpdaterIpc(
   return service.subscribe((snapshot) => {
     if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
     const event = updateSnapshotChangedEventSchema.parse({ snapshot })
-    mainWindow.webContents.send(updateSnapshotChangedChannel, event)
+    mainWindow.webContents.send(updateIpcEvents.snapshotChanged, event)
   })
 }

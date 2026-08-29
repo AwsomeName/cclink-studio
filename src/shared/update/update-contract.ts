@@ -296,7 +296,12 @@ export const updateIpc = {
   ),
 } as const
 
-export const updateSnapshotChangedChannel = 'updater.snapshotChanged' as const
+export const updateIpcEvents = {
+  snapshotChanged: 'updater.snapshotChanged',
+} as const
+
+/** @deprecated 使用 updateIpcEvents.snapshotChanged。 */
+export const updateSnapshotChangedChannel = updateIpcEvents.snapshotChanged
 
 export function parseUpdateSnapshot(value: unknown): UpdateSnapshot {
   return updateSnapshotSchema.parse(value)

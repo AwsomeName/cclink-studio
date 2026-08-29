@@ -32,7 +32,7 @@ describe('editor preload listener ownership', () => {
   it.each([
     ['editor:readRequest', editorApi.onReadRequest],
     ['editor:saveRequest', editorApi.onSaveRequest],
-  ] as const)('replaces only its own %s listener', (channel, subscribe) => {
+  ] as const)('keeps concurrent %s listeners isolated', (channel, subscribe) => {
     const externalListener = vi.fn()
     ipc.on(channel, externalListener)
     const firstCallback = vi.fn()
@@ -46,11 +46,12 @@ describe('editor preload listener ownership', () => {
 
     expect(ipc.removeAllListeners).not.toHaveBeenCalled()
     expect(externalListener).toHaveBeenCalledOnce()
-    expect(firstCallback).not.toHaveBeenCalled()
+    expect(firstCallback).toHaveBeenCalledOnce()
     expect(secondCallback).toHaveBeenCalledOnce()
 
     disposeFirst()
     expect(ipc.listeners.get(channel)?.has(externalListener)).toBe(true)
+    expect(ipc.listeners.get(channel)?.size).toBe(2)
     disposeSecond()
     disposeSecond()
     expect(ipc.listeners.get(channel)?.has(externalListener)).toBe(true)
