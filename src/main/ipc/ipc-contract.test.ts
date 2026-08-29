@@ -207,7 +207,7 @@ describe('IPC invoke contracts', () => {
         },
       ]),
     ).toThrow()
-    expect(() =>
+    expect(
       terminalIpcContracts.submitCommand.parseArgs([
         {
           terminalSessionId: 'terminal-1',
@@ -217,9 +217,10 @@ describe('IPC invoke contracts', () => {
             mode: 'ask-risky-command',
             requireConfirmationFor: ['not-a-risk'],
           },
-        },
+          legacyExtension: { enabled: true },
+        } as never,
       ]),
-    ).toThrow()
+    ).toHaveLength(1)
     expect(() =>
       terminalIpcContracts.recordLifecycleEvent.parseArgs([
         {
@@ -235,12 +236,18 @@ describe('IPC invoke contracts', () => {
         { terminalSessionId: 'terminal-1', workspaceKey: 123, limit: 2.8 },
       ]),
     ).toEqual([{ terminalSessionId: 'terminal-1', workspaceKey: 123, limit: 2.8 }])
+    expect(
+      terminalIpcContracts.listAuditEvents.parseArgs([{ nested: { legacy: true } } as never]),
+    ).toEqual([{ nested: { legacy: true } }])
+    expect(terminalIpcContracts.listAuditEvents.parseArgs([{}, { ignored: true }])).toEqual([{}])
+    expect(terminalIpcContracts.listSessions.parseArgs(['legacy-extra'])).toEqual([])
+    expect(terminalIpcContracts.clearAuditEvents.parseArgs(['legacy-extra'])).toEqual([])
     expect(() =>
-      terminalIpcContracts.listAuditEvents.parseArgs([{ nested: { unbounded: true } }]),
+      terminalIpcContracts.listAuditEvents.parseArgs([
+        { nested: { oversized: 'x'.repeat(100_001) } } as never,
+      ]),
     ).toThrow()
-    expect(() => terminalIpcContracts.listAuditEvents.parseArgs([{}, {}])).toThrow()
-    expect(() => terminalIpcContracts.listSessions.parseArgs(['unexpected'])).toThrow()
-    expect(() => terminalIpcContracts.clearAuditEvents.parseArgs(['unexpected'])).toThrow()
+    expect(() => terminalIpcContracts.listSessions.parseArgs(['x'.repeat(100_001)])).toThrow()
     await expect(
       terminalIpcContracts.startPty.mapParseError?.(
         captureError(() => terminalIpcContracts.startPty.parseArgs([{ terminalSessionId: '' }])),
@@ -774,6 +781,19 @@ describe('IPC invoke contracts', () => {
       ipcEventFlowInventory.map((entry) => `${entry.definitionName}.${entry.key}`),
     )
     expect(collectUninventoriedEventReferences(inventoriedReferences)).toEqual([])
+    expect(
+      collectEventReferenceViolations(
+        'src/preload/rogue-helper.ts',
+        `function subscribe(channel: string, listener: () => void) {
+          ipcRenderer.on(channel, listener)
+        }
+        registerOwnedEditorListener(channel, listener)`,
+        inventoriedReferences,
+      ),
+    ).toEqual([
+      'src/preload/rogue-helper.ts:ipcRenderer.on:channel',
+      'src/preload/rogue-helper.ts:registerOwnedEditorListener:channel',
+    ])
 
     for (const event of ipcEventFlowInventory) {
       const definitionSource = readFileSync(resolve(process.cwd(), event.definitionFile), 'utf8')
@@ -878,52 +898,126 @@ function collectDeclaredIpcEvents(directory: string): Set<string> {
 
 function collectUninventoriedEventReferences(inventoried: ReadonlySet<string>): string[] {
   const violations: string[] = []
-  const allowedDynamicReferences = new Set([
-    'src/main/agent/agent-bridge.ts:channel',
-    'src/main/browser/browser-manager.ts:channel',
-    'src/main/ipc/trusted-renderer-guard.ts:channel',
-    'src/main/terminal/terminal-confirmation-service.ts:TERMINAL_CONFIRMATION_CHANNEL',
-    'src/preload/renderer-support-api.ts:channel',
-  ])
 
   for (const file of [
     ...collectFiles(resolve(process.cwd(), 'src/main')),
     ...collectFiles(resolve(process.cwd(), 'src/preload')),
   ].filter((candidate) => candidate.endsWith('.ts') && !candidate.endsWith('.test.ts'))) {
-    const sourceFile = ts.createSourceFile(
-      file,
-      readFileSync(file, 'utf8'),
-      ts.ScriptTarget.Latest,
-      true,
+    violations.push(
+      ...collectEventReferenceViolations(
+        relative(process.cwd(), file),
+        readFileSync(file, 'utf8'),
+        inventoried,
+      ),
     )
-    const projectFile = relative(process.cwd(), file)
-    const visit = (node: ts.Node): void => {
-      if (!ts.isCallExpression(node) || node.arguments.length === 0) {
-        ts.forEachChild(node, visit)
-        return
-      }
-      const expressionText = node.expression.getText(sourceFile)
-      const isEventBoundary =
-        /ipcRenderer\.(?:on|once|send|removeListener|removeAllListeners)$/u.test(expressionText) ||
-        /(?:^|\.)webContents\??\.send$/u.test(expressionText) ||
-        expressionText === 'sender.send' ||
-        expressionText === 'registerTrustedIpcListener' ||
-        expressionText === 'ipcMain.on'
-      if (isEventBoundary) {
-        const channelExpression = node.arguments[0]!.getText(sourceFile)
-        if (
-          !inventoried.has(channelExpression) &&
-          !allowedDynamicReferences.has(`${projectFile}:${channelExpression}`)
-        ) {
-          violations.push(`${projectFile}:${channelExpression}`)
-        }
-      }
-      ts.forEachChild(node, visit)
-    }
-    visit(sourceFile)
   }
 
   return violations.sort()
+}
+
+function collectEventReferenceViolations(
+  projectFile: string,
+  source: string,
+  inventoried: ReadonlySet<string>,
+): string[] {
+  const violations: string[] = []
+  const sourceFile = ts.createSourceFile(projectFile, source, ts.ScriptTarget.Latest, true)
+  const visit = (node: ts.Node): void => {
+    if (!ts.isCallExpression(node) || node.arguments.length === 0) {
+      ts.forEachChild(node, visit)
+      return
+    }
+    const expressionText = node.expression.getText(sourceFile)
+    const isDirectEventBoundary =
+      /ipcRenderer\.(?:on|once|send|removeListener|removeAllListeners)$/u.test(expressionText) ||
+      /(?:^|\.)webContents\??\.send$/u.test(expressionText) ||
+      expressionText === 'sender.send' ||
+      expressionText === 'registerTrustedIpcListener' ||
+      expressionText === 'ipcMain.on'
+    const isChannelHelper =
+      /(?:^|\.)(?:sendToOwner|sendToTabOwner)$/u.test(expressionText) ||
+      expressionText === 'registerOwnedEditorListener'
+    if (isDirectEventBoundary || isChannelHelper) {
+      const channelArgumentIndex = /(?:^|\.)(?:sendToOwner|sendToTabOwner)$/u.test(expressionText)
+        ? 1
+        : 0
+      const channelExpression = node.arguments[channelArgumentIndex]?.getText(sourceFile)
+      if (!channelExpression) {
+        violations.push(`${projectFile}:${expressionText}:missing-channel`)
+        ts.forEachChild(node, visit)
+        return
+      }
+      if (
+        !inventoried.has(channelExpression) &&
+        !isApprovedDynamicChannelBoundary(projectFile, expressionText, channelExpression, node)
+      ) {
+        violations.push(`${projectFile}:${expressionText}:${channelExpression}`)
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return violations.sort()
+}
+
+function isApprovedDynamicChannelBoundary(
+  projectFile: string,
+  expressionText: string,
+  channelExpression: string,
+  node: ts.CallExpression,
+): boolean {
+  if (channelExpression !== 'channel') return false
+  const owner = findEnclosingFunctionName(node)
+  if (
+    projectFile === 'src/main/browser/browser-manager.ts' &&
+    expressionText === 'webContents.send' &&
+    (owner === 'sendToOwner' || owner === 'sendToTabOwner')
+  ) {
+    return true
+  }
+  if (
+    projectFile === 'src/main/ipc/trusted-renderer-guard.ts' &&
+    expressionText === 'ipcMain.on' &&
+    (owner === 'on' || owner === 'registerTrustedIpcListener')
+  ) {
+    return true
+  }
+  if (
+    projectFile === 'src/preload/renderer-support-api.ts' &&
+    (expressionText === 'ipcRenderer.on' || expressionText === 'ipcRenderer.removeListener') &&
+    owner === 'registerOwnedEditorListener'
+  ) {
+    return true
+  }
+  if (
+    projectFile === 'src/main/runtime/window-runtime.ts' &&
+    /\.sendToTabOwner$/u.test(expressionText)
+  ) {
+    const constructorName = findEnclosingNewExpressionName(node)
+    return constructorName === 'BrowserTaskRuntime' || constructorName === 'BrowserDownloadStore'
+  }
+  return false
+}
+
+function findEnclosingFunctionName(node: ts.Node): string | null {
+  let current: ts.Node | undefined = node.parent
+  while (current) {
+    if (ts.isMethodDeclaration(current) && current.name) return current.name.getText()
+    if (ts.isFunctionDeclaration(current) && current.name) return current.name.text
+    if (ts.isFunctionExpression(current) && current.name) return current.name.text
+    current = current.parent
+  }
+  return null
+}
+
+function findEnclosingNewExpressionName(node: ts.Node): string | null {
+  let current: ts.Node | undefined = node.parent
+  while (current) {
+    if (ts.isNewExpression(current)) return current.expression.getText()
+    if (ts.isFunctionDeclaration(current) || ts.isMethodDeclaration(current)) return null
+    current = current.parent
+  }
+  return null
 }
 
 function captureError(action: () => unknown): unknown {

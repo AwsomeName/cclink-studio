@@ -1,5 +1,11 @@
 import { z } from 'zod'
-import { bindIpcParser, bindNoArgsIpc, ipcArgs } from './contract'
+import {
+  bindIpcParser,
+  ipcArgs,
+  type IpcInvokeContract,
+  type IpcInvokeDefinition,
+} from './contract'
+import { isBoundedIpcEventPayload } from './event-payload'
 import {
   terminalIpc,
   type TerminalAuditListFilter,
@@ -12,6 +18,18 @@ import { workspaceRefSchema } from './workspace-ref-schema'
 
 function requireArgs(args: unknown[], count: number, channel: string): void {
   if (args.length !== count) throw new Error(`IPC ${channel} 需要 ${count} 个参数`)
+}
+
+/** 保留迁移前无参数 handler 忽略多余参数的行为。 */
+function bindLegacyNoArgs<Result>(
+  definition: IpcInvokeDefinition<[], Result>,
+): IpcInvokeContract<[], Result> {
+  return bindIpcParser(definition, (args) => {
+    if (args.some((value) => !isBoundedLegacyTerminalValue(value))) {
+      throw new Error(`IPC ${definition.channel} 参数超过结构或大小限制`)
+    }
+    return ipcArgs()
+  })
 }
 
 const terminalIdSchema = z
@@ -51,58 +69,66 @@ const terminalPtyResizeSchema = z
   .object({ terminalSessionId: terminalIdSchema, size: terminalSizeSchema })
   .strict()
 
-const terminalPermissionRiskSchema = z.enum([
-  'read',
-  'write',
-  'network',
-  'destructive',
-  'privileged',
-  'unknown',
-])
-const terminalPermissionRuleSchema = z.string().max(4_096)
-const terminalPermissionRuleListSchema = z.array(terminalPermissionRuleSchema).max(256)
+function isBoundedLegacyTerminalValue(value: unknown): boolean {
+  return isBoundedIpcEventPayload(value, {
+    maxDepth: 12,
+    maxNodes: 5_000,
+    maxArrayLength: 256,
+    maxObjectKeys: 256,
+    maxStringLength: 100_000,
+    maxTotalStringLength: 200_000,
+  })
+}
+
+const legacyBoundedValueSchema = z.unknown().superRefine((value, context) => {
+  if (!isBoundedLegacyTerminalValue(value)) {
+    context.addIssue({ code: 'custom', message: 'Terminal 参数超过结构或大小限制' })
+  }
+})
+const legacyBoundedRuleListSchema = z.array(legacyBoundedValueSchema).max(256)
 const terminalPermissionPolicySchema = z
   .object({
     mode: z.enum(['read-only', 'ask-every-command', 'ask-risky-command', 'trusted-session']),
-    requireConfirmationFor: z.array(terminalPermissionRiskSchema).max(256),
-    allowlist: terminalPermissionRuleListSchema.optional(),
-    denylist: terminalPermissionRuleListSchema.optional(),
+    requireConfirmationFor: legacyBoundedRuleListSchema.optional(),
+    allowlist: legacyBoundedRuleListSchema.optional(),
+    denylist: legacyBoundedRuleListSchema.optional(),
   })
-  .strict()
-// 旧 handler 会把非字符串 primitive 归一为 null；保留该兼容，但拒绝任意对象/数组。
-const terminalWorkspaceKeySchema = z.union([
-  z.string().max(32_768),
-  z.number().finite(),
-  z.boolean(),
-  z.null(),
-])
+  .passthrough()
+  .superRefine((value, context) => {
+    if (!isBoundedLegacyTerminalValue(value)) {
+      context.addIssue({ code: 'custom', message: 'Terminal 权限策略超过大小限制' })
+    }
+  })
 const terminalLifecycleAuditInputSchema = z
   .object({
     terminalSessionId: z.string().min(1).max(256),
-    workspaceKey: terminalWorkspaceKeySchema.optional(),
+    workspaceKey: legacyBoundedValueSchema.optional(),
     kind: z.enum(['created', 'closed', 'terminated']),
     message: z.string().max(100_000).optional(),
     runtime: terminalRuntimeSchema.optional(),
     permissionPolicy: terminalPermissionPolicySchema.optional(),
     closePolicy: z.enum(['close-view', 'terminate-process', 'keep-running']).optional(),
   })
-  .strict()
+  .passthrough()
+  .superRefine((value, context) => {
+    if (!isBoundedLegacyTerminalValue(value)) {
+      context.addIssue({ code: 'custom', message: 'Terminal 生命周期参数超过大小限制' })
+    }
+  })
 const terminalSubmitCommandInputSchema = z
   .object({
     terminalSessionId: z.string().min(1).max(256),
     command: z.string().min(1).max(100_000),
     actor: z.enum(['user', 'agent', 'system']),
     permissionPolicy: terminalPermissionPolicySchema,
-    workspaceKey: terminalWorkspaceKeySchema.optional(),
+    workspaceKey: legacyBoundedValueSchema.optional(),
   })
-  .strict()
-const terminalAuditListFilterSchema = z
-  .object({
-    terminalSessionId: terminalIdSchema.optional(),
-    workspaceKey: terminalWorkspaceKeySchema.optional(),
-    limit: z.number().finite().min(0).max(5_000).optional(),
+  .passthrough()
+  .superRefine((value, context) => {
+    if (!isBoundedLegacyTerminalValue(value)) {
+      context.addIssue({ code: 'custom', message: 'Terminal 命令参数超过大小限制' })
+    }
   })
-  .strict()
 
 function parseSingleObject<T>(args: unknown[], channel: string): T {
   requireArgs(args, 1, channel)
@@ -202,16 +228,10 @@ export const terminalIpcContracts = {
       error: 'terminalSessionId 不能为空',
     }),
   ),
-  listSessions: bindNoArgsIpc(terminalIpc.listSessions),
+  listSessions: bindLegacyNoArgs(terminalIpc.listSessions),
   listAuditEvents: bindIpcParser(terminalIpc.listAuditEvents, (args) => {
-    if (args.length > 1) {
-      throw new Error(`IPC ${terminalIpc.listAuditEvents.channel} 最多接受 1 个参数`)
-    }
-    return ipcArgs(
-      args[0] === undefined
-        ? undefined
-        : (terminalAuditListFilterSchema.parse(args[0]) as TerminalAuditListFilter),
-    )
+    args.forEach((value) => legacyBoundedValueSchema.parse(value))
+    return ipcArgs(args[0] as TerminalAuditListFilter | undefined)
   }),
   clearAuditSession: bindIpcParser(
     terminalIpc.clearAuditSession,
@@ -224,5 +244,5 @@ export const terminalIpcContracts = {
       error: 'terminalSessionId 不能为空',
     }),
   ),
-  clearAuditEvents: bindNoArgsIpc(terminalIpc.clearAuditEvents),
+  clearAuditEvents: bindLegacyNoArgs(terminalIpc.clearAuditEvents),
 } as const

@@ -64,7 +64,7 @@ export class TerminalConfirmationService {
       }
 
       try {
-        this.mainWindow.webContents.send(TERMINAL_CONFIRMATION_CHANNEL, request)
+        this.mainWindow.webContents.send(terminalIpcEvents.requestCommandConfirmation, request)
       } catch {
         this.rejectPending(request.id, 'Terminal 确认请求发送失败，已拒绝')
       }

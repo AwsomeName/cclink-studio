@@ -1,5 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { authIpc, authIpcEvents, type AuthApiContract } from '../shared/ipc/auth'
+import {
+  authIpc,
+  authIpcEvents,
+  parseAuthSessionEvent,
+  type AuthApiContract,
+} from '../shared/ipc/auth'
 import { cclinkIpc, cclinkIpcEvents, type CclinkApiContract } from '../shared/ipc/cclink'
 import { remoteIpc, type RemoteApiContract } from '../shared/ipc/remote'
 import { officialIpc } from '../shared/ipc/official'
@@ -97,10 +102,10 @@ const authApi: AuthApiContract = {
   checkSession: () => invokeIpcContract(authIpc.checkSession),
   logout: () => invokeIpcContract(authIpc.logout),
   onSessionChanged: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      session: Parameters<typeof callback>[0],
-    ): void => callback(session)
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const session = parseAuthSessionEvent(value)
+      if (session) callback(session)
+    }
     ipcRenderer.on(authIpcEvents.sessionChanged, listener)
     return () => ipcRenderer.removeListener(authIpcEvents.sessionChanged, listener)
   },

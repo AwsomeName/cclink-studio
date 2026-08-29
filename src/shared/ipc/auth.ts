@@ -1,4 +1,5 @@
 import { defineIpcCall } from './contract'
+import { isBoundedIpcEventPayload, isBoundedIpcEventString } from './event-payload'
 
 export interface CclinkUserProfile {
   id: string
@@ -48,3 +49,25 @@ export const authIpc = {
 export const authIpcEvents = {
   sessionChanged: 'auth:sessionChanged',
 } as const
+
+export function parseAuthSessionEvent(value: unknown): AuthSession | null {
+  if (!isBoundedIpcEventPayload(value) || !value || typeof value !== 'object') return null
+  const session = value as Partial<AuthSession>
+  if (typeof session.loggedIn !== 'boolean') return null
+  if (session.offline !== undefined && typeof session.offline !== 'boolean') return null
+  if (session.user === null) return session as AuthSession
+  if (!session.user || typeof session.user !== 'object') return null
+  const user = session.user as Partial<CclinkUserProfile>
+  if (
+    !isBoundedIpcEventString(user.id, 256) ||
+    !isBoundedIpcEventString(user.nickname, 512, { allowEmpty: true }) ||
+    !isBoundedIpcEventString(user.avatarUrl, 32_768, { allowEmpty: true }) ||
+    (user.phone !== null && !isBoundedIpcEventString(user.phone, 64, { allowEmpty: true })) ||
+    user.loginMethod !== 'phone' ||
+    typeof user.lastLoginAt !== 'number' ||
+    !Number.isFinite(user.lastLoginAt)
+  ) {
+    return null
+  }
+  return session as AuthSession
+}

@@ -95,7 +95,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/main/cclink-remote/cclink-remote-ipc.ts'],
     bridgeFiles: ['src/preload/index.ts'],
     consumerFiles: ['src/renderer/src/stores/cclink-store.ts'],
-    payloadBoundary: 'typed-preload-forwarding',
+    payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['onSessionChanged'],
   }),
   ...expandEventGroup({
@@ -134,7 +134,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/main/agent/agent-bridge.ts'],
     bridgeFiles: ['src/preload/agent-api.ts'],
     consumerFiles: ['src/renderer/src/bootstrap/use-agent-stream-events.ts'],
-    payloadBoundary: 'typed-preload-forwarding',
+    payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['onStreamEvent', 'onComplete', 'onError', 'onRunStatus'],
   }),
   ...expandEventGroup({
@@ -147,7 +147,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/main/mcp/permission.ts'],
     bridgeFiles: ['src/preload/agent-api.ts'],
     consumerFiles: ['src/renderer/src/bootstrap/use-agent-stream-events.ts'],
-    payloadBoundary: 'typed-preload-forwarding',
+    payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['onRequestConfirmation'],
   }),
   ...expandEventGroup({
@@ -174,7 +174,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/main/browser/browser-manager.ts'],
     bridgeFiles: ['src/preload/browser-api.ts'],
     consumerFiles: ['src/renderer/src/components/workbench/use-browser-events.ts'],
-    payloadBoundary: 'typed-preload-forwarding',
+    payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['onUrlChanged', 'onPageMetaChanged', 'onViewStateChanged'],
   }),
   ...expandEventGroup({
@@ -193,7 +193,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/main/browser/browser-manager.ts'],
     bridgeFiles: ['src/preload/browser-api.ts'],
     consumerFiles: ['src/renderer/src/bootstrap/use-browser-open-requests.ts'],
-    payloadBoundary: 'typed-preload-forwarding',
+    payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: [
       'onRequestOpenTab',
       'onPopupCreated',
@@ -212,7 +212,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/main/browser/browser-task-runtime.ts'],
     bridgeFiles: ['src/preload/browser-api.ts'],
     consumerFiles: ['src/renderer/src/components/agent-panel/AgentPanel.tsx'],
-    payloadBoundary: 'typed-preload-forwarding',
+    payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['onTaskChanged', 'onActionLogChanged'],
   }),
   ...expandEventGroup({
@@ -225,7 +225,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/main/browser/browser-download-store.ts'],
     bridgeFiles: ['src/preload/browser-api.ts'],
     consumerFiles: ['src/renderer/src/components/agent-panel/AgentPanel.tsx'],
-    payloadBoundary: 'typed-preload-forwarding',
+    payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['onDownloadChanged'],
   }),
   ...expandEventGroup({
@@ -238,7 +238,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/main/browser/browser-manager.ts'],
     bridgeFiles: ['src/preload/browser-api.ts'],
     consumerFiles: ['src/renderer/src/features/browser/use-browser-find-bridge.ts'],
-    payloadBoundary: 'typed-preload-forwarding',
+    payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['onFindShortcutTriggered', 'onFindResult'],
   }),
   ...expandEventGroup({

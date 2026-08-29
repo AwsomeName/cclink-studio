@@ -6,8 +6,19 @@ import {
   browserTaskIpc,
   type BrowserApiContract,
   type BrowserWorkbenchBounds,
+  parseBrowserActionLogChangedPayload,
+  parseBrowserContextAgentRequest,
+  parseBrowserDownloadChangedPayload,
+  parseBrowserFindResultPayload,
+  parseBrowserFindShortcutTriggeredPayload,
+  parseBrowserNativeContextMenuOpenedPayload,
+  parseBrowserOpenTabRequest,
+  parseBrowserPageMetaChangedPayload,
   parseBrowserPopupCreatedPayload,
   parseBrowserRuntimeTabClosedPayload,
+  parseBrowserTaskChangedPayload,
+  parseBrowserUrlChangedPayload,
+  parseBrowserViewStateChangedPayload,
 } from '../shared/ipc/browser'
 import { invokeIpcContract } from './ipc-contract-client'
 
@@ -37,14 +48,18 @@ export const browserApi: BrowserApiContract = {
   dispatchFindShortcutForSmoke: (tabId) =>
     invokeIpcContract(browserIpc.dispatchFindShortcutForSmoke, tabId),
   onFindShortcutTriggered: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
-      callback(payload)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      const payload = parseBrowserFindShortcutTriggeredPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.findShortcutTriggered, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.findShortcutTriggered, handler)
   },
   onFindResult: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
-      callback(payload)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      const payload = parseBrowserFindResultPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.findResult, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.findResult, handler)
   },
@@ -52,20 +67,26 @@ export const browserApi: BrowserApiContract = {
   getRuntimeDiagnostics: (tabId) => invokeIpcContract(browserIpc.getRuntimeDiagnostics, tabId),
   getSessionDiagnostics: (request) => invokeIpcContract(browserIpc.getSessionDiagnostics, request),
   onUrlChanged: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
-      callback(payload)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      const payload = parseBrowserUrlChangedPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.urlChanged, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.urlChanged, handler)
   },
   onPageMetaChanged: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
-      callback(payload)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      const payload = parseBrowserPageMetaChangedPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.pageMetaChanged, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.pageMetaChanged, handler)
   },
   onRequestOpenTab: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
-      callback(payload)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      const payload = parseBrowserOpenTabRequest(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.requestOpenTab, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.requestOpenTab, handler)
   },
@@ -86,14 +107,18 @@ export const browserApi: BrowserApiContract = {
     return () => ipcRenderer.removeListener(browserIpcEvents.runtimeTabClosed, handler)
   },
   onNativeContextMenuOpened: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
-      callback(payload)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      const payload = parseBrowserNativeContextMenuOpenedPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.nativeContextMenuOpened, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.nativeContextMenuOpened, handler)
   },
   onContextAgentRequest: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
-      callback(payload)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      const payload = parseBrowserContextAgentRequest(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.contextAgentRequest, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.contextAgentRequest, handler)
   },
@@ -119,14 +144,18 @@ export const browserApi: BrowserApiContract = {
   finishTask: (taskRunId) => invokeIpcContract(browserTaskIpc.finish, taskRunId),
   listActionLogs: (taskRunId) => invokeIpcContract(browserTaskIpc.listActionLogs, taskRunId),
   onTaskChanged: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
-      callback(payload)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      const payload = parseBrowserTaskChangedPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.taskChanged, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.taskChanged, handler)
   },
   onActionLogChanged: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
-      callback(payload)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      const payload = parseBrowserActionLogChangedPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.actionLogChanged, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.actionLogChanged, handler)
   },
@@ -139,14 +168,18 @@ export const browserApi: BrowserApiContract = {
   openDownload: (downloadId) => invokeIpcContract(browserDownloadIpc.open, downloadId),
   revealDownload: (downloadId) => invokeIpcContract(browserDownloadIpc.reveal, downloadId),
   onDownloadChanged: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
-      callback(payload)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      const payload = parseBrowserDownloadChangedPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.downloadChanged, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.downloadChanged, handler)
   },
   onViewStateChanged: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, payload: Parameters<typeof callback>[0]) =>
-      callback(payload)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      const payload = parseBrowserViewStateChangedPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.viewStateChanged, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.viewStateChanged, handler)
   },

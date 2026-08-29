@@ -8,11 +8,13 @@ import {
 } from '../shared/ipc/workbench-window'
 import {
   browserIpcEvents,
-  type BrowserDownloadChangedPayload,
-  type BrowserNativeContextMenuOpenedPayload,
-  type BrowserPageMetaChangedPayload,
-  type BrowserTaskChangedPayload,
-  type BrowserUrlChangedPayload,
+  parseBrowserDownloadChangedPayload,
+  parseBrowserFindResultPayload,
+  parseBrowserFindShortcutTriggeredPayload,
+  parseBrowserNativeContextMenuOpenedPayload,
+  parseBrowserPageMetaChangedPayload,
+  parseBrowserTaskChangedPayload,
+  parseBrowserUrlChangedPayload,
 } from '../shared/ipc/browser'
 import { invokeIpcContract } from './ipc-contract-client'
 
@@ -41,50 +43,58 @@ const api: WorkbenchWindowApiContract = {
     return () => ipcRenderer.removeListener(workbenchWindowIpcEvents.placementChanged, handler)
   },
   onUrlChanged: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, value: BrowserUrlChangedPayload): void =>
-      callback(value)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const payload = parseBrowserUrlChangedPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.urlChanged, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.urlChanged, handler)
   },
   onPageMetaChanged: (callback) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      value: BrowserPageMetaChangedPayload,
-    ): void => callback(value)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const payload = parseBrowserPageMetaChangedPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.pageMetaChanged, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.pageMetaChanged, handler)
   },
   onFindShortcutTriggered: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof callback>[0]) =>
-      callback(value)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      const payload = parseBrowserFindShortcutTriggeredPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.findShortcutTriggered, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.findShortcutTriggered, handler)
   },
   onFindResult: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof callback>[0]) =>
-      callback(value)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      const payload = parseBrowserFindResultPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.findResult, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.findResult, handler)
   },
   onTaskChanged: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, value: BrowserTaskChangedPayload): void =>
-      callback(value)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const payload = parseBrowserTaskChangedPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.taskChanged, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.taskChanged, handler)
   },
   onDownloadChanged: (callback) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      value: BrowserDownloadChangedPayload,
-    ): void => callback(value)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const payload = parseBrowserDownloadChangedPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.downloadChanged, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.downloadChanged, handler)
   },
   onNativeContextMenuOpened: (callback) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      value: BrowserNativeContextMenuOpenedPayload,
-    ): void => callback(value)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const payload = parseBrowserNativeContextMenuOpenedPayload(value)
+      if (payload) callback(payload)
+    }
     ipcRenderer.on(browserIpcEvents.nativeContextMenuOpened, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.nativeContextMenuOpened, handler)
   },

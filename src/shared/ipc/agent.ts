@@ -1,6 +1,7 @@
 export * from '../agent-protocol'
 
 import { defineIpcCall } from './contract'
+import { isBoundedIpcEventPayload, isBoundedIpcEventString } from './event-payload'
 import type { ImageAttachmentMediaType, TransientImageAttachment } from '../image-attachment'
 import type {
   AgentApiContract as CoreAgentApiContract,
@@ -256,4 +257,95 @@ export interface AgentIpcEventPayloads {
   [agentIpcEvents.error]: AgentErrorEvent
   [agentIpcEvents.runStatus]: AgentRuntimeRunRecord
   [agentIpcEvents.requestConfirmation]: ToolConfirmationRequest
+}
+
+const agentRunStatuses = new Set(['running', 'cancelling', 'succeeded', 'failed', 'cancelled'])
+const agentRiskLevels = new Set(['read', 'write', 'destructive'])
+const agentOperations = new Set(['message', 'compact'])
+
+function isAgentEventObject(value: unknown): value is Record<string, unknown> {
+  return isBoundedIpcEventPayload(value) && Boolean(value) && typeof value === 'object'
+}
+
+export function parseAgentStreamEvent(
+  value: unknown,
+): ClaudeStreamEventData | StudioAgentStreamEventData | null {
+  if (!isAgentEventObject(value)) return null
+  if (value['protocol'] === 'studio-agent-event-v1') {
+    const event = value['event']
+    if (!event || typeof event !== 'object') return null
+    const type = (event as Record<string, unknown>)['type']
+    return ['session', 'text-delta', 'thought-delta', 'tool', 'notice'].includes(String(type))
+      ? (value as unknown as StudioAgentStreamEventData)
+      : null
+  }
+  return isBoundedIpcEventString(value['type'], 128)
+    ? (value as unknown as ClaudeStreamEventData)
+    : null
+}
+
+export function parseAgentCompleteEvent(
+  value: unknown,
+): ClaudeResultEventData | StudioAgentResultEventData | null {
+  if (!isAgentEventObject(value)) return null
+  if (value['protocol'] === 'studio-agent-event-v1') {
+    const event = value['event']
+    return event &&
+      typeof event === 'object' &&
+      (event as Record<string, unknown>)['type'] === 'complete'
+      ? (value as unknown as StudioAgentResultEventData)
+      : null
+  }
+  return isBoundedIpcEventString(value['subtype'], 128) &&
+    typeof value['is_error'] === 'boolean' &&
+    typeof value['duration_ms'] === 'number' &&
+    Number.isFinite(value['duration_ms']) &&
+    isBoundedIpcEventString(value['session_id'], 512) &&
+    typeof value['total_cost_usd'] === 'number' &&
+    Number.isFinite(value['total_cost_usd'])
+    ? (value as unknown as ClaudeResultEventData)
+    : null
+}
+
+export function parseAgentErrorEvent(value: unknown): AgentErrorEvent | null {
+  if (!isAgentEventObject(value) || !isBoundedIpcEventString(value['message'], 32_768)) return null
+  if (value['operation'] !== undefined && !agentOperations.has(String(value['operation']))) {
+    return null
+  }
+  return value as unknown as AgentErrorEvent
+}
+
+export function parseAgentRunStatusEvent(value: unknown): AgentRuntimeRunRecord | null {
+  if (!isAgentEventObject(value)) return null
+  if (
+    !isBoundedIpcEventString(value['conversationId'], 512) ||
+    !isBoundedIpcEventString(value['runId'], 512) ||
+    !agentRunStatuses.has(String(value['status'])) ||
+    (value['workspaceKey'] !== null && !isBoundedIpcEventString(value['workspaceKey'], 32_768)) ||
+    !['startedAt', 'updatedAt'].every(
+      (key) => typeof value[key] === 'number' && Number.isFinite(value[key]),
+    ) ||
+    (value['completedAt'] !== null &&
+      (typeof value['completedAt'] !== 'number' || !Number.isFinite(value['completedAt'])))
+  ) {
+    return null
+  }
+  return value as unknown as AgentRuntimeRunRecord
+}
+
+export function parseAgentConfirmationRequest(value: unknown): ToolConfirmationRequest | null {
+  if (!isAgentEventObject(value)) return null
+  if (
+    !isBoundedIpcEventString(value['id'], 512) ||
+    !isBoundedIpcEventString(value['toolName'], 512) ||
+    !value['params'] ||
+    typeof value['params'] !== 'object' ||
+    !agentRiskLevels.has(String(value['riskLevel'])) ||
+    (value['reason'] !== undefined &&
+      !isBoundedIpcEventString(value['reason'], 32_768, { allowEmpty: true })) ||
+    (value['allowAlways'] !== undefined && typeof value['allowAlways'] !== 'boolean')
+  ) {
+    return null
+  }
+  return value as unknown as ToolConfirmationRequest
 }

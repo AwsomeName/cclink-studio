@@ -3,6 +3,11 @@ import {
   agentIpc,
   agentIpcEvents,
   agentMcpIpc,
+  parseAgentCompleteEvent,
+  parseAgentConfirmationRequest,
+  parseAgentErrorEvent,
+  parseAgentRunStatusEvent,
+  parseAgentStreamEvent,
   type AgentApiContract,
   type AgentCommandResult,
   type AgentScope,
@@ -83,34 +88,34 @@ export const agentApi: AgentApiContract = {
   closeConversation: (conversationId) =>
     invokeIpcContract(agentIpc.closeConversation, conversationId),
   onStreamEvent: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: Parameters<typeof callback>[0],
-    ): void => callback(data)
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const data = parseAgentStreamEvent(value)
+      if (data) callback(data)
+    }
     ipcRenderer.on(agentIpcEvents.stream, listener)
     return () => ipcRenderer.removeListener(agentIpcEvents.stream, listener)
   },
   onComplete: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: Parameters<typeof callback>[0],
-    ): void => callback(data)
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const data = parseAgentCompleteEvent(value)
+      if (data) callback(data)
+    }
     ipcRenderer.on(agentIpcEvents.complete, listener)
     return () => ipcRenderer.removeListener(agentIpcEvents.complete, listener)
   },
   onError: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: Parameters<typeof callback>[0],
-    ): void => callback(data)
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const data = parseAgentErrorEvent(value)
+      if (data) callback(data)
+    }
     ipcRenderer.on(agentIpcEvents.error, listener)
     return () => ipcRenderer.removeListener(agentIpcEvents.error, listener)
   },
   onRunStatus: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: Parameters<typeof callback>[0],
-    ): void => callback(data)
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const data = parseAgentRunStatusEvent(value)
+      if (data) callback(data)
+    }
     ipcRenderer.on(agentIpcEvents.runStatus, listener)
     return () => ipcRenderer.removeListener(agentIpcEvents.runStatus, listener)
   },
@@ -119,10 +124,10 @@ export const agentApi: AgentApiContract = {
   setToolModuleEnabled: (moduleId, enabled) =>
     invokeIpcContract(agentIpc.setToolModuleEnabled, moduleId, enabled),
   onRequestConfirmation: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: Parameters<typeof callback>[0],
-    ): void => callback(data)
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const data = parseAgentConfirmationRequest(value)
+      if (data) callback(data)
+    }
     ipcRenderer.on(agentIpcEvents.requestConfirmation, listener)
     return () => ipcRenderer.removeListener(agentIpcEvents.requestConfirmation, listener)
   },

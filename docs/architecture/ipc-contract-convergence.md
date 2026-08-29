@@ -59,13 +59,18 @@ P0-P5 的代码迁移与自动化工程门禁已按顺序完成，未引入新 I
   本地常量绕过或死事件会失败。空 legacy allowlist 只表示没有遗留裸 channel，不能替代现行库存。
 - 全仓生产 main/preload IPC 边界继续机器扫描，新增裸 `ipcMain`、trusted registrar、
   `webContents.send` 或 `ipcRenderer` channel 字面量会直接失败；preload 不得导入本次新增的 main-only
-  contract。Terminal 全部 invoke 都校验参数数量，lifecycle/submit、权限规则和审计过滤器在服务判断
-  前完成结构与大小校验；Terminal、Android 和 Editor 的保留 main→renderer payload 在 preload 做
-  有界校验。Editor read/save 支持同 channel 多订阅并存，每个 disposer 只释放自身 handler。
+  contract。动态 channel helper 只允许在精确登记的基础实现中出现，调用点仍必须引用库存事件；门禁
+  用伪造 helper 用例证明普通 `channel` 变量不能绕过。Terminal 的 PTY 与确认接口继续精确校验参数，
+  lifecycle/submit 校验核心结构；迁移前会被 main 归一化的普通未知规则、扩展字段、审计 filter 和无参数
+  接口多余参数继续兼容，仅病态深度/节点数/字符串大小会在服务判断前拒绝。Terminal、Android、
+  Editor、Agent、Browser 和 Auth 的相关 main→renderer payload 在 preload 做有界核心字段校验。
+  Editor read/save 支持同 channel 多订阅并存，每个 disposer 只释放自身 handler。
 
-当前工程证据：`pnpm verify` 通过 332 个测试文件、2043 项测试（2 项跳过），lint、类型检查和生产
-构建通过；`smoke:local` 11/11、`smoke:workflow` 21/21、`smoke:restore` 4/4、
-`smoke:update-recovery` 1/1 通过。全新临时 Profile 的 `smoke:ui` 通过 13/17；失败的 4 项集中在
+当前工程证据：`pnpm verify` 通过 334 个测试文件、2050 项测试（2 项跳过），lint、类型检查和生产
+构建通过；`smoke:local` 11/11、`smoke:restore` 4/4、`smoke:update-recovery` 1/1 通过。本轮
+`smoke:workflow` 连续两次为 19/21，失败项均为 Agent Panel 可见性相关的既有 UI locator：Markdown
+诊断按钮和 Agent composer 未出现；其余 Terminal 执行、Editor、Browser 与上下文操作通过。按止损
+规则不在 IPC 修复中扩张 UI，先前 21/21 记录不能代替本轮失败。全新临时 Profile 的 `smoke:ui` 通过 13/17；失败的 4 项集中在
 Remote Agent Panel、会话快捷入口、Activity Bar 和角色中心，均不经过本次迁移的 IPC 域，作为独立
 既有 UI smoke 阻断记录，不在本次最小修复中扩张处理。
 
@@ -328,6 +333,11 @@ Terminal 不能把现有 `normalize*` 机械前移到 parser。尤其 lifecycle 
 parser 只负责参数数量、结构和上限校验，返回不丢字段的完整输入；审计投影、命令 trim/截断、权限
 规则去重以及 session 同步继续在 main 的具名语义函数中完成。只有逐字段兼容测试证明等价后，才可
 移动纯边界逻辑。PTY 启动、command orchestration、registry/store 同步始终留在 main。
+
+兼容基线还包括旧 handler 的容错归一化：权限数组中的未知值、对象上的扩展字段、审计 filter 中未
+识别的普通字段，以及传给无参数接口的多余参数，不能因 schema 改成 `strict()` 而新增拒绝。parser
+可以对这些值施加深度、节点数和总大小上限，防止畸形 payload 占用无界资源，但正常大小的旧输入仍
+交给 main 既有 `normalize*` 处理。该约束与“双故障时 parser 优先”的批准例外分开测试。
 
 退出标准：11 个 invoke 与 2 个事件同源；lifecycle 的 `runtime`、`permissionPolicy`、`closePolicy`
 不丢失；除已批准的双故障 parser-first 场景外，逐通道 rejection/结构化失败、错误码和关键错误文本

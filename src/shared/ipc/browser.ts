@@ -1,4 +1,5 @@
 import { defineIpcCall } from './contract'
+import { isBoundedIpcEventPayload, isBoundedIpcEventString } from './event-payload'
 import type { KeyChord } from '../keybindings'
 import type { BrowserHttpAuthDiagnosticSummary } from './browser-http-auth'
 
@@ -420,15 +421,104 @@ const popupDispositions = new Set<BrowserPopupDisposition>([
   'other',
 ])
 
-function isBoundedBrowserEventString(value: unknown, max: number): value is string {
+const isBoundedBrowserEventString = isBoundedIpcEventString
+
+function parseBrowserEventRecord<T>(value: unknown): T | null {
+  return isBoundedIpcEventPayload(value) && Boolean(value) && typeof value === 'object'
+    ? (value as T)
+    : null
+}
+
+function hasBrowserRuntimeIdentity(value: Record<string, unknown>): boolean {
   return (
-    typeof value === 'string' && value.length > 0 && value.length <= max && !value.includes('\0')
+    isBoundedBrowserEventString(value['tabId'], 512) &&
+    (value['workspaceKey'] === null ||
+      isBoundedBrowserEventString(value['workspaceKey'], 32_768)) &&
+    typeof value['runtimeGeneration'] === 'number' &&
+    Number.isFinite(value['runtimeGeneration'])
   )
+}
+
+function isOptionalBrowserString(value: unknown, max: number): boolean {
+  return value === undefined || isBoundedBrowserEventString(value, max, { allowEmpty: true })
+}
+
+function isNullableBrowserString(value: unknown, max: number): boolean {
+  return value === null || isBoundedBrowserEventString(value, max)
+}
+
+export function parseBrowserFindShortcutTriggeredPayload(
+  value: unknown,
+): BrowserFindShortcutTriggeredPayload | null {
+  const payload = parseBrowserEventRecord<Record<string, unknown>>(value)
+  return payload &&
+    hasBrowserRuntimeIdentity(payload) &&
+    payload['commandId'] === 'workbench.find' &&
+    typeof payload['configVersion'] === 'number' &&
+    Number.isFinite(payload['configVersion']) &&
+    typeof payload['triggerSequence'] === 'number' &&
+    Number.isFinite(payload['triggerSequence'])
+    ? (value as BrowserFindShortcutTriggeredPayload)
+    : null
+}
+
+export function parseBrowserFindResultPayload(value: unknown): BrowserFindResultPayload | null {
+  const payload = parseBrowserEventRecord<Record<string, unknown>>(value)
+  return payload &&
+    hasBrowserRuntimeIdentity(payload) &&
+    isBoundedBrowserEventString(payload['requestToken'], 512) &&
+    ['matches', 'activeMatchOrdinal'].every(
+      (key) => typeof payload[key] === 'number' && Number.isFinite(payload[key]),
+    ) &&
+    typeof payload['finalUpdate'] === 'boolean'
+    ? (value as BrowserFindResultPayload)
+    : null
+}
+
+export function parseBrowserUrlChangedPayload(value: unknown): BrowserUrlChangedPayload | null {
+  const payload = parseBrowserEventRecord<Record<string, unknown>>(value)
+  const history = payload?.['history']
+  return payload &&
+    isBoundedBrowserEventString(payload['tabId'], 512) &&
+    isBoundedBrowserEventString(payload['url'], 32_768, { allowEmpty: true }) &&
+    (history === undefined ||
+      (Array.isArray(history) &&
+        history.every((entry) =>
+          isBoundedBrowserEventString(entry, 32_768, { allowEmpty: true }),
+        ))) &&
+    (payload['historyIndex'] === undefined ||
+      (typeof payload['historyIndex'] === 'number' && Number.isFinite(payload['historyIndex'])))
+    ? (value as BrowserUrlChangedPayload)
+    : null
+}
+
+export function parseBrowserPageMetaChangedPayload(
+  value: unknown,
+): BrowserPageMetaChangedPayload | null {
+  const payload = parseBrowserEventRecord<Record<string, unknown>>(value)
+  return payload &&
+    isBoundedBrowserEventString(payload['tabId'], 512) &&
+    isOptionalBrowserString(payload['title'], 8_192) &&
+    (payload['faviconUrl'] === null || isOptionalBrowserString(payload['faviconUrl'], 32_768))
+    ? (value as BrowserPageMetaChangedPayload)
+    : null
+}
+
+export function parseBrowserOpenTabRequest(value: unknown): BrowserOpenTabRequest | null {
+  const payload = parseBrowserEventRecord<Record<string, unknown>>(value)
+  return payload &&
+    isOptionalBrowserString(payload['initialUrl'], 32_768) &&
+    isNullableBrowserString(payload['workspaceKey'], 32_768) &&
+    (payload['profileId'] === undefined || isNullableBrowserString(payload['profileId'], 128)) &&
+    isOptionalBrowserString(payload['sourceTabId'], 512) &&
+    (payload['forceNew'] === undefined || typeof payload['forceNew'] === 'boolean')
+    ? (value as BrowserOpenTabRequest)
+    : null
 }
 
 /** preload 可安全使用的轻量事件解析器；避免把 Zod 运行时打入隔离桥。 */
 export function parseBrowserPopupCreatedPayload(value: unknown): BrowserPopupCreatedPayload | null {
-  if (!value || typeof value !== 'object') return null
+  if (!parseBrowserEventRecord(value)) return null
   const payload = value as Partial<BrowserPopupCreatedPayload>
   if (
     !isBoundedBrowserEventString(payload.tabId, 512) ||
@@ -447,7 +537,7 @@ export function parseBrowserPopupCreatedPayload(value: unknown): BrowserPopupCre
 export function parseBrowserRuntimeTabClosedPayload(
   value: unknown,
 ): BrowserRuntimeTabClosedPayload | null {
-  if (!value || typeof value !== 'object') return null
+  if (!parseBrowserEventRecord(value)) return null
   const payload = value as Partial<BrowserRuntimeTabClosedPayload>
   if (
     !isBoundedBrowserEventString(payload.tabId, 512) ||
@@ -456,6 +546,108 @@ export function parseBrowserRuntimeTabClosedPayload(
     return null
   }
   return payload as BrowserRuntimeTabClosedPayload
+}
+
+export function parseBrowserNativeContextMenuOpenedPayload(
+  value: unknown,
+): BrowserNativeContextMenuOpenedPayload | null {
+  const payload = parseBrowserEventRecord<Record<string, unknown>>(value)
+  return payload &&
+    isNullableBrowserString(payload['workspaceKey'], 32_768) &&
+    isBoundedBrowserEventString(payload['tabId'], 512) &&
+    isNullableBrowserString(payload['profileId'], 128)
+    ? (value as BrowserNativeContextMenuOpenedPayload)
+    : null
+}
+
+export function parseBrowserContextAgentRequest(value: unknown): BrowserContextAgentRequest | null {
+  const payload = parseBrowserEventRecord<Record<string, unknown>>(value)
+  return payload &&
+    isNullableBrowserString(payload['workspaceKey'], 32_768) &&
+    isBoundedBrowserEventString(payload['tabId'], 512) &&
+    isNullableBrowserString(payload['profileId'], 128) &&
+    ['selection', 'link', 'image', 'page'].includes(String(payload['source'])) &&
+    isBoundedBrowserEventString(payload['pageUrl'], 32_768, { allowEmpty: true }) &&
+    isOptionalBrowserString(payload['text'], 100_000) &&
+    isOptionalBrowserString(payload['url'], 32_768)
+    ? (value as BrowserContextAgentRequest)
+    : null
+}
+
+const browserTaskStatuses = new Set(['running', 'paused', 'completed', 'failed', 'cancelled'])
+const browserActionLogStatuses = new Set(['started', 'succeeded', 'failed', 'skipped'])
+const browserDownloadStatuses = new Set([
+  'pending',
+  'downloading',
+  'completed',
+  'failed',
+  'cancelled',
+])
+
+export function parseBrowserTaskChangedPayload(value: unknown): BrowserTaskChangedPayload | null {
+  const payload = parseBrowserEventRecord<{ task?: Record<string, unknown> }>(value)
+  const task = payload?.task
+  return task &&
+    isBoundedBrowserEventString(task['id'], 512) &&
+    isBoundedBrowserEventString(task['tabId'], 512) &&
+    isBoundedBrowserEventString(task['goal'], 100_000) &&
+    browserTaskStatuses.has(String(task['status'])) &&
+    typeof task['startedAt'] === 'number' &&
+    Number.isFinite(task['startedAt']) &&
+    Array.isArray(task['downloadIds']) &&
+    task['downloadIds'].every((entry) => isBoundedBrowserEventString(entry, 512))
+    ? (value as BrowserTaskChangedPayload)
+    : null
+}
+
+export function parseBrowserActionLogChangedPayload(
+  value: unknown,
+): BrowserActionLogChangedPayload | null {
+  const payload = parseBrowserEventRecord<{ log?: Record<string, unknown> }>(value)
+  const log = payload?.log
+  return log &&
+    ['id', 'taskRunId', 'tabId'].every((key) => isBoundedBrowserEventString(log[key], 512)) &&
+    isBoundedBrowserEventString(log['action'], 8_192) &&
+    isBoundedBrowserEventString(log['paramsSummary'], 100_000, { allowEmpty: true }) &&
+    browserActionLogStatuses.has(String(log['status'])) &&
+    typeof log['startedAt'] === 'number' &&
+    Number.isFinite(log['startedAt'])
+    ? (value as BrowserActionLogChangedPayload)
+    : null
+}
+
+export function parseBrowserDownloadChangedPayload(
+  value: unknown,
+): BrowserDownloadChangedPayload | null {
+  const payload = parseBrowserEventRecord<{ download?: Record<string, unknown> }>(value)
+  const download = payload?.download
+  return download &&
+    isBoundedBrowserEventString(download['id'], 512) &&
+    isBoundedBrowserEventString(download['tabId'], 512) &&
+    isNullableBrowserString(download['workspaceKey'], 32_768) &&
+    isBoundedBrowserEventString(download['sourceUrl'], 32_768, { allowEmpty: true }) &&
+    isBoundedBrowserEventString(download['suggestedFilename'], 4_096) &&
+    ['user', 'agent'].includes(String(download['trigger'])) &&
+    ['temporary', 'kept', 'discarded'].includes(String(download['retention'])) &&
+    browserDownloadStatuses.has(String(download['status'])) &&
+    typeof download['createdAt'] === 'number' &&
+    Number.isFinite(download['createdAt'])
+    ? (value as BrowserDownloadChangedPayload)
+    : null
+}
+
+export function parseBrowserViewStateChangedPayload(
+  value: unknown,
+): BrowserViewStateChangedPayload | null {
+  const payload = parseBrowserEventRecord<Record<string, unknown>>(value)
+  return payload &&
+    isBoundedBrowserEventString(payload['tabId'], 512) &&
+    ['desktop', 'mobile'].includes(String(payload['viewMode'])) &&
+    ['fit', 'manual'].includes(String(payload['zoomMode'])) &&
+    typeof payload['zoomFactor'] === 'number' &&
+    Number.isFinite(payload['zoomFactor'])
+    ? (value as BrowserViewStateChangedPayload)
+    : null
 }
 
 export type BrowserContextMediaType =

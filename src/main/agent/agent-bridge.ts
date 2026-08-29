@@ -66,13 +66,6 @@ import {
   type AgentSkillRef,
 } from '../../shared/agent-role'
 
-const AGENT_EVENT_CHANNELS: Record<AgentRuntimeEvent['type'], string> = {
-  stream: agentIpcEvents.stream,
-  complete: agentIpcEvents.complete,
-  error: agentIpcEvents.error,
-  system: agentIpcEvents.stream,
-}
-
 export interface AgentBridgeOptions {
   /** 主进程角色定义唯一事实源；包含内置与 userData 本地不可变版本。 */
   roleRegistry?: AgentRoleRegistry
@@ -1340,27 +1333,30 @@ export class AgentBridge {
   ): void {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return
 
-    const channel = AGENT_EVENT_CHANNELS[type]
-    if (channel) {
-      const payload =
-        typeof data === 'object' && data !== null
-          ? {
-              ...(data as Record<string, unknown>),
-              conversationId,
-              runId,
-              sessionCompatibilityFingerprint:
-                this.getConversationCompatibilityFingerprint(conversationId),
-              conversationConfiguration: this.getConversationConfiguration(conversationId),
-            }
-          : {
-              value: data,
-              conversationId,
-              runId,
-              sessionCompatibilityFingerprint:
-                this.getConversationCompatibilityFingerprint(conversationId),
-              conversationConfiguration: this.getConversationConfiguration(conversationId),
-            }
-      this.mainWindow.webContents.send(channel, payload)
+    const payload =
+      typeof data === 'object' && data !== null
+        ? {
+            ...(data as Record<string, unknown>),
+            conversationId,
+            runId,
+            sessionCompatibilityFingerprint:
+              this.getConversationCompatibilityFingerprint(conversationId),
+            conversationConfiguration: this.getConversationConfiguration(conversationId),
+          }
+        : {
+            value: data,
+            conversationId,
+            runId,
+            sessionCompatibilityFingerprint:
+              this.getConversationCompatibilityFingerprint(conversationId),
+            conversationConfiguration: this.getConversationConfiguration(conversationId),
+          }
+    if (type === 'complete') {
+      this.mainWindow.webContents.send(agentIpcEvents.complete, payload)
+    } else if (type === 'error') {
+      this.mainWindow.webContents.send(agentIpcEvents.error, payload)
+    } else {
+      this.mainWindow.webContents.send(agentIpcEvents.stream, payload)
     }
   }
 
