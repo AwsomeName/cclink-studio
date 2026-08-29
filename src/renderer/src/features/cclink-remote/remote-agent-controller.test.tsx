@@ -6,6 +6,7 @@ import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
 import {
   resolveRemoteAgentVisualStatus,
   resolveRemoteStopAvailability,
+  selectRemoteAgentImages,
   submitRemoteDraft,
   toUnifiedRemoteMessage,
   tryAcquireRemoteSubmissionLock,
@@ -41,6 +42,14 @@ afterAll(() => {
 })
 
 describe('RemoteAgentController', () => {
+  it('keeps the empty image selection snapshot stable across store reads', () => {
+    const images = {}
+
+    expect(selectRemoteAgentImages(images, 'remote:a')).toBe(
+      selectRemoteAgentImages(images, 'remote:a'),
+    )
+  })
+
   it('exposes the active remote session as a working Agent state', () => {
     expect(
       resolveRemoteAgentVisualStatus({

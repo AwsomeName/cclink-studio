@@ -23,6 +23,15 @@ import type { AgentMessage } from '../../types'
 import { importAgentImageFiles, MAX_AGENT_IMAGES } from '../agent-conversations/image-attachments'
 import type { TransientImageAttachment } from '@shared/image-attachment'
 
+const EMPTY_REMOTE_AGENT_IMAGES: TransientImageAttachment[] = []
+
+export function selectRemoteAgentImages(
+  images: Record<string, TransientImageAttachment[]>,
+  workspaceKey: string,
+): TransientImageAttachment[] {
+  return images[workspaceKey] ?? EMPTY_REMOTE_AGENT_IMAGES
+}
+
 export interface RemoteAgentVisualStatus {
   tone: 'connecting' | 'ready' | 'working' | 'unavailable'
   label: string
@@ -170,7 +179,9 @@ export function RemoteAgentController({
   const pendingPermissions = useCclinkStore((state) => state.pendingPermissions)
   const respondPermission = useCclinkStore((state) => state.respondPermission)
   const draft = useCclinkStore((state) => state.remoteAgentDrafts[remoteWorkspaceKey] ?? '')
-  const pendingImages = useCclinkStore((state) => state.remoteAgentImages[remoteWorkspaceKey] ?? [])
+  const pendingImages = useCclinkStore((state) =>
+    selectRemoteAgentImages(state.remoteAgentImages, remoteWorkspaceKey),
+  )
   const setRemoteAgentDraft = useCclinkStore((state) => state.setRemoteAgentDraft)
   const clearRemoteAgentDraft = useCclinkStore((state) => state.clearRemoteAgentDraft)
   const addRemoteAgentImages = useCclinkStore((state) => state.addRemoteAgentImages)
