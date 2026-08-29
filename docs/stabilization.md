@@ -169,11 +169,15 @@ S0 绿色只表示恢复可信基线。Markdown 注入、明文密钥、Agent �
 均改从 shared 轻量 definition 派生；无生产者的 Editor `contentUpdate/contentUpdateAck` 已删除，
 生产 main/preload 裸 channel allowlist 已收敛为空；全量现行 invoke 库存会校验 shared definition、
 唯一 handler 与 preload consumer，全部 45 个生产事件库存记录 definition、producer、真实 consumer、
-disposer 和 payload 边界，并由生产边界引用及动态 helper 调用点扫描禁止未登记常量绕过。Terminal
+disposer 和 payload 边界；最后 7 个仅有 TypeScript 类型的 CCLink/Window/Scheduled Tasks/
+Media Projects/Filesystem 事件也已补 preload 运行时 parser，库存不再允许 typed-only 转发。门禁从
+字符串证据升级为 AST 核对 shared 声明、真实 main 发送/监听、preload 订阅/发送与解绑边界，并由
+preload 合法/畸形 payload 行为测试证明 parser 实际生效；动态 helper 调用点仍禁止未登记常量绕过。Terminal
 保留迁移前未知规则、扩展字段、审计 filter 与无参数多余参数的容错归一化，只对核心字段和病态体积
-执行有界 parse-first 校验；Agent、Browser、Auth 事件也在 preload 做有界核心字段校验；Editor
+执行有界 parse-first 校验；全部保留的有 payload main→renderer 事件均在 preload 做有界核心字段
+校验；Editor
 read/save 同 channel 多订阅并存且精确释放；Android 异常断连会先释放本地 decoder、stream 与 listener。当前工作树 `pnpm verify` 通过
-334 个测试文件/2050 项测试（2 项跳过），`smoke:local` 11/11、`smoke:restore` 4/4、
+334 个测试文件/2054 项测试（2 项跳过），本次最终 `smoke:local` 11/11，先前同一工作树的 `smoke:restore` 4/4、
 `smoke:update-recovery` 1/1 通过；本轮 `smoke:workflow` 连续两次为 19/21，Markdown 诊断按钮和
 Agent composer 两个既有 UI locator 未出现，其余受影响流程通过，因此先前 21/21 不作为本轮绿色
 证据。S3.2 契约代码覆盖完成，但当前工作树不能宣称全部 smoke 绿色；这也不等于专项

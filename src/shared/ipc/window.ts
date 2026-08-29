@@ -1,5 +1,6 @@
-import type { KeyChord } from '../keybindings'
+import { isValidKeyChord, type KeyChord, type ShortcutModifier } from '../keybindings'
 import { defineIpcInvoke, defineNoArgsIpc } from './contract'
+import { isBoundedIpcEventPayload } from './event-payload'
 
 export interface WindowOperationResult {
   success: boolean
@@ -18,6 +19,36 @@ export interface ShortcutCaptureGuardInput {
 export interface ShortcutCaptureInputEvent {
   sessionId: string
   chord: KeyChord
+}
+
+export function parseShortcutCaptureInputEvent(value: unknown): ShortcutCaptureInputEvent | null {
+  if (
+    !isBoundedIpcEventPayload(value) ||
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value)
+  ) {
+    return null
+  }
+  const input = value as { sessionId?: unknown; chord?: unknown }
+  if (typeof input.sessionId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(input.sessionId)) {
+    return null
+  }
+  if (!input.chord || typeof input.chord !== 'object' || Array.isArray(input.chord)) return null
+  const chord = input.chord as { code?: unknown; modifiers?: unknown }
+  if (
+    typeof chord.code !== 'string' ||
+    !Array.isArray(chord.modifiers) ||
+    chord.modifiers.some((modifier) => typeof modifier !== 'string')
+  ) {
+    return null
+  }
+  const parsedChord: KeyChord = {
+    code: chord.code,
+    modifiers: chord.modifiers as ShortcutModifier[],
+  }
+  if (!isValidKeyChord(parsedChord)) return null
+  return value as ShortcutCaptureInputEvent
 }
 
 export interface WindowApiContract {

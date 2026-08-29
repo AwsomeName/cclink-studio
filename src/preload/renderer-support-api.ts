@@ -19,7 +19,7 @@ import { wechatIpc, type WechatApiContract } from '../shared/ipc/wechat'
 import {
   windowIpc,
   windowIpcEvents,
-  type ShortcutCaptureInputEvent,
+  parseShortcutCaptureInputEvent,
   type WindowApiContract,
 } from '../shared/ipc/window'
 import { invokeIpcContract } from './ipc-contract-client'
@@ -32,8 +32,10 @@ export const windowApi: WindowApiContract = {
   focusRenderer: () => invokeIpcContract(windowIpc.focusRenderer),
   setShortcutCaptureGuard: (input) => invokeIpcContract(windowIpc.setShortcutCaptureGuard, input),
   onShortcutCaptureInput: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, input: ShortcutCaptureInputEvent): void =>
-      callback(input)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const input = parseShortcutCaptureInputEvent(value)
+      if (input) callback(input)
+    }
     ipcRenderer.on(windowIpcEvents.shortcutCaptureInput, handler)
     return () => ipcRenderer.removeListener(windowIpcEvents.shortcutCaptureInput, handler)
   },

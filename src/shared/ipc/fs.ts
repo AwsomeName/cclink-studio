@@ -1,4 +1,5 @@
 import { defineIpcCall } from './contract'
+import { isBoundedIpcEventPayload, isBoundedIpcEventString } from './event-payload'
 
 export interface FsDirEntry {
   name: string
@@ -23,6 +24,22 @@ export interface FsWatchDirEvent {
   watchId: string
   event: 'add' | 'change' | 'unlink'
   filePath: string
+}
+
+export function parseFsWatchDirEvent(value: unknown): FsWatchDirEvent | null {
+  if (
+    !isBoundedIpcEventPayload(value) ||
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value)
+  ) {
+    return null
+  }
+  const event = value as { watchId?: unknown; event?: unknown; filePath?: unknown }
+  if (!isBoundedIpcEventString(event.watchId, 512)) return null
+  if (event.event !== 'add' && event.event !== 'change' && event.event !== 'unlink') return null
+  if (!isBoundedIpcEventString(event.filePath, 4096)) return null
+  return value as FsWatchDirEvent
 }
 
 export interface FsReadResult {

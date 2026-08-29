@@ -26,11 +26,7 @@ export interface IpcEventFlowInventory {
   bridgeFiles: readonly string[]
   consumerFiles: readonly string[]
   disposerFiles: readonly string[]
-  payloadBoundary:
-    | 'bounded-preload-parser'
-    | 'bounded-main-parser'
-    | 'typed-preload-forwarding'
-    | 'no-payload'
+  payloadBoundary: 'bounded-preload-parser' | 'bounded-main-parser' | 'no-payload'
   evidenceTerms: readonly string[]
 }
 
@@ -53,6 +49,9 @@ function expandEventGroup(group: EventInventoryGroup): IpcEventFlowInventory[] {
   return group.keys.map((key) => {
     const channel = group.definitions[key]
     if (!channel) throw new Error(`IPC event inventory key 未声明: ${group.definitionName}.${key}`)
+    const matchingEvidenceTerms = group.evidenceTerms.filter((term) =>
+      term.toLocaleLowerCase().includes(key.toLocaleLowerCase()),
+    )
     return {
       channel,
       key,
@@ -65,7 +64,7 @@ function expandEventGroup(group: EventInventoryGroup): IpcEventFlowInventory[] {
       consumerFiles: group.consumerFiles,
       disposerFiles: group.disposerFiles ?? [...group.bridgeFiles, ...group.consumerFiles],
       payloadBoundary: group.payloadBoundary,
-      evidenceTerms: [key, ...group.evidenceTerms],
+      evidenceTerms: matchingEvidenceTerms.length > 0 ? matchingEvidenceTerms : group.evidenceTerms,
     }
   })
 }
@@ -108,7 +107,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/main/cclink-remote/cclink-remote-ipc.ts'],
     bridgeFiles: ['src/preload/index.ts'],
     consumerFiles: ['src/renderer/src/stores/cclink-store.ts'],
-    payloadBoundary: 'typed-preload-forwarding',
+    payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['onRealtimeStatus', 'onRealtimeEvent'],
   }),
   ...expandEventGroup({
@@ -121,7 +120,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/main/cclink-remote/cclink-remote-ipc.ts'],
     bridgeFiles: ['src/preload/index.ts'],
     consumerFiles: ['src/renderer/src/features/cclink-remote/remote-agent-controller.tsx'],
-    payloadBoundary: 'typed-preload-forwarding',
+    payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['onImageUploadProgress'],
   }),
   ...expandEventGroup({
@@ -251,7 +250,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/main/ipc/window-ipc.ts'],
     bridgeFiles: ['src/preload/renderer-support-api.ts'],
     consumerFiles: ['src/renderer/src/components/settings/KeybindingsSettings.tsx'],
-    payloadBoundary: 'typed-preload-forwarding',
+    payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['onShortcutCaptureInput'],
   }),
   ...expandEventGroup({
@@ -303,7 +302,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/main/scheduled-task/scheduled-task-ipc.ts'],
     bridgeFiles: ['src/preload/index.ts'],
     consumerFiles: ['src/renderer/src/features/scheduled-tasks/ScheduledTasksSidebar.tsx'],
-    payloadBoundary: 'typed-preload-forwarding',
+    payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['onChanged'],
   }),
   ...expandEventGroup({
@@ -316,7 +315,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/main/media-production/media-project-ipc.ts'],
     bridgeFiles: ['src/preload/index.ts'],
     consumerFiles: ['src/renderer/src/features/media-production/PromotionalVideoSidebar.tsx'],
-    payloadBoundary: 'typed-preload-forwarding',
+    payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['onChanged'],
   }),
   ...expandEventGroup({
@@ -369,7 +368,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/main/fs/fs-ipc.ts'],
     bridgeFiles: ['src/preload/fs-api.ts'],
     consumerFiles: ['src/renderer/src/components/sidebar/FileTree.tsx'],
-    payloadBoundary: 'typed-preload-forwarding',
+    payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['watchDir'],
   }),
   ...expandEventGroup({

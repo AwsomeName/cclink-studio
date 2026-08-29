@@ -411,7 +411,7 @@ Agent 发起的浏览器任务在创建时固定 `workspaceKey`、`conversationI
 
 ## 架构复审基线
 
-2026-07-21 的稳定化退出复审在当时门禁范围内未发现需要 ADR 的架构例外。2026-08-28 的全库存复审进一步发现 Terminal、Android/Scrcpy、数据源及若干后续能力仍存在 main/preload channel 双写，Terminal/Android/Editor 还有未完全对称的事件 disposer；S3.2 因此重新打开并按 `docs/architecture/ipc-contract-convergence.md` 完成工程补救。当前生产 main/preload IPC 边界已由全量源码门禁禁止裸 channel，现行 invoke 库存校验 shared definition、唯一 handler 和 preload consumer，全部生产事件库存记录 definition、真实 producer、consumer、disposer 与 payload 边界，并由生产边界引用及动态 helper 调用点扫描禁止未登记常量绕过，临时 allowlist 为空；Terminal 保留旧容错归一化，Agent、Browser、Auth 等保留事件在 preload 校验核心字段与体积边界。该问题没有改变开源/官方边界、renderer 隔离、密钥边界、能力独立降级和状态所有权，也不需要 ADR。完整 Terminal、Android 真机与真实只读数据源真人复验仍待具备环境后补，不能用自动化结果替代三个域的阶段退出和用户闭环。
+2026-07-21 的稳定化退出复审在当时门禁范围内未发现需要 ADR 的架构例外。2026-08-28 的全库存复审进一步发现 Terminal、Android/Scrcpy、数据源及若干后续能力仍存在 main/preload channel 双写，Terminal/Android/Editor 还有未完全对称的事件 disposer；S3.2 因此重新打开并按 `docs/architecture/ipc-contract-convergence.md` 完成工程补救。当前生产 main/preload IPC 边界已由全量源码门禁禁止裸 channel，现行 invoke 库存校验 shared definition、唯一 handler 和 preload consumer，全部生产事件库存记录 definition、真实 producer、consumer、disposer 与 payload 边界；AST 门禁核对 shared 事件声明、真实 main 发送/监听、preload 订阅/发送及解绑，不再以字符串命中代替边界证据，动态 helper 调用点也不能使用未登记常量绕过。临时 allowlist 为空，事件库存不再允许仅靠 TypeScript 类型转发；全部保留的有 payload main→renderer 事件均在 preload 校验核心字段与体积边界，并有畸形 payload 行为测试。Terminal 保留旧容错归一化。该问题没有改变开源/官方边界、renderer 隔离、密钥边界、能力独立降级和状态所有权，也不需要 ADR。完整 Terminal、Android 真机与真实只读数据源真人复验仍待具备环境后补，不能用自动化结果替代三个域的阶段退出和用户闭环。
 
 已知维护债务包括 `AgentPanel`、`SettingsPage`、`BrowserManager`、Browser MCP、文件服务和部分 store 仍超过约一千行。它们当前有领域边界和行为测试保护，未形成已知 P0/P1，因此不以机械拆文件阻塞稳定化退出；后续改动必须先固定行为，再按状态所有者拆分，不能重新引入第二套事务或写入所有者。
 

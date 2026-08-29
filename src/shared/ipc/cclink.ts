@@ -4,6 +4,7 @@ import type { RemoteWorkspaceRef } from '../workspace-ref'
 import type { RemoteFileTreeResult } from '../remote-protocol'
 import type { TransientImageAttachment } from '../image-attachment'
 import { defineIpcCall } from './contract'
+import { isBoundedIpcEventPayload, isBoundedIpcEventString } from './event-payload'
 
 export interface CclinkRealtimeStatus {
   state: 'idle' | 'connecting' | 'online' | 'offline' | 'error'
@@ -82,6 +83,107 @@ export interface CclinkRealtimeEvent {
   message?: CclinkRemoteMessage
   sessions?: CclinkRemoteSession[]
   permission?: { requestId: string; path: string; operation: string }
+}
+
+const REALTIME_STATES = new Set<CclinkRealtimeStatus['state']>([
+  'idle',
+  'connecting',
+  'online',
+  'offline',
+  'error',
+])
+const REALTIME_EVENT_TYPES = new Set<CclinkRealtimeEvent['type']>([
+  'conversation',
+  'sessions',
+  'server',
+  'permission',
+])
+const REALTIME_EVENT_PHASES = new Set<NonNullable<CclinkRealtimeEvent['phase']>>([
+  'message',
+  'started',
+  'streaming',
+  'completed',
+  'error',
+  'untracked',
+])
+const IMAGE_UPLOAD_PHASES = new Set<CclinkImageUploadProgress['phase']>([
+  'preparing',
+  'uploading',
+  'sending',
+  'completed',
+  'cancelled',
+  'failed',
+])
+
+export function parseCclinkRealtimeStatusEvent(value: unknown): CclinkRealtimeStatus | null {
+  if (!isEventRecord(value) || !isBoundedIpcEventPayload(value)) return null
+  if (typeof value.state !== 'string' || !REALTIME_STATES.has(value.state as never)) return null
+  if (
+    value.error !== undefined &&
+    !isBoundedIpcEventString(value.error, 32_768, { allowEmpty: true })
+  ) {
+    return null
+  }
+  return value as unknown as CclinkRealtimeStatus
+}
+
+export function parseCclinkRealtimeEvent(value: unknown): CclinkRealtimeEvent | null {
+  if (!isEventRecord(value) || !isBoundedIpcEventPayload(value)) return null
+  if (typeof value.type !== 'string' || !REALTIME_EVENT_TYPES.has(value.type as never)) return null
+  if (!isBoundedIpcEventString(value.serverId, 512)) return null
+  if (value.sessionId !== undefined && !isBoundedIpcEventString(value.sessionId, 512)) return null
+  if (
+    value.phase !== undefined &&
+    (typeof value.phase !== 'string' || !REALTIME_EVENT_PHASES.has(value.phase as never))
+  ) {
+    return null
+  }
+  if (value.message !== undefined && !isEventRecord(value.message)) return null
+  if (value.sessions !== undefined && !Array.isArray(value.sessions)) return null
+  if (value.permission !== undefined) {
+    if (
+      !isEventRecord(value.permission) ||
+      !isBoundedIpcEventString(value.permission.requestId, 512) ||
+      !isBoundedIpcEventString(value.permission.path, 4096) ||
+      !isBoundedIpcEventString(value.permission.operation, 256)
+    ) {
+      return null
+    }
+  }
+  return value as unknown as CclinkRealtimeEvent
+}
+
+export function parseCclinkImageUploadProgressEvent(
+  value: unknown,
+): CclinkImageUploadProgress | null {
+  if (!isEventRecord(value) || !isBoundedIpcEventPayload(value)) return null
+  if (!isBoundedIpcEventString(value.uploadId, 512)) return null
+  if (value.imageId !== undefined && !isBoundedIpcEventString(value.imageId, 512)) return null
+  if (!isNonNegativeInteger(value.imageIndex) || !isNonNegativeInteger(value.imageCount))
+    return null
+  if (!isNonNegativeNumber(value.loadedBytes) || !isNonNegativeNumber(value.totalBytes)) return null
+  if (typeof value.percent !== 'number' || !Number.isFinite(value.percent)) return null
+  if (value.percent < 0 || value.percent > 100) return null
+  if (typeof value.phase !== 'string' || !IMAGE_UPLOAD_PHASES.has(value.phase as never)) return null
+  if (
+    value.error !== undefined &&
+    !isBoundedIpcEventString(value.error, 32_768, { allowEmpty: true })
+  ) {
+    return null
+  }
+  return value as unknown as CclinkImageUploadProgress
+}
+
+function isEventRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
 }
 
 export const cclinkIpc = {

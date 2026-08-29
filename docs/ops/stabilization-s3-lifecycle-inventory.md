@@ -10,14 +10,17 @@
 
 > 补救结果：P0-P5 代码迁移与自动化工程门禁已顺序完成，生产 main/preload 裸 channel 临时 allowlist
 > 已收敛为空；全量现行 invoke 库存校验 shared definition、唯一 handler 与 preload consumer，全部
-> 45 个生产事件库存记录 definition、producer、真实 consumer、disposer 与 payload 边界，并由生产
-> 边界引用和动态 helper 调用点扫描禁止未登记常量绕过。Terminal 保留迁移前普通扩展输入的容错
-> 归一化，仅拒绝畸形核心字段或病态体积；Agent、Browser、Auth 事件在 preload 增加运行时边界。
+> 45 个生产事件库存记录 definition、producer、真实 consumer、disposer 与 payload 边界；最后 7 个
+> CCLink/Window/Scheduled Tasks/Media Projects/Filesystem typed-only 事件也已补 preload 运行时 parser，
+> 库存不再允许只靠 TypeScript 类型转发。门禁通过 AST 核对 shared 声明、真实 main 发送/监听、
+> preload 订阅/发送与解绑，并用合法/畸形 payload 行为测试证明 parser 生效；动态 helper 调用点继续
+> 禁止未登记常量绕过。Terminal 保留迁移前普通扩展输入的容错归一化，仅拒绝畸形核心字段或病态体积。
 > Terminal、Android/Scrcpy、
 > 数据源及后续 32 个保留 invoke 已迁移，无生产者的 Editor `contentUpdate/contentUpdateAck` 已删除。
 > `pnpm verify` 通过 334 个
-> 测试文件/2050 项测试（2 项跳过）；local 11/11、restore 4/4 和 update-recovery 通过，但本轮
-> workflow 连续两次为 19/21，两个 Agent Panel 可见性 locator 未出现，不能写成全部 smoke 绿色。Android
+> 测试文件/2054 项测试（2 项跳过）；本次最终 local 11/11，先前同一工作树 restore 4/4 和
+> update-recovery 通过，但本轮
+> workflow 连续两次为 19/21，两个 Agent Panel 可见性 locator 未出现，不能写成全部 smoke 绿色。
 > 完整 Terminal、Android 真机和真实只读数据源真人验收待环境具备后补，不由 mock 或构建结果代替，
 > 因此不写成 P1-P3 阶段退出。
 

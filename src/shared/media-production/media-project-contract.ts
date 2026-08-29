@@ -58,6 +58,14 @@ export const mediaProjectsIpcEvents = {
   changed: 'mediaProjects:changed',
 } as const
 
+export function parseMediaProjectsChangedEvent(value: unknown): string | null {
+  try {
+    return parseMediaWorkspacePath(value)
+  } catch {
+    return null
+  }
+}
+
 const invalidOperation = async (error: unknown): Promise<MediaProjectOperationResult> => ({
   success: false,
   error: {

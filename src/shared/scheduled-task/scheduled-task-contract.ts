@@ -43,6 +43,14 @@ export const scheduledTasksIpcEvents = {
   changed: 'scheduledTasks:changed',
 } as const
 
+export function parseScheduledTasksChangedEvent(value: unknown): string | null {
+  try {
+    return parseWorkspacePath(value)
+  } catch {
+    return null
+  }
+}
+
 const invalidOperation = async (error: unknown): Promise<ScheduledTaskOperationResult> => ({
   success: false,
   error: {

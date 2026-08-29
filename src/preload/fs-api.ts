@@ -1,5 +1,5 @@
 import { ipcRenderer, type IpcRendererEvent } from 'electron'
-import { fsIpc, fsIpcEvents, type FsApiContract, type FsWatchDirEvent } from '../shared/ipc/fs'
+import { fsIpc, fsIpcEvents, parseFsWatchDirEvent, type FsApiContract } from '../shared/ipc/fs'
 import { invokeIpcContract } from './ipc-contract-client'
 
 export const fsApi: FsApiContract = {
@@ -33,8 +33,9 @@ export const fsApi: FsApiContract = {
   openPath: (path) => invokeIpcContract(fsIpc.openPath, path),
   watchDir: async (dirPath, onChange) => {
     const watchId = await invokeIpcContract(fsIpc.watchDirStart, dirPath)
-    const listener = (_event: IpcRendererEvent, payload: FsWatchDirEvent): void => {
-      if (payload.watchId === watchId) onChange(payload)
+    const listener = (_event: IpcRendererEvent, value: unknown): void => {
+      const payload = parseFsWatchDirEvent(value)
+      if (payload?.watchId === watchId) onChange(payload)
     }
     ipcRenderer.on(fsIpcEvents.watchDirChanged, listener)
     return () => {

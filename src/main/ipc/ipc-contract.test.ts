@@ -774,7 +774,8 @@ describe('IPC invoke contracts', () => {
     expect(new Set(ipcEventFlowInventory.map((entry) => entry.channel)).size).toBe(
       ipcEventFlowInventory.length,
     )
-    expect([...collectDeclaredIpcEvents(resolve(process.cwd(), 'src/shared'))].sort()).toEqual(
+    const declaredEvents = collectDeclaredIpcEvents(resolve(process.cwd(), 'src/shared'))
+    expect([...declaredEvents.values()].sort()).toEqual(
       ipcEventFlowInventory.map((entry) => entry.channel).sort(),
     )
     const inventoriedReferences = new Set(
@@ -794,27 +795,43 @@ describe('IPC invoke contracts', () => {
       'src/preload/rogue-helper.ts:ipcRenderer.on:channel',
       'src/preload/rogue-helper.ts:registerOwnedEditorListener:channel',
     ])
+    expect(
+      collectEventReferenceViolations(
+        'src/preload/renderer-support-api.ts',
+        `function registerOwnedEditorListener(channel: string, listener: () => void) {
+          ipcRenderer.on(channel, listener)
+          return () => ipcRenderer.removeListener(channel, listener)
+        }
+        function rogue(channel: string, listener: () => void) {
+          ipcRenderer.on(channel, listener)
+        }`,
+        inventoriedReferences,
+      ),
+    ).toEqual(['src/preload/renderer-support-api.ts:ipcRenderer.on:channel'])
+    expect(ipcEventFlowInventory.some((event) => event.payloadBoundary === 'no-payload')).toBe(true)
+    expect(ipcEventFlowInventory.map((event) => event.payloadBoundary)).not.toContain(
+      'typed-preload-forwarding',
+    )
 
     for (const event of ipcEventFlowInventory) {
-      const definitionSource = readFileSync(resolve(process.cwd(), event.definitionFile), 'utf8')
-      expect(definitionSource).toContain(`'${event.channel}'`)
-      const symbol = event.channel.split(/[:.]/u).at(-1)!
-      const evidenceTerms = [symbol, event.key, ...event.evidenceTerms]
-      for (const files of [
-        event.producerFiles,
-        event.bridgeFiles,
-        event.consumerFiles,
-        event.disposerFiles,
-      ]) {
+      const reference = `${event.definitionName}.${event.key}`
+      expect(declaredEvents.get(reference), `${reference} shared definition`).toBe(event.channel)
+      for (const files of [event.producerFiles, event.bridgeFiles, event.consumerFiles]) {
         expect(files).not.toHaveLength(0)
-        for (const file of files) {
-          const source = readFileSync(resolve(process.cwd(), file), 'utf8')
-          expect(
-            evidenceTerms.some((term) =>
-              source.toLocaleLowerCase().includes(term.toLocaleLowerCase()),
-            ),
-          ).toBe(true)
+        files.forEach((file) => expect(statSync(resolve(process.cwd(), file)).isFile()).toBe(true))
+      }
+
+      if (event.direction === 'main-to-renderer') {
+        expectBoundaryReference(event.producerFiles, reference, ['send'])
+        for (const bridgeFile of event.bridgeFiles) {
+          expectBoundaryReference([bridgeFile], reference, ['subscribe', 'owned-subscription'])
+          expectBoundaryReference([bridgeFile], reference, ['unsubscribe', 'owned-subscription'])
         }
+        expectAstEvidence(event.consumerFiles, event.evidenceTerms, reference)
+      } else {
+        expectBoundaryReference(event.bridgeFiles, reference, ['send'])
+        expectBoundaryReference(event.consumerFiles, reference, ['receive'])
+        expectAstEvidence(event.producerFiles, event.evidenceTerms, reference)
       }
     }
   })
@@ -858,8 +875,8 @@ function collectDeclaredIpcChannels(directory: string): Set<string> {
   return channels
 }
 
-function collectDeclaredIpcEvents(directory: string): Set<string> {
-  const channels = new Set<string>()
+function collectDeclaredIpcEvents(directory: string): Map<string, string> {
+  const events = new Map<string, string>()
 
   for (const file of collectFiles(directory).filter(
     (candidate) => candidate.endsWith('.ts') && !candidate.endsWith('.test.ts'),
@@ -882,8 +899,12 @@ function collectDeclaredIpcEvents(directory: string): Set<string> {
           : node.initializer
         if (ts.isObjectLiteralExpression(initializer)) {
           for (const property of initializer.properties) {
-            if (ts.isPropertyAssignment(property) && ts.isStringLiteralLike(property.initializer)) {
-              channels.add(property.initializer.text)
+            if (
+              ts.isPropertyAssignment(property) &&
+              ts.isIdentifier(property.name) &&
+              ts.isStringLiteralLike(property.initializer)
+            ) {
+              events.set(`${node.name.text}.${property.name.text}`, property.initializer.text)
             }
           }
         }
@@ -893,7 +914,66 @@ function collectDeclaredIpcEvents(directory: string): Set<string> {
     visit(sourceFile)
   }
 
-  return channels
+  return events
+}
+
+type EventBoundaryKind = 'subscribe' | 'unsubscribe' | 'owned-subscription' | 'send' | 'receive'
+
+interface EventBoundaryReference {
+  expressionText: string
+  channelExpression: string
+  kind: EventBoundaryKind
+  functionOwner: string | null
+  constructorName: string | null
+}
+
+function expectBoundaryReference(
+  projectFiles: readonly string[],
+  reference: string,
+  kinds: readonly EventBoundaryKind[],
+): void {
+  const matches = projectFiles.flatMap((projectFile) =>
+    collectEventBoundaryReferences(
+      projectFile,
+      readFileSync(resolve(process.cwd(), projectFile), 'utf8'),
+    ).filter(
+      (boundary) => boundary.channelExpression === reference && kinds.includes(boundary.kind),
+    ),
+  )
+  expect(matches.length, `${reference} ${kinds.join('/')} AST boundary`).toBeGreaterThan(0)
+}
+
+function expectAstEvidence(
+  projectFiles: readonly string[],
+  evidenceTerms: readonly string[],
+  reference: string,
+): void {
+  for (const projectFile of projectFiles) {
+    const identifiers = new Set(
+      collectAstIdentifiers(projectFile, readFileSync(resolve(process.cwd(), projectFile), 'utf8')),
+    )
+    expect(
+      evidenceTerms.some((term) => identifiers.has(term)),
+      `${reference} renderer API AST evidence in ${projectFile}`,
+    ).toBe(true)
+  }
+}
+
+function collectAstIdentifiers(projectFile: string, source: string): string[] {
+  const identifiers = new Set<string>()
+  const sourceFile = ts.createSourceFile(projectFile, source, ts.ScriptTarget.Latest, true)
+  const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node)) identifiers.add(node.text)
+    if (
+      (ts.isPropertyAccessExpression(node) || ts.isPropertyAssignment(node)) &&
+      ts.isIdentifier(node.name)
+    ) {
+      identifiers.add(node.name.text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return [...identifiers]
 }
 
 function collectUninventoriedEventReferences(inventoried: ReadonlySet<string>): string[] {
@@ -920,7 +1000,22 @@ function collectEventReferenceViolations(
   source: string,
   inventoried: ReadonlySet<string>,
 ): string[] {
-  const violations: string[] = []
+  return collectEventBoundaryReferences(projectFile, source).flatMap((boundary) => {
+    if (
+      inventoried.has(boundary.channelExpression) ||
+      isApprovedDynamicChannelBoundary(projectFile, boundary)
+    ) {
+      return []
+    }
+    return [`${projectFile}:${boundary.expressionText}:${boundary.channelExpression}`]
+  })
+}
+
+function collectEventBoundaryReferences(
+  projectFile: string,
+  source: string,
+): EventBoundaryReference[] {
+  const references: EventBoundaryReference[] = []
   const sourceFile = ts.createSourceFile(projectFile, source, ts.ScriptTarget.Latest, true)
   const visit = (node: ts.Node): void => {
     if (!ts.isCallExpression(node) || node.arguments.length === 0) {
@@ -942,59 +1037,67 @@ function collectEventReferenceViolations(
         ? 1
         : 0
       const channelExpression = node.arguments[channelArgumentIndex]?.getText(sourceFile)
-      if (!channelExpression) {
-        violations.push(`${projectFile}:${expressionText}:missing-channel`)
-        ts.forEachChild(node, visit)
-        return
-      }
-      if (
-        !inventoried.has(channelExpression) &&
-        !isApprovedDynamicChannelBoundary(projectFile, expressionText, channelExpression, node)
-      ) {
-        violations.push(`${projectFile}:${expressionText}:${channelExpression}`)
-      }
+      references.push({
+        expressionText,
+        channelExpression: channelExpression ?? 'missing-channel',
+        kind: classifyEventBoundary(expressionText),
+        functionOwner: findEnclosingFunctionName(node),
+        constructorName: findEnclosingNewExpressionName(node),
+      })
     }
     ts.forEachChild(node, visit)
   }
   visit(sourceFile)
-  return violations.sort()
+  return references
+}
+
+function classifyEventBoundary(expressionText: string): EventBoundaryKind {
+  if (expressionText === 'registerOwnedEditorListener') return 'owned-subscription'
+  if (/ipcRenderer\.(?:on|once)$/u.test(expressionText)) return 'subscribe'
+  if (/ipcRenderer\.(?:removeListener|removeAllListeners)$/u.test(expressionText)) {
+    return 'unsubscribe'
+  }
+  if (expressionText === 'registerTrustedIpcListener' || expressionText === 'ipcMain.on') {
+    return 'receive'
+  }
+  return 'send'
 }
 
 function isApprovedDynamicChannelBoundary(
   projectFile: string,
-  expressionText: string,
-  channelExpression: string,
-  node: ts.CallExpression,
+  boundary: EventBoundaryReference,
 ): boolean {
-  if (channelExpression !== 'channel') return false
-  const owner = findEnclosingFunctionName(node)
+  if (boundary.channelExpression !== 'channel') return false
   if (
     projectFile === 'src/main/browser/browser-manager.ts' &&
-    expressionText === 'webContents.send' &&
-    (owner === 'sendToOwner' || owner === 'sendToTabOwner')
+    boundary.expressionText === 'webContents.send' &&
+    (boundary.functionOwner === 'sendToOwner' || boundary.functionOwner === 'sendToTabOwner')
   ) {
     return true
   }
   if (
     projectFile === 'src/main/ipc/trusted-renderer-guard.ts' &&
-    expressionText === 'ipcMain.on' &&
-    (owner === 'on' || owner === 'registerTrustedIpcListener')
+    boundary.expressionText === 'ipcMain.on' &&
+    (boundary.functionOwner === 'on' || boundary.functionOwner === 'registerTrustedIpcListener')
   ) {
     return true
   }
   if (
     projectFile === 'src/preload/renderer-support-api.ts' &&
-    (expressionText === 'ipcRenderer.on' || expressionText === 'ipcRenderer.removeListener') &&
-    owner === 'registerOwnedEditorListener'
+    (boundary.expressionText === 'ipcRenderer.on' ||
+      boundary.expressionText === 'ipcRenderer.removeListener') &&
+    boundary.functionOwner === 'registerOwnedEditorListener'
   ) {
     return true
   }
   if (
     projectFile === 'src/main/runtime/window-runtime.ts' &&
-    /\.sendToTabOwner$/u.test(expressionText)
+    /\.sendToTabOwner$/u.test(boundary.expressionText)
   ) {
-    const constructorName = findEnclosingNewExpressionName(node)
-    return constructorName === 'BrowserTaskRuntime' || constructorName === 'BrowserDownloadStore'
+    return (
+      boundary.constructorName === 'BrowserTaskRuntime' ||
+      boundary.constructorName === 'BrowserDownloadStore'
+    )
   }
   return false
 }

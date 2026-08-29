@@ -55,19 +55,27 @@ P0-P5 的代码迁移与自动化工程门禁已按顺序完成，未引入新 I
 - 全量 invoke 库存从 shared definition 生成，并记录 owner、唯一 handler 文件、preload consumer、
   parser 与 registration scope；测试扫描全部 shared definition，缺登记、缺 handler、重复 handler 或
   缺 preload consumer 均失败。全部 45 个生产事件另行记录 definition、producer、preload bridge、
-  真实 consumer、disposer 与 payload 边界；测试同时扫描事件声明和生产 IPC 边界引用，未登记事件、
-  本地常量绕过或死事件会失败。空 legacy allowlist 只表示没有遗留裸 channel，不能替代现行库存。
+  真实 consumer、disposer 与 payload 边界；其中没有仅靠 TypeScript 类型转发的事件。CCLink realtime
+  status/event/图片上传进度、快捷键录制、定时任务变更、媒体工程变更和文件 watcher 这最后 7 个事件
+  已在 preload 执行轻量运行时校验，畸形或超限 payload 不进入 renderer callback。
+- 事件库存门禁不再用“文件中出现过 channel/方法名”的字符串命中作为落实证据：测试从 AST 精确读取
+  shared 事件声明，并核对每项事件在真实 main 发送/监听边界、preload 订阅或发送边界及解绑边界上的
+  contract 引用；renderer 调用证据也按 AST 标识符核对。另有 preload 行为测试直接触发合法和畸形
+  payload，证明 parser 不是只写在库存标签里。未登记事件、本地常量绕过或死事件会失败。空 legacy
+  allowlist 只表示没有遗留裸 channel，不能替代现行库存。
 - 全仓生产 main/preload IPC 边界继续机器扫描，新增裸 `ipcMain`、trusted registrar、
   `webContents.send` 或 `ipcRenderer` channel 字面量会直接失败；preload 不得导入本次新增的 main-only
   contract。动态 channel helper 只允许在精确登记的基础实现中出现，调用点仍必须引用库存事件；门禁
   用伪造 helper 用例证明普通 `channel` 变量不能绕过。Terminal 的 PTY 与确认接口继续精确校验参数，
   lifecycle/submit 校验核心结构；迁移前会被 main 归一化的普通未知规则、扩展字段、审计 filter 和无参数
   接口多余参数继续兼容，仅病态深度/节点数/字符串大小会在服务判断前拒绝。Terminal、Android、
-  Editor、Agent、Browser 和 Auth 的相关 main→renderer payload 在 preload 做有界核心字段校验。
+  Editor、Agent、Browser、Auth、CCLink、Window、Filesystem、Scheduled Tasks 和 Media Projects 的相关
+  main→renderer payload 在 preload 做有界核心字段校验。
   Editor read/save 支持同 channel 多订阅并存，每个 disposer 只释放自身 handler。
 
-当前工程证据：`pnpm verify` 通过 334 个测试文件、2050 项测试（2 项跳过），lint、类型检查和生产
-构建通过；`smoke:local` 11/11、`smoke:restore` 4/4、`smoke:update-recovery` 1/1 通过。本轮
+当前工程证据：`pnpm verify` 通过 334 个测试文件、2054 项测试（2 项跳过），lint、类型检查和生产
+构建通过；本次最终 `smoke:local` 11/11 通过，先前同一工作树的 `smoke:restore` 4/4、
+`smoke:update-recovery` 1/1 通过。本轮
 `smoke:workflow` 连续两次为 19/21，失败项均为 Agent Panel 可见性相关的既有 UI locator：Markdown
 诊断按钮和 Agent composer 未出现；其余 Terminal 执行、Editor、Browser 与上下文操作通过。按止损
 规则不在 IPC 修复中扩张 UI，先前 21/21 记录不能代替本轮失败。全新临时 Profile 的 `smoke:ui` 通过 13/17；失败的 4 项集中在
@@ -422,7 +430,7 @@ payload、日志、诊断或 workspace。数据源 namespace 随本阶段退出 
 | ---------------- | --------------------------------------------------------------------------------------- |
 | Contract 单测    | definition/parser key 完整对应、参数个数、可选参数、错误优先级、非法输入和错误映射      |
 | Main IPC 单测    | trusted sender 先于业务调用、parser 先于 service/bridge、结构化错误不漂移               |
-| Preload 源码边界 | 新 invoke client 使用轻量 definition；不新增 main-only contract 依赖；记录现有 Zod 基线 |
+| Preload 源码边界 | AST 核对真实订阅/发送/解绑 contract 引用；行为测试拒绝畸形事件；记录现有 Zod 基线 |
 | 事件库存         | 每个事件记录 producer 与实际 consumer；无生产者/无消费者事件必须有删除或补齐结论        |
 | 事件生命周期     | Terminal/Editor/Android 多订阅者互不删除，disposer 幂等，重建后无重复 listener          |
 | 能力降级         | Terminal/Android/数据源分别故障时 Studio 和其他本地能力继续可用                         |

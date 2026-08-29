@@ -8,6 +8,11 @@ import {
 } from './agent'
 import { parseAuthSessionEvent } from './auth'
 import {
+  parseCclinkImageUploadProgressEvent,
+  parseCclinkRealtimeEvent,
+  parseCclinkRealtimeStatusEvent,
+} from './cclink'
+import {
   parseBrowserActionLogChangedPayload,
   parseBrowserContextAgentRequest,
   parseBrowserDownloadChangedPayload,
@@ -23,6 +28,10 @@ import {
   parseBrowserViewStateChangedPayload,
 } from './browser'
 import { isBoundedIpcEventPayload } from './event-payload'
+import { parseFsWatchDirEvent } from './fs'
+import { parseShortcutCaptureInputEvent } from './window'
+import { parseMediaProjectsChangedEvent } from '../media-production/media-project-contract'
+import { parseScheduledTasksChangedEvent } from '../scheduled-task/scheduled-task-contract'
 
 describe('preload event payload parsers', () => {
   it('bounds nested event structures without copying payloads', () => {
@@ -206,5 +215,43 @@ describe('preload event payload parsers', () => {
         extra: 'x'.repeat(1_000_001),
       }),
     ).toBeNull()
+  })
+
+  it('checks the remaining CCLink, Window, Filesystem and workspace change events', () => {
+    const status = { state: 'online' as const }
+    const realtime = { type: 'server' as const, serverId: 'server-1' }
+    const progress = {
+      uploadId: 'upload-1',
+      imageIndex: 0,
+      imageCount: 1,
+      loadedBytes: 10,
+      totalBytes: 10,
+      percent: 100,
+      phase: 'completed' as const,
+    }
+    const shortcut = {
+      sessionId: 'capture-1',
+      chord: { code: 'KeyK', modifiers: ['primary' as const] },
+    }
+    const fsChange = { watchId: 'watch-1', event: 'change' as const, filePath: '/workspace/a.md' }
+
+    expect(parseCclinkRealtimeStatusEvent(status)).toBe(status)
+    expect(parseCclinkRealtimeEvent(realtime)).toBe(realtime)
+    expect(parseCclinkImageUploadProgressEvent(progress)).toBe(progress)
+    expect(parseShortcutCaptureInputEvent(shortcut)).toBe(shortcut)
+    expect(parseFsWatchDirEvent(fsChange)).toBe(fsChange)
+    expect(parseScheduledTasksChangedEvent('/workspace')).toBe('/workspace')
+    expect(parseMediaProjectsChangedEvent('/workspace')).toBe('/workspace')
+
+    expect(parseCclinkRealtimeStatusEvent({ state: 'connected' })).toBeNull()
+    expect(parseCclinkRealtimeEvent({ type: 'server', serverId: '' })).toBeNull()
+    expect(parseCclinkImageUploadProgressEvent({ ...progress, percent: 101 })).toBeNull()
+    expect(
+      parseShortcutCaptureInputEvent({ ...shortcut, chord: { code: 'KeyK', modifiers: [] } }),
+    ).toBeNull()
+    expect(parseFsWatchDirEvent({ ...fsChange, event: 'rename' })).toBeNull()
+    expect(parseScheduledTasksChangedEvent('x'.repeat(4097))).toBeNull()
+    expect(parseMediaProjectsChangedEvent('x'.repeat(4097))).toBeNull()
+    expect(parseCclinkRealtimeEvent({ ...realtime, nested: 'x'.repeat(1_000_001) })).toBeNull()
   })
 })

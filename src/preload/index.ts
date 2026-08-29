@@ -5,7 +5,14 @@ import {
   parseAuthSessionEvent,
   type AuthApiContract,
 } from '../shared/ipc/auth'
-import { cclinkIpc, cclinkIpcEvents, type CclinkApiContract } from '../shared/ipc/cclink'
+import {
+  cclinkIpc,
+  cclinkIpcEvents,
+  parseCclinkImageUploadProgressEvent,
+  parseCclinkRealtimeEvent,
+  parseCclinkRealtimeStatusEvent,
+  type CclinkApiContract,
+} from '../shared/ipc/cclink'
 import { remoteIpc, type RemoteApiContract } from '../shared/ipc/remote'
 import { officialIpc } from '../shared/ipc/official'
 import { diagnosticsIpc } from '../shared/ipc/diagnostics'
@@ -21,6 +28,7 @@ import {
 import {
   scheduledTasksIpc,
   scheduledTasksIpcEvents,
+  parseScheduledTasksChangedEvent,
   type ScheduledTasksApiContract,
 } from '../shared/scheduled-task/scheduled-task-contract'
 import { agentApi } from './agent-api'
@@ -55,6 +63,7 @@ import {
 import {
   mediaProjectsIpc,
   mediaProjectsIpcEvents,
+  parseMediaProjectsChangedEvent,
   type MediaProjectsApiContract,
 } from '../shared/media-production/media-project-contract'
 import {
@@ -129,26 +138,26 @@ const cclinkApi: CclinkApiContract = {
   answerQuestion: (input) => invokeIpcContract(cclinkIpc.answerQuestion, input),
   respondPermission: (input) => invokeIpcContract(cclinkIpc.respondPermission, input),
   onRealtimeStatus: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      status: Parameters<typeof callback>[0],
-    ): void => callback(status)
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const status = parseCclinkRealtimeStatusEvent(value)
+      if (status) callback(status)
+    }
     ipcRenderer.on(cclinkIpcEvents.realtimeStatus, listener)
     return () => ipcRenderer.removeListener(cclinkIpcEvents.realtimeStatus, listener)
   },
   onRealtimeEvent: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      event: Parameters<typeof callback>[0],
-    ): void => callback(event)
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const realtimeEvent = parseCclinkRealtimeEvent(value)
+      if (realtimeEvent) callback(realtimeEvent)
+    }
     ipcRenderer.on(cclinkIpcEvents.realtimeEvent, listener)
     return () => ipcRenderer.removeListener(cclinkIpcEvents.realtimeEvent, listener)
   },
   onImageUploadProgress: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      progress: Parameters<typeof callback>[0],
-    ): void => callback(progress)
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const progress = parseCclinkImageUploadProgressEvent(value)
+      if (progress) callback(progress)
+    }
     ipcRenderer.on(cclinkIpcEvents.imageUploadProgress, listener)
     return () => ipcRenderer.removeListener(cclinkIpcEvents.imageUploadProgress, listener)
   },
@@ -211,8 +220,10 @@ const scheduledTasksApi: ScheduledTasksApiContract = {
     invokeIpcContract(scheduledTasksIpc.listRuns, workspacePath, taskId),
   getRuntimeStatus: () => invokeIpcContract(scheduledTasksIpc.getRuntimeStatus),
   onChanged: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, workspacePath: string): void =>
-      callback(workspacePath)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const workspacePath = parseScheduledTasksChangedEvent(value)
+      if (workspacePath) callback(workspacePath)
+    }
     ipcRenderer.on(scheduledTasksIpcEvents.changed, handler)
     return () => ipcRenderer.removeListener(scheduledTasksIpcEvents.changed, handler)
   },
@@ -231,8 +242,10 @@ const mediaProjectsApi: MediaProjectsApiContract = {
   searchAssets: (input) => invokeIpcContract(mediaProjectsIpc.searchAssets, input),
   addSearchCandidate: (input) => invokeIpcContract(mediaProjectsIpc.addSearchCandidate, input),
   onChanged: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, workspacePath: string): void =>
-      callback(workspacePath)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const workspacePath = parseMediaProjectsChangedEvent(value)
+      if (workspacePath) callback(workspacePath)
+    }
     ipcRenderer.on(mediaProjectsIpcEvents.changed, handler)
     return () => ipcRenderer.removeListener(mediaProjectsIpcEvents.changed, handler)
   },
