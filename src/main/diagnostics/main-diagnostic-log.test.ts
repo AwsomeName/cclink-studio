@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { runInNewContext } from 'node:vm'
 import {
   getMainDiagnosticLogSnapshot,
   recordMainDiagnosticLog,
@@ -29,6 +30,16 @@ describe('main diagnostic log', () => {
     expect(entry.message).not.toContain('raw-access')
     expect(entry.message).toContain('138****5678')
     expect(entry.message).toContain('a***@example.com')
+  })
+
+  it('retains message and stack from errors created in an isolated VM realm', () => {
+    const foreignError = runInNewContext('new ReferenceError("navigator is not defined")')
+
+    recordMainDiagnosticLog('error', ['connection failed', foreignError])
+
+    const [entry] = getMainDiagnosticLogSnapshot().entries
+    expect(entry.message).toContain('ReferenceError: navigator is not defined')
+    expect(entry.message).not.toContain('{}')
   })
 
   it('keeps a bounded ring and reports discarded entries', () => {

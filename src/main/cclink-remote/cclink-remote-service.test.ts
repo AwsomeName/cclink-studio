@@ -15,6 +15,7 @@ import {
   type CclinkTransportEvent,
   type ImageUploadOptions,
 } from './request-router'
+import { TimTransport, type TimAdapter } from './tim-transport'
 
 class ReceivingTransport implements CclinkTransport {
   readonly sent: Array<{ serverId: string; message: CclinkProtocolMessage }> = []
@@ -80,6 +81,43 @@ function createService(
 }
 
 describe('CclinkRemoteService runtime protocol', () => {
+  it('fully disposes a partially initialized Tencent transport when login fails', async () => {
+    const unsubscribeMessage = vi.fn()
+    const unsubscribeStatus = vi.fn()
+    const logout = vi.fn().mockResolvedValue(undefined)
+    const foreignError = { name: 'ReferenceError', message: 'navigator is not defined' }
+    const adapter: TimAdapter = {
+      login: vi.fn().mockRejectedValue(foreignError),
+      logout,
+      sendCustomMessage: vi.fn().mockResolvedValue(undefined),
+      onCustomMessage: vi.fn().mockReturnValue(unsubscribeMessage),
+      onStatus: vi.fn().mockReturnValue(unsubscribeStatus),
+    }
+    const transport = new TimTransport(adapter)
+    const auth = {
+      ensureIdentity: vi.fn().mockResolvedValue({
+        accountUserId: 'user-1',
+        imUserId: 'user-1',
+        clientImUserId: 'client-1',
+        imUserSig: 'memory-only',
+        authToken: 'memory-only',
+        sdkAppId: 1,
+        deviceId: 'device-1',
+        deviceName: 'Studio',
+        updatedAt: Date.now(),
+      }),
+    }
+    const service = new CclinkRemoteService(auth as never, null, undefined, () => transport)
+
+    await expect(service.connect()).resolves.toEqual({
+      state: 'error',
+      error: 'navigator is not defined',
+    })
+    expect(logout).toHaveBeenCalledOnce()
+    expect(unsubscribeMessage).toHaveBeenCalledOnce()
+    expect(unsubscribeStatus).toHaveBeenCalledOnce()
+  })
+
   it('backfills generated session names from the first persisted user message', async () => {
     const { service, store } = createService({
       version: 1 as const,

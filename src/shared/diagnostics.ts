@@ -42,8 +42,12 @@ export function formatDiagnosticArguments(values: unknown[]): string {
 }
 
 function formatDiagnosticValue(value: unknown): string {
-  if (value instanceof Error) {
-    return value.stack || `${value.name}: ${value.message}`
+  if (value instanceof Error || isErrorLike(value)) {
+    const name = typeof value.name === 'string' && value.name.trim() ? value.name : 'Error'
+    const message = typeof value.message === 'string' ? value.message : ''
+    return typeof value.stack === 'string' && value.stack.trim()
+      ? value.stack
+      : `${name}: ${message}`
   }
   if (typeof value === 'string') return value
   if (typeof value === 'bigint') return `${value.toString()}n`
@@ -62,4 +66,17 @@ function formatDiagnosticValue(value: unknown): string {
   } catch {
     return String(value)
   }
+}
+
+function isErrorLike(
+  value: unknown,
+): value is { name?: unknown; message?: unknown; stack?: unknown } {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    ('stack' in value ||
+      ('message' in value &&
+        typeof (value as { message?: unknown }).message === 'string' &&
+        'name' in value)),
+  )
 }

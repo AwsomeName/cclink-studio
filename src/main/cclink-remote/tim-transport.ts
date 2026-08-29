@@ -24,6 +24,8 @@ export class TimTransport implements CclinkTransport {
   private readonly unsubscribeStatus: () => void
   private readonly statusListeners = new Set<(status: 'online' | 'offline') => void>()
   private online = false
+  private destroyed = false
+  private disposal: Promise<void> | null = null
 
   constructor(private readonly adapter: TimAdapter) {
     this.unsubscribe = adapter.onCustomMessage((message) =>
@@ -47,6 +49,14 @@ export class TimTransport implements CclinkTransport {
   async logout(): Promise<void> {
     this.online = false
     await this.adapter.logout()
+  }
+
+  dispose(): Promise<void> {
+    if (this.disposal) return this.disposal
+    this.destroy()
+    this.online = false
+    this.disposal = this.adapter.logout()
+    return this.disposal
   }
 
   async sendMessage(serverId: string, message: CclinkProtocolMessage): Promise<void> {
@@ -78,6 +88,8 @@ export class TimTransport implements CclinkTransport {
   }
 
   destroy(): void {
+    if (this.destroyed) return
+    this.destroyed = true
     this.unsubscribe()
     this.unsubscribeStatus()
     this.listeners.clear()

@@ -132,6 +132,8 @@ export class CclinkRemoteService implements RemoteProvider {
     readonly auth: CclinkAuthService,
     private readonly baseUrl: string | null,
     private readonly runtimeStateStore?: CclinkRuntimeStateStore,
+    private readonly createTimTransport: () => TimTransport = () =>
+      new TimTransport(new TencentChatAdapter()),
   ) {
     this.requestRouter.onProtocolEvent((event) => {
       void this.handleProtocolMessage(event.serverId, event.message)
@@ -1459,8 +1461,7 @@ export class CclinkRemoteService implements RemoteProvider {
     this.timStatusUnsubscribe = null
     this.requestRouter.detach()
     if (this.timTransport) {
-      await this.timTransport.logout().catch(() => undefined)
-      this.timTransport.destroy()
+      await this.timTransport.dispose().catch(() => undefined)
       this.timTransport = null
     }
     this.updateStatus({ state: 'offline' })
@@ -1468,14 +1469,16 @@ export class CclinkRemoteService implements RemoteProvider {
 
   private async connectInternal(): Promise<CclinkRealtimeStatus> {
     this.updateStatus({ state: 'connecting' })
+    let transport: TimTransport | null = null
     try {
       const identity = await this.auth.ensureIdentity()
-      const transport = new TimTransport(new TencentChatAdapter())
-      this.timTransport = transport
-      this.timStatusUnsubscribe = transport.onStatus((status) => {
-        if (this.timTransport !== transport) return
+      const candidate = this.createTimTransport()
+      transport = candidate
+      this.timTransport = candidate
+      this.timStatusUnsubscribe = candidate.onStatus((status) => {
+        if (this.timTransport !== candidate) return
         if (status === 'online') {
-          this.requestRouter.attach(transport)
+          this.requestRouter.attach(candidate)
           const reconnected = this.status.state === 'offline' || this.status.state === 'error'
           this.updateStatus({ state: 'online' })
           if (reconnected) void this.refreshOnlineMetadata()
@@ -1484,18 +1487,18 @@ export class CclinkRemoteService implements RemoteProvider {
         this.requestRouter.detach()
         this.updateStatus({ state: 'offline', error: '腾讯 IM 连接已断开，等待自动恢复' })
       })
-      await transport.login(identity)
-      this.requestRouter.attach(transport)
+      await candidate.login(identity)
+      this.requestRouter.attach(candidate)
       this.updateStatus({ state: 'online' })
     } catch (error) {
       this.timStatusUnsubscribe?.()
       this.timStatusUnsubscribe = null
       this.requestRouter.detach()
-      this.timTransport?.destroy()
-      this.timTransport = null
+      await transport?.dispose().catch(() => undefined)
+      if (this.timTransport === transport) this.timTransport = null
       this.updateStatus({
         state: 'error',
-        error: error instanceof Error ? error.message : 'CCLink 连接失败',
+        error: thrownMessage(error, 'CCLink 连接失败'),
       })
     }
     return this.getRealtimeStatus()
@@ -2363,6 +2366,15 @@ export class CclinkRemoteService implements RemoteProvider {
     )
     for (const listener of this.statusListeners) listener({ ...status })
   }
+}
+
+function thrownMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message
+    if (typeof message === 'string' && message.trim()) return message
+  }
+  return fallback
 }
 
 function treeFromPage(response: CclinkFileTreeResponseMessage): CclinkTreeNode | null {

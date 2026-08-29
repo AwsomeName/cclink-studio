@@ -16,6 +16,12 @@ export async function loadIsolatedTencentChatSdk(): Promise<TencentChatSdkStatic
   const entryPath = require.resolve('@tencentcloud/chat')
   const source = await readFile(entryPath, 'utf8')
   const module = { exports: {} as unknown }
+  const navigator = Object.freeze({
+    userAgent: 'CCLink Studio Tencent Chat SDK',
+    cookieEnabled: false,
+  })
+  const location = Object.freeze({ href: '' })
+  const performance = Object.freeze({})
   const sandbox: Record<string, unknown> = {
     module,
     exports: {},
@@ -28,13 +34,21 @@ export async function loadIsolatedTencentChatSdk(): Promise<TencentChatSdkStatic
     setInterval,
     clearInterval,
     queueMicrotask,
+    navigator,
+    location,
+    performance,
     console: SILENT_CONSOLE,
   }
   const context = createContext(sandbox, { name: 'cclink-tencent-chat' })
   sandbox.global = context
   sandbox.self = context
   runInContext(source, context, { filename: entryPath })
-  sandbox.window = { URL: { createObjectURL: () => '' } }
+  sandbox.window = {
+    navigator,
+    location,
+    performance,
+    URL: { createObjectURL: () => '' },
+  }
   sandbox.Image = IsolatedImageFallback
 
   const sdk = module.exports as TencentChatSdkStatic

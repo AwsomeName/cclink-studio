@@ -3,6 +3,29 @@ import { createCclinkEnvelope, type CclinkIdentity } from '../../shared/cclink'
 import { TimTransport, type TimAdapter } from './tim-transport'
 
 describe('TimTransport realtime status', () => {
+  it('disposes the adapter and subscriptions once after a failed or partial connection', async () => {
+    const unsubscribeMessage = vi.fn()
+    const unsubscribeStatus = vi.fn()
+    const logout = vi.fn().mockResolvedValue(undefined)
+    const adapter: TimAdapter = {
+      login: vi.fn().mockRejectedValue(new Error('login failed')),
+      logout,
+      sendCustomMessage: vi.fn().mockResolvedValue(undefined),
+      onCustomMessage: vi.fn().mockReturnValue(unsubscribeMessage),
+      onStatus: vi.fn().mockReturnValue(unsubscribeStatus),
+    }
+    const transport = new TimTransport(adapter)
+
+    const firstDisposal = transport.dispose()
+    const secondDisposal = transport.dispose()
+    await Promise.all([firstDisposal, secondDisposal])
+
+    expect(firstDisposal).toBe(secondDisposal)
+    expect(logout).toHaveBeenCalledOnce()
+    expect(unsubscribeMessage).toHaveBeenCalledOnce()
+    expect(unsubscribeStatus).toHaveBeenCalledOnce()
+  })
+
   it('把 SDK 断线和重连事件传给上层生命周期', async () => {
     let emitStatus: ((status: 'online' | 'offline') => void) | undefined
     const adapter: TimAdapter = {

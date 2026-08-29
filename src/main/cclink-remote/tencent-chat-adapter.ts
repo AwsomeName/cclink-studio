@@ -86,12 +86,23 @@ export class TencentChatAdapter implements TimAdapter {
 
   async logout(): Promise<void> {
     if (!this.chat || !this.sdk) return
-    this.chat.off(this.sdk.EVENT.MESSAGE_RECEIVED, this.receive)
-    this.chat.off(this.sdk.EVENT.SDK_READY, this.readyStatus)
-    this.chat.off(this.sdk.EVENT.SDK_NOT_READY, this.notReadyStatus)
-    await this.chat.logout().catch(() => undefined)
-    await this.chat.destroy?.()
+    const chat = this.chat
+    const sdk = this.sdk
     this.chat = null
+    this.sdk = null
+    chat.off(sdk.EVENT.MESSAGE_RECEIVED, this.receive)
+    chat.off(sdk.EVENT.SDK_READY, this.readyStatus)
+    chat.off(sdk.EVENT.SDK_NOT_READY, this.notReadyStatus)
+    try {
+      await chat.logout()
+    } catch {
+      // Login may have failed before the SDK considered the instance online.
+    }
+    try {
+      await chat.destroy?.()
+    } catch {
+      // Failed/partial SDK instances are still considered disposed by the Studio lifecycle.
+    }
     this.emitStatus('offline')
   }
 
