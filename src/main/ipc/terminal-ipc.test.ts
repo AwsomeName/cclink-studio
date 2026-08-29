@@ -631,6 +631,218 @@ describe('registerTerminalIpc', () => {
     })
   })
 
+  it.each([
+    {
+      channel: 'terminal:resolveCommandConfirmation',
+      operation: 'resolveConfirmation',
+      validArgs: ['confirmation-1', true],
+      invalidArgs: ['', true],
+      invalidResult: { success: false },
+      unavailableResult: { success: false, error: 'Terminal 确认服务未就绪' },
+    },
+    {
+      channel: 'terminal:recordLifecycleEvent',
+      operation: 'recordEvent',
+      validArgs: [{ terminalSessionId: 'terminal-1', kind: 'created' }],
+      invalidArgs: [{ terminalSessionId: '', kind: 'created' }],
+      invalidResult: { success: false, error: 'Terminal 生命周期审计事件无效' },
+      unavailableResult: { success: false, error: 'Terminal 审计存储未就绪' },
+    },
+    {
+      channel: 'terminal:submitCommand',
+      operation: 'submitCommand',
+      validArgs: [
+        {
+          terminalSessionId: 'terminal-1',
+          command: 'pwd',
+          actor: 'user',
+          permissionPolicy: { mode: 'ask-risky-command', requireConfirmationFor: ['write'] },
+        },
+      ],
+      invalidArgs: [
+        {
+          terminalSessionId: 'terminal-1',
+          command: 'pwd',
+          actor: 'robot',
+          permissionPolicy: { mode: 'ask-risky-command', requireConfirmationFor: ['write'] },
+        },
+      ],
+      invalidResult: {
+        success: false,
+        status: 'rejected',
+        error: 'Terminal 命令提交参数无效',
+      },
+      unavailableResult: {
+        success: false,
+        status: 'rejected',
+        error: 'Terminal 命令编排器未就绪',
+      },
+    },
+    {
+      channel: 'terminal:startPty',
+      operation: 'start',
+      validArgs: [{ terminalSessionId: 'terminal-1', runtime: terminalRuntime }],
+      invalidArgs: [{ terminalSessionId: '', runtime: terminalRuntime }],
+      invalidResult: { success: false, error: 'Terminal PTY 启动参数无效' },
+      unavailableResult: { success: false, error: 'Terminal PTY 执行后端未就绪' },
+    },
+    {
+      channel: 'terminal:writePty',
+      operation: 'write',
+      validArgs: [{ terminalSessionId: 'terminal-1', data: 'pwd\r' }],
+      invalidArgs: [{ terminalSessionId: 'terminal-1', data: '' }],
+      invalidResult: { success: false, error: 'Terminal PTY 写入参数无效' },
+      unavailableResult: { success: false, error: 'Terminal PTY 执行后端未就绪' },
+    },
+    {
+      channel: 'terminal:resizePty',
+      operation: 'resize',
+      validArgs: [{ terminalSessionId: 'terminal-1', size: { columns: 120, rows: 32 } }],
+      invalidArgs: [{ terminalSessionId: 'terminal-1', size: { columns: 1, rows: 32 } }],
+      invalidResult: { success: false, error: 'Terminal PTY resize 参数无效' },
+      unavailableResult: { success: false, error: 'Terminal PTY 执行后端未就绪' },
+    },
+    {
+      channel: 'terminal:terminatePty',
+      operation: 'terminate',
+      validArgs: ['terminal-1'],
+      invalidArgs: [''],
+      invalidResult: { success: false, error: 'terminalSessionId 不能为空' },
+      unavailableResult: { success: false, error: 'Terminal PTY 执行后端未就绪' },
+    },
+    {
+      channel: 'terminal:clearAuditSession',
+      operation: 'clearSession',
+      validArgs: ['terminal-1'],
+      invalidArgs: [''],
+      invalidResult: { success: false, error: 'terminalSessionId 不能为空' },
+      unavailableResult: { success: false, error: 'Terminal 审计存储未就绪' },
+    },
+  ] as const)(
+    'freezes parser and service priority for $channel',
+    async ({ channel, operation, validArgs, invalidArgs, invalidResult, unavailableResult }) => {
+      const services = createTerminalPriorityServices()
+      registerTerminalIpc(
+        services.confirmation,
+        services.audit,
+        services.registry,
+        services.orchestrator,
+        services.execution,
+        undefined,
+        services.sessionStore,
+      )
+      const availableHandler = mockIpcMain.handlers.get(channel)
+      const operationSpy = services.operations[operation]
+
+      await expect(Promise.resolve(availableHandler?.({}, ...invalidArgs))).resolves.toEqual(
+        invalidResult,
+      )
+      expect(operationSpy).not.toHaveBeenCalled()
+      await expect(Promise.resolve(availableHandler?.({}, ...validArgs))).resolves.toMatchObject({
+        success: true,
+      })
+      expect(operationSpy).toHaveBeenCalledOnce()
+
+      registerTerminalIpc(null)
+      const unavailableHandler = mockIpcMain.handlers.get(channel)
+      await expect(Promise.resolve(unavailableHandler?.({}, ...invalidArgs))).resolves.toEqual(
+        invalidResult,
+      )
+      await expect(Promise.resolve(unavailableHandler?.({}, ...validArgs))).resolves.toEqual(
+        unavailableResult,
+      )
+    },
+  )
+
+  it('freezes legacy Terminal argument and service behavior', async () => {
+    const services = createTerminalPriorityServices()
+    registerTerminalIpc(
+      services.confirmation,
+      services.audit,
+      services.registry,
+      services.orchestrator,
+      services.execution,
+      undefined,
+      services.sessionStore,
+    )
+
+    await expect(mockIpcMain.handlers.get('terminal:listAuditEvents')?.({}, {})).resolves.toEqual(
+      [],
+    )
+    await expect(mockIpcMain.handlers.get('terminal:listSessions')?.({})).resolves.toEqual([])
+    await expect(mockIpcMain.handlers.get('terminal:clearAuditEvents')?.({})).resolves.toEqual({
+      success: true,
+    })
+    expect(() =>
+      mockIpcMain.handlers.get('terminal:listAuditEvents')?.({}, { nested: 'x'.repeat(100_001) }),
+    ).toThrow()
+    expect(() =>
+      mockIpcMain.handlers.get('terminal:listSessions')?.({}, 'x'.repeat(100_001)),
+    ).toThrow()
+    expect(() =>
+      mockIpcMain.handlers.get('terminal:clearAuditEvents')?.({}, 'x'.repeat(100_001)),
+    ).toThrow()
+
+    registerTerminalIpc(null)
+    await expect(mockIpcMain.handlers.get('terminal:listAuditEvents')?.({}, {})).resolves.toEqual(
+      [],
+    )
+    await expect(mockIpcMain.handlers.get('terminal:listSessions')?.({})).resolves.toEqual([])
+    await expect(mockIpcMain.handlers.get('terminal:clearAuditEvents')?.({})).resolves.toEqual({
+      success: false,
+      error: 'Terminal 审计存储未就绪',
+    })
+  })
+
+  it('rejects untrusted senders for every Terminal channel before parsing or services', () => {
+    const services = createTerminalPriorityServices()
+    trustedRendererGuard.assert.mockImplementation(() => {
+      throw new Error('untrusted')
+    })
+    registerTerminalIpc(
+      services.confirmation,
+      services.audit,
+      services.registry,
+      services.orchestrator,
+      services.execution,
+      undefined,
+      services.sessionStore,
+    )
+    const validArgsByChannel = new Map<string, readonly unknown[]>([
+      ['terminal:resolveCommandConfirmation', ['confirmation-1', true]],
+      ['terminal:recordLifecycleEvent', [{ terminalSessionId: 'terminal-1', kind: 'created' }]],
+      ['terminal:listAuditEvents', [{}]],
+      ['terminal:listSessions', []],
+      [
+        'terminal:submitCommand',
+        [
+          {
+            terminalSessionId: 'terminal-1',
+            command: 'pwd',
+            actor: 'user',
+            permissionPolicy: { mode: 'ask-risky-command', requireConfirmationFor: ['write'] },
+          },
+        ],
+      ],
+      ['terminal:startPty', [{ terminalSessionId: 'terminal-1', runtime: terminalRuntime }]],
+      ['terminal:writePty', [{ terminalSessionId: 'terminal-1', data: 'pwd\r' }]],
+      [
+        'terminal:resizePty',
+        [{ terminalSessionId: 'terminal-1', size: { columns: 120, rows: 32 } }],
+      ],
+      ['terminal:terminatePty', ['terminal-1']],
+      ['terminal:clearAuditSession', ['terminal-1']],
+      ['terminal:clearAuditEvents', []],
+    ])
+
+    for (const [channel, args] of validArgsByChannel) {
+      expect(() => mockIpcMain.handlers.get(channel)?.({}, ...args)).toThrow('untrusted')
+    }
+    for (const operation of Object.values(services.operations)) {
+      expect(operation).not.toHaveBeenCalled()
+    }
+  })
+
   it('records terminal lifecycle audit events with sanitized input', async () => {
     const terminalAuditStore = {
       recordEvent: vi.fn(async () => undefined),
@@ -907,3 +1119,70 @@ describe('registerTerminalIpc', () => {
     })
   })
 })
+
+function createTerminalPriorityServices() {
+  const confirmation = {
+    resolveConfirmation: vi.fn(() => true),
+  }
+  const audit = {
+    recordEvent: vi.fn(async () => undefined),
+    listEvents: vi.fn(async () => []),
+    clearSession: vi.fn(async () => undefined),
+    clearAll: vi.fn(async () => undefined),
+  }
+  const registry = {
+    get: vi.fn(() => null),
+    list: vi.fn(() => []),
+    register: vi.fn(),
+    transition: vi.fn(),
+    remove: vi.fn(),
+  }
+  const orchestrator = {
+    submitCommand: vi.fn(async () => ({
+      success: true,
+      status: 'accepted',
+      risk: 'read',
+      execution: 'not-started',
+      message: 'ok',
+    })),
+  }
+  const execution = {
+    onEvent: vi.fn(() => vi.fn()),
+    start: vi.fn(async () => ({ processId: 42 })),
+    write: vi.fn(async () => undefined),
+    resize: vi.fn(async () => undefined),
+    terminate: vi.fn(async () => undefined),
+  }
+  const sessionStore = {
+    getSession: vi.fn(async () => null),
+    listSessions: vi.fn(async () => []),
+    upsertSession: vi.fn(async () => undefined),
+    patchSession: vi.fn(async () => undefined),
+    appendCommand: vi.fn(async () => undefined),
+    clearSession: vi.fn(async () => undefined),
+    clearAll: vi.fn(async () => undefined),
+  }
+
+  return {
+    confirmation,
+    audit,
+    registry,
+    orchestrator,
+    execution,
+    sessionStore,
+    operations: {
+      resolveConfirmation: confirmation.resolveConfirmation,
+      recordEvent: audit.recordEvent,
+      submitCommand: orchestrator.submitCommand,
+      start: execution.start,
+      write: execution.write,
+      resize: execution.resize,
+      terminate: execution.terminate,
+      clearSession: audit.clearSession,
+      listAuditEvents: audit.listEvents,
+      listSessions: registry.list,
+      listPersistedSessions: sessionStore.listSessions,
+      clearAuditEvents: audit.clearAll,
+    },
+  }
+}

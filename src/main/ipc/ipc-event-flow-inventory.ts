@@ -26,6 +26,7 @@ export interface IpcEventFlowInventory {
   bridgeFiles: readonly string[]
   consumerFiles: readonly string[]
   disposerFiles: readonly string[]
+  disposerEvidenceTerms?: Readonly<Record<string, readonly string[]>>
   payloadBoundary: 'bounded-preload-parser' | 'bounded-main-parser' | 'no-payload'
   evidenceTerms: readonly string[]
 }
@@ -41,6 +42,7 @@ interface EventInventoryGroup {
   bridgeFiles: readonly string[]
   consumerFiles: readonly string[]
   disposerFiles?: readonly string[]
+  disposerEvidenceTerms?: Readonly<Record<string, readonly string[]>>
   payloadBoundary: IpcEventFlowInventory['payloadBoundary']
   evidenceTerms: readonly string[]
 }
@@ -62,7 +64,12 @@ function expandEventGroup(group: EventInventoryGroup): IpcEventFlowInventory[] {
       producerFiles: group.producerFiles,
       bridgeFiles: group.bridgeFiles,
       consumerFiles: group.consumerFiles,
-      disposerFiles: group.disposerFiles ?? [...group.bridgeFiles, ...group.consumerFiles],
+      disposerFiles:
+        group.disposerFiles ??
+        (group.direction === 'main-to-renderer'
+          ? group.bridgeFiles
+          : ['src/main/ipc/trusted-renderer-guard.ts']),
+      disposerEvidenceTerms: group.disposerEvidenceTerms,
       payloadBoundary: group.payloadBoundary,
       evidenceTerms: matchingEvidenceTerms.length > 0 ? matchingEvidenceTerms : group.evidenceTerms,
     }
@@ -159,7 +166,6 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/renderer/src/components/workbench/use-workbench-bounds.ts'],
     bridgeFiles: ['src/preload/browser-api.ts'],
     consumerFiles: ['src/main/ipc/browser-ipc.ts'],
-    disposerFiles: ['src/main/ipc/browser-ipc.ts'],
     payloadBoundary: 'bounded-main-parser',
     evidenceTerms: ['reportWorkbenchBounds'],
   }),
@@ -354,7 +360,6 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/renderer/src/bootstrap/use-agent-web-resource-launch-requests.ts'],
     bridgeFiles: ['src/preload/web-resources-api.ts'],
     consumerFiles: ['src/main/web-resources/agent-web-resource-launch-coordinator.ts'],
-    disposerFiles: ['src/main/web-resources/agent-web-resource-launch-coordinator.ts'],
     payloadBoundary: 'bounded-main-parser',
     evidenceTerms: ['acknowledgeAgentLaunch'],
   }),
@@ -398,6 +403,10 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
       'src/main/ipc/terminal-ipc.ts',
       'src/renderer/src/bootstrap/use-terminal-events.ts',
     ],
+    disposerEvidenceTerms: {
+      'src/main/ipc/terminal-ipc.ts': ['onEvent'],
+      'src/renderer/src/bootstrap/use-terminal-events.ts': ['onExecutionEvent'],
+    },
     payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['onExecutionEvent', 'unsubscribe'],
   }),
@@ -424,7 +433,6 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/renderer/src/components/workbench/AndroidDisplay.tsx'],
     bridgeFiles: ['src/preload/android-api.ts'],
     consumerFiles: ['src/main/ipc/android-ipc.ts'],
-    disposerFiles: ['src/main/ipc/android-ipc.ts'],
     payloadBoundary: 'bounded-main-parser',
     evidenceTerms: ['sendTouch'],
   }),
@@ -493,7 +501,6 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     producerFiles: ['src/renderer/src/bootstrap/use-workspace-state-flush.ts'],
     bridgeFiles: ['src/preload/local-ops-api.ts'],
     consumerFiles: ['src/main/workspace/renderer-workspace-state-flush.ts'],
-    disposerFiles: ['src/main/workspace/renderer-workspace-state-flush.ts'],
     payloadBoundary: 'bounded-main-parser',
     evidenceTerms: ['acknowledgeFlush'],
   }),

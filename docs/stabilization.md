@@ -172,18 +172,20 @@ S0 绿色只表示恢复可信基线。Markdown 注入、明文密钥、Agent �
 disposer 和 payload 边界；最后 7 个仅有 TypeScript 类型的 CCLink/Window/Scheduled Tasks/
 Media Projects/Filesystem 事件也已补 preload 运行时 parser，库存不再允许 typed-only 转发。门禁从
 字符串证据升级为 AST 核对 shared 声明、真实 main 发送/监听、preload 订阅/发送与解绑边界，并由
-preload 合法/畸形 payload 行为测试证明 parser 实际生效；动态 helper 调用点仍禁止未登记常量绕过。Terminal
+preload 合法/畸形 payload 行为测试证明 parser 实际生效；CCLink realtime 的嵌套 message/session
+核心字段也会逐项校验。事件门禁实际读取 `disposerFiles`，核对同一 channel/handler 或订阅返回值
+与 disposer 的所有权关系，并禁止 `removeAllListeners`；同文件无关 disposer 不能作为通过证据；
+动态 helper 调用点仍禁止未登记常量绕过。Terminal
 保留迁移前未知规则、扩展字段、审计 filter 与无参数多余参数的容错归一化，只对核心字段和病态体积
 执行有界 parse-first 校验；全部保留的有 payload main→renderer 事件均在 preload 做有界核心字段
-校验；Editor
+校验；Terminal 11 个 invoke 与数据源 7 个 invoke 已逐通道冻结 sender、参数、服务不可用和正常执行
+的错误优先级；Editor
 read/save 同 channel 多订阅并存且精确释放；Android 异常断连会先释放本地 decoder、stream 与 listener。当前工作树 `pnpm verify` 通过
-334 个测试文件/2054 项测试（2 项跳过），本次最终 `smoke:local` 11/11，先前同一工作树的 `smoke:restore` 4/4、
-`smoke:update-recovery` 1/1 通过；本轮 `smoke:workflow` 连续两次为 19/21，Markdown 诊断按钮和
-Agent composer 两个既有 UI locator 未出现，其余受影响流程通过，因此先前 21/21 不作为本轮绿色
-证据。S3.2 契约代码覆盖完成，但当前工作树不能宣称全部 smoke 绿色；这也不等于专项
+334 个测试文件/2073 项通过（2 项跳过），本次最终 `smoke:local` 11/11、`smoke:workflow` 21/21、
+全新 Profile 的 `smoke:ui` 17/17；先前同一工作树的 `smoke:restore` 4/4、
+`smoke:update-recovery` 1/1 记录保留。S3.2 契约代码覆盖及自动化门禁完成，但这不等于专项
 方案的 P1-P3 阶段退出；完整 Terminal、Android 真机和真实只读数据源真人验收待具备环境后补，
-不计为已经完成的用户功能验收。全新 Profile 的全量 UI
-smoke 仍有 4 个 Agent/Activity Bar/角色中心既有定位失败，未用本次 IPC 重构扩张处理。
+不计为已经完成的用户功能验收。
 
 - 使用同一服务注册表负责启动、回滚、窗口重建和停止。
 - IPC 从共享声明生成注册、preload 调用、运行时校验和清理逻辑。

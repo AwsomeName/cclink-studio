@@ -114,6 +114,14 @@ const IMAGE_UPLOAD_PHASES = new Set<CclinkImageUploadProgress['phase']>([
   'cancelled',
   'failed',
 ])
+const REMOTE_ERROR_LAYERS = new Set([
+  'account',
+  'transport',
+  'remote-agent',
+  'workspace',
+  'file-provider',
+  'unknown',
+])
 
 export function parseCclinkRealtimeStatusEvent(value: unknown): CclinkRealtimeStatus | null {
   if (!isEventRecord(value) || !isBoundedIpcEventPayload(value)) return null
@@ -138,8 +146,13 @@ export function parseCclinkRealtimeEvent(value: unknown): CclinkRealtimeEvent | 
   ) {
     return null
   }
-  if (value.message !== undefined && !isEventRecord(value.message)) return null
-  if (value.sessions !== undefined && !Array.isArray(value.sessions)) return null
+  if (value.message !== undefined && !isCclinkRemoteMessage(value.message)) return null
+  if (
+    value.sessions !== undefined &&
+    (!Array.isArray(value.sessions) || !value.sessions.every(isCclinkRemoteSession))
+  ) {
+    return null
+  }
   if (value.permission !== undefined) {
     if (
       !isEventRecord(value.permission) ||
@@ -184,6 +197,126 @@ function isNonNegativeInteger(value: unknown): value is number {
 
 function isNonNegativeNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
+function isCclinkRemoteSession(value: unknown): value is CclinkRemoteSession {
+  if (!isEventRecord(value)) return false
+  return (
+    isBoundedIpcEventString(value.id, 512) &&
+    isBoundedIpcEventString(value.name, 1024, { allowEmpty: true }) &&
+    isBoundedIpcEventString(value.workspaceId, 512) &&
+    isBoundedIpcEventString(value.workspacePath, 4096) &&
+    isBoundedIpcEventString(value.serverId, 512) &&
+    (value.status === 'active' || value.status === 'idle' || value.status === 'archived') &&
+    isNonNegativeNumber(value.createdAt) &&
+    isNonNegativeNumber(value.updatedAt) &&
+    isNonNegativeInteger(value.messageCount) &&
+    isNonNegativeNumber(value.contextUsage)
+  )
+}
+
+function isCclinkRemoteMessage(value: unknown): value is CclinkRemoteMessage {
+  if (
+    !isEventRecord(value) ||
+    !isBoundedIpcEventString(value.id, 512) ||
+    !isNonNegativeNumber(value.timestamp)
+  ) {
+    return false
+  }
+  if (value.type === 'user' || value.type === 'agentText' || value.type === 'system') {
+    if (!isBoundedIpcEventString(value.content, 1_000_000, { allowEmpty: true })) return false
+    return (
+      value.type !== 'system' ||
+      value.remoteError === undefined ||
+      isCclinkRemoteError(value.remoteError)
+    )
+  }
+  if (value.type === 'agentTool') return isCclinkRemoteTool(value.tool)
+  if (value.type === 'userQuestion') {
+    return (
+      isBoundedIpcEventString(value.requestId, 512) &&
+      isBoundedIpcEventString(value.toolUseId, 512) &&
+      Array.isArray(value.questions) &&
+      value.questions.length <= 100 &&
+      value.questions.every(isCclinkRemoteQuestion) &&
+      (value.answered === undefined || typeof value.answered === 'boolean')
+    )
+  }
+  return false
+}
+
+function isCclinkRemoteError(value: unknown): boolean {
+  if (
+    !isEventRecord(value) ||
+    typeof value.layer !== 'string' ||
+    !REMOTE_ERROR_LAYERS.has(value.layer) ||
+    !isBoundedIpcEventString(value.code, 512) ||
+    !isBoundedIpcEventString(value.message, 32_768, { allowEmpty: true }) ||
+    typeof value.retryable !== 'boolean'
+  ) {
+    return false
+  }
+  if (value.context === undefined) return true
+  return (
+    isEventRecord(value.context) &&
+    Object.values(value.context).every(
+      (entry) =>
+        entry === null ||
+        typeof entry === 'string' ||
+        typeof entry === 'boolean' ||
+        (typeof entry === 'number' && Number.isFinite(entry)),
+    )
+  )
+}
+
+function isCclinkRemoteTool(value: unknown): boolean {
+  if (!isEventRecord(value)) return false
+  if (
+    !isBoundedIpcEventString(value.id, 512) ||
+    !isBoundedIpcEventString(value.name, 512) ||
+    (value.state !== 'pending' &&
+      value.state !== 'executing' &&
+      value.state !== 'completed' &&
+      value.state !== 'failed' &&
+      value.state !== 'denied')
+  ) {
+    return false
+  }
+  if (value.input !== undefined && !isEventRecord(value.input)) return false
+  if (!isOptionalEventString(value.output, 1_000_000)) return false
+  if (!isOptionalEventString(value.error, 32_768)) return false
+  if (!isOptionalEventString(value.approvalReason, 32_768)) return false
+  if (value.requiresApproval !== undefined && typeof value.requiresApproval !== 'boolean')
+    return false
+  if (value.expiresAt !== undefined && !isNonNegativeNumber(value.expiresAt)) return false
+  return isOptionalEventString(value.requestId, 512)
+}
+
+function isCclinkRemoteQuestion(value: unknown): boolean {
+  if (!isEventRecord(value)) return false
+  if (
+    !isBoundedIpcEventString(value.id, 512) ||
+    !isBoundedIpcEventString(value.question, 32_768) ||
+    !isOptionalEventString(value.header, 1024) ||
+    (value.multiSelect !== undefined && typeof value.multiSelect !== 'boolean')
+  ) {
+    return false
+  }
+  return (
+    value.options === undefined ||
+    (Array.isArray(value.options) &&
+      value.options.length <= 100 &&
+      value.options.every(
+        (option) =>
+          isEventRecord(option) &&
+          isBoundedIpcEventString(option.label, 4096) &&
+          isOptionalEventString(option.description, 32_768),
+      ))
+  )
+}
+
+function isOptionalEventString(value: unknown, maxLength: number): boolean {
+  return value === undefined || isBoundedIpcEventString(value, maxLength, { allowEmpty: true })
 }
 
 export const cclinkIpc = {

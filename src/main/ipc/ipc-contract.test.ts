@@ -808,6 +808,37 @@ describe('IPC invoke contracts', () => {
         inventoriedReferences,
       ),
     ).toEqual(['src/preload/renderer-support-api.ts:ipcRenderer.on:channel'])
+    expect(
+      collectEventReferenceViolations(
+        'src/preload/rogue-bulk-dispose.ts',
+        'ipcRenderer.removeAllListeners(agentIpcEvents.stream)',
+        inventoriedReferences,
+      ),
+    ).toEqual([
+      'src/preload/rogue-bulk-dispose.ts:ipcRenderer.removeAllListeners:forbidden-bulk-dispose',
+    ])
+    expect(
+      hasExactRendererDisposer(
+        createTestSource(`function subscribe() {
+          const handler = () => undefined
+          const otherHandler = () => undefined
+          ipcRenderer.on(agentIpcEvents.stream, handler)
+          return () => ipcRenderer.removeListener(agentIpcEvents.stream, otherHandler)
+        }`),
+        'agentIpcEvents.stream',
+      ),
+    ).toBe(false)
+    expect(
+      hasOwnedSubscriptionResultDisposer(
+        createTestSource(`function subscribe() {
+          const unsubscribe = adapter.onEvent(() => undefined)
+          const unrelated = () => undefined
+          unrelated()
+          return () => undefined
+        }`),
+        ['onEvent'],
+      ),
+    ).toBe(false)
     expect(ipcEventFlowInventory.some((event) => event.payloadBoundary === 'no-payload')).toBe(true)
     expect(ipcEventFlowInventory.map((event) => event.payloadBoundary)).not.toContain(
       'typed-preload-forwarding',
@@ -820,12 +851,15 @@ describe('IPC invoke contracts', () => {
         expect(files).not.toHaveLength(0)
         files.forEach((file) => expect(statSync(resolve(process.cwd(), file)).isFile()).toBe(true))
       }
+      expect(event.disposerFiles, `${reference} disposer inventory`).not.toHaveLength(0)
+      event.disposerFiles.forEach((file) =>
+        expect(statSync(resolve(process.cwd(), file)).isFile()).toBe(true),
+      )
 
       if (event.direction === 'main-to-renderer') {
         expectBoundaryReference(event.producerFiles, reference, ['send'])
         for (const bridgeFile of event.bridgeFiles) {
           expectBoundaryReference([bridgeFile], reference, ['subscribe', 'owned-subscription'])
-          expectBoundaryReference([bridgeFile], reference, ['unsubscribe', 'owned-subscription'])
         }
         expectAstEvidence(event.consumerFiles, event.evidenceTerms, reference)
       } else {
@@ -833,6 +867,7 @@ describe('IPC invoke contracts', () => {
         expectBoundaryReference(event.consumerFiles, reference, ['receive'])
         expectAstEvidence(event.producerFiles, event.evidenceTerms, reference)
       }
+      expectDisposerEvidence(event, reference)
     }
   })
 })
@@ -959,6 +994,255 @@ function expectAstEvidence(
   }
 }
 
+function expectDisposerEvidence(
+  event: (typeof ipcEventFlowInventory)[number],
+  reference: string,
+): void {
+  for (const projectFile of event.disposerFiles) {
+    if (projectFile === 'src/main/ipc/trusted-renderer-guard.ts') {
+      const source = readFileSync(resolve(process.cwd(), projectFile), 'utf8')
+      const sourceFile = ts.createSourceFile(projectFile, source, ts.ScriptTarget.Latest, true)
+      expect(
+        hasScopedListenerDisposer(sourceFile),
+        `${reference} scoped listener disposer in ${projectFile}`,
+      ).toBe(true)
+      continue
+    }
+    if (event.bridgeFiles.includes(projectFile)) {
+      const source = readFileSync(resolve(process.cwd(), projectFile), 'utf8')
+      expect(
+        hasExactRendererDisposer(
+          ts.createSourceFile(projectFile, source, ts.ScriptTarget.Latest, true),
+          reference,
+        ),
+        `${reference} exact renderer disposer in ${projectFile}`,
+      ).toBe(true)
+      continue
+    }
+    const source = readFileSync(resolve(process.cwd(), projectFile), 'utf8')
+    const sourceFile = ts.createSourceFile(projectFile, source, ts.ScriptTarget.Latest, true)
+    const evidenceTerms = event.disposerEvidenceTerms?.[projectFile] ?? []
+    expect(
+      evidenceTerms,
+      `${reference} disposer evidence terms in ${projectFile}`,
+    ).not.toHaveLength(0)
+    expect(
+      hasOwnedSubscriptionResultDisposer(sourceFile, evidenceTerms),
+      `${reference} owned subscription disposer in ${projectFile}`,
+    ).toBe(true)
+  }
+}
+
+function hasExactRendererDisposer(sourceFile: ts.SourceFile, channelExpression: string): boolean {
+  const ownedBoundary = collectEventBoundaryReferences(sourceFile.fileName, sourceFile.text).some(
+    (boundary) =>
+      boundary.kind === 'owned-subscription' && boundary.channelExpression === channelExpression,
+  )
+  if (ownedBoundary) return hasRendererListenerPair(sourceFile, 'channel', 'listener')
+  return hasRendererListenerPair(sourceFile, channelExpression)
+}
+
+function hasRendererListenerPair(
+  sourceFile: ts.SourceFile,
+  channelExpression: string,
+  listenerExpression?: string,
+): boolean {
+  const subscriptions: ts.CallExpression[] = []
+  const collect = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      /ipcRenderer\.(?:on|once)$/u.test(node.expression.getText(sourceFile)) &&
+      node.arguments[0]?.getText(sourceFile) === channelExpression &&
+      (listenerExpression === undefined ||
+        node.arguments[1]?.getText(sourceFile) === listenerExpression)
+    ) {
+      subscriptions.push(node)
+    }
+    ts.forEachChild(node, collect)
+  }
+  collect(sourceFile)
+
+  return subscriptions.some((subscription) => {
+    const listener = subscription.arguments[1]?.getText(sourceFile)
+    if (!listener) return false
+    const owner = findEnclosingFunctionLike(subscription) ?? sourceFile
+    let matched = false
+    const findRemoval = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        node.expression.getText(sourceFile) === 'ipcRenderer.removeListener' &&
+        node.arguments[0]?.getText(sourceFile) === channelExpression &&
+        node.arguments[1]?.getText(sourceFile) === listener
+      ) {
+        matched = true
+      }
+      ts.forEachChild(node, findRemoval)
+    }
+    findRemoval(owner)
+    return matched
+  })
+}
+
+function hasOwnedSubscriptionResultDisposer(
+  sourceFile: ts.SourceFile,
+  subscriptionTerms: readonly string[],
+): boolean {
+  const subscriptions: Array<{ declaration: ts.VariableDeclaration; variableName: string }> = []
+  const collectSubscriptions = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer &&
+      ts.isCallExpression(node.initializer) &&
+      subscriptionTerms.includes(getCalledName(node.initializer))
+    ) {
+      subscriptions.push({ declaration: node, variableName: node.name.text })
+    }
+    ts.forEachChild(node, collectSubscriptions)
+  }
+  collectSubscriptions(sourceFile)
+
+  return subscriptions.some(({ declaration, variableName }) => {
+    const owner = findEnclosingFunctionLike(declaration) ?? sourceFile
+    let disposed = false
+    const findDisposal = (node: ts.Node): void => {
+      if (ts.isCallExpression(node)) {
+        if (ts.isIdentifier(node.expression) && node.expression.text === variableName) {
+          disposed = true
+        }
+        if (
+          getCalledName(node) === 'createIdempotentDisposer' &&
+          node.arguments.some(
+            (argument) => ts.isIdentifier(argument) && argument.text === variableName,
+          ) &&
+          hasCallableDisposerFactory(sourceFile, 'createIdempotentDisposer')
+        ) {
+          disposed = true
+        }
+      }
+      ts.forEachChild(node, findDisposal)
+    }
+    findDisposal(owner)
+    return disposed
+  })
+}
+
+function hasCallableDisposerFactory(sourceFile: ts.SourceFile, factoryName: string): boolean {
+  let found = false
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isFunctionDeclaration(node) &&
+      node.name?.text === factoryName &&
+      node.parameters[0] &&
+      ts.isIdentifier(node.parameters[0].name)
+    ) {
+      const parameterName = node.parameters[0].name.text
+      const findCall = (child: ts.Node): void => {
+        if (
+          ts.isCallExpression(child) &&
+          ts.isIdentifier(child.expression) &&
+          child.expression.text === parameterName
+        ) {
+          found = true
+        }
+        ts.forEachChild(child, findCall)
+      }
+      findCall(node)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return found
+}
+
+function getCalledName(node: ts.CallExpression): string {
+  if (ts.isIdentifier(node.expression)) return node.expression.text
+  if (ts.isPropertyAccessExpression(node.expression)) return node.expression.name.text
+  return ''
+}
+
+function findEnclosingFunctionLike(node: ts.Node): ts.Node | null {
+  let current: ts.Node | undefined = node.parent
+  while (current) {
+    if (
+      ts.isFunctionDeclaration(current) ||
+      ts.isFunctionExpression(current) ||
+      ts.isArrowFunction(current) ||
+      ts.isMethodDeclaration(current)
+    ) {
+      return current
+    }
+    current = current.parent
+  }
+  return null
+}
+
+function createTestSource(source: string): ts.SourceFile {
+  return ts.createSourceFile('inline-test.ts', source, ts.ScriptTarget.Latest, true)
+}
+
+function hasScopedListenerDisposer(sourceFile: ts.SourceFile): boolean {
+  const registrations: ts.CallExpression[] = []
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const receiver = node.expression.expression.getText(sourceFile)
+      const method = node.expression.name.text
+      const args = node.arguments.map((argument) => argument.getText(sourceFile))
+      if (
+        receiver === 'ipcMain' &&
+        method === 'on' &&
+        args[0] === 'channel' &&
+        args[1] === 'listener'
+      ) {
+        registrations.push(node)
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return registrations.some((registration) => {
+    const owner = findEnclosingFunctionLike(registration) ?? sourceFile
+    let matched = false
+    const findOwnedRemoval = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        node.expression.getText(sourceFile) === 'this.disposers.push' &&
+        node.arguments.some(
+          (argument) =>
+            (ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)) &&
+            hasExactCall(argument, sourceFile, 'ipcMain.removeListener', 'channel', 'listener'),
+        )
+      ) {
+        matched = true
+      }
+      ts.forEachChild(node, findOwnedRemoval)
+    }
+    findOwnedRemoval(owner)
+    return matched
+  })
+}
+
+function hasExactCall(
+  root: ts.Node,
+  sourceFile: ts.SourceFile,
+  expression: string,
+  ...args: string[]
+): boolean {
+  let matched = false
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText(sourceFile) === expression &&
+      args.every((argument, index) => node.arguments[index]?.getText(sourceFile) === argument)
+    ) {
+      matched = true
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(root)
+  return matched
+}
+
 function collectAstIdentifiers(projectFile: string, source: string): string[] {
   const identifiers = new Set<string>()
   const sourceFile = ts.createSourceFile(projectFile, source, ts.ScriptTarget.Latest, true)
@@ -1001,6 +1285,9 @@ function collectEventReferenceViolations(
   inventoried: ReadonlySet<string>,
 ): string[] {
   return collectEventBoundaryReferences(projectFile, source).flatMap((boundary) => {
+    if (/ipcRenderer\.removeAllListeners$/u.test(boundary.expressionText)) {
+      return [`${projectFile}:${boundary.expressionText}:forbidden-bulk-dispose`]
+    }
     if (
       inventoried.has(boundary.channelExpression) ||
       isApprovedDynamicChannelBoundary(projectFile, boundary)
@@ -1054,9 +1341,7 @@ function collectEventBoundaryReferences(
 function classifyEventBoundary(expressionText: string): EventBoundaryKind {
   if (expressionText === 'registerOwnedEditorListener') return 'owned-subscription'
   if (/ipcRenderer\.(?:on|once)$/u.test(expressionText)) return 'subscribe'
-  if (/ipcRenderer\.(?:removeListener|removeAllListeners)$/u.test(expressionText)) {
-    return 'unsubscribe'
-  }
+  if (/ipcRenderer\.removeListener$/u.test(expressionText)) return 'unsubscribe'
   if (expressionText === 'registerTrustedIpcListener' || expressionText === 'ipcMain.on') {
     return 'receive'
   }

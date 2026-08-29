@@ -254,4 +254,53 @@ describe('preload event payload parsers', () => {
     expect(parseMediaProjectsChangedEvent('x'.repeat(4097))).toBeNull()
     expect(parseCclinkRealtimeEvent({ ...realtime, nested: 'x'.repeat(1_000_001) })).toBeNull()
   })
+
+  it('rejects incomplete nested CCLink messages and sessions', () => {
+    const message = {
+      type: 'agentText' as const,
+      id: 'message-1',
+      content: 'done',
+      timestamp: 1,
+    }
+    const session = {
+      id: 'session-1',
+      name: 'Session',
+      workspaceId: 'workspace-1',
+      workspacePath: '/workspace',
+      serverId: 'server-1',
+      status: 'active' as const,
+      createdAt: 1,
+      updatedAt: 1,
+      messageCount: 1,
+      contextUsage: 0,
+    }
+    const conversation = {
+      type: 'conversation' as const,
+      serverId: 'server-1',
+      sessionId: 'session-1',
+      message,
+    }
+    const sessions = { type: 'sessions' as const, serverId: 'server-1', sessions: [session] }
+
+    expect(parseCclinkRealtimeEvent(conversation)).toBe(conversation)
+    expect(parseCclinkRealtimeEvent(sessions)).toBe(sessions)
+    expect(parseCclinkRealtimeEvent({ ...conversation, message: {} })).toBeNull()
+    expect(
+      parseCclinkRealtimeEvent({ ...conversation, message: { ...message, type: 'unknown' } }),
+    ).toBeNull()
+    expect(
+      parseCclinkRealtimeEvent({
+        ...conversation,
+        message: {
+          type: 'system',
+          id: 'message-2',
+          content: 'offline',
+          timestamp: 2,
+          remoteError: {},
+        },
+      }),
+    ).toBeNull()
+    expect(parseCclinkRealtimeEvent({ ...sessions, sessions: [{}] })).toBeNull()
+    expect(parseCclinkRealtimeEvent({ ...sessions, sessions: [1] })).toBeNull()
+  })
 })

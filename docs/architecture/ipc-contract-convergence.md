@@ -52,6 +52,9 @@ P0-P5 的代码迁移与自动化工程门禁已按顺序完成，未引入新 I
   断开、重连与卸载时清理。
 - 数据源 parser 失败继续返回 `DATA_SOURCE_QUERY_INVALID`；唯一批准的行为变化是“参数非法 + 服务
   不可用”时参数错误优先。凭证值不进入 parse 错误，配置与审计不落明文的既有测试继续通过。
+- Terminal 的 11 个 invoke 与数据源的 7 个 invoke 已按通道固定 sender 拒绝、参数错误、服务不可用
+  和正常执行基线；结构化参数另覆盖“参数非法 + 服务不可用”复合场景，证明批准的 parser-first 例外
+  没有扩张为其他错误语义变化。
 - 全量 invoke 库存从 shared definition 生成，并记录 owner、唯一 handler 文件、preload consumer、
   parser 与 registration scope；测试扫描全部 shared definition，缺登记、缺 handler、重复 handler 或
   缺 preload consumer 均失败。全部 45 个生产事件另行记录 definition、producer、preload bridge、
@@ -61,8 +64,11 @@ P0-P5 的代码迁移与自动化工程门禁已按顺序完成，未引入新 I
 - 事件库存门禁不再用“文件中出现过 channel/方法名”的字符串命中作为落实证据：测试从 AST 精确读取
   shared 事件声明，并核对每项事件在真实 main 发送/监听边界、preload 订阅或发送边界及解绑边界上的
   contract 引用；renderer 调用证据也按 AST 标识符核对。另有 preload 行为测试直接触发合法和畸形
-  payload，证明 parser 不是只写在库存标签里。未登记事件、本地常量绕过或死事件会失败。空 legacy
-  allowlist 只表示没有遗留裸 channel，不能替代现行库存。
+  payload，证明 parser 不是只写在库存标签里。CCLink realtime 的 `message` 按消息类型校验必需字段，
+  `sessions` 的每个成员也校验完整 session 核心字段；残缺嵌套对象不会进入 renderer。门禁会读取每项
+  `disposerFiles`，核对同一 channel/handler 或订阅返回值与 disposer 的所有权关系，
+  `removeAllListeners` 明确视为失败；同文件里无关的 disposer 不能作为通过证据。未登记事件、本地
+  常量绕过或死事件会失败。空 legacy allowlist 只表示没有遗留裸 channel，不能替代现行库存。
 - 全仓生产 main/preload IPC 边界继续机器扫描，新增裸 `ipcMain`、trusted registrar、
   `webContents.send` 或 `ipcRenderer` channel 字面量会直接失败；preload 不得导入本次新增的 main-only
   contract。动态 channel helper 只允许在精确登记的基础实现中出现，调用点仍必须引用库存事件；门禁
@@ -73,14 +79,10 @@ P0-P5 的代码迁移与自动化工程门禁已按顺序完成，未引入新 I
   main→renderer payload 在 preload 做有界核心字段校验。
   Editor read/save 支持同 channel 多订阅并存，每个 disposer 只释放自身 handler。
 
-当前工程证据：`pnpm verify` 通过 334 个测试文件、2054 项测试（2 项跳过），lint、类型检查和生产
-构建通过；本次最终 `smoke:local` 11/11 通过，先前同一工作树的 `smoke:restore` 4/4、
-`smoke:update-recovery` 1/1 通过。本轮
-`smoke:workflow` 连续两次为 19/21，失败项均为 Agent Panel 可见性相关的既有 UI locator：Markdown
-诊断按钮和 Agent composer 未出现；其余 Terminal 执行、Editor、Browser 与上下文操作通过。按止损
-规则不在 IPC 修复中扩张 UI，先前 21/21 记录不能代替本轮失败。全新临时 Profile 的 `smoke:ui` 通过 13/17；失败的 4 项集中在
-Remote Agent Panel、会话快捷入口、Activity Bar 和角色中心，均不经过本次迁移的 IPC 域，作为独立
-既有 UI smoke 阻断记录，不在本次最小修复中扩张处理。
+当前工程证据：`pnpm verify` 通过，测试为 334 个文件、2073 项通过、2 项跳过，lint、类型检查和生产
+构建通过；本次最终 `smoke:local` 11/11、`smoke:workflow` 21/21、全新临时 Profile 的
+`smoke:ui` 17/17 通过。先前同一工作树的 `smoke:restore` 4/4、`smoke:update-recovery` 1/1 记录仍
+保留。上述结果关闭自动化工程门禁，不替代下述三类真人验收。
 
 当前环境没有 Android 真机和真实只读数据源，因此下述对应真人动作尚未执行；Terminal 也没有本次
 完整覆盖 resize、确认批准/拒绝和跨重启恢复的真人记录。这里可以声明 IPC 代码收敛与受影响自动化
