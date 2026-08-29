@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { BrowserWindow, Event } from 'electron'
 import {
+  parseWorkspaceStateFlushAcknowledgement,
   workspaceStateIpcEvents,
   type WorkspaceStateFlushAcknowledgement,
 } from '../../shared/ipc/workspace-state'
@@ -27,15 +28,9 @@ export class RendererWorkspaceStateFlushCoordinator {
     registerTrustedIpcListener(
       workspaceStateIpcEvents.flushAcknowledged,
       trustedRendererGuard,
-      (_event, acknowledgement: WorkspaceStateFlushAcknowledgement) => {
-        if (
-          !acknowledgement ||
-          typeof acknowledgement !== 'object' ||
-          typeof acknowledgement.requestId !== 'string' ||
-          typeof acknowledgement.success !== 'boolean'
-        ) {
-          return
-        }
+      (_event, value: WorkspaceStateFlushAcknowledgement) => {
+        const acknowledgement = parseWorkspaceStateFlushAcknowledgement(value)
+        if (!acknowledgement) return
         this.pending.get(acknowledgement.requestId)?.(
           acknowledgement.success ? 'flushed' : 'failed',
         )

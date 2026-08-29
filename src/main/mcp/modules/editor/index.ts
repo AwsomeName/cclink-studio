@@ -11,7 +11,11 @@
 import { randomUUID } from 'node:crypto'
 import type { BrowserWindow } from 'electron'
 import type { ToolModule, ToolDefinition, ToolExecutionContext } from '../../types'
-import type { EditorReadRequest, EditorSaveRequest } from '../../../../shared/ipc/editor'
+import {
+  editorIpcEvents,
+  type EditorReadRequest,
+  type EditorSaveRequest,
+} from '../../../../shared/ipc/editor'
 import type { DirEntry } from '../../../fs/file-service'
 
 export interface EditorFileAccess {
@@ -281,7 +285,7 @@ export class EditorToolModule implements ToolModule {
       this.pending.set(id, { resolve, reject, timeout })
 
       const request: EditorReadRequest = { id }
-      this.mainWindow!.webContents.send('editor:readRequest', request)
+      this.mainWindow!.webContents.send(editorIpcEvents.readRequest, request)
     })
   }
 
@@ -314,7 +318,7 @@ export class EditorToolModule implements ToolModule {
         id,
         filePath,
       }
-      this.mainWindow!.webContents.send('editor:saveRequest', request)
+      this.mainWindow!.webContents.send(editorIpcEvents.saveRequest, request)
     })
   }
 

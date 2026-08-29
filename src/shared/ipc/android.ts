@@ -1,6 +1,4 @@
-export interface AndroidDeviceLostPayload {
-  reason: string
-}
+import { defineIpcCall } from './contract'
 
 export interface AndroidDeviceInfo {
   model: string
@@ -74,18 +72,35 @@ export interface ScrcpyVideoFrame {
   pts?: string
 }
 
+const MAX_ANDROID_EVENT_MESSAGE_LENGTH = 10_000
+const MAX_SCRCPY_FRAME_BYTES = 64 * 1024 * 1024
+
+export function parseAndroidEventMessage(value: unknown): string | null {
+  return typeof value === 'string' && value.length <= MAX_ANDROID_EVENT_MESSAGE_LENGTH
+    ? value
+    : null
+}
+
+export function parseScrcpyVideoFrame(value: unknown): ScrcpyVideoFrame | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const frame = value as Partial<ScrcpyVideoFrame>
+  if (frame.type !== 'configuration' && frame.type !== 'data') return null
+  if (!(frame.data instanceof ArrayBuffer) || frame.data.byteLength > MAX_SCRCPY_FRAME_BYTES) {
+    return null
+  }
+  if (frame.keyframe !== undefined && typeof frame.keyframe !== 'boolean') return null
+  if (frame.pts !== undefined && !/^-?\d{1,32}$/u.test(frame.pts)) return null
+  return value as ScrcpyVideoFrame
+}
+
 export interface AndroidApiContract {
   reconnect(): Promise<void>
-  onDeviceLost(callback: (info: AndroidDeviceLostPayload) => void): () => void
 
   listPhysicalDevices(): Promise<PhysicalDevice[]>
   connectPhysical(serial: string): Promise<AndroidPhysicalConnectResult>
   disconnectPhysical(): Promise<AndroidActionSuccess>
-  onPhysicalConnected(callback: (data: AndroidPhysicalConnectedPayload) => void): () => void
-  onPhysicalDisconnected(callback: () => void): () => void
 
   onStoreInstallProgress(callback: (msg: string) => void): () => void
-  onStoreInstallResult(callback: (result: StoreInstallResult) => void): () => void
   retryStoreInstall(): Promise<StoreInstallResult>
 
   tap(x: number, y: number): Promise<AndroidActionSuccess>
@@ -109,7 +124,42 @@ export interface AndroidApiContract {
   connectMirror(deviceId: string): Promise<void>
   disconnectMirror(): Promise<void>
   sendTouch(data: ScrcpyTouchPayload): void
-  onVideoFrame(callback: (frame: ScrcpyVideoFrame) => void): void
-  onMirrorError(callback: (error: string) => void): void
+  onVideoFrame(callback: (frame: ScrcpyVideoFrame) => void): () => void
+  onMirrorError(callback: (error: string) => void): () => void
   onMirrorDisconnected(callback: () => void): () => void
 }
+
+export const androidIpc = {
+  reconnect: defineIpcCall<[], void>('android:reconnect'),
+  listPhysicalDevices: defineIpcCall<[], PhysicalDevice[]>('android:listPhysicalDevices'),
+  connectPhysical: defineIpcCall<[serial: string], AndroidPhysicalConnectResult>(
+    'android:connectPhysical',
+  ),
+  disconnectPhysical: defineIpcCall<[], AndroidActionSuccess>('android:disconnectPhysical'),
+  retryStoreInstall: defineIpcCall<[], StoreInstallResult>('android:retryStoreInstall'),
+  tap: defineIpcCall<[x: number, y: number], AndroidActionSuccess>('android:tap'),
+  swipe: defineIpcCall<
+    [x1: number, y1: number, x2: number, y2: number, duration: number | undefined],
+    AndroidActionSuccess
+  >('android:swipe'),
+  pressKey: defineIpcCall<[key: string], AndroidActionSuccess>('android:pressKey'),
+  typeText: defineIpcCall<[text: string], AndroidTypeTextResult>('android:typeText'),
+  screenshot: defineIpcCall<[], AndroidScreenshotResult>('android:screenshot'),
+  getDeviceInfo: defineIpcCall<[], AndroidDeviceInfo>('android:getDeviceInfo'),
+  listPackages: defineIpcCall<[filter: string | undefined], AndroidPackageListResult>(
+    'android:listPackages',
+  ),
+  getDeviceId: defineIpcCall<[], string | null>('android:getDeviceId'),
+  dumpUi: defineIpcCall<[], AndroidDumpUiResult>('android:dumpUi'),
+  installApk: defineIpcCall<[path: string], AndroidCommandResult>('android:installApk'),
+  connectMirror: defineIpcCall<[deviceId: string], void>('scrcpy:connect'),
+  disconnectMirror: defineIpcCall<[], void>('scrcpy:disconnect'),
+} as const
+
+export const androidIpcEvents = {
+  storeInstallProgress: 'android:storeInstallProgress',
+  touch: 'scrcpy:touch',
+  videoFrame: 'scrcpy:videoFrame',
+  mirrorError: 'scrcpy:error',
+  mirrorDisconnected: 'scrcpy:disconnected',
+} as const

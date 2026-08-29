@@ -105,7 +105,6 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   filePathRef.current = filePath
 
   const fileState = useEditorStore((state) => state.files[fileKey])
-  const pendingCount = useEditorStore((state) => state.pendingUpdates.length)
   const executeCommand = useCommandStore((state) => state.executeCommand)
   const editorFontFamily = useSettingsStore((state) => state.settings.editorFontFamily)
   const editorFontSize = useSettingsStore((state) => state.settings.editorFontSize)
@@ -135,7 +134,6 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   const [findOpen, setFindOpen] = useState(false)
   const [findQuery, setFindQuery] = useState('')
   const [activeFindIndex, setActiveFindIndex] = useState(0)
-  const appliedUpdateIds = useRef(new Set<string>())
   const loadedVersionRef = useRef<{ fileKey: string; version: string } | undefined>(undefined)
   const reloadGenerationRef = useRef(0)
   const hydratingRef = useRef(false)
@@ -702,64 +700,6 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
       offSave()
     }
   }, [editor])
-
-  useEffect(() => {
-    if (!editor || pendingCount === 0) return
-    const updates = useEditorStore.getState().consumePendingUpdates(filePath)
-    for (const update of updates) {
-      if (appliedUpdateIds.current.has(update.id)) continue
-      appliedUpdateIds.current.add(update.id)
-      const currentState = useEditorStore.getState().files[fileKey]
-      const current = currentState?.currentContent ?? ''
-      const previousDiagnostics = currentState?.diagnostics ?? []
-      const next =
-        update.type === 'write'
-          ? update.content
-          : update.type === 'append' || update.position !== 'start'
-            ? joinMarkdown(current, update.content)
-            : joinMarkdown(update.content, current)
-      let editorChanged = false
-      try {
-        const inputAnalysis = analyzeMarkdown(next)
-        if (!inputAnalysis.safeToEdit) {
-          throw new Error(
-            inputAnalysis.diagnostics.find((diagnostic) => diagnostic.severity === 'error')
-              ?.message ?? 'Agent 内容包含当前版本不支持的 Markdown 语法',
-          )
-        }
-
-        hydratingRef.current = true
-        editor.commands.setContent(parseMarkdownEditorDocument(editor, next), {
-          emitUpdate: false,
-        })
-        editorChanged = true
-        const serialized = normalizeMarkdownEditorOutput(editor.getMarkdown(), next)
-        const roundTrip = analyzeMarkdown(next, serialized)
-        if (!roundTrip.safeToSave) {
-          throw new Error(
-            roundTrip.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
-              'Agent 内容无法安全转换为所见即所得文档',
-          )
-        }
-
-        useEditorStore.getState().updateContent(fileKey, serialized)
-        useEditorStore.getState().setDiagnostics(fileKey, roundTrip.diagnostics)
-        void window.cclinkStudio.editor.contentUpdateAck(update.id, true)
-      } catch (error) {
-        if (editorChanged) {
-          editor.commands.setContent(parseMarkdownEditorDocument(editor, current), {
-            emitUpdate: false,
-          })
-        }
-        useEditorStore.getState().setDiagnostics(fileKey, previousDiagnostics)
-        const message = error instanceof Error ? error.message : 'Agent 内容更新失败'
-        showToast(message, 'error')
-        void window.cclinkStudio.editor.contentUpdateAck(update.id, false, message)
-      } finally {
-        hydratingRef.current = false
-      }
-    }
-  }, [editor, fileKey, filePath, pendingCount, showToast])
 
   const handleSaveAs = useCallback(async () => {
     try {
@@ -1398,10 +1338,4 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     binary += String.fromCharCode(...bytes.subarray(offset, offset + chunk))
   }
   return btoa(binary)
-}
-
-function joinMarkdown(first: string, second: string): string {
-  if (!first.trim()) return second
-  if (!second.trim()) return first
-  return `${first.replace(/\s+$/, '')}\n\n${second.replace(/^\s+/, '')}`
 }

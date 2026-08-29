@@ -1,16 +1,12 @@
 import { z } from 'zod'
-import type { IpcMainInvokeEvent } from 'electron'
 import { isDataSourceError } from './errors'
 import type { DataSourceService } from './data-source-service'
 import type { DataSourceOperationResult } from '../../shared/ipc/data-source'
-import { registerTrustedIpcHandler, type TrustedRendererGuard } from '../ipc/trusted-renderer-guard'
+import { dataSourceIpcContracts } from '../../shared/ipc/data-source-contract'
 import {
-  createSourceSchema,
-  dataSourceIdSchema,
-  optionalDataSourceIdSchema,
-  runQuerySchema,
-  saveQuerySchema,
-} from './data-source-ipc-schema'
+  registerTrustedIpcContract,
+  type TrustedRendererGuard,
+} from '../ipc/trusted-renderer-guard'
 
 function ok<T>(data: T): DataSourceOperationResult<T> {
   return { success: true, data }
@@ -53,11 +49,6 @@ export function registerDataSourceIpc(
   dataSourceService: DataSourceService | (() => DataSourceService | null),
   trustedRendererGuard: TrustedRendererGuard,
 ): void {
-  const handle = <Args extends unknown[], Result>(
-    channel: string,
-    handler: (event: IpcMainInvokeEvent, ...args: Args) => Result,
-  ): void => registerTrustedIpcHandler(channel, trustedRendererGuard, handler)
-
   const getService = (): DataSourceService => {
     const service =
       typeof dataSourceService === 'function' ? dataSourceService() : dataSourceService
@@ -65,29 +56,43 @@ export function registerDataSourceIpc(
     return service
   }
 
-  handle('data-source:list', () => runOperation(() => getService().listSources()))
-
-  handle('data-source:create', (_event, input: unknown) =>
-    runOperation(() => getService().createSource(createSourceSchema.parse(input))),
+  registerTrustedIpcContract(dataSourceIpcContracts.listSources, trustedRendererGuard, () =>
+    runOperation(() => getService().listSources()),
   )
 
-  handle('data-source:test', (_event, id: unknown) =>
-    runOperation(() => getService().testConnection(dataSourceIdSchema.parse(id))),
+  registerTrustedIpcContract(
+    dataSourceIpcContracts.createSource,
+    trustedRendererGuard,
+    (_event, input) => runOperation(() => getService().createSource(input)),
   )
 
-  handle('data-source:list-collections', (_event, id: unknown) =>
-    runOperation(() => getService().listCollections(dataSourceIdSchema.parse(id))),
+  registerTrustedIpcContract(
+    dataSourceIpcContracts.testConnection,
+    trustedRendererGuard,
+    (_event, id) => runOperation(() => getService().testConnection(id)),
   )
 
-  handle('data-source:query', (_event, input: unknown) =>
-    runOperation(() => getService().runQuery(runQuerySchema.parse(input))),
+  registerTrustedIpcContract(
+    dataSourceIpcContracts.listCollections,
+    trustedRendererGuard,
+    (_event, id) => runOperation(() => getService().listCollections(id)),
   )
 
-  handle('data-source:list-saved-queries', (_event, sourceId: unknown) =>
-    runOperation(() => getService().listSavedQueries(optionalDataSourceIdSchema.parse(sourceId))),
+  registerTrustedIpcContract(
+    dataSourceIpcContracts.runQuery,
+    trustedRendererGuard,
+    (_event, input) => runOperation(() => getService().runQuery(input)),
   )
 
-  handle('data-source:save-query', (_event, input: unknown) =>
-    runOperation(() => getService().saveQuery(saveQuerySchema.parse(input))),
+  registerTrustedIpcContract(
+    dataSourceIpcContracts.listSavedQueries,
+    trustedRendererGuard,
+    (_event, sourceId) => runOperation(() => getService().listSavedQueries(sourceId)),
+  )
+
+  registerTrustedIpcContract(
+    dataSourceIpcContracts.saveQuery,
+    trustedRendererGuard,
+    (_event, input) => runOperation(() => getService().saveQuery(input)),
   )
 }

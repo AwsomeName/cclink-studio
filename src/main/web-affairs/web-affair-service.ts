@@ -220,6 +220,17 @@ export class WebAffairService {
     )
   }
 
+  interruptArticlePublishingRuntime(
+    affairId: string,
+    attemptId: string,
+    reason: string,
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(affairId, workspaceId, () =>
+      this.interruptArticlePublishingLaunchNow(affairId, attemptId, reason, true),
+    )
+  }
+
   reportArticlePublishingCheckpoint(
     input: ReportArticlePublishingCheckpointInput,
     workspaceId: string,
@@ -2052,20 +2063,22 @@ export class WebAffairService {
     affairId: string,
     attemptId: string,
     reason: string,
+    runtimeEnded = false,
   ): Promise<WebAffairOperationResult<WebAffair>> {
     const found = this.findAttempt(affairId, attemptId)
     const publishing = found?.affair.articlePublishing
     if (!found || !publishing || found.affair.kind !== 'article-publishing') {
       return this.notFound('文章发布 Attempt 不存在')
     }
-    if (
-      publishing.execution.currentAttemptId !== attemptId ||
-      !['preparing', 'running-ai'].includes(found.attempt.status)
-    ) {
+    const isCurrentAttempt = publishing.execution.currentAttemptId === attemptId
+    const isTransient = ['preparing', 'running-ai', 'verifying'].includes(found.attempt.status)
+    if (!isCurrentAttempt || !isTransient) {
+      if (runtimeEnded) return { success: true, data: structuredClone(found.affair) }
       return this.transitionError('只有尚未成功启动 Agent 的文章发布 Attempt 可以恢复')
     }
     const now = this.timestamp()
     const currentStepId = publishing.execution.currentStepId
+    const eventPrefix = runtimeEnded ? 'Agent 或浏览器运行已结束' : 'Agent 启动失败'
     return this.persistAffair({
       ...found.affair,
       status: 'needs-attention',
@@ -2076,7 +2089,7 @@ export class WebAffairService {
             ? {
                 ...node,
                 status: 'waiting-human' as const,
-                lastResultNote: 'Agent 启动失败，已保留现场供原 Attempt 重试',
+                lastResultNote: `${eventPrefix}，已保留现场供原 Attempt 重试`,
                 availableTransitions: [...ALLOWED_TRANSITIONS['waiting-human']],
                 updatedAt: now,
               }
@@ -2115,7 +2128,7 @@ export class WebAffairService {
       },
       events: this.appendEvent(
         found.affair,
-        this.event('attempt-finished', `Agent 启动失败，已恢复为可继续状态：${reason}`, now, {
+        this.event('attempt-finished', `${eventPrefix}，已恢复为可继续状态：${reason}`, now, {
           nodeId: found.attempt.nodeId,
           attemptId,
         }),

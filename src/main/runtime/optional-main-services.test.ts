@@ -14,7 +14,8 @@ import {
 
 describe('bootstrapOptionalMainServices', () => {
   beforeEach(() => {
-    mocks.registerTerminalIpc.mockClear()
+    mocks.registerTerminalIpc.mockReset()
+    mocks.registerTerminalIpc.mockReturnValue(vi.fn())
   })
 
   it('continues later capabilities after one optional service fails', async () => {
@@ -45,6 +46,7 @@ describe('bootstrapOptionalMainServices', () => {
     expect(runtime.capabilities.get('meshy').state).toBe('ready')
     expect(runtime.capabilities.get('terminal').state).toBe('ready')
     expect(mocks.registerTerminalIpc).toHaveBeenCalledOnce()
+    expect(runtime.terminalExecutionEventUnsubscribe).toEqual(expect.any(Function))
   })
 
   it('cleans partial terminal state and still registers degraded IPC handlers', async () => {

@@ -22,6 +22,7 @@ import type { PlaywrightBridge } from '../playwright/playwright-bridge'
 import type { AdbBridge } from '../android/adb-bridge'
 import type { BrowserManager } from '../browser/browser-manager'
 import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
+import type { BrowserTaskRun } from '../browser/browser-task-types'
 import { DEFAULT_SETTINGS, type AppSettings } from '../settings/types'
 import type { AgentScope } from './scope'
 import { buildAgentMessageWithContext, type AgentSendMessageContext } from './message-context'
@@ -109,6 +110,14 @@ export interface AgentBridgeOptions {
   browserManager?: BrowserManager
   /** 浏览器任务运行时：browser scope 下自动创建/收束 BrowserTaskRun。 */
   browserTaskRuntime?: BrowserTaskRuntime
+  /** 关联网页事务的临时运行结束后，通知持久状态 owner 收敛 Attempt。 */
+  onCorrelatedBrowserTaskEnded?: (input: {
+    workspacePath: string
+    affairId: string
+    attemptId: string
+    browserTaskRunId: string
+    reason: string
+  }) => Promise<void> | void
   /** 只记录、不控制调用的统一用量账本。 */
   usageLedgerService?: UsageLedgerService
   /** 主进程近期 run 与可信 Runtime Session 的持久状态仓库。 */
@@ -143,6 +152,7 @@ export class AgentBridge {
     agentDeviceAvailable?: () => boolean
     browserManager?: BrowserManager
     browserTaskRuntime?: BrowserTaskRuntime
+    onCorrelatedBrowserTaskEnded?: AgentBridgeOptions['onCorrelatedBrowserTaskEnded']
     getSettingsSnapshot?: () => AppSettings
     usageLedgerService?: UsageLedgerService
   }
@@ -180,6 +190,7 @@ export class AgentBridge {
       agentDeviceAvailable: options?.agentDeviceAvailable,
       browserManager: options?.browserManager,
       browserTaskRuntime: options?.browserTaskRuntime,
+      onCorrelatedBrowserTaskEnded: options?.onCorrelatedBrowserTaskEnded,
       getSettingsSnapshot: options?.getSettingsSnapshot,
       usageLedgerService: options?.usageLedgerService,
     }
@@ -1192,7 +1203,9 @@ export class AgentBridge {
         : resolvedTaskId
     if (!taskId) return
     if (resolvedTaskId === undefined) this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
+    const task = this.deps.browserTaskRuntime?.getTask?.(taskId) ?? null
     this.deps.browserTaskRuntime?.finishTask(taskId)
+    this.reconcileCorrelatedBrowserTaskEnd(task, 'Agent Run 已结束，但发布 Attempt 未进入终态')
     if (this.activeBrowserTaskIds.get(conversationId) === taskId) {
       this.activeBrowserTaskIds.delete(conversationId)
     }
@@ -1202,7 +1215,9 @@ export class AgentBridge {
     const taskId = this.resolveActiveBrowserTaskId(conversationId)
     if (!taskId) return
     this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
+    const task = this.deps.browserTaskRuntime?.getTask?.(taskId) ?? null
     this.deps.browserTaskRuntime?.cancelTask(taskId)
+    this.reconcileCorrelatedBrowserTaskEnd(task, 'Agent Run 或 BrowserTask 已取消')
     this.activeBrowserTaskIds.delete(conversationId)
   }
 
@@ -1217,10 +1232,15 @@ export class AgentBridge {
         : resolvedTaskId
     if (!taskId) return
     if (resolvedTaskId === undefined) this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
+    const task = this.deps.browserTaskRuntime?.getTask?.(taskId) ?? null
     this.deps.browserTaskRuntime?.failTask(taskId, {
       reason: 'unknown',
       errorMessage: this.extractErrorMessage(error),
     })
+    this.reconcileCorrelatedBrowserTaskEnd(
+      task,
+      `Agent Run 或 BrowserTask 失败：${this.extractErrorMessage(error)}`,
+    )
     if (this.activeBrowserTaskIds.get(conversationId) === taskId) {
       this.activeBrowserTaskIds.delete(conversationId)
     }
@@ -1232,6 +1252,37 @@ export class AgentBridge {
       this.deps.browserTaskRuntime?.getActiveTaskForConversation(conversationId)?.id ??
       null
     )
+  }
+
+  private reconcileCorrelatedBrowserTaskEnd(task: BrowserTaskRun | null, reason: string): void {
+    const callback = this.deps.onCorrelatedBrowserTaskEnded
+    const correlation = task?.correlation
+    if (
+      !callback ||
+      !task ||
+      !correlation?.workspaceKey ||
+      !correlation.affairId ||
+      !correlation.affairAttemptId
+    ) {
+      return
+    }
+    const input = {
+      workspacePath: correlation.workspaceKey,
+      affairId: correlation.affairId,
+      attemptId: correlation.affairAttemptId,
+      browserTaskRunId: task.id,
+      reason: reason.slice(0, 1_000),
+    }
+    try {
+      void Promise.resolve(callback(input)).catch((error) => {
+        console.error(
+          '[AgentBridge] 关联网页事务运行终态收敛失败:',
+          this.extractErrorMessage(error),
+        )
+      })
+    } catch (error) {
+      console.error('[AgentBridge] 关联网页事务运行终态收敛失败:', this.extractErrorMessage(error))
+    }
   }
 
   private resolveBrowserTaskIdForEvent(event: AgentRuntimeEvent): string | null {

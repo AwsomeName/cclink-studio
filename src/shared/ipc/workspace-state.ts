@@ -1,4 +1,5 @@
 import type { WorkspaceConversationSnapshotSummary } from '../workspace-conversation-diagnostics'
+import { defineIpcCall } from './contract'
 
 /** 工作台状态分区名称。先允许扩展字符串，便于逐步迁移各 renderer store。 */
 export type WorkspaceStateSection =
@@ -50,6 +51,25 @@ export const workspaceStateIpcEvents = {
 export interface WorkspaceStateFlushAcknowledgement {
   requestId: string
   success: boolean
+}
+
+export function parseWorkspaceStateFlushRequest(value: unknown): string | null {
+  return typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= 256 &&
+    !value.includes('\0')
+    ? value
+    : null
+}
+
+export function parseWorkspaceStateFlushAcknowledgement(
+  value: unknown,
+): WorkspaceStateFlushAcknowledgement | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const acknowledgement = value as Partial<WorkspaceStateFlushAcknowledgement>
+  const requestId = parseWorkspaceStateFlushRequest(acknowledgement.requestId)
+  if (!requestId || typeof acknowledgement.success !== 'boolean') return null
+  return value as WorkspaceStateFlushAcknowledgement
 }
 
 export interface WorkspaceStateDiagnostics {
@@ -146,3 +166,36 @@ export interface WorkspaceStateApiContract {
   onFlushRequest: (callback: (requestId: string) => void) => () => void
   acknowledgeFlush: (acknowledgement: WorkspaceStateFlushAcknowledgement) => void
 }
+
+export const workspaceStateIpc = {
+  resolveLocalWorkspace: defineIpcCall<[workspacePath: string], WorkspaceStateResolveResult>(
+    'workspaceState:resolveLocalWorkspace',
+  ),
+  setActiveLocalWorkspace: defineIpcCall<
+    [workspacePath: string | null],
+    ActiveLocalWorkspaceResult
+  >('workspaceState:setActiveLocalWorkspace'),
+  get: defineIpcCall<
+    [workspaceKey: string | null | undefined, ownerKey: string | null | undefined],
+    WorkspaceStateSnapshot
+  >('workspaceState:get'),
+  setSection: defineIpcCall<
+    [
+      workspaceKey: string | null | undefined,
+      section: WorkspaceStateSection,
+      value: unknown,
+      ownerKey: string | null | undefined,
+      options: WorkspaceStateSetSectionOptions | undefined,
+    ],
+    WorkspaceStateSetSectionResult
+  >('workspaceState:setSection'),
+  clear: defineIpcCall<
+    [workspaceKey: string | null | undefined, ownerKey: string | null | undefined],
+    { success: boolean; error?: string }
+  >('workspaceState:clear'),
+  listLocalWorkspaces: defineIpcCall<
+    [ownerKey: string | null | undefined],
+    WorkspaceStateLocalWorkspaceSummary[]
+  >('workspaceState:listLocalWorkspaces'),
+  diagnostics: defineIpcCall<[], WorkspaceStateDiagnostics>('workspaceState:diagnostics'),
+} as const

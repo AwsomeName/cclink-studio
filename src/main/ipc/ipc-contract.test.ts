@@ -1,8 +1,11 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import ts from 'typescript'
 import { agentIpcContracts, agentMcpIpcContracts } from '../../shared/ipc/agent-contract'
 import { agentIpc, agentMcpIpc } from '../../shared/ipc/agent'
+import { androidIpcContracts } from '../../shared/ipc/android-contract'
+import { androidIpc, androidIpcEvents } from '../../shared/ipc/android'
 import {
   browserDownloadIpcContracts,
   browserIpcContracts,
@@ -15,14 +18,46 @@ import {
   browserTaskIpc,
 } from '../../shared/ipc/browser'
 import { defineIpcInvoke, defineNoArgsIpc } from '../../shared/ipc/contract'
+import { dataSourceIpcContracts } from '../../shared/ipc/data-source-contract'
+import { dataSourceIpc } from '../../shared/ipc/data-source'
+import { cadIpc } from '../../shared/ipc/cad'
+import { editorIpc, editorIpcEvents } from '../../shared/ipc/editor'
+import { gitBackupIpc } from '../../shared/ipc/git-backup'
+import { hardwareIpc } from '../../shared/ipc/hardware'
+import { projectOpsIpc } from '../../shared/ipc/project-ops'
+import { wechatIpc } from '../../shared/ipc/wechat'
+import { workspaceStateIpc } from '../../shared/ipc/workspace-state'
+import {
+  cadIpcContracts,
+  editorIpcContracts,
+  gitBackupIpcContracts,
+  hardwareIpcContracts,
+  projectOpsIpcContracts,
+  wechatIpcContracts,
+  workspaceStateIpcContracts,
+} from '../../shared/ipc/workbench-contract'
 import { dialogIpcContracts as dialogIpc } from '../../shared/ipc/dialog-contract'
 import { fsIpcContracts } from '../../shared/ipc/fs-contract'
 import { fsIpc } from '../../shared/ipc/fs'
 import { settingsIpcContracts as settingsIpc } from '../../shared/ipc/settings-contract'
+import { terminalIpcContracts } from '../../shared/ipc/terminal-contract'
+import {
+  parseTerminalConfirmationRequest,
+  parseTerminalExecutionEvent,
+  terminalIpc,
+  terminalIpcEvents,
+} from '../../shared/ipc/terminal'
 import { webResourcesIpcContracts } from '../../shared/web-resources/web-resource-contract'
 import { webResourcesIpc } from '../../shared/web-resources/web-resource'
 import { webAffairsIpcContracts } from '../../shared/web-affairs/web-affair-contract'
 import { webAffairsIpc } from '../../shared/web-affairs/web-affair'
+import {
+  ipcEventFlowInventory,
+  ipcInvokeContractInventory,
+  legacyIpcChannels,
+  legacyIpcEventFlowInventory,
+  legacyIpcNamespaceInventory,
+} from './ipc-contract-legacy-inventory'
 
 describe('IPC invoke contracts', () => {
   it('rejects unexpected arguments for no-argument channels', () => {
@@ -93,6 +128,223 @@ describe('IPC invoke contracts', () => {
     expect(() => fsIpcContracts.readFile.parseArgs(['/workspace/bad\0path'])).toThrow()
     expect(() => fsIpcContracts.rename.parseArgs(['/workspace/old.md'])).toThrow()
     expect(() => fsIpcContracts.watchDirStop.parseArgs(['not-a-uuid'])).toThrow()
+  })
+
+  it('binds every Terminal definition to its approved runtime boundary', async () => {
+    expect(Object.keys(terminalIpcContracts)).toEqual(Object.keys(terminalIpc))
+    expect(Object.keys(terminalIpcEvents)).toHaveLength(2)
+    expect(
+      terminalIpcContracts.startPty.parseArgs([
+        {
+          terminalSessionId: ' terminal-1 ',
+          runtime: {
+            location: 'local',
+            transport: 'local',
+            backend: 'local-shell',
+            workspaceRef: { kind: 'local', path: '/workspace' },
+          },
+        },
+      ]),
+    ).toEqual([
+      {
+        terminalSessionId: 'terminal-1',
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'local-shell',
+          workspaceRef: { kind: 'local', path: '/workspace' },
+        },
+        size: { columns: 80, rows: 24 },
+      },
+    ])
+    const lifecycleInput = {
+      terminalSessionId: 'terminal-1',
+      workspaceKey: '/workspace',
+      kind: 'created' as const,
+      runtime: {
+        location: 'local' as const,
+        transport: 'local' as const,
+        backend: 'local-shell' as const,
+        workspaceRef: { kind: 'local' as const, path: '/workspace' },
+      },
+      permissionPolicy: {
+        mode: 'ask-risky-command' as const,
+        requireConfirmationFor: ['write' as const],
+      },
+      closePolicy: 'keep-running' as const,
+    }
+    expect(terminalIpcContracts.recordLifecycleEvent.parseArgs([lifecycleInput])).toEqual([
+      lifecycleInput,
+    ])
+    expect(() =>
+      terminalIpcContracts.recordLifecycleEvent.parseArgs([
+        { terminalSessionId: 'terminal-1', kind: 'command-submitted' },
+      ]),
+    ).toThrow()
+    expect(() =>
+      terminalIpcContracts.submitCommand.parseArgs([
+        {
+          terminalSessionId: 'terminal-1',
+          command: 'pwd',
+          actor: 'robot',
+          permissionPolicy: {
+            mode: 'ask-risky-command',
+            requireConfirmationFor: ['write'],
+          },
+        },
+      ]),
+    ).toThrow()
+    expect(() =>
+      terminalIpcContracts.submitCommand.parseArgs([
+        {
+          terminalSessionId: 'terminal-1',
+          command: 'x'.repeat(100_001),
+          actor: 'user',
+          permissionPolicy: {
+            mode: 'ask-risky-command',
+            requireConfirmationFor: ['write'],
+          },
+        },
+      ]),
+    ).toThrow()
+    await expect(
+      terminalIpcContracts.startPty.mapParseError?.(
+        captureError(() => terminalIpcContracts.startPty.parseArgs([{ terminalSessionId: '' }])),
+      ),
+    ).resolves.toEqual({ success: false, error: 'Terminal PTY 启动参数无效' })
+  })
+
+  it('bounds Terminal pushed event payloads before renderer callbacks', () => {
+    expect(
+      parseTerminalExecutionEvent({
+        kind: 'output',
+        sessionId: 'terminal-1',
+        data: 'ok',
+        stream: 'stdout',
+        timestamp: 1,
+      }),
+    ).not.toBeNull()
+    expect(
+      parseTerminalExecutionEvent({
+        kind: 'output',
+        sessionId: 'terminal-1',
+        stream: 'stdout',
+        timestamp: 1,
+      }),
+    ).toBeNull()
+    expect(
+      parseTerminalConfirmationRequest({
+        id: 'confirmation-1',
+        createdAt: 1,
+        expiresAt: 2,
+        terminalSessionId: 'terminal-1',
+        command: 'pwd',
+        actor: 'user',
+        risk: 'read',
+        reason: 'read-only',
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'local-shell',
+          workspaceRef: { kind: 'local', path: '/workspace' },
+        },
+      }),
+    ).not.toBeNull()
+    expect(
+      parseTerminalConfirmationRequest({
+        id: 'confirmation-1',
+        createdAt: 1,
+        expiresAt: 2,
+        terminalSessionId: 'terminal-1',
+        command: 'pwd',
+        actor: 'robot',
+        risk: 'read',
+        reason: 'read-only',
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'local-shell',
+          workspaceRef: { kind: 'local', path: '/workspace' },
+        },
+      }),
+    ).toBeNull()
+  })
+
+  it('binds every Android definition and retained event to one shared declaration', async () => {
+    expect(Object.keys(androidIpcContracts)).toEqual(Object.keys(androidIpc))
+    expect(Object.keys(androidIpcEvents).sort()).toEqual([
+      'mirrorDisconnected',
+      'mirrorError',
+      'storeInstallProgress',
+      'touch',
+      'videoFrame',
+    ])
+    expect(androidIpcContracts.connectPhysical.parseArgs([' device-1 '])).toEqual(['device-1'])
+    expect(androidIpcContracts.swipe.parseArgs([1, 2, 3, 4, undefined])).toEqual([
+      1,
+      2,
+      3,
+      4,
+      undefined,
+    ])
+    expect(androidIpcContracts.listPackages.parseArgs([undefined])).toEqual([undefined])
+    await expect(
+      androidIpcContracts.installApk.mapParseError?.(
+        captureError(() => androidIpcContracts.installApk.parseArgs(['../payload.sh'])),
+      ),
+    ).rejects.toThrow()
+  })
+
+  it('binds every DataSource definition and preserves its structured parse error', async () => {
+    expect(Object.keys(dataSourceIpcContracts)).toEqual(Object.keys(dataSourceIpc))
+    expect(dataSourceIpcContracts.testConnection.parseArgs([' source-1 '])).toEqual(['source-1'])
+    expect(dataSourceIpcContracts.listSavedQueries.parseArgs([undefined])).toEqual([undefined])
+    await expect(
+      dataSourceIpcContracts.createSource.mapParseError?.(
+        captureError(() =>
+          dataSourceIpcContracts.createSource.parseArgs([
+            { type: 'elasticsearch', name: '', endpoint: 'file:///tmp/index' },
+          ]),
+        ),
+      ),
+    ).resolves.toMatchObject({
+      success: false,
+      error: { code: 'DATA_SOURCE_QUERY_INVALID' },
+    })
+  })
+
+  it('binds every remaining workbench definition to the existing bounded parsers', async () => {
+    expect(Object.keys(workspaceStateIpcContracts)).toEqual(Object.keys(workspaceStateIpc))
+    expect(Object.keys(gitBackupIpcContracts)).toEqual(Object.keys(gitBackupIpc))
+    expect(Object.keys(hardwareIpcContracts)).toEqual(Object.keys(hardwareIpc))
+    expect(Object.keys(cadIpcContracts)).toEqual(Object.keys(cadIpc))
+    expect(Object.keys(projectOpsIpcContracts)).toEqual(Object.keys(projectOpsIpc))
+    expect(Object.keys(editorIpcContracts)).toEqual(Object.keys(editorIpc))
+    expect(Object.keys(wechatIpcContracts)).toEqual(Object.keys(wechatIpc))
+    expect(Object.keys(editorIpcEvents)).toEqual(['readRequest', 'saveRequest'])
+
+    expect(workspaceStateIpcContracts.get.parseArgs(['/workspace', undefined])).toEqual([
+      '/workspace',
+      undefined,
+    ])
+    expect(gitBackupIpcContracts.backup.parseArgs([{ workspacePath: '/workspace' }])).toEqual([
+      { workspacePath: '/workspace' },
+    ])
+    expect(
+      cadIpcContracts.convertModel.parseArgs([{ inputPath: '/workspace/model.step' }]),
+    ).toEqual([{ inputPath: '/workspace/model.step' }])
+    expect(() =>
+      hardwareIpcContracts.readGerberLayerPreview.parseArgs([
+        '/workspace',
+        '/workspace/gerber.zip',
+        '../escape.gbr',
+      ]),
+    ).toThrow()
+    await expect(
+      wechatIpcContracts.convert.mapParseError?.(
+        captureError(() => wechatIpcContracts.convert.parseArgs([{ markdown: 42 }])),
+      ),
+    ).resolves.toMatchObject({ error: expect.any(String) })
   })
 
   it('binds every Agent and MCP definition to a bounded runtime parser', () => {
@@ -342,38 +594,23 @@ describe('IPC invoke contracts', () => {
     expect(() => webAffairsIpcContracts.createAffair.parseArgs([])).toThrow()
   })
 
-  it('keeps migrated channel literals in shared declarations only', () => {
+  it('rejects raw channel literals at every production main/preload IPC boundary', () => {
     const productionFiles = [
-      'src/main/ipc/window-ipc.ts',
-      'src/main/identity/identity-ipc.ts',
-      'src/main/ipc/official-ipc.ts',
-      'src/main/ipc/dialog-ipc.ts',
-      'src/main/settings/settings-ipc.ts',
-      'src/main/fs/fs-ipc.ts',
-      'src/main/ipc/agent-ipc.ts',
-      'src/main/agent/agent-bridge.ts',
-      'src/main/mcp/permission.ts',
-      'src/main/ipc/browser-ipc.ts',
-      'src/main/browser/browser-manager.ts',
-      'src/main/browser/browser-task-runtime.ts',
-      'src/main/browser/browser-download-store.ts',
-      'src/main/web-resources/web-resource-ipc.ts',
-      'src/main/web-affairs/web-affair-ipc.ts',
-      'src/preload/renderer-support-api.ts',
-      'src/preload/fs-api.ts',
-      'src/preload/agent-api.ts',
-      'src/preload/browser-api.ts',
-      'src/preload/web-resources-api.ts',
-      'src/preload/web-affairs-api.ts',
-      'src/preload/index.ts',
-    ]
-    const source = productionFiles
-      .map((file) => readFileSync(resolve(process.cwd(), file), 'utf8'))
-      .join('\n')
+      ...collectFiles(resolve(process.cwd(), 'src/main')),
+      ...collectFiles(resolve(process.cwd(), 'src/preload')),
+    ].filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+    const rawBoundaryPattern =
+      /(?:ipcMain\.(?:handle|on)|registerTrustedIpc(?:Handler|Listener)|webContents\.send|ipcRenderer\.(?:invoke|send|on|once|removeListener|removeAllListeners)|replaceOwnedEditorListener)\(\s*['"]([^'"]+)['"]/gu
+    const violations: string[] = []
 
-    expect(source).not.toMatch(
-      /['"](?:window|identity|official|dialog|settings|fs|agent|mcp|browser|browserTask|browserActionLog|browserDownload|webResources|webAffairs|workbench):[A-Za-z]/,
-    )
+    for (const file of productionFiles) {
+      const source = readFileSync(file, 'utf8')
+      for (const match of source.matchAll(rawBoundaryPattern)) {
+        violations.push(`${file}:${match[1]}`)
+      }
+    }
+
+    expect(violations).toEqual([])
   })
 
   it('keeps preload-facing contract definitions free of runtime schema dependencies', () => {
@@ -385,6 +622,16 @@ describe('IPC invoke contracts', () => {
       'src/shared/ipc/browser.ts',
       'src/shared/web-resources/web-resource.ts',
       'src/shared/web-affairs/web-affair.ts',
+      'src/shared/ipc/terminal.ts',
+      'src/shared/ipc/android.ts',
+      'src/shared/ipc/data-source.ts',
+      'src/shared/ipc/workspace-state.ts',
+      'src/shared/ipc/git-backup.ts',
+      'src/shared/ipc/hardware.ts',
+      'src/shared/ipc/cad.ts',
+      'src/shared/ipc/project-ops.ts',
+      'src/shared/ipc/editor.ts',
+      'src/shared/ipc/wechat.ts',
       'src/preload/index.ts',
       'src/preload/renderer-support-api.ts',
       'src/preload/fs-api.ts',
@@ -392,15 +639,161 @@ describe('IPC invoke contracts', () => {
       'src/preload/browser-api.ts',
       'src/preload/web-resources-api.ts',
       'src/preload/web-affairs-api.ts',
+      'src/preload/android-api.ts',
+      'src/preload/data-source-api.ts',
+      'src/preload/local-ops-api.ts',
     ]
     const source = preloadFacingFiles
       .map((file) => readFileSync(resolve(process.cwd(), file), 'utf8'))
       .join('\n')
+    const allPreloadSource = collectFiles(resolve(process.cwd(), 'src/preload'))
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n')
 
-    expect(source).not.toMatch(/(?:settings|dialog|fs|agent|browser)-(?:schema|contract)/)
+    expect(allPreloadSource).not.toMatch(/(?:terminal|android|data-source|workbench)-contract['"]/)
     expect(source).not.toMatch(/from ['"]zod['"]/)
   })
+
+  it('freezes the shrinking legacy preload channel inventory', () => {
+    const preloadFiles = collectFiles(resolve(process.cwd(), 'src/preload')).filter((file) =>
+      file.endsWith('.ts'),
+    )
+    const channels = new Set<string>()
+    const literalCallPattern =
+      /(?:ipcRenderer\.(?:invoke|send|on|once|removeListener|removeAllListeners)|replaceOwnedEditorListener)\(\s*['"]([^'"]+)['"]/gu
+
+    for (const file of preloadFiles) {
+      const source = readFileSync(file, 'utf8')
+      for (const match of source.matchAll(literalCallPattern)) channels.add(match[1])
+    }
+
+    expect([...channels].sort()).toEqual(legacyIpcChannels)
+    expect(new Set(legacyIpcChannels).size).toBe(legacyIpcChannels.length)
+    expect(new Set(legacyIpcNamespaceInventory.map((entry) => entry.namespace)).size).toBe(
+      legacyIpcNamespaceInventory.length,
+    )
+  })
+
+  it('records producers and actual consumers for every legacy pushed event', () => {
+    const legacyChannels = new Set(legacyIpcChannels)
+    for (const event of legacyIpcEventFlowInventory) {
+      expect(legacyChannels.has(event.channel)).toBe(true)
+      expect(event.producerFiles.length + event.consumerFiles.length).toBeGreaterThan(0)
+      if (event.producerFiles.length === 0 || event.consumerFiles.length === 0) {
+        expect(event.disposition).toBe('decide-remove-or-complete')
+      }
+      for (const file of [...event.producerFiles, ...event.consumerFiles]) {
+        expect(statSync(resolve(process.cwd(), file)).isFile()).toBe(true)
+      }
+    }
+  })
+
+  it('keeps a machine-enumerable invoke inventory with real handler and preload evidence', () => {
+    expect(ipcInvokeContractInventory.length).toBeGreaterThan(0)
+    expect(new Set(ipcInvokeContractInventory.map((entry) => entry.channel)).size).toBe(
+      ipcInvokeContractInventory.length,
+    )
+    expect([...collectDeclaredIpcChannels(resolve(process.cwd(), 'src/shared'))].sort()).toEqual(
+      ipcInvokeContractInventory.map((entry) => entry.channel).sort(),
+    )
+
+    for (const entry of ipcInvokeContractInventory) {
+      const definitionSource = readFileSync(resolve(process.cwd(), entry.definitionFile), 'utf8')
+      expect(definitionSource).toContain(`'${entry.channel}'`)
+      expect(entry.handlerFiles).not.toHaveLength(0)
+      expect(entry.preloadFiles).not.toHaveLength(0)
+      const handlerSource = entry.handlerFiles
+        .map((file) => readFileSync(resolve(process.cwd(), file), 'utf8'))
+        .join('\n')
+      const preloadSource = entry.preloadFiles
+        .map((file) => readFileSync(resolve(process.cwd(), file), 'utf8'))
+        .join('\n')
+      const handlerStem = entry.definitionName.replace(/Ipc$/u, '')
+      expect(
+        handlerSource.match(
+          new RegExp(
+            `(?:handle|registerTrustedIpcContract)\\([\\s\\S]{0,160}?${handlerStem}[\\w]*Ipc(?:Contracts)?\\.${entry.key}\\b`,
+            'gu',
+          ),
+        ) ?? [],
+        `${entry.owner}.${entry.key} handler registration count`,
+      ).toHaveLength(1)
+      expect(
+        preloadSource.match(
+          new RegExp(`invokeIpcContract\\(\\s*${entry.definitionName}\\.${entry.key}\\b`, 'gu'),
+        ) ?? [],
+        `${entry.owner}.${entry.key} preload invocation count`,
+      ).not.toHaveLength(0)
+    }
+  })
+
+  it('records every retained convergence event with producer, consumer and disposer evidence', () => {
+    expect(ipcEventFlowInventory.length).toBeGreaterThan(0)
+    expect(new Set(ipcEventFlowInventory.map((entry) => entry.channel)).size).toBe(
+      ipcEventFlowInventory.length,
+    )
+
+    for (const event of ipcEventFlowInventory) {
+      const symbol = event.channel.split(/[:.]/u).at(-1)!
+      const evidenceTerms = event.evidenceTerms ?? [symbol]
+      for (const files of [
+        event.producerFiles,
+        event.bridgeFiles,
+        event.consumerFiles,
+        event.disposerFiles,
+      ]) {
+        expect(files).not.toHaveLength(0)
+        for (const file of files) {
+          const source = readFileSync(resolve(process.cwd(), file), 'utf8')
+          expect(
+            evidenceTerms.some((term) =>
+              source.toLocaleLowerCase().includes(term.toLocaleLowerCase()),
+            ),
+          ).toBe(true)
+        }
+      }
+    }
+  })
 })
+
+function collectFiles(directory: string): string[] {
+  return readdirSync(directory).flatMap((entry) => {
+    const path = resolve(directory, entry)
+    return statSync(path).isDirectory() ? collectFiles(path) : [path]
+  })
+}
+
+function collectDeclaredIpcChannels(directory: string): Set<string> {
+  const channels = new Set<string>()
+  const definitionFunctions = new Set(['defineIpcCall', 'defineIpcInvoke', 'defineNoArgsIpc'])
+
+  for (const file of collectFiles(directory).filter(
+    (candidate) => candidate.endsWith('.ts') && !candidate.endsWith('.test.ts'),
+  )) {
+    const sourceFile = ts.createSourceFile(
+      file,
+      readFileSync(file, 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        definitionFunctions.has(node.expression.text) &&
+        node.arguments[0] &&
+        ts.isStringLiteralLike(node.arguments[0])
+      ) {
+        channels.add(node.arguments[0].text)
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sourceFile)
+  }
+
+  return channels
+}
 
 function captureError(action: () => unknown): unknown {
   try {

@@ -222,12 +222,51 @@ describe('AgentBridge browser send plan', () => {
       data: { code: 'browser_task_not_successful' },
     })
   })
+
+  it('reports a correlated article publishing task when its BrowserTask fails', () => {
+    const onCorrelatedBrowserTaskEnded = vi.fn()
+    const task = {
+      id: 'browser-task',
+      correlation: {
+        workspaceKey: '/workspace/a',
+        affairId: 'affair-a',
+        affairAttemptId: 'attempt-a',
+      },
+    }
+    const failTask = vi.fn()
+    const bridge = createBridge(
+      { kind: 'all' },
+      {},
+      {
+        getTask: () => task,
+        getActiveTaskForConversation: () => task,
+        updateCorrelation: vi.fn(),
+        failTask,
+      },
+      onCorrelatedBrowserTaskEnded,
+    )
+
+    bridge.failActiveBrowserTask('conversation-a', { message: 'automation unavailable' })
+
+    expect(failTask).toHaveBeenCalledWith('browser-task', {
+      reason: 'unknown',
+      errorMessage: 'automation unavailable',
+    })
+    expect(onCorrelatedBrowserTaskEnded).toHaveBeenCalledWith({
+      workspacePath: '/workspace/a',
+      affairId: 'affair-a',
+      attemptId: 'attempt-a',
+      browserTaskRunId: 'browser-task',
+      reason: 'Agent Run 或 BrowserTask 失败：automation unavailable',
+    })
+  })
 })
 
 function createBridge(
   scope: { kind: 'all' } | { kind: 'browser'; instanceId: string },
   browserManager: Record<string, unknown>,
   browserTaskRuntime?: Record<string, unknown>,
+  onCorrelatedBrowserTaskEnded?: (input: Record<string, unknown>) => void,
 ): {
   resolveSendPlan: (
     conversationId: string,
@@ -238,6 +277,7 @@ function createBridge(
     workspaceKey: string | null
   }
   finishActiveBrowserTask: (conversationId: string) => void
+  failActiveBrowserTask: (conversationId: string, error: unknown) => void
   normalizeBrowserTerminalEvent: (event: {
     conversationId: string
     runId: string | null
@@ -255,7 +295,7 @@ function createBridge(
     getScope: () => scope,
     getStatus: () => ({ runId: 'run-a', sessionId: null }),
   }
-  bridge.deps = { browserManager, browserTaskRuntime }
+  bridge.deps = { browserManager, browserTaskRuntime, onCorrelatedBrowserTaskEnded }
   bridge.activeBrowserTaskIds = new Map()
   bridge.sessionDiagnosticRefs = { get: () => null }
   return bridge as never

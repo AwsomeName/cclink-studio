@@ -1,12 +1,12 @@
-import { ipcRenderer } from 'electron'
-import type { DataSourceApiContract } from '../shared/ipc/data-source'
+import { dataSourceIpc, type DataSourceApiContract } from '../shared/ipc/data-source'
+import { invokeIpcContract } from './ipc-contract-client'
 
 export const dataSourceApi: DataSourceApiContract = {
-  listSources: () => ipcRenderer.invoke('data-source:list'),
-  createSource: (input) => ipcRenderer.invoke('data-source:create', input),
-  testConnection: (id) => ipcRenderer.invoke('data-source:test', id),
-  listCollections: (id) => ipcRenderer.invoke('data-source:list-collections', id),
-  runQuery: (input) => ipcRenderer.invoke('data-source:query', input),
-  listSavedQueries: (sourceId) => ipcRenderer.invoke('data-source:list-saved-queries', sourceId),
-  saveQuery: (input) => ipcRenderer.invoke('data-source:save-query', input),
+  listSources: () => invokeIpcContract(dataSourceIpc.listSources),
+  createSource: (input) => invokeIpcContract(dataSourceIpc.createSource, input),
+  testConnection: (id) => invokeIpcContract(dataSourceIpc.testConnection, id),
+  listCollections: (id) => invokeIpcContract(dataSourceIpc.listCollections, id),
+  runQuery: (input) => invokeIpcContract(dataSourceIpc.runQuery, input),
+  listSavedQueries: (sourceId) => invokeIpcContract(dataSourceIpc.listSavedQueries, sourceId),
+  saveQuery: (input) => invokeIpcContract(dataSourceIpc.saveQuery, input),
 }

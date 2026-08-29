@@ -124,7 +124,8 @@ export async function bootstrapOptionalMainServices(
   }
 
   try {
-    registerTerminalIpc(
+    runtime.terminalExecutionEventUnsubscribe?.()
+    runtime.terminalExecutionEventUnsubscribe = registerTerminalIpc(
       runtime.terminalConfirmationService,
       runtime.trustedRendererGuard,
       runtime.terminalAuditStore ?? undefined,
@@ -135,6 +136,8 @@ export async function bootstrapOptionalMainServices(
       runtime.terminalSessionStore ?? undefined,
     )
   } catch (error) {
+    runtime.terminalExecutionEventUnsubscribe?.()
+    runtime.terminalExecutionEventUnsubscribe = null
     resetCapability(runtime, 'terminal')
     runtime.capabilities.failed('terminal', error)
     console.error('[CCLink Studio] terminal IPC 注册失败:', error)
@@ -221,6 +224,8 @@ function resetCapability(
       runtime.markdownIllustrationService = null
       break
     case 'terminal':
+      runtime.terminalExecutionEventUnsubscribe?.()
+      runtime.terminalExecutionEventUnsubscribe = null
       runtime.terminalConfirmationService?.destroy()
       runtime.terminalAuditStore = null
       runtime.terminalSessionStore = null

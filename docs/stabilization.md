@@ -156,7 +156,26 @@ S0 绿色只表示恢复可信基线。Markdown 注入、明文密钥、Agent �
 
 完成结果：S2.1-S2.3 已在实现基线 `b7c1854` 完成，关闭门禁在 `1d80425` 收敛。自动化模块、可选主进程服务以及 Browser/Android 窗口构造均拥有独立失败边界；首个失败原因进入四态能力状态、设置页和脱敏诊断，核心工作台与无关能力在故障注入后继续启动。当前工作树和全新 detached worktree 的 `pnpm verify` 均通过 138 个测试文件/821 项测试，standalone 24/24 与严格认证 smoke 通过，GitHub Actions run `29800851580` 成功。关闭复验曾发现 standalone 共用全局 PID、日志、端口和 Profile 会误连已删除 worktree 的残留 renderer，现已改为 worktree/CI 独立 smoke runtime；详细证据见 `docs/ops/stabilization-s2-capability-matrix.md`。S2 已关闭，但设置页刷新只读取真实状态，环境修复后的当前恢复入口仍是重启 Studio；进程内重试、统一回滚、窗口重建和停止属于 S3。稳定化阶段继续，不恢复功能扩张。
 
-### S3：统一生命周期和契约（已完成）
+### S3：统一生命周期和契约（S3.2 工程补救完成，相关真人复验待补）
+
+> 2026-08-28 复审发现 Terminal、Android/Scrcpy、数据源及若干后续能力仍在 main/preload 双写
+> channel，现有源码门禁只覆盖人工列出的已迁移 namespace；Android、Editor 和 Terminal 还存在
+> listener/disposer 所有权缺口。S3.1 服务生命周期和 S3.3 workspace 资源归属结论保持关闭，仅
+> S3.2 IPC 契约覆盖重新打开。执行方案和增量门禁见
+> `docs/architecture/ipc-contract-convergence.md`；P0 未完成前不得进入 Terminal 迁移，也不得继续用
+> 历史绿色证据宣称当前生产 IPC 已完全单源化。
+
+2026-08-29 补救结果：P0-P5 代码迁移与自动化工程门禁已顺序完成，Terminal、Android/Scrcpy、数据源和后续 32 个保留 invoke
+均改从 shared 轻量 definition 派生；无生产者的 Editor `contentUpdate/contentUpdateAck` 已删除，
+生产 main/preload 裸 channel allowlist 已收敛为空；全量现行 invoke 库存会校验 shared definition、
+唯一 handler 与 preload consumer，保留事件库存记录 producer、真实 renderer consumer、disposer 和
+payload 边界。Terminal lifecycle/submit 和保留事件补齐有界 parse-first 校验，Android 异常断连会
+先释放本地 decoder、stream 与 listener。当前工作树 `pnpm verify` 通过
+332 个测试文件/2041 项测试（2 项跳过），`smoke:local` 11/11、`smoke:workflow` 21/21、
+`smoke:restore` 4/4、`smoke:update-recovery` 1/1 通过。S3.2 工程覆盖据此再次关闭，但不等于专项
+方案的 P1-P3 阶段退出；完整 Terminal、Android 真机和真实只读数据源真人验收待具备环境后补，
+不计为已经完成的用户功能验收。全新 Profile 的全量 UI
+smoke 仍有 4 个 Agent/Activity Bar/角色中心既有定位失败，未用本次 IPC 重构扩张处理。
 
 - 使用同一服务注册表负责启动、回滚、窗口重建和停止。
 - IPC 从共享声明生成注册、preload 调用、运行时校验和清理逻辑。

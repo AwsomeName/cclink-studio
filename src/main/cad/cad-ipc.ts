@@ -1,18 +1,14 @@
-import type { IpcMainInvokeEvent } from 'electron'
-import type { CadConvertRequest } from '../../shared/ipc/cad'
+import { cadIpcContracts } from '../../shared/ipc/workbench-contract'
 import type { CadConversionService } from './cad-conversion-service'
-import { registerTrustedIpcHandler, type TrustedRendererGuard } from '../ipc/trusted-renderer-guard'
-import { cadConvertRequestSchema, cadPathSchema } from '../ipc/workbench-ipc-schema'
+import {
+  registerTrustedIpcContract,
+  type TrustedRendererGuard,
+} from '../ipc/trusted-renderer-guard'
 
 export function registerCadIpc(
   cadConversionService: CadConversionService | (() => CadConversionService | null),
   trustedRendererGuard: TrustedRendererGuard,
 ): void {
-  const handle = <Args extends unknown[], Result>(
-    channel: string,
-    handler: (event: IpcMainInvokeEvent, ...args: Args) => Result,
-  ): void => registerTrustedIpcHandler(channel, trustedRendererGuard, handler)
-
   const getService = (): CadConversionService => {
     const service =
       typeof cadConversionService === 'function' ? cadConversionService() : cadConversionService
@@ -20,16 +16,28 @@ export function registerCadIpc(
     return service
   }
 
-  handle('cad:getBackendStatus', () => getService().getBackendStatus())
-  handle('cad:getModelSupport', (_event, inputPath: string) =>
-    getService().getModelSupport(cadPathSchema.parse(inputPath)),
+  registerTrustedIpcContract(cadIpcContracts.getBackendStatus, trustedRendererGuard, () =>
+    getService().getBackendStatus(),
   )
-  handle('cad:inspectModel', (_event, inputPath: string) =>
-    getService().inspectModel(cadPathSchema.parse(inputPath)),
+  registerTrustedIpcContract(
+    cadIpcContracts.getModelSupport,
+    trustedRendererGuard,
+    (_event, inputPath) => getService().getModelSupport(inputPath),
   )
-  handle('cad:getCacheStatus', () => getService().getCacheStatus())
-  handle('cad:clearCache', () => getService().clearCache())
-  handle('cad:convertModel', (_event, request: CadConvertRequest) =>
-    getService().convertModel(cadConvertRequestSchema.parse(request)),
+  registerTrustedIpcContract(
+    cadIpcContracts.inspectModel,
+    trustedRendererGuard,
+    (_event, inputPath) => getService().inspectModel(inputPath),
+  )
+  registerTrustedIpcContract(cadIpcContracts.getCacheStatus, trustedRendererGuard, () =>
+    getService().getCacheStatus(),
+  )
+  registerTrustedIpcContract(cadIpcContracts.clearCache, trustedRendererGuard, () =>
+    getService().clearCache(),
+  )
+  registerTrustedIpcContract(
+    cadIpcContracts.convertModel,
+    trustedRendererGuard,
+    (_event, request) => getService().convertModel(request),
   )
 }

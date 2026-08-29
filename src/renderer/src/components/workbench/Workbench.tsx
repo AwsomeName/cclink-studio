@@ -7,7 +7,6 @@ import { BrowserToolbar } from './BrowserToolbar'
 import { TabBar } from './TabBar'
 import { WorkbenchContent } from './WorkbenchContent'
 import { useBrowserEvents } from './use-browser-events'
-import { useEditorContentUpdates } from './use-editor-content-updates'
 import { useWorkbenchBounds } from './use-workbench-bounds'
 import { closeTabWithDraftPolicy } from '../../utils/close-tab'
 import { recordTerminalLifecycleEvent } from '../../utils/terminal-lifecycle'
@@ -67,7 +66,6 @@ export function Workbench({
 
   useWorkbenchBounds(contentRef, tabBarRef)
   useBrowserEvents()
-  useEditorContentUpdates()
 
   useEffect(() => {
     const clearConversationDrop = (): void => setConversationDropActive(false)

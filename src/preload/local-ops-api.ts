@@ -1,82 +1,85 @@
 import { ipcRenderer } from 'electron'
-import type { CadApiContract } from '../shared/ipc/cad'
-import type { GitBackupApiContract } from '../shared/ipc/git-backup'
-import type { HardwareApiContract } from '../shared/ipc/hardware'
-import type { ProjectOpsApiContract } from '../shared/ipc/project-ops'
+import { cadIpc, type CadApiContract } from '../shared/ipc/cad'
+import { gitBackupIpc, type GitBackupApiContract } from '../shared/ipc/git-backup'
+import { hardwareIpc, type HardwareApiContract } from '../shared/ipc/hardware'
+import { projectOpsIpc, type ProjectOpsApiContract } from '../shared/ipc/project-ops'
 import {
+  parseWorkspaceStateFlushRequest,
+  workspaceStateIpc,
   workspaceStateIpcEvents,
   type WorkspaceStateApiContract,
 } from '../shared/ipc/workspace-state'
+import { invokeIpcContract } from './ipc-contract-client'
 
 export const projectOpsApi: ProjectOpsApiContract = {
-  getAccounts: (workspacePath) => ipcRenderer.invoke('projectOps:getAccounts', workspacePath),
+  getAccounts: (workspacePath) => invokeIpcContract(projectOpsIpc.getAccounts, workspacePath),
   createAccountsTemplate: (workspacePath) =>
-    ipcRenderer.invoke('projectOps:createAccountsTemplate', workspacePath),
+    invokeIpcContract(projectOpsIpc.createAccountsTemplate, workspacePath),
   createCopyDraft: (workspacePath, input) =>
-    ipcRenderer.invoke('projectOps:createCopyDraft', workspacePath, input),
+    invokeIpcContract(projectOpsIpc.createCopyDraft, workspacePath, input),
   appendPublicationRecord: (workspacePath, input) =>
-    ipcRenderer.invoke('projectOps:appendPublicationRecord', workspacePath, input),
+    invokeIpcContract(projectOpsIpc.appendPublicationRecord, workspacePath, input),
 }
 
 export const gitBackupApi: GitBackupApiContract = {
-  getAccountStatus: () => ipcRenderer.invoke('gitBackup:getAccountStatus'),
-  saveAccount: (input) => ipcRenderer.invoke('gitBackup:saveAccount', input),
-  clearAccount: () => ipcRenderer.invoke('gitBackup:clearAccount'),
-  testAccount: (input) => ipcRenderer.invoke('gitBackup:testAccount', input),
+  getAccountStatus: () => invokeIpcContract(gitBackupIpc.getAccountStatus),
+  saveAccount: (input) => invokeIpcContract(gitBackupIpc.saveAccount, input),
+  clearAccount: () => invokeIpcContract(gitBackupIpc.clearAccount),
+  testAccount: (input) => invokeIpcContract(gitBackupIpc.testAccount, input),
   getProjectStatus: (workspacePath) =>
-    ipcRenderer.invoke('gitBackup:getProjectStatus', workspacePath),
-  backup: (input) => ipcRenderer.invoke('gitBackup:backup', input),
+    invokeIpcContract(gitBackupIpc.getProjectStatus, workspacePath),
+  backup: (input) => invokeIpcContract(gitBackupIpc.backup, input),
 }
 
 export const hardwareApi: HardwareApiContract = {
-  scanWorkspace: (workspacePath) => ipcRenderer.invoke('hardware:scanWorkspace', workspacePath),
+  scanWorkspace: (workspacePath) => invokeIpcContract(hardwareIpc.scanWorkspace, workspacePath),
   inspectProductionPackage: (workspacePath) =>
-    ipcRenderer.invoke('hardware:inspectProductionPackage', workspacePath),
+    invokeIpcContract(hardwareIpc.inspectProductionPackage, workspacePath),
   prepareFpcShapeContext: (workspacePath) =>
-    ipcRenderer.invoke('hardware:prepareFpcShapeContext', workspacePath),
+    invokeIpcContract(hardwareIpc.prepareFpcShapeContext, workspacePath),
   readGerberLayerPreview: (workspacePath, packagePath, entry) =>
-    ipcRenderer.invoke('hardware:readGerberLayerPreview', workspacePath, packagePath, entry),
+    invokeIpcContract(hardwareIpc.readGerberLayerPreview, workspacePath, packagePath, entry),
   readGerberLayerGeometry: (workspacePath, packagePath, entry) =>
-    ipcRenderer.invoke('hardware:readGerberLayerGeometry', workspacePath, packagePath, entry),
+    invokeIpcContract(hardwareIpc.readGerberLayerGeometry, workspacePath, packagePath, entry),
   writeProductionReportMarkdown: (workspacePath) =>
-    ipcRenderer.invoke('hardware:writeProductionReportMarkdown', workspacePath),
+    invokeIpcContract(hardwareIpc.writeProductionReportMarkdown, workspacePath),
 }
 
 export const cadApi: CadApiContract = {
-  getBackendStatus: () => ipcRenderer.invoke('cad:getBackendStatus'),
-  getModelSupport: (inputPath) => ipcRenderer.invoke('cad:getModelSupport', inputPath),
-  inspectModel: (inputPath) => ipcRenderer.invoke('cad:inspectModel', inputPath),
-  getCacheStatus: () => ipcRenderer.invoke('cad:getCacheStatus'),
-  clearCache: () => ipcRenderer.invoke('cad:clearCache'),
-  convertModel: (request) => ipcRenderer.invoke('cad:convertModel', request),
+  getBackendStatus: () => invokeIpcContract(cadIpc.getBackendStatus),
+  getModelSupport: (inputPath) => invokeIpcContract(cadIpc.getModelSupport, inputPath),
+  inspectModel: (inputPath) => invokeIpcContract(cadIpc.inspectModel, inputPath),
+  getCacheStatus: () => invokeIpcContract(cadIpc.getCacheStatus),
+  clearCache: () => invokeIpcContract(cadIpc.clearCache),
+  convertModel: (request) => invokeIpcContract(cadIpc.convertModel, request),
 }
 
 export const workspaceStateApi: WorkspaceStateApiContract = {
   resolveLocalWorkspace: (workspacePath) =>
-    ipcRenderer.invoke('workspaceState:resolveLocalWorkspace', workspacePath),
+    invokeIpcContract(workspaceStateIpc.resolveLocalWorkspace, workspacePath),
   setActiveLocalWorkspace: (workspacePath) =>
-    ipcRenderer.invoke('workspaceState:setActiveLocalWorkspace', workspacePath),
+    invokeIpcContract(workspaceStateIpc.setActiveLocalWorkspace, workspacePath),
   get: (workspacePath, ownerKey) =>
-    ipcRenderer.invoke('workspaceState:get', workspacePath, ownerKey),
+    invokeIpcContract(workspaceStateIpc.get, workspacePath, ownerKey),
   setSection: (workspacePath, section, value, ownerKey, options) =>
-    options
-      ? ipcRenderer.invoke(
-          'workspaceState:setSection',
-          workspacePath,
-          section,
-          value,
-          ownerKey,
-          options,
-        )
-      : ipcRenderer.invoke('workspaceState:setSection', workspacePath, section, value, ownerKey),
+    invokeIpcContract(
+      workspaceStateIpc.setSection,
+      workspacePath,
+      section,
+      value,
+      ownerKey,
+      options,
+    ),
   clear: (workspacePath, ownerKey) =>
-    ipcRenderer.invoke('workspaceState:clear', workspacePath, ownerKey),
+    invokeIpcContract(workspaceStateIpc.clear, workspacePath, ownerKey),
   listLocalWorkspaces: (ownerKey) =>
-    ipcRenderer.invoke('workspaceState:listLocalWorkspaces', ownerKey),
-  diagnostics: () => ipcRenderer.invoke('workspaceState:diagnostics'),
+    invokeIpcContract(workspaceStateIpc.listLocalWorkspaces, ownerKey),
+  diagnostics: () => invokeIpcContract(workspaceStateIpc.diagnostics),
   onFlushRequest: (callback) => {
-    const listener = (_event: Electron.IpcRendererEvent, requestId: string): void =>
-      callback(requestId)
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const requestId = parseWorkspaceStateFlushRequest(value)
+      if (requestId) callback(requestId)
+    }
     ipcRenderer.on(workspaceStateIpcEvents.flushRequest, listener)
     return () => ipcRenderer.removeListener(workspaceStateIpcEvents.flushRequest, listener)
   },

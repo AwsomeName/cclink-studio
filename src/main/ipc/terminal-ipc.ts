@@ -1,15 +1,14 @@
 import type { IpcMainInvokeEvent, WebContents } from 'electron'
-import { z } from 'zod'
 import type {
   TerminalAuditListFilter,
   TerminalLifecycleAuditInput,
   TerminalLifecycleAuditKind,
-  TerminalPtyResizeInput,
-  TerminalPtyStartInput,
-  TerminalPtyWriteInput,
   TerminalSessionSnapshot,
   TerminalSubmitCommandInput,
 } from '../../shared/ipc/terminal'
+import { terminalIpcEvents } from '../../shared/ipc/terminal'
+import { terminalIpcContracts as terminalIpc } from '../../shared/ipc/terminal-contract'
+import type { IpcInvokeContract } from '../../shared/ipc/contract'
 import {
   isTerminalFinalStatus,
   type TerminalCommandActor,
@@ -31,8 +30,7 @@ import type {
 import type { TerminalSessionState } from '../terminal/terminal-session-state'
 import { canTransitionTerminalStatus } from '../terminal/terminal-session-state'
 import type { TrustedRendererGuard } from './trusted-renderer-guard'
-import { registerTrustedIpcHandler } from './trusted-renderer-guard'
-import { workspaceRefSchema } from '../../shared/ipc/workspace-ref-schema'
+import { registerTrustedIpcContract } from './trusted-renderer-guard'
 
 export function registerTerminalIpc(
   terminalConfirmationService: TerminalConfirmationService | null | undefined,
@@ -43,25 +41,13 @@ export function registerTerminalIpc(
   terminalExecutionAdapter?: TerminalExecutionAdapter,
   webContents?: WebContents,
   terminalSessionStore?: TerminalSessionStore,
-): void {
+): () => void {
   const handle = <Args extends unknown[], Result>(
-    channel: string,
-    handler: (event: IpcMainInvokeEvent, ...args: Args) => Result,
-  ): void => registerTrustedIpcHandler(channel, trustedRendererGuard, handler)
+    contract: IpcInvokeContract<Args, Result>,
+    handler: (event: IpcMainInvokeEvent, ...args: Args) => Result | Promise<Result>,
+  ): void => registerTrustedIpcContract(contract, trustedRendererGuard, handler)
 
-  if (terminalExecutionAdapter) {
-    terminalExecutionAdapter.onEvent((event) => {
-      void syncTerminalExecutionEvent(
-        event,
-        terminalSessionRegistry,
-        terminalAuditStore,
-        terminalSessionStore,
-      )
-      webContents?.send('terminal:executionEvent', event)
-    })
-  }
-
-  handle('terminal:resolveCommandConfirmation', (_event, id: string, approved: boolean) => {
+  handle(terminalIpc.resolveCommandConfirmation, (_event, id, approved) => {
     if (!terminalConfirmationService) {
       return { success: false, error: 'Terminal 确认服务未就绪' }
     }
@@ -70,7 +56,7 @@ export function registerTerminalIpc(
     }
   })
 
-  handle('terminal:recordLifecycleEvent', async (_event, input?: TerminalLifecycleAuditInput) => {
+  handle(terminalIpc.recordLifecycleEvent, async (_event, input) => {
     if (!terminalAuditStore) return { success: false, error: 'Terminal 审计存储未就绪' }
     const normalized = normalizeLifecycleAuditInput(input)
     if (!normalized) {
@@ -87,16 +73,16 @@ export function registerTerminalIpc(
     return { success: true }
   })
 
-  handle('terminal:listAuditEvents', async (_event, filter?: TerminalAuditListFilter) => {
+  handle(terminalIpc.listAuditEvents, async (_event, filter?: TerminalAuditListFilter) => {
     if (!terminalAuditStore) return []
     return terminalAuditStore.listEvents(normalizeAuditFilter(filter))
   })
 
-  handle('terminal:listSessions', async () => {
+  handle(terminalIpc.listSessions, async () => {
     return listTerminalSessions(terminalSessionRegistry, terminalSessionStore)
   })
 
-  handle('terminal:submitCommand', async (_event, input?: TerminalSubmitCommandInput) => {
+  handle(terminalIpc.submitCommand, async (_event, input) => {
     if (!terminalCommandOrchestrator) {
       return {
         success: false,
@@ -123,14 +109,12 @@ export function registerTerminalIpc(
     return result
   })
 
-  handle('terminal:startPty', async (_event, input?: TerminalPtyStartInput) => {
+  handle(terminalIpc.startPty, async (_event, input) => {
     if (!terminalExecutionAdapter || !terminalSessionRegistry) {
       return { success: false, error: 'Terminal PTY 执行后端未就绪' }
     }
-    const normalized = normalizePtyStartInput(input)
-    if (!normalized) return { success: false, error: 'Terminal PTY 启动参数无效' }
-    const persisted = await terminalSessionStore?.getSession(normalized.terminalSessionId)
-    const registered = terminalSessionRegistry.get(normalized.terminalSessionId)
+    const persisted = await terminalSessionStore?.getSession(input.terminalSessionId)
+    const registered = terminalSessionRegistry.get(input.terminalSessionId)
     if (
       (registered && isTerminalFinalStatus(registered.status)) ||
       (persisted && isTerminalFinalStatus(persisted.status))
@@ -142,26 +126,26 @@ export function registerTerminalIpc(
     }
     if (!registered) {
       terminalSessionRegistry.register({
-        sessionId: normalized.terminalSessionId,
-        runtime: normalized.runtime,
+        sessionId: input.terminalSessionId,
+        runtime: input.runtime,
       })
     }
-    const startingSession = terminalSessionRegistry.get(normalized.terminalSessionId)
+    const startingSession = terminalSessionRegistry.get(input.terminalSessionId)
     if (startingSession?.status === 'idle') {
-      terminalSessionRegistry.transition(normalized.terminalSessionId, 'starting')
+      terminalSessionRegistry.transition(input.terminalSessionId, 'starting')
     }
     await terminalSessionStore?.upsertSession({
-      sessionId: normalized.terminalSessionId,
-      runtime: normalized.runtime,
+      sessionId: input.terminalSessionId,
+      runtime: input.runtime,
       status: 'starting',
       attachable: false,
     })
 
     try {
       const result = await terminalExecutionAdapter.start({
-        sessionId: normalized.terminalSessionId,
-        runtime: normalized.runtime,
-        size: normalized.size,
+        sessionId: input.terminalSessionId,
+        runtime: input.runtime,
+        size: input.size,
         ...(persisted?.attachable && persisted.processId
           ? { resume: { processId: persisted.processId } }
           : {}),
@@ -169,14 +153,14 @@ export function registerTerminalIpc(
       return { success: true, processId: result.processId }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      const failedSession = terminalSessionRegistry.get(normalized.terminalSessionId)
+      const failedSession = terminalSessionRegistry.get(input.terminalSessionId)
       if (failedSession && canTransitionTerminalStatus(failedSession.status, 'error')) {
-        terminalSessionRegistry.transition(normalized.terminalSessionId, 'error', {
+        terminalSessionRegistry.transition(input.terminalSessionId, 'error', {
           errorMessage: message,
         })
       }
       await terminalSessionStore?.patchSession({
-        sessionId: normalized.terminalSessionId,
+        sessionId: input.terminalSessionId,
         status: 'error',
         attachable: false,
         errorMessage: message,
@@ -188,14 +172,12 @@ export function registerTerminalIpc(
     }
   })
 
-  handle('terminal:writePty', async (_event, input?: TerminalPtyWriteInput) => {
+  handle(terminalIpc.writePty, async (_event, input) => {
     if (!terminalExecutionAdapter) return { success: false, error: 'Terminal PTY 执行后端未就绪' }
-    const normalized = normalizePtyWriteInput(input)
-    if (!normalized) return { success: false, error: 'Terminal PTY 写入参数无效' }
     try {
       await terminalExecutionAdapter.write({
-        sessionId: normalized.terminalSessionId,
-        data: normalized.data,
+        sessionId: input.terminalSessionId,
+        data: input.data,
         actor: 'user',
       })
       return { success: true }
@@ -207,12 +189,10 @@ export function registerTerminalIpc(
     }
   })
 
-  handle('terminal:resizePty', async (_event, input?: TerminalPtyResizeInput) => {
+  handle(terminalIpc.resizePty, async (_event, input) => {
     if (!terminalExecutionAdapter) return { success: false, error: 'Terminal PTY 执行后端未就绪' }
-    const normalized = normalizePtyResizeInput(input)
-    if (!normalized) return { success: false, error: 'Terminal PTY resize 参数无效' }
     try {
-      await terminalExecutionAdapter.resize(normalized.terminalSessionId, normalized.size)
+      await terminalExecutionAdapter.resize(input.terminalSessionId, input.size)
       return { success: true }
     } catch (error) {
       return {
@@ -222,22 +202,19 @@ export function registerTerminalIpc(
     }
   })
 
-  handle('terminal:terminatePty', async (_event, terminalSessionId?: string) => {
+  handle(terminalIpc.terminatePty, async (_event, terminalSessionId) => {
     if (!terminalExecutionAdapter) return { success: false, error: 'Terminal PTY 执行后端未就绪' }
-    if (typeof terminalSessionId !== 'string' || !terminalSessionId.trim()) {
-      return { success: false, error: 'terminalSessionId 不能为空' }
-    }
     try {
-      await terminalExecutionAdapter.terminate(terminalSessionId.trim())
-      const session = terminalSessionRegistry?.get(terminalSessionId.trim())
+      await terminalExecutionAdapter.terminate(terminalSessionId)
+      const session = terminalSessionRegistry?.get(terminalSessionId)
       if (session && canTransitionTerminalStatus(session.status, 'exited')) {
-        terminalSessionRegistry?.transition(terminalSessionId.trim(), 'exited', {
+        terminalSessionRegistry?.transition(terminalSessionId, 'exited', {
           errorMessage: 'Terminal PTY 已请求终止',
         })
       }
-      terminalSessionRegistry?.remove(terminalSessionId.trim())
+      terminalSessionRegistry?.remove(terminalSessionId)
       await terminalSessionStore?.patchSession({
-        sessionId: terminalSessionId.trim(),
+        sessionId: terminalSessionId,
         status: 'exited',
         attachable: false,
         errorMessage: 'Terminal PTY 已请求终止',
@@ -252,7 +229,7 @@ export function registerTerminalIpc(
     }
   })
 
-  handle('terminal:clearAuditSession', async (_event, terminalSessionId: string) => {
+  handle(terminalIpc.clearAuditSession, async (_event, terminalSessionId) => {
     if (!terminalAuditStore) return { success: false, error: 'Terminal 审计存储未就绪' }
     if (!terminalSessionId || typeof terminalSessionId !== 'string') {
       return { success: false, error: 'terminalSessionId 不能为空' }
@@ -262,12 +239,32 @@ export function registerTerminalIpc(
     return { success: true }
   })
 
-  handle('terminal:clearAuditEvents', async () => {
+  handle(terminalIpc.clearAuditEvents, async () => {
     if (!terminalAuditStore) return { success: false, error: 'Terminal 审计存储未就绪' }
     await terminalAuditStore.clearAll()
     await terminalSessionStore?.clearAll()
     return { success: true }
   })
+
+  const unsubscribe = terminalExecutionAdapter?.onEvent((event) => {
+    void syncTerminalExecutionEvent(
+      event,
+      terminalSessionRegistry,
+      terminalAuditStore,
+      terminalSessionStore,
+    )
+    webContents?.send(terminalIpcEvents.executionEvent, event)
+  })
+  return createIdempotentDisposer(unsubscribe)
+}
+
+function createIdempotentDisposer(dispose?: () => void): () => void {
+  let disposed = false
+  return () => {
+    if (disposed) return
+    disposed = true
+    dispose?.()
+  }
 }
 
 function normalizeAuditFilter(filter?: TerminalAuditListFilter): TerminalAuditListFilter {
@@ -341,58 +338,6 @@ function normalizeSubmitCommandInput(
     workspaceKey: typeof input.workspaceKey === 'string' ? input.workspaceKey : null,
   }
 }
-
-function normalizePtyStartInput(input?: TerminalPtyStartInput): TerminalPtyStartInput | null {
-  const parsed = terminalPtyStartSchema.safeParse(input)
-  return parsed.success ? parsed.data : null
-}
-
-function normalizePtyWriteInput(input?: TerminalPtyWriteInput): TerminalPtyWriteInput | null {
-  const parsed = terminalPtyWriteSchema.safeParse(input)
-  return parsed.success ? parsed.data : null
-}
-
-function normalizePtyResizeInput(input?: TerminalPtyResizeInput): TerminalPtyResizeInput | null {
-  const parsed = terminalPtyResizeSchema.safeParse(input)
-  return parsed.success ? parsed.data : null
-}
-
-const terminalIdSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(256)
-  .regex(/^[^\0\r\n]+$/u)
-const terminalSizeSchema = z
-  .object({
-    columns: z.number().int().min(2).max(500),
-    rows: z.number().int().min(2).max(200),
-  })
-  .strict()
-const terminalRuntimeSchema = z
-  .object({
-    location: z.enum(['local', 'remote']),
-    transport: z.enum(['local', 'cclink']),
-    backend: z.enum(['local-shell', 'remote-shell', 'codex', 'custom']),
-    workspaceRef: workspaceRefSchema,
-    cwd: z.string().min(1).max(32_768).optional(),
-    shell: z.string().min(1).max(4_096).optional(),
-    endpointId: z.string().trim().min(1).max(256).optional(),
-  })
-  .strict()
-const terminalPtyStartSchema = z
-  .object({
-    terminalSessionId: terminalIdSchema,
-    runtime: terminalRuntimeSchema,
-    size: terminalSizeSchema.optional().default({ columns: 80, rows: 24 }),
-  })
-  .strict()
-const terminalPtyWriteSchema = z
-  .object({ terminalSessionId: terminalIdSchema, data: z.string().min(1).max(100_000) })
-  .strict()
-const terminalPtyResizeSchema = z
-  .object({ terminalSessionId: terminalIdSchema, size: terminalSizeSchema })
-  .strict()
 
 function normalizePermissionPolicy(
   policy?: TerminalPermissionPolicy,

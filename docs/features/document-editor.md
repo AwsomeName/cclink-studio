@@ -81,7 +81,9 @@ Markdown S 级保持单一所见即所得文档体验，只支持明确列出的
 
 ## MCP 工具集成 ✅ 已实现
 
-Agent 通过 `EditorToolModule`（`src/main/mcp/modules/editor/index.ts`）操作编辑器，共 **5 个工具**，通过 IPC 推送内容到渲染进程并等待 ack 确认（30s 超时）：
+Agent 通过 `EditorToolModule`（`src/main/mcp/modules/editor/index.ts`）操作编辑器，共 **6 个工具**。
+写入、追加和插入由主进程直接写入并回读校验目标文件；读取当前活跃编辑器和请求保存仍通过有界
+IPC 请求/响应完成：
 
 | 工具            | 说明                                                      |
 | --------------- | --------------------------------------------------------- |
@@ -89,9 +91,13 @@ Agent 通过 `EditorToolModule`（`src/main/mcp/modules/editor/index.ts`）操�
 | `editor_append` | 在文档末尾追加 Markdown                                   |
 | `editor_insert` | 在指定位置（start/end）插入 Markdown                      |
 | `editor_read`   | 读取当前编辑器的 Markdown 内容                            |
+| `editor_list`   | 列出本地目录中的文件和子目录                              |
 | `editor_save`   | 保存当前编辑器内容到磁盘（需已关联文件路径）              |
 
-**数据流**：Agent 调用工具 → 主进程 `EditorToolModule` 通过 IPC 推送 `editor:contentUpdate` / `readRequest` / `saveRequest` → 渲染进程 `MarkdownEditor` 应用变更并回 `ack` / `readResponse` / `saveResult` → Promise 解析返回 Agent。
+**数据流**：`editor_write/append/insert` → 主进程文件服务写入并回读校验；无明确文件路径的
+`editor_read` → `editor:readRequest/readResponse`；`editor_save` → `editor:saveRequest/saveResult`。
+历史 `editor:contentUpdate/contentUpdateAck` 没有 main 生产者，已作为死接口删除，不再作为产品能力
+或 renderer API 对外声明。
 
 ## 开发任务拆解
 

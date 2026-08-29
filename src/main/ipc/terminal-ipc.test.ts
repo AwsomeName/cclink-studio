@@ -18,8 +18,8 @@ const trustedRendererGuard = {
   isTrusted: vi.fn(() => true),
 }
 
-function registerTerminalIpc(...args: any[]): void {
-  ;(registerProductionTerminalIpc as (...values: any[]) => void)(
+function registerTerminalIpc(...args: any[]): () => void {
+  return (registerProductionTerminalIpc as (...values: any[]) => () => void)(
     args[0],
     trustedRendererGuard,
     ...args.slice(1),
@@ -86,6 +86,39 @@ describe('registerTerminalIpc', () => {
 
     const handler = mockIpcMain.handlers.get('terminal:resolveCommandConfirmation')
     expect(handler?.({}, 'missing', false)).toEqual({ success: false })
+  })
+
+  it('does not subscribe to execution events when handler registration fails', () => {
+    const onEvent = vi.fn(() => vi.fn())
+    const failingGuard = {
+      assert: vi.fn(),
+      isTrusted: vi.fn(() => true),
+      ipcRegistrations: {
+        handle: vi.fn(() => {
+          throw new Error('handler registration failed')
+        }),
+      },
+    }
+
+    expect(() =>
+      registerProductionTerminalIpc(null, failingGuard as never, undefined, undefined, undefined, {
+        onEvent,
+      } as never),
+    ).toThrow('handler registration failed')
+    expect(onEvent).not.toHaveBeenCalled()
+  })
+
+  it('returns an idempotent execution event disposer after all handlers register', () => {
+    const unsubscribe = vi.fn()
+    const onEvent = vi.fn(() => unsubscribe)
+
+    const dispose = registerTerminalIpc(null, undefined, undefined, undefined, { onEvent } as never)
+
+    expect(mockIpcMain.handle).toHaveBeenCalledTimes(11)
+    expect(onEvent).toHaveBeenCalledOnce()
+    dispose()
+    dispose()
+    expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
   it('lists terminal audit events with a normalized filter', async () => {
@@ -167,6 +200,46 @@ describe('registerTerminalIpc', () => {
     registerTerminalIpc({ resolveConfirmation: vi.fn() } as any, { listEvents: vi.fn() } as any)
 
     await expect(mockIpcMain.handlers.get('terminal:listSessions')?.({})).resolves.toEqual([])
+  })
+
+  it('uses the approved parser-first priority for malformed PTY starts', async () => {
+    registerTerminalIpc(null)
+
+    await expect(
+      mockIpcMain.handlers.get('terminal:startPty')?.({}, { terminalSessionId: '' }),
+    ).resolves.toEqual({ success: false, error: 'Terminal PTY 启动参数无效' })
+  })
+
+  it('rejects malformed PTY starts before calling an available adapter', async () => {
+    const terminalExecutionAdapter = {
+      onEvent: vi.fn(() => vi.fn()),
+      start: vi.fn(),
+    } as any
+    const terminalSessionRegistry = { get: vi.fn() } as any
+
+    registerTerminalIpc(
+      null,
+      undefined,
+      terminalSessionRegistry,
+      undefined,
+      terminalExecutionAdapter,
+    )
+
+    await expect(
+      mockIpcMain.handlers.get('terminal:startPty')?.({}, { terminalSessionId: '' }),
+    ).resolves.toEqual({ success: false, error: 'Terminal PTY 启动参数无效' })
+    expect(terminalExecutionAdapter.start).not.toHaveBeenCalled()
+  })
+
+  it('reports an unavailable PTY backend for a valid start request', async () => {
+    registerTerminalIpc(null)
+
+    await expect(
+      mockIpcMain.handlers.get('terminal:startPty')?.(
+        {},
+        { terminalSessionId: 'terminal-1', runtime: terminalRuntime },
+      ),
+    ).resolves.toEqual({ success: false, error: 'Terminal PTY 执行后端未就绪' })
   })
 
   it('updates the authoritative terminal registry before publishing execution events', () => {
@@ -523,6 +596,41 @@ describe('registerTerminalIpc', () => {
     expect(terminalCommandOrchestrator.submitCommand).not.toHaveBeenCalled()
   })
 
+  it('returns parser errors before unavailable Terminal services for structured inputs', async () => {
+    registerTerminalIpc(null)
+
+    await expect(
+      mockIpcMain.handlers.get('terminal:submitCommand')?.(
+        {},
+        {
+          terminalSessionId: 'terminal-1',
+          command: 'pwd',
+          actor: 'robot',
+          permissionPolicy: {
+            mode: 'ask-risky-command',
+            requireConfirmationFor: ['write'],
+          },
+        },
+      ),
+    ).resolves.toEqual({
+      success: false,
+      status: 'rejected',
+      error: 'Terminal 命令提交参数无效',
+    })
+    await expect(
+      mockIpcMain.handlers.get('terminal:recordLifecycleEvent')?.(
+        {},
+        {
+          terminalSessionId: 'terminal-1',
+          kind: 'command-submitted',
+        },
+      ),
+    ).resolves.toEqual({
+      success: false,
+      error: 'Terminal 生命周期审计事件无效',
+    })
+  })
+
   it('records terminal lifecycle audit events with sanitized input', async () => {
     const terminalAuditStore = {
       recordEvent: vi.fn(async () => undefined),
@@ -560,11 +668,22 @@ describe('registerTerminalIpc', () => {
       remove: vi.fn(),
       transition: vi.fn(),
     } as any
+    const terminalSessionStore = {
+      upsertSession: vi.fn(async () => undefined),
+    } as any
+    const permissionPolicy = {
+      mode: 'ask-risky-command',
+      requireConfirmationFor: ['write'],
+    }
 
     registerTerminalIpc(
       { resolveConfirmation: vi.fn() } as any,
       terminalAuditStore,
       terminalSessionRegistry,
+      undefined,
+      undefined,
+      undefined,
+      terminalSessionStore,
     )
 
     const handler = mockIpcMain.handlers.get('terminal:recordLifecycleEvent')
@@ -576,6 +695,8 @@ describe('registerTerminalIpc', () => {
           workspaceKey: '/workspace',
           kind: 'created',
           runtime: terminalRuntime,
+          permissionPolicy,
+          closePolicy: 'keep-running',
         },
       ),
     ).resolves.toEqual({ success: true })
@@ -583,6 +704,14 @@ describe('registerTerminalIpc', () => {
     expect(terminalSessionRegistry.register).toHaveBeenCalledWith({
       sessionId: 'terminal-1',
       runtime: terminalRuntime,
+    })
+    expect(terminalSessionStore.upsertSession).toHaveBeenCalledWith({
+      sessionId: 'terminal-1',
+      runtime: terminalRuntime,
+      status: 'idle',
+      permissionPolicy,
+      closePolicy: 'keep-running',
+      attachable: false,
     })
     expect(terminalAuditStore.recordEvent).toHaveBeenCalledWith({
       terminalSessionId: 'terminal-1',

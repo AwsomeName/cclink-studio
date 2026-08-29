@@ -1,4 +1,5 @@
 import type { CadBackend } from '../settings-constants'
+import { defineIpcCall } from './contract'
 
 export type CadPreviewFormat = 'stl' | 'obj' | 'glb'
 
@@ -126,3 +127,12 @@ export interface CadApiContract {
   clearCache(): Promise<CadCacheStatus>
   convertModel(request: CadConvertRequest): Promise<CadConvertResult>
 }
+
+export const cadIpc = {
+  getBackendStatus: defineIpcCall<[], CadBackendStatus>('cad:getBackendStatus'),
+  getModelSupport: defineIpcCall<[inputPath: string], CadModelSupport>('cad:getModelSupport'),
+  inspectModel: defineIpcCall<[inputPath: string], CadInspectModelResult>('cad:inspectModel'),
+  getCacheStatus: defineIpcCall<[], CadCacheStatus>('cad:getCacheStatus'),
+  clearCache: defineIpcCall<[], CadCacheStatus>('cad:clearCache'),
+  convertModel: defineIpcCall<[request: CadConvertRequest], CadConvertResult>('cad:convertModel'),
+} as const

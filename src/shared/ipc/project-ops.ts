@@ -62,3 +62,21 @@ export interface ProjectOpsApiContract {
     input: ProjectOpsPublicationRecordInput,
   ) => Promise<ProjectOpsPublicationRecordResult>
 }
+
+export const projectOpsIpc = {
+  getAccounts: defineIpcCall<[workspacePath: string], ProjectOpsAccountsResult>(
+    'projectOps:getAccounts',
+  ),
+  createAccountsTemplate: defineIpcCall<[workspacePath: string], ProjectOpsAccountsResult>(
+    'projectOps:createAccountsTemplate',
+  ),
+  createCopyDraft: defineIpcCall<
+    [workspacePath: string, input: ProjectOpsCreateDraftInput | undefined],
+    ProjectOpsCreateDraftResult
+  >('projectOps:createCopyDraft'),
+  appendPublicationRecord: defineIpcCall<
+    [workspacePath: string, input: ProjectOpsPublicationRecordInput],
+    ProjectOpsPublicationRecordResult
+  >('projectOps:appendPublicationRecord'),
+} as const
+import { defineIpcCall } from './contract'

@@ -4,9 +4,10 @@ import type {
   TerminalAuditEventKind,
   TerminalCommandConfirmationRequest,
 } from '../../shared/terminal'
+import { terminalIpcEvents } from '../../shared/ipc/terminal'
 import type { TerminalAuditStore } from './terminal-audit-store'
 
-export const TERMINAL_CONFIRMATION_CHANNEL = 'terminal:requestCommandConfirmation'
+export const TERMINAL_CONFIRMATION_CHANNEL = terminalIpcEvents.requestCommandConfirmation
 
 export const DEFAULT_TERMINAL_CONFIRMATION_TIMEOUT_MS = 60_000
 

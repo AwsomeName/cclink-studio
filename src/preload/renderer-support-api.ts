@@ -1,6 +1,12 @@
 import { ipcRenderer } from 'electron'
 import { dialogIpc, type DialogApiContract } from '../shared/ipc/dialog'
-import type { EditorApiContract } from '../shared/ipc/editor'
+import {
+  editorIpc,
+  editorIpcEvents,
+  parseEditorReadRequest,
+  parseEditorSaveRequest,
+  type EditorApiContract,
+} from '../shared/ipc/editor'
 import { identityIpc, type IdentityApiContract } from '../shared/ipc/identity'
 import type { UpdateApiContract } from '../shared/ipc/update'
 import {
@@ -9,7 +15,7 @@ import {
   updateSnapshotChangedChannel,
   updateSnapshotChangedEventSchema,
 } from '../shared/update'
-import type { WechatApiContract } from '../shared/ipc/wechat'
+import { wechatIpc, type WechatApiContract } from '../shared/ipc/wechat'
 import {
   windowIpc,
   windowIpcEvents,
@@ -45,41 +51,45 @@ export const dialogApi: DialogApiContract = {
 
 export const wechatApi: WechatApiContract = {
   convert: (markdown, documentPath) =>
-    ipcRenderer.invoke('wechat:convert', { markdown, documentPath }),
+    invokeIpcContract(wechatIpc.convert, { markdown, documentPath }),
+}
+
+type OwnedEditorListener = (event: Electron.IpcRendererEvent, ...args: unknown[]) => void
+
+const ownedEditorListeners = new Map<string, OwnedEditorListener>()
+
+function replaceOwnedEditorListener(channel: string, listener: OwnedEditorListener): () => void {
+  const previous = ownedEditorListeners.get(channel)
+  if (previous) ipcRenderer.removeListener(channel, previous)
+  ownedEditorListeners.set(channel, listener)
+  ipcRenderer.on(channel, listener)
+
+  let disposed = false
+  return () => {
+    if (disposed) return
+    disposed = true
+    ipcRenderer.removeListener(channel, listener)
+    if (ownedEditorListeners.get(channel) === listener) ownedEditorListeners.delete(channel)
+  }
 }
 
 export const editorApi: EditorApiContract = {
-  onContentUpdate: (callback) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      data: Parameters<typeof callback>[0],
-    ): void => callback(data)
-    ipcRenderer.removeAllListeners('editor:contentUpdate')
-    ipcRenderer.on('editor:contentUpdate', handler)
-    return () => ipcRenderer.removeListener('editor:contentUpdate', handler)
-  },
-  contentUpdateAck: (id, success = true, error) =>
-    ipcRenderer.invoke('editor:contentUpdateAck', id, success, error),
   onReadRequest: (callback) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      data: Parameters<typeof callback>[0],
-    ): void => callback(data)
-    ipcRenderer.removeAllListeners('editor:readRequest')
-    ipcRenderer.on('editor:readRequest', handler)
-    return () => ipcRenderer.removeListener('editor:readRequest', handler)
+    const handler: OwnedEditorListener = (_event, data): void => {
+      const request = parseEditorReadRequest(data)
+      if (request) callback(request)
+    }
+    return replaceOwnedEditorListener(editorIpcEvents.readRequest, handler)
   },
-  readResponse: (id, content) => ipcRenderer.invoke('editor:readResponse', id, content),
+  readResponse: (id, content) => invokeIpcContract(editorIpc.readResponse, id, content),
   onSaveRequest: (callback) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      data: Parameters<typeof callback>[0],
-    ): void => callback(data)
-    ipcRenderer.removeAllListeners('editor:saveRequest')
-    ipcRenderer.on('editor:saveRequest', handler)
-    return () => ipcRenderer.removeListener('editor:saveRequest', handler)
+    const handler: OwnedEditorListener = (_event, data): void => {
+      const request = parseEditorSaveRequest(data)
+      if (request) callback(request)
+    }
+    return replaceOwnedEditorListener(editorIpcEvents.saveRequest, handler)
   },
-  saveResult: (id, success, error) => ipcRenderer.invoke('editor:saveResult', id, success, error),
+  saveResult: (id, success, error) => invokeIpcContract(editorIpc.saveResult, id, success, error),
 }
 
 export const updateApi: UpdateApiContract = {

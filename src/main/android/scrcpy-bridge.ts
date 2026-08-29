@@ -19,6 +19,7 @@ import { app, type BrowserWindow } from 'electron'
 import { AdbServerClient, type Adb } from '@yume-chan/adb'
 import { AdbScrcpyClient, AdbScrcpyOptions2_3 } from '@yume-chan/adb-scrcpy'
 import { AndroidMotionEventAction } from '@yume-chan/scrcpy'
+import { androidIpcEvents } from '../../shared/ipc/android'
 import { PushReadableStream, type MaybeConsumable } from '@yume-chan/stream-extra'
 import { NodeAdbServerConnector } from './node-adb-connector'
 import { selectScrcpyServerResource, type ScrcpyServerResource } from './scrcpy-server-resource'
@@ -196,18 +197,18 @@ export class ScrcpyBridge {
           }
 
           if (!this.mainWindow.isDestroyed()) {
-            this.mainWindow.webContents.send('scrcpy:videoFrame', frame)
+            this.mainWindow.webContents.send(androidIpcEvents.videoFrame, frame)
           }
         }
       } catch (err: any) {
         console.error('[ScrcpyBridge] 视频流错误:', err.message)
         if (!this.mainWindow.isDestroyed()) {
-          this.mainWindow.webContents.send('scrcpy:error', err.message)
+          this.mainWindow.webContents.send(androidIpcEvents.mirrorError, err.message)
         }
       } finally {
         this._connected = false
         if (!this.mainWindow.isDestroyed()) {
-          this.mainWindow.webContents.send('scrcpy:disconnected')
+          this.mainWindow.webContents.send(androidIpcEvents.mirrorDisconnected)
         }
       }
     }

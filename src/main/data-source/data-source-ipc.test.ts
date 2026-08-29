@@ -41,6 +41,25 @@ describe('registerDataSourceIpc', () => {
     expect(service.createSource).not.toHaveBeenCalled()
   })
 
+  it('does not echo submitted credentials in parse failures', async () => {
+    const service = createService()
+    registerDataSourceIpc(service as never, createGuard('trusted') as never)
+    const secret = 'credential-that-must-not-leak'
+
+    const result = await mockIpcMain.handlers.get('data-source:create')?.(
+      { sender: 'trusted' },
+      {
+        type: 'elasticsearch',
+        name: '',
+        endpoint: 'file:///tmp/index',
+        secret: { authType: 'bearer', token: secret },
+      },
+    )
+
+    expect(JSON.stringify(result)).not.toContain(secret)
+    expect(service.createSource).not.toHaveBeenCalled()
+  })
+
   it('passes a trusted valid source to the service', async () => {
     const service = createService()
     registerDataSourceIpc(service as never, createGuard('trusted') as never)
@@ -61,6 +80,40 @@ describe('registerDataSourceIpc', () => {
 
     await expect(
       mockIpcMain.handlers.get('data-source:list')?.({ sender: 'trusted' }),
+    ).resolves.toEqual({
+      success: false,
+      error: {
+        code: 'DATA_SOURCE_INTERNAL_ERROR',
+        message: '数据源能力当前不可用，请查看 Agent 能力状态',
+      },
+    })
+  })
+
+  it('uses the approved parser-first priority when input and service are both invalid', async () => {
+    registerDataSourceIpc(() => null, createGuard('trusted') as never)
+
+    await expect(
+      mockIpcMain.handlers.get('data-source:create')?.(
+        { sender: 'trusted' },
+        { type: 'elasticsearch', name: '', endpoint: 'file:///tmp/index' },
+      ),
+    ).resolves.toEqual({
+      success: false,
+      error: {
+        code: 'DATA_SOURCE_QUERY_INVALID',
+        message: expect.any(String),
+      },
+    })
+  })
+
+  it('reports service unavailability for a valid create request', async () => {
+    registerDataSourceIpc(() => null, createGuard('trusted') as never)
+
+    await expect(
+      mockIpcMain.handlers.get('data-source:create')?.(
+        { sender: 'trusted' },
+        { type: 'elasticsearch', name: 'Research', endpoint: 'https://search.example.com' },
+      ),
     ).resolves.toEqual({
       success: false,
       error: {

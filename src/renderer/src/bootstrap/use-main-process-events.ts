@@ -9,23 +9,8 @@ export function useMainProcessEvents(): void {
     const offProgress = window.cclinkStudio.android.onStoreInstallProgress((msg) => {
       setStoreInstall({ phase: 'installing', message: msg })
     })
-    const offResult = window.cclinkStudio.android.onStoreInstallResult((result) => {
-      if (result.status === 'failed') {
-        setStoreInstall({ phase: 'failed', message: result.message })
-      } else {
-        setStoreInstall({
-          phase: 'done',
-          message:
-            result.status === 'installed'
-              ? `已安装 ${result.displayName}`
-              : `${result.displayName} 已就绪`,
-        })
-        setTimeout(() => setStoreInstall({ phase: 'idle' }), 4000)
-      }
-    })
     return () => {
       offProgress()
-      offResult()
     }
   }, [])
 

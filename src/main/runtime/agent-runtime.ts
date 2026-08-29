@@ -124,6 +124,28 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
           agentDeviceAvailable: () => runtime.agentDeviceManager?.isAvailable() ?? false,
           browserManager: runtime.browserManager ?? undefined,
           browserTaskRuntime: runtime.browserTaskRuntime ?? undefined,
+          onCorrelatedBrowserTaskEnded: async (input) => {
+            const service = runtime.webAffairService
+            const workspaceState = runtime.workspaceStateService
+            if (!service || !workspaceState) return
+            const workspaceId = await workspaceState.getLocalProjectId(input.workspacePath)
+            if (!workspaceId) return
+            const result = await service.interruptArticlePublishingRuntime(
+              input.affairId,
+              input.attemptId,
+              input.reason,
+              workspaceId,
+            )
+            if (!result.success && result.error.code !== 'NOT_FOUND') {
+              console.warn('[ArticlePublishing] 运行终态未能收敛发布 Attempt', {
+                affairId: input.affairId,
+                attemptId: input.attemptId,
+                browserTaskRunId: input.browserTaskRunId,
+                code: result.error.code,
+                message: result.error.message,
+              })
+            }
+          },
           usageLedgerService: runtime.usageLedgerService ?? undefined,
           roleRegistry: runtime.agentRoleRegistry ?? undefined,
           runtimeStateStore: runtime.agentRuntimeStateStore,

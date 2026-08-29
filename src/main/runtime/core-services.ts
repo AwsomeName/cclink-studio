@@ -574,6 +574,10 @@ export async function shutdownMainProcessServices(
       sessions.map((session) => runtime.terminalExecutionAdapter?.terminate(session.sessionId)),
     )
   })
+  await runShutdownStep('TerminalExecutionEventSubscription', () => {
+    runtime.terminalExecutionEventUnsubscribe?.()
+    runtime.terminalExecutionEventUnsubscribe = null
+  })
   await runShutdownStep('TerminalSessionRegistry', () => runtime.terminalSessionRegistry?.clear())
   await runShutdownStep('WebAffairService', () => runtime.webAffairService?.flush())
   await runShutdownStep('WebResourceService', () => runtime.webResourceService?.flush())
@@ -602,6 +606,7 @@ export async function shutdownMainProcessServices(
   runtime.terminalConfirmationService = null
   runtime.terminalSessionRegistry = null
   runtime.terminalExecutionAdapter = null
+  runtime.terminalExecutionEventUnsubscribe = null
   runtime.terminalCommandOrchestrator = null
   runtime.updateService = null
 }

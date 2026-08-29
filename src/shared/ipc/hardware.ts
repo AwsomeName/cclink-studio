@@ -1,4 +1,5 @@
 import type { CadModelMetadata, CadModelPreviewMode } from './cad'
+import { defineIpcCall } from './contract'
 
 export type HardwareArtifactType =
   | 'schematic'
@@ -236,3 +237,27 @@ export interface HardwareApiContract {
   ) => Promise<GerberLayerGeometry>
   writeProductionReportMarkdown: (workspacePath: string) => Promise<HardwareReportMarkdownResult>
 }
+
+export const hardwareIpc = {
+  scanWorkspace: defineIpcCall<[workspacePath: string], HardwareProjectSummary>(
+    'hardware:scanWorkspace',
+  ),
+  inspectProductionPackage: defineIpcCall<[workspacePath: string], ProductionPackageReport>(
+    'hardware:inspectProductionPackage',
+  ),
+  prepareFpcShapeContext: defineIpcCall<[workspacePath: string], FpcShapeContext>(
+    'hardware:prepareFpcShapeContext',
+  ),
+  readGerberLayerPreview: defineIpcCall<
+    [workspacePath: string, packagePath: string, entry: string],
+    GerberLayerPreview
+  >('hardware:readGerberLayerPreview'),
+  readGerberLayerGeometry: defineIpcCall<
+    [workspacePath: string, packagePath: string, entry: string],
+    GerberLayerGeometry
+  >('hardware:readGerberLayerGeometry'),
+  writeProductionReportMarkdown: defineIpcCall<
+    [workspacePath: string],
+    HardwareReportMarkdownResult
+  >('hardware:writeProductionReportMarkdown'),
+} as const

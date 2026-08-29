@@ -76,3 +76,20 @@ export interface GitBackupApiContract {
   getProjectStatus(workspacePath: string): Promise<GitBackupProjectStatus>
   backup(input: GitBackupRunInput): Promise<GitBackupRunResult>
 }
+
+export const gitBackupIpc = {
+  getAccountStatus: defineIpcCall<[], GitBackupAccountStatus>('gitBackup:getAccountStatus'),
+  saveAccount: defineIpcCall<[input: GitBackupSaveAccountInput], GitBackupOperationResult>(
+    'gitBackup:saveAccount',
+  ),
+  clearAccount: defineIpcCall<[], GitBackupOperationResult>('gitBackup:clearAccount'),
+  testAccount: defineIpcCall<
+    [input: GitBackupTestAccountInput | undefined],
+    GitBackupOperationResult
+  >('gitBackup:testAccount'),
+  getProjectStatus: defineIpcCall<[workspacePath: string], GitBackupProjectStatus>(
+    'gitBackup:getProjectStatus',
+  ),
+  backup: defineIpcCall<[input: GitBackupRunInput], GitBackupRunResult>('gitBackup:backup'),
+} as const
+import { defineIpcCall } from './contract'

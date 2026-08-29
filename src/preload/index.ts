@@ -6,7 +6,13 @@ import { officialIpc } from '../shared/ipc/official'
 import { diagnosticsIpc } from '../shared/ipc/diagnostics'
 import { settingsIpc, type SettingsApiContract } from '../shared/ipc/settings'
 import { credentialsIpc, type CredentialsApiContract } from '../shared/ipc/credentials'
-import type { TerminalApiContract } from '../shared/ipc/terminal'
+import {
+  parseTerminalConfirmationRequest,
+  parseTerminalExecutionEvent,
+  terminalIpc,
+  terminalIpcEvents,
+  type TerminalApiContract,
+} from '../shared/ipc/terminal'
 import {
   scheduledTasksIpc,
   scheduledTasksIpcEvents,
@@ -302,35 +308,35 @@ const workbenchWindowApi: WorkbenchMainWindowApiContract = {
 
 const terminalApi: TerminalApiContract = {
   onRequestCommandConfirmation: (callback) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      request: Parameters<typeof callback>[0],
-    ): void => callback(request)
-    ipcRenderer.on('terminal:requestCommandConfirmation', handler)
-    return () => ipcRenderer.removeListener('terminal:requestCommandConfirmation', handler)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const request = parseTerminalConfirmationRequest(value)
+      if (request) callback(request)
+    }
+    ipcRenderer.on(terminalIpcEvents.requestCommandConfirmation, handler)
+    return () => ipcRenderer.removeListener(terminalIpcEvents.requestCommandConfirmation, handler)
   },
   onExecutionEvent: (callback) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      event: Parameters<typeof callback>[0],
-    ): void => callback(event)
-    ipcRenderer.on('terminal:executionEvent', handler)
-    return () => ipcRenderer.removeListener('terminal:executionEvent', handler)
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const event = parseTerminalExecutionEvent(value)
+      if (event) callback(event)
+    }
+    ipcRenderer.on(terminalIpcEvents.executionEvent, handler)
+    return () => ipcRenderer.removeListener(terminalIpcEvents.executionEvent, handler)
   },
   resolveCommandConfirmation: (id, approved) =>
-    ipcRenderer.invoke('terminal:resolveCommandConfirmation', id, approved),
-  recordLifecycleEvent: (input) => ipcRenderer.invoke('terminal:recordLifecycleEvent', input),
-  submitCommand: (input) => ipcRenderer.invoke('terminal:submitCommand', input),
-  startPty: (input) => ipcRenderer.invoke('terminal:startPty', input),
-  writePty: (input) => ipcRenderer.invoke('terminal:writePty', input),
-  resizePty: (input) => ipcRenderer.invoke('terminal:resizePty', input),
+    invokeIpcContract(terminalIpc.resolveCommandConfirmation, id, approved),
+  recordLifecycleEvent: (input) => invokeIpcContract(terminalIpc.recordLifecycleEvent, input),
+  submitCommand: (input) => invokeIpcContract(terminalIpc.submitCommand, input),
+  startPty: (input) => invokeIpcContract(terminalIpc.startPty, input),
+  writePty: (input) => invokeIpcContract(terminalIpc.writePty, input),
+  resizePty: (input) => invokeIpcContract(terminalIpc.resizePty, input),
   terminatePty: (terminalSessionId) =>
-    ipcRenderer.invoke('terminal:terminatePty', terminalSessionId),
-  listSessions: () => ipcRenderer.invoke('terminal:listSessions'),
-  listAuditEvents: (filter) => ipcRenderer.invoke('terminal:listAuditEvents', filter),
+    invokeIpcContract(terminalIpc.terminatePty, terminalSessionId),
+  listSessions: () => invokeIpcContract(terminalIpc.listSessions),
+  listAuditEvents: (filter) => invokeIpcContract(terminalIpc.listAuditEvents, filter),
   clearAuditSession: (terminalSessionId) =>
-    ipcRenderer.invoke('terminal:clearAuditSession', terminalSessionId),
-  clearAuditEvents: () => ipcRenderer.invoke('terminal:clearAuditEvents'),
+    invokeIpcContract(terminalIpc.clearAuditSession, terminalSessionId),
+  clearAuditEvents: () => invokeIpcContract(terminalIpc.clearAuditEvents),
 }
 
 contextBridge.exposeInMainWorld('cclinkStudio', {

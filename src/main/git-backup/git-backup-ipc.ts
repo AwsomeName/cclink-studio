@@ -1,39 +1,36 @@
-import type { IpcMainInvokeEvent } from 'electron'
-import type {
-  GitBackupRunInput,
-  GitBackupSaveAccountInput,
-  GitBackupTestAccountInput,
-} from '../../shared/ipc/git-backup'
+import { gitBackupIpcContracts } from '../../shared/ipc/workbench-contract'
 import type { GitBackupService } from './git-backup-service'
-import { registerTrustedIpcHandler, type TrustedRendererGuard } from '../ipc/trusted-renderer-guard'
 import {
-  gitBackupRunSchema,
-  gitBackupSaveAccountSchema,
-  gitBackupTestAccountSchema,
-  gitBackupWorkspacePathSchema,
-} from '../ipc/workbench-ipc-schema'
+  registerTrustedIpcContract,
+  type TrustedRendererGuard,
+} from '../ipc/trusted-renderer-guard'
 
 export function registerGitBackupIpc(
   service: GitBackupService,
   trustedRendererGuard: TrustedRendererGuard,
 ): void {
-  const handle = <Args extends unknown[], Result>(
-    channel: string,
-    handler: (event: IpcMainInvokeEvent, ...args: Args) => Result,
-  ): void => registerTrustedIpcHandler(channel, trustedRendererGuard, handler)
-
-  handle('gitBackup:getAccountStatus', () => service.getAccountStatus())
-  handle('gitBackup:saveAccount', (_event, input: GitBackupSaveAccountInput) =>
-    service.saveAccount(gitBackupSaveAccountSchema.parse(input)),
+  registerTrustedIpcContract(gitBackupIpcContracts.getAccountStatus, trustedRendererGuard, () =>
+    service.getAccountStatus(),
   )
-  handle('gitBackup:clearAccount', () => service.clearAccount())
-  handle('gitBackup:testAccount', (_event, input?: GitBackupTestAccountInput) =>
-    service.testAccount(gitBackupTestAccountSchema.parse(input)),
+  registerTrustedIpcContract(
+    gitBackupIpcContracts.saveAccount,
+    trustedRendererGuard,
+    (_event, input) => service.saveAccount(input),
   )
-  handle('gitBackup:getProjectStatus', (_event, workspacePath: string) =>
-    service.getProjectStatus(gitBackupWorkspacePathSchema.parse(workspacePath)),
+  registerTrustedIpcContract(gitBackupIpcContracts.clearAccount, trustedRendererGuard, () =>
+    service.clearAccount(),
   )
-  handle('gitBackup:backup', (_event, input: GitBackupRunInput) =>
-    service.backup(gitBackupRunSchema.parse(input)),
+  registerTrustedIpcContract(
+    gitBackupIpcContracts.testAccount,
+    trustedRendererGuard,
+    (_event, input) => service.testAccount(input),
+  )
+  registerTrustedIpcContract(
+    gitBackupIpcContracts.getProjectStatus,
+    trustedRendererGuard,
+    (_event, workspacePath) => service.getProjectStatus(workspacePath),
+  )
+  registerTrustedIpcContract(gitBackupIpcContracts.backup, trustedRendererGuard, (_event, input) =>
+    service.backup(input),
   )
 }

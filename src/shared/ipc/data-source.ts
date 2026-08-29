@@ -15,6 +15,8 @@ export type {
   UpdateDataSourceInput,
 } from '../data-source'
 
+import { defineIpcCall } from './contract'
+
 import type {
   ConnectionTestResult,
   CreateDataSourceInput,
@@ -45,3 +47,27 @@ export interface DataSourceApiContract {
   listSavedQueries(sourceId?: string): Promise<DataSourceOperationResult<SavedDataQuery[]>>
   saveQuery(input: SaveDataQueryInput): Promise<DataSourceOperationResult<SavedDataQuery>>
 }
+
+export const dataSourceIpc = {
+  listSources: defineIpcCall<[], DataSourceOperationResult<DataSourceConfig[]>>('data-source:list'),
+  createSource: defineIpcCall<
+    [input: CreateDataSourceInput],
+    DataSourceOperationResult<DataSourceConfig>
+  >('data-source:create'),
+  testConnection: defineIpcCall<[id: string], DataSourceOperationResult<ConnectionTestResult>>(
+    'data-source:test',
+  ),
+  listCollections: defineIpcCall<[id: string], DataSourceOperationResult<DataCollection[]>>(
+    'data-source:list-collections',
+  ),
+  runQuery: defineIpcCall<[input: RunDataQueryInput], DataSourceOperationResult<DataQuerySnapshot>>(
+    'data-source:query',
+  ),
+  listSavedQueries: defineIpcCall<
+    [sourceId: string | undefined],
+    DataSourceOperationResult<SavedDataQuery[]>
+  >('data-source:list-saved-queries'),
+  saveQuery: defineIpcCall<[input: SaveDataQueryInput], DataSourceOperationResult<SavedDataQuery>>(
+    'data-source:save-query',
+  ),
+} as const

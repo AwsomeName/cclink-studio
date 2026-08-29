@@ -116,6 +116,7 @@ export interface CclinkStudioRuntimeState {
   terminalSessionStore: TerminalSessionStore | null
   terminalCommandOrchestrator: TerminalCommandOrchestrator | null
   terminalExecutionAdapter: TerminalExecutionAdapter | null
+  terminalExecutionEventUnsubscribe: (() => void) | null
   officialIntegration: OfficialIntegration | null
   gitWorkspaceService: GitWorkspaceService | null
   gitBackupService: GitBackupService | null
@@ -188,6 +189,7 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     terminalSessionStore: null,
     terminalCommandOrchestrator: null,
     terminalExecutionAdapter: null,
+    terminalExecutionEventUnsubscribe: null,
     officialIntegration: null,
     gitWorkspaceService: null,
     gitBackupService: null,

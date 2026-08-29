@@ -1,10 +1,25 @@
 # S3 生命周期与契约治理记录
 
-> 状态：已完成。S3.1、S3.2、S3.3 均已关闭；下一工作包为 S4。
+> 状态：S3.2 IPC 契约工程覆盖于 2026-08-29 完成补救；相关 P1-P3 真人退出验收待补，S3.1 生命周期与 S3.3 workspace 资源归属保持关闭。
+
+> 重开原因：Terminal、Android/Scrcpy、数据源及若干后续能力仍在 main/preload 双写 channel，旧
+> 防回退测试只枚举部分 namespace；Terminal execution event disposer、Android/Scrcpy 与 Editor
+> listener 所有权也未完全进入对称生命周期。当前收敛方案、阶段门禁和兼容例外见
+> `docs/architecture/ipc-contract-convergence.md`。下文历史提交与验收证据继续作为当时事实保留，
+> 不能替代当前工作树的新一轮收敛和验收。
+
+> 补救结果：P0-P5 代码迁移与自动化工程门禁已顺序完成，生产 main/preload 裸 channel 临时 allowlist
+> 已收敛为空；全量现行 invoke 库存校验 shared definition、唯一 handler 与 preload consumer，保留
+> 事件库存记录 producer、真实 renderer consumer、disposer 与 payload 边界。Terminal、Android/Scrcpy、
+> 数据源及后续 32 个保留 invoke 已迁移，无生产者的 Editor `contentUpdate/contentUpdateAck` 已删除。
+> `pnpm verify` 通过 332 个
+> 测试文件/2041 项测试（2 项跳过），受影响本地 smoke 通过。Android
+> 完整 Terminal、Android 真机和真实只读数据源真人验收待环境具备后补，不由 mock 或构建结果代替，
+> 因此不写成 P1-P3 阶段退出。
 
 ## 结论
 
-S3.1 关闭了运行时生命周期的双清单问题：同一个 `ServiceRegistry` 声明启动与停止，保存在 runtime 中，并负责启动失败回滚、窗口重建和最终退出。S3.2 删除 IPC 人工清理总表，并分域把注册、preload 调用和运行时校验迁移到共享 contract。S3.3 将项目切换资源归属收敛到 workspace transition，明确后台保留与当前项目可见资源的边界。三项均通过当前工作树、全新 detached worktree 和远端 CI 门禁，S3 已关闭。
+S3.1 关闭了运行时生命周期的双清单问题：同一个 `ServiceRegistry` 声明启动与停止，保存在 runtime 中，并负责启动失败回滚、窗口重建和最终退出。S3.2 当时删除 IPC 人工清理总表，并分域把首批注册、preload 调用和运行时校验迁移到共享 contract；2026-08-28 的全库存复审证明该覆盖没有包含全部现存生产 namespace，因此 S3.2 重开，并在 2026-08-29 完成全量 invoke 库存、事件流库存、生命周期补救和全量源码门禁后关闭工程覆盖。真实 Terminal、Android 与数据源验收仍按专项方案单独记录，不能由 S3.2 工程关闭代替。S3.3 将项目切换资源归属收敛到 workspace transition，明确后台保留与当前项目可见资源的边界，其结论保持关闭。
 
 ## 基线问题
 

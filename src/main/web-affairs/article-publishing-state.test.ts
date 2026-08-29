@@ -304,6 +304,36 @@ describe('article publishing persistent state', () => {
     expect(resumed.data.attempts[0]).toMatchObject({ id: attemptId, status: 'preparing' })
   })
 
+  it('interrupts a live publishing Attempt when its Agent or BrowserTask ends', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+
+    const interrupted = await created.service.interruptArticlePublishingRuntime(
+      created.affairId,
+      created.attemptId,
+      'automation unavailable',
+      WORKSPACE_ID,
+    )
+
+    expect(interrupted.success).toBe(true)
+    if (!interrupted.success) return
+    expect(interrupted.data.articlePublishing?.execution.status).toBe('interrupted')
+    expect(interrupted.data.articlePublishing?.checkpoints[0].status).toBe('needs-reconcile')
+    expect(interrupted.data.attempts[0]).toMatchObject({
+      id: created.attemptId,
+      status: 'interrupted',
+      failureMessage: 'automation unavailable',
+    })
+
+    await expect(
+      created.service.interruptArticlePublishingRuntime(
+        created.affairId,
+        created.attemptId,
+        'late duplicate terminal event',
+        WORKSPACE_ID,
+      ),
+    ).resolves.toMatchObject({ success: true })
+  })
+
   it('records the publication side effect before a final click can be dispatched', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
     const workspaceRef = { kind: 'local' as const, path: directory }

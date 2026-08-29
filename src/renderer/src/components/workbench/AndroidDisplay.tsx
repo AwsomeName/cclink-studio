@@ -9,6 +9,7 @@ import {
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
 import { registerAndroidContextSurface } from '../../features/context-actions/android-context-surface'
+import { cleanupAndroidMirrorResources } from './android-mirror-resources'
 
 /**
  * Android 真机画面显示。
@@ -19,6 +20,8 @@ export function AndroidDisplay(): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const decoderRef = useRef<any>(null)
   const streamControllerRef = useRef<ReadableStreamDefaultController<any> | null>(null)
+  const videoFrameUnsubscribeRef = useRef<(() => void) | null>(null)
+  const mirrorErrorUnsubscribeRef = useRef<(() => void) | null>(null)
   const [mirrorStatus, setMirrorStatus] = useState<
     'disconnected' | 'connecting' | 'connected' | 'error'
   >('disconnected')
@@ -33,6 +36,16 @@ export function AndroidDisplay(): React.JSX.Element {
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const showContextMenu = useContextMenuStore((s) => s.show)
 
+  /** 只释放 renderer 投屏资源；异常断连时不能再次调用 main disconnect。 */
+  const cleanupMirrorResources = useCallback(() => {
+    cleanupAndroidMirrorResources({
+      videoFrameUnsubscribeRef,
+      mirrorErrorUnsubscribeRef,
+      streamControllerRef,
+      decoderRef,
+    })
+  }, [])
+
   /** 连接到 scrcpy 投屏（主进程只允许当前已连接真机重连） */
   const connectMirror = useCallback(async () => {
     if (mirrorStatus === 'connecting' || mirrorStatus === 'connected') return
@@ -40,6 +53,7 @@ export function AndroidDisplay(): React.JSX.Element {
     setMirrorError(null)
 
     try {
+      cleanupMirrorResources()
       await window.cclinkStudio.android.reconnect()
 
       const canvas = canvasRef.current
@@ -68,7 +82,8 @@ export function AndroidDisplay(): React.JSX.Element {
         // 断开连接时 pipe 中断属于正常路径
       })
 
-      window.cclinkStudio.android.onVideoFrame(
+      videoFrameUnsubscribeRef.current?.()
+      videoFrameUnsubscribeRef.current = window.cclinkStudio.android.onVideoFrame(
         (frame: {
           type: 'configuration' | 'data'
           data: ArrayBuffer
@@ -100,7 +115,8 @@ export function AndroidDisplay(): React.JSX.Element {
         }
       })
 
-      window.cclinkStudio.android.onMirrorError((error: string) => {
+      mirrorErrorUnsubscribeRef.current?.()
+      mirrorErrorUnsubscribeRef.current = window.cclinkStudio.android.onMirrorError((error) => {
         setMirrorStatus('error')
         setMirrorError(error)
         setMirrorConnected(false)
@@ -109,28 +125,17 @@ export function AndroidDisplay(): React.JSX.Element {
       setMirrorStatus('connected')
       setMirrorConnected(true)
     } catch (err: any) {
+      cleanupMirrorResources()
       console.error('[AndroidDisplay] 连接失败:', err)
       setMirrorStatus('error')
       setMirrorError(err.message)
       setMirrorConnected(false)
     }
-  }, [mirrorStatus, setMirrorConnected])
+  }, [cleanupMirrorResources, mirrorStatus, setMirrorConnected])
 
   /** 断开投屏 */
   const disconnectMirror = useCallback(async () => {
-    try {
-      streamControllerRef.current?.close()
-    } catch {
-      /* ignore */
-    }
-    streamControllerRef.current = null
-
-    try {
-      decoderRef.current?.dispose()
-    } catch {
-      /* ignore */
-    }
-    decoderRef.current = null
+    cleanupMirrorResources()
 
     try {
       await window.cclinkStudio.android.disconnectMirror()
@@ -140,7 +145,7 @@ export function AndroidDisplay(): React.JSX.Element {
 
     setMirrorStatus('disconnected')
     setMirrorConnected(false)
-  }, [setMirrorConnected])
+  }, [cleanupMirrorResources, setMirrorConnected])
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -182,20 +187,15 @@ export function AndroidDisplay(): React.JSX.Element {
   )
 
   useEffect(() => {
-    const offLost = window.cclinkStudio.android.onDeviceLost(() => {
-      setMirrorStatus('error')
-      setMirrorError('设备已断开')
-      setMirrorConnected(false)
-    })
     const offDisconnected = window.cclinkStudio.android.onMirrorDisconnected(() => {
+      cleanupMirrorResources()
       setMirrorStatus('disconnected')
       setMirrorConnected(false)
     })
     return () => {
-      offLost()
       offDisconnected()
     }
-  }, [setMirrorConnected])
+  }, [cleanupMirrorResources, setMirrorConnected])
 
   useEffect(() => {
     if (deviceMode === 'physical' && mirrorStatus === 'disconnected') {
@@ -205,20 +205,11 @@ export function AndroidDisplay(): React.JSX.Element {
 
   useEffect(() => {
     return () => {
-      try {
-        streamControllerRef.current?.close()
-      } catch {
-        /* ignore */
-      }
-      try {
-        decoderRef.current?.dispose()
-      } catch {
-        /* ignore */
-      }
+      cleanupMirrorResources()
       window.cclinkStudio.android.disconnectMirror().catch(() => {})
       setMirrorConnected(false)
     }
-  }, [setMirrorConnected])
+  }, [cleanupMirrorResources, setMirrorConnected])
 
   const handleRetryStoreInstall = useCallback(async () => {
     setStoreInstall({ phase: 'installing', message: '正在重试...' })

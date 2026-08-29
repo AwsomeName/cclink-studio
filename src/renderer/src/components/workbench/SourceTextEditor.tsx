@@ -22,15 +22,6 @@ interface SourceTextEditorProps {
   tabId: string
 }
 
-function applyPlainTextUpdate(
-  current: string,
-  update: { type: 'write' | 'append' | 'insert'; content: string; position?: string },
-): string {
-  if (update.type === 'write') return update.content
-  if (update.type === 'insert' && update.position === 'start') return update.content + current
-  return current + update.content
-}
-
 function sourceSelectionRange(
   content: string,
   start: number,
@@ -65,12 +56,10 @@ function findSourceTextMatches(
 
 export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): React.ReactElement {
   const fileState = useEditorStore((state) => state.files[filePath])
-  const pendingCount = useEditorStore((state) => state.pendingUpdates.length)
   const editorFontFamily = useSettingsStore((state) => state.settings.editorFontFamily)
   const editorFontSize = useSettingsStore((state) => state.settings.editorFontSize)
   const editorWordWrap = useSettingsStore((state) => state.settings.editorWordWrap)
   const showToast = useToastStore((state) => state.show)
-  const appliedUpdateIds = useRef(new Set<string>())
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const findInputRef = useRef<HTMLInputElement>(null)
   const [findOpen, setFindOpen] = useState(false)
@@ -244,24 +233,6 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
       offSave()
     }
   }, [filePath])
-
-  useEffect(() => {
-    if (pendingCount === 0) return
-    const updates = useEditorStore.getState().consumePendingUpdates(filePath)
-    for (const update of updates) {
-      if (appliedUpdateIds.current.has(update.id)) continue
-      appliedUpdateIds.current.add(update.id)
-      try {
-        const current = useEditorStore.getState().files[filePath]?.currentContent ?? ''
-        useEditorStore.getState().updateContent(filePath, applyPlainTextUpdate(current, update))
-        useEditorStore.getState().setDiagnostics(filePath, [])
-        void window.cclinkStudio.editor.contentUpdateAck(update.id, true)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Agent 内容更新失败'
-        void window.cclinkStudio.editor.contentUpdateAck(update.id, false, message)
-      }
-    }
-  }, [filePath, pendingCount])
 
   useEffect(
     () =>
