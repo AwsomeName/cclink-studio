@@ -8649,6 +8649,28 @@ body.is-resizing-panels .main-area > div {
   font-size: 0.92em;
 }
 
+.conversation-markdown-file-link {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.conversation-markdown-file-link:hover,
+.conversation-markdown-file-link:focus-visible {
+  text-decoration: underline;
+}
+
+.conversation-markdown-file-link:hover code,
+.conversation-markdown-file-link:focus-visible code {
+  border-color: color-mix(in srgb, var(--text-accent) 70%, var(--border-color));
+  color: var(--text-accent);
+}
+
 .conversation-markdown pre {
   max-width: 100%;
   margin: 10px 0 14px;

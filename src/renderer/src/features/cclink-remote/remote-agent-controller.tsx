@@ -22,6 +22,7 @@ import { workspaceRefKey } from '@shared/workspace-ref'
 import type { AgentMessage } from '../../types'
 import { importAgentImageFiles, MAX_AGENT_IMAGES } from '../agent-conversations/image-attachments'
 import type { TransientImageAttachment } from '@shared/image-attachment'
+import { openRemoteFileFromConversation } from './remote-file-navigation'
 
 const EMPTY_REMOTE_AGENT_IMAGES: TransientImageAttachment[] = []
 
@@ -654,6 +655,11 @@ export function RemoteAgentController({
         activities: [],
         permissions: [...filePermissions, ...toolPermissions],
         timeline,
+        onOpenFilePath: (path) => {
+          if (!openRemoteFileFromConversation(workspaceRef, path)) {
+            showToast('文件路径不在当前远程工作空间内', 'error')
+          }
+        },
         empty: {
           title: loading ? '正在同步会话…' : '开始工作',
           description: 'Agent 会以当前工作空间作为操作边界。',

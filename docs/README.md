@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-08-29。
+> 当前事实源。最后更新：2026-08-30。
 
 ## 先读这些
 
@@ -48,6 +48,10 @@
   入口和侧栏历史连接专用控制 Tab、持久发布事务、可见网页与发布 Agent，第一目标平台为 CSDN；
   v0.1.72 仍存在 Attempt 假运行阻塞，真实站点闭环未完成。
 - `docs/features/article-platform-publishing-development-plan.md`：CSDN 单篇图文发布的最小纵向研发计划；分离工程门禁、用户增量、真实发布闭环、失败恢复和交付验收。
+- `docs/testing/article-publishing-runtime-convergence.md`：文章发布“开始执行无反应 / Attempt
+  假运行”的根因、系统性终态收敛方案、用户自救入口、故障矩阵和真实 CSDN 验收门禁。
+- `docs/reviews/article-publishing-runtime-convergence-review-prompt.md`：可直接交给新 Codex
+  会话的独立审查指令；要求对照源码寻找假运行、误中断和重复发布反例。
 - `docs/features/promotional-video-workbench.md`：宣发视频工作台产品事实源，定义稿件、分镜、素材、AI 生成、合成和导出的用户闭环与架构边界。
 - `docs/features/promotional-video-development-plan.md`：宣发视频 M0-M6 开发事实源；M0 已完成，后续连续推进 Agent 分镜、素材、国内云视频、合成导出和统一验收。
 - `docs/features/agent-role-configuration.md`：Agent 角色中心事实源；包含已实现待异机验收的会话配置、全局单例配置页、运行回执和 Session 隔离，Skill / `SOUL.md` 内容扩展，以及 AI 员工暂停后的 R0-R4 角色开发里程碑。

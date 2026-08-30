@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   ConversationMarkdown,
   markdownPreviewText,
+  normalizeConversationMarkdownFilePath,
   normalizeConversationHttpUrl,
 } from './ConversationMarkdown'
 
@@ -53,6 +54,20 @@ describe('ConversationMarkdown', () => {
     expect(html).toContain('<pre><code>block command')
   })
 
+  it('makes Markdown file paths clickable only when a file opener is available', () => {
+    const html = renderToStaticMarkup(
+      <ConversationMarkdown
+        source={'`docs/design/需求描述.md` 和 [交付物](docs/delivery.markdown) 以及 `pnpm test`'}
+        onOpenFilePath={() => undefined}
+      />,
+    )
+
+    expect(html.match(/conversation-markdown-file-link/g)).toHaveLength(2)
+    expect(html).toContain('<code>docs/design/需求描述.md</code>')
+    expect(html).toContain('title="打开 docs/delivery.markdown"')
+    expect(html).toContain('<code>pnpm test</code>')
+  })
+
   it('keeps raw HTML inert and never loads Markdown images', () => {
     const html = renderToStaticMarkup(
       <ConversationMarkdown
@@ -83,6 +98,19 @@ describe('ConversationMarkdown', () => {
     expect(normalizeConversationHttpUrl('javascript:alert(1)')).toBeNull()
     expect(normalizeConversationHttpUrl('file:///etc/passwd')).toBeNull()
     expect(normalizeConversationHttpUrl('/relative')).toBeNull()
+  })
+
+  it('recognizes only bounded Markdown file path candidates', () => {
+    expect(normalizeConversationMarkdownFilePath(' docs/readme.md ')).toBe('docs/readme.md')
+    expect(normalizeConversationMarkdownFilePath('docs/readme.markdown')).toBe(
+      'docs/readme.markdown',
+    )
+    expect(normalizeConversationMarkdownFilePath('C:\\project\\readme.md')).toBe(
+      'C:\\project\\readme.md',
+    )
+    expect(normalizeConversationMarkdownFilePath('docs/%E9%9C%80%E6%B1%82.md')).toBe('docs/需求.md')
+    expect(normalizeConversationMarkdownFilePath('pnpm test')).toBeNull()
+    expect(normalizeConversationMarkdownFilePath('https://example.com/readme.md')).toBeNull()
   })
 
   it('removes Markdown punctuation from collapsed thinking previews', () => {

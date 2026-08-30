@@ -380,10 +380,23 @@ export const useTabStore = create<TabState>((set, get) => ({
         }
         // HTML 可同时保留浏览器预览和源码文本；其他文件仍按 filePath 去重。
         if (filePath) {
-          const existing = state.tabs.find(
-            (tab) => tab.filePath === filePath && (!isHtmlFilePath(filePath) || tab.type === type),
-          )
+          const existing = state.tabs.find((tab) => {
+            if (type === 'remote-file' && remoteFile) {
+              return (
+                tab.type === 'remote-file' &&
+                tab.remoteFile?.serverId === remoteFile.serverId &&
+                tab.remoteFile.workspaceId === remoteFile.workspaceId &&
+                tab.remoteFile.path === remoteFile.path
+              )
+            }
+            return (
+              tab.type !== 'remote-file' &&
+              tab.filePath === filePath &&
+              (!isHtmlFilePath(filePath) || tab.type === type)
+            )
+          })
           if (existing) {
+            if (type === 'remote-file') return { activeTabId: existing.id }
             const nextTabs = state.tabs.map((tab) =>
               tab.id === existing.id
                 ? {

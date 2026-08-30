@@ -118,6 +118,41 @@ describe('useTabStore', () => {
       expect(state.activeTabId).toBe(firstId)
     })
 
+    it('远程文件按 endpoint、workspace 和路径去重', () => {
+      const openRemoteFile = (endpointId: string, workspaceId: string) =>
+        useTabStore.getState().openTab({
+          type: 'remote-file',
+          title: 'README.md',
+          icon: '📄',
+          filePath: '/workspace/README.md',
+          workspaceRef: {
+            kind: 'remote',
+            transport: 'cclink',
+            endpointId,
+            workspaceId,
+            path: '/workspace',
+          },
+          remoteFile: {
+            serverId: endpointId,
+            workspaceId,
+            workspacePath: '/workspace',
+            path: '/workspace/README.md',
+          },
+        })
+
+      openRemoteFile('agent-1', 'workspace-1')
+      const firstId = useTabStore.getState().activeTabId
+      useTabStore.getState().updateTabDirty(firstId!, true)
+      openRemoteFile('agent-1', 'workspace-1')
+      expect(useTabStore.getState().tabs).toHaveLength(2)
+      expect(useTabStore.getState().activeTabId).toBe(firstId)
+      expect(useTabStore.getState().tabs.at(-1)?.dirty).toBe(true)
+
+      openRemoteFile('agent-2', 'workspace-2')
+      expect(useTabStore.getState().tabs).toHaveLength(3)
+      expect(useTabStore.getState().tabs.at(-1)?.remoteFile?.serverId).toBe('agent-2')
+    })
+
     it('HTML 允许浏览器和文本两种打开方式并存', () => {
       useTabStore.getState().openTab({
         type: 'browser',

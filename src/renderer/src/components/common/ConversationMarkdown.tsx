@@ -31,9 +31,15 @@ const containerTags = new Map<string, keyof React.JSX.IntrinsicElements>([
   ['s_open', 'del'],
 ])
 
-export function ConversationMarkdown({ source }: { source: string }): React.ReactElement {
+export function ConversationMarkdown({
+  source,
+  onOpenFilePath,
+}: {
+  source: string
+  onOpenFilePath?: (path: string) => void
+}): React.ReactElement {
   const tokens = conversationMarkdown.parse(source, {})
-  return <div className="conversation-markdown">{renderTokens(tokens)}</div>
+  return <div className="conversation-markdown">{renderTokens(tokens, { onOpenFilePath })}</div>
 }
 
 export function markdownPreviewText(source: string): string {
@@ -51,27 +57,33 @@ function collectTokenText(token: Token): string[] {
   return token.content ? [token.content] : []
 }
 
-function renderTokens(tokens: Token[]): ReactNode[] {
+interface ConversationMarkdownRenderOptions {
+  onOpenFilePath?: (path: string) => void
+}
+
+function renderTokens(tokens: Token[], options: ConversationMarkdownRenderOptions): ReactNode[] {
   const nodes: ReactNode[] = []
 
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]
 
     if (token.type === 'inline') {
-      nodes.push(...renderTokens(token.children ?? []))
+      nodes.push(...renderTokens(token.children ?? [], options))
       continue
     }
 
     if (token.nesting === 1) {
       const closeIndex = findMatchingClose(tokens, index)
-      const children = renderTokens(tokens.slice(index + 1, closeIndex))
-      nodes.push(renderContainerToken(token, children, index))
+      const childOptions =
+        token.type === 'link_open' ? { ...options, onOpenFilePath: undefined } : options
+      const children = renderTokens(tokens.slice(index + 1, closeIndex), childOptions)
+      nodes.push(renderContainerToken(token, children, index, options))
       index = closeIndex
       continue
     }
 
     if (token.nesting === -1) continue
-    nodes.push(renderLeafToken(token, index))
+    nodes.push(renderLeafToken(token, index, options))
   }
 
   return nodes
@@ -86,10 +98,29 @@ function findMatchingClose(tokens: Token[], openIndex: number): number {
   return tokens.length - 1
 }
 
-function renderContainerToken(token: Token, children: ReactNode[], key: number): ReactNode {
+function renderContainerToken(
+  token: Token,
+  children: ReactNode[],
+  key: number,
+  options: ConversationMarkdownRenderOptions,
+): ReactNode {
   if (token.type === 'link_open') {
     const href = normalizeConversationHttpUrl(token.attrGet('href'))
-    if (!href) return <span key={key}>{children}</span>
+    if (!href) {
+      const filePath = normalizeConversationMarkdownFilePath(token.attrGet('href'))
+      if (!filePath || !options.onOpenFilePath) return <span key={key}>{children}</span>
+      return (
+        <button
+          key={key}
+          type="button"
+          className="conversation-markdown-file-link"
+          title={`打开 ${filePath}`}
+          onClick={() => options.onOpenFilePath?.(filePath)}
+        >
+          {children}
+        </button>
+      )
+    }
     return (
       <a
         key={key}
@@ -133,15 +164,32 @@ function renderContainerToken(token: Token, children: ReactNode[], key: number):
   return <Tag key={key}>{children}</Tag>
 }
 
-function renderLeafToken(token: Token, key: number): ReactNode {
+function renderLeafToken(
+  token: Token,
+  key: number,
+  options: ConversationMarkdownRenderOptions,
+): ReactNode {
   switch (token.type) {
     case 'text':
       return token.content
     case 'softbreak':
     case 'hardbreak':
       return <br key={key} />
-    case 'code_inline':
-      return <code key={key}>{token.content}</code>
+    case 'code_inline': {
+      const filePath = normalizeConversationMarkdownFilePath(token.content)
+      if (!filePath || !options.onOpenFilePath) return <code key={key}>{token.content}</code>
+      return (
+        <button
+          key={key}
+          type="button"
+          className="conversation-markdown-file-link"
+          title={`打开 ${filePath}`}
+          onClick={() => options.onOpenFilePath?.(filePath)}
+        >
+          <code>{token.content}</code>
+        </button>
+      )
+    }
     case 'fence':
     case 'code_block': {
       const language = token.info.trim().split(/\s+/, 1)[0]
@@ -208,6 +256,21 @@ export function normalizeConversationHttpUrl(value: string | null): string | nul
   } catch {
     return null
   }
+}
+
+export function normalizeConversationMarkdownFilePath(value: string | null): string | null {
+  let path = value?.trim()
+  if (!path || path.includes('\0') || /[\r\n]/u.test(path)) return null
+  if (path.includes('%')) {
+    try {
+      path = decodeURI(path)
+    } catch {
+      return null
+    }
+  }
+  if (!/\.(?:md|markdown)$/iu.test(path)) return null
+  if (/^[a-z][a-z\d+.-]*:/iu.test(path) && !/^[a-z]:[\\/]/iu.test(path)) return null
+  return path
 }
 
 function safeHeadingTag(tag: string): 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' {

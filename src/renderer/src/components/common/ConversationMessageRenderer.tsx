@@ -22,10 +22,12 @@ export function ConversationMessageRenderer({
   message,
   conversationId,
   workspaceKey,
+  onOpenFilePath,
 }: {
   message: AgentMessage
   conversationId: string
   workspaceKey: string | null
+  onOpenFilePath?: (path: string) => void
 }): React.ReactElement {
   const units = buildContentRenderUnits(message.content)
   const copyText = getMessageCopyText(message)
@@ -83,6 +85,7 @@ export function ConversationMessageRenderer({
           unit={unit}
           isStreaming={message.isStreaming === true}
           renderMarkdown={message.role === 'assistant'}
+          onOpenFilePath={onOpenFilePath}
         />
       ))}
       {message.resources && message.resources.length > 0 && (
@@ -169,10 +172,12 @@ function ContentRenderUnitRenderer({
   unit,
   isStreaming,
   renderMarkdown,
+  onOpenFilePath,
 }: {
   unit: ContentRenderUnit
   isStreaming: boolean
   renderMarkdown: boolean
+  onOpenFilePath?: (path: string) => void
 }): React.ReactElement {
   if (unit.type === 'tool_group') {
     return <ToolExecutionGroup blocks={unit.blocks} isStreaming={isStreaming} />
@@ -181,19 +186,29 @@ function ContentRenderUnitRenderer({
     return <ThinkingGroup blocks={unit.blocks} />
   }
 
-  return <ContentBlockRenderer block={unit.block} renderMarkdown={renderMarkdown} />
+  return (
+    <ContentBlockRenderer
+      block={unit.block}
+      renderMarkdown={renderMarkdown}
+      onOpenFilePath={onOpenFilePath}
+    />
+  )
 }
 
 export function ContentBlockRenderer({
   block,
   renderMarkdown = false,
+  onOpenFilePath,
 }: {
   block: ContentBlock
   renderMarkdown?: boolean
+  onOpenFilePath?: (path: string) => void
 }): React.ReactElement {
   switch (block.type) {
     case 'text':
-      if (renderMarkdown) return <ConversationMarkdown source={block.text} />
+      if (renderMarkdown) {
+        return <ConversationMarkdown source={block.text} onOpenFilePath={onOpenFilePath} />
+      }
       return (
         <div className="content-text">
           {block.text.split('\n').map((line, index) => (

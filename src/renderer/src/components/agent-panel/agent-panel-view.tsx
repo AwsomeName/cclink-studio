@@ -237,6 +237,7 @@ export interface AgentPanelViewModel {
   empty: AgentPanelEmptyModel
   composer: AgentPanelComposerModel
   costLabel?: string | null
+  onOpenFilePath?: (path: string) => void
 }
 
 export type AgentComposerKeyDecision =
@@ -341,6 +342,7 @@ export function AgentPanelView({ model }: { model: AgentPanelViewModel }): React
           onWheel={conversationScroll.onWheel}
           onPointerDown={conversationScroll.onPointerDown}
           onTouchStart={conversationScroll.onTouchStart}
+          onOpenFilePath={model.onOpenFilePath}
         />
         {model.costLabel ? <div className="agent-cost">{model.costLabel}</div> : null}
         <ComposerFrame model={model.composer} variant={model.variant} mainRef={mainRef} />
@@ -509,6 +511,7 @@ export function MessageTimeline({
   onWheel,
   onPointerDown,
   onTouchStart,
+  onOpenFilePath,
 }: {
   items: AgentPanelTimelineItem[]
   empty: AgentPanelEmptyModel
@@ -517,6 +520,7 @@ export function MessageTimeline({
   onWheel?: WheelEventHandler<HTMLDivElement>
   onPointerDown?: PointerEventHandler<HTMLDivElement>
   onTouchStart?: TouchEventHandler<HTMLDivElement>
+  onOpenFilePath?: (path: string) => void
 }): ReactElement {
   return (
     <div
@@ -539,6 +543,7 @@ export function MessageTimeline({
                 message={item.message}
                 conversationId={item.conversationId}
                 workspaceKey={item.workspaceKey}
+                onOpenFilePath={onOpenFilePath}
               />
             )
           }
