@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { chmod, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { RemoteFileDraft } from '../../shared/ipc/remote'
+import { remoteMutationIdentityError } from '../../shared/remote-mutation-identity'
 import type { RemoteWorkspaceRef } from '../../shared/workspace-ref'
 
 const MAX_STORE_BYTES = 16 * 1024 * 1024
@@ -52,6 +53,7 @@ export class RemoteFileDraftStore {
       rebased.push({
         ...draft,
         path: `${newPrefix}${draft.path.slice(oldPrefix.length)}`,
+        pendingMutation: undefined,
         updatedAt: Date.now(),
       })
     }
@@ -121,6 +123,16 @@ function sanitizeDraft(value: unknown): RemoteFileDraft | null {
     Buffer.byteLength(draft.savedContent, 'utf8') > 2 * 1024 * 1024
   )
     return null
+  const pending = draft.pendingMutation
+  if (
+    pending &&
+    (typeof pending.sessionId !== 'string' ||
+      typeof pending.expectedSha256 !== 'string' ||
+      !/^[a-f0-9]{64}$/u.test(pending.expectedSha256) ||
+      remoteMutationIdentityError(pending) !== null)
+  ) {
+    delete draft.pendingMutation
+  }
   return draft as RemoteFileDraft
 }
 

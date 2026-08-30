@@ -624,14 +624,15 @@ export class CclinkRemoteService implements RemoteProvider {
       await this.requireOnline()
       await this.requireCapability(input.ref, 'agent.session')
       this.assertSessionMatches(input.ref, input.sessionId)
+      const controlRequestId = randomUUID()
       const response = (await this.requestRouter.request(
         input.ref.endpointId,
         {
           ...createCclinkEnvelope('tool_approval_response', {
-            request_id: input.requestId,
+            request_id: controlRequestId,
             trace_id: input.requestId,
           }),
-          request_id: input.requestId,
+          request_id: controlRequestId,
           session_id: input.sessionId,
           tool_use_id: input.toolUseId,
           approved: input.approved,
@@ -681,14 +682,15 @@ export class CclinkRemoteService implements RemoteProvider {
           return [item.question, answer.trim()]
         }),
       )
+      const controlRequestId = randomUUID()
       const response = (await this.requestRouter.request(
         input.ref.endpointId,
         {
           ...createCclinkEnvelope('question_answer', {
-            request_id: input.requestId,
+            request_id: controlRequestId,
             trace_id: input.requestId,
           }),
-          request_id: input.requestId,
+          request_id: controlRequestId,
           session_id: input.sessionId,
           tool_use_id: input.toolUseId,
           answers: normalizedAnswers,

@@ -128,6 +128,23 @@ const checkpointSchema = z
   })
   .strict()
 
+const sideEffectSchema = z
+  .object({
+    key: z.string().trim().min(1).max(500),
+    affairId: uuidSchema,
+    attemptId: uuidSchema,
+    executionGeneration: z.number().int().positive().max(1_000_000),
+    kind: z.enum(['upload-asset', 'save-draft', 'publish']),
+    targetId: z.string().trim().min(1).max(500),
+    actionFingerprint: z.string().trim().min(1).max(1_000),
+    status: z.enum(['reserved', 'dispatched', 'result-unknown', 'verified', 'rejected']),
+    reservedAt: timestampSchema,
+    dispatchedAt: timestampSchema.optional(),
+    observedAt: timestampSchema.optional(),
+    browserTaskRunId: uuidSchema.optional(),
+  })
+  .strict()
+
 export const articlePublishingStateSchema = z
   .object({
     adapterId: z.literal('csdn'),
@@ -149,21 +166,40 @@ export const articlePublishingStateSchema = z
     fields: articlePublishingFieldsSchema,
     assets: z.array(articlePublishingAssetSchema).max(200),
     checkpoints: z.array(checkpointSchema).min(1).max(40),
+    sideEffects: z.array(sideEffectSchema).max(500),
     execution: z
       .object({
         status: z.enum([
           'draft',
+          'preparing',
           'running',
+          'checking-runtime',
           'waiting-human',
           'interrupted',
+          'cancelled',
           'failed',
           'published',
           'result-unknown',
         ]),
         currentAttemptId: uuidSchema.optional(),
+        currentGeneration: z.number().int().nonnegative().max(1_000_000),
+        currentLaunchOperationId: z.string().trim().min(1).max(200).optional(),
         currentStepId: z.string().trim().min(1).max(120).optional(),
         lastAgentRunId: z.string().trim().min(1).max(200).optional(),
         lastBrowserTaskRunId: uuidSchema.optional(),
+        runtimeCheck: z
+          .object({
+            reasonCode: z.string().trim().min(1).max(200),
+            reason: z.string().trim().min(1).max(2_000),
+            suspectedAt: timestampSchema,
+            lastOwnerAt: timestampSchema.optional(),
+            lastProgressAt: timestampSchema.optional(),
+            probeDeadline: timestampSchema,
+            ownerResponsive: z.boolean().optional(),
+            probeAttempts: z.number().int().nonnegative().max(100),
+          })
+          .strict()
+          .optional(),
       })
       .strict(),
     draft: z
@@ -197,12 +233,13 @@ export const startArticlePublishingTaskInputSchema = z
   .object({ workspaceRef: workspaceRefSchema, affairId: uuidSchema })
   .strict()
 
-export const recoverArticlePublishingTaskLaunchInputSchema = z
+export const manageArticlePublishingRuntimeInputSchema = z
   .object({
     workspaceRef: workspaceRefSchema,
     affairId: uuidSchema,
     attemptId: uuidSchema,
-    reason: z.string().trim().min(1).max(1_000),
+    executionGeneration: z.number().int().positive().max(1_000_000),
+    launchOperationId: z.string().trim().min(1).max(200),
   })
   .strict()
 

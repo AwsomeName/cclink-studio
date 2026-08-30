@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { BrowserTaskRun } from '../../shared/ipc/browser'
 import type { ToolExecutionContext } from '../mcp/types'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
@@ -15,7 +16,7 @@ const CSDN_ARTICLE_SUPPORTED_ORIGIN_SET = new Set<string>(CSDN_ARTICLE_SUPPORTED
 
 export type ArticlePublishingBrowserActionDecision =
   | { kind: 'allow' }
-  | { kind: 'allow-once'; sideEffectKey: string }
+  | { kind: 'allow-once'; sideEffectKey: string; actionFingerprint: string }
   | { kind: 'handoff'; reason: string }
   | { kind: 'unknown'; reason: string }
 
@@ -28,6 +29,10 @@ interface ArticlePublishingExecutionScope {
   currentStepId?: string
   publicationStatus: 'not-started' | 'dispatched' | 'verifying' | 'published' | 'result-unknown'
   localAssetsReady: boolean
+  executionGeneration: number
+  browserTaskRunId: string
+  sourceHash: string
+  assets: Array<{ id: string; sourcePath: string; uploadAttemptCount: number }>
 }
 
 interface ResolveExecutionInput {
@@ -35,6 +40,7 @@ interface ResolveExecutionInput {
   affairId: string
   attemptId: string
   accountId: string
+  browserTaskRunId?: string
 }
 
 const HUMAN_ONLY_CONTROL =
@@ -152,6 +158,47 @@ export class ArticlePublishingBrowserPolicy {
         pageUrl,
       )
     }
+    if (actionType === 'uploadFile') {
+      if (scope.currentStepId !== 'upload-assets') {
+        return this.stopDecision(
+          scope,
+          actionType,
+          'unknown',
+          '上传动作与当前文章发布检查点不一致',
+          pageUrl,
+        )
+      }
+      const paths = Array.isArray(params.paths)
+        ? params.paths.filter((path): path is string => typeof path === 'string')
+        : []
+      if (paths.length !== 1) {
+        return this.stopDecision(
+          scope,
+          actionType,
+          'unknown',
+          '每次只能上传一张已冻结图片',
+          pageUrl,
+        )
+      }
+      const asset = scope.assets.find((candidate) => candidate.sourcePath === paths[0])
+      if (!asset) {
+        return this.stopDecision(
+          scope,
+          actionType,
+          'unknown',
+          '上传文件不属于冻结正文图片',
+          pageUrl,
+        )
+      }
+      return this.reserveSideEffect(
+        scope,
+        'upload-asset',
+        `${asset.id}:attempt-${asset.uploadAttemptCount + 1}`,
+        actionType,
+        params,
+        pageUrl,
+      )
+    }
     if (actionType === 'handleDialog') {
       return params.action === 'accept'
         ? this.stopDecision(
@@ -240,6 +287,25 @@ export class ArticlePublishingBrowserPolicy {
         pageUrl,
       )
     }
+    if (/草稿|暂存|保存.*草稿|save\s*(?:as\s*)?draft|draft/iu.test(signature)) {
+      if (scope.currentStepId !== 'save-draft') {
+        return this.stopDecision(
+          scope,
+          actionType,
+          'unknown',
+          '保存草稿动作与当前文章发布检查点不一致',
+          pageUrl,
+        )
+      }
+      return this.reserveSideEffect(
+        scope,
+        'save-draft',
+        scope.sourceHash,
+        actionType,
+        params,
+        pageUrl,
+      )
+    }
     if (!FINAL_PUBLICATION_CONTROL.test(signature)) return { kind: 'allow' }
     if (scope.currentStepId !== 'publish') {
       return this.stopDecision(
@@ -268,26 +334,47 @@ export class ArticlePublishingBrowserPolicy {
         pageUrl,
       )
     }
-    const marked = await this.webAffairService.markArticlePublishingPublicationDispatched(
+    return this.reserveSideEffect(scope, 'publish', 'final', actionType, params, pageUrl)
+  }
+
+  async consumeSideEffect(
+    task: BrowserTaskRun,
+    sideEffectKey: string,
+    actionFingerprint: string,
+    context?: ToolExecutionContext,
+  ): Promise<void> {
+    const scope = await this.resolveTaskScope(task, context)
+    if (!scope) throw new Error('文章发布副作用授权已经失去 Runtime 绑定')
+    const consumed = await this.webAffairService.consumeArticlePublishingSideEffect(
       scope.affairId,
       scope.attemptId,
+      scope.executionGeneration,
+      sideEffectKey,
+      actionFingerprint,
+      scope.browserTaskRunId,
       scope.workspaceId,
     )
-    if (!marked.success) {
-      return this.stopDecision(scope, actionType, 'unknown', marked.error.message, pageUrl)
-    }
-    console.info('[ArticlePublishing] 适配器动作判定', {
-      affairId: scope.affairId,
-      attemptId: scope.attemptId,
-      adapter: 'csdn@1',
-      currentStepId: scope.currentStepId ?? null,
-      actionType,
-      currentOrigin: toOrigin(pageUrl),
-      decision: 'allow-once',
-    })
-    return {
-      kind: 'allow-once',
-      sideEffectKey: `${scope.affairId}:${scope.attemptId}:publish`,
+    if (!consumed.success) throw new Error(consumed.error.message)
+  }
+
+  async observeSideEffect(
+    task: BrowserTaskRun,
+    sideEffectKey: string,
+    status: 'result-unknown' | 'rejected',
+    context?: ToolExecutionContext,
+  ): Promise<void> {
+    const scope = await this.resolveTaskScope(task, context)
+    if (!scope) return
+    const observed = await this.webAffairService.observeArticlePublishingSideEffect(
+      scope.affairId,
+      scope.attemptId,
+      scope.executionGeneration,
+      sideEffectKey,
+      status,
+      scope.workspaceId,
+    )
+    if (!observed.success) {
+      console.warn('[ArticlePublishing] 副作用观察回写失败', observed.error.message)
     }
   }
 
@@ -334,7 +421,57 @@ export class ArticlePublishingBrowserPolicy {
       affairId: correlation.affairId,
       attemptId: correlation.affairAttemptId,
       accountId: correlation.accountId,
+      browserTaskRunId: task.id,
     })
+  }
+
+  private async reserveSideEffect(
+    scope: ArticlePublishingExecutionScope,
+    kind: 'upload-asset' | 'save-draft' | 'publish',
+    targetId: string,
+    actionType: string,
+    params: Record<string, unknown>,
+    pageUrl: string,
+  ): Promise<ArticlePublishingBrowserActionDecision> {
+    const actionFingerprint = createHash('sha256')
+      .update(
+        JSON.stringify({
+          actionType,
+          origin: toOrigin(pageUrl),
+          selector: String(params.selector ?? ''),
+          key: String(params.key ?? ''),
+          paths: Array.isArray(params.paths) ? params.paths : [],
+          targetId,
+        }),
+      )
+      .digest('hex')
+    const reserved = await this.webAffairService.reserveArticlePublishingSideEffect(
+      scope.affairId,
+      scope.attemptId,
+      scope.executionGeneration,
+      kind,
+      targetId,
+      actionFingerprint,
+      scope.browserTaskRunId,
+      scope.workspaceId,
+    )
+    if (!reserved.success) {
+      return this.stopDecision(scope, actionType, 'unknown', reserved.error.message, pageUrl)
+    }
+    console.info('[ArticlePublishing] 适配器动作判定', {
+      affairId: scope.affairId,
+      attemptId: scope.attemptId,
+      adapter: 'csdn@1',
+      currentStepId: scope.currentStepId ?? null,
+      actionType,
+      currentOrigin: toOrigin(pageUrl),
+      decision: 'allow-once',
+    })
+    return {
+      kind: 'allow-once',
+      sideEffectKey: `${scope.affairId}:${scope.attemptId}:g${scope.executionGeneration}:${kind}:${targetId}`,
+      actionFingerprint,
+    }
   }
 
   private stopDecision(
@@ -392,6 +529,14 @@ export class ArticlePublishingBrowserPolicy {
       localAssetsReady: publishing.assets.every(
         (asset) => asset.kind !== 'local' || asset.status === 'uploaded',
       ),
+      executionGeneration: attempt.executionGeneration,
+      browserTaskRunId: input.browserTaskRunId ?? attempt.browserTaskRunId ?? '',
+      sourceHash: publishing.source.contentHash,
+      assets: publishing.assets.map((asset) => ({
+        id: asset.id,
+        sourcePath: asset.sourcePath,
+        uploadAttemptCount: asset.uploadAttempts.length,
+      })),
     }
   }
 

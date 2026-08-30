@@ -6,6 +6,7 @@ import {
   rebaseRemoteFileDraftPaths,
   rememberRemoteFileDraft,
 } from './remote-file-draft-registry'
+import { createRemoteMutationIdentity } from '@shared/remote-mutation-identity'
 
 const refA = {
   kind: 'remote' as const,
@@ -34,12 +35,22 @@ describe('remote file draft registry', () => {
       content: 'changed',
       savedContent: 'saved',
       sha256: 'a'.repeat(64),
+      pendingMutation: {
+        ...createRemoteMutationIdentity(),
+        sessionId: 'session-a',
+        expectedSha256: 'a'.repeat(64),
+      },
     })
 
     await flushRemoteFileDrafts()
 
     expect(saveDraft).toHaveBeenCalledWith(
-      expect.objectContaining({ ref: refA, path: '/srv/project/a.ts', content: 'changed' }),
+      expect.objectContaining({
+        ref: refA,
+        path: '/srv/project/a.ts',
+        content: 'changed',
+        pendingMutation: expect.objectContaining({ sessionId: 'session-a' }),
+      }),
     )
   })
 

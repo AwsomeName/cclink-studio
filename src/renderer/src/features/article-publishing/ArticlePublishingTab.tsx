@@ -11,14 +11,12 @@ import { useAgentStore } from '../../stores/agent-store'
 import { useTabStore } from '../../stores/tab-store'
 import { useUIStore } from '../../stores/ui-store'
 import { createConversationRuntimeForWorkspace } from '../agent-conversations/view-model'
-import { createConversationRunController } from '../agent-conversations/conversation-run-controller'
 import { resolveAndOpenWebResourceTab } from '../web-resources/web-resource-tab'
 import { notifyWebResourcesChanged } from '../web-resources/web-resource-events'
 import { copyTextToClipboard } from '../../utils/clipboard'
 import {
   createArticleMarkdownOpenDialogOptions,
   formatArticlePublishingAccountOption,
-  getArticlePublishingAgentStartError,
   getArticlePublishingFileDetails,
 } from './article-publishing-tab'
 import './article-publishing.css'
@@ -41,7 +39,6 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const affairId = tab.articlePublishing?.affairId ?? null
   const updateBinding = useTabStore((state) => state.updateTabArticlePublishing)
   const updateTitle = useTabStore((state) => state.updateTabTitle)
-  const activateTab = useTabStore((state) => state.activateTab)
   const [preview, setPreview] = useState<ArticlePublishingSourcePreview | null>(null)
   const [resources, setResources] = useState<WebResourceSnapshot | null>(null)
   const [affair, setAffair] = useState<WebAffair | null>(null)
@@ -184,99 +181,31 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     const taskId = targetAffair.id
     const publishing = targetAffair.articlePublishing
     if (!taskId || !publishing) return
-    let attemptId: string | null = null
-    let stage = '恢复发布事务'
-    try {
-      console.info('[ArticlePublishing] 启动阶段', { taskId, stage })
-      const result = await window.cclinkStudio.articlePublishing.startTask({
-        workspaceRef,
-        affairId: taskId,
-      })
-      if (!result.success) throw new Error(result.error.message)
-      attemptId = result.data.attemptId
+    const nextConversationId = `article-publishing-${taskId}`
+    const agent = useAgentStore.getState()
+    agent.createConversation({
+      id: nextConversationId,
+      runtime: createConversationRuntimeForWorkspace(workspaceRef),
+      activate: true,
+    })
+    agent.renameConversation(nextConversationId, `发布文章 · ${targetAffair.title} · CSDN`)
+    useUIStore.getState().setAgentPanelMode('right', 'user')
+    setConversationId(nextConversationId)
 
-      stage = '打开账号网页'
-      console.info('[ArticlePublishing] 启动阶段', { taskId, attemptId, stage })
-      await resolveAndOpenWebResourceTab(publishing.accountId, workspaceRef)
-      activateTab(tab.id)
-
-      stage = '创建 Agent 会话'
-      console.info('[ArticlePublishing] 启动阶段', { taskId, attemptId, stage })
-      const agent = useAgentStore.getState()
-      const nextConversationId = agent.createConversation({
-        runtime: createConversationRuntimeForWorkspace(workspaceRef),
-        activate: true,
-      })
-      agent.renameConversation(nextConversationId, `发布文章 · ${targetAffair.title} · CSDN`)
-      useUIStore.getState().setAgentPanelMode('right', 'user')
-      setConversationId(nextConversationId)
-
-      stage = '发送 Agent 任务'
-      console.info('[ArticlePublishing] 启动阶段', {
-        taskId,
-        attemptId,
-        conversationId: nextConversationId,
-        stage,
-      })
-      const sent = await createConversationRunController({
-        conversationId: nextConversationId,
-      }).send(result.data.agentPrompt)
-      const sendError = getArticlePublishingAgentStartError(sent)
-      if (sendError) throw new Error(sendError)
-
-      console.info('[ArticlePublishing] Agent 已接收发布任务', {
-        taskId,
-        attemptId,
-        conversationId: nextConversationId,
-        agentRunId: sent.status === 'accepted' ? sent.runId : undefined,
-      })
-      setAffair(result.data.affair)
-      setNotice(
-        result.data.resumed
-          ? '已恢复原发布 Attempt，并创建新的 Agent Run 从待对账检查点继续。'
-          : '发布 Attempt、可见网页和专属 Agent 已启动。',
-      )
-    } catch (reason) {
-      const message = reason instanceof Error ? reason.message : String(reason)
-      if (!attemptId) throw reason
-      console.error('[ArticlePublishing] Agent 启动未完成，正在恢复事务', {
-        taskId,
-        attemptId,
-        stage,
-        message,
-      })
-      const recovered = await window.cclinkStudio.articlePublishing
-        .recoverTaskLaunch({
-          workspaceRef,
-          affairId: taskId,
-          attemptId,
-          reason: `${stage}：${message}`.slice(0, 1_000),
-        })
-        .catch((recoveryReason) => ({
-          success: false as const,
-          error: {
-            code: 'IPC_FAILED',
-            message:
-              recoveryReason instanceof Error ? recoveryReason.message : String(recoveryReason),
-          },
-        }))
-      if (recovered.success) {
-        setAffair(recovered.data)
-        console.warn('[ArticlePublishing] 启动失败事务已恢复为可继续状态', {
-          taskId,
-          attemptId,
-          stage,
-        })
-        throw new Error(`${stage}失败：${message}；发布任务已保留，可点击“从中断处继续”重试`)
-      }
-      console.error('[ArticlePublishing] 启动失败后的事务恢复也失败', {
-        taskId,
-        attemptId,
-        stage,
-        recoveryError: recovered.error.message,
-      })
-      throw new Error(`${stage}失败：${message}；恢复任务状态失败：${recovered.error.message}`)
+    const result = await window.cclinkStudio.articlePublishing.startTask({
+      workspaceRef,
+      affairId: taskId,
+    })
+    if (!result.success) {
+      await reload().catch(() => undefined)
+      throw new Error(result.error.message)
     }
+    setAffair(result.data.affair)
+    setNotice(
+      result.data.resumed
+        ? 'main 已恢复原 Attempt，并绑定新一代 Agent/Browser Runtime。'
+        : 'main 已创建发布 Attempt，并绑定可见网页与专属 Agent。',
+    )
   }
 
   const startTask = async (): Promise<void> => {
@@ -381,6 +310,44 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       ),
     )
     setNotice('已复制发布事务与框架关键日志。')
+  }
+
+  const manageRuntime = async (operation: 'check' | 'continue' | 'terminate'): Promise<void> => {
+    if (!affair?.articlePublishing) return
+    const execution = affair.articlePublishing.execution
+    const attemptId = execution.currentAttemptId
+    const launchOperationId = execution.currentLaunchOperationId
+    if (!attemptId || !launchOperationId) return
+    setBusy(true)
+    setError(null)
+    try {
+      const input = {
+        workspaceRef,
+        affairId: affair.id,
+        attemptId,
+        executionGeneration: execution.currentGeneration,
+        launchOperationId,
+      }
+      const result =
+        operation === 'check'
+          ? await window.cclinkStudio.articlePublishing.checkRuntime(input)
+          : operation === 'continue'
+            ? await window.cclinkStudio.articlePublishing.continueRuntime(input)
+            : await window.cclinkStudio.articlePublishing.terminateRuntime(input)
+      if (!result.success) throw new Error(result.error.message)
+      setAffair(result.data)
+      setNotice(
+        operation === 'terminate'
+          ? '当前发布运行已终止；若网页动作结果未知，系统只允许核验，不会重复执行。'
+          : operation === 'continue'
+            ? '主进程已核验 Runtime 并继续等待。'
+            : '主进程已重新核验 Agent、BrowserTask、Tab 与 CDP 状态。',
+      )
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setBusy(false)
+    }
   }
 
   if (!affairId) {
@@ -585,6 +552,11 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       </header>
       {error ? <div className="article-publishing-alert error">{error}</div> : null}
       {notice ? <div className="article-publishing-alert">{notice}</div> : null}
+      {publishing.execution.status === 'checking-runtime' && publishing.execution.runtimeCheck ? (
+        <div className="article-publishing-alert error">
+          待核验：{publishing.execution.runtimeCheck.reason}
+        </div>
+      ) : null}
       <section className="article-publishing-card">
         <h2>已保存配置</h2>
         <div className="article-publishing-config-grid">
@@ -655,6 +627,21 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           Attempt：{publishing.execution.currentAttemptId?.slice(0, 8) ?? '尚未开始'} ·{' '}
           {publishing.execution.status}
         </span>
+        {['running', 'checking-runtime'].includes(publishing.execution.status) ? (
+          <button type="button" disabled={busy} onClick={() => void manageRuntime('check')}>
+            检查运行状态
+          </button>
+        ) : null}
+        {publishing.execution.status === 'checking-runtime' ? (
+          <button type="button" disabled={busy} onClick={() => void manageRuntime('continue')}>
+            继续等待
+          </button>
+        ) : null}
+        {['preparing', 'running', 'checking-runtime'].includes(publishing.execution.status) ? (
+          <button type="button" disabled={busy} onClick={() => void manageRuntime('terminate')}>
+            终止任务
+          </button>
+        ) : null}
         <button
           type="button"
           className="primary"

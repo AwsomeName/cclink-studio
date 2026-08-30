@@ -1270,6 +1270,134 @@ describe('CclinkRemoteService runtime protocol', () => {
     })
   })
 
+  it('同一任务的多张审批卡使用独立控制 request_id', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+    for (const [msgId, toolUseId] of [
+      ['message-approval-1', 'tool-approval-1'],
+      ['message-approval-2', 'tool-approval-2'],
+    ]) {
+      await handle({
+        ...createCclinkEnvelope('agent_tool', { request_id: 'shared-run-request' }),
+        session_id: 'session-1',
+        msg_id: msgId,
+        tool: 'WebSearch',
+        tool_use_id: toolUseId,
+        state: 'pending',
+        requires_approval: true,
+      })
+    }
+    vi.spyOn(service, 'connect').mockResolvedValue({ state: 'online' })
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+    const request = vi
+      .spyOn(service.getRequestRouter(), 'request')
+      .mockImplementation(async (_serverId, message) => ({
+        ...createCclinkEnvelope('tool_approval_ack'),
+        request_id: message.request_id,
+        session_id: 'session-1',
+        tool_use_id: String((message as { tool_use_id?: string }).tool_use_id),
+        approved: true,
+        status: 'accepted',
+      }))
+
+    await expect(
+      Promise.all(
+        ['tool-approval-1', 'tool-approval-2'].map((toolUseId) =>
+          service.resolveToolApproval({
+            ref: remoteRef,
+            sessionId: 'session-1',
+            requestId: 'shared-run-request',
+            toolUseId,
+            approved: true,
+          }),
+        ),
+      ),
+    ).resolves.toEqual([{ success: true }, { success: true }])
+
+    const outbound = request.mock.calls.map((call) => call[1])
+    expect(outbound.map((message) => message.request_id)).toEqual([
+      expect.any(String),
+      expect.any(String),
+    ])
+    expect(outbound[0]?.request_id).not.toBe(outbound[1]?.request_id)
+    expect(outbound.map((message) => message.trace_id)).toEqual([
+      'shared-run-request',
+      'shared-run-request',
+    ])
+  })
+
+  it('真实 transport 能乱序完成同一任务的多张审批卡', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+    installOnlineServer(service)
+    const transport = new ReceivingTransport()
+    service.getRequestRouter().attach(transport)
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+
+    for (const [msgId, toolUseId] of [
+      ['message-transport-1', 'tool-transport-1'],
+      ['message-transport-2', 'tool-transport-2'],
+    ]) {
+      await handle({
+        ...createCclinkEnvelope('agent_tool', { request_id: 'shared-transport-run' }),
+        session_id: 'session-1',
+        msg_id: msgId,
+        tool: 'WebSearch',
+        tool_use_id: toolUseId,
+        state: 'pending',
+        requires_approval: true,
+      })
+    }
+
+    const approvals = Promise.all(
+      ['tool-transport-1', 'tool-transport-2'].map((toolUseId) =>
+        service.resolveToolApproval({
+          ref: remoteRef,
+          sessionId: 'session-1',
+          requestId: 'shared-transport-run',
+          toolUseId,
+          approved: true,
+        }),
+      ),
+    )
+    await vi.waitFor(() => expect(transport.sent).toHaveLength(2))
+
+    const outbound = transport.sent.map(({ message }) => ({
+      requestId: message.request_id,
+      traceId: message.trace_id,
+      toolUseId: String((message as { tool_use_id?: string }).tool_use_id),
+    }))
+    expect(new Set(outbound.map((message) => message.requestId)).size).toBe(2)
+    expect(outbound.map((message) => message.traceId)).toEqual([
+      'shared-transport-run',
+      'shared-transport-run',
+    ])
+
+    for (const message of outbound.reverse()) {
+      transport.receive('agent-1', {
+        ...createCclinkEnvelope('tool_approval_ack'),
+        request_id: message.requestId,
+        session_id: 'session-1',
+        tool_use_id: message.toolUseId,
+        approved: true,
+        status: 'accepted',
+      })
+    }
+
+    await expect(approvals).resolves.toEqual([{ success: true }, { success: true }])
+    expect(service.listMessages('session-1')).toEqual([
+      expect.objectContaining({
+        type: 'agentTool',
+        tool: expect.objectContaining({ state: 'executing', requiresApproval: false }),
+      }),
+      expect.objectContaining({
+        type: 'agentTool',
+        tool: expect.objectContaining({ state: 'executing', requiresApproval: false }),
+      }),
+    ])
+    service.getRequestRouter().detach()
+  })
+
   it('按问题文本发送多选答案且只在 ACK 后标记已回答', async () => {
     const { service, handle } = createService()
     await service.initialize()
@@ -1308,7 +1436,11 @@ describe('CclinkRemoteService runtime protocol', () => {
     ).resolves.toEqual({ success: true })
     expect(request).toHaveBeenCalledWith(
       'agent-1',
-      expect.objectContaining({ answers: { '启用哪些功能？': 'A, B' } }),
+      expect.objectContaining({
+        answers: { '启用哪些功能？': 'A, B' },
+        request_id: expect.not.stringMatching(/^question-request$/u),
+        trace_id: 'question-request',
+      }),
       ['question_answer_ack'],
       15_000,
     )

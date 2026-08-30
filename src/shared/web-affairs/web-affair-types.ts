@@ -82,6 +82,7 @@ export interface WebAffairFlow {
 export type WebAffairAttemptStatus =
   | 'preparing'
   | 'running-ai'
+  | 'checking-runtime'
   | 'waiting-human'
   | 'waiting-external'
   | 'verifying'
@@ -90,11 +91,101 @@ export type WebAffairAttemptStatus =
   | 'cancelled'
   | 'interrupted'
 
+export interface WebAffairRuntimeBindingBase {
+  id: string
+  attemptId: string
+  executionGeneration: number
+  launchOperationId: string
+  status: 'binding' | 'active' | 'terminal' | 'lost'
+  boundAt: string
+  lastObservedAt: string
+  endedAt?: string
+  terminalReason?: string
+}
+
+export type WebAffairRuntimeBinding =
+  | (WebAffairRuntimeBindingBase & {
+      kind: 'agent-run'
+      conversationId: string
+      agentRunId: string
+      agentRuntimeEpoch: number
+      agentRuntimeBindingKey: string
+    })
+  | (WebAffairRuntimeBindingBase & {
+      kind: 'browser-task'
+      browserTaskRunId: string
+      tabId: string
+      browserViewRuntimeGeneration: number
+      webContentsId: number
+      playwrightConnectionGeneration: number
+      playwrightPageBindingGeneration: number
+    })
+  | (WebAffairRuntimeBindingBase & {
+      kind: 'browser-tab'
+      tabId: string
+      browserViewRuntimeGeneration: number
+      webContentsId: number
+    })
+
+export type ArticlePublishingRuntimeIdentity =
+  | Pick<
+      Extract<WebAffairRuntimeBinding, { kind: 'agent-run' }>,
+      'kind' | 'conversationId' | 'agentRunId' | 'agentRuntimeEpoch' | 'agentRuntimeBindingKey'
+    >
+  | Pick<
+      Extract<WebAffairRuntimeBinding, { kind: 'browser-task' }>,
+      | 'kind'
+      | 'browserTaskRunId'
+      | 'tabId'
+      | 'browserViewRuntimeGeneration'
+      | 'webContentsId'
+      | 'playwrightConnectionGeneration'
+      | 'playwrightPageBindingGeneration'
+    >
+  | Pick<
+      Extract<WebAffairRuntimeBinding, { kind: 'browser-tab' }>,
+      'kind' | 'tabId' | 'browserViewRuntimeGeneration' | 'webContentsId'
+    >
+
+export interface ReconcileArticlePublishingRuntimeInput {
+  eventId: string
+  workspaceId: string
+  affairId: string
+  attemptId: string
+  executionGeneration: number
+  launchOperationId: string
+  source:
+    | 'agent-terminal'
+    | 'browser-terminal'
+    | 'tab-lost'
+    | 'launch-timeout'
+    | 'lease-expired'
+    | 'startup'
+    | 'shutdown'
+    | 'user-check'
+    | 'user-cancel'
+  observedAt: string
+  runtimeBindingId?: string
+  runtimeIdentity?: ArticlePublishingRuntimeIdentity
+  observedStatus?: string
+  lastOwnerAt?: string
+  lastProgressAt?: string
+  probeDeadline?: string
+  reasonCode: string
+  reason: string
+}
+
 export interface WebAffairAttempt {
   id: string
   nodeId: string
   number: number
   status: WebAffairAttemptStatus
+  /** Hard isolation boundary between replacement runtime launches for one Attempt. */
+  executionGeneration: number
+  /** Idempotency key for one main-process-owned launch operation. */
+  launchOperationId: string
+  runtimeBindings: WebAffairRuntimeBinding[]
+  processedRuntimeEventIds?: string[]
   profileId: string
   accountId: string
   entryUrl: string
@@ -222,7 +313,7 @@ export interface WebAffair {
 }
 
 export interface WebAffairSnapshot {
-  schemaVersion: 4
+  schemaVersion: 5
   revision: number
   affairs: WebAffair[]
 }
@@ -430,7 +521,7 @@ export type WebAffairOperationResult<T> =
   | { success: false; error: WebAffairOperationError }
 
 export const EMPTY_WEB_AFFAIR_SNAPSHOT: WebAffairSnapshot = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   revision: 0,
   affairs: [],
 }

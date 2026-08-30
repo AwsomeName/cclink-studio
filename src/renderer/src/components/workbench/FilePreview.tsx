@@ -18,6 +18,7 @@ import {
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
 import { copyBase64ImageToClipboard } from '../../utils/image-clipboard'
+import { PdfPreview } from './PdfPreview'
 
 interface FilePreviewProps {
   filePath: string
@@ -176,18 +177,11 @@ export function FilePreview({
             系统打开
           </button>
         </div>
-        <object
-          className="file-preview-pdf-frame"
-          data={`data:${result.mimeType};base64,${result.content}`}
-          type={result.mimeType}
-        >
-          <div className="file-preview-message">
-            <div className="file-preview-message-title">无法内嵌显示 PDF</div>
-            <button type="button" onClick={openExternal}>
-              用系统应用打开
-            </button>
-          </div>
-        </object>
+        <PdfPreview
+          content={result.content}
+          fileName={result.fileName}
+          onOpenExternal={openExternal}
+        />
       </div>
     )
   }

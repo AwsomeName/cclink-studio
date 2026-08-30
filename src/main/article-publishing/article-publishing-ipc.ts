@@ -48,13 +48,39 @@ export function registerArticlePublishingIpc(
     },
   )
   registerTrustedIpcContract(
-    articlePublishingIpcContracts.recoverTaskLaunch,
+    articlePublishingIpcContracts.checkRuntime,
     trustedRendererGuard,
     async (_event, input) => {
       const resolved = await resolveWorkspaceId(input.workspaceRef, getWorkspaceStateService())
       const service = getService()
       return resolved.success && service
-        ? service.recoverTaskLaunch(input, resolved.data)
+        ? service.checkRuntime(input, resolved.data)
+        : resolved.success
+          ? unavailable()
+          : resolved
+    },
+  )
+  registerTrustedIpcContract(
+    articlePublishingIpcContracts.continueRuntime,
+    trustedRendererGuard,
+    async (_event, input) => {
+      const resolved = await resolveWorkspaceId(input.workspaceRef, getWorkspaceStateService())
+      const service = getService()
+      return resolved.success && service
+        ? service.continueRuntime(input, resolved.data)
+        : resolved.success
+          ? unavailable()
+          : resolved
+    },
+  )
+  registerTrustedIpcContract(
+    articlePublishingIpcContracts.terminateRuntime,
+    trustedRendererGuard,
+    async (_event, input) => {
+      const resolved = await resolveWorkspaceId(input.workspaceRef, getWorkspaceStateService())
+      const service = getService()
+      return resolved.success && service
+        ? service.terminateRuntime(input, resolved.data)
         : resolved.success
           ? unavailable()
           : resolved

@@ -1,4 +1,5 @@
 import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
+import type { RemoteFileDraft } from '@shared/ipc/remote'
 
 export interface RemoteFileDraftController {
   save(): Promise<boolean>
@@ -11,6 +12,7 @@ export interface RemoteFileDraftSnapshot {
   content: string
   savedContent: string
   sha256: string
+  pendingMutation?: RemoteFileDraft['pendingMutation']
 }
 
 const controllers = new Map<string, RemoteFileDraftController>()
@@ -71,6 +73,7 @@ export async function restoreRemoteFileDraft(
     content: persisted.content,
     savedContent: persisted.savedContent,
     sha256: persisted.sha256,
+    pendingMutation: persisted.pendingMutation,
   }
   snapshots.set(tabId, snapshot)
   return snapshot
@@ -97,6 +100,7 @@ export function rebaseRemoteFileDraftPaths(
     snapshots.set(tabId, {
       ...snapshot,
       path: `${newPrefix}${snapshot.path.slice(oldPrefix.length)}`,
+      pendingMutation: undefined,
     })
   }
   void window.cclinkStudio.remote.rebaseDraftPrefix({ ref, oldPrefix, newPrefix })

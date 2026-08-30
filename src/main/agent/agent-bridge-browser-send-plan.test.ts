@@ -227,10 +227,17 @@ describe('AgentBridge browser send plan', () => {
     const onCorrelatedBrowserTaskEnded = vi.fn()
     const task = {
       id: 'browser-task',
+      tabId: 'tab-a',
       correlation: {
         workspaceKey: '/workspace/a',
         affairId: 'affair-a',
         affairAttemptId: 'attempt-a',
+        affairExecutionGeneration: 1,
+        affairLaunchOperationId: 'launch-a',
+        browserViewRuntimeGeneration: 2,
+        webContentsId: 20,
+        playwrightConnectionGeneration: 3,
+        playwrightPageBindingGeneration: 4,
       },
     }
     const failTask = vi.fn()
@@ -257,6 +264,13 @@ describe('AgentBridge browser send plan', () => {
       affairId: 'affair-a',
       attemptId: 'attempt-a',
       browserTaskRunId: 'browser-task',
+      executionGeneration: 1,
+      launchOperationId: 'launch-a',
+      tabId: 'tab-a',
+      browserViewRuntimeGeneration: 2,
+      webContentsId: 20,
+      playwrightConnectionGeneration: 3,
+      playwrightPageBindingGeneration: 4,
       reason: 'Agent Run 或 BrowserTask 失败：automation unavailable',
     })
   })
@@ -265,6 +279,7 @@ describe('AgentBridge browser send plan', () => {
     const onCorrelatedBrowserTaskEnded = vi.fn()
     const publishingTask = {
       id: 'publishing-task',
+      tabId: 'tab-a',
       status: 'failed',
       correlation: {
         workspaceKey: '/workspace/a',
@@ -272,6 +287,12 @@ describe('AgentBridge browser send plan', () => {
         agentRunId: 'run-a',
         affairId: 'affair-a',
         affairAttemptId: 'attempt-a',
+        affairExecutionGeneration: 1,
+        affairLaunchOperationId: 'launch-a',
+        browserViewRuntimeGeneration: 2,
+        webContentsId: 20,
+        playwrightConnectionGeneration: 3,
+        playwrightPageBindingGeneration: 4,
       },
     }
     const laterUnboundTask = {
@@ -310,6 +331,13 @@ describe('AgentBridge browser send plan', () => {
       affairId: 'affair-a',
       attemptId: 'attempt-a',
       browserTaskRunId: 'publishing-task',
+      executionGeneration: 1,
+      launchOperationId: 'launch-a',
+      tabId: 'tab-a',
+      browserViewRuntimeGeneration: 2,
+      webContentsId: 20,
+      playwrightConnectionGeneration: 3,
+      playwrightPageBindingGeneration: 4,
       reason: 'Agent Run 或 BrowserTask 失败：automation unavailable',
     })
   })

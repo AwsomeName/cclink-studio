@@ -113,6 +113,7 @@ interface AgentState {
 
   // --- 会话 Actions ---
   createConversation: (options?: {
+    id?: string
     surface?: ConversationSurface
     runtime?: ConversationRuntimeRef
     runtimeBinding?: AgentRuntimeBinding
@@ -494,7 +495,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   permissionMode: 'auto' as PermissionMode,
 
   createConversation: (options) => {
-    const conversation = createConversation(undefined, options)
+    const existing = options?.id ? get().conversations[options.id] : undefined
+    if (existing) {
+      if (options?.activate ?? true) get().switchConversation(existing.id)
+      return existing.id
+    }
+    const { id, ...conversationOptions } = options ?? {}
+    const conversation = createConversation(id, conversationOptions)
     set((state) => {
       const shouldActivate = options?.activate ?? true
       return {

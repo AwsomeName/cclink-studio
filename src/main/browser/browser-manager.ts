@@ -2126,6 +2126,50 @@ export class BrowserManager {
     return this.views.get(tabId)?.profileId
   }
 
+  getViewRuntimeIdentity(
+    tabId: string,
+  ): { tabId: string; browserViewRuntimeGeneration: number; webContentsId: number } | null {
+    const entry = this.views.get(tabId)
+    return entry
+      ? {
+          tabId,
+          browserViewRuntimeGeneration: entry.runtimeGeneration,
+          webContentsId: entry.view.webContents.id,
+        }
+      : null
+  }
+
+  /** main-owned account launch; renderer only materializes the requested workbench projection. */
+  async waitForAccountView(
+    workspaceKey: string,
+    profileId: string,
+    accountId: string,
+    initialUrl: string,
+    timeoutMs = 8_000,
+  ): Promise<string | null> {
+    const find = (): string | null =>
+      [...this.views].find(
+        ([, entry]) => entry.workspaceKey === workspaceKey && entry.profileId === profileId,
+      )?.[0] ?? null
+    const deadline = Date.now() + timeoutMs
+    let lastRequestAt = 0
+    let tabId = find()
+    while (!tabId && Date.now() < deadline) {
+      if (Date.now() - lastRequestAt >= 500) {
+        this.win()?.webContents.send(browserIpcEvents.requestOpenTab, {
+          initialUrl,
+          workspaceKey,
+          profileId,
+          accountId,
+        })
+        lastRequestAt = Date.now()
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      tabId = find()
+    }
+    return tabId
+  }
+
   /** 等待 renderer 完成浏览器 Tab -> WebContentsView 的异步创建与激活。 */
   async waitForActiveView(timeoutMs = 2500): Promise<string | null> {
     const deadline = Date.now() + timeoutMs

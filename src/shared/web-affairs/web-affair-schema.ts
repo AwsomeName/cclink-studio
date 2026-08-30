@@ -330,6 +330,52 @@ const webAffairEvidenceSchema = z
   })
   .strict()
 
+const runtimeBindingBaseShape = {
+  id: uuidSchema,
+  attemptId: uuidSchema,
+  executionGeneration: positiveVersionSchema,
+  launchOperationId: trimmedText(200, '启动操作 ID'),
+  status: z.enum(['binding', 'active', 'terminal', 'lost']),
+  boundAt: timestampSchema,
+  lastObservedAt: timestampSchema,
+  endedAt: timestampSchema.optional(),
+  terminalReason: optionalTrimmedText(2_000, 'Runtime 终态原因'),
+}
+
+const webAffairRuntimeBindingSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      ...runtimeBindingBaseShape,
+      kind: z.literal('agent-run'),
+      conversationId: trimmedText(200, 'Agent 会话 ID'),
+      agentRunId: trimmedText(200, 'Agent Run ID'),
+      agentRuntimeEpoch: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+      agentRuntimeBindingKey: trimmedText(500, 'Agent Runtime Binding Key'),
+    })
+    .strict(),
+  z
+    .object({
+      ...runtimeBindingBaseShape,
+      kind: z.literal('browser-task'),
+      browserTaskRunId: uuidSchema,
+      tabId: trimmedText(200, '浏览器 Tab ID'),
+      browserViewRuntimeGeneration: positiveVersionSchema,
+      webContentsId: z.number().int().positive(),
+      playwrightConnectionGeneration: positiveVersionSchema,
+      playwrightPageBindingGeneration: positiveVersionSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...runtimeBindingBaseShape,
+      kind: z.literal('browser-tab'),
+      tabId: trimmedText(200, '浏览器 Tab ID'),
+      browserViewRuntimeGeneration: positiveVersionSchema,
+      webContentsId: z.number().int().positive(),
+    })
+    .strict(),
+])
+
 const webAffairAttemptSchema = z
   .object({
     id: uuidSchema,
@@ -338,6 +384,7 @@ const webAffairAttemptSchema = z
     status: z.enum([
       'preparing',
       'running-ai',
+      'checking-runtime',
       'waiting-human',
       'waiting-external',
       'verifying',
@@ -346,6 +393,10 @@ const webAffairAttemptSchema = z
       'cancelled',
       'interrupted',
     ]),
+    executionGeneration: positiveVersionSchema,
+    launchOperationId: trimmedText(200, '启动操作 ID'),
+    runtimeBindings: z.array(webAffairRuntimeBindingSchema).max(40),
+    processedRuntimeEventIds: z.array(trimmedText(500, 'Runtime 事件 ID')).max(200).optional(),
     profileId: trimmedText(200, 'Profile ID'),
     accountId: uuidSchema,
     entryUrl: z.url().max(4_096),
@@ -483,7 +534,7 @@ const webAffairSchema = z
 
 export const webAffairSnapshotSchema = z
   .object({
-    schemaVersion: z.literal(4),
+    schemaVersion: z.literal(5),
     revision: z.number().int().nonnegative(),
     affairs: z.array(webAffairSchema).max(1_000),
   })
@@ -504,6 +555,44 @@ export function parseWebAffairSnapshot(value: unknown) {
 function migrateSnapshot(value: unknown): unknown {
   if (!value || typeof value !== 'object') return value
   const snapshot = structuredClone(value) as Record<string, unknown>
+  if (snapshot['schemaVersion'] === 4) {
+    const affairs = Array.isArray(snapshot['affairs']) ? snapshot['affairs'] : []
+    for (const item of affairs) {
+      if (!item || typeof item !== 'object') continue
+      const affair = item as Record<string, unknown>
+      const attempts = Array.isArray(affair['attempts']) ? affair['attempts'] : []
+      for (const attemptValue of attempts) {
+        if (!attemptValue || typeof attemptValue !== 'object') continue
+        const attempt = attemptValue as Record<string, unknown>
+        attempt['executionGeneration'] ??= 1
+        attempt['launchOperationId'] ??= `legacy:${String(attempt['id'] ?? 'unknown')}:1`
+        attempt['runtimeBindings'] ??= []
+      }
+      const publishing = affair['articlePublishing']
+      if (publishing && typeof publishing === 'object') {
+        const article = publishing as Record<string, unknown>
+        article['sideEffects'] ??= []
+        const execution = article['execution']
+        if (execution && typeof execution === 'object') {
+          const state = execution as Record<string, unknown>
+          const currentAttemptId = state['currentAttemptId']
+          const currentAttempt = attempts.find(
+            (candidate) =>
+              candidate &&
+              typeof candidate === 'object' &&
+              (candidate as Record<string, unknown>)['id'] === currentAttemptId,
+          ) as Record<string, unknown> | undefined
+          state['currentGeneration'] ??= currentAttempt?.['executionGeneration'] ?? 0
+          state['currentLaunchOperationId'] ??= currentAttempt?.['launchOperationId']
+          if (state['status'] === 'running' && currentAttempt?.['status'] === 'preparing') {
+            state['status'] = 'preparing'
+          }
+        }
+      }
+    }
+    snapshot['schemaVersion'] = 5
+    return snapshot
+  }
   if (snapshot['schemaVersion'] === 3) {
     const affairs = Array.isArray(snapshot['affairs']) ? snapshot['affairs'] : []
     for (const item of affairs) {
@@ -512,7 +601,7 @@ function migrateSnapshot(value: unknown): unknown {
       affair['kind'] = 'generic'
     }
     snapshot['schemaVersion'] = 4
-    return snapshot
+    return migrateSnapshot(snapshot)
   }
   if (snapshot['schemaVersion'] === 2) {
     const affairs = Array.isArray(snapshot['affairs']) ? snapshot['affairs'] : []

@@ -6805,10 +6805,15 @@ body.is-resizing-panels .main-area > div {
 }
 
 .agent-panel-notice-area {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 0 12px;
+}
+
+.agent-messages > .agent-panel-notice-area {
+  padding: 0;
 }
 
 .agent-panel-notice-area:empty {
@@ -14374,12 +14379,94 @@ button.context-menu-item {
   overflow: hidden;
 }
 
-.file-preview-pdf-frame {
+.file-preview-pdf-viewer {
+  display: flex;
   flex: 1;
   min-height: 0;
-  width: 100%;
-  border: 0;
+  flex-direction: column;
   background: var(--bg-workbench);
+}
+
+.file-preview-pdf-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-toolbar);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.file-preview-pdf-controls button {
+  min-width: 30px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.file-preview-pdf-controls button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.file-preview-pdf-controls button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.file-preview-pdf-control-divider {
+  align-self: stretch;
+  width: 1px;
+  margin: 6px 2px;
+  background: var(--border-color);
+}
+
+.file-preview-pdf-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+  text-align: center;
+}
+
+.file-preview-pdf-stage canvas {
+  display: inline-block;
+  background: #fff;
+  box-shadow: 0 4px 18px rgb(0 0 0 / 35%);
+  vertical-align: top;
+}
+
+.file-preview-pdf-page-status {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  width: fit-content;
+  margin: 0 auto -26px;
+  border-radius: 4px;
+  background: rgb(24 24 24 / 85%);
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 5px 9px;
+}
+
+.file-preview-pdf-page-status.error {
+  color: var(--error-fg);
+}
+
+.file-preview-pdf-message {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .file-preview-media-stage {

@@ -134,6 +134,12 @@ export interface BrowserTaskRun {
     affairId?: string
     affairNodeId?: string
     affairAttemptId?: string
+    affairExecutionGeneration?: number
+    affairLaunchOperationId?: string
+    browserViewRuntimeGeneration?: number
+    webContentsId?: number
+    playwrightConnectionGeneration?: number
+    playwrightPageBindingGeneration?: number
   }
   status: BrowserTaskStatus
   /** 人工接管交还后，Agent 必须先读取当前页面才能继续写操作。 */
@@ -382,6 +388,8 @@ export interface BrowserOpenTabRequest {
   workspaceKey: string | null
   /** 新 Tab 必须继承来源页面的持久化 Profile。存在时必须同时提供 sourceTabId。 */
   profileId?: string | null
+  /** main 进程签发的登记账号归属；renderer 仅物化账号 Tab。 */
+  accountId?: string
   /** 来源 Browser Tab；renderer 用它继承账号或草稿归属，禁止只继承 Profile。 */
   sourceTabId?: string
   /** 原生网页菜单显式要求新建 Tab 时不得复用当前页面。 */
@@ -510,6 +518,7 @@ export function parseBrowserOpenTabRequest(value: unknown): BrowserOpenTabReques
     isOptionalBrowserString(payload['initialUrl'], 32_768) &&
     isNullableBrowserString(payload['workspaceKey'], 32_768) &&
     (payload['profileId'] === undefined || isNullableBrowserString(payload['profileId'], 128)) &&
+    isOptionalBrowserString(payload['accountId'], 128) &&
     isOptionalBrowserString(payload['sourceTabId'], 512) &&
     (payload['forceNew'] === undefined || typeof payload['forceNew'] === 'boolean')
     ? (value as BrowserOpenTabRequest)

@@ -249,7 +249,7 @@ describe('article publishing persistent state', () => {
       status: 'preparing',
     })
     expect(resumed.data.articlePublishing?.execution).toMatchObject({
-      status: 'running',
+      status: 'preparing',
       currentAttemptId: created.attemptId,
     })
     expect(resumed.data.articlePublishing?.checkpoints[0].status).toBe('needs-reconcile')
@@ -285,7 +285,7 @@ describe('article publishing persistent state', () => {
     expect(recovered.success).toBe(true)
     if (!recovered.success) return
     expect(recovered.data.articlePublishing?.execution.status).toBe('interrupted')
-    expect(recovered.data.articlePublishing?.checkpoints[0].status).toBe('needs-reconcile')
+    expect(recovered.data.articlePublishing?.checkpoints[0].status).toBe('pending')
     expect(recovered.data.attempts).toHaveLength(1)
     expect(recovered.data.attempts[0]).toMatchObject({
       id: attemptId,
@@ -379,21 +379,237 @@ describe('article publishing persistent state', () => {
       expect(completed.success).toBe(true)
     }
 
-    const marked = await created.service.markArticlePublishingPublicationDispatched(
+    const current = created.service.getProjectSnapshot(WORKSPACE_ID)
+    expect(current.success).toBe(true)
+    if (!current.success) return
+    const attempt = current.data.affairs[0].attempts[0]
+    const fingerprint = 'publish-fingerprint'
+    const browserTaskRunId = '77777777-7777-4777-8777-777777777777'
+    const reserved = await created.service.reserveArticlePublishingSideEffect(
       created.affairId,
       created.attemptId,
+      attempt.executionGeneration,
+      'publish',
+      'final',
+      fingerprint,
+      browserTaskRunId,
       WORKSPACE_ID,
     )
-    expect(marked.success).toBe(true)
-    if (!marked.success) return
-    expect(marked.data.articlePublishing?.publication.status).toBe('dispatched')
-
-    const duplicate = await created.service.markArticlePublishingPublicationDispatched(
+    expect(reserved.success).toBe(true)
+    const sideEffectKey = `${created.affairId}:${created.attemptId}:g${attempt.executionGeneration}:publish:final`
+    const consumed = await created.service.consumeArticlePublishingSideEffect(
       created.affairId,
       created.attemptId,
+      attempt.executionGeneration,
+      sideEffectKey,
+      fingerprint,
+      browserTaskRunId,
+      WORKSPACE_ID,
+    )
+    expect(consumed.success).toBe(true)
+    if (!consumed.success) return
+    expect(consumed.data.articlePublishing?.publication.status).toBe('dispatched')
+
+    const duplicate = await created.service.consumeArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      attempt.executionGeneration,
+      sideEffectKey,
+      fingerprint,
+      browserTaskRunId,
       WORKSPACE_ID,
     )
     expect(duplicate).toMatchObject({ success: false, error: { code: 'INVALID_TRANSITION' } })
+  })
+
+  it('consumes a persisted side-effect capability exactly once across restart', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const snapshot = created.service.getProjectSnapshot(WORKSPACE_ID)
+    expect(snapshot.success).toBe(true)
+    if (!snapshot.success) return
+    const attempt = snapshot.data.affairs[0].attempts[0]
+    const browserTaskRunId = '77777777-7777-4777-8777-777777777777'
+    const fingerprint = 'fingerprint-save-draft'
+    const reserved = await created.service.reserveArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      attempt.executionGeneration,
+      'save-draft',
+      'source-a',
+      fingerprint,
+      browserTaskRunId,
+      WORKSPACE_ID,
+    )
+    expect(reserved.success).toBe(true)
+    const sideEffectKey = `${created.affairId}:${created.attemptId}:g${attempt.executionGeneration}:save-draft:source-a`
+    const consumed = await created.service.consumeArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      attempt.executionGeneration,
+      sideEffectKey,
+      fingerprint,
+      browserTaskRunId,
+      WORKSPACE_ID,
+    )
+    expect(consumed.success).toBe(true)
+    if (!consumed.success) return
+    expect(consumed.data.articlePublishing?.sideEffects[0].status).toBe('dispatched')
+    await created.service.flush()
+
+    const reloaded = createService(directory)
+    await reloaded.load()
+    const duplicate = await reloaded.consumeArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      attempt.executionGeneration,
+      sideEffectKey,
+      fingerprint,
+      browserTaskRunId,
+      WORKSPACE_ID,
+    )
+    expect(duplicate).toMatchObject({ success: false, error: { code: 'INVALID_TRANSITION' } })
+  })
+
+  it('ignores stale owner identities and old execution generations', async () => {
+    const created = await createDraftTask(directory, sourcePath, imagePath)
+    const started = await created.service.startAttempt(
+      {
+        workspaceRef: { kind: 'local', path: directory },
+        affairId: created.affairId,
+        nodeId: created.nodeId,
+        accountId: ACCOUNT_ID,
+      },
+      WORKSPACE_ID,
+    )
+    expect(started.success).toBe(true)
+    if (!started.success) return
+    const attempt = started.data.attempts[0]
+    const now = new Date().toISOString()
+    const browserTaskRunId = '77777777-7777-4777-8777-777777777777'
+    const bound = await created.service.bindArticlePublishingRuntime(
+      created.affairId,
+      attempt.id,
+      attempt.executionGeneration,
+      attempt.launchOperationId,
+      [
+        {
+          id: '88888888-8888-4888-8888-888888888881',
+          kind: 'agent-run',
+          attemptId: attempt.id,
+          executionGeneration: attempt.executionGeneration,
+          launchOperationId: attempt.launchOperationId,
+          status: 'active',
+          boundAt: now,
+          lastObservedAt: now,
+          conversationId: 'conversation-a',
+          agentRunId: 'run-a',
+          agentRuntimeEpoch: 10,
+          agentRuntimeBindingKey: 'runtime-a',
+        },
+        {
+          id: '88888888-8888-4888-8888-888888888882',
+          kind: 'browser-tab',
+          attemptId: attempt.id,
+          executionGeneration: attempt.executionGeneration,
+          launchOperationId: attempt.launchOperationId,
+          status: 'active',
+          boundAt: now,
+          lastObservedAt: now,
+          tabId: 'tab-a',
+          browserViewRuntimeGeneration: 2,
+          webContentsId: 20,
+        },
+        {
+          id: '88888888-8888-4888-8888-888888888883',
+          kind: 'browser-task',
+          attemptId: attempt.id,
+          executionGeneration: attempt.executionGeneration,
+          launchOperationId: attempt.launchOperationId,
+          status: 'active',
+          boundAt: now,
+          lastObservedAt: now,
+          browserTaskRunId,
+          tabId: 'tab-a',
+          browserViewRuntimeGeneration: 2,
+          webContentsId: 20,
+          playwrightConnectionGeneration: 3,
+          playwrightPageBindingGeneration: 4,
+        },
+      ],
+      WORKSPACE_ID,
+    )
+    expect(bound.success).toBe(true)
+
+    const wrongOwner = await created.service.reconcileArticlePublishingRuntime({
+      eventId: 'wrong-owner',
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      source: 'agent-terminal',
+      observedAt: now,
+      runtimeIdentity: {
+        kind: 'agent-run',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        agentRuntimeEpoch: 9,
+        agentRuntimeBindingKey: 'runtime-a',
+      },
+      reasonCode: 'OLD_OWNER',
+      reason: 'late event',
+    })
+    expect(wrongOwner.success && wrongOwner.data.articlePublishing?.execution.status).toBe(
+      'running',
+    )
+
+    const interrupted = await created.service.reconcileArticlePublishingRuntime({
+      eventId: 'user-owner-check',
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      source: 'user-check',
+      observedAt: now,
+      observedStatus: 'owner-lost',
+      reasonCode: 'OWNER_LOST',
+      reason: 'owner missing',
+    })
+    expect(interrupted.success).toBe(true)
+    if (!interrupted.success) return
+    expect(interrupted.data.articlePublishing?.execution.status).toBe('interrupted')
+    const resumed = await created.service.resumeArticlePublishingAttempt(
+      created.affairId,
+      attempt.id,
+      WORKSPACE_ID,
+    )
+    expect(resumed.success).toBe(true)
+    if (!resumed.success) return
+    expect(resumed.data.attempts[0].executionGeneration).toBe(attempt.executionGeneration + 1)
+
+    const lateOldGeneration = await created.service.reconcileArticlePublishingRuntime({
+      eventId: 'late-old-generation',
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      source: 'agent-terminal',
+      observedAt: now,
+      runtimeIdentity: {
+        kind: 'agent-run',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        agentRuntimeEpoch: 10,
+        agentRuntimeBindingKey: 'runtime-a',
+      },
+      reasonCode: 'LATE_OLD_RUN',
+      reason: 'late event',
+    })
+    expect(lateOldGeneration.success).toBe(true)
+    if (!lateOldGeneration.success) return
+    expect(lateOldGeneration.data.articlePublishing?.execution.status).toBe('preparing')
   })
 })
 

@@ -807,6 +807,7 @@ export class BrowserToolModule implements ToolModule {
     }
     let actionLogId: string | null = null
     let activeTask: BrowserTaskRun | null = null
+    let sideEffectCapability: { sideEffectKey: string; actionFingerprint: string } | null = null
     if (tabId) {
       const task = this.browserTaskRuntime?.assertCanRunAction(tabId)
       if (task) {
@@ -817,7 +818,13 @@ export class BrowserToolModule implements ToolModule {
         if (task.correlation?.accountId) {
           await this.assertAccountOrigin(task, tabId, actionType, context, 'before')
         }
-        await this.assertAccountActionAllowed(task, actionType, params, page, context)
+        sideEffectCapability = await this.assertAccountActionAllowed(
+          task,
+          actionType,
+          params,
+          page,
+          context,
+        )
         const log = this.browserTaskRuntime!.startActionLog({
           taskRunId: task.id,
           tabId,
@@ -830,8 +837,18 @@ export class BrowserToolModule implements ToolModule {
 
     let dispatched = false
     const dispatchedGeneration = this.playwrightBridge.getConnectionGeneration?.() ?? 0
+    let sideEffectConsumed = false
     try {
       context?.abortSignal?.throwIfAborted()
+      if (activeTask && sideEffectCapability) {
+        await this.articlePublishingBrowserPolicy?.consumeSideEffect(
+          activeTask,
+          sideEffectCapability.sideEffectKey,
+          sideEffectCapability.actionFingerprint,
+          context,
+        )
+        sideEffectConsumed = true
+      }
       const result = await this.executeVisibleBrowserAction(
         actionType,
         params,
@@ -853,6 +870,16 @@ export class BrowserToolModule implements ToolModule {
       }
       return activeTask?.correlation?.accountId ? this.sanitizeAccountActionResult(result) : result
     } catch (error) {
+      if (activeTask && sideEffectCapability && sideEffectConsumed) {
+        await this.articlePublishingBrowserPolicy
+          ?.observeSideEffect(
+            activeTask,
+            sideEffectCapability.sideEffectKey,
+            'result-unknown',
+            context,
+          )
+          .catch(() => undefined)
+      }
       if (actionLogId) {
         this.browserTaskRuntime!.failActionLog(actionLogId, {
           reason: classifyBrowserError(error),
@@ -884,8 +911,8 @@ export class BrowserToolModule implements ToolModule {
     params: Record<string, unknown>,
     page: ReturnType<PlaywrightBridge['getPage']>,
     context?: ToolExecutionContext,
-  ): Promise<void> {
-    if (!task.correlation?.accountId) return
+  ): Promise<{ sideEffectKey: string; actionFingerprint: string } | null> {
+    if (!task.correlation?.accountId) return null
     const actualProfileId = this.browserManager?.getViewProfileId(task.tabId)
     if (actualProfileId !== task.correlation.profileId) {
       throw new Error('账号任务的隔离登录环境绑定已失效，已拒绝继续操作')
@@ -932,7 +959,12 @@ export class BrowserToolModule implements ToolModule {
         await this.pauseForTakeover(task, context, articleDecision.reason, actionType)
         throw new Error(`${articleDecision.reason}；任务已暂停，请由用户在可见页面完成后交还`)
       }
-      return
+      return articleDecision.kind === 'allow-once'
+        ? {
+            sideEffectKey: articleDecision.sideEffectKey,
+            actionFingerprint: articleDecision.actionFingerprint,
+          }
+        : null
     }
     if (actionType === 'handleDialog' && params.action === 'accept') {
       await this.pauseForTakeover(task, context, '网页确认对话框需要人工处理', actionType)
@@ -943,6 +975,7 @@ export class BrowserToolModule implements ToolModule {
       await this.pauseForTakeover(task, context, sensitiveReason, actionType)
       throw new Error(`${sensitiveReason}；任务已暂停，请由用户在可见页面完成后交还`)
     }
+    return null
   }
 
   private async assertWorkspacePaths(

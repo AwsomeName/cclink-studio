@@ -109,6 +109,13 @@ export interface AgentBridgeOptions {
     affairId: string
     attemptId: string
     browserTaskRunId: string
+    executionGeneration: number
+    launchOperationId: string
+    tabId: string
+    browserViewRuntimeGeneration: number
+    webContentsId: number
+    playwrightConnectionGeneration: number
+    playwrightPageBindingGeneration: number
     reason: string
   }) => Promise<void> | void
   /** 只记录、不控制调用的统一用量账本。 */
@@ -162,6 +169,7 @@ export class AgentBridge {
   private readonly runtimeStateStore: AgentRuntimeStateStore
   private readonly conversationWorkspaceKeys = new Map<string, string | null>()
   private readonly cancellingRuns = new Map<string, Promise<void>>()
+  private readonly runtimeEpoch = Date.now()
   constructor(
     mainWindow: BrowserWindow,
     playwrightBridge: PlaywrightBridge | null,
@@ -691,6 +699,20 @@ export class AgentBridge {
 
   getRunStatus(conversationId: string, runId: string): AgentRuntimeRunRecord | null {
     return this.runtimeStateStore.getRun(conversationId, runId)
+  }
+
+  getActiveBrowserTask(conversationId: string): BrowserTaskRun | null {
+    return this.deps.browserTaskRuntime?.getActiveTaskForConversation(conversationId) ?? null
+  }
+
+  getRuntimeIdentity(conversationId: string): {
+    agentRuntimeBindingKey: string
+    agentRuntimeEpoch: number
+  } {
+    return {
+      agentRuntimeBindingKey: this.getRuntimeBindingKey(conversationId),
+      agentRuntimeEpoch: this.runtimeEpoch,
+    }
   }
 
   /** 获取后端状态 */
@@ -1272,7 +1294,13 @@ export class AgentBridge {
       !task ||
       !correlation?.workspaceKey ||
       !correlation.affairId ||
-      !correlation.affairAttemptId
+      !correlation.affairAttemptId ||
+      correlation.affairExecutionGeneration === undefined ||
+      !correlation.affairLaunchOperationId ||
+      correlation.browserViewRuntimeGeneration === undefined ||
+      correlation.webContentsId === undefined ||
+      correlation.playwrightConnectionGeneration === undefined ||
+      correlation.playwrightPageBindingGeneration === undefined
     ) {
       return
     }
@@ -1281,6 +1309,13 @@ export class AgentBridge {
       affairId: correlation.affairId,
       attemptId: correlation.affairAttemptId,
       browserTaskRunId: task.id,
+      executionGeneration: correlation.affairExecutionGeneration,
+      launchOperationId: correlation.affairLaunchOperationId,
+      tabId: task.tabId,
+      browserViewRuntimeGeneration: correlation.browserViewRuntimeGeneration,
+      webContentsId: correlation.webContentsId,
+      playwrightConnectionGeneration: correlation.playwrightConnectionGeneration,
+      playwrightPageBindingGeneration: correlation.playwrightPageBindingGeneration,
       reason: reason.slice(0, 1_000),
     }
     try {

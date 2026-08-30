@@ -120,6 +120,11 @@ export class CclinkRequestRouter {
     }
     const requestId = message.request_id || randomUUID()
     const outbound = { ...message, request_id: requestId, trace_id: message.trace_id || requestId }
+    if (this.pending.has(requestId)) {
+      return Promise.reject(
+        requestError('transport', REMOTE_ERROR_CODE.REQUEST_CONFLICT, '远程请求标识冲突', true),
+      )
+    }
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId)

@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Tab } from '../../types'
 import { remoteWorkspaceRef } from '@shared/workspace-ref'
 import type { RemoteStatus } from '@shared/remote-protocol'
+import {
+  createRemoteMutationIdentity,
+  isRemoteFilePendingMutationReusable,
+  type RemoteFilePendingMutation,
+} from '@shared/remote-mutation-identity'
 import { IconRefresh } from '../../components/common/Icons'
 import { useCclinkStore, useTabStore } from '../../stores'
 import {
@@ -21,6 +26,7 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [revision, setRevision] = useState(0)
+  const [pendingMutation, setPendingMutation] = useState<RemoteFilePendingMutation | null>(null)
   const ref = useMemo(
     () =>
       remoteWorkspaceRef({
@@ -47,11 +53,22 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
         content,
         savedContent,
         sha256,
+        ...(pendingMutation ? { pendingMutation } : {}),
       })
     } else if (content !== null && savedContent !== null && !dirty) {
       clearRemoteFileDraft(tab.id)
     }
-  }, [content, dirty, ref, remoteFile.path, savedContent, sha256, tab.id, updateTabDirty])
+  }, [
+    content,
+    dirty,
+    pendingMutation,
+    ref,
+    remoteFile.path,
+    savedContent,
+    sha256,
+    tab.id,
+    updateTabDirty,
+  ])
 
   useEffect(() => {
     let cancelled = false
@@ -60,6 +77,7 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
     setSha256(null)
     setComplete(false)
     setStatus(null)
+    setPendingMutation(null)
     setLoading(true)
     setError(null)
     void Promise.all([
@@ -80,10 +98,12 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
           setContent(draft.content)
           setSavedContent(draft.savedContent)
           setSha256(draft.sha256)
+          setPendingMutation(draft.pendingMutation ?? null)
         } else {
           setContent(result.file.content)
           setSavedContent(result.file.content)
           setSha256(result.file.sha256 ?? null)
+          setPendingMutation(null)
         }
       })
       .catch((readError: unknown) => {
@@ -98,7 +118,7 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
   }, [ref, remoteFile.path, revision, tab.id])
 
   const save = useCallback(async (): Promise<boolean> => {
-    if (content === null || content === savedContent) return true
+    if (content === null || savedContent === null || content === savedContent) return true
     if (!writable || !sha256) {
       setError(
         status?.state !== 'online'
@@ -117,13 +137,24 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
           item.workspaceId === ref.workspaceId,
       )
       if (!session) session = await createSession(ref, `文件修改 · ${tab.title}`)
-      const now = Date.now()
+      const mutation = isRemoteFilePendingMutationReusable(pendingMutation, session.id, sha256)
+        ? pendingMutation
+        : { ...createRemoteMutationIdentity(), sessionId: session.id, expectedSha256: sha256 }
+      setPendingMutation(mutation)
+      rememberRemoteFileDraft(tab.id, {
+        ref,
+        path: remoteFile.path,
+        content,
+        savedContent,
+        sha256,
+        pendingMutation: mutation,
+      })
       const result = await window.cclinkStudio.remote.writeFile({
         ref,
         sessionId: session.id,
-        operationId: crypto.randomUUID(),
-        operationCreatedAt: now,
-        operationExpiresAt: now + 5 * 60_000,
+        operationId: mutation.operationId,
+        operationCreatedAt: mutation.operationCreatedAt,
+        operationExpiresAt: mutation.operationExpiresAt,
         path: remoteFile.path,
         content,
         expectedSha256: sha256,
@@ -131,6 +162,7 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
       if (!result.success) throw new Error(result.error || '远程文件保存失败')
       setSavedContent(content)
       if (result.sha256) setSha256(result.sha256)
+      setPendingMutation(null)
       clearRemoteFileDraft(tab.id)
       return true
     } catch (saveError) {
@@ -142,7 +174,9 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
   }, [
     content,
     createSession,
+    pendingMutation,
     ref,
+    remoteFile.path,
     savedContent,
     selectedSessionId,
     sessions,
@@ -159,6 +193,7 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
         save,
         discard: () => {
           if (savedContent !== null) setContent(savedContent)
+          setPendingMutation(null)
           clearRemoteFileDraft(tab.id)
         },
       }),
@@ -198,7 +233,10 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
           className="remote-file-content remote-file-editor"
           value={content}
           disabled={loading}
-          onChange={(event) => setContent(event.target.value)}
+          onChange={(event) => {
+            setContent(event.target.value)
+            setPendingMutation(null)
+          }}
           spellCheck={false}
         />
       )}

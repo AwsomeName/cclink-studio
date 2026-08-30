@@ -98,6 +98,19 @@ export async function openRequestedBrowserTab(request: BrowserOpenTabRequest): P
   }
 
   if (hasRequestedProfile && request.profileId) {
+    if (request.accountId) {
+      tabState.openTab({
+        type: 'browser',
+        title: '浏览器',
+        icon: '🌐',
+        initialUrl: request.initialUrl,
+        browserProfile: request.profileId,
+        webResourceRef: { accountId: request.accountId },
+        workspaceRef: activeWorkspaceRef,
+        forceNew: true,
+      })
+      return
+    }
     const sourceTab = request.sourceTabId
       ? tabState.tabs.find((tab) => tab.id === request.sourceTabId)
       : undefined

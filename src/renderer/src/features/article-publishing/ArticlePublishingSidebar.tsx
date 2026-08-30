@@ -5,9 +5,12 @@ import { useTabStore } from '../../stores/tab-store'
 
 const STATUS_LABELS = {
   draft: '草稿',
+  preparing: '正在启动',
   running: '执行中',
+  'checking-runtime': '待核验',
   'waiting-human': '待处理',
   interrupted: '已中断',
+  cancelled: '已终止',
   failed: '失败',
   published: '已发布',
   'result-unknown': '结果未知',

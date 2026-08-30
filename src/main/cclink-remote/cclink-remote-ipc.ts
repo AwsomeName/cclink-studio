@@ -4,6 +4,11 @@ import { z } from 'zod'
 import { authIpc, authIpcEvents } from '../../shared/ipc/auth'
 import { cclinkIpc, cclinkIpcEvents } from '../../shared/ipc/cclink'
 import { remoteIpc } from '../../shared/ipc/remote'
+import {
+  remoteMutationIdentityError,
+  remoteMutationOperationIdPattern,
+  type RemoteMutationIdentity,
+} from '../../shared/remote-mutation-identity'
 import { CCLINK_UNCONFIGURED_MESSAGE } from './service-config'
 import { bindIpcParser } from '../../shared/ipc/contract'
 import {
@@ -61,6 +66,73 @@ export const cclinkStopTrackingAgentRunInputSchema = z
 export const cclinkCancelAgentImageUploadInputSchema = z
   .object({ uploadId: uploadIdSchema })
   .strict()
+
+const mutationBase = {
+  ref: cclinkRemoteRefSchema,
+  sessionId: idSchema,
+  operationId: z.string().regex(remoteMutationOperationIdPattern),
+  operationCreatedAt: z.number().int().nonnegative(),
+  operationExpiresAt: z.number().int().positive(),
+}
+const validateMutationIdentity = (
+  input: RemoteMutationIdentity,
+  context: z.RefinementCtx,
+): void => {
+  const message = remoteMutationIdentityError(input)
+  if (message) context.addIssue({ code: 'custom', message, path: ['operationId'] })
+}
+export const cclinkRemoteWriteFileInputSchema = z
+  .object({
+    ...mutationBase,
+    path: cclinkRemotePathSchema,
+    content: z.string().max(2 * 1024 * 1024),
+    expectedSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
+  })
+  .strict()
+  .superRefine(validateMutationIdentity)
+export const cclinkRemoteCreateFileInputSchema = z
+  .object({
+    ...mutationBase,
+    path: cclinkRemotePathSchema,
+    type: z.enum(['file', 'directory']),
+    content: z
+      .string()
+      .max(2 * 1024 * 1024)
+      .optional(),
+  })
+  .strict()
+  .superRefine(validateMutationIdentity)
+export const cclinkRemoteRenameFileInputSchema = z
+  .object({
+    ...mutationBase,
+    oldPath: cclinkRemotePathSchema,
+    newPath: cclinkRemotePathSchema,
+  })
+  .strict()
+  .superRefine(validateMutationIdentity)
+export const cclinkRemoteDeleteFileInputSchema = z
+  .object({
+    ...mutationBase,
+    path: cclinkRemotePathSchema,
+    recursive: z.boolean().optional(),
+    expectedSha256: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/iu)
+      .optional(),
+  })
+  .strict()
+  .superRefine(validateMutationIdentity)
+
+const pendingMutationSchema = z
+  .object({
+    sessionId: idSchema,
+    operationId: z.string().regex(remoteMutationOperationIdPattern),
+    operationCreatedAt: z.number().int().nonnegative(),
+    operationExpiresAt: z.number().int().positive(),
+    expectedSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
+  })
+  .strict()
+  .superRefine(validateMutationIdentity)
 
 const noArgs = <T>(definition: { channel: string }) =>
   bindIpcParser<[], T>(definition, (args) => z.tuple([]).parse(args))
@@ -307,86 +379,30 @@ export function registerCclinkRemoteIpc(
     guard,
     (_event, request) => service.readFile(request),
   )
-  const mutationBase = {
-    ref: cclinkRemoteRefSchema,
-    sessionId: idSchema,
-    operationId: idSchema,
-    operationCreatedAt: z.number().int().nonnegative(),
-    operationExpiresAt: z.number().int().positive(),
-  }
   registerTrustedIpcContract(
     bindIpcParser(remoteIpc.writeFile, (args) =>
-      z
-        .tuple([
-          z
-            .object({
-              ...mutationBase,
-              path: cclinkRemotePathSchema,
-              content: z.string().max(2 * 1024 * 1024),
-              expectedSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
-            })
-            .strict(),
-        ])
-        .parse(args),
+      z.tuple([cclinkRemoteWriteFileInputSchema]).parse(args),
     ),
     guard,
     (_event, request) => service.writeFile(request),
   )
   registerTrustedIpcContract(
     bindIpcParser(remoteIpc.createFile, (args) =>
-      z
-        .tuple([
-          z
-            .object({
-              ...mutationBase,
-              path: cclinkRemotePathSchema,
-              type: z.enum(['file', 'directory']),
-              content: z
-                .string()
-                .max(2 * 1024 * 1024)
-                .optional(),
-            })
-            .strict(),
-        ])
-        .parse(args),
+      z.tuple([cclinkRemoteCreateFileInputSchema]).parse(args),
     ),
     guard,
     (_event, request) => service.createFile(request),
   )
   registerTrustedIpcContract(
     bindIpcParser(remoteIpc.renameFile, (args) =>
-      z
-        .tuple([
-          z
-            .object({
-              ...mutationBase,
-              oldPath: cclinkRemotePathSchema,
-              newPath: cclinkRemotePathSchema,
-            })
-            .strict(),
-        ])
-        .parse(args),
+      z.tuple([cclinkRemoteRenameFileInputSchema]).parse(args),
     ),
     guard,
     (_event, request) => service.renameFile(request),
   )
   registerTrustedIpcContract(
     bindIpcParser(remoteIpc.deleteFile, (args) =>
-      z
-        .tuple([
-          z
-            .object({
-              ...mutationBase,
-              path: cclinkRemotePathSchema,
-              recursive: z.boolean().optional(),
-              expectedSha256: z
-                .string()
-                .regex(/^[a-f0-9]{64}$/iu)
-                .optional(),
-            })
-            .strict(),
-        ])
-        .parse(args),
+      z.tuple([cclinkRemoteDeleteFileInputSchema]).parse(args),
     ),
     guard,
     (_event, request) => service.deleteFile(request),
@@ -410,6 +426,7 @@ export function registerCclinkRemoteIpc(
               content: z.string().max(2 * 1024 * 1024),
               savedContent: z.string().max(2 * 1024 * 1024),
               sha256: z.string().regex(/^[a-f0-9]{64}$/iu),
+              pendingMutation: pendingMutationSchema.optional(),
               updatedAt: z.number().int().nonnegative(),
             })
             .strict(),

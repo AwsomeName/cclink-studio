@@ -12,6 +12,7 @@ import type {
   RemoteDiagnosticReport,
 } from '../remote-protocol'
 import type { RemoteWorkspaceRef } from '../workspace-ref'
+import type { RemoteFilePendingMutation } from '../remote-mutation-identity'
 import { defineIpcCall } from './contract'
 
 export interface RemoteApiContract {
@@ -40,6 +41,7 @@ export interface RemoteFileDraft {
   content: string
   savedContent: string
   sha256: string
+  pendingMutation?: RemoteFilePendingMutation
   updatedAt: number
 }
 

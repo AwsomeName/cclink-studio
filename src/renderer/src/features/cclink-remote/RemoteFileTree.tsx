@@ -3,6 +3,7 @@ import type { CclinkTreeNode } from '@shared/cclink'
 import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
 import type { RemoteCapabilitySet } from '@shared/remote-protocol'
 import type { RemoteDiagnosticReport } from '@shared/remote-protocol'
+import { createRemoteMutationIdentity } from '@shared/remote-mutation-identity'
 import { useCclinkStore, useTabStore } from '../../stores'
 import {
   IconChevronDown,
@@ -109,13 +110,10 @@ export function RemoteFileTree({
   }
   const mutationBase = async () => {
     const session = await ensureMutationSession()
-    const now = Date.now()
     return {
       ref: workspaceRef,
       sessionId: session.id,
-      operationId: crypto.randomUUID(),
-      operationCreatedAt: now,
-      operationExpiresAt: now + 5 * 60_000,
+      ...createRemoteMutationIdentity(),
     }
   }
   const joinRemotePath = (parent: string, name: string): string =>

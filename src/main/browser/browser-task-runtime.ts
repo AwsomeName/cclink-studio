@@ -22,6 +22,8 @@ export class BrowserTaskRuntime {
   private readonly activeTaskByAccount = new Map<string, string>()
   private readonly actionLogs = new Map<string, BrowserActionLog[]>()
   private readonly actionLogById = new Map<string, BrowserActionLog>()
+  private readonly taskListeners = new Set<(task: BrowserTaskRun) => void>()
+  private readonly actionLogListeners = new Set<(log: BrowserActionLog) => void>()
 
   constructor(
     private readonly mainWindow: BrowserWindow,
@@ -71,6 +73,16 @@ export class BrowserTaskRuntime {
 
   listTasks(): BrowserTaskRun[] {
     return Array.from(this.tasks.values()).map(cloneTask)
+  }
+
+  onTaskChanged(listener: (task: BrowserTaskRun) => void): () => void {
+    this.taskListeners.add(listener)
+    return () => this.taskListeners.delete(listener)
+  }
+
+  onActionLogChanged(listener: (log: BrowserActionLog) => void): () => void {
+    this.actionLogListeners.add(listener)
+    return () => this.actionLogListeners.delete(listener)
   }
 
   getTask(taskRunId: string): BrowserTaskRun | null {
@@ -319,18 +331,34 @@ export class BrowserTaskRuntime {
   }
 
   private emitTaskChanged(task: BrowserTaskRun): void {
+    const snapshot = cloneTask(task)
+    for (const listener of this.taskListeners) {
+      try {
+        listener(snapshot)
+      } catch (error) {
+        console.warn('[BrowserTaskRuntime] task listener 失败:', error)
+      }
+    }
     if (this.mainWindow.isDestroyed()) return
     const payload: BrowserTaskChangedPayload = {
-      task: cloneTask(task),
+      task: snapshot,
     }
     if (this.sendToTabOwner?.(task.tabId, browserIpcEvents.taskChanged, payload)) return
     this.mainWindow.webContents.send(browserIpcEvents.taskChanged, payload)
   }
 
   private emitActionLogChanged(log: BrowserActionLog): void {
+    const snapshot = { ...log }
+    for (const listener of this.actionLogListeners) {
+      try {
+        listener(snapshot)
+      } catch (error) {
+        console.warn('[BrowserTaskRuntime] action listener 失败:', error)
+      }
+    }
     if (this.mainWindow.isDestroyed()) return
     const payload: BrowserActionLogChangedPayload = {
-      log: { ...log },
+      log: snapshot,
     }
     if (this.sendToTabOwner?.(log.tabId, browserIpcEvents.actionLogChanged, payload)) return
     this.mainWindow.webContents.send(browserIpcEvents.actionLogChanged, payload)

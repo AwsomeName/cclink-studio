@@ -8,7 +8,9 @@ export const articlePublishingApi: ArticlePublishingApiContract = {
   inspectSource: (input) => invokeIpcContract(articlePublishingIpc.inspectSource, input),
   createTask: (input) => invokeIpcContract(articlePublishingIpc.createTask, input),
   startTask: (input) => invokeIpcContract(articlePublishingIpc.startTask, input),
-  recoverTaskLaunch: (input) => invokeIpcContract(articlePublishingIpc.recoverTaskLaunch, input),
+  checkRuntime: (input) => invokeIpcContract(articlePublishingIpc.checkRuntime, input),
+  continueRuntime: (input) => invokeIpcContract(articlePublishingIpc.continueRuntime, input),
+  terminateRuntime: (input) => invokeIpcContract(articlePublishingIpc.terminateRuntime, input),
   reportCheckpoint: (input) => invokeIpcContract(articlePublishingIpc.reportCheckpoint, input),
   reportAsset: (input) => invokeIpcContract(articlePublishingIpc.reportAsset, input),
 }

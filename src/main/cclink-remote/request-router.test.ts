@@ -84,6 +84,34 @@ describe('CclinkRequestRouter', () => {
     router.detach()
   })
 
+  it('拒绝覆盖正在等待的相同 request_id', async () => {
+    const transport = new FakeTransport()
+    const router = new CclinkRequestRouter()
+    router.attach(transport)
+    const first = router.request(
+      'agent-1',
+      { ...createCclinkEnvelope('file_tree_request'), request_id: 'shared' },
+      ['file_tree_response'],
+    )
+    const conflicting = router.request(
+      'agent-1',
+      { ...createCclinkEnvelope('file_read_request'), request_id: 'shared' },
+      ['file_read_response'],
+    )
+
+    await expect(conflicting).rejects.toMatchObject({
+      remoteError: { code: 'REMOTE_REQUEST_CONFLICT', retryable: true },
+    })
+    expect(transport.sent).toHaveLength(1)
+
+    transport.emit({
+      serverId: 'agent-1',
+      message: { ...createCclinkEnvelope('file_tree_response'), request_id: 'shared' },
+    })
+    await expect(first).resolves.toMatchObject({ cc_type: 'file_tree_response' })
+    router.detach()
+  })
+
   it('把无 request_id 的流式事件交给协议监听器', () => {
     const transport = new FakeTransport()
     const router = new CclinkRequestRouter()

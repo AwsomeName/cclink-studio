@@ -441,7 +441,12 @@ export async function bootstrapMainProcessServices(
 
   runtime.articlePublishingService =
     runtime.fileService && runtime.webAffairService
-      ? new ArticlePublishingService(runtime.fileService, runtime.webAffairService)
+      ? new ArticlePublishingService(runtime.fileService, runtime.webAffairService, undefined, {
+          getAgentBridge: () => runtime.agentBridge,
+          getBrowserManager: () => runtime.browserManager,
+          getBrowserTaskRuntime: () => runtime.browserTaskRuntime,
+          getPlaywrightBridge: () => runtime.playwrightBridge,
+        })
       : null
   registerArticlePublishingIpc(
     () => runtime.articlePublishingService,
@@ -579,6 +584,9 @@ export async function shutdownMainProcessServices(
     runtime.terminalExecutionEventUnsubscribe = null
   })
   await runShutdownStep('TerminalSessionRegistry', () => runtime.terminalSessionRegistry?.clear())
+  await runShutdownStep('ArticlePublishingService', () =>
+    runtime.articlePublishingService?.dispose(),
+  )
   await runShutdownStep('WebAffairService', () => runtime.webAffairService?.flush())
   await runShutdownStep('WebResourceService', () => runtime.webResourceService?.flush())
 

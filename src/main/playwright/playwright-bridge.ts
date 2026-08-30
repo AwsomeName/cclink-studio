@@ -49,6 +49,7 @@ interface ScopedNetworkLogEntry extends NetworkLogEntry {
 interface PageBinding {
   page: Page
   generation: number
+  connectionGeneration: number
   webContentsId: number
 }
 
@@ -129,6 +130,7 @@ export class PlaywrightBridge {
   /** 多 Tab 注册表：tabId → Page */
   private pages: Map<string, Page> = new Map()
   private pageBindings = new Map<string, PageBinding>()
+  private nextPageBindingGeneration = 1
   /** 当前活跃 Tab ID */
   private activeTabId: string | null = null
   /** BrowserManager 已正式 claim 的可见 View ID；临时 popup ID 不进入此集合。 */
@@ -595,7 +597,7 @@ export class PlaywrightBridge {
   registerPage(
     page: Page,
     key?: string,
-    generation = this.connectionGeneration,
+    connectionGeneration = this.connectionGeneration,
     webContentsId = key ? (this.electronWebContentsIdByTab.get(key) ?? -1) : -1,
   ): string {
     const tabId = key ?? randomUUID()
@@ -607,18 +609,20 @@ export class PlaywrightBridge {
       }
     }
     this.pages.set(tabId, page)
-    this.pageBindings.set(tabId, { page, generation, webContentsId })
+    const generation = this.nextPageBindingGeneration++
+    this.pageBindings.set(tabId, { page, generation, connectionGeneration, webContentsId })
 
     // 设置事件监听
-    this.setupPageListeners(page, generation)
+    this.setupPageListeners(page, connectionGeneration)
 
     // 页面关闭时清理
     const closeHandler = (): void => {
       const binding = this.pageBindings.get(tabId)
       if (
-        generation !== this.connectionGeneration ||
+        connectionGeneration !== this.connectionGeneration ||
         binding?.page !== page ||
         binding.generation !== generation ||
+        binding.connectionGeneration !== connectionGeneration ||
         binding.webContentsId !== webContentsId
       ) {
         return
@@ -718,7 +722,7 @@ export class PlaywrightBridge {
       existing &&
       !existing.isClosed() &&
       existingBinding?.page === existing &&
-      existingBinding.generation === generation &&
+      existingBinding.connectionGeneration === generation &&
       existingBinding.webContentsId === webContents.id
     ) {
       return existing
@@ -827,6 +831,7 @@ export class PlaywrightBridge {
       !binding ||
       binding.page !== expected.page ||
       binding.generation !== expected.generation ||
+      binding.connectionGeneration !== expected.connectionGeneration ||
       binding.webContentsId !== expected.webContentsId
     ) {
       return false
@@ -963,6 +968,7 @@ export class PlaywrightBridge {
     playwrightTitle: string | null
     automationConnection: PlaywrightConnectionDiagnostics & {
       boundGeneration: number | null
+      boundConnectionGeneration: number | null
       boundWebContentsId: number | null
     }
   }> {
@@ -971,6 +977,7 @@ export class PlaywrightBridge {
     const automationConnection = {
       ...this.getConnectionDiagnostics(),
       boundGeneration: binding?.generation ?? null,
+      boundConnectionGeneration: binding?.connectionGeneration ?? null,
       boundWebContentsId: binding?.webContentsId ?? null,
     }
     if (!page || page.isClosed()) {

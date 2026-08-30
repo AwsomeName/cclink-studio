@@ -144,12 +144,49 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
               })
               return
             }
-            const result = await service.interruptArticlePublishingRuntime(
-              input.affairId,
-              input.attemptId,
-              input.reason,
-              workspaceId,
-            )
+            const eventId = createHash('sha256')
+              .update(
+                [
+                  input.attemptId,
+                  input.executionGeneration,
+                  input.launchOperationId,
+                  input.browserTaskRunId,
+                  input.browserViewRuntimeGeneration,
+                  input.webContentsId,
+                  input.playwrightConnectionGeneration,
+                  input.playwrightPageBindingGeneration,
+                  'browser-terminal',
+                ].join('\0'),
+              )
+              .digest('hex')
+            let result
+            for (let attemptNumber = 1; attemptNumber <= 3; attemptNumber += 1) {
+              result = await service.reconcileArticlePublishingRuntime({
+                eventId,
+                workspaceId,
+                affairId: input.affairId,
+                attemptId: input.attemptId,
+                executionGeneration: input.executionGeneration,
+                launchOperationId: input.launchOperationId,
+                source: 'browser-terminal',
+                observedAt: new Date().toISOString(),
+                runtimeIdentity: {
+                  kind: 'browser-task',
+                  browserTaskRunId: input.browserTaskRunId,
+                  tabId: input.tabId,
+                  browserViewRuntimeGeneration: input.browserViewRuntimeGeneration,
+                  webContentsId: input.webContentsId,
+                  playwrightConnectionGeneration: input.playwrightConnectionGeneration,
+                  playwrightPageBindingGeneration: input.playwrightPageBindingGeneration,
+                },
+                observedStatus: 'terminal',
+                reasonCode: 'BROWSER_TASK_ENDED',
+                reason: input.reason,
+              })
+              if (result.success || result.error.code !== 'STORAGE_UNAVAILABLE') break
+              await new Promise((resolve) => setTimeout(resolve, attemptNumber * 250))
+            }
+            if (!result) return
             if (!result.success && result.error.code !== 'NOT_FOUND') {
               console.warn('[ArticlePublishing] 运行终态未能收敛发布 Attempt', {
                 affairId: input.affairId,
@@ -175,9 +212,10 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
       startingCclinkAgentService = null
 
       if (runtime.browserManager) {
-        runtime.browserManager.onViewDestroyed((tabId) =>
-          runtime.agentBridge?.invalidateBrowserScope(tabId),
-        )
+        runtime.browserManager.onViewDestroyed((tabId) => {
+          runtime.agentBridge?.invalidateBrowserScope(tabId)
+          void runtime.webAffairService?.reconcileArticlePublishingTabLost(tabId)
+        })
       }
       runtime.capabilities.ready('agent-backend')
       await runtime.scheduledTaskService?.startRuntime(runtime.agentBridge)

@@ -10,7 +10,7 @@ function createPolicy(options?: {
   assetStatus?: string
   executionStatus?: string
 }) {
-  const markArticlePublishingPublicationDispatched = vi.fn().mockResolvedValue({
+  const reserveArticlePublishingSideEffect = vi.fn().mockResolvedValue({
     success: true,
     data: {},
   })
@@ -23,16 +23,34 @@ function createPolicy(options?: {
           {
             id: 'affair-a',
             kind: 'article-publishing',
-            attempts: [{ id: 'attempt-a', accountId: 'account-a', status: 'running-ai' }],
+            attempts: [
+              {
+                id: 'attempt-a',
+                accountId: 'account-a',
+                status: 'running-ai',
+                executionGeneration: 1,
+                browserTaskRunId: 'task-a',
+              },
+            ],
             articlePublishing: {
               adapterId: 'csdn',
               adapterVersion: 1,
               accountId: 'account-a',
-              assets: [{ kind: 'local', status: options?.assetStatus ?? 'uploaded' }],
+              source: { contentHash: 'a'.repeat(64) },
+              assets: [
+                {
+                  id: 'asset-a',
+                  kind: 'local',
+                  sourcePath: '/workspace/a.png',
+                  status: options?.assetStatus ?? 'uploaded',
+                  uploadAttempts: [],
+                },
+              ],
               execution: {
                 status: options?.executionStatus ?? 'running',
                 currentAttemptId: 'attempt-a',
                 currentStepId: options?.stepId ?? 'upload-assets',
+                currentGeneration: 1,
               },
               publication: { status: options?.publicationStatus ?? 'not-started' },
             },
@@ -40,7 +58,7 @@ function createPolicy(options?: {
         ],
       },
     }),
-    markArticlePublishingPublicationDispatched,
+    reserveArticlePublishingSideEffect,
     handoffAttempt,
   }
   return {
@@ -158,9 +176,14 @@ describe('ArticlePublishingBrowserPolicy', () => {
         context,
       ),
     ).resolves.toMatchObject({ kind: 'allow-once' })
-    expect(webAffairService.markArticlePublishingPublicationDispatched).toHaveBeenCalledWith(
+    expect(webAffairService.reserveArticlePublishingSideEffect).toHaveBeenCalledWith(
       'affair-a',
       'attempt-a',
+      1,
+      'publish',
+      'final',
+      expect.any(String),
+      'task-a',
       'workspace-a',
     )
   })

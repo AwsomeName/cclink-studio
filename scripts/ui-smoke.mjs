@@ -16,6 +16,7 @@ const globalWebResourcesOnly = process.argv.includes('--global-web-resources-onl
 const gitOnly = process.argv.includes('--git-only')
 const dismissableOnly = process.argv.includes('--dismissable-only')
 const tabCreateOnly = process.argv.includes('--tab-create-only')
+const pdfOnly = process.argv.includes('--pdf-only')
 const uiReadyTimeoutMs = 30_000
 const globalWebResourcesCheck = 'global web resources reuse one account and matrix across projects'
 const webAffairPersistenceCheck = 'web affair persists a five-node workflow and node progress'
@@ -37,6 +38,19 @@ const gitChecks = new Set([
 ])
 const dismissableChecks = new Set(['Escape closes only the topmost Studio popup'])
 const tabCreateChecks = new Set(['tab create menu opens editor, browser, and terminal tabs'])
+const pdfChecks = new Set([
+  'main renderer enforces its CSP source boundary',
+  'first screen has no login wall',
+  'PDF pages render visibly with paging controls and explicit failure fallback',
+])
+const agentPanelChecks = new Set([
+  'main renderer enforces its CSP source boundary',
+  'first screen has no login wall',
+  'Escape closes only the topmost Studio popup',
+  'local and remote use one Agent Panel and IME-safe Composer',
+])
+const PDF_PREVIEW_FIXTURE_BASE64 =
+  'JVBERi0xLjMKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA3IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgNyAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjYgMCBvYmoKPDwKL0F1dGhvciAoYW5vbnltb3VzKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYwODMwMjAyODE2KzA4JzAwJykgL0NyZWF0b3IgKGFub255bW91cykgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYwODMwMjAyODE2KzA4JzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKHVuc3BlY2lmaWVkKSAvVGl0bGUgKHVudGl0bGVkKSAvVHJhcHBlZCAvRmFsc2UKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0NvdW50IDEgL0tpZHMgWyA0IDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKOCAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCAxNjcKPj4Kc3RyZWFtCkdhcnAkM3Q/aj0mNFlXTTxMY3I9T0xfbjZDL0hHZiZnbzpzXEwrKSdNPjVgO0xkbDcqLF8nZmtEaE9vTikwWGNNPmFaQFozLTlyTmZWOWBjTko/az9ybjFRbUJBWT1bLCdCXEY1b1c6PT88Vl1LPXFqcyFFM2pMKlVPLitSVSYjUS0tKnIpI250T15kZyNhLVVbXi8kIVxtMCM0ckZlUzBQRHEwc34+ZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgOQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDEwMiAwMDAwMCBuIAowMDAwMDAwMjA5IDAwMDAwIG4gCjAwMDAwMDAzMjEgMDAwMDAgbiAKMDAwMDAwMDUyNCAwMDAwMCBuIAowMDAwMDAwNTkyIDAwMDAwIG4gCjAwMDAwMDA4NTMgMDAwMDAgbiAKMDAwMDAwMDkxMiAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzxkMmM1NzE2MDk2YWE5NDJiMDllNDI4YjQ3YTA2NWE2Nj48ZDJjNTcxNjA5NmFhOTQyYjA5ZTQyOGI0N2EwNjVhNjY+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDYgMCBSCi9Sb290IDUgMCBSCi9TaXplIDkKPj4Kc3RhcnR4cmVmCjExNjkKJSVFT0YK'
 const results = []
 let startedBySmoke = false
 let webFixtureServer
@@ -110,11 +124,13 @@ async function findRendererPage(browser) {
 }
 
 async function runCheck(name, fn, options = {}) {
+  if (agentPanelOnly && !agentPanelChecks.has(name)) return
   if (webAffairsOnly && !webAffairsChecks.has(name)) return
   if (globalWebResourcesOnly && !globalWebResourcesChecks.has(name)) return
   if (gitOnly && !gitChecks.has(name)) return
   if (dismissableOnly && !dismissableChecks.has(name)) return
   if (tabCreateOnly && !tabCreateChecks.has(name)) return
+  if (pdfOnly && !pdfChecks.has(name)) return
   const blockedBy = (options.dependsOn ?? []).find(
     (dependency) => results.find((result) => result.name === dependency)?.status !== 'pass',
   )
@@ -243,6 +259,83 @@ async function main() {
     assert(!text.includes('登录 CCLink'), 'login copy should not block the shell')
     return 'main window ready'
   })
+
+  await runCheck(
+    'PDF pages render visibly with paging controls and explicit failure fallback',
+    async () => {
+      const fixtureDir = await mkdtemp(join(homedir(), '.cclink-studio-ui-pdf-'))
+      const pdfPath = join(fixtureDir, 'visible-preview.pdf')
+      const invalidPdfPath = join(fixtureDir, 'invalid-preview.pdf')
+      try {
+        await writeFile(pdfPath, Buffer.from(PDF_PREVIEW_FIXTURE_BASE64, 'base64'))
+        await writeFile(invalidPdfPath, '%PDF-invalid', 'utf8')
+        await page.evaluate(async (filePath) => {
+          const { useTabStore } = await import('/src/stores/tab-store.ts')
+          useTabStore.getState().openTab({
+            type: 'file-preview',
+            title: 'visible-preview.pdf',
+            icon: '📕',
+            filePath,
+          })
+        }, pdfPath)
+
+        const preview = page.locator('[data-pdf-preview-status="ready"]')
+        await preview.waitFor({ state: 'visible', timeout: 20_000 })
+        const canvas = preview.locator('canvas')
+        const pixels = await canvas.evaluate((element) => {
+          const context = element.getContext('2d')
+          if (!context) return null
+          const { width, height } = element
+          const data = context.getImageData(0, 0, width, height).data
+          let light = 0
+          let dark = 0
+          for (let offset = 0; offset < data.length; offset += 16) {
+            const red = data[offset]
+            const green = data[offset + 1]
+            const blue = data[offset + 2]
+            if (red > 240 && green > 240 && blue > 240) light += 1
+            if (red < 150 && green < 150 && blue < 150) dark += 1
+          }
+          return { width, height, light, dark }
+        })
+        assert(pixels?.width > 500 && pixels?.height > 700, 'PDF canvas has no page-sized output')
+        assert(pixels.light > 10_000, 'PDF canvas is missing the light page background')
+        assert(pixels.dark > 100, 'PDF canvas is missing rendered document content')
+        assert(
+          (await preview.locator('.file-preview-pdf-controls').innerText()).includes('1 / 1'),
+          'PDF page controls do not report the current page',
+        )
+
+        const initialWidth = await canvas.evaluate((element) => element.style.width)
+        await preview.getByRole('button', { name: '放大 PDF' }).click()
+        await page.waitForFunction(
+          (width) =>
+            document.querySelector('.file-preview-pdf-stage canvas')?.style.width !== width,
+          initialWidth,
+          { timeout: 10_000 },
+        )
+
+        await page.evaluate(async (filePath) => {
+          const { useTabStore } = await import('/src/stores/tab-store.ts')
+          useTabStore.getState().openTab({
+            type: 'file-preview',
+            title: 'invalid-preview.pdf',
+            icon: '📕',
+            filePath,
+          })
+        }, invalidPdfPath)
+        const failedPreview = page.locator('[data-pdf-preview-status="error"]')
+        await failedPreview.waitFor({ state: 'visible', timeout: 10_000 })
+        assert(
+          (await failedPreview.innerText()).includes('用系统应用打开'),
+          'invalid PDF has no explicit system-open fallback',
+        )
+        return 'real canvas pixels, page controls, zoom, and invalid-file fallback'
+      } finally {
+        await rm(fixtureDir, { recursive: true, force: true })
+      }
+    },
+  )
 
   await runCheck('Escape closes only the topmost Studio popup', async () => {
     await page.evaluate(async () => {
@@ -453,6 +546,84 @@ async function main() {
     const remoteSideProjection = await panelProjection('remote')
     assertEquivalentPanel(localSideProjection, remoteSideProjection, 'side')
 
+    await page.evaluate(async () => {
+      const { useCclinkStore } = await import('/src/stores/cclink-store.ts')
+      const sessionId = 'ui-smoke-approval-session'
+      const now = Date.now() / 1000
+      useCclinkStore.setState({
+        sessions: [
+          {
+            id: sessionId,
+            name: '审批滚动验收',
+            workspaceId: 'ui-smoke-workspace',
+            workspacePath: '/ui-smoke-workspace',
+            serverId: 'ui-smoke-endpoint',
+            status: 'active',
+            createdAt: now,
+            updatedAt: now,
+            messageCount: 10,
+            contextUsage: 0,
+          },
+        ],
+        messages: {
+          [sessionId]: [
+            { type: 'user', id: 'ui-smoke-user', content: '执行批量搜索', timestamp: now },
+            ...Array.from({ length: 9 }, (_, index) => ({
+              type: 'agentTool',
+              id: `ui-smoke-tool-message-${index}`,
+              timestamp: now + index + 1,
+              tool: {
+                id: `ui-smoke-tool-${index}`,
+                name: 'WebSearch',
+                state: 'pending',
+                input: { query: `scroll regression ${index}` },
+                requiresApproval: true,
+                requestId: 'ui-smoke-shared-run',
+              },
+            })),
+          ],
+        },
+        selectedSessionId: sessionId,
+        loading: false,
+        error: null,
+      })
+    })
+    const remoteTimeline = remotePanel.locator('.agent-messages')
+    const approvalCards = remoteTimeline.locator('.tool-confirmation-card')
+    await approvalCards.first().waitFor({ state: 'visible', timeout: 10_000 })
+    assert((await approvalCards.count()) === 9, 'remote approval cards were not all rendered')
+    const approvalLayout = await remoteTimeline.evaluate((timeline) => {
+      const cards = [...timeline.querySelectorAll('.tool-confirmation-card')]
+      return {
+        clientHeight: timeline.clientHeight,
+        scrollHeight: timeline.scrollHeight,
+        nested: cards.every((card) => card.closest('.agent-messages') === timeline),
+      }
+    })
+    assert(approvalLayout.nested, 'remote approval cards escaped the conversation scroll owner')
+    assert(
+      approvalLayout.scrollHeight > approvalLayout.clientHeight,
+      'remote approval cards did not create a scrollable conversation',
+    )
+    await remoteTimeline.evaluate((timeline) => {
+      timeline.scrollTop = 0
+    })
+    await remoteTimeline.hover()
+    await page.mouse.wheel(0, 640)
+    await page.waitForTimeout(100)
+    assert(
+      (await remoteTimeline.evaluate((timeline) => timeline.scrollTop)) > 0,
+      'mouse wheel did not scroll through remote approval cards',
+    )
+    assert(
+      await remotePanel.locator('textarea.agent-input').isVisible(),
+      'remote approval overflow pushed the Composer out of view',
+    )
+    await page.evaluate(async () => {
+      const { useCclinkStore } = await import('/src/stores/cclink-store.ts')
+      useCclinkStore.setState({ sessions: [], messages: {}, selectedSessionId: null })
+    })
+
     if (!agentPanelOnly) {
       await page.evaluate(async (snapshot) => {
         const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
@@ -462,7 +633,7 @@ async function main() {
           generation: Math.max(state.generation + 1, snapshot.generation + 1),
         })
       }, originalWorkspace)
-      return 'single fixed side view, equivalent landmarks and boxes, IME-safe Enter, and Shift+Enter'
+      return 'single fixed side view, equivalent landmarks and boxes, scrollable approval cards, IME-safe Enter, and Shift+Enter'
     }
 
     // center 是无 Workbench Tab 的首次会话 surface；先回到本地并清空 smoke Tab 投影。
@@ -524,11 +695,12 @@ async function main() {
     const remoteCenterProjection = await panelProjection('remote')
     assertEquivalentPanel(localCenterProjection, remoteCenterProjection, 'center')
 
-    return 'single fixed side/center view, equivalent landmarks and boxes, IME-safe Enter, and Shift+Enter'
+    return 'single fixed side/center view, equivalent landmarks and boxes, scrollable approval cards, IME-safe Enter, and Shift+Enter'
   })
 
   if (agentPanelOnly) {
     await browser.close()
+    await stopWebFixture()
     const failed = results.filter((result) => result.status === 'fail')
     if (startedBySmoke && !keepRunning) runRestart('stop')
     if (failed.length > 0) {

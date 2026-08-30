@@ -263,6 +263,78 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     expect(articlePolicy.classifyAction).toHaveBeenCalled()
   })
 
+  it('consumes an article side-effect capability before calling Playwright', async () => {
+    const accountTask = {
+      id: 'task-a',
+      tabId: 'account-tab',
+      goal: '发布 CSDN 文章',
+      status: 'running',
+      startedAt: Date.now(),
+      downloadIds: [],
+      correlation: {
+        workspaceKey: '/workspace/a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        agentSessionRef: null,
+        profileId: 'profile-a',
+        accountId: 'account-a',
+        allowedOrigins: ['https://app-blog.csdn.net'],
+        affairId: 'affair-a',
+        affairAttemptId: 'attempt-a',
+      },
+    }
+    const page = {
+      url: () => 'https://app-blog.csdn.net/csdn/aiChatNew',
+      click: vi.fn().mockResolvedValue(undefined),
+    }
+    const consumeSideEffect = vi.fn().mockRejectedValue(new Error('capability already consumed'))
+    const module = new BrowserToolModule(
+      {
+        getPage: () => page,
+        getPageById: () => page,
+        switchToPage: vi.fn().mockResolvedValue(undefined),
+      } as any,
+      {
+        getActiveTaskForConversation: () => accountTask,
+        assertCanRunAction: () => accountTask,
+        startActionLog: () => ({ id: 'action-a' }),
+        failActionLog: vi.fn(),
+      } as any,
+      {
+        getViewWorkspaceKey: () => '/workspace/a',
+        getViewProfileId: () => 'profile-a',
+        isWorkspaceActive: () => true,
+        setActive: vi.fn(),
+        getCurrentURL: () => 'https://app-blog.csdn.net/csdn/aiChatNew',
+      } as any,
+      null,
+      {
+        classifyAction: vi.fn().mockResolvedValue({
+          kind: 'allow-once',
+          sideEffectKey: 'effect-a',
+          actionFingerprint: 'fingerprint-a',
+        }),
+        consumeSideEffect,
+        observeSideEffect: vi.fn().mockResolvedValue(undefined),
+      } as any,
+    )
+    const context = {
+      conversationId: 'conversation-a',
+      workspaceKey: '/workspace/a',
+      trustedWorkspace: {
+        kind: 'local' as const,
+        rootPath: '/workspace/a',
+        workspaceKey: '/workspace/a',
+      },
+    }
+
+    await expect(
+      module.execute('browser_click', { selector: '#publish' }, context),
+    ).rejects.toThrow('capability already consumed')
+    expect(consumeSideEffect).toHaveBeenCalledOnce()
+    expect(page.click).not.toHaveBeenCalled()
+  })
+
   it('pauses and persists a handoff returned by the article policy', async () => {
     const accountTask = {
       id: 'task-a',

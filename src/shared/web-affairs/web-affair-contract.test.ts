@@ -126,7 +126,7 @@ describe('web affairs IPC contract', () => {
     })
 
     expect(migrated).toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: 5,
       revision: 3,
       affairs: [
         {

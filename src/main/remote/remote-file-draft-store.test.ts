@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { RemoteFileDraftStore } from './remote-file-draft-store'
+import { createRemoteMutationIdentity } from '../../shared/remote-mutation-identity'
 
 const roots: string[] = []
 const ref = {
@@ -24,21 +25,33 @@ describe('RemoteFileDraftStore', () => {
     roots.push(root)
     const filePath = join(root, 'nested', 'file-drafts.json')
     const store = new RemoteFileDraftStore(filePath)
+    const pendingMutation = {
+      ...createRemoteMutationIdentity(),
+      sessionId: 'session-1',
+      expectedSha256: 'a'.repeat(64),
+    }
     await store.save({
       ref,
       path: '/srv/project/src/a.ts',
       content: 'changed',
       savedContent: 'saved',
       sha256: 'a'.repeat(64),
+      pendingMutation,
       updatedAt: 1,
     })
     expect((await stat(filePath)).mode & 0o777).toBe(0o600)
 
     const restored = new RemoteFileDraftStore(filePath)
-    expect(await restored.get(ref, '/srv/project/src/a.ts')).toMatchObject({ content: 'changed' })
+    expect(await restored.get(ref, '/srv/project/src/a.ts')).toMatchObject({
+      content: 'changed',
+      pendingMutation,
+    })
     await restored.rebasePrefix(ref, '/srv/project/src', '/srv/project/lib')
     expect(await restored.get(ref, '/srv/project/src/a.ts')).toBeNull()
-    expect(await restored.get(ref, '/srv/project/lib/a.ts')).toMatchObject({ content: 'changed' })
+    expect(await restored.get(ref, '/srv/project/lib/a.ts')).toMatchObject({
+      content: 'changed',
+      pendingMutation: undefined,
+    })
     await restored.deletePrefix(ref, '/srv/project/lib')
     expect(await restored.get(ref, '/srv/project/lib/a.ts')).toBeNull()
   })

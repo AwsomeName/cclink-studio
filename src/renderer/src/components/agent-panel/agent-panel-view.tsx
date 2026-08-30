@@ -329,14 +329,12 @@ export function AgentPanelView({ model }: { model: AgentPanelViewModel }): React
       <div className="agent-conversation-main" ref={mainRef}>
         <PanelHeader model={model.header} />
         <ContextBar chips={model.contextChips} />
-        <NoticePermissionArea
-          notices={model.notices}
-          activities={model.activities}
-          permissions={model.permissions}
-        />
+        <NoticePermissionArea notices={model.notices} activities={[]} permissions={[]} />
         <MessageTimeline
           items={model.timeline}
           empty={model.empty}
+          activities={model.activities}
+          permissions={model.permissions}
           listRef={conversationScroll.listRef}
           onScroll={conversationScroll.onScroll}
           onWheel={conversationScroll.onWheel}
@@ -401,13 +399,18 @@ export function NoticePermissionArea({
   notices,
   activities,
   permissions,
+  landmark = true,
 }: {
   notices: AgentPanelNoticeModel[]
   activities: AgentPanelActivityModel[]
   permissions: AgentPanelPermissionModel[]
+  landmark?: boolean
 }): ReactElement {
   return (
-    <section className="agent-panel-notice-area" data-agent-landmark="notice-permission">
+    <section
+      className="agent-panel-notice-area"
+      {...(landmark ? { 'data-agent-landmark': 'notice-permission' } : {})}
+    >
       {notices.map((notice) => (
         <div key={notice.id} className={`agent-panel-notice ${notice.tone}`} role="status">
           <strong>{notice.title}</strong>
@@ -506,6 +509,8 @@ function PermissionCard({ model }: { model: AgentPanelPermissionModel }): ReactE
 export function MessageTimeline({
   items,
   empty,
+  activities = [],
+  permissions = [],
   listRef,
   onScroll,
   onWheel,
@@ -515,6 +520,8 @@ export function MessageTimeline({
 }: {
   items: AgentPanelTimelineItem[]
   empty: AgentPanelEmptyModel
+  activities?: AgentPanelActivityModel[]
+  permissions?: AgentPanelPermissionModel[]
   listRef?: Ref<HTMLDivElement>
   onScroll?: UIEventHandler<HTMLDivElement>
   onWheel?: WheelEventHandler<HTMLDivElement>
@@ -560,6 +567,12 @@ export function MessageTimeline({
           )
         })
       )}
+      <NoticePermissionArea
+        notices={[]}
+        activities={activities}
+        permissions={permissions}
+        landmark={false}
+      />
     </div>
   )
 }

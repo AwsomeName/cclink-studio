@@ -82,6 +82,21 @@ export interface ArticlePublishingFields {
   coverAssetId?: string
 }
 
+export interface ArticlePublishingSideEffect {
+  key: string
+  affairId: string
+  attemptId: string
+  executionGeneration: number
+  kind: 'upload-asset' | 'save-draft' | 'publish'
+  targetId: string
+  actionFingerprint: string
+  status: 'reserved' | 'dispatched' | 'result-unknown' | 'verified' | 'rejected'
+  reservedAt: string
+  dispatchedAt?: string
+  observedAt?: string
+  browserTaskRunId?: string
+}
+
 export interface ArticlePublishingState {
   adapterId: 'csdn'
   adapterVersion: 1
@@ -96,19 +111,35 @@ export interface ArticlePublishingState {
   fields: ArticlePublishingFields
   assets: ArticlePublishingAsset[]
   checkpoints: ArticlePublishingCheckpoint[]
+  sideEffects: ArticlePublishingSideEffect[]
   execution: {
     status:
       | 'draft'
+      | 'preparing'
       | 'running'
+      | 'checking-runtime'
       | 'waiting-human'
       | 'interrupted'
+      | 'cancelled'
       | 'failed'
       | 'published'
       | 'result-unknown'
     currentAttemptId?: string
+    currentGeneration: number
+    currentLaunchOperationId?: string
     currentStepId?: string
     lastAgentRunId?: string
     lastBrowserTaskRunId?: string
+    runtimeCheck?: {
+      reasonCode: string
+      reason: string
+      suspectedAt: string
+      lastOwnerAt?: string
+      lastProgressAt?: string
+      probeDeadline: string
+      ownerResponsive?: boolean
+      probeAttempts: number
+    }
   }
   draft?: { url?: string; lastVerifiedAt?: string }
   publication: {
@@ -146,14 +177,21 @@ export interface StartArticlePublishingTaskResult {
   affair: WebAffair
   attemptId: string
   resumed: boolean
+  executionGeneration: number
+  launchOperationId: string
+  conversationId: string
+  agentRunId: string
+  browserTaskRunId: string
+  browserTabId: string
   agentPrompt: string
 }
 
-export interface RecoverArticlePublishingTaskLaunchInput {
+export interface ManageArticlePublishingRuntimeInput {
   workspaceRef: WorkspaceRef
   affairId: string
   attemptId: string
-  reason: string
+  executionGeneration: number
+  launchOperationId: string
 }
 
 export interface ReportArticlePublishingCheckpointInput {
@@ -186,8 +224,14 @@ export interface ArticlePublishingApiContract {
   startTask(
     input: StartArticlePublishingTaskInput,
   ): Promise<WebAffairOperationResult<StartArticlePublishingTaskResult>>
-  recoverTaskLaunch(
-    input: RecoverArticlePublishingTaskLaunchInput,
+  checkRuntime(
+    input: ManageArticlePublishingRuntimeInput,
+  ): Promise<WebAffairOperationResult<WebAffair>>
+  continueRuntime(
+    input: ManageArticlePublishingRuntimeInput,
+  ): Promise<WebAffairOperationResult<WebAffair>>
+  terminateRuntime(
+    input: ManageArticlePublishingRuntimeInput,
   ): Promise<WebAffairOperationResult<WebAffair>>
   reportCheckpoint(
     input: ReportArticlePublishingCheckpointInput,
