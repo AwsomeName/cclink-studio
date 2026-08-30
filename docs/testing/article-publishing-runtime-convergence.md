@@ -1,6 +1,6 @@
 # 文章发布“开始执行无反应 / Attempt 假运行”系统性治理方案
 
-> 状态：首版方案经独立审查驳回；本文已纳入首轮 5 项和复审 4 项阻塞问题，形成可施工修订版，尚未实现。  
+> 状态：两轮审查的 9 项阻塞已按本文边界实现；自动工程门禁与真实 Electron/CDP 故障注入已通过，真实 CSDN 发布验收待执行。  
 > 日期：2026-08-30。  
 > 适用范围：文章发布中心、`WebAffairService`、Agent Run、BrowserTask、内嵌浏览器。  
 > 架构约束：遵守 `docs/architecture.md`；`WebAffairService` 继续是事务、Attempt、检查点和证据的唯一持久状态所有者。
@@ -9,16 +9,11 @@
 
 这不是按钮点击事件失效。截图中的持久发布事务仍是 `running`，renderer 因而主动禁用了“开始执行”。真正的问题是：Agent、BrowserTask、浏览器 Tab 或 CDP 连接已经结束/断开后，终态没有可靠地收敛回当前 Attempt，导致持久状态和真实运行状态分叉。
 
-截至 2026-08-30，当前 `main` 已补上一个已复现路径：同一个 Agent Run 创建多个 BrowserTask 时，不再只检查最后一个 BrowserTask，而会扫描该 Run 的全部关联 BrowserTask，并按 Attempt 去重收敛。应用重启时也会把遗留的瞬态 Attempt 改成 `interrupted`。这个候选修复不在已经发布的 `v0.1.72` 中。这两项是必要修复，但还不是系统性闭环，因为下列路径仍可能留下假运行：
+截至 2026-08-30，当前工作树已经建立统一、幂等、可重试、可诊断的运行终态收敛链路，并把“真的在运行”“待核验”“确认已经孤儿化”“外部结果未知”分开。启动、看门狗和 Runtime 终态归 main 所有；renderer 只发有界命令。所有 Runtime 事件和副作用授权都绑定发布 generation、launch operation 与 owner 自身代次；上传、保存、发布在实际 Playwright 动作前消费持久一次性能力；启动扫描和固定恢复日志负责崩溃兜底。
 
-- BrowserTask 或 CDP 先断开，而 Agent 一直没有发出终态；
-- 终态回调已触发，但工作空间解析、服务初始化或落盘失败；当前只记日志，没有可靠重试；
-- 启动任务在绑定 Agent Run / BrowserTask 之前失败；
-- 老 Run 的迟到终态覆盖已经恢复的新 Run；
-- 用户看到 `running` 时没有“检查运行状态”或“终止任务”的恢复入口；
-- 最终发布动作已经发出但结果没有确认时，系统如果把它当普通中断重跑，可能重复发布。
+该实现尚未进入已发布版本，也没有真实 CSDN 三图发布和最终断线验收证据。因此可以称为“工程实现与自动门禁通过”，不能称为“真实用户问题已关闭”。
 
-所以，正确方案不是再补一个回调或放开按钮，而是建立一条统一、幂等、可重试、可诊断的运行终态收敛链路，并把“真的在运行”“确认已经孤儿化”“外部结果未知”区分清楚。
+本轮固定参数为：owner lease `60s`、progress lease `10min`、`checking-runtime` probe deadline `60s`、watchdog interval `10s`、单次收敛最多重试 `3` 次。它们集中在 `ArticlePublishingService`，并使用 fake clock 覆盖“owner 存活但无进度”和“owner 丢失”两条路径；真实站点验收后如需调整，只能修改这些集中参数和本文记录。
 
 ## 独立审查结论与本次修订
 
@@ -636,6 +631,12 @@ recovery journal 按 Affair 保存“最新关键目标状态”，同一 Affair
 
 ## 十二、当前完成度与下一步
 
-用户现在仍可能在当前会话遇到假 `running`，也没有完整的 App 内自救入口；因此问题尚未系统性修复。
+用户在当前实现中可以对运行任务执行“检查运行状态”“继续等待”“终止任务”；无终态、Tab/CDP 丢失或长期无真实进度时会先进入持久“待核验”，再有界收敛为可恢复、待人工或结果未知。窗口关闭不再承担启动回滚；旧 generation/owner 的迟到事件不能修改当前运行；最终发布已经派发时，终止、断线和重启都只能进入结果未知，不能直接重放。
 
-已有工程基础：多 BrowserTask 关联扫描、Agent 终态兼容收敛、启动时中断部分遗留 Attempt。方案现已纳入两轮审查的全部 9 项阻塞，可以按 P0-P4 实施，但顺序不能颠倒：先落完整 identity/generation、统一 reducer 与存储保底；再把一次性副作用能力接到实际 Browser 动作入口；随后把整套启动移入 main；最后接 `checking-runtime` 看门狗和 UI。缺少其中任何一层，都不能宣称防假死和防重复发布闭环完成。
+已取得的工程证据：
+
+- `pnpm verify` 通过：337 个测试文件，2104 个测试通过、2 个跳过；format、lint、类型检查、边界检查与生产构建通过。
+- 发布链专项覆盖 main 启动、完整 owner identity、旧 generation/owner no-op、统一生命周期投影、一次性副作用消费、2,000 事件收敛、high-water 压缩、带 revision/hash 的固定恢复日志、损坏日志 fail closed、启动矛盾修复，以及 fake-clock 的静默/失主核验。
+- `pnpm smoke:browser-cdp-recovery` 在真实 Electron `WebContentsView` 中通过；Playwright connection generation 为 `1 → 2 → 3`，URL、WebContents、CDP target、Profile、Session、表单和滚动状态保持。
+
+剩余产品门禁只有本文第一节的真实 CSDN 验收与正式版本交付。没有完成真实三图发布、Agent/Tab/CDP 故障注入、最终发布断线核验之前，不得把本文状态改成 Closed。

@@ -29,7 +29,22 @@ function createPolicy(options?: {
                 accountId: 'account-a',
                 status: 'running-ai',
                 executionGeneration: 1,
+                launchOperationId: 'launch-a',
                 browserTaskRunId: 'task-a',
+                runtimeBindings: [
+                  {
+                    kind: 'browser-task',
+                    status: 'active',
+                    browserTaskRunId: 'task-a',
+                    executionGeneration: 1,
+                    launchOperationId: 'launch-a',
+                    tabId: 'tab-a',
+                    browserViewRuntimeGeneration: 2,
+                    webContentsId: 20,
+                    playwrightConnectionGeneration: 3,
+                    playwrightPageBindingGeneration: 4,
+                  },
+                ],
               },
             ],
             articlePublishing: {
@@ -86,6 +101,12 @@ const task = {
     accountId: 'account-a',
     affairId: 'affair-a',
     affairAttemptId: 'attempt-a',
+    affairExecutionGeneration: 1,
+    affairLaunchOperationId: 'launch-a',
+    browserViewRuntimeGeneration: 2,
+    webContentsId: 20,
+    playwrightConnectionGeneration: 3,
+    playwrightPageBindingGeneration: 4,
   },
 } as const
 
@@ -218,6 +239,23 @@ describe('ArticlePublishingBrowserPolicy', () => {
     await expect(
       policy.classifyAction(task as never, 'fill', {}, page as never, context),
     ).resolves.toMatchObject({ kind: 'unknown' })
+  })
+
+  it('rejects a stale Browser/CDP owner epoch inside the same execution generation', async () => {
+    const { policy, webAffairService } = createPolicy()
+    const staleTask = {
+      ...task,
+      correlation: {
+        ...task.correlation,
+        playwrightPageBindingGeneration: 3,
+      },
+    }
+    const page = { url: () => 'https://app-blog.csdn.net/csdn/aiChatNew' }
+
+    await expect(
+      policy.classifyAction(staleTask as never, 'fill', {}, page as never, context),
+    ).resolves.toMatchObject({ kind: 'unknown' })
+    expect(webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
   })
 
   it('keeps verification checkpoints read-only', async () => {

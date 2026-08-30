@@ -153,6 +153,150 @@ describe('ArticlePublishingService', () => {
     )
   })
 
+  it('freezes a healthy-but-stalled runtime before bounded escalation to human handling', async () => {
+    vi.useFakeTimers()
+    try {
+      const now = new Date('2026-08-30T12:00:00.000Z')
+      vi.setSystemTime(now)
+      const attempt = {
+        id: '44444444-4444-4444-8444-444444444444',
+        status: 'running-ai',
+        executionGeneration: 1,
+        launchOperationId: 'launch-a',
+      }
+      const affair = {
+        id: '33333333-3333-4333-8333-333333333333',
+        attempts: [attempt],
+        articlePublishing: {
+          execution: {
+            status: 'running',
+            currentAttemptId: attempt.id,
+            currentGeneration: 1,
+            currentLaunchOperationId: 'launch-a',
+            runtimeCheck: undefined as { suspectedAt: string } | undefined,
+          },
+        },
+      }
+      const reconcileArticlePublishingRuntime = vi.fn(async () => ({
+        success: true,
+        data: affair,
+      }))
+      const webAffairService = {
+        getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [affair] } })),
+        reconcileArticlePublishingRuntime,
+      }
+      const runtime = createActiveRuntime(now.getTime() - 10 * 60_000 - 1)
+      const service = new ArticlePublishingService(
+        {} as never,
+        webAffairService as never,
+        async (path) => path,
+        healthyRuntimeDependencies(),
+      )
+
+      await (service as never as { probeRuntime(value: unknown): Promise<void> }).probeRuntime(
+        runtime,
+      )
+      expect(reconcileArticlePublishingRuntime).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          source: 'lease-expired',
+          observedStatus: 'owner-alive',
+          reasonCode: 'PROGRESS_LEASE_EXPIRED',
+        }),
+      )
+
+      affair.attempts[0].status = 'checking-runtime'
+      affair.articlePublishing.execution.status = 'checking-runtime'
+      affair.articlePublishing.execution.runtimeCheck = {
+        suspectedAt: new Date(now.getTime() - 60_001).toISOString(),
+      }
+      await (service as never as { probeRuntime(value: unknown): Promise<void> }).probeRuntime(
+        runtime,
+      )
+      expect(reconcileArticlePublishingRuntime).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          source: 'lease-expired',
+          observedStatus: 'owner-alive-no-progress',
+          reasonCode: 'NO_VERIFIABLE_PROGRESS',
+        }),
+      )
+      service.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('moves a missing exact owner identity through checking-runtime to interrupted', async () => {
+    vi.useFakeTimers()
+    try {
+      const now = new Date('2026-08-30T12:00:00.000Z')
+      vi.setSystemTime(now)
+      const attempt = {
+        id: '44444444-4444-4444-8444-444444444444',
+        status: 'running-ai',
+        executionGeneration: 1,
+        launchOperationId: 'launch-a',
+      }
+      const affair = {
+        id: '33333333-3333-4333-8333-333333333333',
+        attempts: [attempt],
+        articlePublishing: {
+          execution: {
+            status: 'running',
+            currentAttemptId: attempt.id,
+            currentGeneration: 1,
+            currentLaunchOperationId: 'launch-a',
+            runtimeCheck: undefined as { suspectedAt: string } | undefined,
+          },
+        },
+      }
+      const reconcileArticlePublishingRuntime = vi.fn(async () => ({
+        success: true,
+        data: affair,
+      }))
+      const webAffairService = {
+        getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [affair] } })),
+        reconcileArticlePublishingRuntime,
+      }
+      const dependencies = healthyRuntimeDependencies()
+      dependencies.getBrowserTaskRuntime = () => ({ getTask: vi.fn(() => null) }) as never
+      const runtime = createActiveRuntime(now.getTime())
+      const service = new ArticlePublishingService(
+        {} as never,
+        webAffairService as never,
+        async (path) => path,
+        dependencies,
+      )
+
+      await (service as never as { probeRuntime(value: unknown): Promise<void> }).probeRuntime(
+        runtime,
+      )
+      expect(reconcileArticlePublishingRuntime).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          observedStatus: 'owner-lost',
+          reasonCode: 'RUNTIME_OWNER_LOST',
+        }),
+      )
+
+      affair.attempts[0].status = 'checking-runtime'
+      affair.articlePublishing.execution.status = 'checking-runtime'
+      affair.articlePublishing.execution.runtimeCheck = {
+        suspectedAt: new Date(now.getTime() - 60_001).toISOString(),
+      }
+      await (service as never as { probeRuntime(value: unknown): Promise<void> }).probeRuntime(
+        runtime,
+      )
+      expect(reconcileArticlePublishingRuntime).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          observedStatus: 'owner-lost',
+          reasonCode: 'RUNTIME_ORPHAN_CONFIRMED',
+        }),
+      )
+      service.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('creates a task after re-inspecting only the Markdown source fields', async () => {
     const markdown = '# 可执行文章\n\n摘要。'
     const fileService = {
@@ -302,3 +446,61 @@ describe('ArticlePublishingService', () => {
     )
   })
 })
+
+function createActiveRuntime(lastProgressAt: number) {
+  return {
+    workspaceId: '11111111-1111-4111-8111-111111111111',
+    affairId: '33333333-3333-4333-8333-333333333333',
+    attemptId: '44444444-4444-4444-8444-444444444444',
+    executionGeneration: 1,
+    launchOperationId: 'launch-a',
+    conversationId: 'conversation-a',
+    agentRunId: 'run-a',
+    agentRuntimeBindingKey: 'agent-binding-a',
+    agentRuntimeEpoch: 7,
+    browserTaskRunId: '55555555-5555-4555-8555-555555555555',
+    tabId: 'tab-a',
+    browserViewRuntimeGeneration: 2,
+    webContentsId: 20,
+    playwrightConnectionGeneration: 3,
+    playwrightPageBindingGeneration: 4,
+    lastOwnerAt: Date.now(),
+    lastProgressAt,
+  }
+}
+
+function healthyRuntimeDependencies() {
+  return {
+    getAgentBridge: () =>
+      ({
+        getRunStatus: vi.fn(() => ({ status: 'running' })),
+        getRuntimeIdentity: vi.fn(() => ({
+          agentRuntimeEpoch: 7,
+          agentRuntimeBindingKey: 'agent-binding-a',
+        })),
+      }) as never,
+    getBrowserManager: () =>
+      ({
+        getViewRuntimeIdentity: vi.fn(() => ({
+          browserViewRuntimeGeneration: 2,
+          webContentsId: 20,
+        })),
+      }) as never,
+    getBrowserTaskRuntime: () =>
+      ({
+        getTask: vi.fn(() => ({
+          status: 'running',
+          correlation: {
+            affairExecutionGeneration: 1,
+            affairLaunchOperationId: 'launch-a',
+          },
+        })),
+      }) as never,
+    getPlaywrightBridge: () =>
+      ({
+        getPageBindingIdentity: vi.fn(() => ({ generation: 4, webContentsId: 20 })),
+        isConnected: vi.fn(() => true),
+        getConnectionGeneration: vi.fn(() => 3),
+      }) as never,
+  }
+}

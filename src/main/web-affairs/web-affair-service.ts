@@ -1871,12 +1871,106 @@ export class WebAffairService {
       const currentAttempt = publishing?.execution.currentAttemptId
         ? affair.attempts.find((attempt) => attempt.id === publishing.execution.currentAttemptId)
         : undefined
+      const missingCurrentAttempt = Boolean(
+        publishing?.execution.currentAttemptId && !currentAttempt,
+      )
+      if (publishing && missingCurrentAttempt) {
+        changed = true
+        const hasUnknownFinalAction =
+          ['dispatched', 'verifying', 'result-unknown'].includes(publishing.publication.status) ||
+          publishing.sideEffects.some(
+            (effect) =>
+              effect.kind === 'publish' && ['dispatched', 'result-unknown'].includes(effect.status),
+          )
+        const executionStatus: ArticlePublishingState['execution']['status'] = hasUnknownFinalAction
+          ? 'result-unknown'
+          : 'interrupted'
+        return {
+          ...affair,
+          status: 'needs-attention' as const,
+          flow: {
+            ...affair.flow,
+            nodes: affair.flow.nodes.map((node) =>
+              !TERMINAL_NODE_STATUSES.has(node.status)
+                ? {
+                    ...node,
+                    status: 'waiting-human' as const,
+                    lastResultNote: '启动审计发现 execution 引用的 Attempt 不存在',
+                    availableTransitions: [...ALLOWED_TRANSITIONS['waiting-human']],
+                    updatedAt: now,
+                  }
+                : node,
+            ),
+          },
+          articlePublishing: {
+            ...publishing,
+            assets: publishing.assets.map((asset) =>
+              ['uploading', 'waiting-platform', 'verifying'].includes(asset.status)
+                ? { ...asset, status: 'reconciling' as const }
+                : asset,
+            ),
+            checkpoints: publishing.checkpoints.map((checkpoint) =>
+              ['running', 'waiting-platform', 'verifying'].includes(checkpoint.status)
+                ? { ...checkpoint, status: 'needs-reconcile' as const, finishedAt: undefined }
+                : checkpoint,
+            ),
+            sideEffects: publishing.sideEffects.map((effect) =>
+              effect.status === 'dispatched'
+                ? { ...effect, status: 'result-unknown' as const, observedAt: now }
+                : effect.status === 'reserved'
+                  ? { ...effect, status: 'rejected' as const, observedAt: now }
+                  : effect,
+            ),
+            execution: {
+              ...publishing.execution,
+              status: executionStatus,
+              currentAttemptId: undefined,
+              currentLaunchOperationId: undefined,
+              lastAgentRunId: undefined,
+              lastBrowserTaskRunId: undefined,
+            },
+            publication: hasUnknownFinalAction
+              ? { ...publishing.publication, status: 'result-unknown' as const, observedAt: now }
+              : publishing.publication,
+          },
+          events: this.appendEvent(
+            affair,
+            this.event(
+              'attempt-finished',
+              '应用启动审计已修复失效 Attempt 引用，未执行任何网页动作',
+              now,
+            ),
+          ),
+          updatedAt: now,
+        }
+      }
       const terminalContradiction = Boolean(
         currentAttempt &&
         TERMINAL_ATTEMPT_STATUSES.has(currentAttempt.status) &&
         ['preparing', 'running', 'checking-runtime'].includes(publishing?.execution.status ?? ''),
       )
-      if (interrupted.length === 0 && !terminalContradiction) return affair
+      const finalActionContradiction = Boolean(
+        currentAttempt &&
+        publishing &&
+        publishing.execution.status !== 'published' &&
+        (['dispatched', 'verifying'].includes(publishing.publication.status) ||
+          publishing.sideEffects.some(
+            (effect) => effect.kind === 'publish' && effect.status === 'dispatched',
+          )),
+      )
+      const identityContradiction = Boolean(
+        currentAttempt &&
+        publishing &&
+        (currentAttempt.executionGeneration !== publishing.execution.currentGeneration ||
+          currentAttempt.launchOperationId !== publishing.execution.currentLaunchOperationId),
+      )
+      if (
+        interrupted.length === 0 &&
+        !terminalContradiction &&
+        !finalActionContradiction &&
+        !identityContradiction
+      )
+        return affair
       changed = true
       const interruptedIds = new Set(interrupted.map((attempt) => attempt.id))
       const interruptedNodeIds = new Set(interrupted.map((attempt) => attempt.nodeId))
@@ -1933,15 +2027,21 @@ export class WebAffairService {
             now,
             '应用或 Agent 运行时已结束，未恢复为假运行',
           )
-        } else if (repairedCurrentAttempt && terminalContradiction) {
-          const target: ArticlePublishingLifecycleTarget =
-            repairedCurrentAttempt.status === 'cancelled'
+        } else if (
+          repairedCurrentAttempt &&
+          (terminalContradiction || finalActionContradiction || identityContradiction)
+        ) {
+          const target: ArticlePublishingLifecycleTarget = finalActionContradiction
+            ? 'result-unknown'
+            : repairedCurrentAttempt.status === 'cancelled'
               ? 'cancelled'
               : repairedCurrentAttempt.status === 'failed'
                 ? 'failed'
                 : repairedCurrentAttempt.status === 'succeeded'
                   ? 'published'
-                  : 'interrupted'
+                  : repairedCurrentAttempt.status === 'waiting-human'
+                    ? 'waiting-human'
+                    : 'interrupted'
           reconciled = this.reduceArticlePublishingLifecycle(
             reconciled,
             repairedCurrentAttempt,
@@ -2221,19 +2321,24 @@ export class WebAffairService {
     const executionGeneration = found.attempt.executionGeneration + 1
     const launchOperationId = randomUUID()
     const publishing = found.affair.articlePublishing
+    const resultVerificationOnly = publishing.execution.status === 'result-unknown'
     const checkpoints = publishing.checkpoints.map((checkpoint) =>
       ['running', 'waiting-platform', 'verifying'].includes(checkpoint.status)
         ? { ...checkpoint, status: 'needs-reconcile' as const, finishedAt: undefined }
         : checkpoint,
     )
-    const currentStep = checkpoints.find((checkpoint) => checkpoint.status !== 'completed')
+    const currentStep = resultVerificationOnly
+      ? checkpoints.find((checkpoint) => checkpoint.stepId === 'verify-publication')
+      : checkpoints.find((checkpoint) => checkpoint.status !== 'completed')
     const nodes = found.affair.flow.nodes.map((node) =>
       node.id === found.attempt.nodeId
         ? {
             ...node,
             status: 'running' as const,
             executor: 'ai' as const,
-            lastResultNote: '正在从已确认检查点恢复',
+            lastResultNote: resultVerificationOnly
+              ? '正在只读核验结果未知的最终发布动作'
+              : '正在从已确认检查点恢复',
             availableTransitions: [...ALLOWED_TRANSITIONS.running],
             updatedAt: now,
           }
@@ -2295,7 +2400,9 @@ export class WebAffairService {
         found.affair,
         this.event(
           'attempt-returned',
-          '文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask',
+          resultVerificationOnly
+            ? '文章发布结果未知；将创建新的只读核验 Runtime，禁止重放发布动作'
+            : '文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask',
           now,
           { nodeId: found.attempt.nodeId, attemptId: found.attempt.id },
         ),
@@ -2314,9 +2421,12 @@ export class WebAffairService {
     }
     const now = this.timestamp()
     const publishing = found.affair.articlePublishing
-    const currentStep = publishing.checkpoints.find(
-      (checkpoint) => checkpoint.status !== 'completed',
-    )
+    const currentStep =
+      publishing.execution.status === 'preparing' &&
+      publishing.publication.status === 'result-unknown' &&
+      publishing.execution.currentStepId === 'verify-publication'
+        ? publishing.checkpoints.find((checkpoint) => checkpoint.stepId === 'verify-publication')
+        : publishing.checkpoints.find((checkpoint) => checkpoint.status !== 'completed')
     const checkpoints = publishing.checkpoints
     return this.persistAffair({
       ...found.affair,
@@ -2694,7 +2804,17 @@ export class WebAffairService {
             'verified',
             now,
           )
-        : publishing.sideEffects
+        : input.status === 'completed' && ['fill-body', 'fill-fields'].includes(input.stepId)
+          ? publishing.sideEffects.map((effect) =>
+              effect.attemptId === found.attempt.id &&
+              effect.executionGeneration === found.attempt.executionGeneration &&
+              effect.kind === 'save-draft' &&
+              effect.targetId.startsWith(`autosave:${input.stepId}:`) &&
+              effect.status === 'dispatched'
+                ? { ...effect, status: 'verified' as const, observedAt: now }
+                : effect,
+            )
+          : publishing.sideEffects
     const baseAffair: WebAffair = {
       ...found.affair,
       status:
@@ -3473,12 +3593,13 @@ export class WebAffairService {
       const currentAttempt = publishing.execution.currentAttemptId
         ? affair.attempts.find((attempt) => attempt.id === publishing.execution.currentAttemptId)
         : undefined
-      if (publishing.execution.currentAttemptId && !currentAttempt)
+      if (!allowRepairableArticleState && publishing.execution.currentAttemptId && !currentAttempt)
         throw new Error('文章发布 execution 引用了不存在的 Attempt')
       if (currentAttempt) {
         if (
-          currentAttempt.executionGeneration !== publishing.execution.currentGeneration ||
-          currentAttempt.launchOperationId !== publishing.execution.currentLaunchOperationId
+          !allowRepairableArticleState &&
+          (currentAttempt.executionGeneration !== publishing.execution.currentGeneration ||
+            currentAttempt.launchOperationId !== publishing.execution.currentLaunchOperationId)
         ) {
           throw new Error('文章发布 Attempt 与 execution 的执行代次不一致')
         }
@@ -3488,6 +3609,25 @@ export class WebAffairService {
           ['preparing', 'running', 'checking-runtime'].includes(publishing.execution.status)
         ) {
           throw new Error('文章发布终态 Attempt 不能保留运行中的 execution')
+        }
+        const expectedExecutionStatuses: Partial<
+          Record<WebAffairAttempt['status'], ArticlePublishingState['execution']['status'][]>
+        > = {
+          preparing: ['preparing'],
+          'running-ai': ['running'],
+          'checking-runtime': ['checking-runtime'],
+          'waiting-human': ['waiting-human'],
+          interrupted: ['interrupted', 'result-unknown'],
+          cancelled: ['cancelled'],
+          failed: ['failed'],
+          succeeded: ['published'],
+        }
+        if (
+          !allowRepairableArticleState &&
+          expectedExecutionStatuses[currentAttempt.status] &&
+          !expectedExecutionStatuses[currentAttempt.status]!.includes(publishing.execution.status)
+        ) {
+          throw new Error('文章发布 Attempt 与 execution 生命周期投影不一致')
         }
       }
       const bindingIds = new Set<string>()

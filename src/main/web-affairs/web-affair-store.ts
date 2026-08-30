@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { createHash } from 'node:crypto'
 import { copyFile, mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
@@ -17,6 +18,14 @@ type SnapshotReadResult =
   | { kind: 'valid'; snapshot: WebAffairSnapshot }
   | { kind: 'missing' }
   | { kind: 'invalid'; error: Error }
+
+interface RecoveryJournal {
+  journalVersion: 1
+  baseRevision: number
+  targetRevision: number
+  targetHash: string
+  affairs: WebAffairSnapshot['affairs']
+}
 
 export class WebAffairStore {
   readonly filePath: string
@@ -117,24 +126,79 @@ export class WebAffairStore {
   }
 
   private async recoverFromJournal(snapshot: WebAffairSnapshot): Promise<WebAffairSnapshot> {
-    const journal = await this.readSnapshot(this.recoveryPath)
-    if (journal.kind !== 'valid' || journal.snapshot.revision <= snapshot.revision) return snapshot
+    const journal = await this.readRecoveryJournal()
+    if (journal.kind === 'missing') return snapshot
+    if (journal.kind === 'invalid') {
+      throw new Error('事务恢复日志损坏；原文件已保留，已停止发布写入')
+    }
+    if (journal.journal.targetRevision <= snapshot.revision) {
+      await this.clearRecoveryJournal()
+      return snapshot
+    }
+    if (journal.journal.baseRevision > snapshot.revision) {
+      throw new Error('事务恢复日志与主文件 revision 不连续；已停止发布写入')
+    }
     const affairs = new Map(snapshot.affairs.map((affair) => [affair.id, affair]))
-    for (const affair of journal.snapshot.affairs) affairs.set(affair.id, affair)
+    for (const affair of journal.journal.affairs) affairs.set(affair.id, affair)
     const recovered = parseWebAffairSnapshot({
       ...snapshot,
-      revision: journal.snapshot.revision,
+      revision: journal.journal.targetRevision,
       affairs: [...affairs.values()],
     })
     console.warn('[WebAffairStore] 已从固定恢复日志补回未完成的事务状态', {
       filePath: this.filePath,
       recoveryPath: this.recoveryPath,
       revision: recovered.revision,
-      recoveredAffairCount: journal.snapshot.affairs.length,
+      recoveredAffairCount: journal.journal.affairs.length,
     })
     await this.persist(recovered, false)
     await this.clearRecoveryJournal()
     return recovered
+  }
+
+  private async readRecoveryJournal(): Promise<
+    | { kind: 'valid'; journal: RecoveryJournal }
+    | { kind: 'missing' }
+    | { kind: 'invalid'; error: Error }
+  > {
+    try {
+      const metadata = await stat(this.recoveryPath)
+      if (metadata.size > MAX_RECOVERY_BYTES) {
+        throw new Error(`事务恢复日志超过 ${MAX_RECOVERY_BYTES} 字节限制`)
+      }
+      const raw = JSON.parse(await readFile(this.recoveryPath, 'utf8')) as Partial<RecoveryJournal>
+      if (
+        raw.journalVersion !== 1 ||
+        !Number.isInteger(raw.baseRevision) ||
+        !Number.isInteger(raw.targetRevision) ||
+        typeof raw.targetHash !== 'string' ||
+        !Array.isArray(raw.affairs)
+      ) {
+        throw new Error('事务恢复日志结构无效')
+      }
+      const snapshot = parseWebAffairSnapshot({
+        schemaVersion: 5,
+        revision: raw.targetRevision,
+        affairs: raw.affairs,
+      })
+      const expectedHash = recoveryTargetHash(snapshot.revision, snapshot.affairs)
+      if (expectedHash !== raw.targetHash) throw new Error('事务恢复日志目标 hash 不匹配')
+      return {
+        kind: 'valid',
+        journal: {
+          journalVersion: 1,
+          baseRevision: raw.baseRevision!,
+          targetRevision: snapshot.revision,
+          targetHash: raw.targetHash,
+          affairs: snapshot.affairs,
+        },
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'missing' }
+      const normalized = error instanceof Error ? error : new Error(String(error))
+      console.warn('[WebAffairStore] 无法读取恢复日志:', normalized.message)
+      return { kind: 'invalid', error: normalized }
+    }
   }
 
   private async clearRecoveryJournal(): Promise<void> {
@@ -172,11 +236,11 @@ export class WebAffairStore {
     })
     while (
       recovery.affairs.length > 1 &&
-      Buffer.byteLength(JSON.stringify(recovery), 'utf8') > MAX_RECOVERY_BYTES
+      Buffer.byteLength(serializeRecoveryJournal(recovery), 'utf8') > MAX_RECOVERY_BYTES
     ) {
       recovery = { ...recovery, affairs: recovery.affairs.slice(0, -1) }
     }
-    const serialized = JSON.stringify(recovery)
+    const serialized = serializeRecoveryJournal(recovery)
     if (Buffer.byteLength(serialized, 'utf8') > MAX_RECOVERY_BYTES) {
       throw new Error(`事务恢复日志超过 ${MAX_RECOVERY_BYTES} 字节限制`)
     }
@@ -185,6 +249,21 @@ export class WebAffairStore {
     await writeFile(temporaryPath, serialized, { encoding: 'utf8', mode: 0o600 })
     await rename(temporaryPath, this.recoveryPath)
   }
+}
+
+function serializeRecoveryJournal(snapshot: WebAffairSnapshot): string {
+  const journal: RecoveryJournal = {
+    journalVersion: 1,
+    baseRevision: Math.max(0, snapshot.revision - 1),
+    targetRevision: snapshot.revision,
+    targetHash: recoveryTargetHash(snapshot.revision, snapshot.affairs),
+    affairs: snapshot.affairs,
+  }
+  return JSON.stringify(journal)
+}
+
+function recoveryTargetHash(revision: number, affairs: WebAffairSnapshot['affairs']): string {
+  return createHash('sha256').update(JSON.stringify({ revision, affairs })).digest('hex')
 }
 
 function compactSnapshot(snapshot: WebAffairSnapshot, targetBytes: number): WebAffairSnapshot {

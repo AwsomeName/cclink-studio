@@ -34,6 +34,19 @@ const CHECKPOINT_LABELS: Record<string, string> = {
   failed: '失败',
 }
 
+const EXECUTION_LABELS: Record<string, string> = {
+  draft: '尚未开始',
+  preparing: '正在启动',
+  running: '执行中',
+  'checking-runtime': '待核验',
+  'waiting-human': '待人工处理',
+  interrupted: '已中断，可恢复',
+  cancelled: '已终止',
+  failed: '失败，可重试',
+  published: '已发布',
+  'result-unknown': '网页动作结果未知，只能核验',
+}
+
 export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement {
   const workspaceRef = tab.workspaceRef
   const affairId = tab.articlePublishing?.affairId ?? null
@@ -295,6 +308,29 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           attemptId: publishing.execution.currentAttemptId,
           adapter: `${publishing.adapterId}@${publishing.adapterVersion}`,
           status: publishing.execution.status,
+          executionGeneration: publishing.execution.currentGeneration,
+          launchOperationId: publishing.execution.currentLaunchOperationId?.slice(0, 16),
+          runtimeCheck: publishing.execution.runtimeCheck,
+          runtimeBindings: affair.attempts
+            .find((attempt) => attempt.id === publishing.execution.currentAttemptId)
+            ?.runtimeBindings.map((binding) => ({
+              kind: binding.kind,
+              status: binding.status,
+              generation: binding.executionGeneration,
+              launchOperationId: binding.launchOperationId.slice(0, 16),
+              lastObservedAt: binding.lastObservedAt,
+              endedAt: binding.endedAt,
+              terminalReason: binding.terminalReason,
+            })),
+          sideEffects: publishing.sideEffects.map((effect) => ({
+            kind: effect.kind,
+            targetId: effect.targetId,
+            generation: effect.executionGeneration,
+            status: effect.status,
+            reservedAt: effect.reservedAt,
+            dispatchedAt: effect.dispatchedAt,
+            observedAt: effect.observedAt,
+          })),
           sourceHash: publishing.source.contentHash,
           assets: publishing.assets.map((asset) => ({
             id: asset.id,
@@ -510,7 +546,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     return <div className="article-publishing-state">{error ?? '正在读取发布事务…'}</div>
   }
   const publishing = affair.articlePublishing
-  const canStart = ['draft', 'waiting-human', 'interrupted', 'failed'].includes(
+  const canStart = ['draft', 'waiting-human', 'interrupted', 'failed', 'result-unknown'].includes(
     publishing.execution.status,
   )
   const savedWebsite = resources?.websites.find((website) => website.id === publishing.websiteId)
@@ -625,7 +661,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       <div className="article-publishing-footer">
         <span>
           Attempt：{publishing.execution.currentAttemptId?.slice(0, 8) ?? '尚未开始'} ·{' '}
-          {publishing.execution.status}
+          {EXECUTION_LABELS[publishing.execution.status] ?? publishing.execution.status}
         </span>
         {['running', 'checking-runtime'].includes(publishing.execution.status) ? (
           <button type="button" disabled={busy} onClick={() => void manageRuntime('check')}>
@@ -654,6 +690,8 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
               ? '交还 Agent 并继续'
               : publishing.execution.status === 'interrupted'
                 ? '从中断处继续'
+                : publishing.execution.status === 'result-unknown'
+                  ? '核验发布结果'
                 : '开始执行'}
         </button>
       </div>

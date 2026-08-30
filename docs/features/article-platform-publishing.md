@@ -1,8 +1,8 @@
 # Markdown 文章平台发布
 
-> 状态：首版任务框架与 CSDN 最小浏览器策略已实现；v0.1.72 仍存在发布 Attempt 假运行阻塞，
+> 状态：发布 Runtime 系统性收敛已在当前工作树实现并通过自动工程门禁；已发布版本仍未包含，
 > 真实 CSDN 端到端发布仍待验收。
-> 最后更新：2026-08-29。
+> 最后更新：2026-08-30。
 > 关联事实源：`docs/architecture.md`、`docs/features/ai-web-affairs-agent.md`、
 > `docs/features/browser-automation.md`、`docs/features/platform-automation.md`、
 > `docs/features/markdown-wysiwyg.md`。
@@ -42,7 +42,7 @@
 正文填写、图片上传、草稿保存、最终发布和结果 URL 核验：尚缺一次新版本在真实 CSDN 页面上的
 完整验收证据。页面不在适配器识别范围、法律/版权声明、风控或结果未知时仍必须停下转人工。
 
-### 2026-08-29 · “开始发布没有反应”仍未关闭
+### 2026-08-30 · “开始发布没有反应”工程修复已实现，产品验收未关闭
 
 v0.1.68 修复了“网页或 Agent 启动失败后 Attempt 留在 `running`”的一条半启动路径，但没有覆盖
 同一 Agent Run 内出现多个 BrowserTask 的情况。v0.1.71 真实日志和 v0.1.72 代码复查确认：Run
@@ -50,14 +50,16 @@ v0.1.68 修复了“网页或 Agent 启动失败后 Attempt 留在 `running`”�
 持久 Attempt 会继续显示 `running`，而 UI 只允许 `draft / waiting-human / interrupted / failed`
 再次启动，所以按钮被主动禁用且没有解释原因。
 
+当前工作树已经增加 execution generation、完整 Runtime owner identity、main-owned 启动、统一生命周期 reducer、上传/保存/发布 write-ahead、双租约看门狗、持久“待核验”、启动一致性审计和 App 内恢复命令。`pnpm verify` 与真实 Electron/CDP 断线恢复 smoke 已通过。
+
 因此当前结论是：
 
 - 按钮事件本身不是主要根因；持久生命周期没有收敛才是根因；
 - v0.1.68 只能视为修复一个失败分支，不能作为“开始发布无响应已关闭”的证据；
-- 当前工作树中的候选修改在完成测试、提交和发布前，不得写成已修复；
-- 最小关闭门禁必须覆盖“一个 Run、多个 BrowserTask、绑定任务不是最后一个”的失败与取消路径，
-  并在真实 CSDN 任务中证明 Attempt 会恢复为可重试状态；
-- UI 后续还应直接显示禁用原因，不能继续让持久 `running` 表现为无反馈按钮。
+- 当前工作树可以称为工程修复候选通过，不得描述成已发布或真实用户闭环完成；
+- 最小关闭门禁仍必须在真实 CSDN 任务中证明多 BrowserTask、Agent 无终态、Tab/CDP 断线、重启、
+  旧事件迟到和最终动作结果未知均能安全收敛；
+- UI 已提供“检查运行状态”“继续等待”“终止任务”和“待核验”原因；正式版本交付前旧版本用户仍不会获得这些入口。
 
 ### 2026-08-28 · 账号任务限制审计与最小修复清单
 

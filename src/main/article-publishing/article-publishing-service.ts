@@ -1096,16 +1096,25 @@ function buildAgentPrompt(
 ): string {
   const publishing = affair.articlePublishing!
   const localAssets = publishing.assets.filter((asset) => asset.kind === 'local')
-  const firstIncomplete = publishing.checkpoints.find(
-    (checkpoint) => checkpoint.status !== 'completed',
-  )
+  const currentStep =
+    publishing.checkpoints.find(
+      (checkpoint) => checkpoint.stepId === publishing.execution.currentStepId,
+    ) ?? publishing.checkpoints.find((checkpoint) => checkpoint.status !== 'completed')
+  const resultVerificationOnly =
+    publishing.publication.status === 'result-unknown' ||
+    publishing.execution.currentStepId === 'verify-publication'
   return [
     `执行一条已由用户在 Studio 明确启动的 CSDN 单篇文章发布事务。`,
     `affairId=${affair.id}`,
     `attemptId=${attemptId}`,
     `accountId=${publishing.accountId}`,
     `sourceMarkdownPath=${publishing.source.markdownPath}`,
-    `从检查点 ${firstIncomplete?.stepId ?? 'verify-publication'} 开始；已完成检查点和已核验图片不得重放。`,
+    `从检查点 ${currentStep?.stepId ?? 'verify-publication'} 开始；已完成检查点和已核验图片不得重放。`,
+    ...(resultVerificationOnly
+      ? [
+          `本次只允许读取页面并核验既有发布结果；禁止填写、上传、保存或再次点击发布。找到现有文章后只回写 URL 和证据。`,
+        ]
+      : []),
     `main 已把可见账号页、Agent Run 和 BrowserTask 精确绑定到本次执行代次；禁止另开账号页。先调用 web_affair_get 读取冻结状态。`,
     `图片共有 ${localAssets.length} 张。每张上传必须依次报告 uploading、waiting-platform、verifying；只有重新读取编辑器取得平台 URL 和页面证据后才能报告 uploaded。`,
     `文章发布动作由主进程根据当前事务、步骤、账号、页面和适配器三态核验；普通“确认上传”和已授权的单篇常规发布可继续，人工专属或未知动作会自动暂停。`,

@@ -41,6 +41,13 @@ interface ResolveExecutionInput {
   attemptId: string
   accountId: string
   browserTaskRunId?: string
+  executionGeneration?: number
+  launchOperationId?: string
+  tabId?: string
+  browserViewRuntimeGeneration?: number
+  webContentsId?: number
+  playwrightConnectionGeneration?: number
+  playwrightPageBindingGeneration?: number
 }
 
 const HUMAN_ONLY_CONTROL =
@@ -60,6 +67,8 @@ const PAGE_MUTATION_ACTIONS = new Set([
 ])
 const CONTROL_ACTIVATION_ACTIONS = new Set(['click', 'press', 'pressKey'])
 const READ_ONLY_STEPS = new Set(['verify-account', 'verify-publication'])
+const POTENTIAL_AUTOSAVE_ACTIONS = new Set(['fill', 'select', 'check', 'uncheck'])
+const AUTOSAVE_STEPS = new Set(['fill-body', 'fill-fields'])
 
 /**
  * Stateless article-domain policy consumed by the generic Browser tool boundary.
@@ -209,6 +218,30 @@ export class ArticlePublishingBrowserPolicy {
             pageUrl,
           )
         : { kind: 'allow' }
+    }
+    if (
+      AUTOSAVE_STEPS.has(scope.currentStepId ?? '') &&
+      POTENTIAL_AUTOSAVE_ACTIONS.has(actionType)
+    ) {
+      const targetHash = createHash('sha256')
+        .update(
+          JSON.stringify({
+            actionType,
+            stepId: scope.currentStepId,
+            selector: String(params.selector ?? ''),
+            key: String(params.key ?? ''),
+            value: params.value ?? params.text ?? params.values ?? null,
+          }),
+        )
+        .digest('hex')
+      return this.reserveSideEffect(
+        scope,
+        'save-draft',
+        `autosave:${scope.currentStepId}:${targetHash}`,
+        actionType,
+        params,
+        pageUrl,
+      )
     }
     if ((actionType === 'press' || actionType === 'pressKey') && params.key !== 'Enter') {
       return { kind: 'allow' }
@@ -422,6 +455,13 @@ export class ArticlePublishingBrowserPolicy {
       attemptId: correlation.affairAttemptId,
       accountId: correlation.accountId,
       browserTaskRunId: task.id,
+      executionGeneration: correlation.affairExecutionGeneration,
+      launchOperationId: correlation.affairLaunchOperationId,
+      tabId: task.tabId,
+      browserViewRuntimeGeneration: correlation.browserViewRuntimeGeneration,
+      webContentsId: correlation.webContentsId,
+      playwrightConnectionGeneration: correlation.playwrightConnectionGeneration,
+      playwrightPageBindingGeneration: correlation.playwrightPageBindingGeneration,
     })
   }
 
@@ -504,6 +544,19 @@ export class ArticlePublishingBrowserPolicy {
     const affair = snapshot.data.affairs.find((candidate) => candidate.id === input.affairId)
     const publishing = affair?.articlePublishing
     const attempt = affair?.attempts.find((candidate) => candidate.id === input.attemptId)
+    const browserBinding = attempt?.runtimeBindings?.find(
+      (binding) =>
+        binding.kind === 'browser-task' &&
+        binding.status === 'active' &&
+        binding.browserTaskRunId === input.browserTaskRunId &&
+        binding.executionGeneration === input.executionGeneration &&
+        binding.launchOperationId === input.launchOperationId &&
+        binding.tabId === input.tabId &&
+        binding.browserViewRuntimeGeneration === input.browserViewRuntimeGeneration &&
+        binding.webContentsId === input.webContentsId &&
+        binding.playwrightConnectionGeneration === input.playwrightConnectionGeneration &&
+        binding.playwrightPageBindingGeneration === input.playwrightPageBindingGeneration,
+    )
     if (
       affair?.kind !== 'article-publishing' ||
       !publishing ||
@@ -514,7 +567,9 @@ export class ArticlePublishingBrowserPolicy {
       attempt.accountId !== input.accountId ||
       publishing.execution.currentAttemptId !== input.attemptId ||
       publishing.execution.status !== 'running' ||
-      !['preparing', 'running-ai'].includes(attempt.status)
+      !['preparing', 'running-ai'].includes(attempt.status) ||
+      (input.browserTaskRunId !== undefined &&
+        (attempt.browserTaskRunId !== input.browserTaskRunId || !browserBinding))
     ) {
       return null
     }

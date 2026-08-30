@@ -1,4 +1,5 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -610,6 +611,179 @@ describe('article publishing persistent state', () => {
     expect(lateOldGeneration.success).toBe(true)
     if (!lateOldGeneration.success) return
     expect(lateOldGeneration.data.articlePublishing?.execution.status).toBe('preparing')
+  })
+
+  it('repairs a terminal Attempt that was persisted with a running execution projection', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+    const filePath = join(directory, 'affairs.json')
+    const persisted = JSON.parse(await readFile(filePath, 'utf8'))
+    const affair = persisted.affairs[0]
+    affair.attempts[0].status = 'cancelled'
+    affair.attempts[0].endedAt = new Date().toISOString()
+    affair.articlePublishing.execution.status = 'running'
+    await writeFile(filePath, JSON.stringify(persisted))
+
+    const reloaded = createService(directory)
+    await reloaded.load()
+    const snapshot = reloaded.getProjectSnapshot(WORKSPACE_ID)
+    expect(snapshot.success).toBe(true)
+    if (!snapshot.success) return
+    expect(snapshot.data.affairs[0].attempts[0].status).toBe('cancelled')
+    expect(snapshot.data.affairs[0].articlePublishing?.execution.status).toBe('cancelled')
+    expect(snapshot.data.affairs[0].flow.nodes[0].status).toBe('cancelled')
+  })
+
+  it('repairs a dispatched final action to result-unknown instead of allowing a retry', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+    const filePath = join(directory, 'affairs.json')
+    const persisted = JSON.parse(await readFile(filePath, 'utf8'))
+    const affair = persisted.affairs[0]
+    const attempt = affair.attempts[0]
+    const now = new Date().toISOString()
+    attempt.status = 'cancelled'
+    attempt.endedAt = now
+    affair.articlePublishing.execution.status = 'cancelled'
+    affair.articlePublishing.publication = { status: 'dispatched', observedAt: now }
+    affair.articlePublishing.sideEffects.push({
+      key: `${affair.id}:${attempt.id}:g${attempt.executionGeneration}:publish:final`,
+      affairId: affair.id,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      kind: 'publish',
+      targetId: 'final',
+      actionFingerprint: 'publish-fingerprint',
+      status: 'dispatched',
+      reservedAt: now,
+      dispatchedAt: now,
+      browserTaskRunId: attempt.browserTaskRunId,
+    })
+    await writeFile(filePath, JSON.stringify(persisted))
+
+    const reloaded = createService(directory)
+    await reloaded.load()
+    const snapshot = reloaded.getProjectSnapshot(WORKSPACE_ID)
+    expect(snapshot.success).toBe(true)
+    if (!snapshot.success) return
+    const repaired = snapshot.data.affairs[0]
+    expect(repaired.attempts[0].status).toBe('interrupted')
+    expect(repaired.articlePublishing?.execution.status).toBe('result-unknown')
+    expect(repaired.articlePublishing?.publication.status).toBe('result-unknown')
+    expect(repaired.articlePublishing?.sideEffects.at(-1)?.status).toBe('result-unknown')
+
+    const verification = await reloaded.resumeArticlePublishingAttempt(
+      repaired.id,
+      repaired.attempts[0].id,
+      WORKSPACE_ID,
+    )
+    expect(verification.success).toBe(true)
+    if (!verification.success) return
+    expect(verification.data.articlePublishing?.execution).toMatchObject({
+      status: 'preparing',
+      currentStepId: 'verify-publication',
+    })
+    expect(verification.data.articlePublishing?.publication.status).toBe('result-unknown')
+    const marked = await reloaded.markArticlePublishingAttemptStarted(
+      repaired.id,
+      repaired.attempts[0].id,
+      WORKSPACE_ID,
+    )
+    expect(marked.success).toBe(true)
+    if (!marked.success) return
+    expect(marked.data.articlePublishing?.execution.currentStepId).toBe('verify-publication')
+  })
+
+  it('still persists startup convergence when an affair already has 2,000 events', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+    const filePath = join(directory, 'affairs.json')
+    const persisted = JSON.parse(await readFile(filePath, 'utf8'))
+    const now = new Date().toISOString()
+    persisted.affairs[0].events = Array.from({ length: 2_000 }, (_, index) => ({
+      id: randomUUID(),
+      type: 'node-status-changed',
+      summary: `diagnostic-${index}`,
+      occurredAt: now,
+    }))
+    await writeFile(filePath, JSON.stringify(persisted))
+
+    const reloaded = createService(directory)
+    await reloaded.load()
+    const snapshot = reloaded.getProjectSnapshot(WORKSPACE_ID)
+    expect(snapshot.success).toBe(true)
+    if (!snapshot.success) return
+    expect(snapshot.data.affairs[0].articlePublishing?.execution.status).toBe('interrupted')
+    expect(snapshot.data.affairs[0].events).toHaveLength(2_000)
+    expect(snapshot.data.affairs[0].events[0].summary).toContain('已压缩')
+  })
+
+  it('compacts oversized diagnostic history below the write high-water mark', async () => {
+    const created = await createDraftTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+    const filePath = join(directory, 'affairs.json')
+    const persisted = JSON.parse(await readFile(filePath, 'utf8'))
+    const now = new Date().toISOString()
+    const events = Array.from({ length: 2_000 }, () => ({
+      id: randomUUID(),
+      type: 'node-status-changed',
+      summary: 'x'.repeat(2_000),
+      occurredAt: now,
+    }))
+    persisted.revision += 1
+    persisted.affairs = [
+      { ...persisted.affairs[0], id: randomUUID(), events },
+      { ...persisted.affairs[0], id: randomUUID(), events },
+    ]
+
+    const saved = await new WebAffairStore(filePath).save(persisted)
+    expect(saved.affairs.every((affair) => affair.events.length <= 500)).toBe(true)
+    expect((await stat(filePath)).size).toBeLessThan(7 * 1024 * 1024)
+  })
+
+  it('replays a newer fixed recovery journal exactly once', async () => {
+    const created = await createDraftTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+    const filePath = join(directory, 'affairs.json')
+    const store = new WebAffairStore(filePath)
+    const primary = JSON.parse(await readFile(filePath, 'utf8'))
+    const recovery = structuredClone(primary)
+    recovery.revision += 1
+    recovery.affairs[0].title = 'Recovered Article'
+    await writeFile(
+      store.recoveryPath,
+      JSON.stringify({
+        journalVersion: 1,
+        baseRevision: primary.revision,
+        targetRevision: recovery.revision,
+        targetHash: createHash('sha256')
+          .update(JSON.stringify({ revision: recovery.revision, affairs: recovery.affairs }))
+          .digest('hex'),
+        affairs: recovery.affairs,
+      }),
+    )
+
+    const recovered = await store.load()
+    expect(recovered.revision).toBe(recovery.revision)
+    expect(recovered.affairs[0].title).toBe('Recovered Article')
+    await expect(readFile(store.recoveryPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+
+    const secondLoad = await store.load()
+    expect(secondLoad.revision).toBe(recovery.revision)
+    expect(secondLoad.affairs[0].title).toBe('Recovered Article')
+  })
+
+  it('fails closed instead of ignoring a damaged recovery journal', async () => {
+    const created = await createDraftTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+    const filePath = join(directory, 'affairs.json')
+    const store = new WebAffairStore(filePath)
+    const primaryBefore = await readFile(filePath, 'utf8')
+    await writeFile(store.recoveryPath, '{"journalVersion":1}')
+
+    await expect(store.load()).rejects.toThrow('恢复日志损坏')
+    expect(await readFile(filePath, 'utf8')).toBe(primaryBefore)
+    expect(await readFile(store.recoveryPath, 'utf8')).toContain('journalVersion')
   })
 })
 
