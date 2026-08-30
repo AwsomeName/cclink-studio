@@ -1,6 +1,6 @@
 # 统一上下文操作系统
 
-> 状态：M1-M5 已完成。日期：2026-07-22。
+> 状态：M1-M5 已完成。主里程碑日期：2026-07-22；远程 Terminal 补充：2026-08-29。
 
 ## 结论
 
@@ -402,10 +402,15 @@ Browser `WebContentsView` 位于 renderer 视图之外，普通 React 浮层可�
 - Browser 的新 Tab 操作显式继承当前 Profile；发送选区、链接、图片或页面给 Agent 只挂载资源并聚焦 Composer，不自动发送消息。
 - Source/Markdown 编辑器已接入剪切、复制、粘贴、全选、选区挂载以及链接/图片源复制，并保留编辑器自身输入与选区语义。
 - Terminal 已接入复制、粘贴、查找、清屏、发送选区、重启和终止；粘贴只写入 PTY 输入且不附加回车。运行态重启/终止在确认后再次校验当前 workspace、tab 与 session；终态工具栏“重新启动”不重复终止或确认，直接创建新 session，并记录生命周期审计。
+- 远程工作空间的 Terminal 选区也可通过右键附加到远程 Agent Composer，但只填入输入框，不执行命令、不自动发送。执行时重新核对完整 `RemoteWorkspaceRef` 与当前远程项目；跨项目目标会被拒绝，选区加已有输入超过 8 KiB 时给出明确错误，失败时保留已有输入内容。
 - Agent Thread 已接入打开、重命名、停止当前 run、复制诊断和归档/恢复；停止命令执行前重新核对 `runId`。消息已接入复制、复制 Markdown 和引用到 Composer，引用不会触发发送。
 - 2026-07-22 全新 detached worktree 自动门禁：`pnpm install --frozen-lockfile`、`pnpm verify` 通过（151 files / 902 tests），`pnpm smoke:standalone` 通过（local 9/9、UI 6/6、workflow 7/7、restore 4/4）。
 - `docs/ops/context-action-m3-acceptance.md` 的 H1-H4 已由真人逐项确认：Browser Profile 与登录态保持，Terminal 粘贴及终止确认正确，Agent 引用与 run 停止不产生旁路副作用，工作空间切换时旧菜单失效且各工作空间运行现场不串。
 - M3 关闭提交 `ca634cb` 已在全新 detached worktree 完成锁定安装和最新整体基线复验：`pnpm verify` 通过（153 files / 926 tests），`pnpm smoke:standalone` 通过（26/26）。
+
+2026-08-29 补充：远程 Terminal 的跨项目拒绝、8 KiB 上限和“不执行、不自动发送”已有定向自动化
+覆盖；已登录、已配对且在线的真实 Agent 客户端验收仍待完成，因此这里只声明代码与自动化完成，
+不声明远程用户闭环完成。
 
 ### M4：领域模块独立贡献
 

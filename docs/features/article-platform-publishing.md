@@ -1,7 +1,8 @@
 # Markdown 文章平台发布
 
-> 状态：首版任务框架与 CSDN 最小浏览器策略已实现；真实 CSDN 端到端发布仍待验收。
-> 最后更新：2026-08-28。
+> 状态：首版任务框架与 CSDN 最小浏览器策略已实现；v0.1.72 仍存在发布 Attempt 假运行阻塞，
+> 真实 CSDN 端到端发布仍待验收。
+> 最后更新：2026-08-29。
 > 关联事实源：`docs/architecture.md`、`docs/features/ai-web-affairs-agent.md`、
 > `docs/features/browser-automation.md`、`docs/features/platform-automation.md`、
 > `docs/features/markdown-wysiwyg.md`。
@@ -40,6 +41,23 @@
 标记，以及人工接管后恢复同一 Attempt。用户现在仍不能被承诺稳定完成真实 CSDN 的
 正文填写、图片上传、草稿保存、最终发布和结果 URL 核验：尚缺一次新版本在真实 CSDN 页面上的
 完整验收证据。页面不在适配器识别范围、法律/版权声明、风控或结果未知时仍必须停下转人工。
+
+### 2026-08-29 · “开始发布没有反应”仍未关闭
+
+v0.1.68 修复了“网页或 Agent 启动失败后 Attempt 留在 `running`”的一条半启动路径，但没有覆盖
+同一 Agent Run 内出现多个 BrowserTask 的情况。v0.1.71 真实日志和 v0.1.72 代码复查确认：Run
+结束时只取最后一个 BrowserTask 做文章事务回收；如果真正绑定 `affairId/attemptId` 的是更早任务，
+持久 Attempt 会继续显示 `running`，而 UI 只允许 `draft / waiting-human / interrupted / failed`
+再次启动，所以按钮被主动禁用且没有解释原因。
+
+因此当前结论是：
+
+- 按钮事件本身不是主要根因；持久生命周期没有收敛才是根因；
+- v0.1.68 只能视为修复一个失败分支，不能作为“开始发布无响应已关闭”的证据；
+- 当前工作树中的候选修改在完成测试、提交和发布前，不得写成已修复；
+- 最小关闭门禁必须覆盖“一个 Run、多个 BrowserTask、绑定任务不是最后一个”的失败与取消路径，
+  并在真实 CSDN 任务中证明 Attempt 会恢复为可重试状态；
+- UI 后续还应直接显示禁用原因，不能继续让持久 `running` 表现为无反馈按钮。
 
 ### 2026-08-28 · 账号任务限制审计与最小修复清单
 

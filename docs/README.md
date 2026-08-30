@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-08-27。
+> 当前事实源。最后更新：2026-08-29。
 
 ## 先读这些
 
@@ -14,11 +14,13 @@
 - `docs/ops/local-smoke-check.md`：验证 Studio 开源壳可独立启动和本地核心能力可用。
 - `docs/ops/package-target-check.md`：开源版与商业版打包目标、身份和产物交付检查。
 - `docs/ops/cclink-remote-entitlement-audit.md`：CCLink 远程服务端身份与付费门禁审计。
-- `docs/ops/cclink-remote-stage-1-acceptance.md`：单一 Studio 远程第一阶段真实 App 验收结果与未完成闭环。
+- `docs/ops/cclink-remote-stage-1-acceptance.md`：单一 Studio 远程第一阶段真实 App 验收结果、
+  v0.1.65-v0.1.71 审批/分页读取/图片/停止等待/realtime 事故补充与未完成在线闭环。
 - `docs/ops/oss-release-runbook.md`：开源版打包、签名、公证、Draft 验收和公开发布手册。
 - `docs/features/desktop-release-and-updates.md`：桌面发布、自动检查、受控下载、确认安装和 U0-U5 开发计划。
 - `docs/features/desktop-update-development-plan.md`：桌面更新 U0-U5 的任务编号、代码落点、工作量、失败矩阵、真人验收和退出证据。
-- `docs/features/runtime-components-and-capability-plugins.md`：已交付的固定 Runtime 管理与已暂停的双版本更新/能力插件边界。
+- `docs/features/runtime-components-and-capability-plugins.md`：已交付的固定 Runtime 管理、已暂停的
+  双版本更新/能力插件边界，以及尚未关闭的 RuntimeComponentManager 启动降级缺口。
 - `docs/features/npm-updatable-capability-inventory.md`：当前 npm 只用于固定 Runtime 下载的事实清单、暂停项与必须走完整 App 更新的边界。
 - `docs/features/component-management-settings.md`：组件管理配置页、首次安装自动打开、清单字段、状态所有权和页面验收标准。
 - `docs/features/runtime-components-and-capability-plugins-development-plan.md`：已暂停的参考计划；只有重启门禁成立并提交新 ADR 后才可恢复。
@@ -42,7 +44,9 @@
 - `docs/features/local-credentials.md`：已确认的 OSS 本地明文凭证产品与架构边界。
 - `docs/features/local-credentials-development-plan.md`：移除系统钥匙串依赖的 M0-M6 详细开发计划。
 - `docs/features/markdown-auto-illustration.md`：Markdown 自动配图的产品边界、MCP 工具、资产事务和失败降级。
-- `docs/features/article-platform-publishing.md`：已进入首版实现的独立文章发布中心；Activity Bar 入口和侧栏历史连接专用控制 Tab、持久发布事务、可见网页与发布 Agent，第一目标平台为 CSDN，真实站点闭环仍待验收。
+- `docs/features/article-platform-publishing.md`：已进入首版实现的独立文章发布中心；Activity Bar
+  入口和侧栏历史连接专用控制 Tab、持久发布事务、可见网页与发布 Agent，第一目标平台为 CSDN；
+  v0.1.72 仍存在 Attempt 假运行阻塞，真实站点闭环未完成。
 - `docs/features/article-platform-publishing-development-plan.md`：CSDN 单篇图文发布的最小纵向研发计划；分离工程门禁、用户增量、真实发布闭环、失败恢复和交付验收。
 - `docs/features/promotional-video-workbench.md`：宣发视频工作台产品事实源，定义稿件、分镜、素材、AI 生成、合成和导出的用户闭环与架构边界。
 - `docs/features/promotional-video-development-plan.md`：宣发视频 M0-M6 开发事实源；M0 已完成，后续连续推进 Agent 分镜、素材、国内云视频、合成导出和统一验收。

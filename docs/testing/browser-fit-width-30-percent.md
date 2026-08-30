@@ -47,6 +47,25 @@ zoom 已恢复，不能证明独立的 Chromium visual/pinch scale 已恢复。�
 状态 owner，必须同时规范 page zoom 和 visual page scale；`WebContentsView` 跨窗口迁移本身不是
 这次比例异常的根因，它只是原样保留了错误的 visual scale。
 
+### 2026-08-24 独立回归：原生缩放请求未进入统一 owner
+
+随后在版权登记登录页又出现“登录框与灰色遮罩比例不一致”。这不是上文
+`633 / 2110 = 0.3` 的自动适宽误算：该页面由滚轮/触控板触发 Electron 原生 `zoom-changed` 请求，
+可见 WebContents 已漂移到约 30%，但 BrowserManager 的手动缩放状态和遮罩布局没有同步。结果是
+页面、登录框和灰色遮罩使用了不同的缩放事实，看起来像弹窗灰屏或没有打开。
+
+v0.1.59 对该独立路径的修复是：所有原生缩放请求都转入 BrowserManager 的手动缩放入口，并在
+应用缩放时串行复位 visual page scale；renderer、网页和辅助窗口都不能直接成为第二 owner。
+当时真实开发版已验证登录框完整可见、验证码遮罩匹配 `1100×676` 视口，Browser 定向测试、
+typecheck 和生产构建通过。
+
+后续事故分析必须先区分两种 30%：
+
+- toolbar 显示自动 30%、raw factor 来自异常 `scrollWidth`：检查适宽测量拒绝；
+- 原生手势后页面实际 30%、BrowserManager 投影未变化：检查 `zoom-changed` 路由和 visual scale。
+
+只引用“30% 事故已记录”而不说明属于哪条链路，不能作为根因或关闭证据。
+
 ## 修复不变式
 
 1. 主框架或页内导航开始时立即恢复 100%，增加文档代次并废弃旧测量。

@@ -1,8 +1,9 @@
 # 文章发布中心最小研发计划
 
-> 文档版本：1.2
-> 状态：M1 已实现，M2/M3 基础已接入；真实 CSDN 闭环与真人验收待完成
-> 最后更新：2026-08-27
+> 文档版本：1.3
+> 状态：M1 已实现，M2/M3 基础已接入；v0.1.72 仍存在发布 Attempt 假运行阻塞，真实 CSDN
+> 闭环与真人验收待完成
+> 最后更新：2026-08-29
 > 产品事实源：`docs/features/article-platform-publishing.md`
 > 架构约束：`docs/architecture.md`、`docs/decisions/0016-agent-web-account-execution.md`
 > 本文只负责第一条 CSDN 单篇文章纵向闭环，不扩张到第二个平台、批量分发、定时发布或适配器插件系统。
@@ -56,26 +57,28 @@ PNG/JPEG/WebP 本地图片；文章和图片不含敏感信息。
 
 ## 3. 当前代码基线与缺口
 
-| 已有能力            | 当前事实                                                                                                       | 本计划怎样复用                                                  |
-| ------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Markdown 文件与资源 | `MarkdownDocumentService` 已能检查引用、工作空间边界、缺失和受管资源；`collectMarkdownDestinations` 已提供位置 | 增加只读 `ArticlePackageBuilder`，不复制编辑器保存逻辑          |
-| 网站账号            | `WebResourceService` 全局保存账号和唯一 Profile，`resolveLaunch` 提供安全启动描述                              | 发布任务只保存 `accountId`，不保存 Cookie、密码或第二份 Profile |
-| 可见网页            | `AgentWebResourceLaunchCoordinator` 已经请求 renderer 打开正确工作空间账号 Tab                                 | 继续走同一启动链，不建隐藏 Chromium                             |
-| 浏览器任务          | `BrowserTaskRuntime` 已有账号互斥、暂停、交还重观察、结果未知和动作日志                                        | 增加文章任务关联和一次性有界动作授权                            |
-| Agent 执行          | `conversation-run-controller`、AgentBridge 和统一 runtime 已拥有 run/session                                   | 新建专属 conversation，但不复制发送、取消和恢复流程             |
-| 网页事务            | `WebAffairService` 已拥有工作空间事务、Attempt、节点、证据和跨重启状态                                         | 增加 `article-publishing` 领域投影，不另建任务 Store            |
-| 统一诊断            | Agent 复制入口已能汇总 main/renderer/Agent 框架日志                                                            | 增加文章 task/attempt/adapter/browser correlation               |
+截至 v0.1.72，M1 和 M2/M3 的基础结构已经进入生产代码，不能再把下列能力写成“尚未实现”：
 
-当前关键缺口：
+| 已实现能力         | 当前事实                                                                                       | 仍需证明的边界                                              |
+| ------------------ | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 独立产品入口       | `article-publishing` Activity、历史 Sidebar、专用 Tab 和 Tab 去重已接入                        | 真实用户能从历史稳定恢复并继续同一任务                      |
+| Markdown 与图片    | `ArticlePackageBuilder` 解析工作空间内 Markdown、图片位置、哈希和阻断问题                      | 真实 CSDN 图片上传后位置、平台 URL 和正文结果一致           |
+| 持久发布事务       | WebAffair schema 已保存文章字段、图片映射、适配器版本、Attempt、步骤、证据和发布结果           | 关闭、重启和故障后不能残留无法操作的假 `running`            |
+| 图片上传状态机     | 已有派发、等待、页面核验、最多三次安全尝试、结果未知对账和成功图片防重复                       | 三张真实图片的等待、失败恢复和不重复上传尚未通过真人验收    |
+| CSDN 浏览器策略    | 已有字段 Schema、受控 Origin、Playwright locator、三态动作分类、人工交还和最终副作用防重放标记 | 当前页面结构、动态必填字段、封面和最终文章 URL 仍需真实验证 |
+| Agent/Browser 关联 | 专属 conversation、Agent Run、BrowserTask 和文章 execution ref 已接入统一 owner                | 同一 Run 产生多个 BrowserTask 时必须回收全部关联发布事务    |
+| 统一诊断           | task/Attempt/adapter/Browser/Agent 关联和启动阶段日志已接入                                    | 诊断必须能解释按钮禁用、假运行和具体未回收的关联任务        |
 
-- 没有 `article-publishing` Activity、Sidebar、Tab 和 Tab 去重契约；
-- WebAffair schema 没有文章来源、平台字段、图片映射、适配器版本和发布结果的结构化载荷；
-- 没有“同一发布 Attempt 跨新 Agent Run/BrowserTask 恢复”的持久检查点和步骤恢复策略；
-- 图片上传目前没有文章级的等待、后置页面核验、单图尝试上限和结果未知对账状态机；
-- 没有 CSDN 字段 Schema、步骤计划、页面 probe、动作分类和结果核验；
-- 当前 Browser 账号动作守卫把包含“提交/发布”的控件统一暂停，不能识别已授权单篇常规发布；
-- 当前 Agent 运行没有可由主进程校验的文章任务 execution ref，也没有文章任务专用工具 allowlist；
-- 没有真实 CSDN 端到端证据。
+当前真正的关键缺口：
+
+- **v0.1.72 已发布基线仍存在假运行阻塞。**同一 Agent Run 先产生绑定发布事务的 BrowserTask，后续
+  又产生新的 BrowserTask 时，Run 终态只回收最后一个任务，旧的绑定任务可能继续把 Attempt 留在
+  `running`；文章 Tab 因此禁用“开始发布/继续执行”，用户看起来像点击没有反应。当前工作树中的
+  候选修复不计入已发布能力，必须完成回归、提交、发布和真人复验后才能改变本结论。
+- 真实 CSDN 正文填写、三图上传、动态字段、草稿保存、最终发布和结果 URL 尚无一条连续验收证据。
+- 同一 Attempt 跨多 BrowserTask、Agent 失败、App 重启和人工交还的全组合恢复仍需真实验证。
+- 图片上传成功不能只凭控件调用；必须继续以页面证据和平台 URL 为成功条件。
+- 真实页面的验证码、风控、版权声明、结果未知和登录失效仍必须证明能安全停下并交还。
 
 ## 4. 首版范围
 
@@ -340,8 +343,8 @@ Markdown。页面不匹配时 fail-closed。
 状态只使用 `Ready / Pending / In Progress / Acceptance / Complete / Blocked`。E0 是工程准备度，
 不计用户功能进度；M1–M3 必须报告用户当前能做什么。
 
-| 类别     | 阶段 | 用户可见结果                                      | 状态    | 估算     |
-| -------- | ---- | ------------------------------------------------- | ------- | -------- |
+| 类别     | 阶段 | 用户可见结果                                       | 状态        | 估算     |
+| -------- | ---- | -------------------------------------------------- | ----------- | -------- |
 | 工程准备 | E0   | contract、迁移和安全失败边界已固化；真实页证据待补 | In Progress | 1 人日   |
 | 用户增量 | M1   | 能从独立入口配置并保存一条 CSDN 发布草稿           | Complete    | 2–3 人日 |
 | 用户闭环 | M2   | Agent 完成真实发布；图片有等待、核验和有界重试     | In Progress | 4–6 人日 |

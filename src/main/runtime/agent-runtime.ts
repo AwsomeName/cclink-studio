@@ -127,9 +127,23 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
           onCorrelatedBrowserTaskEnded: async (input) => {
             const service = runtime.webAffairService
             const workspaceState = runtime.workspaceStateService
-            if (!service || !workspaceState) return
+            if (!service || !workspaceState) {
+              console.warn('[ArticlePublishing] 运行终态无法收敛：事务或工作空间服务不可用', {
+                affairId: input.affairId,
+                attemptId: input.attemptId,
+                browserTaskRunId: input.browserTaskRunId,
+              })
+              return
+            }
             const workspaceId = await workspaceState.getLocalProjectId(input.workspacePath)
-            if (!workspaceId) return
+            if (!workspaceId) {
+              console.warn('[ArticlePublishing] 运行终态无法收敛：工作空间身份不可用', {
+                affairId: input.affairId,
+                attemptId: input.attemptId,
+                browserTaskRunId: input.browserTaskRunId,
+              })
+              return
+            }
             const result = await service.interruptArticlePublishingRuntime(
               input.affairId,
               input.attemptId,
@@ -143,6 +157,13 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
                 browserTaskRunId: input.browserTaskRunId,
                 code: result.error.code,
                 message: result.error.message,
+              })
+            } else if (result.success) {
+              console.info('[ArticlePublishing] 运行终态已收敛发布 Attempt', {
+                affairId: input.affairId,
+                attemptId: input.attemptId,
+                browserTaskRunId: input.browserTaskRunId,
+                status: result.data.articlePublishing?.execution.status,
               })
             }
           },

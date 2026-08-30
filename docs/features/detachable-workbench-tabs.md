@@ -113,6 +113,20 @@ native owner。WindowService 的事实边界已收窄为“进入分离生命周
 generation ledger”，完整 Tab order/active 属于 TabModel，native host active View 属于 BrowserManager。
 终态 transfer、关闭窗口和已安全迁移的 legacy 书签副本均有清理路径与故障注入覆盖。
 
+### 2.4 2026-08-24 主窗口 Tab 激活回归
+
+一次后续回归中，Browser placement 投影里的 `active` 被反复当成用户选中事实；用户从 Browser
+点击 Markdown Tab 后，主窗口因此立即又切回 Browser，看起来像 Markdown 无法打开。这不是
+Markdown 编辑器故障，也不是辅助窗口迁移事务失败。
+
+现行所有权边界是：主窗口当前选中 Tab 只由 TabModel/Tab Store 决定；placement 的 `active` 仅在
+Browser 从辅助窗口送回主窗口时提供一次激活建议，不能持续覆盖用户后续选择。Browser 实际仍在
+辅助窗口时，主窗口必须选择合法的本地 fallback，不能显示同一 Browser Tab 为当前项。
+
+该缺陷的定向代码与自动化验证已完成。修复当时首轮 detachable smoke 的失败属于另一个跨工作空间
+Browser 草稿问题，不能用本缺陷的通过结果替代整个 M1 验收；本页后文记录的 12/12 是后续完整修复
+后的工程证据，真人多屏边界仍以对应验收记录为准。
+
 ## 3. 产品术语和心智
 
 正式术语使用：

@@ -1,6 +1,9 @@
 # Runtime 组件与能力插件
 
-> 状态：固定版本 Runtime 管理已交付；远程版本目录、真实双版本更新/回滚、内容包和通用能力插件自 2026-08-15 起暂停。最后更新：2026-08-15。
+> 状态：固定版本 Runtime 管理已交付；远程版本目录、真实双版本更新/回滚、内容包和通用能力插件
+> 自 2026-08-15 起暂停。2026-08-29 复查发现 `RuntimeComponentManager` 初始化失败仍可能阻断
+> Studio 启动，该降级缺口尚未修复。
+> 最后更新：2026-08-29。
 > 当前 Studio 仍通过完整应用 Release 更新程序代码；Claude Code Runtime 按需安装到 `userData`，OCCT 和 scrcpy 支持固定版本安装与随 App 资源回退，但均不支持远程新版本发现。
 > “设置 > 组件管理”的本地盘点页面已实现，交互事实见 `component-management-settings.md`。
 > 已暂停的参考计划见 `runtime-components-and-capability-plugins-development-plan.md`。
@@ -18,11 +21,11 @@
 
 产品固定采用三层交付模型：
 
-| 层级             | 典型内容                                               | 更新方式                                      |
-| ---------------- | ------------------------------------------------------ | --------------------------------------------- |
-| 核心外壳         | Electron、main、preload、IPC、主 React UI、权限和更新器 | 完整 Tag、签名、公证和应用安装                |
-| Runtime 组件     | Claude 可执行引擎、CAD 后端、scrcpy server、受控 WASM  | 独立签名组件包，安装到 `userData`，安全点切换 |
-| 能力插件         | MCP 工具、Provider、Adapter、声明式 contribution       | 预构建 npm 包，验签后在隔离宿主运行           |
+| 层级         | 典型内容                                                | 更新方式                                      |
+| ------------ | ------------------------------------------------------- | --------------------------------------------- |
+| 核心外壳     | Electron、main、preload、IPC、主 React UI、权限和更新器 | 完整 Tag、签名、公证和应用安装                |
+| Runtime 组件 | Claude 可执行引擎、CAD 后端、scrcpy server、受控 WASM   | 独立签名组件包，安装到 `userData`，安全点切换 |
+| 能力插件     | MCP 工具、Provider、Adapter、声明式 contribution        | 预构建 npm 包，验签后在隔离宿主运行           |
 
 Runtime 组件和能力插件都只能扩展核心外壳已经声明的 contract。它们不能新增 preload、注册任意
 IPC、直接修改主 renderer、接管 Thread/Agent loop、绕过工作空间权限或取消不可逆操作的最终人工
@@ -41,7 +44,8 @@ IPC、直接修改主 renderer、接管 Thread/Agent loop、绕过工作空间�
 - 替换 `.app` 后复用 `userData` 中已安装的 Runtime，不重新下载。
 - 查看和启用/禁用随 Studio 构建的 MCP `ToolModule`。
 - 在统一组件清单中查看能力类型、本地安装状态和已知版本，并重新检测 Claude 与 CAD。
-- 在缺少 adb、CAD 后端或其他可选能力时继续启动 Studio，并看到相应降级状态。
+- 在缺少 adb、CAD 后端或其他已进入隔离 bootstrap 的可选能力时继续启动 Studio，并看到相应
+  降级状态。
 
 ### 用户现在还不能做什么
 
@@ -50,8 +54,26 @@ IPC、直接修改主 renderer、接管 Thread/Agent loop、绕过工作空间�
 - 从远程目录取得可更新版本、权限、兼容性和健康状态。
 - 在首次启动时从远程目录发现新版 Runtime。
 - 在插件或 Runtime 更新失败后由产品自动回退到上一已知可用版本。
+- 在 `RuntimeComponentManager.initialize()` 因目录权限、损坏状态或初始化异常失败时继续进入本地
+  工作台；它当前仍位于窗口创建前的 state-services 硬启动路径，失败会触发 ServiceRegistry 回滚。
 
 因此当前只宣称“固定版本 Runtime 独立安装、修复和 App 替换复用”，不宣称插件安装、npm 热更新或 Runtime 独立版本更新。
+
+### 当前已知启动降级缺口
+
+CAD、Hardware、数据源、Meshy、图片生成和 Terminal 已由独立 capability bootstrap 捕获失败，
+一个领域失败后可以继续初始化后续领域。但 `RuntimeComponentManager` 本身在
+`bootstrapStateServices()` 中直接构造并 `await initialize()`，位于主窗口创建前；这条路径没有
+独立 capability 状态、故障注入或可见恢复界面。
+
+所以以下两句话不能混用：
+
+- “某个已隔离的 Runtime 使用方缺失或失败时，其他能力继续启动”——当前成立；
+- “Runtime 组件管理器自身任何初始化失败都不会阻断 Studio”——当前不成立。
+
+关闭该问题至少需要：管理器状态读取失败的故障注入；失败后主窗口与本地文件/编辑器/Browser/
+Terminal 可用；组件页显示失败原因和恢复入口；修复前不得用一般性的“可选能力独立降级”覆盖
+这个已知例外。
 
 ## 条件性重启后的用户目标与端到端验收
 
@@ -136,17 +158,17 @@ JavaScript、Shell、HTML、SVG 或动态模块。提示词和会影响外部副
 
 ## 哪些改动走哪条链路
 
-| 改动                                                   | 内容包 | 能力插件 | Runtime | 完整 App |
-| ------------------------------------------------------ | ------ | -------- | ------- | -------- |
-| 模板、文案、模型目录、兼容规则                         | 是     | 否       | 否      | 否       |
-| 新增只调用有界 Host API 的 MCP 工具                    | 否     | 是       | 否      | 否       |
-| 新增图片 Provider 或数据源 Adapter                     | 否     | 是       | 否      | 否       |
-| 更新 Claude/CAD/scrcpy 本地执行资源                    | 否     | 否       | 是      | 否       |
-| 修改 Electron main、preload、IPC 或主 React 交互       | 否     | 否       | 否      | 是       |
-| 修改凭证、权限、工作空间边界或外部副作用确认           | 否     | 否       | 否      | 是       |
-| 更新 Electron、React、Playwright、node-pty 等核心依赖   | 否     | 否       | 否      | 是       |
-| 修复插件管理器、签名校验器或 Runtime 选择器自身        | 否     | 否       | 否      | 是       |
-| 携带 Node 原生模块、任意二进制或需要安装脚本的 npm 包  | 否     | 否       | 受审查  | 默认是   |
+| 改动                                                  | 内容包 | 能力插件 | Runtime | 完整 App |
+| ----------------------------------------------------- | ------ | -------- | ------- | -------- |
+| 模板、文案、模型目录、兼容规则                        | 是     | 否       | 否      | 否       |
+| 新增只调用有界 Host API 的 MCP 工具                   | 否     | 是       | 否      | 否       |
+| 新增图片 Provider 或数据源 Adapter                    | 否     | 是       | 否      | 否       |
+| 更新 Claude/CAD/scrcpy 本地执行资源                   | 否     | 否       | 是      | 否       |
+| 修改 Electron main、preload、IPC 或主 React 交互      | 否     | 否       | 否      | 是       |
+| 修改凭证、权限、工作空间边界或外部副作用确认          | 否     | 否       | 否      | 是       |
+| 更新 Electron、React、Playwright、node-pty 等核心依赖 | 否     | 否       | 否      | 是       |
+| 修复插件管理器、签名校验器或 Runtime 选择器自身       | 否     | 否       | 否      | 是       |
+| 携带 Node 原生模块、任意二进制或需要安装脚本的 npm 包 | 否     | 否       | 受审查  | 默认是   |
 
 判断规则只有一个：如果变更需要扩大宿主权限、改变核心状态所有者或让电脑执行宿主未声明的新系统
 能力，就不能作为普通插件更新。
@@ -206,15 +228,15 @@ ClaudeRuntimeManager         RemoteToolModule / ProviderProxy
 
 状态所有权固定如下：
 
-| 状态                                                   | 唯一所有者                         |
-| ------------------------------------------------------ | ---------------------------------- |
-| 完整应用检查、下载和安装                               | `UpdateService`                    |
-| Runtime 包下载、已安装版本和验证句柄                   | `RuntimeComponentManager`          |
-| Claude selection、probe、generation 和活动 run         | `ClaudeRuntimeManager`             |
-| 插件安装、启用版本、进程、健康、回滚和隔离存储         | `PluginManager`                    |
-| Thread、Agent loop、MCP 权限和工具调用事实              | 现有 Agent Runtime / `McpToolHost` |
-| 工作空间、Browser、Terminal、WebAffair 等业务状态       | 现有领域服务                       |
-| 凭证                                                   | `CredentialService`                |
+| 状态                                              | 唯一所有者                         |
+| ------------------------------------------------- | ---------------------------------- |
+| 完整应用检查、下载和安装                          | `UpdateService`                    |
+| Runtime 包下载、已安装版本和验证句柄              | `RuntimeComponentManager`          |
+| Claude selection、probe、generation 和活动 run    | `ClaudeRuntimeManager`             |
+| 插件安装、启用版本、进程、健康、回滚和隔离存储    | `PluginManager`                    |
+| Thread、Agent loop、MCP 权限和工具调用事实        | 现有 Agent Runtime / `McpToolHost` |
+| 工作空间、Browser、Terminal、WebAffair 等业务状态 | 现有领域服务                       |
+| 凭证                                              | `CredentialService`                |
 
 `RuntimeComponentManager` 只提供已验证的不可变组件句柄，不能决定一个 Agent run 正在使用哪个
 Claude generation。`ClaudeRuntimeManager` 继续遵守 ADR 0002 的探测后提交和安全点切换。

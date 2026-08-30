@@ -260,6 +260,59 @@ describe('AgentBridge browser send plan', () => {
       reason: 'Agent Run 或 BrowserTask 失败：automation unavailable',
     })
   })
+
+  it('reports every correlated publishing task when a later task in the same Run is unbound', () => {
+    const onCorrelatedBrowserTaskEnded = vi.fn()
+    const publishingTask = {
+      id: 'publishing-task',
+      status: 'failed',
+      correlation: {
+        workspaceKey: '/workspace/a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        affairId: 'affair-a',
+        affairAttemptId: 'attempt-a',
+      },
+    }
+    const laterUnboundTask = {
+      id: 'later-unbound-task',
+      status: 'running',
+      correlation: {
+        workspaceKey: '/workspace/a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+      },
+    }
+    const bridge = createBridge(
+      { kind: 'all' },
+      {},
+      {
+        getTask: () => laterUnboundTask,
+        getTaskForAgentRun: () => laterUnboundTask,
+        getActiveTaskForConversation: () => laterUnboundTask,
+        listTasks: () => [publishingTask, laterUnboundTask],
+        updateCorrelation: vi.fn(),
+        failTask: vi.fn(),
+      },
+      onCorrelatedBrowserTaskEnded,
+    )
+
+    bridge.failActiveBrowserTask(
+      'conversation-a',
+      { message: 'automation unavailable' },
+      undefined,
+      'run-a',
+    )
+
+    expect(onCorrelatedBrowserTaskEnded).toHaveBeenCalledTimes(1)
+    expect(onCorrelatedBrowserTaskEnded).toHaveBeenCalledWith({
+      workspacePath: '/workspace/a',
+      affairId: 'affair-a',
+      attemptId: 'attempt-a',
+      browserTaskRunId: 'publishing-task',
+      reason: 'Agent Run 或 BrowserTask 失败：automation unavailable',
+    })
+  })
 })
 
 function createBridge(
@@ -277,7 +330,12 @@ function createBridge(
     workspaceKey: string | null
   }
   finishActiveBrowserTask: (conversationId: string) => void
-  failActiveBrowserTask: (conversationId: string, error: unknown) => void
+  failActiveBrowserTask: (
+    conversationId: string,
+    error: unknown,
+    resolvedTaskId?: string | null,
+    agentRunId?: string | null,
+  ) => void
   normalizeBrowserTerminalEvent: (event: {
     conversationId: string
     runId: string | null

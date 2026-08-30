@@ -1067,12 +1067,12 @@ export class AgentBridge {
     if (event.type === 'complete') {
       this.recordAgentUsage(event)
       if (this.isErrorResult(event.data)) {
-        this.failActiveBrowserTask(event.conversationId, event.data, taskId)
+        this.failActiveBrowserTask(event.conversationId, event.data, taskId, event.runId)
       } else {
-        this.finishActiveBrowserTask(event.conversationId, taskId)
+        this.finishActiveBrowserTask(event.conversationId, taskId, event.runId)
       }
     } else if (event.type === 'error') {
-      this.failActiveBrowserTask(event.conversationId, event.data, taskId)
+      this.failActiveBrowserTask(event.conversationId, event.data, taskId, event.runId)
     }
     if (!this.rendererSuppressedConversationIds.has(event.conversationId)) {
       this.forwardToRenderer(event.type, event.data, event.conversationId, event.runId)
@@ -1189,7 +1189,11 @@ export class AgentBridge {
     this.activeBrowserTaskIds.set(conversationId, task.id)
   }
 
-  private finishActiveBrowserTask(conversationId: string, resolvedTaskId?: string | null): void {
+  private finishActiveBrowserTask(
+    conversationId: string,
+    resolvedTaskId?: string | null,
+    agentRunId?: string | null,
+  ): void {
     const taskId =
       resolvedTaskId === undefined
         ? this.resolveActiveBrowserTaskId(conversationId)
@@ -1198,7 +1202,12 @@ export class AgentBridge {
     if (resolvedTaskId === undefined) this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
     const task = this.deps.browserTaskRuntime?.getTask?.(taskId) ?? null
     this.deps.browserTaskRuntime?.finishTask(taskId)
-    this.reconcileCorrelatedBrowserTaskEnd(task, 'Agent Run 已结束，但发布 Attempt 未进入终态')
+    this.reconcileCorrelatedBrowserTasksEnd(
+      conversationId,
+      agentRunId ?? task?.correlation?.agentRunId ?? null,
+      task,
+      'Agent Run 已结束，但发布 Attempt 未进入终态',
+    )
     if (this.activeBrowserTaskIds.get(conversationId) === taskId) {
       this.activeBrowserTaskIds.delete(conversationId)
     }
@@ -1210,7 +1219,12 @@ export class AgentBridge {
     this.syncActiveBrowserTaskCorrelation(conversationId, taskId)
     const task = this.deps.browserTaskRuntime?.getTask?.(taskId) ?? null
     this.deps.browserTaskRuntime?.cancelTask(taskId)
-    this.reconcileCorrelatedBrowserTaskEnd(task, 'Agent Run 或 BrowserTask 已取消')
+    this.reconcileCorrelatedBrowserTasksEnd(
+      conversationId,
+      task?.correlation?.agentRunId ?? null,
+      task,
+      'Agent Run 或 BrowserTask 已取消',
+    )
     this.activeBrowserTaskIds.delete(conversationId)
   }
 
@@ -1218,6 +1232,7 @@ export class AgentBridge {
     conversationId: string,
     error: unknown,
     resolvedTaskId?: string | null,
+    agentRunId?: string | null,
   ): void {
     const taskId =
       resolvedTaskId === undefined
@@ -1230,7 +1245,9 @@ export class AgentBridge {
       reason: 'unknown',
       errorMessage: this.extractErrorMessage(error),
     })
-    this.reconcileCorrelatedBrowserTaskEnd(
+    this.reconcileCorrelatedBrowserTasksEnd(
+      conversationId,
+      agentRunId ?? task?.correlation?.agentRunId ?? null,
       task,
       `Agent Run 或 BrowserTask 失败：${this.extractErrorMessage(error)}`,
     )
@@ -1275,6 +1292,38 @@ export class AgentBridge {
       })
     } catch (error) {
       console.error('[AgentBridge] 关联网页事务运行终态收敛失败:', this.extractErrorMessage(error))
+    }
+  }
+
+  private reconcileCorrelatedBrowserTasksEnd(
+    conversationId: string,
+    agentRunId: string | null,
+    primaryTask: BrowserTaskRun | null,
+    reason: string,
+  ): void {
+    const candidates = [
+      ...(primaryTask ? [primaryTask] : []),
+      ...(agentRunId
+        ? (this.deps.browserTaskRuntime?.listTasks?.() ?? []).filter(
+            (task) =>
+              task.correlation?.conversationId === conversationId &&
+              task.correlation.agentRunId === agentRunId,
+          )
+        : []),
+    ]
+    const seenTasks = new Set<string>()
+    const seenAttempts = new Set<string>()
+    for (const task of candidates) {
+      if (seenTasks.has(task.id)) continue
+      seenTasks.add(task.id)
+      const correlation = task.correlation
+      const attemptKey =
+        correlation?.workspaceKey && correlation.affairId && correlation.affairAttemptId
+          ? `${correlation.workspaceKey}\u0000${correlation.affairId}\u0000${correlation.affairAttemptId}`
+          : null
+      if (attemptKey && seenAttempts.has(attemptKey)) continue
+      if (attemptKey) seenAttempts.add(attemptKey)
+      this.reconcileCorrelatedBrowserTaskEnd(task, reason)
     }
   }
 
