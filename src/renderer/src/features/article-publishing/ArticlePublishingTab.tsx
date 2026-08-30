@@ -691,8 +691,10 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
               : publishing.execution.status === 'interrupted'
                 ? '从中断处继续'
                 : publishing.execution.status === 'result-unknown'
-                  ? '核验发布结果'
-                : '开始执行'}
+                  ? publishing.publication.status === 'result-unknown'
+                    ? '核验发布结果'
+                    : '核验未知网页动作'
+                  : '开始执行'}
         </button>
       </div>
     </div>

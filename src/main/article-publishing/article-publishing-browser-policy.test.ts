@@ -209,6 +209,31 @@ describe('ArticlePublishingBrowserPolicy', () => {
     )
   })
 
+  it('persists a write-ahead marker before a field mutation that may autosave', async () => {
+    const { policy, webAffairService } = createPolicy({ stepId: 'fill-fields' })
+    const page = { url: () => 'https://app-blog.csdn.net/csdn/aiChatNew' }
+
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'fill',
+        { selector: '#title', value: 'Article title' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({ kind: 'allow-once' })
+    expect(webAffairService.reserveArticlePublishingSideEffect).toHaveBeenCalledWith(
+      'affair-a',
+      'attempt-a',
+      1,
+      'save-draft',
+      expect.stringMatching(/^autosave:fill-fields:[a-f0-9]{64}$/),
+      expect.any(String),
+      'task-a',
+      'workspace-a',
+    )
+  })
+
   it('stops page mutations on a supported origin when the page is not an editor page', async () => {
     const { policy } = createPolicy()
     const page = { url: () => 'https://app-blog.csdn.net/account/settings' }

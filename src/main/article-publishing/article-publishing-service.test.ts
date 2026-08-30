@@ -33,12 +33,14 @@ describe('ArticlePublishingService', () => {
         },
         assets: [],
         checkpoints: [{ stepId: 'open-editor', status: 'pending' }],
+        sideEffects: [],
         execution: {
           status: 'preparing',
           currentAttemptId: attemptId,
           currentGeneration: 1,
           currentLaunchOperationId: launchOperationId,
         },
+        publication: { status: 'not-started' },
       },
     }
     const draftAffair = {
@@ -297,6 +299,64 @@ describe('ArticlePublishingService', () => {
     }
   })
 
+  it('allows only one bounded continuation for a healthy runtime generation', async () => {
+    const runtime = createActiveRuntime(Date.now())
+    const attempt = {
+      id: runtime.attemptId,
+      executionGeneration: runtime.executionGeneration,
+      launchOperationId: runtime.launchOperationId,
+    }
+    const affair = {
+      id: runtime.affairId,
+      attempts: [attempt],
+      articlePublishing: {
+        execution: {
+          status: 'checking-runtime',
+          currentAttemptId: runtime.attemptId,
+          currentGeneration: runtime.executionGeneration,
+          currentLaunchOperationId: runtime.launchOperationId,
+        },
+      },
+    }
+    const reconcileArticlePublishingRuntime = vi.fn(async () => ({
+      success: true,
+      data: affair,
+    }))
+    const service = new ArticlePublishingService(
+      {} as never,
+      {
+        getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [affair] } })),
+        reconcileArticlePublishingRuntime,
+      } as never,
+      async (path) => path,
+      healthyRuntimeDependencies(),
+    )
+    ;(
+      service as never as { activeRuntimes: Map<string, ReturnType<typeof createActiveRuntime>> }
+    ).activeRuntimes.set(runtime.attemptId, runtime)
+    const input = {
+      workspaceRef: WORKSPACE_REF,
+      affairId: runtime.affairId,
+      attemptId: runtime.attemptId,
+      executionGeneration: runtime.executionGeneration,
+      launchOperationId: runtime.launchOperationId,
+    }
+
+    const results = await Promise.all([
+      service.continueRuntime(input, runtime.workspaceId),
+      service.continueRuntime(input, runtime.workspaceId),
+    ])
+    expect(results.filter((result) => result.success)).toHaveLength(1)
+    expect(results.filter((result) => !result.success)).toEqual([
+      expect.objectContaining({
+        success: false,
+        error: expect.objectContaining({ message: expect.stringContaining('已经使用过一次') }),
+      }),
+    ])
+    expect(reconcileArticlePublishingRuntime).toHaveBeenCalledOnce()
+    service.dispose()
+  })
+
   it('creates a task after re-inspecting only the Markdown source fields', async () => {
     const markdown = '# 可执行文章\n\n摘要。'
     const fileService = {
@@ -466,6 +526,7 @@ function createActiveRuntime(lastProgressAt: number) {
     playwrightPageBindingGeneration: 4,
     lastOwnerAt: Date.now(),
     lastProgressAt,
+    continuationUsed: false,
   }
 }
 

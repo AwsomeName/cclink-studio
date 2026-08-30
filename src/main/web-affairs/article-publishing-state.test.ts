@@ -694,6 +694,169 @@ describe('article publishing persistent state', () => {
     expect(marked.data.articlePublishing?.execution.currentStepId).toBe('verify-publication')
   })
 
+  it('keeps a non-final unknown upload on its incomplete checkpoint instead of skipping to publication verification', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const workspaceRef = { kind: 'local' as const, path: directory }
+    const uploading = await created.service.reportArticlePublishingAsset(
+      {
+        workspaceRef,
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        assetId: created.assetId,
+        status: 'uploading',
+      },
+      WORKSPACE_ID,
+    )
+    expect(uploading.success).toBe(true)
+    const unknown = await created.service.reportArticlePublishingAsset(
+      {
+        workspaceRef,
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        assetId: created.assetId,
+        status: 'result-unknown',
+        error: { code: 'CDP_DISCONNECTED', message: '上传派发后 CDP 断开' },
+      },
+      WORKSPACE_ID,
+    )
+    expect(unknown.success).toBe(true)
+    if (!unknown.success) return
+    expect(unknown.data.articlePublishing?.execution.status).toBe('result-unknown')
+    expect(unknown.data.articlePublishing?.publication.status).toBe('not-started')
+
+    const resumed = await created.service.resumeArticlePublishingAttempt(
+      created.affairId,
+      created.attemptId,
+      WORKSPACE_ID,
+    )
+    expect(resumed.success).toBe(true)
+    if (!resumed.success) return
+    expect(resumed.data.articlePublishing?.execution.currentStepId).not.toBe('verify-publication')
+    expect(resumed.data.articlePublishing?.publication.status).toBe('not-started')
+  })
+
+  it('repairs v0.1.73 data that mislabeled a non-final unknown action as publication unknown', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const workspaceRef = { kind: 'local' as const, path: directory }
+    await created.service.reportArticlePublishingAsset(
+      {
+        workspaceRef,
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        assetId: created.assetId,
+        status: 'uploading',
+      },
+      WORKSPACE_ID,
+    )
+    const unknown = await created.service.reportArticlePublishingAsset(
+      {
+        workspaceRef,
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        assetId: created.assetId,
+        status: 'result-unknown',
+        error: { code: 'CDP_DISCONNECTED', message: '上传派发后 CDP 断开' },
+      },
+      WORKSPACE_ID,
+    )
+    expect(unknown.success).toBe(true)
+    await created.service.flush()
+
+    const filePath = join(directory, 'affairs.json')
+    const persisted = JSON.parse(await readFile(filePath, 'utf8'))
+    const affair = persisted.affairs[0]
+    const attempt = affair.attempts[0]
+    const now = new Date().toISOString()
+    affair.articlePublishing.execution.currentStepId = 'upload-assets'
+    affair.articlePublishing.publication = { status: 'result-unknown', observedAt: now }
+    affair.articlePublishing.sideEffects.push({
+      key: `${affair.id}:${attempt.id}:g${attempt.executionGeneration}:upload-asset:legacy`,
+      affairId: affair.id,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      kind: 'upload-asset',
+      targetId: `${created.assetId}:attempt-1`,
+      actionFingerprint: 'legacy-upload-fingerprint',
+      status: 'result-unknown',
+      reservedAt: now,
+      dispatchedAt: now,
+      observedAt: now,
+      browserTaskRunId: attempt.browserTaskRunId,
+    })
+    await writeFile(filePath, JSON.stringify(persisted))
+
+    const reloaded = createService(directory)
+    await reloaded.load()
+    const snapshot = reloaded.getProjectSnapshot(WORKSPACE_ID)
+    expect(snapshot.success).toBe(true)
+    if (!snapshot.success) return
+    const repaired = snapshot.data.affairs[0]
+    expect(repaired.articlePublishing?.execution.status).toBe('result-unknown')
+    expect(repaired.articlePublishing?.publication.status).toBe('not-started')
+    expect(repaired.events.at(-1)?.summary).toContain('误标为最终发布未知')
+  })
+
+  it('preserves publication unknown when legacy evidence does not prove it came from a non-final action', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const workspaceRef = { kind: 'local' as const, path: directory }
+    await created.service.reportArticlePublishingAsset(
+      {
+        workspaceRef,
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        assetId: created.assetId,
+        status: 'uploading',
+      },
+      WORKSPACE_ID,
+    )
+    await created.service.reportArticlePublishingAsset(
+      {
+        workspaceRef,
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        assetId: created.assetId,
+        status: 'result-unknown',
+        error: { code: 'CDP_DISCONNECTED', message: '上传派发后 CDP 断开' },
+      },
+      WORKSPACE_ID,
+    )
+    await created.service.flush()
+
+    const filePath = join(directory, 'affairs.json')
+    const persisted = JSON.parse(await readFile(filePath, 'utf8'))
+    const affair = persisted.affairs[0]
+    const attempt = affair.attempts[0]
+    const publicationObservedAt = new Date().toISOString()
+    const nonFinalObservedAt = new Date(Date.parse(publicationObservedAt) - 1_000).toISOString()
+    affair.articlePublishing.execution.currentStepId = 'save-draft'
+    affair.articlePublishing.publication = {
+      status: 'result-unknown',
+      observedAt: publicationObservedAt,
+    }
+    affair.articlePublishing.sideEffects.push({
+      key: `${affair.id}:${attempt.id}:g${attempt.executionGeneration}:save-draft:legacy`,
+      affairId: affair.id,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      kind: 'save-draft',
+      targetId: 'legacy-draft',
+      actionFingerprint: 'legacy-draft-fingerprint',
+      status: 'result-unknown',
+      reservedAt: nonFinalObservedAt,
+      dispatchedAt: nonFinalObservedAt,
+      observedAt: nonFinalObservedAt,
+      browserTaskRunId: attempt.browserTaskRunId,
+    })
+    await writeFile(filePath, JSON.stringify(persisted))
+
+    const reloaded = createService(directory)
+    await reloaded.load()
+    const snapshot = reloaded.getProjectSnapshot(WORKSPACE_ID)
+    expect(snapshot.success).toBe(true)
+    if (!snapshot.success) return
+    expect(snapshot.data.affairs[0].articlePublishing?.publication.status).toBe('result-unknown')
+  })
+
   it('still persists startup convergence when an affair already has 2,000 events', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
     await created.service.flush()

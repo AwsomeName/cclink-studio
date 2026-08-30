@@ -85,6 +85,7 @@ interface ActivePublishingRuntime {
   playwrightPageBindingGeneration: number
   lastOwnerAt: number
   lastProgressAt: number
+  continuationUsed: boolean
 }
 
 export class ArticlePublishingService {
@@ -307,6 +308,7 @@ export class ArticlePublishingService {
         playwrightPageBindingGeneration: pageBinding.generation,
         lastOwnerAt: observedAt,
         lastProgressAt: observedAt,
+        continuationUsed: false,
       })
       if (terminalEvent) {
         disposed = true
@@ -777,23 +779,34 @@ export class ArticlePublishingService {
     if (!runtime || !(await this.isRuntimeHealthy(runtime))) {
       return invalid('当前 Runtime 绑定不健康，不能继续；请先核验网页现场后从中断处恢复')
     }
+    if (runtime.continuationUsed) {
+      return invalid('当前执行代次已经使用过一次有界继续等待；请立即核验或终止任务')
+    }
+    runtime.continuationUsed = true
     const now = Date.now()
     runtime.lastOwnerAt = now
     runtime.lastProgressAt = now
-    return this.webAffairService.reconcileArticlePublishingRuntime({
-      ...this.runtimeCommandIdentity(validated.data.attempt, workspaceId, rawInput.affairId),
-      eventId: stableRuntimeEventId(
-        rawInput.attemptId,
-        rawInput.executionGeneration,
-        rawInput.launchOperationId,
-        `user-continue:${now}`,
-      ),
-      source: 'user-check',
-      observedAt: new Date(now).toISOString(),
-      observedStatus: 'healthy',
-      reasonCode: 'USER_CONTINUE_CONFIRMED',
-      reason: '用户确认继续等待，主进程已复核当前 Runtime 绑定健康',
-    })
+    try {
+      const result = await this.webAffairService.reconcileArticlePublishingRuntime({
+        ...this.runtimeCommandIdentity(validated.data.attempt, workspaceId, rawInput.affairId),
+        eventId: stableRuntimeEventId(
+          rawInput.attemptId,
+          rawInput.executionGeneration,
+          rawInput.launchOperationId,
+          `user-continue:${now}`,
+        ),
+        source: 'user-check',
+        observedAt: new Date(now).toISOString(),
+        observedStatus: 'healthy',
+        reasonCode: 'USER_CONTINUE_CONFIRMED',
+        reason: '用户确认继续等待，主进程已复核当前 Runtime 绑定健康',
+      })
+      if (!result.success) runtime.continuationUsed = false
+      return result
+    } catch (error) {
+      runtime.continuationUsed = false
+      throw error
+    }
   }
 
   async terminateRuntime(

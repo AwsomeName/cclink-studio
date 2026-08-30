@@ -1868,17 +1868,45 @@ export class WebAffairService {
         ['preparing', 'running-ai', 'checking-runtime', 'verifying'].includes(attempt.status),
       )
       const publishing = affair.articlePublishing
+      const hasUnknownPublishSideEffect = Boolean(
+        publishing?.sideEffects.some(
+          (effect) =>
+            effect.kind === 'publish' && ['dispatched', 'result-unknown'].includes(effect.status),
+        ),
+      )
+      const legacyNonFinalPublicationUnknown = Boolean(
+        publishing?.publication.status === 'result-unknown' &&
+        !hasUnknownPublishSideEffect &&
+        publishing.sideEffects.some(
+          (effect) =>
+            effect.kind !== 'publish' &&
+            effect.status === 'result-unknown' &&
+            effect.observedAt === publishing.publication.observedAt &&
+            ((effect.kind === 'upload-asset' &&
+              publishing.execution.currentStepId === 'upload-assets') ||
+              (effect.kind === 'save-draft' &&
+                ['fill-body', 'fill-fields', 'save-draft'].includes(
+                  publishing.execution.currentStepId ?? '',
+                ))),
+        ),
+      )
+      const normalizedPublishing =
+        publishing && legacyNonFinalPublicationUnknown
+          ? { ...publishing, publication: { status: 'not-started' as const } }
+          : publishing
       const currentAttempt = publishing?.execution.currentAttemptId
         ? affair.attempts.find((attempt) => attempt.id === publishing.execution.currentAttemptId)
         : undefined
       const missingCurrentAttempt = Boolean(
         publishing?.execution.currentAttemptId && !currentAttempt,
       )
-      if (publishing && missingCurrentAttempt) {
+      if (normalizedPublishing && missingCurrentAttempt) {
         changed = true
         const hasUnknownFinalAction =
-          ['dispatched', 'verifying', 'result-unknown'].includes(publishing.publication.status) ||
-          publishing.sideEffects.some(
+          ['dispatched', 'verifying', 'result-unknown'].includes(
+            normalizedPublishing.publication.status,
+          ) ||
+          normalizedPublishing.sideEffects.some(
             (effect) =>
               effect.kind === 'publish' && ['dispatched', 'result-unknown'].includes(effect.status),
           )
@@ -1903,18 +1931,18 @@ export class WebAffairService {
             ),
           },
           articlePublishing: {
-            ...publishing,
-            assets: publishing.assets.map((asset) =>
+            ...normalizedPublishing,
+            assets: normalizedPublishing.assets.map((asset) =>
               ['uploading', 'waiting-platform', 'verifying'].includes(asset.status)
                 ? { ...asset, status: 'reconciling' as const }
                 : asset,
             ),
-            checkpoints: publishing.checkpoints.map((checkpoint) =>
+            checkpoints: normalizedPublishing.checkpoints.map((checkpoint) =>
               ['running', 'waiting-platform', 'verifying'].includes(checkpoint.status)
                 ? { ...checkpoint, status: 'needs-reconcile' as const, finishedAt: undefined }
                 : checkpoint,
             ),
-            sideEffects: publishing.sideEffects.map((effect) =>
+            sideEffects: normalizedPublishing.sideEffects.map((effect) =>
               effect.status === 'dispatched'
                 ? { ...effect, status: 'result-unknown' as const, observedAt: now }
                 : effect.status === 'reserved'
@@ -1922,7 +1950,7 @@ export class WebAffairService {
                   : effect,
             ),
             execution: {
-              ...publishing.execution,
+              ...normalizedPublishing.execution,
               status: executionStatus,
               currentAttemptId: undefined,
               currentLaunchOperationId: undefined,
@@ -1930,8 +1958,12 @@ export class WebAffairService {
               lastBrowserTaskRunId: undefined,
             },
             publication: hasUnknownFinalAction
-              ? { ...publishing.publication, status: 'result-unknown' as const, observedAt: now }
-              : publishing.publication,
+              ? {
+                  ...normalizedPublishing.publication,
+                  status: 'result-unknown' as const,
+                  observedAt: now,
+                }
+              : normalizedPublishing.publication,
           },
           events: this.appendEvent(
             affair,
@@ -1947,28 +1979,32 @@ export class WebAffairService {
       const terminalContradiction = Boolean(
         currentAttempt &&
         TERMINAL_ATTEMPT_STATUSES.has(currentAttempt.status) &&
-        ['preparing', 'running', 'checking-runtime'].includes(publishing?.execution.status ?? ''),
+        ['preparing', 'running', 'checking-runtime'].includes(
+          normalizedPublishing?.execution.status ?? '',
+        ),
       )
       const finalActionContradiction = Boolean(
         currentAttempt &&
-        publishing &&
-        publishing.execution.status !== 'published' &&
-        (['dispatched', 'verifying'].includes(publishing.publication.status) ||
-          publishing.sideEffects.some(
+        normalizedPublishing &&
+        normalizedPublishing.execution.status !== 'published' &&
+        (['dispatched', 'verifying'].includes(normalizedPublishing.publication.status) ||
+          normalizedPublishing.sideEffects.some(
             (effect) => effect.kind === 'publish' && effect.status === 'dispatched',
           )),
       )
       const identityContradiction = Boolean(
         currentAttempt &&
-        publishing &&
-        (currentAttempt.executionGeneration !== publishing.execution.currentGeneration ||
-          currentAttempt.launchOperationId !== publishing.execution.currentLaunchOperationId),
+        normalizedPublishing &&
+        (currentAttempt.executionGeneration !== normalizedPublishing.execution.currentGeneration ||
+          currentAttempt.launchOperationId !==
+            normalizedPublishing.execution.currentLaunchOperationId),
       )
       if (
         interrupted.length === 0 &&
         !terminalContradiction &&
         !finalActionContradiction &&
-        !identityContradiction
+        !identityContradiction &&
+        !legacyNonFinalPublicationUnknown
       )
         return affair
       changed = true
@@ -1997,6 +2033,7 @@ export class WebAffairService {
       )
       let reconciled: WebAffair = {
         ...affair,
+        articlePublishing: normalizedPublishing,
         status: 'needs-attention' as const,
         attempts,
         flow: { ...affair.flow, nodes },
@@ -2011,13 +2048,25 @@ export class WebAffairService {
                 { nodeId: attempt.nodeId, attemptId: attempt.id },
               ),
             ),
-          affair.events,
+          legacyNonFinalPublicationUnknown
+            ? this.appendEvent(
+                affair,
+                this.event(
+                  'node-status-changed',
+                  '启动审计已修复旧版本把上传或保存结果未知误标为最终发布未知的状态',
+                  now,
+                  currentAttempt
+                    ? { nodeId: currentAttempt.nodeId, attemptId: currentAttempt.id }
+                    : undefined,
+                ),
+              )
+            : affair.events,
         ),
         updatedAt: now,
       }
-      if (publishing) {
+      if (normalizedPublishing) {
         const repairedCurrentAttempt = attempts.find(
-          (attempt) => attempt.id === publishing.execution.currentAttemptId,
+          (attempt) => attempt.id === normalizedPublishing.execution.currentAttemptId,
         )
         if (repairedCurrentAttempt && interruptedIds.has(repairedCurrentAttempt.id)) {
           reconciled = this.reduceArticlePublishingLifecycle(
@@ -2321,7 +2370,14 @@ export class WebAffairService {
     const executionGeneration = found.attempt.executionGeneration + 1
     const launchOperationId = randomUUID()
     const publishing = found.affair.articlePublishing
-    const resultVerificationOnly = publishing.execution.status === 'result-unknown'
+    const resultVerificationOnly =
+      publishing.execution.status === 'result-unknown' &&
+      (publishing.publication.status === 'result-unknown' ||
+        publishing.sideEffects.some(
+          (effect) =>
+            effect.kind === 'publish' &&
+            (effect.status === 'dispatched' || effect.status === 'result-unknown'),
+        ))
     const checkpoints = publishing.checkpoints.map((checkpoint) =>
       ['running', 'waiting-platform', 'verifying'].includes(checkpoint.status)
         ? { ...checkpoint, status: 'needs-reconcile' as const, finishedAt: undefined }
@@ -3376,7 +3432,7 @@ export class WebAffairService {
     const publication =
       target === 'published'
         ? { status: 'published' as const, url: options.publicationUrl, observedAt: now }
-        : target === 'result-unknown'
+        : target === 'result-unknown' && hasUnknownFinalAction
           ? { ...publishing.publication, status: 'result-unknown' as const, observedAt: now }
           : publishing.publication
     const executionStatus: ArticlePublishingState['execution']['status'] = target

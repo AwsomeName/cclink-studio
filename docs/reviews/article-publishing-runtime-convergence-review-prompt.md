@@ -62,6 +62,9 @@
 20. 事件 identity 是否同时包含发布 `executionGeneration` 和 owner 自身代次？至少审查 Agent runtime binding/epoch、Browser View runtime generation、WebContents ID、Playwright connection/page binding generation；CDP 重连后旧动作回执是否会误伤新 binding？
 21. startup 是否扫描全部文章 Affair 的跨对象不变式，而不只看瞬态 Attempt？事件 2,000 条、文件达到 high-water、journal 合并和 ENOSPC 时，关键收敛分别会怎样？任何日志 append 能否阻断状态修复？
 22. `checking-runtime` 是否是持久状态并冻结副作用？owner lease 与 progress lease 是否分开？只有 heartbeat、没有进度的任务是否会在有界时间转人工处理；合法慢任务是否通过显式 waiting-external 避免误杀？
+23. 正文和平台字段填写可能触发网站自动保存；这些 `fill/select/check/uncheck` 是否也在实际动作前取得并消费 write-ahead key，还是只有显式“保存草稿”按钮受保护？
+24. `result-unknown` 是否区分最终发布与非最终上传/保存：最终发布只能只读核验，非最终动作必须回到自己的未完成检查点对账；是否存在把上传未知误标为 publication unknown、随后跳过正文直接核验发布的路径？
+25. 用户“继续等待”是否对同一 Runtime generation 有次数与截止时间边界？重复点击、renderer 重建或持久化失败能否把假活任务无限续租？
 
 输出格式必须是：
 
