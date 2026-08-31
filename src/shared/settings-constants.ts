@@ -162,8 +162,6 @@ export interface AppSettings {
 
   /** 应用缩放级别（Electron webFrame zoom level, 0 = 100%） */
   appZoomLevel: number
-  /** UI 基础字号 (px) */
-  uiFontSize: number
 
   // ─── 工作区 ───
 
@@ -280,7 +278,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
   // 外观
   appZoomLevel: 0,
-  uiFontSize: 13,
 
   // 工作区
   lastWorkspacePath: '',

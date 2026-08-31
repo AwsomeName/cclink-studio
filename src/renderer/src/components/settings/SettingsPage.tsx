@@ -1013,23 +1013,6 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                 </div>
               </div>
 
-              <SettingsRow settingKey="uiFontSize" settings={settings} onReset={resetOne}>
-                <div className="settings-label">
-                  <span>界面字号</span>
-                  <span className="settings-description">{settings.uiFontSize}px</span>
-                </div>
-                <div className="settings-control">
-                  <input
-                    className="settings-input"
-                    type="number"
-                    min={11}
-                    max={18}
-                    value={settings.uiFontSize}
-                    onChange={(event) => update({ uiFontSize: Number(event.target.value) })}
-                  />
-                </div>
-              </SettingsRow>
-
               <SettingsRow settingKey="appZoomLevel" settings={settings} onReset={resetOne}>
                 <div className="settings-label">
                   <span>应用缩放</span>
