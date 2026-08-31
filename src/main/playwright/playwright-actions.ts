@@ -210,7 +210,10 @@ export async function executePlaywrightAction(
       const ctx = bridge!.getContext()!
       const urls = action.urls as string[] | undefined
       const cookies = urls ? await ctx.cookies(urls) : await ctx.cookies()
-      return { cookies }
+      return {
+        cookieCount: cookies.length,
+        persistentCookieCount: cookies.filter((cookie) => cookie.expires > 0).length,
+      }
     }
 
     case 'setCookie': {
@@ -228,21 +231,46 @@ export async function executePlaywrightAction(
           ...(action.expires && { expires: action.expires }),
         },
       ])
-      return { set: action.name }
+      return { set: true }
     }
 
     case 'clearCookies': {
       const ctx = bridge!.getContext()!
+      const cookies = await ctx.cookies()
       if (action.names && (action.names as string[]).length > 0) {
-        const names = action.names as string[]
-        const pattern = names.length === 1 ? names[0] : `^(${names.join('|')})$`
-        await ctx.clearCookies({ name: new RegExp(pattern) })
-      } else if (action.domain) {
-        await ctx.clearCookies({ domain: action.domain })
+        const names = new Set((action.names as string[]).filter((name) => typeof name === 'string'))
+        const matchingCookies = cookies.filter(
+          (cookie) =>
+            names.has(cookie.name) &&
+            (!action.domain || cookie.domain === action.domain) &&
+            (!action.path || cookie.path === action.path),
+        )
+        for (const cookie of matchingCookies) {
+          await ctx.clearCookies({
+            name: cookie.name,
+            domain: cookie.domain,
+            path: cookie.path,
+          })
+        }
+        return { cleared: matchingCookies.length }
+      } else if (action.domain || action.path) {
+        const matchingCookies = cookies.filter(
+          (cookie) =>
+            (!action.domain || cookie.domain === action.domain) &&
+            (!action.path || cookie.path === action.path),
+        )
+        for (const cookie of matchingCookies) {
+          await ctx.clearCookies({
+            name: cookie.name,
+            domain: cookie.domain,
+            path: cookie.path,
+          })
+        }
+        return { cleared: matchingCookies.length }
       } else {
         await ctx.clearCookies()
+        return { cleared: cookies.length }
       }
-      return { cleared: true }
     }
 
     // ── 网络拦截 ──────────────────────────────

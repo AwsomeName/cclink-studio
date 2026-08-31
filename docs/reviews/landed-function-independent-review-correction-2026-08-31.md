@@ -32,7 +32,7 @@ MCP env/header 的普通配置明文、renderer 全量返回和保存假成功�
 | ID    | 优先级       | 状态           | 问题                                                 | 当前保护                                                                              | 实际缺口                                                                                                             |
 | ----- | ------------ | -------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | IR-01 | P0           | 工程实现完成；最终验收待执行 | 外部 MCP SDK 通配符自动放行                          | SDK 配置与 Backend 投影均只保留内部 `cclink_studio`；外部配置继续保存                 | 真实打包 App 中的 SDK 进程级复核留到统一验收                                                                         |
-| IR-02 | P0           | Open           | Browser Cookie 完整返回模型                          | 登记账号 BrowserTask 禁止 Cookie 工具                                                 | 普通 BrowserTask 仍返回 value、HttpOnly、domain、expiry 等完整 Cookie 对象                                           |
+| IR-02 | P0           | 工程实现及真实 Context smoke 完成 | Browser Cookie 完整返回模型                          | 通用 Agent 工具表移除 Cookie 读写；旧读取只返回聚合计数                               | 最终统一 App/Agent 事件与诊断复核待执行                                                                               |
 | IR-03 | P1，立即止血 | Open           | 本机 MCP HTTP token 未强制                           | backend 每轮生成 token 并放入 URL                                                     | 缺失或错误 token 被解析为空上下文，不拒绝请求                                                                        |
 | RF-01 | P0           | Open，修订范围 | 文件权限边界不统一                                   | 普通 Claude Editor/内置文件工具有 PreToolUse 工作空间保护；登记账号上传有真实路径检查 | renderer 通用 FS、普通 Browser 上传、Android install/push 仍可能读取工作空间外文件；底层 FileService 仍放行整个 home |
 | RF-02 | P0           | Open，缩小范围 | `auto` 和 Always 可绕过危险操作确认                  | 登记账号事务存在专用边界；定时任务严格只读                                            | Android uninstall/shell、清 Cookie 等内部工具没有不可绕过的宿主授权下限                                              |
@@ -46,7 +46,7 @@ MCP env/header 的普通配置明文、renderer 全量返回和保存假成功�
 | IR-04 | P1           | Open           | 本机 MCP HTTP 请求体无大小上限且解析错误包含正文片段 | 仅监听 loopback                                                                       | 可造成主进程内存压力，并把输入秘密写入错误日志                                                                       |
 | IR-05 | P1           | Open           | 工具确认卡把原始参数返回 renderer                    | renderer 需要展示操作摘要                                                             | 参数中的 token、正文或敏感路径被无差别字符串化；重新开放外部 MCP 前必须修复                                          |
 | IR-06 | P1           | Open           | 外部 MCP 名称允许原型特殊键                          | 名称只限制字符集合                                                                    | `__proto__` 等键可进入普通对象映射，造成原型行为或配置投影异常                                                       |
-| IR-07 | P1           | Open           | 按名称清 Cookie 使用模糊且未转义的正则               | 支持按名称、域或全部清理                                                              | 单名称未锚定，多名称未转义，可能误删名称相似或包含正则字符的 Cookie                                                  |
+| IR-07 | P1           | 工程实现及真实 Context smoke 完成 | 按名称清 Cookie 使用模糊且未转义的正则               | 按 name/domain/path 精确枚举并删除 Cookie identity                                    | 最终统一 Browser 回归待执行                                                                                           |
 
 ## 3. 新增 P0 的代码证据
 
@@ -408,3 +408,15 @@ Cookie 秘密出站、强制现有 query token。只有这三道止血完成后�
 - `smoke:ui` 的设置页与应用启动检查通过；同次全量 UI smoke 的 PDF ready 超时和网页事务旧 Tab
   复用失败与本阶段无关，保留到最终统一回归复核。专用真实 Agent runtime smoke 需要隔离 API key，
   未在本阶段借用用户本机账号执行。
+
+### P0-2：Browser Cookie 安全
+
+- 通用 Agent 工具表删除 `browser_get_cookies` 和 `browser_set_cookie`；残留旧工具名在模块执行入口直接
+  拒绝，不进入 Playwright、确认或事件结果链路。
+- Playwright 旧 `getCookies` 动作只返回 `cookieCount`/`persistentCookieCount`，不返回 Cookie 名称、
+  value、HttpOnly 条目或 header；`setCookie` 的结果也不再回显名称。
+- Cookie 清理由模糊正则改成读取主进程 Context 后按精确 `name/domain/path` identity 逐项删除。
+- 45 项相关单测、TypeScript、定向 ESLint 与格式检查通过。
+- 新增 `smoke:browser-cookie-security`：在隔离 Electron `WebContentsView` 和真实 Playwright Context 中
+  写入 5 个测试 Cookie（含 HttpOnly canary），证明 canary 不出现在旧读取结果；删除根路径 `sid` 后，
+  `sid_backup`、`sid.test`、`sid+test` 和 `/admin` 路径的同名 `sid` 均保留。smoke 已通过。

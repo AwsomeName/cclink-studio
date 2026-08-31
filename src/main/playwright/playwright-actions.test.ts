@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { PLAYWRIGHT_ACTION_TYPES } from './playwright-actions'
+import { describe, it, expect, vi } from 'vitest'
+import { executePlaywrightAction, PLAYWRIGHT_ACTION_TYPES } from './playwright-actions'
 
 describe('PLAYWRIGHT_ACTION_TYPES', () => {
   it('应该有 46 种操作类型', () => {
@@ -79,5 +79,84 @@ describe('PLAYWRIGHT_ACTION_TYPES', () => {
 
   it('没有重复', () => {
     expect(new Set(PLAYWRIGHT_ACTION_TYPES).size).toBe(PLAYWRIGHT_ACTION_TYPES.length)
+  })
+})
+
+describe('Cookie action boundary', () => {
+  it('returns only aggregate metadata for legacy getCookies calls', async () => {
+    const canary = 'cookie-canary-secret-value'
+    const context = {
+      cookies: vi.fn().mockResolvedValue([
+        {
+          name: 'sid',
+          value: canary,
+          domain: 'example.test',
+          path: '/',
+          expires: 1_900_000_000,
+          httpOnly: true,
+        },
+      ]),
+    }
+    const result = await executePlaywrightAction(null, { type: 'getCookies' }, {
+      getContext: () => context,
+    } as any)
+
+    expect(result).toEqual({ cookieCount: 1, persistentCookieCount: 1 })
+    const serialized = JSON.stringify(result)
+    expect(serialized).not.toContain(canary)
+    expect(serialized).not.toContain('sid')
+    expect(serialized).not.toContain('httpOnly')
+  })
+
+  it('clears Cookie identities with exact name, domain, and path matching', async () => {
+    const cookies = [
+      { name: 'sid', domain: 'example.test', path: '/', value: 'one' },
+      { name: 'sid_backup', domain: 'example.test', path: '/', value: 'two' },
+      { name: 'sid.test', domain: 'example.test', path: '/', value: 'three' },
+      { name: 'sid+test', domain: 'example.test', path: '/', value: 'four' },
+      { name: 'sid', domain: 'example.test', path: '/admin', value: 'five' },
+      { name: 'sid', domain: 'adjacent.example.test', path: '/', value: 'six' },
+    ]
+    const clearCookies = vi.fn(async (filter?: Record<string, string>) => {
+      if (!filter) {
+        cookies.splice(0)
+        return
+      }
+      for (let index = cookies.length - 1; index >= 0; index -= 1) {
+        const cookie = cookies[index]
+        if (
+          (!filter.name || cookie.name === filter.name) &&
+          (!filter.domain || cookie.domain === filter.domain) &&
+          (!filter.path || cookie.path === filter.path)
+        ) {
+          cookies.splice(index, 1)
+        }
+      }
+    })
+    const context = { cookies: vi.fn(async () => [...cookies]), clearCookies }
+    const result = await executePlaywrightAction(
+      null,
+      {
+        type: 'clearCookies',
+        names: ['sid'],
+        domain: 'example.test',
+        path: '/',
+      },
+      { getContext: () => context } as any,
+    )
+
+    expect(result).toEqual({ cleared: 1 })
+    expect(clearCookies).toHaveBeenCalledWith({
+      name: 'sid',
+      domain: 'example.test',
+      path: '/',
+    })
+    expect(cookies.map((cookie) => `${cookie.name}|${cookie.domain}|${cookie.path}`)).toEqual([
+      'sid_backup|example.test|/',
+      'sid.test|example.test|/',
+      'sid+test|example.test|/',
+      'sid|example.test|/admin',
+      'sid|adjacent.example.test|/',
+    ])
   })
 })

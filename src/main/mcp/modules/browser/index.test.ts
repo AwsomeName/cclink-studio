@@ -39,8 +39,8 @@ const module = new BrowserToolModule(mockBridge)
 const TOOLS = module.tools
 
 describe('BrowserToolModule 工具定义', () => {
-  it('应该有 46 个工具定义', () => {
-    expect(TOOLS).toHaveLength(46)
+  it('应该有 44 个工具定义', () => {
+    expect(TOOLS).toHaveLength(44)
   })
 
   it('所有工具名以 browser_ 开头', () => {
@@ -77,6 +77,18 @@ describe('BrowserToolModule 工具定义', () => {
       const actionType = toolNameToActionType(def.name)
       expect(PLAYWRIGHT_ACTION_TYPES).toContain(actionType)
     }
+  })
+
+  it('does not expose Cookie values or Cookie injection to the general Agent', async () => {
+    const names = TOOLS.map((tool) => tool.name)
+    expect(names).not.toContain('browser_get_cookies')
+    expect(names).not.toContain('browser_set_cookie')
+    await expect(module.execute('browser_get_cookies', {})).rejects.toThrow(
+      '通用 Agent 不开放 Cookie 读取或写入',
+    )
+    await expect(
+      module.execute('browser_set_cookie', { name: 'sid', value: 'cookie-canary-secret' }),
+    ).rejects.toThrow('通用 Agent 不开放 Cookie 读取或写入')
   })
 })
 
@@ -178,7 +190,7 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     const context = { conversationId: 'conversation-a', workspaceKey: '/workspace/a' }
 
     await expect(module.execute('browser_get_cookies', {}, context)).rejects.toThrow(
-      '避免泄露登录态',
+      '通用 Agent 不开放 Cookie 读取或写入',
     )
     await expect(module.execute('browser_click', { selector: '#submit' }, context)).rejects.toThrow(
       '敏感最终动作',

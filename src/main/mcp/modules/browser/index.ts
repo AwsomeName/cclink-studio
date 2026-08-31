@@ -1,7 +1,7 @@
 /**
  * 浏览器工具模块
  *
- * 提供 46 个 Playwright 浏览器自动化工具。
+ * 提供 44 个 Playwright 浏览器自动化工具。
  * 实现统一的 ToolModule 接口，可注册到 McpToolHost。
  */
 
@@ -75,7 +75,7 @@ class BrowserActionResultUnknownError extends Error {
 }
 
 /**
- * 46 个浏览器工具定义
+ * 44 个浏览器工具定义
  *
  * 工具名以 browser_ 为前缀，通过 toolNameToActionType() 映射到
  * executePlaywrightAction 的 action type。
@@ -371,48 +371,10 @@ const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
 
-  // ── Cookie 管理 ──────────────────────
-  {
-    name: 'browser_get_cookies',
-    description: '获取当前页面的所有 Cookie。可指定 URL 过滤特定域名的 Cookie',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        urls: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '可选，只获取匹配这些 URL 的 Cookie',
-        },
-      },
-    },
-    annotations: { readOnlyHint: true, destructiveHint: false },
-  },
-  {
-    name: 'browser_set_cookie',
-    description: '设置一个 Cookie。需要提供名称和值，可选指定域名、路径、安全属性等',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        name: { type: 'string', description: 'Cookie 名称' },
-        value: { type: 'string', description: 'Cookie 值' },
-        url: { type: 'string', description: 'Cookie 关联的 URL（与 domain 二选一）' },
-        domain: { type: 'string', description: 'Cookie 域名（如 .example.com）' },
-        path: { type: 'string', description: 'Cookie 路径，默认 /' },
-        secure: { type: 'boolean', description: '是否仅限 HTTPS' },
-        httpOnly: { type: 'boolean', description: '是否禁止 JavaScript 访问' },
-        sameSite: {
-          type: 'string',
-          description: 'SameSite 策略：Strict、Lax、None',
-          enum: ['Strict', 'Lax', 'None'],
-        },
-      },
-      required: ['name', 'value'],
-    },
-    annotations: { readOnlyHint: false, destructiveHint: false },
-  },
+  // Cookie 值属于 Browser 主进程秘密，不向通用 Agent 暴露读取或写入工具。
   {
     name: 'browser_clear_cookies',
-    description: '清除 Cookie。不传参数清除所有，传 names 清除指定名称，传 domain 清除指定域名',
+    description: '清除 Cookie。不传参数清除所有；可按精确 name、domain 和 path 身份缩小清理范围',
     inputSchema: {
       type: 'object',
       properties: {
@@ -421,7 +383,8 @@ const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
           items: { type: 'string' },
           description: '要清除的 Cookie 名称列表',
         },
-        domain: { type: 'string', description: '只清除该域名下的 Cookie' },
+        domain: { type: 'string', description: '只清除精确匹配该域名的 Cookie' },
+        path: { type: 'string', description: '只清除精确匹配该路径的 Cookie' },
       },
     },
     annotations: { readOnlyHint: false, destructiveHint: true },
@@ -688,7 +651,7 @@ export function toolNameToActionType(toolName: string): string {
 /**
  * 浏览器工具模块
  *
- * 实现 ToolModule 接口，将 46 个 Playwright 操作
+ * 实现 ToolModule 接口，将 44 个可向 Agent 暴露的 Playwright 操作
  * 封装为可注册到 McpToolHost 的工具模块。
  */
 export class BrowserToolModule implements ToolModule {
@@ -748,6 +711,9 @@ export class BrowserToolModule implements ToolModule {
   ): Promise<unknown> {
     context?.abortSignal?.throwIfAborted()
     const actionType = toolNameToActionType(toolName)
+    if (actionType === 'getCookies' || actionType === 'setCookie') {
+      throw new Error('通用 Agent 不开放 Cookie 读取或写入；请在可见浏览器中由用户管理登录态')
+    }
     const {
       tabId: visibleTabId,
       workspaceKey,
