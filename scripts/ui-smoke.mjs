@@ -1055,10 +1055,10 @@ async function main() {
       state: 'visible',
       timeout: 10_000,
     })
-    assert(
-      await page.locator('.agent-role-row', { hasText: customRoleName }).isVisible(),
-      'new local role missing from My Roles',
-    )
+    await page.locator('.agent-role-row', { hasText: customRoleName }).waitFor({
+      state: 'visible',
+      timeout: 10_000,
+    })
     await page.getByRole('button', { name: '编辑角色', exact: true }).click()
     await page.getByLabel('名称').fill(customRoleV2Name)
     await page.getByRole('button', { name: '保存为新版本' }).click()
