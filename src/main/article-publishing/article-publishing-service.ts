@@ -15,8 +15,13 @@ import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
 import type { BrowserActionLog, BrowserTaskRun } from '../browser/browser-task-types'
 import { CSDN_ARTICLE_SUPPORTED_ORIGINS } from './article-publishing-browser-policy'
+import {
+  isSameCsdnDraft,
+  parseCsdnDraftAnchor,
+} from '../../shared/article-publishing/csdn-draft-anchor'
 import type {
   ArticlePublishingAsset,
+  ArticlePublishingState,
   ArticlePublishingSourcePreview,
   CreateArticlePublishingTaskInput,
   InspectArticlePublishingSourceInput,
@@ -149,13 +154,60 @@ export class ArticlePublishingService {
     const attempt = input.affair.attempts.find((candidate) => candidate.id === input.attemptId)
     if (!publishing || !attempt) throw new Error('文章发布运行状态不存在')
 
+    const persistedDraftAnchor = publishing.draft?.url
+      ? parseCsdnDraftAnchor(publishing.draft.url)
+      : null
     const tabId = await browserManager.waitForAccountView(
       input.workspacePath,
       attempt.profileId,
       attempt.accountId,
-      attempt.entryUrl,
+      persistedDraftAnchor?.url ?? attempt.entryUrl,
     )
     if (!tabId) throw new Error('账号浏览器 Tab 创建超时')
+    let draftAnchor = persistedDraftAnchor
+    const visibleUrl = browserManager.getCurrentURL(tabId)
+    if (draftAnchor) {
+      if (!isSameCsdnDraft(draftAnchor.url, visibleUrl)) {
+        await browserManager.navigate(tabId, draftAnchor.url)
+      }
+      const restored = parseCsdnDraftAnchor(browserManager.getCurrentURL(tabId))
+      if (!restored || restored.draftId !== draftAnchor.draftId) {
+        throw new Error(`无法恢复原 CSDN 草稿 ${draftAnchor.draftId}，已拒绝在其他页面继续`)
+      }
+      draftAnchor = restored
+    } else if (input.resumed && hasPlatformPublishingProgress(publishing)) {
+      const visibleDraftAnchor = parseCsdnDraftAnchor(visibleUrl)
+      if (!visibleDraftAnchor) {
+        throw new Error(
+          '旧 Attempt 已有平台写入但缺少草稿锚点；请先在当前账号 Tab 打开原 CSDN 草稿，再点击“从中断处继续”',
+        )
+      }
+      const recorded = await this.webAffairService.recordArticlePublishingDraftAnchor(
+        input.affair.id,
+        attempt.id,
+        attempt.executionGeneration,
+        attempt.launchOperationId,
+        visibleDraftAnchor.url,
+        input.workspaceId,
+      )
+      if (!recorded.success) throw new Error(recorded.error.message)
+      draftAnchor = visibleDraftAnchor
+    } else {
+      await browserManager.navigate(tabId, attempt.entryUrl)
+      const visibleDraftAnchor = parseCsdnDraftAnchor(browserManager.getCurrentURL(tabId))
+      if (visibleDraftAnchor) {
+        const recorded = await this.webAffairService.recordArticlePublishingDraftAnchor(
+          input.affair.id,
+          attempt.id,
+          attempt.executionGeneration,
+          attempt.launchOperationId,
+          visibleDraftAnchor.url,
+          input.workspaceId,
+        )
+        if (!recorded.success) throw new Error(recorded.error.message)
+        draftAnchor = visibleDraftAnchor
+      }
+    }
     await playwrightBridge.ensureConnected('article_publishing_launch')
     await browserManager.ensurePlaywrightPage(tabId)
     await playwrightBridge.switchToPage(tabId)
@@ -211,7 +263,10 @@ export class ArticlePublishingService {
     })
 
     try {
-      const receipt = await agentBridge.sendMessage(input.prompt, conversationId, {
+      const agentPrompt = draftAnchor
+        ? `${input.prompt}\nmain 已锁定平台草稿：draftUrl=${draftAnchor.url}；任何写入前必须确认当前页仍是该草稿，禁止切换到新稿或其他文章。`
+        : input.prompt
+      const receipt = await agentBridge.sendMessage(agentPrompt, conversationId, {
         runId,
         sessionId: null,
         workspaceRef: { kind: 'local', path: input.workspacePath },
@@ -335,7 +390,7 @@ export class ArticlePublishingService {
           agentRunId: receipt.runId,
           browserTaskRunId: browserTask.id,
           browserTabId: tabId,
-          agentPrompt: input.prompt,
+          agentPrompt,
         },
       }
     } catch (error) {
@@ -1261,6 +1316,16 @@ function buildAgentPrompt(
     `验证码、风控、法律/版权声明、账号或内容不一致、未知页面必须暂停给用户。`,
     `发布动作派发后必须立即进入结果核验；断线或证据不足只报告 result-unknown，禁止再次点击发布。`,
   ].join('\n')
+}
+
+function hasPlatformPublishingProgress(publishing: ArticlePublishingState): boolean {
+  if (publishing.sideEffects.length > 0) return true
+  if (publishing.assets.some((asset) => asset.status !== 'pending')) return true
+  return publishing.checkpoints.some(
+    (checkpoint) =>
+      !['verify-account', 'open-editor'].includes(checkpoint.stepId) &&
+      checkpoint.status !== 'pending',
+  )
 }
 
 function invalid<T>(message: string): WebAffairOperationResult<T> {

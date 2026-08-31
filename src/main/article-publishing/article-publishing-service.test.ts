@@ -95,6 +95,8 @@ describe('ArticlePublishingService', () => {
     let pageRuntimeBound: ((identity: Record<string, number | string>) => void) | undefined
     const browserManager = {
       waitForAccountView: vi.fn(async () => 'tab-a'),
+      getCurrentURL: vi.fn(() => 'https://editor.csdn.net/md/'),
+      navigate: vi.fn(async () => undefined),
       ensurePlaywrightPage: vi.fn(async () => undefined),
       onPageRuntimeBound: vi.fn((callback) => {
         pageRuntimeBound = callback
@@ -203,6 +205,46 @@ describe('ArticlePublishingService', () => {
     )
     expect(webAffairService.reconcileArticlePublishingRuntime).not.toHaveBeenCalled()
     service.dispose()
+  })
+
+  it('resumes by navigating to the persisted platform draft before starting the Agent', async () => {
+    const draftUrl = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
+    const harness = createResumeHarness({ draftUrl, visibleUrl: 'https://mp.csdn.net/' })
+
+    const result = await harness.service.startTask(
+      { workspaceRef: WORKSPACE_REF, affairId: harness.affairId },
+      '11111111-1111-4111-8111-111111111111',
+    )
+
+    expect(result.success).toBe(true)
+    expect(harness.browserManager.navigate).toHaveBeenCalledWith('tab-a', draftUrl)
+    expect(harness.browserManager.navigate.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.agentBridge.sendMessage.mock.invocationCallOrder[0],
+    )
+    expect(harness.agentBridge.sendMessage).toHaveBeenCalledWith(
+      expect.stringContaining(`draftUrl=${draftUrl}`),
+      expect.any(String),
+      expect.any(Object),
+    )
+    harness.service.dispose()
+  })
+
+  it('refuses to guess a new editor for a legacy partial Attempt without a draft anchor', async () => {
+    const harness = createResumeHarness({ visibleUrl: 'https://editor.csdn.net/md/' })
+
+    const result = await harness.service.startTask(
+      { workspaceRef: WORKSPACE_REF, affairId: harness.affairId },
+      '11111111-1111-4111-8111-111111111111',
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('打开原 CSDN 草稿') },
+    })
+    expect(harness.browserManager.navigate).not.toHaveBeenCalled()
+    expect(harness.agentBridge.sendMessage).not.toHaveBeenCalled()
+    expect(harness.webAffairService.reconcileArticlePublishingRuntime).toHaveBeenCalledOnce()
+    harness.service.dispose()
   })
 
   it('freezes a healthy-but-stalled runtime before bounded escalation to human handling', async () => {
@@ -623,6 +665,183 @@ describe('ArticlePublishingService', () => {
     )
   })
 })
+
+function createResumeHarness(options: { draftUrl?: string; visibleUrl: string }) {
+  const affairId = '33333333-3333-4333-8333-333333333333'
+  const attemptId = '44444444-4444-4444-8444-444444444444'
+  const browserTaskRunId = '55555555-5555-4555-8555-555555555555'
+  const nodeId = '66666666-6666-4666-8666-666666666666'
+  const accountId = '22222222-2222-4222-8222-222222222222'
+  const resumedAttempt = {
+    id: attemptId,
+    status: 'preparing',
+    executionGeneration: 2,
+    launchOperationId: 'launch-b',
+    profileId: 'profile-a',
+    accountId,
+    nodeId,
+    entryUrl: 'https://editor.csdn.net/md/',
+  }
+  const articlePublishing = {
+    adapterId: 'csdn',
+    adapterVersion: 1,
+    accountId,
+    source: {
+      markdownPath: '/workspace/article.md',
+      contentHash: 'c'.repeat(64),
+    },
+    assets: [],
+    checkpoints: [
+      {
+        stepId: 'upload-assets',
+        label: '上传图片',
+        status: 'needs-reconcile',
+      },
+    ],
+    sideEffects: [{ kind: 'save-draft', status: 'verified' }],
+    execution: {
+      status: 'preparing',
+      currentAttemptId: attemptId,
+      currentGeneration: 2,
+      currentLaunchOperationId: 'launch-b',
+      currentStepId: 'upload-assets',
+    },
+    draft: options.draftUrl ? { url: options.draftUrl } : undefined,
+    publication: { status: 'not-started' },
+  }
+  const resumedAffair = {
+    id: affairId,
+    kind: 'article-publishing',
+    title: 'Article',
+    flow: { nodes: [{ id: nodeId }] },
+    attempts: [resumedAttempt],
+    articlePublishing,
+  }
+  const interruptedAffair = {
+    ...resumedAffair,
+    attempts: [
+      {
+        ...resumedAttempt,
+        status: 'interrupted',
+        executionGeneration: 1,
+        launchOperationId: 'launch-a',
+      },
+    ],
+    articlePublishing: {
+      ...articlePublishing,
+      execution: {
+        ...articlePublishing.execution,
+        status: 'interrupted',
+        currentGeneration: 1,
+        currentLaunchOperationId: 'launch-a',
+      },
+    },
+  }
+  const fileService = {
+    readTextDocument: vi.fn(async () => ({
+      path: '/workspace/article.md',
+      content: '# Article',
+      size: 9,
+      modifiedAt: 123,
+      hash: 'c'.repeat(64),
+    })),
+  }
+  const webAffairService = {
+    getProjectSnapshot: vi.fn(() => ({
+      success: true,
+      data: { affairs: [interruptedAffair] },
+    })),
+    resumeArticlePublishingAttempt: vi.fn(async () => ({
+      success: true,
+      data: resumedAffair,
+    })),
+    markArticlePublishingAttemptStarted: vi.fn(async () => ({
+      success: true,
+      data: resumedAffair,
+    })),
+    recordArticlePublishingDraftAnchor: vi.fn(async () => ({
+      success: true,
+      data: resumedAffair,
+    })),
+    bindArticlePublishingRuntime: vi.fn(async () => ({ success: true, data: resumedAffair })),
+    rebindArticlePublishingBrowserRuntime: vi.fn(async () => ({
+      success: true,
+      data: resumedAffair,
+    })),
+    reconcileArticlePublishingRuntime: vi.fn(async () => ({
+      success: true,
+      data: resumedAffair,
+    })),
+  }
+  const browserTask = {
+    id: browserTaskRunId,
+    tabId: 'tab-a',
+    status: 'running',
+    correlation: {} as Record<string, unknown>,
+  }
+  const agentBridge = {
+    onRuntimeEvent: vi.fn(() => () => undefined),
+    getRuntimeIdentity: vi.fn(() => ({
+      agentRuntimeBindingKey: 'agent-binding-a',
+      agentRuntimeEpoch: 1,
+    })),
+    sendMessage: vi.fn(async () => ({ runId: 'run-launch-b' })),
+    getActiveBrowserTask: vi.fn(() => browserTask),
+    getRunStatus: vi.fn(() => ({ status: 'running' })),
+  }
+  let currentUrl = options.visibleUrl
+  const browserManager = {
+    waitForAccountView: vi.fn(async () => 'tab-a'),
+    getCurrentURL: vi.fn(() => currentUrl),
+    navigate: vi.fn(async (_tabId: string, url: string) => {
+      currentUrl = url
+    }),
+    ensurePlaywrightPage: vi.fn(async () => undefined),
+    onPageRuntimeBound: vi.fn(() => () => undefined),
+    getViewRuntimeIdentity: vi.fn(() => ({
+      browserViewRuntimeGeneration: 2,
+      webContentsId: 20,
+    })),
+  }
+  const browserTaskRuntime = {
+    updateCorrelation: vi.fn((_taskRunId: string, patch: Record<string, unknown>) => {
+      Object.assign(browserTask.correlation, patch)
+      return browserTask
+    }),
+    onTaskChanged: vi.fn(() => () => undefined),
+    onActionLogChanged: vi.fn(() => () => undefined),
+    getTask: vi.fn(() => browserTask),
+  }
+  const playwrightBridge = {
+    ensureConnected: vi.fn(async () => undefined),
+    switchToPage: vi.fn(async () => undefined),
+    getConnectionGeneration: vi.fn(() => 3),
+    getPageBindingIdentity: vi.fn(() => ({
+      generation: 4,
+      connectionGeneration: 3,
+      webContentsId: 20,
+    })),
+    isConnected: vi.fn(() => true),
+  }
+  const service = new ArticlePublishingService(
+    fileService as never,
+    webAffairService as never,
+    async (path) => path,
+    {
+      getAgentBridge: () => agentBridge as never,
+      getBrowserManager: () => browserManager as never,
+      getBrowserTaskRuntime: () => browserTaskRuntime as never,
+      getPlaywrightBridge: () => playwrightBridge as never,
+    },
+  )
+  return {
+    affairId,
+    service,
+    browserManager,
+    agentBridge,
+    webAffairService,
+  }
+}
 
 function createActiveRuntime(lastProgressAt: number) {
   return {

@@ -3,6 +3,10 @@ import type { BrowserTaskRun } from '../../shared/ipc/browser'
 import type { ToolExecutionContext } from '../mcp/types'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
 import type { WebAffairService } from '../web-affairs/web-affair-service'
+import {
+  isSameCsdnDraft,
+  parseCsdnDraftAnchor,
+} from '../../shared/article-publishing/csdn-draft-anchor'
 
 export const CSDN_ARTICLE_SUPPORTED_ORIGINS = [
   'https://csdn.net',
@@ -30,7 +34,9 @@ interface ArticlePublishingExecutionScope {
   publicationStatus: 'not-started' | 'dispatched' | 'verifying' | 'published' | 'result-unknown'
   localAssetsReady: boolean
   executionGeneration: number
+  launchOperationId: string
   browserTaskRunId: string
+  draftUrl?: string
   sourceHash: string
   assets: Array<{ id: string; sourcePath: string; uploadAttemptCount: number }>
 }
@@ -123,10 +129,9 @@ export class ArticlePublishingBrowserPolicy {
       }
       return null
     }
-    if (!PAGE_MUTATION_ACTIONS.has(actionType)) {
-      return { kind: 'allow' }
-    }
+    const isMutation = PAGE_MUTATION_ACTIONS.has(actionType)
     if (!page) {
+      if (!isMutation) return { kind: 'allow' }
       return this.stopDecision(
         scope,
         actionType,
@@ -140,6 +145,48 @@ export class ArticlePublishingBrowserPolicy {
     } catch {
       return this.stopDecision(scope, actionType, 'unknown', '文章发布适配器无法读取当前页面地址')
     }
+    const visibleAnchor = parseCsdnDraftAnchor(pageUrl)
+    let boundDraftUrl = scope.draftUrl
+    if (visibleAnchor && !boundDraftUrl) {
+      const recorded = await this.webAffairService.recordArticlePublishingDraftAnchor(
+        scope.affairId,
+        scope.attemptId,
+        scope.executionGeneration,
+        scope.launchOperationId,
+        visibleAnchor.url,
+        scope.workspaceId,
+        scope.browserTaskRunId,
+      )
+      if (!recorded.success) {
+        return this.stopDecision(scope, actionType, 'unknown', recorded.error.message, pageUrl)
+      }
+      boundDraftUrl = visibleAnchor.url
+    }
+    if (
+      isMutation &&
+      !READ_ONLY_STEPS.has(scope.currentStepId ?? '') &&
+      scope.currentStepId !== 'open-editor'
+    ) {
+      if (!boundDraftUrl) {
+        return this.stopDecision(
+          scope,
+          actionType,
+          'unknown',
+          '当前编辑页没有稳定草稿编号，禁止产生无法跨重启恢复的平台写入',
+          pageUrl,
+        )
+      }
+      if (!isSameCsdnDraft(boundDraftUrl, pageUrl)) {
+        return this.stopDecision(
+          scope,
+          actionType,
+          'unknown',
+          '当前页面不是本 Attempt 已绑定的原草稿，已拒绝串稿写入',
+          pageUrl,
+        )
+      }
+    }
+    if (!isMutation) return { kind: 'allow' }
     if (!this.isRecognizedPageForStep(pageUrl, scope.currentStepId)) {
       return this.stopDecision(
         scope,
@@ -585,7 +632,9 @@ export class ArticlePublishingBrowserPolicy {
         (asset) => asset.kind !== 'local' || asset.status === 'uploaded',
       ),
       executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
       browserTaskRunId: input.browserTaskRunId ?? attempt.browserTaskRunId ?? '',
+      draftUrl: publishing.draft?.url,
       sourceHash: publishing.source.contentHash,
       assets: publishing.assets.map((asset) => ({
         id: asset.id,

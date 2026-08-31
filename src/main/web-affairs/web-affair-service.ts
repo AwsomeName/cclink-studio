@@ -66,6 +66,7 @@ import type {
 } from '../../shared/article-publishing/article-publishing-types'
 import { articlePublishingStateSchema } from '../../shared/article-publishing/article-publishing-schema'
 import { CSDN_ARTICLE_PUBLISHING_PLAN } from '../../shared/article-publishing/article-publishing-plan'
+import { parseCsdnDraftAnchor } from '../../shared/article-publishing/csdn-draft-anchor'
 
 const AFFAIR_LIMIT = 1_000
 const EVENT_LIMIT = 2_000
@@ -363,6 +364,27 @@ export class WebAffairService {
   ) {
     return this.enqueueScoped(input.affairId, workspaceId, () =>
       this.reportArticlePublishingCheckpointNow(input),
+    )
+  }
+
+  recordArticlePublishingDraftAnchor(
+    affairId: string,
+    attemptId: string,
+    executionGeneration: number,
+    launchOperationId: string,
+    rawUrl: string,
+    workspaceId: string,
+    browserTaskRunId?: string,
+  ) {
+    return this.enqueueScoped(affairId, workspaceId, () =>
+      this.recordArticlePublishingDraftAnchorNow(
+        affairId,
+        attemptId,
+        executionGeneration,
+        launchOperationId,
+        rawUrl,
+        browserTaskRunId,
+      ),
     )
   }
 
@@ -3086,6 +3108,66 @@ export class WebAffairService {
           )
         : baseAffair,
     )
+  }
+
+  private async recordArticlePublishingDraftAnchorNow(
+    affairId: string,
+    attemptId: string,
+    executionGeneration: number,
+    launchOperationId: string,
+    rawUrl: string,
+    browserTaskRunId?: string,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const anchor = parseCsdnDraftAnchor(rawUrl)
+    if (!anchor) return this.transitionError('当前页面没有可恢复的 CSDN 草稿标识')
+    const found = this.findAttempt(affairId, attemptId)
+    const publishing = found?.affair.articlePublishing
+    if (!found || !publishing || found.affair.kind !== 'article-publishing') {
+      return this.notFound('文章发布 Attempt 不存在')
+    }
+    if (
+      publishing.execution.currentAttemptId !== attemptId ||
+      publishing.execution.currentGeneration !== executionGeneration ||
+      publishing.execution.currentLaunchOperationId !== launchOperationId ||
+      found.attempt.executionGeneration !== executionGeneration ||
+      found.attempt.launchOperationId !== launchOperationId ||
+      !(
+        (found.attempt.status === 'preparing' &&
+          publishing.execution.status === 'preparing' &&
+          browserTaskRunId === undefined) ||
+        (found.attempt.status === 'running-ai' &&
+          publishing.execution.status === 'running' &&
+          Boolean(browserTaskRunId) &&
+          found.attempt.browserTaskRunId === browserTaskRunId)
+      )
+    ) {
+      return this.transitionError('草稿锚点不属于当前发布运行代次')
+    }
+    const existing = publishing.draft?.url ? parseCsdnDraftAnchor(publishing.draft.url) : null
+    if (existing && existing.draftId !== anchor.draftId) {
+      return this.transitionError(
+        `当前 Attempt 已绑定草稿 ${existing.draftId}，拒绝切换到草稿 ${anchor.draftId}`,
+      )
+    }
+    const now = this.timestamp()
+    if (existing?.url === anchor.url) {
+      return { success: true, data: structuredClone(found.affair) }
+    }
+    return this.persistAffair({
+      ...found.affair,
+      articlePublishing: {
+        ...publishing,
+        draft: { url: anchor.url, lastVerifiedAt: now },
+      },
+      events: this.appendEvent(
+        found.affair,
+        this.event('node-status-changed', `已绑定平台草稿 ${anchor.draftId}`, now, {
+          nodeId: found.attempt.nodeId,
+          attemptId,
+        }),
+      ),
+      updatedAt: now,
+    })
   }
 
   private async reportArticlePublishingAssetNow(

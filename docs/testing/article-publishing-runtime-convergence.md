@@ -15,6 +15,10 @@
 
 v0.1.76 的真实日志又暴露了一个更窄但会直接打断长任务的 owner 更新缺口：Playwright 从 connection generation `1` 重连到 `2` 后，`BrowserManager` 已在同一 View/WebContents 上成功 claim 新 Page，但发布协调器和 BrowserTask correlation 仍保留旧 connection/page generation。看门狗因此把已经恢复的页面误判为 `RUNTIME_OWNER_LOST`，随后确认成孤儿。修复后的不变式是：`BrowserManager` 只在 claim 后发布完整 Page 身份；`WebAffairService` 在当前 Attempt/generation 内先把旧 browser-task binding 标为 `lost` 并持久化新 binding；成功后才更新 BrowserTask correlation 和内存租约，再由同一看门狗核验恢复 `running`。任一步失败都继续冻结网页写入，不能用新 Page 冒充旧动作结果。
 
+2026-09-01 对 v0.1.76 现场日志复盘后又确认了更底层的恢复协议缺口：事务只持久化“执行到哪个检查点”，没有持久化“这些副作用属于 CSDN 的哪一篇草稿”。`ArticlePublishingState.draft` 虽然存在，但此前没有生产写入者或恢复读取者；`waitForAccountView()` 复用同 Profile Tab 时也只激活页面，不保证导航到传入 URL。因此旧实现所谓“从中断处继续”实际是新建 Agent/BrowserTask 并接管任意同账号页，可能落到内容管理、空白编辑器或其他文章。
+
+当前修复把 CSDN 数字草稿 URL 作为 Attempt 的不可变平台锚点：首次进入 `https://mp.csdn.net/mp_blog/creation/editor/<draftId>` 后由 main 在任何写入前持久化；同一 Attempt 不得切换 `draftId`；恢复时必须在 Agent 启动前导航并核验该地址。历史 Attempt 已有平台写入但没有锚点时，只允许用户先在绑定账号 Tab 打开原草稿后补绑定，禁止自动打开通用编辑器猜测。自动化已经覆盖锚点冷重载、串稿拒绝、恢复导航先于 Agent 启动和无锚点旧任务 fail-closed；真实 CSDN 半途退出再恢复仍是发布前必须完成的真人验收，不能用这些测试替代。
+
 本轮固定参数为：owner lease `60s`、progress lease `10min`、`checking-runtime` probe deadline `60s`、watchdog interval `10s`、单次收敛最多重试 `3` 次。它们集中在 `ArticlePublishingService`，并使用 fake clock 覆盖“owner 存活但无进度”和“owner 丢失”两条路径；同一 Runtime generation 的用户“继续等待”最多成功一次。真实站点验收后如需调整，只能修改这些集中参数和本文记录。
 
 ## 独立审查结论与本次修订
@@ -65,6 +69,7 @@ v0.1.76 的真实日志又暴露了一个更窄但会直接打断长任务的 ow
 17. 点击“开始执行”或恢复同一 Attempt 后，主区域必须激活绑定 Browser Tab，右侧必须显示绑定
     conversation 的 Agent 消息和 BrowserTask 活动。切到其他 Tab 再切回该 Browser Tab 时仍恢复同一
     Agent；发布控制 Tab 只能作为配置/历史入口，不能覆盖 Browser View 或劫持 Agent 选择。
+18. 在 CSDN 数字草稿页完成第一张图片但尚未完成正文时终止 Runtime 并重启 Studio。点击“从中断处继续”后，main 必须先恢复同一 `draftId`，再启动新 generation 的 Agent；已核验图片不得重传。把可见 Tab 手工切到另一篇草稿后再触发写入，动作必须在 Playwright 派发前被拒绝。历史任务没有锚点时必须提示先打开原草稿，不能导航到通用编辑器新建空稿。
 
 ## 二、当前代码事实与根因
 
@@ -614,6 +619,7 @@ recovery journal 按 Affair 保存“最新关键目标状态”，同一 Affair
 28. 启动全量扫描修复 terminal Attempt + running execution、旧 generation binding、未知副作用和缺失 currentAttempt，而不只扫描瞬态 Attempt；
 29. 主文件无法写但 journal 可写时关键收敛仍对重启有效；主文件和 journal 都因 ENOSPC/权限失败时冻结外部动作并显示不可恢复的存储故障。
 30. 同一 View/WebContents 上 CDP 重连并成功 claim 新 Page 后，旧 browser-task binding 必须持久化为 `lost`、新 binding 成为唯一 active owner、BrowserTask correlation 随后更新；看门狗不得再产生 `RUNTIME_OWNER_LOST`，重复或倒退的 Page 身份必须 no-op。
+31. 草稿锚点首次捕获必须先于第一个填充/上传副作用授权落盘；Store 冷重载后保持同一 `draftId`。恢复时导航并核验锚点必须先于 Agent Run 启动；可见页是另一 `draftId`、通用编辑器或未知页时不得派发写入。旧数据有非空副作用/资源进度但无锚点时，只能从用户已打开的数字草稿补绑定。
 
 单元测试必须使用确定性 fake clock 和可控 owner 查询，不允许依赖真实 sleep。独立审查报告当前 27 个相关测试通过，但没有覆盖上述 generation、跨投影一致性和副作用消费崩溃窗口，因此这 27 个测试不能作为本问题关闭证据。受影响 smoke 通过后仍必须执行真实 Electron 和真实 CSDN 验收。
 

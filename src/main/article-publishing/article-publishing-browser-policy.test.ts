@@ -4,17 +4,24 @@ import {
   CSDN_ARTICLE_SUPPORTED_ORIGINS,
 } from './article-publishing-browser-policy'
 
+const DRAFT_URL = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
+
 function createPolicy(options?: {
   stepId?: string
   publicationStatus?: string
   assetStatus?: string
   executionStatus?: string
+  draftUrl?: string | null
 }) {
   const reserveArticlePublishingSideEffect = vi.fn().mockResolvedValue({
     success: true,
     data: {},
   })
   const handoffAttempt = vi.fn().mockResolvedValue({ success: true, data: {} })
+  const recordArticlePublishingDraftAnchor = vi.fn().mockResolvedValue({
+    success: true,
+    data: {},
+  })
   const webAffairService = {
     getProjectSnapshot: vi.fn().mockReturnValue({
       success: true,
@@ -68,12 +75,15 @@ function createPolicy(options?: {
                 currentGeneration: 1,
               },
               publication: { status: options?.publicationStatus ?? 'not-started' },
+              draft:
+                options?.draftUrl === null ? undefined : { url: options?.draftUrl ?? DRAFT_URL },
             },
           },
         ],
       },
     }),
     reserveArticlePublishingSideEffect,
+    recordArticlePublishingDraftAnchor,
     handoffAttempt,
   }
   return {
@@ -140,7 +150,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
       evaluate: vi.fn().mockResolvedValue({ label: '确认上传', type: '', role: 'button' }),
     }
     const page = {
-      url: () => 'https://app-blog.csdn.net/csdn/aiChatNew',
+      url: () => DRAFT_URL,
       locator: vi.fn().mockReturnValue(locator),
     }
 
@@ -158,7 +168,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
   it('hands legal and account-impact controls to the user', async () => {
     const { policy } = createPolicy()
     const page = {
-      url: () => 'https://app-blog.csdn.net/csdn/aiChatNew',
+      url: () => DRAFT_URL,
       locator: () => ({
         count: async () => 1,
         isVisible: async () => true,
@@ -180,7 +190,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
   it('persists a one-shot marker before allowing the authorized final publication', async () => {
     const { policy, webAffairService } = createPolicy({ stepId: 'publish' })
     const page = {
-      url: () => 'https://app-blog.csdn.net/csdn/aiChatNew',
+      url: () => DRAFT_URL,
       locator: () => ({
         count: async () => 1,
         isVisible: async () => true,
@@ -211,7 +221,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
 
   it('persists a write-ahead marker before a field mutation that may autosave', async () => {
     const { policy, webAffairService } = createPolicy({ stepId: 'fill-fields' })
-    const page = { url: () => 'https://app-blog.csdn.net/csdn/aiChatNew' }
+    const page = { url: () => DRAFT_URL }
 
     await expect(
       policy.classifyAction(
@@ -232,6 +242,79 @@ describe('ArticlePublishingBrowserPolicy', () => {
       'task-a',
       'workspace-a',
     )
+  })
+
+  it('binds a visible stable draft before the first platform mutation', async () => {
+    const { policy, webAffairService } = createPolicy({
+      stepId: 'fill-fields',
+      draftUrl: null,
+    })
+    const page = { url: () => DRAFT_URL }
+
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'fill',
+        { selector: '#title', value: 'Article title' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({ kind: 'allow-once' })
+    expect(webAffairService.recordArticlePublishingDraftAnchor).toHaveBeenCalledWith(
+      'affair-a',
+      'attempt-a',
+      1,
+      'launch-a',
+      DRAFT_URL,
+      'workspace-a',
+      'task-a',
+    )
+    expect(
+      webAffairService.recordArticlePublishingDraftAnchor.mock.invocationCallOrder[0],
+    ).toBeLessThan(webAffairService.reserveArticlePublishingSideEffect.mock.invocationCallOrder[0])
+  })
+
+  it('rejects a write when the visible page belongs to a different draft', async () => {
+    const { policy, webAffairService } = createPolicy({ stepId: 'fill-fields' })
+    const page = {
+      url: () => 'https://mp.csdn.net/mp_blog/creation/editor/164148818',
+    }
+
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'fill',
+        { selector: '#title', value: 'Wrong article' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({
+      kind: 'unknown',
+      reason: expect.stringContaining('原草稿'),
+    })
+    expect(webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
+  })
+
+  it('rejects a write on a generic editor that cannot be recovered after restart', async () => {
+    const { policy, webAffairService } = createPolicy({
+      stepId: 'fill-fields',
+      draftUrl: null,
+    })
+    const page = { url: () => 'https://editor.csdn.net/md/' }
+
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'fill',
+        { selector: '#title', value: 'Unanchored article' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({
+      kind: 'unknown',
+      reason: expect.stringContaining('稳定草稿编号'),
+    })
+    expect(webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
   })
 
   it('stops page mutations on a supported origin when the page is not an editor page', async () => {

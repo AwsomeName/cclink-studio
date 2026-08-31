@@ -49,6 +49,64 @@ describe('article publishing persistent state', () => {
     await reloaded.flush()
   })
 
+  it('persists one immutable platform draft identity across a cold service reload', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const before = created.service.getProjectSnapshot(WORKSPACE_ID)
+    expect(before.success).toBe(true)
+    if (!before.success) return
+    const attempt = before.data.affairs[0].attempts[0]
+    const draftUrl = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
+    const recorded = await created.service.recordArticlePublishingDraftAnchor(
+      created.affairId,
+      created.attemptId,
+      attempt.executionGeneration,
+      attempt.launchOperationId,
+      `${draftUrl}?from=runtime#body`,
+      WORKSPACE_ID,
+      '77777777-7777-4777-8777-777777777777',
+    )
+    expect(recorded.success).toBe(true)
+    if (!recorded.success) return
+    expect(recorded.data.articlePublishing?.draft?.url).toBe(draftUrl)
+
+    const staleOwner = await created.service.recordArticlePublishingDraftAnchor(
+      created.affairId,
+      created.attemptId,
+      attempt.executionGeneration,
+      attempt.launchOperationId,
+      draftUrl,
+      WORKSPACE_ID,
+      '88888888-8888-4888-8888-888888888888',
+    )
+    expect(staleOwner).toMatchObject({
+      success: false,
+      error: { code: 'INVALID_TRANSITION', message: expect.stringContaining('运行代次') },
+    })
+
+    const conflicting = await created.service.recordArticlePublishingDraftAnchor(
+      created.affairId,
+      created.attemptId,
+      attempt.executionGeneration,
+      attempt.launchOperationId,
+      'https://mp.csdn.net/mp_blog/creation/editor/164148818',
+      WORKSPACE_ID,
+      '77777777-7777-4777-8777-777777777777',
+    )
+    expect(conflicting).toMatchObject({
+      success: false,
+      error: { code: 'INVALID_TRANSITION', message: expect.stringContaining('拒绝切换') },
+    })
+    await created.service.flush()
+
+    const reloaded = createService(directory)
+    await reloaded.load()
+    const after = reloaded.getProjectSnapshot(WORKSPACE_ID)
+    expect(after.success).toBe(true)
+    if (!after.success) return
+    expect(after.data.affairs[0].articlePublishing?.draft).toMatchObject({ url: draftUrl })
+    await reloaded.flush()
+  })
+
   it('requires waiting and verification evidence before an image becomes uploaded', async () => {
     const { service, affairId, attemptId, assetId } = await createStartedTask(
       directory,
