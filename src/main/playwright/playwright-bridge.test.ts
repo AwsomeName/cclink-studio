@@ -153,6 +153,51 @@ describe('PlaywrightBridge diagnostics', () => {
     expect(targetContext.on).toHaveBeenCalledWith('page', expect.any(Function))
   })
 
+  it('claims the only unbound Page when another View already owns the same URL', async () => {
+    const bridge = new PlaywrightBridge()
+    const context = { pages: vi.fn(), on: vi.fn() }
+    const existingPage = {
+      ...fakePage('https://example.com/same', 'Existing'),
+      _guid: 'existing-target',
+      context: () => context,
+    } as unknown as Page
+    const newPage = {
+      ...fakePage('https://example.com/same', 'New'),
+      _guid: 'new-target',
+      context: () => context,
+    } as unknown as Page
+    context.pages.mockReturnValue([existingPage, newPage])
+    const electronSession = { on: vi.fn(), removeListener: vi.fn() }
+    const existingWebContents = {
+      id: 84,
+      session: electronSession,
+      _targetId: 'existing-target',
+      isDestroyed: () => false,
+    }
+    const newWebContents = {
+      id: 85,
+      session: electronSession,
+      isDestroyed: () => false,
+    }
+    const internals = bridge as unknown as {
+      browser: { contexts: () => unknown[]; isConnected: () => boolean }
+      context: unknown
+    }
+    internals.browser = { contexts: () => [context], isConnected: () => true }
+    internals.context = context
+
+    await expect(
+      bridge.claimPageForView(
+        'existing-tab',
+        existingWebContents as any,
+        'https://example.com/same',
+      ),
+    ).resolves.toBe(existingPage)
+    await expect(
+      bridge.claimPageForView('new-tab', newWebContents as any, 'https://example.com/same'),
+    ).resolves.toBe(newPage)
+  })
+
   it('uses the Electron Session as the authoritative download lifecycle for a claimed tab', async () => {
     const downloadStore = {
       startDownloadNow: vi.fn().mockReturnValue({

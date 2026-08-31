@@ -746,12 +746,18 @@ export class PlaywrightBridge {
       // 2. 按 URL 兜底匹配（排除 about:blank / 空页面）
       if (expectedUrl) {
         const norm = expectedUrl.replace(/\/$/, '')
+        const pagesClaimedByOtherViews = new Set(
+          Array.from(this.claimedViewTabIds)
+            .filter((claimedTabId) => claimedTabId !== tabId)
+            .map((claimedTabId) => this.pages.get(claimedTabId))
+            .filter((claimedPage): claimedPage is Page => Boolean(claimedPage)),
+        )
         const byUrl = pages.filter((p) => {
           const u = p.url().replace(/\/$/, '')
-          return u && u !== 'about:blank' && u === norm
+          return !pagesClaimedByOtherViews.has(p) && u && u !== 'about:blank' && u === norm
         })
         ambiguousUrlMatches = byUrl.length
-        // 多个 Profile 打开相同 URL 时不得猜测账号；等待 targetId 或明确失败。
+        // 已被其他 View 认领的 Page 不再是候选；剩余多个 Profile 同 URL 时仍不得猜测账号。
         if (byUrl.length === 1) return byUrl[0]
       }
       return null
