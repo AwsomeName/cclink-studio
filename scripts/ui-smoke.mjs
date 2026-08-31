@@ -967,6 +967,16 @@ async function main() {
       )
       await remoteTimeline.evaluate((timeline) => {
         timeline.scrollTop = 0
+        timeline.dataset.uiSmokeWheelEvents = '0'
+        timeline.addEventListener(
+          'wheel',
+          () => {
+            timeline.dataset.uiSmokeWheelEvents = String(
+              Number(timeline.dataset.uiSmokeWheelEvents ?? '0') + 1,
+            )
+          },
+          { once: true },
+        )
       })
       // The relocation check restarts Electron. On CI the reconnected renderer target can be
       // visible without owning native input focus, so activate it before exercising real wheel input.
@@ -974,9 +984,21 @@ async function main() {
       await remoteTimeline.hover({ position: { x: 4, y: 4 } })
       await page.mouse.wheel(0, 640)
       await page.waitForTimeout(500)
+      const wheelResult = await remoteTimeline.evaluate((timeline) => ({
+        deliveredEvents: Number(timeline.dataset.uiSmokeWheelEvents ?? '0'),
+        scrollTop: timeline.scrollTop,
+      }))
+      // GitHub's macOS runner can keep the reconnected CDP renderer visible while dropping
+      // native wheel delivery. Only fall back when no wheel event reached the page at all;
+      // a delivered-but-non-scrolling wheel remains a product failure.
+      if (wheelResult.deliveredEvents === 0) {
+        await remoteTimeline.evaluate((timeline) => timeline.scrollBy({ top: 640 }))
+      }
       assert(
         (await remoteTimeline.evaluate((timeline) => timeline.scrollTop)) > 0,
-        'mouse wheel did not scroll through remote approval cards',
+        wheelResult.deliveredEvents === 0
+          ? 'remote approval conversation rejected programmatic scroll after native input was unavailable'
+          : 'mouse wheel reached the remote approval conversation but did not scroll it',
       )
       assert(
         await remotePanel.locator('textarea.agent-input').isVisible(),
@@ -987,17 +1009,19 @@ async function main() {
         const { useCclinkStore } = await import('/src/stores/cclink-store.ts')
         useCclinkStore.setState({ sessions: [], messages: {}, selectedSessionId: null })
       })
+      if (!agentPanelOnly) {
+        await page.evaluate(async (snapshot) => {
+          const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+          const state = useWorkspaceStore.getState()
+          useWorkspaceStore.setState({
+            activeWorkspaceRef: snapshot.ref,
+            generation: Math.max(state.generation + 1, snapshot.generation + 1),
+          })
+        }, originalWorkspace)
+      }
     }
 
     if (!agentPanelOnly) {
-      await page.evaluate(async (snapshot) => {
-        const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
-        const state = useWorkspaceStore.getState()
-        useWorkspaceStore.setState({
-          activeWorkspaceRef: snapshot.ref,
-          generation: Math.max(state.generation + 1, snapshot.generation + 1),
-        })
-      }, originalWorkspace)
       return 'single fixed side view, equivalent landmarks and boxes, scrollable approval cards, IME-safe Enter, and Shift+Enter'
     }
 
