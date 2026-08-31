@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { McpToolHost } from '../tools/tool-host'
@@ -95,7 +96,7 @@ function createTool(name: string): ToolDefinition {
 }
 
 function createBackendFixture(
-  externalMcp = false,
+  externalMcp?: Record<string, unknown>,
   workspacePath = '/Users/apple/Desktop/project',
 ): {
   backend: LocalClaudeCodeBackend
@@ -127,7 +128,7 @@ function createBackendFixture(
     return {
       mcpServers: {
         cclink_studio: { type: 'http', url: url.toString() },
-        ...(externalMcp ? { knowledge: { type: 'http', url: 'https://mcp.example.com' } } : {}),
+        ...(externalMcp ? { knowledge: externalMcp } : {}),
       },
     }
   })
@@ -447,7 +448,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     const otherWorkspacePath = join(rootPath, 'other-workspace')
     await Promise.all([mkdir(workspacePath), mkdir(otherWorkspacePath)])
     try {
-      const { backend } = createBackendFixture(false, workspacePath)
+      const { backend } = createBackendFixture(undefined, workspacePath)
       await backend.sendMessage('读取项目文件')
       const hook = getLastQueryParams().options.hooks.PreToolUse[0].hooks[0]
 
@@ -491,7 +492,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     await Promise.all([mkdir(workspacePath), mkdir(otherWorkspacePath)])
     await symlink(otherWorkspacePath, join(workspacePath, 'linked-project'))
     try {
-      const { backend } = createBackendFixture(false, workspacePath)
+      const { backend } = createBackendFixture(undefined, workspacePath)
       await backend.sendMessage('读取项目文件')
       const hook = getLastQueryParams().options.hooks.PreToolUse[0].hooks[0]
 
@@ -529,7 +530,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     const workspacePath = await mkdtemp(join(tmpdir(), 'cclink-workspace-normalized-path-'))
     try {
       const canonicalWorkspacePath = await realpath(workspacePath)
-      const { backend } = createBackendFixture(false, workspacePath)
+      const { backend } = createBackendFixture(undefined, workspacePath)
       await backend.sendMessage('更新项目文件')
       const hook = getLastQueryParams().options.hooks.PreToolUse[0].hooks[0]
 
@@ -648,7 +649,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     await mkdir(join(workspacePath, '.claude'))
     await writeFile(join(workspacePath, '.claude', 'scheduled_tasks.json'), '{}', 'utf8')
     try {
-      const { backend, createToolSession } = createBackendFixture(false, workspacePath)
+      const { backend, createToolSession } = createBackendFixture(undefined, workspacePath)
       const onEvent = vi.fn()
       backend.onEvent(onEvent)
       backend.setSessionId('legacy-session')
@@ -672,7 +673,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     await mkdir(join(workspacePath, '.claude'))
     await symlink('../ordinary.json', join(workspacePath, '.claude', 'scheduled_tasks.json'))
     try {
-      const { backend, createToolSession } = createBackendFixture(false, workspacePath)
+      const { backend, createToolSession } = createBackendFixture(undefined, workspacePath)
       const onEvent = vi.fn()
       backend.onEvent(onEvent)
       backend.setSessionId('legacy-session')
@@ -696,7 +697,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     await mkdir(join(workspacePath, '.claude'))
     await symlink('scheduled_tasks.json', join(workspacePath, '.claude', 'alias.json'))
     try {
-      const { backend } = createBackendFixture(false, workspacePath)
+      const { backend } = createBackendFixture(undefined, workspacePath)
       await backend.sendMessage('更新项目文件')
       const hook = getLastQueryParams().options.hooks.PreToolUse[0].hooks[0]
 
@@ -739,7 +740,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     await symlink(join(workspacePath, '.claude', 'scheduled_tasks.json'), nativeAlias)
     await symlink('/Library/LaunchAgents/com.example.report.plist', systemAlias)
     try {
-      const { backend } = createBackendFixture(false, workspacePath)
+      const { backend } = createBackendFixture(undefined, workspacePath)
       await backend.sendMessage('更新项目文件')
       const hook = getLastQueryParams().options.hooks.PreToolUse[0].hooks[0]
 
@@ -854,14 +855,39 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     })
   })
 
-  it('allows enabled external MCP servers in the all scope', async () => {
-    const { backend } = createBackendFixture(true)
-    await backend.sendMessage('查询外部知识库')
+  it('does not expose or start configured external MCP servers before broker support', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'cclink-external-mcp-canary-'))
+    const canaryPath = join(tempDir, 'started.txt')
+    const canaryScript = `require('node:fs').writeFileSync(${JSON.stringify(canaryPath)}, 'started')`
+    queryMock.mockImplementation((params: { options?: { mcpServers?: Record<string, any> } }) => {
+      for (const [name, server] of Object.entries(params.options?.mcpServers ?? {})) {
+        if (name !== 'cclink_studio' && server.type === 'stdio') {
+          spawnSync(server.command, server.args ?? [], { stdio: 'ignore' })
+        }
+      }
+      return createMockQuery()
+    })
 
-    expect(getLastQueryParams().options.allowedTools).toEqual([
-      'mcp__cclink_studio__*',
-      'mcp__knowledge__*',
-    ])
+    try {
+      const { backend } = createBackendFixture({
+        type: 'stdio',
+        command: process.execPath,
+        args: ['-e', canaryScript],
+      })
+      await backend.sendMessage('查询外部知识库')
+
+      const options = getLastQueryParams().options
+      expect(options.mcpServers).toEqual({
+        cclink_studio: {
+          type: 'http',
+          url: 'http://127.0.0.1:39876/mcp?session=mcp-session-1',
+        },
+      })
+      expect(options.allowedTools).toEqual(['mcp__cclink_studio__*'])
+      await expect(access(canaryPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally {
+      await rm(tempDir, { recursive: true, force: true })
+    }
   })
 
   it('binds MCP tool sessions to the current conversation', async () => {

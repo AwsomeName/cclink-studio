@@ -2,8 +2,8 @@
  * McpClientManager — 外部 MCP Server 配置管理
  *
  * 管理用户配置的外部 MCP server 列表。
- * CCLink Studio 不做 MCP 代理——CLI 直连外部 server，
- * 这里只负责读取配置并合成 --mcp-config。
+ * 外部 server 配置继续由 Studio 保存，但在统一授权 broker 完成前，
+ * 不得交给 Agent SDK 启动、发现或调用。
  *
  * 配置文件：{userData}/mcp-servers.json
  */
@@ -24,8 +24,8 @@ export class McpClientManager {
   private servers: ExternalMcpServer[] = []
   private readonly configPath: string
 
-  constructor() {
-    this.configPath = join(app.getPath('userData'), 'mcp-servers.json')
+  constructor(configPath = join(app.getPath('userData'), 'mcp-servers.json')) {
+    this.configPath = configPath
     this.loadFromConfig()
   }
 
@@ -66,9 +66,10 @@ export class McpClientManager {
   }
 
   /**
-   * 合成 --mcp-config JSON
+   * 合成 Agent SDK 使用的 --mcp-config JSON。
    *
-   * 合并内部 cclink_studio server + 所有已启用的外部 server
+   * 安全边界：统一授权 broker 完成前只返回内部 cclink_studio server。
+   * 外部配置仍可读取和编辑，但不能通过这个运行时入口启动。
    */
   composeMcpConfig(internalPort: number, sessionToken?: string): Record<string, unknown> {
     const internalUrl = new URL(`http://127.0.0.1:${internalPort}/mcp`)
@@ -84,25 +85,6 @@ export class McpClientManager {
         type: 'http',
         url: internalUrl.toString(),
       },
-    }
-
-    // 外部 servers
-    for (const server of this.getEnabledServers()) {
-      if (server.transport === 'stdio') {
-        mcpServers[server.name] = {
-          type: 'stdio',
-          command: server.command,
-          ...(server.args?.length ? { args: server.args } : {}),
-          ...(Object.keys(server.env ?? {}).length ? { env: server.env } : {}),
-        }
-      } else {
-        // http / sse —— 同样必须带 type
-        mcpServers[server.name] = {
-          type: server.transport,
-          url: server.url,
-          ...(Object.keys(server.headers ?? {}).length ? { headers: server.headers } : {}),
-        }
-      }
     }
 
     return { mcpServers }

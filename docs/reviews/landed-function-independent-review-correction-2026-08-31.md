@@ -1,6 +1,6 @@
 # 已落地功能独立审查修订与正式整改顺序
 
-> 状态：独立审查结论已由主会话沿生产代码复核；整改尚未开始。
+> 状态：整改施工中；P0-1 外部 MCP fail-closed 已完成工程实现，真实 SDK/App 验收待最终统一执行。
 > 日期：2026-08-31。
 > 原始审查基线：`main@0db9cf4d`。
 > 复核基线：`main@c81a5126`。`57deba8e` 至 `c81a5126` 的 Browser View、UI smoke 与版本准备提交
@@ -31,7 +31,7 @@ MCP env/header 的普通配置明文、renderer 全量返回和保存假成功�
 
 | ID    | 优先级       | 状态           | 问题                                                 | 当前保护                                                                              | 实际缺口                                                                                                             |
 | ----- | ------------ | -------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| IR-01 | P0           | Open           | 外部 MCP SDK 通配符自动放行                          | 非 all scope 不广播外部 server 通配符                                                 | all scope 下所有启用 server 的所有工具无需提示执行，完全绕过 Studio 权限宿主                                         |
+| IR-01 | P0           | 工程实现完成；最终验收待执行 | 外部 MCP SDK 通配符自动放行                          | SDK 配置与 Backend 投影均只保留内部 `cclink_studio`；外部配置继续保存                 | 真实打包 App 中的 SDK 进程级复核留到统一验收                                                                         |
 | IR-02 | P0           | Open           | Browser Cookie 完整返回模型                          | 登记账号 BrowserTask 禁止 Cookie 工具                                                 | 普通 BrowserTask 仍返回 value、HttpOnly、domain、expiry 等完整 Cookie 对象                                           |
 | IR-03 | P1，立即止血 | Open           | 本机 MCP HTTP token 未强制                           | backend 每轮生成 token 并放入 URL                                                     | 缺失或错误 token 被解析为空上下文，不拒绝请求                                                                        |
 | RF-01 | P0           | Open，修订范围 | 文件权限边界不统一                                   | 普通 Claude Editor/内置文件工具有 PreToolUse 工作空间保护；登记账号上传有真实路径检查 | renderer 通用 FS、普通 Browser 上传、Android install/push 仍可能读取工作空间外文件；底层 FileService 仍放行整个 home |
@@ -393,3 +393,18 @@ P0-1 外部 MCP 不传入 SDK
 修订后的第一目标不是完成漂亮的统一架构，而是在三个独立最小补丁中彻底不启动外部 MCP、停止
 Cookie 秘密出站、强制现有 query token。只有这三道止血完成后，统一 FileService 和授权 broker
 才不会在施工期间继续暴露现有 P0；header 迁移、MCP 凭证和更完整的第三方策略随后独立验证。
+
+## 8. 实施记录
+
+### P0-1：外部 MCP fail-closed
+
+- `McpClientManager.composeMcpConfig()` 只生成内部 `cclink_studio` server；外部配置仍保存在原配置
+  列表，可继续编辑和停用。
+- `LocalClaudeCodeBackend` 在 SDK 调用边界再次按内部 server 名过滤，避免未来配置合成器回归时把外部
+  stdio/http/sse server 交给 SDK。
+- “全部”作用域的自动允许列表只从过滤后的内部 server 生成；UI 明确显示“已配置，等待受控授权支持”。
+- canary 单测模拟 SDK 收到外部 stdio 配置后立即启动子进程写文件；修复后 server 不可见、canary
+  不存在。相关 38 项单测和 TypeScript 检查通过。
+- `smoke:ui` 的设置页与应用启动检查通过；同次全量 UI smoke 的 PDF ready 超时和网页事务旧 Tab
+  复用失败与本阶段无关，保留到最终统一回归复核。专用真实 Agent runtime smoke 需要隔离 API key，
+  未在本阶段借用用户本机账号执行。

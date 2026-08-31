@@ -486,10 +486,21 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       this.toolHost.getPort(),
       this.mcpSessionToken,
     )
-    const mcpServers = (mcpConfig as { mcpServers?: Record<string, McpServerConfig> }).mcpServers
+    const configuredMcpServers = (
+      mcpConfig as {
+        mcpServers?: Record<string, McpServerConfig>
+      }
+    ).mcpServers
+    const internalMcpServer = configuredMcpServers?.[this.hostContext.mcpServerName]
+    // 外部 MCP 在统一授权 broker 完成前必须 fail closed。即使配置合成器误把外部
+    // server 放进结果，送入 SDK 的配置也只保留 Studio 自己的受控工具宿主。
+    const mcpServers: Record<string, McpServerConfig> = Object.create(null)
+    if (internalMcpServer) {
+      mcpServers[this.hostContext.mcpServerName] = internalMcpServer
+    }
     const allowedTools = options?.allowedTools
       ? [...options.allowedTools]
-      : this.scope.kind === 'all' && mcpServers
+      : this.scope.kind === 'all'
         ? Object.keys(mcpServers).map((serverName) => `mcp__${serverName}__*`)
         : scopeToAllowedTools(this.scope)
 

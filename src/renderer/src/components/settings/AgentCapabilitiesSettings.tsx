@@ -333,7 +333,7 @@ export function AgentCapabilitiesSettings({
         <div className="agent-capabilities-block-title">
           <div>
             <h3>外部 MCP</h3>
-            <p>全局配置；启用后在下一轮“全部”作用域消息中交给 Claude Agent SDK。</p>
+            <p>全局配置；受控授权支持完成前不会交给 Agent Runtime 启动或发现工具。</p>
           </div>
           <div className="agent-capabilities-actions">
             <button
@@ -364,7 +364,8 @@ export function AgentCapabilitiesSettings({
               <div className="agent-mcp-copy">
                 <strong>{server.name}</strong>
                 <span>
-                  {server.transport.toUpperCase()} · {serverEndpoint(server)}
+                  {server.transport.toUpperCase()} · {serverEndpoint(server)} ·{' '}
+                  {server.enabled ? '已配置，等待受控授权支持' : '已停用'}
                 </span>
               </div>
               <button type="button" onClick={() => editServer(server)}>
