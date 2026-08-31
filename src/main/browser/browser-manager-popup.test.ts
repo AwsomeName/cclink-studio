@@ -284,6 +284,37 @@ describe('BrowserManager popup adoption', () => {
     expect(electronMocks.createdViews[0].setVisible).toHaveBeenLastCalledWith(false)
   })
 
+  it('publishes the exact current Page identity only after a View claim succeeds', async () => {
+    const { manager, source } = await createSource()
+    const webContentsId = 91
+    ;(source as unknown as { id: number }).id = webContentsId
+    const page = { url: () => 'https://mp.weixin.qq.com/' }
+    const bridge = {
+      claimPageForView: vi.fn(async () => page),
+      getPageBindingIdentity: vi.fn(() => ({
+        page,
+        generation: 9,
+        connectionGeneration: 4,
+        webContentsId,
+      })),
+    }
+    ;(manager as unknown as { playwrightBridge: object }).playwrightBridge = bridge
+    const observed = vi.fn()
+    const dispose = manager.onPageRuntimeBound(observed)
+
+    await manager.ensurePlaywrightPage('source-tab')
+
+    expect(observed).toHaveBeenCalledOnce()
+    expect(observed).toHaveBeenCalledWith({
+      tabId: 'source-tab',
+      browserViewRuntimeGeneration: expect.any(Number),
+      webContentsId,
+      playwrightConnectionGeneration: 4,
+      playwrightPageBindingGeneration: 9,
+    })
+    dispose()
+  })
+
   it('requires renderer activation before reusing an existing account View for publishing', async () => {
     const { manager } = await createSource()
     electronMocks.mainWebContents.send.mockClear()

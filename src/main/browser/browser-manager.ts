@@ -108,6 +108,14 @@ export type ViewMode = BrowserViewModeType
 export type ZoomMode = BrowserZoomModeType
 export type { BrowserViewState } from '../../shared/ipc/browser'
 
+export interface BrowserPageRuntimeBindingIdentity {
+  tabId: string
+  browserViewRuntimeGeneration: number
+  webContentsId: number
+  playwrightConnectionGeneration: number
+  playwrightPageBindingGeneration: number
+}
+
 type FitWidthTrigger = BrowserFitWidthDiagnosticSummary['trigger']
 
 interface FitWidthMeasurement {
@@ -311,6 +319,10 @@ export class BrowserManager {
   private detachPlaywrightReconnectListener: (() => void) | null = null
   /** view 被销毁时回调（tabId）—— AgentBridge / TaskRuntime 等据此清理状态 */
   private readonly viewDestroyedCallbacks = new Set<(tabId: string) => void>()
+  /** claim 完成后的 main-owned Page 身份；运行任务据此收敛 CDP 重连后的 owner。 */
+  private readonly pageRuntimeBoundCallbacks = new Set<
+    (identity: BrowserPageRuntimeBindingIdentity) => void
+  >()
   private readonly mainWorkspaceChangedCallbacks = new Set<(workspaceKey: string | null) => void>()
   /** 浏览历史存储（晚绑定）。项目浏览器现场由 WorkspaceState 负责。 */
   private instanceStore: BrowserInstanceStore | null = null
@@ -616,6 +628,12 @@ export class BrowserManager {
     this.viewDestroyedCallbacks.add(cb)
   }
 
+  /** 只在 View 与 Page 的当前身份完成核对后发布，不暴露 Playwright Page 对象。 */
+  onPageRuntimeBound(callback: (identity: BrowserPageRuntimeBindingIdentity) => void): () => void {
+    this.pageRuntimeBoundCallbacks.add(callback)
+    return () => this.pageRuntimeBoundCallbacks.delete(callback)
+  }
+
   /** 绑定浏览历史存储。 */
   attachInstanceStore(store: BrowserInstanceStore): void {
     this.instanceStore = store
@@ -662,11 +680,35 @@ export class BrowserManager {
       if (this.hostForEntry(entry)?.activeViewId === tabId) {
         await this.playwrightBridge.switchToPage(tabId)
       }
+      if (
+        !claimedBinding ||
+        claimedBinding.page !== claimedPage ||
+        claimedBinding.webContentsId !== entry.view.webContents.id
+      ) {
+        throw new Error(`浏览器 View 的 Playwright Page 身份在 claim 后发生变化: ${tabId}`)
+      }
       this.lastClaimByTab.set(tabId, {
         status: 'succeeded',
         timestamp: Date.now(),
         expectedUrl: url,
       })
+      const identity: BrowserPageRuntimeBindingIdentity = {
+        tabId,
+        browserViewRuntimeGeneration: entry.runtimeGeneration,
+        webContentsId: entry.view.webContents.id,
+        playwrightConnectionGeneration: claimedBinding.connectionGeneration,
+        playwrightPageBindingGeneration: claimedBinding.generation,
+      }
+      for (const callback of this.pageRuntimeBoundCallbacks) {
+        try {
+          callback(identity)
+        } catch (error) {
+          console.warn(
+            `[BrowserManager] Page Runtime 绑定观察者失败 tabId=${tabId}:`,
+            formatError(error),
+          )
+        }
+      }
     } catch (error) {
       this.lastClaimByTab.set(tabId, {
         status: 'failed',
@@ -2696,6 +2738,7 @@ export class BrowserManager {
     this.browserHttpAuthRequestHandler = null
     this.lastHttpAuthByTab.clear()
     this.mainWorkspaceChangedCallbacks.clear()
+    this.pageRuntimeBoundCallbacks.clear()
     this.hosts.clear()
   }
 }

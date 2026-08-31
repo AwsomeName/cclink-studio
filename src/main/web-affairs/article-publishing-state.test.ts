@@ -541,6 +541,59 @@ describe('article publishing persistent state', () => {
     )
     expect(bound.success).toBe(true)
 
+    const rebound = await created.service.rebindArticlePublishingBrowserRuntime({
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      browserTaskRunId,
+      tabId: 'tab-a',
+      browserViewRuntimeGeneration: 2,
+      webContentsId: 20,
+      previousPlaywrightConnectionGeneration: 3,
+      previousPlaywrightPageBindingGeneration: 4,
+      playwrightConnectionGeneration: 4,
+      playwrightPageBindingGeneration: 5,
+    })
+    expect(rebound.success).toBe(true)
+    if (!rebound.success) return
+    expect(
+      rebound.data.attempts[0].runtimeBindings.filter(
+        (binding) => binding.kind === 'browser-task' && binding.status === 'active',
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        browserTaskRunId,
+        playwrightConnectionGeneration: 4,
+        playwrightPageBindingGeneration: 5,
+      }),
+    ])
+    expect(
+      rebound.data.attempts[0].runtimeBindings.find(
+        (binding) =>
+          binding.kind === 'browser-task' && binding.playwrightConnectionGeneration === 3,
+      ),
+    ).toMatchObject({ status: 'lost' })
+
+    await expect(
+      created.service.rebindArticlePublishingBrowserRuntime({
+        workspaceId: WORKSPACE_ID,
+        affairId: created.affairId,
+        attemptId: attempt.id,
+        executionGeneration: attempt.executionGeneration,
+        launchOperationId: attempt.launchOperationId,
+        browserTaskRunId,
+        tabId: 'tab-a',
+        browserViewRuntimeGeneration: 2,
+        webContentsId: 20,
+        previousPlaywrightConnectionGeneration: 3,
+        previousPlaywrightPageBindingGeneration: 4,
+        playwrightConnectionGeneration: 4,
+        playwrightPageBindingGeneration: 5,
+      }),
+    ).resolves.toMatchObject({ success: true })
+
     const wrongOwner = await created.service.reconcileArticlePublishingRuntime({
       eventId: 'wrong-owner',
       workspaceId: WORKSPACE_ID,

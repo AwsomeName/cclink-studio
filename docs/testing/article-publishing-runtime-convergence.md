@@ -13,6 +13,8 @@
 
 基础实现已进入 v0.1.74，但真实用户日志暴露了启动迁移缺口：旧数据在修正非最终 `result-unknown` 后，可能仍保留不匹配的 Attempt/execution 投影，第二次严格校验会让整个事务服务启动失败。v0.1.75 在同一 `WebAffairService` 启动收敛入口中覆盖全部受约束生命周期组合，并把修复结果持久化；仍没有真实 CSDN 三图发布和最终断线验收证据，因此不能称为“真实用户问题已关闭”。
 
+v0.1.76 的真实日志又暴露了一个更窄但会直接打断长任务的 owner 更新缺口：Playwright 从 connection generation `1` 重连到 `2` 后，`BrowserManager` 已在同一 View/WebContents 上成功 claim 新 Page，但发布协调器和 BrowserTask correlation 仍保留旧 connection/page generation。看门狗因此把已经恢复的页面误判为 `RUNTIME_OWNER_LOST`，随后确认成孤儿。修复后的不变式是：`BrowserManager` 只在 claim 后发布完整 Page 身份；`WebAffairService` 在当前 Attempt/generation 内先把旧 browser-task binding 标为 `lost` 并持久化新 binding；成功后才更新 BrowserTask correlation 和内存租约，再由同一看门狗核验恢复 `running`。任一步失败都继续冻结网页写入，不能用新 Page 冒充旧动作结果。
+
 本轮固定参数为：owner lease `60s`、progress lease `10min`、`checking-runtime` probe deadline `60s`、watchdog interval `10s`、单次收敛最多重试 `3` 次。它们集中在 `ArticlePublishingService`，并使用 fake clock 覆盖“owner 存活但无进度”和“owner 丢失”两条路径；同一 Runtime generation 的用户“继续等待”最多成功一次。真实站点验收后如需调整，只能修改这些集中参数和本文记录。
 
 ## 独立审查结论与本次修订
@@ -608,6 +610,7 @@ recovery journal 按 Affair 保存“最新关键目标状态”，同一 Affair
 27. owner heartbeat 持续但无 progress、owner 暂时探测失败后恢复、合法 waiting-external、用户有界继续等待分别使用 fake clock 验证，既不误杀也不永久续租；
 28. 启动全量扫描修复 terminal Attempt + running execution、旧 generation binding、未知副作用和缺失 currentAttempt，而不只扫描瞬态 Attempt；
 29. 主文件无法写但 journal 可写时关键收敛仍对重启有效；主文件和 journal 都因 ENOSPC/权限失败时冻结外部动作并显示不可恢复的存储故障。
+30. 同一 View/WebContents 上 CDP 重连并成功 claim 新 Page 后，旧 browser-task binding 必须持久化为 `lost`、新 binding 成为唯一 active owner、BrowserTask correlation 随后更新；看门狗不得再产生 `RUNTIME_OWNER_LOST`，重复或倒退的 Page 身份必须 no-op。
 
 单元测试必须使用确定性 fake clock 和可控 owner 查询，不允许依赖真实 sleep。独立审查报告当前 27 个相关测试通过，但没有覆盖上述 generation、跨投影一致性和副作用消费崩溃窗口，因此这 27 个测试不能作为本问题关闭证据。受影响 smoke 通过后仍必须执行真实 Electron 和真实 CSDN 验收。
 

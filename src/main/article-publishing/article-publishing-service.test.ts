@@ -64,12 +64,23 @@ describe('ArticlePublishingService', () => {
       success: true,
       data: affair,
     }))
+    const rebindArticlePublishingBrowserRuntime = vi.fn(async () => ({
+      success: true,
+      data: affair,
+    }))
     const webAffairService = {
       getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [draftAffair] } })),
       startAttempt: vi.fn(async () => ({ success: true, data: affair })),
       markArticlePublishingAttemptStarted: vi.fn(async () => ({ success: true, data: affair })),
       bindArticlePublishingRuntime,
+      rebindArticlePublishingBrowserRuntime,
       reconcileArticlePublishingRuntime: vi.fn(async () => ({ success: true, data: affair })),
+    }
+    const browserTask = {
+      id: browserTaskRunId,
+      tabId: 'tab-a',
+      status: 'running',
+      correlation: {} as Record<string, unknown>,
     }
     const agentBridge = {
       onRuntimeEvent: vi.fn(() => () => undefined),
@@ -78,37 +89,41 @@ describe('ArticlePublishingService', () => {
         agentRuntimeEpoch: 7,
       })),
       sendMessage: vi.fn(async () => ({ runId: `run-${launchOperationId}` })),
-      getActiveBrowserTask: vi.fn(() => ({
-        id: browserTaskRunId,
-        tabId: 'tab-a',
-        status: 'running',
-        correlation: {},
-      })),
+      getActiveBrowserTask: vi.fn(() => browserTask),
       getRunStatus: vi.fn(() => ({ status: 'running' })),
     }
+    let pageRuntimeBound: ((identity: Record<string, number | string>) => void) | undefined
     const browserManager = {
       waitForAccountView: vi.fn(async () => 'tab-a'),
       ensurePlaywrightPage: vi.fn(async () => undefined),
+      onPageRuntimeBound: vi.fn((callback) => {
+        pageRuntimeBound = callback
+        return () => undefined
+      }),
       getViewRuntimeIdentity: vi.fn(() => ({
         browserViewRuntimeGeneration: 2,
         webContentsId: 20,
       })),
     }
     const browserTaskRuntime = {
-      updateCorrelation: vi.fn(),
+      updateCorrelation: vi.fn((_taskRunId: string, patch: Record<string, unknown>) => {
+        Object.assign(browserTask.correlation, patch)
+        return browserTask
+      }),
       onTaskChanged: vi.fn(() => () => undefined),
       onActionLogChanged: vi.fn(() => () => undefined),
-      getTask: vi.fn(() => ({ status: 'running', correlation: {} })),
+      getTask: vi.fn(() => browserTask),
+    }
+    let pageBinding = {
+      generation: 4,
+      connectionGeneration: 3,
+      webContentsId: 20,
     }
     const playwrightBridge = {
       ensureConnected: vi.fn(async () => undefined),
       switchToPage: vi.fn(async () => undefined),
-      getConnectionGeneration: vi.fn(() => 3),
-      getPageBindingIdentity: vi.fn(() => ({
-        generation: 4,
-        connectionGeneration: 3,
-        webContentsId: 20,
-      })),
+      getConnectionGeneration: vi.fn(() => pageBinding.connectionGeneration),
+      getPageBindingIdentity: vi.fn(() => pageBinding),
       isConnected: vi.fn(() => true),
     }
     const service = new ArticlePublishingService(
@@ -127,7 +142,6 @@ describe('ArticlePublishingService', () => {
       { workspaceRef: WORKSPACE_REF, affairId },
       '11111111-1111-4111-8111-111111111111',
     )
-    service.dispose()
 
     expect(result.success).toBe(true)
     expect(browserManager.waitForAccountView).toHaveBeenCalledOnce()
@@ -153,6 +167,42 @@ describe('ArticlePublishingService', () => {
       ]),
       '11111111-1111-4111-8111-111111111111',
     )
+
+    affair.attempts[0].status = 'running-ai'
+    affair.articlePublishing.execution.status = 'running'
+    ;(webAffairService.getProjectSnapshot as ReturnType<typeof vi.fn>).mockReturnValue({
+      success: true,
+      data: { affairs: [affair] },
+    })
+    pageBinding = { generation: 5, connectionGeneration: 4, webContentsId: 20 }
+    pageRuntimeBound?.({
+      tabId: 'tab-a',
+      browserViewRuntimeGeneration: 2,
+      webContentsId: 20,
+      playwrightConnectionGeneration: 4,
+      playwrightPageBindingGeneration: 5,
+    })
+    await vi.waitFor(() => expect(rebindArticlePublishingBrowserRuntime).toHaveBeenCalledOnce())
+
+    expect(rebindArticlePublishingBrowserRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        affairId,
+        attemptId,
+        previousPlaywrightConnectionGeneration: 3,
+        previousPlaywrightPageBindingGeneration: 4,
+        playwrightConnectionGeneration: 4,
+        playwrightPageBindingGeneration: 5,
+      }),
+    )
+    expect(browserTaskRuntime.updateCorrelation).toHaveBeenLastCalledWith(browserTaskRunId, {
+      playwrightConnectionGeneration: 4,
+      playwrightPageBindingGeneration: 5,
+    })
+    expect(rebindArticlePublishingBrowserRuntime.mock.invocationCallOrder[0]).toBeLessThan(
+      browserTaskRuntime.updateCorrelation.mock.invocationCallOrder.at(-1)!,
+    )
+    expect(webAffairService.reconcileArticlePublishingRuntime).not.toHaveBeenCalled()
+    service.dispose()
   })
 
   it('freezes a healthy-but-stalled runtime before bounded escalation to human handling', async () => {

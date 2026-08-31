@@ -10,7 +10,7 @@ import {
 import type { FileService } from '../fs/file-service'
 import type { WebAffairService } from '../web-affairs/web-affair-service'
 import type { AgentBridge } from '../agent/agent-bridge'
-import type { BrowserManager } from '../browser/browser-manager'
+import type { BrowserManager, BrowserPageRuntimeBindingIdentity } from '../browser/browser-manager'
 import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
 import type { BrowserActionLog, BrowserTaskRun } from '../browser/browser-task-types'
@@ -93,6 +93,7 @@ export class ArticlePublishingService {
   private runtimeObserversInstalled = false
   private watchdogTimer: ReturnType<typeof setInterval> | null = null
   private runtimeDisposers: Array<() => void> = []
+  private readonly runtimeRebindQueues = new Map<string, Promise<void>>()
 
   constructor(
     private readonly fileService: FileService,
@@ -107,6 +108,7 @@ export class ArticlePublishingService {
     for (const dispose of this.runtimeDisposers.splice(0)) dispose()
     this.runtimeObserversInstalled = false
     this.activeRuntimes.clear()
+    this.runtimeRebindQueues.clear()
   }
 
   async inspectSource(
@@ -142,7 +144,7 @@ export class ArticlePublishingService {
     if (!agentBridge || !browserManager || !browserTaskRuntime || !playwrightBridge) {
       throw new Error('Agent、BrowserTask 或 Playwright 主进程 Runtime 尚未就绪')
     }
-    this.ensureRuntimeObservers(agentBridge, browserTaskRuntime)
+    this.ensureRuntimeObservers(agentBridge, browserManager, browserTaskRuntime)
     const publishing = input.affair.articlePublishing
     const attempt = input.affair.attempts.find((candidate) => candidate.id === input.attemptId)
     if (!publishing || !attempt) throw new Error('文章发布运行状态不存在')
@@ -355,6 +357,7 @@ export class ArticlePublishingService {
 
   private ensureRuntimeObservers(
     agentBridge: AgentBridge,
+    browserManager: BrowserManager,
     browserTaskRuntime: BrowserTaskRuntime,
   ): void {
     if (this.runtimeObserversInstalled) return
@@ -362,6 +365,7 @@ export class ArticlePublishingService {
     this.runtimeDisposers.push(
       browserTaskRuntime.onTaskChanged((task) => this.observeBrowserTask(task)),
       browserTaskRuntime.onActionLogChanged((log) => this.observeBrowserAction(log)),
+      browserManager.onPageRuntimeBound((identity) => this.scheduleBrowserRuntimeRebind(identity)),
       agentBridge.onRuntimeEvent((event) => {
         if (!event.runId) return
         for (const runtime of this.activeRuntimes.values()) {
@@ -374,6 +378,95 @@ export class ArticlePublishingService {
     )
     this.watchdogTimer = setInterval(() => void this.runWatchdog(), WATCHDOG_INTERVAL_MS)
     this.watchdogTimer.unref?.()
+  }
+
+  private scheduleBrowserRuntimeRebind(identity: BrowserPageRuntimeBindingIdentity): void {
+    for (const runtime of this.activeRuntimes.values()) {
+      if (runtime.tabId !== identity.tabId) continue
+      const previous = this.runtimeRebindQueues.get(runtime.attemptId) ?? Promise.resolve()
+      const queued = previous
+        .catch(() => undefined)
+        .then(() => this.rebindBrowserRuntime(runtime, identity))
+        .catch((error) =>
+          console.warn('[ArticlePublishing] Page Runtime 重绑定失败:', {
+            affairId: runtime.affairId,
+            attemptId: runtime.attemptId,
+            tabId: runtime.tabId,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        )
+        .finally(() => {
+          if (this.runtimeRebindQueues.get(runtime.attemptId) === queued) {
+            this.runtimeRebindQueues.delete(runtime.attemptId)
+          }
+        })
+      this.runtimeRebindQueues.set(runtime.attemptId, queued)
+    }
+  }
+
+  private async rebindBrowserRuntime(
+    runtime: ActivePublishingRuntime,
+    identity: BrowserPageRuntimeBindingIdentity,
+  ): Promise<void> {
+    if (this.activeRuntimes.get(runtime.attemptId) !== runtime) return
+    if (
+      runtime.browserViewRuntimeGeneration !== identity.browserViewRuntimeGeneration ||
+      runtime.webContentsId !== identity.webContentsId ||
+      (runtime.playwrightConnectionGeneration === identity.playwrightConnectionGeneration &&
+        runtime.playwrightPageBindingGeneration === identity.playwrightPageBindingGeneration)
+    ) {
+      return
+    }
+    if (
+      identity.playwrightConnectionGeneration < runtime.playwrightConnectionGeneration ||
+      (identity.playwrightConnectionGeneration === runtime.playwrightConnectionGeneration &&
+        identity.playwrightPageBindingGeneration < runtime.playwrightPageBindingGeneration)
+    ) {
+      return
+    }
+    const browserTaskRuntime = this.runtimeDependencies?.getBrowserTaskRuntime()
+    if (!browserTaskRuntime) return
+    const task = browserTaskRuntime.getTask(runtime.browserTaskRunId)
+    if (
+      task?.status !== 'running' ||
+      task.correlation?.affairExecutionGeneration !== runtime.executionGeneration ||
+      task.correlation?.affairLaunchOperationId !== runtime.launchOperationId
+    ) {
+      return
+    }
+
+    const rebound = await this.webAffairService.rebindArticlePublishingBrowserRuntime({
+      workspaceId: runtime.workspaceId,
+      affairId: runtime.affairId,
+      attemptId: runtime.attemptId,
+      executionGeneration: runtime.executionGeneration,
+      launchOperationId: runtime.launchOperationId,
+      browserTaskRunId: runtime.browserTaskRunId,
+      tabId: runtime.tabId,
+      browserViewRuntimeGeneration: runtime.browserViewRuntimeGeneration,
+      webContentsId: runtime.webContentsId,
+      previousPlaywrightConnectionGeneration: runtime.playwrightConnectionGeneration,
+      previousPlaywrightPageBindingGeneration: runtime.playwrightPageBindingGeneration,
+      playwrightConnectionGeneration: identity.playwrightConnectionGeneration,
+      playwrightPageBindingGeneration: identity.playwrightPageBindingGeneration,
+    })
+    if (!rebound.success) throw new Error(rebound.error.message)
+
+    browserTaskRuntime.updateCorrelation(runtime.browserTaskRunId, {
+      playwrightConnectionGeneration: identity.playwrightConnectionGeneration,
+      playwrightPageBindingGeneration: identity.playwrightPageBindingGeneration,
+    })
+    runtime.playwrightConnectionGeneration = identity.playwrightConnectionGeneration
+    runtime.playwrightPageBindingGeneration = identity.playwrightPageBindingGeneration
+    runtime.lastOwnerAt = Date.now()
+    console.info('[ArticlePublishing] Page Runtime owner 已收敛到当前绑定:', {
+      affairId: runtime.affairId,
+      attemptId: runtime.attemptId,
+      tabId: runtime.tabId,
+      playwrightConnectionGeneration: runtime.playwrightConnectionGeneration,
+      playwrightPageBindingGeneration: runtime.playwrightPageBindingGeneration,
+    })
+    await this.probeRuntime(runtime)
   }
 
   private observeAgentActivity(attemptId: string, progress: boolean): void {

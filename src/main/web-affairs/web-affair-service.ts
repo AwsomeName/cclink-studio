@@ -337,6 +337,26 @@ export class WebAffairService {
     )
   }
 
+  rebindArticlePublishingBrowserRuntime(input: {
+    workspaceId: string
+    affairId: string
+    attemptId: string
+    executionGeneration: number
+    launchOperationId: string
+    browserTaskRunId: string
+    tabId: string
+    browserViewRuntimeGeneration: number
+    webContentsId: number
+    previousPlaywrightConnectionGeneration: number
+    previousPlaywrightPageBindingGeneration: number
+    playwrightConnectionGeneration: number
+    playwrightPageBindingGeneration: number
+  }) {
+    return this.enqueueScoped(input.affairId, input.workspaceId, () =>
+      this.rebindArticlePublishingBrowserRuntimeNow(input),
+    )
+  }
+
   reportArticlePublishingCheckpoint(
     input: ReportArticlePublishingCheckpointInput,
     workspaceId: string,
@@ -2641,7 +2661,10 @@ export class WebAffairService {
       conversationId: agent.conversationId,
       agentRunId: agent.agentRunId,
       browserTaskRunId: browserTask.browserTaskRunId,
-      runtimeBindings: [...found.attempt.runtimeBindings, ...activeBindings].slice(-40),
+      runtimeBindings: this.compactRuntimeBindings([
+        ...found.attempt.runtimeBindings,
+        ...activeBindings,
+      ]),
     }
     const baseAffair: WebAffair = {
       ...found.affair,
@@ -2674,6 +2697,125 @@ export class WebAffairService {
         'Agent 与浏览器 Runtime 已绑定',
       ),
     )
+  }
+
+  private async rebindArticlePublishingBrowserRuntimeNow(input: {
+    workspaceId: string
+    affairId: string
+    attemptId: string
+    executionGeneration: number
+    launchOperationId: string
+    browserTaskRunId: string
+    tabId: string
+    browserViewRuntimeGeneration: number
+    webContentsId: number
+    previousPlaywrightConnectionGeneration: number
+    previousPlaywrightPageBindingGeneration: number
+    playwrightConnectionGeneration: number
+    playwrightPageBindingGeneration: number
+  }): Promise<WebAffairOperationResult<WebAffair>> {
+    const found = this.findAttempt(input.affairId, input.attemptId)
+    const publishing = found?.affair.articlePublishing
+    if (!found || !publishing || found.affair.kind !== 'article-publishing') {
+      return this.notFound('文章发布 Attempt 不存在')
+    }
+    if (
+      found.attempt.executionGeneration !== input.executionGeneration ||
+      publishing.execution.currentGeneration !== input.executionGeneration ||
+      found.attempt.launchOperationId !== input.launchOperationId ||
+      publishing.execution.currentLaunchOperationId !== input.launchOperationId
+    ) {
+      return this.transitionError('Page Runtime 重绑定不属于当前发布执行代次')
+    }
+    if (!['running-ai', 'checking-runtime'].includes(found.attempt.status)) {
+      return this.transitionError('只有运行中或核验中的 Attempt 可以重绑定 Page Runtime')
+    }
+    if (
+      found.attempt.browserTaskRunId !== input.browserTaskRunId ||
+      found.attempt.tabId !== input.tabId
+    ) {
+      return this.transitionError('Page Runtime 重绑定目标不是当前 Attempt owner')
+    }
+    if (
+      input.playwrightConnectionGeneration < input.previousPlaywrightConnectionGeneration ||
+      (input.playwrightConnectionGeneration === input.previousPlaywrightConnectionGeneration &&
+        input.playwrightPageBindingGeneration <= input.previousPlaywrightPageBindingGeneration)
+    ) {
+      return this.invalid('Page Runtime 重绑定身份没有前进')
+    }
+    const exactNext = found.attempt.runtimeBindings.find(
+      (binding) =>
+        binding.kind === 'browser-task' &&
+        binding.status === 'active' &&
+        binding.browserTaskRunId === input.browserTaskRunId &&
+        binding.tabId === input.tabId &&
+        binding.browserViewRuntimeGeneration === input.browserViewRuntimeGeneration &&
+        binding.webContentsId === input.webContentsId &&
+        binding.playwrightConnectionGeneration === input.playwrightConnectionGeneration &&
+        binding.playwrightPageBindingGeneration === input.playwrightPageBindingGeneration,
+    )
+    if (exactNext) return { success: true, data: structuredClone(found.affair) }
+
+    const previous = found.attempt.runtimeBindings.find(
+      (binding): binding is Extract<WebAffairRuntimeBinding, { kind: 'browser-task' }> =>
+        binding.kind === 'browser-task' &&
+        binding.status === 'active' &&
+        binding.browserTaskRunId === input.browserTaskRunId &&
+        binding.tabId === input.tabId &&
+        binding.browserViewRuntimeGeneration === input.browserViewRuntimeGeneration &&
+        binding.webContentsId === input.webContentsId &&
+        binding.playwrightConnectionGeneration === input.previousPlaywrightConnectionGeneration &&
+        binding.playwrightPageBindingGeneration === input.previousPlaywrightPageBindingGeneration,
+    )
+    if (!previous) {
+      return this.transitionError('当前发布执行代次不存在待替换的 Page Runtime owner')
+    }
+
+    const now = this.timestamp()
+    const replacement: Extract<WebAffairRuntimeBinding, { kind: 'browser-task' }> = {
+      ...previous,
+      id: randomUUID(),
+      status: 'active',
+      boundAt: now,
+      lastObservedAt: now,
+      endedAt: undefined,
+      terminalReason: undefined,
+      playwrightConnectionGeneration: input.playwrightConnectionGeneration,
+      playwrightPageBindingGeneration: input.playwrightPageBindingGeneration,
+    }
+    const runtimeBindings = this.compactRuntimeBindings([
+      ...found.attempt.runtimeBindings.map((binding) =>
+        binding.id === previous.id
+          ? {
+              ...binding,
+              status: 'lost' as const,
+              lastObservedAt: now,
+              endedAt: now,
+              terminalReason: 'Playwright Page 已由更新的 main-owned 绑定接替',
+            }
+          : binding,
+      ),
+      replacement,
+    ])
+    const nextAttempt: WebAffairAttempt = { ...found.attempt, runtimeBindings }
+    const nextAffair: WebAffair = {
+      ...found.affair,
+      attempts: found.affair.attempts.map((attempt) =>
+        attempt.id === nextAttempt.id ? nextAttempt : attempt,
+      ),
+      updatedAt: now,
+    }
+    return this.persistAffair(nextAffair)
+  }
+
+  private compactRuntimeBindings(bindings: WebAffairRuntimeBinding[]): WebAffairRuntimeBinding[] {
+    const active = bindings.filter((binding) => binding.status === 'active').slice(-40)
+    const historyBudget = Math.max(0, 40 - active.length)
+    const history =
+      historyBudget > 0
+        ? bindings.filter((binding) => binding.status !== 'active').slice(-historyBudget)
+        : []
+    return [...history, ...active]
   }
 
   private async reconcileArticlePublishingRuntimeNow(
