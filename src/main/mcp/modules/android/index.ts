@@ -8,10 +8,11 @@
  * IPC 处理器也使用同一个 executor，避免重复代码。
  */
 
-import type { ToolModule, ToolDefinition } from '../../types'
+import type { ToolModule, ToolDefinition, ToolExecutionContext } from '../../types'
 import type { AdbBridge } from '../../../android/adb-bridge'
 import type { ScrcpyBridge } from '../../../android/scrcpy-bridge'
 import { executeAndroidAction } from '../../../android/android-actions'
+import type { FileService } from '../../../fs/file-service'
 
 /**
  * 将 MCP 工具名映射为 action type
@@ -211,13 +212,29 @@ export class AndroidToolModule implements ToolModule {
   constructor(
     private adbBridge: AdbBridge,
     private scrcpyBridge?: ScrcpyBridge,
+    private fileService?: FileService | null,
   ) {}
 
-  async execute(toolName: string, params: Record<string, unknown>): Promise<unknown> {
+  async execute(
+    toolName: string,
+    params: Record<string, unknown>,
+    context?: ToolExecutionContext,
+  ): Promise<unknown> {
     if (!this.adbBridge.isConnected()) {
       throw new Error('ADB 未连接，Android 设备可能未启动')
     }
     const actionType = toolNameToActionType(toolName)
+    if (actionType === 'installApk' || actionType === 'pushFile') {
+      if (!this.fileService) throw new Error('本地文件授权服务不可用，已拒绝 Android 文件操作')
+      if (context?.trustedWorkspace?.kind !== 'local') {
+        throw new Error('Android 文件操作仅允许使用本次 Run 启动时固定的本地工作空间')
+      }
+      const localPath = actionType === 'installApk' ? params.path : params.local
+      if (typeof localPath !== 'string') throw new Error('Android 文件操作缺少本地文件路径')
+      await this.fileService.withAccess({ trustedWorkspace: context.trustedWorkspace }, () =>
+        this.fileService!.assertReadableFile(localPath),
+      )
+    }
     return executeAndroidAction(this.adbBridge, { type: actionType, ...params }, this.scrcpyBridge)
   }
 }

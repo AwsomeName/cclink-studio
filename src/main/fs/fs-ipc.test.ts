@@ -25,12 +25,20 @@ function getHandler(channel: string): (...args: any[]) => any {
 }
 
 function createSender(): EventEmitter & {
+  id: number
   isDestroyed: ReturnType<typeof vi.fn>
   send: ReturnType<typeof vi.fn>
 } {
   return Object.assign(new EventEmitter(), {
+    id: 7,
     isDestroyed: vi.fn(() => false),
     send: vi.fn(),
+  })
+}
+
+function withAccess<T extends object>(methods: T): T & Pick<FileService, 'withAccess'> {
+  return Object.assign(methods, {
+    withAccess: <Result>(_context: unknown, operation: () => Result) => operation(),
   })
 }
 
@@ -70,7 +78,7 @@ describe('registerFsIpc directory watcher lifecycle', () => {
       sourcePath: '/tmp/project/note.md',
       destinationPath: '/tmp/project/archive/note.md',
     })
-    const fs = { copyEntry } as unknown as FileService
+    const fs = withAccess({ copyEntry }) as unknown as FileService
     const settings = { getAll: vi.fn() } as unknown as SettingsService
     registerFsIpc(fs, settings, trustedRendererGuard as never)
 
@@ -94,11 +102,11 @@ describe('registerFsIpc directory watcher lifecycle', () => {
     ).toThrow()
   })
 
-  it('removes the sender destroyed listener when a watcher stops normally', () => {
+  it('removes the sender destroyed listener when a watcher stops normally', async () => {
     const stop = vi.fn()
-    const fs = {
-      watchDir: vi.fn(() => ({ stop })),
-    } as unknown as FileService
+    const fs = withAccess({
+      watchDir: vi.fn(async () => ({ stop })),
+    }) as unknown as FileService
     const settings = {
       getAll: vi.fn(() => ({ showHiddenFiles: false })),
     } as unknown as SettingsService
@@ -109,20 +117,20 @@ describe('registerFsIpc directory watcher lifecycle', () => {
     const stopWatching = getHandler('fs:watchDirStop')
 
     for (let index = 0; index < 12; index += 1) {
-      const watchId = start({ sender }, `/tmp/project-${index}`)
+      const watchId = await start({ sender }, `/tmp/project-${index}`)
       expect(sender.listenerCount('destroyed')).toBe(1)
-      expect(stopWatching({}, watchId)).toBe(true)
+      expect(stopWatching({ sender }, watchId)).toBe(true)
       expect(sender.listenerCount('destroyed')).toBe(0)
     }
 
     expect(stop).toHaveBeenCalledTimes(12)
   })
 
-  it('stops the watcher when its sender is destroyed', () => {
+  it('stops the watcher when its sender is destroyed', async () => {
     const stop = vi.fn()
-    const fs = {
-      watchDir: vi.fn(() => ({ stop })),
-    } as unknown as FileService
+    const fs = withAccess({
+      watchDir: vi.fn(async () => ({ stop })),
+    }) as unknown as FileService
     const settings = {
       getAll: vi.fn(() => ({ showHiddenFiles: false })),
     } as unknown as SettingsService
@@ -131,12 +139,12 @@ describe('registerFsIpc directory watcher lifecycle', () => {
     registerFsIpc(fs, settings, trustedRendererGuard as never)
     const start = getHandler('fs:watchDirStart')
     const stopWatching = getHandler('fs:watchDirStop')
-    const watchId = start({ sender }, '/tmp/project')
+    const watchId = await start({ sender }, '/tmp/project')
 
     sender.emit('destroyed')
 
     expect(stop).toHaveBeenCalledOnce()
     expect(sender.listenerCount('destroyed')).toBe(0)
-    expect(stopWatching({}, watchId)).toBe(false)
+    expect(stopWatching({ sender }, watchId)).toBe(false)
   })
 })

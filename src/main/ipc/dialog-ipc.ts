@@ -15,18 +15,27 @@ export type {
   SaveDialogOptions,
 } from '../../shared/ipc/dialog'
 
+interface DialogFileCapabilitySink {
+  registerPickerSelection(
+    rendererId: number,
+    paths: string[],
+    kind: 'workspace' | 'file-read' | 'file-write',
+  ): void
+}
+
 /**
  * 注册对话框相关的 IPC 处理器
  */
 export function registerDialogIpc(
   mainWindow: BrowserWindow,
   trustedRendererGuard: TrustedRendererGuard,
+  getFileCapabilitySink: () => DialogFileCapabilitySink | null = () => null,
 ): void {
   /** 打开文件选择对话框 */
   registerTrustedIpcContract(
     dialogIpc.showOpenDialog,
     trustedRendererGuard,
-    async (_event, options) => {
+    async (event, options) => {
       if (mainWindow.isDestroyed()) {
         return { canceled: true, filePaths: [] }
       }
@@ -38,6 +47,13 @@ export function registerDialogIpc(
           : ['openFile', ...(options?.multiSelections ? ['multiSelections' as const] : [])],
         filters: options?.filters,
       })
+      if (!result.canceled && result.filePaths.length > 0) {
+        getFileCapabilitySink()?.registerPickerSelection(
+          event.sender.id,
+          result.filePaths,
+          options?.selectDirectory ? 'workspace' : 'file-read',
+        )
+      }
       return {
         canceled: result.canceled,
         filePaths: result.filePaths,
@@ -49,7 +65,7 @@ export function registerDialogIpc(
   registerTrustedIpcContract(
     dialogIpc.showSaveDialog,
     trustedRendererGuard,
-    async (_event, options) => {
+    async (event, options) => {
       if (mainWindow.isDestroyed()) {
         return { canceled: true, filePath: '' }
       }
@@ -58,6 +74,13 @@ export function registerDialogIpc(
         defaultPath: options?.defaultPath,
         filters: options?.filters,
       })
+      if (!result.canceled && result.filePath) {
+        getFileCapabilitySink()?.registerPickerSelection(
+          event.sender.id,
+          [result.filePath],
+          'file-write',
+        )
+      }
       return {
         canceled: result.canceled,
         filePath: result.filePath ?? '',

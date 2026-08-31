@@ -1,4 +1,14 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, truncate, writeFile } from 'node:fs/promises'
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  symlink,
+  truncate,
+  writeFile,
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -34,9 +44,138 @@ afterEach(async () => {
   if (tempDir) await rm(tempDir, { recursive: true, force: true })
 })
 
+function createFileService(): FileService {
+  return new FileService({ getActiveWorkspace: () => tempDir })
+}
+
 describe('FileService', () => {
+  it('enforces the active workspace for existing and not-yet-created paths', async () => {
+    const workspaceA = join(tempDir, 'workspace-a')
+    const workspaceB = join(tempDir, 'workspace-b')
+    await Promise.all([mkdir(workspaceA), mkdir(workspaceB)])
+    const fileA = join(workspaceA, 'a.txt')
+    const fileB = join(workspaceB, 'b.txt')
+    await Promise.all([writeFile(fileA, 'a'), writeFile(fileB, 'b')])
+    const service = new FileService({ getActiveWorkspace: () => workspaceA })
+
+    await expect(service.readFile(fileA)).resolves.toMatchObject({ content: 'a' })
+    await expect(service.readFile(fileB)).rejects.toThrow('OUTSIDE_WORKSPACE')
+    await expect(service.writeFile(join(workspaceB, 'new.txt'), 'escape')).rejects.toThrow(
+      'OUTSIDE_WORKSPACE',
+    )
+  })
+
+  it('rejects symlink escapes and final-component symlinks', async () => {
+    const workspace = join(tempDir, 'workspace')
+    const outside = join(tempDir, 'outside')
+    await Promise.all([mkdir(workspace), mkdir(outside)])
+    const outsideFile = join(outside, 'secret.txt')
+    const insideFile = join(workspace, 'inside.txt')
+    await Promise.all([writeFile(outsideFile, 'secret'), writeFile(insideFile, 'inside')])
+    const outsideLink = join(workspace, 'outside-link.txt')
+    const insideLink = join(workspace, 'inside-link.txt')
+    const outsideDirectoryLink = join(workspace, 'outside-directory')
+    await Promise.all([
+      symlink(outsideFile, outsideLink),
+      symlink(insideFile, insideLink),
+      symlink(outside, outsideDirectoryLink),
+    ])
+    const service = new FileService({ getActiveWorkspace: () => workspace })
+
+    await expect(service.readFile(outsideLink)).rejects.toThrow('OUTSIDE_WORKSPACE')
+    await expect(
+      service.writeFile(join(outsideDirectoryLink, 'new.txt'), 'escape'),
+    ).rejects.toThrow('OUTSIDE_WORKSPACE')
+    await expect(service.readFile(insideLink)).rejects.toThrow()
+  })
+
+  it('binds short-lived picker capabilities to one renderer and exact path', async () => {
+    const workspace = join(tempDir, 'workspace')
+    const outside = join(tempDir, 'outside')
+    await Promise.all([mkdir(workspace), mkdir(outside)])
+    const selected = join(outside, 'selected.txt')
+    const sibling = join(outside, 'sibling.txt')
+    await Promise.all([writeFile(selected, 'selected'), writeFile(sibling, 'sibling')])
+    let now = 1_000
+    const service = new FileService({ getActiveWorkspace: () => workspace, now: () => now })
+    service.registerPickerSelection(7, [selected], 'file-read')
+
+    await expect(
+      service.withAccess({ rendererId: 7 }, () => service.readFile(selected)),
+    ).resolves.toMatchObject({ content: 'selected' })
+    await expect(
+      service.withAccess({ rendererId: 7 }, () => service.writeFile(selected, 'changed')),
+    ).rejects.toThrow('OUTSIDE_WORKSPACE')
+    await expect(
+      service.withAccess({ rendererId: 8 }, () => service.readFile(selected)),
+    ).rejects.toThrow('OUTSIDE_WORKSPACE')
+    await expect(
+      service.withAccess({ rendererId: 7 }, () => service.readFile(sibling)),
+    ).rejects.toThrow('OUTSIDE_WORKSPACE')
+
+    service.registerPickerSelection(7, [selected], 'file-write')
+    await expect(
+      service.withAccess({ rendererId: 7 }, () => service.writeFile(selected, 'changed')),
+    ).resolves.toBeUndefined()
+    await expect(readFile(selected, 'utf-8')).resolves.toBe('changed')
+
+    now += 2 * 60 * 1000 + 1
+    await expect(
+      service.withAccess({ rendererId: 7 }, () => service.readFile(selected)),
+    ).rejects.toThrow('OUTSIDE_WORKSPACE')
+  })
+
+  it('keeps a Run bound to its startup workspace after the visible workspace switches', async () => {
+    const workspaceA = join(tempDir, 'workspace-a')
+    const workspaceB = join(tempDir, 'workspace-b')
+    await Promise.all([mkdir(workspaceA), mkdir(workspaceB)])
+    const fileA = join(workspaceA, 'a.txt')
+    const fileB = join(workspaceB, 'b.txt')
+    await Promise.all([writeFile(fileA, 'a'), writeFile(fileB, 'b')])
+    let activeWorkspace = workspaceA
+    const service = new FileService({ getActiveWorkspace: () => activeWorkspace })
+
+    await service.withAccess(
+      {
+        trustedWorkspace: {
+          kind: 'local',
+          rootPath: workspaceA,
+        },
+      },
+      async () => {
+        activeWorkspace = workspaceB
+        await expect(service.readFile(fileA)).resolves.toMatchObject({ content: 'a' })
+        await expect(service.readFile(fileB)).rejects.toThrow('OUTSIDE_WORKSPACE')
+        await expect(service.rename(fileA, join(workspaceB, 'moved.txt'))).rejects.toThrow(
+          'OUTSIDE_WORKSPACE',
+        )
+      },
+    )
+  })
+
+  it('requires a picker workspace capability before activation', async () => {
+    const workspace = join(tempDir, 'selected-workspace')
+    await mkdir(workspace)
+    const filePath = join(workspace, 'README.md')
+    await writeFile(filePath, '# Selected')
+    const service = new FileService({ getActiveWorkspace: () => null })
+
+    expect(service.canActivateWorkspace(7, workspace)).toBe(false)
+    service.registerPickerSelection(7, [workspace], 'workspace')
+    expect(service.canActivateWorkspace(7, workspace)).toBe(true)
+    expect(service.canActivateWorkspace(8, workspace)).toBe(false)
+    await expect(
+      service.withAccess({ rendererId: 7 }, () => service.readFile(filePath)),
+    ).resolves.toMatchObject({ content: '# Selected' })
+    await expect(
+      service.withAccess({ rendererId: 7 }, () => service.writeFile(filePath, 'changed')),
+    ).rejects.toThrow('OUTSIDE_WORKSPACE')
+    expect(service.consumeWorkspaceActivation(7, workspace)).toBe(true)
+    expect(service.consumeWorkspaceActivation(7, workspace)).toBe(false)
+  })
+
   it('creates files exclusively without truncating an existing target', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const nestedPath = join(tempDir, 'notes', 'new.md')
 
     await service.createFile(nestedPath)
@@ -48,7 +187,7 @@ describe('FileService', () => {
   })
 
   it('moves files without overwriting an existing target', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const sourceDir = join(tempDir, 'source')
     const targetDir = join(tempDir, 'target')
     await mkdir(sourceDir)
@@ -67,7 +206,7 @@ describe('FileService', () => {
   })
 
   it('renames files without overwriting an existing target', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const sourcePath = join(tempDir, 'source.txt')
     const targetPath = join(tempDir, 'target.txt')
     await writeFile(sourcePath, 'source', 'utf-8')
@@ -79,7 +218,7 @@ describe('FileService', () => {
   })
 
   it('copies files and directories without overwriting existing entries', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const sourceFile = join(tempDir, 'note.txt')
     const sourceDir = join(tempDir, '资料')
     const targetDir = join(tempDir, 'archive')
@@ -116,7 +255,7 @@ describe('FileService', () => {
   })
 
   it('rejects copying a directory into itself or a descendant', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const sourceDir = join(tempDir, 'docs')
     const childDir = join(sourceDir, 'archive')
     await mkdir(childDir, { recursive: true })
@@ -132,7 +271,7 @@ describe('FileService', () => {
   })
 
   it('copies Markdown with its visible asset directory as an independent document', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const sourcePath = join(tempDir, 'notes.md')
     const imagePath = join(tempDir, 'diagram.png')
     await writeFile(sourcePath, '# Notes\n', 'utf-8')
@@ -162,7 +301,7 @@ describe('FileService', () => {
   })
 
   it('avoids an existing Markdown companion asset directory when choosing a copy name', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const sourcePath = join(tempDir, 'notes.md')
     const imagePath = join(tempDir, 'diagram.png')
     const occupiedAssetDir = join(tempDir, 'notes 副本.assets')
@@ -195,7 +334,7 @@ describe('FileService', () => {
   })
 
   it('reads markdown as UTF-8 text', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, 'README.md')
     await writeFile(filePath, '# CCLink Studio', 'utf-8')
 
@@ -206,7 +345,7 @@ describe('FileService', () => {
   })
 
   it('reads text documents with stable version fingerprints', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, 'README.md')
     await writeFile(filePath, '# CCLink Studio', 'utf-8')
 
@@ -223,7 +362,7 @@ describe('FileService', () => {
   })
 
   it('atomically saves text documents and reports external conflicts', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, 'README.md')
     await writeFile(filePath, 'version one', 'utf-8')
     const opened = await service.readTextDocument(filePath)
@@ -256,7 +395,7 @@ describe('FileService', () => {
   })
 
   it('copies and writes images into a non-overwriting document asset directory', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const documentPath = join(tempDir, 'notes.md')
     const sourcePath = join(tempDir, 'diagram.png')
     await writeFile(documentPath, '# Notes', 'utf-8')
@@ -279,7 +418,7 @@ describe('FileService', () => {
   })
 
   it('inserts generated Markdown illustrations with version and anchor protection', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const documentPath = join(tempDir, 'article.md')
     await writeFile(documentPath, '# Article\n\nFirst paragraph.\n\n## Details\n\nBody.\n', 'utf-8')
     const snapshot = await service.preflightMarkdownIllustrations({
@@ -324,7 +463,7 @@ describe('FileService', () => {
   })
 
   it('rejects stale or ambiguous Markdown illustration anchors before writing assets', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const documentPath = join(tempDir, 'article.md')
     await writeFile(documentPath, 'Repeated\n\nRepeated\n', 'utf-8')
 
@@ -356,7 +495,7 @@ describe('FileService', () => {
   })
 
   it('writes a controlled declaration and migrates legacy hidden Markdown assets safely', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const documentPath = join(tempDir, 'notes.md')
     const legacyDir = join(tempDir, '.assets', 'notes')
     await mkdir(legacyDir, { recursive: true })
@@ -380,7 +519,7 @@ describe('FileService', () => {
   })
 
   it('inspects missing, modified, and orphan Markdown resources', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const documentPath = join(tempDir, 'notes.md')
     const sourcePath = join(tempDir, 'diagram.png')
     await writeFile(documentPath, '# Notes\n', 'utf-8')
@@ -403,7 +542,7 @@ describe('FileService', () => {
   })
 
   it('saves a Markdown resource group under a new visible name', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const sourcePath = join(tempDir, 'notes.md')
     const targetPath = join(tempDir, 'archive', 'renamed.md')
     const imagePath = join(tempDir, 'diagram.png')
@@ -425,7 +564,7 @@ describe('FileService', () => {
   })
 
   it('merges legacy and visible assets before Save As without overwriting collisions', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const sourcePath = join(tempDir, 'notes.md')
     const targetPath = join(tempDir, 'copy.md')
     const legacyDir = join(tempDir, '.assets', 'notes')
@@ -458,7 +597,7 @@ describe('FileService', () => {
   })
 
   it('relocates a Markdown file and its visible resource directory together', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const sourcePath = join(tempDir, 'notes.md')
     const targetPath = join(tempDir, 'renamed.md')
     const imagePath = join(tempDir, 'diagram.png')
@@ -482,7 +621,7 @@ describe('FileService', () => {
   })
 
   it('relocates encoded Chinese Markdown asset references', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const sourcePath = join(tempDir, '旧文档.md')
     const targetPath = join(tempDir, '新文档.md')
     const imagePath = join(tempDir, '配图.png')
@@ -506,7 +645,7 @@ describe('FileService', () => {
   })
 
   it('exports a standard ZIP that expands to Markdown and visible resources', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const documentPath = join(tempDir, 'notes.md')
     const imagePath = join(tempDir, 'diagram.png')
     const zipPath = join(tempDir, 'notes-export.zip')
@@ -533,7 +672,7 @@ describe('FileService', () => {
   })
 
   it('refuses ZIP export when existing local references are outside the managed asset directory', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const documentPath = join(tempDir, 'notes.md')
     const externalPath = join(tempDir, 'external.png')
     const zipPath = join(tempDir, 'notes.zip')
@@ -550,7 +689,7 @@ describe('FileService', () => {
   })
 
   it('moves Markdown and its resources to the system trash when requested', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const documentPath = join(tempDir, 'notes.md')
     const assetDir = join(tempDir, 'notes.assets')
     await mkdir(assetDir)
@@ -568,7 +707,7 @@ describe('FileService', () => {
   })
 
   it('trashes only descendants of the declared workspace and protects its root', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const workspacePath = join(tempDir, 'workspace')
     const targetPath = join(workspacePath, 'note.txt')
     const outsidePath = join(tempDir, 'outside.txt')
@@ -588,20 +727,20 @@ describe('FileService', () => {
     expect(electronMock.trashItem).toHaveBeenCalledTimes(1)
   })
 
-  it('reveals only paths associated with the declared workspace', () => {
-    const service = new FileService()
+  it('reveals only paths associated with the declared workspace', async () => {
+    const service = createFileService()
     const workspacePath = join(tempDir, 'workspace')
     const targetPath = join(workspacePath, 'note.txt')
 
-    service.revealPath({ workspacePath, targetPath })
+    await service.revealPath({ workspacePath, targetPath })
     expect(electronMock.showItemInFolder).toHaveBeenCalledWith(targetPath)
-    expect(() =>
+    await expect(
       service.revealPath({ workspacePath, targetPath: join(tempDir, 'outside.txt') }),
-    ).toThrow('目标路径不属于当前工作区')
+    ).rejects.toThrow('目标路径不属于当前工作区')
   })
 
   it('checks directories without throwing for missing paths', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const dirPath = join(tempDir, 'workspace')
     const filePath = join(tempDir, 'note.txt')
     await mkdir(dirPath)
@@ -641,7 +780,7 @@ describe('FileService', () => {
     '.pdf',
     '.png',
   ])('reads binary file %s as base64', async (extension) => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, `asset${extension}`)
     const content = Buffer.from([0x00, 0xff, 0x10, 0x20])
     await mkdir(tempDir, { recursive: true })
@@ -654,7 +793,7 @@ describe('FileService', () => {
   })
 
   it('renders image files as image previews', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, 'pixel.png')
     const content = Buffer.from([0x89, 0x50, 0x4e, 0x47])
     await writeFile(filePath, content)
@@ -669,7 +808,7 @@ describe('FileService', () => {
   })
 
   it('renders pdf files as pdf previews', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, 'brief.pdf')
     const content = Buffer.from('%PDF-1.7\n', 'utf-8')
     await writeFile(filePath, content)
@@ -684,7 +823,7 @@ describe('FileService', () => {
   })
 
   it('renders native media files as playable previews', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, 'clip.mp4')
     const content = Buffer.from([0x00, 0x00, 0x00, 0x18])
     await writeFile(filePath, content)
@@ -701,7 +840,7 @@ describe('FileService', () => {
   })
 
   it('does not inline videos larger than 300MB', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, 'large.mp4')
     await writeFile(filePath, Buffer.alloc(0))
     await truncate(filePath, 300 * 1024 * 1024 + 1)
@@ -716,7 +855,7 @@ describe('FileService', () => {
   })
 
   it('renders docx files as read-only office previews', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, 'note.docx')
     await writeFile(
       filePath,
@@ -753,7 +892,7 @@ describe('FileService', () => {
   })
 
   it('renders pptx files as read-only office previews', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, 'deck.pptx')
     await writeFile(
       filePath,
@@ -793,7 +932,7 @@ describe('FileService', () => {
   it.each(['.doc', '.xls', '.xlsx', '.ppt', '.odt', '.ods', '.odp'])(
     'renders office file %s as unsupported until S-level WYSIWYG is designed',
     async (extension) => {
-      const service = new FileService()
+      const service = createFileService()
       const filePath = join(tempDir, `office${extension}`)
       await writeFile(filePath, Buffer.from([0xd0, 0xcf, 0x11, 0xe0]))
 
@@ -805,7 +944,7 @@ describe('FileService', () => {
   )
 
   it('renders legacy doc files as unsupported instead of text garbage', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, 'legacy.doc')
     await writeFile(filePath, Buffer.from([0xd0, 0xcf, 0x11, 0xe0]))
 
@@ -816,7 +955,7 @@ describe('FileService', () => {
   })
 
   it('renders zip files as unsupported preview with extract guidance', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, 'assets.zip')
     await writeFile(
       filePath,
@@ -840,7 +979,7 @@ describe('FileService', () => {
   })
 
   it('extracts zip files to a same-name sibling directory', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, 'assets.zip')
     await writeFile(
       filePath,
@@ -866,7 +1005,7 @@ describe('FileService', () => {
   })
 
   it('extracts zip files to a numbered directory when the target exists', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, 'assets.zip')
     await mkdir(join(tempDir, 'assets'))
     await writeFile(
@@ -887,7 +1026,7 @@ describe('FileService', () => {
   })
 
   it('rejects zip slip entries during extraction', async () => {
-    const service = new FileService()
+    const service = createFileService()
     const filePath = join(tempDir, 'evil.zip')
     await writeFile(
       filePath,
@@ -905,7 +1044,7 @@ describe('FileService', () => {
   it.each(['.pages', '.numbers', '.key', '.tar', '.7z', '.rar'])(
     'renders unsupported recognized file %s without text garbage',
     async (extension) => {
-      const service = new FileService()
+      const service = createFileService()
       const filePath = join(tempDir, `asset${extension}`)
       await writeFile(filePath, Buffer.from([0x00, 0xff, 0x10, 0x20]))
 

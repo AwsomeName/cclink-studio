@@ -127,6 +127,29 @@ describe('registerWorkspaceStateIpc', () => {
     })
     expect(settings.set).toHaveBeenCalledWith({ lastWorkspacePath: '/private/tmp/project' })
   })
+
+  it('rejects a renderer-invented workspace that has no picker or recent-project capability', async () => {
+    const service = createService()
+    const sender = { id: 17 }
+    const fileService = {
+      canActivateWorkspace: vi.fn(() => false),
+      registerPickerSelection: vi.fn(),
+    }
+    registerWorkspaceStateIpc(
+      service as never,
+      createGuard(sender) as never,
+      undefined,
+      fileService as never,
+    )
+
+    await expect(
+      mockIpcMain.handlers.get('workspaceState:resolveLocalWorkspace')?.(
+        { sender },
+        '/tmp/invented',
+      ),
+    ).resolves.toMatchObject({ valid: false })
+    expect(service.resolveLocalWorkspace).not.toHaveBeenCalled()
+  })
 })
 
 function createService() {
@@ -144,11 +167,11 @@ function createService() {
   }
 }
 
-function createGuard(trustedSender: string) {
+function createGuard(trustedSender: unknown) {
   return {
-    assert: (event: { sender: string }) => {
+    assert: (event: { sender: unknown }) => {
       if (event.sender !== trustedSender) throw new Error('untrusted')
     },
-    isTrusted: (event: { sender: string }) => event.sender === trustedSender,
+    isTrusted: (event: { sender: unknown }) => event.sender === trustedSender,
   }
 }

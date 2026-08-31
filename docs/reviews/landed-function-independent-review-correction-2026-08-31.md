@@ -29,24 +29,24 @@ MCP env/header 的普通配置明文、renderer 全量返回和保存假成功�
 
 ## 2. 修订后的问题清单
 
-| ID    | 优先级       | 状态           | 问题                                                 | 当前保护                                                                              | 实际缺口                                                                                                             |
-| ----- | ------------ | -------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| IR-01 | P0           | 工程实现完成；最终验收待执行 | 外部 MCP SDK 通配符自动放行                          | SDK 配置与 Backend 投影均只保留内部 `cclink_studio`；外部配置继续保存                 | 真实打包 App 中的 SDK 进程级复核留到统一验收                                                                         |
-| IR-02 | P0           | 工程实现及真实 Context smoke 完成 | Browser Cookie 完整返回模型                          | 通用 Agent 工具表移除 Cookie 读写；旧读取只返回聚合计数                               | 最终统一 App/Agent 事件与诊断复核待执行                                                                               |
-| IR-03 | P1，立即止血 | 工程实现及本机 HTTP 集成验证完成 | 本机 MCP HTTP token 未强制                           | 所有 `/mcp` 请求在读 body 前强制有效 Run token；失效状态统一 401                      | Authorization header 迁移仍为独立 P1-H；最终 SDK/App 重连验证待执行                                                  |
-| RF-01 | P0           | Open，修订范围 | 文件权限边界不统一                                   | 普通 Claude Editor/内置文件工具有 PreToolUse 工作空间保护；登记账号上传有真实路径检查 | renderer 通用 FS、普通 Browser 上传、Android install/push 仍可能读取工作空间外文件；底层 FileService 仍放行整个 home |
-| RF-02 | P0           | Open，缩小范围 | `auto` 和 Always 可绕过危险操作确认                  | 登记账号事务存在专用边界；定时任务严格只读                                            | Android uninstall/shell、清 Cookie 等内部工具没有不可绕过的宿主授权下限                                              |
-| RF-03 | P1           | Open，降级     | 外部 MCP env/header 绕过统一 CredentialService       | 文件位于 userData                                                                     | 普通配置明文、`0644`、renderer 全量返回、非原子写入和保存假成功                                                      |
-| RF-04 | P1           | Open           | Runtime 组件初始化失败可阻断 App                     | 无                                                                                    | 可选能力失败扩大为全局启动失败                                                                                       |
-| RF-05 | P1           | Open           | OpenAI Compatible 设置不可用                         | 连接测试会明确报 unsupported                                                          | UI 仍允许保存后端不会采用的配置                                                                                      |
-| RF-06 | P1           | Open           | 搜索跨工作空间残留和迟到覆盖                         | 搜索入口读取当前 workspace                                                            | 查询/结果全局持久化，无 generation，递归深度静默限制三层                                                             |
-| RF-07 | P2           | Open           | `uiFontSize` 无生产效果                              | 值可持久化                                                                            | 没有生产消费者                                                                                                       |
-| RF-08 | P2           | Known debt     | 文件移动崩溃窗口                                     | 普通投影失败可恢复                                                                    | 磁盘提交后立即强杀没有持久 journal                                                                                   |
-| RF-09 | Product gate | Pending        | 远程 Agent、PTY、真实网站登录缺真人验收              | 自动化门禁已覆盖部分代码路径                                                          | 真实身份、在线设备、断线续接和账号隔离没有同一环境证据                                                               |
-| IR-04 | P1           | 工程实现及本机 HTTP 集成验证完成 | 本机 MCP HTTP 请求体无大小上限且解析错误包含正文片段 | 8 MiB 流式/声明长度上限、100 请求 batch 上限、稳定脱敏解析错误                        | 最终统一压力与 App 生命周期回归待执行                                                                                 |
-| IR-05 | P1           | Open           | 工具确认卡把原始参数返回 renderer                    | renderer 需要展示操作摘要                                                             | 参数中的 token、正文或敏感路径被无差别字符串化；重新开放外部 MCP 前必须修复                                          |
-| IR-06 | P1           | Open           | 外部 MCP 名称允许原型特殊键                          | 名称只限制字符集合                                                                    | `__proto__` 等键可进入普通对象映射，造成原型行为或配置投影异常                                                       |
-| IR-07 | P1           | 工程实现及真实 Context smoke 完成 | 按名称清 Cookie 使用模糊且未转义的正则               | 按 name/domain/path 精确枚举并删除 Cookie identity                                    | 最终统一 Browser 回归待执行                                                                                           |
+| ID    | 优先级       | 状态                                                     | 问题                                                 | 当前保护                                                                                                   | 实际缺口                                                                                                                        |
+| ----- | ------------ | -------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| IR-01 | P0           | 工程实现完成；最终验收待执行                             | 外部 MCP SDK 通配符自动放行                          | SDK 配置与 Backend 投影均只保留内部 `cclink_studio`；外部配置继续保存                                      | 真实打包 App 中的 SDK 进程级复核留到统一验收                                                                                    |
+| IR-02 | P0           | 工程实现及真实 Context smoke 完成                        | Browser Cookie 完整返回模型                          | 通用 Agent 工具表移除 Cookie 读写；旧读取只返回聚合计数                                                    | 最终统一 App/Agent 事件与诊断复核待执行                                                                                         |
+| IR-03 | P1，立即止血 | 工程实现及本机 HTTP 集成验证完成                         | 本机 MCP HTTP token 未强制                           | 所有 `/mcp` 请求在读 body 前强制有效 Run token；失效状态统一 401                                           | Authorization header 迁移仍为独立 P1-H；最终 SDK/App 重连验证待执行                                                             |
+| RF-01 | P0           | 核心工程实现完成；真实 App 验收与 TOCTOU residual 待结论 | 文件权限边界不统一                                   | `FileService` 已收敛到主进程 active/trusted workspace；Browser、Android、Editor 与 renderer 复用同一 owner | Node 无可移植 `openat`，递归 mkdir/rename/copy 的父目录瞬时替换仍需按 residual threat 管理；真实文件选择器与 App 回归待统一验收 |
+| RF-02 | P0           | Open，缩小范围                                           | `auto` 和 Always 可绕过危险操作确认                  | 登记账号事务存在专用边界；定时任务严格只读                                                                 | Android uninstall/shell、清 Cookie 等内部工具没有不可绕过的宿主授权下限                                                         |
+| RF-03 | P1           | Open，降级                                               | 外部 MCP env/header 绕过统一 CredentialService       | 文件位于 userData                                                                                          | 普通配置明文、`0644`、renderer 全量返回、非原子写入和保存假成功                                                                 |
+| RF-04 | P1           | Open                                                     | Runtime 组件初始化失败可阻断 App                     | 无                                                                                                         | 可选能力失败扩大为全局启动失败                                                                                                  |
+| RF-05 | P1           | Open                                                     | OpenAI Compatible 设置不可用                         | 连接测试会明确报 unsupported                                                                               | UI 仍允许保存后端不会采用的配置                                                                                                 |
+| RF-06 | P1           | Open                                                     | 搜索跨工作空间残留和迟到覆盖                         | 搜索入口读取当前 workspace                                                                                 | 查询/结果全局持久化，无 generation，递归深度静默限制三层                                                                        |
+| RF-07 | P2           | Open                                                     | `uiFontSize` 无生产效果                              | 值可持久化                                                                                                 | 没有生产消费者                                                                                                                  |
+| RF-08 | P2           | Known debt                                               | 文件移动崩溃窗口                                     | 普通投影失败可恢复                                                                                         | 磁盘提交后立即强杀没有持久 journal                                                                                              |
+| RF-09 | Product gate | Pending                                                  | 远程 Agent、PTY、真实网站登录缺真人验收              | 自动化门禁已覆盖部分代码路径                                                                               | 真实身份、在线设备、断线续接和账号隔离没有同一环境证据                                                                          |
+| IR-04 | P1           | 工程实现及本机 HTTP 集成验证完成                         | 本机 MCP HTTP 请求体无大小上限且解析错误包含正文片段 | 8 MiB 流式/声明长度上限、100 请求 batch 上限、稳定脱敏解析错误                                             | 最终统一压力与 App 生命周期回归待执行                                                                                           |
+| IR-05 | P1           | Open                                                     | 工具确认卡把原始参数返回 renderer                    | renderer 需要展示操作摘要                                                                                  | 参数中的 token、正文或敏感路径被无差别字符串化；重新开放外部 MCP 前必须修复                                                     |
+| IR-06 | P1           | Open                                                     | 外部 MCP 名称允许原型特殊键                          | 名称只限制字符集合                                                                                         | `__proto__` 等键可进入普通对象映射，造成原型行为或配置投影异常                                                                  |
+| IR-07 | P1           | 工程实现及真实 Context smoke 完成                        | 按名称清 Cookie 使用模糊且未转义的正则               | 按 name/domain/path 精确枚举并删除 Cookie identity                                                         | 最终统一 Browser 回归待执行                                                                                                     |
 
 ## 3. 新增 P0 的代码证据
 
@@ -432,3 +432,20 @@ Cookie 秘密出站、强制现有 query token。只有这三道止血完成后�
 - 10 项 ToolHost HTTP/生命周期测试、TypeScript 检查和 `smoke:local` 11/11 通过。
 - 本阶段保留已由当前 SDK 验证的 query token。P1-H 的 Authorization header 迁移仍需真实 SDK initialize、
   list、call、重连和错误重试兼容性证据，不与本次止血耦合。
+
+### P0-4：FileService 工作空间边界
+
+- `WorkspaceStateService` 继续作为 active workspace 唯一 owner；`FileService` 只读取该事实，并通过
+  `AsyncLocalStorage` 接收 renderer id 或 Run 启动时固定的 `trustedWorkspace`，没有新增第二份工作空间状态。
+- renderer FS、Editor、普通 Browser 上传/下载目标、Android Agent install/push 和 renderer APK 安装均
+  进入同一 `FileService` 边界。Browser 导航、Terminal 和定时任务既有只读 schema 未改动。
+- 主进程文件选择器只生成绑定 renderer、精确路径、2 分钟且有限次数的 capability；单文件读 capability
+  不能写。workspace 目录选择仅允许对精确选中目录树做切换前只读预检，并在激活时消费，不能用于写入；
+  最近项目由主进程登记后才可重新激活。
+- 已有目标、未创建目标最近父目录、双路径 rename/move/copy、符号链接和 Run 中可见工作空间切换均有真实
+  文件系统反例。核心文件打开使用 `O_NOFOLLOW`、open 后 `fstat`、路径 inode/dev 与打开前后授权复核。
+- 168 项受影响单测与 Node TypeScript 检查通过。真实 Electron IPC、Browser 上传及 native picker capability
+  验收留到统一 App smoke。
+- residual threat：Node/Electron 没有可移植的 `openat`/目录 fd 相对操作，递归 `mkdir`、`rename`、`cp`
+  以及 Playwright/ADB 按路径二次打开仍存在同用户恶意进程在极短窗口替换父目录的竞态。本轮通过多次
+  realpath、最终分量 `O_NOFOLLOW` 与 `fstat` 缩小窗口，但不将该部分宣称为完全关闭。

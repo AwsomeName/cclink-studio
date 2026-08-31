@@ -18,10 +18,9 @@ import type { BrowserManager } from '../../../browser/browser-manager'
 import { classifyBrowserError } from '../../../browser/browser-task-errors'
 import { summarizeBrowserActionParams } from '../../../browser/browser-task-runtime'
 import type { BrowserTaskRun } from '../../../../shared/ipc/browser'
-import { realpath } from 'node:fs/promises'
-import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import type { WebResourceService } from '../../../web-resources/web-resource-service'
 import type { ArticlePublishingBrowserPolicy } from '../../../article-publishing/article-publishing-browser-policy'
+import type { FileService } from '../../../fs/file-service'
 
 const ACCOUNT_FORBIDDEN_ACTIONS = new Set([
   'evaluate',
@@ -664,6 +663,7 @@ export class BrowserToolModule implements ToolModule {
     private browserManager?: BrowserManager | null,
     private webResourceService?: WebResourceService | null,
     private articlePublishingBrowserPolicy?: ArticlePublishingBrowserPolicy | null,
+    private fileService?: FileService | null,
   ) {}
 
   async getExecutionPolicy(
@@ -714,6 +714,7 @@ export class BrowserToolModule implements ToolModule {
     if (actionType === 'getCookies' || actionType === 'setCookie') {
       throw new Error('通用 Agent 不开放 Cookie 读取或写入；请在可见浏览器中由用户管理登录态')
     }
+    await this.assertLocalFileAccess(actionType, params, context)
     const {
       tabId: visibleTabId,
       workspaceKey,
@@ -907,12 +908,6 @@ export class BrowserToolModule implements ToolModule {
         throw new Error('目标网址超出登记账号边界，任务已暂停，请人工确认后接管')
       }
     }
-    if (actionType === 'uploadFile') {
-      await this.assertWorkspacePaths(params.paths, context, '上传材料', true)
-    }
-    if (actionType === 'saveDownload') {
-      await this.assertWorkspacePaths([params.path], context, '保存下载', false)
-    }
     const articleDecision = await this.articlePublishingBrowserPolicy?.classifyAction(
       task,
       actionType,
@@ -944,37 +939,30 @@ export class BrowserToolModule implements ToolModule {
     return null
   }
 
-  private async assertWorkspacePaths(
-    rawPaths: unknown,
+  private async assertLocalFileAccess(
+    actionType: string,
+    params: Record<string, unknown>,
     context: ToolExecutionContext | undefined,
-    label: string,
-    mustExist: boolean,
   ): Promise<void> {
-    if (context?.trustedWorkspace?.kind !== 'local' || !Array.isArray(rawPaths)) {
-      throw new Error(`${label}仅允许使用当前本地项目内的路径`)
+    if (actionType !== 'uploadFile' && actionType !== 'saveDownload') return
+    if (!this.fileService) throw new Error('本地文件授权服务不可用，已拒绝浏览器文件操作')
+    if (context?.trustedWorkspace?.kind !== 'local') {
+      throw new Error('浏览器文件操作仅允许使用本次 Run 启动时固定的本地工作空间')
     }
-    const workspaceRoot = context.trustedWorkspace.rootPath
-    const root = await realpath(resolve(workspaceRoot)).catch(() => resolve(workspaceRoot))
-    for (const value of rawPaths) {
-      if (typeof value !== 'string' || !isAbsolute(value)) {
-        throw new Error(`${label}路径必须是当前项目内的绝对路径`)
+    await this.fileService.withAccess({ trustedWorkspace: context.trustedWorkspace }, async () => {
+      if (actionType === 'uploadFile') {
+        if (!Array.isArray(params.paths) || params.paths.length === 0) {
+          throw new Error('上传材料必须提供至少一个文件路径')
+        }
+        for (const value of params.paths) {
+          if (typeof value !== 'string') throw new Error('上传材料路径必须是字符串')
+          await this.fileService!.assertReadableFile(value)
+        }
+        return
       }
-      const candidate = resolve(value)
-      const checkedPath = mustExist
-        ? await realpath(candidate).catch(() => {
-            throw new Error(`${label}文件不存在或不可访问`)
-          })
-        : resolve(
-            await realpath(dirname(candidate)).catch(() => {
-              throw new Error(`${label}目录不存在或不可访问`)
-            }),
-            candidate.split(/[/\\]/u).at(-1) ?? '',
-          )
-      const relation = relative(root, checkedPath)
-      if (relation.startsWith('..') || isAbsolute(relation)) {
-        throw new Error(`${label}路径超出当前项目，已拒绝访问`)
-      }
-    }
+      if (typeof params.path !== 'string') throw new Error('保存下载必须提供目标路径')
+      await this.fileService!.assertWritableTarget(params.path)
+    })
   }
 
   private async assertAccountFieldSafe(

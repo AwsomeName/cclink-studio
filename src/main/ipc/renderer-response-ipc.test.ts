@@ -51,6 +51,24 @@ describe('renderer response IPC boundaries', () => {
     })
   })
 
+  it('registers an exact renderer-bound capability after native file selection', async () => {
+    const sender = { id: 42 }
+    const sink = { registerPickerSelection: vi.fn() }
+    mocks.dialog.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: ['/outside/canary.apk'],
+    })
+    registerDialogIpc(createWindow() as never, createGuard(sender) as never, () => sink)
+
+    await mocks.handlers.get('dialog:showOpenDialog')?.({ sender }, { title: '选择 APK' })
+
+    expect(sink.registerPickerSelection).toHaveBeenCalledWith(
+      42,
+      ['/outside/canary.apk'],
+      'file-read',
+    )
+  })
+
   it('rejects oversized editor responses before resolving an Agent operation', () => {
     const editor = { resolveOperation: vi.fn(), rejectOperation: vi.fn() }
     registerEditorIpc(editor as never, createGuard('trusted') as never)
@@ -70,11 +88,11 @@ function createWindow() {
   return { isDestroyed: () => false }
 }
 
-function createGuard(trustedSender: string) {
+function createGuard(trustedSender: unknown) {
   return {
-    assert: (event: { sender: string }) => {
+    assert: (event: { sender: unknown }) => {
       if (event.sender !== trustedSender) throw new Error('untrusted')
     },
-    isTrusted: (event: { sender: string }) => event.sender === trustedSender,
+    isTrusted: (event: { sender: unknown }) => event.sender === trustedSender,
   }
 }

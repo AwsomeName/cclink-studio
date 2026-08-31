@@ -109,6 +109,7 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
           runtime.browserManager,
           runtime.webResourceService,
           articlePublishingBrowserPolicy,
+          runtime.fileService,
         ),
     )
   }
@@ -199,6 +200,7 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
       new AndroidToolModule(
         requireService(runtime.adbBridge),
         requireService(runtime.scrcpyBridge),
+        requireService(runtime.fileService),
       ),
   )
 

@@ -200,10 +200,24 @@ async function main() {
     return `${result.status.status}, configured=${result.status.configuredCount}`
   })
 
-  await runCheck('filesystem can create, read, rename, and delete local files', async () => {
-    const result = await page.evaluate(async (dir) => {
-      const home = await window.cclinkStudio.fs.getHomePath()
-      const workspaceDir = `${home}/.cclink-studio-smoke-${Date.now()}`
+  await runCheck('filesystem is scoped to the active local workspace', async () => {
+    const result = await page.evaluate(async () => {
+      const workspaceRoot = await window.cclinkStudio.fs.getHomePath()
+      if (!workspaceRoot) {
+        const outsidePath = `/tmp/cclink-studio-denied-${Date.now()}.md`
+        try {
+          await window.cclinkStudio.fs.writeFile(outsidePath, 'must not be written')
+          return { mode: 'global', denied: false, error: '', outsidePath }
+        } catch (error) {
+          return {
+            mode: 'global',
+            denied: true,
+            error: error instanceof Error ? error.message : String(error),
+            outsidePath,
+          }
+        }
+      }
+      const workspaceDir = `${workspaceRoot}/.cclink-studio-smoke-${Date.now()}`
       const file = `${workspaceDir}/draft.md`
       const renamed = `${workspaceDir}/renamed.md`
       await window.cclinkStudio.fs.writeFile(file, '# Smoke\n\nlocal file')
@@ -212,8 +226,13 @@ async function main() {
       await window.cclinkStudio.fs.rename(file, renamed)
       const entries = await window.cclinkStudio.fs.readDir(workspaceDir)
       await window.cclinkStudio.fs.delete(renamed)
-      return { workspaceDir, read, stat, entries }
+      return { mode: 'workspace', workspaceDir, read, stat, entries }
     })
+    if (result.mode === 'global') {
+      assert(result.denied, `global workspace wrote outside path: ${result.outsidePath}`)
+      assert(/OUTSIDE_WORKSPACE/.test(result.error), `unexpected denial: ${result.error}`)
+      return 'global workspace fails closed'
+    }
     tempWorkspaceDir = result.workspaceDir
     assert(result.read.content.includes('local file'), 'read content mismatch')
     assert(result.stat.type === 'file', 'stat did not report a file')

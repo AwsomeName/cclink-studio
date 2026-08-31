@@ -5,16 +5,31 @@ import {
   type TrustedRendererGuard,
 } from '../ipc/trusted-renderer-guard'
 import type { SettingsService } from '../settings/settings-service'
+import type { FileService } from '../fs/file-service'
 
 export function registerWorkspaceStateIpc(
   workspaceStateService: WorkspaceStateService,
   trustedRendererGuard: TrustedRendererGuard,
   settingsService?: SettingsService,
+  fileService?: FileService,
 ): void {
   registerTrustedIpcContract(
     workspaceStateIpcContracts.resolveLocalWorkspace,
     trustedRendererGuard,
-    (_event, workspacePath) => workspaceStateService.resolveLocalWorkspace(workspacePath),
+    async (event, workspacePath) => {
+      if (fileService && !fileService.canActivateWorkspace(event.sender.id, workspacePath)) {
+        return {
+          valid: false,
+          workspacePath: null,
+          error: '工作空间必须来自主进程文件选择器或已登记的最近项目',
+        }
+      }
+      const result = await workspaceStateService.resolveLocalWorkspace(workspacePath)
+      if (fileService && result.valid && result.workspacePath) {
+        fileService.registerPickerSelection(event.sender.id, [result.workspacePath], 'workspace')
+      }
+      return result
+    },
   )
 
   registerTrustedIpcContract(
@@ -22,6 +37,13 @@ export function registerWorkspaceStateIpc(
     trustedRendererGuard,
     async (_event, workspacePath) => {
       try {
+        if (
+          workspacePath &&
+          fileService &&
+          !fileService.consumeWorkspaceActivation(_event.sender.id, workspacePath)
+        ) {
+          throw new Error('工作空间授权已失效，请重新从项目选择器打开')
+        }
         const activeWorkspace = await workspaceStateService.setActiveLocalWorkspace(workspacePath)
         if (settingsService) {
           await settingsService.set({ lastWorkspacePath: activeWorkspace.workspacePath ?? '' })
@@ -78,7 +100,15 @@ export function registerWorkspaceStateIpc(
   registerTrustedIpcContract(
     workspaceStateIpcContracts.listLocalWorkspaces,
     trustedRendererGuard,
-    (_event, ownerKey) => workspaceStateService.listLocalWorkspaces(ownerKey),
+    (event, ownerKey) => {
+      const workspaces = workspaceStateService.listLocalWorkspaces(ownerKey)
+      fileService?.registerPickerSelection(
+        event.sender.id,
+        workspaces.map((workspace) => workspace.workspacePath),
+        'workspace',
+      )
+      return workspaces
+    },
   )
 
   registerTrustedIpcContract(workspaceStateIpcContracts.diagnostics, trustedRendererGuard, () => {

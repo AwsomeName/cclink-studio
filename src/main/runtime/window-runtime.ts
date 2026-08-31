@@ -76,7 +76,7 @@ export function createWindowRuntime(
     handleMainWindowClosed(runtime)
   })
 
-  registerDialogIpc(runtime.mainWindow, runtime.trustedRendererGuard)
+  registerDialogIpc(runtime.mainWindow, runtime.trustedRendererGuard, () => runtime.fileService)
   registerWindowIpc(runtime.mainWindow, runtime.trustedRendererGuard)
   bootstrapWindowCapabilities(runtime)
   if (
@@ -294,6 +294,7 @@ function bootstrapAndroidWindowCapability(runtime: CclinkStudioRuntimeState): vo
     runtime.activeDeviceManager,
     runtime.physicalDeviceManager,
     trustedRendererGuard,
+    runtime.fileService,
   )
   console.log('[CCLink Studio] Android 模块已注册（真机连接）')
 }

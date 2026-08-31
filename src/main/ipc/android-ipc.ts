@@ -7,6 +7,7 @@ import type { ActiveDeviceManager } from '../android/active-device-manager'
 import type { PhysicalDeviceManager } from '../android/physical-device-manager'
 import { executeAndroidAction } from '../android/android-actions'
 import { ensureStoreInstalled } from '../android/store-installer'
+import type { FileService } from '../fs/file-service'
 import {
   registerTrustedIpcContract,
   registerTrustedIpcListener,
@@ -26,6 +27,7 @@ export function registerAndroidIpc(
   activeDeviceManager: ActiveDeviceManager,
   physicalDeviceManager: PhysicalDeviceManager,
   trustedRendererGuard: TrustedRendererGuard,
+  fileService?: FileService | null,
 ): void {
   // ─── ADB 操控（通过共享 Action Executor） ───
 
@@ -112,7 +114,12 @@ export function registerAndroidIpc(
   registerTrustedIpcContract(
     androidIpcContracts.installApk,
     trustedRendererGuard,
-    async (_event, path) => {
+    async (event, path) => {
+      if (fileService) {
+        await fileService.withAccess({ rendererId: event.sender.id }, () =>
+          fileService.assertReadableFile(path),
+        )
+      }
       return executeAndroidAction(adbBridge, {
         type: 'installApk',
         path,

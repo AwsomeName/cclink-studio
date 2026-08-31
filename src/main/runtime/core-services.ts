@@ -207,10 +207,16 @@ export async function bootstrapMainProcessServices(
     throw new Error('主窗口、可信 renderer、凭证或设置系统尚未初始化')
   }
 
+  runtime.fileService = new FileService({
+    getActiveWorkspace: () =>
+      runtime.workspaceStateService?.getActiveLocalWorkspace().workspacePath ?? null,
+  })
+
   registerWorkspaceStateIpc(
     runtime.workspaceStateService!,
     runtime.trustedRendererGuard,
     runtime.settingsService,
+    runtime.fileService,
   )
   registerWorkbenchTabModelIpc(
     runtime.workbenchTabModel!,
@@ -341,7 +347,6 @@ export async function bootstrapMainProcessServices(
     `[CCLink Studio] 官方集成接口已注册 (id=${runtime.officialIntegration.id}, profile=${runtime.officialIntegration.buildProfile})`,
   )
 
-  runtime.fileService = new FileService()
   registerFsIpc(runtime.fileService, runtime.settingsService, runtime.trustedRendererGuard)
   console.log('[CCLink Studio] 文件系统 IPC 已注册')
 

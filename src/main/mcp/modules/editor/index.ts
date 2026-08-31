@@ -17,11 +17,13 @@ import {
   type EditorSaveRequest,
 } from '../../../../shared/ipc/editor'
 import type { DirEntry } from '../../../fs/file-service'
+import type { FileAccessContext } from '../../../fs/file-service'
 
 export interface EditorFileAccess {
   readFile(filePath: string): Promise<{ content: string; encoding: string }>
   readDir(dirPath: string, options?: { showHiddenFiles?: boolean }): Promise<DirEntry[]>
   writeFile(filePath: string, content: string): Promise<void>
+  withAccess?<T>(context: FileAccessContext, operation: () => T): T
 }
 
 /** 等待中的编辑器操作 */
@@ -186,24 +188,28 @@ export class EditorToolModule implements ToolModule {
       throw new Error('主窗口不可用')
     }
 
-    const action = toolName.replace(/^editor_/, '')
-
-    switch (action) {
-      case 'write':
-        return this.sendContentUpdate('write', params, context?.abortSignal)
-      case 'append':
-        return this.sendContentUpdate('append', params, context?.abortSignal)
-      case 'insert':
-        return this.sendContentUpdate('insert', params, context?.abortSignal)
-      case 'read':
-        return this.requestRead(params)
-      case 'list':
-        return this.listDirectory(params)
-      case 'save':
-        return this.requestSave(params)
-      default:
-        throw new Error(`未知编辑器工具: ${toolName}`)
+    const operation = async (): Promise<unknown> => {
+      const action = toolName.replace(/^editor_/, '')
+      switch (action) {
+        case 'write':
+          return this.sendContentUpdate('write', params, context?.abortSignal)
+        case 'append':
+          return this.sendContentUpdate('append', params, context?.abortSignal)
+        case 'insert':
+          return this.sendContentUpdate('insert', params, context?.abortSignal)
+        case 'read':
+          return this.requestRead(params)
+        case 'list':
+          return this.listDirectory(params)
+        case 'save':
+          return this.requestSave(params)
+        default:
+          throw new Error(`未知编辑器工具: ${toolName}`)
+      }
     }
+    return this.fileAccess.withAccess
+      ? this.fileAccess.withAccess({ trustedWorkspace: context?.trustedWorkspace }, operation)
+      : operation()
   }
 
   /**

@@ -1,7 +1,6 @@
-import { shell, type IpcMainInvokeEvent, type WebContents } from 'electron'
+import { type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { FileService } from './file-service'
 import { SettingsService } from '../settings/settings-service'
-import { homedir } from 'os'
 import { randomUUID } from 'crypto'
 import type { TrustedRendererGuard } from '../ipc/trusted-renderer-guard'
 import { registerTrustedIpcContract } from '../ipc/trusted-renderer-guard'
@@ -20,7 +19,10 @@ export function registerFsIpc(
   const handle = <Args extends unknown[], Result>(
     contract: IpcInvokeContract<Args, Result>,
     handler: (event: IpcMainInvokeEvent, ...args: Args) => Result | Promise<Result>,
-  ): void => registerTrustedIpcContract(contract, trustedRendererGuard, handler)
+  ): void =>
+    registerTrustedIpcContract(contract, trustedRendererGuard, (event, ...args) =>
+      fs.withAccess({ rendererId: event.sender.id }, () => handler(event, ...args)),
+    )
   const watchers = new Map<
     string,
     { stop: () => void; sender: WebContents; onSenderDestroyed: () => void }
@@ -37,7 +39,7 @@ export function registerFsIpc(
 
   // 获取用户 Home 目录路径
   handle(fsIpc.getHomePath, () => {
-    return homedir()
+    return fs.getCurrentAccessRoot() ?? ''
   })
 
   // 读取目录内容（根据设置决定是否显示隐藏文件）
@@ -138,14 +140,13 @@ export function registerFsIpc(
 
   // 用系统文件管理器打开路径
   handle(fsIpc.openPath, async (_event, path) => {
-    const error = await shell.openPath(path)
-    if (error) throw new Error(error)
+    await fs.openPath(path)
   })
 
-  handle(fsIpc.watchDirStart, (event, dirPath) => {
+  handle(fsIpc.watchDirStart, async (event, dirPath) => {
     const watchId = randomUUID()
     const sender = event.sender
-    const watcher = fs.watchDir(dirPath, (changeEvent, filePath) => {
+    const watcher = await fs.watchDir(dirPath, (changeEvent, filePath) => {
       if (sender.isDestroyed()) {
         stopWatcher(watchId)
         return

@@ -1091,4 +1091,33 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     ).rejects.toThrow('目标浏览器 Tab 不属于任务项目')
     expect(bridge.switchToPage).not.toHaveBeenCalledWith('project-b-tab')
   })
+
+  it('rejects an upload before Playwright when FileService denies the Run path', async () => {
+    const assertReadableFile = vi.fn().mockRejectedValue(new Error('OUTSIDE_WORKSPACE'))
+    const fileService = {
+      withAccess: (_context: unknown, operation: () => unknown) => operation(),
+      assertReadableFile,
+    }
+    const bridge = {
+      getPage: vi.fn(),
+      getActiveTabId: vi.fn(),
+    }
+    const module = new BrowserToolModule(bridge as any, null, null, null, null, fileService as any)
+
+    await expect(
+      module.execute(
+        'browser_upload_file',
+        { selector: '#file', paths: ['/workspace/b/canary.txt'] },
+        {
+          trustedWorkspace: {
+            kind: 'local',
+            rootPath: '/workspace/a',
+            workspaceKey: '/workspace/a',
+          },
+        },
+      ),
+    ).rejects.toThrow('OUTSIDE_WORKSPACE')
+    expect(assertReadableFile).toHaveBeenCalledWith('/workspace/b/canary.txt')
+    expect(bridge.getPage).not.toHaveBeenCalled()
+  })
 })

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { toolNameToActionType, AndroidToolModule } from './index'
 import { ANDROID_ACTION_TYPES } from '../../../android/android-actions'
 
@@ -75,5 +75,33 @@ describe('AndroidToolModule 工具定义', () => {
       const actionType = toolNameToActionType(def.name)
       expect(ANDROID_ACTION_TYPES).toContain(actionType)
     }
+  })
+
+  it('在 ADB 副作用前拒绝 Run 工作空间外的 APK', async () => {
+    const assertReadableFile = vi.fn().mockRejectedValue(new Error('OUTSIDE_WORKSPACE'))
+    const fileService = {
+      withAccess: (_context: unknown, operation: () => unknown) => operation(),
+      assertReadableFile,
+    }
+    const securedModule = new AndroidToolModule(
+      { isConnected: () => true } as any,
+      undefined,
+      fileService as any,
+    )
+
+    await expect(
+      securedModule.execute(
+        'android_install_apk',
+        { path: '/workspace/b/canary.apk' },
+        {
+          trustedWorkspace: {
+            kind: 'local',
+            rootPath: '/workspace/a',
+            workspaceKey: '/workspace/a',
+          },
+        },
+      ),
+    ).rejects.toThrow('OUTSIDE_WORKSPACE')
+    expect(assertReadableFile).toHaveBeenCalledWith('/workspace/b/canary.apk')
   })
 })

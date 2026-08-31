@@ -40,6 +40,29 @@ describe('registerAndroidIpc', () => {
     expect(runtime.adbBridge.installApk).not.toHaveBeenCalled()
   })
 
+  it('rejects a renderer APK path when its picker capability is missing', async () => {
+    const runtime = createRuntime()
+    const sender = { id: 21 }
+    const fileService = {
+      withAccess: (_context: unknown, operation: () => unknown) => operation(),
+      assertReadableFile: vi.fn().mockRejectedValue(new Error('OUTSIDE_WORKSPACE')),
+    }
+    registerAndroidIpc(
+      runtime.adbBridge as never,
+      runtime.mainWindow as never,
+      runtime.scrcpyBridge as never,
+      runtime.activeDeviceManager as never,
+      runtime.physicalDeviceManager as never,
+      createGuard(sender) as never,
+      fileService as never,
+    )
+
+    await expect(
+      mockIpcMain.handlers.get('android:installApk')?.({ sender }, '/outside/application.apk'),
+    ).rejects.toThrow('OUTSIDE_WORKSPACE')
+    expect(runtime.adbBridge.installApk).not.toHaveBeenCalled()
+  })
+
   it('drops malformed and untrusted touch events', () => {
     const runtime = createRuntime()
     register(runtime)
@@ -85,11 +108,11 @@ function register(runtime: ReturnType<typeof createRuntime>): void {
   )
 }
 
-function createGuard(trustedSender: string) {
+function createGuard(trustedSender: unknown) {
   return {
-    assert: (event: { sender: string }) => {
+    assert: (event: { sender: unknown }) => {
       if (event.sender !== trustedSender) throw new Error('untrusted')
     },
-    isTrusted: (event: { sender: string }) => event.sender === trustedSender,
+    isTrusted: (event: { sender: unknown }) => event.sender === trustedSender,
   }
 }

@@ -8,6 +8,9 @@ function createFixture() {
     isDestroyed: () => false,
     webContents: { send },
   } as unknown as BrowserWindow
+  const withAccess = vi.fn((_context: unknown, operation: () => unknown) =>
+    operation(),
+  ) as unknown as NonNullable<EditorFileAccess['withAccess']>
   const fileAccess: EditorFileAccess = {
     readFile: vi.fn().mockResolvedValue({ content: 'project text', encoding: 'utf-8' }),
     readDir: vi.fn().mockResolvedValue([
@@ -15,11 +18,25 @@ function createFixture() {
       { name: 'package.json', path: '/project/package.json', type: 'file', extension: '.json' },
     ]),
     writeFile: vi.fn().mockResolvedValue(undefined),
+    withAccess,
   }
   return { module: new EditorToolModule(mainWindow, fileAccess), fileAccess, send }
 }
 
 describe('EditorToolModule file access', () => {
+  it('把 Run 启动时固定的工作空间传给统一 FileService owner', async () => {
+    const { module, fileAccess } = createFixture()
+    const trustedWorkspace = {
+      kind: 'local' as const,
+      rootPath: '/project-a',
+      workspaceKey: '/project-a',
+    }
+
+    await module.execute('editor_read', { filePath: '/project-a/README.md' }, { trustedWorkspace })
+
+    expect(fileAccess.withAccess).toHaveBeenCalledWith({ trustedWorkspace }, expect.any(Function))
+  })
+
   it('指定 filePath 时直接读取磁盘，不依赖已挂载的编辑器组件', async () => {
     const { module, fileAccess, send } = createFixture()
 

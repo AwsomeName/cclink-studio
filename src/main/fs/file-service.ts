@@ -2,18 +2,21 @@ import {
   cp,
   lstat,
   mkdir,
+  open,
   readdir,
   readFile,
+  realpath,
   rename,
   rm,
   stat,
   unlink,
   writeFile,
 } from 'fs/promises'
-import { createWriteStream, watch } from 'fs'
+import { constants as fsConstants, createWriteStream, watch } from 'fs'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { join, resolve, extname, dirname, parse, sep, basename, relative, isAbsolute } from 'path'
 import { pipeline } from 'stream/promises'
-import { app, shell } from 'electron'
+import { shell } from 'electron'
 import { createHash, randomUUID } from 'crypto'
 import yauzl, { type Entry, type ZipFile } from 'yauzl'
 import { XMLParser } from 'fast-xml-parser'
@@ -56,48 +59,160 @@ const OOXML_PARSER = new XMLParser({
   trimValues: false,
 })
 
+const FILE_PICKER_CAPABILITY_TTL_MS = 2 * 60 * 1000
+const FILE_PICKER_CAPABILITY_MAX_USES = 32
+
+export interface FileAccessContext {
+  rendererId?: number
+  trustedWorkspace?: {
+    kind: 'local' | 'remote' | 'global'
+    rootPath?: string
+  }
+}
+
+export interface FileServiceOptions {
+  getActiveWorkspace: () => string | null
+  now?: () => number
+}
+
+interface PickerCapability {
+  path: string
+  kind: 'workspace' | 'file-read' | 'file-write'
+  expiresAt: number
+  remainingUses: number
+}
+
+type FileAccessIntent = 'read' | 'write'
+
 /**
  * 文件系统操作服务
  * 提供安全的文件读写能力，限制在工作区目录内
  */
 export class FileService {
-  /** 允许访问的根目录列表（用户主目录 + Desktop + Documents + Downloads） */
-  private allowedRoots: string[]
-  private markdownDocuments: MarkdownDocumentService
+  private readonly markdownDocuments: MarkdownDocumentService
+  private readonly accessContexts = new AsyncLocalStorage<FileAccessContext>()
+  private readonly pickerCapabilities = new Map<number, PickerCapability[]>()
+  private readonly getActiveWorkspace: () => string | null
+  private readonly now: () => number
 
-  constructor() {
-    const home = app.getPath('home')
-    this.allowedRoots = [
-      home,
-      app.getPath('desktop'),
-      app.getPath('documents'),
-      app.getPath('downloads'),
-    ]
+  constructor(options: FileServiceOptions) {
+    this.getActiveWorkspace = options.getActiveWorkspace
+    this.now = options.now ?? Date.now
     this.markdownDocuments = new MarkdownDocumentService((filePath) => this.validatePath(filePath))
+  }
+
+  withAccess<T>(context: FileAccessContext, operation: () => T): T {
+    return this.accessContexts.run(context, operation)
+  }
+
+  getCurrentAccessRoot(): string | null {
+    const context = this.accessContexts.getStore()
+    if (context?.trustedWorkspace?.kind === 'local' && context.trustedWorkspace.rootPath) {
+      return resolve(context.trustedWorkspace.rootPath)
+    }
+    if (context?.trustedWorkspace) return null
+    return this.getActiveWorkspace()
+  }
+
+  registerPickerSelection(
+    rendererId: number,
+    paths: string[],
+    kind: PickerCapability['kind'],
+  ): void {
+    const expiresAt = this.now() + FILE_PICKER_CAPABILITY_TTL_MS
+    const existing = this.getLivePickerCapabilities(rendererId)
+    for (const selectedPath of paths) {
+      const path = resolve(selectedPath)
+      const previous = existing.find(
+        (capability) => capability.path === path && capability.kind === kind,
+      )
+      if (previous) {
+        previous.expiresAt = expiresAt
+        previous.remainingUses = FILE_PICKER_CAPABILITY_MAX_USES
+      } else {
+        existing.push({
+          path,
+          kind,
+          expiresAt,
+          remainingUses: FILE_PICKER_CAPABILITY_MAX_USES,
+        })
+      }
+    }
+    this.pickerCapabilities.set(rendererId, existing)
+  }
+
+  canActivateWorkspace(rendererId: number, workspacePath: string): boolean {
+    const candidate = resolve(workspacePath)
+    const active = this.getActiveWorkspace()
+    if (active && resolve(active) === candidate) return true
+    return this.getLivePickerCapabilities(rendererId).some(
+      (capability) => capability.kind === 'workspace' && capability.path === candidate,
+    )
+  }
+
+  consumeWorkspaceActivation(rendererId: number, workspacePath: string): boolean {
+    const candidate = resolve(workspacePath)
+    const active = this.getActiveWorkspace()
+    if (active && resolve(active) === candidate) return true
+    const capabilities = this.getLivePickerCapabilities(rendererId)
+    const index = capabilities.findIndex(
+      (capability) => capability.kind === 'workspace' && capability.path === candidate,
+    )
+    if (index === -1) return false
+    capabilities.splice(index, 1)
+    this.pickerCapabilities.set(rendererId, capabilities)
+    return true
   }
 
   /**
    * 安全校验：确保目标路径在允许的根目录下
    * 防止目录穿越攻击（如 ../../etc/passwd）和路径前缀攻击（如 /Users/testuser）
    */
-  private validatePath(targetPath: string): string {
+  private async validatePath(
+    targetPath: string,
+    intent: FileAccessIntent = 'read',
+  ): Promise<string> {
     const resolved = resolve(targetPath)
-    const isAllowed = this.allowedRoots.some(
-      (root) => resolved === root || resolved.startsWith(root + sep),
-    )
-    if (!isAllowed) {
-      throw new Error(`路径不在允许范围内: ${resolved}`)
+    const context = this.accessContexts.getStore()
+    const trustedRoot =
+      context?.trustedWorkspace?.kind === 'local' && context.trustedWorkspace.rootPath
+        ? resolve(context.trustedWorkspace.rootPath)
+        : context?.trustedWorkspace
+          ? null
+          : this.getActiveWorkspace()
+            ? resolve(this.getActiveWorkspace()!)
+            : null
+    const pickerCapability = this.findPickerCapability(context?.rendererId, resolved, intent)
+    if (!trustedRoot && !pickerCapability) {
+      throw new Error('OUTSIDE_WORKSPACE: 当前操作没有可信本地工作空间或文件选择器授权')
     }
+    const canonical = await canonicalizeExistingOrParent(resolved)
+    if (trustedRoot && !pickerCapability) {
+      const canonicalRoot = await realpath(trustedRoot)
+      if (!isPathWithin(canonicalRoot, canonical)) {
+        throw new Error(`OUTSIDE_WORKSPACE: 路径的真实目标不属于可信工作空间: ${resolved}`)
+      }
+    } else if (pickerCapability) {
+      const canonicalCapability = await canonicalizeExistingOrParent(pickerCapability.path)
+      const matchesCapability =
+        pickerCapability.kind === 'workspace'
+          ? isPathWithin(canonicalCapability, canonical)
+          : canonical === canonicalCapability
+      if (!matchesCapability) {
+        throw new Error(`OUTSIDE_WORKSPACE: 文件选择器授权不匹配: ${resolved}`)
+      }
+    }
+    if (pickerCapability) pickerCapability.remainingUses -= 1
     return resolved
   }
 
-  private validateWorkspaceTarget(
+  private async validateWorkspaceTarget(
     workspacePath: string,
     targetPath: string,
     options: { allowWorkspaceRoot: boolean },
-  ): { workspacePath: string; targetPath: string } {
-    const safeWorkspacePath = this.validatePath(workspacePath)
-    const safeTargetPath = this.validatePath(targetPath)
+  ): Promise<{ workspacePath: string; targetPath: string }> {
+    const safeWorkspacePath = await this.validatePath(workspacePath)
+    const safeTargetPath = await this.validatePath(targetPath)
     const relativeTarget = relative(safeWorkspacePath, safeTargetPath)
     const isWithinWorkspace =
       relativeTarget === '' ||
@@ -111,9 +226,107 @@ export class FileService {
     return { workspacePath: safeWorkspacePath, targetPath: safeTargetPath }
   }
 
+  private getLivePickerCapabilities(rendererId: number): PickerCapability[] {
+    const live = (this.pickerCapabilities.get(rendererId) ?? []).filter(
+      (capability) => capability.expiresAt > this.now() && capability.remainingUses > 0,
+    )
+    this.pickerCapabilities.set(rendererId, live)
+    return live
+  }
+
+  private findPickerCapability(
+    rendererId: number | undefined,
+    targetPath: string,
+    intent: FileAccessIntent,
+  ): PickerCapability | null {
+    if (rendererId === undefined) return null
+    return (
+      this.getLivePickerCapabilities(rendererId).find((capability) => {
+        if (capability.kind === 'workspace') {
+          return intent === 'read' && isPathWithin(capability.path, targetPath)
+        }
+        if (capability.path !== targetPath) return false
+        return capability.kind === 'file-write' || intent === 'read'
+      }) ?? null
+    )
+  }
+
+  private async readAuthorizedFile(filePath: string): Promise<{
+    path: string
+    buffer: Buffer
+    fileStat: Awaited<ReturnType<typeof stat>>
+  }> {
+    const safe = await this.validatePath(filePath, 'read')
+    const before = await stat(safe)
+    const handle = await open(safe, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+    try {
+      const opened = await handle.stat()
+      if (before.dev !== opened.dev || before.ino !== opened.ino) {
+        throw new Error('OUTSIDE_WORKSPACE: 文件在安全检查后被替换')
+      }
+      const after = await stat(safe)
+      if (after.dev !== opened.dev || after.ino !== opened.ino) {
+        throw new Error('OUTSIDE_WORKSPACE: 文件路径在打开后发生变化')
+      }
+      await this.validatePath(safe, 'read')
+      return { path: safe, buffer: await handle.readFile(), fileStat: opened }
+    } finally {
+      await handle.close()
+    }
+  }
+
+  async assertReadableFile(filePath: string): Promise<string> {
+    const safe = await this.validatePath(filePath, 'read')
+    const before = await stat(safe)
+    if (!before.isFile()) throw new Error('EINVAL: 目标不是文件')
+    const handle = await open(safe, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+    try {
+      const opened = await handle.stat()
+      if (!opened.isFile() || before.dev !== opened.dev || before.ino !== opened.ino) {
+        throw new Error('OUTSIDE_WORKSPACE: 文件在安全检查后被替换')
+      }
+      return safe
+    } finally {
+      await handle.close()
+    }
+  }
+
+  async assertWritableTarget(filePath: string): Promise<string> {
+    return this.validatePath(filePath, 'write')
+  }
+
+  private async writeAuthorizedFile(
+    filePath: string,
+    content: string,
+    options: { exclusive?: boolean } = {},
+  ): Promise<string> {
+    const safe = await this.validatePath(filePath, 'write')
+    await mkdir(dirname(safe), { recursive: true })
+    await this.validatePath(safe, 'write')
+    const parentBefore = await realpath(dirname(safe))
+    const flags =
+      fsConstants.O_WRONLY |
+      fsConstants.O_CREAT |
+      fsConstants.O_NOFOLLOW |
+      (options.exclusive ? fsConstants.O_EXCL : fsConstants.O_TRUNC)
+    const handle = await open(safe, flags, 0o600)
+    try {
+      const parentAfter = await realpath(dirname(safe))
+      if (parentAfter !== parentBefore) {
+        throw new Error('OUTSIDE_WORKSPACE: 目标父目录在打开过程中发生变化')
+      }
+      await this.validatePath(safe, 'write')
+      await handle.writeFile(content, 'utf8')
+      await handle.sync()
+      return safe
+    } finally {
+      await handle.close()
+    }
+  }
+
   /** 读取目录内容（options.showHiddenFiles 为真时不过滤 . 开头的隐藏文件） */
   async readDir(dirPath: string, options?: { showHiddenFiles?: boolean }): Promise<DirEntry[]> {
-    const safe = this.validatePath(dirPath)
+    const safe = await this.validatePath(dirPath)
     const entries = await readdir(safe, { withFileTypes: true })
 
     return entries
@@ -133,8 +346,7 @@ export class FileService {
 
   /** 读取文件内容 */
   async readFile(filePath: string): Promise<{ content: string; encoding: string }> {
-    const safe = this.validatePath(filePath)
-    const buffer = await readFile(safe)
+    const { path: safe, buffer } = await this.readAuthorizedFile(filePath)
     const ext = extname(safe).toLowerCase()
 
     // 二进制文件返回 base64，避免编辑器把模型/压缩包当 UTF-8 文本解析。
@@ -146,14 +358,13 @@ export class FileService {
   }
 
   async readTextDocument(filePath: string): Promise<FsTextDocumentSnapshot> {
-    const safe = this.validatePath(filePath)
-    const [buffer, fileStat] = await Promise.all([readFile(safe), stat(safe)])
-    return textDocumentSnapshot(safe, buffer, fileStat.mtimeMs)
+    const { path: safe, buffer, fileStat } = await this.readAuthorizedFile(filePath)
+    return textDocumentSnapshot(safe, buffer, Number(fileStat.mtimeMs))
   }
 
   /** 渲染只读文件预览。渲染进程只消费结构化结果，不直接读取本机文件。 */
   async renderFile(filePath: string): Promise<FsRenderResult> {
-    const safe = this.validatePath(filePath)
+    const safe = await this.validatePath(filePath)
     const ext = extname(safe).toLowerCase()
     const parsed = parse(safe)
 
@@ -266,7 +477,7 @@ export class FileService {
 
   /** 解压 zip 到同级同名目录；自动避开重名目录，并阻止 zip slip 路径穿越。 */
   async extractZip(filePath: string): Promise<FsExtractZipResult> {
-    const safe = this.validatePath(filePath)
+    const safe = await this.validatePath(filePath)
     if (extname(safe).toLowerCase() !== '.zip') {
       throw new Error('仅支持解压 .zip 文件')
     }
@@ -279,17 +490,12 @@ export class FileService {
 
   /** 写入文件 */
   async writeFile(filePath: string, content: string): Promise<void> {
-    // 写入前确保目录存在
-    const safe = this.validatePath(filePath)
-    await mkdir(dirname(safe), { recursive: true })
-    await writeFile(safe, content, 'utf-8')
+    await this.writeAuthorizedFile(filePath, content)
   }
 
   /** 新建空文件；目标已存在时拒绝，避免文件树“新建”静默截断原文件。 */
   async createFile(filePath: string): Promise<void> {
-    const safe = this.validatePath(filePath)
-    await mkdir(dirname(safe), { recursive: true })
-    await writeFile(safe, '', { encoding: 'utf-8', flag: 'wx' })
+    await this.writeAuthorizedFile(filePath, '', { exclusive: true })
   }
 
   async saveTextDocument(input: {
@@ -298,7 +504,7 @@ export class FileService {
     expectedHash?: string
     force?: boolean
   }): Promise<FsSaveTextDocumentResult> {
-    const safe = this.validatePath(input.filePath)
+    const safe = await this.validatePath(input.filePath, 'write')
     await mkdir(dirname(safe), { recursive: true })
 
     const current = await readTextDocumentIfExists(safe)
@@ -327,8 +533,8 @@ export class FileService {
     documentPath: string,
     sourcePath: string,
   ): Promise<FsDocumentAssetResult> {
-    const safeDocument = this.validatePath(documentPath)
-    const safeSource = this.validatePath(sourcePath)
+    const safeDocument = await this.validatePath(documentPath, 'write')
+    const safeSource = await this.validatePath(sourcePath)
     const extension = extname(safeSource).toLowerCase()
     if (!isImageFileExtension(extension)) {
       throw new Error('仅支持导入图片资源')
@@ -343,7 +549,7 @@ export class FileService {
     content: string
     encoding: 'base64'
   }): Promise<FsDocumentAssetResult> {
-    const safeDocument = this.validatePath(input.documentPath)
+    const safeDocument = await this.validatePath(input.documentPath, 'write')
     if (input.encoding !== 'base64' || !input.mimeType.startsWith('image/')) {
       throw new Error('仅支持 base64 图片资源')
     }
@@ -373,7 +579,7 @@ export class FileService {
     snapshot: FsTextDocumentSnapshot
     assets: FsDocumentAssetResult[]
   }> {
-    const safeDocument = this.validatePath(input.documentPath)
+    const safeDocument = await this.validatePath(input.documentPath, 'write')
     if (!isMarkdownDocumentPath(safeDocument)) {
       throw new Error('自动配图仅支持 Markdown 文档')
     }
@@ -434,7 +640,7 @@ export class FileService {
       placement: 'before' | 'after' | 'end'
     }>
   }): Promise<FsTextDocumentSnapshot> {
-    const safeDocument = this.validatePath(input.documentPath)
+    const safeDocument = await this.validatePath(input.documentPath)
     if (!isMarkdownDocumentPath(safeDocument)) {
       throw new Error('自动配图仅支持 Markdown 文档')
     }
@@ -447,7 +653,7 @@ export class FileService {
   }
 
   async inspectMarkdownDocument(documentPath: string) {
-    const safe = this.validatePath(documentPath)
+    const safe = await this.validatePath(documentPath)
     if (!isMarkdownDocumentPath(safe)) throw new Error('仅支持检查 Markdown 文档')
     return this.markdownDocuments.inspect(safe)
   }
@@ -457,8 +663,8 @@ export class FileService {
     targetPath: string
     content: string
   }) {
-    const sourcePath = input.sourcePath ? this.validatePath(input.sourcePath) : undefined
-    const targetPath = this.validatePath(input.targetPath)
+    const sourcePath = input.sourcePath ? await this.validatePath(input.sourcePath) : undefined
+    const targetPath = await this.validatePath(input.targetPath, 'write')
     if (!isMarkdownDocumentPath(targetPath)) throw new Error('目标必须是 Markdown 文件')
     return this.markdownDocuments.saveAs({
       sourcePath,
@@ -473,8 +679,8 @@ export class FileService {
   }
 
   async relocateMarkdownDocument(input: { sourcePath: string; targetPath: string }) {
-    const sourcePath = this.validatePath(input.sourcePath)
-    const targetPath = this.validatePath(input.targetPath)
+    const sourcePath = await this.validatePath(input.sourcePath, 'write')
+    const targetPath = await this.validatePath(input.targetPath, 'write')
     if (!isMarkdownDocumentPath(sourcePath) || !isMarkdownDocumentPath(targetPath)) {
       throw new Error('仅支持移动或重命名 Markdown 文档资源组')
     }
@@ -490,8 +696,8 @@ export class FileService {
   }
 
   async exportMarkdownDocumentZip(input: { documentPath: string; targetPath: string }) {
-    const documentPath = this.validatePath(input.documentPath)
-    const targetPath = this.validatePath(input.targetPath)
+    const documentPath = await this.validatePath(input.documentPath)
+    const targetPath = await this.validatePath(input.targetPath, 'write')
     if (!isMarkdownDocumentPath(documentPath)) throw new Error('仅支持导出 Markdown 文档')
     if (extname(targetPath).toLowerCase() !== '.zip')
       throw new Error('导出文件必须使用 .zip 扩展名')
@@ -511,7 +717,7 @@ export class FileService {
     documentPath: string
     includeAssets: boolean
   }) {
-    const { targetPath: documentPath } = this.validateWorkspaceTarget(
+    const { targetPath: documentPath } = await this.validateWorkspaceTarget(
       input.workspacePath,
       input.documentPath,
       { allowWorkspaceRoot: false },
@@ -536,23 +742,37 @@ export class FileService {
   }
 
   async trashPath(input: { workspacePath: string; targetPath: string }) {
-    const { targetPath } = this.validateWorkspaceTarget(input.workspacePath, input.targetPath, {
-      allowWorkspaceRoot: false,
-    })
+    const { targetPath } = await this.validateWorkspaceTarget(
+      input.workspacePath,
+      input.targetPath,
+      {
+        allowWorkspaceRoot: false,
+      },
+    )
     await shell.trashItem(targetPath)
     return { trashedPath: targetPath }
   }
 
-  revealPath(input: { workspacePath: string; targetPath: string }): void {
-    const { targetPath } = this.validateWorkspaceTarget(input.workspacePath, input.targetPath, {
-      allowWorkspaceRoot: true,
-    })
+  async revealPath(input: { workspacePath: string; targetPath: string }): Promise<void> {
+    const { targetPath } = await this.validateWorkspaceTarget(
+      input.workspacePath,
+      input.targetPath,
+      {
+        allowWorkspaceRoot: true,
+      },
+    )
     shell.showItemInFolder(targetPath)
+  }
+
+  async openPath(targetPath: string): Promise<void> {
+    const safe = await this.validatePath(targetPath)
+    const error = await shell.openPath(safe)
+    if (error) throw new Error(error)
   }
 
   /** 获取文件/目录元数据 */
   async stat(filePath: string): Promise<FileStat> {
-    const safe = this.validatePath(filePath)
+    const safe = await this.validatePath(filePath)
     const s = await stat(safe)
     const parsed = parse(safe)
 
@@ -570,7 +790,7 @@ export class FileService {
   /** 安静检查路径是否为目录，用于最近项目恢复等探测场景 */
   async isDirectory(dirPath: string): Promise<boolean> {
     try {
-      const safe = this.validatePath(dirPath)
+      const safe = await this.validatePath(dirPath)
       const s = await stat(safe)
       return s.isDirectory()
     } catch {
@@ -580,14 +800,14 @@ export class FileService {
 
   /** 创建目录 */
   async mkdir(dirPath: string): Promise<void> {
-    const safe = this.validatePath(dirPath)
+    const safe = await this.validatePath(dirPath, 'write')
     await mkdir(safe, { recursive: true })
   }
 
   /** 重命名/移动文件 */
   async rename(oldPath: string, newPath: string): Promise<void> {
-    const safeOld = this.validatePath(oldPath)
-    const safeNew = this.validatePath(newPath)
+    const safeOld = await this.validatePath(oldPath, 'write')
+    const safeNew = await this.validatePath(newPath, 'write')
     if (safeOld === safeNew) return
     const targetParent = await stat(dirname(safeNew))
     if (!targetParent.isDirectory()) throw new Error('ENOTDIR: 重命名目标不是文件夹')
@@ -602,8 +822,8 @@ export class FileService {
 
   /** 移动文件/目录，不允许覆盖目标中的同名项。 */
   async move(oldPath: string, newPath: string): Promise<void> {
-    const safeOld = this.validatePath(oldPath)
-    const safeNew = this.validatePath(newPath)
+    const safeOld = await this.validatePath(oldPath, 'write')
+    const safeNew = await this.validatePath(newPath, 'write')
     if (safeOld === safeNew) return
 
     const source = await stat(safeOld)
@@ -627,10 +847,14 @@ export class FileService {
 
   /** 复制文件或目录；目标同名时生成不覆盖的“副本”名称。 */
   async copyEntry(input: FsCopyEntryInput): Promise<FsCopyEntryResult> {
-    const sourceScope = this.validateWorkspaceTarget(input.sourceWorkspacePath, input.sourcePath, {
-      allowWorkspaceRoot: true,
-    })
-    const targetScope = this.validateWorkspaceTarget(
+    const sourceScope = await this.validateWorkspaceTarget(
+      input.sourceWorkspacePath,
+      input.sourcePath,
+      {
+        allowWorkspaceRoot: true,
+      },
+    )
+    const targetScope = await this.validateWorkspaceTarget(
       input.targetWorkspacePath,
       input.targetDirectory,
       { allowWorkspaceRoot: true },
@@ -693,16 +917,16 @@ export class FileService {
 
   /** 删除文件 */
   async delete(filePath: string): Promise<void> {
-    const safe = this.validatePath(filePath)
+    const safe = await this.validatePath(filePath, 'write')
     await unlink(safe)
   }
 
   /** 监听目录变更 */
-  watchDir(
+  async watchDir(
     dirPath: string,
     onChange: (event: 'add' | 'change' | 'unlink', filePath: string) => void,
-  ): { stop: () => void } {
-    const safe = this.validatePath(dirPath)
+  ): Promise<{ stop: () => void }> {
+    const safe = await this.validatePath(dirPath)
     const watcher = watch(safe, { recursive: true }, (event, filename) => {
       if (filename) {
         onChange(event === 'rename' ? 'add' : 'change', join(safe, filename))
@@ -731,6 +955,33 @@ export interface FileStat {
   size: number
   modifiedAt: number
   createdAt: number
+}
+
+async function canonicalizeExistingOrParent(targetPath: string): Promise<string> {
+  try {
+    return await realpath(targetPath)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+
+  let existingParent = dirname(targetPath)
+  while (true) {
+    try {
+      const canonicalParent = await realpath(existingParent)
+      const suffix = relative(existingParent, targetPath)
+      return resolve(canonicalParent, suffix)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      const next = dirname(existingParent)
+      if (next === existingParent) throw error
+      existingParent = next
+    }
+  }
+}
+
+function isPathWithin(rootPath: string, candidatePath: string): boolean {
+  const fromRoot = relative(resolve(rootPath), resolve(candidatePath))
+  return fromRoot === '' || (!fromRoot.startsWith('..') && !isAbsolute(fromRoot))
 }
 
 async function uniqueExtractDir(parentDir: string, baseName: string): Promise<string> {

@@ -60,7 +60,8 @@ interface PreparedMarkdownSave {
 
 export class MarkdownDocumentService {
   constructor(
-    private validateReferencePath: (filePath: string) => string = (filePath) => filePath,
+    private validateReferencePath: (filePath: string) => string | Promise<string> = (filePath) =>
+      filePath,
   ) {}
 
   async importAsset(documentPath: string, sourcePath: string): Promise<FsDocumentAssetResult> {
@@ -159,7 +160,7 @@ export class MarkdownDocumentService {
       const absolute = resolveMarkdownReference(documentPath, reference)
       if (!absolute) continue
       try {
-        this.validateReferencePath(absolute)
+        await this.validateReferencePath(absolute)
       } catch {
         missingAssets.push(reference)
         continue
@@ -407,7 +408,7 @@ export class MarkdownDocumentService {
       const absolute = resolveMarkdownReference(documentPath, destination.value)
       if (!absolute) continue
       try {
-        this.validateReferencePath(absolute)
+        await this.validateReferencePath(absolute)
       } catch {
         missingAssets.push(destination.value)
         continue
