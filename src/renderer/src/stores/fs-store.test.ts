@@ -48,6 +48,10 @@ describe('fs-store workspace switching', () => {
       cclinkStudio: {
         fs: {
           readDir: vi.fn().mockResolvedValue([]),
+          beginFileRelocation: vi.fn().mockResolvedValue(undefined),
+          markFileRelocationCommitted: vi.fn().mockResolvedValue(undefined),
+          completeFileRelocation: vi.fn().mockResolvedValue(undefined),
+          listPendingFileRelocations: vi.fn().mockResolvedValue([]),
           isDirectory: vi.fn().mockResolvedValue(true),
           rename: vi.fn().mockResolvedValue(undefined),
           move: vi.fn().mockResolvedValue(undefined),
