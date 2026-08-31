@@ -166,9 +166,9 @@ export class FileService {
   canActivateWorkspace(rendererId: number, workspacePath: string): boolean {
     const candidate = resolve(workspacePath)
     const active = this.getActiveWorkspace()
-    if (active && resolve(active) === candidate) return true
+    if (active && isPathWithin(resolve(active), candidate)) return true
     return this.getLivePickerCapabilities(rendererId).some(
-      (capability) => capability.kind === 'workspace' && capability.path === candidate,
+      (capability) => capability.kind === 'workspace' && isPathWithin(capability.path, candidate),
     )
   }
 

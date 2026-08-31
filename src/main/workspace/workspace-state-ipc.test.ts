@@ -150,6 +150,50 @@ describe('registerWorkspaceStateIpc', () => {
     ).resolves.toMatchObject({ valid: false })
     expect(service.resolveLocalWorkspace).not.toHaveBeenCalled()
   })
+
+  it('does not let workspace-state reads or writes mint a capability for an arbitrary path', async () => {
+    const service = createService()
+    const sender = { id: 23 }
+    const fileService = {
+      canActivateWorkspace: vi.fn((_rendererId: number, path: string) => path === '/tmp/allowed'),
+      registerPickerSelection: vi.fn(),
+    }
+    registerWorkspaceStateIpc(
+      service as never,
+      createGuard(sender) as never,
+      undefined,
+      fileService as never,
+    )
+
+    await expect(
+      mockIpcMain.handlers.get('workspaceState:get')?.({ sender }, '/tmp/invented', null),
+    ).rejects.toThrow('主进程已授权')
+    await expect(
+      mockIpcMain.handlers.get('workspaceState:setSection')?.(
+        { sender },
+        '/tmp/invented',
+        'layout',
+        {},
+        null,
+      ),
+    ).resolves.toMatchObject({ success: false })
+    await expect(
+      mockIpcMain.handlers.get('workspaceState:clear')?.({ sender }, '/tmp/invented', null),
+    ).resolves.toMatchObject({ success: false })
+    expect(service.getSnapshot).not.toHaveBeenCalled()
+    expect(service.setSection).not.toHaveBeenCalled()
+    expect(service.clear).not.toHaveBeenCalled()
+
+    await expect(
+      mockIpcMain.handlers.get('workspaceState:setSection')?.(
+        { sender },
+        '/tmp/allowed',
+        'layout',
+        { sidebarWidth: 240 },
+        null,
+      ),
+    ).resolves.toMatchObject({ success: true })
+  })
 })
 
 function createService() {

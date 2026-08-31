@@ -6,6 +6,7 @@ import {
 } from '../ipc/trusted-renderer-guard'
 import type { SettingsService } from '../settings/settings-service'
 import type { FileService } from '../fs/file-service'
+import { isAbsolute } from 'node:path'
 
 export function registerWorkspaceStateIpc(
   workspaceStateService: WorkspaceStateService,
@@ -13,6 +14,16 @@ export function registerWorkspaceStateIpc(
   settingsService?: SettingsService,
   fileService?: FileService,
 ): void {
+  const assertWorkspaceAccess = (rendererId: number, workspaceKey?: string | null): void => {
+    if (
+      workspaceKey &&
+      isAbsolute(workspaceKey) &&
+      fileService &&
+      !fileService.canActivateWorkspace(rendererId, workspaceKey)
+    ) {
+      throw new Error('工作空间状态只能访问当前项目或主进程已授权的项目')
+    }
+  }
   registerTrustedIpcContract(
     workspaceStateIpcContracts.resolveLocalWorkspace,
     trustedRendererGuard,
@@ -58,8 +69,10 @@ export function registerWorkspaceStateIpc(
   registerTrustedIpcContract(
     workspaceStateIpcContracts.get,
     trustedRendererGuard,
-    async (_event, workspaceKey, ownerKey) =>
-      workspaceStateService.getSnapshot(workspaceKey, ownerKey),
+    async (event, workspaceKey, ownerKey) => {
+      assertWorkspaceAccess(event.sender.id, workspaceKey)
+      return workspaceStateService.getSnapshot(workspaceKey, ownerKey)
+    },
   )
 
   registerTrustedIpcContract(
@@ -67,6 +80,7 @@ export function registerWorkspaceStateIpc(
     trustedRendererGuard,
     async (_event, workspaceKey, section, value: unknown, ownerKey, options) => {
       try {
+        assertWorkspaceAccess(_event.sender.id, workspaceKey)
         if (section === 'tabs' || section === 'browserTabs' || section === 'browserBookmarks') {
           throw new Error(`${section} 已由主进程 Workbench model 单独拥有，renderer 不得直接写入`)
         }
@@ -88,6 +102,7 @@ export function registerWorkspaceStateIpc(
     trustedRendererGuard,
     async (_event, workspaceKey, ownerKey) => {
       try {
+        assertWorkspaceAccess(_event.sender.id, workspaceKey)
         await workspaceStateService.clear(workspaceKey, ownerKey)
         return { success: true }
       } catch (error: unknown) {

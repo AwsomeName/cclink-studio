@@ -258,6 +258,9 @@ describe('FileService', () => {
     expect(service.canActivateWorkspace(7, workspace)).toBe(false)
     service.registerPickerSelection(7, [workspace], 'workspace')
     expect(service.canActivateWorkspace(7, workspace)).toBe(true)
+    const nestedWorkspace = join(workspace, 'nested')
+    await mkdir(nestedWorkspace)
+    expect(service.canActivateWorkspace(7, nestedWorkspace)).toBe(true)
     expect(service.canActivateWorkspace(8, workspace)).toBe(false)
     await expect(
       service.withAccess({ rendererId: 7 }, () => service.readFile(filePath)),

@@ -8,7 +8,11 @@ import { promisify } from 'node:util'
 import { chromium } from 'playwright-core'
 import { createSmokeRuntime } from './smoke-runtime.mjs'
 
-const { rootDir, logFile, rendererOrigin, runRestart } = createSmokeRuntime(import.meta.url)
+const { rootDir, runDir, logFile, rendererOrigin, runRestart } = createSmokeRuntime(import.meta.url)
+const workspaceFixtureRoot = join(
+  homedir(),
+  `.cclink-studio-ui-smoke-${new URL(rendererOrigin).port}`,
+)
 const keepRunning = process.argv.includes('--keep-running')
 const agentPanelOnly = process.argv.includes('--agent-panel-only')
 const webAffairsOnly = process.argv.includes('--web-affairs-only')
@@ -209,7 +213,49 @@ async function runGit(cwd, args) {
   return execFileAsync('git', args, { cwd, encoding: 'utf8' })
 }
 
+async function prepareSmokeWorkspaceCapabilities() {
+  const userDataPath = join(runDir, 'user-data')
+  await mkdir(userDataPath, { recursive: true })
+  await mkdir(workspaceFixtureRoot, { recursive: true })
+  const statePath = join(userDataPath, 'workspace-state.json')
+  const existingState = await readFile(statePath, 'utf8')
+    .then((value) => JSON.parse(value))
+    .catch(() => ({ version: 2, workspaces: {}, localWorkspaces: {} }))
+  existingState.version = 2
+  existingState.workspaces ??= {}
+  existingState.localWorkspaces ??= {}
+  const timestamp = Date.now()
+  existingState.localWorkspaces['ui-smoke-repository'] = {
+    workspaceKey: rootDir,
+    workspacePath: rootDir,
+    ownerKey: null,
+    updatedAt: timestamp,
+    storage: 'fallback',
+    projectId: null,
+  }
+  existingState.localWorkspaces['ui-smoke-fixtures'] = {
+    workspaceKey: workspaceFixtureRoot,
+    workspacePath: workspaceFixtureRoot,
+    ownerKey: null,
+    updatedAt: timestamp,
+    storage: 'fallback',
+    projectId: null,
+  }
+  await writeFile(statePath, JSON.stringify(existingState), 'utf8')
+
+  const settingsPath = join(userDataPath, 'settings.json')
+  const settings = await readFile(settingsPath, 'utf8')
+    .then((value) => JSON.parse(value))
+    .catch(() => ({}))
+  settings.lastWorkspacePath = rootDir
+  settings.recentWorkspacePaths = Array.from(
+    new Set([rootDir, workspaceFixtureRoot, ...(settings.recentWorkspacePaths ?? [])]),
+  )
+  await writeFile(settingsPath, JSON.stringify(settings), 'utf8')
+}
+
 async function main() {
+  await prepareSmokeWorkspaceCapabilities()
   const initialLog = await readLog()
   runRestart('restart')
   startedBySmoke = true
@@ -270,7 +316,7 @@ async function main() {
   await runCheck(
     'PDF pages render visibly with paging controls and explicit failure fallback',
     async () => {
-      const fixtureDir = await mkdtemp(join(homedir(), '.cclink-studio-ui-pdf-'))
+      const fixtureDir = await mkdtemp(join(rootDir, '.cclink-studio-ui-pdf-'))
       const pdfPath = join(fixtureDir, 'visible-preview.pdf')
       const invalidPdfPath = join(fixtureDir, 'invalid-preview.pdf')
       try {
@@ -1183,7 +1229,7 @@ async function main() {
   })
 
   await runCheck('Git compact commit menu executes commit and push actions', async () => {
-    const fixtureRoot = await mkdtemp(join(homedir(), '.cclink-studio-ui-git-'))
+    const fixtureRoot = await mkdtemp(join(workspaceFixtureRoot, 'git-'))
     const workspacePath = join(fixtureRoot, 'workspace')
     const remotePath = join(fixtureRoot, 'remote.git')
     try {
@@ -1201,11 +1247,16 @@ async function main() {
       await runGit(workspacePath, ['add', 'tracked.txt'])
       await writeFile(join(workspacePath, 'leave-untracked.txt'), 'keep local\n', 'utf8')
 
-      const opened = await page.evaluate(async (path) => {
+      const openResult = await page.evaluate(async (path) => {
         const { useFsStore } = await import('/src/stores/fs-store.ts')
-        return useFsStore.getState().openRecentWorkspace(path)
+        const opened = await useFsStore.getState().openRecentWorkspace(path)
+        const state = useFsStore.getState()
+        return { opened, error: state.error, workspacePath: state.workspacePath }
       }, workspacePath)
-      assert(opened, 'temporary Git workspace could not be opened')
+      assert(
+        openResult.opened,
+        `temporary Git workspace could not be opened: ${JSON.stringify(openResult)}`,
+      )
 
       const browserTabId = await page.evaluate(async (initialUrl) => {
         const [{ openDefaultBrowserTab }, { useWorkspaceStore }] = await Promise.all([
@@ -2210,15 +2261,20 @@ async function main() {
       if (!account) throw new Error('global smoke account missing')
       return { accountId: account.id, browserProfileId: account.browserProfileId }
     }, accountLabel)
-    const secondProjectPath = join(rootDir, 'ui-smoke-project-b')
+    const secondProjectPath = join(workspaceFixtureRoot, 'project-b')
     await mkdir(secondProjectPath, { recursive: true })
     await writeFile(join(secondProjectPath, 'README.md'), '# UI Smoke Project B\n', 'utf8')
     try {
       const openedSecond = await page.evaluate(async (workspacePath) => {
         const { useFsStore } = await import('/src/stores/fs-store.ts')
-        return useFsStore.getState().openRecentWorkspace(workspacePath)
+        const opened = await useFsStore.getState().openRecentWorkspace(workspacePath)
+        const state = useFsStore.getState()
+        return { opened, error: state.error, workspacePath: state.workspacePath }
       }, secondProjectPath)
-      assert(openedSecond, 'second smoke project could not be opened')
+      assert(
+        openedSecond.opened,
+        `second smoke project could not be opened: ${JSON.stringify(openedSecond)}`,
+      )
       await clickByTitle(page, '网站与账号')
       await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
       await matrixRow().waitFor({ state: 'visible', timeout: 10_000 })
@@ -2811,6 +2867,7 @@ async function main() {
   const failed = results.filter((result) => result.status === 'fail')
   const skipped = results.filter((result) => result.status === 'skip')
   if (startedBySmoke && !keepRunning) runRestart('stop')
+  if (!keepRunning) await rm(workspaceFixtureRoot, { recursive: true, force: true })
   if (failed.length > 0) {
     console.error(
       `\nUI smoke failed: ${failed.length} failed, ${skipped.length} skipped, ${results.length} total`,
@@ -2833,6 +2890,7 @@ main().catch(async (error) => {
       // best effort cleanup
     }
   }
+  if (!keepRunning) await rm(workspaceFixtureRoot, { recursive: true, force: true }).catch(() => {})
   console.error(error)
   process.exit(1)
 })
