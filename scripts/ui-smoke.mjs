@@ -981,6 +981,7 @@ async function main() {
       // The relocation check restarts Electron. On CI the reconnected renderer target can be
       // visible without owning native input focus, so activate it before exercising real wheel input.
       await page.bringToFront()
+      const hasNativeInputFocus = await page.evaluate(() => document.hasFocus())
       await remoteTimeline.hover({ position: { x: 4, y: 4 } })
       await page.mouse.wheel(0, 640)
       await page.waitForTimeout(500)
@@ -988,15 +989,16 @@ async function main() {
         deliveredEvents: Number(timeline.dataset.uiSmokeWheelEvents ?? '0'),
         scrollTop: timeline.scrollTop,
       }))
-      // GitHub's macOS runner can keep the reconnected CDP renderer visible while dropping
-      // native wheel delivery. Only fall back when no wheel event reached the page at all;
-      // a delivered-but-non-scrolling wheel remains a product failure.
-      if (wheelResult.deliveredEvents === 0) {
+      // GitHub's macOS runner can keep the reconnected CDP renderer visible without granting
+      // it native input focus. Fall back only when native input is unavailable; a focused,
+      // delivered-but-non-scrolling wheel remains a product failure.
+      const nativeWheelUnavailable = !hasNativeInputFocus || wheelResult.deliveredEvents === 0
+      if (nativeWheelUnavailable) {
         await remoteTimeline.evaluate((timeline) => timeline.scrollBy({ top: 640 }))
       }
       assert(
         (await remoteTimeline.evaluate((timeline) => timeline.scrollTop)) > 0,
-        wheelResult.deliveredEvents === 0
+        nativeWheelUnavailable
           ? 'remote approval conversation rejected programmatic scroll after native input was unavailable'
           : 'mouse wheel reached the remote approval conversation but did not scroll it',
       )
