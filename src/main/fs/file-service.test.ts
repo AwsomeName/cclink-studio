@@ -263,8 +263,11 @@ describe('FileService', () => {
     expect(service.canActivateWorkspace(7, nestedWorkspace)).toBe(true)
     expect(service.canActivateWorkspace(8, workspace)).toBe(false)
     await expect(
+      service.withAccess({ rendererId: 7 }, () => service.readDir(workspace)),
+    ).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ name: 'README.md' })]))
+    await expect(
       service.withAccess({ rendererId: 7 }, () => service.readFile(filePath)),
-    ).resolves.toMatchObject({ content: '# Selected' })
+    ).rejects.toThrow('OUTSIDE_WORKSPACE')
     await expect(
       service.withAccess({ rendererId: 7 }, () => service.writeFile(filePath, 'changed')),
     ).rejects.toThrow('OUTSIDE_WORKSPACE')

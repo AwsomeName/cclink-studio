@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from 'node:child_process'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -22,6 +22,7 @@ const dismissableOnly = process.argv.includes('--dismissable-only')
 const tabCreateOnly = process.argv.includes('--tab-create-only')
 const pdfOnly = process.argv.includes('--pdf-only')
 const settingsOnly = process.argv.includes('--settings-only')
+const securityWorkspaceOnly = process.argv.includes('--security-workspace-only')
 const uiReadyTimeoutMs = 30_000
 const globalWebResourcesCheck = 'global web resources reuse one account and matrix across projects'
 const webAffairPersistenceCheck = 'web affair persists a five-node workflow and node progress'
@@ -52,6 +53,11 @@ const settingsChecks = new Set([
   'main renderer enforces its CSP source boundary',
   'first screen has no login wall',
   'settings page opens and searches locally',
+])
+const securityWorkspaceChecks = new Set([
+  'main renderer enforces its CSP source boundary',
+  'first screen has no login wall',
+  'workspace file and search boundaries survive a real project switch',
 ])
 const agentPanelChecks = new Set([
   'main renderer enforces its CSP source boundary',
@@ -142,6 +148,7 @@ async function runCheck(name, fn, options = {}) {
   if (tabCreateOnly && !tabCreateChecks.has(name)) return
   if (pdfOnly && !pdfChecks.has(name)) return
   if (settingsOnly && !settingsChecks.has(name)) return
+  if (securityWorkspaceOnly && !securityWorkspaceChecks.has(name)) return
   const blockedBy = (options.dependsOn ?? []).find(
     (dependency) => results.find((result) => result.name === dependency)?.status !== 'pass',
   )
@@ -311,6 +318,127 @@ async function main() {
     )
     assert(!text.includes('登录 CCLink'), 'login copy should not block the shell')
     return 'main window ready'
+  })
+
+  await runCheck('workspace file and search boundaries survive a real project switch', async () => {
+    const workspaceA = join(workspaceFixtureRoot, 'security-workspace-a')
+    const workspaceB = join(workspaceFixtureRoot, 'security-workspace-b')
+    const outsideFile = join(workspaceFixtureRoot, 'outside-secret.txt')
+    const deepDirectory = join(workspaceA, 'one', 'two', 'three', 'four', 'five')
+    await mkdir(deepDirectory, { recursive: true })
+    await mkdir(workspaceB, { recursive: true })
+    await writeFile(join(deepDirectory, 'a-only-canary.txt'), 'workspace-a', 'utf8')
+    await writeFile(join(workspaceA, 'a-second-canary.txt'), 'workspace-a-2', 'utf8')
+    await writeFile(join(workspaceB, 'b-only-canary.txt'), 'workspace-b', 'utf8')
+    await writeFile(outsideFile, 'outside', 'utf8')
+    await symlink(outsideFile, join(workspaceA, 'outside-link.txt'))
+    try {
+      const result = await page.evaluate(async ({ workspaceA, workspaceB, outsideFile }) => {
+        const [{ useFsStore }, { useWorkspaceStore }] = await Promise.all([
+          import('/src/stores/fs-store.ts'),
+          import('/src/stores/workspace-store.ts'),
+        ])
+        const openedA = await useFsStore.getState().openRecentWorkspace(workspaceA)
+        if (!openedA) return { openedA, error: useFsStore.getState().error }
+        const generationA = useWorkspaceStore.getState().generation
+        const deep = await window.cclinkStudio.fs.searchWorkspace({
+          workspaceKey: workspaceA,
+          generation: generationA,
+          requestId: crypto.randomUUID(),
+          query: 'a-only-canary',
+        })
+        const limited = await window.cclinkStudio.fs.searchWorkspace({
+          workspaceKey: workspaceA,
+          generation: generationA,
+          requestId: crypto.randomUUID(),
+          query: 'canary',
+          maxResults: 1,
+        })
+        const deny = async (operation) => {
+          try {
+            await operation()
+            return false
+          } catch {
+            return true
+          }
+        }
+        const siblingDenied = await deny(() =>
+          window.cclinkStudio.fs.readFile(`${workspaceB}/b-only-canary.txt`),
+        )
+        const symlinkDenied = await deny(() =>
+          window.cclinkStudio.fs.readFile(`${workspaceA}/outside-link.txt`),
+        )
+        const newOutsideDenied = await deny(() =>
+          window.cclinkStudio.fs.writeFile(`${outsideFile}.new`, 'escape'),
+        )
+        const staleRequest = window.cclinkStudio.fs
+          .searchWorkspace({
+            workspaceKey: workspaceA,
+            generation: generationA,
+            requestId: crypto.randomUUID(),
+            query: 'canary',
+          })
+          .then((value) => ({ ok: true, value }))
+          .catch((error) => ({ ok: false, error: String(error) }))
+        const openedB = await useFsStore.getState().openRecentWorkspace(workspaceB)
+        const stale = await staleRequest
+        const generationB = useWorkspaceStore.getState().generation
+        const current = await window.cclinkStudio.fs.searchWorkspace({
+          workspaceKey: workspaceB,
+          generation: generationB,
+          requestId: crypto.randomUUID(),
+          query: 'canary',
+        })
+        const oldWorkspaceDenied = await deny(() =>
+          window.cclinkStudio.fs.readFile(`${workspaceA}/a-second-canary.txt`),
+        )
+        return {
+          openedA,
+          openedB,
+          deepNames: deep.results.map((entry) => entry.name),
+          limitedCount: limited.results.length,
+          truncated: limited.truncated,
+          siblingDenied,
+          symlinkDenied,
+          newOutsideDenied,
+          oldWorkspaceDenied,
+          staleWorkspaceKey: stale.ok ? stale.value.workspaceKey : null,
+          currentWorkspaceKey: current.workspaceKey,
+          currentNames: current.results.map((entry) => entry.name),
+        }
+      }, { workspaceA, workspaceB, outsideFile })
+      assert(result.openedA && result.openedB, `workspace switch failed: ${JSON.stringify(result)}`)
+      assert(result.deepNames.includes('a-only-canary.txt'), 'deep workspace file was not found')
+      assert(result.limitedCount === 1 && result.truncated, 'search truncation was not explicit')
+      assert(
+        result.siblingDenied &&
+          result.symlinkDenied &&
+          result.newOutsideDenied &&
+          result.oldWorkspaceDenied,
+        `workspace boundary escaped: ${JSON.stringify(result)}`,
+      )
+      assert(
+        result.staleWorkspaceKey === null || result.staleWorkspaceKey === workspaceA,
+        'late search response was rebound to another workspace',
+      )
+      assert(
+        result.currentWorkspaceKey === workspaceB &&
+          result.currentNames.includes('b-only-canary.txt') &&
+          !result.currentNames.includes('a-only-canary.txt'),
+        'workspace B search mixed workspace A results',
+      )
+      return 'deep search, truncation, sibling/symlink/new-target denial, and generation-bound switch verified'
+    } finally {
+      await page.evaluate(async (path) => {
+        const { useFsStore } = await import('/src/stores/fs-store.ts')
+        await useFsStore.getState().openRecentWorkspace(path)
+      }, rootDir)
+      await Promise.all([
+        rm(workspaceA, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+        rm(workspaceB, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+        rm(outsideFile, { force: true }),
+      ])
+    }
   })
 
   await runCheck(
@@ -2390,7 +2518,7 @@ async function main() {
         await affairRow().click()
       }
 
-      await page.locator('.web-affair-tab').waitFor({ state: 'visible', timeout: 10_000 })
+      await page.locator('.web-affair-tab').waitFor({ state: 'visible', timeout: uiReadyTimeoutMs })
       const tabText = await page.locator('.web-affair-tab').innerText()
       assert(tabText.includes('相关资源'), 'affair resources section missing')
       assert(tabText.includes('整体流程'), 'affair flow section missing')

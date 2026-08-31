@@ -100,7 +100,7 @@ interface PickerCapability {
   remainingUses: number
 }
 
-type FileAccessIntent = 'read' | 'write'
+type FileAccessIntent = 'read' | 'write' | 'workspace-browse'
 
 /**
  * 文件系统操作服务
@@ -204,7 +204,10 @@ export class FileService {
           : this.getActiveWorkspace()
             ? resolve(this.getActiveWorkspace()!)
             : null
-    const pickerCapability = this.findPickerCapability(context?.rendererId, resolved, intent)
+    const pickerCapability =
+      trustedRoot && isPathWithin(trustedRoot, resolved)
+        ? null
+        : this.findPickerCapability(context?.rendererId, resolved, intent)
     if (!trustedRoot && !pickerCapability) {
       throw new Error('OUTSIDE_WORKSPACE: 当前操作没有可信本地工作空间或文件选择器授权')
     }
@@ -265,7 +268,7 @@ export class FileService {
     return (
       this.getLivePickerCapabilities(rendererId).find((capability) => {
         if (capability.kind === 'workspace') {
-          return intent === 'read' && isPathWithin(capability.path, targetPath)
+          return intent === 'workspace-browse' && isPathWithin(capability.path, targetPath)
         }
         if (capability.path !== targetPath) return false
         return capability.kind === 'file-write' || intent === 'read'
@@ -348,7 +351,7 @@ export class FileService {
 
   /** 读取目录内容（options.showHiddenFiles 为真时不过滤 . 开头的隐藏文件） */
   async readDir(dirPath: string, options?: { showHiddenFiles?: boolean }): Promise<DirEntry[]> {
-    const safe = await this.validatePath(dirPath)
+    const safe = await this.validatePath(dirPath, 'workspace-browse')
     const entries = await readdir(safe, { withFileTypes: true })
 
     return entries
@@ -915,7 +918,7 @@ export class FileService {
   /** 安静检查路径是否为目录，用于最近项目恢复等探测场景 */
   async isDirectory(dirPath: string): Promise<boolean> {
     try {
-      const safe = await this.validatePath(dirPath)
+      const safe = await this.validatePath(dirPath, 'workspace-browse')
       const s = await stat(safe)
       return s.isDirectory()
     } catch {
