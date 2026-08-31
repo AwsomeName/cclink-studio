@@ -25,6 +25,9 @@ export function registerScheduledTaskIpc(
   registerTrustedIpcContract(scheduledTasksIpc.save, trustedRendererGuard, (_event, input) =>
     service.save(input),
   )
+  registerTrustedIpcContract(scheduledTasksIpc.delete, trustedRendererGuard, (_event, input) =>
+    service.delete(input),
+  )
   registerTrustedIpcContract(scheduledTasksIpc.setEnabled, trustedRendererGuard, (_event, input) =>
     service.setEnabled(input),
   )

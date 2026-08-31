@@ -158,13 +158,17 @@ CCLink Studio Backup <backup@cclink.local>
 
 默认排除至少包括：
 
-- `.cclink-studio/`
+- `.cclink-studio/` 下的本机状态、任务、结果、备份和临时文件；只有通过 Schema、文件名、大小与
+  明显秘密检查的 `.cclink-studio/shared/scheduled-tasks/{taskId}.json` 可以进入 Git 候选。
 - `node_modules/`
 - 常见构建输出和缓存目录。
 - `.env`、`.env.*`。
 - 常见私钥、证书私钥和 SSH 密钥文件。
 
-仅依赖 ignore 规则不够：已经被 Git 跟踪的敏感文件不会因新增 exclude 而消失。因此每次提交前必须检查将要提交的路径；发现 `.env`、私钥或明显凭证文件时阻止 Push，并提示用户自行移除或确认工作空间现有 Git 规则。第一版不提供“忽略警告继续上传”。
+仅依赖 ignore 规则不够：已经被 Git 跟踪的敏感文件不会因新增 exclude 而消失。因此每次提交前
+必须检查 resulting index，Push 前还要检查全部 outgoing history；发现本机 Studio 状态、`.env`、
+私钥、明显凭证文件或非法共享任务定义时阻止操作，并提示用户自行取消跟踪或清理历史。第一版
+不提供“忽略警告继续上传”，也不自动改写历史或 Force Push。
 
 大文件、Git LFS、子模块和嵌套仓库不做自动修复。Git 或远程平台拒绝 Push 时，返回错误和诊断信息，不改写工作空间结构。
 

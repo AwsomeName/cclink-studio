@@ -139,5 +139,6 @@ export const agentApi: AgentApiContract = {
   addMcpServer: (server) => invokeIpcContract(agentMcpIpc.addServer, server),
   removeMcpServer: (name) => invokeIpcContract(agentMcpIpc.removeServer, name),
   updateMcpServer: (name, updates) => invokeIpcContract(agentMcpIpc.updateServer, name, updates),
+  copyMcpServer: (name, newName) => invokeIpcContract(agentMcpIpc.copyServer, name, newName),
   reloadMcpConfig: () => invokeIpcContract(agentMcpIpc.reloadConfig),
 }

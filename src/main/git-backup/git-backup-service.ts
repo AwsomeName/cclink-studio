@@ -274,6 +274,31 @@ export class GitBackupService {
     const hadHead = await this.gitClient.hasHead(workspacePath)
     if (hadChanges) {
       await this.gitClient.stageAll(workspacePath)
+      const forbiddenPaths = await this.gitClient.inspectCclinkStudioIndex(workspacePath)
+      if (forbiddenPaths.length > 0) {
+        throw new GitBackupError(
+          'SENSITIVE_FILES',
+          `发现禁止进入 Git 的 CCLink Studio 本机数据，已停止备份：${forbiddenPaths.join('、')}`,
+          { sensitiveFiles: forbiddenPaths },
+        )
+      }
+      const sharedTaskSecrets = await this.gitClient.inspectSharedTaskIndexSecrets(workspacePath)
+      if (sharedTaskSecrets.length > 0) {
+        throw new GitBackupError(
+          'SENSITIVE_FILES',
+          `共享任务定义疑似包含密码、Token 或密钥，已停止备份：${sharedTaskSecrets.join('、')}`,
+          { sensitiveFiles: sharedTaskSecrets },
+        )
+      }
+      const invalidSharedTasks =
+        await this.gitClient.inspectSharedTaskIndexDefinitions(workspacePath)
+      if (invalidSharedTasks.length > 0) {
+        throw new GitBackupError(
+          'SENSITIVE_FILES',
+          `共享任务定义不是合法的 v2 普通 JSON 文件，已停止备份：${invalidSharedTasks.join('、')}`,
+          { sensitiveFiles: invalidSharedTasks },
+        )
+      }
       await this.gitClient.commit(workspacePath, formatCommitMessage(this.now()))
     } else if (!hadHead) {
       await this.gitClient.commit(workspacePath, formatCommitMessage(this.now()), true)
@@ -281,6 +306,41 @@ export class GitBackupService {
 
     await this.gitClient.setRemote(workspacePath, binding.remoteName, binding.remoteUrl)
     const branch = await this.gitClient.currentBranch(workspacePath)
+    const forbiddenIndexPaths = await this.gitClient.inspectCclinkStudioIndex(workspacePath)
+    const forbiddenHistoryPaths = await this.gitClient.inspectCclinkStudioOutgoingHistory(
+      workspacePath,
+      binding.remoteName,
+      branch,
+    )
+    const forbiddenPaths = Array.from(new Set([...forbiddenIndexPaths, ...forbiddenHistoryPaths]))
+    if (forbiddenPaths.length > 0) {
+      throw new GitBackupError(
+        'SENSITIVE_FILES',
+        `Git 已跟踪或待推送历史包含禁止共享的 CCLink Studio 本机数据：${forbiddenPaths.join('、')}`,
+        { sensitiveFiles: forbiddenPaths },
+      )
+    }
+    const invalidSharedTasks = await this.gitClient.inspectSharedTaskIndexDefinitions(workspacePath)
+    const sharedTaskSecrets = await this.gitClient.inspectSharedTaskIndexSecrets(workspacePath)
+    const outgoingSharedTaskContent = await this.gitClient.inspectSharedTaskOutgoingContent(
+      workspacePath,
+      binding.remoteName,
+      branch,
+    )
+    const invalidContent = Array.from(
+      new Set([...invalidSharedTasks, ...outgoingSharedTaskContent.invalid]),
+    )
+    const sensitiveContent = Array.from(
+      new Set([...sharedTaskSecrets, ...outgoingSharedTaskContent.sensitive]),
+    )
+    if (invalidContent.length > 0 || sensitiveContent.length > 0) {
+      const affected = [...invalidContent, ...sensitiveContent]
+      throw new GitBackupError(
+        'SENSITIVE_FILES',
+        `当前或待推送历史包含无效或疑似含秘密的共享任务定义：${affected.join('、')}`,
+        { sensitiveFiles: affected },
+      )
+    }
     const authentication = await this.getAuthenticationForRemote(binding.remoteUrl)
     const pushResult = await this.gitClient.push(
       workspacePath,

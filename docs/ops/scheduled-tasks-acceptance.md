@@ -1,8 +1,8 @@
 # 定时任务验收记录
 
-> 日期：2026-08-17
-> 基线：当前 `main` 加工作树增量；`Cmd/Ctrl+S` 增量尚未进入已发布的 v0.1.41
-> 当前范围：M8.1–M8.2 首版核心闭环
+> 日期：2026-08-31
+> 基线：当前 `main` 加工作树增量
+> 当前范围：M8.1–M8.2 首版核心闭环 + 定时任务 Git 共享
 > 产品事实源：`docs/features/scheduled-tasks.md`
 
 ## 当前结论
@@ -21,6 +21,11 @@ CCLink Studio 完全退出后不会执行任务。真实 App 自动验收已证�
 首版核心闭环已进入真人验收，不在人工矩阵签字前声明正式交付。尚待人工确认的重点是
 双工作空间切换、键盘/屏幕阅读器、磁盘故障文案，以及系统进程查看器中的跨平台残留检查。
 
+Git 共享增量已经允许用户在 A 把任务显式设为随项目共享，经自己的 Git 流程带到 B；B 默认
+暂停，明确确认当前 revision 与 execution digest 后才运行。A 更新或删除后，B 的旧确认失效，
+未来运行停止，但 B 的本机历史保留。自动验收已覆盖两个隔离 userData 和不同绝对路径；尚未在
+两台物理电脑上由真人复核 Git 凭证、UI 可读性和真实等待到点体验。
+
 ## 真实 App 自动验收
 
 执行：
@@ -34,12 +39,13 @@ pnpm smoke:scheduled-tasks
 最近一次证据摘要：
 
 ```text
-manual=1ce6a20b-85bd-4830-bb4b-c63ee4e43a25
-automatic=6f4402f6-bbdd-494c-8b2a-1c1726de6707
-cancelled=7f98b607-60b9-4f4a-b65a-05055946b041
-denied=bb5c2aee-6395-43f9-bb78-747acf0a3436
-missed=c41c242d-e2e4-4fbf-8789-80c4573ce04c
-artifact=docs/定时任务/report-2026-07-29.md
+manual=74acc200-a66d-45aa-91c2-e2756e353cb0
+agentQuery=scheduled_task_list
+automatic=d94e4620-92ed-43c5-b1e3-5df45bec89cd
+cancelled=56c0dc4e-060f-4399-b077-8b8289410871
+denied=31a759da-35a6-4e9d-9646-d1f5ff3941d0
+missed=478b1431-7823-43db-a9e6-432888c43cc7
+artifact=.cclink-studio/scheduled-task-results/task-cdd49693-98b5-481b-9970-b4ca6b2e1a09-2026-08-31-1916-74acc200-a66d-45aa-91c2-e2756e353cb0.md
 systemScheduler=none
 ```
 
@@ -65,7 +71,56 @@ systemScheduler=none
 - 产物入口只加载编辑器 buffer、未创建 Workbench Tab。
 - App 停止与 runner 启动交错时，queued run 可能被恢复成假 running。
 
+## Git 共享真实 App 自动验收
+
+执行：
+
+```bash
+pnpm smoke:scheduled-task-git-sharing
+```
+
+结果：通过。
+
+最近一次证据摘要：
+
+```text
+task=d633edb2-9d8c-410a-9f6c-0d0449669b34
+B-run=dfc48acb-5b9b-4985-83ce-cbd828368dda
+A-revision=2
+B-suspended=definition-changed
+B-removed=definition-removed
+```
+
+脚本使用两个隔离 `userData`、两个不同绝对路径和一个真实 bare Git remote 启动真实 Electron，
+完成：
+
+1. A 保存 portable shared v2 定义，确认 JSON 不含 A 的绝对路径且普通 Git status 可见。
+2. A Commit/Push，B Clone/Open；B 发现任务但 activation 默认 disabled。
+3. B 未确认前立即运行被拒绝；确认绑定 revision + digest 后通过真实 Agent 完成一次运行。
+4. 再打开 A，确认 B 的 activation 和历史没有传播到 A。
+5. A 更新到 revision 2 并 Push；B Pull 后自动暂停，旧确认无法立即运行。
+6. B 重新确认 revision 2；A 删除并 Push；B Pull 后显示 definition removed，不再列出可调度任务。
+7. B 删除后的本机运行历史仍保留，A/B 退出后不留下系统调度器。
+
+常规定时任务烟测同日再次通过，覆盖真实 UI 的 local → shared 转换、共享后暂停、目标设备启用、
+真实 Agent 立即运行和到点运行；证据中的 `systemScheduler=none` 保持不变。
+
 ## 工程门禁
+
+2026-08-31 Git 共享增量门禁：
+
+- `pnpm typecheck`：通过。
+- 受影响 Vitest 串行矩阵：17 个文件、58 项测试通过；删除诊断码收敛后又重跑 10 个文件、
+  38 项定时任务测试通过。
+- 定向 ESLint 与 Prettier：通过。
+- `pnpm smoke:scheduled-tasks`：通过。
+- `pnpm smoke:scheduled-task-git-sharing`：通过。
+
+完整 `pnpm verify` 同日再次运行到格式门禁，OSS、package、credential、Claude scheduling、
+context action 与 release 边界均通过；随后被同一工作树中与本需求无关的并行
+`agent-tool-authorization-broker.ts`、`tool-host.ts` 和 Android 测试格式改动阻断。本轮没有擅自
+格式化或覆盖这些并行修改。依据架构门禁的“`pnpm verify` 或受影响 smoke”，本功能采用上述
+受影响门禁作为当前交付证据。
 
 执行：
 
@@ -104,6 +159,12 @@ pnpm verify
 - [ ] H11 键盘和屏幕阅读器可完成新建、保存、立即运行、取消和打开产物；任务表单输入
       焦点内按 `Cmd/Ctrl+S` 只保存一次，清除 dirty，且不改变启用状态或触发运行。
 - [ ] H12 Git 普通仓库与 linked worktree 只修改本地 exclude。
+- [ ] H13 在物理电脑 A 通过 UI 把本机任务设为随项目共享并 Push；物理电脑 B Clone/Pull 后能看见
+      但默认不执行，确认内容后才能立即运行和到点运行。
+- [ ] H14 A 更新或删除并 Push 后，B Pull 会使旧确认失效或显示定义移除；dirty draft 不被覆盖，
+      B 本机历史仍可查看。
+- [ ] H15 A/B 同时启用时重复执行警告清晰；两端 activation、权限、历史和结果互不传播，Git 凭证
+      失败也不阻断非 Git 本机任务。
 
 ## 残余风险
 
@@ -112,5 +173,7 @@ pnpm verify
 - 交互式用户 Agent 的优先级协调尚未形成独立真人证据；scheduled 自身已保证全局单并发。
 - Activity Bar 首版只显示排队/运行数字；失败/需要处理的颜色优先级仍可继续打磨。
 - 运行历史上限和损坏降级已有边界，但大账本 compaction 与磁盘耗尽仍需长时间压力验收。
+- Git 共享自动验收使用同一台 macOS 上的两个隔离 userData，不等于物理双机的网络、凭证和时钟
+  差异；H13–H15 未签字前只声明自动化闭环通过。
 
 结论：允许进入真人验收；人工矩阵未签字前不标记正式交付。

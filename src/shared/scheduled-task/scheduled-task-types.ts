@@ -4,6 +4,11 @@ export type ScheduledTaskErrorCode =
   | 'SCHEDULED_TASK_INVALID'
   | 'SCHEDULED_TASK_NOT_FOUND'
   | 'SCHEDULED_TASK_REVISION_CONFLICT'
+  | 'SCHEDULED_TASK_DEFINITION_CONFLICT'
+  | 'SCHEDULED_TASK_DEFINITION_CHANGED'
+  | 'SCHEDULED_TASK_DEFINITION_REMOVED'
+  | 'SCHEDULED_TASK_RUN_LEDGER_CONFLICT'
+  | 'SCHEDULED_TASK_CONFIRMATION_REQUIRED'
   | 'SCHEDULED_TASK_WORKSPACE_UNAVAILABLE'
   | 'SCHEDULED_TASK_WORKSPACE_READ_ONLY'
   | 'SCHEDULED_TASK_STORE_INVALID'
@@ -55,9 +60,27 @@ export interface ScheduledTaskOutputPolicy {
 }
 
 export interface ScheduledTaskDefinition {
-  schemaVersion: 1
+  schemaVersion: 2
   id: string
   workspaceRef: LocalWorkspaceRef
+  source: ScheduledTaskDefinitionSource
+  executionDigest: string
+  revision: number
+  title: string
+  instruction: string
+  schedule: ScheduledTaskSchedule
+  resources: ScheduledTaskResourceRef[]
+  outputPolicy: ScheduledTaskOutputPolicy
+  createdAt: number
+  updatedAt: number
+}
+
+export type ScheduledTaskDefinitionSource = 'local' | 'shared'
+
+/** Git 可同步的 v2 磁盘记录；工作空间绝对路径只在读取时注入运行时定义。 */
+export interface StoredScheduledTaskDefinitionV2 {
+  schemaVersion: 2
+  id: string
   revision: number
   title: string
   instruction: string
@@ -73,6 +96,14 @@ export interface ScheduledTaskActivation {
   workspaceId: string
   workspaceRef: LocalWorkspaceRef
   enabled: boolean
+  confirmedTaskRevision: number | null
+  confirmedExecutionDigest: string | null
+  suspensionReason:
+    | 'definition-changed'
+    | 'definition-removed'
+    | 'definition-conflict'
+    | 'migration-conflict'
+    | null
   catchUpPolicy: {
     mode: 'latest-within-window'
     windowMinutes: 30
@@ -106,11 +137,12 @@ export interface ScheduledTaskArtifact {
 }
 
 export interface ScheduledTaskRun {
-  schemaVersion: 1
+  schemaVersion: 2
   id: string
   occurrenceKey: string
   taskId: string
   taskRevision: number
+  taskExecutionDigest: string
   workspaceId: string
   workspaceRef: LocalWorkspaceRef
   conversationId: string
@@ -129,18 +161,33 @@ export interface SaveScheduledTaskInput {
   workspacePath: string
   taskId?: string
   expectedRevision?: number
+  expectedExecutionDigest?: string
   title: string
   instruction: string
   schedule: ScheduledTaskSchedule
   resources: ScheduledTaskResourceRef[]
   outputPolicy: ScheduledTaskOutputPolicy
+  definitionSource?: ScheduledTaskDefinitionSource
   enable: boolean
+}
+
+export interface ScheduledTaskDefinitionIssue {
+  taskId?: string
+  relativePath: string
+  kind: 'invalid-definition' | 'duplicate-definition' | 'migration-conflict' | 'definition-removed'
+  message: string
 }
 
 export interface SetScheduledTaskEnabledInput {
   workspacePath: string
   taskId: string
   enabled: boolean
+}
+
+export interface DeleteScheduledTaskInput {
+  workspacePath: string
+  taskId: string
+  expectedRevision: number
 }
 
 export interface RunScheduledTaskInput {
@@ -162,6 +209,7 @@ export interface ScheduledTaskOperationResult {
 export interface ScheduledTaskListResult {
   success: boolean
   tasks: ScheduledTaskSnapshot[]
+  issues?: ScheduledTaskDefinitionIssue[]
   error?: ScheduledTaskFailure
 }
 
@@ -203,6 +251,7 @@ export interface ScheduledTasksApiContract {
   list(workspacePath: string): Promise<ScheduledTaskListResult>
   get(workspacePath: string, taskId: string): Promise<ScheduledTaskOperationResult>
   save(input: SaveScheduledTaskInput): Promise<ScheduledTaskOperationResult>
+  delete(input: DeleteScheduledTaskInput): Promise<ScheduledTaskOperationResult>
   setEnabled(input: SetScheduledTaskEnabledInput): Promise<ScheduledTaskOperationResult>
   runNow(input: RunScheduledTaskInput): Promise<ScheduledTaskRunResult>
   cancelRun(input: CancelScheduledTaskRunInput): Promise<ScheduledTaskRunResult>

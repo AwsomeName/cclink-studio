@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type {
   SaveScheduledTaskInput,
   ScheduledTaskFailure,
+  ScheduledTaskDefinitionIssue,
   ScheduledTaskSnapshot,
   ScheduledTaskRun,
 } from '@shared/scheduled-task/scheduled-task-types'
@@ -10,9 +11,11 @@ interface ScheduledTaskProjection {
   tasksByWorkspace: Record<string, ScheduledTaskSnapshot[]>
   loadingByWorkspace: Record<string, boolean>
   errorByWorkspace: Record<string, ScheduledTaskFailure | null>
+  issuesByWorkspace: Record<string, ScheduledTaskDefinitionIssue[]>
   runsByTask: Record<string, ScheduledTaskRun[]>
   load(workspacePath: string): Promise<void>
   save(input: SaveScheduledTaskInput): Promise<ScheduledTaskSnapshot>
+  delete(workspacePath: string, taskId: string, expectedRevision: number): Promise<void>
   setEnabled(
     workspacePath: string,
     taskId: string,
@@ -27,6 +30,7 @@ export const useScheduledTaskStore = create<ScheduledTaskProjection>((set) => ({
   tasksByWorkspace: {},
   loadingByWorkspace: {},
   errorByWorkspace: {},
+  issuesByWorkspace: {},
   runsByTask: {},
 
   load: async (workspacePath) => {
@@ -44,6 +48,9 @@ export const useScheduledTaskStore = create<ScheduledTaskProjection>((set) => ({
         ...state.errorByWorkspace,
         [workspacePath]: result.error ?? null,
       },
+      issuesByWorkspace: result.success
+        ? { ...state.issuesByWorkspace, [workspacePath]: result.issues ?? [] }
+        : state.issuesByWorkspace,
     }))
   },
 
@@ -71,6 +78,23 @@ export const useScheduledTaskStore = create<ScheduledTaskProjection>((set) => ({
       errorByWorkspace: { ...state.errorByWorkspace, [input.workspacePath]: null },
     }))
     return result.task
+  },
+
+  delete: async (workspacePath, taskId, expectedRevision) => {
+    const result = await window.cclinkStudio.scheduledTasks.delete({
+      workspacePath,
+      taskId,
+      expectedRevision,
+    })
+    if (!result.success) throw new Error(result.error?.message ?? '定时任务删除失败')
+    set((state) => ({
+      tasksByWorkspace: {
+        ...state.tasksByWorkspace,
+        [workspacePath]: (state.tasksByWorkspace[workspacePath] ?? []).filter(
+          (task) => task.definition.id !== taskId,
+        ),
+      },
+    }))
   },
 
   setEnabled: async (workspacePath, taskId, enabled) => {

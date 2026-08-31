@@ -9,7 +9,7 @@ import {
   type AgentSendMessageArgs,
   type AgentSendMessageInput,
   type AgentSetScopeArgs,
-  type ExternalMcpServer,
+  type ExternalMcpServerInput,
 } from './agent'
 import {
   agentCompactPayloadSchema,
@@ -193,7 +193,7 @@ export const agentMcpIpcContracts = {
     agentMcpIpc.addServer,
     (args) => {
       requireArgs(args, 1, agentMcpIpc.addServer.channel)
-      return ipcArgs(mcpServerSchema.parse(args[0]) as ExternalMcpServer)
+      return ipcArgs(mcpServerSchema.parse(args[0]) as ExternalMcpServerInput)
     },
     mapCommandParseError,
   ),
@@ -205,8 +205,12 @@ export const agentMcpIpcContracts = {
     requireArgs(args, 2, agentMcpIpc.updateServer.channel)
     return ipcArgs(
       mcpServerNameSchema.parse(args[0]),
-      mcpServerUpdatesSchema.parse(args[1]) as Partial<ExternalMcpServer>,
+      mcpServerUpdatesSchema.parse(args[1]) as Partial<ExternalMcpServerInput>,
     )
+  }),
+  copyServer: bindIpcParser(agentMcpIpc.copyServer, (args) => {
+    requireArgs(args, 2, agentMcpIpc.copyServer.channel)
+    return ipcArgs(mcpServerNameSchema.parse(args[0]), mcpServerNameSchema.parse(args[1]))
   }),
   reloadConfig: bindNoArgsIpc(agentMcpIpc.reloadConfig),
 } as const

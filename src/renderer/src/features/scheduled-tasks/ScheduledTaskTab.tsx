@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ScheduledTaskResourceRef,
+  ScheduledTaskDefinitionSource,
   ScheduledTaskSchedule,
   ScheduledTaskSnapshot,
   ScheduledTaskRun,
@@ -36,6 +37,7 @@ interface TaskForm {
   resultMode: 'history' | 'workspace-file'
   outputDirectory: string
   fileNameTemplate: string
+  definitionSource: ScheduledTaskDefinitionSource
 }
 
 const HISTORY_OUTPUT_DIRECTORY = '.cclink-studio/scheduled-task-results'
@@ -67,6 +69,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
   )
   const load = useScheduledTaskStore((state) => state.load)
   const save = useScheduledTaskStore((state) => state.save)
+  const deleteTask = useScheduledTaskStore((state) => state.delete)
   const setEnabled = useScheduledTaskStore((state) => state.setEnabled)
   const loadRuns = useScheduledTaskStore((state) => state.loadRuns)
   const runNow = useScheduledTaskStore((state) => state.runNow)
@@ -84,11 +87,17 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
   const task = tasks.find((candidate) => candidate.definition.id === taskId)
   const [form, setForm] = useState<TaskForm>(() => createDefaultForm())
   const baseSignatureRef = useRef(formSignature(form))
+  const loadedRevisionRef = useRef<number | undefined>(undefined)
+  const loadedDigestRef = useRef<string | undefined>(undefined)
   const [saving, setSaving] = useState(false)
   const [runningAction, setRunningAction] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null)
+  const [gitSharingHint, setGitSharingHint] = useState<string | null>(null)
+  const [externalUpdatePending, setExternalUpdatePending] = useState(false)
   const initializedFrom = useRef<string | null>(null)
+  const currentSignature = useMemo(() => formSignature(form), [form])
+  const hasUnsavedChanges = currentSignature !== baseSignatureRef.current
 
   useEffect(() => {
     if (workspacePath) void load(workspacePath)
@@ -105,21 +114,52 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
   }, [load, loadRuns, taskId, workspacePath])
 
   useEffect(() => {
+    if (!workspacePath || !task || task.definition.source !== 'shared') {
+      setGitSharingHint(null)
+      return
+    }
+    let active = true
+    void window.cclinkStudio.git.getSnapshot(workspacePath).then((snapshot) => {
+      if (!active) return
+      if (snapshot.availability !== 'available') {
+        setGitSharingHint('当前工作空间不是可用 Git 仓库；定义仍可通过显式文件复制共享。')
+        return
+      }
+      const relativePath = `.cclink-studio/shared/scheduled-tasks/${task.definition.id}.json`
+      const ignored = snapshot.ignoredSharedTaskDefinitions?.find(
+        (candidate) => candidate.path === relativePath,
+      )
+      setGitSharingHint(
+        ignored
+          ? `共享定义仍被 Git 规则忽略：${ignored.rule}。请手动修复对应规则，Studio 不会使用 git add -f。`
+          : '共享定义路径已开放给 Git；Commit 和 Push 仍由你明确执行。',
+      )
+    })
+    return () => {
+      active = false
+    }
+  }, [task, workspacePath])
+
+  useEffect(() => {
     const sourceKey = task
-      ? `${task.definition.id}:${task.definition.revision}`
+      ? `${task.definition.id}:${task.definition.revision}:${task.definition.executionDigest}`
       : taskId
         ? null
         : `draft:${tab.scheduledTask?.draftKey ?? tab.id}`
     if (!sourceKey || initializedFrom.current === sourceKey) return
+    if (task && initializedFrom.current && hasUnsavedChanges) {
+      setExternalUpdatePending(true)
+      return
+    }
     const next = task ? formFromTask(task) : createDefaultForm()
     setForm(next)
     baseSignatureRef.current = formSignature(next)
     updateTabDirty(tab.id, false)
     initializedFrom.current = sourceKey
-  }, [tab.id, tab.scheduledTask?.draftKey, task, taskId, updateTabDirty])
-
-  const currentSignature = useMemo(() => formSignature(form), [form])
-  const hasUnsavedChanges = currentSignature !== baseSignatureRef.current
+    loadedRevisionRef.current = task?.definition.revision
+    loadedDigestRef.current = task?.definition.executionDigest
+    setExternalUpdatePending(false)
+  }, [hasUnsavedChanges, tab.id, tab.scheduledTask?.draftKey, task, taskId, updateTabDirty])
   const fileNamePreview = useMemo(
     () => createFileNamePreview(form, task?.definition.id ?? 'task-id'),
     [form, task?.definition.id],
@@ -140,22 +180,36 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
       setActionError(null)
       setSaveFeedback(null)
       try {
+        if (
+          form.definitionSource === 'shared' &&
+          enable &&
+          !window.confirm(
+            '确认把当前 revision 和执行内容授权给此设备自动运行？共享定义可能由 Git 带到其他电脑；每台设备都需单独确认，多台设备启用后会各自执行，可能产生重复结果。',
+          )
+        ) {
+          return false
+        }
         const snapshot = await save({
           workspacePath,
           taskId: task?.definition.id,
-          expectedRevision: task?.definition.revision,
+          expectedRevision: task ? loadedRevisionRef.current : undefined,
+          expectedExecutionDigest: task ? loadedDigestRef.current : undefined,
           title: form.title,
           instruction: form.instruction,
           schedule: scheduleFromForm(form),
           resources: resourcesFromForm(form, workspacePath),
           outputPolicy: outputPolicyFromForm(form, workspacePath),
+          definitionSource: form.definitionSource,
           enable,
         })
         const nextForm = formFromTask(snapshot)
         const nextSignature = formSignature(nextForm)
         baseSignatureRef.current = nextSignature
         setForm(nextForm)
-        initializedFrom.current = `${snapshot.definition.id}:${snapshot.definition.revision}`
+        initializedFrom.current = `${snapshot.definition.id}:${snapshot.definition.revision}:${snapshot.definition.executionDigest}`
+        loadedRevisionRef.current = snapshot.definition.revision
+        loadedDigestRef.current = snapshot.definition.executionDigest
+        setExternalUpdatePending(false)
         updateTabScheduledTask(tab.id, {
           taskId: snapshot.definition.id,
           draftKey: snapshot.definition.id,
@@ -191,9 +245,12 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
   useEffect(() => {
     if (!workspacePath || (taskId && !task)) return
     return registerScheduledTaskDraft(tab.id, {
-      save: () => handleSave(task?.activation.enabled ?? false),
+      save: () =>
+        handleSave(
+          form.definitionSource === 'shared' ? false : (task?.activation.enabled ?? false),
+        ),
     })
-  }, [handleSave, tab.id, task, taskId, workspacePath])
+  }, [form.definitionSource, handleSave, tab.id, task, taskId, workspacePath])
 
   if (!workspacePath) {
     return <TaskUnavailable message="这个 Tab 没有绑定本地工作空间" />
@@ -211,10 +268,22 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
   }
 
   const activation = task?.activation
+  const sharedNeedsConfirmation = Boolean(
+    task && task.definition.source === 'shared' && !task.activation.enabled,
+  )
   const activeRun = runs.find((run) => run.status === 'queued' || run.status === 'running')
 
   const handleToggleEnabled = async (): Promise<void> => {
     if (!task) return
+    if (
+      task.definition.source === 'shared' &&
+      !task.activation.enabled &&
+      !window.confirm(
+        `确认在此设备启用共享任务“${task.definition.title}”的 revision ${task.definition.revision}？后续项目定义变化会再次自动暂停。`,
+      )
+    ) {
+      return
+    }
     setSaving(true)
     setActionError(null)
     setSaveFeedback(null)
@@ -239,6 +308,29 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
       setActionError(error instanceof Error ? error.message : String(error))
     } finally {
       setRunningAction(false)
+    }
+  }
+
+  const handleDelete = async (): Promise<void> => {
+    if (!task) return
+    const sharedWarning =
+      task.definition.source === 'shared'
+        ? '这会删除共享定义并形成 Git 删除变更；其他电脑 Pull 后也会移除该任务。'
+        : '这会删除当前工作空间中的本机任务定义。'
+    if (
+      !window.confirm(`${sharedWarning}\n\n运行历史会保留，已经开始的运行会继续完成。确认删除吗？`)
+    ) {
+      return
+    }
+    setSaving(true)
+    setActionError(null)
+    try {
+      await deleteTask(workspacePath, task.definition.id, task.definition.revision)
+      useTabStore.getState().closeTab(tab.id)
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -331,8 +423,14 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
           {task && !activeRun && (
             <button
               type="button"
-              disabled={saving || runningAction || hasUnsavedChanges}
-              title={hasUnsavedChanges ? '请先保存修改' : undefined}
+              disabled={saving || runningAction || hasUnsavedChanges || sharedNeedsConfirmation}
+              title={
+                hasUnsavedChanges
+                  ? '请先保存修改'
+                  : sharedNeedsConfirmation
+                    ? '请先检查内容并在此设备启用'
+                    : undefined
+              }
               onClick={() => void handleRunNow()}
             >
               立即运行
@@ -345,7 +443,20 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
           )}
           {task && (
             <button type="button" disabled={saving} onClick={() => void handleToggleEnabled()}>
-              {task.activation.enabled ? '暂停' : '启用'}
+              {task.activation.enabled
+                ? '暂停'
+                : task.definition.source === 'shared'
+                  ? '在此设备启用'
+                  : '启用'}
+            </button>
+          )}
+          {task && (
+            <button
+              type="button"
+              disabled={saving || runningAction}
+              onClick={() => void handleDelete()}
+            >
+              删除
             </button>
           )}
           <button
@@ -373,6 +484,36 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
         Helper。
       </div>
       {actionError && <div className="scheduled-task-form-error">{actionError}</div>}
+      {task?.definition.source === 'shared' && !task.activation.enabled && (
+        <div className="scheduled-task-confirmation-note">
+          <strong>来自项目，当前设备尚未授权执行</strong>
+          <span>
+            请检查任务内容、资源与输出位置，再点击“在此设备启用”。项目定义每次更新后都会自动暂停并要求重新确认。
+          </span>
+        </div>
+      )}
+      {gitSharingHint && <div className="scheduled-task-git-note">{gitSharingHint}</div>}
+      {externalUpdatePending && task && (
+        <div className="scheduled-task-confirmation-note">
+          <strong>项目定义已更新，当前未保存草稿已保留</strong>
+          <span>直接保存会因旧 revision/digest 被拒绝。可先复制草稿，或重新加载项目版本。</span>
+          <button
+            type="button"
+            onClick={() => {
+              const next = formFromTask(task)
+              setForm(next)
+              baseSignatureRef.current = formSignature(next)
+              initializedFrom.current = `${task.definition.id}:${task.definition.revision}:${task.definition.executionDigest}`
+              loadedRevisionRef.current = task.definition.revision
+              loadedDigestRef.current = task.definition.executionDigest
+              setExternalUpdatePending(false)
+              updateTabDirty(tab.id, false)
+            }}
+          >
+            重新加载项目版本
+          </button>
+        </div>
+      )}
 
       <main className="scheduled-task-editor">
         <TaskSection title="任务">
@@ -394,6 +535,54 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
               onChange={(event) => setForm({ ...form, instruction: event.target.value })}
             />
           </label>
+        </TaskSection>
+
+        <TaskSection title="共享范围">
+          <div className="scheduled-task-source-options">
+            <label>
+              <input
+                type="radio"
+                name={`scheduled-task-source-${tab.id}`}
+                checked={form.definitionSource === 'local'}
+                onChange={() => {
+                  if (
+                    task?.definition.source !== 'shared' ||
+                    window.confirm(
+                      '转换为本机任务会删除共享定义并形成 Git 删除变更；其他电脑 Pull 后将不再看到该任务。继续吗？',
+                    )
+                  ) {
+                    setForm({ ...form, definitionSource: 'local' })
+                  }
+                }}
+              />
+              <span>
+                <strong>不随 Git 共享</strong>
+                <small>定义只保存在当前工作空间的本机数据目录。</small>
+              </span>
+            </label>
+            <label>
+              <input
+                type="radio"
+                name={`scheduled-task-source-${tab.id}`}
+                checked={form.definitionSource === 'shared'}
+                onChange={() => {
+                  if (
+                    window.confirm(
+                      '共享定义会成为普通 Git 变更，可能同步到其他电脑。定义不得包含密码、Token 或本机绝对路径。继续吗？',
+                    )
+                  ) {
+                    setForm({ ...form, definitionSource: 'shared' })
+                  }
+                }}
+              />
+              <span>
+                <strong>随项目共享</strong>
+                <small>
+                  只共享定义；本机状态不会同步。多台设备分别启用时会各自执行，可能产生重复结果。
+                </small>
+              </span>
+            </label>
+          </div>
         </TaskSection>
 
         <TaskSection title="执行时间">
@@ -665,6 +854,7 @@ function createDefaultForm(): TaskForm {
     resultMode: 'history',
     outputDirectory: 'docs/定时任务',
     fileNameTemplate: 'report-{date}.md',
+    definitionSource: 'local',
   }
 }
 
@@ -691,6 +881,7 @@ function formFromTask(task: ScheduledTaskSnapshot): TaskForm {
     resultMode: isHistoryOutputPolicy(task.definition.outputPolicy) ? 'history' : 'workspace-file',
     outputDirectory: task.definition.outputPolicy.directory,
     fileNameTemplate: task.definition.outputPolicy.fileNameTemplate,
+    definitionSource: task.definition.source,
   }
 }
 

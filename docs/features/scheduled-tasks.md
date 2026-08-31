@@ -1,11 +1,12 @@
 # 工作空间定时任务
 
-> 状态：首版核心闭环已实现并通过真实 App 自动验收，待真人验收矩阵签字
-> 最后更新：2026-08-17
+> 状态：首版核心闭环与 Git 共享已实现并通过真实 App 自动验收，待真人验收矩阵签字
+> 最后更新：2026-08-31
 > 关联文档：`docs/architecture.md`、`docs/features/workspace-system.md`、
 > `docs/features/agent-panel-product-model.md`、`docs/features/context-action-system.md`、
 > `docs/features/workspace-operations-assistant.md`、
-> `docs/features/scheduled-tasks-development-plan.md`
+> `docs/features/scheduled-tasks-development-plan.md`、
+> `docs/features/scheduled-task-git-sharing.md`
 
 ## 结论
 
@@ -28,7 +29,8 @@ macOS LaunchAgent、Windows Task Scheduler、Linux cron/systemd timer、登录�
 
 ## 当前实现快照
 
-截至 2026-08-17，当前 `main` 加工作树增量已形成 M8.1–M8.2 的首版纵向闭环：
+截至 2026-08-31，当前 `main` 加工作树增量已形成 M8.1–M8.2 的首版纵向闭环，并完成定时任务
+通过 Git 随工作空间共享的自动化验收：
 
 - Activity Bar 已有独立时钟入口。
 - 侧栏只投影当前本地工作空间任务，并提供空状态和新建入口。
@@ -36,6 +38,10 @@ macOS LaunchAgent、Windows Task Scheduler、Linux cron/systemd timer、登录�
 - 用户可以填写名称、指令、单次/每天/工作日/每周计划和绑定路径；运行结果默认保留在
   任务历史，需要日报、周报等文件时才选择另存为工作空间 Markdown。
 - 显式保存产生 revision；定义写入工作空间，本机启用状态写入 `userData`。
+- 用户可显式选择“不随 Git 共享 / 随项目共享”；已有任务默认保持本机私有，共享定义写入
+  `.cclink-studio/shared/scheduled-tasks/`，使用不含绝对工作空间路径的可移植 v2 Schema。
+- 另一设备通过 Git 得到共享定义后默认不启用；只有确认当前 revision 与 execution digest 后
+  才在该设备调度，更新或删除会暂停未来运行并保留本机历史。
 - 定时任务 Tab 已接入统一 `workbench.save`：默认 `Cmd/Ctrl+S`，输入框或文本域聚焦时
   仍可保存；快捷键保存只保存当前定义并保持原有本机启用/暂停状态，不触发立即运行。
 - 用户可以仅保存、在此设备启用和暂停；重启后恢复定义与本机状态。
@@ -49,8 +55,9 @@ macOS LaunchAgent、Windows Task Scheduler、Linux cron/systemd timer、登录�
 - 单次错过记录 missed；重复任务只在 30 分钟窗口内补最近一次。
 - Activity Bar 显示全局排队/运行数量；当前工作空间侧栏展示运行和待处理状态。
 - 统一诊断报告包含调度状态、timer 目标、队列、当前 run 和 `systemScheduler=none`。
-- Git 工作空间会把任务定义目录加入仓库本地 `.git/info/exclude`，不修改
-  `.gitignore`。
+- Git 工作空间通过受控 `.git/info/exclude` 精确忽略本机定义、状态、结果和迁移文件，只开放
+  合法 shared task JSON；Studio Commit、备份和 Push 还会检查 index 与 outgoing history，
+  不修改用户 `.gitignore`，也不使用 force-add。
 
 当前首版边界：
 
@@ -65,19 +72,19 @@ macOS LaunchAgent、Windows Task Scheduler、Linux cron/systemd timer、登录�
 
 ## 已确认的首版决策
 
-| 决策         | 首版结论                                                      |
-| ------------ | ------------------------------------------------------------- |
-| 产品入口     | 独立 Activity Bar 按钮、当前工作空间侧栏、独立定时任务 Tab    |
-| 资源归属     | 每个定时任务严格绑定一个本地工作空间                          |
-| 调度所有者   | 当前 CCLink Studio 主进程内的 `ScheduledTaskService`          |
-| 系统集成     | 不注册系统计划任务、后台服务、登录项或常驻 Helper             |
-| App 退出     | 停止调度；运行中实例有界收束，未完成则中断，待触发项下次对账  |
-| 定义存储     | 工作空间 `.cclink-studio/scheduled-tasks/`                    |
-| 本机状态     | `userData/scheduled-tasks/` 保存启用、运行和权限事实          |
-| 保存语义     | 显式保存；每次保存形成 revision，运行固定使用已保存 revision  |
-| 保存快捷键   | `workbench.save`，默认 `Cmd/Ctrl+S`；保持启用状态且不运行任务 |
-| 等待确认     | 当前运行结束为“需要处理”，用户确认后创建关联的新运行          |
-| 首个产品闭环 | 到点读取工作空间文件、在历史展示结果；可选另存 Markdown 文件  |
+| 决策         | 首版结论                                                     |
+| ------------ | ------------------------------------------------------------ |
+| 产品入口     | 独立 Activity Bar 按钮、当前工作空间侧栏、独立定时任务 Tab   |
+| 资源归属     | 每个定时任务严格绑定一个本地工作空间                         |
+| 调度所有者   | 当前 CCLink Studio 主进程内的 `ScheduledTaskService`         |
+| 系统集成     | 不注册系统计划任务、后台服务、登录项或常驻 Helper            |
+| App 退出     | 停止调度；运行中实例有界收束，未完成则中断，待触发项下次对账 |
+| 定义存储     | 本机定义在 `scheduled-tasks/`；显式共享定义在 `shared/`      |
+| 本机状态     | `userData/scheduled-tasks/` 保存启用、运行和权限事实         |
+| 保存语义     | 显式保存；每次保存形成 revision，运行固定使用已保存 revision |
+| 保存快捷键   | 本机任务保持启用状态；共享任务更新后暂停并要求重新确认       |
+| 等待确认     | 当前运行结束为“需要处理”，用户确认后创建关联的新运行         |
+| 首个产品闭环 | 到点读取工作空间文件、在历史展示结果；可选另存 Markdown 文件 |
 
 ## 产品目标与端到端验收
 

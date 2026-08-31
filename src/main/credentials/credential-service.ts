@@ -259,6 +259,7 @@ function consumersFor(id: string): string[] {
   if (id.startsWith('extension:meshy:')) return ['Meshy']
   if (id.startsWith('extension:jimeng:')) return ['即梦图片生成']
   if (id.startsWith('extension:pexels:')) return ['宣发视频素材搜索']
+  if (id.startsWith('mcp:')) return ['外部 MCP']
   if (id.startsWith('extension:')) return ['扩展']
   return []
 }

@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ScheduledTaskSnapshot } from '@shared/scheduled-task/scheduled-task-types'
+import type {
+  ScheduledTaskDefinitionIssue,
+  ScheduledTaskSnapshot,
+} from '@shared/scheduled-task/scheduled-task-types'
 import { useTabStore } from '../../stores/tab-store'
 import { IconClock, IconPlus } from '../../components/common/Icons'
 import { useScheduledTaskStore } from './scheduled-task-store'
@@ -7,6 +10,7 @@ import { createScheduledTaskTab, formatNextRun } from './scheduled-task-view-mod
 import './scheduled-tasks.css'
 
 const EMPTY_TASKS: ScheduledTaskSnapshot[] = []
+const EMPTY_ISSUES: ScheduledTaskDefinitionIssue[] = []
 
 export function ScheduledTasksSidebar({
   workspacePath,
@@ -23,12 +27,22 @@ export function ScheduledTasksSidebar({
   const error = useScheduledTaskStore((state) =>
     workspacePath ? (state.errorByWorkspace[workspacePath] ?? null) : null,
   )
+  const issues = useScheduledTaskStore((state) =>
+    workspacePath ? (state.issuesByWorkspace[workspacePath] ?? EMPTY_ISSUES) : EMPTY_ISSUES,
+  )
   const load = useScheduledTaskStore((state) => state.load)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'paused'>('all')
 
   useEffect(() => {
     if (workspacePath) void load(workspacePath)
+  }, [load, workspacePath])
+
+  useEffect(() => {
+    if (!workspacePath) return
+    const refreshOnFocus = (): void => void load(workspacePath)
+    window.addEventListener('focus', refreshOnFocus)
+    return () => window.removeEventListener('focus', refreshOnFocus)
   }, [load, workspacePath])
 
   const filteredTasks = useMemo(() => {
@@ -108,6 +122,11 @@ export function ScheduledTasksSidebar({
   return (
     <div className="scheduled-task-sidebar-list">
       {error && <div className="scheduled-task-inline-error">{error.message}</div>}
+      {issues.map((issue) => (
+        <div className="scheduled-task-inline-error" key={`${issue.relativePath}:${issue.kind}`}>
+          {issue.message}：{issue.relativePath}
+        </div>
+      ))}
       <div className="scheduled-task-sidebar-tools">
         <input
           type="search"
@@ -177,7 +196,10 @@ function describeTaskRow(task: ScheduledTaskSnapshot): string {
   if (run && ['failed', 'interrupted', 'missed'].includes(run.status)) {
     return run.error?.message ?? run.currentStep
   }
-  return task.activation.enabled
-    ? `下次：${formatNextRun(task.activation.nextRunAt)}`
-    : '已在此设备暂停'
+  if (task.activation.enabled) return `下次：${formatNextRun(task.activation.nextRunAt)}`
+  if (task.definition.source === 'shared' && task.activation.suspensionReason) {
+    return '来自项目 · 内容已变化，等待重新确认'
+  }
+  if (task.definition.source === 'shared') return '来自项目 · 等待在此设备确认'
+  return '仅本机 · 已在此设备暂停'
 }

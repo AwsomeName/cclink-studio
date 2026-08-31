@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -38,6 +38,34 @@ describe('GitClient', () => {
     expect((await client.detect()).available).toBe(true)
     await client.initialize(workspacePath)
     await client.ensureLocalExcludes(workspacePath)
+    const excludePath = (
+      await execFileAsync('git', ['rev-parse', '--git-path', 'info/exclude'], {
+        cwd: workspacePath,
+      })
+    ).stdout
+      .toString()
+      .trim()
+    expect(await readFile(join(workspacePath, excludePath), 'utf-8')).toContain(
+      '!/.cclink-studio/shared/scheduled-tasks/*.json',
+    )
+    const sharedTaskDirectory = join(workspacePath, '.cclink-studio/shared/scheduled-tasks')
+    const localTaskDirectory = join(workspacePath, '.cclink-studio/scheduled-tasks')
+    await Promise.all([
+      mkdir(sharedTaskDirectory, { recursive: true }),
+      mkdir(localTaskDirectory, { recursive: true }),
+    ])
+    const taskFileName = '12345678-1234-1234-1234-123456789abc.json'
+    await writeFile(join(sharedTaskDirectory, taskFileName), '{}\n', 'utf-8')
+    await writeFile(join(localTaskDirectory, taskFileName), '{}\n', 'utf-8')
+    const candidates = await execFileAsync(
+      'git',
+      ['ls-files', '--others', '--exclude-standard', '-z'],
+      { cwd: workspacePath },
+    )
+    expect(candidates.stdout.toString().split('\0')).toContain(
+      `.cclink-studio/shared/scheduled-tasks/${taskFileName}`,
+    )
+    expect(candidates.stdout.toString()).not.toContain('.cclink-studio/scheduled-tasks/')
     await writeFile(join(workspacePath, 'README.md'), '# backup\n', 'utf-8')
     expect(await client.hasChanges(workspacePath)).toBe(true)
     await client.stageAll(workspacePath)

@@ -557,6 +557,11 @@ describe('IPC invoke contracts', () => {
     expect(agentMcpIpcContracts.addServer.mapParseError?.(mcpError)).toMatchObject({
       success: false,
     })
+    expect(() =>
+      agentMcpIpcContracts.addServer.parseArgs([
+        { name: '__proto__', transport: 'stdio', command: 'node', enabled: true },
+      ]),
+    ).toThrow()
   })
 
   it('binds every Browser definition to a bounded runtime parser', () => {

@@ -100,9 +100,11 @@ describe('ScheduledTaskAgentRunner', () => {
 
 function definition(): ScheduledTaskDefinition {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: '00000000-0000-4000-8000-000000000001',
     workspaceRef: { kind: 'local', path: root },
+    source: 'local',
+    executionDigest: 'digest-3',
     revision: 3,
     title: 'Generate report',
     instruction: 'Read README and generate a concise report.',

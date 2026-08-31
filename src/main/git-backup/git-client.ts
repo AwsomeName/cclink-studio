@@ -1,13 +1,20 @@
-import { appendFile, readFile } from 'node:fs/promises'
+import { copyFile, readFile, rename, writeFile } from 'node:fs/promises'
 import { isAbsolute, resolve } from 'node:path'
 import { GitBackupError } from './git-backup-error'
 import type { GitAuthentication, GitCommandResult } from './git-executor'
 import { GitExecutor } from './git-executor'
+import {
+  inspectCclinkStudioIndex,
+  inspectCclinkStudioOutgoingHistory,
+  inspectSharedTaskIndexDefinitions,
+  inspectSharedTaskIndexSecrets,
+  inspectSharedTaskOutgoingContent,
+  resolveKnownRemoteBaseRef,
+  updateCclinkStudioExcludeBlock,
+} from '../git/cclink-studio-path-policy'
 
-const EXCLUDE_MARKER = '# CCLink Studio manual backup'
 const EXCLUDE_RULES = [
-  EXCLUDE_MARKER,
-  '.cclink-studio/',
+  '# CCLink Studio manual backup',
   'node_modules/',
   'dist/',
   'build/',
@@ -68,9 +75,19 @@ export class GitClient {
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
-    if (current.includes(EXCLUDE_MARKER)) return
-    const prefix = current.length > 0 && !current.endsWith('\n') ? '\n' : ''
-    await appendFile(excludePath, `${prefix}${EXCLUDE_RULES.join('\n')}\n`, 'utf-8')
+    const withGeneralRules = EXCLUDE_RULES.reduce((contents, rule) => {
+      const lines = new Set(contents.split(/\r?\n/))
+      if (lines.has(rule)) return contents
+      const prefix = contents && !contents.endsWith('\n') ? `${contents}\n` : contents
+      return `${prefix}${rule}\n`
+    }, current)
+    const next = updateCclinkStudioExcludeBlock(withGeneralRules)
+    if (next !== current) {
+      if (current) await copyFile(excludePath, `${excludePath}.cclink-studio.bak`)
+      const tempPath = `${excludePath}.${process.pid}.cclink-studio.tmp`
+      await writeFile(tempPath, next, 'utf-8')
+      await rename(tempPath, excludePath)
+    }
   }
 
   async listCandidateFiles(workspacePath: string): Promise<string[]> {
@@ -101,6 +118,46 @@ export class GitClient {
 
   stageAll(workspacePath: string): Promise<GitCommandResult> {
     return this.executor.run(workspacePath, ['add', '--all'])
+  }
+
+  inspectCclinkStudioIndex(workspacePath: string): Promise<string[]> {
+    return inspectCclinkStudioIndex(this.executor, workspacePath)
+  }
+
+  inspectSharedTaskIndexSecrets(workspacePath: string): Promise<string[]> {
+    return inspectSharedTaskIndexSecrets(this.executor, workspacePath)
+  }
+
+  inspectSharedTaskIndexDefinitions(workspacePath: string): Promise<string[]> {
+    return inspectSharedTaskIndexDefinitions(this.executor, workspacePath)
+  }
+
+  async inspectCclinkStudioOutgoingHistory(
+    workspacePath: string,
+    remoteName: string,
+    branch: string,
+  ): Promise<string[]> {
+    const baseRef = await resolveKnownRemoteBaseRef(
+      this.executor,
+      workspacePath,
+      remoteName,
+      branch,
+    )
+    return inspectCclinkStudioOutgoingHistory(this.executor, workspacePath, baseRef)
+  }
+
+  async inspectSharedTaskOutgoingContent(
+    workspacePath: string,
+    remoteName: string,
+    branch: string,
+  ): Promise<{ invalid: string[]; sensitive: string[] }> {
+    const baseRef = await resolveKnownRemoteBaseRef(
+      this.executor,
+      workspacePath,
+      remoteName,
+      branch,
+    )
+    return inspectSharedTaskOutgoingContent(this.executor, workspacePath, baseRef)
   }
 
   commit(workspacePath: string, message: string, allowEmpty = false): Promise<GitCommandResult> {

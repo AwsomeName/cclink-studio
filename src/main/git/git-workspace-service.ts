@@ -1,4 +1,4 @@
-import { readFile, realpath, stat } from 'node:fs/promises'
+import { readFile, readdir, realpath, stat } from 'node:fs/promises'
 import { basename, isAbsolute, relative, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import type {
@@ -16,6 +16,14 @@ import { GitBackupError } from '../git-backup/git-backup-error'
 import { GitExecutor } from '../git-backup/git-executor'
 import { findSensitiveFiles } from '../git-backup/git-backup-validation'
 import { parseGitNumstat, parseGitStatusPorcelainV2 } from './git-status-parser'
+import {
+  inspectCclinkStudioIndex,
+  inspectCclinkStudioOutgoingHistory,
+  inspectSharedTaskIndexDefinitions,
+  inspectSharedTaskIndexSecrets,
+  inspectSharedTaskOutgoingContent,
+  resolveKnownRemoteBaseRef,
+} from './cclink-studio-path-policy'
 
 interface GitCommandRunner {
   detect(): Promise<{ available: boolean; version: string | null }>
@@ -101,17 +109,19 @@ export class GitWorkspaceService {
         }
       }
 
-      const [statusResult, workingNumstatResult, stagedNumstatResult] = await Promise.all([
-        this.runner.run(workspacePath, [
-          'status',
-          '--porcelain=v2',
-          '--branch',
-          '-z',
-          '--untracked-files=all',
-        ]),
-        this.runner.run(workspacePath, ['diff', '--numstat', '-z', '--']),
-        this.runner.run(workspacePath, ['diff', '--cached', '--numstat', '-z', '--']),
-      ])
+      const [statusResult, workingNumstatResult, stagedNumstatResult, ignoredSharedTasks] =
+        await Promise.all([
+          this.runner.run(workspacePath, [
+            'status',
+            '--porcelain=v2',
+            '--branch',
+            '-z',
+            '--untracked-files=all',
+          ]),
+          this.runner.run(workspacePath, ['diff', '--numstat', '-z', '--']),
+          this.runner.run(workspacePath, ['diff', '--cached', '--numstat', '-z', '--']),
+          this.findIgnoredSharedTaskDefinitions(workspacePath),
+        ])
       const status = parseGitStatusPorcelainV2(statusResult.stdout)
       const workingNumstat = parseGitNumstat(workingNumstatResult.stdout)
       const stagedNumstat = parseGitNumstat(stagedNumstatResult.stdout)
@@ -140,6 +150,7 @@ export class GitWorkspaceService {
           status.untrackedCount > 0 || workingNumstat.incomplete || stagedNumstat.incomplete,
         refreshedAt: this.now().toISOString(),
         revision: createHash('sha256').update(statusResult.stdout).digest('hex'),
+        ...(ignoredSharedTasks.length ? { ignoredSharedTaskDefinitions: ignoredSharedTasks } : {}),
       }
     } catch (error: unknown) {
       const failure = normalizeGitFailure(error)
@@ -249,6 +260,30 @@ export class GitWorkspaceService {
           `发现敏感文件，已停止提交：${sensitiveFiles.join('、')}`,
         )
       }
+      const forbiddenPaths = await inspectCclinkStudioIndex(this.runner, repositoryRoot)
+      if (forbiddenPaths.length > 0) {
+        return operationFailure(
+          await this.getSnapshot(input.workspacePath),
+          `发现禁止进入 Git 的 CCLink Studio 本机数据，已停止提交：${forbiddenPaths.join('、')}`,
+        )
+      }
+      const sharedTaskSecrets = await inspectSharedTaskIndexSecrets(this.runner, repositoryRoot)
+      if (sharedTaskSecrets.length > 0) {
+        return operationFailure(
+          await this.getSnapshot(input.workspacePath),
+          `共享任务定义疑似包含密码、Token 或密钥，已停止提交：${sharedTaskSecrets.join('、')}`,
+        )
+      }
+      const invalidSharedTasks = await inspectSharedTaskIndexDefinitions(
+        this.runner,
+        repositoryRoot,
+      )
+      if (invalidSharedTasks.length > 0) {
+        return operationFailure(
+          await this.getSnapshot(input.workspacePath),
+          `共享任务定义不是合法的 v2 普通 JSON 文件，已停止提交：${invalidSharedTasks.join('、')}`,
+        )
+      }
       await this.assertGitIdentity(repositoryRoot)
       await this.runner.run(repositoryRoot, ['commit', '-m', input.message])
       snapshot = await this.getSnapshot(input.workspacePath)
@@ -294,6 +329,52 @@ export class GitWorkspaceService {
         return operationFailure(snapshot, '当前 upstream 配置不受支持，请在 Terminal 中检查')
       }
       const targetBranch = mergeRef.slice('refs/heads/'.length)
+      const forbiddenIndexPaths = await inspectCclinkStudioIndex(this.runner, repositoryRoot)
+      if (forbiddenIndexPaths.length > 0) {
+        return operationFailure(
+          snapshot,
+          `Git 已跟踪禁止共享的 CCLink Studio 本机数据，已停止 Push：${forbiddenIndexPaths.join('、')}`,
+        )
+      }
+      const baseRef = await resolveKnownRemoteBaseRef(
+        this.runner,
+        repositoryRoot,
+        remote,
+        targetBranch,
+      )
+      const forbiddenHistoryPaths = await inspectCclinkStudioOutgoingHistory(
+        this.runner,
+        repositoryRoot,
+        baseRef,
+      )
+      if (forbiddenHistoryPaths.length > 0) {
+        return operationFailure(
+          snapshot,
+          `待推送历史包含禁止共享的 CCLink Studio 本机数据，已停止 Push：${forbiddenHistoryPaths.join('、')}`,
+        )
+      }
+      const invalidSharedTasks = await inspectSharedTaskIndexDefinitions(
+        this.runner,
+        repositoryRoot,
+      )
+      const sharedTaskSecrets = await inspectSharedTaskIndexSecrets(this.runner, repositoryRoot)
+      const outgoingSharedTaskContent = await inspectSharedTaskOutgoingContent(
+        this.runner,
+        repositoryRoot,
+        baseRef,
+      )
+      if (invalidSharedTasks.length > 0 || outgoingSharedTaskContent.invalid.length > 0) {
+        return operationFailure(
+          snapshot,
+          `当前或待推送历史包含无效共享任务定义，已停止 Push：${Array.from(new Set([...invalidSharedTasks, ...outgoingSharedTaskContent.invalid])).join('、')}`,
+        )
+      }
+      if (sharedTaskSecrets.length > 0 || outgoingSharedTaskContent.sensitive.length > 0) {
+        return operationFailure(
+          snapshot,
+          `当前或待推送历史中的共享任务疑似包含密码、Token 或密钥，已停止 Push：${Array.from(new Set([...sharedTaskSecrets, ...outgoingSharedTaskContent.sensitive])).join('、')}`,
+        )
+      }
       const remoteUrlResult = await this.runner.run(repositoryRoot, ['remote', 'get-url', remote])
       const authentication = await this.resolveAuthentication(remoteUrlResult.stdout.trim())
       await this.runner.run(
@@ -325,6 +406,33 @@ export class GitWorkspaceService {
         'Git identity 未配置，请先设置 user.name 和 user.email',
       )
     }
+  }
+
+  private async findIgnoredSharedTaskDefinitions(
+    repositoryRoot: string,
+  ): Promise<Array<{ path: string; rule: string }>> {
+    const relativeDirectory = '.cclink-studio/shared/scheduled-tasks'
+    let entries
+    try {
+      entries = await readdir(resolve(repositoryRoot, relativeDirectory), { withFileTypes: true })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+      throw error
+    }
+    const ignored: Array<{ path: string; rule: string }> = []
+    for (const entry of entries.slice(0, 200)) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) continue
+      const path = `${relativeDirectory}/${entry.name}`
+      try {
+        const result = await this.runner.run(repositoryRoot, ['check-ignore', '-v', '--', path])
+        const rule = result.stdout.trim().split('\t')[0] || '未知 Git ignore 规则'
+        ignored.push({ path, rule })
+      } catch (error) {
+        if (error instanceof GitBackupError && error.code === 'GIT_COMMAND_FAILED') continue
+        throw error
+      }
+    }
+    return ignored
   }
 
   private async readUntrackedDiff(

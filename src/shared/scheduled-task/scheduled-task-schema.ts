@@ -1,12 +1,15 @@
 import type {
   SaveScheduledTaskInput,
   ScheduledTaskDefinition,
+  ScheduledTaskDefinitionSource,
+  StoredScheduledTaskDefinitionV2,
   ScheduledTaskOutputPolicy,
   ScheduledTaskResourceRef,
   ScheduledTaskSchedule,
   SetScheduledTaskEnabledInput,
   RunScheduledTaskInput,
   CancelScheduledTaskRunInput,
+  DeleteScheduledTaskInput,
 } from './scheduled-task-types'
 
 const TASK_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f-]{27,35}$/i
@@ -76,8 +79,33 @@ export function parseScheduledTaskSchedule(value: unknown): ScheduledTaskSchedul
   return { kind: 'weekly', time, weekdays: weekdays.sort(), timezone }
 }
 
-export function parseScheduledTaskDefinition(value: unknown): ScheduledTaskDefinition {
+interface LegacyStoredScheduledTaskDefinitionV1 {
+  schemaVersion: 1
+  id: string
+  workspaceRef: { kind: 'local'; path: string }
+  revision: number
+  title: string
+  instruction: string
+  schedule: ScheduledTaskSchedule
+  resources: ScheduledTaskResourceRef[]
+  outputPolicy: ScheduledTaskOutputPolicy
+  createdAt: number
+  updatedAt: number
+}
+
+export type StoredScheduledTaskDefinition =
+  | LegacyStoredScheduledTaskDefinitionV1
+  | StoredScheduledTaskDefinitionV2
+
+export function parseStoredScheduledTaskDefinition(value: unknown): StoredScheduledTaskDefinition {
   const input = requireRecord(value, '定时任务定义无效')
+  if (input.schemaVersion === 2) return parseStoredScheduledTaskDefinitionV2(input)
+  return parseLegacyStoredScheduledTaskDefinitionV1(input)
+}
+
+function parseLegacyStoredScheduledTaskDefinitionV1(
+  input: Record<string, unknown>,
+): LegacyStoredScheduledTaskDefinitionV1 {
   assertAllowedKeys(
     input,
     [
@@ -128,6 +156,67 @@ export function parseScheduledTaskDefinition(value: unknown): ScheduledTaskDefin
   }
 }
 
+function parseStoredScheduledTaskDefinitionV2(
+  input: Record<string, unknown>,
+): StoredScheduledTaskDefinitionV2 {
+  assertAllowedKeys(
+    input,
+    [
+      'schemaVersion',
+      'id',
+      'revision',
+      'title',
+      'instruction',
+      'schedule',
+      'resources',
+      'outputPolicy',
+      'createdAt',
+      'updatedAt',
+    ],
+    '定时任务定义包含未知字段',
+  )
+  const revision = parseRevision(input.revision)
+  const { createdAt, updatedAt } = parseTimestamps(input.createdAt, input.updatedAt)
+  return {
+    schemaVersion: 2,
+    id: parseScheduledTaskId(input.id),
+    revision,
+    title: parseTitle(input.title),
+    instruction: parseInstruction(input.instruction),
+    schedule: parseScheduledTaskSchedule(input.schedule),
+    resources: parseResources(input.resources),
+    outputPolicy: parseOutputPolicy(input.outputPolicy),
+    createdAt,
+    updatedAt,
+  }
+}
+
+export function materializeScheduledTaskDefinition(
+  stored: StoredScheduledTaskDefinition,
+  workspacePath: string,
+  source: ScheduledTaskDefinitionSource,
+  executionDigest: string,
+): ScheduledTaskDefinition {
+  if (stored.schemaVersion === 1 && stored.workspaceRef.path !== workspacePath) {
+    throw new Error('旧版定时任务绑定了其他工作空间')
+  }
+  return {
+    schemaVersion: 2,
+    id: stored.id,
+    workspaceRef: { kind: 'local', path: parseWorkspacePath(workspacePath) },
+    source,
+    executionDigest,
+    revision: stored.revision,
+    title: stored.title,
+    instruction: stored.instruction,
+    schedule: stored.schedule,
+    resources: stored.resources,
+    outputPolicy: stored.outputPolicy,
+    createdAt: stored.createdAt,
+    updatedAt: stored.updatedAt,
+  }
+}
+
 export function parseSaveScheduledTaskInput(value: unknown): SaveScheduledTaskInput {
   const input = requireRecord(value, '定时任务保存参数无效')
   assertAllowedKeys(
@@ -136,11 +225,13 @@ export function parseSaveScheduledTaskInput(value: unknown): SaveScheduledTaskIn
       'workspacePath',
       'taskId',
       'expectedRevision',
+      'expectedExecutionDigest',
       'title',
       'instruction',
       'schedule',
       'resources',
       'outputPolicy',
+      'definitionSource',
       'enable',
     ],
     '定时任务保存参数包含未知字段',
@@ -159,18 +250,61 @@ export function parseSaveScheduledTaskInput(value: unknown): SaveScheduledTaskIn
     expectedRevision = input.expectedRevision
   }
   if (expectedRevision !== undefined && !taskId) throw new Error('新任务不能指定 revision')
+  let expectedExecutionDigest: string | undefined
+  if (input.expectedExecutionDigest !== undefined) {
+    if (
+      typeof input.expectedExecutionDigest !== 'string' ||
+      !/^[0-9a-f]{64}$/i.test(input.expectedExecutionDigest)
+    ) {
+      throw new Error('预期执行摘要无效')
+    }
+    expectedExecutionDigest = input.expectedExecutionDigest
+  }
+  if (expectedExecutionDigest !== undefined && !taskId) throw new Error('新任务不能指定执行摘要')
   if (typeof input.enable !== 'boolean') throw new Error('本机启用状态无效')
   return {
     workspacePath: parseWorkspacePath(input.workspacePath),
-    taskId,
-    expectedRevision,
+    ...(taskId ? { taskId } : {}),
+    ...(expectedRevision !== undefined ? { expectedRevision } : {}),
+    ...(expectedExecutionDigest !== undefined ? { expectedExecutionDigest } : {}),
     title: parseTitle(input.title),
     instruction: parseInstruction(input.instruction),
     schedule: parseScheduledTaskSchedule(input.schedule),
     resources: parseResources(input.resources),
     outputPolicy: parseOutputPolicy(input.outputPolicy),
+    ...(input.definitionSource !== undefined
+      ? { definitionSource: parseDefinitionSource(input.definitionSource) }
+      : {}),
     enable: input.enable,
   }
+}
+
+function parseDefinitionSource(value: unknown): ScheduledTaskDefinitionSource {
+  if (value === 'local') return 'local'
+  if (value === 'shared') return 'shared'
+  throw new Error('任务共享范围无效')
+}
+
+function parseRevision(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+    throw new Error('定时任务 revision 无效')
+  }
+  return value
+}
+
+function parseTimestamps(
+  createdAtValue: unknown,
+  updatedAtValue: unknown,
+): { createdAt: number; updatedAt: number } {
+  if (
+    typeof createdAtValue !== 'number' ||
+    !Number.isSafeInteger(createdAtValue) ||
+    typeof updatedAtValue !== 'number' ||
+    !Number.isSafeInteger(updatedAtValue)
+  ) {
+    throw new Error('定时任务时间戳无效')
+  }
+  return { createdAt: createdAtValue, updatedAt: updatedAtValue }
 }
 
 export function parseSetScheduledTaskEnabledInput(value: unknown): SetScheduledTaskEnabledInput {
@@ -181,6 +315,20 @@ export function parseSetScheduledTaskEnabledInput(value: unknown): SetScheduledT
     workspacePath: parseWorkspacePath(input.workspacePath),
     taskId: parseScheduledTaskId(input.taskId),
     enabled: input.enabled,
+  }
+}
+
+export function parseDeleteScheduledTaskInput(value: unknown): DeleteScheduledTaskInput {
+  const input = requireRecord(value, '定时任务删除参数无效')
+  assertAllowedKeys(
+    input,
+    ['workspacePath', 'taskId', 'expectedRevision'],
+    '定时任务删除参数包含未知字段',
+  )
+  return {
+    workspacePath: parseWorkspacePath(input.workspacePath),
+    taskId: parseScheduledTaskId(input.taskId),
+    expectedRevision: parseRevision(input.expectedRevision),
   }
 }
 

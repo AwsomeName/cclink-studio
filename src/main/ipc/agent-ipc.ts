@@ -571,11 +571,11 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
   })
 
   // 添加外部 server
-  handle(agentMcpIpc.addServer, (_event, server) => {
+  handle(agentMcpIpc.addServer, async (_event, server) => {
     const mcpClientMgr = requireMcpClientMgr()
     if (!mcpClientMgr) return { success: false, error: 'MCP 管理器未就绪' }
     try {
-      mcpClientMgr.addServer(server)
+      await mcpClientMgr.addServer(server)
       return { success: true }
     } catch (err) {
       return { success: false, error: (err as Error).message }
@@ -583,24 +583,30 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
   })
 
   // 移除外部 server
-  handle(agentMcpIpc.removeServer, (_event, name) => {
+  handle(agentMcpIpc.removeServer, async (_event, name) => {
     const mcpClientMgr = requireMcpClientMgr()
     if (!mcpClientMgr) return false
     return mcpClientMgr.removeServer(name)
   })
 
   // 更新外部 server
-  handle(agentMcpIpc.updateServer, (_event, name, updates) => {
+  handle(agentMcpIpc.updateServer, async (_event, name, updates) => {
     const mcpClientMgr = requireMcpClientMgr()
     if (!mcpClientMgr) return false
     return mcpClientMgr.updateServer(name, updates)
   })
 
+  handle(agentMcpIpc.copyServer, async (_event, name, newName) => {
+    const mcpClientMgr = requireMcpClientMgr()
+    if (!mcpClientMgr) return false
+    return mcpClientMgr.copyServer(name, newName)
+  })
+
   // 重新加载配置文件
-  handle(agentMcpIpc.reloadConfig, () => {
+  handle(agentMcpIpc.reloadConfig, async () => {
     const mcpClientMgr = requireMcpClientMgr()
     if (!mcpClientMgr) return []
-    mcpClientMgr.loadFromConfig()
+    await mcpClientMgr.loadFromConfig()
     return mcpClientMgr.getAllServers()
   })
 }

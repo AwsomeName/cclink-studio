@@ -255,7 +255,9 @@
 }
 
 .scheduled-task-stage-note,
-.scheduled-task-form-error {
+.scheduled-task-form-error,
+.scheduled-task-confirmation-note,
+.scheduled-task-git-note {
   max-width: 920px;
   margin: 18px auto 0;
   padding: 10px 14px;
@@ -264,6 +266,64 @@
   background: var(--side-bar-background, rgba(128, 128, 128, 0.08));
   font-size: 12px;
   line-height: 1.6;
+}
+
+.scheduled-task-git-note {
+  max-width: 920px;
+  margin: 10px auto 0;
+  color: var(--text-secondary);
+}
+
+.scheduled-task-confirmation-note {
+  max-width: 920px;
+  margin: 10px auto 0;
+  border-color: #d29922;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-secondary);
+}
+
+.scheduled-task-confirmation-note strong {
+  color: var(--text-primary);
+}
+
+.scheduled-task-source-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.scheduled-task-source-options > label {
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  flex-direction: row;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.scheduled-task-source-options input {
+  width: auto;
+  height: auto;
+  margin-top: 3px;
+}
+
+.scheduled-task-source-options label > span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scheduled-task-source-options strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.scheduled-task-source-options small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .scheduled-task-editor {

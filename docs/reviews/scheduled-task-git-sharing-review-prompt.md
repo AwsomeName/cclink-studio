@@ -15,6 +15,12 @@
 X，但默认不启用，只有人工检查并明确启用后才在 B 本机调度。activation、权限、运行历史、
 内部结果和凭证不得通过 Git 传播；多设备同时启用允许重复执行，不承诺 exactly-once。
 
+第一次独立评审结论为“有条件通过”，提出三个开工阻塞：确认未绑定任务版本、occurrence key
+缺少 workspaceId、Git ignore 无法保护已经 tracked 的本机状态。第二次复审确认三项已形成可
+施工设计，只指出转换恢复表的 source/target 双 hash 条件有歧义；当前文档已改为两者分别匹配
+journal 才能删除 source，任一不匹配一律保留现场并进入冲突。本指令再次使用时仍必须独立验证，
+不得因为状态写成“可进入 E0”就默认方案正确。
+
 必须先完整阅读：
 
 1. `/Users/apple/Desktop/cclink-dev/cclink-studio/AGENTS.md`
@@ -62,6 +68,9 @@ X，但默认不启用，只有人工检查并明确启用后才在 B 本机调�
 5. 当前 manual backup 的 `.cclink-studio/`、scheduled task 自有规则、用户 `.gitignore`、global
    excludes 和已 tracked 文件之间的优先级是什么？方案的 managed block 迁移是否会误删用户规则、
    仍旧忽略 shared 文件或意外暴露 state/results？
+   进一步验证 resulting index 与 outgoing commit range allowlist 是否覆盖 selected Commit、
+   stage-all backup 和 pure Push；forbidden 文件在较早未推送 commit、当前 HEAD 已删除时是否仍
+   阻止 Push，同时是否允许先形成“删除 forbidden tracked 文件”的本地修复 Commit。
 6. 现有 `GitWorkspaceService` 与 `GitBackupService/GitClient` 的 owner 收敛程度是否足以承接
    managed exclude？方案有没有把任务保存硬依赖 Git service，导致非 Git 工作空间或 Git 初始化
    失败时无法保存任务？
@@ -78,10 +87,14 @@ X，但默认不启用，只有人工检查并明确启用后才在 B 本机调�
     disabled？旧 activation、相同 task ID、相同或不同 workspaceId、备份恢复是否存在静默启用路径？
 12. 普通 Save、`Cmd/Ctrl+S`、Tab restore、App restart、全局 auto、Agent tool、Git Pull 和定义
     文件重新出现，是否都无法绕过“在此设备启用”的人工确认？列出每个实际入口。
+    修订方案的 `confirmedTaskRevision + confirmedExecutionDigest` 是否在 runNow、timer、catch-up、
+    claim 和出队转 running 前全部由 main 重查？revision 变化但内容不变、revision 未变但执行字段
+    变化、仅 JSON 排版变化分别是否得到正确结果？
 13. definition revision 是否足以检测 A/B 并发修改？相同 revision 不同内容、Git fast-forward、
     merge conflict、dirty Tab、迟到 watcher 和保存中的外部替换需要什么 hash/generation/expected state？
 14. shared 文件外部删除时，activation orphaned/disabled 的持久化语义是否正确？删除发生在 timer
     到期前、已排队、Agent 启动前、运行中和结果落盘前分别应该怎样，方案是否说清且可实现？
+    queued run 是否从内存队列和持久账本同时变为 cancelled，出队竞态是否可能再次置 running？
 15. 多设备同时启用允许重复执行是否足够诚实？是否存在用户任务天然不可重复、输出 create-only
     冲突、外部副作用未来开放后造成严重后果的场景？首版是否需要更强提示或禁止某些共享任务？
 16. shared instruction 可能包含秘密或恶意指令。现有 scheduled allowlist、路径边界、权限确认和
@@ -96,11 +109,17 @@ X，但默认不启用，只有人工检查并明确启用后才在 B 本机调�
     Studio 可靠知道，必须避免展示？
 20. 方案是否需要 ADR？若不需要，逐条说明为何没有改变架构宪法和长期持久化边界；若需要，指出
     应在实现前冻结的决策和具体 ADR 范围。
-21. 13–23 人日估算是否合理？给出最小可施工纵向切片，指出哪些工作是用户功能、哪些只是工程
+21. 19–29 人日估算是否合理？给出最小可施工纵向切片，指出哪些工作是用户功能、哪些只是工程
     准备度；不得用 Schema、测试或 ignore 重构冒充产品进度。
 22. 测试矩阵是否覆盖真实 Git、不同绝对路径、隔离 userData、worktree、用户 ignore、外部删除、
     dirty draft、冲突和 App 生命周期？指出仍可能让 B 自动执行、看不到 X、覆盖任务或泄露本机
     状态的每条遗漏路径。
+23. 当前 `occurrenceKey(taskId, scheduledFor)` 和全局 run ledger 的真实冲突路径是否被
+    `workspaceId + taskId + scheduledFor` 关闭？ledger v1→v2 是否在 catch-up/timer 前原子完成，
+    重复 legacy key、非法 workspaceId、迁移失败和回滚版本分别会怎样？
+24. 第 4.4 节 journal 字段、phase 和恢复表是否足以覆盖 prepared、target-written、source-removed
+    的每个崩溃窗口？target exclusive-create、源备份、hash 不匹配和损坏 journal 会不会覆盖用户
+    外部修改、产生双定义或变成第三份定义事实源？
 
 必须至少亲自执行以下只读或临时目录实验；临时数据不得创建在仓库中，结束后清理临时目录：
 
@@ -109,6 +128,11 @@ X，但默认不启用，只有人工检查并明确启用后才在 B 本机调�
 - 用源码现有 parser 构造“相同 task 内容、不同 workspace absolute path”的定义读取判断；
 - 检查一个空 B userData 下 snapshot/activation 的默认值；
 - 检查 Git conflict marker 对当前 `readDefinitions()` 的影响范围。
+- 强制把 local definition、state、result、`.bak` 或 `.tmp` 加入临时仓库 index/HEAD，验证 proposed
+  tracked allowlist 在 Commit 和 pure Push 两条路径都能识别；再提交删除，使当前 HEAD 干净，验证
+  outgoing commit range 仍阻止 Push，同时验证本地 staged deletion 修复路径。
+- 构造两个 workspaceId、相同 taskId/scheduledFor 的 legacy run，验证 proposed ledger v2 key 和
+  迁移冲突语义。
 
 若因环境限制无法执行某项，明确写“未执行”及原因，不得用推测冒充证据。
 
@@ -133,6 +157,9 @@ X，但默认不启用，只有人工检查并明确启用后才在 B 本机调�
 - 不同绝对路径一定能读取共享定义；
 - activation/history/results 一定不会进入 Git；
 - 一个冲突或坏文件不会破坏其他合法任务。
+- 已确认共享任务发生执行内容变化后不可能继续自动运行；
+- 同机两个项目副本不可能因为相同 task ID/时间互相吞掉 occurrence；
+- 已被 Git 跟踪的本机状态不可能通过任何 Studio Git 写入口继续 Commit/Push。
 
 只要其中任何一项无法被方案和可施工实现证明，就不能判“通过”。
 

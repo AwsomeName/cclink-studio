@@ -110,6 +110,23 @@ describe('GitWorkspaceService', () => {
     })
   })
 
+  it('reports the exact Git rule that still ignores a shared task definition', async () => {
+    const workspacePath = join(tempDir, 'ignored-shared-task')
+    const sharedDirectory = join(workspacePath, '.cclink-studio/shared/scheduled-tasks')
+    await mkdir(sharedDirectory, { recursive: true })
+    await git(workspacePath, ['init', '-b', 'main'])
+    await writeFile(join(workspacePath, '.gitignore'), '.cclink-studio/\n', 'utf-8')
+    const taskPath =
+      '.cclink-studio/shared/scheduled-tasks/12345678-1234-1234-1234-123456789abc.json'
+    await writeFile(join(workspacePath, taskPath), '{}\n', 'utf-8')
+
+    const snapshot = await createService(workspacePath).getSnapshot(workspacePath)
+
+    expect(snapshot.ignoredSharedTaskDefinitions).toEqual([
+      { path: taskPath, rule: expect.stringContaining('.gitignore') },
+    ])
+  })
+
   it('commits existing staged content without absorbing an unselected partial worktree change', async () => {
     const workspacePath = join(tempDir, 'partial-workspace')
     await mkdir(workspacePath)
@@ -209,6 +226,183 @@ describe('GitWorkspaceService', () => {
       message: expect.stringContaining('敏感文件'),
     })
     expect(await gitOutput(workspacePath, ['rev-list', '--count', 'HEAD'])).toBe('1\n')
+  })
+
+  it('blocks already tracked local CCLink Studio state even when ignore rules cannot help', async () => {
+    const workspacePath = join(tempDir, 'tracked-local-state')
+    await mkdir(join(workspacePath, '.cclink-studio', 'scheduled-tasks'), { recursive: true })
+    await git(workspacePath, ['init', '-b', 'main'])
+    await git(workspacePath, ['config', 'user.name', 'Test User'])
+    await git(workspacePath, ['config', 'user.email', 'test@example.com'])
+    await writeFile(join(workspacePath, 'README.md'), 'initial\n', 'utf-8')
+    await git(workspacePath, ['add', 'README.md'])
+    await git(workspacePath, ['commit', '-m', 'initial'])
+    const localDefinition =
+      '.cclink-studio/scheduled-tasks/12345678-1234-1234-1234-123456789abc.json'
+    await writeFile(join(workspacePath, localDefinition), '{}\n', 'utf-8')
+    await git(workspacePath, ['add', '-f', localDefinition])
+
+    const service = createService(workspacePath)
+    const snapshot = await service.getSnapshot(workspacePath)
+    const result = await service.commit({
+      workspacePath,
+      expectedRevision: snapshot.revision,
+      message: 'must not commit local state',
+      pathsToStage: [],
+    })
+
+    expect(result).toMatchObject({
+      success: false,
+      message: expect.stringContaining('禁止进入 Git'),
+    })
+    expect(await gitOutput(workspacePath, ['rev-list', '--count', 'HEAD'])).toBe('1\n')
+  })
+
+  it('allows a shared task JSON path but blocks obvious secrets in its staged content', async () => {
+    const workspacePath = join(tempDir, 'shared-task-content')
+    const sharedDirectory = join(workspacePath, '.cclink-studio/shared/scheduled-tasks')
+    await mkdir(sharedDirectory, { recursive: true })
+    await git(workspacePath, ['init', '-b', 'main'])
+    await git(workspacePath, ['config', 'user.name', 'Test User'])
+    await git(workspacePath, ['config', 'user.email', 'test@example.com'])
+    await writeFile(join(workspacePath, 'README.md'), 'initial\n', 'utf-8')
+    await git(workspacePath, ['add', 'README.md'])
+    await git(workspacePath, ['commit', '-m', 'initial'])
+    const sharedPath =
+      '.cclink-studio/shared/scheduled-tasks/12345678-1234-1234-1234-123456789abc.json'
+    const sharedDefinition = {
+      schemaVersion: 2,
+      id: '12345678-1234-1234-1234-123456789abc',
+      revision: 1,
+      title: 'Shared task',
+      instruction: 'Generate a report',
+      schedule: { kind: 'daily', time: '09:00', timezone: 'UTC' },
+      resources: [{ kind: 'workspace' }],
+      outputPolicy: {
+        directory: 'docs',
+        fileNameTemplate: 'report.md',
+        mode: 'create-only',
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    await writeFile(
+      join(workspacePath, sharedPath),
+      `${JSON.stringify(sharedDefinition)}\n`,
+      'utf-8',
+    )
+    const service = createService(workspacePath)
+    const safeSnapshot = await service.getSnapshot(workspacePath)
+    await expect(
+      service.commit({
+        workspacePath,
+        expectedRevision: safeSnapshot.revision,
+        message: 'safe shared task',
+        pathsToStage: [sharedPath],
+      }),
+    ).resolves.toMatchObject({ success: true })
+
+    await writeFile(join(workspacePath, sharedPath), '{"schemaVersion":2}\n', 'utf-8')
+    const invalidSnapshot = await service.getSnapshot(workspacePath)
+    await expect(
+      service.commit({
+        workspacePath,
+        expectedRevision: invalidSnapshot.revision,
+        message: 'must reject invalid shared task',
+        pathsToStage: [sharedPath],
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      message: expect.stringContaining('合法的 v2'),
+    })
+
+    await writeFile(
+      join(workspacePath, sharedPath),
+      `${JSON.stringify({ ...sharedDefinition, revision: 2, instruction: 'token=abcdef123456' })}\n`,
+      'utf-8',
+    )
+    const secretSnapshot = await service.getSnapshot(workspacePath)
+    await expect(
+      service.commit({
+        workspacePath,
+        expectedRevision: secretSnapshot.revision,
+        message: 'must reject secret',
+        pathsToStage: [sharedPath],
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      message: expect.stringContaining('Token'),
+    })
+  })
+
+  it('blocks a forbidden path that exists only in an earlier outgoing commit', async () => {
+    const workspacePath = join(tempDir, 'outgoing-history')
+    const remotePath = join(tempDir, 'outgoing-history.git')
+    await mkdir(join(workspacePath, '.cclink-studio', 'scheduled-task-results'), {
+      recursive: true,
+    })
+    await git(tempDir, ['init', '--bare', remotePath])
+    await git(workspacePath, ['init', '-b', 'main'])
+    await git(workspacePath, ['config', 'user.name', 'Test User'])
+    await git(workspacePath, ['config', 'user.email', 'test@example.com'])
+    await writeFile(join(workspacePath, 'README.md'), 'initial\n', 'utf-8')
+    await git(workspacePath, ['add', 'README.md'])
+    await git(workspacePath, ['commit', '-m', 'initial'])
+    await git(workspacePath, ['remote', 'add', 'origin', remotePath])
+    await git(workspacePath, ['push', '-u', 'origin', 'main'])
+    const forbiddenPath = '.cclink-studio/scheduled-task-results/private.md'
+    await writeFile(join(workspacePath, forbiddenPath), 'private\n', 'utf-8')
+    await git(workspacePath, ['add', '-f', forbiddenPath])
+    await git(workspacePath, ['commit', '-m', 'accidental local result'])
+    await rm(join(workspacePath, forbiddenPath))
+    await git(workspacePath, ['add', '-u', '--', forbiddenPath])
+    await git(workspacePath, ['commit', '-m', 'delete accidental result'])
+
+    const service = createService(workspacePath)
+    const snapshot = await service.getSnapshot(workspacePath)
+    const result = await service.push({
+      workspacePath,
+      expectedHeadOid: snapshot.headOid!,
+    })
+
+    expect(result).toMatchObject({
+      success: false,
+      message: expect.stringContaining('待推送历史'),
+    })
+  })
+
+  it('blocks invalid shared task content that exists only in outgoing history', async () => {
+    const workspacePath = join(tempDir, 'invalid-shared-history')
+    const remotePath = join(tempDir, 'invalid-shared-history.git')
+    await mkdir(join(workspacePath, '.cclink-studio/shared/scheduled-tasks'), {
+      recursive: true,
+    })
+    await git(tempDir, ['init', '--bare', remotePath])
+    await git(workspacePath, ['init', '-b', 'main'])
+    await git(workspacePath, ['config', 'user.name', 'Test User'])
+    await git(workspacePath, ['config', 'user.email', 'test@example.com'])
+    await writeFile(join(workspacePath, 'README.md'), 'initial\n', 'utf-8')
+    await git(workspacePath, ['add', 'README.md'])
+    await git(workspacePath, ['commit', '-m', 'initial'])
+    await git(workspacePath, ['remote', 'add', 'origin', remotePath])
+    await git(workspacePath, ['push', '-u', 'origin', 'main'])
+    const sharedPath =
+      '.cclink-studio/shared/scheduled-tasks/12345678-1234-1234-1234-123456789abc.json'
+    await writeFile(join(workspacePath, sharedPath), '{"schemaVersion":2}\n', 'utf-8')
+    await git(workspacePath, ['add', sharedPath])
+    await git(workspacePath, ['commit', '-m', 'invalid shared definition'])
+    await rm(join(workspacePath, sharedPath))
+    await git(workspacePath, ['add', '-u', '--', sharedPath])
+    await git(workspacePath, ['commit', '-m', 'delete invalid shared definition'])
+
+    const service = createService(workspacePath)
+    const snapshot = await service.getSnapshot(workspacePath)
+    await expect(
+      service.push({ workspacePath, expectedHeadOid: snapshot.headOid! }),
+    ).resolves.toMatchObject({
+      success: false,
+      message: expect.stringContaining('无效共享任务定义'),
+    })
   })
 })
 

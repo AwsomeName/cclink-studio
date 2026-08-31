@@ -1,28 +1,33 @@
 import { app } from 'electron'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
-  appendFile,
   copyFile,
+  lstat,
   mkdir,
   readFile,
   readdir,
   realpath,
   rename,
   stat,
+  unlink,
   writeFile,
 } from 'node:fs/promises'
-import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import {
-  parseScheduledTaskDefinition,
+  materializeScheduledTaskDefinition,
+  parseStoredScheduledTaskDefinition,
   parseScheduledTaskId,
   parseWorkspacePath,
 } from '../../shared/scheduled-task/scheduled-task-schema'
 import type {
   CancelScheduledTaskRunInput,
+  DeleteScheduledTaskInput,
   RunScheduledTaskInput,
   SaveScheduledTaskInput,
   ScheduledTaskActivation,
   ScheduledTaskDefinition,
+  ScheduledTaskDefinitionIssue,
+  ScheduledTaskDefinitionSource,
   ScheduledTaskErrorCode,
   ScheduledTaskFailure,
   ScheduledTaskListResult,
@@ -35,6 +40,7 @@ import type {
   ScheduledTaskWorkspaceRuntimeStatusResult,
   ScheduledTaskSnapshot,
   SetScheduledTaskEnabledInput,
+  StoredScheduledTaskDefinitionV2,
 } from '../../shared/scheduled-task/scheduled-task-types'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 import type { AgentBridge } from '../agent/agent-bridge'
@@ -44,10 +50,38 @@ import {
   type ScheduledTaskRunExecutor,
 } from './scheduled-task-agent-runner'
 import { ScheduledTaskRunStore } from './scheduled-task-run-store'
+import { computeScheduledTaskExecutionDigest } from './scheduled-task-definition-digest'
+import {
+  containsObviousSecretText,
+  updateCclinkStudioExcludeBlock,
+} from '../git/cclink-studio-path-policy'
 
 interface ActivationFile {
-  schemaVersion: 1
+  schemaVersion: 2
   activations: Record<string, ScheduledTaskActivation>
+}
+
+interface DefinitionListReadResult {
+  definitions: ScheduledTaskDefinition[]
+  issues: ScheduledTaskDefinitionIssue[]
+}
+
+interface DefinitionMigrationJournal {
+  schemaVersion: 1
+  operationId: string
+  workspaceId: string
+  taskId: string
+  from: ScheduledTaskDefinitionSource
+  to: ScheduledTaskDefinitionSource
+  sourceRelativePath: string
+  sourceBackupRelativePath: string
+  targetRelativePath: string
+  sourceRevision: number
+  sourceFileSha256: string
+  targetRevision: number
+  targetFileSha256: string
+  phase: 'prepared' | 'target-written' | 'source-removed'
+  createdAt: number
 }
 
 interface ScheduledTaskServiceOptions {
@@ -76,7 +110,7 @@ export class ScheduledTaskService {
   private readonly now: () => number
   private readonly runStore: ScheduledTaskRunStore
   private runExecutor: ScheduledTaskRunExecutor | null
-  private activationFile: ActivationFile = { schemaVersion: 1, activations: {} }
+  private activationFile: ActivationFile = { schemaVersion: 2, activations: {} }
   private activationLoadError: Error | null = null
   private runStoreLoadError: Error | null = null
   private mutationQueue: Promise<unknown> = Promise.resolve()
@@ -108,15 +142,17 @@ export class ScheduledTaskService {
   async load(): Promise<void> {
     this.activationLoadError = null
     try {
-      this.activationFile = parseActivationFile(
+      const parsed = parseActivationFile(
         JSON.parse(await readFile(this.activationFilePath, 'utf-8')),
       )
+      this.activationFile = parsed.file
+      if (parsed.migrated) await this.writeActivationFile()
     } catch (error) {
       if (isMissingFileError(error)) {
-        this.activationFile = { schemaVersion: 1, activations: {} }
+        this.activationFile = { schemaVersion: 2, activations: {} }
       } else {
         this.activationLoadError = error instanceof Error ? error : new Error(String(error))
-        this.activationFile = { schemaVersion: 1, activations: {} }
+        this.activationFile = { schemaVersion: 2, activations: {} }
         console.error('[ScheduledTaskService] 本机启用状态加载失败:', error)
       }
     }
@@ -216,9 +252,11 @@ export class ScheduledTaskService {
     try {
       const context = await this.resolveWorkspace(workspacePath, false)
       this.assertActivationStoreAvailable()
-      const definitions = await this.readDefinitions(context.workspacePath)
+      const { definitions, issues } = await this.readDefinitions(context.workspacePath)
+      await this.reconcileDefinitionActivations(context.workspaceId, definitions, issues)
       return {
         success: true,
+        ...(issues.length ? { issues } : {}),
         tasks: definitions
           .map((definition) => this.createSnapshot(definition, context.workspaceId))
           .sort((left, right) => right.definition.updatedAt - left.definition.updatedAt),
@@ -233,6 +271,7 @@ export class ScheduledTaskService {
       const context = await this.resolveWorkspace(workspacePath, false)
       this.assertActivationStoreAvailable()
       const definition = await this.readDefinition(context.workspacePath, taskId)
+      await this.reconcileDefinitionActivations(context.workspaceId, [definition], [])
       return {
         success: true,
         task: this.createSnapshot(definition, context.workspaceId),
@@ -252,21 +291,22 @@ export class ScheduledTaskService {
           : null
         if (
           previous &&
-          input.expectedRevision !== undefined &&
-          previous.revision !== input.expectedRevision
+          ((input.expectedRevision !== undefined && previous.revision !== input.expectedRevision) ||
+            (input.expectedExecutionDigest !== undefined &&
+              previous.executionDigest !== input.expectedExecutionDigest))
         ) {
           throw new ScheduledTaskServiceError(
             'SCHEDULED_TASK_REVISION_CONFLICT',
-            '任务已在其他位置更新，未覆盖较新的版本',
+            '任务已在其他位置更新，未覆盖不同 revision 或内容摘要的版本',
             '重新打开任务并合并修改后再保存',
           )
         }
 
         const timestamp = this.now()
-        const definition: ScheduledTaskDefinition = {
-          schemaVersion: 1,
+        const source = input.definitionSource ?? previous?.source ?? 'local'
+        const storedDefinition: StoredScheduledTaskDefinitionV2 = {
+          schemaVersion: 2,
           id: previous?.id ?? randomUUID(),
-          workspaceRef: { kind: 'local', path: context.workspacePath },
           revision: previous ? previous.revision + 1 : 1,
           title: input.title,
           instruction: input.instruction,
@@ -276,7 +316,21 @@ export class ScheduledTaskService {
           createdAt: previous?.createdAt ?? timestamp,
           updatedAt: timestamp,
         }
-        await this.writeDefinition(context.workspacePath, definition)
+        const definition = materializeScheduledTaskDefinition(
+          storedDefinition,
+          context.workspacePath,
+          source,
+          computeScheduledTaskExecutionDigest(storedDefinition),
+        )
+        if (source === 'shared' && containsObviousSecret(storedDefinition)) {
+          throw new ScheduledTaskServiceError(
+            'SCHEDULED_TASK_INVALID',
+            '共享任务定义疑似包含密码、Token 或密钥，已阻止保存',
+            '移除秘密值，改为由当前设备的凭证配置提供后重试',
+          )
+        }
+        await this.writeDefinition(context.workspacePath, definition, previous?.source)
+        await this.cancelQueuedRunsForChangedDefinition(definition)
 
         const activation = this.createActivation(definition, context.workspaceId, input.enable)
         this.activationFile.activations[activationKey(context.workspaceId, definition.id)] =
@@ -329,6 +383,50 @@ export class ScheduledTaskService {
     })
   }
 
+  async delete(input: DeleteScheduledTaskInput): Promise<ScheduledTaskOperationResult> {
+    return this.enqueue(async () => {
+      try {
+        const context = await this.resolveWorkspace(input.workspacePath, true)
+        this.assertActivationStoreAvailable()
+        const definition = await this.readDefinition(context.workspacePath, input.taskId)
+        if (definition.revision !== input.expectedRevision) {
+          throw new ScheduledTaskServiceError(
+            'SCHEDULED_TASK_REVISION_CONFLICT',
+            '任务已更新，未删除较新的版本',
+            '重新打开任务并确认后再删除',
+          )
+        }
+        await this.cancelQueuedRuns(
+          context.workspaceId,
+          definition.id,
+          '任务已删除',
+          'SCHEDULED_TASK_DEFINITION_REMOVED',
+          '运行历史仍会保留；需要继续执行时请重新创建任务',
+        )
+        await unlink(
+          join(
+            definitionsDirectory(context.workspacePath, definition.source),
+            `${definition.id}.json`,
+          ),
+        )
+        delete this.activationFile.activations[activationKey(context.workspaceId, definition.id)]
+        await this.writeActivationFile()
+        this.armScheduler()
+        this.notifyChanged(context.workspacePath)
+        return {
+          success: true,
+          task: {
+            definition,
+            activation: this.createActivation(definition, context.workspaceId, false),
+            latestRun: this.latestRun(context.workspacePath, definition.id),
+          },
+        }
+      } catch (error) {
+        return { success: false, error: toFailure(error) }
+      }
+    })
+  }
+
   async runNow(input: RunScheduledTaskInput): Promise<ScheduledTaskRunResult> {
     return this.enqueue(async () => {
       try {
@@ -342,6 +440,15 @@ export class ScheduledTaskService {
         }
         const context = await this.resolveWorkspace(input.workspacePath, false)
         const definition = await this.readDefinition(context.workspacePath, input.taskId)
+        const activation =
+          this.activationFile.activations[activationKey(context.workspaceId, definition.id)]
+        if (definition.source === 'shared' && !isActivationRunnable(activation, definition)) {
+          throw new ScheduledTaskServiceError(
+            'SCHEDULED_TASK_CONFIRMATION_REQUIRED',
+            '共享任务尚未在当前设备确认，不能运行',
+            '检查任务内容后点击“在此设备启用”',
+          )
+        }
         const duplicate = this.runStore
           .list(context.workspacePath, definition.id)
           .find((run) => run.status === 'queued' || run.status === 'running')
@@ -351,7 +458,7 @@ export class ScheduledTaskService {
           context.workspaceId,
           'manual',
           null,
-          `manual:${definition.id}:${randomUUID()}`,
+          `manual:${context.workspaceId}:${definition.id}:${randomUUID()}`,
         )
         this.queueRun(run)
         return { success: true, run }
@@ -402,7 +509,6 @@ export class ScheduledTaskService {
     try {
       this.assertRunStoreAvailable()
       const context = await this.resolveWorkspace(workspacePath, false)
-      await this.readDefinition(context.workspacePath, taskId)
       return { success: true, runs: this.runStore.list(context.workspacePath, taskId) }
     } catch (error) {
       return { success: false, runs: [], error: toFailure(error) }
@@ -489,8 +595,16 @@ export class ScheduledTaskService {
           activation.workspaceRef.path,
           activation.taskId,
         )
+        if (!isActivationRunnable(activation, definition)) {
+          await this.suspendActivationForDefinitionChange(activation, definition)
+          continue
+        }
+        if (this.runStore.hasOccurrenceConflict(activation.workspaceId, activation.taskId)) {
+          await this.suspendActivationForOccurrenceConflict(activation)
+          continue
+        }
         const scheduledFor = latestDueOccurrence(definition, activation.nextRunAt, timestamp)
-        const key = occurrenceKey(definition.id, scheduledFor)
+        const key = occurrenceKey(activation.workspaceId, definition.id, scheduledFor)
         if (!this.runStore.findOccurrence(key)) {
           if (
             definition.schedule.kind !== 'once' &&
@@ -514,6 +628,10 @@ export class ScheduledTaskService {
             ? null
             : calculateNextRunAt(definition.schedule, timestamp)
       } catch (error) {
+        activation.enabled = false
+        activation.nextRunAt = null
+        activation.suspensionReason = 'definition-conflict'
+        await this.cancelQueuedRuns(activation.workspaceId, activation.taskId, '任务定义不可用')
         this.lastRuntimeError = toFailure(error)
         this.lastRuntimeErrorWorkspacePath = activation.workspaceRef.path
       }
@@ -571,8 +689,16 @@ export class ScheduledTaskService {
             activation.workspaceRef.path,
             activation.taskId,
           )
+          if (!isActivationRunnable(activation, definition)) {
+            await this.suspendActivationForDefinitionChange(activation, definition)
+            continue
+          }
+          if (this.runStore.hasOccurrenceConflict(activation.workspaceId, activation.taskId)) {
+            await this.suspendActivationForOccurrenceConflict(activation)
+            continue
+          }
           const scheduledFor = activation.nextRunAt
-          const key = occurrenceKey(definition.id, scheduledFor)
+          const key = occurrenceKey(activation.workspaceId, definition.id, scheduledFor)
           const mutableActivation: ScheduledTaskActivation = activation
           mutableActivation.lastEvaluatedAt = timestamp
           mutableActivation.nextRunAt =
@@ -590,6 +716,11 @@ export class ScheduledTaskService {
             this.queueRun(run)
           }
         } catch (error) {
+          const mutableActivation = activation as ScheduledTaskActivation
+          mutableActivation.enabled = false
+          mutableActivation.nextRunAt = null
+          mutableActivation.suspensionReason = 'definition-conflict'
+          await this.cancelQueuedRuns(activation.workspaceId, activation.taskId, '任务定义不可用')
           this.lastRuntimeError = toFailure(error)
           this.lastRuntimeErrorWorkspacePath = activation.workspaceRef.path
         }
@@ -606,16 +737,24 @@ export class ScheduledTaskService {
     scheduledFor: number | null,
     key: string,
   ): Promise<ScheduledTaskRun> {
+    if (this.runStore.hasOccurrenceConflict(workspaceId, definition.id)) {
+      throw new ScheduledTaskServiceError(
+        'SCHEDULED_TASK_DEFINITION_CONFLICT',
+        '运行账本存在重复 occurrence，已禁止创建新的运行',
+        '导出诊断并修复 userData/scheduled-tasks/runs.json 后重试',
+      )
+    }
     const existing = this.runStore.findOccurrence(key)
     if (existing) return existing
     const timestamp = this.now()
     const id = randomUUID()
     const run: ScheduledTaskRun = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       id,
       occurrenceKey: key,
       taskId: definition.id,
       taskRevision: definition.revision,
+      taskExecutionDigest: definition.executionDigest,
       workspaceId,
       workspaceRef: definition.workspaceRef,
       conversationId: `scheduled-task:${id}`,
@@ -657,18 +796,22 @@ export class ScheduledTaskService {
       return
     }
     this.currentRunId = run.id
-    const definition = await this.readDefinition(run.workspaceRef.path, run.taskId).catch(
-      () => null,
-    )
-    if (!definition || definition.revision !== run.taskRevision) {
+    let definition = await this.readDefinition(run.workspaceRef.path, run.taskId).catch(() => null)
+    const activation = this.activationFile.activations[activationKey(run.workspaceId, run.taskId)]
+    if (
+      !definition ||
+      definition.revision !== run.taskRevision ||
+      definition.executionDigest !== run.taskExecutionDigest ||
+      (definition.source === 'shared' && !isActivationRunnable(activation, definition))
+    ) {
       await this.updateRun(run, {
-        status: 'failed',
-        currentStep: '固定 revision 已不可用',
+        status: 'cancelled',
+        currentStep: '任务定义或本机确认已变化，排队运行已取消',
         finishedAt: this.now(),
         error: {
           code: 'SCHEDULED_TASK_REVISION_CONFLICT',
-          message: '运行固定的任务 revision 已不可用',
-          recovery: '保存任务后重新运行',
+          message: '运行固定的任务 revision/digest 已不可用或尚未确认',
+          recovery: '检查当前任务内容并重新确认后运行',
         },
       })
       this.currentRunId = null
@@ -695,11 +838,51 @@ export class ScheduledTaskService {
       this.currentRunId = null
       return
     }
-    await this.updateRun(run, {
-      status: 'running',
-      currentStep: 'Agent 正在执行任务',
-      startedAt: this.now(),
+    const preparedDefinition = await this.enqueue(async () => {
+      const queued = this.runStore.get(run.id)
+      if (!queued || queued.status !== 'queued') return null
+      const latestDefinition = await this.readDefinition(run.workspaceRef.path, run.taskId).catch(
+        () => null,
+      )
+      const latestActivation =
+        this.activationFile.activations[activationKey(run.workspaceId, run.taskId)]
+      if (
+        !latestDefinition ||
+        latestDefinition.revision !== run.taskRevision ||
+        latestDefinition.executionDigest !== run.taskExecutionDigest ||
+        (latestDefinition.source === 'shared' &&
+          !isActivationRunnable(latestActivation, latestDefinition))
+      ) {
+        if (latestDefinition?.source === 'shared' && latestActivation) {
+          await this.suspendActivationForDefinitionChange(latestActivation, latestDefinition)
+          await this.writeActivationFile()
+          this.armScheduler()
+        }
+        await this.updateRun(queued, {
+          status: 'cancelled',
+          currentStep: '执行前复验发现任务定义或本机确认已变化',
+          finishedAt: this.now(),
+          error: {
+            code: 'SCHEDULED_TASK_REVISION_CONFLICT',
+            message: '排队运行绑定的 revision/digest 已失效',
+            recovery: '检查任务内容并重新确认后运行',
+          },
+        })
+        return null
+      }
+      await this.updateRun(queued, {
+        status: 'running',
+        currentStep: 'Agent 正在执行任务',
+        startedAt: this.now(),
+      })
+      return latestDefinition
     })
+    if (!preparedDefinition) {
+      this.currentRunId = null
+      void this.processQueue()
+      return
+    }
+    definition = preparedDefinition
     const runnable = this.runStore.get(run.id)
     if (
       this.runtimeState !== 'ready' ||
@@ -761,11 +944,12 @@ export class ScheduledTaskService {
     if (this.runStore.findOccurrence(key)) return
     const timestamp = this.now()
     const run: ScheduledTaskRun = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: randomUUID(),
       occurrenceKey: key,
       taskId: definition.id,
       taskRevision: definition.revision,
+      taskExecutionDigest: definition.executionDigest,
       workspaceId,
       workspaceRef: definition.workspaceRef,
       conversationId: '',
@@ -815,30 +999,82 @@ export class ScheduledTaskService {
     return { workspacePath: resolved.workspacePath, workspaceId }
   }
 
-  private async readDefinitions(workspacePath: string): Promise<ScheduledTaskDefinition[]> {
-    const directory = definitionsDirectory(workspacePath)
-    let entries
-    try {
-      entries = await readdir(directory, { withFileTypes: true })
-    } catch (error) {
-      if (isMissingFileError(error)) return []
-      throw error
-    }
-    const definitions: ScheduledTaskDefinition[] = []
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith('.json')) continue
+  private async readDefinitions(workspacePath: string): Promise<DefinitionListReadResult> {
+    const migrationIssues = await this.recoverDefinitionMigrations(workspacePath)
+    const blockedTaskIds = new Set(migrationIssues.flatMap((issue) => issue.taskId ?? []))
+    const candidates = new Map<
+      string,
+      Array<{ source: ScheduledTaskDefinitionSource; filePath: string; relativePath: string }>
+    >()
+    const issues: ScheduledTaskDefinitionIssue[] = [...migrationIssues]
+    for (const source of ['local', 'shared'] as const) {
+      const directory = definitionsDirectory(workspacePath, source)
+      let entries
       try {
-        const taskId = parseScheduledTaskId(entry.name.slice(0, -5))
-        definitions.push(await this.readDefinition(workspacePath, taskId))
-      } catch {
-        throw new ScheduledTaskServiceError(
-          'SCHEDULED_TASK_STORE_INVALID',
-          '工作空间中的定时任务定义损坏',
-          '修复 .cclink-studio/scheduled-tasks 中的 JSON 后重试',
-        )
+        entries = await readdir(directory, { withFileTypes: true })
+      } catch (error) {
+        if (isMissingFileError(error)) continue
+        throw error
+      }
+      for (const entry of entries) {
+        if (!entry.name.endsWith('.json')) continue
+        const relativePath = definitionRelativePath(source, entry.name)
+        if (!entry.isFile()) {
+          issues.push({
+            relativePath,
+            kind: 'invalid-definition',
+            message: '任务定义必须是普通 JSON 文件，不能是目录或符号链接',
+          })
+          continue
+        }
+        let taskId: string
+        try {
+          taskId = parseScheduledTaskId(entry.name.slice(0, -5))
+        } catch {
+          issues.push({
+            relativePath,
+            kind: 'invalid-definition',
+            message: '任务定义文件名不是合法任务 ID',
+          })
+          continue
+        }
+        const values = candidates.get(taskId) ?? []
+        values.push({ source, filePath: join(directory, entry.name), relativePath })
+        candidates.set(taskId, values)
       }
     }
-    return definitions
+
+    const definitions: ScheduledTaskDefinition[] = []
+    for (const [taskId, values] of candidates) {
+      if (blockedTaskIds.has(taskId)) continue
+      if (values.length !== 1) {
+        issues.push({
+          taskId,
+          relativePath: values.map((value) => value.relativePath).join(', '),
+          kind: 'duplicate-definition',
+          message: '同一任务同时存在本机和共享定义，已禁止调度',
+        })
+        continue
+      }
+      try {
+        definitions.push(
+          await this.readDefinitionFile(
+            workspacePath,
+            taskId,
+            values[0].source,
+            values[0].filePath,
+          ),
+        )
+      } catch (error) {
+        issues.push({
+          taskId,
+          relativePath: values[0].relativePath,
+          kind: 'invalid-definition',
+          message: error instanceof Error ? error.message : '任务定义不可读取',
+        })
+      }
+    }
+    return { definitions, issues }
   }
 
   private async readDefinition(
@@ -846,15 +1082,52 @@ export class ScheduledTaskService {
     taskId: string,
   ): Promise<ScheduledTaskDefinition> {
     parseScheduledTaskId(taskId)
-    try {
-      const raw = JSON.parse(
-        await readFile(join(definitionsDirectory(workspacePath), `${taskId}.json`), 'utf-8'),
+    const migrationIssues = await this.recoverDefinitionMigrations(workspacePath)
+    if (migrationIssues.some((issue) => issue.taskId === taskId)) {
+      throw new ScheduledTaskServiceError(
+        'SCHEDULED_TASK_DEFINITION_CONFLICT',
+        '任务定义转换存在冲突，已禁止调度',
+        '保留两份定义并手动解决转换冲突',
       )
-      const definition = parseScheduledTaskDefinition(raw)
-      if (definition.id !== taskId || definition.workspaceRef.path !== workspacePath) {
-        throw new Error('任务身份或工作空间不匹配')
+    }
+    const matches: Array<{ source: ScheduledTaskDefinitionSource; filePath: string }> = []
+    for (const source of ['local', 'shared'] as const) {
+      const filePath = join(definitionsDirectory(workspacePath, source), `${taskId}.json`)
+      try {
+        const metadata = await lstat(filePath)
+        if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error('任务定义不是普通文件')
+        matches.push({ source, filePath })
+      } catch (error) {
+        if (!isMissingFileError(error)) {
+          throw new ScheduledTaskServiceError(
+            'SCHEDULED_TASK_STORE_INVALID',
+            '定时任务定义不可读取',
+            '检查任务定义是否为普通 JSON 文件',
+          )
+        }
       }
-      return definition
+    }
+    if (matches.length > 1) {
+      throw new ScheduledTaskServiceError(
+        'SCHEDULED_TASK_DEFINITION_CONFLICT',
+        '同一任务同时存在本机和共享定义，已禁止调度',
+        '保留两份文件并手动选择正确版本后再删除另一份',
+      )
+    }
+    if (matches.length === 0) {
+      throw new ScheduledTaskServiceError(
+        'SCHEDULED_TASK_NOT_FOUND',
+        '定时任务不存在',
+        '刷新侧栏后重试',
+      )
+    }
+    try {
+      return await this.readDefinitionFile(
+        workspacePath,
+        taskId,
+        matches[0].source,
+        matches[0].filePath,
+      )
     } catch (error) {
       if (isMissingFileError(error)) {
         throw new ScheduledTaskServiceError(
@@ -875,20 +1148,28 @@ export class ScheduledTaskService {
   private async writeDefinition(
     workspacePath: string,
     definition: ScheduledTaskDefinition,
+    previousSource?: ScheduledTaskDefinitionSource,
   ): Promise<void> {
-    const directory = definitionsDirectory(workspacePath)
+    const directory = definitionsDirectory(workspacePath, definition.source)
     const filePath = join(directory, `${definition.id}.json`)
     const backupPath = `${filePath}.bak`
     const tempPath = `${filePath}.${process.pid}.tmp`
     try {
       await mkdir(directory, { recursive: true })
+      await assertDefinitionDirectorySafe(workspacePath, directory)
       await this.ensureDefinitionExcluded(workspacePath)
+      const stored = toStoredDefinition(definition)
+      const serialized = `${JSON.stringify(stored, null, 2)}\n`
+      if (previousSource && previousSource !== definition.source) {
+        await this.convertDefinition(workspacePath, definition, previousSource, serialized)
+        return
+      }
       try {
         if ((await stat(filePath)).isFile()) await copyFile(filePath, backupPath)
       } catch (error) {
         if (!isMissingFileError(error)) throw error
       }
-      await writeFile(tempPath, `${JSON.stringify(definition, null, 2)}\n`, 'utf-8')
+      await writeFile(tempPath, serialized, 'utf-8')
       await rename(tempPath, filePath)
     } catch (error) {
       console.error('[ScheduledTaskService] 定时任务定义写入失败:', error)
@@ -898,6 +1179,29 @@ export class ScheduledTaskService {
         '确认工作空间可写且磁盘空间充足后重试',
       )
     }
+  }
+
+  private async readDefinitionFile(
+    workspacePath: string,
+    taskId: string,
+    source: ScheduledTaskDefinitionSource,
+    filePath: string,
+  ): Promise<ScheduledTaskDefinition> {
+    await assertDefinitionPathSafe(workspacePath, source, filePath)
+    const contents = await readFile(filePath, 'utf-8')
+    if (Buffer.byteLength(contents, 'utf-8') > 128 * 1024) throw new Error('任务定义超过 128 KiB')
+    const stored = parseStoredScheduledTaskDefinition(JSON.parse(contents))
+    if (stored.id !== taskId) throw new Error('任务定义 ID 与文件名不匹配')
+    if (source === 'shared' && stored.schemaVersion !== 2) {
+      throw new Error('共享任务只允许可移植的 v2 定义')
+    }
+    const portable = stored.schemaVersion === 1 ? toPortableStoredDefinition(stored) : stored
+    return materializeScheduledTaskDefinition(
+      portable,
+      workspacePath,
+      source,
+      computeScheduledTaskExecutionDigest(portable),
+    )
   }
 
   private async ensureDefinitionExcluded(workspacePath: string): Promise<void> {
@@ -947,15 +1251,293 @@ export class ScheduledTaskService {
     } catch (error) {
       if (!isMissingFileError(error)) throw error
     }
-    const patterns = ['/.cclink-studio/scheduled-tasks/', '/.cclink-studio/scheduled-task-results/']
-    const existing = new Set(current.split(/\r?\n/).map((line) => line.trim()))
-    const missing = patterns.filter((pattern) => !existing.has(pattern))
-    if (missing.length === 0) return
-    const prefix = current && !current.endsWith('\n') ? '\n' : ''
-    await appendFile(
-      excludePath,
-      `${prefix}# CCLink Studio scheduled task data\n${missing.join('\n')}\n`,
-      'utf-8',
+    const next = updateCclinkStudioExcludeBlock(current)
+    if (next === current) return
+    if (current) await copyFile(excludePath, `${excludePath}.cclink-studio.bak`)
+    const tempExcludePath = `${excludePath}.${process.pid}.cclink-studio.tmp`
+    await writeFile(tempExcludePath, next, 'utf-8')
+    await rename(tempExcludePath, excludePath)
+  }
+
+  private async convertDefinition(
+    workspacePath: string,
+    definition: ScheduledTaskDefinition,
+    previousSource: ScheduledTaskDefinitionSource,
+    targetContents: string,
+  ): Promise<void> {
+    const sourcePath = join(
+      definitionsDirectory(workspacePath, previousSource),
+      `${definition.id}.json`,
+    )
+    const targetPath = join(
+      definitionsDirectory(workspacePath, definition.source),
+      `${definition.id}.json`,
+    )
+    const migrationDirectory = join(workspacePath, '.cclink-studio', 'scheduled-task-migrations')
+    const journalPath = join(migrationDirectory, `${definition.id}.json`)
+    const backupPath = join(migrationDirectory, `${definition.id}.source.bak`)
+    await assertDefinitionPathSafe(workspacePath, previousSource, sourcePath)
+    await assertDefinitionDirectorySafe(workspacePath, dirname(targetPath))
+    const sourceContents = await readFile(sourcePath, 'utf-8')
+    const workspaceId = await this.workspaceStateService.getLocalProjectId(workspacePath)
+    if (!workspaceId) throw new Error('工作空间身份不可用')
+    const journal: DefinitionMigrationJournal = {
+      schemaVersion: 1,
+      operationId: randomUUID(),
+      workspaceId,
+      taskId: definition.id,
+      from: previousSource,
+      to: definition.source,
+      sourceRelativePath: definitionRelativePath(previousSource, `${definition.id}.json`),
+      sourceBackupRelativePath: `.cclink-studio/scheduled-task-migrations/${definition.id}.source.bak`,
+      targetRelativePath: definitionRelativePath(definition.source, `${definition.id}.json`),
+      sourceRevision: definition.revision - 1,
+      sourceFileSha256: hashContents(sourceContents),
+      targetRevision: definition.revision,
+      targetFileSha256: hashContents(targetContents),
+      phase: 'prepared',
+      createdAt: this.now(),
+    }
+    await mkdir(migrationDirectory, { recursive: true })
+    await assertDefinitionDirectorySafe(workspacePath, migrationDirectory)
+    await writeFile(backupPath, sourceContents, { encoding: 'utf-8', mode: 0o600 })
+    await writeJsonAtomically(journalPath, journal)
+    await mkdir(dirname(targetPath), { recursive: true })
+    await writeTextAtomically(targetPath, targetContents)
+    journal.phase = 'target-written'
+    await writeJsonAtomically(journalPath, journal)
+    await unlink(sourcePath)
+    journal.phase = 'source-removed'
+    await writeJsonAtomically(journalPath, journal)
+    await unlink(backupPath).catch((error) => {
+      if (!isMissingFileError(error)) throw error
+    })
+    await unlink(journalPath)
+  }
+
+  private async recoverDefinitionMigrations(
+    workspacePath: string,
+  ): Promise<ScheduledTaskDefinitionIssue[]> {
+    const directory = join(workspacePath, '.cclink-studio', 'scheduled-task-migrations')
+    let entries
+    try {
+      entries = await readdir(directory, { withFileTypes: true })
+    } catch (error) {
+      if (isMissingFileError(error)) return []
+      throw error
+    }
+    const issues: ScheduledTaskDefinitionIssue[] = []
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) continue
+      const journalPath = join(directory, entry.name)
+      let journal: DefinitionMigrationJournal
+      try {
+        journal = parseDefinitionMigrationJournal(JSON.parse(await readFile(journalPath, 'utf-8')))
+      } catch (error) {
+        issues.push({
+          relativePath: `.cclink-studio/scheduled-task-migrations/${entry.name}`,
+          kind: 'migration-conflict',
+          message: error instanceof Error ? error.message : '转换日志损坏',
+        })
+        continue
+      }
+      const sourcePath = join(workspacePath, journal.sourceRelativePath)
+      const targetPath = join(workspacePath, journal.targetRelativePath)
+      const sourceContents = await readOptionalRegularFile(sourcePath)
+      const targetContents = await readOptionalRegularFile(targetPath)
+      const sourceMatches =
+        sourceContents !== null && hashContents(sourceContents) === journal.sourceFileSha256
+      const targetMatches =
+        targetContents !== null && hashContents(targetContents) === journal.targetFileSha256
+
+      if (
+        sourceContents !== null &&
+        targetContents === null &&
+        sourceMatches &&
+        journal.phase === 'prepared'
+      ) {
+        await cleanupConversionTemps(targetPath)
+        await this.cleanupMigrationJournal(workspacePath, journal, journalPath)
+        continue
+      }
+      if (sourceContents !== null && targetContents !== null && sourceMatches && targetMatches) {
+        await unlink(sourcePath)
+        await this.cleanupMigrationJournal(workspacePath, journal, journalPath)
+        continue
+      }
+      if (sourceContents === null && targetContents !== null && targetMatches) {
+        await cleanupConversionTemps(targetPath)
+        await this.cleanupMigrationJournal(workspacePath, journal, journalPath)
+        continue
+      }
+      issues.push({
+        taskId: journal.taskId,
+        relativePath: `.cclink-studio/scheduled-task-migrations/${entry.name}`,
+        kind: 'migration-conflict',
+        message: '转换源或目标 hash 不匹配，已保留两份文件并禁止调度',
+      })
+    }
+    return issues
+  }
+
+  private async cleanupMigrationJournal(
+    workspacePath: string,
+    journal: DefinitionMigrationJournal,
+    journalPath: string,
+  ): Promise<void> {
+    await cleanupConversionTemps(join(workspacePath, journal.targetRelativePath))
+    await unlink(join(workspacePath, journal.sourceBackupRelativePath)).catch((error) => {
+      if (!isMissingFileError(error)) throw error
+    })
+    await unlink(journalPath)
+  }
+
+  private async reconcileDefinitionActivations(
+    workspaceId: string,
+    definitions: ScheduledTaskDefinition[],
+    issues: ScheduledTaskDefinitionIssue[],
+  ): Promise<void> {
+    let changed = false
+    const byId = new Map(definitions.map((definition) => [definition.id, definition]))
+    const conflictingIds = new Set(issues.flatMap((issue) => issue.taskId ?? []))
+    for (const activation of Object.values(this.activationFile.activations)) {
+      if (activation.workspaceId !== workspaceId) continue
+      const definition = byId.get(activation.taskId)
+      if (!definition || conflictingIds.has(activation.taskId)) {
+        if (!definition && !conflictingIds.has(activation.taskId)) {
+          issues.push({
+            taskId: activation.taskId,
+            relativePath: `(task ${activation.taskId})`,
+            kind: 'definition-removed',
+            message: '任务定义已从项目删除；本机启用已失效，运行历史仍保留',
+          })
+        }
+        const suspensionReason =
+          !definition && !conflictingIds.has(activation.taskId)
+            ? 'definition-removed'
+            : 'definition-conflict'
+        if (
+          activation.enabled ||
+          activation.nextRunAt !== null ||
+          activation.suspensionReason !== suspensionReason
+        ) {
+          activation.enabled = false
+          activation.nextRunAt = null
+          activation.suspensionReason = suspensionReason
+          changed = true
+          await this.cancelQueuedRuns(
+            activation.workspaceId,
+            activation.taskId,
+            '任务定义已删除或冲突',
+            suspensionReason === 'definition-removed'
+              ? 'SCHEDULED_TASK_DEFINITION_REMOVED'
+              : 'SCHEDULED_TASK_DEFINITION_CONFLICT',
+            suspensionReason === 'definition-removed'
+              ? '运行历史仍会保留；需要继续执行时请恢复定义并重新确认'
+              : '解决任务定义冲突后重新确认',
+          )
+        }
+        continue
+      }
+      if (definition.source === 'shared' && !isActivationRunnable(activation, definition)) {
+        if (
+          activation.enabled ||
+          activation.nextRunAt !== null ||
+          activation.suspensionReason !== 'definition-changed'
+        ) {
+          activation.enabled = false
+          activation.nextRunAt = null
+          activation.suspensionReason = 'definition-changed'
+          changed = true
+          await this.cancelQueuedRuns(
+            activation.workspaceId,
+            activation.taskId,
+            '共享任务定义已变化',
+          )
+        }
+      }
+    }
+    if (changed) {
+      await this.writeActivationFile()
+      this.armScheduler()
+    }
+  }
+
+  private async cancelQueuedRunsForChangedDefinition(
+    definition: ScheduledTaskDefinition,
+  ): Promise<void> {
+    const activation = Object.values(this.activationFile.activations).find(
+      (candidate) =>
+        candidate.taskId === definition.id &&
+        candidate.workspaceRef.path === definition.workspaceRef.path,
+    )
+    if (!activation) return
+    await this.cancelQueuedRuns(
+      activation.workspaceId,
+      definition.id,
+      '任务定义已更新',
+      'SCHEDULED_TASK_DEFINITION_CHANGED',
+      '检查新版本内容并在此设备重新确认',
+    )
+  }
+
+  private async cancelQueuedRuns(
+    workspaceId: string,
+    taskId: string,
+    reason: string,
+    code: ScheduledTaskErrorCode = 'SCHEDULED_TASK_REVISION_CONFLICT',
+    recovery = '检查任务内容并重新确认后运行',
+  ): Promise<void> {
+    const queuedIds = this.runQueue.filter((runId) => {
+      const run = this.runStore.get(runId)
+      return run?.workspaceId === workspaceId && run.taskId === taskId && run.status === 'queued'
+    })
+    for (const runId of queuedIds) {
+      const index = this.runQueue.indexOf(runId)
+      if (index >= 0) this.runQueue.splice(index, 1)
+      const run = this.runStore.get(runId)
+      if (!run || run.status !== 'queued') continue
+      await this.updateRun(run, {
+        status: 'cancelled',
+        currentStep: `${reason}，排队运行已取消`,
+        finishedAt: this.now(),
+        error: {
+          code,
+          message: reason,
+          recovery,
+        },
+      })
+    }
+  }
+
+  private async suspendActivationForDefinitionChange(
+    activation: ScheduledTaskActivation,
+    definition: ScheduledTaskDefinition,
+  ): Promise<void> {
+    activation.enabled = false
+    activation.nextRunAt = null
+    activation.suspensionReason = 'definition-changed'
+    await this.cancelQueuedRuns(
+      activation.workspaceId,
+      definition.id,
+      '共享任务定义已变化',
+      'SCHEDULED_TASK_DEFINITION_CHANGED',
+      '检查新版本内容并在此设备重新确认',
+    )
+  }
+
+  private async suspendActivationForOccurrenceConflict(
+    activation: ScheduledTaskActivation,
+  ): Promise<void> {
+    activation.enabled = false
+    activation.nextRunAt = null
+    activation.suspensionReason = 'definition-conflict'
+    await this.cancelQueuedRuns(
+      activation.workspaceId,
+      activation.taskId,
+      '运行账本 occurrence 冲突',
+      'SCHEDULED_TASK_RUN_LEDGER_CONFLICT',
+      '修复运行账本冲突后再重新启用任务',
     )
   }
 
@@ -982,6 +1564,10 @@ export class ScheduledTaskService {
       workspaceId,
       workspaceRef: definition.workspaceRef,
       enabled,
+      confirmedTaskRevision: definition.source === 'shared' && enabled ? definition.revision : null,
+      confirmedExecutionDigest:
+        definition.source === 'shared' && enabled ? definition.executionDigest : null,
+      suspensionReason: null,
       catchUpPolicy: { mode: 'latest-within-window', windowMinutes: 30 },
       lastEvaluatedAt: previous?.lastEvaluatedAt ?? null,
       nextRunAt: enabled ? calculateNextRunAt(definition.schedule, this.now()) : null,
@@ -1041,8 +1627,19 @@ export class ScheduledTaskService {
   }
 }
 
-function definitionsDirectory(workspacePath: string): string {
-  return join(workspacePath, '.cclink-studio', 'scheduled-tasks')
+function definitionsDirectory(
+  workspacePath: string,
+  source: ScheduledTaskDefinitionSource,
+): string {
+  return source === 'local'
+    ? join(workspacePath, '.cclink-studio', 'scheduled-tasks')
+    : join(workspacePath, '.cclink-studio', 'shared', 'scheduled-tasks')
+}
+
+function definitionRelativePath(source: ScheduledTaskDefinitionSource, fileName: string): string {
+  return source === 'local'
+    ? `.cclink-studio/scheduled-tasks/${fileName}`
+    : `.cclink-studio/shared/scheduled-tasks/${fileName}`
 }
 
 function isPathWithin(rootPath: string, candidatePath: string): boolean {
@@ -1051,12 +1648,39 @@ function isPathWithin(rootPath: string, candidatePath: string): boolean {
   return candidate === root || candidate.startsWith(`${root}${sep}`)
 }
 
+async function assertDefinitionDirectorySafe(
+  workspacePath: string,
+  directory: string,
+): Promise<void> {
+  const canonicalWorkspace = await realpath(workspacePath)
+  const canonicalDirectory = await realpath(directory)
+  if (!isPathWithin(canonicalWorkspace, canonicalDirectory)) {
+    throw new Error('任务定义目录通过符号链接逃逸工作空间')
+  }
+}
+
+async function assertDefinitionPathSafe(
+  workspacePath: string,
+  source: ScheduledTaskDefinitionSource,
+  filePath: string,
+): Promise<void> {
+  const directory = definitionsDirectory(workspacePath, source)
+  await assertDefinitionDirectorySafe(workspacePath, directory)
+  const metadata = await lstat(filePath)
+  if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error('任务定义不是普通文件')
+  const canonicalDirectory = await realpath(directory)
+  const canonicalFile = await realpath(filePath)
+  if (!isPathWithin(canonicalDirectory, canonicalFile)) {
+    throw new Error('任务定义通过符号链接逃逸定义目录')
+  }
+}
+
 function activationKey(workspaceId: string, taskId: string): string {
   return `${workspaceId}:${taskId}`
 }
 
-function occurrenceKey(taskId: string, scheduledFor: number): string {
-  return `scheduled:${taskId}:${scheduledFor}`
+function occurrenceKey(workspaceId: string, taskId: string, scheduledFor: number): string {
+  return `scheduled:${workspaceId}:${taskId}:${scheduledFor}`
 }
 
 function latestDueOccurrence(
@@ -1074,30 +1698,44 @@ function latestDueOccurrence(
   return latest
 }
 
-function parseActivationFile(value: unknown): ActivationFile {
+function parseActivationFile(value: unknown): { file: ActivationFile; migrated: boolean } {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('本机启用状态不是对象')
   }
-  const input = value as Partial<ActivationFile>
+  const input = value as { schemaVersion?: unknown; activations?: unknown }
   assertExactKeys(input as Record<string, unknown>, ['schemaVersion', 'activations'])
-  if (input.schemaVersion !== 1 || !input.activations || typeof input.activations !== 'object') {
+  if (
+    (input.schemaVersion !== 1 && input.schemaVersion !== 2) ||
+    !input.activations ||
+    typeof input.activations !== 'object'
+  ) {
     throw new Error('本机启用状态版本无效')
   }
+  const migrated = input.schemaVersion === 1
   const activations: Record<string, ScheduledTaskActivation> = {}
-  for (const [key, raw] of Object.entries(input.activations)) {
+  for (const [key, raw] of Object.entries(input.activations as Record<string, unknown>)) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
       throw new Error('本机启用记录无效')
     }
-    const activation = raw as ScheduledTaskActivation
-    assertExactKeys(activation as unknown as Record<string, unknown>, [
+    const rawActivation = raw as Record<string, unknown>
+    assertExactKeys(rawActivation, [
       'taskId',
       'workspaceId',
       'workspaceRef',
       'enabled',
+      ...(migrated
+        ? []
+        : ['confirmedTaskRevision', 'confirmedExecutionDigest', 'suspensionReason']),
       'catchUpPolicy',
       'lastEvaluatedAt',
       'nextRunAt',
     ])
+    const activation = {
+      ...rawActivation,
+      confirmedTaskRevision: migrated ? null : rawActivation.confirmedTaskRevision,
+      confirmedExecutionDigest: migrated ? null : rawActivation.confirmedExecutionDigest,
+      suspensionReason: migrated ? null : rawActivation.suspensionReason,
+    } as unknown as ScheduledTaskActivation
     const workspaceRef = activation.workspaceRef as unknown as Record<string, unknown>
     const catchUpPolicy = activation.catchUpPolicy as unknown as Record<string, unknown>
     assertExactKeys(workspaceRef, ['kind', 'path'])
@@ -1107,6 +1745,17 @@ function parseActivationFile(value: unknown): ActivationFile {
       activation.workspaceRef?.kind !== 'local' ||
       typeof activation.workspaceRef.path !== 'string' ||
       typeof activation.enabled !== 'boolean' ||
+      (activation.confirmedTaskRevision !== null &&
+        (typeof activation.confirmedTaskRevision !== 'number' ||
+          !Number.isSafeInteger(activation.confirmedTaskRevision))) ||
+      (activation.confirmedExecutionDigest !== null &&
+        (typeof activation.confirmedExecutionDigest !== 'string' ||
+          !/^[0-9a-f]{64}$/i.test(activation.confirmedExecutionDigest))) ||
+      (activation.suspensionReason !== null &&
+        activation.suspensionReason !== 'definition-changed' &&
+        activation.suspensionReason !== 'definition-removed' &&
+        activation.suspensionReason !== 'definition-conflict' &&
+        activation.suspensionReason !== 'migration-conflict') ||
       activation.catchUpPolicy?.mode !== 'latest-within-window' ||
       activation.catchUpPolicy.windowMinutes !== 30 ||
       (activation.lastEvaluatedAt !== null &&
@@ -1124,7 +1773,152 @@ function parseActivationFile(value: unknown): ActivationFile {
     }
     activations[key] = activation
   }
-  return { schemaVersion: 1, activations }
+  return { file: { schemaVersion: 2, activations }, migrated }
+}
+
+function isActivationRunnable(
+  activation: ScheduledTaskActivation | undefined,
+  definition: ScheduledTaskDefinition,
+): boolean {
+  if (!activation?.enabled || activation.suspensionReason !== null) return false
+  if (definition.source === 'local') return true
+  return (
+    activation.confirmedTaskRevision === definition.revision &&
+    activation.confirmedExecutionDigest === definition.executionDigest
+  )
+}
+
+function toStoredDefinition(definition: ScheduledTaskDefinition): StoredScheduledTaskDefinitionV2 {
+  return {
+    schemaVersion: 2,
+    id: definition.id,
+    revision: definition.revision,
+    title: definition.title,
+    instruction: definition.instruction,
+    schedule: definition.schedule,
+    resources: definition.resources,
+    outputPolicy: definition.outputPolicy,
+    createdAt: definition.createdAt,
+    updatedAt: definition.updatedAt,
+  }
+}
+
+function toPortableStoredDefinition(
+  definition: ReturnType<typeof parseStoredScheduledTaskDefinition>,
+): StoredScheduledTaskDefinitionV2 {
+  return {
+    schemaVersion: 2,
+    id: definition.id,
+    revision: definition.revision,
+    title: definition.title,
+    instruction: definition.instruction,
+    schedule: definition.schedule,
+    resources: definition.resources,
+    outputPolicy: definition.outputPolicy,
+    createdAt: definition.createdAt,
+    updatedAt: definition.updatedAt,
+  }
+}
+
+function hashContents(contents: string): string {
+  return createHash('sha256').update(contents, 'utf8').digest('hex')
+}
+
+function containsObviousSecret(definition: StoredScheduledTaskDefinitionV2): boolean {
+  const candidate = JSON.stringify({
+    instruction: definition.instruction,
+    resources: definition.resources,
+    outputPolicy: definition.outputPolicy,
+  })
+  return containsObviousSecretText(candidate)
+}
+
+async function writeTextAtomically(filePath: string, contents: string): Promise<void> {
+  const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`
+  await writeFile(tempPath, contents, 'utf-8')
+  await rename(tempPath, filePath)
+}
+
+async function writeJsonAtomically(filePath: string, value: unknown): Promise<void> {
+  await writeTextAtomically(filePath, `${JSON.stringify(value, null, 2)}\n`)
+}
+
+async function readOptionalRegularFile(filePath: string): Promise<string | null> {
+  try {
+    const metadata = await lstat(filePath)
+    if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error('转换文件不是普通文件')
+    return await readFile(filePath, 'utf-8')
+  } catch (error) {
+    if (isMissingFileError(error)) return null
+    throw error
+  }
+}
+
+async function cleanupConversionTemps(targetPath: string): Promise<void> {
+  let entries
+  try {
+    entries = await readdir(dirname(targetPath), { withFileTypes: true })
+  } catch (error) {
+    if (isMissingFileError(error)) return
+    throw error
+  }
+  const prefix = `${basename(targetPath)}.`
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.startsWith(prefix) || !entry.name.endsWith('.tmp')) continue
+    await unlink(join(dirname(targetPath), entry.name))
+  }
+}
+
+function parseDefinitionMigrationJournal(value: unknown): DefinitionMigrationJournal {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('任务转换日志不是对象')
+  }
+  const journal = value as DefinitionMigrationJournal
+  assertExactKeys(journal as unknown as Record<string, unknown>, [
+    'schemaVersion',
+    'operationId',
+    'workspaceId',
+    'taskId',
+    'from',
+    'to',
+    'sourceRelativePath',
+    'sourceBackupRelativePath',
+    'targetRelativePath',
+    'sourceRevision',
+    'sourceFileSha256',
+    'targetRevision',
+    'targetFileSha256',
+    'phase',
+    'createdAt',
+  ])
+  parseScheduledTaskId(journal.taskId)
+  const expectedSource = definitionRelativePath(journal.from, `${journal.taskId}.json`)
+  const expectedTarget = definitionRelativePath(journal.to, `${journal.taskId}.json`)
+  const expectedBackup = `.cclink-studio/scheduled-task-migrations/${journal.taskId}.source.bak`
+  if (
+    journal.schemaVersion !== 1 ||
+    typeof journal.operationId !== 'string' ||
+    typeof journal.workspaceId !== 'string' ||
+    (journal.from !== 'local' && journal.from !== 'shared') ||
+    (journal.to !== 'local' && journal.to !== 'shared') ||
+    journal.from === journal.to ||
+    journal.sourceRelativePath !== expectedSource ||
+    journal.targetRelativePath !== expectedTarget ||
+    journal.sourceBackupRelativePath !== expectedBackup ||
+    typeof journal.sourceFileSha256 !== 'string' ||
+    !/^[0-9a-f]{64}$/i.test(journal.sourceFileSha256) ||
+    typeof journal.targetFileSha256 !== 'string' ||
+    !/^[0-9a-f]{64}$/i.test(journal.targetFileSha256) ||
+    !Number.isSafeInteger(journal.sourceRevision) ||
+    !Number.isSafeInteger(journal.targetRevision) ||
+    !Number.isSafeInteger(journal.createdAt) ||
+    (journal.phase !== 'prepared' &&
+      journal.phase !== 'target-written' &&
+      journal.phase !== 'source-removed')
+  ) {
+    throw new Error('任务转换日志字段无效')
+  }
+  return journal
 }
 
 function assertExactKeys(value: Record<string, unknown>, keys: string[]): void {

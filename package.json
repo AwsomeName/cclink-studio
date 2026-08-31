@@ -61,6 +61,7 @@
     "smoke:workflow": "node scripts/workflow-smoke.mjs",
     "smoke:restore": "node scripts/restore-smoke.mjs",
     "smoke:scheduled-tasks": "node scripts/scheduled-tasks-smoke.mjs",
+    "smoke:scheduled-task-git-sharing": "node scripts/scheduled-task-git-sharing-smoke.mjs",
     "smoke:auth-window": "node scripts/auth-window-smoke.cjs",
     "smoke:browser-http-auth": "node scripts/browser-http-auth-smoke.cjs",
     "smoke:browser-cookie-security": "node scripts/browser-cookie-security-smoke.cjs",

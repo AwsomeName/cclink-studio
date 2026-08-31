@@ -470,7 +470,8 @@ export async function bootstrapMainProcessServices(
   runtime.permissionManager = new PermissionManager(runtime.mainWindow)
   runtime.permissionManager.setMode(runtime.settingsService.getAll().permissionMode)
 
-  runtime.mcpClientMgr = new McpClientManager()
+  runtime.mcpClientMgr = new McpClientManager(runtime.credentialService)
+  await runtime.mcpClientMgr.loadFromConfig()
 
   registerAgentIpc({
     trustedRendererGuard: runtime.trustedRendererGuard,

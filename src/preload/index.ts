@@ -213,6 +213,7 @@ const scheduledTasksApi: ScheduledTasksApiContract = {
   list: (workspacePath) => invokeIpcContract(scheduledTasksIpc.list, workspacePath),
   get: (workspacePath, taskId) => invokeIpcContract(scheduledTasksIpc.get, workspacePath, taskId),
   save: (input) => invokeIpcContract(scheduledTasksIpc.save, input),
+  delete: (input) => invokeIpcContract(scheduledTasksIpc.delete, input),
   setEnabled: (input) => invokeIpcContract(scheduledTasksIpc.setEnabled, input),
   runNow: (input) => invokeIpcContract(scheduledTasksIpc.runNow, input),
   cancelRun: (input) => invokeIpcContract(scheduledTasksIpc.cancelRun, input),

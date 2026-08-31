@@ -82,6 +82,7 @@ export interface GitRepositorySnapshot {
   lineStatsIncomplete: boolean
   refreshedAt: string
   revision: string
+  ignoredSharedTaskDefinitions?: Array<{ path: string; rule: string }>
   errorCode?: GitSnapshotErrorCode
   error?: string
 }

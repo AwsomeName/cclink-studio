@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -91,6 +92,32 @@ describe('ScheduledTaskService', () => {
       error: { code: 'SCHEDULED_TASK_REVISION_CONFLICT' },
     })
     expect((await service.get(workspacePath, taskId)).task?.definition.title).toBe('第二版名称')
+  })
+
+  it('rejects a stale content digest even when an external edit keeps the same revision', async () => {
+    const service = createService()
+    await service.load()
+    const first = await service.save(createInput(false))
+    const taskId = first.task!.definition.id
+    const definitionPath = join(workspacePath, '.cclink-studio/scheduled-tasks', `${taskId}.json`)
+    const external = JSON.parse(await readFile(definitionPath, 'utf-8'))
+    external.instruction = '外部修改但错误地保留 revision。'
+    await writeFile(definitionPath, `${JSON.stringify(external, null, 2)}\n`, 'utf-8')
+
+    const stale = await service.save({
+      ...createInput(false),
+      taskId,
+      expectedRevision: 1,
+      expectedExecutionDigest: first.task!.definition.executionDigest,
+    })
+
+    expect(stale).toMatchObject({
+      success: false,
+      error: { code: 'SCHEDULED_TASK_REVISION_CONFLICT' },
+    })
+    expect((await service.get(workspacePath, taskId)).task?.definition.instruction).toBe(
+      '外部修改但错误地保留 revision。',
+    )
   })
 
   it('blocks writes when local activation state is damaged', async () => {
@@ -431,6 +458,235 @@ describe('ScheduledTaskService', () => {
       status: 'completed',
     })
     await restarted.stopRuntime()
+  })
+
+  it('shares only a portable definition and requires device B to confirm each revision', async () => {
+    const workspaceB = join(tempDir, 'workspace-b')
+    const userDataB = join(tempDir, 'user-data-b')
+    await mkdir(join(workspaceB, '.git/info'), { recursive: true })
+    const serviceA = createService()
+    await serviceA.load()
+    const local = await serviceA.save(createInput(true))
+    const first = await serviceA.save({
+      ...createInput(true),
+      taskId: local.task!.definition.id,
+      expectedRevision: 1,
+      definitionSource: 'shared',
+    })
+    const taskId = first.task!.definition.id
+    const sharedRelativePath = join('.cclink-studio', 'shared', 'scheduled-tasks', `${taskId}.json`)
+    const sharedA = join(workspacePath, sharedRelativePath)
+    const sharedB = join(workspaceB, sharedRelativePath)
+    await mkdir(join(workspaceB, '.cclink-studio/shared/scheduled-tasks'), { recursive: true })
+    await copyFile(sharedA, sharedB)
+    expect(await readFile(sharedA, 'utf-8')).not.toContain('workspaceRef')
+    expect(await readFile(sharedA, 'utf-8')).not.toContain(workspacePath)
+
+    const workspaceStateB = {
+      resolveLocalWorkspace: vi.fn(async (path: string) => ({
+        valid: path === workspaceB,
+        workspacePath: path === workspaceB ? workspaceB : null,
+      })),
+      getLocalProjectId: vi.fn(async (path: string) => (path === workspaceB ? 'project-b' : null)),
+    } as unknown as WorkspaceStateService
+    const serviceB = new ScheduledTaskService(workspaceStateB, {
+      userDataPath: userDataB,
+      homePath: tempDir,
+      runExecutor: { run: vi.fn(), cancel: vi.fn(async () => {}) },
+    })
+    await serviceB.load()
+    const discovered = await serviceB.list(workspaceB)
+    expect(discovered.tasks[0]).toMatchObject({
+      definition: { source: 'shared', workspaceRef: { path: workspaceB }, revision: 2 },
+      activation: {
+        enabled: false,
+        confirmedTaskRevision: null,
+        confirmedExecutionDigest: null,
+      },
+    })
+    await serviceB.startRuntime({} as never)
+    await expect(serviceB.runNow({ workspacePath: workspaceB, taskId })).resolves.toMatchObject({
+      success: false,
+      error: { code: 'SCHEDULED_TASK_CONFIRMATION_REQUIRED' },
+    })
+    const confirmed = await serviceB.setEnabled({
+      workspacePath: workspaceB,
+      taskId,
+      enabled: true,
+    })
+    expect(confirmed.task?.activation).toMatchObject({
+      enabled: true,
+      confirmedTaskRevision: 2,
+      confirmedExecutionDigest: first.task!.definition.executionDigest,
+    })
+
+    await serviceA.save({
+      ...createInput(true),
+      taskId,
+      expectedRevision: 2,
+      definitionSource: 'shared',
+      instruction: '读取工作空间资料并生成新版 Markdown 周报。',
+    })
+    await copyFile(sharedA, sharedB)
+    const refreshed = await serviceB.list(workspaceB)
+    expect(refreshed.tasks[0]).toMatchObject({
+      definition: { revision: 3 },
+      activation: { enabled: false, suspensionReason: 'definition-changed' },
+    })
+    await serviceB.stopRuntime()
+  })
+
+  it('preserves both definitions when either conversion hash mismatches', async () => {
+    const service = createService()
+    await service.load()
+    const saved = await service.save(createInput(false))
+    const taskId = saved.task!.definition.id
+    const localPath = join(workspacePath, '.cclink-studio/scheduled-tasks', `${taskId}.json`)
+    const sharedPath = join(
+      workspacePath,
+      '.cclink-studio/shared/scheduled-tasks',
+      `${taskId}.json`,
+    )
+    const migrationDirectory = join(workspacePath, '.cclink-studio/scheduled-task-migrations')
+    await mkdir(join(workspacePath, '.cclink-studio/shared/scheduled-tasks'), { recursive: true })
+    await mkdir(migrationDirectory, { recursive: true })
+    const sourceContents = await readFile(localPath, 'utf-8')
+    const targetRecord = { ...JSON.parse(sourceContents), revision: 2, updatedAt: 2 }
+    const targetContents = `${JSON.stringify(targetRecord, null, 2)}\n`
+    await writeFile(sharedPath, targetContents, 'utf-8')
+    await writeFile(join(migrationDirectory, `${taskId}.source.bak`), sourceContents, 'utf-8')
+    await writeFile(
+      join(migrationDirectory, `${taskId}.json`),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          operationId: '12345678-1234-1234-1234-123456789abc',
+          workspaceId: 'project-1',
+          taskId,
+          from: 'local',
+          to: 'shared',
+          sourceRelativePath: `.cclink-studio/scheduled-tasks/${taskId}.json`,
+          sourceBackupRelativePath: `.cclink-studio/scheduled-task-migrations/${taskId}.source.bak`,
+          targetRelativePath: `.cclink-studio/shared/scheduled-tasks/${taskId}.json`,
+          sourceRevision: 1,
+          sourceFileSha256: '0'.repeat(64),
+          targetRevision: 2,
+          targetFileSha256: createHash('sha256').update(targetContents).digest('hex'),
+          phase: 'target-written',
+          createdAt: 1,
+        },
+        null,
+        2,
+      )}\n`,
+      'utf-8',
+    )
+
+    const listed = await service.list(workspacePath)
+    expect(listed).toMatchObject({
+      success: true,
+      tasks: [],
+      issues: [{ taskId, kind: 'migration-conflict' }],
+    })
+    await expect(readFile(localPath, 'utf-8')).resolves.toBe(sourceContents)
+    await expect(readFile(sharedPath, 'utf-8')).resolves.toBe(targetContents)
+  })
+
+  it('cancels a queued run when its task is deleted but lets the running snapshot finish', async () => {
+    let finishFirst!: (value: {
+      artifact: { relativePath: string; bytes: number; sha256: string }
+    }) => void
+    const run = vi.fn(
+      () =>
+        new Promise<{ artifact: { relativePath: string; bytes: number; sha256: string } }>(
+          (resolve) => {
+            finishFirst = resolve
+          },
+        ),
+    )
+    const service = createService({ run, cancel: vi.fn(async () => {}) })
+    await service.load()
+    const first = await service.save({ ...createInput(false), title: '第一个任务' })
+    const second = await service.save({ ...createInput(false), title: '第二个任务' })
+    await service.startRuntime({} as never)
+    await service.runNow({ workspacePath, taskId: first.task!.definition.id })
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    const queued = await service.runNow({ workspacePath, taskId: second.task!.definition.id })
+    expect(queued.run?.status).toBe('queued')
+
+    await expect(
+      service.delete({
+        workspacePath,
+        taskId: second.task!.definition.id,
+        expectedRevision: 1,
+      }),
+    ).resolves.toMatchObject({ success: true })
+    await expect(
+      service.listRuns(workspacePath, second.task!.definition.id),
+    ).resolves.toMatchObject({
+      success: true,
+      runs: [{ status: 'cancelled', error: { code: 'SCHEDULED_TASK_DEFINITION_REMOVED' } }],
+    })
+
+    await service.delete({
+      workspacePath,
+      taskId: first.task!.definition.id,
+      expectedRevision: 1,
+    })
+    finishFirst({
+      artifact: { relativePath: 'docs/周报/running.md', bytes: 1, sha256: 'f'.repeat(64) },
+    })
+    await vi.waitFor(async () => {
+      const history = await service.listRuns(workspacePath, first.task!.definition.id)
+      expect(history.runs[0]?.status).toBe('completed')
+    })
+    await service.stopRuntime()
+  })
+
+  it('disables an externally removed shared task and keeps its local history', async () => {
+    const service = createService({
+      run: vi.fn(async () => ({
+        artifact: {
+          relativePath: '.cclink-studio/scheduled-task-results/removed.md',
+          bytes: 1,
+          sha256: 'a'.repeat(64),
+        },
+      })),
+      cancel: vi.fn(async () => {}),
+    })
+    await service.load()
+    const saved = await service.save({
+      ...createInput(true),
+      definitionSource: 'shared',
+    })
+    const taskId = saved.task!.definition.id
+    await service.startRuntime({} as never)
+    await service.runNow({ workspacePath, taskId })
+    await vi.waitFor(async () => {
+      expect((await service.listRuns(workspacePath, taskId)).runs[0]?.status).toBe('completed')
+    })
+    await rm(join(workspacePath, '.cclink-studio/shared/scheduled-tasks', `${taskId}.json`))
+
+    const listed = await service.list(workspacePath)
+
+    expect(listed).toMatchObject({
+      success: true,
+      tasks: [],
+      issues: [
+        {
+          taskId,
+          kind: 'definition-removed',
+          message: expect.stringContaining('运行历史仍保留'),
+        },
+      ],
+    })
+    await expect(service.listRuns(workspacePath, taskId)).resolves.toMatchObject({
+      success: true,
+      runs: [{ status: 'completed' }],
+    })
+    expect(
+      JSON.parse(await readFile(join(userDataPath, 'scheduled-tasks/activations.json'), 'utf-8'))
+        .activations[`project-1:${taskId}`],
+    ).toMatchObject({ enabled: false, suspensionReason: 'definition-removed' })
   })
 })
 

@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { chromium } from 'playwright-core'
 import { createSmokeRuntime } from './smoke-runtime.mjs'
 
-const { logFile, rendererOrigin, runRestart } = createSmokeRuntime(import.meta.url)
+const { runDir, logFile, rendererOrigin, runRestart } = createSmokeRuntime(import.meta.url)
 const workspacePath = join(
   homedir(),
   `.cclink-studio-scheduled-task-smoke-${process.pid}-${Date.now()}`,
@@ -143,6 +143,25 @@ async function main() {
   await writeFile(join(workspacePath, 'README.md'), '# Scheduled task smoke\n', 'utf8')
   runRestart('stop')
   await rm(join(dirname(logFile), 'user-data'), { recursive: true, force: true })
+  await mkdir(join(runDir, 'user-data'), { recursive: true })
+  await writeFile(
+    join(runDir, 'user-data', 'workspace-state.json'),
+    JSON.stringify({
+      version: 2,
+      workspaces: {},
+      localWorkspaces: {
+        smoke: {
+          workspaceKey: workspacePath,
+          workspacePath,
+          ownerKey: null,
+          updatedAt: Date.now(),
+          storage: 'fallback',
+          projectId: null,
+        },
+      },
+    }),
+    'utf8',
+  )
   await rm(logFile, { force: true })
 
   const previousLog = await readLog()
@@ -155,13 +174,36 @@ async function main() {
   await page.setViewportSize({ width: 1440, height: 920 })
   await page.waitForSelector('.main-window', { timeout: 30_000 })
 
+  const apiReadyStartedAt = Date.now()
+  while (Date.now() - apiReadyStartedAt < 30_000) {
+    const ready = await page.evaluate(async () => {
+      try {
+        await window.cclinkStudio.settings.getAll()
+        await window.cclinkStudio.workspaceState.get()
+        return true
+      } catch {
+        return false
+      }
+    })
+    if (ready) break
+    await page.waitForTimeout(250)
+  }
+
   const configured = await page.evaluate(async (path) => {
+    await window.cclinkStudio.workspaceState.listLocalWorkspaces()
+    const resolved = await window.cclinkStudio.workspaceState.resolveLocalWorkspace(path)
     const active = await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(path)
-    if (!active.success || active.activeWorkspace?.workspacePath !== path) return false
     const settings = await window.cclinkStudio.settings.set({ recentWorkspacePaths: [path] })
-    return settings.success
+    return { resolved, active, settings }
   }, workspacePath)
-  assert(configured, 'failed to configure smoke workspace')
+  assert(
+    configured.resolved.valid &&
+      configured.resolved.workspacePath === workspacePath &&
+      configured.active.success &&
+      configured.active.activeWorkspace?.workspacePath === workspacePath &&
+      configured.settings.success,
+    `failed to configure smoke workspace: ${JSON.stringify(configured)}`,
+  )
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.main-window', { timeout: 30_000 })
 
@@ -172,6 +214,12 @@ async function main() {
       visible: Boolean(sidebar),
       title: document.querySelector('.sidebar-header-title')?.textContent?.trim() ?? null,
       text: sidebar?.textContent?.trim().slice(0, 500) ?? null,
+      panelError:
+        document.querySelector('.panel-error-fallback, .error-boundary')?.textContent?.trim() ??
+        null,
+      shell:
+        document.querySelector('.workspace-sidebar-shell')?.textContent?.trim().slice(0, 500) ??
+        null,
       activeActivity:
         document.querySelector('.activity-bar-icon.active')?.getAttribute('aria-label') ?? null,
     }
@@ -367,8 +415,47 @@ async function main() {
       'utf8',
     ),
   )
-  assert(definition.workspaceRef.path === workspacePath, 'definition workspace binding mismatch')
+  assert(definition.schemaVersion === 2, 'local definition was not upgraded to schema v2')
+  assert(!('workspaceRef' in definition), 'device workspace path leaked into v2 definition')
   assert(!('enabled' in definition), 'device activation leaked into workspace definition')
+
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByText('随项目共享', { exact: true }).click()
+  await page.getByRole('button', { name: '保存', exact: true }).click()
+  await page
+    .getByRole('status')
+    .getByText(/当前设备保持暂停/)
+    .waitFor({ timeout: 10_000 })
+  const sharedDefinitionPath = join(
+    workspacePath,
+    '.cclink-studio',
+    'shared',
+    'scheduled-tasks',
+    `${taskId}.json`,
+  )
+  const sharedDefinition = JSON.parse(await readFile(sharedDefinitionPath, 'utf8'))
+  assert(sharedDefinition.schemaVersion === 2, 'shared definition schema is not v2')
+  assert(!('workspaceRef' in sharedDefinition), 'absolute workspace path leaked into shared JSON')
+  await assertFileMissing(
+    join(workspacePath, '.cclink-studio', 'scheduled-tasks', `${taskId}.json`),
+    'local definition remained after a completed local-to-shared conversion',
+  )
+  const sharedSnapshot = await page.evaluate(
+    ({ path, id }) => window.cclinkStudio.scheduledTasks.get(path, id),
+    { path: workspacePath, id: taskId },
+  )
+  assert(
+    sharedSnapshot.success &&
+      sharedSnapshot.task.definition.source === 'shared' &&
+      !sharedSnapshot.task.activation.enabled,
+    'shared conversion did not remain paused on this device',
+  )
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: '在此设备启用', exact: true }).click()
+  await page
+    .getByRole('status')
+    .getByText(/已在此设备启用/)
+    .waitFor({ timeout: 10_000 })
 
   const outsideRejected = await page.evaluate((path) => {
     return window.cclinkStudio.scheduledTasks.save({
@@ -586,7 +673,7 @@ async function main() {
 try {
   await main()
 } catch (error) {
-  console.error(`FAIL scheduled task M8.2 - ${error.message || String(error)}`)
+  console.error(`FAIL scheduled task M8.2 - ${error.stack || error.message || String(error)}`)
   process.exitCode = 1
 } finally {
   if (browser) await browser.close().catch(() => {})

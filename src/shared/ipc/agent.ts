@@ -17,6 +17,7 @@ import type {
   ClaudeResultEventData,
   ClaudeStreamEventData,
   ExternalMcpServer,
+  ExternalMcpServerInput,
   ExternalMcpServerSummary,
   ToolConfirmationRequest,
   StudioAgentResultEventData,
@@ -235,11 +236,12 @@ export const agentIpc = {
 
 export const agentMcpIpc = {
   listServers: defineIpcCall<[], ExternalMcpServer[]>('mcp:listServers'),
-  addServer: defineIpcCall<[server: ExternalMcpServer], AgentCommandResult>('mcp:addServer'),
+  addServer: defineIpcCall<[server: ExternalMcpServerInput], AgentCommandResult>('mcp:addServer'),
   removeServer: defineIpcCall<[name: string], boolean>('mcp:removeServer'),
-  updateServer: defineIpcCall<[name: string, updates: Partial<ExternalMcpServer>], boolean>(
+  updateServer: defineIpcCall<[name: string, updates: Partial<ExternalMcpServerInput>], boolean>(
     'mcp:updateServer',
   ),
+  copyServer: defineIpcCall<[name: string, newName: string], boolean>('mcp:copyServer'),
   reloadConfig: defineIpcCall<[], ExternalMcpServerSummary[]>('mcp:reloadConfig'),
 } as const
 

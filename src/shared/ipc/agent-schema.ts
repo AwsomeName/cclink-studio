@@ -272,14 +272,23 @@ const mcpServerFields = {
     .trim()
     .min(1)
     .max(128)
-    .regex(/^[A-Za-z0-9_-]+$/),
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .refine((value) => !['__proto__', 'prototype', 'constructor'].includes(value), {
+      message: 'MCP 名称不能使用保留原型键',
+    }),
   transport: z.enum(['stdio', 'http', 'sse']),
   command: boundedTextSchema(32_768).trim().min(1).optional(),
   args: z.array(boundedTextSchema(8_192)).max(128).optional(),
-  env: boundedStringRecordSchema.optional(),
   url: httpUrlSchema(2_048).optional(),
-  headers: boundedStringRecordSchema.optional(),
   enabled: z.boolean(),
+  credentials: z
+    .object({
+      env: boundedStringRecordSchema.optional(),
+      headers: boundedStringRecordSchema.optional(),
+    })
+    .strict()
+    .nullable()
+    .optional(),
 }
 
 export const mcpServerSchema = z

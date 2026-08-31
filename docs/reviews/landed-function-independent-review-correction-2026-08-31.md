@@ -469,3 +469,17 @@ Cookie 秘密出站、强制现有 query token。只有这三道止血完成后�
 - 130 项 broker、ToolHost、Claude SDK、Codex ACP、Browser、Android 与 PermissionManager 定向测试通过；
   196 项扩大回归通过。真实 App
   无 Android 设备，因此 uninstall 副作用和 shell 人工接管设备流程留到统一验收，当前不宣称设备闭环。
+
+### P1-1：MCP 凭证版本化迁移
+
+- `mcp-servers.json` 升级为 schema v2，只保存稳定 `serverId`、非敏感连接字段和
+  `{credentialId, revision}`；env/header 由现有 `CredentialService` 以
+  `mcp:<serverId>:<revision>` 不可变记录保存。Renderer 列表 DTO 只返回是否配置、是否悬空及 env/header
+  键名，不返回值或 credentialRef。
+- add/update 先写新 revision、再原子切换配置，失败时回收新 revision 并保留旧配置；成功后才清理旧
+  revision。rename 保留 serverId 和引用，copy 创建新 serverId 和独立 revision，delete 先断配置引用再
+  清凭证。
+- 启动时迁移旧格式并对账：orphan 自动清理，dangling ref 保持 fail-closed 并投影“凭证引用缺失”，不
+  猜测最新 revision。配置/凭证容量失败保持旧文件，失败写入不会报告成功，可幂等重试。
+- 隔离临时配置测试覆盖旧格式迁移、Renderer 脱敏、rename/copy/delete、revision 冲突、配置写失败、
+  orphan、dangling ref、256 记录容量上限和原型键；测试未读取或输出真实用户配置。

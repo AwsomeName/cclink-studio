@@ -284,15 +284,36 @@ export interface AgentStatus {
   }
 }
 
-export interface ExternalMcpServer {
+export interface ExternalMcpCredentialInput {
+  env?: Record<string, string>
+  headers?: Record<string, string>
+}
+
+/** Renderer -> main mutation input. Secret values are accepted only on this write path. */
+export interface ExternalMcpServerInput {
   name: string
   transport: 'stdio' | 'http' | 'sse'
   command?: string
   args?: string[]
-  env?: Record<string, string>
   url?: string
-  headers?: Record<string, string>
   enabled: boolean
+  /** undefined preserves an existing revision; null explicitly clears it. */
+  credentials?: ExternalMcpCredentialInput | null
+}
+
+/** Main -> Renderer projection. It must never contain env/header values or a credentialRef. */
+export interface ExternalMcpServer {
+  serverId: string
+  name: string
+  transport: 'stdio' | 'http' | 'sse'
+  command?: string
+  args?: string[]
+  url?: string
+  enabled: boolean
+  credentialConfigured: boolean
+  credentialMissing: boolean
+  envKeys: string[]
+  headerNames: string[]
 }
 
 export interface ExternalMcpServerSummary {
@@ -379,8 +400,9 @@ export interface AgentApiContract {
   setPermissionMode(mode: 'auto' | 'categorized' | 'strict'): Promise<void>
 
   listMcpServers(): Promise<ExternalMcpServer[]>
-  addMcpServer(server: ExternalMcpServer): Promise<AgentCommandResult>
+  addMcpServer(server: ExternalMcpServerInput): Promise<AgentCommandResult>
   removeMcpServer(name: string): Promise<boolean>
-  updateMcpServer(name: string, updates: Partial<ExternalMcpServer>): Promise<boolean>
+  updateMcpServer(name: string, updates: Partial<ExternalMcpServerInput>): Promise<boolean>
+  copyMcpServer(name: string, newName: string): Promise<boolean>
   reloadMcpConfig(): Promise<ExternalMcpServerSummary[]>
 }

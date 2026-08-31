@@ -3,6 +3,7 @@ import type {
   AgentCapabilityStatus,
   AgentToolModuleStatus,
   ExternalMcpServer,
+  ExternalMcpServerInput,
 } from '@shared/ipc/agent'
 import type { AppSettings, PermissionMode } from '@shared/ipc/settings'
 import {
@@ -28,6 +29,8 @@ interface McpFormState {
   url: string
   env: string
   headers: string
+  clearCredentials: boolean
+  hasStoredCredentials: boolean
   enabled: boolean
 }
 
@@ -40,6 +43,8 @@ const EMPTY_FORM: McpFormState = {
   url: '',
   env: '',
   headers: '',
+  clearCredentials: false,
+  hasStoredCredentials: false,
   enabled: true,
 }
 
@@ -153,8 +158,10 @@ export function AgentCapabilitiesSettings({
       command: server.command ?? '',
       args: (server.args ?? []).join('\n'),
       url: server.url ?? '',
-      env: formatRecord(server.env),
-      headers: formatRecord(server.headers),
+      env: '',
+      headers: '',
+      clearCredentials: false,
+      hasStoredCredentials: server.credentialConfigured || server.credentialMissing,
       enabled: server.enabled,
     })
   }
@@ -190,6 +197,19 @@ export function AgentCapabilitiesSettings({
     }
     setServers((current) => current.filter((item) => item.name !== server.name))
     if (form?.originalName === server.name) setForm(null)
+  }
+
+  const copyServer = async (server: ExternalMcpServer): Promise<void> => {
+    const newName = window.prompt('复制后的 MCP Server 名称', `${server.name}_copy`)?.trim()
+    if (!newName) return
+    setError(null)
+    try {
+      const copied = await window.cclinkStudio.agent.copyMcpServer(server.name, newName)
+      if (!copied) throw new Error(`无法复制 MCP Server: ${server.name}`)
+      setServers(await window.cclinkStudio.agent.listMcpServers())
+    } catch (nextError: unknown) {
+      setError(errorMessage(nextError))
+    }
   }
 
   const reloadExternalConfig = async (): Promise<void> => {
@@ -366,8 +386,16 @@ export function AgentCapabilitiesSettings({
                 <span>
                   {server.transport.toUpperCase()} · {serverEndpoint(server)} ·{' '}
                   {server.enabled ? '已配置，等待受控授权支持' : '已停用'}
+                  {server.credentialMissing
+                    ? ' · 凭证引用缺失'
+                    : server.credentialConfigured
+                      ? ` · 凭证已保存（${[...server.envKeys, ...server.headerNames].length} 项）`
+                      : ' · 无凭证'}
                 </span>
               </div>
+              <button type="button" onClick={() => void copyServer(server)}>
+                复制
+              </button>
               <button type="button" onClick={() => editServer(server)}>
                 编辑
               </button>
@@ -393,7 +421,8 @@ export function AgentCapabilitiesSettings({
         )}
 
         <p className="agent-capabilities-note">
-          外部 MCP 的环境变量和请求头保存在本机用户数据目录的 mcp-servers.json，不会写入项目目录。
+          环境变量和请求头由本地 CredentialService 保存；配置文件只含不可变 revision
+          引用，页面不会读取 或回显凭证值。
         </p>
       </div>
     </section>
@@ -468,7 +497,11 @@ function McpServerForm({
             <span>环境变量</span>
             <textarea
               value={form.env}
-              placeholder={'JSON 对象，例如 {"TOKEN":"..."}'}
+              placeholder={
+                form.hasStoredCredentials
+                  ? '留空则保留已保存凭证；输入 JSON 将创建新 revision'
+                  : 'JSON 对象，例如 {"TOKEN":"..."}'
+              }
               onChange={(event) => set('env', event.target.value)}
             />
           </label>
@@ -487,11 +520,25 @@ function McpServerForm({
             <span>请求头</span>
             <textarea
               value={form.headers}
-              placeholder={'JSON 对象，例如 {"Authorization":"Bearer ..."}'}
+              placeholder={
+                form.hasStoredCredentials
+                  ? '留空则保留已保存凭证；输入 JSON 将创建新 revision'
+                  : 'JSON 对象，例如 {"Authorization":"Bearer ..."}'
+              }
               onChange={(event) => set('headers', event.target.value)}
             />
           </label>
         </>
+      )}
+      {form.hasStoredCredentials && (
+        <label className="wide agent-mcp-enabled">
+          <input
+            type="checkbox"
+            checked={form.clearCredentials}
+            onChange={(event) => set('clearCredentials', event.target.checked)}
+          />
+          <span>保存时清除当前凭证 revision</span>
+        </label>
       )}
       <div className="agent-mcp-form-footer">
         <label className="agent-mcp-enabled">
@@ -511,7 +558,7 @@ function McpServerForm({
   )
 }
 
-function buildServer(form: McpFormState): ExternalMcpServer {
+function buildServer(form: McpFormState): ExternalMcpServerInput {
   const name = form.name.trim()
   if (!/^[A-Za-z0-9_-]+$/.test(name)) {
     throw new Error('MCP 名称只能包含字母、数字、下划线和连字符')
@@ -519,6 +566,7 @@ function buildServer(form: McpFormState): ExternalMcpServer {
   if (form.transport === 'stdio') {
     const command = form.command.trim()
     if (!command) throw new Error('stdio MCP 必须填写命令')
+    const credentials = buildCredentialMutation(form, 'env')
     return {
       name,
       transport: 'stdio',
@@ -527,20 +575,32 @@ function buildServer(form: McpFormState): ExternalMcpServer {
         .split('\n')
         .map((item) => item.trim())
         .filter(Boolean),
-      env: parseRecord(form.env, '环境变量'),
+      ...(credentials !== undefined ? { credentials } : {}),
       enabled: form.enabled,
     }
   }
 
   const url = form.url.trim()
   if (!/^https?:\/\//i.test(url)) throw new Error('请填写 http 或 https MCP URL')
+  const credentials = buildCredentialMutation(form, 'headers')
   return {
     name,
     transport: form.transport,
     url,
-    headers: parseRecord(form.headers, '请求头'),
+    ...(credentials !== undefined ? { credentials } : {}),
     enabled: form.enabled,
   }
+}
+
+function buildCredentialMutation(
+  form: McpFormState,
+  kind: 'env' | 'headers',
+): ExternalMcpServerInput['credentials'] | undefined {
+  if (form.clearCredentials) return null
+  const raw = kind === 'env' ? form.env : form.headers
+  if (!raw.trim()) return undefined
+  const parsed = parseRecord(raw, kind === 'env' ? '环境变量' : '请求头')
+  return parsed ? { [kind]: parsed } : undefined
 }
 
 function parseRecord(value: string, label: string): Record<string, string> | undefined {
@@ -559,10 +619,6 @@ function parseRecord(value: string, label: string): Record<string, string> | und
     throw new Error(`${label}的值必须都是字符串`)
   }
   return Object.fromEntries(entries) as Record<string, string>
-}
-
-function formatRecord(value?: Record<string, string>): string {
-  return value && Object.keys(value).length > 0 ? JSON.stringify(value, null, 2) : ''
 }
 
 function serverEndpoint(server: ExternalMcpServer): string {

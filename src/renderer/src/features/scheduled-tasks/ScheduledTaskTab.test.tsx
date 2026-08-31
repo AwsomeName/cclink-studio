@@ -35,11 +35,12 @@ describe('ScheduledTaskTab', () => {
 function createRun(): ScheduledTaskRun {
   const createdAt = Date.parse('2026-08-20T00:50:00.000Z')
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: 'run-1',
     occurrenceKey: 'scheduled:run-1',
     taskId: 'task-1',
     taskRevision: 8,
+    taskExecutionDigest: 'digest-8',
     workspaceId: 'workspace-1',
     workspaceRef: { kind: 'local', path: '/Users/alice/project' },
     conversationId: 'scheduled-task:run-1',

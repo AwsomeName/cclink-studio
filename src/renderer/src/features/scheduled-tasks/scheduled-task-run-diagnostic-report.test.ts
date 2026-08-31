@@ -89,11 +89,12 @@ describe('scheduled task run diagnostic report', () => {
 
 function createRun(): ScheduledTaskRun {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: 'run-1',
     occurrenceKey: 'manual:run-1',
     taskId: 'task-1',
     taskRevision: 8,
+    taskExecutionDigest: 'digest-8',
     workspaceId: 'workspace-1',
     workspaceRef: { kind: 'local', path: '/Users/alice/project' },
     conversationId: 'scheduled-task:run-1',
@@ -115,9 +116,11 @@ function createRun(): ScheduledTaskRun {
 function createTask(): ScheduledTaskSnapshot {
   return {
     definition: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: 'task-1',
       workspaceRef: { kind: 'local', path: '/Users/alice/project' },
+      source: 'local',
+      executionDigest: 'digest-8',
       revision: 8,
       title: '每日日志',
       instruction: '请读取所有文件，并使用 token=do-not-copy',
@@ -136,6 +139,9 @@ function createTask(): ScheduledTaskSnapshot {
       workspaceId: 'workspace-1',
       workspaceRef: { kind: 'local', path: '/Users/alice/project' },
       enabled: true,
+      confirmedTaskRevision: null,
+      confirmedExecutionDigest: null,
+      suspensionReason: null,
       catchUpPolicy: { mode: 'latest-within-window', windowMinutes: 30 },
       lastEvaluatedAt: createdAt,
       nextRunAt: createdAt + 86_400_000,

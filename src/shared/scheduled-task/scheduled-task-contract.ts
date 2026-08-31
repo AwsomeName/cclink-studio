@@ -6,6 +6,7 @@ import {
   parseWorkspacePath,
   parseRunScheduledTaskInput,
   parseCancelScheduledTaskRunInput,
+  parseDeleteScheduledTaskInput,
 } from './scheduled-task-schema'
 import type {
   SaveScheduledTaskInput,
@@ -15,6 +16,7 @@ import type {
   SetScheduledTaskEnabledInput,
   RunScheduledTaskInput,
   CancelScheduledTaskRunInput,
+  DeleteScheduledTaskInput,
   ScheduledTaskRunResult,
   ScheduledTaskRunListResult,
   ScheduledTaskRuntimeStatus,
@@ -25,6 +27,9 @@ export const scheduledTasksIpc = {
   get: defineIpcCall<[string, string], ScheduledTaskOperationResult>('scheduledTasks:get'),
   save: defineIpcCall<[SaveScheduledTaskInput], ScheduledTaskOperationResult>(
     'scheduledTasks:save',
+  ),
+  delete: defineIpcCall<[DeleteScheduledTaskInput], ScheduledTaskOperationResult>(
+    'scheduledTasks:delete',
   ),
   setEnabled: defineIpcCall<[SetScheduledTaskEnabledInput], ScheduledTaskOperationResult>(
     'scheduledTasks:setEnabled',
@@ -125,6 +130,14 @@ export const scheduledTasksIpcContracts = {
     (args) => {
       requireArgs(args, 1, scheduledTasksIpc.save.channel)
       return ipcArgs(parseSaveScheduledTaskInput(args[0]))
+    },
+    invalidOperation,
+  ),
+  delete: bindIpcParser(
+    scheduledTasksIpc.delete,
+    (args) => {
+      requireArgs(args, 1, scheduledTasksIpc.delete.channel)
+      return ipcArgs(parseDeleteScheduledTaskInput(args[0]))
     },
     invalidOperation,
   ),

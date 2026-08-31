@@ -1,6 +1,6 @@
 # 定时任务通过 Git 随工作空间共享
 
-> 状态：产品需求提案，尚未实现
+> 状态：已实现并通过真实 Electron、真实 Git 与隔离双设备自动验收；待物理双机真人复核
 >
 > 最后更新：2026-08-31
 >
@@ -25,6 +25,19 @@ CCLink Studio 应允许用户把一个本地工作空间的定时任务定义显
 
 > 定义可以随项目共享；启用、权限和运行事实严格归当前设备。
 
+### 1.1 独立评审后的开工门禁
+
+2026-08-31 独立评审给出“有条件通过”。以下三项已在需求层冻结，工程方案和实现必须同时
+满足，否则不得开工或宣称共享闭环完成：
+
+1. B 的启用确认必须绑定精确的 `task revision + executionDigest`；共享定义发生任何 revision
+   变化，或执行相关内容在 revision 未变化时发生变化，都必须立即暂停未来执行并要求重新确认。
+2. 单机 occurrence 去重必须包含 `workspaceId + taskId + scheduledFor`，不能让同一电脑打开的
+   两个工作空间副本因 task ID 相同而串扰。
+3. Git ignore 只约束未跟踪文件；Studio 自有 Commit/backup/Push 前必须检查全部 tracked 和
+   staged 路径以及将要 Push 的 commit range，只允许合法共享任务 JSON 进入 `.cclink-studio`，
+   发现本机定义、状态、历史、结果、备份或临时文件已经被跟踪或存在于待推送历史时必须阻止。
+
 ## 2. 用户可执行的端到端验收
 
 本需求只有在以下真实双工作空间流程通过后，才能宣称用户闭环完成：
@@ -40,15 +53,17 @@ CCLink Studio 应允许用户把一个本地工作空间的定时任务定义显
    文件或恢复 Tab 均不得自动运行 X。
 7. B 打开 X，可以查看名称、指令、计划、时区、相对资源和输出约定；界面不显示 A 的绝对
    路径、权限、登录态、下次运行、运行历史或诊断。
-8. B 点击“在此设备启用”，确认当前工作空间绑定和权限摘要后，X 才在 B 生成本机
-   activation 和下次运行时间。
+8. B 点击“在此设备启用”，确认当前工作空间绑定、任务 revision、执行内容摘要和权限摘要后，
+   X 才在 B 生成绑定该 `revision + executionDigest` 的本机 activation 和下次运行时间。
 9. B 的启用、暂停、立即运行和历史变化不修改 A 的本机 activation、权限和运行账本。
 10. A、B 都启用 X 时，两台电脑可能分别执行；两端必须明确提示“多设备同时启用可能产生
     重复运行”，不得声称只执行一次。
-11. A 修改共享任务并 Push，B Pull 后若本地没有未保存草稿，则重新读取新 revision；若有
-    未保存草稿或 Git 冲突，则保留现场并阻止覆盖或运行，给出可操作错误。
-12. A 删除共享定义并 Push，B Pull 后不得继续根据孤立 activation 运行旧任务；B 应显示
-    “定义已从项目移除”，停用本机 activation，并保留有界的本机历史供用户检查。
+11. A 修改共享任务并 Push，B Pull 后即使本地没有未保存草稿，也必须把 X 变为“项目定义已
+    更新 · 待重新确认”，取消尚未开始的旧 revision 排队运行并清除未来 timer；已经进入
+    `running` 的旧 snapshot 可以收束。若有未保存草稿或 Git 冲突，则保留现场并阻止覆盖或运行。
+12. A 删除共享定义并 Push，B Pull 后不得继续根据孤立 activation 运行旧任务；B 应取消尚未
+    开始的排队运行、显示“定义已从项目移除”、停用本机 activation，并保留有界的本机历史。
+    已经进入 `running` 的固定 snapshot 可以继续收束，不从磁盘重新加载新内容。
 13. 用户退出 B 的 Studio 后，X 仍不会由操作系统、后台 Helper 或 Git 触发。
 
 只完成 Schema、文件迁移、Git ignore 调整或单机 mock 测试时，不能声明本需求完成。
@@ -78,9 +93,14 @@ CCLink Studio 应允许用户把一个本地工作空间的定时任务定义显
 - 文件、目录和输出引用只使用工作空间相对路径，并继续执行路径越界校验。
 - 共享定义可被普通 Git 状态、提交和 Push 发现，不要求 `git add -f`。
 - 目标设备发现共享定义时默认暂停，必须人工启用。
+- activation 必须保存用户确认的 definition revision 和规范化 execution digest；当前定义与确认
+  事实不完全匹配时视为待重新确认，不进入 timer、catch-up、立即运行或排队执行。
 - 本机 activation、权限、运行锁、队列、当前运行、运行历史和内部结果继续留在 `userData`
   或其他明确的本机存储中。
 - Git 冲突、损坏定义、重复任务 ID、外部删除和不支持 Schema 必须 fail closed。
+- Studio 自有 Git 写入在 stage/commit/push 前必须检查已跟踪路径；`.cclink-studio` 下除合法
+  shared task JSON 以外的文件一旦被跟踪就阻止操作；Push 还必须检查全部待推送提交，不能依赖
+  ignore 或当前 HEAD 已删除该文件来假定安全。
 - 非 Git 工作空间仍可使用“不随 Git 共享”的定时任务，不因 Git 不可用而降级。
 - 用户复制或移动工作空间后，共享定义绑定当前已验证工作空间；复制得到的新工作空间身份
   不继承原设备 activation。
@@ -138,9 +158,20 @@ B 第一次读取共享任务时，侧栏和 Tab 应显示：
 外来定义不能继承全局 `auto` 权限模式、A 的确认记录或任何“always allow”状态。打开任务、
 恢复 Tab、Git Pull、窗口重建和 App 重启都不能替代用户启用动作。
 
+B 的确认只适用于界面展示的精确 revision 和规范化执行摘要。任务名称之外的任何执行相关字段
+（instruction、schedule、resources、outputPolicy）变化都必须使确认失效；revision 即使未正确
+递增，只要执行摘要变化也必须失效。任务只发生 JSON 排版或字段顺序变化时，规范化摘要不应
+变化，避免无意义的重复确认。
+
+共享任务在当前设备被用户编辑时也遵守同一规则：普通“保存”或 `Cmd/Ctrl+S` 保存新 revision
+后暂停未来执行；用户必须点击独立的“保存并在此设备重新确认”或随后重新启用，不能沿用当前
+本机任务“普通保存保持启用”的既有语义。该差异只适用于需要版本确认的共享任务。
+
 ### 5.3 本机任务与共享任务转换
 
 - “不随 Git 共享 → 随项目共享”：保存为新的可移植共享 revision；成功后再移除旧本机定义。
+  转换确认同时展示新 revision/digest；原任务已启用时，只有用户明确选择“继续在此设备启用”
+  才把 A 的 activation 绑定到新版本，否则转换后暂停。
 - “随项目共享 → 不随 Git 共享”：先保存本机定义，再删除共享文件；删除会形成 Git 变化，必须
   明确提示其他设备 Pull 后将看不到该定义。
 - 转换期间任一步失败都保留至少一个可读取定义，不得产生两个可运行副本。
@@ -153,7 +184,7 @@ B 第一次读取共享任务时，侧栏和 Tab 应显示：
 | 共享任务定义                     | 工作空间共享定义文件 + `ScheduledTaskService` | 是                     |
 | 本机任务定义                     | 工作空间本机定义文件 + `ScheduledTaskService` | 否                     |
 | 当前路径绑定                     | `WorkspaceStateService` 解析后的当前工作空间  | 否，不序列化旧绝对路径 |
-| 是否在本机启用                   | `ScheduledTaskService` activation store       | 否                     |
+| 是否在本机启用及已确认定义版本   | `ScheduledTaskService` activation store       | 否                     |
 | 权限和可信确认                   | 当前设备权限事实                              | 否                     |
 | 当前运行、队列和 timer           | 当前 Studio 主进程                            | 否                     |
 | 运行历史和内部结果               | 当前设备 run store                            | 否                     |
@@ -192,6 +223,10 @@ B 第一次读取共享任务时，侧栏和 Tab 应显示：
 - 相对资源在每次保存和运行前重新解析到当前工作空间 realpath，拒绝 `..`、绝对路径、
   符号链接越界和工作空间替换竞态。
 - Git 冲突标记、JSON 损坏、未知 Schema、重复 ID 或文件名/内部 ID 不一致时禁止运行。
+- Studio 管理的 Git stage/commit/backup/push 必须枚举 tracked、staged 和候选路径；
+  `.cclink-studio` 采用共享任务 allowlist，不能因文件已经被 Git 跟踪而绕过敏感路径门禁。
+- Push 必须检查相对可靠 remote base 的全部 outgoing commits；没有可证明 base 时检查 HEAD
+  全部可达历史。旧提交包含 forbidden 文件时，即使当前 HEAD 已删除也阻止 Push 并提示清理历史。
 - 诊断默认只报告 task ID、revision、来源、解析状态和脱敏错误，不复制完整指令正文。
 - 共享定义不得扩大 preload API、读取凭证或触发 CCLink 登录。
 
@@ -207,6 +242,8 @@ Clone/Pull 后才可能出现。网络离线、没有 remote、没有 Git 或用
 
 - Tab 草稿固定打开时的 task revision 和内容摘要。
 - 外部文件变更后，保存使用 expected revision/摘要；不匹配时拒绝覆盖。
+- activation 固定 `confirmedTaskRevision` 和 `confirmedExecutionDigest`。当前定义任一值不匹配时，
+  原子切换为 `needs-review/disabled`，清除 `nextRunAt`，并取消尚未进入 running 的旧排队 run。
 - Git 产生冲突标记时，该任务进入“定义冲突”，停止未来调度。
 - 首版不自动三方合并任务 JSON，也不使用 last-write-wins。
 - 用户解决 Git 冲突并得到一个合法定义后，服务重新读取；本机 activation 仍由当前设备决定。
@@ -218,14 +255,18 @@ Clone/Pull 后才可能出现。网络离线、没有 remote、没有 Git 或用
 1. 从可调度定义集合移除该任务；
 2. 停止认领未来 occurrence；
 3. 将本机 activation 标记为 orphaned/disabled，而不是保留 enabled；
-4. 不强杀已经开始的运行；已开始运行按当前固定 revision 收束；
-5. 保留有界历史并向用户显示定义已移除；
-6. 不因文件重新出现而自动恢复启用。
+4. 从内存队列移除尚未开始的 run，并将其持久化为 `cancelled`，原因是
+   `SCHEDULED_TASK_DEFINITION_REMOVED`；排队 run 不得先改成 running 再取消；
+5. 不强杀已经进入 `running` 的运行；已开始运行按 claim 时固定的完整 definition snapshot
+   收束，不重新读取已删除或已更新的磁盘定义；
+6. 保留有界历史并向用户显示定义已移除；
+7. 不因文件重新出现而自动恢复启用。
 
 ### 9.4 多设备重复执行
 
-首版每台设备都是独立调度器。两台设备都显式启用同一任务时，允许分别执行。任务 ID、
-occurrence key 和 revision 只能在单设备内去重，不能被描述为全局唯一。
+首版每台设备都是独立调度器。两台设备都显式启用同一任务时，允许分别执行。单机 occurrence
+identity 至少是 `workspaceId + taskId + scheduledFor`；同一电脑的工作空间副本即使携带相同
+task ID，也必须分别调度和记录。该 key 只在单设备内去重，不能被描述为全局唯一。
 
 若未来要求多设备只执行一次，必须另立云端或对等协调需求，明确在线 owner、租约、网络分区、
 时钟偏差、离线恢复、最终一致性和服务端权限；不得在本需求中用 Git lock 文件伪装分布式锁。
@@ -236,6 +277,7 @@ occurrence key 和 revision 只能在单设备内去重，不能被描述为全�
 
 - workspace identity 和 canonical path 的脱敏摘要；
 - task ID、持久化 schemaVersion、revision、定义来源（local/shared）；
+- 当前 executionDigest、activation 已确认 revision/digest 及匹配/待复核状态；
 - 共享文件是否存在、是否被 Git ignore、是否 tracked、是否 unmerged；
 - parse/migration/rebind 状态和结构化错误码；
 - 本机 activation 是否存在、enabled/disabled/orphaned 和来源设备；
@@ -256,6 +298,7 @@ Git 不可用、仓库不存在或 Git 状态读取失败只影响共享诊断�
 | 随项目共享     | 定义可以由用户通过 Git 或文件复制带到其他设备              |
 | 来自项目       | 当前定义来自工作空间共享文件                               |
 | 未在此设备启用 | 当前设备没有有效 activation，不会自动运行                  |
+| 定义已更新     | 当前定义与本机已确认版本不同，未来运行已暂停并等待重新确认 |
 | 定义冲突       | 文件损坏、重复 ID、Git conflict 或并发版本不一致，禁止运行 |
 
 禁止使用“云同步”“自动同步”“团队任务”“全局任务”“只执行一次”等超出首版事实的文案。
@@ -264,27 +307,39 @@ Git 不可用、仓库不存在或 Git 状态读取失败只影响共享诊断�
 
 ### 12.1 用户功能进度
 
-- [ ] A 可以把一个本机任务显式转换为随项目共享，并在真实 Git 变更中看见定义。
-- [ ] B Clone/Pull 后打开真实工作空间可以看见任务，且默认不启用。
-- [ ] B 明确启用后可以立即运行和按计划运行，A 的 activation 与历史不受影响。
-- [ ] A 修改、删除以及 A/B 并发修改在 B 有明确且安全的结果。
-- [ ] 两台设备同时启用时有重复执行提示，不伪造 exactly-once。
-- [ ] 非 Git、Git 离线、Studio 未登录和 CCLink 故障时，本机任务仍完整可用。
+- [x] A 可以把一个本机任务显式转换为随项目共享，并在真实 Git 变更中看见定义。
+- [x] B Clone/Pull 后打开真实工作空间可以看见任务，且默认不启用。
+- [x] B 明确启用后可以立即运行和按计划运行，A 的 activation 与历史不受影响。
+- [x] A 更新 X 后，B 已确认的旧 revision/digest 自动失效；B 不重新确认就没有新的排队或执行。
+- [x] A 修改、删除以及 A/B 并发修改在 B 有明确且安全的结果。
+- [x] 两台设备同时启用时有重复执行提示，不伪造 exactly-once。
+- [x] 非 Git、Git 离线、Studio 未登录和 CCLink 故障时，本机任务仍完整可用。
+
+以上用户功能已由真实 App 自动化和专项故障测试覆盖；物理双机上的真人交互、Git 凭证与定时
+触发体验仍由 12.2 的最后一项单独约束，不能把自动化通过写成真人签字。
 
 ### 12.2 工程准备度
 
-- [ ] 可移植持久化 Schema、v1 兼容和迁移门禁通过。
-- [ ] managed Git exclude 迁移只修改 Studio 自有规则，不覆盖用户规则。
-- [ ] activation/history/results/credentials 永远不进入共享候选文件。
-- [ ] 冲突、损坏、外部删除、符号链接越界和保存竞态 fail closed。
-- [ ] `ScheduledTaskService` 与 `GitWorkspaceService` 状态所有权没有重叠。
-- [ ] 受影响测试、真实 Git smoke 和双工作空间 Electron smoke 通过。
+- [x] 可移植持久化 Schema、v1 兼容和迁移门禁通过。
+- [x] managed Git exclude 迁移只修改 Studio 自有规则，不覆盖用户规则。
+- [x] activation/history/results/credentials 永远不进入共享候选文件。
+- [x] Studio 所有 Git 写入口都能发现并阻止已经 tracked/staged 的本机任务、状态、历史、结果、
+      `.bak`、`.tmp` 和 migration 文件。
+- [x] forbidden 文件只存在于较早待推送 commit、当前 HEAD 已删除时，Push 仍被阻止；历史清理后
+      才能继续。
+- [x] occurrence key 包含 workspaceId；旧 run ledger 迁移后不会跨工作空间误去重或重复补执行。
+- [x] 冲突、损坏、外部删除、符号链接越界和保存竞态 fail closed。
+- [x] `ScheduledTaskService` 与 `GitWorkspaceService` 状态所有权没有重叠。
+- [x] 受影响测试、真实 Git smoke 和双工作空间 Electron smoke 通过。
 - [ ] 真人在两台独立电脑或等价隔离用户目录上完成第 2 节全部验收并记录结果。
 
 ## 13. 拷问结论
 
 - 如果实现只是删除 `.git/info/exclude`，但定义仍保存绝对路径，需求未完成。
 - 如果 B 看见任务后自动启用，安全边界失败。
+- 如果 B 确认后共享定义变化仍保持 enabled，确认只是一次性装饰，安全边界失败。
+- 如果 occurrence key 不含 workspaceId，同机项目副本仍可能串扰，隔离边界失败。
+- 如果 Git 门禁只检查 untracked/ignored 而不检查 tracked 和 staged，本机状态仍可能泄露。
 - 如果为了“同步”把 activation 或运行历史写进工作空间，状态所有权失败。
 - 如果 Studio 自动 Pull/Merge，需求已扩张成 Git 同步系统，应立即止损并另立项目。
 - 如果用 Git 文件锁声称多设备只执行一次，结论不可信。
