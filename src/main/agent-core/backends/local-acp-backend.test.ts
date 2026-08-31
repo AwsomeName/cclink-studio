@@ -55,6 +55,7 @@ describe('Codex ACP runtime boundary', () => {
     const executable = join(root, 'fake-codex-acp.mjs')
     await writeFile(executable, FAKE_CODEX_ACP, { mode: 0o700 })
     const decisions: string[] = []
+    const decisionRunIds: Array<string | undefined> = []
     const events: Array<{ type: string; data: unknown }> = []
     const backend = new LocalAcpBackend({
       executablePath: executable,
@@ -62,6 +63,7 @@ describe('Codex ACP runtime boundary', () => {
       codexHome: join(root, 'home'),
       requestPermission: async (request) => {
         decisions.push(request.toolName)
+        decisionRunIds.push(request.runId)
         return true
       },
     })
@@ -69,11 +71,13 @@ describe('Codex ACP runtime boundary', () => {
 
     await backend.sendMessage('hello', {
       conversationId: 'codex-thread',
+      runId: 'codex-run',
       workspacePath: root,
     })
 
     expect(backend.getSessionId()).toBe('fake-session-1')
     expect(decisions).toEqual(['write_file'])
+    expect(decisionRunIds).toEqual(['codex-run'])
     expect(events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

@@ -189,6 +189,12 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     )
     const context = { conversationId: 'conversation-a', workspaceKey: '/workspace/a' }
 
+    await expect(
+      module.getExecutionPolicy('browser_click', { selector: '#draft' }, context),
+    ).resolves.toEqual({
+      requireConfirmation: false,
+      authorizationSatisfied: true,
+    })
     await expect(module.execute('browser_get_cookies', {}, context)).rejects.toThrow(
       '通用 Agent 不开放 Cookie 读取或写入',
     )

@@ -474,14 +474,15 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     // 发送方携带的会话工作区优先；旧调用方继续回退到当前全局工作区。
     const workspaceKey =
       options?.resourceContext?.workspace.key ?? options?.workspacePath?.trim() ?? null
-    this.mcpSessionToken = this.toolHost.createToolSession({
+    const toolExecutionContext: ToolExecutionContext = {
       conversationId,
       workspaceKey,
       trustedWorkspace: createTrustedWorkspaceContext(options, workspacePath, workspaceKey),
       agentRunId: options?.runId ?? null,
       ...(operation === 'message' ? { agentGoal: userMessage } : {}),
       ...(options?.scheduledTaskPolicy ? { scheduledTaskPolicy: options.scheduledTaskPolicy } : {}),
-    })
+    }
+    this.mcpSessionToken = this.toolHost.createToolSession(toolExecutionContext)
     const mcpConfig = this.mcpClientMgr.composeMcpConfig(
       this.toolHost.getPort(),
       this.mcpSessionToken,
@@ -516,10 +517,12 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       hooks: {
         PreToolUse: [
           {
+            timeout: 75,
             hooks: [
               this.createStudioPreToolUseHook(
                 workspacePath,
                 options?.forceVisibleBrowser === true || options?.disableBuiltinTools === true,
+                toolExecutionContext,
               ),
             ],
           },
@@ -527,6 +530,26 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       },
       ...(this.claudeCodePath ? { pathToClaudeCodeExecutable: this.claudeCodePath } : {}),
       allowedTools,
+      canUseTool: async (toolName, input, permissionOptions) => {
+        const authorization = await this.toolHost.authorizeSdkTool({
+          toolName,
+          params: input,
+          context: toolExecutionContext,
+          reason: permissionOptions.decisionReason,
+          authorizationId: permissionOptions.toolUseID,
+        })
+        return authorization.behavior === 'allow'
+          ? {
+              behavior: 'allow' as const,
+              updatedInput: input,
+              toolUseID: permissionOptions.toolUseID,
+            }
+          : {
+              behavior: 'deny' as const,
+              message: authorization.reason ?? `工具授权被拒绝: ${toolName}`,
+              toolUseID: permissionOptions.toolUseID,
+            }
+      },
       stderr: (data) => {
         this.rememberStderr(data)
         console.error('[ClaudeCodeBackend] stderr:', data)
@@ -578,9 +601,10 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
   private createStudioPreToolUseHook(
     workspacePath: string,
     visibleBrowserOnly: boolean,
+    toolExecutionContext: ToolExecutionContext,
   ): HookCallback {
     const workspaceRoot = workspacePath ? resolve(workspacePath) : null
-    return async (input) => {
+    return async (input, toolUseID) => {
       if (input.hook_event_name !== 'PreToolUse') return { continue: true }
       if (visibleBrowserOnly && isInvisibleWebTool(input.tool_name)) {
         const reason =
@@ -603,29 +627,43 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         return denyPreToolUse(schedulingDenial.reason)
       }
 
-      if (!workspaceRoot) return { continue: true }
-      const pathPolicy = await resolveWorkspaceToolInput(
-        input.tool_name,
-        input.tool_input,
-        workspaceRoot,
-      )
-      if (!pathPolicy.escapedPath && !pathPolicy.error) {
-        if (!pathPolicy.updatedInput) return { continue: true }
-        return {
-          continue: true,
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            updatedInput: pathPolicy.updatedInput,
-          },
+      let authorizedInput = asToolInput(input.tool_input)
+      if (workspaceRoot) {
+        const pathPolicy = await resolveWorkspaceToolInput(
+          input.tool_name,
+          input.tool_input,
+          workspaceRoot,
+        )
+        if (pathPolicy.escapedPath || pathPolicy.error) {
+          const reason =
+            `${pathPolicy.error ? '无法安全验证文件路径' : `已阻止跨工作区文件访问：${pathPolicy.escapedPath}`}\n` +
+            `当前会话工作区是 ${workspaceRoot}。该路径不属于本会话，可能来自失效上下文。` +
+            '请放弃该路径，只在当前工作区内重新定位目标；不要扩大到用户主目录搜索。'
+          console.warn(`[ClaudeCodeBackend] ${reason}`)
+          return denyPreToolUse(reason)
         }
+        authorizedInput = pathPolicy.updatedInput ?? authorizedInput
       }
 
-      const reason =
-        `${pathPolicy.error ? '无法安全验证文件路径' : `已阻止跨工作区文件访问：${pathPolicy.escapedPath}`}\n` +
-        `当前会话工作区是 ${workspaceRoot}。该路径不属于本会话，可能来自失效上下文。` +
-        '请放弃该路径，只在当前工作区内重新定位目标；不要扩大到用户主目录搜索。'
-      console.warn(`[ClaudeCodeBackend] ${reason}`)
-      return denyPreToolUse(reason)
+      const authorization = await this.toolHost.authorizeSdkTool({
+        toolName: input.tool_name,
+        params: authorizedInput,
+        context: toolExecutionContext,
+        authorizationId: toolUseID ?? input.tool_use_id,
+      })
+      if (authorization.behavior === 'deny') {
+        const reason = authorization.reason ?? `工具授权被拒绝: ${input.tool_name}`
+        console.warn(`[ClaudeCodeBackend] ${reason}`)
+        return denyPreToolUse(reason)
+      }
+      return {
+        continue: true,
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'allow',
+          ...(authorizedInput !== input.tool_input ? { updatedInput: authorizedInput } : {}),
+        },
+      }
     }
   }
 
@@ -959,6 +997,12 @@ function denyPreToolUse(reason: string) {
       permissionDecisionReason: reason,
     },
   }
+}
+
+function asToolInput(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
 }
 
 interface WorkspaceToolPathPolicyResult {

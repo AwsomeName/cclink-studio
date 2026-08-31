@@ -35,7 +35,7 @@ MCP env/header 的普通配置明文、renderer 全量返回和保存假成功�
 | IR-02 | P0           | 工程实现及真实 Context smoke 完成                        | Browser Cookie 完整返回模型                          | 通用 Agent 工具表移除 Cookie 读写；旧读取只返回聚合计数                                                    | 最终统一 App/Agent 事件与诊断复核待执行                                                                                         |
 | IR-03 | P1，立即止血 | 工程实现及本机 HTTP 集成验证完成                         | 本机 MCP HTTP token 未强制                           | 所有 `/mcp` 请求在读 body 前强制有效 Run token；失效状态统一 401                                           | Authorization header 迁移仍为独立 P1-H；最终 SDK/App 重连验证待执行                                                             |
 | RF-01 | P0           | 核心工程实现完成；真实 App 验收与 TOCTOU residual 待结论 | 文件权限边界不统一                                   | `FileService` 已收敛到主进程 active/trusted workspace；Browser、Android、Editor 与 renderer 复用同一 owner | Node 无可移植 `openat`，递归 mkdir/rename/copy 的父目录瞬时替换仍需按 residual threat 管理；真实文件选择器与 App 回归待统一验收 |
-| RF-02 | P0           | Open，缩小范围                                           | `auto` 和 Always 可绕过危险操作确认                  | 登记账号事务存在专用边界；定时任务严格只读                                                                 | Android uninstall/shell、清 Cookie 等内部工具没有不可绕过的宿主授权下限                                                         |
+| RF-02 | P0           | 核心工程实现完成；真实设备副作用验收待执行               | `auto` 和 Always 可绕过危险操作确认                  | 单一 broker 已覆盖内部 ToolHost 与 SDK PreToolUse/canUseTool；登记账号专用有界授权和定时任务只读链保留     | Android shell 从工具表移除并 fail-closed；uninstall、清 Cookie 和 SDK Bash 均强制逐次确认；真实 Android 设备验收待执行          |
 | RF-03 | P1           | Open，降级                                               | 外部 MCP env/header 绕过统一 CredentialService       | 文件位于 userData                                                                                          | 普通配置明文、`0644`、renderer 全量返回、非原子写入和保存假成功                                                                 |
 | RF-04 | P1           | Open                                                     | Runtime 组件初始化失败可阻断 App                     | 无                                                                                                         | 可选能力失败扩大为全局启动失败                                                                                                  |
 | RF-05 | P1           | Open                                                     | OpenAI Compatible 设置不可用                         | 连接测试会明确报 unsupported                                                                               | UI 仍允许保存后端不会采用的配置                                                                                                 |
@@ -449,3 +449,23 @@ Cookie 秘密出站、强制现有 query token。只有这三道止血完成后�
 - residual threat：Node/Electron 没有可移植的 `openat`/目录 fd 相对操作，递归 `mkdir`、`rename`、`cp`
   以及 Playwright/ADB 按路径二次打开仍存在同用户恶意进程在极短窗口替换父目录的竞态。本轮通过多次
   realpath、最终分量 `O_NOFOLLOW` 与 `fstat` 缩小窗口，但不将该部分宣称为完全关闭。
+
+### P0-5：统一危险操作授权
+
+- 新增单一 `AgentToolAuthorizationBroker` 作为策略 owner；`PermissionManager` 只保留确认 UI、超时、取消
+  和普通写工具的会话内 Always 记忆。内部 `McpToolHost` 与 Claude SDK `PreToolUse`/`canUseTool` 复用该
+  broker；Codex ACP 已分类权限请求也通过同一入口并绑定 conversation/run，避免任一 Agent 后端绕过主进程
+  安全下限。
+- destructive 工具无条件逐次确认并固定 `allowAlways: false`，因此 `auto` 和历史 Always 都不能绕过。
+  `android_uninstall_package` 已修正为 destructive；`browser_clear_cookies` 和 SDK `Bash` 同样适用。
+- `android_shell` 从普通 Agent 工具表删除；残留旧 MCP 名、SDK 名或模块直调都直接拒绝并提示转可见
+  Terminal/ADB 人工接管，确认按钮不能让命令执行。
+- 外部 MCP 与未知 SDK 工具没有登记分类时默认拒绝；内部 `cclink_studio` MCP 只在 SDK 层放行到本机
+  ToolHost，并在真实执行前由 broker 再次授权。外部 MCP server 本身仍维持 P0-1 的“不传入 SDK”。
+- 登记账号 BrowserTask 的精确 profile/origin/side-effect capability 由既有主进程专用策略验证后可标记
+  `authorizationSatisfied`，避免统一 broker 对同一有界动作重复确认；敏感最终动作仍转人工接管。
+- 定时任务 schema 未改，broker 只接受其既有 read-only annotation；ToolHost 的
+  `editor_read`/`editor_list + readRoots` 校验继续先于执行。
+- 130 项 broker、ToolHost、Claude SDK、Codex ACP、Browser、Android 与 PermissionManager 定向测试通过；
+  196 项扩大回归通过。真实 App
+  无 Android 设备，因此 uninstall 副作用和 shell 人工接管设备流程留到统一验收，当前不宣称设备闭环。

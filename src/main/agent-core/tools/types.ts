@@ -72,6 +72,8 @@ export interface ToolExecutionPolicy {
   riskLevel?: 'read' | 'write' | 'destructive'
   reason?: string
   allowAlways?: boolean
+  /** 专用主进程策略已校验精确、短期、有界授权；统一 broker 不再重复弹确认。 */
+  authorizationSatisfied?: boolean
 }
 
 /** 工具模块接口 */

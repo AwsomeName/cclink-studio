@@ -684,7 +684,12 @@ export class BrowserToolModule implements ToolModule {
     const task = context?.conversationId
       ? this.browserTaskRuntime?.getActiveTaskForConversation(context.conversationId)
       : null
-    if (task?.correlation?.accountId) return null
+    if (task?.correlation?.accountId) {
+      return {
+        requireConfirmation: false,
+        authorizationSatisfied: true,
+      }
+    }
 
     await this.syncVisibleTab(tabId, true, hasWorkspaceContext ? workspaceKey : undefined).catch(
       () => undefined,

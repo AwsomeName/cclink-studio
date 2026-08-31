@@ -21,22 +21,16 @@ import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import { isAbsolute, relative, resolve } from 'node:path'
 import type { ToolModule, ToolDefinition, ToolAnnotations, ToolExecutionContext } from './types.js'
+import {
+  AgentToolAuthorizationBroker,
+  type ToolPermissionController,
+  type ToolAuthorizationResult,
+} from './agent-tool-authorization-broker.js'
 
-export interface ToolConfirmationInput {
-  conversationId?: string
-  runId?: string
-  toolName: string
-  params: Record<string, unknown>
-  riskLevel: 'read' | 'write' | 'destructive'
-  reason?: string
-  allowAlways?: boolean
-}
-
-export interface ToolPermissionController {
-  needsConfirmation(toolName: string, annotations: ToolAnnotations | undefined): boolean
-  requestConfirmation(request: ToolConfirmationInput): Promise<boolean>
-  cancelForRun?(conversationId: string, runId: string): void
-}
+export type {
+  ToolConfirmationInput,
+  ToolPermissionController,
+} from './agent-tool-authorization-broker.js'
 
 /** JSON-RPC 请求 */
 interface JsonRpcRequest {
@@ -82,8 +76,8 @@ export class McpToolHost {
   private readonly toolToModule: Map<string, string> = new Map()
   /** 用户显式禁用的模块；禁用后既不广播工具，也拒绝残留客户端调用。 */
   private readonly disabledModules: Set<string> = new Set()
-  /** 权限管理器 */
-  private readonly permissionManager: ToolPermissionController
+  /** Agent 工具授权的唯一策略 owner。 */
+  private readonly authorizationBroker: AgentToolAuthorizationBroker
   /** 单轮 Agent 进程 → CCLink Studio 会话的短期映射 */
   private readonly toolSessions = new Map<string, ToolExecutionContext>()
   private readonly toolSessionAbortControllers = new Map<string, AbortController>()
@@ -92,7 +86,27 @@ export class McpToolHost {
   private readonly activeToolCalls = new WeakMap<ToolExecutionContext, Set<Promise<unknown>>>()
 
   constructor(permissionManager: ToolPermissionController) {
-    this.permissionManager = permissionManager
+    this.authorizationBroker = new AgentToolAuthorizationBroker(permissionManager)
+  }
+
+  authorizeSdkTool(input: {
+    toolName: string
+    params: Record<string, unknown>
+    context: ToolExecutionContext
+    reason?: string
+    authorizationId?: string
+  }): Promise<ToolAuthorizationResult> {
+    return this.authorizationBroker.authorizeSdkTool(input)
+  }
+
+  authorizeClassifiedTool(input: {
+    toolName: string
+    params: Record<string, unknown>
+    riskLevel: 'read' | 'write' | 'destructive'
+    context: ToolExecutionContext
+    reason?: string
+  }): Promise<ToolAuthorizationResult> {
+    return this.authorizationBroker.authorizeClassifiedTool(input)
   }
 
   /**
@@ -176,7 +190,7 @@ export class McpToolHost {
     if (!context) return
     this.cancelledToolSessions.add(context)
     if (context.conversationId && context.agentRunId) {
-      this.permissionManager.cancelForRun?.(context.conversationId, context.agentRunId)
+      this.authorizationBroker.cancelForRun(context.conversationId, context.agentRunId)
     }
     const activeCalls = this.activeToolCalls.get(context)
     if (activeCalls?.size) await Promise.allSettled([...activeCalls])
@@ -407,8 +421,14 @@ export class McpToolHost {
     }
     const moduleName = this.toolToModule.get(toolName)
     if (!moduleName) {
+      const authorization = this.authorizationBroker.authorizeUnavailableTool(toolName)
       return {
-        content: [{ type: 'text' as const, text: `错误：未找到工具 "${toolName}"` }],
+        content: [
+          {
+            type: 'text' as const,
+            text: authorization.reason ?? `错误：未找到工具 "${toolName}"`,
+          },
+        ],
         isError: true,
       }
     }
@@ -433,39 +453,32 @@ export class McpToolHost {
       const toolDef = module.tools.find((t) => t.name === toolName)
       const annotations: ToolAnnotations | undefined = toolDef?.annotations
       const executionPolicy = await module.getExecutionPolicy?.(toolName, args, context)
-      const confirmationRequired =
-        !context.scheduledTaskPolicy &&
-        (executionPolicy?.requireConfirmation === true ||
-          this.permissionManager.needsConfirmation(toolName, annotations))
-      let confirmationGranted = false
-
-      if (confirmationRequired) {
-        const approved = await this.permissionManager.requestConfirmation({
-          conversationId: context.conversationId,
-          runId: context.agentRunId ?? undefined,
-          toolName,
-          params: args,
-          riskLevel: executionPolicy?.riskLevel ?? getRiskLevel(annotations),
-          ...(executionPolicy?.reason ? { reason: executionPolicy.reason } : {}),
-          ...(executionPolicy?.allowAlways === false ? { allowAlways: false } : {}),
-        })
-
-        if (!approved) {
-          return {
-            content: [{ type: 'text' as const, text: `用户拒绝了操作: ${toolName}` }],
-            isError: true,
-          }
+      const authorization = await this.authorizationBroker.authorizeInternalTool({
+        toolName,
+        params: args,
+        annotations,
+        executionPolicy,
+        context,
+      })
+      if (authorization.behavior === 'deny') {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: authorization.reason ?? `工具授权被拒绝: ${toolName}`,
+            },
+          ],
+          isError: true,
         }
-        if (this.cancelledToolSessions.has(context)) return cancelledToolResult()
-        confirmationGranted = true
       }
+      if (this.cancelledToolSessions.has(context)) return cancelledToolResult()
 
       // 执行工具
       if (this.cancelledToolSessions.has(context)) return cancelledToolResult()
       const result = await module.execute(
         toolName,
         args,
-        confirmationGranted ? { ...context, confirmationGranted: true } : context,
+        authorization.confirmationGranted ? { ...context, confirmationGranted: true } : context,
       )
       if (this.cancelledToolSessions.has(context)) return cancelledToolResult()
       return {
@@ -593,11 +606,4 @@ async function validateScheduledTaskToolCall(
 function isPathWithin(rootPath: string, candidatePath: string): boolean {
   const fromRoot = relative(resolve(rootPath), resolve(candidatePath))
   return fromRoot === '' || (!fromRoot.startsWith('..') && !isAbsolute(fromRoot))
-}
-
-function getRiskLevel(annotations: ToolAnnotations | undefined): 'read' | 'write' | 'destructive' {
-  if (!annotations) return 'write'
-  if (annotations.destructiveHint) return 'destructive'
-  if (annotations.readOnlyHint) return 'read'
-  return 'write'
 }

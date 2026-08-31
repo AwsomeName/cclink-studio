@@ -273,8 +273,19 @@ export class AgentBridge {
         codexHome: options?.codexHome ?? this.codexHome,
         expectedVersion: CODEX_ACP_EXPECTED_VERSION,
         getWorkspacePath: this.getWorkspacePath,
-        requestPermission: (request) =>
-          this.permissionManager.requestConfirmation({ ...request, allowAlways: false }),
+        requestPermission: async (request) => {
+          const authorization = await this.deps.toolHost.authorizeClassifiedTool({
+            toolName: request.toolName,
+            params: request.params,
+            riskLevel: request.riskLevel,
+            context: {
+              conversationId: request.conversationId,
+              agentRunId: request.runId,
+            },
+            reason: request.reason,
+          })
+          return authorization.behavior === 'allow'
+        },
       },
     }
   }

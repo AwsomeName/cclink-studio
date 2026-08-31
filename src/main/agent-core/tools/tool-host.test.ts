@@ -249,6 +249,57 @@ describe('McpToolHost tool session context', () => {
     )
   })
 
+  it('forces destructive annotations through confirmation even when auto/Always says allow', async () => {
+    const requestConfirmation = vi.fn(async () => true)
+    const execute = vi.fn(async () => ({ uninstalled: true }))
+    host = new McpToolHost({
+      needsConfirmation: () => false,
+      requestConfirmation,
+    })
+    host.registerModule({
+      ...createModule(execute),
+      tools: [
+        {
+          ...createModule(execute).tools[0],
+          name: 'android_uninstall_package',
+          annotations: { readOnlyHint: false, destructiveHint: true },
+        },
+      ],
+    })
+    const port = await host.start()
+    const token = host.createToolSession({})
+
+    const response = await callMcp(port, token, 'tools/call', {
+      name: 'android_uninstall_package',
+      arguments: { packageName: 'com.example.canary' },
+    })
+
+    expect(response.result.isError).not.toBe(true)
+    expect(requestConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({ riskLevel: 'destructive', allowAlways: false }),
+    )
+    expect(execute).toHaveBeenCalledOnce()
+  })
+
+  it('rejects stale android_shell calls without displaying an approval path', async () => {
+    const requestConfirmation = vi.fn(async () => true)
+    host = new McpToolHost({
+      needsConfirmation: () => false,
+      requestConfirmation,
+    })
+    const port = await host.start()
+    const token = host.createToolSession({})
+
+    const response = await callMcp(port, token, 'tools/call', {
+      name: 'android_shell',
+      arguments: { command: 'id' },
+    })
+
+    expect(response.result.isError).toBe(true)
+    expect(response.result.content[0]?.text).toContain('人工接管')
+    expect(requestConfirmation).not.toHaveBeenCalled()
+  })
+
   it('hides disabled module tools and rejects calls from stale clients', async () => {
     const execute = vi.fn(async () => ({ ok: true }))
     host = new McpToolHost({

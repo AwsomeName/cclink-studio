@@ -37,8 +37,9 @@ const module = new AndroidToolModule(mockBridge)
 const TOOLS = module.tools
 
 describe('AndroidToolModule 工具定义', () => {
-  it('应该有 15 个工具定义', () => {
-    expect(TOOLS).toHaveLength(15)
+  it('只暴露 14 个结构化工具，不暴露任意 shell', () => {
+    expect(TOOLS).toHaveLength(14)
+    expect(TOOLS.some((tool) => tool.name === 'android_shell')).toBe(false)
   })
 
   it('所有工具名以 android_ 开头', () => {
@@ -103,5 +104,13 @@ describe('AndroidToolModule 工具定义', () => {
       ),
     ).rejects.toThrow('OUTSIDE_WORKSPACE')
     expect(assertReadableFile).toHaveBeenCalledWith('/workspace/b/canary.apk')
+  })
+
+  it('旧 android_shell 调用也只能转人工接管', async () => {
+    const securedModule = new AndroidToolModule({ isConnected: () => true } as any)
+
+    await expect(securedModule.execute('android_shell', { command: 'id' })).rejects.toThrow(
+      '人工接管',
+    )
   })
 })

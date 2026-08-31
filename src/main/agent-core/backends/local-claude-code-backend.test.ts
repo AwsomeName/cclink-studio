@@ -103,6 +103,7 @@ function createBackendFixture(
   createToolSession: ReturnType<typeof vi.fn>
   releaseToolSession: ReturnType<typeof vi.fn>
   cancelToolSession: ReturnType<typeof vi.fn>
+  authorizeSdkTool: ReturnType<typeof vi.fn>
   composeMcpConfig: ReturnType<typeof vi.fn>
 } {
   const playwrightBridge: BrowserAutomationHost = {
@@ -111,11 +112,13 @@ function createBackendFixture(
   const createToolSession = vi.fn(() => 'mcp-session-1')
   const releaseToolSession = vi.fn()
   const cancelToolSession = vi.fn()
+  const authorizeSdkTool = vi.fn(async () => ({ behavior: 'allow' as const }))
   const toolHost = {
     getPort: () => 39876,
     createToolSession,
     releaseToolSession,
     cancelToolSession,
+    authorizeSdkTool,
     getAllTools: () => [
       createTool('browser_navigate'),
       createTool('browser_new_tab'),
@@ -155,7 +158,14 @@ function createBackendFixture(
     },
   )
 
-  return { backend, createToolSession, releaseToolSession, cancelToolSession, composeMcpConfig }
+  return {
+    backend,
+    createToolSession,
+    releaseToolSession,
+    cancelToolSession,
+    authorizeSdkTool,
+    composeMcpConfig,
+  }
 }
 
 function createBackend(): LocalClaudeCodeBackend {
@@ -359,6 +369,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       createToolSession: () => 'mcp-session-1',
       releaseToolSession: vi.fn(),
       cancelToolSession: vi.fn(),
+      authorizeSdkTool: vi.fn(async () => ({ behavior: 'allow' as const })),
       getAllTools: () => [],
     } as unknown as McpToolHost
     const backend = new LocalClaudeCodeBackend(
@@ -439,7 +450,13 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       { signal: new AbortController().signal },
     )
 
-    expect(result).toEqual({ continue: true })
+    expect(result).toEqual({
+      continue: true,
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'allow',
+      },
+    })
   })
 
   it('blocks relative file and editor paths that escape the conversation workspace', async () => {
@@ -792,7 +809,10 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
         'normal-bash',
         { signal: new AbortController().signal },
       ),
-    ).resolves.toEqual({ continue: true })
+    ).resolves.toMatchObject({
+      continue: true,
+      hookSpecificOutput: { permissionDecision: 'allow' },
+    })
     await expect(
       hook(
         {
@@ -807,7 +827,10 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
         'normal-write',
         { signal: new AbortController().signal },
       ),
-    ).resolves.toEqual({ continue: true })
+    ).resolves.toMatchObject({
+      continue: true,
+      hookSpecificOutput: { permissionDecision: 'allow' },
+    })
   })
 
   it('disables invisible browser routes when a visible browser tab is forced', async () => {
@@ -888,6 +911,47 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     } finally {
       await rm(tempDir, { recursive: true, force: true })
     }
+  })
+
+  it('routes SDK canUseTool and PreToolUse through the shared authorization broker', async () => {
+    const { backend, authorizeSdkTool } = createBackendFixture()
+    authorizeSdkTool.mockResolvedValue({
+      behavior: 'deny',
+      reason: 'external MCP denied by broker',
+    })
+    await backend.sendMessage('调用未登记工具')
+
+    const options = getLastQueryParams().options
+    await expect(
+      options.canUseTool(
+        'mcp__external__write_canary',
+        { path: '/tmp/canary' },
+        {
+          signal: new AbortController().signal,
+          toolUseID: 'external-canary',
+        },
+      ),
+    ).resolves.toMatchObject({ behavior: 'deny', message: 'external MCP denied by broker' })
+
+    const hook = options.hooks.PreToolUse[0].hooks[0]
+    await expect(
+      hook(
+        {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'mcp__external__write_canary',
+          tool_input: { path: '/tmp/canary' },
+          tool_use_id: 'external-canary',
+        },
+        'external-canary',
+        { signal: new AbortController().signal },
+      ),
+    ).resolves.toMatchObject({
+      hookSpecificOutput: {
+        permissionDecision: 'deny',
+        permissionDecisionReason: 'external MCP denied by broker',
+      },
+    })
+    expect(authorizeSdkTool).toHaveBeenCalledTimes(2)
   })
 
   it('binds MCP tool sessions to the current conversation', async () => {

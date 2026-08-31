@@ -166,7 +166,7 @@ const ANDROID_TOOL_DEFINITIONS: ToolDefinition[] = [
       },
       required: ['packageName'],
     },
-    annotations: { readOnlyHint: false, destructiveHint: false },
+    annotations: { readOnlyHint: false, destructiveHint: true },
   },
   {
     name: 'android_push_file',
@@ -181,24 +181,12 @@ const ANDROID_TOOL_DEFINITIONS: ToolDefinition[] = [
     },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
-  {
-    name: 'android_shell',
-    description: '在 Android 设备上执行任意 shell 命令（高权限操作）',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        command: { type: 'string', description: '要执行的 shell 命令' },
-      },
-      required: ['command'],
-    },
-    annotations: { readOnlyHint: false, destructiveHint: true },
-  },
 ]
 
 /**
  * Android 工具模块
  *
- * 实现 ToolModule 接口，将 15 个 ADB 操作
+ * 实现 ToolModule 接口，将受控 ADB 操作
  * 封装为可注册到 McpToolHost 的工具模块。
  * 执行委托给 android-actions.ts 的共享 executor。
  *
@@ -220,10 +208,13 @@ export class AndroidToolModule implements ToolModule {
     params: Record<string, unknown>,
     context?: ToolExecutionContext,
   ): Promise<unknown> {
+    const actionType = toolNameToActionType(toolName)
+    if (actionType === 'shell') {
+      throw new Error('Android 任意 shell 不向普通 Agent 开放；请在可见 Terminal/ADB 中人工接管')
+    }
     if (!this.adbBridge.isConnected()) {
       throw new Error('ADB 未连接，Android 设备可能未启动')
     }
-    const actionType = toolNameToActionType(toolName)
     if (actionType === 'installApk' || actionType === 'pushFile') {
       if (!this.fileService) throw new Error('本地文件授权服务不可用，已拒绝 Android 文件操作')
       if (context?.trustedWorkspace?.kind !== 'local') {

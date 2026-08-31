@@ -25,6 +25,7 @@ export const CODEX_ACP_EXPECTED_VERSION = '1.3.0'
 
 export interface AcpPermissionDecisionRequest {
   conversationId?: string
+  runId?: string
   toolName: string
   params: Record<string, unknown>
   riskLevel: 'read' | 'write' | 'destructive'
@@ -342,6 +343,7 @@ export class LocalAcpBackend implements IAgentBackend {
     const rejectOnce = params.options.find((option) => option.kind === 'reject_once')
     const approved = await this.options.requestPermission({
       conversationId: this.currentOptions?.conversationId,
+      runId: this.currentOptions?.runId,
       toolName:
         params.toolCall.name || params.toolCall.title || params.toolCall.kind || 'Codex 工具',
       params: this.toRecord(params.toolCall.rawInput),
