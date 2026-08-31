@@ -31,6 +31,9 @@ describe('SettingsPage secrets', () => {
     expect(markup).toContain('测试连接')
     expect(markup).toContain('Studio 管理版本')
     expect(markup).not.toContain('内置固定版本')
+    expect(markup).toContain('当前本地 Claude Code 后端仅支持 Anthropic 兼容格式')
+    expect(markup).not.toContain('value="openai"')
+    expect(markup).not.toContain('OpenAI Compatible</option>')
   })
 
   it('renders separate Meshy and Jimeng credential inputs for image generation', () => {

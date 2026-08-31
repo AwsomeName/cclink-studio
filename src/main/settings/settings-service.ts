@@ -11,6 +11,7 @@ import { readFile, rename, unlink, writeFile } from 'fs/promises'
 import {
   DEFAULT_SETTINGS,
   MANAGED_CLAUDE_RUNTIME_VERSION,
+  isSupportedAgentApiConfiguration,
   normalizeClaudeRuntimeSettingsUpdate,
   type AppSettings,
 } from './types'
@@ -31,7 +32,7 @@ const MESHY_CREDENTIAL_ID = 'extension:meshy:default'
 /** 每个 key 的合法值集合（用于校验 IPC 传入的数据；数值/字符串字段不在此列） */
 const VALID_VALUES: Record<string, Set<string>> = {
   updateTrack: new Set<string>(['stable', 'beta']),
-  backendType: new Set<string>(['claude-code', 'http-api']),
+  backendType: new Set<string>(['claude-code']),
   permissionMode: new Set<string>(['auto', 'categorized', 'strict']),
   defaultZoomMode: new Set<string>(['fit', 'manual']),
   defaultDeviceMode: new Set<string>(['desktop', 'mobile']),
@@ -44,10 +45,9 @@ const VALID_VALUES: Record<string, Set<string>> = {
     'qwen',
     'moonshot',
     'siliconflow',
-    'openai',
     'custom',
   ]),
-  apiFormat: new Set<string>(['anthropic', 'openai']),
+  apiFormat: new Set<string>(['anthropic']),
   cadBackend: new Set<string>(['none', 'local-freecad', 'managed-freecad', 'occt-experimental']),
 }
 
@@ -90,9 +90,11 @@ export class SettingsService {
     const needsClaudeRuntimeMigration =
       settingsFileExists &&
       (typeof parsed.claudeRuntimeSource !== 'string' || parsed.claudeRuntimeSource === 'bundled')
+    const needsAgentApiMigration = !isSupportedPersistedAgentApiConfiguration(parsed)
 
     this.store = { ...DEFAULT_SETTINGS }
     this.applyPersistedSettings(parsed)
+    if (needsAgentApiMigration) this.migrateUnsupportedAgentApiConfiguration()
     this.migrateClaudeRuntimeSelection(parsed)
     const needsComponentSetupMigration =
       settingsFileExists && typeof parsed.componentSetupPageSeenVersion !== 'number'
@@ -122,7 +124,10 @@ export class SettingsService {
       this.migrationBlocked = false
       if (
         settingsFileExists &&
-        (hasLegacySecretFields || needsClaudeRuntimeMigration || needsComponentSetupMigration)
+        (hasLegacySecretFields ||
+          needsClaudeRuntimeMigration ||
+          needsComponentSetupMigration ||
+          needsAgentApiMigration)
       ) {
         await this.saveState()
         if (hasLegacySecretFields) {
@@ -133,6 +138,9 @@ export class SettingsService {
         }
         if (needsComponentSetupMigration) {
           console.log('[SettingsService] 已有安装的组件配置页状态已迁移')
+        }
+        if (needsAgentApiMigration) {
+          console.log('[SettingsService] 已移除未实现的 OpenAI Compatible 配置')
         }
       }
     } catch (error) {
@@ -239,6 +247,7 @@ export class SettingsService {
    * @returns 更新后的完整设置
    */
   async set(partial: Partial<AppSettings>): Promise<AppSettings> {
+    assertSupportedAgentApiUpdate(partial)
     if (Object.keys(partial).some((key) => SECRET_KEYS.has(key))) {
       throw new Error('敏感设置必须通过专用凭证接口更新')
     }
@@ -371,6 +380,14 @@ export class SettingsService {
     this.store.claudeRuntimeSource = this.store.claudeCodePath.trim() ? 'custom' : 'system'
   }
 
+  private migrateUnsupportedAgentApiConfiguration(): void {
+    this.store.provider = DEFAULT_SETTINGS.provider
+    this.store.apiFormat = DEFAULT_SETTINGS.apiFormat
+    this.store.backendType = DEFAULT_SETTINGS.backendType
+    this.store.apiBaseUrl = DEFAULT_SETTINGS.apiBaseUrl
+    this.store.modelName = DEFAULT_SETTINGS.modelName
+  }
+
   private getResolvedSecrets(): typeof EMPTY_SECRETS {
     try {
       return {
@@ -382,6 +399,36 @@ export class SettingsService {
     } catch {
       return { ...EMPTY_SECRETS }
     }
+  }
+}
+
+function isSupportedPersistedAgentApiConfiguration(parsed: Record<string, unknown>): boolean {
+  const provider = parsed.provider ?? DEFAULT_SETTINGS.provider
+  const apiFormat = parsed.apiFormat ?? DEFAULT_SETTINGS.apiFormat
+  const backendType = parsed.backendType ?? DEFAULT_SETTINGS.backendType
+  if (
+    typeof provider !== 'string' ||
+    typeof apiFormat !== 'string' ||
+    typeof backendType !== 'string'
+  ) {
+    return false
+  }
+  return isSupportedAgentApiConfiguration({
+    provider: provider as AppSettings['provider'],
+    apiFormat: apiFormat as AppSettings['apiFormat'],
+    backendType: backendType as AppSettings['backendType'],
+  })
+}
+
+function assertSupportedAgentApiUpdate(partial: Partial<AppSettings>): void {
+  if (partial.apiFormat !== undefined && partial.apiFormat !== 'anthropic') {
+    throw new Error('OpenAI Compatible 后端尚未实现，不能保存该 API 格式')
+  }
+  if (partial.backendType !== undefined && partial.backendType !== 'claude-code') {
+    throw new Error('HTTP API Agent 后端尚未实现，不能保存该后端类型')
+  }
+  if (partial.provider === 'openai') {
+    throw new Error('OpenAI provider 依赖尚未实现的兼容后端，不能保存')
   }
 }
 

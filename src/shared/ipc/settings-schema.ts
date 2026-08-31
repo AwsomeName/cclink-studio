@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import type { AppSettings } from '../settings-constants'
-import { APP_ZOOM_LEVEL_MAX, APP_ZOOM_LEVEL_MIN } from '../settings-constants'
+import {
+  APP_ZOOM_LEVEL_MAX,
+  APP_ZOOM_LEVEL_MIN,
+  SUPPORTED_AGENT_PROVIDERS,
+} from '../settings-constants'
 import { MAX_BINDINGS_PER_COMMAND, MAX_KEYBINDING_OVERRIDES } from '../keybindings'
 
 const shortString = z.string().max(4096)
@@ -11,7 +15,7 @@ const settingsUpdateSchema = z
     componentSetupPageSeenVersion: z.number().int().min(0).max(1_000),
     updateTrack: z.enum(['stable', 'beta']),
     agentEngine: z.literal('local-claude-code'),
-    backendType: z.enum(['claude-code', 'http-api']),
+    backendType: z.literal('claude-code'),
     permissionMode: z.enum(['auto', 'categorized', 'strict']),
     disabledAgentToolModules: z.array(z.string().min(1).max(256)).max(128),
     defaultAgentRoleRef: z
@@ -34,17 +38,8 @@ const settingsUpdateSchema = z
     codexAcpPath: pathString,
     defaultZoomMode: z.enum(['fit', 'manual']),
     defaultDeviceMode: z.enum(['desktop', 'mobile']),
-    provider: z.enum([
-      'anthropic',
-      'deepseek',
-      'glm',
-      'qwen',
-      'moonshot',
-      'siliconflow',
-      'openai',
-      'custom',
-    ]),
-    apiFormat: z.enum(['anthropic', 'openai']),
+    provider: z.enum(SUPPORTED_AGENT_PROVIDERS),
+    apiFormat: z.literal('anthropic'),
     apiBaseUrl: shortString,
     modelName: shortString,
     cadBackend: z.enum(['none', 'local-freecad', 'managed-freecad', 'occt-experimental']),

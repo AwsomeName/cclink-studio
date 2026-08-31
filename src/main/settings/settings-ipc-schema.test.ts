@@ -24,6 +24,9 @@ describe('settings IPC runtime schema', () => {
     expect(() => parseSettingsUpdate({ apiKey: 'must-use-secret-ipc' })).toThrow()
     expect(() => parseSettingsUpdate({ unknownSetting: true })).toThrow()
     expect(() => parseSettingsUpdate({ uiFontSize: Number.NaN })).toThrow()
+    expect(() => parseSettingsUpdate({ apiFormat: 'openai' })).toThrow()
+    expect(() => parseSettingsUpdate({ backendType: 'http-api' })).toThrow()
+    expect(() => parseSettingsUpdate({ provider: 'openai' })).toThrow()
   })
 
   it('limits secret and reset keys to the declared contract', () => {

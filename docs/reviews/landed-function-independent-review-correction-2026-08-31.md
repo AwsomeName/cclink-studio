@@ -38,7 +38,7 @@ MCP env/header 的普通配置明文、renderer 全量返回和保存假成功�
 | RF-02 | P0           | 核心工程实现完成；真实设备副作用验收待执行               | `auto` 和 Always 可绕过危险操作确认                  | 单一 broker 已覆盖内部 ToolHost 与 SDK PreToolUse/canUseTool；登记账号专用有界授权和定时任务只读链保留     | Android shell 从工具表移除并 fail-closed；uninstall、清 Cookie 和 SDK Bash 均强制逐次确认；真实 Android 设备验收待执行          |
 | RF-03 | P1           | 核心工程关闭；真实用户旧配置迁移不做破坏性代测           | 外部 MCP env/header 绕过统一 CredentialService       | 版本化 CredentialService revision、原子非敏感配置、脱敏 DTO                                               | 隔离 userData 迁移与真实 Electron IPC 已通过；未读取真实用户配置                                                                 |
 | RF-04 | P1           | 核心工程关闭                                             | Runtime 组件初始化失败可阻断 App                     | 同一 manager 降级、组件操作重试初始化                                                                      | 损坏 runtime-components 路径下真实 App 11/11 local smoke 通过                                                                   |
-| RF-05 | P1           | Open                                                     | OpenAI Compatible 设置不可用                         | 连接测试会明确报 unsupported                                                                               | UI 仍允许保存后端不会采用的配置                                                                                                 |
+| RF-05 | P1           | 关闭                                                     | OpenAI Compatible 设置不可用                         | 单一支持常量限制 UI、IPC、持久化迁移、连接测试和 AgentBridge                                               | 未实现选项不再展示或可保存；真实设置页 smoke 通过                                                                               |
 | RF-06 | P1           | Open                                                     | 搜索跨工作空间残留和迟到覆盖                         | 搜索入口读取当前 workspace                                                                                 | 查询/结果全局持久化，无 generation，递归深度静默限制三层                                                                        |
 | RF-07 | P2           | Open                                                     | `uiFontSize` 无生产效果                              | 值可持久化                                                                                                 | 没有生产消费者                                                                                                                  |
 | RF-08 | P2           | Known debt                                               | 文件移动崩溃窗口                                     | 普通投影失败可恢复                                                                                         | 磁盘提交后立即强杀没有持久 journal                                                                                              |
@@ -495,3 +495,11 @@ Cookie 秘密出站、强制现有 query token。只有这三道止血完成后�
   未恢复时只返回组件失败或 `null`，不向 Agent/CAD/Android 伪造可用状态。
 - 17 项 manager、组件 IPC、Agent runtime 和可选服务测试通过；隔离 userData 把
   `runtime-components` 预置为阻止建目录的普通文件后，真实 Electron 本地 smoke 仍为 11/11。
+
+### P1-3：Agent API 设置真实性
+
+- 当前能力事实固定为 `Anthropic + Claude Code`。设置 IPC 拒绝 `openai/http-api`，设置页移除 OpenAI
+  provider 和 Compatible option，并将格式控件锁定为 Anthropic；其他提供商仅保留确有 Anthropic 端点者。
+- 旧 `provider=openai`、`apiFormat=openai` 或 `backendType=http-api` 启动时原子迁回 Anthropic 默认组合，
+  不再保留 OpenAI URL/模型形成混合假配置。连接测试和 `AgentBridge` 使用同一支持事实做主进程复核。
+- 85 项设置、AgentBridge 和 backend 定向回归通过；真实 Electron 设置页/CSP/免登录 3/3 smoke 通过。

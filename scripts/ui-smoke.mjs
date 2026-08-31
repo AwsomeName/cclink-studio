@@ -17,6 +17,7 @@ const gitOnly = process.argv.includes('--git-only')
 const dismissableOnly = process.argv.includes('--dismissable-only')
 const tabCreateOnly = process.argv.includes('--tab-create-only')
 const pdfOnly = process.argv.includes('--pdf-only')
+const settingsOnly = process.argv.includes('--settings-only')
 const uiReadyTimeoutMs = 30_000
 const globalWebResourcesCheck = 'global web resources reuse one account and matrix across projects'
 const webAffairPersistenceCheck = 'web affair persists a five-node workflow and node progress'
@@ -42,6 +43,11 @@ const pdfChecks = new Set([
   'main renderer enforces its CSP source boundary',
   'first screen has no login wall',
   'PDF pages render visibly with paging controls and explicit failure fallback',
+])
+const settingsChecks = new Set([
+  'main renderer enforces its CSP source boundary',
+  'first screen has no login wall',
+  'settings page opens and searches locally',
 ])
 const agentPanelChecks = new Set([
   'main renderer enforces its CSP source boundary',
@@ -131,6 +137,7 @@ async function runCheck(name, fn, options = {}) {
   if (dismissableOnly && !dismissableChecks.has(name)) return
   if (tabCreateOnly && !tabCreateChecks.has(name)) return
   if (pdfOnly && !pdfChecks.has(name)) return
+  if (settingsOnly && !settingsChecks.has(name)) return
   const blockedBy = (options.dependsOn ?? []).find(
     (dependency) => results.find((result) => result.name === dependency)?.status !== 'pass',
   )
@@ -2564,6 +2571,19 @@ async function main() {
       await page.getByRole('heading', { name: 'Agent' }).isVisible(),
       'agent settings section missing',
     )
+    const apiFormatRow = page.locator('.settings-row', { hasText: 'API 格式' })
+    const apiFormatSelect = apiFormatRow.locator('select')
+    assert(await apiFormatSelect.isDisabled(), 'unsupported API format selector is still enabled')
+    assert(
+      JSON.stringify(await apiFormatSelect.locator('option').allTextContents()) ===
+        JSON.stringify(['Anthropic']),
+      'OpenAI Compatible option is still rendered',
+    )
+    const providerOptions = await page
+      .locator('.settings-row', { hasText: '模型提供商' })
+      .locator('option')
+      .allTextContents()
+    assert(!providerOptions.includes('OpenAI'), 'unsupported OpenAI provider is still rendered')
 
     await page.getByRole('button', { name: '更新', exact: true }).click()
     await page.getByRole('heading', { name: '更新', exact: true }).waitFor({ timeout: 10_000 })
@@ -2581,7 +2601,7 @@ async function main() {
     )
     await updatePanel.locator('.update-panel-header button[title="关闭"]').click()
     await updateTrack.selectOption('stable')
-    return 'settings search and stable/beta update track projection'
+    return 'settings search, truthful Agent API options, and stable/beta update track projection'
   })
 
   await runCheck('tab create menu opens editor, browser, and terminal tabs', async () => {

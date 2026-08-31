@@ -65,6 +65,7 @@ import {
   type AgentRunConfigurationReceipt,
   type AgentSkillRef,
 } from '../../shared/agent-role'
+import { SUPPORTED_AGENT_API_FORMATS } from '../../shared/settings-constants'
 
 export interface AgentBridgeOptions {
   /** 主进程角色定义唯一事实源；包含内置与 userData 本地不可变版本。 */
@@ -223,6 +224,14 @@ export class AgentBridge {
    * provider/apiFormat/apiKey 字段暂保留旧设置兼容，但不再决定后端能力。
    */
   private buildBackendConfig(options?: AgentBridgeOptions): BackendConfig {
+    if (
+      options?.apiFormat &&
+      !SUPPORTED_AGENT_API_FORMATS.includes(
+        options.apiFormat as (typeof SUPPORTED_AGENT_API_FORMATS)[number],
+      )
+    ) {
+      throw new Error('OpenAI Compatible Agent 后端尚未实现')
+    }
     if (options?.experimentalCclinkAgent) {
       return {
         type: 'cclink-agent',

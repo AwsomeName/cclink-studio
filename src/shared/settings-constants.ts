@@ -46,6 +46,30 @@ export type Provider =
 /** API 格式 */
 export type ApiFormat = 'anthropic' | 'openai'
 
+/** Current local Claude Code backend support. OpenAI values remain type-readable for migration. */
+export const SUPPORTED_AGENT_API_FORMATS = ['anthropic'] as const
+export const SUPPORTED_AGENT_PROVIDERS = [
+  'anthropic',
+  'deepseek',
+  'glm',
+  'qwen',
+  'moonshot',
+  'siliconflow',
+  'custom',
+] as const satisfies readonly Provider[]
+
+export function isSupportedAgentApiConfiguration(input: {
+  provider: Provider
+  apiFormat: ApiFormat
+  backendType: BackendType
+}): boolean {
+  return (
+    input.apiFormat === 'anthropic' &&
+    input.backendType === 'claude-code' &&
+    SUPPORTED_AGENT_PROVIDERS.includes(input.provider as (typeof SUPPORTED_AGENT_PROVIDERS)[number])
+  )
+}
+
 /** CAD 转换后端 */
 export type CadBackend = 'none' | 'local-freecad' | 'managed-freecad' | 'occt-experimental'
 

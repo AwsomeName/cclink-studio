@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_SETTINGS, PROVIDER_PRESETS, getPresetBaseUrl } from '@shared/ipc/settings'
-import type { ApiFormat, AppSettings, CadBackend, Provider } from '@shared/ipc/settings'
+import type { AppSettings, CadBackend, Provider } from '@shared/ipc/settings'
 import type { SettingsSecretStatus } from '@shared/ipc/settings'
 import {
   APP_ZOOM_LEVEL_MAX,
   APP_ZOOM_LEVEL_MIN,
   MANAGED_CLAUDE_RUNTIME_VERSION,
+  SUPPORTED_AGENT_PROVIDERS,
 } from '@shared/settings-constants'
 import type {
   ClaudeRuntimeSelection,
@@ -429,16 +430,6 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       provider,
       apiBaseUrl,
       modelName: provider === 'custom' ? settings.modelName : preset.defaultModel,
-    })
-  }
-
-  const handleApiFormatChange = (apiFormat: ApiFormat): void => {
-    setClaudeConnectionResult(null)
-    const apiBaseUrl = getPresetBaseUrl(settings.provider, apiFormat)
-    update({
-      apiFormat,
-      backendType: apiFormat === 'anthropic' ? 'claude-code' : 'http-api',
-      apiBaseUrl,
     })
   }
 
@@ -1116,9 +1107,9 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                     value={settings.provider}
                     onChange={(event) => handleProviderChange(event.target.value as Provider)}
                   >
-                    {Object.entries(PROVIDER_PRESETS).map(([key, preset]) => (
+                    {SUPPORTED_AGENT_PROVIDERS.map((key) => (
                       <option key={key} value={key}>
-                        {preset.label}
+                        {PROVIDER_PRESETS[key].label}
                       </option>
                     ))}
                   </select>
@@ -1128,16 +1119,13 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
               <SettingsRow settingKey="apiFormat" settings={settings} onReset={resetOne}>
                 <div className="settings-label">
                   <span>API 格式</span>
-                  <span className="settings-description">Anthropic 或 OpenAI 兼容格式。</span>
+                  <span className="settings-description">
+                    当前本地 Claude Code 后端仅支持 Anthropic 兼容格式。
+                  </span>
                 </div>
                 <div className="settings-control">
-                  <select
-                    className="settings-select"
-                    value={settings.apiFormat}
-                    onChange={(event) => handleApiFormatChange(event.target.value as ApiFormat)}
-                  >
+                  <select className="settings-select" value="anthropic" disabled>
                     <option value="anthropic">Anthropic</option>
-                    <option value="openai">OpenAI Compatible</option>
                   </select>
                 </div>
               </SettingsRow>

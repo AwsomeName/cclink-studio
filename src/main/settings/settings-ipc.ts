@@ -19,6 +19,7 @@ import {
 import type { ClaudeRuntimeSelection } from '../../shared/claude-runtime'
 import {
   DEFAULT_SETTINGS,
+  isSupportedAgentApiConfiguration,
   normalizeClaudeRuntimeSettingsUpdate,
   type PermissionMode,
 } from './types'
@@ -407,7 +408,7 @@ export function registerSettingsIpc(
             },
           }
         }
-        if (settings.apiFormat !== 'anthropic') {
+        if (!isSupportedAgentApiConfiguration(settings)) {
           return {
             success: true,
             result: {

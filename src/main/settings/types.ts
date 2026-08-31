@@ -26,4 +26,7 @@ export {
   MANAGED_CLAUDE_RUNTIME_VERSION,
   getPresetBaseUrl,
   normalizeClaudeRuntimeSettingsUpdate,
+  SUPPORTED_AGENT_API_FORMATS,
+  SUPPORTED_AGENT_PROVIDERS,
+  isSupportedAgentApiConfiguration,
 } from '../../shared/settings-constants'

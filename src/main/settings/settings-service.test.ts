@@ -42,7 +42,9 @@ describe('SettingsService secrets', () => {
     await service.loadState()
 
     expect(service.getAll()).toMatchObject({
-      provider: 'openai',
+      provider: 'anthropic',
+      apiFormat: 'anthropic',
+      backendType: 'claude-code',
       apiKey: '',
       meshyApiKey: '',
     })
@@ -60,6 +62,7 @@ describe('SettingsService secrets', () => {
     expect(settingsFile).not.toContain('apiKey')
     expect(settingsFile).not.toContain('meshyApiKey')
     expect(settingsFile).not.toContain('legacy-agent-secret')
+    expect(settingsFile).not.toContain('"provider": "openai"')
     const credentialFile = JSON.parse(
       await readFile(join(tempDir, 'credentials/credentials.json'), 'utf-8'),
     )
@@ -67,6 +70,34 @@ describe('SettingsService secrets', () => {
     expect(credentialFile.records['extension:meshy:default'].fields.apiKey).toBe(
       'legacy-meshy-secret',
     )
+  })
+
+  it('migrates and rejects unsupported OpenAI Compatible runtime settings', async () => {
+    await writeFile(
+      join(tempDir, 'settings.json'),
+      JSON.stringify({
+        provider: 'openai',
+        apiFormat: 'openai',
+        backendType: 'http-api',
+        apiBaseUrl: 'https://api.openai.com/v1',
+        modelName: 'gpt-canary',
+      }),
+      'utf8',
+    )
+    const service = createSettingsService()
+
+    await service.loadState()
+
+    expect(service.getAll()).toMatchObject({
+      provider: 'anthropic',
+      apiFormat: 'anthropic',
+      backendType: 'claude-code',
+      apiBaseUrl: 'https://api.anthropic.com',
+      modelName: 'claude-sonnet-4-6',
+    })
+    await expect(service.set({ apiFormat: 'openai' })).rejects.toThrow('尚未实现')
+    await expect(service.set({ backendType: 'http-api' })).rejects.toThrow('尚未实现')
+    await expect(service.set({ provider: 'openai' })).rejects.toThrow('尚未实现')
   })
 
   it('updates local credentials only through the dedicated API', async () => {
