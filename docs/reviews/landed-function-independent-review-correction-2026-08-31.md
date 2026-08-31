@@ -1,10 +1,10 @@
 # 已落地功能独立审查修订与正式整改顺序
 
-> 状态：整改施工中；P0-1 外部 MCP fail-closed 已完成工程实现，真实 SDK/App 验收待最终统一执行。
+> 状态：本轮全部可自动完成整改与统一验收已结束；RF-09、真实 Android 副作用、原生文件选择器人工动作
+> 和 P1-H header hardening 因环境/后续决策保持 Open 或“尚未证明”，不得据此宣称真实设备与在线服务闭环。
 > 日期：2026-08-31。
 > 原始审查基线：`main@0db9cf4d`。
-> 复核基线：`main@c81a5126`。`57deba8e` 至 `c81a5126` 的 Browser View、UI smoke 与版本准备提交
-> 未关闭本文安全问题。
+> 施工代码基线：`main@51b1a504`（本收口文档提交不计入代码基线）。
 > 初版记录：`docs/reviews/landed-function-code-audit-and-remediation-plan-2026-08-31.md`。
 > 本文取代初版第 1、3、5、6 节的优先级和施工顺序。初版的 P1/P2 证据与详细真人验收动作继续有效，
 > 但不得绕过本文新增的两项 P0 和一项按 P0 顺序立即止血的 P1。
@@ -29,24 +29,24 @@ MCP env/header 的普通配置明文、renderer 全量返回和保存假成功�
 
 ## 2. 修订后的问题清单
 
-| ID    | 优先级       | 状态                                           | 问题                                                 | 当前保护                                                                                                                            | 实际缺口                                                                                                                           |
-| ----- | ------------ | ---------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| IR-01 | P0           | 工程实现完成；最终验收待执行                   | 外部 MCP SDK 通配符自动放行                          | SDK 配置与 Backend 投影均只保留内部 `cclink_studio`；外部配置继续保存                                                               | 真实打包 App 中的 SDK 进程级复核留到统一验收                                                                                       |
-| IR-02 | P0           | 工程实现及真实 Context smoke 完成              | Browser Cookie 完整返回模型                          | 通用 Agent 工具表移除 Cookie 读写；旧读取只返回聚合计数                                                                             | 最终统一 App/Agent 事件与诊断复核待执行                                                                                            |
-| IR-03 | P1，立即止血 | 工程实现及本机 HTTP 集成验证完成               | 本机 MCP HTTP token 未强制                           | 所有 `/mcp` 请求在读 body 前强制有效 Run token；失效状态统一 401                                                                    | Authorization header 迁移仍为独立 P1-H；最终 SDK/App 重连验证待执行                                                                |
-| RF-01 | P0           | 核心工程及真实双工作空间 App 验收完成          | 文件权限边界不统一                                   | `FileService` 收敛到 active/trusted workspace；WorkspaceState 绝对路径 IPC 要求 capability；workspace capability 不授予文件内容读取 | Node 无可移植 `openat`，递归 mkdir/rename/copy 的父目录瞬时替换仍按 residual threat 管理；真实原生文件选择器 capability 待人工验收 |
-| RF-02 | P0           | 核心工程实现完成；真实设备副作用验收待执行     | `auto` 和 Always 可绕过危险操作确认                  | 单一 broker 已覆盖内部 ToolHost 与 SDK PreToolUse/canUseTool；登记账号专用有界授权和定时任务只读链保留                              | Android shell 从工具表移除并 fail-closed；uninstall、清 Cookie 和 SDK Bash 均强制逐次确认；真实 Android 设备验收待执行             |
-| RF-03 | P1           | 核心工程关闭；真实用户旧配置迁移不做破坏性代测 | 外部 MCP env/header 绕过统一 CredentialService       | 版本化 CredentialService revision、原子非敏感配置、脱敏 DTO                                                                         | 隔离 userData 迁移与真实 Electron IPC 已通过；未读取真实用户配置                                                                   |
-| RF-04 | P1           | 核心工程关闭                                   | Runtime 组件初始化失败可阻断 App                     | 同一 manager 降级、组件操作重试初始化                                                                                               | 损坏 runtime-components 路径下真实 App 11/11 local smoke 通过                                                                      |
-| RF-05 | P1           | 关闭                                           | OpenAI Compatible 设置不可用                         | 单一支持常量限制 UI、IPC、持久化迁移、连接测试和 AgentBridge                                                                        | 未实现选项不再展示或可保存；真实设置页 smoke 通过                                                                                  |
-| RF-06 | P1           | Closed                                         | 搜索跨工作空间残留和迟到覆盖                         | 主进程 FileService 有界搜索，绑定 workspace/generation/requestId；renderer 丢弃迟到响应                                             | 深层、忽略目录、符号链接、截断、切换竞态及真实 Electron 双工作空间验收已通过                                                       |
-| RF-07 | P2           | Closed                                         | `uiFontSize` 无生产效果                              | 删除未消费的 schema、默认值与 UI，保留有效的应用缩放设置                                                                            | 旧配置中的冗余键加载时被忽略                                                                                                       |
-| RF-08 | P2           | Closed (automated)                             | 文件移动崩溃窗口                                     | 主进程原子持久 journal 覆盖 prepared、disk-committed、projection ack；启动按磁盘事实重放路径投影                                    | 提交点重启、未提交清理和冲突保留已覆盖；最终真实 App 重启恢复仍作为统一验收项                                                      |
-| RF-09 | Product gate | Pending                                        | 远程 Agent、PTY、真实网站登录缺真人验收              | 自动化门禁已覆盖部分代码路径                                                                                                        | 真实身份、在线设备、断线续接和账号隔离没有同一环境证据                                                                             |
-| IR-04 | P1           | 工程实现及本机 HTTP 集成验证完成               | 本机 MCP HTTP 请求体无大小上限且解析错误包含正文片段 | 8 MiB 流式/声明长度上限、100 请求 batch 上限、稳定脱敏解析错误                                                                      | 最终统一压力与 App 生命周期回归待执行                                                                                              |
-| IR-05 | P1           | Closed                                         | 工具确认卡把原始参数返回 renderer                    | 主进程只发送有界结构化摘要；命令、脚本、正文、secret、URL 凭证/查询和外部路径被隐藏                                                 | IPC parser 明确拒绝旧 `params`/`reason`；外部 MCP 仍保持 fail-closed                                                               |
-| IR-06 | P1           | Closed                                         | 外部 MCP 名称允许原型特殊键                          | 配置输入和迁移同时拒绝 `__proto__`、`prototype`、`constructor`，投影使用无原型对象                                                  | 隔离配置与原型键回归已覆盖                                                                                                         |
-| IR-07 | P1           | 工程实现及真实 Context smoke 完成              | 按名称清 Cookie 使用模糊且未转义的正则               | 按 name/domain/path 精确枚举并删除 Cookie identity                                                                                  | 最终统一 Browser 回归待执行                                                                                                        |
+| ID    | 优先级       | 状态                                           | 问题                                                 | 当前保护                                                                                                                            | 实际缺口                                                                                                               |
+| ----- | ------------ | ---------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| IR-01 | P0           | Closed (automated + real App canary)           | 外部 MCP SDK 通配符自动放行                          | SDK 配置与 Backend 投影均只保留内部 `cclink_studio`；外部配置继续保存                                                               | 隔离真实 Electron 中外部 stdio canary 未启动；未来重新开放外部 MCP 仍需独立 ADR/验收                                   |
+| IR-02 | P0           | Closed                                         | Browser Cookie 完整返回模型                          | 通用 Agent 工具表移除 Cookie 读写；旧读取只返回聚合计数                                                                             | 真实 WebContentsView/Playwright Context canary 未进入返回、事件、日志、诊断或确认卡                                    |
+| IR-03 | P1，立即止血 | Closed (query-token stopgap)                   | 本机 MCP HTTP token 未强制                           | 所有 `/mcp` 请求在读 body 前强制有效 Run token；失效状态统一 401                                                                    | Authorization header 迁移仍为独立 P1-H，不影响本次止血关闭                                                             |
+| RF-01 | P0           | Closed with recorded residual threat           | 文件权限边界不统一                                   | `FileService` 收敛到 active/trusted workspace；WorkspaceState 绝对路径 IPC 要求 capability；workspace capability 不授予文件内容读取 | Node 无可移植 `openat`，递归 mkdir/rename/copy 的父目录瞬时替换仍按 residual threat 管理；原生 picker 人工动作尚未证明 |
+| RF-02 | P0           | Closed in policy/code; device flow unproven    | `auto` 和 Always 可绕过危险操作确认                  | 单一 broker 已覆盖内部 ToolHost 与 SDK PreToolUse/canUseTool；登记账号专用有界授权和定时任务只读链保留                              | Android shell fail-closed；uninstall、清 Cookie、SDK Bash 强制逐次确认；无真实 Android 设备，设备 UX 尚未证明          |
+| RF-03 | P1           | 核心工程关闭；真实用户旧配置迁移不做破坏性代测 | 外部 MCP env/header 绕过统一 CredentialService       | 版本化 CredentialService revision、原子非敏感配置、脱敏 DTO                                                                         | 隔离 userData 迁移与真实 Electron IPC 已通过；未读取真实用户配置                                                       |
+| RF-04 | P1           | 核心工程关闭                                   | Runtime 组件初始化失败可阻断 App                     | 同一 manager 降级、组件操作重试初始化                                                                                               | 损坏 runtime-components 路径下真实 App 11/11 local smoke 通过                                                          |
+| RF-05 | P1           | 关闭                                           | OpenAI Compatible 设置不可用                         | 单一支持常量限制 UI、IPC、持久化迁移、连接测试和 AgentBridge                                                                        | 未实现选项不再展示或可保存；真实设置页 smoke 通过                                                                      |
+| RF-06 | P1           | Closed                                         | 搜索跨工作空间残留和迟到覆盖                         | 主进程 FileService 有界搜索，绑定 workspace/generation/requestId；renderer 丢弃迟到响应                                             | 深层、忽略目录、符号链接、截断、切换竞态及真实 Electron 双工作空间验收已通过                                           |
+| RF-07 | P2           | Closed                                         | `uiFontSize` 无生产效果                              | 删除未消费的 schema、默认值与 UI，保留有效的应用缩放设置                                                                            | 旧配置中的冗余键加载时被忽略                                                                                           |
+| RF-08 | P2           | Closed                                         | 文件移动崩溃窗口                                     | 主进程原子持久 journal 覆盖 prepared、disk-committed、projection ack；启动按磁盘事实重放路径投影                                    | 提交点单测及 journal 已写/磁盘已动/未 mark 场景的真实 App 进程重启恢复通过                                             |
+| RF-09 | Product gate | Pending                                        | 远程 Agent、PTY、真实网站登录缺真人验收              | 自动化门禁已覆盖部分代码路径                                                                                                        | 真实身份、在线设备、断线续接和账号隔离没有同一环境证据                                                                 |
+| IR-04 | P1           | Closed                                         | 本机 MCP HTTP 请求体无大小上限且解析错误包含正文片段 | 8 MiB 流式/声明长度上限、100 请求 batch 上限、稳定脱敏解析错误                                                                      | 声明/分块超限、畸形正文、batch 和生命周期回归通过                                                                      |
+| IR-05 | P1           | Closed                                         | 工具确认卡把原始参数返回 renderer                    | 主进程只发送有界结构化摘要；命令、脚本、正文、secret、URL 凭证/查询和外部路径被隐藏                                                 | IPC parser 明确拒绝旧 `params`/`reason`；外部 MCP 仍保持 fail-closed                                                   |
+| IR-06 | P1           | Closed                                         | 外部 MCP 名称允许原型特殊键                          | 配置输入和迁移同时拒绝 `__proto__`、`prototype`、`constructor`，投影使用无原型对象                                                  | 隔离配置与原型键回归已覆盖                                                                                             |
+| IR-07 | P1           | Closed                                         | 按名称清 Cookie 使用模糊且未转义的正则               | 按 name/domain/path 精确枚举并删除 Cookie identity                                                                                  | `sid`、`sid_backup`、`sid.test`、`sid+test` 真实 Context 精确删除回归通过                                              |
 
 ## 3. 新增 P0 的代码证据
 
@@ -405,9 +405,9 @@ Cookie 秘密出站、强制现有 query token。只有这三道止血完成后�
 - “全部”作用域的自动允许列表只从过滤后的内部 server 生成；UI 明确显示“已配置，等待受控授权支持”。
 - canary 单测模拟 SDK 收到外部 stdio 配置后立即启动子进程写文件；修复后 server 不可见、canary
   不存在。相关 38 项单测和 TypeScript 检查通过。
-- `smoke:ui` 的设置页与应用启动检查通过；同次全量 UI smoke 的 PDF ready 超时和网页事务旧 Tab
-  复用失败与本阶段无关，保留到最终统一回归复核。专用真实 Agent runtime smoke 需要隔离 API key，
-  未在本阶段借用用户本机账号执行。
+- 隔离真实 Electron/Renderer IPC smoke 配置会写 canary 的外部 stdio server，完成 rename/copy/delete
+  后进程始终未启动；完整 UI smoke 20/20。未借用用户本机 Agent API key 执行模型请求，因为关闭事实在
+  SDK 配置投影前已经可判定，且不应为验收扩大真实账号副作用。
 
 ### P0-2：Browser Cookie 安全
 
@@ -444,8 +444,9 @@ Cookie 秘密出站、强制现有 query token。只有这三道止血完成后�
   最近项目由主进程登记后才可重新激活。
 - 已有目标、未创建目标最近父目录、双路径 rename/move/copy、符号链接和 Run 中可见工作空间切换均有真实
   文件系统反例。核心文件打开使用 `O_NOFOLLOW`、open 后 `fstat`、路径 inode/dev 与打开前后授权复核。
-- 168 项受影响单测与 Node TypeScript 检查通过。真实 Electron IPC、Browser 上传及 native picker capability
-  验收留到统一 App smoke。
+- 168 项受影响单测与 Node TypeScript 检查通过。统一验收又在真实 Electron IPC 中完成双工作区切换、
+  符号链接和未创建目标拒绝，并在真实 WebContentsView 中选择工作区上传文件；原生 picker 的真人点击
+  动作因自动化环境限制仍标记为尚未证明。
 - residual threat：Node/Electron 没有可移植的 `openat`/目录 fd 相对操作，递归 `mkdir`、`rename`、`cp`
   以及 Playwright/ADB 按路径二次打开仍存在同用户恶意进程在极短窗口替换父目录的竞态。本轮通过多次
   realpath、最终分量 `O_NOFOLLOW` 与 `fstat` 缩小窗口，但不将该部分宣称为完全关闭。
@@ -503,3 +504,90 @@ Cookie 秘密出站、强制现有 query token。只有这三道止血完成后�
 - 旧 `provider=openai`、`apiFormat=openai` 或 `backendType=http-api` 启动时原子迁回 Anthropic 默认组合，
   不再保留 OpenAI URL/模型形成混合假配置。连接测试和 `AgentBridge` 使用同一支持事实做主进程复核。
 - 85 项设置、AgentBridge 和 backend 定向回归通过；真实 Electron 设置页/CSP/免登录 3/3 smoke 通过。
+
+### 其他 P1/P2 与遗漏项
+
+- 搜索改由主进程 `FileService` 执行有界遍历，结果绑定 workspace key、generation、requestId 和 query；
+  renderer 丢弃迟到响应并明确显示截断。深层文件、忽略目录、符号链接和真实双工作空间切换已验收。
+- 删除未被生产界面消费的 `uiFontSize` schema、默认值和设置 UI，保留实际生效的 App zoom，消除假设置。
+- 文件移动增加原子主进程 relocation journal；prepared、disk-committed、投影持久化、ack 和 conflict
+  均有恢复覆盖。真实 Electron 在 journal 已写、磁盘已移动、尚未 mark committed 时重启，旧 tab、编辑器
+  路径和磁盘事实成功重放到新路径，journal 随后被清理。
+- 工具确认 DTO 删除原始 `params`/`reason`，只保留主进程生成的有界脱敏摘要；命令、脚本、正文、Token、
+  URL 凭证/查询和外部路径 canary 不进入 renderer。
+- 外部 MCP 名称统一拒绝 `__proto__`、`prototype`、`constructor`，名称映射使用无原型对象。
+
+## 9. 统一验收与收口（2026-08-31）
+
+### 9.1 用户当前可验收能力
+
+用户现在可以继续免登录使用本地工作台、编辑器、Browser、Terminal、数据源和无设备时的 Android 降级；
+外部 MCP 配置可保存和管理，但不会被 Agent 启动或执行；Browser Agent 无法取得 Cookie 值；本机 MCP
+缺少有效 Run token 时无法进入 body 解析和工具路由；工作区切换后旧工作区文件和搜索结果不会继续可读；
+危险操作不再被 `auto`/Always 绕过；文件移动在已验证的进程退出窗口可于重启恢复。
+
+用户目前仍不能通过普通 Agent 执行任意 `android_shell`，需要转可见 Terminal/ADB 人工接管；外部 MCP
+工具仍保持“已配置，等待受控授权支持”。真实在线远程 Agent、远程 PTY 断线续接、真实网站账号长期登录
+隔离和 Android uninstall/push/install 的设备侧体验，因为本机没有对应设备、在线 Agent 或测试账号，仍是
+“尚未证明”，不能声称产品闭环。
+
+### 9.2 自动化门禁
+
+- `pnpm verify`：通过。OSS/package/credential/scheduling/context-action/release 边界、Prettier、ESLint、
+  TypeScript 和 production build 全绿；Vitest 为 345 个文件、2188 项通过、2 项跳过。
+- `smoke:local`：11/11；可选 runtime 目录损坏的 degraded smoke 同样为 11/11。
+- `smoke:workflow`：21/21；`smoke:restore`：4/4。两者的夹具已改为主进程预登记的精确测试工作区，
+  不再依赖 renderer 对 home 的宽权限。
+- 完整真实 Electron UI smoke：20/20；覆盖免登录启动、工作区切换、Git、Browser profile、网页事务重启、
+  Settings、Editor、Browser 和本地 Terminal。
+- 工作区安全专项：4/4。真实 Electron 中验证双工作区、深层搜索、明确截断、符号链接、未创建外部目标、
+  迟到请求、Run 切换后的旧工作区拒绝；真实 WebContentsView 的 `<input type=file>` 成功选择工作区文件，
+  同时主进程仍拒绝读取工作区外 canary。BrowserToolModule 对上传路径复用 FileService 的反例由全量单测覆盖。
+- Browser Cookie 专项：真实 WebContentsView/Playwright Context 通过；五个 Cookie 中只删除完整
+  name/domain/path identity，HttpOnly canary 不出站。
+- MCP 凭证/外部进程专项：隔离真实 Electron 通过；renderer DTO 与非敏感配置无秘密，rename/copy/delete
+  revision 生命周期正确，外部 stdio canary 进程未启动。
+- relocation 专项：提交点单测及真实 Electron 进程重启均通过；冲突保持待诊断，不伪造完成。
+
+### 9.3 尚未证明与残余威胁
+
+1. 当前环境找不到 `adb` 且设备数为 0：Android uninstall、APK install、push 和 shell 人工接管没有真实
+   设备副作用证据；策略和无设备降级已自动验证。
+2. 未提供已配对在线 CCLink Agent 或真实网站账号：远程 Agent、远程 PTY attach/断线输出续接和真实网站
+   登录态隔离仍属于 RF-09，不用本机真实凭证做破坏性代测。
+3. macOS 原生文件选择器的人工点击路径未自动驱动；精确 capability 的主进程生命周期、过期、次数、读写
+   intent 和两工作区切换由单测与真实 IPC 的预登记 capability 覆盖，但原生对话框 UX 仍需真人动作。
+4. Node/Electron 缺少可移植 `openat`/目录 fd 相对操作。核心文件读取使用 `O_NOFOLLOW`、open 后 `fstat`
+   和复核；递归 mkdir、rename、copy 以及 Playwright/ADB 按路径二次打开，仍有同用户恶意进程替换父目录的
+   极短 TOCTOU 窗口。该项是已记录 residual threat，不应描述为数学意义上的完全消除。
+5. P1-H `Authorization: Bearer` 迁移尚未实施；当前 query token 已强制认证并在 Run release/cancel 后失效，
+   所以原 IR-03 旁路已关闭，但 URL 暴露面的进一步 hardening 仍 Open。
+6. 本轮未发布、未推送正式版本，也未读取或输出用户真实 `mcp-servers.json` 内容。
+
+### 9.4 独立提交
+
+| 提交       | 内容                                         |
+| ---------- | -------------------------------------------- |
+| `bb21b4f1` | 外部 MCP fail-closed                         |
+| `e573662d` | Browser Cookie 禁止出站与精确清理            |
+| `9b922ccc` | 本机 MCP token 与输入边界                    |
+| `b8f643ad` | FileService 工作区边界                       |
+| `41746fb9` | 统一危险工具授权 broker                      |
+| `e0af82ce` | MCP 版本化凭证迁移                           |
+| `c307f5fa` | 可选 Runtime 初始化降级                      |
+| `4572bb46` | 隐藏不支持的 OpenAI backend                  |
+| `a44c2abd` | 搜索工作区/generation 隔离                   |
+| `ecd79509` | 删除无效 `uiFontSize`                        |
+| `6df2c9d4` | 文件 relocation journal 与恢复               |
+| `4fd4a045` | 工具确认参数脱敏                             |
+| `1484e43b` | 关闭 MCP 原型键问题并记录事实                |
+| `a51c3ef1` | relocation journal 测试边界补齐              |
+| `c4077910` | WorkspaceState 绝对路径 IPC 防旁路           |
+| `8f713ac4` | 工作区激活 capability 与文件内容 intent 分离 |
+| `c7f99d7f` | 真实 App relocation 重启与工作区恢复验收     |
+| `d82ac404` | workflow/restore smoke 使用有界工作区夹具    |
+| `51b1a504` | 真实 Browser View 工作区上传验收             |
+
+结论：IR-01 至 IR-07、RF-01 至 RF-08 的本轮代码缺口均已按上表关闭或以明确 residual threat 收口；
+RF-09、真实 Android/在线服务/真实账号验收和 P1-H 仍 Open 或尚未证明。所有当前环境可自动完成的门禁与
+真实 App 验收已执行并通过，因此本轮整改可以结束，但不能把未具备环境的产品闭环包装成已完成。
