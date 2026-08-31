@@ -116,8 +116,12 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
   runtime.runtimeComponentManager = new RuntimeComponentManager(
     join(app.getPath('userData'), 'runtime-components'),
   )
-  await runtime.runtimeComponentManager.initialize()
-  console.log('[CCLink Studio] Runtime 组件管理器已初始化')
+  try {
+    await runtime.runtimeComponentManager.initialize()
+    console.log('[CCLink Studio] Runtime 组件管理器已初始化')
+  } catch (error) {
+    console.error('[CCLink Studio] Runtime 组件管理器初始化失败，工作台将继续降级启动:', error)
+  }
 
   runtime.workspaceStateService = new WorkspaceStateService()
   await runtime.workspaceStateService.loadState()

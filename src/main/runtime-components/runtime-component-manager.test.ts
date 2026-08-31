@@ -76,6 +76,30 @@ async function createManager(
 }
 
 describe('RuntimeComponentManager', () => {
+  it('degrades a failed optional initialization and retries on the same owner', async () => {
+    const parent = await temporaryRoot('cclink-runtime-init-degraded-')
+    const root = join(parent, 'runtime-components')
+    await writeFile(root, 'blocks-directory-creation')
+    const manager = new RuntimeComponentManager(root, {
+      resolveCatalogEntry: () => null,
+    })
+
+    await expect(manager.initialize()).rejects.toThrow()
+    expect(manager.getManagedClaudeStatus()).toMatchObject({
+      phase: 'failed',
+      health: 'damaged',
+      failure: expect.objectContaining({ code: 'INSTALL_FAILED' }),
+    })
+
+    await rm(root, { force: true })
+    await expect(manager.ensureInitialized()).resolves.toBe(true)
+    expect(manager.getManagedClaudeStatus()).toMatchObject({
+      phase: 'idle',
+      health: 'not-installed',
+      failure: null,
+    })
+  })
+
   it('installs the constrained package and resolves the verified runtime', async () => {
     const root = await temporaryRoot('cclink-runtime-component-')
     const { manager, download } = await createManager(root)
@@ -188,7 +212,10 @@ describe('RuntimeComponentManager', () => {
       },
       'verifyInstalledEntry',
     )
+    // The first verification belongs to the same-owner initialization retry, the second probes
+    // the existing install, and the third validates the newly published replacement.
     verifySpy.mockRejectedValueOnce(new Error('force reinstall'))
+    verifySpy.mockRejectedValueOnce(new Error('force reinstall after initialization retry'))
     verifySpy.mockRejectedValueOnce(new Error('post-publish verification failed'))
 
     const failed = await replacement.installManagedClaude()

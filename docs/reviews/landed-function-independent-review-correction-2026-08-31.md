@@ -36,8 +36,8 @@ MCP env/header 的普通配置明文、renderer 全量返回和保存假成功�
 | IR-03 | P1，立即止血 | 工程实现及本机 HTTP 集成验证完成                         | 本机 MCP HTTP token 未强制                           | 所有 `/mcp` 请求在读 body 前强制有效 Run token；失效状态统一 401                                           | Authorization header 迁移仍为独立 P1-H；最终 SDK/App 重连验证待执行                                                             |
 | RF-01 | P0           | 核心工程实现完成；真实 App 验收与 TOCTOU residual 待结论 | 文件权限边界不统一                                   | `FileService` 已收敛到主进程 active/trusted workspace；Browser、Android、Editor 与 renderer 复用同一 owner | Node 无可移植 `openat`，递归 mkdir/rename/copy 的父目录瞬时替换仍需按 residual threat 管理；真实文件选择器与 App 回归待统一验收 |
 | RF-02 | P0           | 核心工程实现完成；真实设备副作用验收待执行               | `auto` 和 Always 可绕过危险操作确认                  | 单一 broker 已覆盖内部 ToolHost 与 SDK PreToolUse/canUseTool；登记账号专用有界授权和定时任务只读链保留     | Android shell 从工具表移除并 fail-closed；uninstall、清 Cookie 和 SDK Bash 均强制逐次确认；真实 Android 设备验收待执行          |
-| RF-03 | P1           | Open，降级                                               | 外部 MCP env/header 绕过统一 CredentialService       | 文件位于 userData                                                                                          | 普通配置明文、`0644`、renderer 全量返回、非原子写入和保存假成功                                                                 |
-| RF-04 | P1           | Open                                                     | Runtime 组件初始化失败可阻断 App                     | 无                                                                                                         | 可选能力失败扩大为全局启动失败                                                                                                  |
+| RF-03 | P1           | 核心工程关闭；真实用户旧配置迁移不做破坏性代测           | 外部 MCP env/header 绕过统一 CredentialService       | 版本化 CredentialService revision、原子非敏感配置、脱敏 DTO                                               | 隔离 userData 迁移与真实 Electron IPC 已通过；未读取真实用户配置                                                                 |
+| RF-04 | P1           | 核心工程关闭                                             | Runtime 组件初始化失败可阻断 App                     | 同一 manager 降级、组件操作重试初始化                                                                      | 损坏 runtime-components 路径下真实 App 11/11 local smoke 通过                                                                   |
 | RF-05 | P1           | Open                                                     | OpenAI Compatible 设置不可用                         | 连接测试会明确报 unsupported                                                                               | UI 仍允许保存后端不会采用的配置                                                                                                 |
 | RF-06 | P1           | Open                                                     | 搜索跨工作空间残留和迟到覆盖                         | 搜索入口读取当前 workspace                                                                                 | 查询/结果全局持久化，无 generation，递归深度静默限制三层                                                                        |
 | RF-07 | P2           | Open                                                     | `uiFontSize` 无生产效果                              | 值可持久化                                                                                                 | 没有生产消费者                                                                                                                  |
@@ -486,3 +486,12 @@ Cookie 秘密出站、强制现有 query token。只有这三道止血完成后�
 - 隔离 userData 的真实 Electron/Renderer IPC smoke 证明 DTO 和 v2 配置不含 canary、rename 保持 serverId、
   copy 使用独立 revision、delete 清除引用与 revision，且外部 canary MCP 进程从未启动。测试未读取或输出
   真实用户配置。
+
+### P1-2：Runtime 组件初始化降级
+
+- `RuntimeComponentManager` 保持唯一 owner，记录初始化失败为 `failed/damaged`；state bootstrap 捕获该可选
+  组件异常后继续创建 Workspace、窗口和其他本地服务。
+- 组件安装、检查、修复、卸载及资源解析在同一 manager 上调用 `ensureInitialized()`；目录恢复后可重试，
+  未恢复时只返回组件失败或 `null`，不向 Agent/CAD/Android 伪造可用状态。
+- 17 项 manager、组件 IPC、Agent runtime 和可选服务测试通过；隔离 userData 把
+  `runtime-components` 预置为阻止建目录的普通文件后，真实 Electron 本地 smoke 仍为 11/11。

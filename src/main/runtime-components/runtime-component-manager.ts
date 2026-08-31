@@ -102,6 +102,8 @@ export class RuntimeComponentManager {
   private installedVersions: string[] = []
   private health: ManagedClaudeRuntimeStatus['health'] = 'not-installed'
   private operationPromise: Promise<ManagedClaudeRuntimeOperationResult> | null = null
+  private initialized = false
+  private initializationPromise: Promise<void> | null = null
 
   constructor(root: string, dependencies: RuntimeComponentManagerDependencies = {}) {
     this.root = resolve(root)
@@ -117,16 +119,50 @@ export class RuntimeComponentManager {
   }
 
   async initialize(): Promise<void> {
-    await mkdir(this.root, { recursive: true, mode: 0o700 })
-    await this.resourceManager.initialize()
-    const entry = this.catalogEntry()
-    if (!entry) {
-      this.installedVersions = []
-      return
+    if (this.initialized) return
+    if (this.initializationPromise) return this.initializationPromise
+    const operation = (async () => {
+      try {
+        await mkdir(this.root, { recursive: true, mode: 0o700 })
+        await this.resourceManager.initialize()
+        const entry = this.catalogEntry()
+        if (!entry) {
+          this.installedVersions = []
+          this.phase = 'idle'
+          this.health = 'not-installed'
+          this.failure = null
+          this.initialized = true
+          return
+        }
+        await mkdir(this.configRoot(entry), { recursive: true, mode: 0o700 })
+        await this.recoverInterruptedReplacement(entry)
+        await this.refreshManagedClaudeStatus(entry, false)
+        this.initialized = true
+      } catch (error) {
+        const failure = toInstallFailure(error)
+        this.initialized = false
+        this.phase = 'failed'
+        this.health = 'damaged'
+        this.failure = failure
+        throw error
+      }
+    })()
+    this.initializationPromise = operation
+    try {
+      await operation
+    } finally {
+      if (this.initializationPromise === operation) this.initializationPromise = null
     }
-    await mkdir(this.configRoot(entry), { recursive: true, mode: 0o700 })
-    await this.recoverInterruptedReplacement(entry)
-    await this.refreshManagedClaudeStatus(entry, false)
+  }
+
+  async ensureInitialized(): Promise<boolean> {
+    if (this.initialized) return true
+    try {
+      await this.initialize()
+      return true
+    } catch {
+      return false
+    }
   }
 
   listRuntimeResources(): RuntimeResourceStatus[] {
@@ -136,36 +172,42 @@ export class RuntimeComponentManager {
   installRuntimeResource(
     componentId: RuntimeResourceComponentId,
   ): Promise<RuntimeResourceOperationResult> {
-    return this.resourceManager.install(componentId)
+    return this.withInitializedResource(componentId, () =>
+      this.resourceManager.install(componentId),
+    )
   }
 
   checkRuntimeResource(
     componentId: RuntimeResourceComponentId,
   ): Promise<RuntimeResourceOperationResult> {
-    return this.resourceManager.check(componentId)
+    return this.withInitializedResource(componentId, () => this.resourceManager.check(componentId))
   }
 
   repairRuntimeResource(
     componentId: RuntimeResourceComponentId,
   ): Promise<RuntimeResourceOperationResult> {
-    return this.resourceManager.repair(componentId)
+    return this.withInitializedResource(componentId, () => this.resourceManager.repair(componentId))
   }
 
   uninstallRuntimeResource(
     componentId: RuntimeResourceComponentId,
   ): Promise<RuntimeResourceOperationResult> {
-    return this.resourceManager.uninstall(componentId)
+    return this.withInitializedResource(componentId, () =>
+      this.resourceManager.uninstall(componentId),
+    )
   }
 
-  resolveRuntimeResource(
+  async resolveRuntimeResource(
     componentId: RuntimeResourceComponentId,
   ): Promise<ResolvedRuntimeResource | null> {
+    if (!(await this.ensureInitialized())) return null
     return this.resourceManager.resolve(componentId)
   }
 
-  acquireRuntimeResource(
+  async acquireRuntimeResource(
     componentId: RuntimeResourceComponentId,
   ): Promise<ResolvedRuntimeResourceLease | null> {
+    if (!(await this.ensureInitialized())) return null
     return this.resourceManager.acquire(componentId)
   }
 
@@ -246,13 +288,28 @@ export class RuntimeComponentManager {
         error: 'INSTALL_BUSY: Claude Runtime 正在执行其他操作',
       })
     }
-    this.operationPromise = operation().finally(() => {
+    this.operationPromise = (async () => {
+      if (!(await this.ensureInitialized())) {
+        return {
+          success: false,
+          status: this.getManagedClaudeStatus(),
+          error: `${this.failure?.code ?? 'INSTALL_FAILED'}: ${this.failure?.message ?? 'Runtime 组件初始化失败'}`,
+        }
+      }
+      return operation()
+    })().finally(() => {
       this.operationPromise = null
     })
     return this.operationPromise
   }
 
   async resolveManagedClaude(version: string): Promise<ResolvedManagedClaudeRuntime> {
+    if (!(await this.ensureInitialized())) {
+      throw new RuntimeComponentInstallError(
+        this.failure?.code ?? 'INSTALL_FAILED',
+        this.failure?.message ?? 'Runtime 组件初始化失败',
+      )
+    }
     const entry = this.catalogEntry()
     if (!entry || version !== entry.runtimeVersion) {
       throw new RuntimeComponentInstallError(
@@ -268,6 +325,22 @@ export class RuntimeComponentManager {
       sha256: entry.binarySha256,
       platform: entry.platform,
       arch: entry.arch,
+    }
+  }
+
+  private async withInitializedResource(
+    componentId: RuntimeResourceComponentId,
+    operation: () => Promise<RuntimeResourceOperationResult>,
+  ): Promise<RuntimeResourceOperationResult> {
+    if (await this.ensureInitialized()) return operation()
+    const status = this.resourceManager
+      .listStatuses()
+      .find((candidate) => candidate.componentId === componentId)
+    if (!status) throw new Error(`未知 Runtime 资源: ${componentId}`)
+    return {
+      success: false,
+      status,
+      error: `${this.failure?.code ?? 'INSTALL_FAILED'}: ${this.failure?.message ?? 'Runtime 组件初始化失败'}`,
     }
   }
 
