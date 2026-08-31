@@ -1,8 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { request as httpRequest } from 'node:http'
+import { PassThrough } from 'node:stream'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { McpToolHost, type ToolConfirmationInput } from './tool-host'
+import {
+  MAX_MCP_BATCH_REQUESTS,
+  MAX_MCP_REQUEST_BYTES,
+  McpToolHost,
+  type ToolConfirmationInput,
+} from './tool-host'
 import type { ToolModule } from './types'
 
 describe('McpToolHost tool session context', () => {
@@ -215,8 +222,9 @@ describe('McpToolHost tool session context', () => {
       }),
     })
     const port = await host.start()
+    const token = host.createToolSession({})
 
-    await fetch(`http://127.0.0.1:${port}/mcp`, {
+    await fetch(`http://127.0.0.1:${port}/mcp?session=${token}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -234,7 +242,11 @@ describe('McpToolHost tool session context', () => {
         riskLevel: 'destructive',
       }),
     )
-    expect(execute).toHaveBeenCalledWith('test_write', { value: 2 }, { confirmationGranted: true })
+    expect(execute).toHaveBeenCalledWith(
+      'test_write',
+      { value: 2 },
+      expect.objectContaining({ confirmationGranted: true, abortSignal: expect.any(AbortSignal) }),
+    )
   })
 
   it('hides disabled module tools and rejects calls from stale clients', async () => {
@@ -253,7 +265,8 @@ describe('McpToolHost tool session context', () => {
     ])
 
     const port = await host.start()
-    const response = await fetch(`http://127.0.0.1:${port}/mcp`, {
+    const token = host.createToolSession({})
+    const response = await fetch(`http://127.0.0.1:${port}/mcp?session=${token}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -270,6 +283,173 @@ describe('McpToolHost tool session context', () => {
     expect(payload.result.isError).toBe(true)
     expect(payload.result.content[0]?.text).toContain('已在设置中禁用')
     expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('requires a live token before parsing or routing every MCP request type', async () => {
+    const execute = vi.fn(async () => ({ ok: true }))
+    host = new McpToolHost({
+      needsConfirmation: () => false,
+      requestConfirmation: vi.fn(async () => true),
+    })
+    host.registerModule(createModule(execute))
+    const port = await host.start()
+    const liveToken = host.createToolSession({ conversationId: 'live', agentRunId: 'run-live' })
+    const releasedToken = host.createToolSession({ conversationId: 'released' })
+    const cancelledToken = host.createToolSession({ conversationId: 'cancelled' })
+    host.releaseToolSession(releasedToken)
+    await host.cancelToolSession(cancelledToken)
+
+    const requestBodies = [
+      { jsonrpc: '2.0', id: 1, method: 'initialize' },
+      { jsonrpc: '2.0', id: 2, method: 'tools/list' },
+      {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: { name: 'test_write', arguments: { value: 1 } },
+      },
+      { jsonrpc: '2.0', id: 4, method: 'ping' },
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+    ]
+    for (const body of requestBodies) {
+      for (const token of [null, 'wrong-token', releasedToken, cancelledToken]) {
+        const response = await postMcp(port, token, JSON.stringify(body))
+        expect(response.status).toBe(401)
+        expect(await response.json()).toEqual({
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: -32001, message: 'Unauthorized' },
+        })
+      }
+    }
+    const invalidCanaryBody = '{"cookie":"mcp-auth-canary-secret"'
+    const unauthenticatedInvalid = await postMcp(port, null, invalidCanaryBody)
+    expect(unauthenticatedInvalid.status).toBe(401)
+    expect(await unauthenticatedInvalid.text()).not.toContain('mcp-auth-canary-secret')
+    expect(execute).not.toHaveBeenCalled()
+
+    const initialized = await postMcp(
+      port,
+      liveToken,
+      JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize' }),
+    )
+    expect(initialized.status).toBe(200)
+    const notification = await postMcp(
+      port,
+      liveToken,
+      JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+    )
+    expect(notification.status).toBe(202)
+  })
+
+  it('binds each token to its own immutable run context regardless of request arguments', async () => {
+    const execute = vi.fn(
+      async (
+        _toolName: string,
+        _args: Record<string, unknown>,
+        context?: {
+          conversationId?: string
+          workspaceKey?: string | null
+          agentRunId?: string | null
+        },
+      ) => ({
+        conversationId: context?.conversationId,
+        workspaceKey: context?.workspaceKey,
+        agentRunId: context?.agentRunId,
+      }),
+    )
+    host = new McpToolHost({
+      needsConfirmation: () => false,
+      requestConfirmation: vi.fn(async () => true),
+    })
+    host.registerModule(createModule(execute))
+    const port = await host.start()
+    const tokenA = host.createToolSession({
+      conversationId: 'conversation-a',
+      workspaceKey: '/workspace/a',
+      agentRunId: 'run-a',
+    })
+    const tokenB = host.createToolSession({
+      conversationId: 'conversation-b',
+      workspaceKey: '/workspace/b',
+      agentRunId: 'run-b',
+    })
+
+    const resultA = await callMcp(port, tokenA, 'tools/call', {
+      name: 'test_write',
+      arguments: {
+        conversationId: 'conversation-b',
+        workspaceKey: '/workspace/b',
+        agentRunId: 'run-b',
+      },
+    })
+    const resultB = await callMcp(port, tokenB, 'tools/call', {
+      name: 'test_write',
+      arguments: {
+        conversationId: 'conversation-a',
+        workspaceKey: '/workspace/a',
+        agentRunId: 'run-a',
+      },
+    })
+
+    expect(JSON.parse(resultA.result.content[0].text)).toEqual({
+      conversationId: 'conversation-a',
+      workspaceKey: '/workspace/a',
+      agentRunId: 'run-a',
+    })
+    expect(JSON.parse(resultB.result.content[0].text)).toEqual({
+      conversationId: 'conversation-b',
+      workspaceKey: '/workspace/b',
+      agentRunId: 'run-b',
+    })
+  })
+
+  it('caps request bodies and batches without logging malformed body contents', async () => {
+    host = new McpToolHost({
+      needsConfirmation: () => false,
+      requestConfirmation: vi.fn(async () => true),
+    })
+    host.registerModule(createModule())
+    const port = await host.start()
+    const token = host.createToolSession({ conversationId: 'body-limit' })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const canary = 'mcp-body-canary-secret'
+    try {
+      const malformed = await postMcp(port, token, `{"value":"${canary}"`)
+      expect(malformed.status).toBe(400)
+      expect(await malformed.text()).not.toContain(canary)
+      expect(errorSpy.mock.calls.flat().join(' ')).not.toContain(canary)
+
+      const declaredTooLarge = await postRawMcp(port, token, [Buffer.from('{}')], {
+        'content-length': String(MAX_MCP_REQUEST_BYTES + 1),
+      })
+      expect(declaredTooLarge.status).toBe(413)
+      expect(declaredTooLarge.body).toContain('Request body too large')
+
+      const chunkedRequest = new PassThrough()
+      const chunkedResult = (
+        host as unknown as {
+          readRequestBody(request: PassThrough): Promise<unknown>
+        }
+      ).readRequestBody(chunkedRequest)
+      chunkedRequest.write(Buffer.alloc(MAX_MCP_REQUEST_BYTES, 0x20))
+      chunkedRequest.end(Buffer.from('x'))
+      await expect(chunkedResult).rejects.toMatchObject({
+        status: 413,
+        message: 'Request body too large',
+      })
+
+      const excessiveBatch = Array.from({ length: MAX_MCP_BATCH_REQUESTS + 1 }, (_, index) => ({
+        jsonrpc: '2.0',
+        id: index,
+        method: 'ping',
+      }))
+      const batchResponse = await postMcp(port, token, JSON.stringify(excessiveBatch))
+      expect(batchResponse.status).toBe(400)
+      expect(await batchResponse.text()).toContain('Invalid request batch')
+    } finally {
+      errorSpy.mockRestore()
+    }
   })
 
   it('hard-limits scheduled task sessions independently from global auto mode', async () => {
@@ -396,4 +576,45 @@ async function callMcp(
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
   })
   return response.json()
+}
+
+function postMcp(port: number, token: string | null, body: string): Promise<Response> {
+  const suffix = token ? `?session=${encodeURIComponent(token)}` : ''
+  return fetch(`http://127.0.0.1:${port}/mcp${suffix}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body,
+  })
+}
+
+function postRawMcp(
+  port: number,
+  token: string,
+  chunks: Buffer[],
+  headers: Record<string, string>,
+): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(
+      {
+        host: '127.0.0.1',
+        port,
+        path: `/mcp?session=${encodeURIComponent(token)}`,
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers },
+      },
+      (response) => {
+        const responseChunks: Buffer[] = []
+        response.on('data', (chunk: Buffer) => responseChunks.push(chunk))
+        response.on('end', () => {
+          resolve({
+            status: response.statusCode ?? 0,
+            body: Buffer.concat(responseChunks).toString('utf8'),
+          })
+        })
+      },
+    )
+    request.on('error', reject)
+    for (const chunk of chunks) request.write(chunk)
+    request.end()
+  })
 }

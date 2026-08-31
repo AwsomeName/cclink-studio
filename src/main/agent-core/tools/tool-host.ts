@@ -48,6 +48,21 @@ interface JsonRpcRequest {
 
 type McpRequestContext = ToolExecutionContext
 
+/** Agent 工具输入（含 JSON envelope）的硬上限；用于限制 loopback 服务的主进程内存压力。 */
+export const MAX_MCP_REQUEST_BYTES = 8 * 1024 * 1024
+export const MAX_MCP_BATCH_REQUESTS = 100
+
+class McpHttpRequestError extends Error {
+  constructor(
+    readonly status: number,
+    readonly rpcCode: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'McpHttpRequestError'
+  }
+}
+
 /** JSON-RPC 成功的响应 */
 function jsonRpcResult(id: number | string | null, result: unknown) {
   return { jsonrpc: '2.0', id, result }
@@ -174,22 +189,39 @@ export class McpToolHost {
   async start(): Promise<number> {
     this.httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
       try {
+        const requestUrl = new URL(req.url ?? '/', 'http://127.0.0.1')
+        if (requestUrl.pathname !== '/mcp') {
+          this.writeHttpError(res, 404, -32000, 'Not Found')
+          return
+        }
         const context = this.resolveRequestContext(req.url)
-        if (req.method !== 'POST' || !context) {
-          res.writeHead(405, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify(jsonRpcError(null, -32000, 'Method Not Allowed')))
+        if (!context) {
+          this.writeHttpError(res, 401, -32001, 'Unauthorized')
+          return
+        }
+        if (req.method !== 'POST') {
+          this.writeHttpError(res, 405, -32000, 'Method Not Allowed')
+          return
+        }
+
+        const declaredLength = this.readDeclaredContentLength(req)
+        if (declaredLength !== null && declaredLength > MAX_MCP_REQUEST_BYTES) {
+          this.writeHttpError(res, 413, -32002, 'Request body too large')
           return
         }
 
         const body = await this.readRequestBody(req)
         if (!body) {
-          res.writeHead(400, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify(jsonRpcError(null, -32700, 'Parse error: empty body')))
+          this.writeHttpError(res, 400, -32700, 'Parse error')
           return
         }
 
         // 支持批量请求或单请求
         const requests = Array.isArray(body) ? body : [body]
+        if (requests.length === 0 || requests.length > MAX_MCP_BATCH_REQUESTS) {
+          this.writeHttpError(res, 400, -32600, 'Invalid request batch')
+          return
+        }
         const results = await Promise.all(requests.map((r) => this.handleJsonRpc(r, context)))
 
         const resultList = results.filter((r) => r !== null)
@@ -204,6 +236,12 @@ export class McpToolHost {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(responseBody))
       } catch (err) {
+        if (err instanceof McpHttpRequestError) {
+          if (!res.headersSent) {
+            this.writeHttpError(res, err.status, err.rpcCode, err.message)
+          }
+          return
+        }
         console.error('[McpToolHost] 请求处理错误:', err)
         if (!res.headersSent) {
           res.writeHead(500, { 'Content-Type': 'application/json' })
@@ -256,8 +294,25 @@ export class McpToolHost {
     const url = new URL(rawUrl ?? '/', 'http://127.0.0.1')
     if (url.pathname !== '/mcp') return null
     const token = url.searchParams.get('session')
-    if (!token) return {}
-    return this.toolSessions.get(token) ?? {}
+    if (!token) return null
+    return this.toolSessions.get(token) ?? null
+  }
+
+  private writeHttpError(
+    res: ServerResponse,
+    status: number,
+    rpcCode: number,
+    message: string,
+  ): void {
+    res.writeHead(status, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(jsonRpcError(null, rpcCode, message)))
+  }
+
+  private readDeclaredContentLength(req: IncomingMessage): number | null {
+    const value = req.headers['content-length']
+    if (typeof value !== 'string' || !/^\d+$/.test(value)) return null
+    const parsed = Number(value)
+    return Number.isSafeInteger(parsed) ? parsed : MAX_MCP_REQUEST_BYTES + 1
   }
 
   /**
@@ -268,6 +323,9 @@ export class McpToolHost {
     req: JsonRpcRequest,
     context: McpRequestContext,
   ): Promise<object | null> {
+    if (!req || typeof req !== 'object' || Array.isArray(req)) {
+      return jsonRpcError(null, -32600, 'Invalid request')
+    }
     const { id, method, params } = req
 
     // Notification（无 id）不需要响应
@@ -449,8 +507,25 @@ export class McpToolHost {
   private readRequestBody(req: IncomingMessage): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = []
-      req.on('data', (chunk: Buffer) => chunks.push(chunk))
+      let receivedBytes = 0
+      let settled = false
+      const onData = (chunk: Buffer): void => {
+        if (settled) return
+        receivedBytes += chunk.length
+        if (receivedBytes > MAX_MCP_REQUEST_BYTES) {
+          settled = true
+          chunks.length = 0
+          req.off('data', onData)
+          req.resume()
+          reject(new McpHttpRequestError(413, -32002, 'Request body too large'))
+          return
+        }
+        chunks.push(chunk)
+      }
+      req.on('data', onData)
       req.on('end', () => {
+        if (settled) return
+        settled = true
         const body = Buffer.concat(chunks).toString('utf-8')
         if (!body) {
           resolve(undefined)
@@ -459,10 +534,14 @@ export class McpToolHost {
         try {
           resolve(JSON.parse(body))
         } catch {
-          reject(new Error(`无效的 JSON 请求体: ${body.slice(0, 100)}`))
+          reject(new McpHttpRequestError(400, -32700, 'Parse error'))
         }
       })
-      req.on('error', reject)
+      req.on('error', (error) => {
+        if (settled) return
+        settled = true
+        reject(error)
+      })
     })
   }
 }

@@ -33,7 +33,7 @@ MCP env/header 的普通配置明文、renderer 全量返回和保存假成功�
 | ----- | ------------ | -------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | IR-01 | P0           | 工程实现完成；最终验收待执行 | 外部 MCP SDK 通配符自动放行                          | SDK 配置与 Backend 投影均只保留内部 `cclink_studio`；外部配置继续保存                 | 真实打包 App 中的 SDK 进程级复核留到统一验收                                                                         |
 | IR-02 | P0           | 工程实现及真实 Context smoke 完成 | Browser Cookie 完整返回模型                          | 通用 Agent 工具表移除 Cookie 读写；旧读取只返回聚合计数                               | 最终统一 App/Agent 事件与诊断复核待执行                                                                               |
-| IR-03 | P1，立即止血 | Open           | 本机 MCP HTTP token 未强制                           | backend 每轮生成 token 并放入 URL                                                     | 缺失或错误 token 被解析为空上下文，不拒绝请求                                                                        |
+| IR-03 | P1，立即止血 | 工程实现及本机 HTTP 集成验证完成 | 本机 MCP HTTP token 未强制                           | 所有 `/mcp` 请求在读 body 前强制有效 Run token；失效状态统一 401                      | Authorization header 迁移仍为独立 P1-H；最终 SDK/App 重连验证待执行                                                  |
 | RF-01 | P0           | Open，修订范围 | 文件权限边界不统一                                   | 普通 Claude Editor/内置文件工具有 PreToolUse 工作空间保护；登记账号上传有真实路径检查 | renderer 通用 FS、普通 Browser 上传、Android install/push 仍可能读取工作空间外文件；底层 FileService 仍放行整个 home |
 | RF-02 | P0           | Open，缩小范围 | `auto` 和 Always 可绕过危险操作确认                  | 登记账号事务存在专用边界；定时任务严格只读                                            | Android uninstall/shell、清 Cookie 等内部工具没有不可绕过的宿主授权下限                                              |
 | RF-03 | P1           | Open，降级     | 外部 MCP env/header 绕过统一 CredentialService       | 文件位于 userData                                                                     | 普通配置明文、`0644`、renderer 全量返回、非原子写入和保存假成功                                                      |
@@ -43,7 +43,7 @@ MCP env/header 的普通配置明文、renderer 全量返回和保存假成功�
 | RF-07 | P2           | Open           | `uiFontSize` 无生产效果                              | 值可持久化                                                                            | 没有生产消费者                                                                                                       |
 | RF-08 | P2           | Known debt     | 文件移动崩溃窗口                                     | 普通投影失败可恢复                                                                    | 磁盘提交后立即强杀没有持久 journal                                                                                   |
 | RF-09 | Product gate | Pending        | 远程 Agent、PTY、真实网站登录缺真人验收              | 自动化门禁已覆盖部分代码路径                                                          | 真实身份、在线设备、断线续接和账号隔离没有同一环境证据                                                               |
-| IR-04 | P1           | Open           | 本机 MCP HTTP 请求体无大小上限且解析错误包含正文片段 | 仅监听 loopback                                                                       | 可造成主进程内存压力，并把输入秘密写入错误日志                                                                       |
+| IR-04 | P1           | 工程实现及本机 HTTP 集成验证完成 | 本机 MCP HTTP 请求体无大小上限且解析错误包含正文片段 | 8 MiB 流式/声明长度上限、100 请求 batch 上限、稳定脱敏解析错误                        | 最终统一压力与 App 生命周期回归待执行                                                                                 |
 | IR-05 | P1           | Open           | 工具确认卡把原始参数返回 renderer                    | renderer 需要展示操作摘要                                                             | 参数中的 token、正文或敏感路径被无差别字符串化；重新开放外部 MCP 前必须修复                                          |
 | IR-06 | P1           | Open           | 外部 MCP 名称允许原型特殊键                          | 名称只限制字符集合                                                                    | `__proto__` 等键可进入普通对象映射，造成原型行为或配置投影异常                                                       |
 | IR-07 | P1           | 工程实现及真实 Context smoke 完成 | 按名称清 Cookie 使用模糊且未转义的正则               | 按 name/domain/path 精确枚举并删除 Cookie identity                                    | 最终统一 Browser 回归待执行                                                                                           |
@@ -420,3 +420,15 @@ Cookie 秘密出站、强制现有 query token。只有这三道止血完成后�
 - 新增 `smoke:browser-cookie-security`：在隔离 Electron `WebContentsView` 和真实 Playwright Context 中
   写入 5 个测试 Cookie（含 HttpOnly canary），证明 canary 不出现在旧读取结果；删除根路径 `sid` 后，
   `sid_backup`、`sid.test`、`sid+test` 和 `/admin` 路径的同名 `sid` 均保留。smoke 已通过。
+
+### P0 顺序-3a / P1-2：本机 MCP token 与输入边界
+
+- `/mcp` 在读取 `Content-Length`、流式 body 和 JSON 之前恢复有效 Run token；缺失、错误、已释放、已取消
+  token 对 initialize、tools/list、tools/call、ping 和 notification 统一返回相同 401。
+- token 是唯一上下文来源。并行 Run A/B 的测试证明 token A/B 分别恢复自身 conversation、workspace、
+  run；请求参数伪造另一 Run 的字段不会切换宿主上下文。
+- 请求 envelope 上限为 8 MiB，并同时检查声明长度和读取中的实际字节；batch 上限 100。超限返回 413，
+  空/畸形 JSON 与过大 batch 返回稳定错误，不记录或回显正文片段。
+- 10 项 ToolHost HTTP/生命周期测试、TypeScript 检查和 `smoke:local` 11/11 通过。
+- 本阶段保留已由当前 SDK 验证的 query token。P1-H 的 Authorization header 迁移仍需真实 SDK initialize、
+  list、call、重连和错误重试兼容性证据，不与本次止血耦合。
