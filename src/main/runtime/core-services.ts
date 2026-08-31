@@ -214,6 +214,7 @@ export async function bootstrapMainProcessServices(
   runtime.fileService = new FileService({
     getActiveWorkspace: () =>
       runtime.workspaceStateService?.getActiveLocalWorkspace().workspacePath ?? null,
+    relocationJournalPath: join(app.getPath('userData'), 'file-relocation-journal.json'),
   })
 
   registerWorkspaceStateIpc(

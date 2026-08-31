@@ -34,6 +34,9 @@ import {
 } from '../../shared/file-types'
 import type {
   FsDocumentAssetResult,
+  FsBeginFileRelocationInput,
+  FsCommitFileRelocationInput,
+  FsFileRelocationJournalEntry,
   FsCopyEntryInput,
   FsCopyEntryResult,
   FsExtractZipResult,
@@ -46,6 +49,7 @@ import type {
 } from '../../shared/ipc/fs'
 import { isMarkdownDocumentPath, markdownAssetDirectoryName } from '../../shared/markdown-document'
 import { MarkdownDocumentService } from './markdown-document-service'
+import { FileRelocationJournal } from './file-relocation-journal'
 
 const MAX_INLINE_VIDEO_BYTES = 300 * 1024 * 1024
 const MAX_OFFICE_PREVIEW_BLOCKS = 400
@@ -86,6 +90,7 @@ export interface FileAccessContext {
 export interface FileServiceOptions {
   getActiveWorkspace: () => string | null
   now?: () => number
+  relocationJournalPath?: string
 }
 
 interface PickerCapability {
@@ -107,11 +112,15 @@ export class FileService {
   private readonly pickerCapabilities = new Map<number, PickerCapability[]>()
   private readonly getActiveWorkspace: () => string | null
   private readonly now: () => number
+  private readonly relocationJournal: FileRelocationJournal | null
 
   constructor(options: FileServiceOptions) {
     this.getActiveWorkspace = options.getActiveWorkspace
     this.now = options.now ?? Date.now
     this.markdownDocuments = new MarkdownDocumentService((filePath) => this.validatePath(filePath))
+    this.relocationJournal = options.relocationJournalPath
+      ? new FileRelocationJournal(options.relocationJournalPath, this.now)
+      : null
   }
 
   withAccess<T>(context: FileAccessContext, operation: () => T): T {
@@ -409,6 +418,55 @@ export class FileService {
     }
 
     return { ...input, query: input.query.trim(), results, truncated, scannedEntries }
+  }
+
+  async beginFileRelocation(input: FsBeginFileRelocationInput): Promise<void> {
+    const journal = this.requireRelocationJournal()
+    const workspacePath = await this.validatePath(input.workspacePath)
+    const moves = await Promise.all(
+      input.moves.map(async (move) => ({
+        sourcePath: await this.validatePath(move.sourcePath),
+        targetPath: await this.validatePath(move.targetPath, 'write'),
+      })),
+    )
+    for (const move of moves) {
+      if (
+        !isPathWithin(workspacePath, move.sourcePath) ||
+        !isPathWithin(workspacePath, move.targetPath)
+      ) {
+        throw new Error('OUTSIDE_WORKSPACE: relocation journal path does not belong to workspace')
+      }
+    }
+    await journal.begin({ operationId: input.operationId, workspacePath, moves })
+  }
+
+  async markFileRelocationCommitted(input: FsCommitFileRelocationInput): Promise<void> {
+    const journal = this.requireRelocationJournal()
+    const workspacePath = this.getCurrentAccessRoot()
+    if (!workspacePath) throw new Error('OUTSIDE_WORKSPACE: relocation has no active workspace')
+    const moves = await Promise.all(
+      input.moves.map(async (move) => ({
+        sourcePath: await this.validatePath(move.sourcePath),
+        targetPath: await this.validatePath(move.targetPath),
+      })),
+    )
+    await journal.markCommitted(input.operationId, resolve(workspacePath), moves)
+  }
+
+  async removeFileRelocation(operationId: string): Promise<void> {
+    const workspacePath = this.getCurrentAccessRoot()
+    if (!workspacePath) throw new Error('OUTSIDE_WORKSPACE: relocation has no active workspace')
+    await this.requireRelocationJournal().remove(operationId, resolve(workspacePath))
+  }
+
+  async listPendingFileRelocations(workspacePath: string): Promise<FsFileRelocationJournalEntry[]> {
+    const safeWorkspace = await this.validatePath(workspacePath)
+    return this.requireRelocationJournal().listForWorkspace(safeWorkspace)
+  }
+
+  private requireRelocationJournal(): FileRelocationJournal {
+    if (!this.relocationJournal) throw new Error('FILE_RELOCATION_JOURNAL_UNAVAILABLE')
+    return this.relocationJournal
   }
 
   /** 读取文件内容 */

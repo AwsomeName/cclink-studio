@@ -3,6 +3,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  rename,
   rm,
   stat,
   symlink,
@@ -111,6 +112,36 @@ describe('FileService', () => {
         query: 'x',
       }),
     ).rejects.toThrow('STALE_WORKSPACE')
+  })
+
+  it('persists relocation intent before disk changes and recovers it after service restart', async () => {
+    const workspace = join(tempDir, 'workspace')
+    const journalPath = join(tempDir, 'user-data', 'relocations.json')
+    await mkdir(workspace)
+    const sourcePath = join(workspace, 'old.md')
+    const targetPath = join(workspace, 'new.md')
+    await writeFile(sourcePath, 'draft')
+    const input = {
+      operationId: 'file-relocation-100-1',
+      workspacePath: workspace,
+      moves: [{ sourcePath, targetPath }],
+    }
+    const first = new FileService({
+      getActiveWorkspace: () => workspace,
+      relocationJournalPath: journalPath,
+    })
+    await first.beginFileRelocation(input)
+    await rename(sourcePath, targetPath)
+
+    const restarted = new FileService({
+      getActiveWorkspace: () => workspace,
+      relocationJournalPath: journalPath,
+    })
+    await expect(restarted.listPendingFileRelocations(workspace)).resolves.toMatchObject([
+      { operationId: input.operationId, state: 'disk-committed', moves: input.moves },
+    ])
+    await restarted.removeFileRelocation(input.operationId)
+    await expect(restarted.listPendingFileRelocations(workspace)).resolves.toEqual([])
   })
 
   it('enforces the active workspace for existing and not-yet-created paths', async () => {

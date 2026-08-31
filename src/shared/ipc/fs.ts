@@ -28,6 +28,31 @@ export interface FsSearchWorkspaceResult {
   scannedEntries: number
 }
 
+export interface FsFileRelocationMove {
+  sourcePath: string
+  targetPath: string
+}
+
+export interface FsFileRelocationJournalEntry {
+  operationId: string
+  workspacePath: string
+  moves: FsFileRelocationMove[]
+  state: 'disk-committed' | 'conflict'
+  createdAt: number
+  updatedAt: number
+}
+
+export interface FsBeginFileRelocationInput {
+  operationId: string
+  workspacePath: string
+  moves: FsFileRelocationMove[]
+}
+
+export interface FsCommitFileRelocationInput {
+  operationId: string
+  moves: FsFileRelocationMove[]
+}
+
 export interface FsFileStat {
   name: string
   path: string
@@ -261,6 +286,10 @@ export interface FsApiContract {
   getHomePath: () => Promise<string>
   readDir: (dirPath: string) => Promise<FsDirEntry[]>
   searchWorkspace: (input: FsSearchWorkspaceInput) => Promise<FsSearchWorkspaceResult>
+  beginFileRelocation: (input: FsBeginFileRelocationInput) => Promise<void>
+  markFileRelocationCommitted: (input: FsCommitFileRelocationInput) => Promise<void>
+  completeFileRelocation: (operationId: string) => Promise<void>
+  listPendingFileRelocations: (workspacePath: string) => Promise<FsFileRelocationJournalEntry[]>
   readFile: (filePath: string) => Promise<FsReadResult>
   readTextDocument: (filePath: string) => Promise<FsTextDocumentSnapshot>
   renderFile: (filePath: string) => Promise<FsRenderResult>
@@ -293,6 +322,14 @@ export const fsIpc = {
   readDir: defineIpcCall<[string], FsDirEntry[]>('fs:readDir'),
   searchWorkspace: defineIpcCall<[FsSearchWorkspaceInput], FsSearchWorkspaceResult>(
     'fs:searchWorkspace',
+  ),
+  beginFileRelocation: defineIpcCall<[FsBeginFileRelocationInput], void>('fs:beginFileRelocation'),
+  markFileRelocationCommitted: defineIpcCall<[FsCommitFileRelocationInput], void>(
+    'fs:markFileRelocationCommitted',
+  ),
+  completeFileRelocation: defineIpcCall<[string], void>('fs:completeFileRelocation'),
+  listPendingFileRelocations: defineIpcCall<[string], FsFileRelocationJournalEntry[]>(
+    'fs:listPendingFileRelocations',
   ),
   readFile: defineIpcCall<[string], FsReadResult>('fs:readFile'),
   readTextDocument: defineIpcCall<[string], FsTextDocumentSnapshot>('fs:readTextDocument'),

@@ -21,6 +21,27 @@ export const fsSearchWorkspaceSchema = z
   })
   .strict()
 
+export const fsFileRelocationOperationIdSchema = z.string().regex(/^file-relocation-[0-9]+-[0-9]+$/)
+
+export const fsFileRelocationMoveSchema = z
+  .object({ sourcePath: fsPathSchema, targetPath: fsPathSchema })
+  .strict()
+
+export const fsBeginFileRelocationSchema = z
+  .object({
+    operationId: fsFileRelocationOperationIdSchema,
+    workspacePath: fsPathSchema,
+    moves: z.array(fsFileRelocationMoveSchema).min(1).max(8),
+  })
+  .strict()
+
+export const fsCommitFileRelocationSchema = z
+  .object({
+    operationId: fsFileRelocationOperationIdSchema,
+    moves: z.array(fsFileRelocationMoveSchema).min(1).max(8),
+  })
+  .strict()
+
 export const fsSaveTextDocumentSchema = z
   .object({
     filePath: fsPathSchema,

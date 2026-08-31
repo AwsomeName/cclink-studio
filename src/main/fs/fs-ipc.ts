@@ -50,6 +50,16 @@ export function registerFsIpc(
   })
 
   handle(fsIpc.searchWorkspace, async (_event, input) => fs.searchWorkspace(input))
+  handle(fsIpc.beginFileRelocation, async (_event, input) => fs.beginFileRelocation(input))
+  handle(fsIpc.markFileRelocationCommitted, async (_event, input) =>
+    fs.markFileRelocationCommitted(input),
+  )
+  handle(fsIpc.completeFileRelocation, async (_event, operationId) =>
+    fs.removeFileRelocation(operationId),
+  )
+  handle(fsIpc.listPendingFileRelocations, async (_event, workspacePath) =>
+    fs.listPendingFileRelocations(workspacePath),
+  )
 
   // 读取文件内容
   handle(fsIpc.readFile, async (_event, filePath) => {

@@ -25,6 +25,7 @@ import {
 } from '../utils/workspace-runtime'
 import { runOpenProjectsBootstrapOnce } from '../stores/open-projects-store'
 import { restoreCclinkConnectionForOpenProjects } from '../features/cclink-remote/cclink-connection-policy'
+import { recoverPendingFileRelocations } from '../features/file-relocation/file-relocation-transition'
 
 export type { WorkspaceBootstrapDeps } from './workspace-bootstrap-core'
 export { restoreWorkspaceState } from './workspace-bootstrap-core'
@@ -90,6 +91,11 @@ export function useWorkspaceBootstrap(): boolean {
 
     async function bootstrap(): Promise<void> {
       const result = await runWorkspaceBootstrapOnce()
+      if (result.workspacePath) {
+        await recoverPendingFileRelocations(result.workspacePath, () =>
+          useFsStore.getState().refreshWorkspace(),
+        ).catch((error) => console.warn('[FileRelocation] 启动恢复失败:', error))
+      }
       if (result.canPersistRuntime) {
         await reconcileTerminalRuntimeStatuses(result.workspacePath)
         await reconcileAgentRuntimeStatuses(result.workspacePath)

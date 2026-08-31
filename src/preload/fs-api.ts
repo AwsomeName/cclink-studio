@@ -6,6 +6,13 @@ export const fsApi: FsApiContract = {
   getHomePath: () => invokeIpcContract(fsIpc.getHomePath),
   readDir: (dirPath) => invokeIpcContract(fsIpc.readDir, dirPath),
   searchWorkspace: (input) => invokeIpcContract(fsIpc.searchWorkspace, input),
+  beginFileRelocation: (input) => invokeIpcContract(fsIpc.beginFileRelocation, input),
+  markFileRelocationCommitted: (input) =>
+    invokeIpcContract(fsIpc.markFileRelocationCommitted, input),
+  completeFileRelocation: (operationId) =>
+    invokeIpcContract(fsIpc.completeFileRelocation, operationId),
+  listPendingFileRelocations: (workspacePath) =>
+    invokeIpcContract(fsIpc.listPendingFileRelocations, workspacePath),
   readFile: (filePath) => invokeIpcContract(fsIpc.readFile, filePath),
   readTextDocument: (filePath) => invokeIpcContract(fsIpc.readTextDocument, filePath),
   renderFile: (filePath) => invokeIpcContract(fsIpc.renderFile, filePath),

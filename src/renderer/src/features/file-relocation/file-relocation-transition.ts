@@ -211,11 +211,23 @@ async function runTransition(
   const editorLock = await beginEditorFileRelocation(input.sourcePath)
 
   try {
-    const diskResult = await input.commitDisk()
+    await window.cclinkStudio.fs.beginFileRelocation({
+      operationId,
+      workspacePath: input.workspacePath,
+      moves: [{ sourcePath: input.sourcePath, targetPath: input.targetPath }],
+    })
+    let diskResult: FileRelocationDiskResult
+    try {
+      diskResult = await input.commitDisk()
+    } catch (error) {
+      // 磁盘操作可能已部分完成；保留 prepared 记录，由重启恢复按源/目标事实判定。
+      throw error
+    }
     const moves = [
       { sourcePath: input.sourcePath, targetPath: input.targetPath },
       ...(diskResult.companionMoves ?? []),
     ]
+    await window.cclinkStudio.fs.markFileRelocationCommitted({ operationId, moves })
     const stages = createProjectionStages(input, diskResult, moves, browserBindings)
     let failedStages: string[]
     beginWorkspaceStateRestore()
@@ -237,6 +249,10 @@ async function runTransition(
     if (!verified) warnings.push('verification:file-tree')
     warnings.push(...browserWarnings)
 
+    if (warnings.length === 0) {
+      await window.cclinkStudio.fs.completeFileRelocation(operationId)
+    }
+
     recordRendererDiagnosticLog(warnings.length > 0 ? 'warn' : 'info', [
       '[FileRelocation] completed',
       {
@@ -249,6 +265,72 @@ async function runTransition(
   } finally {
     endEditorFileRelocation(editorLock)
   }
+}
+
+/** 重启后重放已经落盘、尚未持久化到工作台状态的路径投影。冲突记录保持待诊断。 */
+export async function recoverPendingFileRelocations(
+  workspacePath: string,
+  refreshFileTree: () => Promise<void>,
+): Promise<{ recovered: number; conflicts: number; pending: number }> {
+  const entries = await window.cclinkStudio.fs.listPendingFileRelocations(workspacePath)
+  let recovered = 0
+  let conflicts = 0
+  let pending = 0
+  for (const entry of entries) {
+    if (entry.state === 'conflict') {
+      conflicts += 1
+      recordRendererDiagnosticLog('warn', [
+        '[FileRelocation] recovery conflict',
+        { operationId: entry.operationId },
+      ])
+      continue
+    }
+    const [primary, ...companions] = entry.moves
+    if (!primary) continue
+    const browserBindings = entry.moves.flatMap((move) =>
+      captureBrowserFileBindings(move.sourcePath, move.targetPath),
+    )
+    const stages = createProjectionStages(
+      {
+        workspacePath,
+        sourcePath: primary.sourcePath,
+        targetPath: primary.targetPath,
+        commitDisk: async () => ({}),
+        applyFileSystemProjection: () => undefined,
+        verifyFileSystemProjection: async () => true,
+        persistFileSystemProjection: async () => undefined,
+      },
+      { companionMoves: companions },
+      entry.moves,
+      browserBindings,
+    ).filter((stage) => stage.name !== 'file-tree')
+    beginWorkspaceStateRestore()
+    let failures: string[]
+    try {
+      failures = applyProjectionStages(stages)
+    } finally {
+      endWorkspaceStateRestore()
+    }
+    const persistence = failures.length === 0 ? await persistRuntimeSections(workspacePath) : null
+    const browserWarnings = await navigateBrowserBindings(browserBindings)
+    await refreshFileTree()
+    if (failures.length === 0 && persistence?.success && browserWarnings.length === 0) {
+      await window.cclinkStudio.fs.completeFileRelocation(entry.operationId)
+      recovered += 1
+    } else {
+      pending += 1
+      recordRendererDiagnosticLog('warn', [
+        '[FileRelocation] recovery remains pending',
+        {
+          operationId: entry.operationId,
+          failures,
+          persistence: persistence?.failures ?? [],
+          browserWarnings,
+        },
+      ])
+    }
+  }
+  return { recovered, conflicts, pending }
 }
 
 /** Serialize local file relocations so overlapping directory moves cannot interleave projections. */

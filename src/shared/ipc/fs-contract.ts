@@ -5,6 +5,9 @@ import {
   fsDocumentPathPairSchema,
   fsDocumentTargetPathSchema,
   fsCopyEntrySchema,
+  fsBeginFileRelocationSchema,
+  fsCommitFileRelocationSchema,
+  fsFileRelocationOperationIdSchema,
   fsMarkdownSaveAsSchema,
   fsMarkdownTrashSchema,
   fsPathPairSchema,
@@ -43,6 +46,19 @@ export const fsIpcContracts = {
     requireArgs(args, 1, fsIpc.searchWorkspace.channel)
     return ipcArgs(fsSearchWorkspaceSchema.parse(args[0]))
   }),
+  beginFileRelocation: bindIpcParser(fsIpc.beginFileRelocation, (args) => {
+    requireArgs(args, 1, fsIpc.beginFileRelocation.channel)
+    return ipcArgs(fsBeginFileRelocationSchema.parse(args[0]))
+  }),
+  markFileRelocationCommitted: bindIpcParser(fsIpc.markFileRelocationCommitted, (args) => {
+    requireArgs(args, 1, fsIpc.markFileRelocationCommitted.channel)
+    return ipcArgs(fsCommitFileRelocationSchema.parse(args[0]))
+  }),
+  completeFileRelocation: bindIpcParser(fsIpc.completeFileRelocation, (args) => {
+    requireArgs(args, 1, fsIpc.completeFileRelocation.channel)
+    return ipcArgs(fsFileRelocationOperationIdSchema.parse(args[0]))
+  }),
+  listPendingFileRelocations: bindPath(fsIpc.listPendingFileRelocations),
   readFile: bindPath(fsIpc.readFile),
   readTextDocument: bindPath(fsIpc.readTextDocument),
   renderFile: bindPath(fsIpc.renderFile),
