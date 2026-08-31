@@ -1,58 +1,85 @@
-import { useEffect, useState, useCallback } from 'react'
-import { useFsStore, useTabStore } from '../../stores'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { useFsStore, useTabStore, useWorkspaceStore } from '../../stores'
 import type { FileTreeNode } from '../../stores/fs-store'
 import { IconSearch } from '../common/Icons'
 import { getModelFileIcon, getTabTypeForFile, isModelFileExtension } from '../../utils/model-files'
 import { isGerberFileExtension } from '../../utils/hardware-files'
+import { isSearchResponseCurrent } from './search-request-guard'
 
-const SEARCH_PANEL_STORAGE_KEY = 'cclink-studio-search-panel-state'
+const SEARCH_PANEL_STORAGE_KEY = 'cclink-studio-search-panel-queries-v2'
 
-function loadSearchState(): { query: string; results: FileTreeNode[] } {
+function loadSearchQuery(workspaceKey: string | null): string {
   try {
-    if (typeof localStorage === 'undefined') return { query: '', results: [] }
+    if (typeof localStorage === 'undefined' || !workspaceKey) return ''
     const raw = localStorage.getItem(SEARCH_PANEL_STORAGE_KEY)
-    if (!raw) return { query: '', results: [] }
-    const parsed = JSON.parse(raw) as { query?: string; results?: FileTreeNode[] }
-    return {
-      query: parsed.query ?? '',
-      results: Array.isArray(parsed.results) ? parsed.results : [],
-    }
+    if (!raw) return ''
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    return typeof parsed[workspaceKey] === 'string' ? parsed[workspaceKey] : ''
   } catch {
-    return { query: '', results: [] }
+    return ''
   }
 }
 
-function saveSearchState(query: string, results: FileTreeNode[]): void {
+function saveSearchQuery(workspaceKey: string | null, query: string): void {
   try {
-    if (typeof localStorage === 'undefined') return
-    localStorage.setItem(
-      SEARCH_PANEL_STORAGE_KEY,
-      JSON.stringify({ query, results: results.slice(0, 100) }),
-    )
+    if (typeof localStorage === 'undefined' || !workspaceKey) return
+    const raw = localStorage.getItem(SEARCH_PANEL_STORAGE_KEY)
+    const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
+    parsed[workspaceKey] = query
+    localStorage.setItem(SEARCH_PANEL_STORAGE_KEY, JSON.stringify(parsed))
   } catch {
     // localStorage 可能不可用，忽略持久化失败。
   }
 }
 
 export function SearchPanel(): React.ReactElement {
-  const initial = useState(loadSearchState)[0]
-  const [query, setQuery] = useState(initial.query)
-  const [results, setResults] = useState<FileTreeNode[]>(initial.results)
+  const workspacePath = useFsStore((s) => s.workspacePath)
+  const workspaceGeneration = useWorkspaceStore((s) => s.generation)
+  const [query, setQuery] = useState(() => loadSearchQuery(workspacePath))
+  const [results, setResults] = useState<FileTreeNode[]>([])
   const [searching, setSearching] = useState(false)
+  const [truncated, setTruncated] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const requestSequence = useRef(0)
   const searchFiles = useFsStore((s) => s.searchFiles)
   const openTab = useTabStore((s) => s.openTab)
-  const workspacePath = useFsStore((s) => s.workspacePath)
 
   const handleSearch = useCallback(async () => {
     if (!query.trim() || !workspacePath) return
-    setSearching(true)
-    try {
-      const found = await searchFiles(query.trim())
-      setResults(found)
-    } finally {
-      setSearching(false)
+    const request = {
+      sequence: ++requestSequence.current,
+      workspaceKey: workspacePath,
+      generation: workspaceGeneration,
+      requestId: crypto.randomUUID(),
     }
-  }, [query, searchFiles, workspacePath])
+    setSearching(true)
+    setSearchError(null)
+    try {
+      const response = await searchFiles(query.trim(), request.requestId)
+      const currentWorkspace = useFsStore.getState().workspacePath
+      const currentGeneration = useWorkspaceStore.getState().generation
+      if (
+        !isSearchResponseCurrent(
+          request,
+          requestSequence.current,
+          currentWorkspace,
+          currentGeneration,
+          response,
+        )
+      ) {
+        return
+      }
+      setResults(response.results)
+      setTruncated(response.truncated)
+    } catch (error) {
+      if (request.sequence !== requestSequence.current) return
+      setResults([])
+      setTruncated(false)
+      setSearchError(error instanceof Error ? error.message : '搜索失败')
+    } finally {
+      if (request.sequence === requestSequence.current) setSearching(false)
+    }
+  }, [query, searchFiles, workspaceGeneration, workspacePath])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -87,8 +114,15 @@ export function SearchPanel(): React.ReactElement {
   }
 
   useEffect(() => {
-    saveSearchState(query, results)
-  }, [query, results])
+    requestSequence.current += 1
+    setQuery(loadSearchQuery(workspacePath))
+    setResults([])
+    setTruncated(false)
+    setSearchError(null)
+    setSearching(false)
+  }, [workspaceGeneration, workspacePath])
+
+  useEffect(() => saveSearchQuery(workspacePath, query), [query, workspacePath])
 
   return (
     <div className="search-panel">
@@ -107,6 +141,8 @@ export function SearchPanel(): React.ReactElement {
       </div>
 
       {searching && <div className="search-panel-status">搜索中...</div>}
+      {searchError && <div className="search-panel-status error">搜索失败：{searchError}</div>}
+      {truncated && <div className="search-panel-status">结果已截断，请缩小关键词范围</div>}
 
       {results.length > 0 && (
         <div className="search-panel-results">
@@ -121,7 +157,7 @@ export function SearchPanel(): React.ReactElement {
         </div>
       )}
 
-      {!searching && query && results.length === 0 && (
+      {!searching && !searchError && query && results.length === 0 && (
         <div className="search-panel-empty">未找到匹配的文件</div>
       )}
     </div>

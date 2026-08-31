@@ -40,6 +40,8 @@ import type {
   FsOfficePreviewBlock,
   FsRenderResult,
   FsSaveTextDocumentResult,
+  FsSearchWorkspaceInput,
+  FsSearchWorkspaceResult,
   FsTextDocumentSnapshot,
 } from '../../shared/ipc/fs'
 import { isMarkdownDocumentPath, markdownAssetDirectoryName } from '../../shared/markdown-document'
@@ -61,6 +63,17 @@ const OOXML_PARSER = new XMLParser({
 
 const FILE_PICKER_CAPABILITY_TTL_MS = 2 * 60 * 1000
 const FILE_PICKER_CAPABILITY_MAX_USES = 32
+const SEARCH_IGNORED_DIRECTORIES = new Set([
+  '.git',
+  '.hg',
+  '.svn',
+  'node_modules',
+  'dist',
+  'build',
+  'out',
+  'coverage',
+])
+const DEFAULT_SEARCH_RESULT_LIMIT = 200
 
 export interface FileAccessContext {
   rendererId?: number
@@ -342,6 +355,60 @@ export class FileService {
         if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
         return a.name.localeCompare(b.name)
       })
+  }
+
+  /** 主进程拥有的有界工作空间搜索；不跟随符号链接，且在扫描期间持续复核工作空间。 */
+  async searchWorkspace(input: FsSearchWorkspaceInput): Promise<FsSearchWorkspaceResult> {
+    const root = resolve(input.workspaceKey)
+    const activeRoot = this.getCurrentAccessRoot()
+    if (!activeRoot || resolve(activeRoot) !== root) {
+      throw new Error('STALE_WORKSPACE: 搜索请求不属于当前工作空间')
+    }
+    const safeRoot = await this.validatePath(root)
+    const canonicalRoot = await realpath(safeRoot)
+    const query = input.query.trim().toLocaleLowerCase()
+    const limit = input.maxResults ?? DEFAULT_SEARCH_RESULT_LIMIT
+    const results: FsSearchWorkspaceResult['results'] = []
+    let scannedEntries = 0
+    let truncated = false
+    const pending = [safeRoot]
+
+    while (pending.length > 0) {
+      const active = this.getCurrentAccessRoot()
+      if (!active || resolve(active) !== root) {
+        throw new Error('STALE_WORKSPACE: 搜索期间工作空间已切换')
+      }
+      const directory = pending.pop()!
+      const canonicalDirectory = await realpath(directory)
+      if (!isPathWithin(canonicalRoot, canonicalDirectory)) {
+        throw new Error('OUTSIDE_WORKSPACE: 搜索目录逃逸工作空间')
+      }
+      const entries = await readdir(directory, { withFileTypes: true })
+      for (const entry of entries) {
+        scannedEntries += 1
+        const entryPath = join(directory, entry.name)
+        if (entry.isSymbolicLink()) continue
+        const type = entry.isDirectory() ? ('directory' as const) : ('file' as const)
+        if (entry.name.toLocaleLowerCase().includes(query)) {
+          if (results.length >= limit) {
+            truncated = true
+            break
+          }
+          results.push({
+            name: entry.name,
+            path: entryPath,
+            type,
+            extension: entry.isFile() ? extname(entry.name).toLowerCase() : undefined,
+          })
+        }
+        if (entry.isDirectory() && !SEARCH_IGNORED_DIRECTORIES.has(entry.name)) {
+          pending.push(entryPath)
+        }
+      }
+      if (truncated) break
+    }
+
+    return { ...input, query: input.query.trim(), results, truncated, scannedEntries }
   }
 
   /** 读取文件内容 */

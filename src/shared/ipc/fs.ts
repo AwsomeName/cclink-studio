@@ -10,6 +10,24 @@ export interface FsDirEntry {
   modifiedAt: number
 }
 
+export interface FsSearchWorkspaceInput {
+  workspaceKey: string
+  generation: number
+  requestId: string
+  query: string
+  maxResults?: number
+}
+
+export interface FsSearchWorkspaceResult {
+  workspaceKey: string
+  generation: number
+  requestId: string
+  query: string
+  results: Array<Pick<FsDirEntry, 'name' | 'path' | 'type' | 'extension'>>
+  truncated: boolean
+  scannedEntries: number
+}
+
 export interface FsFileStat {
   name: string
   path: string
@@ -242,6 +260,7 @@ export interface FsCopyEntryResult {
 export interface FsApiContract {
   getHomePath: () => Promise<string>
   readDir: (dirPath: string) => Promise<FsDirEntry[]>
+  searchWorkspace: (input: FsSearchWorkspaceInput) => Promise<FsSearchWorkspaceResult>
   readFile: (filePath: string) => Promise<FsReadResult>
   readTextDocument: (filePath: string) => Promise<FsTextDocumentSnapshot>
   renderFile: (filePath: string) => Promise<FsRenderResult>
@@ -272,6 +291,9 @@ export interface FsApiContract {
 export const fsIpc = {
   getHomePath: defineIpcCall<[], string>('fs:getHomePath'),
   readDir: defineIpcCall<[string], FsDirEntry[]>('fs:readDir'),
+  searchWorkspace: defineIpcCall<[FsSearchWorkspaceInput], FsSearchWorkspaceResult>(
+    'fs:searchWorkspace',
+  ),
   readFile: defineIpcCall<[string], FsReadResult>('fs:readFile'),
   readTextDocument: defineIpcCall<[string], FsTextDocumentSnapshot>('fs:readTextDocument'),
   renderFile: defineIpcCall<[string], FsRenderResult>('fs:renderFile'),

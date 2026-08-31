@@ -11,6 +11,16 @@ export const fsPathSchema = z
 export const fsWatchIdSchema = z.string().uuid()
 export const fsTextContentSchema = z.string().max(MAX_TEXT_BYTES)
 
+export const fsSearchWorkspaceSchema = z
+  .object({
+    workspaceKey: fsPathSchema,
+    generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    requestId: z.string().uuid(),
+    query: z.string().trim().min(1).max(256),
+    maxResults: z.number().int().min(1).max(500).optional(),
+  })
+  .strict()
+
 export const fsSaveTextDocumentSchema = z
   .object({
     filePath: fsPathSchema,

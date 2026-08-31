@@ -49,6 +49,70 @@ function createFileService(): FileService {
 }
 
 describe('FileService', () => {
+  it('searches deep workspace paths, skips ignored directories and symlinks, and reports truncation', async () => {
+    const workspace = join(tempDir, 'workspace')
+    const outside = join(tempDir, 'outside')
+    const deep = join(workspace, 'one', 'two', 'three', 'four', 'five')
+    await Promise.all([mkdir(deep, { recursive: true }), mkdir(outside)])
+    await Promise.all([
+      writeFile(join(deep, 'deep-canary.txt'), 'deep'),
+      mkdir(join(workspace, 'node_modules')),
+      writeFile(join(outside, 'outside-canary.txt'), 'outside'),
+    ])
+    await writeFile(join(workspace, 'node_modules', 'ignored-canary.txt'), 'ignored')
+    await symlink(outside, join(workspace, 'linked-outside'))
+    const service = new FileService({ getActiveWorkspace: () => workspace })
+
+    const deepResult = await service.searchWorkspace({
+      workspaceKey: workspace,
+      generation: 3,
+      requestId: '4eab7167-728c-4a62-b55a-70b7eab0640d',
+      query: 'canary',
+    })
+    expect(deepResult.results.map((entry) => entry.name)).toEqual(['deep-canary.txt'])
+    expect(deepResult).toMatchObject({ generation: 3, truncated: false })
+
+    await Promise.all([
+      writeFile(join(workspace, 'canary-a.txt'), 'a'),
+      writeFile(join(workspace, 'canary-b.txt'), 'b'),
+    ])
+    const limited = await service.searchWorkspace({
+      workspaceKey: workspace,
+      generation: 4,
+      requestId: '0d91f44f-24f4-45f2-833f-0a729caf3465',
+      query: 'canary',
+      maxResults: 1,
+    })
+    expect(limited.results).toHaveLength(1)
+    expect(limited.truncated).toBe(true)
+  })
+
+  it('rejects a search bound to another or switched workspace', async () => {
+    const workspaceA = join(tempDir, 'workspace-a')
+    const workspaceB = join(tempDir, 'workspace-b')
+    await Promise.all([mkdir(workspaceA), mkdir(workspaceB)])
+    let activeWorkspace = workspaceA
+    const service = new FileService({ getActiveWorkspace: () => activeWorkspace })
+
+    await expect(
+      service.searchWorkspace({
+        workspaceKey: workspaceB,
+        generation: 1,
+        requestId: 'fab51b8d-9ab7-43bd-8ddf-1836f7aa4b68',
+        query: 'x',
+      }),
+    ).rejects.toThrow('STALE_WORKSPACE')
+    activeWorkspace = workspaceB
+    await expect(
+      service.searchWorkspace({
+        workspaceKey: workspaceA,
+        generation: 1,
+        requestId: '3475c868-9078-423d-98e6-e4b614993012',
+        query: 'x',
+      }),
+    ).rejects.toThrow('STALE_WORKSPACE')
+  })
+
   it('enforces the active workspace for existing and not-yet-created paths', async () => {
     const workspaceA = join(tempDir, 'workspace-a')
     const workspaceB = join(tempDir, 'workspace-b')

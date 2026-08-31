@@ -49,6 +49,8 @@ export function registerFsIpc(
     })
   })
 
+  handle(fsIpc.searchWorkspace, async (_event, input) => fs.searchWorkspace(input))
+
   // 读取文件内容
   handle(fsIpc.readFile, async (_event, filePath) => {
     return fs.readFile(filePath)

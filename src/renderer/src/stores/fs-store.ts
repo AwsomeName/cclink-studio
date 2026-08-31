@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { AppSettings } from '../../../shared/ipc/settings'
-import type { FsCopyEntryResult, FsDirEntry } from '../../../shared/ipc/fs'
+import type { FsCopyEntryResult, FsDirEntry, FsSearchWorkspaceResult } from '../../../shared/ipc/fs'
 import {
   globalWorkspaceRef,
   localWorkspaceRef,
@@ -372,7 +372,7 @@ interface FsState {
   /** 设置当前选中路径 */
   setSelectedPath: (path: string | null) => void
   /** 搜索文件 */
-  searchFiles: (query: string) => Promise<FileTreeNode[]>
+  searchFiles: (query: string, requestId: string) => Promise<FsSearchWorkspaceResult>
   /** 进入内联编辑模式（新建文件/文件夹 或 重命名节点） */
   startEditing: (
     editPath: string | 'new-folder' | 'new-file',
@@ -817,36 +817,18 @@ export const useFsStore = create<FsState>((set, get) => ({
     )
   },
 
-  searchFiles: async (query) => {
-    // 简单实现：在当前工作区内递归搜索
-    const { workspacePath } = get()
-    if (!workspacePath || !query) return []
-
-    const results: FileTreeNode[] = []
-    const searchDir = async (dirPath: string, depth: number): Promise<void> => {
-      if (depth > 3) return // 限制搜索深度
-      try {
-        const entries = await window.cclinkStudio.fs.readDir(dirPath)
-        for (const e of entries) {
-          if (e.name.toLowerCase().includes(query.toLowerCase())) {
-            results.push({
-              name: e.name,
-              path: e.path,
-              type: e.type,
-              extension: e.extension,
-            })
-          }
-          if (e.type === 'directory') {
-            await searchDir(e.path, depth + 1)
-          }
-        }
-      } catch {
-        // 跳过无权限的目录
-      }
+  searchFiles: async (query, requestId) => {
+    const workspacePath = get().workspacePath
+    const workspaceState = useWorkspaceStore.getState()
+    if (!workspacePath || workspaceState.activeWorkspaceRef.kind !== 'local') {
+      throw new Error('当前没有可搜索的本地工作空间')
     }
-
-    await searchDir(workspacePath, 0)
-    return results
+    return window.cclinkStudio.fs.searchWorkspace({
+      workspaceKey: workspacePath,
+      generation: workspaceState.generation,
+      requestId,
+      query,
+    })
   },
 
   startEditing: (editPath, parentForNewFolder) =>

@@ -5,6 +5,7 @@ import { invokeIpcContract } from './ipc-contract-client'
 export const fsApi: FsApiContract = {
   getHomePath: () => invokeIpcContract(fsIpc.getHomePath),
   readDir: (dirPath) => invokeIpcContract(fsIpc.readDir, dirPath),
+  searchWorkspace: (input) => invokeIpcContract(fsIpc.searchWorkspace, input),
   readFile: (filePath) => invokeIpcContract(fsIpc.readFile, filePath),
   readTextDocument: (filePath) => invokeIpcContract(fsIpc.readTextDocument, filePath),
   renderFile: (filePath) => invokeIpcContract(fsIpc.renderFile, filePath),
