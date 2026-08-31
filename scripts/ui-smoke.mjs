@@ -873,6 +873,90 @@ async function main() {
     await localComposer.fill('')
     const localSideProjection = await panelProjection('local')
 
+    const publishingBindingSnapshot = await page.evaluate(async () => {
+      const { useAgentStore } = await import('/src/stores/agent-store.ts')
+      const { useBrowserTaskStore } = await import('/src/stores/browser-task-store.ts')
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      const agent = useAgentStore.getState()
+      const tabs = useTabStore.getState()
+      const browserTasks = useBrowserTaskStore.getState()
+      const conversationId = 'article-publishing-ui-smoke'
+      const tabId = 'article-publishing-browser-ui-smoke'
+      agent.createConversation({
+        id: conversationId,
+        runtime: {
+          location: 'local',
+          transport: 'local',
+          backend: 'cclink-studio-agent',
+          workspaceRef: { kind: 'global' },
+        },
+      })
+      agent.renameConversation(conversationId, '发布文章 · UI Smoke · CSDN')
+      agent.addSystemMessage('发布执行正在上传正文图片', conversationId)
+      useBrowserTaskStore.setState({
+        tasks: {
+          ...browserTasks.tasks,
+          'article-publishing-task-ui-smoke': {
+            id: 'article-publishing-task-ui-smoke',
+            tabId,
+            goal: '发布图文 UI Smoke',
+            correlation: {
+              workspaceKey: null,
+              conversationId,
+              agentRunId: 'article-publishing-run-ui-smoke',
+              agentSessionRef: null,
+              profileId: null,
+              affairId: 'article-publishing-affair-ui-smoke',
+              affairAttemptId: 'article-publishing-attempt-ui-smoke',
+            },
+            status: 'running',
+            startedAt: Date.now(),
+            downloadIds: [],
+          },
+        },
+      })
+      useTabStore.setState({
+        tabs: [
+          ...tabs.tabs,
+          {
+            id: tabId,
+            type: 'browser',
+            title: 'CSDN 发布页',
+            icon: '🌐',
+            initialUrl: 'about:blank',
+            workspaceRef: { kind: 'global' },
+          },
+        ],
+        activeTabId: tabId,
+      })
+      return {
+        activeConversationId: agent.activeConversationId,
+        tabs: tabs.tabs,
+        activeTabId: tabs.activeTabId,
+        tasks: browserTasks.tasks,
+        actionLogs: browserTasks.actionLogs,
+      }
+    })
+    try {
+      await localPanel.getByText('发布执行正在上传正文图片').waitFor({
+        state: 'visible',
+        timeout: 10_000,
+      })
+      await localPanel.getByText('发布图文 UI Smoke').waitFor({
+        state: 'visible',
+        timeout: 10_000,
+      })
+    } finally {
+      await page.evaluate(async (snapshot) => {
+        const { useAgentStore } = await import('/src/stores/agent-store.ts')
+        const { useBrowserTaskStore } = await import('/src/stores/browser-task-store.ts')
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        useBrowserTaskStore.setState({ tasks: snapshot.tasks, actionLogs: snapshot.actionLogs })
+        useTabStore.setState({ tabs: snapshot.tabs, activeTabId: snapshot.activeTabId })
+        useAgentStore.getState().switchConversation(snapshot.activeConversationId)
+      }, publishingBindingSnapshot)
+    }
+
     await page.evaluate(async () => {
       const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
       const state = useWorkspaceStore.getState()

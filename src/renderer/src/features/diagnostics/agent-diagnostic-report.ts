@@ -236,16 +236,15 @@ export function selectDiagnosticBrowserTask({
   workspaceKey,
   conversationId,
 }: DiagnosticBrowserTaskSelection): BrowserTaskRun | null {
-  if (!tabId) return null
   const candidates = tasks
-    .filter((task) => task.tabId === tabId)
+    .filter((task) => !tabId || task.tabId === tabId)
     .sort((a, b) => b.startedAt - a.startedAt)
   const exact = candidates.filter(
     (task) =>
       task.correlation?.conversationId === conversationId &&
       task.correlation.workspaceKey === workspaceKey,
   )
-  const legacy = candidates.filter((task) => !task.correlation)
+  const legacy = tabId ? candidates.filter((task) => !task.correlation) : []
   return pickCurrentTask(exact) ?? pickCurrentTask(legacy)
 }
 

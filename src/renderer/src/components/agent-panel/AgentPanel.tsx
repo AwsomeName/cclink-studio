@@ -64,6 +64,10 @@ import {
 } from './agent-panel-view'
 import { RemoteAgentController } from '../../features/cclink-remote/remote-agent-controller'
 import { useTerminalConfirmationViewModels } from './terminal-confirmation-view-model'
+import {
+  selectBrowserTabConversationTask,
+  selectConversationBrowserTask,
+} from '../../features/agent-conversations/browser-task-binding'
 
 interface AgentPanelProps {
   variant?: 'center' | 'side'
@@ -114,6 +118,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   const scope = useAgentStore((s) => s.scope)
   const createConversation = useAgentStore((s) => s.createConversation)
   const switchConversation = useAgentStore((s) => s.switchConversation)
+  const restoreArchivedConversation = useAgentStore((s) => s.restoreArchivedConversation)
   const setRuntimeBinding = useAgentStore((s) => s.setRuntimeBinding)
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
@@ -139,6 +144,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   const { roles, error: rolesError } = useAgentRoles()
   const { skills: availableSkills, error: skillsError } = useAgentSkills()
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const focusedTabConversationRef = useRef<string | null>(null)
   const [resourceQuery, setResourceQuery] = useState<string | null>(null)
   const [skillQuery, setSkillQuery] = useState<string | null>(null)
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
@@ -187,6 +193,86 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   useEffect(() => {
     void refreshBrowserDownloads()
   }, [refreshBrowserDownloads])
+
+  const activeBrowserTab = useMemo(
+    () => tabs.find((tab) => tab.id === activeTabId && tab.type === 'browser') ?? null,
+    [activeTabId, tabs],
+  )
+  const activePublishingAffairId = useMemo(() => {
+    const tab = tabs.find((candidate) => candidate.id === activeTabId)
+    return tab?.type === 'article-publishing' ? (tab.articlePublishing?.affairId ?? null) : null
+  }, [activeTabId, tabs])
+  const activeConversationBrowserTask = useMemo(
+    () =>
+      selectConversationBrowserTask({
+        tasks: Object.values(browserTasks),
+        conversationId: activeConversationId,
+        workspaceKey: workspaceRefKey(activeWorkspaceRef),
+      }),
+    [activeConversationId, activeWorkspaceRef, browserTasks],
+  )
+  const activeTabConversationTask = useMemo(
+    () =>
+      activeBrowserTab
+        ? selectBrowserTabConversationTask({
+            tasks: Object.values(browserTasks),
+            tabId: activeBrowserTab.id,
+            workspaceKey: workspaceRefKey(activeWorkspaceRef),
+          })
+        : null,
+    [activeBrowserTab, activeWorkspaceRef, browserTasks],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    const taskConversationId = activeTabConversationTask?.correlation?.conversationId
+    const publishingConversationId = activePublishingAffairId
+      ? `article-publishing-${activePublishingAffairId}`
+      : null
+    const conversationId = taskConversationId ?? publishingConversationId
+    if (!conversationId) {
+      focusedTabConversationRef.current = null
+      return
+    }
+    const bindingKey = activeTabConversationTask
+      ? `browser:${activeTabConversationTask.tabId}:${activeTabConversationTask.id}:${conversationId}`
+      : `article-publishing:${activePublishingAffairId}:${conversationId}`
+    if (focusedTabConversationRef.current === bindingKey) return
+    const conversation = conversations[conversationId]
+    if (!conversation && !activeTabConversationTask) return
+    if (!conversation) {
+      createConversation({
+        id: conversationId,
+        runtime: createConversationRuntimeForWorkspace(activeWorkspaceRef),
+      })
+    } else if (conversation.archivedAt) {
+      void restoreArchivedConversation(conversationId)
+        .then(() => {
+          if (cancelled) return
+          focusedTabConversationRef.current = bindingKey
+          switchConversation(conversationId)
+        })
+        .catch(() => {
+          if (!cancelled) focusedTabConversationRef.current = null
+        })
+      return () => {
+        cancelled = true
+      }
+    }
+    focusedTabConversationRef.current = bindingKey
+    switchConversation(conversationId)
+    return () => {
+      cancelled = true
+    }
+  }, [
+    activePublishingAffairId,
+    activeTabConversationTask,
+    activeWorkspaceRef,
+    conversations,
+    createConversation,
+    restoreArchivedConversation,
+    switchConversation,
+  ])
 
   useEffect(() => {
     void loadDataSources()
@@ -338,11 +424,17 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
       conversation?.runtime.workspaceRef ?? activeWorkspaceRef,
     )
     const currentMessages = conversation?.messages ?? messages
-    const browserTab =
-      scope.kind === 'browser'
+    const browserTab = activeConversationBrowserTask
+      ? tabs.find(
+          (tab) => tab.id === activeConversationBrowserTask.tabId && tab.type === 'browser',
+        )
+      : scope.kind === 'browser'
         ? tabs.find((tab) => tab.id === scope.instanceId && tab.type === 'browser')
         : tabs.find((tab) => tab.id === activeTabId && tab.type === 'browser')
-    let browserTabId = browserTab?.id ?? (scope.kind === 'browser' ? scope.instanceId : null)
+    let browserTabId =
+      activeConversationBrowserTask?.tabId ??
+      browserTab?.id ??
+      (scope.kind === 'browser' ? scope.instanceId : null)
     let currentUrl = browserTab?.initialUrl ?? null
     let viewState = null
     let pageDiagnostics = null
@@ -441,6 +533,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     }
   }, [
     activeConversationId,
+    activeConversationBrowserTask,
     activeTabId,
     activeWorkspaceRef,
     backendState,
@@ -515,12 +608,13 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   }
 
   const activeBrowserTask = useMemo(() => {
+    if (activeConversationBrowserTask) return activeConversationBrowserTask
     if (scope.kind !== 'browser') return null
     const tasks = Object.values(browserTasks)
       .filter((task) => task.tabId === scope.instanceId)
       .sort((a, b) => b.startedAt - a.startedAt)
     return tasks.find((task) => !isFinalBrowserTaskStatus(task.status)) ?? tasks[0] ?? null
-  }, [browserTasks, scope])
+  }, [activeConversationBrowserTask, browserTasks, scope])
   const activeBrowserTaskLogs = activeBrowserTask
     ? (browserActionLogs[activeBrowserTask.id] ?? []).slice(-5)
     : []

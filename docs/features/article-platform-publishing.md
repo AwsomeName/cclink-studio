@@ -225,11 +225,13 @@ Agent 不能自行添加、删除或跳过平台步骤，也不能在适配器�
 
 ### 页面、Agent 和控制 Tab 如何联动
 
-点击“开始执行”后，发布控制 Tab 默认保持前台，让用户立即看到步骤开始推进；Studio 在工作区标签
-栏创建一个正常、可随时打开的 Browser Tab，并展开右侧 Agent Panel。这个 Browser Tab 不是无头或
-隐藏浏览器，只是默认不抢走控制 Tab 的焦点。
+点击“开始执行”或“继续”后，Studio 必须激活该任务唯一绑定的可见 Browser Tab，并展开右侧
+Agent Panel 中该任务唯一绑定的 Agent 会话。执行主画面固定为“左侧 Browser、右侧 Agent”；发布
+控制 Tab 只保留配置、历史、检查点和恢复入口，不得在运行开始后继续占据前台，也不得靠自身挂载
+副作用决定右侧显示哪个 Agent。
 
-- 用户点击“打开网页”可以随时查看 Agent 正在操作的同一页面。
+- 用户点击“打开网页”或切回绑定 Browser Tab 时，右侧必须恢复同一任务 Agent 及其 BrowserTask
+  活动，不能显示默认空会话。
 - 出现必须人工处理的卡点时，Studio 自动聚焦 Browser Tab，并在发布 Tab 和 Activity 徽标同时显示
   “待处理”；用户处理后从发布 Tab 或 Agent 卡片点击“交还 Agent”。
 - 用户返回发布 Tab 后，右侧仍显示本次专属 Agent，主区域显示完整进度和证据。

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type {
   ArticlePublishingAsset,
   ArticlePublishingSourcePreview,
@@ -7,6 +7,7 @@ import { CSDN_ARTICLE_PUBLISHING_PLAN } from '@shared/article-publishing/article
 import type { WebAffair } from '@shared/web-affairs/web-affair-types'
 import type { WebResourceSnapshot } from '@shared/web-resources/web-resource-types'
 import type { Tab } from '../../types'
+import { workspaceRefKey } from '@shared/workspace-ref'
 import { useAgentStore } from '../../stores/agent-store'
 import { useTabStore } from '../../stores/tab-store'
 import { useUIStore } from '../../stores/ui-store'
@@ -67,7 +68,6 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const focusedRuntimeBindingRef = useRef<string | null>(null)
 
   const reload = useCallback(async (): Promise<void> => {
     if (!workspaceRef || !affairId) return
@@ -130,14 +130,20 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const runtimeBinding = useMemo(() => getArticlePublishingRuntimeBinding(affair), [affair])
 
   const ensurePublishingConversation = useCallback(
-    (targetAffair: WebAffair, conversationId: string, activate: boolean): string => {
+    async (
+      targetAffair: WebAffair,
+      conversationId: string,
+      activate: boolean,
+    ): Promise<string> => {
       if (!workspaceRef) return conversationId
       const agent = useAgentStore.getState()
+      const existing = agent.conversations[conversationId]
       agent.createConversation({
         id: conversationId,
         runtime: createConversationRuntimeForWorkspace(workspaceRef),
-        activate,
+        activate: false,
       })
+      if (existing?.archivedAt) await agent.restoreArchivedConversation(conversationId)
       agent.renameConversation(conversationId, `发布文章 · ${targetAffair.title} · CSDN`)
       if (activate) {
         agent.switchConversation(conversationId)
@@ -147,14 +153,6 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     },
     [workspaceRef],
   )
-
-  useEffect(() => {
-    if (!affair?.articlePublishing || !runtimeBinding) return
-    const bindingKey = `${affair.id}:${runtimeBinding.attemptId}:${runtimeBinding.conversationId}`
-    if (focusedRuntimeBindingRef.current === bindingKey) return
-    focusedRuntimeBindingRef.current = bindingKey
-    ensurePublishingConversation(affair, runtimeBinding.conversationId, true)
-  }, [affair, ensurePublishingConversation, runtimeBinding])
 
   if (!workspaceRef || workspaceRef.kind !== 'local') {
     return <div className="article-publishing-state">文章发布只支持当前本地工作空间。</div>
@@ -226,7 +224,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     if (!taskId || !publishing) return
     const nextConversationId = `article-publishing-${taskId}`
     const agent = useAgentStore.getState()
-    ensurePublishingConversation(targetAffair, nextConversationId, true)
+    await ensurePublishingConversation(targetAffair, nextConversationId, true)
     agent.addUserMessage(
       publishing.execution.status === 'interrupted'
         ? `从已核验的中断位置继续发布：${targetAffair.title}`
@@ -243,13 +241,27 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       await reload().catch(() => undefined)
       throw new Error(result.error.message)
     }
-    ensurePublishingConversation(targetAffair, result.data.conversationId, true)
+    await ensurePublishingConversation(result.data.affair, result.data.conversationId, true)
+    agent.addMountedResource(
+      {
+        id: `browser-${result.data.browserTabId}`,
+        kind: 'browser',
+        label: 'CSDN 发布页',
+        ref: {
+          type: 'browser',
+          tabId: result.data.browserTabId,
+          workspaceKey: workspaceRefKey(workspaceRef),
+        },
+      },
+      result.data.conversationId,
+    )
     setAffair(result.data.affair)
     setNotice(
       result.data.resumed
         ? 'main 已恢复原 Attempt，并绑定新一代 Agent/Browser Runtime。'
         : 'main 已创建发布 Attempt，并绑定可见网页与专属 Agent。',
     )
+    useTabStore.getState().activateTab(result.data.browserTabId)
   }
 
   const startTask = async (): Promise<void> => {
@@ -613,7 +625,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
             disabled={!runtimeBinding?.conversationId}
             onClick={() => {
               if (!runtimeBinding?.conversationId) return
-              ensurePublishingConversation(affair, runtimeBinding.conversationId, true)
+              void ensurePublishingConversation(affair, runtimeBinding.conversationId, true)
             }}
           >
             打开 Agent

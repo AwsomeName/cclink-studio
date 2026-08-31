@@ -515,6 +515,22 @@ describe('agent diagnostic report', () => {
         conversationId: 'conversation-a',
       })?.id,
     ).toBe('legacy')
+    expect(
+      selectDiagnosticBrowserTask({
+        tasks: [legacy, otherConversation, currentConversation],
+        tabId: null,
+        workspaceKey: '/workspace-a',
+        conversationId: 'conversation-a',
+      })?.id,
+    ).toBe('current')
+    expect(
+      selectDiagnosticBrowserTask({
+        tasks: [legacy, otherConversation],
+        tabId: null,
+        workspaceKey: '/workspace-a',
+        conversationId: 'conversation-a',
+      }),
+    ).toBeNull()
   })
 
   it('formats non-instance scopes without assuming an instance id', () => {

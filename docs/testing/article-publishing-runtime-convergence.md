@@ -62,6 +62,9 @@ v0.1.76 的真实日志又暴露了一个更窄但会直接打断长任务的 ow
 14. 在同一发布 generation 内替换 Agent Runtime、重建 Browser View/WebContents、断开并重连 CDP，再注入旧 owner epoch 的迟到事件。所有旧事件必须 no-op。
 15. 把单事务事件填到 2,000 条，并把事务文件推到普通 high-water，再触发 Agent 断线和 App 重启。关键收敛必须成功落盘，不能因为追加诊断失败而保持 running。
 16. 模拟 owner heartbeat 持续正常但没有 token、工具、检查点或页面进度的静默任务。任务必须先显示“待核验”，外部写入被冻结；不能直接误杀，也不能靠 heartbeat 永久回到 running。
+17. 点击“开始执行”或恢复同一 Attempt 后，主区域必须激活绑定 Browser Tab，右侧必须显示绑定
+    conversation 的 Agent 消息和 BrowserTask 活动。切到其他 Tab 再切回该 Browser Tab 时仍恢复同一
+    Agent；发布控制 Tab 只能作为配置/历史入口，不能覆盖 Browser View 或劫持 Agent 选择。
 
 ## 二、当前代码事实与根因
 
