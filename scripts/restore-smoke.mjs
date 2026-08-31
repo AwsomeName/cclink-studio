@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { rmSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { basename } from 'node:path'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { basename, join } from 'node:path'
 import { chromium } from 'playwright-core'
 import { createSmokeRuntime } from './smoke-runtime.mjs'
 
-const { logFile, rendererOrigin, runRestart } = createSmokeRuntime(import.meta.url)
+const { logFile, rendererOrigin, runDir, runRestart } = createSmokeRuntime(import.meta.url)
 const keepRunning = process.argv.includes('--keep-running')
 const results = []
 let startedBySmoke = false
@@ -125,7 +126,31 @@ async function restartAndReconnect() {
   return connectRenderer(previousLog)
 }
 
+async function prepareWorkspaceCapability(path) {
+  await mkdir(path, { recursive: true })
+  const userDataPath = join(runDir, 'user-data')
+  await mkdir(userDataPath, { recursive: true })
+  const statePath = join(userDataPath, 'workspace-state.json')
+  const state = await readFile(statePath, 'utf8')
+    .then((value) => JSON.parse(value))
+    .catch(() => ({ version: 2, workspaces: {}, localWorkspaces: {} }))
+  state.version = 2
+  state.workspaces ??= {}
+  state.localWorkspaces ??= {}
+  state.localWorkspaces['restore-smoke-capability'] = {
+    workspaceKey: path,
+    workspacePath: path,
+    ownerKey: null,
+    updatedAt: Date.now(),
+    storage: 'fallback',
+    projectId: null,
+  }
+  await writeFile(statePath, JSON.stringify(state), 'utf8')
+}
+
 async function main() {
+  workspaceDir = join(homedir(), `cclink-studio-restore-smoke-${Date.now()}`)
+  await prepareWorkspaceCapability(workspaceDir)
   const initialLog = await readLog()
   runRestart('restart')
   startedBySmoke = true
@@ -134,11 +159,11 @@ async function main() {
   let workspaceName = null
 
   await runCheck('prepare persisted startup workspace', async () => {
-    const setup = await page.evaluate(async () => {
+    const setup = await page.evaluate(async (workspacePath) => {
       const settings = await window.cclinkStudio.settings.getAll()
-      const home = await window.cclinkStudio.fs.getHomePath()
-      const workspacePath = `${home}/cclink-studio-restore-smoke-${Date.now()}`
-      await window.cclinkStudio.fs.mkdir(workspacePath)
+      const activation =
+        await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(workspacePath)
+      if (!activation.success) throw new Error(activation.error || 'failed to activate fixture')
       await window.cclinkStudio.fs.writeFile(
         `${workspacePath}/restored.md`,
         '# Restore Smoke\n\nstartup restore target',
@@ -167,9 +192,8 @@ async function main() {
           ),
         },
       }
-    })
+    }, workspaceDir)
     assert(setup.result.success, setup.result.error || 'failed to persist last workspace')
-    workspaceDir = setup.workspacePath
     workspaceName = basename(workspaceDir)
     originalWorkspaceSettings = setup.original
     return workspaceName
