@@ -2165,8 +2165,7 @@ export class BrowserManager {
       )?.[0] ?? null
     const deadline = Date.now() + timeoutMs
     let lastRequestAt = 0
-    let tabId = find()
-    while (!tabId && Date.now() < deadline) {
+    while (Date.now() < deadline) {
       if (Date.now() - lastRequestAt >= 500) {
         this.win()?.webContents.send(browserIpcEvents.requestOpenTab, {
           initialUrl,
@@ -2176,10 +2175,14 @@ export class BrowserManager {
         })
         lastRequestAt = Date.now()
       }
+      const tabId = find()
+      // Existing account Views must still go through the renderer Tab projection. Returning a
+      // hidden runtime here used to make Agent/Playwright attach the native page over whichever
+      // non-browser Tab happened to be selected.
+      if (tabId && this.getActiveViewIdForWorkspace(workspaceKey) === tabId) return tabId
       await new Promise((resolve) => setTimeout(resolve, 50))
-      tabId = find()
     }
-    return tabId
+    return null
   }
 
   /** 等待 renderer 完成浏览器 Tab -> WebContentsView 的异步创建与激活。 */

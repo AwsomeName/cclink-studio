@@ -284,6 +284,36 @@ describe('BrowserManager popup adoption', () => {
     expect(electronMocks.createdViews[0].setVisible).toHaveBeenLastCalledWith(false)
   })
 
+  it('requires renderer activation before reusing an existing account View for publishing', async () => {
+    const { manager } = await createSource()
+    electronMocks.mainWebContents.send.mockClear()
+
+    const pending = manager.waitForAccountView(
+      '/workspace/a',
+      'wechat',
+      'account-a',
+      'https://mp.weixin.qq.com/',
+      1_000,
+    )
+    await vi.waitFor(() =>
+      expect(electronMocks.mainWebContents.send).toHaveBeenCalledWith(
+        browserIpcEvents.requestOpenTab,
+        expect.objectContaining({
+          workspaceKey: '/workspace/a',
+          profileId: 'wechat',
+          accountId: 'account-a',
+        }),
+      ),
+    )
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      activeTabId: 'source-tab',
+    })
+
+    await expect(pending).resolves.toBe('source-tab')
+  })
+
   it('rejects an unusable automatic 30% result and recovers after the pane widens', async () => {
     vi.useFakeTimers()
     try {
