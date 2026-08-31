@@ -949,39 +949,45 @@ async function main() {
     })
     const remoteTimeline = remotePanel.locator('.agent-messages')
     const approvalCards = remoteTimeline.locator('.tool-confirmation-card')
-    await approvalCards.first().waitFor({ state: 'visible', timeout: 10_000 })
-    assert((await approvalCards.count()) === 9, 'remote approval cards were not all rendered')
-    const approvalLayout = await remoteTimeline.evaluate((timeline) => {
-      const cards = [...timeline.querySelectorAll('.tool-confirmation-card')]
-      return {
-        clientHeight: timeline.clientHeight,
-        scrollHeight: timeline.scrollHeight,
-        nested: cards.every((card) => card.closest('.agent-messages') === timeline),
-      }
-    })
-    assert(approvalLayout.nested, 'remote approval cards escaped the conversation scroll owner')
-    assert(
-      approvalLayout.scrollHeight > approvalLayout.clientHeight,
-      'remote approval cards did not create a scrollable conversation',
-    )
-    await remoteTimeline.evaluate((timeline) => {
-      timeline.scrollTop = 0
-    })
-    await remoteTimeline.hover()
-    await page.mouse.wheel(0, 640)
-    await page.waitForTimeout(100)
-    assert(
-      (await remoteTimeline.evaluate((timeline) => timeline.scrollTop)) > 0,
-      'mouse wheel did not scroll through remote approval cards',
-    )
-    assert(
-      await remotePanel.locator('textarea.agent-input').isVisible(),
-      'remote approval overflow pushed the Composer out of view',
-    )
-    await page.evaluate(async () => {
-      const { useCclinkStore } = await import('/src/stores/cclink-store.ts')
-      useCclinkStore.setState({ sessions: [], messages: {}, selectedSessionId: null })
-    })
+    try {
+      await approvalCards.first().waitFor({ state: 'visible', timeout: 10_000 })
+      assert((await approvalCards.count()) === 9, 'remote approval cards were not all rendered')
+      const approvalLayout = await remoteTimeline.evaluate((timeline) => {
+        const cards = [...timeline.querySelectorAll('.tool-confirmation-card')]
+        return {
+          clientHeight: timeline.clientHeight,
+          scrollHeight: timeline.scrollHeight,
+          nested: cards.every((card) => card.closest('.agent-messages') === timeline),
+        }
+      })
+      assert(approvalLayout.nested, 'remote approval cards escaped the conversation scroll owner')
+      assert(
+        approvalLayout.scrollHeight > approvalLayout.clientHeight,
+        'remote approval cards did not create a scrollable conversation',
+      )
+      await remoteTimeline.evaluate((timeline) => {
+        timeline.scrollTop = 0
+      })
+      // The relocation check restarts Electron. On CI the reconnected renderer target can be
+      // visible without owning native input focus, so activate it before exercising real wheel input.
+      await page.bringToFront()
+      await remoteTimeline.hover({ position: { x: 4, y: 4 } })
+      await page.mouse.wheel(0, 640)
+      await page.waitForTimeout(500)
+      assert(
+        (await remoteTimeline.evaluate((timeline) => timeline.scrollTop)) > 0,
+        'mouse wheel did not scroll through remote approval cards',
+      )
+      assert(
+        await remotePanel.locator('textarea.agent-input').isVisible(),
+        'remote approval overflow pushed the Composer out of view',
+      )
+    } finally {
+      await page.evaluate(async () => {
+        const { useCclinkStore } = await import('/src/stores/cclink-store.ts')
+        useCclinkStore.setState({ sessions: [], messages: {}, selectedSessionId: null })
+      })
+    }
 
     if (!agentPanelOnly) {
       await page.evaluate(async (snapshot) => {
