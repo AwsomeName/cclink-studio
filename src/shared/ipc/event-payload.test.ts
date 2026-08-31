@@ -84,7 +84,7 @@ describe('preload event payload parsers', () => {
     const confirmation = {
       id: 'confirmation-1',
       toolName: 'terminal.execute',
-      params: { command: 'pwd' },
+      summary: [{ label: '内容', value: '命令内容已隐藏' }],
       riskLevel: 'write' as const,
     }
     expect(parseAgentStreamEvent(stream)).toBe(stream)
@@ -96,7 +96,9 @@ describe('preload event payload parsers', () => {
     expect(parseAgentCompleteEvent({ subtype: 'success' })).toBeNull()
     expect(parseAgentErrorEvent({ message: 42 })).toBeNull()
     expect(parseAgentRunStatusEvent({ ...run, status: 'unknown' })).toBeNull()
-    expect(parseAgentConfirmationRequest({ ...confirmation, params: null })).toBeNull()
+    expect(
+      parseAgentConfirmationRequest({ ...confirmation, params: { command: 'pwd' } }),
+    ).toBeNull()
   })
 
   it('checks all Browser events exposed by the main and auxiliary preload bridges', () => {

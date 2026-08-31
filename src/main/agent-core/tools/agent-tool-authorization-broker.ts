@@ -5,6 +5,7 @@ export interface ToolConfirmationInput {
   runId?: string
   toolName: string
   params: Record<string, unknown>
+  workspaceRoot?: string
   riskLevel: 'read' | 'write' | 'destructive'
   reason?: string
   allowAlways?: boolean
@@ -139,6 +140,9 @@ export class AgentToolAuthorizationBroker {
       runId: request.context.agentRunId ?? undefined,
       toolName: request.toolName,
       params: request.params,
+      ...(request.context.trustedWorkspace?.kind === 'local'
+        ? { workspaceRoot: request.context.trustedWorkspace.rootPath }
+        : {}),
       riskLevel,
       ...(request.executionPolicy?.reason ? { reason: request.executionPolicy.reason } : {}),
       ...(mandatoryConfirmation || request.executionPolicy?.allowAlways === false
@@ -230,6 +234,9 @@ export class AgentToolAuthorizationBroker {
       runId: request.context.agentRunId ?? undefined,
       toolName: request.toolName,
       params: request.params,
+      ...(request.context.trustedWorkspace?.kind === 'local'
+        ? { workspaceRoot: request.context.trustedWorkspace.rootPath }
+        : {}),
       riskLevel,
       ...(request.reason ? { reason: request.reason } : {}),
       ...(mandatoryConfirmation ? { allowAlways: false } : {}),

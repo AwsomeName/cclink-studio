@@ -337,14 +337,28 @@ export function parseAgentRunStatusEvent(value: unknown): AgentRuntimeRunRecord 
 
 export function parseAgentConfirmationRequest(value: unknown): ToolConfirmationRequest | null {
   if (!isAgentEventObject(value)) return null
+  const summary = value['summary']
   if (
     !isBoundedIpcEventString(value['id'], 512) ||
     !isBoundedIpcEventString(value['toolName'], 512) ||
-    !value['params'] ||
-    typeof value['params'] !== 'object' ||
+    'params' in value ||
+    'reason' in value ||
+    !Array.isArray(summary) ||
+    summary.length < 1 ||
+    summary.length > 6 ||
+    !summary.every(
+      (row) =>
+        row &&
+        typeof row === 'object' &&
+        !Array.isArray(row) &&
+        isBoundedIpcEventString((row as Record<string, unknown>)['label'], 64) &&
+        isBoundedIpcEventString((row as Record<string, unknown>)['value'], 1024, {
+          allowEmpty: true,
+        }) &&
+        ((row as Record<string, unknown>)['monospace'] === undefined ||
+          typeof (row as Record<string, unknown>)['monospace'] === 'boolean'),
+    ) ||
     !agentRiskLevels.has(String(value['riskLevel'])) ||
-    (value['reason'] !== undefined &&
-      !isBoundedIpcEventString(value['reason'], 32_768, { allowEmpty: true })) ||
     (value['allowAlways'] !== undefined && typeof value['allowAlways'] !== 'boolean')
   ) {
     return null

@@ -638,7 +638,7 @@ describe('useAgentStore', () => {
         id: 'conf-1',
         conversationId: 'conv-1',
         toolName: 'browser_click',
-        params: { selector: '.btn' },
+        summary: [{ label: '目标', value: '页面交互参数已隐藏' }],
         riskLevel: 'write' as const,
       }
       useAgentStore.getState().addPendingConfirmation(req)
@@ -653,7 +653,7 @@ describe('useAgentStore', () => {
       useAgentStore.getState().addPendingConfirmation({
         id: 'conf-1',
         toolName: 'browser_click',
-        params: {},
+        summary: [{ label: '参数', value: '无' }],
         riskLevel: 'write',
       })
       useAgentStore.getState().clearPendingConfirmations()

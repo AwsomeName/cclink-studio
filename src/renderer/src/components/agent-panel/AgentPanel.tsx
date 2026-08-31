@@ -823,15 +823,8 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     title: 'Agent 请求执行操作',
     rows: [
       { label: '操作', value: request.toolName },
-      {
-        label: '参数',
-        value: Object.entries(request.params)
-          .map(([key, value]) => `${key}="${String(value)}"`)
-          .join(', '),
-        monospace: true,
-      },
+      ...request.summary,
       { label: '风险', value: riskLabel[request.riskLevel] },
-      ...(request.reason ? [{ label: '原因', value: request.reason }] : []),
     ],
     actions: [
       {

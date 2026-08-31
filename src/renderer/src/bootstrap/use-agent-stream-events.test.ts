@@ -127,7 +127,7 @@ describe('applyAgentStreamEventToStore', () => {
       conversationId,
       runId,
       toolName: 'editor_write',
-      params: {},
+      summary: [{ label: '参数', value: '无' }],
       riskLevel: 'write',
     })
 

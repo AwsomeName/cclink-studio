@@ -163,11 +163,16 @@ export interface ToolConfirmationRequest {
   conversationId?: string
   runId?: string
   toolName: string
-  params: Record<string, unknown>
+  summary: ToolConfirmationSummaryRow[]
   riskLevel: 'read' | 'write' | 'destructive'
-  reason?: string
   /** false 表示该操作每次都必须单独确认。 */
   allowAlways?: boolean
+}
+
+export interface ToolConfirmationSummaryRow {
+  label: string
+  value: string
+  monospace?: boolean
 }
 
 export type AgentCapabilityName =

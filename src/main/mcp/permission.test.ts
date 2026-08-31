@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { PermissionManager } from './permission'
 import type { ToolAnnotations } from './types'
 
@@ -121,5 +121,33 @@ describe('PermissionManager 模式管理', () => {
     expect(pm.getMode()).toBe('strict')
     pm.setMode('categorized')
     expect(pm.getMode()).toBe('categorized')
+  })
+})
+
+describe('PermissionManager confirmation IPC boundary', () => {
+  it('sends only a bounded redacted summary to the renderer', async () => {
+    const send = vi.fn()
+    const manager = new PermissionManager({
+      isDestroyed: () => false,
+      webContents: { send },
+    } as never)
+    const canary = 'CONFIRMATION_IPC_SECRET_CANARY'
+    const pending = manager.requestConfirmation({
+      conversationId: 'conversation-a',
+      runId: 'run-a',
+      toolName: 'Bash',
+      params: { command: `curl -H 'Authorization: ${canary}'`, token: canary, body: canary },
+      workspaceRoot: '/workspace/a',
+      riskLevel: 'destructive',
+      reason: canary,
+      allowAlways: false,
+    })
+    const payload = send.mock.calls[0]?.[1] as Record<string, unknown>
+    expect(JSON.stringify(payload)).not.toContain(canary)
+    expect(payload).not.toHaveProperty('params')
+    expect(payload).not.toHaveProperty('reason')
+    expect(payload.summary).toEqual([{ label: '内容', value: '脚本或命令内容已隐藏' }])
+    manager.resolveConfirmation(String(payload.id), false)
+    await expect(pending).resolves.toBe(false)
   })
 })

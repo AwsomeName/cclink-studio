@@ -16,8 +16,20 @@ import { randomUUID } from 'node:crypto'
 import type { BrowserWindow } from 'electron'
 import type { PermissionMode, ToolAnnotations } from './types'
 import { agentIpcEvents, type ToolConfirmationRequest } from '../../shared/ipc/agent'
+import { summarizeToolConfirmation } from './tool-confirmation-summary'
 
 export type { ToolConfirmationRequest } from '../../shared/ipc/agent'
+
+interface PermissionConfirmationInput {
+  conversationId?: string
+  runId?: string
+  toolName: string
+  params: Record<string, unknown>
+  workspaceRoot?: string
+  riskLevel: 'read' | 'write' | 'destructive'
+  reason?: string
+  allowAlways?: boolean
+}
 
 /** 等待中的确认 */
 interface PendingConfirmation {
@@ -97,10 +109,18 @@ export class PermissionManager {
    * 通过 IPC 发送确认请求到渲染进程，返回 Promise 等待用户操作。
    * 超时 60 秒自动拒绝。
    */
-  requestConfirmation(req: Omit<ToolConfirmationRequest, 'id'>): Promise<boolean> {
+  requestConfirmation(req: PermissionConfirmationInput): Promise<boolean> {
     return new Promise((resolve) => {
       const id = randomUUID()
-      const request: ToolConfirmationRequest = { id, ...req }
+      const request: ToolConfirmationRequest = {
+        id,
+        ...(req.conversationId ? { conversationId: req.conversationId } : {}),
+        ...(req.runId ? { runId: req.runId } : {}),
+        toolName: req.toolName,
+        riskLevel: req.riskLevel,
+        summary: summarizeToolConfirmation(req.toolName, req.params, req.workspaceRoot),
+        ...(req.allowAlways === false ? { allowAlways: false } : {}),
+      }
 
       // 超时自动拒绝
       const timeout = setTimeout(() => {
