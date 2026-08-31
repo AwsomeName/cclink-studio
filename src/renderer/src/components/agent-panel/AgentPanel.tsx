@@ -425,9 +425,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     )
     const currentMessages = conversation?.messages ?? messages
     const browserTab = activeConversationBrowserTask
-      ? tabs.find(
-          (tab) => tab.id === activeConversationBrowserTask.tabId && tab.type === 'browser',
-        )
+      ? tabs.find((tab) => tab.id === activeConversationBrowserTask.tabId && tab.type === 'browser')
       : scope.kind === 'browser'
         ? tabs.find((tab) => tab.id === scope.instanceId && tab.type === 'browser')
         : tabs.find((tab) => tab.id === activeTabId && tab.type === 'browser')

@@ -130,11 +130,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const runtimeBinding = useMemo(() => getArticlePublishingRuntimeBinding(affair), [affair])
 
   const ensurePublishingConversation = useCallback(
-    async (
-      targetAffair: WebAffair,
-      conversationId: string,
-      activate: boolean,
-    ): Promise<string> => {
+    async (targetAffair: WebAffair, conversationId: string, activate: boolean): Promise<string> => {
       if (!workspaceRef) return conversationId
       const agent = useAgentStore.getState()
       const existing = agent.conversations[conversationId]
