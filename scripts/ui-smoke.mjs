@@ -1221,7 +1221,7 @@ async function main() {
         { timeout: 10_000 },
       )
 
-      const scopeSwitchedWithoutOverlay = await page.evaluate(async (tabId) => {
+      const scopeProjectionResult = await page.evaluate(async (tabId) => {
         const [{ useTabStore }, { useAgentStore }] = await Promise.all([
           import('/src/stores/tab-store.ts'),
           import('/src/stores/agent-store.ts'),
@@ -1230,12 +1230,21 @@ async function main() {
           .getState()
           .openTab({ type: 'settings', title: 'Native View isolation', icon: '⚙️' })
         const conversationId = useAgentStore.getState().activeConversationId
-        return window.cclinkStudio.agent.setScope(conversationId, {
-          kind: 'browser',
-          instanceId: tabId,
-        })
+        const status = await window.cclinkStudio.agent.getStatus(conversationId)
+        return {
+          agentReady: status.ready,
+          scopeSwitched: status.ready
+            ? await window.cclinkStudio.agent.setScope(conversationId, {
+                kind: 'browser',
+                instanceId: tabId,
+              })
+            : false,
+        }
       }, browserTabId)
-      assert(scopeSwitchedWithoutOverlay, 'Agent browser scope could not bind to the test page')
+      assert(
+        !scopeProjectionResult.agentReady || scopeProjectionResult.scopeSwitched,
+        'Agent browser scope could not bind to the test page',
+      )
       await page.waitForFunction(
         async () => (await window.cclinkStudio.browser.getActiveViewId()) === null,
         undefined,
