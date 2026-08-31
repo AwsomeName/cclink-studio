@@ -10,6 +10,7 @@ import {
 } from 'react'
 
 const BOTTOM_THRESHOLD = 48
+const WHEEL_LINE_HEIGHT = 16
 const scrollPositions = new Map<string, ConversationScrollPosition>()
 
 export interface ConversationScrollPosition {
@@ -38,6 +39,26 @@ export function resolveConversationScrollTop(
   return Math.min(Math.max(0, position.scrollTop), maximum)
 }
 
+export function normalizeConversationWheelDelta(
+  deltaY: number,
+  deltaMode: number,
+  clientHeight: number,
+): number {
+  if (!Number.isFinite(deltaY)) return 0
+  if (deltaMode === 1) return deltaY * WHEEL_LINE_HEIGHT
+  if (deltaMode === 2) return deltaY * clientHeight
+  return deltaY
+}
+
+export function resolveConversationWheelFallbackScrollTop(
+  scrollTop: number,
+  deltaY: number,
+  dimensions: Pick<ScrollDimensions, 'scrollHeight' | 'clientHeight'>,
+): number {
+  const maximum = Math.max(0, dimensions.scrollHeight - dimensions.clientHeight)
+  return Math.min(maximum, Math.max(0, scrollTop + deltaY))
+}
+
 export interface ConversationScrollController {
   listRef: RefObject<HTMLDivElement | null>
   onScroll: UIEventHandler<HTMLDivElement>
@@ -61,6 +82,12 @@ export function useConversationScroll(
   const userScrollTimerRef = useRef<number | null>(null)
   const restoreFrameRef = useRef<number | null>(null)
   const followFrameRef = useRef<number | null>(null)
+  const wheelFallbackFrameRef = useRef<number | null>(null)
+  const pendingWheelFallbackRef = useRef<{
+    element: HTMLDivElement
+    startScrollTop: number
+    deltaY: number
+  } | null>(null)
 
   const rememberPosition = useCallback(
     (element: HTMLDivElement) => {
@@ -88,6 +115,45 @@ export function useConversationScroll(
     pendingRestoreTopRef.current = null
     followsLatestRef.current = false
   }, [])
+
+  const handleWheel = useCallback<WheelEventHandler<HTMLDivElement>>(
+    (event) => {
+      beginUserScroll()
+      if (event.defaultPrevented) return
+      const element = event.currentTarget
+      const deltaY = normalizeConversationWheelDelta(
+        event.deltaY,
+        event.deltaMode,
+        element.clientHeight,
+      )
+      if (deltaY === 0) return
+
+      const pending = pendingWheelFallbackRef.current
+      if (pending && pending.element === element && pending.startScrollTop === element.scrollTop) {
+        pending.deltaY += deltaY
+      } else {
+        pendingWheelFallbackRef.current = {
+          element,
+          startScrollTop: element.scrollTop,
+          deltaY,
+        }
+      }
+      if (wheelFallbackFrameRef.current !== null) return
+
+      wheelFallbackFrameRef.current = requestAnimationFrame(() => {
+        wheelFallbackFrameRef.current = null
+        const fallback = pendingWheelFallbackRef.current
+        pendingWheelFallbackRef.current = null
+        if (!fallback || fallback.element.scrollTop !== fallback.startScrollTop) return
+        fallback.element.scrollTop = resolveConversationWheelFallbackScrollTop(
+          fallback.startScrollTop,
+          fallback.deltaY,
+          fallback.element,
+        )
+      })
+    },
+    [beginUserScroll],
+  )
 
   const handlePointerDown = useCallback<PointerEventHandler<HTMLDivElement>>(
     (event) => {
@@ -178,6 +244,10 @@ export function useConversationScroll(
   useLayoutEffect(
     () => () => {
       if (userScrollTimerRef.current !== null) window.clearTimeout(userScrollTimerRef.current)
+      if (wheelFallbackFrameRef.current !== null) {
+        cancelAnimationFrame(wheelFallbackFrameRef.current)
+      }
+      pendingWheelFallbackRef.current = null
     },
     [],
   )
@@ -185,7 +255,7 @@ export function useConversationScroll(
   return {
     listRef,
     onScroll: (event) => rememberPosition(event.currentTarget),
-    onWheel: beginUserScroll,
+    onWheel: handleWheel,
     onPointerDown: handlePointerDown,
     onTouchStart: beginUserScroll,
     followLatest,

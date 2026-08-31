@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isConversationNearBottom, resolveConversationScrollTop } from './use-conversation-scroll'
+import {
+  isConversationNearBottom,
+  normalizeConversationWheelDelta,
+  resolveConversationScrollTop,
+  resolveConversationWheelFallbackScrollTop,
+} from './use-conversation-scroll'
 
 describe('conversation scroll policy', () => {
   it('considers only a small bottom zone eligible for output following', () => {
@@ -30,5 +35,19 @@ describe('conversation scroll policy', () => {
         { scrollHeight: 900, clientHeight: 500 },
       ),
     ).toBe(400)
+  })
+
+  it('normalizes line and page wheel input before applying a fallback', () => {
+    expect(normalizeConversationWheelDelta(2, 0, 500)).toBe(2)
+    expect(normalizeConversationWheelDelta(2, 1, 500)).toBe(32)
+    expect(normalizeConversationWheelDelta(2, 2, 500)).toBe(1000)
+    expect(normalizeConversationWheelDelta(Number.NaN, 0, 500)).toBe(0)
+  })
+
+  it('clamps fallback wheel scrolling to the conversation bounds', () => {
+    const dimensions = { scrollHeight: 2000, clientHeight: 500 }
+    expect(resolveConversationWheelFallbackScrollTop(0, 640, dimensions)).toBe(640)
+    expect(resolveConversationWheelFallbackScrollTop(1400, 640, dimensions)).toBe(1500)
+    expect(resolveConversationWheelFallbackScrollTop(100, -640, dimensions)).toBe(0)
   })
 })

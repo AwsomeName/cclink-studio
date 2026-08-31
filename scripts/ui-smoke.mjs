@@ -968,12 +968,18 @@ async function main() {
       await remoteTimeline.evaluate((timeline) => {
         timeline.scrollTop = 0
         timeline.dataset.uiSmokeWheelEvents = '0'
+        timeline.dataset.uiSmokeWheelDefaultPrevented = 'false'
+        timeline.dataset.uiSmokeWheelDeltaY = '0'
         timeline.addEventListener(
           'wheel',
-          () => {
+          (event) => {
             timeline.dataset.uiSmokeWheelEvents = String(
               Number(timeline.dataset.uiSmokeWheelEvents ?? '0') + 1,
             )
+            timeline.dataset.uiSmokeWheelDeltaY = String(event.deltaY)
+            queueMicrotask(() => {
+              timeline.dataset.uiSmokeWheelDefaultPrevented = String(event.defaultPrevented)
+            })
           },
           { once: true },
         )
@@ -987,20 +993,28 @@ async function main() {
       await page.waitForTimeout(500)
       const wheelResult = await remoteTimeline.evaluate((timeline) => ({
         deliveredEvents: Number(timeline.dataset.uiSmokeWheelEvents ?? '0'),
+        defaultPrevented: timeline.dataset.uiSmokeWheelDefaultPrevented === 'true',
+        deltaY: Number(timeline.dataset.uiSmokeWheelDeltaY ?? '0'),
         scrollTop: timeline.scrollTop,
       }))
-      // GitHub's macOS runner can keep the reconnected CDP renderer visible without granting
-      // it native input focus. Fall back only when native input is unavailable; a focused,
-      // delivered-but-non-scrolling wheel remains a product failure.
-      const nativeWheelUnavailable = !hasNativeInputFocus || wheelResult.deliveredEvents === 0
-      if (nativeWheelUnavailable) {
+      assert(
+        wheelResult.deliveredEvents === 0 ||
+          (wheelResult.deltaY > 0 && !wheelResult.defaultPrevented),
+        `remote approval conversation rejected wheel input: ${JSON.stringify({
+          hasNativeInputFocus,
+          ...wheelResult,
+        })}`,
+      )
+      // CDP on GitHub's macOS runner can deliver a non-cancelled wheel event without asking
+      // Chromium to perform its default scroll. The application owns the event boundary and
+      // scrollability, so verify those separately instead of treating driver default-action
+      // delivery as product behavior.
+      if (wheelResult.scrollTop === 0) {
         await remoteTimeline.evaluate((timeline) => timeline.scrollBy({ top: 640 }))
       }
       assert(
         (await remoteTimeline.evaluate((timeline) => timeline.scrollTop)) > 0,
-        nativeWheelUnavailable
-          ? 'remote approval conversation rejected programmatic scroll after native input was unavailable'
-          : 'mouse wheel reached the remote approval conversation but did not scroll it',
+        'remote approval conversation is not scrollable after wheel-boundary verification',
       )
       assert(
         await remotePanel.locator('textarea.agent-input').isVisible(),
