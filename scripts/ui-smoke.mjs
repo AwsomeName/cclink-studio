@@ -23,6 +23,7 @@ const tabCreateOnly = process.argv.includes('--tab-create-only')
 const pdfOnly = process.argv.includes('--pdf-only')
 const settingsOnly = process.argv.includes('--settings-only')
 const securityWorkspaceOnly = process.argv.includes('--security-workspace-only')
+const relocationRecoveryOnly = process.argv.includes('--relocation-recovery-only')
 const uiReadyTimeoutMs = 30_000
 const globalWebResourcesCheck = 'global web resources reuse one account and matrix across projects'
 const webAffairPersistenceCheck = 'web affair persists a five-node workflow and node progress'
@@ -58,6 +59,11 @@ const securityWorkspaceChecks = new Set([
   'main renderer enforces its CSP source boundary',
   'first screen has no login wall',
   'workspace file and search boundaries survive a real project switch',
+])
+const relocationRecoveryChecks = new Set([
+  'main renderer enforces its CSP source boundary',
+  'first screen has no login wall',
+  'file relocation journal recovers a stale tab after an app process restart',
 ])
 const agentPanelChecks = new Set([
   'main renderer enforces its CSP source boundary',
@@ -149,6 +155,7 @@ async function runCheck(name, fn, options = {}) {
   if (pdfOnly && !pdfChecks.has(name)) return
   if (settingsOnly && !settingsChecks.has(name)) return
   if (securityWorkspaceOnly && !securityWorkspaceChecks.has(name)) return
+  if (relocationRecoveryOnly && !relocationRecoveryChecks.has(name)) return
   const blockedBy = (options.dependsOn ?? []).find(
     (dependency) => results.find((result) => result.name === dependency)?.status !== 'pass',
   )
@@ -333,80 +340,83 @@ async function main() {
     await writeFile(outsideFile, 'outside', 'utf8')
     await symlink(outsideFile, join(workspaceA, 'outside-link.txt'))
     try {
-      const result = await page.evaluate(async ({ workspaceA, workspaceB, outsideFile }) => {
-        const [{ useFsStore }, { useWorkspaceStore }] = await Promise.all([
-          import('/src/stores/fs-store.ts'),
-          import('/src/stores/workspace-store.ts'),
-        ])
-        const openedA = await useFsStore.getState().openRecentWorkspace(workspaceA)
-        if (!openedA) return { openedA, error: useFsStore.getState().error }
-        const generationA = useWorkspaceStore.getState().generation
-        const deep = await window.cclinkStudio.fs.searchWorkspace({
-          workspaceKey: workspaceA,
-          generation: generationA,
-          requestId: crypto.randomUUID(),
-          query: 'a-only-canary',
-        })
-        const limited = await window.cclinkStudio.fs.searchWorkspace({
-          workspaceKey: workspaceA,
-          generation: generationA,
-          requestId: crypto.randomUUID(),
-          query: 'canary',
-          maxResults: 1,
-        })
-        const deny = async (operation) => {
-          try {
-            await operation()
-            return false
-          } catch {
-            return true
-          }
-        }
-        const siblingDenied = await deny(() =>
-          window.cclinkStudio.fs.readFile(`${workspaceB}/b-only-canary.txt`),
-        )
-        const symlinkDenied = await deny(() =>
-          window.cclinkStudio.fs.readFile(`${workspaceA}/outside-link.txt`),
-        )
-        const newOutsideDenied = await deny(() =>
-          window.cclinkStudio.fs.writeFile(`${outsideFile}.new`, 'escape'),
-        )
-        const staleRequest = window.cclinkStudio.fs
-          .searchWorkspace({
+      const result = await page.evaluate(
+        async ({ workspaceA, workspaceB, outsideFile }) => {
+          const [{ useFsStore }, { useWorkspaceStore }] = await Promise.all([
+            import('/src/stores/fs-store.ts'),
+            import('/src/stores/workspace-store.ts'),
+          ])
+          const openedA = await useFsStore.getState().openRecentWorkspace(workspaceA)
+          if (!openedA) return { openedA, error: useFsStore.getState().error }
+          const generationA = useWorkspaceStore.getState().generation
+          const deep = await window.cclinkStudio.fs.searchWorkspace({
+            workspaceKey: workspaceA,
+            generation: generationA,
+            requestId: crypto.randomUUID(),
+            query: 'a-only-canary',
+          })
+          const limited = await window.cclinkStudio.fs.searchWorkspace({
             workspaceKey: workspaceA,
             generation: generationA,
             requestId: crypto.randomUUID(),
             query: 'canary',
+            maxResults: 1,
           })
-          .then((value) => ({ ok: true, value }))
-          .catch((error) => ({ ok: false, error: String(error) }))
-        const openedB = await useFsStore.getState().openRecentWorkspace(workspaceB)
-        const stale = await staleRequest
-        const generationB = useWorkspaceStore.getState().generation
-        const current = await window.cclinkStudio.fs.searchWorkspace({
-          workspaceKey: workspaceB,
-          generation: generationB,
-          requestId: crypto.randomUUID(),
-          query: 'canary',
-        })
-        const oldWorkspaceDenied = await deny(() =>
-          window.cclinkStudio.fs.readFile(`${workspaceA}/a-second-canary.txt`),
-        )
-        return {
-          openedA,
-          openedB,
-          deepNames: deep.results.map((entry) => entry.name),
-          limitedCount: limited.results.length,
-          truncated: limited.truncated,
-          siblingDenied,
-          symlinkDenied,
-          newOutsideDenied,
-          oldWorkspaceDenied,
-          staleWorkspaceKey: stale.ok ? stale.value.workspaceKey : null,
-          currentWorkspaceKey: current.workspaceKey,
-          currentNames: current.results.map((entry) => entry.name),
-        }
-      }, { workspaceA, workspaceB, outsideFile })
+          const deny = async (operation) => {
+            try {
+              await operation()
+              return false
+            } catch {
+              return true
+            }
+          }
+          const siblingDenied = await deny(() =>
+            window.cclinkStudio.fs.readFile(`${workspaceB}/b-only-canary.txt`),
+          )
+          const symlinkDenied = await deny(() =>
+            window.cclinkStudio.fs.readFile(`${workspaceA}/outside-link.txt`),
+          )
+          const newOutsideDenied = await deny(() =>
+            window.cclinkStudio.fs.writeFile(`${outsideFile}.new`, 'escape'),
+          )
+          const staleRequest = window.cclinkStudio.fs
+            .searchWorkspace({
+              workspaceKey: workspaceA,
+              generation: generationA,
+              requestId: crypto.randomUUID(),
+              query: 'canary',
+            })
+            .then((value) => ({ ok: true, value }))
+            .catch((error) => ({ ok: false, error: String(error) }))
+          const openedB = await useFsStore.getState().openRecentWorkspace(workspaceB)
+          const stale = await staleRequest
+          const generationB = useWorkspaceStore.getState().generation
+          const current = await window.cclinkStudio.fs.searchWorkspace({
+            workspaceKey: workspaceB,
+            generation: generationB,
+            requestId: crypto.randomUUID(),
+            query: 'canary',
+          })
+          const oldWorkspaceDenied = await deny(() =>
+            window.cclinkStudio.fs.readFile(`${workspaceA}/a-second-canary.txt`),
+          )
+          return {
+            openedA,
+            openedB,
+            deepNames: deep.results.map((entry) => entry.name),
+            limitedCount: limited.results.length,
+            truncated: limited.truncated,
+            siblingDenied,
+            symlinkDenied,
+            newOutsideDenied,
+            oldWorkspaceDenied,
+            staleWorkspaceKey: stale.ok ? stale.value.workspaceKey : null,
+            currentWorkspaceKey: current.workspaceKey,
+            currentNames: current.results.map((entry) => entry.name),
+          }
+        },
+        { workspaceA, workspaceB, outsideFile },
+      )
       assert(result.openedA && result.openedB, `workspace switch failed: ${JSON.stringify(result)}`)
       assert(result.deepNames.includes('a-only-canary.txt'), 'deep workspace file was not found')
       assert(result.limitedCount === 1 && result.truncated, 'search truncation was not explicit')
@@ -440,6 +450,95 @@ async function main() {
       ])
     }
   })
+
+  await runCheck(
+    'file relocation journal recovers a stale tab after an app process restart',
+    async () => {
+      const fixtureDir = await mkdtemp(join(rootDir, '.cclink-studio-relocation-recovery-'))
+      const sourcePath = join(fixtureDir, 'before-restart.md')
+      const targetPath = join(fixtureDir, 'after-restart.md')
+      const operationId = `file-relocation-${Date.now()}-9001`
+      await writeFile(sourcePath, '# relocation restart canary\n', 'utf8')
+      try {
+        const prepared = await page.evaluate(
+          async ({ operationId, sourcePath, targetPath, workspacePath }) => {
+            const [{ useTabStore }, { useWorkspaceStore }, { persistRuntimeSections }] =
+              await Promise.all([
+                import('/src/stores/tab-store.ts'),
+                import('/src/stores/workspace-store.ts'),
+                import('/src/utils/workspace-runtime.ts'),
+              ])
+            useTabStore.getState().openTab({
+              type: 'editor',
+              title: 'before-restart.md',
+              icon: '📄',
+              filePath: sourcePath,
+              initialContent: '# relocation restart canary\n',
+              workspaceRef: useWorkspaceStore.getState().activeWorkspaceRef,
+              forceNew: true,
+            })
+            const persistence = await persistRuntimeSections(workspacePath)
+            if (!persistence.success) return { persistence, tabId: null }
+            const tabId = useTabStore.getState().activeTabId
+            await window.cclinkStudio.fs.beginFileRelocation({
+              operationId,
+              workspacePath,
+              moves: [{ sourcePath, targetPath }],
+            })
+            await window.cclinkStudio.fs.rename(sourcePath, targetPath)
+            // Deliberately stop here: the app process exits before markFileRelocationCommitted.
+            return { persistence, tabId }
+          },
+          { operationId, sourcePath, targetPath, workspacePath: rootDir },
+        )
+        assert(prepared.persistence.success && prepared.tabId, 'stale source tab was not persisted')
+
+        await browser.close()
+        const restartLog = await readLog()
+        runRestart('restart')
+        const restartedCdpPort = await waitForCdpPort(45_000, restartLog)
+        browser = await chromium.connectOverCDP(`http://127.0.0.1:${restartedCdpPort}`)
+        page = await findRendererPage(browser)
+        await page.setViewportSize({ width: 1440, height: 920 })
+        await page.waitForLoadState('domcontentloaded')
+        await page.waitForSelector('.main-window', { timeout: uiReadyTimeoutMs })
+
+        await page.waitForFunction(
+          async ({ operationId, sourcePath, targetPath, tabId, workspacePath }) => {
+            const { useTabStore } = await import('/src/stores/tab-store.ts')
+            const tab = useTabStore.getState().tabs.find((candidate) => candidate.id === tabId)
+            const pending = await window.cclinkStudio.fs.listPendingFileRelocations(workspacePath)
+            let targetReadable = false
+            let sourceMissing = false
+            try {
+              targetReadable = (await window.cclinkStudio.fs.readFile(targetPath)).includes(
+                'relocation restart canary',
+              )
+            } catch {
+              targetReadable = false
+            }
+            try {
+              await window.cclinkStudio.fs.readFile(sourcePath)
+            } catch {
+              sourceMissing = true
+            }
+            return (
+              tab?.filePath === targetPath &&
+              tab.title === 'after-restart.md' &&
+              targetReadable &&
+              sourceMissing &&
+              !pending.some((entry) => entry.operationId === operationId)
+            )
+          },
+          { operationId, sourcePath, targetPath, tabId: prepared.tabId, workspacePath: rootDir },
+          { timeout: uiReadyTimeoutMs },
+        )
+        return 'prepared journal + disk move recovered and acknowledged after real app restart'
+      } finally {
+        await rm(fixtureDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+      }
+    },
+  )
 
   await runCheck(
     'PDF pages render visibly with paging controls and explicit failure fallback',
@@ -1299,14 +1398,24 @@ async function main() {
     }, rootDir)
     assert(projectOpened, 'Git smoke workspace could not be opened')
 
-    const snapshot = await page.evaluate(
-      (workspacePath) => window.cclinkStudio.git.getSnapshot(workspacePath),
-      rootDir,
-    )
+    const snapshot = await page.evaluate(async (workspacePath) => {
+      const { useGitStore } = await import('/src/stores/git-store.ts')
+      await useGitStore.getState().loadWorkspace(workspacePath)
+      return useGitStore.getState().snapshot
+    }, rootDir)
+    assert(snapshot, 'renderer Git store did not load a snapshot')
     assert(snapshot.availability === 'available', `Git snapshot unavailable: ${snapshot.error}`)
 
     const trigger = page.locator('.git-status-trigger')
     await trigger.waitFor({ state: 'visible', timeout: 10_000 })
+    await page.waitForFunction(
+      ({ branch, changeCount }) => {
+        const text = document.querySelector('.git-status-trigger')?.textContent ?? ''
+        return text.includes(branch) && text.includes(String(changeCount))
+      },
+      { branch: snapshot.branch ?? '', changeCount: snapshot.changeCount },
+      { timeout: 10_000 },
+    )
     const triggerText = await trigger.innerText()
     assert(triggerText.includes(snapshot.branch ?? ''), 'status bar branch does not match Git')
     assert(

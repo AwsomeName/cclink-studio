@@ -272,7 +272,7 @@ describe('FileService', () => {
       service.withAccess({ rendererId: 7 }, () => service.writeFile(filePath, 'changed')),
     ).rejects.toThrow('OUTSIDE_WORKSPACE')
     expect(service.consumeWorkspaceActivation(7, workspace)).toBe(true)
-    expect(service.consumeWorkspaceActivation(7, workspace)).toBe(false)
+    expect(service.consumeWorkspaceActivation(7, workspace)).toBe(true)
   })
 
   it('creates files exclusively without truncating an existing target', async () => {

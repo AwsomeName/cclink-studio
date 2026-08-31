@@ -181,7 +181,8 @@ export class FileService {
       (capability) => capability.kind === 'workspace' && capability.path === candidate,
     )
     if (index === -1) return false
-    capabilities.splice(index, 1)
+    capabilities[index].remainingUses -= 1
+    if (capabilities[index].remainingUses <= 0) capabilities.splice(index, 1)
     this.pickerCapabilities.set(rendererId, capabilities)
     return true
   }
