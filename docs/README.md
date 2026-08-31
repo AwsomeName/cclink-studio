@@ -8,8 +8,11 @@
 - `AGENTS.md`：给 Codex/Agent 的项目边界和协作规则。
 - `docs/architecture.md`：当前架构事实源。
 - `docs/stabilization.md`：已关闭的 S0-S4 稳定化阶段、工作包和退出证据。
-- `docs/reviews/landed-function-code-audit-and-remediation-plan-2026-08-31.md`：当前已落地功能的
-  跨域代码审查、P0-P2 问题登记、用户验收动作和 S1-S3 优先整改顺序。
+- `docs/reviews/landed-function-independent-review-correction-2026-08-31.md`：当前已落地功能独立审查
+  修订后的施工事实源；新增外部 MCP 自动放行、Browser Cookie 明文返回两项 P0 和本机 MCP token
+  未强制这一项需立即止血的 P1，并更正定时任务误判、外部 MCP fail-closed 与正式整改顺序。
+- `docs/reviews/landed-function-code-audit-and-remediation-plan-2026-08-31.md`：初版跨域代码审查和详细
+  验收动作；问题证据保留，优先级和施工顺序已由独立审查修订版取代。
 - `docs/decisions/`：架构原则例外和重大取舍的 ADR。
 - `docs/development.md`：当前开发事实源。
 - `docs/project-memo.md`：尚未进入正式方案或计划的候选想法备忘录，不作为当前实现事实源。

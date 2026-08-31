@@ -1,6 +1,10 @@
 # 已落地功能代码审查与整改方案
 
-> 状态：问题已确认，整改尚未开始。
+> 状态：已被独立审查修订，本文保留初版审查证据，不再作为施工顺序事实源。
+> 当前施工事实源：`docs/reviews/landed-function-independent-review-correction-2026-08-31.md`。
+> 独立审查确认本文遗漏外部 MCP 自动放行、Browser Cookie 明文返回两项 P0，以及本机 MCP token
+> 未强制这一项需立即止血的 P1；同时确认定时任务已有严格只读 allowlist。在修订版关闭这些差异前，
+> 禁止直接按本文第 5、6 节实施。
 > 审查日期：2026-08-31。
 > 审查基线：`main@0db9cf4d`（v0.1.75）。
 > 范围：本地文件与 Agent 工具、Android、Browser、外部 MCP、Runtime 组件启动、Agent 设置、工作空间搜索、文件迁移事务，以及远程和网页事务的产品验收事实源。
