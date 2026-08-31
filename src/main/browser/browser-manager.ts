@@ -765,6 +765,8 @@ export class BrowserManager {
         ...(viewSession ? { session: viewSession } : {}),
       },
     })
+    // Newly created runtime pages start hidden; only the renderer projection may reveal them.
+    view.setVisible(false)
     installBrowserCompatibilityHeaders(view.webContents.session)
     this.sessionDiagnostics.observe(view.webContents.session, profileId)
 
@@ -1428,10 +1430,13 @@ export class BrowserManager {
   }
 
   /**
-   * 设置当前活跃视图（一次只 attach 一个）
+   * 应用 main renderer 声明的当前浏览器投影（一次只 attach 一个）。
+   *
+   * 这是原生 View 可见性的唯一入口。Agent/Playwright 只允许切换自动化 Page，
+   * 不能调用这里把 View 盖到 renderer 当前选中的非浏览器 Tab 上。
    * @param tabId 目标视图 tabId；null = 全部隐藏
    */
-  setActive(tabId: string | null): void {
+  setRendererProjectionActive(tabId: string | null): void {
     this.setActiveForWindow(MAIN_BROWSER_HOST_ID, tabId)
   }
 
@@ -1445,6 +1450,9 @@ export class BrowserManager {
     for (const [viewId, entry] of this.views) {
       if (entry.ownerWindowId !== windowId) continue
       if (viewId !== tabId) {
+        // setVisible(false) is the visual fail-safe even if Electron's detach becomes a no-op.
+        // The View stays warm and remains available to Playwright in the background.
+        entry.view.setVisible(false)
         try {
           win.contentView.removeChildView(entry.view)
         } catch {
@@ -1468,6 +1476,7 @@ export class BrowserManager {
       throw new Error(`Browser View 不属于目标 host: tab=${tabId} window=${windowId}`)
     }
 
+    entry.view.setVisible(true)
     win.contentView.addChildView(entry.view)
     entry.view.setBounds(host.currentBounds)
     host.activeViewId = tabId
@@ -1505,6 +1514,7 @@ export class BrowserManager {
     if (source.activeViewId === tabId) source.activeViewId = null
     try {
       const activate = options.activate ?? true
+      entry.view.setVisible(activate)
       if (activate) targetWindow.contentView.addChildView(entry.view)
       entry.ownerWindowId = targetWindowId
       if (activate) {
@@ -1522,6 +1532,7 @@ export class BrowserManager {
       this.emitState(tabId)
     } catch (error) {
       try {
+        entry.view.setVisible(true)
         sourceWindow.contentView.addChildView(entry.view)
         entry.ownerWindowId = sourceWindowId
         source.activeViewId = tabId
@@ -1559,6 +1570,7 @@ export class BrowserManager {
         // Source is already unreliable; the recovery attachment below is the authority.
       }
     }
+    entry.view.setVisible(true)
     recoveryWindow.contentView.addChildView(entry.view)
     if (source?.activeViewId === tabId) source.activeViewId = null
     entry.ownerWindowId = recoveryWindowId
@@ -1614,7 +1626,7 @@ export class BrowserManager {
     }
 
     const activeEntry = options.activeTabId ? this.views.get(options.activeTabId) : null
-    this.setActive(
+    this.setRendererProjectionActive(
       activeEntry && activeEntry.workspaceKey === options.workspaceKey ? options.activeTabId : null,
     )
   }
@@ -2260,10 +2272,6 @@ export class BrowserManager {
     if (!entry) throw new Error(`可视浏览器 Tab 不存在: ${tabId}`)
     if (!this.playwrightBridge) throw new Error('Playwright 尚未连接')
 
-    const ownerHost = this.hostForEntry(entry)
-    if (ownerHost?.activeViewId !== tabId && entry.ownerWindowId === MAIN_BROWSER_HOST_ID) {
-      this.setActive(tabId)
-    }
     let lastError: unknown = null
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {

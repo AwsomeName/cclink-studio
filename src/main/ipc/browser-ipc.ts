@@ -79,7 +79,7 @@ export function registerBrowserIpc(
 
   /** 设置活跃视图；null = 全部隐藏 */
   handle(browserIpcContracts.setActive, (_event, tabId) => {
-    browserManager.setActive(tabId)
+    browserManager.setRendererProjectionActive(tabId)
   })
 
   handle(browserIpcContracts.reconcileViews, (_event, options) => {

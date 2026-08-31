@@ -413,7 +413,10 @@ export class ArticlePublishingService {
     }
   }
 
-  private async probeRuntime(runtime: ActivePublishingRuntime): Promise<void> {
+  private async probeRuntime(
+    runtime: ActivePublishingRuntime,
+    trigger: 'watchdog' | 'user-check' = 'watchdog',
+  ): Promise<void> {
     const dependencies = this.runtimeDependencies
     const agentBridge = dependencies?.getAgentBridge()
     const browserManager = dependencies?.getBrowserManager()
@@ -460,6 +463,36 @@ export class ArticlePublishingService {
     if (ownerHealthy) runtime.lastOwnerAt = now
     const ownerExpired = !ownerHealthy || now - runtime.lastOwnerAt >= OWNER_LEASE_MS
     const progressExpired = now - runtime.lastProgressAt >= PROGRESS_LEASE_MS
+
+    if (
+      trigger === 'user-check' &&
+      (execution?.status === 'running' || execution?.status === 'checking-runtime')
+    ) {
+      await this.submitRuntimeReconciliation(runtime, {
+        phase: ownerHealthy && !progressExpired ? 'user-healthy' : 'user-resolved',
+        source: 'user-check',
+        observedStatus:
+          ownerHealthy && !progressExpired
+            ? 'healthy'
+            : ownerHealthy
+              ? 'owner-alive-no-progress'
+              : 'owner-lost',
+        reasonCode:
+          ownerHealthy && !progressExpired
+            ? 'RUNTIME_HEALTHY'
+            : ownerHealthy
+              ? 'NO_VERIFIABLE_PROGRESS'
+              : 'RUNTIME_ORPHAN_CONFIRMED',
+        reason:
+          ownerHealthy && !progressExpired
+            ? '用户主动核验已确认当前 Agent、BrowserTask、Tab 与 CDP 绑定健康'
+            : ownerHealthy
+              ? '用户主动核验确认 Runtime 长期没有可验证进度，已转为人工处理'
+              : '用户主动核验确认当前运行绑定失主，任务已安全中断',
+        observedAt: now,
+      })
+      return
+    }
 
     if (execution?.status === 'running' && (ownerExpired || progressExpired)) {
       await this.submitRuntimeReconciliation(runtime, {
@@ -746,7 +779,7 @@ export class ArticlePublishingService {
     if (!validated.success) return validated
     const runtime = this.activeRuntimes.get(validated.data.attempt.id)
     if (runtime) {
-      await this.probeRuntime(runtime)
+      await this.probeRuntime(runtime, 'user-check')
       const refreshed = this.webAffairService.getProjectSnapshot(workspaceId)
       const affair = refreshed.success
         ? refreshed.data.affairs.find((candidate) => candidate.id === rawInput.affairId)

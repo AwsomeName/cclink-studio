@@ -587,7 +587,7 @@ describe('BrowserToolModule 可视浏览器同步', () => {
       url: 'https://www.zhihu.com/signin',
     })
 
-    expect(browserManager.setActive).toHaveBeenCalledWith('visible-tab')
+    expect(browserManager.setActive).not.toHaveBeenCalled()
     expect(browserManager.navigate).toHaveBeenCalledWith(
       'visible-tab',
       'https://www.zhihu.com/signin',

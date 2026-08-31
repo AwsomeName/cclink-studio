@@ -295,15 +295,19 @@ export class AgentBridge {
     const workspaceKey = context?.workspaceRef ? workspaceRefKey(context.workspaceRef) : null
     this.conversationWorkspaceKeys.set(conversationId, workspaceKey)
     let runtimeSessionMode: AgentRunConfigurationReceipt['runtimeSessionMode'] = 'new'
-    await this.runtimeStateStore.beginRun({ conversationId, runId, workspaceKey })
+    const startedRun = await this.runtimeStateStore.beginRun({
+      conversationId,
+      runId,
+      workspaceKey,
+    })
+    // Some product-owned runs (for example article publishing) start in main instead of
+    // going through the renderer conversation controller. Publish the canonical run identity
+    // before any stream event so the Agent panel can bind to it instead of discarding the
+    // entire execution as a stale run.
+    this.forwardRunStatus(startedRun)
     try {
       if (this.runtime.isBusy(conversationId)) {
-        const error = new Error('Agent 当前 Thread 已有活动任务，请等待完成或取消后重试')
-        await this.runtimeStateStore.finishRun(conversationId, runId, 'failed', {
-          code: 'run_already_active',
-          message: error.message,
-        })
-        throw error
+        throw new Error('Agent 当前 Thread 已有活动任务，请等待完成或取消后重试')
       }
       if (context?.sessionId !== undefined && context.sessionId !== null) {
         const restorableSessionId = this.resolveRestorableSessionId(
@@ -366,10 +370,11 @@ export class AgentBridge {
       )
     } catch (error) {
       this.failActiveBrowserTask(conversationId, error)
-      await this.runtimeStateStore.finishRun(conversationId, runId, 'failed', {
+      const terminal = await this.runtimeStateStore.finishRun(conversationId, runId, 'failed', {
         code: 'run_start_failed',
         message: this.extractErrorMessage(error),
       })
+      if (terminal) this.forwardRunStatus(terminal)
       throw error
     }
     return {
@@ -397,11 +402,12 @@ export class AgentBridge {
   }): Promise<void> {
     const workspaceKey = workspaceRefKey({ kind: 'local', path: input.workspacePath })
     this.conversationWorkspaceKeys.set(input.conversationId, workspaceKey)
-    await this.runtimeStateStore.beginRun({
+    const startedRun = await this.runtimeStateStore.beginRun({
       conversationId: input.conversationId,
       runId: input.runId,
       workspaceKey,
     })
+    this.forwardRunStatus(startedRun)
     try {
       await this.runtime.sendMessage(input.message, input.conversationId, {
         runId: input.runId,
@@ -419,10 +425,16 @@ export class AgentBridge {
         },
       })
     } catch (error) {
-      await this.runtimeStateStore.finishRun(input.conversationId, input.runId, 'failed', {
-        code: 'run_start_failed',
-        message: this.extractErrorMessage(error),
-      })
+      const terminal = await this.runtimeStateStore.finishRun(
+        input.conversationId,
+        input.runId,
+        'failed',
+        {
+          code: 'run_start_failed',
+          message: this.extractErrorMessage(error),
+        },
+      )
+      if (terminal) this.forwardRunStatus(terminal)
       throw error
     }
   }
@@ -606,13 +618,6 @@ export class AgentBridge {
     const visibleTabId = tabId ?? this.deps.browserManager?.getViewIdForWorkspace?.(workspaceKey)
     if (!visibleTabId) return
     this.assertBrowserWorkspace(visibleTabId, workspaceKey)
-    try {
-      if (this.deps.browserManager?.isWorkspaceActive(workspaceKey)) {
-        this.deps.browserManager.setActive(visibleTabId)
-      }
-    } catch {
-      // 浏览器管理器未接入或视图不存在，继续尝试同步 Playwright 注册表
-    }
     try {
       await this.deps.playwrightBridge?.switchToPage(visibleTabId)
     } catch (error) {
@@ -866,7 +871,7 @@ export class AgentBridge {
       return false
     }
 
-    // browser scope：切 Playwright 活跃页 + 拉前台
+    // browser scope 只切自动化目标；原生 View 可见性由 renderer 当前 Tab 唯一决定。
     if (scope.kind === 'browser') {
       const bridge = this.deps.playwrightBridge
       if (!bridge) {
@@ -888,11 +893,6 @@ export class AgentBridge {
           err.message,
         )
       })
-      try {
-        this.deps.browserManager?.setActive(scope.instanceId)
-      } catch {
-        // 浏览器管理器未接入或视图不存在，忽略
-      }
     }
 
     this.runtime.setScope(scope, conversationId)

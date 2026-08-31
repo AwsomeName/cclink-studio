@@ -14,6 +14,110 @@ beforeEach(() => {
 })
 
 describe('applyAgentStreamEventToStore', () => {
+  it('adopts a main-owned run before accepting its Agent stream', () => {
+    const conversationId = useAgentStore.getState().createConversation({
+      id: 'article-publishing-affair-1',
+      runtime: {
+        location: 'local',
+        transport: 'local',
+        backend: 'cclink-studio-agent',
+        workspaceRef: { kind: 'local', path: '/workspace/article' },
+      },
+      activate: true,
+    })
+
+    applyAgentRunStatusToStore({
+      conversationId,
+      runId: 'run-launch-operation-1',
+      status: 'running',
+      workspaceKey: '/workspace/article',
+      startedAt: 1,
+      updatedAt: 1,
+      completedAt: null,
+    })
+    applyAgentStreamEventToStore({
+      type: 'stream_event',
+      conversationId,
+      runId: 'run-launch-operation-1',
+      event: { type: 'message_start', message: { id: 'publishing-progress' } },
+    })
+    applyAgentStreamEventToStore({
+      type: 'stream_event',
+      conversationId,
+      runId: 'run-launch-operation-1',
+      event: {
+        type: 'content_block_delta',
+        delta: { type: 'text_delta', text: '正在上传并核验正文图片' },
+      },
+    })
+
+    const conversation = useAgentStore.getState().conversations[conversationId]
+    expect(conversation).toMatchObject({
+      activeRunId: 'run-launch-operation-1',
+      loading: true,
+      runStatus: 'running',
+    })
+    expect(conversation.messages.at(-1)?.rawText).toBe('正在上传并核验正文图片')
+  })
+
+  it('does not adopt a main-owned run from another workspace', () => {
+    const conversationId = useAgentStore.getState().createConversation({
+      id: 'article-publishing-affair-2',
+      runtime: {
+        location: 'local',
+        transport: 'local',
+        backend: 'cclink-studio-agent',
+        workspaceRef: { kind: 'local', path: '/workspace/article' },
+      },
+      activate: true,
+    })
+
+    applyAgentRunStatusToStore({
+      conversationId,
+      runId: 'run-other-workspace',
+      status: 'running',
+      workspaceKey: '/workspace/other',
+      startedAt: 1,
+      updatedAt: 1,
+      completedAt: null,
+    })
+
+    expect(useAgentStore.getState().conversations[conversationId].activeRunId).toBeNull()
+  })
+
+  it('replaces an older persisted run projection when main starts a newer recovery run', () => {
+    const conversationId = useAgentStore.getState().createConversation({
+      id: 'article-publishing-affair-recovery',
+      runtime: {
+        location: 'local',
+        transport: 'local',
+        backend: 'cclink-studio-agent',
+        workspaceRef: { kind: 'local', path: '/workspace/article' },
+      },
+      activate: true,
+    })
+    const staleRunId = useAgentStore.getState().beginRun(conversationId)
+    const staleEventAt =
+      useAgentStore.getState().conversations[conversationId].lastRunEventAt ?? Date.now()
+
+    applyAgentRunStatusToStore({
+      conversationId,
+      runId: 'run-recovered-generation-2',
+      status: 'running',
+      workspaceKey: '/workspace/article',
+      startedAt: staleEventAt + 1,
+      updatedAt: staleEventAt + 1,
+      completedAt: null,
+    })
+
+    expect(staleRunId).not.toBe('run-recovered-generation-2')
+    expect(useAgentStore.getState().conversations[conversationId]).toMatchObject({
+      activeRunId: 'run-recovered-generation-2',
+      runStatus: 'running',
+      loading: true,
+    })
+  })
+
   it('只在 Runtime 确认后把 cancelling run 收敛为已取消', () => {
     const conversationId = useAgentStore.getState().activeConversationId
     const runId = useAgentStore.getState().beginRun(conversationId)

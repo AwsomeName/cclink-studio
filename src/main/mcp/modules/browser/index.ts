@@ -1245,18 +1245,12 @@ export class BrowserToolModule implements ToolModule {
   private async syncVisibleTab(
     tabId: string,
     requirePlaywrightPage: boolean,
-    workspaceKey?: string | null,
+    _workspaceKey?: string | null,
   ): Promise<void> {
-    if (
-      workspaceKey === undefined ||
-      this.browserManager?.isWorkspaceActive?.(workspaceKey) !== false
-    ) {
-      const ownerWindowId = this.browserManager?.getViewOwnerWindowId?.(tabId)
-      if (ownerWindowId && this.browserManager?.setActiveForWindow) {
-        this.browserManager.setActiveForWindow(ownerWindowId, tabId)
-      } else {
-        this.browserManager?.setActive(tabId)
-      }
+    const ownerWindowId = this.browserManager?.getViewOwnerWindowId?.(tabId)
+    if (ownerWindowId && ownerWindowId !== 'main' && this.browserManager?.setActiveForWindow) {
+      // 独立浏览器窗口没有 renderer 内容 Tab，可安全把其唯一 View 拉到前台。
+      this.browserManager.setActiveForWindow(ownerWindowId, tabId)
     }
     try {
       await this.playwrightBridge.switchToPage(tabId)

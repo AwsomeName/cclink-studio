@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-08-30。
+> 当前事实源。最后更新：2026-08-31。
 
 ## 先读这些
 
@@ -8,6 +8,8 @@
 - `AGENTS.md`：给 Codex/Agent 的项目边界和协作规则。
 - `docs/architecture.md`：当前架构事实源。
 - `docs/stabilization.md`：已关闭的 S0-S4 稳定化阶段、工作包和退出证据。
+- `docs/reviews/landed-function-code-audit-and-remediation-plan-2026-08-31.md`：当前已落地功能的
+  跨域代码审查、P0-P2 问题登记、用户验收动作和 S1-S3 优先整改顺序。
 - `docs/decisions/`：架构原则例外和重大取舍的 ADR。
 - `docs/development.md`：当前开发事实源。
 - `docs/project-memo.md`：尚未进入正式方案或计划的候选想法备忘录，不作为当前实现事实源。
@@ -71,6 +73,12 @@
 - `docs/features/ai-web-affairs-agent-development-plan.md`：AI 网页事务代理人的开发管理事实源；保留项目账号和事务历史证据，当前账号施工以全局账号专项计划为准。
 - `docs/features/scheduled-tasks.md`：工作空间定时任务的 Activity Bar、侧栏、Workbench Tab、App 内统一调度、本机启用和保存快捷键产品事实源。
 - `docs/features/scheduled-tasks-development-plan.md`：工作空间定时任务 E0、M8.1-M8.3、R1 的详细开发顺序、任务拆解和真人验收计划。
+- `docs/features/scheduled-task-git-sharing.md`：定时任务定义显式随项目共享、目标设备默认暂停、
+  Git 运输边界和双设备产品验收提案。
+- `docs/features/scheduled-task-git-sharing-development-plan.md`：可移植 v2 定义、local/shared 存储、
+  Git exclude 迁移、外部冲突与分阶段施工方案。
+- `docs/reviews/scheduled-task-git-sharing-review-prompt.md`：供新会话独立复核该需求和方案的只读
+  审查指令。
 - `docs/features/agent-device.md`：Android 真机和 agent-device 边界。
 
 ## 当前边界

@@ -1,5 +1,6 @@
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import type { OpenDialogOptions } from '@shared/ipc/dialog'
+import type { WebAffair } from '@shared/web-affairs/web-affair-types'
 import type { Tab } from '../../types'
 
 export function createArticleMarkdownOpenDialogOptions(
@@ -14,6 +15,20 @@ export function createArticleMarkdownOpenDialogOptions(
 
 export function formatArticlePublishingAccountOption(accountLabel: string): string {
   return `CSDN · ${accountLabel.trim()}`
+}
+
+export function getArticlePublishingRuntimeBinding(affair: WebAffair | null): {
+  attemptId: string
+  conversationId: string
+} | null {
+  const attemptId = affair?.articlePublishing?.execution.currentAttemptId
+  const attempt = affair?.attempts.find((candidate) => candidate.id === attemptId)
+  return attempt && affair
+    ? {
+        attemptId: attempt.id,
+        conversationId: attempt.conversationId ?? `article-publishing-${affair.id}`,
+      }
+    : null
 }
 
 export interface ArticlePublishingFileDetails {

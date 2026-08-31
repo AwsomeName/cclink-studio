@@ -103,6 +103,54 @@ function createBridge(
 describe('AgentBridge run lifecycle', () => {
   beforeEach(() => queryMock.mockReset())
 
+  it('publishes the canonical running record before a main-owned run can stream', async () => {
+    const query = createBlockingQuery()
+    queryMock.mockReturnValue(query)
+    const { bridge, send } = createBridge({ cancelForRun: vi.fn() })
+
+    await bridge.sendMessage('publish article', 'article-publishing-affair-1', {
+      runId: 'run-launch-operation-1',
+      workspaceRef: { kind: 'local', path: '/workspace/article' },
+      sessionId: null,
+    })
+
+    expect(send).toHaveBeenCalledWith(
+      'agent:runStatus',
+      expect.objectContaining({
+        conversationId: 'article-publishing-affair-1',
+        runId: 'run-launch-operation-1',
+        workspaceKey: '/workspace/article',
+        status: 'running',
+      }),
+    )
+
+    query.releaseDone()
+    await bridge.destroy()
+  })
+
+  it('publishes a failed terminal record when a main-owned run cannot start', async () => {
+    const { bridge, send } = createBridge({ cancelForRun: vi.fn() })
+    const runtime = (bridge as never as { runtime: { isBusy: (id: string) => boolean } }).runtime
+    vi.spyOn(runtime, 'isBusy').mockReturnValue(true)
+
+    await expect(
+      bridge.sendMessage('publish article', 'article-publishing-affair-1', {
+        runId: 'run-launch-operation-failed',
+        workspaceRef: { kind: 'local', path: '/workspace/article' },
+        sessionId: null,
+      }),
+    ).rejects.toThrow('已有活动任务')
+
+    await vi.waitFor(() =>
+      expect(
+        send.mock.calls
+          .filter(([channel]) => channel === 'agent:runStatus')
+          .map(([, record]) => record.status),
+      ).toEqual(['running', 'failed']),
+    )
+    await bridge.destroy()
+  })
+
   it('keeps an exact cancelled run occupied until the Runtime read loop exits', async () => {
     const query = createBlockingQuery()
     queryMock.mockReturnValue(query)

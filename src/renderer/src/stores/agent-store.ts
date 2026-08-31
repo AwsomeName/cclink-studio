@@ -981,7 +981,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   applyRuntimeRunStatus: (record) =>
     set((state) => ({
       ...updateConversation(state, record.conversationId, (conversation) => {
-        if (conversation.activeRunId !== record.runId) return conversation
+        const mayAdoptMainOwnedRun =
+          (record.status === 'running' || record.status === 'cancelling') &&
+          conversationWorkspaceKey(conversation) === record.workspaceKey &&
+          (!conversation.activeRunId || record.startedAt >= (conversation.lastRunEventAt ?? 0))
+        if (conversation.activeRunId !== record.runId && !mayAdoptMainOwnedRun) {
+          return conversation
+        }
         const now = Date.now()
         if (record.status === 'running' || record.status === 'cancelling') {
           return {
@@ -989,6 +995,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
             loading: true,
             backendState: 'streaming' as AgentBackendState,
             runStatus: record.status,
+            activeRunId: record.runId,
             lastRunEventAt: now,
             lastRunTerminalReason: null,
             updatedAt: now,

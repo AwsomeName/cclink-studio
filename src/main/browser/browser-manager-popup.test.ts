@@ -104,12 +104,14 @@ const electronMocks = vi.hoisted(() => {
   const createdViews: Array<{
     webContents: ReturnType<typeof makeWebContents>
     setBounds: ReturnType<typeof vi.fn>
+    setVisible: ReturnType<typeof vi.fn>
   }> = []
   const builtMenuTemplates: any[][] = []
 
   class WebContentsView {
     webContents: ReturnType<typeof makeWebContents>
     setBounds = vi.fn()
+    setVisible = vi.fn()
 
     constructor(options: {
       webContents?: ReturnType<typeof makeWebContents>
@@ -261,6 +263,25 @@ describe('BrowserManager popup adoption', () => {
 
     expect(manager.getActiveViewIdForWorkspace('/workspace/a')).toBe('account-tab')
     expect(manager.getViewIdForWorkspace('/workspace/a')).toBeNull()
+  })
+
+  it('claims a background Playwright page without attaching it over a non-browser renderer tab', async () => {
+    const { manager } = await createSource()
+    const claimViewPage = vi
+      .spyOn(manager as never, 'claimViewPage')
+      .mockResolvedValue(undefined as never)
+    ;(manager as unknown as { playwrightBridge: object }).playwrightBridge = {}
+    electronMocks.mainWindow.contentView.addChildView.mockClear()
+
+    await manager.ensurePlaywrightPage('source-tab')
+
+    expect(claimViewPage).toHaveBeenCalledWith(
+      'source-tab',
+      expect.objectContaining({ workspaceKey: '/workspace/a' }),
+    )
+    expect(manager.getActiveViewId()).toBeNull()
+    expect(electronMocks.mainWindow.contentView.addChildView).not.toHaveBeenCalled()
+    expect(electronMocks.createdViews[0].setVisible).toHaveBeenLastCalledWith(false)
   })
 
   it('rejects an unusable automatic 30% result and recovers after the pane widens', async () => {
@@ -920,6 +941,7 @@ describe('BrowserManager popup adoption', () => {
     expect(manager.getViewOwnerWindowId('source-tab')).toBe('aux-1')
     expect(manager.getRuntimeIdentity('source-tab')).toEqual(identityBefore)
     expect(auxiliaryWindow.contentView.addChildView).toHaveBeenCalledWith(view)
+    expect(view.setVisible).toHaveBeenLastCalledWith(true)
     expect(source.close).not.toHaveBeenCalled()
     const loadCountAfterMove = source.loadURL.mock.calls.length
 

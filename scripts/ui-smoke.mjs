@@ -1221,6 +1221,36 @@ async function main() {
         { timeout: 10_000 },
       )
 
+      const scopeSwitchedWithoutOverlay = await page.evaluate(async (tabId) => {
+        const [{ useTabStore }, { useAgentStore }] = await Promise.all([
+          import('/src/stores/tab-store.ts'),
+          import('/src/stores/agent-store.ts'),
+        ])
+        useTabStore
+          .getState()
+          .openTab({ type: 'settings', title: 'Native View isolation', icon: '⚙️' })
+        const conversationId = useAgentStore.getState().activeConversationId
+        return window.cclinkStudio.agent.setScope(conversationId, {
+          kind: 'browser',
+          instanceId: tabId,
+        })
+      }, browserTabId)
+      assert(scopeSwitchedWithoutOverlay, 'Agent browser scope could not bind to the test page')
+      await page.waitForFunction(
+        async () => (await window.cclinkStudio.browser.getActiveViewId()) === null,
+        undefined,
+        { timeout: 10_000 },
+      )
+      await page.evaluate(async (tabId) => {
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        useTabStore.getState().activateTab(tabId)
+      }, browserTabId)
+      await page.waitForFunction(
+        async (tabId) => (await window.cclinkStudio.browser.getActiveViewId()) === tabId,
+        browserTabId,
+        { timeout: 10_000 },
+      )
+
       const trigger = page.locator('.git-status-trigger')
       await trigger.waitFor({ state: 'visible', timeout: 10_000 })
       await trigger.click()

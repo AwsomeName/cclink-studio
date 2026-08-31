@@ -299,6 +299,73 @@ describe('ArticlePublishingService', () => {
     }
   })
 
+  it('lets an explicit runtime check unlock a confirmed orphan immediately', async () => {
+    const runtime = createActiveRuntime(Date.now())
+    const attempt = {
+      id: runtime.attemptId,
+      status: 'running-ai',
+      executionGeneration: runtime.executionGeneration,
+      launchOperationId: runtime.launchOperationId,
+    }
+    const affair = {
+      id: runtime.affairId,
+      attempts: [attempt],
+      articlePublishing: {
+        execution: {
+          status: 'running',
+          currentAttemptId: runtime.attemptId,
+          currentGeneration: runtime.executionGeneration,
+          currentLaunchOperationId: runtime.launchOperationId,
+        },
+      },
+    }
+    const reconcileArticlePublishingRuntime = vi.fn(async (input: { observedStatus?: string }) => {
+      if (input.observedStatus === 'owner-lost') {
+        attempt.status = 'interrupted'
+        affair.articlePublishing.execution.status = 'interrupted'
+      }
+      return { success: true, data: affair }
+    })
+    const dependencies = healthyRuntimeDependencies()
+    dependencies.getBrowserTaskRuntime = () => ({ getTask: vi.fn(() => null) }) as never
+    const service = new ArticlePublishingService(
+      {} as never,
+      {
+        getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [affair] } })),
+        reconcileArticlePublishingRuntime,
+      } as never,
+      async (path) => path,
+      dependencies,
+    )
+    ;(
+      service as never as { activeRuntimes: Map<string, ReturnType<typeof createActiveRuntime>> }
+    ).activeRuntimes.set(runtime.attemptId, runtime)
+
+    const result = await service.checkRuntime(
+      {
+        workspaceRef: WORKSPACE_REF,
+        affairId: runtime.affairId,
+        attemptId: runtime.attemptId,
+        executionGeneration: runtime.executionGeneration,
+        launchOperationId: runtime.launchOperationId,
+      },
+      runtime.workspaceId,
+    )
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { articlePublishing: { execution: { status: 'interrupted' } } },
+    })
+    expect(reconcileArticlePublishingRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'user-check',
+        observedStatus: 'owner-lost',
+        reasonCode: 'RUNTIME_ORPHAN_CONFIRMED',
+      }),
+    )
+    service.dispose()
+  })
+
   it('allows only one bounded continuation for a healthy runtime generation', async () => {
     const runtime = createActiveRuntime(Date.now())
     const attempt = {

@@ -2,6 +2,27 @@ import { describe, expect, it, vi } from 'vitest'
 import { AgentBridge } from './agent-bridge'
 
 describe('AgentBridge browser send plan', () => {
+  it('switches the automation page without overriding the renderer active Tab', async () => {
+    const setRendererProjectionActive = vi.fn()
+    const switchToPage = vi.fn().mockResolvedValue(undefined)
+    const bridge = Object.create(AgentBridge.prototype) as {
+      deps: Record<string, unknown>
+      syncVisibleBrowserPage: (tabId: string, workspaceKey: string) => Promise<void>
+    }
+    bridge.deps = {
+      browserManager: {
+        getViewWorkspaceKey: () => '/workspace/a',
+        setRendererProjectionActive,
+      },
+      playwrightBridge: { switchToPage },
+    }
+
+    await bridge.syncVisibleBrowserPage('browser-a', '/workspace/a')
+
+    expect(switchToPage).toHaveBeenCalledWith('browser-a')
+    expect(setRendererProjectionActive).not.toHaveBeenCalled()
+  })
+
   it('keeps all-scope messages unbound instead of opening a browser from message text', () => {
     const waitForActiveViewForWorkspace = vi.fn()
     const bridge = createBridge({ kind: 'all' }, { waitForActiveViewForWorkspace })

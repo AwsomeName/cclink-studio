@@ -5,6 +5,7 @@ import {
   formatArticlePublishingAccountOption,
   getArticlePublishingAgentStartError,
   getArticlePublishingFileDetails,
+  getArticlePublishingRuntimeBinding,
 } from './article-publishing-tab'
 
 describe('article publishing Markdown picker', () => {
@@ -65,6 +66,29 @@ describe('article publishing execution plan', () => {
       '执行常规单篇发布',
       '核验文章结果',
     ])
+  })
+})
+
+describe('article publishing Agent binding', () => {
+  it('restores the current Attempt conversation and supports legacy deterministic ids', () => {
+    const affair = {
+      id: 'affair-1',
+      attempts: [
+        { id: 'attempt-old' },
+        { id: 'attempt-current', conversationId: 'article-publishing-explicit' },
+      ],
+      articlePublishing: { execution: { currentAttemptId: 'attempt-current' } },
+    }
+
+    expect(getArticlePublishingRuntimeBinding(affair as never)).toEqual({
+      attemptId: 'attempt-current',
+      conversationId: 'article-publishing-explicit',
+    })
+    delete affair.attempts[1].conversationId
+    expect(getArticlePublishingRuntimeBinding(affair as never)).toEqual({
+      attemptId: 'attempt-current',
+      conversationId: 'article-publishing-affair-1',
+    })
   })
 })
 

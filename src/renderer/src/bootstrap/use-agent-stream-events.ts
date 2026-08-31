@@ -385,7 +385,9 @@ export function applyAgentRunStatusToStore(
   store: AgentStoreSnapshot = useAgentStore.getState(),
 ): void {
   const conversation = store.conversations[record.conversationId]
-  if (!conversation || conversation.activeRunId !== record.runId) return
+  if (!conversation) return
+  const nonTerminal = record.status === 'running' || record.status === 'cancelling'
+  if (!nonTerminal && conversation.activeRunId !== record.runId) return
   store.applyRuntimeRunStatus(record)
   if (record.status === 'cancelled') {
     store.addSystemMessage('已确认 Runtime 停止，当前任务已取消', record.conversationId)
