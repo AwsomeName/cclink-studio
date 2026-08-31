@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -794,6 +794,133 @@ describe('article publishing persistent state', () => {
     expect(repaired.articlePublishing?.execution.status).toBe('result-unknown')
     expect(repaired.articlePublishing?.publication.status).toBe('not-started')
     expect(repaired.events.at(-1)?.summary).toContain('误标为最终发布未知')
+  })
+
+  it('repairs the v0.1.74 startup crash when legacy normalization exposes a lifecycle mismatch', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const workspaceRef = { kind: 'local' as const, path: directory }
+    await created.service.reportArticlePublishingAsset(
+      {
+        workspaceRef,
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        assetId: created.assetId,
+        status: 'uploading',
+      },
+      WORKSPACE_ID,
+    )
+    await created.service.reportArticlePublishingAsset(
+      {
+        workspaceRef,
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        assetId: created.assetId,
+        status: 'result-unknown',
+        error: { code: 'CDP_DISCONNECTED', message: '上传派发后 CDP 断开' },
+      },
+      WORKSPACE_ID,
+    )
+    await created.service.flush()
+
+    const filePath = join(directory, 'affairs.json')
+    const persisted = JSON.parse(await readFile(filePath, 'utf8'))
+    const affair = persisted.affairs[0]
+    const attempt = affair.attempts[0]
+    const now = new Date().toISOString()
+    attempt.status = 'waiting-human'
+    affair.articlePublishing.execution.currentStepId = 'upload-assets'
+    affair.articlePublishing.publication = { status: 'result-unknown', observedAt: now }
+    affair.articlePublishing.sideEffects.push({
+      key: `${affair.id}:${attempt.id}:g${attempt.executionGeneration}:upload-asset:v0174`,
+      affairId: affair.id,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      kind: 'upload-asset',
+      targetId: `${created.assetId}:v0174`,
+      actionFingerprint: 'v0174-upload-fingerprint',
+      status: 'result-unknown',
+      reservedAt: now,
+      dispatchedAt: now,
+      observedAt: now,
+      browserTaskRunId: attempt.browserTaskRunId,
+    })
+    await writeFile(filePath, JSON.stringify(persisted))
+
+    const reloaded = createService(directory)
+    await expect(reloaded.load()).resolves.toBeUndefined()
+    const snapshot = reloaded.getProjectSnapshot(WORKSPACE_ID)
+    expect(snapshot.success).toBe(true)
+    if (!snapshot.success) return
+    const repaired = snapshot.data.affairs[0]
+    expect(repaired.attempts[0].status).toBe('waiting-human')
+    expect(repaired.articlePublishing?.execution.status).toBe('waiting-human')
+    expect(repaired.articlePublishing?.publication.status).toBe('not-started')
+    const repairedRevision = snapshot.data.revision
+    await reloaded.flush()
+
+    const secondLoad = createService(directory)
+    await expect(secondLoad.load()).resolves.toBeUndefined()
+    const stable = secondLoad.getProjectSnapshot(WORKSPACE_ID)
+    expect(stable.success).toBe(true)
+    if (!stable.success) return
+    expect(stable.data.revision).toBe(repairedRevision)
+    expect(stable.data.affairs[0].articlePublishing?.execution.status).toBe('waiting-human')
+    await secondLoad.flush()
+  })
+
+  it('converges every persisted terminal or handoff lifecycle mismatch before strict validation', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+    const persisted = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+    const executionStatuses = [
+      'draft',
+      'preparing',
+      'running',
+      'checking-runtime',
+      'waiting-human',
+      'interrupted',
+      'cancelled',
+      'failed',
+      'published',
+      'result-unknown',
+    ] as const
+    const projections = [
+      { attempt: 'waiting-human', allowed: ['waiting-human'], expected: 'waiting-human' },
+      {
+        attempt: 'interrupted',
+        allowed: ['interrupted', 'result-unknown'],
+        expected: 'interrupted',
+      },
+      { attempt: 'cancelled', allowed: ['cancelled'], expected: 'cancelled' },
+      { attempt: 'failed', allowed: ['failed'], expected: 'failed' },
+      { attempt: 'succeeded', allowed: ['published'], expected: 'published' },
+    ] as const
+
+    let caseNumber = 0
+    for (const projection of projections) {
+      for (const executionStatus of executionStatuses) {
+        if ((projection.allowed as readonly string[]).includes(executionStatus)) continue
+        caseNumber += 1
+        const caseDirectory = join(directory, `projection-${caseNumber}`)
+        await mkdir(caseDirectory)
+        const candidate = structuredClone(persisted)
+        const affair = candidate.affairs[0]
+        affair.attempts[0].status = projection.attempt
+        affair.articlePublishing.execution.status = executionStatus
+        await writeFile(join(caseDirectory, 'affairs.json'), JSON.stringify(candidate))
+
+        const reloaded = createService(caseDirectory)
+        await expect(reloaded.load()).resolves.toBeUndefined()
+        const snapshot = reloaded.getProjectSnapshot(WORKSPACE_ID)
+        expect(snapshot.success).toBe(true)
+        if (!snapshot.success) continue
+        expect(snapshot.data.affairs[0].attempts[0].status).toBe(projection.attempt)
+        expect(snapshot.data.affairs[0].articlePublishing?.execution.status).toBe(
+          projection.expected,
+        )
+        await reloaded.flush()
+      }
+    }
   })
 
   it('preserves publication unknown when legacy evidence does not prove it came from a non-final action', async () => {

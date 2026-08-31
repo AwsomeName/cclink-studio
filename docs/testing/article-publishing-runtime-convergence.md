@@ -1,7 +1,7 @@
 # 文章发布“开始执行无反应 / Attempt 假运行”系统性治理方案
 
 > 状态：两轮审查的 9 项阻塞已按本文边界实现；自动工程门禁与真实 Electron/CDP 故障注入已通过，真实 CSDN 发布验收待执行。  
-> 日期：2026-08-30。  
+> 日期：2026-08-31。
 > 适用范围：文章发布中心、`WebAffairService`、Agent Run、BrowserTask、内嵌浏览器。  
 > 架构约束：遵守 `docs/architecture.md`；`WebAffairService` 继续是事务、Attempt、检查点和证据的唯一持久状态所有者。
 
@@ -11,7 +11,7 @@
 
 截至 2026-08-30，当前工作树已经建立统一、幂等、可重试、可诊断的运行终态收敛链路，并把“真的在运行”“待核验”“确认已经孤儿化”“外部结果未知”分开。启动、看门狗和 Runtime 终态归 main 所有；renderer 只发有界命令。所有 Runtime 事件和副作用授权都绑定发布 generation、launch operation 与 owner 自身代次；上传、正文/字段自动保存、显式保存和发布在实际 Playwright 动作前消费持久一次性能力；启动扫描和固定恢复日志负责崩溃兜底。最终发布结果未知只进入只读发布核验，上传或保存结果未知则留在各自未完成检查点对账，不能互相跳步。
 
-该实现尚未进入已发布版本，也没有真实 CSDN 三图发布和最终断线验收证据。因此可以称为“工程实现与自动门禁通过”，不能称为“真实用户问题已关闭”。
+基础实现已进入 v0.1.74，但真实用户日志暴露了启动迁移缺口：旧数据在修正非最终 `result-unknown` 后，可能仍保留不匹配的 Attempt/execution 投影，第二次严格校验会让整个事务服务启动失败。v0.1.75 在同一 `WebAffairService` 启动收敛入口中覆盖全部受约束生命周期组合，并把修复结果持久化；仍没有真实 CSDN 三图发布和最终断线验收证据，因此不能称为“真实用户问题已关闭”。
 
 本轮固定参数为：owner lease `60s`、progress lease `10min`、`checking-runtime` probe deadline `60s`、watchdog interval `10s`、单次收敛最多重试 `3` 次。它们集中在 `ArticlePublishingService`，并使用 fake clock 覆盖“owner 存活但无进度”和“owner 丢失”两条路径；同一 Runtime generation 的用户“继续等待”最多成功一次。真实站点验收后如需调整，只能修改这些集中参数和本文记录。
 
@@ -635,8 +635,8 @@ recovery journal 按 Affair 保存“最新关键目标状态”，同一 Affair
 
 已取得的工程证据：
 
-- `pnpm verify` 通过：337 个测试文件，2110 个测试通过、2 个跳过；format、lint、类型检查、边界检查与生产构建通过。
-- 发布链专项覆盖 main 启动、完整 owner identity、旧 generation/owner no-op、统一生命周期投影、上传/自动保存/发布一次性副作用消费、最终与非最终结果未知分流、同一 generation 并发请求也只能成功一次的有界继续等待、v0.1.73 非最终未知状态的保守启动修复、2,000 事件收敛、high-water 压缩、带 revision/hash 的固定恢复日志、损坏日志 fail closed、启动矛盾修复，以及 fake-clock 的静默/失主核验。
+- `pnpm verify` 通过：337 个测试文件，2112 个测试通过、2 个跳过；format、lint、类型检查、边界检查与生产构建通过。
+- 发布链专项覆盖 main 启动、完整 owner identity、旧 generation/owner no-op、统一生命周期投影、上传/自动保存/发布一次性副作用消费、最终与非最终结果未知分流、同一 generation 并发请求也只能成功一次的有界继续等待、v0.1.73 非最终未知状态的保守启动修复、v0.1.74 真实崩溃组合及 44 组终态/人工接管投影冲突的持久化重启矩阵、2,000 事件收敛、high-water 压缩、带 revision/hash 的固定恢复日志、损坏日志 fail closed，以及 fake-clock 的静默/失主核验。
 - `pnpm smoke:browser-cdp-recovery` 在真实 Electron `WebContentsView` 中通过；Playwright connection generation 为 `1 → 2 → 3`，URL、WebContents、CDP target、Profile、Session、表单和滚动状态保持。
 
-剩余产品门禁只有本文第一节的真实 CSDN 验收与正式版本交付。没有完成真实三图发布、Agent/Tab/CDP 故障注入、最终发布断线核验之前，不得把本文状态改成 Closed。
+剩余产品门禁只有本文第一节的真实 CSDN 验收。没有完成真实三图发布、Agent/Tab/CDP 故障注入、最终发布断线核验之前，不得把本文状态改成 Closed。

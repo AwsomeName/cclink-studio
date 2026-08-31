@@ -88,6 +88,19 @@ type ArticlePublishingLifecycleTarget =
   | 'result-unknown'
   | 'published'
 
+const ARTICLE_EXECUTION_STATUSES_BY_ATTEMPT: Partial<
+  Record<WebAffairAttempt['status'], ArticlePublishingState['execution']['status'][]>
+> = {
+  preparing: ['preparing'],
+  'running-ai': ['running'],
+  'checking-runtime': ['checking-runtime'],
+  'waiting-human': ['waiting-human'],
+  interrupted: ['interrupted', 'result-unknown'],
+  cancelled: ['cancelled'],
+  failed: ['failed'],
+  succeeded: ['published'],
+}
+
 const ALLOWED_TRANSITIONS: Record<WebAffairNodeStatus, ReadonlySet<WebAffairNodeStatus>> = {
   blocked: new Set(['cancelled']),
   ready: new Set([
@@ -1999,11 +2012,20 @@ export class WebAffairService {
           currentAttempt.launchOperationId !==
             normalizedPublishing.execution.currentLaunchOperationId),
       )
+      const lifecycleContradiction = Boolean(
+        currentAttempt &&
+        normalizedPublishing &&
+        ARTICLE_EXECUTION_STATUSES_BY_ATTEMPT[currentAttempt.status] &&
+        !ARTICLE_EXECUTION_STATUSES_BY_ATTEMPT[currentAttempt.status]!.includes(
+          normalizedPublishing.execution.status,
+        ),
+      )
       if (
         interrupted.length === 0 &&
         !terminalContradiction &&
         !finalActionContradiction &&
         !identityContradiction &&
+        !lifecycleContradiction &&
         !legacyNonFinalPublicationUnknown
       )
         return affair
@@ -2078,7 +2100,10 @@ export class WebAffairService {
           )
         } else if (
           repairedCurrentAttempt &&
-          (terminalContradiction || finalActionContradiction || identityContradiction)
+          (terminalContradiction ||
+            finalActionContradiction ||
+            identityContradiction ||
+            lifecycleContradiction)
         ) {
           const target: ArticlePublishingLifecycleTarget = finalActionContradiction
             ? 'result-unknown'
@@ -3666,18 +3691,7 @@ export class WebAffairService {
         ) {
           throw new Error('文章发布终态 Attempt 不能保留运行中的 execution')
         }
-        const expectedExecutionStatuses: Partial<
-          Record<WebAffairAttempt['status'], ArticlePublishingState['execution']['status'][]>
-        > = {
-          preparing: ['preparing'],
-          'running-ai': ['running'],
-          'checking-runtime': ['checking-runtime'],
-          'waiting-human': ['waiting-human'],
-          interrupted: ['interrupted', 'result-unknown'],
-          cancelled: ['cancelled'],
-          failed: ['failed'],
-          succeeded: ['published'],
-        }
+        const expectedExecutionStatuses = ARTICLE_EXECUTION_STATUSES_BY_ATTEMPT
         if (
           !allowRepairableArticleState &&
           expectedExecutionStatuses[currentAttempt.status] &&
