@@ -288,6 +288,15 @@ const mcpServerFields = {
     })
     .strict()
     .nullable()
+    .refine(
+      (value) =>
+        value === null ||
+        Boolean(
+          (value.env && Object.keys(value.env).length > 0) ||
+          (value.headers && Object.keys(value.headers).length > 0),
+        ),
+      { message: 'MCP 凭证更新必须包含 env/header，清除请使用 null' },
+    )
     .optional(),
 }
 

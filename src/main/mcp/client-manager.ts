@@ -562,7 +562,10 @@ function normalizeCredentialInput(
   const env = input.env && Object.keys(input.env).length > 0 ? recordField(input.env) : undefined
   const headers =
     input.headers && Object.keys(input.headers).length > 0 ? recordField(input.headers) : undefined
-  return env || headers ? { ...(env ? { env } : {}), ...(headers ? { headers } : {}) } : null
+  if (!env && !headers) {
+    throw new Error('MCP 凭证更新必须包含 env/header，清除请使用 null')
+  }
+  return { ...(env ? { env } : {}), ...(headers ? { headers } : {}) }
 }
 
 function parseSecretRecord(raw: string): Record<string, string> {

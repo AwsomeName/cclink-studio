@@ -482,4 +482,7 @@ Cookie 秘密出站、强制现有 query token。只有这三道止血完成后�
 - 启动时迁移旧格式并对账：orphan 自动清理，dangling ref 保持 fail-closed 并投影“凭证引用缺失”，不
   猜测最新 revision。配置/凭证容量失败保持旧文件，失败写入不会报告成功，可幂等重试。
 - 隔离临时配置测试覆盖旧格式迁移、Renderer 脱敏、rename/copy/delete、revision 冲突、配置写失败、
-  orphan、dangling ref、256 记录容量上限和原型键；测试未读取或输出真实用户配置。
+  orphan、dangling ref、256 记录容量上限和原型键；298 项 MCP/凭证/IPC/Agent 扩大回归通过。
+- 隔离 userData 的真实 Electron/Renderer IPC smoke 证明 DTO 和 v2 配置不含 canary、rename 保持 serverId、
+  copy 使用独立 revision、delete 清除引用与 revision，且外部 canary MCP 进程从未启动。测试未读取或输出
+  真实用户配置。

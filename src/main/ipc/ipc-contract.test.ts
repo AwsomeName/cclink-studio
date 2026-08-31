@@ -562,6 +562,9 @@ describe('IPC invoke contracts', () => {
         { name: '__proto__', transport: 'stdio', command: 'node', enabled: true },
       ]),
     ).toThrow()
+    expect(() =>
+      agentMcpIpcContracts.updateServer.parseArgs(['remote', { credentials: {} }]),
+    ).toThrow()
   })
 
   it('binds every Browser definition to a bounded runtime parser', () => {
