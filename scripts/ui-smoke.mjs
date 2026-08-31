@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
 import { chromium } from 'playwright-core'
 import { createSmokeRuntime } from './smoke-runtime.mjs'
@@ -59,6 +59,7 @@ const securityWorkspaceChecks = new Set([
   'main renderer enforces its CSP source boundary',
   'first screen has no login wall',
   'workspace file and search boundaries survive a real project switch',
+  'workspace upload reaches a real Browser View without widening file access',
 ])
 const relocationRecoveryChecks = new Set([
   'main renderer enforces its CSP source boundary',
@@ -188,6 +189,11 @@ async function startWebFixture() {
     ${
       request.url === '/login-popup-source'
         ? '<button id="open-login" onclick="window.open(\'/login-popup-target\', \'_blank\')">打开登录页</button>'
+        : ''
+    }
+    ${
+      request.url === '/file-upload'
+        ? '<input id="file-upload" type="file"><output id="uploaded-name"></output><script>document.querySelector("#file-upload").addEventListener("change", event => { document.querySelector("#uploaded-name").textContent = event.target.files?.[0]?.name || "" })</script>'
         : ''
     }
   </body>
@@ -450,6 +456,79 @@ async function main() {
       ])
     }
   })
+
+  await runCheck(
+    'workspace upload reaches a real Browser View without widening file access',
+    async () => {
+      const uploadFixture = join(rootDir, '.cclink-studio-browser-upload-canary.txt')
+      const outsideFixture = join(workspaceFixtureRoot, 'browser-upload-outside-canary.txt')
+      const uploadUrl = `${webFixtureOrigin}/file-upload`
+      await writeFile(uploadFixture, 'workspace upload canary', 'utf8')
+      await writeFile(outsideFixture, 'outside upload canary', 'utf8')
+      let tabId = null
+      try {
+        tabId = await page.evaluate(async (initialUrl) => {
+          const [{ openDefaultBrowserTab }, { useWorkspaceStore }] = await Promise.all([
+            import('/src/features/web-resources/open-default-browser-tab.ts'),
+            import('/src/stores/workspace-store.ts'),
+          ])
+          return (
+            await openDefaultBrowserTab(useWorkspaceStore.getState().activeWorkspaceRef, {
+              title: 'Browser 上传边界验收',
+              initialUrl,
+            })
+          ).tabId
+        }, uploadUrl)
+        await page.waitForFunction(
+          async ({ tabId: id, expectedUrl }) =>
+            (await window.cclinkStudio.browser.getRuntimeDiagnostics(id)).visibleUrl ===
+            expectedUrl,
+          { tabId, expectedUrl: uploadUrl },
+          { timeout: uiReadyTimeoutMs },
+        )
+        let browserViewPage = null
+        const claimDeadline = Date.now() + uiReadyTimeoutMs
+        while (!browserViewPage && Date.now() < claimDeadline) {
+          browserViewPage =
+            browser
+              .contexts()
+              .flatMap((context) => context.pages())
+              .find((candidate) => candidate.url().startsWith(uploadUrl)) ?? null
+          if (!browserViewPage) await new Promise((resolve) => setTimeout(resolve, 250))
+        }
+        assert(
+          browserViewPage,
+          `real Browser WebContentsView page was not claimed over CDP: ${browser
+            .contexts()
+            .flatMap((context) => context.pages().map((candidate) => candidate.url()))
+            .join(', ')}`,
+        )
+        await browserViewPage.locator('#file-upload').setInputFiles(uploadFixture)
+        await browserViewPage.waitForFunction(
+          (expected) => document.querySelector('#uploaded-name')?.textContent === expected,
+          basename(uploadFixture),
+        )
+        const outsideDenied = await page.evaluate(async (path) => {
+          try {
+            await window.cclinkStudio.fs.readFile(path)
+            return false
+          } catch {
+            return true
+          }
+        }, outsideFixture)
+        assert(outsideDenied, 'Browser upload fixture widened renderer access outside workspace')
+        return 'workspace file selected in real WebContentsView; outside workspace remained denied'
+      } finally {
+        if (tabId) {
+          await page.evaluate(async (id) => {
+            const { useTabStore } = await import('/src/stores/tab-store.ts')
+            useTabStore.getState().closeTab(id)
+          }, tabId)
+        }
+        await Promise.all([rm(uploadFixture, { force: true }), rm(outsideFixture, { force: true })])
+      }
+    },
+  )
 
   await runCheck(
     'file relocation journal recovers a stale tab after an app process restart',
