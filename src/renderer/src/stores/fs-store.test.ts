@@ -232,6 +232,16 @@ describe('fs-store workspace switching', () => {
 
   it('reports project switch failures and clears the switching state', async () => {
     const nextPath = '/Users/apple/missing-project'
+    useOpenProjectsStore.setState({
+      openProjectPaths: [nextPath, '/Users/apple/available-project'],
+      recentWorkspaceRefs: [
+        { kind: 'local', path: nextPath },
+        { kind: 'local', path: '/Users/apple/available-project' },
+      ],
+    })
+    useFsStore.setState({
+      recentWorkspacePaths: [nextPath, '/Users/apple/available-project'],
+    })
     const resolveLocalWorkspace = window.cclinkStudio.workspaceState
       .resolveLocalWorkspace as ReturnType<typeof vi.fn>
     resolveLocalWorkspace.mockResolvedValue({ valid: false, workspacePath: null })
@@ -240,7 +250,17 @@ describe('fs-store workspace switching', () => {
 
     expect(switched).toBe(false)
     expect(useFsStore.getState().switchingPath).toBeNull()
-    expect(useFsStore.getState().error).toBe('该工作空间已不存在或不可访问')
+    expect(useFsStore.getState().error).toBe('该工作空间已不存在或不可访问，已从项目列表移除')
+    expect(useFsStore.getState().recentWorkspacePaths).toEqual(['/Users/apple/available-project'])
+    expect(useOpenProjectsStore.getState().openProjectPaths).toEqual([
+      '/Users/apple/available-project',
+    ])
+    expect(useOpenProjectsStore.getState().recentWorkspaceRefs).toEqual([
+      { kind: 'local', path: '/Users/apple/available-project' },
+    ])
+    expect(window.cclinkStudio.settings.set).toHaveBeenCalledWith({
+      recentWorkspacePaths: ['/Users/apple/available-project'],
+    })
   })
 
   it('exposes the target project while an asynchronous switch is in progress', async () => {

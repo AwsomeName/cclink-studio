@@ -28,6 +28,7 @@ interface OpenProjectsState {
   replaceRemoteProject: (current: RemoteWorkspaceRef, confirmed: RemoteWorkspaceRef) => void
   removeRemoteProject: (ref: RemoteWorkspaceRef) => void
   removeProject: (path: string) => void
+  forgetLocalProject: (path: string) => void
   reorderProject: (sourcePath: string, targetPath: string, placement: DropPlacement) => void
 }
 
@@ -238,6 +239,22 @@ export const useOpenProjectsStore = create<OpenProjectsState>((set, get) => ({
     if (openProjectPaths.length === get().openProjectPaths.length) return
     set({ openProjectPaths })
     persistOpenProjects(openProjectPaths)
+  },
+
+  forgetLocalProject: (path) => {
+    const normalized = normalizeProjectPath(path)
+    if (!normalized) return
+    const openProjectPaths = get().openProjectPaths.filter((item) => item !== normalized)
+    const recentWorkspaceRefs = get().recentWorkspaceRefs.filter(
+      (item) => item.kind !== 'local' || item.path !== normalized,
+    )
+    if (
+      openProjectPaths.length === get().openProjectPaths.length &&
+      recentWorkspaceRefs.length === get().recentWorkspaceRefs.length
+    )
+      return
+    set({ openProjectPaths, recentWorkspaceRefs })
+    persistOpenProjects(openProjectPaths, get().openRemoteWorkspaceRefs, recentWorkspaceRefs)
   },
 
   reorderProject: (sourcePath, targetPath, placement) => {

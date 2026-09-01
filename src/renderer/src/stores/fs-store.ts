@@ -624,7 +624,16 @@ export const useFsStore = create<FsState>((set, get) => ({
       if (!resolvedPath || !isWorkspaceRuntimeTransitionCurrent(generation)) {
         if (!resolvedPath) {
           console.warn('[FsStore] 打开最近项目失败：工作空间已不存在或不可访问', { path })
-          set({ error: '该工作空间已不存在或不可访问' })
+          const recentWorkspacePaths = get().recentWorkspacePaths.filter(
+            (candidate) => candidate !== path,
+          )
+          useOpenProjectsStore.getState().forgetLocalProject(path)
+          set({
+            recentWorkspacePaths,
+            error: '该工作空间已不存在或不可访问，已从项目列表移除',
+          })
+          saveRecentWorkspaceFallback(recentWorkspacePaths)
+          await window.cclinkStudio.settings.set({ recentWorkspacePaths }).catch(() => {})
         }
         return false
       }

@@ -66,6 +66,46 @@ describe('open-projects-store', () => {
     ])
   })
 
+  it('forgets a missing local project without removing remote history', async () => {
+    const remote = {
+      kind: 'remote' as const,
+      transport: 'cclink' as const,
+      endpointId: 'agent-1',
+      workspaceId: 'workspace-a',
+      path: '/srv/a',
+    }
+    useOpenProjectsStore.setState({
+      openProjectPaths: ['/workspace/missing', '/workspace/a'],
+      openRemoteWorkspaceRefs: [remote],
+      recentWorkspaceRefs: [
+        { kind: 'local', path: '/workspace/missing' },
+        remote,
+        { kind: 'local', path: '/workspace/a' },
+      ],
+    })
+
+    useOpenProjectsStore.getState().forgetLocalProject('/workspace/missing')
+    await flushPendingWorkspaceStateWrites()
+
+    expect(useOpenProjectsStore.getState().openProjectPaths).toEqual(['/workspace/a'])
+    expect(useOpenProjectsStore.getState().openRemoteWorkspaceRefs).toEqual([remote])
+    expect(useOpenProjectsStore.getState().recentWorkspaceRefs).toEqual([
+      remote,
+      { kind: 'local', path: '/workspace/a' },
+    ])
+    expect(window.cclinkStudio.workspaceState.setSection).toHaveBeenLastCalledWith(
+      null,
+      'projectStrip',
+      {
+        version: 3,
+        openProjectPaths: ['/workspace/a'],
+        openRemoteWorkspaceRefs: [remote],
+        recentWorkspaceRefs: [remote, { kind: 'local', path: '/workspace/a' }],
+      },
+      null,
+    )
+  })
+
   it('replaces a restored remote reference with the Agent-confirmed opaque workspace identity', async () => {
     const store = useOpenProjectsStore.getState()
     const stale = {
