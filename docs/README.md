@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-08-31。
+> 当前事实源。最后更新：2026-09-01。
 
 ## 先读这些
 
@@ -53,6 +53,10 @@
   入口和侧栏历史连接专用控制 Tab、持久发布事务、可见网页与发布 Agent，第一目标平台为 CSDN；
   v0.1.72 仍存在 Attempt 假运行阻塞，真实站点闭环未完成。
 - `docs/features/article-platform-publishing-development-plan.md`：CSDN 单篇图文发布的最小纵向研发计划；分离工程门禁、用户增量、真实发布闭环、失败恢复和交付验收。
+- `docs/features/image-research.md`：图片调研产品事实源；首个平台初步定为小红书，独立评审已驳回
+  原 Ready 方案，当前阻塞于真实页面、可信候选、目录授权和保存事务 E0 证据。
+- `docs/features/image-research-development-plan.md`：图片调研修订计划；E0 通过后按单账号单图人工闭环、
+  公共 WebAffair Runtime、Agent 逐张循环和界面统计推进。
 - `docs/testing/article-publishing-runtime-convergence.md`：文章发布“开始执行无反应 / Attempt
   假运行”的根因、系统性终态收敛方案、用户自救入口、故障矩阵和真实 CSDN 验收门禁。
 - `docs/reviews/article-publishing-runtime-convergence-review-prompt.md`：可直接交给新 Codex
@@ -105,7 +109,7 @@ Studio 默认可单仓库独立启动，不要求 `cclink-dev`、`chat-cc/deploy
 - 本地验收与发布：`docs/ops/local-smoke-check.md`、`docs/ops/oss-release-runbook.md`、`docs/features/desktop-release-and-updates.md`。
 - 桌面更新验收证据：`docs/ops/desktop-update-acceptance.md`。
 - 官方集成：`docs/official-integration-contract.md`、`docs/ops/cclink-dev-official-integration-handoff.md`。
-- 工作台能力：`docs/features/workspace-system.md`、`docs/features/recent-session-switcher.md`、`docs/features/unified-agent-panel.md`、`docs/features/context-action-system.md`、`docs/features/configurable-keybinding-system.md`、`docs/features/detachable-workbench-tabs.md`、`docs/features/local-credentials.md`、`docs/features/local-credentials-development-plan.md`、`docs/features/git-source-control.md`、`docs/features/git-source-control-development-plan.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/agent-role-configuration.md`、`docs/features/ai-employees.md`、`docs/features/agent-profiles.md`、`docs/features/ai-web-affairs-agent.md`、`docs/features/global-web-accounts-development-plan.md`、`docs/features/ai-web-affairs-agent-development-plan.md`、`docs/features/browser-automation.md`、`docs/testing/browser-http-basic-auth.md`、`docs/testing/browser-playwright-cdp-recovery.md`、`docs/testing/browser-tab-bar-native-view-occlusion.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/markdown-auto-illustration.md`、`docs/features/article-platform-publishing.md`、`docs/features/article-platform-publishing-development-plan.md`、`docs/features/promotional-video-workbench.md`、`docs/features/scheduled-tasks.md`、`docs/features/scheduled-tasks-development-plan.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`、`docs/features/runtime-components-and-capability-plugins.md`、`docs/features/runtime-components-and-capability-plugins-development-plan.md`。
+- 工作台能力：`docs/features/workspace-system.md`、`docs/features/recent-session-switcher.md`、`docs/features/unified-agent-panel.md`、`docs/features/context-action-system.md`、`docs/features/configurable-keybinding-system.md`、`docs/features/detachable-workbench-tabs.md`、`docs/features/local-credentials.md`、`docs/features/local-credentials-development-plan.md`、`docs/features/git-source-control.md`、`docs/features/git-source-control-development-plan.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/agent-role-configuration.md`、`docs/features/ai-employees.md`、`docs/features/agent-profiles.md`、`docs/features/ai-web-affairs-agent.md`、`docs/features/global-web-accounts-development-plan.md`、`docs/features/ai-web-affairs-agent-development-plan.md`、`docs/features/browser-automation.md`、`docs/testing/browser-http-basic-auth.md`、`docs/testing/browser-playwright-cdp-recovery.md`、`docs/testing/browser-tab-bar-native-view-occlusion.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/markdown-auto-illustration.md`、`docs/features/article-platform-publishing.md`、`docs/features/article-platform-publishing-development-plan.md`、`docs/features/image-research.md`、`docs/features/image-research-development-plan.md`、`docs/features/promotional-video-workbench.md`、`docs/features/scheduled-tasks.md`、`docs/features/scheduled-tasks-development-plan.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`、`docs/features/runtime-components-and-capability-plugins.md`、`docs/features/runtime-components-and-capability-plugins-development-plan.md`。
 - 行业能力：数据源、硬件工作空间、FPC 改版、CAD 转换、工作空间内运营助手。
 
 架构、开发和功能规格描述当前事实；`docs/decisions/` 和带日期的 `docs/ops/`
