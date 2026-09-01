@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { absolutePathSchema } from '../ipc/input-schema'
 import { articlePublishingStateSchema } from '../article-publishing/article-publishing-schema'
+import { parseCsdnDraftAnchor } from '../article-publishing/csdn-draft-anchor'
 
 const trimmedText = (maxLength: number, label: string): z.ZodString =>
   z.string().trim().min(1, `${label}不能为空`).max(maxLength, `${label}过长`)
@@ -534,7 +535,7 @@ const webAffairSchema = z
 
 export const webAffairSnapshotSchema = z
   .object({
-    schemaVersion: z.literal(5),
+    schemaVersion: z.literal(6),
     revision: z.number().int().nonnegative(),
     affairs: z.array(webAffairSchema).max(1_000),
   })
@@ -555,6 +556,26 @@ export function parseWebAffairSnapshot(value: unknown) {
 function migrateSnapshot(value: unknown): unknown {
   if (!value || typeof value !== 'object') return value
   const snapshot = structuredClone(value) as Record<string, unknown>
+  if (snapshot['schemaVersion'] === 5) {
+    const affairs = Array.isArray(snapshot['affairs']) ? snapshot['affairs'] : []
+    for (const item of affairs) {
+      if (!item || typeof item !== 'object') continue
+      const affair = item as Record<string, unknown>
+      const publishing = affair['articlePublishing']
+      if (!publishing || typeof publishing !== 'object') continue
+      const article = publishing as Record<string, unknown>
+      const draft = article['draft']
+      if (!draft || typeof draft !== 'object') continue
+      const draftState = draft as Record<string, unknown>
+      if (typeof draftState['platformDraftId'] === 'string') continue
+      const rawUrl = draftState['url']
+      if (typeof rawUrl !== 'string') continue
+      const anchor = parseCsdnDraftAnchor(rawUrl)
+      if (anchor) draftState['platformDraftId'] = anchor.draftId
+    }
+    snapshot['schemaVersion'] = 6
+    return snapshot
+  }
   if (snapshot['schemaVersion'] === 4) {
     const affairs = Array.isArray(snapshot['affairs']) ? snapshot['affairs'] : []
     for (const item of affairs) {
@@ -591,7 +612,7 @@ function migrateSnapshot(value: unknown): unknown {
       }
     }
     snapshot['schemaVersion'] = 5
-    return snapshot
+    return migrateSnapshot(snapshot)
   }
   if (snapshot['schemaVersion'] === 3) {
     const affairs = Array.isArray(snapshot['affairs']) ? snapshot['affairs'] : []

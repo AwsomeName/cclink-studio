@@ -129,6 +129,18 @@ describe('article publishing persistent state', () => {
       '77777777-7777-4777-8777-777777777777',
     )
     expect(recorded.success).toBe(true)
+    const baselineSnapshot = platformSnapshot()
+    const snapshotted = await created.service.refreshArticlePublishingWriteSnapshot(
+      {
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        executionGeneration: created.reporter.executionGeneration,
+        browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+        snapshot: baselineSnapshot,
+      },
+      WORKSPACE_ID,
+    )
+    expect(snapshotted.success).toBe(true)
     if (!recorded.success) return
     expect(recorded.data.articlePublishing?.draft?.url).toBe(draftUrl)
 
@@ -161,12 +173,21 @@ describe('article publishing persistent state', () => {
     })
     await created.service.flush()
 
+    const persistedPath = join(directory, 'affairs.json')
+    const legacyV5 = JSON.parse(await readFile(persistedPath, 'utf8'))
+    legacyV5.schemaVersion = 5
+    delete legacyV5.affairs[0].articlePublishing.draft.platformDraftId
+    await writeFile(persistedPath, JSON.stringify(legacyV5))
+
     const reloaded = createService(directory)
     await reloaded.load()
     const after = reloaded.getProjectSnapshot(WORKSPACE_ID)
     expect(after.success).toBe(true)
     if (!after.success) return
-    expect(after.data.affairs[0].articlePublishing?.draft).toMatchObject({ url: draftUrl })
+    expect(after.data.affairs[0].articlePublishing?.draft).toMatchObject({
+      url: draftUrl,
+      platformDraftId: '164148817',
+    })
     await reloaded.flush()
   })
 
@@ -329,6 +350,7 @@ describe('article publishing persistent state', () => {
     expect(uploaded.data.articlePublishing?.assets[0]).toMatchObject({
       status: 'uploaded',
       platformUrl: 'https://img-blog.csdnimg.cn/example.png',
+      platformContentHash: 'd'.repeat(64),
       uploadAttempts: [{ number: 1, status: 'succeeded' }],
     })
   })
@@ -436,7 +458,7 @@ describe('article publishing persistent state', () => {
     await reloaded.flush()
   })
 
-  it('reconciles an unknown upload from the prior generation without uploading the image again', async () => {
+  it('blocks an unknown upload from the prior generation before Agent binding', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
     await prepareUploadCheckpoint(created)
     await dispatchUploadEffect(created, 1)
@@ -468,33 +490,12 @@ describe('article publishing persistent state', () => {
     )
     expect(unknown.success).toBe(true)
 
-    const resumedReporter = await resumeAndBindPublishingTask(created)
-    const reconciled = await created.service.reportArticlePublishingAsset(
-      {
-        workspaceRef,
-        affairId: created.affairId,
-        attemptId: created.attemptId,
-        assetId: created.assetId,
-        status: 'uploaded',
-        platformUrl: 'https://img-blog.csdnimg.cn/recovered.png',
-        evidence: 'csdn@1 按冻结内容哈希读回同一张图片',
-      },
-      WORKSPACE_ID,
-      trustedReporter(resumedReporter, 'asset-uploaded'),
+    await expect(resumeAndBindPublishingTask(created)).rejects.toThrow(
+      '旧代次图片或保存结果仍不确定',
     )
-    if (!reconciled.success) throw new Error(reconciled.error.message)
-    expect(reconciled.data.articlePublishing?.assets[0]).toMatchObject({
-      status: 'uploaded',
-      uploadAttempts: [{ number: 1, status: 'succeeded' }],
-    })
-    expect(
-      reconciled.data.articlePublishing?.sideEffects.find(
-        (effect) => effect.kind === 'upload-asset',
-      )?.status,
-    ).toBe('verified')
   })
 
-  it('finishes an unknown draft save from current CSDN readback instead of getting stuck', async () => {
+  it('blocks an unknown draft save before Agent binding', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
     await prepareUploadCheckpoint(created)
     await dispatchUploadEffect(created, 1)
@@ -544,42 +545,9 @@ describe('article publishing persistent state', () => {
     )
     if (!unknown.success) throw new Error(unknown.error.message)
 
-    const resumedReporter = await resumeAndBindPublishingTask(created)
-    const verifying = await created.service.reportArticlePublishingCheckpoint(
-      {
-        workspaceRef,
-        affairId: created.affairId,
-        attemptId: created.attemptId,
-        stepId: 'save-draft',
-        status: 'verifying',
-        evidence: 'csdn@1 重新读取原草稿',
-      },
-      WORKSPACE_ID,
-      resumedReporter,
+    await expect(resumeAndBindPublishingTask(created)).rejects.toThrow(
+      '旧代次图片或保存结果仍不确定',
     )
-    if (!verifying.success) throw new Error(verifying.error.message)
-    const completed = await created.service.reportArticlePublishingCheckpoint(
-      {
-        workspaceRef,
-        affairId: created.affairId,
-        attemptId: created.attemptId,
-        stepId: 'save-draft',
-        status: 'completed',
-        evidence: 'csdn@1 确认标题一致且页面显示草稿已保存',
-      },
-      WORKSPACE_ID,
-      trustedReporter(resumedReporter, 'checkpoint'),
-    )
-    if (!completed.success) throw new Error(completed.error.message)
-    expect(
-      completed.data.articlePublishing?.checkpoints.find(
-        (checkpoint) => checkpoint.stepId === 'save-draft',
-      )?.status,
-    ).toBe('completed')
-    expect(
-      completed.data.articlePublishing?.sideEffects.find((effect) => effect.key === sideEffectKey)
-        ?.status,
-    ).toBe('verified')
   })
 
   it('returns a waiting-human article task to the same Attempt for fresh observation', async () => {
@@ -615,6 +583,170 @@ describe('article publishing persistent state', () => {
       currentAttemptId: created.attemptId,
     })
     expect(resumed.data.articlePublishing?.checkpoints[0].status).toBe('needs-reconcile')
+  })
+
+  it('persists a recovery generation and refuses runtime binding until the exact page permit is verified', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const draftUrl = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
+    const recorded = await created.service.recordArticlePublishingDraftAnchor(
+      created.affairId,
+      created.attemptId,
+      created.reporter.executionGeneration,
+      created.reporter.launchOperationId,
+      draftUrl,
+      WORKSPACE_ID,
+      '77777777-7777-4777-8777-777777777777',
+    )
+    expect(recorded.success).toBe(true)
+    const baselineSnapshot = platformSnapshot()
+    const snapshotted = await created.service.refreshArticlePublishingWriteSnapshot(
+      {
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        executionGeneration: created.reporter.executionGeneration,
+        browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+        snapshot: baselineSnapshot,
+      },
+      WORKSPACE_ID,
+    )
+    expect(snapshotted.success).toBe(true)
+    const handedOff = await created.service.handoffAttempt(
+      {
+        workspaceRef: { kind: 'local', path: directory },
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        reason: 'Studio will restart',
+      },
+      WORKSPACE_ID,
+    )
+    expect(handedOff.success).toBe(true)
+
+    const resumed = await created.service.resumeArticlePublishingAfterHandoff(
+      created.affairId,
+      created.attemptId,
+      WORKSPACE_ID,
+    )
+    expect(resumed.success).toBe(true)
+    if (!resumed.success) return
+    const attempt = resumed.data.attempts[0]
+    const recovery = resumed.data.articlePublishing?.draft?.recovery
+    expect(recovery).toMatchObject({
+      executionGeneration: attempt.executionGeneration,
+      status: 'locating',
+      expectedDraftId: '164148817',
+    })
+    if (!recovery) throw new Error('恢复操作未持久化')
+    const bindings = runtimeBindingsFor(attempt, {
+      tabId: 'recovered-tab',
+      browserTaskRunId: '88888888-8888-4888-8888-888888888888',
+      browserViewRuntimeGeneration: 2,
+      webContentsId: 20,
+      playwrightConnectionGeneration: 3,
+      playwrightPageBindingGeneration: 4,
+    })
+
+    const rejected = await created.service.bindArticlePublishingRuntime(
+      created.affairId,
+      attempt.id,
+      attempt.executionGeneration,
+      attempt.launchOperationId,
+      bindings,
+      WORKSPACE_ID,
+    )
+    expect(rejected).toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('写入许可') },
+    })
+
+    const verified = await created.service.verifyArticlePublishingRecovery(
+      {
+        affairId: created.affairId,
+        attemptId: attempt.id,
+        executionGeneration: attempt.executionGeneration,
+        launchOperationId: attempt.launchOperationId,
+        recoveryOperationId: recovery.operationId,
+        draftId: '164148817',
+        url: draftUrl,
+        snapshot: baselineSnapshot,
+        evidenceHash: 'e'.repeat(64),
+        tabId: 'recovered-tab',
+        browserViewRuntimeGeneration: 2,
+        webContentsId: 20,
+        playwrightConnectionGeneration: 3,
+        playwrightPageBindingGeneration: 4,
+      },
+      WORKSPACE_ID,
+    )
+    expect(verified).toMatchObject({
+      success: true,
+      data: {
+        articlePublishing: {
+          draft: {
+            recovery: {
+              status: 'verified',
+              writePermit: {
+                recoveryOperationId: recovery.operationId,
+                tabId: 'recovered-tab',
+                playwrightPageBindingGeneration: 4,
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const bound = await created.service.bindArticlePublishingRuntime(
+      created.affairId,
+      attempt.id,
+      attempt.executionGeneration,
+      attempt.launchOperationId,
+      bindings,
+      WORKSPACE_ID,
+    )
+    expect(bound.success).toBe(true)
+    if (!verified.success) return
+    const permit = verified.data.articlePublishing?.draft?.recovery?.writePermit
+    if (!permit) throw new Error('恢复许可未持久化')
+    const rotatedSnapshot = platformSnapshot({
+      bodyStructureHash: 'c'.repeat(64),
+      snapshotHash: 'b'.repeat(64),
+      evidenceHash: 'd'.repeat(64),
+    })
+    const rotated = await created.service.refreshArticlePublishingWriteSnapshot(
+      {
+        affairId: created.affairId,
+        attemptId: attempt.id,
+        executionGeneration: attempt.executionGeneration,
+        browserTaskRunId: '88888888-8888-4888-8888-888888888888',
+        permitId: permit.id,
+        previousSnapshotHash: baselineSnapshot.snapshotHash,
+        snapshot: rotatedSnapshot,
+      },
+      WORKSPACE_ID,
+    )
+    expect(rotated).toMatchObject({
+      success: true,
+      data: {
+        articlePublishing: {
+          draft: {
+            recovery: { writePermit: { snapshotHash: rotatedSnapshot.snapshotHash } },
+          },
+        },
+      },
+    })
+    const staleRotation = await created.service.refreshArticlePublishingWriteSnapshot(
+      {
+        affairId: created.affairId,
+        attemptId: attempt.id,
+        executionGeneration: attempt.executionGeneration,
+        browserTaskRunId: '88888888-8888-4888-8888-888888888888',
+        permitId: permit.id,
+        previousSnapshotHash: baselineSnapshot.snapshotHash,
+        snapshot: platformSnapshot({ snapshotHash: 'f'.repeat(64) }),
+      },
+      WORKSPACE_ID,
+    )
+    expect(staleRotation).toMatchObject({ success: false })
   })
 
   it('keeps the same Attempt retryable when Agent launch fails', async () => {
@@ -1590,6 +1722,58 @@ async function createStartedTask(directory: string, sourcePath: string, imagePat
 
 type StartedTask = Awaited<ReturnType<typeof createStartedTask>>
 
+function runtimeBindingsFor(
+  attempt: { id: string; executionGeneration: number; launchOperationId: string },
+  identity: {
+    tabId: string
+    browserTaskRunId: string
+    browserViewRuntimeGeneration: number
+    webContentsId: number
+    playwrightConnectionGeneration: number
+    playwrightPageBindingGeneration: number
+  },
+) {
+  const now = new Date().toISOString()
+  const base = {
+    attemptId: attempt.id,
+    executionGeneration: attempt.executionGeneration,
+    launchOperationId: attempt.launchOperationId,
+    status: 'active' as const,
+    boundAt: now,
+    lastObservedAt: now,
+  }
+  return [
+    {
+      ...base,
+      id: randomUUID(),
+      kind: 'agent-run' as const,
+      conversationId: `conversation-g${attempt.executionGeneration}`,
+      agentRunId: `run-g${attempt.executionGeneration}`,
+      agentRuntimeEpoch: attempt.executionGeneration,
+      agentRuntimeBindingKey: `agent-binding-g${attempt.executionGeneration}`,
+    },
+    {
+      ...base,
+      id: randomUUID(),
+      kind: 'browser-tab' as const,
+      tabId: identity.tabId,
+      browserViewRuntimeGeneration: identity.browserViewRuntimeGeneration,
+      webContentsId: identity.webContentsId,
+    },
+    {
+      ...base,
+      id: randomUUID(),
+      kind: 'browser-task' as const,
+      browserTaskRunId: identity.browserTaskRunId,
+      tabId: identity.tabId,
+      browserViewRuntimeGeneration: identity.browserViewRuntimeGeneration,
+      webContentsId: identity.webContentsId,
+      playwrightConnectionGeneration: identity.playwrightConnectionGeneration,
+      playwrightPageBindingGeneration: identity.playwrightPageBindingGeneration,
+    },
+  ]
+}
+
 function trustedReporter(
   reporter: ArticlePublishingAgentReporter,
   kind?: NonNullable<ArticlePublishingAgentReporter['trustedPageEvidence']>['kind'],
@@ -1605,7 +1789,29 @@ function trustedReporter(
       observedAt: new Date().toISOString(),
       url,
       kind,
+      ...(kind === 'asset-uploaded' ? { platformContentHash: 'd'.repeat(64) } : {}),
+      bodyStructureHash: 'b'.repeat(64),
+      platformAccountId: 'csdn:test-user',
+      platformSnapshot: platformSnapshot(),
     },
+  }
+}
+
+function platformSnapshot(overrides: Record<string, unknown> = {}) {
+  return {
+    adapterId: 'csdn' as const,
+    adapterVersion: 1 as const,
+    platformAccountId: 'csdn:test-user',
+    draftId: '164148817',
+    normalizedTitle: 'Article',
+    bodyStructureHash: 'b'.repeat(64),
+    images: [],
+    imageEnumerationComplete: true as const,
+    saveState: 'saved' as const,
+    snapshotHash: 'a'.repeat(64),
+    evidenceHash: 'e'.repeat(64),
+    observedAt: new Date().toISOString(),
+    ...overrides,
   }
 }
 

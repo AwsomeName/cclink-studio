@@ -40,6 +40,11 @@ import type {
   WebAffairOperationResult,
   WebAffairProjectSnapshot,
 } from '../../shared/web-affairs/web-affair-types'
+import {
+  CsdnDraftRecoveryCoordinator,
+  type CsdnDraftRecoveryResult,
+} from './csdn-draft-recovery-coordinator'
+import { CSDN_ARTICLE_MANAGEMENT_URL } from './csdn-publishing-adapter'
 
 const MAX_SOURCE_BYTES = 10 * 1024 * 1024
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024
@@ -102,6 +107,7 @@ export class ArticlePublishingService {
     private readonly webAffairService: WebAffairService,
     private readonly resolveRealPath: (path: string) => Promise<string> = realpath,
     private readonly runtimeDependencies?: ArticlePublishingRuntimeDependencies,
+    private readonly draftRecoveryCoordinator = new CsdnDraftRecoveryCoordinator(),
   ) {}
 
   dispose(): void {
@@ -152,343 +158,455 @@ export class ArticlePublishingService {
     const attempt = input.affair.attempts.find((candidate) => candidate.id === input.attemptId)
     if (!publishing || !attempt) throw new Error('文章发布运行状态不存在')
 
-    const persistedDraftAnchor = publishing.draft?.url
-      ? parseCsdnDraftAnchor(publishing.draft.url)
-      : null
-    const tabId = await browserManager.waitForAccountView(
-      input.workspacePath,
-      attempt.profileId,
-      attempt.accountId,
-      persistedDraftAnchor?.url ?? attempt.entryUrl,
-      8_000,
-      input.preferredBrowserTabId,
-    )
-    if (!tabId) throw new Error('账号浏览器 Tab 创建超时')
-    let draftAnchor = persistedDraftAnchor
-    const visibleUrl = browserManager.getCurrentURL(tabId)
-    if (draftAnchor) {
-      if (!isSameCsdnDraft(draftAnchor.url, visibleUrl)) {
-        await browserManager.navigate(tabId, draftAnchor.url)
-      }
-      const restored = parseCsdnDraftAnchor(browserManager.getCurrentURL(tabId))
-      if (!restored || restored.draftId !== draftAnchor.draftId) {
-        throw new Error(`无法恢复原 CSDN 草稿 ${draftAnchor.draftId}，已拒绝在其他页面继续`)
-      }
-      draftAnchor = restored
-    } else if (input.resumed && hasPlatformPublishingProgress(publishing)) {
-      const visibleDraftAnchor = parseCsdnDraftAnchor(visibleUrl)
-      if (!visibleDraftAnchor) {
-        throw new Error(
-          '旧 Attempt 已有平台写入但缺少草稿锚点；请先在当前账号 Tab 打开原 CSDN 草稿，再点击“从中断处继续”',
-        )
-      }
-      const recorded = await this.webAffairService.recordArticlePublishingDraftAnchor(
-        input.affair.id,
-        attempt.id,
-        attempt.executionGeneration,
-        attempt.launchOperationId,
-        visibleDraftAnchor.url,
-        input.workspaceId,
-      )
-      if (!recorded.success) throw new Error(recorded.error.message)
-      draftAnchor = visibleDraftAnchor
-    } else {
-      await browserManager.navigate(tabId, attempt.entryUrl)
-      const visibleDraftAnchor = parseCsdnDraftAnchor(browserManager.getCurrentURL(tabId))
-      if (visibleDraftAnchor) {
-        const recorded = await this.webAffairService.recordArticlePublishingDraftAnchor(
-          input.affair.id,
-          attempt.id,
-          attempt.executionGeneration,
-          attempt.launchOperationId,
-          visibleDraftAnchor.url,
-          input.workspaceId,
-        )
-        if (!recorded.success) throw new Error(recorded.error.message)
-        draftAnchor = visibleDraftAnchor
-      }
-    }
-    await playwrightBridge.ensureConnected('article_publishing_launch')
-    await browserManager.ensurePlaywrightPage(tabId)
-    await playwrightBridge.switchToPage(tabId)
-    const viewIdentity = browserManager.getViewRuntimeIdentity(tabId)
-    const pageBinding = playwrightBridge.getPageBindingIdentity(tabId)
-    if (
-      !viewIdentity ||
-      !pageBinding ||
-      pageBinding.connectionGeneration !== playwrightBridge.getConnectionGeneration() ||
-      pageBinding.webContentsId !== viewIdentity.webContentsId
-    ) {
-      throw new Error('账号浏览器 Runtime 身份未稳定绑定')
-    }
-
-    const conversationId = `article-publishing-${input.affair.id}`
-    const runId = `run-${attempt.launchOperationId}`
-    const terminalIdentity = agentBridge.getRuntimeIdentity(conversationId)
-    let bound = false
-    let boundAffair: WebAffair | null = null
-    let launchedRunId: string | null = null
-    let launchedBrowserTaskId: string | null = null
-    let terminalEvent: { type: 'complete' | 'error'; reason: string } | null = null
-    let terminalReconciliation: Promise<void> | null = null
-    let disposed = false
-    let dispose = (): void => undefined
-    let resolveLaunchReady: (result: StartArticlePublishingTaskResult) => void = () => undefined
-    let rejectLaunchReady: (error: Error) => void = () => undefined
-    const launchReady = new Promise<StartArticlePublishingTaskResult>((resolve, reject) => {
-      resolveLaunchReady = resolve
-      rejectLaunchReady = reject
-    })
-    const reconcileTerminalOnce = (terminal: {
-      type: 'complete' | 'error'
-      reason: string
-    }): Promise<void> => {
-      if (terminalReconciliation) return terminalReconciliation
-      disposed = true
-      dispose()
-      terminalReconciliation = this.reconcileAgentTerminal(
-        input,
-        conversationId,
-        runId,
-        terminalIdentity,
-        terminal,
-      ).finally(() => {
-        this.activeRuntimes.delete(attempt.id)
-      })
-      return terminalReconciliation
-    }
-    dispose = agentBridge.onRuntimeEvent((event) => {
-      if (event.conversationId === conversationId && event.runId === runId) {
-        this.observeAgentActivity(input.attemptId, event.type === 'stream')
-      }
-      if (
-        disposed ||
-        event.conversationId !== conversationId ||
-        event.runId !== runId ||
-        (event.type !== 'complete' && event.type !== 'error')
-      ) {
-        return
-      }
-      terminalEvent = {
-        type: event.type,
-        reason:
-          event.type === 'complete'
-            ? 'Agent Run 已结束，但发布事务尚未取得统一终态'
-            : extractRuntimeError(event.data),
-      }
-      if (bound) {
-        void reconcileTerminalOnce(terminalEvent)
-      }
-    })
-
-    try {
-      const agentPrompt = draftAnchor
-        ? `${input.prompt}\nmain 已锁定平台草稿：draftUrl=${draftAnchor.url}；任何写入前必须确认当前页仍是该草稿，禁止切换到新稿或其他文章。`
-        : input.prompt
-      const runPromise = agentBridge.sendMessage(agentPrompt, conversationId, {
-        runId,
-        sessionId: null,
-        workspaceRef: { kind: 'local', path: input.workspacePath },
-        articlePublishingPolicy: {
-          origin: 'article-publishing',
-          workspaceId: input.workspaceId,
+    const recoveryLease = input.resumed
+      ? browserTaskRuntime.acquireAccountRecoveryLease({
+          accountId: attempt.accountId,
+          profileId: attempt.profileId,
           affairId: input.affair.id,
           attemptId: attempt.id,
           executionGeneration: attempt.executionGeneration,
           launchOperationId: attempt.launchOperationId,
-        },
-        allowedTools: [
-          'mcp__cclink_studio__browser_screenshot',
-          'mcp__cclink_studio__browser_title',
-          'mcp__cclink_studio__browser_input_value',
-          'mcp__cclink_studio__browser_wait_for_selector',
-          'mcp__cclink_studio__browser_click',
-          'mcp__cclink_studio__browser_fill',
-          'mcp__cclink_studio__browser_select',
-          'mcp__cclink_studio__browser_check',
-          'mcp__cclink_studio__browser_uncheck',
-          'mcp__cclink_studio__browser_press',
-          'mcp__cclink_studio__browser_upload_file',
-          'mcp__cclink_studio__browser_wait_for_navigation',
-          'mcp__cclink_studio__browser_get_tab_info',
-          'mcp__cclink_studio__editor_read',
-          'mcp__cclink_studio__editor_list',
-          'mcp__cclink_studio__web_affair_get',
-          'mcp__cclink_studio__article_publishing_inspect_page',
-          'mcp__cclink_studio__article_publishing_report_checkpoint',
-          'mcp__cclink_studio__article_publishing_report_asset',
-          'mcp__cclink_studio__web_affair_finish_attempt',
-        ],
-        disableBuiltinTools: true,
-        resources: [
-          {
-            id: `browser-${tabId}`,
-            kind: 'browser',
-            label: 'CSDN 发布页',
-            ref: { type: 'browser', tabId, workspaceKey: input.workspacePath },
-          },
-        ],
-        onRunPrepared: async (prepared) => {
-          if (disposed) throw new Error('文章发布启动已经超时或取消')
-          if (prepared.runId !== runId || !prepared.browserTaskRunId) {
-            throw new Error('Agent 启动前没有创建绑定账号页的 BrowserTask')
-          }
-          launchedRunId = prepared.runId
-          launchedBrowserTaskId = prepared.browserTaskRunId
-          const browserTask = browserTaskRuntime.getTask(prepared.browserTaskRunId)
-          if (!browserTask || browserTask.tabId !== tabId || browserTask.status !== 'running') {
-            throw new Error('Agent 启动前的 BrowserTask 身份不匹配')
-          }
-          browserTaskRuntime.updateCorrelation(browserTask.id, {
-            accountId: attempt.accountId,
-            allowedOrigins: [...CSDN_ARTICLE_SUPPORTED_ORIGINS],
-            affairId: input.affair.id,
-            affairNodeId: attempt.nodeId,
-            affairAttemptId: attempt.id,
-            affairExecutionGeneration: attempt.executionGeneration,
-            affairLaunchOperationId: attempt.launchOperationId,
-            browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
-            webContentsId: viewIdentity.webContentsId,
-            playwrightConnectionGeneration: playwrightBridge.getConnectionGeneration(),
-            playwrightPageBindingGeneration: pageBinding.generation,
-          })
-          const boundAt = new Date().toISOString()
-          const common = {
-            attemptId: attempt.id,
-            executionGeneration: attempt.executionGeneration,
-            launchOperationId: attempt.launchOperationId,
-            status: 'active' as const,
-            boundAt,
-            lastObservedAt: boundAt,
-          }
-          const boundResult = await this.webAffairService.bindArticlePublishingRuntime(
+        })
+      : null
+
+    try {
+      const persistedDraftAnchor = publishing.draft?.url
+        ? parseCsdnDraftAnchor(publishing.draft.url)
+        : null
+      const recovery = publishing.draft?.recovery
+      const recoveryRequired = Boolean(
+        input.resumed &&
+        recovery &&
+        recovery.executionGeneration === attempt.executionGeneration &&
+        recovery.status === 'locating',
+      )
+      const publicationRecoveryRequired = Boolean(
+        input.resumed &&
+        publishing.publication.status === 'result-unknown' &&
+        publishing.draft?.platformDraftId,
+      )
+      const tabId = await browserManager.waitForAccountView(
+        input.workspacePath,
+        attempt.profileId,
+        attempt.accountId,
+        recoveryRequired || publicationRecoveryRequired
+          ? CSDN_ARTICLE_MANAGEMENT_URL
+          : (persistedDraftAnchor?.url ?? attempt.entryUrl),
+        8_000,
+        input.preferredBrowserTabId,
+      )
+      if (!tabId) throw new Error('账号浏览器 Tab 创建超时')
+      let draftAnchor = persistedDraftAnchor
+      const visibleUrl = browserManager.getCurrentURL(tabId)
+      let recoveredDraft: CsdnDraftRecoveryResult | null = null
+      let recoveredPublicationUrl: string | null = null
+      const navigateForRecovery = async (url: string) => {
+        await browserManager.navigate(tabId, url)
+        await playwrightBridge.ensureConnected('article_publishing_draft_recovery')
+        await browserManager.ensurePlaywrightPage(tabId)
+        await playwrightBridge.switchToPage(tabId)
+        const page = playwrightBridge.getPageById(tabId)
+        if (!page || page.isClosed()) throw new Error('CSDN 恢复核验页面不可用')
+        return page
+      }
+      if (publicationRecoveryRequired) {
+        const expectedSnapshot = publishing.draft?.platformSnapshot
+        const expectedArticleId = publishing.draft?.platformDraftId
+        if (!expectedSnapshot || !expectedArticleId) {
+          throw new Error('发布结果未知，但历史任务缺少原平台账号和完整草稿快照；已停止自动核查')
+        }
+        const recoveredPublication = await this.draftRecoveryCoordinator.recoverExactPublication({
+          expectedArticleId,
+          expectedSnapshot,
+          navigate: navigateForRecovery,
+        })
+        recoveredPublicationUrl = recoveredPublication.url
+        draftAnchor = null
+      } else if (recoveryRequired && recovery) {
+        const expectedSnapshot = publishing.draft?.platformSnapshot
+        if (
+          !expectedSnapshot ||
+          expectedSnapshot.draftId !== recovery.expectedDraftId ||
+          publishing.draft?.bodyStructureHash !== expectedSnapshot.bodyStructureHash
+        ) {
+          throw new Error(
+            '历史任务缺少真实账号、结构化正文、全部图片或保存状态证据；已在启动 Agent 前停止恢复',
+          )
+        }
+        if (
+          publishing.assets.some((asset) =>
+            ['result-unknown', 'reconciling'].includes(asset.status),
+          )
+        ) {
+          throw new Error('旧执行代次仍有无法核验的图片结果；已在启动 Agent 前停止恢复')
+        }
+        const unresolvedSave = publishing.sideEffects.find(
+          (effect) =>
+            effect.attemptId === attempt.id &&
+            effect.executionGeneration < attempt.executionGeneration &&
+            effect.kind === 'save-draft' &&
+            ['reserved', 'dispatched', 'result-unknown'].includes(effect.status),
+        )
+        if (unresolvedSave) {
+          throw new Error(
+            '旧执行代次仍有无法核验的正文或保存动作；已停止恢复以避免覆盖网页人工修改',
+          )
+        }
+        recoveredDraft = await this.draftRecoveryCoordinator.recoverExactDraft({
+          expectedDraftId: recovery.expectedDraftId,
+          expectedSnapshot,
+          navigate: navigateForRecovery,
+        })
+        draftAnchor = parseCsdnDraftAnchor(recoveredDraft.url)
+        if (!draftAnchor || draftAnchor.draftId !== recovery.expectedDraftId) {
+          throw new Error('草稿恢复结果没有返回原平台草稿身份')
+        }
+      } else if (draftAnchor) {
+        if (!isSameCsdnDraft(draftAnchor.url, visibleUrl)) {
+          await browserManager.navigate(tabId, draftAnchor.url)
+        }
+        const restored = parseCsdnDraftAnchor(browserManager.getCurrentURL(tabId))
+        if (!restored || restored.draftId !== draftAnchor.draftId) {
+          throw new Error(`无法恢复原 CSDN 草稿 ${draftAnchor.draftId}，已拒绝在其他页面继续`)
+        }
+        draftAnchor = restored
+      } else if (input.resumed && hasPlatformPublishingProgress(publishing)) {
+        throw new Error(
+          '历史任务已有平台写入但缺少原草稿完整快照；手动打开草稿也不能换发写入许可，请重新创建发布任务',
+        )
+      } else {
+        await browserManager.navigate(tabId, attempt.entryUrl)
+        const visibleDraftAnchor = parseCsdnDraftAnchor(browserManager.getCurrentURL(tabId))
+        if (visibleDraftAnchor) {
+          const recorded = await this.webAffairService.recordArticlePublishingDraftAnchor(
             input.affair.id,
             attempt.id,
             attempt.executionGeneration,
             attempt.launchOperationId,
-            [
-              {
-                ...common,
-                id: randomUUID(),
-                kind: 'agent-run',
-                conversationId,
-                agentRunId: prepared.runId,
-                agentRuntimeEpoch: terminalIdentity.agentRuntimeEpoch,
-                agentRuntimeBindingKey: terminalIdentity.agentRuntimeBindingKey,
-              },
-              {
-                ...common,
-                id: randomUUID(),
-                kind: 'browser-tab',
-                tabId,
-                browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
-                webContentsId: viewIdentity.webContentsId,
-              },
-              {
-                ...common,
-                id: randomUUID(),
-                kind: 'browser-task',
-                browserTaskRunId: browserTask.id,
-                tabId,
-                browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
-                webContentsId: viewIdentity.webContentsId,
-                playwrightConnectionGeneration: playwrightBridge.getConnectionGeneration(),
-                playwrightPageBindingGeneration: pageBinding.generation,
-              },
-            ],
+            visibleDraftAnchor.url,
             input.workspaceId,
           )
-          if (!boundResult.success) throw new Error(boundResult.error.message)
-          boundAffair = boundResult.data
-          bound = true
-          const observedAt = Date.now()
-          this.activeRuntimes.set(attempt.id, {
+          if (!recorded.success) throw new Error(recorded.error.message)
+          draftAnchor = visibleDraftAnchor
+        }
+      }
+      await playwrightBridge.ensureConnected('article_publishing_launch')
+      await browserManager.ensurePlaywrightPage(tabId)
+      await playwrightBridge.switchToPage(tabId)
+      const viewIdentity = browserManager.getViewRuntimeIdentity(tabId)
+      const pageBinding = playwrightBridge.getPageBindingIdentity(tabId)
+      if (
+        !viewIdentity ||
+        !pageBinding ||
+        pageBinding.connectionGeneration !== playwrightBridge.getConnectionGeneration() ||
+        pageBinding.webContentsId !== viewIdentity.webContentsId
+      ) {
+        throw new Error('账号浏览器 Runtime 身份未稳定绑定')
+      }
+      if (recoveredDraft && recovery) {
+        const verified = await this.webAffairService.verifyArticlePublishingRecovery(
+          {
+            affairId: input.affair.id,
+            attemptId: attempt.id,
+            executionGeneration: attempt.executionGeneration,
+            launchOperationId: attempt.launchOperationId,
+            recoveryOperationId: recovery.operationId,
+            draftId: recoveredDraft.draftId,
+            url: recoveredDraft.url,
+            snapshot: recoveredDraft.snapshot,
+            evidenceHash: recoveredDraft.evidenceHash,
+            tabId,
+            browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
+            webContentsId: viewIdentity.webContentsId,
+            playwrightConnectionGeneration: pageBinding.connectionGeneration,
+            playwrightPageBindingGeneration: pageBinding.generation,
+          },
+          input.workspaceId,
+        )
+        if (!verified.success) throw new Error(verified.error.message)
+      }
+
+      const conversationId = `article-publishing-${input.affair.id}`
+      const runId = `run-${attempt.launchOperationId}`
+      const terminalIdentity = agentBridge.getRuntimeIdentity(conversationId)
+      let bound = false
+      let boundAffair: WebAffair | null = null
+      let launchedRunId: string | null = null
+      let launchedBrowserTaskId: string | null = null
+      let terminalEvent: { type: 'complete' | 'error'; reason: string } | null = null
+      let terminalReconciliation: Promise<void> | null = null
+      let disposed = false
+      let dispose = (): void => undefined
+      let resolveLaunchReady: (result: StartArticlePublishingTaskResult) => void = () => undefined
+      let rejectLaunchReady: (error: Error) => void = () => undefined
+      const launchReady = new Promise<StartArticlePublishingTaskResult>((resolve, reject) => {
+        resolveLaunchReady = resolve
+        rejectLaunchReady = reject
+      })
+      const reconcileTerminalOnce = (terminal: {
+        type: 'complete' | 'error'
+        reason: string
+      }): Promise<void> => {
+        if (terminalReconciliation) return terminalReconciliation
+        disposed = true
+        dispose()
+        terminalReconciliation = this.reconcileAgentTerminal(
+          input,
+          conversationId,
+          runId,
+          terminalIdentity,
+          terminal,
+        ).finally(() => {
+          this.activeRuntimes.delete(attempt.id)
+        })
+        return terminalReconciliation
+      }
+      dispose = agentBridge.onRuntimeEvent((event) => {
+        if (event.conversationId === conversationId && event.runId === runId) {
+          this.observeAgentActivity(input.attemptId, event.type === 'stream')
+        }
+        if (
+          disposed ||
+          event.conversationId !== conversationId ||
+          event.runId !== runId ||
+          (event.type !== 'complete' && event.type !== 'error')
+        ) {
+          return
+        }
+        terminalEvent = {
+          type: event.type,
+          reason:
+            event.type === 'complete'
+              ? 'Agent Run 已结束，但发布事务尚未取得统一终态'
+              : extractRuntimeError(event.data),
+        }
+        if (bound) {
+          void reconcileTerminalOnce(terminalEvent)
+        }
+      })
+
+      try {
+        const agentPrompt = recoveredPublicationUrl
+          ? `${input.prompt}\nmain 已按原草稿 ID、平台账号和标题锁定公开结果：publicationUrl=${recoveredPublicationUrl}；只允许读回并完成发布核验。`
+          : draftAnchor
+            ? `${input.prompt}\nmain 已锁定平台草稿：draftUrl=${draftAnchor.url}；任何写入前必须确认当前页仍是该草稿，禁止切换到新稿或其他文章。`
+            : input.prompt
+        const runPromise = agentBridge.sendMessage(agentPrompt, conversationId, {
+          runId,
+          sessionId: null,
+          workspaceRef: { kind: 'local', path: input.workspacePath },
+          articlePublishingPolicy: {
+            origin: 'article-publishing',
             workspaceId: input.workspaceId,
             affairId: input.affair.id,
             attemptId: attempt.id,
             executionGeneration: attempt.executionGeneration,
             launchOperationId: attempt.launchOperationId,
-            conversationId,
-            agentRunId: prepared.runId,
-            agentRuntimeBindingKey: terminalIdentity.agentRuntimeBindingKey,
-            agentRuntimeEpoch: terminalIdentity.agentRuntimeEpoch,
-            browserTaskRunId: browserTask.id,
-            tabId,
-            browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
-            webContentsId: viewIdentity.webContentsId,
-            playwrightConnectionGeneration: playwrightBridge.getConnectionGeneration(),
-            playwrightPageBindingGeneration: pageBinding.generation,
-            lastOwnerAt: observedAt,
-            lastProgressAt: observedAt,
-            continuationUsed: false,
-          })
-          resolveLaunchReady({
-            affair: boundResult.data,
-            attemptId: attempt.id,
-            resumed: input.resumed,
-            executionGeneration: attempt.executionGeneration,
-            launchOperationId: attempt.launchOperationId,
-            conversationId,
-            agentRunId: prepared.runId,
-            browserTaskRunId: browserTask.id,
-            browserTabId: tabId,
-            agentPrompt,
-          })
-        },
-      })
-      void runPromise
-        .then(() => {
-          if (!bound || !boundAffair || launchedBrowserTaskId === null) {
-            rejectLaunchReady(new Error('Agent Runtime 未在执行前完成持久绑定'))
-            return
-          }
-          const terminal = terminalEvent ?? {
-            type: 'complete' as const,
-            reason: 'Agent Run 已返回，但未观察到独立终态事件',
-          }
-          void reconcileTerminalOnce(terminal)
-        })
-        .catch((error) => {
-          const reason = error instanceof Error ? error.message : String(error)
-          if (bound) {
-            void reconcileTerminalOnce(
-              terminalEvent ?? { type: 'error', reason: `Agent Run 后台执行失败：${reason}` },
-            )
-            return
-          }
-          disposed = true
-          dispose()
-          if (launchedBrowserTaskId) {
-            try {
-              browserTaskRuntime.cancelTask(launchedBrowserTaskId)
-            } catch {
-              // BrowserTask 可能已由 AgentBridge 收敛。
+          },
+          allowedTools: [
+            'mcp__cclink_studio__browser_screenshot',
+            'mcp__cclink_studio__browser_title',
+            'mcp__cclink_studio__browser_input_value',
+            'mcp__cclink_studio__browser_wait_for_selector',
+            'mcp__cclink_studio__browser_click',
+            'mcp__cclink_studio__browser_fill',
+            'mcp__cclink_studio__browser_select',
+            'mcp__cclink_studio__browser_check',
+            'mcp__cclink_studio__browser_uncheck',
+            'mcp__cclink_studio__browser_press',
+            'mcp__cclink_studio__browser_upload_file',
+            'mcp__cclink_studio__browser_wait_for_navigation',
+            'mcp__cclink_studio__browser_get_tab_info',
+            'mcp__cclink_studio__editor_read',
+            'mcp__cclink_studio__editor_list',
+            'mcp__cclink_studio__web_affair_get',
+            'mcp__cclink_studio__article_publishing_inspect_page',
+            'mcp__cclink_studio__article_publishing_report_checkpoint',
+            'mcp__cclink_studio__article_publishing_report_asset',
+            'mcp__cclink_studio__web_affair_finish_attempt',
+          ],
+          disableBuiltinTools: true,
+          resources: [
+            {
+              id: `browser-${tabId}`,
+              kind: 'browser',
+              label: 'CSDN 发布页',
+              ref: { type: 'browser', tabId, workspaceKey: input.workspacePath },
+            },
+          ],
+          onRunPrepared: async (prepared) => {
+            if (disposed) throw new Error('文章发布启动已经超时或取消')
+            if (prepared.runId !== runId || !prepared.browserTaskRunId) {
+              throw new Error('Agent 启动前没有创建绑定账号页的 BrowserTask')
             }
-          }
-          rejectLaunchReady(error instanceof Error ? error : new Error(reason))
+            launchedRunId = prepared.runId
+            launchedBrowserTaskId = prepared.browserTaskRunId
+            const browserTask = browserTaskRuntime.getTask(prepared.browserTaskRunId)
+            if (!browserTask || browserTask.tabId !== tabId || browserTask.status !== 'running') {
+              throw new Error('Agent 启动前的 BrowserTask 身份不匹配')
+            }
+            const correlationPatch = {
+              accountId: attempt.accountId,
+              allowedOrigins: [...CSDN_ARTICLE_SUPPORTED_ORIGINS],
+              affairId: input.affair.id,
+              affairNodeId: attempt.nodeId,
+              affairAttemptId: attempt.id,
+              affairExecutionGeneration: attempt.executionGeneration,
+              affairLaunchOperationId: attempt.launchOperationId,
+              browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
+              webContentsId: viewIdentity.webContentsId,
+              playwrightConnectionGeneration: playwrightBridge.getConnectionGeneration(),
+              playwrightPageBindingGeneration: pageBinding.generation,
+            }
+            if (recoveryLease) {
+              browserTaskRuntime.transferAccountRecoveryLeaseToTask(
+                recoveryLease.id,
+                browserTask.id,
+                correlationPatch,
+              )
+            } else {
+              browserTaskRuntime.updateCorrelation(browserTask.id, correlationPatch)
+            }
+            const boundAt = new Date().toISOString()
+            const common = {
+              attemptId: attempt.id,
+              executionGeneration: attempt.executionGeneration,
+              launchOperationId: attempt.launchOperationId,
+              status: 'active' as const,
+              boundAt,
+              lastObservedAt: boundAt,
+            }
+            const boundResult = await this.webAffairService.bindArticlePublishingRuntime(
+              input.affair.id,
+              attempt.id,
+              attempt.executionGeneration,
+              attempt.launchOperationId,
+              [
+                {
+                  ...common,
+                  id: randomUUID(),
+                  kind: 'agent-run',
+                  conversationId,
+                  agentRunId: prepared.runId,
+                  agentRuntimeEpoch: terminalIdentity.agentRuntimeEpoch,
+                  agentRuntimeBindingKey: terminalIdentity.agentRuntimeBindingKey,
+                },
+                {
+                  ...common,
+                  id: randomUUID(),
+                  kind: 'browser-tab',
+                  tabId,
+                  browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
+                  webContentsId: viewIdentity.webContentsId,
+                },
+                {
+                  ...common,
+                  id: randomUUID(),
+                  kind: 'browser-task',
+                  browserTaskRunId: browserTask.id,
+                  tabId,
+                  browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
+                  webContentsId: viewIdentity.webContentsId,
+                  playwrightConnectionGeneration: playwrightBridge.getConnectionGeneration(),
+                  playwrightPageBindingGeneration: pageBinding.generation,
+                },
+              ],
+              input.workspaceId,
+            )
+            if (!boundResult.success) throw new Error(boundResult.error.message)
+            boundAffair = boundResult.data
+            bound = true
+            const observedAt = Date.now()
+            this.activeRuntimes.set(attempt.id, {
+              workspaceId: input.workspaceId,
+              affairId: input.affair.id,
+              attemptId: attempt.id,
+              executionGeneration: attempt.executionGeneration,
+              launchOperationId: attempt.launchOperationId,
+              conversationId,
+              agentRunId: prepared.runId,
+              agentRuntimeBindingKey: terminalIdentity.agentRuntimeBindingKey,
+              agentRuntimeEpoch: terminalIdentity.agentRuntimeEpoch,
+              browserTaskRunId: browserTask.id,
+              tabId,
+              browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
+              webContentsId: viewIdentity.webContentsId,
+              playwrightConnectionGeneration: playwrightBridge.getConnectionGeneration(),
+              playwrightPageBindingGeneration: pageBinding.generation,
+              lastOwnerAt: observedAt,
+              lastProgressAt: observedAt,
+              continuationUsed: false,
+            })
+            resolveLaunchReady({
+              affair: boundResult.data,
+              attemptId: attempt.id,
+              resumed: input.resumed,
+              executionGeneration: attempt.executionGeneration,
+              launchOperationId: attempt.launchOperationId,
+              conversationId,
+              agentRunId: prepared.runId,
+              browserTaskRunId: browserTask.id,
+              browserTabId: tabId,
+              agentPrompt,
+            })
+          },
         })
-      return {
-        success: true,
-        data: await withTimeout(
-          launchReady,
-          RUNTIME_BIND_TIMEOUT_MS,
-          'Agent Runtime 未在 15 秒内完成持久绑定',
-        ),
-      }
-    } catch (error) {
-      disposed = true
-      dispose()
-      if (!bound && launchedBrowserTaskId) {
-        try {
-          browserTaskRuntime.cancelTask(launchedBrowserTaskId)
-        } catch {
-          // 启动回滚只取消本次精确 task；已终态或已被 owner 清理时无需重复处理。
+        void runPromise
+          .then(() => {
+            if (!bound || !boundAffair || launchedBrowserTaskId === null) {
+              rejectLaunchReady(new Error('Agent Runtime 未在执行前完成持久绑定'))
+              return
+            }
+            const terminal = terminalEvent ?? {
+              type: 'complete' as const,
+              reason: 'Agent Run 已返回，但未观察到独立终态事件',
+            }
+            void reconcileTerminalOnce(terminal)
+          })
+          .catch((error) => {
+            const reason = error instanceof Error ? error.message : String(error)
+            if (bound) {
+              void reconcileTerminalOnce(
+                terminalEvent ?? { type: 'error', reason: `Agent Run 后台执行失败：${reason}` },
+              )
+              return
+            }
+            disposed = true
+            dispose()
+            if (launchedBrowserTaskId) {
+              try {
+                browserTaskRuntime.cancelTask(launchedBrowserTaskId)
+              } catch {
+                // BrowserTask 可能已由 AgentBridge 收敛。
+              }
+            }
+            rejectLaunchReady(error instanceof Error ? error : new Error(reason))
+          })
+        return {
+          success: true,
+          data: await withTimeout(
+            launchReady,
+            RUNTIME_BIND_TIMEOUT_MS,
+            'Agent Runtime 未在 15 秒内完成持久绑定',
+          ),
         }
+      } catch (error) {
+        disposed = true
+        dispose()
+        if (!bound && launchedBrowserTaskId) {
+          try {
+            browserTaskRuntime.cancelTask(launchedBrowserTaskId)
+          } catch {
+            // 启动回滚只取消本次精确 task；已终态或已被 owner 清理时无需重复处理。
+          }
+        }
+        if (!bound) {
+          await agentBridge.abort(conversationId, launchedRunId ?? runId).catch(() => undefined)
+        }
+        throw error
       }
-      if (!bound) {
-        await agentBridge.abort(conversationId, launchedRunId ?? runId).catch(() => undefined)
-      }
-      throw error
+    } finally {
+      if (recoveryLease) browserTaskRuntime.releaseAccountRecoveryLease(recoveryLease.id)
     }
   }
 

@@ -19,6 +19,28 @@ v0.1.76 的真实日志又暴露了一个更窄但会直接打断长任务的 ow
 
 当前修复把 CSDN 数字草稿 URL 作为 Attempt 的不可变平台锚点：首次进入 `https://mp.csdn.net/mp_blog/creation/editor/<draftId>` 后由 main 在任何写入前持久化；同一 Attempt 不得切换 `draftId`；恢复时必须在 Agent 启动前导航并核验该地址。历史 Attempt 已有平台写入但没有锚点时，只允许用户先在绑定账号 Tab 打开原草稿后补绑定，禁止自动打开通用编辑器猜测。自动化已经覆盖锚点冷重载、串稿拒绝、恢复导航先于 Agent 启动和无锚点旧任务 fail-closed；真实 CSDN 半途退出再恢复仍是发布前必须完成的真人验收，不能用这些测试替代。
 
+2026-09-01 的独立评审进一步指出“导航并核验旧地址”仍不等于重启恢复：旧入口可能失效，且本地账号
+引用不能证明网页当前登录身份。当前工作区的 P0 修复会为恢复新代次持久化 operation，先进入 CSDN
+文章管理/草稿入口，只接受当前可见列表中唯一相同的 `platformDraftId`。草稿箱与编辑器必须同时证明
+真实 CSDN 主页账号；打开后生成标题、保留段落/换行/代码缩进的正文结构哈希、全部图片字节哈希和
+`saved` 状态组成的完整快照，再签发同时绑定快照与当前 Tab/WebContents/Playwright generation 的
+写入许可。每次 Playwright 写入前重读快照，写后只有再次形成完整已保存快照才续签。历史缺证据、
+旧保存未知、图片枚举/下载不完整均在 Agent 绑定前 fail-closed。发布结果未知时只按原草稿 ID 查同 ID
+公开文章，再核验账号、ID 和标题；同标题链接不算证据。该链路已有单元和主进程状态测试，仍没有
+真实 CSDN 证据。
+
+同日复审确认恢复找稿与 BrowserTask 创建之间仍有账号竞态。当前修复让 `BrowserTaskRuntime` 使用同一
+main-owned account owner map 管理 recovery 与 task：恢复在创建/激活账号 Tab 前取得租约，普通 Agent
+从 `BrowserManager` 的真实 Tab 绑定读取 `accountId` 并竞争同一租约；核验成功后 correlation 与 owner
+在一个同步操作中原子转交给精确 BrowserTask。失败/超时释放未转交租约，旧 release 不会清除新 task
+owner，错 Profile/Affair/Attempt/generation/launch operation 的转交全部拒绝。该运行时租约无需持久化；
+进程崩溃后没有存活网页 owner，重启由 WebAffair 持久 recovery generation 重新取得。
+
+仍有两个真实平台阻塞不能用单测关闭：当前快照哈希包含图片 URL，CSDN 只换 URL、图片字节不变时也
+会保守停止；发布结果核验暂假设公开文章 ID 等于原草稿 ID，该映射尚未在真实 CSDN 证明。前者需要
+内容身份与位置身份分层比较，后者需要真实管理页/公开页证据；完成前只能 fail-closed，不能宣称产品
+恢复闭环。
+
 本轮固定参数为：owner lease `60s`、progress lease `10min`、`checking-runtime` probe deadline `60s`、watchdog interval `10s`、单次收敛最多重试 `3` 次。它们集中在 `ArticlePublishingService`，并使用 fake clock 覆盖“owner 存活但无进度”和“owner 丢失”两条路径；同一 Runtime generation 的用户“继续等待”最多成功一次。真实站点验收后如需调整，只能修改这些集中参数和本文记录。
 
 ## 独立审查结论与本次修订
@@ -653,7 +675,7 @@ generation/launch/conversation/run 才能修改状态；成功回报还必须经
 
 已取得的工程证据：
 
-- `pnpm verify` 通过：337 个测试文件，2112 个测试通过、2 个跳过；format、lint、类型检查、边界检查与生产构建通过。
+- `pnpm verify` 通过：349 个测试文件，2236 个测试通过、2 个跳过；format、lint、类型检查、边界检查与生产构建通过。
 - 发布链专项覆盖 main 启动、完整 owner identity、旧 generation/owner no-op、统一生命周期投影、上传/自动保存/发布一次性副作用消费、最终与非最终结果未知分流、同一 generation 并发请求也只能成功一次的有界继续等待、v0.1.73 非最终未知状态的保守启动修复、v0.1.74 真实崩溃组合及 44 组终态/人工接管投影冲突的持久化重启矩阵、2,000 事件收敛、high-water 压缩、带 revision/hash 的固定恢复日志、损坏日志 fail closed，以及 fake-clock 的静默/失主核验。
 - `pnpm smoke:browser-cdp-recovery` 在真实 Electron `WebContentsView` 中通过；Playwright connection generation 为 `1 → 2 → 3`，URL、WebContents、CDP target、Profile、Session、表单和滚动状态保持。
 

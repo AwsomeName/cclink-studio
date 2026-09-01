@@ -363,6 +363,7 @@ export class AgentBridge {
         sendPlan.browserTabId,
         sendPlan.workspaceKey,
         runId,
+        context?.articlePublishingPolicy?.origin === 'article-publishing',
       )
       await context?.onRunPrepared?.({
         conversationId,
@@ -1218,6 +1219,7 @@ export class AgentBridge {
     browserTabId: string | null = null,
     workspaceKey: string | null = null,
     agentRunId: string | null = null,
+    deferAccountLease = false,
   ): BrowserTaskRun | null {
     const scope = this.runtime.getScope(conversationId)
     const tabId = browserTabId ?? (scope.kind === 'browser' ? scope.instanceId : null)
@@ -1227,6 +1229,9 @@ export class AgentBridge {
 
     const goal = message.trim().replace(/\s+/g, ' ').slice(0, 200) || '浏览器任务'
     const sessionId = this.runtime.getStatus(conversationId).sessionId
+    const accountId = deferAccountLease
+      ? null
+      : (this.deps.browserManager?.getViewAccountId(tabId) ?? null)
     const task = runtime.startTask({
       tabId,
       goal,
@@ -1236,6 +1241,7 @@ export class AgentBridge {
         agentRunId,
         agentSessionRef: this.getSessionDiagnosticRef(sessionId),
         profileId: this.deps.browserManager?.getViewProfileId(tabId) ?? null,
+        ...(accountId ? { accountId } : {}),
       },
     })
     this.activeBrowserTaskIds.set(conversationId, task.id)

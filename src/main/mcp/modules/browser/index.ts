@@ -831,6 +831,14 @@ export class BrowserToolModule implements ToolModule {
           dispatched = true
         },
       )
+      if (activeTask?.correlation?.accountId) {
+        await this.articlePublishingBrowserPolicy?.completeMutation?.(
+          activeTask,
+          actionType,
+          page,
+          context,
+        )
+      }
       if (actionLogId) {
         this.browserTaskRuntime!.succeedActionLog(actionLogId)
       }

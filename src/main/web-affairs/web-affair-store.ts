@@ -176,13 +176,15 @@ export class WebAffairStore {
       ) {
         throw new Error('事务恢复日志结构无效')
       }
+      const rawAffairs = raw.affairs as WebAffairSnapshot['affairs']
+      const targetRevision = Number(raw.targetRevision)
+      const expectedHash = recoveryTargetHash(targetRevision, rawAffairs)
+      if (expectedHash !== raw.targetHash) throw new Error('事务恢复日志目标 hash 不匹配')
       const snapshot = parseWebAffairSnapshot({
         schemaVersion: 5,
-        revision: raw.targetRevision,
-        affairs: raw.affairs,
+        revision: targetRevision,
+        affairs: rawAffairs,
       })
-      const expectedHash = recoveryTargetHash(snapshot.revision, snapshot.affairs)
-      if (expectedHash !== raw.targetHash) throw new Error('事务恢复日志目标 hash 不匹配')
       return {
         kind: 'valid',
         journal: {
@@ -230,7 +232,7 @@ export class WebAffairStore {
       .map((affair) => compactAffairHistory(affair, 100, 20))
     if (activeArticleAffairs.length === 0) return
     let recovery = parseWebAffairSnapshot({
-      schemaVersion: 5,
+      schemaVersion: 6,
       revision: snapshot.revision,
       affairs: activeArticleAffairs,
     })

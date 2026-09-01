@@ -313,7 +313,7 @@ export interface WebAffair {
 }
 
 export interface WebAffairSnapshot {
-  schemaVersion: 5
+  schemaVersion: 6
   revision: number
   affairs: WebAffair[]
 }
@@ -521,7 +521,7 @@ export type WebAffairOperationResult<T> =
   | { success: false; error: WebAffairOperationError }
 
 export const EMPTY_WEB_AFFAIR_SNAPSHOT: WebAffairSnapshot = {
-  schemaVersion: 5,
+  schemaVersion: 6,
   revision: 0,
   affairs: [],
 }

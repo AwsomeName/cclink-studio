@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import {
   ArticlePublishingBrowserPolicy,
   CSDN_ARTICLE_SUPPORTED_ORIGINS,
@@ -6,12 +7,39 @@ import {
 
 const DRAFT_URL = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
 
+function savedPlatformSnapshot(bodyStructure: string) {
+  const payload = {
+    adapterId: 'csdn' as const,
+    adapterVersion: 1 as const,
+    platformAccountId: 'csdn:test-user',
+    draftId: '164148817',
+    normalizedTitle: 'Article',
+    bodyStructureHash: createHash('sha256').update(bodyStructure).digest('hex'),
+    images: [],
+    imageEnumerationComplete: true as const,
+    saveState: 'saved' as const,
+  }
+  return {
+    ...payload,
+    snapshotHash: createHash('sha256').update(JSON.stringify(payload)).digest('hex'),
+    evidenceHash: 'e'.repeat(64),
+    observedAt: '2026-09-01T00:00:00.000Z',
+  }
+}
+
 function createPolicy(options?: {
   stepId?: string
   publicationStatus?: string
   assetStatus?: string
   executionStatus?: string
   draftUrl?: string | null
+  recovery?: Record<string, unknown>
+  imageEnumerationComplete?: boolean
+  images?: Array<{ src: string; alt: string }>
+  imageBytes?: string
+  publishedLinks?: Array<{ url: string; title: string }>
+  bodyStructure?: string
+  platformSnapshot?: ReturnType<typeof savedPlatformSnapshot>
 }) {
   let inspectionPage: Record<string, unknown> | null = null
   const reserveArticlePublishingSideEffect = vi.fn().mockResolvedValue({
@@ -80,7 +108,19 @@ function createPolicy(options?: {
               },
               publication: { status: options?.publicationStatus ?? 'not-started' },
               draft:
-                options?.draftUrl === null ? undefined : { url: options?.draftUrl ?? DRAFT_URL },
+                options?.draftUrl === null
+                  ? undefined
+                  : {
+                      platformDraftId: '164148817',
+                      url: options?.draftUrl ?? DRAFT_URL,
+                      ...(options?.platformSnapshot
+                        ? {
+                            bodyStructureHash: options.platformSnapshot.bodyStructureHash,
+                            platformSnapshot: options.platformSnapshot,
+                          }
+                        : {}),
+                      ...(options?.recovery ? { recovery: options.recovery } : {}),
+                    },
             },
           },
         ],
@@ -106,24 +146,36 @@ function createPolicy(options?: {
     ) => {
       inspectionPage = {
         isClosed: () => false,
+        url: () => url,
+        context: () => ({
+          request: {
+            get: async () => ({
+              ok: () => true,
+              body: async () => Buffer.from(options?.imageBytes ?? ''),
+            }),
+          },
+        }),
         evaluate: async () => ({
           url,
           pageKind,
           bodySelector: selectors['body'] ?? '#body',
           bodyTextLength: 100,
-          imageEnumerationComplete: false,
-          images: [],
+          bodyStructure: options?.bodyStructure ?? '<P>\nArticle body\n</P>',
+          platformAccountCandidates: ['csdn:test-user'],
+          imageEnumerationComplete: options?.imageEnumerationComplete ?? false,
+          images: options?.images ?? [],
           fileInputSelector: selectors['fileInput'],
           titleSelector: selectors['title'] ?? '#title',
           titleValue: 'Article',
           selectors,
           saveState: 'saved',
           saveEvidence: '草稿已保存',
-          publishedLinks: [],
+          publishedLinks: options?.publishedLinks ?? [],
         }),
       }
       const result = await policy.inspectCurrentPage(context)
       expect(result.success).toBe(true)
+      return inspectionPage
     },
   }
 }
@@ -254,6 +306,77 @@ describe('ArticlePublishingBrowserPolicy', () => {
     ).toMatchObject({
       success: true,
       data: { trustedPageEvidence: { kind: 'published', url: publicationUrl } },
+    })
+  })
+
+  it('does not treat a same-title management link as proof that this attempt published it', async () => {
+    const publicationUrl = 'https://blog.csdn.net/example/article/details/123456'
+    const { policy, inspect } = createPolicy({
+      stepId: 'verify-publication',
+      publicationStatus: 'result-unknown',
+      publishedLinks: [{ url: publicationUrl, title: 'Article' }],
+    })
+    await inspect({}, 'https://mp.csdn.net/mp_blog/manage/article', 'management')
+
+    expect(
+      policy.authorizeTrustedReport(
+        'web_affair_finish_attempt',
+        { outcome: 'succeeded', url: publicationUrl },
+        context,
+        reporter(),
+      ),
+    ).toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('不能证明') },
+    })
+  })
+
+  it('does not declare an old uncertain upload absent without comparable platform identity', async () => {
+    const { policy, inspect } = createPolicy({
+      assetStatus: 'reconciling',
+      imageEnumerationComplete: true,
+    })
+    await inspect({})
+
+    expect(
+      policy.authorizeTrustedReport(
+        'article_publishing_report_asset',
+        { assetId: 'asset-a', status: 'uploading' },
+        context,
+        reporter(),
+      ),
+    ).toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('不能证明') },
+    })
+  })
+
+  it('records the platform bytes when CSDN transformed an uploaded image', async () => {
+    const platformUrl = 'https://img-blog.csdnimg.cn/transformed.png'
+    const imageBytes = 'platform-transformed-image'
+    const { policy, inspect } = createPolicy({
+      assetStatus: 'verifying',
+      imageEnumerationComplete: true,
+      images: [{ src: platformUrl, alt: 'image' }],
+      imageBytes,
+    })
+    await inspect({})
+
+    expect(
+      policy.authorizeTrustedReport(
+        'article_publishing_report_asset',
+        { assetId: 'asset-a', status: 'uploaded', platformUrl },
+        context,
+        reporter(),
+      ),
+    ).toMatchObject({
+      success: true,
+      data: {
+        trustedPageEvidence: {
+          kind: 'asset-uploaded',
+          platformContentHash: createHash('sha256').update(imageBytes).digest('hex'),
+        },
+      },
     })
   })
 
@@ -391,6 +514,96 @@ describe('ArticlePublishingBrowserPolicy', () => {
     expect(webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
   })
 
+  it('rejects mutations when the current recovery generation has no exact page write permit', async () => {
+    const { policy, webAffairService, inspect } = createPolicy({
+      stepId: 'fill-fields',
+      recovery: {
+        operationId: 'recovery-a',
+        executionGeneration: 1,
+        status: 'locating',
+        expectedDraftId: '164148817',
+        startedAt: '2026-09-01T00:00:00.000Z',
+      },
+    })
+    const page = { url: () => DRAFT_URL }
+    await inspect({ title: '#title' })
+
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'fill',
+        { selector: '#title', value: 'Article title' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({
+      kind: 'unknown',
+      reason: expect.stringContaining('写入许可'),
+    })
+    expect(webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
+  })
+
+  it('invalidates a recovered permit when the body changes after recovery verification', async () => {
+    const baseline = savedPlatformSnapshot('<P>\nArticle body\n</P>')
+    const recovery = {
+      operationId: 'recovery-a',
+      executionGeneration: 1,
+      status: 'verified',
+      expectedDraftId: '164148817',
+      startedAt: '2026-09-01T00:00:00.000Z',
+      writePermit: {
+        id: 'permit-a',
+        recoveryOperationId: 'recovery-a',
+        executionGeneration: 1,
+        draftId: '164148817',
+        tabId: 'tab-a',
+        browserViewRuntimeGeneration: 2,
+        webContentsId: 20,
+        playwrightConnectionGeneration: 3,
+        playwrightPageBindingGeneration: 4,
+        snapshotHash: baseline.snapshotHash,
+        issuedAt: '2026-09-01T00:00:01.000Z',
+      },
+    }
+    const { policy, inspect } = createPolicy({
+      stepId: 'fill-fields',
+      recovery,
+      imageEnumerationComplete: true,
+      platformSnapshot: baseline,
+    })
+    const page = (await inspect({ title: '#title' })) as {
+      evaluate: () => Promise<Record<string, unknown>>
+    }
+    page.evaluate = async () => ({
+      url: DRAFT_URL,
+      pageKind: 'editor',
+      bodySelector: '#body',
+      bodyTextLength: 20,
+      bodyStructure: '<P>\nManually changed body\n</P>',
+      platformAccountCandidates: ['csdn:test-user'],
+      imageEnumerationComplete: true,
+      images: [],
+      titleSelector: '#title',
+      titleValue: 'Article',
+      selectors: { title: '#title' },
+      saveState: 'saved',
+      publishedLinks: [],
+    })
+
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'fill',
+        { selector: '#title', value: 'Article title' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({
+      kind: 'unknown',
+      reason: expect.stringContaining('恢复许可'),
+    })
+  })
+
   it('rejects a write on a generic editor that cannot be recovered after restart', async () => {
     const { policy, webAffairService } = createPolicy({
       stepId: 'fill-fields',
@@ -471,3 +684,15 @@ describe('ArticlePublishingBrowserPolicy', () => {
     ).resolves.toMatchObject({ kind: 'unknown' })
   })
 })
+
+function reporter() {
+  return {
+    workspaceId: 'workspace-a',
+    affairId: 'affair-a',
+    attemptId: 'attempt-a',
+    executionGeneration: 1,
+    launchOperationId: 'launch-a',
+    conversationId: 'conversation-a',
+    agentRunId: 'run-a',
+  }
+}

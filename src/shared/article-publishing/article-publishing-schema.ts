@@ -96,6 +96,10 @@ export const articlePublishingAssetSchema = z
       .max(500),
     status: articleAssetUploadStatusSchema,
     platformUrl: z.url().max(16_384).optional(),
+    platformContentHash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/u)
+      .optional(),
     verifiedAt: timestampSchema.optional(),
     uploadAttempts: z.array(articleAssetUploadAttemptSchema).max(100),
   })
@@ -203,7 +207,80 @@ export const articlePublishingStateSchema = z
       })
       .strict(),
     draft: z
-      .object({ url: z.url().max(16_384).optional(), lastVerifiedAt: timestampSchema.optional() })
+      .object({
+        platformDraftId: z.string().trim().regex(/^\d+$/u).max(120).optional(),
+        url: z.url().max(16_384).optional(),
+        normalizedTitle: z.string().max(320).optional(),
+        bodyStructureHash: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/u)
+          .optional(),
+        platformSnapshot: z
+          .object({
+            adapterId: z.literal('csdn'),
+            adapterVersion: z.literal(1),
+            platformAccountId: z.string().trim().min(1).max(320),
+            draftId: z.string().trim().regex(/^\d+$/u).max(120),
+            normalizedTitle: z.string().max(320),
+            bodyStructureHash: z.string().regex(/^[a-f0-9]{64}$/u),
+            images: z
+              .array(
+                z
+                  .object({
+                    url: z.url().max(16_384),
+                    contentHash: z.string().regex(/^[a-f0-9]{64}$/u),
+                    alt: z.string().max(1_000),
+                  })
+                  .strict(),
+              )
+              .max(24),
+            imageEnumerationComplete: z.literal(true),
+            saveState: z.literal('saved'),
+            snapshotHash: z.string().regex(/^[a-f0-9]{64}$/u),
+            evidenceHash: z.string().regex(/^[a-f0-9]{64}$/u),
+            observedAt: timestampSchema,
+          })
+          .strict()
+          .optional(),
+        lastVerifiedAt: timestampSchema.optional(),
+        recovery: z
+          .object({
+            operationId: z.string().trim().min(1).max(200),
+            executionGeneration: z.number().int().positive().max(1_000_000),
+            status: z.enum(['locating', 'verified', 'failed']),
+            expectedDraftId: z.string().trim().regex(/^\d+$/u).max(120),
+            startedAt: timestampSchema,
+            verifiedAt: timestampSchema.optional(),
+            evidenceHash: z
+              .string()
+              .regex(/^[a-f0-9]{64}$/u)
+              .optional(),
+            platformAccountId: z.string().trim().min(1).max(320).optional(),
+            snapshotHash: z
+              .string()
+              .regex(/^[a-f0-9]{64}$/u)
+              .optional(),
+            failureReason: z.string().trim().min(1).max(2_000).optional(),
+            writePermit: z
+              .object({
+                id: z.string().trim().min(1).max(200),
+                recoveryOperationId: z.string().trim().min(1).max(200),
+                executionGeneration: z.number().int().positive().max(1_000_000),
+                draftId: z.string().trim().regex(/^\d+$/u).max(120),
+                tabId: z.string().trim().min(1).max(200),
+                browserViewRuntimeGeneration: z.number().int().positive().max(1_000_000),
+                webContentsId: z.number().int().positive(),
+                playwrightConnectionGeneration: z.number().int().positive().max(1_000_000),
+                playwrightPageBindingGeneration: z.number().int().positive().max(1_000_000),
+                snapshotHash: z.string().regex(/^[a-f0-9]{64}$/u),
+                issuedAt: timestampSchema,
+              })
+              .strict()
+              .optional(),
+          })
+          .strict()
+          .optional(),
+      })
       .strict()
       .optional(),
     publication: z

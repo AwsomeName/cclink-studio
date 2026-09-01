@@ -104,6 +104,7 @@ const CHUNK_SEND_CONCURRENCY = 8
 const REMOTE_SESSION_DIAGNOSTIC_MESSAGE_LIMIT = 100
 const REMOTE_FILE_READ_PAGE_LINES = 100
 const MAX_REMOTE_FILE_READ_ATTEMPTS = 4096
+const AUTO_APPROVED_REMOTE_AGENT_TOOLS = new Set(['WebSearch'])
 
 export class CclinkRemoteService implements RemoteProvider {
   readonly transport = 'cclink' as const
@@ -125,6 +126,7 @@ export class CclinkRemoteService implements RemoteProvider {
   private readonly activeAgentRequests = new Map<string, string>()
   private readonly stoppedAgentRequestIds = new Map<string, string[]>()
   private readonly stoppedAgentSessionsWithoutRequest = new Set<string>()
+  private readonly automaticToolApprovals = new Map<string, Promise<boolean>>()
   private connecting: Promise<CclinkRealtimeStatus> | null = null
   private readonly diagnosticLog = new RemoteDiagnosticLog()
 
@@ -1870,6 +1872,30 @@ export class CclinkRemoteService implements RemoteProvider {
           },
         }
         this.appendMessage(event.session_id, remoteMessage)
+        if (
+          event.requires_approval === true &&
+          (event.state === 'pending' || event.state === 'executing') &&
+          AUTO_APPROVED_REMOTE_AGENT_TOOLS.has(event.tool) &&
+          event.request_id
+        ) {
+          await this.autoApproveRemoteTool({
+            serverId,
+            sessionId: event.session_id,
+            requestId: event.request_id,
+            toolUseId: event.tool_use_id,
+          })
+          const latestMessage = (this.messages.get(event.session_id) ?? []).find(
+            (item) => item.id === messageId,
+          )
+          this.emitRealtime({
+            type: 'conversation',
+            serverId,
+            sessionId: event.session_id,
+            phase: 'message',
+            message: latestMessage ?? remoteMessage,
+          })
+          return
+        }
         this.emitRealtime({
           type: 'conversation',
           serverId,
@@ -2227,6 +2253,41 @@ export class CclinkRemoteService implements RemoteProvider {
       ),
     )
     this.persistState()
+  }
+
+  private autoApproveRemoteTool(input: {
+    serverId: string
+    sessionId: string
+    requestId: string
+    toolUseId: string
+  }): Promise<boolean> {
+    const key = `${input.serverId}\u0000${input.sessionId}\u0000${input.toolUseId}`
+    const existing = this.automaticToolApprovals.get(key)
+    if (existing) return existing
+
+    const session = this.sessions.get(input.sessionId)
+    if (!session || session.serverId !== input.serverId) return Promise.resolve(false)
+    const decision = this.resolveToolApproval({
+      ref: {
+        kind: 'remote',
+        transport: 'cclink',
+        endpointId: session.serverId,
+        workspaceId: session.workspaceId,
+        path: session.workspacePath,
+      },
+      sessionId: input.sessionId,
+      requestId: input.requestId,
+      toolUseId: input.toolUseId,
+      approved: true,
+    })
+      .then((result) => result.success)
+      .finally(() => {
+        if (this.automaticToolApprovals.get(key) === decision) {
+          this.automaticToolApprovals.delete(key)
+        }
+      })
+    this.automaticToolApprovals.set(key, decision)
+    return decision
   }
 
   private markQuestionAnswered(sessionId: string, toolUseId: string): void {

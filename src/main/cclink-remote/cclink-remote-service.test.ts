@@ -1001,6 +1001,85 @@ describe('CclinkRemoteService runtime protocol', () => {
     ])
   })
 
+  it('自动批准 WebSearch 且不向 UI 暴露待确认卡片', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+    vi.spyOn(service, 'connect').mockResolvedValue({ state: 'online' })
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+    const request = vi
+      .spyOn(service.getRequestRouter(), 'request')
+      .mockImplementation(async (_serverId, message) => ({
+        ...createCclinkEnvelope('tool_approval_ack'),
+        request_id: message.request_id,
+        session_id: 'session-1',
+        tool_use_id: String((message as { tool_use_id?: string }).tool_use_id),
+        approved: true,
+        status: 'accepted',
+      }))
+    const events: Array<CclinkRemoteMessage | undefined> = []
+    service.onRealtimeEvent((event) => events.push(event.message))
+
+    await handle({
+      ...createCclinkEnvelope('agent_tool', { request_id: 'search-request' }),
+      session_id: 'session-1',
+      msg_id: 'search-message',
+      tool: 'WebSearch',
+      tool_use_id: 'search-tool',
+      state: 'pending',
+      requires_approval: true,
+      input: { query: '中文嵌入模型' },
+    })
+
+    expect(request).toHaveBeenCalledWith(
+      'agent-1',
+      expect.objectContaining({
+        cc_type: 'tool_approval_response',
+        trace_id: 'search-request',
+        session_id: 'session-1',
+        tool_use_id: 'search-tool',
+        approved: true,
+        explicit_user_decision: true,
+      }),
+      ['tool_approval_ack'],
+      15_000,
+    )
+    expect(service.listMessages('session-1')[0]).toMatchObject({
+      type: 'agentTool',
+      tool: { name: 'WebSearch', state: 'executing', requiresApproval: false },
+    })
+    expect(events.at(-1)).toMatchObject({
+      type: 'agentTool',
+      tool: { name: 'WebSearch', state: 'executing', requiresApproval: false },
+    })
+  })
+
+  it('WebSearch 自动批准回执失败时恢复人工确认卡', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+    vi.spyOn(service, 'connect').mockResolvedValue({ state: 'online' })
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+    vi.spyOn(service.getRequestRouter(), 'request').mockRejectedValue(
+      new Error('CONTROL_NOT_PENDING'),
+    )
+    const events: Array<CclinkRemoteMessage | undefined> = []
+    service.onRealtimeEvent((event) => events.push(event.message))
+
+    await handle({
+      ...createCclinkEnvelope('agent_tool', { request_id: 'search-request' }),
+      session_id: 'session-1',
+      msg_id: 'search-message',
+      tool: 'WebSearch',
+      tool_use_id: 'search-tool',
+      state: 'pending',
+      requires_approval: true,
+    })
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'agentTool',
+      tool: { name: 'WebSearch', state: 'pending', requiresApproval: true },
+    })
+  })
+
   it('执行中事件未明确撤销时保留同一工具的待审批状态', async () => {
     const { service, handle } = createService()
     await service.initialize()
@@ -1281,7 +1360,7 @@ describe('CclinkRemoteService runtime protocol', () => {
         ...createCclinkEnvelope('agent_tool', { request_id: 'shared-run-request' }),
         session_id: 'session-1',
         msg_id: msgId,
-        tool: 'WebSearch',
+        tool: 'Bash',
         tool_use_id: toolUseId,
         state: 'pending',
         requires_approval: true,
@@ -1342,7 +1421,7 @@ describe('CclinkRemoteService runtime protocol', () => {
         ...createCclinkEnvelope('agent_tool', { request_id: 'shared-transport-run' }),
         session_id: 'session-1',
         msg_id: msgId,
-        tool: 'WebSearch',
+        tool: 'Bash',
         tool_use_id: toolUseId,
         state: 'pending',
         requires_approval: true,

@@ -25,6 +25,8 @@
 1. 在远程文件树新建测试文件，修改保存，重命名后删除；
 2. 新建远程 Agent 会话，发送消息并收到流式回复/工具事件；
 3. 打开远程 Terminal，执行 `pwd`，断网恢复后确认 PTY attach 和输出续接。
+4. 连续触发多次远程 `WebSearch`，确认 Studio 自动批准、不显示逐条确认卡，
+   且远程任务继续执行。
 
 ## 独立审查后的桌面端补齐记录
 
@@ -32,7 +34,9 @@
   用户资料、access token、IM UserSig 和完整远程身份只驻留当前进程内存。
 - 工具审批和 Agent 提问不再以“消息已发送”冒充成功：Studio 等待并校验
   `tool_approval_ack` / `question_answer_ack` 后才更新状态；错误保持可重试。AskUserQuestion
-  使用问题文本作为 answers key，并支持以逗号分隔协议提交多选答案。
+  使用问题文本作为 answers key，并支持以逗号分隔协议提交多选答案。精确名为
+  `WebSearch` 的只读远程工具由 Studio 自动批准；ACK 失败时恢复人工确认卡，
+  其他工具的审批边界不变。
 - 首次目录浏览触发的 `permission_request` 现在直接显示在远程目录选择器中，无需先打开
   Workspace。远程脏文件重新读取前要求确认；退出 flush 会等待尚在 debounce 窗口内的草稿
   写盘，草稿目录移动/删除按完整 WorkspaceRef 隔离，单次写失败不会毒化后续保存队列。

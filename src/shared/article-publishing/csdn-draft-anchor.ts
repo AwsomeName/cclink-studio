@@ -1,4 +1,6 @@
 const CSDN_NUMERIC_DRAFT_PATH = /^\/mp_blog\/creation\/editor\/(\d+)\/?$/u
+const CSDN_EDITOR_QUERY_PATH = /^(?:\/mp_blog\/creation\/editor\/?|\/md\/?)$/u
+const CSDN_DRAFT_QUERY_KEYS = ['articleId', 'draftId', 'id'] as const
 
 export interface CsdnDraftAnchor {
   draftId: string
@@ -15,12 +17,24 @@ export interface CsdnDraftAnchor {
 export function parseCsdnDraftAnchor(rawUrl: string): CsdnDraftAnchor | null {
   try {
     const url = new URL(rawUrl)
-    if (url.protocol !== 'https:' || url.hostname !== 'mp.csdn.net') return null
-    const match = CSDN_NUMERIC_DRAFT_PATH.exec(url.pathname)
-    if (!match) return null
+    if (url.protocol !== 'https:' || !['mp.csdn.net', 'editor.csdn.net'].includes(url.hostname)) {
+      return null
+    }
+    const pathMatch =
+      url.hostname === 'mp.csdn.net' ? CSDN_NUMERIC_DRAFT_PATH.exec(url.pathname) : null
+    const queryDraftId = CSDN_EDITOR_QUERY_PATH.test(url.pathname)
+      ? CSDN_DRAFT_QUERY_KEYS.map((key) => url.searchParams.get(key)).find((value) =>
+          /^\d+$/u.test(value ?? ''),
+        )
+      : null
+    const draftId = pathMatch?.[1] ?? queryDraftId
+    if (!draftId) return null
     return {
-      draftId: match[1],
-      url: `https://mp.csdn.net/mp_blog/creation/editor/${match[1]}`,
+      draftId,
+      url:
+        pathMatch !== null
+          ? `https://mp.csdn.net/mp_blog/creation/editor/${draftId}`
+          : `${url.origin}${url.pathname}?articleId=${draftId}`,
     }
   } catch {
     return null

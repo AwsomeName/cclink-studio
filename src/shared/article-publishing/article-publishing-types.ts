@@ -70,8 +70,63 @@ export interface ArticlePublishingAsset {
   occurrences: ArticlePublishingAssetOccurrence[]
   status: ArticleAssetUploadStatus
   platformUrl?: string
+  platformContentHash?: string
   verifiedAt?: string
   uploadAttempts: ArticleAssetUploadAttempt[]
+}
+
+export interface ArticlePublishingPlatformImageSnapshot {
+  url: string
+  contentHash: string
+  alt: string
+}
+
+/**
+ * Main-process evidence read back from the real CSDN editor. The snapshot hash is intentionally
+ * derived from every field below except timestamps/evidenceHash so a write permit can be compared
+ * with a fresh page read immediately before the next mutation.
+ */
+export interface ArticlePublishingPlatformSnapshot {
+  adapterId: 'csdn'
+  adapterVersion: 1
+  platformAccountId: string
+  draftId: string
+  normalizedTitle: string
+  bodyStructureHash: string
+  images: ArticlePublishingPlatformImageSnapshot[]
+  imageEnumerationComplete: true
+  saveState: 'saved'
+  snapshotHash: string
+  evidenceHash: string
+  observedAt: string
+}
+
+export interface ArticlePublishingRecoveryWritePermit {
+  id: string
+  recoveryOperationId: string
+  executionGeneration: number
+  draftId: string
+  tabId: string
+  browserViewRuntimeGeneration: number
+  webContentsId: number
+  playwrightConnectionGeneration: number
+  playwrightPageBindingGeneration: number
+  snapshotHash: string
+  issuedAt: string
+}
+
+export interface ArticlePublishingDraftRecovery {
+  operationId: string
+  executionGeneration: number
+  status: 'locating' | 'verified' | 'failed'
+  expectedDraftId: string
+  startedAt: string
+  verifiedAt?: string
+  evidenceHash?: string
+  platformAccountId?: string
+  snapshotHash?: string
+  failureReason?: string
+  writePermit?: ArticlePublishingRecoveryWritePermit
 }
 
 export interface ArticlePublishingFields {
@@ -141,7 +196,15 @@ export interface ArticlePublishingState {
       probeAttempts: number
     }
   }
-  draft?: { url?: string; lastVerifiedAt?: string }
+  draft?: {
+    platformDraftId?: string
+    url?: string
+    normalizedTitle?: string
+    bodyStructureHash?: string
+    platformSnapshot?: ArticlePublishingPlatformSnapshot
+    lastVerifiedAt?: string
+    recovery?: ArticlePublishingDraftRecovery
+  }
   publication: {
     status: 'not-started' | 'dispatched' | 'verifying' | 'published' | 'result-unknown'
     url?: string

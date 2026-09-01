@@ -197,6 +197,157 @@ describe('BrowserTaskRuntime', () => {
     ).not.toThrow()
   })
 
+  it('blocks ordinary BrowserTasks for the whole account recovery window', () => {
+    const { runtime } = createRuntime()
+    const lease = runtime.acquireAccountRecoveryLease({
+      accountId: 'account-a',
+      profileId: 'profile-a',
+      affairId: 'affair-a',
+      attemptId: 'attempt-a',
+      executionGeneration: 2,
+      launchOperationId: 'launch-b',
+    })
+    const unbound = runtime.startTask({
+      tabId: 'browser-unbound',
+      goal: 'ordinary task',
+      correlation: {
+        workspaceKey: '/workspace-a',
+        conversationId: 'conversation-b',
+        agentRunId: 'run-b',
+        agentSessionRef: null,
+        profileId: 'profile-a',
+      },
+    })
+
+    expect(() =>
+      runtime.startTask({
+        tabId: 'browser-b',
+        goal: 'ordinary account task',
+        correlation: {
+          workspaceKey: '/workspace-a',
+          conversationId: 'conversation-b',
+          agentRunId: 'run-b',
+          agentSessionRef: null,
+          profileId: 'profile-a',
+          accountId: 'account-a',
+        },
+      }),
+    ).toThrow('正在恢复原网页事务')
+    expect(() => runtime.updateCorrelation(unbound.id, { accountId: 'account-a' })).toThrow(
+      '普通 BrowserTask 不能取得写入权',
+    )
+    expect(runtime.releaseAccountRecoveryLease(lease.id)).toBe(true)
+  })
+
+  it('atomically transfers a recovery lease and ignores stale recovery release', () => {
+    const { runtime } = createRuntime()
+    const lease = runtime.acquireAccountRecoveryLease({
+      accountId: 'account-a',
+      profileId: 'profile-a',
+      affairId: 'affair-a',
+      attemptId: 'attempt-a',
+      executionGeneration: 2,
+      launchOperationId: 'launch-b',
+    })
+    const task = runtime.startTask({
+      tabId: 'browser-a',
+      goal: 'resume publish',
+      correlation: {
+        workspaceKey: '/workspace-a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-b',
+        agentSessionRef: null,
+        profileId: 'profile-a',
+      },
+    })
+
+    runtime.transferAccountRecoveryLeaseToTask(lease.id, task.id, {
+      affairId: 'affair-a',
+      affairAttemptId: 'attempt-a',
+      affairExecutionGeneration: 2,
+      affairLaunchOperationId: 'launch-b',
+    })
+
+    expect(runtime.getTask(task.id)?.correlation?.accountId).toBe('account-a')
+    expect(runtime.releaseAccountRecoveryLease(lease.id)).toBe(false)
+    expect(() =>
+      runtime.startTask({
+        tabId: 'browser-b',
+        goal: 'race after handoff',
+        correlation: {
+          workspaceKey: '/workspace-a',
+          conversationId: 'conversation-b',
+          agentRunId: 'run-c',
+          agentSessionRef: null,
+          profileId: 'profile-a',
+          accountId: 'account-a',
+        },
+      }),
+    ).toThrow('另一个 Agent 任务')
+
+    runtime.finishTask(task.id)
+    expect(() =>
+      runtime.startTask({
+        tabId: 'browser-b',
+        goal: 'after terminal release',
+        correlation: {
+          workspaceKey: '/workspace-a',
+          conversationId: 'conversation-b',
+          agentRunId: 'run-c',
+          agentSessionRef: null,
+          profileId: 'profile-a',
+          accountId: 'account-a',
+        },
+      }),
+    ).not.toThrow()
+  })
+
+  it('rejects stale or mismatched recovery lease handoff without releasing the live owner', () => {
+    const { runtime } = createRuntime()
+    const stale = runtime.acquireAccountRecoveryLease({
+      accountId: 'account-a',
+      profileId: 'profile-a',
+      affairId: 'affair-a',
+      attemptId: 'attempt-a',
+      executionGeneration: 1,
+      launchOperationId: 'launch-a',
+    })
+    runtime.releaseAccountRecoveryLease(stale.id)
+    const current = runtime.acquireAccountRecoveryLease({
+      accountId: 'account-a',
+      profileId: 'profile-a',
+      affairId: 'affair-a',
+      attemptId: 'attempt-a',
+      executionGeneration: 2,
+      launchOperationId: 'launch-b',
+    })
+    const task = runtime.startTask({
+      tabId: 'browser-a',
+      goal: 'resume publish',
+      correlation: {
+        workspaceKey: '/workspace-a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-b',
+        agentSessionRef: null,
+        profileId: 'profile-a',
+      },
+    })
+
+    expect(() => runtime.transferAccountRecoveryLeaseToTask(stale.id, task.id, {})).toThrow(
+      '恢复租约已失效',
+    )
+    expect(() =>
+      runtime.transferAccountRecoveryLeaseToTask(current.id, task.id, {
+        affairId: 'affair-a',
+        affairAttemptId: 'attempt-a',
+        affairExecutionGeneration: 1,
+        affairLaunchOperationId: 'launch-b',
+      }),
+    ).toThrow('事务代次不匹配')
+    expect(runtime.releaseAccountRecoveryLease(stale.id)).toBe(false)
+    expect(runtime.releaseAccountRecoveryLease(current.id)).toBe(true)
+  })
+
   it('replaces a paused BrowserTask only when resuming the same affair Attempt', () => {
     const { runtime } = createRuntime()
     const correlation = {

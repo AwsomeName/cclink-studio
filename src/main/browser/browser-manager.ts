@@ -2205,6 +2205,11 @@ export class BrowserManager {
     return this.views.get(tabId)?.profileId
   }
 
+  /** 查询 Tab 的 main-owned 登记账号归属；undefined 表示视图不存在。 */
+  getViewAccountId(tabId: string): string | null | undefined {
+    return this.views.get(tabId)?.accountId
+  }
+
   getViewRuntimeIdentity(
     tabId: string,
   ): { tabId: string; browserViewRuntimeGeneration: number; webContentsId: number } | null {

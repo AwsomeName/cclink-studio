@@ -16,10 +16,26 @@ import type {
 
 const FINAL_STATUSES = new Set<BrowserTaskStatus>(['completed', 'failed', 'cancelled'])
 
+export interface BrowserAccountRecoveryLease {
+  id: string
+  accountId: string
+  profileId: string
+  affairId: string
+  attemptId: string
+  executionGeneration: number
+  launchOperationId: string
+  acquiredAt: number
+}
+
+type BrowserAccountLeaseOwner =
+  | { kind: 'task'; taskRunId: string }
+  | ({ kind: 'recovery' } & BrowserAccountRecoveryLease)
+
 export class BrowserTaskRuntime {
   private readonly tasks = new Map<string, BrowserTaskRun>()
   private readonly activeTaskByTab = new Map<string, string>()
-  private readonly activeTaskByAccount = new Map<string, string>()
+  /** Single main-owned authority for both recovery and Agent account ownership. */
+  private readonly accountLeaseByAccount = new Map<string, BrowserAccountLeaseOwner>()
   private readonly actionLogs = new Map<string, BrowserActionLog[]>()
   private readonly actionLogById = new Map<string, BrowserActionLog>()
   private readonly taskListeners = new Set<(task: BrowserTaskRun) => void>()
@@ -33,8 +49,11 @@ export class BrowserTaskRuntime {
   startTask(options: StartBrowserTaskOptions): BrowserTaskRun {
     const accountId = options.correlation?.accountId
     if (accountId) {
-      const leasedTaskId = this.activeTaskByAccount.get(accountId)
-      const leasedTask = leasedTaskId ? this.tasks.get(leasedTaskId) : undefined
+      const owner = this.getLiveAccountLeaseOwner(accountId)
+      if (owner?.kind === 'recovery') {
+        throw new Error('该账号正在恢复原网页事务，请等待恢复完成或取消后重试')
+      }
+      const leasedTask = owner?.kind === 'task' ? this.tasks.get(owner.taskRunId) : undefined
       if (leasedTask && !FINAL_STATUSES.has(leasedTask.status)) {
         const resumesSameAffairAttempt =
           leasedTask.status === 'paused' &&
@@ -66,7 +85,77 @@ export class BrowserTaskRuntime {
     }
     this.tasks.set(task.id, task)
     this.activeTaskByTab.set(task.tabId, task.id)
-    if (accountId) this.activeTaskByAccount.set(accountId, task.id)
+    if (accountId) this.accountLeaseByAccount.set(accountId, { kind: 'task', taskRunId: task.id })
+    this.emitTaskChanged(task)
+    return cloneTask(task)
+  }
+
+  acquireAccountRecoveryLease(
+    input: Omit<BrowserAccountRecoveryLease, 'id' | 'acquiredAt'>,
+  ): BrowserAccountRecoveryLease {
+    const owner = this.getLiveAccountLeaseOwner(input.accountId)
+    if (owner) {
+      throw new Error(
+        owner.kind === 'recovery'
+          ? '该账号已有恢复任务正在核验原页面，请等待完成后重试'
+          : '该账号正在由另一个 Agent 任务使用，请先完成或取消原任务',
+      )
+    }
+    const lease: BrowserAccountRecoveryLease = {
+      ...input,
+      id: randomUUID(),
+      acquiredAt: Date.now(),
+    }
+    this.accountLeaseByAccount.set(input.accountId, { kind: 'recovery', ...lease })
+    return { ...lease }
+  }
+
+  releaseAccountRecoveryLease(leaseId: string): boolean {
+    for (const [accountId, owner] of this.accountLeaseByAccount) {
+      if (owner.kind !== 'recovery' || owner.id !== leaseId) continue
+      this.accountLeaseByAccount.delete(accountId)
+      return true
+    }
+    return false
+  }
+
+  transferAccountRecoveryLeaseToTask(
+    leaseId: string,
+    taskRunId: string,
+    patch: UpdateBrowserTaskCorrelationOptions,
+  ): BrowserTaskRun {
+    const task = this.requireTask(taskRunId)
+    if (FINAL_STATUSES.has(task.status) || !task.correlation) {
+      throw new Error('恢复租约不能转交给已结束或无 Agent 身份的 BrowserTask')
+    }
+    const leaseEntry = [...this.accountLeaseByAccount.entries()].find(
+      ([, owner]) => owner.kind === 'recovery' && owner.id === leaseId,
+    )
+    if (!leaseEntry || leaseEntry[1].kind !== 'recovery') {
+      throw new Error('恢复租约已失效，拒绝把账号写入权交给 BrowserTask')
+    }
+    const [accountId, lease] = leaseEntry
+    if (
+      (patch.accountId && patch.accountId !== accountId) ||
+      (task.correlation.accountId && task.correlation.accountId !== accountId)
+    ) {
+      throw new Error('BrowserTask 与恢复租约的账号或事务代次不匹配')
+    }
+    const nextCorrelation = { ...task.correlation, ...patch, accountId }
+    if (
+      nextCorrelation.profileId !== lease.profileId ||
+      nextCorrelation.affairId !== lease.affairId ||
+      nextCorrelation.affairAttemptId !== lease.attemptId ||
+      nextCorrelation.affairExecutionGeneration !== lease.executionGeneration ||
+      nextCorrelation.affairLaunchOperationId !== lease.launchOperationId
+    ) {
+      throw new Error('BrowserTask 与恢复租约的账号或事务代次不匹配')
+    }
+
+    // Correlation and owner change in one synchronous main-process operation, so another task
+    // cannot acquire the account between recovery verification and Agent ownership.
+    task.correlation = nextCorrelation
+    this.accountLeaseByAccount.set(accountId, { kind: 'task', taskRunId: task.id })
     this.emitTaskChanged(task)
     return cloneTask(task)
   }
@@ -243,7 +332,28 @@ export class BrowserTaskRuntime {
       ([key, value]) => task.correlation?.[key as keyof typeof task.correlation] !== value,
     )
     if (!changed) return cloneTask(task)
+    const previousAccountId = task.correlation.accountId
+    const nextAccountId = nextCorrelation.accountId
+    if (nextAccountId && nextAccountId !== previousAccountId) {
+      const owner = this.getLiveAccountLeaseOwner(nextAccountId)
+      if (owner?.kind === 'recovery') {
+        throw new Error('该账号正在恢复原网页事务，普通 BrowserTask 不能取得写入权')
+      }
+      if (owner?.kind === 'task' && owner.taskRunId !== task.id) {
+        throw new Error('该账号正在由另一个 Agent 任务使用，请先完成或取消原任务')
+      }
+    }
     task.correlation = nextCorrelation
+    if (
+      previousAccountId &&
+      previousAccountId !== nextAccountId &&
+      this.isTaskAccountLeaseOwner(previousAccountId, task.id)
+    ) {
+      this.accountLeaseByAccount.delete(previousAccountId)
+    }
+    if (nextAccountId) {
+      this.accountLeaseByAccount.set(nextAccountId, { kind: 'task', taskRunId: task.id })
+    }
     this.emitTaskChanged(task)
     return cloneTask(task)
   }
@@ -310,8 +420,8 @@ export class BrowserTaskRuntime {
     }
     if (FINAL_STATUSES.has(status)) {
       const accountId = task.correlation?.accountId
-      if (accountId && this.activeTaskByAccount.get(accountId) === task.id) {
-        this.activeTaskByAccount.delete(accountId)
+      if (accountId && this.isTaskAccountLeaseOwner(accountId, task.id)) {
+        this.accountLeaseByAccount.delete(accountId)
       }
     }
     this.emitTaskChanged(task)
@@ -328,6 +438,20 @@ export class BrowserTaskRuntime {
     const log = this.actionLogById.get(logId)
     if (!log) throw new Error(`浏览器动作日志不存在: ${logId}`)
     return log
+  }
+
+  private getLiveAccountLeaseOwner(accountId: string): BrowserAccountLeaseOwner | null {
+    const owner = this.accountLeaseByAccount.get(accountId)
+    if (!owner || owner.kind === 'recovery') return owner ?? null
+    const task = this.tasks.get(owner.taskRunId)
+    if (task && !FINAL_STATUSES.has(task.status)) return owner
+    this.accountLeaseByAccount.delete(accountId)
+    return null
+  }
+
+  private isTaskAccountLeaseOwner(accountId: string, taskRunId: string): boolean {
+    const owner = this.accountLeaseByAccount.get(accountId)
+    return owner?.kind === 'task' && owner.taskRunId === taskRunId
   }
 
   private emitTaskChanged(task: BrowserTaskRun): void {

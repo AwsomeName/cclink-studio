@@ -239,7 +239,7 @@ describe('ArticlePublishingService', () => {
     service.dispose()
   })
 
-  it('resumes by navigating to the persisted platform draft before starting the Agent', async () => {
+  it('recovers the exact persisted draft from the account draft list before starting the Agent', async () => {
     const draftUrl = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
     const harness = createResumeHarness({ draftUrl, visibleUrl: 'https://mp.csdn.net/' })
 
@@ -249,23 +249,124 @@ describe('ArticlePublishingService', () => {
     )
 
     expect(result.success).toBe(true)
+    expect(harness.browserTaskRuntime.acquireAccountRecoveryLease).toHaveBeenCalledWith({
+      accountId: '22222222-2222-4222-8222-222222222222',
+      profileId: 'profile-a',
+      affairId: harness.affairId,
+      attemptId: expect.any(String),
+      executionGeneration: 2,
+      launchOperationId: 'launch-b',
+    })
+    expect(
+      harness.browserTaskRuntime.acquireAccountRecoveryLease.mock.invocationCallOrder[0],
+    ).toBeLessThan(harness.browserManager.waitForAccountView.mock.invocationCallOrder[0])
     expect(harness.browserManager.waitForAccountView).toHaveBeenCalledWith(
       '/workspace',
       'profile-a',
       '22222222-2222-4222-8222-222222222222',
-      draftUrl,
+      'https://mp.csdn.net/mp_blog/manage/article',
       8_000,
       'original-editor-tab',
     )
     expect(harness.browserManager.navigate).toHaveBeenCalledWith('tab-a', draftUrl)
-    expect(harness.browserManager.navigate.mock.invocationCallOrder[0]).toBeLessThan(
-      harness.agentBridge.sendMessage.mock.invocationCallOrder[0],
+    expect(harness.draftRecoveryCoordinator.recoverExactDraft).toHaveBeenCalledOnce()
+    expect(harness.webAffairService.verifyArticlePublishingRecovery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recoveryOperationId: 'recovery-b',
+        draftId: '164148817',
+        tabId: 'tab-a',
+        playwrightConnectionGeneration: 3,
+        playwrightPageBindingGeneration: 4,
+      }),
+      '11111111-1111-4111-8111-111111111111',
+    )
+    expect(
+      harness.webAffairService.verifyArticlePublishingRecovery.mock.invocationCallOrder[0],
+    ).toBeLessThan(harness.agentBridge.sendMessage.mock.invocationCallOrder[0])
+    expect(harness.browserTaskRuntime.transferAccountRecoveryLeaseToTask).toHaveBeenCalledWith(
+      'recovery-lease-a',
+      expect.any(String),
+      expect.objectContaining({
+        accountId: '22222222-2222-4222-8222-222222222222',
+        affairExecutionGeneration: 2,
+        affairLaunchOperationId: 'launch-b',
+      }),
+    )
+    expect(harness.browserTaskRuntime.releaseAccountRecoveryLease).toHaveBeenCalledWith(
+      'recovery-lease-a',
     )
     expect(harness.agentBridge.sendMessage).toHaveBeenCalledWith(
       expect.stringContaining(`draftUrl=${draftUrl}`),
       expect.any(String),
       expect.any(Object),
     )
+    harness.service.dispose()
+  })
+
+  it('does not create an Agent when the exact draft cannot be proven from the draft list', async () => {
+    const harness = createResumeHarness({
+      draftUrl: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
+      visibleUrl: 'https://mp.csdn.net/',
+      recoveryError: '当前登录账号的草稿列表没有找到原草稿 164148817',
+    })
+
+    const result = await harness.service.startTask(
+      { workspaceRef: WORKSPACE_REF, affairId: harness.affairId },
+      '11111111-1111-4111-8111-111111111111',
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('没有找到原草稿') },
+    })
+    expect(harness.agentBridge.sendMessage).not.toHaveBeenCalled()
+    expect(harness.webAffairService.verifyArticlePublishingRecovery).not.toHaveBeenCalled()
+    expect(harness.browserTaskRuntime.releaseAccountRecoveryLease).toHaveBeenCalledWith(
+      'recovery-lease-a',
+    )
+    expect(harness.webAffairService.reconcileArticlePublishingRuntime).toHaveBeenCalledOnce()
+    harness.service.dispose()
+  })
+
+  it('does not recover or write when an older save may already have reached the platform', async () => {
+    const harness = createResumeHarness({
+      draftUrl: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
+      visibleUrl: 'https://mp.csdn.net/',
+      unresolvedSave: true,
+    })
+
+    const result = await harness.service.startTask(
+      { workspaceRef: WORKSPACE_REF, affairId: harness.affairId },
+      '11111111-1111-4111-8111-111111111111',
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('无法核验的正文或保存动作') },
+    })
+    expect(harness.draftRecoveryCoordinator.recoverExactDraft).not.toHaveBeenCalled()
+    expect(harness.agentBridge.sendMessage).not.toHaveBeenCalled()
+    harness.service.dispose()
+  })
+
+  it('does not start the Agent when the recovery write permit cannot be persisted', async () => {
+    const harness = createResumeHarness({
+      draftUrl: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
+      visibleUrl: 'https://mp.csdn.net/',
+      verifyError: '事务文件不可写',
+    })
+
+    const result = await harness.service.startTask(
+      { workspaceRef: WORKSPACE_REF, affairId: harness.affairId },
+      '11111111-1111-4111-8111-111111111111',
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('事务文件不可写') },
+    })
+    expect(harness.webAffairService.verifyArticlePublishingRecovery).toHaveBeenCalledOnce()
+    expect(harness.agentBridge.sendMessage).not.toHaveBeenCalled()
     harness.service.dispose()
   })
 
@@ -279,11 +380,32 @@ describe('ArticlePublishingService', () => {
 
     expect(result).toMatchObject({
       success: false,
-      error: { message: expect.stringContaining('打开原 CSDN 草稿') },
+      error: { message: expect.stringContaining('手动打开草稿也不能换发写入许可') },
     })
     expect(harness.browserManager.navigate).not.toHaveBeenCalled()
     expect(harness.agentBridge.sendMessage).not.toHaveBeenCalled()
     expect(harness.webAffairService.reconcileArticlePublishingRuntime).toHaveBeenCalledOnce()
+    harness.service.dispose()
+  })
+
+  it('does not start an Agent for a legacy anchored draft without a complete platform snapshot', async () => {
+    const harness = createResumeHarness({
+      draftUrl: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
+      visibleUrl: 'https://mp.csdn.net/',
+      missingSnapshot: true,
+    })
+    const result = await harness.service.startTask(
+      { workspaceRef: WORKSPACE_REF, affairId: harness.affairId },
+      '11111111-1111-4111-8111-111111111111',
+    )
+    expect(result).toMatchObject({
+      success: false,
+      error: {
+        message: expect.stringContaining('缺少真实账号、结构化正文、全部图片或保存状态证据'),
+      },
+    })
+    expect(harness.draftRecoveryCoordinator.recoverExactDraft).not.toHaveBeenCalled()
+    expect(harness.agentBridge.sendMessage).not.toHaveBeenCalled()
     harness.service.dispose()
   })
 
@@ -737,12 +859,33 @@ describe('ArticlePublishingService', () => {
   })
 })
 
-function createResumeHarness(options: { draftUrl?: string; visibleUrl: string }) {
+function createResumeHarness(options: {
+  draftUrl?: string
+  visibleUrl: string
+  recoveryError?: string
+  unresolvedSave?: boolean
+  verifyError?: string
+  missingSnapshot?: boolean
+}) {
   const affairId = '33333333-3333-4333-8333-333333333333'
   const attemptId = '44444444-4444-4444-8444-444444444444'
   const browserTaskRunId = '55555555-5555-4555-8555-555555555555'
   const nodeId = '66666666-6666-4666-8666-666666666666'
   const accountId = '22222222-2222-4222-8222-222222222222'
+  const platformSnapshot = {
+    adapterId: 'csdn' as const,
+    adapterVersion: 1 as const,
+    platformAccountId: 'csdn:test-user',
+    draftId: '164148817',
+    normalizedTitle: 'Article',
+    bodyStructureHash: 'b'.repeat(64),
+    images: [],
+    imageEnumerationComplete: true as const,
+    saveState: 'saved' as const,
+    snapshotHash: 'a'.repeat(64),
+    evidenceHash: 'e'.repeat(64),
+    observedAt: '2026-09-01T00:00:00.000Z',
+  }
   const resumedAttempt = {
     id: attemptId,
     status: 'preparing',
@@ -761,6 +904,12 @@ function createResumeHarness(options: { draftUrl?: string; visibleUrl: string })
       markdownPath: '/workspace/article.md',
       contentHash: 'c'.repeat(64),
     },
+    fields: {
+      title: 'Article',
+      summary: '',
+      tags: [],
+      category: '',
+    },
     assets: [],
     checkpoints: [
       {
@@ -769,7 +918,16 @@ function createResumeHarness(options: { draftUrl?: string; visibleUrl: string })
         status: 'needs-reconcile',
       },
     ],
-    sideEffects: [{ kind: 'save-draft', status: 'verified' }],
+    sideEffects: options.unresolvedSave
+      ? [
+          {
+            attemptId,
+            executionGeneration: 1,
+            kind: 'save-draft',
+            status: 'result-unknown',
+          },
+        ]
+      : [{ kind: 'save-draft', status: 'verified' }],
     execution: {
       status: 'preparing',
       currentAttemptId: attemptId,
@@ -777,7 +935,25 @@ function createResumeHarness(options: { draftUrl?: string; visibleUrl: string })
       currentLaunchOperationId: 'launch-b',
       currentStepId: 'upload-assets',
     },
-    draft: options.draftUrl ? { url: options.draftUrl } : undefined,
+    draft: options.draftUrl
+      ? {
+          platformDraftId: '164148817',
+          url: options.draftUrl,
+          ...(options.missingSnapshot
+            ? {}
+            : {
+                bodyStructureHash: platformSnapshot.bodyStructureHash,
+                platformSnapshot,
+              }),
+          recovery: {
+            operationId: 'recovery-b',
+            executionGeneration: 2,
+            status: 'locating',
+            expectedDraftId: '164148817',
+            startedAt: '2026-09-01T00:00:00.000Z',
+          },
+        }
+      : undefined,
     publication: { status: 'not-started' },
   }
   const resumedAffair = {
@@ -846,6 +1022,14 @@ function createResumeHarness(options: { draftUrl?: string; visibleUrl: string })
       success: true,
       data: resumedAffair,
     })),
+    verifyArticlePublishingRecovery: vi.fn(async () =>
+      options.verifyError
+        ? {
+            success: false,
+            error: { code: 'STORAGE_UNAVAILABLE', message: options.verifyError },
+          }
+        : { success: true, data: resumedAffair },
+    ),
     bindArticlePublishingRuntime: vi.fn(async () => ({ success: true, data: resumedAffair })),
     rebindArticlePublishingBrowserRuntime: vi.fn(async () => ({
       success: true,
@@ -894,6 +1078,18 @@ function createResumeHarness(options: { draftUrl?: string; visibleUrl: string })
     })),
   }
   const browserTaskRuntime = {
+    acquireAccountRecoveryLease: vi.fn((input: Record<string, unknown>) => ({
+      ...input,
+      id: 'recovery-lease-a',
+      acquiredAt: Date.now(),
+    })),
+    releaseAccountRecoveryLease: vi.fn(() => false),
+    transferAccountRecoveryLeaseToTask: vi.fn(
+      (_leaseId: string, _taskRunId: string, patch: Record<string, unknown>) => {
+        Object.assign(browserTask.correlation, patch)
+        return browserTask
+      },
+    ),
     updateCorrelation: vi.fn((_taskRunId: string, patch: Record<string, unknown>) => {
       Object.assign(browserTask.correlation, patch)
       return browserTask
@@ -911,7 +1107,22 @@ function createResumeHarness(options: { draftUrl?: string; visibleUrl: string })
       connectionGeneration: 3,
       webContentsId: 20,
     })),
+    getPageById: vi.fn(() => ({ isClosed: () => false, url: () => currentUrl })),
     isConnected: vi.fn(() => true),
+  }
+  const draftRecoveryCoordinator = {
+    recoverExactDraft: vi.fn(async (input) => {
+      if (options.recoveryError) throw new Error(options.recoveryError)
+      await input.navigate('https://mp.csdn.net/mp_blog/manage/article')
+      await input.navigate(options.draftUrl!)
+      return {
+        draftId: '164148817',
+        url: options.draftUrl!,
+        snapshot: platformSnapshot,
+        evidenceHash: 'e'.repeat(64),
+        observedAt: '2026-09-01T00:00:01.000Z',
+      }
+    }),
   }
   const service = new ArticlePublishingService(
     fileService as never,
@@ -923,13 +1134,16 @@ function createResumeHarness(options: { draftUrl?: string; visibleUrl: string })
       getBrowserTaskRuntime: () => browserTaskRuntime as never,
       getPlaywrightBridge: () => playwrightBridge as never,
     },
+    draftRecoveryCoordinator as never,
   )
   return {
     affairId,
     service,
     browserManager,
     agentBridge,
+    browserTaskRuntime,
     webAffairService,
+    draftRecoveryCoordinator,
   }
 }
 

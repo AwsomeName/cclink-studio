@@ -141,6 +141,10 @@ export interface ArticlePublishingAgentReporter {
     observedAt: string
     url: string
     kind: 'checkpoint' | 'asset-absent' | 'asset-uploaded' | 'published'
+    platformContentHash?: string
+    bodyStructureHash?: string
+    platformAccountId?: string
+    platformSnapshot?: NonNullable<ArticlePublishingState['draft']>['platformSnapshot']
   }
 }
 
@@ -233,7 +237,7 @@ export class WebAffairService {
     return {
       success: true,
       data: {
-        schemaVersion: 5,
+        schemaVersion: 6,
         revision: result.data.revision,
         workspaceId,
         affairs: result.data.affairs.filter((affair) => affair.workspaceId === workspaceId),
@@ -499,6 +503,47 @@ export class WebAffairService {
         rawUrl,
         browserTaskRunId,
       ),
+    )
+  }
+
+  verifyArticlePublishingRecovery(
+    input: {
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      launchOperationId: string
+      recoveryOperationId: string
+      draftId: string
+      url: string
+      snapshot: NonNullable<ArticlePublishingState['draft']>['platformSnapshot']
+      evidenceHash: string
+      tabId: string
+      browserViewRuntimeGeneration: number
+      webContentsId: number
+      playwrightConnectionGeneration: number
+      playwrightPageBindingGeneration: number
+    },
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(input.affairId, workspaceId, () =>
+      this.verifyArticlePublishingRecoveryNow(input),
+    )
+  }
+
+  refreshArticlePublishingWriteSnapshot(
+    input: {
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      browserTaskRunId: string
+      permitId?: string
+      previousSnapshotHash?: string
+      snapshot: NonNullable<ArticlePublishingState['draft']>['platformSnapshot']
+    },
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(input.affairId, workspaceId, () =>
+      this.refreshArticlePublishingWriteSnapshotNow(input),
     )
   }
 
@@ -2582,6 +2627,7 @@ export class WebAffairService {
       ),
       articlePublishing: {
         ...publishing,
+        draft: this.beginArticlePublishingRecovery(publishing, executionGeneration, now),
         checkpoints,
         execution: {
           ...publishing.execution,
@@ -2686,6 +2732,9 @@ export class WebAffairService {
       attempts,
       articlePublishing: {
         ...publishing,
+        draft: resultVerificationOnly
+          ? publishing.draft
+          : this.beginArticlePublishingRecovery(publishing, executionGeneration, now),
         assets: publishing.assets.map((asset) =>
           ['uploading', 'waiting-platform', 'verifying', 'result-unknown'].includes(asset.status)
             ? { ...asset, status: 'reconciling' as const }
@@ -2854,6 +2903,39 @@ export class WebAffairService {
     if (!agent || !browserTask || !browserTab) {
       return this.invalid('文章发布必须同时绑定 Agent Run、BrowserTask 和 Browser Tab')
     }
+    const recovery = publishing.draft?.recovery
+    if (recovery?.executionGeneration === executionGeneration) {
+      if (
+        publishing.assets.some((asset) =>
+          ['result-unknown', 'reconciling'].includes(asset.status),
+        ) ||
+        publishing.sideEffects.some(
+          (effect) =>
+            effect.executionGeneration < executionGeneration &&
+            effect.kind === 'save-draft' &&
+            ['reserved', 'dispatched', 'result-unknown'].includes(effect.status),
+        )
+      ) {
+        return this.transitionError('旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime')
+      }
+      const permit = recovery.writePermit
+      if (
+        recovery.status !== 'verified' ||
+        !permit ||
+        !publishing.draft?.platformSnapshot ||
+        permit.snapshotHash !== publishing.draft.platformSnapshot.snapshotHash ||
+        permit.recoveryOperationId !== recovery.operationId ||
+        permit.executionGeneration !== executionGeneration ||
+        permit.draftId !== publishing.draft?.platformDraftId ||
+        permit.tabId !== browserTask.tabId ||
+        permit.browserViewRuntimeGeneration !== browserTask.browserViewRuntimeGeneration ||
+        permit.webContentsId !== browserTask.webContentsId ||
+        permit.playwrightConnectionGeneration !== browserTask.playwrightConnectionGeneration ||
+        permit.playwrightPageBindingGeneration !== browserTask.playwrightPageBindingGeneration
+      ) {
+        return this.transitionError('草稿恢复尚未签发当前页面写入许可，拒绝绑定 Agent Runtime')
+      }
+    }
     const now = this.timestamp()
     const activeBindings = bindings.map((binding) => ({
       ...binding,
@@ -3009,6 +3091,20 @@ export class WebAffairService {
       attempts: found.affair.attempts.map((attempt) =>
         attempt.id === nextAttempt.id ? nextAttempt : attempt,
       ),
+      articlePublishing: publishing.draft?.recovery?.writePermit
+        ? {
+            ...publishing,
+            draft: {
+              ...publishing.draft,
+              recovery: {
+                ...publishing.draft.recovery,
+                status: 'failed',
+                failureReason: 'Playwright Page owner 已变化，旧恢复写入许可已失效',
+                writePermit: undefined,
+              },
+            },
+          }
+        : publishing,
       updatedAt: now,
     }
     return this.persistAffair(nextAffair)
@@ -3265,6 +3361,15 @@ export class WebAffairService {
       if (reporter.trustedPageEvidence?.kind !== expectedEvidenceKind) {
         return this.evidenceRequired('检查点完成必须附带当前 CSDN 页面适配器证据')
       }
+      if (input.stepId === 'verify-account' && !reporter.trustedPageEvidence.platformAccountId) {
+        return this.evidenceRequired('账号核验必须保存真实 CSDN 平台账号标识')
+      }
+      if (
+        ['upload-assets', 'fill-body', 'fill-fields', 'save-draft'].includes(input.stepId) &&
+        !reporter.trustedPageEvidence.platformSnapshot
+      ) {
+        return this.evidenceRequired('网页写入步骤完成必须保存账号、正文、全部图片和保存状态快照')
+      }
       if (
         input.stepId === 'upload-assets' &&
         publishing.assets.some((asset) => asset.kind === 'local' && asset.status !== 'uploaded')
@@ -3384,6 +3489,18 @@ export class WebAffairService {
             : 'active',
       articlePublishing: {
         ...publishing,
+        draft:
+          input.status === 'completed' && reporter.trustedPageEvidence?.platformSnapshot
+            ? {
+                ...publishing.draft,
+                platformDraftId: reporter.trustedPageEvidence.platformSnapshot.draftId,
+                url: reporter.trustedPageEvidence.url,
+                normalizedTitle: reporter.trustedPageEvidence.platformSnapshot.normalizedTitle,
+                bodyStructureHash: reporter.trustedPageEvidence.platformSnapshot.bodyStructureHash,
+                platformSnapshot: reporter.trustedPageEvidence.platformSnapshot,
+                lastVerifiedAt: now,
+              }
+            : publishing.draft,
         checkpoints,
         sideEffects,
         publication,
@@ -3472,7 +3589,12 @@ export class WebAffairService {
       ...found.affair,
       articlePublishing: {
         ...publishing,
-        draft: { url: anchor.url, lastVerifiedAt: now },
+        draft: {
+          ...publishing.draft,
+          platformDraftId: anchor.draftId,
+          url: anchor.url,
+          lastVerifiedAt: now,
+        },
       },
       events: this.appendEvent(
         found.affair,
@@ -3481,6 +3603,228 @@ export class WebAffairService {
           attemptId,
         }),
       ),
+      updatedAt: now,
+    })
+  }
+
+  private beginArticlePublishingRecovery(
+    publishing: ArticlePublishingState,
+    executionGeneration: number,
+    now: string,
+  ): ArticlePublishingState['draft'] {
+    const anchor = publishing.draft?.platformDraftId
+      ? {
+          draftId: publishing.draft.platformDraftId,
+          url: publishing.draft.url ?? '',
+        }
+      : publishing.draft?.url
+        ? parseCsdnDraftAnchor(publishing.draft.url)
+        : null
+    if (!anchor) return publishing.draft
+    return {
+      ...publishing.draft,
+      platformDraftId: anchor.draftId,
+      recovery: {
+        operationId: randomUUID(),
+        executionGeneration,
+        status: 'locating',
+        expectedDraftId: anchor.draftId,
+        startedAt: now,
+      },
+    }
+  }
+
+  private async verifyArticlePublishingRecoveryNow(input: {
+    affairId: string
+    attemptId: string
+    executionGeneration: number
+    launchOperationId: string
+    recoveryOperationId: string
+    draftId: string
+    url: string
+    snapshot: NonNullable<ArticlePublishingState['draft']>['platformSnapshot']
+    evidenceHash: string
+    tabId: string
+    browserViewRuntimeGeneration: number
+    webContentsId: number
+    playwrightConnectionGeneration: number
+    playwrightPageBindingGeneration: number
+  }): Promise<WebAffairOperationResult<WebAffair>> {
+    const found = this.findAttempt(input.affairId, input.attemptId)
+    const publishing = found?.affair.articlePublishing
+    const recovery = publishing?.draft?.recovery
+    if (!found || !publishing || found.affair.kind !== 'article-publishing') {
+      return this.notFound('文章发布恢复事务不存在')
+    }
+    if (
+      found.attempt.status !== 'preparing' ||
+      publishing.execution.status !== 'preparing' ||
+      found.attempt.executionGeneration !== input.executionGeneration ||
+      publishing.execution.currentGeneration !== input.executionGeneration ||
+      found.attempt.launchOperationId !== input.launchOperationId ||
+      publishing.execution.currentLaunchOperationId !== input.launchOperationId ||
+      !recovery ||
+      recovery.operationId !== input.recoveryOperationId ||
+      recovery.executionGeneration !== input.executionGeneration ||
+      recovery.status !== 'locating' ||
+      recovery.expectedDraftId !== input.draftId ||
+      publishing.draft?.platformDraftId !== input.draftId
+    ) {
+      return this.transitionError('草稿恢复证据不属于当前发布恢复代次')
+    }
+    const parsed = parseCsdnDraftAnchor(input.url)
+    if (!parsed || parsed.draftId !== input.draftId) {
+      return this.transitionError('恢复后的页面不能证明是原平台草稿')
+    }
+    const expectedSnapshot = publishing.draft?.platformSnapshot
+    if (!expectedSnapshot || !input.snapshot) {
+      return this.evidenceRequired('草稿恢复缺少可持久化的完整平台快照')
+    }
+    if (
+      input.snapshot.draftId !== input.draftId ||
+      input.snapshot.snapshotHash !== expectedSnapshot.snapshotHash ||
+      input.snapshot.platformAccountId !== expectedSnapshot.platformAccountId ||
+      input.snapshot.bodyStructureHash !== expectedSnapshot.bodyStructureHash ||
+      input.snapshot.saveState !== 'saved' ||
+      !input.snapshot.imageEnumerationComplete
+    ) {
+      return this.transitionError('恢复后的账号、正文、全部图片或保存状态与持久快照不一致')
+    }
+    if (!/^[a-f0-9]{64}$/u.test(input.evidenceHash)) {
+      return this.evidenceRequired('草稿恢复必须附带当前草稿箱和编辑器证据')
+    }
+    const now = this.timestamp()
+    const writePermit = {
+      id: randomUUID(),
+      recoveryOperationId: recovery.operationId,
+      executionGeneration: input.executionGeneration,
+      draftId: input.draftId,
+      tabId: input.tabId,
+      browserViewRuntimeGeneration: input.browserViewRuntimeGeneration,
+      webContentsId: input.webContentsId,
+      playwrightConnectionGeneration: input.playwrightConnectionGeneration,
+      playwrightPageBindingGeneration: input.playwrightPageBindingGeneration,
+      snapshotHash: input.snapshot.snapshotHash,
+      issuedAt: now,
+    }
+    return this.persistAffair({
+      ...found.affair,
+      articlePublishing: {
+        ...publishing,
+        draft: {
+          ...publishing.draft,
+          platformDraftId: input.draftId,
+          url: parsed.url,
+          normalizedTitle: input.snapshot.normalizedTitle,
+          bodyStructureHash: input.snapshot.bodyStructureHash,
+          platformSnapshot: input.snapshot,
+          lastVerifiedAt: now,
+          recovery: {
+            ...recovery,
+            status: 'verified',
+            verifiedAt: now,
+            evidenceHash: input.evidenceHash,
+            platformAccountId: input.snapshot.platformAccountId,
+            snapshotHash: input.snapshot.snapshotHash,
+            writePermit,
+          },
+        },
+      },
+      events: this.appendEvent(
+        found.affair,
+        this.event(
+          'node-status-changed',
+          `已从当前账号草稿列表恢复原草稿 ${input.draftId}，写入许可已绑定当前页面 Runtime`,
+          now,
+          { nodeId: found.attempt.nodeId, attemptId: found.attempt.id },
+        ),
+      ),
+      updatedAt: now,
+    })
+  }
+
+  private async refreshArticlePublishingWriteSnapshotNow(input: {
+    affairId: string
+    attemptId: string
+    executionGeneration: number
+    browserTaskRunId: string
+    permitId?: string
+    previousSnapshotHash?: string
+    snapshot: NonNullable<ArticlePublishingState['draft']>['platformSnapshot']
+  }): Promise<WebAffairOperationResult<WebAffair>> {
+    const found = this.findAttempt(input.affairId, input.attemptId)
+    const publishing = found?.affair.articlePublishing
+    if (!found || !publishing || found.affair.kind !== 'article-publishing') {
+      return this.notFound('文章发布写后快照事务不存在')
+    }
+    if (
+      !input.snapshot ||
+      found.attempt.status !== 'running-ai' ||
+      publishing.execution.status !== 'running' ||
+      found.attempt.executionGeneration !== input.executionGeneration ||
+      publishing.execution.currentGeneration !== input.executionGeneration ||
+      found.attempt.browserTaskRunId !== input.browserTaskRunId
+    ) {
+      return this.transitionError('写后快照不属于当前活动发布代次')
+    }
+    if (
+      !publishing.draft?.platformDraftId ||
+      input.snapshot.draftId !== publishing.draft.platformDraftId ||
+      input.snapshot.saveState !== 'saved' ||
+      !input.snapshot.imageEnumerationComplete
+    ) {
+      return this.evidenceRequired('写后页面未形成同一草稿的完整已保存快照')
+    }
+    const previousSnapshot = publishing.draft.platformSnapshot
+    if (
+      previousSnapshot &&
+      previousSnapshot.platformAccountId !== input.snapshot.platformAccountId
+    ) {
+      return this.transitionError('写后页面的平台账号发生变化，拒绝换发写入许可')
+    }
+    for (const asset of publishing.assets) {
+      if (asset.kind !== 'local' || asset.status !== 'uploaded') continue
+      const image = input.snapshot.images.find((candidate) => candidate.url === asset.platformUrl)
+      if (!image || !asset.platformContentHash || image.contentHash !== asset.platformContentHash) {
+        return this.transitionError(`写后快照不能证明已上传图片仍存在：${asset.displayPath}`)
+      }
+    }
+    const recovery = publishing.draft.recovery
+    let nextRecovery = recovery
+    if (recovery?.executionGeneration === input.executionGeneration) {
+      const permit = recovery.writePermit
+      if (
+        recovery.status !== 'verified' ||
+        !permit ||
+        permit.id !== input.permitId ||
+        permit.snapshotHash !== input.previousSnapshotHash
+      ) {
+        return this.transitionError('恢复写入许可已变化，拒绝用写后页面覆盖持久快照')
+      }
+      nextRecovery = {
+        ...recovery,
+        snapshotHash: input.snapshot.snapshotHash,
+        writePermit: {
+          ...permit,
+          snapshotHash: input.snapshot.snapshotHash,
+          issuedAt: this.timestamp(),
+        },
+      }
+    }
+    const now = this.timestamp()
+    return this.persistAffair({
+      ...found.affair,
+      articlePublishing: {
+        ...publishing,
+        draft: {
+          ...publishing.draft,
+          normalizedTitle: input.snapshot.normalizedTitle,
+          bodyStructureHash: input.snapshot.bodyStructureHash,
+          platformSnapshot: input.snapshot,
+          lastVerifiedAt: now,
+          ...(nextRecovery ? { recovery: nextRecovery } : {}),
+        },
+      },
       updatedAt: now,
     })
   }
@@ -3512,6 +3856,9 @@ export class WebAffairService {
     }
     if (input.status === 'uploaded' && reporter.trustedPageEvidence?.kind !== 'asset-uploaded') {
       return this.evidenceRequired('图片上传成功必须由当前 CSDN 页面适配器读回并核验')
+    }
+    if (input.status === 'uploaded' && !reporter.trustedPageEvidence?.platformContentHash) {
+      return this.evidenceRequired('图片上传成功必须保存平台实际图片内容哈希')
     }
     if (input.status === 'uploading' && reporter.trustedPageEvidence?.kind !== 'asset-absent') {
       return this.evidenceRequired('开始上传前必须由当前 CSDN 页面适配器证明图片尚不存在')
@@ -3614,6 +3961,10 @@ export class WebAffairService {
             ...asset,
             status: nextStatus,
             platformUrl: input.status === 'uploaded' ? input.platformUrl : asset.platformUrl,
+            platformContentHash:
+              input.status === 'uploaded'
+                ? reporter.trustedPageEvidence?.platformContentHash
+                : asset.platformContentHash,
             verifiedAt: input.status === 'uploaded' ? now : asset.verifiedAt,
             uploadAttempts,
           }
@@ -3698,6 +4049,49 @@ export class WebAffairService {
       found.attempt.browserTaskRunId !== browserTaskRunId
     ) {
       return this.transitionError('副作用授权不属于当前运行代次')
+    }
+    const activeBrowserBinding = found.attempt.runtimeBindings.find(
+      (binding): binding is Extract<WebAffairRuntimeBinding, { kind: 'browser-task' }> =>
+        binding.kind === 'browser-task' &&
+        binding.status === 'active' &&
+        binding.browserTaskRunId === browserTaskRunId,
+    )
+    const recovery = publishing.draft?.recovery
+    if (recovery?.executionGeneration === executionGeneration) {
+      const permit = recovery.writePermit
+      if (
+        recovery.status !== 'verified' ||
+        !permit ||
+        !publishing.draft?.platformSnapshot ||
+        permit.snapshotHash !== publishing.draft.platformSnapshot.snapshotHash ||
+        !activeBrowserBinding ||
+        permit.recoveryOperationId !== recovery.operationId ||
+        permit.executionGeneration !== executionGeneration ||
+        permit.tabId !== activeBrowserBinding.tabId ||
+        permit.browserViewRuntimeGeneration !== activeBrowserBinding.browserViewRuntimeGeneration ||
+        permit.webContentsId !== activeBrowserBinding.webContentsId ||
+        permit.playwrightConnectionGeneration !==
+          activeBrowserBinding.playwrightConnectionGeneration ||
+        permit.playwrightPageBindingGeneration !==
+          activeBrowserBinding.playwrightPageBindingGeneration
+      ) {
+        return this.transitionError('当前页面没有有效的草稿恢复写入许可')
+      }
+    }
+    const unresolvedHistoricalEffect = publishing.sideEffects.find(
+      (effect) =>
+        effect.attemptId === attemptId &&
+        effect.executionGeneration < executionGeneration &&
+        ['reserved', 'dispatched', 'result-unknown'].includes(effect.status) &&
+        ((kind === 'save-draft' && effect.kind === 'save-draft') ||
+          (kind === 'upload-asset' &&
+            effect.kind === 'upload-asset' &&
+            effect.targetId.split(':', 1)[0] === targetId.split(':', 1)[0])),
+    )
+    if (unresolvedHistoricalEffect) {
+      return this.transitionError(
+        `旧执行代次仍有未核验的 ${unresolvedHistoricalEffect.kind} 副作用，禁止重复写入`,
+      )
     }
     const key = `${affairId}:${attemptId}:g${executionGeneration}:${kind}:${targetId}`
     const existing = publishing.sideEffects.find((effect) => effect.key === key)
