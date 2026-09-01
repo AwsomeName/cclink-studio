@@ -79,13 +79,27 @@ export async function openRequestedBrowserTab(request: BrowserOpenTabRequest): P
       return false
     }
     const mode = getBrowserTabMode(tab)
-    return hasRequestedProfile
-      ? tab.browserProfile === request.profileId && (mode === 'account' || mode === 'account-draft')
-      : mode === 'ordinary'
+    if (!hasRequestedProfile) return mode === 'ordinary'
+    if (
+      tab.browserProfile !== request.profileId ||
+      (mode !== 'account' && mode !== 'account-draft')
+    ) {
+      return false
+    }
+    return !request.accountId || tab.webResourceRef?.accountId === request.accountId
   }
 
   const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId)
   if (!request.forceNew && activeTab && isReusableRequestTarget(activeTab)) {
+    return
+  }
+
+  const preferredBrowserTab =
+    !request.forceNew && request.sourceTabId
+      ? tabState.tabs.find((tab) => tab.id === request.sourceTabId && isReusableRequestTarget(tab))
+      : undefined
+  if (preferredBrowserTab) {
+    tabState.activateTab(preferredBrowserTab.id)
     return
   }
 

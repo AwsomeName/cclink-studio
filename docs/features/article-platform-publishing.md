@@ -1,8 +1,9 @@
 # Markdown 文章平台发布
 
-> 状态：发布 Runtime 系统性收敛已在当前工作树实现并通过自动工程门禁；已发布版本仍未包含，
-> 真实 CSDN 端到端发布仍待验收。
-> 最后更新：2026-08-30。
+> 状态：发布 Runtime 收敛和平台草稿锚点已随 v0.1.79 发布；当前工作树已补齐后台启动、
+> 全局原子发布租约、Tab/Agent 持久投影和 `csdn@1` 确定性读回门禁。自动工程门禁通过后仍需
+> 真人验收真实 CSDN 中断恢复。
+> 最后更新：2026-09-01。
 > 关联事实源：`docs/architecture.md`、`docs/features/ai-web-affairs-agent.md`、
 > `docs/features/browser-automation.md`、`docs/features/platform-automation.md`、
 > `docs/features/markdown-wysiwyg.md`。
@@ -30,6 +31,68 @@
 断点恢复状态和 Agent/Browser 启动骨架，但不代表真实 CSDN 发布闭环已经交付。若需要改变架构
 宪法或既有暂停范围，仍需先更新事实源并按要求提交 ADR。
 
+## 产品逻辑：一条发布任务到底是什么
+
+用户只需要理解一件事：**一条发布任务始终绑定一篇本地文稿、一个网站账号和网站上的同一篇
+平台草稿。** 左侧 Browser Tab 是 Agent 真正操作的网页现场，右侧 Agent Panel 是该现场唯一的
+执行者与执行记录；文章发布 Tab 只负责配置、进度、卡点和恢复入口。
+
+### 正常开始
+
+1. 用户在文章发布 Tab 选择 Markdown、CSDN 账号和平台字段，点击“开始执行”。
+2. Studio 冻结本次输入并创建持久 Attempt，然后激活本 Attempt 唯一绑定的可见 Browser Tab。
+3. Studio 为这个 Attempt 启动专属 Agent Run 和 BrowserTask。右侧必须显示这个 Agent，且它只能
+   操作左侧当前绑定的 Browser Tab，不能另开隐藏页面完成发布。
+4. CSDN 产生带数字 ID 的草稿页后，main 在第一个填写、上传或保存动作之前，把该 `draftId` 和
+   规范化草稿 URL 持久化到发布事务。此后全部检查点、图片映射和网页副作用都属于这篇草稿。
+
+### 中断与继续
+
+1. Agent、BrowserTask、CDP、Browser Tab 或 App 生命周期中断时，运行中的 Attempt 必须离开
+   “执行中”，进入“待核验”“已中断”“待人工”或“结果未知”，不能留下没有真实执行者的假运行。
+2. 用户点击“从中断处继续”后，Studio 先校验冻结文稿、图片、账号和适配器版本，再恢复网页；
+   **网页恢复成功是启动新 Agent 的前置条件。**
+3. 已记录草稿锚点时，Studio 必须优先恢复该 Attempt 上一次绑定的 Browser Tab；原 Tab 已不存在时
+   才可复用同账号 Tab，并导航到原 `draftId` 重新核验。只有确认仍是同一篇草稿后，才创建新
+   generation 的 Agent Run 和 BrowserTask。
+4. 新 Agent 从最早一个尚未核验完成的检查点继续。已核验图片不得重传；派发后结果未知的上传、
+   保存或发布必须先观察平台结果，不能盲目重放。
+5. 当前页是另一篇草稿、空白编辑器、内容管理页或未知页面时，任何填写、上传、保存和发布动作都
+   必须在 Playwright 派发前被拒绝。系统不得为了“继续跑”而猜一篇草稿或静默新建文章。
+
+### 历史任务没有草稿锚点时
+
+v0.1.79 之前创建的任务可能已经产生平台写入，却没有保存 `draftId`。对这种历史数据，Studio 不能
+凭检查点或 Agent 文本猜测是哪篇 CSDN 草稿：
+
+- Studio 优先恢复旧 Attempt 上一次绑定的 Browser Tab；如果用户已在该 Tab 打开原数字草稿页，
+  点击“从中断处继续”时，main 可以把该页一次性补录为草稿锚点，再启动 Agent。
+- 如果当前页不能证明是原数字草稿，恢复必须停止并提示用户打开原草稿；不得导航到通用编辑器，
+  不得创建新稿，也不得启动 Agent 后让它自行搜索和猜测。
+- 这是旧数据缺少关键事实时的一次性兼容路径，不是新任务的正常操作步骤。v0.1.79 及以后创建的
+  新任务应在首次平台写入前自动记录锚点，后续恢复不要求用户手工找稿。
+
+### Tab 与右侧 Agent 的可见规则
+
+- 启动或恢复成功后，主区域自动显示绑定 Browser Tab，右侧自动显示同一 Attempt 的 Agent 会话和
+  BrowserTask 活动。
+- 用户切换 Browser Tab 时，右侧跟随该 Tab 的真实任务绑定切换；没有绑定的普通网页不得继承上一个
+  发布 Agent。
+- 用户切回文章发布控制 Tab 时，可以查看本任务进度，但控制 Tab 不能伪装成网页执行现场，也不能
+  把别的 Tab 或默认 Agent 显示为本任务执行者。
+- 如果恢复在网页核验阶段失败，右侧不得显示一个“正在执行”的新 Agent；文章发布 Tab 必须显示
+  可操作的失败原因和下一步。
+
+### 用户验收口径
+
+“恢复正确”不等于按钮可点、Agent 有输出或 Browser Tab 被打开。只有下面五件事同时成立才算：
+
+1. 恢复前后是同一个持久 Attempt，execution generation 已更新；
+2. 左侧 URL 对应同一个平台 `draftId`；
+3. 右侧显示新 generation 的专属 Agent 和绑定 BrowserTask；
+4. 已核验步骤和图片没有重复执行；
+5. 串到其他草稿或无法确认结果时，系统停止而不是继续写。
+
 ## 用户现在能做什么、还不能做什么
 
 用户现在可以从独立“文章发布”入口新建专用 Tab，选择当前工作空间内的 Markdown，自动识别并
@@ -37,10 +100,37 @@
 保存为可从历史恢复的发布事务。点击开始后会打开绑定账号的可见 Browser Tab 和专属 Agent，并把
 检查点、单图等待/核验/三次尝试上限、原 Attempt 恢复以及框架关键日志保存在事务中。
 
-当前已实现 CSDN 受控 Origin 集合、Playwright 控件识别、三态动作分类、常规单篇发布防重放
-标记，以及人工接管后恢复同一 Attempt。用户现在仍不能被承诺稳定完成真实 CSDN 的
+当前已实现 CSDN 受控 Origin 集合、版本化页面探针、Adapter 签发 selector、图片内容哈希读回、
+草稿保存状态和公开文章 URL/标题读回、常规单篇发布防重放，以及人工接管后恢复同一 Attempt。
+用户现在仍不能被承诺稳定完成真实 CSDN 的
 正文填写、图片上传、草稿保存、最终发布和结果 URL 核验：尚缺一次新版本在真实 CSDN 页面上的
 完整验收证据。页面不在适配器识别范围、法律/版权声明、风控或结果未知时仍必须停下转人工。
+
+### 当前代码与目标产品逻辑的差距
+
+截至 2026-09-01，代码已经有持久 Attempt、固定检查点、Runtime identity、草稿锚点、写前副作用
+标记和独立的 `CsdnPublishingAdapter`。Agent 每次页面写入前必须调用 main 的页面探针，且只能使用
+本次探针签发的唯一 selector；猜测 selector、未知页面形态和过期页面证据会在 Playwright 派发前被
+拒绝。图片 `uploaded`、检查点 `completed` 和最终 `succeeded` 不再接受 Agent 自报，必须携带 main
+依据当前 CSDN 页面生成的短时证据。
+
+因此必须区分两层完成度：
+
+- **底层事务与隔离层**：负责同一 Attempt、同一草稿、同一账号、同一可见 Tab、唯一 Agent/BrowserTask
+  owner，以及中断后的 fail-closed 恢复；本轮代码审查继续修正这一层。
+- **CSDN 确定性执行层**：版本化页面探针已实现编辑器/管理页/公开文章识别、唯一控件 selector、
+  图片内容哈希、保存状态和最终 URL/标题读回；未知 DOM 明确 fail closed。仍需在真实 CSDN 完成
+  中断恢复验收，在此之前不能把自动测试通过写成“真实站点稳定闭环”。
+
+本轮同时关闭四个此前会互相放大的底层缺口：`startTask` 在 Runtime 持久绑定后立即返回，Agent 在
+后台继续且终止按钮可用；所有发布任务通过同一个主进程 mutation queue 原子竞争唯一执行租约；
+`result-unknown` 的图片和检查点在恢复代次分别进入 `reconciling` / `needs-reconcile`，当前页面找到
+结果就认领旧副作用，确定不存在才签发新动作；Browser Tab 切换和冷重启按
+`{tabId, affairId, attemptId, generation, conversationId}` 恢复右侧 Agent，不再用最后一个会话猜归属。
+
+这也是后续评审的止损线：如果故障发生在 Tab、账号、Attempt 或草稿归属，修状态隔离；如果归属都
+正确但 Agent 不知道页面当前实际完成了什么，应补适配器探针和证据读取，不能继续靠增加 Prompt、延时
+或宽松重试掩盖。
 
 ### 2026-08-30 · “开始发布没有反应”工程修复已实现，产品验收未关闭
 
@@ -59,7 +149,8 @@ v0.1.68 修复了“网页或 Agent 启动失败后 Attempt 留在 `running`”�
 - 当前工作树可以称为工程修复候选通过，不得描述成已发布或真实用户闭环完成；
 - 最小关闭门禁仍必须在真实 CSDN 任务中证明多 BrowserTask、Agent 无终态、Tab/CDP 断线、重启、
   旧事件迟到和最终动作结果未知均能安全收敛；
-- UI 已提供“检查运行状态”“继续等待”“终止任务”和“待核验”原因；正式版本交付前旧版本用户仍不会获得这些入口。
+- UI 已提供“检查运行状态”“继续等待”“终止任务”和“待核验”原因；这些入口后来已进入正式版本，
+  但仍不能代替真实 CSDN 恢复验收。
 
 ### 2026-08-28 · 账号任务限制审计与最小修复清单
 
@@ -557,6 +648,86 @@ P1–P3 的真实 CSDN 验收和受影响 `pnpm verify`/Electron smoke 全部通
 - 已保存账号登录过期、验证码、风控和网页改版分别怎样稳定进入同一个人工卡点；
 - 发布动作后连接中断时，怎样从文章列表、页面 URL 或平台可见结果证明“已发布”或“尚未发布”；
 - 哪个允许自动化测试的 CSDN 账号、测试文章和无敏感图片用于真人端到端验收。
+
+## 2026-09-01 现场问题账与底层修复边界
+
+### 用户看到的产品必须始终是同一件事
+
+- 左侧是**账号浏览器 Tab**：它显示 CSDN 真实页面，也是 Agent 唯一允许操作的页面。
+- 右侧是**发布 Agent**：它显示该发布事务当前 Run 的对话、工具调用、等待、失败和终态，不得显示
+  空白默认助手，也不得借当前可见 Tab 猜另一个会话。
+- 中间的“文章发布”Tab 是**持久控制面**：它保存同一个 Affair/Attempt 的检查点、草稿锚点、图片
+  上传结果和恢复按钮。关闭页面、Agent 退出或 App 重启，都不能把这件事务变成另一件事务。
+- “恢复”不是重新发布。恢复必须保留 Affair 和 Attempt，递增 execution generation，重新绑定新的
+  Agent Run、BrowserTask 与原草稿，再从最后一个可信检查点先对账后继续。
+- BrowserTask 和 Agent Run 是一次性执行者，不是发布状态 owner；`WebAffairService` 才是跨重启事实源。
+
+```mermaid
+flowchart LR
+  P["文章发布 Tab<br/>持久控制面"] --> A["同一 Affair / Attempt"]
+  A --> G["当前 execution generation"]
+  G --> R["右侧 Agent Run"]
+  G --> B["左侧 BrowserTask / Browser Tab"]
+  B --> D["同一 CSDN 草稿锚点"]
+  R -->|"带主进程签发身份的回报"| A
+  B -->|"动作凭证与页面重观测"| A
+```
+
+### 本轮确认的问题
+
+1. **Runtime 绑定时序倒置。** 旧代码在 `agentBridge.sendMessage()` 完整返回后才写 Agent、BrowserTask
+   和 Tab 的持久 binding；Agent 的工具调用却发生在 send 进行中。等价于“先执行，跑完后才登记谁在
+   执行”，运行中无法用持久事实判断 owner，恢复和右侧投影自然容易失真。
+2. **Agent 回报缺少可信执行身份。** 回报参数只有模型可填写的 `affairId/attemptId`；同一 Attempt
+   恢复后仍复用 Attempt ID，旧 generation 的晚到工具调用可能污染新 Run。
+3. **检查点不是状态机。** 旧实现允许任意步骤直接写任意状态、跳步、倒退；描述虽说完成要证据，
+   Schema 和 service 并未强制。
+4. **“已发布”可以绕过真实发布链。** 旧 `finishAttemptNow()` 只要求一个 URL 和本地图片已标记上传，
+   没有要求全部检查点完成、当前 generation 的 publish 副作用已派发并核验，也没有要求 URL 来自
+   `verify-publication`。
+5. **图片成功只信 Agent 文本。** 状态顺序有部分约束，但 `uploaded` 不要求当前 generation 存在已消费
+   的上传副作用凭证；恢复中的 `reconciling` 也可能被直接改写。
+6. **发布 Agent 权限过宽。** 发布会话继承 `all` scope 的整套 MCP 工具；现场日志出现了与发布无关的
+   Android 工具探测，增加噪声和错误路径。
+7. **右侧投影依赖内存 BrowserTask。** BrowserTask 不跨重启；仅靠“当前可见 Tab → 内存任务”不能在
+   重启后重建该 Tab 对应的发布 conversation。此前的 UI 修复只能防串台，不能替代持久映射。
+8. **`csdn@1` 仍只是动作安全策略，不是完整页面适配器。** 当前没有实现本文定义的确定性
+   `probeEditor/readDraftSnapshot/verifyPublished`；Agent 仍会在真实 CSDN DOM 上猜 selector。该项是
+   真实发布稳定性的剩余产品阻塞，不能用状态机测试冒充已完成。
+
+### 本轮已经落实的不变量
+
+- Agent 获得工具前，main 必须先创建 BrowserTask、写入完整 Runtime binding 并更新 BrowserTask
+  correlation；绑定失败则 Agent 不得开始。
+- main 为发布 MCP session 签发不可由模型覆盖的发布身份：`workspaceId + affairId + attemptId +
+executionGeneration + launchOperationId + conversationId + agentRunId`。任何字段不匹配、binding 非
+  active 或运行已离开 `running-ai/running`，回报全部 fail-closed。
+- renderer 的 `reportCheckpoint/reportAsset` IPC 已移除；renderer 只能发开始、检查、继续等待和终止
+  等用户命令，不能伪造执行进度。
+- 检查点只允许更新 `currentStepId`，并遵守单向状态转换；观察、核验、完成和结果未知必须有证据，
+  失败与人工卡点必须有结构化原因。
+- 图片只能在 `upload-assets` 步骤更新；恢复态不能由 Agent 自设；`uploaded` 必须对应当前 generation
+  已消费的 `upload-asset` 凭证、平台 URL 和页面核验证据。
+- 正文、字段、显式保存和发布步骤完成前，必须找到对应已派发/已核验的副作用凭证。
+- `verify-publication` 完成必须给出 `https://blog.csdn.net/<user>/article/details/<id>` 形态的 URL，
+  并把当前 publish 凭证核验为 verified；最终 `succeeded/published` 还要再次核对全部检查点、URL 和
+  publish 凭证。
+- 发布 Agent 只开放可见 Browser、只读文稿、当前事务读取、发布进度回报和 Attempt 收尾工具；禁用
+  backend 原生文件、Shell 和网络工具。
+- 右侧 Agent 先按当前 BrowserTask 找 conversation；内存 BrowserTask 因重启丢失时，再从持久 Affair
+  的当前 Attempt 精确匹配 `tabId` 并恢复 `conversationId`。找不到精确匹配时保持空白，不猜其他会话。
+
+### 仍未关闭，禁止误报
+
+- 必须实现真正的 CSDN 页面适配器 probe、稳定字段定位、草稿快照读取和发布结果读取，替代运行时
+  selector 猜测；页面版本未知时转人工。
+- 仍需在真实 App 重启场景验收右侧 Agent 的持久会话投影，确认已终态 Run 的历史和状态都能恢复，
+  且切换普通同账号 Tab 时不会误吸附发布会话。
+- 启动互斥目前以事务队列为主；仍需用跨 Affair 同账号并发现场测试证明不会同时占用同一 Profile/Tab。
+- 历史无草稿锚点的部分执行任务，只能由用户明确打开原数字草稿后补绑定；这是一项人工断言，不是
+  系统自动证明。
+- 在真实 CSDN 完成“半途退出 → App 重启 → 原草稿对账 → 继续 → 发布后 URL 核验”，并验证左侧 Tab、
+  右侧 Agent 和发布控制 Tab 三者全程对应同一 Attempt。完成前只能声明本轮底层门禁已加固。
 
 ## 明确不做
 

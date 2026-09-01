@@ -92,6 +92,7 @@ export const browserReconcileViewsSchema = z
           .object({
             tabId: browserIdentifierSchema,
             profileId: browserProfileIdSchema,
+            accountId: browserOptionalIdentifierSchema.optional(),
           })
           .strict(),
       )

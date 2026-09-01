@@ -78,6 +78,43 @@ const TERMINAL_ATTEMPT_STATUSES = new Set<WebAffairAttempt['status']>([
   'interrupted',
 ])
 
+const ARTICLE_CHECKPOINT_TRANSITIONS: Readonly<
+  Record<
+    ArticlePublishingState['checkpoints'][number]['status'],
+    ReadonlySet<ArticlePublishingState['checkpoints'][number]['status']>
+  >
+> = {
+  pending: new Set(['running']),
+  running: new Set([
+    'waiting-platform',
+    'verifying',
+    'retryable-failed',
+    'result-unknown',
+    'waiting-human',
+    'failed',
+  ]),
+  'waiting-platform': new Set([
+    'verifying',
+    'retryable-failed',
+    'result-unknown',
+    'waiting-human',
+    'failed',
+  ]),
+  verifying: new Set([
+    'completed',
+    'retryable-failed',
+    'result-unknown',
+    'waiting-human',
+    'failed',
+  ]),
+  'retryable-failed': new Set(['running', 'verifying', 'waiting-human', 'failed']),
+  'result-unknown': new Set(),
+  'needs-reconcile': new Set(['running', 'verifying', 'result-unknown', 'waiting-human', 'failed']),
+  'waiting-human': new Set(),
+  failed: new Set(),
+  completed: new Set(),
+}
+
 type ArticlePublishingLifecycleTarget =
   | 'preparing'
   | 'running'
@@ -88,6 +125,24 @@ type ArticlePublishingLifecycleTarget =
   | 'failed'
   | 'result-unknown'
   | 'published'
+
+export interface ArticlePublishingAgentReporter {
+  workspaceId: string
+  affairId: string
+  attemptId: string
+  executionGeneration: number
+  launchOperationId: string
+  conversationId: string
+  agentRunId: string
+  trustedPageEvidence?: {
+    adapterId: 'csdn'
+    adapterVersion: 1
+    evidenceHash: string
+    observedAt: string
+    url: string
+    kind: 'checkpoint' | 'asset-absent' | 'asset-uploaded' | 'published'
+  }
+}
 
 const ARTICLE_EXECUTION_STATUSES_BY_ATTEMPT: Partial<
   Record<WebAffairAttempt['status'], ArticlePublishingState['execution']['status'][]>
@@ -237,6 +292,61 @@ export class WebAffairService {
     )
   }
 
+  acquireArticlePublishingAttempt(affairId: string, workspaceId: string) {
+    return this.enqueueScoped(affairId, workspaceId, async () => {
+      const affair = this.findAffair(affairId)
+      const publishing = affair?.articlePublishing
+      if (!affair || !publishing || affair.kind !== 'article-publishing') {
+        return this.notFound('文章发布事务不存在')
+      }
+      const conflictingAffair = this.snapshot?.affairs.find(
+        (candidate) =>
+          candidate.id !== affairId &&
+          candidate.kind === 'article-publishing' &&
+          candidate.articlePublishing &&
+          ['preparing', 'running', 'checking-runtime', 'waiting-human'].includes(
+            candidate.articlePublishing.execution.status,
+          ),
+      )
+      if (conflictingAffair) {
+        return this.invalid(
+          `另一条文章发布任务正在占用 Browser/Agent：${conflictingAffair.title}；请先完成或终止它`,
+        )
+      }
+
+      const currentAttempt = publishing.execution.currentAttemptId
+        ? affair.attempts.find((attempt) => attempt.id === publishing.execution.currentAttemptId)
+        : undefined
+      let prepared: WebAffairOperationResult<WebAffair>
+      if (currentAttempt?.status === 'interrupted') {
+        prepared = await this.resumeArticlePublishingAttemptNow(affairId, currentAttempt.id)
+      } else if (currentAttempt && publishing.execution.status === 'waiting-human') {
+        prepared = await this.resumeArticlePublishingAfterHandoffNow(affairId, currentAttempt.id)
+      } else if (
+        currentAttempt &&
+        !['failed', 'cancelled', 'succeeded'].includes(currentAttempt.status)
+      ) {
+        return this.invalid('当前发布 Attempt 已经在运行或等待处理')
+      } else {
+        const node = affair.flow.nodes[0]
+        if (!node) return this.invalid('文章发布执行节点不存在')
+        prepared = await this.startAttemptNow(
+          {
+            workspaceRef: affair.workspaceRef,
+            affairId,
+            nodeId: node.id,
+            accountId: publishing.accountId,
+          },
+          workspaceId,
+        )
+      }
+      if (!prepared.success) return prepared
+      const attemptId = prepared.data.articlePublishing?.execution.currentAttemptId
+      if (!attemptId) return this.invalid('发布 Attempt 创建失败')
+      return this.markArticlePublishingAttemptStartedNow(affairId, attemptId)
+    })
+  }
+
   interruptArticlePublishingLaunch(
     affairId: string,
     attemptId: string,
@@ -361,9 +471,13 @@ export class WebAffairService {
   reportArticlePublishingCheckpoint(
     input: ReportArticlePublishingCheckpointInput,
     workspaceId: string,
+    reporter: ArticlePublishingAgentReporter,
   ) {
+    if (reporter.workspaceId !== workspaceId) {
+      return Promise.resolve(this.transitionError('发布回报的工作空间身份不匹配'))
+    }
     return this.enqueueScoped(input.affairId, workspaceId, () =>
-      this.reportArticlePublishingCheckpointNow(input),
+      this.reportArticlePublishingCheckpointNow(input, reporter),
     )
   }
 
@@ -388,9 +502,16 @@ export class WebAffairService {
     )
   }
 
-  reportArticlePublishingAsset(input: ReportArticlePublishingAssetInput, workspaceId: string) {
+  reportArticlePublishingAsset(
+    input: ReportArticlePublishingAssetInput,
+    workspaceId: string,
+    reporter: ArticlePublishingAgentReporter,
+  ) {
+    if (reporter.workspaceId !== workspaceId) {
+      return Promise.resolve(this.transitionError('发布回报的工作空间身份不匹配'))
+    }
     return this.enqueueScoped(input.affairId, workspaceId, () =>
-      this.reportArticlePublishingAssetNow(input),
+      this.reportArticlePublishingAssetNow(input, reporter),
     )
   }
 
@@ -495,8 +616,17 @@ export class WebAffairService {
     return this.enqueueScoped(input.affairId, workspaceId, () => this.confirmFinalActionNow(input))
   }
 
-  finishAttempt(input: FinishWebAffairAttemptInput, workspaceId: string) {
-    return this.enqueueScoped(input.affairId, workspaceId, () => this.finishAttemptNow(input))
+  finishAttempt(
+    input: FinishWebAffairAttemptInput,
+    workspaceId: string,
+    reporter?: ArticlePublishingAgentReporter,
+  ) {
+    if (reporter && reporter.workspaceId !== workspaceId) {
+      return Promise.resolve(this.transitionError('发布回报的工作空间身份不匹配'))
+    }
+    return this.enqueueScoped(input.affairId, workspaceId, () =>
+      this.finishAttemptNow(input, reporter),
+    )
   }
 
   scheduleCheck(input: ScheduleWebAffairCheckInput, workspaceId: string) {
@@ -1215,12 +1345,17 @@ export class WebAffairService {
 
   private async finishAttemptNow(
     rawInput: FinishWebAffairAttemptInput,
+    reporter?: ArticlePublishingAgentReporter,
   ): Promise<WebAffairOperationResult<WebAffair>> {
     const parsed = finishWebAffairAttemptInputSchema.safeParse(rawInput)
     if (!parsed.success) return this.invalid('Attempt 结果参数无效')
     const input = parsed.data
     const found = this.findAttempt(input.affairId, input.attemptId)
     if (!found) return this.notFound('办理 Attempt 不存在')
+    if (found.affair.articlePublishing) {
+      const reporterError = this.validateArticlePublishingReporter(found, reporter)
+      if (reporterError) return this.transitionError(reporterError)
+    }
     if (TERMINAL_ATTEMPT_STATUSES.has(found.attempt.status))
       return this.transitionError('Attempt 已经结束')
     const node = found.affair.flow.nodes.find((item) => item.id === found.attempt.nodeId)!
@@ -1235,10 +1370,28 @@ export class WebAffairService {
       }
     }
     if (input.outcome === 'succeeded' && found.affair.articlePublishing) {
+      if (
+        reporter?.trustedPageEvidence?.kind !== 'published' ||
+        reporter.trustedPageEvidence.url !== input.url
+      ) {
+        return {
+          success: false,
+          error: {
+            code: 'EVIDENCE_REQUIRED',
+            message: '文章发布成功必须由当前 CSDN 页面适配器读回并核验',
+          },
+        }
+      }
       if (!input.url) {
         return {
           success: false,
           error: { code: 'EVIDENCE_REQUIRED', message: '文章发布成功必须取得可复核 URL' },
+        }
+      }
+      if (!isCsdnPublicationUrl(input.url)) {
+        return {
+          success: false,
+          error: { code: 'EVIDENCE_REQUIRED', message: '文章发布 URL 不是可复核的 CSDN 文章地址' },
         }
       }
       if (
@@ -1249,6 +1402,37 @@ export class WebAffairService {
         return {
           success: false,
           error: { code: 'EVIDENCE_REQUIRED', message: '仍有正文图片没有完成后置核验' },
+        }
+      }
+      if (found.affair.articlePublishing.checkpoints.some((item) => item.status !== 'completed')) {
+        return {
+          success: false,
+          error: { code: 'EVIDENCE_REQUIRED', message: '文章发布仍有未完成检查点' },
+        }
+      }
+      const verification = found.affair.articlePublishing.checkpoints.find(
+        (item) => item.stepId === 'verify-publication',
+      )
+      if (
+        verification?.outputRefs?.['publicationUrl'] !== input.url ||
+        found.affair.articlePublishing.publication.status !== 'verifying' ||
+        found.affair.articlePublishing.publication.url !== input.url
+      ) {
+        return {
+          success: false,
+          error: { code: 'EVIDENCE_REQUIRED', message: '发布 URL 尚未经过当前核验步骤确认' },
+        }
+      }
+      const verifiedPublishEffect = found.affair.articlePublishing.sideEffects.find(
+        (effect) =>
+          effect.attemptId === found.attempt.id &&
+          effect.kind === 'publish' &&
+          effect.status === 'verified',
+      )
+      if (!verifiedPublishEffect) {
+        return {
+          success: false,
+          error: { code: 'EVIDENCE_REQUIRED', message: '当前发布动作尚未完成后置核验' },
         }
       }
     }
@@ -2446,7 +2630,7 @@ export class WebAffairService {
             (effect.status === 'dispatched' || effect.status === 'result-unknown'),
         ))
     const checkpoints = publishing.checkpoints.map((checkpoint) =>
-      ['running', 'waiting-platform', 'verifying'].includes(checkpoint.status)
+      ['running', 'waiting-platform', 'verifying', 'result-unknown'].includes(checkpoint.status)
         ? { ...checkpoint, status: 'needs-reconcile' as const, finishedAt: undefined }
         : checkpoint,
     )
@@ -2503,7 +2687,7 @@ export class WebAffairService {
       articlePublishing: {
         ...publishing,
         assets: publishing.assets.map((asset) =>
-          ['uploading', 'waiting-platform', 'verifying'].includes(asset.status)
+          ['uploading', 'waiting-platform', 'verifying', 'result-unknown'].includes(asset.status)
             ? { ...asset, status: 'reconciling' as const }
             : asset,
         ),
@@ -2998,19 +3182,130 @@ export class WebAffairService {
     return false
   }
 
+  private validateArticlePublishingReporter(
+    found: { affair: WebAffair; attempt: WebAffairAttempt },
+    reporter: ArticlePublishingAgentReporter | undefined,
+  ): string | null {
+    const publishing = found.affair.articlePublishing
+    if (!publishing) return '当前事务不是文章发布事务'
+    if (!reporter) return '文章发布状态只能由主进程绑定的当前 Agent Run 回报'
+    if (
+      reporter.affairId !== found.affair.id ||
+      reporter.attemptId !== found.attempt.id ||
+      publishing.execution.currentAttemptId !== found.attempt.id
+    ) {
+      return '发布回报不属于当前事务或 Attempt'
+    }
+    if (
+      reporter.executionGeneration !== found.attempt.executionGeneration ||
+      reporter.executionGeneration !== publishing.execution.currentGeneration ||
+      reporter.launchOperationId !== found.attempt.launchOperationId ||
+      reporter.launchOperationId !== publishing.execution.currentLaunchOperationId
+    ) {
+      return '发布回报来自已失效的执行代次'
+    }
+    if (
+      found.attempt.status !== 'running-ai' ||
+      publishing.execution.status !== 'running' ||
+      found.attempt.conversationId !== reporter.conversationId ||
+      found.attempt.agentRunId !== reporter.agentRunId
+    ) {
+      return '发布回报的 Agent Run 已不再拥有当前事务'
+    }
+    const activeAgentBinding = found.attempt.runtimeBindings.find(
+      (binding) =>
+        binding.kind === 'agent-run' &&
+        binding.status === 'active' &&
+        binding.attemptId === reporter.attemptId &&
+        binding.executionGeneration === reporter.executionGeneration &&
+        binding.launchOperationId === reporter.launchOperationId &&
+        binding.conversationId === reporter.conversationId &&
+        binding.agentRunId === reporter.agentRunId,
+    )
+    return activeAgentBinding ? null : '发布回报没有匹配的活动 Runtime binding'
+  }
+
   private async reportArticlePublishingCheckpointNow(
     input: ReportArticlePublishingCheckpointInput,
+    reporter: ArticlePublishingAgentReporter,
   ): Promise<WebAffairOperationResult<WebAffair>> {
     const found = this.findAttempt(input.affairId, input.attemptId)
     const publishing = found?.affair.articlePublishing
     if (!found || !publishing || found.affair.kind !== 'article-publishing') {
       return this.notFound('文章发布 Attempt 不存在')
     }
+    const reporterError = this.validateArticlePublishingReporter(found, reporter)
+    if (reporterError) return this.transitionError(reporterError)
     if (publishing.execution.currentAttemptId !== input.attemptId) {
       return this.transitionError('报告的 Attempt 不是当前发布事务')
     }
     const checkpoint = publishing.checkpoints.find((item) => item.stepId === input.stepId)
     if (!checkpoint) return this.notFound('文章发布检查点不存在')
+    if (publishing.execution.currentStepId !== input.stepId) {
+      return this.transitionError('只能回报当前文章发布步骤，禁止跳步或回写已完成步骤')
+    }
+    if (!ARTICLE_CHECKPOINT_TRANSITIONS[checkpoint.status].has(input.status)) {
+      return this.transitionError(`文章发布步骤不能从 ${checkpoint.status} 进入 ${input.status}`)
+    }
+    if (
+      ['waiting-platform', 'verifying', 'completed', 'result-unknown'].includes(input.status) &&
+      !input.evidence
+    ) {
+      return this.transitionError('当前步骤状态必须包含重新观察到的页面证据')
+    }
+    if (['retryable-failed', 'waiting-human', 'failed'].includes(input.status) && !input.error) {
+      return this.transitionError('失败或人工卡点必须包含结构化原因')
+    }
+    const eligibleEffects = publishing.sideEffects.filter(
+      (effect) => effect.attemptId === found.attempt.id,
+    )
+    if (input.status === 'completed') {
+      const expectedEvidenceKind =
+        input.stepId === 'verify-publication' ? 'published' : 'checkpoint'
+      if (reporter.trustedPageEvidence?.kind !== expectedEvidenceKind) {
+        return this.evidenceRequired('检查点完成必须附带当前 CSDN 页面适配器证据')
+      }
+      if (
+        input.stepId === 'upload-assets' &&
+        publishing.assets.some((asset) => asset.kind === 'local' && asset.status !== 'uploaded')
+      ) {
+        return this.transitionError('仍有正文图片未完成页面核验，不能完成上传步骤')
+      }
+      const requiredEffect =
+        input.stepId === 'save-draft'
+          ? eligibleEffects.find(
+              (effect) => effect.kind === 'save-draft' && !effect.targetId.startsWith('autosave:'),
+            )
+          : ['fill-body', 'fill-fields'].includes(input.stepId)
+            ? eligibleEffects.find(
+                (effect) =>
+                  effect.kind === 'save-draft' &&
+                  effect.targetId.startsWith(`autosave:${input.stepId}:`),
+              )
+            : input.stepId === 'publish'
+              ? eligibleEffects.find((effect) => effect.kind === 'publish')
+              : undefined
+      if (
+        ['fill-body', 'fill-fields', 'save-draft', 'publish'].includes(input.stepId) &&
+        (!requiredEffect ||
+          !['dispatched', 'result-unknown', 'verified'].includes(requiredEffect.status))
+      ) {
+        return this.transitionError('当前步骤没有匹配的已派发副作用凭证，不能标记完成')
+      }
+      if (input.stepId === 'verify-publication') {
+        const publicationUrl = input.outputRefs?.['publicationUrl']
+        const publishEffect = eligibleEffects.find((effect) => effect.kind === 'publish')
+        if (!publicationUrl || !isCsdnPublicationUrl(publicationUrl)) {
+          return this.transitionError('发布核验必须返回可复核的 CSDN 文章 URL')
+        }
+        if (
+          !publishEffect ||
+          !['dispatched', 'result-unknown', 'verified'].includes(publishEffect.status)
+        ) {
+          return this.transitionError('没有本 Attempt 的发布动作凭证，不能核验发布结果')
+        }
+      }
+    }
     const now = this.timestamp()
     const checkpoints = publishing.checkpoints.map((item) =>
       item.stepId === input.stepId
@@ -3048,18 +3343,37 @@ export class WebAffairService {
             (effect) => effect.kind === 'save-draft',
             'verified',
             now,
+            true,
           )
         : input.status === 'completed' && ['fill-body', 'fill-fields'].includes(input.stepId)
-          ? publishing.sideEffects.map((effect) =>
-              effect.attemptId === found.attempt.id &&
-              effect.executionGeneration === found.attempt.executionGeneration &&
-              effect.kind === 'save-draft' &&
-              effect.targetId.startsWith(`autosave:${input.stepId}:`) &&
-              effect.status === 'dispatched'
-                ? { ...effect, status: 'verified' as const, observedAt: now }
-                : effect,
+          ? this.updateLatestSideEffect(
+              publishing,
+              found.attempt,
+              (effect) =>
+                effect.kind === 'save-draft' &&
+                effect.targetId.startsWith(`autosave:${input.stepId}:`),
+              'verified',
+              now,
+              true,
             )
-          : publishing.sideEffects
+          : input.status === 'completed' && input.stepId === 'verify-publication'
+            ? this.updateLatestSideEffect(
+                publishing,
+                found.attempt,
+                (effect) => effect.kind === 'publish',
+                'verified',
+                now,
+                true,
+              )
+            : publishing.sideEffects
+    const publication =
+      input.status === 'completed' && input.stepId === 'verify-publication'
+        ? {
+            status: 'verifying' as const,
+            url: input.outputRefs?.['publicationUrl'],
+            observedAt: now,
+          }
+        : publishing.publication
     const baseAffair: WebAffair = {
       ...found.affair,
       status:
@@ -3072,6 +3386,7 @@ export class WebAffairService {
         ...publishing,
         checkpoints,
         sideEffects,
+        publication,
         execution: {
           ...publishing.execution,
           status: executionStatus,
@@ -3172,17 +3487,41 @@ export class WebAffairService {
 
   private async reportArticlePublishingAssetNow(
     input: ReportArticlePublishingAssetInput,
+    reporter: ArticlePublishingAgentReporter,
   ): Promise<WebAffairOperationResult<WebAffair>> {
     const found = this.findAttempt(input.affairId, input.attemptId)
     const publishing = found?.affair.articlePublishing
     if (!found || !publishing || found.affair.kind !== 'article-publishing') {
       return this.notFound('文章发布 Attempt 不存在')
     }
+    const reporterError = this.validateArticlePublishingReporter(found, reporter)
+    if (reporterError) return this.transitionError(reporterError)
     if (publishing.execution.currentAttemptId !== input.attemptId) {
       return this.transitionError('报告的 Attempt 不是当前发布事务')
     }
+    if (publishing.execution.currentStepId !== 'upload-assets') {
+      return this.transitionError('当前不在图片上传检查点，拒绝修改图片状态')
+    }
     const target = publishing.assets.find((asset) => asset.id === input.assetId)
     if (!target || target.kind !== 'local') return this.notFound('正文图片不存在')
+    if (input.status === 'reconciling') {
+      return this.transitionError('reconciling 只能由主进程在恢复时设置')
+    }
+    if (input.status !== 'uploading' && !input.evidence) {
+      return this.transitionError('图片状态变化必须包含重新观察到的页面证据')
+    }
+    if (input.status === 'uploaded' && reporter.trustedPageEvidence?.kind !== 'asset-uploaded') {
+      return this.evidenceRequired('图片上传成功必须由当前 CSDN 页面适配器读回并核验')
+    }
+    if (input.status === 'uploading' && reporter.trustedPageEvidence?.kind !== 'asset-absent') {
+      return this.evidenceRequired('开始上传前必须由当前 CSDN 页面适配器证明图片尚不存在')
+    }
+    if (['retryable-failed', 'result-unknown', 'failed'].includes(input.status) && !input.error) {
+      return this.transitionError('图片失败或结果未知必须包含结构化原因')
+    }
+    if (input.status === 'uploading' && target.status === 'reconciling' && !input.evidence) {
+      return this.transitionError('恢复后重新上传前必须先证明页面中不存在已上传结果')
+    }
     const now = this.timestamp()
     const activeAttempt = target.uploadAttempts[target.uploadAttempts.length - 1]
     let uploadAttempts = target.uploadAttempts
@@ -3230,6 +3569,21 @@ export class WebAffairService {
       ) {
         return this.transitionError('图片必须经过页面核验后才能标记成功')
       }
+      if (input.status === 'uploaded') {
+        const allowRecoveredEffect = target.status === 'reconciling'
+        const uploadEffect = publishing.sideEffects.find(
+          (effect) =>
+            effect.attemptId === found.attempt.id &&
+            (allowRecoveredEffect ||
+              effect.executionGeneration === found.attempt.executionGeneration) &&
+            effect.kind === 'upload-asset' &&
+            effect.targetId.startsWith(`${target.id}:`) &&
+            ['dispatched', 'result-unknown', 'verified'].includes(effect.status),
+        )
+        if (!uploadEffect) {
+          return this.transitionError('图片没有匹配的已派发上传凭证，不能标记成功')
+        }
+      }
       if (input.status === 'retryable-failed' && activeAttempt.number >= 3) nextStatus = 'failed'
       uploadAttempts = target.uploadAttempts.map((attempt, index) =>
         index === target.uploadAttempts.length - 1
@@ -3274,8 +3628,21 @@ export class WebAffairService {
               effect.kind === 'upload-asset' && effect.targetId.startsWith(`${target.id}:`),
             'verified',
             now,
+            target.status === 'reconciling',
           )
-        : publishing.sideEffects
+        : input.status === 'uploading' && target.status === 'reconciling'
+          ? this.updateLatestSideEffect(
+              publishing,
+              found.attempt,
+              (effect) =>
+                effect.kind === 'upload-asset' &&
+                effect.targetId.startsWith(`${target.id}:`) &&
+                ['reserved', 'dispatched', 'result-unknown'].includes(effect.status),
+              'rejected',
+              now,
+              true,
+            )
+          : publishing.sideEffects
     const baseAffair: WebAffair = {
       ...found.affair,
       articlePublishing: { ...publishing, assets, sideEffects },
@@ -3519,13 +3886,15 @@ export class WebAffairService {
     matches: (effect: ArticlePublishingState['sideEffects'][number]) => boolean,
     status: ArticlePublishingState['sideEffects'][number]['status'],
     observedAt: string,
+    includePreviousGenerations = false,
   ): ArticlePublishingState['sideEffects'] {
     let targetIndex = -1
     for (let index = publishing.sideEffects.length - 1; index >= 0; index -= 1) {
       const effect = publishing.sideEffects[index]
       if (
         effect.attemptId === attempt.id &&
-        effect.executionGeneration === attempt.executionGeneration &&
+        (includePreviousGenerations ||
+          effect.executionGeneration === attempt.executionGeneration) &&
         matches(effect)
       ) {
         targetIndex = index
@@ -3852,6 +4221,10 @@ export class WebAffairService {
     return { success: false, error: { code: 'INVALID_INPUT', message } }
   }
 
+  private evidenceRequired(message: string): WebAffairOperationResult<never> {
+    return { success: false, error: { code: 'EVIDENCE_REQUIRED', message } }
+  }
+
   private resourceError(message: string): WebAffairOperationResult<never> {
     return { success: false, error: { code: 'INVALID_RESOURCE_REFERENCE', message } }
   }
@@ -3953,5 +4326,18 @@ export class WebAffairService {
         }
       }
     }
+  }
+}
+
+function isCsdnPublicationUrl(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl)
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === 'blog.csdn.net' &&
+      /^\/[^/]+\/article\/details\/\d+\/?$/u.test(url.pathname)
+    )
+  } catch {
+    return false
   }
 }

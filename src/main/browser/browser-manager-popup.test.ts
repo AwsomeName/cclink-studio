@@ -338,11 +338,104 @@ describe('BrowserManager popup adoption', () => {
     )
     manager.reconcileViews({
       workspaceKey: '/workspace/a',
-      views: [{ tabId: 'source-tab', profileId: 'wechat' }],
+      views: [{ tabId: 'source-tab', profileId: 'wechat', accountId: 'account-a' }],
       activeTabId: 'source-tab',
     })
 
     await expect(pending).resolves.toBe('source-tab')
+  })
+
+  it("asks renderer to restore the publishing Attempt's previously bound Tab", async () => {
+    const { manager } = await createSource()
+    electronMocks.mainWebContents.send.mockClear()
+
+    const pending = manager.waitForAccountView(
+      '/workspace/a',
+      'wechat',
+      'account-a',
+      'https://mp.weixin.qq.com/editor/123',
+      1_000,
+      'editor-tab',
+    )
+    await vi.waitFor(() =>
+      expect(electronMocks.mainWebContents.send).toHaveBeenCalledWith(
+        browserIpcEvents.requestOpenTab,
+        expect.objectContaining({ sourceTabId: 'editor-tab' }),
+      ),
+    )
+    await manager.createView('editor-tab', 'https://mp.weixin.qq.com/editor/123', {
+      workspaceKey: '/workspace/a',
+      profileId: 'wechat',
+    })
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'editor-tab', profileId: 'wechat', accountId: 'account-a' }],
+      activeTabId: 'editor-tab',
+    })
+
+    await expect(pending).resolves.toBe('editor-tab')
+  })
+
+  it('binds publishing to the active account View when the same Profile has multiple Tabs', async () => {
+    const { manager } = await createSource()
+    await manager.createView('editor-tab', 'https://mp.weixin.qq.com/editor/123', {
+      workspaceKey: '/workspace/a',
+      profileId: 'wechat',
+    })
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [
+        { tabId: 'source-tab', profileId: 'wechat', accountId: 'account-a' },
+        { tabId: 'editor-tab', profileId: 'wechat', accountId: 'account-a' },
+      ],
+      activeTabId: 'editor-tab',
+    })
+
+    await expect(
+      manager.waitForAccountView(
+        '/workspace/a',
+        'wechat',
+        'account-a',
+        'https://mp.weixin.qq.com/editor/123',
+        100,
+      ),
+    ).resolves.toBe('editor-tab')
+  })
+
+  it('does not bind an active same-profile View owned by another account record', async () => {
+    const { manager } = await createSource()
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat', accountId: 'account-b' }],
+      activeTabId: 'source-tab',
+    })
+
+    await expect(
+      manager.waitForAccountView(
+        '/workspace/a',
+        'wechat',
+        'account-a',
+        'https://mp.weixin.qq.com/editor/123',
+        20,
+      ),
+    ).resolves.toBeNull()
+  })
+
+  it('rebuilds a View instead of changing its registered account ownership in place', async () => {
+    const { manager } = await createSource()
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat', accountId: 'account-a' }],
+      activeTabId: 'source-tab',
+    })
+
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat', accountId: 'account-b' }],
+      activeTabId: 'source-tab',
+    })
+
+    expect(manager.getViewWorkspaceKey('source-tab')).toBeUndefined()
   })
 
   it('rejects an unusable automatic 30% result and recovers after the pane widens', async () => {

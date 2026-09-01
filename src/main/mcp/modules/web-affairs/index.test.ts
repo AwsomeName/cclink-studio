@@ -77,4 +77,75 @@ describe('WebAffairToolModule', () => {
     )
     expect(getProjectSnapshot).not.toHaveBeenCalled()
   })
+
+  it('rejects article progress reports without a main-issued execution identity', async () => {
+    const reportArticlePublishingCheckpoint = vi.fn()
+    const module = new WebAffairToolModule(
+      { reportArticlePublishingCheckpoint } as never,
+      async () => 'workspace-a-id',
+    )
+
+    await expect(
+      module.execute(
+        'article_publishing_report_checkpoint',
+        { affairId: 'affair-1', attemptId: 'attempt-1', stepId: 'open-editor', status: 'running' },
+        { workspaceKey: '/workspace/a', conversationId: 'conversation-a', agentRunId: 'run-a' },
+      ),
+    ).resolves.toMatchObject({ success: false, error: { code: 'INVALID_TRANSITION' } })
+    expect(reportArticlePublishingCheckpoint).not.toHaveBeenCalled()
+  })
+
+  it('injects the trusted generation and run identity instead of accepting model identity fields', async () => {
+    const reportArticlePublishingCheckpoint = vi.fn(async () => ({ success: true }))
+    const module = new WebAffairToolModule(
+      { reportArticlePublishingCheckpoint } as never,
+      async () => 'workspace-a-id',
+    )
+    const policy = {
+      origin: 'article-publishing' as const,
+      workspaceId: 'workspace-a-id',
+      affairId: 'affair-1',
+      attemptId: 'attempt-1',
+      executionGeneration: 3,
+      launchOperationId: 'launch-3',
+    }
+
+    await module.execute(
+      'article_publishing_report_checkpoint',
+      { affairId: 'affair-1', attemptId: 'attempt-1', stepId: 'open-editor', status: 'running' },
+      {
+        workspaceKey: '/workspace/a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        articlePublishingPolicy: policy,
+      },
+    )
+
+    expect(reportArticlePublishingCheckpoint).toHaveBeenCalledWith(
+      expect.objectContaining({ affairId: 'affair-1', attemptId: 'attempt-1' }),
+      'workspace-a-id',
+      {
+        workspaceId: 'workspace-a-id',
+        affairId: 'affair-1',
+        attemptId: 'attempt-1',
+        executionGeneration: 3,
+        launchOperationId: 'launch-3',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+      },
+    )
+
+    await expect(
+      module.execute(
+        'web_affair_get',
+        { affairId: 'affair-2' },
+        {
+          workspaceKey: '/workspace/a',
+          conversationId: 'conversation-a',
+          agentRunId: 'run-a',
+          articlePublishingPolicy: policy,
+        },
+      ),
+    ).resolves.toMatchObject({ success: false, error: { code: 'INVALID_TRANSITION' } })
+  })
 })

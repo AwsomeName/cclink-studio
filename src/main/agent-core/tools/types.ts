@@ -61,6 +61,18 @@ export interface ToolExecutionContext {
     readRoots: string[]
     allowedTools: string[]
   }
+  /**
+   * 文章发布运行由主进程在启动时签发的不可伪造身份。
+   * 模型参数只表达“要报告什么”，不得用 affairId/attemptId 冒充当前执行代次。
+   */
+  articlePublishingPolicy?: {
+    origin: 'article-publishing'
+    workspaceId: string
+    affairId: string
+    attemptId: string
+    executionGeneration: number
+    launchOperationId: string
+  }
   /** 工具宿主已为本次调用取得显式用户确认。 */
   confirmationGranted?: boolean
   /** run 取消时触发；执行时间较长的模块应协作停止尚未提交的工作。 */

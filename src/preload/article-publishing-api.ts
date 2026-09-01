@@ -11,6 +11,4 @@ export const articlePublishingApi: ArticlePublishingApiContract = {
   checkRuntime: (input) => invokeIpcContract(articlePublishingIpc.checkRuntime, input),
   continueRuntime: (input) => invokeIpcContract(articlePublishingIpc.continueRuntime, input),
   terminateRuntime: (input) => invokeIpcContract(articlePublishingIpc.terminateRuntime, input),
-  reportCheckpoint: (input) => invokeIpcContract(articlePublishingIpc.reportCheckpoint, input),
-  reportAsset: (input) => invokeIpcContract(articlePublishingIpc.reportAsset, input),
 }

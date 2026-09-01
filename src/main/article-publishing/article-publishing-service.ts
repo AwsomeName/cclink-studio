@@ -26,8 +26,6 @@ import type {
   CreateArticlePublishingTaskInput,
   InspectArticlePublishingSourceInput,
   ManageArticlePublishingRuntimeInput,
-  ReportArticlePublishingAssetInput,
-  ReportArticlePublishingCheckpointInput,
   StartArticlePublishingTaskInput,
   StartArticlePublishingTaskResult,
 } from '../../shared/article-publishing/article-publishing-types'
@@ -35,8 +33,6 @@ import {
   createArticlePublishingTaskInputSchema,
   inspectArticlePublishingSourceInputSchema,
   manageArticlePublishingRuntimeInputSchema,
-  reportArticlePublishingAssetInputSchema,
-  reportArticlePublishingCheckpointInputSchema,
   startArticlePublishingTaskInputSchema,
 } from '../../shared/article-publishing/article-publishing-schema'
 import type {
@@ -47,6 +43,7 @@ import type {
 
 const MAX_SOURCE_BYTES = 10 * 1024 * 1024
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024
+const RUNTIME_BIND_TIMEOUT_MS = 15_000
 const OWNER_LEASE_MS = 60_000
 const PROGRESS_LEASE_MS = 10 * 60_000
 const RUNTIME_PROBE_MS = 60_000
@@ -137,6 +134,7 @@ export class ArticlePublishingService {
     affair: WebAffair
     attemptId: string
     resumed: boolean
+    preferredBrowserTabId?: string
     prompt: string
     workspaceId: string
     workspacePath: string
@@ -162,6 +160,8 @@ export class ArticlePublishingService {
       attempt.profileId,
       attempt.accountId,
       persistedDraftAnchor?.url ?? attempt.entryUrl,
+      8_000,
+      input.preferredBrowserTabId,
     )
     if (!tabId) throw new Error('账号浏览器 Tab 创建超时')
     let draftAnchor = persistedDraftAnchor
@@ -226,11 +226,38 @@ export class ArticlePublishingService {
     const runId = `run-${attempt.launchOperationId}`
     const terminalIdentity = agentBridge.getRuntimeIdentity(conversationId)
     let bound = false
+    let boundAffair: WebAffair | null = null
     let launchedRunId: string | null = null
     let launchedBrowserTaskId: string | null = null
     let terminalEvent: { type: 'complete' | 'error'; reason: string } | null = null
+    let terminalReconciliation: Promise<void> | null = null
     let disposed = false
-    const dispose = agentBridge.onRuntimeEvent((event) => {
+    let dispose = (): void => undefined
+    let resolveLaunchReady: (result: StartArticlePublishingTaskResult) => void = () => undefined
+    let rejectLaunchReady: (error: Error) => void = () => undefined
+    const launchReady = new Promise<StartArticlePublishingTaskResult>((resolve, reject) => {
+      resolveLaunchReady = resolve
+      rejectLaunchReady = reject
+    })
+    const reconcileTerminalOnce = (terminal: {
+      type: 'complete' | 'error'
+      reason: string
+    }): Promise<void> => {
+      if (terminalReconciliation) return terminalReconciliation
+      disposed = true
+      dispose()
+      terminalReconciliation = this.reconcileAgentTerminal(
+        input,
+        conversationId,
+        runId,
+        terminalIdentity,
+        terminal,
+      ).finally(() => {
+        this.activeRuntimes.delete(attempt.id)
+      })
+      return terminalReconciliation
+    }
+    dispose = agentBridge.onRuntimeEvent((event) => {
       if (event.conversationId === conversationId && event.runId === runId) {
         this.observeAgentActivity(input.attemptId, event.type === 'stream')
       }
@@ -250,15 +277,7 @@ export class ArticlePublishingService {
             : extractRuntimeError(event.data),
       }
       if (bound) {
-        disposed = true
-        dispose()
-        void this.reconcileAgentTerminal(
-          input,
-          conversationId,
-          runId,
-          terminalIdentity,
-          terminalEvent,
-        )
+        void reconcileTerminalOnce(terminalEvent)
       }
     })
 
@@ -266,10 +285,41 @@ export class ArticlePublishingService {
       const agentPrompt = draftAnchor
         ? `${input.prompt}\nmain 已锁定平台草稿：draftUrl=${draftAnchor.url}；任何写入前必须确认当前页仍是该草稿，禁止切换到新稿或其他文章。`
         : input.prompt
-      const receipt = await agentBridge.sendMessage(agentPrompt, conversationId, {
+      const runPromise = agentBridge.sendMessage(agentPrompt, conversationId, {
         runId,
         sessionId: null,
         workspaceRef: { kind: 'local', path: input.workspacePath },
+        articlePublishingPolicy: {
+          origin: 'article-publishing',
+          workspaceId: input.workspaceId,
+          affairId: input.affair.id,
+          attemptId: attempt.id,
+          executionGeneration: attempt.executionGeneration,
+          launchOperationId: attempt.launchOperationId,
+        },
+        allowedTools: [
+          'mcp__cclink_studio__browser_screenshot',
+          'mcp__cclink_studio__browser_title',
+          'mcp__cclink_studio__browser_input_value',
+          'mcp__cclink_studio__browser_wait_for_selector',
+          'mcp__cclink_studio__browser_click',
+          'mcp__cclink_studio__browser_fill',
+          'mcp__cclink_studio__browser_select',
+          'mcp__cclink_studio__browser_check',
+          'mcp__cclink_studio__browser_uncheck',
+          'mcp__cclink_studio__browser_press',
+          'mcp__cclink_studio__browser_upload_file',
+          'mcp__cclink_studio__browser_wait_for_navigation',
+          'mcp__cclink_studio__browser_get_tab_info',
+          'mcp__cclink_studio__editor_read',
+          'mcp__cclink_studio__editor_list',
+          'mcp__cclink_studio__web_affair_get',
+          'mcp__cclink_studio__article_publishing_inspect_page',
+          'mcp__cclink_studio__article_publishing_report_checkpoint',
+          'mcp__cclink_studio__article_publishing_report_asset',
+          'mcp__cclink_studio__web_affair_finish_attempt',
+        ],
+        disableBuiltinTools: true,
         resources: [
           {
             id: `browser-${tabId}`,
@@ -278,120 +328,152 @@ export class ArticlePublishingService {
             ref: { type: 'browser', tabId, workspaceKey: input.workspacePath },
           },
         ],
-      })
-      launchedRunId = receipt.runId
-      const browserTask = agentBridge.getActiveBrowserTask(conversationId)
-      if (!browserTask || browserTask.tabId !== tabId) {
-        throw new Error('Agent 启动后没有创建绑定账号页的 BrowserTask')
-      }
-      launchedBrowserTaskId = browserTask.id
-      browserTaskRuntime.updateCorrelation(browserTask.id, {
-        accountId: attempt.accountId,
-        allowedOrigins: [...CSDN_ARTICLE_SUPPORTED_ORIGINS],
-        affairId: input.affair.id,
-        affairNodeId: attempt.nodeId,
-        affairAttemptId: attempt.id,
-        affairExecutionGeneration: attempt.executionGeneration,
-        affairLaunchOperationId: attempt.launchOperationId,
-        browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
-        webContentsId: viewIdentity.webContentsId,
-        playwrightConnectionGeneration: playwrightBridge.getConnectionGeneration(),
-        playwrightPageBindingGeneration: pageBinding.generation,
-      })
-      const boundAt = new Date().toISOString()
-      const common = {
-        attemptId: attempt.id,
-        executionGeneration: attempt.executionGeneration,
-        launchOperationId: attempt.launchOperationId,
-        status: 'active' as const,
-        boundAt,
-        lastObservedAt: boundAt,
-      }
-      const boundResult = await this.webAffairService.bindArticlePublishingRuntime(
-        input.affair.id,
-        attempt.id,
-        attempt.executionGeneration,
-        attempt.launchOperationId,
-        [
-          {
-            ...common,
-            id: randomUUID(),
-            kind: 'agent-run',
-            conversationId,
-            agentRunId: receipt.runId,
-            agentRuntimeEpoch: terminalIdentity.agentRuntimeEpoch,
-            agentRuntimeBindingKey: terminalIdentity.agentRuntimeBindingKey,
-          },
-          {
-            ...common,
-            id: randomUUID(),
-            kind: 'browser-tab',
-            tabId,
+        onRunPrepared: async (prepared) => {
+          if (disposed) throw new Error('文章发布启动已经超时或取消')
+          if (prepared.runId !== runId || !prepared.browserTaskRunId) {
+            throw new Error('Agent 启动前没有创建绑定账号页的 BrowserTask')
+          }
+          launchedRunId = prepared.runId
+          launchedBrowserTaskId = prepared.browserTaskRunId
+          const browserTask = browserTaskRuntime.getTask(prepared.browserTaskRunId)
+          if (!browserTask || browserTask.tabId !== tabId || browserTask.status !== 'running') {
+            throw new Error('Agent 启动前的 BrowserTask 身份不匹配')
+          }
+          browserTaskRuntime.updateCorrelation(browserTask.id, {
+            accountId: attempt.accountId,
+            allowedOrigins: [...CSDN_ARTICLE_SUPPORTED_ORIGINS],
+            affairId: input.affair.id,
+            affairNodeId: attempt.nodeId,
+            affairAttemptId: attempt.id,
+            affairExecutionGeneration: attempt.executionGeneration,
+            affairLaunchOperationId: attempt.launchOperationId,
             browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
             webContentsId: viewIdentity.webContentsId,
-          },
-          {
-            ...common,
-            id: randomUUID(),
-            kind: 'browser-task',
+            playwrightConnectionGeneration: playwrightBridge.getConnectionGeneration(),
+            playwrightPageBindingGeneration: pageBinding.generation,
+          })
+          const boundAt = new Date().toISOString()
+          const common = {
+            attemptId: attempt.id,
+            executionGeneration: attempt.executionGeneration,
+            launchOperationId: attempt.launchOperationId,
+            status: 'active' as const,
+            boundAt,
+            lastObservedAt: boundAt,
+          }
+          const boundResult = await this.webAffairService.bindArticlePublishingRuntime(
+            input.affair.id,
+            attempt.id,
+            attempt.executionGeneration,
+            attempt.launchOperationId,
+            [
+              {
+                ...common,
+                id: randomUUID(),
+                kind: 'agent-run',
+                conversationId,
+                agentRunId: prepared.runId,
+                agentRuntimeEpoch: terminalIdentity.agentRuntimeEpoch,
+                agentRuntimeBindingKey: terminalIdentity.agentRuntimeBindingKey,
+              },
+              {
+                ...common,
+                id: randomUUID(),
+                kind: 'browser-tab',
+                tabId,
+                browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
+                webContentsId: viewIdentity.webContentsId,
+              },
+              {
+                ...common,
+                id: randomUUID(),
+                kind: 'browser-task',
+                browserTaskRunId: browserTask.id,
+                tabId,
+                browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
+                webContentsId: viewIdentity.webContentsId,
+                playwrightConnectionGeneration: playwrightBridge.getConnectionGeneration(),
+                playwrightPageBindingGeneration: pageBinding.generation,
+              },
+            ],
+            input.workspaceId,
+          )
+          if (!boundResult.success) throw new Error(boundResult.error.message)
+          boundAffair = boundResult.data
+          bound = true
+          const observedAt = Date.now()
+          this.activeRuntimes.set(attempt.id, {
+            workspaceId: input.workspaceId,
+            affairId: input.affair.id,
+            attemptId: attempt.id,
+            executionGeneration: attempt.executionGeneration,
+            launchOperationId: attempt.launchOperationId,
+            conversationId,
+            agentRunId: prepared.runId,
+            agentRuntimeBindingKey: terminalIdentity.agentRuntimeBindingKey,
+            agentRuntimeEpoch: terminalIdentity.agentRuntimeEpoch,
             browserTaskRunId: browserTask.id,
             tabId,
             browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
             webContentsId: viewIdentity.webContentsId,
             playwrightConnectionGeneration: playwrightBridge.getConnectionGeneration(),
             playwrightPageBindingGeneration: pageBinding.generation,
-          },
-        ],
-        input.workspaceId,
-      )
-      if (!boundResult.success) throw new Error(boundResult.error.message)
-      bound = true
-      const observedAt = Date.now()
-      this.activeRuntimes.set(attempt.id, {
-        workspaceId: input.workspaceId,
-        affairId: input.affair.id,
-        attemptId: attempt.id,
-        executionGeneration: attempt.executionGeneration,
-        launchOperationId: attempt.launchOperationId,
-        conversationId,
-        agentRunId: receipt.runId,
-        agentRuntimeBindingKey: terminalIdentity.agentRuntimeBindingKey,
-        agentRuntimeEpoch: terminalIdentity.agentRuntimeEpoch,
-        browserTaskRunId: browserTask.id,
-        tabId,
-        browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
-        webContentsId: viewIdentity.webContentsId,
-        playwrightConnectionGeneration: playwrightBridge.getConnectionGeneration(),
-        playwrightPageBindingGeneration: pageBinding.generation,
-        lastOwnerAt: observedAt,
-        lastProgressAt: observedAt,
-        continuationUsed: false,
+            lastOwnerAt: observedAt,
+            lastProgressAt: observedAt,
+            continuationUsed: false,
+          })
+          resolveLaunchReady({
+            affair: boundResult.data,
+            attemptId: attempt.id,
+            resumed: input.resumed,
+            executionGeneration: attempt.executionGeneration,
+            launchOperationId: attempt.launchOperationId,
+            conversationId,
+            agentRunId: prepared.runId,
+            browserTaskRunId: browserTask.id,
+            browserTabId: tabId,
+            agentPrompt,
+          })
+        },
       })
-      if (terminalEvent) {
-        disposed = true
-        dispose()
-        await this.reconcileAgentTerminal(
-          input,
-          conversationId,
-          runId,
-          terminalIdentity,
-          terminalEvent,
-        )
-      }
+      void runPromise
+        .then(() => {
+          if (!bound || !boundAffair || launchedBrowserTaskId === null) {
+            rejectLaunchReady(new Error('Agent Runtime 未在执行前完成持久绑定'))
+            return
+          }
+          const terminal = terminalEvent ?? {
+            type: 'complete' as const,
+            reason: 'Agent Run 已返回，但未观察到独立终态事件',
+          }
+          void reconcileTerminalOnce(terminal)
+        })
+        .catch((error) => {
+          const reason = error instanceof Error ? error.message : String(error)
+          if (bound) {
+            void reconcileTerminalOnce(
+              terminalEvent ?? { type: 'error', reason: `Agent Run 后台执行失败：${reason}` },
+            )
+            return
+          }
+          disposed = true
+          dispose()
+          if (launchedBrowserTaskId) {
+            try {
+              browserTaskRuntime.cancelTask(launchedBrowserTaskId)
+            } catch {
+              // BrowserTask 可能已由 AgentBridge 收敛。
+            }
+          }
+          rejectLaunchReady(error instanceof Error ? error : new Error(reason))
+        })
       return {
         success: true,
-        data: {
-          affair: boundResult.data,
-          attemptId: attempt.id,
-          resumed: input.resumed,
-          executionGeneration: attempt.executionGeneration,
-          launchOperationId: attempt.launchOperationId,
-          conversationId,
-          agentRunId: receipt.runId,
-          browserTaskRunId: browserTask.id,
-          browserTabId: tabId,
-          agentPrompt,
-        },
+        data: await withTimeout(
+          launchReady,
+          RUNTIME_BIND_TIMEOUT_MS,
+          'Agent Runtime 未在 15 秒内完成持久绑定',
+        ),
       }
     } catch (error) {
       disposed = true
@@ -403,8 +485,8 @@ export class ArticlePublishingService {
           // 启动回滚只取消本次精确 task；已终态或已被 owner 清理时无需重复处理。
         }
       }
-      if (!bound && launchedRunId) {
-        await agentBridge.abort(conversationId, launchedRunId).catch(() => undefined)
+      if (!bound) {
+        await agentBridge.abort(conversationId, launchedRunId ?? runId).catch(() => undefined)
       }
       throw error
     }
@@ -836,55 +918,27 @@ export class ArticlePublishingService {
     const currentAttempt = publishing.execution.currentAttemptId
       ? affair.attempts.find((attempt) => attempt.id === publishing.execution.currentAttemptId)
       : undefined
-    let result
-    let resumed = false
-    if (currentAttempt?.status === 'interrupted') {
-      result = await this.webAffairService.resumeArticlePublishingAttempt(
-        affair.id,
-        currentAttempt.id,
-        workspaceId,
-      )
-      resumed = true
-    } else if (currentAttempt && publishing.execution.status === 'waiting-human') {
-      result = await this.webAffairService.resumeArticlePublishingAfterHandoff(
-        affair.id,
-        currentAttempt.id,
-        workspaceId,
-      )
-      resumed = true
-    } else if (
-      currentAttempt &&
-      !['failed', 'cancelled', 'succeeded'].includes(currentAttempt.status)
-    ) {
-      return invalid('当前发布 Attempt 已经在运行或等待处理')
-    } else {
-      result = await this.webAffairService.startAttempt(
-        {
-          workspaceRef: parsed.data.workspaceRef,
-          affairId: affair.id,
-          nodeId: affair.flow.nodes[0].id,
-          accountId: publishing.accountId,
-        },
-        workspaceId,
-      )
-    }
-    if (!result.success) return result
-    const attempt = resumed
-      ? result.data.attempts.find((item) => item.id === currentAttempt?.id)
-      : result.data.attempts[result.data.attempts.length - 1]
-    if (!attempt) return invalid('发布 Attempt 创建失败')
-    const marked = await this.webAffairService.markArticlePublishingAttemptStarted(
+    const resumed = Boolean(
+      currentAttempt?.status === 'interrupted' ||
+      (currentAttempt && publishing.execution.status === 'waiting-human'),
+    )
+    const result = await this.webAffairService.acquireArticlePublishingAttempt(
       affair.id,
-      attempt.id,
       workspaceId,
     )
-    if (!marked.success) return marked
-    const prompt = buildAgentPrompt(marked.data, attempt.id)
+    if (!result.success) return result
+    const attemptId = result.data.articlePublishing?.execution.currentAttemptId
+    const attempt = attemptId
+      ? result.data.attempts.find((item) => item.id === attemptId)
+      : undefined
+    if (!attempt) return invalid('发布 Attempt 创建失败')
+    const prompt = buildAgentPrompt(result.data, attempt.id)
     try {
       return await this.launchRuntime({
-        affair: marked.data,
+        affair: result.data,
         attemptId: attempt.id,
         resumed,
+        preferredBrowserTabId: resumed ? currentAttempt?.tabId : undefined,
         prompt,
         workspaceId,
         workspacePath: parsed.data.workspaceRef.path,
@@ -911,12 +965,6 @@ export class ArticlePublishingService {
       })
       return invalid(`发布 Runtime 启动失败：${reason}；已恢复为可继续状态`)
     }
-  }
-
-  reportCheckpoint(input: ReportArticlePublishingCheckpointInput, workspaceId: string) {
-    const parsed = reportArticlePublishingCheckpointInputSchema.safeParse(input)
-    if (!parsed.success) return Promise.resolve(invalid('文章发布检查点参数无效'))
-    return this.webAffairService.reportArticlePublishingCheckpoint(parsed.data, workspaceId)
   }
 
   async checkRuntime(
@@ -1084,12 +1132,6 @@ export class ArticlePublishingService {
       playwrightBridge.isConnected() &&
       playwrightBridge.getConnectionGeneration() === runtime.playwrightConnectionGeneration,
     )
-  }
-
-  reportAsset(input: ReportArticlePublishingAssetInput, workspaceId: string) {
-    const parsed = reportArticlePublishingAssetInputSchema.safeParse(input)
-    if (!parsed.success) return Promise.resolve(invalid('正文图片状态参数无效'))
-    return this.webAffairService.reportArticlePublishingAsset(parsed.data, workspaceId)
   }
 
   private async buildPreview(
@@ -1276,6 +1318,23 @@ function stableAssetId(contentHash: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error(message)), timeoutMs)
+    timeout.unref?.()
+    void promise.then(
+      (value) => {
+        clearTimeout(timeout)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timeout)
+        reject(error)
+      },
+    )
+  })
+}
+
 function isPathWithin(rootPath: string, targetPath: string): boolean {
   const relativePath = relative(rootPath, targetPath)
   return (
@@ -1310,6 +1369,7 @@ function buildAgentPrompt(
         ]
       : []),
     `main 已把可见账号页、Agent Run 和 BrowserTask 精确绑定到本次执行代次；禁止另开账号页。先调用 web_affair_get 读取冻结状态。`,
+    `每个检查点开始和成功回报前都调用 article_publishing_inspect_page；只使用 csdn@1 返回的唯一 selector 和页面证据。适配器返回 unsupported 或没有 selector 时立即转人工，禁止自行枚举或猜测 CSDN selector。`,
     `图片共有 ${localAssets.length} 张。每张上传必须依次报告 uploading、waiting-platform、verifying；只有重新读取编辑器取得平台 URL 和页面证据后才能报告 uploaded。`,
     `文章发布动作由主进程根据当前事务、步骤、账号、页面和适配器三态核验；普通“确认上传”和已授权的单篇常规发布可继续，人工专属或未知动作会自动暂停。`,
     `单图最多 3 次安全尝试；派发后结果不明必须报告 result-unknown 并先对账，禁止盲目重复上传。`,

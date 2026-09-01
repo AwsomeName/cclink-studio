@@ -4,6 +4,7 @@ import type {
   ArticlePublishingSourcePreview,
 } from '@shared/article-publishing/article-publishing-types'
 import { CSDN_ARTICLE_PUBLISHING_PLAN } from '@shared/article-publishing/article-publishing-plan'
+import { parseCsdnDraftAnchor } from '@shared/article-publishing/csdn-draft-anchor'
 import type { WebAffair } from '@shared/web-affairs/web-affair-types'
 import type { WebResourceSnapshot } from '@shared/web-resources/web-resource-types'
 import type { Tab } from '../../types'
@@ -251,7 +252,10 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       },
       result.data.conversationId,
     )
-    setAffair(result.data.affair)
+    // startTask returns as soon as main has durably bound the background Runtime. Reload from
+    // the persistent owner instead of applying the launch receipt as a later UI truth: a very
+    // fast Agent may already have reached a newer terminal state before this Promise resumes.
+    await reload()
     setNotice(
       result.data.resumed
         ? 'main 已恢复原 Attempt，并绑定新一代 Agent/Browser Runtime。'
@@ -592,6 +596,13 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     return <div className="article-publishing-state">{error ?? '正在读取发布事务…'}</div>
   }
   const publishing = affair.articlePublishing
+  const currentAttempt = publishing.execution.currentAttemptId
+    ? affair.attempts.find((attempt) => attempt.id === publishing.execution.currentAttemptId)
+    : undefined
+  const draftAnchor = publishing.draft?.url ? parseCsdnDraftAnchor(publishing.draft.url) : null
+  const persistedRuntimeFailure = ['interrupted', 'failed'].includes(publishing.execution.status)
+    ? currentAttempt?.failureMessage
+    : undefined
   const canStart = ['draft', 'waiting-human', 'interrupted', 'failed', 'result-unknown'].includes(
     publishing.execution.status,
   )
@@ -632,6 +643,11 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         </div>
       </header>
       {error ? <div className="article-publishing-alert error">{error}</div> : null}
+      {!error && persistedRuntimeFailure ? (
+        <div className="article-publishing-alert error">
+          上次执行未完成：{persistedRuntimeFailure}
+        </div>
+      ) : null}
       {notice ? <div className="article-publishing-alert">{notice}</div> : null}
       {publishing.execution.status === 'checking-runtime' && publishing.execution.runtimeCheck ? (
         <div className="article-publishing-alert error">
@@ -660,6 +676,11 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           <div className="article-publishing-config-item wide">
             <span>发布标题</span>
             <strong>{publishing.fields.title}</strong>
+          </div>
+          <div className="article-publishing-config-item wide">
+            <span>平台草稿</span>
+            <strong>{draftAnchor ? `CSDN 草稿 ${draftAnchor.draftId}` : '尚未锁定平台草稿'}</strong>
+            <small>{draftAnchor?.url ?? '首次进入带数字 ID 的草稿页后自动记录'}</small>
           </div>
           <div className="article-publishing-config-item wide">
             <span>摘要</span>

@@ -74,6 +74,8 @@ export interface BrowserCreateViewOptions {
 export interface BrowserViewBinding {
   tabId: string
   profileId: string | null
+  /** 已登记网站账号；普通页和未保存账号草稿为空。 */
+  accountId?: string | null
 }
 
 export interface BrowserReconcileViewsOptions {
@@ -390,7 +392,7 @@ export interface BrowserOpenTabRequest {
   profileId?: string | null
   /** main 进程签发的登记账号归属；renderer 仅物化账号 Tab。 */
   accountId?: string
-  /** 来源 Browser Tab；renderer 用它继承账号或草稿归属，禁止只继承 Profile。 */
+  /** 优先复用的来源 Browser Tab；renderer 用它恢复原现场或继承账号/草稿归属。 */
   sourceTabId?: string
   /** 原生网页菜单显式要求新建 Tab 时不得复用当前页面。 */
   forceNew?: boolean

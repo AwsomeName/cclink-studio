@@ -2,11 +2,15 @@ import { createHash } from 'node:crypto'
 import type { BrowserTaskRun } from '../../shared/ipc/browser'
 import type { ToolExecutionContext } from '../mcp/types'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
+import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
 import type { WebAffairService } from '../web-affairs/web-affair-service'
 import {
   isSameCsdnDraft,
   parseCsdnDraftAnchor,
 } from '../../shared/article-publishing/csdn-draft-anchor'
+import { CsdnPublishingAdapter, type CsdnPageProbe } from './csdn-publishing-adapter'
+import type { WebAffairOperationResult } from '../../shared/web-affairs/web-affair-types'
+import type { ArticlePublishingAgentReporter } from '../web-affairs/web-affair-service'
 
 export const CSDN_ARTICLE_SUPPORTED_ORIGINS = [
   'https://csdn.net',
@@ -38,7 +42,34 @@ interface ArticlePublishingExecutionScope {
   browserTaskRunId: string
   draftUrl?: string
   sourceHash: string
-  assets: Array<{ id: string; sourcePath: string; uploadAttemptCount: number }>
+  expectedTitle: string
+  assets: Array<{
+    id: string
+    sourcePath: string
+    displayPath: string
+    contentHash: string
+    platformUrl?: string
+    status:
+      | 'pending'
+      | 'uploading'
+      | 'waiting-platform'
+      | 'verifying'
+      | 'uploaded'
+      | 'retryable-failed'
+      | 'result-unknown'
+      | 'reconciling'
+      | 'failed'
+    uploadAttemptCount: number
+  }>
+}
+
+export interface ArticlePublishingPageInspection extends CsdnPageProbe {
+  matchedAssets: Record<string, string>
+}
+
+interface TrustedPageAttestation {
+  scope: ArticlePublishingExecutionScope
+  inspection: ArticlePublishingPageInspection
 }
 
 interface ResolveExecutionInput {
@@ -81,10 +112,117 @@ const AUTOSAVE_STEPS = new Set(['fill-body', 'fill-fields'])
  * It owns no task state and only resolves the current WebAffair snapshot.
  */
 export class ArticlePublishingBrowserPolicy {
+  private readonly adapter = new CsdnPublishingAdapter()
+  private readonly attestations = new Map<string, TrustedPageAttestation>()
+
   constructor(
     private readonly webAffairService: WebAffairService,
     private readonly resolveWorkspaceId: (workspacePath: string) => Promise<string | null>,
+    private readonly playwrightBridge?: PlaywrightBridge | null,
+    private readonly browserTaskRuntime?: BrowserTaskRuntime | null,
   ) {}
+
+  async inspectCurrentPage(
+    context?: ToolExecutionContext,
+  ): Promise<WebAffairOperationResult<ArticlePublishingPageInspection>> {
+    const conversationId = context?.conversationId?.trim()
+    const agentRunId = context?.agentRunId?.trim()
+    if (!conversationId || !agentRunId || !this.playwrightBridge || !this.browserTaskRuntime) {
+      return publishingEvidenceError('当前工具会话没有可核验的文章发布页面 Runtime')
+    }
+    const task = this.browserTaskRuntime.getActiveTaskForConversation(conversationId)
+    if (!task || task.correlation?.agentRunId !== agentRunId) {
+      return publishingEvidenceError('当前 Agent Run 没有精确绑定的活动 BrowserTask')
+    }
+    const scope = await this.resolveTaskScope(task, context)
+    if (!scope) return publishingEvidenceError('文章发布页面 Runtime 身份已经失效')
+    const page = this.playwrightBridge.getPageById(task.tabId)
+    if (!page || page.isClosed()) return publishingEvidenceError('绑定的 CSDN 页面不可用')
+    const probe = await this.adapter.probe(page)
+    if (
+      scope.draftUrl &&
+      probe.pageKind === 'editor' &&
+      !isSameCsdnDraft(scope.draftUrl, probe.url)
+    ) {
+      return publishingEvidenceError('当前页面不是本 Attempt 已绑定的 CSDN 草稿')
+    }
+    const matchedAssets: Record<string, string> = {}
+    if (probe.editor.recognized && probe.editor.imageEnumerationComplete) {
+      const unresolvedAssets = [] as typeof scope.assets
+      for (const asset of scope.assets) {
+        const existing = asset.platformUrl
+          ? probe.editor.images.find((image) => image.src === asset.platformUrl)?.src
+          : null
+        if (existing) matchedAssets[asset.id] = existing
+        else unresolvedAssets.push(asset)
+      }
+      const matchesByHash = await this.adapter.matchAssetsByContentHash(
+        page,
+        probe,
+        unresolvedAssets.map((asset) => asset.contentHash),
+      )
+      for (const asset of unresolvedAssets) {
+        const matched = matchesByHash[asset.contentHash]
+        if (matched) matchedAssets[asset.id] = matched
+      }
+    }
+    const inspection: ArticlePublishingPageInspection = { ...probe, matchedAssets }
+    this.attestations.set(this.attestationKey(context), { scope, inspection })
+    while (this.attestations.size > 40) {
+      const oldest = this.attestations.keys().next().value
+      if (!oldest) break
+      this.attestations.delete(oldest)
+    }
+    return { success: true, data: inspection }
+  }
+
+  authorizeTrustedReport(
+    toolName: string,
+    params: Record<string, unknown>,
+    context: ToolExecutionContext | undefined,
+    reporter: ArticlePublishingAgentReporter,
+  ): WebAffairOperationResult<ArticlePublishingAgentReporter> {
+    if (!requiresTrustedPageEvidence(toolName, params)) return { success: true, data: reporter }
+    const attestation = this.attestations.get(this.attestationKey(context))
+    if (!attestation) {
+      return publishingEvidenceError(
+        '成功回报前必须调用 article_publishing_inspect_page 取得主进程页面证据',
+      )
+    }
+    const { scope, inspection } = attestation
+    if (
+      scope.workspaceId !== reporter.workspaceId ||
+      scope.affairId !== reporter.affairId ||
+      scope.attemptId !== reporter.attemptId ||
+      scope.executionGeneration !== reporter.executionGeneration ||
+      scope.launchOperationId !== reporter.launchOperationId ||
+      Date.now() - Date.parse(inspection.observedAt) > 60_000
+    ) {
+      return publishingEvidenceError('CSDN 页面证据已经过期或不属于当前执行代次')
+    }
+    const evidenceKind = trustedEvidenceKind(toolName, params)
+    if (!this.inspectionProves(evidenceKind, params, attestation)) {
+      return publishingEvidenceError('当前 CSDN 页面读回结果不能证明所报告的成功状态')
+    }
+    const trustedUrl =
+      evidenceKind === 'published'
+        ? (this.resolvePublishedUrl(params, attestation) ?? inspection.url)
+        : inspection.url
+    return {
+      success: true,
+      data: {
+        ...reporter,
+        trustedPageEvidence: {
+          adapterId: inspection.adapterId,
+          adapterVersion: inspection.adapterVersion,
+          evidenceHash: inspection.evidenceHash,
+          observedAt: inspection.observedAt,
+          url: trustedUrl,
+          kind: evidenceKind,
+        },
+      },
+    }
+  }
 
   async resolveAllowedOrigins(input: ResolveExecutionInput): Promise<string[] | null> {
     const scope = await this.resolveExecution(input)
@@ -205,6 +343,25 @@ export class ArticlePublishingBrowserPolicy {
         pageUrl,
       )
     }
+    if (actionType === 'handleDialog') {
+      return params.action === 'accept'
+        ? this.stopDecision(
+            scope,
+            actionType,
+            'unknown',
+            '文章发布页面出现无法由适配器核验的原生确认对话框',
+            pageUrl,
+          )
+        : { kind: 'allow' }
+    }
+    const selectorDecision = this.validateAttestedSelector(
+      scope,
+      actionType,
+      params,
+      pageUrl,
+      context,
+    )
+    if (selectorDecision) return selectorDecision
     if (scope.currentStepId === 'open-editor' && !CONTROL_ACTIVATION_ACTIONS.has(actionType)) {
       return this.stopDecision(
         scope,
@@ -246,6 +403,15 @@ export class ArticlePublishingBrowserPolicy {
           pageUrl,
         )
       }
+      if (asset.status !== 'uploading') {
+        return this.stopDecision(
+          scope,
+          actionType,
+          'unknown',
+          '图片尚未取得本次确定性“页面不存在”证据并进入 uploading，禁止派发上传',
+          pageUrl,
+        )
+      }
       return this.reserveSideEffect(
         scope,
         'upload-asset',
@@ -254,17 +420,6 @@ export class ArticlePublishingBrowserPolicy {
         params,
         pageUrl,
       )
-    }
-    if (actionType === 'handleDialog') {
-      return params.action === 'accept'
-        ? this.stopDecision(
-            scope,
-            actionType,
-            'unknown',
-            '文章发布页面出现无法由适配器核验的原生确认对话框',
-            pageUrl,
-          )
-        : { kind: 'allow' }
     }
     if (
       AUTOSAVE_STEPS.has(scope.currentStepId ?? '') &&
@@ -636,12 +791,191 @@ export class ArticlePublishingBrowserPolicy {
       browserTaskRunId: input.browserTaskRunId ?? attempt.browserTaskRunId ?? '',
       draftUrl: publishing.draft?.url,
       sourceHash: publishing.source.contentHash,
+      expectedTitle: publishing.fields.title,
       assets: publishing.assets.map((asset) => ({
         id: asset.id,
         sourcePath: asset.sourcePath,
+        displayPath: asset.displayPath,
+        contentHash: asset.contentHash,
+        platformUrl: asset.platformUrl,
+        status: asset.status,
         uploadAttemptCount: asset.uploadAttempts.length,
       })),
     }
+  }
+
+  private attestationKey(context?: ToolExecutionContext): string {
+    const policy = context?.articlePublishingPolicy
+    return [
+      context?.conversationId ?? '',
+      context?.agentRunId ?? '',
+      policy?.attemptId ?? '',
+      policy?.executionGeneration ?? '',
+      policy?.launchOperationId ?? '',
+    ].join(':')
+  }
+
+  private validateAttestedSelector(
+    scope: ArticlePublishingExecutionScope,
+    actionType: string,
+    params: Record<string, unknown>,
+    pageUrl: string,
+    context?: ToolExecutionContext,
+  ): ArticlePublishingBrowserActionDecision | null {
+    const attestation = this.attestations.get(this.attestationKey(context))
+    if (!attestation) {
+      return this.stopDecision(
+        scope,
+        actionType,
+        'unknown',
+        '页面写入前必须先调用 article_publishing_inspect_page，禁止 Agent 猜 selector',
+        pageUrl,
+      )
+    }
+    const { inspection, scope: inspectedScope } = attestation
+    if (
+      inspectedScope.affairId !== scope.affairId ||
+      inspectedScope.attemptId !== scope.attemptId ||
+      inspectedScope.executionGeneration !== scope.executionGeneration ||
+      inspectedScope.launchOperationId !== scope.launchOperationId ||
+      inspectedScope.browserTaskRunId !== scope.browserTaskRunId ||
+      inspection.url !== pageUrl ||
+      Date.now() - Date.parse(inspection.observedAt) > 60_000
+    ) {
+      return this.stopDecision(
+        scope,
+        actionType,
+        'unknown',
+        '页面证据已过期或页面已变化，请重新调用 article_publishing_inspect_page',
+        pageUrl,
+      )
+    }
+    if (actionType === 'pressKey' || actionType === 'dragDrop') {
+      return this.stopDecision(
+        scope,
+        actionType,
+        'unknown',
+        '文章发布不允许无确定目标的键盘或拖放写入',
+        pageUrl,
+      )
+    }
+    const selector = String(params.selector ?? '').trim()
+    const stepId = scope.currentStepId ?? ''
+    const selectors = inspection.selectors
+    const allowed =
+      stepId === 'open-editor'
+        ? [selectors.openEditor]
+        : stepId === 'upload-assets'
+          ? [selectors.fileInput, selectors.uploadConfirm]
+          : stepId === 'fill-body'
+            ? [selectors.body]
+            : stepId === 'fill-fields'
+              ? [
+                  selectors.title,
+                  selectors.summary,
+                  selectors.tags,
+                  selectors.category,
+                  selectors.cover,
+                ]
+              : stepId === 'save-draft'
+                ? [selectors.save]
+                : stepId === 'publish'
+                  ? [selectors.publish]
+                  : []
+    const allowedSelectors = new Set(allowed.filter((value): value is string => Boolean(value)))
+    if (!selector || !allowedSelectors.has(selector)) {
+      return this.stopDecision(
+        scope,
+        actionType,
+        'unknown',
+        allowedSelectors.size === 0
+          ? 'csdn@1 未识别当前步骤的唯一控件，已停止并等待人工处理'
+          : '写入目标不是 csdn@1 本次读回签发的唯一 selector，已拒绝执行',
+        pageUrl,
+      )
+    }
+    return null
+  }
+
+  private inspectionProves(
+    kind: NonNullable<ArticlePublishingAgentReporter['trustedPageEvidence']>['kind'],
+    params: Record<string, unknown>,
+    attestation: TrustedPageAttestation,
+  ): boolean {
+    const { inspection, scope } = attestation
+    if (kind === 'asset-uploaded') {
+      const assetId = String(params['assetId'] ?? '')
+      const platformUrl = String(params['platformUrl'] ?? '')
+      return Boolean(platformUrl && inspection.matchedAssets[assetId] === platformUrl)
+    }
+    if (kind === 'asset-absent') {
+      const assetId = String(params['assetId'] ?? '')
+      return Boolean(
+        inspection.editor.recognized &&
+        inspection.editor.imageEnumerationComplete &&
+        scope.assets.some((asset) => asset.id === assetId) &&
+        !inspection.matchedAssets[assetId],
+      )
+    }
+    if (kind === 'published') {
+      return Boolean(this.resolvePublishedUrl(params, attestation))
+    }
+    const stepId = String(params['stepId'] ?? '')
+    if (stepId === 'open-editor' || stepId === 'verify-account') {
+      return inspection.editor.recognized
+    }
+    if (stepId === 'upload-assets') {
+      return scope.assets.every((asset) => Boolean(inspection.matchedAssets[asset.id]))
+    }
+    if (stepId === 'fill-body') {
+      return inspection.editor.recognized && inspection.editor.bodyTextLength > 0
+    }
+    if (stepId === 'fill-fields') {
+      return normalizeText(inspection.title.value) === normalizeText(scope.expectedTitle)
+    }
+    if (stepId === 'save-draft') {
+      return (
+        inspection.editor.recognized &&
+        inspection.saveState === 'saved' &&
+        normalizeText(inspection.title.value) === normalizeText(scope.expectedTitle)
+      )
+    }
+    if (stepId === 'publish') {
+      return inspection.pageKind === 'published-article' || scope.publicationStatus === 'dispatched'
+    }
+    if (stepId === 'verify-publication') {
+      return (
+        inspection.pageKind === 'published-article' &&
+        normalizeText(inspection.title.value) === normalizeText(scope.expectedTitle)
+      )
+    }
+    return false
+  }
+
+  private resolvePublishedUrl(
+    params: Record<string, unknown>,
+    attestation: TrustedPageAttestation,
+  ): string | null {
+    const outputRefs =
+      params['outputRefs'] && typeof params['outputRefs'] === 'object'
+        ? (params['outputRefs'] as Record<string, unknown>)
+        : {}
+    const requestedUrl = String(params['url'] ?? outputRefs['publicationUrl'] ?? '')
+    if (!requestedUrl) return null
+    const { inspection, scope } = attestation
+    if (
+      inspection.pageKind === 'published-article' &&
+      inspection.url === requestedUrl &&
+      normalizeText(inspection.title.value) === normalizeText(scope.expectedTitle)
+    ) {
+      return requestedUrl
+    }
+    const exactLink = inspection.publishedLinks.find(
+      (link) =>
+        link.url === requestedUrl &&
+        normalizeText(link.title) === normalizeText(scope.expectedTitle),
+    )
+    return exactLink?.url ?? null
   }
 
   private async isArticleAffair(input: ResolveExecutionInput): Promise<boolean> {
@@ -681,6 +1015,36 @@ export class ArticlePublishingBrowserPolicy {
       return false
     }
   }
+}
+
+function requiresTrustedPageEvidence(toolName: string, params: Record<string, unknown>): boolean {
+  return (
+    (toolName === 'article_publishing_report_checkpoint' && params['status'] === 'completed') ||
+    (toolName === 'article_publishing_report_asset' &&
+      ['uploading', 'uploaded'].includes(String(params['status'] ?? ''))) ||
+    (toolName === 'web_affair_finish_attempt' && params['outcome'] === 'succeeded')
+  )
+}
+
+function trustedEvidenceKind(
+  toolName: string,
+  params: Record<string, unknown>,
+): NonNullable<ArticlePublishingAgentReporter['trustedPageEvidence']>['kind'] {
+  if (toolName === 'article_publishing_report_asset') {
+    return params['status'] === 'uploading' ? 'asset-absent' : 'asset-uploaded'
+  }
+  if (toolName === 'web_affair_finish_attempt' || params['stepId'] === 'verify-publication') {
+    return 'published'
+  }
+  return 'checkpoint'
+}
+
+function publishingEvidenceError<T>(message: string): WebAffairOperationResult<T> {
+  return { success: false, error: { code: 'EVIDENCE_REQUIRED', message } }
+}
+
+function normalizeText(value: string): string {
+  return value.replace(/\s+/gu, ' ').trim()
 }
 
 function toOrigin(rawUrl: string): string | null {

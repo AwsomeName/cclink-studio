@@ -21,6 +21,7 @@ import {
   toMountedSkill,
 } from '../../features/agent-conversations/payload'
 import { createConversationRunController } from '../../features/agent-conversations/conversation-run-controller'
+import { DEFAULT_CONVERSATION_ID } from '../../features/agent-conversations/conversation-state'
 import {
   buildResourceCandidates,
   buildSkillCandidates,
@@ -148,6 +149,12 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   const [resourceQuery, setResourceQuery] = useState<string | null>(null)
   const [skillQuery, setSkillQuery] = useState<string | null>(null)
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
+  const [persistedPublishingBinding, setPersistedPublishingBinding] = useState<{
+    affairId: string
+    attemptId: string
+    executionGeneration: number
+    conversationId: string
+  } | null>(null)
   const pendingConfirmations = useMemo(
     () =>
       allPendingConfirmations.filter((confirmation) =>
@@ -225,21 +232,72 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
 
   useEffect(() => {
     let cancelled = false
+    if (!activeBrowserTab || activeWorkspaceRef.kind !== 'local') {
+      setPersistedPublishingBinding(null)
+      return
+    }
+    // Never project the previous Browser Tab's publishing Agent while the persistent mapping for
+    // the newly focused Tab is still loading.
+    setPersistedPublishingBinding(null)
+    const refresh = async () => {
+      const result = await window.cclinkStudio.webAffairs.getSnapshot({
+        workspaceRef: activeWorkspaceRef,
+      })
+      if (cancelled) return
+      if (!result.success) {
+        setPersistedPublishingBinding(null)
+        return
+      }
+      const affair = result.data.affairs.find((candidate) => {
+        const attemptId = candidate.articlePublishing?.execution.currentAttemptId
+        const attempt = attemptId
+          ? candidate.attempts.find((item) => item.id === attemptId)
+          : undefined
+        return candidate.kind === 'article-publishing' && attempt?.tabId === activeBrowserTab.id
+      })
+      const attemptId = affair?.articlePublishing?.execution.currentAttemptId
+      const attempt = attemptId ? affair?.attempts.find((item) => item.id === attemptId) : undefined
+      setPersistedPublishingBinding(
+        affair && attempt
+          ? {
+              affairId: affair.id,
+              attemptId: attempt.id,
+              executionGeneration: attempt.executionGeneration,
+              conversationId: attempt.conversationId ?? `article-publishing-${affair.id}`,
+            }
+          : null,
+      )
+    }
+    void refresh()
+    const offChanged = window.cclinkStudio.webAffairs.onChanged(() => void refresh())
+    return () => {
+      cancelled = true
+      offChanged()
+    }
+  }, [activeBrowserTab, activeWorkspaceRef])
+
+  useEffect(() => {
+    let cancelled = false
     const taskConversationId = activeTabConversationTask?.correlation?.conversationId
     const publishingConversationId = activePublishingAffairId
       ? `article-publishing-${activePublishingAffairId}`
       : null
-    const conversationId = taskConversationId ?? publishingConversationId
+    const conversationId =
+      taskConversationId ?? persistedPublishingBinding?.conversationId ?? publishingConversationId
     if (!conversationId) {
       focusedTabConversationRef.current = null
+      if (activeBrowserTab && activeConversationId.startsWith('article-publishing-')) {
+        switchConversation(DEFAULT_CONVERSATION_ID)
+      }
       return
     }
     const bindingKey = activeTabConversationTask
       ? `browser:${activeTabConversationTask.tabId}:${activeTabConversationTask.id}:${conversationId}`
-      : `article-publishing:${activePublishingAffairId}:${conversationId}`
+      : persistedPublishingBinding
+        ? `persisted-browser:${activeBrowserTab?.id}:${persistedPublishingBinding.affairId}:${persistedPublishingBinding.attemptId}:g${persistedPublishingBinding.executionGeneration}:${conversationId}`
+        : `article-publishing:${activePublishingAffairId}:${conversationId}`
     if (focusedTabConversationRef.current === bindingKey) return
     const conversation = conversations[conversationId]
-    if (!conversation && !activeTabConversationTask) return
     if (!conversation) {
       createConversation({
         id: conversationId,
@@ -266,10 +324,13 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     }
   }, [
     activePublishingAffairId,
+    activeBrowserTab,
+    activeConversationId,
     activeTabConversationTask,
     activeWorkspaceRef,
     conversations,
     createConversation,
+    persistedPublishingBinding,
     restoreArchivedConversation,
     switchConversation,
   ])
@@ -424,14 +485,18 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
       conversation?.runtime.workspaceRef ?? activeWorkspaceRef,
     )
     const currentMessages = conversation?.messages ?? messages
-    const browserTab = activeConversationBrowserTask
-      ? tabs.find((tab) => tab.id === activeConversationBrowserTask.tabId && tab.type === 'browser')
-      : scope.kind === 'browser'
-        ? tabs.find((tab) => tab.id === scope.instanceId && tab.type === 'browser')
-        : tabs.find((tab) => tab.id === activeTabId && tab.type === 'browser')
+    const browserTab = activeBrowserTab
+      ? activeBrowserTab
+      : activeConversationBrowserTask
+        ? tabs.find(
+            (tab) => tab.id === activeConversationBrowserTask.tabId && tab.type === 'browser',
+          )
+        : scope.kind === 'browser'
+          ? tabs.find((tab) => tab.id === scope.instanceId && tab.type === 'browser')
+          : tabs.find((tab) => tab.id === activeTabId && tab.type === 'browser')
     let browserTabId =
-      activeConversationBrowserTask?.tabId ??
       browserTab?.id ??
+      activeConversationBrowserTask?.tabId ??
       (scope.kind === 'browser' ? scope.instanceId : null)
     let currentUrl = browserTab?.initialUrl ?? null
     let viewState = null
@@ -532,6 +597,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   }, [
     activeConversationId,
     activeConversationBrowserTask,
+    activeBrowserTab,
     activeTabId,
     activeWorkspaceRef,
     backendState,
@@ -606,13 +672,16 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   }
 
   const activeBrowserTask = useMemo(() => {
-    if (activeConversationBrowserTask) return activeConversationBrowserTask
-    if (scope.kind !== 'browser') return null
-    const tasks = Object.values(browserTasks)
-      .filter((task) => task.tabId === scope.instanceId)
-      .sort((a, b) => b.startedAt - a.startedAt)
-    return tasks.find((task) => !isFinalBrowserTaskStatus(task.status)) ?? tasks[0] ?? null
-  }, [activeConversationBrowserTask, browserTasks, scope])
+    // A visible Browser Tab is the execution scene. Never render another conversation's
+    // BrowserTask over it merely because that conversation remains selected in the panel.
+    if (activeBrowserTab) {
+      const tasks = Object.values(browserTasks)
+        .filter((task) => task.tabId === activeBrowserTab.id)
+        .sort((a, b) => b.startedAt - a.startedAt)
+      return tasks.find((task) => !isFinalBrowserTaskStatus(task.status)) ?? tasks[0] ?? null
+    }
+    return activeConversationBrowserTask
+  }, [activeBrowserTab, activeConversationBrowserTask, browserTasks])
   const activeBrowserTaskLogs = activeBrowserTask
     ? (browserActionLogs[activeBrowserTask.id] ?? []).slice(-5)
     : []

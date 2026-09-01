@@ -21,6 +21,21 @@ export interface AgentSendMessageContext {
   workspaceRef?: WorkspaceRef
   resourceContext?: AgentResourceContextSnapshot
   continuity?: AgentConversationContinuity
+  /** main-owned exact MCP allowlist for product runs. */
+  allowedTools?: string[]
+  /** Disable backend-native file/shell/network tools for product runs. */
+  disableBuiltinTools?: boolean
+  /** main-owned product policy; renderer IPC never accepts this field. */
+  articlePublishingPolicy?: import('../agent-core/tools/types.js').ToolExecutionContext['articlePublishingPolicy']
+  /**
+   * BrowserTask 已创建、但 Agent 尚未获得 MCP 工具前调用。产品编排必须在这里
+   * 先持久化 Runtime binding，禁止“先执行、结束后才登记 owner”。
+   */
+  onRunPrepared?: (input: {
+    conversationId: string
+    runId: string
+    browserTaskRunId: string | null
+  }) => Promise<void>
 }
 
 type AgentCompiledMessageContext = Omit<AgentSendMessageContext, 'skills'> & {

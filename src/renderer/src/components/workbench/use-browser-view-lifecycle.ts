@@ -38,7 +38,11 @@ export function useBrowserViewLifecycle(
               Boolean(tab.workspaceRef) &&
               workspaceRefKey(tab.workspaceRef!) === activeWorkspaceKey,
           )
-          .map((tab) => ({ tabId: tab.id, profileId: tab.browserProfile ?? null })),
+          .map((tab) => ({
+            tabId: tab.id,
+            profileId: tab.browserProfile ?? null,
+            accountId: tab.webResourceRef?.accountId ?? null,
+          })),
       ),
     [activeWorkspaceKey, tabs],
   )

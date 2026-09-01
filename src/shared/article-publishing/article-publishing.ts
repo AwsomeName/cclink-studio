@@ -6,8 +6,6 @@ import type {
   CreateArticlePublishingTaskInput,
   InspectArticlePublishingSourceInput,
   ManageArticlePublishingRuntimeInput,
-  ReportArticlePublishingAssetInput,
-  ReportArticlePublishingCheckpointInput,
   StartArticlePublishingTaskInput,
   StartArticlePublishingTaskResult,
 } from './article-publishing-types'
@@ -37,14 +35,6 @@ export const articlePublishingIpc = {
     [ManageArticlePublishingRuntimeInput],
     WebAffairOperationResult<WebAffair>
   >('articlePublishing:terminateRuntime'),
-  reportCheckpoint: defineIpcCall<
-    [ReportArticlePublishingCheckpointInput],
-    WebAffairOperationResult<WebAffair>
-  >('articlePublishing:reportCheckpoint'),
-  reportAsset: defineIpcCall<
-    [ReportArticlePublishingAssetInput],
-    WebAffairOperationResult<WebAffair>
-  >('articlePublishing:reportAsset'),
 } as const
 
 export type { ArticlePublishingApiContract }

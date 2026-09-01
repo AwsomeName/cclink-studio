@@ -1,7 +1,11 @@
 import type { ToolDefinition, ToolExecutionContext, ToolModule } from '../../types'
-import type { WebAffairService } from '../../../web-affairs/web-affair-service'
+import type {
+  ArticlePublishingAgentReporter,
+  WebAffairService,
+} from '../../../web-affairs/web-affair-service'
 import type { WorkspaceRef } from '../../../../shared/workspace-ref'
 import type { WebAffairOperationResult } from '../../../../shared/web-affairs/web-affair-types'
+import type { ArticlePublishingBrowserPolicy } from '../../../article-publishing/article-publishing-browser-policy'
 
 const TOOLS: ToolDefinition[] = [
   {
@@ -69,6 +73,20 @@ const TOOLS: ToolDefinition[] = [
       required: ['affairId', 'nodeId', 'outcome', 'summary'],
     },
     annotations: { readOnlyHint: false, destructiveHint: false },
+  },
+  {
+    name: 'article_publishing_inspect_page',
+    description:
+      '使用主进程内置 csdn@1 适配器一次性读取当前绑定页面、编辑器、标题、图片、草稿保存状态和公开文章结果。成功回报前必须先调用本工具；页面版本未知时会明确停止，不要继续猜 selector。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        affairId: { type: 'string' },
+        attemptId: { type: 'string' },
+      },
+      required: ['affairId', 'attemptId'],
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false },
   },
   {
     name: 'article_publishing_report_checkpoint',
@@ -142,6 +160,7 @@ export class WebAffairToolModule implements ToolModule {
   constructor(
     private readonly service: WebAffairService,
     private readonly resolveWorkspaceId: (workspacePath: string) => Promise<string | null>,
+    private readonly articlePublishingBrowserPolicy?: ArticlePublishingBrowserPolicy | null,
   ) {}
 
   async execute(
@@ -154,6 +173,8 @@ export class WebAffairToolModule implements ToolModule {
     const { workspaceId, workspaceRef } = scope.data
 
     if (toolName === 'web_affair_get') {
+      const policyError = this.validatePublishingTarget(params, context)
+      if (policyError) return policyError
       const snapshot = this.service.getProjectSnapshot(workspaceId)
       if (!snapshot.success) return snapshot
       const affair = snapshot.data.affairs.find((item) => item.id === params['affairId'])
@@ -184,21 +205,52 @@ export class WebAffairToolModule implements ToolModule {
       )
     }
     if (toolName === 'web_affair_finish_attempt') {
-      return this.service.finishAttempt({ ...params, workspaceRef } as never, workspaceId)
+      const reporter = this.resolvePublishingReporter(params, context, workspaceId)
+      if (context?.articlePublishingPolicy && !reporter.success) return reporter
+      const trustedReporter = reporter.success
+        ? this.authorizeTrustedReport(toolName, params, context, reporter.data)
+        : reporter
+      if (context?.articlePublishingPolicy && !trustedReporter.success) return trustedReporter
+      return this.service.finishAttempt(
+        { ...params, workspaceRef } as never,
+        workspaceId,
+        trustedReporter.success ? trustedReporter.data : undefined,
+      )
     }
     if (toolName === 'web_affair_complete_check') {
       return this.service.completeCheck({ ...params, workspaceRef } as never, workspaceId)
     }
     if (toolName === 'article_publishing_report_checkpoint') {
+      const reporter = this.resolvePublishingReporter(params, context, workspaceId)
+      if (!reporter.success) return reporter
+      const trustedReporter = this.authorizeTrustedReport(toolName, params, context, reporter.data)
+      if (!trustedReporter.success) return trustedReporter
       return this.service.reportArticlePublishingCheckpoint(
-        { ...params, workspaceRef } as never,
+        this.withCanonicalEvidence(params, workspaceRef, trustedReporter.data) as never,
         workspaceId,
+        trustedReporter.data,
       )
     }
     if (toolName === 'article_publishing_report_asset') {
+      const reporter = this.resolvePublishingReporter(params, context, workspaceId)
+      if (!reporter.success) return reporter
+      const trustedReporter = this.authorizeTrustedReport(toolName, params, context, reporter.data)
+      if (!trustedReporter.success) return trustedReporter
       return this.service.reportArticlePublishingAsset(
-        { ...params, workspaceRef } as never,
+        this.withCanonicalEvidence(params, workspaceRef, trustedReporter.data) as never,
         workspaceId,
+        trustedReporter.data,
+      )
+    }
+    if (toolName === 'article_publishing_inspect_page') {
+      const targetError = this.validatePublishingTarget(params, context)
+      if (targetError) return targetError
+      if (params['attemptId'] !== context?.articlePublishingPolicy?.attemptId) {
+        return publishingPolicyError('工具参数与当前文章发布 Attempt 不匹配')
+      }
+      return (
+        this.articlePublishingBrowserPolicy?.inspectCurrentPage(context) ??
+        publishingPolicyError('CSDN 页面适配器尚未就绪')
       )
     }
     throw new Error(`未知网页事务工具: ${toolName}`)
@@ -221,6 +273,88 @@ export class WebAffairToolModule implements ToolModule {
       return workspaceRequired()
     }
   }
+
+  private validatePublishingTarget(
+    params: Record<string, unknown>,
+    context?: ToolExecutionContext,
+  ): WebAffairOperationResult<never> | null {
+    const policy = context?.articlePublishingPolicy
+    if (!policy) return null
+    return params['affairId'] === policy.affairId
+      ? null
+      : publishingPolicyError('当前发布 Agent 不能读取或修改其他事务')
+  }
+
+  private resolvePublishingReporter(
+    params: Record<string, unknown>,
+    context: ToolExecutionContext | undefined,
+    workspaceId: string,
+  ): WebAffairOperationResult<ArticlePublishingAgentReporter> {
+    const policy = context?.articlePublishingPolicy
+    const conversationId = context?.conversationId?.trim()
+    const agentRunId = context?.agentRunId?.trim()
+    if (!policy || !conversationId || !agentRunId) {
+      return publishingPolicyError('当前工具会话没有主进程签发的文章发布执行身份')
+    }
+    if (
+      policy.workspaceId !== workspaceId ||
+      params['affairId'] !== policy.affairId ||
+      params['attemptId'] !== policy.attemptId
+    ) {
+      return publishingPolicyError('工具参数与当前文章发布执行身份不匹配')
+    }
+    return {
+      success: true,
+      data: {
+        workspaceId,
+        affairId: policy.affairId,
+        attemptId: policy.attemptId,
+        executionGeneration: policy.executionGeneration,
+        launchOperationId: policy.launchOperationId,
+        conversationId,
+        agentRunId,
+      },
+    }
+  }
+
+  private authorizeTrustedReport(
+    toolName: string,
+    params: Record<string, unknown>,
+    context: ToolExecutionContext | undefined,
+    reporter: ArticlePublishingAgentReporter,
+  ): WebAffairOperationResult<ArticlePublishingAgentReporter> {
+    const requiresEvidence =
+      (toolName === 'article_publishing_report_checkpoint' && params['status'] === 'completed') ||
+      (toolName === 'article_publishing_report_asset' &&
+        ['uploading', 'uploaded'].includes(String(params['status'] ?? ''))) ||
+      (toolName === 'web_affair_finish_attempt' && params['outcome'] === 'succeeded')
+    if (!requiresEvidence) return { success: true, data: reporter }
+    return (
+      this.articlePublishingBrowserPolicy?.authorizeTrustedReport(
+        toolName,
+        params,
+        context,
+        reporter,
+      ) ?? publishingPolicyError('成功回报必须经过当前 CSDN 页面适配器核验')
+    )
+  }
+
+  private withCanonicalEvidence(
+    params: Record<string, unknown>,
+    workspaceRef: WorkspaceRef,
+    reporter: ArticlePublishingAgentReporter,
+  ): Record<string, unknown> {
+    const trusted = reporter.trustedPageEvidence
+    return {
+      ...params,
+      workspaceRef,
+      ...(trusted
+        ? {
+            evidence: `csdn@${trusted.adapterVersion} 页面证据 ${trusted.evidenceHash.slice(0, 16)} · ${trusted.url}`,
+          }
+        : {}),
+    }
+  }
 }
 
 function workspaceRequired<T>(): WebAffairOperationResult<T> {
@@ -231,4 +365,8 @@ function workspaceRequired<T>(): WebAffairOperationResult<T> {
       message: '当前 Agent 会话没有可验证的本地工作空间，不能读写事务',
     },
   }
+}
+
+function publishingPolicyError<T>(message: string): WebAffairOperationResult<T> {
+  return { success: false, error: { code: 'INVALID_TRANSITION', message } }
 }

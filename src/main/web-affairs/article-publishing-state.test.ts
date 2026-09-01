@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ArticlePublishingSourcePreview } from '../../shared/article-publishing/article-publishing-types'
 import type { WebResourceSnapshot } from '../../shared/web-resources/web-resource-types'
-import { WebAffairService } from './web-affair-service'
+import { WebAffairService, type ArticlePublishingAgentReporter } from './web-affair-service'
 import { WebAffairStore } from './web-affair-store'
 
 const PRINCIPAL_ID = '11111111-1111-4111-8111-111111111111'
@@ -47,6 +47,69 @@ describe('article publishing persistent state', () => {
       articlePublishing: { execution: { status: 'draft' } },
     })
     await reloaded.flush()
+  })
+
+  it('atomically grants only one cross-affair article publishing execution lease', async () => {
+    const first = await createDraftTask(directory, sourcePath, imagePath)
+    const secondCreated = await first.service.createArticlePublishingAffair(
+      {
+        preview: {
+          source: {
+            markdownPath: sourcePath,
+            contentHash: 'a'.repeat(64),
+            modifiedAt: Date.now(),
+            size: 36,
+          },
+          title: 'Second Article',
+          summary: 'summary',
+          assets: [
+            {
+              id: '66666666-6666-4666-8666-666666666666',
+              kind: 'local',
+              sourcePath: imagePath,
+              displayPath: 'image.png',
+              contentHash: 'b'.repeat(64),
+              mediaType: 'image/png',
+              size: 5,
+              occurrences: [{ start: 12, end: 23, alt: 'image' }],
+              status: 'pending',
+              uploadAttempts: [],
+            },
+          ],
+          blockers: [],
+          warnings: [],
+        },
+        accountId: ACCOUNT_ID,
+        fields: { title: 'Second Article', summary: 'summary', tags: [], category: '' },
+        workspaceRef: { kind: 'local', path: directory },
+      },
+      WORKSPACE_ID,
+    )
+    if (!secondCreated.success) throw new Error(secondCreated.error.message)
+
+    const results = await Promise.all([
+      first.service.acquireArticlePublishingAttempt(first.affairId, WORKSPACE_ID),
+      first.service.acquireArticlePublishingAttempt(secondCreated.data.id, WORKSPACE_ID),
+    ])
+
+    expect(results.filter((result) => result.success)).toHaveLength(1)
+    expect(results.filter((result) => !result.success)).toEqual([
+      expect.objectContaining({
+        error: expect.objectContaining({
+          message: expect.stringContaining('正在占用 Browser/Agent'),
+        }),
+      }),
+    ])
+    const snapshot = first.service.getSnapshot()
+    expect(snapshot.success).toBe(true)
+    if (!snapshot.success) return
+    expect(
+      snapshot.data.affairs.filter((affair) =>
+        ['preparing', 'running', 'checking-runtime', 'waiting-human'].includes(
+          affair.articlePublishing?.execution.status ?? '',
+        ),
+      ),
+    ).toHaveLength(1)
   })
 
   it('persists one immutable platform draft identity across a cold service reload', async () => {
@@ -107,18 +170,98 @@ describe('article publishing persistent state', () => {
     await reloaded.flush()
   })
 
+  it('rejects stale Agent generations, out-of-order checkpoints and finish bypasses', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const workspaceRef = { kind: 'local' as const, path: directory }
+
+    await expect(
+      created.service.reportArticlePublishingCheckpoint(
+        {
+          workspaceRef,
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          stepId: 'verify-account',
+          status: 'running',
+        },
+        WORKSPACE_ID,
+        trustedReporter(created.reporter, 'checkpoint'),
+      ),
+    ).resolves.toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('当前文章发布步骤') },
+    })
+
+    await expect(
+      created.service.reportArticlePublishingCheckpoint(
+        {
+          workspaceRef,
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          stepId: 'open-editor',
+          status: 'verifying',
+        },
+        WORKSPACE_ID,
+        created.reporter,
+      ),
+    ).resolves.toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('页面证据') },
+    })
+
+    await expect(
+      created.service.reportArticlePublishingCheckpoint(
+        {
+          workspaceRef,
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          stepId: 'open-editor',
+          status: 'verifying',
+          evidence: 'visible editor observed',
+        },
+        WORKSPACE_ID,
+        { ...created.reporter, executionGeneration: created.reporter.executionGeneration - 1 },
+      ),
+    ).resolves.toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('已失效的执行代次') },
+    })
+
+    const finishInput = {
+      workspaceRef,
+      affairId: created.affairId,
+      attemptId: created.attemptId,
+      outcome: 'succeeded' as const,
+      summary: 'published',
+      url: 'https://blog.csdn.net/example/article/details/123456',
+    }
+    await expect(created.service.finishAttempt(finishInput, WORKSPACE_ID)).resolves.toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('当前 Agent Run') },
+    })
+    await expect(
+      created.service.finishAttempt(finishInput, WORKSPACE_ID, created.reporter),
+    ).resolves.toMatchObject({
+      success: false,
+      error: { code: 'EVIDENCE_REQUIRED' },
+    })
+  })
+
   it('requires waiting and verification evidence before an image becomes uploaded', async () => {
-    const { service, affairId, attemptId, assetId } = await createStartedTask(
+    const { service, affairId, attemptId, assetId, reporter } = await createStartedTask(
       directory,
       sourcePath,
       imagePath,
     )
+    const created = { service, affairId, attemptId, assetId, reporter, workspacePath: directory }
+    await prepareUploadCheckpoint(created)
+    await dispatchUploadEffect(created, 1)
     const workspaceRef = { kind: 'local' as const, path: directory }
 
     await expectStatus(
       service.reportArticlePublishingAsset(
         { workspaceRef, affairId, attemptId, assetId, status: 'uploading' },
         WORKSPACE_ID,
+        trustedReporter(reporter, 'asset-absent'),
       ),
       'uploading',
     )
@@ -133,6 +276,7 @@ describe('article publishing persistent state', () => {
           evidence: '文件控件已接收',
         },
         WORKSPACE_ID,
+        reporter,
       ),
       'waiting-platform',
     )
@@ -147,6 +291,7 @@ describe('article publishing persistent state', () => {
           evidence: '编辑器出现新图片节点',
         },
         WORKSPACE_ID,
+        reporter,
       ),
       'verifying',
     )
@@ -160,6 +305,7 @@ describe('article publishing persistent state', () => {
         platformUrl: 'https://img-blog.csdnimg.cn/example.png',
       },
       WORKSPACE_ID,
+      trustedReporter(reporter, 'asset-uploaded'),
     )
     expect(missingEvidence).toMatchObject({
       success: false,
@@ -176,6 +322,7 @@ describe('article publishing persistent state', () => {
         evidence: '重新读取编辑器确认平台 URL 和插入位置',
       },
       WORKSPACE_ID,
+      trustedReporter(reporter, 'asset-uploaded'),
     )
     expect(uploaded.success).toBe(true)
     if (!uploaded.success) return
@@ -187,16 +334,20 @@ describe('article publishing persistent state', () => {
   })
 
   it('caps safe image upload attempts at three', async () => {
-    const { service, affairId, attemptId, assetId } = await createStartedTask(
+    const { service, affairId, attemptId, assetId, reporter } = await createStartedTask(
       directory,
       sourcePath,
       imagePath,
     )
+    const created = { service, affairId, attemptId, assetId, reporter, workspacePath: directory }
+    await prepareUploadCheckpoint(created)
     const workspaceRef = { kind: 'local' as const, path: directory }
     for (let number = 1; number <= 3; number += 1) {
+      await dispatchUploadEffect(created, number)
       const started = await service.reportArticlePublishingAsset(
         { workspaceRef, affairId, attemptId, assetId, status: 'uploading' },
         WORKSPACE_ID,
+        trustedReporter(reporter, 'asset-absent'),
       )
       expect(started.success).toBe(true)
       const failed = await service.reportArticlePublishingAsset(
@@ -206,24 +357,29 @@ describe('article publishing persistent state', () => {
           attemptId,
           assetId,
           status: 'retryable-failed',
+          evidence: '平台明确拒绝本次上传',
           error: { code: 'UPLOAD_REJECTED', message: `第 ${number} 次失败` },
         },
         WORKSPACE_ID,
+        reporter,
       )
       expect(failed.success).toBe(true)
     }
     const fourth = await service.reportArticlePublishingAsset(
       { workspaceRef, affairId, attemptId, assetId, status: 'uploading' },
       WORKSPACE_ID,
+      trustedReporter(reporter, 'asset-absent'),
     )
     expect(fourth).toMatchObject({
       success: false,
-      error: { code: 'INVALID_TRANSITION', message: expect.stringContaining('状态不能') },
+      error: { code: 'INVALID_TRANSITION' },
     })
   })
 
   it('resumes the same interrupted Attempt and moves transient state to reconciliation', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
+    await prepareUploadCheckpoint(created)
+    await dispatchUploadEffect(created, 1)
     const uploading = await created.service.reportArticlePublishingAsset(
       {
         workspaceRef: { kind: 'local', path: directory },
@@ -233,6 +389,7 @@ describe('article publishing persistent state', () => {
         status: 'uploading',
       },
       WORKSPACE_ID,
+      trustedReporter(created.reporter, 'asset-absent'),
     )
     expect(uploading.success).toBe(true)
     await created.service.flush()
@@ -277,6 +434,152 @@ describe('article publishing persistent state', () => {
       status: 'preparing',
     })
     await reloaded.flush()
+  })
+
+  it('reconciles an unknown upload from the prior generation without uploading the image again', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await prepareUploadCheckpoint(created)
+    await dispatchUploadEffect(created, 1)
+    const workspaceRef = { kind: 'local' as const, path: directory }
+    const uploading = await created.service.reportArticlePublishingAsset(
+      {
+        workspaceRef,
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        assetId: created.assetId,
+        status: 'uploading',
+      },
+      WORKSPACE_ID,
+      trustedReporter(created.reporter, 'asset-absent'),
+    )
+    expect(uploading.success).toBe(true)
+    const unknown = await created.service.reportArticlePublishingAsset(
+      {
+        workspaceRef,
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        assetId: created.assetId,
+        status: 'result-unknown',
+        evidence: '上传动作已派发，但连接在页面读回前断开',
+        error: { code: 'CDP_DISCONNECTED', message: '无法确认上传结果' },
+      },
+      WORKSPACE_ID,
+      created.reporter,
+    )
+    expect(unknown.success).toBe(true)
+
+    const resumedReporter = await resumeAndBindPublishingTask(created)
+    const reconciled = await created.service.reportArticlePublishingAsset(
+      {
+        workspaceRef,
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        assetId: created.assetId,
+        status: 'uploaded',
+        platformUrl: 'https://img-blog.csdnimg.cn/recovered.png',
+        evidence: 'csdn@1 按冻结内容哈希读回同一张图片',
+      },
+      WORKSPACE_ID,
+      trustedReporter(resumedReporter, 'asset-uploaded'),
+    )
+    if (!reconciled.success) throw new Error(reconciled.error.message)
+    expect(reconciled.data.articlePublishing?.assets[0]).toMatchObject({
+      status: 'uploaded',
+      uploadAttempts: [{ number: 1, status: 'succeeded' }],
+    })
+    expect(
+      reconciled.data.articlePublishing?.sideEffects.find(
+        (effect) => effect.kind === 'upload-asset',
+      )?.status,
+    ).toBe('verified')
+  })
+
+  it('finishes an unknown draft save from current CSDN readback instead of getting stuck', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await prepareUploadCheckpoint(created)
+    await dispatchUploadEffect(created, 1)
+    const workspaceRef = { kind: 'local' as const, path: directory }
+    for (const update of [
+      { status: 'uploading' as const },
+      { status: 'waiting-platform' as const, evidence: 'file accepted' },
+      { status: 'verifying' as const, evidence: 'image visible' },
+      {
+        status: 'uploaded' as const,
+        platformUrl: 'https://img-blog.csdnimg.cn/save-recovery.png',
+        evidence: 'image hash verified',
+      },
+    ]) {
+      const result = await created.service.reportArticlePublishingAsset(
+        {
+          workspaceRef,
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          assetId: created.assetId,
+          ...update,
+        },
+        WORKSPACE_ID,
+        trustedReporter(
+          created.reporter,
+          update.status === 'uploading'
+            ? 'asset-absent'
+            : update.status === 'uploaded'
+              ? 'asset-uploaded'
+              : undefined,
+        ),
+      )
+      if (!result.success) throw new Error(result.error.message)
+    }
+    await advanceToSaveCheckpoint(created)
+    const sideEffectKey = await dispatchSaveEffect(created, 'save-draft')
+    const before = created.service.getProjectSnapshot(WORKSPACE_ID)
+    if (!before.success) throw new Error(before.error.message)
+    const attempt = before.data.affairs[0].attempts.find((item) => item.id === created.attemptId)!
+    const unknown = await created.service.observeArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      attempt.executionGeneration,
+      sideEffectKey,
+      'result-unknown',
+      WORKSPACE_ID,
+    )
+    if (!unknown.success) throw new Error(unknown.error.message)
+
+    const resumedReporter = await resumeAndBindPublishingTask(created)
+    const verifying = await created.service.reportArticlePublishingCheckpoint(
+      {
+        workspaceRef,
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        stepId: 'save-draft',
+        status: 'verifying',
+        evidence: 'csdn@1 重新读取原草稿',
+      },
+      WORKSPACE_ID,
+      resumedReporter,
+    )
+    if (!verifying.success) throw new Error(verifying.error.message)
+    const completed = await created.service.reportArticlePublishingCheckpoint(
+      {
+        workspaceRef,
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        stepId: 'save-draft',
+        status: 'completed',
+        evidence: 'csdn@1 确认标题一致且页面显示草稿已保存',
+      },
+      WORKSPACE_ID,
+      trustedReporter(resumedReporter, 'checkpoint'),
+    )
+    if (!completed.success) throw new Error(completed.error.message)
+    expect(
+      completed.data.articlePublishing?.checkpoints.find(
+        (checkpoint) => checkpoint.stepId === 'save-draft',
+      )?.status,
+    ).toBe('completed')
+    expect(
+      completed.data.articlePublishing?.sideEffects.find((effect) => effect.key === sideEffectKey)
+        ?.status,
+    ).toBe('verified')
   })
 
   it('returns a waiting-human article task to the same Attempt for fresh observation', async () => {
@@ -395,6 +698,8 @@ describe('article publishing persistent state', () => {
 
   it('records the publication side effect before a final click can be dispatched', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
+    await prepareUploadCheckpoint(created)
+    await dispatchUploadEffect(created, 1)
     const workspaceRef = { kind: 'local' as const, path: directory }
     for (const update of [
       { status: 'uploading' as const },
@@ -415,28 +720,18 @@ describe('article publishing persistent state', () => {
           ...update,
         },
         WORKSPACE_ID,
+        trustedReporter(
+          created.reporter,
+          update.status === 'uploading'
+            ? 'asset-absent'
+            : update.status === 'uploaded'
+              ? 'asset-uploaded'
+              : undefined,
+        ),
       )
       expect(updated.success).toBe(true)
     }
-    const snapshot = created.service.getProjectSnapshot(WORKSPACE_ID)
-    expect(snapshot.success).toBe(true)
-    if (!snapshot.success) return
-    const affair = snapshot.data.affairs[0]
-    for (const checkpoint of affair.articlePublishing?.checkpoints ?? []) {
-      if (checkpoint.stepId === 'publish') break
-      const completed = await created.service.reportArticlePublishingCheckpoint(
-        {
-          workspaceRef,
-          affairId: created.affairId,
-          attemptId: created.attemptId,
-          stepId: checkpoint.stepId,
-          status: 'completed',
-          evidence: `${checkpoint.stepId} verified`,
-        },
-        WORKSPACE_ID,
-      )
-      expect(completed.success).toBe(true)
-    }
+    await advanceToPublishCheckpoint(created)
 
     const current = created.service.getProjectSnapshot(WORKSPACE_ID)
     expect(current.success).toBe(true)
@@ -807,6 +1102,8 @@ describe('article publishing persistent state', () => {
 
   it('keeps a non-final unknown upload on its incomplete checkpoint instead of skipping to publication verification', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
+    await prepareUploadCheckpoint(created)
+    await dispatchUploadEffect(created, 1)
     const workspaceRef = { kind: 'local' as const, path: directory }
     const uploading = await created.service.reportArticlePublishingAsset(
       {
@@ -817,6 +1114,7 @@ describe('article publishing persistent state', () => {
         status: 'uploading',
       },
       WORKSPACE_ID,
+      trustedReporter(created.reporter, 'asset-absent'),
     )
     expect(uploading.success).toBe(true)
     const unknown = await created.service.reportArticlePublishingAsset(
@@ -826,9 +1124,11 @@ describe('article publishing persistent state', () => {
         attemptId: created.attemptId,
         assetId: created.assetId,
         status: 'result-unknown',
+        evidence: '上传派发后无法重新读取页面',
         error: { code: 'CDP_DISCONNECTED', message: '上传派发后 CDP 断开' },
       },
       WORKSPACE_ID,
+      created.reporter,
     )
     expect(unknown.success).toBe(true)
     if (!unknown.success) return
@@ -848,6 +1148,8 @@ describe('article publishing persistent state', () => {
 
   it('repairs v0.1.73 data that mislabeled a non-final unknown action as publication unknown', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
+    await prepareUploadCheckpoint(created)
+    await dispatchUploadEffect(created, 1)
     const workspaceRef = { kind: 'local' as const, path: directory }
     await created.service.reportArticlePublishingAsset(
       {
@@ -858,6 +1160,7 @@ describe('article publishing persistent state', () => {
         status: 'uploading',
       },
       WORKSPACE_ID,
+      trustedReporter(created.reporter, 'asset-absent'),
     )
     const unknown = await created.service.reportArticlePublishingAsset(
       {
@@ -866,9 +1169,11 @@ describe('article publishing persistent state', () => {
         attemptId: created.attemptId,
         assetId: created.assetId,
         status: 'result-unknown',
+        evidence: '上传派发后无法重新读取页面',
         error: { code: 'CDP_DISCONNECTED', message: '上传派发后 CDP 断开' },
       },
       WORKSPACE_ID,
+      created.reporter,
     )
     expect(unknown.success).toBe(true)
     await created.service.flush()
@@ -909,6 +1214,8 @@ describe('article publishing persistent state', () => {
 
   it('repairs the v0.1.74 startup crash when legacy normalization exposes a lifecycle mismatch', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
+    await prepareUploadCheckpoint(created)
+    await dispatchUploadEffect(created, 1)
     const workspaceRef = { kind: 'local' as const, path: directory }
     await created.service.reportArticlePublishingAsset(
       {
@@ -919,6 +1226,7 @@ describe('article publishing persistent state', () => {
         status: 'uploading',
       },
       WORKSPACE_ID,
+      trustedReporter(created.reporter, 'asset-absent'),
     )
     await created.service.reportArticlePublishingAsset(
       {
@@ -927,9 +1235,11 @@ describe('article publishing persistent state', () => {
         attemptId: created.attemptId,
         assetId: created.assetId,
         status: 'result-unknown',
+        evidence: '上传派发后无法重新读取页面',
         error: { code: 'CDP_DISCONNECTED', message: '上传派发后 CDP 断开' },
       },
       WORKSPACE_ID,
+      created.reporter,
     )
     await created.service.flush()
 
@@ -1036,6 +1346,8 @@ describe('article publishing persistent state', () => {
 
   it('preserves publication unknown when legacy evidence does not prove it came from a non-final action', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
+    await prepareUploadCheckpoint(created)
+    await dispatchUploadEffect(created, 1)
     const workspaceRef = { kind: 'local' as const, path: directory }
     await created.service.reportArticlePublishingAsset(
       {
@@ -1046,6 +1358,7 @@ describe('article publishing persistent state', () => {
         status: 'uploading',
       },
       WORKSPACE_ID,
+      trustedReporter(created.reporter, 'asset-absent'),
     )
     await created.service.reportArticlePublishingAsset(
       {
@@ -1054,9 +1367,11 @@ describe('article publishing persistent state', () => {
         attemptId: created.attemptId,
         assetId: created.assetId,
         status: 'result-unknown',
+        evidence: '上传派发后无法重新读取页面',
         error: { code: 'CDP_DISCONNECTED', message: '上传派发后 CDP 断开' },
       },
       WORKSPACE_ID,
+      created.reporter,
     )
     await created.service.flush()
 
@@ -1207,16 +1522,51 @@ async function createStartedTask(directory: string, sourcePath: string, imagePat
     WORKSPACE_ID,
   )
   if (!marked.success) throw new Error(marked.error.message)
-  const bound = await created.service.bindAttempt(
-    {
-      workspaceRef: { kind: 'local', path: directory },
-      affairId: created.affairId,
-      attemptId,
-      tabId: 'tab-article',
-      conversationId: 'conversation-article',
-      agentRunId: 'run-article',
-      browserTaskRunId: '77777777-7777-4777-8777-777777777777',
-    },
+  const markedAttempt = marked.data.attempts.find((attempt) => attempt.id === attemptId)!
+  const now = new Date().toISOString()
+  const bindingBase = {
+    attemptId,
+    executionGeneration: markedAttempt.executionGeneration,
+    launchOperationId: markedAttempt.launchOperationId,
+    status: 'active' as const,
+    boundAt: now,
+    lastObservedAt: now,
+  }
+  const bound = await created.service.bindArticlePublishingRuntime(
+    created.affairId,
+    attemptId,
+    markedAttempt.executionGeneration,
+    markedAttempt.launchOperationId,
+    [
+      {
+        ...bindingBase,
+        id: randomUUID(),
+        kind: 'agent-run',
+        conversationId: 'conversation-article',
+        agentRunId: 'run-article',
+        agentRuntimeEpoch: 1,
+        agentRuntimeBindingKey: 'agent-binding-article',
+      },
+      {
+        ...bindingBase,
+        id: randomUUID(),
+        kind: 'browser-tab',
+        tabId: 'tab-article',
+        browserViewRuntimeGeneration: 1,
+        webContentsId: 10,
+      },
+      {
+        ...bindingBase,
+        id: randomUUID(),
+        kind: 'browser-task',
+        browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+        tabId: 'tab-article',
+        browserViewRuntimeGeneration: 1,
+        webContentsId: 10,
+        playwrightConnectionGeneration: 1,
+        playwrightPageBindingGeneration: 1,
+      },
+    ],
     WORKSPACE_ID,
   )
   if (!bound.success) throw new Error(bound.error.message)
@@ -1225,7 +1575,254 @@ async function createStartedTask(directory: string, sourcePath: string, imagePat
     affairId: created.affairId,
     attemptId,
     assetId: created.assetId,
+    workspacePath: directory,
+    reporter: {
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId,
+      executionGeneration: markedAttempt.executionGeneration,
+      launchOperationId: markedAttempt.launchOperationId,
+      conversationId: 'conversation-article',
+      agentRunId: 'run-article',
+    },
   }
+}
+
+type StartedTask = Awaited<ReturnType<typeof createStartedTask>>
+
+function trustedReporter(
+  reporter: ArticlePublishingAgentReporter,
+  kind?: NonNullable<ArticlePublishingAgentReporter['trustedPageEvidence']>['kind'],
+  url = 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
+): ArticlePublishingAgentReporter {
+  if (!kind) return reporter
+  return {
+    ...reporter,
+    trustedPageEvidence: {
+      adapterId: 'csdn',
+      adapterVersion: 1,
+      evidenceHash: 'e'.repeat(64),
+      observedAt: new Date().toISOString(),
+      url,
+      kind,
+    },
+  }
+}
+
+async function resumeAndBindPublishingTask(
+  created: StartedTask,
+): Promise<ArticlePublishingAgentReporter> {
+  const acquired = await created.service.acquireArticlePublishingAttempt(
+    created.affairId,
+    WORKSPACE_ID,
+  )
+  if (!acquired.success) throw new Error(acquired.error.message)
+  const attempt = acquired.data.attempts.find((item) => item.id === created.attemptId)
+  if (!attempt) throw new Error('恢复后的 Attempt 不存在')
+  const now = new Date().toISOString()
+  const base = {
+    attemptId: attempt.id,
+    executionGeneration: attempt.executionGeneration,
+    launchOperationId: attempt.launchOperationId,
+    status: 'active' as const,
+    boundAt: now,
+    lastObservedAt: now,
+  }
+  const browserTaskRunId = '88888888-8888-4888-8888-888888888888'
+  const conversationId = 'conversation-article'
+  const agentRunId = `run-article-g${attempt.executionGeneration}`
+  const bound = await created.service.bindArticlePublishingRuntime(
+    created.affairId,
+    attempt.id,
+    attempt.executionGeneration,
+    attempt.launchOperationId,
+    [
+      {
+        ...base,
+        id: randomUUID(),
+        kind: 'agent-run',
+        conversationId,
+        agentRunId,
+        agentRuntimeEpoch: attempt.executionGeneration,
+        agentRuntimeBindingKey: `agent-binding-g${attempt.executionGeneration}`,
+      },
+      {
+        ...base,
+        id: randomUUID(),
+        kind: 'browser-tab',
+        tabId: 'tab-article',
+        browserViewRuntimeGeneration: attempt.executionGeneration,
+        webContentsId: 10,
+      },
+      {
+        ...base,
+        id: randomUUID(),
+        kind: 'browser-task',
+        browserTaskRunId,
+        tabId: 'tab-article',
+        browserViewRuntimeGeneration: attempt.executionGeneration,
+        webContentsId: 10,
+        playwrightConnectionGeneration: attempt.executionGeneration,
+        playwrightPageBindingGeneration: attempt.executionGeneration,
+      },
+    ],
+    WORKSPACE_ID,
+  )
+  if (!bound.success) throw new Error(bound.error.message)
+  return {
+    workspaceId: WORKSPACE_ID,
+    affairId: created.affairId,
+    attemptId: attempt.id,
+    executionGeneration: attempt.executionGeneration,
+    launchOperationId: attempt.launchOperationId,
+    conversationId,
+    agentRunId,
+  }
+}
+
+async function prepareUploadCheckpoint(created: StartedTask) {
+  const workspaceRef = { kind: 'local' as const, path: created.workspacePath }
+  for (const stepId of ['open-editor', 'verify-account']) {
+    const snapshot = created.service.getProjectSnapshot(WORKSPACE_ID)
+    if (!snapshot.success) throw new Error(snapshot.error.message)
+    const checkpoint = snapshot.data.affairs[0].articlePublishing?.checkpoints.find(
+      (item) => item.stepId === stepId,
+    )
+    const updates = [
+      ...(checkpoint?.status === 'pending' ? [{ status: 'running' as const }] : []),
+      { status: 'verifying' as const, evidence: `${stepId} observed` },
+      { status: 'completed' as const, evidence: `${stepId} verified` },
+    ]
+    for (const update of updates) {
+      const result = await created.service.reportArticlePublishingCheckpoint(
+        {
+          workspaceRef,
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          stepId,
+          ...update,
+        },
+        WORKSPACE_ID,
+        trustedReporter(created.reporter, update.status === 'completed' ? 'checkpoint' : undefined),
+      )
+      if (!result.success) throw new Error(result.error.message)
+    }
+  }
+  const running = await created.service.reportArticlePublishingCheckpoint(
+    {
+      workspaceRef,
+      affairId: created.affairId,
+      attemptId: created.attemptId,
+      stepId: 'upload-assets',
+      status: 'running',
+    },
+    WORKSPACE_ID,
+    created.reporter,
+  )
+  if (!running.success) throw new Error(running.error.message)
+}
+
+async function dispatchUploadEffect(created: StartedTask, attemptNumber: number) {
+  const snapshot = created.service.getProjectSnapshot(WORKSPACE_ID)
+  if (!snapshot.success) throw new Error(snapshot.error.message)
+  const attempt = snapshot.data.affairs[0].attempts[0]
+  const browserTaskRunId = '77777777-7777-4777-8777-777777777777'
+  const targetId = `${created.assetId}:attempt-${attemptNumber}`
+  const fingerprint = `upload-${attemptNumber}`
+  const reserved = await created.service.reserveArticlePublishingSideEffect(
+    created.affairId,
+    created.attemptId,
+    attempt.executionGeneration,
+    'upload-asset',
+    targetId,
+    fingerprint,
+    browserTaskRunId,
+    WORKSPACE_ID,
+  )
+  if (!reserved.success) throw new Error(reserved.error.message)
+  const consumed = await created.service.consumeArticlePublishingSideEffect(
+    created.affairId,
+    created.attemptId,
+    attempt.executionGeneration,
+    `${created.affairId}:${created.attemptId}:g${attempt.executionGeneration}:upload-asset:${targetId}`,
+    fingerprint,
+    browserTaskRunId,
+    WORKSPACE_ID,
+  )
+  if (!consumed.success) throw new Error(consumed.error.message)
+}
+
+async function reportPublishingCheckpoint(
+  created: StartedTask,
+  stepId: string,
+  status: 'running' | 'verifying' | 'completed',
+) {
+  const workspaceRef = { kind: 'local' as const, path: created.workspacePath }
+  const result = await created.service.reportArticlePublishingCheckpoint(
+    {
+      workspaceRef,
+      affairId: created.affairId,
+      attemptId: created.attemptId,
+      stepId,
+      status,
+      ...(status === 'running' ? {} : { evidence: `${stepId} ${status}` }),
+    },
+    WORKSPACE_ID,
+    trustedReporter(created.reporter, status === 'completed' ? 'checkpoint' : undefined),
+  )
+  if (!result.success) throw new Error(result.error.message)
+}
+
+async function dispatchSaveEffect(created: StartedTask, stepId: string): Promise<string> {
+  const snapshot = created.service.getProjectSnapshot(WORKSPACE_ID)
+  if (!snapshot.success) throw new Error(snapshot.error.message)
+  const attempt = snapshot.data.affairs[0].attempts.find((item) => item.id === created.attemptId)!
+  const targetId = stepId === 'save-draft' ? 'source-hash-test' : `autosave:${stepId}:test-action`
+  const fingerprint = `${stepId}-fingerprint-g${attempt.executionGeneration}`
+  const browserTaskRunId = attempt.browserTaskRunId ?? '77777777-7777-4777-8777-777777777777'
+  const reserved = await created.service.reserveArticlePublishingSideEffect(
+    created.affairId,
+    created.attemptId,
+    attempt.executionGeneration,
+    'save-draft',
+    targetId,
+    fingerprint,
+    browserTaskRunId,
+    WORKSPACE_ID,
+  )
+  if (!reserved.success) throw new Error(reserved.error.message)
+  const sideEffectKey = `${created.affairId}:${created.attemptId}:g${attempt.executionGeneration}:save-draft:${targetId}`
+  const consumed = await created.service.consumeArticlePublishingSideEffect(
+    created.affairId,
+    created.attemptId,
+    attempt.executionGeneration,
+    sideEffectKey,
+    fingerprint,
+    browserTaskRunId,
+    WORKSPACE_ID,
+  )
+  if (!consumed.success) throw new Error(consumed.error.message)
+  return sideEffectKey
+}
+
+async function advanceToSaveCheckpoint(created: StartedTask) {
+  await reportPublishingCheckpoint(created, 'upload-assets', 'verifying')
+  await reportPublishingCheckpoint(created, 'upload-assets', 'completed')
+  for (const stepId of ['fill-body', 'fill-fields']) {
+    await reportPublishingCheckpoint(created, stepId, 'running')
+    await dispatchSaveEffect(created, stepId)
+    await reportPublishingCheckpoint(created, stepId, 'verifying')
+    await reportPublishingCheckpoint(created, stepId, 'completed')
+  }
+  await reportPublishingCheckpoint(created, 'save-draft', 'running')
+}
+
+async function advanceToPublishCheckpoint(created: StartedTask) {
+  await advanceToSaveCheckpoint(created)
+  await dispatchSaveEffect(created, 'save-draft')
+  await reportPublishingCheckpoint(created, 'save-draft', 'verifying')
+  await reportPublishingCheckpoint(created, 'save-draft', 'completed')
+  await reportPublishingCheckpoint(created, 'publish', 'running')
 }
 
 function createService(directory: string): WebAffairService {

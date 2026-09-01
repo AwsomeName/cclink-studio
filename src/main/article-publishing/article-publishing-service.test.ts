@@ -70,8 +70,7 @@ describe('ArticlePublishingService', () => {
     }))
     const webAffairService = {
       getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [draftAffair] } })),
-      startAttempt: vi.fn(async () => ({ success: true, data: affair })),
-      markArticlePublishingAttemptStarted: vi.fn(async () => ({ success: true, data: affair })),
+      acquireArticlePublishingAttempt: vi.fn(async () => ({ success: true, data: affair })),
       bindArticlePublishingRuntime,
       rebindArticlePublishingBrowserRuntime,
       reconcileArticlePublishingRuntime: vi.fn(async () => ({ success: true, data: affair })),
@@ -88,7 +87,16 @@ describe('ArticlePublishingService', () => {
         agentRuntimeBindingKey: 'agent-binding-a',
         agentRuntimeEpoch: 7,
       })),
-      sendMessage: vi.fn(async () => ({ runId: `run-${launchOperationId}` })),
+      sendMessage: vi.fn(async (_message, conversationId, context) => {
+        await context?.onRunPrepared?.({
+          conversationId,
+          runId: `run-${launchOperationId}`,
+          browserTaskRunId,
+        })
+        // A real Agent Run remains pending after onRunPrepared. startTask must return the
+        // durable launch receipt without waiting for this completion Promise.
+        return await new Promise<never>(() => undefined)
+      }),
       getActiveBrowserTask: vi.fn(() => browserTask),
       getRunStatus: vi.fn(() => ({ status: 'running' })),
     }
@@ -148,6 +156,30 @@ describe('ArticlePublishingService', () => {
     expect(result.success).toBe(true)
     expect(browserManager.waitForAccountView).toHaveBeenCalledOnce()
     expect(agentBridge.sendMessage).toHaveBeenCalledOnce()
+    expect(agentBridge.sendMessage).toHaveBeenCalledWith(
+      expect.any(String),
+      `article-publishing-${affairId}`,
+      expect.objectContaining({
+        disableBuiltinTools: true,
+        allowedTools: expect.arrayContaining([
+          'mcp__cclink_studio__browser_click',
+          'mcp__cclink_studio__article_publishing_inspect_page',
+          'mcp__cclink_studio__article_publishing_report_checkpoint',
+          'mcp__cclink_studio__web_affair_finish_attempt',
+        ]),
+        articlePublishingPolicy: {
+          origin: 'article-publishing',
+          workspaceId: '11111111-1111-4111-8111-111111111111',
+          affairId,
+          attemptId,
+          executionGeneration: 1,
+          launchOperationId,
+        },
+        onRunPrepared: expect.any(Function),
+      }),
+    )
+    const launchOptions = agentBridge.sendMessage.mock.calls[0]?.[2]
+    expect(launchOptions?.allowedTools).not.toContain('mcp__cclink_studio__browser_*')
     expect(browserTaskRuntime.updateCorrelation).toHaveBeenCalledWith(
       browserTaskRunId,
       expect.objectContaining({
@@ -217,6 +249,14 @@ describe('ArticlePublishingService', () => {
     )
 
     expect(result.success).toBe(true)
+    expect(harness.browserManager.waitForAccountView).toHaveBeenCalledWith(
+      '/workspace',
+      'profile-a',
+      '22222222-2222-4222-8222-222222222222',
+      draftUrl,
+      8_000,
+      'original-editor-tab',
+    )
     expect(harness.browserManager.navigate).toHaveBeenCalledWith('tab-a', draftUrl)
     expect(harness.browserManager.navigate.mock.invocationCallOrder[0]).toBeLessThan(
       harness.agentBridge.sendMessage.mock.invocationCallOrder[0],
@@ -244,6 +284,37 @@ describe('ArticlePublishingService', () => {
     expect(harness.browserManager.navigate).not.toHaveBeenCalled()
     expect(harness.agentBridge.sendMessage).not.toHaveBeenCalled()
     expect(harness.webAffairService.reconcileArticlePublishingRuntime).toHaveBeenCalledOnce()
+    harness.service.dispose()
+  })
+
+  it('refuses to start while another article publishing Attempt owns Browser and Agent', async () => {
+    const harness = createResumeHarness({
+      draftUrl: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
+      visibleUrl: 'https://mp.csdn.net/',
+    })
+    const snapshot = harness.webAffairService.getProjectSnapshot()
+    const otherAffair = structuredClone(snapshot.data.affairs[0])
+    otherAffair.id = '77777777-7777-4777-8777-777777777777'
+    otherAffair.title = '另一篇文章'
+    otherAffair.articlePublishing.execution.status = 'running'
+    harness.webAffairService.getProjectSnapshot.mockReturnValue({
+      success: true,
+      data: {
+        affairs: [...snapshot.data.affairs, otherAffair],
+      },
+    })
+
+    const result = await harness.service.startTask(
+      { workspaceRef: WORKSPACE_REF, affairId: harness.affairId },
+      '11111111-1111-4111-8111-111111111111',
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('另一条文章发布任务正在占用 Browser/Agent') },
+    })
+    expect(harness.webAffairService.acquireArticlePublishingAttempt).toHaveBeenCalledOnce()
+    expect(harness.agentBridge.sendMessage).not.toHaveBeenCalled()
     harness.service.dispose()
   })
 
@@ -725,6 +796,7 @@ function createResumeHarness(options: { draftUrl?: string; visibleUrl: string })
         status: 'interrupted',
         executionGeneration: 1,
         launchOperationId: 'launch-a',
+        tabId: 'original-editor-tab',
       },
     ],
     articlePublishing: {
@@ -751,14 +823,25 @@ function createResumeHarness(options: { draftUrl?: string; visibleUrl: string })
       success: true,
       data: { affairs: [interruptedAffair] },
     })),
-    resumeArticlePublishingAttempt: vi.fn(async () => ({
-      success: true,
-      data: resumedAffair,
-    })),
-    markArticlePublishingAttemptStarted: vi.fn(async () => ({
-      success: true,
-      data: resumedAffair,
-    })),
+    acquireArticlePublishingAttempt: vi.fn(async () => {
+      const current = webAffairService.getProjectSnapshot()
+      const conflict = current.data.affairs.find(
+        (candidate) =>
+          candidate.id !== affairId &&
+          ['preparing', 'running', 'checking-runtime', 'waiting-human'].includes(
+            candidate.articlePublishing?.execution.status ?? '',
+          ),
+      )
+      return conflict
+        ? {
+            success: false,
+            error: {
+              code: 'INVALID_INPUT',
+              message: `另一条文章发布任务正在占用 Browser/Agent：${conflict.title}；请先完成或终止它`,
+            },
+          }
+        : { success: true, data: resumedAffair }
+    }),
     recordArticlePublishingDraftAnchor: vi.fn(async () => ({
       success: true,
       data: resumedAffair,
@@ -785,7 +868,14 @@ function createResumeHarness(options: { draftUrl?: string; visibleUrl: string })
       agentRuntimeBindingKey: 'agent-binding-a',
       agentRuntimeEpoch: 1,
     })),
-    sendMessage: vi.fn(async () => ({ runId: 'run-launch-b' })),
+    sendMessage: vi.fn(async (_message, conversationId, context) => {
+      await context?.onRunPrepared?.({
+        conversationId,
+        runId: 'run-launch-b',
+        browserTaskRunId,
+      })
+      return { runId: 'run-launch-b' }
+    }),
     getActiveBrowserTask: vi.fn(() => browserTask),
     getRunStatus: vi.fn(() => ({ status: 'running' })),
   }

@@ -13,6 +13,7 @@ function createPolicy(options?: {
   executionStatus?: string
   draftUrl?: string | null
 }) {
+  let inspectionPage: Record<string, unknown> | null = null
   const reserveArticlePublishingSideEffect = vi.fn().mockResolvedValue({
     success: true,
     data: {},
@@ -59,11 +60,14 @@ function createPolicy(options?: {
               adapterVersion: 1,
               accountId: 'account-a',
               source: { contentHash: 'a'.repeat(64) },
+              fields: { title: 'Article', summary: '', tags: [], category: '' },
               assets: [
                 {
                   id: 'asset-a',
                   kind: 'local',
                   sourcePath: '/workspace/a.png',
+                  displayPath: 'a.png',
+                  contentHash: 'b'.repeat(64),
                   status: options?.assetStatus ?? 'uploaded',
                   uploadAttempts: [],
                 },
@@ -86,12 +90,41 @@ function createPolicy(options?: {
     recordArticlePublishingDraftAnchor,
     handoffAttempt,
   }
+  const policy = new ArticlePublishingBrowserPolicy(
+    webAffairService as never,
+    async () => 'workspace-a',
+    { getPageById: () => inspectionPage } as never,
+    { getActiveTaskForConversation: () => task } as never,
+  )
   return {
-    policy: new ArticlePublishingBrowserPolicy(
-      webAffairService as never,
-      async () => 'workspace-a',
-    ),
+    policy,
     webAffairService,
+    inspect: async (
+      selectors: Record<string, string>,
+      url = DRAFT_URL,
+      pageKind: 'editor' | 'published-article' | 'management' | 'unsupported' = 'editor',
+    ) => {
+      inspectionPage = {
+        isClosed: () => false,
+        evaluate: async () => ({
+          url,
+          pageKind,
+          bodySelector: selectors['body'] ?? '#body',
+          bodyTextLength: 100,
+          imageEnumerationComplete: false,
+          images: [],
+          fileInputSelector: selectors['fileInput'],
+          titleSelector: selectors['title'] ?? '#title',
+          titleValue: 'Article',
+          selectors,
+          saveState: 'saved',
+          saveEvidence: '草稿已保存',
+          publishedLinks: [],
+        }),
+      }
+      const result = await policy.inspectCurrentPage(context)
+      expect(result.success).toBe(true)
+    },
   }
 }
 
@@ -121,6 +154,16 @@ const task = {
 } as const
 
 const context = {
+  conversationId: 'conversation-a',
+  agentRunId: 'run-a',
+  articlePublishingPolicy: {
+    origin: 'article-publishing' as const,
+    workspaceId: 'workspace-a',
+    affairId: 'affair-a',
+    attemptId: 'attempt-a',
+    executionGeneration: 1,
+    launchOperationId: 'launch-a',
+  },
   trustedWorkspace: {
     kind: 'local' as const,
     rootPath: '/workspace',
@@ -143,7 +186,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
   })
 
   it('allows a unique visible confirm-upload control located with Playwright syntax', async () => {
-    const { policy } = createPolicy()
+    const { policy, inspect } = createPolicy()
     const locator = {
       count: vi.fn().mockResolvedValue(1),
       isVisible: vi.fn().mockResolvedValue(true),
@@ -153,6 +196,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
       url: () => DRAFT_URL,
       locator: vi.fn().mockReturnValue(locator),
     }
+    await inspect({ uploadConfirm: 'button:has-text("确认上传")' })
 
     await expect(
       policy.classifyAction(
@@ -165,8 +209,56 @@ describe('ArticlePublishingBrowserPolicy', () => {
     ).resolves.toEqual({ kind: 'allow' })
   })
 
+  it('rejects an Agent-guessed selector that was not signed by the current adapter probe', async () => {
+    const { policy, inspect } = createPolicy({ stepId: 'fill-fields' })
+    const page = { url: () => DRAFT_URL }
+    await inspect({ title: '#adapter-title' })
+
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'fill',
+        { selector: '#agent-guessed-title', value: 'Article' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({
+      kind: 'unknown',
+      reason: expect.stringContaining('签发'),
+    })
+  })
+
+  it('authorizes publication success only after reading back the exact public article and title', async () => {
+    const { policy, inspect } = createPolicy({
+      stepId: 'verify-publication',
+      publicationStatus: 'result-unknown',
+    })
+    const publicationUrl = 'https://blog.csdn.net/example/article/details/123456'
+    await inspect({}, publicationUrl, 'published-article')
+
+    expect(
+      policy.authorizeTrustedReport(
+        'web_affair_finish_attempt',
+        { outcome: 'succeeded', url: publicationUrl },
+        context,
+        {
+          workspaceId: 'workspace-a',
+          affairId: 'affair-a',
+          attemptId: 'attempt-a',
+          executionGeneration: 1,
+          launchOperationId: 'launch-a',
+          conversationId: 'conversation-a',
+          agentRunId: 'run-a',
+        },
+      ),
+    ).toMatchObject({
+      success: true,
+      data: { trustedPageEvidence: { kind: 'published', url: publicationUrl } },
+    })
+  })
+
   it('hands legal and account-impact controls to the user', async () => {
-    const { policy } = createPolicy()
+    const { policy, inspect } = createPolicy()
     const page = {
       url: () => DRAFT_URL,
       locator: () => ({
@@ -175,6 +267,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
         evaluate: async () => ({ label: '确认原创声明', type: '', role: 'button' }),
       }),
     }
+    await inspect({ uploadConfirm: 'button:has-text("确认原创声明")' })
 
     await expect(
       policy.classifyAction(
@@ -188,7 +281,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
   })
 
   it('persists a one-shot marker before allowing the authorized final publication', async () => {
-    const { policy, webAffairService } = createPolicy({ stepId: 'publish' })
+    const { policy, webAffairService, inspect } = createPolicy({ stepId: 'publish' })
     const page = {
       url: () => DRAFT_URL,
       locator: () => ({
@@ -197,6 +290,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
         evaluate: async () => ({ label: '发布博客', type: 'submit', role: 'button' }),
       }),
     }
+    await inspect({ publish: 'button:has-text("发布博客")' })
 
     await expect(
       policy.classifyAction(
@@ -220,8 +314,9 @@ describe('ArticlePublishingBrowserPolicy', () => {
   })
 
   it('persists a write-ahead marker before a field mutation that may autosave', async () => {
-    const { policy, webAffairService } = createPolicy({ stepId: 'fill-fields' })
+    const { policy, webAffairService, inspect } = createPolicy({ stepId: 'fill-fields' })
     const page = { url: () => DRAFT_URL }
+    await inspect({ title: '#title' })
 
     await expect(
       policy.classifyAction(
@@ -245,11 +340,12 @@ describe('ArticlePublishingBrowserPolicy', () => {
   })
 
   it('binds a visible stable draft before the first platform mutation', async () => {
-    const { policy, webAffairService } = createPolicy({
+    const { policy, webAffairService, inspect } = createPolicy({
       stepId: 'fill-fields',
       draftUrl: null,
     })
     const page = { url: () => DRAFT_URL }
+    await inspect({ title: '#title' })
 
     await expect(
       policy.classifyAction(

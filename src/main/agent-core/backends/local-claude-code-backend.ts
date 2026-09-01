@@ -481,6 +481,9 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       agentRunId: options?.runId ?? null,
       ...(operation === 'message' ? { agentGoal: userMessage } : {}),
       ...(options?.scheduledTaskPolicy ? { scheduledTaskPolicy: options.scheduledTaskPolicy } : {}),
+      ...(options?.articlePublishingPolicy
+        ? { articlePublishingPolicy: options.articlePublishingPolicy }
+        : {}),
     }
     this.mcpSessionToken = this.toolHost.createToolSession(toolExecutionContext)
     const mcpConfig = this.mcpClientMgr.composeMcpConfig(

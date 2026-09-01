@@ -245,6 +245,8 @@ interface ViewEntry {
   pendingHistoryDirection: 'back' | 'forward' | null
   /** 项目运营平台 Profile；为空时使用默认 session。 */
   profileId: string | null
+  /** renderer 投影声明的已登记账号；main 用它阻止同 Profile 下的账号串线。 */
+  accountId: string | null
   /** 创建该视图的工作区；用于阻断相同 tabId 的跨项目复用。 */
   workspaceKey: string | null
   /** 最近一次原生网页菜单 token；新菜单或 View 销毁后旧回调不可执行。 */
@@ -855,6 +857,7 @@ export class BrowserManager {
           : 0,
       pendingHistoryDirection: null,
       profileId,
+      accountId: null,
       workspaceKey,
       contextMenuToken: null,
       popup: null,
@@ -1188,6 +1191,7 @@ export class BrowserManager {
       historyIndex: 0,
       pendingHistoryDirection: null,
       profileId: sourceEntry.profileId,
+      accountId: sourceEntry.accountId,
       workspaceKey: sourceEntry.workspaceKey,
       contextMenuToken: null,
       popup: {
@@ -1639,6 +1643,9 @@ export class BrowserManager {
     const expectedProfileByTabId = new Map(
       options.views.map(({ tabId, profileId }) => [tabId, normalizeBrowserProfileId(profileId)]),
     )
+    const expectedAccountByTabId = new Map(
+      options.views.map(({ tabId, accountId }) => [tabId, accountId ?? null]),
+    )
     for (const [tabId, entry] of [...this.views]) {
       if (entry.ownerWindowId !== MAIN_BROWSER_HOST_ID) continue
       if (entry.popup && entry.popup.adoptionState !== 'adopted') {
@@ -1646,7 +1653,8 @@ export class BrowserManager {
         const bindingMismatch =
           rendererDeclaredPopup &&
           (entry.workspaceKey !== options.workspaceKey ||
-            entry.profileId !== expectedProfileByTabId.get(tabId))
+            entry.profileId !== expectedProfileByTabId.get(tabId) ||
+            entry.accountId !== expectedAccountByTabId.get(tabId))
         if (bindingMismatch) {
           this.destroyView(tabId)
           this.emitRuntimeTabClosed(tabId, entry.workspaceKey, entry.ownerWindowId)
@@ -1654,7 +1662,13 @@ export class BrowserManager {
         // 接纳 IPC 与 renderer effect 异步竞速期间，pending View 不能按孤儿销毁。
         continue
       }
+      const expectedAccountId = expectedAccountByTabId.get(tabId)
+      const accountBindingChanged =
+        expectedProfileByTabId.has(tabId) &&
+        entry.accountId !== null &&
+        entry.accountId !== expectedAccountId
       if (
+        accountBindingChanged ||
         shouldDestroyBrowserViewDuringReconcile({
           tabId,
           viewWorkspaceKey: entry.workspaceKey,
@@ -1664,6 +1678,17 @@ export class BrowserManager {
         })
       ) {
         this.destroyView(tabId)
+      }
+    }
+
+    for (const [tabId, accountId] of expectedAccountByTabId) {
+      const entry = this.views.get(tabId)
+      if (
+        entry &&
+        entry.workspaceKey === options.workspaceKey &&
+        entry.profileId === expectedProfileByTabId.get(tabId)
+      ) {
+        entry.accountId = accountId
       }
     }
 
@@ -2200,11 +2225,18 @@ export class BrowserManager {
     accountId: string,
     initialUrl: string,
     timeoutMs = 8_000,
+    preferredTabId?: string,
   ): Promise<string | null> {
-    const find = (): string | null =>
-      [...this.views].find(
-        ([, entry]) => entry.workspaceKey === workspaceKey && entry.profileId === profileId,
-      )?.[0] ?? null
+    const findActiveAccountView = (): string | null => {
+      const activeTabId = this.getActiveViewIdForWorkspace(workspaceKey)
+      if (!activeTabId) return null
+      const activeEntry = this.views.get(activeTabId)
+      return activeEntry?.workspaceKey === workspaceKey &&
+        activeEntry.profileId === profileId &&
+        activeEntry.accountId === accountId
+        ? activeTabId
+        : null
+    }
     const deadline = Date.now() + timeoutMs
     let lastRequestAt = 0
     while (Date.now() < deadline) {
@@ -2214,14 +2246,15 @@ export class BrowserManager {
           workspaceKey,
           profileId,
           accountId,
+          ...(preferredTabId ? { sourceTabId: preferredTabId } : {}),
         })
         lastRequestAt = Date.now()
       }
-      const tabId = find()
+      const tabId = findActiveAccountView()
       // Existing account Views must still go through the renderer Tab projection. Returning a
       // hidden runtime here used to make Agent/Playwright attach the native page over whichever
       // non-browser Tab happened to be selected.
-      if (tabId && this.getActiveViewIdForWorkspace(workspaceKey) === tabId) return tabId
+      if (tabId) return tabId
       await new Promise((resolve) => setTimeout(resolve, 50))
     }
     return null

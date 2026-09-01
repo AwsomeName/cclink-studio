@@ -51,6 +51,80 @@ afterEach(() => {
 })
 
 describe('openRequestedBrowserTab', () => {
+  it('restores the previously bound account Tab instead of the first same-profile Tab', async () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'account-home',
+          type: 'browser',
+          title: '首页',
+          icon: 'B',
+          workspaceRef,
+          browserProfile: 'account-profile',
+          webResourceRef: { accountId: 'account-a' },
+        },
+        {
+          id: 'original-editor',
+          type: 'browser',
+          title: '原草稿',
+          icon: 'B',
+          workspaceRef,
+          browserProfile: 'account-profile',
+          webResourceRef: { accountId: 'account-a' },
+        },
+        {
+          id: 'publishing-control',
+          type: 'article-publishing',
+          title: '发布',
+          icon: 'P',
+          workspaceRef,
+          articlePublishing: { affairId: 'affair-a' },
+        },
+      ],
+      activeTabId: 'publishing-control',
+    })
+
+    await openRequestedBrowserTab({
+      initialUrl: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
+      workspaceKey: '/workspace/a',
+      profileId: 'account-profile',
+      accountId: 'account-a',
+      sourceTabId: 'original-editor',
+    })
+
+    expect(useTabStore.getState().activeTabId).toBe('original-editor')
+  })
+
+  it('does not reuse a same-profile Tab that belongs to another account record', async () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'wrong-account',
+          type: 'browser',
+          title: '错误账号',
+          icon: 'B',
+          workspaceRef,
+          browserProfile: 'shared-profile',
+          webResourceRef: { accountId: 'account-b' },
+        },
+      ],
+      activeTabId: 'wrong-account',
+    })
+
+    await openRequestedBrowserTab({
+      initialUrl: 'https://mp.csdn.net/',
+      workspaceKey: '/workspace/a',
+      profileId: 'shared-profile',
+      accountId: 'account-a',
+    })
+
+    expect(useTabStore.getState().tabs).toHaveLength(2)
+    expect(useTabStore.getState().tabs.at(-1)).toMatchObject({
+      browserProfile: 'shared-profile',
+      webResourceRef: { accountId: 'account-a' },
+    })
+  })
+
   it('activates an existing browser tab in the current workspace', async () => {
     useTabStore.setState({
       tabs: [

@@ -233,10 +233,4 @@ export interface ArticlePublishingApiContract {
   terminateRuntime(
     input: ManageArticlePublishingRuntimeInput,
   ): Promise<WebAffairOperationResult<WebAffair>>
-  reportCheckpoint(
-    input: ReportArticlePublishingCheckpointInput,
-  ): Promise<WebAffairOperationResult<WebAffair>>
-  reportAsset(
-    input: ReportArticlePublishingAssetInput,
-  ): Promise<WebAffairOperationResult<WebAffair>>
 }

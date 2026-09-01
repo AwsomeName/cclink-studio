@@ -357,13 +357,18 @@ export class AgentBridge {
         playwrightBridge: this.deps.playwrightBridge,
         settings: this.deps.getSettingsSnapshot?.() ?? DEFAULT_SETTINGS,
       })
-      this.startBrowserTaskIfNeeded(
+      const browserTask = this.startBrowserTaskIfNeeded(
         conversationId,
         message,
         sendPlan.browserTabId,
         sendPlan.workspaceKey,
         runId,
       )
+      await context?.onRunPrepared?.({
+        conversationId,
+        runId,
+        browserTaskRunId: browserTask?.id ?? null,
+      })
       await this.runtime.sendMessage(
         buildAgentMessageWithContext(message, {
           resources: context?.resources,
@@ -385,6 +390,7 @@ export class AgentBridge {
           workspacePath: resourceContext.workspace.rootPath ?? undefined,
           resourceContext,
           continuity: context?.continuity,
+          articlePublishingPolicy: context?.articlePublishingPolicy,
           agentProfile: this.toAgentRoleContext(binding.role),
         },
       )
@@ -601,7 +607,11 @@ export class AgentBridge {
     const forceVisibleBrowser = Boolean(browserTabId)
 
     return {
-      options: { forceVisibleBrowser },
+      options: {
+        forceVisibleBrowser,
+        allowedTools: context?.allowedTools,
+        disableBuiltinTools: context?.disableBuiltinTools,
+      },
       browserTabId,
       workspaceKey,
     }
@@ -1208,12 +1218,12 @@ export class AgentBridge {
     browserTabId: string | null = null,
     workspaceKey: string | null = null,
     agentRunId: string | null = null,
-  ): void {
+  ): BrowserTaskRun | null {
     const scope = this.runtime.getScope(conversationId)
     const tabId = browserTabId ?? (scope.kind === 'browser' ? scope.instanceId : null)
-    if (!tabId) return
+    if (!tabId) return null
     const runtime = this.deps.browserTaskRuntime
-    if (!runtime) return
+    if (!runtime) return null
 
     const goal = message.trim().replace(/\s+/g, ' ').slice(0, 200) || '浏览器任务'
     const sessionId = this.runtime.getStatus(conversationId).sessionId
@@ -1229,6 +1239,7 @@ export class AgentBridge {
       },
     })
     this.activeBrowserTaskIds.set(conversationId, task.id)
+    return task
   }
 
   private finishActiveBrowserTask(

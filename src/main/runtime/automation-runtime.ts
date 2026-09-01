@@ -95,6 +95,8 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
           runtime.webAffairService,
           async (workspacePath) =>
             runtime.workspaceStateService?.getLocalProjectId(workspacePath) ?? null,
+          runtime.playwrightBridge,
+          runtime.browserTaskRuntime,
         )
       : null
 
@@ -130,6 +132,7 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
           runtime.webAffairService,
           async (workspacePath) =>
             runtime.workspaceStateService?.getLocalProjectId(workspacePath) ?? null,
+          articlePublishingBrowserPolicy,
         ),
       )
     } catch (error) {

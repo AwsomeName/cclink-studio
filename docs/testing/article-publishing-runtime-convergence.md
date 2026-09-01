@@ -643,7 +643,13 @@ recovery journal 按 Affair 保存“最新关键目标状态”，同一 Affair
 
 ## 十二、当前完成度与下一步
 
-用户在当前实现中可以对运行任务执行“检查运行状态”“继续等待”“终止任务”；无终态、Tab/CDP 丢失或长期无真实进度时会先进入持久“待核验”，再有界收敛为可恢复、待人工或结果未知。窗口关闭不再承担启动回滚；旧 generation/owner 的迟到事件不能修改当前运行；最终发布已经派发时，终止、断线和重启都只能进入结果未知，不能直接重放。
+用户在当前实现中可以对运行任务执行“检查运行状态”“继续等待”“终止任务”；`startTask` 只等待
+Runtime 持久绑定并立即返回，Agent 后台运行不再占住启动 IPC。无终态、Tab/CDP 丢失或长期无真实
+进度时会先进入持久“待核验”，再有界收敛为可恢复、待人工或结果未知。窗口关闭不再承担启动回滚；
+Runtime 终态和 Browser owner 事件已按 generation/owner 隔离。2026-09-01 审计补上了此前遗漏的
+**Agent MCP 回报身份和确定性页面证据**：只有 main 在 Agent 获得工具前持久绑定并签发的当前
+generation/launch/conversation/run 才能修改状态；成功回报还必须经过 `csdn@1` 当前页面读回。最终
+发布已经派发时，终止、断线和重启都只能进入结果未知，不能直接重放。
 
 已取得的工程证据：
 
@@ -651,4 +657,6 @@ recovery journal 按 Affair 保存“最新关键目标状态”，同一 Affair
 - 发布链专项覆盖 main 启动、完整 owner identity、旧 generation/owner no-op、统一生命周期投影、上传/自动保存/发布一次性副作用消费、最终与非最终结果未知分流、同一 generation 并发请求也只能成功一次的有界继续等待、v0.1.73 非最终未知状态的保守启动修复、v0.1.74 真实崩溃组合及 44 组终态/人工接管投影冲突的持久化重启矩阵、2,000 事件收敛、high-water 压缩、带 revision/hash 的固定恢复日志、损坏日志 fail closed，以及 fake-clock 的静默/失主核验。
 - `pnpm smoke:browser-cdp-recovery` 在真实 Electron `WebContentsView` 中通过；Playwright connection generation 为 `1 → 2 → 3`，URL、WebContents、CDP target、Profile、Session、表单和滚动状态保持。
 
-剩余产品门禁只有本文第一节的真实 CSDN 验收。没有完成真实三图发布、Agent/Tab/CDP 故障注入、最终发布断线核验之前，不得把本文状态改成 Closed。
+剩余产品门禁是真实 CSDN 验收：`csdn@1` 页面适配器和 Browser Tab→持久 Attempt→Agent 会话投影
+已进入代码与自动化门禁，但尚未取得真实三图发布、半途重启恢复、Agent/Tab/CDP 故障注入、最终
+发布断线核验和三栏身份一致性的真人证据。在这些验收完成之前，不得把本文状态改成 Closed。
