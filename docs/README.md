@@ -53,10 +53,10 @@
   入口和侧栏历史连接专用控制 Tab、持久发布事务、可见网页与发布 Agent，第一目标平台为 CSDN；
   v0.1.72 仍存在 Attempt 假运行阻塞，真实站点闭环未完成。
 - `docs/features/article-platform-publishing-development-plan.md`：CSDN 单篇图文发布的最小纵向研发计划；分离工程门禁、用户增量、真实发布闭环、失败恢复和交付验收。
-- `docs/features/image-research.md`：图片调研产品事实源；首个平台初步定为小红书，独立评审已驳回
-  原 Ready 方案，当前阻塞于真实页面、可信候选、目录授权和保存事务 E0 证据。
-- `docs/features/image-research-development-plan.md`：图片调研修订计划；E0 通过后按单账号单图人工闭环、
-  公共 WebAffair Runtime、Agent 逐张循环和界面统计推进。
+- `docs/features/image-research.md`：图片调研产品事实源；首个平台初步定为小红书，方案获条件通过；
+  可进入实验开关后的实现，真实人工/Agent 验收分别作为实现后的默认启用门禁。
+- `docs/features/image-research-development-plan.md`：图片调研修订计划；按非阻塞预检、人工单图薄片、
+  候选与保存故障门禁、真实人工验收、公共 Runtime、Agent 薄片和真实 Agent 验收推进。
 - `docs/testing/article-publishing-runtime-convergence.md`：文章发布“开始执行无反应 / Attempt
   假运行”的根因、系统性终态收敛方案、用户自救入口、故障矩阵和真实 CSDN 验收门禁。
 - `docs/reviews/article-publishing-runtime-convergence-review-prompt.md`：可直接交给新 Codex

@@ -339,6 +339,19 @@ describe('useAgentStore', () => {
       expect(useAgentStore.getState().messages.at(-1)?.rawText).toBe('第二个会话')
     })
 
+    it('重复切换到当前会话时不广播新状态', () => {
+      const activeConversationId = useAgentStore.getState().activeConversationId
+      let notificationCount = 0
+      const unsubscribe = useAgentStore.subscribe(() => {
+        notificationCount += 1
+      })
+
+      useAgentStore.getState().switchConversation(activeConversationId)
+
+      unsubscribe()
+      expect(notificationCount).toBe(0)
+    })
+
     it('新建激活会话时镜像状态指向新会话而不是旧消息', () => {
       useAgentStore.getState().addUserMessage('旧会话内容')
       const id = useAgentStore.getState().createConversation()

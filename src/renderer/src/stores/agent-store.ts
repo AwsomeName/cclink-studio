@@ -524,7 +524,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   switchConversation: (id) =>
     set((state) => {
       const conversation = state.conversations[id]
-      if (!conversation) return state
+      if (!conversation || state.activeConversationId === id) return state
       return {
         activeConversationId: id,
         ...mirrorActive(state, conversation),

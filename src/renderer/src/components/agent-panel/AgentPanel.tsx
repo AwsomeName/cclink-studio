@@ -205,6 +205,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     () => tabs.find((tab) => tab.id === activeTabId && tab.type === 'browser') ?? null,
     [activeTabId, tabs],
   )
+  const activeBrowserTabId = activeBrowserTab?.id ?? null
   const activePublishingAffairId = useMemo(() => {
     const tab = tabs.find((candidate) => candidate.id === activeTabId)
     return tab?.type === 'article-publishing' ? (tab.articlePublishing?.affairId ?? null) : null
@@ -220,22 +221,24 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   )
   const activeTabConversationTask = useMemo(
     () =>
-      activeBrowserTab
+      activeBrowserTabId
         ? selectBrowserTabConversationTask({
             tasks: Object.values(browserTasks),
-            tabId: activeBrowserTab.id,
+            tabId: activeBrowserTabId,
             workspaceKey: workspaceRefKey(activeWorkspaceRef),
           })
         : null,
-    [activeBrowserTab, activeWorkspaceRef, browserTasks],
+    [activeBrowserTabId, activeWorkspaceRef, browserTasks],
   )
 
   useEffect(() => {
     let cancelled = false
-    if (!activeBrowserTab || activeWorkspaceRef.kind !== 'local') {
+    if (!activeBrowserTabId || activeWorkspaceRef.kind !== 'local') {
       setPersistedPublishingBinding(null)
       return
     }
+    // Navigation replaces the Tab object as URL/title change. The binding lifecycle belongs to the
+    // stable Tab id, otherwise navigation churn repeatedly clears and restores the Agent selection.
     // Never project the previous Browser Tab's publishing Agent while the persistent mapping for
     // the newly focused Tab is still loading.
     setPersistedPublishingBinding(null)
@@ -253,7 +256,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
         const attempt = attemptId
           ? candidate.attempts.find((item) => item.id === attemptId)
           : undefined
-        return candidate.kind === 'article-publishing' && attempt?.tabId === activeBrowserTab.id
+        return candidate.kind === 'article-publishing' && attempt?.tabId === activeBrowserTabId
       })
       const attemptId = affair?.articlePublishing?.execution.currentAttemptId
       const attempt = attemptId ? affair?.attempts.find((item) => item.id === attemptId) : undefined
@@ -274,7 +277,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
       cancelled = true
       offChanged()
     }
-  }, [activeBrowserTab, activeWorkspaceRef])
+  }, [activeBrowserTabId, activeWorkspaceRef])
 
   useEffect(() => {
     let cancelled = false
@@ -286,7 +289,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
       taskConversationId ?? persistedPublishingBinding?.conversationId ?? publishingConversationId
     if (!conversationId) {
       focusedTabConversationRef.current = null
-      if (activeBrowserTab && activeConversationId.startsWith('article-publishing-')) {
+      if (activeBrowserTabId && activeConversationId.startsWith('article-publishing-')) {
         switchConversation(DEFAULT_CONVERSATION_ID)
       }
       return
@@ -294,7 +297,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     const bindingKey = activeTabConversationTask
       ? `browser:${activeTabConversationTask.tabId}:${activeTabConversationTask.id}:${conversationId}`
       : persistedPublishingBinding
-        ? `persisted-browser:${activeBrowserTab?.id}:${persistedPublishingBinding.affairId}:${persistedPublishingBinding.attemptId}:g${persistedPublishingBinding.executionGeneration}:${conversationId}`
+        ? `persisted-browser:${activeBrowserTabId}:${persistedPublishingBinding.affairId}:${persistedPublishingBinding.attemptId}:g${persistedPublishingBinding.executionGeneration}:${conversationId}`
         : `article-publishing:${activePublishingAffairId}:${conversationId}`
     if (focusedTabConversationRef.current === bindingKey) return
     const conversation = conversations[conversationId]
@@ -324,7 +327,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     }
   }, [
     activePublishingAffairId,
-    activeBrowserTab,
+    activeBrowserTabId,
     activeConversationId,
     activeTabConversationTask,
     activeWorkspaceRef,
