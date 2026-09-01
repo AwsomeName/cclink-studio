@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import type {
@@ -137,14 +137,13 @@ export interface ArticlePublishingAgentReporter {
   trustedPageEvidence?: {
     adapterId: 'csdn'
     adapterVersion: 1
-    evidenceHash: string
     observedAt: string
     url: string
     kind: 'checkpoint' | 'asset-absent' | 'asset-uploaded' | 'published'
-    platformContentHash?: string
-    bodyStructureHash?: string
     platformAccountId?: string
-    platformSnapshot?: NonNullable<ArticlePublishingState['draft']>['platformSnapshot']
+    draftId?: string
+    normalizedTitle?: string
+    saveState?: 'saved' | 'saving' | 'unknown'
   }
 }
 
@@ -237,7 +236,7 @@ export class WebAffairService {
     return {
       success: true,
       data: {
-        schemaVersion: 6,
+        schemaVersion: 7,
         revision: result.data.revision,
         workspaceId,
         affairs: result.data.affairs.filter((affair) => affair.workspaceId === workspaceId),
@@ -397,11 +396,7 @@ export class WebAffairService {
       })
       for (const { affair, attempt, binding } of candidates) {
         const command: ReconcileArticlePublishingRuntimeInput = {
-          eventId: createHash('sha256')
-            .update(
-              `${attempt.id}\0${attempt.executionGeneration}\0${attempt.launchOperationId}\0${binding.id}\0tab-lost`,
-            )
-            .digest('hex'),
+          eventId: `${attempt.id}:g${attempt.executionGeneration}:${attempt.launchOperationId}:${binding.id}:tab-lost`,
           workspaceId: affair.workspaceId!,
           affairId: affair.id,
           attemptId: attempt.id,
@@ -515,8 +510,9 @@ export class WebAffairService {
       recoveryOperationId: string
       draftId: string
       url: string
-      snapshot: NonNullable<ArticlePublishingState['draft']>['platformSnapshot']
-      evidenceHash: string
+      platformAccountId: string
+      normalizedTitle: string
+      saveState: 'saved'
       tabId: string
       browserViewRuntimeGeneration: number
       webContentsId: number
@@ -530,20 +526,23 @@ export class WebAffairService {
     )
   }
 
-  refreshArticlePublishingWriteSnapshot(
+  recordArticlePublishingPageObservation(
     input: {
       affairId: string
       attemptId: string
       executionGeneration: number
       browserTaskRunId: string
       permitId?: string
-      previousSnapshotHash?: string
-      snapshot: NonNullable<ArticlePublishingState['draft']>['platformSnapshot']
+      draftId: string
+      platformAccountId: string
+      normalizedTitle: string
+      url: string
+      saveState: 'saved'
     },
     workspaceId: string,
   ) {
     return this.enqueueScoped(input.affairId, workspaceId, () =>
-      this.refreshArticlePublishingWriteSnapshotNow(input),
+      this.recordArticlePublishingPageObservationNow(input),
     )
   }
 
@@ -560,13 +559,23 @@ export class WebAffairService {
     )
   }
 
+  resolveArticlePublishingAsset(
+    affairId: string,
+    assetId: string,
+    resolution: 'present' | 'missing',
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(affairId, workspaceId, () =>
+      this.resolveArticlePublishingAssetNow(affairId, assetId, resolution),
+    )
+  }
+
   reserveArticlePublishingSideEffect(
     affairId: string,
     attemptId: string,
     executionGeneration: number,
     kind: ArticlePublishingState['sideEffects'][number]['kind'],
     targetId: string,
-    actionFingerprint: string,
     browserTaskRunId: string,
     workspaceId: string,
   ) {
@@ -577,7 +586,6 @@ export class WebAffairService {
         executionGeneration,
         kind,
         targetId,
-        actionFingerprint,
         browserTaskRunId,
       ),
     )
@@ -588,7 +596,6 @@ export class WebAffairService {
     attemptId: string,
     executionGeneration: number,
     sideEffectKey: string,
-    actionFingerprint: string,
     browserTaskRunId: string,
     workspaceId: string,
   ) {
@@ -598,7 +605,6 @@ export class WebAffairService {
         attemptId,
         executionGeneration,
         sideEffectKey,
-        actionFingerprint,
         browserTaskRunId,
       ),
     )
@@ -849,22 +855,10 @@ export class WebAffairService {
     if (materials.some((material) => material.state !== 'available')) {
       return this.resourceError('Markdown 或正文图片已经不可用，请重新选择文章')
     }
-    const scopeHash = createHash('sha256')
-      .update(
-        JSON.stringify({
-          sourceHash: input.preview.source.contentHash,
-          accountId: input.accountId,
-          fields: input.fields,
-          adapterId: 'csdn',
-          adapterVersion: 1,
-        }),
-      )
-      .digest('hex')
     const checkpoints: ArticlePublishingState['checkpoints'] = CSDN_ARTICLE_PUBLISHING_PLAN.map(
       ({ stepId, label, resumePolicy }) => ({
         stepId,
         label,
-        inputHash: scopeHash,
         adapterVersion: 1,
         status: 'pending',
         resumePolicy,
@@ -2922,8 +2916,6 @@ export class WebAffairService {
       if (
         recovery.status !== 'verified' ||
         !permit ||
-        !publishing.draft?.platformSnapshot ||
-        permit.snapshotHash !== publishing.draft.platformSnapshot.snapshotHash ||
         permit.recoveryOperationId !== recovery.operationId ||
         permit.executionGeneration !== executionGeneration ||
         permit.draftId !== publishing.draft?.platformDraftId ||
@@ -3366,9 +3358,11 @@ export class WebAffairService {
       }
       if (
         ['upload-assets', 'fill-body', 'fill-fields', 'save-draft'].includes(input.stepId) &&
-        !reporter.trustedPageEvidence.platformSnapshot
+        (!reporter.trustedPageEvidence.platformAccountId ||
+          !reporter.trustedPageEvidence.draftId ||
+          reporter.trustedPageEvidence.saveState !== 'saved')
       ) {
-        return this.evidenceRequired('网页写入步骤完成必须保存账号、正文、全部图片和保存状态快照')
+        return this.evidenceRequired('网页写入步骤完成必须读回同一账号、同一草稿和已保存状态')
       }
       if (
         input.stepId === 'upload-assets' &&
@@ -3490,14 +3484,17 @@ export class WebAffairService {
       articlePublishing: {
         ...publishing,
         draft:
-          input.status === 'completed' && reporter.trustedPageEvidence?.platformSnapshot
+          input.status === 'completed' && reporter.trustedPageEvidence?.platformAccountId
             ? {
                 ...publishing.draft,
-                platformDraftId: reporter.trustedPageEvidence.platformSnapshot.draftId,
+                ...(reporter.trustedPageEvidence.draftId
+                  ? { platformDraftId: reporter.trustedPageEvidence.draftId }
+                  : {}),
+                platformAccountId: reporter.trustedPageEvidence.platformAccountId,
                 url: reporter.trustedPageEvidence.url,
-                normalizedTitle: reporter.trustedPageEvidence.platformSnapshot.normalizedTitle,
-                bodyStructureHash: reporter.trustedPageEvidence.platformSnapshot.bodyStructureHash,
-                platformSnapshot: reporter.trustedPageEvidence.platformSnapshot,
+                ...(reporter.trustedPageEvidence.normalizedTitle
+                  ? { normalizedTitle: reporter.trustedPageEvidence.normalizedTitle }
+                  : {}),
                 lastVerifiedAt: now,
               }
             : publishing.draft,
@@ -3629,6 +3626,7 @@ export class WebAffairService {
         executionGeneration,
         status: 'locating',
         expectedDraftId: anchor.draftId,
+        expectedTitle: publishing.fields.title,
         startedAt: now,
       },
     }
@@ -3642,8 +3640,9 @@ export class WebAffairService {
     recoveryOperationId: string
     draftId: string
     url: string
-    snapshot: NonNullable<ArticlePublishingState['draft']>['platformSnapshot']
-    evidenceHash: string
+    platformAccountId: string
+    normalizedTitle: string
+    saveState: 'saved'
     tabId: string
     browserViewRuntimeGeneration: number
     webContentsId: number
@@ -3676,22 +3675,13 @@ export class WebAffairService {
     if (!parsed || parsed.draftId !== input.draftId) {
       return this.transitionError('恢复后的页面不能证明是原平台草稿')
     }
-    const expectedSnapshot = publishing.draft?.platformSnapshot
-    if (!expectedSnapshot || !input.snapshot) {
-      return this.evidenceRequired('草稿恢复缺少可持久化的完整平台快照')
-    }
     if (
-      input.snapshot.draftId !== input.draftId ||
-      input.snapshot.snapshotHash !== expectedSnapshot.snapshotHash ||
-      input.snapshot.platformAccountId !== expectedSnapshot.platformAccountId ||
-      input.snapshot.bodyStructureHash !== expectedSnapshot.bodyStructureHash ||
-      input.snapshot.saveState !== 'saved' ||
-      !input.snapshot.imageEnumerationComplete
+      !publishing.draft?.platformAccountId ||
+      input.platformAccountId !== publishing.draft.platformAccountId ||
+      input.normalizedTitle !== recovery.expectedTitle ||
+      input.saveState !== 'saved'
     ) {
-      return this.transitionError('恢复后的账号、正文、全部图片或保存状态与持久快照不一致')
-    }
-    if (!/^[a-f0-9]{64}$/u.test(input.evidenceHash)) {
-      return this.evidenceRequired('草稿恢复必须附带当前草稿箱和编辑器证据')
+      return this.transitionError('恢复后的账号、标题或保存状态与任务记录不一致')
     }
     const now = this.timestamp()
     const writePermit = {
@@ -3704,7 +3694,6 @@ export class WebAffairService {
       webContentsId: input.webContentsId,
       playwrightConnectionGeneration: input.playwrightConnectionGeneration,
       playwrightPageBindingGeneration: input.playwrightPageBindingGeneration,
-      snapshotHash: input.snapshot.snapshotHash,
       issuedAt: now,
     }
     return this.persistAffair({
@@ -3714,18 +3703,15 @@ export class WebAffairService {
         draft: {
           ...publishing.draft,
           platformDraftId: input.draftId,
+          platformAccountId: input.platformAccountId,
           url: parsed.url,
-          normalizedTitle: input.snapshot.normalizedTitle,
-          bodyStructureHash: input.snapshot.bodyStructureHash,
-          platformSnapshot: input.snapshot,
+          normalizedTitle: input.normalizedTitle,
           lastVerifiedAt: now,
           recovery: {
             ...recovery,
             status: 'verified',
             verifiedAt: now,
-            evidenceHash: input.evidenceHash,
-            platformAccountId: input.snapshot.platformAccountId,
-            snapshotHash: input.snapshot.snapshotHash,
+            platformAccountId: input.platformAccountId,
             writePermit,
           },
         },
@@ -3743,73 +3729,51 @@ export class WebAffairService {
     })
   }
 
-  private async refreshArticlePublishingWriteSnapshotNow(input: {
+  private async recordArticlePublishingPageObservationNow(input: {
     affairId: string
     attemptId: string
     executionGeneration: number
     browserTaskRunId: string
     permitId?: string
-    previousSnapshotHash?: string
-    snapshot: NonNullable<ArticlePublishingState['draft']>['platformSnapshot']
+    draftId: string
+    platformAccountId: string
+    normalizedTitle: string
+    url: string
+    saveState: 'saved'
   }): Promise<WebAffairOperationResult<WebAffair>> {
     const found = this.findAttempt(input.affairId, input.attemptId)
     const publishing = found?.affair.articlePublishing
     if (!found || !publishing || found.affair.kind !== 'article-publishing') {
-      return this.notFound('文章发布写后快照事务不存在')
+      return this.notFound('文章发布写后页面观察事务不存在')
     }
     if (
-      !input.snapshot ||
       found.attempt.status !== 'running-ai' ||
       publishing.execution.status !== 'running' ||
       found.attempt.executionGeneration !== input.executionGeneration ||
       publishing.execution.currentGeneration !== input.executionGeneration ||
       found.attempt.browserTaskRunId !== input.browserTaskRunId
     ) {
-      return this.transitionError('写后快照不属于当前活动发布代次')
+      return this.transitionError('写后页面观察不属于当前活动发布代次')
     }
     if (
       !publishing.draft?.platformDraftId ||
-      input.snapshot.draftId !== publishing.draft.platformDraftId ||
-      input.snapshot.saveState !== 'saved' ||
-      !input.snapshot.imageEnumerationComplete
+      input.draftId !== publishing.draft.platformDraftId ||
+      (publishing.draft.platformAccountId &&
+        input.platformAccountId !== publishing.draft.platformAccountId) ||
+      input.saveState !== 'saved'
     ) {
-      return this.evidenceRequired('写后页面未形成同一草稿的完整已保存快照')
-    }
-    const previousSnapshot = publishing.draft.platformSnapshot
-    if (
-      previousSnapshot &&
-      previousSnapshot.platformAccountId !== input.snapshot.platformAccountId
-    ) {
-      return this.transitionError('写后页面的平台账号发生变化，拒绝换发写入许可')
-    }
-    for (const asset of publishing.assets) {
-      if (asset.kind !== 'local' || asset.status !== 'uploaded') continue
-      const image = input.snapshot.images.find((candidate) => candidate.url === asset.platformUrl)
-      if (!image || !asset.platformContentHash || image.contentHash !== asset.platformContentHash) {
-        return this.transitionError(`写后快照不能证明已上传图片仍存在：${asset.displayPath}`)
-      }
+      return this.evidenceRequired('写后页面不是同一账号、同一草稿或尚未保存')
     }
     const recovery = publishing.draft.recovery
-    let nextRecovery = recovery
     if (recovery?.executionGeneration === input.executionGeneration) {
       const permit = recovery.writePermit
-      if (
-        recovery.status !== 'verified' ||
-        !permit ||
-        permit.id !== input.permitId ||
-        permit.snapshotHash !== input.previousSnapshotHash
-      ) {
-        return this.transitionError('恢复写入许可已变化，拒绝用写后页面覆盖持久快照')
+      if (recovery.status !== 'verified' || !permit || permit.id !== input.permitId) {
+        return this.transitionError('恢复写入许可已变化，拒绝记录写后页面')
       }
-      nextRecovery = {
-        ...recovery,
-        snapshotHash: input.snapshot.snapshotHash,
-        writePermit: {
-          ...permit,
-          snapshotHash: input.snapshot.snapshotHash,
-          issuedAt: this.timestamp(),
-        },
-      }
+    }
+    const parsed = parseCsdnDraftAnchor(input.url)
+    if (!parsed || parsed.draftId !== input.draftId) {
+      return this.evidenceRequired('写后页面地址没有同一草稿编号')
     }
     const now = this.timestamp()
     return this.persistAffair({
@@ -3818,13 +3782,96 @@ export class WebAffairService {
         ...publishing,
         draft: {
           ...publishing.draft,
-          normalizedTitle: input.snapshot.normalizedTitle,
-          bodyStructureHash: input.snapshot.bodyStructureHash,
-          platformSnapshot: input.snapshot,
+          platformAccountId: input.platformAccountId,
+          normalizedTitle: input.normalizedTitle,
+          url: parsed.url,
           lastVerifiedAt: now,
-          ...(nextRecovery ? { recovery: nextRecovery } : {}),
         },
       },
+      updatedAt: now,
+    })
+  }
+
+  private async resolveArticlePublishingAssetNow(
+    affairId: string,
+    assetId: string,
+    resolution: 'present' | 'missing',
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const affair = this.snapshot?.affairs.find((candidate) => candidate.id === affairId)
+    const publishing = affair?.articlePublishing
+    const asset = publishing?.assets.find((candidate) => candidate.id === assetId)
+    if (!affair || affair.kind !== 'article-publishing' || !publishing || !asset) {
+      return this.notFound('待确认的文章图片不存在')
+    }
+    if (asset.kind !== 'local' || !['result-unknown', 'reconciling'].includes(asset.status)) {
+      return this.transitionError('只有结果未知的本地图片可以人工确认')
+    }
+    const now = this.timestamp()
+    const nextStatus =
+      resolution === 'present' ? ('uploaded' as const) : ('retryable-failed' as const)
+    const assets = publishing.assets.map((candidate) =>
+      candidate.id === assetId
+        ? {
+            ...candidate,
+            status: nextStatus,
+            manualResolution: { status: resolution, resolvedAt: now },
+            verifiedAt: resolution === 'present' ? now : candidate.verifiedAt,
+            uploadAttempts: candidate.uploadAttempts.map((attempt, index) =>
+              index === candidate.uploadAttempts.length - 1
+                ? {
+                    ...attempt,
+                    status:
+                      resolution === 'present'
+                        ? ('succeeded' as const)
+                        : ('retryable-failed' as const),
+                    finishedAt: now,
+                    evidence: [
+                      ...attempt.evidence,
+                      resolution === 'present'
+                        ? '用户已在可见 CSDN 编辑器中确认图片存在'
+                        : '用户已在可见 CSDN 编辑器中确认图片缺失',
+                    ].slice(-40),
+                  }
+                : attempt,
+            ),
+          }
+        : candidate,
+    )
+    const sideEffects = this.updateLatestSideEffect(
+      publishing,
+      affair.attempts.find((attempt) => attempt.id === publishing.execution.currentAttemptId) ??
+        affair.attempts.at(-1)!,
+      (effect) => effect.kind === 'upload-asset' && effect.targetId.startsWith(`${assetId}:`),
+      resolution === 'present' ? 'verified' : 'rejected',
+      now,
+      true,
+    )
+    const attempts = affair.attempts.map((attempt) =>
+      attempt.id === publishing.execution.currentAttemptId &&
+      !['cancelled', 'failed', 'succeeded'].includes(attempt.status)
+        ? { ...attempt, status: 'interrupted' as const, endedAt: now }
+        : attempt,
+    )
+    return this.persistAffair({
+      ...affair,
+      status: 'needs-attention',
+      attempts,
+      articlePublishing: {
+        ...publishing,
+        assets,
+        sideEffects,
+        execution: { ...publishing.execution, status: 'interrupted' },
+      },
+      events: this.appendEvent(
+        affair,
+        this.event(
+          'node-status-changed',
+          resolution === 'present'
+            ? `用户确认图片已存在：${asset.displayPath}`
+            : `用户确认图片缺失，允许继续上传：${asset.displayPath}`,
+          now,
+        ),
+      ),
       updatedAt: now,
     })
   }
@@ -3856,9 +3903,6 @@ export class WebAffairService {
     }
     if (input.status === 'uploaded' && reporter.trustedPageEvidence?.kind !== 'asset-uploaded') {
       return this.evidenceRequired('图片上传成功必须由当前 CSDN 页面适配器读回并核验')
-    }
-    if (input.status === 'uploaded' && !reporter.trustedPageEvidence?.platformContentHash) {
-      return this.evidenceRequired('图片上传成功必须保存平台实际图片内容哈希')
     }
     if (input.status === 'uploading' && reporter.trustedPageEvidence?.kind !== 'asset-absent') {
       return this.evidenceRequired('开始上传前必须由当前 CSDN 页面适配器证明图片尚不存在')
@@ -3961,10 +4005,6 @@ export class WebAffairService {
             ...asset,
             status: nextStatus,
             platformUrl: input.status === 'uploaded' ? input.platformUrl : asset.platformUrl,
-            platformContentHash:
-              input.status === 'uploaded'
-                ? reporter.trustedPageEvidence?.platformContentHash
-                : asset.platformContentHash,
             verifiedAt: input.status === 'uploaded' ? now : asset.verifiedAt,
             uploadAttempts,
           }
@@ -4033,7 +4073,6 @@ export class WebAffairService {
     executionGeneration: number,
     kind: ArticlePublishingState['sideEffects'][number]['kind'],
     targetId: string,
-    actionFingerprint: string,
     browserTaskRunId: string,
   ): Promise<WebAffairOperationResult<WebAffair>> {
     const found = this.findAttempt(affairId, attemptId)
@@ -4062,8 +4101,6 @@ export class WebAffairService {
       if (
         recovery.status !== 'verified' ||
         !permit ||
-        !publishing.draft?.platformSnapshot ||
-        permit.snapshotHash !== publishing.draft.platformSnapshot.snapshotHash ||
         !activeBrowserBinding ||
         permit.recoveryOperationId !== recovery.operationId ||
         permit.executionGeneration !== executionGeneration ||
@@ -4099,7 +4136,6 @@ export class WebAffairService {
       if (
         existing.status === 'reserved' &&
         existing.executionGeneration === executionGeneration &&
-        existing.actionFingerprint === actionFingerprint &&
         existing.browserTaskRunId === browserTaskRunId
       ) {
         return { success: true, data: structuredClone(found.affair) }
@@ -4148,7 +4184,6 @@ export class WebAffairService {
             executionGeneration,
             kind,
             targetId,
-            actionFingerprint,
             status: 'reserved',
             reservedAt: now,
             browserTaskRunId,
@@ -4171,7 +4206,6 @@ export class WebAffairService {
     attemptId: string,
     executionGeneration: number,
     sideEffectKey: string,
-    actionFingerprint: string,
     browserTaskRunId: string,
   ): Promise<WebAffairOperationResult<WebAffair>> {
     const found = this.findAttempt(affairId, attemptId)
@@ -4184,7 +4218,6 @@ export class WebAffairService {
       !effect ||
       effect.status !== 'reserved' ||
       effect.executionGeneration !== executionGeneration ||
-      effect.actionFingerprint !== actionFingerprint ||
       effect.browserTaskRunId !== browserTaskRunId ||
       publishing.execution.currentGeneration !== executionGeneration ||
       found.attempt.status !== 'running-ai'

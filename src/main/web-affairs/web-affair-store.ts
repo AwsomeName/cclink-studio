@@ -15,12 +15,13 @@ const COMPACTED_EVENT_LIMIT = 500
 const RECOVERY_AFFAIR_LIMIT = 8
 
 type SnapshotReadResult =
-  | { kind: 'valid'; snapshot: WebAffairSnapshot }
+  | { kind: 'valid'; snapshot: WebAffairSnapshot; discardedArticleCount: number }
   | { kind: 'missing' }
   | { kind: 'invalid'; error: Error }
 
 interface RecoveryJournal {
-  journalVersion: 1
+  journalVersion: 2
+  snapshotSchemaVersion: 7
   baseRevision: number
   targetRevision: number
   targetHash: string
@@ -42,6 +43,17 @@ export class WebAffairStore {
   async load(): Promise<WebAffairSnapshot> {
     const primary = await this.readSnapshot(this.filePath)
     if (primary.kind === 'valid') {
+      if (primary.discardedArticleCount > 0) {
+        await this.rewriteSanitizedSnapshot(this.filePath, primary.snapshot)
+        console.warn('[WebAffairStore] 已删除旧版文章发布任务', {
+          filePath: this.filePath,
+          discardedArticleCount: primary.discardedArticleCount,
+        })
+      }
+      const staleBackup = await this.readSnapshot(this.backupPath)
+      if (staleBackup.kind === 'valid' && staleBackup.discardedArticleCount > 0) {
+        await this.rewriteSanitizedSnapshot(this.backupPath, staleBackup.snapshot)
+      }
       console.info('[WebAffairStore] 事务数据已加载', {
         filePath: this.filePath,
         revision: primary.snapshot.revision,
@@ -52,6 +64,9 @@ export class WebAffairStore {
 
     const backup = await this.readSnapshot(this.backupPath)
     if (backup.kind === 'valid') {
+      if (backup.discardedArticleCount > 0) {
+        await this.rewriteSanitizedSnapshot(this.backupPath, backup.snapshot)
+      }
       await this.persist(backup.snapshot, false)
       console.warn('[WebAffairStore] 主文件不可用，已从备份恢复事务数据', {
         filePath: this.filePath,
@@ -89,9 +104,25 @@ export class WebAffairStore {
       if (metadata.size > MAX_STORE_BYTES) {
         throw new Error(`事务文件超过 ${MAX_STORE_BYTES} 字节限制`)
       }
+      const raw = JSON.parse(await readFile(path, 'utf8')) as unknown
+      const rawAffairs =
+        raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>)['affairs'])
+          ? ((raw as Record<string, unknown>)['affairs'] as unknown[])
+          : []
+      const isLegacySnapshot =
+        !raw || typeof raw !== 'object' || (raw as Record<string, unknown>)['schemaVersion'] !== 7
+      const discardedArticleCount = isLegacySnapshot
+        ? rawAffairs.filter(
+            (item) =>
+              item &&
+              typeof item === 'object' &&
+              (item as Record<string, unknown>)['kind'] === 'article-publishing',
+          ).length
+        : 0
       return {
         kind: 'valid',
-        snapshot: parseWebAffairSnapshot(JSON.parse(await readFile(path, 'utf8'))),
+        snapshot: parseWebAffairSnapshot(raw),
+        discardedArticleCount,
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'missing' }
@@ -99,6 +130,16 @@ export class WebAffairStore {
       console.warn(`[WebAffairStore] 无法读取 ${path}:`, normalized.message)
       return { kind: 'invalid', error: normalized }
     }
+  }
+
+  private async rewriteSanitizedSnapshot(path: string, snapshot: WebAffairSnapshot): Promise<void> {
+    const temporaryPath = `${path}.sanitize.tmp`
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(temporaryPath, JSON.stringify(snapshot, null, 2), {
+      encoding: 'utf8',
+      mode: 0o600,
+    })
+    await rename(temporaryPath, path)
   }
 
   private async persist(snapshot: WebAffairSnapshot, preservePrimary: boolean): Promise<void> {
@@ -168,7 +209,7 @@ export class WebAffairStore {
       }
       const raw = JSON.parse(await readFile(this.recoveryPath, 'utf8')) as Partial<RecoveryJournal>
       if (
-        raw.journalVersion !== 1 ||
+        ![1, 2].includes(Number(raw.journalVersion)) ||
         !Number.isInteger(raw.baseRevision) ||
         !Number.isInteger(raw.targetRevision) ||
         typeof raw.targetHash !== 'string' ||
@@ -180,15 +221,20 @@ export class WebAffairStore {
       const targetRevision = Number(raw.targetRevision)
       const expectedHash = recoveryTargetHash(targetRevision, rawAffairs)
       if (expectedHash !== raw.targetHash) throw new Error('事务恢复日志目标 hash 不匹配')
+      const sanitizedAffairs =
+        raw.journalVersion === 2 && raw.snapshotSchemaVersion === 7
+          ? rawAffairs
+          : rawAffairs.filter((affair) => affair.kind !== 'article-publishing')
       const snapshot = parseWebAffairSnapshot({
-        schemaVersion: 5,
+        schemaVersion: 7,
         revision: targetRevision,
-        affairs: rawAffairs,
+        affairs: sanitizedAffairs,
       })
       return {
         kind: 'valid',
         journal: {
-          journalVersion: 1,
+          journalVersion: 2,
+          snapshotSchemaVersion: 7,
           baseRevision: raw.baseRevision!,
           targetRevision: snapshot.revision,
           targetHash: raw.targetHash,
@@ -232,7 +278,7 @@ export class WebAffairStore {
       .map((affair) => compactAffairHistory(affair, 100, 20))
     if (activeArticleAffairs.length === 0) return
     let recovery = parseWebAffairSnapshot({
-      schemaVersion: 6,
+      schemaVersion: 7,
       revision: snapshot.revision,
       affairs: activeArticleAffairs,
     })
@@ -255,7 +301,8 @@ export class WebAffairStore {
 
 function serializeRecoveryJournal(snapshot: WebAffairSnapshot): string {
   const journal: RecoveryJournal = {
-    journalVersion: 1,
+    journalVersion: 2,
+    snapshotSchemaVersion: 7,
     baseRevision: Math.max(0, snapshot.revision - 1),
     targetRevision: snapshot.revision,
     targetHash: recoveryTargetHash(snapshot.revision, snapshot.affairs),

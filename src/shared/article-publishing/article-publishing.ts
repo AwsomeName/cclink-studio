@@ -6,6 +6,7 @@ import type {
   CreateArticlePublishingTaskInput,
   InspectArticlePublishingSourceInput,
   ManageArticlePublishingRuntimeInput,
+  ResolveArticlePublishingAssetInput,
   StartArticlePublishingTaskInput,
   StartArticlePublishingTaskResult,
 } from './article-publishing-types'
@@ -35,6 +36,10 @@ export const articlePublishingIpc = {
     [ManageArticlePublishingRuntimeInput],
     WebAffairOperationResult<WebAffair>
   >('articlePublishing:terminateRuntime'),
+  resolveAsset: defineIpcCall<
+    [ResolveArticlePublishingAssetInput],
+    WebAffairOperationResult<WebAffair>
+  >('articlePublishing:resolveAsset'),
 } as const
 
 export type { ArticlePublishingApiContract }

@@ -5,9 +5,10 @@ import { CSDN_ARTICLE_MANAGEMENT_URL } from './csdn-publishing-adapter'
 const DRAFT_ID = '164148817'
 const DRAFT_URL = `https://mp.csdn.net/mp_blog/creation/editor/${DRAFT_ID}`
 const DRAFT_LIST_URL = 'https://mp.csdn.net/mp_blog/manage/article?type=draft'
+const ACCOUNT = 'csdn:test-user'
 
 describe('CsdnDraftRecoveryCoordinator', () => {
-  it('finds one exact persisted draft through the visible draft list before opening it', async () => {
+  it('从草稿箱按原 draftId 找回同账号、同标题且已保存的草稿', async () => {
     const adapter = {
       probeDraftList: vi
         .fn()
@@ -16,14 +17,14 @@ describe('CsdnDraftRecoveryCoordinator', () => {
           listProbe([{ draftId: DRAFT_ID, url: DRAFT_URL, title: 'Article' }]),
         ),
       probe: vi.fn(async () => editorProbe()),
-      captureSavedEditorSnapshot: vi.fn(async () => platformSnapshot()),
     }
     const navigate = vi.fn(async (url: string) => pageAt(url))
     const coordinator = new CsdnDraftRecoveryCoordinator(adapter as never)
 
     const result = await coordinator.recoverExactDraft({
       expectedDraftId: DRAFT_ID,
-      expectedSnapshot: platformSnapshot(),
+      expectedPlatformAccountId: ACCOUNT,
+      expectedTitle: 'Article',
       navigate: navigate as never,
     })
 
@@ -35,11 +36,12 @@ describe('CsdnDraftRecoveryCoordinator', () => {
     expect(result).toMatchObject({
       draftId: DRAFT_ID,
       url: DRAFT_URL,
-      snapshot: { snapshotHash: 'a'.repeat(64) },
+      platformAccountId: ACCOUNT,
+      normalizedTitle: 'Article',
     })
   })
 
-  it('stops without opening an editor when the exact draft ID is absent', async () => {
+  it('找不到原 draftId 时停止且不新建文章', async () => {
     const adapter = {
       probeDraftList: vi.fn(async () => listProbe([], CSDN_ARTICLE_MANAGEMENT_URL)),
       probe: vi.fn(),
@@ -50,34 +52,15 @@ describe('CsdnDraftRecoveryCoordinator', () => {
     await expect(
       coordinator.recoverExactDraft({
         expectedDraftId: DRAFT_ID,
-        expectedSnapshot: platformSnapshot(),
+        expectedPlatformAccountId: ACCOUNT,
+        expectedTitle: 'Article',
         navigate: navigate as never,
       }),
     ).rejects.toThrow(`没有找到原草稿 ${DRAFT_ID}`)
-    expect(navigate).toHaveBeenCalledTimes(1)
     expect(adapter.probe).not.toHaveBeenCalled()
   })
 
-  it('does not search ordinary article-management links when a draft section is unproven', async () => {
-    const adapter = {
-      probeDraftList: vi.fn(async () =>
-        listProbe([{ draftId: DRAFT_ID, url: DRAFT_URL, title: 'Article' }]),
-      ),
-      probe: vi.fn(),
-    }
-    const coordinator = new CsdnDraftRecoveryCoordinator(adapter as never)
-
-    await expect(
-      coordinator.recoverExactDraft({
-        expectedDraftId: DRAFT_ID,
-        expectedSnapshot: platformSnapshot(),
-        navigate: async (url) => pageAt(url) as never,
-      }),
-    ).rejects.toThrow('无法确认草稿箱入口')
-    expect(adapter.probe).not.toHaveBeenCalled()
-  })
-
-  it('stops before writing when the recovered draft body no longer matches saved evidence', async () => {
+  it('账号、标题或保存状态不一致时拒绝恢复', async () => {
     const adapter = {
       probeDraftList: vi.fn(async () =>
         listProbe(
@@ -85,24 +68,21 @@ describe('CsdnDraftRecoveryCoordinator', () => {
           CSDN_ARTICLE_MANAGEMENT_URL,
         ),
       ),
-      probe: vi.fn(async () => editorProbe()),
-      captureSavedEditorSnapshot: vi.fn(async () =>
-        platformSnapshot({ snapshotHash: 'd'.repeat(64) }),
-      ),
+      probe: vi.fn(async () => ({ ...editorProbe(), title: { value: 'Other' } })),
     }
     const coordinator = new CsdnDraftRecoveryCoordinator(adapter as never)
-
     await expect(
       coordinator.recoverExactDraft({
         expectedDraftId: DRAFT_ID,
-        expectedSnapshot: platformSnapshot(),
+        expectedPlatformAccountId: ACCOUNT,
+        expectedTitle: 'Article',
         navigate: async (url) => pageAt(url) as never,
       }),
-    ).rejects.toThrow('正文、图片或保存状态已变化')
+    ).rejects.toThrow('标题与任务标题不一致')
   })
 
-  it('finds an unknown publication only by the original draft ID and account', async () => {
-    const publicationUrl = `https://blog.csdn.net/test-user/article/details/${DRAFT_ID}`
+  it('发布结果未知时按账号和唯一标题查公开文章，不假设公开 ID 等于草稿 ID', async () => {
+    const publicationUrl = 'https://blog.csdn.net/test-user/article/details/999999'
     const adapter = {
       probe: vi
         .fn()
@@ -116,40 +96,38 @@ describe('CsdnDraftRecoveryCoordinator', () => {
           ...editorProbe(),
           pageKind: 'published-article',
           url: publicationUrl,
-          publishedArticleId: DRAFT_ID,
         }),
     }
     const coordinator = new CsdnDraftRecoveryCoordinator(adapter as never)
-    const result = await coordinator.recoverExactPublication({
-      expectedArticleId: DRAFT_ID,
-      expectedSnapshot: platformSnapshot(),
-      navigate: async (url) => pageAt(url) as never,
-    })
-    expect(result.url).toBe(publicationUrl)
+    await expect(
+      coordinator.recoverExactPublication({
+        expectedPlatformAccountId: ACCOUNT,
+        expectedTitle: 'Article',
+        navigate: async (url) => pageAt(url) as never,
+      }),
+    ).resolves.toMatchObject({ url: publicationUrl })
   })
 
-  it('does not use a same-title article with a different ID as publication proof', async () => {
+  it('多个同名公开文章时停下来让人工选择', async () => {
     const adapter = {
       probe: vi.fn(async () => ({
         ...editorProbe(),
         pageKind: 'management',
         url: CSDN_ARTICLE_MANAGEMENT_URL,
         publishedLinks: [
-          {
-            url: 'https://blog.csdn.net/test-user/article/details/999999',
-            title: 'Article',
-          },
+          { url: 'https://blog.csdn.net/test-user/article/details/1', title: 'Article' },
+          { url: 'https://blog.csdn.net/test-user/article/details/2', title: 'Article' },
         ],
       })),
     }
     const coordinator = new CsdnDraftRecoveryCoordinator(adapter as never)
     await expect(
       coordinator.recoverExactPublication({
-        expectedArticleId: DRAFT_ID,
-        expectedSnapshot: platformSnapshot(),
+        expectedPlatformAccountId: ACCOUNT,
+        expectedTitle: 'Article',
         navigate: async (url) => pageAt(url) as never,
       }),
-    ).rejects.toThrow(`尚未找到与原草稿 ID 相同的公开文章 ${DRAFT_ID}`)
+    ).rejects.toThrow('需要人工选择')
   })
 })
 
@@ -165,8 +143,7 @@ function listProbe(
     adapterId: 'csdn' as const,
     adapterVersion: 1 as const,
     observedAt: '2026-09-01T00:00:00.000Z',
-    evidenceHash: 'e'.repeat(64),
-    platformAccountId: 'csdn:test-user',
+    platformAccountId: ACCOUNT,
     pageSupported: true,
     ...(draftSectionUrl ? { draftSectionUrl } : {}),
     candidates,
@@ -178,15 +155,13 @@ function editorProbe() {
     adapterId: 'csdn' as const,
     adapterVersion: 1 as const,
     observedAt: '2026-09-01T00:00:01.000Z',
-    evidenceHash: 'f'.repeat(64),
     url: DRAFT_URL,
     pageKind: 'editor' as const,
     draftId: DRAFT_ID,
-    platformAccountId: 'csdn:test-user',
+    platformAccountId: ACCOUNT,
     editor: {
       recognized: true,
       bodyTextLength: 10,
-      bodyStructureHash: 'b'.repeat(64),
       imageEnumerationComplete: true,
       images: [],
     },
@@ -194,23 +169,5 @@ function editorProbe() {
     selectors: {},
     saveState: 'saved' as const,
     publishedLinks: [],
-  }
-}
-
-function platformSnapshot(overrides: Record<string, unknown> = {}) {
-  return {
-    adapterId: 'csdn' as const,
-    adapterVersion: 1 as const,
-    platformAccountId: 'csdn:test-user',
-    draftId: DRAFT_ID,
-    normalizedTitle: 'Article',
-    bodyStructureHash: 'b'.repeat(64),
-    images: [],
-    imageEnumerationComplete: true as const,
-    saveState: 'saved' as const,
-    snapshotHash: 'a'.repeat(64),
-    evidenceHash: 'e'.repeat(64),
-    observedAt: '2026-09-01T00:00:01.000Z',
-    ...overrides,
   }
 }

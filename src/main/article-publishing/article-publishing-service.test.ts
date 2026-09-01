@@ -29,7 +29,8 @@ describe('ArticlePublishingService', () => {
         accountId: '22222222-2222-4222-8222-222222222222',
         source: {
           markdownPath: '/workspace/article.md',
-          contentHash: 'c'.repeat(64),
+          modifiedAt: 123,
+          size: 9,
         },
         assets: [],
         checkpoints: [{ stepId: 'open-editor', status: 'pending' }],
@@ -57,7 +58,6 @@ describe('ArticlePublishingService', () => {
         content: '# Article',
         size: 9,
         modifiedAt: 123,
-        hash: 'c'.repeat(64),
       })),
     }
     const bindArticlePublishingRuntime = vi.fn(async () => ({
@@ -328,7 +328,7 @@ describe('ArticlePublishingService', () => {
     harness.service.dispose()
   })
 
-  it('does not recover or write when an older save may already have reached the platform', async () => {
+  it('restores the draft first and leaves an older unknown save for the resumed Agent to reconcile', async () => {
     const harness = createResumeHarness({
       draftUrl: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
       visibleUrl: 'https://mp.csdn.net/',
@@ -340,12 +340,9 @@ describe('ArticlePublishingService', () => {
       '11111111-1111-4111-8111-111111111111',
     )
 
-    expect(result).toMatchObject({
-      success: false,
-      error: { message: expect.stringContaining('无法核验的正文或保存动作') },
-    })
-    expect(harness.draftRecoveryCoordinator.recoverExactDraft).not.toHaveBeenCalled()
-    expect(harness.agentBridge.sendMessage).not.toHaveBeenCalled()
+    expect(result.success).toBe(true)
+    expect(harness.draftRecoveryCoordinator.recoverExactDraft).toHaveBeenCalledOnce()
+    expect(harness.agentBridge.sendMessage).toHaveBeenCalledOnce()
     harness.service.dispose()
   })
 
@@ -380,7 +377,7 @@ describe('ArticlePublishingService', () => {
 
     expect(result).toMatchObject({
       success: false,
-      error: { message: expect.stringContaining('手动打开草稿也不能换发写入许可') },
+      error: { message: expect.stringContaining('缺少原草稿编号或账号') },
     })
     expect(harness.browserManager.navigate).not.toHaveBeenCalled()
     expect(harness.agentBridge.sendMessage).not.toHaveBeenCalled()
@@ -388,7 +385,7 @@ describe('ArticlePublishingService', () => {
     harness.service.dispose()
   })
 
-  it('does not start an Agent for a legacy anchored draft without a complete platform snapshot', async () => {
+  it('does not start an Agent for an anchored draft without the original platform account', async () => {
     const harness = createResumeHarness({
       draftUrl: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
       visibleUrl: 'https://mp.csdn.net/',
@@ -401,7 +398,7 @@ describe('ArticlePublishingService', () => {
     expect(result).toMatchObject({
       success: false,
       error: {
-        message: expect.stringContaining('缺少真实账号、结构化正文、全部图片或保存状态证据'),
+        message: expect.stringContaining('缺少原 CSDN 账号'),
       },
     })
     expect(harness.draftRecoveryCoordinator.recoverExactDraft).not.toHaveBeenCalled()
@@ -717,7 +714,6 @@ describe('ArticlePublishingService', () => {
         content: markdown,
         size: Buffer.byteLength(markdown),
         modifiedAt: 123,
-        hash: 'c'.repeat(64),
       })),
     }
     const webAffairService = {
@@ -757,7 +753,7 @@ describe('ArticlePublishingService', () => {
     )
   })
 
-  it('extracts title and deduplicates inline, reference and HTML image occurrences by content hash', async () => {
+  it('extracts title and deduplicates inline, reference and HTML image occurrences by source path', async () => {
     const markdown = [
       '---',
       'title: 可恢复文章',
@@ -781,7 +777,6 @@ describe('ArticlePublishingService', () => {
         content: markdown,
         size: Buffer.byteLength(markdown),
         modifiedAt: 123,
-        hash: 'a'.repeat(64),
       })),
       stat: vi.fn(async (path: string) => ({
         path,
@@ -829,7 +824,6 @@ describe('ArticlePublishingService', () => {
         content: markdown,
         size: Buffer.byteLength(markdown),
         modifiedAt: 123,
-        hash: 'b'.repeat(64),
       })),
       stat: vi.fn(async () => {
         throw new Error('ENOENT')
@@ -872,20 +866,6 @@ function createResumeHarness(options: {
   const browserTaskRunId = '55555555-5555-4555-8555-555555555555'
   const nodeId = '66666666-6666-4666-8666-666666666666'
   const accountId = '22222222-2222-4222-8222-222222222222'
-  const platformSnapshot = {
-    adapterId: 'csdn' as const,
-    adapterVersion: 1 as const,
-    platformAccountId: 'csdn:test-user',
-    draftId: '164148817',
-    normalizedTitle: 'Article',
-    bodyStructureHash: 'b'.repeat(64),
-    images: [],
-    imageEnumerationComplete: true as const,
-    saveState: 'saved' as const,
-    snapshotHash: 'a'.repeat(64),
-    evidenceHash: 'e'.repeat(64),
-    observedAt: '2026-09-01T00:00:00.000Z',
-  }
   const resumedAttempt = {
     id: attemptId,
     status: 'preparing',
@@ -902,7 +882,8 @@ function createResumeHarness(options: {
     accountId,
     source: {
       markdownPath: '/workspace/article.md',
-      contentHash: 'c'.repeat(64),
+      modifiedAt: 123,
+      size: 9,
     },
     fields: {
       title: 'Article',
@@ -939,17 +920,14 @@ function createResumeHarness(options: {
       ? {
           platformDraftId: '164148817',
           url: options.draftUrl,
-          ...(options.missingSnapshot
-            ? {}
-            : {
-                bodyStructureHash: platformSnapshot.bodyStructureHash,
-                platformSnapshot,
-              }),
+          ...(options.missingSnapshot ? {} : { platformAccountId: 'csdn:test-user' }),
+          normalizedTitle: 'Article',
           recovery: {
             operationId: 'recovery-b',
             executionGeneration: 2,
             status: 'locating',
             expectedDraftId: '164148817',
+            expectedTitle: 'Article',
             startedAt: '2026-09-01T00:00:00.000Z',
           },
         }
@@ -991,7 +969,6 @@ function createResumeHarness(options: {
       content: '# Article',
       size: 9,
       modifiedAt: 123,
-      hash: 'c'.repeat(64),
     })),
   }
   const webAffairService = {
@@ -1118,8 +1095,8 @@ function createResumeHarness(options: {
       return {
         draftId: '164148817',
         url: options.draftUrl!,
-        snapshot: platformSnapshot,
-        evidenceHash: 'e'.repeat(64),
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
         observedAt: '2026-09-01T00:00:01.000Z',
       }
     }),

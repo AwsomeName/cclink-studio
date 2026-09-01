@@ -21,7 +21,6 @@ export type ArticlePublishingCheckpointStatus =
 export interface ArticlePublishingCheckpoint {
   stepId: string
   label: string
-  inputHash: string
   adapterVersion: number
   status: ArticlePublishingCheckpointStatus
   resumePolicy: ArticlePublishingResumePolicy
@@ -64,41 +63,18 @@ export interface ArticlePublishingAsset {
   kind: 'local' | 'remote'
   sourcePath: string
   displayPath: string
-  contentHash: string
   mediaType?: string
   size?: number
+  modifiedAt?: number
   occurrences: ArticlePublishingAssetOccurrence[]
   status: ArticleAssetUploadStatus
   platformUrl?: string
-  platformContentHash?: string
   verifiedAt?: string
+  manualResolution?: {
+    status: 'present' | 'missing'
+    resolvedAt: string
+  }
   uploadAttempts: ArticleAssetUploadAttempt[]
-}
-
-export interface ArticlePublishingPlatformImageSnapshot {
-  url: string
-  contentHash: string
-  alt: string
-}
-
-/**
- * Main-process evidence read back from the real CSDN editor. The snapshot hash is intentionally
- * derived from every field below except timestamps/evidenceHash so a write permit can be compared
- * with a fresh page read immediately before the next mutation.
- */
-export interface ArticlePublishingPlatformSnapshot {
-  adapterId: 'csdn'
-  adapterVersion: 1
-  platformAccountId: string
-  draftId: string
-  normalizedTitle: string
-  bodyStructureHash: string
-  images: ArticlePublishingPlatformImageSnapshot[]
-  imageEnumerationComplete: true
-  saveState: 'saved'
-  snapshotHash: string
-  evidenceHash: string
-  observedAt: string
 }
 
 export interface ArticlePublishingRecoveryWritePermit {
@@ -111,7 +87,6 @@ export interface ArticlePublishingRecoveryWritePermit {
   webContentsId: number
   playwrightConnectionGeneration: number
   playwrightPageBindingGeneration: number
-  snapshotHash: string
   issuedAt: string
 }
 
@@ -120,11 +95,10 @@ export interface ArticlePublishingDraftRecovery {
   executionGeneration: number
   status: 'locating' | 'verified' | 'failed'
   expectedDraftId: string
+  expectedTitle: string
   startedAt: string
   verifiedAt?: string
-  evidenceHash?: string
   platformAccountId?: string
-  snapshotHash?: string
   failureReason?: string
   writePermit?: ArticlePublishingRecoveryWritePermit
 }
@@ -144,7 +118,6 @@ export interface ArticlePublishingSideEffect {
   executionGeneration: number
   kind: 'upload-asset' | 'save-draft' | 'publish'
   targetId: string
-  actionFingerprint: string
   status: 'reserved' | 'dispatched' | 'result-unknown' | 'verified' | 'rejected'
   reservedAt: string
   dispatchedAt?: string
@@ -157,7 +130,6 @@ export interface ArticlePublishingState {
   adapterVersion: 1
   source: {
     markdownPath: string
-    contentHash: string
     modifiedAt: number
     size: number
   }
@@ -198,10 +170,9 @@ export interface ArticlePublishingState {
   }
   draft?: {
     platformDraftId?: string
+    platformAccountId?: string
     url?: string
     normalizedTitle?: string
-    bodyStructureHash?: string
-    platformSnapshot?: ArticlePublishingPlatformSnapshot
     lastVerifiedAt?: string
     recovery?: ArticlePublishingDraftRecovery
   }
@@ -257,6 +228,13 @@ export interface ManageArticlePublishingRuntimeInput {
   launchOperationId: string
 }
 
+export interface ResolveArticlePublishingAssetInput {
+  workspaceRef: WorkspaceRef
+  affairId: string
+  assetId: string
+  resolution: 'present' | 'missing'
+}
+
 export interface ReportArticlePublishingCheckpointInput {
   workspaceRef: WorkspaceRef
   affairId: string
@@ -295,5 +273,8 @@ export interface ArticlePublishingApiContract {
   ): Promise<WebAffairOperationResult<WebAffair>>
   terminateRuntime(
     input: ManageArticlePublishingRuntimeInput,
+  ): Promise<WebAffairOperationResult<WebAffair>>
+  resolveAsset(
+    input: ResolveArticlePublishingAssetInput,
   ): Promise<WebAffairOperationResult<WebAffair>>
 }

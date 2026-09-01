@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { absolutePathSchema } from '../ipc/input-schema'
 
 const uuidSchema = z.uuid()
+const assetIdSchema = z.string().trim().min(1).max(16_384)
 const timestampSchema = z.iso.datetime()
 const workspaceRefSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('global') }).strict(),
@@ -69,11 +70,10 @@ const articleAssetUploadAttemptSchema = z
 
 export const articlePublishingAssetSchema = z
   .object({
-    id: uuidSchema,
+    id: assetIdSchema,
     kind: z.enum(['local', 'remote']),
     sourcePath: z.string().trim().min(1).max(16_384),
     displayPath: z.string().trim().min(1).max(4_096),
-    contentHash: z.string().regex(/^[a-f0-9]{64}$/u),
     mediaType: z.string().trim().min(1).max(200).optional(),
     size: z
       .number()
@@ -81,6 +81,7 @@ export const articlePublishingAssetSchema = z
       .nonnegative()
       .max(100 * 1024 * 1024)
       .optional(),
+    modifiedAt: z.number().finite().nonnegative().optional(),
     occurrences: z
       .array(
         z
@@ -96,11 +97,14 @@ export const articlePublishingAssetSchema = z
       .max(500),
     status: articleAssetUploadStatusSchema,
     platformUrl: z.url().max(16_384).optional(),
-    platformContentHash: z
-      .string()
-      .regex(/^[a-f0-9]{64}$/u)
-      .optional(),
     verifiedAt: timestampSchema.optional(),
+    manualResolution: z
+      .object({
+        status: z.enum(['present', 'missing']),
+        resolvedAt: timestampSchema,
+      })
+      .strict()
+      .optional(),
     uploadAttempts: z.array(articleAssetUploadAttemptSchema).max(100),
   })
   .strict()
@@ -111,7 +115,7 @@ export const articlePublishingFieldsSchema = z
     summary: z.string().trim().max(1_000),
     tags: z.array(z.string().trim().min(1).max(40)).max(20),
     category: z.string().trim().max(120),
-    coverAssetId: uuidSchema.optional(),
+    coverAssetId: assetIdSchema.optional(),
   })
   .strict()
 
@@ -119,7 +123,6 @@ const checkpointSchema = z
   .object({
     stepId: z.string().trim().min(1).max(120),
     label: z.string().trim().min(1).max(160),
-    inputHash: z.string().regex(/^[a-f0-9]{64}$/u),
     adapterVersion: z.literal(1),
     status: articlePublishingCheckpointStatusSchema,
     resumePolicy: articlePublishingResumePolicySchema,
@@ -140,7 +143,6 @@ const sideEffectSchema = z
     executionGeneration: z.number().int().positive().max(1_000_000),
     kind: z.enum(['upload-asset', 'save-draft', 'publish']),
     targetId: z.string().trim().min(1).max(500),
-    actionFingerprint: z.string().trim().min(1).max(1_000),
     status: z.enum(['reserved', 'dispatched', 'result-unknown', 'verified', 'rejected']),
     reservedAt: timestampSchema,
     dispatchedAt: timestampSchema.optional(),
@@ -156,7 +158,6 @@ export const articlePublishingStateSchema = z
     source: z
       .object({
         markdownPath: absolutePathSchema,
-        contentHash: z.string().regex(/^[a-f0-9]{64}$/u),
         modifiedAt: z.number().finite().nonnegative(),
         size: z
           .number()
@@ -209,39 +210,9 @@ export const articlePublishingStateSchema = z
     draft: z
       .object({
         platformDraftId: z.string().trim().regex(/^\d+$/u).max(120).optional(),
+        platformAccountId: z.string().trim().min(1).max(320).optional(),
         url: z.url().max(16_384).optional(),
         normalizedTitle: z.string().max(320).optional(),
-        bodyStructureHash: z
-          .string()
-          .regex(/^[a-f0-9]{64}$/u)
-          .optional(),
-        platformSnapshot: z
-          .object({
-            adapterId: z.literal('csdn'),
-            adapterVersion: z.literal(1),
-            platformAccountId: z.string().trim().min(1).max(320),
-            draftId: z.string().trim().regex(/^\d+$/u).max(120),
-            normalizedTitle: z.string().max(320),
-            bodyStructureHash: z.string().regex(/^[a-f0-9]{64}$/u),
-            images: z
-              .array(
-                z
-                  .object({
-                    url: z.url().max(16_384),
-                    contentHash: z.string().regex(/^[a-f0-9]{64}$/u),
-                    alt: z.string().max(1_000),
-                  })
-                  .strict(),
-              )
-              .max(24),
-            imageEnumerationComplete: z.literal(true),
-            saveState: z.literal('saved'),
-            snapshotHash: z.string().regex(/^[a-f0-9]{64}$/u),
-            evidenceHash: z.string().regex(/^[a-f0-9]{64}$/u),
-            observedAt: timestampSchema,
-          })
-          .strict()
-          .optional(),
         lastVerifiedAt: timestampSchema.optional(),
         recovery: z
           .object({
@@ -249,17 +220,10 @@ export const articlePublishingStateSchema = z
             executionGeneration: z.number().int().positive().max(1_000_000),
             status: z.enum(['locating', 'verified', 'failed']),
             expectedDraftId: z.string().trim().regex(/^\d+$/u).max(120),
+            expectedTitle: z.string().trim().min(1).max(320),
             startedAt: timestampSchema,
             verifiedAt: timestampSchema.optional(),
-            evidenceHash: z
-              .string()
-              .regex(/^[a-f0-9]{64}$/u)
-              .optional(),
             platformAccountId: z.string().trim().min(1).max(320).optional(),
-            snapshotHash: z
-              .string()
-              .regex(/^[a-f0-9]{64}$/u)
-              .optional(),
             failureReason: z.string().trim().min(1).max(2_000).optional(),
             writePermit: z
               .object({
@@ -272,7 +236,6 @@ export const articlePublishingStateSchema = z
                 webContentsId: z.number().int().positive(),
                 playwrightConnectionGeneration: z.number().int().positive().max(1_000_000),
                 playwrightPageBindingGeneration: z.number().int().positive().max(1_000_000),
-                snapshotHash: z.string().regex(/^[a-f0-9]{64}$/u),
                 issuedAt: timestampSchema,
               })
               .strict()
@@ -320,6 +283,15 @@ export const manageArticlePublishingRuntimeInputSchema = z
   })
   .strict()
 
+export const resolveArticlePublishingAssetInputSchema = z
+  .object({
+    workspaceRef: workspaceRefSchema,
+    affairId: uuidSchema,
+    assetId: assetIdSchema,
+    resolution: z.enum(['present', 'missing']),
+  })
+  .strict()
+
 export const reportArticlePublishingCheckpointInputSchema = z
   .object({
     workspaceRef: workspaceRefSchema,
@@ -338,7 +310,7 @@ export const reportArticlePublishingAssetInputSchema = z
     workspaceRef: workspaceRefSchema,
     affairId: uuidSchema,
     attemptId: uuidSchema,
-    assetId: uuidSchema,
+    assetId: assetIdSchema,
     status: articleAssetUploadStatusSchema,
     platformUrl: z.url().max(16_384).optional(),
     evidence: z.string().trim().min(1).max(2_000).optional(),

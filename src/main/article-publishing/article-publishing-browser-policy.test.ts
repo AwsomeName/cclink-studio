@@ -1,31 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createHash } from 'node:crypto'
 import {
   ArticlePublishingBrowserPolicy,
   CSDN_ARTICLE_SUPPORTED_ORIGINS,
 } from './article-publishing-browser-policy'
 
 const DRAFT_URL = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
-
-function savedPlatformSnapshot(bodyStructure: string) {
-  const payload = {
-    adapterId: 'csdn' as const,
-    adapterVersion: 1 as const,
-    platformAccountId: 'csdn:test-user',
-    draftId: '164148817',
-    normalizedTitle: 'Article',
-    bodyStructureHash: createHash('sha256').update(bodyStructure).digest('hex'),
-    images: [],
-    imageEnumerationComplete: true as const,
-    saveState: 'saved' as const,
-  }
-  return {
-    ...payload,
-    snapshotHash: createHash('sha256').update(JSON.stringify(payload)).digest('hex'),
-    evidenceHash: 'e'.repeat(64),
-    observedAt: '2026-09-01T00:00:00.000Z',
-  }
-}
 
 function createPolicy(options?: {
   stepId?: string
@@ -36,10 +15,7 @@ function createPolicy(options?: {
   recovery?: Record<string, unknown>
   imageEnumerationComplete?: boolean
   images?: Array<{ src: string; alt: string }>
-  imageBytes?: string
   publishedLinks?: Array<{ url: string; title: string }>
-  bodyStructure?: string
-  platformSnapshot?: ReturnType<typeof savedPlatformSnapshot>
 }) {
   let inspectionPage: Record<string, unknown> | null = null
   const reserveArticlePublishingSideEffect = vi.fn().mockResolvedValue({
@@ -87,7 +63,7 @@ function createPolicy(options?: {
               adapterId: 'csdn',
               adapterVersion: 1,
               accountId: 'account-a',
-              source: { contentHash: 'a'.repeat(64) },
+              source: { markdownPath: '/workspace/article.md', modifiedAt: 1, size: 10 },
               fields: { title: 'Article', summary: '', tags: [], category: '' },
               assets: [
                 {
@@ -95,7 +71,6 @@ function createPolicy(options?: {
                   kind: 'local',
                   sourcePath: '/workspace/a.png',
                   displayPath: 'a.png',
-                  contentHash: 'b'.repeat(64),
                   status: options?.assetStatus ?? 'uploaded',
                   uploadAttempts: [],
                 },
@@ -112,13 +87,9 @@ function createPolicy(options?: {
                   ? undefined
                   : {
                       platformDraftId: '164148817',
+                      platformAccountId: 'csdn:test-user',
+                      normalizedTitle: 'Article',
                       url: options?.draftUrl ?? DRAFT_URL,
-                      ...(options?.platformSnapshot
-                        ? {
-                            bodyStructureHash: options.platformSnapshot.bodyStructureHash,
-                            platformSnapshot: options.platformSnapshot,
-                          }
-                        : {}),
                       ...(options?.recovery ? { recovery: options.recovery } : {}),
                     },
             },
@@ -147,20 +118,11 @@ function createPolicy(options?: {
       inspectionPage = {
         isClosed: () => false,
         url: () => url,
-        context: () => ({
-          request: {
-            get: async () => ({
-              ok: () => true,
-              body: async () => Buffer.from(options?.imageBytes ?? ''),
-            }),
-          },
-        }),
         evaluate: async () => ({
           url,
           pageKind,
           bodySelector: selectors['body'] ?? '#body',
           bodyTextLength: 100,
-          bodyStructure: options?.bodyStructure ?? '<P>\nArticle body\n</P>',
           platformAccountCandidates: ['csdn:test-user'],
           imageEnumerationComplete: options?.imageEnumerationComplete ?? false,
           images: options?.images ?? [],
@@ -351,14 +313,12 @@ describe('ArticlePublishingBrowserPolicy', () => {
     })
   })
 
-  it('records the platform bytes when CSDN transformed an uploaded image', async () => {
+  it('accepts an uploaded image only when the reported platform URL is visible in the editor', async () => {
     const platformUrl = 'https://img-blog.csdnimg.cn/transformed.png'
-    const imageBytes = 'platform-transformed-image'
     const { policy, inspect } = createPolicy({
       assetStatus: 'verifying',
       imageEnumerationComplete: true,
       images: [{ src: platformUrl, alt: 'image' }],
-      imageBytes,
     })
     await inspect({})
 
@@ -374,7 +334,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
       data: {
         trustedPageEvidence: {
           kind: 'asset-uploaded',
-          platformContentHash: createHash('sha256').update(imageBytes).digest('hex'),
+          url: DRAFT_URL,
         },
       },
     })
@@ -430,7 +390,6 @@ describe('ArticlePublishingBrowserPolicy', () => {
       1,
       'publish',
       'final',
-      expect.any(String),
       'task-a',
       'workspace-a',
     )
@@ -455,8 +414,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
       'attempt-a',
       1,
       'save-draft',
-      expect.stringMatching(/^autosave:fill-fields:[a-f0-9]{64}$/),
-      expect.any(String),
+      expect.stringMatching(/^autosave:fill-fields:[0-9a-f-]{36}$/),
       'task-a',
       'workspace-a',
     )
@@ -543,13 +501,13 @@ describe('ArticlePublishingBrowserPolicy', () => {
     expect(webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
   })
 
-  it('invalidates a recovered permit when the body changes after recovery verification', async () => {
-    const baseline = savedPlatformSnapshot('<P>\nArticle body\n</P>')
+  it('keeps a recovered permit bound to the exact Runtime without comparing page content', async () => {
     const recovery = {
       operationId: 'recovery-a',
       executionGeneration: 1,
       status: 'verified',
       expectedDraftId: '164148817',
+      expectedTitle: 'Article',
       startedAt: '2026-09-01T00:00:00.000Z',
       writePermit: {
         id: 'permit-a',
@@ -561,7 +519,6 @@ describe('ArticlePublishingBrowserPolicy', () => {
         webContentsId: 20,
         playwrightConnectionGeneration: 3,
         playwrightPageBindingGeneration: 4,
-        snapshotHash: baseline.snapshotHash,
         issuedAt: '2026-09-01T00:00:01.000Z',
       },
     }
@@ -569,7 +526,6 @@ describe('ArticlePublishingBrowserPolicy', () => {
       stepId: 'fill-fields',
       recovery,
       imageEnumerationComplete: true,
-      platformSnapshot: baseline,
     })
     const page = (await inspect({ title: '#title' })) as {
       evaluate: () => Promise<Record<string, unknown>>
@@ -579,7 +535,6 @@ describe('ArticlePublishingBrowserPolicy', () => {
       pageKind: 'editor',
       bodySelector: '#body',
       bodyTextLength: 20,
-      bodyStructure: '<P>\nManually changed body\n</P>',
       platformAccountCandidates: ['csdn:test-user'],
       imageEnumerationComplete: true,
       images: [],
@@ -598,10 +553,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
         page as never,
         context,
       ),
-    ).resolves.toMatchObject({
-      kind: 'unknown',
-      reason: expect.stringContaining('恢复许可'),
-    })
+    ).resolves.toMatchObject({ kind: 'allow-once' })
   })
 
   it('rejects a write on a generic editor that cannot be recovered after restart', async () => {

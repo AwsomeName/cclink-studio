@@ -6,6 +6,7 @@ import {
   createArticlePublishingTaskInputSchema,
   inspectArticlePublishingSourceInputSchema,
   manageArticlePublishingRuntimeInputSchema,
+  resolveArticlePublishingAssetInputSchema,
   startArticlePublishingTaskInputSchema,
 } from './article-publishing-schema'
 const invalidInputResult = async <T>(): Promise<WebAffairOperationResult<T>> => ({
@@ -45,5 +46,9 @@ export const articlePublishingIpcContracts = {
   terminateRuntime: bindSingle(
     articlePublishingIpc.terminateRuntime,
     manageArticlePublishingRuntimeInputSchema,
+  ),
+  resolveAsset: bindSingle(
+    articlePublishingIpc.resolveAsset,
+    resolveArticlePublishingAssetInputSchema,
   ),
 }

@@ -56,7 +56,6 @@ describe('article publishing persistent state', () => {
         preview: {
           source: {
             markdownPath: sourcePath,
-            contentHash: 'a'.repeat(64),
             modifiedAt: Date.now(),
             size: 36,
           },
@@ -68,7 +67,6 @@ describe('article publishing persistent state', () => {
               kind: 'local',
               sourcePath: imagePath,
               displayPath: 'image.png',
-              contentHash: 'b'.repeat(64),
               mediaType: 'image/png',
               size: 5,
               occurrences: [{ start: 12, end: 23, alt: 'image' }],
@@ -112,7 +110,7 @@ describe('article publishing persistent state', () => {
     ).toHaveLength(1)
   })
 
-  it('persists one immutable platform draft identity across a cold service reload', async () => {
+  it('keeps one draft identity and deletes the task when its persisted schema is legacy', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
     const before = created.service.getProjectSnapshot(WORKSPACE_ID)
     expect(before.success).toBe(true)
@@ -129,18 +127,21 @@ describe('article publishing persistent state', () => {
       '77777777-7777-4777-8777-777777777777',
     )
     expect(recorded.success).toBe(true)
-    const baselineSnapshot = platformSnapshot()
-    const snapshotted = await created.service.refreshArticlePublishingWriteSnapshot(
+    const observed = await created.service.recordArticlePublishingPageObservation(
       {
         affairId: created.affairId,
         attemptId: created.attemptId,
         executionGeneration: created.reporter.executionGeneration,
         browserTaskRunId: '77777777-7777-4777-8777-777777777777',
-        snapshot: baselineSnapshot,
+        draftId: '164148817',
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        url: draftUrl,
+        saveState: 'saved',
       },
       WORKSPACE_ID,
     )
-    expect(snapshotted.success).toBe(true)
+    expect(observed.success).toBe(true)
     if (!recorded.success) return
     expect(recorded.data.articlePublishing?.draft?.url).toBe(draftUrl)
 
@@ -184,10 +185,10 @@ describe('article publishing persistent state', () => {
     const after = reloaded.getProjectSnapshot(WORKSPACE_ID)
     expect(after.success).toBe(true)
     if (!after.success) return
-    expect(after.data.affairs[0].articlePublishing?.draft).toMatchObject({
-      url: draftUrl,
-      platformDraftId: '164148817',
-    })
+    expect(after.data.affairs).toEqual([])
+    const rewritten = JSON.parse(await readFile(persistedPath, 'utf8'))
+    expect(rewritten.schemaVersion).toBe(7)
+    expect(rewritten.affairs).toEqual([])
     await reloaded.flush()
   })
 
@@ -350,7 +351,6 @@ describe('article publishing persistent state', () => {
     expect(uploaded.data.articlePublishing?.assets[0]).toMatchObject({
       status: 'uploaded',
       platformUrl: 'https://img-blog.csdnimg.cn/example.png',
-      platformContentHash: 'd'.repeat(64),
       uploadAttempts: [{ number: 1, status: 'succeeded' }],
     })
   })
@@ -458,7 +458,7 @@ describe('article publishing persistent state', () => {
     await reloaded.flush()
   })
 
-  it('blocks an unknown upload from the prior generation before Agent binding', async () => {
+  it('blocks an unknown upload until the user visually confirms whether the image exists', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
     await prepareUploadCheckpoint(created)
     await dispatchUploadEffect(created, 1)
@@ -493,6 +493,21 @@ describe('article publishing persistent state', () => {
     await expect(resumeAndBindPublishingTask(created)).rejects.toThrow(
       '旧代次图片或保存结果仍不确定',
     )
+    const resolved = await created.service.resolveArticlePublishingAsset(
+      created.affairId,
+      created.assetId,
+      'present',
+      WORKSPACE_ID,
+    )
+    expect(resolved).toMatchObject({
+      success: true,
+      data: {
+        articlePublishing: {
+          execution: { status: 'interrupted' },
+          assets: [{ status: 'uploaded', manualResolution: { status: 'present' } }],
+        },
+      },
+    })
   })
 
   it('blocks an unknown draft save before Agent binding', async () => {
@@ -507,7 +522,7 @@ describe('article publishing persistent state', () => {
       {
         status: 'uploaded' as const,
         platformUrl: 'https://img-blog.csdnimg.cn/save-recovery.png',
-        evidence: 'image hash verified',
+        evidence: 'image visible in editor',
       },
     ]) {
       const result = await created.service.reportArticlePublishingAsset(
@@ -598,18 +613,21 @@ describe('article publishing persistent state', () => {
       '77777777-7777-4777-8777-777777777777',
     )
     expect(recorded.success).toBe(true)
-    const baselineSnapshot = platformSnapshot()
-    const snapshotted = await created.service.refreshArticlePublishingWriteSnapshot(
+    const observed = await created.service.recordArticlePublishingPageObservation(
       {
         affairId: created.affairId,
         attemptId: created.attemptId,
         executionGeneration: created.reporter.executionGeneration,
         browserTaskRunId: '77777777-7777-4777-8777-777777777777',
-        snapshot: baselineSnapshot,
+        draftId: '164148817',
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        url: draftUrl,
+        saveState: 'saved',
       },
       WORKSPACE_ID,
     )
-    expect(snapshotted.success).toBe(true)
+    expect(observed.success).toBe(true)
     const handedOff = await created.service.handoffAttempt(
       {
         workspaceRef: { kind: 'local', path: directory },
@@ -667,8 +685,9 @@ describe('article publishing persistent state', () => {
         recoveryOperationId: recovery.operationId,
         draftId: '164148817',
         url: draftUrl,
-        snapshot: baselineSnapshot,
-        evidenceHash: 'e'.repeat(64),
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        saveState: 'saved',
         tabId: 'recovered-tab',
         browserViewRuntimeGeneration: 2,
         webContentsId: 20,
@@ -707,46 +726,47 @@ describe('article publishing persistent state', () => {
     if (!verified.success) return
     const permit = verified.data.articlePublishing?.draft?.recovery?.writePermit
     if (!permit) throw new Error('恢复许可未持久化')
-    const rotatedSnapshot = platformSnapshot({
-      bodyStructureHash: 'c'.repeat(64),
-      snapshotHash: 'b'.repeat(64),
-      evidenceHash: 'd'.repeat(64),
-    })
-    const rotated = await created.service.refreshArticlePublishingWriteSnapshot(
+    const refreshed = await created.service.recordArticlePublishingPageObservation(
       {
         affairId: created.affairId,
         attemptId: attempt.id,
         executionGeneration: attempt.executionGeneration,
         browserTaskRunId: '88888888-8888-4888-8888-888888888888',
         permitId: permit.id,
-        previousSnapshotHash: baselineSnapshot.snapshotHash,
-        snapshot: rotatedSnapshot,
+        draftId: '164148817',
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        url: draftUrl,
+        saveState: 'saved',
       },
       WORKSPACE_ID,
     )
-    expect(rotated).toMatchObject({
+    expect(refreshed).toMatchObject({
       success: true,
       data: {
         articlePublishing: {
           draft: {
-            recovery: { writePermit: { snapshotHash: rotatedSnapshot.snapshotHash } },
+            recovery: { writePermit: { id: permit.id } },
           },
         },
       },
     })
-    const staleRotation = await created.service.refreshArticlePublishingWriteSnapshot(
+    const stalePermit = await created.service.recordArticlePublishingPageObservation(
       {
         affairId: created.affairId,
         attemptId: attempt.id,
         executionGeneration: attempt.executionGeneration,
         browserTaskRunId: '88888888-8888-4888-8888-888888888888',
-        permitId: permit.id,
-        previousSnapshotHash: baselineSnapshot.snapshotHash,
-        snapshot: platformSnapshot({ snapshotHash: 'f'.repeat(64) }),
+        permitId: 'stale-permit',
+        draftId: '164148817',
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        url: draftUrl,
+        saveState: 'saved',
       },
       WORKSPACE_ID,
     )
-    expect(staleRotation).toMatchObject({ success: false })
+    expect(stalePermit).toMatchObject({ success: false })
   })
 
   it('keeps the same Attempt retryable when Agent launch fails', async () => {
@@ -869,7 +889,6 @@ describe('article publishing persistent state', () => {
     expect(current.success).toBe(true)
     if (!current.success) return
     const attempt = current.data.affairs[0].attempts[0]
-    const fingerprint = 'publish-fingerprint'
     const browserTaskRunId = '77777777-7777-4777-8777-777777777777'
     const reserved = await created.service.reserveArticlePublishingSideEffect(
       created.affairId,
@@ -877,7 +896,6 @@ describe('article publishing persistent state', () => {
       attempt.executionGeneration,
       'publish',
       'final',
-      fingerprint,
       browserTaskRunId,
       WORKSPACE_ID,
     )
@@ -888,7 +906,6 @@ describe('article publishing persistent state', () => {
       created.attemptId,
       attempt.executionGeneration,
       sideEffectKey,
-      fingerprint,
       browserTaskRunId,
       WORKSPACE_ID,
     )
@@ -901,7 +918,6 @@ describe('article publishing persistent state', () => {
       created.attemptId,
       attempt.executionGeneration,
       sideEffectKey,
-      fingerprint,
       browserTaskRunId,
       WORKSPACE_ID,
     )
@@ -915,14 +931,12 @@ describe('article publishing persistent state', () => {
     if (!snapshot.success) return
     const attempt = snapshot.data.affairs[0].attempts[0]
     const browserTaskRunId = '77777777-7777-4777-8777-777777777777'
-    const fingerprint = 'fingerprint-save-draft'
     const reserved = await created.service.reserveArticlePublishingSideEffect(
       created.affairId,
       created.attemptId,
       attempt.executionGeneration,
       'save-draft',
       'source-a',
-      fingerprint,
       browserTaskRunId,
       WORKSPACE_ID,
     )
@@ -933,7 +947,6 @@ describe('article publishing persistent state', () => {
       created.attemptId,
       attempt.executionGeneration,
       sideEffectKey,
-      fingerprint,
       browserTaskRunId,
       WORKSPACE_ID,
     )
@@ -949,7 +962,6 @@ describe('article publishing persistent state', () => {
       created.attemptId,
       attempt.executionGeneration,
       sideEffectKey,
-      fingerprint,
       browserTaskRunId,
       WORKSPACE_ID,
     )
@@ -1191,7 +1203,6 @@ describe('article publishing persistent state', () => {
       executionGeneration: attempt.executionGeneration,
       kind: 'publish',
       targetId: 'final',
-      actionFingerprint: 'publish-fingerprint',
       status: 'dispatched',
       reservedAt: now,
       dispatchedAt: now,
@@ -1324,7 +1335,6 @@ describe('article publishing persistent state', () => {
       executionGeneration: attempt.executionGeneration,
       kind: 'upload-asset',
       targetId: `${created.assetId}:attempt-1`,
-      actionFingerprint: 'legacy-upload-fingerprint',
       status: 'result-unknown',
       reservedAt: now,
       dispatchedAt: now,
@@ -1390,7 +1400,6 @@ describe('article publishing persistent state', () => {
       executionGeneration: attempt.executionGeneration,
       kind: 'upload-asset',
       targetId: `${created.assetId}:v0174`,
-      actionFingerprint: 'v0174-upload-fingerprint',
       status: 'result-unknown',
       reservedAt: now,
       dispatchedAt: now,
@@ -1525,7 +1534,6 @@ describe('article publishing persistent state', () => {
       executionGeneration: attempt.executionGeneration,
       kind: 'save-draft',
       targetId: 'legacy-draft',
-      actionFingerprint: 'legacy-draft-fingerprint',
       status: 'result-unknown',
       reservedAt: nonFinalObservedAt,
       dispatchedAt: nonFinalObservedAt,
@@ -1601,7 +1609,8 @@ describe('article publishing persistent state', () => {
     await writeFile(
       store.recoveryPath,
       JSON.stringify({
-        journalVersion: 1,
+        journalVersion: 2,
+        snapshotSchemaVersion: 7,
         baseRevision: primary.revision,
         targetRevision: recovery.revision,
         targetHash: createHash('sha256')
@@ -1785,33 +1794,14 @@ function trustedReporter(
     trustedPageEvidence: {
       adapterId: 'csdn',
       adapterVersion: 1,
-      evidenceHash: 'e'.repeat(64),
       observedAt: new Date().toISOString(),
       url,
       kind,
-      ...(kind === 'asset-uploaded' ? { platformContentHash: 'd'.repeat(64) } : {}),
-      bodyStructureHash: 'b'.repeat(64),
       platformAccountId: 'csdn:test-user',
-      platformSnapshot: platformSnapshot(),
+      draftId: '164148817',
+      normalizedTitle: 'Article',
+      saveState: 'saved',
     },
-  }
-}
-
-function platformSnapshot(overrides: Record<string, unknown> = {}) {
-  return {
-    adapterId: 'csdn' as const,
-    adapterVersion: 1 as const,
-    platformAccountId: 'csdn:test-user',
-    draftId: '164148817',
-    normalizedTitle: 'Article',
-    bodyStructureHash: 'b'.repeat(64),
-    images: [],
-    imageEnumerationComplete: true as const,
-    saveState: 'saved' as const,
-    snapshotHash: 'a'.repeat(64),
-    evidenceHash: 'e'.repeat(64),
-    observedAt: new Date().toISOString(),
-    ...overrides,
   }
 }
 
@@ -1934,14 +1924,12 @@ async function dispatchUploadEffect(created: StartedTask, attemptNumber: number)
   const attempt = snapshot.data.affairs[0].attempts[0]
   const browserTaskRunId = '77777777-7777-4777-8777-777777777777'
   const targetId = `${created.assetId}:attempt-${attemptNumber}`
-  const fingerprint = `upload-${attemptNumber}`
   const reserved = await created.service.reserveArticlePublishingSideEffect(
     created.affairId,
     created.attemptId,
     attempt.executionGeneration,
     'upload-asset',
     targetId,
-    fingerprint,
     browserTaskRunId,
     WORKSPACE_ID,
   )
@@ -1951,7 +1939,6 @@ async function dispatchUploadEffect(created: StartedTask, attemptNumber: number)
     created.attemptId,
     attempt.executionGeneration,
     `${created.affairId}:${created.attemptId}:g${attempt.executionGeneration}:upload-asset:${targetId}`,
-    fingerprint,
     browserTaskRunId,
     WORKSPACE_ID,
   )
@@ -1983,8 +1970,7 @@ async function dispatchSaveEffect(created: StartedTask, stepId: string): Promise
   const snapshot = created.service.getProjectSnapshot(WORKSPACE_ID)
   if (!snapshot.success) throw new Error(snapshot.error.message)
   const attempt = snapshot.data.affairs[0].attempts.find((item) => item.id === created.attemptId)!
-  const targetId = stepId === 'save-draft' ? 'source-hash-test' : `autosave:${stepId}:test-action`
-  const fingerprint = `${stepId}-fingerprint-g${attempt.executionGeneration}`
+  const targetId = stepId === 'save-draft' ? 'manual-save:test' : `autosave:${stepId}:test-action`
   const browserTaskRunId = attempt.browserTaskRunId ?? '77777777-7777-4777-8777-777777777777'
   const reserved = await created.service.reserveArticlePublishingSideEffect(
     created.affairId,
@@ -1992,7 +1978,6 @@ async function dispatchSaveEffect(created: StartedTask, stepId: string): Promise
     attempt.executionGeneration,
     'save-draft',
     targetId,
-    fingerprint,
     browserTaskRunId,
     WORKSPACE_ID,
   )
@@ -2003,7 +1988,6 @@ async function dispatchSaveEffect(created: StartedTask, stepId: string): Promise
     created.attemptId,
     attempt.executionGeneration,
     sideEffectKey,
-    fingerprint,
     browserTaskRunId,
     WORKSPACE_ID,
   )
@@ -2055,7 +2039,6 @@ async function createDraftTask(directory: string, sourcePath: string, imagePath:
   const preview: ArticlePublishingSourcePreview = {
     source: {
       markdownPath: sourcePath,
-      contentHash: 'a'.repeat(64),
       modifiedAt: Date.now(),
       size: 36,
     },
@@ -2067,7 +2050,6 @@ async function createDraftTask(directory: string, sourcePath: string, imagePath:
         kind: 'local',
         sourcePath: imagePath,
         displayPath: 'image.png',
-        contentHash: 'b'.repeat(64),
         mediaType: 'image/png',
         size: 5,
         occurrences: [{ start: 12, end: 23, alt: 'image' }],

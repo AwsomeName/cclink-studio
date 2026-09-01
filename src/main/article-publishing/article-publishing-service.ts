@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import {
@@ -26,6 +26,7 @@ import type {
   CreateArticlePublishingTaskInput,
   InspectArticlePublishingSourceInput,
   ManageArticlePublishingRuntimeInput,
+  ResolveArticlePublishingAssetInput,
   StartArticlePublishingTaskInput,
   StartArticlePublishingTaskResult,
 } from '../../shared/article-publishing/article-publishing-types'
@@ -33,6 +34,7 @@ import {
   createArticlePublishingTaskInputSchema,
   inspectArticlePublishingSourceInputSchema,
   manageArticlePublishingRuntimeInputSchema,
+  resolveArticlePublishingAssetInputSchema,
   startArticlePublishingTaskInputSchema,
 } from '../../shared/article-publishing/article-publishing-schema'
 import type {
@@ -210,51 +212,26 @@ export class ArticlePublishingService {
         return page
       }
       if (publicationRecoveryRequired) {
-        const expectedSnapshot = publishing.draft?.platformSnapshot
-        const expectedArticleId = publishing.draft?.platformDraftId
-        if (!expectedSnapshot || !expectedArticleId) {
-          throw new Error('发布结果未知，但历史任务缺少原平台账号和完整草稿快照；已停止自动核查')
+        const expectedPlatformAccountId = publishing.draft?.platformAccountId
+        if (!expectedPlatformAccountId) {
+          throw new Error('发布结果未知，但任务缺少原 CSDN 账号；已停止自动核查')
         }
         const recoveredPublication = await this.draftRecoveryCoordinator.recoverExactPublication({
-          expectedArticleId,
-          expectedSnapshot,
+          expectedPlatformAccountId,
+          expectedTitle: publishing.fields.title,
           navigate: navigateForRecovery,
         })
         recoveredPublicationUrl = recoveredPublication.url
         draftAnchor = null
       } else if (recoveryRequired && recovery) {
-        const expectedSnapshot = publishing.draft?.platformSnapshot
-        if (
-          !expectedSnapshot ||
-          expectedSnapshot.draftId !== recovery.expectedDraftId ||
-          publishing.draft?.bodyStructureHash !== expectedSnapshot.bodyStructureHash
-        ) {
-          throw new Error(
-            '历史任务缺少真实账号、结构化正文、全部图片或保存状态证据；已在启动 Agent 前停止恢复',
-          )
-        }
-        if (
-          publishing.assets.some((asset) =>
-            ['result-unknown', 'reconciling'].includes(asset.status),
-          )
-        ) {
-          throw new Error('旧执行代次仍有无法核验的图片结果；已在启动 Agent 前停止恢复')
-        }
-        const unresolvedSave = publishing.sideEffects.find(
-          (effect) =>
-            effect.attemptId === attempt.id &&
-            effect.executionGeneration < attempt.executionGeneration &&
-            effect.kind === 'save-draft' &&
-            ['reserved', 'dispatched', 'result-unknown'].includes(effect.status),
-        )
-        if (unresolvedSave) {
-          throw new Error(
-            '旧执行代次仍有无法核验的正文或保存动作；已停止恢复以避免覆盖网页人工修改',
-          )
+        const expectedPlatformAccountId = publishing.draft?.platformAccountId
+        if (!expectedPlatformAccountId) {
+          throw new Error('任务缺少原 CSDN 账号；已在启动 Agent 前停止恢复')
         }
         recoveredDraft = await this.draftRecoveryCoordinator.recoverExactDraft({
           expectedDraftId: recovery.expectedDraftId,
-          expectedSnapshot,
+          expectedPlatformAccountId,
+          expectedTitle: recovery.expectedTitle,
           navigate: navigateForRecovery,
         })
         draftAnchor = parseCsdnDraftAnchor(recoveredDraft.url)
@@ -271,9 +248,7 @@ export class ArticlePublishingService {
         }
         draftAnchor = restored
       } else if (input.resumed && hasPlatformPublishingProgress(publishing)) {
-        throw new Error(
-          '历史任务已有平台写入但缺少原草稿完整快照；手动打开草稿也不能换发写入许可，请重新创建发布任务',
-        )
+        throw new Error('任务已有平台写入但缺少原草稿编号或账号；请重新创建发布任务')
       } else {
         await browserManager.navigate(tabId, attempt.entryUrl)
         const visibleDraftAnchor = parseCsdnDraftAnchor(browserManager.getCurrentURL(tabId))
@@ -313,8 +288,9 @@ export class ArticlePublishingService {
             recoveryOperationId: recovery.operationId,
             draftId: recoveredDraft.draftId,
             url: recoveredDraft.url,
-            snapshot: recoveredDraft.snapshot,
-            evidenceHash: recoveredDraft.evidenceHash,
+            platformAccountId: recoveredDraft.platformAccountId,
+            normalizedTitle: recoveredDraft.normalizedTitle,
+            saveState: 'saved',
             tabId,
             browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
             webContentsId: viewIdentity.webContentsId,
@@ -1024,12 +1000,20 @@ export class ArticlePublishingService {
       publishing.source.markdownPath,
       parsed.data.workspaceRef.path,
     ).catch(() => null)
-    if (!preview || preview.source.contentHash !== publishing.source.contentHash) {
+    if (
+      !preview ||
+      preview.source.modifiedAt !== publishing.source.modifiedAt ||
+      preview.source.size !== publishing.source.size
+    ) {
       return invalid('源 Markdown 已变化，不能恢复旧 Attempt；请以新内容创建发布任务')
     }
-    const currentHashes = preview.assets.map((asset) => asset.contentHash).sort()
-    const frozenHashes = publishing.assets.map((asset) => asset.contentHash).sort()
-    if (JSON.stringify(currentHashes) !== JSON.stringify(frozenHashes)) {
+    const currentAssets = preview.assets
+      .map((asset) => [asset.id, asset.sourcePath, asset.size, asset.modifiedAt])
+      .sort((left, right) => String(left[0]).localeCompare(String(right[0])))
+    const frozenAssets = publishing.assets
+      .map((asset) => [asset.id, asset.sourcePath, asset.size, asset.modifiedAt])
+      .sort((left, right) => String(left[0]).localeCompare(String(right[0])))
+    if (JSON.stringify(currentAssets) !== JSON.stringify(frozenAssets)) {
       return invalid('正文图片已变化，不能恢复旧 Attempt；请重新创建发布任务')
     }
 
@@ -1190,6 +1174,22 @@ export class ArticlePublishingService {
     })
   }
 
+  async resolveAsset(
+    rawInput: ResolveArticlePublishingAssetInput,
+    workspaceId: string,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const parsed = resolveArticlePublishingAssetInputSchema.safeParse(rawInput)
+    if (!parsed.success || parsed.data.workspaceRef.kind !== 'local') {
+      return invalid('图片人工确认参数无效')
+    }
+    return this.webAffairService.resolveArticlePublishingAsset(
+      parsed.data.affairId,
+      parsed.data.assetId,
+      parsed.data.resolution,
+      workspaceId,
+    )
+  }
+
   private resolveRuntimeCommand(
     rawInput: ManageArticlePublishingRuntimeInput,
     workspaceId: string,
@@ -1271,17 +1271,15 @@ export class ArticlePublishingService {
     const byIdentity = new Map<string, ArticlePublishingAsset>()
     for (const reference of collectImageReferences(snapshot.content)) {
       if (isExternalMarkdownDestination(reference.destination)) {
-        const hash = sha256(reference.destination)
         const current = byIdentity.get(`remote:${reference.destination}`)
         const occurrence = { start: reference.start, end: reference.end, alt: reference.alt }
         if (current) current.occurrences.push(occurrence)
         else {
           byIdentity.set(`remote:${reference.destination}`, {
-            id: stableAssetId(hash),
+            id: `remote:${reference.destination}`,
             kind: 'remote',
             sourcePath: reference.destination,
             displayPath: reference.destination,
-            contentHash: hash,
             occurrences: [occurrence],
             status: 'uploaded',
             platformUrl: reference.destination,
@@ -1305,32 +1303,26 @@ export class ArticlePublishingService {
           blockers.push(`图片超出当前工作空间：${rawPath}`)
           continue
         }
-        const [metadata, file] = await Promise.all([
-          this.fileService.stat(realAssetPath),
-          this.fileService.readFile(realAssetPath),
-        ])
+        const metadata = await this.fileService.stat(realAssetPath)
         if (metadata.type !== 'file') throw new Error('图片路径不是文件')
         if (metadata.size > MAX_IMAGE_BYTES) {
           blockers.push(`图片超过 20MB：${rawPath}`)
           continue
         }
-        const contentHash = createHash('sha256')
-          .update(Buffer.from(file.content, 'base64'))
-          .digest('hex')
-        const identity = `local:${contentHash}`
+        const identity = `local:${realAssetPath}`
         const occurrence = { start: reference.start, end: reference.end, alt: reference.alt }
         const current = byIdentity.get(identity)
         if (current) current.occurrences.push(occurrence)
         else {
           byIdentity.set(identity, {
-            id: stableAssetId(contentHash),
+            id: `local:${relative(realWorkspacePath, realAssetPath)}`,
             kind: 'local',
             sourcePath: realAssetPath,
             displayPath:
               relative(dirname(realMarkdownPath), realAssetPath) || basename(realAssetPath),
-            contentHash,
             mediaType,
             size: metadata.size,
+            modifiedAt: metadata.modifiedAt,
             occurrences: [occurrence],
             status: 'pending',
             uploadAttempts: [],
@@ -1345,7 +1337,6 @@ export class ArticlePublishingService {
     return {
       source: {
         markdownPath: snapshot.path,
-        contentHash: snapshot.hash,
         modifiedAt: snapshot.modifiedAt,
         size: snapshot.size,
       },
@@ -1422,18 +1413,6 @@ function extractSummary(markdown: string): string {
       )
       .find((paragraph) => paragraph && !paragraph.startsWith('```')) ?? ''
   ).slice(0, 500)
-}
-
-function sha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex')
-}
-
-function stableAssetId(contentHash: string): string {
-  const value = contentHash.slice(0, 32).split('')
-  value[12] = '4'
-  value[16] = '8'
-  const hex = value.join('')
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
@@ -1516,9 +1495,7 @@ function stableRuntimeEventId(
   launchOperationId: string,
   event: string,
 ): string {
-  return createHash('sha256')
-    .update(`${attemptId}\0${executionGeneration}\0${launchOperationId}\0${event}`)
-    .digest('hex')
+  return `${attemptId}:g${executionGeneration}:${launchOperationId}:${event}`
 }
 
 function extractRuntimeError(data: unknown): string {

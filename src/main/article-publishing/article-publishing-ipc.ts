@@ -86,6 +86,19 @@ export function registerArticlePublishingIpc(
           : resolved
     },
   )
+  registerTrustedIpcContract(
+    articlePublishingIpcContracts.resolveAsset,
+    trustedRendererGuard,
+    async (_event, input) => {
+      const resolved = await resolveWorkspaceId(input.workspaceRef, getWorkspaceStateService())
+      const service = getService()
+      return resolved.success && service
+        ? service.resolveAsset(input, resolved.data)
+        : resolved.success
+          ? unavailable()
+          : resolved
+    },
+  )
 }
 
 async function resolveWorkspaceId(

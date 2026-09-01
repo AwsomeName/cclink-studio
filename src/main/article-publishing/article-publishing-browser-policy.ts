@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import type { BrowserTaskRun } from '../../shared/ipc/browser'
 import type { ToolExecutionContext } from '../mcp/types'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
@@ -11,7 +11,6 @@ import {
 import { CsdnPublishingAdapter, type CsdnPageProbe } from './csdn-publishing-adapter'
 import type { WebAffairOperationResult } from '../../shared/web-affairs/web-affair-types'
 import type { ArticlePublishingAgentReporter } from '../web-affairs/web-affair-service'
-import type { ArticlePublishingPlatformSnapshot } from '../../shared/article-publishing/article-publishing-types'
 
 export const CSDN_ARTICLE_SUPPORTED_ORIGINS = [
   'https://csdn.net',
@@ -25,7 +24,7 @@ const CSDN_ARTICLE_SUPPORTED_ORIGIN_SET = new Set<string>(CSDN_ARTICLE_SUPPORTED
 
 export type ArticlePublishingBrowserActionDecision =
   | { kind: 'allow' }
-  | { kind: 'allow-once'; sideEffectKey: string; actionFingerprint: string }
+  | { kind: 'allow-once'; sideEffectKey: string }
   | { kind: 'handoff'; reason: string }
   | { kind: 'unknown'; reason: string }
 
@@ -43,17 +42,15 @@ interface ArticlePublishingExecutionScope {
   browserTaskRunId: string
   writePermitted: boolean
   writePermitId?: string
-  writePermitSnapshotHash?: string
   draftUrl?: string
-  sourceHash: string
   expectedTitle: string
   assets: Array<{
     id: string
+    kind: 'local' | 'remote'
     sourcePath: string
     displayPath: string
-    contentHash: string
     platformUrl?: string
-    platformContentHash?: string
+    manualResolution?: { status: 'present' | 'missing'; resolvedAt: string }
     status:
       | 'pending'
       | 'uploading'
@@ -70,10 +67,6 @@ interface ArticlePublishingExecutionScope {
 
 export interface ArticlePublishingPageInspection extends CsdnPageProbe {
   matchedAssets: Record<string, string>
-  matchedAssetHashes: Record<string, string>
-  platformHashesByUrl: Record<string, string>
-  assetComparisonComplete: boolean
-  platformSnapshot?: ArticlePublishingPlatformSnapshot
 }
 
 interface TrustedPageAttestation {
@@ -156,49 +149,17 @@ export class ArticlePublishingBrowserPolicy {
       return publishingEvidenceError('当前页面不是本 Attempt 已绑定的 CSDN 草稿')
     }
     const matchedAssets: Record<string, string> = {}
-    const matchedAssetHashes: Record<string, string> = {}
-    let platformHashesByUrl: Record<string, string> = {}
-    let assetComparisonComplete = false
     if (probe.editor.recognized && probe.editor.imageEnumerationComplete) {
-      const unresolvedAssets = [] as typeof scope.assets
       for (const asset of scope.assets) {
         const existing = asset.platformUrl
           ? probe.editor.images.find((image) => image.src === asset.platformUrl)?.src
           : null
         if (existing) matchedAssets[asset.id] = existing
-        else unresolvedAssets.push(asset)
       }
-      const matchResult = await this.adapter.matchAssetsByContentHash(
-        page,
-        probe,
-        unresolvedAssets.flatMap((asset) =>
-          asset.platformContentHash
-            ? [asset.platformContentHash, asset.contentHash]
-            : [asset.contentHash],
-        ),
-      )
-      for (const asset of unresolvedAssets) {
-        const matchedHash = asset.platformContentHash ?? asset.contentHash
-        const matched = matchResult.matches[matchedHash] ?? matchResult.matches[asset.contentHash]
-        if (matched) {
-          matchedAssets[asset.id] = matched
-          matchedAssetHashes[asset.id] =
-            matchResult.matchedPlatformHashes[matchedHash] ??
-            matchResult.matchedPlatformHashes[asset.contentHash] ??
-            matchedHash
-        }
-      }
-      platformHashesByUrl = matchResult.platformHashesByUrl
-      assetComparisonComplete = matchResult.comparisonComplete
     }
-    const platformSnapshot = await this.adapter.captureSavedEditorSnapshot(page, probe)
     const inspection: ArticlePublishingPageInspection = {
       ...probe,
       matchedAssets,
-      matchedAssetHashes,
-      platformHashesByUrl,
-      assetComparisonComplete,
-      ...(platformSnapshot ? { platformSnapshot } : {}),
     }
     this.attestations.set(this.attestationKey(context), { scope, inspection })
     while (this.attestations.size > 40) {
@@ -248,24 +209,15 @@ export class ArticlePublishingBrowserPolicy {
         trustedPageEvidence: {
           adapterId: inspection.adapterId,
           adapterVersion: inspection.adapterVersion,
-          evidenceHash: inspection.evidenceHash,
           observedAt: inspection.observedAt,
           url: trustedUrl,
           kind: evidenceKind,
           ...(inspection.platformAccountId
             ? { platformAccountId: inspection.platformAccountId }
             : {}),
-          ...(evidenceKind === 'asset-uploaded'
-            ? {
-                platformContentHash:
-                  inspection.matchedAssetHashes[String(params['assetId'] ?? '')] ??
-                  inspection.platformHashesByUrl[String(params['platformUrl'] ?? '')],
-              }
-            : {}),
-          ...(inspection.editor.bodyStructureHash
-            ? { bodyStructureHash: inspection.editor.bodyStructureHash }
-            : {}),
-          ...(inspection.platformSnapshot ? { platformSnapshot: inspection.platformSnapshot } : {}),
+          ...(inspection.draftId ? { draftId: inspection.draftId } : {}),
+          normalizedTitle: normalizeText(inspection.title.value),
+          saveState: inspection.saveState,
         },
       },
     }
@@ -379,18 +331,6 @@ export class ArticlePublishingBrowserPolicy {
         )
       }
     }
-    if (isMutation && scope.writePermitSnapshotHash) {
-      const freshSnapshot = await this.adapter.captureSavedEditorSnapshot(page)
-      if (!freshSnapshot || freshSnapshot.snapshotHash !== scope.writePermitSnapshotHash) {
-        return this.stopDecision(
-          scope,
-          actionType,
-          'unknown',
-          '写入前重新读取发现账号、正文、图片或保存状态已变化，恢复许可已失效',
-          pageUrl,
-        )
-      }
-    }
     if (!isMutation) return { kind: 'allow' }
     if (!this.isRecognizedPageForStep(pageUrl, scope.currentStepId)) {
       return this.stopDecision(
@@ -492,21 +432,10 @@ export class ArticlePublishingBrowserPolicy {
       AUTOSAVE_STEPS.has(scope.currentStepId ?? '') &&
       POTENTIAL_AUTOSAVE_ACTIONS.has(actionType)
     ) {
-      const targetHash = createHash('sha256')
-        .update(
-          JSON.stringify({
-            actionType,
-            stepId: scope.currentStepId,
-            selector: String(params.selector ?? ''),
-            key: String(params.key ?? ''),
-            value: params.value ?? params.text ?? params.values ?? null,
-          }),
-        )
-        .digest('hex')
       return this.reserveSideEffect(
         scope,
         'save-draft',
-        `autosave:${scope.currentStepId}:${targetHash}`,
+        `autosave:${scope.currentStepId}:${randomUUID()}`,
         actionType,
         params,
         pageUrl,
@@ -602,7 +531,7 @@ export class ArticlePublishingBrowserPolicy {
       return this.reserveSideEffect(
         scope,
         'save-draft',
-        scope.sourceHash,
+        `manual-save:${scope.currentStepId}`,
         actionType,
         params,
         pageUrl,
@@ -649,36 +578,44 @@ export class ArticlePublishingBrowserPolicy {
     const scope = await this.resolveTaskScope(task, context)
     if (!scope) return
     if (scope.currentStepId === 'open-editor' || scope.currentStepId === 'publish') return
-    let snapshot: ArticlePublishingPlatformSnapshot | null = null
+    let observation: CsdnPageProbe | null = null
     for (let attempt = 0; attempt < 24; attempt += 1) {
-      snapshot = await this.adapter.captureSavedEditorSnapshot(page)
-      if (snapshot) break
+      const probe = await this.adapter.probe(page)
+      if (
+        probe.editor.recognized &&
+        probe.draftId &&
+        probe.platformAccountId &&
+        probe.saveState === 'saved'
+      ) {
+        observation = probe
+        break
+      }
       await page.waitForTimeout(250)
     }
-    if (!snapshot) {
-      throw new Error('网页动作后无法证明同一账号草稿已保存完整正文和全部图片，许可已停止续签')
+    if (!observation?.draftId || !observation.platformAccountId) {
+      throw new Error('网页动作后无法读回同一账号、同一草稿和已保存状态')
     }
-    const refreshed = await this.webAffairService.refreshArticlePublishingWriteSnapshot(
+    const recorded = await this.webAffairService.recordArticlePublishingPageObservation(
       {
         affairId: scope.affairId,
         attemptId: scope.attemptId,
         executionGeneration: scope.executionGeneration,
         browserTaskRunId: scope.browserTaskRunId,
         ...(scope.writePermitId ? { permitId: scope.writePermitId } : {}),
-        ...(scope.writePermitSnapshotHash
-          ? { previousSnapshotHash: scope.writePermitSnapshotHash }
-          : {}),
-        snapshot,
+        draftId: observation.draftId,
+        platformAccountId: observation.platformAccountId,
+        normalizedTitle: normalizeText(observation.title.value),
+        url: observation.url,
+        saveState: 'saved',
       },
       scope.workspaceId,
     )
-    if (!refreshed.success) throw new Error(refreshed.error.message)
+    if (!recorded.success) throw new Error(recorded.error.message)
   }
 
   async consumeSideEffect(
     task: BrowserTaskRun,
     sideEffectKey: string,
-    actionFingerprint: string,
     context?: ToolExecutionContext,
   ): Promise<void> {
     const scope = await this.resolveTaskScope(task, context)
@@ -688,7 +625,6 @@ export class ArticlePublishingBrowserPolicy {
       scope.attemptId,
       scope.executionGeneration,
       sideEffectKey,
-      actionFingerprint,
       scope.browserTaskRunId,
       scope.workspaceId,
     )
@@ -775,28 +711,15 @@ export class ArticlePublishingBrowserPolicy {
     kind: 'upload-asset' | 'save-draft' | 'publish',
     targetId: string,
     actionType: string,
-    params: Record<string, unknown>,
+    _params: Record<string, unknown>,
     pageUrl: string,
   ): Promise<ArticlePublishingBrowserActionDecision> {
-    const actionFingerprint = createHash('sha256')
-      .update(
-        JSON.stringify({
-          actionType,
-          origin: toOrigin(pageUrl),
-          selector: String(params.selector ?? ''),
-          key: String(params.key ?? ''),
-          paths: Array.isArray(params.paths) ? params.paths : [],
-          targetId,
-        }),
-      )
-      .digest('hex')
     const reserved = await this.webAffairService.reserveArticlePublishingSideEffect(
       scope.affairId,
       scope.attemptId,
       scope.executionGeneration,
       kind,
       targetId,
-      actionFingerprint,
       scope.browserTaskRunId,
       scope.workspaceId,
     )
@@ -815,7 +738,6 @@ export class ArticlePublishingBrowserPolicy {
     return {
       kind: 'allow-once',
       sideEffectKey: `${scope.affairId}:${scope.attemptId}:g${scope.executionGeneration}:${kind}:${targetId}`,
-      actionFingerprint,
     }
   }
 
@@ -885,8 +807,6 @@ export class ArticlePublishingBrowserPolicy {
       Boolean(
         recovery.status === 'verified' &&
         permit &&
-        publishing.draft?.platformSnapshot &&
-        permit.snapshotHash === publishing.draft.platformSnapshot.snapshotHash &&
         permit.recoveryOperationId === recovery.operationId &&
         permit.executionGeneration === attempt.executionGeneration &&
         permit.tabId === input.tabId &&
@@ -911,17 +831,15 @@ export class ArticlePublishingBrowserPolicy {
       browserTaskRunId: input.browserTaskRunId ?? attempt.browserTaskRunId ?? '',
       writePermitted,
       ...(permit?.id ? { writePermitId: permit.id } : {}),
-      ...(permit?.snapshotHash ? { writePermitSnapshotHash: permit.snapshotHash } : {}),
       draftUrl: publishing.draft?.url,
-      sourceHash: publishing.source.contentHash,
       expectedTitle: publishing.fields.title,
       assets: publishing.assets.map((asset) => ({
         id: asset.id,
+        kind: asset.kind,
         sourcePath: asset.sourcePath,
         displayPath: asset.displayPath,
-        contentHash: asset.contentHash,
         platformUrl: asset.platformUrl,
-        platformContentHash: asset.platformContentHash,
+        manualResolution: asset.manualResolution,
         status: asset.status,
         uploadAttemptCount: asset.uploadAttempts.length,
       })),
@@ -1032,23 +950,22 @@ export class ArticlePublishingBrowserPolicy {
       const platformUrl = String(params['platformUrl'] ?? '')
       return Boolean(
         platformUrl &&
-        inspection.platformSnapshot &&
+        inspection.editor.recognized &&
         (inspection.matchedAssets[assetId] === platformUrl ||
-          (inspection.editor.images.some((image) => image.src === platformUrl) &&
-            inspection.platformHashesByUrl[platformUrl])),
+          inspection.editor.images.some((image) => image.src === platformUrl)),
       )
     }
     if (kind === 'asset-absent') {
       const assetId = String(params['assetId'] ?? '')
       const asset = scope.assets.find((candidate) => candidate.id === assetId)
       const absenceCanAuthorizeFirstUpload = Boolean(
-        asset?.status !== 'reconciling' && asset?.uploadAttemptCount === 0,
+        asset &&
+        ((asset.status !== 'reconciling' && asset.uploadAttemptCount === 0) ||
+          asset.manualResolution?.status === 'missing'),
       )
       return Boolean(
         inspection.editor.recognized &&
-        inspection.platformSnapshot &&
         inspection.editor.imageEnumerationComplete &&
-        inspection.assetComparisonComplete &&
         asset &&
         absenceCanAuthorizeFirstUpload &&
         !inspection.matchedAssets[assetId],
@@ -1066,27 +983,23 @@ export class ArticlePublishingBrowserPolicy {
     }
     if (stepId === 'upload-assets') {
       return Boolean(
-        inspection.platformSnapshot &&
-        scope.assets.every((asset) => Boolean(inspection.matchedAssets[asset.id])),
+        inspection.editor.recognized &&
+        inspection.saveState === 'saved' &&
+        scope.assets.every((asset) => asset.kind !== 'local' || asset.status === 'uploaded'),
       )
     }
     if (stepId === 'fill-body') {
-      return Boolean(
-        inspection.platformSnapshot &&
-        inspection.editor.recognized &&
-        inspection.editor.bodyTextLength > 0,
-      )
+      return Boolean(inspection.editor.recognized && inspection.editor.bodyTextLength > 0)
     }
     if (stepId === 'fill-fields') {
       return Boolean(
-        inspection.platformSnapshot &&
+        inspection.editor.recognized &&
         normalizeText(inspection.title.value) === normalizeText(scope.expectedTitle),
       )
     }
     if (stepId === 'save-draft') {
       return Boolean(
         inspection.editor.recognized &&
-        inspection.platformSnapshot &&
         inspection.saveState === 'saved' &&
         normalizeText(inspection.title.value) === normalizeText(scope.expectedTitle),
       )

@@ -1,10 +1,6 @@
-import { createHash } from 'node:crypto'
 import type { Page } from 'playwright-core'
 import { parseCsdnDraftAnchor } from '../../shared/article-publishing/csdn-draft-anchor'
-import type { ArticlePublishingPlatformSnapshot } from '../../shared/article-publishing/article-publishing-types'
 
-const MAX_PROBED_IMAGES = 24
-const MAX_IMAGE_BYTES = 20 * 1024 * 1024
 export const CSDN_ARTICLE_MANAGEMENT_URL = 'https://mp.csdn.net/mp_blog/manage/article'
 
 export interface CsdnPageImageProbe {
@@ -16,7 +12,6 @@ export interface CsdnPageProbe {
   adapterId: 'csdn'
   adapterVersion: 1
   observedAt: string
-  evidenceHash: string
   url: string
   platformAccountId?: string
   pageKind: 'editor' | 'published-article' | 'management' | 'unsupported'
@@ -26,7 +21,6 @@ export interface CsdnPageProbe {
     recognized: boolean
     bodySelector?: string
     bodyTextLength: number
-    bodyStructureHash?: string
     imageEnumerationComplete: boolean
     images: CsdnPageImageProbe[]
     fileInputSelector?: string
@@ -59,7 +53,6 @@ interface RawCsdnPageProbe {
   publishedArticleId?: string
   bodySelector?: string
   bodyTextLength: number
-  bodyStructure: string
   platformAccountCandidates: string[]
   imageEnumerationComplete: boolean
   images: CsdnPageImageProbe[]
@@ -82,7 +75,6 @@ export interface CsdnDraftListProbe {
   adapterId: 'csdn'
   adapterVersion: 1
   observedAt: string
-  evidenceHash: string
   platformAccountId?: string
   pageSupported: boolean
   draftSectionUrl?: string
@@ -94,13 +86,6 @@ interface RawCsdnDraftListProbe {
   draftSectionUrl?: string
   platformAccountCandidates: string[]
   links: Array<{ url: string; title: string }>
-}
-
-export interface CsdnAssetMatchResult {
-  matches: Record<string, string>
-  matchedPlatformHashes: Record<string, string>
-  platformHashesByUrl: Record<string, string>
-  comparisonComplete: boolean
 }
 
 /**
@@ -167,56 +152,6 @@ export class CsdnPublishingAdapter {
           return element.value.trim()
         }
         return (element.textContent ?? '').trim()
-      }
-      const serializeBody = (element: Element | undefined): string => {
-        if (!element) return ''
-        if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-          return element.value.replace(/\r\n?/gu, '\n').slice(0, 2_000_000)
-        }
-        const blockTags = new Set([
-          'ADDRESS',
-          'ARTICLE',
-          'ASIDE',
-          'BLOCKQUOTE',
-          'DIV',
-          'FIGCAPTION',
-          'FIGURE',
-          'H1',
-          'H2',
-          'H3',
-          'H4',
-          'H5',
-          'H6',
-          'LI',
-          'OL',
-          'P',
-          'PRE',
-          'SECTION',
-          'TABLE',
-          'TBODY',
-          'TD',
-          'TH',
-          'THEAD',
-          'TR',
-          'UL',
-        ])
-        const visit = (node: Node): string => {
-          if (node.nodeType === Node.TEXT_NODE) {
-            return (node.nodeValue ?? '').replace(/\r\n?/gu, '\n')
-          }
-          if (!(node instanceof Element)) return ''
-          const tag = node.tagName.toUpperCase()
-          if (tag === 'BR') return '<BR>\n'
-          if (tag === 'IMG') {
-            return `<IMG src="${canonical(node.getAttribute('src') ?? '')}" alt="${node.getAttribute('alt') ?? ''}">`
-          }
-          if (tag === 'PRE') {
-            return `<PRE>${(node.textContent ?? '').replace(/\r\n?/gu, '\n')}</PRE>`
-          }
-          const children = Array.from(node.childNodes).map(visit).join('')
-          return blockTags.has(tag) ? `<${tag}>\n${children}\n</${tag}>` : children
-        }
-        return visit(element).slice(0, 2_000_000)
       }
       const canonical = (value: string): string => {
         try {
@@ -312,7 +247,6 @@ export class CsdnPublishingAdapter {
             }))
             .filter((image) => Boolean(image.src))
         : []
-      const bodyStructure = serializeBody(body?.element)
       const pageText = (document.body?.innerText ?? '').replace(/\s+/gu, ' ').trim()
       const savedMatch = /(草稿已保存(?:\s*\d{1,2}:\d{2}(?::\d{2})?)?|已保存至草稿|保存成功)/u.exec(
         pageText,
@@ -340,7 +274,6 @@ export class CsdnPublishingAdapter {
         platformAccountCandidates,
         ...(body ? { bodySelector: body.selector } : {}),
         bodyTextLength: valueOf(body?.element).length,
-        bodyStructure,
         imageEnumerationComplete: Boolean(body && imageElements.length <= 24),
         images,
         ...(fileInput ? { fileInputSelector: fileInput.selector } : {}),
@@ -386,23 +319,12 @@ export class CsdnPublishingAdapter {
     })
     const anchor = parseCsdnDraftAnchor(raw.url)
     const observedAt = new Date().toISOString()
-    const evidenceHash = createHash('sha256')
-      .update(
-        JSON.stringify({ adapterId: this.id, adapterVersion: this.version, observedAt, ...raw }),
-      )
-      .digest('hex')
-    const bodyStructureHash = raw.bodySelector
-      ? createHash('sha256')
-          .update(raw.bodyStructure ?? '')
-          .digest('hex')
-      : undefined
     const platformAccountId =
       raw.platformAccountCandidates?.length === 1 ? raw.platformAccountCandidates[0] : undefined
     return {
       adapterId: this.id,
       adapterVersion: this.version,
       observedAt,
-      evidenceHash,
       url: raw.url,
       ...(platformAccountId ? { platformAccountId } : {}),
       pageKind: raw.pageKind,
@@ -412,7 +334,6 @@ export class CsdnPublishingAdapter {
         recognized: raw.pageKind === 'editor',
         ...(raw.bodySelector ? { bodySelector: raw.bodySelector } : {}),
         bodyTextLength: raw.bodyTextLength,
-        ...(bodyStructureHash ? { bodyStructureHash } : {}),
         imageEnumerationComplete: raw.imageEnumerationComplete,
         images: raw.images,
         ...(raw.fileInputSelector ? { fileInputSelector: raw.fileInputSelector } : {}),
@@ -498,9 +419,6 @@ export class CsdnPublishingAdapter {
     }
     const candidates = [...candidatesById.values()]
     const observedAt = new Date().toISOString()
-    const evidenceHash = createHash('sha256')
-      .update(JSON.stringify({ adapterId: this.id, adapterVersion: this.version, observedAt, raw }))
-      .digest('hex')
     const platformAccountId =
       raw.platformAccountCandidates?.length === 1 ? raw.platformAccountCandidates[0] : undefined
     const draftSectionUrl = normalizeCsdnManagementUrl(raw.draftSectionUrl)
@@ -508,112 +426,11 @@ export class CsdnPublishingAdapter {
       adapterId: this.id,
       adapterVersion: this.version,
       observedAt,
-      evidenceHash,
       ...(platformAccountId ? { platformAccountId } : {}),
       pageSupported,
       ...(draftSectionUrl ? { draftSectionUrl } : {}),
       candidates,
     }
-  }
-
-  async captureSavedEditorSnapshot(
-    page: Page,
-    probe?: CsdnPageProbe,
-  ): Promise<ArticlePublishingPlatformSnapshot | null> {
-    const currentProbe = probe ?? (await this.probe(page))
-    if (
-      !currentProbe.editor.recognized ||
-      !currentProbe.draftId ||
-      !currentProbe.platformAccountId ||
-      !currentProbe.editor.bodyStructureHash ||
-      !currentProbe.editor.imageEnumerationComplete ||
-      currentProbe.saveState !== 'saved'
-    ) {
-      return null
-    }
-    const images: ArticlePublishingPlatformSnapshot['images'] = []
-    for (const image of currentProbe.editor.images) {
-      try {
-        const response = await page.context().request.get(image.src, { timeout: 5_000 })
-        if (!response.ok()) return null
-        const body = await response.body()
-        if (body.byteLength > MAX_IMAGE_BYTES) return null
-        images.push({
-          url: image.src,
-          contentHash: createHash('sha256').update(body).digest('hex'),
-          alt: image.alt,
-        })
-      } catch {
-        return null
-      }
-    }
-    const normalizedTitle = normalizeText(currentProbe.title.value)
-    const snapshotPayload = {
-      adapterId: this.id,
-      adapterVersion: this.version,
-      platformAccountId: currentProbe.platformAccountId,
-      draftId: currentProbe.draftId,
-      normalizedTitle,
-      bodyStructureHash: currentProbe.editor.bodyStructureHash,
-      images,
-      imageEnumerationComplete: true as const,
-      saveState: 'saved' as const,
-    }
-    const snapshotHash = createHash('sha256').update(JSON.stringify(snapshotPayload)).digest('hex')
-    const observedAt = new Date().toISOString()
-    const evidenceHash = createHash('sha256')
-      .update(
-        JSON.stringify({
-          ...snapshotPayload,
-          snapshotHash,
-          observedAt,
-          page: currentProbe.evidenceHash,
-        }),
-      )
-      .digest('hex')
-    return { ...snapshotPayload, snapshotHash, evidenceHash, observedAt }
-  }
-
-  async matchAssetsByContentHash(
-    page: Page,
-    probe: CsdnPageProbe,
-    contentHashes: string[],
-  ): Promise<CsdnAssetMatchResult> {
-    const pendingHashes = new Set(contentHashes)
-    const matched: Record<string, string> = {}
-    const matchedPlatformHashes: Record<string, string> = {}
-    const platformHashesByUrl: Record<string, string> = {}
-    const images = probe.editor.images.slice(0, MAX_PROBED_IMAGES)
-    let nextIndex = 0
-    let comparisonComplete = probe.editor.imageEnumerationComplete
-    const worker = async (): Promise<void> => {
-      while (nextIndex < images.length && pendingHashes.size > 0) {
-        const image = images[nextIndex]
-        nextIndex += 1
-        try {
-          const response = await page.context().request.get(image.src, { timeout: 5_000 })
-          if (!response.ok()) {
-            comparisonComplete = false
-            continue
-          }
-          const body = await response.body()
-          if (body.byteLength > MAX_IMAGE_BYTES) {
-            comparisonComplete = false
-            continue
-          }
-          const hash = createHash('sha256').update(body).digest('hex')
-          platformHashesByUrl[image.src] = hash
-          if (!pendingHashes.has(hash)) continue
-          matched[hash] = image.src
-          matchedPlatformHashes[hash] = hash
-          pendingHashes.delete(hash)
-        } catch {
-          comparisonComplete = false
-        }
-      }
-    }
-    await Promise.all(Array.from({ length: Math.min(4, images.length) }, () => worker()))
-    return { matches: matched, matchedPlatformHashes, platformHashesByUrl, comparisonComplete }
   }
 }
 
@@ -629,8 +446,4 @@ function normalizeCsdnManagementUrl(value: string | undefined): string | undefin
   } catch {
     return undefined
   }
-}
-
-function normalizeText(value: string): string {
-  return value.replace(/\s+/gu, ' ').trim()
 }

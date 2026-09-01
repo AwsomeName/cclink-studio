@@ -330,7 +330,6 @@ describe('BrowserToolModule 可视浏览器同步', () => {
         classifyAction: vi.fn().mockResolvedValue({
           kind: 'allow-once',
           sideEffectKey: 'effect-a',
-          actionFingerprint: 'fingerprint-a',
         }),
         consumeSideEffect,
         observeSideEffect: vi.fn().mockResolvedValue(undefined),

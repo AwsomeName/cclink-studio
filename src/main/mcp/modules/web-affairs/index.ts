@@ -350,7 +350,7 @@ export class WebAffairToolModule implements ToolModule {
       workspaceRef,
       ...(trusted
         ? {
-            evidence: `csdn@${trusted.adapterVersion} 页面证据 ${trusted.evidenceHash.slice(0, 16)} · ${trusted.url}`,
+            evidence: `csdn@${trusted.adapterVersion} 页面回读 · ${trusted.url}`,
           }
         : {}),
     }

@@ -779,7 +779,7 @@ export class BrowserToolModule implements ToolModule {
     }
     let actionLogId: string | null = null
     let activeTask: BrowserTaskRun | null = null
-    let sideEffectCapability: { sideEffectKey: string; actionFingerprint: string } | null = null
+    let sideEffectCapability: { sideEffectKey: string } | null = null
     if (tabId) {
       const task = this.browserTaskRuntime?.assertCanRunAction(tabId)
       if (task) {
@@ -816,7 +816,6 @@ export class BrowserToolModule implements ToolModule {
         await this.articlePublishingBrowserPolicy?.consumeSideEffect(
           activeTask,
           sideEffectCapability.sideEffectKey,
-          sideEffectCapability.actionFingerprint,
           context,
         )
         sideEffectConsumed = true
@@ -891,7 +890,7 @@ export class BrowserToolModule implements ToolModule {
     params: Record<string, unknown>,
     page: ReturnType<PlaywrightBridge['getPage']>,
     context?: ToolExecutionContext,
-  ): Promise<{ sideEffectKey: string; actionFingerprint: string } | null> {
+  ): Promise<{ sideEffectKey: string } | null> {
     if (!task.correlation?.accountId) return null
     const actualProfileId = this.browserManager?.getViewProfileId(task.tabId)
     if (actualProfileId !== task.correlation.profileId) {
@@ -934,10 +933,7 @@ export class BrowserToolModule implements ToolModule {
         throw new Error(`${articleDecision.reason}；任务已暂停，请由用户在可见页面完成后交还`)
       }
       return articleDecision.kind === 'allow-once'
-        ? {
-            sideEffectKey: articleDecision.sideEffectKey,
-            actionFingerprint: articleDecision.actionFingerprint,
-          }
+        ? { sideEffectKey: articleDecision.sideEffectKey }
         : null
     }
     if (actionType === 'handleDialog' && params.action === 'accept') {

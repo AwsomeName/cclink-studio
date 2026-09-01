@@ -49,31 +49,4 @@ describe('CsdnPublishingAdapter recovery evidence', () => {
       'draftSectionUrl',
     )
   })
-
-  it('marks image absence comparison incomplete when a platform image cannot be downloaded', async () => {
-    const adapter = new CsdnPublishingAdapter()
-    const get = vi.fn(async () => {
-      throw new Error('network failed')
-    })
-    const page = { context: () => ({ request: { get } }) }
-    const result = await adapter.matchAssetsByContentHash(
-      page as never,
-      {
-        editor: {
-          recognized: true,
-          bodyTextLength: 10,
-          imageEnumerationComplete: true,
-          images: [{ src: 'https://img-blog.csdnimg.cn/transformed.png', alt: '' }],
-        },
-      } as never,
-      ['b'.repeat(64)],
-    )
-
-    expect(result).toEqual({
-      matches: {},
-      matchedPlatformHashes: {},
-      platformHashesByUrl: {},
-      comparisonComplete: false,
-    })
-  })
 })

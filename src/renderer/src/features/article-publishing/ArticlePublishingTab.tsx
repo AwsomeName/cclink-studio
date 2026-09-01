@@ -374,10 +374,12 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
             dispatchedAt: effect.dispatchedAt,
             observedAt: effect.observedAt,
           })),
-          sourceHash: publishing.source.contentHash,
+          source: publishing.source,
           assets: publishing.assets.map((asset) => ({
             id: asset.id,
-            hash: asset.contentHash,
+            path: asset.displayPath,
+            size: asset.size,
+            modifiedAt: asset.modifiedAt,
             status: asset.status,
             attempts: asset.uploadAttempts.length,
           })),
@@ -428,6 +430,34 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
                 : nextStatus === 'running'
                   ? 'Agent、BrowserTask、Tab 与 CDP 均仍在运行；右侧已切到对应 Agent 会话。'
                   : '主进程已重新核验 Agent、BrowserTask、Tab 与 CDP 状态。',
+      )
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const resolveAsset = async (
+    assetId: string,
+    resolution: 'present' | 'missing',
+  ): Promise<void> => {
+    if (!workspaceRef || !affairId) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await window.cclinkStudio.articlePublishing.resolveAsset({
+        workspaceRef,
+        affairId,
+        assetId,
+        resolution,
+      })
+      if (!result.success) throw new Error(result.error.message)
+      setAffair(result.data)
+      setNotice(
+        resolution === 'present'
+          ? '已记录：你在网页中确认这张图片存在。'
+          : '已记录：网页中缺少这张图片，下次继续时允许重新上传。',
       )
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -702,7 +732,12 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       </section>
       <section className="article-publishing-card">
         <h2>正文图片（{publishing.assets.length}）</h2>
-        <ArticleAssetList assets={publishing.assets} workspacePath={workspaceRef.path} />
+        <ArticleAssetList
+          assets={publishing.assets}
+          workspacePath={workspaceRef.path}
+          busy={busy}
+          onResolve={(assetId, resolution) => void resolveAsset(assetId, resolution)}
+        />
       </section>
       <section className="article-publishing-card">
         <h2>执行计划</h2>
@@ -781,10 +816,7 @@ function SourcePreview({
       <span>文件名：{sourceDetails.fileName}</span>
       <code>工作空间位置：{sourceDetails.workspaceRelativePath}</code>
       <code>完整路径：{sourceDetails.absolutePath}</code>
-      <span>
-        哈希 {preview.source.contentHash.slice(0, 12)} · {(preview.source.size / 1024).toFixed(1)}{' '}
-        KB
-      </span>
+      <span>{(preview.source.size / 1024).toFixed(1)} KB</span>
       <strong>正文图片（{preview.assets.length} 个去重资源）</strong>
       <ArticleAssetList assets={preview.assets} workspacePath={workspacePath} />
       {preview.blockers.map((blocker) => (
@@ -804,9 +836,13 @@ function SourcePreview({
 function ArticleAssetList({
   assets,
   workspacePath,
+  busy = false,
+  onResolve,
 }: {
   assets: ArticlePublishingAsset[]
   workspacePath: string
+  busy?: boolean
+  onResolve?: (assetId: string, resolution: 'present' | 'missing') => void
 }): React.ReactElement {
   if (assets.length === 0) return <p>正文没有图片。</p>
   return (
@@ -849,6 +885,25 @@ function ArticleAssetList({
             ) : (
               <small title={asset.sourcePath}>{asset.sourcePath}</small>
             )}
+            {onResolve && ['result-unknown', 'reconciling'].includes(asset.status) ? (
+              <div className="article-publishing-actions">
+                <span>先在可见的 CSDN 编辑器里看图片是否存在，不用填写图片地址。</span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onResolve(asset.id, 'present')}
+                >
+                  网页里有这张图
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onResolve(asset.id, 'missing')}
+                >
+                  网页里没有，重新上传
+                </button>
+              </div>
+            ) : null}
           </div>
         )
       })}
