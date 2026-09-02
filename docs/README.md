@@ -55,8 +55,8 @@
 - `docs/features/article-platform-publishing-development-plan.md`：CSDN 单篇图文发布的最小纵向研发计划；分离工程门禁、用户增量、真实发布闭环、失败恢复和交付验收。
 - `docs/features/image-research.md`：图片调研产品事实源；首个平台初步定为小红书，方案获条件通过；
   可进入实验开关后的实现，真实人工/Agent 验收分别作为实现后的默认启用门禁。
-- `docs/features/image-research-development-plan.md`：图片调研修订计划；按非阻塞预检、人工单图薄片、
-  候选与保存故障门禁、真实人工验收、公共 Runtime、Agent 薄片和真实 Agent 验收推进。
+- `docs/features/image-research-development-plan.md`：图片调研修订计划；按非阻塞 E0、V1a 配置恢复、
+  V1b 精确选图/跳过、V1c 原子保存/统计、真实人工验收、公共 Runtime 和 Agent 闭环推进。
 - `docs/testing/article-publishing-runtime-convergence.md`：文章发布“开始执行无反应 / Attempt
   假运行”的根因、系统性终态收敛方案、用户自救入口、故障矩阵和真实 CSDN 验收门禁。
 - `docs/reviews/article-publishing-runtime-convergence-review-prompt.md`：可直接交给新 Codex

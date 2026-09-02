@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Tab } from '../../types'
 import { remoteWorkspaceRef } from '@shared/workspace-ref'
 import type { RemoteStatus } from '@shared/remote-protocol'
+import { isMarkdownDocumentPath, stripCclinkMarkdownMetadata } from '@shared/markdown-document'
 import {
   createRemoteMutationIdentity,
   isRemoteFilePendingMutationReusable,
   type RemoteFilePendingMutation,
 } from '@shared/remote-mutation-identity'
 import { IconRefresh } from '../../components/common/Icons'
+import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
 import { useCclinkStore, useTabStore } from '../../stores'
 import {
   clearRemoteFileDraft,
@@ -16,8 +18,32 @@ import {
   restoreRemoteFileDraft,
 } from '../../utils/remote-file-draft-registry'
 
+export type RemoteFileViewMode = 'preview' | 'source'
+
+export function resolveRemoteFileDefaultViewMode(path: string): RemoteFileViewMode {
+  return isMarkdownDocumentPath(path) ? 'preview' : 'source'
+}
+
+export function RemoteMarkdownPreview({
+  source,
+  title,
+}: {
+  source: string
+  title: string
+}): React.ReactElement {
+  return (
+    <div className="remote-markdown-preview" role="document" aria-label={`${title} Markdown 预览`}>
+      <ConversationMarkdown source={stripCclinkMarkdownMetadata(source)} />
+    </div>
+  )
+}
+
 export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
   const remoteFile = tab.remoteFile!
+  const markdown = isMarkdownDocumentPath(remoteFile.path)
+  const [viewMode, setViewMode] = useState<RemoteFileViewMode>(() =>
+    resolveRemoteFileDefaultViewMode(remoteFile.path),
+  )
   const [content, setContent] = useState<string | null>(null)
   const [savedContent, setSavedContent] = useState<string | null>(null)
   const [sha256, setSha256] = useState<string | null>(null)
@@ -202,35 +228,62 @@ export function RemoteFileViewer({ tab }: { tab: Tab }): React.ReactElement {
   return (
     <div className="remote-file-viewer">
       <div className="remote-file-header">
-        <div>
+        <div className="remote-file-heading">
           <strong>{tab.title}</strong>
           <span>{remoteFile.path}</span>
         </div>
-        <button
-          type="button"
-          title="重新读取"
-          onClick={() => {
-            if (dirty && !window.confirm('重新读取会放弃当前未保存的远程修改，是否继续？')) return
-            if (dirty) clearRemoteFileDraft(tab.id)
-            setRevision((value) => value + 1)
-          }}
-        >
-          <IconRefresh size={14} />
-        </button>
-        <button
-          type="button"
-          title="保存到远程设备"
-          disabled={loading || !dirty || !writable}
-          onClick={() => void save()}
-        >
-          保存
-        </button>
+        <div className="remote-file-actions">
+          {markdown && (
+            <div className="remote-file-mode-switch" aria-label="远程 Markdown 显示模式">
+              <button
+                type="button"
+                className={viewMode === 'preview' ? 'active' : undefined}
+                aria-pressed={viewMode === 'preview'}
+                onClick={() => setViewMode('preview')}
+              >
+                预览
+              </button>
+              <button
+                type="button"
+                className={viewMode === 'source' ? 'active' : undefined}
+                aria-pressed={viewMode === 'source'}
+                onClick={() => setViewMode('source')}
+              >
+                源码
+              </button>
+            </div>
+          )}
+          <button
+            type="button"
+            title="重新读取"
+            aria-label="重新读取远程文件"
+            onClick={() => {
+              if (dirty && !window.confirm('重新读取会放弃当前未保存的远程修改，是否继续？')) return
+              if (dirty) clearRemoteFileDraft(tab.id)
+              setRevision((value) => value + 1)
+            }}
+          >
+            <IconRefresh size={14} />
+          </button>
+          <button
+            type="button"
+            title="保存到远程设备"
+            disabled={loading || !dirty || !writable}
+            onClick={() => void save()}
+          >
+            保存
+          </button>
+        </div>
       </div>
       {loading && <div className="remote-file-state">正在读取远程文件…</div>}
       {error && <div className="remote-file-state error">{error}</div>}
-      {content !== null && (
+      {content !== null && markdown && viewMode === 'preview' && (
+        <RemoteMarkdownPreview source={content} title={tab.title} />
+      )}
+      {content !== null && (!markdown || viewMode === 'source') && (
         <textarea
           className="remote-file-content remote-file-editor"
+          aria-label={`${tab.title} 源码`}
           value={content}
           disabled={loading}
           onChange={(event) => {

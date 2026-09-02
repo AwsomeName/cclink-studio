@@ -1,6 +1,6 @@
 # 图片调研开发计划
 
-> 状态：Conditionally accepted，可进入实验开关后的受控实现。P0 只做非阻塞预检；G1-M/G3-A
+> 状态：Conditionally accepted，可进入实验开关后的受控实现。E0 只做非阻塞预检；G1-M/G3-A
 > 分别位于对应实现之后，门禁默认启用和支持声明，不倒置阻塞编码。
 > 最后更新：2026-09-02。
 > 产品事实源：[`image-research.md`](./image-research.md)。
@@ -9,6 +9,9 @@
 
 首个平台初步定为小红书，但仓库目前只有站点 host 识别，没有小红书页面适配器、可信候选身份、
 可信人工/Agent 观察、Session 图片获取或可恢复的候选保存事务。
+
+2026-09-02 公开页取证只看到推荐图片和登录遮罩，点击笔记后 URL 仍为 `/explore`；尚未证明真实已
+登录账号、详情预览、轮播、实际账号观察或保存闭环。该证据进入 E0 记录，但不冒充 G1-M/G3-A。
 
 原计划错误地假设以下能力可以直接复用：
 
@@ -42,9 +45,10 @@ Mock 页面、普通 `<img>` 页面、Schema、单元测试或 Activity 图标�
 
 | 类别       | 阶段 | 用户可验收结果                                                      | 状态    | 估算               |
 | ---------- | ---- | ------------------------------------------------------------------- | ------- | ------------------ |
-| 非阻塞预检 | P0   | 记录现有真实页面形态和同 URL 切换证据；无新增用户能力               | Pending | 0.5 人日主动工作   |
-| 实验薄片   | V1   | 配置并恢复单账号任务，人工提交一张候选，保存或跳过并看到基础计数    | Pending | 3–5 人日           |
-| 保存门禁   | S1   | 候选与文件在崩溃、停止、重试后不丢失、不假运行、不重复              | Pending | 1–2 人日           |
+| 非阻塞预检 | E0   | 记录现有真实页面形态和同 URL 切换证据；无新增用户能力               | Pending | 0.5 人日主动工作   |
+| 配置薄片   | V1a  | 配置并恢复任务；同一事务可从图片入口和公共事务入口打开              | Pending | 1–2 人日           |
+| 候选薄片   | V1b  | 精确人工选图、持久候选、跳过和重启恢复，不取得错误图片              | Pending | 1–2 人日           |
+| 保存薄片   | V1c  | 确认后取图、原子发布、hash 去重和互斥基础统计                       | Pending | 2–3 人日           |
 | 人工验收   | G1-M | 真实小红书人工逐张闭环通过，允许默认启用人工路径                    | Pending | 0.5–1 人日主动工作 |
 | 工程准备   | V2   | 文章和图片共用完整 WebAffair Runtime identity；不计新增用户能力     | Pending | 2–4 人日           |
 | Agent薄片  | V3   | Agent 可见搜索并提出一张；用户确认后截图/保存或跳过                 | Pending | 3–5 人日           |
@@ -52,14 +56,14 @@ Mock 页面、普通 `<img>` 页面、Schema、单元测试或 Activity 图标�
 | 完整V0     | V4   | 单账号达到目标停止、主动结束和界面分类统计                          | Pending | 1–2 人日           |
 | 交付验收   | R1   | 故障矩阵、真实小红书、受影响 Electron smoke 和 `pnpm verify` 全通过 | Pending | 1–2 人日           |
 
-等待登录、风控或页面现场的时间不计入纯编码时间。完整 Agent V0 预计约 11.5–20.5 人日；真实证据取得前
+等待登录、风控或页面现场的时间不计入纯编码时间。完整 Agent V0 预计约 12.5–22.5 人日；真实证据取得前
 不承诺固定交付日期。
 
 ## 4. 实施顺序
 
-### P0：现有能力非阻塞预检
+### E0：现有能力非阻塞预检
 
-用户结果：无。P0 只减少实现盲区，不是开工或产品支持门禁。
+用户结果：无。E0 只减少实现盲区，不是开工或产品支持门禁。
 
 执行项：
 
@@ -68,73 +72,76 @@ Mock 页面、普通 `<img>` 页面、Schema、单元测试或 Activity 图标�
 3. 使用真实搜索词记录搜索列表、详情页、轮播、图片表示方式和图片序号；
 4. 专门记录同一 URL 内切换笔记、详情弹层和轮播时可观察的内容 ID、DOM/页面状态与变化时机；
 5. 记录 Electron `context-menu` 参数、当前账号核验方式、图片响应格式和可见页面截图能力；
-6. 冻结 `PageSemanticIdentity`、两类 Observation Lease、持久 `CandidateRecord` 和决定命令草案；
-7. 冻结候选恢复日志与保存顺序草案；工作空间外目录不属于 V0。
+6. 冻结 `PageSemanticIdentity`、`AccountObservation`、两类 Observation Lease、精确选图和决定命令草案；
+7. 冻结现有 `WebAffairStore` journal 泛化与文件保存顺序草案；工作空间外目录不属于 V0。
 
-P0 无法取得某项信息时，记录未知并让 V1 通用截图薄片 fail-closed；不得用 Mock 结果冒充真实页面，
-也不得因此阻塞 V1 编码。平台书面授权不属于 P0 或后续技术门禁。
+E0 无法取得某项信息时，记录未知并让 V1b 通用选择/裁剪薄片 fail-closed；不得用 Mock 结果冒充真实
+页面，也不得因此阻塞 V1a 编码。平台书面授权不属于 E0 或后续技术门禁。
 
-### V1：单账号、单图人工纵向闭环
+### V1a：任务配置与单一恢复裁判
 
-用户结果：用户从最小“图片调研”入口配置一个小红书账号、一个工作空间内目录和任务主题；关闭后可恢复。
-用户在当前可见网页提交一张候选，右侧确认卡可以保存或跳过。
+用户结果：用户可以配置一个小红书账号、主题和工作空间内目录；关闭 Tab 或重启后，从图片调研入口
+或公共事务入口都能打开同一任务。
 
 工程任务：
 
-1. 增加最小 Activity 和 Sidebar 筛选投影；它们查询同一 `WebAffairService`，以 `affairId` 打开统一
-   `web-affair` Tab，禁止新增 TabType、持久 Store 或生命周期 owner；
-2. 扩展 WebAffair kind、独立 `imageResearch` payload、schema、migration 和纯 reducer；
-3. 任务目录只接受工作空间相对路径，主进程解析并拒绝越界、symlink 逃逸和任意绝对路径；
-4. BrowserManager 增加业务通用 `navigationGeneration` 和 `PageSemanticIdentity` 探针；同 URL 内
-   `sourceContentId/sourceImageId/imageIndex` 变化也递增 `pageSemanticGeneration`；
-5. 主进程从当前账号、View、WebContents、页面语义身份和用户手势签发一次消费的
-   `manual-observation` Lease；消费前重新探测语义身份，完全一致才生成持久 `CandidateRecord`；
-6. 增加领域确认卡和 `approve/reject/updateTags` CAS 命令，调用只携带
-   `affairId + candidateId + revision + decisionOperationId`，不复用60秒工具权限确认；
-7. V1 同时增加图片候选恢复日志；`propose/decision/save` 先记录转换意图，再提交 WebAffair，启动时
-   对账 `awaiting-decision`、不完整转换和无 owner 的假运行；
-8. 实现 `SaveOperation`：临时文件 → 校验/hash → 去重占位 → 原子发布 → ledger 提交；
-9. 文件名只由内部 ID/hash/format 确定；使用同卷 sibling 临时文件、流式上限、格式嗅探、SHA-256 和
-   file fsync；hash 完成后先在 mutation queue 取得唯一去重占位；
-10. 使用目标操作系统验证过的原子 no-replace 原语发布完整临时文件，再 directory fsync；普通 rename
-    和 `open('wx')` 后再写入都不算原子发布；
-11. 增加只保存 `operationId/path/hash/dedupeReservation/phase` 的文件 journal；副作用前先原子持久化
-    意图，损坏时 fail-closed，启动时与 WebAffair 和候选恢复日志对账；
-12. 保存来源、图片序号、取得方式、平台原图/截图标识和 `rightsStatus: unknown`；创作者信息带
-    `page-visible/user-confirmed/model-suggested` 证据级别，模型建议不作为事实；
-13. 从持久候选显示历史 `saved/skipped/pending/failed` 与当前文件 `available/missing/changed` 计数；
-14. 截图或取得图片字节只在用户点击逐张确认动作后发生；取得前再次复核持久候选的页面语义身份，
-    不一致则进入 `needs-reobservation`；缓存最长边 2048 px、单项 4 MiB、单任务 64 MiB；
-15. 冻结 `1..50` 目标、150 个候选决定上限、一次一个待确认候选；待决定时禁止预取；
-16. 删除任务默认保留成功文件并清理缓存；删除成功文件使用独立明确确认。
+1. 增加图片 Activity/Sidebar 筛选投影，以 `affairId` 打开统一 `web-affair` Tab；同时修正公共事务
+   Sidebar，使其包含 `image-research`，禁止新增 TabType、Store 或 lifecycle owner；
+2. 扩展 WebAffair kind、`imageResearch` payload、互斥 CandidateOutcome、schema、migration 和 reducer；
+3. 任务目录只接受工作空间相对路径，主进程拒绝越界、symlink 逃逸和任意绝对路径；
+4. 直接泛化现有 `WebAffairStore` recovery journal，使其保存活动 `image-research` Affair 的完整目标
+   快照、revision、hash 和 operation ID；不得新增候选 journal；
+5. 启动顺序固定为 Store 按 revision 恢复唯一快照，再由 Service 收敛无 owner 的运行状态。
 
-V1 验收：
+真人验收：空白 Tab 不产生历史；已保存配置从两个入口打开同一 affairId；分别在 Store journal 写入前、
+写入后和 snapshot 替换后重启，任务只恢复一次且不假运行。
 
-- 空白 Tab 不产生历史；任务关闭和重启后可恢复；
-- 一次最多一个候选，旧页面/旧候选/重复点击不能保存；
-- 在同一 URL 中切换到另一笔记后，旧 Lease 提交被 `stale-observation` 拒绝且不会生成候选；候选已
-  持久化后再切换，逐张保存进入 `needs-reobservation`，不会截图或保存当前笔记；
-- 跳过不落文件，保存产生一个已核验文件；
-- 保存或跳过后基础计数立即变化，重启后可从候选记录重建；
-- 候选不是普通 `img/srcURL` 时，已证明的人工降级仍可工作；
-- 等待确认、临时写入和磁盘提交后账本前重启均不丢候选、不重复文件；
-- `propose` 或决定转换中重启时，候选恢复日志完成/回滚同一 operation，无 owner 状态不假运行；
-- 目录删除、只读、symlink 替换、`ENOSPC`、`EEXIST`、HTML 伪装和链接过期进入
-  `needs-reobservation/retryable/result-unknown/reconciling/abandoned` 中的明确状态。
+### V1b：精确人工候选与跳过
 
-### S1：保存事务故障门禁
+用户结果：用户可以在当前可见网页精确选择图片或裁剪区域，立即看到同一目标的受限预览，保存候选、
+重启恢复或跳过；本阶段不写最终图片文件。
 
-用户结果：V1 已有人工单图闭环在崩溃、停止、重试和结果未知后仍不重复保存或计数。
+工程任务：
 
-必须在接 Agent 前完成：
+1. BrowserManager 增加 `PageSemanticIdentity` 探针；同 URL 内笔记、弹层或轮播对象变化也递增
+   `pageSemanticGeneration`；
+2. 增加 main-owned `AccountObservation`，支持 `page-visible` 和明确的 `user-confirmed` 证据；提出候选
+   前重新观察，无法自动识别时显示“账号由用户确认”；
+3. 增加“选择图片/裁剪区域”动作：普通图片绑定元素/资源/边界，canvas、背景图和轮播由用户拖选；
+4. 选择手势授权主进程在同一捕获序列立即固定 View 像素矩形、viewport/scale、页面语义代次、账号
+   观察和来源身份，捕获并裁剪预览；禁止延迟全 View 截图；
+5. 签发一次消费的 `manual-observation` Lease；生成候选前重新复核页面与账号观察，再通过现有
+   WebAffair mutation queue/Store journal 持久化 `CandidateRecord + awaiting-decision`；
+6. 增加 `skip/updateTags` CAS 命令和确认卡；调用只携带
+   `affairId + candidateId + revision + decisionOperationId`；
+7. 私有预览缓存限制最长边 2048 px、单项 4 MiB、单任务 64 MiB；跳过或过期后清理像素。
 
-1. 故障注入覆盖候选恢复日志、临时文件、校验/hash、去重占位、原子发布、目录 fsync 和账本提交前后；
-2. 同一 `decisionOperationId` 重试可认领，换 operation 重试被拒绝；
-3. `停止` 与 `保存` 并发时串行等待或进入 `result-unknown/reconciling`，不得误报已停止；
-4. journal 损坏、文件存在但哈希不明、目录重新挂载和 App 重启均 fail-closed；
-5. 每个故障只能得到零或一个最终文件、零或一次历史成功计数。
+真人验收：普通 img、canvas/背景图和轮播各选择一次，预览与手势目标一致；同 URL 换笔记、轮播变化、
+账号变化或捕获期间代次变化均拒绝旧选择；等待确认时重启候选仍存在且无假运行；跳过不产生文件。
 
-S1 未通过，不进入 G1-M，也不开始 V2/V3。
+### V1c：确认后保存与基础统计
+
+用户结果：用户确认后保存精确候选或跳过；文件只出现一次，并立即看到互斥基础统计。
+
+工程任务：
+
+1. 取得页面原图前重新复核 `PageSemanticIdentity + AccountObservation + media identity`；保存截图直接
+   使用 V1b 已绑定像素，目标不稳定时要求重新选择；
+2. 实现 `SaveOperation`：同卷临时文件 → 校验/hash → mutation queue 中的去重占位 → 原子
+   no-replace 发布 → ledger 提交；
+3. 文件名只由内部 ID/hash/format 确定；临时文件完成格式嗅探、SHA-256 和 fsync 后才能申请占位；
+4. 使用目标操作系统验证过的原子发布原语，再 directory fsync；普通 rename 和 `open('wx')` 后写入
+   都不算原子发布；
+5. 只有文件副作用使用独立文件 journal，记录 `operationId/path/hash/dedupeReservation/phase`；它只
+   报告事实，由 `WebAffairService` 在 Store 恢复后作唯一对账决定；
+6. 持久化来源、实际账号证据、图片序号、取得方式、原图/截图标识、hash 和 `rightsStatus: unknown`；
+7. 定义互斥 outcome：非终态为 pending，ledger 成功为 saved，用户跳过为 skipped，hash 命中为
+   duplicate，不可恢复且明确放弃为 failed；五项之和等于候选总数；
+8. 冻结 `1..50` 目标、150 个候选决定、一次一个待确认候选；删除任务默认保留成功文件。
+
+退出门禁：故障注入覆盖 Store journal、临时文件、校验/hash、去重占位、原子发布、directory fsync、
+ledger 和停止并发；同一 operation 可认领，换 operation 被拒绝；每个窗口只能产生零或一个最终文件、
+零或一次 saved 计数。`ENOSPC/EACCES/EEXIST`、HTML 伪装、链接过期和 journal 损坏均 fail-closed。
 
 ### G1-M：真实人工闭环发布门禁
 
@@ -142,20 +149,19 @@ S1 未通过，不进入 G1-M，也不开始 V2/V3。
 
 必须完成：
 
-1. 从实验开关进入 V1，在真实账号中人工提交、跳过一张，再提交并保存一张；
-2. 网页对象、`PageSemanticIdentity`、候选来源和图片序号一致；同 URL 切换笔记使旧 Lease 失效，
-   已持久候选的保存也要求重新观察；
-3. 截图或图片获取只由用户逐张确认触发，跳过不截图、不获取文件、不落盘；
-4. 等待确认和候选转换中分别重启，候选不丢失且任务不假运行；
-5. S1 保存故障矩阵已通过，成功样本只来自 `ledger-committed` 文件。
+1. 从实验开关进入 V1a–V1c，在真实登录账号中精确选择、跳过一张，再选择并保存一张；
+2. 网页对象、`PageSemanticIdentity`、`AccountObservation`、候选来源和图片序号一致；
+3. canvas/背景图/轮播的选择预览与用户手势完全一致；同 URL 换笔记或切换账号使旧候选拒绝保存；
+4. 等待确认和 Store journal 提交窗口分别重启，候选不丢失、不重复且任务不假运行；
+5. V1c 保存故障矩阵已通过，成功样本只来自 `ledger-committed` 文件。
 
-失败时 V1 继续留在实验开关后修正；G1-M 不是回溯性的开工门禁，也不要求平台书面授权。
+失败时 V1a–V1c 继续留在实验开关后修正；G1-M 不是回溯性的开工门禁，也不要求平台书面授权。
 
 ### V2：公共 WebAffair Runtime 身份
 
 用户结果：无新增图片调研能力。V2 是 Agent 闭环必需的工程准备度。
 
-前置门禁：S1 和 G1-M 已通过，避免在未证实的人工语义上抽象 Agent Runtime。
+前置门禁：V1c 和 G1-M 已通过，避免在未证实的人工语义上抽象 Agent Runtime。
 
 工程任务：
 
@@ -167,8 +173,8 @@ S1 未通过，不进入 G1-M，也不开始 V2/V3。
 4. 图片 coordinator 只保存可丢弃运行句柄，不持久化任务快照；
 5. Agent Panel 按完整 Affair Runtime identity 投影，停止按同 Tab 最近 BrowserTask 猜任务；
 6. Affair 的暂停、继续、终止走精确主进程命令，renderer 不直接 cancel BrowserTask 冒充事务终态；
-7. 将 V1 已交付的候选恢复日志扩展到 Agent launch/bind/terminal 转换，并纳入通用 WebAffair recovery
-   contract；不得另建第二份图片候选日志。
+7. 将 Agent launch/bind/terminal operation ID 纳入 V1a 已泛化的 WebAffair schema；继续只使用现有
+   `WebAffairStore` recovery journal，不新增图片专用恢复裁判。
 
 V2 退出门禁：
 
@@ -185,22 +191,30 @@ V2 退出门禁：
 工程任务：
 
 1. 增加最小图片调研 MCP：读取冻结任务、消费主进程签发的 `agent-observation` Lease、报告本轮终态；
-2. Agent 工具只允许明确账号打开、Browser观察/导航和图片调研命令；不含截图、文件保存、shell、
-   任意文件写、Cookie、evaluate、网络日志或拦截；
-3. `propose` 消费 Lease 前重新复核 `PageSemanticIdentity`；一致后通过 V1 候选恢复日志原子持久化候选
-   和 `awaiting-decision`；
-4. propose 成功后本轮 Agent Run 与 BrowserTask 正常结束，不保留内存等待 Promise；
-5. 用户明确点击逐张动作后，main 才截图/取得图片并保存或跳过；完成决定后才签发下一 generation，
+2. 创建 Run 时设置 `disableBuiltinTools: true`，逐项允许 `web_account_open`、`browser_title`、
+   `browser_get_tab_info`、`browser_wait_for_selector`、`browser_click`、`browser_fill`、
+   `browser_press`、`browser_scroll`、`browser_wait_for_navigation`、受限 inspect/propose、
+   `web_affair_get` 和 `web_affair_finish_attempt`；禁止 `browser_*` 通配符；
+3. 工具服务端读取 main-issued `imageResearchPolicy` 和完整 Runtime identity，再执行同一白名单；无论
+   客户端配置如何，都拒绝 screenshot、extract/evaluate、文件、编辑器、shell、上传和下载；
+4. `propose` 消费 Lease 前重新复核 `PageSemanticIdentity + AccountObservation`；一致后通过现有
+   WebAffair mutation queue/Store journal 原子持久化候选和 `awaiting-decision`；
+5. 平台探针无法给出稳定图片身份/元素引用时进入 `waiting-human`，要求用户走 V1b 精确选择；Agent
+   不得自报坐标或触发延迟截图；
+6. propose 成功后本轮 Agent Run 与 BrowserTask 正常结束，不保留内存等待 Promise；
+7. 用户明确点击逐张动作后，main 才取得图片并保存或跳过；需要人工截图时进入 V1b 精确选择，完成
+   决定后才签发下一 generation，
    未决定时不能截图、保存、预取或继续导航；
-6. App重启后可以先处理候选，再创建新 Run；决定不依赖旧 Runtime；
-7. 登录、验证码、风控、账号不明和未知页面进入人工接管，交还后重新观察。
-8. 每 generation 最多 30 次 Browser 动作且页面变更间隔至少 1 秒；达到候选/目标上限或风险信号
-   立即结束自动动作。
+8. App重启后可以先处理候选，再创建新 Run；决定不依赖旧 Runtime；
+9. 登录、验证码、风控、账号不明和未知页面进入人工接管，交还后重新观察；
+10. 每 generation 最多 30 次 Browser 动作且页面变更间隔至少 1 秒；达到候选/目标上限或风险信号
+    立即结束自动动作。
 
 V3 验收：
 
 - 真实完成“提出 → 跳过 → 新 generation → 再提出 → 保存 → 新 generation 继续”；
-- Agent 候选、网页图片、页面语义身份和来源页是同一对象；
+- Agent 候选、网页图片、页面语义身份、实际账号观察和来源页是同一对象；
+- 客户端 allowedTools 和工具服务端都拒绝截图、文件、extract/evaluate 与内置工具；
 - Agent/BrowserTask/Tab/CDP 任一中断后不假运行；
 - 旧 Agent 迟到候选、迟到终态和重复工具调用不修改当前状态；
 - 链接过期只从同一来源和图片序号重新观察，不抓当前页其他图片。
@@ -213,9 +227,9 @@ V3 验收：
 必须完成：
 
 1. Agent 只在可见 Browser 中搜索和提出候选，网页对象、页面语义身份和候选完全一致；
-2. 用户确认前没有截图、图片获取、文件写入或下一候选预取；
+2. Agent 没有截图、图片获取或文件工具；用户决定前没有文件写入或下一候选预取；
 3. 真实完成“提出 → 用户跳过 → 新 generation → 提出 → 用户确认截图/保存 → 继续”；
-4. 同 URL 切换笔记、旧 Agent 迟到、Tab/CDP 中断和重启都不能串候选或恢复成假运行；
+4. 同 URL 切换笔记、实际账号变化、旧 Agent 迟到、Tab/CDP 中断和重启都不能串候选或恢复成假运行；
 5. 达到动作上限、验证码、风控或未知页面立即停在可执行人工状态。
 
 自动路径连续失败两次后停止调延时和猜 selector，V3 保留在实验开关后；已通过 G1-M 的人工路径不受
@@ -265,36 +279,46 @@ src/preload/image-research-api.ts
 需要受控修改：
 
 - `src/shared/web-affairs/`、`src/main/web-affairs/`：kind、payload、公共 Runtime contract、迁移和恢复；
-- `src/main/browser/browser-manager.ts`：navigation generation、页面语义身份、可信 observation 和
-  Session 获取边界；
-- `src/main/web-affairs/`：V1 即交付图片候选恢复日志与启动对账，V2 再扩展 Runtime 转换；
+- `src/main/browser/browser-manager.ts`：navigation generation、页面语义身份、实际账号观察、精确选择
+  即时裁剪、可信 observation 和 Session 获取边界；
+- `src/main/web-affairs/`：V1a 泛化现有 Store recovery journal 与启动对账，V2 再扩展 Runtime 字段；
 - `src/main/fs/`：工作空间相对目录校验、hash 去重占位、原子 no-replace 发布和文件 journal；
-- Activity、Sidebar 和既有 `web-affair` Tab 激活链：最小任务筛选入口与恢复；
+- 图片 Activity、图片 Sidebar、公共事务 Sidebar 和既有 `web-affair` Tab 激活链：同一任务的两个入口；
 - AgentPanel：完整 Affair binding 和候选卡；
-- Browser原生菜单/人工提交入口：实现逐张确认后截图/取得图片，并在 G1-M 覆盖真实页面表示方式；
+- Browser原生菜单/人工提交入口：实现“选择图片/裁剪区域”与即时 main-owned 裁剪；
+- Agent runtime/MCP dispatcher：精确 allowedTools、`disableBuiltinTools` 和服务端
+  `imageResearchPolicy` 双重拒绝；
 - runtime registry、preload 和 shared IPC inventory：成对注册、校验和释放。
 
-`image-research` 保持独立 reducer。候选恢复日志只解决 WebAffair 转换意图，文件 journal 只解决文件
-提交阶段，两者以同一 operation ID 对账；均不得保存第二份候选、决定、计数或任务终态。
+`image-research` 保持独立 reducer。现有 `WebAffairStore` journal 是事务快照唯一恢复裁判；文件 journal
+只记录文件副作用事实，并在 Store 恢复后由 `WebAffairService` 以同一 operation ID 对账。不得增加
+第二份候选、决定、计数或任务终态。
 
 ## 6. 必测门禁
 
 ### 自动化证据
 
 - 新 Schema/migration 保留 generic、article-publishing 和全部历史；损坏、超限和降级 fail-closed；
+- 图片入口和公共事务 Sidebar 打开同一 affairId；没有新增 TabType、事务 Store 或 recovery owner；
 - 一次最多一个候选；旧 generation、旧账号、旧页面、重复工具和迟到事件均 no-op；
 - 同 URL 切换笔记、弹层或轮播时 `pageSemanticGeneration` 递增；Lease 消费和用户确认取得图片前均
   复核，不一致即拒绝；
+- `AccountObservation` 在提出候选和取得图片前复核；页面身份可见时比对稳定 ID，无法识别时要求用户
+  明确确认且界面不声称自动验证；
+- 精确选图固定 View 像素矩形、scale、页面/账号代次并立即裁剪；代次变化、越界或遮挡要求重选，
+  禁止延迟全 View 截图；
 - App启动对账 `preparing/searching/awaiting-decision/saving`，无 BrowserTask 时不恢复成运行中；
-- 候选恢复日志覆盖 propose/decision/save 转换中崩溃，候选不丢失、不形成第二状态 owner；
+- 现有 Store journal 覆盖 image-research 的 propose/decision/save 快照；恢复只按 revision 裁决一次；
 - 工作空间目录覆盖绝对路径、越界、跨 workspace、symlink 替换和重新挂载；
 - 保存故障按临时文件、校验/hash、去重占位、原子 no-replace 发布、directory fsync、账本提交顺序覆盖，
   并覆盖
   `ENOSPC/EACCES/EEXIST`、journal 损坏、redirect、
   HTML伪装、超限、链接过期和重复点击；
-- Agent只使用 main-issued `agent-observation` Lease；人工 Lease 不伪造 Agent 字段；工具 allowlist 不含
-  截图、任意文件、网络、Cookie 或 evaluate；
-- 用户确认前没有截图、图片字节获取、文件写入或下一候选预取；
+- Agent Run 设置逐项 allowedTools 和 `disableBuiltinTools: true`，客户端及服务端都拒绝 screenshot、
+  extract/evaluate、文件、内置工具与 `browser_*` 通配符；
+- 只有用户精确选择手势可以立即取得人工预览；Agent 无像素工具，用户决定前无文件写入或下一候选
+  预取；
+- 每个候选只属于 `saved/skipped/duplicate/pending/failed` 一个 outcome，五项之和恒等于候选总数；
 - Agent Panel、工作空间切换、Tab切换和窗口重建不串任务；
 - IPC、事件 producer/consumer/disposer 进入现有 inventory 和 AST 门禁；
 - 文章发布、普通事务、Browser、Agent Panel 和文件能力回归、受影响 Electron smoke、`pnpm verify` 全绿。
@@ -303,9 +327,11 @@ src/preload/image-research-api.ts
 
 - 已保存账号真实登录，扫码、验证码和风控由真人处理；
 - 执行前网页实际账号与任务账号一致；
+- 自动无法识别实际账号时显示并记录“账号由用户确认”，切换账号后旧观察和旧候选失效；
 - 搜索列表、详情、轮播、图片表示方式、来源页和图片序号已记录；
 - G1-M 人工候选和 G3-A Agent 候选分别通过；
-- 网页图片、页面语义身份、来源和“在网页中查看”是同一张；同 URL 切换旧 Lease 失效；
+- 网页图片、精确裁剪预览、页面语义身份、实际账号、来源和“在网页中查看”是同一张；同 URL 换笔记
+  或切换账号使旧 Lease/候选失效；
 - 跳过不落盘且不立即重复，保存只产生一个文件和一次计数；
 - 重复点击、旧卡、旧 Agent、三个保存崩溃窗口不重复文件；
 - Agent、BrowserTask、Tab、CDP 中断各一次后安全收敛；
@@ -316,10 +342,10 @@ src/preload/image-research-api.ts
 
 ## 7. 止损与不得扩张
 
-- P0 未知项采用 fail-closed 薄片，不阻塞 V1；
-- S1/G1-M 未通过，不默认启用人工路径，也不开始 V2 抽象；
+- E0 未知项采用 fail-closed 薄片，不阻塞 V1a；
+- V1c/G1-M 未通过，不默认启用人工路径，也不开始 V2 抽象；
 - G3-A 未通过，不默认启用 Agent 路径，但不撤销已通过 G1-M 的人工路径；
-- V1 单图人工闭环未通过，不抽象多平台；
+- V1a–V1c 单图人工闭环未通过，不抽象多平台；
 - V2 公共 Runtime 未通过，不接 Agent循环；
 - 不建设服务器、云同步、多账号并发、隐藏浏览器、批量采集或全局去重；
 - 不把通用工具确认当成持久候选决定；
@@ -330,9 +356,10 @@ src/preload/image-research-api.ts
 ## 8. 当前最短主线
 
 ```text
-P0 现有能力非阻塞预检
-→ V1 实验开关后的单账号单图人工闭环（含页面语义身份、候选恢复日志）
-→ S1 保存故障门禁
+E0 真实小红书非阻塞预检
+→ V1a 同一 WebAffair schema、配置恢复、泛化现有 Store journal
+→ V1b 精确人工选图、持久候选、跳过、重启恢复
+→ V1c 确认后取图、原子发布、hash 去重、互斥基础统计
 → G1-M 真实人工闭环发布门禁
 → V2 公共 WebAffair Runtime 身份
 → V3 Agent提出一张后结束，用户决定后新代次继续

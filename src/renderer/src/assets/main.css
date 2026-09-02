@@ -101,7 +101,7 @@
 
 .cclink-login-heading > div,
 .cclink-account-row > div,
-.remote-file-header > div {
+.remote-file-heading {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -262,6 +262,24 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.remote-file-actions,
+.remote-file-mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.remote-file-actions {
+  flex: none;
+}
+.remote-file-mode-switch {
+  padding-right: 4px;
+  border-right: 1px solid var(--border-color);
+}
+.remote-file-mode-switch button.active {
+  border-color: color-mix(in srgb, var(--text-accent) 55%, var(--border-color));
+  background: var(--bg-active);
+  color: var(--text-active);
+}
 .remote-file-content {
   overflow: auto;
   flex: 1;
@@ -271,6 +289,21 @@
   font: 12px/1.6 var(--font-mono);
   white-space: pre;
   tab-size: 2;
+}
+.remote-markdown-preview {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 28px 40px 48px;
+  background: var(--bg-workbench);
+  color: var(--text-primary);
+}
+.remote-markdown-preview .conversation-markdown {
+  max-width: 980px;
+  margin: 0 auto;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.75;
 }
 
 /* ====== 浅色主题 ====== */
