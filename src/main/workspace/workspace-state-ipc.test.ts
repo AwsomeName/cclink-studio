@@ -208,6 +208,7 @@ describe('registerWorkspaceStateIpc', () => {
     const sender = { id: 29, once: vi.fn() }
     const fileService = {
       registerKnownWorkspaces: vi.fn(),
+      registerPickerSelection: vi.fn(),
       releaseRendererCapabilities: vi.fn(),
     }
     registerWorkspaceStateIpc(
@@ -221,6 +222,11 @@ describe('registerWorkspaceStateIpc', () => {
       mockIpcMain.handlers.get('workspaceState:listLocalWorkspaces')?.({ sender }, 'local:owner-1'),
     ).toEqual([expect.objectContaining({ workspacePath: '/tmp/project' })])
     expect(fileService.registerKnownWorkspaces).toHaveBeenCalledWith(29, ['/tmp/project'])
+    expect(fileService.registerPickerSelection).toHaveBeenCalledWith(
+      29,
+      ['/tmp/project'],
+      'workspace',
+    )
     expect(sender.once).toHaveBeenCalledWith('destroyed', expect.any(Function))
 
     const cleanup = sender.once.mock.calls[0]?.[1] as (() => void) | undefined

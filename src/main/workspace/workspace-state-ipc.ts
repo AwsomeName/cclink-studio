@@ -127,10 +127,12 @@ export function registerWorkspaceStateIpc(
     (event, ownerKey) => {
       bindCapabilityCleanup(event.sender)
       const workspaces = workspaceStateService.listLocalWorkspaces(ownerKey)
-      fileService?.registerKnownWorkspaces(
-        event.sender.id,
-        workspaces.map((workspace) => workspace.workspacePath),
-      )
+      const workspacePaths = workspaces.map((workspace) => workspace.workspacePath)
+      fileService?.registerKnownWorkspaces(event.sender.id, workspacePaths)
+      // Startup recovery probes these roots with fs:isDirectory before any one
+      // of them becomes active. Keep the bounded browse grant as well as the
+      // renderer-lifetime reactivation grant above.
+      fileService?.registerPickerSelection(event.sender.id, workspacePaths, 'workspace')
       return workspaces
     },
   )
