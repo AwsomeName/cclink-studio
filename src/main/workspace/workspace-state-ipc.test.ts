@@ -194,6 +194,39 @@ describe('registerWorkspaceStateIpc', () => {
       ),
     ).resolves.toMatchObject({ success: true })
   })
+
+  it('registers main-owned workspace history as renderer-lifetime project access', async () => {
+    const service = createService()
+    service.listLocalWorkspaces.mockReturnValue([
+      {
+        workspaceKey: '/tmp/project',
+        workspacePath: '/tmp/project',
+        ownerKey: 'local:owner-1',
+        updatedAt: 1,
+      },
+    ])
+    const sender = { id: 29, once: vi.fn() }
+    const fileService = {
+      registerKnownWorkspaces: vi.fn(),
+      releaseRendererCapabilities: vi.fn(),
+    }
+    registerWorkspaceStateIpc(
+      service as never,
+      createGuard(sender) as never,
+      undefined,
+      fileService as never,
+    )
+
+    expect(
+      mockIpcMain.handlers.get('workspaceState:listLocalWorkspaces')?.({ sender }, 'local:owner-1'),
+    ).toEqual([expect.objectContaining({ workspacePath: '/tmp/project' })])
+    expect(fileService.registerKnownWorkspaces).toHaveBeenCalledWith(29, ['/tmp/project'])
+    expect(sender.once).toHaveBeenCalledWith('destroyed', expect.any(Function))
+
+    const cleanup = sender.once.mock.calls[0]?.[1] as (() => void) | undefined
+    cleanup?.()
+    expect(fileService.releaseRendererCapabilities).toHaveBeenCalledWith(29)
+  })
 })
 
 function createService() {
@@ -206,7 +239,14 @@ function createService() {
       workspacePath: '/private/tmp/project',
       generation: 2,
     })),
-    listLocalWorkspaces: vi.fn(async () => []),
+    listLocalWorkspaces: vi.fn(
+      (): Array<{
+        workspaceKey: string
+        workspacePath: string
+        ownerKey: string | null
+        updatedAt: number
+      }> => [],
+    ),
     getDiagnostics: vi.fn(() => ({})),
   }
 }

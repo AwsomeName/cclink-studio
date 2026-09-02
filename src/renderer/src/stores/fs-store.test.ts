@@ -230,7 +230,7 @@ describe('fs-store workspace switching', () => {
     )
   })
 
-  it('reports project switch failures and clears the switching state', async () => {
+  it('keeps an open project when its path is missing and clears the switching state', async () => {
     const nextPath = '/Users/apple/missing-project'
     useOpenProjectsStore.setState({
       openProjectPaths: [nextPath, '/Users/apple/available-project'],
@@ -244,23 +244,55 @@ describe('fs-store workspace switching', () => {
     })
     const resolveLocalWorkspace = window.cclinkStudio.workspaceState
       .resolveLocalWorkspace as ReturnType<typeof vi.fn>
-    resolveLocalWorkspace.mockResolvedValue({ valid: false, workspacePath: null })
+    resolveLocalWorkspace.mockResolvedValue({
+      valid: false,
+      workspacePath: null,
+      error: 'ENOENT: no such file or directory',
+    })
 
     const switched = await useFsStore.getState().openRecentWorkspace(nextPath)
 
     expect(switched).toBe(false)
     expect(useFsStore.getState().switchingPath).toBeNull()
-    expect(useFsStore.getState().error).toBe('该工作空间已不存在或不可访问，已从项目列表移除')
-    expect(useFsStore.getState().recentWorkspacePaths).toEqual(['/Users/apple/available-project'])
+    expect(useFsStore.getState().error).toBe(
+      '该工作空间路径已不存在或已移动，项目仍保留；请从新位置重新打开或手动关闭',
+    )
+    expect(useFsStore.getState().recentWorkspacePaths).toEqual([
+      nextPath,
+      '/Users/apple/available-project',
+    ])
     expect(useOpenProjectsStore.getState().openProjectPaths).toEqual([
+      nextPath,
       '/Users/apple/available-project',
     ])
     expect(useOpenProjectsStore.getState().recentWorkspaceRefs).toEqual([
+      { kind: 'local', path: nextPath },
       { kind: 'local', path: '/Users/apple/available-project' },
     ])
-    expect(window.cclinkStudio.settings.set).toHaveBeenCalledWith({
-      recentWorkspacePaths: ['/Users/apple/available-project'],
+    expect(window.cclinkStudio.settings.set).not.toHaveBeenCalled()
+  })
+
+  it('keeps an open project when activation is rejected for a non-filesystem reason', async () => {
+    const path = '/Users/apple/still-there'
+    useOpenProjectsStore.setState({
+      openProjectPaths: [path],
+      recentWorkspaceRefs: [{ kind: 'local', path }],
     })
+    useFsStore.setState({ recentWorkspacePaths: [path] })
+    const resolveLocalWorkspace = window.cclinkStudio.workspaceState
+      .resolveLocalWorkspace as ReturnType<typeof vi.fn>
+    resolveLocalWorkspace.mockResolvedValue({
+      valid: false,
+      workspacePath: null,
+      error: '工作空间必须来自主进程文件选择器或已登记的最近项目',
+    })
+
+    await expect(useFsStore.getState().openRecentWorkspace(path)).resolves.toBe(false)
+
+    expect(useOpenProjectsStore.getState().openProjectPaths).toEqual([path])
+    expect(useFsStore.getState().recentWorkspacePaths).toEqual([path])
+    expect(useFsStore.getState().error).toContain('已登记的最近项目')
+    expect(window.cclinkStudio.settings.set).not.toHaveBeenCalled()
   })
 
   it('exposes the target project while an asynchronous switch is in progress', async () => {

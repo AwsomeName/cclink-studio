@@ -6,6 +6,7 @@ import {
 } from '../ipc/trusted-renderer-guard'
 import type { SettingsService } from '../settings/settings-service'
 import type { FileService } from '../fs/file-service'
+import type { WebContents } from 'electron'
 import { isAbsolute } from 'node:path'
 
 export function registerWorkspaceStateIpc(
@@ -14,6 +15,12 @@ export function registerWorkspaceStateIpc(
   settingsService?: SettingsService,
   fileService?: FileService,
 ): void {
+  const cleanupBoundSenders = new WeakSet<WebContents>()
+  const bindCapabilityCleanup = (sender: WebContents): void => {
+    if (!fileService || cleanupBoundSenders.has(sender) || typeof sender.once !== 'function') return
+    cleanupBoundSenders.add(sender)
+    sender.once('destroyed', () => fileService.releaseRendererCapabilities(sender.id))
+  }
   const assertWorkspaceAccess = (rendererId: number, workspaceKey?: string | null): void => {
     if (
       workspaceKey &&
@@ -28,6 +35,7 @@ export function registerWorkspaceStateIpc(
     workspaceStateIpcContracts.resolveLocalWorkspace,
     trustedRendererGuard,
     async (event, workspacePath) => {
+      bindCapabilityCleanup(event.sender)
       if (fileService && !fileService.canActivateWorkspace(event.sender.id, workspacePath)) {
         return {
           valid: false,
@@ -47,6 +55,7 @@ export function registerWorkspaceStateIpc(
     workspaceStateIpcContracts.setActiveLocalWorkspace,
     trustedRendererGuard,
     async (_event, workspacePath) => {
+      bindCapabilityCleanup(_event.sender)
       try {
         if (
           workspacePath &&
@@ -116,11 +125,11 @@ export function registerWorkspaceStateIpc(
     workspaceStateIpcContracts.listLocalWorkspaces,
     trustedRendererGuard,
     (event, ownerKey) => {
+      bindCapabilityCleanup(event.sender)
       const workspaces = workspaceStateService.listLocalWorkspaces(ownerKey)
-      fileService?.registerPickerSelection(
+      fileService?.registerKnownWorkspaces(
         event.sender.id,
         workspaces.map((workspace) => workspace.workspacePath),
-        'workspace',
       )
       return workspaces
     },

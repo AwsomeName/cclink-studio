@@ -620,20 +620,27 @@ export const useFsStore = create<FsState>((set, get) => ({
     set({ switchingPath: path, error: null, operationError: null })
     try {
       const generation = beginWorkspaceRuntimeTransition()
-      const resolvedPath = await resolveWorkspaceCandidate(path)
+      const resolution = await window.cclinkStudio.workspaceState
+        .resolveLocalWorkspace(path)
+        .catch((error: unknown) => ({
+          valid: false as const,
+          workspacePath: null,
+          error: describeError(error),
+        }))
+      const resolvedPath = resolution.valid ? resolution.workspacePath : null
       if (!resolvedPath || !isWorkspaceRuntimeTransitionCurrent(generation)) {
         if (!resolvedPath) {
-          console.warn('[FsStore] 打开最近项目失败：工作空间已不存在或不可访问', { path })
-          const recentWorkspacePaths = get().recentWorkspacePaths.filter(
-            (candidate) => candidate !== path,
-          )
-          useOpenProjectsStore.getState().forgetLocalProject(path)
-          set({
-            recentWorkspacePaths,
-            error: '该工作空间已不存在或不可访问，已从项目列表移除',
+          const resolutionError = 'error' in resolution ? resolution.error : undefined
+          const missing = /ENOENT|ENOTDIR|no such file|not a directory/i.test(resolutionError ?? '')
+          console.warn('[FsStore] 打开最近项目失败，保留项目条目', {
+            path,
+            error: resolutionError,
           })
-          saveRecentWorkspaceFallback(recentWorkspacePaths)
-          await window.cclinkStudio.settings.set({ recentWorkspacePaths }).catch(() => {})
+          set({
+            error: missing
+              ? '该工作空间路径已不存在或已移动，项目仍保留；请从新位置重新打开或手动关闭'
+              : resolutionError || '本地工作空间打开失败，项目仍保留',
+          })
         }
         return false
       }

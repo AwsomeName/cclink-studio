@@ -275,6 +275,43 @@ describe('FileService', () => {
     expect(service.consumeWorkspaceActivation(7, workspace)).toBe(true)
   })
 
+  it('reactivates a local project after switching away and its picker grant expires', async () => {
+    const workspace = join(tempDir, 'selected-workspace')
+    await mkdir(workspace)
+    let now = 1_000
+    let activeWorkspace: string | null = null
+    const service = new FileService({ getActiveWorkspace: () => activeWorkspace, now: () => now })
+
+    service.registerPickerSelection(7, [workspace], 'workspace')
+    expect(service.consumeWorkspaceActivation(7, workspace)).toBe(true)
+    activeWorkspace = workspace
+
+    // Switching to a remote/global workspace clears the active local root. The
+    // already-open project must not fall back to the expiring picker grant.
+    activeWorkspace = null
+
+    now += 10 * 60 * 1000
+    expect(service.canActivateWorkspace(7, workspace)).toBe(true)
+    expect(service.consumeWorkspaceActivation(7, workspace)).toBe(true)
+    expect(service.canActivateWorkspace(8, workspace)).toBe(false)
+
+    service.releaseRendererCapabilities(7)
+    expect(service.canActivateWorkspace(7, workspace)).toBe(false)
+  })
+
+  it('does not keep an unused picker project grant after its expiry', async () => {
+    const workspace = join(tempDir, 'unopened-workspace')
+    await mkdir(workspace)
+    let now = 1_000
+    const service = new FileService({ getActiveWorkspace: () => null, now: () => now })
+
+    service.registerPickerSelection(7, [workspace], 'workspace')
+    now += 10 * 60 * 1000
+
+    expect(service.canActivateWorkspace(7, workspace)).toBe(false)
+    expect(service.consumeWorkspaceActivation(7, workspace)).toBe(false)
+  })
+
   it('creates files exclusively without truncating an existing target', async () => {
     const service = createFileService()
     const nestedPath = join(tempDir, 'notes', 'new.md')

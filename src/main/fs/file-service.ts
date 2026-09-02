@@ -110,6 +110,12 @@ export class FileService {
   private readonly markdownDocuments: MarkdownDocumentService
   private readonly accessContexts = new AsyncLocalStorage<FileAccessContext>()
   private readonly pickerCapabilities = new Map<number, PickerCapability[]>()
+  /**
+   * A workspace picker grant is intentionally short-lived. Once the user has
+   * actually activated a workspace, however, the project strip must be able to
+   * reactivate that exact project for the lifetime of the trusted renderer.
+   */
+  private readonly activatedWorkspacePaths = new Map<number, Set<string>>()
   private readonly getActiveWorkspace: () => string | null
   private readonly now: () => number
   private readonly relocationJournal: FileRelocationJournal | null
@@ -163,10 +169,27 @@ export class FileService {
     this.pickerCapabilities.set(rendererId, existing)
   }
 
+  registerKnownWorkspaces(rendererId: number, paths: string[]): void {
+    const known = this.activatedWorkspacePaths.get(rendererId) ?? new Set<string>()
+    for (const workspacePath of paths) known.add(resolve(workspacePath))
+    this.activatedWorkspacePaths.set(rendererId, known)
+  }
+
+  releaseRendererCapabilities(rendererId: number): void {
+    this.pickerCapabilities.delete(rendererId)
+    this.activatedWorkspacePaths.delete(rendererId)
+  }
+
   canActivateWorkspace(rendererId: number, workspacePath: string): boolean {
     const candidate = resolve(workspacePath)
     const active = this.getActiveWorkspace()
     if (active && isPathWithin(resolve(active), candidate)) return true
+    if (
+      [...(this.activatedWorkspacePaths.get(rendererId) ?? [])].some((workspaceRoot) =>
+        isPathWithin(workspaceRoot, candidate),
+      )
+    )
+      return true
     return this.getLivePickerCapabilities(rendererId).some(
       (capability) => capability.kind === 'workspace' && isPathWithin(capability.path, candidate),
     )
@@ -175,7 +198,11 @@ export class FileService {
   consumeWorkspaceActivation(rendererId: number, workspacePath: string): boolean {
     const candidate = resolve(workspacePath)
     const active = this.getActiveWorkspace()
-    if (active && resolve(active) === candidate) return true
+    if (active && resolve(active) === candidate) {
+      this.registerKnownWorkspaces(rendererId, [candidate])
+      return true
+    }
+    if (this.activatedWorkspacePaths.get(rendererId)?.has(candidate)) return true
     const capabilities = this.getLivePickerCapabilities(rendererId)
     const index = capabilities.findIndex(
       (capability) => capability.kind === 'workspace' && capability.path === candidate,
@@ -184,6 +211,7 @@ export class FileService {
     capabilities[index].remainingUses -= 1
     if (capabilities[index].remainingUses <= 0) capabilities.splice(index, 1)
     this.pickerCapabilities.set(rendererId, capabilities)
+    this.registerKnownWorkspaces(rendererId, [candidate])
     return true
   }
 
