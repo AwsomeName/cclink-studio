@@ -928,6 +928,9 @@ export class BrowserToolModule implements ToolModule {
       context,
     )
     if (articleDecision) {
+      if (articleDecision.kind === 'runtime-error') {
+        throw new Error(articleDecision.reason)
+      }
       if (articleDecision.kind === 'handoff' || articleDecision.kind === 'unknown') {
         await this.pauseForTakeover(task, context, articleDecision.reason, actionType)
         throw new Error(`${articleDecision.reason}；任务已暂停，请由用户在可见页面完成后交还`)

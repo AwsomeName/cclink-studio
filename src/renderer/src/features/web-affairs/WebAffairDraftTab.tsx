@@ -66,6 +66,24 @@ export function WebAffairDraftTab({ tab }: { tab: Tab }): React.ReactElement {
         group.accountIds.every((id) => activeIds.has(id)),
     )
   }, [accounts, draft.principalId, resources])
+  const xiaohongshuAccounts = useMemo(() => {
+    if (!resources) return []
+    const websiteIds = new Set(
+      resources.websites
+        .filter((website) => {
+          try {
+            const hostname = new URL(website.origin).hostname.toLowerCase()
+            return hostname === 'xiaohongshu.com' || hostname.endsWith('.xiaohongshu.com')
+          } catch {
+            return false
+          }
+        })
+        .map((website) => website.id),
+    )
+    return resources.accounts.filter(
+      (account) => !account.archivedAt && websiteIds.has(account.websiteId),
+    )
+  }, [resources])
 
   if (!workspaceRef || !affairRef || affairRef.affairId) {
     return <div className="web-affair-tab-state error">新建事务 Tab 缺少有效的工作空间绑定。</div>
@@ -119,17 +137,29 @@ export function WebAffairDraftTab({ tab }: { tab: Tab }): React.ReactElement {
     setSaving(true)
     setError(null)
     try {
-      const result = await window.cclinkStudio.webAffairs.createAffair({
-        title: draft.title,
-        objective: draft.objective,
-        principalId: draft.principalId,
-        accountIds: draft.accountIds,
-        accountGroupIds: draft.accountGroupIds,
-        materialPaths: draft.materialPaths,
-        nodeTitles: draft.nodeTitles.map((item) => item.trim()).filter(Boolean),
-        workspaceRef,
-        templateRef: draft.templateRef,
-      })
+      const result =
+        draft.kind === 'image-research'
+          ? await window.cclinkStudio.webAffairs.createImageResearchAffair({
+              title: draft.title,
+              accountId: draft.imageResearchAccountId ?? '',
+              searchTerms: (draft.imageResearchSearchTerms ?? '')
+                .split(/\n+/)
+                .map((item) => item.trim())
+                .filter(Boolean),
+              targetCount: draft.imageResearchTargetCount ?? 30,
+              workspaceRef,
+            })
+          : await window.cclinkStudio.webAffairs.createAffair({
+              title: draft.title,
+              objective: draft.objective,
+              principalId: draft.principalId,
+              accountIds: draft.accountIds,
+              accountGroupIds: draft.accountGroupIds,
+              materialPaths: draft.materialPaths,
+              nodeTitles: draft.nodeTitles.map((item) => item.trim()).filter(Boolean),
+              workspaceRef,
+              templateRef: draft.templateRef,
+            })
       if (!result.success) {
         setError(result.error.message)
         return
@@ -155,9 +185,105 @@ export function WebAffairDraftTab({ tab }: { tab: Tab }): React.ReactElement {
     !loading &&
     !saving &&
     draft.title.trim().length > 0 &&
-    draft.objective.trim().length > 0 &&
-    draft.principalId.length > 0 &&
-    draft.nodeTitles.some((title) => title.trim().length > 0)
+    (draft.kind === 'image-research'
+      ? Boolean(
+          draft.imageResearchAccountId &&
+          draft.imageResearchSearchTerms?.trim() &&
+          draft.imageResearchTargetCount &&
+          draft.imageResearchTargetCount >= 1 &&
+          draft.imageResearchTargetCount <= 50,
+        )
+      : draft.objective.trim().length > 0 &&
+        draft.principalId.length > 0 &&
+        draft.nodeTitles.some((title) => title.trim().length > 0))
+
+  if (draft.kind === 'image-research') {
+    return (
+      <div className="web-affair-draft-tab">
+        <header className="web-affair-tab-header">
+          <div>
+            <div className="web-affair-tab-eyebrow">小红书 · 逐张人工确认</div>
+            <h1>新建图片调研</h1>
+            <p>Agent 每次只找一张；图片由你自己截图或保存，Studio 只记录决定。</p>
+          </div>
+          <span className="web-affair-draft-workspace">{workspaceRefLabel(workspaceRef)}</span>
+        </header>
+        {error ? <div className="web-affair-tab-alert">{error}</div> : null}
+        <form className="web-affair-draft-form" onSubmit={(event) => void createAffair(event)}>
+          <section className="web-affair-draft-section">
+            <div className="web-affair-section-heading">
+              <div>
+                <span>01</span>
+                <h2>任务</h2>
+              </div>
+              <button type="button" onClick={() => patchDraft({ kind: 'generic' })}>
+                切回普通事务
+              </button>
+            </div>
+            <div className="web-affair-draft-fields">
+              <label>
+                任务名称
+                <input
+                  required
+                  maxLength={160}
+                  value={draft.title}
+                  onChange={(event) => patchDraft({ title: event.target.value })}
+                />
+              </label>
+              <label>
+                小红书账号
+                <select
+                  required
+                  value={draft.imageResearchAccountId ?? ''}
+                  onChange={(event) => patchDraft({ imageResearchAccountId: event.target.value })}
+                >
+                  <option value="">请选择账号</option>
+                  {xiaohongshuAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.label}
+                    </option>
+                  ))}
+                </select>
+                <small>登录态由“网站与账号”的已保存 Profile 提供。</small>
+              </label>
+              <label className="wide">
+                搜索词（每行一个）
+                <textarea
+                  required
+                  rows={8}
+                  maxLength={2_400}
+                  value={draft.imageResearchSearchTerms ?? ''}
+                  onChange={(event) => patchDraft({ imageResearchSearchTerms: event.target.value })}
+                />
+              </label>
+              <label>
+                目标保存数量
+                <input
+                  required
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={draft.imageResearchTargetCount ?? 30}
+                  onChange={(event) =>
+                    patchDraft({ imageResearchTargetCount: Number(event.target.value) })
+                  }
+                />
+              </label>
+            </div>
+          </section>
+          <footer className="web-affair-draft-footer">
+            <div>
+              <strong>边界</strong>
+              <span>不下载、不截图、不验证文件，不判断图片授权。</span>
+            </div>
+            <button type="submit" className="primary" disabled={!canCreate}>
+              {saving ? '保存中…' : '保存任务'}
+            </button>
+          </footer>
+        </form>
+      </div>
+    )
+  }
 
   return (
     <div className="web-affair-draft-tab">
@@ -173,6 +299,9 @@ export function WebAffairDraftTab({ tab }: { tab: Tab }): React.ReactElement {
       {error ? <div className="web-affair-tab-alert">{error}</div> : null}
 
       <form className="web-affair-draft-form" onSubmit={(event) => void createAffair(event)}>
+        <button type="button" onClick={() => patchDraft({ kind: 'image-research' })}>
+          新建小红书图片调研
+        </button>
         <section className="web-affair-draft-section">
           <div className="web-affair-section-heading">
             <div>

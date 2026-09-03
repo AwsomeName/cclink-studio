@@ -428,6 +428,76 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     expect(page.click).not.toHaveBeenCalled()
   })
 
+  it('does not disguise an article Runtime mismatch as a human webpage handoff', async () => {
+    const accountTask = {
+      id: 'task-a',
+      tabId: 'account-tab',
+      goal: '发布 CSDN 文章',
+      status: 'running',
+      startedAt: Date.now(),
+      downloadIds: [],
+      correlation: {
+        workspaceKey: '/workspace/a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        profileId: 'profile-a',
+        accountId: 'account-a',
+        allowedOrigins: ['https://mp.csdn.net'],
+        affairId: 'affair-a',
+        affairAttemptId: 'attempt-a',
+      },
+    }
+    const page = {
+      url: () => 'https://mp.csdn.net/mp_blog/creation/editor/1',
+      title: vi.fn(),
+    }
+    const pauseForTakeover = vi.fn()
+    const module = new BrowserToolModule(
+      {
+        getPage: () => page,
+        getPageById: () => page,
+        switchToPage: vi.fn().mockResolvedValue(undefined),
+      } as any,
+      {
+        getActiveTaskForConversation: () => accountTask,
+        assertCanRunAction: () => accountTask,
+        pauseForTakeover,
+      } as any,
+      {
+        getViewWorkspaceKey: () => '/workspace/a',
+        getViewProfileId: () => 'profile-a',
+        isWorkspaceActive: () => true,
+        setActive: vi.fn(),
+        getCurrentURL: () => page.url(),
+      } as any,
+      null,
+      {
+        classifyAction: vi.fn().mockResolvedValue({
+          kind: 'runtime-error',
+          reason: '文章发布任务状态已过期或与当前 Agent 不一致',
+        }),
+      } as any,
+    )
+
+    await expect(
+      module.execute(
+        'browser_title',
+        {},
+        {
+          conversationId: 'conversation-a',
+          workspaceKey: '/workspace/a',
+          trustedWorkspace: {
+            kind: 'local',
+            rootPath: '/workspace/a',
+            workspaceKey: '/workspace/a',
+          },
+        },
+      ),
+    ).rejects.toThrow('状态已过期')
+    expect(pauseForTakeover).not.toHaveBeenCalled()
+    expect(page.title).not.toHaveBeenCalled()
+  })
+
   it('requires a fresh read before writing after human handback', async () => {
     const accountTask = {
       id: 'task-a',

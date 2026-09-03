@@ -133,6 +133,7 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
           async (workspacePath) =>
             runtime.workspaceStateService?.getLocalProjectId(workspacePath) ?? null,
           articlePublishingBrowserPolicy,
+          runtime.imageResearchService,
         ),
       )
     } catch (error) {

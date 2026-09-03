@@ -1,423 +1,343 @@
 # 图片调研
 
-> 状态：Conditionally accepted，可进入受控实现。真实小红书人工闭环是 V1a–V1c 实现后的 G1-M
-> 发布门禁；
-> 真实 Agent 路径是 V3 实现后的 G3-A 发布门禁，均不再倒置为开工前提。
-> 最后更新：2026-09-02。
-> 开发计划：[`image-research-development-plan.md`](./image-research-development-plan.md)。
-> 关联事实源：`docs/architecture.md`、`docs/features/article-platform-publishing.md`、
-> `docs/features/ai-web-affairs-agent.md`、`docs/features/context-action-system.md`。
+> 状态：2026-09-03 已完成 V0 工程实现和自动化门禁，真实小红书账号验收待执行。当前环境没有已保存的小红书账号；未完成登录态真人闭环前，不宣称该能力已交付。
 
-## 结论
+## 1. 产品结论
 
-CCLink Studio 计划增加一个本地优先的“图片调研”流程。首个平台初步定为小红书，V0 只做一个
-已保存小红书账号，不建设服务器，不并发多个账号，也不同时开发抖音、微博适配器。
+图片调研 V0 是 Studio 内的轻量 Agent 事务，不是图片下载器，也不是文件管理系统。
 
-目标用户流程保持不变：用户配置主题、搜索词、目标数量和当前工作空间内的图片目录；人工路径或
-Agent 在可见网页中每次提出一张候选；用户逐张保存或跳过；达到目标后显示分类统计。
+用户能够：
 
-当前不能宣称小红书支持，但可以在实验开关后开始最小纵向实现。仓库尚未证明真实小红书页面中的
-同 URL 笔记切换、候选恢复和保存事务；这些能力必须先实现，再在真实页面中验收。AI 只代替用户在
-可见浏览器中搜索和提出候选；截图、保存或跳过均由用户逐张确认，不做隐藏浏览器、无人值守或批量
-下载。
+1. 在现有“事务”入口配置小红书搜索任务；
+2. 让 Agent 在可见浏览器中搜索并停在一张候选图片；
+3. 自己使用系统截图或网页已有能力保存图片；
+4. 点击“我已自行保存并继续”或“跳过并继续”；
+5. 达到目标或主动结束后查看“已自行保存、跳过、待处理”统计。
 
-2026-09-02 本轮公开页实测只证明推荐图片在可见 Browser 中出现；页面存在登录遮罩，点击笔记后 URL
-仍停留在 `/explore`。这不是已登录账号、详情页、轮播、实际账号身份或完整闭环证据，G1-M/G3-A
-仍为 Pending。
+“我已自行保存”只是用户对本次操作的确认。Studio 不下载、不截图、不检查文件是否存在，也不判断图片授权。
 
-## 实施前预检与实现后门禁
+## 2. 当前实现事实与交付条件
 
-### E0：非阻塞预检
+- `image-research` 已复用现有 WebAffair、统一事务 Tab、单 Attempt、多 generation、BrowserTask 和账号租约；没有新增 Store、Activity 或 Runtime owner。
+- Agent 运行只获得四个图片调研工具，且关闭 builtin tools；适配器只返回标题、作者、有限可见文字和短期引用。
+- Store 已改为接收完整 `changedAffairIds`；图片或混合批次不再生成“文章事务子集 + 全局 revision”的恢复 journal。
+- 2026-09-03 未登录公开页实测：搜索地址能到达，但页面显示“登录后查看搜索结果”，无法取得真实结果列表。Studio 当前资源中也没有已保存的小红书账号。
+- 因此交付前仍必须由真人在现有可见 Browser 中确认：已保存账号对应的 Profile 能登录、搜索、打开一条真实小红书笔记，并能用 `noteId` 重开同一笔记和图片序号。
 
-开工前只做现有能力可以完成的只读预检，不把尚未实现的候选或保存工具列为前提：
+## 3. V0 用户闭环
 
-1. 登录、搜索结果、详情页和轮播可以在现有 `WebContentsView` 中使用；
-2. 记录同 URL 切换不同笔记、详情弹层、轮播切换时可观察的内容 ID、图片序号和 DOM/页面状态；
-3. 记录候选图片的页面表示方式、右键参数和响应格式，为 V1b 探针提供输入；
-4. 确认当前网页实际账号可重新观察，不能只依赖账号目录或 Cookie；
-5. 冻结 Observation Lease、页面语义身份、`WebAffairStore` journal 泛化和保存协议的初始契约。
+1. 用户从现有“事务”入口新建图片调研任务。
+2. 用户填写主题、搜索词、一个已保存的小红书 `accountId` 和目标保存数量。
+3. Studio 保存任务；用户可以关闭并重新打开同一个 `web-affair` Tab。
+4. 用户启动任务，main 根据 `accountId` 解析并打开对应 Profile。实际登录的是谁由用户在可见页面判断，Studio 不声称已自动核验账号。
+5. Agent 搜索并定位当前可见笔记中的一张图片，持久化候选后结束本轮运行。
+6. 用户自行截图或保存，然后点击“我已自行保存并继续”；或者点击“跳过并继续”。
+7. Studio 先幂等保存决定，再启动新的 generation，让 Agent 找下一张。
+8. 达到目标保存数量后停止；用户也可以随时点击“结束任务”。两条路径都不再产生浏览器动作，并展示当前统计。
 
-E0 信息不完整时采用 fail-closed 的通用“用户选择图片/裁剪区域”薄片继续实现，不能靠猜 selector
-扩张适配器；E0 不作为研发阻塞项，也不要求平台书面授权。
+等待用户决定时允许重启 Studio。重启后候选仍在，用户可以点击“打开候选页面”；没有真实运行 owner 时不得显示“搜索中”。
 
-### G1-M：V1c 后的人工闭环门禁
+## 4. 入口与界面
 
-V1a–V1c 实现后，真人必须证明人工候选、页面语义身份、实际账号、重启恢复和逐张保存/跳过在真实
-小红书可用，才能
-默认启用或宣称人工闭环支持。失败时继续隐藏在实验开关后修正，不回退成开工前门禁。
+V0 不新增独立 Activity、图片专用 Sidebar 或新的 Tab 类型：
 
-### G3-A：V3 后的 Agent 闭环门禁
+- 创建和查找任务：现有“事务”入口；
+- 任务页面：统一 `web-affair` Tab；
+- Agent 运行与接管：现有 Agent Panel；
+- Browser：现有可见浏览器；main 根据任务 `accountId` 解析 Profile。
 
-V3 实现后，真人必须证明 Agent 在可见浏览器中搜索和提出同一候选，且所有截图、保存和跳过都等待
-用户逐张确认，才能默认启用或宣称 Agent 支持。自动路径连续失败两次后停止调延时和猜 selector；
-保留已通过 G1-M 的人工闭环，不允许降级为无人值守采集。
+任务配置只包含：
 
-## 最终用户验收
-
-只有真人在真实 Studio 中完成以下动作，才能声明 V0 完成：
-
-1. 点击 Activity Bar 的“图片调研”，新建“奥森热门拍照姿势”任务；
-2. 填写搜索词，选择一个已保存小红书账号、目标数量和当前工作空间内目录；
-3. 保存任务，关闭 Tab 后从侧栏历史重新打开；
-4. 开始执行后打开该账号的可见 Browser Tab，右侧显示本任务 Agent；
-5. Agent 提出一张候选，网页可见图片、页面语义身份、实际账号观察、来源页和图片序号一致；
-6. 对 canvas、背景图或轮播使用“选择图片/裁剪区域”，选择手势立即生成同一目标的受限预览；用户
-   跳过后目录没有新增文件，该来源图片不立即重复出现；
-7. Agent 在新一轮执行中提出下一张，用户修改分类；同 URL 切换笔记或切换实际账号后，旧候选必须
-   拒绝取得和保存；
-8. 回到原目标并重新观察账号后，用户逐张确认取得图片或截图并保存；图片只保存一次，并显示来源、
-   实际账号证据、图片序号、哈希、确认时间和权利状态未知；
-9. 分别在等待确认、临时文件写入和最终文件已提交但账本未提交时重启，任务不假运行、不重复保存；
-10. 达到目标数量后停止网页动作并显示分类统计；提前结束时显示样本不足。
-
-## 产品入口
-
-### Activity Bar 与侧栏
-
-“图片调研”位于 Activity Bar 的“流程”分组，与“文章发布”并列。
-
-该入口不是新的事务系统：它只查询 `WebAffairService` 中 `kind: 'image-research'` 的筛选投影，点击
-任务仍以 `webAffair.affairId` 打开或激活统一 `web-affair` Tab。不得新增 `image-research` TabType、
-持久 Store、恢复 owner 或生命周期；新建与已保存页面只是统一事务 Tab 的领域视图。
-
-通用“事务”侧栏也必须包含同一条 `image-research` 记录，不能继续只过滤 `generic`；图片调研入口和
-通用事务入口打开的是同一个 affairId，不复制任务。
-
-V0 侧栏只提供：
-
-- `＋` 新建任务；
-- 任务主题；
-- 草稿、执行中、待确认、已完成或失败状态；
-- `已保存数量 / 目标数量`；
-- 点击历史任务打开或激活同一个控制 Tab。
-
-高级筛选、徽标和多账号摘要不阻塞首个单图闭环。
-
-### 新建任务 Tab
-
-新建任务只填写：
-
-1. 主题、地点、多行搜索词、目标数量和选择/排除要求；
-2. 一个已保存小红书账号；
-3. 一个当前工作空间内的图片保存目录，默认 `image-research/<任务名>/`；
-4. 执行计划：核验账号 → 搜索 → 候选 → 用户决定 → 保存或跳过 → 新一轮继续 → 统计。
-
-底部提供 `仅保存任务` 和 `保存并开始执行`。空白 Tab 不进入历史。任务保存后冻结账号、搜索词、
-目标、规则和工作空间相对目录；运行中修改必须停止当前 Attempt，再由用户明确开始新 Attempt。
-
-### 已保存任务 Tab
-
-任务 Tab 显示冻结配置、当前步骤、保存/跳过/重复/待确认/失败数量、当前候选、已保存图片和分类统计，
-并提供
-开始、暂停、继续、结束并统计、打开网页、打开 Agent 和诊断入口。
-
-底层 Observation、journal、Runtime identity 和平台探针诊断只在实验/诊断开关启用时显示；普通用户
-界面只展示可执行状态、失败原因和恢复动作。
-
-控制 Tab 不伪装成网页现场。启动后激活真实 Browser Tab；右侧 Agent 只按完整 Affair Runtime
-identity 跟随该 Browser Tab，不能按“最近任务”猜测。
-
-## 可信候选
-
-Agent 和 renderer 不能用图片 URL 自报候选。页面现场授权和持久业务事实必须分开：主进程先签发
-短期、一次消费的 `ObservationLease`，它只授权 `propose`；成功提出后立即生成独立持久的
-`CandidateRecord`，后续保存或跳过不依赖旧 Agent、BrowserTask、Tab、CDP 或 Lease。
-
-`ObservationLease` 是严格判别联合，公共字段至少绑定：
-
-```text
-observationId
-observationKind
-workspaceId
-affairId
-registeredAccountId
-accountObservationId
-profileId
-tabId
-browserViewRuntimeGeneration
-webContentsId
-playwrightConnectionGeneration
-playwrightPageBindingGeneration
-navigationGeneration
-pageSemanticGeneration
-pageKind
-sourceContentId
-sourceImageId
-imageIndex
-mediaLocatorRef
-captureMethod
-observedAt
-expiresAt
-```
-
-`observationKind: 'agent-observation'` 另外必须绑定 `attemptId`、`executionGeneration`、
-`launchOperationId`、`conversationId`、`agentRunId`、`agentRuntimeEpoch`、
-`agentRuntimeBindingKey` 和 `browserTaskRunId`；
-`observationKind: 'manual-observation'` 绑定当前受信 renderer、用户手势或上下文操作 token，禁止伪造
-任何 Agent/BrowserTask 字段。两种 Lease 均只能由主进程从当时可见页面签发和消费。
-
-`CandidateRecord` 至少持久化 `candidateId`、`affairId`、`revision`、页面语义身份、来源键、图片序号、
-计划取得方式、`AccountObservation` 摘要、人工选择的捕获 ID/像素矩形/预览 hash（适用时）、分类、
-决定状态和审计时间。它可以记录创建自己的 `observationId`，但该字段仅供审计，不继续授权后续操作。
-
-登记账号不是实际登录账号证据。主进程签发的 `AccountObservation` 至少包含：
-
-```text
-accountObservationId
-registeredAccountId
-evidenceKind: page-visible | user-confirmed
-visibleDisplayName?
-visibleStablePublicId?
-userConfirmationOperationId?
-profileId
-tabId
-browserViewRuntimeGeneration
-webContentsId
-observedAt
-expiresAt
-```
-
-`page-visible` 必须含页面可见显示名和稳定公开 ID；`user-confirmed` 必须含一次用户确认 operation，
-两者是严格判别联合。平台适配器不能可靠读取时必须显示“当前账号由用户确认”，由用户明确选择登记
-账号并生成短期 `user-confirmed` 观察，不得显示“已自动验证”。Profile 重建、登录/退出迹象、页面
-身份区域变化、观察过期或用户切换账号都会使观察失效。
-消费 Observation Lease 提出候选前，以及实际取得图片/截图前，主进程都必须重新取得或要求用户重新
-确认 `AccountObservation`；登记账号与实际观察不一致时 fail-closed。
-
-BrowserManager 需要新增通用 `navigationGeneration`，并由主进程页面探针维护
-`PageSemanticIdentity`：至少包含站点、页面类型、笔记/内容 ID、轮播图片 ID 或序号、可验证语义指纹
-以及单调递增的 `pageSemanticGeneration`。URL、标题和 `navigationGeneration` 只能作为辅助证据；小红书
-在同一 URL 内切换笔记、详情弹层内容或轮播对象时，语义身份变化也必须递增代次。适宽缩放使用的
-`fitDocumentGeneration` 不能成为业务页面身份。
-
-MCP `propose` 只接收主进程签发的 `observationId` 和分类建议，不接受模型提供账号、Profile、Tab、
-图片 URL 或页面代次。确认卡只以 `affairId + candidateId + revision + decisionOperationId` 提交决定；
-旧 revision 或重复 operation 为幂等 no-op。只有需要重新取得像素时才创建新的 Observation Lease，
-不得借用旧 Runtime 身份。
-
-消费 Lease、生成 `CandidateRecord` 前，主进程必须重新探测当前 `PageSemanticIdentity`，并逐项复核
-`pageSemanticGeneration + sourceContentId + sourceImageId/imageIndex`。即使 URL、Tab 和 WebContents
-没有变化，只要语义身份不一致、缺失或不稳定，就以 `stale-observation` 拒绝提交并要求重新观察；
-不得把上一条笔记的候选挂到当前笔记。
-
-### 人工精确选图
-
-Browser 增加真实的“选择图片/裁剪区域”上下文动作。普通 `<img>` 可以绑定主进程验证的元素边界、
-资源引用和图片序号；canvas、背景图或无法稳定识别的图片进入覆盖在当前可见 View 上的裁剪模式，由
-用户拖出唯一矩形。
-
-用户完成选择手势即明确授权主进程当场取得该区域的预览像素。主进程必须在同一捕获序列中固定
-View 像素坐标裁剪框、viewport/设备缩放、`PageSemanticIdentity`、`AccountObservation`、元素/资源
-引用和捕获时间，立即截取并裁剪，计算预览 hash 后才生成 `manual-observation` Lease。页面或账号代次
-在手势与捕获之间变化、矩形越界、元素遮挡或目标不稳定时，丢弃像素并要求重新选择；禁止稍后对
-“当前页面”做全 View 截图来冒充原候选。
-
-候选卡使用这份 main-owned 受限预览并提供“在网页中查看”。跳过后清理像素；用户确认保存截图时
-直接使用已绑定像素或要求重新选择，取得页面原图时仍须复核同一页面语义身份、实际账号和资源身份。
-Agent 自己不得截图、取得图片字节或写文件。不能把远端 HTML、SVG、脚本或认证 Header 放进
-renderer、Agent 消息或诊断。
-
-Agent 只有在平台探针能签发稳定的内容/图片身份和元素引用时才可直接 `propose`。canvas、背景图、
-遮罩或轮播无法稳定定位时，必须进入 `waiting-human` 并让用户执行上述精确选择；不得由 Agent 自报
-坐标，也不得延迟截取当时的当前页面。
-
-## 逐张确认与继续语义
-
-V0 不让 Agent Run 在内存 Promise 中等待用户：
-
-```text
-Agent 搜索并提出候选
-→ 主进程原子持久化候选和 awaiting-decision
-→ 本轮 Agent Run 与 BrowserTask 正常结束
-→ 用户保存或跳过
-→ main 持久化决定和保存结果
-→ 创建新 execution generation 继续搜索
-```
-
-因此用户可以隔几分钟、关闭 Tab 或重启 App 后再处理候选。决定命令不依赖旧 Promise、旧 Agent、
-旧 BrowserTask 或通用60秒工具确认。候选未决定前不会创建下一轮搜索。
-
-右侧确认卡提供：
-
-- `取得图片并保存` 或 `截图并保存`；
-- `跳过并继续`；
-- `修改分类`；
-- `在网页中查看`；
-- `停止任务`。
-
-验证码、扫码、登录失效、风控和未知页面进入独立 `waiting-human`，不冒充候选确认。
-
-候选状态至少为：
-
-```text
-observed → awaiting-decision → skipped
-                             → approved → prepared → saved
-                                                   → duplicate
-                                                   → retryable
-                                                   → result-unknown → reconciling
-                             → needs-reobservation
-                             → abandoned
-```
-
-`needs-reobservation` 可回到同一来源和图片序号重新取得；`retryable` 只能复用同一个决定操作继续；
-用户可以明确放弃为 `abandoned`。任何无法证明磁盘结果的情况先进入 `result-unknown/reconciling`，禁止
-直接重试生成第二个文件。
-
-每个候选另有互斥 `outcome: pending | saved | skipped | duplicate | failed`，统计只按 outcome 计数：
-非终态 lifecycle 全部属于 `pending`；`ledger-committed` 才是 `saved`；用户明确跳过是 `skipped`；hash
-命中已保存或进行中占位是 `duplicate`；只有不可恢复且被明确放弃的错误才是 `failed`。一个候选任何
-时刻只能进入一个桶，`saved + skipped + duplicate + pending + failed` 等于持久候选总数。
-
-## WebAffair 恢复所有权
-
-不得新增独立候选恢复日志。V1a 直接泛化现有 `WebAffairStore` recovery journal，使其 schema、容量、
-hash 和 revision 恢复覆盖活动中的 `image-research` Affair、`CandidateRecord` 与稳定 operation ID。
-它是候选、决定和事务状态唯一的恢复裁判：`propose`、决定和进入保存都通过同一 mutation queue 生成
-目标 WebAffair 快照，再沿用 Store 既有的“journal → snapshot → clear journal”提交顺序。
-
-启动时先由 `WebAffairStore` 按 revision 恢复唯一快照，再由 `WebAffairService` 收敛运行状态：完整的
-`awaiting-decision` 继续等待用户；没有真实 owner 的 `observing/searching` 变为可重试中断，不能恢复
-成假运行。只有文件副作用保留独立文件 journal；它只报告临时文件、hash、去重占位、发布和 ledger
-阶段，不能自行完成或回滚候选状态。文件对账必须在 WebAffair 快照恢复后，由
-`WebAffairService` 以同一 operation ID 作唯一决定。
-
-## 目录授权
-
-V0 只允许选择当前工作空间内的相对目录，默认 `image-research/<任务名>/`。主进程通过现有工作空间
-边界解析和写入，renderer 与 Agent 只提交任务 ID、候选 ID 和决定操作 ID，不能提交任意绝对路径。
-目录失效或越界时保留候选并进入 `retryable`。
-
-工作空间外目录推迟到 V0 之后；届时必须另行设计不暴露原始路径的 opaque capability，并覆盖撤销、
-重新挂载、目录身份、inode/file-id、symlink 和 TOCTOU，不能把系统目录选择结果直接当长期授权。
-
-## 保存事务
-
-用户批准和文件保存使用稳定 `decisionOperationId` 与 `SaveOperation`：
-
-```text
-reserved → fetching → temp-verified → dedupe-reserved → atomically-published → ledger-committed
-```
-
-要求：
-
-1. WebAffair mutation queue 对候选 revision、决定 operation 和去重占位做 compare-and-set；
-2. 先在目标目录创建同卷 sibling 临时文件，流式限制体积、嗅探格式、完成校验并计算 SHA-256；
-3. 在 WebAffair mutation queue 中按 hash 取得唯一去重占位；已有成功文件或进行中占位时进入
-   `duplicate`，不发布新文件、不增加成功样本；
-4. 文件名由 `affairId/candidateId/hash/format` 确定生成，不包含搜索词、账号或创作者信息；临时文件
-   `fsync` 后，使用目标操作系统已验证的原子 no-replace 发布原语把完整临时文件发布为最终路径，
-   再 `fsync` 父目录；普通 rename 和 `open('wx')` 后再写入都不能视为原子发布；
-5. 只有原子发布成功后才提交 ledger；低层 journal 记录 `operationId/path/hash/dedupeReservation/phase`，
-   每次副作用前先通过原子替换持久化下一意图；
-   journal 损坏或结果不明时 fail-closed 到 `result-unknown`；
-6. 启动时将 journal、去重占位、磁盘文件和 WebAffair 对账；只有同一 operation ID 可以认领或继续，
-   不能换 operation 重试；发布前失败时也只有在确认最终文件不存在后才能释放去重占位，发布成功后
-   占位由 ledger 接管；
-7. Session 获取必须限制来源 host、redirect、Referer、响应类型和体积；链接过期时回到同一来源页
-   重新观察，不能改抓当前页另一张图片；
-8. 停止命令与保存走同一串行队列：等待已进入提交区的 operation 对账后再结束，或明确停在
-   `result-unknown/reconciling`；重复点击、目录冲突、磁盘满和 App 崩溃不能产生第二个文件或计数。
-
-现有 BrowserDownloadStore 不能直接作为候选保存账本。
-
-## 去重与来源
-
-Agent 候选展示前只以 `PageSemanticIdentity + sourceImageId/imageIndex` 做来源去重，不自动截图或取得
-图片字节；人工候选使用用户选择手势即时取得的受限预览 hash。确认保存后，主进程从临时文件计算
-内容指纹并在发布前取得 hash 去重占位。签名媒体 URL 不能成为权威身份；`mediaLocatorRef` 只是
-main-owned 的短期重新取得引用。
-
-用户确认后产生的位图最长边不超过 2048 px、编码后不超过 4 MiB；每个任务私有缓存不超过 64 MiB，
-且同一时刻只有一个待确认候选。决定后或到期后清理临时像素，只持久化安全指纹和来源键。重启时
-页面现场已失效，候选进入 `needs-reobservation`，必须回到相同页面语义身份和图片序号重新观察，不能
-改用当前页另一张图片。
-
-用户确认取得图片前，V0 只承诺“同一页面语义身份和图片序号不立即重复”，不得宣称跨 CDN URL 的
-内容级去重。已确认取得的图片以 SHA-256 在当前任务内去重；跨任务全局去重不属于 V0。
-
-每个已保存项记录：
-
-- canonical 来源页；
-- 登记账号 ID、实际 `AccountObservation` 的 evidenceKind、页面可见公开身份或用户确认记录；
-- 创作者显示名和稳定公开 ID，以及 `authorEvidence: page-visible | user-confirmed | model-suggested`；
-- 图片序号；
-- 取得时间与取得方式；
-- 平台原图或页面截图标识；
-- 本地路径、格式、大小和 SHA-256；
-- 地点、动作原始值、规范化动作、景别、机位、构图和热度依据；
-- `rightsStatus: 'unknown'`。
-
-`model-suggested` 只是待确认建议，不能作为创作者事实展示或导出。历史统计同时区分“成功保存过的
-数量”和“当前仍可用的文件数量”；外部删除或修改不会改写历史成功事实。删除任务时默认保留已保存
-文件并清理临时缓存；删除已保存文件必须由用户另行明确确认并列出目标。
-
-首次执行前以普通产品提示说明来源和权利状态未知，用户自行判断使用范围；本地保存不自动取得转载、
-商业使用、肖像或改编权。来源清单不得输出“已授权”或“可商用”等推断。该提示和平台书面授权均不
-作为研发、默认启用或技术验收门禁。
-
-## Agent 工具硬边界
-
-图片调研 Agent 不得复用 Browser scope 的 `browser_*` 通配符。V3 创建 Run 时必须设置
-`disableBuiltinTools: true`，并逐项列出最小工具白名单：`web_account_open`、`browser_title`、
-`browser_get_tab_info`、`browser_wait_for_selector`、`browser_click`、`browser_fill`、
-`browser_press`、`browser_scroll`、`browser_wait_for_navigation`、受限的
-`image_research_inspect_page`、`image_research_propose`、`web_affair_get` 和
-`web_affair_finish_attempt`。名单不得包含 `browser_screenshot`、`browser_extract`、evaluate、文件、
-编辑器、shell、上传或下载工具。
-
-客户端白名单不是唯一安全边界。Browser/MCP 服务端必须识别 main-issued `imageResearchPolicy` 和完整
-Affair Runtime identity，只允许上述动作；即使 scope 通配符、提示词或调用方配置错误，也要拒绝图片
-任务调用截图、任意页面提取/evaluate、文件与内置工具。用户精确选图和确认后保存走独立的主进程
-领域命令，不暴露为 Agent 工具。
-
-## 状态所有权
-
-图片调研仍是新的持久网页事务类型：
+- 主题；
+- 搜索词；
+- 一个已保存的小红书 `accountId`；
+- 目标保存数量，范围 `1..50`；
+- 可选的包含或排除说明。
+
+不配置保存目录。任务页展示配置、当前状态、当前候选和三项统计。
+
+任务第一次开始时，main 冻结本次执行配置：`accountId`、主题、搜索词、目标数量和包含/排除说明。运行中和等待候选决定时都不能修改；用户若要变更，应先结束任务，再创建或重新配置新任务。完成条件只能读取冻结的 `targetCount`。
+
+## 5. 候选身份
+
+V0 只增加小红书专用的 `CandidateProposalToken`，不建设通用 ObservationLease、账号观察或裁剪身份平台。
+
+整个图片调研任务从开始到结束只创建一个 Attempt。每轮搜索只是该 Attempt 的一个 `executionGeneration`；提出候选后，同一 Attempt 进入既有 `waiting-human`，当前 Agent run 和 BrowserTask 结束。用户决定后只替换该 Attempt 的运行代次，不创建新 Attempt。
+
+### 搜索结果引用
+
+Agent 不直接操作 selector。小红书适配器提供两个受限动作：
+
+- `image_research_search(query)`：只接受当前执行配置中冻结的某个完整搜索词，由 main-owned 适配器填写并提交；
+- `image_research_open_result(resultRef)`：只接受本轮 inspect 返回的引用，由 main-owned 适配器打开对应笔记。
+
+搜索结果页的 inspect 最多返回 10 条：
 
 ```ts
-kind: 'image-research'
+interface ImageResearchSearchResult {
+  resultRef: string
+  title: string
+  authorDisplayName?: string
+}
 ```
 
-- `WebAffairService` 唯一拥有任务、Attempt、generation、候选、决定、保存账本和终态；
-- 图片 reducer 与 article-publishing payload 分离；
-- 先将 acquire、完整 runtime bind、tab-lost、startup reconcile、cancel 和 sealed Agent policy
-  收敛为 WebAffair 公共能力，再供文章发布和图片调研调用；
-- 图片 coordinator 只持可丢弃运行句柄；文件 journal 只保存跨文件提交阶段，不是第二任务 Store；
-- 现有 `WebAffairStore` recovery journal 泛化后仍是事务快照唯一恢复裁判；文件 journal 只提供副作用
-  事实，由 `WebAffairService` 以同一 operation ID 对账；
-- `WebResourceService`、`BrowserManager`、BrowserTask 和 Agent 继续只拥有各自现有事实；
-- renderer 只显示快照并发送有界命令。
+`resultRef` 由 main 生成，绑定当前 `affairId + attemptId + generation + tabId + browserTaskRunId + pageBindingGeneration`，并具有短有效期。main 内部记录还必须绑定被观察结果的稳定 `noteId`；该字段不需要返回给 Agent。
 
-这条路线符合现有架构宪法，不需要 ADR。若实现选择第二持久任务 Store、第二 Runtime owner、第二
-浏览器、独立候选恢复 journal 或 renderer 任意目录写入，必须停止并先提交 ADR；这些例外没有当前
-必要性，默认不接受。
+它不向 Agent 暴露 selector、DOM、任意 URL 或平台内部定位信息。页面代次、generation、Tab 或 BrowserTask 任一变化后，旧引用必须拒绝。即使这些运行身份没有变化，SPA 局部刷新或虚拟滚动后，`openResult` 也必须在打开详情后重新读取 `noteId`：只有详情 `noteId` 与引用内部记录一致才算成功；不一致时拒绝、不给候选 token，并要求返回搜索页重新 inspect。
 
-## V0 范围
+### 笔记候选 token
 
-V0 包含：
+```ts
+interface CandidateProposalToken {
+  proposalTokenId: string
+  affairId: string
+  attemptId: string
+  generation: number
+  tabId: string
+  browserTaskRunId: string
+  pageBindingGeneration: number
+  noteId: string
+  imageIndex: number
+  sanitizedPageUrl: string
+  observedAt: number
+  expiresAt: number
+}
+```
 
-- 最小 Activity、侧栏、任务 Tab 和历史恢复；
-- 一个小红书账号、搜索词、目标数量和工作空间内目录；
-- 真实小红书或明确人工降级的逐张候选；
-- 每张候选结束当前 Run，用户决定后新 generation 继续；
-- 原子文件保存、来源记录、任务内去重；
-- 中断恢复、停止和界面分类统计。
+受限的小红书 inspect 命令由 main 从当前 BrowserTask 和页面状态生成 token，并只向 Agent 返回以下信息：
 
-基础保存、跳过、重复、待处理和失败计数随单图闭环交付；V0 末尾增加动作归类和地点分布，不把
-“有计数”拖到最后一个阶段。
+```ts
+type ImageResearchPageInspection =
+  | {
+      pageType: 'search-results'
+      results: ImageResearchSearchResult[]
+      visibleText: string[]
+    }
+  | {
+      pageType: 'note-detail'
+      noteTitle: string
+      authorDisplayName?: string
+      noteId: string
+      imageIndex: number
+      imageCount?: number
+      visibleText: string[]
+      proposalTokenId: string
+    }
+  | {
+      pageType: 'unknown'
+      visibleText: string[]
+    }
+```
 
-V0 固定运行上限：每任务目标保存数 `1..50`、候选决定总数最多 150、每个 Agent generation 最多
-30 次 Browser 动作、自动页面变更间隔至少 1 秒。候选待决定时禁止预取或继续导航；达到任一上限、
-出现验证码/风控/未知页面或平台风险信号时立即停止自动动作。G3-A 可以根据真实证据提高间隔或降低
-上限，不得在没有新证据时放宽。
+`visibleText` 只能来自小红书适配器明确列入白名单、当前确实可见的文字区域，最多 20 段、合计最多 2,000 字符。inspect 不返回截图、HTML、DOM、selector、样式、媒体 URL 或媒体字节。只有稳定取得当前 `noteId + imageIndex` 时才返回笔记详情和 `proposalTokenId`；否则返回 `unknown`。
 
-V0 不包含：
+`imageIndex` 在适配器、token、持久化和复核中统一为从 `0` 开始的整数；已知 `imageCount` 时范围为 `0..imageCount-1`。UI 可以显示为“第 `imageIndex + 1` 张”，但不得把展示序号写回领域状态。
 
-- 多账号顺序执行；
-- CSV、JSON、Markdown 多格式导出；
-- 抖音、微博或其他平台；
-- 服务器、云同步、多人协作、隐藏浏览器或无人值守采集；
-- 跨任务全局去重；
-- 工作空间外目录；
-- 自动判断已获授权或可商用；
-- 固定必须生成 12 个模板。
+V0 的 Agent 只依据笔记标题、作者显示名、有限可见文字和当前图片序号判断是否符合搜索要求，不声称识别图片的姿势、构图或视觉质量；这些由用户直接查看可见网页后判断。
+
+Agent 提交候选时只传 token ID；main 必须复核：
+
+- Affair、attempt 和 generation 仍是当前值；
+- Tab、BrowserTask run 和 page binding generation 未变化；
+- 当前 `noteId` 与 `imageIndex` 仍匹配；
+- token 未过期、未被使用。
+
+小红书同一 `/explore` URL 切换笔记时，以 `noteId + imageIndex` 区分。无法稳定观察这两个字段时必须停止并要求用户接管，不得猜测或提交候选。
+
+持久化候选的最小结构为：
+
+```ts
+interface ImageResearchCandidate {
+  candidateId: string
+  revision: number
+  noteId: string
+  imageIndex: number
+  sanitizedPageUrl: string
+  reopenPath?: string
+  proposedAt: number
+  decision: 'pending' | 'self-saved' | 'skipped'
+  decisionOperationId?: string
+  decidedAt?: number
+}
+```
+
+`sanitizedPageUrl` 默认移除用户名、密码、query 和 fragment，只保留安全路径及产品明确允许的参数。`reopenPath` 只能由 main 的小红书适配器根据已验证的 `noteId` 构造，不能接受 Agent 或 renderer 提供的任意 URL。V0 不保存媒体 URL，不建设通用来源 canonicalizer，也不保存截图、预览或图片缓存。
+
+## 6. Agent 单候选循环
+
+每个 generation 只允许一个结果：
+
+1. Agent 使用 `image_research_search` 执行冻结的一个搜索词；
+2. 在搜索结果页调用 inspect，依据最多 10 条有界文字结果选择 `resultRef`；
+3. 调用 `image_research_open_result` 进入笔记；
+4. 在笔记页调用 inspect 读取有限页面信息；Agent 判断符合搜索要求后取得短期 token；
+5. 调用 `image_research_propose`；
+6. main 校验 token 并先保存 WebAffair；
+7. 保存成功后才向 renderer 显示候选；
+8. 同一 Attempt 进入既有 `waiting-human`，本轮 Agent run 和 BrowserTask 立即结束，等待用户决定。
+
+持久化失败时不得显示候选。迟到的 propose、旧 generation、旧 Tab、旧 BrowserTask 或旧页面绑定一律 fail-closed。
+
+搜索结果为空时，本轮 Agent run 和 BrowserTask 必须结束，界面显示“重试搜索”或“结束任务”；没有运行 owner 时不得继续显示“搜索中”。重试使用冻结配置启动新的 generation。
+
+### 登录、验证码与人工处理
+
+登录失效、验证码或 `unknown` 页面时，本轮 Agent 和 BrowserTask 结束，事务进入既有 `needs-attention`。用户通过“打开账号处理登录/验证码”在可见页面处理，再点击“处理完成，重新搜索”。Studio 复用同一 Attempt，并启动一个新的或已持久化待恢复的 generation。
+
+人工处理前签发的所有 `resultRef` 和 `CandidateProposalToken` 必须失效。新 generation 必须重新 inspect，不能沿用处理前的搜索结果、note 身份或 token。V0 不让 Agent 跨人工等待保持假运行，也不允许用户人工提交候选或增加新事务状态。
+
+## 7. 用户决定与继续
+
+界面提供两个主决定和一个辅助动作：
+
+- “我已自行保存并继续”；
+- “跳过并继续”；
+- “打开候选页面”。
+
+“打开候选页面”不能直接导航。main 必须先通过现有 `acquireAccountRecoveryLease` 取得账号恢复租约，调用时传入完整的 `accountId + profileId + affairId + attemptId + executionGeneration + launchOperationId`，再使用已验证的 `reopenPath` 打开同一 `noteId`，并定位 `imageIndex`。账号已被其他任务占用时只提示“账号正在使用，请稍后重试”，不得创建、激活或导航任何 Tab。
+
+打开后必须重新核对笔记和图片序号。核对失败立即释放租约；核对成功后继续持有，覆盖用户停留页面、自行截图或保存以及提交决定的全过程。持有期间，同账号其他任务必须被拒绝，且不能激活或导航这个候选 Tab。
+
+租约终止规则：
+
+- 用户决定后仍需继续搜索：调用现有 `transferAccountRecoveryLeaseToTask`，把租约直接转交给同一 Attempt 新 generation 的唯一 BrowserTask；禁止先释放再重新获取；
+- 用户决定后已达目标：提交完成终态后释放；
+- 用户关闭候选 Tab、取消打开或结束任务：立即释放；候选未决定时仍保持 `pending`；
+- 打开/核对失败、异常、App/窗口销毁：清理并释放，不能留下假租约。
+
+转交失败时不得启动或导航 BrowserTask；保留可恢复事实并按同一 `launchOperationId + executionGeneration` 重试转交。以上全部复用现有租约，不新增锁、Store 或状态机。
+
+因此确认或跳过完成后，原账号恢复租约必须已转交或释放，不能继续以 recovery lease 形态悬挂。
+
+M0 若证明平台不能构造稳定重开路径，或某个候选重启后无法重开，界面显示“来源不可恢复”。这只禁用或警告“打开候选页面”，不能禁用两个决定。用户仍可确认此前已经自行保存，或选择：
+
+- 重试打开；
+- “放弃此候选并重新搜索”，该操作由用户确认后将当前候选记为 `skipped` 并启动下一 generation；
+- 直接“跳过并继续”。
+
+不得仅打开 `/explore` 就声称已恢复原候选。
+
+决定命令只携带 `affairId + candidateId + candidateRevision + decision`。main 使用 revision 做 compare-and-set，并在首次接受决定时生成 `decisionOperationId`：
+
+- 相同候选和相同决定重试返回原结果；
+- 相同候选提交相反决定时拒绝；
+- 已决定的候选不能改判或重复计数；
+- 若决定后仍需继续，`decisionOperationId` 同时就是同一 Attempt 替代运行的 `launchOperationId`；
+- main 在同一个 WebAffair 快照提交中原子持久化候选决定、同一 Attempt 递增一次后的 `executionGeneration` 及该 `launchOperationId`；成功后才为这个 generation 启动 Agent run 和 BrowserTask；
+- 若当前持有账号恢复租约，快照提交成功后必须先通过 `transferAccountRecoveryLeaseToTask` 把它转交给该唯一 BrowserTask，再允许启动或导航；
+- 恢复时按同一 Attempt 的 `launchOperationId + executionGeneration` 对账；已持久化的 generation 只能恢复或认领，不能再次递增，也不能创建第二 Attempt；
+- 相同 `launchOperationId` 最多对应同一 Attempt 的一个 generation、一个 Agent run 和一个 BrowserTask；
+- 若本次决定已达到目标，则同一快照提交决定，并把同一 Attempt/节点置为成功，不再递增 generation；主动结束则把同一 Attempt/节点置为既有 `cancelled`。
+
+不得用只存在内存中的 Promise 表示等待用户决定。
+
+任务页同时提供“结束任务”。它复用 WebAffair 既有取消链路：取消当前 Agent run 和 BrowserTask，持久化既有 `cancelled` 终态，拒绝所有迟到的 propose 和未开始的 continuation，并保留当前三个统计。运行中和等待决定时都能结束；不增加新状态机。取消与候选/决定并发时由 WebAffair mutation queue 串行，取消先完成则迟到写入必须拒绝。
+
+## 8. 状态、恢复与唯一所有者
+
+`WebAffairService` 继续拥有全部图片调研状态和生命周期。V0 不新增 Store、恢复裁判、Runtime owner 或文件 journal。
+
+现有 `WebAffairStore` 需要一个窄修正：
+
+```ts
+store.save(snapshot, { changedAffairIds })
+```
+
+`changedAffairIds` 必须包含本次快照中全部实际变更的 Affair ID。只有全部变更对象都是需要现有 recovery journal 的活动文章发布事务时，才写文章 journal，而且 journal 内容必须覆盖这些变更对象。单个图片事务、多个图片事务或文章与图片混合批次都只走完整快照的临时文件加原子替换，不能生成“事务子集 + 全局 revision”的 journal。V0 不建设通用 delta journal。
+
+图片候选和决定继续使用现有 WebAffair 快照临时文件加原子替换；不新增候选 journal，不建设通用 delta 系统，也不修改文章发布状态机。
+
+恢复规则：
+
+- `pending` 候选：恢复为等待用户决定；
+- `pending` 候选有稳定 `reopenPath`：允许用户打开并在复核后继续决定；
+- `pending` 候选无法重开：显示“来源不可恢复”；用户仍可确认已自行保存、重试打开、放弃并重新搜索或跳过；
+- 已决定但替代运行尚未启动：按同一 Attempt 的 `launchOperationId + executionGeneration` 恢复或认领，不得再次递增 generation 或创建 Attempt；
+- 登录或验证码人工处理中：保留既有 Attempt；处理完成后使旧引用/token 失效，以唯一 generation 重新启动并 inspect；
+- 没有运行 owner：不得显示“搜索中”；
+- 达到目标：恢复为完成态，不再启动 BrowserTask。
+- 已主动结束：恢复为既有 `cancelled`，保留统计且不得恢复 Agent 或 BrowserTask。
+
+## 9. 权限边界
+
+图片调研 Agent 使用逐项工具白名单和 `disableBuiltinTools: true`。只开放 `image_research_search`、`image_research_inspect_page`、`image_research_open_result`、`image_research_propose` 及完成 Affair 本轮生命周期所需的最小工具。
+
+图片调研任务不得调用：
+
+- 截图、下载、上传或文件读写工具；
+- shell、任意 evaluate 或任意脚本注入工具；
+- 通配的 `browser_*` 工具集合；
+- 接受 Agent 提供 selector 或任意 URL 的点击、导航工具；
+- 任何自动保存图片、裁剪、缓存或哈希接口。
+
+客户端白名单和工具服务端都必须拒绝这些调用，不能只靠提示词。
+
+## 10. 统计定义
+
+V0 只有三个互斥计数：
+
+- 已自行保存：用户成功点击该决定的候选数；
+- 跳过：用户成功点击跳过决定的候选数；
+- 待处理：当前仍为 `pending` 的候选数。
+
+三者之和等于已持久化候选总数。完成条件只看“已自行保存”是否达到目标。统计不代表文件存在、内容可打开、图片唯一或拥有使用权。
+
+## 11. V0 明确不做
+
+- 保存目录、自动下载和任何图片文件写入；
+- Studio 截图、裁剪、选区、预览和图片缓存；
+- `SaveOperation`、文件 journal、原子发布、文件校验和哈希去重；
+- 文件可用性或授权统计；
+- 实际登录账号自动识别；
+- 通用来源 canonicalizer；
+- 独立 Activity、图片专用 Sidebar 或新 Tab 类型；
+- 地点、动作、景别、机位、构图和热度聚类统计；
+- 多账号、多平台、云端服务器和无人值守采集。
+
+产品只做普通提示：来源和权利状态未知，用户自行判断保存与使用范围。该提示不是技术门禁。
+
+## 12. 验收门禁
+
+自动化证据：
+
+- 旧 generation、旧 Tab、旧 BrowserTask、旧页面绑定和迟到 propose 被拒绝；
+- 搜索结果只返回最多 10 条有界文字和短期 `resultRef`；旧页面、旧 generation、旧 Tab 和旧 BrowserTask 引用全部拒绝；
+- 搜索列表局部刷新或虚拟滚动后，详情 `noteId` 与引用内部 `noteId` 不一致时拒绝打开结果并要求重新 inspect；
+- inspect 只返回有限可见信息，不返回截图、HTML、DOM 或媒体字节；
+- 候选只有在 WebAffair 持久化成功后才显示；
+- 等待决定时重启，候选仍存在且可以打开原笔记和图片序号；无法重开时仍可确认已保存或跳过；
+- 重复点击任一决定只计一次、只启动一个新 generation；
+- `decisionOperationId` 重放只对应同一 Attempt 的一个持久化 generation、一个 Agent run 和一个 BrowserTask；
+- 每次决定只让同一 Attempt 增加一个 generation，整个任务不存在第二 Attempt；
+- 候选持久化后、决定/同一 Attempt 新 generation 原子提交后、实际启动前三个崩溃窗口均恢复到唯一结果；取消与候选/决定并发也只产生一个终态；
+- 打开候选并核对成功后，账号恢复租约持续覆盖用户查看和自行保存；持有期间同账号其他任务被拒绝且不能激活或导航候选 Tab；
+- 用户决定并继续时租约无缝转交给唯一 BrowserTask；达标、关闭候选 Tab、取消、结束、失败和 App/窗口销毁后均正确释放或清理；
+- 登录或验证码人工处理后可以重试并继续；处理前所有引用和 token 均失效；
+- 搜索结果为空时本轮退出，只显示重试或结束，不保持“搜索中”；
+- 主动结束后 Agent、BrowserTask、propose 和 continuation 全部停止，统计保留；
+- 任务只保存 `accountId`，Profile 由 main 解析；
+- 单 Affair、双 Affair 及文章与图片混合批次的 journal/revision 崩溃测试通过；
+- 图片调研代码没有图片文件写入、下载、截图、裁剪或哈希接口；
+- 达到目标后不再产生 Browser 动作；
+- 文章发布和原有 WebAffair 恢复测试不回归。
+
+真实小红书真人证据：
+
+- 已保存账号对应的 Profile 打开真实登录页面并完成一次搜索；
+- Agent 提出当前可见笔记中的一张候选后停止；
+- inspect 后刷新或滚动搜索列表，旧结果不能串到另一笔记；
+- 登录失效后人工处理，完成后重试 Agent 能够继续；
+- 用户自行截图或保存，再点击“我已自行保存并继续”；
+- 用户跳过下一张后，Agent 能再次继续；
+- 等待候选期间重启，可重开与不可重开两种路径都能标记已保存或跳过；
+- 同 URL 切换笔记时，旧候选提交被拒绝；
+- 两个任务使用同一账号时，旧任务打开候选不会干扰正在运行的任务；
+- 用户打开候选并停留保存期间，第二个同账号任务不能切走页面；关闭候选而不决定后，账号可被其他任务正常使用；
+- 运行中和等待决定时都能主动结束，并保留统计；
+- 达到目标后，统计与用户点击记录一致。
+
+## 13. 架构判断
+
+V0 不需要 ADR：它复用 `WebAffairService`、统一 `web-affair` Tab、现有 BrowserTask 和 Agent 会话，没有第二状态所有者，也不修改文章发布状态机。
+
+如果后续要增加第二 Store、独立恢复裁判、第二 Browser owner、自动下载、截图或图片文件 API，必须重新做架构评审；违反架构宪法时先提交 ADR。

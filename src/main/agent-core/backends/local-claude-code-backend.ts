@@ -484,6 +484,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       ...(options?.articlePublishingPolicy
         ? { articlePublishingPolicy: options.articlePublishingPolicy }
         : {}),
+      ...(options?.imageResearchPolicy ? { imageResearchPolicy: options.imageResearchPolicy } : {}),
     }
     this.mcpSessionToken = this.toolHost.createToolSession(toolExecutionContext)
     const mcpConfig = this.mcpClientMgr.composeMcpConfig(

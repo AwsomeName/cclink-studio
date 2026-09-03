@@ -131,6 +131,7 @@ export type ConversationTabRef = {
 }
 
 export interface WebAffairDraftState {
+  kind?: 'generic' | 'image-research'
   title: string
   objective: string
   principalId: string
@@ -142,6 +143,9 @@ export interface WebAffairDraftState {
     templateId: string
     version: number
   }
+  imageResearchAccountId?: string
+  imageResearchSearchTerms?: string
+  imageResearchTargetCount?: number
 }
 
 /** Workbench Tab */

@@ -22,6 +22,13 @@ interface RecoverExactPublicationInput {
   navigate: (url: string) => Promise<Page>
 }
 
+interface VerifyExactDraftPageInput {
+  page: Page
+  expectedDraftId: string
+  expectedPlatformAccountId: string
+  expectedTitle: string
+}
+
 /** Main-owned recovery. It locates the persisted draft again and only reads current page facts. */
 export class CsdnDraftRecoveryCoordinator {
   constructor(private readonly adapter = new CsdnPublishingAdapter()) {}
@@ -51,7 +58,16 @@ export class CsdnDraftRecoveryCoordinator {
       )
     }
     page = await input.navigate(matches[0].url)
-    const editor = await this.adapter.probe(page)
+    return this.verifyExactDraftPage({
+      page,
+      expectedDraftId: input.expectedDraftId,
+      expectedPlatformAccountId: input.expectedPlatformAccountId,
+      expectedTitle: input.expectedTitle,
+    })
+  }
+
+  async verifyExactDraftPage(input: VerifyExactDraftPageInput): Promise<CsdnDraftRecoveryResult> {
+    const editor = await this.adapter.probe(input.page)
     if (!editor.editor.recognized || editor.draftId !== input.expectedDraftId) {
       throw new Error(`候选页面不是原 CSDN 草稿 ${input.expectedDraftId}`)
     }

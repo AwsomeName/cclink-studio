@@ -12,6 +12,7 @@ import { WebAffairService } from '../web-affairs/web-affair-service'
 import { registerWebAffairIpc } from '../web-affairs/web-affair-ipc'
 import { webAffairsIpcEvents } from '../../shared/web-affairs/web-affair'
 import { ArticlePublishingService } from '../article-publishing/article-publishing-service'
+import { ImageResearchService } from '../image-research/image-research-service'
 import { registerArticlePublishingIpc } from '../article-publishing/article-publishing-ipc'
 import { registerWechatIPC } from '../ipc/wechat-ipc'
 import { SettingsService } from '../settings/settings-service'
@@ -446,6 +447,7 @@ export async function bootstrapMainProcessServices(
     runtime.trustedRendererGuard,
     () => runtime.browserTaskRuntime,
     () => runtime.workspaceStateService,
+    () => runtime.imageResearchService,
   )
   console.log('[CCLink Studio] 事务 IPC 已注册')
 
@@ -464,6 +466,15 @@ export async function bootstrapMainProcessServices(
     runtime.trustedRendererGuard,
   )
   console.log('[CCLink Studio] 文章发布 IPC 已注册')
+
+  runtime.imageResearchService = runtime.webAffairService
+    ? new ImageResearchService(runtime.webAffairService, {
+        getAgentBridge: () => runtime.agentBridge,
+        getBrowserManager: () => runtime.browserManager,
+        getBrowserTaskRuntime: () => runtime.browserTaskRuntime,
+        getPlaywrightBridge: () => runtime.playwrightBridge,
+      })
+    : null
 
   try {
     registerWechatIPC(runtime.trustedRendererGuard)
@@ -598,6 +609,7 @@ export async function shutdownMainProcessServices(
   await runShutdownStep('ArticlePublishingService', () =>
     runtime.articlePublishingService?.dispose(),
   )
+  await runShutdownStep('ImageResearchService', () => runtime.imageResearchService?.dispose())
   await runShutdownStep('WebAffairService', () => runtime.webAffairService?.flush())
   await runShutdownStep('WebResourceService', () => runtime.webResourceService?.flush())
 
@@ -612,6 +624,7 @@ export async function shutdownMainProcessServices(
   runtime.webResourceService = null
   runtime.webAffairService = null
   runtime.articlePublishingService = null
+  runtime.imageResearchService = null
   runtime.permissionManager = null
   runtime.mcpClientMgr = null
   runtime.cadConversionService = null

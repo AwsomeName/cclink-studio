@@ -4228,6 +4228,28 @@ button.project-panel-row.active {
   font-size: 9px;
 }
 
+.image-research-candidate {
+  margin: 10px;
+}
+
+.image-research-candidate > small {
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.image-research-candidate-actions,
+.image-research-task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.image-research-task-actions {
+  padding: 0 10px 10px;
+}
+
 .web-affair-main-grid {
   display: grid;
   grid-template-columns: minmax(280px, 0.8fr) minmax(420px, 1.2fr);

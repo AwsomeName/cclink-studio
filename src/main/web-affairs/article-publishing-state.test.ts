@@ -723,8 +723,72 @@ describe('article publishing persistent state', () => {
       WORKSPACE_ID,
     )
     expect(bound.success).toBe(true)
-    if (!verified.success) return
-    const permit = verified.data.articlePublishing?.draft?.recovery?.writePermit
+    const rebound = await created.service.rebindArticlePublishingBrowserRuntime({
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      browserTaskRunId: '88888888-8888-4888-8888-888888888888',
+      tabId: 'recovered-tab',
+      previousBrowserViewRuntimeGeneration: 2,
+      previousWebContentsId: 20,
+      browserViewRuntimeGeneration: 3,
+      webContentsId: 21,
+      previousPlaywrightConnectionGeneration: 3,
+      previousPlaywrightPageBindingGeneration: 4,
+      playwrightConnectionGeneration: 4,
+      playwrightPageBindingGeneration: 5,
+    })
+    expect(rebound).toMatchObject({
+      success: true,
+      data: {
+        articlePublishing: { draft: { recovery: { status: 'locating' } } },
+      },
+    })
+    if (!rebound.success) return
+    expect(rebound.data.articlePublishing?.draft?.recovery?.writePermit).toBeUndefined()
+    expect(
+      rebound.data.attempts[0].runtimeBindings.filter((binding) => binding.status === 'active'),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'browser-tab',
+          browserViewRuntimeGeneration: 3,
+          webContentsId: 21,
+        }),
+        expect.objectContaining({
+          kind: 'browser-task',
+          browserViewRuntimeGeneration: 3,
+          webContentsId: 21,
+          playwrightConnectionGeneration: 4,
+          playwrightPageBindingGeneration: 5,
+        }),
+      ]),
+    )
+    const reverified = await created.service.verifyArticlePublishingRecovery(
+      {
+        affairId: created.affairId,
+        attemptId: attempt.id,
+        executionGeneration: attempt.executionGeneration,
+        launchOperationId: attempt.launchOperationId,
+        recoveryOperationId: recovery.operationId,
+        draftId: '164148817',
+        url: draftUrl,
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        saveState: 'saved',
+        tabId: 'recovered-tab',
+        browserViewRuntimeGeneration: 3,
+        webContentsId: 21,
+        playwrightConnectionGeneration: 4,
+        playwrightPageBindingGeneration: 5,
+      },
+      WORKSPACE_ID,
+    )
+    expect(reverified.success).toBe(true)
+    if (!reverified.success) return
+    const permit = reverified.data.articlePublishing?.draft?.recovery?.writePermit
     if (!permit) throw new Error('恢复许可未持久化')
     const refreshed = await created.service.recordArticlePublishingPageObservation(
       {
@@ -1046,6 +1110,8 @@ describe('article publishing persistent state', () => {
       launchOperationId: attempt.launchOperationId,
       browserTaskRunId,
       tabId: 'tab-a',
+      previousBrowserViewRuntimeGeneration: 2,
+      previousWebContentsId: 20,
       browserViewRuntimeGeneration: 2,
       webContentsId: 20,
       previousPlaywrightConnectionGeneration: 3,
@@ -1082,6 +1148,8 @@ describe('article publishing persistent state', () => {
         launchOperationId: attempt.launchOperationId,
         browserTaskRunId,
         tabId: 'tab-a',
+        previousBrowserViewRuntimeGeneration: 2,
+        previousWebContentsId: 20,
         browserViewRuntimeGeneration: 2,
         webContentsId: 20,
         previousPlaywrightConnectionGeneration: 3,
@@ -1592,7 +1660,9 @@ describe('article publishing persistent state', () => {
       { ...persisted.affairs[0], id: randomUUID(), events },
     ]
 
-    const saved = await new WebAffairStore(filePath).save(persisted)
+    const saved = await new WebAffairStore(filePath).save(persisted, {
+      changedAffairIds: persisted.affairs.map((affair: { id: string }) => affair.id),
+    })
     expect(saved.affairs.every((affair) => affair.events.length <= 500)).toBe(true)
     expect((await stat(filePath)).size).toBeLessThan(7 * 1024 * 1024)
   })
@@ -1641,6 +1711,38 @@ describe('article publishing persistent state', () => {
     await expect(store.load()).rejects.toThrow('恢复日志损坏')
     expect(await readFile(filePath, 'utf8')).toBe(primaryBefore)
     expect(await readFile(store.recoveryPath, 'utf8')).toContain('journalVersion')
+  })
+
+  it('never writes a subset recovery journal for a mixed changed-affair batch', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+    const filePath = join(directory, 'affairs.json')
+    const primary = JSON.parse(await readFile(filePath, 'utf8'))
+    const article = primary.affairs[0]
+    const generic = {
+      ...structuredClone(article),
+      id: randomUUID(),
+      kind: 'generic',
+      title: '普通事务',
+      articlePublishing: undefined,
+      attempts: [],
+    }
+    const mixed = {
+      ...primary,
+      revision: primary.revision + 1,
+      affairs: [{ ...article, title: '文章变更' }, generic],
+    }
+    const store = new WebAffairStore(filePath)
+    Object.defineProperty(store, 'persist', {
+      value: async () => {
+        throw new Error('simulated crash before atomic snapshot publish')
+      },
+    })
+
+    await expect(store.save(mixed, { changedAffairIds: [article.id, generic.id] })).rejects.toThrow(
+      'simulated crash',
+    )
+    await expect(readFile(store.recoveryPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
   })
 })
 

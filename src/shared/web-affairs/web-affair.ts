@@ -4,7 +4,10 @@ import type {
   ClaimLegacyWebAffairInput,
   CompleteWebAffairCheckInput,
   ConfirmWebAffairFinalActionInput,
+  CreateImageResearchAffairInput,
   CreateWebAffairInput,
+  DecideImageResearchCandidateInput,
+  ImageResearchAffairInput,
   DecideWebAffairFlowProposalInput,
   FinishWebAffairAttemptInput,
   HandoffWebAffairAttemptInput,
@@ -29,6 +32,21 @@ export interface WebAffairsApiContract {
   ): Promise<WebAffairOperationResult<WebAffairProjectSnapshot>>
   getCatalog(): Promise<WebAffairOperationResult<WebAffairCatalog>>
   createAffair(input: CreateWebAffairInput): Promise<WebAffairOperationResult<WebAffair>>
+  createImageResearchAffair(
+    input: CreateImageResearchAffairInput,
+  ): Promise<WebAffairOperationResult<WebAffair>>
+  startImageResearch(input: ImageResearchAffairInput): Promise<WebAffairOperationResult<WebAffair>>
+  decideImageResearchCandidate(
+    input: DecideImageResearchCandidateInput,
+  ): Promise<WebAffairOperationResult<WebAffair>>
+  retryImageResearch(input: ImageResearchAffairInput): Promise<WebAffairOperationResult<WebAffair>>
+  openImageResearchCandidate(
+    input: ImageResearchAffairInput,
+  ): Promise<WebAffairOperationResult<WebAffair>>
+  closeImageResearchCandidate(
+    input: ImageResearchAffairInput,
+  ): Promise<WebAffairOperationResult<WebAffair>>
+  cancelImageResearch(input: ImageResearchAffairInput): Promise<WebAffairOperationResult<WebAffair>>
   claimLegacyAffair(input: ClaimLegacyWebAffairInput): Promise<WebAffairOperationResult<WebAffair>>
   updateNode(input: UpdateWebAffairNodeInput): Promise<WebAffairOperationResult<WebAffair>>
   reviseFlow(input: ReviseWebAffairFlowInput): Promise<WebAffairOperationResult<WebAffair>>
@@ -65,6 +83,34 @@ export const webAffairsIpc = {
   createAffair: defineIpcCall<[CreateWebAffairInput], WebAffairOperationResult<WebAffair>>(
     'webAffairs:createAffair',
   ),
+  createImageResearchAffair: defineIpcCall<
+    [CreateImageResearchAffairInput],
+    WebAffairOperationResult<WebAffair>
+  >('webAffairs:createImageResearchAffair'),
+  startImageResearch: defineIpcCall<
+    [ImageResearchAffairInput],
+    WebAffairOperationResult<WebAffair>
+  >('webAffairs:startImageResearch'),
+  decideImageResearchCandidate: defineIpcCall<
+    [DecideImageResearchCandidateInput],
+    WebAffairOperationResult<WebAffair>
+  >('webAffairs:decideImageResearchCandidate'),
+  retryImageResearch: defineIpcCall<
+    [ImageResearchAffairInput],
+    WebAffairOperationResult<WebAffair>
+  >('webAffairs:retryImageResearch'),
+  openImageResearchCandidate: defineIpcCall<
+    [ImageResearchAffairInput],
+    WebAffairOperationResult<WebAffair>
+  >('webAffairs:openImageResearchCandidate'),
+  closeImageResearchCandidate: defineIpcCall<
+    [ImageResearchAffairInput],
+    WebAffairOperationResult<WebAffair>
+  >('webAffairs:closeImageResearchCandidate'),
+  cancelImageResearch: defineIpcCall<
+    [ImageResearchAffairInput],
+    WebAffairOperationResult<WebAffair>
+  >('webAffairs:cancelImageResearch'),
   claimLegacyAffair: defineIpcCall<
     [ClaimLegacyWebAffairInput],
     WebAffairOperationResult<WebAffair>

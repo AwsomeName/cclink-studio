@@ -302,6 +302,44 @@ describe('BrowserTaskRuntime', () => {
     ).not.toThrow()
   })
 
+  it('atomically transfers a held candidate lease to the immediate next generation', () => {
+    const { runtime } = createRuntime()
+    const lease = runtime.acquireAccountRecoveryLease({
+      accountId: 'account-a',
+      profileId: 'profile-a',
+      affairId: 'affair-a',
+      attemptId: 'attempt-a',
+      executionGeneration: 4,
+      launchOperationId: 'launch-current',
+    })
+    const task = runtime.startTask({
+      tabId: 'browser-a',
+      goal: 'continue image research',
+      correlation: {
+        workspaceKey: '/workspace-a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-next',
+        agentSessionRef: null,
+        profileId: 'profile-a',
+      },
+    })
+
+    expect(() =>
+      runtime.transferAccountRecoveryLeaseToTask(lease.id, task.id, {
+        affairId: 'affair-a',
+        affairAttemptId: 'attempt-a',
+        affairExecutionGeneration: 5,
+        affairLaunchOperationId: 'decision-operation',
+      }),
+    ).not.toThrow()
+    expect(runtime.getTask(task.id)?.correlation).toMatchObject({
+      accountId: 'account-a',
+      affairAttemptId: 'attempt-a',
+      affairExecutionGeneration: 5,
+      affairLaunchOperationId: 'decision-operation',
+    })
+  })
+
   it('rejects stale or mismatched recovery lease handoff without releasing the live owner', () => {
     const { runtime } = createRuntime()
     const stale = runtime.acquireAccountRecoveryLease({

@@ -12,10 +12,13 @@ import {
   claimLegacyWebAffairInputSchema,
   completeWebAffairCheckInputSchema,
   confirmWebAffairFinalActionInputSchema,
+  createImageResearchAffairInputSchema,
   createWebAffairInputSchema,
+  decideImageResearchCandidateInputSchema,
   decideWebAffairFlowProposalInputSchema,
   finishWebAffairAttemptInputSchema,
   handoffWebAffairAttemptInputSchema,
+  imageResearchAffairInputSchema,
   inspectWebAffairMaterialsInputSchema,
   proposeWebAffairFlowDiffInputSchema,
   returnWebAffairAttemptInputSchema,
@@ -59,6 +62,34 @@ export const webAffairsIpcContracts = {
   ),
   getCatalog: bindNoArgsIpc(webAffairsIpc.getCatalog),
   createAffair: bindSingleInput(webAffairsIpc.createAffair, createWebAffairInputSchema),
+  createImageResearchAffair: bindSingleInput(
+    webAffairsIpc.createImageResearchAffair,
+    createImageResearchAffairInputSchema,
+  ),
+  startImageResearch: bindSingleInput(
+    webAffairsIpc.startImageResearch,
+    imageResearchAffairInputSchema,
+  ),
+  decideImageResearchCandidate: bindSingleInput(
+    webAffairsIpc.decideImageResearchCandidate,
+    decideImageResearchCandidateInputSchema,
+  ),
+  retryImageResearch: bindSingleInput(
+    webAffairsIpc.retryImageResearch,
+    imageResearchAffairInputSchema,
+  ),
+  openImageResearchCandidate: bindSingleInput(
+    webAffairsIpc.openImageResearchCandidate,
+    imageResearchAffairInputSchema,
+  ),
+  closeImageResearchCandidate: bindSingleInput(
+    webAffairsIpc.closeImageResearchCandidate,
+    imageResearchAffairInputSchema,
+  ),
+  cancelImageResearch: bindSingleInput(
+    webAffairsIpc.cancelImageResearch,
+    imageResearchAffairInputSchema,
+  ),
   claimLegacyAffair: bindSingleInput(
     webAffairsIpc.claimLegacyAffair,
     claimLegacyWebAffairInputSchema,

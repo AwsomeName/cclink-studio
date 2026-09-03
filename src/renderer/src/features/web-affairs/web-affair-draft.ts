@@ -11,6 +11,7 @@ export const DEFAULT_WEB_AFFAIR_NODE_TITLES = [
 
 export function createEmptyWebAffairDraft(): WebAffairDraftState {
   return {
+    kind: 'generic',
     title: '',
     objective: '',
     principalId: '',
@@ -18,6 +19,10 @@ export function createEmptyWebAffairDraft(): WebAffairDraftState {
     accountGroupIds: [],
     materialPaths: [],
     nodeTitles: [...DEFAULT_WEB_AFFAIR_NODE_TITLES],
+    imageResearchAccountId: '',
+    imageResearchSearchTerms:
+      '奥森拍照\n奥海拍照\n奥森湿地拍照\n奥森栈道拍照\n仰山拍照\n奥森拍照姿势',
+    imageResearchTargetCount: 30,
   }
 }
 
@@ -48,6 +53,7 @@ export function isWebAffairDraftEmpty(draft: WebAffairDraftState): boolean {
     draft.principalId.length === 0 &&
     draft.accountIds.length === 0 &&
     draft.accountGroupIds.length === 0 &&
-    draft.materialPaths.length === 0
+    draft.materialPaths.length === 0 &&
+    !draft.imageResearchAccountId
   )
 }

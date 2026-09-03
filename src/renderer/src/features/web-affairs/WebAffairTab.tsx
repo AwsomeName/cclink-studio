@@ -153,6 +153,21 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
   if (error && !affair) return <div className="web-affair-tab-state error">{error}</div>
   if (!affair || !resources) return <div className="web-affair-tab-state">正在读取事务…</div>
 
+  if (affair.kind === 'image-research') {
+    return (
+      <ImageResearchAffairView
+        affair={affair}
+        accountLabel={accounts[0]?.label ?? '账号资源已失效'}
+        error={error}
+        saving={saving}
+        setSaving={setSaving}
+        setError={setError}
+        onChanged={acceptChangedAffair}
+        onOpenAccount={() => openAccount(researchAccountId(affair))}
+      />
+    )
+  }
+
   return (
     <div className="web-affair-tab">
       <header className="web-affair-tab-header">
@@ -188,7 +203,7 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
             title="目标网站"
             items={websites.length > 0 ? websites.map((website) => website.name) : ['暂未关联']}
           />
-          <div className="web-affair-resource-card">
+          <div className="web-affair-resource-card image-research-candidate">
             <strong>账号与登录环境</strong>
             {accounts.length > 0 ? (
               accounts.map((account) => (
@@ -237,7 +252,7 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
       <div className="web-affair-main-grid">
         <section className="web-affair-flow-panel">
           <div className="web-affair-section-heading">
-            <div>
+            <div className="image-research-candidate-actions">
               <span>02</span>
               <h2>整体流程</h2>
             </div>
@@ -388,6 +403,213 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
       </div>
     </div>
   )
+}
+
+function ImageResearchAffairView({
+  affair,
+  accountLabel,
+  error,
+  saving,
+  setSaving,
+  setError,
+  onChanged,
+  onOpenAccount,
+}: {
+  affair: WebAffair
+  accountLabel: string
+  error: string | null
+  saving: boolean
+  setSaving: (value: boolean) => void
+  setError: (value: string | null) => void
+  onChanged: (affair: WebAffair) => void
+  onOpenAccount: () => Promise<void>
+}): React.ReactElement {
+  const research = affair.imageResearch!
+  const current = research.candidates.find((item) => item.id === research.currentCandidateId)
+  const saved = research.candidates.filter((item) => item.decision === 'self-saved').length
+  const skipped = research.candidates.filter((item) => item.decision === 'skipped').length
+  const pending = research.candidates.filter((item) => !item.decision).length
+  const invoke = async (
+    action: () => Promise<
+      { success: true; data: WebAffair } | { success: false; error: { message: string } }
+    >,
+  ): Promise<void> => {
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await action()
+      if (!result.success) {
+        setError(result.error.message)
+        return
+      }
+      onChanged(result.data)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setSaving(false)
+    }
+  }
+  const scope = { workspaceRef: affair.workspaceRef, affairId: affair.id }
+  const terminal = research.status === 'completed' || research.status === 'cancelled'
+  return (
+    <div className="web-affair-tab">
+      <header className="web-affair-tab-header">
+        <div>
+          <div className="web-affair-tab-eyebrow">小红书图片调研 · 仅记录人工决定</div>
+          <h1>{affair.title}</h1>
+          <p>
+            {research.searchTerms.join('、')} · 账号：{accountLabel}
+          </p>
+        </div>
+        <strong className={`web-affair-status ${affair.status}`}>
+          {WEB_AFFAIR_STATUS_LABELS[affair.status]}
+        </strong>
+      </header>
+      {error ? <div className="web-affair-tab-alert">{error}</div> : null}
+      <section className="web-affair-resources-panel">
+        <div className="web-affair-section-heading">
+          <div>
+            <span>01</span>
+            <h2>进度</h2>
+          </div>
+          <small>目标 {research.targetCount} 张</small>
+        </div>
+        <div className="web-affair-resource-grid">
+          <ResourceCard title="已自行保存" items={[String(saved)]} />
+          <ResourceCard title="已跳过" items={[String(skipped)]} />
+          <ResourceCard title="待处理" items={[String(pending)]} />
+        </div>
+      </section>
+      <section className="web-affair-resources-panel">
+        <div className="web-affair-section-heading">
+          <div>
+            <span>02</span>
+            <h2>当前候选</h2>
+          </div>
+          <small>Studio 不读取或保存图片文件</small>
+        </div>
+        {current ? (
+          <div className="web-affair-resource-card image-research-candidate">
+            <strong>{current.title}</strong>
+            <span>
+              {current.authorDisplayName ?? '作者未识别'} · 第 {current.imageIndex + 1} 张
+            </span>
+            {current.visibleText.map((text) => (
+              <small key={text}>{text}</small>
+            ))}
+            <div className="image-research-candidate-actions">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() =>
+                  void invoke(() =>
+                    window.cclinkStudio.webAffairs.openImageResearchCandidate(scope),
+                  )
+                }
+              >
+                打开候选页面
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() =>
+                  void invoke(() =>
+                    window.cclinkStudio.webAffairs.closeImageResearchCandidate(scope),
+                  )
+                }
+              >
+                关闭候选页面
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() =>
+                  void invoke(() =>
+                    window.cclinkStudio.webAffairs.decideImageResearchCandidate({
+                      ...scope,
+                      candidateId: current.id,
+                      decision: 'self-saved',
+                    }),
+                  )
+                }
+              >
+                我已自行保存并继续
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() =>
+                  void invoke(() =>
+                    window.cclinkStudio.webAffairs.decideImageResearchCandidate({
+                      ...scope,
+                      candidateId: current.id,
+                      decision: 'skipped',
+                    }),
+                  )
+                }
+              >
+                跳过并继续
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="web-affair-tab-state">
+            {research.status === 'searching'
+              ? 'Agent 正在可见浏览器中查找一张候选…'
+              : (research.lastIssue ?? '尚未开始')}
+          </div>
+        )}
+        <div className="image-research-task-actions">
+          {research.status === 'draft' ? (
+            <button
+              type="button"
+              className="primary"
+              disabled={saving}
+              onClick={() =>
+                void invoke(() => window.cclinkStudio.webAffairs.startImageResearch(scope))
+              }
+            >
+              开始搜索
+            </button>
+          ) : null}
+          {research.status === 'needs-attention' ? (
+            <>
+              <button type="button" disabled={saving} onClick={() => void onOpenAccount()}>
+                打开账号处理登录/验证码
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() =>
+                  void invoke(() => window.cclinkStudio.webAffairs.retryImageResearch(scope))
+                }
+              >
+                处理完成，重新搜索
+              </button>
+            </>
+          ) : null}
+          {!terminal ? (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() =>
+                void invoke(() => window.cclinkStudio.webAffairs.cancelImageResearch(scope))
+              }
+            >
+              结束任务
+            </button>
+          ) : null}
+        </div>
+      </section>
+      <p className="web-affair-tab-alert">
+        来源和权利状态未知，请自行判断使用范围。统计只代表你的按钮操作。
+      </p>
+    </div>
+  )
+}
+
+function researchAccountId(affair: WebAffair): string {
+  return affair.imageResearch?.accountId ?? affair.accountIds[0] ?? ''
 }
 
 function ResourceCard({ title, items }: { title: string; items: string[] }): React.ReactElement {

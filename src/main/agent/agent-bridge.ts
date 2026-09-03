@@ -363,7 +363,8 @@ export class AgentBridge {
         sendPlan.browserTabId,
         sendPlan.workspaceKey,
         runId,
-        context?.articlePublishingPolicy?.origin === 'article-publishing',
+        context?.articlePublishingPolicy?.origin === 'article-publishing' ||
+          context?.imageResearchPolicy?.origin === 'image-research',
       )
       await context?.onRunPrepared?.({
         conversationId,
@@ -392,6 +393,7 @@ export class AgentBridge {
           resourceContext,
           continuity: context?.continuity,
           articlePublishingPolicy: context?.articlePublishingPolicy,
+          imageResearchPolicy: context?.imageResearchPolicy,
           agentProfile: this.toAgentRoleContext(binding.role),
         },
       )

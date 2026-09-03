@@ -10,6 +10,17 @@ export const webAffairsApi: WebAffairsApiContract = {
   getSnapshot: (input) => invokeIpcContract(webAffairsIpc.getSnapshot, input),
   getCatalog: () => invokeIpcContract(webAffairsIpc.getCatalog),
   createAffair: (input) => invokeIpcContract(webAffairsIpc.createAffair, input),
+  createImageResearchAffair: (input) =>
+    invokeIpcContract(webAffairsIpc.createImageResearchAffair, input),
+  startImageResearch: (input) => invokeIpcContract(webAffairsIpc.startImageResearch, input),
+  decideImageResearchCandidate: (input) =>
+    invokeIpcContract(webAffairsIpc.decideImageResearchCandidate, input),
+  retryImageResearch: (input) => invokeIpcContract(webAffairsIpc.retryImageResearch, input),
+  openImageResearchCandidate: (input) =>
+    invokeIpcContract(webAffairsIpc.openImageResearchCandidate, input),
+  closeImageResearchCandidate: (input) =>
+    invokeIpcContract(webAffairsIpc.closeImageResearchCandidate, input),
+  cancelImageResearch: (input) => invokeIpcContract(webAffairsIpc.cancelImageResearch, input),
   claimLegacyAffair: (input) => invokeIpcContract(webAffairsIpc.claimLegacyAffair, input),
   updateNode: (input) => invokeIpcContract(webAffairsIpc.updateNode, input),
   reviseFlow: (input) => invokeIpcContract(webAffairsIpc.reviseFlow, input),

@@ -1,6 +1,37 @@
 import type { WorkspaceRef } from '../workspace-ref'
 import type { ArticlePublishingState } from '../article-publishing/article-publishing-types'
 
+export type ImageResearchDecision = 'self-saved' | 'skipped'
+
+export interface ImageResearchCandidate {
+  id: string
+  executionGeneration: number
+  noteId: string
+  imageIndex: number
+  title: string
+  authorDisplayName?: string
+  visibleText: string[]
+  sanitizedPageUrl: string
+  reopenPath?: string
+  proposedAt: string
+  decision?: ImageResearchDecision
+  decisionOperationId?: string
+  decidedAt?: string
+}
+
+export interface ImageResearchState {
+  adapterId: 'xiaohongshu'
+  adapterVersion: 1
+  accountId: string
+  searchTerms: string[]
+  targetCount: number
+  frozenAt?: string
+  status: 'draft' | 'searching' | 'waiting-human' | 'needs-attention' | 'completed' | 'cancelled'
+  currentCandidateId?: string
+  candidates: ImageResearchCandidate[]
+  lastIssue?: string
+}
+
 export type WebAffairStatus =
   | 'draft'
   | 'active'
@@ -289,7 +320,7 @@ export interface WebAffairEvent {
 
 export interface WebAffair {
   id: string
-  kind: 'generic' | 'article-publishing'
+  kind: 'generic' | 'article-publishing' | 'image-research'
   /** Stable local workspace identity. `null` is reserved for migrated legacy affairs. */
   workspaceId: string | null
   title: string
@@ -306,6 +337,7 @@ export interface WebAffair {
   flowProposals: WebAffairFlowProposal[]
   templateRef?: WebAffairTemplateRef
   articlePublishing?: ArticlePublishingState
+  imageResearch?: ImageResearchState
   events: WebAffairEvent[]
   workspaceRef: WorkspaceRef
   createdAt: string
@@ -357,6 +389,23 @@ export interface CreateWebAffairInput {
   nodeTitles: string[]
   workspaceRef: WorkspaceRef
   templateRef?: WebAffairTemplateRef
+}
+
+export interface CreateImageResearchAffairInput {
+  title: string
+  accountId: string
+  searchTerms: string[]
+  targetCount: number
+  workspaceRef: WorkspaceRef
+}
+
+export interface ImageResearchAffairInput extends WebAffairWorkspaceScopeInput {
+  affairId: string
+}
+
+export interface DecideImageResearchCandidateInput extends ImageResearchAffairInput {
+  candidateId: string
+  decision: ImageResearchDecision
 }
 
 export interface UpdateWebAffairNodeInput extends WebAffairWorkspaceScopeInput {

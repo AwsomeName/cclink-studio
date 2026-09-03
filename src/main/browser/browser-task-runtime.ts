@@ -142,12 +142,16 @@ export class BrowserTaskRuntime {
       throw new Error('BrowserTask 与恢复租约的账号或事务代次不匹配')
     }
     const nextCorrelation = { ...task.correlation, ...patch, accountId }
+    const generation = nextCorrelation.affairExecutionGeneration
+    const transfersCurrentRun =
+      generation === lease.executionGeneration &&
+      nextCorrelation.affairLaunchOperationId === lease.launchOperationId
+    const transfersImmediateContinuation = generation === lease.executionGeneration + 1
     if (
       nextCorrelation.profileId !== lease.profileId ||
       nextCorrelation.affairId !== lease.affairId ||
       nextCorrelation.affairAttemptId !== lease.attemptId ||
-      nextCorrelation.affairExecutionGeneration !== lease.executionGeneration ||
-      nextCorrelation.affairLaunchOperationId !== lease.launchOperationId
+      (!transfersCurrentRun && !transfersImmediateContinuation)
     ) {
       throw new Error('BrowserTask 与恢复租约的账号或事务代次不匹配')
     }

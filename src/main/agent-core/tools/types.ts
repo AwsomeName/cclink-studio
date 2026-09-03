@@ -73,6 +73,15 @@ export interface ToolExecutionContext {
     executionGeneration: number
     launchOperationId: string
   }
+  /** 图片调研运行由主进程签发的不可伪造身份。 */
+  imageResearchPolicy?: {
+    origin: 'image-research'
+    workspaceId: string
+    affairId: string
+    attemptId: string
+    executionGeneration: number
+    launchOperationId: string
+  }
   /** 工具宿主已为本次调用取得显式用户确认。 */
   confirmationGranted?: boolean
   /** run 取消时触发；执行时间较长的模块应协作停止尚未提交的工作。 */

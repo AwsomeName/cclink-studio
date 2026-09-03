@@ -6,8 +6,46 @@ import type {
 import type { WorkspaceRef } from '../../../../shared/workspace-ref'
 import type { WebAffairOperationResult } from '../../../../shared/web-affairs/web-affair-types'
 import type { ArticlePublishingBrowserPolicy } from '../../../article-publishing/article-publishing-browser-policy'
+import type { ImageResearchService } from '../../../image-research/image-research-service'
 
 const TOOLS: ToolDefinition[] = [
+  {
+    name: 'image_research_search',
+    description: '在当前绑定的小红书可见页面执行一个冻结搜索词，并返回有界搜索结果。',
+    inputSchema: {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+      required: ['query'],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  },
+  {
+    name: 'image_research_inspect_page',
+    description:
+      '读取当前小红书页面的有限可见文字和短期引用；不返回截图、HTML、selector、媒体 URL 或媒体字节。',
+    inputSchema: { type: 'object', properties: {} },
+    annotations: { readOnlyHint: true, destructiveHint: false },
+  },
+  {
+    name: 'image_research_open_result',
+    description: '打开 inspect 返回的短期 resultRef；打开后会复核稳定 noteId。',
+    inputSchema: {
+      type: 'object',
+      properties: { resultRef: { type: 'string' } },
+      required: ['resultRef'],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  },
+  {
+    name: 'image_research_propose',
+    description: '提交 inspect 返回的当前候选 token。成功后必须立即结束本轮。',
+    inputSchema: {
+      type: 'object',
+      properties: { proposalToken: { type: 'string' } },
+      required: ['proposalToken'],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  },
   {
     name: 'web_affair_get',
     description:
@@ -161,6 +199,7 @@ export class WebAffairToolModule implements ToolModule {
     private readonly service: WebAffairService,
     private readonly resolveWorkspaceId: (workspacePath: string) => Promise<string | null>,
     private readonly articlePublishingBrowserPolicy?: ArticlePublishingBrowserPolicy | null,
+    private readonly imageResearchService?: ImageResearchService | null,
   ) {}
 
   async execute(
@@ -171,6 +210,31 @@ export class WebAffairToolModule implements ToolModule {
     const scope = await this.resolveScope(context)
     if (!scope.success) return scope
     const { workspaceId, workspaceRef } = scope.data
+
+    if (toolName === 'image_research_search') {
+      return (
+        this.imageResearchService?.search(String(params['query'] ?? ''), context) ??
+        publishingPolicyError('图片调研适配器尚未就绪')
+      )
+    }
+    if (toolName === 'image_research_inspect_page') {
+      return (
+        this.imageResearchService?.inspectPage(context) ??
+        publishingPolicyError('图片调研适配器尚未就绪')
+      )
+    }
+    if (toolName === 'image_research_open_result') {
+      return (
+        this.imageResearchService?.openResult(String(params['resultRef'] ?? ''), context) ??
+        publishingPolicyError('图片调研适配器尚未就绪')
+      )
+    }
+    if (toolName === 'image_research_propose') {
+      return (
+        this.imageResearchService?.propose(String(params['proposalToken'] ?? ''), context) ??
+        publishingPolicyError('图片调研适配器尚未就绪')
+      )
+    }
 
     if (toolName === 'web_affair_get') {
       const policyError = this.validatePublishingTarget(params, context)

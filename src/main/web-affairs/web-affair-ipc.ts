@@ -12,6 +12,7 @@ import {
 import type { WebAffairService } from './web-affair-service'
 import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
+import type { ImageResearchService } from '../image-research/image-research-service'
 
 function unavailable<T>(): WebAffairOperationResult<T> {
   return {
@@ -44,6 +45,7 @@ export function registerWebAffairIpc(
   trustedRendererGuard: TrustedRendererGuard,
   getBrowserTaskRuntime: () => BrowserTaskRuntime | null = () => null,
   getWorkspaceStateService: () => WorkspaceStateService | null = () => null,
+  getImageResearchService: () => ImageResearchService | null = () => null,
 ): void {
   registerTrustedIpcContract(
     webAffairsIpcContracts.getCatalog,
@@ -64,6 +66,87 @@ export function registerWebAffairIpc(
     async (_event, input): Promise<WebAffairOperationResult<WebAffair>> =>
       invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
         service.createAffair(input, workspaceId),
+      ),
+  )
+  registerTrustedIpcContract(
+    webAffairsIpcContracts.createImageResearchAffair,
+    trustedRendererGuard,
+    async (_event, input): Promise<WebAffairOperationResult<WebAffair>> =>
+      invokeScoped(input, getService, getWorkspaceStateService, (service, workspaceId) =>
+        service.createImageResearchAffair(input, workspaceId),
+      ),
+  )
+  registerTrustedIpcContract(
+    webAffairsIpcContracts.startImageResearch,
+    trustedRendererGuard,
+    async (_event, input): Promise<WebAffairOperationResult<WebAffair>> =>
+      invokeImageResearch(
+        input,
+        getService,
+        getWorkspaceStateService,
+        getImageResearchService,
+        (service, workspaceId) => service.start(input.affairId, workspaceId),
+      ),
+  )
+  registerTrustedIpcContract(
+    webAffairsIpcContracts.retryImageResearch,
+    trustedRendererGuard,
+    async (_event, input): Promise<WebAffairOperationResult<WebAffair>> =>
+      invokeImageResearch(
+        input,
+        getService,
+        getWorkspaceStateService,
+        getImageResearchService,
+        (service, workspaceId) => service.retry(input.affairId, workspaceId),
+      ),
+  )
+  registerTrustedIpcContract(
+    webAffairsIpcContracts.decideImageResearchCandidate,
+    trustedRendererGuard,
+    async (_event, input): Promise<WebAffairOperationResult<WebAffair>> =>
+      invokeImageResearch(
+        input,
+        getService,
+        getWorkspaceStateService,
+        getImageResearchService,
+        (service, workspaceId) => service.decide(input, workspaceId),
+      ),
+  )
+  registerTrustedIpcContract(
+    webAffairsIpcContracts.openImageResearchCandidate,
+    trustedRendererGuard,
+    async (_event, input): Promise<WebAffairOperationResult<WebAffair>> =>
+      invokeImageResearch(
+        input,
+        getService,
+        getWorkspaceStateService,
+        getImageResearchService,
+        (service, workspaceId) => service.openCandidate(input.affairId, workspaceId),
+      ),
+  )
+  registerTrustedIpcContract(
+    webAffairsIpcContracts.closeImageResearchCandidate,
+    trustedRendererGuard,
+    async (_event, input): Promise<WebAffairOperationResult<WebAffair>> =>
+      invokeImageResearch(
+        input,
+        getService,
+        getWorkspaceStateService,
+        getImageResearchService,
+        (service, workspaceId) =>
+          Promise.resolve(service.closeCandidate(input.affairId, workspaceId)),
+      ),
+  )
+  registerTrustedIpcContract(
+    webAffairsIpcContracts.cancelImageResearch,
+    trustedRendererGuard,
+    async (_event, input): Promise<WebAffairOperationResult<WebAffair>> =>
+      invokeImageResearch(
+        input,
+        getService,
+        getWorkspaceStateService,
+        getImageResearchService,
+        (service, workspaceId) => service.cancel(input.affairId, workspaceId),
       ),
   )
   registerTrustedIpcContract(
@@ -195,6 +278,24 @@ export function registerWebAffairIpc(
         service.inspectMaterials(input, workspaceId),
       ),
   )
+}
+
+async function invokeImageResearch<T extends WebAffairWorkspaceScopeInput>(
+  input: T,
+  getWebAffairService: () => WebAffairService | null,
+  getWorkspaceStateService: () => WorkspaceStateService | null,
+  getImageResearchService: () => ImageResearchService | null,
+  invoke: (
+    service: ImageResearchService,
+    workspaceId: string,
+  ) => Promise<WebAffairOperationResult<WebAffair>>,
+): Promise<WebAffairOperationResult<WebAffair>> {
+  if (!getWebAffairService()) return unavailable()
+  const service = getImageResearchService()
+  if (!service) return unavailable()
+  const workspaceId = await resolveWorkspaceId(input, getWorkspaceStateService())
+  if (!workspaceId.success) return workspaceId
+  return invoke(service, workspaceId.data)
 }
 
 async function resolveWorkspaceId(

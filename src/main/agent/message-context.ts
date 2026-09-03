@@ -27,6 +27,8 @@ export interface AgentSendMessageContext {
   disableBuiltinTools?: boolean
   /** main-owned product policy; renderer IPC never accepts this field. */
   articlePublishingPolicy?: import('../agent-core/tools/types.js').ToolExecutionContext['articlePublishingPolicy']
+  /** main-owned image research identity; renderer IPC never accepts this field. */
+  imageResearchPolicy?: import('../agent-core/tools/types.js').ToolExecutionContext['imageResearchPolicy']
   /**
    * BrowserTask 已创建、但 Agent 尚未获得 MCP 工具前调用。产品编排必须在这里
    * 先持久化 Runtime binding，禁止“先执行、结束后才登记 owner”。

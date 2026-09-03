@@ -53,6 +53,200 @@ describe('WebAffairService', () => {
     })
   })
 
+  it('keeps one image-research Attempt across candidate decisions and makes continuation idempotent', async () => {
+    const resources = xiaohongshuResourceSnapshot()
+    const service = createServiceWithResources(filePath, resources)
+    await service.load()
+    const created = await service.createImageResearchAffair(
+      {
+        title: '奥森热门照片',
+        accountId: ACCOUNT_ID,
+        searchTerms: ['奥森拍照', '奥海拍照'],
+        targetCount: 1,
+        workspaceRef: WORKSPACE_REF,
+      },
+      WORKSPACE_ID,
+    )
+    expect(created).toMatchObject({
+      success: true,
+      data: { kind: 'image-research', imageResearch: { status: 'draft', targetCount: 1 } },
+    })
+    if (!created.success) return
+
+    const started = await service.startImageResearch(created.data.id, WORKSPACE_ID)
+    if (!started.success) throw new Error(started.error.message)
+    const firstAttempt = started.data.attempts[0]
+    expect(started.data.attempts).toHaveLength(1)
+    expect(firstAttempt.executionGeneration).toBe(1)
+    const bound = await service.bindImageResearchAttempt(
+      {
+        workspaceRef: WORKSPACE_REF,
+        affairId: created.data.id,
+        attemptId: firstAttempt.id,
+        tabId: 'browser-xhs',
+        conversationId: `image-research-${created.data.id}`,
+        agentRunId: `run-${firstAttempt.launchOperationId}`,
+        browserTaskRunId: '66666666-6666-4666-8666-666666666666',
+      },
+      WORKSPACE_ID,
+    )
+    if (!bound.success) throw new Error(bound.error.message)
+    const proposed = await service.proposeImageResearchCandidate(
+      {
+        affairId: created.data.id,
+        attemptId: firstAttempt.id,
+        executionGeneration: 1,
+        launchOperationId: firstAttempt.launchOperationId,
+        noteId: '66abc123def456',
+        imageIndex: 0,
+        title: '奥森湖边拍照',
+        authorDisplayName: '测试作者',
+        visibleText: ['奥森拍照', '湖边散步'],
+        sanitizedPageUrl: 'https://www.xiaohongshu.com/explore/66abc123def456',
+        reopenPath: '/explore/66abc123def456',
+      },
+      WORKSPACE_ID,
+    )
+    expect(proposed).toMatchObject({
+      success: true,
+      data: {
+        attempts: [{ id: firstAttempt.id, status: 'waiting-human' }],
+        imageResearch: { status: 'waiting-human' },
+      },
+    })
+    if (!proposed.success) return
+    const candidateId = proposed.data.imageResearch!.currentCandidateId!
+    const decided = await service.decideImageResearchCandidate(
+      {
+        workspaceRef: WORKSPACE_REF,
+        affairId: created.data.id,
+        candidateId,
+        decision: 'skipped',
+      },
+      WORKSPACE_ID,
+    )
+    expect(decided).toMatchObject({
+      success: true,
+      data: {
+        status: 'active',
+        attempts: [{ id: firstAttempt.id, status: 'preparing', executionGeneration: 2 }],
+        imageResearch: { status: 'searching', currentCandidateId: undefined },
+      },
+    })
+    const replay = await service.decideImageResearchCandidate(
+      {
+        workspaceRef: WORKSPACE_REF,
+        affairId: created.data.id,
+        candidateId,
+        decision: 'skipped',
+      },
+      WORKSPACE_ID,
+    )
+    expect(replay).toMatchObject({
+      success: true,
+      data: { attempts: [{ executionGeneration: 2 }] },
+    })
+    if (!decided.success) return
+    const secondAttempt = decided.data.attempts[0]
+    const rebound = await service.bindImageResearchAttempt(
+      {
+        workspaceRef: WORKSPACE_REF,
+        affairId: created.data.id,
+        attemptId: firstAttempt.id,
+        tabId: 'browser-xhs',
+        conversationId: `image-research-${created.data.id}`,
+        agentRunId: `run-${secondAttempt.launchOperationId}`,
+        browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+      },
+      WORKSPACE_ID,
+    )
+    if (!rebound.success) throw new Error(rebound.error.message)
+    const secondProposal = await service.proposeImageResearchCandidate(
+      {
+        affairId: created.data.id,
+        attemptId: firstAttempt.id,
+        executionGeneration: 2,
+        launchOperationId: secondAttempt.launchOperationId,
+        noteId: '77abc123def456',
+        imageIndex: 1,
+        title: '奥海回头照',
+        visibleText: ['奥海拍照'],
+        sanitizedPageUrl: 'https://www.xiaohongshu.com/explore/77abc123def456',
+        reopenPath: '/explore/77abc123def456',
+      },
+      WORKSPACE_ID,
+    )
+    if (!secondProposal.success) throw new Error(secondProposal.error.message)
+    const completed = await service.decideImageResearchCandidate(
+      {
+        workspaceRef: WORKSPACE_REF,
+        affairId: created.data.id,
+        candidateId: secondProposal.data.imageResearch!.currentCandidateId!,
+        decision: 'self-saved',
+      },
+      WORKSPACE_ID,
+    )
+    expect(completed).toMatchObject({
+      success: true,
+      data: {
+        status: 'completed',
+        attempts: [{ id: firstAttempt.id, status: 'succeeded', executionGeneration: 2 }],
+        imageResearch: { status: 'completed' },
+      },
+    })
+  })
+
+  it('never restores an ownerless image search as running', async () => {
+    const resources = xiaohongshuResourceSnapshot()
+    const service = createServiceWithResources(filePath, resources)
+    await service.load()
+    const created = await service.createImageResearchAffair(
+      {
+        title: '奥森热门照片',
+        accountId: ACCOUNT_ID,
+        searchTerms: ['奥森拍照'],
+        targetCount: 2,
+        workspaceRef: WORKSPACE_REF,
+      },
+      WORKSPACE_ID,
+    )
+    if (!created.success) throw new Error(created.error.message)
+    const started = await service.startImageResearch(created.data.id, WORKSPACE_ID)
+    if (!started.success) throw new Error(started.error.message)
+    const persistedGeneration = started.data.attempts[0].executionGeneration
+    const persistedLaunchOperationId = started.data.attempts[0].launchOperationId
+    await service.flush()
+
+    const restarted = createServiceWithResources(filePath, resources)
+    await restarted.load()
+    expect(restarted.getProjectSnapshot(WORKSPACE_ID)).toMatchObject({
+      success: true,
+      data: {
+        affairs: [
+          {
+            attempts: [{ status: 'interrupted' }],
+            imageResearch: { status: 'needs-attention' },
+          },
+        ],
+      },
+    })
+
+    const resumed = await restarted.startImageResearch(created.data.id, WORKSPACE_ID)
+    expect(resumed).toMatchObject({
+      success: true,
+      data: {
+        attempts: [
+          {
+            status: 'preparing',
+            executionGeneration: persistedGeneration,
+            launchOperationId: persistedLaunchOperationId,
+          },
+        ],
+        imageResearch: { status: 'searching' },
+      },
+    })
+  })
+
   it('stores a versioned membership snapshot when an affair references a global account group', async () => {
     const resources = resourceSnapshot()
     resources.accountGroups = [
@@ -207,17 +401,20 @@ describe('WebAffairService', () => {
     if (!created.success) throw new Error(created.error.message)
     await service.flush()
 
-    await new WebAffairStore(filePath).save({
-      schemaVersion: 7,
-      revision: 2,
-      affairs: [
-        {
-          ...created.data,
-          workspaceId: null,
-          workspaceRef: { kind: 'global' },
-        },
-      ],
-    })
+    await new WebAffairStore(filePath).save(
+      {
+        schemaVersion: 7,
+        revision: 2,
+        affairs: [
+          {
+            ...created.data,
+            workspaceId: null,
+            workspaceRef: { kind: 'global' },
+          },
+        ],
+      },
+      { changedAffairIds: [created.data.id] },
+    )
     const reloaded = createService(filePath)
     await reloaded.load()
 
@@ -646,13 +843,19 @@ describe('WebAffairService', () => {
 })
 
 function createService(filePath: string): WebAffairService {
+  return createServiceWithResources(filePath, resourceSnapshot())
+}
+
+function createServiceWithResources(
+  filePath: string,
+  resources: WebResourceSnapshot,
+): WebAffairService {
   return new WebAffairService(
-    () => resourceSnapshot(),
+    () => resources,
     new WebAffairStore(filePath),
     undefined,
     undefined,
     (_workspaceId, accountId) => {
-      const resources = resourceSnapshot()
       const account = resources.accounts.find((item) => item.id === accountId)
       const website = resources.websites.find((item) => item.id === account?.websiteId)
       if (!account || !website) {
@@ -672,6 +875,22 @@ function createService(filePath: string): WebAffairService {
       }
     },
   )
+}
+
+function xiaohongshuResourceSnapshot(): WebResourceSnapshot {
+  const snapshot = resourceSnapshot()
+  snapshot.websites[0] = {
+    ...snapshot.websites[0],
+    name: '小红书',
+    origin: 'https://www.xiaohongshu.com',
+    entryUrl: 'https://www.xiaohongshu.com/explore',
+  }
+  snapshot.accounts[0] = {
+    ...snapshot.accounts[0],
+    label: '小红书主账号',
+    browserProfileId: 'xiaohongshu-main',
+  }
+  return snapshot
 }
 
 function validInput() {

@@ -495,8 +495,8 @@ describe('ArticlePublishingBrowserPolicy', () => {
         context,
       ),
     ).resolves.toMatchObject({
-      kind: 'unknown',
-      reason: expect.stringContaining('写入许可'),
+      kind: 'runtime-error',
+      reason: expect.stringContaining('正在收敛'),
     })
     expect(webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
   })
@@ -607,7 +607,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
     ).resolves.toEqual([])
     await expect(
       policy.classifyAction(task as never, 'fill', {}, page as never, context),
-    ).resolves.toMatchObject({ kind: 'unknown' })
+    ).resolves.toMatchObject({ kind: 'runtime-error' })
   })
 
   it('rejects a stale Browser/CDP owner epoch inside the same execution generation', async () => {
@@ -623,7 +623,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
 
     await expect(
       policy.classifyAction(staleTask as never, 'fill', {}, page as never, context),
-    ).resolves.toMatchObject({ kind: 'unknown' })
+    ).resolves.toMatchObject({ kind: 'runtime-error' })
     expect(webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
   })
 

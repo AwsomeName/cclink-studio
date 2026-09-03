@@ -58,7 +58,7 @@ export function WebAffairsSidebar({
   const sortedAffairs = useMemo(
     () =>
       [...(affairs?.affairs ?? [])]
-        .filter((affair) => affair.kind === 'generic')
+        .filter((affair) => affair.kind === 'generic' || affair.kind === 'image-research')
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
     [affairs],
   )

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ArticlePublishingService } from './article-publishing-service'
+import { ArticlePublishingBrowserPolicy } from './article-publishing-browser-policy'
 
 const WORKSPACE_REF = { kind: 'local' as const, path: '/workspace' }
 
@@ -93,9 +94,9 @@ describe('ArticlePublishingService', () => {
           runId: `run-${launchOperationId}`,
           browserTaskRunId,
         })
-        // A real Agent Run remains pending after onRunPrepared. startTask must return the
-        // durable launch receipt without waiting for this completion Promise.
-        return await new Promise<never>(() => undefined)
+        // The real bridge resolves once dispatch is accepted. Runtime terminal state arrives
+        // later through onRuntimeEvent and must not be synthesized from this receipt.
+        return { runId: `run-${launchOperationId}` }
       }),
       getActiveBrowserTask: vi.fn(() => browserTask),
       getRunStatus: vi.fn(() => ({ status: 'running' })),
@@ -229,11 +230,13 @@ describe('ArticlePublishingService', () => {
       }),
     )
     expect(browserTaskRuntime.updateCorrelation).toHaveBeenLastCalledWith(browserTaskRunId, {
+      browserViewRuntimeGeneration: 2,
+      webContentsId: 20,
       playwrightConnectionGeneration: 4,
       playwrightPageBindingGeneration: 5,
     })
-    expect(rebindArticlePublishingBrowserRuntime.mock.invocationCallOrder[0]).toBeLessThan(
-      browserTaskRuntime.updateCorrelation.mock.invocationCallOrder.at(-1)!,
+    expect(browserTaskRuntime.updateCorrelation.mock.invocationCallOrder.at(-2)!).toBeLessThan(
+      rebindArticlePublishingBrowserRuntime.mock.invocationCallOrder[0],
     )
     expect(webAffairService.reconcileArticlePublishingRuntime).not.toHaveBeenCalled()
     service.dispose()
@@ -299,6 +302,180 @@ describe('ArticlePublishingService', () => {
       expect.stringContaining(`draftUrl=${draftUrl}`),
       expect.any(String),
       expect.any(Object),
+    )
+    harness.service.dispose()
+  })
+
+  it('uses the Page binding created with the BrowserTask for recovery and the first Agent inspection', async () => {
+    const draftUrl = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
+    const harness = createResumeHarness({
+      draftUrl,
+      visibleUrl: 'https://mp.csdn.net/',
+      changePageBindingBeforeRunPrepared: true,
+    })
+
+    const result = await harness.service.startTask(
+      { workspaceRef: WORKSPACE_REF, affairId: harness.affairId },
+      '11111111-1111-4111-8111-111111111111',
+    )
+
+    expect(result.success).toBe(true)
+    expect(harness.draftRecoveryCoordinator.verifyExactDraftPage).toHaveBeenCalledOnce()
+    expect(harness.webAffairService.verifyArticlePublishingRecovery).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        draftId: '164148817',
+        tabId: 'tab-a',
+        playwrightConnectionGeneration: 4,
+        playwrightPageBindingGeneration: 5,
+      }),
+      '11111111-1111-4111-8111-111111111111',
+    )
+    expect(harness.browserTaskRuntime.transferAccountRecoveryLeaseToTask).toHaveBeenCalledWith(
+      'recovery-lease-a',
+      expect.any(String),
+      expect.objectContaining({
+        playwrightConnectionGeneration: 4,
+        playwrightPageBindingGeneration: 5,
+      }),
+    )
+    expect(harness.webAffairService.bindArticlePublishingRuntime).toHaveBeenCalledWith(
+      harness.affairId,
+      expect.any(String),
+      2,
+      'launch-b',
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'browser-task',
+          playwrightConnectionGeneration: 4,
+          playwrightPageBindingGeneration: 5,
+        }),
+      ]),
+      '11111111-1111-4111-8111-111111111111',
+    )
+    if (!result.success) throw new Error('launch failed')
+    const bindCalls = harness.webAffairService.bindArticlePublishingRuntime.mock
+      .calls as unknown as Array<[string, string, number, string, unknown[]]>
+    const runtimeBindings = bindCalls.at(-1)?.[4] ?? []
+    const activeAffair = {
+      ...result.data.affair,
+      attempts: result.data.affair.attempts.map((attempt) =>
+        attempt.id === result.data.attemptId
+          ? {
+              ...attempt,
+              status: 'running-ai',
+              browserTaskRunId: result.data.browserTaskRunId,
+              tabId: result.data.browserTabId,
+              runtimeBindings,
+            }
+          : attempt,
+      ),
+      articlePublishing: {
+        ...result.data.affair.articlePublishing,
+        execution: {
+          ...result.data.affair.articlePublishing!.execution,
+          status: 'running',
+        },
+      },
+    }
+    ;(harness.webAffairService.getProjectSnapshot as ReturnType<typeof vi.fn>).mockReturnValue({
+      success: true,
+      data: { affairs: [activeAffair as never] },
+    })
+    const policy = new ArticlePublishingBrowserPolicy(
+      harness.webAffairService as never,
+      async () => '11111111-1111-4111-8111-111111111111',
+      harness.playwrightBridge as never,
+      harness.browserTaskRuntime as never,
+    )
+    await expect(
+      policy.inspectCurrentPage({
+        conversationId: result.data.conversationId,
+        agentRunId: result.data.agentRunId,
+        trustedWorkspace: {
+          kind: 'local',
+          rootPath: '/workspace',
+          workspaceKey: '/workspace',
+        },
+        articlePublishingPolicy: {
+          origin: 'article-publishing',
+          workspaceId: '11111111-1111-4111-8111-111111111111',
+          affairId: harness.affairId,
+          attemptId: result.data.attemptId,
+          executionGeneration: 2,
+          launchOperationId: 'launch-b',
+        },
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      data: {
+        draftId: '164148817',
+        pageKind: 'editor',
+        platformAccountId: 'csdn:test-user',
+      },
+    })
+    expect(harness.webAffairService.reconcileArticlePublishingRuntime).not.toHaveBeenCalled()
+    harness.service.dispose()
+  })
+
+  it('blocks the stale permit, rebinds a rebuilt WebContents, and re-verifies the draft before writes resume', async () => {
+    const draftUrl = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
+    const harness = createResumeHarness({ draftUrl, visibleUrl: 'https://mp.csdn.net/' })
+    const result = await harness.service.startTask(
+      { workspaceRef: WORKSPACE_REF, affairId: harness.affairId },
+      '11111111-1111-4111-8111-111111111111',
+    )
+    expect(result.success).toBe(true)
+    harness.emitPageRuntime({
+      tabId: 'tab-a',
+      browserViewRuntimeGeneration: 3,
+      webContentsId: 21,
+      playwrightConnectionGeneration: 4,
+      playwrightPageBindingGeneration: 5,
+    })
+
+    await vi.waitFor(() =>
+      expect(harness.webAffairService.rebindArticlePublishingBrowserRuntime).toHaveBeenCalledOnce(),
+    )
+    await vi.waitFor(() =>
+      expect(harness.webAffairService.verifyArticlePublishingRecovery).toHaveBeenCalledTimes(2),
+    )
+    expect(harness.browserTaskRuntime.updateCorrelation).toHaveBeenCalledWith(
+      result.success ? result.data.browserTaskRunId : '',
+      expect.objectContaining({
+        browserViewRuntimeGeneration: 3,
+        webContentsId: 21,
+        playwrightConnectionGeneration: 4,
+        playwrightPageBindingGeneration: 5,
+      }),
+    )
+    expect(harness.webAffairService.rebindArticlePublishingBrowserRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        previousBrowserViewRuntimeGeneration: 2,
+        previousWebContentsId: 20,
+        browserViewRuntimeGeneration: 3,
+        webContentsId: 21,
+        previousPlaywrightConnectionGeneration: 3,
+        previousPlaywrightPageBindingGeneration: 4,
+        playwrightConnectionGeneration: 4,
+        playwrightPageBindingGeneration: 5,
+      }),
+    )
+    expect(harness.draftRecoveryCoordinator.verifyExactDraftPage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedDraftId: '164148817',
+        expectedPlatformAccountId: 'csdn:test-user',
+        expectedTitle: 'Article',
+      }),
+    )
+    expect(harness.webAffairService.verifyArticlePublishingRecovery).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        draftId: '164148817',
+        browserViewRuntimeGeneration: 3,
+        webContentsId: 21,
+        playwrightConnectionGeneration: 4,
+        playwrightPageBindingGeneration: 5,
+      }),
+      '11111111-1111-4111-8111-111111111111',
     )
     harness.service.dispose()
   })
@@ -860,6 +1037,7 @@ function createResumeHarness(options: {
   unresolvedSave?: boolean
   verifyError?: string
   missingSnapshot?: boolean
+  changePageBindingBeforeRunPrepared?: boolean
 }) {
   const affairId = '33333333-3333-4333-8333-333333333333'
   const attemptId = '44444444-4444-4444-8444-444444444444'
@@ -1021,7 +1199,23 @@ function createResumeHarness(options: {
     id: browserTaskRunId,
     tabId: 'tab-a',
     status: 'running',
-    correlation: {} as Record<string, unknown>,
+    correlation: {
+      workspaceKey: '/workspace',
+      conversationId: `article-publishing-${affairId}`,
+      agentRunId: 'run-launch-b',
+      profileId: 'profile-a',
+      accountId,
+    } as Record<string, unknown>,
+  }
+  let pageRuntimeBound: ((identity: Record<string, number | string>) => void) | undefined
+  let pageBinding = {
+    generation: 4,
+    connectionGeneration: 3,
+    webContentsId: 20,
+  }
+  let viewIdentity = {
+    browserViewRuntimeGeneration: 2,
+    webContentsId: 20,
   }
   const agentBridge = {
     onRuntimeEvent: vi.fn(() => () => undefined),
@@ -1030,6 +1224,20 @@ function createResumeHarness(options: {
       agentRuntimeEpoch: 1,
     })),
     sendMessage: vi.fn(async (_message, conversationId, context) => {
+      if (options.changePageBindingBeforeRunPrepared) {
+        pageBinding = {
+          generation: 5,
+          connectionGeneration: 4,
+          webContentsId: 20,
+        }
+        pageRuntimeBound?.({
+          tabId: 'tab-a',
+          browserViewRuntimeGeneration: 2,
+          webContentsId: 20,
+          playwrightConnectionGeneration: 4,
+          playwrightPageBindingGeneration: 5,
+        })
+      }
       await context?.onRunPrepared?.({
         conversationId,
         runId: 'run-launch-b',
@@ -1048,11 +1256,11 @@ function createResumeHarness(options: {
       currentUrl = url
     }),
     ensurePlaywrightPage: vi.fn(async () => undefined),
-    onPageRuntimeBound: vi.fn(() => () => undefined),
-    getViewRuntimeIdentity: vi.fn(() => ({
-      browserViewRuntimeGeneration: 2,
-      webContentsId: 20,
-    })),
+    onPageRuntimeBound: vi.fn((callback) => {
+      pageRuntimeBound = callback
+      return () => undefined
+    }),
+    getViewRuntimeIdentity: vi.fn(() => viewIdentity),
   }
   const browserTaskRuntime = {
     acquireAccountRecoveryLease: vi.fn((input: Record<string, unknown>) => ({
@@ -1074,17 +1282,33 @@ function createResumeHarness(options: {
     onTaskChanged: vi.fn(() => () => undefined),
     onActionLogChanged: vi.fn(() => () => undefined),
     getTask: vi.fn(() => browserTask),
+    getActiveTaskForConversation: vi.fn(() => browserTask),
+  }
+  const page = {
+    isClosed: () => false,
+    url: () => currentUrl,
+    evaluate: vi.fn(async () => ({
+      url: currentUrl,
+      pageKind: 'editor',
+      platformAccountCandidates: ['csdn:test-user'],
+      bodySelector: '#editor',
+      bodyTextLength: 9,
+      imageEnumerationComplete: true,
+      images: [],
+      titleSelector: '#title',
+      titleValue: 'Article',
+      selectors: { body: '#editor', title: '#title' },
+      saveState: 'saved',
+      saveEvidence: '草稿已保存',
+      publishedLinks: [],
+    })),
   }
   const playwrightBridge = {
     ensureConnected: vi.fn(async () => undefined),
     switchToPage: vi.fn(async () => undefined),
-    getConnectionGeneration: vi.fn(() => 3),
-    getPageBindingIdentity: vi.fn(() => ({
-      generation: 4,
-      connectionGeneration: 3,
-      webContentsId: 20,
-    })),
-    getPageById: vi.fn(() => ({ isClosed: () => false, url: () => currentUrl })),
+    getConnectionGeneration: vi.fn(() => pageBinding.connectionGeneration),
+    getPageBindingIdentity: vi.fn(() => pageBinding),
+    getPageById: vi.fn(() => page),
     isConnected: vi.fn(() => true),
   }
   const draftRecoveryCoordinator = {
@@ -1100,6 +1324,13 @@ function createResumeHarness(options: {
         observedAt: '2026-09-01T00:00:01.000Z',
       }
     }),
+    verifyExactDraftPage: vi.fn(async () => ({
+      draftId: '164148817',
+      url: options.draftUrl!,
+      platformAccountId: 'csdn:test-user',
+      normalizedTitle: 'Article',
+      observedAt: '2026-09-01T00:00:02.000Z',
+    })),
   }
   const service = new ArticlePublishingService(
     fileService as never,
@@ -1113,6 +1344,24 @@ function createResumeHarness(options: {
     },
     draftRecoveryCoordinator as never,
   )
+  const emitPageRuntime = (identity: {
+    tabId: string
+    browserViewRuntimeGeneration: number
+    webContentsId: number
+    playwrightConnectionGeneration: number
+    playwrightPageBindingGeneration: number
+  }): void => {
+    viewIdentity = {
+      browserViewRuntimeGeneration: identity.browserViewRuntimeGeneration,
+      webContentsId: identity.webContentsId,
+    }
+    pageBinding = {
+      generation: identity.playwrightPageBindingGeneration,
+      connectionGeneration: identity.playwrightConnectionGeneration,
+      webContentsId: identity.webContentsId,
+    }
+    pageRuntimeBound?.(identity)
+  }
   return {
     affairId,
     service,
@@ -1121,6 +1370,8 @@ function createResumeHarness(options: {
     browserTaskRuntime,
     webAffairService,
     draftRecoveryCoordinator,
+    playwrightBridge,
+    emitPageRuntime,
   }
 }
 

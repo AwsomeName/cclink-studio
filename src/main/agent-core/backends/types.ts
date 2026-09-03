@@ -104,6 +104,7 @@ export interface AgentSendOptions {
   scheduledTaskPolicy?: import('../tools/types.js').ToolExecutionContext['scheduledTaskPolicy']
   /** 随一次 MCP session 固定的文章发布执行身份；只能由 main 注入。 */
   articlePublishingPolicy?: import('../tools/types.js').ToolExecutionContext['articlePublishingPolicy']
+  imageResearchPolicy?: import('../tools/types.js').ToolExecutionContext['imageResearchPolicy']
   /** 主进程解析后的内置角色；renderer 不得直接提供 system instructions。 */
   agentProfile?: {
     ref: import('../../../shared/agent-role').AgentRoleRef

@@ -26,6 +26,7 @@ export type ArticlePublishingBrowserActionDecision =
   | { kind: 'allow' }
   | { kind: 'allow-once'; sideEffectKey: string }
   | { kind: 'handoff'; reason: string }
+  | { kind: 'runtime-error'; reason: string }
   | { kind: 'unknown'; reason: string }
 
 interface ArticlePublishingExecutionScope {
@@ -259,21 +260,27 @@ export class ArticlePublishingBrowserPolicy {
           currentStepId: null,
           actionType,
           currentOrigin: page ? toOrigin(safePageUrl(page)) : null,
-          decision: 'unknown',
+          decision: 'runtime-error',
           reason,
         })
-        return { kind: 'unknown', reason }
+        return { kind: 'runtime-error', reason }
       }
       return null
     }
     const isMutation = PAGE_MUTATION_ACTIONS.has(actionType)
     if (isMutation && !scope.writePermitted) {
-      return this.stopDecision(
-        scope,
+      const reason = '草稿恢复正在收敛到最新 Page Runtime，当前禁止写入'
+      console.warn('[ArticlePublishing] 适配器动作判定', {
+        affairId: scope.affairId,
+        attemptId: scope.attemptId,
+        adapter: 'csdn@1',
+        currentStepId: scope.currentStepId ?? null,
         actionType,
-        'unknown',
-        '草稿恢复写入许可缺失或已随 Page Runtime 变化而失效',
-      )
+        currentOrigin: null,
+        decision: 'runtime-error',
+        reason,
+      })
+      return { kind: 'runtime-error', reason }
     }
     if (!page) {
       if (!isMutation) return { kind: 'allow' }
@@ -765,12 +772,21 @@ export class ArticlePublishingBrowserPolicy {
     input: ResolveExecutionInput,
   ): Promise<ArticlePublishingExecutionScope | null> {
     const workspaceId = await this.resolveWorkspaceId(input.workspacePath)
-    if (!workspaceId) return null
+    if (!workspaceId) {
+      this.logRuntimeResolutionFailure(input, ['workspace-not-resolved'])
+      return null
+    }
     const snapshot = this.webAffairService.getProjectSnapshot(workspaceId)
-    if (!snapshot.success) return null
+    if (!snapshot.success) {
+      this.logRuntimeResolutionFailure(input, ['workspace-snapshot-unavailable'])
+      return null
+    }
     const affair = snapshot.data.affairs.find((candidate) => candidate.id === input.affairId)
     const publishing = affair?.articlePublishing
     const attempt = affair?.attempts.find((candidate) => candidate.id === input.attemptId)
+    const activeBrowserBinding = attempt?.runtimeBindings?.find(
+      (binding) => binding.kind === 'browser-task' && binding.status === 'active',
+    )
     const browserBinding = attempt?.runtimeBindings?.find(
       (binding) =>
         binding.kind === 'browser-task' &&
@@ -784,20 +800,50 @@ export class ArticlePublishingBrowserPolicy {
         binding.playwrightConnectionGeneration === input.playwrightConnectionGeneration &&
         binding.playwrightPageBindingGeneration === input.playwrightPageBindingGeneration,
     )
+    const mismatches: string[] = []
+    if (affair?.kind !== 'article-publishing') mismatches.push('affair-kind')
+    if (!publishing) mismatches.push('publishing-state')
+    if (!attempt) mismatches.push('attempt')
+    if (publishing?.adapterId !== 'csdn' || publishing?.adapterVersion !== 1) {
+      mismatches.push('adapter')
+    }
+    if (publishing?.accountId !== input.accountId) mismatches.push('publishing-accountId')
+    if (attempt?.accountId !== input.accountId) mismatches.push('attempt-accountId')
+    if (publishing?.execution.currentAttemptId !== input.attemptId) {
+      mismatches.push('currentAttemptId')
+    }
+    if (publishing?.execution.status !== 'running') mismatches.push('execution-status')
+    if (!attempt || !['preparing', 'running-ai'].includes(attempt.status)) {
+      mismatches.push('attempt-status')
+    }
     if (
-      affair?.kind !== 'article-publishing' ||
-      !publishing ||
-      !attempt ||
-      publishing.adapterId !== 'csdn' ||
-      publishing.adapterVersion !== 1 ||
-      publishing.accountId !== input.accountId ||
-      attempt.accountId !== input.accountId ||
-      publishing.execution.currentAttemptId !== input.attemptId ||
-      publishing.execution.status !== 'running' ||
-      !['preparing', 'running-ai'].includes(attempt.status) ||
-      (input.browserTaskRunId !== undefined &&
-        (attempt.browserTaskRunId !== input.browserTaskRunId || !browserBinding))
+      input.browserTaskRunId !== undefined &&
+      attempt?.browserTaskRunId !== input.browserTaskRunId
     ) {
+      mismatches.push('browserTaskRunId')
+    }
+    if (input.browserTaskRunId !== undefined && !browserBinding) {
+      mismatches.push('browser-runtime-binding')
+    }
+    if (mismatches.length > 0 || !publishing || !attempt || affair?.kind !== 'article-publishing') {
+      this.logRuntimeResolutionFailure(input, mismatches, {
+        workspaceId,
+        affairKind: affair?.kind ?? null,
+        execution: publishing?.execution ?? null,
+        publishingAccountId: publishing?.accountId ?? null,
+        attempt: attempt
+          ? {
+              id: attempt.id,
+              status: attempt.status,
+              accountId: attempt.accountId,
+              executionGeneration: attempt.executionGeneration,
+              launchOperationId: attempt.launchOperationId,
+              browserTaskRunId: attempt.browserTaskRunId ?? null,
+              tabId: attempt.tabId ?? null,
+            }
+          : null,
+        activeBrowserBinding: activeBrowserBinding ?? null,
+      })
       return null
     }
     const recovery = publishing.draft?.recovery
@@ -844,6 +890,42 @@ export class ArticlePublishingBrowserPolicy {
         uploadAttemptCount: asset.uploadAttempts.length,
       })),
     }
+  }
+
+  private logRuntimeResolutionFailure(
+    input: ResolveExecutionInput,
+    mismatches: string[],
+    transaction?: Record<string, unknown>,
+  ): void {
+    const pageBinding =
+      input.tabId && this.playwrightBridge?.getPageBindingIdentity
+        ? this.playwrightBridge.getPageBindingIdentity(input.tabId)
+        : null
+    console.warn('[ArticlePublishing] Runtime 身份解析失败', {
+      affairId: input.affairId,
+      attemptId: input.attemptId,
+      mismatches,
+      transaction: transaction ?? null,
+      browserTask: {
+        browserTaskRunId: input.browserTaskRunId ?? null,
+        accountId: input.accountId,
+        executionGeneration: input.executionGeneration ?? null,
+        launchOperationId: input.launchOperationId ?? null,
+        tabId: input.tabId ?? null,
+        browserViewRuntimeGeneration: input.browserViewRuntimeGeneration ?? null,
+        webContentsId: input.webContentsId ?? null,
+        playwrightConnectionGeneration: input.playwrightConnectionGeneration ?? null,
+        playwrightPageBindingGeneration: input.playwrightPageBindingGeneration ?? null,
+      },
+      currentPage: pageBinding
+        ? {
+            tabId: input.tabId,
+            webContentsId: pageBinding.webContentsId,
+            playwrightConnectionGeneration: pageBinding.connectionGeneration,
+            playwrightPageBindingGeneration: pageBinding.generation,
+          }
+        : null,
+    })
   }
 
   private attestationKey(context?: ToolExecutionContext): string {

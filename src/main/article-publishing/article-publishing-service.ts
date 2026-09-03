@@ -99,6 +99,10 @@ interface ActivePublishingRuntime {
 
 export class ArticlePublishingService {
   private readonly activeRuntimes = new Map<string, ActivePublishingRuntime>()
+  private readonly latestPageRuntimeIdentities = new Map<
+    string,
+    BrowserPageRuntimeBindingIdentity
+  >()
   private runtimeObserversInstalled = false
   private watchdogTimer: ReturnType<typeof setInterval> | null = null
   private runtimeDisposers: Array<() => void> = []
@@ -118,6 +122,7 @@ export class ArticlePublishingService {
     for (const dispose of this.runtimeDisposers.splice(0)) dispose()
     this.runtimeObserversInstalled = false
     this.activeRuntimes.clear()
+    this.latestPageRuntimeIdentities.clear()
     this.runtimeRebindQueues.clear()
   }
 
@@ -421,6 +426,56 @@ export class ArticlePublishingService {
             if (!browserTask || browserTask.tabId !== tabId || browserTask.status !== 'running') {
               throw new Error('Agent 启动前的 BrowserTask 身份不匹配')
             }
+            const currentViewIdentity = browserManager.getViewRuntimeIdentity(tabId)
+            const currentPageBinding = playwrightBridge.getPageBindingIdentity(tabId)
+            if (
+              !currentViewIdentity ||
+              !currentPageBinding ||
+              currentPageBinding.connectionGeneration !==
+                playwrightBridge.getConnectionGeneration() ||
+              currentPageBinding.webContentsId !== currentViewIdentity.webContentsId
+            ) {
+              throw new Error('BrowserTask 创建后页面 Runtime 身份未稳定绑定')
+            }
+            const pageIdentityChanged =
+              currentViewIdentity.browserViewRuntimeGeneration !==
+                viewIdentity.browserViewRuntimeGeneration ||
+              currentViewIdentity.webContentsId !== viewIdentity.webContentsId ||
+              currentPageBinding.connectionGeneration !== pageBinding.connectionGeneration ||
+              currentPageBinding.generation !== pageBinding.generation
+            if (pageIdentityChanged && recoveredDraft && recovery) {
+              const page = playwrightBridge.getPageById(tabId)
+              if (!page || page.isClosed()) {
+                throw new Error('BrowserTask 创建后恢复草稿页面不可用')
+              }
+              const refreshedDraft = await this.draftRecoveryCoordinator.verifyExactDraftPage({
+                page,
+                expectedDraftId: recoveredDraft.draftId,
+                expectedPlatformAccountId: recoveredDraft.platformAccountId,
+                expectedTitle: recoveredDraft.normalizedTitle,
+              })
+              const refreshedPermit = await this.webAffairService.verifyArticlePublishingRecovery(
+                {
+                  affairId: input.affair.id,
+                  attemptId: attempt.id,
+                  executionGeneration: attempt.executionGeneration,
+                  launchOperationId: attempt.launchOperationId,
+                  recoveryOperationId: recovery.operationId,
+                  draftId: refreshedDraft.draftId,
+                  url: refreshedDraft.url,
+                  platformAccountId: refreshedDraft.platformAccountId,
+                  normalizedTitle: refreshedDraft.normalizedTitle,
+                  saveState: 'saved',
+                  tabId,
+                  browserViewRuntimeGeneration: currentViewIdentity.browserViewRuntimeGeneration,
+                  webContentsId: currentViewIdentity.webContentsId,
+                  playwrightConnectionGeneration: currentPageBinding.connectionGeneration,
+                  playwrightPageBindingGeneration: currentPageBinding.generation,
+                },
+                input.workspaceId,
+              )
+              if (!refreshedPermit.success) throw new Error(refreshedPermit.error.message)
+            }
             const correlationPatch = {
               accountId: attempt.accountId,
               allowedOrigins: [...CSDN_ARTICLE_SUPPORTED_ORIGINS],
@@ -429,10 +484,10 @@ export class ArticlePublishingService {
               affairAttemptId: attempt.id,
               affairExecutionGeneration: attempt.executionGeneration,
               affairLaunchOperationId: attempt.launchOperationId,
-              browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
-              webContentsId: viewIdentity.webContentsId,
-              playwrightConnectionGeneration: playwrightBridge.getConnectionGeneration(),
-              playwrightPageBindingGeneration: pageBinding.generation,
+              browserViewRuntimeGeneration: currentViewIdentity.browserViewRuntimeGeneration,
+              webContentsId: currentViewIdentity.webContentsId,
+              playwrightConnectionGeneration: currentPageBinding.connectionGeneration,
+              playwrightPageBindingGeneration: currentPageBinding.generation,
             }
             if (recoveryLease) {
               browserTaskRuntime.transferAccountRecoveryLeaseToTask(
@@ -472,8 +527,8 @@ export class ArticlePublishingService {
                   id: randomUUID(),
                   kind: 'browser-tab',
                   tabId,
-                  browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
-                  webContentsId: viewIdentity.webContentsId,
+                  browserViewRuntimeGeneration: currentViewIdentity.browserViewRuntimeGeneration,
+                  webContentsId: currentViewIdentity.webContentsId,
                 },
                 {
                   ...common,
@@ -481,10 +536,10 @@ export class ArticlePublishingService {
                   kind: 'browser-task',
                   browserTaskRunId: browserTask.id,
                   tabId,
-                  browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
-                  webContentsId: viewIdentity.webContentsId,
-                  playwrightConnectionGeneration: playwrightBridge.getConnectionGeneration(),
-                  playwrightPageBindingGeneration: pageBinding.generation,
+                  browserViewRuntimeGeneration: currentViewIdentity.browserViewRuntimeGeneration,
+                  webContentsId: currentViewIdentity.webContentsId,
+                  playwrightConnectionGeneration: currentPageBinding.connectionGeneration,
+                  playwrightPageBindingGeneration: currentPageBinding.generation,
                 },
               ],
               input.workspaceId,
@@ -505,14 +560,16 @@ export class ArticlePublishingService {
               agentRuntimeEpoch: terminalIdentity.agentRuntimeEpoch,
               browserTaskRunId: browserTask.id,
               tabId,
-              browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
-              webContentsId: viewIdentity.webContentsId,
-              playwrightConnectionGeneration: playwrightBridge.getConnectionGeneration(),
-              playwrightPageBindingGeneration: pageBinding.generation,
+              browserViewRuntimeGeneration: currentViewIdentity.browserViewRuntimeGeneration,
+              webContentsId: currentViewIdentity.webContentsId,
+              playwrightConnectionGeneration: currentPageBinding.connectionGeneration,
+              playwrightPageBindingGeneration: currentPageBinding.generation,
               lastOwnerAt: observedAt,
               lastProgressAt: observedAt,
               continuationUsed: false,
             })
+            const latestIdentity = this.latestPageRuntimeIdentities.get(tabId)
+            if (latestIdentity) this.scheduleBrowserRuntimeRebind(latestIdentity)
             resolveLaunchReady({
               affair: boundResult.data,
               attemptId: attempt.id,
@@ -529,15 +586,12 @@ export class ArticlePublishingService {
         })
         void runPromise
           .then(() => {
+            // sendMessage() resolves after the backend accepted the run. The actual terminal
+            // state is emitted independently through onRuntimeEvent and is the only terminal
+            // source allowed to reconcile the publishing Attempt.
             if (!bound || !boundAffair || launchedBrowserTaskId === null) {
               rejectLaunchReady(new Error('Agent Runtime 未在执行前完成持久绑定'))
-              return
             }
-            const terminal = terminalEvent ?? {
-              type: 'complete' as const,
-              reason: 'Agent Run 已返回，但未观察到独立终态事件',
-            }
-            void reconcileTerminalOnce(terminal)
           })
           .catch((error) => {
             const reason = error instanceof Error ? error.message : String(error)
@@ -612,8 +666,39 @@ export class ArticlePublishingService {
   }
 
   private scheduleBrowserRuntimeRebind(identity: BrowserPageRuntimeBindingIdentity): void {
+    const latest = this.latestPageRuntimeIdentities.get(identity.tabId)
+    if (
+      !latest ||
+      identity.browserViewRuntimeGeneration > latest.browserViewRuntimeGeneration ||
+      (identity.browserViewRuntimeGeneration === latest.browserViewRuntimeGeneration &&
+        identity.webContentsId === latest.webContentsId &&
+        (identity.playwrightConnectionGeneration > latest.playwrightConnectionGeneration ||
+          (identity.playwrightConnectionGeneration === latest.playwrightConnectionGeneration &&
+            identity.playwrightPageBindingGeneration >= latest.playwrightPageBindingGeneration)))
+    ) {
+      this.latestPageRuntimeIdentities.set(identity.tabId, identity)
+    }
     for (const runtime of this.activeRuntimes.values()) {
-      if (runtime.tabId !== identity.tabId) continue
+      if (!this.isNewerPageRuntimeIdentity(runtime, identity)) continue
+      const browserTaskRuntime = this.runtimeDependencies?.getBrowserTaskRuntime()
+      if (!browserTaskRuntime) continue
+      const task = browserTaskRuntime?.getTask(runtime.browserTaskRunId)
+      if (
+        task?.status !== 'running' ||
+        task.correlation?.affairExecutionGeneration !== runtime.executionGeneration ||
+        task.correlation?.affairLaunchOperationId !== runtime.launchOperationId
+      ) {
+        continue
+      }
+      // Synchronously move the BrowserTask fence first. Until the durable WebAffair binding
+      // catches up, policy resolution fails closed instead of allowing the old permit to write
+      // through a newly claimed Page.
+      browserTaskRuntime.updateCorrelation(runtime.browserTaskRunId, {
+        browserViewRuntimeGeneration: identity.browserViewRuntimeGeneration,
+        webContentsId: identity.webContentsId,
+        playwrightConnectionGeneration: identity.playwrightConnectionGeneration,
+        playwrightPageBindingGeneration: identity.playwrightPageBindingGeneration,
+      })
       const previous = this.runtimeRebindQueues.get(runtime.attemptId) ?? Promise.resolve()
       const queued = previous
         .catch(() => undefined)
@@ -640,23 +725,11 @@ export class ArticlePublishingService {
     identity: BrowserPageRuntimeBindingIdentity,
   ): Promise<void> {
     if (this.activeRuntimes.get(runtime.attemptId) !== runtime) return
-    if (
-      runtime.browserViewRuntimeGeneration !== identity.browserViewRuntimeGeneration ||
-      runtime.webContentsId !== identity.webContentsId ||
-      (runtime.playwrightConnectionGeneration === identity.playwrightConnectionGeneration &&
-        runtime.playwrightPageBindingGeneration === identity.playwrightPageBindingGeneration)
-    ) {
-      return
-    }
-    if (
-      identity.playwrightConnectionGeneration < runtime.playwrightConnectionGeneration ||
-      (identity.playwrightConnectionGeneration === runtime.playwrightConnectionGeneration &&
-        identity.playwrightPageBindingGeneration < runtime.playwrightPageBindingGeneration)
-    ) {
-      return
-    }
+    if (!this.isNewerPageRuntimeIdentity(runtime, identity)) return
     const browserTaskRuntime = this.runtimeDependencies?.getBrowserTaskRuntime()
-    if (!browserTaskRuntime) return
+    const browserManager = this.runtimeDependencies?.getBrowserManager()
+    const playwrightBridge = this.runtimeDependencies?.getPlaywrightBridge()
+    if (!browserTaskRuntime || !browserManager || !playwrightBridge) return
     const task = browserTaskRuntime.getTask(runtime.browserTaskRunId)
     if (
       task?.status !== 'running' ||
@@ -674,8 +747,10 @@ export class ArticlePublishingService {
       launchOperationId: runtime.launchOperationId,
       browserTaskRunId: runtime.browserTaskRunId,
       tabId: runtime.tabId,
-      browserViewRuntimeGeneration: runtime.browserViewRuntimeGeneration,
-      webContentsId: runtime.webContentsId,
+      previousBrowserViewRuntimeGeneration: runtime.browserViewRuntimeGeneration,
+      previousWebContentsId: runtime.webContentsId,
+      browserViewRuntimeGeneration: identity.browserViewRuntimeGeneration,
+      webContentsId: identity.webContentsId,
       previousPlaywrightConnectionGeneration: runtime.playwrightConnectionGeneration,
       previousPlaywrightPageBindingGeneration: runtime.playwrightPageBindingGeneration,
       playwrightConnectionGeneration: identity.playwrightConnectionGeneration,
@@ -684,20 +759,102 @@ export class ArticlePublishingService {
     if (!rebound.success) throw new Error(rebound.error.message)
 
     browserTaskRuntime.updateCorrelation(runtime.browserTaskRunId, {
+      browserViewRuntimeGeneration: identity.browserViewRuntimeGeneration,
+      webContentsId: identity.webContentsId,
       playwrightConnectionGeneration: identity.playwrightConnectionGeneration,
       playwrightPageBindingGeneration: identity.playwrightPageBindingGeneration,
     })
+    runtime.browserViewRuntimeGeneration = identity.browserViewRuntimeGeneration
+    runtime.webContentsId = identity.webContentsId
     runtime.playwrightConnectionGeneration = identity.playwrightConnectionGeneration
     runtime.playwrightPageBindingGeneration = identity.playwrightPageBindingGeneration
     runtime.lastOwnerAt = Date.now()
+
+    const publishing = rebound.data.articlePublishing
+    const recovery = publishing?.draft?.recovery
+    if (
+      publishing &&
+      recovery?.executionGeneration === runtime.executionGeneration &&
+      publishing.draft?.platformDraftId &&
+      publishing.draft.platformAccountId
+    ) {
+      const page = playwrightBridge.getPageById(runtime.tabId)
+      if (!page || page.isClosed()) throw new Error('Page Runtime 重绑定后恢复草稿页面不可用')
+      const verifiedDraft = await this.draftRecoveryCoordinator.verifyExactDraftPage({
+        page,
+        expectedDraftId: publishing.draft.platformDraftId,
+        expectedPlatformAccountId: publishing.draft.platformAccountId,
+        expectedTitle: recovery.expectedTitle,
+      })
+      const currentView = browserManager.getViewRuntimeIdentity(runtime.tabId)
+      const currentPage = playwrightBridge.getPageBindingIdentity(runtime.tabId)
+      if (
+        !currentView ||
+        !currentPage ||
+        currentView.browserViewRuntimeGeneration !== identity.browserViewRuntimeGeneration ||
+        currentView.webContentsId !== identity.webContentsId ||
+        currentPage.connectionGeneration !== identity.playwrightConnectionGeneration ||
+        currentPage.generation !== identity.playwrightPageBindingGeneration ||
+        currentPage.webContentsId !== identity.webContentsId
+      ) {
+        throw new Error('恢复草稿核验期间 Page Runtime 再次变化')
+      }
+      const permit = await this.webAffairService.verifyArticlePublishingRecovery(
+        {
+          affairId: runtime.affairId,
+          attemptId: runtime.attemptId,
+          executionGeneration: runtime.executionGeneration,
+          launchOperationId: runtime.launchOperationId,
+          recoveryOperationId: recovery.operationId,
+          draftId: verifiedDraft.draftId,
+          url: verifiedDraft.url,
+          platformAccountId: verifiedDraft.platformAccountId,
+          normalizedTitle: verifiedDraft.normalizedTitle,
+          saveState: 'saved',
+          tabId: runtime.tabId,
+          browserViewRuntimeGeneration: identity.browserViewRuntimeGeneration,
+          webContentsId: identity.webContentsId,
+          playwrightConnectionGeneration: identity.playwrightConnectionGeneration,
+          playwrightPageBindingGeneration: identity.playwrightPageBindingGeneration,
+        },
+        runtime.workspaceId,
+      )
+      if (!permit.success) throw new Error(permit.error.message)
+    }
     console.info('[ArticlePublishing] Page Runtime owner 已收敛到当前绑定:', {
       affairId: runtime.affairId,
       attemptId: runtime.attemptId,
       tabId: runtime.tabId,
+      browserViewRuntimeGeneration: runtime.browserViewRuntimeGeneration,
+      webContentsId: runtime.webContentsId,
       playwrightConnectionGeneration: runtime.playwrightConnectionGeneration,
       playwrightPageBindingGeneration: runtime.playwrightPageBindingGeneration,
     })
     await this.probeRuntime(runtime)
+  }
+
+  private isNewerPageRuntimeIdentity(
+    runtime: ActivePublishingRuntime,
+    identity: BrowserPageRuntimeBindingIdentity,
+  ): boolean {
+    if (runtime.tabId !== identity.tabId) return false
+    if (identity.browserViewRuntimeGeneration < runtime.browserViewRuntimeGeneration) return false
+    if (
+      identity.browserViewRuntimeGeneration === runtime.browserViewRuntimeGeneration &&
+      identity.webContentsId !== runtime.webContentsId
+    ) {
+      return false
+    }
+    if (identity.playwrightConnectionGeneration < runtime.playwrightConnectionGeneration) {
+      return false
+    }
+    if (
+      identity.playwrightConnectionGeneration === runtime.playwrightConnectionGeneration &&
+      identity.playwrightPageBindingGeneration <= runtime.playwrightPageBindingGeneration
+    ) {
+      return false
+    }
+    return true
   }
 
   private observeAgentActivity(attemptId: string, progress: boolean): void {

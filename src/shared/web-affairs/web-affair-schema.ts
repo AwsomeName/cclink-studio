@@ -89,6 +89,33 @@ export const createWebAffairInputSchema = z
   })
   .strict()
 
+export const createImageResearchAffairInputSchema = z
+  .object({
+    title: trimmedText(160, '任务名称'),
+    accountId: uuidSchema,
+    searchTerms: z
+      .array(trimmedText(120, '搜索词'))
+      .min(1)
+      .max(20)
+      .transform((items) => [...new Set(items.map((item) => item.trim()))]),
+    targetCount: z.number().int().min(1).max(50),
+    workspaceRef: workspaceRefSchema,
+  })
+  .strict()
+
+export const imageResearchAffairInputSchema = z
+  .object({ workspaceRef: workspaceRefSchema, affairId: uuidSchema })
+  .strict()
+
+export const decideImageResearchCandidateInputSchema = z
+  .object({
+    workspaceRef: workspaceRefSchema,
+    affairId: uuidSchema,
+    candidateId: uuidSchema,
+    decision: z.enum(['self-saved', 'skipped']),
+  })
+  .strict()
+
 export const updateWebAffairNodeInputSchema = z
   .object({
     workspaceRef: workspaceRefSchema,
@@ -473,10 +500,50 @@ const webAffairEventSchema = z
   })
   .strict()
 
+const imageResearchCandidateSchema = z
+  .object({
+    id: uuidSchema,
+    executionGeneration: positiveVersionSchema,
+    noteId: trimmedText(200, '小红书笔记 ID'),
+    imageIndex: z.number().int().nonnegative().max(500),
+    title: trimmedText(500, '候选标题'),
+    authorDisplayName: optionalTrimmedText(200, '作者显示名'),
+    visibleText: z.array(trimmedText(500, '页面可见文字')).max(20),
+    sanitizedPageUrl: z.url().max(4_096),
+    reopenPath: z.string().trim().min(1).max(2_048).startsWith('/').optional(),
+    proposedAt: timestampSchema,
+    decision: z.enum(['self-saved', 'skipped']).optional(),
+    decisionOperationId: trimmedText(200, '决定操作 ID').optional(),
+    decidedAt: timestampSchema.optional(),
+  })
+  .strict()
+
+const imageResearchStateSchema = z
+  .object({
+    adapterId: z.literal('xiaohongshu'),
+    adapterVersion: z.literal(1),
+    accountId: uuidSchema,
+    searchTerms: z.array(trimmedText(120, '搜索词')).min(1).max(20),
+    targetCount: z.number().int().min(1).max(50),
+    frozenAt: timestampSchema.optional(),
+    status: z.enum([
+      'draft',
+      'searching',
+      'waiting-human',
+      'needs-attention',
+      'completed',
+      'cancelled',
+    ]),
+    currentCandidateId: uuidSchema.optional(),
+    candidates: z.array(imageResearchCandidateSchema).max(5_000),
+    lastIssue: optionalTrimmedText(2_000, '最近问题'),
+  })
+  .strict()
+
 const webAffairSchema = z
   .object({
     id: uuidSchema,
-    kind: z.enum(['generic', 'article-publishing']),
+    kind: z.enum(['generic', 'article-publishing', 'image-research']),
     workspaceId: uuidSchema.nullable(),
     title: trimmedText(160, '事务名称'),
     objective: trimmedText(4_000, '事务目标'),
@@ -509,6 +576,7 @@ const webAffairSchema = z
     flowProposals: z.array(webAffairFlowProposalSchema).max(500),
     templateRef: templateRefSchema.optional(),
     articlePublishing: articlePublishingStateSchema.optional(),
+    imageResearch: imageResearchStateSchema.optional(),
     events: z.array(webAffairEventSchema).max(2_000),
     workspaceRef: workspaceRefSchema,
     createdAt: timestampSchema,
@@ -523,11 +591,25 @@ const webAffairSchema = z
         message: '文章发布事务缺少领域状态',
       })
     }
-    if (value.kind === 'generic' && value.articlePublishing) {
+    if (value.kind !== 'article-publishing' && value.articlePublishing) {
       context.addIssue({
         code: 'custom',
         path: ['articlePublishing'],
-        message: '通用事务不能保存文章发布领域状态',
+        message: '非文章发布事务不能保存文章发布领域状态',
+      })
+    }
+    if (value.kind === 'image-research' && !value.imageResearch) {
+      context.addIssue({
+        code: 'custom',
+        path: ['imageResearch'],
+        message: '图片调研事务缺少领域状态',
+      })
+    }
+    if (value.kind !== 'image-research' && value.imageResearch) {
+      context.addIssue({
+        code: 'custom',
+        path: ['imageResearch'],
+        message: '非图片调研事务不能保存图片调研领域状态',
       })
     }
   })

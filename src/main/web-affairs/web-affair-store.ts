@@ -12,7 +12,6 @@ const STORE_HIGH_WATER_BYTES = 7 * 1024 * 1024
 const MAX_STORE_BYTES = 64 * 1024 * 1024
 const MAX_RECOVERY_BYTES = 2 * 1024 * 1024
 const COMPACTED_EVENT_LIMIT = 500
-const RECOVERY_AFFAIR_LIMIT = 8
 
 type SnapshotReadResult =
   | { kind: 'valid'; snapshot: WebAffairSnapshot; discardedArticleCount: number }
@@ -86,9 +85,34 @@ export class WebAffairStore {
     return this.recoverFromJournal(structuredClone(EMPTY_WEB_AFFAIR_SNAPSHOT))
   }
 
-  async save(snapshot: WebAffairSnapshot): Promise<WebAffairSnapshot> {
+  async save(
+    snapshot: WebAffairSnapshot,
+    options: { changedAffairIds: string[] },
+  ): Promise<WebAffairSnapshot> {
     const compacted = compactSnapshot(parseWebAffairSnapshot(snapshot), STORE_HIGH_WATER_BYTES)
-    await this.persistRecoveryJournal(compacted)
+    const changedAffairIds = [...new Set(options.changedAffairIds)]
+    if (changedAffairIds.length === 0) {
+      throw new Error('保存事务快照时必须声明完整的 changedAffairIds')
+    }
+    const changedAffairs = changedAffairIds.map((id) =>
+      compacted.affairs.find((affair) => affair.id === id),
+    )
+    if (changedAffairs.some((affair) => !affair)) {
+      throw new Error('changedAffairIds 包含快照中不存在的事务')
+    }
+    const articleJournalAffairs = changedAffairs.filter(
+      (affair): affair is NonNullable<typeof affair> =>
+        Boolean(
+          affair?.kind === 'article-publishing' &&
+          affair.articlePublishing &&
+          affair.articlePublishing.execution.status !== 'draft',
+        ),
+    )
+    if (articleJournalAffairs.length === changedAffairs.length) {
+      await this.persistRecoveryJournal(compacted, articleJournalAffairs)
+    } else {
+      await this.clearRecoveryJournal()
+    }
     await this.persist(compacted, true)
     await this.clearRecoveryJournal()
     return compacted
@@ -265,17 +289,13 @@ export class WebAffairStore {
     }
   }
 
-  private async persistRecoveryJournal(snapshot: WebAffairSnapshot): Promise<void> {
-    const activeArticleAffairs = snapshot.affairs
-      .filter(
-        (affair) =>
-          affair.kind === 'article-publishing' &&
-          affair.articlePublishing &&
-          affair.articlePublishing.execution.status !== 'draft',
-      )
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-      .slice(0, RECOVERY_AFFAIR_LIMIT)
-      .map((affair) => compactAffairHistory(affair, 100, 20))
+  private async persistRecoveryJournal(
+    snapshot: WebAffairSnapshot,
+    changedAffairs: WebAffairSnapshot['affairs'],
+  ): Promise<void> {
+    const activeArticleAffairs = changedAffairs.map((affair) =>
+      compactAffairHistory(affair, 100, 20),
+    )
     if (activeArticleAffairs.length === 0) return
     let recovery = parseWebAffairSnapshot({
       schemaVersion: 7,

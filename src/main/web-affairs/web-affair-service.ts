@@ -12,7 +12,9 @@ import type {
   ClaimLegacyWebAffairInput,
   CompleteWebAffairCheckInput,
   ConfirmWebAffairFinalActionInput,
+  CreateImageResearchAffairInput,
   CreateWebAffairInput,
+  DecideImageResearchCandidateInput,
   DecideWebAffairFlowProposalInput,
   FinishWebAffairAttemptInput,
   HandoffWebAffairAttemptInput,
@@ -44,7 +46,9 @@ import {
   claimLegacyWebAffairInputSchema,
   completeWebAffairCheckInputSchema,
   confirmWebAffairFinalActionInputSchema,
+  createImageResearchAffairInputSchema,
   createWebAffairInputSchema,
+  decideImageResearchCandidateInputSchema,
   decideWebAffairFlowProposalInputSchema,
   finishWebAffairAttemptInputSchema,
   handoffWebAffairAttemptInputSchema,
@@ -77,6 +81,7 @@ const TERMINAL_ATTEMPT_STATUSES = new Set<WebAffairAttempt['status']>([
   'cancelled',
   'interrupted',
 ])
+const OWNERLESS_RUNTIME_INTERRUPTION = '应用或 Agent 运行时已结束，未恢复为假运行'
 
 const ARTICLE_CHECKPOINT_TRANSITIONS: Readonly<
   Record<
@@ -263,6 +268,134 @@ export class WebAffairService {
 
   createAffair(input: CreateWebAffairInput, workspaceId: string) {
     return this.enqueue(() => this.createAffairNow(input, workspaceId))
+  }
+
+  createImageResearchAffair(input: CreateImageResearchAffairInput, workspaceId: string) {
+    return this.enqueue(() => this.createImageResearchAffairNow(input, workspaceId))
+  }
+
+  startImageResearch(affairId: string, workspaceId: string) {
+    return this.enqueueScoped(affairId, workspaceId, async () => {
+      const affair = this.findAffair(affairId)
+      const research = affair?.imageResearch
+      const node = affair?.flow.nodes[0]
+      if (!affair || !research || affair.kind !== 'image-research' || !node) {
+        return this.notFound('图片调研事务不存在')
+      }
+      if (research.status === 'completed' || research.status === 'cancelled') {
+        return this.transitionError('图片调研任务已经结束')
+      }
+      const current = affair.attempts[0]
+      if (current) {
+        if (current.status === 'preparing') return { success: true, data: structuredClone(affair) }
+        if (!['interrupted', 'failed'].includes(current.status) || research.currentCandidateId) {
+          return this.transitionError('图片调研当前不能重新启动')
+        }
+        const now = this.timestamp()
+        const resumePersistedLaunch = current.failureMessage === OWNERLESS_RUNTIME_INTERRUPTION
+        const launchOperationId = resumePersistedLaunch ? current.launchOperationId : randomUUID()
+        const nextAttempt: WebAffairAttempt = {
+          ...current,
+          status: 'preparing',
+          executionGeneration: resumePersistedLaunch
+            ? current.executionGeneration
+            : current.executionGeneration + 1,
+          launchOperationId,
+          tabId: undefined,
+          conversationId: undefined,
+          agentRunId: undefined,
+          browserTaskRunId: undefined,
+          failureMessage: undefined,
+          endedAt: undefined,
+        }
+        return this.persistAffair({
+          ...affair,
+          status: 'active',
+          flow: {
+            ...affair.flow,
+            nodes: affair.flow.nodes.map((item) =>
+              item.id === node.id ? { ...item, status: 'running', updatedAt: now } : item,
+            ),
+          },
+          attempts: [nextAttempt],
+          imageResearch: {
+            ...research,
+            status: 'searching',
+            frozenAt: research.frozenAt ?? now,
+            lastIssue: undefined,
+          },
+          updatedAt: now,
+        })
+      }
+      const started = await this.startAttemptNow(
+        {
+          workspaceRef: affair.workspaceRef,
+          affairId,
+          nodeId: node.id,
+          accountId: research.accountId,
+        },
+        workspaceId,
+      )
+      if (!started.success) return started
+      const persisted = this.findAffair(affairId)
+      if (!persisted?.imageResearch) return this.notFound('图片调研事务不存在')
+      const now = this.timestamp()
+      return this.persistAffair({
+        ...persisted,
+        imageResearch: {
+          ...persisted.imageResearch,
+          status: 'searching',
+          frozenAt: persisted.imageResearch.frozenAt ?? now,
+        },
+        updatedAt: now,
+      })
+    })
+  }
+
+  bindImageResearchAttempt(input: BindWebAffairAttemptInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () => this.bindAttemptNow(input))
+  }
+
+  proposeImageResearchCandidate(
+    input: {
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      launchOperationId: string
+      noteId: string
+      imageIndex: number
+      title: string
+      authorDisplayName?: string
+      visibleText: string[]
+      sanitizedPageUrl: string
+      reopenPath?: string
+    },
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(input.affairId, workspaceId, () =>
+      this.proposeImageResearchCandidateNow(input),
+    )
+  }
+
+  decideImageResearchCandidate(input: DecideImageResearchCandidateInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, () =>
+      this.decideImageResearchCandidateNow(input),
+    )
+  }
+
+  markImageResearchNeedsAttention(
+    affairId: string,
+    attemptId: string,
+    reason: string,
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(affairId, workspaceId, () =>
+      this.markImageResearchNeedsAttentionNow(affairId, attemptId, reason),
+    )
+  }
+
+  cancelImageResearch(affairId: string, workspaceId: string) {
+    return this.enqueueScoped(affairId, workspaceId, () => this.cancelImageResearchNow(affairId))
   }
 
   createArticlePublishingAffair(
@@ -455,6 +588,8 @@ export class WebAffairService {
     launchOperationId: string
     browserTaskRunId: string
     tabId: string
+    previousBrowserViewRuntimeGeneration: number
+    previousWebContentsId: number
     browserViewRuntimeGeneration: number
     webContentsId: number
     previousPlaywrightConnectionGeneration: number
@@ -912,6 +1047,311 @@ export class WebAffairService {
       updatedAt: now,
     }
     return this.persistNewAffair(affair)
+  }
+
+  private async createImageResearchAffairNow(
+    rawInput: CreateImageResearchAffairInput,
+    workspaceId: string,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    if (!this.snapshot) return this.unavailable()
+    const parsed = createImageResearchAffairInputSchema.safeParse(rawInput)
+    if (!parsed.success) return this.invalid('图片调研参数无效')
+    if (this.snapshot.affairs.length >= AFFAIR_LIMIT) return this.limit('事务数量已达到限制')
+    const input = parsed.data
+    const resources = this.getWebResources()
+    const account = resources?.accounts.find(
+      (item) => item.id === input.accountId && !item.archivedAt && !item.mergedIntoAccountId,
+    )
+    const website = resources?.websites.find((item) => item.id === account?.websiteId)
+    if (!account || !website) return this.resourceError('所选小红书账号不存在或已归档')
+    let hostname = ''
+    try {
+      hostname = new URL(website.origin).hostname.toLowerCase()
+    } catch {
+      return this.resourceError('所选网站 Origin 无效')
+    }
+    if (hostname !== 'xiaohongshu.com' && !hostname.endsWith('.xiaohongshu.com')) {
+      return this.resourceError('首版只能选择小红书账号')
+    }
+    const now = this.timestamp()
+    const node = this.createNode({
+      title: '逐张查找小红书候选',
+      description: 'Agent 每轮只提出一张；用户自行保存或截图后确认或跳过。',
+      type: 'web-task',
+      status: 'ready',
+      executor: 'ai',
+      accountIds: [account.id],
+      materialIds: [],
+      successCriteria: [`用户确认自行保存 ${input.targetCount} 张候选`],
+      now,
+    })
+    const affair: WebAffair = {
+      id: randomUUID(),
+      kind: 'image-research',
+      workspaceId,
+      title: input.title,
+      objective: `按 ${input.searchTerms.join('、')} 搜索小红书图片候选`,
+      status: 'active',
+      principalId: account.principalId,
+      websiteIds: [website.id],
+      accountIds: [account.id],
+      materials: [],
+      flow: { version: 1, nodes: [node], edges: [] },
+      attempts: [],
+      waitPlans: [],
+      flowProposals: [],
+      imageResearch: {
+        adapterId: 'xiaohongshu',
+        adapterVersion: 1,
+        accountId: account.id,
+        searchTerms: input.searchTerms,
+        targetCount: input.targetCount,
+        status: 'draft',
+        candidates: [],
+      },
+      events: [this.event('created', '小红书图片调研事务已创建', now)],
+      workspaceRef: input.workspaceRef,
+      createdAt: now,
+      updatedAt: now,
+    }
+    return this.persistNewAffair(affair)
+  }
+
+  private async proposeImageResearchCandidateNow(input: {
+    affairId: string
+    attemptId: string
+    executionGeneration: number
+    launchOperationId: string
+    noteId: string
+    imageIndex: number
+    title: string
+    authorDisplayName?: string
+    visibleText: string[]
+    sanitizedPageUrl: string
+    reopenPath?: string
+  }): Promise<WebAffairOperationResult<WebAffair>> {
+    const found = this.findAttempt(input.affairId, input.attemptId)
+    const research = found?.affair.imageResearch
+    if (!found || !research || found.affair.kind !== 'image-research') {
+      return this.notFound('图片调研运行不存在')
+    }
+    if (
+      found.attempt.executionGeneration !== input.executionGeneration ||
+      found.attempt.launchOperationId !== input.launchOperationId ||
+      found.attempt.status !== 'running-ai'
+    ) {
+      return this.transitionError('候选来自旧运行，已拒绝')
+    }
+    if (research.currentCandidateId) return this.transitionError('当前已有候选等待用户决定')
+    const now = this.timestamp()
+    const candidate = {
+      id: randomUUID(),
+      executionGeneration: input.executionGeneration,
+      noteId: input.noteId.trim(),
+      imageIndex: input.imageIndex,
+      title: input.title.trim(),
+      authorDisplayName: input.authorDisplayName?.trim() || undefined,
+      visibleText: input.visibleText
+        .slice(0, 20)
+        .map((item) => item.trim())
+        .filter(Boolean),
+      sanitizedPageUrl: input.sanitizedPageUrl,
+      reopenPath: input.reopenPath,
+      proposedAt: now,
+    }
+    const attempt: WebAffairAttempt = {
+      ...found.attempt,
+      status: 'waiting-human',
+      agentRunId: undefined,
+      browserTaskRunId: undefined,
+    }
+    return this.persistAffair({
+      ...found.affair,
+      status: 'needs-attention',
+      flow: {
+        ...found.affair.flow,
+        nodes: found.affair.flow.nodes.map((node) =>
+          node.id === attempt.nodeId ? { ...node, status: 'waiting-human', updatedAt: now } : node,
+        ),
+      },
+      attempts: [attempt],
+      imageResearch: {
+        ...research,
+        status: 'waiting-human',
+        currentCandidateId: candidate.id,
+        candidates: [...research.candidates, candidate],
+        lastIssue: undefined,
+      },
+      events: this.appendEvent(
+        found.affair,
+        this.event('node-status-changed', `等待用户处理候选：${candidate.title}`, now, {
+          nodeId: attempt.nodeId,
+          attemptId: attempt.id,
+        }),
+      ),
+      updatedAt: now,
+    })
+  }
+
+  private async decideImageResearchCandidateNow(
+    rawInput: DecideImageResearchCandidateInput,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const parsed = decideImageResearchCandidateInputSchema.safeParse(rawInput)
+    if (!parsed.success) return this.invalid('候选决定参数无效')
+    const input = parsed.data
+    const affair = this.findAffair(input.affairId)
+    const research = affair?.imageResearch
+    const attempt = affair?.attempts[0]
+    if (!affair || !research || !attempt || affair.kind !== 'image-research') {
+      return this.notFound('图片调研候选不存在')
+    }
+    const candidate = research.candidates.find((item) => item.id === input.candidateId)
+    if (!candidate) return this.notFound('图片调研候选不存在')
+    if (candidate.decision) {
+      if (candidate.decision !== input.decision) return this.transitionError('候选已经做出其他决定')
+      return { success: true, data: structuredClone(affair) }
+    }
+    if (
+      research.currentCandidateId !== candidate.id ||
+      research.status !== 'waiting-human' ||
+      attempt.status !== 'waiting-human'
+    ) {
+      return this.transitionError('候选已过期或不再等待决定')
+    }
+    const now = this.timestamp()
+    const decisionOperationId = randomUUID()
+    const candidates = research.candidates.map((item) =>
+      item.id === candidate.id
+        ? { ...item, decision: input.decision, decisionOperationId, decidedAt: now }
+        : item,
+    )
+    const savedCount = candidates.filter((item) => item.decision === 'self-saved').length
+    const completed = savedCount >= research.targetCount
+    const nextAttempt: WebAffairAttempt = completed
+      ? { ...attempt, status: 'succeeded', endedAt: now }
+      : {
+          ...attempt,
+          status: 'preparing',
+          executionGeneration: attempt.executionGeneration + 1,
+          launchOperationId: decisionOperationId,
+          tabId: undefined,
+          conversationId: undefined,
+          agentRunId: undefined,
+          browserTaskRunId: undefined,
+          handedOffAt: undefined,
+          returnedAt: undefined,
+          reobservedAt: undefined,
+          failureMessage: undefined,
+          endedAt: undefined,
+        }
+    return this.persistAffair({
+      ...affair,
+      status: completed ? 'completed' : 'active',
+      flow: {
+        ...affair.flow,
+        nodes: affair.flow.nodes.map((node) =>
+          node.id === attempt.nodeId
+            ? {
+                ...node,
+                status: completed ? 'completed' : 'running',
+                lastResultNote: completed ? `已自行保存 ${savedCount} 张` : node.lastResultNote,
+                updatedAt: now,
+              }
+            : node,
+        ),
+      },
+      attempts: [nextAttempt],
+      imageResearch: {
+        ...research,
+        status: completed ? 'completed' : 'searching',
+        currentCandidateId: undefined,
+        candidates,
+      },
+      events: this.appendEvent(
+        affair,
+        this.event(
+          'node-status-changed',
+          `${input.decision === 'self-saved' ? '用户已自行保存' : '用户已跳过'}：${candidate.title}`,
+          now,
+          { nodeId: attempt.nodeId, attemptId: attempt.id },
+        ),
+      ),
+      updatedAt: now,
+    })
+  }
+
+  private async markImageResearchNeedsAttentionNow(
+    affairId: string,
+    attemptId: string,
+    reason: string,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const found = this.findAttempt(affairId, attemptId)
+    if (!found?.affair.imageResearch || found.affair.kind !== 'image-research') {
+      return this.notFound('图片调研运行不存在')
+    }
+    if (found.affair.imageResearch.currentCandidateId) {
+      return this.transitionError('已有候选等待决定')
+    }
+    const now = this.timestamp()
+    const attempt: WebAffairAttempt = {
+      ...found.attempt,
+      status: 'interrupted',
+      failureMessage: reason,
+      endedAt: now,
+      agentRunId: undefined,
+      browserTaskRunId: undefined,
+    }
+    return this.persistAffair({
+      ...found.affair,
+      status: 'needs-attention',
+      flow: {
+        ...found.affair.flow,
+        nodes: found.affair.flow.nodes.map((node) =>
+          node.id === attempt.nodeId ? { ...node, status: 'failed', updatedAt: now } : node,
+        ),
+      },
+      attempts: [attempt],
+      imageResearch: {
+        ...found.affair.imageResearch,
+        status: 'needs-attention',
+        lastIssue: reason,
+      },
+      updatedAt: now,
+    })
+  }
+
+  private async cancelImageResearchNow(
+    affairId: string,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const affair = this.findAffair(affairId)
+    const research = affair?.imageResearch
+    if (!affair || !research || affair.kind !== 'image-research') {
+      return this.notFound('图片调研事务不存在')
+    }
+    if (research.status === 'cancelled') return { success: true, data: structuredClone(affair) }
+    if (research.status === 'completed') return this.transitionError('已完成任务不能再结束')
+    const now = this.timestamp()
+    return this.persistAffair({
+      ...affair,
+      status: 'cancelled',
+      flow: {
+        ...affair.flow,
+        nodes: affair.flow.nodes.map((node) => ({ ...node, status: 'cancelled', updatedAt: now })),
+      },
+      attempts: affair.attempts.map((attempt) => ({
+        ...attempt,
+        status: 'cancelled',
+        endedAt: now,
+        agentRunId: undefined,
+        browserTaskRunId: undefined,
+      })),
+      imageResearch: {
+        ...research,
+        status: 'cancelled',
+        currentCandidateId: undefined,
+      },
+      updatedAt: now,
+    })
   }
 
   private async claimLegacyAffairNow(
@@ -2128,7 +2568,10 @@ export class WebAffairService {
       })
       if (!changed) return { success: true, data: this.snapshot.affairs[0] ?? (null as never) }
       const next = { ...this.snapshot, revision: this.snapshot.revision + 1, affairs }
-      const persisted = await this.store.save(next)
+      const changedAffairIds = affairs
+        .filter((affair, index) => affair !== this.snapshot?.affairs[index])
+        .map((affair) => affair.id)
+      const persisted = await this.store.save(next, { changedAffairIds })
       this.snapshot = persisted
       for (const affair of affairs) {
         if (affair.updatedAt === timestamp) this.onChanged(affair.id, persisted.revision)
@@ -2302,7 +2745,7 @@ export class WebAffairService {
           ? {
               ...attempt,
               status: 'interrupted' as const,
-              failureMessage: '应用或 Agent 运行时已结束，未恢复为假运行',
+              failureMessage: OWNERLESS_RUNTIME_INTERRUPTION,
               endedAt: now,
             }
           : attempt,
@@ -2321,6 +2764,15 @@ export class WebAffairService {
       let reconciled: WebAffair = {
         ...affair,
         articlePublishing: normalizedPublishing,
+        ...(affair.imageResearch && interrupted.length > 0
+          ? {
+              imageResearch: {
+                ...affair.imageResearch,
+                status: 'needs-attention' as const,
+                lastIssue: '上次 Agent 运行已中断，请重试搜索或结束任务',
+              },
+            }
+          : {}),
         status: 'needs-attention' as const,
         attempts,
         flow: { ...affair.flow, nodes },
@@ -2361,7 +2813,7 @@ export class WebAffairService {
             repairedCurrentAttempt,
             'interrupted',
             now,
-            '应用或 Agent 运行时已结束，未恢复为假运行',
+            OWNERLESS_RUNTIME_INTERRUPTION,
           )
         } else if (
           repairedCurrentAttempt &&
@@ -2394,7 +2846,10 @@ export class WebAffairService {
     })
     if (!changed) return
     const next = { ...this.snapshot, revision: this.snapshot.revision + 1, affairs }
-    const persisted = await this.store.save(next)
+    const changedAffairIds = affairs
+      .filter((affair, index) => affair !== this.snapshot?.affairs[index])
+      .map((affair) => affair.id)
+    const persisted = await this.store.save(next, { changedAffairIds })
     this.snapshot = persisted
     for (const affair of affairs) {
       if (affair.updatedAt === now) this.onChanged(affair.id, persisted.revision)
@@ -2987,6 +3442,8 @@ export class WebAffairService {
     launchOperationId: string
     browserTaskRunId: string
     tabId: string
+    previousBrowserViewRuntimeGeneration: number
+    previousWebContentsId: number
     browserViewRuntimeGeneration: number
     webContentsId: number
     previousPlaywrightConnectionGeneration: number
@@ -3023,7 +3480,7 @@ export class WebAffairService {
     ) {
       return this.invalid('Page Runtime 重绑定身份没有前进')
     }
-    const exactNext = found.attempt.runtimeBindings.find(
+    const exactNextTask = found.attempt.runtimeBindings.find(
       (binding) =>
         binding.kind === 'browser-task' &&
         binding.status === 'active' &&
@@ -3034,38 +3491,69 @@ export class WebAffairService {
         binding.playwrightConnectionGeneration === input.playwrightConnectionGeneration &&
         binding.playwrightPageBindingGeneration === input.playwrightPageBindingGeneration,
     )
-    if (exactNext) return { success: true, data: structuredClone(found.affair) }
+    const exactNextTab = found.attempt.runtimeBindings.find(
+      (binding) =>
+        binding.kind === 'browser-tab' &&
+        binding.status === 'active' &&
+        binding.tabId === input.tabId &&
+        binding.browserViewRuntimeGeneration === input.browserViewRuntimeGeneration &&
+        binding.webContentsId === input.webContentsId,
+    )
+    if (exactNextTask && exactNextTab) {
+      return { success: true, data: structuredClone(found.affair) }
+    }
 
-    const previous = found.attempt.runtimeBindings.find(
+    const previousTask = found.attempt.runtimeBindings.find(
       (binding): binding is Extract<WebAffairRuntimeBinding, { kind: 'browser-task' }> =>
         binding.kind === 'browser-task' &&
         binding.status === 'active' &&
         binding.browserTaskRunId === input.browserTaskRunId &&
         binding.tabId === input.tabId &&
-        binding.browserViewRuntimeGeneration === input.browserViewRuntimeGeneration &&
-        binding.webContentsId === input.webContentsId &&
+        binding.browserViewRuntimeGeneration === input.previousBrowserViewRuntimeGeneration &&
+        binding.webContentsId === input.previousWebContentsId &&
         binding.playwrightConnectionGeneration === input.previousPlaywrightConnectionGeneration &&
         binding.playwrightPageBindingGeneration === input.previousPlaywrightPageBindingGeneration,
     )
-    if (!previous) {
+    const previousTab = found.attempt.runtimeBindings.find(
+      (binding): binding is Extract<WebAffairRuntimeBinding, { kind: 'browser-tab' }> =>
+        binding.kind === 'browser-tab' &&
+        binding.status === 'active' &&
+        binding.tabId === input.tabId &&
+        binding.browserViewRuntimeGeneration === input.previousBrowserViewRuntimeGeneration &&
+        binding.webContentsId === input.previousWebContentsId,
+    )
+    if (!previousTask || !previousTab) {
       return this.transitionError('当前发布执行代次不存在待替换的 Page Runtime owner')
     }
 
     const now = this.timestamp()
-    const replacement: Extract<WebAffairRuntimeBinding, { kind: 'browser-task' }> = {
-      ...previous,
+    const replacementTask: Extract<WebAffairRuntimeBinding, { kind: 'browser-task' }> = {
+      ...previousTask,
       id: randomUUID(),
       status: 'active',
       boundAt: now,
       lastObservedAt: now,
       endedAt: undefined,
       terminalReason: undefined,
+      browserViewRuntimeGeneration: input.browserViewRuntimeGeneration,
+      webContentsId: input.webContentsId,
       playwrightConnectionGeneration: input.playwrightConnectionGeneration,
       playwrightPageBindingGeneration: input.playwrightPageBindingGeneration,
     }
+    const replacementTab: Extract<WebAffairRuntimeBinding, { kind: 'browser-tab' }> = {
+      ...previousTab,
+      id: randomUUID(),
+      status: 'active',
+      boundAt: now,
+      lastObservedAt: now,
+      endedAt: undefined,
+      terminalReason: undefined,
+      browserViewRuntimeGeneration: input.browserViewRuntimeGeneration,
+      webContentsId: input.webContentsId,
+    }
     const runtimeBindings = this.compactRuntimeBindings([
       ...found.attempt.runtimeBindings.map((binding) =>
-        binding.id === previous.id
+        binding.id === previousTask.id || binding.id === previousTab.id
           ? {
               ...binding,
               status: 'lost' as const,
@@ -3075,7 +3563,8 @@ export class WebAffairService {
             }
           : binding,
       ),
-      replacement,
+      replacementTab,
+      replacementTask,
     ])
     const nextAttempt: WebAffairAttempt = { ...found.attempt, runtimeBindings }
     const nextAffair: WebAffair = {
@@ -3090,8 +3579,8 @@ export class WebAffairService {
               ...publishing.draft,
               recovery: {
                 ...publishing.draft.recovery,
-                status: 'failed',
-                failureReason: 'Playwright Page owner 已变化，旧恢复写入许可已失效',
+                status: 'locating',
+                failureReason: undefined,
                 writePermit: undefined,
               },
             },
@@ -3655,9 +4144,12 @@ export class WebAffairService {
     if (!found || !publishing || found.affair.kind !== 'article-publishing') {
       return this.notFound('文章发布恢复事务不存在')
     }
+    const launchIsPreparing =
+      found.attempt.status === 'preparing' && publishing.execution.status === 'preparing'
+    const runtimeIsActive =
+      found.attempt.status === 'running-ai' && publishing.execution.status === 'running'
     if (
-      found.attempt.status !== 'preparing' ||
-      publishing.execution.status !== 'preparing' ||
+      (!launchIsPreparing && !runtimeIsActive) ||
       found.attempt.executionGeneration !== input.executionGeneration ||
       publishing.execution.currentGeneration !== input.executionGeneration ||
       found.attempt.launchOperationId !== input.launchOperationId ||
@@ -3665,7 +4157,7 @@ export class WebAffairService {
       !recovery ||
       recovery.operationId !== input.recoveryOperationId ||
       recovery.executionGeneration !== input.executionGeneration ||
-      recovery.status !== 'locating' ||
+      !['locating', 'verified'].includes(recovery.status) ||
       recovery.expectedDraftId !== input.draftId ||
       publishing.draft?.platformDraftId !== input.draftId
     ) {
@@ -4522,7 +5014,7 @@ export class WebAffairService {
       revision: this.snapshot.revision + 1,
       affairs: [...this.snapshot.affairs, affair],
     }
-    const persisted = await this.store.save(next)
+    const persisted = await this.store.save(next, { changedAffairIds: [affair.id] })
     this.snapshot = persisted
     this.onChanged(affair.id, persisted.revision)
     const saved = persisted.affairs.find((item) => item.id === affair.id) ?? affair
@@ -4540,7 +5032,7 @@ export class WebAffairService {
       revision: this.snapshot.revision + 1,
       affairs: this.snapshot.affairs.map((item) => (item.id === affair.id ? affair : item)),
     }
-    const persisted = await this.store.save(next)
+    const persisted = await this.store.save(next, { changedAffairIds: [affair.id] })
     this.snapshot = persisted
     this.onChanged(affair.id, persisted.revision)
     const saved = persisted.affairs.find((item) => item.id === affair.id) ?? affair
