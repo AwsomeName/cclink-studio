@@ -74,35 +74,67 @@ function assessEnding(
   sessionStatus: 'active' | 'idle' | 'archived' | undefined,
   events: RemoteAgentSessionDiagnosticEvent[],
 ): string {
-  const latestOutbound = [...events]
-    .reverse()
-    .find((event) => event.direction === 'outbound' && event.type === 'user_text')
-  const terminal = [...events]
-    .reverse()
-    .find(
-      (event) =>
-        (event.type === 'stream_end' ||
-          (event.type === 'agent_status' &&
-            ['idle', 'completed', 'failed', 'error'].includes(event.status ?? ''))) &&
-        (!latestOutbound ||
-          ((event.requestId === latestOutbound.requestId ||
-            event.traceId === latestOutbound.requestId ||
-            (!event.requestId && !event.traceId)) &&
-            event.timestamp >= latestOutbound.timestamp)),
-    )
+  const outbound = events.filter(
+    (event) => event.direction === 'outbound' && event.type === 'user_text',
+  )
+  const latestOutbound = outbound.at(-1)
+  const terminalEvents = events.filter(isTerminalEvent)
+  const terminal = latestOutbound
+    ? [...terminalEvents].reverse().find((event) => matchesRequest(event, latestOutbound))
+    : terminalEvents.at(-1)
+  const unterminated = outbound.filter(
+    (sent) => !terminalEvents.some((event) => matchesRequest(event, sent)),
+  )
   if (terminal) {
-    const details = [
-      terminal.type,
-      terminal.status && `status=${terminal.status}`,
-      terminal.exitCode !== undefined && `exit=${terminal.exitCode}`,
-      terminal.finalState && `final_state=${terminal.finalState}`,
-      terminal.code && `code=${terminal.code}`,
-    ].filter(Boolean)
-    return `已收到结束事件（${details.join(' · ')}）`
+    const olderUnterminated = unterminated.filter(
+      (event) => !latestOutbound || event.timestamp < latestOutbound.timestamp,
+    )
+    if (olderUnterminated.length > 0) {
+      return `状态冲突：最新请求已收到结束事件（${terminalDetails(terminal)}），但仍有 ${olderUnterminated.length} 条更早请求没有结束事件`
+    }
+    return `已收到结束事件（${terminalDetails(terminal)}）`
+  }
+  if (unterminated.length > 0 && sessionStatus === 'idle') {
+    return `状态冲突：Studio 显示已结束，但仍有 ${unterminated.length} 条请求没有结束事件`
   }
   if (sessionStatus === 'active') return '仍在运行，尚未收到结束事件'
   if (sessionStatus === 'idle') return 'Studio 显示已结束，但当前进程没有捕获结束事件'
   return '没有足够信息判断'
+}
+
+function isTerminalEvent(event: RemoteAgentSessionDiagnosticEvent): boolean {
+  return (
+    event.type === 'stream_end' ||
+    (event.type === 'agent_status' &&
+      ['idle', 'completed', 'failed', 'error'].includes(event.status ?? ''))
+  )
+}
+
+function matchesRequest(
+  terminal: RemoteAgentSessionDiagnosticEvent,
+  outbound: RemoteAgentSessionDiagnosticEvent,
+): boolean {
+  if (terminal.timestamp < outbound.timestamp) return false
+  if (!terminal.requestId && !terminal.traceId) return true
+  if (!outbound.requestId && !outbound.traceId) return false
+  return (
+    terminal.requestId === outbound.requestId ||
+    terminal.requestId === outbound.traceId ||
+    terminal.traceId === outbound.requestId ||
+    terminal.traceId === outbound.traceId
+  )
+}
+
+function terminalDetails(event: RemoteAgentSessionDiagnosticEvent): string {
+  return [
+    event.type,
+    event.status && `status=${event.status}`,
+    event.exitCode !== undefined && `exit=${event.exitCode}`,
+    event.finalState && `final_state=${event.finalState}`,
+    event.code && `code=${event.code}`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 function formatProtocolEvent(event: RemoteAgentSessionDiagnosticEvent): string {

@@ -124,6 +124,7 @@ export class CclinkRemoteService implements RemoteProvider {
   private capabilityProbeFailures = new Map<string, CapabilityProbeResult & { expiresAt: number }>()
   private readonly openWorkspaceOperations = new Map<string, { cancelled: boolean }>()
   private readonly activeAgentRequests = new Map<string, string>()
+  private readonly submittingAgentSessions = new Set<string>()
   private readonly stoppedAgentRequestIds = new Map<string, string[]>()
   private readonly stoppedAgentSessionsWithoutRequest = new Set<string>()
   private readonly automaticToolApprovals = new Map<string, Promise<boolean>>()
@@ -427,21 +428,8 @@ export class CclinkRemoteService implements RemoteProvider {
     imageUploadId?: string,
   ): Promise<{ success: boolean; error?: string }> {
     let uploadController: AbortController | null = null
-    if (images.length > 0 && imageUploadId) {
-      if (this.imageUploads.has(imageUploadId)) {
-        return { success: false, error: '图片上传任务 ID 正在使用' }
-      }
-      uploadController = new AbortController()
-      this.imageUploads.set(imageUploadId, uploadController)
-    }
+    let ownsSubmissionLock = false
     try {
-      await this.requireOnline()
-      await this.requireCapability(ref, 'agent.stream')
-      const normalized = content.trim()
-      if (!normalized && images.length === 0) return { success: true }
-      if (Buffer.byteLength(normalized, 'utf8') > 8 * 1024) {
-        return { success: false, error: '单条远程消息不能超过 8 KiB，请拆分后发送' }
-      }
       const session = this.sessions.get(sessionId)
       if (
         !session ||
@@ -449,6 +437,32 @@ export class CclinkRemoteService implements RemoteProvider {
         session.workspaceId !== ref.workspaceId
       ) {
         return { success: false, error: '远程会话与当前工作空间不匹配' }
+      }
+      if (
+        session.status === 'active' ||
+        this.activeAgentRequests.has(sessionId) ||
+        this.submittingAgentSessions.has(sessionId)
+      ) {
+        return {
+          success: false,
+          error: '当前远程会话仍有任务在运行，请等待结束或先停止等待',
+        }
+      }
+      this.submittingAgentSessions.add(sessionId)
+      ownsSubmissionLock = true
+      if (images.length > 0 && imageUploadId) {
+        if (this.imageUploads.has(imageUploadId)) {
+          return { success: false, error: '图片上传任务 ID 正在使用' }
+        }
+        uploadController = new AbortController()
+        this.imageUploads.set(imageUploadId, uploadController)
+      }
+      await this.requireOnline()
+      await this.requireCapability(ref, 'agent.stream')
+      const normalized = content.trim()
+      if (!normalized && images.length === 0) return { success: true }
+      if (Buffer.byteLength(normalized, 'utf8') > 8 * 1024) {
+        return { success: false, error: '单条远程消息不能超过 8 KiB，请拆分后发送' }
       }
       const imageUrls: string[] = []
       if (images.length > 0) {
@@ -567,6 +581,7 @@ export class CclinkRemoteService implements RemoteProvider {
       }
       return { success: false, error: errorMessage }
     } finally {
+      if (ownsSubmissionLock) this.submittingAgentSessions.delete(sessionId)
       if (imageUploadId && this.imageUploads.get(imageUploadId) === uploadController) {
         this.imageUploads.delete(imageUploadId)
       }
@@ -1718,7 +1733,10 @@ export class CclinkRemoteService implements RemoteProvider {
           message?: string
         }
         const active = !['idle', 'completed', 'failed', 'error'].includes(event.status)
-        this.setSessionStatus(event.session_id, active ? 'active' : 'idle')
+        const terminalBelongsToTrackedRequest =
+          active || this.terminalBelongsToTrackedRequest(event.session_id, message)
+        if (active) this.setSessionStatus(event.session_id, 'active')
+        else if (terminalBelongsToTrackedRequest) this.setSessionStatus(event.session_id, 'idle')
         const failed = event.status === 'failed' || event.status === 'error'
         const remoteMessage: CclinkRemoteMessage | undefined =
           failed && (event.message || event.code)
@@ -1737,12 +1755,20 @@ export class CclinkRemoteService implements RemoteProvider {
               }
             : undefined
         if (remoteMessage) this.appendMessage(event.session_id, remoteMessage)
-        if (!active) this.settleAgentRequest(event.session_id, message)
+        if (!active && terminalBelongsToTrackedRequest) {
+          this.settleAgentRequest(event.session_id, message)
+        }
         this.emitRealtime({
           type: 'conversation',
           serverId,
           sessionId: event.session_id,
-          phase: active ? 'streaming' : failed ? 'error' : 'completed',
+          phase: active
+            ? 'streaming'
+            : terminalBelongsToTrackedRequest
+              ? failed
+                ? 'error'
+                : 'completed'
+              : 'message',
           ...(remoteMessage ? { message: remoteMessage } : {}),
         })
         return
@@ -1813,13 +1839,23 @@ export class CclinkRemoteService implements RemoteProvider {
           }
           this.appendMessage(event.session_id, remoteMessage)
         }
-        this.setSessionStatus(event.session_id, 'idle')
-        this.settleAgentRequest(event.session_id, message)
+        const terminalBelongsToTrackedRequest = this.terminalBelongsToTrackedRequest(
+          event.session_id,
+          message,
+        )
+        if (terminalBelongsToTrackedRequest) {
+          this.setSessionStatus(event.session_id, 'idle')
+          this.settleAgentRequest(event.session_id, message)
+        }
         this.emitRealtime({
           type: 'conversation',
           serverId,
           sessionId: event.session_id,
-          phase: event.error || event.code ? 'error' : 'completed',
+          phase: terminalBelongsToTrackedRequest
+            ? event.error || event.code
+              ? 'error'
+              : 'completed'
+            : 'message',
           ...(remoteMessage ? { message: remoteMessage } : {}),
         })
         return
@@ -2014,13 +2050,19 @@ export class CclinkRemoteService implements RemoteProvider {
           },
         }
         this.appendMessage(event.session_id, remoteMessage)
-        this.setSessionStatus(event.session_id, 'idle')
-        this.settleAgentRequest(event.session_id, message)
+        const terminalBelongsToTrackedRequest = this.terminalBelongsToTrackedRequest(
+          event.session_id,
+          message,
+        )
+        if (terminalBelongsToTrackedRequest) {
+          this.setSessionStatus(event.session_id, 'idle')
+          this.settleAgentRequest(event.session_id, message)
+        }
         this.emitRealtime({
           type: 'conversation',
           serverId,
           sessionId: event.session_id,
-          phase: 'error',
+          phase: terminalBelongsToTrackedRequest ? 'error' : 'message',
           message: remoteMessage,
         })
         return
@@ -2064,9 +2106,21 @@ export class CclinkRemoteService implements RemoteProvider {
     const payload = message as unknown as Record<string, unknown>
     const requestId = typeof payload['request_id'] === 'string' ? payload['request_id'] : null
     const traceId = typeof payload['trace_id'] === 'string' ? payload['trace_id'] : null
-    if (!requestId || requestId === active || traceId === active) {
+    if ((!requestId && !traceId) || requestId === active || traceId === active) {
       this.activeAgentRequests.delete(sessionId)
     }
+  }
+
+  private terminalBelongsToTrackedRequest(
+    sessionId: string,
+    message: CclinkProtocolMessage,
+  ): boolean {
+    const active = this.activeAgentRequests.get(sessionId)
+    if (!active) return true
+    const payload = message as unknown as Record<string, unknown>
+    const requestId = typeof payload['request_id'] === 'string' ? payload['request_id'] : null
+    const traceId = typeof payload['trace_id'] === 'string' ? payload['trace_id'] : null
+    return (!requestId && !traceId) || requestId === active || traceId === active
   }
 
   private applySessionSync(serverId: string, response: CclinkSessionSyncResponseMessage): void {

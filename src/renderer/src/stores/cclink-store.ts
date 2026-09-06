@@ -394,14 +394,20 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
       const nextMessages = event.message
         ? [...current.filter((item) => item.id !== event.message!.id), event.message]
         : current
-      const active = event.phase === 'started' || event.phase === 'streaming'
       return {
         messages: event.message ? { ...state.messages, [sessionId]: nextMessages } : state.messages,
         sessions: state.sessions.map((session) =>
           session.id === sessionId
             ? {
                 ...session,
-                status: active ? ('active' as const) : ('idle' as const),
+                status:
+                  event.phase === 'started' || event.phase === 'streaming'
+                    ? ('active' as const)
+                    : event.phase === 'completed' ||
+                        event.phase === 'error' ||
+                        event.phase === 'untracked'
+                      ? ('idle' as const)
+                      : session.status,
                 updatedAt: event.message?.timestamp ?? session.updatedAt,
                 messageCount: nextMessages.length,
               }

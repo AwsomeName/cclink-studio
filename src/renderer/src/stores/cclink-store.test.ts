@@ -216,4 +216,37 @@ describe('cclink session selection ownership', () => {
       id: 'tracking-stopped',
     })
   })
+
+  it('keeps a remote session active when tool and text message events arrive', () => {
+    useCclinkStore.setState({ sessions: [{ ...session('session-1'), status: 'active' }] })
+
+    useCclinkStore.getState().handleRealtimeEvent({
+      type: 'conversation',
+      serverId: workspaceRef.endpointId,
+      sessionId: 'session-1',
+      phase: 'message',
+      message: {
+        type: 'agentTool',
+        id: 'tool-1',
+        timestamp: 2,
+        tool: { id: 'use-1', name: 'Bash', state: 'executing' },
+      },
+    })
+
+    expect(useCclinkStore.getState().sessions[0]?.status).toBe('active')
+    expect(useCclinkStore.getState().messages['session-1']).toHaveLength(1)
+  })
+
+  it('only releases the active projection for a lifecycle terminal event', () => {
+    useCclinkStore.setState({ sessions: [{ ...session('session-1'), status: 'active' }] })
+
+    useCclinkStore.getState().handleRealtimeEvent({
+      type: 'conversation',
+      serverId: workspaceRef.endpointId,
+      sessionId: 'session-1',
+      phase: 'completed',
+    })
+
+    expect(useCclinkStore.getState().sessions[0]?.status).toBe('idle')
+  })
 })

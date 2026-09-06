@@ -133,4 +133,48 @@ describe('remote Agent diagnostic report', () => {
     expect(markdown).toContain('结束判断：仍在运行，尚未收到结束事件')
     expect(markdown).not.toContain('结束判断：已收到结束事件')
   })
+
+  it('reports a state conflict when a queued request ends while an older request is still running', () => {
+    const markdown = buildRemoteAgentDiagnosticMarkdown({
+      appVersion: '0.1.42',
+      platform: 'Linux',
+      report: {
+        ...report,
+        agentSession: {
+          ...report.agentSession!,
+          session: { ...report.agentSession!.session, status: 'idle' },
+          events: [
+            {
+              timestamp: 1_700_000_000_100,
+              direction: 'outbound',
+              type: 'user_text',
+              requestId: 'running-request',
+              traceId: 'running-request',
+            },
+            {
+              timestamp: 1_700_000_000_200,
+              direction: 'outbound',
+              type: 'user_text',
+              requestId: 'queued-request',
+              traceId: 'queued-request',
+            },
+            {
+              timestamp: 1_700_000_300_200,
+              direction: 'inbound',
+              type: 'stream_end',
+              requestId: 'queued-request',
+              traceId: 'queued-request',
+              exitCode: 1,
+              finalState: 'final_error',
+              error: 'Request timed out after 300s in queue',
+            },
+          ],
+        },
+      },
+    })
+
+    expect(markdown).toContain(
+      '状态冲突：最新请求已收到结束事件（stream_end · exit=1 · final_state=final_error），但仍有 1 条更早请求没有结束事件',
+    )
+  })
 })

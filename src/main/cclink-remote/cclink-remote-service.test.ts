@@ -446,6 +446,109 @@ describe('CclinkRemoteService runtime protocol', () => {
     service.getRequestRouter().detach()
   })
 
+  it('rejects another message while the same remote session is still active', async () => {
+    const { service } = createService()
+    await service.initialize()
+    installOnlineServer(service)
+    const transport = new ReceivingTransport()
+    service.getRequestRouter().attach(transport)
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+
+    await expect(service.sendAgentMessage(remoteRef, 'session-1', '第一条长任务')).resolves.toEqual(
+      {
+        success: true,
+      },
+    )
+    await expect(service.sendAgentMessage(remoteRef, 'session-1', '不应进入队列')).resolves.toEqual(
+      {
+        success: false,
+        error: '当前远程会话仍有任务在运行，请等待结束或先停止等待',
+      },
+    )
+
+    expect(transport.sent).toHaveLength(1)
+    expect(transport.sent[0]?.message).toMatchObject({
+      cc_type: 'user_text',
+      content: '第一条长任务',
+    })
+    service.getRequestRouter().detach()
+  })
+
+  it('serializes simultaneous submissions before the first transport send settles', async () => {
+    const { service } = createService()
+    await service.initialize()
+    installOnlineServer(service)
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+    const router = service.getRequestRouter()
+    let releaseSend!: () => void
+    const sendSettled = new Promise<void>((resolve) => {
+      releaseSend = resolve
+    })
+    const send = vi.spyOn(router, 'send').mockImplementation(() => sendSettled)
+
+    const first = service.sendAgentMessage(remoteRef, 'session-1', '第一条')
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce())
+
+    await expect(service.sendAgentMessage(remoteRef, 'session-1', '并发第二条')).resolves.toEqual({
+      success: false,
+      error: '当前远程会话仍有任务在运行，请等待结束或先停止等待',
+    })
+
+    releaseSend()
+    await expect(first).resolves.toEqual({ success: true })
+    expect(send).toHaveBeenCalledOnce()
+  })
+
+  it('does not let an unrelated terminal event mark the tracked request idle', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+    installOnlineServer(service)
+    const transport = new ReceivingTransport()
+    service.getRequestRouter().attach(transport)
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+
+    await service.sendAgentMessage(remoteRef, 'session-1', '继续执行')
+    const activeRequestId = transport.sent[0]?.message.request_id
+    expect(activeRequestId).toBeTruthy()
+
+    await handle({
+      ...createCclinkEnvelope('stream_end', {
+        request_id: 'queued-request',
+        trace_id: 'queued-request',
+      }),
+      session_id: 'session-1',
+      msg_id: 'queued-message',
+      error: 'Request timed out after 300s in queue',
+    })
+
+    expect(
+      (
+        service as unknown as {
+          sessions: Map<string, typeof storedSession>
+        }
+      ).sessions.get('session-1')?.status,
+    ).toBe('active')
+
+    await handle({
+      ...createCclinkEnvelope('stream_end', {
+        request_id: activeRequestId,
+        trace_id: activeRequestId,
+      }),
+      session_id: 'session-1',
+      msg_id: 'active-message',
+      final_text: '完成',
+    })
+
+    expect(
+      (
+        service as unknown as {
+          sessions: Map<string, typeof storedSession>
+        }
+      ).sessions.get('session-1')?.status,
+    ).toBe('idle')
+    service.getRequestRouter().detach()
+  })
+
   it('reconciles a persisted active session after Studio loses runtime ownership', async () => {
     const { service, store } = createService({
       version: 1 as const,
