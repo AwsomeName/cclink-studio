@@ -229,6 +229,12 @@ describe('ImageResearchService', () => {
           ({
             waitForAccountView: vi.fn(async () => 'candidate-tab'),
             navigate: vi.fn(async () => undefined),
+            getViewRuntimeIdentity: vi.fn(() => ({
+              tabId: 'candidate-tab',
+              browserViewRuntimeGeneration: 1,
+              webContentsId: 10,
+              documentGeneration: 1,
+            })),
             executeJavaScriptInView: vi.fn(async () => ({
               url: 'https://www.xiaohongshu.com/404',
               title: '404',
