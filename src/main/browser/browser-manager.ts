@@ -2210,17 +2210,51 @@ export class BrowserManager {
     return this.views.get(tabId)?.accountId
   }
 
-  getViewRuntimeIdentity(
-    tabId: string,
-  ): { tabId: string; browserViewRuntimeGeneration: number; webContentsId: number } | null {
+  getViewRuntimeIdentity(tabId: string): {
+    tabId: string
+    browserViewRuntimeGeneration: number
+    webContentsId: number
+    documentGeneration: number
+  } | null {
     const entry = this.views.get(tabId)
     return entry
       ? {
           tabId,
           browserViewRuntimeGeneration: entry.runtimeGeneration,
           webContentsId: entry.view.webContents.id,
+          documentGeneration: entry.fitDocumentGeneration,
         }
       : null
+  }
+
+  /**
+   * 仅供 main-owned 的站点适配器在已经绑定的可见 View 中执行固定脚本。
+   * 本方法不经过 preload/IPC，也不能把任意脚本能力暴露给 Agent 或 renderer。
+   */
+  async executeJavaScriptInView<T>(
+    tabId: string,
+    script: string,
+    options?: {
+      userGesture?: boolean
+      expectedRuntimeGeneration?: number
+      expectedWebContentsId?: number
+    },
+  ): Promise<T> {
+    const entry = this.views.get(tabId)
+    if (
+      !entry ||
+      entry.view.webContents.isDestroyed() ||
+      (options?.expectedRuntimeGeneration !== undefined &&
+        entry.runtimeGeneration !== options.expectedRuntimeGeneration) ||
+      (options?.expectedWebContentsId !== undefined &&
+        entry.view.webContents.id !== options.expectedWebContentsId)
+    ) {
+      throw new Error(`浏览器 View 不存在或已经销毁: ${tabId}`)
+    }
+    return (await entry.view.webContents.executeJavaScript(
+      script,
+      options?.userGesture ?? false,
+    )) as T
   }
 
   /** main-owned account launch; renderer only materializes the requested workbench projection. */

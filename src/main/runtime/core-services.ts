@@ -472,7 +472,6 @@ export async function bootstrapMainProcessServices(
         getAgentBridge: () => runtime.agentBridge,
         getBrowserManager: () => runtime.browserManager,
         getBrowserTaskRuntime: () => runtime.browserTaskRuntime,
-        getPlaywrightBridge: () => runtime.playwrightBridge,
       })
     : null
 

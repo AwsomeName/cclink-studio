@@ -13,6 +13,8 @@ export interface ImageResearchCandidate {
   visibleText: string[]
   sanitizedPageUrl: string
   reopenPath?: string
+  sourceRecoveryStatus?: 'available' | 'unavailable'
+  sourceRecoveryIssue?: string
   proposedAt: string
   decision?: ImageResearchDecision
   decisionOperationId?: string

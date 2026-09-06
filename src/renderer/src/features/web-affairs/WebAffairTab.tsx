@@ -494,6 +494,11 @@ function ImageResearchAffairView({
             <span>
               {current.authorDisplayName ?? '作者未识别'} · 第 {current.imageIndex + 1} 张
             </span>
+            {current.sourceRecoveryStatus === 'unavailable' ? (
+              <small className="web-affair-tab-alert">
+                来源不可恢复：{current.sourceRecoveryIssue ?? '请直接确认已保存、跳过或重试搜索'}
+              </small>
+            ) : null}
             {current.visibleText.map((text) => (
               <small key={text}>{text}</small>
             ))}

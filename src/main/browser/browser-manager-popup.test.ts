@@ -907,6 +907,33 @@ describe('BrowserManager popup adoption', () => {
     ).toThrow('目标已失效')
   })
 
+  it('rejects a main-owned fixed script when the visible View identity was replaced', async () => {
+    const { manager, source } = await createSource()
+    const identity = manager.getViewRuntimeIdentity('source-tab')!
+
+    source.executeJavaScript.mockResolvedValueOnce({ pageType: 'search-results' })
+    await expect(
+      manager.executeJavaScriptInView('source-tab', 'fixed-inspection-script', {
+        userGesture: false,
+        expectedRuntimeGeneration: identity.browserViewRuntimeGeneration,
+        expectedWebContentsId: identity.webContentsId,
+      }),
+    ).resolves.toEqual({ pageType: 'search-results' })
+
+    manager.destroyView('source-tab')
+    await manager.createView('source-tab', 'https://example.com', {
+      workspaceKey: '/workspace/a',
+      profileId: 'wechat',
+    })
+
+    await expect(
+      manager.executeJavaScriptInView('source-tab', 'fixed-inspection-script', {
+        expectedRuntimeGeneration: identity.browserViewRuntimeGeneration,
+        expectedWebContentsId: identity.webContentsId,
+      }),
+    ).rejects.toThrow('不存在或已经销毁')
+  })
+
   it('returns a count-only fallback when Electron omits found-in-page', async () => {
     vi.useFakeTimers()
     try {

@@ -511,6 +511,8 @@ const imageResearchCandidateSchema = z
     visibleText: z.array(trimmedText(500, '页面可见文字')).max(20),
     sanitizedPageUrl: z.url().max(4_096),
     reopenPath: z.string().trim().min(1).max(2_048).startsWith('/').optional(),
+    sourceRecoveryStatus: z.enum(['available', 'unavailable']).optional(),
+    sourceRecoveryIssue: optionalTrimmedText(1_000, '候选来源恢复问题'),
     proposedAt: timestampSchema,
     decision: z.enum(['self-saved', 'skipped']).optional(),
     decisionOperationId: trimmedText(200, '决定操作 ID').optional(),

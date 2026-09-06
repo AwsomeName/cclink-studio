@@ -383,6 +383,40 @@ export class WebAffairService {
     )
   }
 
+  markImageResearchCandidateSourceRecovery(
+    affairId: string,
+    candidateId: string,
+    status: 'available' | 'unavailable',
+    issue: string | undefined,
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(affairId, workspaceId, async () => {
+      const affair = this.findAffair(affairId)
+      const research = affair?.imageResearch
+      if (!affair || !research || research.currentCandidateId !== candidateId) {
+        return this.transitionError('候选已过期或不再等待决定')
+      }
+      const now = this.timestamp()
+      return this.persistAffair({
+        ...affair,
+        imageResearch: {
+          ...research,
+          candidates: research.candidates.map((candidate) =>
+            candidate.id === candidateId
+              ? {
+                  ...candidate,
+                  sourceRecoveryStatus: status,
+                  sourceRecoveryIssue:
+                    status === 'unavailable' ? issue?.trim().slice(0, 1_000) : undefined,
+                }
+              : candidate,
+          ),
+        },
+        updatedAt: now,
+      })
+    })
+  }
+
   markImageResearchNeedsAttention(
     affairId: string,
     attemptId: string,

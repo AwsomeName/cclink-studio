@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto'
-import type { Page } from 'playwright-core'
 import type { AgentBridge } from '../agent/agent-bridge'
 import type { BrowserManager } from '../browser/browser-manager'
 import type {
   BrowserAccountRecoveryLease,
   BrowserTaskRuntime,
 } from '../browser/browser-task-runtime'
-import type { PlaywrightBridge } from '../playwright/playwright-bridge'
+import {
+  XiaohongshuVisiblePageAdapter,
+  type XiaohongshuPageInspection,
+} from './xiaohongshu-visible-page-adapter'
 import type { ToolExecutionContext } from '../agent-core/tools/types'
 import type { WebAffairService } from '../web-affairs/web-affair-service'
 import type {
@@ -19,7 +21,6 @@ interface ImageResearchDependencies {
   getAgentBridge: () => AgentBridge | null
   getBrowserManager: () => BrowserManager | null
   getBrowserTaskRuntime: () => BrowserTaskRuntime | null
-  getPlaywrightBridge: () => PlaywrightBridge | null
 }
 
 interface ActiveImageResearchRuntime {
@@ -33,6 +34,8 @@ interface ActiveImageResearchRuntime {
   agentRunId: string
   browserTaskRunId: string
   tabId: string
+  browserViewRuntimeGeneration: number
+  webContentsId: number
   pageBindingGeneration: number
 }
 
@@ -159,8 +162,7 @@ export class ImageResearchService {
     if (existing?.candidateId === candidate.id) return { success: true, data: affair }
     const browserManager = this.dependencies.getBrowserManager()
     const browserTaskRuntime = this.dependencies.getBrowserTaskRuntime()
-    const playwrightBridge = this.dependencies.getPlaywrightBridge()
-    if (!browserManager || !browserTaskRuntime || !playwrightBridge) {
+    if (!browserManager || !browserTaskRuntime) {
       return unavailable('浏览器运行尚未就绪')
     }
     if (affair.workspaceRef.kind !== 'local') return invalid('图片调研只支持本地工作空间')
@@ -184,18 +186,34 @@ export class ImageResearchService {
       )
       if (!tabId) throw new Error('候选页面打开超时')
       await browserManager.navigate(tabId, targetUrl)
-      await this.preparePage(tabId, playwrightBridge, browserManager)
-      const page = playwrightBridge.getPageById(tabId)
-      if (!page || (await this.readCurrentNoteId(page)) !== candidate.noteId) {
+      const viewIdentity = browserManager.getViewRuntimeIdentity(tabId)
+      if (!viewIdentity) throw new Error('候选页面运行身份不可用')
+      const adapter = new XiaohongshuVisiblePageAdapter(browserManager, viewIdentity)
+      const inspection = await adapter.waitForInspectablePage(tabId)
+      if (inspection.noteId !== candidate.noteId) {
         throw new Error('无法重新定位原候选笔记；仍可确认已保存或跳过')
       }
-      await this.moveToImageIndex(page, candidate.imageIndex)
+      await adapter.moveToImageIndex(tabId, candidate.imageIndex)
       this.heldLeaseByAffair.set(affairId, { lease, affairId, candidateId: candidate.id, tabId })
       this.installBrowserObserver(browserManager)
-      return { success: true, data: affair }
+      return this.webAffairService.markImageResearchCandidateSourceRecovery(
+        affairId,
+        candidate.id,
+        'available',
+        undefined,
+        workspaceId,
+      )
     } catch (error) {
       browserTaskRuntime.releaseAccountRecoveryLease(lease.id)
-      return invalid(error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      await this.webAffairService.markImageResearchCandidateSourceRecovery(
+        affairId,
+        candidate.id,
+        'unavailable',
+        message,
+        workspaceId,
+      )
+      return invalid(message)
     }
   }
 
@@ -213,61 +231,67 @@ export class ImageResearchService {
   async search(query: string, context?: ToolExecutionContext): Promise<unknown> {
     const runtime = this.requireRuntime(context)
     const affair = this.getAffair(runtime.affairId, runtime.workspaceId)
-    if (!affair?.imageResearch?.searchTerms.includes(query.trim())) {
+    const normalizedQuery = query.trim()
+    if (!affair?.imageResearch?.searchTerms.includes(normalizedQuery)) {
       return invalid('搜索词不在任务冻结配置中')
     }
-    const page = this.requirePage(runtime)
-    await page.goto(`${XHS_ORIGIN}/search_result?keyword=${encodeURIComponent(query.trim())}`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 20_000,
-    })
-    await page.waitForTimeout(800)
+    const browserManager = this.requireBrowserManager(runtime)
+    await this.withBrowserAction(
+      runtime,
+      'image-research-search',
+      JSON.stringify({ query: normalizedQuery }),
+      async () => {
+        await browserManager.navigate(
+          runtime.tabId,
+          `${XHS_ORIGIN}/search_result?keyword=${encodeURIComponent(normalizedQuery)}`,
+        )
+        await this.adapterForRuntime(runtime).waitForInspectablePage(runtime.tabId)
+      },
+    )
     this.invalidateRuntimeReferences(runtime)
     return this.inspectPage(context)
   }
 
   async inspectPage(context?: ToolExecutionContext): Promise<unknown> {
     const runtime = this.requireRuntime(context)
-    const page = this.requirePage(runtime)
-    const noteId = await this.readCurrentNoteId(page)
-    if (!noteId) {
-      const results = await this.readSearchResults(page, runtime)
-      const loginRequired =
-        (await page.locator('text=登录后查看搜索结果').count()) > 0 ||
-        (await page.locator('input[placeholder*="手机号"]').count()) > 0
+    return this.withBrowserAction(runtime, 'image-research-inspect', '{}', async () => {
+      const inspection = await this.adapterForRuntime(runtime).inspect(runtime.tabId)
+      if (!inspection.noteId) {
+        const results = this.recordSearchResults(inspection, runtime)
+        return {
+          success: true,
+          data: {
+            pageType: inspection.loginRequired
+              ? 'login-required'
+              : results.length > 0
+                ? 'search-results'
+                : 'unknown',
+            results: results.map(({ id: resultRef, title, authorDisplayName }) => ({
+              resultRef,
+              title,
+              ...(authorDisplayName ? { authorDisplayName } : {}),
+            })),
+          },
+        }
+      }
+      const detail = this.readNoteDetail(inspection, inspection.noteId)
+      const proposalToken = randomUUID()
+      const proposal: ProposalReference = { id: proposalToken, runtime, ...detail }
+      this.proposalRefs.set(proposalToken, proposal)
       return {
         success: true,
         data: {
-          pageType: loginRequired
-            ? 'login-required'
-            : results.length > 0
-              ? 'search-results'
-              : 'unknown',
-          results: results.map(({ id: resultRef, title, authorDisplayName }) => ({
-            resultRef,
-            title,
-            ...(authorDisplayName ? { authorDisplayName } : {}),
-          })),
+          pageType: 'note-detail',
+          noteId: detail.noteId,
+          title: detail.title,
+          authorDisplayName: detail.authorDisplayName,
+          imageIndex: detail.imageIndex,
+          totalImages: detail.totalImages,
+          visibleText: detail.visibleText,
+          proposalToken,
         },
       }
-    }
-    const detail = await this.readNoteDetail(page, noteId)
-    const proposalToken = randomUUID()
-    const proposal: ProposalReference = { id: proposalToken, runtime, ...detail }
-    this.proposalRefs.set(proposalToken, proposal)
-    return {
-      success: true,
-      data: {
-        pageType: 'note-detail',
-        noteId: detail.noteId,
-        title: detail.title,
-        authorDisplayName: detail.authorDisplayName,
-        imageIndex: detail.imageIndex,
-        totalImages: detail.totalImages,
-        visibleText: detail.visibleText,
-        proposalToken,
-      },
-    }
+    })
   }
 
   async openResult(resultRef: string, context?: ToolExecutionContext): Promise<unknown> {
@@ -277,18 +301,19 @@ export class ImageResearchService {
       return invalid('搜索结果引用已过期，请重新 inspect')
     }
     this.assertPageBinding(runtime)
-    const page = this.requirePage(runtime)
-    const anchor = page
-      .locator(`a[href*="${cssEscape(reference.noteId)}"]`)
-      .filter({ visible: true })
-      .first()
-    if ((await anchor.count()) === 0) return invalid('搜索列表已变化，请重新 inspect')
-    await anchor.click({ timeout: 8_000 })
-    await page.waitForTimeout(800)
-    const openedNoteId = await this.readCurrentNoteId(page)
-    if (openedNoteId !== reference.noteId) {
+    const adapter = this.adapterForRuntime(runtime)
+    const opened = await this.withBrowserAction(
+      runtime,
+      'image-research-open-result',
+      JSON.stringify({ noteId: reference.noteId }),
+      async () => {
+        if (!(await adapter.openResult(runtime.tabId, reference.noteId))) return null
+        const inspection = await adapter.waitForInspectablePage(runtime.tabId)
+        return inspection.noteId
+      },
+    )
+    if (opened !== reference.noteId)
       return invalid('搜索结果已变化且打开的笔记身份不匹配，请重新 inspect')
-    }
     this.invalidateRuntimeReferences(runtime)
     return this.inspectPage(context)
   }
@@ -300,8 +325,10 @@ export class ImageResearchService {
       return invalid('候选 token 已过期，请重新 inspect')
     }
     this.assertPageBinding(runtime)
-    const page = this.requirePage(runtime)
-    const current = await this.readNoteDetail(page, proposal.noteId)
+    const current = this.readNoteDetail(
+      await this.adapterForRuntime(runtime).inspect(runtime.tabId),
+      proposal.noteId,
+    )
     if (current.noteId !== proposal.noteId || current.imageIndex !== proposal.imageIndex) {
       return invalid('页面已切换到其他笔记或图片，请重新 inspect')
     }
@@ -360,11 +387,10 @@ export class ImageResearchService {
     const agentBridge = this.dependencies.getAgentBridge()
     const browserManager = this.dependencies.getBrowserManager()
     const browserTaskRuntime = this.dependencies.getBrowserTaskRuntime()
-    const playwrightBridge = this.dependencies.getPlaywrightBridge()
     if (!attempt || !research || affair.workspaceRef.kind !== 'local') {
       return invalid('图片调研运行状态不完整')
     }
-    if (!agentBridge || !browserManager || !browserTaskRuntime || !playwrightBridge) {
+    if (!agentBridge || !browserManager || !browserTaskRuntime) {
       return unavailable('Agent 或浏览器运行尚未就绪')
     }
     this.installAgentObserver(agentBridge)
@@ -391,9 +417,8 @@ export class ImageResearchService {
         held?.tabId,
       )
       if (!tabId) throw new Error('小红书账号页面打开超时')
-      await this.preparePage(tabId, playwrightBridge, browserManager)
-      const pageBinding = playwrightBridge.getPageBindingIdentity(tabId)
-      if (!pageBinding) throw new Error('小红书页面运行身份不可用')
+      const viewIdentity = browserManager.getViewRuntimeIdentity(tabId)
+      if (!viewIdentity) throw new Error('小红书页面运行身份不可用')
       const conversationId = `image-research-${affair.id}`
       const agentRunId = `run-${attempt.launchOperationId}`
       const prompt = buildPrompt(affair)
@@ -442,8 +467,6 @@ export class ImageResearchService {
             browserViewRuntimeGeneration:
               browserManager.getViewRuntimeIdentity(tabId)?.browserViewRuntimeGeneration,
             webContentsId: browserManager.getViewRuntimeIdentity(tabId)?.webContentsId,
-            playwrightConnectionGeneration: pageBinding.connectionGeneration,
-            playwrightPageBindingGeneration: pageBinding.generation,
           }
           const bound = await this.webAffairService.bindImageResearchAttempt(
             {
@@ -478,7 +501,9 @@ export class ImageResearchService {
             agentRunId,
             browserTaskRunId: prepared.browserTaskRunId,
             tabId,
-            pageBindingGeneration: pageBinding.generation,
+            browserViewRuntimeGeneration: viewIdentity.browserViewRuntimeGeneration,
+            webContentsId: viewIdentity.webContentsId,
+            pageBindingGeneration: viewIdentity.documentGeneration,
           })
         },
       })
@@ -527,167 +552,65 @@ export class ImageResearchService {
   }
 
   private assertPageBinding(runtime: ActiveImageResearchRuntime): void {
-    const binding = this.dependencies.getPlaywrightBridge()?.getPageBindingIdentity(runtime.tabId)
-    if (!binding || binding.generation !== runtime.pageBindingGeneration) {
+    const binding = this.dependencies.getBrowserManager()?.getViewRuntimeIdentity(runtime.tabId)
+    if (
+      !binding ||
+      binding.browserViewRuntimeGeneration !== runtime.browserViewRuntimeGeneration ||
+      binding.webContentsId !== runtime.webContentsId
+    ) {
       throw new Error('页面已经重新绑定，请重试本轮搜索')
     }
   }
 
-  private requirePage(runtime: ActiveImageResearchRuntime): Page {
-    const page = this.dependencies.getPlaywrightBridge()?.getPageById(runtime.tabId)
-    if (!page || page.isClosed()) throw new Error('小红书页面不可用')
-    return page
+  private requireBrowserManager(runtime: ActiveImageResearchRuntime): BrowserManager {
+    const browserManager = this.dependencies.getBrowserManager()
+    const identity = browserManager?.getViewRuntimeIdentity(runtime.tabId)
+    if (!browserManager || !identity) throw new Error('小红书页面不可用')
+    return browserManager
   }
 
-  private async preparePage(
-    tabId: string,
-    playwrightBridge: PlaywrightBridge,
-    browserManager: BrowserManager,
-  ): Promise<void> {
-    await playwrightBridge.ensureConnected('image_research')
-    await browserManager.ensurePlaywrightPage(tabId)
-    await playwrightBridge.switchToPage(tabId)
+  private adapterForRuntime(runtime: ActiveImageResearchRuntime): XiaohongshuVisiblePageAdapter {
+    return new XiaohongshuVisiblePageAdapter(this.requireBrowserManager(runtime), {
+      browserViewRuntimeGeneration: runtime.browserViewRuntimeGeneration,
+      webContentsId: runtime.webContentsId,
+    })
   }
 
-  private async readSearchResults(
-    page: Page,
+  private recordSearchResults(
+    inspection: XiaohongshuPageInspection,
     runtime: ActiveImageResearchRuntime,
-  ): Promise<ResultReference[]> {
-    const anchors = page.locator(
-      'a[href*="/explore/"], a[href*="/discovery/item/"], a[href*="/search_result/"]',
-    )
-    const count = Math.min(await anchors.count(), 80)
+  ): ResultReference[] {
     const results: ResultReference[] = []
     const seen = new Set<string>()
-    for (let index = 0; index < count && results.length < MAX_RESULTS; index += 1) {
-      const anchor = anchors.nth(index)
-      if (!(await anchor.isVisible().catch(() => false))) continue
-      const href = await anchor.getAttribute('href')
-      const noteId = parseXiaohongshuNoteId(href ?? '')
-      if (!noteId || seen.has(noteId)) continue
-      const text = boundedText(await anchor.innerText().catch(() => ''), 500)
-      if (!text) continue
-      const lines = text
-        .split(/\n+/)
-        .map((item) => item.trim())
-        .filter(Boolean)
+    for (const result of inspection.results.slice(0, MAX_RESULTS)) {
+      if (seen.has(result.noteId)) continue
       const reference: ResultReference = {
         id: randomUUID(),
         runtime: { ...runtime },
-        noteId,
-        title: lines[0] ?? '未命名笔记',
-        authorDisplayName: lines.length > 1 ? lines[lines.length - 1] : undefined,
+        noteId: result.noteId,
+        title: result.title,
+        authorDisplayName: result.authorDisplayName,
       }
       this.resultRefs.set(reference.id, reference)
       results.push(reference)
-      seen.add(noteId)
+      seen.add(result.noteId)
     }
     return results
   }
 
-  private async readCurrentNoteId(page: Page): Promise<string | null> {
-    const fromUrl = parseXiaohongshuNoteId(page.url())
-    if (fromUrl) return fromUrl
-    const identityNodes = page.locator(
-      '[role="dialog"] [data-note-id], [class*="note-detail"] [data-note-id]',
-    )
-    const identityCount = Math.min(await identityNodes.count(), 10)
-    for (let index = 0; index < identityCount; index += 1) {
-      const node = identityNodes.nth(index)
-      if (!(await node.isVisible().catch(() => false))) continue
-      const noteId = (await node.getAttribute('data-note-id'))?.trim()
-      if (noteId && /^[a-zA-Z0-9_-]{6,200}$/.test(noteId)) return noteId
-    }
-    const visibleAnchors = page.locator(
-      '[role="dialog"] a[href*="/explore/"], [class*="note-detail"] a[href*="/explore/"]',
-    )
-    const count = Math.min(await visibleAnchors.count(), 20)
-    for (let index = 0; index < count; index += 1) {
-      const anchor = visibleAnchors.nth(index)
-      if (!(await anchor.isVisible().catch(() => false))) continue
-      const noteId = parseXiaohongshuNoteId((await anchor.getAttribute('href')) ?? '')
-      if (noteId) return noteId
-    }
-    return null
-  }
-
-  private async readNoteDetail(page: Page, expectedNoteId: string) {
-    const noteId = await this.readCurrentNoteId(page)
-    if (!noteId || noteId !== expectedNoteId) throw new Error('当前详情页笔记身份不匹配')
-    const visibleText = await this.readVisibleText(page)
-    const title = visibleText[0] ?? (boundedText(await page.title(), 500) || '未命名笔记')
-    const author = await firstVisibleText(page, [
-      '[role="dialog"] [class*="author"]',
-      '[class*="note"] [class*="author"]',
-      '[class*="user-name"]',
-    ])
-    const { imageIndex, totalImages } = await this.readCarouselPosition(page)
-    const sanitizedPageUrl = `${XHS_ORIGIN}/explore/${encodeURIComponent(noteId)}`
+  private readNoteDetail(inspection: XiaohongshuPageInspection, expectedNoteId: string) {
+    if (inspection.noteId !== expectedNoteId) throw new Error('当前详情页笔记身份不匹配')
+    const title = inspection.visibleText[0] ?? inspection.title ?? '未命名笔记'
+    const sanitizedPageUrl = `${XHS_ORIGIN}/explore/${encodeURIComponent(expectedNoteId)}`
     return {
-      noteId,
-      imageIndex,
-      totalImages,
+      noteId: expectedNoteId,
+      imageIndex: inspection.imageIndex,
+      totalImages: inspection.totalImages,
       title,
-      authorDisplayName: author || undefined,
-      visibleText,
+      authorDisplayName: inspection.authorDisplayName,
+      visibleText: inspection.visibleText,
       sanitizedPageUrl,
-      reopenPath: `/explore/${encodeURIComponent(noteId)}`,
-    }
-  }
-
-  private async readVisibleText(page: Page): Promise<string[]> {
-    const selectors = [
-      '[role="dialog"] h1',
-      '[role="dialog"] [class*="title"]',
-      '[role="dialog"] [class*="desc"]',
-      '[role="dialog"] [class*="tag"]',
-      '[class*="note"] [class*="title"]',
-      '[class*="note"] [class*="desc"]',
-    ]
-    const output: string[] = []
-    let total = 0
-    for (const selector of selectors) {
-      const locator = page.locator(selector)
-      const count = Math.min(await locator.count(), 20)
-      for (let index = 0; index < count && output.length < 20; index += 1) {
-        const item = locator.nth(index)
-        if (!(await item.isVisible().catch(() => false))) continue
-        const value = boundedText(await item.innerText().catch(() => ''), 500)
-        if (!value || output.includes(value) || total + value.length > 2_000) continue
-        output.push(value)
-        total += value.length
-      }
-    }
-    return output
-  }
-
-  private async readCarouselPosition(
-    page: Page,
-  ): Promise<{ imageIndex: number; totalImages: number }> {
-    const dots = page.locator(
-      '[role="dialog"] .swiper-pagination-bullet, [role="dialog"] [class*="indicator"] [class*="dot"]',
-    )
-    const count = Math.min(await dots.count(), 500)
-    let active = 0
-    for (let index = 0; index < count; index += 1) {
-      const className = (await dots.nth(index).getAttribute('class')) ?? ''
-      if (/active|current|selected/i.test(className)) {
-        active = index
-        break
-      }
-    }
-    return { imageIndex: active, totalImages: Math.max(1, count) }
-  }
-
-  private async moveToImageIndex(page: Page, target: number): Promise<void> {
-    if (target <= 0) return
-    const next = page
-      .locator('[role="dialog"] button[aria-label*="下一"], [role="dialog"] [class*="next"]')
-      .first()
-    for (let index = 0; index < target; index += 1) {
-      if ((await next.count()) === 0 || !(await next.isVisible().catch(() => false))) break
-      await next.click({ timeout: 3_000 })
-      await page.waitForTimeout(150)
+      reopenPath: `/explore/${encodeURIComponent(expectedNoteId)}`,
     }
   }
 
@@ -734,6 +657,34 @@ export class ImageResearchService {
     this.heldLeaseByAffair.delete(affairId)
   }
 
+  private async withBrowserAction<T>(
+    runtime: ActiveImageResearchRuntime,
+    action: string,
+    paramsSummary: string,
+    execute: () => Promise<T>,
+  ): Promise<T> {
+    const browserTaskRuntime = this.dependencies.getBrowserTaskRuntime()
+    const log = browserTaskRuntime?.startActionLog({
+      taskRunId: runtime.browserTaskRunId,
+      tabId: runtime.tabId,
+      action,
+      paramsSummary,
+    })
+    try {
+      const result = await execute()
+      if (log) browserTaskRuntime?.succeedActionLog(log.id)
+      return result
+    } catch (error) {
+      if (log) {
+        browserTaskRuntime?.failActionLog(log.id, {
+          reason: 'unknown',
+          errorMessage: error instanceof Error ? error.message : String(error),
+        })
+      }
+      throw error
+    }
+  }
+
   private invalidateRuntimeReferences(runtime: ActiveImageResearchRuntime): void {
     for (const [id, reference] of this.resultRefs) {
       if (sameRuntime(reference.runtime, runtime)) this.resultRefs.delete(id)
@@ -770,21 +721,6 @@ export function parseXiaohongshuNoteId(value: string): string | null {
   return match?.[1] ?? null
 }
 
-function boundedText(value: string, max: number): string {
-  return value.replace(/\s+/g, ' ').trim().slice(0, max)
-}
-
-async function firstVisibleText(page: Page, selectors: string[]): Promise<string> {
-  for (const selector of selectors) {
-    const locator = page.locator(selector).first()
-    if ((await locator.count()) > 0 && (await locator.isVisible().catch(() => false))) {
-      const text = boundedText(await locator.innerText().catch(() => ''), 200)
-      if (text) return text
-    }
-  }
-  return ''
-}
-
 function sameRuntime(left: ActiveImageResearchRuntime, right: ActiveImageResearchRuntime): boolean {
   return (
     left.affairId === right.affairId &&
@@ -795,10 +731,6 @@ function sameRuntime(left: ActiveImageResearchRuntime, right: ActiveImageResearc
     left.browserTaskRunId === right.browserTaskRunId &&
     left.pageBindingGeneration === right.pageBindingGeneration
   )
-}
-
-function cssEscape(value: string): string {
-  return value.replace(/["\\]/g, '\\$&')
 }
 
 function invalid<T>(message: string): WebAffairOperationResult<T> {

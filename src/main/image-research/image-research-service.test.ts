@@ -56,6 +56,7 @@ describe('ImageResearchService', () => {
             tabId: 'browser-tab-a',
             browserViewRuntimeGeneration: 3,
             webContentsId: 9,
+            documentGeneration: 2,
           })),
         }) as never,
       getBrowserTaskRuntime: () =>
@@ -77,12 +78,6 @@ describe('ImageResearchService', () => {
             tabId: 'browser-tab-a',
           })),
           finishTask: vi.fn(),
-        }) as never,
-      getPlaywrightBridge: () =>
-        ({
-          ensureConnected: vi.fn(async () => undefined),
-          switchToPage: vi.fn(async () => undefined),
-          getPageBindingIdentity: vi.fn(() => ({ connectionGeneration: 2, generation: 4 })),
         }) as never,
     })
 
@@ -143,6 +138,10 @@ describe('ImageResearchService', () => {
     const service = new ImageResearchService(
       {
         getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [affair] } })),
+        markImageResearchCandidateSourceRecovery: vi.fn(async () => ({
+          success: true,
+          data: affair,
+        })),
       } as never,
       {
         getAgentBridge: () => null,
@@ -150,7 +149,22 @@ describe('ImageResearchService', () => {
           ({
             waitForAccountView: vi.fn(async () => 'candidate-tab'),
             navigate: vi.fn(async () => undefined),
-            ensurePlaywrightPage: vi.fn(async () => undefined),
+            getViewRuntimeIdentity: vi.fn(() => ({
+              tabId: 'candidate-tab',
+              browserViewRuntimeGeneration: 1,
+              webContentsId: 10,
+              documentGeneration: 1,
+            })),
+            executeJavaScriptInView: vi.fn(async () => ({
+              url: 'https://www.xiaohongshu.com/explore/66abc123def456',
+              title: '奥森湖边拍照',
+              loginRequired: false,
+              noteId: '66abc123def456',
+              imageIndex: 0,
+              totalImages: 1,
+              visibleText: ['奥森湖边拍照'],
+              results: [],
+            })),
             destroyView,
             onViewDestroyed: vi.fn(),
           }) as never,
@@ -168,15 +182,6 @@ describe('ImageResearchService', () => {
             })),
             releaseAccountRecoveryLease,
           }) as never,
-        getPlaywrightBridge: () =>
-          ({
-            ensureConnected: vi.fn(async () => undefined),
-            switchToPage: vi.fn(async () => undefined),
-            getPageById: vi.fn(() => ({
-              isClosed: () => false,
-              url: () => 'https://www.xiaohongshu.com/explore/66abc123def456',
-            })),
-          }) as never,
       },
     )
 
@@ -187,6 +192,82 @@ describe('ImageResearchService', () => {
     expect(service.closeCandidate(affair.id, affair.workspaceId!)).toMatchObject({ success: true })
     expect(destroyView).toHaveBeenCalledWith('candidate-tab')
     expect(releaseAccountRecoveryLease).toHaveBeenCalledWith('candidate-lease')
+  })
+
+  it('persists an unavailable source without disabling the candidate decision', async () => {
+    const affair = imageResearchAffair()
+    const candidateId = '88888888-8888-4888-8888-888888888888'
+    affair.attempts[0].status = 'waiting-human'
+    affair.imageResearch = {
+      ...affair.imageResearch!,
+      status: 'waiting-human',
+      currentCandidateId: candidateId,
+      candidates: [
+        {
+          id: candidateId,
+          executionGeneration: 1,
+          noteId: '66abc123def456',
+          imageIndex: 0,
+          title: '奥森湖边拍照',
+          visibleText: [],
+          sanitizedPageUrl: 'https://www.xiaohongshu.com/explore/66abc123def456',
+          reopenPath: '/explore/66abc123def456',
+          proposedAt: new Date().toISOString(),
+        },
+      ],
+    }
+    const markRecovery = vi.fn(async () => ({ success: true, data: affair }))
+    const releaseLease = vi.fn()
+    const service = new ImageResearchService(
+      {
+        getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [affair] } })),
+        markImageResearchCandidateSourceRecovery: markRecovery,
+      } as never,
+      {
+        getAgentBridge: () => null,
+        getBrowserManager: () =>
+          ({
+            waitForAccountView: vi.fn(async () => 'candidate-tab'),
+            navigate: vi.fn(async () => undefined),
+            executeJavaScriptInView: vi.fn(async () => ({
+              url: 'https://www.xiaohongshu.com/404',
+              title: '404',
+              loginRequired: false,
+              noteId: null,
+              imageIndex: 0,
+              totalImages: 1,
+              visibleText: [],
+              results: [],
+            })),
+          }) as never,
+        getBrowserTaskRuntime: () =>
+          ({
+            acquireAccountRecoveryLease: vi.fn(() => ({
+              id: 'candidate-lease',
+              accountId: affair.attempts[0].accountId,
+              profileId: affair.attempts[0].profileId,
+              affairId: affair.id,
+              attemptId: affair.attempts[0].id,
+              executionGeneration: 1,
+              launchOperationId: affair.attempts[0].launchOperationId,
+              acquiredAt: Date.now(),
+            })),
+            releaseAccountRecoveryLease: releaseLease,
+          }) as never,
+      },
+    )
+
+    await expect(service.openCandidate(affair.id, affair.workspaceId!)).resolves.toMatchObject({
+      success: false,
+    })
+    expect(markRecovery).toHaveBeenCalledWith(
+      affair.id,
+      candidateId,
+      'unavailable',
+      expect.stringContaining('无法重新定位'),
+      affair.workspaceId,
+    )
+    expect(releaseLease).toHaveBeenCalledWith('candidate-lease')
   })
 })
 
