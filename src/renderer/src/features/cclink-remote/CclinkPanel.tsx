@@ -188,10 +188,7 @@ function RemoteDirectoryPicker({
 }): React.ReactElement {
   const pendingPermissions = useCclinkStore((state) => state.pendingPermissions)
   const respondPermission = useCclinkStore((state) => state.respondPermission)
-  const initialPath = useMemo(
-    () => server.workspaces.find((item) => item.exists !== false)?.path || '/',
-    [server],
-  )
+  const initialPath = useMemo(() => resolveRemoteDirectoryInitialPath(server), [server])
   const [path, setPath] = useState(initialPath)
   const [tree, setTree] = useState<CclinkTreeNode | null>(null)
   const [loading, setLoading] = useState(false)
@@ -330,6 +327,12 @@ function RemoteDirectoryPicker({
       </button>
     </div>
   )
+}
+
+export function resolveRemoteDirectoryInitialPath(
+  server: Pick<CclinkServer, 'workspaces'>,
+): string {
+  return server.workspaces.find((item) => item.exists !== false)?.path || '~'
 }
 
 function parentPath(path: string): string | null {
