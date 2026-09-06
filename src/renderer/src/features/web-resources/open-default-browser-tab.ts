@@ -5,9 +5,12 @@ export const EMPTY_BROWSER_TAB_URL = 'about:blank'
 
 export interface OpenBrowserTabResult {
   tabId: string
+  saveable: boolean
+  error?: string
 }
 
-export interface OpenWebAccountDraftTabResult extends OpenBrowserTabResult {
+export interface OpenWebAccountDraftTabResult {
+  tabId: string
   success: boolean
   error?: string
 }
@@ -42,18 +45,45 @@ function openBrowserTab(
     initialUrl: options.initialUrl ?? EMPTY_BROWSER_TAB_URL,
     forceNew: true,
   })
-  return { tabId: getOpenedTabId() }
+  return { tabId: getOpenedTabId(), saveable: Boolean(binding) }
 }
 
-/** 打开共享默认 Session 的普通 Browser Tab；不依赖网站账号服务。 */
+/**
+ * 打开普通 Browser Tab。对本地工作空间，预先分配一个持久 Profile 草稿：用户可以先正常
+ * 浏览和登录，再把当前 Tab 原地保存成账号；保存过程不会切换 Profile 或要求再次登录。
+ */
 export async function openDefaultBrowserTab(
   workspaceRef: WorkspaceRef,
   options: OpenDefaultBrowserTabOptions = {},
 ): Promise<OpenBrowserTabResult> {
-  return openBrowserTab(workspaceRef, options)
+  if (workspaceRef.kind === 'local') {
+    try {
+      const result = await window.cclinkStudio.webResources.beginDraft({ workspaceRef })
+      if (result.success) {
+        return openBrowserTab(workspaceRef, options, {
+          browserProfile: result.data.browserProfileId,
+          draftId: result.data.draftId,
+        })
+      }
+      return {
+        ...openBrowserTab(workspaceRef, options),
+        error: result.error.message,
+      }
+    } catch (error) {
+      return {
+        ...openBrowserTab(workspaceRef, options),
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  return {
+    ...openBrowserTab(workspaceRef, options),
+    error: '请先打开一个本地项目',
+  }
 }
 
-/** 只有明确“添加网站与账号”时才创建隔离的账号草稿 Profile。 */
+/** 从账号管理入口添加账号；与普通 Browser 使用同一种“先浏览登录、后原地保存”模型。 */
 export async function openWebAccountDraftTab(
   workspaceRef: WorkspaceRef,
   options: OpenDefaultBrowserTabOptions = {},

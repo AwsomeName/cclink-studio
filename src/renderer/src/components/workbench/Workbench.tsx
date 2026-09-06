@@ -19,7 +19,11 @@ import {
   readConversationDragData,
   readRemoteConversationDragData,
 } from '../../features/agent-conversations/conversation-workbench'
-import { openDefaultBrowserTab } from '../../features/web-resources/open-default-browser-tab'
+import {
+  openDefaultBrowserTab,
+  openWebAccountDraftTab,
+} from '../../features/web-resources/open-default-browser-tab'
+import { resolveAndOpenWebResourceTab } from '../../features/web-resources/web-resource-tab'
 import { isDetachedFromMain, useWorkbenchWindowStore } from '../../stores/workbench-window-store'
 import {
   beginBrowserTabDetachDrag,
@@ -52,6 +56,10 @@ export function Workbench({
   const showToast = useToastStore((s) => s.show)
   const browserTabs = useBrowserStore((s) => s.tabs)
   const setBrowserUrlInput = useBrowserStore((s) => s.setUrlInput)
+  const beginBrowserNavigation = useBrowserStore((s) => s.beginNavigation)
+  const completeBrowserNavigation = useBrowserStore((s) => s.completeNavigation)
+  const failBrowserNavigation = useBrowserStore((s) => s.failNavigation)
+  const clearBrowserNavigation = useBrowserStore((s) => s.clearNavigation)
   const contentRef = useRef<HTMLDivElement>(null)
   const tabBarRef = useRef<HTMLDivElement>(null)
   const [conversationDropActive, setConversationDropActive] = useState(false)
@@ -62,7 +70,9 @@ export function Workbench({
   const isAndroidTab = activeTab?.type === 'android'
   const activeBrowserState = activeTabId ? browserTabs[activeTabId] : undefined
   const showBrowserNewTab =
-    isBrowserTab && isBrowserNewTabUrl(activeBrowserState?.url ?? activeTab?.initialUrl)
+    isBrowserTab &&
+    !activeBrowserState?.navigation &&
+    isBrowserNewTabUrl(activeBrowserState?.url ?? activeTab?.initialUrl)
 
   useWorkbenchBounds(contentRef, tabBarRef)
   useBrowserEvents()
@@ -139,11 +149,23 @@ export function Workbench({
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         url = 'https://' + url
       }
-      void window.cclinkStudio.browser.navigate(activeTabId, url).catch((error) => {
-        showToast(error instanceof Error ? error.message : String(error), 'error')
-      })
+      beginBrowserNavigation(activeTabId, url)
+      void window.cclinkStudio.browser
+        .navigate(activeTabId, url)
+        .then(() => completeBrowserNavigation(activeTabId, url))
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error)
+          failBrowserNavigation(activeTabId, url, message)
+          showToast('网页打开失败，可在页面中重试', 'error')
+        })
     },
-    [activeTabId, showToast],
+    [
+      activeTabId,
+      beginBrowserNavigation,
+      completeBrowserNavigation,
+      failBrowserNavigation,
+      showToast,
+    ],
   )
 
   const openNewDocument = useCallback((): void => {
@@ -281,6 +303,39 @@ export function Workbench({
     [activeTab, activeTabId, activeWorkspaceRef],
   )
 
+  const openBrowserAccount = useCallback(
+    (accountId: string): void => {
+      if (activeWorkspaceRef.kind !== 'local') {
+        showToast('请先打开本地工作空间，再打开已保存账号', 'error')
+        return
+      }
+      const blankTabId = showBrowserNewTab ? activeTabId : null
+      void resolveAndOpenWebResourceTab(accountId, activeWorkspaceRef)
+        .then(() => {
+          if (blankTabId) void closeTabWithDraftPolicy(blankTabId)
+        })
+        .catch((error) =>
+          showToast(error instanceof Error ? error.message : String(error), 'error'),
+        )
+    },
+    [activeTabId, activeWorkspaceRef, showBrowserNewTab, showToast],
+  )
+
+  const addBrowserAccount = useCallback((): void => {
+    if (activeWorkspaceRef.kind !== 'local') {
+      showToast('请先打开本地工作空间，再添加账号', 'error')
+      return
+    }
+    const blankTabId = showBrowserNewTab ? activeTabId : null
+    void openWebAccountDraftTab(activeWorkspaceRef).then((result) => {
+      if (!result.success) {
+        showToast(result.error ?? '账号环境创建失败', 'error')
+        return
+      }
+      if (blankTabId) void closeTabWithDraftPolicy(blankTabId)
+    })
+  }, [activeTabId, activeWorkspaceRef, showBrowserNewTab, showToast])
+
   return (
     <div
       className="workbench"
@@ -327,7 +382,14 @@ export function Workbench({
         activeTab={activeTab}
         isBrowserTab={isBrowserTab}
         showBrowserNewTab={showBrowserNewTab}
+        browserNavigation={activeBrowserState?.navigation ?? null}
         onOpenBrowserUrl={openBrowserUrl}
+        onOpenBrowserAccount={openBrowserAccount}
+        onAddBrowserAccount={addBrowserAccount}
+        onRetryBrowserNavigation={handleNavigate}
+        onCancelBrowserNavigation={() => {
+          if (activeTabId) clearBrowserNavigation(activeTabId)
+        }}
         contentRef={contentRef}
       />
     </div>

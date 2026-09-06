@@ -75,6 +75,7 @@ const MAIN_ICON_GROUPS: Array<{
 export function ActivityBar(): React.ReactElement {
   const activePanel = useUIStore((s) => s.activePanel)
   const setActivePanel = useUIStore((s) => s.setActivePanel)
+  const setAgentPanelMode = useUIStore((s) => s.setAgentPanelMode)
   const hideSidebar = useUIStore((s) => s.hideSidebar)
   const openTab = useTabStore((s) => s.openTab)
   const showContextMenu = useContextMenuStore((s) => s.show)
@@ -93,6 +94,7 @@ export function ActivityBar(): React.ReactElement {
 
   const handleClick = (id: ActivityPanel): void => {
     setActivePanel(id)
+    if (id === 'browser') setAgentPanelMode('right', 'user')
   }
 
   const handleOpenSettings = (): void => {

@@ -176,6 +176,31 @@ describe('openRequestedBrowserTab', () => {
     expect(useTabStore.getState().tabs).toHaveLength(2)
   })
 
+  it('reuses the active saveable ordinary draft for Agent browsing', async () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: 'browser-draft',
+          type: 'browser',
+          title: '普通浏览器',
+          icon: 'B',
+          workspaceRef,
+          browserProfile: 'draft-profile',
+          webResourceDraftRef: { draftId: 'draft-a' },
+        },
+      ],
+      activeTabId: 'browser-draft',
+    })
+
+    await openRequestedBrowserTab({
+      initialUrl: 'https://www.baidu.com/',
+      workspaceKey: '/workspace/a',
+    })
+
+    expect(useTabStore.getState().activeTabId).toBe('browser-draft')
+    expect(useTabStore.getState().tabs).toHaveLength(1)
+  })
+
   it('creates an ordinary Tab when the workspace only has an account Tab', async () => {
     useTabStore.setState({
       tabs: [
@@ -200,7 +225,8 @@ describe('openRequestedBrowserTab', () => {
     expect(useTabStore.getState().tabs).toHaveLength(2)
     expect(useTabStore.getState().tabs.at(-1)).toMatchObject({
       type: 'browser',
-      browserProfile: null,
+      browserProfile: 'profile-request',
+      webResourceDraftRef: { draftId: 'draft-request' },
       initialUrl: 'https://www.baidu.com/',
     })
   })
@@ -221,7 +247,8 @@ describe('openRequestedBrowserTab', () => {
       type: 'browser',
       initialUrl: 'https://www.baidu.com/',
       workspaceRef,
-      browserProfile: null,
+      browserProfile: 'profile-request',
+      webResourceDraftRef: { draftId: 'draft-request' },
     })
     expect(state.activeTabId).toBe(state.tabs.at(-1)?.id)
   })

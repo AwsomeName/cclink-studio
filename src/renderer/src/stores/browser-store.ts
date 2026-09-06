@@ -12,6 +12,12 @@ export type ViewMode = BrowserViewModeType
 /** 缩放模式：适应宽度（自动） / 手动 */
 export type ZoomMode = BrowserZoomModeType
 
+export interface BrowserNavigationState {
+  targetUrl: string
+  status: 'loading' | 'failed'
+  error: string | null
+}
+
 /** 默认首页 */
 const DEFAULT_URL = 'https://www.baidu.com'
 const EMPTY_TAB_URL = 'about:blank'
@@ -37,6 +43,8 @@ export interface BrowserTabState {
   historyIndex: number
   /** 主进程视图是否已创建 */
   ready: boolean
+  /** 地址栏提交后的瞬态反馈；不进入 WorkspaceState。 */
+  navigation?: BrowserNavigationState | null
 }
 
 export interface BrowserBookmark {
@@ -64,6 +72,14 @@ interface BrowserState {
   setUrl: (tabId: string, url: string, nav?: { history?: string[]; historyIndex?: number }) => void
   /** 仅设置 URL 输入框内容 */
   setUrlInput: (tabId: string, url: string) => void
+  /** 地址栏已经提交，等待主进程发布真实导航结果。 */
+  beginNavigation: (tabId: string, url: string) => void
+  /** 导航失败；保留目标地址供用户重试。 */
+  failNavigation: (tabId: string, url: string, error: string) => void
+  /** 对应提交已完成；只清理同一目标，避免旧请求覆盖新请求。 */
+  completeNavigation: (tabId: string, url: string) => void
+  /** 返回提交前的真实页面或空白新标签页。 */
+  clearNavigation: (tabId: string) => void
   /** 同步页面标题与 favicon。 */
   setPageMeta: (tabId: string, meta: { title?: string; faviconUrl?: string | null }) => void
   /** 同步主进程下发的视图状态 */
@@ -92,6 +108,7 @@ function defaultTab(url: string = DEFAULT_URL): BrowserTabState {
     history: [url],
     historyIndex: 0,
     ready: false,
+    navigation: null,
   }
 }
 
@@ -123,6 +140,7 @@ function normalizeBrowserSnapshot(value: unknown): {
           ? Math.min(Math.max(tab.historyIndex, 0), Math.max(history.length - 1, 0))
           : 0,
       ready: false,
+      navigation: null,
     }
   }
   const bookmarks = Array.isArray(parsed.bookmarks)
@@ -156,7 +174,8 @@ function saveStoredBrowserTabs(state: BrowserState): void {
     if (isWorkspaceStateRestoring()) return
     const tabs: Record<string, BrowserTabState> = {}
     for (const [id, tab] of Object.entries(state.tabs)) {
-      tabs[id] = { ...tab, ready: false }
+      const { navigation: _navigation, ...persistedTab } = tab
+      tabs[id] = { ...persistedTab, ready: false }
     }
     const workspaceKey = getWorkspaceStateKey()
     const ownerKey = getWorkspaceStateOwnerKey()
@@ -208,6 +227,7 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
             history: nav?.history?.length ? nav.history : tab.history,
             historyIndex:
               typeof nav?.historyIndex === 'number' ? nav.historyIndex : tab.historyIndex,
+            navigation: tab.navigation?.targetUrl === url ? null : tab.navigation,
           },
         },
       }
@@ -218,6 +238,65 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
       const tab = state.tabs[tabId]
       if (!tab) return state
       return { tabs: { ...state.tabs, [tabId]: { ...tab, urlInput: url } } }
+    }),
+
+  beginNavigation: (tabId, url) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: {
+            ...tab,
+            urlInput: url,
+            navigation: { targetUrl: url, status: 'loading', error: null },
+          },
+        },
+      }
+    }),
+
+  failNavigation: (tabId, url, error) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab || tab.navigation?.targetUrl !== url) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: {
+            ...tab,
+            navigation: { targetUrl: url, status: 'failed', error },
+          },
+        },
+      }
+    }),
+
+  completeNavigation: (tabId, url) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab || tab.navigation?.targetUrl !== url) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: { ...tab, navigation: null },
+        },
+      }
+    }),
+
+  clearNavigation: (tabId) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: {
+            ...tab,
+            urlInput: tab.url === EMPTY_TAB_URL ? '' : tab.url,
+            navigation: null,
+          },
+        },
+      }
     }),
 
   setPageMeta: (tabId, meta) =>

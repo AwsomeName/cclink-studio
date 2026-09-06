@@ -40,7 +40,7 @@ describe('conversation quick switcher', () => {
     expect(QUICK_SWITCHER_TITLE_LIMIT).toBe(10)
   })
 
-  it('keeps the active conversation within the five-item quick list', () => {
+  it('keeps the five-item quick list fixed when an overflow conversation becomes active', () => {
     const conversations = Array.from({ length: 7 }, (_, index) =>
       conversation(`thread-${index}`, 100 - index, index === 6),
     )
@@ -50,11 +50,11 @@ describe('conversation quick switcher', () => {
       'thread-1',
       'thread-2',
       'thread-3',
-      'thread-6',
+      'thread-4',
     ])
   })
 
-  it('pins the active conversation when the panel only fits a subset', () => {
+  it('keeps visible positions fixed when an overflow conversation becomes active', () => {
     const conversations = [
       conversation('newest', 3),
       conversation('middle', 2),
@@ -62,8 +62,8 @@ describe('conversation quick switcher', () => {
     ]
 
     expect(partitionQuickSwitcherThreads(conversations, 2)).toEqual({
-      visible: [conversations[0], conversations[2]],
-      overflow: [conversations[1]],
+      visible: [conversations[0], conversations[1]],
+      overflow: [conversations[2]],
     })
   })
 
@@ -138,5 +138,42 @@ describe('conversation quick switcher', () => {
         isActive: true,
       },
     ])
+  })
+
+  it('keeps remote sessions in creation order when their activity changes', () => {
+    const items = buildRemoteQuickSwitcherItems({
+      sessions: [
+        {
+          id: 'older',
+          name: '先创建',
+          workspaceId: 'workspace-1',
+          workspacePath: '/srv/project',
+          serverId: 'agent-1',
+          status: 'idle',
+          createdAt: 1,
+          updatedAt: 100,
+          messageCount: 2,
+          contextUsage: 0,
+        },
+        {
+          id: 'newer',
+          name: '后创建',
+          workspaceId: 'workspace-1',
+          workspacePath: '/srv/project',
+          serverId: 'agent-1',
+          status: 'active',
+          createdAt: 2,
+          updatedAt: 3,
+          messageCount: 1,
+          contextUsage: 0,
+        },
+      ],
+      selectedSessionId: 'older',
+      endpointId: 'agent-1',
+      workspaceId: 'workspace-1',
+    })
+
+    expect(items.map((item) => item.id)).toEqual(['newer', 'older'])
+    expect(items.map((item) => item.isActive)).toEqual([false, true])
   })
 })

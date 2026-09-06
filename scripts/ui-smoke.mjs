@@ -222,6 +222,17 @@ async function clickByTitle(page, title) {
   await page.locator(`[title="${title}"]`).first().click()
 }
 
+async function ensureActivityPanel(page, panelId, title) {
+  const state = await page.evaluate(async () => {
+    const { useUIStore } = await import('/src/stores/ui-store.ts')
+    const { activePanel, sidebarVisible } = useUIStore.getState()
+    return { activePanel, sidebarVisible }
+  })
+  if (state.activePanel !== panelId || !state.sidebarVisible) {
+    await clickByTitle(page, title)
+  }
+}
+
 async function createTabFromMenu(page, label) {
   await page.locator('.tab-new-button').first().click()
   const menu = page.locator('.tab-create-menu')
@@ -1390,7 +1401,7 @@ async function main() {
   })
 
   await runCheck('activity bar switches local panels', async () => {
-    await clickByTitle(page, '浏览器')
+    await ensureActivityPanel(page, 'browser', '浏览器')
     await page.waitForTimeout(200)
     assert(
       (await page.locator('.sidebar-header-title').innerText()) === '浏览器',
@@ -1886,11 +1897,11 @@ async function main() {
     }, rootDir)
     assert(projectOpened, 'smoke project could not be opened')
 
-    await clickByTitle(page, '网站与账号')
+    await ensureActivityPanel(page, 'browser', '浏览器')
     await page.waitForTimeout(200)
     assert(
-      (await page.locator('.sidebar-header-title').innerText()) === '网站与账号',
-      'web resources panel missing',
+      (await page.locator('.sidebar-header-title').innerText()) === '浏览器',
+      'unified browser panel missing',
     )
 
     const ordinarySourceTabId = await page.evaluate(async (fixtureOrigin) => {
@@ -1924,6 +1935,11 @@ async function main() {
       ordinarySourceTabId,
       { timeout: 10_000 },
     )
+    const ordinarySourceRuntime = await page.evaluate(
+      (tabId) => window.cclinkStudio.browser.getRuntimeDiagnostics(tabId),
+      ordinarySourceTabId,
+    )
+    assert(ordinarySourceRuntime.profileId, 'ordinary browser did not receive a saveable Profile')
     const ordinarySiblingTabId = await page.evaluate(async (fixtureOrigin) => {
       const [{ openDefaultBrowserTab }, { useWorkspaceStore }] = await Promise.all([
         import('/src/features/web-resources/open-default-browser-tab.ts'),
@@ -1951,25 +1967,23 @@ async function main() {
       ordinarySiblingTabId,
     )
     assert(
-      ordinarySiblingRuntime.profileId === null &&
-        ordinarySiblingRuntime.session?.likelyAuthCookies.some(
-          (cookie) => cookie.name === 'cclink_auth_marker',
-        ),
-      'ordinary tabs did not share the default persistent login session',
+      ordinarySiblingRuntime.profileId &&
+        ordinarySiblingRuntime.profileId !== ordinarySourceRuntime.profileId,
+      'ordinary browser tabs did not receive independent saveable Profiles',
     )
     assert(
-      (await page.locator('.browser-environment-badge').innerText()) === '默认环境',
-      'ordinary browser mode was not visible in the toolbar',
+      (await page.locator('.browser-environment-badge').innerText()) === '普通浏览器 · 登录可保存',
+      'saveable ordinary browser mode was not visible in the toolbar',
     )
     assert(
-      (await page.getByRole('button', { name: '登录完成，保存账号和登录状态' }).count()) === 0,
-      'ordinary browser incorrectly exposed the account save action',
+      (await page.getByRole('button', { name: '登录完成，保存账号和登录状态' }).count()) === 1,
+      'ordinary browser did not expose the account save action',
     )
     await page.evaluate(
       ({ sourceTabId, siblingTabId }) => {
-        return import('/src/stores/tab-store.ts').then(({ useTabStore }) => {
-          if (sourceTabId) useTabStore.getState().closeTab(sourceTabId)
-          if (siblingTabId) useTabStore.getState().closeTab(siblingTabId)
+        return import('/src/utils/close-tab.ts').then(async ({ closeTabWithDraftPolicy }) => {
+          if (sourceTabId) await closeTabWithDraftPolicy(sourceTabId)
+          if (siblingTabId) await closeTabWithDraftPolicy(siblingTabId)
         })
       },
       { sourceTabId: ordinarySourceTabId, siblingTabId: ordinarySiblingTabId },
@@ -2017,9 +2031,9 @@ async function main() {
         const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
         return Boolean(
           tab &&
-          !tab.browserProfile &&
+          tab.browserProfile &&
           !tab.webResourceRef &&
-          !tab.webResourceDraftRef &&
+          tab.webResourceDraftRef &&
           tab.initialUrl === expectedUrl,
         )
       },
@@ -2043,25 +2057,25 @@ async function main() {
       { timeout: 10_000 },
     )
     assert(
-      (await page.locator('.browser-environment-badge').innerText()) === '默认环境',
-      'Agent link without an account did not use ordinary browsing',
+      (await page.locator('.browser-environment-badge').innerText()) === '普通浏览器 · 登录可保存',
+      'Agent link without an account did not use the saveable ordinary browser',
     )
     assert(
       await page.evaluate(async (tabId) => {
         const runtime = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
         return (
-          runtime.profileId === null &&
+          Boolean(runtime.profileId) &&
           runtime.session?.likelyAuthCookies.some((cookie) => cookie.name === 'cclink_auth_marker')
         )
       }, ordinaryAgentTabId),
-      'Agent ordinary browser did not inherit the default login session',
+      'Agent ordinary browser did not keep its login in the saveable Profile',
     )
     await page.evaluate(async (tabId) => {
-      const [{ useTabStore }, { useUIStore }] = await Promise.all([
-        import('/src/stores/tab-store.ts'),
+      const [{ closeTabWithDraftPolicy }, { useUIStore }] = await Promise.all([
+        import('/src/utils/close-tab.ts'),
         import('/src/stores/ui-store.ts'),
       ])
-      useTabStore.getState().closeTab(tabId)
+      await closeTabWithDraftPolicy(tabId)
       const uiStore = useUIStore.getState()
       uiStore.setAgentPanelMode('hidden', 'user')
       uiStore.setActivePanel('operations')
@@ -2082,7 +2096,7 @@ async function main() {
       .locator('.sidebar-header-title', { hasText: '网站与账号' })
       .waitFor({ state: 'visible', timeout: 10_000 })
 
-    await page.getByRole('button', { name: '添加网站与账号' }).click()
+    await page.locator('.tab-new-browser-button').click()
     await page.waitForFunction(async () => {
       const { useTabStore } = await import('/src/stores/tab-store.ts')
       const state = useTabStore.getState()
@@ -2101,11 +2115,11 @@ async function main() {
           }
         : null
     })
-    assert(draftBrowser, 'explicit add account did not create an isolated draft session')
+    assert(draftBrowser, 'ordinary browser did not create a saveable login session')
     await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
     assert(
-      (await page.locator('.browser-environment-badge').innerText()) === '新账号环境',
-      'account draft mode was not visible in the toolbar',
+      (await page.locator('.browser-environment-badge').innerText()) === '普通浏览器 · 登录可保存',
+      'ordinary saveable browser mode was not visible in the toolbar',
     )
     assert(
       await page.evaluate(async (tabId) => {
@@ -2388,7 +2402,7 @@ async function main() {
     }
 
     await clickByTitle(page, '文件')
-    await clickByTitle(page, '网站与账号')
+    await ensureActivityPanel(page, 'operations', '网站与账号')
     await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
     const rowText = await primaryRow().innerText()
     assert(rowText.includes(accountLabel), 'saved account label is not visible')
@@ -2482,7 +2496,7 @@ async function main() {
         Math.abs(manualZoomGroupBounds.width - fitZoomGroupBounds.width) <= 1,
       'zoom controls shifted horizontally when fit mode changed to manual mode',
     )
-    await page.getByRole('button', { name: '适应宽度' }).click()
+    await page.locator('.browser-toolbar').getByRole('button', { name: '适应宽度' }).click()
     await page.waitForFunction(
       async () => (await window.cclinkStudio.browser.getViewState())?.zoomMode === 'fit',
       undefined,
@@ -2514,7 +2528,7 @@ async function main() {
       reloadTarget,
       { timeout: 10_000 },
     )
-    await page.getByRole('button', { name: '适应宽度' }).click()
+    await page.locator('.browser-toolbar').getByRole('button', { name: '适应宽度' }).click()
     await page.waitForFunction(
       async () => {
         const viewState = await window.cclinkStudio.browser.getViewState()
@@ -2537,7 +2551,7 @@ async function main() {
         url: runtime.visibleUrl,
       }
     }, activeBrowserTabId)
-    await clickByTitle(page, '浏览器')
+    await ensureActivityPanel(page, 'browser', '浏览器')
     const historySourceByTitle = page.locator(
       `.browser-sidebar-history-list .browser-sidebar-row-main[title="${webFixtureOrigin}/login-popup-source"]`,
     )
@@ -2551,15 +2565,15 @@ async function main() {
         if (
           !active ||
           active.id === accountTabId ||
-          active.browserProfile ||
+          !active.browserProfile ||
           active.webResourceRef ||
-          active.webResourceDraftRef
+          !active.webResourceDraftRef
         ) {
           return null
         }
         return {
           tabId: active.id,
-          profileId: active.browserProfile ?? null,
+          profileId: active.browserProfile,
           ordinary: true,
         }
       },
@@ -2568,8 +2582,8 @@ async function main() {
     )
     const historyOrdinaryValue = await historyOrdinary.jsonValue()
     assert(
-      historyOrdinaryValue?.ordinary && historyOrdinaryValue.profileId === null,
-      'history entry did not open in the ordinary browser session',
+      historyOrdinaryValue?.ordinary && Boolean(historyOrdinaryValue.profileId),
+      'history entry did not open in a saveable ordinary browser session',
     )
     const accountAfterHistory = await page.evaluate(async (tabId) => {
       const { useTabStore } = await import('/src/stores/tab-store.ts')
@@ -2591,7 +2605,7 @@ async function main() {
       const { closeTabWithDraftPolicy } = await import('/src/utils/close-tab.ts')
       await closeTabWithDraftPolicy(tabId)
     }, historyOrdinaryValue.tabId)
-    await clickByTitle(page, '网站与账号')
+    await ensureActivityPanel(page, 'browser', '浏览器')
 
     const markdownLinkEditorTabId = await page.evaluate(async (fixtureOrigin) => {
       const [{ useTabStore }, { useWorkspaceStore }] = await Promise.all([
@@ -2623,9 +2637,9 @@ async function main() {
           tab &&
           tab.id !== editorTabId &&
           tab.initialUrl === expectedUrl &&
-          !tab.browserProfile &&
+          tab.browserProfile &&
           !tab.webResourceRef &&
-          !tab.webResourceDraftRef,
+          tab.webResourceDraftRef,
         )
       },
       {
@@ -2639,21 +2653,19 @@ async function main() {
       const state = useTabStore.getState()
       const tab = state.tabs.find((item) => item.id === state.activeTabId)
       return tab?.type === 'browser' &&
-        !tab.browserProfile &&
+        tab.browserProfile &&
         !tab.webResourceRef &&
-        !tab.webResourceDraftRef
-        ? { tabId: tab.id }
+        tab.webResourceDraftRef
+        ? { tabId: tab.id, profileId: tab.browserProfile }
         : null
     })
-    assert(markdownOrdinary, 'Markdown DOM link did not open in ordinary browsing')
+    assert(markdownOrdinary, 'Markdown DOM link did not open in saveable ordinary browsing')
     assert(
       await page.evaluate(async (tabId) => {
         const runtime = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
-        return runtime.session?.likelyAuthCookies.some(
-          (cookie) => cookie.name === 'cclink_auth_marker',
-        )
+        return Boolean(runtime.profileId)
       }, markdownOrdinary.tabId),
-      'Markdown ordinary browser did not reuse the default login session',
+      'Markdown ordinary browser lost its saveable login Profile',
     )
     await page.evaluate(
       async ({ browserTabId, editorTabId }) => {
@@ -2672,6 +2684,7 @@ async function main() {
     await page.locator('.markdown-editor-wrapper').waitFor({ state: 'visible', timeout: 10_000 })
     const tabCountWithDraft = await page.locator('.tab').count()
     assert(tabCountWithDraft === tabCountBeforeDraft + 1, 'draft tab did not open')
+    await ensureActivityPanel(page, 'operations', '网站与账号')
     await primaryRow()
       .locator('.web-resource-row-open')
       .evaluate((element) => element.click())
@@ -2721,7 +2734,7 @@ async function main() {
         openedSecond.opened,
         `second smoke project could not be opened: ${JSON.stringify(openedSecond)}`,
       )
-      await clickByTitle(page, '网站与账号')
+      await ensureActivityPanel(page, 'operations', '网站与账号')
       await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
       await matrixRow().waitFor({ state: 'visible', timeout: 10_000 })
       await primaryRow()
@@ -2750,7 +2763,7 @@ async function main() {
         return useFsStore.getState().openRecentWorkspace(workspacePath)
       }, rootDir)
       await rm(secondProjectPath, { recursive: true, force: true })
-      await clickByTitle(page, '网站与账号')
+      await ensureActivityPanel(page, 'operations', '网站与账号')
     }
 
     await browser.close()
@@ -2762,45 +2775,34 @@ async function main() {
     await page.setViewportSize({ width: 1440, height: 920 })
     await page.waitForLoadState('domcontentloaded')
     await page.waitForSelector('.main-window', { timeout: uiReadyTimeoutMs })
-    if ((await page.locator('.sidebar-header-title', { hasText: '网站与账号' }).count()) === 0) {
-      await page
-        .locator('[title="网站与账号"]')
-        .first()
-        .evaluate((element) => element.click())
-    }
+    await ensureActivityPanel(page, 'operations', '网站与账号')
     await primaryRow().waitFor({ state: 'visible', timeout: 10_000 })
-    const restartedOrdinaryTabId = await page.evaluate(async (fixtureOrigin) => {
-      const [{ openDefaultBrowserTab }, { useWorkspaceStore }] = await Promise.all([
-        import('/src/features/web-resources/open-default-browser-tab.ts'),
-        import('/src/stores/workspace-store.ts'),
-      ])
-      return (
-        await openDefaultBrowserTab(useWorkspaceStore.getState().activeWorkspaceRef, {
-          title: '重启后普通登录环境',
-          initialUrl: `${fixtureOrigin}/login-popup-target`,
-        })
-      ).tabId
-    }, webFixtureOrigin)
+    await primaryRow()
+      .locator('.web-resource-row-open')
+      .evaluate((element) => element.click())
+    const restartedSavedTabId = await page.evaluate(async () => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      return useTabStore.getState().activeTabId
+    })
     await page.waitForFunction(
-      async ({ tabId, expectedUrl }) => {
+      async ({ tabId, profileId }) => {
         const runtime = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
         return (
-          runtime.visibleUrl === expectedUrl &&
-          runtime.profileId === null &&
+          runtime.profileId === profileId &&
           runtime.session?.likelyAuthCookies.some((cookie) => cookie.name === 'cclink_auth_marker')
         )
       },
       {
-        tabId: restartedOrdinaryTabId,
-        expectedUrl: `${webFixtureOrigin}/login-popup-target`,
+        tabId: restartedSavedTabId,
+        profileId: globalIdentity.browserProfileId,
       },
       { timeout: 10_000 },
     )
     await page.evaluate(async (tabId) => {
       const { useTabStore } = await import('/src/stores/tab-store.ts')
       useTabStore.getState().closeTab(tabId)
-    }, restartedOrdinaryTabId)
-    return 'ordinary tabs and Agent links share the default login session; explicit account drafts stay isolated and keep one Profile through save, with global reuse and restart persistence verified'
+    }, restartedSavedTabId)
+    return 'ordinary Browser login is saved in place without a Profile switch; the website-account icon, cross-project reuse, and restart login persistence are verified'
   })
 
   await runCheck(
@@ -3177,12 +3179,21 @@ async function main() {
     )
     const recentPage = page.locator('.browser-new-tab')
     await recentPage.waitFor({ state: 'visible', timeout: 10_000 })
+    assert(
+      (await recentPage.innerText()).includes('已保存账号') &&
+        (await recentPage.innerText()).includes('添加账号'),
+      'new browser tab did not include the saved-account surface',
+    )
+    assert(
+      (await page.locator('.activity-bar-icon[title="网站与账号"]').count()) === 1,
+      'website-account activity entry is missing',
+    )
     await page.waitForFunction(
       () => !document.querySelector('.browser-new-tab-empty')?.textContent?.includes('正在加载'),
       undefined,
       { timeout: 10_000 },
     )
-    const recentCards = recentPage.locator('.browser-new-tab-card')
+    const recentCards = recentPage.getByLabel('最近访问的网址').locator('.browser-new-tab-card')
     assert((await recentCards.count()) <= 8, 'new tab rendered more than eight recent addresses')
     const renderedRecentUrls = await recentCards.evaluateAll((cards) =>
       cards.map((card) => card.getAttribute('title')),
@@ -3194,11 +3205,22 @@ async function main() {
       renderedRecentUrls.includes(recentUrl),
       `new tab omitted the seeded recent address: ${JSON.stringify({ renderedRecentUrls, storedRecentUrls })}`,
     )
-    const recentCard = recentPage.locator(`.browser-new-tab-card[title="${recentUrl}"]`)
-    await recentCard.click()
+    await page.locator('.url-input').fill(recentUrl)
+    await page.locator('.url-input').press('Enter')
     await page.waitForFunction(
-      async (tabId) => (await window.cclinkStudio.browser.getActiveViewId()) === tabId,
-      activeBrowserTabId,
+      async ({ tabId, url }) => {
+        const [{ useBrowserStore }, runtime] = await Promise.all([
+          import('/src/stores/browser-store.ts'),
+          window.cclinkStudio.browser.getRuntimeDiagnostics(tabId),
+        ])
+        return (
+          runtime.visibleUrl === url &&
+          useBrowserStore.getState().tabs[tabId]?.url === url &&
+          !useBrowserStore.getState().tabs[tabId]?.navigation &&
+          (await window.cclinkStudio.browser.getActiveViewId()) === tabId
+        )
+      },
+      { tabId: activeBrowserTabId, url: recentUrl },
       { timeout: 10_000 },
     )
     await page.waitForFunction(
@@ -3214,6 +3236,37 @@ async function main() {
       activeBrowserTabId,
       { timeout: 10_000 },
     )
+
+    await page.locator('.url-input').fill('http://127.0.0.1:99999/navigation-failure')
+    await page.locator('.url-input').press('Enter')
+    const navigationFailure = page.locator('.browser-navigation-status')
+    await navigationFailure.waitFor({ state: 'visible', timeout: 10_000 })
+    await navigationFailure
+      .getByRole('heading', { name: '无法打开网页' })
+      .waitFor({ state: 'visible', timeout: 10_000 })
+    assert(
+      (await navigationFailure.getByRole('button', { name: '重试' }).count()) === 1 &&
+        (await navigationFailure.getByRole('button', { name: '返回' }).count()) === 1,
+      'failed address did not expose retry and return actions',
+    )
+    await navigationFailure.getByRole('button', { name: '返回' }).click()
+    await page.waitForFunction(
+      async ({ tabId, previousUrl }) => {
+        const [{ useBrowserStore }, runtime] = await Promise.all([
+          import('/src/stores/browser-store.ts'),
+          window.cclinkStudio.browser.getRuntimeDiagnostics(tabId),
+        ])
+        return (
+          runtime.visibleUrl === previousUrl &&
+          useBrowserStore.getState().tabs[tabId]?.url === previousUrl &&
+          !useBrowserStore.getState().tabs[tabId]?.navigation &&
+          (await window.cclinkStudio.browser.getActiveViewId()) === tabId
+        )
+      },
+      { tabId: activeBrowserTabId, previousUrl: recentUrl },
+      { timeout: 10_000 },
+    )
+    await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
 
     await page.locator('[title="检查和下载 CCLink Studio 更新"]').click()
     const browserUpdatePanel = page.locator('.update-panel')

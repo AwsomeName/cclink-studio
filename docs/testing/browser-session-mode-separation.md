@@ -1,93 +1,91 @@
-# 统一 Browser 的三种登录环境
+# 普通浏览器原地保存账号验收
 
 > 状态：工程修复与自动门禁已通过；真实第三方账号真人验收待执行
 > 发现日期：2026-08-24
-> 影响范围：本地工作空间内的 Browser Tab、网页新标签、书签/历史入口和未指定账号的 Agent 打开请求
+> 影响范围：本地工作空间内的 Browser Tab、网站账号保存、popup/网页新标签和账号恢复
 
-产品只有一个内嵌 Browser。下文的“默认环境、已保存账号、新账号环境”只是同一种 Browser Tab
-使用的不同 Session 归属，不是三套浏览器，也不是三个独立功能入口。
+产品只有一种内嵌 Browser Tab。“浏览器”负责正常浏览，“网站与账号”图标负责管理保存结果；
+二者使用同一个 Tab、Profile 和登录现场，不是两套浏览器，也不得要求用户在保存时重新登录。
 
 ## 用户问题
 
-用户在一个普通 Browser Tab 登录网站后，再打开同一网站的新标签，第二个标签却要求重新登录。
-两个标签标题和 URL 看起来相同，界面没有说明它们实际使用了不同的登录环境。
+用户在普通 Browser Tab 登录网站后，点击保存账号却被切换到新建隔离环境，导致刚完成的登录
+没有被保存，用户还要再次登录。“合并”的目标是把当前普通浏览现场直接转成命名账号，而不是
+只把两个入口摆在同一个界面里。
 
 ## 用户可执行的端到端验收
 
-1. 在本地工作空间点击“+”打开普通 Browser Tab，登录一个安全的测试网站。
-2. 再点击“+”，在新标签打开同一网站；新标签应直接看到相同登录状态。
-3. 在第一个普通网页中选择“在新标签打开”或触发安全测试 popup；新标签应继承来源登录状态。
-4. 从书签、历史、Agent 消息或 Markdown 链接打开普通网页；未明确指定账号时应进入普通浏览环境，且普通标签之间共享登录状态。
-5. 打开“网站与账号”，点击“添加网站与账号”；此时才创建“新账号”隔离环境，且不得复制普通浏览 Cookie。用户按提示重新登录并保存。
-6. 分别打开两个已保存账号；各自复用自己的 Profile，同站账号互不串号。
-7. 让 Agent 明确使用一个已保存账号；Agent 必须使用该账号 Profile。未指定账号的普通网页任务必须使用普通浏览环境。
-8. 完全退出并重启 Studio；普通浏览、已保存账号的绑定和登录状态分别恢复，未保存账号草稿仍按既有清理规则处理。
-9. 检查 Browser 工具栏；普通标签显示“默认环境”，草稿显示“新账号环境”，已保存账号显示具体账号，用户能区分同名网页所属环境。
+1. 在本地工作空间通过普通“新建浏览器”按钮打开 Browser Tab，访问一个安全的测试网站并登录。
+2. 工具栏应显示“普通浏览器 · 登录可保存”，并提供“登录完成，保存账号和登录状态”。
+3. 点击保存并输入账号显示名称；保存前后的 Tab、Profile、URL、Cookie/localStorage 和页面实例
+   都保持不变，页面不刷新，也不出现第二次登录。
+4. 关闭该 Tab，从 Activity Bar 的“网站与账号”图标打开刚保存的账号；应直接保持登录。
+5. 切换到另一个本地项目再打开该账号；应复用同一 Profile 并保持登录。
+6. 完全退出并重启 Studio，再从“网站与账号”打开该账号；应继续保持登录。
+7. 由当前网页触发 popup 或“在新标签打开”；新 Tab 应继承来源 Profile 和草稿/账号引用。
+8. 再创建一个普通 Browser Tab 并保存为另一个账号；它应使用另一 Profile，同站账号不得串号，
+   但每个账号自己的保存过程都不得切换 Profile 或要求二次登录。
+9. 模拟账号服务不可用；普通网页仍能打开，界面明确不可保存，不得让账号故障挡住本地浏览器。
 
 真实第三方身份、二次认证和重启后的页面身份必须由真人确认。单元测试和 Cookie 元数据不能替代第 1–9 步。
 
 ## 根因
 
-`openDefaultBrowserTab()` 曾在每次打开本地普通 Browser Tab 时无条件调用
-`webResources.beginDraft()`。`beginDraft()` 在没有现有 Profile 时生成新的
-`web-draft-<uuid>`，Tab 生命周期再把它交给 `BrowserManager` 创建独立 Electron partition。
-
-结果是：
+保存账号曾从普通 Browser 的默认 Session 新建 `web-draft-<uuid>` Profile。Electron partition
+切换不会自动携带原 Session 的 Cookie/localStorage，因此保存动作实际上打开了一个全新的登录环境。
 
 ```text
-普通新标签
-  -> 被误判为“添加新账号”
-  -> 创建新的 web-draft Profile
-  -> 创建独立 Cookie/localStorage
-  -> 相同网站再次要求登录
+普通浏览器已登录
+  -> 点击保存才创建 web-draft Profile
+  -> Tab 切换到新的 Electron partition
+  -> 原 Cookie/localStorage 留在旧 Session
+  -> 用户被要求再次登录
 ```
 
-问题不在 Electron Session 持久化，而在产品入口把“普通浏览”和“添加账号”错误合并。此前
-“所有本地 HTTP(S) Tab 必须绑定账号或草稿”的恢复与校验规则进一步固化了该错误。
+问题不在 Electron Session 持久化，而在创建 Profile 的时机。正确时机是普通 Browser Tab
+创建之初、用户登录之前；保存只能把同一 Profile 从未命名草稿原地转成命名账号。
 
-## 修复后的三种模式
+## 修复后的状态
 
-| 模式       | Tab 绑定                                           | Session 所有者与生命周期                                   |
-| ---------- | -------------------------------------------------- | ---------------------------------------------------------- |
-| 普通浏览   | 无 `browserProfile`、无账号/草稿引用               | `BrowserManager` 默认持久 Session；普通标签和重启之间共享  |
-| 已保存账号 | 非空 `browserProfile` + 一个 `webResourceRef`      | 对应全局账号的持久 Profile；关闭 Tab 不删除账号或 Session  |
-| 添加新账号 | 非空 `browserProfile` + 一个 `webResourceDraftRef` | 临时隔离 Profile；保存后原地转正，未保存关闭按既有规则清理 |
+| 状态       | Tab 绑定                                           | Session 所有者与生命周期                              |
+| ---------- | -------------------------------------------------- | ----------------------------------------------------- |
+| 普通浏览   | 非空 `browserProfile` + 一个 `webResourceDraftRef` | 从创建起可持久化；保存时 Profile 与页面实例均不变     |
+| 已保存账号 | 非空 `browserProfile` + 一个 `webResourceRef`      | 对应全局账号的持久 Profile；关闭 Tab 不删除登录状态   |
+| 降级浏览   | 无 `browserProfile`、无账号/草稿引用               | 账号服务失败时使用默认 Session；保持可浏览但不可保存  |
 
 以下状态仍然非法：只带 Profile 没有账号/草稿引用、同时带账号和草稿引用、账号/草稿引用没有
-Profile。普通浏览不是 Profile-only 状态；它明确使用默认 Session。
+Profile。正常本地普通浏览不是 Profile-only 状态；只有明确的服务失败降级才使用默认 Session。
 
 ## 能力边界与失败降级
 
-- 普通浏览不依赖 `WebResourceService`，账号服务故障不得阻断普通网页。
-- 普通浏览中的现有登录不能自动无损转换为独立账号，因为切换 partition 不会复制 Cookie；用户
-  必须从“添加网站与账号”进入隔离环境并重新登录。
-- 已保存账号和账号草稿继续隔离，不能为了修复普通浏览而共享全部 Cookie。
-- popup、复制页和网页“在新标签打开”继承来源模式；来源归属冲突时 fail-closed。
-- Agent 明确 `accountId/profileId` 时继续走账号授权链；没有账号时只能使用普通浏览，不得猜测
-  或复制账号 Profile。
+- 普通浏览创建会尝试调用 `WebResourceService`，但账号服务故障不得阻断普通网页。
+- 保存不得切换 partition 或复制 Cookie；它只登记当前 Tab 从创建时就持有的 Profile。
+- 不同普通 Tab/账号仍使用不同 Profile，避免账号串用；这里的隔离发生在登录前，不发生在保存时。
+- popup、复制页和网页“在新标签打开”继承来源状态；来源归属冲突时 fail-closed。
+- Agent 明确 `accountId/profileId` 时继续走账号授权链；没有账号时打开新的普通草稿环境，不得
+  猜测或复制已保存账号 Profile。
 - Cookie、Token、验证码和网页正文不进入 Tab 快照、日志或诊断。
 
 ## 实现与验证清单
 
-- [x] 普通新建、书签、历史、普通 URL 和无账号 Agent 请求不再创建草稿。
-- [x] “添加网站与账号”保留显式 `beginDraft()`。
-- [x] Tab Store、WorkspaceState schema 和恢复允许普通模式，仍拒绝 Profile-only 状态。
-- [x] Browser 新标签、popup 和复制页继承来源模式。
-- [x] 工具栏显示环境标识，普通标签不显示“保存当前登录状态”的误导按钮。
-- [x] 旧账号草稿和已保存账号恢复行为不变；旧普通标签可安全恢复为默认 Session。
+- [x] 本地普通新建、书签、历史、普通 URL 和无账号 Agent 请求从创建起绑定草稿 Profile。
+- [x] “网站与账号”Activity 图标保留；Browser 新标签页也保留账号快捷入口。
+- [x] Tab Store、WorkspaceState schema 和恢复拒绝 Profile-only 状态；瞬态导航状态不持久化。
+- [x] Browser 新标签、popup 和复制页继承来源状态。
+- [x] 工具栏允许把当前普通登录原地保存；保存前后 Profile、页面实例、URL 和 Cookie 不变。
+- [x] 已保存账号跨工作空间和 Studio 重启复用同一 Profile；未保存草稿关闭后按既有规则清理。
 - [x] 受影响单元测试、TypeScript、Lint 和真实 Electron smoke 通过。
-- [ ] 按“用户可执行的端到端验收”完成真人验证。
+- [ ] 按“用户可执行的端到端验收”完成真人第三方账号验证。
 
-自动证据：9 个受影响测试文件共 118 项通过；Web/Node TypeScript 与 ESLint 通过；
-`node scripts/ui-smoke.mjs --global-web-resources-only` 3/3 通过。Electron smoke 已验证普通标签、
-Agent 链接和 Markdown/历史使用默认 Session，显式账号草稿不复制普通 Cookie，保存后 Profile
-不变，且重启 Studio 后普通登录状态仍可复用。真实百度身份和二次认证仍须真人确认。
+自动证据：真实 Electron 专项 smoke 3/3 通过。它通过普通“新建浏览器”入口建立登录 Cookie，
+验证保存动作没有改变 Profile、URL、Cookie 或页面实例，并验证“网站与账号”图标、跨项目打开
+及 Studio 重启后仍复用同一登录状态。真实第三方身份和二次认证仍须真人确认。
 
 ## `/grilling`
 
-- 是否只是删掉 `beginDraft()`，却仍被 Tab 恢复 schema 丢弃？
+- 是否把 `beginDraft()` 放到了保存按钮之后，从而再次制造二次登录？
 - 网页新标签是否真的继承来源 Session，还是只继承了 URL？
 - Agent 未指定账号时是否错误复用当前已保存账号，造成权限扩张？
-- 普通浏览能否跨重启恢复，而不把旧草稿错误转成普通 Session？
-- UI 是否能让用户在两个同名网页之间看出“默认环境 / 新账号环境 / 已保存账号”？
-- 修复普通浏览时，是否破坏了两个已保存账号互不串号的不变量？
+- 保存前后页面实例和 Profile 是否真的没变，还是只保留了相同 URL？
+- “网站与账号”独立图标是否仍在，能否从中重新打开保存结果？
+- 修复原地保存时，是否破坏了两个已保存账号互不串号的不变量？

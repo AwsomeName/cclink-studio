@@ -218,14 +218,14 @@ describe('BrowserManager popup adoption', () => {
     manager.reconcileViews({
       workspaceKey: '/workspace/a',
       views: [
-        { tabId: 'ordinary-tab', profileId: null },
-        { tabId: 'account-tab', profileId: 'account-profile' },
+        { tabId: 'ordinary-tab', profileId: 'draft-profile' },
+        { tabId: 'account-tab', profileId: 'account-profile', accountId: 'account-a' },
       ],
       activeTabId: null,
     })
     await manager.createView('ordinary-tab', 'https://example.com/default', {
       workspaceKey: '/workspace/a',
-      profileId: null,
+      profileId: 'draft-profile',
     })
     await manager.createView('account-tab', 'https://example.com/account', {
       workspaceKey: '/workspace/a',
@@ -234,8 +234,8 @@ describe('BrowserManager popup adoption', () => {
     manager.reconcileViews({
       workspaceKey: '/workspace/a',
       views: [
-        { tabId: 'ordinary-tab', profileId: null },
-        { tabId: 'account-tab', profileId: 'account-profile' },
+        { tabId: 'ordinary-tab', profileId: 'draft-profile' },
+        { tabId: 'account-tab', profileId: 'account-profile', accountId: 'account-a' },
       ],
       activeTabId: 'account-tab',
     })
@@ -248,7 +248,7 @@ describe('BrowserManager popup adoption', () => {
     const manager = new BrowserManager(electronMocks.mainWindow as never)
     manager.reconcileViews({
       workspaceKey: '/workspace/a',
-      views: [{ tabId: 'account-tab', profileId: 'account-profile' }],
+      views: [{ tabId: 'account-tab', profileId: 'account-profile', accountId: 'account-a' }],
       activeTabId: null,
     })
     await manager.createView('account-tab', 'https://example.com/account', {
@@ -257,7 +257,7 @@ describe('BrowserManager popup adoption', () => {
     })
     manager.reconcileViews({
       workspaceKey: '/workspace/a',
-      views: [{ tabId: 'account-tab', profileId: 'account-profile' }],
+      views: [{ tabId: 'account-tab', profileId: 'account-profile', accountId: 'account-a' }],
       activeTabId: 'account-tab',
     })
 
@@ -774,6 +774,14 @@ describe('BrowserManager popup adoption', () => {
     await expect(manager.navigate('source-tab', 'https://invalid.example/')).rejects.toMatchObject({
       code: 'ERR_NAME_NOT_RESOLVED',
     })
+  })
+
+  it('does not report navigation success when the target view is missing', async () => {
+    const { manager } = await createSource()
+
+    await expect(manager.navigate('missing-tab', 'https://example.com/')).rejects.toThrow(
+      '浏览器视图尚未就绪',
+    )
   })
 
   it('removes the runtime and notifies renderer when popup calls window.close', async () => {

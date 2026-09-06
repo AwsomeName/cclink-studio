@@ -184,21 +184,25 @@ Thread 显式选择经过验证的本地 Codex ACP Runtime；公共 Registry、�
 - `WebResourceService` 是全局网站、主体、账号、运营矩阵、Browser Profile 绑定和未保存
   草稿清理账本的唯一 owner；Cookie/Session 仍由 `BrowserManager` 持有，密码和 Token
   不进入资源快照。工作空间不得复制或重新拥有全局账号。
-- 产品与代码都只有一个 Browser 能力：浏览器侧栏与“网站与账号”侧栏共享同一个 Tab Store、
-  `BrowserManager`、popup/新标签链路和恢复生命周期；后者只管理命名账号资源，不得再创建
-  第二种 Browser Tab 或第二套窗口/Session owner。
-- 普通网页使用 `BrowserManager` 的默认持久 Session，不属于 `WebResourceService` 账号资源；
-  普通 Tab 以“无 Profile、无账号/草稿引用”表示并可随工作空间恢复。只有用户明确“添加网站
-  与账号”时才创建隔离草稿 Profile；已保存账号继续使用各自 Profile，三者不得静默互相转换
-  或复制 Cookie。
+- 产品与代码只有一种 Browser Tab 和一套浏览生命周期。“浏览器”入口承载网页现场、历史和
+  收藏；“网站与账号”Activity 入口保留，用于管理已命名账号和运营矩阵。两个入口共享同一个
+  Tab Store、`BrowserManager`、popup/新标签链路和恢复生命周期，不得创建第二种 Browser Tab、
+  第二套窗口或第二个 Session owner。
+- 本地普通 Browser Tab 创建时即由 `WebResourceService` 分配可持久化的草稿 Profile。用户可先
+  正常浏览和登录，点击“保存账号和登录状态”时只把当前草稿 Profile 原地登记为正式账号；不得
+  reload、切换 partition、复制 Cookie 或要求再次登录。不同普通 Tab 的草稿 Profile 相互独立，
+  因而可以分别保存同站不同账号；popup 和网页新标签继承来源 Tab 的 Profile 与草稿引用。
+- `WebResourceService` 缺失或创建草稿失败时，普通浏览必须降级到 `BrowserManager` 默认 Session
+  并继续可用；降级 Tab 不得伪装成可保存账号。已保存账号始终复用保存前的同一 Profile，关闭
+  Tab、切换工作空间和重启 Studio 都不得改变其登录环境。
 - `WebAffairService` 是事务、流程版本、节点、Attempt、人工交接、证据、等待计划和流程
   建议的唯一 owner，并继续以稳定 `workspaceId` 隔离事务、本地物料和证据；renderer、
   Agent、BrowserTask 和模板只持有引用或可丢弃投影。
-- “网站与账号”侧栏查询全局 WebResource Snapshot。用户手动打开账号时，renderer 提交
+- “网站与账号”侧栏以及 Browser 新标签页中的账号快捷区查询全局 WebResource Snapshot。用户手动打开账号时，renderer 提交
   `workspaceRef + accountId`，主进程解析全局账号、URL 和唯一 Profile，Workspace/Tab 层
   只在当前工作空间创建或激活 Browser Tab 投影。renderer 不得按当前 Tab、URL 或 Profile
   猜账号，也不得移动其他工作空间的 Tab。
-- 新建账号先创建临时 Browser 草稿和独立 Profile，登录后只以一个显示名称保存；主进程
+- 普通 Browser Tab 和“添加账号”快捷操作都先创建临时 Browser 草稿和独立 Profile，登录后只以一个显示名称保存；主进程
   从真实 Browser View 反查 URL、标题和 Profile。草稿记录可以保留发起工作空间用于 Tab
   和清理对账，但保存结果进入全局账号库。关闭未保存 Tab 会清理 Profile，异常退出遗留项
   由启动对账继续清理；正式资源与 Session 不随 Tab、工作空间或项目删除而删除。

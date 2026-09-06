@@ -8,6 +8,10 @@ const beginDraft = vi.fn()
 
 beforeEach(() => {
   beginDraft.mockReset()
+  beginDraft.mockResolvedValue({
+    success: true,
+    data: { draftId: 'ordinary-draft', browserProfileId: 'ordinary-profile' },
+  })
   vi.stubGlobal('window', {
     cclinkStudio: {
       webResources: { beginDraft },
@@ -22,25 +26,26 @@ afterEach(() => {
 })
 
 describe('openDefaultBrowserTab', () => {
-  it('opens ordinary browsing without creating an account draft', async () => {
+  it('opens ordinary browsing in a saveable Profile that is kept when the account is saved', async () => {
     const result = await openDefaultBrowserTab(workspaceRef)
 
-    expect(beginDraft).not.toHaveBeenCalled()
+    expect(beginDraft).toHaveBeenCalledWith({ workspaceRef })
+    expect(result.saveable).toBe(true)
     expect(useTabStore.getState().tabs).toEqual([
       expect.objectContaining({
         id: result.tabId,
         type: 'browser',
         title: '浏览器',
-        browserProfile: null,
+        browserProfile: 'ordinary-profile',
         webResourceRef: undefined,
-        webResourceDraftRef: undefined,
+        webResourceDraftRef: { draftId: 'ordinary-draft' },
         workspaceRef,
         initialUrl: 'about:blank',
       }),
     ])
   })
 
-  it('loads ordinary web targets in the shared default environment', async () => {
+  it('loads ordinary web targets without switching away from their saveable Profile', async () => {
     await openDefaultBrowserTab(workspaceRef, {
       initialUrl: 'https://www.oschina.net/',
       title: '开源中国',
@@ -49,7 +54,8 @@ describe('openDefaultBrowserTab', () => {
     expect(useTabStore.getState().tabs[0]).toMatchObject({
       title: '开源中国',
       initialUrl: 'https://www.oschina.net/',
-      browserProfile: null,
+      browserProfile: 'ordinary-profile',
+      webResourceDraftRef: { draftId: 'ordinary-draft' },
     })
   })
 
@@ -58,14 +64,27 @@ describe('openDefaultBrowserTab', () => {
 
     expect(beginDraft).not.toHaveBeenCalled()
     expect(result.tabId).toBeTruthy()
+    expect(result.saveable).toBe(false)
     expect(useTabStore.getState().tabs[0]).toEqual(
       expect.objectContaining({ initialUrl: 'about:blank', browserProfile: null }),
     )
   })
+
+  it('keeps browser access available when the account service is degraded', async () => {
+    beginDraft.mockResolvedValue({
+      success: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message: '网站与账号服务尚未就绪' },
+    })
+
+    const result = await openDefaultBrowserTab(workspaceRef)
+
+    expect(result).toMatchObject({ saveable: false, error: '网站与账号服务尚未就绪' })
+    expect(useTabStore.getState().tabs[0]).toMatchObject({ browserProfile: null })
+  })
 })
 
 describe('openWebAccountDraftTab', () => {
-  it('creates an isolated Profile only for explicit account creation', async () => {
+  it('uses the same saveable browsing model from the account-management entry', async () => {
     beginDraft.mockResolvedValue({
       success: true,
       data: { draftId: 'draft-id', browserProfileId: 'web-draft-profile' },

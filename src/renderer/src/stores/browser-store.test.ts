@@ -78,6 +78,56 @@ describe('useBrowserStore', () => {
     })
   })
 
+  describe('address navigation feedback', () => {
+    it('tracks a submitted address and clears it when main publishes the real URL', () => {
+      useBrowserStore.getState().beginNavigation('browser', 'https://example.com')
+      expect(useBrowserStore.getState().tabs.browser.navigation).toEqual({
+        targetUrl: 'https://example.com',
+        status: 'loading',
+        error: null,
+      })
+
+      useBrowserStore.getState().setUrl('browser', 'https://example.com')
+      expect(useBrowserStore.getState().tabs.browser.navigation).toBeNull()
+    })
+
+    it('keeps a failed target retryable and can return to the last real URL', () => {
+      useBrowserStore.getState().beginNavigation('browser', 'https://invalid.example')
+      useBrowserStore
+        .getState()
+        .failNavigation('browser', 'https://invalid.example', 'ERR_NAME_NOT_RESOLVED')
+      expect(useBrowserStore.getState().tabs.browser.navigation).toMatchObject({
+        status: 'failed',
+        error: 'ERR_NAME_NOT_RESOLVED',
+      })
+
+      useBrowserStore.getState().clearNavigation('browser')
+      expect(useBrowserStore.getState().tabs.browser.navigation).toBeNull()
+      expect(useBrowserStore.getState().tabs.browser.urlInput).toBe('https://www.baidu.com')
+    })
+
+    it('ignores a stale failure from a superseded navigation', () => {
+      useBrowserStore.getState().beginNavigation('browser', 'https://second.example')
+      useBrowserStore.getState().failNavigation('browser', 'https://first.example', 'stale failure')
+
+      expect(useBrowserStore.getState().tabs.browser.navigation?.targetUrl).toBe(
+        'https://second.example',
+      )
+      expect(useBrowserStore.getState().tabs.browser.navigation?.status).toBe('loading')
+    })
+
+    it('ignores a stale completion from a superseded navigation', () => {
+      useBrowserStore.getState().beginNavigation('browser', 'https://second.example')
+      useBrowserStore.getState().completeNavigation('browser', 'https://first.example')
+
+      expect(useBrowserStore.getState().tabs.browser.navigation?.targetUrl).toBe(
+        'https://second.example',
+      )
+      useBrowserStore.getState().completeNavigation('browser', 'https://second.example')
+      expect(useBrowserStore.getState().tabs.browser.navigation).toBeNull()
+    })
+  })
+
   describe('setViewState', () => {
     it('同步指定 Tab 的视图状态', () => {
       useBrowserStore.getState().setViewState('browser', {

@@ -54,6 +54,8 @@ import { RemoteAgentController } from '../../features/cclink-remote/remote-agent
 import { MediaProductionTab } from '../../features/media-production/MediaProductionTab'
 import { useToastStore } from '../common/Toast'
 import { BrowserNewTabPage } from './BrowserNewTabPage'
+import { BrowserNavigationStatusPage } from './BrowserNavigationStatusPage'
+import type { BrowserNavigationState } from '../../stores/browser-store'
 
 const EMPTY_TERMINAL_OUTPUT_LINES: TerminalOutputLine[] = []
 
@@ -61,7 +63,12 @@ interface WorkbenchContentProps {
   activeTab: Tab | undefined
   isBrowserTab: boolean
   showBrowserNewTab: boolean
+  browserNavigation: BrowserNavigationState | null
   onOpenBrowserUrl: (url: string) => void
+  onOpenBrowserAccount: (accountId: string) => void
+  onAddBrowserAccount: () => void
+  onRetryBrowserNavigation: (url: string) => void
+  onCancelBrowserNavigation: () => void
   contentRef: RefObject<HTMLDivElement | null>
 }
 
@@ -69,7 +76,12 @@ export function WorkbenchContent({
   activeTab,
   isBrowserTab,
   showBrowserNewTab,
+  browserNavigation,
   onOpenBrowserUrl,
+  onOpenBrowserAccount,
+  onAddBrowserAccount,
+  onRetryBrowserNavigation,
+  onCancelBrowserNavigation,
   contentRef,
 }: WorkbenchContentProps): React.ReactElement {
   const conversationTarget = activeTab ? resolveConversationTab(activeTab) : null
@@ -100,7 +112,21 @@ export function WorkbenchContent({
             draggable={false}
           />
         )}
-        {isBrowserTab && showBrowserNewTab && <BrowserNewTabPage onOpenUrl={onOpenBrowserUrl} />}
+        {isBrowserTab && showBrowserNewTab && activeTab?.workspaceRef && (
+          <BrowserNewTabPage
+            workspaceRef={activeTab.workspaceRef}
+            onOpenUrl={onOpenBrowserUrl}
+            onOpenAccount={onOpenBrowserAccount}
+            onAddAccount={onAddBrowserAccount}
+          />
+        )}
+        {isBrowserTab && browserNavigation && (
+          <BrowserNavigationStatusPage
+            navigation={browserNavigation}
+            onRetry={onRetryBrowserNavigation}
+            onCancel={onCancelBrowserNavigation}
+          />
+        )}
         {!isBrowserTab && activeTab && (
           <>
             {activeTab.type === 'settings' && (

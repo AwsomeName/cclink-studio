@@ -79,7 +79,7 @@ export async function openRequestedBrowserTab(request: BrowserOpenTabRequest): P
       return false
     }
     const mode = getBrowserTabMode(tab)
-    if (!hasRequestedProfile) return mode === 'ordinary'
+    if (!hasRequestedProfile) return mode === 'ordinary' || mode === 'account-draft'
     if (
       tab.browserProfile !== request.profileId ||
       (mode !== 'account' && mode !== 'account-draft')

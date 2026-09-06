@@ -751,6 +751,16 @@ function BrowserManagementView(): React.ReactElement {
   )
 }
 
+function OperationsSidebarView({
+  workspaceRef,
+  workspacePath,
+}: {
+  workspaceRef: WorkspaceRef
+  workspacePath: string | null
+}): React.ReactElement | null {
+  return <WebResourcesSidebar workspaceRef={workspaceRef} workspacePath={workspacePath} />
+}
+
 function FilesSidebarView({
   workspaceRef,
   workspacePath,
@@ -1036,16 +1046,6 @@ function TerminalSidebarView({ workspaceRef }: { workspaceRef: WorkspaceRef }): 
       </div>
     </>
   )
-}
-
-function OperationsSidebarView({
-  workspaceRef,
-  workspacePath,
-}: {
-  workspaceRef: WorkspaceRef
-  workspacePath: string | null
-}): React.ReactElement | null {
-  return <WebResourcesSidebar workspaceRef={workspaceRef} workspacePath={workspacePath} />
 }
 
 function SessionsSidebarView({

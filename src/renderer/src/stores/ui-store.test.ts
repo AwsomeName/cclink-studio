@@ -44,7 +44,7 @@ describe('useUIStore', () => {
       expect(useUIStore.getState().sidebarVisible).toBe(true)
     })
 
-    it('点击不同面板 → 展开侧栏并切换', () => {
+    it('网站与账号是可见 Activity 面板', () => {
       const { setActivePanel } = useUIStore.getState()
       setActivePanel('operations')
       expect(useUIStore.getState().activePanel).toBe('operations')

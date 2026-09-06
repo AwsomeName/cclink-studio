@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   getBrowserEnvironmentLabel,
+  inferWebResourceDisplayName,
   normalizeBrowserZoomPercent,
+  shouldQueueBrowserAddressNavigation,
   shouldNavigateBrowserAddress,
 } from './BrowserToolbar'
 
@@ -24,6 +26,13 @@ describe('shouldNavigateBrowserAddress', () => {
         compositionActive: true,
       }),
     ).toBe(false)
+    expect(
+      shouldQueueBrowserAddressNavigation({
+        key: 'Enter',
+        nativeIsComposing: true,
+        compositionActive: true,
+      }),
+    ).toBe(true)
   })
 
   it('keeps the composition guard when Chromium reports a stale native flag', () => {
@@ -44,6 +53,13 @@ describe('shouldNavigateBrowserAddress', () => {
         compositionActive: false,
       }),
     ).toBe(false)
+    expect(
+      shouldQueueBrowserAddressNavigation({
+        key: 'a',
+        nativeIsComposing: true,
+        compositionActive: true,
+      }),
+    ).toBe(false)
   })
 })
 
@@ -56,7 +72,7 @@ describe('getBrowserEnvironmentLabel', () => {
         browserProfile: 'draft-profile',
         webResourceDraftRef: { draftId: 'draft-1' },
       }),
-    ).toBe('新账号环境')
+    ).toBe('普通浏览器 · 登录可保存')
     expect(
       getBrowserEnvironmentLabel({
         title: '百度资源平台',
@@ -81,6 +97,18 @@ describe('getBrowserEnvironmentLabel', () => {
         webResourceRef: { accountId: 'account-without-profile' },
       }),
     ).toBe('环境异常')
+  })
+})
+
+describe('saving the current ordinary browser', () => {
+  it('infers a useful account label without changing the current page', () => {
+    expect(
+      inferWebResourceDisplayName({
+        title: '浏览器',
+        url: 'https://www.example.com/account',
+        urlInput: 'https://www.example.com/account',
+      }),
+    ).toBe('example.com')
   })
 })
 

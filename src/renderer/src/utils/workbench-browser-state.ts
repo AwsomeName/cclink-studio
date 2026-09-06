@@ -153,12 +153,13 @@ async function drainBookmarkQueue(
 }
 
 function applyBrowserInput(projection: WorkbenchBrowserStateSnapshot, input: BrowserSyncInput) {
-  const tabs = input.tabs as Record<string, WorkbenchBrowserProjection>
+  const tabs = input.tabs as Record<string, WorkbenchBrowserProjection & { navigation?: unknown }>
   const upserts = Object.entries(tabs).flatMap(([tabId, candidate]) => {
     const current = projection.tabs[tabId]
-    return current && JSON.stringify(current) === JSON.stringify(candidate)
+    const persistentCandidate = toWorkbenchBrowserProjection(candidate)
+    return current && JSON.stringify(current) === JSON.stringify(persistentCandidate)
       ? []
-      : [{ tabId, projection: { ...candidate, ready: false } }]
+      : [{ tabId, projection: persistentCandidate }]
   })
   const removedTabIds = Object.keys(projection.tabs).filter((tabId) => !(tabId in tabs))
   if (upserts.length === 0 && removedTabIds.length === 0) {
@@ -171,6 +172,13 @@ function applyBrowserInput(projection: WorkbenchBrowserStateSnapshot, input: Bro
     upserts,
     removedTabIds,
   })
+}
+
+export function toWorkbenchBrowserProjection(
+  candidate: WorkbenchBrowserProjection & { navigation?: unknown },
+): WorkbenchBrowserProjection {
+  const { navigation: _navigation, ...persistentCandidate } = candidate
+  return { ...persistentCandidate, ready: false }
 }
 
 function applyBookmarkInput(

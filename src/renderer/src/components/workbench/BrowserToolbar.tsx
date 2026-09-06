@@ -44,6 +44,14 @@ export function shouldNavigateBrowserAddress(input: {
   return input.key === 'Enter' && !input.nativeIsComposing && !input.compositionActive
 }
 
+export function shouldQueueBrowserAddressNavigation(input: {
+  key: string
+  nativeIsComposing: boolean
+  compositionActive: boolean
+}): boolean {
+  return input.key === 'Enter' && (input.nativeIsComposing || input.compositionActive)
+}
+
 const MIN_BROWSER_ZOOM_PERCENT = 30
 const MAX_BROWSER_ZOOM_PERCENT = 300
 
@@ -55,13 +63,32 @@ export function normalizeBrowserZoomPercent(value: string): number | null {
   return Math.min(MAX_BROWSER_ZOOM_PERCENT, Math.max(MIN_BROWSER_ZOOM_PERCENT, Math.round(percent)))
 }
 
+export function inferWebResourceDisplayName(
+  browserState: Pick<BrowserTabState, 'title' | 'url' | 'urlInput'> | undefined,
+): string {
+  const title = browserState?.title?.trim()
+  if (title && title !== '浏览器' && title !== '新标签页') return title.slice(0, 160)
+  for (const candidate of [browserState?.url, browserState?.urlInput]) {
+    if (!candidate?.trim()) continue
+    try {
+      const url = new URL(candidate)
+      if (url.protocol === 'http:' || url.protocol === 'https:') {
+        return url.hostname.replace(/^www\./, '').slice(0, 160)
+      }
+    } catch {
+      // 地址尚未形成有效网页时不猜测名称。
+    }
+  }
+  return ''
+}
+
 export function getBrowserEnvironmentLabel(
   tab: Pick<Tab, 'title' | 'browserProfile' | 'webResourceRef' | 'webResourceDraftRef'>,
   accountLabel?: string | null,
 ): string {
   const mode = getBrowserTabMode(tab)
   if (mode === 'ordinary') return '默认环境'
-  if (mode === 'account-draft') return '新账号环境'
+  if (mode === 'account-draft') return '普通浏览器 · 登录可保存'
   if (mode === 'account') return `账号 · ${accountLabel?.trim() || tab.title}`
   return '环境异常'
 }
@@ -91,6 +118,7 @@ export function BrowserToolbar({
   const findInputRef = useRef<HTMLInputElement>(null)
   const urlInputRef = useRef<HTMLInputElement>(null)
   const urlCompositionActiveRef = useRef(false)
+  const navigateAfterCompositionRef = useRef(false)
   const cancelZoomCommitRef = useRef(false)
   const draftId = tab.webResourceDraftRef?.draftId
   const environmentLabel = getBrowserEnvironmentLabel(tab, accountLabel)
@@ -248,6 +276,7 @@ export function BrowserToolbar({
 
   const prepareSave = (): void => {
     if (!draftId || tab.workspaceRef?.kind !== 'local' || tab.webResourceRef) return
+    setDisplayName((current) => current || inferWebResourceDisplayName(browserState))
     setSaveError(null)
     setShowSave(true)
   }
@@ -363,9 +392,13 @@ export function BrowserToolbar({
           onChange={(event) => onUrlInputChange(tabId, event.target.value)}
           onCompositionStart={() => {
             urlCompositionActiveRef.current = true
+            navigateAfterCompositionRef.current = false
           }}
-          onCompositionEnd={() => {
+          onCompositionEnd={(event) => {
             urlCompositionActiveRef.current = false
+            if (!navigateAfterCompositionRef.current) return
+            navigateAfterCompositionRef.current = false
+            onNavigate(event.currentTarget.value)
           }}
           onFocus={() => {
             void window.cclinkStudio.window.focusRenderer()
@@ -373,6 +406,17 @@ export function BrowserToolbar({
           onKeyDown={(event) => {
             const primaryModifier = event.metaKey || event.ctrlKey
             const key = event.key.toLowerCase()
+
+            if (
+              shouldQueueBrowserAddressNavigation({
+                key: event.key,
+                nativeIsComposing: event.nativeEvent.isComposing,
+                compositionActive: urlCompositionActiveRef.current,
+              })
+            ) {
+              navigateAfterCompositionRef.current = true
+              return
+            }
 
             if (primaryModifier && !event.altKey && !event.shiftKey && key === 'a') {
               event.preventDefault()

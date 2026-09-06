@@ -59,4 +59,31 @@ describe('BrowserNewTabContent', () => {
     expect(emptyMarkup).toContain('访问过的网址会显示在这里')
     expect(errorMarkup).toContain('最近访问加载失败，点击重试')
   })
+
+  it('renders saved accounts and the add-account action in the same browser surface', () => {
+    const markup = renderToStaticMarkup(
+      <BrowserNewTabContent
+        history={[]}
+        loading={false}
+        error={false}
+        accounts={[
+          {
+            id: 'account-1',
+            label: '运营账号 A',
+            websiteName: '示例平台',
+            entryUrl: 'https://example.com',
+          },
+        ]}
+        onOpenUrl={vi.fn()}
+        onOpenAccount={vi.fn()}
+        onAddAccount={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    )
+
+    expect(markup).toContain('已保存账号')
+    expect(markup).toContain('运营账号 A')
+    expect(markup).toContain('添加账号')
+    expect(markup).toContain('已保存的网站账号')
+  })
 })

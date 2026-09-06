@@ -21,13 +21,18 @@ export function useBrowserViewLifecycle(
   const activeBrowserUrl = useBrowserStore((state) =>
     activeTabId ? state.tabs[activeTabId]?.url : undefined,
   )
+  const activeBrowserNavigation = useBrowserStore((state) =>
+    activeTabId ? state.tabs[activeTabId]?.navigation : undefined,
+  )
   const activeWorkspaceKey = workspaceRefKey(workspaceRef)
   const isBrowserTab =
     activeTab?.type === 'browser' &&
     Boolean(activeTab.workspaceRef) &&
     workspaceRefKey(activeTab.workspaceRef!) === activeWorkspaceKey
   const showNativeBrowserView =
-    isBrowserTab && !isBrowserNewTabUrl(activeBrowserUrl ?? activeTab?.initialUrl)
+    isBrowserTab &&
+    !activeBrowserNavigation &&
+    !isBrowserNewTabUrl(activeBrowserUrl ?? activeTab?.initialUrl)
   const browserViewBindingKey = useMemo(
     () =>
       JSON.stringify(

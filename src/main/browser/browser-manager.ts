@@ -243,7 +243,7 @@ interface ViewEntry {
   history: string[]
   historyIndex: number
   pendingHistoryDirection: 'back' | 'forward' | null
-  /** 项目运营平台 Profile；为空时使用默认 session。 */
+  /** Browser Profile；普通可保存草稿和已登记账号均可非空，为空时使用降级默认 Session。 */
   profileId: string | null
   /** renderer 投影声明的已登记账号；main 用它阻止同 Profile 下的账号串线。 */
   accountId: string | null
@@ -2178,15 +2178,15 @@ export class BrowserManager {
   }
 
   /**
-   * 返回项目内可供未指定网站账号的 Agent 使用的默认环境浏览器。
-   * 账号和草稿 Profile 只能由显式账号调用链选择，不能因当前可见而被隐式复用。
+   * 返回项目内可供未指定网站账号的 Agent 使用的普通浏览器。
+   * 普通可保存草稿可以被复用；已登记账号只能由显式账号调用链选择。
    */
   getViewIdForWorkspace(workspaceKey: string | null): string | null {
     const activeTabId = this.getActiveViewIdForWorkspace(workspaceKey)
-    if (activeTabId && this.views.get(activeTabId)?.profileId === null) return activeTabId
+    if (activeTabId && this.views.get(activeTabId)?.accountId === null) return activeTabId
     return (
       [...this.views].find(
-        ([, entry]) => entry.workspaceKey === workspaceKey && entry.profileId === null,
+        ([, entry]) => entry.workspaceKey === workspaceKey && entry.accountId === null,
       )?.[0] ?? null
     )
   }
@@ -2316,7 +2316,7 @@ export class BrowserManager {
     return this.activeViewId
   }
 
-  /** 等待指定项目的默认环境浏览器；账号环境不能满足未指定账号的 Agent 请求。 */
+  /** 等待指定项目的普通浏览器；已登记账号不能满足未指定账号的 Agent 请求。 */
   async waitForActiveViewForWorkspace(
     workspaceKey: string | null,
     timeoutMs = 2500,
@@ -2470,7 +2470,7 @@ export class BrowserManager {
   /** 导航到指定 URL */
   async navigate(tabId: string, url: string): Promise<void> {
     const entry = this.views.get(tabId)
-    if (!entry) return
+    if (!entry) throw new Error(`浏览器视图尚未就绪: ${tabId}`)
     if (this.routeBrowserAuth(tabId, entry, url)) return
     await assertBrowserUrlAccess(url, entry.workspaceKey)
     entry.pendingUrl = url

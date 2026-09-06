@@ -25,7 +25,8 @@ export function buildRemoteQuickSwitcherItems(input: {
         session.serverId === input.endpointId &&
         session.workspaceId === input.workspaceId,
     )
-    .sort((a, b) => b.updatedAt - a.updatedAt)
+    // Activity updates status and content, but must not move a tab under the pointer.
+    .sort((a, b) => b.createdAt - a.createdAt)
   const activeId = sessions.some((session) => session.id === input.selectedSessionId)
     ? input.selectedSessionId
     : sessions[0]?.id
@@ -55,32 +56,21 @@ export function quickSwitcherVisibleCount(panelMode: AgentPanelMode, panelWidth:
   return 2
 }
 
-export function selectQuickSwitcherThreads<T extends { id: string; isActive: boolean }>(
+export function selectQuickSwitcherThreads<T>(
   conversations: T[],
   limit = QUICK_SWITCHER_THREAD_LIMIT,
 ): T[] {
-  if (conversations.length <= limit) return conversations
-  const latest = conversations.slice(0, limit)
-  if (latest.some((conversation) => conversation.isActive)) return latest
-
-  const active = conversations.find((conversation) => conversation.isActive)
-  if (!active || limit <= 0) return latest
-  return [...latest.slice(0, limit - 1), active]
+  // Keep the same prefix visible; active state is presentation, not ordering state.
+  return conversations.slice(0, Math.max(limit, 0))
 }
 
-export function partitionQuickSwitcherThreads<T extends { id: string; isActive: boolean }>(
+export function partitionQuickSwitcherThreads<T>(
   conversations: T[],
   visibleCount: number,
 ): { visible: T[]; overflow: T[] } {
-  if (conversations.length <= visibleCount) return { visible: conversations, overflow: [] }
-  const visible = conversations.slice(0, Math.max(visibleCount, 0))
-  if (!visible.some((conversation) => conversation.isActive) && visibleCount > 0) {
-    const active = conversations.find((conversation) => conversation.isActive)
-    if (active) visible.splice(visible.length - 1, 1, active)
-  }
-  const visibleIds = new Set(visible.map((conversation) => conversation.id))
+  const splitIndex = Math.max(visibleCount, 0)
   return {
-    visible,
-    overflow: conversations.filter((conversation) => !visibleIds.has(conversation.id)),
+    visible: conversations.slice(0, splitIndex),
+    overflow: conversations.slice(splitIndex),
   }
 }
