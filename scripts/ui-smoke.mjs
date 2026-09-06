@@ -2798,11 +2798,7 @@ async function main() {
       },
       { timeout: 10_000 },
     )
-    await page.evaluate(async (tabId) => {
-      const { useTabStore } = await import('/src/stores/tab-store.ts')
-      useTabStore.getState().closeTab(tabId)
-    }, restartedSavedTabId)
-    return 'ordinary Browser login is saved in place without a Profile switch; the website-account icon, cross-project reuse, and restart login persistence are verified'
+    return 'ordinary Browser login is saved in place without a Profile switch; the website-account icon, cross-project reuse, restart login persistence, and the open account Tab required by affair reuse are verified'
   })
 
   await runCheck(

@@ -120,10 +120,11 @@ async function waitForTerminal(
       : never
     : never
 > {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  const deadline = Date.now() + 3_000
+  while (Date.now() < deadline) {
     const result = await service.listTasks(workspacePath, PROJECT_ID)
     if (result.success && result.tasks[0]?.status === 'succeeded') return result.tasks[0] as never
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    await new Promise((resolve) => setTimeout(resolve, 10))
   }
   throw new Error('render did not finish')
 }
