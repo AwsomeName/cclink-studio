@@ -134,7 +134,7 @@ export class WebAffairStore {
           ? ((raw as Record<string, unknown>)['affairs'] as unknown[])
           : []
       const isLegacySnapshot =
-        !raw || typeof raw !== 'object' || (raw as Record<string, unknown>)['schemaVersion'] !== 8
+        !raw || typeof raw !== 'object' || (raw as Record<string, unknown>)['schemaVersion'] !== 9
       const discardedArticleCount = isLegacySnapshot
         ? rawAffairs.filter(
             (item) =>
@@ -250,7 +250,7 @@ export class WebAffairStore {
           ? rawAffairs
           : rawAffairs.filter((affair) => affair.kind !== 'article-publishing')
       const snapshot = parseWebAffairSnapshot({
-        schemaVersion: 8,
+        schemaVersion: 9,
         revision: targetRevision,
         affairs: sanitizedAffairs,
       })
@@ -298,7 +298,7 @@ export class WebAffairStore {
     )
     if (activeArticleAffairs.length === 0) return
     let recovery = parseWebAffairSnapshot({
-      schemaVersion: 8,
+      schemaVersion: 9,
       revision: snapshot.revision,
       affairs: activeArticleAffairs,
     })

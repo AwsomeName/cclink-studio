@@ -1,10 +1,15 @@
 # 文章发布逐步可观测执行协议修复方案
 
-状态：P0 已实现并通过自动门禁；等待真实 Electron/CSDN 验收
+状态：最小修复继续补强；真实 CSDN 取证发现验收缺口，产品闭环未完成
 日期：2026-09-07
 目标需求：[article-publishing-observable-execution-protocol.md](article-publishing-observable-execution-protocol.md)
 
 ## 结论
+
+2026-09-07 继续修复时明确收缩范围：沿用 WebAffair/current operation/transition、长 Agent Run 和
+Runtime handshake，不引入 ledger、claim/report MCP、短 Run 调度或时间线 UI。
+验收终点不是 inspect 成功，而是继续原未完成步骤且原有完成记录不倒退。
+真实现场及尚未通过项见 [中断恢复测试清单](../testing/article-publishing-runtime-convergence.md)。
 
 保留现有账号、草稿、Runtime binding、recovery permit 和副作用安全围栏，不引入完整
 `operationRuns` 账本。新增最小的“一个 current operation + 最多 200 条 transition”，由
@@ -23,14 +28,14 @@ recovery.restore-exact-draft
 
 ## 当前源码基线
 
-独立评审基线是 2026-09-07 `main` 的 HEAD `23e0426d4fcc3df71d6197792d52074c7d48a038`、版本
+独立评审基线是 2026-09-07 `main` 的 HEAD `27f51a1588124ef54cd09698f1d827420c0ede6e`、版本
 `0.1.87`。实施时仍须重新确认 HEAD 和工作区，不能把这里的行号当作永久事实。
 
 当前已有：启动 IPC 在持久绑定后返回、`onRunPrepared` 工具屏障、execution generation、launch
 operation、三类 Runtime binding、recovery lease、精确草稿找回、write permit、Page rebind、字段级
 mismatch 日志和启动审计。
 
-独立评审时确认的 P0 缺口（当前工作树已按下列边界修复）：
+此前独立评审确认、当前基线已先行处理的 P0 缺口：
 
 1. 早到 `onPageRuntimeBound` 只 schedule 异步 rebind，`onRunPrepared` 没有等待其完成；
 2. 运行期 rebind 分两次持久提交，核验失败只写日志，当前业务步骤没有结构化失败；
@@ -38,21 +43,30 @@ mismatch 日志和启动审计。
 4. Runtime 无进度可能被错误映射成 waiting-human；
 5. UI 只显示粗 checkpoint，不能显示 Runtime 准备卡在哪个 transition。
 
-## P0 实施记录（2026-09-07）
+## 复审修正（2026-09-07）
 
-- 已实现 current operation、结构化 failure 和最多 200 条 transition；`WebAffairService` 仍是唯一进度所有者。
-- 已把恢复阶段的第一次核验改为只观察、不签发 permit；BrowserTask 创建后在最终稳定 Page 上重新核验，再把
-  lease、binding、permit 和 current Runtime 一次持久提交。
-- 已缓存并 await `activeRuntimes` 登记前到达的 `onPageRuntimeBound`；工具运行期遇到同页重绑也先等待确定的
-  rebind queue，再决定是否失败。
-- 已把 exact Page identity 纳入 inspect attestation；同 URL 但 Page generation 改变时旧证明立即失效。
-- 已把内部 Runtime 无进度和重绑失败收敛为 interrupted/结构化 Studio Runtime failure，并撤销写入许可；只有
-  真实验证码、登录失效、法律声明或账号冲突才允许进入人工处理。
-- 已在文章发布页显示 operation、owner、起点、目标、最新 transition、失败分类和字段级 expected/actual。
-- 专项测试 89/89 通过；`pnpm verify` 通过（354 个测试文件，2295 passed、2 skipped，生产构建通过）。
+此前“P0 已实现”的结论撤回。当前骨架仍有五类必须先关闭的安全缺口：发布语义可能绕过副作用账本；取消或
+接管没有同步终结 operation/permit；恢复账号与 saved 证据来源过宽；probe 后提交前没有再次核对 Task、可见
+View、Page 和 operation；当前 operation 没有真正限制全部工具。
 
-尚未完成：真实 Electron `WebContentsView` 生命周期改代测试和真实 CSDN 真人验收。验收复用现有 Profile，
-不要求用户重复登录；这两项通过前不得宣称恢复闭环完成，也不得据此发布版本。
+施工分两批：
+
+1. 批次 A：adapter 输出的语义动作决定 save/publish 副作用；生命周期 reducer 原子终结 operation 并撤销
+   permit；所有迟到完成使用 operationRunId/status/revision CAS；派发前再次验证 live owner；内部 unknown 不再
+   自动转人工。
+2. 批次 B：恢复前置 operation 与业务 checkpoint 解耦；生产 Task 克隆语义下等待 rebind 后重新取 Task；
+   inspect probe 前后及证据使用时复核 operation、Task、实际挂载 View、Page 和主文档代次；
+   精确找回原草稿后只将旧保存记为已对账，不宣称旧正文写入成功。
+
+每个 current operation 增加单调 `revision`。任何入场、派发和完成提交必须携带 expected
+operationRunId/status/revision；reducer 在成功转换和终态撤权时递增 revision。schema 升级时按产品要求删除旧
+文章发布事务，不迁移；其他 WebAffair 保留。
+
+本轮实现还把副作用派发拆成两个持久时点：`consumedAt` 表示一次性 capability 已被领取但尚未触达网页；
+`dispatchedAt` 在初步 execution/Task/Page/attestation 核对成功后写入；该异步落盘返回后，在真正调用
+页面动作前同一段同步代码再次检查 abort、执行代次、实际动作 Page、View 和文档代次。取消发生在两者之间时，前者可安全
+转为 rejected，不会把一个根本没有点击的动作误报成 result-unknown；一旦写入 dispatchedAt，恢复仍严格只核验、
+不重放。
 
 ## 唯一状态结构
 
@@ -63,6 +77,7 @@ executionProtocol: {
   version: 1
   current?: {
     operationRunId: string
+    revision: number
     definitionId:
       | 'recovery.restore-exact-draft'
       | 'runtime.prepare-first-inspect'
@@ -145,6 +160,10 @@ snapshot 和结构化 failure。它不拥有业务进度，超过 200 条删除�
 13. `onRunPrepared` 返回，Agent 第一次 inspect 才能开始。
 14. inspect 再读当前 exact identity；adapter 成功后 main 完成 `page.first-inspect`。
 
+第 14 步必须拆成 capture/commit 两个 transition：capture 后异步 probe；commit 前重新读取生产
+BrowserTask clone、当前 operation revision、可见 View 和 Playwright Page。任一变化都废止本次观察并回到
+Runtime 收敛，不能用 capture 时的快照提交。
+
 WebAffair 与 BrowserTaskRuntime 不构成数据库原子事务。这是 fail-closed handshake：
 
 - transfer 前崩溃：无 permit，重启后重新恢复；
@@ -167,10 +186,12 @@ CAS 条件是：
 
 ```text
 affairId + attemptId + executionGeneration + launchOperationId
-+ expected operationRunId + expected operation status
++ expected operationRunId + expected operation status + expected operation revision
 ```
 
 每次提交同时维护 current、recentTransitions、所属 checkpoint、Attempt/execution、runtime binding/permit。
+取消、接管、Run/Task 终止和 Runtime 丢失也走同一 reducer：关闭 current、递增 revision、撤销 permit，并把可能
+派发的副作用标记 result-unknown。
 旧 generation、旧 operation、旧 Agent 和重复 transition 不推进 revision。
 
 P0 激活 `open-editor/verify-account` 的 operation 所有权时，旧

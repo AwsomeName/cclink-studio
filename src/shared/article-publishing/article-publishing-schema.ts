@@ -143,8 +143,16 @@ const sideEffectSchema = z
     executionGeneration: z.number().int().positive().max(1_000_000),
     kind: z.enum(['upload-asset', 'save-draft', 'publish']),
     targetId: z.string().trim().min(1).max(500),
-    status: z.enum(['reserved', 'dispatched', 'result-unknown', 'verified', 'rejected']),
+    status: z.enum([
+      'reserved',
+      'dispatched',
+      'result-unknown',
+      'verified',
+      'rejected',
+      'reconciled',
+    ]),
     reservedAt: timestampSchema,
+    consumedAt: timestampSchema.optional(),
     dispatchedAt: timestampSchema.optional(),
     observedAt: timestampSchema.optional(),
     browserTaskRunId: uuidSchema.optional(),
@@ -199,6 +207,7 @@ const operationDefinitionIdSchema = z.enum([
 const currentOperationSchema = z
   .object({
     operationRunId: uuidSchema,
+    revision: z.number().int().positive().max(1_000_000),
     definitionId: operationDefinitionIdSchema,
     checkpointId: z.string().trim().min(1).max(200),
     status: z.enum([

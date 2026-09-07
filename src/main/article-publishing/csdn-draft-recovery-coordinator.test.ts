@@ -8,6 +8,46 @@ const DRAFT_LIST_URL = 'https://mp.csdn.net/mp_blog/manage/article?type=draft'
 const ACCOUNT = 'csdn:test-user'
 
 describe('CsdnDraftRecoveryCoordinator', () => {
+  it('uses the observed same-URL draft tab and discards candidates from the all-articles tab', async () => {
+    const tab = {
+      count: vi.fn(async () => 1),
+      isVisible: vi.fn(async () => true),
+      click: vi.fn(async () => undefined),
+    }
+    const page = {
+      ...pageAt(CSDN_ARTICLE_MANAGEMENT_URL),
+      getByRole: vi.fn(() => tab),
+      waitForTimeout: vi.fn(),
+    }
+    const adapter = {
+      probeDraftList: vi
+        .fn()
+        .mockResolvedValueOnce({
+          ...listProbe([{ draftId: DRAFT_ID, url: 'https://mp.csdn.net/wrong', title: 'decoy' }]),
+          draftSectionTabName: '草稿箱(1)',
+        })
+        .mockResolvedValueOnce(
+          listProbe([{ draftId: DRAFT_ID, url: DRAFT_URL, title: 'Article' }]),
+        ),
+      probe: vi.fn(async () => editorProbe()),
+    }
+    const navigate = vi.fn(async (url: string) =>
+      url === CSDN_ARTICLE_MANAGEMENT_URL ? page : pageAt(url),
+    )
+    await new CsdnDraftRecoveryCoordinator(adapter as never).recoverExactDraft({
+      expectedDraftId: DRAFT_ID,
+      expectedPlatformAccountId: ACCOUNT,
+      expectedTitle: 'Article',
+      navigate: navigate as never,
+    })
+    expect(page.getByRole).toHaveBeenCalledWith('tab', { name: '草稿箱(1)', exact: true })
+    expect(tab.click).toHaveBeenCalledOnce()
+    expect(navigate.mock.calls.map(([url]) => url)).toEqual([
+      CSDN_ARTICLE_MANAGEMENT_URL,
+      DRAFT_URL,
+    ])
+  })
+
   it('从草稿箱按原 draftId 找回同账号、同标题且已保存的草稿', async () => {
     const adapter = {
       probeDraftList: vi

@@ -105,6 +105,17 @@ async function main() {
   const baselinePageState = await readPageState(target)
   const baselineTargetId = await resolveTargetId(externalBrowser, fixture.url)
 
+  const assistantFrame = target.frames().find((frame) => frame.url().endsWith('/assistant'))
+  assert(assistantFrame, 'assistant iframe missing')
+  await assistantFrame.evaluate(() =>
+    history.replaceState({}, '', '/assistant?articleId=164148817'),
+  )
+  await renderer.waitForTimeout(300)
+  assert(
+    (await address.inputValue()) === fixture.url,
+    'iframe navigation replaced the main tab URL',
+  )
+
   await disconnectInternalTransport(
     child,
     baselineDiagnostics.automationConnection.connectionGeneration,
@@ -239,6 +250,7 @@ async function main() {
         targetId: baselineTargetId,
         ownerMigration: ['main', detachedDiagnostics.ownerWindowId, 'main'],
         preserved: [
+          'main tab URL during iframe SPA navigation',
           'url',
           'webContentsId',
           'targetId',
@@ -262,10 +274,15 @@ async function startFixtureServer() {
       'Content-Type': 'text/html; charset=utf-8',
       'Set-Cookie': 'fixture_login=authenticated; SameSite=Lax',
     })
+    if (_request.url?.startsWith('/assistant')) {
+      response.end('<!doctype html><title>AI assistant fixture</title><p>Read-only assistant</p>')
+      return
+    }
     response.end(`<!doctype html>
       <title>CCLink CDP Recovery Smoke</title>
       <script>window.__bootId = crypto.randomUUID()</script>
       <input id="draft" value="initial">
+      <iframe src="/assistant"></iframe>
       <div style="height:2400px">recovery fixture</div>`)
   })
   await new Promise((resolve, reject) => {

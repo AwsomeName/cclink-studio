@@ -118,8 +118,9 @@ export interface ArticlePublishingSideEffect {
   executionGeneration: number
   kind: 'upload-asset' | 'save-draft' | 'publish'
   targetId: string
-  status: 'reserved' | 'dispatched' | 'result-unknown' | 'verified' | 'rejected'
+  status: 'reserved' | 'dispatched' | 'result-unknown' | 'verified' | 'rejected' | 'reconciled'
   reservedAt: string
+  consumedAt?: string
   dispatchedAt?: string
   observedAt?: string
   browserTaskRunId?: string
@@ -168,6 +169,7 @@ export interface ArticlePublishingOperationFailure {
 
 export interface ArticlePublishingCurrentOperation {
   operationRunId: string
+  revision: number
   definitionId: ArticlePublishingOperationDefinitionId
   checkpointId: string
   status: ArticlePublishingOperationStatus

@@ -1,6 +1,6 @@
 # 文章发布中断恢复测试清单
 
-状态：P0 operation 自动门禁已补齐；真实 Electron/CSDN 门禁待执行
+状态：针对性自动测试通过；真实 CSDN 已只读取证，恢复到后续步骤的产品验收未通过
 日期：2026-09-07
 
 本文测试继续作为防倒退基线，但不能证明 Studio/Agent 两个黑盒已经拆开。新增的真实故障顺序和同类
@@ -9,8 +9,47 @@
 
 ## 自动测试
 
-- 新任务使用 schema v8 保存并重载；
-- v1-v7 文章发布任务在加载时删除，通用 WebAffair 保留；
+本轮实跑结果：受影响的 13 个测试文件、213 项测试通过；TypeScript、ESLint、修改文件格式检查通过。
+
+本轮最小修复新增：同 URL 文档刷新时废弃 probe 和排队中的结果；使用证据时复核实际挂载 View；
+副作用持久化返回后的同步取消/身份闸门；草稿箱同 URL tab；iframe 页内跳转不得污染主 Tab URL。
+跨 service 测试不再停在 inspect：用真实 WebAffairService/Store、BrowserTaskRuntime 和发布服务执行
+恢复 31 → BrowserTask 改为 32 → 首次检查 → 账号检查 → 图片步骤 → 正文写入/核验 → fill-fields。
+平台页面和 Agent 后端仍为替身，这不是 CSDN 产品验收。
+
+旧保存的未知结果经精确草稿恢复后标记为 `reconciled`，含义仅为“已读取原草稿当前保存状态”。
+不是旧动作成功，不完成正文/字段/保存检查点，不影响发布未知结果的禁止重试保护。
+
+## 2026-09-07 真实 Studio/CSDN 现场
+
+使用已运行的开发版 Studio 0.1.87 和原登录 Profile，只做管理页导航、草稿箱切换和打开原草稿，
+没有登录、上传、保存、发布、删除，也没有创建替代任务。
+
+已观察到：
+
+- 当前 `cclink-promotion` 项目的文章发布侧栏显示“还没有发布记录”，没有可点击继续的原事务；
+- 管理页账号头像链接为 `https://blog.csdn.net/weixin_36388257`；
+- 草稿箱为同 URL 的 `草稿箱(1)` 标签，不是链接；
+- 从该标签找到并点击原 draftId `164148817` 的编辑链接；
+- 草稿列表及编辑器标题均为“【无标题】”，不是已证明匹配的任务标题；
+- 编辑器含富文本 iframe 和 AI 助手 iframe。加载 AI 助手后 Studio 地址栏变成其
+  `app-blog.csdn.net/csdn/aiChatNew?...articleId=164148817`，主编辑器仍在；
+- AX 读回可见“保存草稿”按钮，但没有明确的当前“已保存”状态。按钮不等于保存成功。
+
+因此，真实账号/原 ID 的人工取证已做到；adapter 的账号 DOM 区域、富文本 iframe 正文识别、保存
+状态取证仍未被真实 DOM 执行证明。不能把 AX 文本或新增的 role-tab 测试称为 adapter 验收通过。
+原任务缺失且标题不符，未执行“点击继续 → 首次检查 → 继续原未完成步骤”，不得宣称恢复闭环完成。
+
+隔离 Electron 验证已运行 `node scripts/browser-cdp-recovery-smoke.cjs`：CDP generation 1 → 2 → 3，
+主窗口 → 辅助窗口 → 主窗口均保留同一 WebContents/target、Profile、登录 Cookie、未保存表单、滚动及
+timeOrigin；新增的真实 iframe `history.replaceState` 不再污染主 Tab 地址栏。该项使用本地 fixture 和
+隔离临时 userData，不包含真实 CSDN 发布任务，也不替代完整浏览器缩放真人矩阵。
+
+剩余验收必须使用仍保留的当前 schema 中断事务和对应原稿，不允许通过伪造已完成 checkpoint、
+把“【无标题】”当成匹配标题、把“保存草稿”按钮当 saved、或新建文章代替原稿来通过。
+
+- 新任务使用 schema v9 保存并重载；
+- v1-v8 文章发布任务在加载时删除，通用 WebAffair 保留；
 - 旧文章任务不会从 `.bak` 或旧 recovery journal 回流；
 - 同账号 recovery lease 只能有一个 owner；
 - 草稿核验成功后 recovery lease 原子转交 BrowserTask；

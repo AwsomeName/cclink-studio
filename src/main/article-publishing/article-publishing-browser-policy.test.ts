@@ -17,7 +17,11 @@ function createPolicy(options?: {
   images?: Array<{ src: string; alt: string }>
   publishedLinks?: Array<{ url: string; title: string }>
   awaitRuntimeConvergence?: (attemptId: string) => Promise<void>
+  duringProbe?: () => void
+  beforeComplete?: () => void
 }) {
+  let documentGeneration = 1
+  let viewVisible = true
   let inspectionPage: Record<string, unknown> | null = null
   const activeTask = structuredClone(task) as unknown as {
     id: string
@@ -51,68 +55,116 @@ function createPolicy(options?: {
     playwrightConnectionGeneration: 3,
     playwrightPageBindingGeneration: 4,
   }
+  let currentOperation: Record<string, unknown> | undefined = {
+    operationRunId: 'operation-a',
+    revision: 1,
+    definitionId: 'page.first-inspect',
+    checkpointId: options?.stepId ?? 'upload-assets',
+    status: 'ready',
+    owner: 'agent',
+    attemptId: 'attempt-a',
+    executionGeneration: 1,
+    launchOperationId: 'launch-a',
+    startSummary: '等待首次只读检查',
+    goalSummary: '核验当前页面',
+    lastTransitionAt: '2026-09-07T00:00:00.000Z',
+  }
+  const snapshotAffair = () => ({
+    id: 'affair-a',
+    kind: 'article-publishing',
+    attempts: [
+      {
+        id: 'attempt-a',
+        accountId: 'account-a',
+        status: 'running-ai',
+        executionGeneration: 1,
+        launchOperationId: 'launch-a',
+        browserTaskRunId: 'task-a',
+        runtimeBindings: [activeBrowserBinding],
+      },
+    ],
+    articlePublishing: {
+      adapterId: 'csdn',
+      adapterVersion: 1,
+      accountId: 'account-a',
+      source: { markdownPath: '/workspace/article.md', modifiedAt: 1, size: 10 },
+      fields: { title: 'Article', summary: '', tags: [], category: '' },
+      assets: [
+        {
+          id: 'asset-a',
+          kind: 'local',
+          sourcePath: '/workspace/a.png',
+          displayPath: 'a.png',
+          status: options?.assetStatus ?? 'uploaded',
+          uploadAttempts: [],
+        },
+      ],
+      execution: {
+        status: options?.executionStatus ?? 'running',
+        currentAttemptId: 'attempt-a',
+        currentStepId: options?.stepId ?? 'upload-assets',
+        currentGeneration: 1,
+        currentLaunchOperationId: 'launch-a',
+      },
+      executionProtocol: {
+        current: currentOperation,
+        recentTransitions: [],
+      },
+      sideEffects: [],
+      publication: { status: options?.publicationStatus ?? 'not-started' },
+      draft:
+        options?.draftUrl === null
+          ? undefined
+          : {
+              platformDraftId: '164148817',
+              platformAccountId: 'csdn:test-user',
+              normalizedTitle: 'Article',
+              url: options?.draftUrl ?? DRAFT_URL,
+              ...(options?.recovery ? { recovery: options.recovery } : {}),
+            },
+    },
+  })
   const webAffairService = {
-    getProjectSnapshot: vi.fn().mockReturnValue({
+    getProjectSnapshot: vi.fn(() => ({
       success: true,
       data: {
-        affairs: [
-          {
-            id: 'affair-a',
-            kind: 'article-publishing',
-            attempts: [
-              {
-                id: 'attempt-a',
-                accountId: 'account-a',
-                status: 'running-ai',
-                executionGeneration: 1,
-                launchOperationId: 'launch-a',
-                browserTaskRunId: 'task-a',
-                runtimeBindings: [activeBrowserBinding],
-              },
-            ],
-            articlePublishing: {
-              adapterId: 'csdn',
-              adapterVersion: 1,
-              accountId: 'account-a',
-              source: { markdownPath: '/workspace/article.md', modifiedAt: 1, size: 10 },
-              fields: { title: 'Article', summary: '', tags: [], category: '' },
-              assets: [
-                {
-                  id: 'asset-a',
-                  kind: 'local',
-                  sourcePath: '/workspace/a.png',
-                  displayPath: 'a.png',
-                  status: options?.assetStatus ?? 'uploaded',
-                  uploadAttempts: [],
-                },
-              ],
-              execution: {
-                status: options?.executionStatus ?? 'running',
-                currentAttemptId: 'attempt-a',
-                currentStepId: options?.stepId ?? 'upload-assets',
-                currentGeneration: 1,
-              },
-              publication: { status: options?.publicationStatus ?? 'not-started' },
-              draft:
-                options?.draftUrl === null
-                  ? undefined
-                  : {
-                      platformDraftId: '164148817',
-                      platformAccountId: 'csdn:test-user',
-                      normalizedTitle: 'Article',
-                      url: options?.draftUrl ?? DRAFT_URL,
-                      ...(options?.recovery ? { recovery: options.recovery } : {}),
-                    },
-            },
-          },
-        ],
+        affairs: [snapshotAffair()],
       },
-    }),
+    })),
     reserveArticlePublishingSideEffect,
     recordArticlePublishingDraftAnchor,
     handoffAttempt,
-    startArticlePublishingFirstInspect: vi.fn().mockResolvedValue({ success: true, data: {} }),
-    completeArticlePublishingFirstInspect: vi.fn().mockResolvedValue({ success: true, data: {} }),
+    startArticlePublishingFirstInspect: vi.fn(async (input: Record<string, unknown>) => {
+      const operation = currentOperation
+      if (
+        !operation ||
+        operation.operationRunId !== input.expectedOperationRunId ||
+        operation.revision !== input.expectedOperationRevision
+      ) {
+        return { success: false, error: { message: 'operation 已过期' } }
+      }
+      currentOperation = {
+        ...operation,
+        revision: Number(operation.revision) + 1,
+        status: 'running',
+        runtime: input.runtime,
+      }
+      return { success: true, data: snapshotAffair() }
+    }),
+    completeArticlePublishingFirstInspect: vi.fn(
+      async (input: Record<string, unknown>, isCurrent?: () => boolean) => {
+        options?.beforeComplete?.()
+        if (isCurrent && !isCurrent()) return { success: false, error: { message: '观察已过期' } }
+        if (
+          currentOperation?.operationRunId !== input.expectedOperationRunId ||
+          currentOperation?.revision !== input.expectedOperationRevision
+        ) {
+          return { success: false, error: { message: 'operation 已过期' } }
+        }
+        currentOperation = undefined
+        return { success: true, data: snapshotAffair() }
+      },
+    ),
     failArticlePublishingCurrentOperation: vi.fn().mockResolvedValue({ success: true, data: {} }),
   }
   const policy = new ArticlePublishingBrowserPolicy(
@@ -122,12 +174,29 @@ function createPolicy(options?: {
       getPageById: () => inspectionPage,
       getPageBindingIdentity: () => currentPageBinding,
     } as never,
-    { getActiveTaskForConversation: () => activeTask, getTask: () => activeTask } as never,
+    {
+      getActiveTaskForConversation: () => structuredClone(activeTask),
+      getTask: () => structuredClone(activeTask),
+    } as never,
     options?.awaitRuntimeConvergence,
+    {
+      getViewRuntimeIdentity: () => ({
+        browserViewRuntimeGeneration: 2,
+        webContentsId: 20,
+        documentGeneration,
+      }),
+      isViewVisible: () => viewVisible,
+    } as never,
   )
   return {
     policy,
     webAffairService,
+    advanceDocument: () => {
+      documentGeneration += 1
+    },
+    hideView: () => {
+      viewVisible = false
+    },
     advancePageBinding: () => {
       currentPageBinding = { ...currentPageBinding, generation: 5 }
       activeTask.correlation.playwrightPageBindingGeneration = 5
@@ -136,34 +205,40 @@ function createPolicy(options?: {
       activeBrowserBinding.playwrightPageBindingGeneration =
         activeTask.correlation.playwrightPageBindingGeneration
     },
+    clearCurrentOperation: () => {
+      currentOperation = undefined
+    },
     inspect: async (
       selectors: Record<string, string>,
       url = DRAFT_URL,
       pageKind: 'editor' | 'published-article' | 'management' | 'unsupported' = 'editor',
+      expectSuccess = true,
     ) => {
       inspectionPage = {
         isClosed: () => false,
         url: () => url,
-        evaluate: async () => ({
-          url,
-          pageKind,
-          bodySelector: selectors['body'] ?? '#body',
-          bodyTextLength: 100,
-          platformAccountCandidates: ['csdn:test-user'],
-          imageEnumerationComplete: options?.imageEnumerationComplete ?? false,
-          images: options?.images ?? [],
-          fileInputSelector: selectors['fileInput'],
-          titleSelector: selectors['title'] ?? '#title',
-          titleValue: 'Article',
-          selectors,
-          saveState: 'saved',
-          saveEvidence: '草稿已保存',
-          publishedLinks: options?.publishedLinks ?? [],
-        }),
+        evaluate: async () => {
+          options?.duringProbe?.()
+          return {
+            url,
+            pageKind,
+            bodySelector: selectors['body'] ?? '#body',
+            bodyTextLength: 100,
+            accountHrefCandidates: ['https://blog.csdn.net/test-user'],
+            imageEnumerationComplete: options?.imageEnumerationComplete ?? false,
+            images: options?.images ?? [],
+            fileInputSelector: selectors['fileInput'],
+            titleSelector: selectors['title'] ?? '#title',
+            titleValue: 'Article',
+            selectors,
+            saveStatusTexts: ['草稿已保存'],
+            publishedLinks: options?.publishedLinks ?? [],
+          }
+        },
       }
       const result = await policy.inspectCurrentPage(context)
-      expect(result.success).toBe(true)
-      return inspectionPage
+      expect(result.success).toBe(expectSuccess)
+      return expectSuccess ? inspectionPage : result
     },
   }
 }
@@ -427,16 +502,16 @@ describe('ArticlePublishingBrowserPolicy', () => {
       locator: () => ({
         count: async () => 1,
         isVisible: async () => true,
-        evaluate: async () => ({ label: '发布博客', type: 'submit', role: 'button' }),
+        evaluate: async () => ({ label: '发布', type: 'submit', role: 'button' }),
       }),
     }
-    await inspect({ publish: 'button:has-text("发布博客")' })
+    await inspect({ publish: 'button:has-text("发布")' })
 
     await expect(
       policy.classifyAction(
         task as never,
         'click',
-        { selector: 'button:has-text("发布博客")' },
+        { selector: 'button:has-text("发布")' },
         page as never,
         context,
       ),
@@ -451,6 +526,69 @@ describe('ArticlePublishingBrowserPolicy', () => {
       'workspace-a',
     )
   })
+
+  it('discards the first inspect when Page binding changes while the adapter probe is running', async () => {
+    let advancePageBinding = (): void => undefined
+    const harness = createPolicy({ duringProbe: () => advancePageBinding() })
+    advancePageBinding = harness.advancePageBinding
+
+    const result = await harness.inspect({ title: '#title' }, DRAFT_URL, 'editor', false)
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('Runtime 尚未收敛') },
+    })
+    expect(harness.webAffairService.completeArticlePublishingFirstInspect).not.toHaveBeenCalled()
+  })
+
+  it('re-inspects after a same-URL document reload during the probe, without handing off', async () => {
+    let once = true
+    const harness = createPolicy({
+      duringProbe: () => {
+        if (once) {
+          once = false
+          harness.advanceDocument()
+        }
+      },
+    })
+    await harness.inspect({ title: '#title' })
+    expect(harness.webAffairService.startArticlePublishingFirstInspect).toHaveBeenCalledTimes(2)
+    expect(harness.webAffairService.completeArticlePublishingFirstInspect).toHaveBeenCalledOnce()
+    expect(harness.webAffairService.handoffAttempt).not.toHaveBeenCalled()
+  })
+
+  it('discards evidence that changes while queued for completion and inspects again', async () => {
+    let once = true
+    const harness = createPolicy({
+      beforeComplete: () => {
+        if (once) {
+          once = false
+          harness.advanceDocument()
+        }
+      },
+    })
+    await harness.inspect({ title: '#title' })
+    expect(harness.webAffairService.completeArticlePublishingFirstInspect).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(['document', 'view'] as const)(
+    'rejects signed selectors after %s identity changes',
+    async (change) => {
+      const harness = createPolicy({ stepId: 'fill-fields' })
+      const page = await harness.inspect({ title: '#title' })
+      if (change === 'document') harness.advanceDocument()
+      else harness.hideView()
+      const decision = await harness.policy.classifyAction(
+        task as never,
+        'fill',
+        { selector: '#title', value: 'Article' },
+        page as never,
+        context,
+      )
+      expect(decision?.kind).not.toBe('allow-once')
+      expect(harness.webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
+    },
+  )
 
   it('persists a write-ahead marker before a field mutation that may autosave', async () => {
     const { policy, webAffairService, inspect } = createPolicy({ stepId: 'fill-fields' })
@@ -509,7 +647,10 @@ describe('ArticlePublishingBrowserPolicy', () => {
   })
 
   it('rejects a write when the visible page belongs to a different draft', async () => {
-    const { policy, webAffairService } = createPolicy({ stepId: 'fill-fields' })
+    const { policy, webAffairService, clearCurrentOperation } = createPolicy({
+      stepId: 'fill-fields',
+    })
+    clearCurrentOperation()
     const page = {
       url: () => 'https://mp.csdn.net/mp_blog/creation/editor/164148818',
     }
@@ -592,13 +733,13 @@ describe('ArticlePublishingBrowserPolicy', () => {
       pageKind: 'editor',
       bodySelector: '#body',
       bodyTextLength: 20,
-      platformAccountCandidates: ['csdn:test-user'],
+      accountHrefCandidates: ['https://blog.csdn.net/test-user'],
       imageEnumerationComplete: true,
       images: [],
       titleSelector: '#title',
       titleValue: 'Article',
       selectors: { title: '#title' },
-      saveState: 'saved',
+      saveStatusTexts: ['草稿已保存'],
       publishedLinks: [],
     })
 
@@ -614,10 +755,11 @@ describe('ArticlePublishingBrowserPolicy', () => {
   })
 
   it('rejects a write on a generic editor that cannot be recovered after restart', async () => {
-    const { policy, webAffairService } = createPolicy({
+    const { policy, webAffairService, clearCurrentOperation } = createPolicy({
       stepId: 'fill-fields',
       draftUrl: null,
     })
+    clearCurrentOperation()
     const page = { url: () => 'https://editor.csdn.net/md/' }
 
     await expect(
@@ -636,7 +778,8 @@ describe('ArticlePublishingBrowserPolicy', () => {
   })
 
   it('stops page mutations on a supported origin when the page is not an editor page', async () => {
-    const { policy } = createPolicy()
+    const { policy, clearCurrentOperation } = createPolicy()
+    clearCurrentOperation()
     const page = { url: () => 'https://app-blog.csdn.net/account/settings' }
 
     await expect(
@@ -685,7 +828,8 @@ describe('ArticlePublishingBrowserPolicy', () => {
   })
 
   it('keeps verification checkpoints read-only', async () => {
-    const { policy } = createPolicy({ stepId: 'verify-publication' })
+    const { policy, clearCurrentOperation } = createPolicy({ stepId: 'verify-publication' })
+    clearCurrentOperation()
     const page = { url: () => 'https://blog.csdn.net/example/article/details/1' }
 
     await expect(

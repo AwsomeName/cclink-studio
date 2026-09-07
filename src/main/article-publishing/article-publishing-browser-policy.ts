@@ -3,6 +3,7 @@ import type { BrowserTaskRun } from '../../shared/ipc/browser'
 import type { ToolExecutionContext } from '../mcp/types'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
 import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
+import type { BrowserManager } from '../browser/browser-manager'
 import type { WebAffairService } from '../web-affairs/web-affair-service'
 import {
   isSameCsdnDraft,
@@ -12,6 +13,7 @@ import { CsdnPublishingAdapter, type CsdnPageProbe } from './csdn-publishing-ada
 import type { WebAffairOperationResult } from '../../shared/web-affairs/web-affair-types'
 import type { ArticlePublishingAgentReporter } from '../web-affairs/web-affair-service'
 import type {
+  ArticlePublishingCurrentOperation,
   ArticlePublishingOperationFailure,
   ArticlePublishingRuntimeSnapshot,
 } from '../../shared/article-publishing/article-publishing-types'
@@ -40,6 +42,22 @@ interface ArticlePublishingExecutionScope {
   attemptId: string
   accountId: string
   currentStepId?: string
+  currentOperation?: {
+    operationRunId: string
+    revision: number
+    definitionId:
+      | 'recovery.restore-exact-draft'
+      | 'runtime.prepare-first-inspect'
+      | 'page.first-inspect'
+    status:
+      | 'ready'
+      | 'running'
+      | 'verifying'
+      | 'waiting-human'
+      | 'interrupted'
+      | 'result-unknown'
+      | 'failed'
+  }
   publicationStatus: 'not-started' | 'dispatched' | 'verifying' | 'published' | 'result-unknown'
   localAssetsReady: boolean
   executionGeneration: number
@@ -83,6 +101,8 @@ interface TrustedPageAttestation {
   scope: ArticlePublishingExecutionScope
   inspection: ArticlePublishingPageInspection
   runtime: ArticlePublishingRuntimeSnapshot
+  page: ReturnType<PlaywrightBridge['getPageById']>
+  documentGeneration?: number
 }
 
 interface ResolveExecutionInput {
@@ -102,7 +122,6 @@ interface ResolveExecutionInput {
 
 const HUMAN_ONLY_CONTROL =
   /支付|付款|购买|下单|充值|删除|注销|撤回|签署|签名|授权|权限|所有权|实名认证|人脸|验证码|扫码|同意|接受|原创|转载|翻译|版权|\bpay\b|purchase|delete|withdraw|sign|authorize|ownership|agree\s*(?:to\s*)?(?:terms|agreement)/iu
-const FINAL_PUBLICATION_CONTROL = /发布博客|发布文章|立即发布|确认发布|\bpublish\b/iu
 const PAGE_MUTATION_ACTIONS = new Set([
   'click',
   'fill',
@@ -134,17 +153,19 @@ export class ArticlePublishingBrowserPolicy {
     private readonly playwrightBridge?: PlaywrightBridge | null,
     private readonly browserTaskRuntime?: BrowserTaskRuntime | null,
     private readonly awaitRuntimeConvergence?: (attemptId: string) => Promise<void>,
+    private readonly browserManager?: BrowserManager | null,
   ) {}
 
   async inspectCurrentPage(
     context?: ToolExecutionContext,
+    retriesRemaining = 2,
   ): Promise<WebAffairOperationResult<ArticlePublishingPageInspection>> {
     const conversationId = context?.conversationId?.trim()
     const agentRunId = context?.agentRunId?.trim()
     if (!conversationId || !agentRunId || !this.playwrightBridge || !this.browserTaskRuntime) {
       return publishingEvidenceError('当前工具会话没有可核验的文章发布页面 Runtime')
     }
-    const task = this.browserTaskRuntime.getActiveTaskForConversation(conversationId)
+    let task = this.browserTaskRuntime.getActiveTaskForConversation(conversationId)
     if (!task || task.correlation?.agentRunId !== agentRunId) {
       return publishingEvidenceError('当前 Agent Run 没有精确绑定的活动 BrowserTask')
     }
@@ -157,53 +178,143 @@ export class ArticlePublishingBrowserPolicy {
       await this.awaitRuntimeConvergence(context.articlePublishingPolicy.attemptId).catch(
         () => undefined,
       )
+      task = this.browserTaskRuntime.getTask(task.id)
+      if (!task || task.status !== 'running' || task.correlation?.agentRunId !== agentRunId) {
+        return publishingEvidenceError('Runtime 收敛后当前 Agent 的 BrowserTask 已失效')
+      }
       scope = await this.resolveTaskScope(task, context)
     }
     if (!scope) {
       const failure = await this.runtimeResolutionFailure(task, context)
       const policy = context?.articlePublishingPolicy
       if (policy) {
-        await this.webAffairService.failArticlePublishingCurrentOperation({
-          workspaceId: policy.workspaceId,
-          affairId: policy.affairId,
-          attemptId: policy.attemptId,
-          executionGeneration: policy.executionGeneration,
-          launchOperationId: policy.launchOperationId,
-          failure,
-        })
+        const snapshot = this.webAffairService.getProjectSnapshot(policy.workspaceId)
+        const current = snapshot.success
+          ? snapshot.data.affairs.find((affair) => affair.id === policy.affairId)?.articlePublishing
+              ?.executionProtocol.current
+          : undefined
+        if (current) {
+          await this.webAffairService.failArticlePublishingCurrentOperation({
+            workspaceId: policy.workspaceId,
+            affairId: policy.affairId,
+            attemptId: policy.attemptId,
+            executionGeneration: policy.executionGeneration,
+            launchOperationId: policy.launchOperationId,
+            expectedOperationRunId: current.operationRunId,
+            expectedOperationRevision: current.revision,
+            failure,
+          })
+        }
       }
       return publishingEvidenceError(failure.message)
     }
     const page = this.playwrightBridge.getPageById(task.tabId)
     if (!page || page.isClosed()) return publishingEvidenceError('绑定的 CSDN 页面不可用')
+    const trackedOperation = scope.currentOperation
+    if (
+      trackedOperation &&
+      (trackedOperation.definitionId !== 'page.first-inspect' ||
+        !['ready', 'running'].includes(trackedOperation.status))
+    ) {
+      return publishingEvidenceError('当前 operation 不允许执行首次页面检查')
+    }
     const runtime = this.runtimeSnapshot(scope, context)
-    const started = await this.webAffairService.startArticlePublishingFirstInspect({
-      workspaceId: scope.workspaceId,
-      affairId: scope.affairId,
-      attemptId: scope.attemptId,
-      executionGeneration: scope.executionGeneration,
-      launchOperationId: scope.launchOperationId,
-      runtime,
-    })
-    if (!started.success) return publishingEvidenceError(started.error.message)
-    let probe: CsdnPageProbe
-    try {
-      probe = await this.adapter.probe(page)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      await this.webAffairService.failArticlePublishingCurrentOperation({
+    const documentGeneration = this.browserManager?.getViewRuntimeIdentity(
+      task.tabId,
+    )?.documentGeneration
+    const observationUrl = page.url()
+    const observationIsCurrent = () =>
+      this.attestationRuntimeIsCurrent({
+        scope,
+        runtime,
+        page,
+        documentGeneration,
+        inspection: { url: observationUrl } as ArticlePublishingPageInspection,
+      })
+    const retryCurrentPage = async (): Promise<
+      WebAffairOperationResult<ArticlePublishingPageInspection>
+    > => {
+      if (retriesRemaining > 0 && !context?.abortSignal?.aborted) {
+        await this.awaitRuntimeConvergence?.(scope.attemptId)
+        return this.inspectCurrentPage(context, retriesRemaining - 1)
+      }
+      return publishingEvidenceError('页面检查期间身份或文档已变化；旧观察已废止，请重试只读检查')
+    }
+    if (!observationIsCurrent()) return retryCurrentPage()
+    let startedOperation: ArticlePublishingCurrentOperation | undefined
+    if (trackedOperation) {
+      const started = await this.webAffairService.startArticlePublishingFirstInspect({
         workspaceId: scope.workspaceId,
         affairId: scope.affairId,
         attemptId: scope.attemptId,
         executionGeneration: scope.executionGeneration,
         launchOperationId: scope.launchOperationId,
-        failure: {
-          category: 'platform-page',
-          code: 'platform_page.inspect_failed',
-          message: `CSDN 页面只读检查失败：${message}`,
-        },
+        expectedOperationRunId: trackedOperation.operationRunId,
+        expectedOperationRevision: trackedOperation.revision,
+        runtime,
       })
+      if (!started.success) return publishingEvidenceError(started.error.message)
+      startedOperation = started.data.articlePublishing?.executionProtocol.current
+      if (
+        !startedOperation ||
+        startedOperation.operationRunId !== trackedOperation.operationRunId ||
+        startedOperation.status !== 'running'
+      ) {
+        return publishingEvidenceError('首次页面检查 operation 启动后身份不一致')
+      }
+    }
+    let probe: CsdnPageProbe
+    try {
+      if (!observationIsCurrent()) return retryCurrentPage()
+      probe = await this.adapter.probe(page)
+    } catch (error) {
+      if (!observationIsCurrent()) return retryCurrentPage()
+      const message = error instanceof Error ? error.message : String(error)
+      if (startedOperation) {
+        await this.webAffairService.failArticlePublishingCurrentOperation({
+          workspaceId: scope.workspaceId,
+          affairId: scope.affairId,
+          attemptId: scope.attemptId,
+          executionGeneration: scope.executionGeneration,
+          launchOperationId: scope.launchOperationId,
+          expectedOperationRunId: startedOperation.operationRunId,
+          expectedOperationRevision: startedOperation.revision,
+          failure: {
+            category: 'platform-page',
+            code: 'platform_page.inspect_failed',
+            message: `CSDN 页面只读检查失败：${message}`,
+          },
+        })
+      }
       return publishingEvidenceError(`CSDN 页面只读检查失败：${message}`)
+    }
+    const currentTask = this.browserTaskRuntime.getTask(task.id)
+    const currentPage = this.playwrightBridge.getPageById(task.tabId)
+    const currentScope = currentTask ? await this.resolveTaskScope(currentTask, context) : null
+    const currentRuntime = currentScope ? this.runtimeSnapshot(currentScope, context) : null
+    const visibleRuntime = this.browserManager?.getViewRuntimeIdentity(task.tabId)
+    if (
+      !observationIsCurrent() ||
+      !currentTask ||
+      currentTask.status !== 'running' ||
+      currentTask.correlation?.agentRunId !== agentRunId ||
+      currentPage !== page ||
+      page.isClosed() ||
+      page.url() !== probe.url ||
+      !currentScope ||
+      (startedOperation
+        ? currentScope.currentOperation?.operationRunId !== startedOperation.operationRunId ||
+          currentScope.currentOperation.revision !== startedOperation.revision ||
+          currentScope.currentOperation.status !== 'running'
+        : Boolean(currentScope.currentOperation)) ||
+      !currentRuntime ||
+      !sameRuntimeSnapshot(runtime, currentRuntime) ||
+      (visibleRuntime !== undefined &&
+        (!visibleRuntime ||
+          visibleRuntime.browserViewRuntimeGeneration !== runtime.browserViewRuntimeGeneration ||
+          visibleRuntime.webContentsId !== runtime.webContentsId))
+    ) {
+      return retryCurrentPage()
     }
     if (
       scope.draftUrl &&
@@ -225,21 +336,35 @@ export class ArticlePublishingBrowserPolicy {
       ...probe,
       matchedAssets,
     }
-    const completed = await this.webAffairService.completeArticlePublishingFirstInspect({
-      workspaceId: scope.workspaceId,
-      affairId: scope.affairId,
-      attemptId: scope.attemptId,
-      executionGeneration: scope.executionGeneration,
-      launchOperationId: scope.launchOperationId,
+    if (startedOperation) {
+      const completed = await this.webAffairService.completeArticlePublishingFirstInspect(
+        {
+          workspaceId: scope.workspaceId,
+          affairId: scope.affairId,
+          attemptId: scope.attemptId,
+          executionGeneration: scope.executionGeneration,
+          launchOperationId: scope.launchOperationId,
+          expectedOperationRunId: startedOperation.operationRunId,
+          expectedOperationRevision: startedOperation.revision,
+          runtime,
+          pageKind: inspection.pageKind,
+          platformAccountId: inspection.platformAccountId,
+          draftId: inspection.draftId,
+          normalizedTitle: normalizeText(inspection.title.value),
+          saveState: inspection.saveState,
+        },
+        observationIsCurrent,
+      )
+      if (!observationIsCurrent()) return retryCurrentPage()
+      if (!completed.success) return publishingEvidenceError(completed.error.message)
+    }
+    this.attestations.set(this.attestationKey(context), {
+      scope: currentScope,
+      inspection,
       runtime,
-      pageKind: inspection.pageKind,
-      platformAccountId: inspection.platformAccountId,
-      draftId: inspection.draftId,
-      normalizedTitle: normalizeText(inspection.title.value),
-      saveState: inspection.saveState,
+      page,
+      documentGeneration,
     })
-    if (!completed.success) return publishingEvidenceError(completed.error.message)
-    this.attestations.set(this.attestationKey(context), { scope, inspection, runtime })
     while (this.attestations.size > 40) {
       const oldest = this.attestations.keys().next().value
       if (!oldest) break
@@ -286,6 +411,7 @@ export class ArticlePublishingBrowserPolicy {
       data: {
         ...reporter,
         trustedPageEvidence: {
+          isCurrent: () => this.attestationRuntimeIsCurrent(attestation),
           adapterId: inspection.adapterId,
           adapterVersion: inspection.adapterVersion,
           observedAt: inspection.observedAt,
@@ -345,6 +471,13 @@ export class ArticlePublishingBrowserPolicy {
         return { kind: 'runtime-error', reason }
       }
       return null
+    }
+    if (scope.currentOperation) {
+      const reason =
+        scope.currentOperation.definitionId === 'page.first-inspect'
+          ? '当前 operation 只允许调用 article_publishing_inspect_page；其他 Browser 工具尚未开放'
+          : '文章发布 Runtime 尚在准备，当前 operation 不开放 Browser 工具'
+      return { kind: 'runtime-error', reason }
     }
     const isMutation = PAGE_MUTATION_ACTIONS.has(actionType)
     if (isMutation && !scope.writePermitted) {
@@ -604,7 +737,8 @@ export class ArticlePublishingBrowserPolicy {
         pageUrl,
       )
     }
-    if (/草稿|暂存|保存.*草稿|save\s*(?:as\s*)?draft|draft/iu.test(signature)) {
+    const semanticControl = this.attestedSemanticControl(context, selector)
+    if (semanticControl === 'save-draft') {
       if (scope.currentStepId !== 'save-draft') {
         return this.stopDecision(
           scope,
@@ -623,7 +757,7 @@ export class ArticlePublishingBrowserPolicy {
         pageUrl,
       )
     }
-    if (!FINAL_PUBLICATION_CONTROL.test(signature)) return { kind: 'allow' }
+    if (semanticControl !== 'publish') return { kind: 'allow' }
     if (scope.currentStepId !== 'publish') {
       return this.stopDecision(
         scope,
@@ -664,9 +798,24 @@ export class ArticlePublishingBrowserPolicy {
     const scope = await this.resolveTaskScope(task, context)
     if (!scope) return
     if (scope.currentStepId === 'open-editor' || scope.currentStepId === 'publish') return
+    const runtime = this.runtimeSnapshot(scope, context)
+    const documentGeneration = this.browserManager?.getViewRuntimeIdentity(
+      task.tabId,
+    )?.documentGeneration
+    const url = page.url()
+    const isCurrent = () =>
+      this.attestationRuntimeIsCurrent({
+        scope,
+        runtime,
+        page,
+        documentGeneration,
+        inspection: { url } as ArticlePublishingPageInspection,
+      })
     let observation: CsdnPageProbe | null = null
     for (let attempt = 0; attempt < 24; attempt += 1) {
+      if (!isCurrent()) throw new Error('保存读回前页面已变化，必须重新核验原草稿')
       const probe = await this.adapter.probe(page)
+      if (!isCurrent()) throw new Error('保存读回期间页面已变化，结果未知，禁止重复派发')
       if (
         probe.editor.recognized &&
         probe.draftId &&
@@ -695,6 +844,7 @@ export class ArticlePublishingBrowserPolicy {
         saveState: 'saved',
       },
       scope.workspaceId,
+      isCurrent,
     )
     if (!recorded.success) throw new Error(recorded.error.message)
   }
@@ -715,6 +865,71 @@ export class ArticlePublishingBrowserPolicy {
       scope.workspaceId,
     )
     if (!consumed.success) throw new Error(consumed.error.message)
+  }
+
+  async assertSideEffectDispatchAllowed(
+    task: BrowserTaskRun,
+    sideEffectKey: string,
+    context?: ToolExecutionContext,
+    dispatchPage?: ReturnType<PlaywrightBridge['getPageById']>,
+  ): Promise<() => void> {
+    const currentTask = this.browserTaskRuntime?.getTask(task.id)
+    if (!currentTask || currentTask.status !== 'running') {
+      throw new Error('网页副作用派发前 BrowserTask 已终止')
+    }
+    const scope = await this.resolveTaskScope(currentTask, context)
+    if (!scope || scope.currentOperation) {
+      throw new Error('网页副作用派发前执行身份或当前 operation 已变化')
+    }
+    const snapshot = this.webAffairService.getProjectSnapshot(scope.workspaceId)
+    const affair = snapshot.success
+      ? snapshot.data.affairs.find((candidate) => candidate.id === scope.affairId)
+      : undefined
+    const effect = affair?.articlePublishing?.sideEffects.find(
+      (candidate) => candidate.key === sideEffectKey,
+    )
+    if (
+      affair?.articlePublishing?.execution.status !== 'running' ||
+      effect?.status !== 'reserved' ||
+      !effect.consumedAt ||
+      effect.executionGeneration !== scope.executionGeneration ||
+      effect.browserTaskRunId !== scope.browserTaskRunId
+    ) {
+      throw new Error('网页副作用派发前授权已被取消、接管或改代')
+    }
+    const attestation = this.attestations.get(this.attestationKey(context))
+    if (!attestation || !this.attestationRuntimeIsCurrent(attestation)) {
+      throw new Error('网页副作用派发前页面证明已经失效')
+    }
+    const dispatched = await this.webAffairService.dispatchArticlePublishingSideEffect(
+      scope.affairId,
+      scope.attemptId,
+      scope.executionGeneration,
+      sideEffectKey,
+      scope.browserTaskRunId,
+      scope.workspaceId,
+    )
+    if (!dispatched.success) throw new Error(dispatched.error.message)
+    // 返回同步闸门。调用方必须在 await 返回后、真正调用页面动作的同一段同步代码中执行。
+    return () => {
+      context?.abortSignal?.throwIfAborted()
+      const latest = this.webAffairService.getProjectSnapshot(scope.workspaceId)
+      const publishing = latest.success
+        ? latest.data.affairs.find((candidate) => candidate.id === scope.affairId)
+            ?.articlePublishing
+        : undefined
+      const effect = publishing?.sideEffects.find((candidate) => candidate.key === sideEffectKey)
+      if (
+        publishing?.execution.status !== 'running' ||
+        publishing.execution.currentGeneration !== scope.executionGeneration ||
+        publishing.execution.currentLaunchOperationId !== scope.launchOperationId ||
+        publishing.executionProtocol.current ||
+        effect?.status !== 'dispatched' ||
+        (dispatchPage !== undefined && dispatchPage !== attestation.page) ||
+        !this.attestationRuntimeIsCurrent(attestation)
+      )
+        throw new Error('网页副作用授权落盘后执行或页面已变化；禁止派发')
+    }
   }
 
   async observeSideEffect(
@@ -1056,6 +1271,16 @@ export class ArticlePublishingBrowserPolicy {
       attemptId: attempt.id,
       accountId: input.accountId,
       currentStepId: publishing.execution.currentStepId,
+      ...(publishing.executionProtocol?.current
+        ? {
+            currentOperation: {
+              operationRunId: publishing.executionProtocol.current.operationRunId,
+              revision: publishing.executionProtocol.current.revision,
+              definitionId: publishing.executionProtocol.current.definitionId,
+              status: publishing.executionProtocol.current.status,
+            },
+          }
+        : {}),
       publicationStatus: publishing.publication.status,
       localAssetsReady: publishing.assets.every(
         (asset) => asset.kind !== 'local' || asset.status === 'uploaded',
@@ -1216,6 +1441,17 @@ export class ArticlePublishingBrowserPolicy {
     return null
   }
 
+  private attestedSemanticControl(
+    context: ToolExecutionContext | undefined,
+    selector: string,
+  ): 'save-draft' | 'publish' | null {
+    const selectors = this.attestations.get(this.attestationKey(context))?.inspection.selectors
+    if (!selectors || !selector) return null
+    if (selectors.save === selector) return 'save-draft'
+    if (selectors.publish === selector) return 'publish'
+    return null
+  }
+
   private runtimeSnapshot(
     scope: ArticlePublishingExecutionScope,
     context?: ToolExecutionContext,
@@ -1236,8 +1472,15 @@ export class ArticlePublishingBrowserPolicy {
       ? this.browserTaskRuntime?.getTask(attestation.runtime.browserTaskRunId)
       : null
     const page = this.playwrightBridge?.getPageBindingIdentity(attestation.runtime.tabId)
+    const visible = this.browserManager?.getViewRuntimeIdentity(attestation.runtime.tabId)
     return Boolean(
       task?.status === 'running' &&
+      task.correlation?.agentRunId === attestation.runtime.agentRunId &&
+      task.correlation?.affairExecutionGeneration === attestation.scope.executionGeneration &&
+      task.correlation?.affairLaunchOperationId === attestation.scope.launchOperationId &&
+      this.playwrightBridge?.getPageById(attestation.runtime.tabId) === attestation.page &&
+      !attestation.page?.isClosed() &&
+      attestation.page?.url() === attestation.inspection.url &&
       task.tabId === attestation.runtime.tabId &&
       task.correlation?.browserViewRuntimeGeneration ===
         attestation.runtime.browserViewRuntimeGeneration &&
@@ -1248,7 +1491,14 @@ export class ArticlePublishingBrowserPolicy {
         attestation.runtime.playwrightPageBindingGeneration &&
       page?.webContentsId === attestation.runtime.webContentsId &&
       page.connectionGeneration === attestation.runtime.playwrightConnectionGeneration &&
-      page.generation === attestation.runtime.playwrightPageBindingGeneration,
+      page.generation === attestation.runtime.playwrightPageBindingGeneration &&
+      (visible === undefined ||
+        (visible?.browserViewRuntimeGeneration ===
+          attestation.runtime.browserViewRuntimeGeneration &&
+          visible.webContentsId === attestation.runtime.webContentsId &&
+          visible.documentGeneration === attestation.documentGeneration)) &&
+      (!this.browserManager?.isViewVisible ||
+        this.browserManager.isViewVisible(attestation.runtime.tabId)),
     )
   }
 

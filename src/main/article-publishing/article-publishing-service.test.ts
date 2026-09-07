@@ -353,6 +353,29 @@ describe('ArticlePublishingService', () => {
     const bindCalls = harness.webAffairService.bindArticlePublishingRuntime.mock
       .calls as unknown as Array<[string, string, number, string, unknown[]]>
     const runtimeBindings = bindCalls.at(-1)?.[4] ?? []
+    const firstInspectOperation = {
+      operationRunId: '77777777-7777-4777-8777-777777777779',
+      revision: 1,
+      definitionId: 'page.first-inspect' as const,
+      checkpointId: 'upload-assets' as const,
+      status: 'ready' as const,
+      owner: 'agent' as const,
+      attemptId: result.data.attemptId,
+      executionGeneration: 2,
+      launchOperationId: 'launch-b',
+      startSummary: 'Runtime 已绑定',
+      goalSummary: '执行首次只读检查',
+      lastTransitionAt: '2026-09-01T00:00:03.000Z',
+      runtime: {
+        tabId: result.data.browserTabId,
+        browserViewRuntimeGeneration: 2,
+        webContentsId: 20,
+        playwrightConnectionGeneration: 4,
+        playwrightPageBindingGeneration: 5,
+        agentRunId: result.data.agentRunId,
+        browserTaskRunId: result.data.browserTaskRunId,
+      },
+    }
     const activeAffair = {
       ...result.data.affair,
       attempts: result.data.affair.attempts.map((attempt) =>
@@ -368,6 +391,7 @@ describe('ArticlePublishingService', () => {
       ),
       articlePublishing: {
         ...result.data.affair.articlePublishing,
+        executionProtocol: { current: firstInspectOperation, recentTransitions: [] },
         execution: {
           ...result.data.affair.articlePublishing!.execution,
           status: 'running',
@@ -377,6 +401,25 @@ describe('ArticlePublishingService', () => {
     ;(harness.webAffairService.getProjectSnapshot as ReturnType<typeof vi.fn>).mockReturnValue({
       success: true,
       data: { affairs: [activeAffair as never] },
+    })
+    const runningAffair = {
+      ...activeAffair,
+      articlePublishing: {
+        ...activeAffair.articlePublishing,
+        executionProtocol: {
+          current: { ...firstInspectOperation, revision: 2, status: 'running' as const },
+          recentTransitions: [],
+        },
+      },
+    }
+    ;(
+      harness.webAffairService.startArticlePublishingFirstInspect as ReturnType<typeof vi.fn>
+    ).mockImplementation(async () => {
+      ;(harness.webAffairService.getProjectSnapshot as ReturnType<typeof vi.fn>).mockReturnValue({
+        success: true,
+        data: { affairs: [runningAffair as never] },
+      })
+      return { success: true, data: runningAffair }
     })
     const policy = new ArticlePublishingBrowserPolicy(
       harness.webAffairService as never,
@@ -1363,7 +1406,7 @@ function createResumeHarness(options: {
     evaluate: vi.fn(async () => ({
       url: currentUrl,
       pageKind: 'editor',
-      platformAccountCandidates: ['csdn:test-user'],
+      accountHrefCandidates: ['https://blog.csdn.net/test-user'],
       bodySelector: '#editor',
       bodyTextLength: 9,
       imageEnumerationComplete: true,
@@ -1371,8 +1414,7 @@ function createResumeHarness(options: {
       titleSelector: '#title',
       titleValue: 'Article',
       selectors: { body: '#editor', title: '#title' },
-      saveState: 'saved',
-      saveEvidence: '草稿已保存',
+      saveStatusTexts: ['草稿已保存'],
       publishedLinks: [],
     })),
   }

@@ -810,6 +810,7 @@ export class BrowserToolModule implements ToolModule {
     let dispatched = false
     const dispatchedGeneration = this.playwrightBridge.getConnectionGeneration?.() ?? 0
     let sideEffectConsumed = false
+    let dispatchGuard: (() => void) | undefined
     try {
       context?.abortSignal?.throwIfAborted()
       if (activeTask && sideEffectCapability) {
@@ -826,7 +827,21 @@ export class BrowserToolModule implements ToolModule {
         page,
         tabId,
         hasWorkspaceContext ? workspaceKey : undefined,
+        activeTask && sideEffectCapability
+          ? async () => {
+              context?.abortSignal?.throwIfAborted()
+              dispatchGuard =
+                await this.articlePublishingBrowserPolicy?.assertSideEffectDispatchAllowed(
+                  activeTask,
+                  sideEffectCapability.sideEffectKey,
+                  context,
+                  page,
+                )
+            }
+          : undefined,
         () => {
+          context?.abortSignal?.throwIfAborted()
+          dispatchGuard?.()
           dispatched = true
         },
       )
@@ -854,7 +869,7 @@ export class BrowserToolModule implements ToolModule {
           ?.observeSideEffect(
             activeTask,
             sideEffectCapability.sideEffectKey,
-            'result-unknown',
+            dispatched ? 'result-unknown' : 'rejected',
             context,
           )
           .catch(() => undefined)
@@ -931,9 +946,12 @@ export class BrowserToolModule implements ToolModule {
       if (articleDecision.kind === 'runtime-error') {
         throw new Error(articleDecision.reason)
       }
-      if (articleDecision.kind === 'handoff' || articleDecision.kind === 'unknown') {
+      if (articleDecision.kind === 'handoff') {
         await this.pauseForTakeover(task, context, articleDecision.reason, actionType)
         throw new Error(`${articleDecision.reason}；任务已暂停，请由用户在可见页面完成后交还`)
+      }
+      if (articleDecision.kind === 'unknown') {
+        throw new Error(`${articleDecision.reason}；这是内部适配器或执行状态问题，未转人工`)
       }
       return articleDecision.kind === 'allow-once'
         ? { sideEffectKey: articleDecision.sideEffectKey }
@@ -1235,6 +1253,7 @@ export class BrowserToolModule implements ToolModule {
     page: ReturnType<PlaywrightBridge['getPage']>,
     tabId: string | null,
     workspaceKey?: string | null,
+    beforeDispatch?: () => Promise<void>,
     onDispatch?: () => void,
   ): Promise<unknown> {
     if (workspaceKey !== undefined && actionType === 'newTab') {
@@ -1268,6 +1287,7 @@ export class BrowserToolModule implements ToolModule {
         case 'navigate': {
           const url = String(params.url ?? '')
           if (!url) throw new Error('必须提供目标 URL')
+          await beforeDispatch?.()
           onDispatch?.()
           await this.browserManager.navigate(tabId, url)
           await this.confirmAutomationBinding(tabId, true)
@@ -1278,6 +1298,7 @@ export class BrowserToolModule implements ToolModule {
           }
         }
         case 'goBack':
+          await beforeDispatch?.()
           onDispatch?.()
           this.browserManager.goBack(tabId)
           await this.confirmAutomationBinding(tabId, true)
@@ -1287,6 +1308,7 @@ export class BrowserToolModule implements ToolModule {
             title: this.browserManager.getTitle(tabId),
           }
         case 'goForward':
+          await beforeDispatch?.()
           onDispatch?.()
           this.browserManager.goForward(tabId)
           await this.confirmAutomationBinding(tabId, true)
@@ -1296,6 +1318,7 @@ export class BrowserToolModule implements ToolModule {
             title: this.browserManager.getTitle(tabId),
           }
         case 'reload':
+          await beforeDispatch?.()
           onDispatch?.()
           this.browserManager.reload(tabId)
           await this.confirmAutomationBinding(tabId, true)
@@ -1322,6 +1345,7 @@ export class BrowserToolModule implements ToolModule {
     if (!page) {
       throw new Error('可视浏览器页面尚未就绪，请稍后自动重试')
     }
+    await beforeDispatch?.()
     onDispatch?.()
     return executePlaywrightAction(page, { type: actionType, ...params }, this.playwrightBridge)
   }

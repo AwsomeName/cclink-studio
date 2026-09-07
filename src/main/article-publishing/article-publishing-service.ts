@@ -484,6 +484,8 @@ export class ArticlePublishingService {
                   sampledView.browserViewRuntimeGeneration ===
                     verifiedView.browserViewRuntimeGeneration &&
                   sampledView.webContentsId === verifiedView.webContentsId &&
+                  sampledView.documentGeneration === verifiedView.documentGeneration &&
+                  playwrightBridge.getPageById(tabId) === page &&
                   sampledPage.connectionGeneration === verifiedPage.connectionGeneration &&
                   sampledPage.generation === verifiedPage.generation &&
                   verifiedPage.webContentsId === verifiedView.webContentsId
@@ -805,12 +807,20 @@ export class ArticlePublishingService {
     error: unknown,
   ): Promise<void> {
     const message = error instanceof Error ? error.message : String(error)
+    const snapshot = this.webAffairService.getProjectSnapshot(runtime.workspaceId)
+    const current = snapshot.success
+      ? snapshot.data.affairs.find((affair) => affair.id === runtime.affairId)?.articlePublishing
+          ?.executionProtocol.current
+      : undefined
+    if (!current) return
     await this.webAffairService.failArticlePublishingCurrentOperation({
       workspaceId: runtime.workspaceId,
       affairId: runtime.affairId,
       attemptId: runtime.attemptId,
       executionGeneration: runtime.executionGeneration,
       launchOperationId: runtime.launchOperationId,
+      expectedOperationRunId: current.operationRunId,
+      expectedOperationRevision: current.revision,
       failure: {
         category: 'studio-runtime',
         code: 'studio_runtime.page_rebind_failed',
@@ -883,6 +893,7 @@ export class ArticlePublishingService {
     ) {
       const page = playwrightBridge.getPageById(runtime.tabId)
       if (!page || page.isClosed()) throw new Error('Page Runtime 重绑定后恢复草稿页面不可用')
+      const observedView = browserManager.getViewRuntimeIdentity(runtime.tabId)
       const verifiedDraft = await this.draftRecoveryCoordinator.verifyExactDraftPage({
         page,
         expectedDraftId: publishingBeforeRebind.draft.platformDraftId,
@@ -895,6 +906,8 @@ export class ArticlePublishingService {
         !currentView ||
         !currentPage ||
         currentView.browserViewRuntimeGeneration !== identity.browserViewRuntimeGeneration ||
+        currentView.documentGeneration !== observedView?.documentGeneration ||
+        playwrightBridge.getPageById(runtime.tabId) !== page ||
         currentView.webContentsId !== identity.webContentsId ||
         currentPage.connectionGeneration !== identity.playwrightConnectionGeneration ||
         currentPage.generation !== identity.playwrightPageBindingGeneration ||

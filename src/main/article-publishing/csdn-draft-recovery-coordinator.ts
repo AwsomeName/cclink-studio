@@ -36,11 +36,25 @@ export class CsdnDraftRecoveryCoordinator {
   async recoverExactDraft(input: RecoverExactDraftInput): Promise<CsdnDraftRecoveryResult> {
     let page = await input.navigate(CSDN_ARTICLE_MANAGEMENT_URL)
     let list = await this.adapter.probeDraftList(page)
-    if (!list.pageSupported || !list.draftSectionUrl) {
+    if (!list.pageSupported || (!list.draftSectionUrl && !list.draftSectionTabName)) {
       throw new Error('当前 CSDN 页面无法确认草稿箱入口，已停止恢复')
     }
     this.requireAccount(list.platformAccountId, input.expectedPlatformAccountId, '草稿管理页')
-    if (!sameUrl(list.draftSectionUrl, page.url())) {
+    if (list.draftSectionTabName) {
+      const tab = page.getByRole('tab', { name: list.draftSectionTabName, exact: true })
+      if ((await tab.count()) !== 1 || !(await tab.isVisible())) {
+        throw new Error('草稿箱入口在使用前已变化，已停止恢复')
+      }
+      await tab.click()
+      // 同 URL SPA 切换后重新读管理页，绝不复用“全部文章”中的候选。
+      for (let retry = 0; retry < 20; retry += 1) {
+        list = await this.adapter.probeDraftList(page)
+        if (!list.pageSupported) throw new Error('草稿箱切换后页面身份已变化')
+        this.requireAccount(list.platformAccountId, input.expectedPlatformAccountId, '草稿箱')
+        if (list.candidates.some((candidate) => candidate.draftId === input.expectedDraftId)) break
+        await page.waitForTimeout(250)
+      }
+    } else if (list.draftSectionUrl && !sameUrl(list.draftSectionUrl, page.url())) {
       page = await input.navigate(list.draftSectionUrl)
       list = await this.adapter.probeDraftList(page)
       if (!list.pageSupported) throw new Error('CSDN 草稿箱页面版本无法识别，已停止恢复')

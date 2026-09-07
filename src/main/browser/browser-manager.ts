@@ -1039,8 +1039,8 @@ export class BrowserManager {
       this.onNavigate(tabId, url)
     })
     wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
-      this.onNavigate(tabId, url)
       if (!isMainFrame) return
+      this.onNavigate(tabId, url)
       this.beginFitNavigation(tabId, entry)
       void this.applyZoom(tabId, 'did-navigate-in-page')
     })
@@ -2225,6 +2225,18 @@ export class BrowserManager {
           documentGeneration: entry.fitDocumentGeneration,
         }
       : null
+  }
+
+  /** 读取实际挂载到所属窗口的 View；后台存活的 Page 不能冒充可见页面。 */
+  isViewVisible(tabId: string): boolean {
+    const entry = this.views.get(tabId)
+    const win = entry ? this.hostWindow(entry.ownerWindowId) : null
+    return Boolean(
+      entry &&
+      !entry.view.webContents.isDestroyed() &&
+      this.hosts.get(entry.ownerWindowId)?.activeViewId === tabId &&
+      win?.contentView.children.includes(entry.view),
+    )
   }
 
   /**

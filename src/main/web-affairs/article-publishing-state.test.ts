@@ -187,7 +187,7 @@ describe('article publishing persistent state', () => {
     if (!after.success) return
     expect(after.data.affairs).toEqual([])
     const rewritten = JSON.parse(await readFile(persistedPath, 'utf8'))
-    expect(rewritten.schemaVersion).toBe(8)
+    expect(rewritten.schemaVersion).toBe(9)
     expect(rewritten.affairs).toEqual([])
     await reloaded.flush()
   })
@@ -992,21 +992,31 @@ describe('article publishing persistent state', () => {
       ...reboundIdentity,
       agentRunId: `run-g${attempt.executionGeneration}`,
     }
+    const openEditorOperation = rebound.data.articlePublishing?.executionProtocol.current
+    if (!openEditorOperation) throw new Error('missing open-editor operation')
     const startOpenEditor = await created.service.startArticlePublishingFirstInspect({
       workspaceId: WORKSPACE_ID,
       affairId: created.affairId,
       attemptId: attempt.id,
       executionGeneration: attempt.executionGeneration,
       launchOperationId: attempt.launchOperationId,
+      expectedOperationRunId: openEditorOperation.operationRunId,
+      expectedOperationRevision: openEditorOperation.revision,
       runtime,
     })
     expect(startOpenEditor.success).toBe(true)
+    const runningOpenEditor = startOpenEditor.success
+      ? startOpenEditor.data.articlePublishing?.executionProtocol.current
+      : undefined
+    if (!runningOpenEditor) throw new Error('missing running open-editor operation')
     const completeOpenEditor = await created.service.completeArticlePublishingFirstInspect({
       workspaceId: WORKSPACE_ID,
       affairId: created.affairId,
       attemptId: attempt.id,
       executionGeneration: attempt.executionGeneration,
       launchOperationId: attempt.launchOperationId,
+      expectedOperationRunId: runningOpenEditor.operationRunId,
+      expectedOperationRevision: runningOpenEditor.revision,
       runtime,
       pageKind: 'editor',
       platformAccountId: 'csdn:test-user',
@@ -1025,20 +1035,30 @@ describe('article publishing persistent state', () => {
       status: 'ready',
     })
 
-    await created.service.startArticlePublishingFirstInspect({
+    const verifyAccountOperation =
+      completeOpenEditor.data.articlePublishing?.executionProtocol.current
+    if (!verifyAccountOperation) throw new Error('missing verify-account operation')
+    const startedAccount = await created.service.startArticlePublishingFirstInspect({
       workspaceId: WORKSPACE_ID,
       affairId: created.affairId,
       attemptId: attempt.id,
       executionGeneration: attempt.executionGeneration,
       launchOperationId: attempt.launchOperationId,
+      expectedOperationRunId: verifyAccountOperation.operationRunId,
+      expectedOperationRevision: verifyAccountOperation.revision,
       runtime,
     })
+    if (!startedAccount.success) throw new Error(startedAccount.error.message)
+    const runningAccount = startedAccount.data.articlePublishing?.executionProtocol.current
+    if (!runningAccount) throw new Error('missing running verify-account operation')
     const completeAccount = await created.service.completeArticlePublishingFirstInspect({
       workspaceId: WORKSPACE_ID,
       affairId: created.affairId,
       attemptId: attempt.id,
       executionGeneration: attempt.executionGeneration,
       launchOperationId: attempt.launchOperationId,
+      expectedOperationRunId: runningAccount.operationRunId,
+      expectedOperationRevision: runningAccount.revision,
       runtime,
       pageKind: 'editor',
       platformAccountId: 'csdn:test-user',
@@ -1116,6 +1136,8 @@ describe('article publishing persistent state', () => {
     )
     if (!resumed.success) throw new Error(resumed.error.message)
     const attempt = resumed.data.attempts[0]
+    const currentOperation = resumed.data.articlePublishing?.executionProtocol.current
+    if (!currentOperation) throw new Error('missing current operation')
 
     const failed = await created.service.failArticlePublishingCurrentOperation({
       workspaceId: WORKSPACE_ID,
@@ -1123,6 +1145,8 @@ describe('article publishing persistent state', () => {
       attemptId: attempt.id,
       executionGeneration: attempt.executionGeneration,
       launchOperationId: attempt.launchOperationId,
+      expectedOperationRunId: currentOperation.operationRunId,
+      expectedOperationRevision: currentOperation.revision,
       failure: {
         category: 'studio-runtime',
         code: 'studio_runtime.page_rebind_failed',
@@ -1225,6 +1249,179 @@ describe('article publishing persistent state', () => {
     ).resolves.toMatchObject({ success: true })
   })
 
+  it('revokes the current operation and rejects a late inspect completion after cancellation', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const draftUrl = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
+    await created.service.recordArticlePublishingDraftAnchor(
+      created.affairId,
+      created.attemptId,
+      created.reporter.executionGeneration,
+      created.reporter.launchOperationId,
+      draftUrl,
+      WORKSPACE_ID,
+      '77777777-7777-4777-8777-777777777777',
+    )
+    await created.service.recordArticlePublishingPageObservation(
+      {
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        executionGeneration: created.reporter.executionGeneration,
+        browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+        draftId: '164148817',
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        url: draftUrl,
+        saveState: 'saved',
+      },
+      WORKSPACE_ID,
+    )
+    await created.service.handoffAttempt(
+      {
+        workspaceRef: { kind: 'local', path: directory },
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        reason: '模拟重启前交接',
+      },
+      WORKSPACE_ID,
+    )
+    const resumed = await created.service.resumeArticlePublishingAfterHandoff(
+      created.affairId,
+      created.attemptId,
+      WORKSPACE_ID,
+    )
+    if (!resumed.success) throw new Error(resumed.error.message)
+    const attempt = resumed.data.attempts[0]
+    const recovery = resumed.data.articlePublishing?.draft?.recovery
+    if (!recovery) throw new Error('missing recovery')
+    await created.service.verifyArticlePublishingRecovery(
+      {
+        affairId: created.affairId,
+        attemptId: attempt.id,
+        executionGeneration: attempt.executionGeneration,
+        launchOperationId: attempt.launchOperationId,
+        recoveryOperationId: recovery.operationId,
+        draftId: '164148817',
+        url: draftUrl,
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        saveState: 'saved',
+        tabId: 'recovered-tab',
+        browserViewRuntimeGeneration: 2,
+        webContentsId: 20,
+        playwrightConnectionGeneration: 2,
+        playwrightPageBindingGeneration: 2,
+      },
+      WORKSPACE_ID,
+      { issueWritePermit: false },
+    )
+    const identity = {
+      tabId: 'recovered-tab',
+      browserTaskRunId: '88888888-8888-4888-8888-888888888888',
+      browserViewRuntimeGeneration: 3,
+      webContentsId: 30,
+      playwrightConnectionGeneration: 3,
+      playwrightPageBindingGeneration: 3,
+    }
+    const bound = await created.service.bindArticlePublishingRuntime(
+      created.affairId,
+      attempt.id,
+      attempt.executionGeneration,
+      attempt.launchOperationId,
+      runtimeBindingsFor(attempt, identity),
+      WORKSPACE_ID,
+      {
+        recoveryOperationId: recovery.operationId,
+        draftId: '164148817',
+        url: draftUrl,
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        saveState: 'saved',
+      },
+    )
+    if (!bound.success) throw new Error(bound.error.message)
+    const operation = bound.data.articlePublishing?.executionProtocol.current
+    const runtime = operation?.runtime
+    if (!operation || !runtime) throw new Error('missing current inspect operation')
+    const started = await created.service.startArticlePublishingFirstInspect({
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      expectedOperationRunId: operation.operationRunId,
+      expectedOperationRevision: operation.revision,
+      runtime,
+    })
+    if (!started.success) throw new Error(started.error.message)
+    const runningOperation = started.data.articlePublishing?.executionProtocol.current
+    if (!runningOperation) throw new Error('missing running inspect operation')
+    const reporter: ArticlePublishingAgentReporter = {
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      conversationId: `conversation-g${attempt.executionGeneration}`,
+      agentRunId: `run-g${attempt.executionGeneration}`,
+    }
+    await expect(
+      created.service.reportArticlePublishingCheckpoint(
+        {
+          workspaceRef: { kind: 'local', path: directory },
+          affairId: created.affairId,
+          attemptId: attempt.id,
+          stepId: 'open-editor',
+          status: 'verifying',
+          evidence: 'Agent 尝试绕过当前 operation',
+        },
+        WORKSPACE_ID,
+        reporter,
+      ),
+    ).resolves.toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('当前 operation 尚未完成') },
+    })
+
+    const cancelled = await created.service.finishAttempt(
+      {
+        workspaceRef: { kind: 'local', path: directory },
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        outcome: 'cancelled',
+        summary: '用户取消文章发布',
+      },
+      WORKSPACE_ID,
+      reporter,
+    )
+    if (!cancelled.success) throw new Error(cancelled.error.message)
+    expect(cancelled.data.articlePublishing?.executionProtocol.current).toMatchObject({
+      operationRunId: runningOperation.operationRunId,
+      revision: runningOperation.revision + 1,
+      status: 'interrupted',
+    })
+    expect(cancelled.data.articlePublishing?.draft?.recovery?.writePermit).toBeUndefined()
+
+    const lateCompletion = await created.service.completeArticlePublishingFirstInspect({
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: created.attemptId,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      expectedOperationRunId: runningOperation.operationRunId,
+      expectedOperationRevision: runningOperation.revision,
+      runtime,
+      pageKind: 'editor',
+      platformAccountId: 'csdn:test-user',
+      normalizedTitle: 'Article',
+      saveState: 'saved',
+    })
+    expect(lateCompletion.success).toBe(false)
+    const after = created.service.getProjectSnapshot(WORKSPACE_ID)
+    if (!after.success) throw new Error(after.error.message)
+    expect(after.data.affairs[0].articlePublishing?.checkpoints[0].status).not.toBe('completed')
+    expect(after.data.affairs[0].attempts[0].status).toBe('cancelled')
+  })
+
   it('records the publication side effect before a final click can be dispatched', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
     await prepareUploadCheckpoint(created)
@@ -1288,7 +1485,18 @@ describe('article publishing persistent state', () => {
     )
     expect(consumed.success).toBe(true)
     if (!consumed.success) return
-    expect(consumed.data.articlePublishing?.publication.status).toBe('dispatched')
+    expect(consumed.data.articlePublishing?.publication.status).toBe('not-started')
+    const dispatched = await created.service.dispatchArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      attempt.executionGeneration,
+      sideEffectKey,
+      browserTaskRunId,
+      WORKSPACE_ID,
+    )
+    expect(dispatched.success).toBe(true)
+    if (!dispatched.success) return
+    expect(dispatched.data.articlePublishing?.publication.status).toBe('dispatched')
 
     const duplicate = await created.service.consumeArticlePublishingSideEffect(
       created.affairId,
@@ -1329,7 +1537,10 @@ describe('article publishing persistent state', () => {
     )
     expect(consumed.success).toBe(true)
     if (!consumed.success) return
-    expect(consumed.data.articlePublishing?.sideEffects[0].status).toBe('dispatched')
+    expect(consumed.data.articlePublishing?.sideEffects[0]).toMatchObject({
+      status: 'reserved',
+      consumedAt: expect.any(String),
+    })
     await created.service.flush()
 
     const reloaded = createService(directory)
@@ -1343,6 +1554,65 @@ describe('article publishing persistent state', () => {
       WORKSPACE_ID,
     )
     expect(duplicate).toMatchObject({ success: false, error: { code: 'INVALID_TRANSITION' } })
+  })
+
+  it('cancels a consumed but not yet dispatched side effect without inventing an unknown result', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const generation = created.reporter.executionGeneration
+    const browserTaskRunId = '77777777-7777-4777-8777-777777777777'
+    const sideEffectKey = `${created.affairId}:${created.attemptId}:g${generation}:save-draft:race-window`
+    await created.service.reserveArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      generation,
+      'save-draft',
+      'race-window',
+      browserTaskRunId,
+      WORKSPACE_ID,
+    )
+    const consumed = await created.service.consumeArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      generation,
+      sideEffectKey,
+      browserTaskRunId,
+      WORKSPACE_ID,
+    )
+    expect(consumed).toMatchObject({
+      success: true,
+      data: {
+        articlePublishing: {
+          sideEffects: [
+            expect.objectContaining({ status: 'reserved', consumedAt: expect.any(String) }),
+          ],
+        },
+      },
+    })
+
+    const cancelled = await created.service.finishAttempt(
+      {
+        workspaceRef: { kind: 'local', path: directory },
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        outcome: 'cancelled',
+        summary: '用户在动作派发前取消',
+      },
+      WORKSPACE_ID,
+      created.reporter,
+    )
+    if (!cancelled.success) throw new Error(cancelled.error.message)
+    expect(cancelled.data.articlePublishing?.execution.status).toBe('cancelled')
+    expect(cancelled.data.articlePublishing?.sideEffects[0].status).toBe('rejected')
+    await expect(
+      created.service.dispatchArticlePublishingSideEffect(
+        created.affairId,
+        created.attemptId,
+        generation,
+        sideEffectKey,
+        browserTaskRunId,
+        WORKSPACE_ID,
+      ),
+    ).resolves.toMatchObject({ success: false })
   })
 
   it('ignores stale owner identities and old execution generations', async () => {
@@ -2358,6 +2628,15 @@ async function dispatchUploadEffect(created: StartedTask, attemptNumber: number)
     WORKSPACE_ID,
   )
   if (!consumed.success) throw new Error(consumed.error.message)
+  const dispatched = await created.service.dispatchArticlePublishingSideEffect(
+    created.affairId,
+    created.attemptId,
+    attempt.executionGeneration,
+    `${created.affairId}:${created.attemptId}:g${attempt.executionGeneration}:upload-asset:${targetId}`,
+    browserTaskRunId,
+    WORKSPACE_ID,
+  )
+  if (!dispatched.success) throw new Error(dispatched.error.message)
 }
 
 async function reportPublishingCheckpoint(
@@ -2407,6 +2686,15 @@ async function dispatchSaveEffect(created: StartedTask, stepId: string): Promise
     WORKSPACE_ID,
   )
   if (!consumed.success) throw new Error(consumed.error.message)
+  const dispatched = await created.service.dispatchArticlePublishingSideEffect(
+    created.affairId,
+    created.attemptId,
+    attempt.executionGeneration,
+    sideEffectKey,
+    browserTaskRunId,
+    WORKSPACE_ID,
+  )
+  if (!dispatched.success) throw new Error(dispatched.error.message)
   return sideEffectKey
 }
 

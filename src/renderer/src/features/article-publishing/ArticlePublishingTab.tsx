@@ -748,7 +748,9 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
             <div className="article-publishing-config-item">
               <span>动作</span>
               <strong>{currentOperation.definitionId}</strong>
-              <small>{currentOperation.status}</small>
+              <small>
+                {currentOperation.status} · revision {currentOperation.revision}
+              </small>
             </div>
             <div className="article-publishing-config-item">
               <span>执行者</span>
@@ -756,10 +758,32 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
               <small>{currentOperation.checkpointId}</small>
             </div>
             <div className="article-publishing-config-item wide">
-              <span>本步终点</span>
-              <strong>{currentOperation.goalSummary}</strong>
-              <small>{lastOperationTransition?.summary ?? currentOperation.startSummary}</small>
+              <span>本步起点</span>
+              <strong>{currentOperation.startSummary}</strong>
+              <small>
+                generation {currentOperation.executionGeneration} · launch{' '}
+                {currentOperation.launchOperationId.slice(0, 8)}
+              </small>
             </div>
+            <div className="article-publishing-config-item wide">
+              <span>本步终点 / 当前进展</span>
+              <strong>{currentOperation.goalSummary}</strong>
+              <small>{lastOperationTransition?.summary ?? '尚无新的 transition'}</small>
+            </div>
+            {currentOperation.runtime ? (
+              <div className="article-publishing-config-item wide">
+                <span>精确页面身份</span>
+                <strong>
+                  Tab {currentOperation.runtime.tabId} · View g
+                  {currentOperation.runtime.browserViewRuntimeGeneration} · WebContents{' '}
+                  {currentOperation.runtime.webContentsId}
+                </strong>
+                <small>
+                  Playwright connection g{currentOperation.runtime.playwrightConnectionGeneration} ·
+                  Page binding g{currentOperation.runtime.playwrightPageBindingGeneration}
+                </small>
+              </div>
+            ) : null}
             {currentOperation.failure ? (
               <div className="article-publishing-config-item wide">
                 <span>失败归属</span>

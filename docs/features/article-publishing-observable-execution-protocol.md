@@ -1,6 +1,6 @@
 # 文章发布逐步可观测执行协议
 
-状态：P0 已实现并通过自动门禁；真实 Electron/CSDN 验收未完成
+状态：批次 A/B 源码和跨 service 自动门禁已完成；真实 Electron/CSDN 尚未验收，禁止宣称恢复闭环完成
 日期：2026-09-07
 
 ## 一句话结论
@@ -48,6 +48,16 @@ Studio 可以限制工具和校验部分结果，但不能从持久状态中还�
 ## 三层概念
 
 必须明确区分三层，不能再把它们都叫“步骤”：
+
+- Runtime 恢复、绑定和首次 inspect 是每个新执行现场都必须完成的前置 operation，不因对应业务
+  checkpoint 曾经完成而跳过。
+- checkpoint 只保存已经由 main 验证的业务结果；它不能授权当前 operation，也不能从最多 200 条 transition
+  反算。
+- 一个 operation 可以不完成业务 checkpoint；一个 checkpoint 也可能经历多次 operation 才得到可信结果。
+
+每次工具调用由 main 重新读取 current operation。入场、实际网页派发前、结果提交时都必须比较
+`operationRunId + status + revision + executionGeneration + launchOperationId + exact Runtime`。模型回显的
+operation 身份只能作为 expected value，不能成为授权来源。
 
 | 层级                   | 用途                                 | 示例                                            | 所有者                             |
 | ---------------------- | ------------------------------------ | ----------------------------------------------- | ---------------------------------- |
@@ -212,6 +222,10 @@ BrowserTask 资源挂载都可能改变 Runtime 身份。
 只有真实页面出现登录失效、验证码、法律声明或账号冲突时才能进入人工处理。Studio 内部 Runtime、
 状态机或绑定错误必须显示为“Studio 运行错误”，并提供自动重新绑定或终止操作。
 
+取消、人工接管、Agent/BrowserTask 终止、Runtime 丢失和任何终态转换必须在同一次 reducer 提交中：终结
+current operation、递增 operation revision、撤销 recovery permit、终止活动 binding，并把已经可能派发的
+副作用转为 result-unknown。此后旧 operation、旧 Agent 和旧完成事件只能被拒绝，不能推进 checkpoint。
+
 ## 用户必须看到的最小诊断
 
 文章发布页必须直接展示：
@@ -262,12 +276,14 @@ BrowserTask 资源挂载都可能改变 Runtime 身份。
 
 ## 当前完成度判断
 
-截至 2026-09-07 的当前工作树，P0 已实现：`WebAffair` 持有唯一 current operation 和最多 200 条
-transition；恢复核验、Runtime 准备和首次 inspect 已进入同一状态协议；最终 Page 核验、lease 转交、binding
-与 permit 提交、早到 rebind 重放和 Agent 工具开放按顺序收敛；运行期 inspect 会等待正在执行的同页重绑；
-内部 Runtime 失败会撤销 permit 并进入 interrupted，不再伪装成人工登录问题。UI 已显示当前 operation、owner、
-最新 transition 和字段级 expected/actual。
+批次 A/B 已在源码中关闭复审指出的安全缺口：save/publish 语义统一来自 adapter attestation；副作用先消费、
+再在网页派发前做最后一次原子提交；取消、接管和 Runtime 终态同步撤销 operation/permit；迟到完成使用
+operation revision CAS；账号和保存状态只从有界页面区域取证；inspect 在 probe 后重新核对 Task、View、Page 和
+operation；内部 unknown 不再伪装成人工接管。
 
-专项门禁 89/89 通过，仓库 `pnpm verify` 通过（354 个测试文件，2295 passed、2 skipped，生产构建通过）。
-这只证明 P0 工程实现，不证明真实网页闭环。真实 Electron `WebContentsView` 中的改代，以及复用现有登录 Profile
-的真实 CSDN 恢复和首次 inspect 尚未验收；在二者通过前仍禁止宣称发布恢复闭环完成。
+反例已经转成回归测试；真实 Store、WebAffairService、BrowserTaskRuntime、发布协调服务和 BrowserPolicy 也已由同一
+测试驱动完整的“恢复在 31 观察 → Task 创建前改成 32 → 早到事件 → Agent 首次 inspect”时序。仓库 `pnpm verify`
+已通过（355 个测试文件，2304 passed、2 skipped；类型检查、lint、格式和生产构建通过）。这仍不等于产品闭环
+完成：真实 Electron WebContentsView 的改代、当前已登录 CSDN Profile 的恢复首检、页面 DOM 兼容性和真人发布结果
+尚未验收，且不得要求用户反复登录。这两层通过前只能称为“安全底座、恢复源码切片和跨 service 门禁完成”，不能
+更新为“发布恢复闭环完成”。

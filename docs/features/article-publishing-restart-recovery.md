@@ -1,6 +1,6 @@
 # 文章发布中断恢复规则
 
-状态：恢复安全规则继续有效；逐步可观测协议尚未实现
+状态：恢复安全规则继续有效；逐步可观测安全底座和恢复源码切片已实现，真人闭环未验收
 日期：2026-09-07
 
 本文定义的草稿找回、防重放和人工边界继续有效。2026-09-07 新增的逐步执行要求见
@@ -41,8 +41,10 @@ Studio 或发布 Agent 中断后，用户再次点击“从中断处继续”，
 3. 核验当前登录的 CSDN 账号与任务记录一致。
 4. 用持久化的 `platformDraftId` 找原草稿；找不到就停止，不新建文章。
 5. 打开候选草稿，核验草稿 ID、账号、标题和“已保存”状态。
-6. 将当前 URL 写回任务，签发只绑定当前执行代次、Tab、WebContents 和 Playwright Page 的写入许可。
-7. recovery lease 原子转交给新的 BrowserTask，然后才启动 Agent。
+6. 创建尚未开放工具的 BrowserTask，重新读取可见 View、WebContents 和 Playwright Page；创建期间发生改代时，
+   必须在最新 Page 上重新核验同一账号、draftId、标题和保存状态。
+7. recovery lease 与 BrowserTask correlation 在主进程内同步转交；随后由 WebAffair 单次提交最新 binding、permit 和
+   首次 inspect operation。最终身份复核通过前，Agent 工具保持关闭。
 8. Agent 跳过已完成步骤，只处理第一个未完成或结果未知步骤。
 
 标题只用于二次核验和“发布结果未知”的公开文章查找，不代替草稿 ID。多个同名候选必须停下来让用户选择。

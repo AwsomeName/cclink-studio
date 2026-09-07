@@ -403,7 +403,7 @@ describe('WebAffairService', () => {
 
     await new WebAffairStore(filePath).save(
       {
-        schemaVersion: 8,
+        schemaVersion: 9,
         revision: 2,
         affairs: [
           {

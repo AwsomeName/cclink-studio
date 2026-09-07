@@ -562,6 +562,21 @@ describe('BrowserManager popup adoption', () => {
     manager.destroy()
   })
 
+  it('never projects an AI iframe navigation as the article tab URL or document generation', async () => {
+    const { manager, source } = await createSource()
+    const before = manager.getViewRuntimeIdentity('source-tab')
+    const url = manager.getCurrentURL('source-tab')
+    source.emit(
+      'did-navigate-in-page',
+      {},
+      'https://app-blog.csdn.net/csdn/aiChatNew?articleId=164148817',
+      false,
+    )
+    expect(manager.getCurrentURL('source-tab')).toBe(url)
+    expect(manager.getViewRuntimeIdentity('source-tab')).toEqual(before)
+    manager.destroy()
+  })
+
   it('does not touch the native view again when stabilized bounds are unchanged', async () => {
     const { manager } = await createSource()
     manager.updateBounds({ x: 0, y: 72, width: 600, height: 600 })

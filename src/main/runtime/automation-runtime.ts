@@ -99,6 +99,7 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
           runtime.browserTaskRuntime,
           async (attemptId) =>
             runtime.articlePublishingService?.awaitBrowserRuntimeConvergence(attemptId),
+          runtime.browserManager,
         )
       : null
 
