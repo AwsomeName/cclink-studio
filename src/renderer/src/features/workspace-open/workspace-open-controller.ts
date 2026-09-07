@@ -1,9 +1,7 @@
 import type { RemoteWorkspaceRef, WorkspaceRef } from '@shared/workspace-ref'
-import { workspaceRefKey } from '@shared/workspace-ref'
 import { useCclinkStore } from '../../stores/cclink-store'
 import { useFsStore } from '../../stores/fs-store'
 import { useOpenProjectsStore } from '../../stores/open-projects-store'
-import { useTabStore } from '../../stores/tab-store'
 import { useUIStore } from '../../stores/ui-store'
 import { confirmRemoteWorkspaceRef } from '../cclink-remote/remote-workspace-confirmation'
 import {
@@ -22,26 +20,13 @@ export interface OpenWorkspaceRefOptions {
   remoteRequestId?: string
 }
 
-function activateRestoredTab(ref: WorkspaceRef): void {
-  const key = workspaceRefKey(ref)
-  const tab = useTabStore
-    .getState()
-    .tabs.find((item) => workspaceRefKey(item.workspaceRef ?? { kind: 'global' }) === key)
-  if (tab) useTabStore.getState().activateTab(tab.id)
-}
-
-function revealOpenedWorkspace(ref: WorkspaceRef): void {
-  useUIStore.getState().setActivePanel('files')
-  activateRestoredTab(ref)
-}
-
 /** 从系统目录选择器打开本地工作空间，并统一落到文件面板。 */
 export async function pickLocalWorkspace(): Promise<boolean> {
   const opened = await useFsStore.getState().openWorkspacePicker()
   if (!opened) return false
   const path = useFsStore.getState().workspacePath
   if (!path) return false
-  revealOpenedWorkspace({ kind: 'local', path })
+  useUIStore.getState().showPanel('files')
   return true
 }
 
@@ -59,7 +44,6 @@ export async function openWorkspaceRef(
     if (!opened) {
       throw new Error(useFsStore.getState().error || '本地工作空间打开失败')
     }
-    revealOpenedWorkspace(ref)
     return ref
   }
 
@@ -100,6 +84,5 @@ export async function openWorkspaceRef(
   const projects = useOpenProjectsStore.getState()
   projects.replaceRemoteProject(ref, confirmedRef)
   useOpenProjectsStore.getState().addRemoteProject(confirmedRef)
-  revealOpenedWorkspace(confirmedRef)
   return confirmedRef
 }

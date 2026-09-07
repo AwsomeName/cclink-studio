@@ -82,6 +82,24 @@ describe('useUIStore', () => {
     })
   })
 
+  describe('showPanel', () => {
+    it('重复展示同一面板不会反向折叠侧栏', () => {
+      useUIStore.getState().showPanel('files')
+      useUIStore.getState().showPanel('files')
+
+      expect(useUIStore.getState().activePanel).toBe('files')
+      expect(useUIStore.getState().sidebarVisible).toBe(true)
+    })
+
+    it('会切换并展开目标面板', () => {
+      useUIStore.setState({ activePanel: 'browser', sidebarVisible: false })
+      useUIStore.getState().showPanel('files')
+
+      expect(useUIStore.getState().activePanel).toBe('files')
+      expect(useUIStore.getState().sidebarVisible).toBe(true)
+    })
+  })
+
   describe('toggleSidebar', () => {
     it('切换侧栏可见性', () => {
       expect(useUIStore.getState().sidebarVisible).toBe(true)

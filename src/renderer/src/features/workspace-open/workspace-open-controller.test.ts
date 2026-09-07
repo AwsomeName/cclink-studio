@@ -91,12 +91,55 @@ afterEach(() => {
 })
 
 describe('workspace-open-controller', () => {
-  it('commits a confirmed remote ref through the shared transition and project strip owner', async () => {
+  it('commits a confirmed remote ref without changing the restored tab or current layout', async () => {
+    const getSnapshot = window.cclinkStudio.workspaceState.get as ReturnType<typeof vi.fn>
+    getSnapshot.mockResolvedValueOnce(
+      snapshot('remote:agent-1:workspace-a', {
+        tabs: {
+          tabs: [
+            {
+              id: 'tab-first',
+              type: 'editor',
+              title: 'First',
+              icon: 'file',
+              workspaceRef: remoteA,
+            },
+            {
+              id: 'tab-restored',
+              type: 'editor',
+              title: 'Restored',
+              icon: 'file',
+              workspaceRef: remoteA,
+            },
+          ],
+          activeTabId: 'tab-restored',
+        },
+        browserTabs: { tabs: {} },
+        editorDrafts: { files: {} },
+      }),
+    )
+    useUIStore.setState({
+      activePanel: 'browser',
+      sidebarVisible: false,
+      sidebarWidth: 312,
+      agentPanelMode: 'hidden',
+      agentPanelVisible: false,
+      agentPanelModeSource: 'user',
+    })
+
     await expect(openWorkspaceRef(remoteA, { confirmedRemote: true })).resolves.toEqual(remoteA)
 
     expect(useWorkspaceStore.getState().activeWorkspaceRef).toEqual(remoteA)
     expect(useOpenProjectsStore.getState().openRemoteWorkspaceRefs).toEqual([remoteA])
-    expect(useUIStore.getState().activePanel).toBe('files')
+    expect(useTabStore.getState().activeTabId).toBe('tab-restored')
+    expect(useUIStore.getState()).toMatchObject({
+      activePanel: 'browser',
+      sidebarVisible: false,
+      sidebarWidth: 312,
+      agentPanelMode: 'hidden',
+      agentPanelVisible: false,
+      agentPanelModeSource: 'user',
+    })
   })
 
   it('rejects an older remote discovery generation so only the later selection commits', async () => {

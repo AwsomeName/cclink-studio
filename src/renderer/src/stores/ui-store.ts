@@ -34,6 +34,8 @@ interface UIState {
 
   // --- Actions ---
   setActivePanel: (panel: ActivityPanel) => void
+  /** 程序化展示面板；与 Activity Bar 的再次点击折叠语义分离。 */
+  showPanel: (panel: ActivityPanel) => void
   toggleSidebar: () => void
   hideSidebar: () => void
   toggleAgentPanel: (preferredMode?: VisibleAgentPanelMode) => void
@@ -241,6 +243,12 @@ export const useUIStore = create<UIState>((set) => ({
         // 点击已激活的面板 → 折叠侧栏；点击其他面板 → 展开侧栏
         sidebarVisible: state.activePanel === nextPanel ? !state.sidebarVisible : true,
       }
+    }),
+
+  showPanel: (panel) =>
+    set({
+      activePanel: normalizeActivityPanel(panel),
+      sidebarVisible: true,
     }),
 
   toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
