@@ -79,7 +79,7 @@ describe('useBrowserStore', () => {
   })
 
   describe('address navigation feedback', () => {
-    it('tracks a submitted address and clears it when main publishes the real URL', () => {
+    it('keeps the submitted address pending until the matching navigation completes', () => {
       useBrowserStore.getState().beginNavigation('browser', 'https://example.com')
       expect(useBrowserStore.getState().tabs.browser.navigation).toEqual({
         targetUrl: 'https://example.com',
@@ -88,7 +88,24 @@ describe('useBrowserStore', () => {
       })
 
       useBrowserStore.getState().setUrl('browser', 'https://example.com')
+      expect(useBrowserStore.getState().tabs.browser.navigation?.status).toBe('loading')
+
+      useBrowserStore.getState().completeNavigation('browser', 'https://example.com')
       expect(useBrowserStore.getState().tabs.browser.navigation).toBeNull()
+    })
+
+    it('preserves a failure that arrives after the matching URL event', () => {
+      useBrowserStore.getState().beginNavigation('browser', 'https://invalid.example')
+      useBrowserStore.getState().setUrl('browser', 'https://invalid.example')
+      useBrowserStore
+        .getState()
+        .failNavigation('browser', 'https://invalid.example', 'ERR_NAME_NOT_RESOLVED')
+
+      expect(useBrowserStore.getState().tabs.browser.navigation).toEqual({
+        targetUrl: 'https://invalid.example',
+        status: 'failed',
+        error: 'ERR_NAME_NOT_RESOLVED',
+      })
     })
 
     it('keeps a failed target retryable and can return to the last real URL', () => {

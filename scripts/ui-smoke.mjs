@@ -3251,6 +3251,22 @@ async function main() {
         .catch(() => false)
     }
     assert(navigationFailureSubmitted, 'failed address was overwritten before submission')
+    await page.waitForFunction(
+      async ({ tabId, url }) => {
+        const [{ useBrowserStore }, { useTabStore }] = await Promise.all([
+          import('/src/stores/browser-store.ts'),
+          import('/src/stores/tab-store.ts'),
+        ])
+        const navigation = useBrowserStore.getState().tabs[tabId]?.navigation
+        return (
+          useTabStore.getState().activeTabId === tabId &&
+          navigation?.targetUrl === url &&
+          navigation.status === 'failed'
+        )
+      },
+      { tabId: activeBrowserTabId, url: navigationFailureUrl },
+      { timeout: 10_000 },
+    )
     const navigationFailure = page.locator('.browser-navigation-status')
     await navigationFailure.waitFor({ state: 'visible', timeout: 10_000 })
     await navigationFailure

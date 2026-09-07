@@ -227,7 +227,6 @@ export const useBrowserStore = create<BrowserState>((set, get) => ({
             history: nav?.history?.length ? nav.history : tab.history,
             historyIndex:
               typeof nav?.historyIndex === 'number' ? nav.historyIndex : tab.historyIndex,
-            navigation: tab.navigation?.targetUrl === url ? null : tab.navigation,
           },
         },
       }
