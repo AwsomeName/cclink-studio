@@ -151,6 +151,106 @@ const sideEffectSchema = z
   })
   .strict()
 
+const operationRuntimeSchema = z
+  .object({
+    tabId: z.string().trim().min(1).max(200),
+    browserViewRuntimeGeneration: z.number().int().positive().max(1_000_000),
+    webContentsId: z.number().int().positive(),
+    playwrightConnectionGeneration: z.number().int().positive().max(1_000_000),
+    playwrightPageBindingGeneration: z.number().int().positive().max(1_000_000),
+    agentRunId: z.string().trim().min(1).max(200).optional(),
+    browserTaskRunId: uuidSchema.optional(),
+  })
+  .strict()
+
+const operationFailureSchema = z
+  .object({
+    category: z.enum([
+      'studio-state',
+      'studio-runtime',
+      'agent-runtime',
+      'platform-page',
+      'human-required',
+      'side-effect-unknown',
+    ]),
+    code: z.string().trim().min(1).max(200),
+    message: z.string().trim().min(1).max(2_000),
+    mismatches: z
+      .array(
+        z
+          .object({
+            field: z.string().trim().min(1).max(200),
+            expected: z.union([z.string().max(2_000), z.number().finite(), z.null()]),
+            actual: z.union([z.string().max(2_000), z.number().finite(), z.null()]),
+          })
+          .strict(),
+      )
+      .max(30)
+      .optional(),
+  })
+  .strict()
+
+const operationDefinitionIdSchema = z.enum([
+  'recovery.restore-exact-draft',
+  'runtime.prepare-first-inspect',
+  'page.first-inspect',
+])
+
+const currentOperationSchema = z
+  .object({
+    operationRunId: uuidSchema,
+    definitionId: operationDefinitionIdSchema,
+    checkpointId: z.string().trim().min(1).max(200),
+    status: z.enum([
+      'ready',
+      'running',
+      'verifying',
+      'waiting-human',
+      'interrupted',
+      'result-unknown',
+      'failed',
+    ]),
+    owner: z.enum(['studio', 'agent', 'adapter', 'human']),
+    attemptId: uuidSchema,
+    executionGeneration: z.number().int().positive().max(1_000_000),
+    launchOperationId: z.string().trim().min(1).max(200),
+    startSummary: z.string().trim().min(1).max(1_000),
+    goalSummary: z.string().trim().min(1).max(1_000),
+    startedAt: timestampSchema.optional(),
+    lastTransitionAt: timestampSchema,
+    runtime: operationRuntimeSchema.optional(),
+    failure: operationFailureSchema.optional(),
+  })
+  .strict()
+
+const operationTransitionSchema = z
+  .object({
+    id: uuidSchema,
+    operationRunId: uuidSchema,
+    kind: z.enum([
+      'recovery-started',
+      'draft-restored',
+      'runtime-prepare-started',
+      'page-identity-sampled',
+      'page-identity-changed',
+      'draft-reverified',
+      'lease-transferred',
+      'binding-committed',
+      'cached-identity-replayed',
+      'runtime-ready',
+      'first-inspect-started',
+      'first-inspect-completed',
+      'operation-failed',
+      'operation-interrupted',
+    ]),
+    occurredAt: timestampSchema,
+    summary: z.string().trim().min(1).max(2_000),
+    previousRuntime: operationRuntimeSchema.optional(),
+    currentRuntime: operationRuntimeSchema.optional(),
+    failure: operationFailureSchema.optional(),
+  })
+  .strict()
+
 export const articlePublishingStateSchema = z
   .object({
     adapterId: z.literal('csdn'),
@@ -172,6 +272,13 @@ export const articlePublishingStateSchema = z
     assets: z.array(articlePublishingAssetSchema).max(200),
     checkpoints: z.array(checkpointSchema).min(1).max(40),
     sideEffects: z.array(sideEffectSchema).max(500),
+    executionProtocol: z
+      .object({
+        version: z.literal(1),
+        current: currentOperationSchema.optional(),
+        recentTransitions: z.array(operationTransitionSchema).max(200),
+      })
+      .strict(),
     execution: z
       .object({
         status: z.enum([

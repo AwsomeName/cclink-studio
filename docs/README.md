@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-09-01。
+> 当前事实源。最后更新：2026-09-07。
 
 ## 先读这些
 
@@ -52,13 +52,19 @@
 - `docs/features/article-platform-publishing.md`：已进入首版实现的独立文章发布中心；Activity Bar
   入口和侧栏历史连接专用控制 Tab、持久发布事务、可见网页与发布 Agent，第一目标平台为 CSDN；
   v0.1.72 仍存在 Attempt 假运行阻塞，真实站点闭环未完成。
-- `docs/features/article-platform-publishing-development-plan.md`：CSDN 单篇图文发布的最小纵向研发计划；分离工程门禁、用户增量、真实发布闭环、失败恢复和交付验收。
+- `docs/features/article-platform-publishing-development-plan.md`：CSDN 单篇图文发布的历史阶段计划；当前施工已由逐步可观测执行方案接管。
+- `docs/features/article-publishing-observable-execution-protocol.md`：文章发布“双黑盒”拆解需求；规定每个
+  AI/Studio 小步骤的起点、命令、终点、证据、Runtime 身份和失败归属。
+- `docs/features/article-publishing-observable-execution-development-plan.md`：当前文章发布修复施工事实源；
+  先关闭“恢复草稿 → Page 改代 → BrowserTask → Agent 第一次 inspect”，再逐步迁移图片、保存和发布。
+- `docs/reviews/article-publishing-observable-execution-independent-review-prompt-2026-09-07.md`：逐步执行
+  方案的施工前独立评审指令；重点裁决 Agent Run 粒度、跨 owner handshake、旧入口切断和 P0 范围。
 - `docs/features/image-research.md`：图片调研 V0 产品事实源；首个平台为小红书，仅做 Agent 可见搜索、
   单张候选、用户自行保存或跳过、继续和操作记录统计，不提供图片文件能力。
 - `docs/features/image-research-development-plan.md`：图片调研 V0 最小纵向计划；M1-M3 工程实现已完成，
   自动化门禁已过，真实登录小红书 M0/R1 真人闭环待执行。
-- `docs/testing/article-publishing-runtime-convergence.md`：文章发布“开始执行无反应 / Attempt
-  假运行”的根因、系统性终态收敛方案、用户自救入口、故障矩阵和真实 CSDN 验收门禁。
+- `docs/testing/article-publishing-runtime-convergence.md`：文章发布旧恢复门禁；继续用于防倒退，但不足以
+  证明逐步可观测执行和真实 CSDN 闭环。
 - `docs/reviews/article-publishing-runtime-convergence-review-prompt.md`：可直接交给新 Codex
   会话的独立审查指令；要求对照源码寻找假运行、误中断和重复发布反例。
 - `docs/features/promotional-video-workbench.md`：宣发视频工作台产品事实源，定义稿件、分镜、素材、AI 生成、合成和导出的用户闭环与架构边界。

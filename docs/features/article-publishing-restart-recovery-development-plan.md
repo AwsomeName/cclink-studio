@@ -1,7 +1,10 @@
 # 文章发布中断恢复开发方案
 
-状态：已按单一事实状态方案落地，真实 CSDN 验收待执行
-日期：2026-09-01
+状态：历史安全围栏基线；整体施工由逐步可观测执行方案接管
+日期：2026-09-07
+
+本文记录 2026-09-01 已落地的恢复安全围栏，不再作为文章发布闭环完成依据。当前施工事实源是
+[article-publishing-observable-execution-development-plan.md](article-publishing-observable-execution-development-plan.md)。
 
 ## 验收动作
 

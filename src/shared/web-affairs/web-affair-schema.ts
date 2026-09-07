@@ -618,7 +618,7 @@ const webAffairSchema = z
 
 export const webAffairSnapshotSchema = z
   .object({
-    schemaVersion: z.literal(7),
+    schemaVersion: z.literal(8),
     revision: z.number().int().nonnegative(),
     affairs: z.array(webAffairSchema).max(1_000),
   })
@@ -639,6 +639,17 @@ export function parseWebAffairSnapshot(value: unknown) {
 function migrateSnapshot(value: unknown): unknown {
   if (!value || typeof value !== 'object') return value
   const snapshot = structuredClone(value) as Record<string, unknown>
+  if (snapshot['schemaVersion'] === 7) {
+    const affairs = Array.isArray(snapshot['affairs']) ? snapshot['affairs'] : []
+    snapshot['affairs'] = affairs.filter(
+      (item) =>
+        !item ||
+        typeof item !== 'object' ||
+        (item as Record<string, unknown>)['kind'] !== 'article-publishing',
+    )
+    snapshot['schemaVersion'] = 8
+    return snapshot
+  }
   if (snapshot['schemaVersion'] === 6) {
     const affairs = Array.isArray(snapshot['affairs']) ? snapshot['affairs'] : []
     snapshot['affairs'] = affairs.filter(
@@ -648,7 +659,7 @@ function migrateSnapshot(value: unknown): unknown {
         (item as Record<string, unknown>)['kind'] !== 'article-publishing',
     )
     snapshot['schemaVersion'] = 7
-    return snapshot
+    return migrateSnapshot(snapshot)
   }
   if (snapshot['schemaVersion'] === 5) {
     snapshot['schemaVersion'] = 6

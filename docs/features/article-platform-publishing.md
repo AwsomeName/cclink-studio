@@ -1,7 +1,7 @@
 # Markdown 文章平台发布
 
-状态：CSDN 工程闭环已实现，真实平台验收待完成
-最后更新：2026-09-01
+状态：逐步可观测执行协议待实现，真实平台闭环未完成
+最后更新：2026-09-07
 
 ## 产品结果
 
@@ -10,6 +10,12 @@
 关闭 Tab、Agent 中断或 Studio 重启后，任务仍是同一个 WebAffair/Attempt。继续时必须先进入原账号草稿箱找到原 draftId，再从未完成步骤继续，不能使用失效旧 URL 猜页面，也不能静默新建文章。
 
 完整恢复规则见 [article-publishing-restart-recovery.md](article-publishing-restart-recovery.md)，开发与验收状态见 [article-publishing-restart-recovery-development-plan.md](article-publishing-restart-recovery-development-plan.md)。
+
+2026-09-07 的真实恢复故障进一步证明：现有 8 个 checkpoint 仍把 Studio 编排和 Agent 实际执行包在
+两个黑盒中，不能精确回答当前小步骤的起点、目标、实际结果和失败归属。新增的强制需求见
+[article-publishing-observable-execution-protocol.md](article-publishing-observable-execution-protocol.md)，
+施工事实源见
+[article-publishing-observable-execution-development-plan.md](article-publishing-observable-execution-development-plan.md)。
 
 ## 用户入口
 
@@ -59,4 +65,6 @@
 
 独立入口、持久任务、受控 Browser/Agent、草稿锚点、账号级恢复互斥、草稿箱找回、未决副作用防重放、图片人工确认、旧文章任务删除和自动测试已经落地。
 
-尚未完成的是新版代码在真实 CSDN 账号上的完整中断矩阵验收。因此当前只能称为工程闭环，不能称为真实站点稳定闭环。
+尚未完成的不只是新版代码在真实 CSDN 账号上的完整中断矩阵验收。当前也缺少由 WebAffair 持久拥有的
+逐步 operation、Agent 单步授权、起点/终点证据和用户可见字段级诊断。因此当前不能再称为工程闭环，
+只能称为已有部分安全围栏；逐步协议和真实站点矩阵全部通过后才能声明稳定闭环。

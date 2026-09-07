@@ -125,6 +125,95 @@ export interface ArticlePublishingSideEffect {
   browserTaskRunId?: string
 }
 
+export type ArticlePublishingOperationDefinitionId =
+  | 'recovery.restore-exact-draft'
+  | 'runtime.prepare-first-inspect'
+  | 'page.first-inspect'
+
+export type ArticlePublishingOperationStatus =
+  | 'ready'
+  | 'running'
+  | 'verifying'
+  | 'waiting-human'
+  | 'interrupted'
+  | 'result-unknown'
+  | 'failed'
+
+export interface ArticlePublishingRuntimeSnapshot {
+  tabId: string
+  browserViewRuntimeGeneration: number
+  webContentsId: number
+  playwrightConnectionGeneration: number
+  playwrightPageBindingGeneration: number
+  agentRunId?: string
+  browserTaskRunId?: string
+}
+
+export interface ArticlePublishingOperationFailure {
+  category:
+    | 'studio-state'
+    | 'studio-runtime'
+    | 'agent-runtime'
+    | 'platform-page'
+    | 'human-required'
+    | 'side-effect-unknown'
+  code: string
+  message: string
+  mismatches?: Array<{
+    field: string
+    expected: string | number | null
+    actual: string | number | null
+  }>
+}
+
+export interface ArticlePublishingCurrentOperation {
+  operationRunId: string
+  definitionId: ArticlePublishingOperationDefinitionId
+  checkpointId: string
+  status: ArticlePublishingOperationStatus
+  owner: 'studio' | 'agent' | 'adapter' | 'human'
+  attemptId: string
+  executionGeneration: number
+  launchOperationId: string
+  startSummary: string
+  goalSummary: string
+  startedAt?: string
+  lastTransitionAt: string
+  runtime?: ArticlePublishingRuntimeSnapshot
+  failure?: ArticlePublishingOperationFailure
+}
+
+export interface ArticlePublishingOperationTransition {
+  id: string
+  operationRunId: string
+  kind:
+    | 'recovery-started'
+    | 'draft-restored'
+    | 'runtime-prepare-started'
+    | 'page-identity-sampled'
+    | 'page-identity-changed'
+    | 'draft-reverified'
+    | 'lease-transferred'
+    | 'binding-committed'
+    | 'cached-identity-replayed'
+    | 'runtime-ready'
+    | 'first-inspect-started'
+    | 'first-inspect-completed'
+    | 'operation-failed'
+    | 'operation-interrupted'
+  occurredAt: string
+  summary: string
+  previousRuntime?: ArticlePublishingRuntimeSnapshot
+  currentRuntime?: ArticlePublishingRuntimeSnapshot
+  failure?: ArticlePublishingOperationFailure
+}
+
+export interface ArticlePublishingExecutionProtocol {
+  version: 1
+  current?: ArticlePublishingCurrentOperation
+  recentTransitions: ArticlePublishingOperationTransition[]
+}
+
 export interface ArticlePublishingState {
   adapterId: 'csdn'
   adapterVersion: 1
@@ -139,6 +228,7 @@ export interface ArticlePublishingState {
   assets: ArticlePublishingAsset[]
   checkpoints: ArticlePublishingCheckpoint[]
   sideEffects: ArticlePublishingSideEffect[]
+  executionProtocol: ArticlePublishingExecutionProtocol
   execution: {
     status:
       | 'draft'

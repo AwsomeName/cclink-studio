@@ -11,6 +11,7 @@ import {
 import { CsdnPublishingAdapter, type CsdnPageProbe } from './csdn-publishing-adapter'
 import type { WebAffairOperationResult } from '../../shared/web-affairs/web-affair-types'
 import type { ArticlePublishingAgentReporter } from '../web-affairs/web-affair-service'
+import type { ArticlePublishingRuntimeSnapshot } from '../../shared/article-publishing/article-publishing-types'
 
 export const CSDN_ARTICLE_SUPPORTED_ORIGINS = [
   'https://csdn.net',
@@ -41,6 +42,11 @@ interface ArticlePublishingExecutionScope {
   executionGeneration: number
   launchOperationId: string
   browserTaskRunId: string
+  tabId: string
+  browserViewRuntimeGeneration: number
+  webContentsId: number
+  playwrightConnectionGeneration: number
+  playwrightPageBindingGeneration: number
   writePermitted: boolean
   writePermitId?: string
   draftUrl?: string
@@ -73,6 +79,7 @@ export interface ArticlePublishingPageInspection extends CsdnPageProbe {
 interface TrustedPageAttestation {
   scope: ArticlePublishingExecutionScope
   inspection: ArticlePublishingPageInspection
+  runtime: ArticlePublishingRuntimeSnapshot
 }
 
 interface ResolveExecutionInput {
@@ -141,7 +148,35 @@ export class ArticlePublishingBrowserPolicy {
     if (!scope) return publishingEvidenceError('文章发布页面 Runtime 身份已经失效')
     const page = this.playwrightBridge.getPageById(task.tabId)
     if (!page || page.isClosed()) return publishingEvidenceError('绑定的 CSDN 页面不可用')
-    const probe = await this.adapter.probe(page)
+    const runtime = this.runtimeSnapshot(scope, context)
+    const started = await this.webAffairService.startArticlePublishingFirstInspect({
+      workspaceId: scope.workspaceId,
+      affairId: scope.affairId,
+      attemptId: scope.attemptId,
+      executionGeneration: scope.executionGeneration,
+      launchOperationId: scope.launchOperationId,
+      runtime,
+    })
+    if (!started.success) return publishingEvidenceError(started.error.message)
+    let probe: CsdnPageProbe
+    try {
+      probe = await this.adapter.probe(page)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      await this.webAffairService.failArticlePublishingCurrentOperation({
+        workspaceId: scope.workspaceId,
+        affairId: scope.affairId,
+        attemptId: scope.attemptId,
+        executionGeneration: scope.executionGeneration,
+        launchOperationId: scope.launchOperationId,
+        failure: {
+          category: 'platform-page',
+          code: 'platform_page.inspect_failed',
+          message: `CSDN 页面只读检查失败：${message}`,
+        },
+      })
+      return publishingEvidenceError(`CSDN 页面只读检查失败：${message}`)
+    }
     if (
       scope.draftUrl &&
       probe.pageKind === 'editor' &&
@@ -162,7 +197,21 @@ export class ArticlePublishingBrowserPolicy {
       ...probe,
       matchedAssets,
     }
-    this.attestations.set(this.attestationKey(context), { scope, inspection })
+    const completed = await this.webAffairService.completeArticlePublishingFirstInspect({
+      workspaceId: scope.workspaceId,
+      affairId: scope.affairId,
+      attemptId: scope.attemptId,
+      executionGeneration: scope.executionGeneration,
+      launchOperationId: scope.launchOperationId,
+      runtime,
+      pageKind: inspection.pageKind,
+      platformAccountId: inspection.platformAccountId,
+      draftId: inspection.draftId,
+      normalizedTitle: normalizeText(inspection.title.value),
+      saveState: inspection.saveState,
+    })
+    if (!completed.success) return publishingEvidenceError(completed.error.message)
+    this.attestations.set(this.attestationKey(context), { scope, inspection, runtime })
     while (this.attestations.size > 40) {
       const oldest = this.attestations.keys().next().value
       if (!oldest) break
@@ -191,6 +240,7 @@ export class ArticlePublishingBrowserPolicy {
       scope.attemptId !== reporter.attemptId ||
       scope.executionGeneration !== reporter.executionGeneration ||
       scope.launchOperationId !== reporter.launchOperationId ||
+      !this.attestationRuntimeIsCurrent(attestation) ||
       Date.now() - Date.parse(inspection.observedAt) > 60_000
     ) {
       return publishingEvidenceError('CSDN 页面证据已经过期或不属于当前执行代次')
@@ -875,6 +925,11 @@ export class ArticlePublishingBrowserPolicy {
       executionGeneration: attempt.executionGeneration,
       launchOperationId: attempt.launchOperationId,
       browserTaskRunId: input.browserTaskRunId ?? attempt.browserTaskRunId ?? '',
+      tabId: input.tabId ?? '',
+      browserViewRuntimeGeneration: input.browserViewRuntimeGeneration ?? 0,
+      webContentsId: input.webContentsId ?? 0,
+      playwrightConnectionGeneration: input.playwrightConnectionGeneration ?? 0,
+      playwrightPageBindingGeneration: input.playwrightPageBindingGeneration ?? 0,
       writePermitted,
       ...(permit?.id ? { writePermitId: permit.id } : {}),
       draftUrl: publishing.draft?.url,
@@ -963,6 +1018,8 @@ export class ArticlePublishingBrowserPolicy {
       inspectedScope.executionGeneration !== scope.executionGeneration ||
       inspectedScope.launchOperationId !== scope.launchOperationId ||
       inspectedScope.browserTaskRunId !== scope.browserTaskRunId ||
+      !sameRuntimeSnapshot(attestation.runtime, this.runtimeSnapshot(scope, context)) ||
+      !this.attestationRuntimeIsCurrent(attestation) ||
       inspection.url !== pageUrl ||
       Date.now() - Date.parse(inspection.observedAt) > 60_000
     ) {
@@ -1019,6 +1076,42 @@ export class ArticlePublishingBrowserPolicy {
       )
     }
     return null
+  }
+
+  private runtimeSnapshot(
+    scope: ArticlePublishingExecutionScope,
+    context?: ToolExecutionContext,
+  ): ArticlePublishingRuntimeSnapshot {
+    return {
+      tabId: scope.tabId,
+      browserViewRuntimeGeneration: scope.browserViewRuntimeGeneration,
+      webContentsId: scope.webContentsId,
+      playwrightConnectionGeneration: scope.playwrightConnectionGeneration,
+      playwrightPageBindingGeneration: scope.playwrightPageBindingGeneration,
+      ...(context?.agentRunId ? { agentRunId: context.agentRunId } : {}),
+      ...(scope.browserTaskRunId ? { browserTaskRunId: scope.browserTaskRunId } : {}),
+    }
+  }
+
+  private attestationRuntimeIsCurrent(attestation: TrustedPageAttestation): boolean {
+    const task = attestation.runtime.browserTaskRunId
+      ? this.browserTaskRuntime?.getTask(attestation.runtime.browserTaskRunId)
+      : null
+    const page = this.playwrightBridge?.getPageBindingIdentity(attestation.runtime.tabId)
+    return Boolean(
+      task?.status === 'running' &&
+        task.tabId === attestation.runtime.tabId &&
+        task.correlation?.browserViewRuntimeGeneration ===
+          attestation.runtime.browserViewRuntimeGeneration &&
+        task.correlation?.webContentsId === attestation.runtime.webContentsId &&
+        task.correlation?.playwrightConnectionGeneration ===
+          attestation.runtime.playwrightConnectionGeneration &&
+        task.correlation?.playwrightPageBindingGeneration ===
+          attestation.runtime.playwrightPageBindingGeneration &&
+        page?.webContentsId === attestation.runtime.webContentsId &&
+        page.connectionGeneration === attestation.runtime.playwrightConnectionGeneration &&
+        page.generation === attestation.runtime.playwrightPageBindingGeneration,
+    )
   }
 
   private inspectionProves(
@@ -1182,6 +1275,21 @@ function trustedEvidenceKind(
 
 function publishingEvidenceError<T>(message: string): WebAffairOperationResult<T> {
   return { success: false, error: { code: 'EVIDENCE_REQUIRED', message } }
+}
+
+function sameRuntimeSnapshot(
+  left: ArticlePublishingRuntimeSnapshot,
+  right: ArticlePublishingRuntimeSnapshot,
+): boolean {
+  return (
+    left.tabId === right.tabId &&
+    left.browserViewRuntimeGeneration === right.browserViewRuntimeGeneration &&
+    left.webContentsId === right.webContentsId &&
+    left.playwrightConnectionGeneration === right.playwrightConnectionGeneration &&
+    left.playwrightPageBindingGeneration === right.playwrightPageBindingGeneration &&
+    left.agentRunId === right.agentRunId &&
+    left.browserTaskRunId === right.browserTaskRunId
+  )
 }
 
 function normalizeText(value: string): string {

@@ -20,7 +20,7 @@ type SnapshotReadResult =
 
 interface RecoveryJournal {
   journalVersion: 2
-  snapshotSchemaVersion: 7
+  snapshotSchemaVersion: 8
   baseRevision: number
   targetRevision: number
   targetHash: string
@@ -134,7 +134,7 @@ export class WebAffairStore {
           ? ((raw as Record<string, unknown>)['affairs'] as unknown[])
           : []
       const isLegacySnapshot =
-        !raw || typeof raw !== 'object' || (raw as Record<string, unknown>)['schemaVersion'] !== 7
+        !raw || typeof raw !== 'object' || (raw as Record<string, unknown>)['schemaVersion'] !== 8
       const discardedArticleCount = isLegacySnapshot
         ? rawAffairs.filter(
             (item) =>
@@ -246,11 +246,11 @@ export class WebAffairStore {
       const expectedHash = recoveryTargetHash(targetRevision, rawAffairs)
       if (expectedHash !== raw.targetHash) throw new Error('事务恢复日志目标 hash 不匹配')
       const sanitizedAffairs =
-        raw.journalVersion === 2 && raw.snapshotSchemaVersion === 7
+        raw.journalVersion === 2 && raw.snapshotSchemaVersion === 8
           ? rawAffairs
           : rawAffairs.filter((affair) => affair.kind !== 'article-publishing')
       const snapshot = parseWebAffairSnapshot({
-        schemaVersion: 7,
+        schemaVersion: 8,
         revision: targetRevision,
         affairs: sanitizedAffairs,
       })
@@ -258,7 +258,7 @@ export class WebAffairStore {
         kind: 'valid',
         journal: {
           journalVersion: 2,
-          snapshotSchemaVersion: 7,
+          snapshotSchemaVersion: 8,
           baseRevision: raw.baseRevision!,
           targetRevision: snapshot.revision,
           targetHash: raw.targetHash,
@@ -298,7 +298,7 @@ export class WebAffairStore {
     )
     if (activeArticleAffairs.length === 0) return
     let recovery = parseWebAffairSnapshot({
-      schemaVersion: 7,
+      schemaVersion: 8,
       revision: snapshot.revision,
       affairs: activeArticleAffairs,
     })
@@ -322,7 +322,7 @@ export class WebAffairStore {
 function serializeRecoveryJournal(snapshot: WebAffairSnapshot): string {
   const journal: RecoveryJournal = {
     journalVersion: 2,
-    snapshotSchemaVersion: 7,
+    snapshotSchemaVersion: 8,
     baseRevision: Math.max(0, snapshot.revision - 1),
     targetRevision: snapshot.revision,
     targetHash: recoveryTargetHash(snapshot.revision, snapshot.affairs),

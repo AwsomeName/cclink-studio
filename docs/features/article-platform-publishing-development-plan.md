@@ -1,9 +1,10 @@
 # Markdown 文章平台发布开发计划
 
-状态：当前计划
-最后更新：2026-09-01
+状态：由逐步可观测执行协议修复方案接管
+最后更新：2026-09-07
 
-本功能的主开发计划已经收敛到 [article-publishing-restart-recovery-development-plan.md](article-publishing-restart-recovery-development-plan.md)。本文只保留阶段顺序，避免维护两套冲突方案。
+本功能早期计划曾收敛到 [article-publishing-restart-recovery-development-plan.md](article-publishing-restart-recovery-development-plan.md)。2026-09-07 的真实故障证明粗 checkpoint 和长 Agent Prompt 仍形成两个黑盒；当前施工事实源改为
+[article-publishing-observable-execution-development-plan.md](article-publishing-observable-execution-development-plan.md)。本文只保留历史阶段顺序，不再用于判断闭环完成。
 
 ## 阶段 1：最小 CSDN 纵向闭环
 

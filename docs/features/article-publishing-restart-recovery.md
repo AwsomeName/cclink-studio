@@ -1,7 +1,11 @@
 # 文章发布中断恢复规则
 
-状态：当前事实源
-日期：2026-09-01
+状态：恢复安全规则继续有效；逐步可观测协议尚未实现
+日期：2026-09-07
+
+本文定义的草稿找回、防重放和人工边界继续有效。2026-09-07 新增的逐步执行要求见
+[article-publishing-observable-execution-protocol.md](article-publishing-observable-execution-protocol.md)；
+它细化执行和诊断，不放宽本文任何安全规则。
 
 ## 用户要得到的结果
 
