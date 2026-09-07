@@ -41,6 +41,7 @@ const remoteImageSchema = z
   })
   .strict()
 export const cclinkRemotePathSchema = remoteWorkspacePathSchema
+export const cclinkBrowseDirectoryPathSchema = z.union([cclinkRemotePathSchema, z.literal('~')])
 export const cclinkRemoteRefSchema = remoteWorkspaceRefSchema
 export const cclinkSendAgentMessageInputSchema = z
   .object({
@@ -204,10 +205,16 @@ export function registerCclinkRemoteIpc(
   )
   registerTrustedIpcContract(noArgs(cclinkIpc.connectRealtime), guard, () => service.connect())
   registerTrustedIpcContract(noArgs(cclinkIpc.listServers), guard, () => service.listServers())
-  const serverPathSchema = z.object({ serverId: idSchema, path: cclinkRemotePathSchema }).strict()
-  const openWorkspaceSchema = serverPathSchema.extend({ requestId: idSchema }).strict()
+  const browseDirectorySchema = z
+    .object({ serverId: idSchema, path: cclinkBrowseDirectoryPathSchema })
+    .strict()
+  const openWorkspaceSchema = z
+    .object({ serverId: idSchema, path: cclinkRemotePathSchema, requestId: idSchema })
+    .strict()
   registerTrustedIpcContract(
-    bindIpcParser(cclinkIpc.browseDirectory, (args) => z.tuple([serverPathSchema]).parse(args)),
+    bindIpcParser(cclinkIpc.browseDirectory, (args) =>
+      z.tuple([browseDirectorySchema]).parse(args),
+    ),
     guard,
     (_event, input) => service.browseDirectory(input.serverId, input.path),
   )

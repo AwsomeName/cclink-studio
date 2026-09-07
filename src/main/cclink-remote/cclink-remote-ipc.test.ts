@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  cclinkBrowseDirectoryPathSchema,
   cclinkCancelAgentImageUploadInputSchema,
   cclinkRemoteCreateFileInputSchema,
   cclinkRemoteDeleteFileInputSchema,
@@ -45,6 +46,14 @@ describe('CCLink remote IPC schema', () => {
     expect(cclinkRemotePathSchema.parse('\\\\server\\share\\project')).toBe(
       '\\\\server\\share\\project',
     )
+  })
+
+  it('仅允许目录浏览使用精确的远程主目录哨兵', () => {
+    expect(cclinkBrowseDirectoryPathSchema.parse('~')).toBe('~')
+    expect(cclinkBrowseDirectoryPathSchema.parse('/srv/project')).toBe('/srv/project')
+    expect(() => cclinkBrowseDirectoryPathSchema.parse('~/project')).toThrow()
+    expect(() => cclinkBrowseDirectoryPathSchema.parse('relative/project')).toThrow()
+    expect(() => cclinkRemotePathSchema.parse('~')).toThrow()
   })
 
   it('accepts image-only remote Agent messages and rejects malformed image bytes', () => {
