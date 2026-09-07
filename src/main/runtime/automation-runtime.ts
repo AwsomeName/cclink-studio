@@ -97,6 +97,8 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
             runtime.workspaceStateService?.getLocalProjectId(workspacePath) ?? null,
           runtime.playwrightBridge,
           runtime.browserTaskRuntime,
+          async (attemptId) =>
+            runtime.articlePublishingService?.awaitBrowserRuntimeConvergence(attemptId),
         )
       : null
 

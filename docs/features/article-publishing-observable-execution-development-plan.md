@@ -1,6 +1,6 @@
 # 文章发布逐步可观测执行协议修复方案
 
-状态：独立评审后已修订；允许只推进 P0
+状态：P0 已实现并通过自动门禁；等待真实 Electron/CSDN 验收
 日期：2026-09-07
 目标需求：[article-publishing-observable-execution-protocol.md](article-publishing-observable-execution-protocol.md)
 
@@ -30,13 +30,29 @@ recovery.restore-exact-draft
 operation、三类 Runtime binding、recovery lease、精确草稿找回、write permit、Page rebind、字段级
 mismatch 日志和启动审计。
 
-当前 P0 缺口：
+独立评审时确认的 P0 缺口（当前工作树已按下列边界修复）：
 
 1. 早到 `onPageRuntimeBound` 只 schedule 异步 rebind，`onRunPrepared` 没有等待其完成；
 2. 运行期 rebind 分两次持久提交，核验失败只写日志，当前业务步骤没有结构化失败；
 3. 页面 attestation 缺少 View/WebContents/CDP/Page generation；
 4. Runtime 无进度可能被错误映射成 waiting-human；
 5. UI 只显示粗 checkpoint，不能显示 Runtime 准备卡在哪个 transition。
+
+## P0 实施记录（2026-09-07）
+
+- 已实现 current operation、结构化 failure 和最多 200 条 transition；`WebAffairService` 仍是唯一进度所有者。
+- 已把恢复阶段的第一次核验改为只观察、不签发 permit；BrowserTask 创建后在最终稳定 Page 上重新核验，再把
+  lease、binding、permit 和 current Runtime 一次持久提交。
+- 已缓存并 await `activeRuntimes` 登记前到达的 `onPageRuntimeBound`；工具运行期遇到同页重绑也先等待确定的
+  rebind queue，再决定是否失败。
+- 已把 exact Page identity 纳入 inspect attestation；同 URL 但 Page generation 改变时旧证明立即失效。
+- 已把内部 Runtime 无进度和重绑失败收敛为 interrupted/结构化 Studio Runtime failure，并撤销写入许可；只有
+  真实验证码、登录失效、法律声明或账号冲突才允许进入人工处理。
+- 已在文章发布页显示 operation、owner、起点、目标、最新 transition、失败分类和字段级 expected/actual。
+- 专项测试 89/89 通过；`pnpm verify` 通过（354 个测试文件，2295 passed、2 skipped，生产构建通过）。
+
+尚未完成：真实 Electron `WebContentsView` 生命周期改代测试和真实 CSDN 真人验收。验收复用现有 Profile，
+不要求用户重复登录；这两项通过前不得宣称恢复闭环完成，也不得据此发布版本。
 
 ## 唯一状态结构
 

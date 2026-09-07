@@ -645,6 +645,8 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const coverAsset = publishing.fields.coverAssetId
     ? publishing.assets.find((asset) => asset.id === publishing.fields.coverAssetId)
     : null
+  const currentOperation = publishing.executionProtocol.current
+  const lastOperationTransition = publishing.executionProtocol.recentTransitions.at(-1)
   return (
     <div className="article-publishing-page">
       <header className="article-publishing-header">
@@ -738,6 +740,45 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           busy={busy}
           onResolve={(assetId, resolution) => void resolveAsset(assetId, resolution)}
         />
+      </section>
+      <section className="article-publishing-card">
+        <h2>当前执行动作</h2>
+        {currentOperation ? (
+          <div className="article-publishing-config-grid">
+            <div className="article-publishing-config-item">
+              <span>动作</span>
+              <strong>{currentOperation.definitionId}</strong>
+              <small>{currentOperation.status}</small>
+            </div>
+            <div className="article-publishing-config-item">
+              <span>执行者</span>
+              <strong>{currentOperation.owner}</strong>
+              <small>{currentOperation.checkpointId}</small>
+            </div>
+            <div className="article-publishing-config-item wide">
+              <span>本步终点</span>
+              <strong>{currentOperation.goalSummary}</strong>
+              <small>{lastOperationTransition?.summary ?? currentOperation.startSummary}</small>
+            </div>
+            {currentOperation.failure ? (
+              <div className="article-publishing-config-item wide">
+                <span>失败归属</span>
+                <strong>
+                  {currentOperation.failure.category} · {currentOperation.failure.code}
+                </strong>
+                <small>{currentOperation.failure.message}</small>
+                {currentOperation.failure.mismatches?.map((mismatch) => (
+                  <small key={mismatch.field}>
+                    {mismatch.field}：期望 {String(mismatch.expected)}，实际{' '}
+                    {String(mismatch.actual)}
+                  </small>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <p>当前没有由 main 接管的细粒度动作。</p>
+        )}
       </section>
       <section className="article-publishing-card">
         <h2>执行计划</h2>

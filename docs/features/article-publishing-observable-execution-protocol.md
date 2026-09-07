@@ -1,6 +1,6 @@
 # 文章发布逐步可观测执行协议
 
-状态：已确认需求，尚未实现
+状态：P0 已实现并通过自动门禁；真实 Electron/CSDN 验收未完成
 日期：2026-09-07
 
 ## 一句话结论
@@ -121,11 +121,11 @@ transition 数量必须有上限。历史 transition 只用于诊断和恢复，
 
 ### 4. Runtime 建立与第一次 Agent 检查
 
-| ID                               | 执行者           | 起点                                | 本步只做什么                                                                                     | 成功终点                                                                                  |
-| -------------------------------- | ---------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `recovery.restore-exact-draft`   | Studio + adapter | 新 generation 和 recovery lease 有效 | 从管理页找回并核验原账号、draftId、标题和 saved                                                  | 原草稿已核验，仍无写入许可                                                                |
-| `runtime.prepare-first-inspect`  | Studio           | 原草稿已核验                        | 创建 BrowserTask、比较资源挂载前后 Page、必要时重核验、转交 lease、提交 binding/permit 并等待早到事件收敛 | WebAffair、BrowserTask、当前 Page 和 permit 身份完全一致，Agent 工具门才开放               |
-| `page.first-inspect`             | Agent + adapter  | Runtime 准备完成                     | 只调用一次文章页面 inspect，不写网页                                                                  | main 在当前精确 Page 上返回结构化事实                                                      |
+| ID                              | 执行者           | 起点                                 | 本步只做什么                                                                                              | 成功终点                                                                     |
+| ------------------------------- | ---------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `recovery.restore-exact-draft`  | Studio + adapter | 新 generation 和 recovery lease 有效 | 从管理页找回并核验原账号、draftId、标题和 saved                                                           | 原草稿已核验，仍无写入许可                                                   |
+| `runtime.prepare-first-inspect` | Studio           | 原草稿已核验                         | 创建 BrowserTask、比较资源挂载前后 Page、必要时重核验、转交 lease、提交 binding/permit 并等待早到事件收敛 | WebAffair、BrowserTask、当前 Page 和 permit 身份完全一致，Agent 工具门才开放 |
+| `page.first-inspect`            | Agent + adapter  | Runtime 准备完成                     | 只调用一次文章页面 inspect，不写网页                                                                      | main 在当前精确 Page 上返回结构化事实                                        |
 
 Page 身份前后采样、lease 转交、binding commit 和缓存事件重放是
 `runtime.prepare-first-inspect` 内的结构化 transition/diagnostic，不是彼此独立的业务 operation。只有会独立
@@ -262,9 +262,12 @@ BrowserTask 资源挂载都可能改变 Runtime 身份。
 
 ## 当前完成度判断
 
-当前 HEAD 已有 execution generation、launch operation、Runtime binding、recovery permit、Page 改代重绑、
-副作用账本和字段级主进程日志等基础能力，也已有一条“恢复后 Page binding 改代再进行第一次检查”的
-针对性测试。
+截至 2026-09-07 的当前工作树，P0 已实现：`WebAffair` 持有唯一 current operation 和最多 200 条
+transition；恢复核验、Runtime 准备和首次 inspect 已进入同一状态协议；最终 Page 核验、lease 转交、binding
+与 permit 提交、早到 rebind 重放和 Agent 工具开放按顺序收敛；运行期 inspect 会等待正在执行的同页重绑；
+内部 Runtime 失败会撤销 permit 并进入 interrupted，不再伪装成人工登录问题。UI 已显示当前 operation、owner、
+最新 transition 和字段级 expected/actual。
 
-但上述 current operation、持久 transition、Agent 单步授权、用户可见阻塞点和统一结构化诊断尚未实现。
-因此现状只能称为“具备部分安全围栏”，不能称为“双黑盒已经拆开”。
+专项门禁 89/89 通过，仓库 `pnpm verify` 通过（354 个测试文件，2295 passed、2 skipped，生产构建通过）。
+这只证明 P0 工程实现，不证明真实网页闭环。真实 Electron `WebContentsView` 中的改代，以及复用现有登录 Profile
+的真实 CSDN 恢复和首次 inspect 尚未验收；在二者通过前仍禁止宣称发布恢复闭环完成。

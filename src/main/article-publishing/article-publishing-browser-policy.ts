@@ -11,7 +11,10 @@ import {
 import { CsdnPublishingAdapter, type CsdnPageProbe } from './csdn-publishing-adapter'
 import type { WebAffairOperationResult } from '../../shared/web-affairs/web-affair-types'
 import type { ArticlePublishingAgentReporter } from '../web-affairs/web-affair-service'
-import type { ArticlePublishingRuntimeSnapshot } from '../../shared/article-publishing/article-publishing-types'
+import type {
+  ArticlePublishingOperationFailure,
+  ArticlePublishingRuntimeSnapshot,
+} from '../../shared/article-publishing/article-publishing-types'
 
 export const CSDN_ARTICLE_SUPPORTED_ORIGINS = [
   'https://csdn.net',
@@ -130,6 +133,7 @@ export class ArticlePublishingBrowserPolicy {
     private readonly resolveWorkspaceId: (workspacePath: string) => Promise<string | null>,
     private readonly playwrightBridge?: PlaywrightBridge | null,
     private readonly browserTaskRuntime?: BrowserTaskRuntime | null,
+    private readonly awaitRuntimeConvergence?: (attemptId: string) => Promise<void>,
   ) {}
 
   async inspectCurrentPage(
@@ -144,8 +148,32 @@ export class ArticlePublishingBrowserPolicy {
     if (!task || task.correlation?.agentRunId !== agentRunId) {
       return publishingEvidenceError('当前 Agent Run 没有精确绑定的活动 BrowserTask')
     }
-    const scope = await this.resolveTaskScope(task, context)
-    if (!scope) return publishingEvidenceError('文章发布页面 Runtime 身份已经失效')
+    let scope = await this.resolveTaskScope(
+      task,
+      context,
+      !context?.articlePublishingPolicy || !this.awaitRuntimeConvergence,
+    )
+    if (!scope && context?.articlePublishingPolicy && this.awaitRuntimeConvergence) {
+      await this.awaitRuntimeConvergence(context.articlePublishingPolicy.attemptId).catch(
+        () => undefined,
+      )
+      scope = await this.resolveTaskScope(task, context)
+    }
+    if (!scope) {
+      const failure = await this.runtimeResolutionFailure(task, context)
+      const policy = context?.articlePublishingPolicy
+      if (policy) {
+        await this.webAffairService.failArticlePublishingCurrentOperation({
+          workspaceId: policy.workspaceId,
+          affairId: policy.affairId,
+          attemptId: policy.attemptId,
+          executionGeneration: policy.executionGeneration,
+          launchOperationId: policy.launchOperationId,
+          failure,
+        })
+      }
+      return publishingEvidenceError(failure.message)
+    }
     const page = this.playwrightBridge.getPageById(task.tabId)
     if (!page || page.isClosed()) return publishingEvidenceError('绑定的 CSDN 页面不可用')
     const runtime = this.runtimeSnapshot(scope, context)
@@ -302,7 +330,8 @@ export class ArticlePublishingBrowserPolicy {
           accountId: correlation.accountId,
         }))
       ) {
-        const reason = '文章发布任务状态已过期或与当前 Agent 不一致'
+        const failure = await this.runtimeResolutionFailure(task, context)
+        const reason = failure.message
         console.warn('[ArticlePublishing] 适配器动作判定', {
           affairId: correlation.affairId,
           attemptId: correlation.affairAttemptId,
@@ -737,6 +766,7 @@ export class ArticlePublishingBrowserPolicy {
   private async resolveTaskScope(
     task: BrowserTaskRun,
     context?: ToolExecutionContext,
+    logFailure = true,
   ): Promise<ArticlePublishingExecutionScope | null> {
     const correlation = task.correlation
     if (
@@ -747,20 +777,126 @@ export class ArticlePublishingBrowserPolicy {
     ) {
       return null
     }
-    return this.resolveExecution({
-      workspacePath: context.trustedWorkspace.rootPath,
-      affairId: correlation.affairId,
-      attemptId: correlation.affairAttemptId,
-      accountId: correlation.accountId,
-      browserTaskRunId: task.id,
-      executionGeneration: correlation.affairExecutionGeneration,
-      launchOperationId: correlation.affairLaunchOperationId,
-      tabId: task.tabId,
-      browserViewRuntimeGeneration: correlation.browserViewRuntimeGeneration,
-      webContentsId: correlation.webContentsId,
-      playwrightConnectionGeneration: correlation.playwrightConnectionGeneration,
-      playwrightPageBindingGeneration: correlation.playwrightPageBindingGeneration,
-    })
+    return this.resolveExecution(
+      {
+        workspacePath: context.trustedWorkspace.rootPath,
+        affairId: correlation.affairId,
+        attemptId: correlation.affairAttemptId,
+        accountId: correlation.accountId,
+        browserTaskRunId: task.id,
+        executionGeneration: correlation.affairExecutionGeneration,
+        launchOperationId: correlation.affairLaunchOperationId,
+        tabId: task.tabId,
+        browserViewRuntimeGeneration: correlation.browserViewRuntimeGeneration,
+        webContentsId: correlation.webContentsId,
+        playwrightConnectionGeneration: correlation.playwrightConnectionGeneration,
+        playwrightPageBindingGeneration: correlation.playwrightPageBindingGeneration,
+      },
+      logFailure,
+    )
+  }
+
+  private async runtimeResolutionFailure(
+    task: BrowserTaskRun,
+    context?: ToolExecutionContext,
+  ): Promise<ArticlePublishingOperationFailure> {
+    const correlation = task.correlation
+    const policy = context?.articlePublishingPolicy
+    const snapshot = policy ? this.webAffairService.getProjectSnapshot(policy.workspaceId) : null
+    const affair =
+      snapshot?.success && policy
+        ? snapshot.data.affairs.find((candidate) => candidate.id === policy.affairId)
+        : undefined
+    const attempt = affair?.attempts.find((candidate) => candidate.id === policy?.attemptId)
+    const binding = attempt?.runtimeBindings.find(
+      (candidate) => candidate.kind === 'browser-task' && candidate.status === 'active',
+    )
+    const page = this.playwrightBridge?.getPageBindingIdentity(task.tabId)
+    const mismatches: NonNullable<ArticlePublishingOperationFailure['mismatches']> = []
+    const compare = (
+      field: string,
+      expected: string | number | null | undefined,
+      actual: string | number | null | undefined,
+    ) => {
+      if (expected === actual) return
+      mismatches.push({ field, expected: expected ?? null, actual: actual ?? null })
+    }
+    compare('attemptId', policy?.attemptId, correlation?.affairAttemptId)
+    compare('affair.kind', 'article-publishing', affair?.kind)
+    compare(
+      'adapter',
+      'csdn@1',
+      affair?.articlePublishing
+        ? `${affair.articlePublishing.adapterId}@${affair.articlePublishing.adapterVersion}`
+        : undefined,
+    )
+    compare(
+      'execution.currentAttemptId',
+      policy?.attemptId,
+      affair?.articlePublishing?.execution.currentAttemptId,
+    )
+    compare('execution.status', 'running', affair?.articlePublishing?.execution.status)
+    compare('attempt.status', 'running-ai', attempt?.status)
+    compare('accountId.publishing', correlation?.accountId, affair?.articlePublishing?.accountId)
+    compare('accountId.attempt', correlation?.accountId, attempt?.accountId)
+    compare(
+      'executionGeneration',
+      attempt?.executionGeneration ?? policy?.executionGeneration,
+      correlation?.affairExecutionGeneration,
+    )
+    compare(
+      'launchOperationId',
+      attempt?.launchOperationId ?? policy?.launchOperationId,
+      correlation?.affairLaunchOperationId,
+    )
+    compare('agentRunId', context?.agentRunId, correlation?.agentRunId)
+    compare('browserTaskRunId', attempt?.browserTaskRunId, task.id)
+    compare('tabId', binding?.kind === 'browser-task' ? binding.tabId : undefined, task.tabId)
+    compare(
+      'browserViewRuntimeGeneration',
+      binding?.kind === 'browser-task' ? binding.browserViewRuntimeGeneration : undefined,
+      correlation?.browserViewRuntimeGeneration,
+    )
+    compare(
+      'webContentsId.browserTask',
+      binding?.kind === 'browser-task' ? binding.webContentsId : undefined,
+      correlation?.webContentsId,
+    )
+    compare(
+      'playwrightConnectionGeneration.browserTask',
+      binding?.kind === 'browser-task' ? binding.playwrightConnectionGeneration : undefined,
+      correlation?.playwrightConnectionGeneration,
+    )
+    compare(
+      'playwrightPageBindingGeneration.browserTask',
+      binding?.kind === 'browser-task' ? binding.playwrightPageBindingGeneration : undefined,
+      correlation?.playwrightPageBindingGeneration,
+    )
+    compare('webContentsId.currentPage', correlation?.webContentsId, page?.webContentsId)
+    compare(
+      'playwrightConnectionGeneration.currentPage',
+      correlation?.playwrightConnectionGeneration,
+      page?.connectionGeneration,
+    )
+    compare(
+      'playwrightPageBindingGeneration.currentPage',
+      correlation?.playwrightPageBindingGeneration,
+      page?.generation,
+    )
+    const detail = mismatches.length
+      ? mismatches
+          .map(
+            (mismatch) =>
+              `${mismatch.field}：期望 ${String(mismatch.expected)}，实际 ${String(mismatch.actual)}`,
+          )
+          .join('；')
+      : '事务、BrowserTask 或 Agent 外层身份不再属于当前执行代次'
+    return {
+      category: 'studio-runtime',
+      code: 'studio_runtime.identity_mismatch',
+      message: `文章发布 Page Runtime 尚未收敛：${detail}`,
+      ...(mismatches.length ? { mismatches } : {}),
+    }
   }
 
   private async reserveSideEffect(
@@ -820,15 +956,16 @@ export class ArticlePublishingBrowserPolicy {
 
   private async resolveExecution(
     input: ResolveExecutionInput,
+    logFailure = true,
   ): Promise<ArticlePublishingExecutionScope | null> {
     const workspaceId = await this.resolveWorkspaceId(input.workspacePath)
     if (!workspaceId) {
-      this.logRuntimeResolutionFailure(input, ['workspace-not-resolved'])
+      if (logFailure) this.logRuntimeResolutionFailure(input, ['workspace-not-resolved'])
       return null
     }
     const snapshot = this.webAffairService.getProjectSnapshot(workspaceId)
     if (!snapshot.success) {
-      this.logRuntimeResolutionFailure(input, ['workspace-snapshot-unavailable'])
+      if (logFailure) this.logRuntimeResolutionFailure(input, ['workspace-snapshot-unavailable'])
       return null
     }
     const affair = snapshot.data.affairs.find((candidate) => candidate.id === input.affairId)
@@ -876,24 +1013,25 @@ export class ArticlePublishingBrowserPolicy {
       mismatches.push('browser-runtime-binding')
     }
     if (mismatches.length > 0 || !publishing || !attempt || affair?.kind !== 'article-publishing') {
-      this.logRuntimeResolutionFailure(input, mismatches, {
-        workspaceId,
-        affairKind: affair?.kind ?? null,
-        execution: publishing?.execution ?? null,
-        publishingAccountId: publishing?.accountId ?? null,
-        attempt: attempt
-          ? {
-              id: attempt.id,
-              status: attempt.status,
-              accountId: attempt.accountId,
-              executionGeneration: attempt.executionGeneration,
-              launchOperationId: attempt.launchOperationId,
-              browserTaskRunId: attempt.browserTaskRunId ?? null,
-              tabId: attempt.tabId ?? null,
-            }
-          : null,
-        activeBrowserBinding: activeBrowserBinding ?? null,
-      })
+      if (logFailure)
+        this.logRuntimeResolutionFailure(input, mismatches, {
+          workspaceId,
+          affairKind: affair?.kind ?? null,
+          execution: publishing?.execution ?? null,
+          publishingAccountId: publishing?.accountId ?? null,
+          attempt: attempt
+            ? {
+                id: attempt.id,
+                status: attempt.status,
+                accountId: attempt.accountId,
+                executionGeneration: attempt.executionGeneration,
+                launchOperationId: attempt.launchOperationId,
+                browserTaskRunId: attempt.browserTaskRunId ?? null,
+                tabId: attempt.tabId ?? null,
+              }
+            : null,
+          activeBrowserBinding: activeBrowserBinding ?? null,
+        })
       return null
     }
     const recovery = publishing.draft?.recovery
@@ -1100,17 +1238,17 @@ export class ArticlePublishingBrowserPolicy {
     const page = this.playwrightBridge?.getPageBindingIdentity(attestation.runtime.tabId)
     return Boolean(
       task?.status === 'running' &&
-        task.tabId === attestation.runtime.tabId &&
-        task.correlation?.browserViewRuntimeGeneration ===
-          attestation.runtime.browserViewRuntimeGeneration &&
-        task.correlation?.webContentsId === attestation.runtime.webContentsId &&
-        task.correlation?.playwrightConnectionGeneration ===
-          attestation.runtime.playwrightConnectionGeneration &&
-        task.correlation?.playwrightPageBindingGeneration ===
-          attestation.runtime.playwrightPageBindingGeneration &&
-        page?.webContentsId === attestation.runtime.webContentsId &&
-        page.connectionGeneration === attestation.runtime.playwrightConnectionGeneration &&
-        page.generation === attestation.runtime.playwrightPageBindingGeneration,
+      task.tabId === attestation.runtime.tabId &&
+      task.correlation?.browserViewRuntimeGeneration ===
+        attestation.runtime.browserViewRuntimeGeneration &&
+      task.correlation?.webContentsId === attestation.runtime.webContentsId &&
+      task.correlation?.playwrightConnectionGeneration ===
+        attestation.runtime.playwrightConnectionGeneration &&
+      task.correlation?.playwrightPageBindingGeneration ===
+        attestation.runtime.playwrightPageBindingGeneration &&
+      page?.webContentsId === attestation.runtime.webContentsId &&
+      page.connectionGeneration === attestation.runtime.playwrightConnectionGeneration &&
+      page.generation === attestation.runtime.playwrightPageBindingGeneration,
     )
   }
 

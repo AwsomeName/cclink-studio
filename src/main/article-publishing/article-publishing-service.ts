@@ -41,6 +41,7 @@ import type {
   WebAffair,
   WebAffairOperationResult,
   WebAffairProjectSnapshot,
+  WebAffairRuntimeBinding,
 } from '../../shared/web-affairs/web-affair-types'
 import {
   CsdnDraftRecoveryCoordinator,
@@ -124,6 +125,14 @@ export class ArticlePublishingService {
     this.activeRuntimes.clear()
     this.latestPageRuntimeIdentities.clear()
     this.runtimeRebindQueues.clear()
+  }
+
+  async awaitBrowserRuntimeConvergence(attemptId: string): Promise<void> {
+    const runtime = this.activeRuntimes.get(attemptId)
+    const latestIdentity = runtime ? this.latestPageRuntimeIdentities.get(runtime.tabId) : undefined
+    if (latestIdentity) await this.scheduleBrowserRuntimeRebind(latestIdentity)
+    const pending = this.runtimeRebindQueues.get(attemptId)
+    if (pending) await pending
   }
 
   async inspectSource(
@@ -303,6 +312,7 @@ export class ArticlePublishingService {
             playwrightPageBindingGeneration: pageBinding.generation,
           },
           input.workspaceId,
+          { issueWritePermit: false },
         )
         if (!verified.success) throw new Error(verified.error.message)
       }
@@ -426,8 +436,8 @@ export class ArticlePublishingService {
             if (!browserTask || browserTask.tabId !== tabId || browserTask.status !== 'running') {
               throw new Error('Agent 启动前的 BrowserTask 身份不匹配')
             }
-            const currentViewIdentity = browserManager.getViewRuntimeIdentity(tabId)
-            const currentPageBinding = playwrightBridge.getPageBindingIdentity(tabId)
+            let currentViewIdentity = browserManager.getViewRuntimeIdentity(tabId)
+            let currentPageBinding = playwrightBridge.getPageBindingIdentity(tabId)
             if (
               !currentViewIdentity ||
               !currentPageBinding ||
@@ -437,44 +447,65 @@ export class ArticlePublishingService {
             ) {
               throw new Error('BrowserTask 创建后页面 Runtime 身份未稳定绑定')
             }
-            const pageIdentityChanged =
-              currentViewIdentity.browserViewRuntimeGeneration !==
-                viewIdentity.browserViewRuntimeGeneration ||
-              currentViewIdentity.webContentsId !== viewIdentity.webContentsId ||
-              currentPageBinding.connectionGeneration !== pageBinding.connectionGeneration ||
-              currentPageBinding.generation !== pageBinding.generation
-            if (pageIdentityChanged && recoveredDraft && recovery) {
-              const page = playwrightBridge.getPageById(tabId)
-              if (!page || page.isClosed()) {
-                throw new Error('BrowserTask 创建后恢复草稿页面不可用')
+            let launchRecoveryVerification:
+              | {
+                  recoveryOperationId: string
+                  draftId: string
+                  url: string
+                  platformAccountId: string
+                  normalizedTitle: string
+                  saveState: 'saved'
+                }
+              | undefined
+            if (recoveredDraft && recovery) {
+              for (
+                let verificationAttempt = 1;
+                verificationAttempt <= 3;
+                verificationAttempt += 1
+              ) {
+                const sampledView = currentViewIdentity
+                const sampledPage = currentPageBinding
+                const page = playwrightBridge.getPageById(tabId)
+                if (!page || page.isClosed()) {
+                  throw new Error('BrowserTask 创建后恢复草稿页面不可用')
+                }
+                const refreshedDraft = await this.draftRecoveryCoordinator.verifyExactDraftPage({
+                  page,
+                  expectedDraftId: recoveredDraft.draftId,
+                  expectedPlatformAccountId: recoveredDraft.platformAccountId,
+                  expectedTitle: recoveredDraft.normalizedTitle,
+                })
+                const verifiedView = browserManager.getViewRuntimeIdentity(tabId)
+                const verifiedPage = playwrightBridge.getPageBindingIdentity(tabId)
+                if (!verifiedView || !verifiedPage) {
+                  throw new Error('恢复草稿核验后 Page Runtime 不可用')
+                }
+                if (
+                  sampledView.browserViewRuntimeGeneration ===
+                    verifiedView.browserViewRuntimeGeneration &&
+                  sampledView.webContentsId === verifiedView.webContentsId &&
+                  sampledPage.connectionGeneration === verifiedPage.connectionGeneration &&
+                  sampledPage.generation === verifiedPage.generation &&
+                  verifiedPage.webContentsId === verifiedView.webContentsId
+                ) {
+                  currentViewIdentity = verifiedView
+                  currentPageBinding = verifiedPage
+                  launchRecoveryVerification = {
+                    recoveryOperationId: recovery.operationId,
+                    draftId: refreshedDraft.draftId,
+                    url: refreshedDraft.url,
+                    platformAccountId: refreshedDraft.platformAccountId,
+                    normalizedTitle: refreshedDraft.normalizedTitle,
+                    saveState: 'saved',
+                  }
+                  break
+                }
+                currentViewIdentity = verifiedView
+                currentPageBinding = verifiedPage
               }
-              const refreshedDraft = await this.draftRecoveryCoordinator.verifyExactDraftPage({
-                page,
-                expectedDraftId: recoveredDraft.draftId,
-                expectedPlatformAccountId: recoveredDraft.platformAccountId,
-                expectedTitle: recoveredDraft.normalizedTitle,
-              })
-              const refreshedPermit = await this.webAffairService.verifyArticlePublishingRecovery(
-                {
-                  affairId: input.affair.id,
-                  attemptId: attempt.id,
-                  executionGeneration: attempt.executionGeneration,
-                  launchOperationId: attempt.launchOperationId,
-                  recoveryOperationId: recovery.operationId,
-                  draftId: refreshedDraft.draftId,
-                  url: refreshedDraft.url,
-                  platformAccountId: refreshedDraft.platformAccountId,
-                  normalizedTitle: refreshedDraft.normalizedTitle,
-                  saveState: 'saved',
-                  tabId,
-                  browserViewRuntimeGeneration: currentViewIdentity.browserViewRuntimeGeneration,
-                  webContentsId: currentViewIdentity.webContentsId,
-                  playwrightConnectionGeneration: currentPageBinding.connectionGeneration,
-                  playwrightPageBindingGeneration: currentPageBinding.generation,
-                },
-                input.workspaceId,
-              )
-              if (!refreshedPermit.success) throw new Error(refreshedPermit.error.message)
+              if (!launchRecoveryVerification) {
+                throw new Error('恢复草稿核验期间 Page Runtime 连续改代，已停止启动 Agent')
+              }
             }
             const correlationPatch = {
               accountId: attempt.accountId,
@@ -507,43 +538,54 @@ export class ArticlePublishingService {
               boundAt,
               lastObservedAt: boundAt,
             }
-            const boundResult = await this.webAffairService.bindArticlePublishingRuntime(
-              input.affair.id,
-              attempt.id,
-              attempt.executionGeneration,
-              attempt.launchOperationId,
-              [
-                {
-                  ...common,
-                  id: randomUUID(),
-                  kind: 'agent-run',
-                  conversationId,
-                  agentRunId: prepared.runId,
-                  agentRuntimeEpoch: terminalIdentity.agentRuntimeEpoch,
-                  agentRuntimeBindingKey: terminalIdentity.agentRuntimeBindingKey,
-                },
-                {
-                  ...common,
-                  id: randomUUID(),
-                  kind: 'browser-tab',
-                  tabId,
-                  browserViewRuntimeGeneration: currentViewIdentity.browserViewRuntimeGeneration,
-                  webContentsId: currentViewIdentity.webContentsId,
-                },
-                {
-                  ...common,
-                  id: randomUUID(),
-                  kind: 'browser-task',
-                  browserTaskRunId: browserTask.id,
-                  tabId,
-                  browserViewRuntimeGeneration: currentViewIdentity.browserViewRuntimeGeneration,
-                  webContentsId: currentViewIdentity.webContentsId,
-                  playwrightConnectionGeneration: currentPageBinding.connectionGeneration,
-                  playwrightPageBindingGeneration: currentPageBinding.generation,
-                },
-              ],
-              input.workspaceId,
-            )
+            const runtimeBindings: WebAffairRuntimeBinding[] = [
+              {
+                ...common,
+                id: randomUUID(),
+                kind: 'agent-run',
+                conversationId,
+                agentRunId: prepared.runId,
+                agentRuntimeEpoch: terminalIdentity.agentRuntimeEpoch,
+                agentRuntimeBindingKey: terminalIdentity.agentRuntimeBindingKey,
+              },
+              {
+                ...common,
+                id: randomUUID(),
+                kind: 'browser-tab',
+                tabId,
+                browserViewRuntimeGeneration: currentViewIdentity.browserViewRuntimeGeneration,
+                webContentsId: currentViewIdentity.webContentsId,
+              },
+              {
+                ...common,
+                id: randomUUID(),
+                kind: 'browser-task',
+                browserTaskRunId: browserTask.id,
+                tabId,
+                browserViewRuntimeGeneration: currentViewIdentity.browserViewRuntimeGeneration,
+                webContentsId: currentViewIdentity.webContentsId,
+                playwrightConnectionGeneration: currentPageBinding.connectionGeneration,
+                playwrightPageBindingGeneration: currentPageBinding.generation,
+              },
+            ]
+            const boundResult = launchRecoveryVerification
+              ? await this.webAffairService.bindArticlePublishingRuntime(
+                  input.affair.id,
+                  attempt.id,
+                  attempt.executionGeneration,
+                  attempt.launchOperationId,
+                  runtimeBindings,
+                  input.workspaceId,
+                  launchRecoveryVerification,
+                )
+              : await this.webAffairService.bindArticlePublishingRuntime(
+                  input.affair.id,
+                  attempt.id,
+                  attempt.executionGeneration,
+                  attempt.launchOperationId,
+                  runtimeBindings,
+                  input.workspaceId,
+                )
             if (!boundResult.success) throw new Error(boundResult.error.message)
             boundAffair = boundResult.data
             bound = true
@@ -703,9 +745,7 @@ export class ArticlePublishingService {
     this.watchdogTimer.unref?.()
   }
 
-  private scheduleBrowserRuntimeRebind(
-    identity: BrowserPageRuntimeBindingIdentity,
-  ): Promise<void> {
+  private scheduleBrowserRuntimeRebind(identity: BrowserPageRuntimeBindingIdentity): Promise<void> {
     const latest = this.latestPageRuntimeIdentities.get(identity.tabId)
     if (
       !latest ||
@@ -781,7 +821,11 @@ export class ArticlePublishingService {
             expected: identity.browserViewRuntimeGeneration,
             actual: runtime.browserViewRuntimeGeneration,
           },
-          { field: 'webContentsId', expected: identity.webContentsId, actual: runtime.webContentsId },
+          {
+            field: 'webContentsId',
+            expected: identity.webContentsId,
+            actual: runtime.webContentsId,
+          },
           {
             field: 'playwrightConnectionGeneration',
             expected: identity.playwrightConnectionGeneration,
@@ -1047,7 +1091,7 @@ export class ArticlePublishingService {
           ownerHealthy && !progressExpired
             ? '用户主动核验已确认当前 Agent、BrowserTask、Tab 与 CDP 绑定健康'
             : ownerHealthy
-              ? '用户主动核验确认 Runtime 长期没有可验证进度，已转为人工处理'
+              ? '用户主动核验确认 Runtime 长期没有可验证进度，已安全中断；可从当前步骤重试'
               : '用户主动核验确认当前运行绑定失主，任务已安全中断',
         observedAt: now,
       })
@@ -1085,7 +1129,7 @@ export class ArticlePublishingService {
       observedStatus: ownerHealthy ? 'owner-alive-no-progress' : 'owner-lost',
       reasonCode: ownerHealthy ? 'NO_VERIFIABLE_PROGRESS' : 'RUNTIME_ORPHAN_CONFIRMED',
       reason: ownerHealthy
-        ? 'Runtime 仍响应但持续没有可验证进度，已转为人工处理'
+        ? 'Runtime 仍响应但持续没有可验证进度，已安全中断；可从当前步骤重试'
         : '主进程已确认当前运行绑定失主，任务已安全中断',
       observedAt: now,
     })

@@ -616,6 +616,7 @@ export class WebAffairService {
     launchOperationId: string,
     bindings: WebAffairRuntimeBinding[],
     workspaceId: string,
+    recoveryVerification?: ArticlePublishingRecoveryVerification,
   ) {
     return this.enqueueScoped(affairId, workspaceId, () =>
       this.bindArticlePublishingRuntimeNow(
@@ -624,6 +625,7 @@ export class WebAffairService {
         executionGeneration,
         launchOperationId,
         bindings,
+        recoveryVerification,
       ),
     )
   }
@@ -748,9 +750,10 @@ export class WebAffairService {
       playwrightPageBindingGeneration: number
     },
     workspaceId: string,
+    options: { issueWritePermit?: boolean } = {},
   ) {
     return this.enqueueScoped(input.affairId, workspaceId, () =>
-      this.verifyArticlePublishingRecoveryNow(input),
+      this.verifyArticlePublishingRecoveryNow(input, options.issueWritePermit ?? true),
     )
   }
 
@@ -3366,13 +3369,13 @@ export class WebAffairService {
     const runtimeOperation =
       !publishing.executionProtocol.current && recoveryIsCurrent
         ? this.createArticlePublishingOperation(
-          'runtime.prepare-first-inspect',
-          'open-editor',
-          'studio',
-          found.attempt,
-          now,
-          '发布 Attempt 已准备，正在建立可见页面 Runtime',
-          '绑定 BrowserTask、Agent Run 和当前 Page 后开放第一次只读检查',
+            'runtime.prepare-first-inspect',
+            'open-editor',
+            'studio',
+            found.attempt,
+            now,
+            '发布 Attempt 已准备，正在建立可见页面 Runtime',
+            '绑定 BrowserTask、Agent Run 和当前 Page 后开放第一次只读检查',
           )
         : null
     const executionProtocol = runtimeOperation
@@ -3461,6 +3464,7 @@ export class WebAffairService {
     executionGeneration: number,
     launchOperationId: string,
     bindings: WebAffairRuntimeBinding[],
+    recoveryVerification?: ArticlePublishingRecoveryVerification,
   ): Promise<WebAffairOperationResult<WebAffair>> {
     const found = this.findAttempt(affairId, attemptId)
     const publishing = found?.affair.articlePublishing
@@ -3506,7 +3510,52 @@ export class WebAffairService {
     if (!agent || !browserTask || !browserTab) {
       return this.invalid('文章发布必须同时绑定 Agent Run、BrowserTask 和 Browser Tab')
     }
+    const now = this.timestamp()
     const recovery = publishing.draft?.recovery
+    let publishingForBind = publishing
+    if (recovery?.executionGeneration === executionGeneration && recoveryVerification) {
+      const parsed = parseCsdnDraftAnchor(recoveryVerification.url)
+      if (
+        recoveryVerification.recoveryOperationId !== recovery.operationId ||
+        recoveryVerification.draftId !== recovery.expectedDraftId ||
+        recoveryVerification.draftId !== publishing.draft?.platformDraftId ||
+        recoveryVerification.platformAccountId !== publishing.draft?.platformAccountId ||
+        recoveryVerification.normalizedTitle !== recovery.expectedTitle ||
+        recoveryVerification.saveState !== 'saved' ||
+        !parsed ||
+        parsed.draftId !== recoveryVerification.draftId
+      ) {
+        return this.transitionError('Runtime 提交缺少当前页面上的原草稿核验证据')
+      }
+      publishingForBind = {
+        ...publishing,
+        draft: {
+          ...publishing.draft,
+          url: parsed.url,
+          normalizedTitle: recoveryVerification.normalizedTitle,
+          lastVerifiedAt: now,
+          recovery: {
+            ...recovery,
+            status: 'verified',
+            verifiedAt: now,
+            platformAccountId: recoveryVerification.platformAccountId,
+            failureReason: undefined,
+            writePermit: {
+              id: randomUUID(),
+              recoveryOperationId: recovery.operationId,
+              executionGeneration,
+              draftId: recoveryVerification.draftId,
+              tabId: browserTask.tabId,
+              browserViewRuntimeGeneration: browserTask.browserViewRuntimeGeneration,
+              webContentsId: browserTask.webContentsId,
+              playwrightConnectionGeneration: browserTask.playwrightConnectionGeneration,
+              playwrightPageBindingGeneration: browserTask.playwrightPageBindingGeneration,
+              issuedAt: now,
+            },
+          },
+        },
+      }
+    }
     if (recovery?.executionGeneration === executionGeneration) {
       if (
         publishing.assets.some((asset) =>
@@ -3521,13 +3570,14 @@ export class WebAffairService {
       ) {
         return this.transitionError('旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime')
       }
-      const permit = recovery.writePermit
+      const effectiveRecovery = publishingForBind.draft?.recovery
+      const permit = effectiveRecovery?.writePermit
       if (
-        recovery.status !== 'verified' ||
+        effectiveRecovery?.status !== 'verified' ||
         !permit ||
-        permit.recoveryOperationId !== recovery.operationId ||
+        permit.recoveryOperationId !== effectiveRecovery.operationId ||
         permit.executionGeneration !== executionGeneration ||
-        permit.draftId !== publishing.draft?.platformDraftId ||
+        permit.draftId !== publishingForBind.draft?.platformDraftId ||
         permit.tabId !== browserTask.tabId ||
         permit.browserViewRuntimeGeneration !== browserTask.browserViewRuntimeGeneration ||
         permit.webContentsId !== browserTask.webContentsId ||
@@ -3537,7 +3587,6 @@ export class WebAffairService {
         return this.transitionError('草稿恢复尚未签发当前页面写入许可，拒绝绑定 Agent Runtime')
       }
     }
-    const now = this.timestamp()
     const activeBindings = bindings.map((binding) => ({
       ...binding,
       status: 'active' as const,
@@ -3564,13 +3613,13 @@ export class WebAffairService {
       agentRunId: agent.agentRunId,
       browserTaskRunId: browserTask.browserTaskRunId,
     }
-    const runtimeOperation = publishing.executionProtocol.current
+    const runtimeOperation = publishingForBind.executionProtocol.current
     const firstInspectOperation =
       runtimeOperation?.definitionId === 'runtime.prepare-first-inspect' &&
-      ['open-editor', 'verify-account'].includes(publishing.execution.currentStepId ?? '')
+      ['open-editor', 'verify-account'].includes(publishingForBind.execution.currentStepId ?? '')
         ? this.createArticlePublishingOperation(
             'page.first-inspect',
-            publishing.execution.currentStepId!,
+            publishingForBind.execution.currentStepId!,
             'agent',
             nextAttempt,
             now,
@@ -3580,8 +3629,21 @@ export class WebAffairService {
             runtimeSnapshot,
           )
         : undefined
-    let executionProtocol = publishing.executionProtocol
+    let executionProtocol = publishingForBind.executionProtocol
     if (runtimeOperation?.definitionId === 'runtime.prepare-first-inspect') {
+      if (recoveryVerification) {
+        executionProtocol = this.appendArticlePublishingTransition(
+          { ...publishingForBind, executionProtocol },
+          {
+            operationRunId: runtimeOperation.operationRunId,
+            kind: 'draft-reverified',
+            occurredAt: now,
+            summary: `BrowserTask 创建后已在最终 Page 重新核验原草稿 ${recoveryVerification.draftId}`,
+            previousRuntime: runtimeOperation.runtime,
+            currentRuntime: runtimeSnapshot,
+          },
+        )
+      }
       for (const transition of [
         {
           kind: 'lease-transferred' as const,
@@ -3594,7 +3656,7 @@ export class WebAffairService {
         { kind: 'runtime-ready' as const, summary: '第一次页面检查 Runtime 已就绪' },
       ]) {
         executionProtocol = this.appendArticlePublishingTransition(
-          { ...publishing, executionProtocol },
+          { ...publishingForBind, executionProtocol },
           {
             operationRunId: runtimeOperation.operationRunId,
             kind: transition.kind,
@@ -3612,10 +3674,10 @@ export class WebAffairService {
         attempt.id === attemptId ? nextAttempt : attempt,
       ),
       articlePublishing: {
-        ...publishing,
+        ...publishingForBind,
         executionProtocol: { ...executionProtocol, current: firstInspectOperation },
         execution: {
-          ...publishing.execution,
+          ...publishingForBind.execution,
           lastAgentRunId: agent.agentRunId,
           lastBrowserTaskRunId: browserTask.browserTaskRunId,
         },
@@ -3784,7 +3846,51 @@ export class WebAffairService {
       ...(found.attempt.agentRunId ? { agentRunId: found.attempt.agentRunId } : {}),
       browserTaskRunId: input.browserTaskRunId,
     }
-    const executionProtocol = currentOperation
+    const recovery = publishing.draft?.recovery
+    let nextDraft = publishing.draft
+    if (recovery?.executionGeneration === input.executionGeneration) {
+      const evidence = input.recoveryVerification
+      const parsed = evidence ? parseCsdnDraftAnchor(evidence.url) : null
+      if (
+        !evidence ||
+        evidence.recoveryOperationId !== recovery.operationId ||
+        evidence.draftId !== recovery.expectedDraftId ||
+        evidence.draftId !== publishing.draft?.platformDraftId ||
+        evidence.platformAccountId !== publishing.draft?.platformAccountId ||
+        evidence.normalizedTitle !== recovery.expectedTitle ||
+        evidence.saveState !== 'saved' ||
+        !parsed ||
+        parsed.draftId !== evidence.draftId
+      ) {
+        return this.transitionError('Page Runtime 重绑定缺少当前页面上的原草稿核验证据')
+      }
+      nextDraft = {
+        ...publishing.draft,
+        url: parsed.url,
+        normalizedTitle: evidence.normalizedTitle,
+        lastVerifiedAt: now,
+        recovery: {
+          ...recovery,
+          status: 'verified',
+          verifiedAt: now,
+          platformAccountId: evidence.platformAccountId,
+          failureReason: undefined,
+          writePermit: {
+            id: randomUUID(),
+            recoveryOperationId: recovery.operationId,
+            executionGeneration: input.executionGeneration,
+            draftId: evidence.draftId,
+            tabId: input.tabId,
+            browserViewRuntimeGeneration: input.browserViewRuntimeGeneration,
+            webContentsId: input.webContentsId,
+            playwrightConnectionGeneration: input.playwrightConnectionGeneration,
+            playwrightPageBindingGeneration: input.playwrightPageBindingGeneration,
+            issuedAt: now,
+          },
+        },
+      }
+    }
+    let executionProtocol = currentOperation
       ? this.appendArticlePublishingTransition(publishing, {
           operationRunId: currentOperation.operationRunId,
           kind: 'page-identity-changed',
@@ -3794,6 +3900,30 @@ export class WebAffairService {
           currentRuntime: nextRuntime,
         })
       : publishing.executionProtocol
+    if (currentOperation && recovery?.executionGeneration === input.executionGeneration) {
+      executionProtocol = this.appendArticlePublishingTransition(
+        { ...publishing, executionProtocol },
+        {
+          operationRunId: currentOperation.operationRunId,
+          kind: 'draft-reverified',
+          occurredAt: now,
+          summary: `已在新 Page Runtime 重新核验原草稿 ${recovery.expectedDraftId}`,
+          previousRuntime: currentOperation.runtime,
+          currentRuntime: nextRuntime,
+        },
+      )
+      executionProtocol = this.appendArticlePublishingTransition(
+        { ...publishing, executionProtocol },
+        {
+          operationRunId: currentOperation.operationRunId,
+          kind: 'runtime-ready',
+          occurredAt: now,
+          summary: '新 Page Runtime 已完成原草稿核验并重新开放只读检查',
+          previousRuntime: currentOperation.runtime,
+          currentRuntime: nextRuntime,
+        },
+      )
+    }
     const nextAffair: WebAffair = {
       ...found.affair,
       attempts: found.affair.attempts.map((attempt) =>
@@ -3801,32 +3931,24 @@ export class WebAffairService {
       ),
       articlePublishing: {
         ...publishing,
+        draft: nextDraft,
         executionProtocol: {
           ...executionProtocol,
           ...(currentOperation
             ? {
                 current: {
                   ...currentOperation,
-                  status: 'verifying' as const,
+                  status:
+                    currentOperation.definitionId === 'page.first-inspect'
+                      ? ('ready' as const)
+                      : ('running' as const),
                   lastTransitionAt: now,
                   runtime: nextRuntime,
+                  failure: undefined,
                 },
               }
             : {}),
         },
-        ...(publishing.draft?.recovery?.writePermit
-          ? {
-              draft: {
-                ...publishing.draft,
-                recovery: {
-                  ...publishing.draft.recovery,
-                  status: 'locating' as const,
-                  failureReason: undefined,
-                  writePermit: undefined,
-                },
-              },
-            }
-          : {}),
       },
       updatedAt: now,
     }
@@ -3916,13 +4038,13 @@ export class WebAffairService {
           ? input.observedStatus === 'healthy'
             ? 'running'
             : input.observedStatus === 'owner-alive-no-progress'
-              ? 'waiting-human'
+              ? 'interrupted'
               : input.observedStatus === 'owner-lost'
                 ? 'interrupted'
                 : 'checking-runtime'
           : input.source === 'lease-expired' && found.attempt.status === 'checking-runtime'
             ? input.observedStatus === 'owner-alive-no-progress'
-              ? 'waiting-human'
+              ? 'interrupted'
               : 'interrupted'
             : ['startup', 'shutdown', 'launch-timeout'].includes(input.source)
               ? 'interrupted'
@@ -4387,19 +4509,22 @@ export class WebAffairService {
     }
   }
 
-  private async transitionArticlePublishingFirstInspectNow(input: {
-    workspaceId: string
-    affairId: string
-    attemptId: string
-    executionGeneration: number
-    launchOperationId: string
-    runtime: ArticlePublishingRuntimeSnapshot
-    pageKind?: string
-    platformAccountId?: string
-    draftId?: string
-    normalizedTitle?: string
-    saveState?: 'saved' | 'saving' | 'unknown'
-  }, completed: boolean): Promise<WebAffairOperationResult<WebAffair>> {
+  private async transitionArticlePublishingFirstInspectNow(
+    input: {
+      workspaceId: string
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      launchOperationId: string
+      runtime: ArticlePublishingRuntimeSnapshot
+      pageKind?: string
+      platformAccountId?: string
+      draftId?: string
+      normalizedTitle?: string
+      saveState?: 'saved' | 'saving' | 'unknown'
+    },
+    completed: boolean,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
     const found = this.findAttempt(input.affairId, input.attemptId)
     const publishing = found?.affair.articlePublishing
     if (!found || !publishing || found.affair.kind !== 'article-publishing') {
@@ -4424,7 +4549,10 @@ export class WebAffairService {
     ) {
       return this.transitionError('首次页面检查 operation 已过期')
     }
-    if (current.runtime && !this.articlePublishingRuntimeSnapshotsEqual(current.runtime, input.runtime)) {
+    if (
+      current.runtime &&
+      !this.articlePublishingRuntimeSnapshotsEqual(current.runtime, input.runtime)
+    ) {
       return this.transitionError('首次页面检查使用的 Page Runtime 已经改代')
     }
     if (!completed && !['ready', 'running'].includes(current.status)) {
@@ -4579,10 +4707,23 @@ export class WebAffairService {
       failure: input.failure,
       ...(current.runtime ? { currentRuntime: current.runtime } : {}),
     })
-    return this.persistAffair({
+    const failedAffair: WebAffair = {
       ...found.affair,
       articlePublishing: {
         ...publishing,
+        ...(publishing.draft?.recovery?.executionGeneration === input.executionGeneration
+          ? {
+              draft: {
+                ...publishing.draft,
+                recovery: {
+                  ...publishing.draft.recovery,
+                  status: 'locating' as const,
+                  failureReason: input.failure.message,
+                  writePermit: undefined,
+                },
+              },
+            }
+          : {}),
         executionProtocol: {
           ...protocol,
           current: {
@@ -4594,7 +4735,16 @@ export class WebAffairService {
         },
       },
       updatedAt: now,
-    })
+    }
+    return this.persistAffair(
+      this.reduceArticlePublishingLifecycle(
+        failedAffair,
+        found.attempt,
+        'interrupted',
+        now,
+        input.failure.message,
+      ),
+    )
   }
 
   private beginArticlePublishingRecovery(
@@ -4625,23 +4775,26 @@ export class WebAffairService {
     }
   }
 
-  private async verifyArticlePublishingRecoveryNow(input: {
-    affairId: string
-    attemptId: string
-    executionGeneration: number
-    launchOperationId: string
-    recoveryOperationId: string
-    draftId: string
-    url: string
-    platformAccountId: string
-    normalizedTitle: string
-    saveState: 'saved'
-    tabId: string
-    browserViewRuntimeGeneration: number
-    webContentsId: number
-    playwrightConnectionGeneration: number
-    playwrightPageBindingGeneration: number
-  }): Promise<WebAffairOperationResult<WebAffair>> {
+  private async verifyArticlePublishingRecoveryNow(
+    input: {
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      launchOperationId: string
+      recoveryOperationId: string
+      draftId: string
+      url: string
+      platformAccountId: string
+      normalizedTitle: string
+      saveState: 'saved'
+      tabId: string
+      browserViewRuntimeGeneration: number
+      webContentsId: number
+      playwrightConnectionGeneration: number
+      playwrightPageBindingGeneration: number
+    },
+    issueWritePermit: boolean,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
     const found = this.findAttempt(input.affairId, input.attemptId)
     const publishing = found?.affair.articlePublishing
     const recovery = publishing?.draft?.recovery
@@ -4772,7 +4925,7 @@ export class WebAffairService {
             status: 'verified',
             verifiedAt: now,
             platformAccountId: input.platformAccountId,
-            writePermit,
+            writePermit: issueWritePermit ? writePermit : undefined,
           },
         },
       },
@@ -4780,7 +4933,9 @@ export class WebAffairService {
         found.affair,
         this.event(
           'node-status-changed',
-          `已从当前账号草稿列表恢复原草稿 ${input.draftId}，写入许可已绑定当前页面 Runtime`,
+          issueWritePermit
+            ? `已从当前账号草稿列表恢复原草稿 ${input.draftId}，写入许可已绑定当前页面 Runtime`
+            : `已从当前账号草稿列表核验原草稿 ${input.draftId}，尚未开放网页写入`,
           now,
           { nodeId: found.attempt.nodeId, attemptId: found.attempt.id },
         ),

@@ -16,8 +16,20 @@ function createPolicy(options?: {
   imageEnumerationComplete?: boolean
   images?: Array<{ src: string; alt: string }>
   publishedLinks?: Array<{ url: string; title: string }>
+  awaitRuntimeConvergence?: (attemptId: string) => Promise<void>
 }) {
   let inspectionPage: Record<string, unknown> | null = null
+  const activeTask = structuredClone(task) as unknown as {
+    id: string
+    tabId: string
+    status: string
+    correlation: Record<string, unknown> & { playwrightPageBindingGeneration: number }
+  }
+  let currentPageBinding = {
+    webContentsId: 20,
+    connectionGeneration: 3,
+    generation: 4,
+  }
   const reserveArticlePublishingSideEffect = vi.fn().mockResolvedValue({
     success: true,
     data: {},
@@ -27,6 +39,18 @@ function createPolicy(options?: {
     success: true,
     data: {},
   })
+  const activeBrowserBinding = {
+    kind: 'browser-task',
+    status: 'active',
+    browserTaskRunId: 'task-a',
+    executionGeneration: 1,
+    launchOperationId: 'launch-a',
+    tabId: 'tab-a',
+    browserViewRuntimeGeneration: 2,
+    webContentsId: 20,
+    playwrightConnectionGeneration: 3,
+    playwrightPageBindingGeneration: 4,
+  }
   const webAffairService = {
     getProjectSnapshot: vi.fn().mockReturnValue({
       success: true,
@@ -43,20 +67,7 @@ function createPolicy(options?: {
                 executionGeneration: 1,
                 launchOperationId: 'launch-a',
                 browserTaskRunId: 'task-a',
-                runtimeBindings: [
-                  {
-                    kind: 'browser-task',
-                    status: 'active',
-                    browserTaskRunId: 'task-a',
-                    executionGeneration: 1,
-                    launchOperationId: 'launch-a',
-                    tabId: 'tab-a',
-                    browserViewRuntimeGeneration: 2,
-                    webContentsId: 20,
-                    playwrightConnectionGeneration: 3,
-                    playwrightPageBindingGeneration: 4,
-                  },
-                ],
+                runtimeBindings: [activeBrowserBinding],
               },
             ],
             articlePublishing: {
@@ -100,16 +111,31 @@ function createPolicy(options?: {
     reserveArticlePublishingSideEffect,
     recordArticlePublishingDraftAnchor,
     handoffAttempt,
+    startArticlePublishingFirstInspect: vi.fn().mockResolvedValue({ success: true, data: {} }),
+    completeArticlePublishingFirstInspect: vi.fn().mockResolvedValue({ success: true, data: {} }),
+    failArticlePublishingCurrentOperation: vi.fn().mockResolvedValue({ success: true, data: {} }),
   }
   const policy = new ArticlePublishingBrowserPolicy(
     webAffairService as never,
     async () => 'workspace-a',
-    { getPageById: () => inspectionPage } as never,
-    { getActiveTaskForConversation: () => task } as never,
+    {
+      getPageById: () => inspectionPage,
+      getPageBindingIdentity: () => currentPageBinding,
+    } as never,
+    { getActiveTaskForConversation: () => activeTask, getTask: () => activeTask } as never,
+    options?.awaitRuntimeConvergence,
   )
   return {
     policy,
     webAffairService,
+    advancePageBinding: () => {
+      currentPageBinding = { ...currentPageBinding, generation: 5 }
+      activeTask.correlation.playwrightPageBindingGeneration = 5
+    },
+    convergeStoredBinding: () => {
+      activeBrowserBinding.playwrightPageBindingGeneration =
+        activeTask.correlation.playwrightPageBindingGeneration
+    },
     inspect: async (
       selectors: Record<string, string>,
       url = DRAFT_URL,
@@ -186,6 +212,19 @@ const context = {
 }
 
 describe('ArticlePublishingBrowserPolicy', () => {
+  it('waits for an in-flight same-page rebind before failing the first inspect', async () => {
+    let convergeStoredBinding = (): void => undefined
+    const awaitRuntimeConvergence = vi.fn(async () => convergeStoredBinding())
+    const harness = createPolicy({ awaitRuntimeConvergence })
+    convergeStoredBinding = harness.convergeStoredBinding
+    harness.advancePageBinding()
+
+    await harness.inspect({ title: '#title' })
+
+    expect(awaitRuntimeConvergence).toHaveBeenCalledWith('attempt-a')
+    expect(harness.webAffairService.failArticlePublishingCurrentOperation).not.toHaveBeenCalled()
+  })
+
   it('returns the bounded multi-origin CSDN execution scope', async () => {
     const { policy } = createPolicy()
 
@@ -290,6 +329,24 @@ describe('ArticlePublishingBrowserPolicy', () => {
     ).toMatchObject({
       success: false,
       error: { message: expect.stringContaining('不能证明') },
+    })
+  })
+
+  it('invalidates trusted evidence when the exact Page binding changes at the same URL', async () => {
+    const { policy, inspect, advancePageBinding } = createPolicy({ stepId: 'verify-account' })
+    await inspect({})
+    advancePageBinding()
+
+    expect(
+      policy.authorizeTrustedReport(
+        'article_publishing_report_checkpoint',
+        { stepId: 'verify-account', status: 'completed' },
+        context,
+        reporter(),
+      ),
+    ).toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('过期') },
     })
   })
 

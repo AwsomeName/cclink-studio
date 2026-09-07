@@ -1,6 +1,6 @@
 # 文章发布中断恢复测试清单
 
-状态：历史恢复门禁；需由逐步 operation 测试补齐
+状态：P0 operation 自动门禁已补齐；真实 Electron/CSDN 门禁待执行
 日期：2026-09-07
 
 本文测试继续作为防倒退基线，但不能证明 Studio/Agent 两个黑盒已经拆开。新增的真实故障顺序和同类
@@ -9,8 +9,8 @@
 
 ## 自动测试
 
-- 新任务使用 schema v7 保存并重载；
-- v1-v6 文章发布任务在加载时删除，通用 WebAffair 保留；
+- 新任务使用 schema v8 保存并重载；
+- v1-v7 文章发布任务在加载时删除，通用 WebAffair 保留；
 - 旧文章任务不会从 `.bak` 或旧 recovery journal 回流；
 - 同账号 recovery lease 只能有一个 owner；
 - 草稿核验成功后 recovery lease 原子转交 BrowserTask；
@@ -22,6 +22,11 @@
 - 发布动作派发后结果未知时只能查文章管理页，不能再次发布；
 - 公开文章 ID 与草稿 ID 不同，但账号和唯一标题一致时可确认发布；
 - 多个同名草稿或公开文章时停止自动选择。
+- 恢复找到原草稿后，BrowserTask 创建导致 Page generation 改代，最终 Page 重新核验成功后才提交 binding 和
+  permit，Agent 第一次 inspect 使用新 generation；
+- `onPageRuntimeBound` 在 active runtime 登记前到达时会被缓存并 await，不会丢失；
+- Agent inspect 与同页 rebind 并发时先等待 rebind queue，不把瞬时不一致误判成人工问题；
+- 内部 Runtime 重绑失败会撤销 permit 并进入 interrupted，不进入 waiting-human。
 
 ## 真实 CSDN 验收矩阵
 

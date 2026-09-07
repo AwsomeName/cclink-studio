@@ -187,7 +187,7 @@ describe('article publishing persistent state', () => {
     if (!after.success) return
     expect(after.data.affairs).toEqual([])
     const rewritten = JSON.parse(await readFile(persistedPath, 'utf8'))
-    expect(rewritten.schemaVersion).toBe(7)
+    expect(rewritten.schemaVersion).toBe(8)
     expect(rewritten.affairs).toEqual([])
     await reloaded.flush()
   })
@@ -739,15 +739,29 @@ describe('article publishing persistent state', () => {
       previousPlaywrightPageBindingGeneration: 4,
       playwrightConnectionGeneration: 4,
       playwrightPageBindingGeneration: 5,
+      recoveryVerification: {
+        recoveryOperationId: recovery.operationId,
+        draftId: '164148817',
+        url: draftUrl,
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        saveState: 'saved',
+      },
     })
     expect(rebound).toMatchObject({
       success: true,
       data: {
-        articlePublishing: { draft: { recovery: { status: 'locating' } } },
+        articlePublishing: {
+          draft: {
+            recovery: {
+              status: 'verified',
+              writePermit: { playwrightPageBindingGeneration: 5 },
+            },
+          },
+        },
       },
     })
     if (!rebound.success) return
-    expect(rebound.data.articlePublishing?.draft?.recovery?.writePermit).toBeUndefined()
     expect(
       rebound.data.attempts[0].runtimeBindings.filter((binding) => binding.status === 'active'),
     ).toEqual(
@@ -766,29 +780,7 @@ describe('article publishing persistent state', () => {
         }),
       ]),
     )
-    const reverified = await created.service.verifyArticlePublishingRecovery(
-      {
-        affairId: created.affairId,
-        attemptId: attempt.id,
-        executionGeneration: attempt.executionGeneration,
-        launchOperationId: attempt.launchOperationId,
-        recoveryOperationId: recovery.operationId,
-        draftId: '164148817',
-        url: draftUrl,
-        platformAccountId: 'csdn:test-user',
-        normalizedTitle: 'Article',
-        saveState: 'saved',
-        tabId: 'recovered-tab',
-        browserViewRuntimeGeneration: 3,
-        webContentsId: 21,
-        playwrightConnectionGeneration: 4,
-        playwrightPageBindingGeneration: 5,
-      },
-      WORKSPACE_ID,
-    )
-    expect(reverified.success).toBe(true)
-    if (!reverified.success) return
-    const permit = reverified.data.articlePublishing?.draft?.recovery?.writePermit
+    const permit = rebound.data.articlePublishing?.draft?.recovery?.writePermit
     if (!permit) throw new Error('恢复许可未持久化')
     const refreshed = await created.service.recordArticlePublishingPageObservation(
       {
@@ -831,6 +823,327 @@ describe('article publishing persistent state', () => {
       WORKSPACE_ID,
     )
     expect(stalePermit).toMatchObject({ success: false })
+  })
+
+  it('atomically exposes recovery operations and lets exact Page inspection own the first checkpoints', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const draftUrl = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
+    const before = created.service.getProjectSnapshot(WORKSPACE_ID)
+    if (!before.success) throw new Error(before.error.message)
+    const firstAttempt = before.data.affairs[0].attempts[0]
+    const anchored = await created.service.recordArticlePublishingDraftAnchor(
+      created.affairId,
+      created.attemptId,
+      firstAttempt.executionGeneration,
+      firstAttempt.launchOperationId,
+      draftUrl,
+      WORKSPACE_ID,
+      '77777777-7777-4777-8777-777777777777',
+    )
+    expect(anchored.success).toBe(true)
+    const observed = await created.service.recordArticlePublishingPageObservation(
+      {
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        executionGeneration: firstAttempt.executionGeneration,
+        browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+        draftId: '164148817',
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        url: draftUrl,
+        saveState: 'saved',
+      },
+      WORKSPACE_ID,
+    )
+    expect(observed.success).toBe(true)
+    const handedOff = await created.service.handoffAttempt(
+      {
+        workspaceRef: { kind: 'local', path: directory },
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        reason: '模拟 Studio 重启前的人工交接',
+      },
+      WORKSPACE_ID,
+    )
+    expect(handedOff.success).toBe(true)
+    const resumed = await created.service.resumeArticlePublishingAfterHandoff(
+      created.affairId,
+      created.attemptId,
+      WORKSPACE_ID,
+    )
+    if (!resumed.success) throw new Error(resumed.error.message)
+    const attempt = resumed.data.attempts[0]
+    const recovery = resumed.data.articlePublishing?.draft?.recovery
+    if (!recovery) throw new Error('恢复状态不存在')
+    expect(resumed.data.articlePublishing?.executionProtocol.current).toMatchObject({
+      definitionId: 'recovery.restore-exact-draft',
+      checkpointId: 'open-editor',
+      owner: 'studio',
+    })
+
+    const observedRecovery = await created.service.verifyArticlePublishingRecovery(
+      {
+        affairId: created.affairId,
+        attemptId: attempt.id,
+        executionGeneration: attempt.executionGeneration,
+        launchOperationId: attempt.launchOperationId,
+        recoveryOperationId: recovery.operationId,
+        draftId: '164148817',
+        url: draftUrl,
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        saveState: 'saved',
+        tabId: 'recovered-tab',
+        browserViewRuntimeGeneration: 31,
+        webContentsId: 310,
+        playwrightConnectionGeneration: 31,
+        playwrightPageBindingGeneration: 31,
+      },
+      WORKSPACE_ID,
+      { issueWritePermit: false },
+    )
+    if (!observedRecovery.success) throw new Error(observedRecovery.error.message)
+    expect(observedRecovery.data.articlePublishing?.draft?.recovery?.writePermit).toBeUndefined()
+    expect(observedRecovery.data.articlePublishing?.executionProtocol.current).toMatchObject({
+      definitionId: 'runtime.prepare-first-inspect',
+      status: 'running',
+    })
+
+    const identity = {
+      tabId: 'recovered-tab',
+      browserTaskRunId: '88888888-8888-4888-8888-888888888888',
+      browserViewRuntimeGeneration: 32,
+      webContentsId: 320,
+      playwrightConnectionGeneration: 32,
+      playwrightPageBindingGeneration: 32,
+    }
+    const bindings = runtimeBindingsFor(attempt, identity)
+    const bound = await created.service.bindArticlePublishingRuntime(
+      created.affairId,
+      attempt.id,
+      attempt.executionGeneration,
+      attempt.launchOperationId,
+      bindings,
+      WORKSPACE_ID,
+      {
+        recoveryOperationId: recovery.operationId,
+        draftId: '164148817',
+        url: draftUrl,
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        saveState: 'saved',
+      },
+    )
+    if (!bound.success) throw new Error(bound.error.message)
+    expect(bound.data.articlePublishing?.draft?.recovery?.writePermit).toMatchObject({
+      browserViewRuntimeGeneration: 32,
+      playwrightPageBindingGeneration: 32,
+    })
+    expect(bound.data.articlePublishing?.executionProtocol.current).toMatchObject({
+      definitionId: 'page.first-inspect',
+      checkpointId: 'open-editor',
+      status: 'ready',
+      runtime: { browserTaskRunId: identity.browserTaskRunId },
+    })
+
+    const reboundIdentity = {
+      ...identity,
+      browserViewRuntimeGeneration: 33,
+      webContentsId: 330,
+      playwrightConnectionGeneration: 33,
+      playwrightPageBindingGeneration: 33,
+    }
+    const rebound = await created.service.rebindArticlePublishingBrowserRuntime({
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      browserTaskRunId: identity.browserTaskRunId,
+      tabId: identity.tabId,
+      previousBrowserViewRuntimeGeneration: identity.browserViewRuntimeGeneration,
+      previousWebContentsId: identity.webContentsId,
+      browserViewRuntimeGeneration: reboundIdentity.browserViewRuntimeGeneration,
+      webContentsId: reboundIdentity.webContentsId,
+      previousPlaywrightConnectionGeneration: identity.playwrightConnectionGeneration,
+      previousPlaywrightPageBindingGeneration: identity.playwrightPageBindingGeneration,
+      playwrightConnectionGeneration: reboundIdentity.playwrightConnectionGeneration,
+      playwrightPageBindingGeneration: reboundIdentity.playwrightPageBindingGeneration,
+      recoveryVerification: {
+        recoveryOperationId: recovery.operationId,
+        draftId: '164148817',
+        url: draftUrl,
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        saveState: 'saved',
+      },
+    })
+    if (!rebound.success) throw new Error(rebound.error.message)
+    expect(rebound.data.articlePublishing?.executionProtocol.current).toMatchObject({
+      definitionId: 'page.first-inspect',
+      status: 'ready',
+      runtime: {
+        webContentsId: 330,
+        playwrightPageBindingGeneration: 33,
+      },
+    })
+
+    const runtime = {
+      ...reboundIdentity,
+      agentRunId: `run-g${attempt.executionGeneration}`,
+    }
+    const startOpenEditor = await created.service.startArticlePublishingFirstInspect({
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      runtime,
+    })
+    expect(startOpenEditor.success).toBe(true)
+    const completeOpenEditor = await created.service.completeArticlePublishingFirstInspect({
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      runtime,
+      pageKind: 'editor',
+      platformAccountId: 'csdn:test-user',
+      draftId: '164148817',
+      normalizedTitle: 'Article',
+      saveState: 'saved',
+    })
+    if (!completeOpenEditor.success) throw new Error(completeOpenEditor.error.message)
+    expect(completeOpenEditor.data.articlePublishing?.checkpoints[0]).toMatchObject({
+      stepId: 'open-editor',
+      status: 'completed',
+    })
+    expect(completeOpenEditor.data.articlePublishing?.executionProtocol.current).toMatchObject({
+      definitionId: 'page.first-inspect',
+      checkpointId: 'verify-account',
+      status: 'ready',
+    })
+
+    await created.service.startArticlePublishingFirstInspect({
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      runtime,
+    })
+    const completeAccount = await created.service.completeArticlePublishingFirstInspect({
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      runtime,
+      pageKind: 'editor',
+      platformAccountId: 'csdn:test-user',
+      draftId: '164148817',
+      normalizedTitle: 'Article',
+      saveState: 'saved',
+    })
+    if (!completeAccount.success) throw new Error(completeAccount.error.message)
+    expect(completeAccount.data.articlePublishing?.checkpoints[1]).toMatchObject({
+      stepId: 'verify-account',
+      status: 'completed',
+    })
+    expect(completeAccount.data.articlePublishing?.execution.currentStepId).toBe('upload-assets')
+    expect(completeAccount.data.articlePublishing?.executionProtocol.current).toBeUndefined()
+    expect(
+      completeAccount.data.articlePublishing?.executionProtocol.recentTransitions.map(
+        (transition) => transition.kind,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        'recovery-started',
+        'draft-restored',
+        'draft-reverified',
+        'lease-transferred',
+        'binding-committed',
+        'runtime-ready',
+        'first-inspect-started',
+        'first-inspect-completed',
+      ]),
+    )
+  })
+
+  it('keeps an internal Runtime operation failure out of the human-handoff state', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const before = created.service.getProjectSnapshot(WORKSPACE_ID)
+    if (!before.success) throw new Error(before.error.message)
+    const firstAttempt = before.data.affairs[0].attempts[0]
+    const draftUrl = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
+    await created.service.recordArticlePublishingDraftAnchor(
+      created.affairId,
+      created.attemptId,
+      firstAttempt.executionGeneration,
+      firstAttempt.launchOperationId,
+      draftUrl,
+      WORKSPACE_ID,
+      '77777777-7777-4777-8777-777777777777',
+    )
+    await created.service.recordArticlePublishingPageObservation(
+      {
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        executionGeneration: firstAttempt.executionGeneration,
+        browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+        draftId: '164148817',
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        url: draftUrl,
+        saveState: 'saved',
+      },
+      WORKSPACE_ID,
+    )
+    await created.service.handoffAttempt(
+      {
+        workspaceRef: { kind: 'local', path: directory },
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        reason: '模拟 Studio 重启前的人工交接',
+      },
+      WORKSPACE_ID,
+    )
+    const resumed = await created.service.resumeArticlePublishingAfterHandoff(
+      created.affairId,
+      created.attemptId,
+      WORKSPACE_ID,
+    )
+    if (!resumed.success) throw new Error(resumed.error.message)
+    const attempt = resumed.data.attempts[0]
+
+    const failed = await created.service.failArticlePublishingCurrentOperation({
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      failure: {
+        category: 'studio-runtime',
+        code: 'studio_runtime.page_rebind_failed',
+        message: 'Page Runtime 重绑定失败',
+      },
+    })
+    if (!failed.success) throw new Error(failed.error.message)
+    expect(failed.data.articlePublishing?.execution.status).toBe('interrupted')
+    expect(failed.data.attempts[0]).toMatchObject({
+      status: 'interrupted',
+      failureMessage: 'Page Runtime 重绑定失败',
+    })
+    expect(failed.data.articlePublishing?.executionProtocol.current).toMatchObject({
+      status: 'failed',
+      failure: { category: 'studio-runtime', code: 'studio_runtime.page_rebind_failed' },
+    })
+    expect(failed.data.articlePublishing?.draft?.recovery).toMatchObject({
+      status: 'locating',
+      failureReason: 'Page Runtime 重绑定失败',
+    })
+    expect(failed.data.articlePublishing?.draft?.recovery?.writePermit).toBeUndefined()
   })
 
   it('keeps the same Attempt retryable when Agent launch fails', async () => {
@@ -1191,9 +1504,9 @@ describe('article publishing persistent state', () => {
       launchOperationId: attempt.launchOperationId,
       source: 'user-check',
       observedAt: now,
-      observedStatus: 'owner-lost',
-      reasonCode: 'OWNER_LOST',
-      reason: 'owner missing',
+      observedStatus: 'owner-alive-no-progress',
+      reasonCode: 'OWNER_NO_PROGRESS',
+      reason: 'owner alive but internal runtime made no progress',
     })
     expect(interrupted.success).toBe(true)
     if (!interrupted.success) return
@@ -1692,12 +2005,12 @@ describe('article publishing persistent state', () => {
 
     const recovered = await store.load()
     expect(recovered.revision).toBe(recovery.revision)
-    expect(recovered.affairs[0].title).toBe('Recovered Article')
+    expect(recovered.affairs[0].title).toBe('Article')
     await expect(readFile(store.recoveryPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
 
     const secondLoad = await store.load()
     expect(secondLoad.revision).toBe(recovery.revision)
-    expect(secondLoad.affairs[0].title).toBe('Recovered Article')
+    expect(secondLoad.affairs[0].title).toBe('Article')
   })
 
   it('fails closed instead of ignoring a damaged recovery journal', async () => {
