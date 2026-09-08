@@ -21,7 +21,6 @@ import {
   toMountedSkill,
 } from '../../features/agent-conversations/payload'
 import { createConversationRunController } from '../../features/agent-conversations/conversation-run-controller'
-import { DEFAULT_CONVERSATION_ID } from '../../features/agent-conversations/conversation-state'
 import {
   buildResourceCandidates,
   buildSkillCandidates,
@@ -289,9 +288,9 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
       taskConversationId ?? persistedPublishingBinding?.conversationId ?? publishingConversationId
     if (!conversationId) {
       focusedTabConversationRef.current = null
-      if (activeBrowserTabId && activeConversationId.startsWith('article-publishing-')) {
-        switchConversation(DEFAULT_CONVERSATION_ID)
-      }
+      // No binding is not a request to select the global conversation. During Tab startup the
+      // mapping may still be loading; the workspace fallback below exclusively owns that case.
+      // Selecting agent-default here fights that fallback (it is not in the local workspace).
       return
     }
     const bindingKey = activeTabConversationTask

@@ -705,7 +705,7 @@ describe('BrowserManager popup adoption', () => {
   it('allows bounded native pinch requests before routing them through BrowserManager', async () => {
     const { source } = await createSource()
 
-    expect(source.setVisualZoomLevelLimits).toHaveBeenCalledWith(0.3, 3)
+    expect(source.setVisualZoomLevelLimits).toHaveBeenCalledWith(1, 3)
   })
 
   it('routes native zoom requests back through the manager-owned zoom state', async () => {

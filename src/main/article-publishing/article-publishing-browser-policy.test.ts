@@ -1,4 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
+import { CsdnPublishingAdapter } from './csdn-publishing-adapter'
+vi.mock('./article-body', () => ({ prepareArticleBody: vi.fn(async () => '<p>Article</p>') }))
+vi.spyOn(CsdnPublishingAdapter.prototype, 'verifyBody').mockResolvedValue({
+  matches: true,
+  textMatches: true,
+  textEvidence: '正文一致',
+  expectedImages: 0,
+  actualImages: 0,
+  images: [],
+})
 import {
   ArticlePublishingBrowserPolicy,
   CSDN_ARTICLE_SUPPORTED_ORIGINS,
@@ -9,16 +19,28 @@ const DRAFT_URL = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
 function createPolicy(options?: {
   stepId?: string
   publicationStatus?: string
+  publicationBlocker?: string
+  assetId?: string
+  platformUrl?: string
   assetStatus?: string
   executionStatus?: string
   draftUrl?: string | null
   recovery?: Record<string, unknown>
   imageEnumerationComplete?: boolean
-  images?: Array<{ src: string; alt: string }>
+  images?: Array<{ src: string; alt: string; loaded?: boolean }>
   publishedLinks?: Array<{ url: string; title: string }>
   awaitRuntimeConvergence?: (attemptId: string) => Promise<void>
   duringProbe?: () => void
   beforeComplete?: () => void
+  bodyFrameSelector?: string
+  initialDraftBodyEmpty?: boolean
+  initialDraftBodyText?: string
+  titleValue?: string
+  summary?: string
+  tags?: string[]
+  tagEditor?: { openSelector?: string; inputSelector?: string; pendingValue: string }
+  fieldValues?: Record<string, string>
+  sideEffects?: Array<Record<string, unknown>>
 }) {
   let documentGeneration = 1
   let viewVisible = true
@@ -88,13 +110,20 @@ function createPolicy(options?: {
       adapterVersion: 1,
       accountId: 'account-a',
       source: { markdownPath: '/workspace/article.md', modifiedAt: 1, size: 10 },
-      fields: { title: 'Article', summary: '', tags: [], category: '' },
+      fields: {
+        title: 'Article',
+        summary: options?.summary ?? '',
+        tags: options?.tags ?? [],
+        category: '',
+      },
       assets: [
         {
-          id: 'asset-a',
+          id: options?.assetId ?? 'asset-a',
           kind: 'local',
           sourcePath: '/workspace/a.png',
+          platformUrl: options?.platformUrl,
           displayPath: 'a.png',
+          occurrences: [],
           status: options?.assetStatus ?? 'uploaded',
           uploadAttempts: [],
         },
@@ -110,7 +139,7 @@ function createPolicy(options?: {
         current: currentOperation,
         recentTransitions: [],
       },
-      sideEffects: [],
+      sideEffects: options?.sideEffects ?? [],
       publication: { status: options?.publicationStatus ?? 'not-started' },
       draft:
         options?.draftUrl === null
@@ -125,6 +154,8 @@ function createPolicy(options?: {
     },
   })
   const webAffairService = {
+    recordArticlePublishingImageObservation: vi.fn().mockResolvedValue({ success: true, data: {} }),
+    recordArticlePublishingPlanResults: vi.fn().mockResolvedValue({ success: true, data: {} }),
     getProjectSnapshot: vi.fn(() => ({
       success: true,
       data: {
@@ -133,6 +164,7 @@ function createPolicy(options?: {
     })),
     reserveArticlePublishingSideEffect,
     recordArticlePublishingDraftAnchor,
+    recordArticlePublishingPageObservation: vi.fn().mockResolvedValue({ success: true, data: {} }),
     handoffAttempt,
     startArticlePublishingFirstInspect: vi.fn(async (input: Record<string, unknown>) => {
       const operation = currentOperation
@@ -167,6 +199,8 @@ function createPolicy(options?: {
     ),
     failArticlePublishingCurrentOperation: vi.fn().mockResolvedValue({ success: true, data: {} }),
   }
+  const startActionLog = vi.fn(() => ({ id: 'verified-read' }))
+  const succeedActionLog = vi.fn()
   const policy = new ArticlePublishingBrowserPolicy(
     webAffairService as never,
     async () => 'workspace-a',
@@ -175,6 +209,8 @@ function createPolicy(options?: {
       getPageBindingIdentity: () => currentPageBinding,
     } as never,
     {
+      startActionLog,
+      succeedActionLog,
       getActiveTaskForConversation: () => structuredClone(activeTask),
       getTask: () => structuredClone(activeTask),
     } as never,
@@ -191,6 +227,8 @@ function createPolicy(options?: {
   return {
     policy,
     webAffairService,
+    startActionLog,
+    succeedActionLog,
     advanceDocument: () => {
       documentGeneration += 1
     },
@@ -222,15 +260,21 @@ function createPolicy(options?: {
           return {
             url,
             pageKind,
+            publicationBlocker: options?.publicationBlocker,
             bodySelector: selectors['body'] ?? '#body',
+            bodyFrameSelector: options?.bodyFrameSelector,
             bodyTextLength: 100,
+            initialDraftBodyEmpty: options?.initialDraftBodyEmpty,
+            initialDraftBodyText: options?.initialDraftBodyText,
             accountHrefCandidates: ['https://blog.csdn.net/test-user'],
             imageEnumerationComplete: options?.imageEnumerationComplete ?? false,
             images: options?.images ?? [],
             fileInputSelector: selectors['fileInput'],
             titleSelector: selectors['title'] ?? '#title',
-            titleValue: 'Article',
+            titleValue: options?.titleValue ?? 'Article',
             selectors,
+            tagEditor: options?.tagEditor,
+            fieldValues: options?.fieldValues,
             saveStatusTexts: ['草稿已保存'],
             publishedLinks: options?.publishedLinks ?? [],
           }
@@ -287,6 +331,342 @@ const context = {
 }
 
 describe('ArticlePublishingBrowserPolicy', () => {
+  it('records the exact image and reason when a real upload dispatch is rejected', async () => {
+    const { policy, inspect, webAffairService } = createPolicy({
+      stepId: 'upload-assets',
+      assetStatus: 'pending',
+    })
+    const page = await inspect({ fileInput: '#upload' })
+    const decision = await policy.classifyAction(
+      task as never,
+      'uploadFile',
+      { selector: '#upload', paths: ['/workspace/a.png'] },
+      page as never,
+      context,
+    )
+    expect(decision).toMatchObject({ kind: 'unknown' })
+    expect(webAffairService.recordArticlePublishingPlanResults).toHaveBeenCalledWith(
+      expect.objectContaining({
+        results: [
+          expect.objectContaining({
+            id: 'asset.asset-a.dispatch',
+            status: 'failed',
+            evidence: expect.stringContaining('a.png'),
+            reason: expect.stringContaining('uploading'),
+          }),
+        ],
+      }),
+      expect.any(Function),
+    )
+  })
+
+  it('records a real visible adapter read for verification-only BrowserTask completion, never a hidden read', async () => {
+    const harness = createPolicy({ stepId: 'verify-publication' })
+    await harness.inspect(
+      {},
+      'https://blog.csdn.net/test-user/article/details/164148817',
+      'published-article',
+    )
+    expect(harness.startActionLog).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'article_publishing_inspect_page', taskRunId: 'task-a' }),
+    )
+    expect(harness.succeedActionLog).toHaveBeenCalledWith('verified-read')
+    harness.startActionLog.mockClear()
+    harness.succeedActionLog.mockClear()
+    harness.hideView()
+    await harness.inspect({}, DRAFT_URL, 'editor', false)
+    expect(harness.startActionLog).not.toHaveBeenCalled()
+    expect(harness.succeedActionLog).not.toHaveBeenCalled()
+  })
+
+  it('only submits frozen tags through the inspected input and separates the search buffer from article writes', async () => {
+    const harness = createPolicy({
+      stepId: 'fill-fields',
+      tags: ['软件测试'],
+      tagEditor: {
+        openSelector: '#add-tag',
+        inputSelector: '#tag-query',
+        pendingValue: '软件测试',
+      },
+      fieldValues: { tags: '' },
+    })
+    await harness.inspect({ tags: '#tag-query', title: '#title' })
+    const page = { url: () => DRAFT_URL, locator: () => ({ inputValue: async () => '软件测试' }) }
+    expect(
+      await harness.policy.classifyAction(
+        task as never,
+        'click',
+        { selector: '#add-tag' },
+        page as never,
+        context,
+      ),
+    ).toMatchObject({ kind: 'allow' })
+    expect(
+      await harness.policy.classifyAction(
+        task as never,
+        'fill',
+        { selector: '#tag-query', value: '软件测试' },
+        page as never,
+        context,
+      ),
+    ).toMatchObject({ kind: 'allow' })
+    expect(harness.webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
+    expect(
+      await harness.policy.classifyAction(
+        task as never,
+        'fill',
+        { selector: '#tag-query', value: '未授权标签' },
+        page as never,
+        context,
+      ),
+    ).toMatchObject({ kind: 'runtime-error' })
+    await harness.policy.classifyAction(
+      task as never,
+      'press',
+      { selector: '#tag-query', key: 'Enter' },
+      page as never,
+      context,
+    )
+    expect(harness.webAffairService.reserveArticlePublishingSideEffect).toHaveBeenCalledWith(
+      'affair-a',
+      'attempt-a',
+      1,
+      'save-draft',
+      expect.stringContaining('autosave:fill-fields:tags:'),
+      'task-a',
+      'workspace-a',
+    )
+  })
+
+  it('cannot complete all platform fields using only a matching title when summary is unreadable', async () => {
+    const { policy, webAffairService, inspect } = createPolicy({
+      stepId: 'fill-fields',
+      summary: 'Required summary',
+    })
+    await inspect({ title: '#title' })
+    expect(webAffairService.recordArticlePublishingPlanResults).toHaveBeenCalledWith(
+      expect.objectContaining({
+        results: expect.arrayContaining([
+          expect.objectContaining({ id: 'field.summary.verify', status: 'waiting' }),
+        ]),
+      }),
+      expect.any(Function),
+    )
+    expect(
+      policy.authorizeTrustedReport(
+        'article_publishing_report_checkpoint',
+        { stepId: 'fill-fields', status: 'completed' },
+        context,
+        reporter(),
+      ),
+    ).toMatchObject({ success: false })
+  })
+
+  it('permits only the bounded title seed in the attested first-draft body frame, not full content or another frame', async () => {
+    const { policy, inspect } = createPolicy({
+      stepId: 'open-editor',
+      draftUrl: null,
+      initialDraftBodyEmpty: true,
+      bodyFrameSelector: 'iframe.cke_wysiwyg_frame',
+      sideEffects: [
+        {
+          targetId: 'initial-draft:title',
+          executionGeneration: 1,
+          browserTaskRunId: 'task-a',
+          status: 'dispatched',
+        },
+      ],
+    })
+    const page = await inspect(
+      { body: '#body', title: '#title' },
+      'https://mp.csdn.net/mp_blog/creation/editor',
+    )
+    const params = {
+      frameAction: 'fill',
+      frameSelector: 'iframe.cke_wysiwyg_frame',
+      selector: '#body',
+      value: 'Article',
+    }
+    expect(
+      await policy.classifyAction(task as never, 'frameExecute', params, page as never, context),
+    ).toMatchObject({ kind: 'allow-once' })
+    for (const changed of [
+      { ...params, value: 'full article content' },
+      { ...params, frameSelector: 'iframe.ai-chat' },
+    ]) {
+      expect(
+        await policy.classifyAction(task as never, 'frameExecute', changed, page as never, context),
+      ).toMatchObject({ kind: 'runtime-error' })
+    }
+  })
+
+  it('hit-tests the initial save before creating a response observer or consuming its capability', async () => {
+    const { policy, inspect, webAffairService } = createPolicy({
+      stepId: 'open-editor',
+      draftUrl: null,
+      initialDraftBodyEmpty: true,
+      initialDraftBodyText: 'Article',
+      sideEffects: [{ key: 'initial-save', targetId: 'initial-draft:save', status: 'reserved' }],
+    })
+    const page = await inspect(
+      { title: '#title', save: '#save' },
+      'https://mp.csdn.net/mp_blog/creation/editor',
+    )
+    const click = vi.fn().mockRejectedValue(new Error('AI drawer covers save'))
+    ;(page as Record<string, unknown>).locator = () => ({ click })
+    await expect(
+      policy.prepareInitialDraftSave(task as never, 'initial-save', page as never, context),
+    ).rejects.toThrow('covers save')
+    expect(click).toHaveBeenCalledWith({ trial: true, timeout: 3_000 })
+    expect(webAffairService.recordArticlePublishingDraftAnchor).not.toHaveBeenCalled()
+  })
+
+  it.each(['open-editor', 'verify-account', 'fill-body'])(
+    'only closes the attested CSDN drawer at %s',
+    async (stepId) => {
+      const { policy, inspect, webAffairService, advanceDocument } = createPolicy({
+        stepId,
+        bodyFrameSelector: 'iframe.cke_wysiwyg_frame',
+      })
+      const page = await inspect({
+        dismissAssistant: '.edit-drawer-content > img.edit-title-close',
+      })
+      const params = { selector: '.edit-drawer-content > img.edit-title-close' }
+      expect(
+        await policy.classifyAction(task as never, 'click', params, page as never, context),
+      ).toMatchObject({ kind: 'allow' })
+      expect(webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
+      advanceDocument()
+      expect(
+        await policy.classifyAction(task as never, 'click', params, page as never, context),
+      ).not.toMatchObject({ kind: 'allow' })
+    },
+  )
+
+  it.each(['fill-fields', 'save-draft', 'publish'])(
+    'closes only the attested tag popup before %s',
+    async (stepId) => {
+      const { policy, inspect, webAffairService, advanceDocument } = createPolicy({ stepId })
+      const selector = '.mark_selection_box .modal__close-button[aria-label="关闭"]'
+      const page = await inspect({ dismissTagEditor: selector })
+      expect(
+        await policy.classifyAction(task as never, 'click', { selector }, page as never, context),
+      ).toMatchObject({ kind: 'allow' })
+      expect(webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
+      advanceDocument()
+      expect(
+        await policy.classifyAction(task as never, 'click', { selector }, page as never, context),
+      ).not.toMatchObject({ kind: 'allow' })
+    },
+  )
+
+  it('only allows the frozen title in a proven empty first editor, not arbitrary no-ID writes', async () => {
+    const { policy, inspect, webAffairService } = createPolicy({
+      stepId: 'open-editor',
+      draftUrl: null,
+      initialDraftBodyEmpty: true,
+      initialDraftBodyText: 'Article',
+      titleValue: '',
+    })
+    const page = await inspect(
+      { title: '#title', save: '#save' },
+      'https://mp.csdn.net/mp_blog/creation/editor',
+    )
+    expect(
+      await policy.classifyAction(
+        task as never,
+        'fill',
+        { selector: '#title', value: 'Other' },
+        page as never,
+        context,
+      ),
+    ).toMatchObject({ kind: 'runtime-error' })
+    expect(
+      await policy.classifyAction(
+        task as never,
+        'fill',
+        { selector: '#title', value: 'Article' },
+        page as never,
+        context,
+      ),
+    ).toMatchObject({ kind: 'allow-once' })
+    expect(webAffairService.reserveArticlePublishingSideEffect).toHaveBeenCalledWith(
+      'affair-a',
+      'attempt-a',
+      1,
+      'save-draft',
+      'initial-draft:title',
+      'task-a',
+      'workspace-a',
+    )
+  })
+
+  it.each([true, false])(
+    'requires the same-run seed authorization before first save: %s',
+    async (authorized) => {
+      const { policy, inspect } = createPolicy({
+        stepId: 'open-editor',
+        draftUrl: null,
+        initialDraftBodyEmpty: true,
+        initialDraftBodyText: 'Article',
+        sideEffects: authorized
+          ? [
+              {
+                targetId: 'initial-draft:body',
+                executionGeneration: 1,
+                browserTaskRunId: 'task-a',
+                status: 'dispatched',
+              },
+            ]
+          : [],
+      })
+      const page = await inspect(
+        { title: '#title', save: '#save' },
+        'https://mp.csdn.net/mp_blog/creation/editor',
+      )
+      expect(
+        await policy.classifyAction(
+          task as never,
+          'click',
+          { selector: '#save' },
+          page as never,
+          context,
+        ),
+      ).toMatchObject({ kind: authorized ? 'allow-once' : 'runtime-error' })
+    },
+  )
+
+  it('allows only the attested CSDN body iframe fill and reserves its autosave effect', async () => {
+    const { policy, inspect, webAffairService } = createPolicy({
+      stepId: 'fill-body',
+      bodyFrameSelector: 'iframe.cke_wysiwyg_frame',
+    })
+    const page = await inspect({ body: 'body.cke_editable[contenteditable="true"]' })
+    const action = {
+      frameSelector: 'iframe.cke_wysiwyg_frame',
+      frameAction: 'fill',
+      selector: 'body.cke_editable[contenteditable="true"]',
+      value: 'Test',
+    }
+    await expect(
+      policy.classifyAction(task as never, 'frameExecute', action, page as never, context),
+    ).resolves.toMatchObject({ kind: 'allow-once' })
+    expect(webAffairService.reserveArticlePublishingSideEffect).toHaveBeenCalledOnce()
+    for (const changed of [
+      { ...action, frameSelector: 'iframe[src*="aiChatNew"]' },
+      { ...action, frameAction: 'click' },
+      { ...action, selector: 'input[type="password"]' },
+    ]) {
+      await expect(
+        policy.classifyAction(task as never, 'frameExecute', changed, page as never, context),
+      ).resolves.toMatchObject({ kind: 'runtime-error' })
+    }
+    await expect(
+      policy.classifyAction(task as never, 'fill', action, page as never, context),
+    ).resolves.toMatchObject({ kind: 'runtime-error' })
+    expect(webAffairService.reserveArticlePublishingSideEffect).toHaveBeenCalledOnce()
+  })
+
   it('waits for an in-flight same-page rebind before failing the first inspect', async () => {
     let convergeStoredBinding = (): void => undefined
     const awaitRuntimeConvergence = vi.fn(async () => convergeStoredBinding())
@@ -385,6 +765,91 @@ describe('ArticlePublishingBrowserPolicy', () => {
     })
   })
 
+  it('refuses publication completion when the public body or images do not match', async () => {
+    vi.mocked(CsdnPublishingAdapter.prototype.verifyBody).mockResolvedValueOnce({
+      matches: false,
+      textMatches: true,
+      textEvidence: 'text matches but image missing',
+      expectedImages: 1,
+      actualImages: 0,
+      images: [],
+    })
+    const { policy, inspect } = createPolicy({
+      stepId: 'verify-publication',
+      publicationStatus: 'result-unknown',
+    })
+    const url = 'https://blog.csdn.net/example/article/details/123456'
+    await inspect({}, url, 'published-article')
+    const reporter = {
+      workspaceId: 'workspace-a',
+      affairId: 'affair-a',
+      attemptId: 'attempt-a',
+      executionGeneration: 1,
+      launchOperationId: 'launch-a',
+      conversationId: 'conversation-a',
+      agentRunId: 'run-a',
+    }
+    expect(
+      policy.authorizeTrustedReport(
+        'web_affair_finish_attempt',
+        { outcome: 'succeeded', url },
+        context,
+        reporter,
+      ).success,
+    ).toBe(false)
+    expect(
+      policy.authorizeTrustedReport(
+        'article_publishing_report_checkpoint',
+        { stepId: 'verify-publication', status: 'completed', outputRefs: { publicationUrl: url } },
+        context,
+        reporter,
+      ).success,
+    ).toBe(false)
+  })
+
+  it.each(['审核未通过', '审核中', '仅自己可见'])(
+    'refuses author-visible success when CSDN reports %s',
+    async (publicationBlocker) => {
+      const { policy, inspect, webAffairService } = createPolicy({
+        stepId: 'verify-publication',
+        publicationStatus: 'result-unknown',
+        publicationBlocker,
+      })
+      const url = 'https://blog.csdn.net/example/article/details/123456'
+      await inspect({}, url, 'published-article')
+      expect(
+        policy.authorizeTrustedReport(
+          'web_affair_finish_attempt',
+          { outcome: 'succeeded', url },
+          context,
+          {
+            workspaceId: 'workspace-a',
+            affairId: 'affair-a',
+            attemptId: 'attempt-a',
+            executionGeneration: 1,
+            launchOperationId: 'launch-a',
+            conversationId: 'conversation-a',
+            agentRunId: 'run-a',
+          },
+        ),
+      ).toMatchObject({
+        success: false,
+        error: { message: expect.stringContaining(publicationBlocker) },
+      })
+      expect(webAffairService.recordArticlePublishingPlanResults).toHaveBeenCalledWith(
+        expect.objectContaining({
+          results: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'publication.verify',
+              reason: expect.stringContaining(publicationBlocker),
+            }),
+          ]),
+        }),
+        expect.any(Function),
+      )
+    },
+  )
+
   it('does not treat a same-title management link as proof that this attempt published it', async () => {
     const publicationUrl = 'https://blog.csdn.net/example/article/details/123456'
     const { policy, inspect } = createPolicy({
@@ -445,12 +910,13 @@ describe('ArticlePublishingBrowserPolicy', () => {
     })
   })
 
-  it('accepts an uploaded image only when the reported platform URL is visible in the editor', async () => {
+  it('accepts an uploaded image only with an observed per-file URL visible in the editor', async () => {
     const platformUrl = 'https://img-blog.csdnimg.cn/transformed.png'
     const { policy, inspect } = createPolicy({
       assetStatus: 'verifying',
       imageEnumerationComplete: true,
-      images: [{ src: platformUrl, alt: 'image' }],
+      platformUrl,
+      images: [{ src: platformUrl, alt: 'image', loaded: true }],
     })
     await inspect({})
 
@@ -471,6 +937,83 @@ describe('ArticlePublishingBrowserPolicy', () => {
       },
     })
   })
+
+  it('rejects an Agent mapping another visible image to a local file without a trusted upload observation', async () => {
+    const platformUrl = 'https://img-blog.csdnimg.cn/other.png'
+    const { policy, inspect } = createPolicy({
+      assetStatus: 'verifying',
+      imageEnumerationComplete: true,
+      images: [{ src: platformUrl, alt: 'other' }],
+    })
+    await inspect({})
+    expect(
+      policy.authorizeTrustedReport(
+        'article_publishing_report_asset',
+        { assetId: 'asset-a', status: 'uploaded', platformUrl },
+        context,
+        reporter(),
+      ),
+    ).toMatchObject({ success: false })
+  })
+
+  it.each(['matched', 'ambiguous', 'stale'] as const)(
+    'observes the one-file image delta with colon-containing IDs: %s',
+    async (mode) => {
+      const assetId = 'local:images/a.png'
+      const fixture = createPolicy({
+        assetId,
+        assetStatus: 'uploading',
+        imageEnumerationComplete: true,
+        sideEffects: [
+          {
+            key: 'upload-key',
+            kind: 'upload-asset',
+            targetId: `${assetId}:attempt-1`,
+            status: 'dispatched',
+          },
+        ],
+      })
+      const page = (await fixture.inspect({ fileInput: '#body-upload' })) as {
+        evaluate: () => Promise<Record<string, unknown>>
+      }
+      const observer = await fixture.policy.prepareImageUpload(
+        task as never,
+        'upload-key',
+        page as never,
+        context,
+      )
+      expect(observer).not.toBeNull()
+      const original = page.evaluate
+      page.evaluate = async () => ({
+        ...(await original()),
+        images: [
+          { src: 'https://i-blog.csdnimg.cn/direct/one.png', alt: '', loaded: true },
+          ...(mode === 'ambiguous'
+            ? [{ src: 'https://i-blog.csdnimg.cn/direct/two.png', alt: '', loaded: true }]
+            : []),
+        ],
+      })
+      if (mode === 'stale') fixture.advanceDocument()
+      if (mode === 'matched') {
+        await observer!.finish()
+        expect(
+          fixture.webAffairService.recordArticlePublishingImageObservation,
+        ).toHaveBeenCalledWith(
+          expect.objectContaining({
+            assetId,
+            platformUrl: 'https://i-blog.csdnimg.cn/direct/one.png',
+            sideEffectKey: 'upload-key',
+          }),
+          expect.any(Function),
+        )
+      } else {
+        await expect(observer!.finish()).rejects.toThrow(mode === 'stale' ? '改代' : '多张')
+        expect(
+          fixture.webAffairService.recordArticlePublishingImageObservation,
+        ).not.toHaveBeenCalled()
+      }
+    },
+  )
 
   it('hands legal and account-impact controls to the user', async () => {
     const { policy, inspect } = createPolicy()
@@ -609,13 +1152,13 @@ describe('ArticlePublishingBrowserPolicy', () => {
       'attempt-a',
       1,
       'save-draft',
-      expect.stringMatching(/^autosave:fill-fields:[0-9a-f-]{36}$/),
+      expect.stringMatching(/^autosave:fill-fields:title:[0-9a-f-]{36}$/),
       'task-a',
       'workspace-a',
     )
   })
 
-  it('binds a visible stable draft before the first platform mutation', async () => {
+  it('never adopts an unrelated visible numeric draft for a fresh task', async () => {
     const { policy, webAffairService, inspect } = createPolicy({
       stepId: 'fill-fields',
       draftUrl: null,
@@ -631,19 +1174,9 @@ describe('ArticlePublishingBrowserPolicy', () => {
         page as never,
         context,
       ),
-    ).resolves.toMatchObject({ kind: 'allow-once' })
-    expect(webAffairService.recordArticlePublishingDraftAnchor).toHaveBeenCalledWith(
-      'affair-a',
-      'attempt-a',
-      1,
-      'launch-a',
-      DRAFT_URL,
-      'workspace-a',
-      'task-a',
-    )
-    expect(
-      webAffairService.recordArticlePublishingDraftAnchor.mock.invocationCallOrder[0],
-    ).toBeLessThan(webAffairService.reserveArticlePublishingSideEffect.mock.invocationCallOrder[0])
+    ).resolves.toMatchObject({ kind: 'runtime-error' })
+    expect(webAffairService.recordArticlePublishingDraftAnchor).not.toHaveBeenCalled()
+    expect(webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
   })
 
   it('rejects a write when the visible page belongs to a different draft', async () => {
@@ -849,3 +1382,94 @@ function reporter() {
     agentRunId: 'run-a',
   }
 }
+
+describe('CSDN automatic save readback', () => {
+  it('allows only the freshly signed body iframe for selector-based reads', async () => {
+    const setup = createPolicy({
+      stepId: 'fill-body',
+      bodyFrameSelector: 'iframe.cke_wysiwyg_frame',
+    })
+    const page = await setup.inspect({ body: '#body' })
+    const params = { frameSelector: 'iframe.cke_wysiwyg_frame', selector: '#body' }
+    await expect(
+      setup.policy.classifyAction(task as never, 'frameContent', params, page as never, context),
+    ).resolves.toEqual({ kind: 'allow' })
+    await expect(
+      setup.policy.classifyAction(
+        task as never,
+        'frameContent',
+        { ...params, frameSelector: 'iframe.ai-chat' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({ kind: 'runtime-error' })
+    setup.advanceDocument()
+    await expect(
+      setup.policy.classifyAction(task as never, 'frameContent', params, page as never, context),
+    ).resolves.toMatchObject({ kind: 'runtime-error' })
+  })
+  it('waits for the real 60-second autosave without replaying a page mutation', async () => {
+    const setup = createPolicy({ stepId: 'fill-body' })
+    const page = (await setup.inspect({ body: '#body' })) as any
+    const raw = await page.evaluate()
+    let elapsed = 0
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => elapsed)
+    page.evaluate = vi.fn(async () => ({ ...raw, savedDraftMatches: elapsed >= 60_000 }))
+    page.waitForTimeout = vi.fn(async (ms: number) => {
+      elapsed += ms
+    })
+    try {
+      await setup.policy.completeMutation(task as never, 'frameExecute', page, context)
+      expect(elapsed).toBe(60_000)
+      expect(setup.webAffairService.recordArticlePublishingPageObservation).toHaveBeenCalledOnce()
+      expect(setup.webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it('keeps the result unknown after the bounded deadline, even with a stale saved toast', async () => {
+    const setup = createPolicy({ stepId: 'fill-body' })
+    const page = (await setup.inspect({ body: '#body' })) as any
+    const raw = await page.evaluate()
+    let elapsed = 0
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => elapsed)
+    page.evaluate = vi.fn(async () => ({ ...raw, savedDraftMatches: false }))
+    page.waitForTimeout = vi.fn(async (ms: number) => {
+      elapsed += ms
+    })
+    try {
+      await expect(
+        setup.policy.completeMutation(task as never, 'frameExecute', page, context),
+      ).rejects.toThrow('无法读回')
+      expect(elapsed).toBe(75_000)
+      expect(setup.webAffairService.recordArticlePublishingPageObservation).not.toHaveBeenCalled()
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it.each(['cancel', 'document', 'binding', 'view'] as const)(
+    'discards a saved response when %s changes during readback',
+    async (change) => {
+      const setup = createPolicy({ stepId: 'fill-body' })
+      const page = (await setup.inspect({ body: '#body' })) as any
+      const raw = await page.evaluate()
+      const cancel = new AbortController()
+      page.evaluate = vi.fn(async () => {
+        if (change === 'cancel') cancel.abort()
+        if (change === 'document') setup.advanceDocument()
+        if (change === 'binding') setup.advancePageBinding()
+        if (change === 'view') setup.hideView()
+        return { ...raw, savedDraftMatches: true }
+      })
+      await expect(
+        setup.policy.completeMutation(task as never, 'frameExecute', page, {
+          ...context,
+          abortSignal: cancel.signal,
+        }),
+      ).rejects.toThrow('结果未知')
+      expect(setup.webAffairService.recordArticlePublishingPageObservation).not.toHaveBeenCalled()
+    },
+  )
+})

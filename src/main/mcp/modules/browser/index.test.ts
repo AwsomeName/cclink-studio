@@ -352,97 +352,116 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     expect(page.click).not.toHaveBeenCalled()
   })
 
-  it.each(['before-persist', 'after-persist'] as const)(
-    'never clicks after cancellation %s',
-    async (phase) => {
-      const accountTask = {
-        id: 'task-a',
-        tabId: 'account-tab',
-        goal: '发布 CSDN 文章',
-        status: 'running',
-        startedAt: Date.now(),
-        downloadIds: [],
-        correlation: {
-          workspaceKey: '/workspace/a',
-          conversationId: 'conversation-a',
-          agentRunId: 'run-a',
-          profileId: 'profile-a',
-          accountId: 'account-a',
-          allowedOrigins: ['https://mp.csdn.net'],
-          affairId: 'affair-a',
-          affairAttemptId: 'attempt-a',
-        },
+  it.each([
+    ['before-persist', 'click'],
+    ['after-persist', 'click'],
+    ['before-persist', 'frame_execute'],
+    ['after-persist', 'frame_execute'],
+  ] as const)('never dispatches after cancellation %s (%s)', async (phase, action) => {
+    const accountTask = {
+      id: 'task-a',
+      tabId: 'account-tab',
+      goal: '发布 CSDN 文章',
+      status: 'running',
+      startedAt: Date.now(),
+      downloadIds: [],
+      correlation: {
+        workspaceKey: '/workspace/a',
+        conversationId: 'conversation-a',
+        agentRunId: 'run-a',
+        profileId: 'profile-a',
+        accountId: 'account-a',
+        allowedOrigins: ['https://mp.csdn.net'],
+        affairId: 'affair-a',
+        affairAttemptId: 'attempt-a',
+      },
+    }
+    const page = {
+      url: () => 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
+      click: vi.fn(),
+      frameLocator: vi.fn(),
+    }
+    const consumeSideEffect = vi.fn().mockResolvedValue(undefined)
+    const assertSideEffectDispatchAllowed = vi.fn(async () => {
+      const guard = () => {
+        throw new Error('网页副作用派发前授权已被取消、接管或改代')
       }
-      const page = {
-        url: () => 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
-        click: vi.fn(),
-      }
-      const consumeSideEffect = vi.fn().mockResolvedValue(undefined)
-      const assertSideEffectDispatchAllowed = vi.fn(async () => {
-        const guard = () => {
-          throw new Error('网页副作用派发前授权已被取消、接管或改代')
-        }
-        if (phase === 'before-persist') guard()
-        return guard
-      })
-      const observeSideEffect = vi.fn().mockResolvedValue(undefined)
-      const module = new BrowserToolModule(
-        {
-          getPage: () => page,
-          getPageById: () => page,
-          switchToPage: vi.fn().mockResolvedValue(undefined),
-        } as any,
-        {
-          getActiveTaskForConversation: () => accountTask,
-          assertCanRunAction: () => accountTask,
-          startActionLog: () => ({ id: 'action-a' }),
-          failActionLog: vi.fn(),
-        } as any,
-        {
-          getViewWorkspaceKey: () => '/workspace/a',
-          getViewProfileId: () => 'profile-a',
-          isWorkspaceActive: () => true,
-          setActive: vi.fn(),
-          getCurrentURL: () => page.url(),
-        } as any,
-        null,
-        {
-          classifyAction: vi.fn().mockResolvedValue({
-            kind: 'allow-once',
-            sideEffectKey: 'effect-a',
-          }),
-          consumeSideEffect,
-          assertSideEffectDispatchAllowed,
-          observeSideEffect,
-        } as any,
-      )
+      if (phase === 'before-persist') guard()
+      return guard
+    })
+    const observeSideEffect = vi.fn().mockResolvedValue(undefined)
+    const module = new BrowserToolModule(
+      {
+        getPage: () => page,
+        getPageById: () => page,
+        switchToPage: vi.fn().mockResolvedValue(undefined),
+      } as any,
+      {
+        getActiveTaskForConversation: () => accountTask,
+        assertCanRunAction: () => accountTask,
+        startActionLog: () => ({ id: 'action-a' }),
+        failActionLog: vi.fn(),
+      } as any,
+      {
+        getViewWorkspaceKey: () => '/workspace/a',
+        getViewProfileId: () => 'profile-a',
+        isWorkspaceActive: () => true,
+        setActive: vi.fn(),
+        getCurrentURL: () => page.url(),
+      } as any,
+      null,
+      {
+        classifyAction: vi.fn().mockResolvedValue({
+          kind: 'allow-once',
+          sideEffectKey: 'effect-a',
+        }),
+        consumeSideEffect,
+        assertSideEffectDispatchAllowed,
+        observeSideEffect,
+      } as any,
+    )
 
-      await expect(
-        module.execute(
-          'browser_click',
-          { selector: '#publish' },
-          {
-            conversationId: 'conversation-a',
-            workspaceKey: '/workspace/a',
-            trustedWorkspace: {
-              kind: 'local',
-              rootPath: '/workspace/a',
-              workspaceKey: '/workspace/a',
+    await expect(
+      module.execute(
+        `browser_${action}`,
+        action === 'click'
+          ? { selector: '#publish' }
+          : {
+              frameSelector: 'iframe.cke_wysiwyg_frame',
+              frameAction: 'fill',
+              selector: 'body.cke_editable[contenteditable="true"]',
+              value: '正文',
             },
+        {
+          conversationId: 'conversation-a',
+          workspaceKey: '/workspace/a',
+          articlePublishingPolicy: {
+            origin: 'article-publishing',
+            workspaceId: 'workspace-a',
+            affairId: 'affair-a',
+            attemptId: 'attempt-a',
+            executionGeneration: 1,
+            launchOperationId: 'launch-a',
           },
-        ),
-      ).rejects.toThrow('授权已被取消')
-      expect(consumeSideEffect).toHaveBeenCalledOnce()
-      expect(assertSideEffectDispatchAllowed).toHaveBeenCalledOnce()
-      expect(page.click).not.toHaveBeenCalled()
-      expect(observeSideEffect).toHaveBeenCalledWith(
-        accountTask,
-        'effect-a',
-        'rejected',
-        expect.any(Object),
-      )
-    },
-  )
+          trustedWorkspace: {
+            kind: 'local',
+            rootPath: '/workspace/a',
+            workspaceKey: '/workspace/a',
+          },
+        },
+      ),
+    ).rejects.toThrow('授权已被取消')
+    expect(consumeSideEffect).toHaveBeenCalledOnce()
+    expect(assertSideEffectDispatchAllowed).toHaveBeenCalledOnce()
+    expect(page.click).not.toHaveBeenCalled()
+    expect(page.frameLocator).not.toHaveBeenCalled()
+    expect(observeSideEffect).toHaveBeenCalledWith(
+      accountTask,
+      'effect-a',
+      'rejected',
+      expect.any(Object),
+    )
+  })
 
   it('pauses and persists a handoff returned by the article policy', async () => {
     const accountTask = {

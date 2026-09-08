@@ -1,15 +1,16 @@
-import type { Page } from 'playwright-core'
+import type { Frame, Page } from 'playwright-core'
 import { parseCsdnDraftAnchor } from '../../shared/article-publishing/csdn-draft-anchor'
 
 export const CSDN_ARTICLE_MANAGEMENT_URL = 'https://mp.csdn.net/mp_blog/manage/article'
 export const CSDN_ACCOUNT_EVIDENCE_REGION_SELECTOR =
   'header, [role="banner"], .csdn-toolbar, .toolbar-container, [class*="user-info" i], [class*="userInfo"]'
 export const CSDN_SAVE_STATUS_SELECTOR =
-  '[aria-live], [data-testid*="save" i], [class*="save-status" i], [class*="saveStatus"], [class*="draft-status" i]'
+  '.autosave-tip, [aria-live], [data-testid*="save" i], [class*="save-status" i], [class*="saveStatus"], [class*="draft-status" i]'
 
 export interface CsdnPageImageProbe {
   src: string
   alt: string
+  loaded?: boolean
 }
 
 export interface CsdnPageProbe {
@@ -24,7 +25,11 @@ export interface CsdnPageProbe {
   editor: {
     recognized: boolean
     bodySelector?: string
+    bodyFrameSelector?: string
     bodyTextLength: number
+    /** Current CKEditor is empty and below CSDN's automatic-save threshold. */
+    initialDraftBodyEmpty?: boolean
+    initialDraftBodyText?: string
     imageEnumerationComplete: boolean
     images: CsdnPageImageProbe[]
     fileInputSelector?: string
@@ -35,28 +40,38 @@ export interface CsdnPageProbe {
   }
   selectors: {
     openEditor?: string
+    dismissAssistant?: string
+    dismissTagEditor?: string
     body?: string
     title?: string
     summary?: string
     tags?: string
     category?: string
     cover?: string
+    imageOpen?: string
     fileInput?: string
     uploadConfirm?: string
     save?: string
     publish?: string
   }
+  tagEditor?: { openSelector?: string; inputSelector?: string; pendingValue: string }
+  fieldValues?: Partial<Record<'title' | 'summary' | 'tags' | 'category' | 'cover', string>>
   saveState: 'saved' | 'saving' | 'unknown'
   saveEvidence?: string
+  publicationBlocker?: string
   publishedLinks: Array<{ url: string; title: string }>
 }
 
 interface RawCsdnPageProbe {
+  publicationBlocker?: string
   url: string
   pageKind: CsdnPageProbe['pageKind']
   publishedArticleId?: string
   bodySelector?: string
+  bodyFrameSelector?: string
   bodyTextLength: number
+  initialDraftBodyEmpty?: boolean
+  initialDraftBodyText?: string
   accountHrefCandidates: string[]
   imageEnumerationComplete: boolean
   images: CsdnPageImageProbe[]
@@ -64,7 +79,10 @@ interface RawCsdnPageProbe {
   titleSelector?: string
   titleValue: string
   selectors: CsdnPageProbe['selectors']
+  tagEditor?: CsdnPageProbe['tagEditor']
+  fieldValues?: CsdnPageProbe['fieldValues']
   saveStatusTexts: string[]
+  savedDraftMatches?: boolean
   publishedLinks: Array<{ url: string; title: string }>
 }
 
@@ -94,20 +112,144 @@ interface RawCsdnDraftListProbe {
 }
 
 /**
- * Versioned, read-only CSDN page adapter. It executes one bounded DOM probe and returns selectors
- * only when they identify exactly one visible top-document element. Unknown page shapes fail
- * closed instead of asking the Agent to try more selectors.
+ * Read-only CSDN adapter: bounded DOM and the current rich editor's signed draft read client.
+ * Selectors identify one visible element in the top document or the specific CKEditor iframe.
+ * Unknown page shapes fail closed instead of asking the Agent to guess selectors.
  */
 export class CsdnPublishingAdapter {
   readonly id = 'csdn' as const
   readonly version = 1 as const
+  private readonly documents = new WeakMap<Page, { generation: number; frames: Set<Frame> }>()
+
+  /** Ephemeral invalidation only; publishing progress remains in WebAffair. */
+  documentGeneration(page: Page): number {
+    let state = this.documents.get(page)
+    if (!state) {
+      state = { generation: 0, frames: new Set() }
+      this.documents.set(page, state)
+      const tracked = state
+      const changed = (frame: Frame): void => {
+        if (tracked.frames.has(frame) || frame.url() === page.url()) {
+          tracked.frames.add(frame)
+          tracked.generation += 1
+        }
+      }
+      for (const frame of page.frames?.() ?? []) {
+        if (frame.url() === page.url()) tracked.frames.add(frame)
+      }
+      page.on?.('framenavigated', changed)
+      page.on?.('framedetached', changed)
+    }
+    return state.generation
+  }
+
+  async verifyBody(page: Page, expectedHtml: string) {
+    return page.evaluate((html) => {
+      const normalize = (text: string) => text.replace(/[\s\u200b]/gu, '')
+      const expected = new DOMParser().parseFromString(html, 'text/html').body
+      const frames = document.querySelectorAll<HTMLIFrameElement>('iframe.cke_wysiwyg_frame')
+      const publicBodies =
+        location.hostname === 'blog.csdn.net' ? document.querySelectorAll('#content_views') : []
+      const actual =
+        publicBodies.length === 1
+          ? publicBodies[0]
+          : frames.length === 1
+            ? frames[0].contentDocument?.querySelector('body.cke_editable')
+            : null
+      const imageSelector = 'img:not(.cke_widget_drag_handler[data-cke-widget-drag-handler="1"])'
+      // Read a clone: CSDN overlays an “编辑” button and drag handle on every image.
+      // They are editor controls, not article text, images or paragraph positions.
+      const clean = (root: Element) => {
+        const clone = root.cloneNode(true) as Element
+        for (const control of clone.querySelectorAll(
+          '[data-cke-widget-wrapper="1"] > .cke_widget_edit_container, [data-cke-widget-wrapper="1"] > .cke_widget_drag_handler_container',
+        ))
+          control.remove()
+        return clone
+      }
+      const cleanActual = actual ? clean(actual) : null
+      const expectedLinks = Array.from(expected.querySelectorAll('a[href]'))
+      const actualLinks = Array.from(cleanActual?.querySelectorAll('a[href]') ?? [])
+      const linksMatch =
+        expectedLinks.length === actualLinks.length &&
+        expectedLinks.every(
+          (link, index) => link.getAttribute('href') === actualLinks[index]?.getAttribute('href'),
+        )
+      // CSDN replaces a bare URL's caption with the target page title. Verify the exact
+      // link target and its known title metadata, then compare its original URL caption.
+      for (const [index, link] of expectedLinks.entries()) {
+        const shown = actualLinks[index]
+        if (
+          shown &&
+          link.textContent === link.getAttribute('href') &&
+          shown.getAttribute('href') === link.getAttribute('href') &&
+          shown.textContent ===
+            (shown.getAttribute('data-link-title') ??
+              (publicBodies.length === 1 ? shown.getAttribute('title') : null))
+        )
+          shown.textContent = link.textContent
+      }
+      const describe = (root: Element, liveRoot = root) => {
+        const liveImages = Array.from(liveRoot.querySelectorAll<HTMLImageElement>(imageSelector))
+        return Array.from(root.querySelectorAll<HTMLImageElement>(imageSelector)).map(
+          (img, index) => {
+            const range = root.ownerDocument.createRange()
+            range.selectNodeContents(root)
+            range.setEndBefore(img)
+            return {
+              src: img.getAttribute('src') ?? '',
+              alt: img.alt,
+              precedingText: normalize(range.toString()),
+              loaded: liveImages[index]?.complete === true && liveImages[index].naturalWidth > 0,
+            }
+          },
+        )
+      }
+      const wanted = describe(expected)
+      const observed = cleanActual && actual ? describe(cleanActual, actual) : []
+      const images = wanted.map((image, index) => ({
+        index,
+        src: image.src,
+        alt: image.alt,
+        matches:
+          observed[index]?.src === image.src &&
+          observed[index]?.alt === image.alt &&
+          observed[index]?.precedingText === image.precedingText &&
+          observed[index]?.loaded === true,
+        actualSrc: observed[index]?.src ?? '',
+        precedingCharacters: observed[index]?.precedingText.length ?? 0,
+      }))
+      const expectedText = normalize(expected.textContent ?? '')
+      const actualText = normalize(cleanActual?.textContent ?? '')
+      const textMatches = Boolean(actual && actualText === expectedText && linksMatch)
+      let difference = 0
+      while (
+        difference < expectedText.length &&
+        expectedText[difference] === actualText[difference]
+      )
+        difference++
+      const textEvidence =
+        `正文期望 ${expectedText.length} 字符，实际 ${actualText.length} 字符` +
+        (textMatches
+          ? '；内容与链接目标一致（忽略编辑器零宽占位，链接卡片按原地址核对）'
+          : `；首个差异位置 ${difference}，期望「${expectedText.slice(difference, difference + 40)}」，实际「${actualText.slice(difference, difference + 40)}」`)
+      return {
+        matches: textMatches && observed.length === wanted.length && images.every((i) => i.matches),
+        textMatches,
+        textEvidence,
+        expectedImages: wanted.length,
+        actualImages: observed.length,
+        images,
+      }
+    }, expectedHtml)
+  }
 
   async probe(page: Page): Promise<CsdnPageProbe> {
     const raw = await page.evaluate<
       RawCsdnPageProbe,
       { accountRegionSelector: string; saveStatusSelector: string }
     >(
-      ({ accountRegionSelector, saveStatusSelector }) => {
+      async ({ accountRegionSelector, saveStatusSelector }) => {
         const visible = (element: Element): boolean => {
           const html = element as HTMLElement
           const style = globalThis.getComputedStyle?.(html)
@@ -174,9 +316,19 @@ export class CsdnPublishingAdapter {
         const accountRegions = Array.from(document.querySelectorAll(accountRegionSelector)).filter(
           visible,
         )
-        const accountAnchors = accountRegions.flatMap((region) =>
-          Array.from(region.querySelectorAll('a[href]')).filter(visible),
+        // CSDN hides its login toolbar on narrow panes. The dedicated logged-in avatar still
+        // identifies the account; unrelated hidden profile links must never enter this evidence.
+        const loginAvatars = Array.from(
+          document.querySelectorAll(
+            '.toolbar-container .toolbar-btn-login-new > a.hasAvatar[href]',
+          ),
         )
+        const accountAnchors =
+          loginAvatars.length > 0
+            ? loginAvatars
+            : accountRegions.flatMap((region) =>
+                Array.from(region.querySelectorAll('a[href]')).filter(visible),
+              )
         const accountHrefCandidates = accountAnchors.map((anchor) =>
           canonical(anchor.getAttribute('href') ?? ''),
         )
@@ -190,7 +342,7 @@ export class CsdnPublishingAdapter {
         const isManagement =
           location.hostname === 'mp.csdn.net' &&
           /\/mp_blog\/manage\/article/u.test(location.pathname)
-        const body = uniqueVisible([
+        let body = uniqueVisible([
           '[contenteditable="true"][role="textbox"]',
           '.ProseMirror[contenteditable="true"]',
           '.ql-editor[contenteditable="true"]',
@@ -199,6 +351,17 @@ export class CsdnPublishingAdapter {
           'textarea[name*="content" i]',
           'textarea[id*="content" i]',
         ])
+        // Only CSDN's current rich-text editor, never the adjacent AI Chat iframe.
+        const bodyFrameSelector = 'iframe.cke_wysiwyg_frame'
+        const editorFrame = uniqueVisible([bodyFrameSelector])?.element as
+          | HTMLIFrameElement
+          | undefined
+        const editorDocument = editorFrame?.contentDocument
+        const frameBody = editorDocument?.querySelector('body.cke_editable[contenteditable="true"]')
+        if (!body && frameBody && editorDocument?.URL === url) {
+          body = { element: frameBody, selector: 'body.cke_editable[contenteditable="true"]' }
+        }
+        const usesFrame = Boolean(body?.element === frameBody && frameBody)
         const title = uniqueVisible([
           'input[placeholder*="标题"]',
           'textarea[placeholder*="标题"]',
@@ -206,12 +369,19 @@ export class CsdnPublishingAdapter {
           'textarea[name*="title" i]',
           '#title',
         ])
-        const fileInputs = Array.from(
-          document.querySelectorAll('input[type="file"][accept*="image" i], input[type="file"]'),
-        )
+        const summary = uniqueVisible(['textarea[placeholder*="摘要"]'])
+        // Body images only: cover and feedback uploaders share the same input class.
+        const imageOpen = uniqueVisible(['a.cke_button__imageoutside'])
+        const uploadPane = uniqueVisible(['.up_img_model_box #pane-upimg'])
+        const fileInputs = uploadPane
+          ? Array.from(uploadPane.element.querySelectorAll('input[type="file"]'))
+          : []
         const fileInput =
           fileInputs.length === 1
-            ? { element: fileInputs[0], selector: cssPath(fileInputs[0]) }
+            ? {
+                element: fileInputs[0],
+                selector: '.up_img_model_box #pane-upimg input[type="file"]',
+              }
             : null
         const controls = Array.from(
           document.querySelectorAll('button, input, textarea, select, [role="button"]'),
@@ -232,7 +402,13 @@ export class CsdnPublishingAdapter {
           return matches.length === 1 ? cssPath(matches[0]) || undefined : undefined
         }
         const imageRoot = body?.element ?? null
-        const imageElements = imageRoot ? Array.from(imageRoot.querySelectorAll('img')) : []
+        const imageElements = imageRoot
+          ? Array.from(
+              imageRoot.querySelectorAll<HTMLImageElement>(
+                'img:not(.cke_widget_drag_handler[data-cke-widget-drag-handler="1"])',
+              ),
+            )
+          : []
         const images = imageRoot
           ? imageElements
               .filter(visible)
@@ -240,6 +416,7 @@ export class CsdnPublishingAdapter {
               .map((image) => ({
                 src: canonical(image.getAttribute('src') ?? ''),
                 alt: (image.getAttribute('alt') ?? '').trim(),
+                loaded: image.complete && image.naturalWidth > 0,
               }))
               .filter((image) => Boolean(image.src))
           : []
@@ -248,16 +425,237 @@ export class CsdnPublishingAdapter {
           .map((element) => (element.textContent ?? '').replace(/\s+/gu, ' ').trim())
           .filter(Boolean)
         const publishedLinks = Array.from(document.querySelectorAll('a[href]'))
-          .map((anchor) => ({
-            url: canonical(anchor.getAttribute('href') ?? ''),
-            title: (anchor.textContent ?? '').replace(/\s+/gu, ' ').trim(),
-          }))
+          .filter(visible)
+          .map((anchor) => {
+            const url = canonical(anchor.getAttribute('href') ?? '')
+            const articleId = /\/article\/details\/(\d+)/u.exec(url)?.[1]
+            const row = anchor.closest('.article-list-item-mp')
+            const titles =
+              row && articleId
+                ? Array.from(row.querySelectorAll('.article-list-item-txt a[href]')).filter(
+                    (item) =>
+                      canonical(item.getAttribute('href') ?? '').endsWith(
+                        `/creation/editor/${articleId}`,
+                      ),
+                  )
+                : []
+            return {
+              url,
+              title: (titles.length === 1
+                ? (titles[0].textContent ?? '')
+                : (anchor.textContent ?? '')
+              )
+                .replace(/\s+/gu, ' ')
+                .trim(),
+            }
+          })
           .filter((link) =>
             /^https:\/\/blog\.csdn\.net\/[^/]+\/article\/details\/\d+/u.test(link.url),
           )
           .slice(0, 40)
+        let savedDraftMatches: boolean | undefined
+        let initialDraftBodyEmpty = false
+        let initialDraftBodyText: string | undefined
+        if (isEditorUrl && usesFrame) {
+          // The loaded editor's signed READ client is required by CSDN. Do not copy cookies,
+          // keys or headers, and never call its write methods. A button/toast is not evidence.
+          savedDraftMatches = false
+          const draftId = /\/creation\/editor\/(\d+)\/?$/u.exec(location.pathname)?.[1]
+          const entryScripts = Array.from(document.scripts)
+            .map((script) => script.src)
+            .filter((src) =>
+              /^https:\/\/csdnimg\.cn\/release\/mpfev3\/mp_v3\/index-[\w-]+\.js$/u.test(src),
+            )
+          type Editor = { getData(): string; status: string }
+          const getEditor = (): Editor | undefined =>
+            (window as unknown as { CKEDITOR?: { instances?: { editor?: Editor } } }).CKEDITOR
+              ?.instances?.editor
+          const editor = getEditor()
+          initialDraftBodyEmpty = Boolean(
+            editor?.status === 'ready' &&
+            editor.getData().length < 100 &&
+            !valueOf(body?.element).trim() &&
+            imageElements.length === 0,
+          )
+          if (
+            editor?.status === 'ready' &&
+            editor.getData().length < 100 &&
+            imageElements.length === 0 &&
+            valueOf(body?.element).trim().length <= 10
+          ) {
+            initialDraftBodyText = valueOf(body?.element).trim()
+          }
+          if (draftId && entryScripts.length === 1 && editor?.status === 'ready') {
+            const initialContent = editor.getData().trim()
+            const initialTitle = valueOf(title?.element)
+            const initialSummary = valueOf(summary?.element)
+            const savedBody = (html: string): string => {
+              const parsed = new DOMParser().parseFromString(html, 'text/html')
+              // CDN URL rotation is not a save failure or proof of a different image. Image
+              // presence/identity is still handled by the existing per-asset reconciliation.
+              for (const image of parsed.querySelectorAll('img')) {
+                image.removeAttribute('src')
+                image.removeAttribute('srcset')
+              }
+              return parsed.body.innerHTML.trim()
+            }
+            try {
+              const module = (await import(/* @vite-ignore */ entryScripts[0])) as Record<
+                string,
+                unknown
+              >
+              const clients = Object.values(module).filter(
+                (
+                  value,
+                ): value is {
+                  getArticle(input: { id: string }): Promise<{
+                    code: number
+                    data?: {
+                      article_id?: string
+                      title?: string
+                      content?: string
+                      description?: string
+                      status?: number
+                    }
+                  }>
+                } =>
+                  Boolean(
+                    value &&
+                    typeof value === 'object' &&
+                    typeof (value as { getArticle?: unknown }).getArticle === 'function',
+                  ),
+              )
+              if (clients.length === 1 && initialContent.length <= 2_000_000) {
+                let timeout: ReturnType<typeof setTimeout> | undefined
+                const response = await Promise.race([
+                  clients[0].getArticle({ id: draftId }),
+                  new Promise<never>((_, reject) => {
+                    timeout = setTimeout(() => reject(new Error('CSDN draft read timed out')), 8000)
+                  }),
+                ]).finally(() => clearTimeout(timeout))
+                const saved = response.data
+                savedDraftMatches = Boolean(
+                  response.code === 200 &&
+                  saved?.status === 2 &&
+                  String(saved.article_id) === draftId &&
+                  saved.title?.trim() === initialTitle &&
+                  typeof saved.content === 'string' &&
+                  saved.content.length <= 2_000_000 &&
+                  savedBody(saved.content) === savedBody(initialContent) &&
+                  (!summary || saved.description?.trim() === initialSummary) &&
+                  location.href === url &&
+                  editorFrame?.contentDocument === editorDocument &&
+                  getEditor() === editor &&
+                  editor.getData().trim() === initialContent &&
+                  valueOf(title?.element) === initialTitle &&
+                  valueOf(summary?.element) === initialSummary &&
+                  accountAnchors.every(
+                    (anchor, index) =>
+                      anchor.isConnected &&
+                      canonical(anchor.getAttribute('href') ?? '') === accountHrefCandidates[index],
+                  ),
+                )
+              }
+            } catch {
+              // Read unavailable or page changed: unknown, never promote a stale saved toast.
+            }
+          }
+        }
+        const selectors: CsdnPageProbe['selectors'] = {
+          ...(uniqueVisible(['.mark_selection_box .modal__close-button[aria-label="关闭"]'])
+            ? { dismissTagEditor: '.mark_selection_box .modal__close-button[aria-label="关闭"]' }
+            : {}),
+          ...(document.querySelectorAll('.edit-drawer-content > img.edit-title-close').length ===
+            1 &&
+          visible(document.querySelector('.edit-drawer-content > img.edit-title-close')!) &&
+          document.querySelector(
+            '.edit-drawer-content .iframe-box > iframe[src^="https://app-blog.csdn.net/csdn/aiChatNew?"]',
+          )
+            ? { dismissAssistant: '.edit-drawer-content > img.edit-title-close' }
+            : {}),
+          ...(findControl(/写文章|开始创作|新建文章|创建文章|write\s*(?:an?\s*)?article/iu)
+            ? {
+                openEditor: findControl(
+                  /写文章|开始创作|新建文章|创建文章|write\s*(?:an?\s*)?article/iu,
+                ),
+              }
+            : {}),
+          ...(body ? { body: body.selector } : {}),
+          ...(title ? { title: title.selector } : {}),
+          ...(findControl(/摘要|简介|description|summary/iu)
+            ? { summary: findControl(/摘要|简介|description|summary/iu) }
+            : {}),
+          ...(findControl(/标签|tag/iu) ? { tags: findControl(/标签|tag/iu) } : {}),
+          ...(findControl(/分类|category/iu) ? { category: findControl(/分类|category/iu) } : {}),
+          ...(findControl(/封面|cover/iu) ? { cover: findControl(/封面|cover/iu) } : {}),
+          ...(imageOpen ? { imageOpen: imageOpen.selector } : {}),
+          ...(fileInput?.selector ? { fileInput: fileInput.selector } : {}),
+          ...(findControl(/确认上传|插入图片|插入所选|confirm\s*upload/iu)
+            ? {
+                uploadConfirm: findControl(/确认上传|插入图片|插入所选|confirm\s*upload/iu),
+              }
+            : {}),
+          ...(findControl(/保存草稿|存为草稿|暂存|save\s*(?:as\s*)?draft/iu)
+            ? { save: findControl(/保存草稿|存为草稿|暂存|save\s*(?:as\s*)?draft/iu) }
+            : {}),
+          ...(findControl(/发布博客|发布文章|立即发布|确认发布|^发布$|\bpublish\b/iu)
+            ? { publish: findControl(/发布博客|发布文章|立即发布|确认发布|^发布$|\bpublish\b/iu) }
+            : {}),
+        }
+        const tagOpen = uniqueVisible(['.mark_selection .tag__btn-tag'])
+        const tagInput = uniqueVisible([
+          '.mark-selection-popper input[placeholder="请输入文字搜索，Enter键入可添加自定义标签"]',
+        ])
+        const tagForms = document.querySelectorAll('input[type="hidden"][name="tags"]')
+        const tagEditor =
+          tagOpen && tagForms.length === 1
+            ? {
+                openSelector: cssPath(tagOpen.element),
+                ...(tagInput ? { inputSelector: cssPath(tagInput.element) } : {}),
+                pendingValue: tagInput ? valueOf(tagInput.element) : '',
+              }
+            : undefined
+        if (tagEditor) selectors.tags = tagEditor.inputSelector ?? tagEditor.openSelector
+        const fieldValues: Partial<
+          Record<'title' | 'summary' | 'tags' | 'category' | 'cover', string>
+        > = {}
+        for (const field of ['title', 'summary', 'tags', 'category', 'cover'] as const) {
+          const selector = selectors[field]
+          if (!selector) continue
+          let elements: NodeListOf<Element>
+          try {
+            elements = document.querySelectorAll(selector)
+          } catch {
+            continue
+          }
+          if (elements.length !== 1) continue
+          const element = elements[0]
+          // Buttons/labels are not field fieldValues. Compound tag/category widgets stay unsupported.
+          if (
+            element instanceof HTMLInputElement ||
+            element instanceof HTMLTextAreaElement ||
+            element instanceof HTMLSelectElement
+          )
+            fieldValues[field] = element.value
+          else if (element instanceof HTMLElement && element.isContentEditable)
+            fieldValues[field] = element.innerText
+        }
+        if (tagEditor) fieldValues.tags = (tagForms[0] as HTMLInputElement).value
+        const reviewRegions = document.querySelectorAll(
+          '.article-info-box .article-bar-top .bar-content.active',
+        )
+        const publicationBlocker =
+          publishedMatch && reviewRegions.length === 1
+            ? Array.from(reviewRegions[0].querySelectorAll('span'))
+                .map((e) => (e.textContent ?? '').trim())
+                .find((text) =>
+                  /^(审核未通过|审核不通过|审核中|正在审核中|仅自己可见)$/u.test(text),
+                )
+            : undefined
         return {
           url,
+          publicationBlocker,
+          tagEditor,
           pageKind: publishedMatch
             ? 'published-article'
             : isEditorUrl && body
@@ -268,7 +666,10 @@ export class CsdnPublishingAdapter {
           ...(publishedMatch ? { publishedArticleId: publishedMatch[1] } : {}),
           accountHrefCandidates,
           ...(body ? { bodySelector: body.selector } : {}),
+          ...(usesFrame ? { bodyFrameSelector } : {}),
           bodyTextLength: valueOf(body?.element).length,
+          initialDraftBodyEmpty,
+          initialDraftBodyText,
           imageEnumerationComplete: Boolean(body && imageElements.length <= 24),
           images,
           ...(fileInput ? { fileInputSelector: fileInput.selector } : {}),
@@ -276,36 +677,10 @@ export class CsdnPublishingAdapter {
           titleValue:
             valueOf(title?.element) ||
             (publishedMatch ? (document.querySelector('h1')?.textContent ?? '').trim() : ''),
-          selectors: {
-            ...(findControl(/写文章|开始创作|新建文章|创建文章|write\s*(?:an?\s*)?article/iu)
-              ? {
-                  openEditor: findControl(
-                    /写文章|开始创作|新建文章|创建文章|write\s*(?:an?\s*)?article/iu,
-                  ),
-                }
-              : {}),
-            ...(body ? { body: body.selector } : {}),
-            ...(title ? { title: title.selector } : {}),
-            ...(findControl(/摘要|简介|description|summary/iu)
-              ? { summary: findControl(/摘要|简介|description|summary/iu) }
-              : {}),
-            ...(findControl(/标签|tag/iu) ? { tags: findControl(/标签|tag/iu) } : {}),
-            ...(findControl(/分类|category/iu) ? { category: findControl(/分类|category/iu) } : {}),
-            ...(findControl(/封面|cover/iu) ? { cover: findControl(/封面|cover/iu) } : {}),
-            ...(fileInput?.selector ? { fileInput: fileInput.selector } : {}),
-            ...(findControl(/确认上传|插入图片|插入所选|confirm\s*upload/iu)
-              ? {
-                  uploadConfirm: findControl(/确认上传|插入图片|插入所选|confirm\s*upload/iu),
-                }
-              : {}),
-            ...(findControl(/保存草稿|存为草稿|暂存|save\s*(?:as\s*)?draft/iu)
-              ? { save: findControl(/保存草稿|存为草稿|暂存|save\s*(?:as\s*)?draft/iu) }
-              : {}),
-            ...(findControl(/发布博客|发布文章|立即发布|确认发布|^发布$|\bpublish\b/iu)
-              ? { publish: findControl(/发布博客|发布文章|立即发布|确认发布|^发布$|\bpublish\b/iu) }
-              : {}),
-          },
+          selectors,
+          fieldValues,
           saveStatusTexts,
+          ...(savedDraftMatches !== undefined ? { savedDraftMatches } : {}),
           publishedLinks,
         }
       },
@@ -317,7 +692,16 @@ export class CsdnPublishingAdapter {
     const anchor = parseCsdnDraftAnchor(raw.url)
     const observedAt = new Date().toISOString()
     const platformAccountId = resolveCsdnPlatformAccountId(raw.url, raw.accountHrefCandidates)
-    const save = classifyCsdnSaveStatus(raw.saveStatusTexts)
+    const status = classifyCsdnSaveStatus(raw.saveStatusTexts)
+    const save =
+      raw.savedDraftMatches === undefined || status.state === 'saving'
+        ? status
+        : raw.savedDraftMatches
+          ? {
+              state: 'saved' as const,
+              evidence: 'CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿',
+            }
+          : { state: 'unknown' as const }
     return {
       adapterId: this.id,
       adapterVersion: this.version,
@@ -325,12 +709,18 @@ export class CsdnPublishingAdapter {
       url: raw.url,
       ...(platformAccountId ? { platformAccountId } : {}),
       pageKind: raw.pageKind,
+      ...(raw.publicationBlocker ? { publicationBlocker: raw.publicationBlocker } : {}),
       ...(anchor ? { draftId: anchor.draftId } : {}),
       ...(raw.publishedArticleId ? { publishedArticleId: raw.publishedArticleId } : {}),
       editor: {
         recognized: raw.pageKind === 'editor',
         ...(raw.bodySelector ? { bodySelector: raw.bodySelector } : {}),
+        ...(raw.bodyFrameSelector ? { bodyFrameSelector: raw.bodyFrameSelector } : {}),
         bodyTextLength: raw.bodyTextLength,
+        initialDraftBodyEmpty: raw.initialDraftBodyEmpty === true,
+        ...(raw.initialDraftBodyText !== undefined
+          ? { initialDraftBodyText: raw.initialDraftBodyText }
+          : {}),
         imageEnumerationComplete: raw.imageEnumerationComplete,
         images: raw.images,
         ...(raw.fileInputSelector ? { fileInputSelector: raw.fileInputSelector } : {}),
@@ -340,6 +730,8 @@ export class CsdnPublishingAdapter {
         value: raw.titleValue,
       },
       selectors: raw.selectors,
+      tagEditor: raw.tagEditor,
+      fieldValues: { ...raw.fieldValues, title: raw.titleValue },
       saveState: save.state,
       ...(save.evidence ? { saveEvidence: save.evidence } : {}),
       publishedLinks: raw.publishedLinks,
@@ -369,9 +761,15 @@ export class CsdnPublishingAdapter {
       const accountRegions = Array.from(document.querySelectorAll(accountRegionSelector)).filter(
         visible,
       )
-      const accountAnchors = accountRegions.flatMap((region) =>
-        Array.from(region.querySelectorAll('a[href]')).filter(visible),
+      const loginAvatars = Array.from(
+        document.querySelectorAll('.toolbar-container .toolbar-btn-login-new > a.hasAvatar[href]'),
       )
+      const accountAnchors =
+        loginAvatars.length > 0
+          ? loginAvatars
+          : accountRegions.flatMap((region) =>
+              Array.from(region.querySelectorAll('a[href]')).filter(visible),
+            )
       const draftSection = anchors.find((anchor) =>
         /草稿箱|草稿管理|drafts?/iu.test((anchor.textContent ?? '').replace(/\s+/gu, ' ').trim()),
       )

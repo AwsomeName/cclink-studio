@@ -568,10 +568,15 @@ const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'browser_frame_content',
-    description: '提取指定 iframe 的内容。可通过 frameUrl 或 frameName 定位 iframe',
+    description:
+      '提取指定 iframe 的内容。优先用已签发的 frameSelector；也可通过 frameUrl 或 frameName 定位 iframe',
     inputSchema: {
       type: 'object',
       properties: {
+        frameSelector: {
+          type: 'string',
+          description: '已识别 iframe 元素的 CSS selector；使用时还须提供内部 selector',
+        },
         frameUrl: { type: 'string', description: '通过 URL 子串匹配 iframe' },
         frameName: { type: 'string', description: '通过 name 属性匹配 iframe' },
         selector: { type: 'string', description: '可选，只提取 iframe 中特定元素的文本' },
@@ -811,9 +816,33 @@ export class BrowserToolModule implements ToolModule {
     const dispatchedGeneration = this.playwrightBridge.getConnectionGeneration?.() ?? 0
     let sideEffectConsumed = false
     let dispatchGuard: (() => void) | undefined
+    let trustedBodyHtml: string | undefined
+    let imageUpload: Awaited<ReturnType<ArticlePublishingBrowserPolicy['prepareImageUpload']>> =
+      null
+    let initialDraftSave: Awaited<
+      ReturnType<ArticlePublishingBrowserPolicy['prepareInitialDraftSave']>
+    > = null
     try {
       context?.abortSignal?.throwIfAborted()
       if (activeTask && sideEffectCapability) {
+        initialDraftSave =
+          (await this.articlePublishingBrowserPolicy?.prepareInitialDraftSave?.(
+            activeTask,
+            sideEffectCapability.sideEffectKey,
+            page,
+            context,
+          )) ?? null
+        trustedBodyHtml = await this.articlePublishingBrowserPolicy?.prepareBodyWrite?.(
+          activeTask,
+          context,
+        )
+        imageUpload =
+          (await this.articlePublishingBrowserPolicy?.prepareImageUpload?.(
+            activeTask,
+            sideEffectCapability.sideEffectKey,
+            page,
+            context,
+          )) ?? null
         await this.articlePublishingBrowserPolicy?.consumeSideEffect(
           activeTask,
           sideEffectCapability.sideEffectKey,
@@ -842,15 +871,20 @@ export class BrowserToolModule implements ToolModule {
         () => {
           context?.abortSignal?.throwIfAborted()
           dispatchGuard?.()
+          initialDraftSave?.arm()
           dispatched = true
         },
+        trustedBodyHtml,
       )
+      await initialDraftSave?.finish(true)
+      await imageUpload?.finish()
       if (activeTask?.correlation?.accountId) {
         await this.articlePublishingBrowserPolicy?.completeMutation?.(
           activeTask,
           actionType,
           page,
           context,
+          sideEffectCapability?.sideEffectKey,
         )
       }
       if (actionLogId) {
@@ -864,6 +898,21 @@ export class BrowserToolModule implements ToolModule {
       }
       return activeTask?.correlation?.accountId ? this.sanitizeAccountActionResult(result) : result
     } catch (error) {
+      // A click can throw after the server accepted the save. Preserve its exact ID even on
+      // cancellation, but never navigate, advance progress or dispatch another save from catch.
+      if (dispatched && initialDraftSave)
+        await initialDraftSave.finish(false).catch(() => undefined)
+      if (activeTask)
+        await this.articlePublishingBrowserPolicy
+          ?.recordActionFailure?.(
+            activeTask,
+            actionType,
+            params,
+            error instanceof Error ? error.message : String(error),
+            dispatched,
+            context,
+          )
+          .catch(() => undefined)
       if (activeTask && sideEffectCapability && sideEffectConsumed) {
         await this.articlePublishingBrowserPolicy
           ?.observeSideEffect(
@@ -896,6 +945,8 @@ export class BrowserToolModule implements ToolModule {
         throw new BrowserActionResultUnknownError(message)
       }
       throw error
+    } finally {
+      initialDraftSave?.dispose()
     }
   }
 
@@ -911,7 +962,11 @@ export class BrowserToolModule implements ToolModule {
     if (actualProfileId !== task.correlation.profileId) {
       throw new Error('账号任务的隔离登录环境绑定已失效，已拒绝继续操作')
     }
-    if (ACCOUNT_FORBIDDEN_ACTIONS.has(actionType)) {
+    const articleFrameFill =
+      actionType === 'frameExecute' &&
+      params.frameAction === 'fill' &&
+      Boolean(context?.articlePublishingPolicy)
+    if (ACCOUNT_FORBIDDEN_ACTIONS.has(actionType) && !articleFrameFill) {
       throw new Error(`登记账号任务不开放 ${actionType}，以避免泄露登录态或绕过可见操作`)
     }
     if (actionType === 'extract' && !String(params.selector ?? '').trim()) {
@@ -956,6 +1011,9 @@ export class BrowserToolModule implements ToolModule {
       return articleDecision.kind === 'allow-once'
         ? { sideEffectKey: articleDecision.sideEffectKey }
         : null
+    }
+    if (articleFrameFill) {
+      throw new Error('正文 iframe 操作没有取得当前文章任务的精确授权')
     }
     if (actionType === 'handleDialog' && params.action === 'accept') {
       await this.pauseForTakeover(task, context, '网页确认对话框需要人工处理', actionType)
@@ -1255,6 +1313,7 @@ export class BrowserToolModule implements ToolModule {
     workspaceKey?: string | null,
     beforeDispatch?: () => Promise<void>,
     onDispatch?: () => void,
+    trustedBodyHtml?: string,
   ): Promise<unknown> {
     if (workspaceKey !== undefined && actionType === 'newTab') {
       throw new Error('Agent 不能创建脱离项目归属的浏览器 Tab，请由工作台新建浏览器')
@@ -1347,7 +1406,13 @@ export class BrowserToolModule implements ToolModule {
     }
     await beforeDispatch?.()
     onDispatch?.()
-    return executePlaywrightAction(page, { type: actionType, ...params }, this.playwrightBridge)
+    return executePlaywrightAction(
+      page,
+      { type: actionType, ...params },
+      this.playwrightBridge,
+      onDispatch,
+      trustedBodyHtml,
+    )
   }
 
   private async confirmAutomationBinding(tabId: string, commandDispatched: boolean): Promise<void> {

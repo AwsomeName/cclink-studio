@@ -328,7 +328,7 @@ describe('article publishing Runtime cross-service convergence', () => {
         }
         dispatch()
         await page.fill()
-        await policy.completeMutation(task, 'fill', page as never, context)
+        await policy.completeMutation(task, 'fill', page as never, context, decision.sideEffectKey)
         expect(page.fill).toHaveBeenCalledOnce()
         const bodyInput = {
           workspaceRef: { kind: 'local' as const, path: directory },
@@ -363,6 +363,19 @@ describe('article publishing Runtime cross-service convergence', () => {
         if (!continued.success) throw new Error(continued.error.message)
         expect(continued.data.affairs[0].articlePublishing?.execution.currentStepId).toBe(
           'fill-fields',
+        )
+        const bodyDetails = continued.data.affairs[0].articlePublishing?.checkpoints.find(
+          (c) => c.stepId === 'fill-body',
+        )?.details
+        expect(bodyDetails).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: 'body.dispatch', status: 'completed' }),
+            expect.objectContaining({
+              id: 'body.verify',
+              status: 'completed',
+              evidence: expect.stringContaining('saved'),
+            }),
+          ]),
         )
         expect(continued.data.affairs[0].articlePublishing?.sideEffects).toEqual([
           expect.objectContaining({

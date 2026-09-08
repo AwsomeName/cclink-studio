@@ -8,6 +8,122 @@ const DRAFT_LIST_URL = 'https://mp.csdn.net/mp_blog/manage/article?type=draft'
 const ACCOUNT = 'csdn:test-user'
 
 describe('CsdnDraftRecoveryCoordinator', () => {
+  it('emits independently verified recovery steps and points at a title mismatch before permitting writes', async () => {
+    const observe = vi.fn(async () => undefined)
+    const adapter = {
+      probeDraftList: vi.fn(async () =>
+        listProbe(
+          [{ draftId: DRAFT_ID, url: DRAFT_URL, title: 'Article' }],
+          CSDN_ARTICLE_MANAGEMENT_URL,
+        ),
+      ),
+      probe: vi.fn(async () => ({ ...editorProbe(), title: { value: 'Wrong article' } })),
+    }
+    await expect(
+      new CsdnDraftRecoveryCoordinator(adapter as never).recoverExactDraft({
+        expectedDraftId: DRAFT_ID,
+        expectedPlatformAccountId: ACCOUNT,
+        expectedTitle: 'Article',
+        navigate: async (url) => pageAt(url) as never,
+        observe,
+      }),
+    ).rejects.toThrow('标题')
+    expect(observe).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'recovery.locate', status: 'completed' }),
+    )
+    expect(observe).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'recovery.verify.id', status: 'completed' }),
+    )
+    expect(observe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'recovery.verify.title',
+        status: 'failed',
+        evidence: expect.stringContaining('Wrong article'),
+      }),
+    )
+  })
+
+  it('waits for actual image loading and server save comparison during recovery hydration', async () => {
+    const image = { src: 'https://i-blog.csdnimg.cn/direct/one.png', alt: '', loaded: true }
+    const ready = { ...editorProbe(), editor: { ...editorProbe().editor, images: [image] } }
+    const adapter = {
+      probe: vi
+        .fn()
+        .mockResolvedValueOnce({ ...ready, saveState: 'unknown' })
+        .mockResolvedValueOnce({
+          ...ready,
+          editor: { ...ready.editor, images: [{ ...image, loaded: false }] },
+        })
+        .mockResolvedValue(ready),
+    }
+    const result = await new CsdnDraftRecoveryCoordinator(adapter as never).verifyExactDraftPage({
+      page: pageAt(DRAFT_URL) as never,
+      expectedDraftId: DRAFT_ID,
+      expectedPlatformAccountId: ACCOUNT,
+      expectedTitle: 'Article',
+    })
+    expect(adapter.probe).toHaveBeenCalledTimes(3)
+    expect(result.images).toEqual([image])
+  })
+
+  it('retries only reads across the real management redirect and CKEditor hydration', async () => {
+    const adapter = {
+      probeDraftList: vi
+        .fn()
+        .mockRejectedValueOnce(
+          new Error('Execution context was destroyed, most likely because of a navigation.'),
+        )
+        .mockResolvedValue(
+          listProbe(
+            [{ draftId: DRAFT_ID, url: DRAFT_URL, title: 'Article' }],
+            CSDN_ARTICLE_MANAGEMENT_URL,
+          ),
+        ),
+      probe: vi
+        .fn()
+        .mockResolvedValueOnce({ ...editorProbe(), editor: { recognized: false } })
+        .mockResolvedValue(editorProbe()),
+    }
+    const navigate = vi.fn(async (url: string) => pageAt(url))
+    await expect(
+      new CsdnDraftRecoveryCoordinator(adapter as never).recoverExactDraft({
+        expectedDraftId: DRAFT_ID,
+        expectedPlatformAccountId: ACCOUNT,
+        expectedTitle: 'Article',
+        navigate: navigate as never,
+      }),
+    ).resolves.toMatchObject({ draftId: DRAFT_ID })
+    expect(navigate.mock.calls.map(([url]) => url)).toEqual([
+      CSDN_ARTICLE_MANAGEMENT_URL,
+      DRAFT_URL,
+    ])
+    expect(adapter.probeDraftList).toHaveBeenCalledTimes(2)
+    expect(adapter.probe).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not click the draft tab when cancelled while reading the management page', async () => {
+    let cancelled = false
+    const click = vi.fn()
+    const adapter = {
+      probeDraftList: vi.fn(async () => {
+        cancelled = true
+        return { ...listProbe([]), draftSectionTabName: '草稿箱(1)' }
+      }),
+    }
+    await expect(
+      new CsdnDraftRecoveryCoordinator(adapter as never).recoverExactDraft({
+        expectedDraftId: DRAFT_ID,
+        expectedPlatformAccountId: ACCOUNT,
+        expectedTitle: 'Article',
+        navigate: async (url) => ({ ...pageAt(url), getByRole: () => ({ click }) }) as never,
+        assertActive: () => {
+          if (cancelled) throw new Error('cancelled')
+        },
+      }),
+    ).rejects.toThrow('cancelled')
+    expect(click).not.toHaveBeenCalled()
+  })
+
   it('uses the observed same-URL draft tab and discards candidates from the all-articles tab', async () => {
     const tab = {
       count: vi.fn(async () => 1),
@@ -16,7 +132,7 @@ describe('CsdnDraftRecoveryCoordinator', () => {
     }
     const page = {
       ...pageAt(CSDN_ARTICLE_MANAGEMENT_URL),
-      getByRole: vi.fn(() => tab),
+      getByRole: vi.fn((_role: string, _options: { name: RegExp }) => tab),
       waitForTimeout: vi.fn(),
     }
     const adapter = {
@@ -40,7 +156,12 @@ describe('CsdnDraftRecoveryCoordinator', () => {
       expectedTitle: 'Article',
       navigate: navigate as never,
     })
-    expect(page.getByRole).toHaveBeenCalledWith('tab', { name: '草稿箱(1)', exact: true })
+    const name = page.getByRole.mock.calls[0]?.[1]?.name as RegExp
+    expect(name).toBeInstanceOf(RegExp)
+    expect(name.test('草稿箱(1)')).toBe(true)
+    expect(name.test('草稿箱(2)')).toBe(true)
+    expect(name.test('回收站(2)')).toBe(false)
+    expect(name.test('草稿箱管理说明')).toBe(false)
     expect(tab.click).toHaveBeenCalledOnce()
     expect(navigate.mock.calls.map(([url]) => url)).toEqual([
       CSDN_ARTICLE_MANAGEMENT_URL,
@@ -130,6 +251,12 @@ describe('CsdnDraftRecoveryCoordinator', () => {
           ...editorProbe(),
           pageKind: 'management',
           url: CSDN_ARTICLE_MANAGEMENT_URL,
+          publishedLinks: [],
+        })
+        .mockResolvedValueOnce({
+          ...editorProbe(),
+          pageKind: 'management',
+          url: CSDN_ARTICLE_MANAGEMENT_URL,
           publishedLinks: [{ url: publicationUrl, title: 'Article' }],
         })
         .mockResolvedValueOnce({
@@ -172,7 +299,7 @@ describe('CsdnDraftRecoveryCoordinator', () => {
 })
 
 function pageAt(url: string) {
-  return { url: () => url, isClosed: () => false }
+  return { url: () => url, isClosed: () => false, waitForTimeout: vi.fn() }
 }
 
 function listProbe(

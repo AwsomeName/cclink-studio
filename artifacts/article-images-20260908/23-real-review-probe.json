@@ -1,0 +1,183 @@
+{
+  "adapterId": "csdn",
+  "adapterVersion": 1,
+  "observedAt": "2026-09-08T07:16:49.411Z",
+  "url": "https://blog.csdn.net/weixin_36388257/article/details/164615143#t1",
+  "platformAccountId": "csdn:weixin_36388257",
+  "pageKind": "published-article",
+  "publicationBlocker": "审核未通过",
+  "publishedArticleId": "164615143",
+  "editor": {
+    "recognized": false,
+    "bodyTextLength": 0,
+    "initialDraftBodyEmpty": false,
+    "imageEnumerationComplete": false,
+    "images": []
+  },
+  "title": {
+    "value": "App 写完可以 close，上线和宣发却要一直做"
+  },
+  "selectors": {},
+  "fieldValues": {
+    "title": "App 写完可以 close，上线和宣发却要一直做"
+  },
+  "saveState": "unknown",
+  "publishedLinks": [
+    {
+      "url": "https://blog.csdn.net/2501_90531556/article/details/164299094",
+      "title": "精密锡膏印刷机技术深度解析：从原理到应用的全面指南"
+    },
+    {
+      "url": "https://blog.csdn.net/2501_90531556/article/details/164299094",
+      "title": "而精密电子焊接真空共晶炉作为实现无氧焊接的关键设备，其与精密锡膏印刷机的协同工作能力，直接决定了产品焊接质量的上限。随着5G通信、新能源汽车、半导体封装等产业的高速发展，对焊接设备的要求已从“能用”升级为“高精密、高一致性、高自动化”。在这一背景下，精密锡膏印刷机作为SMT（表面贴装技术）产线的核心设备，其技术演进与选型逻辑成为行业关注的焦点。同时，与焊接工艺密切相关的国内混合键合机哪家好、国内混合键合机公司哪家好等设备选型问题，也反映了产业链对精密焊接技术日益增长的需求。"
+    },
+    {
+      "url": "https://blog.csdn.net/m0_62617719/article/details/164334694",
+      "title": "软件工程：确认测试"
+    },
+    {
+      "url": "https://blog.csdn.net/m0_62617719/article/details/164334694",
+      "title": "确认测试（Validation Testing）又称有效性测试，是在集成测试完成之后进行的一类测试活动。它的目标是验证软件的所有功能、性能和其他特征是否与需求规格说明书中规定的各项需求相一致，并确认软件配置的正确性和完整性。确认测试概念fill:#333;important;important;fill:none;color:#333;color:#333;important;fill:none;fill:#333;height:1em;确认测试需求验证功能确认性能确认配置审查对照需求规格。"
+    },
+    {
+      "url": "https://blog.csdn.net/m0_62617719/article/details/164326615",
+      "title": "软件工程：单元测试"
+    },
+    {
+      "url": "https://blog.csdn.net/m0_62617719/article/details/164326615",
+      "title": "单元测试（Unit Testing）是对软件中的最小可测试单元进行检验的测试方法。所谓\"单元\"，是指软件中不可再分的最小功能模块，通常是一个函数、一个方法或一个类。单元测试的目标是验证每个单元在各种输入条件下的行为是否正确。单元测试概念fill:#333;important;important;fill:none;color:#333;color:#333;important;fill:none;fill:#333;height:1em;单元测试最小测试单元独立验证代码级测试白盒测试函数/方法。"
+    },
+    {
+      "url": "https://blog.csdn.net/m0_62617719/article/details/163183062",
+      "title": "软件工程：白盒测试"
+    },
+    {
+      "url": "https://blog.csdn.net/m0_62617719/article/details/163183062",
+      "title": "白盒测试（White Box Testing）又称结构测试、逻辑驱动测试，是一种基于程序内部逻辑结构的测试方法。白盒测试特点fill:#333;important;important;fill:none;color:#333;color:#333;important;fill:none;fill:#333;height:1em;白盒测试了解内部结构基于代码逻辑检查路径覆盖验证内部行为查看源代码理解控制流分析判定条件设计测试用例语句覆盖判定覆盖条件覆盖路径覆盖验证逻辑正确性。"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_42081167/article/details/164430141",
+      "title": "【架构专栏】5.7 软件工程 -软件项目管理 3/3-2"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_42081167/article/details/164430141",
+      "title": "本文针对架构设计中 《第5章 软件工程基础知识- 5.7软件项目管理》的学习笔记，涵盖项目管理概述、项目管理内容，主要包括（进度管理、配置管理、质量管理、风险管理）的管理知识，为相关人员学习提供参考。"
+    },
+    {
+      "url": "https://blog.csdn.net/m0_62617719/article/details/163182890",
+      "title": "软件工程：软件测试的目的和重要性"
+    },
+    {
+      "url": "https://blog.csdn.net/m0_62617719/article/details/163182890",
+      "title": "软件测试是质量保障基石，目的包括发现缺陷、验证功能、评估质量、预防问题等，并通过系统方法提升软件可靠性。需控制字数。</think>软件测试是质量保障的基石，旨在系统发现缺陷、验证功能、评估质量并预防问题。它贯穿全生命周期，结合多种类型与实践，有效提升软件可靠性与用户信心。本文概述了测试定义、演进、目的及关键"
+    },
+    {
+      "url": "https://blog.csdn.net/motchen/article/details/164370220",
+      "title": "《AI 渐进编程》之二十九：AI 为什么要先重构软件工程"
+    },
+    {
+      "url": "https://blog.csdn.net/motchen/article/details/164370220",
+      "title": "本文讨论 AI 为什么要先重构软件工程。AI 已经能够生成代码，但软件工程还涉及任务边界、状态管理、权限、验证、失败恢复和长期维护。Agent 让执行路径从固定流程变成动态决策，也使这些控制问题更加突出。未来软件开发可能从手写代码转向模板、组件和 AI 装配，但可靠性仍依赖结构化约束。AI 只有先解决软件生产中的控制与验证问题，才可能进一步进入更复杂的真实世界系统。"
+    },
+    {
+      "url": "https://blog.csdn.net/m0_62617719/article/details/163183003",
+      "title": "软件工程：静态分析与动态测试"
+    },
+    {
+      "url": "https://blog.csdn.net/m0_62617719/article/details/163183003",
+      "title": "静态分析与动态测试fill:#333;important;important;fill:none;color:#333;color:#333;important;fill:none;fill:#333;height:1em;软件测试方法静态分析动态测试代码审查静态代码分析走查审查会议黑盒测试白盒测试单元测试集成测试不运行程序运行程序静态分析是在不执行程序的情况下，对代码进行检查和分析的方法。静态分析方法方法说明代码审查人工检查代码代码走查团队评审代码静态代码分析。"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_44592002/article/details/164373946",
+      "title": "告别 AI 开发碎片化：软件工程 3.0 时代，AI 重构软件研发全流程的落地之道"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_44592002/article/details/164373946",
+      "title": "软件工程3.0已至，单点AI工具无法破解角色割裂、流程断链难题。真正的企业级AI研发，需打通全链路上下文、重塑人机协同模式并构建安全合规的平台底座，让AI真正融入团队工作流，释放组织级生产力。"
+    },
+    {
+      "url": "https://blog.csdn.net/fightfo_r/article/details/164341041",
+      "title": "对抗复杂性：软件工程的永恒之战"
+    },
+    {
+      "url": "https://blog.csdn.net/fightfo_r/article/details/164341041",
+      "title": "<think>我们根据要求生成不超过150字的摘要。内容讨论了复杂性作为软件开发难题，区分本质与偶然复杂性，并介绍两种武器：分而治之（模块化、分层、抽象）和命名。摘要需精炼。</think>代码难点不在技术，而在系统复杂性。复杂性分本质与偶然：前者源于问题本身，需管理；后者因设计混乱所致，应消灭。核心武器是“分而治之”与“命名表达”——通过分层和抽象将问题化整为零，用清晰命名沟通逻辑与意义，以此对抗超出人类思维的复杂度。"
+    },
+    {
+      "url": "https://blog.csdn.net/m0_62617719/article/details/163182923",
+      "title": "软件工程：软件测试的特点和原则"
+    },
+    {
+      "url": "https://blog.csdn.net/m0_62617719/article/details/163182923",
+      "title": "内容是关于软件测试的特点和原则，主要介绍了特点包括贯穿性、复杂性、局限性等，以及原则。但用户只给出了部分内容，主要是特点部分（贯穿性、复杂性、局限性），可能后面还有原则部分未完整显示，但根据提示“软件测试的特点和原则：理解测试的本质”，应概括主要观点。 我们需要生成摘要，≤150字。从内容中提取核心要点：软件测试贯穿整个开发周期，具有复杂性（输入组合多）、局限性（无法证明无错），强调理解这些有助于提高质量。注意摘要需简洁。 写一个摘要：软"
+    },
+    {
+      "url": "https://blog.csdn.net/m0_62617719/article/details/163182957",
+      "title": "软件工程：软件测试的基本步骤"
+    },
+    {
+      "url": "https://blog.csdn.net/m0_62617719/article/details/163182957",
+      "title": "软件测试是一个系统化的过程，需要按照一定的步骤有序进行。从测试计划到测试报告，每个步骤都至关重要。本文将详细介绍软件测试的基本步骤，帮助建立系统化的测试流程。 软件测试基本步骤：测试计划测试设计测试环境搭建测试执行缺陷管理测试评估测试报告需求分析风险评估资源规划用例设计数据准备执行用例记录结果缺陷提交缺陷跟踪结果分析覆盖率评估测试步骤详解：测试计划是测试工作的起点，确定测试的范围、方法、资源和进度。测试计划要素：测试计划示例： 🌐 三、测试设计 （一）测试设计概述 测试设计是根据测试计划设计测试用例和测试"
+    },
+    {
+      "url": "https://blog.csdn.net/blogdevteam/article/details/126135357",
+      "title": "账号管理规范"
+    },
+    {
+      "url": "https://blog.csdn.net/blogdevteam/article/details/90369522",
+      "title": "版权申诉"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/164598985",
+      "title": "新 Studio 细步骤验收 20260908-1227"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/164063187",
+      "title": "热 如何用手机继续电脑里的 Claude Code / Codex"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/78221062",
+      "title": "热 Nutch学习笔记（一）"
+    },
+    {
+      "url": "https://blog.csdn.net/2601_96055447/article/details/164460540",
+      "title": "2026学生党录音转写工具实测 68"
+    },
+    {
+      "url": "https://blog.csdn.net/o_Oill/article/details/164617880",
+      "title": "90% OPC一人创业者被淘汰：AI降低了创业门槛，却筛掉了99%的普通人"
+    },
+    {
+      "url": "https://blog.csdn.net/2402_83220522/article/details/164377499",
+      "title": "红外相机波段选择与应用综述 508"
+    },
+    {
+      "url": "https://blog.csdn.net/LUSTER_Vision/article/details/164617798",
+      "title": "凌云光荣获 “热成形产业创领先锋奖“，以视觉AI助力汽车智能制造"
+    },
+    {
+      "url": "https://blog.csdn.net/LUSTER_Vision/article/details/164617571",
+      "title": "凌云光×JAI亮相无锡，展示全波段成像检测方案，助力“芯”质生产力 54"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/164615143#t0",
+      "title": "App 写完可以 close，上线和宣发却要一直做"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/164615143#t1",
+      "title": "代码写完，有明确的判断"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/164615143#t2",
+      "title": "把产品讲清楚，比我原来想的难"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/164615143#t3",
+      "title": "上线也不是按下发布按钮"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/164615143#t4",
+      "title": "宣发是一项长期工作"
+    }
+  ]
+}

@@ -875,9 +875,10 @@ export class BrowserManager {
   /** 普通工作台 View 与网页 popup 共用同一套安全、导航和自动化监听。 */
   private installViewListeners(tabId: string, entry: ViewEntry): void {
     const wc = entry.view.webContents
-    // Electron 默认关闭 visual zoom；显式开放请求范围，再由下方 zoom-changed 收回统一状态。
+    // Pinch-out below 1 expands Chromium layout viewport independently of the visible pane.
+    // Keep shrinking in Electron page zoom; visual zoom only magnifies, and is reset by main.
     void wc
-      .setVisualZoomLevelLimits(MIN_ZOOM, MAX_ZOOM)
+      .setVisualZoomLevelLimits(1, MAX_ZOOM)
       .catch((error) =>
         console.warn(
           `[BrowserManager] 触控板缩放降级 tabId=${tabId}:`,

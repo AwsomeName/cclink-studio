@@ -1,3 +1,8 @@
+import {
+  foldArticlePublishingPlanResults,
+  setArticlePublishingPlanResult,
+} from './article-publishing-plan-results'
+import type { ArticlePublishingDetailResult } from '../../shared/article-publishing/article-publishing-types'
 import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { basename } from 'node:path'
@@ -156,6 +161,8 @@ export interface ArticlePublishingAgentReporter {
     draftId?: string
     normalizedTitle?: string
     saveState?: 'saved' | 'saving' | 'unknown'
+    /** Main adapter compared the complete frozen body, links and image positions. */
+    bodyMatchesFrozen?: boolean
   }
 }
 
@@ -165,6 +172,8 @@ export interface ArticlePublishingRecoveryVerification {
   url: string
   platformAccountId: string
   normalizedTitle: string
+  images?: Array<{ src: string; loaded?: boolean }>
+  imageEnumerationComplete?: boolean
   saveState: 'saved'
 }
 
@@ -451,6 +460,7 @@ export class WebAffairService {
   createArticlePublishingAffair(
     input: {
       preview: ArticlePublishingSourcePreview
+      reviseDraftFromAffairId?: string
       accountId: string
       fields: ArticlePublishingFields
       workspaceRef: CreateWebAffairInput['workspaceRef']
@@ -731,6 +741,7 @@ export class WebAffairService {
     rawUrl: string,
     workspaceId: string,
     browserTaskRunId?: string,
+    creation?: { sideEffectKey: string; platformAccountId: string; normalizedTitle: string },
   ) {
     return this.enqueueScoped(affairId, workspaceId, () =>
       this.recordArticlePublishingDraftAnchorNow(
@@ -740,6 +751,7 @@ export class WebAffairService {
         launchOperationId,
         rawUrl,
         browserTaskRunId,
+        creation,
       ),
     )
   }
@@ -768,6 +780,97 @@ export class WebAffairService {
     return this.enqueueScoped(input.affairId, workspaceId, () =>
       this.verifyArticlePublishingRecoveryNow(input, options.issueWritePermit ?? true),
     )
+  }
+
+  /** Internal trusted execution hook; deliberately not exposed as IPC/MCP. */
+  recordArticlePublishingPlanResults(
+    input: {
+      workspaceId: string
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      launchOperationId: string
+      results: Array<Pick<ArticlePublishingDetailResult, 'id' | 'status' | 'evidence' | 'reason'>>
+    },
+    isCurrent: () => boolean,
+  ) {
+    return this.enqueueScoped(input.affairId, input.workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      if (
+        !found ||
+        !publishing ||
+        !isCurrent() ||
+        publishing.execution.currentGeneration !== input.executionGeneration ||
+        publishing.execution.currentLaunchOperationId !== input.launchOperationId ||
+        !['preparing', 'running'].includes(publishing.execution.status)
+      )
+        return this.transitionError('细步骤证据已失效或执行已停止')
+      let next = publishing
+      const now = this.timestamp()
+      for (const result of input.results)
+        next = setArticlePublishingPlanResult(next, {
+          ...result,
+          evidence: result.evidence.slice(0, 4000),
+          reason: result.reason?.slice(0, 2000),
+          observedAt: now,
+          generation: input.executionGeneration,
+        })
+      return this.persistAffair({ ...found.affair, articlePublishing: next, updatedAt: now })
+    })
+  }
+
+  /** Internal observer only. Bind the one-file upload to its unique new, loaded editor image. */
+  recordArticlePublishingImageObservation(
+    input: {
+      workspaceId: string
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      launchOperationId: string
+      sideEffectKey: string
+      assetId: string
+      platformUrl: string
+    },
+    isCurrent: () => boolean,
+  ) {
+    return this.enqueueScoped(input.affairId, input.workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      const effect = publishing?.sideEffects.find((e) => e.key === input.sideEffectKey)
+      const asset = publishing?.assets.find((a) => a.id === input.assetId)
+      if (
+        !found ||
+        !publishing ||
+        !asset ||
+        !['uploading', 'waiting-platform', 'verifying'].includes(asset.status) ||
+        !isCurrent() ||
+        publishing.execution.status !== 'running' ||
+        publishing.execution.currentStepId !== 'upload-assets' ||
+        publishing.execution.currentAttemptId !== input.attemptId ||
+        publishing.execution.currentGeneration !== input.executionGeneration ||
+        publishing.execution.currentLaunchOperationId !== input.launchOperationId ||
+        effect?.status !== 'dispatched' ||
+        effect.attemptId !== input.attemptId ||
+        effect.executionGeneration !== input.executionGeneration ||
+        effect.kind !== 'upload-asset' ||
+        effect.targetId.replace(/:attempt-\d+$/u, '') !== asset.id ||
+        !/^https:\/\/[^/]+\.csdnimg\.cn\//u.test(input.platformUrl) ||
+        publishing.assets.some((a) => a.id !== asset.id && a.platformUrl === input.platformUrl)
+      )
+        return this.transitionError('图片上传读回身份失效或无法唯一对应文件')
+      const now = this.timestamp()
+      return this.persistAffair({
+        ...found.affair,
+        updatedAt: now,
+        articlePublishing: {
+          ...publishing,
+          assets: publishing.assets.map((a) =>
+            a.id === asset.id ? { ...a, platformUrl: input.platformUrl } : a,
+          ),
+        },
+      })
+    })
   }
 
   recordArticlePublishingPageObservation(
@@ -1076,6 +1179,7 @@ export class WebAffairService {
   private async createArticlePublishingAffairNow(
     input: {
       preview: ArticlePublishingSourcePreview
+      reviseDraftFromAffairId?: string
       accountId: string
       fields: ArticlePublishingFields
       workspaceRef: CreateWebAffairInput['workspaceRef']
@@ -1107,6 +1211,45 @@ export class WebAffairService {
       )
     ) {
       return this.invalid('所选封面已经失效，请重新选择')
+    }
+
+    const original = input.reviseDraftFromAffairId
+      ? this.findAffair(input.reviseDraftFromAffairId)
+      : undefined
+    const originalPublishing = original?.articlePublishing
+    if (input.reviseDraftFromAffairId) {
+      if (
+        !original ||
+        original.workspaceId !== workspaceId ||
+        !originalPublishing ||
+        !['cancelled', 'failed'].includes(originalPublishing.execution.status) ||
+        originalPublishing.accountId !== input.accountId ||
+        originalPublishing.fields.title !== input.fields.title ||
+        !originalPublishing.draft?.platformDraftId ||
+        !originalPublishing.draft.platformAccountId ||
+        originalPublishing.publication.status !== 'not-started' ||
+        originalPublishing.sideEffects.some(
+          (effect) =>
+            effect.kind === 'publish' ||
+            ['reserved', 'dispatched', 'result-unknown'].includes(effect.status),
+        )
+      ) {
+        return this.invalid(
+          '只能修订同工作空间、同账号同标题、已终止且没有未知动作或发布记录的原草稿',
+        )
+      }
+      if (
+        this.snapshot.affairs.some(
+          (candidate) =>
+            candidate.id !== original.id &&
+            candidate.articlePublishing?.accountId === input.accountId &&
+            candidate.articlePublishing.draft?.platformDraftId ===
+              originalPublishing.draft?.platformDraftId &&
+            !['cancelled', 'failed'].includes(candidate.articlePublishing.execution.status),
+        )
+      ) {
+        return this.invalid('此原稿已有修订任务，请继续现有任务，禁止重复创建')
+      }
     }
 
     const now = this.timestamp()
@@ -1142,6 +1285,16 @@ export class WebAffairService {
       assets: input.preview.assets,
       checkpoints,
       sideEffects: [],
+      ...(originalPublishing?.draft
+        ? {
+            draft: {
+              platformDraftId: originalPublishing.draft.platformDraftId,
+              platformAccountId: originalPublishing.draft.platformAccountId,
+              url: originalPublishing.draft.url,
+              normalizedTitle: originalPublishing.draft.normalizedTitle,
+            },
+          }
+        : {}),
       executionProtocol: { version: 1, recentTransitions: [] },
       execution: { status: 'draft', currentGeneration: 0 },
       publication: { status: 'not-started' },
@@ -1173,7 +1326,15 @@ export class WebAffairService {
       waitPlans: [],
       flowProposals: [],
       articlePublishing,
-      events: [this.event('created', 'CSDN 文章发布事务已创建', now)],
+      events: [
+        this.event(
+          'created',
+          original
+            ? `修订原稿 ${originalPublishing?.draft?.platformDraftId}；来源事务 ${original.id}；原记录保留，所有正文/字段重新核验`
+            : 'CSDN 文章发布事务已创建',
+          now,
+        ),
+      ],
       workspaceRef: input.workspaceRef,
       createdAt: now,
       updatedAt: now,
@@ -1699,6 +1860,18 @@ export class WebAffairService {
           }
         : item,
     )
+    const publishing = affair.articlePublishing
+    const recoveryOperation = publishing?.draft?.platformDraftId
+      ? this.createArticlePublishingOperation(
+          'recovery.restore-exact-draft',
+          'open-editor',
+          'studio',
+          attempt,
+          now,
+          '从管理页核验待修订原稿',
+          '原账号、draftId、标题与 saved 全部匹配后开始修订',
+        )
+      : undefined
     return this.persistAffair({
       ...affair,
       materials: checkedMaterials,
@@ -1709,6 +1882,24 @@ export class WebAffairService {
         ? {
             articlePublishing: {
               ...affair.articlePublishing,
+              ...(publishing && recoveryOperation
+                ? {
+                    draft: this.beginArticlePublishingRecovery(
+                      publishing,
+                      attempt.executionGeneration,
+                      now,
+                    ),
+                    executionProtocol: {
+                      ...this.appendArticlePublishingTransition(publishing, {
+                        operationRunId: recoveryOperation.operationRunId,
+                        kind: 'recovery-started',
+                        occurredAt: now,
+                        summary: '修订任务从管理页核验同一原稿；不沿用旧内容完成记录',
+                      }),
+                      current: recoveryOperation,
+                    },
+                  }
+                : {}),
               execution: {
                 ...affair.articlePublishing.execution,
                 status: 'preparing' as const,
@@ -3280,7 +3471,14 @@ export class WebAffairService {
         ))
     const checkpoints = publishing.checkpoints.map((checkpoint) =>
       ['running', 'waiting-platform', 'verifying', 'result-unknown'].includes(checkpoint.status)
-        ? { ...checkpoint, status: 'needs-reconcile' as const, finishedAt: undefined }
+        ? {
+            ...checkpoint,
+            status: 'needs-reconcile' as const,
+            finishedAt: undefined,
+            ...(checkpoint.stepId === 'verify-publication'
+              ? { resumePolicy: 'reconcile-then-run' as const }
+              : {}),
+          }
         : checkpoint,
     )
     const currentStep = resultVerificationOnly
@@ -3597,12 +3795,74 @@ export class WebAffairService {
         },
       }
     }
+    // The final Runtime handshake has just reread the same saved draft on its exact Page.
+    // Only URLs already bound by main's one-file observer can resolve interrupted uploads.
+    if (
+      recoveryVerification?.imageEnumerationComplete &&
+      publishingForBind.draft?.recovery?.status === 'verified'
+    ) {
+      const recoveredIds = new Set(
+        publishing.assets
+          .filter(
+            (asset) =>
+              ['result-unknown', 'reconciling'].includes(asset.status) &&
+              asset.platformUrl &&
+              recoveryVerification.images?.some(
+                (image) => image.src === asset.platformUrl && image.loaded === true,
+              ) &&
+              publishing.sideEffects.some(
+                (effect) =>
+                  effect.attemptId === attemptId &&
+                  effect.executionGeneration < executionGeneration &&
+                  effect.kind === 'upload-asset' &&
+                  effect.targetId.replace(/:attempt-\d+$/u, '') === asset.id &&
+                  ['dispatched', 'result-unknown'].includes(effect.status),
+              ),
+          )
+          .map((asset) => asset.id),
+      )
+      publishingForBind = {
+        ...publishingForBind,
+        assets: publishingForBind.assets.map((asset) =>
+          recoveredIds.has(asset.id)
+            ? {
+                ...asset,
+                status: 'uploaded',
+                verifiedAt: now,
+                uploadAttempts: asset.uploadAttempts.map((upload, index) =>
+                  index === asset.uploadAttempts.length - 1
+                    ? {
+                        ...upload,
+                        status: 'succeeded',
+                        finishedAt: now,
+                        error: undefined,
+                        evidence: [
+                          ...upload.evidence,
+                          `恢复同账号原稿 ${recoveryVerification.draftId}；已保存正文中的 ${asset.platformUrl} 加载成功`,
+                        ].slice(-40),
+                      }
+                    : upload,
+                ),
+              }
+            : asset,
+        ),
+        sideEffects: publishingForBind.sideEffects.map((effect) =>
+          effect.attemptId === attemptId &&
+          effect.executionGeneration < executionGeneration &&
+          effect.kind === 'upload-asset' &&
+          recoveredIds.has(effect.targetId.replace(/:attempt-\d+$/u, '')) &&
+          ['dispatched', 'result-unknown'].includes(effect.status)
+            ? { ...effect, status: 'verified', observedAt: now }
+            : effect,
+        ),
+      }
+    }
     if (recovery?.executionGeneration === executionGeneration) {
       if (
-        publishing.assets.some((asset) =>
+        publishingForBind.assets.some((asset) =>
           ['result-unknown', 'reconciling'].includes(asset.status),
         ) ||
-        publishing.sideEffects.some(
+        publishingForBind.sideEffects.some(
           (effect) =>
             effect.executionGeneration < executionGeneration &&
             effect.kind === 'save-draft' &&
@@ -3654,6 +3914,13 @@ export class WebAffairService {
       agentRunId: agent.agentRunId,
       browserTaskRunId: browserTask.browserTaskRunId,
     }
+    publishingForBind = setArticlePublishingPlanResult(publishingForBind, {
+      id: 'runtime.ready',
+      status: 'completed',
+      observedAt: now,
+      generation: executionGeneration,
+      evidence: `Agent ${agent.agentRunId} · BrowserTask ${browserTask.browserTaskRunId} · Tab ${browserTask.tabId} · View g${browserTask.browserViewRuntimeGeneration} · WebContents ${browserTask.webContentsId} · Page g${browserTask.playwrightPageBindingGeneration}`,
+    })
     const runtimeOperation = publishingForBind.executionProtocol.current
     const firstInspectOperation =
       runtimeOperation?.definitionId === 'runtime.prepare-first-inspect'
@@ -4025,7 +4292,10 @@ export class WebAffairService {
     ) {
       return { success: true, data: structuredClone(found.affair) }
     }
-    if (TERMINAL_ATTEMPT_STATUSES.has(found.attempt.status)) {
+    if (
+      TERMINAL_ATTEMPT_STATUSES.has(found.attempt.status) &&
+      !(input.source === 'user-cancel' && found.attempt.status === 'interrupted')
+    ) {
       return { success: true, data: structuredClone(found.affair) }
     }
     if (found.attempt.processedRuntimeEventIds?.includes(input.eventId)) {
@@ -4251,8 +4521,31 @@ export class WebAffairService {
     if (['retryable-failed', 'waiting-human', 'failed'].includes(input.status) && !input.error) {
       return this.transitionError('失败或人工卡点必须包含结构化原因')
     }
+    // Recovery only settled the old save lock. A fresh complete body comparison
+    // can now verify that dispatched write without manufacturing another write.
+    const recoveredBodyEffect =
+      input.stepId === 'fill-body' &&
+      reporter.trustedPageEvidence?.bodyMatchesFrozen === true &&
+      reporter.trustedPageEvidence.draftId === publishing.draft?.platformDraftId &&
+      reporter.trustedPageEvidence.platformAccountId === publishing.draft?.platformAccountId &&
+      reporter.trustedPageEvidence.normalizedTitle === publishing.fields.title.trim() &&
+      reporter.trustedPageEvidence.saveState === 'saved'
+        ? [...publishing.sideEffects]
+            .reverse()
+            .find(
+              (effect) =>
+                effect.attemptId === found.attempt.id &&
+                effect.status === 'reconciled' &&
+                effect.executionGeneration < found.attempt.executionGeneration &&
+                effect.kind === 'save-draft' &&
+                effect.targetId.startsWith('autosave:fill-body:') &&
+                Boolean(effect.dispatchedAt),
+            )
+        : undefined
     const eligibleEffects = publishing.sideEffects.filter(
-      (effect) => effect.attemptId === found.attempt.id && effect.status !== 'reconciled',
+      (effect) =>
+        effect.attemptId === found.attempt.id &&
+        (effect.status !== 'reconciled' || effect === recoveredBodyEffect),
     )
     if (input.status === 'completed') {
       const expectedEvidenceKind =
@@ -4277,11 +4570,30 @@ export class WebAffairService {
       ) {
         return this.transitionError('仍有正文图片未完成页面核验，不能完成上传步骤')
       }
+      // A verified autosave of this draft already fulfills saving. Do not force an
+      // extra click merely to manufacture a manual-save receipt. Unknown writes
+      // still require reconciliation, and the current adapter must verify identity.
+      const verifiedAutosave =
+        input.stepId === 'save-draft' &&
+        reporter.trustedPageEvidence.draftId === publishing.draft?.platformDraftId &&
+        reporter.trustedPageEvidence.platformAccountId === publishing.draft?.platformAccountId &&
+        reporter.trustedPageEvidence.normalizedTitle === publishing.fields.title.trim() &&
+        !eligibleEffects.some(
+          (effect) => effect.kind === 'save-draft' && effect.status !== 'verified',
+        )
+          ? eligibleEffects.find(
+              (effect) =>
+                effect.kind === 'save-draft' &&
+                effect.targetId.startsWith('autosave:') &&
+                effect.status === 'verified',
+            )
+          : undefined
       const requiredEffect =
         input.stepId === 'save-draft'
-          ? eligibleEffects.find(
+          ? (verifiedAutosave ??
+            eligibleEffects.find(
               (effect) => effect.kind === 'save-draft' && !effect.targetId.startsWith('autosave:'),
-            )
+            ))
           : ['fill-body', 'fill-fields'].includes(input.stepId)
             ? eligibleEffects.find(
                 (effect) =>
@@ -4294,7 +4606,8 @@ export class WebAffairService {
       if (
         ['fill-body', 'fill-fields', 'save-draft', 'publish'].includes(input.stepId) &&
         (!requiredEffect ||
-          !['dispatched', 'result-unknown', 'verified'].includes(requiredEffect.status))
+          (!['dispatched', 'result-unknown', 'verified'].includes(requiredEffect.status) &&
+            requiredEffect !== recoveredBodyEffect))
       ) {
         return this.transitionError('当前步骤没有匹配的已派发副作用凭证，不能标记完成')
       }
@@ -4351,27 +4664,37 @@ export class WebAffairService {
             now,
             true,
           )
-        : input.status === 'completed' && ['fill-body', 'fill-fields'].includes(input.stepId)
-          ? this.updateLatestSideEffect(
-              publishing,
-              found.attempt,
-              (effect) =>
-                effect.kind === 'save-draft' &&
-                effect.targetId.startsWith(`autosave:${input.stepId}:`),
-              'verified',
-              now,
-              true,
+        : input.status === 'completed' && input.stepId === 'fill-fields'
+          ? publishing.sideEffects.map((effect) =>
+              effect.attemptId === found.attempt.id &&
+              effect.kind === 'save-draft' &&
+              effect.targetId.startsWith('autosave:fill-fields:') &&
+              Boolean(effect.dispatchedAt) &&
+              ['dispatched', 'result-unknown', 'verified'].includes(effect.status)
+                ? { ...effect, status: 'verified' as const, observedAt: now }
+                : effect,
             )
-          : input.status === 'completed' && input.stepId === 'verify-publication'
+          : input.status === 'completed' && input.stepId === 'fill-body'
             ? this.updateLatestSideEffect(
                 publishing,
                 found.attempt,
-                (effect) => effect.kind === 'publish',
+                (effect) =>
+                  effect.kind === 'save-draft' &&
+                  effect.targetId.startsWith(`autosave:${input.stepId}:`),
                 'verified',
                 now,
                 true,
               )
-            : publishing.sideEffects
+            : input.status === 'completed' && input.stepId === 'verify-publication'
+              ? this.updateLatestSideEffect(
+                  publishing,
+                  found.attempt,
+                  (effect) => effect.kind === 'publish',
+                  'verified',
+                  now,
+                  true,
+                )
+              : publishing.sideEffects
     const publication =
       input.status === 'completed' && input.stepId === 'verify-publication'
         ? {
@@ -4380,6 +4703,34 @@ export class WebAffairService {
             observedAt: now,
           }
         : publishing.publication
+    let detailedPublishing = publishing
+    if (input.status === 'completed' && reporter.trustedPageEvidence) {
+      const id =
+        input.stepId === 'save-draft'
+          ? 'save.verify'
+          : input.stepId === 'verify-publication'
+            ? 'publication.verify'
+            : undefined
+      if (id)
+        detailedPublishing = setArticlePublishingPlanResult(detailedPublishing, {
+          id,
+          status: 'completed',
+          observedAt: now,
+          generation: publishing.execution.currentGeneration,
+          evidence: `可信适配器回读 · ${reporter.trustedPageEvidence.platformAccountId} · draftId ${reporter.trustedPageEvidence.draftId ?? ''} · ${reporter.trustedPageEvidence.normalizedTitle} · ${reporter.trustedPageEvidence.saveState ?? ''} · ${reporter.trustedPageEvidence.url}`,
+        })
+      if (
+        input.stepId === 'save-draft' &&
+        !eligibleEffects.some((e) => e.targetId.startsWith('manual-save:') && e.dispatchedAt)
+      )
+        detailedPublishing = setArticlePublishingPlanResult(detailedPublishing, {
+          id: 'save.dispatch',
+          status: 'skipped',
+          evidence: '已有同稿自动保存的可信回读，无需再次点击保存',
+          observedAt: now,
+          generation: publishing.execution.currentGeneration,
+        })
+    }
     const baseAffair: WebAffair = {
       ...found.affair,
       status:
@@ -4389,7 +4740,7 @@ export class WebAffairService {
             ? 'failed'
             : 'active',
       articlePublishing: {
-        ...publishing,
+        ...detailedPublishing,
         draft:
           input.status === 'completed' && reporter.trustedPageEvidence?.platformAccountId
             ? {
@@ -4405,7 +4756,10 @@ export class WebAffairService {
                 lastVerifiedAt: now,
               }
             : publishing.draft,
-        checkpoints,
+        checkpoints: checkpoints.map((c) => ({
+          ...c,
+          details: detailedPublishing.checkpoints.find((d) => d.stepId === c.stepId)?.details,
+        })),
         sideEffects,
         publication,
         execution: {
@@ -4453,6 +4807,7 @@ export class WebAffairService {
     launchOperationId: string,
     rawUrl: string,
     browserTaskRunId?: string,
+    creation?: { sideEffectKey: string; platformAccountId: string; normalizedTitle: string },
   ): Promise<WebAffairOperationResult<WebAffair>> {
     const anchor = parseCsdnDraftAnchor(rawUrl)
     if (!anchor) return this.transitionError('当前页面没有可恢复的 CSDN 草稿标识')
@@ -4460,6 +4815,26 @@ export class WebAffairService {
     const publishing = found?.affair.articlePublishing
     if (!found || !publishing || found.affair.kind !== 'article-publishing') {
       return this.notFound('文章发布 Attempt 不存在')
+    }
+    const creationEffect =
+      creation &&
+      publishing.sideEffects.find(
+        (effect) =>
+          effect.key === creation.sideEffectKey &&
+          effect.kind === 'save-draft' &&
+          effect.targetId === 'initial-draft:save' &&
+          effect.attemptId === attemptId &&
+          effect.executionGeneration === executionGeneration &&
+          effect.browserTaskRunId === browserTaskRunId &&
+          ['dispatched', 'result-unknown'].includes(effect.status),
+      )
+    if (
+      creation &&
+      (!creationEffect ||
+        !creation.platformAccountId ||
+        creation.normalizedTitle !== publishing.fields.title.replace(/\s+/gu, ' ').trim())
+    ) {
+      return this.transitionError('首次草稿响应缺少本次已派发保存授权或账号标题证据')
     }
     if (
       publishing.execution.currentAttemptId !== attemptId ||
@@ -4474,7 +4849,14 @@ export class WebAffairService {
         (found.attempt.status === 'running-ai' &&
           publishing.execution.status === 'running' &&
           Boolean(browserTaskRunId) &&
-          found.attempt.browserTaskRunId === browserTaskRunId)
+          found.attempt.browserTaskRunId === browserTaskRunId) ||
+        // A late response records only the exact ID, never progress or new action permission.
+        // The generation checks above still reject responses from a replaced execution.
+        (Boolean(creationEffect) &&
+          found.attempt.browserTaskRunId === browserTaskRunId &&
+          ['cancelled', 'interrupted', 'result-unknown', 'waiting-human', 'failed'].includes(
+            publishing.execution.status,
+          ))
       )
     ) {
       return this.transitionError('草稿锚点不属于当前发布运行代次')
@@ -4497,6 +4879,12 @@ export class WebAffairService {
           ...publishing.draft,
           platformDraftId: anchor.draftId,
           url: anchor.url,
+          ...(creation
+            ? {
+                platformAccountId: creation.platformAccountId,
+                normalizedTitle: creation.normalizedTitle,
+              }
+            : {}),
           lastVerifiedAt: now,
         },
       },
@@ -5797,7 +6185,7 @@ export class WebAffairService {
         }
       }
       if (
-        isRuntimeLoss &&
+        (isRuntimeLoss || target === 'cancelled') &&
         ['running', 'waiting-platform', 'verifying'].includes(checkpoint.status)
       ) {
         return { ...checkpoint, status: 'needs-reconcile' as const, finishedAt: undefined }
@@ -5927,6 +6315,14 @@ export class WebAffairService {
 
   private async persistAffair(affair: WebAffair): Promise<WebAffairOperationResult<WebAffair>> {
     if (!this.snapshot) return this.unavailable()
+    if (affair.articlePublishing)
+      affair = {
+        ...affair,
+        articlePublishing: foldArticlePublishingPlanResults(
+          affair.articlePublishing,
+          affair.updatedAt,
+        ),
+      }
     this.assertIntegrity({
       ...this.snapshot,
       affairs: this.snapshot.affairs.map((item) => (item.id === affair.id ? affair : item)),

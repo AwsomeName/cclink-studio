@@ -4,7 +4,10 @@ import type {
   WebAffairService,
 } from '../../../web-affairs/web-affair-service'
 import type { WorkspaceRef } from '../../../../shared/workspace-ref'
-import type { WebAffairOperationResult } from '../../../../shared/web-affairs/web-affair-types'
+import type {
+  WebAffair,
+  WebAffairOperationResult,
+} from '../../../../shared/web-affairs/web-affair-types'
 import type { ArticlePublishingBrowserPolicy } from '../../../article-publishing/article-publishing-browser-policy'
 import type { ImageResearchService } from '../../../image-research/image-research-service'
 
@@ -242,6 +245,9 @@ export class WebAffairToolModule implements ToolModule {
       const snapshot = this.service.getProjectSnapshot(workspaceId)
       if (!snapshot.success) return snapshot
       const affair = snapshot.data.affairs.find((item) => item.id === params['affairId'])
+      if (affair && context?.articlePublishingPolicy) {
+        return publishingExecutionResult({ success: true, data: affair })
+      }
       return affair
         ? {
             success: true,
@@ -289,10 +295,12 @@ export class WebAffairToolModule implements ToolModule {
       if (!reporter.success) return reporter
       const trustedReporter = this.authorizeTrustedReport(toolName, params, context, reporter.data)
       if (!trustedReporter.success) return trustedReporter
-      return this.service.reportArticlePublishingCheckpoint(
-        this.withCanonicalEvidence(params, workspaceRef, trustedReporter.data) as never,
-        workspaceId,
-        trustedReporter.data,
+      return publishingExecutionResult(
+        await this.service.reportArticlePublishingCheckpoint(
+          this.withCanonicalEvidence(params, workspaceRef, trustedReporter.data) as never,
+          workspaceId,
+          trustedReporter.data,
+        ),
       )
     }
     if (toolName === 'article_publishing_report_asset') {
@@ -300,10 +308,12 @@ export class WebAffairToolModule implements ToolModule {
       if (!reporter.success) return reporter
       const trustedReporter = this.authorizeTrustedReport(toolName, params, context, reporter.data)
       if (!trustedReporter.success) return trustedReporter
-      return this.service.reportArticlePublishingAsset(
-        this.withCanonicalEvidence(params, workspaceRef, trustedReporter.data) as never,
-        workspaceId,
-        trustedReporter.data,
+      return publishingExecutionResult(
+        await this.service.reportArticlePublishingAsset(
+          this.withCanonicalEvidence(params, workspaceRef, trustedReporter.data) as never,
+          workspaceId,
+          trustedReporter.data,
+        ),
       )
     }
     if (toolName === 'article_publishing_inspect_page') {
@@ -418,6 +428,39 @@ export class WebAffairToolModule implements ToolModule {
           }
         : {}),
     }
+  }
+}
+
+/** Execution projection only. Full audit history stays in WebAffairService/UI diagnostics. */
+function publishingExecutionResult(result: WebAffairOperationResult<WebAffair>): unknown {
+  if (!result.success || !result.data?.articlePublishing) return result
+  const affair = result.data
+  const publishing = affair.articlePublishing!
+  const attempts = affair.attempts.filter(
+    (attempt) => attempt.id === publishing.execution.currentAttemptId,
+  )
+  return {
+    success: true,
+    data: {
+      ...affair,
+      events: [],
+      attempts: attempts.map(
+        ({ profileId: _profileId, processedRuntimeEventIds: _events, ...attempt }) => ({
+          ...attempt,
+          runtimeBindings: attempt.runtimeBindings.filter(
+            (binding) =>
+              binding.executionGeneration === attempt.executionGeneration &&
+              binding.launchOperationId === attempt.launchOperationId,
+          ),
+        }),
+      ),
+      articlePublishing: {
+        ...publishing,
+        executionProtocol: { ...publishing.executionProtocol, recentTransitions: [] },
+      },
+    },
+    historyOmitted:
+      '仅省略历史事件、旧执行代次绑定和动作转换历史；完整审计在 Studio 诊断中。当前检查点、全部图片与副作用（含未知结果）完整保留，不能把省略历史理解为未执行。',
   }
 }
 

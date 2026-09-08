@@ -174,6 +174,35 @@ export class ArticlePublishingService {
     const attempt = input.affair.attempts.find((candidate) => candidate.id === input.attemptId)
     if (!publishing || !attempt) throw new Error('文章发布运行状态不存在')
 
+    const recordPlan = async (
+      result: Pick<
+        import('../../shared/article-publishing/article-publishing-types').ArticlePublishingDetailResult,
+        'id' | 'status' | 'evidence' | 'reason'
+      >,
+    ) => {
+      const recorded = await this.webAffairService.recordArticlePublishingPlanResults(
+        {
+          workspaceId: input.workspaceId,
+          affairId: input.affair.id,
+          attemptId: attempt.id,
+          executionGeneration: attempt.executionGeneration,
+          launchOperationId: attempt.launchOperationId,
+          results: [result],
+        },
+        () => true,
+      )
+      if (!recorded.success) throw new Error(recorded.error.message)
+    }
+    await recordPlan({
+      id: 'account.resolve',
+      status: 'completed',
+      evidence: `账号 ${attempt.accountId} · Profile ${attempt.profileId}`,
+    })
+    await recordPlan({
+      id: 'tab.acquire',
+      status: 'running',
+      evidence: '等待当前工作空间账号的可见 Tab',
+    })
     const recoveryLease = input.resumed
       ? browserTaskRuntime.acquireAccountRecoveryLease({
           accountId: attempt.accountId,
@@ -212,6 +241,11 @@ export class ArticlePublishingService {
         input.preferredBrowserTabId,
       )
       if (!tabId) throw new Error('账号浏览器 Tab 创建超时')
+      await recordPlan({
+        id: 'tab.acquire',
+        status: 'completed',
+        evidence: `Tab ${tabId} · 账号 ${attempt.accountId} · Profile ${attempt.profileId}`,
+      })
       let draftAnchor = persistedDraftAnchor
       const visibleUrl = browserManager.getCurrentURL(tabId)
       let recoveredDraft: CsdnDraftRecoveryResult | null = null
@@ -243,6 +277,7 @@ export class ArticlePublishingService {
           throw new Error('任务缺少原 CSDN 账号；已在启动 Agent 前停止恢复')
         }
         recoveredDraft = await this.draftRecoveryCoordinator.recoverExactDraft({
+          observe: recordPlan,
           expectedDraftId: recovery.expectedDraftId,
           expectedPlatformAccountId,
           expectedTitle: recovery.expectedTitle,
@@ -264,20 +299,21 @@ export class ArticlePublishingService {
       } else if (input.resumed && hasPlatformPublishingProgress(publishing)) {
         throw new Error('任务已有平台写入但缺少原草稿编号或账号；请重新创建发布任务')
       } else {
-        await browserManager.navigate(tabId, attempt.entryUrl)
-        const visibleDraftAnchor = parseCsdnDraftAnchor(browserManager.getCurrentURL(tabId))
-        if (visibleDraftAnchor) {
-          const recorded = await this.webAffairService.recordArticlePublishingDraftAnchor(
-            input.affair.id,
-            attempt.id,
-            attempt.executionGeneration,
-            attempt.launchOperationId,
-            visibleDraftAnchor.url,
-            input.workspaceId,
-          )
-          if (!recorded.success) throw new Error(recorded.error.message)
-          draftAnchor = visibleDraftAnchor
-        }
+        // Account entry URLs may point at the creator home. Use the real CSDN new-editor
+        // entry only for a task with no platform progress; recovery above always finds its draft.
+        await recordPlan({
+          id: 'editor.open',
+          status: 'running',
+          evidence: 'https://mp.csdn.net/mp_blog/creation/editor',
+        })
+        await browserManager.navigate(tabId, 'https://mp.csdn.net/mp_blog/creation/editor')
+        await recordPlan({
+          id: 'editor.open',
+          status: 'completed',
+          evidence: browserManager.getCurrentURL(tabId),
+        })
+        // A cached URL, recent-draft redirect or reused account Tab is not ownership evidence.
+        // Only this task's guarded first-save response may establish a new draft identity.
       }
       await playwrightBridge.ensureConnected('article_publishing_launch')
       await browserManager.ensurePlaywrightPage(tabId)
@@ -401,6 +437,7 @@ export class ArticlePublishingService {
             'mcp__cclink_studio__browser_wait_for_selector',
             'mcp__cclink_studio__browser_click',
             'mcp__cclink_studio__browser_fill',
+            'mcp__cclink_studio__browser_frame_execute',
             'mcp__cclink_studio__browser_select',
             'mcp__cclink_studio__browser_check',
             'mcp__cclink_studio__browser_uncheck',
@@ -454,6 +491,8 @@ export class ArticlePublishingService {
                   url: string
                   platformAccountId: string
                   normalizedTitle: string
+                  images?: Array<{ src: string; loaded?: boolean }>
+                  imageEnumerationComplete?: boolean
                   saveState: 'saved'
                 }
               | undefined
@@ -498,6 +537,8 @@ export class ArticlePublishingService {
                     url: refreshedDraft.url,
                     platformAccountId: refreshedDraft.platformAccountId,
                     normalizedTitle: refreshedDraft.normalizedTitle,
+                    images: refreshedDraft.images,
+                    imageEnumerationComplete: refreshedDraft.imageEnumerationComplete,
                     saveState: 'saved',
                   }
                   break
@@ -1266,6 +1307,7 @@ export class ArticlePublishingService {
     return this.webAffairService.createArticlePublishingAffair(
       {
         preview: previewResult.data,
+        reviseDraftFromAffairId: parsed.data.reviseDraftFromAffairId,
         accountId: parsed.data.accountId,
         fields: parsed.data.fields,
         workspaceRef: parsed.data.workspaceRef,
@@ -1314,6 +1356,7 @@ export class ArticlePublishingService {
       ? affair.attempts.find((attempt) => attempt.id === publishing.execution.currentAttemptId)
       : undefined
     const resumed = Boolean(
+      publishing.draft?.platformDraftId ||
       currentAttempt?.status === 'interrupted' ||
       (currentAttempt && publishing.execution.status === 'waiting-human'),
     )
@@ -1448,7 +1491,17 @@ export class ArticlePublishingService {
       } catch {
         // Runtime 可能已经先结束；持久终止仍由下方统一 reducer 完成。
       }
-      await agentBridge?.abort(runtime.conversationId, runtime.agentRunId).catch(() => undefined)
+      // BrowserTask is already fenced synchronously. Persist the publishing stop
+      // independently of the Agent cancellation receipt (which may wait on its store).
+      // Agent process termination remains owned and reported by AgentBridge.
+      void agentBridge?.abort(runtime.conversationId, runtime.agentRunId).catch(() => {
+        console.warn('[ArticlePublishing] 发布写入已停止，Agent 取消请求尚未确认', {
+          affairId: runtime.affairId,
+          attemptId: runtime.attemptId,
+          executionGeneration: runtime.executionGeneration,
+          agentRunId: runtime.agentRunId,
+        })
+      })
       this.activeRuntimes.delete(runtime.attemptId)
     }
     return this.webAffairService.reconcileArticlePublishingRuntime({
@@ -1760,10 +1813,22 @@ function buildAgentPrompt(
       : []),
     `main 已把可见账号页、Agent Run 和 BrowserTask 精确绑定到本次执行代次；禁止另开账号页。先调用 web_affair_get 读取冻结状态。`,
     `每个检查点开始和成功回报前都调用 article_publishing_inspect_page；只使用 csdn@1 返回的唯一 selector 和页面证据。适配器返回 unsupported 或没有 selector 时立即转人工，禁止自行枚举或猜测 CSDN selector。`,
+    `若 inspect 返回 selectors.dismissAssistant，先用 browser_click 点击它收起挡住编辑器的 CSDN AI 助手，再重新 inspect；不要进入 AI Chat iframe，不用强制点击或猜测关闭按钮。`,
+    `open-editor 必须取得本任务 draftId 和已保存证据才完成。全新空白编辑器没有 draftId 时：先用 browser_fill 向 selectors.title 填写冻结标题；重新 inspect；再用 browser_frame_execute（frameAction=fill）向签发的正文 iframe 填写冻结标题 trim 后的前 10 个字符作为建稿占位；重新 inspect；最后 browser_click 点击 selectors.save 一次。CSDN 保存要求正文非空，该短占位低于自动保存阈值，不算 fill-body 完成。主进程记录真实保存响应中的编号并从草稿箱找回同稿；之后重新 inspect。禁止新建第二份或跳过 open-editor；后续 fill-body 必须用完整原文替换占位。`,
+    `检查点状态按 running → verifying → completed 回报，不能从 running 直接 completed。恢复时先读当前状态，已 completed 的步骤不得退回或重报。`,
+    `若 inspect 返回 editor.bodyFrameSelector，正文只用 browser_frame_execute，frameAction=fill，frameSelector=该值，selector=selectors.body；不得操作旁边的 AI Chat iframe。保存按钮不代表已保存，必须读回 saveState=saved 后才能报告保存完成。`,
+    `核对已有正文时，使用 browser_frame_content，frameSelector=inspect 返回的 editor.bodyFrameSelector，selector=selectors.body，读取正文文本与源 Markdown 比对；不要猜 frameUrl/frameName，iframe 可能没有独立 URL。不要使用 browser_evaluate，不要把 bodyTextLength 非零当成完整正文证据；已有完整正文无需重填。若 inspect.bodyMatchesFrozen=true 且 saveState=saved，Studio 已完成正文和逐图位置核验，直接继续检查点核验，不重复填写。`,
+    `fill-fields 若 inspect 返回 tagEditor：先点击 openSelector，重新 inspect；用 browser_fill 在 inputSelector 填入一个尚缺失的冻结 tags 值，再 inspect；用 browser_press（selector=inputSelector,key=Enter）提交这个标签，再 inspect 核验 fieldValues.tags。输入框里的搜索词不算已添加标签；不得用无目标的 browser_press_key。`,
+    '若 inspect 返回 selectors.dismissTagEditor 且冻结标签已经全部匹配，用 browser_click 点击该唯一关闭按钮，再 inspect 确认面板关闭后继续保存或发布，避免下拉层挡住按钮。不要使用无目标 Escape。',
+    `每次 inspect 可能由 main 推进检查点。inspect 后先读取 web_affair_get 的 currentStepId/current operation，再选择动作，不回报旧检查点。`,
     `图片共有 ${localAssets.length} 张。每张上传必须依次报告 uploading、waiting-platform、verifying；只有重新读取编辑器取得平台 URL 和页面证据后才能报告 uploaded。`,
+    `正文图片使用 selectors.imageOpen 打开图片上传面板，重新 inspect 后向 selectors.fileInput 单次上传一个冻结文件；封面和反馈上传框不属于正文。上传返回后重新 inspect，从 matchedAssets[assetId] 读取主进程观察到的平台地址，不能自行挑选另一张图片 URL。主进程会核验该文件上传后唯一新增且已加载的图片。`,
+    `有图片的 fill-body 仍使用 browser_frame_execute(frameAction=fill) 向签发正文区域填写原 Markdown；Studio 将使用冻结原文件及已核验图片地址写入格式化正文，逐图验证原文位置、顺序、替代文字和加载，再读回服务端保存。不可另行 browser_evaluate、粘贴图片或更换编辑器。`,
     `文章发布动作由主进程根据当前事务、步骤、账号、页面和适配器三态核验；普通“确认上传”和已授权的单篇常规发布可继续，人工专属或未知动作会自动暂停。`,
     `单图最多 3 次安全尝试；派发后结果不明必须报告 result-unknown 并先对账，禁止盲目重复上传。`,
     `验证码、风控、法律/版权声明、账号或内容不一致、未知页面必须暂停给用户。`,
+    'inspect.publicationBlocker 是平台状态栏的真实阻塞；审核未通过、审核中或仅自己可见都不得回报成功。调用 article_publishing_report_checkpoint 将 verify-publication 设为 waiting-human，error={code:"PLATFORM_REVIEW_BLOCKED",message:该平台原因}，携带当前页面证据转人工，保留已派发记录，不重发、不擅自改文或申诉。',
+    `verify-publication 是 Agent 必须自动执行的只读核验，不要求用户确认。成功页不是核验终点：用 browser_navigate 打开 inspect.publishedLinks 中匹配当前账号和原稿 ID 的唯一文章链接，再 inspect 核对 published-article、账号、标题和 URL；可信证据齐全后回报 checkpoint verifying/completed 和 web_affair_finish_attempt(outcome=succeeded, url=actual URL)。审核中、不可访问或不匹配则报告具体等待原因，绝不重发。`,
     `发布动作派发后必须立即进入结果核验；断线或证据不足只报告 result-unknown，禁止再次点击发布。`,
   ].join('\n')
 }

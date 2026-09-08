@@ -501,7 +501,12 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     // server 放进结果，送入 SDK 的配置也只保留 Studio 自己的受控工具宿主。
     const mcpServers: Record<string, McpServerConfig> = Object.create(null)
     if (internalMcpServer) {
-      mcpServers[this.hostContext.mcpServerName] = internalMcpServer
+      // CSDN's guarded mutation includes its 60s autosave and bounded server readback.
+      // HTTP MCP otherwise times out at 60s before main can return the verified result.
+      mcpServers[this.hostContext.mcpServerName] =
+        options?.articlePublishingPolicy && internalMcpServer.type === 'http'
+          ? { ...internalMcpServer, timeout: 120_000 }
+          : internalMcpServer
     }
     const allowedTools = options?.allowedTools
       ? [...options.allowedTools]

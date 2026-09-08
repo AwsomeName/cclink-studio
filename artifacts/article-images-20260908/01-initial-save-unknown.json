@@ -1,0 +1,683 @@
+{
+  "id": "e0fae919-d72b-4cb4-8c7c-7387ab0091ac",
+  "kind": "article-publishing",
+  "workspaceId": "d02046dc-dbf0-40bd-9f1a-1fa378c3ce5b",
+  "title": "App 写完可以 close，上线和宣发却要一直做",
+  "objective": "将 /Users/apple/Desktop/chat-cc/cclink-promotion/03-linux.do/2026-08-27-App写完之后-初稿.md 发布到 CSDN",
+  "status": "needs-attention",
+  "principalId": "2ecbb0e2-d8a8-49b7-95a3-eccb032bd33f",
+  "websiteIds": [
+    "7c77a996-e908-4bbf-9bea-e12c14057f94"
+  ],
+  "accountIds": [
+    "ff3592e8-517a-443d-a674-58105f7bc06b"
+  ],
+  "materials": [
+    {
+      "id": "7e467601-6913-472d-b536-49df4ddac80f",
+      "path": "/Users/apple/Desktop/chat-cc/cclink-promotion/03-linux.do/2026-08-27-App写完之后-初稿.md",
+      "name": "2026-08-27-App写完之后-初稿.md",
+      "state": "available",
+      "size": 4969,
+      "modifiedAt": "2026-08-26T15:36:53.662Z",
+      "checkedAt": "2026-09-08T06:08:52.816Z",
+      "addedAt": "2026-09-08T06:08:52.730Z"
+    },
+    {
+      "id": "a30f72cc-1e00-4531-8c99-65cb190f7333",
+      "path": "/Users/apple/Desktop/chat-cc/cclink-promotion/03-linux.do/2026-08-27-App写完之后-配图/00-封面-App写完之后.png",
+      "name": "00-封面-App写完之后.png",
+      "state": "available",
+      "size": 1664772,
+      "modifiedAt": "2026-08-26T15:36:10.760Z",
+      "checkedAt": "2026-09-08T06:08:52.816Z",
+      "addedAt": "2026-09-08T06:08:52.730Z"
+    },
+    {
+      "id": "30e0cba1-4b14-4bf7-b5e7-ac425fd6f580",
+      "path": "/Users/apple/Desktop/chat-cc/cclink-promotion/03-linux.do/2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png",
+      "name": "01-从技术语言到用户动作.png",
+      "state": "available",
+      "size": 1530650,
+      "modifiedAt": "2026-08-26T15:36:10.765Z",
+      "checkedAt": "2026-09-08T06:08:52.816Z",
+      "addedAt": "2026-09-08T06:08:52.730Z"
+    },
+    {
+      "id": "223a0672-31cc-4344-a02e-d306cfa15f40",
+      "path": "/Users/apple/Desktop/chat-cc/cclink-promotion/03-linux.do/2026-08-27-App写完之后-配图/02-上线后的真实链路.png",
+      "name": "02-上线后的真实链路.png",
+      "state": "available",
+      "size": 1324946,
+      "modifiedAt": "2026-08-26T15:36:10.769Z",
+      "checkedAt": "2026-09-08T06:08:52.816Z",
+      "addedAt": "2026-09-08T06:08:52.730Z"
+    }
+  ],
+  "flow": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": "eef46242-6f86-42ac-ad5d-b18f90f5bf10",
+        "type": "web-task",
+        "title": "发布文章到 CSDN",
+        "description": "按冻结文章、账号和平台字段执行；特殊卡点转人工。",
+        "status": "verifying",
+        "executor": "ai",
+        "accountIds": [
+          "ff3592e8-517a-443d-a674-58105f7bc06b"
+        ],
+        "materialIds": [
+          "7e467601-6913-472d-b536-49df4ddac80f",
+          "a30f72cc-1e00-4531-8c99-65cb190f7333",
+          "30e0cba1-4b14-4bf7-b5e7-ac425fd6f580",
+          "223a0672-31cc-4344-a02e-d306cfa15f40"
+        ],
+        "successCriteria": [
+          "全部正文图片已经后置核验",
+          "发布结果 URL 可复核"
+        ],
+        "availableTransitions": [
+          "waiting-human",
+          "waiting-external",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "lastResultNote": "网页动作已派发但结果无法确认，只允许重新核验",
+        "createdAt": "2026-09-08T06:08:52.730Z",
+        "updatedAt": "2026-09-08T06:10:46.987Z"
+      }
+    ],
+    "edges": []
+  },
+  "attempts": [
+    {
+      "id": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+      "nodeId": "eef46242-6f86-42ac-ad5d-b18f90f5bf10",
+      "number": 1,
+      "status": "interrupted",
+      "executionGeneration": 1,
+      "launchOperationId": "3fc740e8-7084-4333-bb2a-5d812ede6f06",
+      "runtimeBindings": [
+        {
+          "id": "594a73a9-3ed3-426c-9bde-88badd007776",
+          "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+          "executionGeneration": 1,
+          "launchOperationId": "3fc740e8-7084-4333-bb2a-5d812ede6f06",
+          "status": "terminal",
+          "boundAt": "2026-09-08T06:08:53.082Z",
+          "lastObservedAt": "2026-09-08T06:10:46.987Z",
+          "endedAt": "2026-09-08T06:10:46.987Z",
+          "terminalReason": "网页动作已派发但结果无法确认，只允许重新核验",
+          "kind": "agent-run",
+          "conversationId": "article-publishing-e0fae919-d72b-4cb4-8c7c-7387ab0091ac",
+          "agentRunId": "run-3fc740e8-7084-4333-bb2a-5d812ede6f06",
+          "agentRuntimeEpoch": 1788847686752,
+          "agentRuntimeBindingKey": "claude-code"
+        },
+        {
+          "id": "7ff4987a-514f-4543-b340-dd8f9f82b3fa",
+          "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+          "executionGeneration": 1,
+          "launchOperationId": "3fc740e8-7084-4333-bb2a-5d812ede6f06",
+          "status": "terminal",
+          "boundAt": "2026-09-08T06:08:53.082Z",
+          "lastObservedAt": "2026-09-08T06:10:46.987Z",
+          "endedAt": "2026-09-08T06:10:46.987Z",
+          "terminalReason": "网页动作已派发但结果无法确认，只允许重新核验",
+          "kind": "browser-tab",
+          "tabId": "tab-1-1788435800906",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2
+        },
+        {
+          "id": "2f730d85-923f-4beb-8b1b-9d095f57764d",
+          "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+          "executionGeneration": 1,
+          "launchOperationId": "3fc740e8-7084-4333-bb2a-5d812ede6f06",
+          "status": "terminal",
+          "boundAt": "2026-09-08T06:08:53.082Z",
+          "lastObservedAt": "2026-09-08T06:10:46.987Z",
+          "endedAt": "2026-09-08T06:10:46.987Z",
+          "terminalReason": "网页动作已派发但结果无法确认，只允许重新核验",
+          "kind": "browser-task",
+          "browserTaskRunId": "e324119f-2dbc-4214-bd40-c3db39908337",
+          "tabId": "tab-1-1788435800906",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2,
+          "playwrightConnectionGeneration": 1,
+          "playwrightPageBindingGeneration": 1
+        }
+      ],
+      "profileId": "web-draft-b3896210-978e-4fe6-a9c0-813927210b5e",
+      "accountId": "ff3592e8-517a-443d-a674-58105f7bc06b",
+      "entryUrl": "https://mp.csdn.net/",
+      "tabId": "tab-1-1788435800906",
+      "conversationId": "article-publishing-e0fae919-d72b-4cb4-8c7c-7387ab0091ac",
+      "agentRunId": "run-3fc740e8-7084-4333-bb2a-5d812ede6f06",
+      "browserTaskRunId": "e324119f-2dbc-4214-bd40-c3db39908337",
+      "sideEffectKey": "e0fae919-d72b-4cb4-8c7c-7387ab0091ac:eef46242-6f86-42ac-ad5d-b18f90f5bf10:flow-1",
+      "failureMessage": "网页动作已派发但结果无法确认，只允许重新核验",
+      "evidence": [],
+      "startedAt": "2026-09-08T06:08:52.816Z"
+    }
+  ],
+  "waitPlans": [],
+  "flowProposals": [],
+  "articlePublishing": {
+    "adapterId": "csdn",
+    "adapterVersion": 1,
+    "source": {
+      "markdownPath": "/Users/apple/Desktop/chat-cc/cclink-promotion/03-linux.do/2026-08-27-App写完之后-初稿.md",
+      "modifiedAt": 1787758613662.017,
+      "size": 4969
+    },
+    "accountId": "ff3592e8-517a-443d-a674-58105f7bc06b",
+    "websiteId": "7c77a996-e908-4bbf-9bea-e12c14057f94",
+    "fields": {
+      "title": "App 写完可以 close，上线和宣发却要一直做",
+      "summary": "代码完成只是开始。从 CCLink 的开发经历聊聊产品说明、首次使用链路，以及上线后持续的运营和宣发。",
+      "tags": [
+        "软件工程"
+      ],
+      "category": ""
+    },
+    "assets": [
+      {
+        "id": "local:03-linux.do/2026-08-27-App写完之后-配图/00-封面-App写完之后.png",
+        "kind": "local",
+        "sourcePath": "/Users/apple/Desktop/chat-cc/cclink-promotion/03-linux.do/2026-08-27-App写完之后-配图/00-封面-App写完之后.png",
+        "displayPath": "2026-08-27-App写完之后-配图/00-封面-App写完之后.png",
+        "mediaType": "image/png",
+        "size": 1664772,
+        "modifiedAt": 1787758570759.7944,
+        "occurrences": [
+          {
+            "start": 58,
+            "end": 97,
+            "alt": "App 写完可以 close，上线和宣发却要一直做"
+          }
+        ],
+        "status": "pending",
+        "uploadAttempts": []
+      },
+      {
+        "id": "local:03-linux.do/2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png",
+        "kind": "local",
+        "sourcePath": "/Users/apple/Desktop/chat-cc/cclink-promotion/03-linux.do/2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png",
+        "displayPath": "2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png",
+        "mediaType": "image/png",
+        "size": 1530650,
+        "modifiedAt": 1787758570764.516,
+        "occurrences": [
+          {
+            "start": 856,
+            "end": 895,
+            "alt": "从开发者熟悉的技术语言到用户真正要做的动作"
+          }
+        ],
+        "status": "pending",
+        "uploadAttempts": []
+      },
+      {
+        "id": "local:03-linux.do/2026-08-27-App写完之后-配图/02-上线后的真实链路.png",
+        "kind": "local",
+        "sourcePath": "/Users/apple/Desktop/chat-cc/cclink-promotion/03-linux.do/2026-08-27-App写完之后-配图/02-上线后的真实链路.png",
+        "displayPath": "2026-08-27-App写完之后-配图/02-上线后的真实链路.png",
+        "mediaType": "image/png",
+        "size": 1324946,
+        "modifiedAt": 1787758570769.228,
+        "occurrences": [
+          {
+            "start": 1357,
+            "end": 1394,
+            "alt": "从文章到第一个任务，上线后的真实使用链路"
+          }
+        ],
+        "status": "pending",
+        "uploadAttempts": []
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "label": "打开 CSDN 编辑页",
+        "adapterVersion": 1,
+        "status": "needs-reconcile",
+        "details": [
+          {
+            "id": "account.resolve",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "账号 ff3592e8-517a-443d-a674-58105f7bc06b · Profile web-draft-b3896210-978e-4fe6-a9c0-813927210b5e",
+            "observedAt": "2026-09-08T06:08:52.852Z",
+            "generation": 1
+          },
+          {
+            "id": "tab.acquire",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "Tab tab-1-1788435800906 · 账号 ff3592e8-517a-443d-a674-58105f7bc06b · Profile web-draft-b3896210-978e-4fe6-a9c0-813927210b5e",
+            "observedAt": "2026-09-08T06:08:52.893Z",
+            "generation": 1
+          },
+          {
+            "id": "editor.open",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "https://mp.csdn.net/mp_blog/creation/editor",
+            "observedAt": "2026-09-08T06:08:52.925Z",
+            "generation": 1
+          },
+          {
+            "id": "runtime.ready",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "Agent run-3fc740e8-7084-4333-bb2a-5d812ede6f06 · BrowserTask e324119f-2dbc-4214-bd40-c3db39908337 · Tab tab-1-1788435800906 · View g1 · WebContents 2 · Page g1",
+            "observedAt": "2026-09-08T06:08:53.082Z",
+            "generation": 1
+          },
+          {
+            "id": "initial.title.dispatch",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "recheck": {
+              "status": "unknown",
+              "evidence": "派发闸门已通过 · 2026-09-08T06:10:11.383Z · save-draft/initial-draft:title；结果另行核验",
+              "observedAt": "2026-09-08T06:10:46.987Z",
+              "generation": 1
+            },
+            "status": "completed",
+            "evidence": "浏览器动作 fill 已返回；平台结果另行核验 · initial-draft:title",
+            "observedAt": "2026-09-08T06:10:11.470Z",
+            "generation": 1
+          },
+          {
+            "id": "initial.body.dispatch",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "recheck": {
+              "status": "unknown",
+              "evidence": "派发闸门已通过 · 2026-09-08T06:10:22.745Z · save-draft/initial-draft:body；结果另行核验",
+              "observedAt": "2026-09-08T06:10:46.987Z",
+              "generation": 1
+            },
+            "status": "completed",
+            "evidence": "浏览器动作 frameExecute 已返回；平台结果另行核验 · initial-draft:body",
+            "observedAt": "2026-09-08T06:10:22.852Z",
+            "generation": 1
+          },
+          {
+            "id": "initial.save.dispatch",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "unknown",
+            "evidence": "派发闸门已通过 · 2026-09-08T06:10:31.921Z · save-draft/initial-draft:save；结果另行核验",
+            "observedAt": "2026-09-08T06:10:46.987Z",
+            "generation": 1
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 1,
+        "startedAt": "2026-09-08T06:08:53.082Z",
+        "evidence": []
+      },
+      {
+        "stepId": "verify-account",
+        "label": "核验账号与页面",
+        "adapterVersion": 1,
+        "status": "pending",
+        "details": [
+          {
+            "id": "page.inspect",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "recheck": {
+              "status": "unknown",
+              "evidence": "press · open-editor · 可能已派发，不能重放",
+              "reason": "首次保存响应超时，结果未知，禁止再次创建",
+              "observedAt": "2026-09-08T06:10:46.953Z",
+              "generation": 1
+            },
+            "status": "completed",
+            "evidence": "页面 editor · 账号 csdn:weixin_36388257 · draftId 尚无 · 标题 App 写完可以 close，上线和宣发却要一直做 · 保存 unknown",
+            "observedAt": "2026-09-08T06:10:15.301Z",
+            "generation": 1
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "upload-assets",
+        "label": "上传并核验正文图片",
+        "adapterVersion": 1,
+        "status": "pending",
+        "resumePolicy": "skip-if-verified",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "fill-body",
+        "label": "填写并核验正文",
+        "adapterVersion": 1,
+        "status": "pending",
+        "details": [
+          {
+            "id": "body.locate",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "正文 body.cke_editable[contenteditable=\"true\"] · iframe iframe.cke_wysiwyg_frame · 10 字符",
+            "observedAt": "2026-09-08T06:10:28.900Z",
+            "generation": 1
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "fill-fields",
+        "label": "填写平台字段",
+        "adapterVersion": 1,
+        "status": "pending",
+        "details": [
+          {
+            "id": "field.summary.inspect",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "期望 代码完成只是开始。从 CCLink 的开发经历聊聊产品说明、首次使用链路，以及上线后持续的运营和宣发。；实际 ",
+            "observedAt": "2026-09-08T06:09:36.115Z",
+            "generation": 1
+          },
+          {
+            "id": "field.summary.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "waiting",
+            "evidence": "期望 代码完成只是开始。从 CCLink 的开发经历聊聊产品说明、首次使用链路，以及上线后持续的运营和宣发。；实际 ",
+            "reason": "字段值尚不一致",
+            "observedAt": "2026-09-08T06:09:36.115Z",
+            "generation": 1
+          },
+          {
+            "id": "field.tags.inspect",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "期望 软件工程；实际 ",
+            "observedAt": "2026-09-08T06:09:36.115Z",
+            "generation": 1
+          },
+          {
+            "id": "field.tags.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "waiting",
+            "evidence": "期望 软件工程；实际 ",
+            "reason": "字段值尚不一致",
+            "observedAt": "2026-09-08T06:09:36.115Z",
+            "generation": 1
+          },
+          {
+            "id": "field.category.inspect",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "skipped",
+            "evidence": "本任务未配置此可选字段，不执行修改",
+            "observedAt": "2026-09-08T06:09:36.115Z",
+            "generation": 1
+          },
+          {
+            "id": "field.category.dispatch",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "skipped",
+            "evidence": "未配置，不需要写入",
+            "observedAt": "2026-09-08T06:09:36.115Z",
+            "generation": 1
+          },
+          {
+            "id": "field.category.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "skipped",
+            "evidence": "未配置，不声明当前平台字段已核验",
+            "observedAt": "2026-09-08T06:09:36.115Z",
+            "generation": 1
+          },
+          {
+            "id": "field.cover.inspect",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "skipped",
+            "evidence": "本任务未配置此可选字段，不执行修改",
+            "observedAt": "2026-09-08T06:09:36.115Z",
+            "generation": 1
+          },
+          {
+            "id": "field.cover.dispatch",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "skipped",
+            "evidence": "未配置，不需要写入",
+            "observedAt": "2026-09-08T06:09:36.115Z",
+            "generation": 1
+          },
+          {
+            "id": "field.cover.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "skipped",
+            "evidence": "未配置，不声明当前平台字段已核验",
+            "observedAt": "2026-09-08T06:09:36.115Z",
+            "generation": 1
+          },
+          {
+            "id": "field.title.inspect",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "期望 App 写完可以 close，上线和宣发却要一直做；实际 App 写完可以 close，上线和宣发却要一直做",
+            "observedAt": "2026-09-08T06:10:15.301Z",
+            "generation": 1
+          },
+          {
+            "id": "field.title.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "期望 App 写完可以 close，上线和宣发却要一直做；实际 App 写完可以 close，上线和宣发却要一直做",
+            "observedAt": "2026-09-08T06:10:15.301Z",
+            "generation": 1
+          },
+          {
+            "id": "field.title.dispatch",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "skipped",
+            "evidence": "当前字段已经与任务一致，无需再次填写",
+            "observedAt": "2026-09-08T06:10:15.301Z",
+            "generation": 1
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "save-draft",
+        "label": "保存并复核草稿",
+        "adapterVersion": 1,
+        "status": "pending",
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "publish",
+        "label": "执行常规单篇发布",
+        "adapterVersion": 1,
+        "status": "pending",
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "verify-publication",
+        "label": "核验文章结果",
+        "adapterVersion": 1,
+        "status": "pending",
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      }
+    ],
+    "sideEffects": [
+      {
+        "key": "e0fae919-d72b-4cb4-8c7c-7387ab0091ac:94afd4dd-ccd4-4a48-8c62-8c66dc6c0573:g1:save-draft:initial-draft:title",
+        "affairId": "e0fae919-d72b-4cb4-8c7c-7387ab0091ac",
+        "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+        "executionGeneration": 1,
+        "kind": "save-draft",
+        "targetId": "initial-draft:title",
+        "status": "result-unknown",
+        "reservedAt": "2026-09-08T06:10:11.324Z",
+        "consumedAt": "2026-09-08T06:10:11.363Z",
+        "dispatchedAt": "2026-09-08T06:10:11.383Z",
+        "observedAt": "2026-09-08T06:10:46.987Z",
+        "browserTaskRunId": "e324119f-2dbc-4214-bd40-c3db39908337"
+      },
+      {
+        "key": "e0fae919-d72b-4cb4-8c7c-7387ab0091ac:94afd4dd-ccd4-4a48-8c62-8c66dc6c0573:g1:save-draft:initial-draft:body",
+        "affairId": "e0fae919-d72b-4cb4-8c7c-7387ab0091ac",
+        "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+        "executionGeneration": 1,
+        "kind": "save-draft",
+        "targetId": "initial-draft:body",
+        "status": "result-unknown",
+        "reservedAt": "2026-09-08T06:10:22.682Z",
+        "consumedAt": "2026-09-08T06:10:22.725Z",
+        "dispatchedAt": "2026-09-08T06:10:22.745Z",
+        "observedAt": "2026-09-08T06:10:46.987Z",
+        "browserTaskRunId": "e324119f-2dbc-4214-bd40-c3db39908337"
+      },
+      {
+        "key": "e0fae919-d72b-4cb4-8c7c-7387ab0091ac:94afd4dd-ccd4-4a48-8c62-8c66dc6c0573:g1:save-draft:initial-draft:save",
+        "affairId": "e0fae919-d72b-4cb4-8c7c-7387ab0091ac",
+        "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+        "executionGeneration": 1,
+        "kind": "save-draft",
+        "targetId": "initial-draft:save",
+        "status": "result-unknown",
+        "reservedAt": "2026-09-08T06:10:31.847Z",
+        "consumedAt": "2026-09-08T06:10:31.900Z",
+        "dispatchedAt": "2026-09-08T06:10:31.921Z",
+        "observedAt": "2026-09-08T06:10:46.987Z",
+        "browserTaskRunId": "e324119f-2dbc-4214-bd40-c3db39908337"
+      }
+    ],
+    "executionProtocol": {
+      "version": 1,
+      "recentTransitions": []
+    },
+    "execution": {
+      "status": "result-unknown",
+      "currentAttemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+      "currentGeneration": 1,
+      "currentLaunchOperationId": "3fc740e8-7084-4333-bb2a-5d812ede6f06",
+      "currentStepId": "open-editor"
+    },
+    "publication": {
+      "status": "not-started"
+    }
+  },
+  "events": [
+    {
+      "id": "6d560387-21bf-4217-96f1-88eaad308658",
+      "type": "created",
+      "summary": "CSDN 文章发布事务已创建",
+      "occurredAt": "2026-09-08T06:08:52.730Z"
+    },
+    {
+      "id": "8cbd0c52-31a6-4713-a51a-5ade2baa74f2",
+      "type": "attempt-started",
+      "nodeId": "eef46242-6f86-42ac-ad5d-b18f90f5bf10",
+      "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+      "summary": "发布文章到 CSDN：已创建第 1 次办理",
+      "occurredAt": "2026-09-08T06:08:52.816Z"
+    },
+    {
+      "id": "0382af3e-24c3-46f5-bb7e-a0af484f8a10",
+      "type": "attempt-started",
+      "nodeId": "eef46242-6f86-42ac-ad5d-b18f90f5bf10",
+      "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+      "summary": "main 已绑定完整 Agent/Browser Runtime 身份",
+      "occurredAt": "2026-09-08T06:08:53.082Z"
+    },
+    {
+      "id": "f35e6447-67b8-4914-bd77-7e603829a57c",
+      "type": "node-status-changed",
+      "nodeId": "eef46242-6f86-42ac-ad5d-b18f90f5bf10",
+      "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+      "summary": "已预写网页副作用授权：save-draft/initial-draft:title",
+      "occurredAt": "2026-09-08T06:10:11.324Z"
+    },
+    {
+      "id": "7418ea3c-203d-4ca3-af38-cfa96a6b64bc",
+      "type": "node-status-changed",
+      "nodeId": "eef46242-6f86-42ac-ad5d-b18f90f5bf10",
+      "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+      "summary": "已消费网页副作用授权：save-draft/initial-draft:title",
+      "occurredAt": "2026-09-08T06:10:11.363Z"
+    },
+    {
+      "id": "20b39e8d-724b-4ae9-98cf-f623242e6179",
+      "type": "node-status-changed",
+      "nodeId": "eef46242-6f86-42ac-ad5d-b18f90f5bf10",
+      "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+      "summary": "即将派发网页副作用：save-draft/initial-draft:title",
+      "occurredAt": "2026-09-08T06:10:11.383Z"
+    },
+    {
+      "id": "2ee6cb8c-feab-44a6-8cfb-63233a8f2284",
+      "type": "node-status-changed",
+      "nodeId": "eef46242-6f86-42ac-ad5d-b18f90f5bf10",
+      "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+      "summary": "已预写网页副作用授权：save-draft/initial-draft:body",
+      "occurredAt": "2026-09-08T06:10:22.682Z"
+    },
+    {
+      "id": "f65a4103-ce46-4641-bc77-4f6d4129d5f1",
+      "type": "node-status-changed",
+      "nodeId": "eef46242-6f86-42ac-ad5d-b18f90f5bf10",
+      "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+      "summary": "已消费网页副作用授权：save-draft/initial-draft:body",
+      "occurredAt": "2026-09-08T06:10:22.725Z"
+    },
+    {
+      "id": "802a4fba-ce6d-4087-b620-91589f24f59e",
+      "type": "node-status-changed",
+      "nodeId": "eef46242-6f86-42ac-ad5d-b18f90f5bf10",
+      "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+      "summary": "即将派发网页副作用：save-draft/initial-draft:body",
+      "occurredAt": "2026-09-08T06:10:22.745Z"
+    },
+    {
+      "id": "c310bbe0-2d5d-4029-a938-2ace03c8505a",
+      "type": "node-status-changed",
+      "nodeId": "eef46242-6f86-42ac-ad5d-b18f90f5bf10",
+      "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+      "summary": "已预写网页副作用授权：save-draft/initial-draft:save",
+      "occurredAt": "2026-09-08T06:10:31.847Z"
+    },
+    {
+      "id": "85551cc9-eaf0-4a57-b9bc-8aaf4df7774b",
+      "type": "node-status-changed",
+      "nodeId": "eef46242-6f86-42ac-ad5d-b18f90f5bf10",
+      "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+      "summary": "已消费网页副作用授权：save-draft/initial-draft:save",
+      "occurredAt": "2026-09-08T06:10:31.900Z"
+    },
+    {
+      "id": "59f02905-c104-441f-8be0-59df6a44badd",
+      "type": "node-status-changed",
+      "nodeId": "eef46242-6f86-42ac-ad5d-b18f90f5bf10",
+      "attemptId": "94afd4dd-ccd4-4a48-8c62-8c66dc6c0573",
+      "summary": "即将派发网页副作用：save-draft/initial-draft:save",
+      "occurredAt": "2026-09-08T06:10:31.921Z"
+    }
+  ],
+  "workspaceRef": {
+    "kind": "local",
+    "path": "/Users/apple/Desktop/chat-cc/cclink-promotion"
+  },
+  "createdAt": "2026-09-08T06:08:52.730Z",
+  "updatedAt": "2026-09-08T06:10:46.987Z"
+}

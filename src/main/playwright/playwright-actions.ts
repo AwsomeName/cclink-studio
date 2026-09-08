@@ -19,6 +19,8 @@ export async function executePlaywrightAction(
   page: import('playwright-core').Page | null,
   action: { type: string; [key: string]: any },
   bridge?: PlaywrightBridge,
+  assertDispatchStillCurrent?: () => void,
+  trustedArticleBodyHtml?: string,
 ): Promise<any> {
   switch (action.type) {
     // ── 基础导航操作 ──────────────────────────────
@@ -441,8 +443,7 @@ export async function executePlaywrightAction(
     // ── iframe / Frame ──────────────────────────────
 
     case 'listFrames': {
-      const activePage = bridge!.getActivePage()!
-      const frames = activePage.frames()
+      const frames = page!.frames().filter((frame) => frame !== page!.mainFrame())
       return frames.map((f, i) => ({
         index: i,
         name: f.name(),
@@ -451,8 +452,7 @@ export async function executePlaywrightAction(
     }
 
     case 'frameExecute': {
-      const activePage = bridge!.getActivePage()!
-      const frameLocator = activePage.frameLocator(action.frameSelector as string)
+      const frameLocator = page!.frameLocator(action.frameSelector as string)
       const frameAction = action.frameAction as string
       const selector = action.selector as string
 
@@ -461,6 +461,59 @@ export async function executePlaywrightAction(
           await frameLocator.locator(selector).click()
           return { clicked: selector, frame: action.frameSelector }
         case 'fill':
+          // The current CSDN CKEditor does not mark locator.fill's input event dirty.
+          // A real, non-editing key event lets its existing change listener/60s autosave run.
+          // Pin the element: a replacement iframe must not receive the follow-up key.
+          if (
+            assertDispatchStillCurrent &&
+            /^https:\/\/mp\.csdn\.net\/mp_blog\/creation\/editor(?:\/\d+)?(?:[?#]|$)/u.test(
+              page!.url(),
+            ) &&
+            action.frameSelector === 'iframe.cke_wysiwyg_frame' &&
+            selector === 'body.cke_editable[contenteditable="true"]'
+          ) {
+            const body = await frameLocator.locator(selector).elementHandle()
+            if (!body) throw new Error('CSDN 正文编辑区域已经失效')
+            try {
+              assertDispatchStillCurrent()
+              if (trustedArticleBodyHtml !== undefined) {
+                await page!.evaluate(async (html) => {
+                  const editor = (
+                    window as unknown as {
+                      CKEDITOR?: {
+                        instances?: {
+                          editor?: {
+                            status: string
+                            setData(html: string, done: () => void): void
+                            fire(name: string): void
+                          }
+                        }
+                      }
+                    }
+                  ).CKEDITOR?.instances?.editor
+                  if (editor?.status !== 'ready') throw new Error('CSDN 正文编辑器未就绪')
+                  await new Promise<void>((resolve) => editor.setData(html, resolve))
+                }, trustedArticleBodyHtml)
+                assertDispatchStillCurrent()
+                await page!.evaluate(() => {
+                  const editor = (
+                    window as unknown as {
+                      CKEDITOR?: { instances?: { editor?: { fire(name: string): void } } }
+                    }
+                  ).CKEDITOR?.instances?.editor
+                  if (!editor) throw new Error('正文编辑器已失效')
+                  editor.fire('change')
+                })
+              } else {
+                await body.fill(action.value as string)
+                assertDispatchStillCurrent()
+                await body.press('ArrowRight')
+              }
+              return { filled: selector, frame: action.frameSelector }
+            } finally {
+              await body.dispose()
+            }
+          }
           await frameLocator.locator(selector).fill(action.value as string)
           return { filled: selector, frame: action.frameSelector }
         default:
@@ -469,14 +522,26 @@ export async function executePlaywrightAction(
     }
 
     case 'frameContent': {
-      const activePage = bridge!.getActivePage()!
-      const frames = activePage.frames()
-      // 通过 URL 或名称查找 frame
-      const targetFrame = action.frameUrl
-        ? frames.find((f) => f.url().includes(action.frameUrl as string))
+      if (action.frameSelector) {
+        if (!action.selector) throw new Error('按 iframe selector 读取时必须指定正文 selector')
+        return {
+          text: await page!
+            .frameLocator(action.frameSelector as string)
+            .locator(action.selector as string)
+            .textContent(),
+        }
+      }
+      // CKEditor's iframe shares the editor URL with the top document. Never select the
+      // top document or an unrelated globally active Page as this task's iframe content.
+      const frames = page!.frames().filter((frame) => frame !== page!.mainFrame())
+      const matches = action.frameUrl
+        ? frames.filter((f) => f.url().includes(action.frameUrl as string))
         : action.frameName
-          ? frames.find((f) => f.name() === action.frameName)
-          : null
+          ? frames.filter((f) => f.name() === action.frameName)
+          : []
+      if (matches.length > 1)
+        throw new Error('多个 iframe 匹配，请使用 listFrames 后指定唯一名称或 URL')
+      const targetFrame = matches[0]
 
       if (!targetFrame) throw new Error('未找到指定的 iframe，请使用 listFrames 查看可用 frame')
 

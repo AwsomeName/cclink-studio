@@ -6,6 +6,19 @@ function read(relativePath: string): string {
 }
 
 describe('unified Agent Panel production boundary', () => {
+  it('does not fight the workspace fallback while a Browser Tab binding is loading', () => {
+    const source = read('./AgentPanel.tsx')
+    const missingBinding = source.slice(
+      source.indexOf('if (!conversationId) {'),
+      source.indexOf('const bindingKey = activeTabConversationTask'),
+    )
+    // agent-default has no local workspace and is excluded by buildQuickThreadList. Selecting it
+    // here makes the workspace effect select the article again, repeating until React aborts.
+    expect(missingBinding).toContain('focusedTabConversationRef.current = null')
+    expect(missingBinding).not.toContain('switchConversation(')
+    expect(missingBinding).not.toContain('createConversation(')
+  })
+
   it('routes both layout positions through the single AgentPanel entry', () => {
     const appSource = read('../../App.tsx')
 

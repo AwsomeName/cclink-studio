@@ -18,6 +18,25 @@ export type ArticlePublishingCheckpointStatus =
   | 'waiting-human'
   | 'failed'
 
+/** Latest verified result per bounded plan item, folded into its existing checkpoint.
+ * No operation runs/history and no permission authority. */
+export interface ArticlePublishingDetailResult {
+  nextAction?: string
+  recheck?: {
+    status: string
+    evidence: string
+    reason?: string
+    observedAt: string
+    generation: number
+  }
+  id: string
+  status: 'running' | 'verifying' | 'completed' | 'waiting' | 'failed' | 'unknown' | 'skipped'
+  evidence: string
+  reason?: string
+  observedAt: string
+  generation: number
+}
+
 export interface ArticlePublishingCheckpoint {
   stepId: string
   label: string
@@ -29,6 +48,7 @@ export interface ArticlePublishingCheckpoint {
   finishedAt?: string
   outputRefs?: Record<string, string>
   evidence: string[]
+  details?: ArticlePublishingDetailResult[]
   error?: { code: string; message: string }
 }
 
@@ -290,6 +310,7 @@ export interface InspectArticlePublishingSourceInput {
 }
 
 export interface CreateArticlePublishingTaskInput extends InspectArticlePublishingSourceInput {
+  reviseDraftFromAffairId?: string
   accountId: string
   fields: ArticlePublishingFields
 }

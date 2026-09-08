@@ -3,6 +3,10 @@
 状态：针对性自动测试通过；真实 CSDN 已只读取证，恢复到后续步骤的产品验收未通过
 日期：2026-09-07
 
+当晚当前编辑器适配、新建真实任务及中断/继续的实跑结果见
+[CSDN 编辑器验收记录](article-publishing-csdn-editor-acceptance-2026-09-07.md)。
+当前仍未通过完整产品验收；下述早前现场与自动测试数字不替代该次记录。
+
 本文测试继续作为防倒退基线，但不能证明 Studio/Agent 两个黑盒已经拆开。新增的真实故障顺序和同类
 竞态测试见
 [../features/article-publishing-observable-execution-development-plan.md](../features/article-publishing-observable-execution-development-plan.md)。
@@ -20,7 +24,7 @@
 旧保存的未知结果经精确草稿恢复后标记为 `reconciled`，含义仅为“已读取原草稿当前保存状态”。
 不是旧动作成功，不完成正文/字段/保存检查点，不影响发布未知结果的禁止重试保护。
 
-## 2026-09-07 真实 Studio/CSDN 现场
+## 2026-09-07 早前真实 Studio/CSDN 现场
 
 使用已运行的开发版 Studio 0.1.87 和原登录 Profile，只做管理页导航、草稿箱切换和打开原草稿，
 没有登录、上传、保存、发布、删除，也没有创建替代任务。

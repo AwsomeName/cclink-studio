@@ -1,0 +1,46 @@
+{
+  "adapterId": "csdn",
+  "adapterVersion": 1,
+  "observedAt": "2026-09-08T05:35:59.042Z",
+  "url": "https://mp.csdn.net/mp_blog/manage/article",
+  "platformAccountId": "csdn:weixin_36388257",
+  "pageKind": "management",
+  "editor": {
+    "recognized": false,
+    "bodyTextLength": 0,
+    "initialDraftBodyEmpty": false,
+    "imageEnumerationComplete": false,
+    "images": [],
+    "fileInputSelector": "body:nth-of-type(1) > div:nth-of-type(3) > form:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(4) > input:nth-of-type(1)"
+  },
+  "title": {
+    "selector": "input[placeholder*=\"标题\"]",
+    "value": ""
+  },
+  "selectors": {
+    "title": "input[placeholder*=\"标题\"]",
+    "fileInput": "body:nth-of-type(1) > div:nth-of-type(3) > form:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(4) > input:nth-of-type(1)"
+  },
+  "fieldValues": {
+    "title": ""
+  },
+  "saveState": "unknown",
+  "publishedLinks": [
+    {
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/164598985",
+      "title": "Studio 细步骤验收 20260908-1227"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/164096117",
+      "title": "2 个月，我做了一个在手机上给 AI Agent 发任务、看进度的 App"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/164063187",
+      "title": "如何用手机继续电脑里的 Claude Code / Codex"
+    },
+    {
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/78221062",
+      "title": "浏览"
+    }
+  ]
+}

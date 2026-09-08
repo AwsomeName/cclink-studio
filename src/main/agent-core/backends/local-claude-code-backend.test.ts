@@ -192,6 +192,20 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     queryMock.mockImplementation(() => createMockQuery())
   })
 
+  it('gives only article-publishing HTTP calls time to finish CSDN autosave readback', async () => {
+    await createBackend().sendMessage('继续原草稿', {
+      articlePublishingPolicy: {
+        origin: 'article-publishing',
+        workspaceId: 'workspace-a',
+        affairId: 'affair-a',
+        attemptId: 'attempt-a',
+        executionGeneration: 2,
+        launchOperationId: 'launch-a',
+      },
+    })
+    expect(getLastQueryParams().options.mcpServers.cclink_studio.timeout).toBe(120_000)
+  })
+
   it('uses the Claude Agent SDK with configured provider settings', async () => {
     await createBackend().sendMessage('普通问答')
 
@@ -213,6 +227,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       },
     })
     expect(params.options.maxBudgetUsd).toBeUndefined()
+    expect(params.options.mcpServers.cclink_studio.timeout).toBeUndefined()
     expect(params.options.env.ANTHROPIC_BASE_URL).toBe('https://open.bigmodel.cn/api/anthropic')
     expect(params.options.env.ANTHROPIC_API_KEY).toBe('test-api-key')
     expect(params.options.env.CLAUDE_AGENT_SDK_CLIENT_APP).toBe('cclink-studio/0.1.1')

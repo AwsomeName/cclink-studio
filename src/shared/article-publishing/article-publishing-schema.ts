@@ -125,6 +125,48 @@ const checkpointSchema = z
     label: z.string().trim().min(1).max(160),
     adapterVersion: z.literal(1),
     status: articlePublishingCheckpointStatusSchema,
+    details: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1).max(240),
+            nextAction: z.string().max(2000).optional(),
+            recheck: z
+              .object({
+                status: z.enum([
+                  'running',
+                  'verifying',
+                  'completed',
+                  'waiting',
+                  'failed',
+                  'unknown',
+                  'skipped',
+                ]),
+                evidence: z.string().max(4000),
+                reason: z.string().max(2000).optional(),
+                observedAt: timestampSchema,
+                generation: z.number().int().nonnegative(),
+              })
+              .strict()
+              .optional(),
+            status: z.enum([
+              'running',
+              'verifying',
+              'completed',
+              'waiting',
+              'failed',
+              'unknown',
+              'skipped',
+            ]),
+            evidence: z.string().max(4000),
+            reason: z.string().max(2000).optional(),
+            observedAt: timestampSchema,
+            generation: z.number().int().nonnegative(),
+          })
+          .strict(),
+      )
+      .max(1200)
+      .optional(),
     resumePolicy: articlePublishingResumePolicySchema,
     attemptCount: z.number().int().nonnegative().max(100),
     startedAt: timestampSchema.optional(),
@@ -378,6 +420,7 @@ export const inspectArticlePublishingSourceInputSchema = z
 
 export const createArticlePublishingTaskInputSchema = z
   .object({
+    reviseDraftFromAffairId: uuidSchema.optional(),
     workspaceRef: workspaceRefSchema,
     markdownPath: absolutePathSchema,
     accountId: uuidSchema,

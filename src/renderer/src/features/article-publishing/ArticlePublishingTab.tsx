@@ -3,7 +3,7 @@ import type {
   ArticlePublishingAsset,
   ArticlePublishingSourcePreview,
 } from '@shared/article-publishing/article-publishing-types'
-import { CSDN_ARTICLE_PUBLISHING_PLAN } from '@shared/article-publishing/article-publishing-plan'
+import { articlePublishingDetailDefinitions } from '@shared/article-publishing/article-publishing-plan'
 import { parseCsdnDraftAnchor } from '@shared/article-publishing/csdn-draft-anchor'
 import type { WebAffair } from '@shared/web-affairs/web-affair-types'
 import type { WebResourceSnapshot } from '@shared/web-resources/web-resource-types'
@@ -11,6 +11,7 @@ import type { Tab } from '../../types'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { useAgentStore } from '../../stores/agent-store'
 import { useTabStore } from '../../stores/tab-store'
+import { useCommandStore } from '../../stores/command-store'
 import { useUIStore } from '../../stores/ui-store'
 import { createConversationRuntimeForWorkspace } from '../agent-conversations/view-model'
 import { resolveAndOpenWebResourceTab } from '../web-resources/web-resource-tab'
@@ -55,6 +56,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const affairId = tab.articlePublishing?.affairId ?? null
   const updateBinding = useTabStore((state) => state.updateTabArticlePublishing)
   const updateTitle = useTabStore((state) => state.updateTabTitle)
+  const [revisionOf, setRevisionOf] = useState<string | null>(null)
   const [preview, setPreview] = useState<ArticlePublishingSourcePreview | null>(null)
   const [resources, setResources] = useState<WebResourceSnapshot | null>(null)
   const [affair, setAffair] = useState<WebAffair | null>(null)
@@ -261,7 +263,8 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         ? 'main 已恢复原 Attempt，并绑定新一代 Agent/Browser Runtime。'
         : 'main 已创建发布 Attempt，并绑定可见网页与专属 Agent。',
     )
-    useTabStore.getState().activateTab(result.data.browserTabId)
+    // Main already opened the account tab during launch. Replaying focus here after
+    // awaited IPC can hide a task the user has returned to and just terminated.
   }
 
   const startTask = async (): Promise<void> => {
@@ -289,6 +292,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       const result = await window.cclinkStudio.articlePublishing.createTask({
         workspaceRef,
         markdownPath: preview.source.markdownPath,
+        ...(revisionOf ? { reviseDraftFromAffairId: revisionOf } : {}),
         accountId,
         fields: {
           title,
@@ -311,6 +315,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       updateBinding(tab.id, { affairId: result.data.id })
       updateTitle(tab.id, `发布 · ${result.data.title}`)
       setAffair(result.data)
+      setRevisionOf(null)
       if (startAfterSave) await executeTask(result.data)
       else
         setNotice(
@@ -338,6 +343,26 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     }
+  }
+
+  const showWebsiteBesidePlan = async (): Promise<void> => {
+    const attempt = affair?.attempts.find(
+      (item) => item.id === affair.articlePublishing?.execution.currentAttemptId,
+    )
+    if (!attempt?.tabId) {
+      setError('当前任务尚未绑定可见网页')
+      return
+    }
+    const result = await useCommandStore.getState().executeCommand('workbench.moveTabToNewWindow', {
+      source: 'toolbar',
+      target: {
+        kind: 'tab',
+        tabId: attempt.tabId,
+        tabType: 'browser',
+        workspaceKey: workspaceRefKey(workspaceRef),
+      },
+    })
+    if (!result.ok) setError(result.message ?? '无法分离当前网页')
   }
 
   const copyDiagnostics = async (): Promise<void> => {
@@ -466,7 +491,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     }
   }
 
-  if (!affairId) {
+  if (!affairId || revisionOf) {
     return (
       <div className="article-publishing-page">
         <header className="article-publishing-header">
@@ -584,13 +609,26 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           <h2>4. 执行计划</h2>
           <p>开始后会打开正确账号的可见网页和专属 Agent，并按以下顺序执行。</p>
           <div className="article-publishing-checkpoints">
-            {CSDN_ARTICLE_PUBLISHING_PLAN.map((step, index) => (
-              <div className="article-publishing-checkpoint pending" key={step.stepId}>
+            {articlePublishingDetailDefinitions({
+              draft: revisionOf ? affair?.articlePublishing?.draft : undefined,
+              assets: preview?.assets ?? [],
+              fields: {
+                title,
+                summary,
+                tags: tags
+                  .split(',')
+                  .map((value) => value.trim())
+                  .filter(Boolean),
+                category,
+                ...(coverAssetId ? { coverAssetId } : {}),
+              },
+            }).map((step, index) => (
+              <div className="article-publishing-checkpoint pending" key={step.id}>
                 <span>{index + 1}</span>
-                <strong>{step.label}</strong>
+                <strong>{step.action}</strong>
                 <em>等待</em>
                 <small>
-                  {step.resumePolicy === 'manual-only' ? '敏感边界可暂停' : '可中断恢复'}
+                  {step.owner} · {step.completion}
                 </small>
               </div>
             ))}
@@ -661,6 +699,13 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           </button>
           <button
             type="button"
+            onClick={() => void showWebsiteBesidePlan()}
+            disabled={!runtimeBinding}
+          >
+            网页独立窗口
+          </button>
+          <button
+            type="button"
             disabled={!runtimeBinding?.conversationId}
             onClick={() => {
               if (!runtimeBinding?.conversationId) return
@@ -672,6 +717,37 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           <button type="button" onClick={() => void copyDiagnostics()}>
             复制完整诊断日志
           </button>
+          {['cancelled', 'failed'].includes(publishing.execution.status) &&
+          publishing.draft?.platformDraftId &&
+          publishing.publication.status === 'not-started' ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true)
+                void window.cclinkStudio.articlePublishing
+                  .inspectSource({ workspaceRef, markdownPath: publishing.source.markdownPath })
+                  .then((result) => {
+                    if (!result.success) throw new Error(result.error.message)
+                    setPreview(result.data)
+                    setAccountId(publishing.accountId)
+                    setTitle(publishing.fields.title)
+                    setSummary(publishing.fields.summary)
+                    setTags(publishing.fields.tags.join(','))
+                    setCategory(publishing.fields.category)
+                    setCoverAssetId(publishing.fields.coverAssetId ?? '')
+                    setRevisionOf(affair.id)
+                    setNotice(
+                      `修订原稿 ${publishing.draft?.platformDraftId}：请确认当前文件及摘要允许公开发布。旧任务保持终止，原账号和标题必须保持一致。`,
+                    )
+                  })
+                  .catch((reason) => setError(String(reason)))
+                  .finally(() => setBusy(false))
+              }}
+            >
+              按当前文件修订原稿
+            </button>
+          ) : null}
         </div>
       </header>
       {error ? <div className="article-publishing-alert error">{error}</div> : null}
@@ -712,7 +788,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           <div className="article-publishing-config-item wide">
             <span>平台草稿</span>
             <strong>{draftAnchor ? `CSDN 草稿 ${draftAnchor.draftId}` : '尚未锁定平台草稿'}</strong>
-            <small>{draftAnchor?.url ?? '首次进入带数字 ID 的草稿页后自动记录'}</small>
+            <small>{draftAnchor?.url ?? '首次受保护保存成功后，记录本任务自己的草稿编号'}</small>
           </div>
           <div className="article-publishing-config-item wide">
             <span>摘要</span>
@@ -801,27 +877,113 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
             ) : null}
           </div>
         ) : (
-          <p>当前没有由 main 接管的细粒度动作。</p>
+          <div>
+            <p>
+              具体执行、核验结果和卡点见下方执行计划。执行时请保留原稿网页可见；使用“网页独立窗口”可同时查看计划。
+            </p>
+            {publishing.checkpoints
+              .find((item) => item.stepId === publishing.execution.currentStepId)
+              ?.details?.filter(
+                (item) =>
+                  ['running', 'verifying', 'waiting', 'unknown', 'failed'].includes(item.status) ||
+                  item.recheck,
+              )
+              .map((item) => (
+                <p key={item.id}>
+                  <strong>
+                    {articlePublishingDetailDefinitions(publishing).find(
+                      (definition) => definition.id === item.id,
+                    )?.action ?? item.id}
+                  </strong>
+                  ：{item.recheck?.reason ?? item.reason ?? item.evidence}
+                </p>
+              ))}
+          </div>
         )}
       </section>
       <section className="article-publishing-card">
         <h2>执行计划</h2>
         <div className="article-publishing-checkpoints">
-          {publishing.checkpoints.map((checkpoint, index) => (
-            <div
-              className={`article-publishing-checkpoint ${checkpoint.status}`}
-              key={checkpoint.stepId}
-            >
-              <span>{index + 1}</span>
-              <strong>{checkpoint.label}</strong>
-              <em>{CHECKPOINT_LABELS[checkpoint.status]}</em>
-              <small>
-                {checkpoint.attemptCount > 0
-                  ? `执行 ${checkpoint.attemptCount} 次`
-                  : checkpoint.resumePolicy}
-              </small>
-            </div>
-          ))}
+          {articlePublishingDetailDefinitions(publishing).map((step, index) => {
+            const checkpoint = publishing.checkpoints.find(
+              (item) => item.stepId === step.checkpointId,
+            )
+            const result = checkpoint?.details?.find((item) => item.id === step.id)
+            const status = result?.status ?? 'pending'
+            const labels: Record<string, string> = {
+              pending: '尚未观察到执行',
+              running: '执行中',
+              verifying: '正在核验',
+              completed: step.id.endsWith('.dispatch') ? '动作已完成' : '已核验',
+              waiting: '等待处理',
+              failed: '失败',
+              unknown: '结果未知',
+              skipped: '无需执行',
+            }
+            return (
+              <details
+                className={`article-publishing-detail ${status}`}
+                key={step.id}
+                open={
+                  ['running', 'verifying', 'waiting', 'failed', 'unknown'].includes(status) ||
+                  Boolean(result?.recheck)
+                }
+              >
+                <summary>
+                  <span>{index + 1}</span>
+                  <strong>{step.action}</strong>
+                  <em>
+                    {labels[status]}
+                    {result?.recheck
+                      ? ` · 本次${labels[result.recheck.status] ?? result.recheck.status}`
+                      : ''}
+                  </em>
+                  <small>{step.owner}</small>
+                </summary>
+                <dl>
+                  <dt>进入条件</dt>
+                  <dd>{step.entry}</dd>
+                  <dt>完成条件</dt>
+                  <dd>{step.completion}</dd>
+                  <dt>实际证据</dt>
+                  <dd>
+                    {result?.evidence ||
+                      '尚无真实执行或页面回读证据。历史粗检查点不作为此小步骤的完成证据。'}
+                  </dd>
+                  {result?.reason ? (
+                    <>
+                      <dt>停住原因</dt>
+                      <dd>{result.reason}</dd>
+                    </>
+                  ) : null}
+                  {result?.recheck ? (
+                    <>
+                      <dt>本次复核</dt>
+                      <dd>
+                        {result.recheck.evidence} · {result.recheck.reason} ·{' '}
+                        {result.recheck.observedAt}
+                      </dd>
+                    </>
+                  ) : null}
+                  <dt>允许下一步</dt>
+                  <dd>
+                    {result?.nextAction ??
+                      (publishing.execution.status === 'cancelled'
+                        ? '任务已终止；不能再派发操作。保留现场和证据。'
+                        : step.next)}
+                  </dd>
+                  {result ? (
+                    <>
+                      <dt>证据时间</dt>
+                      <dd>
+                        {result.observedAt} · 执行代次 {result.generation}
+                      </dd>
+                    </>
+                  ) : null}
+                </dl>
+              </details>
+            )
+          })}
         </div>
       </section>
       <div className="article-publishing-footer">

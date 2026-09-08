@@ -8,6 +8,58 @@ import {
 } from './csdn-publishing-adapter'
 
 describe('CsdnPublishingAdapter recovery evidence', () => {
+  it.each([true, false])(
+    'uses server comparison, not a stale saved toast, for CKEditor (%s)',
+    async (matches) => {
+      const page = {
+        evaluate: vi.fn(async () => ({
+          url: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
+          pageKind: 'editor',
+          accountHrefCandidates: ['https://blog.csdn.net/test-user'],
+          bodySelector: 'body.cke_editable[contenteditable="true"]',
+          bodyFrameSelector: 'iframe.cke_wysiwyg_frame',
+          bodyTextLength: 120,
+          imageEnumerationComplete: true,
+          images: [],
+          titleValue: 'Article',
+          selectors: {},
+          saveStatusTexts: ['草稿已保存'],
+          savedDraftMatches: matches,
+          publishedLinks: [],
+        })),
+      }
+      const probe = await new CsdnPublishingAdapter().probe(page as never)
+      expect(probe.saveState).toBe(matches ? 'saved' : 'unknown')
+      expect(probe).toMatchObject({
+        platformAccountId: 'csdn:test-user',
+        draftId: '164148817',
+        editor: { bodyFrameSelector: 'iframe.cke_wysiwyg_frame' },
+      })
+    },
+  )
+
+  it('invalidates observations on CKEditor reload/detach, but not AI Chat navigation', () => {
+    const url = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
+    const editor = { url: () => url }
+    const ai = { url: () => 'https://app-blog.csdn.net/csdn/aiChatNew' }
+    const listeners: Record<string, (frame: unknown) => void> = {}
+    const page = {
+      url: () => url,
+      frames: () => [editor, ai],
+      on: (name: string, fn: (frame: unknown) => void) => {
+        listeners[name] = fn
+      },
+    }
+    const adapter = new CsdnPublishingAdapter()
+    expect(adapter.documentGeneration(page as never)).toBe(0)
+    listeners.framenavigated(ai)
+    expect(adapter.documentGeneration(page as never)).toBe(0)
+    listeners.framenavigated(editor)
+    expect(adapter.documentGeneration(page as never)).toBe(1)
+    listeners.framedetached(editor)
+    expect(adapter.documentGeneration(page as never)).toBe(2)
+  })
+
   it('does not treat article-body profile links or saved-looking prose as account/save evidence', () => {
     expect(CSDN_ACCOUNT_EVIDENCE_REGION_SELECTOR).not.toMatch(/body|article|main/iu)
     expect(CSDN_SAVE_STATUS_SELECTOR).not.toMatch(/body|article|main/iu)
@@ -15,6 +67,7 @@ describe('CsdnPublishingAdapter recovery evidence', () => {
       resolveCsdnPlatformAccountId('https://mp.csdn.net/mp_blog/creation/editor/164148817', []),
     ).toBeUndefined()
     expect(classifyCsdnSaveStatus([])).toEqual({ state: 'unknown' })
+    expect(classifyCsdnSaveStatus(['保存草稿', '保存并预览'])).toEqual({ state: 'unknown' })
   })
 
   it('prefers an active saving signal over a stale saved signal in bounded status controls', () => {

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { prepareArticleBody } from './article-body'
 import type { BrowserTaskRun } from '../../shared/ipc/browser'
 import type { ToolExecutionContext } from '../mcp/types'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
@@ -10,6 +11,8 @@ import {
   parseCsdnDraftAnchor,
 } from '../../shared/article-publishing/csdn-draft-anchor'
 import { CsdnPublishingAdapter, type CsdnPageProbe } from './csdn-publishing-adapter'
+import { observeCsdnInitialDraftSave } from './csdn-initial-draft-save'
+import { CsdnDraftRecoveryCoordinator } from './csdn-draft-recovery-coordinator'
 import type { WebAffairOperationResult } from '../../shared/web-affairs/web-affair-types'
 import type { ArticlePublishingAgentReporter } from '../web-affairs/web-affair-service'
 import type {
@@ -72,6 +75,7 @@ interface ArticlePublishingExecutionScope {
   writePermitId?: string
   draftUrl?: string
   expectedTitle: string
+  expectedFields: import('../../shared/article-publishing/article-publishing-types').ArticlePublishingFields
   assets: Array<{
     id: string
     kind: 'local' | 'remote'
@@ -94,6 +98,7 @@ interface ArticlePublishingExecutionScope {
 }
 
 export interface ArticlePublishingPageInspection extends CsdnPageProbe {
+  bodyMatchesFrozen?: boolean
   matchedAssets: Record<string, string>
 }
 
@@ -103,6 +108,7 @@ interface TrustedPageAttestation {
   runtime: ArticlePublishingRuntimeSnapshot
   page: ReturnType<PlaywrightBridge['getPageById']>
   documentGeneration?: number
+  editorDocumentGeneration?: number
 }
 
 interface ResolveExecutionInput {
@@ -133,10 +139,11 @@ const PAGE_MUTATION_ACTIONS = new Set([
   'pressKey',
   'dragDrop',
   'handleDialog',
+  'frameExecute',
 ])
 const CONTROL_ACTIVATION_ACTIONS = new Set(['click', 'press', 'pressKey'])
 const READ_ONLY_STEPS = new Set(['verify-account', 'verify-publication'])
-const POTENTIAL_AUTOSAVE_ACTIONS = new Set(['fill', 'select', 'check', 'uncheck'])
+const POTENTIAL_AUTOSAVE_ACTIONS = new Set(['fill', 'select', 'check', 'uncheck', 'frameExecute'])
 const AUTOSAVE_STEPS = new Set(['fill-body', 'fill-fields'])
 
 /**
@@ -223,12 +230,14 @@ export class ArticlePublishingBrowserPolicy {
       task.tabId,
     )?.documentGeneration
     const observationUrl = page.url()
+    const editorDocumentGeneration = this.adapter.documentGeneration(page)
     const observationIsCurrent = () =>
       this.attestationRuntimeIsCurrent({
         scope,
         runtime,
         page,
         documentGeneration,
+        editorDocumentGeneration,
         inspection: { url: observationUrl } as ArticlePublishingPageInspection,
       })
     const retryCurrentPage = async (): Promise<
@@ -239,6 +248,29 @@ export class ArticlePublishingBrowserPolicy {
         return this.inspectCurrentPage(context, retriesRemaining - 1)
       }
       return publishingEvidenceError('页面检查期间身份或文档已变化；旧观察已废止，请重试只读检查')
+    }
+    if (this.browserManager?.isViewVisible && !this.browserManager.isViewVisible(task.tabId)) {
+      await this.webAffairService.recordArticlePublishingPlanResults(
+        {
+          workspaceId: scope.workspaceId,
+          affairId: scope.affairId,
+          attemptId: scope.attemptId,
+          executionGeneration: scope.executionGeneration,
+          launchOperationId: scope.launchOperationId,
+          results: [
+            {
+              id: 'page.inspect',
+              status: 'waiting',
+              evidence: `当前绑定网页 Tab ${task.tabId} 不可见`,
+              reason: '请打开网页，或点击“网页独立窗口”让原稿与执行计划同时可见；不会要求重新登录',
+            },
+          ],
+        },
+        () => !context?.abortSignal?.aborted && !this.browserManager!.isViewVisible(task.tabId),
+      )
+      return publishingEvidenceError(
+        '绑定的原稿网页不可见；请打开网页或使用“网页独立窗口”后重新检查，不需要重新登录',
+      )
     }
     if (!observationIsCurrent()) return retryCurrentPage()
     let startedOperation: ArticlePublishingCurrentOperation | undefined
@@ -327,7 +359,9 @@ export class ArticlePublishingBrowserPolicy {
     if (probe.editor.recognized && probe.editor.imageEnumerationComplete) {
       for (const asset of scope.assets) {
         const existing = asset.platformUrl
-          ? probe.editor.images.find((image) => image.src === asset.platformUrl)?.src
+          ? probe.editor.images.find(
+              (image) => image.src === asset.platformUrl && image.loaded === true,
+            )?.src
           : null
         if (existing) matchedAssets[asset.id] = existing
       }
@@ -335,6 +369,14 @@ export class ArticlePublishingBrowserPolicy {
     const inspection: ArticlePublishingPageInspection = {
       ...probe,
       matchedAssets,
+    }
+    if (
+      scope.assets.length &&
+      scope.localAssetsReady &&
+      (probe.editor.recognized || probe.pageKind === 'published-article')
+    ) {
+      inspection.bodyMatchesFrozen = await this.verifyFrozenBody(scope, page, observationIsCurrent)
+      if (!observationIsCurrent()) return retryCurrentPage()
     }
     if (startedOperation) {
       const completed = await this.webAffairService.completeArticlePublishingFirstInspect(
@@ -358,18 +400,129 @@ export class ArticlePublishingBrowserPolicy {
       if (!observationIsCurrent()) return retryCurrentPage()
       if (!completed.success) return publishingEvidenceError(completed.error.message)
     }
+    const facts: Array<
+      Pick<
+        import('../../shared/article-publishing/article-publishing-types').ArticlePublishingDetailResult,
+        'id' | 'status' | 'evidence' | 'reason'
+      >
+    > = [
+      {
+        id: 'page.inspect',
+        status:
+          inspection.platformAccountId && inspection.pageKind !== 'unsupported'
+            ? 'completed'
+            : 'waiting',
+        evidence: `页面 ${inspection.pageKind} · 账号 ${inspection.platformAccountId ?? '不可读'} · draftId ${inspection.draftId ?? '尚无'} · 标题 ${inspection.title.value} · 保存 ${inspection.saveState}`,
+      },
+      {
+        id: 'body.locate',
+        status:
+          inspection.editor.recognized && inspection.editor.bodySelector ? 'completed' : 'waiting',
+        evidence: `正文 ${inspection.editor.bodySelector ?? '未识别'} · iframe ${inspection.editor.bodyFrameSelector ?? '主文档'} · ${inspection.editor.bodyTextLength} 字符`,
+        ...(!inspection.editor.bodySelector ? { reason: '当前页面没有可核验的正文编辑区域' } : {}),
+      },
+    ]
+    if (scope.currentStepId === 'upload-assets') {
+      const asset = scope.assets.find((a) => a.kind === 'local' && a.status !== 'uploaded')
+      if (asset)
+        facts.push({
+          id: `asset.${asset.id}.open`,
+          status: inspection.selectors.fileInput ? 'completed' : 'waiting',
+          evidence: `${asset.displayPath} · ${inspection.selectors.fileInput ?? '正文上传面板尚未打开'}`,
+          reason: inspection.selectors.fileInput
+            ? undefined
+            : '先打开正文图片上传面板；不能使用封面或反馈上传框',
+        })
+    }
+    for (const field of ['title', 'summary', 'tags', 'category', 'cover'] as const) {
+      const expected =
+        field === 'cover'
+          ? (scope.assets.find((a) => a.id === scope.expectedFields.coverAssetId)?.platformUrl ??
+            scope.expectedFields.coverAssetId)
+          : scope.expectedFields[field]
+      const required = Array.isArray(expected) ? expected.length > 0 : Boolean(expected)
+      if (!required) {
+        facts.push(
+          {
+            id: `field.${field}.inspect`,
+            status: 'skipped',
+            evidence: '本任务未配置此可选字段，不执行修改',
+          },
+          { id: `field.${field}.dispatch`, status: 'skipped', evidence: '未配置，不需要写入' },
+          {
+            id: `field.${field}.verify`,
+            status: 'skipped',
+            evidence: '未配置，不声明当前平台字段已核验',
+          },
+        )
+        continue
+      }
+      const actual = inspection.fieldValues?.[field]
+      const expectedText = Array.isArray(expected) ? expected.join(',') : String(expected)
+      const matches = actual !== undefined && normalizeText(actual) === normalizeText(expectedText)
+      facts.push({
+        id: `field.${field}.inspect`,
+        status: actual === undefined ? 'waiting' : 'completed',
+        evidence: `期望 ${expectedText}；实际 ${actual ?? '不支持读取此字段'}`,
+        ...(actual === undefined ? { reason: '当前平台字段不是受支持的唯一可读控件' } : {}),
+      })
+      facts.push({
+        id: `field.${field}.verify`,
+        status: matches ? 'completed' : 'waiting',
+        evidence: `期望 ${expectedText}；实际 ${actual ?? '不可读'}`,
+        ...(!matches
+          ? { reason: actual === undefined ? '缺少字段回读证据' : '字段值尚不一致' }
+          : {}),
+      })
+      if (matches)
+        facts.push({
+          id: `field.${field}.dispatch`,
+          status: 'skipped',
+          evidence: '当前字段已经与任务一致，无需再次填写',
+        })
+    }
+    if (inspection.publicationBlocker)
+      facts.push({
+        id: 'publication.verify',
+        status: /未通过|不通过/u.test(inspection.publicationBlocker) ? 'failed' : 'waiting',
+        evidence: `CSDN 文章状态栏：${inspection.publicationBlocker} · ${inspection.url}`,
+        reason: `平台${inspection.publicationBlocker}；作者可见不代表公开成功。查看平台原因后决定修改或申诉，不自动重发`,
+      })
+    const planRecorded = await this.webAffairService.recordArticlePublishingPlanResults(
+      {
+        workspaceId: scope.workspaceId,
+        affairId: scope.affairId,
+        attemptId: scope.attemptId,
+        executionGeneration: scope.executionGeneration,
+        launchOperationId: scope.launchOperationId,
+        results: facts,
+      },
+      observationIsCurrent,
+    )
+    if (!planRecorded.success) return publishingEvidenceError(planRecorded.error.message)
+    if (!observationIsCurrent()) return retryCurrentPage()
     this.attestations.set(this.attestationKey(context), {
       scope: currentScope,
       inspection,
       runtime,
       page,
       documentGeneration,
+      editorDocumentGeneration,
     })
     while (this.attestations.size > 40) {
       const oldest = this.attestations.keys().next().value
       if (!oldest) break
       this.attestations.delete(oldest)
     }
+    // The adapter really read the bound visible Page. Register that read in the existing
+    // BrowserTask log so a verification-only Run is not mistaken for an idle claim.
+    const readLog = this.browserTaskRuntime?.startActionLog?.({
+      taskRunId: scope.browserTaskRunId,
+      tabId: scope.tabId,
+      action: 'article_publishing_inspect_page',
+      paramsSummary: `Verified read: ${inspection.pageKind} ${inspection.url}`,
+    })
+    if (readLog) this.browserTaskRuntime?.succeedActionLog(readLog.id)
     return { success: true, data: inspection }
   }
 
@@ -399,6 +552,8 @@ export class ArticlePublishingBrowserPolicy {
       return publishingEvidenceError('CSDN 页面证据已经过期或不属于当前执行代次')
     }
     const evidenceKind = trustedEvidenceKind(toolName, params)
+    if (evidenceKind === 'published' && inspection.publicationBlocker)
+      return publishingEvidenceError(`CSDN ${inspection.publicationBlocker}，不能标记公开发布成功`)
     if (!this.inspectionProves(evidenceKind, params, attestation)) {
       return publishingEvidenceError('当前 CSDN 页面读回结果不能证明所报告的成功状态')
     }
@@ -423,6 +578,7 @@ export class ArticlePublishingBrowserPolicy {
           ...(inspection.draftId ? { draftId: inspection.draftId } : {}),
           normalizedTitle: normalizeText(inspection.title.value),
           saveState: inspection.saveState,
+          bodyMatchesFrozen: inspection.bodyMatchesFrozen,
         },
       },
     }
@@ -435,6 +591,87 @@ export class ArticlePublishingBrowserPolicy {
   }
 
   async classifyAction(
+    task: BrowserTaskRun,
+    actionType: string,
+    params: Record<string, unknown>,
+    page: ReturnType<PlaywrightBridge['getPage']>,
+    context?: ToolExecutionContext,
+  ): Promise<ArticlePublishingBrowserActionDecision | null> {
+    const decision = await this.classifyActionDecision(task, actionType, params, page, context)
+    if (
+      decision &&
+      ['handoff', 'unknown', 'runtime-error'].includes(decision.kind) &&
+      'reason' in decision
+    )
+      await this.recordActionFailure(task, actionType, params, decision.reason, false, context)
+    return decision
+  }
+
+  /** A real rejected/failed Browser action, not an Agent's description of progress. */
+  async recordActionFailure(
+    task: BrowserTaskRun,
+    actionType: string,
+    params: Record<string, unknown>,
+    reason: string,
+    dispatched: boolean,
+    context?: ToolExecutionContext,
+  ): Promise<void> {
+    const scope = await this.resolveTaskScope(task, context, false)
+    if (!scope) return
+    const selectors = this.attestations.get(this.attestationKey(context))?.inspection.selectors
+    const asset =
+      Array.isArray(params.paths) && params.paths.length === 1
+        ? scope.assets.find((a) => a.sourcePath === (params.paths as unknown[])[0])
+        : undefined
+    const field = (['title', 'summary', 'tags', 'category', 'cover'] as const).find(
+      (key) => selectors?.[key] && selectors[key] === params.selector,
+    )
+    const openingAsset =
+      scope.currentStepId === 'upload-assets' && selectors?.imageOpen === params.selector
+        ? scope.assets.find((a) => a.kind === 'local' && a.status !== 'uploaded')
+        : undefined
+    const id = openingAsset
+      ? `asset.${openingAsset.id}.open`
+      : scope.currentStepId === 'open-editor' && selectors?.save === params.selector
+        ? dispatched
+          ? 'initial.anchor'
+          : 'initial.save.dispatch'
+        : asset
+          ? `asset.${asset.id}.${dispatched ? 'verify' : 'dispatch'}`
+          : scope.currentStepId === 'fill-body' && selectors?.body === params.selector
+            ? `body.${dispatched ? 'verify' : 'dispatch'}`
+            : scope.currentStepId === 'fill-fields' && field
+              ? `field.${field}.${dispatched ? 'verify' : 'dispatch'}`
+              : scope.currentStepId === 'save-draft'
+                ? `save.${dispatched ? 'verify' : 'dispatch'}`
+                : scope.currentStepId === 'publish'
+                  ? dispatched
+                    ? 'publication.verify'
+                    : 'publish.dispatch'
+                  : 'page.inspect'
+    await this.webAffairService.recordArticlePublishingPlanResults(
+      {
+        workspaceId: scope.workspaceId,
+        affairId: scope.affairId,
+        attemptId: scope.attemptId,
+        executionGeneration: scope.executionGeneration,
+        launchOperationId: scope.launchOperationId,
+        results: [
+          {
+            id,
+            status: dispatched ? 'unknown' : 'failed',
+            evidence: `${actionType} · ${asset?.displayPath ?? field ?? scope.currentStepId ?? '页面检查'} · ${dispatched ? '可能已派发，不能重放' : '动作被拒绝或尚未派发'}`,
+            reason,
+          },
+        ],
+      },
+      () =>
+        !context?.abortSignal?.aborted &&
+        this.browserTaskRuntime?.getTask(task.id)?.status === 'running',
+    )
+  }
+
+  private async classifyActionDecision(
     task: BrowserTaskRun,
     actionType: string,
     params: Record<string, unknown>,
@@ -510,21 +747,12 @@ export class ArticlePublishingBrowserPolicy {
       return this.stopDecision(scope, actionType, 'unknown', '文章发布适配器无法读取当前页面地址')
     }
     const visibleAnchor = parseCsdnDraftAnchor(pageUrl)
-    let boundDraftUrl = scope.draftUrl
-    if (visibleAnchor && !boundDraftUrl) {
-      const recorded = await this.webAffairService.recordArticlePublishingDraftAnchor(
-        scope.affairId,
-        scope.attemptId,
-        scope.executionGeneration,
-        scope.launchOperationId,
-        visibleAnchor.url,
-        scope.workspaceId,
-        scope.browserTaskRunId,
-      )
-      if (!recorded.success) {
-        return this.stopDecision(scope, actionType, 'unknown', recorded.error.message, pageUrl)
+    const boundDraftUrl = scope.draftUrl
+    if (isMutation && visibleAnchor && !boundDraftUrl) {
+      return {
+        kind: 'runtime-error',
+        reason: '当前数字草稿不是本任务首次保存产生的原稿，禁止认领或写入',
       }
-      boundDraftUrl = visibleAnchor.url
     }
     if (
       isMutation &&
@@ -550,7 +778,23 @@ export class ArticlePublishingBrowserPolicy {
         )
       }
     }
-    if (!isMutation) return { kind: 'allow' }
+    if (!isMutation) {
+      if (actionType === 'frameContent' && params.frameSelector) {
+        const attestation = this.attestations.get(this.attestationKey(context))
+        if (
+          !attestation ||
+          !this.attestationRuntimeIsCurrent(attestation) ||
+          params.frameSelector !== attestation.inspection.editor.bodyFrameSelector ||
+          params.selector !== attestation.inspection.selectors.body
+        ) {
+          return {
+            kind: 'runtime-error',
+            reason: '正文读取必须使用最新 inspect 签发的 iframe 和正文 selector',
+          }
+        }
+      }
+      return { kind: 'allow' }
+    }
     if (!this.isRecognizedPageForStep(pageUrl, scope.currentStepId)) {
       return this.stopDecision(
         scope,
@@ -558,6 +802,20 @@ export class ArticlePublishingBrowserPolicy {
         'unknown',
         '当前页面不是适配器可核验的 CSDN 文章发布页面',
         pageUrl,
+      )
+    }
+    const dismissSelectors = this.attestations.get(this.attestationKey(context))?.inspection
+      .selectors
+    if (
+      actionType === 'click' &&
+      [dismissSelectors?.dismissAssistant, dismissSelectors?.dismissTagEditor].some(
+        (s) => s && params.selector === s,
+      )
+    ) {
+      return (
+        this.validateAttestedSelector(scope, actionType, params, pageUrl, context) ?? {
+          kind: 'allow',
+        }
       )
     }
     if (READ_ONLY_STEPS.has(scope.currentStepId ?? '')) {
@@ -588,6 +846,112 @@ export class ArticlePublishingBrowserPolicy {
       context,
     )
     if (selectorDecision) return selectorDecision
+    const tagEditor = this.attestations.get(this.attestationKey(context))?.inspection.tagEditor
+    if (scope.currentStepId === 'fill-fields' && tagEditor) {
+      if (actionType === 'click' && params.selector === tagEditor.openSelector)
+        return { kind: 'allow' }
+      if (params.selector === tagEditor.inputSelector) {
+        const pending = actionType === 'fill' ? String(params.value ?? '') : tagEditor.pendingValue
+        if (!scope.expectedFields.tags.includes(pending))
+          return { kind: 'runtime-error', reason: '只能填写任务冻结的文章标签' }
+        if (actionType === 'fill') return { kind: 'allow' } // Search buffer, not an article field yet.
+        if (actionType === 'press' && params.key === 'Enter') {
+          if ((await page.locator(String(params.selector)).inputValue()) !== pending)
+            return { kind: 'runtime-error', reason: '标签输入已变化，重新 inspect 后再提交' }
+          return this.reserveSideEffect(
+            scope,
+            'save-draft',
+            `autosave:fill-fields:tags:${randomUUID()}`,
+            actionType,
+            params,
+            pageUrl,
+          )
+        }
+        return {
+          kind: 'runtime-error',
+          reason: '标签只允许填写冻结值后在唯一输入框按 Enter，再回读文章标签',
+        }
+      }
+    }
+    if (scope.currentStepId === 'open-editor' && !boundDraftUrl) {
+      const inspection = this.attestations.get(this.attestationKey(context))!.inspection
+      const initialPage =
+        inspection.url === 'https://mp.csdn.net/mp_blog/creation/editor' &&
+        Boolean(inspection.platformAccountId)
+      const snapshot = this.webAffairService.getProjectSnapshot(scope.workspaceId)
+      const effects = snapshot.success
+        ? snapshot.data.affairs.find((a) => a.id === scope.affairId)?.articlePublishing?.sideEffects
+        : []
+      const ownsEffect = (targetId: string) =>
+        effects?.some(
+          (effect) =>
+            effect.targetId === targetId &&
+            effect.executionGeneration === scope.executionGeneration &&
+            effect.browserTaskRunId === task.id &&
+            effect.status === 'dispatched',
+        )
+      const seed = scope.expectedTitle.trim().slice(0, 10)
+      const selector = String(params.selector ?? '')
+      if (
+        initialPage &&
+        inspection.editor.initialDraftBodyEmpty &&
+        actionType === 'fill' &&
+        selector === inspection.selectors.title &&
+        !inspection.title.value.trim() &&
+        params.value === scope.expectedTitle
+      ) {
+        return this.reserveSideEffect(
+          scope,
+          'save-draft',
+          'initial-draft:title',
+          actionType,
+          params,
+          pageUrl,
+        )
+      }
+      if (
+        initialPage &&
+        inspection.editor.initialDraftBodyEmpty &&
+        actionType === 'frameExecute' &&
+        params.value === seed &&
+        normalizeText(inspection.title.value) === normalizeText(scope.expectedTitle) &&
+        ownsEffect('initial-draft:title')
+      ) {
+        return this.reserveSideEffect(
+          scope,
+          'save-draft',
+          'initial-draft:body',
+          actionType,
+          params,
+          pageUrl,
+        )
+      }
+      if (
+        initialPage &&
+        inspection.editor.initialDraftBodyText === seed &&
+        actionType === 'click' &&
+        selector === inspection.selectors.save &&
+        normalizeText(inspection.title.value) === normalizeText(scope.expectedTitle)
+      ) {
+        if (ownsEffect('initial-draft:body')) {
+          return this.reserveSideEffect(
+            scope,
+            'save-draft',
+            'initial-draft:save',
+            actionType,
+            params,
+            pageUrl,
+          )
+        }
+      }
+      if (inspection.editor.recognized) {
+        return {
+          kind: 'runtime-error',
+          reason:
+            '首次草稿只允许依次填写冻结标题、标题前 10 字的建稿占位、保存一次；每步先重新检查，未知结果禁止重新创建',
+        }
+      }
+    }
     if (scope.currentStepId === 'open-editor' && !CONTROL_ACTIVATION_ACTIONS.has(actionType)) {
       return this.stopDecision(
         scope,
@@ -654,7 +1018,7 @@ export class ArticlePublishingBrowserPolicy {
       return this.reserveSideEffect(
         scope,
         'save-draft',
-        `autosave:${scope.currentStepId}:${randomUUID()}`,
+        `autosave:${scope.currentStepId}:${scope.currentStepId === 'fill-fields' ? `${(['title', 'summary', 'tags', 'category', 'cover'] as const).find((field) => this.attestations.get(this.attestationKey(context))?.inspection.selectors[field] === params.selector) ?? 'unknown'}:` : ''}${randomUUID()}`,
         actionType,
         params,
         pageUrl,
@@ -793,29 +1157,142 @@ export class ArticlePublishingBrowserPolicy {
     actionType: string,
     page: ReturnType<PlaywrightBridge['getPage']>,
     context?: ToolExecutionContext,
+    sideEffectKey?: string,
   ): Promise<void> {
     if (!PAGE_MUTATION_ACTIONS.has(actionType) || !page) return
     const scope = await this.resolveTaskScope(task, context)
     if (!scope) return
+    if (!sideEffectKey && ['fill-fields', 'upload-assets'].includes(scope.currentStepId ?? ''))
+      return
+    let mutatedField: 'title' | 'summary' | 'tags' | 'category' | 'cover' | undefined
+    if (sideEffectKey) {
+      const snapshot = this.webAffairService.getProjectSnapshot(scope.workspaceId)
+      const effect = snapshot.success
+        ? snapshot.data.affairs
+            .find((a) => a.id === scope.affairId)
+            ?.articlePublishing?.sideEffects.find((e) => e.key === sideEffectKey)
+        : undefined
+      let id: string | undefined
+      if (effect?.kind === 'publish') id = 'publish.dispatch'
+      else if (effect?.kind === 'upload-asset')
+        id = `asset.${effect.targetId.replace(/:attempt-\d+$/u, '')}.dispatch`
+      else if (effect?.targetId.startsWith('initial-draft:'))
+        id = `initial.${effect.targetId.split(':')[1]}.dispatch`
+      else if (effect?.targetId.startsWith('autosave:fill-body:')) id = 'body.dispatch'
+      else if (effect?.targetId.startsWith('autosave:fill-fields:')) {
+        const field = effect.targetId.split(':')[2]
+        if (['title', 'summary', 'tags', 'category', 'cover'].includes(field)) {
+          mutatedField = field as typeof mutatedField
+          id = `field.${field}.dispatch`
+        }
+      } else if (effect?.targetId.startsWith('manual-save:')) id = 'save.dispatch'
+      if (id)
+        await this.webAffairService.recordArticlePublishingPlanResults(
+          {
+            workspaceId: scope.workspaceId,
+            affairId: scope.affairId,
+            attemptId: scope.attemptId,
+            executionGeneration: scope.executionGeneration,
+            launchOperationId: scope.launchOperationId,
+            results: [
+              {
+                id,
+                status: 'completed',
+                evidence: `浏览器动作 ${actionType} 已返回；平台结果另行核验 · ${effect?.targetId}`,
+              },
+            ],
+          },
+          () =>
+            !context?.abortSignal?.aborted &&
+            Boolean(this.browserTaskRuntime?.getTask(task.id)?.status === 'running'),
+        )
+    }
     if (scope.currentStepId === 'open-editor' || scope.currentStepId === 'publish') return
     const runtime = this.runtimeSnapshot(scope, context)
     const documentGeneration = this.browserManager?.getViewRuntimeIdentity(
       task.tabId,
     )?.documentGeneration
     const url = page.url()
+    const editorDocumentGeneration = this.adapter.documentGeneration(page)
     const isCurrent = () =>
+      !context?.abortSignal?.aborted &&
       this.attestationRuntimeIsCurrent({
         scope,
         runtime,
         page,
         documentGeneration,
+        editorDocumentGeneration,
         inspection: { url } as ArticlePublishingPageInspection,
       })
     let observation: CsdnPageProbe | null = null
-    for (let attempt = 0; attempt < 24; attempt += 1) {
+    let lastSaveObservation = ''
+    // Real CSDN CKEditor starts its autosave timer 60s after a dirty change. Read only:
+    // allow that interval plus response time, never click Save or replay the mutation here.
+    const deadline = Date.now() + 75_000
+    while (Date.now() < deadline) {
       if (!isCurrent()) throw new Error('保存读回前页面已变化，必须重新核验原草稿')
       const probe = await this.adapter.probe(page)
       if (!isCurrent()) throw new Error('保存读回期间页面已变化，结果未知，禁止重复派发')
+      if (mutatedField) {
+        const expected =
+          mutatedField === 'cover'
+            ? scope.assets.find((a) => a.id === scope.expectedFields.coverAssetId)?.platformUrl
+            : scope.expectedFields[mutatedField]
+        const expectedText = Array.isArray(expected) ? expected.join(',') : expected
+        const actual = probe.fieldValues?.[mutatedField]
+        const matches =
+          expectedText !== undefined &&
+          actual !== undefined &&
+          normalizeText(actual) === normalizeText(expectedText)
+        const result = await this.webAffairService.recordArticlePublishingPlanResults(
+          {
+            workspaceId: scope.workspaceId,
+            affairId: scope.affairId,
+            attemptId: scope.attemptId,
+            executionGeneration: scope.executionGeneration,
+            launchOperationId: scope.launchOperationId,
+            results: [
+              {
+                id: `field.${mutatedField}.verify`,
+                status: matches ? 'completed' : 'waiting',
+                evidence: `期望 ${expectedText ?? '缺少已核验封面'}；实际 ${actual ?? '无法读取'}`,
+                reason: matches ? undefined : '字段写后回读不匹配，不能完成字段步骤',
+              },
+            ],
+          },
+          isCurrent,
+        )
+        if (!result.success) throw new Error(result.error.message)
+        // The field value has been observed; saving remains an independent read below.
+        mutatedField = undefined
+      }
+      const actualSave = `账号 ${probe.platformAccountId ?? '不可读'} · draftId ${probe.draftId ?? '不可读'} · 标题 ${probe.title.value} · 正文 ${probe.editor.bodyTextLength} 字符 · 保存 ${probe.saveState}`
+      if (
+        actualSave !== lastSaveObservation &&
+        ['fill-body', 'fill-fields', 'save-draft'].includes(scope.currentStepId ?? '')
+      ) {
+        lastSaveObservation = actualSave
+        const result = await this.webAffairService.recordArticlePublishingPlanResults(
+          {
+            workspaceId: scope.workspaceId,
+            affairId: scope.affairId,
+            attemptId: scope.attemptId,
+            executionGeneration: scope.executionGeneration,
+            launchOperationId: scope.launchOperationId,
+            results: [
+              {
+                id: scope.currentStepId === 'fill-body' ? 'body.verify' : 'save.verify',
+                status: 'verifying',
+                evidence: actualSave,
+                reason:
+                  probe.saveState === 'saved' ? undefined : '正在只读等待平台保存，不重复写入',
+              },
+            ],
+          },
+          isCurrent,
+        )
+        if (!result.success) throw new Error(result.error.message)
+      }
       if (
         probe.editor.recognized &&
         probe.draftId &&
@@ -825,11 +1302,17 @@ export class ArticlePublishingBrowserPolicy {
         observation = probe
         break
       }
-      await page.waitForTimeout(250)
+      await page.waitForTimeout(1000)
     }
     if (!observation?.draftId || !observation.platformAccountId) {
       throw new Error('网页动作后无法读回同一账号、同一草稿和已保存状态')
     }
+    if (
+      scope.currentStepId === 'fill-body' &&
+      scope.assets.length &&
+      !(await this.verifyFrozenBody(scope, page, isCurrent))
+    )
+      throw new Error('正文或逐图位置与冻结原稿不一致，不能完成正文填写')
     const recorded = await this.webAffairService.recordArticlePublishingPageObservation(
       {
         affairId: scope.affairId,
@@ -847,6 +1330,244 @@ export class ArticlePublishingBrowserPolicy {
       isCurrent,
     )
     if (!recorded.success) throw new Error(recorded.error.message)
+    if (['fill-body', 'fill-fields', 'save-draft'].includes(scope.currentStepId ?? '')) {
+      const result = await this.webAffairService.recordArticlePublishingPlanResults(
+        {
+          workspaceId: scope.workspaceId,
+          affairId: scope.affairId,
+          attemptId: scope.attemptId,
+          executionGeneration: scope.executionGeneration,
+          launchOperationId: scope.launchOperationId,
+          results: [
+            {
+              id: scope.currentStepId === 'fill-body' ? 'body.verify' : 'save.verify',
+              status:
+                scope.currentStepId !== 'fill-body' || observation.editor.bodyTextLength > 0
+                  ? 'completed'
+                  : 'waiting',
+              evidence: `账号 ${observation.platformAccountId} · draftId ${observation.draftId} · 标题 ${observation.title.value} · 正文 ${observation.editor.bodyTextLength} 字符 · saved · ${observation.saveEvidence ?? '页面保存状态回读'}`,
+            },
+          ],
+        },
+        isCurrent,
+      )
+      if (!result.success) throw new Error(result.error.message)
+    }
+  }
+
+  private async verifyFrozenBody(
+    scope: ArticlePublishingExecutionScope,
+    page: NonNullable<ReturnType<PlaywrightBridge['getPage']>>,
+    isCurrent: () => boolean,
+  ) {
+    const snapshot = this.webAffairService.getProjectSnapshot(scope.workspaceId)
+    const state = snapshot.success
+      ? snapshot.data.affairs.find((a) => a.id === scope.affairId)?.articlePublishing
+      : undefined
+    if (!state) return false
+    const observed = await this.adapter.verifyBody(page, await prepareArticleBody(state))
+    if (!isCurrent()) return false
+    const results = state.assets
+      .filter((a) => a.kind === 'local')
+      .map((asset) => {
+        const images = observed.images.filter((i) => i.src === asset.platformUrl)
+        const matches = images.length === asset.occurrences.length && images.every((i) => i.matches)
+        return {
+          id: `asset.${asset.id}.${page.url().startsWith('https://blog.csdn.net/') ? 'published' : 'placement'}`,
+          status: matches ? ('completed' as const) : ('waiting' as const),
+          evidence: `${asset.displayPath} · 期望 ${asset.occurrences.length} 处，实际对应 ${images.filter((i) => i.matches).length} 处；${images.map((i) => `第 ${i.index + 1} 张，前文 ${i.precedingCharacters} 字符，${i.matches ? '位置/地址/替代文字/加载一致' : '不匹配'}`).join('；')}`,
+          reason: matches ? undefined : '正文图片顺序、位置或加载结果未核验通过',
+        }
+      })
+    if (!observed.textMatches)
+      results.push({
+        id: page.url().startsWith('https://blog.csdn.net/') ? 'publication.verify' : 'body.verify',
+        status: 'waiting',
+        evidence: observed.textEvidence,
+        reason: '正文实际内容与冻结原稿不同',
+      })
+    const saved = await this.webAffairService.recordArticlePublishingPlanResults(
+      { ...scope, results },
+      isCurrent,
+    )
+    if (!saved.success) throw new Error(saved.error.message)
+    return observed.matches
+  }
+
+  async prepareBodyWrite(task: BrowserTaskRun, context?: ToolExecutionContext) {
+    const scope = await this.resolveTaskScope(task, context)
+    if (!scope || scope.currentStepId !== 'fill-body' || !scope.assets.length) return undefined
+    const snapshot = this.webAffairService.getProjectSnapshot(scope.workspaceId)
+    const state = snapshot.success
+      ? snapshot.data.affairs.find((a) => a.id === scope.affairId)?.articlePublishing
+      : undefined
+    if (!state) throw new Error('冻结正文不存在')
+    return prepareArticleBody(state)
+  }
+
+  async prepareImageUpload(
+    task: BrowserTaskRun,
+    sideEffectKey: string,
+    page: ReturnType<PlaywrightBridge['getPage']>,
+    context?: ToolExecutionContext,
+  ) {
+    const scope = await this.resolveTaskScope(task, context)
+    if (!scope || !page || scope.currentStepId !== 'upload-assets') return null
+    const snapshot = this.webAffairService.getProjectSnapshot(scope.workspaceId)
+    const effect = snapshot.success
+      ? snapshot.data.affairs
+          .find((a) => a.id === scope.affairId)
+          ?.articlePublishing?.sideEffects.find((e) => e.key === sideEffectKey)
+      : undefined
+    if (effect?.kind !== 'upload-asset') return null
+    const assetId = effect.targetId.replace(/:attempt-\d+$/u, '')
+    const before = await this.adapter.probe(page)
+    if (!before.editor.imageEnumerationComplete || !before.draftId)
+      throw new Error('上传前正文图片无法完整枚举')
+    const urls = new Set(before.editor.images.map((i) => i.src))
+    const runtime = this.runtimeSnapshot(scope, context)
+    const documentGeneration = this.browserManager?.getViewRuntimeIdentity(
+      task.tabId,
+    )?.documentGeneration
+    const editorDocumentGeneration = this.adapter.documentGeneration(page)
+    const isCurrent = () =>
+      !context?.abortSignal?.aborted &&
+      this.attestationRuntimeIsCurrent({
+        scope,
+        runtime,
+        page,
+        documentGeneration,
+        editorDocumentGeneration,
+        inspection: { url: before.url } as ArticlePublishingPageInspection,
+      })
+    return {
+      finish: async () => {
+        const deadline = Date.now() + 30_000
+        while (Date.now() < deadline) {
+          if (!isCurrent()) throw new Error('图片上传后页面已改代，只能恢复核验，禁止重复上传')
+          const after = await this.adapter.probe(page)
+          if (!isCurrent()) throw new Error('图片回读证据已过期')
+          const added = after.editor.images.filter((i) => !urls.has(i.src))
+          if (added.length > 1) throw new Error('一次上传出现多张新图片，无法确定文件对应关系')
+          if (
+            added.length === 1 &&
+            added[0].loaded &&
+            after.editor.imageEnumerationComplete &&
+            after.draftId === before.draftId &&
+            after.platformAccountId === before.platformAccountId
+          ) {
+            const recorded = await this.webAffairService.recordArticlePublishingImageObservation(
+              {
+                ...scope,
+                sideEffectKey,
+                assetId,
+                platformUrl: added[0].src,
+              },
+              isCurrent,
+            )
+            if (!recorded.success) throw new Error(recorded.error.message)
+            return
+          }
+          await page.waitForTimeout(500)
+        }
+        throw new Error('该文件上传后没有唯一已加载的正文图片；只核验，不重复上传')
+      },
+    }
+  }
+
+  async prepareInitialDraftSave(
+    task: BrowserTaskRun,
+    sideEffectKey: string,
+    page: ReturnType<PlaywrightBridge['getPage']>,
+    context?: ToolExecutionContext,
+  ) {
+    const scope = await this.resolveTaskScope(task, context)
+    if (!scope || !page) throw new Error('网页保存观察准备时执行或页面身份已失效，禁止派发')
+    if (scope.currentStepId !== 'open-editor' || scope.draftUrl) return null
+    const snapshot = this.webAffairService.getProjectSnapshot(scope.workspaceId)
+    const effect = snapshot.success
+      ? snapshot.data.affairs
+          .find((a) => a.id === scope.affairId)
+          ?.articlePublishing?.sideEffects.find((e) => e.key === sideEffectKey)
+      : undefined
+    if (effect?.targetId !== 'initial-draft:save') return null
+    const inspection = this.attestations.get(this.attestationKey(context))?.inspection
+    if (
+      !inspection?.platformAccountId ||
+      inspection.editor.initialDraftBodyText !== scope.expectedTitle.trim().slice(0, 10)
+    ) {
+      throw new Error('首次草稿保存前缺少账号与短占位正文证据')
+    }
+    // CSDN opens an AI drawer over Save. Hit-test before consuming/dispatching the capability;
+    // an occluded button is not an unknown platform save. No forced clicks or hidden DOM calls.
+    if (!inspection.selectors.save) throw new Error('首次草稿缺少唯一保存控件')
+    await page.locator(inspection.selectors.save).click({ trial: true, timeout: 3_000 })
+    const observer = observeCsdnInitialDraftSave(page, scope.expectedTitle)
+    let recorded = false
+    return {
+      arm: observer.arm,
+      dispose: observer.dispose,
+      finish: async (continueAfterSave: boolean) => {
+        const result = await observer.result
+        if (!result.draftId) throw new Error(result.error ?? '首次草稿结果未知')
+        if (!recorded) {
+          const anchor = await this.webAffairService.recordArticlePublishingDraftAnchor(
+            scope.affairId,
+            scope.attemptId,
+            scope.executionGeneration,
+            scope.launchOperationId,
+            `https://mp.csdn.net/mp_blog/creation/editor/${result.draftId}`,
+            scope.workspaceId,
+            task.id,
+            {
+              sideEffectKey,
+              platformAccountId: inspection.platformAccountId!,
+              normalizedTitle: normalizeText(scope.expectedTitle),
+            },
+          )
+          if (!anchor.success) throw new Error(anchor.error.message)
+          recorded = true
+        }
+        if (!continueAfterSave) return
+        const assertActive = () => {
+          context?.abortSignal?.throwIfAborted()
+          const current = this.browserTaskRuntime?.getTask(task.id)
+          if (
+            current?.status !== 'running' ||
+            current.tabId !== scope.tabId ||
+            current.correlation?.agentRunId !== context?.agentRunId ||
+            current.correlation?.affairExecutionGeneration !== scope.executionGeneration ||
+            current.correlation?.affairLaunchOperationId !== scope.launchOperationId ||
+            this.browserManager?.getViewProfileId(task.tabId) !== task.correlation?.profileId ||
+            !this.browserManager?.isViewVisible(task.tabId)
+          ) {
+            throw new Error('首次草稿已记录，任务已停止，不再操作网页')
+          }
+        }
+        await new CsdnDraftRecoveryCoordinator(this.adapter).recoverExactDraft({
+          expectedDraftId: result.draftId,
+          expectedPlatformAccountId: inspection.platformAccountId!,
+          expectedTitle: scope.expectedTitle,
+          assertActive,
+          navigate: async (url) => {
+            assertActive()
+            if (!this.browserManager || !this.playwrightBridge)
+              throw new Error('草稿核验 Runtime 不可用')
+            await this.browserManager.navigate(task.tabId, url)
+            assertActive()
+            await this.browserManager.ensurePlaywrightPage(task.tabId)
+            await this.awaitRuntimeConvergence?.(scope.attemptId)
+            assertActive()
+            const current = this.playwrightBridge.getPageById(task.tabId)
+            if (!current || current.isClosed()) throw new Error('首次草稿核验页面不可用')
+            return current
+          },
+        })
+        assertActive()
+        // No checkpoint completion here. Agent must inspect the final Page and report verifying
+        // then completed through the existing WebAffair transitions.
+      },
+    }
   }
 
   async consumeSideEffect(
@@ -1297,6 +2018,7 @@ export class ArticlePublishingBrowserPolicy {
       ...(permit?.id ? { writePermitId: permit.id } : {}),
       draftUrl: publishing.draft?.url,
       expectedTitle: publishing.fields.title,
+      expectedFields: publishing.fields,
       assets: publishing.assets.map((asset) => ({
         id: asset.id,
         kind: asset.kind,
@@ -1406,11 +2128,34 @@ export class ArticlePublishingBrowserPolicy {
     const selector = String(params.selector ?? '').trim()
     const stepId = scope.currentStepId ?? ''
     const selectors = inspection.selectors
+    const dismissAssistant =
+      actionType === 'click' &&
+      [selectors.dismissAssistant, selectors.dismissTagEditor].some(
+        (s) => Boolean(s) && selector === s,
+      )
+    if (
+      !dismissAssistant &&
+      (actionType === 'frameExecute'
+        ? (stepId !== 'fill-body' && !(stepId === 'open-editor' && !scope.draftUrl)) ||
+          params.frameAction !== 'fill' ||
+          !inspection.editor.bodyFrameSelector ||
+          params.frameSelector !== inspection.editor.bodyFrameSelector ||
+          selector !== selectors.body
+        : stepId === 'fill-body' && Boolean(inspection.editor.bodyFrameSelector))
+    ) {
+      return {
+        kind: 'runtime-error',
+        reason:
+          '正文 iframe 写入必须使用本次检查签发的 frameSelector 和正文 selector，且只允许 fill',
+      }
+    }
     const allowed =
       stepId === 'open-editor'
-        ? [selectors.openEditor]
+        ? scope.draftUrl
+          ? [selectors.openEditor]
+          : [selectors.openEditor, selectors.title, selectors.body, selectors.save]
         : stepId === 'upload-assets'
-          ? [selectors.fileInput, selectors.uploadConfirm]
+          ? [selectors.imageOpen, selectors.fileInput, selectors.uploadConfirm]
           : stepId === 'fill-body'
             ? [selectors.body]
             : stepId === 'fill-fields'
@@ -1418,6 +2163,7 @@ export class ArticlePublishingBrowserPolicy {
                   selectors.title,
                   selectors.summary,
                   selectors.tags,
+                  inspection.tagEditor?.openSelector,
                   selectors.category,
                   selectors.cover,
                 ]
@@ -1426,7 +2172,11 @@ export class ArticlePublishingBrowserPolicy {
                 : stepId === 'publish'
                   ? [selectors.publish]
                   : []
-    const allowedSelectors = new Set(allowed.filter((value): value is string => Boolean(value)))
+    const allowedSelectors = new Set(
+      [...allowed, selectors.dismissAssistant, selectors.dismissTagEditor].filter(
+        (value): value is string => Boolean(value),
+      ),
+    )
     if (!selector || !allowedSelectors.has(selector)) {
       return this.stopDecision(
         scope,
@@ -1480,6 +2230,9 @@ export class ArticlePublishingBrowserPolicy {
       task.correlation?.affairLaunchOperationId === attestation.scope.launchOperationId &&
       this.playwrightBridge?.getPageById(attestation.runtime.tabId) === attestation.page &&
       !attestation.page?.isClosed() &&
+      (attestation.editorDocumentGeneration === undefined ||
+        this.adapter.documentGeneration(attestation.page!) ===
+          attestation.editorDocumentGeneration) &&
       attestation.page?.url() === attestation.inspection.url &&
       task.tabId === attestation.runtime.tabId &&
       task.correlation?.browserViewRuntimeGeneration ===
@@ -1514,8 +2267,7 @@ export class ArticlePublishingBrowserPolicy {
       return Boolean(
         platformUrl &&
         inspection.editor.recognized &&
-        (inspection.matchedAssets[assetId] === platformUrl ||
-          inspection.editor.images.some((image) => image.src === platformUrl)),
+        inspection.matchedAssets[assetId] === platformUrl,
       )
     }
     if (kind === 'asset-absent') {
@@ -1535,11 +2287,22 @@ export class ArticlePublishingBrowserPolicy {
       )
     }
     if (kind === 'published') {
-      return Boolean(this.resolvePublishedUrl(params, attestation))
+      return Boolean(
+        this.resolvePublishedUrl(params, attestation) &&
+        (!scope.assets.length || inspection.bodyMatchesFrozen === true),
+      )
     }
     const stepId = String(params['stepId'] ?? '')
     if (stepId === 'open-editor') {
-      return inspection.editor.recognized
+      return Boolean(
+        inspection.editor.recognized &&
+        scope.draftUrl &&
+        isSameCsdnDraft(scope.draftUrl, inspection.url) &&
+        inspection.draftId &&
+        inspection.platformAccountId &&
+        inspection.saveState === 'saved' &&
+        normalizeText(inspection.title.value) === normalizeText(scope.expectedTitle),
+      )
     }
     if (stepId === 'verify-account') {
       return inspection.editor.recognized && Boolean(inspection.platformAccountId)
@@ -1552,12 +2315,30 @@ export class ArticlePublishingBrowserPolicy {
       )
     }
     if (stepId === 'fill-body') {
-      return Boolean(inspection.editor.recognized && inspection.editor.bodyTextLength > 0)
+      return Boolean(
+        inspection.editor.recognized &&
+        inspection.editor.bodyTextLength > 0 &&
+        (!scope.assets.length || inspection.bodyMatchesFrozen === true),
+      )
     }
     if (stepId === 'fill-fields') {
       return Boolean(
         inspection.editor.recognized &&
-        normalizeText(inspection.title.value) === normalizeText(scope.expectedTitle),
+        normalizeText(inspection.title.value) === normalizeText(scope.expectedTitle) &&
+        (['summary', 'tags', 'category', 'cover'] as const).every((field) => {
+          const expected =
+            field === 'cover'
+              ? (scope.assets.find((a) => a.id === scope.expectedFields.coverAssetId)
+                  ?.platformUrl ?? scope.expectedFields.coverAssetId)
+              : scope.expectedFields[field]
+          if (!expected || (Array.isArray(expected) && expected.length === 0)) return true
+          const actual = inspection.fieldValues?.[field]
+          return (
+            actual !== undefined &&
+            normalizeText(actual) ===
+              normalizeText(Array.isArray(expected) ? expected.join(',') : expected)
+          )
+        }),
       )
     }
     if (stepId === 'save-draft') {
@@ -1573,6 +2354,8 @@ export class ArticlePublishingBrowserPolicy {
     if (stepId === 'verify-publication') {
       return (
         inspection.pageKind === 'published-article' &&
+        !inspection.publicationBlocker &&
+        (!scope.assets.length || inspection.bodyMatchesFrozen === true) &&
         normalizeText(inspection.title.value) === normalizeText(scope.expectedTitle)
       )
     }
@@ -1592,6 +2375,8 @@ export class ArticlePublishingBrowserPolicy {
     const { inspection, scope } = attestation
     if (
       inspection.pageKind === 'published-article' &&
+      !inspection.publicationBlocker &&
+      (!scope.assets.length || inspection.bodyMatchesFrozen === true) &&
       inspection.url === requestedUrl &&
       normalizeText(inspection.title.value) === normalizeText(scope.expectedTitle)
     ) {

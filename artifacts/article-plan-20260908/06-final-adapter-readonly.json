@@ -1,0 +1,39 @@
+{
+  "adapterId": "csdn",
+  "adapterVersion": 1,
+  "observedAt": "2026-09-08T04:50:29.487Z",
+  "url": "https://mp.csdn.net/mp_blog/creation/editor/164598985",
+  "platformAccountId": "csdn:weixin_36388257",
+  "pageKind": "editor",
+  "draftId": "164598985",
+  "editor": {
+    "recognized": true,
+    "bodySelector": "body.cke_editable[contenteditable=\"true\"]",
+    "bodyFrameSelector": "iframe.cke_wysiwyg_frame",
+    "bodyTextLength": 202,
+    "initialDraftBodyEmpty": false,
+    "imageEnumerationComplete": true,
+    "images": []
+  },
+  "title": {
+    "selector": "textarea[placeholder*=\"标题\"]",
+    "value": "Studio 细步骤验收 20260908-1227"
+  },
+  "selectors": {
+    "dismissAssistant": ".edit-drawer-content > img.edit-title-close",
+    "body": "body.cke_editable[contenteditable=\"true\"]",
+    "title": "textarea[placeholder*=\"标题\"]",
+    "summary": "#el_mcm-id-1417-54",
+    "tags": "div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > span:nth-of-type(1) > button:nth-of-type(1)",
+    "category": "div:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > button:nth-of-type(1)",
+    "save": "div:nth-of-type(5) > div:nth-of-type(14) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(3) > button:nth-of-type(1)",
+    "publish": "div:nth-of-type(5) > div:nth-of-type(14) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(3) > button:nth-of-type(3)"
+  },
+  "fieldValues": {
+    "title": "Studio 细步骤验收 20260908-1227",
+    "summary": "Studio 执行计划的正文写入、字段回读与中断恢复验收。仅保存测试草稿，不公开发布。"
+  },
+  "saveState": "saved",
+  "saveEvidence": "CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿",
+  "publishedLinks": []
+}

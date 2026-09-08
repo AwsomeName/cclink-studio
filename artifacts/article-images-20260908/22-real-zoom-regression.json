@@ -1,0 +1,81 @@
+[
+  {
+    "label": "restored public page",
+    "state": {
+      "viewMode": "desktop",
+      "zoomMode": "manual",
+      "zoomFactor": 1
+    },
+    "dom": {
+      "root": 633,
+      "scroll": 1284,
+      "body": 1200,
+      "visualWidth": 633,
+      "scale": 1
+    }
+  },
+  {
+    "label": "manual 30%",
+    "state": {
+      "viewMode": "desktop",
+      "zoomMode": "manual",
+      "zoomFactor": 0.3
+    },
+    "dom": {
+      "root": 2110,
+      "scroll": 2110,
+      "body": 2110,
+      "visualWidth": 2110,
+      "scale": 1
+    }
+  },
+  {
+    "label": "reset 100%",
+    "state": {
+      "viewMode": "desktop",
+      "zoomMode": "manual",
+      "zoomFactor": 1
+    },
+    "dom": {
+      "root": 633,
+      "scroll": 1284,
+      "body": 1200,
+      "visualWidth": 633,
+      "scale": 1
+    }
+  },
+  {
+    "label": "same-page navigation",
+    "state": {
+      "viewMode": "desktop",
+      "zoomMode": "manual",
+      "zoomFactor": 1
+    },
+    "dom": {
+      "root": 633,
+      "scroll": 1200,
+      "body": 1200,
+      "visualWidth": 633,
+      "scale": 1
+    }
+  },
+  {
+    "label": "detached wider pane",
+    "state": null,
+    "dom": {
+      "root": 1100,
+      "scroll": 1200,
+      "body": 1200,
+      "visualWidth": 1100,
+      "scale": 1
+    }
+  },
+  {
+    "label": "final restart restored wider page",
+    "dom": {
+      "root": 1100,
+      "visualWidth": 1100,
+      "scale": 1
+    }
+  }
+]

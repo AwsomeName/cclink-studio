@@ -1,7 +1,7 @@
 # Markdown 文章平台发布
 
-状态：逐步可观测安全底座、恢复源码切片和跨 service 门禁已实现；真实 Electron/CSDN 闭环未完成
-最后更新：2026-09-07
+状态：无图文章公开闭环已完成；用户指定三图文章已自动提交并逐图核验，但 CSDN 审核未通过，不能声明已公开
+最后更新：2026-09-08
 
 ## 产品结果
 
@@ -11,8 +11,8 @@
 
 完整恢复规则见 [article-publishing-restart-recovery.md](article-publishing-restart-recovery.md)，开发与验收状态见 [article-publishing-restart-recovery-development-plan.md](article-publishing-restart-recovery-development-plan.md)。
 
-2026-09-07 的真实恢复故障进一步证明：现有 8 个 checkpoint 仍把 Studio 编排和 Agent 实际执行包在
-两个黑盒中，不能精确回答当前小步骤的起点、目标、实际结果和失败归属。新增的强制需求见
+执行计划现在将原有 8 个业务 checkpoint 展开为由真实执行驱动的细项，展示条件、动作、回读、失败原因和下一步；
+checkpoint 继续承担原有执行门禁。完整要求见
 [article-publishing-observable-execution-protocol.md](article-publishing-observable-execution-protocol.md)，
 施工事实源见
 [article-publishing-observable-execution-development-plan.md](article-publishing-observable-execution-development-plan.md)。
@@ -65,6 +65,10 @@
 
 独立入口、持久任务、受控 Browser/Agent、草稿锚点、账号级恢复互斥、草稿箱找回、未决副作用防重放、图片人工确认、旧文章任务删除和自动测试已经落地。
 
-尚未完成的不只是新版代码在真实 CSDN 账号上的完整中断矩阵验收。当前也缺少由 WebAffair 持久拥有的
-逐步 operation、Agent 单步授权、起点/终点证据和用户可见字段级诊断。因此当前不能再称为工程闭环，
-只能称为已有部分安全围栏；逐步协议和真实站点矩阵全部通过后才能声明稳定闭环。
+业务细步骤事实由 WebAffair 持久拥有，账号/原稿、正文、逐图、平台字段、保存和发布都接入观测。
+正文→重启恢复→摘要→保存已在真实 Electron/CSDN 运行，见
+[2026-09-08 验收记录](../testing/article-publishing-plan-acceptance-2026-09-08.md)。
+用户随后明确授权公开提交。同一原稿已完成自动正文、摘要、标签、保存、一次发布和公开结果核验，
+见 [真实发布闭环记录](../testing/article-publishing-public-closure-2026-09-08.md)。
+用户随后指定的三图文章已完成真实逐张上传、同稿中断恢复、格式化正文及位置核验、字段保存和一次自动提交；平台实际“审核未通过”，作者页可读、匿名 404，最后步骤显示平台卡点，未重发。见 [三图与审核结果验收](../testing/article-publishing-images-2026-09-08.md)。
+复杂分类/封面和完整中断矩阵尚未真人验收；不能把单篇执行扩大为所有场景已通过。

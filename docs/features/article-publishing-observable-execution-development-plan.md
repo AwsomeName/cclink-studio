@@ -1,10 +1,28 @@
 # 文章发布逐步可观测执行协议修复方案
 
-状态：最小修复继续补强；真实 CSDN 取证发现验收缺口，产品闭环未完成
-日期：2026-09-07
+状态：业务细步骤已接入；无图文章的正文、摘要、标签、保存、一次公开提交及结果核验已实跑
+日期：2026-09-08
 目标需求：[article-publishing-observable-execution-protocol.md](article-publishing-observable-execution-protocol.md)
 
-## 结论
+## 当前实施结果（2026-09-08）
+
+用户现在能展开账号、Tab、Runtime、原稿找回、正文、每张本地图片、各平台字段、保存和发布的小步骤，
+看到执行者、进入条件、实际状态、完成条件、回读证据、卡点和允许的下一步。
+恢复分支显示管理页找回和账号/draftId/标题/saved 四项复核，新建分支显示首次写入及保存锚点。
+写入返回不等于结果核验成功。未配置字段标为不适用；不支持读取的已配置控件等待处理，不能凭标题通过。
+
+实现继续复用 current operation、transition、长 Agent Run、Runtime handshake 和既有 sideEffects；
+`checkpoints[].details` 只保存每个细项的最新事实，由 WebAffair 同一持久化路径折叠，不是 operation 账本。
+内部观测入口不暴露新 MCP/IPC，renderer 不推断成功，不使用内容/图片/证据哈希，也没有旧数据迁移或版本升级。
+完成的业务事实保留；新现场的复核等待/失败另列，不能用旧证据授权当前页面。
+
+真实 Electron/CSDN 已跑过新建、正文写入/回读、同稿重启恢复、摘要写入/回读及保存。
+最初测试稿在公开发布前终止；用户随后授权修订并公开提交，同一平台原稿已发布并完成结果未知后的只读恢复核验。
+详见 [公开发布闭环记录](../testing/article-publishing-public-closure-2026-09-08.md)。三图文章已真实自动提交并回读位置/加载，但 CSDN 审核未通过，未公开；详见 [三图验收](../testing/article-publishing-images-2026-09-08.md)。复杂分类/封面仍未实测。
+详见 [本轮验收记录与界面证据](../testing/article-publishing-plan-acceptance-2026-09-08.md)。
+以下为已有协议底座设计；其中 P0 的范围收缩不再限制本轮明确要求的业务细步骤接入。
+
+## 既有协议底座
 
 2026-09-07 继续修复时明确收缩范围：沿用 WebAffair/current operation/transition、长 Agent Run 和
 Runtime handshake，不引入 ledger、claim/report MCP、短 Run 调度或时间线 UI。
@@ -24,7 +42,7 @@ recovery.restore-exact-draft
 → page.first-inspect
 ```
 
-正文、图片、字段、保存和发布的单步化全部留到 P1。P0 真实 CSDN 首次 inspect 没有通过前，不扩张范围。
+2026-09-08 已继续接入正文、逐图、字段、保存和发布观测，当前交付与未验收范围以上方实施结果为准。
 
 ## 当前源码基线
 

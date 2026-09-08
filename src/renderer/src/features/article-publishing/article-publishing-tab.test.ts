@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { CSDN_ARTICLE_PUBLISHING_PLAN } from '@shared/article-publishing/article-publishing-plan'
 import {
   createArticleMarkdownOpenDialogOptions,
@@ -7,6 +8,16 @@ import {
   getArticlePublishingFileDetails,
   getArticlePublishingRuntimeBinding,
 } from './article-publishing-tab'
+
+it('does not replay browser focus from a late launch receipt after the user returns to cancel', () => {
+  const source = readFileSync(new URL('./ArticlePublishingTab.tsx', import.meta.url), 'utf8')
+  const launch = source.slice(
+    source.indexOf('const executeTask ='),
+    source.indexOf('const startTask ='),
+  )
+  expect(launch).toContain('await reload()')
+  expect(launch).not.toContain('activateTab(')
+})
 
 describe('article publishing Markdown picker', () => {
   it('opens in the current local workspace by default', () => {

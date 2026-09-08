@@ -2,6 +2,97 @@ import { describe, expect, it, vi } from 'vitest'
 import { WebAffairToolModule } from '.'
 
 describe('WebAffairToolModule', () => {
+  it('keeps execution facts and unknown effects readable without returning or mutating audit history', async () => {
+    const policy = {
+      origin: 'article-publishing' as const,
+      workspaceId: 'workspace-a-id',
+      affairId: 'affair-1',
+      attemptId: 'attempt-1',
+      executionGeneration: 3,
+      launchOperationId: 'launch-3',
+    }
+    const affair = {
+      id: 'affair-1',
+      kind: 'article-publishing',
+      events: [{ message: 'old-event'.repeat(10_000) }],
+      attempts: [
+        { id: 'old-attempt', runtimeBindings: [] },
+        {
+          id: 'attempt-1',
+          profileId: 'private-profile',
+          executionGeneration: 3,
+          launchOperationId: 'launch-3',
+          processedRuntimeEventIds: ['old-runtime'],
+          runtimeBindings: [
+            { executionGeneration: 2, launchOperationId: 'old' },
+            { executionGeneration: 3, launchOperationId: 'launch-3', status: 'active' },
+          ],
+        },
+      ],
+      articlePublishing: {
+        execution: {
+          currentAttemptId: 'attempt-1',
+          currentGeneration: 3,
+          currentStepId: 'fill-body',
+        },
+        checkpoints: [
+          { stepId: 'open-editor', status: 'completed' },
+          { stepId: 'fill-body', status: 'running' },
+        ],
+        assets: [
+          {
+            id: 'asset-1',
+            status: 'result-unknown',
+            uploadAttempts: [{ status: 'result-unknown' }],
+          },
+        ],
+        sideEffects: [
+          { key: 'unknown-save', status: 'result-unknown' },
+          { key: 'old-save', status: 'reconciled' },
+        ],
+        publication: { status: 'result-unknown' },
+        executionProtocol: {
+          current: { operationRunId: 'current-operation' },
+          recentTransitions: [{ note: 'old-transition'.repeat(5000) }],
+        },
+      },
+    }
+    const before = JSON.stringify(affair)
+    const service = {
+      getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [affair] } })),
+      reportArticlePublishingCheckpoint: vi.fn(async () => ({ success: true, data: affair })),
+    }
+    const module = new WebAffairToolModule(service as never, async () => 'workspace-a-id')
+    const context = {
+      workspaceKey: '/workspace/a',
+      conversationId: 'conversation-a',
+      agentRunId: 'run-a',
+      articlePublishingPolicy: policy,
+    }
+    for (const tool of ['web_affair_get', 'article_publishing_report_checkpoint']) {
+      const result = (await module.execute(
+        tool,
+        { affairId: 'affair-1', attemptId: 'attempt-1', stepId: 'fill-body', status: 'verifying' },
+        context,
+      )) as any
+      expect(result.success).toBe(true)
+      expect(result.historyOmitted).toBeTruthy()
+      expect(JSON.stringify(result).length).toBeLessThan(4000)
+      expect(result.data.attempts).toHaveLength(1)
+      expect(result.data.attempts[0].runtimeBindings).toHaveLength(1)
+      expect(result.data.attempts[0]).not.toHaveProperty('profileId')
+      expect(result.data.articlePublishing.sideEffects).toEqual(
+        affair.articlePublishing.sideEffects,
+      )
+      expect(result.data.articlePublishing.assets).toEqual(affair.articlePublishing.assets)
+      expect(result.data.articlePublishing.publication.status).toBe('result-unknown')
+      expect(result.data.articlePublishing.executionProtocol.current.operationRunId).toBe(
+        'current-operation',
+      )
+    }
+    expect(JSON.stringify(affair)).toBe(before)
+  })
+
   it('projects one affair without exposing another state owner', async () => {
     const service = {
       getProjectSnapshot: vi.fn(() => ({

@@ -5,6 +5,61 @@ import { ArticlePublishingBrowserPolicy } from './article-publishing-browser-pol
 const WORKSPACE_REF = { kind: 'local' as const, path: '/workspace' }
 
 describe('ArticlePublishingService', () => {
+  it('durably terminates publishing without waiting for the Agent cancellation receipt', async () => {
+    const harness = createResumeHarness({
+      draftUrl: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
+      visibleUrl: 'https://mp.csdn.net/',
+    })
+    let releaseAbort!: () => void
+    harness.agentBridge.abort.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseAbort = resolve
+        }),
+    )
+    try {
+      await harness.service.startTask(
+        { workspaceRef: WORKSPACE_REF, affairId: harness.affairId },
+        'workspace-a',
+      )
+      let settled = false
+      const result = harness.service
+        .terminateRuntime(
+          {
+            workspaceRef: WORKSPACE_REF,
+            affairId: harness.affairId,
+            attemptId: '44444444-4444-4444-8444-444444444444',
+            executionGeneration: 2,
+            launchOperationId: 'launch-b',
+          },
+          'workspace-a',
+        )
+        .then((value) => {
+          settled = true
+          return value
+        })
+      await vi.waitFor(() => expect(settled).toBe(true), { timeout: 200 })
+      expect(await result).toMatchObject({ success: true })
+      expect(harness.browserTaskRuntime.cancelTask).toHaveBeenCalledWith(
+        '55555555-5555-4555-8555-555555555555',
+      )
+      expect(harness.webAffairService.reconcileArticlePublishingRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'user-cancel',
+          observedStatus: 'cancelled',
+          executionGeneration: 2,
+        }),
+      )
+      expect(harness.agentBridge.abort).toHaveBeenCalledWith(
+        `article-publishing-${harness.affairId}`,
+        'run-launch-b',
+      )
+    } finally {
+      releaseAbort?.()
+      harness.service.dispose()
+    }
+  })
+
   it('launches and binds the Agent, BrowserTask, visible tab and CDP entirely in main', async () => {
     const affairId = '33333333-3333-4333-8333-333333333333'
     const attemptId = '44444444-4444-4444-8444-444444444444'
@@ -70,6 +125,8 @@ describe('ArticlePublishingService', () => {
       data: affair,
     }))
     const webAffairService = {
+      recordArticlePublishingDraftAnchor: vi.fn(),
+      recordArticlePublishingPlanResults: vi.fn().mockResolvedValue({ success: true, data: {} }),
       getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [draftAffair] } })),
       acquireArticlePublishingAttempt: vi.fn(async () => ({ success: true, data: affair })),
       bindArticlePublishingRuntime,
@@ -104,7 +161,8 @@ describe('ArticlePublishingService', () => {
     let pageRuntimeBound: ((identity: Record<string, number | string>) => void) | undefined
     const browserManager = {
       waitForAccountView: vi.fn(async () => 'tab-a'),
-      getCurrentURL: vi.fn(() => 'https://editor.csdn.net/md/'),
+      // Real regression: reused account Tab still reports the previous draft during navigation.
+      getCurrentURL: vi.fn(() => 'https://mp.csdn.net/mp_blog/creation/editor/164148817'),
       navigate: vi.fn(async () => undefined),
       ensurePlaywrightPage: vi.fn(async () => undefined),
       onPageRuntimeBound: vi.fn((callback) => {
@@ -155,6 +213,7 @@ describe('ArticlePublishingService', () => {
     )
 
     expect(result.success).toBe(true)
+    expect(webAffairService.recordArticlePublishingDraftAnchor).not.toHaveBeenCalled()
     expect(browserManager.waitForAccountView).toHaveBeenCalledOnce()
     expect(agentBridge.sendMessage).toHaveBeenCalledOnce()
     expect(agentBridge.sendMessage).toHaveBeenCalledWith(
@@ -714,6 +773,7 @@ describe('ArticlePublishingService', () => {
         data: affair,
       }))
       const webAffairService = {
+        recordArticlePublishingPlanResults: vi.fn().mockResolvedValue({ success: true, data: {} }),
         getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [affair] } })),
         reconcileArticlePublishingRuntime,
       }
@@ -786,6 +846,7 @@ describe('ArticlePublishingService', () => {
         data: affair,
       }))
       const webAffairService = {
+        recordArticlePublishingPlanResults: vi.fn().mockResolvedValue({ success: true, data: {} }),
         getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [affair] } })),
         reconcileArticlePublishingRuntime,
       }
@@ -861,6 +922,7 @@ describe('ArticlePublishingService', () => {
     const service = new ArticlePublishingService(
       {} as never,
       {
+        recordArticlePublishingPlanResults: vi.fn().mockResolvedValue({ success: true, data: {} }),
         getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [affair] } })),
         reconcileArticlePublishingRuntime,
       } as never,
@@ -922,6 +984,7 @@ describe('ArticlePublishingService', () => {
     const service = new ArticlePublishingService(
       {} as never,
       {
+        recordArticlePublishingPlanResults: vi.fn().mockResolvedValue({ success: true, data: {} }),
         getProjectSnapshot: vi.fn(() => ({ success: true, data: { affairs: [affair] } })),
         reconcileArticlePublishingRuntime,
       } as never,
@@ -1223,6 +1286,7 @@ function createResumeHarness(options: {
     })),
   }
   const webAffairService = {
+    recordArticlePublishingPlanResults: vi.fn().mockResolvedValue({ success: true, data: {} }),
     getProjectSnapshot: vi.fn(() => ({
       success: true,
       data: { affairs: [currentSnapshotAffair] },
@@ -1332,6 +1396,7 @@ function createResumeHarness(options: {
     webContentsId: 20,
   }
   const agentBridge = {
+    abort: vi.fn(async (): Promise<void> => undefined),
     onRuntimeEvent: vi.fn(() => () => undefined),
     getRuntimeIdentity: vi.fn(() => ({
       agentRuntimeBindingKey: 'agent-binding-a',
@@ -1379,6 +1444,7 @@ function createResumeHarness(options: {
     getViewRuntimeIdentity: vi.fn(() => viewIdentity),
   }
   const browserTaskRuntime = {
+    cancelTask: vi.fn(),
     acquireAccountRecoveryLease: vi.fn((input: Record<string, unknown>) => ({
       ...input,
       id: 'recovery-lease-a',

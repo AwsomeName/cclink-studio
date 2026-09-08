@@ -30,6 +30,249 @@ describe('article publishing persistent state', () => {
     await rm(directory, { recursive: true, force: true })
   })
 
+  it('honors explicit cancellation after the Agent has already interrupted the current attempt', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await created.service.interruptArticlePublishingLaunch(
+      created.affairId,
+      created.attemptId,
+      'Agent 先结束',
+      WORKSPACE_ID,
+    )
+    const cancelled = await created.service.reconcileArticlePublishingRuntime({
+      ...created.reporter,
+      eventId: randomUUID(),
+      source: 'user-cancel',
+      observedAt: new Date().toISOString(),
+      observedStatus: 'cancelled',
+      reasonCode: 'USER_CANCELLED',
+      reason: '用户明确终止已中断运行',
+    })
+    expect(cancelled.success).toBe(true)
+    if (!cancelled.success) throw new Error(cancelled.error.message)
+    expect(cancelled.data.articlePublishing?.execution.status).toBe('cancelled')
+    expect(cancelled.data.attempts.at(-1)?.status).toBe('cancelled')
+    await created.service.flush()
+  })
+
+  it('revises only a terminal known draft, preserving old facts and requiring management recovery', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await prepareUploadCheckpoint(created)
+    const snapshot = created.service.getProjectSnapshot(WORKSPACE_ID)
+    if (!snapshot.success) throw new Error(snapshot.error.message)
+    const old = snapshot.data.affairs[0].articlePublishing!
+    const input = {
+      reviseDraftFromAffairId: created.affairId,
+      workspaceRef: { kind: 'local' as const, path: directory },
+      accountId: ACCOUNT_ID,
+      fields: { ...old.fields, summary: '公开修订' },
+      preview: {
+        source: old.source,
+        title: old.fields.title,
+        summary: '公开修订',
+        assets: [],
+        blockers: [],
+        warnings: [],
+      },
+    }
+    expect(await created.service.createArticlePublishingAffair(input, WORKSPACE_ID)).toMatchObject({
+      success: false,
+    })
+    await created.service.finishAttempt(
+      {
+        workspaceRef: input.workspaceRef,
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        outcome: 'cancelled',
+        summary: '明确结束旧任务',
+      },
+      WORKSPACE_ID,
+      created.reporter,
+    )
+    expect(
+      await created.service.createArticlePublishingAffair(
+        { ...input, fields: { ...input.fields, title: '其他标题' } },
+        WORKSPACE_ID,
+      ),
+    ).toMatchObject({ success: false })
+    expect(await created.service.createArticlePublishingAffair(input, randomUUID())).toMatchObject({
+      success: false,
+    })
+    const revision = await created.service.createArticlePublishingAffair(input, WORKSPACE_ID)
+    expect(revision.success).toBe(true)
+    if (!revision.success) throw new Error(revision.error.message)
+    expect(revision.data.articlePublishing?.draft?.platformDraftId).toBe(old.draft?.platformDraftId)
+    expect(revision.data.articlePublishing?.checkpoints.every((c) => c.status === 'pending')).toBe(
+      true,
+    )
+    expect(await created.service.createArticlePublishingAffair(input, WORKSPACE_ID)).toMatchObject({
+      success: false,
+    })
+    const started = await created.service.acquireArticlePublishingAttempt(
+      revision.data.id,
+      WORKSPACE_ID,
+    )
+    expect(started.success).toBe(true)
+    if (!started.success) throw new Error(started.error.message)
+    expect(started.data.articlePublishing?.executionProtocol.current?.definitionId).toBe(
+      'recovery.restore-exact-draft',
+    )
+    expect(started.data.articlePublishing?.draft?.recovery).toMatchObject({
+      status: 'locating',
+      expectedDraftId: old.draft?.platformDraftId,
+    })
+    const retained = created.service.getProjectSnapshot(WORKSPACE_ID)
+    if (!retained.success) throw new Error(retained.error.message)
+    expect(
+      retained.data.affairs.find((a) => a.id === created.affairId)?.articlePublishing?.execution
+        .status,
+    ).toBe('cancelled')
+    await created.service.flush()
+  })
+
+  it('persists exact detail evidence, rejects stale generations and cancellation, and retains completed business results', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const input = {
+      ...created.reporter,
+      results: [
+        {
+          id: 'body.verify',
+          status: 'completed' as const,
+          evidence: '原稿正文与服务端一致；saved',
+        },
+      ],
+    }
+    const record = (overrides = {}, current = true) =>
+      created.service.recordArticlePublishingPlanResults({ ...input, ...overrides }, () => current)
+    expect(await record({}, false)).toMatchObject({ success: false })
+    expect(await record({ executionGeneration: input.executionGeneration + 1 })).toMatchObject({
+      success: false,
+    })
+    expect(await record()).toMatchObject({ success: true })
+    await record({
+      results: [
+        {
+          id: 'body.verify',
+          status: 'waiting',
+          evidence: '新页面还没有读到 saved',
+          reason: '等待当前页面复核',
+        },
+      ],
+    })
+    let snapshot = created.service.getProjectSnapshot(WORKSPACE_ID)
+    if (!snapshot.success) throw new Error(snapshot.error.message)
+    expect(
+      snapshot.data.affairs[0].articlePublishing?.checkpoints.find((c) => c.stepId === 'fill-body')
+        ?.details,
+    ).toContainEqual(
+      expect.objectContaining({
+        id: 'body.verify',
+        status: 'completed',
+        evidence: '原稿正文与服务端一致；saved',
+        recheck: expect.objectContaining({ status: 'waiting' }),
+      }),
+    )
+    expect(await record()).toMatchObject({ success: true })
+    snapshot = created.service.getProjectSnapshot(WORKSPACE_ID)
+    if (!snapshot.success) throw new Error(snapshot.error.message)
+    expect(
+      snapshot.data.affairs[0].articlePublishing?.checkpoints
+        .flatMap((c) => c.details ?? [])
+        .find((d) => d.id === 'body.verify')?.recheck,
+    ).toBeUndefined()
+    await created.service.finishAttempt(
+      {
+        workspaceRef: { kind: 'local', path: directory },
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        outcome: 'cancelled',
+        summary: '测试停止',
+      },
+      WORKSPACE_ID,
+      created.reporter,
+    )
+    expect(await record()).toMatchObject({ success: false })
+    await created.service.flush()
+    const reloaded = createService(directory)
+    await reloaded.load()
+    snapshot = reloaded.getProjectSnapshot(WORKSPACE_ID)
+    if (!snapshot.success) throw new Error(snapshot.error.message)
+    expect(
+      snapshot.data.affairs[0].articlePublishing?.checkpoints.find((c) => c.stepId === 'fill-body')
+        ?.details,
+    ).toContainEqual(expect.objectContaining({ id: 'body.verify', status: 'completed' }))
+    await reloaded.flush()
+  })
+
+  it('separates prewritten field dispatch from result verification and keeps unknown writes unresolved', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const target = 'autosave:fill-fields:summary:test'
+    const taskId = '77777777-7777-4777-8777-777777777777'
+    const generation = created.reporter.executionGeneration
+    const key = `${created.affairId}:${created.attemptId}:g${generation}:save-draft:${target}`
+    const reserved = await created.service.reserveArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      generation,
+      'save-draft',
+      target,
+      taskId,
+      WORKSPACE_ID,
+    )
+    if (!reserved.success) throw new Error(reserved.error.message)
+    expect(
+      reserved.data.articlePublishing?.checkpoints.find((c) => c.stepId === 'fill-fields')?.details,
+    ).toContainEqual(expect.objectContaining({ id: 'field.summary.dispatch', status: 'running' }))
+    await created.service.consumeArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      generation,
+      key,
+      taskId,
+      WORKSPACE_ID,
+    )
+    const dispatched = await created.service.dispatchArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      generation,
+      key,
+      taskId,
+      WORKSPACE_ID,
+    )
+    if (!dispatched.success) throw new Error(dispatched.error.message)
+    const details = dispatched.data.articlePublishing?.checkpoints.find(
+      (c) => c.stepId === 'fill-fields',
+    )?.details
+    expect(details).toContainEqual(
+      expect.objectContaining({ id: 'field.summary.dispatch', status: 'running' }),
+    )
+    expect(details).toContainEqual(
+      expect.objectContaining({ id: 'field.summary.verify', status: 'verifying' }),
+    )
+    const unknown = await created.service.observeArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      generation,
+      key,
+      'result-unknown',
+      WORKSPACE_ID,
+    )
+    if (!unknown.success) throw new Error(unknown.error.message)
+    expect(
+      unknown.data.articlePublishing?.checkpoints.find((c) => c.stepId === 'fill-fields')?.details,
+    ).toContainEqual(expect.objectContaining({ id: 'field.summary.verify', status: 'unknown' }))
+    expect(
+      await created.service.reserveArticlePublishingSideEffect(
+        created.affairId,
+        created.attemptId,
+        generation,
+        'save-draft',
+        target,
+        taskId,
+        WORKSPACE_ID,
+      ),
+    ).toMatchObject({ success: false })
+  })
+
   it('persists a saved draft and reloads it into project history', async () => {
     const created = await createDraftTask(directory, sourcePath, imagePath)
     await created.service.flush()
@@ -47,6 +290,93 @@ describe('article publishing persistent state', () => {
       articlePublishing: { execution: { status: 'draft' } },
     })
     await reloaded.flush()
+  })
+
+  it('retains a late first-save ID after cancel without advancing progress or accepting another generation', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    const generation = created.reporter.executionGeneration
+    const browserTaskRunId = '77777777-7777-4777-8777-777777777777'
+    const snapshot = created.service.getProjectSnapshot(WORKSPACE_ID)
+    if (!snapshot.success) throw new Error(snapshot.error.message)
+    const attempt = snapshot.data.affairs[0].attempts[0]
+    const key = `${created.affairId}:${created.attemptId}:g${generation}:save-draft:initial-draft:save`
+    const creation = {
+      sideEffectKey: key,
+      platformAccountId: 'csdn:test-user',
+      normalizedTitle: 'Article',
+    }
+    const record = (gen = generation) =>
+      created.service.recordArticlePublishingDraftAnchor(
+        created.affairId,
+        created.attemptId,
+        gen,
+        attempt.launchOperationId,
+        'https://mp.csdn.net/mp_blog/creation/editor/164148900',
+        WORKSPACE_ID,
+        browserTaskRunId,
+        creation,
+      )
+    expect(await record()).toMatchObject({ success: false })
+    await created.service.reserveArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      generation,
+      'save-draft',
+      'initial-draft:save',
+      browserTaskRunId,
+      WORKSPACE_ID,
+    )
+    await created.service.consumeArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      generation,
+      key,
+      browserTaskRunId,
+      WORKSPACE_ID,
+    )
+    await created.service.dispatchArticlePublishingSideEffect(
+      created.affairId,
+      created.attemptId,
+      generation,
+      key,
+      browserTaskRunId,
+      WORKSPACE_ID,
+    )
+    const cancelled = await created.service.finishAttempt(
+      {
+        workspaceRef: { kind: 'local', path: directory },
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        outcome: 'cancelled',
+        summary: '首次保存派发后取消',
+      },
+      WORKSPACE_ID,
+      created.reporter,
+    )
+    if (!cancelled.success) throw new Error(cancelled.error.message)
+    const recorded = await record()
+    expect(recorded).toMatchObject({
+      success: true,
+      data: {
+        articlePublishing: {
+          execution: { status: 'cancelled' },
+          draft: { platformDraftId: '164148900', platformAccountId: 'csdn:test-user' },
+          checkpoints: cancelled.data.articlePublishing?.checkpoints,
+        },
+      },
+    })
+    expect(await record(generation + 1)).toMatchObject({ success: false })
+    expect(
+      await created.service.reserveArticlePublishingSideEffect(
+        created.affairId,
+        created.attemptId,
+        generation,
+        'save-draft',
+        'initial-draft:save',
+        browserTaskRunId,
+        WORKSPACE_ID,
+      ),
+    ).toMatchObject({ success: false })
   })
 
   it('atomically grants only one cross-affair article publishing execution lease', async () => {
@@ -355,6 +685,62 @@ describe('article publishing persistent state', () => {
     })
   })
 
+  it('persists the observed file-to-image URL without declaring upload success and rejects stale observations', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await prepareUploadCheckpoint(created)
+    await created.service.reportArticlePublishingAsset(
+      {
+        workspaceRef: { kind: 'local', path: directory },
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        assetId: created.assetId,
+        status: 'uploading',
+      },
+      WORKSPACE_ID,
+      trustedReporter(created.reporter, 'asset-absent'),
+    )
+    await dispatchUploadEffect(created, 1)
+    const state = created.service.getProjectSnapshot(WORKSPACE_ID)
+    if (!state.success) throw new Error('snapshot')
+    const publishing = state.data.affairs[0].articlePublishing!
+    const effect = publishing.sideEffects.find((e) => e.kind === 'upload-asset')!
+    const input = {
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: created.attemptId,
+      executionGeneration: publishing.execution.currentGeneration,
+      launchOperationId: publishing.execution.currentLaunchOperationId!,
+      sideEffectKey: effect.key,
+      assetId: created.assetId,
+      platformUrl: 'https://i-blog.csdnimg.cn/direct/observed.png',
+    }
+    expect(
+      await created.service.recordArticlePublishingImageObservation(input, () => false),
+    ).toMatchObject({ success: false })
+    expect(
+      await created.service.recordArticlePublishingImageObservation(
+        { ...input, assetId: 'other-file' },
+        () => true,
+      ),
+    ).toMatchObject({ success: false })
+    const result = await created.service.recordArticlePublishingImageObservation(input, () => true)
+    expect(result.success).toBe(true)
+    if (!result.success) throw new Error(result.error.message)
+    expect(result.data.articlePublishing?.assets[0]).toMatchObject({
+      platformUrl: input.platformUrl,
+      status: 'uploading',
+    })
+    await created.service.interruptArticlePublishingLaunch(
+      created.affairId,
+      created.attemptId,
+      'stop',
+      WORKSPACE_ID,
+    )
+    expect(
+      await created.service.recordArticlePublishingImageObservation(input, () => true),
+    ).toMatchObject({ success: false })
+  })
+
   it('caps safe image upload attempts at three', async () => {
     const { service, affairId, attemptId, assetId, reporter } = await createStartedTask(
       directory,
@@ -458,6 +844,132 @@ describe('article publishing persistent state', () => {
     await reloaded.flush()
   })
 
+  it.each(['present', 'missing', 'not-loaded'] as const)(
+    'reconciles an interrupted observed upload only on the saved original draft: %s',
+    async (mode) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      const draftUrl = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
+      await created.service.recordArticlePublishingDraftAnchor(
+        created.affairId,
+        created.attemptId,
+        created.reporter.executionGeneration,
+        created.reporter.launchOperationId,
+        draftUrl,
+        WORKSPACE_ID,
+        '77777777-7777-4777-8777-777777777777',
+      )
+      await created.service.recordArticlePublishingPageObservation(
+        {
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          executionGeneration: created.reporter.executionGeneration,
+          browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+          draftId: '164148817',
+          platformAccountId: 'csdn:test-user',
+          normalizedTitle: 'Article',
+          url: draftUrl,
+          saveState: 'saved',
+        },
+        WORKSPACE_ID,
+      )
+      await prepareUploadCheckpoint(created)
+      await dispatchUploadEffect(created, 1)
+      await created.service.reportArticlePublishingAsset(
+        {
+          workspaceRef: { kind: 'local', path: directory },
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          assetId: created.assetId,
+          status: 'uploading',
+        },
+        WORKSPACE_ID,
+        trustedReporter(created.reporter, 'asset-absent'),
+      )
+      const snapshot = created.service.getProjectSnapshot(WORKSPACE_ID)
+      if (!snapshot.success) throw new Error('snapshot')
+      const effect = snapshot.data.affairs[0].articlePublishing!.sideEffects.find(
+        (e) => e.kind === 'upload-asset',
+      )!
+      const platformUrl = 'https://i-blog.csdnimg.cn/direct/observed.png'
+      const observed = await created.service.recordArticlePublishingImageObservation(
+        { ...created.reporter, sideEffectKey: effect.key, assetId: created.assetId, platformUrl },
+        () => true,
+      )
+      if (!observed.success) throw new Error(observed.error.message)
+      await created.service.interruptArticlePublishingLaunch(
+        created.affairId,
+        created.attemptId,
+        'test interruption',
+        WORKSPACE_ID,
+      )
+      const resumed = await created.service.acquireArticlePublishingAttempt(
+        created.affairId,
+        WORKSPACE_ID,
+      )
+      if (!resumed.success) throw new Error(resumed.error.message)
+      const attempt = resumed.data.attempts[0]
+      const recovery = resumed.data.articlePublishing!.draft!.recovery!
+      const identity = {
+        tabId: 'recovered-tab',
+        browserTaskRunId: '88888888-8888-4888-8888-888888888888',
+        browserViewRuntimeGeneration: 2,
+        webContentsId: 20,
+        playwrightConnectionGeneration: 2,
+        playwrightPageBindingGeneration: 2,
+      }
+      const verification = {
+        recoveryOperationId: recovery.operationId,
+        draftId: '164148817',
+        url: draftUrl,
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        saveState: 'saved' as const,
+      }
+      const verified = await created.service.verifyArticlePublishingRecovery(
+        {
+          ...identity,
+          ...verification,
+          affairId: created.affairId,
+          attemptId: attempt.id,
+          executionGeneration: attempt.executionGeneration,
+          launchOperationId: attempt.launchOperationId,
+        },
+        WORKSPACE_ID,
+        { issueWritePermit: false },
+      )
+      if (!verified.success) throw new Error(verified.error.message)
+      const bound = await created.service.bindArticlePublishingRuntime(
+        created.affairId,
+        attempt.id,
+        attempt.executionGeneration,
+        attempt.launchOperationId,
+        runtimeBindingsFor(attempt, identity),
+        WORKSPACE_ID,
+        {
+          ...verification,
+          imageEnumerationComplete: true,
+          images: [
+            {
+              src: mode === 'missing' ? 'https://i-blog.csdnimg.cn/other.png' : platformUrl,
+              loaded: mode !== 'not-loaded',
+            },
+          ],
+        },
+      )
+      expect(bound.success).toBe(mode === 'present')
+      if (bound.success) {
+        expect(bound.data.articlePublishing?.assets[0]).toMatchObject({
+          status: 'uploaded',
+          platformUrl,
+          uploadAttempts: [{ number: 1, status: 'succeeded' }],
+        })
+        expect(
+          bound.data.articlePublishing?.sideEffects.filter((e) => e.kind === 'upload-asset'),
+        ).toEqual([expect.objectContaining({ key: effect.key, status: 'verified' })])
+      }
+    },
+  )
+
   it('blocks an unknown upload until the user visually confirms whether the image exists', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
     await prepareUploadCheckpoint(created)
@@ -509,6 +1021,258 @@ describe('article publishing persistent state', () => {
       },
     })
   })
+
+  it.each([
+    'verified',
+    'wrong-draft',
+    'wrong-account',
+    'wrong-title',
+    'unknown-save',
+    'stale-page',
+    'pending-save',
+  ] as const)(
+    'completes save reconciliation without a redundant click only with safe autosave evidence: %s',
+    async (scenario) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await prepareUploadCheckpoint(created)
+      await dispatchUploadEffect(created, 1)
+      for (const status of ['uploading', 'waiting-platform', 'verifying', 'uploaded'] as const) {
+        const result = await created.service.reportArticlePublishingAsset(
+          {
+            workspaceRef: { kind: 'local', path: directory },
+            affairId: created.affairId,
+            attemptId: created.attemptId,
+            assetId: created.assetId,
+            status,
+            evidence: 'image verified in current editor',
+            ...(status === 'uploaded'
+              ? { platformUrl: 'https://img-blog.csdnimg.cn/test.png' }
+              : {}),
+          },
+          WORKSPACE_ID,
+          trustedReporter(
+            created.reporter,
+            status === 'uploading'
+              ? 'asset-absent'
+              : status === 'uploaded'
+                ? 'asset-uploaded'
+                : undefined,
+          ),
+        )
+        if (!result.success) throw new Error(result.error.message)
+      }
+      await advanceToSaveCheckpoint(created)
+      if (scenario === 'pending-save') {
+        const result = await created.service.reserveArticlePublishingSideEffect(
+          created.affairId,
+          created.attemptId,
+          created.reporter.executionGeneration,
+          'save-draft',
+          'manual-save:pending',
+          '77777777-7777-4777-8777-777777777777',
+          WORKSPACE_ID,
+        )
+        if (!result.success) throw new Error(result.error.message)
+      }
+      await reportPublishingCheckpoint(created, 'save-draft', 'verifying')
+      const reporter = trustedReporter(created.reporter, 'checkpoint')
+      if (scenario === 'wrong-draft') reporter.trustedPageEvidence!.draftId = '999999999'
+      if (scenario === 'wrong-account')
+        reporter.trustedPageEvidence!.platformAccountId = 'csdn:other'
+      if (scenario === 'wrong-title') reporter.trustedPageEvidence!.normalizedTitle = 'Other'
+      if (scenario === 'unknown-save') reporter.trustedPageEvidence!.saveState = 'unknown'
+      if (scenario === 'stale-page') reporter.trustedPageEvidence!.isCurrent = () => false
+      const result = await created.service.reportArticlePublishingCheckpoint(
+        {
+          workspaceRef: { kind: 'local', path: directory },
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          stepId: 'save-draft',
+          status: 'completed',
+          evidence: 'current original draft verified saved',
+        },
+        WORKSPACE_ID,
+        reporter,
+      )
+      expect(result.success).toBe(scenario === 'verified')
+      if (result.success) {
+        expect(result.data.articlePublishing?.execution.currentStepId).toBe('publish')
+        expect(result.data.articlePublishing?.publication.status).toBe('not-started')
+        expect(
+          result.data.articlePublishing?.sideEffects.some((effect) =>
+            effect.targetId.startsWith('manual-save:'),
+          ),
+        ).toBe(false)
+      }
+    },
+  )
+
+  it.each([
+    'matched',
+    'mismatch',
+    'stale',
+    'wrong-draft',
+    'wrong-account',
+    'unknown-save',
+  ] as const)(
+    'finishes recovered body without replay only after complete fresh comparison: %s',
+    async (mode) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await prepareUploadCheckpoint(created)
+      await dispatchUploadEffect(created, 1)
+      for (const status of ['uploading', 'waiting-platform', 'verifying', 'uploaded'] as const) {
+        const result = await created.service.reportArticlePublishingAsset(
+          {
+            workspaceRef: { kind: 'local', path: directory },
+            affairId: created.affairId,
+            attemptId: created.attemptId,
+            assetId: created.assetId,
+            status,
+            evidence: 'observed image',
+            ...(status === 'uploaded'
+              ? { platformUrl: 'https://img-blog.csdnimg.cn/test.png' }
+              : {}),
+          },
+          WORKSPACE_ID,
+          trustedReporter(
+            created.reporter,
+            status === 'uploading'
+              ? 'asset-absent'
+              : status === 'uploaded'
+                ? 'asset-uploaded'
+                : undefined,
+          ),
+        )
+        if (!result.success) throw new Error(result.error.message)
+      }
+      await reportPublishingCheckpoint(created, 'upload-assets', 'verifying')
+      await reportPublishingCheckpoint(created, 'upload-assets', 'completed')
+      await reportPublishingCheckpoint(created, 'fill-body', 'running')
+      await dispatchSaveEffect(created, 'fill-body')
+      await created.service.interruptArticlePublishingLaunch(
+        created.affairId,
+        created.attemptId,
+        'restart',
+        WORKSPACE_ID,
+      )
+      const resumed = await created.service.acquireArticlePublishingAttempt(
+        created.affairId,
+        WORKSPACE_ID,
+      )
+      if (!resumed.success) throw new Error(resumed.error.message)
+      const attempt = resumed.data.attempts[0]
+      const recovery = resumed.data.articlePublishing!.draft!.recovery!
+      const identity = {
+        tabId: 'recovered-tab',
+        browserTaskRunId: '88888888-8888-4888-8888-888888888888',
+        browserViewRuntimeGeneration: 2,
+        webContentsId: 20,
+        playwrightConnectionGeneration: 2,
+        playwrightPageBindingGeneration: 2,
+      }
+      const verification = {
+        recoveryOperationId: recovery.operationId,
+        draftId: '164148817',
+        url: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
+        platformAccountId: 'csdn:test-user',
+        normalizedTitle: 'Article',
+        saveState: 'saved' as const,
+      }
+      const verified = await created.service.verifyArticlePublishingRecovery(
+        {
+          ...identity,
+          ...verification,
+          affairId: created.affairId,
+          attemptId: attempt.id,
+          executionGeneration: attempt.executionGeneration,
+          launchOperationId: attempt.launchOperationId,
+        },
+        WORKSPACE_ID,
+        { issueWritePermit: false },
+      )
+      if (!verified.success) throw new Error(verified.error.message)
+      const bound = await created.service.bindArticlePublishingRuntime(
+        created.affairId,
+        attempt.id,
+        attempt.executionGeneration,
+        attempt.launchOperationId,
+        runtimeBindingsFor(attempt, identity),
+        WORKSPACE_ID,
+        verification,
+      )
+      if (!bound.success) throw new Error(bound.error.message)
+      const operation = bound.data.articlePublishing!.executionProtocol.current!
+      const inspectIdentity = {
+        workspaceId: WORKSPACE_ID,
+        affairId: created.affairId,
+        attemptId: attempt.id,
+        executionGeneration: attempt.executionGeneration,
+        launchOperationId: attempt.launchOperationId,
+        runtime: { ...identity, agentRunId: `run-g${attempt.executionGeneration}` },
+        expectedOperationRunId: operation.operationRunId,
+        expectedOperationRevision: operation.revision,
+      }
+      const started = await created.service.startArticlePublishingFirstInspect(inspectIdentity)
+      if (!started.success) throw new Error(started.error.message)
+      const completed = await created.service.completeArticlePublishingFirstInspect({
+        ...inspectIdentity,
+        expectedOperationRevision:
+          started.data.articlePublishing!.executionProtocol.current!.revision,
+        pageKind: 'editor',
+        ...verification,
+      })
+      if (!completed.success) throw new Error(completed.error.message)
+      const reporter = trustedReporter(
+        {
+          ...created.reporter,
+          executionGeneration: attempt.executionGeneration,
+          launchOperationId: attempt.launchOperationId,
+          conversationId: `conversation-g${attempt.executionGeneration}`,
+          agentRunId: `run-g${attempt.executionGeneration}`,
+        },
+        'checkpoint',
+      )
+      reporter.trustedPageEvidence!.bodyMatchesFrozen = mode !== 'mismatch'
+      reporter.trustedPageEvidence!.isCurrent = () => mode !== 'stale'
+      if (mode === 'wrong-draft') reporter.trustedPageEvidence!.draftId = '999999999'
+      if (mode === 'wrong-account') reporter.trustedPageEvidence!.platformAccountId = 'csdn:other'
+      if (mode === 'unknown-save') reporter.trustedPageEvidence!.saveState = 'unknown'
+      const input = {
+        workspaceRef: { kind: 'local' as const, path: directory },
+        affairId: created.affairId,
+        attemptId: attempt.id,
+        stepId: 'fill-body',
+        evidence: 'current complete frozen body comparison',
+      }
+      await created.service.reportArticlePublishingCheckpoint(
+        { ...input, status: 'verifying' },
+        WORKSPACE_ID,
+        reporter,
+      )
+      const result = await created.service.reportArticlePublishingCheckpoint(
+        { ...input, status: 'completed' },
+        WORKSPACE_ID,
+        reporter,
+      )
+      expect(result.success, JSON.stringify(result.success ? {} : result.error)).toBe(
+        mode === 'matched',
+      )
+      if (result.success) {
+        expect(result.data.articlePublishing!.execution.currentStepId).toBe('fill-fields')
+        const writes = result.data.articlePublishing!.sideEffects.filter((e) =>
+          e.targetId.startsWith('autosave:fill-body:'),
+        )
+        expect(writes).toHaveLength(1)
+        expect(writes[0].status).toBe('verified')
+        expect(writes[0].executionGeneration).toBe(1)
+        expect(
+          result.data
+            .articlePublishing!.checkpoints.find((c) => c.stepId === 'fill-body')!
+            .details?.find((d) => d.id === 'body.verify')?.status,
+        ).toBe('completed')
+      }
+    },
+  )
 
   it('blocks an unknown draft save before Agent binding', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
@@ -1603,6 +2367,12 @@ describe('article publishing persistent state', () => {
     if (!cancelled.success) throw new Error(cancelled.error.message)
     expect(cancelled.data.articlePublishing?.execution.status).toBe('cancelled')
     expect(cancelled.data.articlePublishing?.sideEffects[0].status).toBe('rejected')
+    expect(
+      cancelled.data.articlePublishing?.checkpoints.find(
+        (checkpoint) =>
+          checkpoint.stepId === cancelled.data.articlePublishing?.execution.currentStepId,
+      )?.status,
+    ).toBe('needs-reconcile')
     await expect(
       created.service.dispatchArticlePublishingSideEffect(
         created.affairId,
@@ -2704,8 +3474,20 @@ async function advanceToSaveCheckpoint(created: StartedTask) {
   for (const stepId of ['fill-body', 'fill-fields']) {
     await reportPublishingCheckpoint(created, stepId, 'running')
     await dispatchSaveEffect(created, stepId)
+    if (stepId === 'fill-fields') await dispatchSaveEffect(created, 'fill-fields:summary')
     await reportPublishingCheckpoint(created, stepId, 'verifying')
     await reportPublishingCheckpoint(created, stepId, 'completed')
+    if (stepId === 'fill-fields') {
+      const snapshot = created.service.getProjectSnapshot(WORKSPACE_ID)
+      if (!snapshot.success) throw new Error(snapshot.error.message)
+      expect(
+        snapshot.data.affairs[0]
+          .articlePublishing!.sideEffects.filter((e) =>
+            e.targetId.startsWith('autosave:fill-fields:'),
+          )
+          .every((e) => e.status === 'verified'),
+      ).toBe(true)
+    }
   }
   await reportPublishingCheckpoint(created, 'save-draft', 'running')
 }

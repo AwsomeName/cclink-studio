@@ -1,0 +1,375 @@
+{
+  "execution": {
+    "status": "running",
+    "currentAttemptId": "e45b8588-20e4-47e0-a88e-4e52abde83c9",
+    "currentGeneration": 2,
+    "currentLaunchOperationId": "29468b03-491b-4440-b7d0-e380bc2706d9",
+    "currentStepId": "fill-fields",
+    "lastAgentRunId": "run-29468b03-491b-4440-b7d0-e380bc2706d9",
+    "lastBrowserTaskRunId": "0e5e8080-b6c5-47c3-bf22-c08c623061ff"
+  },
+  "draft": {
+    "platformDraftId": "164598985",
+    "platformAccountId": "csdn:weixin_36388257",
+    "url": "https://mp.csdn.net/mp_blog/creation/editor/164598985",
+    "normalizedTitle": "Studio 细步骤验收 20260908-1227",
+    "lastVerifiedAt": "2026-09-08T04:36:55.342Z",
+    "recovery": {
+      "operationId": "ea3335c5-6a80-40f8-af44-16351eab331d",
+      "executionGeneration": 2,
+      "status": "verified",
+      "expectedDraftId": "164598985",
+      "expectedTitle": "Studio 细步骤验收 20260908-1227",
+      "startedAt": "2026-09-08T04:34:01.182Z",
+      "verifiedAt": "2026-09-08T04:34:04.076Z",
+      "platformAccountId": "csdn:weixin_36388257",
+      "writePermit": {
+        "id": "59c148a0-c56a-463c-881b-24687d8c18eb",
+        "recoveryOperationId": "ea3335c5-6a80-40f8-af44-16351eab331d",
+        "executionGeneration": 2,
+        "draftId": "164598985",
+        "tabId": "tab-1-1788435800906",
+        "browserViewRuntimeGeneration": 1,
+        "webContentsId": 2,
+        "playwrightConnectionGeneration": 1,
+        "playwrightPageBindingGeneration": 1,
+        "issuedAt": "2026-09-08T04:34:04.076Z"
+      }
+    }
+  },
+  "details": [
+    {
+      "id": "editor.open",
+      "status": "completed",
+      "evidence": "https://mp.csdn.net/mp_blog/creation/editor",
+      "observedAt": "2026-09-08T04:26:39.941Z",
+      "generation": 1
+    },
+    {
+      "id": "initial.title.dispatch",
+      "recheck": {
+        "status": "unknown",
+        "evidence": "派发闸门已通过 · 2026-09-08T04:27:18.295Z · save-draft/initial-draft:title；结果另行核验",
+        "observedAt": "2026-09-08T04:31:44.177Z",
+        "generation": 1
+      },
+      "status": "completed",
+      "evidence": "浏览器动作 fill 已返回；平台结果另行核验 · initial-draft:title",
+      "observedAt": "2026-09-08T04:27:18.382Z",
+      "generation": 1
+    },
+    {
+      "id": "initial.body.dispatch",
+      "recheck": {
+        "status": "unknown",
+        "evidence": "派发闸门已通过 · 2026-09-08T04:27:29.846Z · save-draft/initial-draft:body；结果另行核验",
+        "observedAt": "2026-09-08T04:31:44.177Z",
+        "generation": 1
+      },
+      "status": "completed",
+      "evidence": "浏览器动作 frameExecute 已返回；平台结果另行核验 · initial-draft:body",
+      "observedAt": "2026-09-08T04:27:29.947Z",
+      "generation": 1
+    },
+    {
+      "id": "initial.save.dispatch",
+      "recheck": {
+        "status": "unknown",
+        "evidence": "派发闸门已通过 · 2026-09-08T04:27:40.887Z · save-draft/initial-draft:save；结果另行核验",
+        "observedAt": "2026-09-08T04:31:44.177Z",
+        "generation": 1
+      },
+      "status": "completed",
+      "evidence": "浏览器动作 click 已返回；平台结果另行核验 · initial-draft:save",
+      "observedAt": "2026-09-08T04:27:44.944Z",
+      "generation": 1
+    },
+    {
+      "id": "initial.anchor",
+      "status": "completed",
+      "evidence": "首次保存与原稿复核 · csdn:weixin_36388257 · draftId 164598985 · Studio 细步骤验收 20260908-1227 · 2026-09-08T04:28:16.807Z",
+      "observedAt": "2026-09-08T04:28:16.807Z",
+      "generation": 1
+    },
+    {
+      "id": "account.resolve",
+      "status": "completed",
+      "evidence": "账号 ff3592e8-517a-443d-a674-58105f7bc06b · Profile web-draft-b3896210-978e-4fe6-a9c0-813927210b5e",
+      "observedAt": "2026-09-08T04:34:01.206Z",
+      "generation": 2
+    },
+    {
+      "id": "tab.acquire",
+      "status": "completed",
+      "evidence": "Tab tab-1-1788435800906 · 账号 ff3592e8-517a-443d-a674-58105f7bc06b · Profile web-draft-b3896210-978e-4fe6-a9c0-813927210b5e",
+      "observedAt": "2026-09-08T04:34:01.225Z",
+      "generation": 2
+    },
+    {
+      "id": "recovery.management",
+      "status": "completed",
+      "evidence": "管理页可识别；草稿箱入口 草稿箱(0)",
+      "observedAt": "2026-09-08T04:34:01.726Z",
+      "generation": 2
+    },
+    {
+      "id": "recovery.account",
+      "status": "completed",
+      "evidence": "期望 csdn:weixin_36388257；实际 csdn:weixin_36388257",
+      "observedAt": "2026-09-08T04:34:01.738Z",
+      "generation": 2
+    },
+    {
+      "id": "recovery.locate",
+      "status": "completed",
+      "evidence": "draftId 164598985；匹配 1 项",
+      "observedAt": "2026-09-08T04:34:02.378Z",
+      "generation": 2
+    },
+    {
+      "id": "recovery.open",
+      "status": "completed",
+      "evidence": "https://mp.csdn.net/mp_blog/manage/article",
+      "observedAt": "2026-09-08T04:34:02.425Z",
+      "generation": 2
+    },
+    {
+      "id": "recovery.verify.account",
+      "status": "completed",
+      "evidence": "期望 csdn:weixin_36388257；实际 csdn:weixin_36388257 · https://mp.csdn.net/mp_blog/creation/editor/164598985",
+      "observedAt": "2026-09-08T04:34:03.815Z",
+      "generation": 2
+    },
+    {
+      "id": "recovery.verify.id",
+      "status": "completed",
+      "evidence": "期望 164598985；实际 164598985 · https://mp.csdn.net/mp_blog/creation/editor/164598985",
+      "observedAt": "2026-09-08T04:34:03.830Z",
+      "generation": 2
+    },
+    {
+      "id": "recovery.verify.title",
+      "status": "completed",
+      "evidence": "期望 Studio 细步骤验收 20260908-1227；实际 Studio 细步骤验收 20260908-1227 · https://mp.csdn.net/mp_blog/creation/editor/164598985",
+      "observedAt": "2026-09-08T04:34:03.851Z",
+      "generation": 2
+    },
+    {
+      "id": "recovery.verify.saved",
+      "status": "completed",
+      "evidence": "期望 saved；实际 saved · https://mp.csdn.net/mp_blog/creation/editor/164598985",
+      "observedAt": "2026-09-08T04:34:03.866Z",
+      "generation": 2
+    },
+    {
+      "id": "runtime.ready",
+      "status": "completed",
+      "evidence": "在当前精确 Page 上完成第一次只读检查 · Tab tab-1-1788435800906 · Page g1",
+      "observedAt": "2026-09-08T04:34:04.076Z",
+      "generation": 2
+    },
+    {
+      "id": "page.inspect",
+      "status": "completed",
+      "evidence": "页面 editor · 账号 csdn:weixin_36388257 · draftId 164598985 · 标题 Studio 细步骤验收 20260908-1227 · 保存 saved",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "body.verify",
+      "status": "completed",
+      "evidence": "账号 csdn:weixin_36388257 · draftId 164598985 · 标题 Studio 细步骤验收 20260908-1227 · 正文 202 字符 · saved · CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿",
+      "observedAt": "2026-09-08T04:36:27.537Z",
+      "generation": 2
+    },
+    {
+      "id": "body.locate",
+      "status": "completed",
+      "evidence": "正文 body.cke_editable[contenteditable=\"true\"] · iframe iframe.cke_wysiwyg_frame · 202 字符",
+      "observedAt": "2026-09-08T04:36:33.085Z",
+      "generation": 2
+    },
+    {
+      "id": "body.dispatch",
+      "status": "completed",
+      "evidence": "派发闸门已通过 · 2026-09-08T04:35:15.557Z · save-draft/autosave:fill-body:16ece35d-a2fd-4764-ae21-ce9598fbd5cc；结果另行核验",
+      "observedAt": "2026-09-08T04:36:55.342Z",
+      "generation": 2
+    },
+    {
+      "id": "field.title.inspect",
+      "status": "completed",
+      "evidence": "期望 Studio 细步骤验收 20260908-1227；实际 Studio 细步骤验收 20260908-1227",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "field.title.verify",
+      "status": "completed",
+      "evidence": "期望 Studio 细步骤验收 20260908-1227；实际 Studio 细步骤验收 20260908-1227",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "field.title.dispatch",
+      "status": "skipped",
+      "evidence": "当前字段已经与任务一致，无需再次填写",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "field.summary.inspect",
+      "status": "completed",
+      "evidence": "期望 Studio 执行计划的正文写入、字段回读与中断恢复验收。仅保存测试草稿，不公开发布。；实际 ",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "field.summary.verify",
+      "status": "waiting",
+      "evidence": "期望 Studio 执行计划的正文写入、字段回读与中断恢复验收。仅保存测试草稿，不公开发布。；实际 ",
+      "reason": "字段值尚不一致",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "field.tags.inspect",
+      "status": "skipped",
+      "evidence": "本任务未配置此可选字段，不执行修改",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "field.tags.dispatch",
+      "status": "skipped",
+      "evidence": "未配置，不需要写入",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "field.tags.verify",
+      "status": "skipped",
+      "evidence": "未配置，不声明当前平台字段已核验",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "field.category.inspect",
+      "status": "skipped",
+      "evidence": "本任务未配置此可选字段，不执行修改",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "field.category.dispatch",
+      "status": "skipped",
+      "evidence": "未配置，不需要写入",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "field.category.verify",
+      "status": "skipped",
+      "evidence": "未配置，不声明当前平台字段已核验",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "field.cover.inspect",
+      "status": "skipped",
+      "evidence": "本任务未配置此可选字段，不执行修改",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "field.cover.dispatch",
+      "status": "skipped",
+      "evidence": "未配置，不需要写入",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "field.cover.verify",
+      "status": "skipped",
+      "evidence": "未配置，不声明当前平台字段已核验",
+      "observedAt": "2026-09-08T04:34:12.627Z",
+      "generation": 2
+    },
+    {
+      "id": "field.summary.dispatch",
+      "status": "completed",
+      "evidence": "浏览器动作 fill 已返回；平台结果另行核验 · autosave:fill-fields:summary:6d9e86f3-9baa-4d08-abe4-30fac68c0bb3",
+      "observedAt": "2026-09-08T04:37:06.335Z",
+      "generation": 2
+    }
+  ],
+  "checkpoints": [
+    {
+      "id": "open-editor",
+      "status": "completed"
+    },
+    {
+      "id": "verify-account",
+      "status": "completed"
+    },
+    {
+      "id": "upload-assets",
+      "status": "completed"
+    },
+    {
+      "id": "fill-body",
+      "status": "completed"
+    },
+    {
+      "id": "fill-fields",
+      "status": "running"
+    },
+    {
+      "id": "save-draft",
+      "status": "pending"
+    },
+    {
+      "id": "publish",
+      "status": "pending"
+    },
+    {
+      "id": "verify-publication",
+      "status": "pending"
+    }
+  ],
+  "effects": [
+    {
+      "kind": "save-draft",
+      "target": "initial-draft:title",
+      "status": "reconciled"
+    },
+    {
+      "kind": "save-draft",
+      "target": "initial-draft:body",
+      "status": "reconciled"
+    },
+    {
+      "kind": "save-draft",
+      "target": "initial-draft:save",
+      "status": "reconciled"
+    },
+    {
+      "kind": "save-draft",
+      "target": "autosave:fill-body:16ece35d-a2fd-4764-ae21-ce9598fbd5cc",
+      "status": "verified"
+    },
+    {
+      "kind": "save-draft",
+      "target": "autosave:fill-fields:summary:6d9e86f3-9baa-4d08-abe4-30fac68c0bb3",
+      "status": "dispatched"
+    }
+  ],
+  "last": {
+    "id": "ffe591b7-6b53-4df0-a91f-b54586943f87",
+    "type": "node-status-changed",
+    "nodeId": "9f8c3d36-c196-4fa6-8f65-d41ba282d28e",
+    "attemptId": "e45b8588-20e4-47e0-a88e-4e52abde83c9",
+    "summary": "即将派发网页副作用：save-draft/autosave:fill-fields:summary:6d9e86f3-9baa-4d08-abe4-30fac68c0bb3",
+    "occurredAt": "2026-09-08T04:37:06.253Z"
+  }
+}
