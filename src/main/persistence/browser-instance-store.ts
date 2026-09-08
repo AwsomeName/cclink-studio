@@ -28,6 +28,7 @@ export class BrowserInstanceStore {
   private history: BrowserHistoryEntry[] = []
   private loaded = false
   private historyLoaded = false
+  private historyQueue: Promise<unknown> = Promise.resolve()
 
   constructor(filename = 'browser-snapshots.json') {
     this.filePath = join(app.getPath('userData'), filename)
@@ -61,6 +62,7 @@ export class BrowserInstanceStore {
       const raw = await readFile(this.historyFilePath, 'utf-8')
       if (!raw.trim()) {
         this.history = []
+        this.historyLoaded = true
         return
       }
       const parsed = JSON.parse(raw)
@@ -128,26 +130,40 @@ export class BrowserInstanceStore {
     await this.save()
   }
 
+  /** Serialize lazy loading and writes so a stale read cannot replace a new visit. */
+  private enqueueHistory<T>(operation: () => Promise<T>): Promise<T> {
+    const pending = this.historyQueue.then(operation)
+    this.historyQueue = pending.catch(() => undefined)
+    return pending
+  }
+
   /** 记录一次页面访问（同 URL 去重并移到最前） */
-  async recordHistory(entry: BrowserHistoryEntry): Promise<void> {
-    if (!this.historyLoaded) await this.loadHistory()
-    this.history = this.history.filter((item) => item.url !== entry.url)
-    this.history.unshift(entry)
-    if (this.history.length > MAX_HISTORY) {
-      this.history = this.history.slice(0, MAX_HISTORY)
-    }
-    await this.saveHistory()
+  recordHistory(entry: BrowserHistoryEntry): Promise<void> {
+    return this.enqueueHistory(async () => {
+      if (!this.historyLoaded) await this.loadHistory()
+      this.history = this.history.filter((item) => item.url !== entry.url)
+      this.history.unshift(entry)
+      if (this.history.length > MAX_HISTORY) {
+        this.history = this.history.slice(0, MAX_HISTORY)
+      }
+      await this.saveHistory()
+    })
   }
 
   /** 列出最近浏览历史 */
-  async listHistory(limit = 50): Promise<BrowserHistoryEntry[]> {
-    if (!this.historyLoaded) await this.loadHistory()
-    return this.history.slice(0, limit)
+  listHistory(limit = 50): Promise<BrowserHistoryEntry[]> {
+    return this.enqueueHistory(async () => {
+      if (!this.historyLoaded) await this.loadHistory()
+      return this.history.slice(0, limit)
+    })
   }
 
   /** 清空浏览历史 */
-  async clearHistory(): Promise<void> {
-    this.history = []
-    await this.saveHistory()
+  clearHistory(): Promise<void> {
+    return this.enqueueHistory(async () => {
+      this.historyLoaded = true
+      this.history = []
+      await this.saveHistory()
+    })
   }
 }

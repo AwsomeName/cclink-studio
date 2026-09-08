@@ -52,3 +52,34 @@ describe('BrowserInstanceStore history lifecycle', () => {
     expect(await reloaded.listHistory()).toEqual([historyEntry])
   })
 })
+
+describe('concurrent browser history operations', () => {
+  it('keeps every visit across concurrent first reads and persists the final order', async () => {
+    const store = new BrowserInstanceStore()
+    const entries = Array.from({ length: 20 }, (_, index) => ({
+      id: `visit-${index}`,
+      url: `https://example.com/${index}`,
+      title: `Page ${index}`,
+      visitedAt: index,
+    }))
+    const initialRead = store.listHistory()
+    const writes = entries.map((entry) => store.recordHistory(entry))
+    const finalRead = store.listHistory()
+    await Promise.all([initialRead, ...writes])
+    expect(await finalRead).toEqual([...entries].reverse())
+    expect(await new BrowserInstanceStore().listHistory()).toEqual([...entries].reverse())
+  })
+
+  it('orders clear after pending visits and retains only visits recorded after clear', async () => {
+    const store = new BrowserInstanceStore()
+    const oldVisit = { id: 'old', url: 'https://example.com/old', title: null, visitedAt: 1 }
+    const newVisit = { id: 'new', url: 'https://example.com/new', title: null, visitedAt: 2 }
+    await Promise.all([
+      store.recordHistory(oldVisit),
+      store.clearHistory(),
+      store.recordHistory(newVisit),
+    ])
+    expect(await store.listHistory()).toEqual([newVisit])
+    expect(await new BrowserInstanceStore().listHistory()).toEqual([newVisit])
+  })
+})
