@@ -1,3 +1,4 @@
+import { memo, useState } from 'react'
 import type { AgentMessage, ContentBlock } from '../../types'
 import { IconCheck, IconClipboard, IconError, IconThinking, IconTool } from './Icons'
 import { openFileRangeResource } from '../../features/markdown/markdown-navigation'
@@ -18,7 +19,7 @@ type ContentRenderUnit =
   | { type: 'tool_group'; blocks: ToolContentBlock[] }
   | { type: 'thinking_group'; blocks: ThinkingContentBlock[] }
 
-export function ConversationMessageRenderer({
+export const ConversationMessageRenderer = memo(function ConversationMessageRenderer({
   message,
   conversationId,
   workspaceKey,
@@ -106,7 +107,7 @@ export function ConversationMessageRenderer({
       {message.isStreaming && <span className="streaming-cursor" />}
     </div>
   )
-}
+})
 
 export function getMessageCopyText(message: AgentMessage): string {
   if (message.rawText.trim()) return message.rawText
@@ -331,6 +332,7 @@ function ToolExecutionGroup({
   blocks: ToolContentBlock[]
   isStreaming: boolean
 }): React.ReactElement {
+  const [expanded, setExpanded] = useState(false)
   const summary = getToolExecutionSummary(blocks)
   const preview = blocks
     .slice(0, 3)
@@ -344,7 +346,10 @@ function ToolExecutionGroup({
     .join('、')
 
   return (
-    <details className="content-tool-group">
+    <details
+      className="content-tool-group"
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
+    >
       <summary>
         <IconTool size={12} />
         <span>执行过程</span>
@@ -358,22 +363,24 @@ function ToolExecutionGroup({
           {preview ? ` · ${preview}` : ''}
         </em>
       </summary>
-      <div className="tool-group-rows">
-        {blocks.map((block, index) => (
-          <ToolExecutionRow
-            key={index}
-            block={block}
-            isPending={
-              block.type === 'tool_use' &&
-              !blocks.some(
-                (candidate) =>
-                  candidate.type === 'tool_result' && candidate.tool_use_id === block.id,
-              )
-            }
-            isStreaming={isStreaming}
-          />
-        ))}
-      </div>
+      {expanded && (
+        <div className="tool-group-rows">
+          {blocks.map((block, index) => (
+            <ToolExecutionRow
+              key={index}
+              block={block}
+              isPending={
+                block.type === 'tool_use' &&
+                !blocks.some(
+                  (candidate) =>
+                    candidate.type === 'tool_result' && candidate.tool_use_id === block.id,
+                )
+              }
+              isStreaming={isStreaming}
+            />
+          ))}
+        </div>
+      )}
     </details>
   )
 }

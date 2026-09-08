@@ -1,10 +1,17 @@
 # Markdown 文章平台发布开发计划
 
 状态：由逐步可观测执行协议修复方案接管
-最后更新：2026-09-07
+最后更新：2026-09-08
 
 本功能早期计划曾收敛到 [article-publishing-restart-recovery-development-plan.md](article-publishing-restart-recovery-development-plan.md)。2026-09-07 的真实故障证明粗 checkpoint 和长 Agent Prompt 仍形成两个黑盒；当前施工事实源改为
 [article-publishing-observable-execution-development-plan.md](article-publishing-observable-execution-development-plan.md)。本文只保留历史阶段顺序，不再用于判断闭环完成。
+
+## 当前增量：知乎图文纵向验收
+
+复用文章发布 Tab、WebAffair、长 Agent Run 和 Runtime handshake；创建时选择 CSDN 或知乎，一个任务一个平台。
+本轮目标是用户指定三图稿实际提交知乎，同时细步骤跟随真实派发与回读变化。没有新增调度框架、第二状态所有者、哈希或旧数据迁移。
+已跑通的动作、辅助确认及尚未覆盖的入口见 [知乎图文验收](../testing/article-publishing-zhihu-2026-09-08.md)。
+工程测试通过不代替该文档的真人验收记录。
 
 ## 阶段 1：最小 CSDN 纵向闭环
 

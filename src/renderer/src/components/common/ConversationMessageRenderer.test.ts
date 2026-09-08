@@ -1,12 +1,40 @@
-import { describe, expect, it } from 'vitest'
+import * as React from 'react'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { ContentBlock } from '../../types'
 import {
+  ConversationMessageRenderer,
   buildContentRenderUnits,
   getMessageCopyText,
   getToolExecutionSummary,
 } from './ConversationMessageRenderer'
 
+beforeAll(() => vi.stubGlobal('React', React))
+afterAll(() => vi.unstubAllGlobals())
+
 describe('ConversationMessageRenderer', () => {
+  it('keeps large tool output out of a collapsed group while preserving the copyable record', () => {
+    const content = 'large-result-marker'.repeat(10000)
+    const message = {
+      id: 'large',
+      role: 'assistant' as const,
+      rawText: '',
+      timestamp: 1,
+      content: [{ type: 'tool_result' as const, tool_use_id: 'read', content }],
+    }
+    const rendered = renderToStaticMarkup(
+      createElement(ConversationMessageRenderer, {
+        message,
+        conversationId: 'test',
+        workspaceKey: null,
+      }),
+    )
+    expect(rendered).toContain('执行过程')
+    expect(rendered).not.toContain('large-result-marker')
+    expect(getMessageCopyText(message)).toBe(content)
+  })
+
   it('groups consecutive tool blocks into one execution unit', () => {
     const blocks: ContentBlock[] = [
       { type: 'text', text: '开始' },

@@ -118,7 +118,7 @@ const TOOLS: ToolDefinition[] = [
   {
     name: 'article_publishing_inspect_page',
     description:
-      '使用主进程内置 csdn@1 适配器一次性读取当前绑定页面、编辑器、标题、图片、草稿保存状态和公开文章结果。成功回报前必须先调用本工具；页面版本未知时会明确停止，不要继续猜 selector。',
+      '使用任务平台对应的主进程内置 csdn@1／zhihu@1 适配器一次性读取当前绑定页面、编辑器、标题、图片、草稿保存状态和公开文章结果。成功回报前必须先调用本工具；页面版本未知时会明确停止，不要继续猜 selector。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -324,7 +324,7 @@ export class WebAffairToolModule implements ToolModule {
       }
       return (
         this.articlePublishingBrowserPolicy?.inspectCurrentPage(context) ??
-        publishingPolicyError('CSDN 页面适配器尚未就绪')
+        publishingPolicyError('当前平台页面适配器尚未就绪')
       )
     }
     throw new Error(`未知网页事务工具: ${toolName}`)
@@ -409,7 +409,7 @@ export class WebAffairToolModule implements ToolModule {
         params,
         context,
         reporter,
-      ) ?? publishingPolicyError('成功回报必须经过当前 CSDN 页面适配器核验')
+      ) ?? publishingPolicyError('成功回报必须经过当前平台页面适配器核验')
     )
   }
 

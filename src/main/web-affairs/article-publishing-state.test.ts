@@ -30,6 +30,99 @@ describe('article publishing persistent state', () => {
     await rm(directory, { recursive: true, force: true })
   })
 
+  it.each(['current', 'stale', 'not-skipped', 'wrong-account'])(
+    'completes an unchanged Zhihu title only with current read-only evidence: %s',
+    async (scenario) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await prepareUploadCheckpoint(created)
+      await dispatchUploadEffect(created, 1)
+      for (const status of ['uploading', 'waiting-platform', 'verifying', 'uploaded'] as const) {
+        const result = await created.service.reportArticlePublishingAsset(
+          {
+            workspaceRef: { kind: 'local', path: directory },
+            affairId: created.affairId,
+            attemptId: created.attemptId,
+            assetId: created.assetId,
+            status,
+            evidence: 'current image',
+            ...(status === 'uploaded'
+              ? { platformUrl: 'https://img-blog.csdnimg.cn/test.png' }
+              : {}),
+          },
+          WORKSPACE_ID,
+          trustedReporter(
+            created.reporter,
+            status === 'uploading'
+              ? 'asset-absent'
+              : status === 'uploaded'
+                ? 'asset-uploaded'
+                : undefined,
+          ),
+        )
+        if (!result.success) throw new Error(result.error.message)
+      }
+      await advanceToSaveCheckpoint(created)
+      await created.service.flush()
+      const path = join(directory, 'affairs.json')
+      const snapshot = JSON.parse(await readFile(path, 'utf8'))
+      const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)
+      const publishing = affair.articlePublishing
+      publishing.adapterId = 'zhihu'
+      publishing.execution.currentStepId = 'fill-fields'
+      publishing.sideEffects = publishing.sideEffects.filter(
+        (e: { targetId: string }) => !e.targetId.startsWith('autosave:fill-fields:'),
+      )
+      const checkpoint = publishing.checkpoints.find(
+        (c: { stepId: string }) => c.stepId === 'fill-fields',
+      )
+      checkpoint.status = 'verifying'
+      checkpoint.details = [
+        {
+          id: 'field.title.dispatch',
+          evidence: 'main page',
+          observedAt: new Date().toISOString(),
+          nextAction: 'verify',
+          status: scenario === 'not-skipped' ? 'pending' : 'skipped',
+          generation: scenario === 'stale' ? 0 : publishing.execution.currentGeneration,
+        },
+        {
+          id: 'field.title.verify',
+          evidence: 'main page',
+          observedAt: new Date().toISOString(),
+          nextAction: 'save',
+          status: 'completed',
+          generation: publishing.execution.currentGeneration,
+        },
+      ]
+      await writeFile(path, JSON.stringify(snapshot))
+      const service = created.service
+      Reflect.set(service, 'snapshot', snapshot)
+      const reporter = trustedReporter(
+        created.reporter,
+        'checkpoint',
+        'https://zhuanlan.zhihu.com/p/164148817/edit',
+      )
+      reporter.trustedPageEvidence!.adapterId = 'zhihu'
+      if (scenario === 'wrong-account') reporter.trustedPageEvidence!.platformAccountId = 'other'
+      const result = await service.reportArticlePublishingCheckpoint(
+        {
+          workspaceRef: { kind: 'local', path: directory },
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          stepId: 'fill-fields',
+          status: 'completed',
+          evidence: 'main readback',
+        },
+        WORKSPACE_ID,
+        reporter,
+      )
+      expect(result.success, JSON.stringify(result.success ? null : result.error)).toBe(
+        scenario === 'current',
+      )
+      await service.flush()
+    },
+  )
+
   it('honors explicit cancellation after the Agent has already interrupted the current attempt', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
     await created.service.interruptArticlePublishingLaunch(

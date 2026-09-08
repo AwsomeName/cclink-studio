@@ -1,3 +1,4 @@
+import { PublishingAdapter, publishingPlatform } from './publishing-adapter'
 import { randomUUID } from 'node:crypto'
 import { prepareArticleBody } from './article-body'
 import type { BrowserTaskRun } from '../../shared/ipc/browser'
@@ -7,10 +8,10 @@ import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
 import type { BrowserManager } from '../browser/browser-manager'
 import type { WebAffairService } from '../web-affairs/web-affair-service'
 import {
-  isSameCsdnDraft,
-  parseCsdnDraftAnchor,
-} from '../../shared/article-publishing/csdn-draft-anchor'
-import { CsdnPublishingAdapter, type CsdnPageProbe } from './csdn-publishing-adapter'
+  isSamePlatformDraft,
+  parsePlatformDraftAnchor,
+} from '../../shared/article-publishing/platform-draft-anchor'
+import { type CsdnPageProbe } from './csdn-publishing-adapter'
 import { observeCsdnInitialDraftSave } from './csdn-initial-draft-save'
 import { CsdnDraftRecoveryCoordinator } from './csdn-draft-recovery-coordinator'
 import type { WebAffairOperationResult } from '../../shared/web-affairs/web-affair-types'
@@ -39,6 +40,7 @@ export type ArticlePublishingBrowserActionDecision =
   | { kind: 'unknown'; reason: string }
 
 interface ArticlePublishingExecutionScope {
+  adapterId: 'csdn' | 'zhihu'
   workspaceId: string
   workspacePath: string
   affairId: string
@@ -74,6 +76,8 @@ interface ArticlePublishingExecutionScope {
   writePermitted: boolean
   writePermitId?: string
   draftUrl?: string
+  expectedPlatformAccountId?: string
+  expectedPlatformDraftId?: string
   expectedTitle: string
   expectedFields: import('../../shared/article-publishing/article-publishing-types').ArticlePublishingFields
   assets: Array<{
@@ -151,7 +155,7 @@ const AUTOSAVE_STEPS = new Set(['fill-body', 'fill-fields'])
  * It owns no task state and only resolves the current WebAffair snapshot.
  */
 export class ArticlePublishingBrowserPolicy {
-  private readonly adapter = new CsdnPublishingAdapter()
+  private readonly adapter = new PublishingAdapter()
   private readonly attestations = new Map<string, TrustedPageAttestation>()
 
   constructor(
@@ -216,7 +220,7 @@ export class ArticlePublishingBrowserPolicy {
       return publishingEvidenceError(failure.message)
     }
     const page = this.playwrightBridge.getPageById(task.tabId)
-    if (!page || page.isClosed()) return publishingEvidenceError('绑定的 CSDN 页面不可用')
+    if (!page || page.isClosed()) return publishingEvidenceError('绑定的 平台页面不可用')
     const trackedOperation = scope.currentOperation
     if (
       trackedOperation &&
@@ -314,11 +318,11 @@ export class ArticlePublishingBrowserPolicy {
           failure: {
             category: 'platform-page',
             code: 'platform_page.inspect_failed',
-            message: `CSDN 页面只读检查失败：${message}`,
+            message: `平台页面只读检查失败：${message}`,
           },
         })
       }
-      return publishingEvidenceError(`CSDN 页面只读检查失败：${message}`)
+      return publishingEvidenceError(`平台页面只读检查失败：${message}`)
     }
     const currentTask = this.browserTaskRuntime.getTask(task.id)
     const currentPage = this.playwrightBridge.getPageById(task.tabId)
@@ -351,10 +355,11 @@ export class ArticlePublishingBrowserPolicy {
     if (
       scope.draftUrl &&
       probe.pageKind === 'editor' &&
-      !isSameCsdnDraft(scope.draftUrl, probe.url)
+      !isSamePlatformDraft(scope.draftUrl, probe.url)
     ) {
-      return publishingEvidenceError('当前页面不是本 Attempt 已绑定的 CSDN 草稿')
+      return publishingEvidenceError('当前页面不是本 Attempt 已绑定的 平台草稿')
     }
+    if (probe.adapterId !== scope.adapterId) return publishingEvidenceError('页面与任务平台不一致')
     const matchedAssets: Record<string, string> = {}
     if (probe.editor.recognized && probe.editor.imageEnumerationComplete) {
       for (const asset of scope.assets) {
@@ -422,6 +427,7 @@ export class ArticlePublishingBrowserPolicy {
         ...(!inspection.editor.bodySelector ? { reason: '当前页面没有可核验的正文编辑区域' } : {}),
       },
     ]
+    if (inspection.pageKind === 'published-article') facts.splice(1, 1)
     if (scope.currentStepId === 'upload-assets') {
       const asset = scope.assets.find((a) => a.kind === 'local' && a.status !== 'uploaded')
       if (asset)
@@ -434,7 +440,9 @@ export class ArticlePublishingBrowserPolicy {
             : '先打开正文图片上传面板；不能使用封面或反馈上传框',
         })
     }
-    for (const field of ['title', 'summary', 'tags', 'category', 'cover'] as const) {
+    for (const field of scope.adapterId === 'zhihu'
+      ? (['title'] as const)
+      : (['title', 'summary', 'tags', 'category', 'cover'] as const)) {
       const expected =
         field === 'cover'
           ? (scope.assets.find((a) => a.id === scope.expectedFields.coverAssetId)?.platformUrl ??
@@ -485,7 +493,7 @@ export class ArticlePublishingBrowserPolicy {
       facts.push({
         id: 'publication.verify',
         status: /未通过|不通过/u.test(inspection.publicationBlocker) ? 'failed' : 'waiting',
-        evidence: `CSDN 文章状态栏：${inspection.publicationBlocker} · ${inspection.url}`,
+        evidence: `平台文章状态栏：${inspection.publicationBlocker} · ${inspection.url}`,
         reason: `平台${inspection.publicationBlocker}；作者可见不代表公开成功。查看平台原因后决定修改或申诉，不自动重发`,
       })
     const planRecorded = await this.webAffairService.recordArticlePublishingPlanResults(
@@ -549,13 +557,25 @@ export class ArticlePublishingBrowserPolicy {
       !this.attestationRuntimeIsCurrent(attestation) ||
       Date.now() - Date.parse(inspection.observedAt) > 60_000
     ) {
-      return publishingEvidenceError('CSDN 页面证据已经过期或不属于当前执行代次')
+      return publishingEvidenceError('平台页面证据已经过期或不属于当前执行代次')
     }
     const evidenceKind = trustedEvidenceKind(toolName, params)
+    if (
+      evidenceKind === 'published' &&
+      !params.url &&
+      !(
+        params.outputRefs &&
+        typeof params.outputRefs === 'object' &&
+        (params.outputRefs as Record<string, unknown>).publicationUrl
+      )
+    )
+      return publishingEvidenceError(
+        '发布核验缺少结果 URL：检查点 completed 必须携带 outputRefs.publicationUrl=inspect.url；结束 Attempt 必须携带 url=inspect.url',
+      )
     if (evidenceKind === 'published' && inspection.publicationBlocker)
       return publishingEvidenceError(`CSDN ${inspection.publicationBlocker}，不能标记公开发布成功`)
     if (!this.inspectionProves(evidenceKind, params, attestation)) {
-      return publishingEvidenceError('当前 CSDN 页面读回结果不能证明所报告的成功状态')
+      return publishingEvidenceError('当前 平台页面读回结果不能证明所报告的成功状态')
     }
     const trustedUrl =
       evidenceKind === 'published'
@@ -586,7 +606,7 @@ export class ArticlePublishingBrowserPolicy {
 
   async resolveAllowedOrigins(input: ResolveExecutionInput): Promise<string[] | null> {
     const scope = await this.resolveExecution(input)
-    if (scope) return [...CSDN_ARTICLE_SUPPORTED_ORIGINS]
+    if (scope) return publishingPlatform(scope.adapterId).origins
     return (await this.isArticleAffair(input)) ? [] : null
   }
 
@@ -698,7 +718,7 @@ export class ArticlePublishingBrowserPolicy {
         console.warn('[ArticlePublishing] 适配器动作判定', {
           affairId: correlation.affairId,
           attemptId: correlation.affairAttemptId,
-          adapter: 'csdn@1',
+          adapter: 'unresolved',
           currentStepId: null,
           actionType,
           currentOrigin: page ? toOrigin(safePageUrl(page)) : null,
@@ -722,7 +742,7 @@ export class ArticlePublishingBrowserPolicy {
       console.warn('[ArticlePublishing] 适配器动作判定', {
         affairId: scope.affairId,
         attemptId: scope.attemptId,
-        adapter: 'csdn@1',
+        adapter: `${scope?.adapterId ?? 'unknown'}@1`,
         currentStepId: scope.currentStepId ?? null,
         actionType,
         currentOrigin: null,
@@ -746,7 +766,7 @@ export class ArticlePublishingBrowserPolicy {
     } catch {
       return this.stopDecision(scope, actionType, 'unknown', '文章发布适配器无法读取当前页面地址')
     }
-    const visibleAnchor = parseCsdnDraftAnchor(pageUrl)
+    const visibleAnchor = parsePlatformDraftAnchor(pageUrl)
     const boundDraftUrl = scope.draftUrl
     if (isMutation && visibleAnchor && !boundDraftUrl) {
       return {
@@ -768,7 +788,7 @@ export class ArticlePublishingBrowserPolicy {
           pageUrl,
         )
       }
-      if (!isSameCsdnDraft(boundDraftUrl, pageUrl)) {
+      if (!isSamePlatformDraft(boundDraftUrl, pageUrl)) {
         return this.stopDecision(
           scope,
           actionType,
@@ -800,7 +820,7 @@ export class ArticlePublishingBrowserPolicy {
         scope,
         actionType,
         'unknown',
-        '当前页面不是适配器可核验的 CSDN 文章发布页面',
+        '当前页面不是适配器可核验的 平台文章发布页面',
         pageUrl,
       )
     }
@@ -1373,15 +1393,19 @@ export class ArticlePublishingBrowserPolicy {
         const images = observed.images.filter((i) => i.src === asset.platformUrl)
         const matches = images.length === asset.occurrences.length && images.every((i) => i.matches)
         return {
-          id: `asset.${asset.id}.${page.url().startsWith('https://blog.csdn.net/') ? 'published' : 'placement'}`,
+          id: `asset.${asset.id}.${page.url().startsWith('https://blog.csdn.net/') || /^https:\/\/zhuanlan\.zhihu\.com\/p\/\d+\/?$/u.test(page.url()) ? 'published' : 'placement'}`,
           status: matches ? ('completed' as const) : ('waiting' as const),
-          evidence: `${asset.displayPath} · 期望 ${asset.occurrences.length} 处，实际对应 ${images.filter((i) => i.matches).length} 处；${images.map((i) => `第 ${i.index + 1} 张，前文 ${i.precedingCharacters} 字符，${i.matches ? '位置/地址/替代文字/加载一致' : '不匹配'}`).join('；')}`,
+          evidence: `${asset.displayPath} · 期望 ${asset.occurrences.length} 处，实际对应 ${images.filter((i) => i.matches).length} 处；${images.map((i) => `第 ${i.index + 1} 张，前文 ${i.precedingCharacters} 字符，${i.matches ? (scope.adapterId === 'zhihu' ? '位置/地址/加载一致（知乎不保留替代文字）' : '位置/地址/替代文字/加载一致') : '不匹配'}`).join('；')}`,
           reason: matches ? undefined : '正文图片顺序、位置或加载结果未核验通过',
         }
       })
     if (!observed.textMatches)
       results.push({
-        id: page.url().startsWith('https://blog.csdn.net/') ? 'publication.verify' : 'body.verify',
+        id:
+          page.url().startsWith('https://blog.csdn.net/') ||
+          /^https:\/\/zhuanlan\.zhihu\.com\/p\/\d+\/?$/u.test(page.url())
+            ? 'publication.verify'
+            : 'body.verify',
         status: 'waiting',
         evidence: observed.textEvidence,
         reason: '正文实际内容与冻结原稿不同',
@@ -1402,7 +1426,23 @@ export class ArticlePublishingBrowserPolicy {
       ? snapshot.data.affairs.find((a) => a.id === scope.affairId)?.articlePublishing
       : undefined
     if (!state) throw new Error('冻结正文不存在')
-    return prepareArticleBody(state)
+    let html = await prepareArticleBody(state)
+    if (state.adapterId === 'zhihu') {
+      const page = this.playwrightBridge?.getPageById(scope.tabId)
+      if (!page) throw new Error('知乎原稿页面不可用')
+      const live = await page
+        .locator('.public-DraftEditor-content img')
+        .evaluateAll((images) => images.map((e) => (e as HTMLImageElement).src))
+      for (const asset of state.assets.filter((a) => a.kind === 'local')) {
+        const current = live.find((src) => src.split('?')[0] === asset.platformUrl)
+        if (!current || !asset.platformUrl)
+          throw new Error(`当前原稿无法取得已核验图片：${asset.displayPath}`)
+        html = html
+          .split(asset.platformUrl.replace(/&/gu, '&amp;'))
+          .join(current.replace(/&/gu, '&amp;'))
+      }
+    }
+    return html
   }
 
   async prepareImageUpload(
@@ -1761,7 +1801,9 @@ export class ArticlePublishingBrowserPolicy {
     compare('affair.kind', 'article-publishing', affair?.kind)
     compare(
       'adapter',
-      'csdn@1',
+      affair?.articlePublishing && ['csdn', 'zhihu'].includes(affair.articlePublishing.adapterId)
+        ? `${affair.articlePublishing.adapterId}@1`
+        : 'supported-platform@1',
       affair?.articlePublishing
         ? `${affair.articlePublishing.adapterId}@${affair.articlePublishing.adapterVersion}`
         : undefined,
@@ -1858,7 +1900,7 @@ export class ArticlePublishingBrowserPolicy {
     console.info('[ArticlePublishing] 适配器动作判定', {
       affairId: scope.affairId,
       attemptId: scope.attemptId,
-      adapter: 'csdn@1',
+      adapter: `${scope?.adapterId ?? 'unknown'}@1`,
       currentStepId: scope.currentStepId ?? null,
       actionType,
       currentOrigin: toOrigin(pageUrl),
@@ -1880,7 +1922,7 @@ export class ArticlePublishingBrowserPolicy {
     console.warn('[ArticlePublishing] 适配器动作判定', {
       affairId: scope.affairId,
       attemptId: scope.attemptId,
-      adapter: 'csdn@1',
+      adapter: `${scope?.adapterId ?? 'unknown'}@1`,
       currentStepId: scope.currentStepId ?? null,
       actionType,
       currentOrigin: toOrigin(pageUrl),
@@ -1927,7 +1969,11 @@ export class ArticlePublishingBrowserPolicy {
     if (affair?.kind !== 'article-publishing') mismatches.push('affair-kind')
     if (!publishing) mismatches.push('publishing-state')
     if (!attempt) mismatches.push('attempt')
-    if (publishing?.adapterId !== 'csdn' || publishing?.adapterVersion !== 1) {
+    if (
+      !publishing ||
+      !['csdn', 'zhihu'].includes(publishing.adapterId) ||
+      publishing?.adapterVersion !== 1
+    ) {
       mismatches.push('adapter')
     }
     if (publishing?.accountId !== input.accountId) mismatches.push('publishing-accountId')
@@ -1986,6 +2032,7 @@ export class ArticlePublishingBrowserPolicy {
         permit.playwrightPageBindingGeneration === input.playwrightPageBindingGeneration,
       )
     return {
+      adapterId: publishing.adapterId,
       workspaceId,
       workspacePath: input.workspacePath,
       affairId: affair.id,
@@ -2017,6 +2064,8 @@ export class ArticlePublishingBrowserPolicy {
       writePermitted,
       ...(permit?.id ? { writePermitId: permit.id } : {}),
       draftUrl: publishing.draft?.url,
+      expectedPlatformAccountId: publishing.draft?.platformAccountId,
+      expectedPlatformDraftId: publishing.draft?.platformDraftId,
       expectedTitle: publishing.fields.title,
       expectedFields: publishing.fields,
       assets: publishing.assets.map((asset) => ({
@@ -2297,7 +2346,7 @@ export class ArticlePublishingBrowserPolicy {
       return Boolean(
         inspection.editor.recognized &&
         scope.draftUrl &&
-        isSameCsdnDraft(scope.draftUrl, inspection.url) &&
+        isSamePlatformDraft(scope.draftUrl, inspection.url) &&
         inspection.draftId &&
         inspection.platformAccountId &&
         inspection.saveState === 'saved' &&
@@ -2374,6 +2423,14 @@ export class ArticlePublishingBrowserPolicy {
     if (!requestedUrl) return null
     const { inspection, scope } = attestation
     if (
+      scope.adapterId === 'zhihu' &&
+      (!scope.expectedPlatformAccountId ||
+        inspection.platformAccountId !== scope.expectedPlatformAccountId ||
+        !scope.expectedPlatformDraftId ||
+        inspection.publishedArticleId !== scope.expectedPlatformDraftId)
+    )
+      return null
+    if (
       inspection.pageKind === 'published-article' &&
       !inspection.publicationBlocker &&
       (!scope.assets.length || inspection.bodyMatchesFrozen === true) &&
@@ -2395,7 +2452,8 @@ export class ArticlePublishingBrowserPolicy {
     const attempt = affair?.attempts.find((candidate) => candidate.id === input.attemptId)
     return Boolean(
       affair?.kind === 'article-publishing' &&
-      publishing?.adapterId === 'csdn' &&
+      publishing &&
+      ['csdn', 'zhihu'].includes(publishing.adapterId) &&
       publishing.adapterVersion === 1 &&
       publishing.accountId === input.accountId &&
       attempt?.accountId === input.accountId,
@@ -2405,7 +2463,18 @@ export class ArticlePublishingBrowserPolicy {
   private isRecognizedPageForStep(rawUrl: string, stepId?: string): boolean {
     try {
       const url = new URL(rawUrl)
-      if (!CSDN_ARTICLE_SUPPORTED_ORIGIN_SET.has(url.origin)) return false
+      if (
+        !CSDN_ARTICLE_SUPPORTED_ORIGIN_SET.has(url.origin) &&
+        !['https://www.zhihu.com', 'https://zhuanlan.zhihu.com'].includes(url.origin)
+      )
+        return false
+      if (url.hostname.endsWith('.zhihu.com')) {
+        if (stepId === 'verify-account' || stepId === 'verify-publication') return true
+        return (
+          url.hostname === 'zhuanlan.zhihu.com' &&
+          (url.pathname === '/write' || /^\/p\/\d+\/edit$/u.test(url.pathname))
+        )
+      }
       const isEditorPage =
         url.hostname === 'editor.csdn.net' ||
         (url.hostname === 'mp.csdn.net' && /\/mp_blog\/creation/iu.test(url.pathname)) ||

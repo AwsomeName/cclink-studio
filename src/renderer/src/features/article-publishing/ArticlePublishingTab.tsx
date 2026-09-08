@@ -4,7 +4,6 @@ import type {
   ArticlePublishingSourcePreview,
 } from '@shared/article-publishing/article-publishing-types'
 import { articlePublishingDetailDefinitions } from '@shared/article-publishing/article-publishing-plan'
-import { parseCsdnDraftAnchor } from '@shared/article-publishing/csdn-draft-anchor'
 import type { WebAffair } from '@shared/web-affairs/web-affair-types'
 import type { WebResourceSnapshot } from '@shared/web-resources/web-resource-types'
 import type { Tab } from '../../types'
@@ -61,6 +60,10 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const [resources, setResources] = useState<WebResourceSnapshot | null>(null)
   const [affair, setAffair] = useState<WebAffair | null>(null)
   const [accountId, setAccountId] = useState('')
+  const [platform, setPlatform] = useState<'csdn' | 'zhihu'>('csdn')
+  const [existingDraftUrl, setExistingDraftUrl] = useState('')
+  const [platformAccountId, setPlatformAccountId] = useState('')
+  const platformLabel = platform === 'zhihu' ? '知乎' : 'CSDN'
   const [accountLabelDraft, setAccountLabelDraft] = useState('')
   const [savingAccountLabel, setSavingAccountLabel] = useState(false)
   const [title, setTitle] = useState('')
@@ -115,11 +118,13 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       }
       return !account.archivedAt &&
         !account.mergedIntoAccountId &&
-        (hostname === 'csdn.net' || hostname.endsWith('.csdn.net'))
+        (platform === 'csdn'
+          ? hostname === 'csdn.net' || hostname.endsWith('.csdn.net')
+          : hostname === 'zhihu.com' || hostname.endsWith('.zhihu.com'))
         ? [{ account, website: website! }]
         : []
     })
-  }, [resources])
+  }, [resources, platform])
 
   const selectedCsdnAccount = useMemo(
     () => csdnAccounts.find(({ account }) => account.id === accountId)?.account ?? null,
@@ -143,7 +148,10 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         activate: false,
       })
       if (existing?.archivedAt) await agent.restoreArchivedConversation(conversationId)
-      agent.renameConversation(conversationId, `发布文章 · ${targetAffair.title} · CSDN`)
+      agent.renameConversation(
+        conversationId,
+        `发布文章 · ${targetAffair.title} · ${targetAffair.articlePublishing?.adapterId === 'zhihu' ? '知乎' : 'CSDN'}`,
+      )
       if (activate) {
         agent.switchConversation(conversationId)
         useUIStore.getState().setAgentPanelMode('right', 'user')
@@ -245,7 +253,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       {
         id: `browser-${result.data.browserTabId}`,
         kind: 'browser',
-        label: 'CSDN 发布页',
+        label: `${publishing.adapterId === 'zhihu' ? '知乎' : 'CSDN'}发布页`,
         ref: {
           type: 'browser',
           tabId: result.data.browserTabId,
@@ -294,15 +302,21 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         markdownPath: preview.source.markdownPath,
         ...(revisionOf ? { reviseDraftFromAffairId: revisionOf } : {}),
         accountId,
+        ...(platform === 'zhihu'
+          ? { existingDraft: { url: existingDraftUrl, platformAccountId } }
+          : {}),
         fields: {
           title,
-          summary,
-          tags: tags
-            .split(/[,，]/u)
-            .map((item) => item.trim())
-            .filter(Boolean),
-          category,
-          ...(coverAssetId ? { coverAssetId } : {}),
+          summary: platform === 'zhihu' ? '' : summary,
+          tags:
+            platform === 'zhihu'
+              ? []
+              : tags
+                  .split(/[,，]/u)
+                  .map((item) => item.trim())
+                  .filter(Boolean),
+          category: platform === 'zhihu' ? '' : category,
+          ...(platform === 'csdn' && coverAssetId ? { coverAssetId } : {}),
         },
       })
       if (!result.success) throw new Error(result.error.message)
@@ -497,7 +511,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         <header className="article-publishing-header">
           <div>
             <span>文章发布</span>
-            <h1>新建 CSDN 发布任务</h1>
+            <h1>新建{platformLabel}发布任务</h1>
           </div>
         </header>
         {error ? <div className="article-publishing-alert error">{error}</div> : null}
@@ -517,12 +531,21 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           <h2>2. 发布目标</h2>
           <label>
             网站
-            <input value="CSDN" disabled />
+            <select
+              value={platform}
+              onChange={(event) => {
+                setPlatform(event.target.value as 'csdn' | 'zhihu')
+                setAccountId('')
+              }}
+            >
+              <option value="csdn">CSDN</option>
+              <option value="zhihu">知乎</option>
+            </select>
           </label>
           <label>
             已保存账号
             <select value={accountId} onChange={(event) => setAccountId(event.target.value)}>
-              <option value="">请选择 CSDN 账号</option>
+              <option value="">请选择{platformLabel}账号</option>
               {csdnAccounts.map(({ account }) => (
                 <option key={account.id} value={account.id}>
                   {formatArticlePublishingAccountOption(account.label)}
@@ -562,7 +585,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           ) : null}
         </section>
         <section className="article-publishing-card">
-          <h2>3. CSDN 发布设置</h2>
+          <h2>3. {platformLabel}发布设置</h2>
           <label>
             标题
             <input
@@ -571,39 +594,68 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
               onChange={(event) => setTitle(event.target.value)}
             />
           </label>
-          <label>
-            摘要
-            <textarea
-              value={summary}
-              maxLength={1_000}
-              onChange={(event) => setSummary(event.target.value)}
-            />
-          </label>
-          <label>
-            标签
-            <input
-              value={tags}
-              placeholder="TypeScript, Electron"
-              onChange={(event) => setTags(event.target.value)}
-            />
-          </label>
-          <label>
-            分类
-            <input value={category} onChange={(event) => setCategory(event.target.value)} />
-          </label>
-          <label>
-            封面
-            <select value={coverAssetId} onChange={(event) => setCoverAssetId(event.target.value)}>
-              <option value="">暂不选择</option>
-              {preview?.assets
-                .filter((asset) => asset.kind === 'local')
-                .map((asset) => (
-                  <option key={asset.id} value={asset.id}>
-                    {asset.displayPath}
-                  </option>
-                ))}
-            </select>
-          </label>
+          {platform === 'csdn' ? (
+            <>
+              <label>
+                摘要
+                <textarea
+                  value={summary}
+                  maxLength={1_000}
+                  onChange={(event) => setSummary(event.target.value)}
+                />
+              </label>
+              <label>
+                标签
+                <input
+                  value={tags}
+                  placeholder="TypeScript, Electron"
+                  onChange={(event) => setTags(event.target.value)}
+                />
+              </label>
+              <label>
+                分类
+                <input value={category} onChange={(event) => setCategory(event.target.value)} />
+              </label>
+              <label>
+                封面
+                <select
+                  value={coverAssetId}
+                  onChange={(event) => setCoverAssetId(event.target.value)}
+                >
+                  <option value="">暂不选择</option>
+                  {preview?.assets
+                    .filter((asset) => asset.kind === 'local')
+                    .map((asset) => (
+                      <option key={asset.id} value={asset.id}>
+                        {asset.displayPath}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            </>
+          ) : (
+            <>
+              <label>
+                已有知乎草稿地址
+                <input
+                  value={existingDraftUrl}
+                  placeholder="https://zhuanlan.zhihu.com/p/…/edit"
+                  onChange={(e) => setExistingDraftUrl(e.target.value)}
+                />
+              </label>
+              <label>
+                原账号用户标识
+                <input
+                  value={platformAccountId}
+                  placeholder="个人主页 /people/ 后面的标识"
+                  onChange={(e) => setPlatformAccountId(e.target.value)}
+                />
+              </label>
+              <p>
+                当前从已有草稿继续，启动后从管理页核验账号与原稿。正文图片逐张上传；话题、封面及创作声明保留平台设置。
+              </p>
+            </>
+          )}
         </section>
         <section className="article-publishing-card">
           <h2>4. 执行计划</h2>
@@ -667,7 +719,6 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const currentAttempt = publishing.execution.currentAttemptId
     ? affair.attempts.find((attempt) => attempt.id === publishing.execution.currentAttemptId)
     : undefined
-  const draftAnchor = publishing.draft?.url ? parseCsdnDraftAnchor(publishing.draft.url) : null
   const persistedRuntimeFailure = ['interrupted', 'failed'].includes(publishing.execution.status)
     ? currentAttempt?.failureMessage
     : undefined
@@ -689,7 +740,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     <div className="article-publishing-page">
       <header className="article-publishing-header">
         <div>
-          <span>CSDN · 持久发布事务</span>
+          <span>{publishing.adapterId === 'zhihu' ? '知乎' : 'CSDN'} · 持久发布事务</span>
           <h1>{affair.title}</h1>
           <p>{publishing.source.markdownPath}</p>
         </div>
@@ -787,8 +838,14 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           </div>
           <div className="article-publishing-config-item wide">
             <span>平台草稿</span>
-            <strong>{draftAnchor ? `CSDN 草稿 ${draftAnchor.draftId}` : '尚未锁定平台草稿'}</strong>
-            <small>{draftAnchor?.url ?? '首次受保护保存成功后，记录本任务自己的草稿编号'}</small>
+            <strong>
+              {publishing.draft?.platformDraftId
+                ? `${publishing.adapterId === 'zhihu' ? '知乎' : 'CSDN'} 原稿 ${publishing.draft.platformDraftId}`
+                : '尚未锁定平台草稿'}
+            </strong>
+            <small>
+              {publishing.draft?.url ?? '首次受保护保存成功后，记录本任务自己的草稿编号'}
+            </small>
           </div>
           <div className="article-publishing-config-item wide">
             <span>摘要</span>
@@ -947,8 +1004,12 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
                   <dd>{step.completion}</dd>
                   <dt>实际证据</dt>
                   <dd>
-                    {result?.evidence ||
-                      '尚无真实执行或页面回读证据。历史粗检查点不作为此小步骤的完成证据。'}
+                    {step.id === 'publication.verify' &&
+                    result?.status === 'completed' &&
+                    publishing.publication.status === 'published'
+                      ? `WebAffair 已核验公开页 · 账号 ${publishing.draft?.platformAccountId ?? ''} · ${publishing.fields.title} · ${publishing.publication.url}（公开页不适用草稿保存状态）`
+                      : result?.evidence ||
+                        '尚无真实执行或页面回读证据。历史粗检查点不作为此小步骤的完成证据。'}
                   </dd>
                   {result?.reason ? (
                     <>
@@ -1114,7 +1175,7 @@ function ArticleAssetList({
             )}
             {onResolve && ['result-unknown', 'reconciling'].includes(asset.status) ? (
               <div className="article-publishing-actions">
-                <span>先在可见的 CSDN 编辑器里看图片是否存在，不用填写图片地址。</span>
+                <span>先在可见的平台编辑器里看图片是否存在，不用填写图片地址。</span>
                 <button
                   type="button"
                   disabled={busy}

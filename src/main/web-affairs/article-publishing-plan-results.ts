@@ -106,7 +106,7 @@ export function foldArticlePublishingPlanResults(
       effect.status === 'verified' &&
       state.checkpoints.some((c) => c.stepId === 'fill-body' && c.status === 'completed') &&
       !next.checkpoints.some((c) =>
-        c.details?.some((d) => d.id === 'body.verify' && d.status === 'completed'),
+        c.details?.some((d) => d.id === 'body.verify' && d.status === 'completed' && !d.recheck),
       )
     )
       put(
@@ -127,6 +127,13 @@ export function foldArticlePublishingPlanResults(
         .find((d) => d.id === `asset.${asset.id}.open`)
       if (opened?.status === 'completed' && opened.recheck)
         next = setArticlePublishingPlanResult(next, { ...opened, recheck: undefined })
+      if (state.adapterId === 'zhihu' && !opened)
+        put(
+          `asset.${asset.id}.open`,
+          'skipped',
+          '图片已核验存在，本次无需再定位上传控件；此前定位动作未记录，不补记成功',
+        )
+
       put(`asset.${asset.id}.inspect`, 'completed', `已有可信图片记录 · ${asset.displayPath}`)
       put(
         `asset.${asset.id}.verify`,
@@ -163,6 +170,21 @@ export function foldArticlePublishingPlanResults(
               `任务${state.execution.status}；没有继续派发权限，恢复后重新核验`,
           )
       }
+  }
+  // Once the actual public article has passed final verification, editor-only
+  // rechecks from earlier interrupted generations no longer describe a live blocker.
+  if (state.adapterId === 'zhihu' && state.publication.status === 'published') {
+    next = {
+      ...next,
+      checkpoints: next.checkpoints.map((checkpoint) => ({
+        ...checkpoint,
+        details: checkpoint.details?.map((detail) =>
+          checkpoint.status === 'completed' && detail.status === 'completed' && detail.recheck
+            ? { ...detail, recheck: undefined }
+            : detail,
+        ),
+      })),
+    }
   }
   const definitions = articlePublishingDetailDefinitions(next)
   return {

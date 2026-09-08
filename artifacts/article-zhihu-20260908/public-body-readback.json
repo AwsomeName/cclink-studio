@@ -1,0 +1,35 @@
+{
+  "url": "https://zhuanlan.zhihu.com/p/2080754524944339658",
+  "observedAt": "2026-09-08T14:07:12.369Z",
+  "matches": true,
+  "textMatches": true,
+  "textEvidence": "正文期望 1610 字符，实际 1610 字符；内容与链接目标一致（忽略编辑器零宽占位，链接卡片按原地址核对）",
+  "expectedImages": 3,
+  "actualImages": 3,
+  "images": [
+    {
+      "index": 0,
+      "src": "https://pic-private.zhihu.com/v2-02fffd139e44493e5527062d1be2c280~resize:1440:q75.png",
+      "alt": "App 写完可以 close，上线和宣发却要一直做",
+      "matches": true,
+      "actualSrc": "https://pic1.zhimg.com/v2-02fffd139e44493e5527062d1be2c280_1440w.jpg",
+      "precedingCharacters": 23
+    },
+    {
+      "index": 1,
+      "src": "https://pic-private.zhihu.com/v2-0adb7ee455645e8a0dfb5e1e1b354a6e~resize:1440:q75.png",
+      "alt": "从开发者熟悉的技术语言到用户真正要做的动作",
+      "matches": true,
+      "actualSrc": "https://pic1.zhimg.com/v2-0adb7ee455645e8a0dfb5e1e1b354a6e_1440w.jpg",
+      "precedingCharacters": 701
+    },
+    {
+      "index": 2,
+      "src": "https://pic-private.zhihu.com/v2-8d8681a98b51d2a7bc8058b4f66253a7~resize:1440:q75.png",
+      "alt": "从文章到第一个任务，上线后的真实使用链路",
+      "matches": true,
+      "actualSrc": "https://pic4.zhimg.com/v2-8d8681a98b51d2a7bc8058b4f66253a7_1440w.jpg",
+      "precedingCharacters": 1114
+    }
+  ]
+}

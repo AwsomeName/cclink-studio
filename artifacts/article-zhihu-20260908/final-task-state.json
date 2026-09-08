@@ -1,0 +1,429 @@
+{
+  "capturedAt": "2026-09-08T14:24:14.951Z",
+  "affairId": "9ab92645-c7fa-412a-9027-1b36c74d9a8f",
+  "status": "completed",
+  "attemptId": "f5618535-d671-48a4-901f-147fe706624d",
+  "attemptStatus": "succeeded",
+  "execution": {
+    "status": "published",
+    "currentAttemptId": "f5618535-d671-48a4-901f-147fe706624d",
+    "currentGeneration": 13,
+    "currentLaunchOperationId": "984a309c-bad6-4859-aa17-9176f2477bc5"
+  },
+  "publication": {
+    "status": "published",
+    "url": "https://zhuanlan.zhihu.com/p/2080754524944339658",
+    "observedAt": "2026-09-08T14:23:11.395Z"
+  },
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "status": "completed",
+      "details": [
+        {
+          "id": "recovery.management",
+          "nextAction": "核验管理页账号",
+          "status": "completed",
+          "evidence": "管理页可识别；草稿箱入口 https://www.zhihu.com/creator/manage/creation/draft?type=article",
+          "observedAt": "2026-09-08T13:56:36.051Z",
+          "generation": 7
+        },
+        {
+          "id": "recovery.account",
+          "nextAction": "按原 draftId 定位，找不到即停止",
+          "status": "completed",
+          "evidence": "期望 zhidfc1e；实际 zhidfc1e",
+          "observedAt": "2026-09-08T13:56:36.071Z",
+          "generation": 7
+        },
+        {
+          "id": "recovery.locate",
+          "nextAction": "打开候选草稿",
+          "status": "completed",
+          "evidence": "draftId 2080754524944339658；匹配 1 项",
+          "observedAt": "2026-09-08T13:56:36.118Z",
+          "generation": 7
+        },
+        {
+          "id": "recovery.open",
+          "nextAction": "复核账号、ID、标题、保存状态",
+          "status": "completed",
+          "evidence": "https://zhuanlan.zhihu.com/p/2080754524944339658/edit",
+          "observedAt": "2026-09-08T13:56:40.009Z",
+          "generation": 7
+        },
+        {
+          "id": "recovery.verify.account",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "期望 zhidfc1e；实际 zhidfc1e · https://zhuanlan.zhihu.com/p/2080754524944339658/edit",
+          "observedAt": "2026-09-08T13:56:40.033Z",
+          "generation": 7
+        },
+        {
+          "id": "recovery.verify.id",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "期望 2080754524944339658；实际 2080754524944339658 · https://zhuanlan.zhihu.com/p/2080754524944339658/edit",
+          "observedAt": "2026-09-08T13:56:40.061Z",
+          "generation": 7
+        },
+        {
+          "id": "recovery.verify.title",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "期望 App 写完可以 close，上线和宣发却要一直做；实际 App 写完可以 close，上线和宣发却要一直做 · https://zhuanlan.zhihu.com/p/2080754524944339658/edit",
+          "observedAt": "2026-09-08T13:56:40.085Z",
+          "generation": 7
+        },
+        {
+          "id": "recovery.verify.saved",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "期望 saved；实际 saved · https://zhuanlan.zhihu.com/p/2080754524944339658/edit",
+          "observedAt": "2026-09-08T13:56:40.108Z",
+          "generation": 7
+        },
+        {
+          "id": "account.resolve",
+          "nextAction": "取得可见账号 Tab",
+          "status": "completed",
+          "evidence": "账号 81f36309-c843-49b2-8de9-e283cfd51b37 · Profile web-draft-f7031c41-fec1-4fb0-9c40-acc92bb0f6e6",
+          "observedAt": "2026-09-08T14:22:00.673Z",
+          "generation": 13
+        },
+        {
+          "id": "tab.acquire",
+          "nextAction": "按新建或恢复分支打开页面",
+          "status": "completed",
+          "evidence": "Tab tab-1-1788869761305 · 账号 81f36309-c843-49b2-8de9-e283cfd51b37 · Profile web-draft-f7031c41-fec1-4fb0-9c40-acc92bb0f6e6",
+          "observedAt": "2026-09-08T14:22:00.725Z",
+          "generation": 13
+        },
+        {
+          "id": "runtime.ready",
+          "nextAction": "首次只读检查；改代则重新绑定核验",
+          "status": "completed",
+          "evidence": "Agent run-984a309c-bad6-4859-aa17-9176f2477bc5 · BrowserTask f87cab1b-6988-46ed-9934-ac895d4c4b9c · Tab tab-1-1788869761305 · View g1 · WebContents 2 · Page g1",
+          "observedAt": "2026-09-08T14:22:01.935Z",
+          "generation": 13
+        }
+      ]
+    },
+    {
+      "stepId": "verify-account",
+      "status": "completed",
+      "details": [
+        {
+          "id": "page.inspect",
+          "nextAction": "定位正文与平台字段",
+          "status": "completed",
+          "evidence": "页面 published-article · 账号 zhidfc1e · draftId 尚无 · 标题 App 写完可以 close，上线和宣发却要一直做 · 保存 unknown",
+          "observedAt": "2026-09-08T14:22:18.973Z",
+          "generation": 13
+        }
+      ]
+    },
+    {
+      "stepId": "upload-assets",
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "completed",
+          "evidence": "2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png · input[type=\"file\"][accept^=\"image/webp,image/jpg\"]",
+          "observedAt": "2026-09-08T13:31:55.323Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/02-上线后的真实链路.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "completed",
+          "evidence": "2026-08-27-App写完之后-配图/02-上线后的真实链路.png · input[type=\"file\"][accept^=\"image/webp,image/jpg\"]",
+          "observedAt": "2026-09-08T13:34:19.147Z",
+          "generation": 3
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/00-封面-App写完之后.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-08T13:23:45.569Z · upload-asset/local:03-linux.do/2026-08-27-App写完之后-配图/00-封面-App写完之后.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-08T14:22:00.608Z",
+          "generation": 13
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-08T13:32:13.543Z · upload-asset/local:03-linux.do/2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-08T14:22:00.608Z",
+          "generation": 13
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/02-上线后的真实链路.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-08T13:34:32.603Z · upload-asset/local:03-linux.do/2026-08-27-App写完之后-配图/02-上线后的真实链路.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-08T14:22:00.608Z",
+          "generation": 13
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/00-封面-App写完之后.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "skipped",
+          "evidence": "图片已核验存在，本次无需再定位上传控件；此前定位动作未记录，不补记成功",
+          "observedAt": "2026-09-08T14:22:00.608Z",
+          "generation": 13
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/00-封面-App写完之后.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 2026-08-27-App写完之后-配图/00-封面-App写完之后.png",
+          "observedAt": "2026-09-08T14:22:00.608Z",
+          "generation": 13
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/00-封面-App写完之后.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "用户目视确认存在 · 2026-09-08T13:31:27.059Z",
+          "observedAt": "2026-09-08T14:22:00.608Z",
+          "generation": 13
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png",
+          "observedAt": "2026-09-08T14:22:00.608Z",
+          "generation": 13
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "用户目视确认存在 · 2026-09-08T13:33:58.502Z",
+          "observedAt": "2026-09-08T14:22:00.608Z",
+          "generation": 13
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/02-上线后的真实链路.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 2026-08-27-App写完之后-配图/02-上线后的真实链路.png",
+          "observedAt": "2026-09-08T14:22:00.608Z",
+          "generation": 13
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/02-上线后的真实链路.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "用户目视确认存在 · 2026-09-08T13:37:54.505Z",
+          "observedAt": "2026-09-08T14:22:00.608Z",
+          "generation": 13
+        }
+      ]
+    },
+    {
+      "stepId": "fill-body",
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/00-封面-App写完之后.png.placement",
+          "nextAction": "全部图片通过后核验正文保存；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "2026-08-27-App写完之后-配图/00-封面-App写完之后.png · 期望 1 处，实际对应 1 处；第 1 张，前文 23 字符，位置/地址/加载一致（知乎不保留替代文字）",
+          "observedAt": "2026-09-08T13:56:58.264Z",
+          "generation": 7
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png.placement",
+          "nextAction": "全部图片通过后核验正文保存；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png · 期望 1 处，实际对应 1 处；第 2 张，前文 701 字符，位置/地址/加载一致（知乎不保留替代文字）",
+          "observedAt": "2026-09-08T13:56:58.264Z",
+          "generation": 7
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/02-上线后的真实链路.png.placement",
+          "nextAction": "全部图片通过后核验正文保存；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "2026-08-27-App写完之后-配图/02-上线后的真实链路.png · 期望 1 处，实际对应 1 处；第 3 张，前文 1114 字符，位置/地址/加载一致（知乎不保留替代文字）",
+          "observedAt": "2026-09-08T13:56:58.264Z",
+          "generation": 7
+        },
+        {
+          "id": "body.locate",
+          "nextAction": "只允许向已定位的正文区域写入",
+          "status": "completed",
+          "evidence": "正文 .public-DraftEditor-content[contenteditable=\"true\"] · iframe 主文档 · 1603 字符",
+          "observedAt": "2026-09-08T13:56:58.305Z",
+          "generation": 7
+        },
+        {
+          "id": "body.verify",
+          "nextAction": "检查平台字段；未知时先对账不重填",
+          "status": "completed",
+          "evidence": "正文检查点已由可信页面回读完成；原写入已核验 · 2026-09-08T13:57:42.274Z · autosave:fill-body:99394b8e-e774-4ffc-9393-bee9689ed74b",
+          "observedAt": "2026-09-08T14:12:38.473Z",
+          "generation": 10
+        },
+        {
+          "id": "body.dispatch",
+          "nextAction": "等待正文回读与平台保存",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-08T13:50:13.097Z · save-draft/autosave:fill-body:99394b8e-e774-4ffc-9393-bee9689ed74b；结果另行核验",
+          "observedAt": "2026-09-08T14:22:00.608Z",
+          "generation": 13
+        }
+      ]
+    },
+    {
+      "stepId": "fill-fields",
+      "status": "completed",
+      "details": [
+        {
+          "id": "field.title.inspect",
+          "nextAction": "与冻结字段比较",
+          "status": "completed",
+          "evidence": "期望 App 写完可以 close，上线和宣发却要一直做；实际 App 写完可以 close，上线和宣发却要一直做",
+          "observedAt": "2026-09-08T14:22:18.973Z",
+          "generation": 13
+        },
+        {
+          "id": "field.title.verify",
+          "nextAction": "下一字段；不匹配则停止字段完成回报",
+          "status": "completed",
+          "evidence": "期望 App 写完可以 close，上线和宣发却要一直做；实际 App 写完可以 close，上线和宣发却要一直做",
+          "observedAt": "2026-09-08T14:22:18.973Z",
+          "generation": 13
+        },
+        {
+          "id": "field.title.dispatch",
+          "nextAction": "回读同一字段",
+          "status": "skipped",
+          "evidence": "当前字段已经与任务一致，无需再次填写",
+          "observedAt": "2026-09-08T14:22:18.973Z",
+          "generation": 13
+        }
+      ]
+    },
+    {
+      "stepId": "save-draft",
+      "status": "completed",
+      "details": [
+        {
+          "id": "save.verify",
+          "nextAction": "发布前复核，保存不代表发布",
+          "status": "completed",
+          "evidence": "可信适配器回读 · zhidfc1e · draftId 2080754524944339658 · App 写完可以 close，上线和宣发却要一直做 · saved · https://zhuanlan.zhihu.com/p/2080754524944339658/edit",
+          "observedAt": "2026-09-08T13:57:42.274Z",
+          "generation": 7
+        },
+        {
+          "id": "save.dispatch",
+          "nextAction": "核验同稿保存结果",
+          "status": "skipped",
+          "evidence": "已有同稿自动保存的可信回读，无需再次点击保存",
+          "observedAt": "2026-09-08T13:57:42.274Z",
+          "generation": 7
+        }
+      ]
+    },
+    {
+      "stepId": "publish",
+      "status": "completed",
+      "details": [
+        {
+          "id": "publish.preflight",
+          "nextAction": "只派发一次；人工专属卡点暂停",
+          "status": "completed",
+          "evidence": "当前发布控件与一次性授权通过主进程闸门 · 2026-09-08T13:57:58.084Z",
+          "observedAt": "2026-09-08T14:22:00.608Z",
+          "generation": 13
+        },
+        {
+          "id": "publish.dispatch",
+          "nextAction": "只核验结果，不再次发布",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-08T13:57:58.084Z · publish/final；结果另行核验",
+          "observedAt": "2026-09-08T14:23:02.253Z",
+          "generation": 13
+        }
+      ]
+    },
+    {
+      "stepId": "verify-publication",
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/00-封面-App写完之后.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "2026-08-27-App写完之后-配图/00-封面-App写完之后.png · 期望 1 处，实际对应 1 处；第 1 张，前文 23 字符，位置/地址/加载一致（知乎不保留替代文字）",
+          "observedAt": "2026-09-08T14:22:18.945Z",
+          "generation": 13
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png · 期望 1 处，实际对应 1 处；第 2 张，前文 701 字符，位置/地址/加载一致（知乎不保留替代文字）",
+          "observedAt": "2026-09-08T14:22:18.945Z",
+          "generation": 13
+        },
+        {
+          "id": "asset.local:03-linux.do/2026-08-27-App写完之后-配图/02-上线后的真实链路.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "2026-08-27-App写完之后-配图/02-上线后的真实链路.png · 期望 1 处，实际对应 1 处；第 3 张，前文 1114 字符，位置/地址/加载一致（知乎不保留替代文字）",
+          "observedAt": "2026-09-08T14:22:18.945Z",
+          "generation": 13
+        },
+        {
+          "id": "publication.verify",
+          "nextAction": "完成事务；未知只查询管理页",
+          "status": "completed",
+          "evidence": "可信适配器回读 · zhidfc1e · draftId  · App 写完可以 close，上线和宣发却要一直做 · unknown · https://zhuanlan.zhihu.com/p/2080754524944339658",
+          "observedAt": "2026-09-08T14:23:02.253Z",
+          "generation": 13
+        }
+      ]
+    }
+  ],
+  "dispatchCounts": {
+    "publish": 1,
+    "uploads": 3
+  },
+  "assets": [
+    {
+      "displayPath": "2026-08-27-App写完之后-配图/00-封面-App写完之后.png",
+      "status": "uploaded",
+      "platformUrl": "https://pic-private.zhihu.com/v2-02fffd139e44493e5527062d1be2c280~resize:1440:q75.png",
+      "manualResolution": {
+        "status": "present",
+        "resolvedAt": "2026-09-08T13:31:27.059Z"
+      }
+    },
+    {
+      "displayPath": "2026-08-27-App写完之后-配图/01-从技术语言到用户动作.png",
+      "status": "uploaded",
+      "platformUrl": "https://pic-private.zhihu.com/v2-0adb7ee455645e8a0dfb5e1e1b354a6e~resize:1440:q75.png",
+      "manualResolution": {
+        "status": "present",
+        "resolvedAt": "2026-09-08T13:33:58.502Z"
+      }
+    },
+    {
+      "displayPath": "2026-08-27-App写完之后-配图/02-上线后的真实链路.png",
+      "status": "uploaded",
+      "platformUrl": "https://pic-private.zhihu.com/v2-8d8681a98b51d2a7bc8058b4f66253a7~resize:1440:q75.png",
+      "manualResolution": {
+        "status": "present",
+        "resolvedAt": "2026-09-08T13:37:54.505Z"
+      }
+    }
+  ]
+}

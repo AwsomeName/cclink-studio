@@ -1,11 +1,11 @@
 # Markdown 文章平台发布
 
-状态：无图文章公开闭环已完成；用户指定三图文章已自动提交并逐图核验，但 CSDN 审核未通过，不能声明已公开
+状态：知乎已实际提交用户指定三图文章，公开页全文及三图核验通过；本轮完整记录见知乎验收文档。CSDN 既有三图稿的审核未通过结论不变。
 最后更新：2026-09-08
 
 ## 产品结果
 
-用户在 Studio 的“文章发布”入口选择工作空间内的 Markdown、CSDN 账号和发布字段，保存为持久任务并启动。Studio 打开绑定账号的可见 Browser Tab 和专属 Agent，按固定步骤填写正文、上传图片、保存草稿、发布并核验结果。
+用户在 Studio 的“文章发布”入口选择工作空间内的 Markdown、平台（CSDN／知乎）、对应账号和发布字段，保存为持久任务并启动。Studio 打开绑定账号的可见 Browser Tab 和专属 Agent，按固定步骤填写正文、上传图片、保存草稿、发布并核验结果。
 
 关闭 Tab、Agent 中断或 Studio 重启后，任务仍是同一个 WebAffair/Attempt。继续时必须先进入原账号草稿箱找到原 draftId，再从未完成步骤继续，不能使用失效旧 URL 猜页面，也不能静默新建文章。
 
@@ -16,6 +16,21 @@ checkpoint 继续承担原有执行门禁。完整要求见
 [article-publishing-observable-execution-protocol.md](article-publishing-observable-execution-protocol.md)，
 施工事实源见
 [article-publishing-observable-execution-development-plan.md](article-publishing-observable-execution-development-plan.md)。
+
+## 知乎图文分支（2026-09-08）
+
+沿用同一种文章发布 Tab，在创建时选择平台，每个任务固定一个平台和账号，不增加批量并发或视频类型。
+知乎当前从已有文章草稿进入：填写编辑 URL 与平台账号 URL token，启动后必须从管理页按原 ID 找回，并核验当前登录账号与草稿作者一致。
+不会重新登录，也不会把 CSDN 的摘要、标签、分类和封面步骤强加给知乎。标题相同时走只读核验，不为完成步骤制造一次写入。
+
+知乎专属细步骤把每张图片的定位、上传、结果、正文位置和公开页加载分开；正文通过受保护的 Draft.js 粘贴入口替换，清空失败则停止；
+服务端草稿 GET 回读同时核对账号、ID、标题、正文和图片。签名图片查询参数只在主进程写入瞬间使用，不进入持久证据。
+发布后公开图的 CDN 路径及知乎跳转链接按已观测的平台规则核对，自动关键词链接保留原文字核对。知乎删除图片 alt，因此不宣称 alt 已验证。
+公开文章正文与评论编辑框严格区分；懒加载图片逐个滚入视口后读取真实加载结果。
+
+未知发布仅核验；已观测到同 ID 的公开 URL 时优先在该页核验原账号、标题、全文和图片，不重新提交。
+没有可识别公开结果时仍停住。自动新建空白知乎草稿、发布设置扩展和完全无人值守上传不在本轮已验收范围内。
+真人步骤、实际问题及证据见 [知乎图文验收](../testing/article-publishing-zhihu-2026-09-08.md)。
 
 ## 用户入口
 
@@ -29,7 +44,7 @@ checkpoint 继续承担原有执行门禁。完整要求见
 
 - `WebAffairService` 是发布状态唯一所有者；
 - `ArticlePublishingService` 只做发布编排和 Runtime 生命周期；
-- `CsdnPublishingAdapter` 只识别当前网页事实与唯一控件；
+- `CsdnPublishingAdapter`／`ZhihuPublishingAdapter` 各自只识别平台网页事实与唯一控件，由轻量 `PublishingAdapter` 分派；
 - `BrowserTaskRuntime` 管理账号租约、recovery lease 和 BrowserTask；
 - renderer 不直接修改业务状态或网页；
 - Agent 不能读取 Cookie、Token、密码或验证码，不能使用隐藏页面；

@@ -342,3 +342,76 @@ describe('Cookie action boundary', () => {
     ])
   })
 })
+
+it('fences the Zhihu formatted paste after selection and before the clipboard event', async () => {
+  const evaluate = vi.fn()
+  const locator = { click: vi.fn(), press: vi.fn(), evaluate }
+  const page = { url: () => 'https://zhuanlan.zhihu.com/p/123/edit', locator: () => locator }
+  let checks = 0
+  await expect(
+    executePlaywrightAction(
+      page as never,
+      {
+        type: 'fill',
+        selector: '.public-DraftEditor-content[contenteditable="true"]',
+        value: 'ignored',
+      },
+      undefined,
+      () => {
+        if (++checks === 2) throw new Error('cancelled')
+      },
+      '<p>frozen body</p>',
+    ),
+  ).rejects.toThrow('cancelled')
+  expect(evaluate).not.toHaveBeenCalled()
+})
+
+it('rejects formatted article writes to an unsigned field or another origin', async () => {
+  const locator = vi.fn()
+  await expect(
+    executePlaywrightAction(
+      { url: () => 'https://evil.test/p/123/edit', locator } as never,
+      { type: 'fill', selector: '.public-DraftEditor-content[contenteditable="true"]' },
+      undefined,
+      undefined,
+      '<p>body</p>',
+    ),
+  ).rejects.toThrow('知乎编辑器')
+  expect(locator).not.toHaveBeenCalled()
+})
+
+it('does not paste over a Zhihu body when old atomic images remain after deletion', async () => {
+  const evaluate = vi.fn().mockResolvedValue(false)
+  const locator = { click: vi.fn(), press: vi.fn(), evaluate }
+  const page = { url: () => 'https://zhuanlan.zhihu.com/p/123/edit', locator: () => locator }
+  await expect(
+    executePlaywrightAction(
+      page as never,
+      { type: 'fill', selector: '.public-DraftEditor-content[contenteditable="true"]' },
+      undefined,
+      undefined,
+      '<p>frozen</p>',
+    ),
+  ).rejects.toThrow('未完整清空')
+  expect(locator.press.mock.calls).toEqual([['ControlOrMeta+a'], ['Backspace']])
+  expect(evaluate).toHaveBeenCalledTimes(1)
+})
+
+it('fences a Zhihu paste again after checking deletion of the old body', async () => {
+  const evaluate = vi.fn().mockResolvedValue(true)
+  const locator = { click: vi.fn(), press: vi.fn(), evaluate }
+  const page = { url: () => 'https://zhuanlan.zhihu.com/p/123/edit', locator: () => locator }
+  let checks = 0
+  await expect(
+    executePlaywrightAction(
+      page as never,
+      { type: 'fill', selector: '.public-DraftEditor-content[contenteditable="true"]' },
+      undefined,
+      () => {
+        if (++checks === 3) throw new Error('cancelled')
+      },
+      '<p>frozen</p>',
+    ),
+  ).rejects.toThrow('cancelled')
+  expect(evaluate).toHaveBeenCalledTimes(1)
+})

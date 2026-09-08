@@ -78,8 +78,14 @@ import type {
   ReportArticlePublishingCheckpointInput,
 } from '../../shared/article-publishing/article-publishing-types'
 import { articlePublishingStateSchema } from '../../shared/article-publishing/article-publishing-schema'
-import { CSDN_ARTICLE_PUBLISHING_PLAN } from '../../shared/article-publishing/article-publishing-plan'
-import { parseCsdnDraftAnchor } from '../../shared/article-publishing/csdn-draft-anchor'
+import {
+  CSDN_ARTICLE_PUBLISHING_PLAN,
+  ZHIHU_ARTICLE_PUBLISHING_PLAN,
+} from '../../shared/article-publishing/article-publishing-plan'
+import {
+  parsePlatformDraftAnchor,
+  isPlatformImageUrl,
+} from '../../shared/article-publishing/platform-draft-anchor'
 
 const AFFAIR_LIMIT = 1_000
 const EVENT_LIMIT = 2_000
@@ -152,7 +158,7 @@ export interface ArticlePublishingAgentReporter {
   trustedPageEvidence?: {
     /** Main-only live guard; never persisted or accepted from IPC. */
     isCurrent?: () => boolean
-    adapterId: 'csdn'
+    adapterId: 'csdn' | 'zhihu'
     adapterVersion: 1
     observedAt: string
     url: string
@@ -460,6 +466,7 @@ export class WebAffairService {
   createArticlePublishingAffair(
     input: {
       preview: ArticlePublishingSourcePreview
+      existingDraft?: { url: string; platformAccountId: string }
       reviseDraftFromAffairId?: string
       accountId: string
       fields: ArticlePublishingFields
@@ -839,6 +846,8 @@ export class WebAffairService {
       const publishing = found?.affair.articlePublishing
       const effect = publishing?.sideEffects.find((e) => e.key === input.sideEffectKey)
       const asset = publishing?.assets.find((a) => a.id === input.assetId)
+      if (publishing && !isPlatformImageUrl(publishing.adapterId, input.platformUrl))
+        return this.transitionError('图片仍是临时预览或非本平台地址，尚未取得可核验的上传结果')
       if (
         !found ||
         !publishing ||
@@ -855,7 +864,7 @@ export class WebAffairService {
         effect.executionGeneration !== input.executionGeneration ||
         effect.kind !== 'upload-asset' ||
         effect.targetId.replace(/:attempt-\d+$/u, '') !== asset.id ||
-        !/^https:\/\/[^/]+\.csdnimg\.cn\//u.test(input.platformUrl) ||
+        !isPlatformImageUrl(publishing.adapterId, input.platformUrl) ||
         publishing.assets.some((a) => a.id !== asset.id && a.platformUrl === input.platformUrl)
       )
         return this.transitionError('图片上传读回身份失效或无法唯一对应文件')
@@ -914,9 +923,10 @@ export class WebAffairService {
     assetId: string,
     resolution: 'present' | 'missing',
     workspaceId: string,
+    observation?: { platformUrl: string; isCurrent: () => boolean },
   ) {
     return this.enqueueScoped(affairId, workspaceId, () =>
-      this.resolveArticlePublishingAssetNow(affairId, assetId, resolution),
+      this.resolveArticlePublishingAssetNow(affairId, assetId, resolution, observation),
     )
   }
 
@@ -1179,6 +1189,7 @@ export class WebAffairService {
   private async createArticlePublishingAffairNow(
     input: {
       preview: ArticlePublishingSourcePreview
+      existingDraft?: { url: string; platformAccountId: string }
       reviseDraftFromAffairId?: string
       accountId: string
       fields: ArticlePublishingFields
@@ -1201,9 +1212,45 @@ export class WebAffairService {
     } catch {
       return this.resourceError('所选网站 Origin 无效')
     }
-    if (hostname !== 'csdn.net' && !hostname.endsWith('.csdn.net')) {
-      return this.resourceError('首版只能选择 CSDN 账号')
-    }
+    const adapterId =
+      hostname === 'zhihu.com' || hostname.endsWith('.zhihu.com')
+        ? 'zhihu'
+        : hostname === 'csdn.net' || hostname.endsWith('.csdn.net')
+          ? 'csdn'
+          : null
+    if (!adapterId) return this.resourceError('请选择 CSDN 或知乎账号')
+    const platformLabel = adapterId === 'zhihu' ? '知乎' : 'CSDN'
+    const importedAnchor = input.existingDraft
+      ? parsePlatformDraftAnchor(input.existingDraft.url)
+      : null
+    if (
+      input.existingDraft &&
+      (adapterId !== 'zhihu' ||
+        importedAnchor?.adapterId !== adapterId ||
+        input.reviseDraftFromAffairId)
+    )
+      return this.invalid('原稿地址与平台不一致')
+    if (adapterId === 'zhihu' && !importedAnchor)
+      return this.invalid('知乎调试阶段请提供已有草稿地址和原账号标识；不会新建替代稿')
+    if (
+      adapterId === 'zhihu' &&
+      (input.fields.summary ||
+        input.fields.tags.length ||
+        input.fields.category ||
+        input.fields.coverAssetId)
+    )
+      return this.invalid('知乎当前仅支持原文图文和标题；额外字段请在平台人工核验')
+    if (
+      importedAnchor &&
+      this.snapshot.affairs.some(
+        (a) =>
+          a.articlePublishing?.adapterId === adapterId &&
+          a.articlePublishing.accountId === input.accountId &&
+          a.articlePublishing.draft?.platformDraftId === importedAnchor.draftId &&
+          !['cancelled', 'failed'].includes(a.articlePublishing.execution.status),
+      )
+    )
+      return this.invalid('此原稿已有任务，请继续原任务')
     if (
       input.fields.coverAssetId &&
       !input.preview.assets.some(
@@ -1264,19 +1311,19 @@ export class WebAffairService {
     if (materials.some((material) => material.state !== 'available')) {
       return this.resourceError('Markdown 或正文图片已经不可用，请重新选择文章')
     }
-    const checkpoints: ArticlePublishingState['checkpoints'] = CSDN_ARTICLE_PUBLISHING_PLAN.map(
-      ({ stepId, label, resumePolicy }) => ({
-        stepId,
-        label,
-        adapterVersion: 1,
-        status: 'pending',
-        resumePolicy,
-        attemptCount: 0,
-        evidence: [],
-      }),
-    )
+    const checkpoints: ArticlePublishingState['checkpoints'] = (
+      adapterId === 'zhihu' ? ZHIHU_ARTICLE_PUBLISHING_PLAN : CSDN_ARTICLE_PUBLISHING_PLAN
+    ).map(({ stepId, label, resumePolicy }) => ({
+      stepId,
+      label,
+      adapterVersion: 1,
+      status: 'pending',
+      resumePolicy,
+      attemptCount: 0,
+      evidence: [],
+    }))
     const articlePublishing = articlePublishingStateSchema.parse({
-      adapterId: 'csdn',
+      adapterId,
       adapterVersion: 1,
       source: input.preview.source,
       accountId: input.accountId,
@@ -1285,6 +1332,16 @@ export class WebAffairService {
       assets: input.preview.assets,
       checkpoints,
       sideEffects: [],
+      ...(importedAnchor && input.existingDraft
+        ? {
+            draft: {
+              platformDraftId: importedAnchor.draftId,
+              url: importedAnchor.url,
+              platformAccountId: input.existingDraft.platformAccountId,
+              normalizedTitle: input.fields.title.trim(),
+            },
+          }
+        : {}),
       ...(originalPublishing?.draft
         ? {
             draft: {
@@ -1300,7 +1357,7 @@ export class WebAffairService {
       publication: { status: 'not-started' },
     })
     const node = this.createNode({
-      title: '发布文章到 CSDN',
+      title: `发布文章到 ${platformLabel}`,
       description: '按冻结文章、账号和平台字段执行；特殊卡点转人工。',
       type: 'web-task',
       status: 'ready',
@@ -1315,7 +1372,7 @@ export class WebAffairService {
       kind: 'article-publishing',
       workspaceId,
       title: input.fields.title,
-      objective: `将 ${input.preview.source.markdownPath} 发布到 CSDN`,
+      objective: `将 ${input.preview.source.markdownPath} 发布到 ${platformLabel}`,
       status: 'active',
       principalId: account.principalId,
       websiteIds: [website.id],
@@ -1331,7 +1388,7 @@ export class WebAffairService {
           'created',
           original
             ? `修订原稿 ${originalPublishing?.draft?.platformDraftId}；来源事务 ${original.id}；原记录保留，所有正文/字段重新核验`
-            : 'CSDN 文章发布事务已创建',
+            : `${platformLabel} 文章发布事务已创建`,
           now,
         ),
       ],
@@ -2180,6 +2237,7 @@ export class WebAffairService {
     if (input.outcome === 'succeeded' && found.affair.articlePublishing) {
       if (
         reporter?.trustedPageEvidence?.kind !== 'published' ||
+        reporter.trustedPageEvidence.adapterId !== found.affair.articlePublishing.adapterId ||
         reporter.trustedPageEvidence.url !== input.url
       ) {
         return {
@@ -2196,7 +2254,7 @@ export class WebAffairService {
           error: { code: 'EVIDENCE_REQUIRED', message: '文章发布成功必须取得可复核 URL' },
         }
       }
-      if (!isCsdnPublicationUrl(input.url)) {
+      if (!isPlatformPublicationUrl(input.url, found.affair.articlePublishing.adapterId)) {
         return {
           success: false,
           error: { code: 'EVIDENCE_REQUIRED', message: '文章发布 URL 不是可复核的 CSDN 文章地址' },
@@ -3753,7 +3811,7 @@ export class WebAffairService {
     const recovery = publishing.draft?.recovery
     let publishingForBind = publishing
     if (recovery?.executionGeneration === executionGeneration && recoveryVerification) {
-      const parsed = parseCsdnDraftAnchor(recoveryVerification.url)
+      const parsed = parsePlatformDraftAnchor(recoveryVerification.url)
       if (
         recoveryVerification.recoveryOperationId !== recovery.operationId ||
         recoveryVerification.draftId !== recovery.expectedDraftId ||
@@ -3762,6 +3820,7 @@ export class WebAffairService {
         recoveryVerification.normalizedTitle !== recovery.expectedTitle ||
         recoveryVerification.saveState !== 'saved' ||
         !parsed ||
+        parsed.adapterId !== publishing.adapterId ||
         parsed.draftId !== recoveryVerification.draftId
       ) {
         return this.transitionError('Runtime 提交缺少当前页面上的原草稿核验证据')
@@ -4157,7 +4216,7 @@ export class WebAffairService {
     let nextDraft = publishing.draft
     if (recovery?.executionGeneration === input.executionGeneration) {
       const evidence = input.recoveryVerification
-      const parsed = evidence ? parseCsdnDraftAnchor(evidence.url) : null
+      const parsed = evidence ? parsePlatformDraftAnchor(evidence.url) : null
       if (
         !evidence ||
         evidence.recoveryOperationId !== recovery.operationId ||
@@ -4167,6 +4226,7 @@ export class WebAffairService {
         evidence.normalizedTitle !== recovery.expectedTitle ||
         evidence.saveState !== 'saved' ||
         !parsed ||
+        parsed.adapterId !== publishing.adapterId ||
         parsed.draftId !== evidence.draftId
       ) {
         return this.transitionError('Page Runtime 重绑定缺少当前页面上的原草稿核验证据')
@@ -4550,7 +4610,10 @@ export class WebAffairService {
     if (input.status === 'completed') {
       const expectedEvidenceKind =
         input.stepId === 'verify-publication' ? 'published' : 'checkpoint'
-      if (reporter.trustedPageEvidence?.kind !== expectedEvidenceKind) {
+      if (
+        reporter.trustedPageEvidence?.kind !== expectedEvidenceKind ||
+        reporter.trustedPageEvidence.adapterId !== publishing.adapterId
+      ) {
         return this.evidenceRequired('检查点完成必须附带当前 CSDN 页面适配器证据')
       }
       if (input.stepId === 'verify-account' && !reporter.trustedPageEvidence.platformAccountId) {
@@ -4588,6 +4651,28 @@ export class WebAffairService {
                 effect.status === 'verified',
             )
           : undefined
+      // An already matching Zhihu title is a read-only branch. Main must have
+      // observed both the skipped write and its current-generation verification.
+      const unchangedZhihuTitle =
+        publishing.adapterId === 'zhihu' &&
+        input.stepId === 'fill-fields' &&
+        reporter.trustedPageEvidence.draftId === publishing.draft?.platformDraftId &&
+        reporter.trustedPageEvidence.platformAccountId === publishing.draft?.platformAccountId &&
+        reporter.trustedPageEvidence.normalizedTitle === publishing.fields.title.trim() &&
+        ['field.title.dispatch', 'field.title.verify'].every((id) =>
+          checkpoint.details?.some(
+            (detail) =>
+              detail.id === id &&
+              detail.generation === found.attempt.executionGeneration &&
+              detail.status === (id.endsWith('.dispatch') ? 'skipped' : 'completed'),
+          ),
+        ) &&
+        !eligibleEffects.some(
+          (effect) =>
+            effect.kind === 'save-draft' &&
+            effect.targetId.startsWith('autosave:fill-fields:') &&
+            effect.status !== 'verified',
+        )
       const requiredEffect =
         input.stepId === 'save-draft'
           ? (verifiedAutosave ??
@@ -4605,6 +4690,7 @@ export class WebAffairService {
               : undefined
       if (
         ['fill-body', 'fill-fields', 'save-draft', 'publish'].includes(input.stepId) &&
+        !unchangedZhihuTitle &&
         (!requiredEffect ||
           (!['dispatched', 'result-unknown', 'verified'].includes(requiredEffect.status) &&
             requiredEffect !== recoveredBodyEffect))
@@ -4614,7 +4700,7 @@ export class WebAffairService {
       if (input.stepId === 'verify-publication') {
         const publicationUrl = input.outputRefs?.['publicationUrl']
         const publishEffect = eligibleEffects.find((effect) => effect.kind === 'publish')
-        if (!publicationUrl || !isCsdnPublicationUrl(publicationUrl)) {
+        if (!publicationUrl || !isPlatformPublicationUrl(publicationUrl, publishing.adapterId)) {
           return this.transitionError('发布核验必须返回可复核的 CSDN 文章 URL')
         }
         if (
@@ -4717,7 +4803,10 @@ export class WebAffairService {
           status: 'completed',
           observedAt: now,
           generation: publishing.execution.currentGeneration,
-          evidence: `可信适配器回读 · ${reporter.trustedPageEvidence.platformAccountId} · draftId ${reporter.trustedPageEvidence.draftId ?? ''} · ${reporter.trustedPageEvidence.normalizedTitle} · ${reporter.trustedPageEvidence.saveState ?? ''} · ${reporter.trustedPageEvidence.url}`,
+          evidence:
+            id === 'publication.verify'
+              ? `公开页已核验 · ${reporter.trustedPageEvidence.platformAccountId} · ${reporter.trustedPageEvidence.normalizedTitle} · ${reporter.trustedPageEvidence.url}`
+              : `可信适配器回读 · ${reporter.trustedPageEvidence.platformAccountId} · draftId ${reporter.trustedPageEvidence.draftId ?? ''} · ${reporter.trustedPageEvidence.normalizedTitle} · ${reporter.trustedPageEvidence.saveState ?? ''} · ${reporter.trustedPageEvidence.url}`,
         })
       if (
         input.stepId === 'save-draft' &&
@@ -4809,13 +4898,15 @@ export class WebAffairService {
     browserTaskRunId?: string,
     creation?: { sideEffectKey: string; platformAccountId: string; normalizedTitle: string },
   ): Promise<WebAffairOperationResult<WebAffair>> {
-    const anchor = parseCsdnDraftAnchor(rawUrl)
+    const anchor = parsePlatformDraftAnchor(rawUrl)
     if (!anchor) return this.transitionError('当前页面没有可恢复的 CSDN 草稿标识')
     const found = this.findAttempt(affairId, attemptId)
     const publishing = found?.affair.articlePublishing
     if (!found || !publishing || found.affair.kind !== 'article-publishing') {
       return this.notFound('文章发布 Attempt 不存在')
     }
+    if (anchor.adapterId !== publishing.adapterId)
+      return this.transitionError('草稿平台与任务不一致')
     const creationEffect =
       creation &&
       publishing.sideEffects.find(
@@ -4861,7 +4952,7 @@ export class WebAffairService {
     ) {
       return this.transitionError('草稿锚点不属于当前发布运行代次')
     }
-    const existing = publishing.draft?.url ? parseCsdnDraftAnchor(publishing.draft.url) : null
+    const existing = publishing.draft?.url ? parsePlatformDraftAnchor(publishing.draft.url) : null
     if (existing && existing.draftId !== anchor.draftId) {
       return this.transitionError(
         `当前 Attempt 已绑定草稿 ${existing.draftId}，拒绝切换到草稿 ${anchor.draftId}`,
@@ -5213,7 +5304,7 @@ export class WebAffairService {
           url: publishing.draft.url ?? '',
         }
       : publishing.draft?.url
-        ? parseCsdnDraftAnchor(publishing.draft.url)
+        ? parsePlatformDraftAnchor(publishing.draft.url)
         : null
     if (!anchor) return publishing.draft
     return {
@@ -5275,8 +5366,8 @@ export class WebAffairService {
     ) {
       return this.transitionError('草稿恢复证据不属于当前发布恢复代次')
     }
-    const parsed = parseCsdnDraftAnchor(input.url)
-    if (!parsed || parsed.draftId !== input.draftId) {
+    const parsed = parsePlatformDraftAnchor(input.url)
+    if (!parsed || parsed.adapterId !== publishing.adapterId || parsed.draftId !== input.draftId) {
       return this.transitionError('恢复后的页面不能证明是原平台草稿')
     }
     if (
@@ -5453,8 +5544,8 @@ export class WebAffairService {
         return this.transitionError('恢复写入许可已变化，拒绝记录写后页面')
       }
     }
-    const parsed = parseCsdnDraftAnchor(input.url)
-    if (!parsed || parsed.draftId !== input.draftId) {
+    const parsed = parsePlatformDraftAnchor(input.url)
+    if (!parsed || parsed.adapterId !== publishing.adapterId || parsed.draftId !== input.draftId) {
       return this.evidenceRequired('写后页面地址没有同一草稿编号')
     }
     const now = this.timestamp()
@@ -5478,7 +5569,10 @@ export class WebAffairService {
     affairId: string,
     assetId: string,
     resolution: 'present' | 'missing',
+    observation?: { platformUrl: string; isCurrent: () => boolean },
   ): Promise<WebAffairOperationResult<WebAffair>> {
+    if (observation && !observation.isCurrent())
+      return this.transitionError('图片确认期间原稿已变化')
     const affair = this.snapshot?.affairs.find((candidate) => candidate.id === affairId)
     const publishing = affair?.articlePublishing
     const asset = publishing?.assets.find((candidate) => candidate.id === assetId)
@@ -5496,6 +5590,7 @@ export class WebAffairService {
         ? {
             ...candidate,
             status: nextStatus,
+            ...(observation ? { platformUrl: observation.platformUrl } : {}),
             manualResolution: { status: resolution, resolvedAt: now },
             verifiedAt: resolution === 'present' ? now : candidate.verifiedAt,
             uploadAttempts: candidate.uploadAttempts.map((attempt, index) =>
@@ -5510,8 +5605,8 @@ export class WebAffairService {
                     evidence: [
                       ...attempt.evidence,
                       resolution === 'present'
-                        ? '用户已在可见 CSDN 编辑器中确认图片存在'
-                        : '用户已在可见 CSDN 编辑器中确认图片缺失',
+                        ? '已通过可见原稿确认图片存在'
+                        : '已通过可见原稿确认图片缺失',
                     ].slice(-40),
                   }
                 : attempt,
@@ -6548,13 +6643,17 @@ export class WebAffairService {
   }
 }
 
-function isCsdnPublicationUrl(rawUrl: string): boolean {
+function isPlatformPublicationUrl(rawUrl: string, platform: 'csdn' | 'zhihu'): boolean {
   try {
     const url = new URL(rawUrl)
     return (
       url.protocol === 'https:' &&
-      url.hostname === 'blog.csdn.net' &&
-      /^\/[^/]+\/article\/details\/\d+\/?$/u.test(url.pathname)
+      ((platform === 'csdn' &&
+        url.hostname === 'blog.csdn.net' &&
+        /^\/[^/]+\/article\/details\/\d+\/?$/u.test(url.pathname)) ||
+        (platform === 'zhihu' &&
+          url.hostname === 'zhuanlan.zhihu.com' &&
+          /^\/p\/\d+\/?$/u.test(url.pathname)))
     )
   } catch {
     return false

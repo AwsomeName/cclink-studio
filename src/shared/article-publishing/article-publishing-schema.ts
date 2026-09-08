@@ -304,7 +304,7 @@ const operationTransitionSchema = z
 
 export const articlePublishingStateSchema = z
   .object({
-    adapterId: z.literal('csdn'),
+    adapterId: z.enum(['csdn', 'zhihu']),
     adapterVersion: z.literal(1),
     source: z
       .object({
@@ -420,6 +420,13 @@ export const inspectArticlePublishingSourceInputSchema = z
 
 export const createArticlePublishingTaskInputSchema = z
   .object({
+    existingDraft: z
+      .object({
+        url: z.url().max(2000),
+        platformAccountId: z.string().regex(/^[a-zA-Z0-9_-]{1,160}$/u),
+      })
+      .strict()
+      .optional(),
     reviseDraftFromAffairId: uuidSchema.optional(),
     workspaceRef: workspaceRefSchema,
     markdownPath: absolutePathSchema,

@@ -1473,3 +1473,34 @@ describe('CSDN automatic save readback', () => {
     },
   )
 })
+
+it.each(['same', 'wrong-id', 'wrong-owner'])(
+  'keeps the original Zhihu identity when its stored URL has become public: %s',
+  (scenario) => {
+    const { policy } = createPolicy({ stepId: 'verify-publication' })
+    const url = 'https://zhuanlan.zhihu.com/p/2080754524944339658'
+    const result = Reflect.get(policy, 'resolvePublishedUrl').call(
+      policy,
+      { url },
+      {
+        scope: {
+          adapterId: 'zhihu',
+          draftUrl: url,
+          expectedPlatformDraftId: '2080754524944339658',
+          expectedPlatformAccountId: 'owner',
+          expectedTitle: 'Article',
+          assets: [],
+        },
+        inspection: {
+          pageKind: 'published-article',
+          url,
+          title: { value: 'Article' },
+          platformAccountId: scenario === 'wrong-owner' ? 'other' : 'owner',
+          publishedArticleId:
+            scenario === 'wrong-id' ? '2080754524944339659' : '2080754524944339658',
+        },
+      },
+    )
+    expect(result).toBe(scenario === 'same' ? url : null)
+  },
+)

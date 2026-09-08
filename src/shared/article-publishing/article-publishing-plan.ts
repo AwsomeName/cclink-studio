@@ -20,6 +20,18 @@ export const CSDN_ARTICLE_PUBLISHING_PLAN = [
   { stepId: 'verify-publication', label: '核验文章结果', resumePolicy: 'reconcile-then-run' },
 ] as const satisfies readonly ArticlePublishingPlanStep[]
 
+export const ZHIHU_ARTICLE_PUBLISHING_PLAN = CSDN_ARTICLE_PUBLISHING_PLAN.map((step) => ({
+  ...step,
+  label:
+    step.stepId === 'open-editor'
+      ? '从知乎管理页找回原稿'
+      : step.stepId === 'fill-fields'
+        ? '核验知乎标题与发布设置'
+        : step.stepId === 'save-draft'
+          ? '核验知乎自动保存'
+          : step.label,
+}))
+
 export interface ArticlePublishingDetailDefinition {
   id: string
   checkpointId: string
@@ -32,7 +44,8 @@ export interface ArticlePublishingDetailDefinition {
 
 /** Definitions only. Results are written by WebAffair from real execution boundaries. */
 export function articlePublishingDetailDefinitions(
-  publishing: Pick<ArticlePublishingState, 'assets' | 'fields' | 'draft'>,
+  publishing: Pick<ArticlePublishingState, 'assets' | 'fields' | 'draft'> &
+    Partial<Pick<ArticlePublishingState, 'adapterId'>>,
 ): ArticlePublishingDetailDefinition[] {
   const rows: ArticlePublishingDetailDefinition[] = []
   const add = (
@@ -62,7 +75,7 @@ export function articlePublishingDetailDefinitions(
     '可见 Tab 与账号、工作空间绑定一致',
     '按新建或恢复分支打开页面',
   )
-  if (publishing.draft?.recovery) {
+  if (publishing.draft?.recovery || publishing.draft?.platformDraftId) {
     add(
       'recovery.management',
       'open-editor',
@@ -190,10 +203,12 @@ export function articlePublishingDetailDefinitions(
     add(
       `asset.${asset.id}.open`,
       'upload-assets',
-      'Agent',
-      `打开正文上传面板：${name}`,
+      publishing.adapterId === 'zhihu' ? 'Studio' : 'Agent',
+      publishing.adapterId === 'zhihu'
+        ? `定位正文图片上传控件：${name}`
+        : `打开正文上传面板：${name}`,
       '当前账号、原稿与正文区域通过核验',
-      'CSDN 正文上传面板已打开，唯一文件控件可用',
+      '平台正文上传入口的唯一文件控件可用',
       '只选择该冻结文件；不使用封面或反馈上传入口',
     )
     add(
@@ -231,7 +246,9 @@ export function articlePublishingDetailDefinitions(
       'Studio',
       `核验正文位置与加载：${asset.displayPath.split('/').pop()}`,
       '完整正文已按冻结 Markdown 与已核验平台图片填写',
-      '该图出现次数、顺序、前文位置、替代文字与原稿一致，且图片加载成功',
+      publishing.adapterId === 'zhihu'
+        ? '该图平台地址、出现次数、顺序、前文位置与原稿一致，且图片加载成功（知乎不保留替代文字）'
+        : '该图出现次数、顺序、前文位置、替代文字与原稿一致，且图片加载成功',
       '全部图片通过后核验正文保存；不一致时显示具体图片卡点',
     )
   }
@@ -244,13 +261,15 @@ export function articlePublishingDetailDefinitions(
     '同稿正文非空、服务端与编辑器正文一致且已保存',
     '检查平台字段；未知时先对账不重填',
   )
-  for (const [field, label] of [
-    ['title', '标题'],
-    ['summary', '摘要'],
-    ['tags', '标签'],
-    ['category', '分类'],
-    ['cover', '封面'],
-  ]) {
+  for (const [field, label] of publishing.adapterId === 'zhihu'
+    ? [['title', '标题']]
+    : [
+        ['title', '标题'],
+        ['summary', '摘要'],
+        ['tags', '标签'],
+        ['category', '分类'],
+        ['cover', '封面'],
+      ]) {
     add(
       `field.${field}.inspect`,
       'fill-fields',
@@ -283,7 +302,7 @@ export function articlePublishingDetailDefinitions(
     'save.dispatch',
     'save-draft',
     'Agent',
-    '触发保存草稿',
+    publishing.adapterId === 'zhihu' ? '确认自动保存，无需重复点击' : '触发保存草稿',
     '字段已核验；无未知保存；已有自动保存可省略点击',
     '一次保存已派发，或已核验自动保存无需额外点击',
     '核验同稿保存结果',

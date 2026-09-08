@@ -90,7 +90,8 @@ export function ArticlePublishingSidebar({
                 {STATUS_LABELS[publishing.execution.status]}
               </span>
               <small>
-                CSDN · 账号 {account} · {new Date(affair.updatedAt).toLocaleString()}
+                {publishing.adapterId === 'zhihu' ? '知乎' : 'CSDN'} · 账号 {account} ·{' '}
+                {new Date(affair.updatedAt).toLocaleString()}
               </small>
             </button>
           )

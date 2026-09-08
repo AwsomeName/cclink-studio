@@ -8,6 +8,35 @@ const DRAFT_LIST_URL = 'https://mp.csdn.net/mp_blog/manage/article?type=draft'
 const ACCOUNT = 'csdn:test-user'
 
 describe('CsdnDraftRecoveryCoordinator', () => {
+  it.each(['owner', 'other'])(
+    'recovers an observed public URL by readback only and checks the original owner: %s',
+    async (owner) => {
+      const url = 'https://zhuanlan.zhihu.com/p/2080754524944339658'
+      const adapter = {
+        probe: vi.fn(async () => ({
+          ...editorProbe(),
+          adapterId: 'zhihu',
+          pageKind: 'published-article',
+          platformAccountId: owner,
+          url,
+        })),
+        probeDraftList: vi.fn(),
+      }
+      const navigate = vi.fn(async (url: string) => pageAt(url) as never)
+      const result = new CsdnDraftRecoveryCoordinator(adapter as never).recoverExactPublication({
+        visiblePublicationUrl: url,
+        expectedPlatformAccountId: 'owner',
+        expectedTitle: 'Article',
+        navigate,
+      })
+      if (owner === 'owner') await expect(result).resolves.toMatchObject({ url })
+      else await expect(result).rejects.toThrow('原平台账号')
+      expect(navigate).toHaveBeenCalledTimes(1)
+      expect(navigate).toHaveBeenCalledWith(url)
+      expect(adapter.probeDraftList).not.toHaveBeenCalled()
+    },
+  )
+
   it('emits independently verified recovery steps and points at a title mismatch before permitting writes', async () => {
     const observe = vi.fn(async () => undefined)
     const adapter = {

@@ -237,7 +237,7 @@ export interface ArticlePublishingExecutionProtocol {
 }
 
 export interface ArticlePublishingState {
-  adapterId: 'csdn'
+  adapterId: 'csdn' | 'zhihu'
   adapterVersion: 1
   source: {
     markdownPath: string
@@ -310,6 +310,7 @@ export interface InspectArticlePublishingSourceInput {
 }
 
 export interface CreateArticlePublishingTaskInput extends InspectArticlePublishingSourceInput {
+  existingDraft?: { url: string; platformAccountId: string }
   reviseDraftFromAffairId?: string
   accountId: string
   fields: ArticlePublishingFields

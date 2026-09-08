@@ -26,6 +26,7 @@ interface RecoverExactDraftInput {
 }
 
 interface RecoverExactPublicationInput {
+  visiblePublicationUrl?: string
   expectedPlatformAccountId: string
   expectedTitle: string
   navigate: (url: string) => Promise<Page>
@@ -41,15 +42,21 @@ interface VerifyExactDraftPageInput {
 
 /** Main-owned recovery. It locates the persisted draft again and only reads current page facts. */
 export class CsdnDraftRecoveryCoordinator {
-  constructor(private readonly adapter = new CsdnPublishingAdapter()) {}
+  constructor(
+    private readonly adapter: Pick<
+      CsdnPublishingAdapter,
+      'probe' | 'probeDraftList'
+    > = new CsdnPublishingAdapter(),
+    private readonly managementUrl = CSDN_ARTICLE_MANAGEMENT_URL,
+  ) {}
 
   async recoverExactDraft(input: RecoverExactDraftInput): Promise<CsdnDraftRecoveryResult> {
     await input.observe?.({
       id: 'recovery.management',
       status: 'running',
-      evidence: CSDN_ARTICLE_MANAGEMENT_URL,
+      evidence: this.managementUrl,
     })
-    let page = await input.navigate(CSDN_ARTICLE_MANAGEMENT_URL)
+    let page = await input.navigate(this.managementUrl)
     let list = await this.readSettledPage(
       page,
       () => this.adapter.probeDraftList(page),
@@ -61,7 +68,7 @@ export class CsdnDraftRecoveryCoordinator {
     )
     input.assertActive?.()
     if (!list.pageSupported || (!list.draftSectionUrl && !list.draftSectionTabName)) {
-      throw new Error('当前 CSDN 页面无法确认草稿箱入口，已停止恢复')
+      throw new Error('当前 平台页面无法确认草稿箱入口，已停止恢复')
     }
     await input.observe?.({
       id: 'recovery.management',
@@ -100,7 +107,7 @@ export class CsdnDraftRecoveryCoordinator {
     } else if (list.draftSectionUrl && !sameUrl(list.draftSectionUrl, page.url())) {
       page = await input.navigate(list.draftSectionUrl)
       list = await this.adapter.probeDraftList(page)
-      if (!list.pageSupported) throw new Error('CSDN 草稿箱页面版本无法识别，已停止恢复')
+      if (!list.pageSupported) throw new Error('平台草稿箱页面版本无法识别，已停止恢复')
       this.requireAccount(list.platformAccountId, input.expectedPlatformAccountId, '草稿箱')
     }
 
@@ -163,7 +170,7 @@ export class CsdnDraftRecoveryCoordinator {
         ...(expected !== actual ? { reason: '原稿核验不一致，禁止写入' } : {}),
       })
     if (!editor.editor.recognized || editor.draftId !== input.expectedDraftId) {
-      throw new Error(`候选页面不是原 CSDN 草稿 ${input.expectedDraftId}`)
+      throw new Error(`候选页面不是原 平台草稿 ${input.expectedDraftId}`)
     }
     this.requireAccount(editor.platformAccountId, input.expectedPlatformAccountId, '草稿编辑页')
     const normalizedTitle = normalizeText(editor.title.value)
@@ -188,7 +195,26 @@ export class CsdnDraftRecoveryCoordinator {
     url: string
     observedAt: string
   }> {
-    let page = await input.navigate(CSDN_ARTICLE_MANAGEMENT_URL)
+    if (input.visiblePublicationUrl) {
+      const page = await input.navigate(input.visiblePublicationUrl)
+      const published = await this.readSettledPage(
+        page,
+        () => this.adapter.probe(page),
+        (probe) => probe.pageKind === 'published-article' && Boolean(probe.platformAccountId),
+      )
+      this.requireAccount(
+        published.platformAccountId,
+        input.expectedPlatformAccountId,
+        '公开文章页',
+      )
+      if (
+        published.pageKind !== 'published-article' ||
+        normalizeText(published.title.value) !== normalizeText(input.expectedTitle)
+      )
+        throw new Error('可见发布结果不是原账号原文章，已停止只读恢复')
+      return { url: published.url, observedAt: published.observedAt }
+    }
+    let page = await input.navigate(this.managementUrl)
     const management = await this.readSettledPage(
       page,
       () => this.adapter.probe(page),
@@ -198,7 +224,7 @@ export class CsdnDraftRecoveryCoordinator {
         probe.publishedLinks.length > 0,
     )
     if (management.pageKind !== 'management') {
-      throw new Error('当前页面不是可识别的 CSDN 文章管理页')
+      throw new Error('当前页面不是可识别的 平台文章管理页')
     }
     this.requireAccount(management.platformAccountId, input.expectedPlatformAccountId, '文章管理页')
     const expectedTitle = normalizeText(input.expectedTitle)
@@ -222,7 +248,7 @@ export class CsdnDraftRecoveryCoordinator {
         Boolean(probe.title.value.trim()),
     )
     if (published.pageKind !== 'published-article') {
-      throw new Error('候选页面不是可识别的 CSDN 公开文章')
+      throw new Error('候选页面不是可识别的 平台公开文章')
     }
     this.requireAccount(published.platformAccountId, input.expectedPlatformAccountId, '公开文章页')
     if (normalizeText(published.title.value) !== expectedTitle) {
@@ -233,7 +259,7 @@ export class CsdnDraftRecoveryCoordinator {
 
   private requireAccount(actual: string | undefined, expected: string, pageLabel: string): void {
     if (!actual || actual !== expected) {
-      throw new Error(`${pageLabel}不是原 CSDN 账号，已停止恢复`)
+      throw new Error(`${pageLabel}不是原平台账号，已停止恢复`)
     }
   }
 

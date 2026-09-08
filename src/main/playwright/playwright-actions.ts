@@ -34,6 +34,38 @@ export async function executePlaywrightAction(
       return { clicked: action.selector }
 
     case 'fill':
+      if (trustedArticleBodyHtml !== undefined) {
+        if (
+          new URL(page!.url()).origin !== 'https://zhuanlan.zhihu.com' ||
+          action.selector !== '.public-DraftEditor-content[contenteditable="true"]'
+        )
+          throw new Error('格式化正文目标不是受支持的知乎编辑器')
+        const body = page!.locator(action.selector)
+        await body.click()
+        assertDispatchStillCurrent?.()
+        await body.press('ControlOrMeta+a')
+        assertDispatchStillCurrent?.()
+        await body.press('Backspace')
+        const empty = await body.evaluate(
+          (element) =>
+            !element.querySelector('img') &&
+            !(element.textContent ?? '').replace(/[\s\u200b]/gu, ''),
+        )
+        if (!empty) throw new Error('知乎旧正文未完整清空，已停止粘贴，避免重复正文或图片')
+        assertDispatchStillCurrent?.()
+        await body.evaluate((element, html) => {
+          const data = new DataTransfer()
+          data.setData('text/html', html)
+          data.setData(
+            'text/plain',
+            new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '',
+          )
+          element.dispatchEvent(
+            new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }),
+          )
+        }, trustedArticleBodyHtml)
+        return { filled: action.selector }
+      }
       await page!.fill(action.selector, action.value)
       return { filled: action.selector }
 
