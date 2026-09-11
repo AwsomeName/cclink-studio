@@ -59,6 +59,7 @@ export class ZhihuPublishingAdapter {
       bodyClone
         ?.querySelectorAll('button, figcaption, [contenteditable="false"] button')
         .forEach((e) => e.remove())
+      if (publicBody) bodyClone?.querySelectorAll('noscript').forEach((e) => e.remove())
       const bodyText = bodyClone?.textContent ?? ''
       const saved = Boolean(
         isEditor &&
@@ -203,6 +204,9 @@ export class ZhihuPublishingAdapter {
         const clone = root.cloneNode(true) as Element
         for (const control of clone.querySelectorAll('button, figcaption')) control.remove()
         if (publicBodies.length === 1) {
+          // With scripting enabled, Zhihu's noscript image fallback is inert text.
+          // Exclude it from the read-only clone; real images remain fully verified.
+          for (const fallback of clone.querySelectorAll('noscript')) fallback.remove()
           for (const link of clone.querySelectorAll(
             'a.RichContent-EntityWord[data-paste-text="true"]',
           )) {

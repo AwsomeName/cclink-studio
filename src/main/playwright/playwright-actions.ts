@@ -1,4 +1,8 @@
-import { clickXiaohongshuControl, XIAOHONGSHU_SAVE_SELECTOR, XIAOHONGSHU_PUBLISH_SELECTOR } from '../article-publishing/xiaohongshu-publish-control'
+import {
+  clickXiaohongshuControl,
+  XIAOHONGSHU_SAVE_SELECTOR,
+  XIAOHONGSHU_PUBLISH_SELECTOR,
+} from '../article-publishing/xiaohongshu-publish-control'
 /**
  * Playwright 操作执行器
  *
@@ -31,20 +35,54 @@ export async function executePlaywrightAction(
       return { url: page!.url() }
 
     case 'click':
-      if (new URL(page!.url()).origin === 'https://creator.xiaohongshu.com' && [XIAOHONGSHU_SAVE_SELECTOR,XIAOHONGSHU_PUBLISH_SELECTOR].includes(action.selector)) {
+      if (
+        new URL(page!.url()).origin === 'https://creator.xiaohongshu.com' &&
+        [XIAOHONGSHU_SAVE_SELECTOR, XIAOHONGSHU_PUBLISH_SELECTOR].includes(action.selector)
+      ) {
         if (!assertDispatchStillCurrent) throw new Error('小红书保存/发布需要主进程动作许可')
-        await clickXiaohongshuControl(page!, action.selector === XIAOHONGSHU_SAVE_SELECTOR ? 'save' : 'publish', assertDispatchStillCurrent)
-        return {clicked:action.selector}
+        await clickXiaohongshuControl(
+          page!,
+          action.selector === XIAOHONGSHU_SAVE_SELECTOR ? 'save' : 'publish',
+          assertDispatchStillCurrent,
+        )
+        return { clicked: action.selector }
       }
       await page!.click(action.selector)
       return { clicked: action.selector }
 
     case 'fill':
-      if (trustedArticleBodyHtml !== undefined && new URL(page!.url()).origin === 'https://creator.xiaohongshu.com') {
-        if (new URL(page!.url()).pathname !== '/publish/publish' || action.selector !== '.tiptap.ProseMirror[contenteditable="true"]' || !assertDispatchStillCurrent) throw new Error('小红书正文目标或派发许可不匹配')
+      if (
+        trustedArticleBodyHtml !== undefined &&
+        new URL(page!.url()).origin === 'https://weibo.com'
+      ) {
+        if (new URL(page!.url()).pathname !== '/' || !assertDispatchStillCurrent)
+          throw new Error('微博正文需要当前编辑器的主进程派发许可')
+        const body = page!.locator(action.selector)
+        if (
+          !(await body.evaluate(
+            (element) =>
+              element instanceof HTMLTextAreaElement &&
+              element.getAttribute('placeholder') === '有什么新鲜事想分享给大家？',
+          ))
+        )
+          throw new Error('微博正文目标不是当前图文编辑器')
+        assertDispatchStillCurrent()
+        await body.fill(trustedArticleBodyHtml)
+        return { filled: action.selector }
+      }
+      if (
+        trustedArticleBodyHtml !== undefined &&
+        new URL(page!.url()).origin === 'https://creator.xiaohongshu.com'
+      ) {
+        if (
+          new URL(page!.url()).pathname !== '/publish/publish' ||
+          action.selector !== '.tiptap.ProseMirror[contenteditable="true"]' ||
+          !assertDispatchStillCurrent
+        )
+          throw new Error('小红书正文目标或派发许可不匹配')
         assertDispatchStillCurrent()
         await page!.locator(action.selector).fill(trustedArticleBodyHtml)
-        return {filled:action.selector}
+        return { filled: action.selector }
       }
       if (
         trustedArticleBodyHtml !== undefined &&
@@ -83,7 +121,9 @@ export async function executePlaywrightAction(
         )
           throw new Error('格式化正文目标不是受支持的知乎编辑器')
         const body = page!.locator(action.selector)
-        await body.click()
+        // A center click can land on an atomic image or its caption. Focus the
+        // signed contenteditable itself so Select All targets the document.
+        await body.focus()
         assertDispatchStillCurrent?.()
         await body.press('ControlOrMeta+a')
         assertDispatchStillCurrent?.()

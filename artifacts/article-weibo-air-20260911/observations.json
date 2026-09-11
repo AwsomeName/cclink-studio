@@ -1,0 +1,32 @@
+{
+  "method": "real Studio UI accessibility readback; not WebAffair automation",
+  "url": "https://weibo.com/5961101548/RhAKon2wi",
+  "account": "深芯智造",
+  "uid": "5961101548",
+  "visibleStatus": "公开",
+  "platformDisplayedTime": "2026-09-11 11:47",
+  "sendClicks": 1,
+  "bodyMatches": true,
+  "expectedCharacters": 413,
+  "actualCharacters": 413,
+  "images": [
+    {
+      "file": "01-首篇封面.png",
+      "platformImage": "006vqaPaly1igzkzpeszmj30u6148u0x.jpg"
+    },
+    {
+      "file": "02-导航场景效果图.png",
+      "platformImage": "006vqaPaly1igzl2cc5t9j31fa0no4qp.jpg"
+    },
+    {
+      "file": "03-城市漫游效果图.png",
+      "platformImage": "006vqaPaly1igzl388g3lj31ag0q5hdt.jpg"
+    }
+  ],
+  "limitations": [
+    "Weibo automation/observable plan not implemented",
+    "No verified draft ID or save receipt",
+    "Original single-sided hashtags produced four links, not eight separate topics",
+    "Anonymous visibility not tested"
+  ]
+}

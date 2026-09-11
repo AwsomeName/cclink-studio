@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { CSDN_ARTICLE_PUBLISHING_PLAN } from '@shared/article-publishing/article-publishing-plan'
 import {
+  articlePublishingPreviewDefinitions,
   createArticleMarkdownOpenDialogOptions,
   formatArticlePublishingAccountOption,
   getArticlePublishingAgentStartError,
@@ -116,4 +117,25 @@ describe('article publishing Agent launch result', () => {
       getArticlePublishingAgentStartError({ status: 'failed', error: 'runtime offline' }),
     ).toBe('runtime offline')
   })
+})
+
+it('previews the selected platform recovery branch without inventing observed success', () => {
+  const input = {
+    adapterId: 'zhihu' as const,
+    assets: [],
+    fields: { title: 'AIR', summary: '', tags: [], category: '' },
+    existingDraftUrl: 'https://zhuanlan.zhihu.com/p/2081699689099945915/edit',
+  }
+  const steps = articlePublishingPreviewDefinitions(input)
+  expect(steps.some((s) => s.id.startsWith('recovery.'))).toBe(true)
+  expect(steps.some((s) => s.id.startsWith('initial.'))).toBe(false)
+  expect(steps.some((s) => s.id.startsWith('field.summary.'))).toBe(false)
+  expect(steps.every((s) => !('status' in s))).toBe(true)
+  expect(
+    articlePublishingPreviewDefinitions({
+      ...input,
+      existingDraftUrl: 'https://juejin.cn/editor/drafts/123',
+    }).some((s) => s.id.startsWith('recovery.')),
+  ).toBe(false)
+  expect(formatArticlePublishingAccountOption('深芯智造', '知乎')).toBe('知乎 · 深芯智造')
 })

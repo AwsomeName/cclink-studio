@@ -1,3 +1,9 @@
+import { readWeiboComposer } from './weibo-publishing-adapter'
+import {
+  observeWeiboSubmission,
+  parseWeiboPublicationUrl,
+  weiboImageIdentity,
+} from './weibo-publication'
 import { observeXiaohongshuSubmission } from './xiaohongshu-submission'
 import { readXiaohongshuEditor } from './xiaohongshu-publishing-adapter'
 import {
@@ -46,7 +52,7 @@ export type ArticlePublishingBrowserActionDecision =
   | { kind: 'unknown'; reason: string }
 
 interface ArticlePublishingExecutionScope {
-  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu'
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo'
   workspaceId: string
   workspacePath: string
   affairId: string
@@ -69,6 +75,7 @@ interface ArticlePublishingExecutionScope {
       | 'result-unknown'
       | 'failed'
   }
+  allowPublish?: boolean
   publicationUrl?: string
   publicationStatus: 'not-started' | 'dispatched' | 'verifying' | 'published' | 'result-unknown'
   localAssetsReady: boolean
@@ -105,6 +112,7 @@ interface ArticlePublishingExecutionScope {
       | 'reconciling'
       | 'failed'
     uploadAttemptCount: number
+    uploadNeverDispatched?: boolean
   }>
 }
 
@@ -373,6 +381,35 @@ export class ArticlePublishingBrowserPolicy {
         probe.platformAccountId !== scope.expectedPlatformAccountId)
     )
       return publishingEvidenceError('小红书当前账号或本地原稿身份不一致')
+    if (scope.adapterId === 'weibo') {
+      const reason =
+        probe.platformAccountId !== scope.expectedPlatformAccountId ||
+        (!probe.editor.recognized && probe.pageKind !== 'published-article')
+          ? `微博账号或编辑区域不能核验：${probe.publicationBlocker ?? 'UID 不一致'}`
+          : ['open-editor', 'upload-assets'].includes(scope.currentStepId ?? '') &&
+              (probe.editor.bodyTextLength > 0 ||
+                (scope.currentStepId === 'open-editor' && probe.editor.images.length > 0) ||
+                !probe.editor.imageEnumerationComplete)
+            ? '微博编辑器存在未归属内容或无法完整核验图集，不能自动覆盖'
+            : undefined
+      if (reason) {
+        await this.webAffairService.recordArticlePublishingPlanResults(
+          {
+            ...scope,
+            results: [
+              {
+                id: 'page.inspect',
+                status: 'waiting',
+                reason,
+                evidence: `账号 ${probe.platformAccountId ?? '不可读'}；正文 ${probe.editor.bodyTextLength} 字符；图片 ${probe.editor.images.map((i) => i.src).join('、') || '未读到'}；完整枚举 ${probe.editor.imageEnumerationComplete}`,
+              },
+            ],
+          },
+          observationIsCurrent,
+        )
+        return publishingEvidenceError(reason)
+      }
+    }
     if (probe.adapterId !== scope.adapterId) return publishingEvidenceError('页面与任务平台不一致')
     const matchedAssets: Record<string, string> = {}
     if (probe.editor.recognized && probe.editor.imageEnumerationComplete) {
@@ -388,12 +425,18 @@ export class ArticlePublishingBrowserPolicy {
     const inspection: ArticlePublishingPageInspection = {
       ...probe,
       matchedAssets,
-      ...(scope.adapterId === 'xiaohongshu' && scope.publicationUrl
+      ...(scope.adapterId === 'weibo' && !scope.allowPublish
+        ? {
+            submissionUnavailableReason:
+              '本任务只授权准备图文，未授权提交；不会发送或将准备标为发布成功',
+          }
+        : {}),
+      ...(['xiaohongshu', 'weibo'].includes(scope.adapterId) && scope.publicationUrl
         ? { publishedLinks: [{ url: scope.publicationUrl, title: scope.expectedTitle }] }
         : {}),
     }
     if (
-      scope.assets.length &&
+      (scope.assets.length || scope.adapterId === 'weibo') &&
       scope.localAssetsReady &&
       (probe.editor.recognized || probe.pageKind === 'published-article')
     ) {
@@ -473,7 +516,7 @@ export class ArticlePublishingBrowserPolicy {
             : '先打开正文图片上传面板；不能使用封面或反馈上传框',
         })
     }
-    for (const field of scope.adapterId === 'zhihu'
+    for (const field of ['zhihu', 'weibo'].includes(scope.adapterId)
       ? (['title'] as const)
       : (['title', 'summary', 'tags', 'category', 'cover'] as const)) {
       const expected =
@@ -842,6 +885,7 @@ export class ArticlePublishingBrowserPolicy {
     }
     if (
       isMutation &&
+      scope.adapterId !== 'weibo' &&
       !READ_ONLY_STEPS.has(scope.currentStepId ?? '') &&
       scope.currentStepId !== 'open-editor'
     ) {
@@ -1225,6 +1269,14 @@ export class ArticlePublishingBrowserPolicy {
       )
     }
     if (semanticControl !== 'publish') return { kind: 'allow' }
+    if (scope.adapterId === 'weibo' && scope.allowPublish !== true)
+      return this.stopDecision(
+        scope,
+        actionType,
+        'handoff',
+        '本任务只授权准备图文，禁止发送；需要在新任务中明确授权该账号和文章的单次提交',
+        pageUrl,
+      )
     if (scope.currentStepId !== 'publish') {
       return this.stopDecision(
         scope,
@@ -1327,6 +1379,35 @@ export class ArticlePublishingBrowserPolicy {
         editorDocumentGeneration,
         inspection: { url } as ArticlePublishingPageInspection,
       })
+    if (scope.adapterId === 'weibo') {
+      const probe = await this.adapter.probe(page)
+      if (
+        !isCurrent() ||
+        probe.platformAccountId !== scope.expectedPlatformAccountId ||
+        !probe.editor.recognized
+      )
+        throw new Error('微博写入后账号或页面已变化，不能确认写入结果')
+      if (scope.currentStepId === 'fill-body') {
+        const matches = await this.verifyFrozenBody(scope, page, isCurrent)
+        const result = await this.webAffairService.recordArticlePublishingPlanResults(
+          {
+            ...scope,
+            results: [
+              {
+                id: 'body.verify',
+                status: matches ? 'completed' : 'waiting',
+                evidence: `当前微博正文 ${probe.editor.bodyTextLength} 字符；正文及逐图${matches ? '一致' : '尚未一致'}；无平台保存保证`,
+                reason: matches ? undefined : '当前正文或图集与冻结稿件不符',
+              },
+            ],
+          },
+          isCurrent,
+        )
+        if (!result.success) throw new Error(result.error.message)
+        if (!matches) throw new Error('微博正文或图集回读不一致，停止自动写入')
+      }
+      return
+    }
     let observation: CsdnPageProbe | null = null
     let lastSaveObservation = ''
     // Real CSDN CKEditor starts its autosave timer 60s after a dirty change. Read only:
@@ -1476,12 +1557,11 @@ export class ArticlePublishingBrowserPolicy {
         const images = observed.images.filter((i) => i.src === asset.platformUrl)
         const matches = images.length === asset.occurrences.length && images.every((i) => i.matches)
         return {
-          id: `asset.${asset.id}.${page.url().startsWith('https://www.xiaohongshu.com/explore/') || page.url().startsWith('https://juejin.cn/post/') || page.url().startsWith('https://blog.csdn.net/') || /^https:\/\/zhuanlan\.zhihu\.com\/p\/\d+\/?$/u.test(page.url()) ? 'published' : 'placement'}`,
+          id: `asset.${asset.id}.${Boolean(parseWeiboPublicationUrl(page.url())) || page.url().startsWith('https://www.xiaohongshu.com/explore/') || page.url().startsWith('https://juejin.cn/post/') || page.url().startsWith('https://blog.csdn.net/') || /^https:\/\/zhuanlan\.zhihu\.com\/p\/\d+\/?$/u.test(page.url()) ? 'published' : 'placement'}`,
           status: matches ? ('completed' as const) : ('waiting' as const),
-          evidence:
-            scope.adapterId === 'xiaohongshu'
-              ? `${asset.displayPath} · 图集 ${images.map((i) => `第 ${i.index + 1} 张：${i.matches ? '顺序、平台地址和加载通过' : '未匹配'}`).join('；')}`
-              : `${asset.displayPath} · 期望 ${asset.occurrences.length} 处，实际对应 ${images.filter((i) => i.matches).length} 处；${images.map((i) => `第 ${i.index + 1} 张，前文 ${i.precedingCharacters} 字符，${i.matches ? (scope.adapterId === 'zhihu' ? '位置/地址/加载一致（知乎不保留替代文字）' : '位置/地址/替代文字/加载一致') : '不匹配'}`).join('；')}`,
+          evidence: ['xiaohongshu', 'weibo'].includes(scope.adapterId)
+            ? `${asset.displayPath} · 图集 ${images.map((i) => `第 ${i.index + 1} 张：${i.matches ? '顺序、平台地址和加载通过' : '未匹配'}`).join('；')}`
+            : `${asset.displayPath} · 期望 ${asset.occurrences.length} 处，实际对应 ${images.filter((i) => i.matches).length} 处；${images.map((i) => `第 ${i.index + 1} 张，前文 ${i.precedingCharacters} 字符，${i.matches ? (scope.adapterId === 'zhihu' ? '位置/地址/加载一致（知乎不保留替代文字）' : '位置/地址/替代文字/加载一致') : '不匹配'}`).join('；')}`,
           reason: matches
             ? undefined
             : scope.adapterId === 'xiaohongshu' &&
@@ -1493,6 +1573,7 @@ export class ArticlePublishingBrowserPolicy {
     if (!observed.textMatches)
       results.push({
         id:
+          Boolean(parseWeiboPublicationUrl(page.url())) ||
           page.url().startsWith('https://www.xiaohongshu.com/explore/') ||
           page.url().startsWith('https://juejin.cn/post/') ||
           page.url().startsWith('https://blog.csdn.net/') ||
@@ -1513,12 +1594,23 @@ export class ArticlePublishingBrowserPolicy {
 
   async prepareBodyWrite(task: BrowserTaskRun, context?: ToolExecutionContext) {
     const scope = await this.resolveTaskScope(task, context)
-    if (!scope || scope.currentStepId !== 'fill-body' || !scope.assets.length) return undefined
+    if (
+      !scope ||
+      scope.currentStepId !== 'fill-body' ||
+      (!scope.assets.length && scope.adapterId !== 'weibo')
+    )
+      return undefined
     const snapshot = this.webAffairService.getProjectSnapshot(scope.workspaceId)
     const state = snapshot.success
       ? snapshot.data.affairs.find((a) => a.id === scope.affairId)?.articlePublishing
       : undefined
     if (!state) throw new Error('冻结正文不存在')
+    if (state.adapterId === 'weibo') {
+      return (await prepareArticleMarkdown(state))
+        .replace(/^# /u, '')
+        .replace(/!\[[^\]]*\]\([^)]*\)/gu, '')
+        .trim()
+    }
     if (state.adapterId === 'xiaohongshu') {
       const markdown = await prepareArticleMarkdown(state)
       return markdown
@@ -1577,7 +1669,14 @@ export class ArticlePublishingBrowserPolicy {
     if (effect?.kind !== 'upload-asset') return null
     const assetId = effect.targetId.replace(/:attempt-\d+$/u, '')
     const before = await this.adapter.probe(page)
-    if (!before.editor.imageEnumerationComplete || !before.draftId)
+    if (
+      !before.editor.imageEnumerationComplete ||
+      (scope.adapterId === 'weibo'
+        ? !before.platformAccountId ||
+          before.platformAccountId !== scope.expectedPlatformAccountId ||
+          before.editor.images.some((i) => !scope.assets.some((a) => a.platformUrl === i.src))
+        : !before.draftId)
+    )
       throw new Error('上传前正文图片无法完整枚举')
     const urls = new Set(before.editor.images.map((i) => i.src))
     const runtime = this.runtimeSnapshot(scope, context)
@@ -1638,6 +1737,66 @@ export class ArticlePublishingBrowserPolicy {
     context?: ToolExecutionContext,
   ) {
     const scope = await this.resolveTaskScope(task, context)
+    if (scope?.adapterId === 'weibo' && page && scope.currentStepId === 'publish') {
+      if (scope.allowPublish !== true) throw new Error('本次微博提交未授权或步骤不符')
+      const runtime = this.runtimeSnapshot(scope, context)
+      const documentGeneration = this.browserManager?.getViewRuntimeIdentity(
+        task.tabId,
+      )?.documentGeneration
+      const editorDocumentGeneration = this.adapter.documentGeneration(page)
+      const url = page.url()
+      const isCurrent = () =>
+        !context?.abortSignal?.aborted &&
+        this.attestationRuntimeIsCurrent({
+          scope,
+          runtime,
+          page,
+          documentGeneration,
+          editorDocumentGeneration,
+          inspection: { url } as ArticlePublishingPageInspection,
+        })
+      const live = await readWeiboComposer(page)
+      const imageIds = live.images.map((image) => weiboImageIdentity(image.src))
+      if (
+        !live.recognized ||
+        live.uid !== scope.expectedPlatformAccountId ||
+        !live.privacy ||
+        !live.imageEnumerationComplete ||
+        imageIds.some((id) => !id) ||
+        live.images.length !== scope.assets.length ||
+        live.images.some(
+          (image, index) => !image.loaded || image.src !== scope.assets[index].platformUrl,
+        ) ||
+        !(await this.verifyFrozenBody(scope, page, isCurrent))
+      )
+        throw new Error('微博提交前账号、冻结正文、逐图或公开设置未同时核验通过')
+      if (!isCurrent()) throw new Error('微博提交前页面已改代，禁止派发')
+      const observer = observeWeiboSubmission(page, {
+        uid: live.uid!,
+        text: live.text,
+        imageIds: imageIds as string[],
+      })
+      return {
+        arm: observer.arm,
+        dispose: observer.dispose,
+        finish: async () => {
+          const receipt = await observer.finish()
+          const saved = await this.webAffairService.recordWeiboSubmissionReceipt(
+            {
+              affairId: scope.affairId,
+              attemptId: scope.attemptId,
+              executionGeneration: scope.executionGeneration,
+              browserTaskRunId: task.id,
+              sideEffectKey,
+              uid: receipt.uid,
+              postId: receipt.id,
+            },
+            scope.workspaceId,
+          )
+          if (!saved.success) throw new Error(saved.error.message)
+        },
+      }
+    }
     if (!scope || !page || scope.adapterId !== 'xiaohongshu' || scope.currentStepId !== 'publish')
       return null
     const live = await readXiaohongshuEditor(page)
@@ -1977,7 +2136,9 @@ export class ArticlePublishingBrowserPolicy {
     compare(
       'adapter',
       affair?.articlePublishing &&
-        ['csdn', 'zhihu', 'juejin', 'xiaohongshu'].includes(affair.articlePublishing.adapterId)
+        ['csdn', 'zhihu', 'juejin', 'xiaohongshu', 'weibo'].includes(
+          affair.articlePublishing.adapterId,
+        )
         ? `${affair.articlePublishing.adapterId}@1`
         : 'supported-platform@1',
       affair?.articlePublishing
@@ -2147,7 +2308,7 @@ export class ArticlePublishingBrowserPolicy {
     if (!attempt) mismatches.push('attempt')
     if (
       !publishing ||
-      !['csdn', 'zhihu', 'juejin', 'xiaohongshu'].includes(publishing.adapterId) ||
+      !['csdn', 'zhihu', 'juejin', 'xiaohongshu', 'weibo'].includes(publishing.adapterId) ||
       publishing?.adapterVersion !== 1
     ) {
       mismatches.push('adapter')
@@ -2225,6 +2386,7 @@ export class ArticlePublishingBrowserPolicy {
             },
           }
         : {}),
+      allowPublish: publishing.composer?.allowPublish,
       publicationStatus: publishing.publication.status,
       publicationUrl: publishing.publication.url,
       localAssetsReady: publishing.assets.every(
@@ -2241,7 +2403,8 @@ export class ArticlePublishingBrowserPolicy {
       writePermitted,
       ...(permit?.id ? { writePermitId: permit.id } : {}),
       draftUrl: publishing.draft?.url,
-      expectedPlatformAccountId: publishing.draft?.platformAccountId,
+      expectedPlatformAccountId:
+        publishing.composer?.platformAccountId ?? publishing.draft?.platformAccountId,
       expectedPlatformDraftId: publishing.draft?.platformDraftId,
       expectedTitle: publishing.fields.title,
       expectedFields: publishing.fields,
@@ -2254,6 +2417,14 @@ export class ArticlePublishingBrowserPolicy {
         manualResolution: asset.manualResolution,
         status: asset.status,
         uploadAttemptCount: asset.uploadAttempts.length,
+        uploadNeverDispatched:
+          publishing.adapterId === 'weibo' &&
+          !publishing.sideEffects.some(
+            (effect) =>
+              effect.kind === 'upload-asset' &&
+              effect.targetId.replace(/:attempt-\d+$/u, '') === asset.id &&
+              Boolean(effect.dispatchedAt),
+          ),
       })),
     }
   }
@@ -2504,14 +2675,15 @@ export class ArticlePublishingBrowserPolicy {
       const absenceCanAuthorizeFirstUpload = Boolean(
         asset &&
         ((asset.status !== 'reconciling' && asset.uploadAttemptCount === 0) ||
-          asset.manualResolution?.status === 'missing'),
+          asset.manualResolution?.status === 'missing' ||
+          (scope.adapterId === 'weibo' && asset.uploadNeverDispatched === true)),
       )
       return Boolean(
         inspection.editor.recognized &&
         inspection.editor.imageEnumerationComplete &&
         asset &&
         absenceCanAuthorizeFirstUpload &&
-        (scope.adapterId !== 'xiaohongshu' ||
+        (!['xiaohongshu', 'weibo'].includes(scope.adapterId) ||
           inspection.editor.images.every((image) =>
             scope.assets.some((known) => known.platformUrl === image.src),
           )) &&
@@ -2525,6 +2697,38 @@ export class ArticlePublishingBrowserPolicy {
       )
     }
     const stepId = String(params['stepId'] ?? '')
+    if (scope.adapterId === 'weibo') {
+      if (['publish', 'verify-publication'].includes(stepId))
+        return Boolean(
+          scope.allowPublish &&
+          scope.publicationUrl &&
+          parseWeiboPublicationUrl(inspection.url)?.url === scope.publicationUrl &&
+          inspection.pageKind === 'published-article' &&
+          !inspection.publicationBlocker &&
+          inspection.platformAccountId === scope.expectedPlatformAccountId &&
+          inspection.bodyMatchesFrozen === true,
+        )
+      if (
+        !inspection.editor.recognized ||
+        inspection.platformAccountId !== scope.expectedPlatformAccountId
+      )
+        return false
+      if (stepId === 'open-editor')
+        return inspection.editor.bodyTextLength === 0 && inspection.editor.images.length === 0
+      if (stepId === 'verify-account') return true
+      if (stepId === 'upload-assets')
+        return (
+          scope.localAssetsReady &&
+          inspection.editor.imageEnumerationComplete &&
+          Object.keys(inspection.matchedAssets).length === scope.assets.length
+        )
+      if (['fill-body', 'fill-fields', 'save-draft'].includes(stepId))
+        return (
+          inspection.bodyMatchesFrozen === true &&
+          normalizeText(inspection.title.value) === normalizeText(scope.expectedTitle)
+        )
+      return false
+    }
     if (stepId === 'open-editor') {
       return Boolean(
         inspection.editor.recognized &&
@@ -2605,6 +2809,20 @@ export class ArticlePublishingBrowserPolicy {
     const requestedUrl = String(params['url'] ?? outputRefs['publicationUrl'] ?? '')
     if (!requestedUrl) return null
     const { inspection, scope } = attestation
+    if (scope.adapterId === 'weibo') {
+      const receipt = parseWeiboPublicationUrl(scope.publicationUrl ?? '')
+      if (
+        !scope.allowPublish ||
+        !receipt ||
+        receipt.url !== parseWeiboPublicationUrl(inspection.url)?.url ||
+        receipt.url !== parseWeiboPublicationUrl(requestedUrl)?.url ||
+        receipt.uid !== scope.expectedPlatformAccountId ||
+        inspection.platformAccountId !== receipt.uid ||
+        inspection.publishedArticleId !== receipt.id ||
+        inspection.bodyMatchesFrozen !== true
+      )
+        return null
+    }
     if (
       scope.adapterId === 'xiaohongshu' &&
       (!scope.publicationUrl ||
@@ -2652,7 +2870,7 @@ export class ArticlePublishingBrowserPolicy {
     return Boolean(
       affair?.kind === 'article-publishing' &&
       publishing &&
-      ['csdn', 'zhihu', 'juejin', 'xiaohongshu'].includes(publishing.adapterId) &&
+      ['csdn', 'zhihu', 'juejin', 'xiaohongshu', 'weibo'].includes(publishing.adapterId) &&
       publishing.adapterVersion === 1 &&
       publishing.accountId === input.accountId &&
       attempt?.accountId === input.accountId,
@@ -2662,6 +2880,12 @@ export class ArticlePublishingBrowserPolicy {
   private isRecognizedPageForStep(rawUrl: string, stepId?: string): boolean {
     try {
       const u = new URL(rawUrl)
+      if (u.origin === 'https://weibo.com' && u.pathname === '/') return true
+      if (
+        ['publish', 'verify-publication'].includes(stepId ?? '') &&
+        parseWeiboPublicationUrl(rawUrl)
+      )
+        return true
       if (u.origin === 'https://creator.xiaohongshu.com' && u.pathname === '/publish/publish')
         return true
       if (

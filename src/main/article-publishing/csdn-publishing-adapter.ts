@@ -14,7 +14,7 @@ export interface CsdnPageImageProbe {
 }
 
 export interface CsdnPageProbe {
-  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu'
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo'
   adapterVersion: 1
   observedAt: string
   url: string
@@ -95,7 +95,7 @@ export interface CsdnDraftListCandidate {
 }
 
 export interface CsdnDraftListProbe {
-  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu'
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo'
   adapterVersion: 1
   observedAt: string
   platformAccountId?: string

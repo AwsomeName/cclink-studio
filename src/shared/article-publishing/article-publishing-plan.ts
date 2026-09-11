@@ -20,6 +20,22 @@ export const CSDN_ARTICLE_PUBLISHING_PLAN = [
   { stepId: 'verify-publication', label: '核验文章结果', resumePolicy: 'reconcile-then-run' },
 ] as const satisfies readonly ArticlePublishingPlanStep[]
 
+export const WEIBO_ARTICLE_PUBLISHING_PLAN = CSDN_ARTICLE_PUBLISHING_PLAN.map((step) => ({
+  ...step,
+  label: (
+    {
+      'open-editor': '打开微博临时编辑器',
+      'verify-account': '核验目标 UID 与空白现场',
+      'upload-assets': '逐张上传并回读图集',
+      'fill-body': '填写并回读微博正文',
+      'fill-fields': '核验首行标题与现场',
+      'save-draft': '检查当前图文（不代表平台已保存）',
+      publish: '提交微博并读取回执',
+      'verify-publication': '核验平台实际发布结果',
+    } as Record<string, string>
+  )[step.stepId],
+}))
+
 export const ZHIHU_ARTICLE_PUBLISHING_PLAN = CSDN_ARTICLE_PUBLISHING_PLAN.map((step) => ({
   ...step,
   label:
@@ -303,7 +319,9 @@ export function articlePublishingDetailDefinitions(
       '分类、标签、摘要面板可见；未提交文章',
       '逐项核验平台字段，禁止提前点击确定并发布',
     )
-  for (const [field, label] of ['zhihu', 'xiaohongshu'].includes(publishing.adapterId ?? '')
+  for (const [field, label] of ['zhihu', 'xiaohongshu', 'weibo'].includes(
+    publishing.adapterId ?? '',
+  )
     ? [['title', '标题']]
     : [
         ['title', '标题'],
@@ -413,5 +431,42 @@ export function articlePublishingDetailDefinitions(
       if (row.id === 'save.verify')
         row.completion = '同账号本地原稿 ID、标题、完整正文及图集回读一致'
     }
+  if (publishing.adapterId === 'weibo') {
+    const omitted = /^(initial\.|recovery\.)/u
+    for (let i = rows.length - 1; i >= 0; i--) if (omitted.test(rows[i].id)) rows.splice(i, 1)
+    for (const row of rows) {
+      row.entry = row.entry.replace(/原草稿/g, '当前编辑现场').replace(/原 draftId/g, '现场身份')
+      row.next = row.next.replace(/平台保存/g, '当前正文回读').replace(/正文保存/g, '正文现场')
+      if (row.id === 'page.inspect') {
+        row.action = '读取微博真实 UID 与编辑器'
+        row.completion = 'UID 与任务目标一致；正文区域唯一；图集可完整枚举'
+      }
+      if (row.id === 'body.verify') {
+        row.action = '回读当前正文与图集'
+        row.completion = '冻结正文与当前文本一致，每张图片地址、顺序与加载一致；不声明平台已保存'
+      }
+      if (row.id.endsWith('.placement')) {
+        row.action = row.action.replace('正文位置', '图集顺序')
+        row.completion = '该张图片平台地址、图集顺序与加载已回读核验'
+      }
+      if (row.id === 'save.dispatch') {
+        row.owner = 'Studio'
+        row.action = '确认此流程没有可核验的保存动作'
+        row.entry = '正文和图集已核验'
+        row.completion = '不派发保存，不编造草稿 ID 或 saved'
+        row.next = '重新读取当前图文现场'
+      }
+      if (row.id === 'save.verify') {
+        row.action = '复核当前图文现场'
+        row.entry = '当前 UID 和 Runtime 一致'
+        row.completion = '正文和逐图仍与冻结稿一致；页面关闭后不保证可恢复'
+        row.next = '核对本任务提交授权'
+      }
+      if (row.id === 'publish.preflight') {
+        row.entry = '当前图文已核验；具体提交动作已授权'
+        row.completion = '本任务明确授权；同一 UID、冻结正文、逐图和公开设置均通过；从未派发提交'
+      }
+    }
+  }
   return rows
 }

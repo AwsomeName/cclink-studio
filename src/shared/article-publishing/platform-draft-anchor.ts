@@ -46,12 +46,17 @@ export function isSamePlatformDraft(left: string, right: string, localDraftId?: 
 }
 
 export function isPlatformImageUrl(
-  platform: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu',
+  platform: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo',
   rawUrl: string,
 ): boolean {
   try {
     const url = new URL(rawUrl)
     if (url.protocol !== 'https:' || url.username || url.password || url.port) return false
+    if (platform === 'weibo')
+      return (
+        /^[a-z0-9-]+\.sinaimg\.cn$/u.test(url.hostname) &&
+        /\/[^/]+\.(?:jpg|jpeg|png)$/iu.test(url.pathname)
+      )
     if (platform === 'xiaohongshu')
       return (
         url.hostname === 'sns-creator-preview.xhscdn.com' && url.pathname.startsWith('/spectrum/')

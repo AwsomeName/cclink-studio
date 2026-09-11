@@ -1,3 +1,5 @@
+import { parsePlatformDraftAnchor } from '@shared/article-publishing/platform-draft-anchor'
+import { articlePublishingDetailDefinitions } from '@shared/article-publishing/article-publishing-plan'
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import type { OpenDialogOptions } from '@shared/ipc/dialog'
 import type { WebAffair } from '@shared/web-affairs/web-affair-types'
@@ -13,8 +15,11 @@ export function createArticleMarkdownOpenDialogOptions(
   }
 }
 
-export function formatArticlePublishingAccountOption(accountLabel: string): string {
-  return `CSDN · ${accountLabel.trim()}`
+export function formatArticlePublishingAccountOption(
+  accountLabel: string,
+  platformLabel = 'CSDN',
+): string {
+  return `${platformLabel} · ${accountLabel.trim()}`
 }
 
 export function getArticlePublishingRuntimeBinding(affair: WebAffair | null): {
@@ -87,4 +92,22 @@ export function createArticlePublishingDraftTab(workspaceRef: WorkspaceRef): {
     workspaceRef,
     articlePublishing: { affairId: null, draftKey: crypto.randomUUID() },
   }
+}
+
+/** Preview definitions only; an entered anchor does not assert that recovery has succeeded. */
+export function articlePublishingPreviewDefinitions(
+  input: Parameters<typeof articlePublishingDetailDefinitions>[0] & {
+    existingDraftUrl: string
+    localDraftId?: string
+  },
+) {
+  const anchor = parsePlatformDraftAnchor(input.existingDraftUrl, input.localDraftId)
+  return articlePublishingDetailDefinitions({
+    ...input,
+    draft:
+      input.draft ??
+      (anchor && anchor.adapterId === input.adapterId
+        ? { platformDraftId: anchor.draftId, url: anchor.url }
+        : undefined),
+  })
 }

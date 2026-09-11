@@ -302,9 +302,17 @@ const operationTransitionSchema = z
   })
   .strict()
 
+const articlePublishingComposerSchema = z
+  .object({
+    platformAccountId: z.string().regex(/^\d{5,20}$/u),
+    allowPublish: z.boolean(),
+  })
+  .strict()
+
 export const articlePublishingStateSchema = z
   .object({
-    adapterId: z.enum(['csdn', 'zhihu', 'juejin', 'xiaohongshu']),
+    adapterId: z.enum(['csdn', 'zhihu', 'juejin', 'xiaohongshu', 'weibo']),
+    composer: articlePublishingComposerSchema.optional(),
     adapterVersion: z.literal(1),
     source: z
       .object({
@@ -419,6 +427,12 @@ export const articlePublishingStateSchema = z
   })
   .strict()
   .superRefine((state, ctx) => {
+    if (state.adapterId === 'weibo' ? !state.composer || !!state.draft : !!state.composer)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['composer'],
+        message: '微博必须使用临时编辑器配置，不得伪造草稿身份；其他平台不使用此配置',
+      })
     for (const id of [
       state.draft?.platformDraftId,
       state.draft?.recovery?.writePermit?.draftId,
@@ -440,6 +454,7 @@ export const inspectArticlePublishingSourceInputSchema = z
 
 export const createArticlePublishingTaskInputSchema = z
   .object({
+    composer: articlePublishingComposerSchema.optional(),
     existingDraft: z
       .object({
         localDraftId: z.string().uuid().optional(),

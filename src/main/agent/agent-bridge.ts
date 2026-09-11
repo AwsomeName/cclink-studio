@@ -1234,6 +1234,11 @@ export class AgentBridge {
     const accountId = deferAccountLease
       ? null
       : (this.deps.browserManager?.getViewAccountId(tabId) ?? null)
+    // A mounted Tab is context, not an account execution lease. web_account_open
+    // resolves the registered origin/Profile and creates the authorized task.
+    // Creating an account task here without allowedOrigins falsely pauses even
+    // its own website, and claiming an origin from the current page is unsafe.
+    if (accountId) return null
     const task = runtime.startTask({
       tabId,
       goal,

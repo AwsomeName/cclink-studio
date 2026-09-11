@@ -55,7 +55,7 @@ describe('AgentBridge browser send plan', () => {
     })
   })
 
-  it('claims the main-owned account when an ordinary Agent starts on a registered account Tab', () => {
+  it('defers a registered account Tab to web_account_open instead of creating a task without an origin lease', () => {
     const startTask = vi.fn(() => ({ id: 'task-a' }))
     const bridge = createBridge(
       { kind: 'browser', instanceId: 'browser-a' },
@@ -75,7 +75,7 @@ describe('AgentBridge browser send plan', () => {
       ) => { id: string } | null
     }
 
-    bridge.startBrowserTaskIfNeeded(
+    const task = bridge.startBrowserTaskIfNeeded(
       'conversation-a',
       'inspect',
       'browser-a',
@@ -83,14 +83,8 @@ describe('AgentBridge browser send plan', () => {
       'run-a',
     )
 
-    expect(startTask).toHaveBeenCalledWith(
-      expect.objectContaining({
-        correlation: expect.objectContaining({
-          profileId: 'profile-a',
-          accountId: 'account-a',
-        }),
-      }),
-    )
+    expect(task).toBeNull()
+    expect(startTask).not.toHaveBeenCalled()
   })
 
   it('finishes a browser task lazily created by the first browser tool call', () => {

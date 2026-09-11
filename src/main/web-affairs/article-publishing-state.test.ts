@@ -30,6 +30,61 @@ describe('article publishing persistent state', () => {
     await rm(directory, { recursive: true, force: true })
   })
 
+  it.each([false, true])(
+    'creates a Weibo task with explicit allowPublish=%s without a fake draft or duplicate composer',
+    async (allowPublish) => {
+      const registered = resources()
+      registered.websites[0].origin = 'https://weibo.com'
+      registered.websites[0].entryUrl = 'https://weibo.com/'
+      const service = new WebAffairService(
+        () => registered,
+        new WebAffairStore(join(directory, 'weibo.json')),
+      )
+      await service.load()
+      const input = {
+        preview: {
+          source: { markdownPath: sourcePath, modifiedAt: Date.now(), size: 36 },
+          title: 'Article',
+          summary: '',
+          assets: [],
+          blockers: [],
+          warnings: [],
+        },
+        accountId: ACCOUNT_ID,
+        composer: { platformAccountId: '5961101548', allowPublish },
+        fields: { title: 'Article', summary: '', tags: [], category: '' },
+        workspaceRef: { kind: 'local' as const, path: directory },
+      }
+      expect(
+        await service.createArticlePublishingAffair(
+          { ...input, composer: { ...input.composer, platformAccountId: 'invalid' } },
+          WORKSPACE_ID,
+        ),
+      ).toMatchObject({ success: false })
+      expect(
+        await service.createArticlePublishingAffair(
+          {
+            ...input,
+            existingDraft: { url: 'https://weibo.com/', platformAccountId: '5961101548' },
+          },
+          WORKSPACE_ID,
+        ),
+      ).toMatchObject({ success: false })
+      const created = await service.createArticlePublishingAffair(input, WORKSPACE_ID)
+      expect(created.success).toBe(true)
+      if (!created.success) throw new Error(created.error.message)
+      expect(created.data.articlePublishing?.draft).toBeUndefined()
+      expect(created.data.articlePublishing?.publication).toEqual({ status: 'not-started' })
+      expect(
+        created.data.articlePublishing?.checkpoints.find((c) => c.stepId === 'save-draft')?.label,
+      ).toContain('不代表平台已保存')
+      expect(await service.createArticlePublishingAffair(input, WORKSPACE_ID)).toMatchObject({
+        success: false,
+      })
+      await service.flush()
+    },
+  )
+
   it.each(['accepted', 'stale', 'wrong-account', 'not-dispatched'] as const)(
     'binds only a current dispatched XHS receipt without declaring publication: %s',
     async (scenario) => {
@@ -82,6 +137,59 @@ describe('article publishing persistent state', () => {
         expect(result.data.articlePublishing?.publication.status).toBe('dispatched')
         expect(result.data.articlePublishing?.publication.url).toBe(
           'https://www.xiaohongshu.com/explore/6a8ed725000000002102ea10',
+        )
+        expect(result.data.articlePublishing?.sideEffects[0].status).toBe('verified')
+      }
+      await created.service.flush()
+    },
+  )
+
+  it.each(['accepted', 'stale', 'wrong-account', 'not-dispatched', 'not-authorized'] as const)(
+    'binds only a current dispatched Weibo receipt without declaring publication: %s',
+    async (scenario) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await created.service.flush()
+      const snapshot = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+      const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)!
+      const publishing = affair.articlePublishing!
+      const uid = '5961101548'
+      publishing.adapterId = 'weibo'
+      delete publishing.draft
+      publishing.composer = { platformAccountId: uid, allowPublish: scenario !== 'not-authorized' }
+      publishing.publication = { status: 'dispatched' }
+      const effect = {
+        key: 'weibo-submit',
+        affairId: affair.id,
+        attemptId: created.attemptId,
+        executionGeneration: publishing.execution.currentGeneration,
+        kind: 'publish' as const,
+        targetId: 'publish',
+        status: scenario === 'not-dispatched' ? ('reserved' as const) : ('dispatched' as const),
+        reservedAt: new Date().toISOString(),
+        dispatchedAt: new Date().toISOString(),
+        browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+      }
+      publishing.sideEffects = [effect]
+      Reflect.set(created.service, 'snapshot', snapshot)
+      const result = await created.service.recordWeiboSubmissionReceipt(
+        {
+          affairId: affair.id,
+          attemptId: created.attemptId,
+          executionGeneration: effect.executionGeneration + (scenario === 'stale' ? 1 : 0),
+          browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+          sideEffectKey: effect.key,
+          uid: scenario === 'wrong-account' ? 'other' : uid,
+          postId: 'RhAKon2wi',
+        },
+        WORKSPACE_ID,
+      )
+      expect(result.success, JSON.stringify(result.success ? null : result.error)).toBe(
+        scenario === 'accepted',
+      )
+      if (result.success) {
+        expect(result.data.articlePublishing?.publication.status).toBe('dispatched')
+        expect(result.data.articlePublishing?.publication.url).toBe(
+          'https://weibo.com/5961101548/RhAKon2wi',
         )
         expect(result.data.articlePublishing?.sideEffects[0].status).toBe('verified')
       }
@@ -1496,6 +1604,24 @@ describe('article publishing persistent state', () => {
     if (!handedOff.success) return
     expect(handedOff.data.articlePublishing?.execution.status).toBe('waiting-human')
     expect(handedOff.data.attempts[0].status).toBe('waiting-human')
+
+    const attempt = handedOff.data.attempts[0]
+    const binding = attempt.runtimeBindings.find((b) => b.kind === 'browser-task')!
+    expect(binding.status).toBe('terminal')
+    const ended = await created.service.reconcileArticlePublishingRuntime({
+      eventId: 'after-handoff',
+      workspaceId: WORKSPACE_ID,
+      affairId: created.affairId,
+      attemptId: attempt.id,
+      executionGeneration: attempt.executionGeneration,
+      launchOperationId: attempt.launchOperationId,
+      source: 'browser-terminal',
+      observedAt: new Date().toISOString(),
+      runtimeIdentity: binding as never,
+      reasonCode: 'RUN_ENDED',
+      reason: 'Agent ended after handoff',
+    })
+    expect(ended.success && ended.data.articlePublishing?.execution.status).toBe('waiting-human')
 
     const resumed = await created.service.resumeArticlePublishingAfterHandoff(
       created.affairId,

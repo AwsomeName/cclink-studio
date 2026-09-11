@@ -1,3 +1,4 @@
+import { parseWeiboPublicationUrl } from './weibo-publication'
 import { readXiaohongshuEditor } from './xiaohongshu-publishing-adapter'
 import { PublishingAdapter, publishingPlatform } from './publishing-adapter'
 import { randomUUID } from 'node:crypto'
@@ -228,7 +229,7 @@ export class ArticlePublishingService {
       const publicationRecoveryRequired = Boolean(
         input.resumed &&
         publishing.publication.status === 'result-unknown' &&
-        publishing.draft?.platformDraftId,
+        (publishing.draft?.platformDraftId || publishing.adapterId === 'weibo'),
       )
       const tabId = await browserManager.waitForAccountView(
         input.workspacePath,
@@ -259,7 +260,21 @@ export class ArticlePublishingService {
         if (!page || page.isClosed()) throw new Error('CSDN 恢复核验页面不可用')
         return page
       }
-      if (publicationRecoveryRequired) {
+      if (publicationRecoveryRequired && publishing.adapterId === 'weibo') {
+        const receipt = parseWeiboPublicationUrl(publishing.publication.url ?? '')
+        if (!receipt || receipt.uid !== publishing.composer?.platformAccountId)
+          throw new Error('微博提交结果未知且缺少本次回执地址，只允许人工核验，不会再次发送')
+        const page = await navigateForRecovery(receipt.url)
+        const observed = await new PublishingAdapter().probe(page)
+        if (
+          observed.pageKind !== 'published-article' ||
+          observed.platformAccountId !== receipt.uid ||
+          observed.publishedArticleId !== receipt.id
+        )
+          throw new Error('本次微博回执页面尚不能核验账号及文章 ID；保留结果未知，不重复发送')
+        recoveredPublicationUrl = receipt.url
+        draftAnchor = null
+      } else if (publicationRecoveryRequired) {
         const expectedPlatformAccountId = publishing.draft?.platformAccountId
         if (!expectedPlatformAccountId) {
           throw new Error('发布结果未知，但任务缺少原 CSDN 账号；已停止自动核查')
@@ -334,7 +349,22 @@ export class ArticlePublishingService {
           throw new Error(`无法恢复原 CSDN 草稿 ${draftAnchor.draftId}，已拒绝在其他页面继续`)
         }
         draftAnchor = restored
-      } else if (input.resumed && hasPlatformPublishingProgress(publishing)) {
+      } else if (
+        publishing.adapterId === 'weibo' &&
+        input.resumed &&
+        (publishing.sideEffects.some((effect) => Boolean(effect.dispatchedAt)) ||
+          publishing.assets.some(
+            (asset) => Boolean(asset.platformUrl) || asset.status === 'uploaded',
+          ))
+      ) {
+        throw new Error(
+          '微博临时编辑器没有可恢复草稿身份。当前版本停止恢复；请保留页面现场，不会重填、重传或再次发送。',
+        )
+      } else if (
+        publishing.adapterId !== 'weibo' &&
+        input.resumed &&
+        hasPlatformPublishingProgress(publishing)
+      ) {
         throw new Error('任务已有平台写入但缺少原草稿编号或账号；请重新创建发布任务')
       } else {
         // Account entry URLs may point at the creator home. Use the real CSDN new-editor
@@ -344,7 +374,11 @@ export class ArticlePublishingService {
           status: 'running',
           evidence: publishingPlatform(publishing.adapterId).editorUrl,
         })
-        await browserManager.navigate(tabId, publishingPlatform(publishing.adapterId).editorUrl)
+        if (
+          publishing.adapterId !== 'weibo' ||
+          browserManager.getCurrentURL(tabId) !== 'https://weibo.com/'
+        )
+          await browserManager.navigate(tabId, publishingPlatform(publishing.adapterId).editorUrl)
         await recordPlan({
           id: 'editor.open',
           status: 'completed',
@@ -452,7 +486,7 @@ export class ArticlePublishingService {
 
       try {
         const agentPrompt = recoveredPublicationUrl
-          ? `${input.prompt}\nmain 已按原草稿 ID、平台账号和标题锁定公开结果：publicationUrl=${recoveredPublicationUrl}；只允许读回并完成发布核验。`
+          ? `${input.prompt}\nmain 已按任务绑定的原稿或提交回执、平台账号和标题锁定公开结果：publicationUrl=${recoveredPublicationUrl}；只允许读回并完成发布核验。`
           : draftAnchor
             ? `${input.prompt}\nmain 已锁定平台草稿：draftUrl=${draftAnchor.url}；任何写入前必须确认当前页仍是该草稿，禁止切换到新稿或其他文章。`
             : input.prompt
@@ -1354,6 +1388,7 @@ export class ArticlePublishingService {
       {
         preview: previewResult.data,
         existingDraft: parsed.data.existingDraft,
+        composer: parsed.data.composer,
         reviseDraftFromAffairId: parsed.data.reviseDraftFromAffairId,
         accountId: parsed.data.accountId,
         fields: parsed.data.fields,
@@ -1918,6 +1953,24 @@ function buildAgentPrompt(
 ): string {
   const publishing = affair.articlePublishing!
   const localAssets = publishing.assets.filter((asset) => asset.kind === 'local')
+  if (publishing.adapterId === 'weibo')
+    return [
+      publishing.composer?.allowPublish
+        ? '执行用户授权的微博单篇图文任务，只允许提交一次；结果未知不重发。'
+        : '执行微博图文准备任务；本任务禁止提交，不得点击发送，也不得建议用户发送这篇已发布的验收稿。',
+      `affairId=${affair.id}; attemptId=${attemptId}; accountId=${publishing.accountId}; targetUID=${publishing.composer?.platformAccountId}`,
+      `sourceMarkdownPath=${publishing.source.markdownPath}`,
+      '先 web_affair_get，再 article_publishing_inspect_page；按主进程 currentStepId 顺序执行。每次动作和回报前重新 inspect，只用 main 返回的 selector，不猜选择器、不使用 evaluate、shell、网络日志或鼠标坐标。',
+      '检查点状态回报必须串行：pending→running→verifying→completed；每次成功返回后读取新的 currentStepId，不能并行回报两个检查点，也不能 running 直接 completed。已完成的检查点不回报、不重做。',
+      '恢复后图片为 reconciling 时，只有最新 inspect 已完整枚举且主进程证实未派发的缺失图片才可报告 uploading，并附 evidence 说明当前缺失。已有上传地址或未知派发结果禁止重试。selector 必须逐字复制最近一次 inspect 的 selectors.fileInput，不复制 bodySelector 或旧调用参数。',
+      'upload-assets：没有 fileInput 但有 selectors.imageOpen 时可先点击一次图片入口，再 inspect。每张冻结图片先报告 uploading，向 selectors.fileInput 上传一个文件，再报告 waiting-platform/verifying；main 后置核验唯一新增图片；inspect 的 matchedAssets 一致才报告 uploaded。没有签发控件则停止，不重复上传。',
+      'fill-body：browser_fill 使用 selectors.body，main 注入冻结正文，保留首行标题，图片独立图集。不得自己改写正文。',
+      'fill-fields 只回读首行标题。save-draft 在此平台表示当前图文的提交前复核，不是保存；不点击保存，不伪造 draftId 或 saved。主进程会逐图核验当前现场。',
+      publishing.composer?.allowPublish
+        ? '到 publish 时最新 inspect 必须证明正文、逐图、公开设置通过；只 click selectors.publish 一次。主进程绑定本次准确图文请求的回执，inspect.publishedLinks 返回本次作品地址。browser_navigate 该地址，再 inspect 核验 UID、作品 ID、全文和每张图片。公开页核验后完成 publish，然后 verify-publication completed 携带 outputRefs={publicationUrl:inspect.url}；最后 finish_attempt(outcome=succeeded,url=inspect.url)。没有回执、审核中、正文或图片不符均 waiting-human，绝不能再次发送。'
+        : '准备步骤完成后到 publish 报告 waiting-human，原因=本任务未授权提交，当前只准备不发送。然后结束本次运行，不能回报发布成功，也不要引导用户手动重发。',
+      '报告 failed / waiting-human 必须传 error={code:"weibo_preparation_blocked",message:"实际卡点"}，evidence 只补充观察事实。inspect 已给出内容或权限卡点后不重复截图、提取或猜测；一次正确的失败或等待回报后结束，不调用 finish_attempt(succeeded)。',
+    ].join('\n')
   if (publishing.adapterId === 'xiaohongshu')
     return [
       '执行小红书单篇图文任务，复用绑定原账号原本地草稿，不新建、不重复提交。',

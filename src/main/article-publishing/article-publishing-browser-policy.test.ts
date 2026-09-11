@@ -1,10 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
+import { WeiboPublishingAdapter } from './weibo-publishing-adapter'
 import { CsdnPublishingAdapter } from './csdn-publishing-adapter'
 vi.mock('./article-body', () => ({ prepareArticleBody: vi.fn(async () => '<p>Article</p>') }))
 vi.spyOn(CsdnPublishingAdapter.prototype, 'verifyBody').mockResolvedValue({
   matches: true,
   textMatches: true,
   textEvidence: '正文一致',
+  expectedImages: 0,
+  actualImages: 0,
+  images: [],
+})
+vi.spyOn(WeiboPublishingAdapter.prototype, 'verifyBody').mockResolvedValue({
+  matches: true,
+  textMatches: true,
+  textEvidence: 'current composer',
   expectedImages: 0,
   actualImages: 0,
   images: [],
@@ -17,6 +26,8 @@ import {
 const DRAFT_URL = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
 
 function createPolicy(options?: {
+  adapterId?: 'csdn' | 'weibo'
+  weiboUid?: string
   stepId?: string
   publicationStatus?: string
   publicationBlocker?: string
@@ -106,7 +117,10 @@ function createPolicy(options?: {
       },
     ],
     articlePublishing: {
-      adapterId: 'csdn',
+      adapterId: options?.adapterId ?? 'csdn',
+      ...(options?.adapterId === 'weibo'
+        ? { composer: { platformAccountId: '5961101548', allowPublish: false } }
+        : {}),
       adapterVersion: 1,
       accountId: 'account-a',
       source: { markdownPath: '/workspace/article.md', modifiedAt: 1, size: 10 },
@@ -258,6 +272,18 @@ function createPolicy(options?: {
         evaluate: async () => {
           options?.duringProbe?.()
           return {
+            ...(options?.adapterId === 'weibo'
+              ? {
+                  uid: options.weiboUid ?? '5961101548',
+                  recognized: true,
+                  text: ['open-editor', 'upload-assets'].includes(options?.stepId ?? '')
+                    ? ''
+                    : 'Article',
+                  publishSelector: selectors.publish,
+                  fileInputSelector: selectors.fileInput,
+                  privacy: true,
+                }
+              : {}),
             url,
             pageKind,
             publicationBlocker: options?.publicationBlocker,
@@ -331,6 +357,81 @@ const context = {
 }
 
 describe('ArticlePublishingBrowserPolicy', () => {
+  it('allows a bounded Weibo single-image upload without claiming a saved draft', async () => {
+    const { policy, inspect, webAffairService } = createPolicy({
+      adapterId: 'weibo',
+      draftUrl: null,
+      stepId: 'upload-assets',
+      assetStatus: 'uploading',
+      imageEnumerationComplete: true,
+    })
+    const page = await inspect({ fileInput: '#upload' }, 'https://weibo.com/')
+    expect(
+      await policy.classifyAction(
+        task as never,
+        'uploadFile',
+        { selector: '#upload', paths: ['/workspace/a.png'] },
+        page as never,
+        context,
+      ),
+    ).toMatchObject({ kind: 'allow-once' })
+    await expect(
+      policy.preparePublicationSubmit(task as never, 'upload-key', page as never, context),
+    ).resolves.toBeNull()
+    expect(webAffairService.recordArticlePublishingDraftAnchor).not.toHaveBeenCalled()
+    expect(webAffairService.recordArticlePublishingPageObservation).not.toHaveBeenCalled()
+  })
+
+  it('blocks Weibo submit even with a current matching composer and publish selector', async () => {
+    const { policy, inspect, webAffairService } = createPolicy({
+      adapterId: 'weibo',
+      draftUrl: null,
+      stepId: 'publish',
+      imageEnumerationComplete: true,
+    })
+    const page = await inspect({ publish: '#publish' }, 'https://weibo.com/')
+    Reflect.set(page, 'locator', () => ({
+      count: async () => 1,
+      isVisible: async () => true,
+      evaluate: async () => ({ label: '发送', type: 'button', role: 'button' }),
+    }))
+    expect(
+      await policy.classifyAction(
+        task as never,
+        'click',
+        { selector: '#publish' },
+        page as never,
+        context,
+      ),
+    ).toMatchObject({ kind: 'handoff' })
+    expect(webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
+  })
+
+  it('records the wrong Weibo UID as a concrete page-check blocker', async () => {
+    const { inspect, webAffairService } = createPolicy({
+      adapterId: 'weibo',
+      draftUrl: null,
+      stepId: 'open-editor',
+      weiboUid: '1234567890',
+      assetStatus: 'pending',
+      imageEnumerationComplete: true,
+    })
+    await inspect({}, 'https://weibo.com/', 'editor', false)
+    expect(webAffairService.completeArticlePublishingFirstInspect).not.toHaveBeenCalled()
+    expect(webAffairService.recordArticlePublishingPlanResults).toHaveBeenCalledWith(
+      expect.objectContaining({
+        results: [
+          expect.objectContaining({
+            id: 'page.inspect',
+            status: 'waiting',
+            evidence: expect.stringContaining('1234567890'),
+          }),
+        ],
+      }),
+      expect.any(Function),
+    )
+  })
+
   it('records the exact image and reason when a real upload dispatch is rejected', async () => {
     const { policy, inspect, webAffairService } = createPolicy({
       stepId: 'upload-assets',

@@ -236,8 +236,14 @@ export interface ArticlePublishingExecutionProtocol {
   recentTransitions: ArticlePublishingOperationTransition[]
 }
 
+export interface ArticlePublishingComposer {
+  platformAccountId: string
+  allowPublish: boolean
+}
+
 export interface ArticlePublishingState {
-  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu'
+  composer?: ArticlePublishingComposer
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo'
   adapterVersion: 1
   source: {
     markdownPath: string
@@ -310,6 +316,7 @@ export interface InspectArticlePublishingSourceInput {
 }
 
 export interface CreateArticlePublishingTaskInput extends InspectArticlePublishingSourceInput {
+  composer?: ArticlePublishingComposer
   existingDraft?: { url: string; platformAccountId: string }
   reviseDraftFromAffairId?: string
   accountId: string

@@ -1,6 +1,37 @@
 import { describe, it, expect, vi } from 'vitest'
 import { executePlaywrightAction, PLAYWRIGHT_ACTION_TYPES } from './playwright-actions'
 
+it.each(['current', 'cancelled', 'wrong-editor'] as const)(
+  'writes only frozen Weibo text through the signed live textarea: %s',
+  async (scenario) => {
+    const fill = vi.fn()
+    const page = {
+      url: () => 'https://weibo.com/',
+      locator: () => ({ fill, evaluate: async () => scenario !== 'wrong-editor' }),
+    }
+    const result = executePlaywrightAction(
+      page as never,
+      {
+        type: 'fill',
+        selector: 'textarea[placeholder="有什么新鲜事想分享给大家？"]',
+        value: 'Agent invented text',
+      },
+      undefined,
+      () => {
+        if (scenario === 'cancelled') throw new Error('cancelled')
+      },
+      'Frozen title\nFrozen body',
+    )
+    if (scenario === 'current') {
+      await result
+      expect(fill).toHaveBeenCalledWith('Frozen title\nFrozen body')
+    } else {
+      await expect(result).rejects.toThrow()
+      expect(fill).not.toHaveBeenCalled()
+    }
+  },
+)
+
 it('executes iframe fill on the exact dispatched Page, never the globally active Page', async () => {
   const fill = vi.fn().mockResolvedValue(undefined)
   const locator = vi.fn(() => ({ fill }))
@@ -345,7 +376,7 @@ describe('Cookie action boundary', () => {
 
 it('fences the Zhihu formatted paste after selection and before the clipboard event', async () => {
   const evaluate = vi.fn()
-  const locator = { click: vi.fn(), press: vi.fn(), evaluate }
+  const locator = { click: vi.fn(), focus: vi.fn(), press: vi.fn(), evaluate }
   const page = { url: () => 'https://zhuanlan.zhihu.com/p/123/edit', locator: () => locator }
   let checks = 0
   await expect(
@@ -382,7 +413,7 @@ it('rejects formatted article writes to an unsigned field or another origin', as
 
 it('does not paste over a Zhihu body when old atomic images remain after deletion', async () => {
   const evaluate = vi.fn().mockResolvedValue(false)
-  const locator = { click: vi.fn(), press: vi.fn(), evaluate }
+  const locator = { click: vi.fn(), focus: vi.fn(), press: vi.fn(), evaluate }
   const page = { url: () => 'https://zhuanlan.zhihu.com/p/123/edit', locator: () => locator }
   await expect(
     executePlaywrightAction(
@@ -393,13 +424,15 @@ it('does not paste over a Zhihu body when old atomic images remain after deletio
       '<p>frozen</p>',
     ),
   ).rejects.toThrow('未完整清空')
+  expect(locator.focus).toHaveBeenCalledOnce()
+  expect(locator.click).not.toHaveBeenCalled()
   expect(locator.press.mock.calls).toEqual([['ControlOrMeta+a'], ['Backspace']])
   expect(evaluate).toHaveBeenCalledTimes(1)
 })
 
 it('fences a Zhihu paste again after checking deletion of the old body', async () => {
   const evaluate = vi.fn().mockResolvedValue(true)
-  const locator = { click: vi.fn(), press: vi.fn(), evaluate }
+  const locator = { click: vi.fn(), focus: vi.fn(), press: vi.fn(), evaluate }
   const page = { url: () => 'https://zhuanlan.zhihu.com/p/123/edit', locator: () => locator }
   let checks = 0
   await expect(

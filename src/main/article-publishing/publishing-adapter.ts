@@ -1,3 +1,4 @@
+import { WeiboPublishingAdapter } from './weibo-publishing-adapter'
 import { XiaohongshuPublishingAdapter } from './xiaohongshu-publishing-adapter'
 import { JuejinPublishingAdapter } from './juejin-publishing-adapter'
 import type { ArticlePublishingState } from '../../shared/article-publishing/article-publishing-types'
@@ -6,12 +7,15 @@ import { CsdnPublishingAdapter } from './csdn-publishing-adapter'
 import { ZhihuPublishingAdapter, ZHIHU_MANAGEMENT_URL } from './zhihu-publishing-adapter'
 
 export class PublishingAdapter {
+  private readonly weibo = new WeiboPublishingAdapter()
   private readonly xiaohongshu = new XiaohongshuPublishingAdapter()
   private readonly juejin = new JuejinPublishingAdapter()
   private readonly csdn = new CsdnPublishingAdapter()
   private readonly zhihu = new ZhihuPublishingAdapter()
   private forPage(page: Page) {
-    if (['creator.xiaohongshu.com', 'www.xiaohongshu.com'].includes(new URL(page.url()).hostname)) return this.xiaohongshu
+    if (new URL(page.url()).origin === 'https://weibo.com') return this.weibo
+    if (['creator.xiaohongshu.com', 'www.xiaohongshu.com'].includes(new URL(page.url()).hostname))
+      return this.xiaohongshu
     if (new URL(page.url()).hostname === 'juejin.cn') return this.juejin
     return new URL(page.url()).hostname.endsWith('.zhihu.com') ? this.zhihu : this.csdn
   }
@@ -30,7 +34,14 @@ export class PublishingAdapter {
     return this.forPage(page).verifyBody(page, html)
   }
 }
-export function publishingPlatform(id: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu') {
+export function publishingPlatform(id: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo') {
+  if (id === 'weibo')
+    return {
+      label: '微博',
+      editorUrl: 'https://weibo.com/',
+      managementUrl: 'https://weibo.com/',
+      origins: ['https://weibo.com'],
+    }
   if (id === 'xiaohongshu')
     return {
       label: '小红书',

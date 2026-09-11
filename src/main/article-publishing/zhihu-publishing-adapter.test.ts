@@ -114,3 +114,54 @@ describe('Zhihu server-backed page evidence', () => {
     expect((await new ZhihuPublishingAdapter().probe(page as never)).saveState).toBe('unknown')
   })
 })
+
+describe('Zhihu public image fallback text', () => {
+  it.each(['正文', '被改过的正文'])(
+    'ignores inert noscript without hiding visible differences: %s',
+    async (visibleText) => {
+      const expected = { textContent: '正文', querySelectorAll: () => [] }
+      const actual = {
+        querySelectorAll: () => [],
+        cloneNode: () => {
+          let fallbackPresent = true
+          return {
+            get textContent() {
+              return visibleText + (fallbackPresent ? '<img src="fallback.png">' : '')
+            },
+            querySelectorAll: (selector: string) =>
+              selector === 'noscript'
+                ? [
+                    {
+                      remove: () => {
+                        fallbackPresent = false
+                      },
+                    },
+                  ]
+                : [],
+          }
+        },
+      }
+      vi.stubGlobal('document', {
+        querySelectorAll: (selector: string) =>
+          selector.includes('Post-RichTextContainer') ? [actual] : [],
+      })
+      vi.stubGlobal(
+        'DOMParser',
+        class {
+          parseFromString() {
+            return { body: expected }
+          }
+        },
+      )
+      const page = {
+        url: () => `https://zhuanlan.zhihu.com/p/${id}`,
+        locator: () => ({ count: async () => 0 }),
+        evaluate: async (fn: (html: string) => unknown, html: string) => fn(html),
+      }
+      const result = await new ZhihuPublishingAdapter().verifyBody(page as never, '<p>正文</p>')
+      expect(result.textMatches).toBe(visibleText === '正文')
+      expect(result.matches).toBe(visibleText === '正文')
+      expect(result.textEvidence).not.toContain('fallback.png')
+    },
+  )
+})

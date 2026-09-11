@@ -209,7 +209,9 @@ export function foldArticlePublishingPlanResults(
           state.execution.status === 'cancelled'
             ? '任务已终止；不能再派发操作。保留现场和证据。'
             : ['interrupted', 'failed', 'result-unknown'].includes(state.execution.status)
-              ? '使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。'
+              ? state.adapterId === 'weibo'
+                ? '保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。'
+                : '使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。'
               : detail.recheck || ['waiting', 'unknown', 'failed'].includes(detail.status)
                 ? `${detail.recheck?.reason ?? detail.reason ?? '尚未核验'}；先处理此卡点并重新检查。`
                 : ['running', 'verifying'].includes(detail.status)

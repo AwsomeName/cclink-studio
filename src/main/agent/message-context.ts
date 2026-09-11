@@ -71,6 +71,11 @@ export function buildAgentMessageWithContext(
   return [
     'CCLink Studio 会话上下文:',
     '以下是用户显式挂载到当前消息的资源索引和 Skill。不要把资源索引当作资源正文。需要读取文件、查看网页或操作 Tab 时，必须使用可用工具并遵守权限确认。Skill 表示用户希望本轮遵循的流程风格，不代表可以执行未授权代码。',
+    ...(resources.some((resource) => resource.ref.type === 'browser')
+      ? [
+          '挂载浏览器 Tab 只提供上下文，不授予账号执行许可。涉及已登记网站账号时，先用 web_accounts_list 核对用户指定的唯一账号，再调用 web_account_open 绑定；不要反复调用失败的浏览器工具，也不要自行扩大网站范围。',
+        ]
+      : []),
     JSON.stringify(
       {
         mountedResources: resources,
