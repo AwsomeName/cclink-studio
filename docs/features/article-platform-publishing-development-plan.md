@@ -1,10 +1,15 @@
 # Markdown 文章平台发布开发计划
 
 状态：由逐步可观测执行协议修复方案接管
-最后更新：2026-09-08
+最后更新：2026-09-09
 
 本功能早期计划曾收敛到 [article-publishing-restart-recovery-development-plan.md](article-publishing-restart-recovery-development-plan.md)。2026-09-07 的真实故障证明粗 checkpoint 和长 Agent Prompt 仍形成两个黑盒；当前施工事实源改为
 [article-publishing-observable-execution-development-plan.md](article-publishing-observable-execution-development-plan.md)。本文只保留历史阶段顺序，不再用于判断闭环完成。
+
+## 当前增量：掘金三图实际发布
+
+同一文章发布 Tab 已支持选择掘金，当前要求已有原稿 ID，沿用账号 Profile 和 WebAffair。指定三图文章完成实际上传、正文与保存回读、一次提交及公开页逐图核验；重启后只读核验收口，没有重发。
+自动新建草稿、平台字段实际修改分支及全部细步骤观测尚未全部验收，具体辅助确认、两项历史观测残余和真实截图见 [掘金验收记录](../testing/article-publishing-juejin-2026-09-09.md)。
 
 ## 当前增量：知乎图文纵向验收
 

@@ -3,7 +3,7 @@ import MarkdownIt from 'markdown-it'
 import type { ArticlePublishingState } from '../../shared/article-publishing/article-publishing-types'
 
 /** Frozen source + observed image URLs, never Agent-authored replacement HTML. */
-export async function prepareArticleBody(state: ArticlePublishingState): Promise<string> {
+export async function prepareArticleMarkdown(state: ArticlePublishingState): Promise<string> {
   const info = await stat(state.source.markdownPath)
   if (info.size !== state.source.size || info.mtimeMs !== state.source.modifiedAt)
     throw new Error('原 Markdown 已变化，不能填写冻结任务')
@@ -19,5 +19,9 @@ export async function prepareArticleBody(state: ArticlePublishingState): Promise
     .sort((a, b) => b.start - a.start)
   for (const occurrence of replacements)
     markdown = markdown.slice(0, occurrence.start) + occurrence.url + markdown.slice(occurrence.end)
-  return new MarkdownIt({ html: false, linkify: false }).render(markdown)
+  return markdown
+}
+
+export async function prepareArticleBody(state: ArticlePublishingState): Promise<string> {
+  return new MarkdownIt({ html: false, linkify: false }).render(await prepareArticleMarkdown(state))
 }

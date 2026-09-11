@@ -415,3 +415,65 @@ it('fences a Zhihu paste again after checking deletion of the old body', async (
   ).rejects.toThrow('cancelled')
   expect(evaluate).toHaveBeenCalledTimes(1)
 })
+
+it('dispatches Juejin image paste at the input handler and checks cancellation before it', async () => {
+  const { mkdtemp, writeFile, rm } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const dir = await mkdtemp(join(tmpdir(), 'juejin-paste-'))
+  const file = join(dir, 'image.png')
+  await writeFile(file, Buffer.from([137, 80, 78, 71]))
+  const pasted = vi.fn()
+  const containerPaste = vi.fn()
+  const input = { dispatchEvent: pasted }
+  const element = { querySelector: vi.fn(() => input), dispatchEvent: containerPaste }
+  vi.stubGlobal(
+    'DataTransfer',
+    class {
+      items = { add: vi.fn() }
+    },
+  )
+  vi.stubGlobal(
+    'ClipboardEvent',
+    class {
+      constructor(
+        public type: string,
+        public init: unknown,
+      ) {}
+    },
+  )
+  const page = {
+    url: () => 'https://juejin.cn/editor/drafts/7683025447916847150',
+    locator: () => ({
+      click: vi.fn(),
+      focus: vi.fn(),
+      evaluate: async (fn: (element: unknown, payload: unknown) => unknown, payload: unknown) =>
+        fn(element, payload),
+    }),
+  }
+  try {
+    await executePlaywrightAction(page as never, {
+      type: 'uploadFile',
+      selector: '.CodeMirror',
+      paths: [file],
+    })
+    expect(pasted).toHaveBeenCalledTimes(1)
+    expect(containerPaste).not.toHaveBeenCalled()
+    pasted.mockClear()
+    let checks = 0
+    await expect(
+      executePlaywrightAction(
+        page as never,
+        { type: 'uploadFile', selector: '.CodeMirror', paths: [file] },
+        undefined,
+        () => {
+          if (++checks === 3) throw Error('cancelled')
+        },
+      ),
+    ).rejects.toThrow('cancelled')
+    expect(pasted).not.toHaveBeenCalled()
+  } finally {
+    vi.unstubAllGlobals()
+    await rm(dir, { recursive: true, force: true })
+  }
+})

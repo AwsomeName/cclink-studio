@@ -66,3 +66,49 @@ it('accepts only each platform image hosts at the upload observation boundary', 
   expect(isPlatformImageUrl('csdn', 'https://picx.zhimg.com/a.png')).toBe(false)
   expect(isPlatformImageUrl('csdn', 'https://i-blog.csdnimg.cn/a.png')).toBe(true)
 })
+
+it('keeps Juejin draft IDs exact and isolates its image hosts', () => {
+  const id = '7683025447916847150'
+  expect(parsePlatformDraftAnchor(`https://juejin.cn/editor/drafts/${id}`)).toEqual({
+    adapterId: 'juejin',
+    draftId: id,
+    url: `https://juejin.cn/editor/drafts/${id}`,
+  })
+  for (const url of [
+    `https://juejin.cn/editor/drafts/new`,
+    `https://juejin.cn/post/${id}`,
+    `https://juejin.cn.evil.test/editor/drafts/${id}`,
+    `https://user@juejin.cn/editor/drafts/${id}`,
+  ])
+    expect(parsePlatformDraftAnchor(url)).toBeNull()
+  expect(
+    isPlatformImageUrl('juejin', 'https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/image.png'),
+  ).toBe(true)
+  expect(isPlatformImageUrl('juejin', 'https://p3-juejin.byteimg.com.evil.test/image.png')).toBe(
+    false,
+  )
+  expect(isPlatformImageUrl('juejin', 'https://picx.zhimg.com/a.png')).toBe(false)
+})
+
+it('requires an explicit local XHS draft ID, never treats the shared editor URL as identity', () => {
+  const url = 'https://creator.xiaohongshu.com/publish/publish?target=image'
+  const id = '071c3c48-ca3e-49c3-bb52-a43c1a73def8'
+  expect(parsePlatformDraftAnchor(url)).toBeNull()
+  expect(parsePlatformDraftAnchor(url, id)).toEqual({ adapterId: 'xiaohongshu', draftId: id, url })
+  for (const other of [
+    'https://creator.xiaohongshu.com.evil.test/publish/publish',
+    'https://user@creator.xiaohongshu.com/publish/publish',
+    'https://creator.xiaohongshu.com/new/home',
+  ])
+    expect(parsePlatformDraftAnchor(other, id)).toBeNull()
+  expect(parsePlatformDraftAnchor(url, '------------------------------------')).toBeNull()
+  expect(
+    isPlatformImageUrl('xiaohongshu', 'https://sns-creator-preview.xhscdn.com/spectrum/image'),
+  ).toBe(true)
+  expect(
+    isPlatformImageUrl(
+      'xiaohongshu',
+      'https://sns-creator-preview.xhscdn.com.evil.test/spectrum/image',
+    ),
+  ).toBe(false)
+})

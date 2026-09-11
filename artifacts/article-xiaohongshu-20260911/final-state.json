@@ -1,0 +1,143 @@
+{
+  "status": "needs-attention",
+  "execution": {
+    "status": "checking-runtime",
+    "currentAttemptId": "a68b6700-04a4-4d66-8569-6347ae86de76",
+    "currentGeneration": 8,
+    "currentLaunchOperationId": "eacf2434-8457-4649-b5f9-b99eca6b339b",
+    "currentStepId": "verify-publication",
+    "runtimeCheck": {
+      "reasonCode": "RUNTIME_OWNER_LOST",
+      "reason": "Agent、BrowserTask、Tab 或 CDP 的当前绑定已失效，正在核验",
+      "suspectedAt": "2026-09-10T18:01:13.125Z",
+      "lastOwnerAt": "2026-09-10T18:01:13.116Z",
+      "lastProgressAt": "2026-09-10T18:01:13.116Z",
+      "probeDeadline": "2026-09-10T18:02:13.125Z",
+      "ownerResponsive": false,
+      "probeAttempts": 1
+    }
+  },
+  "publication": {
+    "status": "result-unknown",
+    "url": "https://www.xiaohongshu.com/explore/6aa2ed5e000000002502d58d",
+    "observedAt": "2026-09-10T17:59:03.848Z"
+  },
+  "steps": [
+    {
+      "step": "open-editor",
+      "status": "completed",
+      "details": []
+    },
+    {
+      "step": "verify-account",
+      "status": "completed",
+      "details": []
+    },
+    {
+      "step": "upload-assets",
+      "status": "completed",
+      "details": []
+    },
+    {
+      "step": "fill-body",
+      "status": "completed",
+      "details": []
+    },
+    {
+      "step": "fill-fields",
+      "status": "completed",
+      "details": []
+    },
+    {
+      "step": "save-draft",
+      "status": "completed",
+      "details": []
+    },
+    {
+      "step": "publish",
+      "status": "completed",
+      "details": []
+    },
+    {
+      "step": "verify-publication",
+      "status": "needs-reconcile",
+      "details": [
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.published",
+          "nextAction": "发布后图片地址与上传记录不同，尚缺平台转换映射证据；请核对这张图，不得重传或重发；先处理此卡点并重新检查。",
+          "status": "waiting",
+          "evidence": "素材/01-首篇封面.png · 图集 第 1 张：未匹配",
+          "reason": "发布后图片地址与上传记录不同，尚缺平台转换映射证据；请核对这张图，不得重传或重发",
+          "observedAt": "2026-09-10T18:00:54.464Z",
+          "generation": 8
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.published",
+          "nextAction": "发布后图片地址与上传记录不同，尚缺平台转换映射证据；请核对这张图，不得重传或重发；先处理此卡点并重新检查。",
+          "status": "waiting",
+          "evidence": "素材/02-导航场景效果图.png · 图集 第 2 张：未匹配",
+          "reason": "发布后图片地址与上传记录不同，尚缺平台转换映射证据；请核对这张图，不得重传或重发",
+          "observedAt": "2026-09-10T18:00:54.464Z",
+          "generation": 8
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.published",
+          "nextAction": "发布后图片地址与上传记录不同，尚缺平台转换映射证据；请核对这张图，不得重传或重发；先处理此卡点并重新检查。",
+          "status": "waiting",
+          "evidence": "素材/03-城市漫游效果图.png · 图集 第 3 张：未匹配",
+          "reason": "发布后图片地址与上传记录不同，尚缺平台转换映射证据；请核对这张图，不得重传或重发",
+          "observedAt": "2026-09-10T18:00:54.464Z",
+          "generation": 8
+        },
+        {
+          "id": "publication.verify",
+          "nextAction": "等待公开页原账号、原文与逐张图片核验；只核验，不重复发布；先处理此卡点并重新检查。",
+          "status": "waiting",
+          "evidence": "已取得本次提交回执 · https://www.xiaohongshu.com/explore/6aa2ed5e000000002502d58d",
+          "reason": "等待公开页原账号、原文与逐张图片核验；只核验，不重复发布",
+          "observedAt": "2026-09-10T18:00:54.512Z",
+          "generation": 8
+        }
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "name": "素材/01-首篇封面.png",
+      "status": "uploaded",
+      "url": "https://sns-creator-preview.xhscdn.com/spectrum/YOPqfNsIiUtXbw-5tgLvJJOKBNVnLstxekR9Sjb0O0r16Ao"
+    },
+    {
+      "name": "素材/02-导航场景效果图.png",
+      "status": "uploaded",
+      "url": "https://sns-creator-preview.xhscdn.com/spectrum/-ACSDZ9OKDTs4tNZ8KqZ_1y-5QBn8BcETMhhVC9FyphDoW0"
+    },
+    {
+      "name": "素材/03-城市漫游效果图.png",
+      "status": "uploaded",
+      "url": "https://sns-creator-preview.xhscdn.com/spectrum/oXSjxM1yzk9x106Z3A6Al7up6t_gO3uuJ69eFsrVRPtiAb8"
+    }
+  ],
+  "effects": [
+    {
+      "kind": "upload-asset",
+      "target": "local:2026-09-09/素材/02-导航场景效果图.png:attempt-2",
+      "status": "verified"
+    },
+    {
+      "kind": "upload-asset",
+      "target": "local:2026-09-09/素材/03-城市漫游效果图.png:attempt-2",
+      "status": "verified"
+    },
+    {
+      "kind": "save-draft",
+      "target": "autosave:fill-body:86e751ae-a8e4-4fdc-923a-bca0cfe8c79d",
+      "status": "verified"
+    },
+    {
+      "kind": "publish",
+      "target": "final",
+      "status": "verified"
+    }
+  ]
+}

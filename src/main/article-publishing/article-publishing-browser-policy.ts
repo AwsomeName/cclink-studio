@@ -1,6 +1,12 @@
+import { observeXiaohongshuSubmission } from './xiaohongshu-submission'
+import { readXiaohongshuEditor } from './xiaohongshu-publishing-adapter'
+import {
+  XIAOHONGSHU_SAVE_SELECTOR,
+  XIAOHONGSHU_PUBLISH_SELECTOR,
+} from './xiaohongshu-publish-control'
 import { PublishingAdapter, publishingPlatform } from './publishing-adapter'
 import { randomUUID } from 'node:crypto'
-import { prepareArticleBody } from './article-body'
+import { prepareArticleBody, prepareArticleMarkdown } from './article-body'
 import type { BrowserTaskRun } from '../../shared/ipc/browser'
 import type { ToolExecutionContext } from '../mcp/types'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
@@ -40,7 +46,7 @@ export type ArticlePublishingBrowserActionDecision =
   | { kind: 'unknown'; reason: string }
 
 interface ArticlePublishingExecutionScope {
-  adapterId: 'csdn' | 'zhihu'
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu'
   workspaceId: string
   workspacePath: string
   affairId: string
@@ -63,6 +69,7 @@ interface ArticlePublishingExecutionScope {
       | 'result-unknown'
       | 'failed'
   }
+  publicationUrl?: string
   publicationStatus: 'not-started' | 'dispatched' | 'verifying' | 'published' | 'result-unknown'
   localAssetsReady: boolean
   executionGeneration: number
@@ -302,7 +309,7 @@ export class ArticlePublishingBrowserPolicy {
     let probe: CsdnPageProbe
     try {
       if (!observationIsCurrent()) return retryCurrentPage()
-      probe = await this.adapter.probe(page)
+      probe = await this.adapter.probe(page, scope.expectedFields, scope.expectedPlatformDraftId)
     } catch (error) {
       if (!observationIsCurrent()) return retryCurrentPage()
       const message = error instanceof Error ? error.message : String(error)
@@ -355,10 +362,17 @@ export class ArticlePublishingBrowserPolicy {
     if (
       scope.draftUrl &&
       probe.pageKind === 'editor' &&
-      !isSamePlatformDraft(scope.draftUrl, probe.url)
+      !isSamePlatformDraft(scope.draftUrl, probe.url, scope.expectedPlatformDraftId)
     ) {
       return publishingEvidenceError('当前页面不是本 Attempt 已绑定的 平台草稿')
     }
+    if (
+      scope.adapterId === 'xiaohongshu' &&
+      probe.pageKind === 'editor' &&
+      (probe.draftId !== scope.expectedPlatformDraftId ||
+        probe.platformAccountId !== scope.expectedPlatformAccountId)
+    )
+      return publishingEvidenceError('小红书当前账号或本地原稿身份不一致')
     if (probe.adapterId !== scope.adapterId) return publishingEvidenceError('页面与任务平台不一致')
     const matchedAssets: Record<string, string> = {}
     if (probe.editor.recognized && probe.editor.imageEnumerationComplete) {
@@ -374,6 +388,9 @@ export class ArticlePublishingBrowserPolicy {
     const inspection: ArticlePublishingPageInspection = {
       ...probe,
       matchedAssets,
+      ...(scope.adapterId === 'xiaohongshu' && scope.publicationUrl
+        ? { publishedLinks: [{ url: scope.publicationUrl, title: scope.expectedTitle }] }
+        : {}),
     }
     if (
       scope.assets.length &&
@@ -428,6 +445,22 @@ export class ArticlePublishingBrowserPolicy {
       },
     ]
     if (inspection.pageKind === 'published-article') facts.splice(1, 1)
+    if (
+      scope.adapterId === 'juejin' &&
+      ['fill-fields', 'publish'].includes(scope.currentStepId ?? '')
+    )
+      facts.push({
+        id: 'fields.open',
+        status: inspection.selectors.openPublishSettings
+          ? 'waiting'
+          : inspection.selectors.publish
+            ? 'completed'
+            : 'waiting',
+        evidence: inspection.selectors.publish
+          ? '掘金发布设置面板已打开；尚未执行最终提交'
+          : '需要打开掘金分类、标签、摘要面板',
+        reason: inspection.selectors.openPublishSettings ? '等待打开平台字段面板' : undefined,
+      })
     if (scope.currentStepId === 'upload-assets') {
       const asset = scope.assets.find((a) => a.kind === 'local' && a.status !== 'uploaded')
       if (asset)
@@ -489,6 +522,39 @@ export class ArticlePublishingBrowserPolicy {
           evidence: '当前字段已经与任务一致，无需再次填写',
         })
     }
+    if (
+      scope.adapterId === 'xiaohongshu' &&
+      inspection.selectors.publish &&
+      scope.publicationStatus === 'not-started'
+    )
+      facts.push({
+        id: 'publication.verify',
+        status: 'waiting',
+        evidence: '尚未提交；等待本次提交回执后核验公开结果',
+        reason: '等待本次发布回执',
+      })
+    if (scope.adapterId === 'xiaohongshu' && scope.publicationUrl)
+      facts.push({
+        id: 'publication.verify',
+        status: 'waiting',
+        evidence: `已取得本次提交回执 · ${scope.publicationUrl}`,
+        reason: '等待公开页原账号、原文与逐张图片核验；只核验，不重复发布',
+      })
+    if (inspection.submissionUnavailableReason)
+      facts.push(
+        {
+          id: 'publish.preflight',
+          status: 'waiting',
+          evidence: inspection.submissionUnavailableReason,
+          reason: inspection.submissionUnavailableReason,
+        },
+        {
+          id: 'publication.verify',
+          status: 'waiting',
+          evidence: '尚未派发公开发布；' + inspection.submissionUnavailableReason,
+          reason: inspection.submissionUnavailableReason,
+        },
+      )
     if (inspection.publicationBlocker)
       facts.push({
         id: 'publication.verify',
@@ -766,7 +832,7 @@ export class ArticlePublishingBrowserPolicy {
     } catch {
       return this.stopDecision(scope, actionType, 'unknown', '文章发布适配器无法读取当前页面地址')
     }
-    const visibleAnchor = parsePlatformDraftAnchor(pageUrl)
+    const visibleAnchor = parsePlatformDraftAnchor(pageUrl, scope.expectedPlatformDraftId)
     const boundDraftUrl = scope.draftUrl
     if (isMutation && visibleAnchor && !boundDraftUrl) {
       return {
@@ -788,7 +854,7 @@ export class ArticlePublishingBrowserPolicy {
           pageUrl,
         )
       }
-      if (!isSamePlatformDraft(boundDraftUrl, pageUrl)) {
+      if (!isSamePlatformDraft(boundDraftUrl, pageUrl, scope.expectedPlatformDraftId)) {
         return this.stopDecision(
           scope,
           actionType,
@@ -866,6 +932,15 @@ export class ArticlePublishingBrowserPolicy {
       context,
     )
     if (selectorDecision) return selectorDecision
+    const fieldPanel = this.attestations.get(this.attestationKey(context))?.inspection.selectors
+      .openPublishSettings
+    if (
+      scope.adapterId === 'juejin' &&
+      actionType === 'click' &&
+      fieldPanel &&
+      params.selector === fieldPanel
+    )
+      return { kind: 'allow' }
     const tagEditor = this.attestations.get(this.attestationKey(context))?.inspection.tagEditor
     if (scope.currentStepId === 'fill-fields' && tagEditor) {
       if (actionType === 'click' && params.selector === tagEditor.openSelector)
@@ -1087,19 +1162,27 @@ export class ArticlePublishingBrowserPolicy {
             pageUrl,
           )
         }
-        control = await locator.evaluate((element) => {
-          const target = element.closest('button, input, a, [role="button"]') ?? element
-          return {
-            label: String(
-              target.getAttribute('value') ||
-                target.getAttribute('aria-label') ||
-                target.textContent ||
-                '',
-            ).trim(),
-            type: String(target.getAttribute('type') || '').toLowerCase(),
-            role: String(target.getAttribute('role') || '').toLowerCase(),
-          }
-        })
+        control =
+          scope.adapterId === 'xiaohongshu' &&
+          [XIAOHONGSHU_SAVE_SELECTOR, XIAOHONGSHU_PUBLISH_SELECTOR].includes(selector)
+            ? {
+                label: selector === XIAOHONGSHU_SAVE_SELECTOR ? '暂存离开' : '发布',
+                type: 'button',
+                role: 'button',
+              }
+            : await locator.evaluate((element) => {
+                const target = element.closest('button, input, a, [role="button"]') ?? element
+                return {
+                  label: String(
+                    target.getAttribute('value') ||
+                      target.getAttribute('aria-label') ||
+                      target.textContent ||
+                      '',
+                  ).trim(),
+                  type: String(target.getAttribute('type') || '').toLowerCase(),
+                  role: String(target.getAttribute('role') || '').toLowerCase(),
+                }
+              })
       }
     } catch {
       return this.stopDecision(
@@ -1393,15 +1476,25 @@ export class ArticlePublishingBrowserPolicy {
         const images = observed.images.filter((i) => i.src === asset.platformUrl)
         const matches = images.length === asset.occurrences.length && images.every((i) => i.matches)
         return {
-          id: `asset.${asset.id}.${page.url().startsWith('https://blog.csdn.net/') || /^https:\/\/zhuanlan\.zhihu\.com\/p\/\d+\/?$/u.test(page.url()) ? 'published' : 'placement'}`,
+          id: `asset.${asset.id}.${page.url().startsWith('https://www.xiaohongshu.com/explore/') || page.url().startsWith('https://juejin.cn/post/') || page.url().startsWith('https://blog.csdn.net/') || /^https:\/\/zhuanlan\.zhihu\.com\/p\/\d+\/?$/u.test(page.url()) ? 'published' : 'placement'}`,
           status: matches ? ('completed' as const) : ('waiting' as const),
-          evidence: `${asset.displayPath} · 期望 ${asset.occurrences.length} 处，实际对应 ${images.filter((i) => i.matches).length} 处；${images.map((i) => `第 ${i.index + 1} 张，前文 ${i.precedingCharacters} 字符，${i.matches ? (scope.adapterId === 'zhihu' ? '位置/地址/加载一致（知乎不保留替代文字）' : '位置/地址/替代文字/加载一致') : '不匹配'}`).join('；')}`,
-          reason: matches ? undefined : '正文图片顺序、位置或加载结果未核验通过',
+          evidence:
+            scope.adapterId === 'xiaohongshu'
+              ? `${asset.displayPath} · 图集 ${images.map((i) => `第 ${i.index + 1} 张：${i.matches ? '顺序、平台地址和加载通过' : '未匹配'}`).join('；')}`
+              : `${asset.displayPath} · 期望 ${asset.occurrences.length} 处，实际对应 ${images.filter((i) => i.matches).length} 处；${images.map((i) => `第 ${i.index + 1} 张，前文 ${i.precedingCharacters} 字符，${i.matches ? (scope.adapterId === 'zhihu' ? '位置/地址/加载一致（知乎不保留替代文字）' : '位置/地址/替代文字/加载一致') : '不匹配'}`).join('；')}`,
+          reason: matches
+            ? undefined
+            : scope.adapterId === 'xiaohongshu' &&
+                page.url().startsWith('https://www.xiaohongshu.com/explore/')
+              ? '发布后图片地址与上传记录不同，尚缺平台转换映射证据；请核对这张图，不得重传或重发'
+              : '正文图片顺序、位置或加载结果未核验通过',
         }
       })
     if (!observed.textMatches)
       results.push({
         id:
+          page.url().startsWith('https://www.xiaohongshu.com/explore/') ||
+          page.url().startsWith('https://juejin.cn/post/') ||
           page.url().startsWith('https://blog.csdn.net/') ||
           /^https:\/\/zhuanlan\.zhihu\.com\/p\/\d+\/?$/u.test(page.url())
             ? 'publication.verify'
@@ -1426,6 +1519,28 @@ export class ArticlePublishingBrowserPolicy {
       ? snapshot.data.affairs.find((a) => a.id === scope.affairId)?.articlePublishing
       : undefined
     if (!state) throw new Error('冻结正文不存在')
+    if (state.adapterId === 'xiaohongshu') {
+      const markdown = await prepareArticleMarkdown(state)
+      return markdown
+        .replace(/^# [^\n]*\n/u, '')
+        .replace(/!\[[^\]]*\]\([^)]*\)/gu, '')
+        .trim()
+    }
+    if (state.adapterId === 'juejin') {
+      const page = this.playwrightBridge?.getPageById(scope.tabId)
+      if (!page) throw new Error('掘金原稿页面不可用')
+      const live = await page
+        .locator('.bytemd-preview img')
+        .evaluateAll((images) => images.map((e) => (e as HTMLImageElement).src))
+      let markdown = await prepareArticleMarkdown(state)
+      for (const asset of state.assets.filter((a) => a.kind === 'local')) {
+        const current = live.find((src) => src.split('?')[0] === asset.platformUrl)
+        if (!current || !asset.platformUrl)
+          throw new Error(`原稿已核验图片无法对应：${asset.displayPath}`)
+        markdown = markdown.split(asset.platformUrl).join(current)
+      }
+      return markdown
+    }
     let html = await prepareArticleBody(state)
     if (state.adapterId === 'zhihu') {
       const page = this.playwrightBridge?.getPageById(scope.tabId)
@@ -1493,6 +1608,7 @@ export class ArticlePublishingBrowserPolicy {
             added.length === 1 &&
             added[0].loaded &&
             after.editor.imageEnumerationComplete &&
+            (scope.adapterId !== 'xiaohongshu' || after.saveState === 'saved') &&
             after.draftId === before.draftId &&
             after.platformAccountId === before.platformAccountId
           ) {
@@ -1511,6 +1627,65 @@ export class ArticlePublishingBrowserPolicy {
           await page.waitForTimeout(500)
         }
         throw new Error('该文件上传后没有唯一已加载的正文图片；只核验，不重复上传')
+      },
+    }
+  }
+
+  async preparePublicationSubmit(
+    task: BrowserTaskRun,
+    sideEffectKey: string,
+    page: ReturnType<PlaywrightBridge['getPage']>,
+    context?: ToolExecutionContext,
+  ) {
+    const scope = await this.resolveTaskScope(task, context)
+    if (!scope || !page || scope.adapterId !== 'xiaohongshu' || scope.currentStepId !== 'publish')
+      return null
+    const live = await readXiaohongshuEditor(page)
+    if (
+      live.uid !== scope.expectedPlatformAccountId ||
+      live.draftId !== scope.expectedPlatformDraftId ||
+      live.title !== scope.expectedTitle ||
+      !live.renderedMatches ||
+      live.privacy?.type !== 0 ||
+      live.scheduled
+    )
+      throw new Error('小红书提交前原账号、原稿、正文或公开设置不一致')
+    if (
+      live.images.length !== scope.assets.length ||
+      live.images.some(
+        (i, index) =>
+          !i.loaded ||
+          scope.assets[index].platformUrl !== `https://sns-creator-preview.xhscdn.com/${i.fileId}`,
+      )
+    )
+      throw new Error('小红书提交前逐图记录不一致')
+    const observer = observeXiaohongshuSubmission(page, {
+      title: live.title,
+      description: live.description,
+      fileIds: live.images.map((i) => i.fileId),
+    })
+    let recorded = false
+    return {
+      arm: observer.arm,
+      dispose: observer.dispose,
+      finish: async () => {
+        if (recorded) return
+        const noteId = await observer.finish()
+        const result = await this.webAffairService.recordXiaohongshuSubmissionReceipt(
+          {
+            affairId: scope.affairId,
+            attemptId: scope.attemptId,
+            executionGeneration: scope.executionGeneration,
+            browserTaskRunId: task.id,
+            sideEffectKey,
+            draftId: live.draftId!,
+            uid: live.uid!,
+            noteId,
+          },
+          scope.workspaceId,
+        )
+        if (!result.success) throw new Error(result.error.message)
+        recorded = true
       },
     }
   }
@@ -1801,7 +1976,8 @@ export class ArticlePublishingBrowserPolicy {
     compare('affair.kind', 'article-publishing', affair?.kind)
     compare(
       'adapter',
-      affair?.articlePublishing && ['csdn', 'zhihu'].includes(affair.articlePublishing.adapterId)
+      affair?.articlePublishing &&
+        ['csdn', 'zhihu', 'juejin', 'xiaohongshu'].includes(affair.articlePublishing.adapterId)
         ? `${affair.articlePublishing.adapterId}@1`
         : 'supported-platform@1',
       affair?.articlePublishing
@@ -1971,7 +2147,7 @@ export class ArticlePublishingBrowserPolicy {
     if (!attempt) mismatches.push('attempt')
     if (
       !publishing ||
-      !['csdn', 'zhihu'].includes(publishing.adapterId) ||
+      !['csdn', 'zhihu', 'juejin', 'xiaohongshu'].includes(publishing.adapterId) ||
       publishing?.adapterVersion !== 1
     ) {
       mismatches.push('adapter')
@@ -2050,6 +2226,7 @@ export class ArticlePublishingBrowserPolicy {
           }
         : {}),
       publicationStatus: publishing.publication.status,
+      publicationUrl: publishing.publication.url,
       localAssetsReady: publishing.assets.every(
         (asset) => asset.kind !== 'local' || asset.status === 'uploaded',
       ),
@@ -2209,6 +2386,8 @@ export class ArticlePublishingBrowserPolicy {
             ? [selectors.body]
             : stepId === 'fill-fields'
               ? [
+                  selectors.openPublishSettings,
+                  inspection.tagEditor?.inputSelector,
                   selectors.title,
                   selectors.summary,
                   selectors.tags,
@@ -2219,7 +2398,7 @@ export class ArticlePublishingBrowserPolicy {
               : stepId === 'save-draft'
                 ? [selectors.save]
                 : stepId === 'publish'
-                  ? [selectors.publish]
+                  ? [selectors.openPublishSettings, selectors.publish]
                   : []
     const allowedSelectors = new Set(
       [...allowed, selectors.dismissAssistant, selectors.dismissTagEditor].filter(
@@ -2232,8 +2411,8 @@ export class ArticlePublishingBrowserPolicy {
         actionType,
         'unknown',
         allowedSelectors.size === 0
-          ? 'csdn@1 未识别当前步骤的唯一控件，已停止并等待人工处理'
-          : '写入目标不是 csdn@1 本次读回签发的唯一 selector，已拒绝执行',
+          ? '平台适配器未识别当前步骤的唯一控件，已停止并等待人工处理'
+          : '写入目标不是平台适配器本次读回签发的唯一 selector，已拒绝执行',
         pageUrl,
       )
     }
@@ -2332,6 +2511,10 @@ export class ArticlePublishingBrowserPolicy {
         inspection.editor.imageEnumerationComplete &&
         asset &&
         absenceCanAuthorizeFirstUpload &&
+        (scope.adapterId !== 'xiaohongshu' ||
+          inspection.editor.images.every((image) =>
+            scope.assets.some((known) => known.platformUrl === image.src),
+          )) &&
         !inspection.matchedAssets[assetId],
       )
     }
@@ -2346,7 +2529,7 @@ export class ArticlePublishingBrowserPolicy {
       return Boolean(
         inspection.editor.recognized &&
         scope.draftUrl &&
-        isSamePlatformDraft(scope.draftUrl, inspection.url) &&
+        isSamePlatformDraft(scope.draftUrl, inspection.url, scope.expectedPlatformDraftId) &&
         inspection.draftId &&
         inspection.platformAccountId &&
         inspection.saveState === 'saved' &&
@@ -2423,6 +2606,22 @@ export class ArticlePublishingBrowserPolicy {
     if (!requestedUrl) return null
     const { inspection, scope } = attestation
     if (
+      scope.adapterId === 'xiaohongshu' &&
+      (!scope.publicationUrl ||
+        new URL(scope.publicationUrl).pathname !== new URL(inspection.url).pathname ||
+        new URL(inspection.url).origin !== 'https://www.xiaohongshu.com' ||
+        inspection.platformAccountId !== scope.expectedPlatformAccountId ||
+        inspection.publishedArticleId !== new URL(scope.publicationUrl).pathname.split('/').at(-1))
+    )
+      return null
+    if (
+      scope.adapterId === 'juejin' &&
+      (!scope.expectedPlatformDraftId ||
+        inspection.draftId !== scope.expectedPlatformDraftId ||
+        inspection.platformAccountId !== scope.expectedPlatformAccountId)
+    )
+      return null
+    if (
       scope.adapterId === 'zhihu' &&
       (!scope.expectedPlatformAccountId ||
         inspection.platformAccountId !== scope.expectedPlatformAccountId ||
@@ -2453,7 +2652,7 @@ export class ArticlePublishingBrowserPolicy {
     return Boolean(
       affair?.kind === 'article-publishing' &&
       publishing &&
-      ['csdn', 'zhihu'].includes(publishing.adapterId) &&
+      ['csdn', 'zhihu', 'juejin', 'xiaohongshu'].includes(publishing.adapterId) &&
       publishing.adapterVersion === 1 &&
       publishing.accountId === input.accountId &&
       attempt?.accountId === input.accountId,
@@ -2462,12 +2661,34 @@ export class ArticlePublishingBrowserPolicy {
 
   private isRecognizedPageForStep(rawUrl: string, stepId?: string): boolean {
     try {
+      const u = new URL(rawUrl)
+      if (u.origin === 'https://creator.xiaohongshu.com' && u.pathname === '/publish/publish')
+        return true
+      if (
+        ['publish', 'verify-publication'].includes(stepId ?? '') &&
+        ((u.origin === 'https://www.xiaohongshu.com' &&
+          /^\/explore\/[a-f\d]{24}\/?$/iu.test(u.pathname)) ||
+          (u.origin === 'https://creator.xiaohongshu.com' &&
+            ['/publish/success', '/new/note-manager'].includes(u.pathname)))
+      )
+        return true
+    } catch {
+      return false
+    }
+
+    try {
       const url = new URL(rawUrl)
       if (
         !CSDN_ARTICLE_SUPPORTED_ORIGIN_SET.has(url.origin) &&
-        !['https://www.zhihu.com', 'https://zhuanlan.zhihu.com'].includes(url.origin)
+        !['https://www.zhihu.com', 'https://zhuanlan.zhihu.com', 'https://juejin.cn'].includes(
+          url.origin,
+        )
       )
         return false
+      if (url.origin === 'https://juejin.cn')
+        return stepId === 'verify-publication'
+          ? /^\/post\/\d+\/?$/u.test(url.pathname)
+          : /^\/editor\/drafts\/\d+\/?$/u.test(url.pathname)
       if (url.hostname.endsWith('.zhihu.com')) {
         if (stepId === 'verify-account' || stepId === 'verify-publication') return true
         return (

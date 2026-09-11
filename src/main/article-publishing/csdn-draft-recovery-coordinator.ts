@@ -1,3 +1,4 @@
+import { openXiaohongshuLocalDraft } from './xiaohongshu-draft-recovery'
 import type { ArticlePublishingDetailResult } from '../../shared/article-publishing/article-publishing-types'
 import type { Page } from 'playwright-core'
 import { CSDN_ARTICLE_MANAGEMENT_URL, CsdnPublishingAdapter } from './csdn-publishing-adapter'
@@ -56,6 +57,24 @@ export class CsdnDraftRecoveryCoordinator {
       status: 'running',
       evidence: this.managementUrl,
     })
+    if (new URL(this.managementUrl).origin === 'https://creator.xiaohongshu.com') {
+      const page = await input.navigate(this.managementUrl)
+      await input.observe?.({
+        id: 'recovery.management',
+        status: 'completed',
+        evidence: '已打开小红书本地草稿箱所在发布页',
+      })
+      return openXiaohongshuLocalDraft(
+        page,
+        {
+          draftId: input.expectedDraftId,
+          uid: input.expectedPlatformAccountId,
+          title: input.expectedTitle,
+        },
+        () => input.assertActive?.(),
+        input.observe,
+      )
+    }
     let page = await input.navigate(this.managementUrl)
     let list = await this.readSettledPage(
       page,

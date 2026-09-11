@@ -30,6 +30,65 @@ describe('article publishing persistent state', () => {
     await rm(directory, { recursive: true, force: true })
   })
 
+  it.each(['accepted', 'stale', 'wrong-account', 'not-dispatched'] as const)(
+    'binds only a current dispatched XHS receipt without declaring publication: %s',
+    async (scenario) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await created.service.flush()
+      const snapshot = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+      const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)!
+      const publishing = affair.articlePublishing!
+      const draftId = '071c3c48-ca3e-49c3-bb52-a43c1a73def8',
+        uid = '65361844000000000301e75a'
+      publishing.adapterId = 'xiaohongshu'
+      publishing.draft = {
+        platformDraftId: draftId,
+        platformAccountId: uid,
+        url: 'https://creator.xiaohongshu.com/publish/publish?target=image',
+        normalizedTitle: 'Article',
+      }
+      publishing.publication = { status: 'dispatched' }
+      const effect = {
+        key: 'xhs-submit',
+        affairId: affair.id,
+        attemptId: created.attemptId,
+        executionGeneration: publishing.execution.currentGeneration,
+        kind: 'publish' as const,
+        targetId: 'publish',
+        status: scenario === 'not-dispatched' ? ('reserved' as const) : ('dispatched' as const),
+        reservedAt: new Date().toISOString(),
+        dispatchedAt: new Date().toISOString(),
+        browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+      }
+      publishing.sideEffects = [effect]
+      Reflect.set(created.service, 'snapshot', snapshot)
+      const result = await created.service.recordXiaohongshuSubmissionReceipt(
+        {
+          affairId: affair.id,
+          attemptId: created.attemptId,
+          executionGeneration: effect.executionGeneration + (scenario === 'stale' ? 1 : 0),
+          browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+          sideEffectKey: effect.key,
+          draftId,
+          uid: scenario === 'wrong-account' ? 'other' : uid,
+          noteId: '6a8ed725000000002102ea10',
+        },
+        WORKSPACE_ID,
+      )
+      expect(result.success, JSON.stringify(result.success ? null : result.error)).toBe(
+        scenario === 'accepted',
+      )
+      if (result.success) {
+        expect(result.data.articlePublishing?.publication.status).toBe('dispatched')
+        expect(result.data.articlePublishing?.publication.url).toBe(
+          'https://www.xiaohongshu.com/explore/6a8ed725000000002102ea10',
+        )
+        expect(result.data.articlePublishing?.sideEffects[0].status).toBe('verified')
+      }
+      await created.service.flush()
+    },
+  )
+
   it.each(['current', 'stale', 'not-skipped', 'wrong-account'])(
     'completes an unchanged Zhihu title only with current read-only evidence: %s',
     async (scenario) => {

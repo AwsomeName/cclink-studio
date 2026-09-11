@@ -1,3 +1,4 @@
+import { clickXiaohongshuControl, XIAOHONGSHU_SAVE_SELECTOR, XIAOHONGSHU_PUBLISH_SELECTOR } from '../article-publishing/xiaohongshu-publish-control'
 /**
  * Playwright 操作执行器
  *
@@ -30,10 +31,51 @@ export async function executePlaywrightAction(
       return { url: page!.url() }
 
     case 'click':
+      if (new URL(page!.url()).origin === 'https://creator.xiaohongshu.com' && [XIAOHONGSHU_SAVE_SELECTOR,XIAOHONGSHU_PUBLISH_SELECTOR].includes(action.selector)) {
+        if (!assertDispatchStillCurrent) throw new Error('小红书保存/发布需要主进程动作许可')
+        await clickXiaohongshuControl(page!, action.selector === XIAOHONGSHU_SAVE_SELECTOR ? 'save' : 'publish', assertDispatchStillCurrent)
+        return {clicked:action.selector}
+      }
       await page!.click(action.selector)
       return { clicked: action.selector }
 
     case 'fill':
+      if (trustedArticleBodyHtml !== undefined && new URL(page!.url()).origin === 'https://creator.xiaohongshu.com') {
+        if (new URL(page!.url()).pathname !== '/publish/publish' || action.selector !== '.tiptap.ProseMirror[contenteditable="true"]' || !assertDispatchStillCurrent) throw new Error('小红书正文目标或派发许可不匹配')
+        assertDispatchStillCurrent()
+        await page!.locator(action.selector).fill(trustedArticleBodyHtml)
+        return {filled:action.selector}
+      }
+      if (
+        trustedArticleBodyHtml !== undefined &&
+        new URL(page!.url()).origin === 'https://juejin.cn'
+      ) {
+        if (
+          !/^\/editor\/drafts\/\d+$/u.test(new URL(page!.url()).pathname) ||
+          action.selector !== '.CodeMirror textarea'
+        )
+          throw new Error('正文目标不是掘金原稿 Markdown 编辑器')
+        await page!.locator('.bytemd-toolbar-tab:text-is("编辑")').click()
+        assertDispatchStillCurrent?.()
+        const input = page!.locator('.CodeMirror textarea')
+        await input.press('ControlOrMeta+a')
+        assertDispatchStillCurrent?.()
+        await input.press('Backspace')
+        const empty = await page!.evaluate(
+          () =>
+            (
+              document.querySelector('.CodeMirror') as
+                | (HTMLElement & { CodeMirror?: { getValue(): string } })
+                | null
+            )?.CodeMirror?.getValue() === '',
+        )
+        if (!empty) throw new Error('掘金正文未清空，停止写入')
+        assertDispatchStillCurrent?.()
+        await input.fill(trustedArticleBodyHtml)
+        assertDispatchStillCurrent?.()
+        await page!.locator('.bytemd-toolbar-tab:text-is("预览")').click()
+        return { filled: action.selector }
+      }
       if (trustedArticleBodyHtml !== undefined) {
         if (
           new URL(page!.url()).origin !== 'https://zhuanlan.zhihu.com' ||
@@ -183,6 +225,39 @@ export async function executePlaywrightAction(
       const paths = action.paths as string[]
       if (!paths || paths.length === 0) {
         throw new Error('必须提供至少一个文件路径')
+      }
+      if (new URL(page!.url()).origin === 'https://juejin.cn' && selector === '.CodeMirror') {
+        if (!/^\/editor\/drafts\/\d+$/u.test(new URL(page!.url()).pathname) || paths.length !== 1)
+          throw new Error('掘金图片粘贴只允许原稿中的单张冻结图片')
+        const mime = /\.png$/iu.test(paths[0])
+          ? 'image/png'
+          : /\.jpe?g$/iu.test(paths[0])
+            ? 'image/jpeg'
+            : /\.webp$/iu.test(paths[0])
+              ? 'image/webp'
+              : null
+        if (!mime) throw new Error('不支持的正文图片类型')
+        const { readFile } = await import('node:fs/promises')
+        const bytes = await readFile(paths[0])
+        assertDispatchStillCurrent?.()
+        await page!.locator('.bytemd-toolbar-tab:text-is("编辑")').click()
+        assertDispatchStillCurrent?.()
+        await page!.locator('.CodeMirror textarea').focus()
+        assertDispatchStillCurrent?.()
+        await page!.locator('.CodeMirror').evaluate(
+          (element, payload) => {
+            const data = new DataTransfer()
+            const bytes = Uint8Array.from(atob(payload.base64), (c) => c.charCodeAt(0))
+            data.items.add(new File([bytes], payload.name, { type: payload.mime }))
+            const input = element.querySelector('textarea')
+            if (!input) throw new Error('掘金图片粘贴输入区已消失')
+            input.dispatchEvent(
+              new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }),
+            )
+          },
+          { base64: bytes.toString('base64'), mime, name: paths[0].split('/').pop()! },
+        )
+        return { uploaded: 1, files: [paths[0].split('/').pop()] }
       }
       const locator = page!.locator(selector)
       await locator.setInputFiles(paths)

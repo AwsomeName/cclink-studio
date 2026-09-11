@@ -60,10 +60,18 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const [resources, setResources] = useState<WebResourceSnapshot | null>(null)
   const [affair, setAffair] = useState<WebAffair | null>(null)
   const [accountId, setAccountId] = useState('')
-  const [platform, setPlatform] = useState<'csdn' | 'zhihu'>('csdn')
+  const [platform, setPlatform] = useState<'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu'>('csdn')
+  const [localDraftId, setLocalDraftId] = useState('')
   const [existingDraftUrl, setExistingDraftUrl] = useState('')
   const [platformAccountId, setPlatformAccountId] = useState('')
-  const platformLabel = platform === 'zhihu' ? '知乎' : 'CSDN'
+  const platformLabel =
+    platform === 'xiaohongshu'
+      ? '小红书'
+      : platform === 'juejin'
+        ? '掘金'
+        : platform === 'zhihu'
+          ? '知乎'
+          : 'CSDN'
   const [accountLabelDraft, setAccountLabelDraft] = useState('')
   const [savingAccountLabel, setSavingAccountLabel] = useState(false)
   const [title, setTitle] = useState('')
@@ -120,7 +128,11 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         !account.mergedIntoAccountId &&
         (platform === 'csdn'
           ? hostname === 'csdn.net' || hostname.endsWith('.csdn.net')
-          : hostname === 'zhihu.com' || hostname.endsWith('.zhihu.com'))
+          : platform === 'xiaohongshu'
+            ? hostname === 'xiaohongshu.com' || hostname.endsWith('.xiaohongshu.com')
+            : platform === 'juejin'
+              ? hostname === 'juejin.cn'
+              : hostname === 'zhihu.com' || hostname.endsWith('.zhihu.com'))
         ? [{ account, website: website! }]
         : []
     })
@@ -150,7 +162,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       if (existing?.archivedAt) await agent.restoreArchivedConversation(conversationId)
       agent.renameConversation(
         conversationId,
-        `发布文章 · ${targetAffair.title} · ${targetAffair.articlePublishing?.adapterId === 'zhihu' ? '知乎' : 'CSDN'}`,
+        `发布文章 · ${targetAffair.title} · ${targetAffair.articlePublishing?.adapterId === 'xiaohongshu' ? '小红书' : targetAffair.articlePublishing?.adapterId === 'juejin' ? '掘金' : targetAffair.articlePublishing?.adapterId === 'zhihu' ? '知乎' : 'CSDN'}`,
       )
       if (activate) {
         agent.switchConversation(conversationId)
@@ -253,7 +265,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       {
         id: `browser-${result.data.browserTabId}`,
         kind: 'browser',
-        label: `${publishing.adapterId === 'zhihu' ? '知乎' : 'CSDN'}发布页`,
+        label: `${publishing.adapterId === 'xiaohongshu' ? '小红书' : publishing.adapterId === 'juejin' ? '掘金' : publishing.adapterId === 'zhihu' ? '知乎' : 'CSDN'}发布页`,
         ref: {
           type: 'browser',
           tabId: result.data.browserTabId,
@@ -302,20 +314,29 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         markdownPath: preview.source.markdownPath,
         ...(revisionOf ? { reviseDraftFromAffairId: revisionOf } : {}),
         accountId,
-        ...(platform === 'zhihu'
-          ? { existingDraft: { url: existingDraftUrl, platformAccountId } }
+        ...(platform !== 'csdn'
+          ? {
+              existingDraft: {
+                url:
+                  platform === 'xiaohongshu'
+                    ? 'https://creator.xiaohongshu.com/publish/publish?target=image'
+                    : existingDraftUrl,
+                platformAccountId,
+                ...(platform === 'xiaohongshu' ? { localDraftId } : {}),
+              },
+            }
           : {}),
         fields: {
           title,
-          summary: platform === 'zhihu' ? '' : summary,
+          summary: platform === 'zhihu' || platform === 'xiaohongshu' ? '' : summary,
           tags:
-            platform === 'zhihu'
+            platform === 'zhihu' || platform === 'xiaohongshu'
               ? []
               : tags
                   .split(/[,，]/u)
                   .map((item) => item.trim())
                   .filter(Boolean),
-          category: platform === 'zhihu' ? '' : category,
+          category: platform === 'zhihu' || platform === 'xiaohongshu' ? '' : category,
           ...(platform === 'csdn' && coverAssetId ? { coverAssetId } : {}),
         },
       })
@@ -534,12 +555,14 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
             <select
               value={platform}
               onChange={(event) => {
-                setPlatform(event.target.value as 'csdn' | 'zhihu')
+                setPlatform(event.target.value as 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu')
                 setAccountId('')
               }}
             >
               <option value="csdn">CSDN</option>
               <option value="zhihu">知乎</option>
+              <option value="juejin">掘金</option>
+              <option value="xiaohongshu">小红书图文</option>
             </select>
           </label>
           <label>
@@ -579,9 +602,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
             </div>
           ) : null}
           {resources && csdnAccounts.length === 0 ? (
-            <p className="article-publishing-warning">
-              “网站与账号”中还没有 Origin 为 csdn.net 的可用账号。
-            </p>
+            <p className="article-publishing-warning">“网站与账号”中还没有当前平台的可用账号。</p>
           ) : null}
         </section>
         <section className="article-publishing-card">
@@ -594,13 +615,13 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
               onChange={(event) => setTitle(event.target.value)}
             />
           </label>
-          {platform === 'csdn' ? (
+          {platform !== 'zhihu' && platform !== 'xiaohongshu' ? (
             <>
               <label>
                 摘要
                 <textarea
                   value={summary}
-                  maxLength={1_000}
+                  maxLength={platform === 'juejin' ? 100 : 1_000}
                   onChange={(event) => setSummary(event.target.value)}
                 />
               </label>
@@ -616,38 +637,57 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
                 分类
                 <input value={category} onChange={(event) => setCategory(event.target.value)} />
               </label>
-              <label>
-                封面
-                <select
-                  value={coverAssetId}
-                  onChange={(event) => setCoverAssetId(event.target.value)}
-                >
-                  <option value="">暂不选择</option>
-                  {preview?.assets
-                    .filter((asset) => asset.kind === 'local')
-                    .map((asset) => (
-                      <option key={asset.id} value={asset.id}>
-                        {asset.displayPath}
-                      </option>
-                    ))}
-                </select>
-              </label>
+              {platform === 'csdn' ? (
+                <label>
+                  封面
+                  <select
+                    value={coverAssetId}
+                    onChange={(event) => setCoverAssetId(event.target.value)}
+                  >
+                    <option value="">暂不选择</option>
+                    {preview?.assets
+                      .filter((asset) => asset.kind === 'local')
+                      .map((asset) => (
+                        <option key={asset.id} value={asset.id}>
+                          {asset.displayPath}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              ) : null}
             </>
-          ) : (
+          ) : null}
+          {platform !== 'csdn' ? (
             <>
               <label>
-                已有知乎草稿地址
+                {platform === 'xiaohongshu' ? '小红书本地草稿 ID' : `已有${platformLabel}草稿地址`}
                 <input
-                  value={existingDraftUrl}
-                  placeholder="https://zhuanlan.zhihu.com/p/…/edit"
-                  onChange={(e) => setExistingDraftUrl(e.target.value)}
+                  value={platform === 'xiaohongshu' ? localDraftId : existingDraftUrl}
+                  placeholder={
+                    platform === 'xiaohongshu'
+                      ? '原账号浏览器本地草稿 UUID'
+                      : platform === 'juejin'
+                        ? 'https://juejin.cn/editor/drafts/…'
+                        : 'https://zhuanlan.zhihu.com/p/…/edit'
+                  }
+                  onChange={(e) =>
+                    platform === 'xiaohongshu'
+                      ? setLocalDraftId(e.target.value)
+                      : setExistingDraftUrl(e.target.value)
+                  }
                 />
               </label>
               <label>
                 原账号用户标识
                 <input
                   value={platformAccountId}
-                  placeholder="个人主页 /people/ 后面的标识"
+                  placeholder={
+                    platform === 'xiaohongshu'
+                      ? '创作后台当前账号 UID（不是手机号或小红书号）'
+                      : platform === 'juejin'
+                        ? '个人主页 /user/ 后面的数字标识'
+                        : '个人主页 /people/ 后面的标识'
+                  }
                   onChange={(e) => setPlatformAccountId(e.target.value)}
                 />
               </label>
@@ -655,7 +695,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
                 当前从已有草稿继续，启动后从管理页核验账号与原稿。正文图片逐张上传；话题、封面及创作声明保留平台设置。
               </p>
             </>
-          )}
+          ) : null}
         </section>
         <section className="article-publishing-card">
           <h2>4. 执行计划</h2>
@@ -740,7 +780,16 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     <div className="article-publishing-page">
       <header className="article-publishing-header">
         <div>
-          <span>{publishing.adapterId === 'zhihu' ? '知乎' : 'CSDN'} · 持久发布事务</span>
+          <span>
+            {publishing.adapterId === 'xiaohongshu'
+              ? '小红书'
+              : publishing.adapterId === 'juejin'
+                ? '掘金'
+                : publishing.adapterId === 'zhihu'
+                  ? '知乎'
+                  : 'CSDN'}{' '}
+            · 持久发布事务
+          </span>
           <h1>{affair.title}</h1>
           <p>{publishing.source.markdownPath}</p>
         </div>
@@ -840,7 +889,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
             <span>平台草稿</span>
             <strong>
               {publishing.draft?.platformDraftId
-                ? `${publishing.adapterId === 'zhihu' ? '知乎' : 'CSDN'} 原稿 ${publishing.draft.platformDraftId}`
+                ? `${publishing.adapterId === 'xiaohongshu' ? '小红书' : publishing.adapterId === 'juejin' ? '掘金' : publishing.adapterId === 'zhihu' ? '知乎' : 'CSDN'} 原稿 ${publishing.draft.platformDraftId}`
                 : '尚未锁定平台草稿'}
             </strong>
             <small>
@@ -869,6 +918,10 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         <h2>正文图片（{publishing.assets.length}）</h2>
         <ArticleAssetList
           assets={publishing.assets}
+          allowExisting={
+            publishing.adapterId === 'xiaohongshu' &&
+            publishing.draft?.recovery?.status === 'verified'
+          }
           workspacePath={workspaceRef.path}
           busy={busy}
           onResolve={(assetId, resolution) => void resolveAsset(assetId, resolution)}
@@ -1125,11 +1178,13 @@ function ArticleAssetList({
   assets,
   workspacePath,
   busy = false,
+  allowExisting = false,
   onResolve,
 }: {
   assets: ArticlePublishingAsset[]
   workspacePath: string
   busy?: boolean
+  allowExisting?: boolean
   onResolve?: (assetId: string, resolution: 'present' | 'missing') => void
 }): React.ReactElement {
   if (assets.length === 0) return <p>正文没有图片。</p>
@@ -1173,7 +1228,9 @@ function ArticleAssetList({
             ) : (
               <small title={asset.sourcePath}>{asset.sourcePath}</small>
             )}
-            {onResolve && ['result-unknown', 'reconciling'].includes(asset.status) ? (
+            {onResolve &&
+            (['result-unknown', 'reconciling'].includes(asset.status) ||
+              (allowExisting && asset.status === 'pending')) ? (
               <div className="article-publishing-actions">
                 <span>先在可见的平台编辑器里看图片是否存在，不用填写图片地址。</span>
                 <button
@@ -1183,13 +1240,15 @@ function ArticleAssetList({
                 >
                   网页里有这张图
                 </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onResolve(asset.id, 'missing')}
-                >
-                  网页里没有，重新上传
-                </button>
+                {asset.status !== 'pending' && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onResolve(asset.id, 'missing')}
+                  >
+                    网页里没有，重新上传
+                  </button>
+                )}
               </div>
             ) : null}
           </div>

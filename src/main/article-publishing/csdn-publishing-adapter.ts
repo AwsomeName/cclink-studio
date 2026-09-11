@@ -14,7 +14,7 @@ export interface CsdnPageImageProbe {
 }
 
 export interface CsdnPageProbe {
-  adapterId: 'csdn' | 'zhihu'
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu'
   adapterVersion: 1
   observedAt: string
   url: string
@@ -39,6 +39,7 @@ export interface CsdnPageProbe {
     value: string
   }
   selectors: {
+    openPublishSettings?: string
     openEditor?: string
     dismissAssistant?: string
     dismissTagEditor?: string
@@ -59,6 +60,7 @@ export interface CsdnPageProbe {
   saveState: 'saved' | 'saving' | 'unknown'
   saveEvidence?: string
   publicationBlocker?: string
+  submissionUnavailableReason?: string
   publishedLinks: Array<{ url: string; title: string }>
 }
 
@@ -93,7 +95,7 @@ export interface CsdnDraftListCandidate {
 }
 
 export interface CsdnDraftListProbe {
-  adapterId: 'csdn' | 'zhihu'
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu'
   adapterVersion: 1
   observedAt: string
   platformAccountId?: string

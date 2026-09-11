@@ -237,7 +237,7 @@ export interface ArticlePublishingExecutionProtocol {
 }
 
 export interface ArticlePublishingState {
-  adapterId: 'csdn' | 'zhihu'
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu'
   adapterVersion: 1
   source: {
     markdownPath: string

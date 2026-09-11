@@ -1,17 +1,26 @@
+import { XiaohongshuPublishingAdapter } from './xiaohongshu-publishing-adapter'
+import { JuejinPublishingAdapter } from './juejin-publishing-adapter'
+import type { ArticlePublishingState } from '../../shared/article-publishing/article-publishing-types'
 import type { Page } from 'playwright-core'
 import { CsdnPublishingAdapter } from './csdn-publishing-adapter'
 import { ZhihuPublishingAdapter, ZHIHU_MANAGEMENT_URL } from './zhihu-publishing-adapter'
 
 export class PublishingAdapter {
+  private readonly xiaohongshu = new XiaohongshuPublishingAdapter()
+  private readonly juejin = new JuejinPublishingAdapter()
   private readonly csdn = new CsdnPublishingAdapter()
   private readonly zhihu = new ZhihuPublishingAdapter()
   private forPage(page: Page) {
+    if (['creator.xiaohongshu.com', 'www.xiaohongshu.com'].includes(new URL(page.url()).hostname)) return this.xiaohongshu
+    if (new URL(page.url()).hostname === 'juejin.cn') return this.juejin
     return new URL(page.url()).hostname.endsWith('.zhihu.com') ? this.zhihu : this.csdn
   }
   documentGeneration(page: Page) {
     return this.csdn.documentGeneration(page)
   }
-  probe(page: Page) {
+  probe(page: Page, fields?: ArticlePublishingState['fields'], draftId?: string) {
+    if (new URL(page.url()).hostname === 'juejin.cn')
+      return this.juejin.probe(page, fields, draftId)
     return this.forPage(page).probe(page)
   }
   probeDraftList(page: Page) {
@@ -21,7 +30,21 @@ export class PublishingAdapter {
     return this.forPage(page).verifyBody(page, html)
   }
 }
-export function publishingPlatform(id: 'csdn' | 'zhihu') {
+export function publishingPlatform(id: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu') {
+  if (id === 'xiaohongshu')
+    return {
+      label: '小红书',
+      editorUrl: 'https://creator.xiaohongshu.com/publish/publish?target=image',
+      managementUrl: 'https://creator.xiaohongshu.com/publish/publish?target=image',
+      origins: ['https://creator.xiaohongshu.com', 'https://www.xiaohongshu.com'],
+    }
+  if (id === 'juejin')
+    return {
+      label: '掘金',
+      editorUrl: 'https://juejin.cn/editor/drafts/new?v=2',
+      managementUrl: 'https://juejin.cn/editor/drafts',
+      origins: ['https://juejin.cn'],
+    }
   return id === 'zhihu'
     ? {
         label: '知乎',

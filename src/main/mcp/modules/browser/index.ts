@@ -819,6 +819,7 @@ export class BrowserToolModule implements ToolModule {
     let trustedBodyHtml: string | undefined
     let imageUpload: Awaited<ReturnType<ArticlePublishingBrowserPolicy['prepareImageUpload']>> =
       null
+    let publicationSubmit: Awaited<ReturnType<ArticlePublishingBrowserPolicy['preparePublicationSubmit']>> = null
     let initialDraftSave: Awaited<
       ReturnType<ArticlePublishingBrowserPolicy['prepareInitialDraftSave']>
     > = null
@@ -832,6 +833,7 @@ export class BrowserToolModule implements ToolModule {
             page,
             context,
           )) ?? null
+        publicationSubmit = (await this.articlePublishingBrowserPolicy?.preparePublicationSubmit?.(activeTask,sideEffectCapability.sideEffectKey,page,context)) ?? null
         trustedBodyHtml = await this.articlePublishingBrowserPolicy?.prepareBodyWrite?.(
           activeTask,
           context,
@@ -872,12 +874,14 @@ export class BrowserToolModule implements ToolModule {
           context?.abortSignal?.throwIfAborted()
           dispatchGuard?.()
           initialDraftSave?.arm()
+          publicationSubmit?.arm()
           dispatched = true
         },
         trustedBodyHtml,
       )
       await initialDraftSave?.finish(true)
       await imageUpload?.finish()
+      await publicationSubmit?.finish()
       if (activeTask?.correlation?.accountId) {
         await this.articlePublishingBrowserPolicy?.completeMutation?.(
           activeTask,
@@ -900,6 +904,7 @@ export class BrowserToolModule implements ToolModule {
     } catch (error) {
       // A click can throw after the server accepted the save. Preserve its exact ID even on
       // cancellation, but never navigate, advance progress or dispatch another save from catch.
+      if (dispatched && publicationSubmit) await publicationSubmit.finish().catch(() => undefined)
       if (dispatched && initialDraftSave)
         await initialDraftSave.finish(false).catch(() => undefined)
       if (activeTask)
@@ -947,6 +952,7 @@ export class BrowserToolModule implements ToolModule {
       throw error
     } finally {
       initialDraftSave?.dispose()
+      publicationSubmit?.dispose()
     }
   }
 

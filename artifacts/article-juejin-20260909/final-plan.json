@@ -1,0 +1,218 @@
+[
+  {
+    "status": "article-publishing-detail completed",
+    "text": "1\n解析账号与登录 Profile\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "2\n取得当前工作空间的账号 Tab\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "3\n打开管理页与草稿箱\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "4\n核验管理页真实账号\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "5\n按原 draftId 找到唯一草稿\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "6\n打开找到的原草稿\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "7\n复核原稿账号\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "8\n复核原稿draftId\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "9\n复核原稿标题\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "10\n复核原稿保存状态\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "11\n绑定并核对 Runtime\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "12\n读取当前页面账号与草稿事实\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "13\n定位正文编辑区域\n已核验 · 本次等待处理\nStudio\n进入条件\n当前页面检查通过\n完成条件\n唯一受支持正文 selector 与对应 iframe 可读\n实际证据\n正文 .CodeMirror textarea · iframe 主文档 · 2811 字符\n本次复核\n正文 未识别 · iframe 主文档 · 0 字符 · 当前页面没有可核验的正文编辑区域 · 2026-09-08T16:31:05.170Z\n允许下一步\n当前页面没有可核验的正文编辑区域；先处理此卡点并重新检查。\n证据时间\n2026-09-08T16:23:53.459Z · 执行代次 10"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "14\n检查图片 00-封面-App写完之后.png（正文引用 1 处）\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "15\n定位正文图片上传控件：00-封面-App写完之后.png（正文引用 1 处）\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "16\n上传图片 00-封面-App写完之后.png（正文引用 1 处）\n动作已完成\nAgent"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "17\n核验图片 00-封面-App写完之后.png（正文引用 1 处）\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "18\n检查图片 01-从技术语言到用户动作.png（正文引用 1 处）\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail pending",
+    "text": "19\n定位正文图片上传控件：01-从技术语言到用户动作.png（正文引用 1 处）\n尚未观察到执行\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "20\n上传图片 01-从技术语言到用户动作.png（正文引用 1 处）\n动作已完成\nAgent"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "21\n核验图片 01-从技术语言到用户动作.png（正文引用 1 处）\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "22\n检查图片 02-上线后的真实链路.png（正文引用 1 处）\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "23\n定位正文图片上传控件：02-上线后的真实链路.png（正文引用 1 处）\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "24\n上传图片 02-上线后的真实链路.png（正文引用 1 处）\n动作已完成\nAgent"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "25\n核验图片 02-上线后的真实链路.png（正文引用 1 处）\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "26\n填写完整正文\n动作已完成\nAgent"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "27\n核验正文位置与加载：00-封面-App写完之后.png\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "28\n核验正文位置与加载：01-从技术语言到用户动作.png\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "29\n核验正文位置与加载：02-上线后的真实链路.png\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "30\n回读正文与平台保存\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "31\n核验掘金发布设置面板\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "32\n读取标题\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail skipped",
+    "text": "33\n填写标题\n无需执行\nAgent"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "34\n核验标题\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "35\n读取摘要\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail skipped",
+    "text": "36\n填写摘要\n无需执行\nAgent"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "37\n核验摘要\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "38\n读取标签\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail skipped",
+    "text": "39\n填写标签\n无需执行\nAgent"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "40\n核验标签\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "41\n读取分类\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail skipped",
+    "text": "42\n填写分类\n无需执行\nAgent"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "43\n核验分类\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail skipped",
+    "text": "44\n读取封面\n无需执行\nStudio"
+  },
+  {
+    "status": "article-publishing-detail skipped",
+    "text": "45\n填写封面\n无需执行\nAgent"
+  },
+  {
+    "status": "article-publishing-detail skipped",
+    "text": "46\n核验封面\n无需执行\nStudio"
+  },
+  {
+    "status": "article-publishing-detail skipped",
+    "text": "47\n确认自动保存，无需重复点击\n无需执行\nAgent"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "48\n核验保存结果\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "49\n复核发布目标与有界授权\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "50\n提交单篇发布\n动作已完成\nAgent"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "51\n核验公开页图片：00-封面-App写完之后.png\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "52\n核验公开页图片：01-从技术语言到用户动作.png\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "53\n核验公开页图片：02-上线后的真实链路.png\n已核验\nStudio"
+  },
+  {
+    "status": "article-publishing-detail completed",
+    "text": "54\n核验平台公开结果\n已核验\nStudio"
+  }
+]

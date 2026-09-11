@@ -32,6 +32,34 @@ export const ZHIHU_ARTICLE_PUBLISHING_PLAN = CSDN_ARTICLE_PUBLISHING_PLAN.map((s
           : step.label,
 }))
 
+export const JUEJIN_ARTICLE_PUBLISHING_PLAN = CSDN_ARTICLE_PUBLISHING_PLAN.map((step) => ({
+  ...step,
+  label:
+    step.stepId === 'open-editor'
+      ? '从掘金草稿箱找回原稿'
+      : step.stepId === 'save-draft'
+        ? '核验掘金自动保存'
+        : step.label,
+}))
+
+export const XIAOHONGSHU_ARTICLE_PUBLISHING_PLAN = CSDN_ARTICLE_PUBLISHING_PLAN.map((step) => ({
+  ...step,
+  label:
+    step.stepId === 'open-editor'
+      ? '找回小红书原账号本地草稿'
+      : step.stepId === 'upload-assets'
+        ? '逐张上传并核验笔记图集'
+        : step.stepId === 'fill-fields'
+          ? '核验小红书标题及公开设置'
+          : step.stepId === 'save-draft'
+            ? '核验本地自动保存与原笔记'
+            : step.stepId === 'publish'
+              ? '提交这篇图文笔记'
+              : step.stepId === 'verify-publication'
+                ? '核验笔记审核与公开结果'
+                : step.label,
+}))
+
 export interface ArticlePublishingDetailDefinition {
   id: string
   checkpointId: string
@@ -203,8 +231,8 @@ export function articlePublishingDetailDefinitions(
     add(
       `asset.${asset.id}.open`,
       'upload-assets',
-      publishing.adapterId === 'zhihu' ? 'Studio' : 'Agent',
-      publishing.adapterId === 'zhihu'
+      publishing.adapterId !== 'csdn' ? 'Studio' : 'Agent',
+      publishing.adapterId !== 'csdn'
         ? `定位正文图片上传控件：${name}`
         : `打开正文上传面板：${name}`,
       '当前账号、原稿与正文区域通过核验',
@@ -246,9 +274,11 @@ export function articlePublishingDetailDefinitions(
       'Studio',
       `核验正文位置与加载：${asset.displayPath.split('/').pop()}`,
       '完整正文已按冻结 Markdown 与已核验平台图片填写',
-      publishing.adapterId === 'zhihu'
-        ? '该图平台地址、出现次数、顺序、前文位置与原稿一致，且图片加载成功（知乎不保留替代文字）'
-        : '该图出现次数、顺序、前文位置、替代文字与原稿一致，且图片加载成功',
+      publishing.adapterId === 'xiaohongshu'
+        ? '该图平台地址、图集出现次数和顺序与原稿对应，预览加载成功；图集不使用正文内位置或替代文字'
+        : publishing.adapterId === 'zhihu'
+          ? '该图平台地址、出现次数、顺序、前文位置与原稿一致，且图片加载成功（知乎不保留替代文字）'
+          : '该图出现次数、顺序、前文位置、替代文字与原稿一致，且图片加载成功',
       '全部图片通过后核验正文保存；不一致时显示具体图片卡点',
     )
   }
@@ -258,10 +288,22 @@ export function articlePublishingDetailDefinitions(
     'Studio',
     '回读正文与平台保存',
     '正文填写已派发',
-    '同稿正文非空、服务端与编辑器正文一致且已保存',
+    publishing.adapterId === 'xiaohongshu'
+      ? '同稿正文与平台本地草稿库回读一致；图集逐张核验通过'
+      : '同稿正文非空、服务端与编辑器正文一致且已保存',
     '检查平台字段；未知时先对账不重填',
   )
-  for (const [field, label] of publishing.adapterId === 'zhihu'
+  if (publishing.adapterId === 'juejin')
+    add(
+      'fields.open',
+      'fill-fields',
+      'Studio',
+      '核验掘金发布设置面板',
+      '正文及图片已核验',
+      '分类、标签、摘要面板可见；未提交文章',
+      '逐项核验平台字段，禁止提前点击确定并发布',
+    )
+  for (const [field, label] of ['zhihu', 'xiaohongshu'].includes(publishing.adapterId ?? '')
     ? [['title', '标题']]
     : [
         ['title', '标题'],
@@ -302,7 +344,7 @@ export function articlePublishingDetailDefinitions(
     'save.dispatch',
     'save-draft',
     'Agent',
-    publishing.adapterId === 'zhihu' ? '确认自动保存，无需重复点击' : '触发保存草稿',
+    publishing.adapterId !== 'csdn' ? '确认自动保存，无需重复点击' : '触发保存草稿',
     '字段已核验；无未知保存；已有自动保存可省略点击',
     '一次保存已派发，或已核验自动保存无需额外点击',
     '核验同稿保存结果',
@@ -354,5 +396,22 @@ export function articlePublishingDetailDefinitions(
     '唯一公开文章的账号、标题和 URL 已核验',
     '完成事务；未知只查询管理页',
   )
+  if (publishing.adapterId === 'xiaohongshu')
+    for (const row of rows) {
+      row.action = row.action
+        .replace('正文图片', '笔记图集图片')
+        .replace('正文位置与加载', '图集顺序与加载')
+        .replace('完整正文', '笔记正文')
+      row.completion = row.completion
+        .replace('位置、顺序、替代文字', '图集顺序')
+        .replace('正文位置', '图集顺序')
+      if (row.id === 'save.dispatch') {
+        row.action = '确认平台本地自动保存，已保存则不再点击暂存离开'
+        row.owner = 'Studio'
+        row.completion = '本地库已保存同一稿件，无需额外点击；保存结果独立核验'
+      }
+      if (row.id === 'save.verify')
+        row.completion = '同账号本地原稿 ID、标题、完整正文及图集回读一致'
+    }
   return rows
 }

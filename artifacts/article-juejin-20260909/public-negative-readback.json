@@ -1,0 +1,17 @@
+{
+  "wrongLink": {
+    "matches": false
+  },
+  "missingImage": {
+    "matches": false
+  },
+  "changedText": {
+    "matches": false
+  },
+  "wrongImage": {
+    "matches": false
+  },
+  "duplicateImage": {
+    "matches": false
+  }
+}

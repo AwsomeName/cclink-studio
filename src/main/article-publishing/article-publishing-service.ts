@@ -1,3 +1,4 @@
+import { readXiaohongshuEditor } from './xiaohongshu-publishing-adapter'
 import { PublishingAdapter, publishingPlatform } from './publishing-adapter'
 import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
@@ -215,7 +216,7 @@ export class ArticlePublishingService {
 
     try {
       const persistedDraftAnchor = publishing.draft?.url
-        ? parsePlatformDraftAnchor(publishing.draft.url)
+        ? parsePlatformDraftAnchor(publishing.draft.url, publishing.draft.platformDraftId)
         : null
       const recovery = publishing.draft?.recovery
       const recoveryRequired = Boolean(
@@ -264,17 +265,33 @@ export class ArticlePublishingService {
           throw new Error('发布结果未知，但任务缺少原 CSDN 账号；已停止自动核查')
         }
         const recoveredPublication = await (
-          publishing.adapterId === 'zhihu'
+          publishing.adapterId !== 'csdn'
             ? new CsdnDraftRecoveryCoordinator(
                 new PublishingAdapter(),
-                publishingPlatform('zhihu').managementUrl,
+                publishingPlatform(publishing.adapterId).managementUrl,
               )
             : this.draftRecoveryCoordinator
         ).recoverExactPublication({
-          ...(publishing.adapterId === 'zhihu' &&
-          /^https:\/\/zhuanlan\.zhihu\.com\/p\/(\d+)\/?$/u.exec(visibleUrl)?.[1] ===
-            publishing.draft?.platformDraftId
+          ...((publishing.adapterId === 'juejin' &&
+            /^https:\/\/juejin\.cn\/post\/\d+\/?$/u.test(visibleUrl)) ||
+          (publishing.adapterId === 'zhihu' &&
+            /^https:\/\/zhuanlan\.zhihu\.com\/p\/(\d+)\/?$/u.exec(visibleUrl)?.[1] ===
+              publishing.draft?.platformDraftId)
             ? { visiblePublicationUrl: visibleUrl }
+            : {}),
+          ...(publishing.adapterId === 'xiaohongshu' && publishing.publication.url
+            ? {
+                visiblePublicationUrl: (() => {
+                  const recorded = new URL(publishing.publication.url)
+                  const visible = new URL(visibleUrl)
+                  return visible.origin === recorded.origin &&
+                    visible.pathname === recorded.pathname &&
+                    !visible.username &&
+                    !visible.password
+                    ? visible.href
+                    : recorded.href
+                })(),
+              }
             : {}),
           expectedPlatformAccountId,
           expectedTitle: publishing.fields.title,
@@ -288,10 +305,10 @@ export class ArticlePublishingService {
           throw new Error('任务缺少原 CSDN 账号；已在启动 Agent 前停止恢复')
         }
         recoveredDraft = await (
-          publishing.adapterId === 'zhihu'
+          publishing.adapterId !== 'csdn'
             ? new CsdnDraftRecoveryCoordinator(
                 new PublishingAdapter(),
-                publishingPlatform('zhihu').managementUrl,
+                publishingPlatform(publishing.adapterId).managementUrl,
               )
             : this.draftRecoveryCoordinator
         ).recoverExactDraft({
@@ -301,15 +318,18 @@ export class ArticlePublishingService {
           expectedTitle: recovery.expectedTitle,
           navigate: navigateForRecovery,
         })
-        draftAnchor = parsePlatformDraftAnchor(recoveredDraft.url)
+        draftAnchor = parsePlatformDraftAnchor(recoveredDraft.url, recoveredDraft.draftId)
         if (!draftAnchor || draftAnchor.draftId !== recovery.expectedDraftId) {
           throw new Error('草稿恢复结果没有返回原平台草稿身份')
         }
       } else if (draftAnchor) {
-        if (!isSamePlatformDraft(draftAnchor.url, visibleUrl)) {
+        if (!isSamePlatformDraft(draftAnchor.url, visibleUrl, draftAnchor.draftId)) {
           await browserManager.navigate(tabId, draftAnchor.url)
         }
-        const restored = parsePlatformDraftAnchor(browserManager.getCurrentURL(tabId))
+        const restored = parsePlatformDraftAnchor(
+          browserManager.getCurrentURL(tabId),
+          draftAnchor.draftId,
+        )
         if (!restored || restored.draftId !== draftAnchor.draftId) {
           throw new Error(`无法恢复原 CSDN 草稿 ${draftAnchor.draftId}，已拒绝在其他页面继续`)
         }
@@ -527,7 +547,7 @@ export class ArticlePublishingService {
                   throw new Error('BrowserTask 创建后恢复草稿页面不可用')
                 }
                 const refreshedDraft = await (
-                  publishing.adapterId === 'zhihu'
+                  publishing.adapterId !== 'csdn'
                     ? new CsdnDraftRecoveryCoordinator(new PublishingAdapter())
                     : this.draftRecoveryCoordinator
                 ).verifyExactDraftPage({
@@ -958,7 +978,7 @@ export class ArticlePublishingService {
       if (!page || page.isClosed()) throw new Error('Page Runtime 重绑定后恢复草稿页面不可用')
       const observedView = browserManager.getViewRuntimeIdentity(runtime.tabId)
       const verifiedDraft = await (
-        publishingBeforeRebind.adapterId === 'zhihu'
+        publishingBeforeRebind.adapterId !== 'csdn'
           ? new CsdnDraftRecoveryCoordinator(new PublishingAdapter())
           : this.draftRecoveryCoordinator
       ).verifyExactDraftPage({
@@ -1560,22 +1580,35 @@ export class ArticlePublishingService {
       ? snapshot.data.affairs.find((a) => a.id === parsed.data.affairId)
       : undefined
     const state = affair?.articlePublishing
+    const workspacePath = parsed.data.workspaceRef.path
     let observation: { platformUrl: string; isCurrent: () => boolean } | undefined
-    if (state?.adapterId === 'zhihu' && parsed.data.resolution === 'present') {
+    if (state && state.adapterId !== 'csdn' && parsed.data.resolution === 'present') {
       const attempt = affair?.attempts.find((a) => a.id === state.execution.currentAttemptId)
       const manager = this.runtimeDependencies?.getBrowserManager()
       const bridge = this.runtimeDependencies?.getPlaywrightBridge()
-      const page = attempt?.tabId ? bridge?.getPageById(attempt.tabId) : undefined
+      const tabId =
+        attempt?.tabId ?? manager?.getActiveViewIdForWorkspace(parsed.data.workspaceRef.path)
+      const page = tabId ? bridge?.getPageById(tabId) : undefined
       if (
         !page ||
-        !attempt?.tabId ||
-        !manager?.isViewVisible(attempt.tabId) ||
-        manager.getViewProfileId(attempt.tabId) !== attempt.profileId
+        !attempt ||
+        !tabId ||
+        !manager?.isViewVisible(tabId) ||
+        manager.getViewProfileId(tabId) !== attempt.profileId ||
+        manager.getViewAccountId(tabId) !== state.accountId ||
+        manager.getViewWorkspaceKey(tabId) !== parsed.data.workspaceRef.path
       )
         return invalid('请打开本任务原稿后再确认图片')
       const adapter = new PublishingAdapter()
       const generation = adapter.documentGeneration(page)
       const probe = await adapter.probe(page)
+      const selected = state.assets.find((a) => a.id === parsed.data.assetId)
+      const importingExisting =
+        state.adapterId === 'xiaohongshu' &&
+        selected?.status === 'pending' &&
+        selected.uploadAttempts.length === 0 &&
+        state.draft?.recovery?.status === 'verified'
+      const liveGallery = importingExisting ? await readXiaohongshuEditor(page) : undefined
       const unknown = state.assets.filter((a) =>
         ['result-unknown', 'reconciling'].includes(a.status),
       )
@@ -1587,8 +1620,16 @@ export class ArticlePublishingService {
         probe.platformAccountId !== state.draft?.platformAccountId ||
         probe.title.value !== state.fields.title ||
         probe.saveState !== 'saved' ||
-        unknown.length !== 1 ||
-        unknown[0].id !== parsed.data.assetId ||
+        (importingExisting
+          ? !liveGallery?.images.some(
+              (img) =>
+                img.loaded &&
+                img.name === selected?.sourcePath.split('/').at(-1) &&
+                unassigned.some(
+                  (u) => u.src === `https://sns-creator-preview.xhscdn.com/${img.fileId}`,
+                ),
+            )
+          : unknown.length !== 1 || unknown[0].id !== parsed.data.assetId) ||
         unassigned.length !== 1
       )
         return invalid('原稿或图片无法唯一对应，请保留现场；不会猜测图片地址')
@@ -1603,8 +1644,11 @@ export class ArticlePublishingService {
             now?.execution.currentGeneration === state.execution.currentGeneration &&
             page.url() === probe.url &&
             adapter.documentGeneration(page) === generation &&
-            bridge?.getPageById(attempt.tabId!) === page &&
-            manager.isViewVisible(attempt.tabId!),
+            bridge?.getPageById(tabId) === page &&
+            manager.isViewVisible(tabId) &&
+            manager.getViewProfileId(tabId) === attempt.profileId &&
+            manager.getViewAccountId(tabId) === state.accountId &&
+            manager.getViewWorkspaceKey(tabId) === workspacePath,
           )
         },
       }
@@ -1874,6 +1918,35 @@ function buildAgentPrompt(
 ): string {
   const publishing = affair.articlePublishing!
   const localAssets = publishing.assets.filter((asset) => asset.kind === 'local')
+  if (publishing.adapterId === 'xiaohongshu')
+    return [
+      '执行小红书单篇图文任务，复用绑定原账号原本地草稿，不新建、不重复提交。',
+      `affairId=${affair.id}; attemptId=${attemptId}; accountId=${publishing.accountId}`,
+      `sourceMarkdownPath=${publishing.source.markdownPath}`,
+      '先 web_affair_get，再 article_publishing_inspect_page；每次动作前和回报前重新 inspect，只用 main 签发的 selector。按 currentStepId 顺序 running → verifying → completed；inspect 可能推进步骤，重新读取再继续。',
+      'Studio 从草稿箱的图文笔记分类恢复精确 draftId，并核对 UID、标题、本地保存全文及图集。登录失效、原稿不唯一或 ID 不符必须停住。',
+      '小红书图集与正文分开：每张图报告 uploading，向 selectors.fileInput 上传一个冻结文件，报告 waiting-platform/verifying；main 等待真实上传并回读同一平台本地草稿，核验 fileId、尺寸及加载后才报告 uploaded。结果未知不重复上传；已有未归属图片先报告需要用户核对，不能猜对应关系。',
+      'fill-body 使用 browser_fill(selector=selectors.body,value=原 Markdown)，main 去掉标题和图片标记，只填写冻结正文；保持三张图集顺序。禁止 browser_evaluate、操作平台内部 store 或猜按钮。',
+      'fill-fields 只核对冻结标题；不代用户勾选原创或版权声明。平台自动保存到本机草稿库，已保存时无需点击暂存离开；只有 inspect.saveState=saved 且原账号、原稿、全文、逐图一致才能完成 save-draft。',
+      'publish 只点击 selectors.publish 一次；缺少授权、出现声明、验证码或未识别弹窗时报告具体原因并等待用户。暂存离开绝不是发布。',
+      '提交后从 inspect.publishedLinks 读取主进程绑定本次回执的作品链接，完成 publish 检查点后 browser_navigate 打开该链接，再 inspect 核验原账号、作品 ID、正文和逐图。不得按同名标题猜作品。',
+      'result-unknown 不得再次发布。缺少平台结果或图文核验时不得回报 succeeded；出现审核中/未通过据实报告。verify-publication completed 必须携带 outputRefs={publicationUrl:inspect.url}，最后 web_affair_finish_attempt(outcome=succeeded,url=inspect.url)。',
+    ].join('\n')
+  if (publishing.adapterId === 'juejin')
+    return [
+      '执行用户授权的掘金单篇三图文章发布，复用绑定的原账号原稿，不新建、不重复提交。',
+      `affairId=${affair.id}; attemptId=${attemptId}; accountId=${publishing.accountId}`,
+      `sourceMarkdownPath=${publishing.source.markdownPath}`,
+      '先 web_affair_get，再 article_publishing_inspect_page；每个动作前和回报前重新 inspect，只使用 main 返回的 selector。按 currentStepId 顺序 running → verifying → completed；inspect 可能推进步骤，每次重新读当前步骤。',
+      '单图次数以 asset.uploadAttempts 数组长度为准；sideEffect.targetId 中的 attempt 编号不是已尝试次数。上限仍为三次，不得改状态绕过。',
+      '每张本地图片：报告 uploading，向 selectors.fileInput 上传一个冻结文件，报告 waiting-platform/verifying，inspect 的 matchedAssets 对应地址确认后才报告 uploaded。不要打开系统文件选择器，不重复上传结果未知图片。',
+      'fill-body 调 browser_fill(selector=selectors.body,value=原 Markdown)，main 注入冻结全文和已核验图片。不要操作 DOM 或调用 browser_evaluate。正文及每张图位置通过且 saved 才完成。',
+      'fill-fields：有 selectors.openPublishSettings 时先点击打开字段面板，这不是提交。标题/摘要不同时 fill 对应 selector；分类不同时 click selectors.category；标签不同时 fill tagEditor.inputSelector=冻结标签，再 inspect 后 click selectors.tags。所有已匹配字段不重写。',
+      'save-draft 等待 inspect.saveState=saved，并再次核对所有冻结字段。',
+      'publish：如需要先点击 selectors.openPublishSettings，再 inspect；只点击 selectors.publish（确定并发布）一次。出现验证码、声明或未知弹窗停住并报具体原因，不猜测下一按钮。',
+      '发布后只核验，禁止重复发布；通过 inspect.publishedLinks 或实际公开页核验原账号、原文、三图。结果未知只查，不能重发。',
+      'verify-publication 完成必须携带 outputRefs={publicationUrl:inspect.url}，最后 web_affair_finish_attempt(outcome=succeeded,url=inspect.url,summary=真实结果)。保存不能当发布成功。',
+    ].join('\n')
   if (publishing.adapterId === 'zhihu')
     return [
       '执行用户已授权的知乎单篇图文提交。使用当前绑定原稿，不新建、不换账号。',

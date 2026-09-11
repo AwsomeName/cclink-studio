@@ -81,6 +81,8 @@ import { articlePublishingStateSchema } from '../../shared/article-publishing/ar
 import {
   CSDN_ARTICLE_PUBLISHING_PLAN,
   ZHIHU_ARTICLE_PUBLISHING_PLAN,
+  JUEJIN_ARTICLE_PUBLISHING_PLAN,
+  XIAOHONGSHU_ARTICLE_PUBLISHING_PLAN,
 } from '../../shared/article-publishing/article-publishing-plan'
 import {
   parsePlatformDraftAnchor,
@@ -158,7 +160,7 @@ export interface ArticlePublishingAgentReporter {
   trustedPageEvidence?: {
     /** Main-only live guard; never persisted or accepted from IPC. */
     isCurrent?: () => boolean
-    adapterId: 'csdn' | 'zhihu'
+    adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu'
     adapterVersion: 1
     observedAt: string
     url: string
@@ -466,7 +468,7 @@ export class WebAffairService {
   createArticlePublishingAffair(
     input: {
       preview: ArticlePublishingSourcePreview
-      existingDraft?: { url: string; platformAccountId: string }
+      existingDraft?: { url: string; platformAccountId: string; localDraftId?: string }
       reviseDraftFromAffairId?: string
       accountId: string
       fields: ArticlePublishingFields
@@ -882,6 +884,65 @@ export class WebAffairService {
     })
   }
 
+  recordXiaohongshuSubmissionReceipt(
+    input: {
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      browserTaskRunId: string
+      sideEffectKey: string
+      draftId: string
+      uid: string
+      noteId: string
+    },
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(input.affairId, workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      const effect = publishing?.sideEffects.find((e) => e.key === input.sideEffectKey)
+      if (
+        !found ||
+        !publishing ||
+        publishing.adapterId !== 'xiaohongshu' ||
+        publishing.execution.currentGeneration !== input.executionGeneration ||
+        found.attempt.browserTaskRunId !== input.browserTaskRunId ||
+        publishing.draft?.platformDraftId !== input.draftId ||
+        publishing.draft.platformAccountId !== input.uid ||
+        !effect ||
+        effect.kind !== 'publish' ||
+        effect.attemptId !== input.attemptId ||
+        effect.executionGeneration !== input.executionGeneration ||
+        effect.browserTaskRunId !== input.browserTaskRunId ||
+        !['dispatched', 'result-unknown', 'verified'].includes(effect.status) ||
+        !/^[a-f\d]{24}$/iu.test(input.noteId)
+      )
+        return this.transitionError('小红书提交回执不属于本次原稿及已派发发布动作')
+      const url = `https://www.xiaohongshu.com/explore/${input.noteId}`
+      if (publishing.publication.url && publishing.publication.url !== url)
+        return this.transitionError('小红书提交结果 ID 冲突，禁止替换或重发')
+      const now = this.timestamp()
+      return this.persistAffair({
+        ...found.affair,
+        articlePublishing: {
+          ...setArticlePublishingPlanResult(publishing, {
+            id: 'publication.verify',
+            status: 'waiting',
+            observedAt: now,
+            generation: input.executionGeneration,
+            evidence: `平台已接受本次提交 · 作品 ${input.noteId}`,
+            reason: '等待公开页账号、正文与逐张图片核验；禁止重复发布',
+          }),
+          publication: { ...publishing.publication, url, observedAt: now },
+          sideEffects: publishing.sideEffects.map((e) =>
+            e.key === effect.key ? { ...e, status: 'verified' as const, observedAt: now } : e,
+          ),
+        },
+        updatedAt: now,
+      })
+    })
+  }
+
   recordArticlePublishingPageObservation(
     input: {
       affairId: string
@@ -1189,7 +1250,7 @@ export class WebAffairService {
   private async createArticlePublishingAffairNow(
     input: {
       preview: ArticlePublishingSourcePreview
-      existingDraft?: { url: string; platformAccountId: string }
+      existingDraft?: { url: string; platformAccountId: string; localDraftId?: string }
       reviseDraftFromAffairId?: string
       accountId: string
       fields: ArticlePublishingFields
@@ -1213,25 +1274,36 @@ export class WebAffairService {
       return this.resourceError('所选网站 Origin 无效')
     }
     const adapterId =
-      hostname === 'zhihu.com' || hostname.endsWith('.zhihu.com')
-        ? 'zhihu'
-        : hostname === 'csdn.net' || hostname.endsWith('.csdn.net')
-          ? 'csdn'
-          : null
-    if (!adapterId) return this.resourceError('请选择 CSDN 或知乎账号')
-    const platformLabel = adapterId === 'zhihu' ? '知乎' : 'CSDN'
+      hostname === 'xiaohongshu.com' || hostname.endsWith('.xiaohongshu.com')
+        ? 'xiaohongshu'
+        : hostname === 'juejin.cn'
+          ? 'juejin'
+          : hostname === 'zhihu.com' || hostname.endsWith('.zhihu.com')
+            ? 'zhihu'
+            : hostname === 'csdn.net' || hostname.endsWith('.csdn.net')
+              ? 'csdn'
+              : null
+    if (!adapterId) return this.resourceError('请选择 CSDN、知乎或掘金账号')
+    const platformLabel =
+      adapterId === 'xiaohongshu'
+        ? '小红书'
+        : adapterId === 'juejin'
+          ? '掘金'
+          : adapterId === 'zhihu'
+            ? '知乎'
+            : 'CSDN'
     const importedAnchor = input.existingDraft
-      ? parsePlatformDraftAnchor(input.existingDraft.url)
+      ? parsePlatformDraftAnchor(input.existingDraft.url, input.existingDraft.localDraftId)
       : null
     if (
       input.existingDraft &&
-      (adapterId !== 'zhihu' ||
+      (adapterId === 'csdn' ||
         importedAnchor?.adapterId !== adapterId ||
         input.reviseDraftFromAffairId)
     )
       return this.invalid('原稿地址与平台不一致')
-    if (adapterId === 'zhihu' && !importedAnchor)
-      return this.invalid('知乎调试阶段请提供已有草稿地址和原账号标识；不会新建替代稿')
+    if (adapterId !== 'csdn' && !importedAnchor)
+      return this.invalid('当前平台请提供已有草稿地址和原账号标识；不会新建替代稿')
     if (
       adapterId === 'zhihu' &&
       (input.fields.summary ||
@@ -1312,7 +1384,13 @@ export class WebAffairService {
       return this.resourceError('Markdown 或正文图片已经不可用，请重新选择文章')
     }
     const checkpoints: ArticlePublishingState['checkpoints'] = (
-      adapterId === 'zhihu' ? ZHIHU_ARTICLE_PUBLISHING_PLAN : CSDN_ARTICLE_PUBLISHING_PLAN
+      adapterId === 'xiaohongshu'
+        ? XIAOHONGSHU_ARTICLE_PUBLISHING_PLAN
+        : adapterId === 'juejin'
+          ? JUEJIN_ARTICLE_PUBLISHING_PLAN
+          : adapterId === 'zhihu'
+            ? ZHIHU_ARTICLE_PUBLISHING_PLAN
+            : CSDN_ARTICLE_PUBLISHING_PLAN
     ).map(({ stepId, label, resumePolicy }) => ({
       stepId,
       label,
@@ -3811,7 +3889,10 @@ export class WebAffairService {
     const recovery = publishing.draft?.recovery
     let publishingForBind = publishing
     if (recovery?.executionGeneration === executionGeneration && recoveryVerification) {
-      const parsed = parsePlatformDraftAnchor(recoveryVerification.url)
+      const parsed = parsePlatformDraftAnchor(
+        recoveryVerification.url,
+        recoveryVerification.draftId,
+      )
       if (
         recoveryVerification.recoveryOperationId !== recovery.operationId ||
         recoveryVerification.draftId !== recovery.expectedDraftId ||
@@ -4216,7 +4297,7 @@ export class WebAffairService {
     let nextDraft = publishing.draft
     if (recovery?.executionGeneration === input.executionGeneration) {
       const evidence = input.recoveryVerification
-      const parsed = evidence ? parsePlatformDraftAnchor(evidence.url) : null
+      const parsed = evidence ? parsePlatformDraftAnchor(evidence.url, evidence.draftId) : null
       if (
         !evidence ||
         evidence.recoveryOperationId !== recovery.operationId ||
@@ -4653,20 +4734,31 @@ export class WebAffairService {
           : undefined
       // An already matching Zhihu title is a read-only branch. Main must have
       // observed both the skipped write and its current-generation verification.
-      const unchangedZhihuTitle =
-        publishing.adapterId === 'zhihu' &&
+      const unchangedPlatformFields =
+        publishing.adapterId !== 'csdn' &&
         input.stepId === 'fill-fields' &&
         reporter.trustedPageEvidence.draftId === publishing.draft?.platformDraftId &&
         reporter.trustedPageEvidence.platformAccountId === publishing.draft?.platformAccountId &&
         reporter.trustedPageEvidence.normalizedTitle === publishing.fields.title.trim() &&
-        ['field.title.dispatch', 'field.title.verify'].every((id) =>
-          checkpoint.details?.some(
-            (detail) =>
-              detail.id === id &&
-              detail.generation === found.attempt.executionGeneration &&
-              detail.status === (id.endsWith('.dispatch') ? 'skipped' : 'completed'),
-          ),
-        ) &&
+        (['title', 'summary', 'tags', 'category', 'cover'] as const)
+          .filter((field) =>
+            ['zhihu', 'xiaohongshu'].includes(publishing.adapterId)
+              ? field === 'title'
+              : field === 'cover'
+                ? Boolean(publishing.fields.coverAssetId)
+                : Array.isArray(publishing.fields[field])
+                  ? publishing.fields[field].length > 0
+                  : Boolean(publishing.fields[field]),
+          )
+          .flatMap((field) => [`field.${field}.dispatch`, `field.${field}.verify`])
+          .every((id) =>
+            checkpoint.details?.some(
+              (detail) =>
+                detail.id === id &&
+                detail.generation === found.attempt.executionGeneration &&
+                detail.status === (id.endsWith('.dispatch') ? 'skipped' : 'completed'),
+            ),
+          ) &&
         !eligibleEffects.some(
           (effect) =>
             effect.kind === 'save-draft' &&
@@ -4690,7 +4782,7 @@ export class WebAffairService {
               : undefined
       if (
         ['fill-body', 'fill-fields', 'save-draft', 'publish'].includes(input.stepId) &&
-        !unchangedZhihuTitle &&
+        !unchangedPlatformFields &&
         (!requiredEffect ||
           (!['dispatched', 'result-unknown', 'verified'].includes(requiredEffect.status) &&
             requiredEffect !== recoveredBodyEffect))
@@ -4898,9 +4990,12 @@ export class WebAffairService {
     browserTaskRunId?: string,
     creation?: { sideEffectKey: string; platformAccountId: string; normalizedTitle: string },
   ): Promise<WebAffairOperationResult<WebAffair>> {
-    const anchor = parsePlatformDraftAnchor(rawUrl)
-    if (!anchor) return this.transitionError('当前页面没有可恢复的 CSDN 草稿标识')
     const found = this.findAttempt(affairId, attemptId)
+    const anchor = parsePlatformDraftAnchor(
+      rawUrl,
+      found?.affair.articlePublishing?.draft?.platformDraftId,
+    )
+    if (!anchor) return this.transitionError('当前页面没有可恢复的原草稿标识')
     const publishing = found?.affair.articlePublishing
     if (!found || !publishing || found.affair.kind !== 'article-publishing') {
       return this.notFound('文章发布 Attempt 不存在')
@@ -4952,7 +5047,9 @@ export class WebAffairService {
     ) {
       return this.transitionError('草稿锚点不属于当前发布运行代次')
     }
-    const existing = publishing.draft?.url ? parsePlatformDraftAnchor(publishing.draft.url) : null
+    const existing = publishing.draft?.url
+      ? parsePlatformDraftAnchor(publishing.draft.url, publishing.draft.platformDraftId)
+      : null
     if (existing && existing.draftId !== anchor.draftId) {
       return this.transitionError(
         `当前 Attempt 已绑定草稿 ${existing.draftId}，拒绝切换到草稿 ${anchor.draftId}`,
@@ -5304,7 +5401,7 @@ export class WebAffairService {
           url: publishing.draft.url ?? '',
         }
       : publishing.draft?.url
-        ? parsePlatformDraftAnchor(publishing.draft.url)
+        ? parsePlatformDraftAnchor(publishing.draft.url, publishing.draft.platformDraftId)
         : null
     if (!anchor) return publishing.draft
     return {
@@ -5366,7 +5463,7 @@ export class WebAffairService {
     ) {
       return this.transitionError('草稿恢复证据不属于当前发布恢复代次')
     }
-    const parsed = parsePlatformDraftAnchor(input.url)
+    const parsed = parsePlatformDraftAnchor(input.url, input.draftId)
     if (!parsed || parsed.adapterId !== publishing.adapterId || parsed.draftId !== input.draftId) {
       return this.transitionError('恢复后的页面不能证明是原平台草稿')
     }
@@ -5544,7 +5641,7 @@ export class WebAffairService {
         return this.transitionError('恢复写入许可已变化，拒绝记录写后页面')
       }
     }
-    const parsed = parsePlatformDraftAnchor(input.url)
+    const parsed = parsePlatformDraftAnchor(input.url, input.draftId)
     if (!parsed || parsed.adapterId !== publishing.adapterId || parsed.draftId !== input.draftId) {
       return this.evidenceRequired('写后页面地址没有同一草稿编号')
     }
@@ -5579,7 +5676,17 @@ export class WebAffairService {
     if (!affair || affair.kind !== 'article-publishing' || !publishing || !asset) {
       return this.notFound('待确认的文章图片不存在')
     }
-    if (asset.kind !== 'local' || !['result-unknown', 'reconciling'].includes(asset.status)) {
+    const importingExisting =
+      publishing.adapterId === 'xiaohongshu' &&
+      asset.status === 'pending' &&
+      asset.uploadAttempts.length === 0 &&
+      publishing.draft?.recovery?.status === 'verified' &&
+      resolution === 'present' &&
+      Boolean(observation)
+    if (
+      asset.kind !== 'local' ||
+      (!importingExisting && !['result-unknown', 'reconciling'].includes(asset.status))
+    ) {
       return this.transitionError('只有结果未知的本地图片可以人工确认')
     }
     const now = this.timestamp()
@@ -6643,14 +6750,23 @@ export class WebAffairService {
   }
 }
 
-function isPlatformPublicationUrl(rawUrl: string, platform: 'csdn' | 'zhihu'): boolean {
+function isPlatformPublicationUrl(
+  rawUrl: string,
+  platform: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu',
+): boolean {
   try {
     const url = new URL(rawUrl)
     return (
       url.protocol === 'https:' &&
-      ((platform === 'csdn' &&
-        url.hostname === 'blog.csdn.net' &&
-        /^\/[^/]+\/article\/details\/\d+\/?$/u.test(url.pathname)) ||
+      ((platform === 'xiaohongshu' &&
+        url.origin === 'https://www.xiaohongshu.com' &&
+        /^\/explore\/[a-f\d]{24}\/?$/iu.test(url.pathname)) ||
+        (platform === 'juejin' &&
+          url.origin === 'https://juejin.cn' &&
+          /^\/post\/\d+\/?$/u.test(url.pathname)) ||
+        (platform === 'csdn' &&
+          url.hostname === 'blog.csdn.net' &&
+          /^\/[^/]+\/article\/details\/\d+\/?$/u.test(url.pathname)) ||
         (platform === 'zhihu' &&
           url.hostname === 'zhuanlan.zhihu.com' &&
           /^\/p\/\d+\/?$/u.test(url.pathname)))

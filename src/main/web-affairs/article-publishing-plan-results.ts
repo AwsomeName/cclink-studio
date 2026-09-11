@@ -60,6 +60,12 @@ export function foldArticlePublishingPlanResults(
               : 'running',
         `派发闸门已通过 · ${effect.dispatchedAt} · ${effect.kind}/${effect.targetId}；结果另行核验`,
       )
+      if (effect.kind === 'publish' && state.adapterId === 'juejin')
+        put(
+          'fields.open',
+          'completed',
+          `最终提交前 main 已在掘金可见设置面板核验唯一提交控件 · ${effect.dispatchedAt}`,
+        )
       if (effect.kind === 'publish')
         put(
           'publish.preflight',
@@ -127,13 +133,19 @@ export function foldArticlePublishingPlanResults(
         .find((d) => d.id === `asset.${asset.id}.open`)
       if (opened?.status === 'completed' && opened.recheck)
         next = setArticlePublishingPlanResult(next, { ...opened, recheck: undefined })
-      if (state.adapterId === 'zhihu' && !opened)
+      if (['zhihu', 'xiaohongshu'].includes(state.adapterId) && !opened)
         put(
           `asset.${asset.id}.open`,
           'skipped',
           '图片已核验存在，本次无需再定位上传控件；此前定位动作未记录，不补记成功',
         )
 
+      if (asset.manualResolution?.status === 'present' && asset.uploadAttempts.length === 0)
+        put(
+          `asset.${asset.id}.dispatch`,
+          'skipped',
+          '原稿已有该图，经人工确认并由主进程回读，无需重新上传；未补记上传成功',
+        )
       put(`asset.${asset.id}.inspect`, 'completed', `已有可信图片记录 · ${asset.displayPath}`)
       put(
         `asset.${asset.id}.verify`,

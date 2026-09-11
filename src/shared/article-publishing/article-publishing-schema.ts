@@ -304,7 +304,7 @@ const operationTransitionSchema = z
 
 export const articlePublishingStateSchema = z
   .object({
-    adapterId: z.enum(['csdn', 'zhihu']),
+    adapterId: z.enum(['csdn', 'zhihu', 'juejin', 'xiaohongshu']),
     adapterVersion: z.literal(1),
     source: z
       .object({
@@ -367,7 +367,9 @@ export const articlePublishingStateSchema = z
       .strict(),
     draft: z
       .object({
-        platformDraftId: z.string().trim().regex(/^\d+$/u).max(120).optional(),
+        platformDraftId: z
+          .union([z.string().trim().regex(/^\d+$/u).max(120), z.string().uuid()])
+          .optional(),
         platformAccountId: z.string().trim().min(1).max(320).optional(),
         url: z.url().max(16_384).optional(),
         normalizedTitle: z.string().max(320).optional(),
@@ -377,7 +379,10 @@ export const articlePublishingStateSchema = z
             operationId: z.string().trim().min(1).max(200),
             executionGeneration: z.number().int().positive().max(1_000_000),
             status: z.enum(['locating', 'verified', 'failed']),
-            expectedDraftId: z.string().trim().regex(/^\d+$/u).max(120),
+            expectedDraftId: z.union([
+              z.string().trim().regex(/^\d+$/u).max(120),
+              z.string().uuid(),
+            ]),
             expectedTitle: z.string().trim().min(1).max(320),
             startedAt: timestampSchema,
             verifiedAt: timestampSchema.optional(),
@@ -388,7 +393,7 @@ export const articlePublishingStateSchema = z
                 id: z.string().trim().min(1).max(200),
                 recoveryOperationId: z.string().trim().min(1).max(200),
                 executionGeneration: z.number().int().positive().max(1_000_000),
-                draftId: z.string().trim().regex(/^\d+$/u).max(120),
+                draftId: z.union([z.string().trim().regex(/^\d+$/u).max(120), z.string().uuid()]),
                 tabId: z.string().trim().min(1).max(200),
                 browserViewRuntimeGeneration: z.number().int().positive().max(1_000_000),
                 webContentsId: z.number().int().positive(),
@@ -413,6 +418,21 @@ export const articlePublishingStateSchema = z
       .strict(),
   })
   .strict()
+  .superRefine((state, ctx) => {
+    for (const id of [
+      state.draft?.platformDraftId,
+      state.draft?.recovery?.writePermit?.draftId,
+      state.draft?.recovery?.expectedDraftId,
+    ]) {
+      if (
+        id &&
+        !(state.adapterId === 'xiaohongshu'
+          ? z.string().uuid().safeParse(id).success
+          : /^\d+$/u.test(id))
+      )
+        ctx.addIssue({ code: 'custom', path: ['draft'], message: '草稿 ID 格式与平台不一致' })
+    }
+  })
 
 export const inspectArticlePublishingSourceInputSchema = z
   .object({ workspaceRef: workspaceRefSchema, markdownPath: absolutePathSchema })
@@ -422,6 +442,7 @@ export const createArticlePublishingTaskInputSchema = z
   .object({
     existingDraft: z
       .object({
+        localDraftId: z.string().uuid().optional(),
         url: z.url().max(2000),
         platformAccountId: z.string().regex(/^[a-zA-Z0-9_-]{1,160}$/u),
       })
