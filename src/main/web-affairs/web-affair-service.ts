@@ -1,3 +1,6 @@
+import { parseBilibiliPublicationUrl } from '../article-publishing/bilibili-publication'
+import { parseToutiaoPublicationUrl } from '../article-publishing/toutiao-publication'
+import { TOUTIAO_ARTICLE_PUBLISHING_PLAN } from '../../shared/article-publishing/article-publishing-plan'
 import { parseWeiboPublicationUrl } from '../article-publishing/weibo-publication'
 import {
   foldArticlePublishingPlanResults,
@@ -82,6 +85,7 @@ import { articlePublishingStateSchema } from '../../shared/article-publishing/ar
 import {
   CSDN_ARTICLE_PUBLISHING_PLAN,
   WEIBO_ARTICLE_PUBLISHING_PLAN,
+  BILIBILI_ARTICLE_PUBLISHING_PLAN,
   ZHIHU_ARTICLE_PUBLISHING_PLAN,
   JUEJIN_ARTICLE_PUBLISHING_PLAN,
   XIAOHONGSHU_ARTICLE_PUBLISHING_PLAN,
@@ -162,7 +166,7 @@ export interface ArticlePublishingAgentReporter {
   trustedPageEvidence?: {
     /** Main-only live guard; never persisted or accepted from IPC. */
     isCurrent?: () => boolean
-    adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo'
+    adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili'
     adapterVersion: 1
     observedAt: string
     url: string
@@ -795,6 +799,57 @@ export class WebAffairService {
   }
 
   /** Internal trusted execution hook; deliberately not exposed as IPC/MCP. */
+  /** Main-only fresh public-page verification; never changes the completed lifecycle. */
+  recordPublishedArticleImages(
+    input: {
+      workspaceId: string
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      launchOperationId: string
+      url: string
+      images: Array<{ src: string; actualSrc: string; matches: boolean }>
+    },
+    isCurrent: () => boolean,
+  ) {
+    return this.enqueueScoped(input.affairId, input.workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const p = found?.affair.articlePublishing
+      if (
+        !found ||
+        !p ||
+        p.adapterId !== 'toutiao' ||
+        p.publication.status !== 'published' ||
+        found.attempt.status !== 'succeeded' ||
+        p.publication.url !== input.url ||
+        p.execution.currentAttemptId !== input.attemptId ||
+        p.execution.currentGeneration !== input.executionGeneration ||
+        p.execution.currentLaunchOperationId !== input.launchOperationId ||
+        !isCurrent() ||
+        input.images.length !== p.assets.length ||
+        p.assets.some(
+          (a, i) =>
+            !a.platformUrl ||
+            !input.images[i]?.matches ||
+            input.images[i].src !== a.platformUrl ||
+            input.images[i].actualSrc !== a.platformUrl,
+        )
+      )
+        return this.evidenceRequired('公开图片读回不属于本次已发布作品或页面已变化')
+      let next = p
+      const now = this.timestamp()
+      for (const [index, asset] of p.assets.entries())
+        next = setArticlePublishingPlanResult(next, {
+          id: `asset.${asset.id}.published`,
+          status: 'completed',
+          observedAt: now,
+          generation: input.executionGeneration,
+          evidence: `当前公开页 ${input.url}；${asset.displayPath}；第 ${index + 1} 张，平台地址、顺序及实际加载通过；冻结全文一致`,
+        })
+      return this.persistAffair({ ...found.affair, articlePublishing: next, updatedAt: now })
+    })
+  }
+
   recordArticlePublishingPlanResults(
     input: {
       workspaceId: string
@@ -946,6 +1001,76 @@ export class WebAffairService {
     })
   }
 
+  /** Main-only receipt location obtained from the uniquely matched management card. */
+  recordToutiaoPublicationLocation(
+    input: {
+      workspaceId: string
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      launchOperationId: string
+      uid: string
+      url: string
+      imageUrls: string[]
+    },
+    isCurrent: () => boolean,
+  ) {
+    return this.enqueueScoped(input.affairId, input.workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      const anchor = parseToutiaoPublicationUrl(input.url)
+      const effects =
+        publishing?.sideEffects.filter(
+          (e) => e.kind === 'publish' && e.attemptId === input.attemptId && !!e.dispatchedAt,
+        ) ?? []
+      if (
+        !found ||
+        !publishing ||
+        publishing.adapterId !== 'toutiao' ||
+        !isCurrent() ||
+        found.attempt.executionGeneration !== input.executionGeneration ||
+        found.attempt.launchOperationId !== input.launchOperationId ||
+        publishing.execution.currentAttemptId !== input.attemptId ||
+        !['preparing', 'running-ai'].includes(found.attempt.status) ||
+        publishing.draft?.platformAccountId !== input.uid ||
+        !anchor ||
+        anchor.id !== publishing.draft?.platformDraftId ||
+        effects.length !== 1 ||
+        !['dispatched', 'result-unknown', 'verified'].includes(effects[0].status) ||
+        input.imageUrls.length !== publishing.assets.length ||
+        publishing.assets.some((a, i) => !a.platformUrl || a.platformUrl !== input.imageUrls[i]) ||
+        (publishing.publication.url && publishing.publication.url !== input.url)
+      )
+        return this.transitionError('头条管理页结果不属于本次已提交图文，禁止认领或重发')
+      const now = this.timestamp()
+      return this.persistAffair({
+        ...found.affair,
+        articlePublishing: {
+          ...publishing,
+          publication: { ...publishing.publication, url: input.url, observedAt: now },
+          checkpoints: publishing.checkpoints.map((checkpoint) =>
+            checkpoint.stepId === 'publish' && checkpoint.status !== 'completed'
+              ? {
+                  ...checkpoint,
+                  status: 'completed' as const,
+                  finishedAt: now,
+                  evidence: [
+                    ...checkpoint.evidence,
+                    `main 已从原账号管理页核验本次单次提交及全部原图；公开正文另行核验 · ${input.url}`,
+                  ].slice(-40),
+                  error: undefined,
+                }
+              : checkpoint,
+          ),
+          sideEffects: publishing.sideEffects.map((e) =>
+            e.key === effects[0].key ? { ...e, status: 'verified' as const, observedAt: now } : e,
+          ),
+        },
+        updatedAt: now,
+      })
+    })
+  }
+
   recordWeiboSubmissionReceipt(
     input: {
       affairId: string
@@ -982,6 +1107,64 @@ export class WebAffairService {
       const url = `https://weibo.com/${input.uid}/${input.postId}`
       if (publishing.publication.url && publishing.publication.url !== url)
         return this.transitionError('微博提交结果 ID 冲突，禁止替换或重发')
+      const now = this.timestamp()
+      return this.persistAffair({
+        ...found.affair,
+        articlePublishing: {
+          ...setArticlePublishingPlanResult(publishing, {
+            id: 'publication.verify',
+            status: 'waiting',
+            observedAt: now,
+            generation: input.executionGeneration,
+            evidence: `平台已接受本次提交 · 作品 ${input.postId}`,
+            reason: '等待公开页账号、正文与逐张图片核验；禁止重复发布',
+          }),
+          publication: { ...publishing.publication, url, observedAt: now },
+          sideEffects: publishing.sideEffects.map((e) =>
+            e.key === effect.key ? { ...e, status: 'verified' as const, observedAt: now } : e,
+          ),
+        },
+        updatedAt: now,
+      })
+    })
+  }
+
+  recordBilibiliSubmissionReceipt(
+    input: {
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      browserTaskRunId: string
+      sideEffectKey: string
+      uid: string
+      postId: string
+    },
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(input.affairId, workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      const effect = publishing?.sideEffects.find((e) => e.key === input.sideEffectKey)
+      if (
+        !found ||
+        !publishing ||
+        publishing.adapterId !== 'bilibili' ||
+        publishing.composer?.allowPublish !== true ||
+        publishing.execution.currentGeneration !== input.executionGeneration ||
+        found.attempt.browserTaskRunId !== input.browserTaskRunId ||
+        publishing.composer?.platformAccountId !== input.uid ||
+        !effect ||
+        effect.kind !== 'publish' ||
+        effect.attemptId !== input.attemptId ||
+        effect.executionGeneration !== input.executionGeneration ||
+        effect.browserTaskRunId !== input.browserTaskRunId ||
+        !['dispatched', 'result-unknown', 'verified'].includes(effect.status) ||
+        !parseBilibiliPublicationUrl(`https://t.bilibili.com/${input.postId}`)
+      )
+        return this.transitionError('B站提交回执不属于本次文章及已派发发布动作')
+      const url = `https://t.bilibili.com/${input.postId}`
+      if (publishing.publication.url && publishing.publication.url !== url)
+        return this.transitionError('B站提交结果 ID 冲突，禁止替换或重发')
       const now = this.timestamp()
       return this.persistAffair({
         ...found.affair,
@@ -1335,29 +1518,38 @@ export class WebAffairService {
     } catch {
       return this.resourceError('所选网站 Origin 无效')
     }
-    const adapterId =
-      hostname === 'weibo.com'
-        ? 'weibo'
-        : hostname === 'xiaohongshu.com' || hostname.endsWith('.xiaohongshu.com')
-          ? 'xiaohongshu'
-          : hostname === 'juejin.cn'
-            ? 'juejin'
-            : hostname === 'zhihu.com' || hostname.endsWith('.zhihu.com')
-              ? 'zhihu'
-              : hostname === 'csdn.net' || hostname.endsWith('.csdn.net')
-                ? 'csdn'
-                : null
-    if (!adapterId) return this.resourceError('请选择 CSDN、知乎或掘金账号')
+    const adapterId = ['passport.bilibili.com', 't.bilibili.com', 'space.bilibili.com'].includes(
+      hostname,
+    )
+      ? 'bilibili'
+      : ['toutiao.com', 'www.toutiao.com', 'mp.toutiao.com'].includes(hostname)
+        ? 'toutiao'
+        : hostname === 'weibo.com'
+          ? 'weibo'
+          : hostname === 'xiaohongshu.com' || hostname.endsWith('.xiaohongshu.com')
+            ? 'xiaohongshu'
+            : hostname === 'juejin.cn'
+              ? 'juejin'
+              : hostname === 'zhihu.com' || hostname.endsWith('.zhihu.com')
+                ? 'zhihu'
+                : hostname === 'csdn.net' || hostname.endsWith('.csdn.net')
+                  ? 'csdn'
+                  : null
+    if (!adapterId) return this.resourceError('请选择支持的图文发布平台账号')
     const platformLabel =
-      adapterId === 'weibo'
-        ? '微博'
-        : adapterId === 'xiaohongshu'
-          ? '小红书'
-          : adapterId === 'juejin'
-            ? '掘金'
-            : adapterId === 'zhihu'
-              ? '知乎'
-              : 'CSDN'
+      adapterId === 'bilibili'
+        ? 'B站动态'
+        : adapterId === 'toutiao'
+          ? '头条微头条'
+          : adapterId === 'weibo'
+            ? '微博'
+            : adapterId === 'xiaohongshu'
+              ? '小红书'
+              : adapterId === 'juejin'
+                ? '掘金'
+                : adapterId === 'zhihu'
+                  ? '知乎'
+                  : 'CSDN'
     const importedAnchor = input.existingDraft
       ? parsePlatformDraftAnchor(input.existingDraft.url, input.existingDraft.localDraftId)
       : null
@@ -1368,7 +1560,16 @@ export class WebAffairService {
         input.reviseDraftFromAffairId)
     )
       return this.invalid('原稿地址与平台不一致')
-    if (adapterId === 'weibo') {
+    if (
+      adapterId === 'toutiao' &&
+      (input.fields.title !== input.preview.title ||
+        input.preview.assets.length > 18 ||
+        input.preview.assets.some(
+          (asset) => asset.kind !== 'local' || asset.occurrences.length !== 1,
+        ))
+    )
+      return this.invalid('头条微头条使用原文首行标题及最多18张本地图片，每张只引用一次')
+    if (['weibo', 'bilibili'].includes(adapterId)) {
       if (
         !input.composer ||
         !/^\d{5,20}$/u.test(input.composer.platformAccountId) ||
@@ -1376,28 +1577,28 @@ export class WebAffairService {
         input.existingDraft ||
         input.reviseDraftFromAffairId
       )
-        return this.invalid('微博需要目标 UID 和明确提交选项，不接受草稿 ID')
+        return this.invalid('图文动态需要目标 UID 和明确提交选项，不接受草稿 ID')
       if (input.fields.title !== input.preview.title)
-        return this.invalid('微博首行标题使用冻结原文，不能单独改标题')
+        return this.invalid('图文动态标题使用冻结原文，不能单独改标题')
       if (
         input.preview.assets.some((a) => a.kind !== 'local' || a.occurrences.length !== 1) ||
         input.preview.assets.length > 9
       )
-        return this.invalid('微博当前仅支持最多九张本地图片，每张在原文引用一次')
+        return this.invalid('图文动态当前仅支持最多九张本地图片，每张在原文引用一次')
       if (
         this.snapshot.affairs.some(
           (a) =>
-            a.articlePublishing?.adapterId === 'weibo' &&
+            a.articlePublishing?.adapterId === adapterId &&
             a.articlePublishing.accountId === input.accountId &&
             !['cancelled', 'failed', 'published'].includes(a.articlePublishing.execution.status),
         )
       )
-        return this.invalid('这个微博账号已有未结束任务，请先继续或取消原任务')
-    } else if (input.composer) return this.invalid('只有微博使用临时编辑器配置')
-    if (adapterId !== 'csdn' && adapterId !== 'weibo' && !importedAnchor)
+        return this.invalid('这个平台账号已有未结束任务，请先继续或取消原任务')
+    } else if (input.composer) return this.invalid('只有微博和B站动态使用临时编辑器配置')
+    if (adapterId !== 'csdn' && !['weibo', 'bilibili'].includes(adapterId) && !importedAnchor)
       return this.invalid('当前平台请提供已有草稿地址和原账号标识；不会新建替代稿')
     if (
-      ['zhihu', 'weibo'].includes(adapterId) &&
+      ['zhihu', 'weibo', 'toutiao', 'bilibili'].includes(adapterId) &&
       (input.fields.summary ||
         input.fields.tags.length ||
         input.fields.category ||
@@ -1476,15 +1677,19 @@ export class WebAffairService {
       return this.resourceError('Markdown 或正文图片已经不可用，请重新选择文章')
     }
     const checkpoints: ArticlePublishingState['checkpoints'] = (
-      adapterId === 'weibo'
-        ? WEIBO_ARTICLE_PUBLISHING_PLAN
-        : adapterId === 'xiaohongshu'
-          ? XIAOHONGSHU_ARTICLE_PUBLISHING_PLAN
-          : adapterId === 'juejin'
-            ? JUEJIN_ARTICLE_PUBLISHING_PLAN
-            : adapterId === 'zhihu'
-              ? ZHIHU_ARTICLE_PUBLISHING_PLAN
-              : CSDN_ARTICLE_PUBLISHING_PLAN
+      adapterId === 'bilibili'
+        ? BILIBILI_ARTICLE_PUBLISHING_PLAN
+        : adapterId === 'toutiao'
+          ? TOUTIAO_ARTICLE_PUBLISHING_PLAN
+          : adapterId === 'weibo'
+            ? WEIBO_ARTICLE_PUBLISHING_PLAN
+            : adapterId === 'xiaohongshu'
+              ? XIAOHONGSHU_ARTICLE_PUBLISHING_PLAN
+              : adapterId === 'juejin'
+                ? JUEJIN_ARTICLE_PUBLISHING_PLAN
+                : adapterId === 'zhihu'
+                  ? ZHIHU_ARTICLE_PUBLISHING_PLAN
+                  : CSDN_ARTICLE_PUBLISHING_PLAN
     ).map(({ stepId, label, resumePolicy }) => ({
       stepId,
       label,
@@ -3582,6 +3787,13 @@ export class WebAffairService {
     ) {
       return this.transitionError('只有待人工处理的文章发布 Attempt 可以交还 Agent')
     }
+    const resultVerificationOnly =
+      publishing.adapterId === 'toutiao' &&
+      publishing.publication.status !== 'not-started' &&
+      publishing.sideEffects.some(
+        (effect) =>
+          effect.kind === 'publish' && effect.attemptId === attemptId && !!effect.dispatchedAt,
+      )
     const now = this.timestamp()
     const executionGeneration = found.attempt.executionGeneration + 1
     const launchOperationId = randomUUID()
@@ -3600,7 +3812,9 @@ export class WebAffairService {
       occurredAt: now,
       summary: '开始从草稿管理页恢复原草稿',
     })
-    const currentStepId = publishing.execution.currentStepId
+    const currentStepId = resultVerificationOnly
+      ? 'verify-publication'
+      : publishing.execution.currentStepId
     const checkpoints = publishing.checkpoints.map((checkpoint) =>
       checkpoint.stepId === currentStepId && checkpoint.status === 'waiting-human'
         ? { ...checkpoint, status: 'needs-reconcile' as const, finishedAt: undefined }
@@ -3651,12 +3865,17 @@ export class WebAffairService {
       ),
       articlePublishing: {
         ...publishing,
-        executionProtocol: { ...recoveryProtocol, current: recoveryOperation },
-        draft: this.beginArticlePublishingRecovery(publishing, executionGeneration, now),
+        executionProtocol: resultVerificationOnly
+          ? { ...publishing.executionProtocol, current: undefined }
+          : { ...recoveryProtocol, current: recoveryOperation },
+        draft: resultVerificationOnly
+          ? publishing.draft
+          : this.beginArticlePublishingRecovery(publishing, executionGeneration, now),
         checkpoints,
         execution: {
           ...publishing.execution,
           status: 'preparing',
+          currentStepId,
           currentGeneration: executionGeneration,
           currentLaunchOperationId: launchOperationId,
           lastAgentRunId: undefined,
@@ -4804,7 +5023,7 @@ export class WebAffairService {
         return this.evidenceRequired('账号核验必须保存真实 CSDN 平台账号标识')
       }
       if (
-        publishing.adapterId !== 'weibo' &&
+        !['weibo', 'bilibili'].includes(publishing.adapterId) &&
         ['upload-assets', 'fill-body', 'fill-fields', 'save-draft'].includes(input.stepId) &&
         (!reporter.trustedPageEvidence.platformAccountId ||
           !reporter.trustedPageEvidence.draftId ||
@@ -4819,19 +5038,19 @@ export class WebAffairService {
         return this.transitionError('仍有正文图片未完成页面核验，不能完成上传步骤')
       }
       if (
-        publishing.adapterId === 'weibo' &&
+        ['weibo', 'bilibili'].includes(publishing.adapterId) &&
         (reporter.trustedPageEvidence.platformAccountId !==
           publishing.composer?.platformAccountId ||
           (['fill-body', 'fill-fields', 'save-draft'].includes(input.stepId) &&
             reporter.trustedPageEvidence.bodyMatchesFrozen !== true))
       )
-        return this.evidenceRequired('微博完成步骤必须核验目标 UID、冻结正文和逐图现场')
+        return this.evidenceRequired('图文动态完成步骤必须核验目标 UID、冻结正文和逐图现场')
       if (
-        publishing.adapterId === 'weibo' &&
+        ['weibo', 'bilibili'].includes(publishing.adapterId) &&
         ['publish', 'verify-publication'].includes(input.stepId) &&
         publishing.composer?.allowPublish !== true
       )
-        return this.evidenceRequired('本任务未授权微博提交，禁止标记发布成功')
+        return this.evidenceRequired('本任务未授权动态提交，禁止标记发布成功')
       // A verified autosave of this draft already fulfills saving. Do not force an
       // extra click merely to manufacture a manual-save receipt. Unknown writes
       // still require reconciliation, and the current adapter must verify identity.
@@ -4853,9 +5072,36 @@ export class WebAffairService {
       // An already matching Zhihu title is a read-only branch. Main must have
       // observed both the skipped write and its current-generation verification.
       const verifiedWeiboPreparation =
-        publishing.adapterId === 'weibo' &&
+        ['weibo', 'bilibili'].includes(publishing.adapterId) &&
         ['fill-fields', 'save-draft'].includes(input.stepId) &&
         reporter.trustedPageEvidence.bodyMatchesFrozen === true
+      // A recovered Toutiao draft may already contain the complete frozen article.
+      // Main must prove the read-only branch; never create a fictitious write receipt.
+      const unchangedToutiaoDraft =
+        publishing.adapterId === 'toutiao' &&
+        ['fill-body', 'save-draft'].includes(input.stepId) &&
+        publishing.draft?.recovery?.status === 'verified' &&
+        publishing.draft.recovery.executionGeneration === found.attempt.executionGeneration &&
+        reporter.trustedPageEvidence.isCurrent?.() === true &&
+        reporter.trustedPageEvidence.bodyMatchesFrozen === true &&
+        reporter.trustedPageEvidence.saveState === 'saved' &&
+        reporter.trustedPageEvidence.draftId === publishing.draft.platformDraftId &&
+        reporter.trustedPageEvidence.platformAccountId === publishing.draft.platformAccountId &&
+        reporter.trustedPageEvidence.normalizedTitle === publishing.fields.title.trim() &&
+        publishing.assets.every(
+          (asset) => asset.status === 'uploaded' && Boolean(asset.platformUrl),
+        ) &&
+        ['dispatch', 'verify'].every((suffix) =>
+          checkpoint.details?.some(
+            (detail) =>
+              detail.id === `${input.stepId === 'fill-body' ? 'body' : 'save'}.${suffix}` &&
+              detail.generation === found.attempt.executionGeneration &&
+              detail.status === (suffix === 'dispatch' ? 'skipped' : 'completed'),
+          ),
+        ) &&
+        !eligibleEffects.some(
+          (effect) => effect.kind === 'save-draft' && effect.status !== 'verified',
+        )
       const unchangedPlatformFields =
         publishing.adapterId !== 'csdn' &&
         input.stepId === 'fill-fields' &&
@@ -4906,6 +5152,7 @@ export class WebAffairService {
         ['fill-body', 'fill-fields', 'save-draft', 'publish'].includes(input.stepId) &&
         !unchangedPlatformFields &&
         !verifiedWeiboPreparation &&
+        !unchangedToutiaoDraft &&
         (!requiredEffect ||
           (!['dispatched', 'result-unknown', 'verified'].includes(requiredEffect.status) &&
             requiredEffect !== recoveredBodyEffect))
@@ -5030,10 +5277,9 @@ export class WebAffairService {
         detailedPublishing = setArticlePublishingPlanResult(detailedPublishing, {
           id: 'save.dispatch',
           status: 'skipped',
-          evidence:
-            publishing.adapterId === 'weibo'
-              ? '当前微博流程没有平台保存动作，不声明草稿已保存'
-              : '已有同稿自动保存的可信回读，无需再次点击保存',
+          evidence: ['weibo', 'bilibili'].includes(publishing.adapterId)
+            ? '当前动态流程没有平台保存动作，不声明草稿已保存'
+            : '已有同稿自动保存的可信回读，无需再次点击保存',
           observedAt: now,
           generation: publishing.execution.currentGeneration,
         })
@@ -5050,7 +5296,7 @@ export class WebAffairService {
         ...detailedPublishing,
         draft:
           input.status === 'completed' &&
-          publishing.adapterId !== 'weibo' &&
+          !['weibo', 'bilibili'].includes(publishing.adapterId) &&
           reporter.trustedPageEvidence?.platformAccountId
             ? {
                 ...publishing.draft,
@@ -5324,20 +5570,24 @@ export class WebAffairService {
         input.saveState === 'saved')
     if (
       completed &&
-      publishing.adapterId === 'weibo' &&
+      ['weibo', 'bilibili'].includes(publishing.adapterId) &&
       input.platformAccountId !== publishing.composer?.platformAccountId
     )
-      return this.evidenceRequired('微博页面真实 UID 与任务账号不一致')
+      return this.evidenceRequired('动态页面真实 UID 与任务账号不一致')
     const checkpointProven =
       current.checkpointId === 'open-editor'
         ? input.pageKind === 'editor' && exactRecoveredDraftProven
         : current.checkpointId === 'verify-account'
           ? Boolean(input.platformAccountId) && exactRecoveredDraftProven
           : (input.pageKind === 'editor' && exactRecoveredDraftProven) ||
-            (publishing.adapterId === 'weibo' &&
+            (['weibo', 'toutiao', 'bilibili'].includes(publishing.adapterId) &&
               ['publish', 'verify-publication'].includes(current.checkpointId) &&
               input.pageKind === 'published-article' &&
-              Boolean(publishing.publication.url))
+              Boolean(publishing.publication.url) &&
+              (publishing.adapterId !== 'toutiao' ||
+                (input.platformAccountId === publishing.draft?.platformAccountId &&
+                  parseToutiaoPublicationUrl(publishing.publication.url ?? '')?.id ===
+                    publishing.draft?.platformDraftId)))
     if (completed && !checkpointProven) {
       return this.evidenceRequired(
         '首次页面检查未能证明当前页面、真实账号、准确草稿、标题和保存状态',
@@ -5815,7 +6065,7 @@ export class WebAffairService {
       return this.notFound('待确认的文章图片不存在')
     }
     const importingExisting =
-      publishing.adapterId === 'xiaohongshu' &&
+      ['xiaohongshu', 'toutiao'].includes(publishing.adapterId) &&
       asset.status === 'pending' &&
       asset.uploadAttempts.length === 0 &&
       publishing.draft?.recovery?.status === 'verified' &&
@@ -5827,6 +6077,16 @@ export class WebAffairService {
     ) {
       return this.transitionError('只有结果未知的本地图片可以人工确认')
     }
+    if (
+      publishing.adapterId === 'toutiao' &&
+      observation &&
+      (!['waiting-human', 'interrupted'].includes(publishing.execution.status) ||
+        !isPlatformImageUrl('toutiao', observation.platformUrl) ||
+        publishing.assets.some(
+          (a) => a.id !== assetId && a.platformUrl === observation.platformUrl,
+        ))
+    )
+      return this.transitionError('头条图片确认必须在暂停状态且不能重复认领同一张图')
     const now = this.timestamp()
     const nextStatus =
       resolution === 'present' ? ('uploaded' as const) : ('retryable-failed' as const)
@@ -6170,8 +6430,11 @@ export class WebAffairService {
       return this.transitionError('该网页副作用已经派发、结果未知或完成，不能重复执行')
     }
     if (kind === 'publish') {
-      if (publishing.adapterId === 'weibo' && publishing.composer?.allowPublish !== true)
-        return this.transitionError('本任务没有授权微博提交')
+      if (
+        ['weibo', 'bilibili'].includes(publishing.adapterId) &&
+        publishing.composer?.allowPublish !== true
+      )
+        return this.transitionError('本任务没有授权动态提交')
       if (publishing.execution.currentStepId !== 'publish') {
         return this.transitionError('发布动作与当前检查点不一致')
       }
@@ -6892,13 +7155,15 @@ export class WebAffairService {
 
 function isPlatformPublicationUrl(
   rawUrl: string,
-  platform: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo',
+  platform: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili',
 ): boolean {
   try {
     const url = new URL(rawUrl)
     return (
       url.protocol === 'https:' &&
-      ((platform === 'weibo' && Boolean(parseWeiboPublicationUrl(rawUrl))) ||
+      ((platform === 'toutiao' && Boolean(parseToutiaoPublicationUrl(rawUrl))) ||
+        (platform === 'weibo' && Boolean(parseWeiboPublicationUrl(rawUrl))) ||
+        (platform === 'bilibili' && Boolean(parseBilibiliPublicationUrl(rawUrl))) ||
         (platform === 'xiaohongshu' &&
           url.origin === 'https://www.xiaohongshu.com' &&
           /^\/explore\/[a-f\d]{24}\/?$/iu.test(url.pathname)) ||

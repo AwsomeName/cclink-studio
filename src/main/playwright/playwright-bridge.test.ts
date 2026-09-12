@@ -155,7 +155,17 @@ describe('PlaywrightBridge diagnostics', () => {
 
   it('claims the only unbound Page when another View already owns the same URL', async () => {
     const bridge = new PlaywrightBridge()
-    const context = { pages: vi.fn(), on: vi.fn() }
+    const detach = vi.fn().mockResolvedValue(undefined)
+    const context = {
+      pages: vi.fn(),
+      on: vi.fn(),
+      newCDPSession: async (page: Page) => ({
+        send: async () => ({
+          targetInfo: { targetId: page === existingPage ? 'existing-target' : 'new-target' },
+        }),
+        detach,
+      }),
+    }
     const existingPage = {
       ...fakePage('https://example.com/same', 'Existing'),
       _guid: 'existing-target',
@@ -171,7 +181,7 @@ describe('PlaywrightBridge diagnostics', () => {
     const existingWebContents = {
       id: 84,
       session: electronSession,
-      _targetId: 'existing-target',
+      getOrCreateDevToolsTargetId: () => 'existing-target',
       isDestroyed: () => false,
     }
     const newWebContents = {
@@ -196,6 +206,42 @@ describe('PlaywrightBridge diagnostics', () => {
     await expect(
       bridge.claimPageForView('new-tab', newWebContents as any, 'https://example.com/same'),
     ).resolves.toBe(newPage)
+    expect(detach).toHaveBeenCalledTimes(2)
+  })
+
+  it('never binds the only same-URL Page when its real target ID belongs to another View', async () => {
+    vi.useFakeTimers()
+    const bridge = new PlaywrightBridge()
+    const detach = vi.fn().mockResolvedValue(undefined)
+    const context = {
+      pages: vi.fn(),
+      on: vi.fn(),
+      newCDPSession: async () => ({
+        send: async () => ({ targetInfo: { targetId: 'another-native-view' } }),
+        detach,
+      }),
+    }
+    const page = {
+      ...fakePage('https://example.com/same', 'Other account'),
+      context: () => context,
+    } as unknown as Page
+    context.pages.mockReturnValue([page])
+    const internals = bridge as unknown as { browser: unknown; context: unknown }
+    internals.browser = { contexts: () => [context], isConnected: () => true }
+    internals.context = context
+    const wc = {
+      id: 99,
+      getOrCreateDevToolsTargetId: () => 'expected-native-view',
+      isDestroyed: () => false,
+      session: { on: vi.fn(), removeListener: vi.fn() },
+    }
+    const rejected = expect(
+      bridge.claimPageForView('tab', wc as never, page.url()),
+    ).rejects.toThrow('找不到匹配')
+    await vi.advanceTimersByTimeAsync(1100)
+    await rejected
+    expect(detach).toHaveBeenCalledTimes(1)
+    expect(bridge.getPageBindingIdentity('tab')).toBeNull()
   })
 
   it('uses the Electron Session as the authoritative download lifecycle for a claimed tab', async () => {

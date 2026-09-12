@@ -1,0 +1,591 @@
+{
+  "capturedAt": "2026-09-11T16:35:20.271Z",
+  "affairId": "9d635bd0-22cd-4ad2-93b1-930b894cffec",
+  "status": "completed",
+  "execution": {
+    "status": "published",
+    "currentAttemptId": "5ebf83cf-35b6-4fff-a06f-46aefb6bb10a",
+    "currentGeneration": 20,
+    "currentLaunchOperationId": "a87eaca7-9544-4d8f-809b-c0db65d66759"
+  },
+  "publication": {
+    "status": "published",
+    "url": "https://www.toutiao.com/w/1876018407641100/",
+    "observedAt": "2026-09-11T16:27:59.600Z"
+  },
+  "attempts": [
+    {
+      "id": "5ebf83cf-35b6-4fff-a06f-46aefb6bb10a",
+      "status": "succeeded",
+      "executionGeneration": 20
+    }
+  ],
+  "assets": [
+    {
+      "id": "local:2026-09-09/素材/01-首篇封面.png",
+      "path": "素材/01-首篇封面.png",
+      "status": "uploaded",
+      "platformUrl": "https://p3-sign.toutiaoimg.com/tos-cn-i-ezhpy3drpa/c7ba69a85ef246f39f99b6932046c9de",
+      "manualResolution": {
+        "status": "present",
+        "resolvedAt": "2026-09-11T09:43:35.011Z"
+      }
+    },
+    {
+      "id": "local:2026-09-09/素材/02-导航场景效果图.png",
+      "path": "素材/02-导航场景效果图.png",
+      "status": "uploaded",
+      "platformUrl": "https://p3-sign.toutiaoimg.com/tos-cn-i-ezhpy3drpa/cb4423122b754e6ea5bc34f3482bde16",
+      "manualResolution": {
+        "status": "present",
+        "resolvedAt": "2026-09-11T15:25:52.692Z"
+      }
+    },
+    {
+      "id": "local:2026-09-09/素材/03-城市漫游效果图.png",
+      "path": "素材/03-城市漫游效果图.png",
+      "status": "uploaded",
+      "platformUrl": "https://p3-sign.toutiaoimg.com/tos-cn-i-ezhpy3drpa/14697e07fa4e4a03aad0143ded683c86",
+      "manualResolution": {
+        "status": "present",
+        "resolvedAt": "2026-09-11T15:26:03.829Z"
+      }
+    }
+  ],
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "label": "从头条草稿箱找回原微头条",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "recovery.management",
+          "nextAction": "核验管理页账号",
+          "status": "completed",
+          "evidence": "https://mp.toutiao.com/profile_v4/manage/draft",
+          "observedAt": "2026-09-11T15:50:59.010Z",
+          "generation": 15
+        },
+        {
+          "id": "recovery.account",
+          "nextAction": "按原 draftId 定位，找不到即停止",
+          "status": "completed",
+          "evidence": "草稿箱账号 3777529577766638",
+          "observedAt": "2026-09-11T15:51:01.198Z",
+          "generation": 15
+        },
+        {
+          "id": "recovery.locate",
+          "nextAction": "打开候选草稿",
+          "status": "completed",
+          "evidence": "实际子页原 draftId 1876018407641100 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100",
+          "observedAt": "2026-09-11T15:51:01.241Z",
+          "generation": 15
+        },
+        {
+          "id": "recovery.open",
+          "nextAction": "复核账号、ID、标题、保存状态",
+          "status": "completed",
+          "evidence": "https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100",
+          "observedAt": "2026-09-11T15:51:02.871Z",
+          "generation": 15
+        },
+        {
+          "id": "recovery.verify.account",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "期望 3777529577766638；实际 3777529577766638 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100",
+          "observedAt": "2026-09-11T15:51:02.923Z",
+          "generation": 15
+        },
+        {
+          "id": "recovery.verify.id",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "期望 1876018407641100；实际 1876018407641100 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100",
+          "observedAt": "2026-09-11T15:51:02.979Z",
+          "generation": 15
+        },
+        {
+          "id": "recovery.verify.title",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第188天，它开始看懂我的世界；实际 做AI眼镜第188天，它开始看懂我的世界 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100",
+          "observedAt": "2026-09-11T15:51:03.023Z",
+          "generation": 15
+        },
+        {
+          "id": "recovery.verify.saved",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "期望 saved；实际 saved · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；逐图 一致（页面 3 / 原稿 3）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft",
+          "observedAt": "2026-09-11T15:51:03.064Z",
+          "generation": 15
+        },
+        {
+          "id": "account.resolve",
+          "nextAction": "取得可见账号 Tab",
+          "status": "completed",
+          "evidence": "账号 1345b278-f2bf-4d40-ac5f-437d8a0b3c14 · Profile web-draft-e422d4a2-e9ab-44e7-aa6f-ff475f3bf731",
+          "observedAt": "2026-09-11T16:26:08.127Z",
+          "generation": 20
+        },
+        {
+          "id": "tab.acquire",
+          "nextAction": "按新建或恢复分支打开页面",
+          "status": "completed",
+          "evidence": "Tab tab-1-1789104390028 · 账号 1345b278-f2bf-4d40-ac5f-437d8a0b3c14 · Profile web-draft-e422d4a2-e9ab-44e7-aa6f-ff475f3bf731",
+          "observedAt": "2026-09-11T16:26:08.441Z",
+          "generation": 20
+        },
+        {
+          "id": "runtime.ready",
+          "nextAction": "首次只读检查；改代则重新绑定核验",
+          "status": "completed",
+          "evidence": "Agent run-a87eaca7-9544-4d8f-809b-c0db65d66759 · BrowserTask 179a5af6-65ef-46f1-bb6d-306724bf69ac · Tab tab-1-1789104390028 · View g1 · WebContents 2 · Page g1",
+          "observedAt": "2026-09-11T16:26:22.065Z",
+          "generation": 20
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 2,
+      "startedAt": "2026-09-11T09:14:58.051Z",
+      "finishedAt": "2026-09-11T09:15:10.335Z",
+      "evidence": [
+        "main adapter 已在当前精确 Page 完成首次只读核验：editor"
+      ]
+    },
+    {
+      "stepId": "verify-account",
+      "label": "核验头条账号与原稿",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "page.inspect",
+          "nextAction": "定位正文与平台字段",
+          "status": "completed",
+          "evidence": "页面 published-article · 账号 3777529577766638 · draftId 尚无 · 标题 做AI眼镜第188天，它开始看懂我的世界 · 保存 unknown",
+          "observedAt": "2026-09-11T16:27:09.703Z",
+          "generation": 20
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "startedAt": "2026-09-11T09:16:46.352Z",
+      "finishedAt": "2026-09-11T09:16:46.352Z",
+      "evidence": [
+        "main adapter 已在当前精确 Page 完成首次只读核验：editor"
+      ]
+    },
+    {
+      "stepId": "upload-assets",
+      "label": "逐图上传、确认插入并核验",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "skipped",
+          "evidence": "用户确认原图对应后，Studio 回读已有图集；本次没有上传动作",
+          "observedAt": "2026-09-11T15:51:24.162Z",
+          "generation": 15
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "skipped",
+          "evidence": "用户确认原图对应后，Studio 回读已有图集；本次没有上传动作",
+          "observedAt": "2026-09-11T15:51:24.162Z",
+          "generation": 15
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "skipped",
+          "evidence": "用户确认原图对应后，Studio 回读已有图集；本次没有上传动作",
+          "observedAt": "2026-09-11T15:51:24.162Z",
+          "generation": 15
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "skipped",
+          "evidence": "原稿已有该图，经人工确认并由主进程回读，无需重新上传；未补记上传成功",
+          "observedAt": "2026-09-11T16:26:07.938Z",
+          "generation": 20
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/01-首篇封面.png",
+          "observedAt": "2026-09-11T16:26:07.938Z",
+          "generation": 20
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "用户目视确认存在 · 2026-09-11T09:43:35.011Z",
+          "observedAt": "2026-09-11T16:26:07.938Z",
+          "generation": 20
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "skipped",
+          "evidence": "原稿已有该图，经人工确认并由主进程回读，无需重新上传；未补记上传成功",
+          "observedAt": "2026-09-11T16:26:07.938Z",
+          "generation": 20
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/02-导航场景效果图.png",
+          "observedAt": "2026-09-11T16:26:07.938Z",
+          "generation": 20
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "用户目视确认存在 · 2026-09-11T15:25:52.692Z",
+          "observedAt": "2026-09-11T16:26:07.938Z",
+          "generation": 20
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "skipped",
+          "evidence": "原稿已有该图，经人工确认并由主进程回读，无需重新上传；未补记上传成功",
+          "observedAt": "2026-09-11T16:26:07.938Z",
+          "generation": 20
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/03-城市漫游效果图.png",
+          "observedAt": "2026-09-11T16:26:07.938Z",
+          "generation": 20
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "用户目视确认存在 · 2026-09-11T15:26:03.829Z",
+          "observedAt": "2026-09-11T16:26:07.938Z",
+          "generation": 20
+        }
+      ],
+      "resumePolicy": "skip-if-verified",
+      "attemptCount": 3,
+      "startedAt": "2026-09-11T15:33:15.586Z",
+      "finishedAt": "2026-09-11T15:34:02.839Z",
+      "evidence": [
+        "开始处理 upload-assets：当前 Page 为锁定草稿 1876018407641100（saveState=saved），平台图集 3 张图全部 loaded；主进程 inspect 明细显示 3 张本地原图均尚未与平台图集关联，正在按协议核对该卡点",
+        "平台图集已有 3 张图且全部 loaded、正文 424 字符、saveState=saved、平台原稿回读全文与逐图（3/3）一致；但主进程检查点明细 asset.local:2026-09-09/素材/01-首篇封面.png.inspect 等三项均为 waiting：网页图集 3 张的第 1/2/3 张均尚未与本地原图关联（平台原稿未保留原文件名，需使用原图对应确认入口，不得按数量猜测或重复上传）；inspect 返回 matchedAssets={}、selectors={}",
+        "inspect observedAt=2026-09-11T15:19:09.425Z：draftId 1876018407641100 · 账号 3777529577766638 · 标题一致 · saveState=saved · 平台原稿回读全文与逐图（页面 3 / 原稿 3）一致 · 图集 3 张全部 loaded · matchedAssets 仅 1/3 · selectors={} · submissionUnavailableReason 禁止提交",
+        "inspect(15:33:26.178Z)：图集 3 张全部 loaded；matchedAssets 3/3 齐全（01-首篇封面→c7ba69a8…、02-导航场景效果图→cb4423122…、03-城市漫游效果图→14697e07…）；平台原稿回读逐图一致（页面 3 / 原稿 3）；本次无任何上传动作",
+        "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100"
+      ]
+    },
+    {
+      "stepId": "fill-body",
+      "label": "填写并回读微头条正文",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "body.locate",
+          "nextAction": "只允许向已定位的正文区域写入",
+          "status": "completed",
+          "evidence": "正文 div.ProseMirror[contenteditable=\"true\"] · iframe 主文档 · 424 字符",
+          "observedAt": "2026-09-11T15:51:24.162Z",
+          "generation": 15
+        },
+        {
+          "id": "body.dispatch",
+          "nextAction": "等待正文回读与平台保存",
+          "status": "skipped",
+          "evidence": "原稿全文及逐图已与冻结原文一致；本次无需重写",
+          "observedAt": "2026-09-11T15:51:24.162Z",
+          "generation": 15
+        },
+        {
+          "id": "body.verify",
+          "nextAction": "检查平台字段；未知时先对账不重填",
+          "status": "completed",
+          "evidence": "当前冻结全文、逐图顺序和加载一致；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；逐图 一致（页面 3 / 原稿 3）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft",
+          "observedAt": "2026-09-11T15:51:24.162Z",
+          "generation": 15
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.placement",
+          "nextAction": "全部图片通过后核验正文保存；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "素材/01-首篇封面.png · 图集 第 1 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-11T16:27:09.664Z",
+          "generation": 20
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.placement",
+          "nextAction": "全部图片通过后核验正文保存；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "素材/02-导航场景效果图.png · 图集 第 2 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-11T16:27:09.664Z",
+          "generation": 20
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.placement",
+          "nextAction": "全部图片通过后核验正文保存；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "素材/03-城市漫游效果图.png · 图集 第 3 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-11T16:27:09.664Z",
+          "generation": 20
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 3,
+      "startedAt": "2026-09-11T15:43:09.774Z",
+      "finishedAt": "2026-09-11T15:44:00.439Z",
+      "evidence": [
+        "当前 Page 为锁定草稿 1876018407641100；主进程已定位正文 div.ProseMirror[contenteditable=\"true\"]（424 字符，iframe 主文档），placement 明细 3 张图位置/地址/替代文字/加载全部一致",
+        "inspect(15:34:11.450Z)：bodyMatchesFrozen=true · 正文 424 字符与冻结原文一致 · 图集 3 张 loaded 且 matchedAssets 3/3 对应 · 主进程 body.dispatch 判定“原稿全文及逐图已与冻结原文一致；本次无需重写”· 本次未写入正文",
+        "fill-body 本轮无写入需求（body.dispatch=skipped），首次评估窗口遇瞬态坏读（saveState=unknown、逐图未通过，15:34:11），后续三次复核均通过；请求按可重试失败处理并重新进入评估",
+        "重试 fill-body：当前 Page 为锁定草稿 1876018407641100；最近一次 inspect(15:35:53.413Z) 为 bodyMatchesFrozen=true、saveState=saved、平台原稿回读全文/逐图一致；body.dispatch=skipped（无需重写），本次同样不做任何写入",
+        "重试窗口内 inspect(15:38:05.587Z)：bodyMatchesFrozen=true · 正文 424 字符与冻结原文一致 · saveState=saved · 平台原稿回读全文一致、逐图一致（页面 3 / 原稿 3）· 图集 3 张 loaded · matchedAssets 3/3 · 本次未写入正文",
+        "fill-body 无需写入（bodyMatchesFrozen=true，body.dispatch=skipped）；completed 回报因缺少副作用凭证被拒，事实条件均已由主进程回读确认",
+        "fill-body 实质条件已全部由主进程核验：bodyMatchesFrozen=true（六次 inspect：15:33:26/15:34:11/15:34:27/15:34:46/15:35:53/15:38:05/15:39:07）、正文 424 字符与冻结原文一致、saveState=saved、平台原稿回读全文/逐图一致、图集 3 张 loaded、matchedAssets 3/3、body.dispatch=skipped（无需重写）；但 completed 回报三次被“无已派发副作用凭证”守卫拒绝，verifying→needs-reconcile/running 均为非法转换，retryable-failed 重试循环亦未触发适配器自动完成；等待人工/主进程对账",
+        "复核 inspect(15:43:48.413Z)：bodyMatchesFrozen=true · 正文 424 字符与冻结原文一致 · 图集 3 张 loaded · matchedAssets 3/3 对应 · saveState=saved · 平台原稿回读全文/逐图一致（页面 3 / 原稿 3）· 无需重填",
+        "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100"
+      ]
+    },
+    {
+      "stepId": "fill-fields",
+      "label": "核验首发、配乐与作品声明",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "toutiao.declaration.verify",
+          "nextAction": "设置未核验通过前禁止提交",
+          "status": "completed",
+          "evidence": "取材网络：未选；引用站内：未选；个人观点，仅供参考：未选；引用AI：未选；虚构演绎，故事经历：未选；投资观点，仅供参考：未选；健康医疗分享，仅供参考：未选",
+          "observedAt": "2026-09-11T15:51:03.209Z",
+          "generation": 15
+        },
+        {
+          "id": "toutiao.exclusive.verify",
+          "nextAction": "设置未核验通过前禁止提交",
+          "status": "completed",
+          "evidence": "头条首发：未勾选；当前页面回读",
+          "observedAt": "2026-09-11T15:51:24.162Z",
+          "generation": 15
+        },
+        {
+          "id": "field.title.inspect",
+          "nextAction": "当前平台字段不是受支持的唯一可读控件；先处理此卡点并重新检查。",
+          "recheck": {
+            "status": "waiting",
+            "evidence": "期望 做AI眼镜第188天，它开始看懂我的世界；实际 不支持读取此字段",
+            "reason": "当前平台字段不是受支持的唯一可读控件",
+            "observedAt": "2026-09-11T16:27:30.358Z",
+            "generation": 20
+          },
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第188天，它开始看懂我的世界；实际 做AI眼镜第188天，它开始看懂我的世界",
+          "observedAt": "2026-09-11T15:51:24.162Z",
+          "generation": 15
+        },
+        {
+          "id": "field.title.verify",
+          "nextAction": "缺少字段回读证据；先处理此卡点并重新检查。",
+          "recheck": {
+            "status": "waiting",
+            "evidence": "期望 做AI眼镜第188天，它开始看懂我的世界；实际 不可读",
+            "reason": "缺少字段回读证据",
+            "observedAt": "2026-09-11T16:27:30.358Z",
+            "generation": 20
+          },
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第188天，它开始看懂我的世界；实际 做AI眼镜第188天，它开始看懂我的世界",
+          "observedAt": "2026-09-11T15:51:24.162Z",
+          "generation": 15
+        },
+        {
+          "id": "field.title.dispatch",
+          "nextAction": "回读同一字段",
+          "status": "skipped",
+          "evidence": "当前字段已经与任务一致，无需再次填写",
+          "observedAt": "2026-09-11T15:51:24.162Z",
+          "generation": 15
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-11T15:44:03.932Z",
+      "finishedAt": "2026-09-11T15:44:20.807Z",
+      "evidence": [
+        "inspect(15:43:56.927Z)：锁定草稿 1876018407641100 · 标题 做AI眼镜第188天，它开始看懂我的世界 一致 · 头条首发 未勾选（不得声明首发）· 作品声明各项均未选（不代用户选择）· 开启配乐 已勾选（留待 publish 前关闭）",
+        "复核 inspect(15:44:08.763Z)：标题 做AI眼镜第188天，它开始看懂我的世界 与冻结字段一致 · 头条首发 未勾选（符合“不得声明首发”）· 作品声明 7 项均未选（不代用户选择）· 开启配乐 已勾选（按协议留待 publish 检查点关闭并回读）",
+        "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100"
+      ]
+    },
+    {
+      "stepId": "save-draft",
+      "label": "保存并重新核验原微头条",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "save.verify",
+          "nextAction": "发布前复核，保存不代表发布",
+          "status": "completed",
+          "evidence": "可信适配器回读 · 3777529577766638 · draftId 1876018407641100 · 做AI眼镜第188天，它开始看懂我的世界 · saved · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100",
+          "observedAt": "2026-09-11T15:44:45.206Z",
+          "generation": 14
+        },
+        {
+          "id": "save.dispatch",
+          "nextAction": "核验同稿保存结果",
+          "status": "skipped",
+          "evidence": "已有同稿自动保存的可信回读，无需再次点击保存",
+          "observedAt": "2026-09-11T15:44:45.206Z",
+          "generation": 14
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-11T15:44:27.579Z",
+      "finishedAt": "2026-09-11T15:44:45.206Z",
+      "evidence": [
+        "inspect(15:44:17.052Z)：锁定草稿 1876018407641100 · saveState=saved · 平台原稿回读已核对：返回码 0；原稿ID 一致；全文 一致；逐图 一致（页面 3 / 原稿 3）；当前文档 未变化 · bodyMatchesFrozen=true · 正文图集 3 张与冻结原稿逐图一致 · 无需重复保存",
+        "复核 inspect(15:44:32.331Z)：saveState=saved · 平台原稿回读：返回码 0；原稿ID 一致；全文 一致；逐图 一致（页面 3 / 原稿 3）；当前文档 未变化 · bodyMatchesFrozen=true · 图集 3 张 loaded 且 matchedAssets 3/3 · 草稿已保存且与冻结原稿一致，不重复保存",
+        "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100"
+      ]
+    },
+    {
+      "stepId": "publish",
+      "label": "提交这篇微头条一次",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "toutiao.music.dispatch",
+          "nextAction": "回读原生复选框；已关闭时跳过点击，不能反向开启",
+          "status": "completed",
+          "evidence": "Agent 对 Studio 签发的已勾选配乐标签点击已返回；是否关闭由下一次原生复选框回读判断",
+          "observedAt": "2026-09-11T15:51:45.334Z",
+          "generation": 15
+        },
+        {
+          "id": "toutiao.music.verify",
+          "nextAction": "设置未核验通过前禁止提交",
+          "status": "completed",
+          "evidence": "开启配乐：未勾选；当前页面回读",
+          "observedAt": "2026-09-11T15:51:48.355Z",
+          "generation": 15
+        },
+        {
+          "id": "publish.preflight",
+          "nextAction": "只派发一次；人工专属卡点暂停",
+          "status": "completed",
+          "evidence": "当前发布控件与一次性授权通过主进程闸门 · 2026-09-11T15:52:05.450Z",
+          "observedAt": "2026-09-11T16:26:07.938Z",
+          "generation": 20
+        },
+        {
+          "id": "publish.dispatch",
+          "nextAction": "只核验结果，不再次发布",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-11T15:52:05.450Z · publish/final；结果另行核验",
+          "observedAt": "2026-09-11T16:26:20.740Z",
+          "generation": 20
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 2,
+      "startedAt": "2026-09-11T15:51:03.638Z",
+      "finishedAt": "2026-09-11T16:22:54.384Z",
+      "evidence": [
+        "inspect(15:44:41.551Z)：锁定草稿 1876018407641100 · saveState=saved · 正文/图集/字段均已核验一致 · 当前卡点：开启配乐 已勾选（submissionUnavailableReason：提交前必须关闭并回读）· 主进程已签发 selectors.disableMusic 与 selectors.dismissAssistant，将按协议先关闭配乐并回读后再提交",
+        "inspect(15:47:31.953Z)：锁定草稿 1876018407641100 · saveState=saved · 开启配乐 checked=true · submissionUnavailableReason 仍为“开启配乐：仍已勾选，提交前必须关闭并回读” · selectors 仅签发 disableMusic（label:text-is），未签发 publish · 两次按最新签发 selector 点击均 Timeout 30000ms（点击未派发）· 已完成 dismissAssistant 关闭遮挡",
+        "inspect(15:51:48.072Z)：点击最新签发 disableMusic（label:has-text）一次后回读 开启配乐 checked=false · submissionUnavailableReason 已消失 · 锁定草稿 1876018407641100 · saveState=saved · bodyMatchesFrozen=true · matchedAssets 3/3 · 头条首发未勾选 · 作品声明 7 项均未选 · 主进程签发 selectors.publish=button.publish-content",
+        "main 已从原账号管理页核验本次单次提交及全部原图；公开正文另行核验 · https://www.toutiao.com/w/1876018407641100/"
+      ]
+    },
+    {
+      "stepId": "verify-publication",
+      "label": "核验微头条平台结果",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "publication.verify",
+          "nextAction": "完成事务；未知只查询管理页",
+          "status": "completed",
+          "evidence": "公开页已核验 · 3777529577766638 · 做AI眼镜第188天，它开始看懂我的世界 · https://www.toutiao.com/w/1876018407641100/",
+          "observedAt": "2026-09-11T16:27:44.132Z",
+          "generation": 20
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "当前公开页 https://www.toutiao.com/w/1876018407641100/；素材/01-首篇封面.png；第 1 张，平台地址、顺序及实际加载通过；冻结全文一致",
+          "observedAt": "2026-09-11T16:35:20.271Z",
+          "generation": 20
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "当前公开页 https://www.toutiao.com/w/1876018407641100/；素材/02-导航场景效果图.png；第 2 张，平台地址、顺序及实际加载通过；冻结全文一致",
+          "observedAt": "2026-09-11T16:35:20.271Z",
+          "generation": 20
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "当前公开页 https://www.toutiao.com/w/1876018407641100/；素材/03-城市漫游效果图.png；第 3 张，平台地址、顺序及实际加载通过；冻结全文一致",
+          "observedAt": "2026-09-11T16:35:20.271Z",
+          "generation": 20
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 2,
+      "startedAt": "2026-09-11T16:26:22.065Z",
+      "finishedAt": "2026-09-11T16:27:44.132Z",
+      "outputRefs": {
+        "publicationUrl": "https://www.toutiao.com/w/1876018407641100/"
+      },
+      "evidence": [
+        "inspect 返回 EVIDENCE_REQUIRED：绑定的原稿网页不可见（绑定 Tab tab-1-1789104390028 已在公开结果页 https://www.toutiao.com/w/1876018407641100/ ，但页面不可见）；等待用户在 Studio 中打开该网页或使用网页独立窗口后重新检查",
+        "inspect(2026-09-11T16:27:09.632Z) 公开结果页回读：pageKind=published-article · URL https://www.toutiao.com/w/1876018407641100/ · publishedArticleId 1876018407641100 与 draftId 一致 · 标题\"做AI眼镜第188天，它开始看懂我的世界\"一致 · platformAccountId 3777529577766638 一致 · 正文 424 字符 bodyMatchesFrozen=true · 逐图 3/3 loaded 且平台地址与冻结原图逐一对应（c7ba69a8…↔01-首篇封面、cb442312…↔02-导航场景效果图、14697e07…↔03-城市漫游效果图，顺序一致）· publishedLinks 含该 URL 与标题",
+        "csdn@1 页面回读 · https://www.toutiao.com/w/1876018407641100/"
+      ]
+    }
+  ],
+  "publishEffects": [
+    {
+      "key": "9d635bd0-22cd-4ad2-93b1-930b894cffec:5ebf83cf-35b6-4fff-a06f-46aefb6bb10a:g15:publish:final",
+      "affairId": "9d635bd0-22cd-4ad2-93b1-930b894cffec",
+      "attemptId": "5ebf83cf-35b6-4fff-a06f-46aefb6bb10a",
+      "executionGeneration": 15,
+      "kind": "publish",
+      "targetId": "final",
+      "status": "verified",
+      "reservedAt": "2026-09-11T15:52:04.870Z",
+      "consumedAt": "2026-09-11T15:52:05.361Z",
+      "dispatchedAt": "2026-09-11T15:52:05.450Z",
+      "observedAt": "2026-09-11T16:27:44.132Z",
+      "browserTaskRunId": "0dfa4a1b-d1f0-4f10-894a-81989d39c44e"
+    }
+  ]
+}

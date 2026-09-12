@@ -20,6 +20,22 @@ export const CSDN_ARTICLE_PUBLISHING_PLAN = [
   { stepId: 'verify-publication', label: '核验文章结果', resumePolicy: 'reconcile-then-run' },
 ] as const satisfies readonly ArticlePublishingPlanStep[]
 
+export const TOUTIAO_ARTICLE_PUBLISHING_PLAN = CSDN_ARTICLE_PUBLISHING_PLAN.map((step) => ({
+  ...step,
+  label: (
+    {
+      'open-editor': '从头条草稿箱找回原微头条',
+      'verify-account': '核验头条账号与原稿',
+      'upload-assets': '逐图上传、确认插入并核验',
+      'fill-body': '填写并回读微头条正文',
+      'fill-fields': '核验首发、配乐与作品声明',
+      'save-draft': '保存并重新核验原微头条',
+      publish: '提交这篇微头条一次',
+      'verify-publication': '核验微头条平台结果',
+    } as Record<string, string>
+  )[step.stepId],
+}))
+
 export const WEIBO_ARTICLE_PUBLISHING_PLAN = CSDN_ARTICLE_PUBLISHING_PLAN.map((step) => ({
   ...step,
   label: (
@@ -32,6 +48,22 @@ export const WEIBO_ARTICLE_PUBLISHING_PLAN = CSDN_ARTICLE_PUBLISHING_PLAN.map((s
       'save-draft': '检查当前图文（不代表平台已保存）',
       publish: '提交微博并读取回执',
       'verify-publication': '核验平台实际发布结果',
+    } as Record<string, string>
+  )[step.stepId],
+}))
+
+export const BILIBILI_ARTICLE_PUBLISHING_PLAN = CSDN_ARTICLE_PUBLISHING_PLAN.map((step) => ({
+  ...step,
+  label: (
+    {
+      'open-editor': '打开 B站图文动态发布器',
+      'verify-account': '核验 B站 UID 与当前空白现场',
+      'upload-assets': '逐张选择、上传并核验动态图片',
+      'fill-body': '填写正文并完整回读',
+      'fill-fields': '填写独立标题并核验发布设置',
+      'save-draft': '复核当前图文（不代表平台已保存）',
+      publish: '单次发布 B站动态',
+      'verify-publication': '核验动态 ID、作者、全文与逐图结果',
     } as Record<string, string>
   )[step.stepId],
 }))
@@ -290,7 +322,7 @@ export function articlePublishingDetailDefinitions(
       'Studio',
       `核验正文位置与加载：${asset.displayPath.split('/').pop()}`,
       '完整正文已按冻结 Markdown 与已核验平台图片填写',
-      publishing.adapterId === 'xiaohongshu'
+      ['xiaohongshu', 'weibo', 'toutiao', 'bilibili'].includes(publishing.adapterId ?? 'csdn')
         ? '该图平台地址、图集出现次数和顺序与原稿对应，预览加载成功；图集不使用正文内位置或替代文字'
         : publishing.adapterId === 'zhihu'
           ? '该图平台地址、出现次数、顺序、前文位置与原稿一致，且图片加载成功（知乎不保留替代文字）'
@@ -319,7 +351,7 @@ export function articlePublishingDetailDefinitions(
       '分类、标签、摘要面板可见；未提交文章',
       '逐项核验平台字段，禁止提前点击确定并发布',
     )
-  for (const [field, label] of ['zhihu', 'xiaohongshu', 'weibo'].includes(
+  for (const [field, label] of ['zhihu', 'xiaohongshu', 'weibo', 'toutiao', 'bilibili'].includes(
     publishing.adapterId ?? '',
   )
     ? [['title', '标题']]
@@ -431,14 +463,14 @@ export function articlePublishingDetailDefinitions(
       if (row.id === 'save.verify')
         row.completion = '同账号本地原稿 ID、标题、完整正文及图集回读一致'
     }
-  if (publishing.adapterId === 'weibo') {
+  if (publishing.adapterId === 'weibo' || publishing.adapterId === 'bilibili') {
     const omitted = /^(initial\.|recovery\.)/u
     for (let i = rows.length - 1; i >= 0; i--) if (omitted.test(rows[i].id)) rows.splice(i, 1)
     for (const row of rows) {
       row.entry = row.entry.replace(/原草稿/g, '当前编辑现场').replace(/原 draftId/g, '现场身份')
       row.next = row.next.replace(/平台保存/g, '当前正文回读').replace(/正文保存/g, '正文现场')
       if (row.id === 'page.inspect') {
-        row.action = '读取微博真实 UID 与编辑器'
+        row.action = `读取${publishing.adapterId === 'bilibili' ? 'B站' : '微博'}真实 UID 与编辑器`
         row.completion = 'UID 与任务目标一致；正文区域唯一；图集可完整枚举'
       }
       if (row.id === 'body.verify') {
@@ -467,6 +499,114 @@ export function articlePublishingDetailDefinitions(
         row.completion = '本任务明确授权；同一 UID、冻结正文、逐图和公开设置均通过；从未派发提交'
       }
     }
+  }
+  if (publishing.adapterId === 'bilibili') {
+    const dispatch = rows.find((row) => row.id === 'publish.dispatch')!
+    dispatch.action = '点击原生发布入口一次'
+    dispatch.completion = '入口已点击；可能打开首次规范弹窗，不等于已经提交'
+    dispatch.next = '识别首次规范确认分支，或读取直接提交回执'
+    add(
+      'bilibili.agreement.inspect',
+      'publish',
+      'Studio',
+      '识别首次动态规范确认分支',
+      '本次授权发布入口已点击；同一 Runtime 与提交观察器仍有效',
+      '读到原生规范 iframe、标题和唯一确认按钮，或已取得直接提交回执',
+      '首次规范分支复核同稿后确认；已有提交请求时禁止再发送',
+    )
+    add(
+      'bilibili.agreement.confirm',
+      'publish',
+      'Studio',
+      '首次规范确认并发送',
+      '实际存在原生规范弹窗；同账号、正文、标题、逐图复核通过；尚无提交请求',
+      '唯一确认按钮已点击一次；不代表提交成功；无此分支时跳过',
+      '读取同稿提交回执；取消、页面改代或结果未知时不得再次确认',
+    )
+    add(
+      'bilibili.submission.receipt',
+      'publish',
+      'Studio',
+      '核验动态创建请求与平台回执',
+      '已点击发布入口或首次确认；原生请求观察器已在点击前绑定',
+      '唯一请求的正文、逐图地址和顺序对应，响应 code=0 且动态 ID 可核验',
+      '只读打开该动态核验公开全文与逐图；无回执时保持未知，不重发',
+    )
+    add(
+      'bilibili.visibility.verify',
+      'fill-fields',
+      'Studio',
+      '读取动态可见范围的当前选中项',
+      '同账号发布器；必要时 Agent 打开设置和可见范围菜单',
+      '原生菜单所有用户可见为 is-active，且仅自己可见未选中；不是依据菜单文案存在',
+      '不可读时打开当前签发的设置入口；私密或矛盾时停止，不能自动切换',
+    )
+    const nativeRows = rows.filter((row) => row.id.startsWith('bilibili.'))
+    for (const row of nativeRows) rows.splice(rows.indexOf(row), 1)
+    rows.splice(
+      rows.findIndex((row) => row.id === 'save.dispatch'),
+      0,
+      ...nativeRows.filter((row) => row.checkpointId === 'fill-fields'),
+    )
+    rows.splice(
+      rows.findIndex((row) => row.id === 'publish.dispatch') + 1,
+      0,
+      ...nativeRows.filter((row) => row.checkpointId === 'publish'),
+    )
+  }
+  if (publishing.adapterId === 'toutiao') {
+    for (const row of rows) {
+      if (row.id.endsWith('.placement')) row.action = row.action.replace('正文位置', '图集顺序')
+      if (row.id === 'save.dispatch') row.action = '点击存草稿一次'
+      if (row.id === 'save.verify')
+        row.completion =
+          '从平台原稿回读同一账号、draftId、完整正文和逐图结果；不凭编辑器存在判断保存'
+      if (row.id === 'body.verify') {
+        row.action = '回读当前微头条正文与图集'
+        row.completion = '冻结正文逐字一致；每张图的顺序、平台地址和加载结果可核验'
+      }
+    }
+    for (const [field, label] of [
+      ['exclusive', '头条首发'],
+      ['music', '配乐'],
+      ['declaration', '作品声明'],
+    ]) {
+      if (field === 'music')
+        add(
+          'toutiao.music.dispatch',
+          'publish',
+          'Agent',
+          '关闭当前配乐选项',
+          '最后保存或恢复完成；当前配乐已勾选，且 Studio 签发唯一关联标签',
+          '关闭动作已返回；不等于配乐状态已核验',
+          '回读原生复选框；已关闭时跳过点击，不能反向开启',
+        )
+      add(
+        `toutiao.${field}.verify`,
+        field === 'music' ? 'publish' : 'fill-fields',
+        'Studio',
+        field === 'declaration' ? '读取作品声明当前选择' : `读取并核验${label}`,
+        field === 'music' ? '保存或恢复完成；每次提交前重新读取当前文档' : '原账号与草稿一致',
+        field === 'music'
+          ? '当前配乐 checked=false；不沿用保存前或上个文档的值'
+          : field === 'declaration'
+            ? '完整读到各声明选项的真实勾选状态，不替代作品真实性审核'
+            : '读取控件实际状态；不可读或与任务要求冲突则停止',
+        '设置未核验通过前禁止提交',
+      )
+    }
+    const nativeRows = rows.filter((row) => row.id.startsWith('toutiao.'))
+    for (const row of nativeRows) rows.splice(rows.indexOf(row), 1)
+    rows.splice(
+      rows.findIndex((row) => row.id === 'save.dispatch'),
+      0,
+      ...nativeRows.filter((row) => row.checkpointId === 'fill-fields'),
+    )
+    rows.splice(
+      rows.findIndex((row) => row.id === 'publish.preflight'),
+      0,
+      ...nativeRows.filter((row) => row.checkpointId === 'publish'),
+    )
   }
   return rows
 }

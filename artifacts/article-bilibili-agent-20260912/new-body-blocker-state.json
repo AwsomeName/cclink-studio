@@ -1,0 +1,501 @@
+{
+  "capturedAt": "2026-09-12T09:01:32.722695+00:00",
+  "affairId": "ee57dda3-94a2-4107-b8e4-8d5a6d5705f1",
+  "execution": {
+    "status": "result-unknown",
+    "currentAttemptId": "35d2da8c-6eb2-4f76-b26c-a57b44825fe1",
+    "currentGeneration": 1,
+    "currentLaunchOperationId": "a65b20b8-ba1f-4a47-bb0a-da00390eaf6b",
+    "currentStepId": "fill-body"
+  },
+  "publication": {
+    "status": "not-started"
+  },
+  "assets": [
+    {
+      "id": "local:2026-09-09/素材/01-首篇封面.png",
+      "kind": "local",
+      "sourcePath": "/Users/apple/Desktop/研发日记/2026-09-09/素材/01-首篇封面.png",
+      "displayPath": "素材/01-首篇封面.png",
+      "mediaType": "image/png",
+      "size": 2510228,
+      "modifiedAt": 1789052878075.3413,
+      "occurrences": [
+        {
+          "start": 446,
+          "end": 460,
+          "alt": "封面：让AI和我看同一个世界"
+        }
+      ],
+      "status": "uploaded",
+      "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/f47f3590d8d80b162c6e5bdb9d1556793546384070347419.png",
+      "verifiedAt": "2026-09-12T08:54:22.577Z",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-12T08:53:22.646Z",
+          "finishedAt": "2026-09-12T08:54:22.577Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "inspect 2026-09-12T08:53:47.951Z：文件选择已派发后页面 images 新增 1 张，src=https://i0.hdslb.com/bfs/new_dyn/f47f3590d8d80b162c6e5bdb9d1556793546384070347419.png，loaded=true",
+            "inspect 2026-09-12T08:53:47.951Z：matchedAssets 已将 素材/01-首篇封面.png 匹配到 https://i0.hdslb.com/bfs/new_dyn/f47f3590d8d80b162c6e5bdb9d1556793546384070347419.png，images[0].loaded=true",
+            "csdn@1 页面回读 · https://t.bilibili.com/"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "local:2026-09-09/素材/02-导航场景效果图.png",
+      "kind": "local",
+      "sourcePath": "/Users/apple/Desktop/研发日记/2026-09-09/素材/02-导航场景效果图.png",
+      "displayPath": "素材/02-导航场景效果图.png",
+      "mediaType": "image/png",
+      "size": 1505655,
+      "modifiedAt": 1789052878077.4902,
+      "occurrences": [
+        {
+          "start": 476,
+          "end": 493,
+          "alt": "导航场景设计效果图"
+        }
+      ],
+      "status": "uploaded",
+      "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/2e70ca643dcaa8eefec120e35e86c3673546384070347419.png",
+      "verifiedAt": "2026-09-12T08:55:18.348Z",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-12T08:54:32.951Z",
+          "finishedAt": "2026-09-12T08:55:18.348Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "inspect 2026-09-12T08:54:54.882Z：文件选择派发后 images 增至 2 张，新图 src=https://i0.hdslb.com/bfs/new_dyn/2e70ca643dcaa8eefec120e35e86c3673546384070347419.png，loaded=true；matchedAssets 已匹配 素材/02-导航场景效果图.png",
+            "inspect 2026-09-12T08:54:54.882Z：matchedAssets[\"local:2026-09-09/素材/02-导航场景效果图.png\"]=https://i0.hdslb.com/bfs/new_dyn/2e70ca643dcaa8eefec120e35e86c3673546384070347419.png；页面 images 共 2 张且均 loaded=true",
+            "csdn@1 页面回读 · https://t.bilibili.com/"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "local:2026-09-09/素材/03-城市漫游效果图.png",
+      "kind": "local",
+      "sourcePath": "/Users/apple/Desktop/研发日记/2026-09-09/素材/03-城市漫游效果图.png",
+      "displayPath": "素材/03-城市漫游效果图.png",
+      "mediaType": "image/png",
+      "size": 2114549,
+      "modifiedAt": 1789052878080.0527,
+      "occurrences": [
+        {
+          "start": 509,
+          "end": 526,
+          "alt": "城市漫游概念效果图"
+        }
+      ],
+      "status": "uploaded",
+      "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/81274913e3a7312229142902852c90933546384070347419.png",
+      "verifiedAt": "2026-09-12T08:56:03.580Z",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-12T08:55:24.969Z",
+          "finishedAt": "2026-09-12T08:56:03.580Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "inspect 2026-09-12T08:55:39.964Z：文件选择派发后 images 增至 3 张，新图 src=https://i0.hdslb.com/bfs/new_dyn/81274913e3a7312229142902852c90933546384070347419.png，loaded=true；matchedAssets 已匹配 素材/03-城市漫游效果图.png",
+            "inspect 2026-09-12T08:55:39.964Z：matchedAssets[\"local:2026-09-09/素材/03-城市漫游效果图.png\"]=https://i0.hdslb.com/bfs/new_dyn/81274913e3a7312229142902852c90933546384070347419.png；页面 images 共 3 张且均 loaded=true",
+            "csdn@1 页面回读 · https://t.bilibili.com/"
+          ]
+        }
+      ]
+    }
+  ],
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "label": "打开 B站图文动态发布器",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "account.resolve",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "账号 7c1ef8bb-7770-4c53-ad02-e4943f745fea · Profile web-draft-67f01554-70b0-4739-ad9f-178437a7b1a3",
+          "observedAt": "2026-09-12T08:50:10.358Z",
+          "generation": 1
+        },
+        {
+          "id": "tab.acquire",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "Tab tab-1-1789145082433 · 账号 7c1ef8bb-7770-4c53-ad02-e4943f745fea · Profile web-draft-67f01554-70b0-4739-ad9f-178437a7b1a3",
+          "observedAt": "2026-09-12T08:50:10.720Z",
+          "generation": 1
+        },
+        {
+          "id": "editor.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "https://t.bilibili.com/",
+          "observedAt": "2026-09-12T08:50:10.869Z",
+          "generation": 1
+        },
+        {
+          "id": "runtime.ready",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "Agent run-a65b20b8-ba1f-4a47-bb0a-da00390eaf6b · BrowserTask 348787e6-50fd-4403-aebc-17887989101d · Tab tab-1-1789145082433 · View g1 · WebContents 2 · Page g1",
+          "observedAt": "2026-09-12T08:50:11.114Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-12T08:50:11.114Z",
+      "finishedAt": "2026-09-12T08:52:07.919Z",
+      "evidence": [
+        "inspect 2026-09-12T08:50:32.132Z：https://t.bilibili.com/ pageKind=editor，editor.recognized=true，bodySelector=div[placeholder=\"有什么想和大家分享的？\"] 存在，platformAccountId=3546384070347419",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "verify-account",
+      "label": "核验 B站 UID 与当前空白现场",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "page.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面 editor · 账号 3546384070347419 · draftId 尚无 · 标题  · 保存 unknown",
+          "observedAt": "2026-09-12T08:50:32.142Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-12T08:52:31.872Z",
+      "finishedAt": "2026-09-12T08:53:00.833Z",
+      "evidence": [
+        "开始核验 B站 UID 与当前空白现场",
+        "inspect 2026-09-12T08:52:41.144Z：platformAccountId=3546384070347419 与 targetUID 3546384070347419 一致；bodyTextLength=0 且 initialDraftBodyEmpty=true；images=[] 且 imageEnumerationComplete=true；title 为空，现场为空白草稿",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "upload-assets",
+      "label": "逐张选择、上传并核验动态图片",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/01-首篇封面.png · div.bili-pics-uploader__add",
+          "observedAt": "2026-09-12T08:53:48.125Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-12T08:53:28.183Z · upload-asset/local:2026-09-09/素材/01-首篇封面.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-12T08:54:22.577Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/01-首篇封面.png",
+          "observedAt": "2026-09-12T08:54:22.577Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i0.hdslb.com/bfs/new_dyn/f47f3590d8d80b162c6e5bdb9d1556793546384070347419.png · 2026-09-12T08:54:22.577Z",
+          "observedAt": "2026-09-12T08:54:22.577Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/02-导航场景效果图.png · div.bili-pics-uploader__add",
+          "observedAt": "2026-09-12T08:54:37.421Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-12T08:54:45.544Z · upload-asset/local:2026-09-09/素材/02-导航场景效果图.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-12T08:55:18.348Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/02-导航场景效果图.png",
+          "observedAt": "2026-09-12T08:55:18.348Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i0.hdslb.com/bfs/new_dyn/2e70ca643dcaa8eefec120e35e86c3673546384070347419.png · 2026-09-12T08:55:18.348Z",
+          "observedAt": "2026-09-12T08:55:18.348Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/03-城市漫游效果图.png · div.bili-pics-uploader__add",
+          "observedAt": "2026-09-12T08:55:28.697Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-12T08:55:31.684Z · upload-asset/local:2026-09-09/素材/03-城市漫游效果图.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-12T08:56:03.580Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/03-城市漫游效果图.png",
+          "observedAt": "2026-09-12T08:56:03.580Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i0.hdslb.com/bfs/new_dyn/81274913e3a7312229142902852c90933546384070347419.png · 2026-09-12T08:56:03.580Z",
+          "observedAt": "2026-09-12T08:56:03.580Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "skip-if-verified",
+      "attemptCount": 1,
+      "startedAt": "2026-09-12T08:53:11.575Z",
+      "finishedAt": "2026-09-12T08:56:33.134Z",
+      "evidence": [
+        "开始逐张上传 3 张动态图片（01-首篇封面 → 02-导航场景效果图 → 03-城市漫游效果图），使用 fileInput=div.bili-dyn-publishing__tools__item.pic",
+        "inspect 2026-09-12T08:56:12.113Z：页面 images 共 3 张且均 loaded=true；matchedAssets 完整匹配 01-首篇封面/02-导航场景效果图/03-城市漫游效果图 三张冻结图片到各自平台 URL",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "fill-body",
+      "label": "填写正文并完整回读",
+      "adapterVersion": 1,
+      "status": "needs-reconcile",
+      "details": [
+        {
+          "id": "body.locate",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "正文 div[placeholder=\"有什么想和大家分享的？\"] · iframe 主文档 · 0 字符",
+          "observedAt": "2026-09-12T08:50:32.142Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.placement",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/01-首篇封面.png · 图集 第 1 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-12T08:56:13.188Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.placement",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/02-导航场景效果图.png · 图集 第 2 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-12T08:56:13.188Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.placement",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/03-城市漫游效果图.png · 图集 第 3 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-12T08:56:13.188Z",
+          "generation": 1
+        },
+        {
+          "id": "body.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "unknown",
+          "evidence": "派发闸门已通过 · 2026-09-12T08:59:42.974Z · save-draft/autosave:fill-body:7b78ee3a-8353-4423-8954-4e67b9e32a93；结果另行核验",
+          "observedAt": "2026-09-12T08:59:43.075Z",
+          "generation": 1
+        },
+        {
+          "id": "body.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "unknown",
+          "evidence": "已派发但没有可信结果 · autosave:fill-body:7b78ee3a-8353-4423-8954-4e67b9e32a93",
+          "reason": "格式化正文目标不是受支持的知乎编辑器",
+          "observedAt": "2026-09-12T08:59:43.075Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-12T08:59:01.579Z",
+      "evidence": [
+        "开始填写正文到 div[placeholder=\"有什么想和大家分享的？\"]，正文来自冻结源稿（不含 Markdown 图片语法），标题留待 fill-fields 填写"
+      ]
+    },
+    {
+      "stepId": "fill-fields",
+      "label": "填写独立标题并核验发布设置",
+      "adapterVersion": 1,
+      "status": "pending",
+      "details": [
+        {
+          "id": "field.title.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第188天，它开始看懂我的世界；实际 ",
+          "observedAt": "2026-09-12T08:50:32.142Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "waiting",
+          "evidence": "期望 做AI眼镜第188天，它开始看懂我的世界；实际 ",
+          "reason": "字段值尚不一致",
+          "observedAt": "2026-09-12T08:50:32.142Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "evidence": []
+    },
+    {
+      "stepId": "save-draft",
+      "label": "复核当前图文（不代表平台已保存）",
+      "adapterVersion": 1,
+      "status": "pending",
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "evidence": []
+    },
+    {
+      "stepId": "publish",
+      "label": "单次发布 B站动态",
+      "adapterVersion": 1,
+      "status": "pending",
+      "details": [
+        {
+          "id": "publish.preflight",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "waiting",
+          "evidence": "等待核验公开范围、正文、图片和唯一可用的即时发布按钮",
+          "reason": "等待核验公开范围、正文、图片和唯一可用的即时发布按钮",
+          "observedAt": "2026-09-12T08:50:32.142Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "evidence": []
+    },
+    {
+      "stepId": "verify-publication",
+      "label": "核验动态 ID、作者、全文与逐图结果",
+      "adapterVersion": 1,
+      "status": "pending",
+      "details": [
+        {
+          "id": "publication.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "waiting",
+          "evidence": "尚未派发公开发布；等待核验公开范围、正文、图片和唯一可用的即时发布按钮",
+          "reason": "等待核验公开范围、正文、图片和唯一可用的即时发布按钮",
+          "observedAt": "2026-09-12T08:50:32.142Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "evidence": []
+    }
+  ],
+  "sideEffects": [
+    {
+      "key": "ee57dda3-94a2-4107-b8e4-8d5a6d5705f1:35d2da8c-6eb2-4f76-b26c-a57b44825fe1:g1:upload-asset:local:2026-09-09/素材/01-首篇封面.png:attempt-2",
+      "affairId": "ee57dda3-94a2-4107-b8e4-8d5a6d5705f1",
+      "attemptId": "35d2da8c-6eb2-4f76-b26c-a57b44825fe1",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:2026-09-09/素材/01-首篇封面.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-12T08:53:28.064Z",
+      "consumedAt": "2026-09-12T08:53:28.137Z",
+      "dispatchedAt": "2026-09-12T08:53:28.183Z",
+      "observedAt": "2026-09-12T08:54:22.577Z",
+      "browserTaskRunId": "348787e6-50fd-4403-aebc-17887989101d"
+    },
+    {
+      "key": "ee57dda3-94a2-4107-b8e4-8d5a6d5705f1:35d2da8c-6eb2-4f76-b26c-a57b44825fe1:g1:upload-asset:local:2026-09-09/素材/02-导航场景效果图.png:attempt-2",
+      "affairId": "ee57dda3-94a2-4107-b8e4-8d5a6d5705f1",
+      "attemptId": "35d2da8c-6eb2-4f76-b26c-a57b44825fe1",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:2026-09-09/素材/02-导航场景效果图.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-12T08:54:45.244Z",
+      "consumedAt": "2026-09-12T08:54:45.498Z",
+      "dispatchedAt": "2026-09-12T08:54:45.544Z",
+      "observedAt": "2026-09-12T08:55:18.348Z",
+      "browserTaskRunId": "348787e6-50fd-4403-aebc-17887989101d"
+    },
+    {
+      "key": "ee57dda3-94a2-4107-b8e4-8d5a6d5705f1:35d2da8c-6eb2-4f76-b26c-a57b44825fe1:g1:upload-asset:local:2026-09-09/素材/03-城市漫游效果图.png:attempt-2",
+      "affairId": "ee57dda3-94a2-4107-b8e4-8d5a6d5705f1",
+      "attemptId": "35d2da8c-6eb2-4f76-b26c-a57b44825fe1",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:2026-09-09/素材/03-城市漫游效果图.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-12T08:55:31.122Z",
+      "consumedAt": "2026-09-12T08:55:31.631Z",
+      "dispatchedAt": "2026-09-12T08:55:31.684Z",
+      "observedAt": "2026-09-12T08:56:03.580Z",
+      "browserTaskRunId": "348787e6-50fd-4403-aebc-17887989101d"
+    },
+    {
+      "key": "ee57dda3-94a2-4107-b8e4-8d5a6d5705f1:35d2da8c-6eb2-4f76-b26c-a57b44825fe1:g1:save-draft:autosave:fill-body:7b78ee3a-8353-4423-8954-4e67b9e32a93",
+      "affairId": "ee57dda3-94a2-4107-b8e4-8d5a6d5705f1",
+      "attemptId": "35d2da8c-6eb2-4f76-b26c-a57b44825fe1",
+      "executionGeneration": 1,
+      "kind": "save-draft",
+      "targetId": "autosave:fill-body:7b78ee3a-8353-4423-8954-4e67b9e32a93",
+      "status": "result-unknown",
+      "reservedAt": "2026-09-12T08:59:42.858Z",
+      "consumedAt": "2026-09-12T08:59:42.926Z",
+      "dispatchedAt": "2026-09-12T08:59:42.974Z",
+      "observedAt": "2026-09-12T08:59:43.075Z",
+      "browserTaskRunId": "348787e6-50fd-4403-aebc-17887989101d"
+    }
+  ]
+}

@@ -7,6 +7,25 @@ import {
 import { articlePublishingDetailDefinitions } from './article-publishing-plan'
 
 describe('platform draft identity', () => {
+  it('keeps an exact Toutiao micro-post draft and rejects ambiguous or foreign addresses', () => {
+    const url = 'https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100'
+    expect(parsePlatformDraftAnchor(url)).toEqual({
+      adapterId: 'toutiao',
+      draftId: '1876018407641100',
+      url,
+    })
+    for (const other of [
+      url + '&draft_id=2',
+      url.replace('mp.toutiao.com', 'mp.toutiao.com.evil.test'),
+      url.replace('https://', 'https://user@'),
+      url.replace('1876018407641100', 'new'),
+      url.split('?')[0],
+    ])
+      expect(parsePlatformDraftAnchor(other)).toBeNull()
+    expect(isSamePlatformDraft(url, 'https://zhuanlan.zhihu.com/p/1876018407641100/edit')).toBe(
+      false,
+    )
+  })
   it('keeps the exact Zhihu draft ID without converting a 19 digit ID to a number', () => {
     expect(
       parsePlatformDraftAnchor('https://zhuanlan.zhihu.com/p/2080754524944339658/edit?source=test'),

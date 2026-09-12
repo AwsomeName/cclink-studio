@@ -410,7 +410,12 @@ export class McpToolHost {
     toolName: string,
     args: Record<string, unknown>,
     context: McpRequestContext,
-  ): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> {
+  ): Promise<{
+    content: Array<
+      { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: 'image/png' }
+    >
+    isError?: boolean
+  }> {
     if (this.cancelledToolSessions.has(context)) return cancelledToolResult()
     const scheduledPolicyFailure = await validateScheduledTaskToolCall(toolName, args, context)
     if (scheduledPolicyFailure) {
@@ -481,6 +486,21 @@ export class McpToolHost {
         authorization.confirmationGranted ? { ...context, confirmationGranted: true } : context,
       )
       if (this.cancelledToolSessions.has(context)) return cancelledToolResult()
+      // Browser screenshots are visual evidence. Serializing the PNG as JSON text
+      // makes clients truncate it and leaves the Agent unable to inspect the page.
+      if (moduleName === 'browser' && toolName === 'browser_screenshot') {
+        const screenshot = (result as { screenshot?: unknown } | null)?.screenshot
+        if (
+          typeof screenshot !== 'string' ||
+          screenshot.length > 24 * 1024 * 1024 ||
+          !/^iVBORw0KGgo[A-Za-z0-9+/]*={0,2}$/u.test(screenshot)
+        ) {
+          throw new Error('浏览器截图没有返回有效且大小受限的 PNG，不能作为图像核验')
+        }
+        return {
+          content: [{ type: 'image' as const, data: screenshot, mimeType: 'image/png' as const }],
+        }
+      }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
       }

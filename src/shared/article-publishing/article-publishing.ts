@@ -12,6 +12,10 @@ import type {
 } from './article-publishing-types'
 
 export const articlePublishingIpc = {
+  verifyPublishedResult: defineIpcCall<
+    [ManageArticlePublishingRuntimeInput],
+    WebAffairOperationResult<WebAffair>
+  >('articlePublishing:verifyPublishedResult'),
   inspectSource: defineIpcCall<
     [InspectArticlePublishingSourceInput],
     WebAffairOperationResult<ArticlePublishingSourcePreview>

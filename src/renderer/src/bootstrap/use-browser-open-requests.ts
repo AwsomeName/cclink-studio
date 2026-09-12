@@ -90,16 +90,16 @@ export async function openRequestedBrowserTab(request: BrowserOpenTabRequest): P
   }
 
   const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId)
-  if (!request.forceNew && activeTab && isReusableRequestTarget(activeTab)) {
-    return
-  }
-
   const preferredBrowserTab =
     !request.forceNew && request.sourceTabId
       ? tabState.tabs.find((tab) => tab.id === request.sourceTabId && isReusableRequestTarget(tab))
       : undefined
   if (preferredBrowserTab) {
-    tabState.activateTab(preferredBrowserTab.id)
+    if (activeTab?.id !== preferredBrowserTab.id) tabState.activateTab(preferredBrowserTab.id)
+    return
+  }
+
+  if (!request.forceNew && activeTab && isReusableRequestTarget(activeTab)) {
     return
   }
 

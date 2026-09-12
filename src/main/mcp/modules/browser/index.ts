@@ -13,6 +13,7 @@ import type {
 } from '../../types'
 import type { PlaywrightBridge } from '../../../playwright/playwright-bridge'
 import { executePlaywrightAction } from '../../../playwright/playwright-actions'
+import { safeControlUrl } from '../../../playwright/browser-controls'
 import type { BrowserTaskRuntime } from '../../../browser/browser-task-runtime'
 import type { BrowserManager } from '../../../browser/browser-manager'
 import { classifyBrowserError } from '../../../browser/browser-task-errors'
@@ -83,16 +84,21 @@ const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
   // ── 只读工具 ──────────────────────────────
   {
     name: 'browser_screenshot',
-    description: '截取当前页面的屏幕截图，返回 base64 编码的 PNG 图片',
+    description:
+      '截取当前页面的屏幕截图，返回可直接查看的 PNG 图像，用于核验页面和图片；截图本身不证明发布成功',
     inputSchema: { type: 'object', properties: {} },
     annotations: { readOnlyHint: true, destructiveHint: false },
   },
   {
     name: 'browser_extract',
-    description: '提取页面内容。提供 selector 时返回该元素的文本，否则返回整个页面 HTML',
+    description:
+      '提取页面内容。selector 指定可见范围；controls=true 返回该范围最多80个实际链接和控件选择器（不含输入值），适合寻找真实导航和编辑入口，禁止猜地址。默认返回可见文本，最多20000字符；truncated=true 时缩小 selector 范围，不用 shell 读取临时文件。无 selector 时返回 HTML（登记账号禁止）。',
     inputSchema: {
       type: 'object',
-      properties: { selector: { type: 'string', description: '可选的 CSS 选择器' } },
+      properties: {
+        selector: { type: 'string', description: 'CSS 选择器，登记账号必须提供' },
+        controls: { type: 'boolean', description: '只读提取有界链接与控件元数据；不读取表单值' },
+      },
     },
     annotations: { readOnlyHint: true, destructiveHint: false },
   },
@@ -151,8 +157,9 @@ const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'browser_reload',
-    description: '刷新当前页面',
-    inputSchema: { type: 'object', properties: {} },
+    description:
+      '刷新当前页面。加载异常时可用 ignoreCache=true 强制从网络刷新；不删除 Cookie 或登录态。刷新会使旧页面证据失效，必须重新读取。',
+    inputSchema: { type: 'object', properties: { ignoreCache: { type: 'boolean' } } },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
 
@@ -496,7 +503,8 @@ const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'browser_get_tab_info',
-    description: '获取当前活跃标签页的详细信息（ID、URL、标题）',
+    description:
+      '获取任务绑定标签页的ID、URL、标题。openedPageUrls只含该账号当前Tab自行打开的同站点子页，可据此在原任务Tab导航核验；不会切换绑定，也不列举其他Tab。',
     inputSchema: { type: 'object', properties: {} },
     annotations: { readOnlyHint: true, destructiveHint: false },
   },
@@ -819,7 +827,9 @@ export class BrowserToolModule implements ToolModule {
     let trustedBodyHtml: string | undefined
     let imageUpload: Awaited<ReturnType<ArticlePublishingBrowserPolicy['prepareImageUpload']>> =
       null
-    let publicationSubmit: Awaited<ReturnType<ArticlePublishingBrowserPolicy['preparePublicationSubmit']>> = null
+    let publicationSubmit: Awaited<
+      ReturnType<ArticlePublishingBrowserPolicy['preparePublicationSubmit']>
+    > = null
     let initialDraftSave: Awaited<
       ReturnType<ArticlePublishingBrowserPolicy['prepareInitialDraftSave']>
     > = null
@@ -833,7 +843,13 @@ export class BrowserToolModule implements ToolModule {
             page,
             context,
           )) ?? null
-        publicationSubmit = (await this.articlePublishingBrowserPolicy?.preparePublicationSubmit?.(activeTask,sideEffectCapability.sideEffectKey,page,context)) ?? null
+        publicationSubmit =
+          (await this.articlePublishingBrowserPolicy?.preparePublicationSubmit?.(
+            activeTask,
+            sideEffectCapability.sideEffectKey,
+            page,
+            context,
+          )) ?? null
         trustedBodyHtml = await this.articlePublishingBrowserPolicy?.prepareBodyWrite?.(
           activeTask,
           context,
@@ -875,6 +891,7 @@ export class BrowserToolModule implements ToolModule {
           dispatchGuard?.()
           initialDraftSave?.arm()
           publicationSubmit?.arm()
+          imageUpload?.arm?.()
           dispatched = true
         },
         trustedBodyHtml,
@@ -889,6 +906,7 @@ export class BrowserToolModule implements ToolModule {
           page,
           context,
           sideEffectCapability?.sideEffectKey,
+          typeof params.selector === 'string' ? params.selector : undefined,
         )
       }
       if (actionLogId) {
@@ -904,7 +922,8 @@ export class BrowserToolModule implements ToolModule {
     } catch (error) {
       // A click can throw after the server accepted the save. Preserve its exact ID even on
       // cancellation, but never navigate, advance progress or dispatch another save from catch.
-      if (dispatched && publicationSubmit) await publicationSubmit.finish().catch(() => undefined)
+      if (dispatched && publicationSubmit)
+        await publicationSubmit.finish(false).catch(() => undefined)
       if (dispatched && initialDraftSave)
         await initialDraftSave.finish(false).catch(() => undefined)
       if (activeTask)
@@ -953,6 +972,7 @@ export class BrowserToolModule implements ToolModule {
     } finally {
       initialDraftSave?.dispose()
       publicationSubmit?.dispose()
+      imageUpload?.dispose?.()
     }
   }
 
@@ -1165,41 +1185,36 @@ export class BrowserToolModule implements ToolModule {
   ): Promise<string | null> {
     if (!page || !['click', 'press', 'pressKey'].includes(actionType)) return null
     if ((actionType === 'press' || actionType === 'pressKey') && params.key !== 'Enter') return null
-    const result = await page
-      .evaluate(
-        ({ action, selector }) => {
-          let element: Element | null = null
-          try {
-            element =
-              action === 'pressKey'
-                ? document.activeElement
-                : selector
-                  ? document.querySelector(selector)
-                  : null
-          } catch {
-            return { sensitive: true, label: '无法识别的提交控件' }
-          }
-          const target = element?.closest('button, input, a, [role="button"]') ?? element
-          const label = String(
-            target?.getAttribute('value') ||
-              target?.getAttribute('aria-label') ||
-              target?.textContent ||
-              '',
-          ).trim()
-          const lower = label.toLowerCase()
-          if (/草稿|暂存|save\s+draft|draft/.test(lower)) return { sensitive: false, label }
-          const type = (target?.getAttribute('type') || '').toLowerCase()
-          const sensitive =
+    const unknown = { sensitive: true, label: '无法识别的提交控件' }
+    const result = await (async () => {
+      // Use the same selector engine as dispatch. Native querySelector rejects
+      // observed Playwright text selectors, incorrectly handing safe navigation off.
+      const selector = actionType === 'pressKey' ? ':focus' : String(params.selector ?? '')
+      if (!selector.trim()) return unknown
+      const locator = page.locator(selector)
+      if ((await locator.count()) !== 1) return unknown
+      return locator.evaluate((element, action) => {
+        const target = element.closest('button, input, a, [role="button"]') ?? element
+        const label = String(
+          target.getAttribute('value') ||
+            target.getAttribute('aria-label') ||
+            target.textContent ||
+            '',
+        ).trim()
+        const lower = label.toLowerCase()
+        if (/草稿|暂存|save\s+draft|draft/.test(lower)) return { sensitive: false, label }
+        const type = (target.getAttribute('type') || '').toLowerCase()
+        return {
+          sensitive:
             type === 'submit' ||
             /提交|发布|确认|支付|付款|删除|注销|签署|授权|同意|submit|publish|confirm|pay|delete|sign|authorize|approve/.test(
               lower,
             ) ||
-            action === 'pressKey'
-          return { sensitive, label }
-        },
-        { action: actionType, selector: String(params.selector ?? '') },
-      )
-      .catch(() => ({ sensitive: true, label: '无法确认的网页动作' }))
+            action === 'pressKey',
+          label,
+        }
+      }, actionType)
+    })().catch(() => unknown)
     return result.sensitive
       ? `检测到敏感最终动作${result.label ? `（${result.label}）` : ''}`
       : null
@@ -1385,7 +1400,7 @@ export class BrowserToolModule implements ToolModule {
         case 'reload':
           await beforeDispatch?.()
           onDispatch?.()
-          this.browserManager.reload(tabId)
+          this.browserManager.reload(tabId, params.ignoreCache === true)
           await this.confirmAutomationBinding(tabId, true)
           return {
             tabId,
@@ -1397,6 +1412,14 @@ export class BrowserToolModule implements ToolModule {
             tabId,
             url: this.browserManager.getCurrentURL(tabId),
             title: this.browserManager.getTitle(tabId),
+            openedPageUrls: (this.browserManager.getAccountChildPageUrls?.(tabId) ?? [])
+              .map(safeControlUrl)
+              .filter(
+                (url): url is string =>
+                  typeof url === 'string' &&
+                  safeUrlOrigin(url) ===
+                    safeUrlOrigin(this.browserManager!.getCurrentURL(tabId) ?? ''),
+              ),
           }
         default: {
           if (!page) {

@@ -1,0 +1,70 @@
+{
+  "affairId": "3eb86c88-265c-46a2-b144-2ea228e7f186",
+  "execution": {
+    "status": "result-unknown",
+    "currentAttemptId": "9f981f0a-cff7-4c9b-8355-3c8a6c9ea721",
+    "currentGeneration": 4,
+    "currentLaunchOperationId": "02ff6f90-d45f-4b99-9590-76ee40060e5b",
+    "currentStepId": "upload-assets"
+  },
+  "publication": {
+    "status": "not-started"
+  },
+  "assets": [
+    {
+      "id": "local:2026-09-09/素材/01-首篇封面.png",
+      "status": "reconciling",
+      "platformUrl": null,
+      "uploadAttempts": 3
+    },
+    {
+      "id": "local:2026-09-09/素材/02-导航场景效果图.png",
+      "status": "pending",
+      "platformUrl": null,
+      "uploadAttempts": 0
+    },
+    {
+      "id": "local:2026-09-09/素材/03-城市漫游效果图.png",
+      "status": "pending",
+      "platformUrl": null,
+      "uploadAttempts": 0
+    }
+  ],
+  "sideEffects": [
+    {
+      "key": "3eb86c88-265c-46a2-b144-2ea228e7f186:9f981f0a-cff7-4c9b-8355-3c8a6c9ea721:g3:upload-asset:local:2026-09-09/素材/01-首篇封面.png:attempt-3",
+      "affairId": "3eb86c88-265c-46a2-b144-2ea228e7f186",
+      "attemptId": "9f981f0a-cff7-4c9b-8355-3c8a6c9ea721",
+      "executionGeneration": 3,
+      "kind": "upload-asset",
+      "targetId": "local:2026-09-09/素材/01-首篇封面.png:attempt-3",
+      "status": "rejected",
+      "reservedAt": "2026-09-12T00:49:07.945Z",
+      "consumedAt": "2026-09-12T00:49:08.162Z",
+      "dispatchedAt": "2026-09-12T00:49:08.246Z",
+      "observedAt": "2026-09-12T01:13:15.188Z",
+      "browserTaskRunId": "e9f4b9aa-33ec-4087-bac8-0fcf601ff350"
+    },
+    {
+      "key": "3eb86c88-265c-46a2-b144-2ea228e7f186:9f981f0a-cff7-4c9b-8355-3c8a6c9ea721:g4:upload-asset:local:2026-09-09/素材/01-首篇封面.png:attempt-4",
+      "affairId": "3eb86c88-265c-46a2-b144-2ea228e7f186",
+      "attemptId": "9f981f0a-cff7-4c9b-8355-3c8a6c9ea721",
+      "executionGeneration": 4,
+      "kind": "upload-asset",
+      "targetId": "local:2026-09-09/素材/01-首篇封面.png:attempt-4",
+      "status": "result-unknown",
+      "reservedAt": "2026-09-12T01:14:34.241Z",
+      "consumedAt": "2026-09-12T01:14:34.438Z",
+      "dispatchedAt": "2026-09-12T01:14:34.510Z",
+      "observedAt": "2026-09-12T01:14:37.892Z",
+      "browserTaskRunId": "833d2381-13ae-45d3-a3dc-7b2331d9a758"
+    }
+  ],
+  "verifiedLimits": [
+    "Generation 4 attempted first image only; receipt observer fired but rejected its payload. Raw receipt fields were not retained by that build, so the specific rejection cause is not established.",
+    "No body, second/third image or publication dispatch. No repeat upload after generation 4 failure.",
+    "Native DOM inspection in this turn established success item and data:image/png;base64 CSS preview, rather than a CDN img element. No framework state or credentials were read.",
+    "Restart discarded the unsaved first preview. The main process verified the original account empty composer before the existing missing-image resolution UI permitted a retry.",
+    "Mac locked during the post-failure visual check. The added sanitized receipt diagnostics are in source but not loaded into the preserved running app."
+  ]
+}

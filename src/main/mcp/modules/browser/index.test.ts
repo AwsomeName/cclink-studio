@@ -93,6 +93,53 @@ describe('BrowserToolModule 工具定义', () => {
 })
 
 describe('BrowserToolModule 可视浏览器同步', () => {
+  it('returns only same-origin, non-secret child URLs without switching account tabs', async () => {
+    const url = 'https://mp.toutiao.com/profile_v4/manage/draft'
+    const child = 'https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=123'
+    const getAccountChildPageUrls = vi.fn(() => [
+      child,
+      'https://other.example/draft',
+      `${child}&token=secret`,
+    ])
+    const module = new BrowserToolModule({} as any, null, {
+      getCurrentURL: () => url,
+      getTitle: () => '头条',
+      getAccountChildPageUrls,
+    } as any)
+    const result = await (module as any).executeVisibleBrowserAction(
+      'getTabInfo',
+      {},
+      null,
+      'account-source',
+      '/workspace/a',
+    )
+    expect(result).toMatchObject({ url, tabId: 'account-source', openedPageUrls: [child] })
+    expect(getAccountChildPageUrls).toHaveBeenCalledExactlyOnceWith('account-source')
+  })
+
+  it.each([
+    ['text=/^草稿箱/', '草稿箱 (1)', 1, false],
+    ['text="发布"', '发布', 1, true],
+    ['text="草稿箱"', '草稿箱', 2, true],
+    ['text="草稿箱"', '草稿箱', 0, true],
+  ])(
+    'checks the actual Playwright target for %s (count %s)',
+    async (selector, label, count, blocked) => {
+      const element = { closest: () => null, getAttribute: () => null, textContent: label }
+      const evaluate = vi.fn(async (fn, action) => fn(element, action))
+      const locator = vi.fn(() => ({ count: async () => count, evaluate }))
+      const module = new BrowserToolModule({} as any)
+      const reason = await (module as any).getGenericSensitiveActionReason(
+        'click',
+        { selector },
+        { locator },
+      )
+      expect(locator).toHaveBeenCalledWith(selector)
+      expect(Boolean(reason)).toBe(blocked)
+      if (count !== 1) expect(evaluate).not.toHaveBeenCalled()
+    },
+  )
+
   it('forces one-time confirmation for a V2EX final publish control', async () => {
     const page = {
       url: () => 'https://www.v2ex.com/new/create',
@@ -163,6 +210,10 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     const page = {
       url: () => 'https://example.com/form',
       evaluate: vi.fn().mockResolvedValue({ sensitive: true, label: '提交申请' }),
+      locator: () => ({
+        count: async () => 1,
+        evaluate: async () => ({ sensitive: true, label: '提交申请' }),
+      }),
       click: vi.fn(),
     }
     const bridge = {
@@ -1113,6 +1164,7 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     ['browser_go_back', 'goBack', {}],
     ['browser_go_forward', 'goForward', {}],
     ['browser_reload', 'reload', {}],
+    ['browser_reload', 'reload', { ignoreCache: true }],
   ])(
     'checks automation binding after %s and never replays it',
     async (toolName, method, params) => {
@@ -1138,6 +1190,11 @@ describe('BrowserToolModule 可视浏览器同步', () => {
         commandDispatched: true,
       })
       expect(command).toHaveBeenCalledTimes(1)
+      if (toolName === 'browser_reload')
+        expect(command).toHaveBeenCalledWith(
+          'visible-tab',
+          'ignoreCache' in params && params.ignoreCache === true,
+        )
     },
   )
 

@@ -1,4 +1,5 @@
 import type { Session } from 'electron'
+import { installBrowserLoadDiagnostics } from './browser-load-diagnostics'
 
 const configuredSessions = new WeakSet<Session>()
 
@@ -25,6 +26,7 @@ export function normalizeDesktopUserAgent(userAgent: string): string {
 export function installBrowserCompatibilityHeaders(session: Session): void {
   if (configuredSessions.has(session)) return
   configuredSessions.add(session)
+  installBrowserLoadDiagnostics(session)
 
   session.webRequest.onBeforeSendHeaders((details, callback) => {
     const headers = { ...details.requestHeaders }

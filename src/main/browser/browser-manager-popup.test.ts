@@ -347,6 +347,10 @@ describe('BrowserManager popup adoption', () => {
 
   it("asks renderer to restore the publishing Attempt's previously bound Tab", async () => {
     const { manager } = await createSource()
+    let mounted = false
+    const visible = vi
+      .spyOn(manager, 'isViewVisible')
+      .mockImplementation((id) => mounted && id === 'editor-tab')
     electronMocks.mainWebContents.send.mockClear()
 
     const pending = manager.waitForAccountView(
@@ -372,7 +376,8 @@ describe('BrowserManager popup adoption', () => {
       views: [{ tabId: 'editor-tab', profileId: 'wechat', accountId: 'account-a' }],
       activeTabId: 'editor-tab',
     })
-
+    await vi.waitFor(() => expect(visible).toHaveBeenCalledWith('editor-tab'))
+    mounted = true
     await expect(pending).resolves.toBe('editor-tab')
   })
 
@@ -400,6 +405,29 @@ describe('BrowserManager popup adoption', () => {
         100,
       ),
     ).resolves.toBe('editor-tab')
+    // A popup from this same account must not satisfy an exact original-Tab request.
+    await expect(
+      manager.waitForAccountView(
+        '/workspace/a',
+        'wechat',
+        'account-a',
+        'https://mp.weixin.qq.com/',
+        20,
+        'source-tab',
+      ),
+    ).resolves.toBeNull()
+    // The original native View may instead be visible in an auxiliary host.
+    vi.spyOn(manager, 'isViewVisible').mockImplementation((id) => id === 'source-tab')
+    await expect(
+      manager.waitForAccountView(
+        '/workspace/a',
+        'wechat',
+        'account-a',
+        'https://mp.weixin.qq.com/',
+        100,
+        'source-tab',
+      ),
+    ).resolves.toBe('source-tab')
   })
 
   it('does not bind an active same-profile View owned by another account record', async () => {
@@ -684,6 +712,36 @@ describe('BrowserManager popup adoption', () => {
       activeTabId: popupTabId,
     })
     expect(manager.getActiveViewId()).toBe(popupTabId)
+  })
+
+  it('reads only adopted child URLs from the same live account source', async () => {
+    const { manager, source } = await createSource()
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat', accountId: 'account-a' }],
+      activeTabId: 'source-tab',
+    })
+    const response = source.windowOpenHandler?.(popupDetails())
+    const child = electronMocks.makeWebContents(source.session)
+    child.currentUrl = 'https://mp.weixin.qq.com/draft?id=123'
+    response.createWindow({ webContents: child })
+    const popupId = electronMocks.mainWebContents.send.mock.calls.find(
+      ([channel]) => channel === browserIpcEvents.popupCreated,
+    )![1].tabId
+    expect(manager.getAccountChildPageUrls('source-tab')).toEqual([])
+    manager.acceptPopup(popupId)
+    expect(manager.getAccountChildPageUrls('source-tab')).toEqual([child.currentUrl])
+    expect(manager.getAccountChildPageUrls('other-source')).toEqual([])
+    child.isDestroyed.mockReturnValueOnce(true)
+    expect(manager.getAccountChildPageUrls('source-tab')).toEqual([])
+    source.emit('did-navigate-in-page', {}, 'https://mp.weixin.qq.com/other', true)
+    expect(manager.getAccountChildPageUrls('source-tab')).toEqual([])
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'source-tab', profileId: 'wechat', accountId: 'account-b' }],
+      activeTabId: 'source-tab',
+    })
+    expect(manager.getAccountChildPageUrls('source-tab')).toEqual([])
   })
 
   it('installs bounded page interaction fallbacks in isolated worlds after load', async () => {

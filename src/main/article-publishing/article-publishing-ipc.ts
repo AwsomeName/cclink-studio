@@ -14,6 +14,19 @@ export function registerArticlePublishingIpc(
   trustedRendererGuard: TrustedRendererGuard,
 ): void {
   registerTrustedIpcContract(
+    articlePublishingIpcContracts.verifyPublishedResult,
+    trustedRendererGuard,
+    async (_event, input) => {
+      const resolved = await resolveWorkspaceId(input.workspaceRef, getWorkspaceStateService())
+      const service = getService()
+      return resolved.success && service
+        ? service.verifyPublishedResult(input, resolved.data)
+        : resolved.success
+          ? unavailable()
+          : resolved
+    },
+  )
+  registerTrustedIpcContract(
     articlePublishingIpcContracts.inspectSource,
     trustedRendererGuard,
     async (_event, input) => {

@@ -1,0 +1,247 @@
+{
+  "affairId": "9d635bd0-22cd-4ad2-93b1-930b894cffec",
+  "execution": {
+    "status": "waiting-human",
+    "currentAttemptId": "5ebf83cf-35b6-4fff-a06f-46aefb6bb10a",
+    "currentGeneration": 10,
+    "currentLaunchOperationId": "1d818325-7041-4e50-ad8b-f4b2355851ad",
+    "currentStepId": "upload-assets"
+  },
+  "publication": {
+    "status": "not-started"
+  },
+  "draft": {
+    "platformDraftId": "1876018407641100",
+    "platformAccountId": "3777529577766638",
+    "url": "https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100",
+    "normalizedTitle": "做AI眼镜第188天，它开始看懂我的世界",
+    "lastVerifiedAt": "2026-09-11T09:14:58.051Z",
+    "recovery": {
+      "operationId": "9615a52b-3363-47d9-a05e-0c4707358e9c",
+      "executionGeneration": 10,
+      "status": "verified",
+      "expectedDraftId": "1876018407641100",
+      "expectedTitle": "做AI眼镜第188天，它开始看懂我的世界",
+      "startedAt": "2026-09-11T09:14:51.437Z",
+      "verifiedAt": "2026-09-11T09:14:58.051Z",
+      "platformAccountId": "3777529577766638"
+    }
+  },
+  "details": [
+    {
+      "id": "account.resolve",
+      "nextAction": "取得可见账号 Tab",
+      "status": "completed",
+      "evidence": "账号 1345b278-f2bf-4d40-ac5f-437d8a0b3c14 · Profile web-draft-e422d4a2-e9ab-44e7-aa6f-ff475f3bf731",
+      "observedAt": "2026-09-11T09:14:51.590Z",
+      "generation": 10
+    },
+    {
+      "id": "tab.acquire",
+      "nextAction": "按新建或恢复分支打开页面",
+      "status": "completed",
+      "evidence": "Tab tab-1-1789104390028 · 账号 1345b278-f2bf-4d40-ac5f-437d8a0b3c14 · Profile web-draft-e422d4a2-e9ab-44e7-aa6f-ff475f3bf731",
+      "observedAt": "2026-09-11T09:14:51.829Z",
+      "generation": 10
+    },
+    {
+      "id": "recovery.management",
+      "nextAction": "核验管理页账号",
+      "status": "completed",
+      "evidence": "https://mp.toutiao.com/profile_v4/manage/draft",
+      "observedAt": "2026-09-11T09:14:53.222Z",
+      "generation": 10
+    },
+    {
+      "id": "recovery.account",
+      "nextAction": "按原 draftId 定位，找不到即停止",
+      "status": "completed",
+      "evidence": "草稿箱账号 3777529577766638",
+      "observedAt": "2026-09-11T09:14:55.206Z",
+      "generation": 10
+    },
+    {
+      "id": "recovery.locate",
+      "nextAction": "打开候选草稿",
+      "status": "completed",
+      "evidence": "实际子页原 draftId 1876018407641100 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100",
+      "observedAt": "2026-09-11T09:14:55.254Z",
+      "generation": 10
+    },
+    {
+      "id": "recovery.open",
+      "nextAction": "复核账号、ID、标题、保存状态",
+      "status": "completed",
+      "evidence": "https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100",
+      "observedAt": "2026-09-11T09:14:57.187Z",
+      "generation": 10
+    },
+    {
+      "id": "recovery.verify.account",
+      "nextAction": "四项全部通过后准备 Runtime",
+      "status": "completed",
+      "evidence": "期望 3777529577766638；实际 3777529577766638 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100",
+      "observedAt": "2026-09-11T09:14:57.226Z",
+      "generation": 10
+    },
+    {
+      "id": "recovery.verify.id",
+      "nextAction": "四项全部通过后准备 Runtime",
+      "status": "completed",
+      "evidence": "期望 1876018407641100；实际 1876018407641100 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100",
+      "observedAt": "2026-09-11T09:14:57.275Z",
+      "generation": 10
+    },
+    {
+      "id": "recovery.verify.title",
+      "nextAction": "四项全部通过后准备 Runtime",
+      "status": "completed",
+      "evidence": "期望 做AI眼镜第188天，它开始看懂我的世界；实际 做AI眼镜第188天，它开始看懂我的世界 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100",
+      "observedAt": "2026-09-11T09:14:57.321Z",
+      "generation": 10
+    },
+    {
+      "id": "recovery.verify.saved",
+      "nextAction": "四项全部通过后准备 Runtime",
+      "status": "completed",
+      "evidence": "期望 saved；实际 saved · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；逐图 一致（页面 3 / 原稿 3）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft",
+      "observedAt": "2026-09-11T09:14:57.367Z",
+      "generation": 10
+    },
+    {
+      "id": "runtime.ready",
+      "nextAction": "首次只读检查；改代则重新绑定核验",
+      "status": "completed",
+      "evidence": "Agent run-1d818325-7041-4e50-ad8b-f4b2355851ad · BrowserTask 1fcf94e1-157f-4e70-b3c7-7b8d34764a4b · Tab tab-1-1789104390028 · View g2 · WebContents 3 · Page g2",
+      "observedAt": "2026-09-11T09:14:58.051Z",
+      "generation": 10
+    },
+    {
+      "id": "page.inspect",
+      "nextAction": "定位正文与平台字段",
+      "status": "completed",
+      "evidence": "页面 editor · 账号 3777529577766638 · draftId 1876018407641100 · 标题 做AI眼镜第188天，它开始看懂我的世界 · 保存 saved",
+      "observedAt": "2026-09-11T09:15:10.440Z",
+      "generation": 10
+    },
+    {
+      "id": "asset.local:2026-09-09/素材/01-首篇封面.png.inspect",
+      "nextAction": "平台原稿未保留原文件名；请使用原图对应确认入口，不得按数量猜测或重复上传；先处理此卡点并重新检查。",
+      "status": "waiting",
+      "evidence": "素材/01-首篇封面.png；网页图集 3 张；第 1 张尚未与本地原图关联",
+      "reason": "平台原稿未保留原文件名；请使用原图对应确认入口，不得按数量猜测或重复上传",
+      "observedAt": "2026-09-11T09:15:10.440Z",
+      "generation": 10
+    },
+    {
+      "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.inspect",
+      "nextAction": "平台原稿未保留原文件名；请使用原图对应确认入口，不得按数量猜测或重复上传；先处理此卡点并重新检查。",
+      "status": "waiting",
+      "evidence": "素材/02-导航场景效果图.png；网页图集 3 张；第 2 张尚未与本地原图关联",
+      "reason": "平台原稿未保留原文件名；请使用原图对应确认入口，不得按数量猜测或重复上传",
+      "observedAt": "2026-09-11T09:15:10.440Z",
+      "generation": 10
+    },
+    {
+      "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.inspect",
+      "nextAction": "平台原稿未保留原文件名；请使用原图对应确认入口，不得按数量猜测或重复上传；先处理此卡点并重新检查。",
+      "status": "waiting",
+      "evidence": "素材/03-城市漫游效果图.png；网页图集 3 张；第 3 张尚未与本地原图关联",
+      "reason": "平台原稿未保留原文件名；请使用原图对应确认入口，不得按数量猜测或重复上传",
+      "observedAt": "2026-09-11T09:15:10.440Z",
+      "generation": 10
+    },
+    {
+      "id": "body.locate",
+      "nextAction": "只允许向已定位的正文区域写入",
+      "status": "completed",
+      "evidence": "正文 div.ProseMirror[contenteditable=\"true\"] · iframe 主文档 · 424 字符",
+      "observedAt": "2026-09-11T09:15:10.440Z",
+      "generation": 10
+    },
+    {
+      "id": "toutiao.exclusive.verify",
+      "nextAction": "设置未核验通过前禁止提交",
+      "status": "completed",
+      "evidence": "头条首发：未勾选",
+      "observedAt": "2026-09-11T09:14:57.411Z",
+      "generation": 10
+    },
+    {
+      "id": "toutiao.declaration.verify",
+      "nextAction": "设置未核验通过前禁止提交",
+      "status": "completed",
+      "evidence": "取材网络：未选；引用站内：未选；个人观点，仅供参考：未选；引用AI：未选；虚构演绎，故事经历：未选；投资观点，仅供参考：未选；健康医疗分享，仅供参考：未选",
+      "observedAt": "2026-09-11T09:14:57.515Z",
+      "generation": 10
+    },
+    {
+      "id": "field.title.inspect",
+      "nextAction": "与冻结字段比较",
+      "status": "completed",
+      "evidence": "期望 做AI眼镜第188天，它开始看懂我的世界；实际 做AI眼镜第188天，它开始看懂我的世界",
+      "observedAt": "2026-09-11T09:15:10.440Z",
+      "generation": 10
+    },
+    {
+      "id": "field.title.verify",
+      "nextAction": "下一字段；不匹配则停止字段完成回报",
+      "status": "completed",
+      "evidence": "期望 做AI眼镜第188天，它开始看懂我的世界；实际 做AI眼镜第188天，它开始看懂我的世界",
+      "observedAt": "2026-09-11T09:15:10.440Z",
+      "generation": 10
+    },
+    {
+      "id": "field.title.dispatch",
+      "nextAction": "回读同一字段",
+      "status": "skipped",
+      "evidence": "当前字段已经与任务一致，无需再次填写",
+      "observedAt": "2026-09-11T09:15:10.440Z",
+      "generation": 10
+    },
+    {
+      "id": "toutiao.music.verify",
+      "nextAction": "当前图文流程不允许独家首发或配乐分发；需修改并回读；先处理此卡点并重新检查。",
+      "status": "waiting",
+      "evidence": "开启配乐：已勾选",
+      "reason": "当前图文流程不允许独家首发或配乐分发；需修改并回读",
+      "observedAt": "2026-09-11T09:14:57.466Z",
+      "generation": 10
+    },
+    {
+      "id": "publish.preflight",
+      "nextAction": "头条首发：未勾选；开启配乐：已勾选；取材网络：未勾选；引用站内：未勾选；个人观点，仅供参考：未勾选；引用AI：未勾选；虚构演绎，故事经历：未勾选；投资观点，仅供参考：未勾选；健康医疗分享，仅供参考：未勾选；本任务尚未关联本地原图与平台图片，禁止提交；先处理此卡点并重新检查。",
+      "status": "waiting",
+      "evidence": "头条首发：未勾选；开启配乐：已勾选；取材网络：未勾选；引用站内：未勾选；个人观点，仅供参考：未勾选；引用AI：未勾选；虚构演绎，故事经历：未勾选；投资观点，仅供参考：未勾选；健康医疗分享，仅供参考：未勾选；本任务尚未关联本地原图与平台图片，禁止提交",
+      "reason": "头条首发：未勾选；开启配乐：已勾选；取材网络：未勾选；引用站内：未勾选；个人观点，仅供参考：未勾选；引用AI：未勾选；虚构演绎，故事经历：未勾选；投资观点，仅供参考：未勾选；健康医疗分享，仅供参考：未勾选；本任务尚未关联本地原图与平台图片，禁止提交",
+      "observedAt": "2026-09-11T09:15:10.440Z",
+      "generation": 10
+    },
+    {
+      "id": "publication.verify",
+      "nextAction": "头条首发：未勾选；开启配乐：已勾选；取材网络：未勾选；引用站内：未勾选；个人观点，仅供参考：未勾选；引用AI：未勾选；虚构演绎，故事经历：未勾选；投资观点，仅供参考：未勾选；健康医疗分享，仅供参考：未勾选；本任务尚未关联本地原图与平台图片，禁止提交；先处理此卡点并重新检查。",
+      "status": "waiting",
+      "evidence": "尚未派发公开发布；头条首发：未勾选；开启配乐：已勾选；取材网络：未勾选；引用站内：未勾选；个人观点，仅供参考：未勾选；引用AI：未勾选；虚构演绎，故事经历：未勾选；投资观点，仅供参考：未勾选；健康医疗分享，仅供参考：未勾选；本任务尚未关联本地原图与平台图片，禁止提交",
+      "reason": "头条首发：未勾选；开启配乐：已勾选；取材网络：未勾选；引用站内：未勾选；个人观点，仅供参考：未勾选；引用AI：未勾选；虚构演绎，故事经历：未勾选；投资观点，仅供参考：未勾选；健康医疗分享，仅供参考：未勾选；本任务尚未关联本地原图与平台图片，禁止提交",
+      "observedAt": "2026-09-11T09:15:10.440Z",
+      "generation": 10
+    }
+  ],
+  "assets": [
+    {
+      "displayPath": "素材/01-首篇封面.png",
+      "status": "pending",
+      "uploadAttemptCount": 0
+    },
+    {
+      "displayPath": "素材/02-导航场景效果图.png",
+      "status": "pending",
+      "uploadAttemptCount": 0
+    },
+    {
+      "displayPath": "素材/03-城市漫游效果图.png",
+      "status": "pending",
+      "uploadAttemptCount": 0
+    }
+  ]
+}

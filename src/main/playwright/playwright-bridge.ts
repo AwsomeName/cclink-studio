@@ -730,7 +730,8 @@ export class PlaywrightBridge {
 
     let ambiguousUrlMatches = 0
     const samples: PageClaimSample[] = []
-    const matchPage = (): Page | null => {
+    const targetReads = new Map<Page, Promise<string | null>>()
+    const matchPage = async (): Promise<Page | null> => {
       if (generation !== this.connectionGeneration || this.stopping) {
         throw new Error('Playwright claim 已被更新的 generation 作废')
       }
@@ -740,8 +741,19 @@ export class PlaywrightBridge {
       // 1. 按 targetId 匹配（webContents 有 devtools targetId）
       const targetId = this.webContentsTargetId(webContents)
       if (targetId) {
-        const byTarget = pages.find((p) => this.pageTargetId(p) === targetId)
-        if (byTarget) return byTarget
+        const targets = await Promise.all(
+          pages.map((p) => {
+            let read = targetReads.get(p)
+            if (!read) {
+              read = this.pageTargetId(p)
+              targetReads.set(p, read)
+            }
+            return read
+          }),
+        )
+        const matches = pages.filter((_p, i) => targets[i] === targetId)
+        // A known native target must never fall back to another Profile's same-URL page.
+        return matches.length === 1 ? matches[0] : null
       }
       // 2. 按 URL 兜底匹配（排除 about:blank / 空页面）
       if (expectedUrl) {
@@ -764,7 +776,7 @@ export class PlaywrightBridge {
     }
 
     // 立即尝试
-    let page = matchPage()
+    let page = await matchPage()
 
     // 轮询兜底（页面可能延迟出现在 context.pages()）
     if (!page) {
@@ -772,7 +784,7 @@ export class PlaywrightBridge {
       const intervalMs = 100
       for (let i = 0; i < maxTries; i++) {
         await new Promise((r) => setTimeout(r, intervalMs))
-        page = matchPage()
+        page = await matchPage()
         if (page) break
       }
     }
@@ -804,22 +816,23 @@ export class PlaywrightBridge {
   /** 从 webContents 取 devtools targetId（用于精确匹配 Playwright Page） */
   private webContentsTargetId(webContents: WebContents): string | null {
     try {
-      // Electron devtools targetId（undocumented 但稳定），用于和 Playwright 的 CDP targetId 对齐
-      const id = (webContents as unknown as { _targetId?: string })._targetId
-      return id ?? null
+      return webContents.getOrCreateDevToolsTargetId() || null
     } catch {
       return null
     }
   }
 
   /** 从 Playwright Page 取底层 CDP targetId */
-  private pageTargetId(page: Page): string | null {
+  private async pageTargetId(page: Page): Promise<string | null> {
+    let session: Awaited<ReturnType<BrowserContext['newCDPSession']>> | undefined
     try {
-      // Playwright Page 暴露的 target 信息（不同版本字段位置略不同，尽力取）
-      const unparsed = page as unknown as { _guid?: string; _target?: { _targetId?: string } }
-      return unparsed._target?._targetId ?? unparsed._guid ?? null
+      session = await page.context().newCDPSession(page)
+      const { targetInfo } = await session.send('Target.getTargetInfo')
+      return targetInfo.targetId || null
     } catch {
       return null
+    } finally {
+      await session?.detach().catch(() => undefined)
     }
   }
 

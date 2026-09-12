@@ -30,12 +30,70 @@ describe('article publishing persistent state', () => {
     await rm(directory, { recursive: true, force: true })
   })
 
-  it.each([false, true])(
-    'creates a Weibo task with explicit allowPublish=%s without a fake draft or duplicate composer',
-    async (allowPublish) => {
+  it('creates a Toutiao original-draft task without claiming restored, saved or published', async () => {
+    const registered = resources()
+    registered.websites[0].origin = 'https://mp.toutiao.com'
+    registered.websites[0].entryUrl = 'https://mp.toutiao.com/profile_v4/'
+    const service = new WebAffairService(
+      () => registered,
+      new WebAffairStore(join(directory, 'toutiao.json')),
+    )
+    await service.load()
+    const input = {
+      preview: {
+        source: { markdownPath: sourcePath, modifiedAt: Date.now(), size: 36 },
+        title: 'Article',
+        summary: '',
+        assets: [],
+        blockers: [],
+        warnings: [],
+      },
+      accountId: ACCOUNT_ID,
+      fields: { title: 'Article', summary: '', tags: [], category: '' },
+      workspaceRef: { kind: 'local' as const, path: directory },
+    }
+    expect(await service.createArticlePublishingAffair(input, WORKSPACE_ID)).toMatchObject({
+      success: false,
+    })
+    const created = await service.createArticlePublishingAffair(
+      {
+        ...input,
+        existingDraft: {
+          url: 'https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876018407641100',
+          platformAccountId: '3777529577766638',
+        },
+      },
+      WORKSPACE_ID,
+    )
+    expect(created.success).toBe(true)
+    if (!created.success) throw new Error(created.error.message)
+    expect(created.data.articlePublishing).toMatchObject({
+      adapterId: 'toutiao',
+      publication: { status: 'not-started' },
+      draft: { platformDraftId: '1876018407641100' },
+    })
+    expect(created.data.articlePublishing?.checkpoints.every((c) => c.status === 'pending')).toBe(
+      true,
+    )
+    expect(
+      created.data.articlePublishing?.checkpoints.find((c) => c.stepId === 'fill-fields')?.label,
+    ).toContain('首发')
+    await service.flush()
+  })
+
+  it.each([
+    ['weibo', false],
+    ['weibo', true],
+    ['bilibili', false],
+    ['bilibili', true],
+  ] as const)(
+    'creates a %s task with explicit allowPublish=%s without a fake draft or duplicate composer',
+    async (platform, allowPublish) => {
       const registered = resources()
-      registered.websites[0].origin = 'https://weibo.com'
-      registered.websites[0].entryUrl = 'https://weibo.com/'
+      registered.websites[0].origin =
+        platform === 'bilibili' ? 'https://passport.bilibili.com' : 'https://weibo.com'
+      registered.websites[0].entryUrl =
+        platform === 'bilibili' ? 'https://passport.bilibili.com/register' : 'https://weibo.com/'
       const service = new WebAffairService(
         () => registered,
         new WebAffairStore(join(directory, 'weibo.json')),
@@ -144,6 +202,172 @@ describe('article publishing persistent state', () => {
     },
   )
 
+  it.each([
+    'accepted',
+    'stale',
+    'wrong-account',
+    'wrong-post',
+    'wrong-image',
+    'not-dispatched',
+    'cancelled',
+  ] as const)(
+    'binds a Toutiao management result without declaring the public body verified: %s',
+    async (scenario) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await created.service.flush()
+      const snapshot = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+      const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)!
+      const p = affair.articlePublishing!
+      const attempt = affair.attempts.find((a: { id: string }) => a.id === created.attemptId)!
+      p.adapterId = 'toutiao'
+      p.draft = { platformAccountId: '12345', platformDraftId: '123456' }
+      p.publication = { status: 'result-unknown' }
+      p.assets.forEach((a: { platformUrl: string }, i: number) => {
+        a.platformUrl = `https://p3-sign.toutiaoimg.com/tos-cn-i-ezhpy3drpa/${String(i + 1).repeat(32)}`
+      })
+      p.sideEffects = [
+        {
+          key: 'toutiao-submit',
+          affairId: affair.id,
+          attemptId: attempt.id,
+          executionGeneration: attempt.executionGeneration,
+          kind: 'publish',
+          targetId: 'final',
+          status: scenario === 'not-dispatched' ? 'reserved' : 'result-unknown',
+          reservedAt: new Date().toISOString(),
+          dispatchedAt: new Date().toISOString(),
+          browserTaskRunId: attempt.browserTaskRunId,
+        },
+      ]
+      Reflect.set(created.service, 'snapshot', snapshot)
+      const result = await created.service.recordToutiaoPublicationLocation(
+        {
+          workspaceId: WORKSPACE_ID,
+          affairId: affair.id,
+          attemptId: attempt.id,
+          executionGeneration: attempt.executionGeneration + (scenario === 'stale' ? 1 : 0),
+          launchOperationId: attempt.launchOperationId,
+          uid: scenario === 'wrong-account' ? '54321' : '12345',
+          url: `https://www.toutiao.com/w/${scenario === 'wrong-post' ? '55555' : '123456'}/`,
+          imageUrls:
+            scenario === 'wrong-image'
+              ? []
+              : p.assets.map((a: { platformUrl: string }) => a.platformUrl),
+        },
+        () => scenario !== 'cancelled',
+      )
+      expect(result.success, JSON.stringify(result.success ? null : result.error)).toBe(
+        scenario === 'accepted',
+      )
+      if (result.success) {
+        expect(result.data.articlePublishing?.publication.status).toBe('result-unknown')
+        expect(result.data.articlePublishing?.publication.url).toBe(
+          'https://www.toutiao.com/w/123456/',
+        )
+        expect(result.data.articlePublishing?.sideEffects[0].status).toBe('verified')
+        expect(
+          result.data.articlePublishing?.checkpoints.find((c) => c.stepId === 'publish')?.status,
+        ).toBe('completed')
+        const handoff = await created.service.handoffAttempt(
+          {
+            workspaceRef: { kind: 'local', path: directory },
+            affairId: affair.id,
+            attemptId: attempt.id,
+            reason: '公开页面暂时不可见',
+          },
+          WORKSPACE_ID,
+        )
+        expect(handoff.success).toBe(true)
+        const resumed = await created.service.resumeArticlePublishingAfterHandoff(
+          affair.id,
+          attempt.id,
+          WORKSPACE_ID,
+        )
+        expect(resumed.success).toBe(true)
+        if (resumed.success) {
+          expect(resumed.data.articlePublishing?.execution.currentStepId).toBe('verify-publication')
+          expect(resumed.data.articlePublishing?.draft?.recovery?.executionGeneration).not.toBe(
+            resumed.data.articlePublishing?.execution.currentGeneration,
+          )
+          expect(resumed.data.articlePublishing?.executionProtocol.current).toBeUndefined()
+          expect(resumed.data.articlePublishing?.sideEffects).toHaveLength(1)
+        }
+      }
+      await created.service.flush()
+    },
+  )
+
+  it.each([
+    'current',
+    'stale',
+    'other-url',
+    'wrong-image',
+    'changed-page',
+    'not-published',
+  ] as const)(
+    'refreshes public image detail from new evidence without reopening the completed task: %s',
+    async (mode) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await created.service.flush()
+      const snapshot = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+      const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)!
+      const p = affair.articlePublishing
+      const attempt = affair.attempts.find((a: { id: string }) => a.id === created.attemptId)!
+      affair.status = 'completed'
+      affair.flow.nodes.forEach((n: { status: string }) => {
+        n.status = 'completed'
+      })
+      attempt.status = 'succeeded'
+      p.adapterId = 'toutiao'
+      p.execution.status = 'published'
+      delete p.execution.currentStepId
+      delete p.executionProtocol.current
+      p.publication = {
+        status: mode === 'not-published' ? 'result-unknown' : 'published',
+        url: 'https://www.toutiao.com/w/123456/',
+      }
+      p.checkpoints.forEach((c: { status: string }) => {
+        c.status = 'completed'
+      })
+      p.assets.forEach((a: { platformUrl: string; status: string }, i: number) => {
+        a.platformUrl = `https://p3-sign.toutiaoimg.com/tos-cn-i-ezhpy3drpa/${String(i + 1).repeat(32)}`
+        a.status = 'uploaded'
+      })
+      Reflect.set(created.service, 'snapshot', snapshot)
+      const result = await created.service.recordPublishedArticleImages(
+        {
+          workspaceId: WORKSPACE_ID,
+          affairId: affair.id,
+          attemptId: attempt.id,
+          executionGeneration: attempt.executionGeneration + (mode === 'stale' ? 1 : 0),
+          launchOperationId: attempt.launchOperationId,
+          url: mode === 'other-url' ? 'https://www.toutiao.com/w/999999/' : p.publication.url,
+          images: p.assets.map((a: { platformUrl: string }) => ({
+            src: a.platformUrl,
+            actualSrc: mode === 'wrong-image' ? 'other' : a.platformUrl,
+            matches: true,
+          })),
+        },
+        () => mode !== 'changed-page',
+      )
+      expect(result.success, JSON.stringify(result.success ? null : result.error)).toBe(
+        mode === 'current',
+      )
+      if (result.success) {
+        expect(result.data.status).toBe('completed')
+        expect(result.data.attempts.find((a) => a.id === attempt.id)?.status).toBe('succeeded')
+        expect(result.data.articlePublishing?.execution.status).toBe('published')
+        const details =
+          result.data.articlePublishing?.checkpoints.flatMap((c) => c.details ?? []) ?? []
+        for (const asset of p.assets)
+          expect(details.find((d) => d.id === `asset.${asset.id}.published`)?.status).toBe(
+            'completed',
+          )
+      }
+      await created.service.flush()
+    },
+  )
+
   it.each(['accepted', 'stale', 'wrong-account', 'not-dispatched', 'not-authorized'] as const)(
     'binds only a current dispatched Weibo receipt without declaring publication: %s',
     async (scenario) => {
@@ -190,6 +414,59 @@ describe('article publishing persistent state', () => {
         expect(result.data.articlePublishing?.publication.status).toBe('dispatched')
         expect(result.data.articlePublishing?.publication.url).toBe(
           'https://weibo.com/5961101548/RhAKon2wi',
+        )
+        expect(result.data.articlePublishing?.sideEffects[0].status).toBe('verified')
+      }
+      await created.service.flush()
+    },
+  )
+
+  it.each(['accepted', 'stale', 'wrong-account', 'not-dispatched', 'not-authorized'] as const)(
+    'binds only a current dispatched Bilibili receipt without declaring publication: %s',
+    async (scenario) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await created.service.flush()
+      const snapshot = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+      const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)!
+      const publishing = affair.articlePublishing!
+      const uid = '5961101548'
+      publishing.adapterId = 'bilibili'
+      delete publishing.draft
+      publishing.composer = { platformAccountId: uid, allowPublish: scenario !== 'not-authorized' }
+      publishing.publication = { status: 'dispatched' }
+      const effect = {
+        key: 'weibo-submit',
+        affairId: affair.id,
+        attemptId: created.attemptId,
+        executionGeneration: publishing.execution.currentGeneration,
+        kind: 'publish' as const,
+        targetId: 'publish',
+        status: scenario === 'not-dispatched' ? ('reserved' as const) : ('dispatched' as const),
+        reservedAt: new Date().toISOString(),
+        dispatchedAt: new Date().toISOString(),
+        browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+      }
+      publishing.sideEffects = [effect]
+      Reflect.set(created.service, 'snapshot', snapshot)
+      const result = await created.service.recordBilibiliSubmissionReceipt(
+        {
+          affairId: affair.id,
+          attemptId: created.attemptId,
+          executionGeneration: effect.executionGeneration + (scenario === 'stale' ? 1 : 0),
+          browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+          sideEffectKey: effect.key,
+          uid: scenario === 'wrong-account' ? 'other' : uid,
+          postId: '1246694229973925912',
+        },
+        WORKSPACE_ID,
+      )
+      expect(result.success, JSON.stringify(result.success ? null : result.error)).toBe(
+        scenario === 'accepted',
+      )
+      if (result.success) {
+        expect(result.data.articlePublishing?.publication.status).toBe('dispatched')
+        expect(result.data.articlePublishing?.publication.url).toBe(
+          'https://t.bilibili.com/1246694229973925912',
         )
         expect(result.data.articlePublishing?.sideEffects[0].status).toBe('verified')
       }
@@ -287,6 +564,83 @@ describe('article publishing persistent state', () => {
         scenario === 'current',
       )
       await service.flush()
+    },
+  )
+
+  it.each(
+    (['fill-body', 'save-draft'] as const).flatMap((stepId) =>
+      (['current', 'stale', 'wrong-account', 'body-mismatch', 'missing-readback'] as const).map(
+        (scenario) => ({ stepId, scenario }),
+      ),
+    ),
+  )(
+    'accepts a recovered unchanged Toutiao $stepId only with fresh complete main evidence: $scenario',
+    async ({ stepId, scenario }) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await prepareUploadCheckpoint(created)
+      await created.service.flush()
+      const snapshot = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+      const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)
+      const publishing = affair.articlePublishing
+      publishing.adapterId = 'toutiao'
+      publishing.execution.currentStepId = stepId
+      publishing.sideEffects = []
+      publishing.draft = {
+        ...publishing.draft,
+        platformAccountId: '12345',
+        url: 'https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=164148817',
+        recovery: {
+          operationId: 'recovery-test',
+          startedAt: new Date().toISOString(),
+          status: 'verified',
+          executionGeneration: publishing.execution.currentGeneration,
+          expectedDraftId: '164148817',
+          expectedTitle: 'Article',
+        },
+      }
+      for (const asset of publishing.assets) {
+        asset.status = 'uploaded'
+        asset.platformUrl = `https://p3-sign.toutiaoimg.com/tos-cn-i-ezhpy3drpa/${'a'.repeat(32)}`
+      }
+      const checkpoint = publishing.checkpoints.find((c: { stepId: string }) => c.stepId === stepId)
+      checkpoint.status = 'verifying'
+      checkpoint.details = ['dispatch', 'verify'].map((suffix) => ({
+        id: `${stepId === 'fill-body' ? 'body' : 'save'}.${suffix}`,
+        generation: publishing.execution.currentGeneration,
+        observedAt: new Date().toISOString(),
+        evidence: 'current main full-body and gallery readback',
+        status:
+          suffix === 'dispatch'
+            ? 'skipped'
+            : scenario === 'missing-readback'
+              ? 'waiting'
+              : 'completed',
+      }))
+      Reflect.set(created.service, 'snapshot', snapshot)
+      const reporter = trustedReporter(created.reporter, 'checkpoint', publishing.draft.url)
+      Object.assign(reporter.trustedPageEvidence!, {
+        adapterId: 'toutiao',
+        platformAccountId: scenario === 'wrong-account' ? '54321' : '12345',
+        bodyMatchesFrozen: scenario !== 'body-mismatch',
+        isCurrent: () => scenario !== 'stale',
+      })
+      const result = await created.service.reportArticlePublishingCheckpoint(
+        {
+          workspaceRef: { kind: 'local', path: directory },
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          stepId,
+          status: 'completed',
+          evidence: 'main readback',
+        },
+        WORKSPACE_ID,
+        reporter,
+      )
+      expect(result.success, JSON.stringify(result.success ? null : result.error)).toBe(
+        scenario === 'current',
+      )
+      if (result.success) expect(result.data.articlePublishing?.sideEffects).toHaveLength(0)
+      await created.service.flush()
     },
   )
 

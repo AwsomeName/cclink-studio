@@ -90,15 +90,19 @@ export function ArticlePublishingSidebar({
                 {STATUS_LABELS[publishing.execution.status]}
               </span>
               <small>
-                {publishing.adapterId === 'weibo'
-                  ? '微博'
-                  : publishing.adapterId === 'xiaohongshu'
-                    ? '小红书'
-                    : publishing.adapterId === 'juejin'
-                      ? '掘金'
-                      : publishing.adapterId === 'zhihu'
-                        ? '知乎'
-                        : 'CSDN'}{' '}
+                {publishing.adapterId === 'bilibili'
+                  ? 'B站动态'
+                  : publishing.adapterId === 'toutiao'
+                    ? '头条微头条'
+                    : publishing.adapterId === 'weibo'
+                      ? '微博'
+                      : publishing.adapterId === 'xiaohongshu'
+                        ? '小红书'
+                        : publishing.adapterId === 'juejin'
+                          ? '掘金'
+                          : publishing.adapterId === 'zhihu'
+                            ? '知乎'
+                            : 'CSDN'}{' '}
                 · 账号 {account} · {new Date(affair.updatedAt).toLocaleString()}
               </small>
             </button>

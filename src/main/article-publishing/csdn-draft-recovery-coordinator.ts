@@ -1,4 +1,5 @@
 import { openXiaohongshuLocalDraft } from './xiaohongshu-draft-recovery'
+import { locateToutiaoDraft } from './toutiao-draft-recovery'
 import type { ArticlePublishingDetailResult } from '../../shared/article-publishing/article-publishing-types'
 import type { Page } from 'playwright-core'
 import { CSDN_ARTICLE_MANAGEMENT_URL, CsdnPublishingAdapter } from './csdn-publishing-adapter'
@@ -76,6 +77,39 @@ export class CsdnDraftRecoveryCoordinator {
       )
     }
     let page = await input.navigate(this.managementUrl)
+    if (new URL(this.managementUrl).origin === 'https://mp.toutiao.com') {
+      await input.observe?.({
+        id: 'recovery.management',
+        status: 'completed',
+        evidence: page.url(),
+      })
+      await input.observe?.({
+        id: 'recovery.locate',
+        status: 'running',
+        evidence: `从唯一草稿行的实际编辑入口核对原 ID ${input.expectedDraftId}`,
+      })
+      const url = await locateToutiaoDraft(
+        page,
+        {
+          draftId: input.expectedDraftId,
+          uid: input.expectedPlatformAccountId,
+          title: input.expectedTitle,
+        },
+        () => input.assertActive?.(),
+      )
+      await input.observe?.({
+        id: 'recovery.account',
+        status: 'completed',
+        evidence: `草稿箱账号 ${input.expectedPlatformAccountId}`,
+      })
+      await input.observe?.({
+        id: 'recovery.locate',
+        status: 'completed',
+        evidence: `实际子页原 draftId ${input.expectedDraftId} · ${url}`,
+      })
+      page = await input.navigate(url)
+      return this.verifyExactDraftPage({ ...input, page })
+    }
     let list = await this.readSettledPage(
       page,
       () => this.adapter.probeDraftList(page),
@@ -185,9 +219,48 @@ export class CsdnDraftRecoveryCoordinator {
       await input.observe?.({
         id: `recovery.verify.${field}`,
         status: expected === actual && editor.editor.recognized ? 'completed' : 'failed',
-        evidence: `期望 ${expected}；实际 ${actual} · ${editor.url}`,
+        evidence: `期望 ${expected}；实际 ${actual} · ${editor.url}${field === 'saved' && editor.saveEvidence ? `；${editor.saveEvidence}` : ''}`,
         ...(expected !== actual ? { reason: '原稿核验不一致，禁止写入' } : {}),
       })
+    if (
+      editor.adapterId === 'toutiao' &&
+      editor.platformAccountId === input.expectedPlatformAccountId &&
+      editor.draftId === input.expectedDraftId
+    ) {
+      for (const [id, label] of [
+        ['exclusive', '头条首发'],
+        ['music', '开启配乐'],
+      ]) {
+        const option = editor.toutiaoOptions?.find((o) => o.label === label)
+        await input.observe?.({
+          id: `toutiao.${id}.verify`,
+          status: option?.checked === false ? 'completed' : 'waiting',
+          evidence: `${label}：${option?.checked === true ? '已勾选' : option?.checked === false ? '未勾选' : '不可读'}`,
+          ...(option?.checked === false
+            ? {}
+            : { reason: option?.reason ?? '当前图文流程不允许独家首发或配乐分发；需修改并回读' }),
+        })
+      }
+      const declarations = editor.toutiaoOptions?.slice(2) ?? []
+      await input.observe?.({
+        id: 'toutiao.declaration.verify',
+        status:
+          declarations.length === 7 && declarations.every((d) => d.checked !== null)
+            ? 'completed'
+            : 'waiting',
+        evidence:
+          declarations
+            .map(
+              (d) =>
+                `${d.label}：${d.checked === true ? '已选' : d.checked === false ? '未选' : '不可读'}`,
+            )
+            .join('；') || '未读到声明控件',
+        reason:
+          declarations.length === 7 && declarations.every((d) => d.checked !== null)
+            ? undefined
+            : '作品声明尚未完整读回',
+      })
+    }
     if (!editor.editor.recognized || editor.draftId !== input.expectedDraftId) {
       throw new Error(`候选页面不是原 平台草稿 ${input.expectedDraftId}`)
     }
@@ -197,7 +270,9 @@ export class CsdnDraftRecoveryCoordinator {
       throw new Error('原草稿标题与任务标题不一致；已停止自动写入，请人工确认')
     }
     if (editor.saveState !== 'saved') {
-      throw new Error('原草稿当前不是“已保存”状态；已停止自动写入')
+      throw new Error(
+        `原草稿当前不是“已保存”状态；已停止自动写入${editor.saveEvidence ? `；${editor.saveEvidence}` : ''}`,
+      )
     }
     return {
       draftId: input.expectedDraftId,

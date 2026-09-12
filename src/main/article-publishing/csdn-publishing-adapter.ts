@@ -14,7 +14,7 @@ export interface CsdnPageImageProbe {
 }
 
 export interface CsdnPageProbe {
-  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo'
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili'
   adapterVersion: 1
   observedAt: string
   url: string
@@ -42,6 +42,8 @@ export interface CsdnPageProbe {
     openPublishSettings?: string
     openEditor?: string
     dismissAssistant?: string
+    /** Toutiao: only a currently checked music label, never an enable action. */
+    disableMusic?: string
     dismissTagEditor?: string
     body?: string
     title?: string
@@ -59,6 +61,8 @@ export interface CsdnPageProbe {
   fieldValues?: Partial<Record<'title' | 'summary' | 'tags' | 'category' | 'cover', string>>
   saveState: 'saved' | 'saving' | 'unknown'
   saveEvidence?: string
+  toutiaoOptions?: Array<{ label: string; checked: boolean | null; reason?: string }>
+  bilibiliVisibility?: 'public' | 'private' | 'unknown'
   publicationBlocker?: string
   submissionUnavailableReason?: string
   publishedLinks: Array<{ url: string; title: string }>
@@ -95,7 +99,7 @@ export interface CsdnDraftListCandidate {
 }
 
 export interface CsdnDraftListProbe {
-  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo'
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili'
   adapterVersion: 1
   observedAt: string
   platformAccountId?: string

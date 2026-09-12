@@ -1,6 +1,48 @@
 import { describe, it, expect, vi } from 'vitest'
 import { executePlaywrightAction, PLAYWRIGHT_ACTION_TYPES } from './playwright-actions'
 
+it('does not claim upload success when only file selection has completed', async () => {
+  const setInputFiles = vi.fn().mockResolvedValue(undefined)
+  const page = {
+    url: () => 'https://mp.toutiao.com/profile_v4/weitoutiao/publish',
+    locator: () => ({ setInputFiles }),
+  }
+  const result = await executePlaywrightAction(page as never, {
+    type: 'uploadFile',
+    selector: '#upload-drag-input',
+    paths: ['/workspace/cover.png'],
+  })
+  expect(setInputFiles).toHaveBeenCalledExactlyOnceWith(['/workspace/cover.png'])
+  expect(result).toMatchObject({
+    dispatched: 'file-selection',
+    files: ['cover.png'],
+    uploadVerified: false,
+  })
+  expect(result).not.toHaveProperty('uploaded')
+  setInputFiles.mockRejectedValueOnce(new Error('input detached'))
+  await expect(
+    executePlaywrightAction(page as never, {
+      type: 'uploadFile',
+      selector: '#upload-drag-input',
+      paths: ['/workspace/cover.png'],
+    }),
+  ).rejects.toThrow('input detached')
+})
+
+it('extracts rendered text rather than hidden scripts and bounds oversized results', async () => {
+  const textContent = vi.fn().mockResolvedValue('hidden script and private bootstrap state')
+  const innerText = vi.fn().mockResolvedValue('可见正文')
+  const page = { innerText, textContent }
+  expect(
+    await executePlaywrightAction(page as never, { type: 'extract', selector: 'body' }),
+  ).toEqual({ text: '可见正文', textLength: 4, truncated: false })
+  innerText.mockResolvedValueOnce('文'.repeat(20_001))
+  const result = await executePlaywrightAction(page as never, { type: 'extract', selector: 'body' })
+  expect(result.text).toHaveLength(20_000)
+  expect(result).toMatchObject({ textLength: 20_001, truncated: true })
+  expect(textContent).not.toHaveBeenCalled()
+})
+
 it.each(['current', 'cancelled', 'wrong-editor'] as const)(
   'writes only frozen Weibo text through the signed live textarea: %s',
   async (scenario) => {
@@ -373,6 +415,44 @@ describe('Cookie action boundary', () => {
     ])
   })
 })
+
+it.each(['valid', 'wrong-selector', 'detail-page', 'not-editable', 'cancelled', 'no-permit'])(
+  'writes the frozen B站 plain body only to the current signed composer: %s',
+  async (scenario) => {
+    const fill = vi.fn()
+    const body = { fill, evaluate: vi.fn().mockResolvedValue(scenario !== 'not-editable') }
+    const page = {
+      url: () =>
+        scenario === 'detail-page'
+          ? 'https://t.bilibili.com/112233445566778899'
+          : 'https://t.bilibili.com/',
+      locator: vi.fn(() => body),
+    }
+    const guard = vi.fn(() => {
+      if (scenario === 'cancelled') throw new Error('cancelled')
+    })
+    const result = executePlaywrightAction(
+      page as never,
+      {
+        type: 'fill',
+        selector:
+          scenario === 'wrong-selector' ? '#other' : 'div[placeholder="有什么想和大家分享的？"]',
+        value: 'untrusted Agent text',
+      },
+      undefined,
+      scenario === 'no-permit' ? undefined : guard,
+      '冻结正文\n#原稿标签',
+    )
+    if (scenario === 'valid') {
+      await result
+      expect(fill).toHaveBeenCalledExactlyOnceWith('冻结正文\n#原稿标签')
+      expect(guard).toHaveBeenCalled()
+    } else {
+      await expect(result).rejects.toThrow()
+      expect(fill).not.toHaveBeenCalled()
+    }
+  },
+)
 
 it('fences the Zhihu formatted paste after selection and before the clipboard event', async () => {
   const evaluate = vi.fn()

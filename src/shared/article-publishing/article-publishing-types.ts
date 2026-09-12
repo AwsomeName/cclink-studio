@@ -243,7 +243,7 @@ export interface ArticlePublishingComposer {
 
 export interface ArticlePublishingState {
   composer?: ArticlePublishingComposer
-  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo'
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili'
   adapterVersion: 1
   source: {
     markdownPath: string
@@ -379,6 +379,9 @@ export interface ReportArticlePublishingAssetInput {
 }
 
 export interface ArticlePublishingApiContract {
+  verifyPublishedResult(
+    input: ManageArticlePublishingRuntimeInput,
+  ): Promise<WebAffairOperationResult<WebAffair>>
   inspectSource(
     input: InspectArticlePublishingSourceInput,
   ): Promise<WebAffairOperationResult<ArticlePublishingSourcePreview>>

@@ -1,7 +1,88 @@
 import { describe, expect, it, vi } from 'vitest'
-import { WebResourceToolModule } from '.'
+import { accountNavigationOrigins, WebResourceToolModule } from '.'
 
 describe('WebResourceToolModule', () => {
+  it('binds B站 navigation scope to the selected account and its exact visible Profile', async () => {
+    const startTask = vi.fn().mockReturnValue({ id: 'task' })
+    const waitForViewBinding = vi.fn().mockResolvedValue(true)
+    const module = new WebResourceToolModule(
+      {
+        resolveLaunch: () => ({
+          success: true,
+          data: {
+            entryUrl: 'https://passport.bilibili.com/register',
+            browserProfileId: 'original-profile',
+          },
+        }),
+        getSnapshot: () => ({
+          success: true,
+          data: {
+            accounts: [
+              { id: 'selected-account', websiteId: 'site', principalId: 'person', label: 'B站' },
+            ],
+            websites: [{ id: 'site', name: 'B站' }],
+            principals: [],
+          },
+        }),
+      } as never,
+      {
+        launchCoordinator: {
+          requestLaunch: vi.fn().mockResolvedValue({ tabId: 'visible-tab' }),
+        } as never,
+        browserManager: { waitForViewBinding } as never,
+        browserTaskRuntime: { cancelTaskForConversation: vi.fn(), startTask } as never,
+      },
+    )
+    const context = {
+      conversationId: 'conversation',
+      agentRunId: 'run',
+      trustedWorkspace: {
+        kind: 'local' as const,
+        rootPath: '/workspace',
+        workspaceKey: '/workspace',
+      },
+    }
+    await module.execute('web_account_open', { accountId: 'selected-account' }, context)
+    expect(startTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'visible-tab',
+        correlation: expect.objectContaining({
+          accountId: 'selected-account',
+          profileId: 'original-profile',
+          conversationId: 'conversation',
+          agentRunId: 'run',
+          allowedOrigins: [
+            'https://passport.bilibili.com',
+            'https://t.bilibili.com',
+            'https://space.bilibili.com',
+          ],
+        }),
+      }),
+    )
+    startTask.mockClear()
+    waitForViewBinding.mockResolvedValue(false)
+    await expect(
+      module.execute('web_account_open', { accountId: 'selected-account' }, context),
+    ).rejects.toThrow('隔离登录环境')
+    expect(startTask).not.toHaveBeenCalled()
+  })
+  it('allows only the observed B站 login, dynamic and profile origins', () => {
+    const origins = accountNavigationOrigins('https://passport.bilibili.com')
+    expect(origins).toEqual([
+      'https://passport.bilibili.com',
+      'https://t.bilibili.com',
+      'https://space.bilibili.com',
+    ])
+    for (const origin of [
+      'https://bilibili.com.attacker.test',
+      'https://account.bilibili.com',
+      'https://member.bilibili.com',
+      'http://passport.bilibili.com',
+      'https://t.bilibili.com:8443',
+      'https://developer.apple.com',
+    ])
+      expect(accountNavigationOrigins(origin)).toEqual([origin])
+  })
   it('lists safe global account metadata without exposing session or profile data', async () => {
     const getSnapshot = vi.fn(() => ({
       success: true as const,

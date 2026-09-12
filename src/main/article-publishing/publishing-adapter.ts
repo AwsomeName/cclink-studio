@@ -1,3 +1,9 @@
+import { ToutiaoPublishingAdapter, TOUTIAO_MANAGEMENT_URL } from './toutiao-publishing-adapter'
+import {
+  BilibiliPublishingAdapter,
+  BILIBILI_EDITOR_URL,
+  type BilibiliImageSource,
+} from './bilibili-publishing-adapter'
 import { WeiboPublishingAdapter } from './weibo-publishing-adapter'
 import { XiaohongshuPublishingAdapter } from './xiaohongshu-publishing-adapter'
 import { JuejinPublishingAdapter } from './juejin-publishing-adapter'
@@ -7,12 +13,21 @@ import { CsdnPublishingAdapter } from './csdn-publishing-adapter'
 import { ZhihuPublishingAdapter, ZHIHU_MANAGEMENT_URL } from './zhihu-publishing-adapter'
 
 export class PublishingAdapter {
+  private readonly bilibili = new BilibiliPublishingAdapter()
+  private readonly toutiao = new ToutiaoPublishingAdapter()
   private readonly weibo = new WeiboPublishingAdapter()
   private readonly xiaohongshu = new XiaohongshuPublishingAdapter()
   private readonly juejin = new JuejinPublishingAdapter()
   private readonly csdn = new CsdnPublishingAdapter()
   private readonly zhihu = new ZhihuPublishingAdapter()
   private forPage(page: Page) {
+    if (new URL(page.url()).origin === 'https://t.bilibili.com') return this.bilibili
+    if (
+      ['https://mp.toutiao.com', 'https://www.toutiao.com', 'https://toutiao.com'].includes(
+        new URL(page.url()).origin,
+      )
+    )
+      return this.toutiao
     if (new URL(page.url()).origin === 'https://weibo.com') return this.weibo
     if (['creator.xiaohongshu.com', 'www.xiaohongshu.com'].includes(new URL(page.url()).hostname))
       return this.xiaohongshu
@@ -22,7 +37,16 @@ export class PublishingAdapter {
   documentGeneration(page: Page) {
     return this.csdn.documentGeneration(page)
   }
-  probe(page: Page, fields?: ArticlePublishingState['fields'], draftId?: string) {
+  probe(
+    page: Page,
+    fields?: ArticlePublishingState['fields'],
+    draftId?: string,
+    assets: readonly BilibiliImageSource[] = [],
+  ) {
+    if (new URL(page.url()).origin === 'https://t.bilibili.com')
+      return this.bilibili.probe(page, assets)
+    if (['mp.toutiao.com', 'www.toutiao.com', 'toutiao.com'].includes(new URL(page.url()).hostname))
+      return this.toutiao.probe(page, fields)
     if (new URL(page.url()).hostname === 'juejin.cn')
       return this.juejin.probe(page, fields, draftId)
     return this.forPage(page).probe(page)
@@ -30,11 +54,29 @@ export class PublishingAdapter {
   probeDraftList(page: Page) {
     return this.forPage(page).probeDraftList(page)
   }
-  verifyBody(page: Page, html: string) {
+  verifyBody(page: Page, html: string, assets: readonly BilibiliImageSource[] = []) {
+    if (new URL(page.url()).origin === 'https://t.bilibili.com')
+      return this.bilibili.verifyBody(page, html, assets)
     return this.forPage(page).verifyBody(page, html)
   }
 }
-export function publishingPlatform(id: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo') {
+export function publishingPlatform(
+  id: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili',
+) {
+  if (id === 'bilibili')
+    return {
+      label: 'B站动态',
+      editorUrl: BILIBILI_EDITOR_URL,
+      managementUrl: BILIBILI_EDITOR_URL,
+      origins: ['https://t.bilibili.com', 'https://space.bilibili.com'],
+    }
+  if (id === 'toutiao')
+    return {
+      label: '头条微头条',
+      editorUrl: 'https://mp.toutiao.com/profile_v4/weitoutiao/publish',
+      managementUrl: TOUTIAO_MANAGEMENT_URL,
+      origins: ['https://mp.toutiao.com', 'https://www.toutiao.com', 'https://toutiao.com'],
+    }
   if (id === 'weibo')
     return {
       label: '微博',

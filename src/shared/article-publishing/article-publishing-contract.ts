@@ -29,6 +29,10 @@ function bindSingle<Input, Output>(
 }
 
 export const articlePublishingIpcContracts = {
+  verifyPublishedResult: bindSingle(
+    articlePublishingIpc.verifyPublishedResult,
+    manageArticlePublishingRuntimeInputSchema,
+  ),
   inspectSource: bindSingle(
     articlePublishingIpc.inspectSource,
     inspectArticlePublishingSourceInputSchema,

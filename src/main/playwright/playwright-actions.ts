@@ -1,3 +1,5 @@
+import { readBrowserControls } from './browser-controls'
+import { uploadBilibiliImage } from './bilibili-image-upload'
 import {
   clickXiaohongshuControl,
   XIAOHONGSHU_SAVE_SELECTOR,
@@ -51,6 +53,23 @@ export async function executePlaywrightAction(
       return { clicked: action.selector }
 
     case 'fill':
+      if (
+        trustedArticleBodyHtml !== undefined &&
+        new URL(page!.url()).origin === 'https://t.bilibili.com'
+      ) {
+        if (
+          new URL(page!.url()).pathname !== '/' ||
+          action.selector !== 'div[placeholder="有什么想和大家分享的？"]' ||
+          !assertDispatchStillCurrent
+        )
+          throw new Error('B站正文目标或派发许可不匹配')
+        const body = page!.locator(action.selector)
+        if (!(await body.evaluate((element) => (element as HTMLElement).isContentEditable)))
+          throw new Error('B站正文区域不可编辑')
+        assertDispatchStillCurrent()
+        await body.fill(trustedArticleBodyHtml)
+        return { filled: action.selector }
+      }
       if (
         trustedArticleBodyHtml !== undefined &&
         new URL(page!.url()).origin === 'https://weibo.com'
@@ -157,8 +176,18 @@ export async function executePlaywrightAction(
     }
 
     case 'extract':
+      if (action.controls === true) {
+        if (typeof action.selector !== 'string' || !action.selector.trim())
+          throw new Error('控件读取必须指定可见范围，如 body')
+        return readBrowserControls(page!, action.selector)
+      }
       if (action.selector) {
-        return { text: await page!.textContent(action.selector) }
+        const text = await page!.innerText(action.selector)
+        return {
+          text: text.slice(0, 20_000),
+          textLength: text.length,
+          truncated: text.length > 20_000,
+        }
       }
       return { html: await page!.content() }
 
@@ -196,6 +225,7 @@ export async function executePlaywrightAction(
       return { url: page!.url() }
 
     case 'reload':
+      if (action.ignoreCache === true) throw new Error('强制刷新需要绑定 Studio 浏览器 Tab')
       await page!.reload()
       return { url: page!.url() }
 
@@ -266,6 +296,15 @@ export async function executePlaywrightAction(
       if (!paths || paths.length === 0) {
         throw new Error('必须提供至少一个文件路径')
       }
+      if (new URL(page!.url()).origin === 'https://t.bilibili.com') {
+        await uploadBilibiliImage(page!, selector, paths, () => assertDispatchStillCurrent?.())
+        return {
+          dispatched: 'file-selection',
+          files: paths.map((p) => p.split('/').pop()),
+          uploadVerified: false,
+          next: '核验本次唯一新增图片、上传结果及加载；结果未知禁止重复上传',
+        }
+      }
       if (new URL(page!.url()).origin === 'https://juejin.cn' && selector === '.CodeMirror') {
         if (!/^\/editor\/drafts\/\d+$/u.test(new URL(page!.url()).pathname) || paths.length !== 1)
           throw new Error('掘金图片粘贴只允许原稿中的单张冻结图片')
@@ -297,11 +336,21 @@ export async function executePlaywrightAction(
           },
           { base64: bytes.toString('base64'), mime, name: paths[0].split('/').pop()! },
         )
-        return { uploaded: 1, files: [paths[0].split('/').pop()] }
+        return {
+          dispatched: 'paste',
+          files: [paths[0].split('/').pop()],
+          uploadVerified: false,
+          next: '核验平台新增图片及加载结果；粘贴事件派发不等于上传成功',
+        }
       }
       const locator = page!.locator(selector)
       await locator.setInputFiles(paths)
-      return { uploaded: paths.length, files: paths.map((p: string) => p.split('/').pop()) }
+      return {
+        dispatched: 'file-selection',
+        files: paths.map((p: string) => p.split('/').pop()),
+        uploadVerified: false,
+        next: '核验平台新增图片及加载结果；文件选择完成不等于上传成功，结果未知时不要重复上传',
+      }
     }
 
     case 'waitForNavigation': {

@@ -1,0 +1,7 @@
+																			1710 row    img_height : 1448
+																			1720 row    img_src : "http://i0.hdslb.com/bfs/new_dyn/70631b44e8a37fa9e7cad0a2494313da3546384070347419.png"
+																			1725 row (selected)    img_width : 1086
+																			1758 row    set img_height : ƒ(t)
+																			1782 row    set img_src : ƒ(t)
+																			1794 row    set img_width : ƒ(t)
+The focused UI element is 1725 row (selected)    img_width : 1086

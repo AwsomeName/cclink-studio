@@ -5,6 +5,8 @@ import {
 import { invokeIpcContract } from './ipc-contract-client'
 
 export const articlePublishingApi: ArticlePublishingApiContract = {
+  verifyPublishedResult: (input) =>
+    invokeIpcContract(articlePublishingIpc.verifyPublishedResult, input),
   inspectSource: (input) => invokeIpcContract(articlePublishingIpc.inspectSource, input),
   createTask: (input) => invokeIpcContract(articlePublishingIpc.createTask, input),
   startTask: (input) => invokeIpcContract(articlePublishingIpc.startTask, input),

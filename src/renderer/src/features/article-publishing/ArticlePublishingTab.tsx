@@ -61,9 +61,9 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const [resources, setResources] = useState<WebResourceSnapshot | null>(null)
   const [affair, setAffair] = useState<WebAffair | null>(null)
   const [accountId, setAccountId] = useState('')
-  const [platform, setPlatform] = useState<'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo'>(
-    'csdn',
-  )
+  const [platform, setPlatform] = useState<
+    'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili'
+  >('csdn')
   const [localDraftId, setLocalDraftId] = useState('')
   const [existingDraftUrl, setExistingDraftUrl] = useState('')
   const [platformAccountId, setPlatformAccountId] = useState('')
@@ -72,15 +72,19 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     setAllowWeiboPublish(false)
   }, [platform, accountId, platformAccountId, preview])
   const platformLabel =
-    platform === 'weibo'
-      ? '微博'
-      : platform === 'xiaohongshu'
-        ? '小红书'
-        : platform === 'juejin'
-          ? '掘金'
-          : platform === 'zhihu'
-            ? '知乎'
-            : 'CSDN'
+    platform === 'bilibili'
+      ? 'B站动态'
+      : platform === 'toutiao'
+        ? '头条微头条'
+        : ['weibo', 'bilibili'].includes(platform)
+          ? '微博'
+          : platform === 'xiaohongshu'
+            ? '小红书'
+            : platform === 'juejin'
+              ? '掘金'
+              : platform === 'zhihu'
+                ? '知乎'
+                : 'CSDN'
   const [accountLabelDraft, setAccountLabelDraft] = useState('')
   const [savingAccountLabel, setSavingAccountLabel] = useState(false)
   const [title, setTitle] = useState('')
@@ -137,13 +141,19 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         !account.mergedIntoAccountId &&
         (platform === 'csdn'
           ? hostname === 'csdn.net' || hostname.endsWith('.csdn.net')
-          : platform === 'weibo'
-            ? hostname === 'weibo.com'
-            : platform === 'xiaohongshu'
-              ? hostname === 'xiaohongshu.com' || hostname.endsWith('.xiaohongshu.com')
-              : platform === 'juejin'
-                ? hostname === 'juejin.cn'
-                : hostname === 'zhihu.com' || hostname.endsWith('.zhihu.com'))
+          : platform === 'toutiao'
+            ? ['toutiao.com', 'www.toutiao.com', 'mp.toutiao.com'].includes(hostname)
+            : ['weibo', 'bilibili'].includes(platform)
+              ? platform === 'bilibili'
+                ? ['passport.bilibili.com', 't.bilibili.com', 'space.bilibili.com'].includes(
+                    hostname,
+                  )
+                : hostname === 'weibo.com'
+              : platform === 'xiaohongshu'
+                ? hostname === 'xiaohongshu.com' || hostname.endsWith('.xiaohongshu.com')
+                : platform === 'juejin'
+                  ? hostname === 'juejin.cn'
+                  : hostname === 'zhihu.com' || hostname.endsWith('.zhihu.com'))
         ? [{ account, website: website! }]
         : []
     })
@@ -173,7 +183,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       if (existing?.archivedAt) await agent.restoreArchivedConversation(conversationId)
       agent.renameConversation(
         conversationId,
-        `发布文章 · ${targetAffair.title} · ${targetAffair.articlePublishing?.adapterId === 'weibo' ? '微博' : targetAffair.articlePublishing?.adapterId === 'xiaohongshu' ? '小红书' : targetAffair.articlePublishing?.adapterId === 'juejin' ? '掘金' : targetAffair.articlePublishing?.adapterId === 'zhihu' ? '知乎' : 'CSDN'}`,
+        `发布文章 · ${targetAffair.title} · ${targetAffair.articlePublishing?.adapterId === 'bilibili' ? 'B站动态' : targetAffair.articlePublishing?.adapterId === 'toutiao' ? '头条微头条' : targetAffair.articlePublishing?.adapterId === 'weibo' ? '微博' : targetAffair.articlePublishing?.adapterId === 'xiaohongshu' ? '小红书' : targetAffair.articlePublishing?.adapterId === 'juejin' ? '掘金' : targetAffair.articlePublishing?.adapterId === 'zhihu' ? '知乎' : 'CSDN'}`,
       )
       if (activate) {
         agent.switchConversation(conversationId)
@@ -276,7 +286,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       {
         id: `browser-${result.data.browserTabId}`,
         kind: 'browser',
-        label: `${publishing.adapterId === 'weibo' ? '微博' : publishing.adapterId === 'xiaohongshu' ? '小红书' : publishing.adapterId === 'juejin' ? '掘金' : publishing.adapterId === 'zhihu' ? '知乎' : 'CSDN'}发布页`,
+        label: `${publishing.adapterId === 'bilibili' ? 'B站动态' : publishing.adapterId === 'toutiao' ? '头条微头条' : publishing.adapterId === 'weibo' ? '微博' : publishing.adapterId === 'xiaohongshu' ? '小红书' : publishing.adapterId === 'juejin' ? '掘金' : publishing.adapterId === 'zhihu' ? '知乎' : 'CSDN'}发布页`,
         ref: {
           type: 'browser',
           tabId: result.data.browserTabId,
@@ -325,10 +335,10 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         markdownPath: preview.source.markdownPath,
         ...(revisionOf ? { reviseDraftFromAffairId: revisionOf } : {}),
         accountId,
-        ...(platform === 'weibo'
+        ...(['weibo', 'bilibili'].includes(platform)
           ? { composer: { platformAccountId, allowPublish: allowWeiboPublish } }
           : {}),
-        ...(platform !== 'csdn' && platform !== 'weibo'
+        ...(platform !== 'csdn' && !['weibo', 'bilibili'].includes(platform)
           ? {
               existingDraft: {
                 url:
@@ -343,18 +353,27 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         fields: {
           title,
           summary:
-            platform === 'zhihu' || platform === 'xiaohongshu' || platform === 'weibo'
+            platform === 'zhihu' ||
+            platform === 'xiaohongshu' ||
+            ['weibo', 'bilibili'].includes(platform) ||
+            platform === 'toutiao'
               ? ''
               : summary,
           tags:
-            platform === 'zhihu' || platform === 'xiaohongshu' || platform === 'weibo'
+            platform === 'zhihu' ||
+            platform === 'xiaohongshu' ||
+            ['weibo', 'bilibili'].includes(platform) ||
+            platform === 'toutiao'
               ? []
               : tags
                   .split(/[,，]/u)
                   .map((item) => item.trim())
                   .filter(Boolean),
           category:
-            platform === 'zhihu' || platform === 'xiaohongshu' || platform === 'weibo'
+            platform === 'zhihu' ||
+            platform === 'xiaohongshu' ||
+            ['weibo', 'bilibili'].includes(platform) ||
+            platform === 'toutiao'
               ? ''
               : category,
           ...(platform === 'csdn' && coverAssetId ? { coverAssetId } : {}),
@@ -473,6 +492,29 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     setNotice('已复制发布事务与框架关键日志。')
   }
 
+  const verifyPublishedResult = async (): Promise<void> => {
+    const p = affair?.articlePublishing
+    if (!affair || !p?.execution.currentAttemptId || !p.execution.currentLaunchOperationId) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await window.cclinkStudio.articlePublishing.verifyPublishedResult({
+        workspaceRef,
+        affairId: affair.id,
+        attemptId: p.execution.currentAttemptId,
+        executionGeneration: p.execution.currentGeneration,
+        launchOperationId: p.execution.currentLaunchOperationId,
+      })
+      if (!result.success) throw new Error(result.error.message)
+      setAffair(result.data)
+      setNotice('已从当前公开页面重新核验全文和每张图片；没有重新发布。')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const manageRuntime = async (operation: 'check' | 'continue' | 'terminate'): Promise<void> => {
     if (!affair?.articlePublishing) return
     const execution = affair.articlePublishing.execution
@@ -576,7 +618,14 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
               value={platform}
               onChange={(event) => {
                 setPlatform(
-                  event.target.value as 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo',
+                  event.target.value as
+                    | 'csdn'
+                    | 'zhihu'
+                    | 'juejin'
+                    | 'xiaohongshu'
+                    | 'weibo'
+                    | 'toutiao'
+                    | 'bilibili',
                 )
                 setAccountId('')
               }}
@@ -586,6 +635,8 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
               <option value="juejin">掘金</option>
               <option value="xiaohongshu">小红书图文</option>
               <option value="weibo">微博图文</option>
+              <option value="toutiao">头条微头条</option>
+              <option value="bilibili">B站图文动态</option>
             </select>
           </label>
           <label>
@@ -633,13 +684,16 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           <label>
             标题
             <input
-              readOnly={platform === 'weibo'}
+              readOnly={['weibo', 'bilibili'].includes(platform) || platform === 'toutiao'}
               value={title}
               maxLength={160}
               onChange={(event) => setTitle(event.target.value)}
             />
           </label>
-          {platform !== 'zhihu' && platform !== 'xiaohongshu' && platform !== 'weibo' ? (
+          {platform !== 'zhihu' &&
+          platform !== 'xiaohongshu' &&
+          !['weibo', 'bilibili'].includes(platform) &&
+          platform !== 'toutiao' ? (
             <>
               <label>
                 摘要
@@ -681,19 +735,19 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
               ) : null}
             </>
           ) : null}
-          {platform === 'weibo' ? (
+          {['weibo', 'bilibili'].includes(platform) ? (
             <>
               <label>
-                目标微博 UID
+                目标{platformLabel} UID
                 <input
                   value={platformAccountId}
-                  placeholder="个人主页 /u/ 后的数字 UID"
+                  placeholder="本人个人主页中的数字 UID"
                   onChange={(e) => setPlatformAccountId(e.target.value)}
                 />
               </label>
               <p>
                 Studio Agent
-                准备正文和图集，逐张核验。微博临时编辑现场不等于已保存草稿；页面丢失后停止恢复。提交结果未知时只核验，不重发。
+                准备正文和图集，逐张核验。临时编辑现场不等于已保存草稿；页面丢失后停止恢复。提交结果未知时只核验，不重发。
               </p>
               <label>
                 <input
@@ -707,7 +761,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
               </label>
             </>
           ) : null}
-          {platform !== 'csdn' && platform !== 'weibo' ? (
+          {platform !== 'csdn' && !['weibo', 'bilibili'].includes(platform) ? (
             <>
               <label>
                 {platform === 'xiaohongshu' ? '小红书本地草稿 ID' : `已有${platformLabel}草稿地址`}
@@ -716,9 +770,11 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
                   placeholder={
                     platform === 'xiaohongshu'
                       ? '原账号浏览器本地草稿 UUID'
-                      : platform === 'juejin'
-                        ? 'https://juejin.cn/editor/drafts/…'
-                        : 'https://zhuanlan.zhihu.com/p/…/edit'
+                      : platform === 'toutiao'
+                        ? 'https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=…'
+                        : platform === 'juejin'
+                          ? 'https://juejin.cn/editor/drafts/…'
+                          : 'https://zhuanlan.zhihu.com/p/…/edit'
                   }
                   onChange={(e) =>
                     platform === 'xiaohongshu'
@@ -734,9 +790,11 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
                   placeholder={
                     platform === 'xiaohongshu'
                       ? '创作后台当前账号 UID（不是手机号或小红书号）'
-                      : platform === 'juejin'
-                        ? '个人主页 /user/ 后面的数字标识'
-                        : '个人主页 /people/ 后面的标识'
+                      : platform === 'toutiao'
+                        ? '个人主页 /c/user/ 后面的数字 UID'
+                        : platform === 'juejin'
+                          ? '个人主页 /user/ 后面的数字标识'
+                          : '个人主页 /people/ 后面的标识'
                   }
                   onChange={(e) => setPlatformAccountId(e.target.value)}
                 />
@@ -784,9 +842,11 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         </section>
         <div className="article-publishing-footer">
           <span>
-            {platform === 'weibo'
-              ? '保存的是本地任务，启动后由 Studio Agent 准备图文。'
-              : '可仅保存草稿，也可一次完成保存并启动。'}
+            {platform === 'toutiao'
+              ? '仅建立本地任务，启动后核验原草稿与平台结果。'
+              : ['weibo', 'bilibili'].includes(platform)
+                ? '保存的是本地任务，启动后由 Studio Agent 准备图文。'
+                : '可仅保存草稿，也可一次完成保存并启动。'}
           </span>
           <button
             type="button"
@@ -795,7 +855,11 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
             }
             onClick={() => void saveTask(false)}
           >
-            {busy ? '处理中…' : platform === 'weibo' ? '仅保存任务' : '仅保存草稿'}
+            {busy
+              ? '处理中…'
+              : ['weibo', 'bilibili'].includes(platform) || platform === 'toutiao'
+                ? '仅保存任务'
+                : '仅保存草稿'}
           </button>
           <button
             type="button"
@@ -807,9 +871,9 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           >
             {busy
               ? '启动中…'
-              : platform === 'weibo'
+              : ['weibo', 'bilibili'].includes(platform)
                 ? allowWeiboPublish
-                  ? '保存任务并提交微博'
+                  ? `保存任务并提交${platformLabel}`
                   : '保存任务并准备图文'
                 : '保存并开始执行'}
           </button>
@@ -847,23 +911,28 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       <header className="article-publishing-header">
         <div>
           <span>
-            {publishing.adapterId === 'weibo'
-              ? publishing.composer?.allowPublish
-                ? '微博（已授权单次提交）'
-                : '微博（只准备）'
+            {['weibo', 'bilibili'].includes(publishing.adapterId)
+              ? `${publishing.adapterId === 'bilibili' ? 'B站动态' : '微博'}（${publishing.composer?.allowPublish ? '已授权单次提交' : '只准备'}）`
               : publishing.adapterId === 'xiaohongshu'
                 ? '小红书'
                 : publishing.adapterId === 'juejin'
                   ? '掘金'
-                  : publishing.adapterId === 'zhihu'
-                    ? '知乎'
-                    : 'CSDN'}{' '}
+                  : publishing.adapterId === 'toutiao'
+                    ? '头条微头条'
+                    : publishing.adapterId === 'zhihu'
+                      ? '知乎'
+                      : 'CSDN'}{' '}
             · 持久发布事务
           </span>
           <h1>{affair.title}</h1>
           <p>{publishing.source.markdownPath}</p>
         </div>
         <div className="article-publishing-actions">
+          {publishing.adapterId === 'toutiao' && publishing.publication.status === 'published' && (
+            <button type="button" disabled={busy} onClick={() => void verifyPublishedResult()}>
+              重新核验公开全文与图片
+            </button>
+          )}
           <button type="button" onClick={() => void openWebsite()}>
             打开网页
           </button>
@@ -959,12 +1028,12 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
             <span>平台草稿</span>
             <strong>
               {publishing.draft?.platformDraftId
-                ? `${publishing.adapterId === 'weibo' ? '微博' : publishing.adapterId === 'xiaohongshu' ? '小红书' : publishing.adapterId === 'juejin' ? '掘金' : publishing.adapterId === 'zhihu' ? '知乎' : 'CSDN'} 原稿 ${publishing.draft.platformDraftId}`
+                ? `${publishing.adapterId === 'bilibili' ? 'B站动态' : publishing.adapterId === 'toutiao' ? '头条微头条' : publishing.adapterId === 'weibo' ? '微博' : publishing.adapterId === 'xiaohongshu' ? '小红书' : publishing.adapterId === 'juejin' ? '掘金' : publishing.adapterId === 'zhihu' ? '知乎' : 'CSDN'} 原稿 ${publishing.draft.platformDraftId}`
                 : '尚未锁定平台草稿'}
             </strong>
             <small>
-              {publishing.adapterId === 'weibo'
-                ? '微博临时编辑现场；没有已保存草稿编号，不保证页面关闭后恢复'
+              {['weibo', 'bilibili'].includes(publishing.adapterId)
+                ? `${publishing.adapterId === 'bilibili' ? 'B站' : '微博'}临时编辑现场；没有已保存草稿编号，不保证页面关闭后恢复`
                 : (publishing.draft?.url ?? '首次受保护保存成功后，记录本任务自己的草稿编号')}
             </small>
           </div>
@@ -991,9 +1060,11 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         <ArticleAssetList
           assets={publishing.assets}
           allowExisting={
-            publishing.adapterId === 'xiaohongshu' &&
-            publishing.draft?.recovery?.status === 'verified'
+            ['xiaohongshu', 'toutiao'].includes(publishing.adapterId) &&
+            publishing.draft?.recovery?.status === 'verified' &&
+            ['waiting-human', 'interrupted'].includes(publishing.execution.status)
           }
+          confirmGalleryOrder={publishing.adapterId === 'toutiao'}
           workspacePath={workspaceRef.path}
           busy={busy}
           onResolve={(assetId, resolution) => void resolveAsset(assetId, resolution)}
@@ -1187,7 +1258,14 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
             继续等待
           </button>
         ) : null}
-        {['preparing', 'running', 'checking-runtime'].includes(publishing.execution.status) ? (
+        {[
+          'preparing',
+          'running',
+          'checking-runtime',
+          'waiting-human',
+          'interrupted',
+          'result-unknown',
+        ].includes(publishing.execution.status) ? (
           <button type="button" disabled={busy} onClick={() => void manageRuntime('terminate')}>
             终止任务
           </button>
@@ -1251,18 +1329,20 @@ function ArticleAssetList({
   workspacePath,
   busy = false,
   allowExisting = false,
+  confirmGalleryOrder = false,
   onResolve,
 }: {
   assets: ArticlePublishingAsset[]
   workspacePath: string
   busy?: boolean
   allowExisting?: boolean
+  confirmGalleryOrder?: boolean
   onResolve?: (assetId: string, resolution: 'present' | 'missing') => void
 }): React.ReactElement {
   if (assets.length === 0) return <p>正文没有图片。</p>
   return (
     <div className="article-publishing-assets">
-      {assets.map((asset) => {
+      {assets.map((asset, assetIndex) => {
         const details = getArticlePublishingFileDetails(asset.sourcePath, workspacePath)
         return (
           <div key={asset.id} className={`article-publishing-asset ${asset.status}`}>
@@ -1304,13 +1384,17 @@ function ArticleAssetList({
             (['result-unknown', 'reconciling'].includes(asset.status) ||
               (allowExisting && asset.status === 'pending')) ? (
               <div className="article-publishing-actions">
-                <span>先在可见的平台编辑器里看图片是否存在，不用填写图片地址。</span>
+                <span>
+                  {confirmGalleryOrder
+                    ? `请打开网页独立窗口，核对图集第 ${assetIndex + 1} 张就是本地 ${details.fileName}；数量相同不算核验。`
+                    : '先在可见的平台编辑器里看图片是否存在，不用填写图片地址。'}
+                </span>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => onResolve(asset.id, 'present')}
                 >
-                  网页里有这张图
+                  {confirmGalleryOrder ? `确认第 ${assetIndex + 1} 张对应此原图` : '网页里有这张图'}
                 </button>
                 {asset.status !== 'pending' && (
                   <button

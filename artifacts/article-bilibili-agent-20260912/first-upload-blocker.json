@@ -1,0 +1,52 @@
+{
+  "affairId": "3eb86c88-265c-46a2-b144-2ea228e7f186",
+  "observedAt": "2026-09-12T08:56:00+08:00",
+  "execution": {
+    "status": "result-unknown",
+    "currentAttemptId": "9f981f0a-cff7-4c9b-8355-3c8a6c9ea721",
+    "currentGeneration": 3,
+    "currentLaunchOperationId": "986f602f-8dbb-4659-a0d4-81c2e9ed4c7d",
+    "currentStepId": "upload-assets"
+  },
+  "publication": {
+    "status": "not-started"
+  },
+  "assets": [
+    {
+      "id": "local:2026-09-09/素材/01-首篇封面.png",
+      "status": "reconciling",
+      "platformUrl": null
+    },
+    {
+      "id": "local:2026-09-09/素材/02-导航场景效果图.png",
+      "status": "pending",
+      "platformUrl": null
+    },
+    {
+      "id": "local:2026-09-09/素材/03-城市漫游效果图.png",
+      "status": "pending",
+      "platformUrl": null
+    }
+  ],
+  "sideEffects": [
+    {
+      "key": "3eb86c88-265c-46a2-b144-2ea228e7f186:9f981f0a-cff7-4c9b-8355-3c8a6c9ea721:g3:upload-asset:local:2026-09-09/素材/01-首篇封面.png:attempt-3",
+      "affairId": "3eb86c88-265c-46a2-b144-2ea228e7f186",
+      "attemptId": "9f981f0a-cff7-4c9b-8355-3c8a6c9ea721",
+      "executionGeneration": 3,
+      "kind": "upload-asset",
+      "targetId": "local:2026-09-09/素材/01-首篇封面.png:attempt-3",
+      "status": "result-unknown",
+      "reservedAt": "2026-09-12T00:49:07.945Z",
+      "consumedAt": "2026-09-12T00:49:08.162Z",
+      "dispatchedAt": "2026-09-12T00:49:08.246Z",
+      "observedAt": "2026-09-12T00:49:39.461Z",
+      "browserTaskRunId": "e9f4b9aa-33ec-4087-bac8-0fcf601ff350"
+    }
+  ],
+  "evidenceLimits": [
+    "Studio dispatched exactly one first-image upload in generation 3. Native screenshot shows cover thumbnail.",
+    "No authoritative file-to-platform-URL mapping was established. No second/third-image upload, body write or publish occurred.",
+    "Mac locked during follow-up read-only diagnostic; no refresh or repeat upload performed."
+  ]
+}

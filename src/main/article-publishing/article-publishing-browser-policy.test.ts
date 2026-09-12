@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { WeiboPublishingAdapter } from './weibo-publishing-adapter'
 import { CsdnPublishingAdapter } from './csdn-publishing-adapter'
+import { TOUTIAO_DISABLE_MUSIC_SELECTOR } from './toutiao-publishing-adapter'
 vi.mock('./article-body', () => ({ prepareArticleBody: vi.fn(async () => '<p>Article</p>') }))
 vi.spyOn(CsdnPublishingAdapter.prototype, 'verifyBody').mockResolvedValue({
   matches: true,
@@ -26,7 +27,8 @@ import {
 const DRAFT_URL = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
 
 function createPolicy(options?: {
-  adapterId?: 'csdn' | 'weibo'
+  adapterId?: 'csdn' | 'weibo' | 'toutiao' | 'bilibili'
+  musicChecked?: boolean | null
   weiboUid?: string
   stepId?: string
   publicationStatus?: string
@@ -118,7 +120,7 @@ function createPolicy(options?: {
     ],
     articlePublishing: {
       adapterId: options?.adapterId ?? 'csdn',
-      ...(options?.adapterId === 'weibo'
+      ...(['weibo', 'bilibili'].includes(options?.adapterId ?? '')
         ? { composer: { platformAccountId: '5961101548', allowPublish: false } }
         : {}),
       adapterVersion: 1,
@@ -160,7 +162,7 @@ function createPolicy(options?: {
           ? undefined
           : {
               platformDraftId: '164148817',
-              platformAccountId: 'csdn:test-user',
+              platformAccountId: options?.adapterId === 'toutiao' ? '12345' : 'csdn:test-user',
               normalizedTitle: 'Article',
               url: options?.draftUrl ?? DRAFT_URL,
               ...(options?.recovery ? { recovery: options.recovery } : {}),
@@ -272,6 +274,16 @@ function createPolicy(options?: {
         evaluate: async () => {
           options?.duringProbe?.()
           return {
+            ...(options?.adapterId === 'toutiao'
+              ? {
+                  uid: '12345',
+                  editorRecognized: true,
+                  text: 'Article',
+                  title: 'Article',
+                  observedAt: new Date().toISOString(),
+                  options: [{ label: '开启配乐', checked: options.musicChecked }],
+                }
+              : {}),
             ...(options?.adapterId === 'weibo'
               ? {
                   uid: options.weiboUid ?? '5961101548',
@@ -282,6 +294,17 @@ function createPolicy(options?: {
                   publishSelector: selectors.publish,
                   fileInputSelector: selectors.fileInput,
                   privacy: true,
+                }
+              : {}),
+            ...(options?.adapterId === 'bilibili'
+              ? {
+                  uid: '5961101548',
+                  recognized: true,
+                  text: '',
+                  title: '',
+                  uploadSelector: selectors.fileInput,
+                  visibility: 'unknown',
+                  observedAt: new Date().toISOString(),
                 }
               : {}),
             url,
@@ -357,6 +380,99 @@ const context = {
 }
 
 describe('ArticlePublishingBrowserPolicy', () => {
+  it.each([true, false])(
+    'records B站 public image and body evidence in publication steps (matches=%s)',
+    async (matches) => {
+      const platformUrl = 'https://i0.hdslb.com/bfs/new_dyn/picture.png'
+      const { policy, webAffairService } = createPolicy({ adapterId: 'bilibili', platformUrl })
+      const snapshot = webAffairService.getProjectSnapshot()
+      const state = snapshot.data.affairs[0].articlePublishing
+      state.assets[0].occurrences = [{ index: 0 }] as never
+      webAffairService.getProjectSnapshot.mockReturnValue(snapshot)
+      const adapter = Reflect.get(policy, 'adapter')
+      const verify = vi.spyOn(adapter, 'verifyBody').mockResolvedValue({
+        matches,
+        textMatches: matches,
+        textEvidence: 'actual public body',
+        images: [{ src: platformUrl, index: 0, matches }],
+      })
+      try {
+        await Reflect.get(policy, 'verifyFrozenBody').call(
+          policy,
+          {
+            workspaceId: 'workspace-a',
+            affairId: 'affair-a',
+            adapterId: 'bilibili',
+            assets: state.assets,
+          },
+          { url: () => 'https://t.bilibili.com/112233445566778899' },
+          () => true,
+        )
+        const results = webAffairService.recordArticlePublishingPlanResults.mock.calls[0][0].results
+        expect(results[0]).toMatchObject({
+          id: 'asset.asset-a.published',
+          status: matches ? 'completed' : 'waiting',
+        })
+        if (!matches)
+          expect(results[1]).toMatchObject({ id: 'publication.verify', status: 'waiting' })
+        expect(
+          results.some(
+            (r: { id: string }) => r.id === 'body.verify' || r.id.endsWith('.placement'),
+          ),
+        ).toBe(false)
+      } finally {
+        verify.mockRestore()
+      }
+    },
+  )
+
+  it('only disables currently checked Toutiao music, then requires fresh evidence before another click', async () => {
+    const options = {
+      adapterId: 'toutiao' as const,
+      stepId: 'publish',
+      assetStatus: 'pending',
+      draftUrl: 'https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=164148817',
+      musicChecked: true,
+    }
+    const { policy, inspect, webAffairService } = createPolicy(options)
+    const page = await inspect({}, options.draftUrl)
+    const params = { selector: TOUTIAO_DISABLE_MUSIC_SELECTOR }
+    expect(
+      await policy.classifyAction(task as never, 'click', params, page as never, context),
+    ).toMatchObject({ kind: 'allow' })
+    expect(webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
+    options.musicChecked = false
+    expect(
+      await policy.classifyAction(task as never, 'click', params, page as never, context),
+    ).toMatchObject({ kind: 'runtime-error' })
+  })
+  it.each(['generation', 'cancel', 'submitted'] as const)(
+    'does not change Toutiao music after %s',
+    async (mode) => {
+      const url = 'https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=164148817'
+      const { policy, inspect, advanceDocument } = createPolicy({
+        adapterId: 'toutiao',
+        stepId: 'publish',
+        assetStatus: 'pending',
+        draftUrl: url,
+        musicChecked: true,
+        publicationStatus: mode === 'submitted' ? 'dispatched' : 'not-started',
+      })
+      const page = await inspect({}, url)
+      if (mode === 'generation') advanceDocument()
+      const signal = new AbortController()
+      if (mode === 'cancel') signal.abort()
+      expect(
+        await policy.classifyAction(
+          task as never,
+          'click',
+          { selector: TOUTIAO_DISABLE_MUSIC_SELECTOR },
+          page as never,
+          { ...context, abortSignal: signal.signal },
+        ),
+      ).not.toMatchObject({ kind: 'allow' })
+    },
+  )
   it('allows a bounded Weibo single-image upload without claiming a saved draft', async () => {
     const { policy, inspect, webAffairService } = createPolicy({
       adapterId: 'weibo',
@@ -380,6 +496,28 @@ describe('ArticlePublishingBrowserPolicy', () => {
     ).resolves.toBeNull()
     expect(webAffairService.recordArticlePublishingDraftAnchor).not.toHaveBeenCalled()
     expect(webAffairService.recordArticlePublishingPageObservation).not.toHaveBeenCalled()
+  })
+
+  it('allows a bounded Bilibili upload on its attested native composer without inventing a draft', async () => {
+    const { policy, inspect, webAffairService } = createPolicy({
+      adapterId: 'bilibili',
+      draftUrl: null,
+      stepId: 'upload-assets',
+      assetStatus: 'uploading',
+      imageEnumerationComplete: true,
+    })
+    const selector = 'div.bili-dyn-publishing__tools__item.pic'
+    const page = await inspect({ fileInput: selector }, 'https://t.bilibili.com/')
+    expect(
+      await policy.classifyAction(
+        task as never,
+        'uploadFile',
+        { selector, paths: ['/workspace/a.png'] },
+        page as never,
+        context,
+      ),
+    ).toMatchObject({ kind: 'allow-once' })
+    expect(webAffairService.recordArticlePublishingDraftAnchor).not.toHaveBeenCalled()
   })
 
   it('blocks Weibo submit even with a current matching composer and publish selector', async () => {

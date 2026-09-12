@@ -311,7 +311,7 @@ const articlePublishingComposerSchema = z
 
 export const articlePublishingStateSchema = z
   .object({
-    adapterId: z.enum(['csdn', 'zhihu', 'juejin', 'xiaohongshu', 'weibo']),
+    adapterId: z.enum(['csdn', 'zhihu', 'juejin', 'xiaohongshu', 'weibo', 'toutiao', 'bilibili']),
     composer: articlePublishingComposerSchema.optional(),
     adapterVersion: z.literal(1),
     source: z
@@ -427,7 +427,11 @@ export const articlePublishingStateSchema = z
   })
   .strict()
   .superRefine((state, ctx) => {
-    if (state.adapterId === 'weibo' ? !state.composer || !!state.draft : !!state.composer)
+    if (
+      ['weibo', 'bilibili'].includes(state.adapterId)
+        ? !state.composer || !!state.draft
+        : !!state.composer
+    )
       ctx.addIssue({
         code: 'custom',
         path: ['composer'],

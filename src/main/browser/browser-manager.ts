@@ -253,6 +253,9 @@ interface ViewEntry {
   contextMenuToken: string | null
   /** 仅 popup View 存在；普通工作台 View 为 null。 */
   popup: {
+    sourceTabId: string
+    sourceRuntimeGeneration: number
+    sourceDocumentGeneration: number
     adoptionState: 'pending' | 'adopting' | 'adopted'
     disposition: BrowserPopupDisposition
     adoptionTimer: ReturnType<typeof setTimeout> | null
@@ -1196,6 +1199,9 @@ export class BrowserManager {
       workspaceKey: sourceEntry.workspaceKey,
       contextMenuToken: null,
       popup: {
+        sourceTabId,
+        sourceRuntimeGeneration: sourceEntry.runtimeGeneration,
+        sourceDocumentGeneration: sourceEntry.fitDocumentGeneration,
         adoptionState: 'pending',
         disposition: details.disposition,
         adoptionTimer: null,
@@ -2211,6 +2217,26 @@ export class BrowserManager {
     return this.views.get(tabId)?.accountId
   }
 
+  /** Read only this live account Tab's own adopted children; never enumerate other tabs. */
+  getAccountChildPageUrls(sourceTabId: string): string[] {
+    const source = this.views.get(sourceTabId)
+    if (!source?.accountId || !source.profileId) return []
+    return [...this.views.values()]
+      .filter(
+        (entry) =>
+          entry.popup?.sourceTabId === sourceTabId &&
+          entry.popup.sourceRuntimeGeneration === source.runtimeGeneration &&
+          entry.popup.sourceDocumentGeneration === source.fitDocumentGeneration &&
+          entry.popup.adoptionState === 'adopted' &&
+          entry.accountId === source.accountId &&
+          entry.profileId === source.profileId &&
+          entry.workspaceKey === source.workspaceKey &&
+          !entry.view.webContents.isDestroyed(),
+      )
+      .slice(-8)
+      .map((entry) => entry.view.webContents.getURL())
+  }
+
   getViewRuntimeIdentity(tabId: string): {
     tabId: string
     browserViewRuntimeGeneration: number
@@ -2280,8 +2306,11 @@ export class BrowserManager {
     preferredTabId?: string,
   ): Promise<string | null> {
     const findActiveAccountView = (): string | null => {
-      const activeTabId = this.getActiveViewIdForWorkspace(workspaceKey)
+      // A detached original Tab can be visible in its own host while a popup is
+      // active in the main host. Inspect the requested native View itself.
+      const activeTabId = preferredTabId ?? this.getActiveViewIdForWorkspace(workspaceKey)
       if (!activeTabId) return null
+      if (preferredTabId && !this.isViewVisible(activeTabId)) return null
       const activeEntry = this.views.get(activeTabId)
       return activeEntry?.workspaceKey === workspaceKey &&
         activeEntry.profileId === profileId &&
@@ -2536,8 +2565,10 @@ export class BrowserManager {
   }
 
   /** 刷新 */
-  reload(tabId: string): void {
-    this.views.get(tabId)?.view.webContents.reload()
+  reload(tabId: string, ignoreCache = false): void {
+    const wc = this.views.get(tabId)?.view.webContents
+    if (ignoreCache) wc?.reloadIgnoringCache()
+    else wc?.reload()
   }
 
   /** 捕获当前网页画面，供原生 View 暂时隐藏时作为无闪烁占位。 */

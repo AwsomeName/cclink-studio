@@ -20,6 +20,50 @@ describe('McpToolHost tool session context', () => {
     host = null
   })
 
+  it('delivers browser screenshots as MCP image content after normal authorization', async () => {
+    const screenshot =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aR0kAAAAASUVORK5CYII='
+    const execute = vi.fn(async () => ({ screenshot }))
+    const requestConfirmation = vi.fn(async () => true)
+    host = new McpToolHost({ needsConfirmation: () => true, requestConfirmation })
+    host.registerModule({
+      ...createModule(execute),
+      name: 'browser',
+      tools: [
+        {
+          name: 'browser_screenshot',
+          description: 'Screenshot',
+          inputSchema: { type: 'object', properties: {} },
+          annotations: { readOnlyHint: true, destructiveHint: false },
+        },
+      ],
+    })
+    const port = await host.start()
+    const token = host.createToolSession({ conversationId: 'images', agentRunId: 'image-run' })
+    const response = await callMcp(port, token, 'tools/call', {
+      name: 'browser_screenshot',
+      arguments: {},
+    })
+    expect(requestConfirmation).toHaveBeenCalledTimes(1)
+    expect(response.result).toEqual({
+      content: [{ type: 'image', data: screenshot, mimeType: 'image/png' }],
+    })
+    execute.mockResolvedValueOnce({ screenshot: 'private-invalid-payload' })
+    const invalid = await callMcp(port, token, 'tools/call', {
+      name: 'browser_screenshot',
+      arguments: {},
+    })
+    expect(invalid.result.isError).toBe(true)
+    expect(JSON.stringify(invalid)).not.toContain('private-invalid-payload')
+    requestConfirmation.mockResolvedValueOnce(false)
+    const denied = await callMcp(port, token, 'tools/call', {
+      name: 'browser_screenshot',
+      arguments: {},
+    })
+    expect(denied.result.isError).toBe(true)
+    expect(execute).toHaveBeenCalledTimes(2)
+  })
+
   it('attaches conversationId to tool confirmation requests', async () => {
     const requestConfirmation = vi.fn(async () => true)
     const execute = vi.fn(async () => ({ ok: true }))

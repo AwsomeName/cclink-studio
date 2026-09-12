@@ -1,4 +1,15 @@
+import { parseBilibiliPublicationUrl } from './bilibili-publication'
+import {
+  canRetryEmptyBilibiliComposer,
+  isEmptyBilibiliComposer,
+} from './bilibili-composer-recovery'
+import { prepareArticleBody } from './article-body'
 import { parseWeiboPublicationUrl } from './weibo-publication'
+import {
+  readToutiaoPublicationReview,
+  openToutiaoPublicationResult,
+  TOUTIAO_PUBLICATION_MANAGEMENT_URL,
+} from './toutiao-publication-review'
 import { readXiaohongshuEditor } from './xiaohongshu-publishing-adapter'
 import { PublishingAdapter, publishingPlatform } from './publishing-adapter'
 import { randomUUID } from 'node:crypto'
@@ -228,8 +239,10 @@ export class ArticlePublishingService {
       )
       const publicationRecoveryRequired = Boolean(
         input.resumed &&
-        publishing.publication.status === 'result-unknown' &&
-        (publishing.draft?.platformDraftId || publishing.adapterId === 'weibo'),
+        (publishing.publication.status === 'result-unknown' ||
+          (publishing.adapterId === 'toutiao' &&
+            ['dispatched', 'verifying'].includes(publishing.publication.status))) &&
+        (publishing.draft?.platformDraftId || ['weibo', 'bilibili'].includes(publishing.adapterId)),
       )
       const tabId = await browserManager.waitForAccountView(
         input.workspacePath,
@@ -251,7 +264,25 @@ export class ArticlePublishingService {
       const visibleUrl = browserManager.getCurrentURL(tabId)
       let recoveredDraft: CsdnDraftRecoveryResult | null = null
       let recoveredPublicationUrl: string | null = null
+      const assertToutiaoRecoveryActive = () => {
+        if (publishing.adapterId !== 'toutiao') return
+        const snapshot = this.webAffairService.getProjectSnapshot(input.workspaceId)
+        const current = snapshot.success
+          ? snapshot.data.affairs.find((a) => a.id === input.affair.id)?.articlePublishing
+          : undefined
+        if (
+          !current ||
+          current.execution.currentAttemptId !== attempt.id ||
+          current.execution.currentGeneration !== attempt.executionGeneration ||
+          current.execution.currentLaunchOperationId !== attempt.launchOperationId ||
+          ['cancelled', 'failed', 'interrupted', 'waiting-human', 'published'].includes(
+            current.execution.status,
+          )
+        )
+          throw new Error('头条原稿恢复已取消或执行代次变化，停止继续打开页面')
+      }
       const navigateForRecovery = async (url: string) => {
+        assertToutiaoRecoveryActive()
         await browserManager.navigate(tabId, url)
         await playwrightBridge.ensureConnected('article_publishing_draft_recovery')
         await browserManager.ensurePlaywrightPage(tabId)
@@ -260,18 +291,111 @@ export class ArticlePublishingService {
         if (!page || page.isClosed()) throw new Error('CSDN 恢复核验页面不可用')
         return page
       }
-      if (publicationRecoveryRequired && publishing.adapterId === 'weibo') {
-        const receipt = parseWeiboPublicationUrl(publishing.publication.url ?? '')
-        if (!receipt || receipt.uid !== publishing.composer?.platformAccountId)
-          throw new Error('微博提交结果未知且缺少本次回执地址，只允许人工核验，不会再次发送')
+      if (publicationRecoveryRequired && publishing.adapterId === 'toutiao') {
+        const page = await navigateForRecovery(TOUTIAO_PUBLICATION_MANAGEMENT_URL)
+        const review = await readToutiaoPublicationReview(page, {
+          uid: publishing.draft?.platformAccountId ?? '',
+          title: publishing.fields.title,
+          images: publishing.assets.map((asset) => asset.platformUrl ?? ''),
+        })
+        assertToutiaoRecoveryActive()
+        if (!review.current || review.candidates.length !== 1)
+          throw new Error(
+            `头条结果只读核验尚未唯一对应原账号、原标题和逐张图片；${review.diagnostics.join('；')}`,
+          )
+        const actual = review.candidates[0]
+        if (actual.status === '已发布' && !actual.urls.length) {
+          actual.urls = [
+            await openToutiaoPublicationResult(
+              page,
+              {
+                uid: publishing.draft?.platformAccountId ?? '',
+                title: publishing.fields.title,
+                images: publishing.assets.map((asset) => asset.platformUrl ?? ''),
+              },
+              () => {
+                try {
+                  assertToutiaoRecoveryActive()
+                  return true
+                } catch {
+                  return false
+                }
+              },
+            ),
+          ]
+        }
+        await recordPlan({
+          id: 'publish.dispatch',
+          status: 'completed',
+          evidence: `本 Attempt 已派发一次提交；平台管理页已出现原账号、原标题和 ${actual.images.length} 张原图完全对应的作品`,
+        })
+        await recordPlan({
+          id: 'publication.verify',
+          status: 'waiting',
+          evidence: `账号 ${publishing.draft?.platformAccountId}；${publishing.fields.title}；逐图 ${actual.images.length}/${publishing.assets.length} 地址、顺序和加载一致；平台状态 ${actual.status}${actual.urls.length ? `；实际链接 ${actual.urls.join('、')}` : ''}`,
+          reason: `头条平台当前${actual.status}；只检查结果，禁止重复发布`,
+        })
+        if (actual.status !== '已发布' || actual.urls.length !== 1)
+          throw new Error(
+            `头条已接收本篇图文，管理页显示${actual.status}；公开结果尚待核验，不会重复发布`,
+          )
+        const located = await this.webAffairService.recordToutiaoPublicationLocation(
+          {
+            workspaceId: input.workspaceId,
+            affairId: input.affair.id,
+            attemptId: attempt.id,
+            executionGeneration: attempt.executionGeneration,
+            launchOperationId: attempt.launchOperationId,
+            uid: publishing.draft?.platformAccountId ?? '',
+            url: actual.urls[0],
+            imageUrls: actual.images.map((i) => i.src),
+          },
+          () => {
+            try {
+              assertToutiaoRecoveryActive()
+              return true
+            } catch {
+              return false
+            }
+          },
+        )
+        if (!located.success) throw new Error(located.error.message)
+        await navigateForRecovery(actual.urls[0])
+        const visibleResultTab = await browserManager.waitForAccountView(
+          input.workspacePath,
+          attempt.profileId,
+          attempt.accountId,
+          actual.urls[0],
+          8_000,
+          tabId,
+        )
+        assertToutiaoRecoveryActive()
+        if (visibleResultTab !== tabId || !browserManager.isViewVisible(tabId))
+          throw new Error('头条公开结果已找到，但原任务 Tab 尚未可见；保留只读核验')
+        recoveredPublicationUrl = actual.urls[0]
+        draftAnchor = null
+      } else if (
+        publicationRecoveryRequired &&
+        ['weibo', 'bilibili'].includes(publishing.adapterId)
+      ) {
+        const parsed =
+          publishing.adapterId === 'bilibili'
+            ? parseBilibiliPublicationUrl(publishing.publication.url ?? '')
+            : parseWeiboPublicationUrl(publishing.publication.url ?? '')
+        const receipt = parsed && {
+          ...parsed,
+          uid: 'uid' in parsed ? parsed.uid : publishing.composer?.platformAccountId,
+        }
+        if (!receipt || !receipt.uid || receipt.uid !== publishing.composer?.platformAccountId)
+          throw new Error('动态提交结果未知且缺少本次回执地址，只允许核验，不会再次发送')
         const page = await navigateForRecovery(receipt.url)
         const observed = await new PublishingAdapter().probe(page)
         if (
           observed.pageKind !== 'published-article' ||
-          observed.platformAccountId !== receipt.uid ||
+          (publishing.adapterId !== 'bilibili' && observed.platformAccountId !== receipt.uid) ||
           observed.publishedArticleId !== receipt.id
         )
-          throw new Error('本次微博回执页面尚不能核验账号及文章 ID；保留结果未知，不重复发送')
+          throw new Error('本次动态回执页面尚不能核验内容及文章 ID；保留结果未知，不重复发送')
         recoveredPublicationUrl = receipt.url
         draftAnchor = null
       } else if (publicationRecoveryRequired) {
@@ -328,6 +452,7 @@ export class ArticlePublishingService {
             : this.draftRecoveryCoordinator
         ).recoverExactDraft({
           observe: recordPlan,
+          assertActive: assertToutiaoRecoveryActive,
           expectedDraftId: recovery.expectedDraftId,
           expectedPlatformAccountId,
           expectedTitle: recovery.expectedTitle,
@@ -336,6 +461,20 @@ export class ArticlePublishingService {
         draftAnchor = parsePlatformDraftAnchor(recoveredDraft.url, recoveredDraft.draftId)
         if (!draftAnchor || draftAnchor.draftId !== recovery.expectedDraftId) {
           throw new Error('草稿恢复结果没有返回原平台草稿身份')
+        }
+        if (publishing.adapterId === 'toutiao') {
+          assertToutiaoRecoveryActive()
+          const restoredTab = await browserManager.waitForAccountView(
+            input.workspacePath,
+            attempt.profileId,
+            attempt.accountId,
+            recoveredDraft.url,
+            8_000,
+            tabId,
+          )
+          assertToutiaoRecoveryActive()
+          if (restoredTab !== tabId || !browserManager.isViewVisible(tabId))
+            throw new Error('头条原稿已找回，但原任务 Tab 尚未重新可见；停止开放 Agent 工具')
         }
       } else if (draftAnchor) {
         if (!isSamePlatformDraft(draftAnchor.url, visibleUrl, draftAnchor.draftId)) {
@@ -350,18 +489,33 @@ export class ArticlePublishingService {
         }
         draftAnchor = restored
       } else if (
-        publishing.adapterId === 'weibo' &&
+        ['weibo', 'bilibili'].includes(publishing.adapterId) &&
         input.resumed &&
         (publishing.sideEffects.some((effect) => Boolean(effect.dispatchedAt)) ||
           publishing.assets.some(
             (asset) => Boolean(asset.platformUrl) || asset.status === 'uploaded',
           ))
       ) {
-        throw new Error(
-          '微博临时编辑器没有可恢复草稿身份。当前版本停止恢复；请保留页面现场，不会重填、重传或再次发送。',
-        )
+        if (publishing.adapterId === 'bilibili') {
+          await playwrightBridge.ensureConnected('bilibili_empty_retry_check')
+          await browserManager.ensurePlaywrightPage(tabId)
+          const page = playwrightBridge.getPageById(tabId)
+          if (!page) throw new Error('B站原账号页面尚未连接，不能核验重试条件')
+          const probe = await new PublishingAdapter().probe(page)
+          if (!canRetryEmptyBilibiliComposer(publishing, probe))
+            throw new Error('B站临时编辑器已有内容或上传结果尚未核清；不会重填、重传或再次发送')
+          await recordPlan({
+            id: 'editor.open',
+            status: 'completed',
+            evidence: '原账号编辑器当前为空；此前上传已经明确核对为缺失，仅允许继续未完成的上传',
+          })
+        } else {
+          throw new Error(
+            '当前临时编辑器没有可恢复草稿身份。当前版本停止恢复；请保留页面现场，不会重填、重传或再次发送。',
+          )
+        }
       } else if (
-        publishing.adapterId !== 'weibo' &&
+        !['weibo', 'bilibili'].includes(publishing.adapterId) &&
         input.resumed &&
         hasPlatformPublishingProgress(publishing)
       ) {
@@ -375,8 +529,8 @@ export class ArticlePublishingService {
           evidence: publishingPlatform(publishing.adapterId).editorUrl,
         })
         if (
-          publishing.adapterId !== 'weibo' ||
-          browserManager.getCurrentURL(tabId) !== 'https://weibo.com/'
+          !['weibo', 'bilibili'].includes(publishing.adapterId) ||
+          browserManager.getCurrentURL(tabId) !== publishingPlatform(publishing.adapterId).editorUrl
         )
           await browserManager.navigate(tabId, publishingPlatform(publishing.adapterId).editorUrl)
         await recordPlan({
@@ -1487,6 +1641,79 @@ export class ArticlePublishingService {
     }
   }
 
+  /** Read the current published page again without reopening an execution or permitting writes. */
+  async verifyPublishedResult(
+    rawInput: ManageArticlePublishingRuntimeInput,
+    workspaceId: string,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const validated = this.resolveRuntimeCommand(rawInput, workspaceId)
+    if (!validated.success) return validated
+    const { affair, attempt } = validated.data
+    const publishing = affair.articlePublishing!
+    const manager = this.runtimeDependencies?.getBrowserManager()
+    const bridge = this.runtimeDependencies?.getPlaywrightBridge()
+    if (
+      publishing.adapterId !== 'toutiao' ||
+      publishing.publication.status !== 'published' ||
+      attempt.status !== 'succeeded' ||
+      !publishing.publication.url ||
+      !attempt.tabId ||
+      !manager ||
+      !bridge
+    )
+      return invalid('只能重新读取已发布头条任务的原绑定页面')
+    try {
+      const tabId = await manager.waitForAccountView(
+        rawInput.workspaceRef.kind === 'local' ? rawInput.workspaceRef.path : '',
+        attempt.profileId,
+        attempt.accountId,
+        publishing.publication.url,
+        8000,
+        attempt.tabId,
+      )
+      if (tabId !== attempt.tabId) return invalid('已发布作品的原任务页面尚未可见')
+      await bridge.ensureConnected('article_publishing_verify_published')
+      await manager.ensurePlaywrightPage(tabId)
+      const page = bridge.getPageById(tabId)
+      const identity = manager.getViewRuntimeIdentity(tabId)
+      if (!page || !identity || page.url() !== publishing.publication.url)
+        return invalid('请先在原任务网页打开本篇已发布作品')
+      const isCurrent = () => {
+        const current = manager.getViewRuntimeIdentity(tabId)
+        return (
+          manager.isViewVisible(tabId) &&
+          bridge.getPageById(tabId) === page &&
+          !page.isClosed() &&
+          page.url() === publishing.publication.url &&
+          current?.webContentsId === identity.webContentsId &&
+          current?.browserViewRuntimeGeneration === identity.browserViewRuntimeGeneration &&
+          current?.documentGeneration === identity.documentGeneration
+        )
+      }
+      const observed = await new PublishingAdapter().verifyBody(
+        page,
+        await prepareArticleBody(publishing),
+      )
+      if (!isCurrent() || !observed.matches)
+        return invalid('公开全文或逐张图片尚未通过当前页面核验；保留原完成记录，不重新发布')
+      return this.webAffairService.recordPublishedArticleImages(
+        {
+          ...rawInput,
+          workspaceId,
+          url: page.url(),
+          images: observed.images.map((i) => ({
+            src: i.src,
+            actualSrc: i.actualSrc,
+            matches: i.matches,
+          })),
+        },
+        isCurrent,
+      )
+    } catch (error) {
+      return invalid(error instanceof Error ? error.message : String(error))
+    }
+  }
+
   async checkRuntime(
     rawInput: ManageArticlePublishingRuntimeInput,
     workspaceId: string,
@@ -1616,6 +1843,28 @@ export class ArticlePublishingService {
       : undefined
     const state = affair?.articlePublishing
     const workspacePath = parsed.data.workspaceRef.path
+    if (state?.adapterId === 'bilibili' && parsed.data.resolution === 'missing') {
+      const attempt = affair?.attempts.find((a) => a.id === state.execution.currentAttemptId)
+      const manager = this.runtimeDependencies?.getBrowserManager()
+      const bridge = this.runtimeDependencies?.getPlaywrightBridge()
+      const tabId = attempt?.tabId
+      const page = tabId ? bridge?.getPageById(tabId) : undefined
+      if (
+        !page ||
+        !attempt ||
+        !tabId ||
+        !manager?.isViewVisible(tabId) ||
+        manager.getViewProfileId(tabId) !== attempt.profileId ||
+        manager.getViewAccountId(tabId) !== state.accountId ||
+        manager.getViewWorkspaceKey(tabId) !== workspacePath ||
+        state.publication.status !== 'not-started' ||
+        state.execution.currentStepId !== 'upload-assets'
+      )
+        return invalid('必须在原账号的可见空白编辑器核验缺图，且不能存在发布动作')
+      const probe = await new PublishingAdapter().probe(page)
+      if (!isEmptyBilibiliComposer(probe, state.composer?.platformAccountId))
+        return invalid('B站编辑器仍有内容或无法完整核验，不能把首图标记为缺失')
+    }
     let observation: { platformUrl: string; isCurrent: () => boolean } | undefined
     if (state && state.adapterId !== 'csdn' && parsed.data.resolution === 'present') {
       const attempt = affair?.attempts.find((a) => a.id === state.execution.currentAttemptId)
@@ -1639,32 +1888,49 @@ export class ArticlePublishingService {
       const probe = await adapter.probe(page)
       const selected = state.assets.find((a) => a.id === parsed.data.assetId)
       const importingExisting =
-        state.adapterId === 'xiaohongshu' &&
+        ['xiaohongshu', 'toutiao'].includes(state.adapterId) &&
         selected?.status === 'pending' &&
         selected.uploadAttempts.length === 0 &&
         state.draft?.recovery?.status === 'verified'
-      const liveGallery = importingExisting ? await readXiaohongshuEditor(page) : undefined
+      const liveGallery =
+        importingExisting && state.adapterId === 'xiaohongshu'
+          ? await readXiaohongshuEditor(page)
+          : undefined
+      const importingToutiao = importingExisting && state.adapterId === 'toutiao'
+      const position = state.assets.findIndex((a) => a.id === selected?.id)
       const unknown = state.assets.filter((a) =>
         ['result-unknown', 'reconciling'].includes(a.status),
       )
       const unassigned = probe.editor.images.filter(
-        (i) => i.loaded && !state.assets.some((a) => a.platformUrl === i.src),
+        (i, index) =>
+          i.loaded &&
+          !state.assets.some((a) => a.platformUrl === i.src) &&
+          (!importingToutiao || index === position),
       )
       if (
         probe.draftId !== state.draft?.platformDraftId ||
         probe.platformAccountId !== state.draft?.platformAccountId ||
         probe.title.value !== state.fields.title ||
         probe.saveState !== 'saved' ||
-        (importingExisting
-          ? !liveGallery?.images.some(
-              (img) =>
-                img.loaded &&
-                img.name === selected?.sourcePath.split('/').at(-1) &&
-                unassigned.some(
-                  (u) => u.src === `https://sns-creator-preview.xhscdn.com/${img.fileId}`,
-                ),
+        (importingToutiao
+          ? !['waiting-human', 'interrupted'].includes(state.execution.status) ||
+            !probe.editor.imageEnumerationComplete ||
+            state.assets.some((a) => a.kind !== 'local' || a.occurrences.length !== 1) ||
+            probe.editor.images.length !== state.assets.length ||
+            new Set(probe.editor.images.map((i) => i.src)).size !== state.assets.length ||
+            state.assets.some(
+              (a, index) => a.platformUrl && a.platformUrl !== probe.editor.images[index]?.src,
             )
-          : unknown.length !== 1 || unknown[0].id !== parsed.data.assetId) ||
+          : importingExisting
+            ? !liveGallery?.images.some(
+                (img) =>
+                  img.loaded &&
+                  img.name === selected?.sourcePath.split('/').at(-1) &&
+                  unassigned.some(
+                    (u) => u.src === `https://sns-creator-preview.xhscdn.com/${img.fileId}`,
+                  ),
+              )
+            : unknown.length !== 1 || unknown[0].id !== parsed.data.assetId) ||
         unassigned.length !== 1
       )
         return invalid('原稿或图片无法唯一对应，请保留现场；不会猜测图片地址')
@@ -1953,6 +2219,31 @@ function buildAgentPrompt(
 ): string {
   const publishing = affair.articlePublishing!
   const localAssets = publishing.assets.filter((asset) => asset.kind === 'local')
+  if (publishing.adapterId === 'toutiao')
+    return [
+      '执行用户授权的头条微头条原稿任务，使用绑定原账号原 draftId，不新建、不重复上传或提交。',
+      `affairId=${affair.id}; attemptId=${attemptId}; accountId=${publishing.accountId}; draftId=${publishing.draft?.platformDraftId}`,
+      `sourceMarkdownPath=${publishing.source.markdownPath}`,
+      '先 web_affair_get，再 article_publishing_inspect_page。只使用主进程签发的当前 selectors；禁止 evaluate、网络日志、shell、坐标或猜控件。',
+      '主进程已持久且当前 matchedAssets 已复核的原图对应关系，无需重新要求用户确认。每个检查点分别 running、重新 inspect、verifying、重新 inspect、completed；以返回的新 currentStepId 继续。已有 uploaded 图片且 matchedAssets 对应齐全时完成 upload-assets；bodyMatchesFrozen=true 时不重填，完成 fill-body；标题一致时完成 fill-fields；saveState=saved 且正文图集一致时不重复保存，完成 save-draft。不可因之后的配乐尚未处理而提前停止这些已能核验的步骤。',
+      '原稿保存由 Studio 比较平台回读的全文、draftId 和逐图地址，不由你报告成功。已在其他平台发布，不得声明头条首发。配乐在重新加载后可能重置，必须在最后保存之后、提交之前重新核验。作品声明不得代用户选择。',
+      '到 publish 检查点，若 inspect 签发 selectors.disableMusic，先按需 click selectors.dismissAssistant 关闭遮挡，再重新 inspect 并 click 最新 selectors.disableMusic 一次，随后 inspect 回读 checked=false；不重复切换，不沿用旧 selector。没有 selectors.publish 时停止并报告其具体原因，不绕过主进程。',
+      '已有图集但未关联冻结原图时，不能猜 matchedAssets 或重复上传。在 publish 且配乐已关闭后，只 click 最新 inspect.selectors.publish 一次。工具返回结果未知时，只 inspect 当前结果及读取页面，不得重发；保留主进程记录的实际响应证据。只有公开结果实际核验通过才能完成任务。当前步骤确实缺证据时报告 waiting-human，error={code:"toutiao_evidence_missing",message:"inspect 返回的具体缺口"}；不绕过工具限制。',
+      '检查点按 currentStepId 串行 running→verifying→completed；只有主进程实际证据通过才完成。保存不是发布，未知提交只能核验，不得再次点击发布。',
+    ].join('\n')
+  if (publishing.adapterId === 'bilibili')
+    return [
+      '执行 B站图文动态准备及单篇授权发布，不能重复发送；只按 main 当前步骤执行。',
+      `affairId=${affair.id}; attemptId=${attemptId}; accountId=${publishing.accountId}; targetUID=${publishing.composer?.platformAccountId}`,
+      `sourceMarkdownPath=${publishing.source.markdownPath}`,
+      '先 web_affair_get，再 article_publishing_inspect_page；只使用当前 inspect 返回的 selector。检查点 pending→running→verifying→completed 必须串行；已完成不重做。每次动作前和报告前重新 inspect。',
+      'upload-assets：每张图单独 uploading→browser_upload_file(selector=selectors.fileInput,paths=[该张冻结文件])→waiting-platform→verifying→inspect 匹配后 uploaded。fileInput 是 Studio 核验过的 B站图标上传入口，工具接管文件选择器；禁止先 browser_click 它、手选文件或重复上传未知结果。',
+      'fill-body 使用 browser_fill(selectors.body)，由 main 注入冻结正文，标题单独在 fill-fields 填写 selectors.title。不写 Markdown 图片语法。正文和逐图必须由 main 实际核验。',
+      '没有持久草稿，save-draft 只做同 UID、当前正文和逐图复核；不得伪造保存或草稿ID。',
+      'fill-fields 填写独立标题后，若 bilibiliVisibility=unknown，click 当前 selectors.openPublishSettings 后重新 inspect，再按最新 selector 展开可见范围，直到 main 读到 public。不得点击选项改变可见范围；private 或缺少入口则报告具体阻塞。',
+      '仅到 publish 检查点时：尚无 selectors.publish 或 submissionUnavailableReason 非空，说明发布适配尚未通过；报告 waiting-human 并附 error={code:"bilibili_submission_unavailable",message:实际原因} 后结束。之前按顺序完成准备步骤，不得自行寻找或点击发布。',
+      '禁止 evaluate、shell、网络工具、猜URL/selector。遇到具体失败报告一次后结束，不擅自重建或重绑重试。',
+    ].join('\n')
   if (publishing.adapterId === 'weibo')
     return [
       publishing.composer?.allowPublish

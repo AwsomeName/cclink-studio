@@ -198,7 +198,7 @@ export class WebResourceToolModule implements ToolModule {
         agentSessionRef: null,
         profileId: launch.data.browserProfileId,
         accountId,
-        allowedOrigins: articleOrigins ?? [origin],
+        allowedOrigins: articleOrigins ?? accountNavigationOrigins(origin),
         ...(affairId && attemptId ? { affairId, affairAttemptId: attemptId } : {}),
       },
     })
@@ -249,4 +249,14 @@ export class WebResourceToolModule implements ToolModule {
       },
     }
   }
+}
+
+/** B站保存的登录入口、动态和本人空间属于同一账号的三个已验证入口。 */
+export function accountNavigationOrigins(origin: string): string[] {
+  const bilibili = [
+    'https://passport.bilibili.com',
+    'https://t.bilibili.com',
+    'https://space.bilibili.com',
+  ]
+  return bilibili.includes(origin) ? bilibili : [origin]
 }

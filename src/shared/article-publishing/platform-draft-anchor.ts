@@ -27,6 +27,21 @@ export function parsePlatformDraftAnchor(rawUrl: string, localDraftId?: string) 
           url: `${url.origin}/editor/drafts/${draft[1]}`,
         }
     }
+    if (
+      url.origin === 'https://mp.toutiao.com' &&
+      !url.username &&
+      !url.password &&
+      url.pathname === '/profile_v4/weitoutiao/publish' &&
+      url.searchParams.getAll('draft_id').length === 1
+    ) {
+      const draftId = url.searchParams.get('draft_id')!
+      if (/^\d{1,24}$/u.test(draftId))
+        return {
+          adapterId: 'toutiao' as const,
+          draftId,
+          url: `${url.origin}${url.pathname}?draft_id=${draftId}`,
+        }
+    }
     const match = /^\/p\/(\d+)\/edit\/?$/u.exec(url.pathname)
     if (url.origin !== 'https://zhuanlan.zhihu.com' || !match || url.username || url.password)
       return null
@@ -46,12 +61,26 @@ export function isSamePlatformDraft(left: string, right: string, localDraftId?: 
 }
 
 export function isPlatformImageUrl(
-  platform: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo',
+  platform: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili',
   rawUrl: string,
 ): boolean {
   try {
     const url = new URL(rawUrl)
     if (url.protocol !== 'https:' || url.username || url.password || url.port) return false
+    if (platform === 'bilibili')
+      return (
+        /^i[012]\.hdslb\.com$/u.test(url.hostname) &&
+        /^\/bfs\/new_dyn\/[^/]+\.(?:png|jpe?g|webp)$/iu.test(url.pathname) &&
+        !url.search &&
+        !url.hash
+      )
+    if (platform === 'toutiao')
+      return (
+        url.hostname === 'p3-sign.toutiaoimg.com' &&
+        /^\/tos-cn-i-ezhpy3drpa\/[a-f0-9]{32}$/u.test(url.pathname) &&
+        !url.search &&
+        !url.hash
+      )
     if (platform === 'weibo')
       return (
         /^[a-z0-9-]+\.sinaimg\.cn$/u.test(url.hostname) &&
