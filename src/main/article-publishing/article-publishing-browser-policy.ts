@@ -1,3 +1,4 @@
+import { hasBilibiliRetryAuthorization } from '../../shared/article-publishing/bilibili-retry'
 import {
   parseBilibiliPublicationUrl,
   observeBilibiliSubmission,
@@ -87,6 +88,7 @@ interface ArticlePublishingExecutionScope {
   }
   allowPublish?: boolean
   publicationUrl?: string
+  bilibiliRetryAuthorized?: boolean
   publicationStatus: 'not-started' | 'dispatched' | 'verifying' | 'published' | 'result-unknown'
   localAssetsReady: boolean
   executionGeneration: number
@@ -121,6 +123,7 @@ interface ArticlePublishingExecutionScope {
       | 'result-unknown'
       | 'reconciling'
       | 'failed'
+    rebuildUploadAllowed?: boolean
     uploadAttemptCount: number
     uploadNeverDispatched?: boolean
   }>
@@ -1455,7 +1458,7 @@ export class ArticlePublishingBrowserPolicy {
         pageUrl,
       )
     }
-    if (scope.publicationStatus !== 'not-started') {
+    if (scope.publicationStatus !== 'not-started' && !scope.bilibiliRetryAuthorized) {
       return this.stopDecision(
         scope,
         actionType,
@@ -2022,7 +2025,7 @@ export class ArticlePublishingBrowserPolicy {
       if (
         !isCurrent() ||
         !scope.allowPublish ||
-        scope.publicationStatus !== 'not-started' ||
+        (scope.publicationStatus !== 'not-started' && !scope.bilibiliRetryAuthorized) ||
         !scope.localAssetsReady ||
         !live.recognized ||
         live.uid !== scope.expectedPlatformAccountId ||
@@ -2038,17 +2041,36 @@ export class ArticlePublishingBrowserPolicy {
       )
         throw new Error('B站提交前账号、冻结正文、独立标题、公开设置或逐图证据未同时通过')
       if (!isCurrent()) throw new Error('B站提交前页面已改代')
-      const observer = observeBilibiliSubmission(page, {
-        uid: live.uid!,
-        text: live.text,
-        images: scope.assets.map((a) => a.platformUrl ?? ''),
-      })
+      const observer = observeBilibiliSubmission(
+        page,
+        {
+          uid: live.uid!,
+          text: live.text,
+          images: scope.assets.map((a) => a.platformUrl ?? ''),
+        },
+        async (observation) => {
+          const recorded = await this.webAffairService.recordBilibiliSubmissionObservation(
+            {
+              affairId: scope.affairId,
+              attemptId: scope.attemptId,
+              executionGeneration: scope.executionGeneration,
+              browserTaskRunId: task.id,
+              sideEffectKey,
+              uid: live.uid!,
+              observation,
+            },
+            scope.workspaceId,
+          )
+          if (!recorded.success) throw new Error(recorded.error.message)
+        },
+      )
       let finishing: Promise<void> | undefined
+      let savingReceipt: Promise<void> | undefined
       return {
         arm: observer.arm,
         dispose: observer.dispose,
-        finish: (allowConfirmation = true) =>
-          (finishing ??= (async () => {
+        finish: (allowConfirmation = true) => {
+          const finish = async () => {
             const receipt = allowConfirmation
               ? await finishBilibiliSubmission(page, observer, {
                   isCurrent,
@@ -2057,9 +2079,13 @@ export class ArticlePublishingBrowserPolicy {
                     if (
                       !isCurrent() ||
                       !current.recognized ||
+                      !current.bodyStructureValid ||
                       current.uid !== live.uid ||
                       current.visibility !== 'public' ||
-                      !current.publishSelector ||
+                      // The native specification modal disables the consumed
+                      // entry. Keep immediate-mode identity here; the enabled
+                      // confirmation control is checked by finishBilibiliSubmission.
+                      !current.immediatePublishPresent ||
                       normalizeText(current.title) !== normalizeText(scope.expectedTitle) ||
                       normalizeText(current.text) !== normalizeText(live.text) ||
                       !current.imageEnumerationComplete ||
@@ -2080,20 +2106,27 @@ export class ArticlePublishingBrowserPolicy {
                   },
                 })
               : await observer.finish()
-            const saved = await this.webAffairService.recordBilibiliSubmissionReceipt(
-              {
-                affairId: scope.affairId,
-                attemptId: scope.attemptId,
-                executionGeneration: scope.executionGeneration,
-                browserTaskRunId: task.id,
-                sideEffectKey,
-                uid: receipt.uid,
-                postId: receipt.id,
-              },
-              scope.workspaceId,
-            )
-            if (!saved.success) throw new Error(saved.error.message)
-          })()),
+            await (savingReceipt ??= (async () => {
+              const saved = await this.webAffairService.recordBilibiliSubmissionReceipt(
+                {
+                  affairId: scope.affairId,
+                  attemptId: scope.attemptId,
+                  executionGeneration: scope.executionGeneration,
+                  browserTaskRunId: task.id,
+                  sideEffectKey,
+                  uid: receipt.uid,
+                  postId: receipt.id,
+                },
+                scope.workspaceId,
+              )
+              if (!saved.success) throw new Error(saved.error.message)
+            })())
+          }
+          // Once-only confirmation and read-only receipt recovery are different
+          // branches. A rejected confirmation must not hide a later receipt by
+          // returning the same rejected Promise from the MCP catch path.
+          return allowConfirmation ? (finishing ??= finish()) : finish()
+        },
       }
     }
     if (scope?.adapterId === 'weibo' && page && scope.currentStepId === 'publish') {
@@ -2749,6 +2782,7 @@ export class ArticlePublishingBrowserPolicy {
         : {}),
       allowPublish: publishing.composer?.allowPublish,
       publicationStatus: publishing.publication.status,
+      bilibiliRetryAuthorized: hasBilibiliRetryAuthorization(publishing),
       publicationUrl: publishing.publication.url,
       localAssetsReady: publishing.assets.every(
         (asset) => asset.kind !== 'local' || asset.status === 'uploaded',
@@ -2778,6 +2812,17 @@ export class ArticlePublishingBrowserPolicy {
         manualResolution: asset.manualResolution,
         status: asset.status,
         uploadAttemptCount: asset.uploadAttempts.length,
+        rebuildUploadAllowed:
+          hasBilibiliRetryAuthorization(publishing) &&
+          asset.status === 'pending' &&
+          !asset.platformUrl &&
+          !publishing.sideEffects.some(
+            (effect) =>
+              effect.executionGeneration === attempt.executionGeneration &&
+              effect.kind === 'upload-asset' &&
+              effect.targetId.replace(/:attempt-\d+$/u, '') === asset.id &&
+              Boolean(effect.dispatchedAt),
+          ),
         uploadNeverDispatched:
           ['weibo', 'bilibili'].includes(publishing.adapterId) &&
           !publishing.sideEffects.some(
@@ -3035,7 +3080,8 @@ export class ArticlePublishingBrowserPolicy {
       const asset = scope.assets.find((candidate) => candidate.id === assetId)
       const absenceCanAuthorizeFirstUpload = Boolean(
         asset &&
-        ((asset.status !== 'reconciling' && asset.uploadAttemptCount === 0) ||
+        (asset.rebuildUploadAllowed === true ||
+          (asset.status !== 'reconciling' && asset.uploadAttemptCount === 0) ||
           asset.manualResolution?.status === 'missing' ||
           (['weibo', 'bilibili'].includes(scope.adapterId) &&
             asset.uploadNeverDispatched === true)),

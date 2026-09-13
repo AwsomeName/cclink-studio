@@ -1,3 +1,7 @@
+import {
+  eligibleBilibiliRetryEffect,
+  canCarryUnusedBilibiliRetry,
+} from '../../../../shared/article-publishing/bilibili-retry'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type {
   ArticlePublishingAsset,
@@ -258,7 +262,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     }
   }
 
-  const executeTask = async (targetAffair: WebAffair): Promise<void> => {
+  const executeTask = async (targetAffair: WebAffair, retry = false): Promise<void> => {
     const taskId = targetAffair.id
     const publishing = targetAffair.articlePublishing
     if (!taskId || !publishing) return
@@ -275,6 +279,15 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     const result = await window.cclinkStudio.articlePublishing.startTask({
       workspaceRef,
       affairId: taskId,
+      ...(retry && eligibleBilibiliRetryEffect(publishing)
+        ? {
+            bilibiliRetry: {
+              previousEffectKey: eligibleBilibiliRetryEffect(publishing)!.key,
+              observedGeneration: publishing.execution.currentGeneration,
+              acceptPossibleDuplicate: true as const,
+            },
+          }
+        : {}),
     })
     if (!result.success) {
       agent.addSystemMessage(`发布 Runtime 未启动：${result.error.message}`, nextConversationId)
@@ -308,13 +321,13 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     // awaited IPC can hide a task the user has returned to and just terminated.
   }
 
-  const startTask = async (): Promise<void> => {
+  const startTask = async (retry = false): Promise<void> => {
     if (!affair) return
     setBusy(true)
     setError(null)
     setNotice(null)
     try {
-      await executeTask(affair)
+      await executeTask(affair, retry)
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : String(reason)
       console.error('[ArticlePublishing] 启动发布失败', { taskId: affair.id, message })
@@ -892,6 +905,15 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const persistedRuntimeFailure = ['interrupted', 'failed'].includes(publishing.execution.status)
     ? currentAttempt?.failureMessage
     : undefined
+  const bilibiliAccountError =
+    publishing.adapterId === 'bilibili' &&
+    publishing.publication.status === 'result-unknown' &&
+    publishing.sideEffects.some(
+      (effect) =>
+        effect.kind === 'publish' &&
+        effect.executionGeneration === publishing.execution.currentGeneration &&
+        effect.bilibiliSubmission?.platformCode === 4126021,
+    )
   const canStart = ['draft', 'waiting-human', 'interrupted', 'failed', 'result-unknown'].includes(
     publishing.execution.status,
   )
@@ -996,6 +1018,13 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         </div>
       ) : null}
       {notice ? <div className="article-publishing-alert">{notice}</div> : null}
+      {bilibiliAccountError ? (
+        <div className="article-publishing-alert error" role="status">
+          B站账号检查未通过（4126021）。Studio 已自动发起提交，但未取得发布成功回执。 请在
+          B站个人中心检查会员资格与账号限制；账号问题处理后再继续核验。本任务保留图文及提交记录，
+          不会自动重复发送。
+        </div>
+      ) : null}
       {publishing.execution.status === 'checking-runtime' && publishing.execution.runtimeCheck ? (
         <div className="article-publishing-alert error">
           待核验：{publishing.execution.runtimeCheck.reason}
@@ -1243,6 +1272,23 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           })}
         </div>
       </section>
+      {eligibleBilibiliRetryEffect(publishing) ? (
+        <section className="article-publishing-retry-review">
+          {publishing.bilibiliRetry ? (
+            <p>
+              上一次重发授权已经使用，且此前提交仍未知。这里需要另一次明确授权，可能再次产生重复动态；普通“核验发布结果”不会重发。这是本稿最后一次重建入口。
+            </p>
+          ) : null}
+          <p>
+            同账号、同一冻结原稿重新上传并提交一次，可能产生重复动态；保留全部旧记录。仅同账号空白发布器可执行，已有图文时停止。
+          </p>
+          <button type="button" disabled={busy} onClick={() => void startTask(true)}>
+            {publishing.bilibiliRetry
+              ? '另行授权最后一次重建并提交（可能重复）'
+              : '接受可能重复，重建并提交本稿一次'}
+          </button>
+        </section>
+      ) : null}
       <div className="article-publishing-footer">
         <span>
           Attempt：{publishing.execution.currentAttemptId?.slice(0, 8) ?? '尚未开始'} ·{' '}
@@ -1278,15 +1324,17 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
         >
           {busy
             ? '启动中…'
-            : publishing.execution.status === 'waiting-human'
-              ? '交还 Agent 并继续'
-              : publishing.execution.status === 'interrupted'
-                ? '从中断处继续'
-                : publishing.execution.status === 'result-unknown'
-                  ? publishing.publication.status === 'result-unknown'
-                    ? '核验发布结果'
-                    : '核验未知网页动作'
-                  : '开始执行'}
+            : canCarryUnusedBilibiliRetry(publishing)
+              ? '继续已授权的原稿重建'
+              : publishing.execution.status === 'waiting-human'
+                ? '交还 Agent 并继续'
+                : publishing.execution.status === 'interrupted'
+                  ? '从中断处继续'
+                  : publishing.execution.status === 'result-unknown'
+                    ? publishing.publication.status === 'result-unknown'
+                      ? '核验发布结果'
+                      : '核验未知网页动作'
+                    : '开始执行'}
         </button>
       </div>
     </div>

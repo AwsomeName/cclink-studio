@@ -1,3 +1,5 @@
+import { BILIBILI_BODY } from './bilibili-publishing-adapter'
+import { hasBilibiliRetryAuthorization } from '../../shared/article-publishing/bilibili-retry'
 import { parseBilibiliPublicationUrl } from './bilibili-publication'
 import {
   canRetryEmptyBilibiliComposer,
@@ -239,6 +241,7 @@ export class ArticlePublishingService {
       )
       const publicationRecoveryRequired = Boolean(
         input.resumed &&
+        !hasBilibiliRetryAuthorization(publishing) &&
         (publishing.publication.status === 'result-unknown' ||
           (publishing.adapterId === 'toutiao' &&
             ['dispatched', 'verifying'].includes(publishing.publication.status))) &&
@@ -291,7 +294,29 @@ export class ArticlePublishingService {
         if (!page || page.isClosed()) throw new Error('CSDN 恢复核验页面不可用')
         return page
       }
-      if (publicationRecoveryRequired && publishing.adapterId === 'toutiao') {
+      if (hasBilibiliRetryAuthorization(publishing)) {
+        // A restart loses the native temporary composer. This explicit retry may
+        // rebuild only an observed empty composer; never overwrite a surviving one.
+        await playwrightBridge.ensureConnected('bilibili_authorized_retry')
+        await browserManager.ensurePlaywrightPage(tabId)
+        const page = playwrightBridge.getPageById(tabId)
+        await page?.locator(BILIBILI_BODY).waitFor({ state: 'visible', timeout: 8000 })
+        if (
+          !page ||
+          !isEmptyBilibiliComposer(
+            await new PublishingAdapter().probe(page),
+            publishing.composer?.platformAccountId,
+          )
+        )
+          throw new Error(
+            '授权重建仅适用于同账号空白发布器；当前仍有图文或账号未核验，保留现场并停止',
+          )
+        await recordPlan({
+          id: 'editor.open',
+          status: 'completed',
+          evidence: '用户另行授权原稿重建；main读到同账号空白发布器，旧未知发送记录保留',
+        })
+      } else if (publicationRecoveryRequired && publishing.adapterId === 'toutiao') {
         const page = await navigateForRecovery(TOUTIAO_PUBLICATION_MANAGEMENT_URL)
         const review = await readToutiaoPublicationReview(page, {
           uid: publishing.draft?.platformAccountId ?? '',
@@ -1599,6 +1624,7 @@ export class ArticlePublishingService {
     const result = await this.webAffairService.acquireArticlePublishingAttempt(
       affair.id,
       workspaceId,
+      parsed.data.bilibiliRetry,
     )
     if (!result.success) return result
     const attemptId = result.data.articlePublishing?.execution.currentAttemptId
@@ -2233,7 +2259,9 @@ function buildAgentPrompt(
     ].join('\n')
   if (publishing.adapterId === 'bilibili')
     return [
-      '执行 B站图文动态准备及单篇授权发布，不能重复发送；只按 main 当前步骤执行。',
+      hasBilibiliRetryAuthorization(publishing)
+        ? '用户已明确接受可能重复，另行授权本任务同一冻结原稿重建并提交一次。旧publication仍结果未知，不能将它报告未发送；本次仅按main新代次签发的控件执行，失败不能自行重试。'
+        : '执行 B站图文动态准备及单篇授权发布，不能重复发送；只按 main 当前步骤执行。',
       `affairId=${affair.id}; attemptId=${attemptId}; accountId=${publishing.accountId}; targetUID=${publishing.composer?.platformAccountId}`,
       `sourceMarkdownPath=${publishing.source.markdownPath}`,
       '先 web_affair_get，再 article_publishing_inspect_page；只使用当前 inspect 返回的 selector。检查点 pending→running→verifying→completed 必须串行；已完成不重做。每次动作前和报告前重新 inspect。',

@@ -1,4 +1,10 @@
+import {
+  canCarryUnusedBilibiliRetry,
+  eligibleBilibiliRetryEffect,
+  hasBilibiliRetryAuthorization,
+} from '../../shared/article-publishing/bilibili-retry'
 import { parseBilibiliPublicationUrl } from '../article-publishing/bilibili-publication'
+import { isIndependentBilibiliDraft } from '../article-publishing/bilibili-independent-draft'
 import { parseToutiaoPublicationUrl } from '../article-publishing/toutiao-publication'
 import { TOUTIAO_ARTICLE_PUBLISHING_PLAN } from '../../shared/article-publishing/article-publishing-plan'
 import { parseWeiboPublicationUrl } from '../article-publishing/weibo-publication'
@@ -78,6 +84,7 @@ import type {
   ArticlePublishingRuntimeSnapshot,
   ArticlePublishingSourcePreview,
   ArticlePublishingState,
+  BilibiliSubmissionObservation,
   ReportArticlePublishingAssetInput,
   ReportArticlePublishingCheckpointInput,
 } from '../../shared/article-publishing/article-publishing-types'
@@ -504,7 +511,15 @@ export class WebAffairService {
     )
   }
 
-  acquireArticlePublishingAttempt(affairId: string, workspaceId: string) {
+  acquireArticlePublishingAttempt(
+    affairId: string,
+    workspaceId: string,
+    retry?: {
+      previousEffectKey: string
+      observedGeneration: number
+      acceptPossibleDuplicate: true
+    },
+  ) {
     return this.enqueueScoped(affairId, workspaceId, async () => {
       const affair = this.findAffair(affairId)
       const publishing = affair?.articlePublishing
@@ -529,9 +544,23 @@ export class WebAffairService {
       const currentAttempt = publishing.execution.currentAttemptId
         ? affair.attempts.find((attempt) => attempt.id === publishing.execution.currentAttemptId)
         : undefined
+      if (
+        retry &&
+        (retry.acceptPossibleDuplicate !== true ||
+          retry.observedGeneration !== publishing.execution.currentGeneration ||
+          eligibleBilibiliRetryEffect(publishing)?.key !== retry.previousEffectKey ||
+          currentAttempt?.status !== 'interrupted')
+      )
+        return this.transitionError(
+          '本稿没有可绑定的首次确认前中断证据，或重试授权已使用；只能核验',
+        )
       let prepared: WebAffairOperationResult<WebAffair>
       if (currentAttempt?.status === 'interrupted') {
-        prepared = await this.resumeArticlePublishingAttemptNow(affairId, currentAttempt.id)
+        prepared = await this.resumeArticlePublishingAttemptNow(
+          affairId,
+          currentAttempt.id,
+          retry?.previousEffectKey,
+        )
       } else if (currentAttempt && publishing.execution.status === 'waiting-human') {
         prepared = await this.resumeArticlePublishingAfterHandoffNow(affairId, currentAttempt.id)
       } else if (
@@ -1129,6 +1158,71 @@ export class WebAffairService {
     })
   }
 
+  /** Main-only facts from the original observer. This never resets a publication or issues a permit. */
+  recordBilibiliSubmissionObservation(
+    input: {
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      browserTaskRunId: string
+      sideEffectKey: string
+      uid: string
+      observation: Omit<BilibiliSubmissionObservation, 'observedAt'>
+    },
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(input.affairId, workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      const effect = publishing?.sideEffects.find((e) => e.key === input.sideEffectKey)
+      if (
+        !found ||
+        !publishing ||
+        publishing.adapterId !== 'bilibili' ||
+        publishing.composer?.allowPublish !== true ||
+        publishing.composer.platformAccountId !== input.uid ||
+        publishing.execution.currentGeneration !== input.executionGeneration ||
+        found.attempt.browserTaskRunId !== input.browserTaskRunId ||
+        !effect ||
+        effect.kind !== 'publish' ||
+        effect.attemptId !== input.attemptId ||
+        effect.executionGeneration !== input.executionGeneration ||
+        effect.browserTaskRunId !== input.browserTaskRunId ||
+        !effect.dispatchedAt ||
+        !['dispatched', 'result-unknown', 'verified'].includes(effect.status)
+      )
+        return this.transitionError('B站提交观察不属于本次已派发发布动作')
+      const previous = effect.bilibiliSubmission
+      const observation = input.observation
+      if (
+        (previous?.confirmationAttempted && !observation.confirmationAttempted) ||
+        (previous?.requestObserved && !observation.requestObserved) ||
+        (previous?.observationEnded && !observation.observationEnded) ||
+        (previous?.transportFailed && !observation.transportFailed) ||
+        (previous?.requestMatch &&
+          previous.requestMatch !== observation.requestMatch &&
+          observation.requestMatch !== 'multiple-requests') ||
+        (previous?.responseStatus !== undefined &&
+          previous.responseStatus !== observation.responseStatus) ||
+        (previous?.platformCode !== undefined && previous.platformCode !== observation.platformCode)
+      )
+        return this.transitionError('B站提交观察不能撤销已发生的动作或重新开启监听')
+      const now = this.timestamp()
+      return this.persistAffair({
+        ...found.affair,
+        articlePublishing: {
+          ...publishing,
+          sideEffects: publishing.sideEffects.map((e) =>
+            e.key === effect.key
+              ? { ...e, bilibiliSubmission: { ...observation, observedAt: now } }
+              : e,
+          ),
+        },
+        updatedAt: now,
+      })
+    })
+  }
+
   recordBilibiliSubmissionReceipt(
     input: {
       affairId: string
@@ -1585,15 +1679,23 @@ export class WebAffairService {
         input.preview.assets.length > 9
       )
         return this.invalid('图文动态当前仅支持最多九张本地图片，每张在原文引用一次')
-      if (
-        this.snapshot.affairs.some(
-          (a) =>
-            a.articlePublishing?.adapterId === adapterId &&
-            a.articlePublishing.accountId === input.accountId &&
-            !['cancelled', 'failed', 'published'].includes(a.articlePublishing.execution.status),
-        )
+      const conflicts = this.snapshot.affairs.filter(
+        (a) =>
+          a.articlePublishing?.adapterId === adapterId &&
+          a.articlePublishing.accountId === input.accountId &&
+          !['cancelled', 'failed', 'published'].includes(a.articlePublishing.execution.status),
       )
-        return this.invalid('这个平台账号已有未结束任务，请先继续或取消原任务')
+      for (const conflict of conflicts) {
+        if (
+          adapterId === 'bilibili' &&
+          conflict.workspaceId === workspaceId &&
+          (await isIndependentBilibiliDraft(conflict, input.preview))
+        )
+          continue
+        return this.invalid(
+          '这个平台账号已有未结束任务；仅允许在旧发布已中断且原文未变时创建标题、文件和正文均不同的新稿，未知原稿仍只能核验',
+        )
+      }
     } else if (input.composer) return this.invalid('只有微博和B站动态使用临时编辑器配置')
     if (adapterId !== 'csdn' && !['weibo', 'bilibili'].includes(adapterId) && !importedAnchor)
       return this.invalid('当前平台请提供已有草稿地址和原账号标识；不会新建替代稿')
@@ -3899,6 +4001,7 @@ export class WebAffairService {
   private async resumeArticlePublishingAttemptNow(
     affairId: string,
     attemptId: string,
+    retryEffectKey?: string,
   ): Promise<WebAffairOperationResult<WebAffair>> {
     const found = this.findAttempt(affairId, attemptId)
     if (!found?.affair.articlePublishing || found.affair.kind !== 'article-publishing') {
@@ -3911,7 +4014,10 @@ export class WebAffairService {
     const executionGeneration = found.attempt.executionGeneration + 1
     const launchOperationId = randomUUID()
     const publishing = found.affair.articlePublishing
+    const carryUnusedRetry = canCarryUnusedBilibiliRetry(publishing)
     const resultVerificationOnly =
+      !retryEffectKey &&
+      !carryUnusedRetry &&
       publishing.execution.status === 'result-unknown' &&
       (publishing.publication.status === 'result-unknown' ||
         publishing.sideEffects.some(
@@ -3920,16 +4026,30 @@ export class WebAffairService {
             (effect.status === 'dispatched' || effect.status === 'result-unknown'),
         ))
     const checkpoints = publishing.checkpoints.map((checkpoint) =>
-      ['running', 'waiting-platform', 'verifying', 'result-unknown'].includes(checkpoint.status)
+      retryEffectKey
         ? {
             ...checkpoint,
-            status: 'needs-reconcile' as const,
+            status: 'pending' as const,
+            startedAt: undefined,
             finishedAt: undefined,
-            ...(checkpoint.stepId === 'verify-publication'
-              ? { resumePolicy: 'reconcile-then-run' as const }
-              : {}),
+            outputRefs: undefined,
+            details: [],
+            error: undefined,
+            evidence: [
+              ...checkpoint.evidence,
+              '用户另行授权本稿重建；上代证据不能证明新现场完成',
+            ].slice(-40),
           }
-        : checkpoint,
+        : ['running', 'waiting-platform', 'verifying', 'result-unknown'].includes(checkpoint.status)
+          ? {
+              ...checkpoint,
+              status: 'needs-reconcile' as const,
+              finishedAt: undefined,
+              ...(checkpoint.stepId === 'verify-publication'
+                ? { resumePolicy: 'reconcile-then-run' as const }
+                : {}),
+            }
+          : checkpoint,
     )
     const currentStep = resultVerificationOnly
       ? checkpoints.find((checkpoint) => checkpoint.stepId === 'verify-publication')
@@ -3998,16 +4118,51 @@ export class WebAffairService {
       attempts,
       articlePublishing: {
         ...publishing,
-        executionProtocol: resultVerificationOnly
-          ? publishing.executionProtocol
-          : { ...recoveryProtocol, current: recoveryOperation },
-        draft: resultVerificationOnly
-          ? publishing.draft
-          : this.beginArticlePublishingRecovery(publishing, executionGeneration, now),
+        ...(carryUnusedRetry
+          ? { bilibiliRetry: { ...publishing.bilibiliRetry!, executionGeneration } }
+          : {}),
+        ...(retryEffectKey
+          ? {
+              bilibiliRetry: {
+                attemptId,
+                executionGeneration,
+                previousEffectKey: retryEffectKey,
+                authorizedAt: now,
+              },
+            }
+          : {}),
+        executionProtocol:
+          retryEffectKey || carryUnusedRetry
+            ? { ...recoveryProtocol, current: undefined }
+            : resultVerificationOnly
+              ? publishing.executionProtocol
+              : { ...recoveryProtocol, current: recoveryOperation },
+        draft:
+          retryEffectKey || carryUnusedRetry
+            ? undefined
+            : resultVerificationOnly
+              ? publishing.draft
+              : this.beginArticlePublishingRecovery(publishing, executionGeneration, now),
         assets: publishing.assets.map((asset) =>
-          ['uploading', 'waiting-platform', 'verifying', 'result-unknown'].includes(asset.status)
-            ? { ...asset, status: 'reconciling' as const }
-            : asset,
+          retryEffectKey
+            ? {
+                ...asset,
+                status: 'pending' as const,
+                platformUrl: undefined,
+                verifiedAt: undefined,
+                uploadAttempts: asset.uploadAttempts.map((upload) => ({
+                  ...upload,
+                  evidence: [
+                    ...upload.evidence,
+                    `上一现场平台地址：${asset.platformUrl ?? '无'}`,
+                  ].slice(-40),
+                })),
+              }
+            : ['uploading', 'waiting-platform', 'verifying', 'result-unknown'].includes(
+                  asset.status,
+                )
+              ? { ...asset, status: 'reconciling' as const }
+              : asset,
         ),
         checkpoints,
         execution: {
@@ -4025,9 +4180,11 @@ export class WebAffairService {
         found.affair,
         this.event(
           'attempt-returned',
-          resultVerificationOnly
-            ? '文章发布结果未知；将创建新的只读核验 Runtime，禁止重放发布动作'
-            : '文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask',
+          retryEffectKey
+            ? `用户明确接受可能重复，授权原任务重建并提交一次；旧未知动作 ${retryEffectKey} 保留`
+            : resultVerificationOnly
+              ? '文章发布结果未知；将创建新的只读核验 Runtime，禁止重放发布动作'
+              : '文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask',
           now,
           { nodeId: found.attempt.nodeId, attemptId: found.attempt.id },
         ),
@@ -6438,7 +6595,10 @@ export class WebAffairService {
       if (publishing.execution.currentStepId !== 'publish') {
         return this.transitionError('发布动作与当前检查点不一致')
       }
-      if (publishing.publication.status !== 'not-started') {
+      if (
+        publishing.publication.status !== 'not-started' &&
+        !hasBilibiliRetryAuthorization(publishing)
+      ) {
         return this.transitionError('发布动作已经派发或结果未知，只允许核验')
       }
       if (

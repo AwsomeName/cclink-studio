@@ -35,6 +35,56 @@ export function foldArticlePublishingPlanResults(
       `Agent ${current.runtime.agentRunId ?? ''} · BrowserTask ${current.runtime.browserTaskRunId ?? ''} · Tab ${current.runtime.tabId} · View g${current.runtime.browserViewRuntimeGeneration} · WebContents ${current.runtime.webContentsId} · Page g${current.runtime.playwrightPageBindingGeneration}`,
     )
   for (const effect of state.sideEffects) {
+    // An explicitly authorized rebuild starts new work. Keep prior effects in
+    // history, but do not project their dispatches onto the rebuilt plan.
+    if (
+      state.adapterId === 'bilibili' &&
+      state.bilibiliRetry &&
+      effect.executionGeneration < state.bilibiliRetry.executionGeneration
+    )
+      continue
+    if (state.adapterId === 'bilibili' && effect.kind === 'publish' && effect.bilibiliSubmission) {
+      const facts = effect.bilibiliSubmission
+      put(
+        'bilibili.submission.observation',
+        facts.observationEnded ? 'completed' : 'verifying',
+        `截至 ${facts.observedAt}：确认调用${facts.confirmationAttempted ? '已预写尝试记录（不证明点击成功）' : '尚未尝试'}；创建请求${facts.requestObserved ? '已观察到' : '尚未观察到（不证明平台未接收）'}；监听${facts.observationEnded ? '已结束' : '记录尚未结束'}。` +
+          (facts.requestMatch
+            ? `请求稿件匹配：${
+                {
+                  matched: '正文与逐图对应',
+                  'invalid-body': '请求结构不可读',
+                  'text-mismatch': '正文不一致',
+                  'image-mismatch': '图片或顺序不一致',
+                  'multiple-requests': '观察到多个请求',
+                }[facts.requestMatch]
+              }。`
+            : '') +
+          (facts.responseStatus !== undefined ? `响应状态 ${facts.responseStatus}。` : '') +
+          (facts.platformCode !== undefined ? `平台结果码 ${facts.platformCode}。` : '') +
+          (facts.transportFailed ? '创建请求发生网络失败；不能推断平台未接收。' : ''),
+        '这是原操作的观察记录，不是发布成功或可重发证明；续接必须检查仍有效的原 Runtime 与观察器。',
+      )
+      if (facts.requestObserved && !facts.confirmationAttempted) {
+        put('bilibili.agreement.inspect', 'completed', '已观察到直接创建请求，无需首次规范确认。')
+        put('bilibili.agreement.confirm', 'skipped', '本次未调用首次确认；已有创建请求，禁止补点。')
+      }
+      if (facts.platformCode !== undefined && facts.platformCode !== 0)
+        put(
+          'bilibili.submission.receipt',
+          'failed',
+          `平台返回错误码 ${facts.platformCode}（HTTP ${facts.responseStatus ?? '未记录'}）；未取得成功回执。`,
+          facts.platformCode === 4126021
+            ? 'B站账号检查未通过；需检查会员资格与账号限制，处理后再核验。'
+            : '平台未返回成功回执；保留提交事实，不自动重发。',
+        )
+      else if (facts.requestObserved && effect.status !== 'verified')
+        put(
+          'bilibili.submission.receipt',
+          facts.observationEnded ? 'unknown' : 'verifying',
+          '已观察到创建请求，尚未取得与本稿对应的成功回执。',
+        )
+    }
     let id: string | undefined
     if (effect.kind === 'upload-asset')
       id = `asset.${effect.targetId.replace(/:attempt-\d+$/u, '')}.dispatch`

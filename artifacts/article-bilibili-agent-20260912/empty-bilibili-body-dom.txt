@@ -1,0 +1,3 @@
+																					2225 row (selected)    <div placeholder=​"有什么想和大家分享的？" contenteditable=​"true" class=​"bili-rich-textarea__inner empty" style=​"font-size:​ 15px;​ line-height:​ 24px;​ min-height:​ 24px;​"> ​ Expand …​ </div> ​
+																		2520 row    attributes : NamedNodeMap {0: placeholder, 1: contenteditable, 2: class, 3: style, placeholder: placeholder, contenteditable: contenteditable, class: class, style: style, length: 4}
+																		2696 row    outerHTML : "<div placeholder=\"有什么想和大家分享的？\" contenteditable=\"true\" class=\"bili-rich-textarea__inner empty\" style=\"font-size: 15px; line-height: 24px; min-height: 24px;\">​\n</div>"

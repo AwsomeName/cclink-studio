@@ -971,7 +971,7 @@ export class BrowserToolModule implements ToolModule {
       throw error
     } finally {
       initialDraftSave?.dispose()
-      publicationSubmit?.dispose()
+      await publicationSubmit?.dispose()
       imageUpload?.dispose?.()
     }
   }

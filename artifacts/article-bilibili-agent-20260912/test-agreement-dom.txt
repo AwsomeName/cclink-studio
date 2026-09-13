@@ -1,0 +1,358 @@
+The following is a diff from the previous accessibility tree for Window: "CCLink Studio 开源版" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 1623-1631, 1637-1656, 1660-1663, 1667-1737, 1751-1772, 1776-1790, 1795-1807, 1811-1830, 1835-1869, 1877-1897, 1905-1908, 1912-1918
+~																			1591 row    <div class=​"bili-dyn-specification-popup__content"> ​
+~																			1621 row (selected)    <iframe src=​"/​/​t.bilibili.com/​h5/​dynamic/​specification"> ​
++																					1637 container <iframe src=​"/​/​t.bilibili.com/​h5/​dynamic/​specification">
++																						1638 text < iframe src =​"
++																						1639 链接 Description: /​/​t.bilibili.com/​h5/​dynamic/​specification, Help: https://t.bilibili.com/h5/dynamic/specification
++																							1640 文本 /​/​t.bilibili.com/​h5/​dynamic/​specification
++																						1641 text " >
++																			1642 container
++																				1643 row    #document (https://t.bilibili.com/h5/dynamic/specification)
++																					1644 container
++																						1645 文本 #document (
++																						1646 链接 https://t.bilibili.com/h5/dynamic/specification
++																							1647 文本 https://t.bilibili.com/h5/dynamic/specification
++																						1648 文本 )
++																				1649 row <> ​
++																					1650 container
++																						1651 container <>
++																							1652 text < /iframe >
++																1653 link Description: iframe, Value: devtools://devtools/bundled/devtools_app.html
++																		1654 row    accessKey : ""
++																			1655 container
++																				1656 text accessKey :  ""
+~																		1657 row    adAuctionHeaders : false
+~																				1659 text adAuctionHeaders : 
++																				1660 文本 false
++																		1661 row    align : ""
++																			1662 container
++																				1663 text align :  ""
+~																		1664 row    allow : ""
+~																				1666 text allow :  ""
++																		1667 row    allowFullscreen : false
++																			1668 container
++																				1669 text allowFullscreen : 
++																				1670 文本 false
++																		1671 row    allowPaymentRequest : false
++																			1672 container
++																				1673 text allowPaymentRequest : 
++																				1674 文本 false
++																		1675 row    attributeStyleMap : StylePropertyMap {size: 0}
++																			1676 container
++																				1677 text attributeStyleMap : 
++																				1678 container StylePropertyMap
++																					1679 text StylePropertyMap  { size :  0 }
++																		1680 row    attributes : NamedNodeMap {0: src, src: src, length: 1}
++																			1681 container
++																				1682 text attributes : 
++																				1683 container NamedNodeMap
++																					1684 text NamedNodeMap  { 0 :  src ,  src :  src ,  length :  1 }
++																		1685 row    autocapitalize : ""
++																			1686 container
++																				1687 text autocapitalize :  ""
++																		1688 row    autofocus : false
++																			1689 container
++																				1690 text autofocus : 
++																				1691 文本 false
++																		1692 row    baseURI : "https://t.bilibili.com/"
++																			1693 container
++																				1694 text baseURI : 
++																				1695 文本 "https://t.bilibili.com/"
++																		1696 row    browsingTopics : false
++																			1697 container
++																				1698 text browsingTopics : 
++																				1699 文本 false
++																		1700 row    childElementCount : 0
++																			1701 container
++																				1702 text childElementCount : 
++																				1703 文本 0
++																		1704 row    childNodes : NodeList []
++																			1705 container
++																				1706 text childNodes : 
++																				1707 container NodeList(0)
++																					1708 text NodeList  [ ]
++																		1709 row    children : HTMLCollection []
++																			1710 container
++																				1711 text children : 
++																				1712 container HTMLCollection(0)
++																					1713 text HTMLCollection  [ ]
++																		1714 row    classList : DOMTokenList [value: '']
++																			1715 container
++																				1716 text classList : 
++																				1717 container DOMTokenList(0)
++																					1718 text DOMTokenList  [ value :  '' ]
++																		1719 row    className : ""
++																			1720 container
++																				1721 text className :  ""
++																		1722 row    clientHeight : 348
++																			1723 container
++																				1724 text clientHeight : 
++																				1725 文本 348
++																		1726 row    clientLeft : 0
++																			1727 container
++																				1728 text clientLeft : 
++																				1729 文本 0
++																		1730 row    clientTop : 0
++																			1731 container
++																				1732 text clientTop : 
++																				1733 文本 0
++																		1734 row    clientWidth : 545
++																			1735 container
++																				1736 text clientWidth : 
++																				1737 文本 545
+~																		1738 row    contentDocument : document
+~																				1740 text contentDocument : 
+~																				1741 文本 document
+~																		1742 row    contentEditable : "inherit"
+~																				1744 text contentEditable : 
+~																				1745 文本 "inherit"
+~																		1746 row    contentWindow : Window {window: Window, self: Window, document: document, name: '', location: Location, …}
+~																				1748 text contentWindow : 
+~																				1749 container Window
+~																					1750 text Window  { window : 
++																					1751 文本 Window
++																					1752 text ,  self : 
++																					1753 文本 Window
++																					1754 text ,  document :  document ,  name :  '' ,  location : 
++																					1755 文本 Location
++																					1756 text , … }
++																		1757 row    credentialless : false
++																			1758 container
++																				1759 text credentialless : 
++																				1760 文本 false
++																		1761 row    csp : ""
++																			1762 container
++																				1763 text csp :  ""
++																		1764 row    currentCSSZoom : 1
++																			1765 container
++																				1766 text currentCSSZoom : 
++																				1767 文本 1
++																		1768 row    customElementRegistry : CustomElementRegistry {}
++																			1769 container
++																				1770 text customElementRegistry : 
++																				1771 container CustomElementRegistry
++																					1772 text CustomElementRegistry  { }
+~																		1773 row    dataset : DOMStringMap {}
+~																				1775 text dataset : 
++																				1776 container DOMStringMap
++																					1777 text DOMStringMap  { }
++																		1778 row    dir : ""
++																			1779 container
++																				1780 text dir :  ""
++																		1781 row    draggable : false
++																			1782 container
++																				1783 text draggable : 
++																				1784 文本 false
++																		1785 row    elementTiming : ""
++																			1786 container
++																				1787 text elementTiming :  ""
++																		1788 row    enterKeyHint : ""
++																			1789 container
++																				1790 text enterKeyHint :  ""
+~																		1791 row    featurePolicy : FeaturePolicy {}
+~																				1793 text featurePolicy : 
+~																				1794 container FeaturePolicy
++																					1795 text FeaturePolicy  { }
++																		1796 row    focusGroup : DOMTokenList [value: '']
++																			1797 container
++																				1798 text focusGroup : 
++																				1799 container DOMTokenList(0)
++																					1800 text DOMTokenList  [ value :  '' ]
++																		1801 row    focusGroupStart : false
++																			1802 container
++																				1803 text focusGroupStart : 
++																				1804 文本 false
++																		1805 row    frameBorder : ""
++																			1806 container
++																				1807 text frameBorder :  ""
+~																		1808 row    height : ""
+~																				1810 text height :  ""
++																		1811 row    hidden : false
++																			1812 container
++																				1813 text hidden : 
++																				1814 文本 false
++																		1815 row    id : ""
++																			1816 container
++																				1817 text id :  ""
++																		1818 row    inert : false
++																			1819 container
++																				1820 text inert : 
++																				1821 文本 false
++																		1822 row    innerHTML : ""
++																			1823 container
++																				1824 text innerHTML :  ""
++																		1825 row    innerText : ""
++																			1826 container
++																				1827 text innerText :  ""
++																		1828 row    inputMode : ""
++																			1829 container
++																				1830 text inputMode :  ""
+~																		1831 row    isConnected : true
+~																				1833 text isConnected : 
+~																				1834 文本 true
++																		1835 row    isContentEditable : false
++																			1836 container
++																				1837 text isContentEditable : 
++																				1838 文本 false
++																		1839 row    lang : ""
++																			1840 container
++																				1841 text lang :  ""
++																		1842 row    loading : "auto"
++																			1843 container
++																				1844 text loading : 
++																				1845 文本 "auto"
++																		1846 row    localName : "iframe"
++																			1847 container
++																				1848 text localName : 
++																				1849 文本 "iframe"
++																		1850 row    longDesc : ""
++																			1851 container
++																				1852 text longDesc :  ""
++																		1853 row    marginHeight : ""
++																			1854 container
++																				1855 text marginHeight :  ""
++																		1856 row    marginWidth : ""
++																			1857 container
++																				1858 text marginWidth :  ""
++																		1859 row    name : ""
++																			1860 container
++																				1861 text name :  ""
++																		1862 row    namespaceURI : "http://www.w3.org/1999/xhtml"
++																			1863 container
++																				1864 text namespaceURI : 
++																				1865 文本 "http://www.w3.org/1999/xhtml"
++																		1866 row    nodeName : "IFRAME"
++																			1867 container
++																				1868 text nodeName : 
++																				1869 文本 "IFRAME"
+~																		1870 row    nodeType : 1
+~																				1872 text nodeType : 
+~																				1873 文本 1
+~																		1874 row    nonce : ""
+~																				1876 text nonce :  ""
++																		1877 row    offsetHeight : 348
++																			1878 container
++																				1879 text offsetHeight : 
++																				1880 文本 348
++																		1881 row    offsetLeft : 0
++																			1882 container
++																				1883 text offsetLeft : 
++																				1884 文本 0
++																		1885 row    offsetParent : div.bili-popup__wrap
++																			1886 container
++																				1887 text offsetParent : 
++																				1888 container
++																					1889 text div .bili-popup__wrap
++																		1890 row    offsetTop : 14
++																			1891 container
++																				1892 text offsetTop : 
++																				1893 文本 14
++																		1894 row    offsetWidth : 545
++																			1895 container
++																				1896 text offsetWidth : 
++																				1897 文本 545
+~																		1898 row    outerHTML : "<iframe src=\"//t.bilibili.com/h5/dynamic/specification\"></iframe>"
+~																				1900 text outerHTML : 
+~																				1901 文本 "<iframe src=\"//t.bilibili.com/h5/dynamic/specification\"></iframe>"
+~																		1902 row    outerText : ""
+~																				1904 text outerText :  ""
++																		1905 row    ownerDocument : document
++																			1906 container
++																				1907 text ownerDocument : 
++																				1908 文本 document
+~																		1909 row    parentElement : div.bili-dyn-specification-popup__content
+~																				1911 text parentElement : 
++																				1912 container
++																					1913 text div .bili-dyn-specification-popup__content
++																		1914 row    parentNode : div.bili-dyn-specification-popup__content
++																			1915 container
++																				1916 text parentNode : 
++																				1917 container
++																					1918 text div .bili-dyn-specification-popup__content
+~																		1919 row    part : DOMTokenList [value: '']
+~																				1921 text part : 
+~																				1922 container DOMTokenList(0)
++																					1923 text DOMTokenList  [ value :  '' ]
++																		1924 row    privateToken : ""
++																			1925 container
++																				1926 text privateToken :  ""
++																		1927 row    referrerPolicy : ""
++																			1928 container
++																				1929 text referrerPolicy :  ""
++																		1930 row    sandbox : DOMTokenList [value: '']
++																			1931 container
++																				1932 text sandbox : 
++																				1933 container DOMTokenList(0)
++																					1934 text DOMTokenList  [ value :  '' ]
++																		1935 row    scrollHeight : 348
++																			1936 container
++																				1937 text scrollHeight : 
++																				1938 文本 348
++																		1939 row    scrollLeft : 0
++																			1940 container
++																				1941 text scrollLeft : 
++																				1942 文本 0
++																		1943 row    scrollTop : 0
++																			1944 container
++																				1945 text scrollTop : 
++																				1946 文本 0
++																		1947 row    scrollWidth : 545
++																			1948 container
++																				1949 text scrollWidth : 
++																				1950 文本 545
++																		1951 row    scrolling : ""
++																			1952 container
++																				1953 text scrolling :  ""
++																		1954 row    sharedStorageWritable : false
++																			1955 container
++																				1956 text sharedStorageWritable : 
++																				1957 文本 false
++																		1958 row    slot : ""
++																			1959 container
++																				1960 text slot :  ""
++																		1961 row    spellcheck : true
++																			1962 container
++																				1963 text spellcheck : 
++																				1964 文本 true
++																		1965 row    src : "https://t.bilibili.com/h5/dynamic/specification"
++																			1966 container
++																				1967 text src : 
++																				1968 文本 "https://t.bilibili.com/h5/dynamic/specification"
++																		1969 row    srcdoc : ""
++																			1970 container
++																				1971 text srcdoc :  ""
++																		1972 row    style : CSSStyleDeclaration {accentColor: '', additiveSymbols: '', alignContent: '', alignItems: '', alignSelf: '', …}
++																			1973 container
++																				1974 text style : 
++																				1975 container CSSStyleDeclaration
++																					1976 text CSSStyleDeclaration  { accentColor :  '' ,  additiveSymbols :  '' ,  alignContent :  '' ,  alignItems :  '' ,  alignSelf :  '' , … }
++																		1977 row    tabIndex : 0
++																			1978 container
++																				1979 text tabIndex : 
++																				1980 文本 0
++																		1981 row    tagName : "IFRAME"
++																			1982 container
++																				1983 text tagName : 
++																				1984 文本 "IFRAME"
++																		1985 row    textContent : ""
++																			1986 container
++																				1987 text textContent :  ""
++																		1988 row    title : ""
++																			1989 container
++																				1990 text title :  ""
++																		1991 row    translate : true
++																			1992 container
++																				1993 text translate : 
++																				1994 文本 true
++																		1995 row    virtualKeyboardPolicy : ""
++																			1996 container
++																				1997 text virtualKeyboardPolicy :  ""
++																		1998 row    width : ""
++																			1999 container
++																				2000 text width :  ""
++																		2001 row    writingSuggestions : "true"
++																			2002 container
++																				2003 text writingSuggestions : 
++																				2004 文本 "true"
+The focused UI element is 1621 row (selected)    <iframe src=​"/​/​t.bilibili.com/​h5/​dynamic/​specification"> ​

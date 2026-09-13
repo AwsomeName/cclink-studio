@@ -28,6 +28,7 @@ describe('B站 visible dynamic facts', () => {
     'missing-receipt',
     'duplicate-source',
     'decode-failed',
+    'broken-body',
   ] as const)('%s', async (mode) => {
     const rect = () => ({ width: 100, height: 40 })
     const native = [
@@ -38,7 +39,8 @@ describe('B站 visible dynamic facts', () => {
       'decode-failed',
     ].includes(mode)
     const populated =
-      native || ['ready', 'scheduled', 'disabled', 'duplicate-publish'].includes(mode)
+      native ||
+      ['ready', 'scheduled', 'disabled', 'duplicate-publish', 'broken-body'].includes(mode)
     const previewNode = { getBoundingClientRect: rect }
     const publish = {
       textContent: mode === 'scheduled' ? '定时发布' : '发布',
@@ -86,6 +88,7 @@ describe('B站 visible dynamic facts', () => {
                 : [],
     }
     const body = {
+      children: mode === 'broken-body' ? [{ getAttribute: () => null }] : [],
       innerText: populated ? '正文' : '',
       isContentEditable: true,
       closest: () => root,

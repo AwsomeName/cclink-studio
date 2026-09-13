@@ -1,0 +1,213 @@
+The following is a diff from the previous accessibility tree for Window: "CCLink Studio 开源版" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 714-725, 727-890, 1316-1468
+~													470 标签 (selected) Description: Console, Value: 1
+~													472 标签 (settable, integer) Description: Network, Value: 0
++										1470 container Console panel
++											1471 container console
++												1472 container
++													1473 工具栏
++														1474 container Show console sidebar
++															1475 按钮 Show console sidebar
++														1476 container Description: Clear console, Help: Clear console - Ctrl L - ⌘ K
++															1477 按钮 Clear console - Ctrl L - ⌘ K
++														1478 container Expand all
++															1479 按钮 Expand all
++														1480 按钮 JavaScript context: top
++														1481 container Create live expression
++															1482 按钮 Create live expression
++														1483 文本输入区 (settable) Filter
++															1484 文本 Filter
++														1485 弹出式按钮 Log level: Default levels
++															1486 文本 Default levels
++														1487 container Some problems no longer generate console messages, but are surfaced in the issues tab. Click to go to the issues tab
++															1488 按钮 Some problems no longer generate console messages, but are surfaced in the issues tab. Click to go to the issues tab
++														1489 container Console settings
++															1490 切换按钮 Description: Console settings, Value: 0
++														1491 container 6 messages in console
++													1492 container
++														1493 container
++															1494 container %c%s
++																1495 container  bili-fe-fp: 1.1.4 Stack table collapsed
++																	1496 container
++																		1497 按钮 bili-user-fingerprint.min.js:1, Help: https://s1.hdslb.com/bfs/seed/jinkela/short/user-fingerprint/bili-user-fingerprint.min.js:1
++																		1498 text bili-fe-fp: 1.1.4
++															1499 container %c bili-fe-mirror %c v2.1.0 
++																1500 container  bili-fe-mirror v2.1.0 Stack table collapsed
++																	1501 container
++																		1502 按钮 biliMirror.umd.mini.js:2, Help: https://s1.hdslb.com/bfs/seed/jinkela/short/b-mirror/biliMirror.umd.mini.js:2
++																		1503 text  bili-fe-mirror   v2.1.0 
++															1504 container TypeError: Cannot read properties of undefined (reading 'match') at b (https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:10872) at https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:15989 at o.render (https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2434982) at o._render (https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2198042) at o.r (https://s1.hdslb.com/bfs/static/
++																1505 container
++																	1506 container Error
++																	1507 container  Stack table collapsed
++																		1508 container
++																			1509 按钮 index.27f5a8b3.js:2, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2
++																			1510 文本 TypeError: Cannot read properties of undefined (reading 'match')
+
++																			1511 文本     at b (
++																			1512 链接 Description: index.27f5a8b3.js:2:10872, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:10872
++																				1513 文本 index.27f5a8b3.js:2:10872
++																			1514 文本 )
+
++																			1515 文本     at 
++																			1516 链接 Description: index.27f5a8b3.js:2:15989, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:15989
++																				1517 文本 index.27f5a8b3.js:2:15989
++																			1518 文本     at o.render (
++																			1519 链接 Description: index.27f5a8b3.js:2:2434982, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2434982
++																				1520 文本 index.27f5a8b3.js:2:2434982
++																			1521 文本 )
+
++																			1522 文本     at o._render (
++																			1523 链接 Description: index.27f5a8b3.js:2:2198042, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2198042
++																				1524 文本 index.27f5a8b3.js:2:2198042
++																			1525 文本 )
+
++																			1526 文本     at o.r (
++																			1527 链接 Description: index.27f5a8b3.js:2:2208031, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2208031
++																				1528 文本 index.27f5a8b3.js:2:2208031
++																			1529 文本 )
+
++																			1530 文本     at e.get (
++																			1531 链接 Description: index.27f5a8b3.js:2:2204244, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2204244
++																				1532 文本 index.27f5a8b3.js:2:2204244
++																			1533 文本 )
+
++																			1534 文本     at new e (
++																			1535 链接 Description: index.27f5a8b3.js:2:2204161, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2204161
++																				1536 文本 index.27f5a8b3.js:2:2204161
++																			1537 文本 )
+
++																			1538 文本     at rc (
++																			1539 链接 Description: index.27f5a8b3.js:2:2208120, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2208120
++																				1540 文本 index.27f5a8b3.js:2:2208120
++																			1541 文本 )
+
++																			1542 文本     at o.$mount (
++																			1543 链接 Description: index.27f5a8b3.js:2:2252166, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2252166
++																				1544 文本 index.27f5a8b3.js:2:2252166
++																			1545 文本 )
+
++																			1546 文本     at init (
++																			1547 链接 Description: index.27f5a8b3.js:2:2212836, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2212836
++																				1548 文本 index.27f5a8b3.js:2:2212836
++																			1549 文本 )
++															1550 container 白屏检测是否正常
++																1551 container  白屏检测是否正常 Object Stack table collapsed
++																	1552 container
++																		1553 按钮 (index):35, Help: https://t.bilibili.com/:35
++																		1554 text 白屏检测是否正常
++																		1555 外框
++																			1556 row    Object
++																				1557 文本 Object
++															1558 container SyntaxError: "undefined" is not valid JSON at JSON.parse (<anonymous>) at https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:1327398 at o._backspace (https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:1327430) at https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:1326728 at d (https://s1.hdslb.com/bfs/seed/crayon/im/message-notify.js:3:681) at Generator.<anonymous> (https://s1.hdslb.com/bfs/seed/crayon/im/m
++																1559 container Error, Repeated 2 times
++																	1560 文本 2
++																1561 container  Stack table collapsed
++																	1562 container
++																		1563 按钮 index.27f5a8b3.js:2, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2
++																		1564 文本 SyntaxError: "undefined" is not valid JSON
++																		1565 文本     at JSON.parse (<anonymous>)
+
++																		1566 文本     at 
++																		1567 链接 Description: index.27f5a8b3.js:2:1327398, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:1327398
++																			1568 文本 index.27f5a8b3.js:2:1327398
++																		1569 文本     at o._backspace (
++																		1570 链接 Description: index.27f5a8b3.js:2:1327430, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:1327430
++																			1571 文本 index.27f5a8b3.js:2:1327430
++																		1572 文本 )
+
++																		1573 文本     at 
++																		1574 链接 Description: index.27f5a8b3.js:2:1326728, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:1326728
++																			1575 文本 index.27f5a8b3.js:2:1326728
++																		1576 文本     at d (
++																		1577 链接 Description: message-notify.js:3:681, Help: https://s1.hdslb.com/bfs/seed/crayon/im/message-notify.js:3:681
++																			1578 文本 message-notify.js:3:681
++																		1579 文本 )
+
++																		1580 文本     at Generator.<anonymous> (
++																		1581 链接 Description: message-notify.js:3:2023, Help: https://s1.hdslb.com/bfs/seed/crayon/im/message-notify.js:3:2023
++																			1582 文本 message-notify.js:3:2023
++																		1583 文本 )
+
++																		1584 文本     at Generator.next (
++																		1585 链接 Description: message-notify.js:3:1110, Help: https://s1.hdslb.com/bfs/seed/crayon/im/message-notify.js:3:1110
++																			1586 文本 message-notify.js:3:1110
++																		1587 文本 )
+
++																		1588 文本     at i (
++																		1589 链接 Description: index.27f5a8b3.js:2:1129971, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:1129971
++																			1590 文本 index.27f5a8b3.js:2:1129971
++																		1591 文本 )
+
++																		1592 文本     at s (
++																		1593 链接 Description: index.27f5a8b3.js:2:1130173, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:1130173
++																			1594 文本 index.27f5a8b3.js:2:1130173
++																		1595 文本 )
+
++																		1596 文本     at 
++																		1597 链接 Description: index.27f5a8b3.js:2:1130232, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:1130232
++																			1598 文本 index.27f5a8b3.js:2:1130232
++															1599 container NotFoundError: Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node. at o.move (https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:1275888) at o.beforeDestroy (https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:1275291) at nL (https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2200763) at rh (https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5
++																1600 container
++																	1601 container Error
++																	1602 container  Stack table collapsed
++																		1603 container
++																			1604 按钮 index.27f5a8b3.js:2, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2
++																			1605 文本 NotFoundError: Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.
+
++																			1606 文本     at o.move (
++																			1607 链接 Description: index.27f5a8b3.js:2:1275888, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:1275888
++																				1608 文本 index.27f5a8b3.js:2:1275888
++																			1609 文本 )
+
++																			1610 文本     at o.beforeDestroy (
++																			1611 链接 Description: index.27f5a8b3.js:2:1275291, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:1275291
++																				1612 文本 index.27f5a8b3.js:2:1275291
++																			1613 文本 )
+
++																			1614 文本     at nL (
++																			1615 链接 Description: index.27f5a8b3.js:2:2200763, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2200763
++																				1616 文本 index.27f5a8b3.js:2:2200763
++																			1617 文本 )
+
++																			1618 文本     at rh (
++																			1619 链接 Description: index.27f5a8b3.js:2:2209665, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2209665
++																				1620 文本 index.27f5a8b3.js:2:2209665
++																			1621 文本 )
+
++																			1622 文本     at o.$destroy (
++																			1623 链接 Description: index.27f5a8b3.js:2:2207597, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2207597
++																				1624 文本 index.27f5a8b3.js:2:2207597
++																			1625 文本 )
+
++																			1626 文本     at destroy (
++																			1627 链接 Description: index.27f5a8b3.js:2:2213237, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2213237
++																				1628 文本 index.27f5a8b3.js:2:2213237
++																			1629 文本 )
+
++																			1630 文本     at M (
++																			1631 链接 Description: index.27f5a8b3.js:2:2231876, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2231876
++																				1632 文本 index.27f5a8b3.js:2:2231876
++																			1633 文本 )
+
++																			1634 文本     at o.__patch__ (
++																			1635 链接 Description: index.27f5a8b3.js:2:2234621, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2234621
++																				1636 文本 index.27f5a8b3.js:2:2234621
++																			1637 文本 )
+
++																			1638 文本     at o.$destroy (
++																			1639 链接 Description: index.27f5a8b3.js:2:2207798, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2207798
++																				1640 文本 index.27f5a8b3.js:2:2207798
++																			1641 文本 )
+
++																			1642 文本     at destroy (
++																			1643 链接 Description: index.27f5a8b3.js:2:2213237, Help: https://s1.hdslb.com/bfs/static/2233-monorepo/dyn-home/static/js/index.27f5a8b3.js:2:2213237
++																				1644 文本 index.27f5a8b3.js:2:2213237
++																			1645 文本 )
++														1646 container
++															1647 container
++																1648 文本输入区 (settable) Description: Console prompt, Value: 
+
+~												709 container Expand drawer
+~													710 按钮 Expand drawer
+The focused UI element is 1648 文本输入区 (settable) Description: Console prompt, Value: 

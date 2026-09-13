@@ -1,0 +1,309 @@
+The following is a diff from the previous accessibility tree for Window: "CCLink Studio 开源版" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 1486-1491, 1496-1800
+~																					1377 row    <div class=​"bili-cascader bili-dyn-publishing__settings__cascader" style=​"flex-direction:​ row-reverse;​ z-index:​ 2003;​ display:​ none;​"> ​
+~																						1484 row (selected)    <div class=​"bili-cascader__list" style=​"margin-right:​ -3px;​ z-index:​ 2;​"> ​
++																								1496 container <div class=​"bili-cascader__list" style=​"margin-right:​ -3px;​ z-index:​ 2;​">
++																									1497 text < div class =​" bili-cascader__list " style =​" margin-right:​ -3px;​ z-index:​ 2;​ " >
++																						1498 row    <div class=​"bili-cascader-options"> ​ Expand …​ </div> ​
++																							1499 container
++																								1500 container <div class=​"bili-cascader-options">
++																									1501 text < div class =​" bili-cascader-options " >
++																								1502 按钮 Expand
++																								1503 text …
++																								1504 container </div>
++																									1505 text < /div >
++																						1506 row <> ​
++																							1507 container
++																								1508 container <>
++																									1509 text < /div >
++																1510 link Description: div.bili-cascader__list, Value: devtools://devtools/bundled/devtools_app.html
++																		1511 row    _prevClass : "bili-cascader__list"
++																			1512 container
++																				1513 text _prevClass : 
++																				1514 文本 "bili-cascader__list"
++																		1515 row    accessKey : ""
++																			1516 container
++																				1517 text accessKey :  ""
++																		1518 row    align : ""
++																			1519 container
++																				1520 text align :  ""
++																		1521 row    attributeStyleMap : StylePropertyMap {size: 2}
++																			1522 container
++																				1523 text attributeStyleMap : 
++																				1524 container StylePropertyMap
++																					1525 text StylePropertyMap  { size :  2 }
++																		1526 row    attributes : NamedNodeMap {0: class, 1: style, class: class, style: style, length: 2}
++																			1527 container
++																				1528 text attributes : 
++																				1529 container NamedNodeMap
++																					1530 text NamedNodeMap  { 0 :  class ,  1 :  style ,  class :  class ,  style :  style ,  length :  2 }
++																		1531 row    autocapitalize : ""
++																			1532 container
++																				1533 text autocapitalize :  ""
++																		1534 row    autofocus : false
++																			1535 container
++																				1536 text autofocus : 
++																				1537 文本 false
++																		1538 row    baseURI : "https://t.bilibili.com/"
++																			1539 container
++																				1540 text baseURI : 
++																				1541 文本 "https://t.bilibili.com/"
++																		1542 row    childElementCount : 1
++																			1543 container
++																				1544 text childElementCount : 
++																				1545 文本 1
++																		1546 row    childNodes : NodeList [div.bili-cascader-options]
++																			1547 container
++																				1548 text childNodes : 
++																				1549 container NodeList(1)
++																					1550 text NodeList  [ div .bili-cascader-options ]
++																		1551 row    children : HTMLCollection [div.bili-cascader-options]
++																			1552 container
++																				1553 text children : 
++																				1554 container HTMLCollection(1)
++																					1555 text HTMLCollection  [ div .bili-cascader-options ]
++																		1556 row    classList : DOMTokenList ['bili-cascader__list', value: 'bili-cascader__list']
++																			1557 container
++																				1558 text classList : 
++																				1559 container DOMTokenList(1)
++																					1560 text DOMTokenList  [ 'bili-cascader__list' ,  value :  'bili-cascader__list' ]
++																		1561 row    className : "bili-cascader__list"
++																			1562 container
++																				1563 text className : 
++																				1564 文本 "bili-cascader__list"
++																		1565 row    clientHeight : 0
++																			1566 container
++																				1567 text clientHeight : 
++																				1568 文本 0
++																		1569 row    clientLeft : 0
++																			1570 container
++																				1571 text clientLeft : 
++																				1572 文本 0
++																		1573 row    clientTop : 0
++																			1574 container
++																				1575 text clientTop : 
++																				1576 文本 0
++																		1577 row    clientWidth : 0
++																			1578 container
++																				1579 text clientWidth : 
++																				1580 文本 0
++																		1581 row    contentEditable : "inherit"
++																			1582 container
++																				1583 text contentEditable : 
++																				1584 文本 "inherit"
++																		1585 row    currentCSSZoom : 1
++																			1586 container
++																				1587 text currentCSSZoom : 
++																				1588 文本 1
++																		1589 row    customElementRegistry : CustomElementRegistry {}
++																			1590 container
++																				1591 text customElementRegistry : 
++																				1592 container CustomElementRegistry
++																					1593 text CustomElementRegistry  { }
++																		1594 row    dataset : DOMStringMap {}
++																			1595 container
++																				1596 text dataset : 
++																				1597 container DOMStringMap
++																					1598 text DOMStringMap  { }
++																		1599 row    dir : ""
++																			1600 container
++																				1601 text dir :  ""
++																		1602 row    draggable : false
++																			1603 container
++																				1604 text draggable : 
++																				1605 文本 false
++																		1606 row    elementTiming : ""
++																			1607 container
++																				1608 text elementTiming :  ""
++																		1609 row    enterKeyHint : ""
++																			1610 container
++																				1611 text enterKeyHint :  ""
++																		1612 row    firstChild : div.bili-cascader-options
++																			1613 container
++																				1614 text firstChild : 
++																				1615 container
++																					1616 text div .bili-cascader-options
++																		1617 row    firstElementChild : div.bili-cascader-options
++																			1618 container
++																				1619 text firstElementChild : 
++																				1620 container
++																					1621 text div .bili-cascader-options
++																		1622 row    focusGroup : DOMTokenList [value: '']
++																			1623 container
++																				1624 text focusGroup : 
++																				1625 container DOMTokenList(0)
++																					1626 text DOMTokenList  [ value :  '' ]
++																		1627 row    focusGroupStart : false
++																			1628 container
++																				1629 text focusGroupStart : 
++																				1630 文本 false
++																		1631 row    hidden : false
++																			1632 container
++																				1633 text hidden : 
++																				1634 文本 false
++																		1635 row    id : ""
++																			1636 container
++																				1637 text id :  ""
++																		1638 row    inert : false
++																			1639 container
++																				1640 text inert : 
++																				1641 文本 false
++																		1642 row    innerHTML : "<div class=\"bili-cascader-options\"><div class=\"bili-cascader-options__item is-active\"><div class=\"bili-cascader-options__item-custom\"><div class=\"icon\"><svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 20 20\" width=\"20\" height=\"20\" style=\"width: 20px; height: 20px;\"><path d=\"M5.208333333333334 8.625C4.333881666666667 8.625 3.625 9.333866666666667 3.625 10.208333333333334L3.625 15.051C3.625 15.847066666666665 4.211218333333334
++																			1643 container
++																				1644 text innerHTML : 
++																				1645 文本 "<div class=\"bili-cascader-options\"><div class=\"bili-cascader-options__item is-active\"><div class=\"bili-cascader-options__item-custom\"><div class=\"icon\"><svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 20 20\" width=\"20\" height=\"20\" style=\"width: 20px; height: 20px;\"><path d=\"M5.208333333333334 8.625C4.333881666666667 8.625 3.625 9.333866666666667 3.625 10.208333333333334L3.625 15.051C3.625 15.847066666666665 4.211218333333334 16.49963333333
++																		1646 row    innerText : " \n 所有用户可见\n \n 仅自己可见\n \n 开启后，将不支持分享、商业推广\n "
++																			1647 container
++																				1648 text innerText : 
++																				1649 文本 " \n                  所有用户可见\n                  \n                  仅自己可见\n                 \n                  开启后，将不支持分享、商业推广\n                "
++																		1650 row    inputMode : ""
++																			1651 container
++																				1652 text inputMode :  ""
++																		1653 row    isConnected : true
++																			1654 container
++																				1655 text isConnected : 
++																				1656 文本 true
++																		1657 row    isContentEditable : false
++																			1658 container
++																				1659 text isContentEditable : 
++																				1660 文本 false
++																		1661 row    lang : ""
++																			1662 container
++																				1663 text lang :  ""
++																		1664 row    lastChild : div.bili-cascader-options
++																			1665 container
++																				1666 text lastChild : 
++																				1667 container
++																					1668 text div .bili-cascader-options
++																		1669 row    lastElementChild : div.bili-cascader-options
++																			1670 container
++																				1671 text lastElementChild : 
++																				1672 container
++																					1673 text div .bili-cascader-options
++																		1674 row    localName : "div"
++																			1675 container
++																				1676 text localName : 
++																				1677 文本 "div"
++																		1678 row    namespaceURI : "http://www.w3.org/1999/xhtml"
++																			1679 container
++																				1680 text namespaceURI : 
++																				1681 文本 "http://www.w3.org/1999/xhtml"
++																		1682 row    nodeName : "DIV"
++																			1683 container
++																				1684 text nodeName : 
++																				1685 文本 "DIV"
++																		1686 row    nodeType : 1
++																			1687 container
++																				1688 text nodeType : 
++																				1689 文本 1
++																		1690 row    nonce : ""
++																			1691 container
++																				1692 text nonce :  ""
++																		1693 row    offsetHeight : 0
++																			1694 container
++																				1695 text offsetHeight : 
++																				1696 文本 0
++																		1697 row    offsetLeft : 0
++																			1698 container
++																				1699 text offsetLeft : 
++																				1700 文本 0
++																		1701 row    offsetTop : 0
++																			1702 container
++																				1703 text offsetTop : 
++																				1704 文本 0
++																		1705 row    offsetWidth : 0
++																			1706 container
++																				1707 text offsetWidth : 
++																				1708 文本 0
++																		1709 row    outerHTML : "<div class=\"bili-cascader__list\" style=\"margin-right: -3px; z-index: 2;\"><div class=\"bili-cascader-options\"><div class=\"bili-cascader-options__item is-active\"><div class=\"bili-cascader-options__item-custom\"><div class=\"icon\"><svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 20 20\" width=\"20\" height=\"20\" style=\"width: 20px; height: 20px;\"><path d=\"M5.208333333333334 8.625C4.333881666666667 8.625 3.625 9.333866666666667 3.6
++																			1710 container
++																				1711 text outerHTML : 
++																				1712 文本 "<div class=\"bili-cascader__list\" style=\"margin-right: -3px; z-index: 2;\"><div class=\"bili-cascader-options\"><div class=\"bili-cascader-options__item is-active\"><div class=\"bili-cascader-options__item-custom\"><div class=\"icon\"><svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 20 20\" width=\"20\" height=\"20\" style=\"width: 20px; height: 20px;\"><path d=\"M5.208333333333334 8.625C4.333881666666667 8.625 3.625 9.333866666666667 3.625 10.208333333
++																		1713 row    outerText : " \n 所有用户可见\n \n 仅自己可见\n \n 开启后，将不支持分享、商业推广\n "
++																			1714 container
++																				1715 text outerText : 
++																				1716 文本 " \n                  所有用户可见\n                  \n                  仅自己可见\n                 \n                  开启后，将不支持分享、商业推广\n                "
++																		1717 row    ownerDocument : document
++																			1718 container
++																				1719 text ownerDocument : 
++																				1720 文本 document
++																		1721 row    parentElement : div.bili-cascader.bili-dyn-publishing__settings__cascader
++																			1722 container
++																				1723 text parentElement : 
++																				1724 container
++																					1725 text div .bili-cascader.bili-dyn-publishing__settings__cascader
++																		1726 row    parentNode : div.bili-cascader.bili-dyn-publishing__settings__cascader
++																			1727 container
++																				1728 text parentNode : 
++																				1729 container
++																					1730 text div .bili-cascader.bili-dyn-publishing__settings__cascader
++																		1731 row    part : DOMTokenList [value: '']
++																			1732 container
++																				1733 text part : 
++																				1734 container DOMTokenList(0)
++																					1735 text DOMTokenList  [ value :  '' ]
++																		1736 row    previousElementSibling : div.bili-cascader__list
++																			1737 container
++																				1738 text previousElementSibling : 
++																				1739 container
++																					1740 text div .bili-cascader__list
++																		1741 row    previousSibling : div.bili-cascader__list
++																			1742 container
++																				1743 text previousSibling : 
++																				1744 container
++																					1745 text div .bili-cascader__list
++																		1746 row    scrollHeight : 0
++																			1747 container
++																				1748 text scrollHeight : 
++																				1749 文本 0
++																		1750 row    scrollLeft : 0
++																			1751 container
++																				1752 text scrollLeft : 
++																				1753 文本 0
++																		1754 row    scrollTop : 0
++																			1755 container
++																				1756 text scrollTop : 
++																				1757 文本 0
++																		1758 row    scrollWidth : 0
++																			1759 container
++																				1760 text scrollWidth : 
++																				1761 文本 0
++																		1762 row    slot : ""
++																			1763 container
++																				1764 text slot :  ""
++																		1765 row    spellcheck : true
++																			1766 container
++																				1767 text spellcheck : 
++																				1768 文本 true
++																		1769 row    style : CSSStyleDeclaration {0: 'margin-right', 1: 'z-index', accentColor: '', additiveSymbols: '', alignContent: '', alignItems: '', alignSelf: '', …}
++																			1770 container
++																				1771 text style : 
++																				1772 container CSSStyleDeclaration
++																					1773 text CSSStyleDeclaration  { 0 :  'margin-right' ,  1 :  'z-index' ,  accentColor :  '' ,  additiveSymbols :  '' ,  alignContent :  '' ,  alignItems :  '' ,  alignSelf :  '' , … }
++																		1774 row    tabIndex : -1
++																			1775 container
++																				1776 text tabIndex : 
++																				1777 文本 -1
++																		1778 row    tagName : "DIV"
++																			1779 container
++																				1780 text tagName : 
++																				1781 文本 "DIV"
++																		1782 row    textContent : " \n 所有用户可见\n \n 仅自己可见\n \n 开启后，将不支持分享、商业推广\n "
++																			1783 container
++																				1784 text textContent : 
++																				1785 文本 " \n                  所有用户可见\n                  \n                  仅自己可见\n                 \n                  开启后，将不支持分享、商业推广\n                "
++																		1786 row    title : ""
++																			1787 container
++																				1788 text title :  ""
++																		1789 row    translate : true
++																			1790 container
++																				1791 text translate : 
++																				1792 文本 true
++																		1793 row    virtualKeyboardPolicy : ""
++																			1794 container
++																				1795 text virtualKeyboardPolicy :  ""
++																		1796 row    writingSuggestions : "true"
++																			1797 container
++																				1798 text writingSuggestions : 
++																				1799 文本 "true"
+The focused UI element is 1484 row (selected)    <div class=​"bili-cascader__list" style=​"margin-right:​ -3px;​ z-index:​ 2;​"> ​

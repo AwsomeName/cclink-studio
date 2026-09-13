@@ -9,6 +9,37 @@ import {
 const url = 'https://t.bilibili.com/1246694229973925912'
 const img = 'https://i0.hdslb.com/bfs/new_dyn/example.png'
 describe('B站 single native submission evidence', () => {
+  it.each(['disposed', 'close', 'crash', 'expired'] as const)(
+    'ends pending receipt waits and cannot rearm after %s',
+    async (mode) => {
+      vi.useFakeTimers()
+      const page = new EventEmitter()
+      const observer = observeBilibiliSubmission(page as never, {
+        uid: '3546384070347419',
+        text: '冻结正文',
+        images: [img],
+      })
+      try {
+        const rejected = expect(observer.finish()).rejects.toThrow()
+        if (mode === 'expired') await vi.advanceTimersByTimeAsync(30000)
+        else {
+          observer.arm()
+          expect(() => observer.arm()).toThrow('不可重新启用')
+          if (mode === 'disposed') await observer.dispose()
+          else page.emit(mode)
+        }
+        await rejected
+        expect(observer.canConfirm()).toBe(false)
+        expect(() => observer.arm()).toThrow()
+      } finally {
+        await observer.dispose()
+        vi.useRealTimers()
+      }
+      for (const name of ['request', 'response', 'requestfailed', 'close', 'crash'])
+        expect(page.listenerCount(name)).toBe(0)
+    },
+  )
+
   it('keeps platform IDs as strings and rejects unrelated origins and secret URLs', () => {
     expect(parseBilibiliPublicationUrl(`${url}?spm_id_from=native`)).toEqual({
       id: '1246694229973925912',
@@ -79,6 +110,7 @@ describe('B站 single native submission evidence', () => {
     if (mode !== 'unarmed') observer.arm()
     page.emit('request', request)
     page.emit('response', {
+      status: () => 200,
       request: () => (mode === 'other-response' ? {} : request),
       json: async () => ({
         code: mode === 'platform-error' ? -1 : 0,
@@ -91,9 +123,138 @@ describe('B站 single native submission evidence', () => {
     expect(page.listenerCount('request') + page.listenerCount('response')).toBe(0)
     vi.useRealTimers()
   })
+
+  it.each([
+    'text-mismatch',
+    'invalid-body',
+    'platform-error',
+    'transport-failed',
+    'multiple-requests',
+  ] as const)('preserves bounded diagnostics and never claims success after %s', async (mode) => {
+    const page = new EventEmitter()
+    const facts: unknown[] = []
+    const observer = observeBilibiliSubmission(
+      page as never,
+      {
+        uid: '3546384070347419',
+        text: '冻结正文',
+        images: [img],
+      },
+      async (fact) => {
+        facts.push(fact)
+      },
+    )
+    const request = {
+      method: () => 'POST',
+      url: () => 'https://api.bilibili.com/x/dynamic/feed/create/dyn',
+      postDataJSON: () =>
+        mode === 'invalid-body'
+          ? { secret: 'do-not-persist' }
+          : {
+              dyn_req: {
+                content: {
+                  contents: [{ raw_text: mode === 'text-mismatch' ? '其他稿' : '冻结正文' }],
+                },
+                pics: [{ img_src: img }],
+              },
+            },
+    }
+    observer.arm()
+    const pending = expect(observer.finish()).rejects.toThrow(
+      mode === 'platform-error'
+        ? '平台错误码 -101'
+        : mode === 'transport-failed'
+          ? '网络失败'
+          : mode === 'multiple-requests'
+            ? '多个提交请求'
+            : '不匹配',
+    )
+    page.emit('request', request)
+    expect(observer.canConfirm()).toBe(false)
+    if (mode === 'transport-failed') page.emit('requestfailed', request)
+    else if (mode === 'multiple-requests') page.emit('request', { ...request })
+    else
+      page.emit('response', {
+        request: () => request,
+        status: () => 200,
+        json: async () => ({
+          code: mode === 'platform-error' ? -101 : 0,
+          data: { dyn_id_str: '1246694229973925912' },
+          secret: 'do-not-persist',
+        }),
+      })
+    await pending
+    await observer.dispose()
+    expect(facts.at(-1)).toMatchObject({
+      requestObserved: true,
+      observationEnded: true,
+      requestMatch: mode === 'platform-error' || mode === 'transport-failed' ? 'matched' : mode,
+    })
+    if (mode === 'transport-failed') expect(facts.at(-1)).toMatchObject({ transportFailed: true })
+    else if (mode !== 'multiple-requests')
+      expect(facts.at(-1)).toMatchObject({
+        responseStatus: 200,
+        platformCode: mode === 'platform-error' ? -101 : 0,
+      })
+    expect(JSON.stringify(facts)).not.toContain('do-not-persist')
+    expect(page.listenerCount('requestfailed')).toBe(0)
+  })
 })
 
 describe('B站 first publication agreement continuation', () => {
+  it.each(['cancelled', 'storage-failed'] as const)(
+    'does not click if %s while persisting the confirmation attempt',
+    async (mode) => {
+      vi.useFakeTimers()
+      let current = true
+      const facts: unknown[] = []
+      const click = vi.fn()
+      const page = Object.assign(new EventEmitter(), {
+        url: () => 'https://t.bilibili.com/',
+        frameLocator: () => ({ getByRole: () => ({ waitFor: async () => undefined }) }),
+        getByRole: () => ({ waitFor: async () => undefined, click }),
+        evaluate: async () => 'recognized',
+      })
+      const observer = observeBilibiliSubmission(
+        page as never,
+        {
+          uid: '3546384070347419',
+          text: '冻结正文',
+          images: [img],
+        },
+        async (observation) => {
+          facts.push(observation)
+          if (observation.confirmationAttempted) {
+            if (mode === 'storage-failed') throw new Error('disk failed')
+            current = false
+          }
+        },
+      )
+      observer.arm()
+      try {
+        const result = finishBilibiliSubmission(page as never, observer, {
+          isCurrent: () => current,
+          revalidate: async () => undefined,
+          record: async () => undefined,
+        })
+        const rejected = expect(result).rejects.toThrow(
+          mode === 'storage-failed' ? 'disk failed' : 'Runtime',
+        )
+        await vi.advanceTimersByTimeAsync(30000)
+        await rejected
+        expect(click).not.toHaveBeenCalled()
+        expect(facts).toContainEqual({
+          confirmationAttempted: true,
+          requestObserved: false,
+          observationEnded: false,
+        })
+      } finally {
+        await observer.dispose().catch(() => undefined)
+        vi.useRealTimers()
+      }
+    },
+  )
+
   it.each([
     'terms',
     'direct',
@@ -121,12 +282,13 @@ describe('B站 first publication agreement continuation', () => {
       if (mode === 'cancel-after-accepted') active = false
     })
     const page = {
+      frameLocator: () => ({ getByRole: () => ({ waitFor: async () => undefined }) }),
       getByRole: () => ({
         waitFor: () => (mode === 'direct' ? new Promise<void>(() => {}) : Promise.resolve()),
         click,
       }),
       url: () => (mode === 'navigated' ? url : 'https://t.bilibili.com/'),
-      evaluate: vi.fn(async () => mode !== 'unrecognized'),
+      evaluate: vi.fn(async () => (mode === 'unrecognized' ? '规范文档不可读' : 'recognized')),
     }
     const record = vi.fn(async (_result: unknown) => {
       if (mode === 'cancel-after-accepted' && !active) throw new Error('cancelled owner write')
@@ -140,6 +302,7 @@ describe('B站 first publication agreement continuation', () => {
       finish: () => pending,
       hasSubmissionRequest: () => requestSeen,
       canConfirm: () => !requestSeen,
+      markConfirmationAttempted: vi.fn(async () => undefined),
       arm: vi.fn(),
       dispose: vi.fn(),
     }
@@ -176,8 +339,9 @@ describe('B站 first publication agreement continuation', () => {
     async (mode) => {
       vi.useFakeTimers()
       const page = Object.assign(new EventEmitter(), {
+        frameLocator: () => ({ getByRole: () => ({ waitFor: async () => undefined }) }),
         url: () => 'https://t.bilibili.com/',
-        evaluate: vi.fn(async () => true),
+        evaluate: vi.fn(async () => 'recognized'),
         getByRole: () => ({ waitFor: async () => undefined, click }),
       })
       const click = vi.fn()

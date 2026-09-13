@@ -1,0 +1,645 @@
+{
+  "affairId": "248d5211-9d05-477c-a8db-50a4d75f0d84",
+  "updatedAt": "2026-09-12T12:54:58.604Z",
+  "execution": {
+    "status": "result-unknown",
+    "currentAttemptId": "a64c9daf-a43f-4a62-89e8-be68d7c9dd49",
+    "currentGeneration": 4,
+    "currentLaunchOperationId": "22fdf398-5f0d-4ec1-9fc7-00f734a91513",
+    "currentStepId": "publish"
+  },
+  "publication": {
+    "status": "result-unknown",
+    "observedAt": "2026-09-12T12:54:58.549Z"
+  },
+  "publishEffects": [
+    {
+      "key": "248d5211-9d05-477c-a8db-50a4d75f0d84:a64c9daf-a43f-4a62-89e8-be68d7c9dd49:g2:publish:final",
+      "affairId": "248d5211-9d05-477c-a8db-50a4d75f0d84",
+      "attemptId": "a64c9daf-a43f-4a62-89e8-be68d7c9dd49",
+      "executionGeneration": 2,
+      "kind": "publish",
+      "targetId": "final",
+      "status": "result-unknown",
+      "reservedAt": "2026-09-12T11:51:30.193Z",
+      "consumedAt": "2026-09-12T11:51:31.558Z",
+      "dispatchedAt": "2026-09-12T11:51:31.614Z",
+      "observedAt": "2026-09-12T11:52:01.622Z",
+      "browserTaskRunId": "41eaa47b-efea-4f1e-b84a-34e04c451853",
+      "bilibiliSubmission": {
+        "confirmationAttempted": false,
+        "requestObserved": false,
+        "observationEnded": true,
+        "observedAt": "2026-09-12T11:52:01.706Z"
+      }
+    },
+    {
+      "key": "248d5211-9d05-477c-a8db-50a4d75f0d84:a64c9daf-a43f-4a62-89e8-be68d7c9dd49:g4:publish:final",
+      "affairId": "248d5211-9d05-477c-a8db-50a4d75f0d84",
+      "attemptId": "a64c9daf-a43f-4a62-89e8-be68d7c9dd49",
+      "executionGeneration": 4,
+      "kind": "publish",
+      "targetId": "final",
+      "status": "result-unknown",
+      "reservedAt": "2026-09-12T12:54:26.940Z",
+      "consumedAt": "2026-09-12T12:54:28.413Z",
+      "dispatchedAt": "2026-09-12T12:54:28.474Z",
+      "observedAt": "2026-09-12T12:54:58.549Z",
+      "browserTaskRunId": "c1d328ba-344d-4ca9-98fb-ed651ef02c5d",
+      "bilibiliSubmission": {
+        "confirmationAttempted": true,
+        "requestObserved": true,
+        "observationEnded": true,
+        "observedAt": "2026-09-12T12:54:58.604Z"
+      }
+    }
+  ],
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "label": "打开 B站图文动态发布器",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "account.resolve",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "账号 7c1ef8bb-7770-4c53-ad02-e4943f745fea · Profile web-draft-67f01554-70b0-4739-ad9f-178437a7b1a3",
+          "observedAt": "2026-09-12T12:47:38.913Z",
+          "generation": 4
+        },
+        {
+          "id": "tab.acquire",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "Tab tab-1-1789145082433 · 账号 7c1ef8bb-7770-4c53-ad02-e4943f745fea · Profile web-draft-67f01554-70b0-4739-ad9f-178437a7b1a3",
+          "observedAt": "2026-09-12T12:47:39.045Z",
+          "generation": 4
+        },
+        {
+          "id": "editor.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "用户另行授权原稿重建；main读到同账号空白发布器，旧未知发送记录保留",
+          "observedAt": "2026-09-12T12:47:39.553Z",
+          "generation": 4
+        },
+        {
+          "id": "runtime.ready",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "Agent run-22fdf398-5f0d-4ec1-9fc7-00f734a91513 · BrowserTask c1d328ba-344d-4ca9-98fb-ed651ef02c5d · Tab tab-1-1789145082433 · View g2 · WebContents 3 · Page g2",
+          "observedAt": "2026-09-12T12:47:39.757Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 3,
+      "startedAt": "2026-09-12T12:39:13.958Z",
+      "finishedAt": "2026-09-12T12:40:45.838Z",
+      "evidence": [
+        "inspect 2026-09-12T11:41:23.546Z：https://t.bilibili.com/ pageKind=editor，editor.recognized=true，bodySelector=div[placeholder=\"有什么想和大家分享的？\"]，title 选择器与 fileInput=div.bili-dyn-publishing__tools__item.pic 均已返回",
+        "browser_title 正常返回“动态首页-哔哩哔哩”（Tab tab-1-1789145082433 · https://t.bilibili.com/），页面本身在线；但 article_publishing_inspect_page 连续两次返回 EVIDENCE_REQUIRED：绑定的原稿网页不可见。首次 inspect（11:41:23.546Z）曾成功识别编辑器，此后页面转为不可见，无法产生当前代次证据。",
+        "inspect 2026-09-12T11:44:27.160Z：https://t.bilibili.com/ pageKind=editor，editor.recognized=true，bodySelector=div[placeholder=\"有什么想和大家分享的？\"]，正文 0 字符且 initialDraftBodyEmpty=true，图片 0 张且 imageEnumerationComplete=true，fileInput=div.bili-dyn-publishing__tools__item.pic 已返回，标题选择器已返回，页面不可见卡点已消除",
+        "csdn@1 页面回读 · https://t.bilibili.com/",
+        "用户另行授权本稿重建；上代证据不能证明新现场完成",
+        "inspect 2026-09-12T12:39:39.508Z：https://t.bilibili.com/ pageKind=editor，editor.recognized=true，account.resolve/tab.acquire/editor.open/runtime.ready 四项 gen3 detail 均已完成；platformAccountId=3546384070347419 与 targetUID 一致，正文 0 字符、图片 0 张、标题空，空白发布器现场确认",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "verify-account",
+      "label": "核验 B站 UID 与当前空白现场",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "page.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面 editor · 账号 3546384070347419 · draftId 尚无 · 标题 Studio 发布恢复验证 · 保存 unknown",
+          "observedAt": "2026-09-12T12:52:30.976Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 2,
+      "startedAt": "2026-09-12T12:40:53.342Z",
+      "finishedAt": "2026-09-12T12:41:12.922Z",
+      "evidence": [
+        "基于 inspect 2026-09-12T11:45:09.151Z：页面 platformAccountId=3546384070347419 与 targetUID 一致，正文 0 字符、图片 0 张、标题为空，现场为空白动态编辑器；开始核验账号与空白现场",
+        "inspect 2026-09-12T11:45:29.192Z：platformAccountId=3546384070347419 与 targetUID=3546384070347419 完全一致；正文 0 字符、initialDraftBodyEmpty=true、图片 0 张、imageEnumerationComplete=true、标题为空，确认为空白现场，无残留草稿",
+        "csdn@1 页面回读 · https://t.bilibili.com/",
+        "用户另行授权本稿重建；上代证据不能证明新现场完成",
+        "基于 inspect 2026-09-12T12:40:40.321Z：开始核验 UID 与空白现场——platformAccountId=3546384070347419，与 targetUID=3546384070347419 比对中；正文 0 字符、图片 0 张、标题空",
+        "inspect 2026-09-12T12:40:40.321Z：platformAccountId=3546384070347419 与 targetUID=3546384070347419 完全一致；正文 0 字符 initialDraftBodyEmpty=true、图片 0 张 imageEnumerationComplete=true、标题为空，确认为空白现场，无残留草稿，进入核验",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "upload-assets",
+      "label": "逐张选择、上传并核验动态图片",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/01-首篇封面.png · div.bili-pics-uploader__add",
+          "observedAt": "2026-09-12T12:48:50.464Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/01-首篇封面.png",
+          "observedAt": "2026-09-12T12:49:00.467Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i0.hdslb.com/bfs/new_dyn/2ccd435001898d8f88cc64e79eba3d1f3546384070347419.png · 2026-09-12T12:49:00.467Z",
+          "observedAt": "2026-09-12T12:49:00.467Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/02-导航场景效果图.png · div.bili-pics-uploader__add",
+          "observedAt": "2026-09-12T12:49:35.612Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/02-导航场景效果图.png",
+          "observedAt": "2026-09-12T12:49:40.240Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i0.hdslb.com/bfs/new_dyn/675c0482a27021cb02839500bbea98593546384070347419.png · 2026-09-12T12:49:40.240Z",
+          "observedAt": "2026-09-12T12:49:40.240Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/03-城市漫游效果图.png · div.bili-pics-uploader__add",
+          "observedAt": "2026-09-12T12:50:16.877Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/03-城市漫游效果图.png",
+          "observedAt": "2026-09-12T12:50:26.136Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i0.hdslb.com/bfs/new_dyn/5896a94174e4afc69e002b512c6a02b03546384070347419.png · 2026-09-12T12:50:26.136Z",
+          "observedAt": "2026-09-12T12:50:26.136Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-12T12:48:22.446Z · upload-asset/local:2026-09-09/素材/01-首篇封面.png:attempt-3；结果另行核验",
+          "observedAt": "2026-09-12T12:54:58.604Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-12T12:49:12.865Z · upload-asset/local:2026-09-09/素材/02-导航场景效果图.png:attempt-3；结果另行核验",
+          "observedAt": "2026-09-12T12:54:58.604Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-12T12:49:52.834Z · upload-asset/local:2026-09-09/素材/03-城市漫游效果图.png:attempt-3；结果另行核验",
+          "observedAt": "2026-09-12T12:54:58.604Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "skip-if-verified",
+      "attemptCount": 3,
+      "startedAt": "2026-09-12T12:47:39.757Z",
+      "finishedAt": "2026-09-12T12:51:00.325Z",
+      "evidence": [
+        "基于 inspect 2026-09-12T11:45:37.483Z：fileInput=div.bili-dyn-publishing__tools__item.pic 可用，编辑器当前 0 张图片；将按顺序逐张上传 01-首篇封面.png、02-导航场景效果图.png、03-城市漫游效果图.png",
+        "inspect 2026-09-12T11:48:26.076Z：三张图片全部 uploaded 且 verifiedAt 已记录（01-首篇封面 bfe0c589、02-导航场景 47c4ca85、03-城市漫游 cc6d65b1 均为 i0.hdslb.com 平台 URL，loaded=true，imageEnumerationComplete=true），matchedAssets 三项全部匹配",
+        "csdn@1 页面回读 · https://t.bilibili.com/",
+        "用户另行授权本稿重建；上代证据不能证明新现场完成",
+        "基于 inspect 2026-09-12T12:41:06.811Z：fileInput=div.bili-dyn-publishing__tools__item.pic 可用，编辑器当前 0 张图片；将按顺序逐张上传 01-首篇封面.png、02-导航场景效果图.png、03-城市漫游效果图.png（gen3 新现场，每张单独核验）",
+        "三张图均已 uploaded：01-首篇封面 2ccd4350、02-导航场景 675c0482、03-城市漫游 5896a941（均为 i0.hdslb.com 平台 URL，g4 attempt-3 副作用全部 verified）",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "fill-body",
+      "label": "填写正文并完整回读",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:2026-09-09/素材/01-首篇封面.png.placement",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/01-首篇封面.png · 图集 第 1 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-12T12:50:51.529Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/02-导航场景效果图.png.placement",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/02-导航场景效果图.png · 图集 第 2 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-12T12:50:51.529Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:2026-09-09/素材/03-城市漫游效果图.png.placement",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/03-城市漫游效果图.png · 图集 第 3 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-12T12:50:51.529Z",
+          "generation": 4
+        },
+        {
+          "id": "body.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "当前图文正文 118 字符；正文及逐图一致；无平台保存保证",
+          "observedAt": "2026-09-12T12:51:46.261Z",
+          "generation": 4
+        },
+        {
+          "id": "body.locate",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "正文 div[placeholder=\"有什么想和大家分享的？\"] · iframe 主文档 · 118 字符",
+          "observedAt": "2026-09-12T12:51:50.757Z",
+          "generation": 4
+        },
+        {
+          "id": "body.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-12T12:51:44.436Z · save-draft/autosave:fill-body:c73d5229-44f5-4865-8c2d-9dcd417ebfa6；结果另行核验",
+          "observedAt": "2026-09-12T12:54:58.604Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 2,
+      "startedAt": "2026-09-12T12:51:39.946Z",
+      "finishedAt": "2026-09-12T12:52:10.283Z",
+      "evidence": [
+        "基于 inspect 2026-09-12T11:48:41.688Z：正文区域 div[placeholder=\"有什么想和大家分享的？\"] 当前 0 字符，三张图片 placement 已全部通过；main 冻结正文期望 110 字符，将写入冻结原稿的两段文字（不含 Markdown 图片语法）",
+        "inspect 2026-09-12T11:49:18.448Z：browser_fill 已写入正文区域，bodyTextLength=118（含换行），bodyMatchesFrozen=true，正文与冻结原稿一致；三张图片仍全部 loaded=true，顺序未变",
+        "csdn@1 页面回读 · https://t.bilibili.com/",
+        "用户另行授权本稿重建；上代证据不能证明新现场完成",
+        "基于 inspect 2026-09-12T12:50:50.270Z：正文区域 div[placeholder=\"有什么想和大家分享的？\"] 当前 0 字符，三张图片 placement 已全部通过；将写入冻结原稿的两段文字（不含 Markdown 图片语法）",
+        "inspect 2026-09-12T12:51:49.284Z：browser_fill 已写入正文区域，bodyTextLength=118（含换行），bodyMatchesFrozen=true，正文与冻结原稿一致；三张图片仍全部 loaded=true，顺序未变",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "fill-fields",
+      "label": "填写独立标题并核验发布设置",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "field.title.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 Studio 发布恢复验证；实际 Studio 发布恢复验证",
+          "observedAt": "2026-09-12T12:52:30.976Z",
+          "generation": 4
+        },
+        {
+          "id": "field.title.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 Studio 发布恢复验证；实际 Studio 发布恢复验证",
+          "observedAt": "2026-09-12T12:52:30.976Z",
+          "generation": 4
+        },
+        {
+          "id": "bilibili.visibility.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "当前原生可见范围：public",
+          "observedAt": "2026-09-12T12:52:55.946Z",
+          "generation": 4
+        },
+        {
+          "id": "field.title.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-12T12:52:22.256Z · save-draft/autosave:fill-fields:title:31e4e43b-6e79-439f-b43f-da13fc5bbd12；结果另行核验",
+          "observedAt": "2026-09-12T12:54:58.604Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 2,
+      "startedAt": "2026-09-12T12:52:17.753Z",
+      "finishedAt": "2026-09-12T12:53:18.990Z",
+      "evidence": [
+        "基于 inspect 2026-09-12T11:49:31.729Z：标题 input[placeholder=\"好的标题更容易获得支持，选填20字\"] 当前为空，冻结字段期望\"Studio 发布恢复验证\"；填写后需通过 openPublishSettings=div.bili-dyn-publishing__settings__btn 核验可见范围为 public",
+        "inspect 2026-09-12T11:50:17.874Z：标题已填写\"Studio 发布恢复验证\"与冻结字段一致；经 openPublishSettings 两级展开后 bilibiliVisibility=public；submissionUnavailableReason 已清空，selectors.publish=main > section:nth-child(1) :text-is(\"发布\") 已返回；未点击任何可见范围选项",
+        "csdn@1 页面回读 · https://t.bilibili.com/",
+        "用户另行授权本稿重建；上代证据不能证明新现场完成",
+        "基于 inspect 2026-09-12T12:52:04.670Z：标题 input[placeholder=\"好的标题更容易获得支持，选填20字\"] 当前为空，冻结字段期望\"Studio 发布恢复验证\"；填写后需通过 openPublishSettings=div.bili-dyn-publishing__settings__btn 核验可见范围为 public",
+        "inspect 2026-09-12T12:52:54.552Z：标题已填写\"Studio 发布恢复验证\"与冻结字段一致；经 openPublishSettings 两级展开后 bilibiliVisibility=public；submissionUnavailableReason 已清空，selectors.publish=main > section:nth-child(1) :text-is(\"发布\") 已返回；未点击任何可见范围选项，正文 118 字符 bodyMatchesFrozen=true，三张图片仍全部 loaded=true",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "save-draft",
+      "label": "复核当前图文（不代表平台已保存）",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "save.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "可信适配器回读 · 3546384070347419 · draftId  · Studio 发布恢复验证 · unknown · https://t.bilibili.com/",
+          "observedAt": "2026-09-12T12:53:56.026Z",
+          "generation": 4
+        },
+        {
+          "id": "save.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "skipped",
+          "evidence": "当前动态流程没有平台保存动作，不声明草稿已保存",
+          "observedAt": "2026-09-12T12:53:56.026Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 2,
+      "startedAt": "2026-09-12T12:53:25.062Z",
+      "finishedAt": "2026-09-12T12:53:56.026Z",
+      "evidence": [
+        "基于 inspect 2026-09-12T11:50:30.494Z：开始复核当前图文——同 UID 3546384070347419、正文 118 字符 bodyMatchesFrozen=true、三张图片逐一核对平台 URL；该平台无持久草稿，本步只做现场复核，不产生草稿ID",
+        "inspect 2026-09-12T11:50:47.509Z 复核：platformAccountId=3546384070347419 与 targetUID 一致；正文 118 字符 bodyMatchesFrozen=true；标题\"Studio 发布恢复验证\"；三张图片平台 URL 与 matchedAssets 一一对应且 loaded=true；bilibiliVisibility=public；两条 autosave 副作用已 verified。本平台无持久草稿，saveState=unknown，不产生草稿ID",
+        "csdn@1 页面回读 · https://t.bilibili.com/",
+        "用户另行授权本稿重建；上代证据不能证明新现场完成",
+        "基于 inspect 2026-09-12T12:53:11.207Z：开始复核当前图文——同 UID 3546384070347419、正文 118 字符 bodyMatchesFrozen=true、三张图片逐一核对平台 URL；该平台无持久草稿，本步只做现场复核，不产生草稿ID",
+        "inspect 2026-09-12T12:53:33.571Z 复核：platformAccountId=3546384070347419 与 targetUID 一致；正文 118 字符 bodyMatchesFrozen=true；标题\"Studio 发布恢复验证\"；三张图片平台 URL 与 matchedAssets 一一对应且 loaded=true；bilibiliVisibility=public；g4 两条 autosave 副作用已 verified。本平台无持久草稿，saveState=unknown，不产生草稿ID",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "publish",
+      "label": "单次发布 B站动态",
+      "adapterVersion": 1,
+      "status": "needs-reconcile",
+      "details": [
+        {
+          "id": "bilibili.agreement.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "实际读到原生动态使用规范 iframe、标题、确认并发送和取消；尚未观察到提交请求",
+          "observedAt": "2026-09-12T12:54:28.775Z",
+          "generation": 4
+        },
+        {
+          "id": "bilibili.agreement.confirm",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "原生确认并发送按钮已点击一次；结果由提交回执独立核验",
+          "observedAt": "2026-09-12T12:54:29.884Z",
+          "generation": 4
+        },
+        {
+          "id": "bilibili.submission.receipt",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "unknown",
+          "evidence": "已尝试原生确认发送，未能完成回执核验",
+          "reason": "不得再次确认或重发；只核验平台结果",
+          "observedAt": "2026-09-12T12:54:58.387Z",
+          "generation": 4
+        },
+        {
+          "id": "bilibili.submission.observation",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "截至 2026-09-12T12:54:58.604Z：确认调用已预写尝试记录（不证明点击成功）；创建请求已观察到；监听已结束。",
+          "reason": "这是原操作的观察记录，不是发布成功或可重发证明；续接必须检查仍有效的原 Runtime 与观察器。",
+          "observedAt": "2026-09-12T12:54:58.604Z",
+          "generation": 4
+        },
+        {
+          "id": "publish.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "unknown",
+          "evidence": "派发闸门已通过 · 2026-09-12T12:54:28.474Z · publish/final；结果另行核验",
+          "observedAt": "2026-09-12T12:54:58.604Z",
+          "generation": 4
+        },
+        {
+          "id": "publish.preflight",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "当前发布控件与一次性授权通过主进程闸门 · 2026-09-12T12:54:28.474Z",
+          "observedAt": "2026-09-12T12:54:58.604Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 2,
+      "startedAt": "2026-09-12T12:54:04.709Z",
+      "evidence": [
+        "基于 inspect 2026-09-12T11:50:59.841Z：selectors.publish=main > section:nth-child(1) :text-is(\"发布\") 已返回，submissionUnavailableReason 为空，bilibiliVisibility=public，正文/图片/标题全部核验通过；发布适配已通过，准备单次发布",
+        "用户另行授权本稿重建；上代证据不能证明新现场完成",
+        "基于 inspect 2026-09-12T12:53:50.443Z：selectors.publish=main > section:nth-child(1) :text-is(\"发布\") 已返回，submissionUnavailableReason 为空，bilibiliVisibility=public，正文/图片/标题全部核验通过；发布适配已通过，按用户另行授权执行单次发布"
+      ]
+    },
+    {
+      "stepId": "verify-publication",
+      "label": "核验动态 ID、作者、全文与逐图结果",
+      "adapterVersion": 1,
+      "status": "pending",
+      "details": [
+        {
+          "id": "publication.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "unknown",
+          "evidence": "已派发但没有可信结果 · final",
+          "reason": "B站提交结果未取得可核验回执；禁止重复发送",
+          "observedAt": "2026-09-12T12:54:58.461Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "evidence": [
+        "用户另行授权本稿重建；上代证据不能证明新现场完成"
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "id": "local:2026-09-09/素材/01-首篇封面.png",
+      "kind": "local",
+      "sourcePath": "/Users/apple/Desktop/研发日记/2026-09-09/素材/01-首篇封面.png",
+      "displayPath": "素材/01-首篇封面.png",
+      "mediaType": "image/png",
+      "size": 2510228,
+      "modifiedAt": 1789052878075.3413,
+      "occurrences": [
+        {
+          "start": 145,
+          "end": 159,
+          "alt": "AI眼镜封面"
+        }
+      ],
+      "status": "uploaded",
+      "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/2ccd435001898d8f88cc64e79eba3d1f3546384070347419.png",
+      "verifiedAt": "2026-09-12T12:49:00.467Z",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-12T11:45:55.637Z",
+          "finishedAt": "2026-09-12T11:46:54.839Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "inspect 2026-09-12T11:46:19.576Z：文件选择已派发后编辑器 images 出现 1 张图片，src=https://i0.hdslb.com/bfs/new_dyn/bfe0c589a8c5e32a216af1faecdba9333546384070347419.png，loaded=true；等待平台确认",
+            "inspect 2026-09-12T11:46:37.195Z：编辑器 images 稳定为 1 张，src=https://i0.hdslb.com/bfs/new_dyn/bfe0c589a8c5e32a216af1faecdba9333546384070347419.png，loaded=true，imageEnumerationComplete=true；matchedAssets 已将 local:2026-09-09/素材/01-首篇封面.png 匹配到该平台 URL，进入核验",
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "上一现场平台地址：https://i0.hdslb.com/bfs/new_dyn/bfe0c589a8c5e32a216af1faecdba9333546384070347419.png"
+          ]
+        },
+        {
+          "number": 2,
+          "status": "succeeded",
+          "startedAt": "2026-09-12T12:48:15.920Z",
+          "finishedAt": "2026-09-12T12:49:00.467Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "browser_upload_file 已派发 01-首篇封面.png（fileInput=div.bili-dyn-publishing__tools__item.pic，未先点击），工具返回 dispatched=file-selection、uploadVerified=false；等待平台处理",
+            "main 已记录平台 URL https://i0.hdslb.com/bfs/new_dyn/2ccd435001898d8f88cc64e79eba3d1f3546384070347419.png（g4 attempt-3 dispatched）；进入页面回读核验",
+            "csdn@1 页面回读 · https://t.bilibili.com/"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "local:2026-09-09/素材/02-导航场景效果图.png",
+      "kind": "local",
+      "sourcePath": "/Users/apple/Desktop/研发日记/2026-09-09/素材/02-导航场景效果图.png",
+      "displayPath": "素材/02-导航场景效果图.png",
+      "mediaType": "image/png",
+      "size": 1505655,
+      "modifiedAt": 1789052878077.4902,
+      "occurrences": [
+        {
+          "start": 173,
+          "end": 190,
+          "alt": "导航设计效果图"
+        }
+      ],
+      "status": "uploaded",
+      "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/675c0482a27021cb02839500bbea98593546384070347419.png",
+      "verifiedAt": "2026-09-12T12:49:40.240Z",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-12T11:47:01.621Z",
+          "finishedAt": "2026-09-12T11:47:48.608Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "inspect 2026-09-12T11:47:18.969Z：文件选择派发后编辑器 images 从 1 张增至 2 张，新增 src=https://i0.hdslb.com/bfs/new_dyn/47c4ca85c117f88dc93b282e5332377a3546384070347419.png，loaded=true；等待平台确认",
+            "inspect 2026-09-12T11:47:28.949Z：编辑器 images 稳定为 2 张，第 2 张 src=https://i0.hdslb.com/bfs/new_dyn/47c4ca85c117f88dc93b282e5332377a3546384070347419.png，loaded=true，imageEnumerationComplete=true；matchedAssets 已将 local:2026-09-09/素材/02-导航场景效果图.png 匹配到该平台 URL，进入核验",
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "上一现场平台地址：https://i0.hdslb.com/bfs/new_dyn/47c4ca85c117f88dc93b282e5332377a3546384070347419.png"
+          ]
+        },
+        {
+          "number": 2,
+          "status": "succeeded",
+          "startedAt": "2026-09-12T12:49:06.768Z",
+          "finishedAt": "2026-09-12T12:49:40.240Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "browser_upload_file 已派发 02-导航场景效果图.png（fileInput=div.bili-pics-uploader__add，未先点击），工具返回 dispatched=file-selection、uploadVerified=false；等待平台处理",
+            "main 已记录平台 URL https://i0.hdslb.com/bfs/new_dyn/675c0482a27021cb02839500bbea98593546384070347419.png（g4 attempt-3 dispatched）；进入页面回读核验",
+            "csdn@1 页面回读 · https://t.bilibili.com/"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "local:2026-09-09/素材/03-城市漫游效果图.png",
+      "kind": "local",
+      "sourcePath": "/Users/apple/Desktop/研发日记/2026-09-09/素材/03-城市漫游效果图.png",
+      "displayPath": "素材/03-城市漫游效果图.png",
+      "mediaType": "image/png",
+      "size": 2114549,
+      "modifiedAt": 1789052878080.0527,
+      "occurrences": [
+        {
+          "start": 206,
+          "end": 223,
+          "alt": "城市漫游概念效果图"
+        }
+      ],
+      "status": "uploaded",
+      "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/5896a94174e4afc69e002b512c6a02b03546384070347419.png",
+      "verifiedAt": "2026-09-12T12:50:26.136Z",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-12T11:47:56.173Z",
+          "finishedAt": "2026-09-12T11:48:33.632Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "inspect 2026-09-12T11:48:09.383Z：文件选择派发后编辑器 images 从 2 张增至 3 张，新增 src=https://i0.hdslb.com/bfs/new_dyn/cc6d65b129d0299c1c7da983c2113c523546384070347419.png，loaded=true；等待平台确认",
+            "inspect 2026-09-12T11:48:18.664Z：编辑器 images 稳定为 3 张，第 3 张 src=https://i0.hdslb.com/bfs/new_dyn/cc6d65b129d0299c1c7da983c2113c523546384070347419.png，loaded=true，imageEnumerationComplete=true；matchedAssets 已将 local:2026-09-09/素材/03-城市漫游效果图.png 匹配到该平台 URL，进入核验",
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "上一现场平台地址：https://i0.hdslb.com/bfs/new_dyn/cc6d65b129d0299c1c7da983c2113c523546384070347419.png"
+          ]
+        },
+        {
+          "number": 2,
+          "status": "succeeded",
+          "startedAt": "2026-09-12T12:49:46.434Z",
+          "finishedAt": "2026-09-12T12:50:26.136Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "browser_upload_file 已派发 03-城市漫游效果图.png（fileInput=div.bili-pics-uploader__add，未先点击），工具返回 dispatched=file-selection、uploadVerified=false；等待平台处理",
+            "main 已记录平台 URL https://i0.hdslb.com/bfs/new_dyn/5896a94174e4afc69e002b512c6a02b03546384070347419.png（g4 attempt-3 dispatched）；进入页面回读核验",
+            "csdn@1 页面回读 · https://t.bilibili.com/"
+          ]
+        }
+      ]
+    }
+  ]
+}

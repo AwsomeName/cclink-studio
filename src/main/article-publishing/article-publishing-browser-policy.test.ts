@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
+import { BilibiliPublishingAdapter } from './bilibili-publishing-adapter'
 import { WeiboPublishingAdapter } from './weibo-publishing-adapter'
 import { CsdnPublishingAdapter } from './csdn-publishing-adapter'
 import { TOUTIAO_DISABLE_MUSIC_SELECTOR } from './toutiao-publishing-adapter'
@@ -32,6 +34,7 @@ function createPolicy(options?: {
   weiboUid?: string
   stepId?: string
   publicationStatus?: string
+  allowPublish?: boolean
   publicationBlocker?: string
   assetId?: string
   platformUrl?: string
@@ -121,7 +124,12 @@ function createPolicy(options?: {
     articlePublishing: {
       adapterId: options?.adapterId ?? 'csdn',
       ...(['weibo', 'bilibili'].includes(options?.adapterId ?? '')
-        ? { composer: { platformAccountId: '5961101548', allowPublish: false } }
+        ? {
+            composer: {
+              platformAccountId: '5961101548',
+              allowPublish: options?.allowPublish ?? false,
+            },
+          }
         : {}),
       adapterVersion: 1,
       accountId: 'account-a',
@@ -170,6 +178,8 @@ function createPolicy(options?: {
     },
   })
   const webAffairService = {
+    recordBilibiliSubmissionObservation: vi.fn().mockResolvedValue({ success: true, data: {} }),
+    recordBilibiliSubmissionReceipt: vi.fn().mockResolvedValue({ success: true, data: {} }),
     recordArticlePublishingImageObservation: vi.fn().mockResolvedValue({ success: true, data: {} }),
     recordArticlePublishingPlanResults: vi.fn().mockResolvedValue({ success: true, data: {} }),
     getProjectSnapshot: vi.fn(() => ({
@@ -300,10 +310,12 @@ function createPolicy(options?: {
               ? {
                   uid: '5961101548',
                   recognized: true,
-                  text: '',
-                  title: '',
+                  text: options.stepId === 'publish' ? 'Article' : '',
+                  title: options.stepId === 'publish' ? 'Article' : '',
+                  publishSelector: selectors.publish,
                   uploadSelector: selectors.fileInput,
-                  visibility: 'unknown',
+                  immediatePublishPresent: Boolean(selectors.publish),
+                  visibility: options.stepId === 'publish' ? 'public' : 'unknown',
                   observedAt: new Date().toISOString(),
                 }
               : {}),
@@ -380,6 +392,205 @@ const context = {
 }
 
 describe('ArticlePublishingBrowserPolicy', () => {
+  it.each([
+    'disabled-entry',
+    'authorized-retry',
+    'private',
+    'scheduled',
+    'changed-body',
+    'damaged-body-structure',
+    'changed-title',
+    'changed-account',
+    'changed-image',
+  ])('revalidates the confirmation phase with a disabled original entry (%s)', async (mode) => {
+    const image = 'https://i0.hdslb.com/bfs/new_dyn/fixture.png'
+    const verification = vi
+      .spyOn(BilibiliPublishingAdapter.prototype, 'verifyBody')
+      .mockResolvedValue({
+        matches: true,
+        textMatches: true,
+        textEvidence: 'frozen',
+        expectedImages: 1,
+        actualImages: 1,
+        images: [{ src: image, actualSrc: image, matches: true, alt: '' }],
+      } as never)
+    const { policy, inspect, webAffairService } = createPolicy({
+      adapterId: 'bilibili',
+      stepId: 'publish',
+      allowPublish: true,
+      draftUrl: null,
+      platformUrl: image,
+      imageEnumerationComplete: true,
+      images: [{ src: image, alt: '', loaded: true }],
+    })
+    const page = await inspect({ publish: '#publish' }, 'https://t.bilibili.com/')
+    const events = new EventEmitter()
+    Object.assign(page, { on: events.on.bind(events), off: events.off.bind(events) })
+    let submission: Awaited<ReturnType<typeof policy.preparePublicationSubmit>> = null
+    const click = vi.fn(async () => {
+      const request = {
+        method: () => 'POST',
+        url: () => 'https://api.bilibili.com/x/dynamic/feed/create/dyn',
+        postDataJSON: () => ({
+          dyn_req: {
+            content: { contents: [{ raw_text: 'Article' }] },
+            pics: [{ img_src: image }],
+          },
+        }),
+      }
+      events.emit('request', request)
+      events.emit('response', {
+        status: () => 200,
+        request: () => request,
+        json: async () => ({ code: 0, data: { dyn_id_str: '1246694229973925912' } }),
+      })
+    })
+    try {
+      if (mode === 'authorized-retry') {
+        const snapshot = webAffairService.getProjectSnapshot()
+        const state = snapshot.data.affairs[0].articlePublishing
+        state.publication.status = 'result-unknown'
+        Object.assign(state, {
+          bilibiliRetry: {
+            attemptId: 'attempt-a',
+            executionGeneration: 1,
+            previousEffectKey: 'old',
+            authorizedAt: new Date().toISOString(),
+          },
+        })
+        state.sideEffects = [
+          { key: 'old', kind: 'publish', executionGeneration: 0, status: 'result-unknown' },
+        ]
+        webAffairService.getProjectSnapshot.mockReturnValue(snapshot)
+      }
+      submission = await policy.preparePublicationSubmit(
+        task as never,
+        'publish-key',
+        page as never,
+        context,
+      )
+      expect(submission).not.toBeNull()
+      const evaluateComposer = (page as Record<string, unknown>).evaluate as (
+        ...args: unknown[]
+      ) => Promise<Record<string, unknown>>
+      Object.assign(page, {
+        frameLocator: () => ({ getByRole: () => ({ waitFor: async () => undefined }) }),
+        getByRole: () => ({ waitFor: async () => undefined, click }),
+        evaluate: async (fn: unknown, args: unknown) =>
+          args
+            ? {
+                ...(await evaluateComposer(fn, args)),
+                publishSelector: undefined,
+                immediatePublishPresent: mode !== 'scheduled',
+                bodyStructureValid: mode !== 'damaged-body-structure',
+                visibility: mode === 'private' ? 'private' : 'public',
+                text: mode === 'changed-body' ? 'changed' : 'Article',
+                title: mode === 'changed-title' ? 'changed' : 'Article',
+                uid: mode === 'changed-account' ? '1234567890' : '5961101548',
+                images: [{ src: image, alt: '', loaded: mode !== 'changed-image' }],
+              }
+            : 'recognized',
+      })
+      submission!.arm()
+      if (['disabled-entry', 'authorized-retry'].includes(mode)) {
+        await submission!.finish()
+        expect(click).toHaveBeenCalledTimes(1)
+        expect(webAffairService.recordBilibiliSubmissionReceipt).toHaveBeenCalledTimes(1)
+      } else {
+        await expect(submission!.finish()).rejects.toThrow('首次确认前')
+        expect(click).not.toHaveBeenCalled()
+        expect(webAffairService.recordBilibiliSubmissionReceipt).not.toHaveBeenCalled()
+      }
+    } finally {
+      await submission?.dispose()
+      verification.mockRestore()
+    }
+  })
+
+  it('keeps receipt-only recovery independent of a failed B站 confirmation and persists it once', async () => {
+    const image = 'https://i0.hdslb.com/bfs/new_dyn/fixture.png'
+    const verification = vi
+      .spyOn(BilibiliPublishingAdapter.prototype, 'verifyBody')
+      .mockResolvedValue({
+        matches: true,
+        textMatches: true,
+        textEvidence: 'same frozen text',
+        expectedImages: 1,
+        actualImages: 1,
+        images: [{ src: image, actualSrc: image, matches: true, alt: '' }],
+      } as never)
+    const { policy, inspect, webAffairService } = createPolicy({
+      adapterId: 'bilibili',
+      stepId: 'publish',
+      allowPublish: true,
+      draftUrl: null,
+      platformUrl: image,
+      imageEnumerationComplete: true,
+      images: [{ src: image, alt: '', loaded: true }],
+    })
+    const page = await inspect({ publish: '#publish' }, 'https://t.bilibili.com/')
+    const events = new EventEmitter()
+    Object.assign(page, { on: events.on.bind(events), off: events.off.bind(events) })
+    let submission: Awaited<ReturnType<typeof policy.preparePublicationSubmit>> = null
+    const click = vi.fn()
+    try {
+      submission = await policy.preparePublicationSubmit(
+        task as never,
+        'publish-key',
+        page as never,
+        context,
+      )
+      expect(submission).not.toBeNull()
+      Object.assign(page, {
+        frameLocator: () => ({ getByRole: () => ({ waitFor: async () => undefined }) }),
+        getByRole: () => ({ waitFor: async () => undefined, click }),
+        evaluate: async () => '规范文档不可读',
+      })
+      submission!.arm()
+      await expect(submission!.finish()).rejects.toThrow('规范文档不可读')
+      const recovery = submission!.finish(false)
+      const request = {
+        method: () => 'POST',
+        url: () => 'https://api.bilibili.com/x/dynamic/feed/create/dyn',
+        postDataJSON: () => ({
+          dyn_req: { content: { contents: [{ raw_text: 'Article' }] }, pics: [{ img_src: image }] },
+        }),
+      }
+      events.emit('request', request)
+      events.emit('response', {
+        status: () => 200,
+        request: () => request,
+        json: async () => ({ code: 0, data: { dyn_id_str: '1246694229973925912' } }),
+      })
+      await recovery
+      await submission!.finish(false)
+      await expect(submission!.finish()).rejects.toThrow('规范文档不可读')
+      expect(click).not.toHaveBeenCalled()
+      expect(webAffairService.recordBilibiliSubmissionReceipt).toHaveBeenCalledTimes(1)
+      expect(webAffairService.recordBilibiliSubmissionReceipt).toHaveBeenCalledWith(
+        expect.objectContaining({ postId: '1246694229973925912', sideEffectKey: 'publish-key' }),
+        'workspace-a',
+      )
+    } finally {
+      await submission?.dispose()
+      verification.mockRestore()
+    }
+    expect(webAffairService.recordBilibiliSubmissionObservation).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        observation: {
+          confirmationAttempted: false,
+          requestObserved: true,
+          observationEnded: true,
+          requestMatch: 'matched',
+          responseStatus: 200,
+          platformCode: 0,
+        },
+      }),
+      'workspace-a',
+    )
+    expect(events.listenerCount('request') + events.listenerCount('response')).toBe(0)
+  })
+
   it.each([true, false])(
     'records B站 public image and body evidence in publication steps (matches=%s)',
     async (matches) => {
@@ -1128,6 +1339,66 @@ describe('ArticlePublishingBrowserPolicy', () => {
       error: { message: expect.stringContaining('过期') },
     })
   })
+
+  it.each(['authorized', 'no-authorization', 'already-dispatched'])(
+    'bounds rebuilding a previously uploaded image: %s',
+    async (mode) => {
+      const { policy, inspect, webAffairService } = createPolicy({
+        adapterId: 'bilibili',
+        allowPublish: true,
+        assetStatus: 'pending',
+        draftUrl: null,
+        imageEnumerationComplete: true,
+      })
+      await inspect({ fileInput: '#upload' }, 'https://t.bilibili.com/')
+      const snapshot = webAffairService.getProjectSnapshot()
+      const state = snapshot.data.affairs[0].articlePublishing
+      state.publication.status = 'result-unknown'
+      Object.assign(state.assets[0], { uploadAttempts: [{ number: 1, status: 'succeeded' }] })
+      state.sideEffects = [
+        { key: 'old', kind: 'publish', executionGeneration: 0, status: 'result-unknown' },
+        {
+          key: 'old-upload',
+          kind: 'upload-asset',
+          executionGeneration: 0,
+          status: 'verified',
+          targetId: 'asset-a:attempt-1',
+          dispatchedAt: 'old',
+        },
+        ...(mode === 'already-dispatched'
+          ? [
+              {
+                key: 'new-upload',
+                kind: 'upload-asset',
+                executionGeneration: 1,
+                status: 'result-unknown',
+                targetId: 'asset-a:attempt-2',
+                dispatchedAt: 'new',
+              },
+            ]
+          : []),
+      ]
+      if (mode !== 'no-authorization')
+        Object.assign(state, {
+          bilibiliRetry: {
+            attemptId: 'attempt-a',
+            executionGeneration: 1,
+            previousEffectKey: 'old',
+            authorizedAt: new Date().toISOString(),
+          },
+        })
+      webAffairService.getProjectSnapshot.mockReturnValue(snapshot)
+      await inspect({ fileInput: '#upload' }, 'https://t.bilibili.com/')
+      expect(
+        policy.authorizeTrustedReport(
+          'article_publishing_report_asset',
+          { assetId: 'asset-a', status: 'uploading' },
+          context,
+          reporter(),
+        ).success,
+      ).toBe(mode === 'authorized')
+    },
+  )
 
   it('does not declare an old uncertain upload absent without comparable platform identity', async () => {
     const { policy, inspect } = createPolicy({

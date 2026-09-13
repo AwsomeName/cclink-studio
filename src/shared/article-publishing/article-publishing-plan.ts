@@ -524,6 +524,15 @@ export function articlePublishingDetailDefinitions(
       '读取同稿提交回执；取消、页面改代或结果未知时不得再次确认',
     )
     add(
+      'bilibili.submission.observation',
+      'publish',
+      'Studio',
+      '保留确认派发与请求观察事实',
+      '本次发布入口的派发闸门已通过；观察器只属于当前操作',
+      '主进程记录确认是否已尝试、是否观察到创建请求以及监听结束状态',
+      '只在原 Runtime 与原观察器仍有效时继续；历史记录不授予重发权限',
+    )
+    add(
       'bilibili.submission.receipt',
       'publish',
       'Studio',

@@ -416,43 +416,70 @@ describe('Cookie action boundary', () => {
   })
 })
 
-it.each(['valid', 'wrong-selector', 'detail-page', 'not-editable', 'cancelled', 'no-permit'])(
-  'writes the frozen B站 plain body only to the current signed composer: %s',
-  async (scenario) => {
-    const fill = vi.fn()
-    const body = { fill, evaluate: vi.fn().mockResolvedValue(scenario !== 'not-editable') }
-    const page = {
-      url: () =>
-        scenario === 'detail-page'
-          ? 'https://t.bilibili.com/112233445566778899'
-          : 'https://t.bilibili.com/',
-      locator: vi.fn(() => body),
-    }
-    const guard = vi.fn(() => {
-      if (scenario === 'cancelled') throw new Error('cancelled')
-    })
-    const result = executePlaywrightAction(
-      page as never,
-      {
-        type: 'fill',
-        selector:
-          scenario === 'wrong-selector' ? '#other' : 'div[placeholder="有什么想和大家分享的？"]',
-        value: 'untrusted Agent text',
-      },
-      undefined,
-      scenario === 'no-permit' ? undefined : guard,
-      '冻结正文\n#原稿标签',
-    )
-    if (scenario === 'valid') {
-      await result
-      expect(fill).toHaveBeenCalledExactlyOnceWith('冻结正文\n#原稿标签')
-      expect(guard).toHaveBeenCalled()
-    } else {
-      await expect(result).rejects.toThrow()
-      expect(fill).not.toHaveBeenCalled()
-    }
-  },
-)
+it.each([
+  'valid',
+  'wrong-selector',
+  'detail-page',
+  'not-editable',
+  'cancelled',
+  'no-permit',
+  'nonempty',
+  'cancel-after-focus',
+  'cancel-after-position',
+])('writes the frozen B站 plain body only to the current signed composer: %s', async (scenario) => {
+  const fill = vi.fn()
+  const paste = vi.fn()
+  let cancelled = scenario === 'cancelled'
+  const body = {
+    fill,
+    innerText: async () => (scenario === 'nonempty' ? '已存在的稿件' : '\u200b\n'),
+    focus: async () => {
+      if (scenario === 'cancel-after-focus') cancelled = true
+    },
+    press: async () => {
+      if (scenario === 'cancel-after-position') cancelled = true
+    },
+    evaluate: vi.fn(async (_fn, text) => {
+      if (text !== undefined) {
+        paste(text)
+        return undefined
+      }
+      return scenario !== 'not-editable'
+    }),
+  }
+  const page = {
+    url: () =>
+      scenario === 'detail-page'
+        ? 'https://t.bilibili.com/112233445566778899'
+        : 'https://t.bilibili.com/',
+    locator: vi.fn(() => body),
+  }
+  const guard = vi.fn(() => {
+    if (cancelled) throw new Error('cancelled')
+  })
+  const result = executePlaywrightAction(
+    page as never,
+    {
+      type: 'fill',
+      selector:
+        scenario === 'wrong-selector' ? '#other' : 'div[placeholder="有什么想和大家分享的？"]',
+      value: 'untrusted Agent text',
+    },
+    undefined,
+    scenario === 'no-permit' ? undefined : guard,
+    '冻结正文\n#原稿标签',
+  )
+  if (scenario === 'valid') {
+    await result
+    expect(paste).toHaveBeenCalledExactlyOnceWith('冻结正文\n#原稿标签')
+    expect(guard).toHaveBeenCalled()
+  } else {
+    await expect(result).rejects.toThrow()
+    expect(fill).not.toHaveBeenCalled()
+    expect(paste).not.toHaveBeenCalled()
+  }
+  expect(fill).not.toHaveBeenCalled()
+})
 
 it('fences the Zhihu formatted paste after selection and before the clipboard event', async () => {
   const evaluate = vi.fn()

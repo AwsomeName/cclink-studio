@@ -1,5 +1,6 @@
 import { readBrowserControls } from './browser-controls'
 import { uploadBilibiliImage } from './bilibili-image-upload'
+import { pasteBilibiliBody } from './bilibili-body-input'
 import {
   clickXiaohongshuControl,
   XIAOHONGSHU_SAVE_SELECTOR,
@@ -64,10 +65,10 @@ export async function executePlaywrightAction(
         )
           throw new Error('B站正文目标或派发许可不匹配')
         const body = page!.locator(action.selector)
-        if (!(await body.evaluate((element) => (element as HTMLElement).isContentEditable)))
-          throw new Error('B站正文区域不可编辑')
-        assertDispatchStillCurrent()
-        await body.fill(trustedArticleBodyHtml)
+        // Native B站 input tracks text nodes. Chromium fill() creates plain DIVs
+        // for multiline input, which its _backspace parser treats as JSON-backed
+        // rich nodes. Use the site's paste handler to update its own model.
+        await pasteBilibiliBody(body, trustedArticleBodyHtml, assertDispatchStillCurrent)
         return { filled: action.selector }
       }
       if (

@@ -26,19 +26,17 @@ describe('Toutiao current-page evidence', () => {
       }))
       const page = {
         url: () => url,
-        evaluate: vi
-          .fn()
-          .mockResolvedValue({
-            url,
-            options,
-            editorRecognized: true,
-            hasPublishControl: true,
-            saved: mode !== 'unsaved',
-            text: 'Article',
-            title: 'Article',
-            images: [],
-            observedAt: new Date().toISOString(),
-          }),
+        evaluate: vi.fn().mockResolvedValue({
+          url,
+          options,
+          editorRecognized: true,
+          hasPublishControl: true,
+          saved: mode !== 'unsaved',
+          text: 'Article',
+          title: 'Article',
+          images: [],
+          observedAt: new Date().toISOString(),
+        }),
       }
       const probe = await new PublishingAdapter().probe(page as never)
       expect(Boolean(probe.selectors.publish)).toBe(mode === 'ready')

@@ -1,0 +1,2 @@
+There has been no change in the accessibility tree for Window: "CCLink Studio 开源版".
+The focused UI element is 14 HTML 内容 动态首页-哔哩哔哩, URL: t.bilibili.com/

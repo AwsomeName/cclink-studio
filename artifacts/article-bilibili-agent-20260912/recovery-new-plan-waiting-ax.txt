@@ -1,0 +1,832 @@
+Window: "CCLink Studio 开源版", App: CCLink Studio 开源版.
+0 标准窗口 CCLink Studio 开源版, Secondary Actions: Raise
+	1 container CCLink Studio 开源版
+		2 container
+			3 HTML 内容 CCLink Studio 开源版, URL: localhost:5173/
+				4 container
+					5 按钮 收起左侧栏
+						6 图像
+					7 按钮 打开工作空间
+						8 图像
+						9 文本 打开工作空间
+					10 按钮 cclink-promotion, Help: /Users/apple/Desktop/chat-cc/cclink-promotion
+						11 图像
+						12 文本 cclink-promotion
+					13 按钮 研发日记, Help: /Users/apple/Desktop/研发日记
+						14 图像
+						15 文本 研发日记
+					16 按钮 历史项目
+						17 图像
+						18 文本 历史项目
+					19 container 当前项目最近会话
+						20 标签组 快速切换会话
+							21 标签 (selected) Description: 切换到会话：发布文章 · Studio 发布恢复验证 · B站动态，已完成, Help: 发布文章 · Studio 发布恢复验证 · B站动态 · 已完成, Value: 1
+							22 标签 (settable, integer) Description: 切换到会话：发布文章 · Studio 图文发布验证 · B站动态，已完成, Help: 发布文章 · Studio 图文发布验证 · B站动态 · 已完成, Value: 0
+						23 弹出式按钮 更多最近会话
+						24 按钮 新建本地会话
+							25 图像
+					26 按钮 收起 Agent 面板
+						27 图像
+					28 container
+						29 container 工作
+							30 按钮 文件
+							31 按钮 会话
+							32 按钮 浏览器
+							33 按钮 Terminal
+						34 container 资源
+							35 按钮 角色
+							36 按钮 网站与账号
+							37 按钮 数据源
+							38 按钮 CCLink 远程
+						39 container 流程
+							40 按钮 文章发布
+							41 按钮 事务
+							42 按钮 定时任务
+							43 按钮 生产
+					44 按钮 设置
+					45 container 文章发布侧栏
+						46 文本 文章发布
+						47 按钮 新建文章发布
+							48 图像
+						49 按钮 Studio 发布恢复验证 待处理 B站动态 · 账号 7c1ef8bb · 2026/9/12 19:42:39
+							50 文本 Studio 发布恢复验证
+							51 文本 待处理
+							52 container
+								53 text B站动态 · 账号  7c1ef8bb  ·  2026/9/12 19:42:39
+						54 按钮 Studio 图文发布验证 结果未知 B站动态 · 账号 7c1ef8bb · 2026/9/12 18:39:25
+							55 文本 Studio 图文发布验证
+							56 文本 结果未知
+							57 container
+								58 text B站动态 · 账号  7c1ef8bb  ·  2026/9/12 18:39:25
+						59 按钮 做AI眼镜第188天，它开始看懂我的世界 结果未知 B站动态 · 账号 7c1ef8bb · 2026/9/12 17:34:52
+							60 文本 做AI眼镜第188天，它开始看懂我的世界
+							61 文本 结果未知
+							62 container
+								63 text B站动态 · 账号  7c1ef8bb  ·  2026/9/12 17:34:52
+						64 按钮 做AI眼镜第188天，它开始看懂我的世界 已终止 B站动态 · 账号 7c1ef8bb · 2026/9/12 17:17:11
+							65 文本 做AI眼镜第188天，它开始看懂我的世界
+							66 文本 已终止
+							67 container
+								68 text B站动态 · 账号  7c1ef8bb  ·  2026/9/12 17:17:11
+						69 按钮 做AI眼镜第188天，它开始看懂我的世界 已终止 B站动态 · 账号 7c1ef8bb · 2026/9/12 16:46:32
+							70 文本 做AI眼镜第188天，它开始看懂我的世界
+							71 文本 已终止
+							72 container
+								73 text B站动态 · 账号  7c1ef8bb  ·  2026/9/12 16:46:32
+						74 按钮 做AI眼镜第188天，它开始看懂我的世界 已发布 头条微头条 · 账号 1345b278 · 2026/9/12 00:35:20
+							75 文本 做AI眼镜第188天，它开始看懂我的世界
+							76 文本 已发布
+							77 container
+								78 text 头条微头条 · 账号  1345b278  ·  2026/9/12 00:35:20
+						79 按钮 做AI眼镜第188天，它开始看懂我的世界 已中断 微博 · 账号 9823a570 · 2026/9/11 13:05:59
+							80 文本 做AI眼镜第188天，它开始看懂我的世界
+							81 文本 已中断
+							82 container
+								83 text 微博 · 账号  9823a570  ·  2026/9/11 13:05:59
+						84 按钮 做AI眼镜第188天，它开始看懂我的世界 已发布 知乎 · 账号 81f36309 · 2026/9/11 11:27:26
+							85 文本 做AI眼镜第188天，它开始看懂我的世界
+							86 文本 已发布
+							87 container
+								88 text 知乎 · 账号  81f36309  ·  2026/9/11 11:27:26
+						89 按钮 做AI眼镜第188天，它开始看懂我的世界 结果未知 小红书 · 账号 49f17596 · 2026/9/11 02:02:13
+							90 文本 做AI眼镜第188天，它开始看懂我的世界
+							91 文本 结果未知
+							92 container
+								93 text 小红书 · 账号  49f17596  ·  2026/9/11 02:02:13
+					94 分离器 Description: 侧栏宽度, Value: 50
+					95 container
+						96 标签 (settable, integer) 小红书 - 你的生活兴趣社区, Value: 0
+						97 标签 (settable, integer) 📰 小红书 · AIR第188天, Value: 0
+							98 文本 📰
+							99 文本 小红书 · AIR第188天
+							100 图像
+						101 标签 (settable, integer) 在手机上给 AI Agent 发任务 - 小红书, Value: 0
+						102 标签 (settable, integer) 做AI眼镜第188天，它开始看懂我的世界 - 小红书, Value: 0
+						103 标签 (settable, integer) zhiDFc1e - 知乎, Value: 0
+						104 标签 (settable, integer) (3 条消息) 内容管理 - 创作中心 - 知乎, Value: 0
+						105 标签 (settable, integer) 写文章 - 知乎, Value: 0
+						106 标签 (settable, integer) 📰 发布 · 做AI眼镜第188天，它开始看懂我的世界, Value: 0
+							107 文本 📰
+							108 文本 发布 · 做AI眼镜第188天，它开始看懂我的世界
+							109 图像
+						110 标签 (settable, integer) 微博 – 随时随地发现新鲜事, Value: 0
+						111 标签 (settable, integer) 📰 发布 · 做AI眼镜第188天，它开始看懂我的世界, Value: 0
+							112 文本 📰
+							113 文本 发布 · 做AI眼镜第188天，它开始看懂我的世界
+							114 图像
+						115 标签 (settable, integer) 头条号, Value: 0
+						116 标签 (settable, integer) 头条号, Value: 0
+						117 标签 (settable, integer) 头条号, Value: 0
+						118 标签 (settable, integer) 头条号, Value: 0
+						119 标签 (settable, integer) 头条号, Value: 0
+						120 标签 (settable, integer) 📰 发布 · 做AI眼镜第188天，它开始看懂我的世界, Value: 0
+							121 文本 📰
+							122 文本 发布 · 做AI眼镜第188天，它开始看懂我的世界
+							123 图像
+						124 标签 (settable, integer) 头条号, Value: 0
+						125 标签 (settable, integer) 头条号, Value: 0
+						126 标签 (settable, integer) 头条号, Value: 0
+						127 标签 (settable, integer) 头条号, Value: 0
+						128 标签 (settable, integer) 头条号, Value: 0
+						129 标签 (settable, integer) 头条号, Value: 0
+						130 标签 (settable, integer) 头条号, Value: 0
+						131 标签 (settable, integer) 头条号, Value: 0
+						132 标签 (settable, integer) 头条号, Value: 0
+						133 标签 (settable, integer) 头条号, Value: 0
+						134 标签 (settable, integer) 头条号, Value: 0
+						135 标签 (settable, integer) 头条号, Value: 0
+						136 标签 (settable, integer) 头条号, Value: 0
+						137 标签 (settable, integer) 头条号, Value: 0
+						138 标签 (settable, integer) Value: 0, 你好小眸：做AI眼镜第188天，它开始看懂我的世界 做AI眼镜第188天，想认真说说做它的初衷。AIR的愿景一句话就能说清：让AI帮助人，而不是替代人。所以我想让小眸拥有一双和我一样的眼睛，看到我所看到的，随时帮我应对眼前这个世界——尤其是腾不出手的时候：骑车两只手扶着车把，想知道路怎么走，问一句就行；手里正操作着设备，想知道下一步怎么干，它看着画面告诉你；逛展碰到看不懂的东西，它给你讲背后的故...
+						139 标签 (settable, integer) Value: 0, 你好小眸：做AI眼镜第188天，它开始看懂我的世界 做AI眼镜第188天，想认真说说做它的初衷。AIR的愿景一句话就能说清：让AI帮助人，而不是替代人。所以我想让小眸拥有一双和我一样的眼睛，看到我所看到的，随时帮我应对眼前这个世界——尤其是腾不出手的时候：骑车两只手扶着车把，想知道路怎么走，问一句就行；手里正操作着设备，想知道下一步怎么干，它看着画面告诉你；逛展碰到看不懂的东西，它给你讲背后的故...
+						140 标签 (settable, integer) Value: 0, 你好小眸：做AI眼镜第188天，它开始看懂我的世界 做AI眼镜第188天，想认真说说做它的初衷。AIR的愿景一句话就能说清：让AI帮助人，而不是替代人。所以我想让小眸拥有一双和我一样的眼睛，看到我所看到的，随时帮我应对眼前这个世界——尤其是腾不出手的时候：骑车两只手扶着车把，想知道路怎么走，问一句就行；手里正操作着设备，想知道下一步怎么干，它看着画面告诉你；逛展碰到看不懂的东西，它给你讲背后的故...
+						141 标签 (settable, integer) Value: 0, 你好小眸：做AI眼镜第188天，它开始看懂我的世界 做AI眼镜第188天，想认真说说做它的初衷。AIR的愿景一句话就能说清：让AI帮助人，而不是替代人。所以我想让小眸拥有一双和我一样的眼睛，看到我所看到的，随时帮我应对眼前这个世界——尤其是腾不出手的时候：骑车两只手扶着车把，想知道路怎么走，问一句就行；手里正操作着设备，想知道下一步怎么干，它看着画面告诉你；逛展碰到看不懂的东西，它给你讲背后的故...
+						142 标签 (settable, integer) 智元AGIBOT的动态-哔哩哔哩, Value: 0
+						143 标签 (settable, integer) 浏览器, Value: 0
+							144 图像
+							145 文本 浏览器
+							146 图像
+						147 标签 (settable, integer) 稚晖君的动态-哔哩哔哩, Value: 0
+						148 标签 (settable, integer) 浏览器, Value: 0
+							149 图像
+							150 文本 浏览器
+							151 图像
+						152 标签 (settable, integer) 浏览器, Value: 0
+							153 图像
+							154 文本 浏览器
+							155 图像
+						156 标签 (settable, integer) 浏览器, Value: 0
+							157 图像
+							158 文本 浏览器
+							159 图像
+						160 标签 (settable, integer) 浏览器, Value: 0
+							161 图像
+							162 文本 浏览器
+							163 图像
+						164 标签 (settable, integer) 稚晖君的动态 - 哔哩哔哩, Value: 0
+						165 标签 (settable, integer) 📰 发布 · 做AI眼镜第188天，它开始看懂我的世界, Value: 0
+							166 文本 📰
+							167 文本 发布 · 做AI眼镜第188天，它开始看懂我的世界
+							168 图像
+						169 标签 (settable, integer) 📰 发布 · 做AI眼镜第188天，它开始看懂我的世界, Value: 0
+							170 文本 📰
+							171 文本 发布 · 做AI眼镜第188天，它开始看懂我的世界
+							172 图像
+						173 标签 (settable, integer) 📰 发布 · 做AI眼镜第188天，它开始看懂我的世界, Value: 0
+							174 文本 📰
+							175 文本 发布 · 做AI眼镜第188天，它开始看懂我的世界
+							176 图像
+						177 标签 (settable, integer) 📰 发布 · Studio 图文发布验证, Value: 0
+							178 文本 📰
+							179 文本 发布 · Studio 图文发布验证
+							180 图像
+						181 标签 (selected) 📰 发布 · Studio 发布恢复验证, Value: 1
+							182 文本 📰
+							183 文本 发布 · Studio 发布恢复验证
+							184 图像
+						185 按钮 新建标签页
+							186 图像
+						187 按钮 新建浏览器页
+							188 图像
+					189 container
+						190 text B站动态（已授权单次提交） · 持久发布事务
+						191 标题 Studio 发布恢复验证, Value: 1
+							192 文本 Studio 发布恢复验证
+						193 文本 /Users/apple/Desktop/研发日记/2026-09-09/Studio发布恢复验证.md
+						194 按钮 打开网页
+						195 按钮 网页独立窗口
+						196 按钮 打开 Agent
+						197 按钮 复制完整诊断日志
+						198 标题 已保存配置, Value: 2
+							199 文本 已保存配置
+						200 文本 Markdown 文件
+						201 文本 Studio发布恢复验证.md
+						202 文本 2026-09-09/Studio发布恢复验证.md
+						203 文本 /Users/apple/Desktop/研发日记/2026-09-09/Studio发布恢复验证.md
+						204 文本 网站
+						205 文本 出错啦! - bilibili.com
+						206 文本 https://passport.bilibili.com
+						207 文本 账号
+						208 文本 bilibili.com
+						209 container
+							210 text ID  7c1ef8bb-7770-4c53-ad02-e4943f745fea
+						211 文本 发布标题
+						212 文本 Studio 发布恢复验证
+						213 文本 平台草稿
+						214 文本 尚未锁定平台草稿
+						215 文本 B站临时编辑现场；没有已保存草稿编号，不保证页面关闭后恢复
+						216 文本 摘要
+						217 文本 未填写
+						218 文本 标签
+						219 文本 未填写
+						220 文本 分类
+						221 文本 未填写
+						222 文本 封面
+						223 文本 未选择
+						224 标题 正文图片（3）, Value: 2
+							225 text 正文图片（ 3 ）
+						226 文本 01-首篇封面.png
+						227 文本 等待
+						228 定义列表
+							229 container Markdown 引用路径
+								230 文本 Markdown 引用路径
+							231 文本 素材/01-首篇封面.png
+							232 container 工作空间位置
+								233 文本 工作空间位置
+							234 文本 2026-09-09/素材/01-首篇封面.png
+							235 container 完整路径
+								236 文本 完整路径
+							237 文本 /Users/apple/Desktop/研发日记/2026-09-09/素材/01-首篇封面.png
+							238 container 文件信息
+								239 文本 文件信息
+							240 container
+								241 text image/png  · 2451.4 KB  ·  0 /3 次上传尝试
+							242 container 正文位置
+								243 文本 正文位置
+							244 container
+								245 text 引用  1 ： AI眼镜封面 （字符  145 – 159 ）
+						246 文本 02-导航场景效果图.png
+						247 文本 等待
+						248 定义列表
+							249 container Markdown 引用路径
+								250 文本 Markdown 引用路径
+							251 文本 素材/02-导航场景效果图.png
+							252 container 工作空间位置
+								253 文本 工作空间位置
+							254 文本 2026-09-09/素材/02-导航场景效果图.png
+							255 container 完整路径
+								256 文本 完整路径
+							257 文本 /Users/apple/Desktop/研发日记/2026-09-09/素材/02-导航场景效果图.png
+							258 container 文件信息
+								259 文本 文件信息
+							260 container
+								261 text image/png  · 1470.4 KB  ·  0 /3 次上传尝试
+							262 container 正文位置
+								263 文本 正文位置
+							264 container
+								265 text 引用  1 ： 导航设计效果图 （字符  173 – 190 ）
+						266 文本 03-城市漫游效果图.png
+						267 文本 等待
+						268 定义列表
+							269 container Markdown 引用路径
+								270 文本 Markdown 引用路径
+							271 文本 素材/03-城市漫游效果图.png
+							272 container 工作空间位置
+								273 文本 工作空间位置
+							274 文本 2026-09-09/素材/03-城市漫游效果图.png
+							275 container 完整路径
+								276 文本 完整路径
+							277 文本 /Users/apple/Desktop/研发日记/2026-09-09/素材/03-城市漫游效果图.png
+							278 container 文件信息
+								279 文本 文件信息
+							280 container
+								281 text image/png  · 2065.0 KB  ·  0 /3 次上传尝试
+							282 container 正文位置
+								283 文本 正文位置
+							284 container
+								285 text 引用  1 ： 城市漫游概念效果图 （字符  206 – 223 ）
+						286 标题 当前执行动作, Value: 2
+							287 文本 当前执行动作
+						288 文本 具体执行、核验结果和卡点见下方执行计划。执行时请保留原稿网页可见；使用“网页独立窗口”可同时查看计划。
+						289 标题 执行计划, Value: 2
+							290 文本 执行计划
+						291 开合三角标记 1 解析账号与登录 Profile 已核验 Studio
+							292 文本 1
+							293 文本 解析账号与登录 Profile
+							294 文本 已核验
+							295 文本 Studio
+						296 开合三角标记 2 取得当前工作空间的账号 Tab 已核验 Studio
+							297 文本 2
+							298 文本 取得当前工作空间的账号 Tab
+							299 文本 已核验
+							300 文本 Studio
+						301 开合三角标记 3 打开新建编辑器 已核验 Studio
+							302 文本 3
+							303 文本 打开新建编辑器
+							304 文本 已核验
+							305 文本 Studio
+						306 开合三角标记 4 绑定并核对 Runtime 已核验 Studio
+							307 文本 4
+							308 文本 绑定并核对 Runtime
+							309 文本 已核验
+							310 文本 Studio
+						311 container
+							312 开合三角标记 5 读取B站真实 UID 与编辑器 已核验 · 本次等待处理 Studio
+								313 文本 5
+								314 文本 读取B站真实 UID 与编辑器
+								315 container
+									316 text 已核验  · 本次等待处理
+								317 文本 Studio
+							318 定义列表
+								319 container 进入条件
+									320 文本 进入条件
+								321 文本 当前精确 Runtime 已绑定
+								322 container 完成条件
+									323 文本 完成条件
+								324 文本 UID 与任务目标一致；正文区域唯一；图集可完整枚举
+								325 container 实际证据
+									326 文本 实际证据
+								327 文本 页面 editor · 账号 3546384070347419 · draftId 尚无 · 标题  · 保存 unknown
+								328 container 本次复核
+									329 文本 本次复核
+								330 container
+									331 text 当前绑定网页 Tab tab-1-1789145082433 不可见  ·  请打开网页，或点击“网页独立窗口”让原稿与执行计划同时可见；不会要求重新登录  · 2026-09-12T11:42:27.526Z
+								332 container 允许下一步
+									333 文本 允许下一步
+								334 文本 请打开网页，或点击“网页独立窗口”让原稿与执行计划同时可见；不会要求重新登录；先处理此卡点并重新检查。
+								335 container 证据时间
+									336 文本 证据时间
+								337 container
+									338 text 2026-09-12T11:41:23.554Z  · 执行代次  1
+						339 开合三角标记 6 定位正文编辑区域 已核验 Studio
+							340 文本 6
+							341 文本 定位正文编辑区域
+							342 文本 已核验
+							343 文本 Studio
+						344 开合三角标记 7 检查图片 01-首篇封面.png（正文引用 1 处） 尚未观察到执行 Studio
+							345 文本 7
+							346 文本 检查图片 01-首篇封面.png（正文引用 1 处）
+							347 文本 尚未观察到执行
+							348 文本 Studio
+						349 开合三角标记 8 定位正文图片上传控件：01-首篇封面.png（正文引用 1 处） 尚未观察到执行 Studio
+							350 文本 8
+							351 文本 定位正文图片上传控件：01-首篇封面.png（正文引用 1 处）
+							352 文本 尚未观察到执行
+							353 文本 Studio
+						354 开合三角标记 9 上传图片 01-首篇封面.png（正文引用 1 处） 尚未观察到执行 Agent
+							355 文本 9
+							356 文本 上传图片 01-首篇封面.png（正文引用 1 处）
+							357 文本 尚未观察到执行
+							358 文本 Agent
+						359 开合三角标记 10 核验图片 01-首篇封面.png（正文引用 1 处） 尚未观察到执行 Studio
+							360 文本 10
+							361 文本 核验图片 01-首篇封面.png（正文引用 1 处）
+							362 文本 尚未观察到执行
+							363 文本 Studio
+						364 开合三角标记 11 检查图片 02-导航场景效果图.png（正文引用 1 处） 尚未观察到执行 Studio
+							365 文本 11
+							366 文本 检查图片 02-导航场景效果图.png（正文引用 1 处）
+							367 文本 尚未观察到执行
+							368 文本 Studio
+						369 开合三角标记 12 定位正文图片上传控件：02-导航场景效果图.png（正文引用 1 处） 尚未观察到执行 Studio
+							370 文本 12
+							371 文本 定位正文图片上传控件：02-导航场景效果图.png（正文引用 1 处）
+							372 文本 尚未观察到执行
+							373 文本 Studio
+						374 开合三角标记 13 上传图片 02-导航场景效果图.png（正文引用 1 处） 尚未观察到执行 Agent
+							375 文本 13
+							376 文本 上传图片 02-导航场景效果图.png（正文引用 1 处）
+							377 文本 尚未观察到执行
+							378 文本 Agent
+						379 开合三角标记 14 核验图片 02-导航场景效果图.png（正文引用 1 处） 尚未观察到执行 Studio
+							380 文本 14
+							381 文本 核验图片 02-导航场景效果图.png（正文引用 1 处）
+							382 文本 尚未观察到执行
+							383 文本 Studio
+						384 开合三角标记 15 检查图片 03-城市漫游效果图.png（正文引用 1 处） 尚未观察到执行 Studio
+							385 文本 15
+							386 文本 检查图片 03-城市漫游效果图.png（正文引用 1 处）
+							387 文本 尚未观察到执行
+							388 文本 Studio
+						389 开合三角标记 16 定位正文图片上传控件：03-城市漫游效果图.png（正文引用 1 处） 尚未观察到执行 Studio
+							390 文本 16
+							391 文本 定位正文图片上传控件：03-城市漫游效果图.png（正文引用 1 处）
+							392 文本 尚未观察到执行
+							393 文本 Studio
+						394 开合三角标记 17 上传图片 03-城市漫游效果图.png（正文引用 1 处） 尚未观察到执行 Agent
+							395 文本 17
+							396 文本 上传图片 03-城市漫游效果图.png（正文引用 1 处）
+							397 文本 尚未观察到执行
+							398 文本 Agent
+						399 开合三角标记 18 核验图片 03-城市漫游效果图.png（正文引用 1 处） 尚未观察到执行 Studio
+							400 文本 18
+							401 文本 核验图片 03-城市漫游效果图.png（正文引用 1 处）
+							402 文本 尚未观察到执行
+							403 文本 Studio
+						404 开合三角标记 19 填写完整正文 尚未观察到执行 Agent
+							405 文本 19
+							406 文本 填写完整正文
+							407 文本 尚未观察到执行
+							408 文本 Agent
+						409 开合三角标记 20 核验图集顺序与加载：01-首篇封面.png 尚未观察到执行 Studio
+							410 文本 20
+							411 文本 核验图集顺序与加载：01-首篇封面.png
+							412 文本 尚未观察到执行
+							413 文本 Studio
+						414 开合三角标记 21 核验图集顺序与加载：02-导航场景效果图.png 尚未观察到执行 Studio
+							415 文本 21
+							416 文本 核验图集顺序与加载：02-导航场景效果图.png
+							417 文本 尚未观察到执行
+							418 文本 Studio
+						419 开合三角标记 22 核验图集顺序与加载：03-城市漫游效果图.png 尚未观察到执行 Studio
+							420 文本 22
+							421 文本 核验图集顺序与加载：03-城市漫游效果图.png
+							422 文本 尚未观察到执行
+							423 文本 Studio
+						424 开合三角标记 23 回读当前正文与图集 尚未观察到执行 Studio
+							425 文本 23
+							426 文本 回读当前正文与图集
+							427 文本 尚未观察到执行
+							428 文本 Studio
+						429 开合三角标记 24 读取标题 已核验 Studio
+							430 文本 24
+							431 文本 读取标题
+							432 文本 已核验
+							433 文本 Studio
+						434 开合三角标记 25 填写标题 尚未观察到执行 Agent
+							435 文本 25
+							436 文本 填写标题
+							437 文本 尚未观察到执行
+							438 文本 Agent
+						439 container
+							440 开合三角标记 26 核验标题 等待处理 Studio
+								441 文本 26
+								442 文本 核验标题
+								443 文本 等待处理
+								444 文本 Studio
+							445 定义列表
+								446 container 进入条件
+									447 文本 进入条件
+								448 文本 已读取或填写该字段
+								449 container 完成条件
+									450 文本 完成条件
+								451 文本 字段实际值与任务值一致
+								452 container 实际证据
+									453 文本 实际证据
+								454 文本 期望 Studio 发布恢复验证；实际 
+								455 container 停住原因
+									456 文本 停住原因
+								457 文本 字段值尚不一致
+								458 container 允许下一步
+									459 文本 允许下一步
+								460 文本 字段值尚不一致；先处理此卡点并重新检查。
+								461 container 证据时间
+									462 文本 证据时间
+								463 container
+									464 text 2026-09-12T11:41:23.554Z  · 执行代次  1
+						465 开合三角标记 27 读取动态可见范围的当前选中项 尚未观察到执行 Studio
+							466 文本 27
+							467 文本 读取动态可见范围的当前选中项
+							468 文本 尚未观察到执行
+							469 文本 Studio
+						470 开合三角标记 28 确认此流程没有可核验的保存动作 尚未观察到执行 Studio
+							471 文本 28
+							472 文本 确认此流程没有可核验的保存动作
+							473 文本 尚未观察到执行
+							474 文本 Studio
+						475 开合三角标记 29 复核当前图文现场 尚未观察到执行 Studio
+							476 文本 29
+							477 文本 复核当前图文现场
+							478 文本 尚未观察到执行
+							479 文本 Studio
+						480 container
+							481 开合三角标记 30 复核发布目标与有界授权 等待处理 Studio
+								482 文本 30
+								483 文本 复核发布目标与有界授权
+								484 文本 等待处理
+								485 文本 Studio
+							486 定义列表
+								487 container 进入条件
+									488 文本 进入条件
+								489 文本 当前图文已核验；具体提交动作已授权
+								490 container 完成条件
+									491 文本 完成条件
+								492 文本 本任务明确授权；同一 UID、冻结正文、逐图和公开设置均通过；从未派发提交
+								493 container 实际证据
+									494 文本 实际证据
+								495 文本 等待核验公开范围、正文、图片和唯一可用的即时发布按钮
+								496 container 停住原因
+									497 文本 停住原因
+								498 文本 等待核验公开范围、正文、图片和唯一可用的即时发布按钮
+								499 container 允许下一步
+									500 文本 允许下一步
+								501 文本 等待核验公开范围、正文、图片和唯一可用的即时发布按钮；先处理此卡点并重新检查。
+								502 container 证据时间
+									503 文本 证据时间
+								504 container
+									505 text 2026-09-12T11:41:23.554Z  · 执行代次  1
+						506 开合三角标记 31 点击原生发布入口一次 尚未观察到执行 Agent
+							507 文本 31
+							508 文本 点击原生发布入口一次
+							509 文本 尚未观察到执行
+							510 文本 Agent
+						511 开合三角标记 32 识别首次动态规范确认分支 尚未观察到执行 Studio
+							512 文本 32
+							513 文本 识别首次动态规范确认分支
+							514 文本 尚未观察到执行
+							515 文本 Studio
+						516 开合三角标记 33 首次规范确认并发送 尚未观察到执行 Studio
+							517 文本 33
+							518 文本 首次规范确认并发送
+							519 文本 尚未观察到执行
+							520 文本 Studio
+						521 开合三角标记 34 保留确认派发与请求观察事实 尚未观察到执行 Studio
+							522 文本 34
+							523 文本 保留确认派发与请求观察事实
+							524 文本 尚未观察到执行
+							525 文本 Studio
+						526 开合三角标记 35 核验动态创建请求与平台回执 尚未观察到执行 Studio
+							527 文本 35
+							528 文本 核验动态创建请求与平台回执
+							529 文本 尚未观察到执行
+							530 文本 Studio
+						531 开合三角标记 36 核验公开页图片：01-首篇封面.png 尚未观察到执行 Studio
+							532 文本 36
+							533 文本 核验公开页图片：01-首篇封面.png
+							534 文本 尚未观察到执行
+							535 文本 Studio
+						536 开合三角标记 37 核验公开页图片：02-导航场景效果图.png 尚未观察到执行 Studio
+							537 文本 37
+							538 文本 核验公开页图片：02-导航场景效果图.png
+							539 文本 尚未观察到执行
+							540 文本 Studio
+						541 开合三角标记 38 核验公开页图片：03-城市漫游效果图.png 尚未观察到执行 Studio
+							542 文本 38
+							543 文本 核验公开页图片：03-城市漫游效果图.png
+							544 文本 尚未观察到执行
+							545 文本 Studio
+						546 container
+							547 开合三角标记 39 核验平台公开结果 等待处理 Studio
+								548 文本 39
+								549 文本 核验平台公开结果
+								550 文本 等待处理
+								551 文本 Studio
+							552 定义列表
+								553 container 进入条件
+									554 文本 进入条件
+								555 文本 发布已派发或结果未知
+								556 container 完成条件
+									557 文本 完成条件
+								558 文本 唯一公开文章的账号、标题和 URL 已核验
+								559 container 实际证据
+									560 文本 实际证据
+								561 文本 尚未派发公开发布；等待核验公开范围、正文、图片和唯一可用的即时发布按钮
+								562 container 停住原因
+									563 文本 停住原因
+								564 文本 等待核验公开范围、正文、图片和唯一可用的即时发布按钮
+								565 container 允许下一步
+									566 文本 允许下一步
+								567 文本 等待核验公开范围、正文、图片和唯一可用的即时发布按钮；先处理此卡点并重新检查。
+								568 container 证据时间
+									569 文本 证据时间
+								570 container
+									571 text 2026-09-12T11:41:23.554Z  · 执行代次  1
+						572 text Attempt： a64c9daf  · 待人工处理
+						573 按钮 终止任务
+						574 按钮 交还 Agent 并继续
+					575 分离器 Description: Agent 面板宽度, Value: 50
+					576 container
+						577 图像
+						578 text Agent 本地 · 默认助手
+						579 container 本地 Agent 已就绪
+							580 文本 已就绪
+						581 按钮 复制完整诊断日志
+							582 图像
+					583 container 当前会话会优先参考这些工作现场
+						584 文本 上下文
+						585 container
+							586 container 本地: 研发日记
+								587 图像
+								588 text 研发日记 本地
+							589 container 操作目标: 全部
+								590 图像
+								591 text 全部 操作目标
+							592 container 工作区 Tab: 发布 · Studio 发布恢复验证
+								593 图像
+								594 text 发布 · Studio 发布恢复验证 工作区 Tab
+							595 container 已打开: 39 个浏览器
+								596 图像
+								597 text 39 个浏览器 已打开
+					598 container
+						599 按钮 复制整条消息
+							600 图像
+						601 文本 你好！我是 CCLink Studio 的本地 Agent。
+						602 文本 你可以用自然语言和我对话，我会帮你完成代码、文档和本地工作区任务。新 Thread 默认使用 Claude Code，也可以在发送第一条消息前选择 Codex ACP。
+						603 按钮 复制整条消息
+							604 图像
+						605 文本 开始执行文章发布：Studio 发布恢复验证
+						606 按钮 复制整条消息
+							607 图像
+						608 开合三角标记 思考摘要 Let me start by following the user's instructions: 1. First call web_aff...
+							609 图像
+							610 文本 思考摘要
+							611 文本 Let me start by following the user's instructions: 1. First call web_aff...
+						612 开合三角标记 执行过程 1 个动作 · 1 完成 · web affair get、工具完成
+							613 图像
+							614 文本 执行过程
+							615 container
+								616 text 1  个动作  · 1 完成  · web affair get、工具完成
+						617 按钮 复制整条消息
+							618 图像
+						619 开合三角标记 思考摘要 I've got the affair. Current step is open-editor (running). Checkpoints ...
+							620 图像
+							621 文本 思考摘要
+							622 文本 I've got the affair. Current step is open-editor (running). Checkpoints ...
+						623 container
+							624 text 事务已读取。当前检查点： open-editor  运行中，其余待办。现在执行首次页面检查。
+						625 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							626 图像
+							627 文本 执行过程
+							628 container
+								629 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						630 按钮 复制整条消息
+							631 图像
+						632 开合三角标记 思考摘要 The page is the B站 dynamic editor. Current state: - Editor recognized, b...
+							633 图像
+							634 文本 思考摘要
+							635 文本 The page is the B站 dynamic editor. Current state: - Editor recognized, b...
+						636 container
+							637 text 编辑器已识别：B站动态发布页、正文/标题选择器已返回、现场为空白、UID 匹配  3546384070347419 。按串行顺序推进检查点  open-editor 。
+						638 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							639 图像
+							640 文本 执行过程
+							641 container
+								642 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						643 按钮 复制整条消息
+							644 图像
+						645 开合三角标记 思考摘要 open-editor is now verifying. Now report completed with the fresh inspec...
+							646 图像
+							647 文本 思考摘要
+							648 文本 open-editor is now verifying. Now report completed with the fresh inspec...
+						649 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							650 图像
+							651 文本 执行过程
+							652 container
+								653 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						654 按钮 复制整条消息
+							655 图像
+						656 开合三角标记 思考摘要 Evidence expired or not of current generation. I need to re-inspect befo...
+							657 图像
+							658 文本 思考摘要
+							659 文本 Evidence expired or not of current generation. I need to re-inspect befo...
+						660 文本 证据需要新鲜重读。重新 inspect 后再报 completed。
+						661 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							662 图像
+							663 文本 执行过程
+							664 container
+								665 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						666 按钮 复制整条消息
+							667 图像
+						668 开合三角标记 思考摘要 The bound page is not visible. The browser tab exists (tab-1-17891450824...
+							669 图像
+							670 文本 思考摘要
+							671 文本 The bound page is not visible. The browser tab exists (tab-1-17891450824...
+						672 文本 页面可见性出了问题。先核对绑定 Tab 状态。
+						673 开合三角标记 执行过程 1 个动作 · 1 完成 · 读取标签页信息、工具完成
+							674 图像
+							675 文本 执行过程
+							676 container
+								677 text 1  个动作  · 1 完成  · 读取标签页信息、工具完成
+						678 按钮 复制整条消息
+							679 图像
+						680 开合三角标记 思考摘要 The tab is still at https://t.bilibili.com/ titled 动态首页-哔哩哔哩. The page s...
+							681 图像
+							682 文本 思考摘要
+							683 文本 The tab is still at https://t.bilibili.com/ titled 动态首页-哔哩哔哩. The page s...
+						684 开合三角标记 执行过程 1 个动作 · 1 完成 · browser title、工具完成
+							685 图像
+							686 文本 执行过程
+							687 container
+								688 text 1  个动作  · 1 完成  · browser title、工具完成
+						689 按钮 复制整条消息
+							690 图像
+						691 开合三角标记 思考摘要 Page is alive — title reads fine. The inspect tool complains the page is...
+							692 图像
+							693 文本 思考摘要
+							694 文本 Page is alive — title reads fine. The inspect tool complains the page is...
+						695 文本 页面仍在线（标题可读）。重试一次 inspect。
+						696 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							697 图像
+							698 文本 执行过程
+							699 container
+								700 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						701 按钮 复制整条消息
+							702 图像
+						703 开合三角标记 思考摘要 Same error twice. The inspect adapter requires the bound page to be visi...
+							704 图像
+							705 文本 思考摘要
+							706 文本 Same error twice. The inspect adapter requires the bound page to be visi...
+						707 文本 连续两次同样的失败：适配器报告绑定的 B站页面当前不可见，无法生成有效证据。按要求报告一次具体阻塞并停止，不自行重绑或重试。
+						708 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							709 图像
+							710 文本 执行过程
+							711 container
+								712 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						713 按钮 复制整条消息
+							714 图像
+						715 开合三角标记 思考摘要 The waiting-human report succeeded. The attempt is now in waiting-human ...
+							716 图像
+							717 文本 思考摘要
+							718 文本 The waiting-human report succeeded. The attempt is now in waiting-human ...
+						719 文本 已按规则报告阻塞并停止。本轮执行情况如下：
+						720 标题 执行结果：等待人工（页面不可见）, Value: 2
+							721 文本 执行结果：等待人工（页面不可见）
+						722 文本 已完成
+						723 内容列表
+							724 container
+								725 AXListMarker • 
+								726 文本 web_affair_get
+								727 文本 ：读取事务，检查点顺序为 open-editor → verify-account → upload-assets → fill-body → fill-fields → save-draft → publish → verify-publication
+							728 container
+								729 AXListMarker • 
+								730 文本 首次 inspect 成功：
+								731 文本 https://t.bilibili.com/
+								732 文本  编辑器已识别，正文、标题、图片上传入口选择器均已返回，平台 UID 
+								733 文本 3546384070347419
+								734 文本  与目标一致，现场为空白
+							735 container
+								736 AXListMarker • 
+								737 文本 open-editor
+								738 文本  已推进到 verifying
+						739 文本 阻塞点
+						740 内容列表
+							741 container
+								742 AXListMarker • 
+								743 文本 报 completed 时提示证据过期，随后连续两次 
+								744 文本 article_publishing_inspect_page
+								745 文本  返回同一错误：
+								746 文本 「绑定的原稿网页不可见」
+							747 container
+								748 AXListMarker • 
+								749 文本 页面本身在线（
+								750 文本 browser_title
+								751 文本  正常返回「动态首页-哔哩哔哩」，Tab 
+								752 文本 tab-1-1789145082433
+								753 文本 ），但适配器判定原稿页面当前不可见，无法生成有效证据
+							754 container
+								755 AXListMarker • 
+								756 文本 已将 
+								757 文本 open-editor
+								758 文本  报告为 
+								759 文本 waiting-human
+								760 文本 ，错误码 
+								761 文本 bilibili_page_not_visible
+								762 文本 ，未做任何重建或重绑
+						763 container
+							764 text 未发生的操作 ：未上传任何图片、未填写正文/标题、未保存草稿、未发布。三张图片和全部后续检查点保持 pending，不存在重复发送风险。
+						765 container
+							766 text 需要你做一件事 ：在 Studio 左侧把该浏览器页面重新打开显示（或点击「网页独立窗口」），不需要重新登录。完成后重新继续此事务，我会从 open-editor 的核验继续，按顺序执行后续步骤。
+						767 文本 执行 B站图文动态准备及单篇授权发布，不能重复发送；只按 main 当前步骤执行。 affairId=248d5211-9d05-477c-a8db-50a4d75f0d84; attemptId=a64c9daf-a43f-4a62-89e8-be68d7c9dd49; accountId=7c1ef8bb-7770-4c53-ad02-e4943f745fea; targetUID=35463
+						768 文本 已完成
+						769 文本 article_publishing_inspect_page
+						770 文本 完成
+						771 文本 1ms
+						772 文本 getTabInfo
+						773 文本 完成
+						774 文本 0ms
+						775 文本 title
+						776 文本 完成
+						777 文本 5ms
+					778 文本 费用 $0.4498
+					779 分离器 Description: 调整消息区和输入区高度, Value: 305.7422
+					780 container
+						781 container 当前会话已挂载资源
+							782 文本 资源
+							783 container
+								784 图像
+								785 text @  B站动态发布页
+								786 按钮 移除资源
+									787 图像
+						788 文本输入区 (settable) 输入消息，@ 挂资源，/ 挂技能；Shift+Enter 换行
+						789 按钮 添加上下文
+							790 图像
+						791 按钮 当前角色: 默认助手
+						792 按钮 自动, Help: 权限模式: 自动
+							793 图像
+							794 文本 自动
+							795 图像
+						796 按钮 Description: 上下文占用 20%, Help: 上下文 20% · 40k / 200k
+						797 按钮 Claude Code 系统安装, Help: 运行环境
+							798 文本 Claude Code
+							799 文本 系统安装
+							800 图像
+						801 按钮 (disabled) 发送
+							802 图像
+					803 弹出式按钮 main ● 5, Help: main · 5 个变更
+						804 图像
+						805 文本 main
+						806 文本 ● 
+						807 文本 5
+					808 container /Users/apple/Desktop/研发日记
+						809 文本 本地
+						810 文本  · 
+						811 文本 研发日记
+					812 按钮 框架日志, Help: 复制 Agent 以外的工作台框架诊断日志
+						813 图像
+						814 文本 框架日志
+					815 按钮 检查更新, Help: 检查和下载 CCLink Studio 更新
+						816 图像
+						817 文本 检查更新
+					818 container 本地开源桌面工作台
+						819 文本 CCLink Studio 开源版 v0.1.88
+	820 关闭按钮
+	821 全屏幕按钮 Help: 此按钮也可以执行缩放窗口的操作, Secondary Actions: 缩放窗口
+	822 最小化按钮
+823 menu bar
+	824 CCLink Studio 开源版
+	825 File
+	826 Edit
+	827 View
+	828 Window
+
+The focused UI element is 195 按钮 网页独立窗口

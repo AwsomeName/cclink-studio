@@ -131,6 +131,23 @@ export interface ArticlePublishingFields {
   coverAssetId?: string
 }
 
+/** Observed facts only. None of these fields grants a retry after owner/runtime loss. */
+export interface BilibiliSubmissionObservation {
+  confirmationAttempted: boolean
+  requestObserved: boolean
+  observationEnded: boolean
+  requestMatch?:
+    | 'matched'
+    | 'invalid-body'
+    | 'text-mismatch'
+    | 'image-mismatch'
+    | 'multiple-requests'
+  responseStatus?: number
+  platformCode?: number
+  transportFailed?: boolean
+  observedAt: string
+}
+
 export interface ArticlePublishingSideEffect {
   key: string
   affairId: string
@@ -144,6 +161,7 @@ export interface ArticlePublishingSideEffect {
   dispatchedAt?: string
   observedAt?: string
   browserTaskRunId?: string
+  bilibiliSubmission?: BilibiliSubmissionObservation
 }
 
 export type ArticlePublishingOperationDefinitionId =
@@ -242,6 +260,12 @@ export interface ArticlePublishingComposer {
 }
 
 export interface ArticlePublishingState {
+  bilibiliRetry?: {
+    attemptId: string
+    executionGeneration: number
+    previousEffectKey: string
+    authorizedAt: string
+  }
   composer?: ArticlePublishingComposer
   adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili'
   adapterVersion: 1
@@ -324,6 +348,11 @@ export interface CreateArticlePublishingTaskInput extends InspectArticlePublishi
 }
 
 export interface StartArticlePublishingTaskInput {
+  bilibiliRetry?: {
+    previousEffectKey: string
+    observedGeneration: number
+    acceptPossibleDuplicate: true
+  }
   workspaceRef: WorkspaceRef
   affairId: string
 }

@@ -174,8 +174,10 @@ describe('RemoteAgentController', () => {
     )
 
     expect(html).toContain('class="content-tool-group"')
-    expect(html).toContain('class="tool-group-row tool-group-row-use ')
-    expect(html).toContain('class="tool-group-row tool-group-row-result success"')
+    expect(html).toContain('1 个动作 · 1 完成 · Bash、工具完成')
+    // Collapsed groups defer rendering tool rows and large output until expanded.
+    expect(html).not.toContain('class="tool-group-row')
+    expect(html).not.toContain('README.md')
     expect(html).toContain('<details')
     expect(html).not.toContain('Bashcompleted')
   })

@@ -198,6 +198,21 @@ const sideEffectSchema = z
     dispatchedAt: timestampSchema.optional(),
     observedAt: timestampSchema.optional(),
     browserTaskRunId: uuidSchema.optional(),
+    bilibiliSubmission: z
+      .object({
+        confirmationAttempted: z.boolean(),
+        requestObserved: z.boolean(),
+        observationEnded: z.boolean(),
+        requestMatch: z
+          .enum(['matched', 'invalid-body', 'text-mismatch', 'image-mismatch', 'multiple-requests'])
+          .optional(),
+        responseStatus: z.number().int().min(100).max(599).optional(),
+        platformCode: z.number().int().safe().optional(),
+        transportFailed: z.boolean().optional(),
+        observedAt: timestampSchema,
+      })
+      .strict()
+      .optional(),
   })
   .strict()
 
@@ -331,6 +346,15 @@ export const articlePublishingStateSchema = z
     assets: z.array(articlePublishingAssetSchema).max(200),
     checkpoints: z.array(checkpointSchema).min(1).max(40),
     sideEffects: z.array(sideEffectSchema).max(500),
+    bilibiliRetry: z
+      .object({
+        attemptId: uuidSchema,
+        executionGeneration: z.number().int().positive(),
+        previousEffectKey: z.string().min(1).max(500),
+        authorizedAt: timestampSchema,
+      })
+      .strict()
+      .optional(),
     executionProtocol: z
       .object({
         version: z.literal(1),
@@ -476,7 +500,18 @@ export const createArticlePublishingTaskInputSchema = z
   .strict()
 
 export const startArticlePublishingTaskInputSchema = z
-  .object({ workspaceRef: workspaceRefSchema, affairId: uuidSchema })
+  .object({
+    workspaceRef: workspaceRefSchema,
+    affairId: uuidSchema,
+    bilibiliRetry: z
+      .object({
+        previousEffectKey: z.string().min(1).max(500),
+        observedGeneration: z.number().int().positive(),
+        acceptPossibleDuplicate: z.literal(true),
+      })
+      .strict()
+      .optional(),
+  })
   .strict()
 
 export const manageArticlePublishingRuntimeInputSchema = z

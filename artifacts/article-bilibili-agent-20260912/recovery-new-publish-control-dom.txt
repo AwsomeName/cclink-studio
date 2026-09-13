@@ -1,0 +1,289 @@
+The following is a diff from the previous accessibility tree for Window: "CCLink Studio 开源版" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 724-726, 762-1049
+~																						495 row    <div class=​"bili-cascader-options"> ​
+~																					539 row (selected) <div class=​"bili-dyn-publishing__action launcher disabled"> ​ 发布 ​ </div> ​ Enable flex mode
+~																723 link Description: div.bili-dyn-publishing__action.launcher.disabled, Value: devtools://devtools/bundled/devtools_app.html
+~														728 搜索文本字段 (settable) Value: [class*=publishing][class*=action], Placeholder: Find by string, selector, or XPath
+~															736 container Shows result 1 of 1
++																		1738 row    _prevClass : "bili-dyn-publishing__action launcher disabled"
++																			1739 container
++																				1740 text _prevClass : 
++																				1741 文本 "bili-dyn-publishing__action launcher disabled"
++																		1742 row    accessKey : ""
++																			1743 container
++																				1744 text accessKey :  ""
++																		1745 row    align : ""
++																			1746 container
++																				1747 text align :  ""
++																		1748 row    attributeStyleMap : StylePropertyMap {size: 0}
++																			1749 container
++																				1750 text attributeStyleMap : 
++																				1751 container StylePropertyMap
++																					1752 text StylePropertyMap  { size :  0 }
++																		1753 row    attributes : NamedNodeMap {0: class, class: class, length: 1}
++																			1754 container
++																				1755 text attributes : 
++																				1756 container NamedNodeMap
++																					1757 text NamedNodeMap  { 0 :  class ,  class :  class ,  length :  1 }
++																		1758 row    autocapitalize : ""
++																			1759 container
++																				1760 text autocapitalize :  ""
++																		1761 row    autofocus : false
++																			1762 container
++																				1763 text autofocus : 
++																				1764 文本 false
++																		1765 row    baseURI : "https://t.bilibili.com/"
++																			1766 container
++																				1767 text baseURI : 
++																				1768 文本 "https://t.bilibili.com/"
++																		1769 row    childElementCount : 0
++																			1770 container
++																				1771 text childElementCount : 
++																				1772 文本 0
++																		1773 row    childNodes : NodeList [text]
++																			1774 container
++																				1775 text childNodes : 
++																				1776 container NodeList(1)
++																					1777 text NodeList  [ text ]
++																		1778 row    children : HTMLCollection []
++																			1779 container
++																				1780 text children : 
++																				1781 container HTMLCollection(0)
++																					1782 text HTMLCollection  [ ]
++																		1783 row    classList : DOMTokenList(3) ['bili-dyn-publishing__action', 'launcher', 'disabled', value: 'bili-dyn-publishing__action launcher disabled']
++																			1784 container
++																				1785 text classList : 
++																				1786 container DOMTokenList(3)
++																					1787 text DOMTokenList(3)  [ 'bili-dyn-publishing__action' ,  'launcher' ,  'disabled' ,  value :  'bili-dyn-publishing__action launcher disabled' ]
++																		1788 row    className : "bili-dyn-publishing__action launcher disabled"
++																			1789 container
++																				1790 text className : 
++																				1791 文本 "bili-dyn-publishing__action launcher disabled"
++																		1792 row    clientHeight : 32
++																			1793 container
++																				1794 text clientHeight : 
++																				1795 文本 32
++																		1796 row    clientLeft : 0
++																			1797 container
++																				1798 text clientLeft : 
++																				1799 文本 0
++																		1800 row    clientTop : 0
++																			1801 container
++																				1802 text clientTop : 
++																				1803 文本 0
++																		1804 row    clientWidth : 70
++																			1805 container
++																				1806 text clientWidth : 
++																				1807 文本 70
++																		1808 row    contentEditable : "inherit"
++																			1809 container
++																				1810 text contentEditable : 
++																				1811 文本 "inherit"
++																		1812 row    currentCSSZoom : 1
++																			1813 container
++																				1814 text currentCSSZoom : 
++																				1815 文本 1
++																		1816 row    customElementRegistry : CustomElementRegistry {}
++																			1817 container
++																				1818 text customElementRegistry : 
++																				1819 container CustomElementRegistry
++																					1820 text CustomElementRegistry  { }
++																		1821 row    dataset : DOMStringMap {}
++																			1822 container
++																				1823 text dataset : 
++																				1824 container DOMStringMap
++																					1825 text DOMStringMap  { }
++																		1826 row    dir : ""
++																			1827 container
++																				1828 text dir :  ""
++																		1829 row    draggable : false
++																			1830 container
++																				1831 text draggable : 
++																				1832 文本 false
++																		1833 row    elementTiming : ""
++																			1834 container
++																				1835 text elementTiming :  ""
++																		1836 row    enterKeyHint : ""
++																			1837 container
++																				1838 text enterKeyHint :  ""
++																		1839 row    firstChild : text
++																			1840 container
++																				1841 text firstChild : 
++																				1842 文本 text
++																		1843 row    focusGroup : DOMTokenList [value: '']
++																			1844 container
++																				1845 text focusGroup : 
++																				1846 container DOMTokenList(0)
++																					1847 text DOMTokenList  [ value :  '' ]
++																		1848 row    focusGroupStart : false
++																			1849 container
++																				1850 text focusGroupStart : 
++																				1851 文本 false
++																		1852 row    hidden : false
++																			1853 container
++																				1854 text hidden : 
++																				1855 文本 false
++																		1856 row    id : ""
++																			1857 container
++																				1858 text id :  ""
++																		1859 row    inert : false
++																			1860 container
++																				1861 text inert : 
++																				1862 文本 false
++																		1863 row    innerHTML : "\n 发布\n "
++																			1864 container
++																				1865 text innerHTML : 
++																				1866 文本 "\n        发布\n      "
++																		1867 row    innerText : "发布"
++																			1868 container
++																				1869 text innerText : 
++																				1870 文本 "发布"
++																		1871 row    inputMode : ""
++																			1872 container
++																				1873 text inputMode :  ""
++																		1874 row    isConnected : true
++																			1875 container
++																				1876 text isConnected : 
++																				1877 文本 true
++																		1878 row    isContentEditable : false
++																			1879 container
++																				1880 text isContentEditable : 
++																				1881 文本 false
++																		1882 row    lang : ""
++																			1883 container
++																				1884 text lang :  ""
++																		1885 row    lastChild : text
++																			1886 container
++																				1887 text lastChild : 
++																				1888 文本 text
++																		1889 row    localName : "div"
++																			1890 container
++																				1891 text localName : 
++																				1892 文本 "div"
++																		1893 row    namespaceURI : "http://www.w3.org/1999/xhtml"
++																			1894 container
++																				1895 text namespaceURI : 
++																				1896 文本 "http://www.w3.org/1999/xhtml"
++																		1897 row    nodeName : "DIV"
++																			1898 container
++																				1899 text nodeName : 
++																				1900 文本 "DIV"
++																		1901 row    nodeType : 1
++																			1902 container
++																				1903 text nodeType : 
++																				1904 文本 1
++																		1905 row    nonce : ""
++																			1906 container
++																				1907 text nonce :  ""
++																		1908 row    offsetHeight : 32
++																			1909 container
++																				1910 text offsetHeight : 
++																				1911 文本 32
++																		1912 row    offsetLeft : 466
++																			1913 container
++																				1914 text offsetLeft : 
++																				1915 文本 466
++																		1916 row    offsetParent : div.bili-dyn-publishing
++																			1917 container
++																				1918 text offsetParent : 
++																				1919 container
++																					1920 text div .bili-dyn-publishing
++																		1921 row    offsetTop : 312
++																			1922 container
++																				1923 text offsetTop : 
++																				1924 文本 312
++																		1925 row    offsetWidth : 70
++																			1926 container
++																				1927 text offsetWidth : 
++																				1928 文本 70
++																		1929 row    outerHTML : "<div class=\"bili-dyn-publishing__action launcher disabled\">\n 发布\n </div>"
++																			1930 container
++																				1931 text outerHTML : 
++																				1932 文本 "<div class=\"bili-dyn-publishing__action launcher disabled\">\n        发布\n      </div>"
++																		1933 row    outerText : "发布"
++																			1934 container
++																				1935 text outerText : 
++																				1936 文本 "发布"
++																		1937 row    ownerDocument : document
++																			1938 container
++																				1939 text ownerDocument : 
++																				1940 文本 document
++																		1941 row    parentElement : div.bili-dyn-publishing__headquarters
++																			1942 container
++																				1943 text parentElement : 
++																				1944 container
++																					1945 text div .bili-dyn-publishing__headquarters
++																		1946 row    parentNode : div.bili-dyn-publishing__headquarters
++																			1947 container
++																				1948 text parentNode : 
++																				1949 container
++																					1950 text div .bili-dyn-publishing__headquarters
++																		1951 row    part : DOMTokenList [value: '']
++																			1952 container
++																				1953 text part : 
++																				1954 container DOMTokenList(0)
++																					1955 text DOMTokenList  [ value :  '' ]
++																		1956 row    previousElementSibling : div.bili-dyn-publishing__settings
++																			1957 container
++																				1958 text previousElementSibling : 
++																				1959 container
++																					1960 text div .bili-dyn-publishing__settings
++																		1961 row    previousSibling : text
++																			1962 container
++																				1963 text previousSibling : 
++																				1964 文本 text
++																		1965 row    scrollHeight : 32
++																			1966 container
++																				1967 text scrollHeight : 
++																				1968 文本 32
++																		1969 row    scrollLeft : 0
++																			1970 container
++																				1971 text scrollLeft : 
++																				1972 文本 0
++																		1973 row    scrollTop : 0
++																			1974 container
++																				1975 text scrollTop : 
++																				1976 文本 0
++																		1977 row    scrollWidth : 70
++																			1978 container
++																				1979 text scrollWidth : 
++																				1980 文本 70
++																		1981 row    slot : ""
++																			1982 container
++																				1983 text slot :  ""
++																		1984 row    spellcheck : true
++																			1985 container
++																				1986 text spellcheck : 
++																				1987 文本 true
++																		1988 row    style : CSSStyleDeclaration {accentColor: '', additiveSymbols: '', alignContent: '', alignItems: '', alignSelf: '', …}
++																			1989 container
++																				1990 text style : 
++																				1991 container CSSStyleDeclaration
++																					1992 text CSSStyleDeclaration  { accentColor :  '' ,  additiveSymbols :  '' ,  alignContent :  '' ,  alignItems :  '' ,  alignSelf :  '' , … }
++																		1993 row    tabIndex : -1
++																			1994 container
++																				1995 text tabIndex : 
++																				1996 文本 -1
++																		1997 row    tagName : "DIV"
++																			1998 container
++																				1999 text tagName : 
++																				2000 文本 "DIV"
++																		2001 row    textContent : "\n 发布\n "
++																			2002 container
++																				2003 text textContent : 
++																				2004 文本 "\n        发布\n      "
++																		2005 row    title : ""
++																			2006 container
++																				2007 text title :  ""
++																		2008 row    translate : true
++																			2009 container
++																				2010 text translate : 
++																				2011 文本 true
++																		2012 row    virtualKeyboardPolicy : ""
++																			2013 container
++																				2014 text virtualKeyboardPolicy :  ""
++																		2015 row    writingSuggestions : "true"
++																			2016 container
++																				2017 text writingSuggestions : 
++																				2018 文本 "true"
+The focused UI element is 728 搜索文本字段 (settable) Value: [class*=publishing][class*=action], Placeholder: Find by string, selector, or XPath

@@ -1,0 +1,1450 @@
+Window: "CCLink Studio 开源版", App: CCLink Studio 开源版.
+1 标准窗口 CCLink Studio 开源版, Secondary Actions: Raise
+	2 container CCLink Studio 开源版
+		3 container
+			4 HTML 内容 CCLink Studio 开源版, URL: …
+				5 container
+					6 按钮 收起左侧栏
+						7 图像
+					8 按钮 打开工作空间
+						9 图像
+						10 文本 打开工作空间
+					11 按钮 cclink-promotion, Help: /Users/apple/Desktop/chat-cc/cclink-promotion
+						12 图像
+						13 文本 cclink-promotion
+					14 按钮 研发日记, Help: /Users/apple/Desktop/研发日记
+						15 图像
+						16 文本 研发日记
+					17 按钮 历史项目
+						18 图像
+						19 文本 历史项目
+					20 container 当前项目最近会话
+						21 标签组 快速切换会话
+							22 标签 (selected) Description: 切换到会话：发布文章 · Studio 发布恢复验证 · B站动态，已完成, Help: 发布文章 · Studio 发布恢复验证 · B站动态 · 已完成, Value: 1
+							23 标签 (settable, integer) Description: 切换到会话：发布文章 · Studio 图文发布验证 · B站动态，已完成, Help: 发布文章 · Studio 图文发布验证 · B站动态 · 已完成, Value: 0
+						24 弹出式按钮 更多最近会话
+						25 按钮 新建本地会话
+							26 图像
+					27 按钮 收起 Agent 面板
+						28 图像
+					29 container
+						30 container 工作
+							31 按钮 文件
+							32 按钮 会话
+							33 按钮 浏览器
+							34 按钮 Terminal
+						35 container 资源
+							36 按钮 角色
+							37 按钮 网站与账号
+							38 按钮 数据源
+							39 按钮 CCLink 远程
+						40 container 流程
+							41 按钮 文章发布
+							42 按钮 事务
+							43 按钮 定时任务
+							44 按钮 生产
+					45 按钮 设置
+					46 container 文章发布侧栏
+						47 文本 文章发布
+						48 按钮 新建文章发布
+							49 图像
+						50 按钮 Studio 发布恢复验证 结果未知 B站动态 · 账号 7c1ef8bb · 2026/9/12 19:52:01
+							51 文本 Studio 发布恢复验证
+							52 文本 结果未知
+							53 container
+								54 text B站动态 · 账号  7c1ef8bb  ·  2026/9/12 19:52:01
+						55 按钮 Studio 图文发布验证 结果未知 B站动态 · 账号 7c1ef8bb · 2026/9/12 18:39:25
+							56 文本 Studio 图文发布验证
+							57 文本 结果未知
+							58 container
+								59 text B站动态 · 账号  7c1ef8bb  ·  2026/9/12 18:39:25
+						60 按钮 做AI眼镜第188天，它开始看懂我的世界 结果未知 B站动态 · 账号 7c1ef8bb · 2026/9/12 17:34:52
+							61 文本 做AI眼镜第188天，它开始看懂我的世界
+							62 文本 结果未知
+							63 container
+								64 text B站动态 · 账号  7c1ef8bb  ·  2026/9/12 17:34:52
+						65 按钮 做AI眼镜第188天，它开始看懂我的世界 已终止 B站动态 · 账号 7c1ef8bb · 2026/9/12 17:17:11
+							66 文本 做AI眼镜第188天，它开始看懂我的世界
+							67 文本 已终止
+							68 container
+								69 text B站动态 · 账号  7c1ef8bb  ·  2026/9/12 17:17:11
+						70 按钮 做AI眼镜第188天，它开始看懂我的世界 已终止 B站动态 · 账号 7c1ef8bb · 2026/9/12 16:46:32
+							71 文本 做AI眼镜第188天，它开始看懂我的世界
+							72 文本 已终止
+							73 container
+								74 text B站动态 · 账号  7c1ef8bb  ·  2026/9/12 16:46:32
+						75 按钮 做AI眼镜第188天，它开始看懂我的世界 已发布 头条微头条 · 账号 1345b278 · 2026/9/12 00:35:20
+							76 文本 做AI眼镜第188天，它开始看懂我的世界
+							77 文本 已发布
+							78 container
+								79 text 头条微头条 · 账号  1345b278  ·  2026/9/12 00:35:20
+						80 按钮 做AI眼镜第188天，它开始看懂我的世界 已中断 微博 · 账号 9823a570 · 2026/9/11 13:05:59
+							81 文本 做AI眼镜第188天，它开始看懂我的世界
+							82 文本 已中断
+							83 container
+								84 text 微博 · 账号  9823a570  ·  2026/9/11 13:05:59
+						85 按钮 做AI眼镜第188天，它开始看懂我的世界 已发布 知乎 · 账号 81f36309 · 2026/9/11 11:27:26
+							86 文本 做AI眼镜第188天，它开始看懂我的世界
+							87 文本 已发布
+							88 container
+								89 text 知乎 · 账号  81f36309  ·  2026/9/11 11:27:26
+						90 按钮 做AI眼镜第188天，它开始看懂我的世界 结果未知 小红书 · 账号 49f17596 · 2026/9/11 02:02:13
+							91 文本 做AI眼镜第188天，它开始看懂我的世界
+							92 文本 结果未知
+							93 container
+								94 text 小红书 · 账号  49f17596  ·  2026/9/11 02:02:13
+					95 分离器 Description: 侧栏宽度, Value: 50
+					96 container
+						97 标签 (selected) 小红书 - 你的生活兴趣社区, Value: 1
+						98 标签 (settable, integer) 📰 小红书 · AIR第188天, Value: 0
+							99 文本 📰
+							100 文本 小红书 · AIR第188天
+							101 图像
+						102 标签 (settable, integer) 在手机上给 AI Agent 发任务 - 小红书, Value: 0
+						103 标签 (settable, integer) 做AI眼镜第188天，它开始看懂我的世界 - 小红书, Value: 0
+						104 标签 (settable, integer) zhiDFc1e - 知乎, Value: 0
+						105 标签 (settable, integer) (3 条消息) 内容管理 - 创作中心 - 知乎, Value: 0
+						106 标签 (settable, integer) 写文章 - 知乎, Value: 0
+						107 标签 (settable, integer) 📰 发布 · 做AI眼镜第188天，它开始看懂我的世界, Value: 0
+							108 文本 📰
+							109 文本 发布 · 做AI眼镜第188天，它开始看懂我的世界
+							110 图像
+						111 标签 (settable, integer) 微博 – 随时随地发现新鲜事, Value: 0
+						112 标签 (settable, integer) 📰 发布 · 做AI眼镜第188天，它开始看懂我的世界, Value: 0
+							113 文本 📰
+							114 文本 发布 · 做AI眼镜第188天，它开始看懂我的世界
+							115 图像
+						116 标签 (settable, integer) 头条号, Value: 0
+						117 标签 (settable, integer) 头条号, Value: 0
+						118 标签 (settable, integer) 头条号, Value: 0
+						119 标签 (settable, integer) 头条号, Value: 0
+						120 标签 (settable, integer) 头条号, Value: 0
+						121 标签 (settable, integer) 📰 发布 · 做AI眼镜第188天，它开始看懂我的世界, Value: 0
+							122 文本 📰
+							123 文本 发布 · 做AI眼镜第188天，它开始看懂我的世界
+							124 图像
+						125 标签 (settable, integer) 头条号, Value: 0
+						126 标签 (settable, integer) 头条号, Value: 0
+						127 标签 (settable, integer) 头条号, Value: 0
+						128 标签 (settable, integer) 头条号, Value: 0
+						129 标签 (settable, integer) 头条号, Value: 0
+						130 标签 (settable, integer) 头条号, Value: 0
+						131 标签 (settable, integer) 头条号, Value: 0
+						132 标签 (settable, integer) 头条号, Value: 0
+						133 标签 (settable, integer) 头条号, Value: 0
+						134 标签 (settable, integer) 头条号, Value: 0
+						135 标签 (settable, integer) 头条号, Value: 0
+						136 标签 (settable, integer) 头条号, Value: 0
+						137 标签 (settable, integer) 头条号, Value: 0
+						138 标签 (settable, integer) 头条号, Value: 0
+						139 标签 (settable, integer) Value: 0, 你好小眸：做AI眼镜第188天，它开始看懂我的世界 做AI眼镜第188天，想认真说说做它的初衷。AIR的愿景一句话就能说清：让AI帮助人，而不是替代人。所以我想让小眸拥有一双和我一样的眼睛，看到我所看到的，随时帮我应对眼前这个世界——尤其是腾不出手的时候：骑车两只手扶着车把，想知道路怎么走，问一句就行；手里正操作着设备，想知道下一步怎么干，它看着画面告诉你；逛展碰到看不懂的东西，它给你讲背后的故...
+						140 标签 (settable, integer) Value: 0, 你好小眸：做AI眼镜第188天，它开始看懂我的世界 做AI眼镜第188天，想认真说说做它的初衷。AIR的愿景一句话就能说清：让AI帮助人，而不是替代人。所以我想让小眸拥有一双和我一样的眼睛，看到我所看到的，随时帮我应对眼前这个世界——尤其是腾不出手的时候：骑车两只手扶着车把，想知道路怎么走，问一句就行；手里正操作着设备，想知道下一步怎么干，它看着画面告诉你；逛展碰到看不懂的东西，它给你讲背后的故...
+						141 标签 (settable, integer) Value: 0, 你好小眸：做AI眼镜第188天，它开始看懂我的世界 做AI眼镜第188天，想认真说说做它的初衷。AIR的愿景一句话就能说清：让AI帮助人，而不是替代人。所以我想让小眸拥有一双和我一样的眼睛，看到我所看到的，随时帮我应对眼前这个世界——尤其是腾不出手的时候：骑车两只手扶着车把，想知道路怎么走，问一句就行；手里正操作着设备，想知道下一步怎么干，它看着画面告诉你；逛展碰到看不懂的东西，它给你讲背后的故...
+						142 标签 (settable, integer) Value: 0, 你好小眸：做AI眼镜第188天，它开始看懂我的世界 做AI眼镜第188天，想认真说说做它的初衷。AIR的愿景一句话就能说清：让AI帮助人，而不是替代人。所以我想让小眸拥有一双和我一样的眼睛，看到我所看到的，随时帮我应对眼前这个世界——尤其是腾不出手的时候：骑车两只手扶着车把，想知道路怎么走，问一句就行；手里正操作着设备，想知道下一步怎么干，它看着画面告诉你；逛展碰到看不懂的东西，它给你讲背后的故...
+						143 标签 (settable, integer) 智元AGIBOT的动态-哔哩哔哩, Value: 0
+						144 标签 (settable, integer) 浏览器, Value: 0
+							145 图像
+							146 文本 浏览器
+							147 图像
+						148 标签 (settable, integer) 稚晖君的动态-哔哩哔哩, Value: 0
+						149 标签 (settable, integer) 浏览器, Value: 0
+							150 图像
+							151 文本 浏览器
+							152 图像
+						153 标签 (settable, integer) 浏览器, Value: 0
+							154 图像
+							155 文本 浏览器
+							156 图像
+						157 标签 (settable, integer) 浏览器, Value: 0
+							158 图像
+							159 文本 浏览器
+							160 图像
+						161 标签 (settable, integer) 浏览器, Value: 0
+							162 图像
+							163 文本 浏览器
+							164 图像
+						165 标签 (settable, integer) 稚晖君的动态 - 哔哩哔哩, Value: 0
+						166 标签 (settable, integer) 📰 发布 · 做AI眼镜第188天，它开始看懂我的世界, Value: 0
+							167 文本 📰
+							168 文本 发布 · 做AI眼镜第188天，它开始看懂我的世界
+							169 图像
+						170 标签 (settable, integer) 📰 发布 · 做AI眼镜第188天，它开始看懂我的世界, Value: 0
+							171 文本 📰
+							172 文本 发布 · 做AI眼镜第188天，它开始看懂我的世界
+							173 图像
+						174 标签 (settable, integer) 📰 发布 · 做AI眼镜第188天，它开始看懂我的世界, Value: 0
+							175 文本 📰
+							176 文本 发布 · 做AI眼镜第188天，它开始看懂我的世界
+							177 图像
+						178 标签 (settable, integer) 📰 发布 · Studio 图文发布验证, Value: 0
+							179 文本 📰
+							180 文本 发布 · Studio 图文发布验证
+							181 图像
+						182 标签 (settable, integer) 📰 发布 · Studio 发布恢复验证, Value: 0
+							183 文本 📰
+							184 文本 发布 · Studio 发布恢复验证
+							185 图像
+						186 按钮 新建标签页
+							187 图像
+						188 按钮 新建浏览器页
+							189 图像
+					190 按钮 后退
+						191 图像
+					192 按钮 前进
+						193 图像
+					194 按钮 刷新
+						195 图像
+					196 按钮 浏览历史
+						197 图像
+					198 文本栏 (settable) Placeholder: 输入 URL..., Value: https://www.xiaohongshu.com/explore/6aa2ed5e000000002502d58d?xsec_token=YBug3t5OZ2BXTDQeZBCiDq3oE31nOlgakbE9Gvjlh3xJ0=&xsec_source=pc_creatormng
+					199 文本 账号 · 15063036754
+					200 按钮 缩小
+						201 图像
+					202 container 当前为适应宽度自动缩放；输入百分比可切换为手动缩放
+						203 文本 自动
+						204 文本栏 (settable) Description: 浏览器缩放百分比, Value: 100
+						205 文本 %
+					206 按钮 放大
+						207 图像
+					208 切换按钮 Description: 适应宽度, Help: 适应宽度（自动缩放以显示整页）, Value: 1
+						209 图像
+					210 按钮 桌面版
+						211 图像
+					212 按钮 移动版
+						213 图像
+					214 分离器 Description: Agent 面板宽度, Value: 50
+					215 container
+						216 图像
+						217 text Agent 本地 · 默认助手
+						218 container 本地 Agent 已就绪
+							219 文本 已就绪
+						220 按钮 复制完整诊断日志
+							221 图像
+					222 container 当前会话会优先参考这些工作现场
+						223 文本 上下文
+						224 container
+							225 container 本地: 研发日记
+								226 图像
+								227 text 研发日记 本地
+							228 container 操作目标: 全部
+								229 图像
+								230 text 全部 操作目标
+							231 container 浏览器 Tab: 小红书 - 你的生活兴趣社区
+								232 图像
+								233 text 小红书 - 你的生活兴趣社区 浏览器 Tab
+					234 container
+						235 按钮 复制整条消息
+							236 图像
+						237 文本 你好！我是 CCLink Studio 的本地 Agent。
+						238 文本 你可以用自然语言和我对话，我会帮你完成代码、文档和本地工作区任务。新 Thread 默认使用 Claude Code，也可以在发送第一条消息前选择 Codex ACP。
+						239 按钮 复制整条消息
+							240 图像
+						241 文本 开始执行文章发布：Studio 发布恢复验证
+						242 按钮 复制整条消息
+							243 图像
+						244 开合三角标记 思考摘要 Let me start by following the user's instructions: 1. First call web_aff...
+							245 图像
+							246 文本 思考摘要
+							247 文本 Let me start by following the user's instructions: 1. First call web_aff...
+						248 开合三角标记 执行过程 1 个动作 · 1 完成 · web affair get、工具完成
+							249 图像
+							250 文本 执行过程
+							251 container
+								252 text 1  个动作  · 1 完成  · web affair get、工具完成
+						253 按钮 复制整条消息
+							254 图像
+						255 开合三角标记 思考摘要 I've got the affair. Current step is open-editor (running). Checkpoints ...
+							256 图像
+							257 文本 思考摘要
+							258 文本 I've got the affair. Current step is open-editor (running). Checkpoints ...
+						259 container
+							260 text 事务已读取。当前检查点： open-editor  运行中，其余待办。现在执行首次页面检查。
+						261 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							262 图像
+							263 文本 执行过程
+							264 container
+								265 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						266 按钮 复制整条消息
+							267 图像
+						268 开合三角标记 思考摘要 The page is the B站 dynamic editor. Current state: - Editor recognized, b...
+							269 图像
+							270 文本 思考摘要
+							271 文本 The page is the B站 dynamic editor. Current state: - Editor recognized, b...
+						272 container
+							273 text 编辑器已识别：B站动态发布页、正文/标题选择器已返回、现场为空白、UID 匹配  3546384070347419 。按串行顺序推进检查点  open-editor 。
+						274 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							275 图像
+							276 文本 执行过程
+							277 container
+								278 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						279 按钮 复制整条消息
+							280 图像
+						281 开合三角标记 思考摘要 open-editor is now verifying. Now report completed with the fresh inspec...
+							282 图像
+							283 文本 思考摘要
+							284 文本 open-editor is now verifying. Now report completed with the fresh inspec...
+						285 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							286 图像
+							287 文本 执行过程
+							288 container
+								289 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						290 按钮 复制整条消息
+							291 图像
+						292 开合三角标记 思考摘要 Evidence expired or not of current generation. I need to re-inspect befo...
+							293 图像
+							294 文本 思考摘要
+							295 文本 Evidence expired or not of current generation. I need to re-inspect befo...
+						296 文本 证据需要新鲜重读。重新 inspect 后再报 completed。
+						297 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							298 图像
+							299 文本 执行过程
+							300 container
+								301 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						302 按钮 复制整条消息
+							303 图像
+						304 开合三角标记 思考摘要 The bound page is not visible. The browser tab exists (tab-1-17891450824...
+							305 图像
+							306 文本 思考摘要
+							307 文本 The bound page is not visible. The browser tab exists (tab-1-17891450824...
+						308 文本 页面可见性出了问题。先核对绑定 Tab 状态。
+						309 开合三角标记 执行过程 1 个动作 · 1 完成 · 读取标签页信息、工具完成
+							310 图像
+							311 文本 执行过程
+							312 container
+								313 text 1  个动作  · 1 完成  · 读取标签页信息、工具完成
+						314 按钮 复制整条消息
+							315 图像
+						316 开合三角标记 思考摘要 The tab is still at https://t.bilibili.com/ titled 动态首页-哔哩哔哩. The page s...
+							317 图像
+							318 文本 思考摘要
+							319 文本 The tab is still at https://t.bilibili.com/ titled 动态首页-哔哩哔哩. The page s...
+						320 开合三角标记 执行过程 1 个动作 · 1 完成 · browser title、工具完成
+							321 图像
+							322 文本 执行过程
+							323 container
+								324 text 1  个动作  · 1 完成  · browser title、工具完成
+						325 按钮 复制整条消息
+							326 图像
+						327 开合三角标记 思考摘要 Page is alive — title reads fine. The inspect tool complains the page is...
+							328 图像
+							329 文本 思考摘要
+							330 文本 Page is alive — title reads fine. The inspect tool complains the page is...
+						331 文本 页面仍在线（标题可读）。重试一次 inspect。
+						332 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							333 图像
+							334 文本 执行过程
+							335 container
+								336 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						337 按钮 复制整条消息
+							338 图像
+						339 开合三角标记 思考摘要 Same error twice. The inspect adapter requires the bound page to be visi...
+							340 图像
+							341 文本 思考摘要
+							342 文本 Same error twice. The inspect adapter requires the bound page to be visi...
+						343 文本 连续两次同样的失败：适配器报告绑定的 B站页面当前不可见，无法生成有效证据。按要求报告一次具体阻塞并停止，不自行重绑或重试。
+						344 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							345 图像
+							346 文本 执行过程
+							347 container
+								348 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						349 按钮 复制整条消息
+							350 图像
+						351 开合三角标记 思考摘要 The waiting-human report succeeded. The attempt is now in waiting-human ...
+							352 图像
+							353 文本 思考摘要
+							354 文本 The waiting-human report succeeded. The attempt is now in waiting-human ...
+						355 文本 已按规则报告阻塞并停止。本轮执行情况如下：
+						356 标题 执行结果：等待人工（页面不可见）, Value: 2
+							357 文本 执行结果：等待人工（页面不可见）
+						358 文本 已完成
+						359 内容列表
+							360 container
+								361 AXListMarker • 
+								362 文本 web_affair_get
+								363 文本 ：读取事务，检查点顺序为 open-editor → verify-account → upload-assets → fill-body → fill-fields → save-draft → publish → verify-publication
+							364 container
+								365 AXListMarker • 
+								366 文本 首次 inspect 成功：
+								367 文本 https://t.bilibili.com/
+								368 文本  编辑器已识别，正文、标题、图片上传入口选择器均已返回，平台 UID 
+								369 文本 3546384070347419
+								370 文本  与目标一致，现场为空白
+							371 container
+								372 AXListMarker • 
+								373 文本 open-editor
+								374 文本  已推进到 verifying
+						375 文本 阻塞点
+						376 内容列表
+							377 container
+								378 AXListMarker • 
+								379 文本 报 completed 时提示证据过期，随后连续两次 
+								380 文本 article_publishing_inspect_page
+								381 文本  返回同一错误：
+								382 文本 「绑定的原稿网页不可见」
+							383 container
+								384 AXListMarker • 
+								385 文本 页面本身在线（
+								386 文本 browser_title
+								387 文本  正常返回「动态首页-哔哩哔哩」，Tab 
+								388 文本 tab-1-1789145082433
+								389 文本 ），但适配器判定原稿页面当前不可见，无法生成有效证据
+							390 container
+								391 AXListMarker • 
+								392 文本 已将 
+								393 文本 open-editor
+								394 文本  报告为 
+								395 文本 waiting-human
+								396 文本 ，错误码 
+								397 文本 bilibili_page_not_visible
+								398 文本 ，未做任何重建或重绑
+						399 container
+							400 text 未发生的操作 ：未上传任何图片、未填写正文/标题、未保存草稿、未发布。三张图片和全部后续检查点保持 pending，不存在重复发送风险。
+						401 container
+							402 text 需要你做一件事 ：在 Studio 左侧把该浏览器页面重新打开显示（或点击「网页独立窗口」），不需要重新登录。完成后重新继续此事务，我会从 open-editor 的核验继续，按顺序执行后续步骤。
+						403 按钮 复制整条消息
+							404 图像
+						405 文本 开始执行文章发布：Studio 发布恢复验证
+						406 按钮 复制整条消息
+							407 图像
+						408 开合三角标记 思考摘要 Let me start by following the instructions. First I need to call web_aff...
+							409 图像
+							410 文本 思考摘要
+							411 文本 Let me start by following the instructions. First I need to call web_aff...
+						412 文本 我先读取事务状态，再检查当前页面。
+						413 开合三角标记 执行过程 1 个动作 · 1 完成 · web affair get、工具完成
+							414 图像
+							415 文本 执行过程
+							416 container
+								417 text 1  个动作  · 1 完成  · web affair get、工具完成
+						418 按钮 复制整条消息
+							419 图像
+						420 开合三角标记 思考摘要 The affair state shows: - Current step: open-editor (status: running), w...
+							421 图像
+							422 文本 思考摘要
+							423 文本 The affair state shows: - Current step: open-editor (status: running), w...
+						424 文本 事务状态已读取。当前步骤是 open-editor（running），此前因页面不可见卡过一次。现在重新检查页面状态。
+						425 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							426 图像
+							427 文本 执行过程
+							428 container
+								429 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						430 按钮 复制整条消息
+							431 图像
+						432 开合三角标记 思考摘要 The page is now visible and the editor is recognized: - pageKind: editor...
+							433 图像
+							434 文本 思考摘要
+							435 文本 The page is now visible and the editor is recognized: - pageKind: editor...
+						436 文本 页面已恢复可见，编辑器识别成功。按串行顺序推进检查点。先读冻结素材正文，同时报告 open-editor 进入 verifying。
+						437 开合三角标记 执行过程 2 个动作 · 2 完成 · article publishing report checkpoint、editor read、工具完成
+							438 图像
+							439 文本 执行过程
+							440 container
+								441 text 2  个动作  · 2 完成  · article publishing report checkpoint、editor read、工具完成
+						442 按钮 复制整条消息
+							443 图像
+						444 开合三角标记 思考摘要 Now I have the markdown content. The frozen body (per the occurrence pos...
+							445 图像
+							446 文本 思考摘要
+							447 文本 Now I have the markdown content. The frozen body (per the occurrence pos...
+						448 文本 冻结正文已确认：两段文字 + 三张图片引用（图片单独上传，正文不含图片语法）。open-editor 已进入 verifying，重新 inspect 后报 completed。
+						449 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							450 图像
+							451 文本 执行过程
+							452 container
+								453 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						454 按钮 复制整条消息
+							455 图像
+						456 开合三角标记 思考摘要 Editor still recognized. Report open-editor completed. Then verify-accou...
+							457 图像
+							458 文本 思考摘要
+							459 文本 Editor still recognized. Report open-editor completed. Then verify-accou...
+						460 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							461 图像
+							462 文本 执行过程
+							463 container
+								464 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						465 按钮 复制整条消息
+							466 图像
+						467 开合三角标记 思考摘要 open-editor completed. Current step is now verify-account (pending). The...
+							468 图像
+							469 文本 思考摘要
+							470 文本 open-editor completed. Current step is now verify-account (pending). The...
+						471 文本 open-editor 已完成，当前步骤推进到 verify-account。报告 running。
+						472 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							473 图像
+							474 文本 执行过程
+							475 container
+								476 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						477 按钮 复制整条消息
+							478 图像
+						479 开合三角标记 思考摘要 verify-account is running. Now report verifying (with fresh inspect evid...
+							480 图像
+							481 文本 思考摘要
+							482 文本 verify-account is running. Now report verifying (with fresh inspect evid...
+						483 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							484 图像
+							485 文本 执行过程
+							486 container
+								487 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						488 按钮 复制整条消息
+							489 图像
+						490 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							491 图像
+							492 文本 执行过程
+							493 container
+								494 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						495 按钮 复制整条消息
+							496 图像
+						497 开合三角标记 思考摘要 verify-account is verifying. Re-inspect before reporting completed.
+							498 图像
+							499 文本 思考摘要
+							500 文本 verify-account is verifying. Re-inspect before reporting completed.
+						501 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							502 图像
+							503 文本 执行过程
+							504 container
+								505 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						506 按钮 复制整条消息
+							507 图像
+						508 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							509 图像
+							510 文本 执行过程
+							511 container
+								512 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						513 按钮 复制整条消息
+							514 图像
+						515 开合三角标记 思考摘要 verify-account completed. Current step: upload-assets (pending). Now the...
+							516 图像
+							517 文本 思考摘要
+							518 文本 verify-account completed. Current step: upload-assets (pending). Now the...
+						519 文本 verify-account 已完成，当前步骤为 upload-assets。开始逐张上传图片。
+						520 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							521 图像
+							522 文本 执行过程
+							523 container
+								524 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						525 按钮 复制整条消息
+							526 图像
+						527 开合三角标记 思考摘要 upload-assets is running. Now upload image 1: report_asset uploading fir...
+							528 图像
+							529 文本 思考摘要
+							530 文本 upload-assets is running. Now upload image 1: report_asset uploading fir...
+						531 文本 upload-assets 运行中。第 1 张图（01-首篇封面.png）开始：先报 uploading。
+						532 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report asset、工具完成
+							533 图像
+							534 文本 执行过程
+							535 container
+								536 text 1  个动作  · 1 完成  · article publishing report asset、工具完成
+						537 按钮 复制整条消息
+							538 图像
+						539 开合三角标记 思考摘要 Image 1 is in "uploading" state. Now execute browser_upload_file with th...
+							540 图像
+							541 文本 思考摘要
+							542 文本 Image 1 is in "uploading" state. Now execute browser_upload_file with th...
+						543 文本 第 1 张图已报 uploading，执行文件选择器上传。
+						544 开合三角标记 执行过程 1 个动作 · 1 完成 · browser upload file、工具完成
+							545 图像
+							546 文本 执行过程
+							547 container
+								548 text 1  个动作  · 1 完成  · browser upload file、工具完成
+						549 按钮 复制整条消息
+							550 图像
+						551 开合三角标记 思考摘要 The file selection has been dispatched. Now report waiting-platform, the...
+							552 图像
+							553 文本 思考摘要
+							554 文本 The file selection has been dispatched. Now report waiting-platform, the...
+						555 文本 文件选择已派发。报 waiting-platform。
+						556 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report asset、工具完成
+							557 图像
+							558 文本 执行过程
+							559 container
+								560 text 1  个动作  · 1 完成  · article publishing report asset、工具完成
+						561 按钮 复制整条消息
+							562 图像
+						563 开合三角标记 思考摘要 The transition requires a re-observed page evidence. I need to inspect f...
+							564 图像
+							565 文本 思考摘要
+							566 文本 The transition requires a re-observed page evidence. I need to inspect f...
+						567 文本 需要先 inspect 提供页面证据再报状态。
+						568 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							569 图像
+							570 文本 执行过程
+							571 container
+								572 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						573 按钮 复制整条消息
+							574 图像
+						575 开合三角标记 思考摘要 The image is uploaded and matched: - matchedAssets contains local:2026-0...
+							576 图像
+							577 文本 思考摘要
+							578 文本 The image is uploaded and matched: - matchedAssets contains local:2026-0...
+						579 文本 第 1 张图已上传并被平台匹配（loaded=true）。按顺序报 waiting-platform。
+						580 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report asset、工具完成
+							581 图像
+							582 文本 执行过程
+							583 container
+								584 text 1  个动作  · 1 完成  · article publishing report asset、工具完成
+						585 按钮 复制整条消息
+							586 图像
+						587 开合三角标记 思考摘要 waiting-platform recorded. The platformUrl was auto-captured: https://i0...
+							588 图像
+							589 文本 思考摘要
+							590 文本 waiting-platform recorded. The platformUrl was auto-captured: https://i0...
+						591 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							592 图像
+							593 文本 执行过程
+							594 container
+								595 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						596 按钮 复制整条消息
+							597 图像
+						598 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report asset、工具完成
+							599 图像
+							600 文本 执行过程
+							601 container
+								602 text 1  个动作  · 1 完成  · article publishing report asset、工具完成
+						603 按钮 复制整条消息
+							604 图像
+						605 开合三角标记 思考摘要 verifying reported. Now report uploaded with platformUrl and evidence. N...
+							606 图像
+							607 文本 思考摘要
+							608 文本 verifying reported. Now report uploaded with platformUrl and evidence. N...
+						609 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							610 图像
+							611 文本 执行过程
+							612 container
+								613 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						614 按钮 复制整条消息
+							615 图像
+						616 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report asset、工具完成
+							617 图像
+							618 文本 执行过程
+							619 container
+								620 text 1  个动作  · 1 完成  · article publishing report asset、工具完成
+						621 按钮 复制整条消息
+							622 图像
+						623 开合三角标记 思考摘要 第 1 张图已 uploaded（status: uploaded, verifiedAt 已记录，platformUrl 已确认）。第 2 张...
+							624 图像
+							625 文本 思考摘要
+							626 文本 第 1 张图已 uploaded（status: uploaded, verifiedAt 已记录，platformUrl 已确认）。第 2 张...
+						627 文本 第 1 张图已确认上传。开始第 2 张图（02-导航场景效果图.png）：报 uploading。
+						628 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report asset、工具完成
+							629 图像
+							630 文本 执行过程
+							631 container
+								632 text 1  个动作  · 1 完成  · article publishing report asset、工具完成
+						633 按钮 复制整条消息
+							634 图像
+						635 开合三角标记 思考摘要 第 2 张图 uploading 已记录。当前最新 fileInput selector 是 div.bili-pics-uploader__a...
+							636 图像
+							637 文本 思考摘要
+							638 文本 第 2 张图 uploading 已记录。当前最新 fileInput selector 是 div.bili-pics-uploader__a...
+						639 开合三角标记 执行过程 1 个动作 · 1 完成 · browser upload file、工具完成
+							640 图像
+							641 文本 执行过程
+							642 container
+								643 text 1  个动作  · 1 完成  · browser upload file、工具完成
+						644 按钮 复制整条消息
+							645 图像
+						646 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							647 图像
+							648 文本 执行过程
+							649 container
+								650 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						651 按钮 复制整条消息
+							652 图像
+						653 开合三角标记 思考摘要 Image 2 is now uploaded and matched: https://i0.hdslb.com/bfs/new_dyn/47...
+							654 图像
+							655 文本 思考摘要
+							656 文本 Image 2 is now uploaded and matched: https://i0.hdslb.com/bfs/new_dyn/47...
+						657 文本 第 2 张图已上传并被平台匹配。依次报告 waiting-platform → verifying。
+						658 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report asset、工具完成
+							659 图像
+							660 文本 执行过程
+							661 container
+								662 text 1  个动作  · 1 完成  · article publishing report asset、工具完成
+						663 按钮 复制整条消息
+							664 图像
+						665 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							666 图像
+							667 文本 执行过程
+							668 container
+								669 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						670 按钮 复制整条消息
+							671 图像
+						672 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report asset、工具完成
+							673 图像
+							674 文本 执行过程
+							675 container
+								676 text 1  个动作  · 1 完成  · article publishing report asset、工具完成
+						677 按钮 复制整条消息
+							678 图像
+						679 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							680 图像
+							681 文本 执行过程
+							682 container
+								683 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						684 按钮 复制整条消息
+							685 图像
+						686 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report asset、工具完成
+							687 图像
+							688 文本 执行过程
+							689 container
+								690 text 1  个动作  · 1 完成  · article publishing report asset、工具完成
+						691 按钮 复制整条消息
+							692 图像
+						693 开合三角标记 思考摘要 第 2 张图 uploaded。第 3 张图（03-城市漫游效果图.png）：uploading → upload → waiting-plat...
+							694 图像
+							695 文本 思考摘要
+							696 文本 第 2 张图 uploaded。第 3 张图（03-城市漫游效果图.png）：uploading → upload → waiting-plat...
+						697 文本 第 2 张图已确认。开始第 3 张图（03-城市漫游效果图.png）：报 uploading。
+						698 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report asset、工具完成
+							699 图像
+							700 文本 执行过程
+							701 container
+								702 text 1  个动作  · 1 完成  · article publishing report asset、工具完成
+						703 按钮 复制整条消息
+							704 图像
+						705 开合三角标记 执行过程 1 个动作 · 1 完成 · browser upload file、工具完成
+							706 图像
+							707 文本 执行过程
+							708 container
+								709 text 1  个动作  · 1 完成  · browser upload file、工具完成
+						710 按钮 复制整条消息
+							711 图像
+						712 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							713 图像
+							714 文本 执行过程
+							715 container
+								716 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						717 按钮 复制整条消息
+							718 图像
+						719 开合三角标记 思考摘要 第 3 张图已上传并匹配： https://i0.hdslb.com/bfs/new_dyn/cc6d65b129d0299c1c7da983c...
+							720 图像
+							721 文本 思考摘要
+							722 文本 第 3 张图已上传并匹配： https://i0.hdslb.com/bfs/new_dyn/cc6d65b129d0299c1c7da983c...
+						723 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report asset、工具完成
+							724 图像
+							725 文本 执行过程
+							726 container
+								727 text 1  个动作  · 1 完成  · article publishing report asset、工具完成
+						728 按钮 复制整条消息
+							729 图像
+						730 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							731 图像
+							732 文本 执行过程
+							733 container
+								734 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						735 按钮 复制整条消息
+							736 图像
+						737 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report asset、工具完成
+							738 图像
+							739 文本 执行过程
+							740 container
+								741 text 1  个动作  · 1 完成  · article publishing report asset、工具完成
+						742 按钮 复制整条消息
+							743 图像
+						744 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							745 图像
+							746 文本 执行过程
+							747 container
+								748 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						749 按钮 复制整条消息
+							750 图像
+						751 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report asset、工具完成
+							752 图像
+							753 文本 执行过程
+							754 container
+								755 text 1  个动作  · 1 完成  · article publishing report asset、工具完成
+						756 按钮 复制整条消息
+							757 图像
+						758 开合三角标记 思考摘要 全部 3 张图 uploaded。现在报 upload-assets checkpoint：verifying → inspect → comp...
+							759 图像
+							760 文本 思考摘要
+							761 文本 全部 3 张图 uploaded。现在报 upload-assets checkpoint：verifying → inspect → comp...
+						762 文本 三张图全部上传核验完成。推进 upload-assets 检查点到 verifying。
+						763 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							764 图像
+							765 文本 执行过程
+							766 container
+								767 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						768 按钮 复制整条消息
+							769 图像
+						770 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							771 图像
+							772 文本 执行过程
+							773 container
+								774 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						775 按钮 复制整条消息
+							776 图像
+						777 开合三角标记 思考摘要 Note "bodyMatchesFrozen": false is now included — the body is still empt...
+							778 图像
+							779 文本 思考摘要
+							780 文本 Note "bodyMatchesFrozen": false is now included — the body is still empt...
+						781 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							782 图像
+							783 文本 执行过程
+							784 container
+								785 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						786 按钮 复制整条消息
+							787 图像
+						788 开合三角标记 思考摘要 upload-assets 已完成。当前步骤 fill-body（pending）。main 已经标注 body.verify waiting：...
+							789 图像
+							790 文本 思考摘要
+							791 文本 upload-assets 已完成。当前步骤 fill-body（pending）。main 已经标注 body.verify waiting：...
+						792 文本 upload-assets 已完成，进入 fill-body。冻结正文为两段共约 110 字符。报 running 后填写正文。
+						793 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							794 图像
+							795 文本 执行过程
+							796 container
+								797 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						798 按钮 复制整条消息
+							799 图像
+						800 开合三角标记 思考摘要 fill-body is running. Now use browser_fill to fill in the body text. The...
+							801 图像
+							802 文本 思考摘要
+							803 文本 fill-body is running. Now use browser_fill to fill in the body text. The...
+						804 文本 现在用 browser_fill 写入冻结正文（两段文字，不含图片语法）。
+						805 开合三角标记 执行过程 1 个动作 · 1 完成 · 填写表单、工具完成
+							806 图像
+							807 文本 执行过程
+							808 container
+								809 text 1  个动作  · 1 完成  · 填写表单、工具完成
+						810 按钮 复制整条消息
+							811 图像
+						812 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							813 图像
+							814 文本 执行过程
+							815 container
+								816 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						817 按钮 复制整条消息
+							818 图像
+						819 开合三角标记 思考摘要 bodyMatchesFrozen: true — 正文与冻结原稿匹配（bodyTextLength 118 包含换行，main 判定 body...
+							820 图像
+							821 文本 思考摘要
+							822 文本 bodyMatchesFrozen: true — 正文与冻结原稿匹配（bodyTextLength 118 包含换行，main 判定 body...
+						823 文本 正文已写入且 bodyMatchesFrozen=true。报 verifying。
+						824 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							825 图像
+							826 文本 执行过程
+							827 container
+								828 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						829 按钮 复制整条消息
+							830 图像
+						831 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							832 图像
+							833 文本 执行过程
+							834 container
+								835 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						836 按钮 复制整条消息
+							837 图像
+						838 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							839 图像
+							840 文本 执行过程
+							841 container
+								842 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						843 按钮 复制整条消息
+							844 图像
+						845 开合三角标记 思考摘要 fill-body 已完成。当前步骤 fill-fields（pending）。 fill-fields 流程： 1. 报 running 2....
+							846 图像
+							847 文本 思考摘要
+							848 文本 fill-body 已完成。当前步骤 fill-fields（pending）。 fill-fields 流程： 1. 报 running 2....
+						849 文本 fill-body 已完成，进入 fill-fields。报 running 并填写标题。
+						850 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							851 图像
+							852 文本 执行过程
+							853 container
+								854 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						855 按钮 复制整条消息
+							856 图像
+						857 开合三角标记 执行过程 1 个动作 · 1 完成 · 填写表单、工具完成
+							858 图像
+							859 文本 执行过程
+							860 container
+								861 text 1  个动作  · 1 完成  · 填写表单、工具完成
+						862 按钮 复制整条消息
+							863 图像
+						864 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							865 图像
+							866 文本 执行过程
+							867 container
+								868 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						869 按钮 复制整条消息
+							870 图像
+						871 开合三角标记 思考摘要 标题已填写："Studio 发布恢复验证"，与冻结字段一致。bilibiliVisibility 仍是 unknown。按指令：fill-fie...
+							872 图像
+							873 文本 思考摘要
+							874 文本 标题已填写："Studio 发布恢复验证"，与冻结字段一致。bilibiliVisibility 仍是 unknown。按指令：fill-fie...
+						875 文本 标题已填写且与冻结字段一致。bilibiliVisibility 仍为 unknown，点击发布设置按钮展开可见范围。
+						876 开合三角标记 执行过程 1 个动作 · 1 完成 · 点击页面、工具完成
+							877 图像
+							878 文本 执行过程
+							879 container
+								880 text 1  个动作  · 1 完成  · 点击页面、工具完成
+						881 按钮 复制整条消息
+							882 图像
+						883 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							884 图像
+							885 文本 执行过程
+							886 container
+								887 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						888 按钮 复制整条消息
+							889 图像
+						890 开合三角标记 思考摘要 设置面板已打开，openPublishSettings selector 现在变成了可见范围的级联选项： .bili-dyn-publishin...
+							891 图像
+							892 文本 思考摘要
+							893 文本 设置面板已打开，openPublishSettings selector 现在变成了可见范围的级联选项： .bili-dyn-publishin...
+						894 文本 设置面板已展开，最新 selector 指向"可见范围"级联项。继续点击展开。
+						895 开合三角标记 执行过程 1 个动作 · 1 完成 · 点击页面、工具完成
+							896 图像
+							897 文本 执行过程
+							898 container
+								899 text 1  个动作  · 1 完成  · 点击页面、工具完成
+						900 按钮 复制整条消息
+							901 图像
+						902 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							903 图像
+							904 文本 执行过程
+							905 container
+								906 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						907 按钮 复制整条消息
+							908 图像
+						909 开合三角标记 思考摘要 重大进展： - bilibiliVisibility: public ✓ - submissionUnavailableReason 不再返回（...
+							910 图像
+							911 文本 思考摘要
+							912 文本 重大进展： - bilibiliVisibility: public ✓ - submissionUnavailableReason 不再返回（...
+						913 文本 可见范围已读到 public，标题与冻结字段一致。报 fill-fields verifying。
+						914 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							915 图像
+							916 文本 执行过程
+							917 container
+								918 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						919 按钮 复制整条消息
+							920 图像
+						921 开合三角标记 思考摘要 main 已确认： - field.title.verify: completed "期望 Studio 发布恢复验证；实际 Studio 发布...
+							922 图像
+							923 文本 思考摘要
+							924 文本 main 已确认： - field.title.verify: completed "期望 Studio 发布恢复验证；实际 Studio 发布...
+						925 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							926 图像
+							927 文本 执行过程
+							928 container
+								929 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						930 按钮 复制整条消息
+							931 图像
+						932 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							933 图像
+							934 文本 执行过程
+							935 container
+								936 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						937 按钮 复制整条消息
+							938 图像
+						939 开合三角标记 思考摘要 fill-fields 已完成。当前步骤 save-draft（pending）。 save-draft 只做同 UID、当前正文和逐图复核，不...
+							940 图像
+							941 文本 思考摘要
+							942 文本 fill-fields 已完成。当前步骤 save-draft（pending）。 save-draft 只做同 UID、当前正文和逐图复核，不...
+						943 文本 fill-fields 已完成，进入 save-draft 复核。报 running。
+						944 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							945 图像
+							946 文本 执行过程
+							947 container
+								948 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						949 按钮 复制整条消息
+							950 图像
+						951 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							952 图像
+							953 文本 执行过程
+							954 container
+								955 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						956 按钮 复制整条消息
+							957 图像
+						958 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							959 图像
+							960 文本 执行过程
+							961 container
+								962 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						963 按钮 复制整条消息
+							964 图像
+						965 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							966 图像
+							967 文本 执行过程
+							968 container
+								969 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						970 按钮 复制整条消息
+							971 图像
+						972 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							973 图像
+							974 文本 执行过程
+							975 container
+								976 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						977 按钮 复制整条消息
+							978 图像
+						979 开合三角标记 思考摘要 save-draft 已完成。当前步骤 publish（pending）。 指令："仅到 publish 检查点时：尚无 selectors.p...
+							980 图像
+							981 文本 思考摘要
+							982 文本 save-draft 已完成。当前步骤 publish（pending）。 指令："仅到 publish 检查点时：尚无 selectors.p...
+						983 文本 save-draft 已完成。当前步骤 publish，最新 inspect 显示 selectors.publish 已返回且 submissionUnavailableReason 已清空——发布适配已通过。报 running。
+						984 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							985 图像
+							986 文本 执行过程
+							987 container
+								988 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						989 按钮 复制整条消息
+							990 图像
+						991 开合三角标记 思考摘要 publish is in the running state. Before taking action, re-inspect to con...
+							992 图像
+							993 文本 思考摘要
+							994 文本 publish is in the running state. Before taking action, re-inspect to con...
+						995 文本 发布前最后检查一次页面。
+						996 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							997 图像
+							998 文本 执行过程
+							999 container
+								1000 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						1001 按钮 复制整条消息
+							1002 图像
+						1003 开合三角标记 思考摘要 一切就绪。点击发布按钮 selectors.publish = main > section:nth-child(1) :text-is("发布...
+							1004 图像
+							1005 文本 思考摘要
+							1006 文本 一切就绪。点击发布按钮 selectors.publish = main > section:nth-child(1) :text-is("发布...
+						1007 文本 一切就绪，执行单次发布点击。
+						1008 开合三角标记 执行过程 1 个动作 · 1 失败 · 点击页面、工具失败
+							1009 图像
+							1010 文本 执行过程
+							1011 container
+								1012 text 1  个动作  · 1 失败  · 点击页面、工具失败
+						1013 按钮 复制整条消息
+							1014 图像
+						1015 开合三角标记 思考摘要 发布点击被 Studio 主进程闸门拒绝："B站首次确认前账号、冻结正文、标题或逐图证据变化；停止发送"。这是发布安全闸门。指令说"遇到具体失败...
+							1016 图像
+							1017 文本 思考摘要
+							1018 文本 发布点击被 Studio 主进程闸门拒绝："B站首次确认前账号、冻结正文、标题或逐图证据变化；停止发送"。这是发布安全闸门。指令说"遇到具体失败...
+						1019 container
+							1020 text 发布点击被主进程安全闸门拒绝： B站首次确认前账号、冻结正文、标题或逐图证据变化；停止发送 。按指令不重试，先重新 inspect 固定证据再报告。
+						1021 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing inspect page、工具完成
+							1022 图像
+							1023 文本 执行过程
+							1024 container
+								1025 text 1  个动作  · 1 完成  · article publishing inspect page、工具完成
+						1026 按钮 复制整条消息
+							1027 图像
+						1028 开合三角标记 思考摘要 Attempt 已被主进程标记为 interrupted，attempt.status 变成 interrupted，execution.sta...
+							1029 图像
+							1030 文本 思考摘要
+							1031 文本 Attempt 已被主进程标记为 interrupted，attempt.status 变成 interrupted，execution.sta...
+						1032 文本 Attempt 已被主进程标记为 interrupted（发布动作结果未知保护）。报告一次具体阻塞后结束。
+						1033 开合三角标记 执行过程 1 个动作 · 1 完成 · article publishing report checkpoint、工具完成
+							1034 图像
+							1035 文本 执行过程
+							1036 container
+								1037 text 1  个动作  · 1 完成  · article publishing report checkpoint、工具完成
+						1038 按钮 复制整条消息
+							1039 图像
+						1040 开合三角标记 思考摘要 The report was also rejected: the Agent Run for the publish report no lo...
+							1041 图像
+							1042 文本 思考摘要
+							1043 文本 The report was also rejected: the Agent Run for the publish report no lo...
+						1044 文本 任务在 publish 检查点遇到安全闸门阻塞，Attempt 已被主进程接管中断，检查点回报通道也已关闭（“发布回报的 Agent Run 已不再拥有当前事务”）。按指令报告一次具体失败后结束，不重试、不重建。
+						1045 标题 执行结果总结, Value: 2
+							1046 文本 执行结果总结
+						1047 文本 ✅ 已完成的准备步骤（全部通过 main 核验）
+						1048 表格
+							1049 row
+								1050 列标题
+									1051 文本 检查点
+								1052 列标题
+									1053 文本 状态
+								1054 列标题
+									1055 文本 关键证据
+							1056 row
+								1057 单元格
+									1058 文本 open-editor
+								1059 单元格
+									1060 文本 completed
+								1061 单元格
+									1062 文本 编辑器识别成功，页面可见卡点已消除
+							1063 row
+								1064 单元格
+									1065 文本 verify-account
+								1066 单元格
+									1067 文本 completed
+								1068 单元格
+									1069 文本 UID 3546384070347419 与 targetUID 一致，空白现场
+							1070 row
+								1071 单元格
+									1072 文本 upload-assets
+								1073 单元格
+									1074 文本 completed
+								1075 单元格
+									1076 文本 3 张图全部 uploaded，逐图核验平台 URL（bfe0c589 / 47c4ca85 / cc6d65b1）
+							1077 row
+								1078 单元格
+									1079 文本 fill-body
+								1080 单元格
+									1081 文本 completed
+								1082 单元格
+									1083 文本 正文 118 字符，bodyMatchesFrozen=true
+							1084 row
+								1085 单元格
+									1086 文本 fill-fields
+								1087 单元格
+									1088 文本 completed
+								1089 单元格
+									1090 文本 标题“Studio 发布恢复验证”一致；可见范围 public
+							1091 row
+								1092 单元格
+									1093 文本 save-draft
+								1094 单元格
+									1095 文本 completed
+								1096 单元格
+									1097 文本 现场复核通过（无持久草稿，未伪造草稿ID）
+						1098 文本 ⛔ publish 检查点：失败结束
+						1099 内容列表
+							1100 container
+								1101 AXListMarker • 
+								1102 文本 发布前最后 inspect（11:51:22）显示一切就绪：
+								1103 文本 selectors.publish
+								1104 文本  已返回、
+								1105 文本 submissionUnavailableReason
+								1106 文本  为空、可见范围 public。
+							1107 container
+								1108 AXListMarker • 
+								1109 文本 点击发布按钮时被主进程安全闸门拒绝，原话：
+								1110 文本 「B站首次确认前账号、冻结正文、标题或逐图证据变化；停止发送」
+								1111 文本 。
+							1112 container
+								1113 AXListMarker • 
+								1114 文本 动态
+								1115 文本 未发出
+								1116 文本 （publishedLinks 为空，无重复发送）。
+							1117 container
+								1118 AXListMarker • 
+								1119 文本 随后主进程将本 Attempt 标记为 
+								1120 文本 interrupted
+								1121 文本 （execution.status=result-unknown），inspect 返回 EVIDENCE_REQUIRED，检查点回报返回“发布回报的 Agent Run 已不再拥有当前事务”。
+						1122 container
+							1123 text 当前现场状态 ：B站编辑器中正文、标题、三张图片、public 可见范围均完整保留，未发布。闸门提示“证据变化”，可能是页面在发布瞬间发生了超出冻结快照的变化（如设置面板状态）。需要您在 Studio 中确认后重新派发，或在可视浏览器页手动检查编辑器内容后自行点击发布。
+					1124 文本 费用 $7.2600
+					1125 分离器 Description: 调整消息区和输入区高度, Value: 305.7422
+					1126 container
+						1127 container 当前会话已挂载资源
+							1128 文本 资源
+							1129 container
+								1130 图像
+								1131 text @  B站动态发布页
+								1132 按钮 移除资源
+									1133 图像
+						1134 文本输入区 (settable) 输入消息，@ 挂资源，/ 挂技能；Shift+Enter 换行
+						1135 按钮 添加上下文
+							1136 图像
+						1137 按钮 当前角色: 默认助手
+						1138 按钮 自动, Help: 权限模式: 自动
+							1139 图像
+							1140 文本 自动
+							1141 图像
+						1142 按钮 Description: 上下文占用 100%, Help: 上下文 100% · 325k / 200k
+						1143 按钮 Claude Code 系统安装, Help: 运行环境
+							1144 文本 Claude Code
+							1145 文本 系统安装
+							1146 图像
+						1147 按钮 (disabled) 发送
+							1148 图像
+					1149 弹出式按钮 main ● 5, Help: main · 5 个变更
+						1150 图像
+						1151 文本 main
+						1152 文本 ● 
+						1153 文本 5
+					1154 container /Users/apple/Desktop/研发日记
+						1155 文本 本地
+						1156 文本  · 
+						1157 文本 研发日记
+					1158 container
+						1159 图像
+						1160 文本 www.xiaohongshu.com/explore/6aa2ed5e000000002502d58d
+					1161 按钮 框架日志, Help: 复制 Agent 以外的工作台框架诊断日志
+						1162 图像
+						1163 文本 框架日志
+					1164 按钮 检查更新, Help: 检查和下载 CCLink Studio 更新
+						1165 图像
+						1166 文本 检查更新
+					1167 container 本地开源桌面工作台
+						1168 文本 CCLink Studio 开源版 v0.1.88
+			1169 HTML 内容 做AI眼镜第188天，它开始看懂我的世界 - 小红书, URL: …
+				1170 container
+					1171 container
+						1172 container 弹窗遮罩
+						1173 图像
+						1174 文本 登录后推荐更懂你的笔记
+						1175 未加标签的图片 要获取缺失的图片说明，请打开上下文菜单。
+						1176 container
+							1177 未加标签的图片 /+4DrgBAAAABklEQVQDAO4pffyZxJmGAAAAAElFTkSuQmCC
+							1178 文本 二维码已过期
+							1179 文本 点击刷新
+						1180 文本 可用
+						1181 图像
+						1182 text 小红书 或
+						1183 图像
+						1184 text 微信 扫码
+						1185 图像
+						1186 text 小红书如何扫码 或
+						1187 container
+							1188 文本 +86
+							1189 文本栏 (settable) +86, Placeholder: 输入手机号
+						1190 文本 新用户可直接登录
+					1191 container
+						1192 container
+							1193 link xiaohongshu.com/explore?channel_type=web_note_detail_r10
+							1194 文本栏 (settable) 登录探索更多内容
+							1195 未加标签的图片 搜索
+							1196 按钮
+								1197 图像
+							1198 按钮
+								1199 图像
+						1200 container
+							1201 文本 推荐
+							1202 文本 世界杯
+							1203 文本 RED
+							1204 文本 穿搭
+							1205 文本 美食
+							1206 文本 彩妆
+							1207 文本 影视
+							1208 文本 职场
+							1209 文本 情感
+							1210 文本 家居
+							1211 文本 游戏
+							1212 文本 旅行
+							1213 文本 健身
+							1214 文本 视频
+						1215 container
+							1216 link xiaohongshu.com/explore/6aa2ed5e000000002502d58d?xsec_token=YBug3t5OZ2BXTDQeZBCiDq3oE31nOlgakbE9Gvjlh3xJ0=&xsec_source=pc_creatormng
+							1217 link Description: 做AI眼镜第188天，它开始看懂我的世界, Value: xiaohongshu.com/explore/6aa2ed5e000000002502d58d?xsec_token=YBug3t5OZ2BXTDQeZBCiDq3oE31nOlgakbE9Gvjlh3xJ0=&xsec_source=pc_creatormng
+							1218 link Description: 小眸, Value: xiaohongshu.com/user/profile/65361844000000000301e75a?channel_type=web_note_detail_r10&parent_page_channel_type=web_profile_board&xsec_token=ABppRcGQSMAM39ZEbek1MEbFVkf93w4-DuzV-nc5UeixY=&xsec_source=
+							1219 图像
+							1220 link xiaohongshu.com/explore/6a83e6a800000000290326f0?xsec_token=ABD87wjc2Cknwh2PTVMtq8TMiVarOQudv9lJ0k0a-oJJY=&xsec_source=pc_feed
+							1221 link Description: 这是第三次了, Value: xiaohongshu.com/explore/6a83e6a800000000290326f0?xsec_token=ABD87wjc2Cknwh2PTVMtq8TMiVarOQudv9lJ0k0a-oJJY=&xsec_source=pc_feed
+							1222 link Description: 会发光的泡., Value: xiaohongshu.com/user/profile/5f9573740000000001004ee8?channel_type=web_note_detail_r10&parent_page_channel_type=web_profile_board&xsec_token=ABysP5PTi4c_jQbf6z3FwdBf6FypDaOnDmMZP7FwMvz8E=&xsec_source=
+							1223 container
+								1224 图像
+								1225 文本 3236
+							1226 link xiaohongshu.com/explore/6a7d452d000000000502057c?xsec_token=AB10gPekGaN_inGQavv-71Co416ZPsW9AgMNEl198xTkc=&xsec_source=pc_feed
+							1227 link Description: 恩利期待的世纪同框，如果10.24北京真的实现了，那这场演唱会的含金量直接封神。, Value: xiaohongshu.com/explore/6a7d452d000000000502057c?xsec_token=AB10gPekGaN_inGQavv-71Co416ZPsW9AgMNEl198xTkc=&xsec_source=pc_feed
+							1228 link Description: 成都观演星游记, Value: xiaohongshu.com/user/profile/6897464e000000002900a717?channel_type=web_note_detail_r10&parent_page_channel_type=web_profile_board&xsec_token=AB-CBUnfQpu8Mda2CDET3gf5JrClWAcQT1U_nCZebt8ok=&xsec_source=
+							1229 container
+								1230 图像
+								1231 文本 431
+							1232 link xiaohongshu.com/explore/6a7b64a100000000220150ae?xsec_token=ABOXSLgktRAIkNZB0dvCB4mX60H3ACzaFQmKtxDObFAco=&xsec_source=pc_feed
+							1233 link Description: dy小爆了一条 后续怎么发呀, Value: xiaohongshu.com/explore/6a7b64a100000000220150ae?xsec_token=ABOXSLgktRAIkNZB0dvCB4mX60H3ACzaFQmKtxDObFAco=&xsec_source=pc_feed
+							1234 link Description: 她有一张初恋脸, Value: xiaohongshu.com/user/profile/6598012b0000000022012715?channel_type=web_note_detail_r10&parent_page_channel_type=web_profile_board&xsec_token=ABtuYQJ1jGNnT082BC-u5U9yvaVoOsNGUkdSpALofC_8s=&xsec_source=
+							1235 container
+								1236 图像
+								1237 文本 4830
+							1238 link xiaohongshu.com/explore/6a7bc733000000003400c6b3?xsec_token=ABOXSLgktRAIkNZB0dvCB4mSyBxhj78tw0kMLCSB1mSlU=&xsec_source=pc_feed
+							1239 link Description: 凌晨三点，小区里迎来了一支没有声音的迎亲队伍烟火故事会 讲一个小家故事 画一个故, Value: xiaohongshu.com/explore/6a7bc733000000003400c6b3?xsec_token=ABOXSLgktRAIkNZB0dvCB4mSyBxhj78tw0kMLCSB1mSlU=&xsec_source=pc_feed
+							1240 link Description: 叶 记 晓, Value: xiaohongshu.com/user/profile/5f43739a000000000100beee?channel_type=web_note_detail_r10&parent_page_channel_type=web_profile_board&xsec_token=ABXeEVIKqMWMM2kIPLwEjziScrOMMlKkfMhAjOaXBHJ-0=&xsec_source=
+							1241 container
+								1242 图像
+								1243 文本 686
+							1244 link xiaohongshu.com/explore/6a7a85890000000025011bd3?xsec_token=ABAt1cAwhmAMEIh-IbqLLlrCQZLXayg38J2OLgAvihJtM=&xsec_source=pc_feed
+							1245 link Description: 人的命运真的是注定的吗？, Value: xiaohongshu.com/explore/6a7a85890000000025011bd3?xsec_token=ABAt1cAwhmAMEIh-IbqLLlrCQZLXayg38J2OLgAvihJtM=&xsec_source=pc_feed
+							1246 link Description: 妮妮今天学习了吗, Value: xiaohongshu.com/user/profile/5d9084eb000000000101984c?channel_type=web_note_detail_r10&parent_page_channel_type=web_profile_board&xsec_token=ABoRK9o6bWWFJdJTokwcjtfOEVnr8ZEN22oeJJcwYCGls=&xsec_source=
+							1247 container
+								1248 图像
+								1249 文本 7929
+							1250 link xiaohongshu.com/explore/6a7be095000000002701e7bd?xsec_token=ABOXSLgktRAIkNZB0dvCB4mRfI-HCmvYjsFhnAX773-Ws=&xsec_source=pc_feed
+							1251 link Description: 婚期临近，请柬打不开了😫😫😫, Value: xiaohongshu.com/explore/6a7be095000000002701e7bd?xsec_token=ABOXSLgktRAIkNZB0dvCB4mRfI-HCmvYjsFhnAX773-Ws=&xsec_source=pc_feed
+							1252 link Description: journeyJL, Value: xiaohongshu.com/user/profile/5786deb550c4b40e6a6148bb?channel_type=web_note_detail_r10&parent_page_channel_type=web_profile_board&xsec_token=ABzSOwoM5PJhQyjxdw6lSrz6c_n8AkMRBtTJHqjRFfWFI=&xsec_source=
+							1253 container
+								1254 图像
+								1255 文本 1352
+							1256 link xiaohongshu.com/explore/6a8287d90000000025011b72?xsec_token=AB1MNTmnDcwG6QBuLYFya_kBCkKH1BzCiVWR-2Sp5GNS0=&xsec_source=pc_feed
+							1257 link Description: 为什么年轻人不穿匡威Vans了？曾经的青春标, Value: xiaohongshu.com/explore/6a8287d90000000025011b72?xsec_token=AB1MNTmnDcwG6QBuLYFya_kBCkKH1BzCiVWR-2Sp5GNS0=&xsec_source=pc_feed
+							1258 link Description: 范璐, Value: xiaohongshu.com/user/profile/58d3dbdd82ec39112d83ee15?channel_type=web_note_detail_r10&parent_page_channel_type=web_profile_board&xsec_token=ABlZvLifUG0s5h-bXiKOXmvqktfaJ_O7lluM3fiEaymrc=&xsec_source=
+							1259 container
+								1260 图像
+								1261 文本 722
+							1262 link xiaohongshu.com/explore/6a87b58f000000000501767d?xsec_token=ABzQcm2OQMAZC8-_lkrzZlwZShRJMk7f54h247yHjXZPM=&xsec_source=pc_feed
+							1263 link Description: 大学生素质这一块, Value: xiaohongshu.com/explore/6a87b58f000000000501767d?xsec_token=ABzQcm2OQMAZC8-_lkrzZlwZShRJMk7f54h247yHjXZPM=&xsec_source=pc_feed
+							1264 link Description: 不是本人, Value: …
+							1265 container
+								1266 图像
+								1267 文本 10万+
+							1268 link …
+							1269 link Description: 坐过的人说说感受, Value: …
+							1270 link Description: 爱吃蛋炒饭, Value: …
+							1271 container
+								1272 图像
+								1273 文本 1004
+							1274 link …
+							1275 link Description: 一天存5元四个月存多少不懂就问有问必答 万能的小红书, Value: …
+							1276 link Description: 呆呆不呆, Value: …
+							1277 container
+								1278 图像
+								1279 文本 475
+							1280 link …
+							1281 link Description: 中国人必看的家庭实用风水 学会终身受益风水 国学智慧 传统文化传播 弘扬中华传统, Value: …
+							1282 link Description: 道玄尊(学习看私信), Value: …
+							1283 container
+								1284 图像
+								1285 文本 6011
+							1286 link …
+							1287 link Description: 那些有眼不识泰山的故事, Value: …
+							1288 link Description: 苏苏, Value: …
+							1289 container
+								1290 图像
+								1291 文本 1163
+							1292 link …
+							1293 link Description: 周冬雨当年报考北电时, Value: …
+							1294 link Description: 炸米花, Value: …
+							1295 container
+								1296 图像
+								1297 文本 1252
+							1298 link …
+							1299 link Description: 好怕自己因为缺氧变蠢从而考不上任何, Value: …
+							1300 link Description: 妮妮小no, Value: …
+							1301 container
+								1302 图像
+								1303 文本 3303
+							1304 link …
+							1305 link Description: 阿伽门农全家都很炸裂啊！！！, Value: …
+							1306 link Description: 花臂珊喵（文博野史版）, Value: …
+							1307 container
+								1308 图像
+								1309 文本 8072
+							1310 link …
+							1311 link Description: 影视寒冬到这种程度了吗？没有ip可以挖掘了？天天说影视寒冬，其实真寒的只有影视行, Value: …
+							1312 link Description: 到底谁想上班啊(卸载小红书了), Value: …
+							1313 container
+								1314 图像
+								1315 文本 101
+							1316 link …
+							1317 link Description: 头饰一戴上，宫里的嫡庶尊卑一眼就能分清, Value: …
+							1318 link Description: 偷喝汽水, Value: …
+							1319 container
+								1320 图像
+								1321 文本 599
+							1322 link …
+							1323 link Description: 当年古代大户人家的夫妻行房时, Value: …
+							1324 link Description: 王朝旁观者, Value: …
+							1325 container
+								1326 图像
+								1327 文本 125
+							1328 link …
+							1329 link Description: 叫半天不敢过来，还要看父亲脸色, Value: …
+							1330 link Description: 广西田园犬专属地, Value: …
+							1331 container
+								1332 图像
+								1333 文本 1946
+							1334 link …
+							1335 link Description: 内娱名场面2.0 脚趾扣出三室一厅, Value: …
+							1336 link Description: 钝芫, Value: …
+							1337 container
+								1338 图像
+								1339 文本 1.4万
+							1340 link …
+							1341 link Description: 别惹大魔王Lily, Value: …
+							1342 link Description: 别在那里猫猫咪咪, Value: …
+							1343 container
+								1344 图像
+								1345 文本 1648
+							1346 link …
+							1347 link Description: 脱簪这场戏为什么杀伤力这么大？, Value: …
+							1348 link Description: 书页里的晚风, Value: …
+							1349 container
+								1350 图像
+								1351 文本 2978
+							1352 link …
+							1353 link Description: 伊能静感谢庾澄庆保护儿子隐私，这份人品，这么多年了，依然经得起时间检验。庾澄庆北, Value: …
+							1354 link Description: 爱现场的技术宅, Value: …
+							1355 container
+								1356 图像
+								1357 文本 165
+							1358 link …
+							1359 link Description: 数一下今年非法入侵到我家的物种, Value: …
+							1360 link Description: 乐天 知命, Value: …
+							1361 container
+								1362 图像
+								1363 文本 448
+							1364 link …
+							1365 link Description: 亲妈离了个大谱, Value: …
+							1366 link Description: 偷蛋糕的芝士, Value: …
+							1367 container
+								1368 图像
+								1369 文本 277
+							1370 link …
+							1371 link Description: 四年车主，聊聊理想生活是什么感觉！, Value: …
+							1372 link Description: 郭姐哒, Value: …
+							1373 container
+								1374 图像
+								1375 文本 3186
+							1376 link …
+							1377 link Description: 第一次知道放外卖柜骑手居然要给钱, Value: …
+							1378 link Description: 菲卖品, Value: …
+							1379 container
+								1380 图像
+								1381 文本 2025
+							1382 link …
+							1383 link Description: isa的问题到底是不是家庭的问题, Value: …
+							1384 link Description: 哦咦哦, Value: …
+							1385 container
+								1386 图像
+								1387 文本 1309
+							1388 link …
+							1389 link Description: 事情是这样的, Value: …
+							1390 link Description: 11, Value: …
+							1391 container
+								1392 图像
+								1393 文本 1564
+							1394 图像
+							1395 图像
+						1396 container
+							1397 container
+								1398 link …
+								1399 link Description: 小眸, Value: …
+								1400 按钮 关注
+							1401 container
+								1402 container
+									1403 未加标签的图片 /1040g0k0324uoqtut2s005p9m3120rpqqqo19488!nd_dft_wgth_webp_3
+									1404 未加标签的图片 /1040g34o324unpv2030105p9m3120rpqq0s5iit8!nd_dft_wlteh_webp_3
+									1405 未加标签的图片 /1040g0k0324uood992u005p9m3120rpqqga4kqh8!nd_dft_wgth_webp_3
+									1406 未加标签的图片 /1040g0k0324uoqtut2s005p9m3120rpqqqo19488!nd_dft_wgth_webp_3
+									1407 未加标签的图片 /1040g34o324unpv2030105p9m3120rpqq0s5iit8!nd_dft_wlteh_webp_3
+								1408 文本 1/3
+								1409 图像
+								1410 图像
+							1411 container
+							1412 container
+								1413 标题 做AI眼镜第188天，它开始看懂我的世界, Value: 1
+									1414 文本 做AI眼镜第188天，它开始看懂我的世界
+								1415 text 做AI眼镜第188天，想认真说说做它的初衷。AIR的愿景一句话就能说清：让AI帮助人，而不是替代人。所以我想让小眸拥有一双和我一样的眼睛，看到我所看到的，随时帮我应对眼前这个世界——尤其是腾不出手的时候：骑车两只手扶着车把，想知道路怎么走，问一句就行；手里正操作着设备，想知道下一步怎么干，它看着画面告诉你；逛展碰到看不懂的东西，它给你讲背后的故事；看到不认识的外文，问它一句就行。我负责往前走、去体验这个世界，杂活交给它。说白了，就是站在AI的肩膀上体验世界：AI不替你生活，它只是帮你把眼前的事理顺，让你看得更明白、玩得更尽兴。眼镜现在还在打磨，重心在手机端，看现场、导航、室内导览、实时翻译都在一点点做出来，图2、图3是导航和城市漫游的设计效果图，先带你们看看它想长成的样子。明天第189天，继续干活。
+	
+#AI眼镜 #智能眼镜 #AI搭子 #独立开发 #开发日记 #科技数码 #AIR眼镜 #小眸 昨天 01:48 北京
+								1416 图像
+								1417 未加标签的图片 /PFrxbl+o9sQZokv2jo6M7Sde71+vytn57NP66Bq
+								1418 container
+									1419 text 这是一片荒地 点击评论
+								1420 container
+									1421 文本输入区 (settable)
+									1422 container
+										1423 图像
+										1424 文本 登录后评论
+									1425 图像
+									1426 图像
+									1427 图像
+									1428 文本 评论
+									1429 container
+										1430 图像
+										1431 图像
+									1432 图像
+									1433 图像
+									1434 按钮 (disabled) 发送
+									1435 按钮 取消
+							1436 图像
+	1437 关闭按钮
+	1438 全屏幕按钮 Help: 此按钮也可以执行缩放窗口的操作, Secondary Actions: 缩放窗口
+	1439 最小化按钮
+1440 menu bar
+	1441 CCLink Studio 开源版
+	1442 File
+	1443 Edit
+	1444 View
+	1445 Window
+
+The focused UI element is 4 HTML 内容 CCLink Studio 开源版, URL: …

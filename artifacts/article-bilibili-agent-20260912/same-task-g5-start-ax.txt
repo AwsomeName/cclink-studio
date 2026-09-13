@@ -1,0 +1,465 @@
+Window: "CCLink Studio 开源版", App: CCLink Studio 开源版.
+1 标准窗口 CCLink Studio 开源版, Secondary Actions: Raise
+	2 container CCLink Studio 开源版
+		3 container
+			4 HTML 内容 CCLink Studio 开源版, URL: localhost:5173/
+				5 container
+					6 文本 出错啦! - bilibili.com
+					7 按钮 送回主窗口
+					8 container 浏览器导航
+						9 按钮 ←, Help: 后退
+						10 按钮 →, Help: 前进
+						11 按钮 ↻, Help: 刷新
+						12 文本栏 (settable) Description: 地址, Value: https://t.bilibili.com/
+						13 按钮 前往
+					14 文本 任务：running
+			15 HTML 内容 动态首页-哔哩哔哩, URL: t.bilibili.com/
+				16 container
+					17 内容列表
+						18 link Description: 首页, Value: bilibili.com/
+						19 link Description: 番剧, Value: bilibili.com/anime/
+						20 link Description: 直播, Value: live.bilibili.com/
+						21 link Description: 游戏中心, Value: game.bilibili.com/platform
+						22 link Description: 会员购, Value: show.bilibili.com/platform/home.html
+						23 link Description: 漫画, Value: manga.bilibili.com/
+						24 link Description: 赛事, Value: bilibili.com/match/home/
+					25 container
+						26 文本栏 (settable) 凡人修仙传
+						27 图像
+					28 内容列表
+						29 link space.bilibili.com/3546384070347419
+						30 link account.bilibili.com/big
+						31 container
+							32 文本 1
+							33 link message.bilibili.com/
+						34 link t.bilibili.com/
+						35 link space.bilibili.com/3546384070347419/favlist
+						36 link bilibili.com/history
+						37 link member.bilibili.com/platform/home
+						38 link member.bilibili.com/platform/upload/video/frame
+				39 container
+					40 container
+						41 未加标签的图片 /0c8051c47e1e882932f9715f008fce651c30b085.jpg@96w_96h
+						42 文本 艾瑞_B
+						43 link Description: 2 关注, Value: space.bilibili.com/3546384070347419/fans/follow
+						44 link Description: 0 粉丝, Value: space.bilibili.com/3546384070347419/fans/fans
+						45 link Description: 0 动态, Value: space.bilibili.com/3546384070347419/dynamic
+						46 文本 正在直播
+						47 文本 更多关注
+					48 container
+						49 container
+							50 container
+								51 图像
+								52 文本 选择话题
+							53 文本栏 (settable) 好的标题更容易获得支持，选填20字
+							54 文本输入区 (settable) 有什么想和大家分享的？
+​
+
+								55 文本 有什么想和大家分享的？
+							56 图像
+							57 图像
+							58 图像
+							59 container 全角字符计数为1半角字符计数为0.5，不足1时记为1
+								60 文本 0
+								61 文本 |
+							62 图像
+							63 文本 发布
+						64 container
+							65 文本 全部动态
+							66 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h.avif
+							67 文本 智元AGIBOT
+							68 未加标签的图片 /cb9ef82714507e6bda707dac216da94c97d70037.jpg@96w_96h.avif
+							69 文本 稚晖君
+						70 container
+							71 text 全部 视频投稿 追番追剧 专栏
+						72 container
+							73 container
+								74 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							75 text 智元AGIBOT 昨天 14:10 · 投稿了视频
+							76 图像
+							77 link Value: bilibili.com/video/BV1PpYj6MEpf/, Description: 00:24 智元远征A3是全球首个全尺寸人形机器人自主投篮! 从实验室走向球场，智元远征A3完成了一次特别的"投篮测试"。这是全球首个全尺寸人形机器人自主投篮!与库里同台，远征A3稳定出手，三分命中，赢得现场"三分王"的点头认可。 4593 3
+							78 container
+								79 图像
+								80 文本 1
+							81 container
+								82 图像
+								83 文本 17
+							84 container
+								85 图像
+								86 文本 183
+						87 container
+							88 container
+								89 未加标签的图片 /cb9ef82714507e6bda707dac216da94c97d70037.jpg@96w_96h_1c_1s.webp
+							90 text 稚晖君 2天前
+							91 图像
+							92 container
+								93 文本 这个怕是有点帅哦
+								94 图像 [星星眼]
+							95 未加标签的图片 /b1e959207694247b1fc777f76fff72bbf531f587.jpg@40w_40h_!web-dynamic.avif
+							96 文本 橙豆造物ing
+							97 文本 投稿了视频
+							98 container
+								99 图像
+								100 文本 上B站看播客
+							101 link Description: 24:11 给机器人做了一套战甲？暴改启元Q1|Formlabs光固化体验|全过程记录| 6.5万 52, Value: bilibili.com/video/BV1utY46yE4U/
+							102 container
+								103 图像
+								104 文本 2
+							105 container
+								106 图像
+								107 文本 14
+							108 container
+								109 图像
+								110 文本 581
+						111 container
+							112 container
+								113 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							114 text 智元AGIBOT 3天前 · 投稿了视频
+							115 图像
+							116 link Description: 03:49 智元发布GE-Act 2.0，首次验证原生世界—动作模型预训练与Scaling路径。 4143 0, Value: bilibili.com/video/BV1j3Ys6mEUt/
+							117 container
+								118 图像
+								119 文本 1
+							120 container
+								121 图像
+								122 文本 30
+							123 container
+								124 图像
+								125 文本 199
+						126 container
+							127 container
+								128 未加标签的图片 /cb9ef82714507e6bda707dac216da94c97d70037.jpg@96w_96h_1c_1s.webp
+							129 text 稚晖君 3天前
+							130 图像
+							131 container
+								132 文本 又帅又萌
+								133 未加标签的图片 [歪嘴]
+							134 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@40w_40h_!web-dynamic.avif
+							135 文本 智元AGIBOT
+							136 文本 投稿了视频
+							137 link Description: 03:21 《杂技Bot》机器人进入“睁眼运动”时代，感控一体模型驱动，轻松拿捏杂技极限！ 2.9万 182, Value: bilibili.com/video/BV12yYJ6SEHE/
+							138 container
+								139 图像
+								140 文本 2
+							141 container
+								142 图像
+								143 文本 8
+							144 container
+								145 图像
+								146 文本 476
+						147 container
+							148 container
+								149 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							150 text 智元AGIBOT 9月8日 · 投稿了视频
+							151 图像
+							152 link Description: 03:21 《杂技Bot》机器人进入“睁眼运动”时代，感控一体模型驱动，轻松拿捏杂技极限！ 2.9万 182, Value: bilibili.com/video/BV12yYJ6SEHE/
+							153 container
+								154 文本 他们de故事：
+								155 文本 省流：机器人已进入幼儿园阶段
+								156 未加标签的图片 [呲牙]
+							157 container
+								158 图像
+								159 文本 18
+							160 container
+								161 图像
+								162 文本 303
+							163 container
+								164 图像
+								165 文本 2543
+						166 container
+							167 container
+								168 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							169 text 智元AGIBOT 8月31日 · 投稿了视频
+							170 图像
+							171 link Description: 02:01 智元开源数据集AGIBOT WORLD 2026第三期：强化学习，让机器人从经验中学习。 3317 0, Value: bilibili.com/video/BV1Vst861EbR/
+							172 container
+								173 图像
+								174 文本 转发
+							175 container
+								176 图像
+								177 文本 23
+							178 container
+								179 图像
+								180 文本 157
+						181 container
+							182 container
+								183 未加标签的图片 /cb9ef82714507e6bda707dac216da94c97d70037.jpg@96w_96h_1c_1s.webp
+							184 text 稚晖君 8月31日
+							185 图像
+							186 container
+								187 text 恭喜 @付与断尽残桓 中奖，已私信通知，详情请点击抽奖查看。
+							188 未加标签的图片 /cb9ef82714507e6bda707dac216da94c97d70037.jpg@40w_40h_!web-dynamic.avif
+							189 文本 稚晖君
+							190 container
+								191 container
+									192 链接 ​互动抽奖​
+										193 图像
+										194 文本 ​互动抽奖​
+									195 文本  转发本动态抽一台机器人～
+
+启元Q1 & T1终于量产交付啦 🤖
+
+创业以来，我一直相信：机器人的终点不是站在舞台上跳舞，而是真正进入每一个人的生活，成为像手机一样自然的智能终端。
+
+今天是我们在家庭的第一步。
+
+它可以陪伴孩子成长，可以成为家庭助手，也可以成为每个人探索AI与机器人世界的入口。
+当然，这只是开始。未来的机器人一定会越来越聪明、越来越有用，最终成为人类创造力的延伸。
+
+感谢所有参与和支持启元的伙伴，也感谢每一位愿意尝试未来的人。
+
+欢迎大家预定启元Q1 & T1，微信扫图片优购码预定的朋友，我全部会亲笔签名（以后机器人统治地球了，证明你是早期支持者😂）
+								196 文本 展开
+								197 container
+									198 按钮
+										199 图像
+									200 未加标签的图片 /219667c99597e43bcbaaf914e4848bee20259914.jpg@402w_536h_1c_1s.avif
+									201 未加标签的图片 /1de17c923849213aeaa7a17affb2190320259914.jpg@402w_536h_1c_1s.avif
+									202 未加标签的图片 /e4f8407b40535de2bb1526bc3ab26d3f20259914.jpg@402w_536h_1c_1s.avif
+									203 未加标签的图片 /f4660be102563be3e695c314fa353f4620259914.jpg@402w_536h_1c_1s.avif
+									204 未加标签的图片 /b9e7b7e36b691a715214a078d02ebcd520259914.jpg@402w_536h_1c_1s.avif
+									205 未加标签的图片 /15cb21c62617b9bc11bae5b3a8e8cfad20259914.jpg@402w_536h_1c_1s.avif
+									206 未加标签的图片 /4277748ecd4c58b67d2f4907bb62fa7120259914.jpg@402w_536h_1c_1s.avif
+									207 未加标签的图片 /008e4ba2af334a73deac514ab048117220259914.jpg@402w_536h_1c_1s.avif
+									208 未加标签的图片 /568694030265c932e202c901399b3d0c20259914.jpg@402w_536h_1c_1s.avif
+							209 container
+								210 图像
+								211 文本 2
+							212 container
+								213 图像
+								214 文本 31
+							215 container
+								216 图像
+								217 文本 466
+						218 container
+							219 container
+								220 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							221 text 智元AGIBOT 8月31日 · 投稿了视频
+							222 图像
+							223 link Value: bilibili.com/video/BV1ABtx6nEDH/, Description: 09:38:34 【直播回放】全球首个平板量产质检工段全覆盖 机器人作业直播第2天 2026年6月23日-28日，连续6天，99.99%成功率！从单点工序到整条质检工段全域落地，从技术演示到常态化产线部署，适配真实生产节拍、承接量产核心工序，具身智能深度扎根工业一线。 3900 1
+							224 container
+								225 图像
+								226 文本 1
+							227 container
+								228 图像
+								229 文本 17
+							230 container
+								231 图像
+								232 文本 151
+						233 container
+							234 container
+								235 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							236 text 智元AGIBOT 8月30日 · 投稿了视频
+							237 图像
+							238 link Description: 00:36 智元远征A3在自由搏击项目中包揽金银铜！ 以全身协同控制与动态平衡实力、打出竞技赛场硬核表现！ 2362 2, Value: bilibili.com/video/BV1aB4D6eEvJ/
+							239 container
+								240 图像
+								241 文本 1
+							242 container
+								243 图像
+								244 文本 12
+							245 container
+								246 图像
+								247 文本 119
+						248 container
+							249 container
+								250 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							251 text 智元AGIBOT 8月27日 · 投稿了视频
+							252 图像
+							253 link Description: 00:48 再夺三金!智元精灵G2在场景赛、投壶中再次验证实力!不仅能打工，也能上赛场! 2.2万 0, Value: bilibili.com/video/BV1gMhw6eEFq/
+							254 container
+								255 图像
+								256 文本 转发
+							257 container
+								258 图像
+								259 文本 15
+							260 container
+								261 图像
+								262 文本 152
+						263 container
+							264 container
+								265 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							266 text 智元AGIBOT 8月27日
+							267 图像
+							268 container
+								269 图像
+								270 文本 世界人形机器人运动会
+							271 container
+								272 text 智元斩获第二届世界人形机器人运动会金牌榜、奖牌总数双第一！
+								273 未加标签的图片 /9dc31260c5c43e8b99846ff4e5f57b363494380742642452.png@376w_560h_1e_1c.avif
+							274 container
+								275 图像
+								276 文本 2
+							277 container
+								278 图像
+								279 文本 16
+							280 container
+								281 图像
+								282 文本 159
+						283 container
+							284 container
+								285 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							286 text 智元AGIBOT 8月27日 · 投稿了视频
+							287 图像
+							288 link Description: 00:34 第二届世界人形机器人运动会，智元荣膺金牌榜，奖牌榜双第一！智元，实力见真章！赛场圆满收官，部署态征程继续！ 2.5万 9, Value: bilibili.com/video/BV1Nfhw68EyG/
+							289 container
+								290 图像
+								291 文本 2
+							292 container
+								293 图像
+								294 文本 99
+							295 container
+								296 图像
+								297 文本 554
+						298 container
+							299 container
+								300 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							301 text 智元AGIBOT 8月26日 · 投稿了视频
+							302 图像
+							303 link Description: 00:47 乒乓球冠军，拿下！国标舞冠军，拿下！智元远征A3斩获两项比赛项目金牌！ 乒乓球冠军，拿下！国标舞冠军，拿下！智元远征A3斩获两项比赛项目金牌！ 2.2万 1, Value: bilibili.com/video/BV1N28d65Eh8/
+							304 container
+								305 图像
+								306 文本 转发
+							307 container
+								308 图像
+								309 文本 7
+							310 container
+								311 图像
+								312 文本 133
+						313 container
+							314 container
+								315 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							316 text 智元AGIBOT 8月26日 · 投稿了视频
+							317 图像
+							318 link Description: 00:47 乒乓球冠军，拿下！国标舞冠军，拿下！智元远征A3斩获两项比赛项目金牌！ 1918 0, Value: bilibili.com/video/BV1G28X62EJW/
+							319 container
+								320 图像
+								321 文本 2
+							322 container
+								323 图像
+								324 文本 7
+							325 container
+								326 图像
+								327 文本 117
+						328 container
+							329 container
+								330 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							331 text 智元AGIBOT 8月25日 · 投稿了视频
+							332 图像
+							333 link Description: 00:46 智元临界点OmniHand量产版，双手打天下。 我们在灵巧手全自主专项比赛中斩获7金4银3铜，覆盖全自主赛项，硬件算法皆卓越！ 2.3万 0, Value: bilibili.com/video/BV1WFh56tEfv/
+							334 container
+								335 图像
+								336 文本 转发
+							337 container
+								338 图像
+								339 文本 7
+							340 container
+								341 图像
+								342 文本 155
+						343 container
+							344 container
+								345 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							346 text 智元AGIBOT 8月25日
+							347 图像
+							348 container
+								349 文本 打工很萌，比赛很猛！智元灵犀X2夺得田径100米障碍赛金牌！ 
+								350 link Description: #第二届世界人形机器人运动会 #​, Value: search.bilibili.com/all
+								351 text 智元AGIBOT
+								352 未加标签的图片 /63c6eeed439bb5a35de83489503331c03494380742642452.png@316w_560h_1e_1c.avif
+							353 container
+								354 图像
+								355 文本 转发
+							356 container
+								357 图像
+								358 文本 1
+							359 container
+								360 图像
+								361 文本 140
+						362 container
+							363 container
+								364 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							365 text 智元AGIBOT 8月25日 · 投稿了视频
+							366 图像
+							367 link Value: bilibili.com/video/BV1M3hV6wEef/, Description: 00:51 8月23日，智元与长隆正式签署战略合作协议。 8月23日，智元与长隆正式签署战略合作协议。双方将共同打造全球首个、规模最大、场景最丰富、技术最先进的大型具身智能主题乐园，共同开创全球科技文旅新时代。 2553 1
+							368 container
+								369 图像
+								370 文本 1
+							371 container
+								372 图像
+								373 文本 3
+							374 container
+								375 图像
+								376 文本 146
+						377 container
+							378 container
+								379 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							380 text 智元AGIBOT 8月25日 · 投稿了视频
+							381 图像
+							382 link Description: 00:44 今天不打工，今天上赛场！ 智元灵犀X2，田径障碍赛，金银铜大满贯！越台阶、穿窄道，可靠本体+硬核算法，智元用实力说话！ 2.4万 5, Value: bilibili.com/video/BV1BjhN6RE3Q/
+							383 container
+								384 图像
+								385 文本 转发
+							386 container
+								387 图像
+								388 文本 20
+							389 container
+								390 图像
+								391 文本 294
+						392 container
+							393 container
+								394 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							395 text 智元AGIBOT 8月24日 · 投稿了视频
+							396 图像
+							397 link Description: 00:47 再揽一金！ “绝世高手”之“太极宗师”，智元远征A3夺得“武术-太极拳”金牌！ 2.4万 4, Value: bilibili.com/video/BV1cvhK6aEAd/
+							398 container
+								399 图像
+								400 文本 转发
+							401 container
+								402 图像
+								403 文本 4
+							404 container
+								405 图像
+								406 文本 399
+						407 container
+							408 container
+								409 未加标签的图片 /06c11565568f923813d47b346119459d0902e09c.jpg@96w_96h_1c_1s.webp
+							410 text 智元AGIBOT 8月24日
+							411 图像
+							412 container
+								413 文本 再揽一金！“绝世高手”之“太极宗师”，智元远征A3夺得“武术-太极拳”金牌！目前奖牌总数升至 3 金 3 银 2 铜，稳居奖牌榜首位。
+								414 link Description: #第二届人形机器人运动会 #​, Value: search.bilibili.com/all
+								415 text 智元AGIBOT #部署态也是竞技态
+								416 未加标签的图片 /5b6383c09a4bbac867a366b0cc7b3c613494380742642452.png@316w_560h_1e_1c.avif
+							417 container
+								418 图像
+								419 文本 1
+							420 container
+								421 图像
+								422 文本 1
+							423 container
+								424 图像
+								425 文本 105
+					426 container
+						427 未加标签的图片 /9c699f2acbcad00197e92c401b835d2c6aba8a55.png@616w_286h_!web-dynamic.avif
+						428 文本 bilibili热搜
+						429 link Description: 1 AL战胜IG LPL季后赛, Value: search.bilibili.com/all
+						430 link Description: 2 UP主探店勇哥餐厅, Value: search.bilibili.com/all
+						431 link Description: 3 美国纪念911的背后, Value: search.bilibili.com/all
+						432 link Description: 4 重庆狼队vs广州TTG KPL, Value: search.bilibili.com/all
+						433 link Description: 5 外网爆火的中埃联训有何意义, Value: search.bilibili.com/all
+						434 link Description: 6 打歌2026李佳薇甲乙丙丁直拍, Value: search.bilibili.com/all
+						435 link Description: 7 HLE战胜T1赛后数据, Value: search.bilibili.com/all
+						436 link Description: 8 罗永浩评付航脱口秀黄牛票事件, Value: search.bilibili.com/all
+						437 link Description: 9 探访美军登陆后的芭提雅, Value: search.bilibili.com/all
+						438 link Description: 10 实测四种AI Flash, Value: search.bilibili.com/all
+	439 关闭按钮
+	440 全屏幕按钮 Help: 此按钮也可以执行缩放窗口的操作, Secondary Actions: 缩放窗口
+	441 最小化按钮
+442 menu bar
+	443 CCLink Studio 开源版
+	444 File
+	445 Edit
+	446 View
+	447 Window
+
+The focused UI element is 15 HTML 内容 动态首页-哔哩哔哩, URL: t.bilibili.com/

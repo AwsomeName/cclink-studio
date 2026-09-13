@@ -220,6 +220,17 @@
   border-color: var(--error-color, #f48771);
 }
 
+.article-publishing-retry-review {
+  max-width: 980px;
+  margin: 16px auto;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  line-height: 1.6;
+}
+.article-publishing-retry-review p {
+  margin: 0 0 12px;
+}
 .article-publishing-footer {
   position: sticky;
   bottom: 0;

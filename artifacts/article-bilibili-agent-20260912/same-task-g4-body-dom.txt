@@ -1,0 +1,28 @@
+The following is a diff from the previous accessibility tree for Window: "CCLink Studio 开源版" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 1274-1279
+~																					1272 row (selected)    <div placeholder=​"有什么想和大家分享的？" contenteditable=​"true" class=​"bili-rich-textarea__inner" style=​"font-size:​ 15px;​ line-height:​ 24px;​ min-height:​ 24px;​"> ​
++																							1687 container <div placeholder=​"有什么想和大家分享的？" contenteditable=​"true" class=​"bili-rich-textarea__inner" style=​"font-size:​ 15px;​ line-height:​ 24px;​ min-height:​ 24px;​">
++																								1688 text < div placeholder =​" 有什么想和大家分享的？ " contenteditable =​" true " class =​" bili-rich-textarea__inner " style =​" font-size:​ 15px;​ line-height:​ 24px;​ min-height:​ 24px;​ " >
++																					1689 row "&ZeroWidthSpace;本条用于验证 Studio 在首次规范页面加载较慢时，能否保持同一次发布操作并自动完成确认，以及保存对应的提交回执。 "
++																						1690 container
++																							1691 text " &ZeroWidthSpace; 本条用于验证 Studio 在首次规范页面加载较慢时，能否保持同一次发布操作并自动完成确认，以及保存对应的提交回执。  "
++																					1692 row    <div> ​ Expand …​ </div> ​
++																						1693 container
++																							1694 container <div>
++																								1695 text < div >
++																							1696 按钮 Expand
++																							1697 text …
++																							1698 container </div>
++																								1699 text < /div >
++																					1700 row <div> ​三张图片依次展示 AI 眼镜封面、导航设计效果和城市漫游概念；均为设计展示，不代表产品实测。本条是独立测试记录。​ </div> ​
++																						1701 container
++																							1702 container <div>
++																								1703 text < div >
++																							1704 text 三张图片依次展示 AI 眼镜封面、导航设计效果和城市漫游概念；均为设计展示，不代表产品实测。本条是独立测试记录。
++																							1705 container </div>
++																								1706 text < /div >
++																					1707 row <> ​
++																						1708 container
++																							1709 container <>
++																								1710 text < /div >
+The focused UI element is 15 HTML 内容 DevTools, URL: devtools://devtools/bundled/devtools_app.html

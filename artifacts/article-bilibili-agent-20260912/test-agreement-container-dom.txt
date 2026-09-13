@@ -1,0 +1,314 @@
+The following is a diff from the previous accessibility tree for Window: "CCLink Studio 开源版" with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+Removed element IDs: 1577-1582, 1588-1649, 1654-1658, 1663-1692, 1696-1724, 1729-1757, 1761-1771, 1780-1799, 1812-1824, 1829-1847, 1852-1875, 1884-1897
+~																		1549 row    <div class=​"bili-popup__wrap" style=​"width:​ 796px;​ max-height:​ 518.4px;​ border-radius:​ 6px;​"> ​ Enable flex mode
+~																		1575 row (selected)    <div class=​"bili-popup__content" style=​"overflow:​ hidden;​"> ​
++																				1588 container <div class=​"bili-popup__content" style=​"overflow:​ hidden;​">
++																					1589 text < div class =​" bili-popup__content " style =​" overflow:​ hidden;​ " >
++																		1590 container
++																			1591 row    <div class=​"bili-dyn-specification-popup__content"> ​ Expand …​ </div> ​
++																				1592 container
++																					1593 container <div class=​"bili-dyn-specification-popup__content">
++																						1594 text < div class =​" bili-dyn-specification-popup__content " >
++																					1595 按钮 Expand
++																					1596 text …
++																					1597 container </div>
++																						1598 text < /div >
++																			1599 row    <div class=​"bili-dyn-specification-popup__footer"> ​ Expand …​ </div> ​ Enable flex mode
++																				1600 container
++																					1601 container <div class=​"bili-dyn-specification-popup__footer">
++																						1602 text < div class =​" bili-dyn-specification-popup__footer " >
++																					1603 按钮 Expand
++																					1604 text …
++																					1605 container </div>
++																						1606 text < /div >
++																					1607 切换按钮 Description: Enable flex mode, Value: 0
++																						1608 文本 flex
++																			1609 row <!---->
++																				1610 container
++																					1611 text <!-- -->
++																			1612 row <> ​
++																				1613 container
++																					1614 container <>
++																						1615 text < /div >
++															1616 按钮 Scroll left
++																1617 link Description: div.bili-popup__content, Value: devtools://devtools/bundled/devtools_app.html
++															1618 按钮 (disabled) Scroll right
++																		1619 row    _prevClass : "bili-popup__content"
++																			1620 container
++																				1621 text _prevClass : 
++																				1622 文本 "bili-popup__content"
++																		1623 row    accessKey : ""
++																			1624 container
++																				1625 text accessKey :  ""
++																		1626 row    align : ""
++																			1627 container
++																				1628 text align :  ""
++																		1629 row    attributeStyleMap : StylePropertyMap {size: 2}
++																			1630 container
++																				1631 text attributeStyleMap : 
++																				1632 container StylePropertyMap
++																					1633 text StylePropertyMap  { size :  2 }
++																		1634 row    attributes : NamedNodeMap {0: class, 1: style, class: class, style: style, length: 2}
++																			1635 container
++																				1636 text attributes : 
++																				1637 container NamedNodeMap
++																					1638 text NamedNodeMap  { 0 :  class ,  1 :  style ,  class :  class ,  style :  style ,  length :  2 }
++																		1639 row    autocapitalize : ""
++																			1640 container
++																				1641 text autocapitalize :  ""
++																		1642 row    autofocus : false
++																			1643 container
++																				1644 text autofocus : 
++																				1645 文本 false
++																		1646 row    baseURI : "https://t.bilibili.com/"
++																			1647 container
++																				1648 text baseURI : 
++																				1649 文本 "https://t.bilibili.com/"
+~																		1650 row    childElementCount : 2
+~																				1652 text childElementCount : 
+~																				1653 文本 2
++																		1654 row    childNodes : NodeList(5) [div.bili-dyn-specification-popup__content, text, div.bili-dyn-specification-popup__footer, text, comment]
++																			1655 container
++																				1656 text childNodes : 
++																				1657 container NodeList(5)
++																					1658 text NodeList(5)  [ div .bili-dyn-specification-popup__content ,  text ,  div .bili-dyn-specification-popup__footer ,  text ,  comment ]
+~																		1659 row    children : HTMLCollection(2) [div.bili-dyn-specification-popup__content, div.bili-dyn-specification-popup__footer]
+~																				1661 text children : 
+~																				1662 container HTMLCollection(2)
++																					1663 text HTMLCollection(2)  [ div .bili-dyn-specification-popup__content ,  div .bili-dyn-specification-popup__footer ]
++																		1664 row    classList : DOMTokenList ['bili-popup__content', value: 'bili-popup__content']
++																			1665 container
++																				1666 text classList : 
++																				1667 container DOMTokenList(1)
++																					1668 text DOMTokenList  [ 'bili-popup__content' ,  value :  'bili-popup__content' ]
++																		1669 row    className : "bili-popup__content"
++																			1670 container
++																				1671 text className : 
++																				1672 文本 "bili-popup__content"
++																		1673 row    clientHeight : 374
++																			1674 container
++																				1675 text clientHeight : 
++																				1676 文本 374
++																		1677 row    clientLeft : 0
++																			1678 container
++																				1679 text clientLeft : 
++																				1680 文本 0
++																		1681 row    clientTop : 0
++																			1682 container
++																				1683 text clientTop : 
++																				1684 文本 0
++																		1685 row    clientWidth : 545
++																			1686 container
++																				1687 text clientWidth : 
++																				1688 文本 545
++																		1689 row    contentEditable : "inherit"
++																			1690 container
++																				1691 text contentEditable : 
++																				1692 文本 "inherit"
+~																		1693 row    currentCSSZoom : 1
+~																				1695 text currentCSSZoom : 
++																				1696 文本 1
++																		1697 row    customElementRegistry : CustomElementRegistry {}
++																			1698 container
++																				1699 text customElementRegistry : 
++																				1700 container CustomElementRegistry
++																					1701 text CustomElementRegistry  { }
++																		1702 row    dataset : DOMStringMap {}
++																			1703 container
++																				1704 text dataset : 
++																				1705 container DOMStringMap
++																					1706 text DOMStringMap  { }
++																		1707 row    dir : ""
++																			1708 container
++																				1709 text dir :  ""
++																		1710 row    draggable : false
++																			1711 container
++																				1712 text draggable : 
++																				1713 文本 false
++																		1714 row    elementTiming : ""
++																			1715 container
++																				1716 text elementTiming :  ""
++																		1717 row    enterKeyHint : ""
++																			1718 container
++																				1719 text enterKeyHint :  ""
++																		1720 row    firstChild : div.bili-dyn-specification-popup__content
++																			1721 container
++																				1722 text firstChild : 
++																				1723 container
++																					1724 text div .bili-dyn-specification-popup__content
+~																		1725 row    firstElementChild : div.bili-dyn-specification-popup__content
+~																				1727 text firstElementChild : 
+~																				1728 container
++																					1729 text div .bili-dyn-specification-popup__content
++																		1730 row    focusGroup : DOMTokenList [value: '']
++																			1731 container
++																				1732 text focusGroup : 
++																				1733 container DOMTokenList(0)
++																					1734 text DOMTokenList  [ value :  '' ]
++																		1735 row    focusGroupStart : false
++																			1736 container
++																				1737 text focusGroupStart : 
++																				1738 文本 false
++																		1739 row    hidden : false
++																			1740 container
++																				1741 text hidden : 
++																				1742 文本 false
++																		1743 row    id : ""
++																			1744 container
++																				1745 text id :  ""
++																		1746 row    inert : false
++																			1747 container
++																				1748 text inert : 
++																				1749 文本 false
++																		1750 row    innerHTML : "<div class=\"bili-dyn-specification-popup__content\"><iframe src=\"//t.bilibili.com/h5/dynamic/specification\"></iframe></div> <div class=\"bili-dyn-specification-popup__footer\"><button class=\"bili-dyn-specification-popup__btn bili-button primary bili-button--medium\">\n 确认并发送 \n </button> <button class=\"bili-dyn-specification-popup__btn bili-button primary bili-button--medium plain\">\n 取消 \n </button></div> <!---->"
++																			1751 container
++																				1752 text innerHTML : 
++																				1753 文本 "<div class=\"bili-dyn-specification-popup__content\"><iframe src=\"//t.bilibili.com/h5/dynamic/specification\"></iframe></div> <div class=\"bili-dyn-specification-popup__footer\"><button class=\"bili-dyn-specification-popup__btn bili-button primary bili-button--medium\">\n        确认并发送  \n      </button> <button class=\"bili-dyn-specification-popup__btn bili-button primary bili-button--medium plain\">\n        取消  \n      </button></div> <!---->"
++																		1754 row    innerText : "确认并发送\n取消"
++																			1755 container
++																				1756 text innerText : 
++																				1757 文本 "确认并发送\n取消"
+~																		1758 row    inputMode : ""
+~																				1760 text inputMode :  ""
++																		1761 row    isConnected : true
++																			1762 container
++																				1763 text isConnected : 
++																				1764 文本 true
++																		1765 row    isContentEditable : false
++																			1766 container
++																				1767 text isContentEditable : 
++																				1768 文本 false
++																		1769 row    lang : ""
++																			1770 container
++																				1771 text lang :  ""
+~																		1772 row    lastChild : comment
+~																				1774 text lastChild : 
+~																				1775 文本 comment
+~																		1776 row    lastElementChild : div.bili-dyn-specification-popup__footer
+~																				1778 text lastElementChild : 
+~																				1779 container
++																					1780 text div .bili-dyn-specification-popup__footer
++																		1781 row    localName : "div"
++																			1782 container
++																				1783 text localName : 
++																				1784 文本 "div"
++																		1785 row    namespaceURI : "http://www.w3.org/1999/xhtml"
++																			1786 container
++																				1787 text namespaceURI : 
++																				1788 文本 "http://www.w3.org/1999/xhtml"
++																		1789 row    nodeName : "DIV"
++																			1790 container
++																				1791 text nodeName : 
++																				1792 文本 "DIV"
++																		1793 row    nodeType : 1
++																			1794 container
++																				1795 text nodeType : 
++																				1796 文本 1
++																		1797 row    nonce : ""
++																			1798 container
++																				1799 text nonce :  ""
+~																		1800 row    offsetHeight : 374
+~																				1802 text offsetHeight : 
+~																				1803 文本 374
+~																		1804 row    offsetLeft : 0
+~																				1806 text offsetLeft : 
+~																				1807 文本 0
+~																		1808 row    offsetParent : div.bili-popup__wrap
+~																				1810 text offsetParent : 
+~																				1811 container
++																					1812 text div .bili-popup__wrap
++																		1813 row    offsetTop : 50
++																			1814 container
++																				1815 text offsetTop : 
++																				1816 文本 50
++																		1817 row    offsetWidth : 545
++																			1818 container
++																				1819 text offsetWidth : 
++																				1820 文本 545
++																		1821 row    outerHTML : "<div class=\"bili-popup__content\" style=\"overflow: hidden;\"><div class=\"bili-dyn-specification-popup__content\"><iframe src=\"//t.bilibili.com/h5/dynamic/specification\"></iframe></div> <div class=\"bili-dyn-specification-popup__footer\"><button class=\"bili-dyn-specification-popup__btn bili-button primary bili-button--medium\">\n 确认并发送 \n </button> <button class=\"bili-dyn-specification-popup__btn bili-button primary bili-button--medium plain\">\n 取消 \n </button></div> <!----></div>"
++																			1822 container
++																				1823 text outerHTML : 
++																				1824 文本 "<div class=\"bili-popup__content\" style=\"overflow: hidden;\"><div class=\"bili-dyn-specification-popup__content\"><iframe src=\"//t.bilibili.com/h5/dynamic/specification\"></iframe></div> <div class=\"bili-dyn-specification-popup__footer\"><button class=\"bili-dyn-specification-popup__btn bili-button primary bili-button--medium\">\n        确认并发送  \n      </button> <button class=\"bili-dyn-specification-popup__btn bili-button primary bili-button--medium plain\">\n        取消  \n      </button></div> <!----
+~																		1825 row    outerText : "确认并发送\n取消"
+~																				1827 text outerText : 
+~																				1828 文本 "确认并发送\n取消"
++																		1829 row    ownerDocument : document
++																			1830 container
++																				1831 text ownerDocument : 
++																				1832 文本 document
++																		1833 row    parentElement : div.bili-popup__wrap
++																			1834 container
++																				1835 text parentElement : 
++																				1836 container
++																					1837 text div .bili-popup__wrap
++																		1838 row    parentNode : div.bili-popup__wrap
++																			1839 container
++																				1840 text parentNode : 
++																				1841 container
++																					1842 text div .bili-popup__wrap
++																		1843 row    part : DOMTokenList [value: '']
++																			1844 container
++																				1845 text part : 
++																				1846 container DOMTokenList(0)
++																					1847 text DOMTokenList  [ value :  '' ]
+~																		1848 row    previousElementSibling : div.bili-popup__header.no-title
+~																				1850 text previousElementSibling : 
+~																				1851 container
++																					1852 text div .bili-popup__header.no-title
++																		1853 row    previousSibling : text
++																			1854 container
++																				1855 text previousSibling : 
++																				1856 文本 text
++																		1857 row    scrollHeight : 374
++																			1858 container
++																				1859 text scrollHeight : 
++																				1860 文本 374
++																		1861 row    scrollLeft : 0
++																			1862 container
++																				1863 text scrollLeft : 
++																				1864 文本 0
++																		1865 row    scrollTop : 0
++																			1866 container
++																				1867 text scrollTop : 
++																				1868 文本 0
++																		1869 row    scrollWidth : 545
++																			1870 container
++																				1871 text scrollWidth : 
++																				1872 文本 545
++																		1873 row    slot : ""
++																			1874 container
++																				1875 text slot :  ""
+~																		1876 row    spellcheck : true
+~																				1878 text spellcheck : 
+~																				1879 文本 true
+~																		1880 row    style : CSSStyleDeclaration {0: 'overflow-x', 1: 'overflow-y', accentColor: '', additiveSymbols: '', alignContent: '', alignItems: '', alignSelf: '', …}
+~																				1882 text style : 
+~																				1883 container CSSStyleDeclaration
++																					1884 text CSSStyleDeclaration  { 0 :  'overflow-x' ,  1 :  'overflow-y' ,  accentColor :  '' ,  additiveSymbols :  '' ,  alignContent :  '' ,  alignItems :  '' ,  alignSelf :  '' , … }
++																		1885 row    tabIndex : -1
++																			1886 container
++																				1887 text tabIndex : 
++																				1888 文本 -1
++																		1889 row    tagName : "DIV"
++																			1890 container
++																				1891 text tagName : 
++																				1892 文本 "DIV"
++																		1893 row    textContent : " \n 确认并发送 \n \n 取消 \n "
++																			1894 container
++																				1895 text textContent : 
++																				1896 文本 " \n        确认并发送  \n       \n        取消  \n       "
++																		1897 row    title : ""
++																			1898 container
++																				1899 text title :  ""
++																		1900 row    translate : true
++																			1901 container
++																				1902 text translate : 
++																				1903 文本 true
++																		1904 row    virtualKeyboardPolicy : ""
++																			1905 container
++																				1906 text virtualKeyboardPolicy :  ""
++																		1907 row    writingSuggestions : "true"
++																			1908 container
++																				1909 text writingSuggestions : 
++																				1910 文本 "true"
+The focused UI element is 1575 row (selected)    <div class=​"bili-popup__content" style=​"overflow:​ hidden;​"> ​

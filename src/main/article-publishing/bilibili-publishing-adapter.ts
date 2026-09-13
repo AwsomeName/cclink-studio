@@ -43,6 +43,18 @@ export async function readBilibiliComposer(
       const body = one(bodySelector) as HTMLElement | undefined
       const root = body?.closest('main > section:nth-child(1)')
       const recognized = Boolean(root && title && root.contains(title) && body?.isContentEditable)
+      // Native rich nodes carry JSON in data-data. Plain DIVs left by fill()
+      // are visible text but cannot be serialized by the site's editor.
+      const bodyStructureValid = Boolean(
+        body &&
+        [...body.children].every((node) => {
+          try {
+            return Boolean(JSON.parse(node.getAttribute('data-data') ?? 'null'))
+          } catch {
+            return false
+          }
+        }),
+      )
       const avatar = one('a.header-entry-mini') as HTMLAnchorElement | undefined
       let uid: string | undefined
       if (avatar) {
@@ -129,6 +141,7 @@ export async function readBilibiliComposer(
       const publish = publishControls.length === 1 ? publishControls[0] : undefined
       const publishReady = Boolean(
         recognized &&
+        bodyStructureValid &&
         uid &&
         visibility === 'public' &&
         body?.innerText.replace(/[\s\u200b]/gu, '') &&
@@ -143,6 +156,7 @@ export async function readBilibiliComposer(
         url: location.href,
         uid,
         recognized,
+        bodyStructureValid,
         title: title?.value ?? '',
         text: body?.innerText.replace(/\u200b/gu, '').trim() ?? '',
         images,
@@ -151,8 +165,9 @@ export async function readBilibiliComposer(
         uploadSelector,
         visibility,
         openSettingsSelector,
+        immediatePublishPresent: Boolean(publish),
         publishSelector: publishReady ? 'main > section:nth-child(1) :text-is("发布")' : undefined,
-        diagnostic: `标题 ${title ? 1 : 0}；正文 ${body ? 1 : 0}；发布器 ${recognized ? 1 : 0}；UID ${uid ?? '未读到'}；图集 ${images.length}`,
+        diagnostic: `标题 ${title ? 1 : 0}；正文 ${body ? 1 : 0}；正文原生结构 ${bodyStructureValid ? '有效' : '损坏或未知'}；发布器 ${recognized ? 1 : 0}；UID ${uid ?? '未读到'}；图集 ${images.length}`,
       }
     },
     {
@@ -245,7 +260,9 @@ export class BilibiliPublishingAdapter {
       bilibiliVisibility: live.visibility,
       submissionUnavailableReason: live.publishSelector
         ? undefined
-        : '等待核验公开范围、正文、图片和唯一可用的即时发布按钮',
+        : !live.bodyStructureValid
+          ? 'B站正文原生结构损坏或未知；可见全文不足以证明可提交，禁止发布'
+          : '等待核验公开范围、正文、图片和唯一可用的即时发布按钮',
       publicationBlocker: !live.recognized || !live.uid ? live.diagnostic : undefined,
     }
   }
@@ -272,7 +289,10 @@ export class BilibiliPublishingAdapter {
         }))
         doc.querySelectorAll('img,h1').forEach((e) => e.remove())
         const norm = (s: string) => s.replace(/[\s\u200b]/gu, '')
-        const textMatches = live.recognized && norm(doc.body.textContent ?? '') === norm(live.text)
+        const textMatches =
+          live.recognized &&
+          (!('bodyStructureValid' in live) || live.bodyStructureValid) &&
+          norm(doc.body.textContent ?? '') === norm(live.text)
         const images = expected.map((img, index) => ({
           ...img,
           index,

@@ -1,3 +1,7 @@
+import {
+  eligibleBilibiliRetryEffect,
+  hasBilibiliRetryAuthorization,
+} from '../../shared/article-publishing/bilibili-retry'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -473,6 +477,284 @@ describe('article publishing persistent state', () => {
       await created.service.flush()
     },
   )
+
+  it.each([
+    'authorized',
+    'ordinary',
+    'stale',
+    'attempted',
+    'observed',
+    'open-observer',
+    'legacy',
+    'other-platform',
+    'second-explicit',
+    'second-ordinary',
+    'second-stale',
+    'second-open-observer',
+    'second-quota',
+  ])('keeps unknown history while bounding explicit B站 retry: %s', async (mode) => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+    const snapshot = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+    const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)!
+    const p = affair.articlePublishing!
+    const second = mode.startsWith('second-')
+    if (second) {
+      p.execution.currentGeneration += 1
+      affair.attempts.find((a: { id: string }) => a.id === created.attemptId).executionGeneration =
+        p.execution.currentGeneration
+    }
+    p.adapterId = mode === 'other-platform' ? 'weibo' : 'bilibili'
+    delete p.draft
+    p.composer = { platformAccountId: '5961101548', allowPublish: true }
+    p.publication = { status: 'result-unknown' }
+    p.execution.status = 'result-unknown'
+    affair.attempts.find((a: { id: string }) => a.id === created.attemptId).status = 'interrupted'
+    for (const a of p.assets) {
+      a.status = 'uploaded'
+      a.platformUrl = 'https://i0.hdslb.com/bfs/new_dyn/old.png'
+      a.uploadAttempts = [
+        {
+          number: 1,
+          status: 'succeeded',
+          startedAt: new Date().toISOString(),
+          evidence: ['old upload verified'],
+        },
+      ]
+      if (second) a.uploadAttempts.push({ ...a.uploadAttempts[0], number: 2 })
+      if (mode === 'second-quota') a.uploadAttempts.push({ ...a.uploadAttempts[0], number: 3 })
+    }
+    const effect = {
+      key: 'old-bilibili-submit',
+      affairId: affair.id,
+      attemptId: created.attemptId,
+      executionGeneration: p.execution.currentGeneration,
+      kind: 'publish',
+      targetId: 'final',
+      status: 'result-unknown',
+      reservedAt: new Date().toISOString(),
+      dispatchedAt: new Date().toISOString(),
+      ...(mode === 'legacy'
+        ? {}
+        : {
+            bilibiliSubmission: {
+              confirmationAttempted: second || mode === 'attempted',
+              requestObserved: second || mode === 'observed',
+              observationEnded: !['open-observer', 'second-open-observer'].includes(mode),
+              observedAt: new Date().toISOString(),
+            },
+          }),
+    }
+    p.sideEffects = [effect]
+    if (second) {
+      p.sideEffects.unshift({
+        ...effect,
+        key: 'before-explicit-retry',
+        executionGeneration: effect.executionGeneration - 1,
+        bilibiliSubmission: {
+          confirmationAttempted: false,
+          requestObserved: false,
+          observationEnded: true,
+          observedAt: new Date().toISOString(),
+        },
+      })
+      p.bilibiliRetry = {
+        attemptId: created.attemptId,
+        executionGeneration: p.execution.currentGeneration,
+        previousEffectKey: 'before-explicit-retry',
+        authorizedAt: new Date().toISOString(),
+      }
+    }
+    const historicalEffects = structuredClone(p.sideEffects)
+    Reflect.set(created.service, 'snapshot', snapshot)
+    const authorization = {
+      previousEffectKey: effect.key,
+      observedGeneration:
+        p.execution.currentGeneration + (['stale', 'second-stale'].includes(mode) ? 1 : 0),
+      acceptPossibleDuplicate: true as const,
+    }
+    const result = await created.service.acquireArticlePublishingAttempt(
+      created.affairId,
+      WORKSPACE_ID,
+      ['ordinary', 'second-ordinary'].includes(mode) ? undefined : authorization,
+    )
+    if (!['authorized', 'ordinary', 'second-explicit', 'second-ordinary'].includes(mode)) {
+      expect(result.success).toBe(false)
+      return
+    }
+    expect(result.success, JSON.stringify(result)).toBe(true)
+    if (!result.success) return
+    const next = result.data.articlePublishing!
+    expect(next.publication.status).toBe('result-unknown')
+    expect(next.sideEffects).toEqual(historicalEffects)
+    if (['authorized', 'second-explicit'].includes(mode)) {
+      const details = next.checkpoints.flatMap((checkpoint) => checkpoint.details ?? [])
+      expect(details.find((detail) => detail.id === 'publish.dispatch')?.status).not.toBe('unknown')
+      expect(details.find((detail) => detail.id === 'publish.preflight')?.status).not.toBe(
+        'completed',
+      )
+      expect(
+        details.find((detail) => detail.id === 'bilibili.submission.observation')?.status,
+      ).not.toBe('completed')
+    }
+    expect(next.execution.currentStepId).toBe(
+      ['authorized', 'second-explicit'].includes(mode) ? 'open-editor' : 'verify-publication',
+    )
+    expect(hasBilibiliRetryAuthorization(next)).toBe(
+      ['authorized', 'second-explicit'].includes(mode),
+    )
+    expect(eligibleBilibiliRetryEffect(next)).toBeUndefined()
+    if (mode === 'second-explicit') {
+      const exhausted = structuredClone(next)
+      exhausted.execution.status = 'result-unknown'
+      exhausted.sideEffects.push({
+        ...effect,
+        key: 'third-submit',
+        executionGeneration: next.execution.currentGeneration,
+      } as never)
+      expect(hasBilibiliRetryAuthorization(exhausted)).toBe(false)
+      expect(eligibleBilibiliRetryEffect(exhausted)).toBeUndefined()
+    }
+    if (mode === 'authorized') {
+      expect(next.assets[0].platformUrl).toBeUndefined()
+      expect(next.assets[0].uploadAttempts[0].status).toBe('succeeded')
+      expect(next.assets[0].uploadAttempts[0].evidence.join(' ')).toContain('old.png')
+      expect(next.checkpoints.every((c) => c.status === 'pending')).toBe(true)
+      await created.service.interruptArticlePublishingLaunch(
+        created.affairId,
+        created.attemptId,
+        'pre-upload runtime stopped',
+        WORKSPACE_ID,
+      )
+      const carried = await created.service.acquireArticlePublishingAttempt(
+        created.affairId,
+        WORKSPACE_ID,
+      )
+      expect(carried.success).toBe(true)
+      if (carried.success) {
+        expect(hasBilibiliRetryAuthorization(carried.data.articlePublishing!)).toBe(true)
+        expect(carried.data.articlePublishing!.bilibiliRetry!.authorizedAt).toBe(
+          next.bilibiliRetry!.authorizedAt,
+        )
+        expect(carried.data.articlePublishing!.publication.status).toBe('result-unknown')
+      }
+
+      const consumed = structuredClone(next)
+      consumed.sideEffects.push({
+        ...effect,
+        key: 'new',
+        executionGeneration: next.execution.currentGeneration,
+        kind: 'publish',
+        status: 'dispatched',
+      })
+      expect(hasBilibiliRetryAuthorization(consumed)).toBe(false)
+      expect(
+        (
+          await created.service.acquireArticlePublishingAttempt(
+            created.affairId,
+            WORKSPACE_ID,
+            authorization,
+          )
+        ).success,
+      ).toBe(false)
+    }
+  })
+
+  it('persists B站 observation facts monotonically without clearing unknown publication or granting a retry', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+    const snapshot = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+    const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)!
+    const p = affair.articlePublishing!
+    p.adapterId = 'bilibili'
+    delete p.draft
+    p.composer = { platformAccountId: '5961101548', allowPublish: true }
+    p.publication = { status: 'result-unknown' }
+    p.execution.status = 'result-unknown'
+    affair.attempts.find((a: { id: string }) => a.id === created.attemptId).status = 'interrupted'
+    const effect = {
+      key: 'bilibili-submit',
+      affairId: affair.id,
+      attemptId: created.attemptId,
+      executionGeneration: p.execution.currentGeneration,
+      kind: 'publish',
+      targetId: 'publish',
+      status: 'result-unknown',
+      reservedAt: new Date().toISOString(),
+      dispatchedAt: new Date().toISOString(),
+      browserTaskRunId: '77777777-7777-4777-8777-777777777777',
+    }
+    p.sideEffects = [effect]
+    Reflect.set(created.service, 'snapshot', snapshot)
+    const input = {
+      affairId: affair.id,
+      attemptId: created.attemptId,
+      executionGeneration: effect.executionGeneration,
+      browserTaskRunId: effect.browserTaskRunId,
+      sideEffectKey: effect.key,
+      uid: '5961101548',
+      observation: {
+        confirmationAttempted: false,
+        requestObserved: false,
+        observationEnded: false,
+      },
+    }
+    const start = await created.service.recordBilibiliSubmissionObservation(input, WORKSPACE_ID)
+    expect(start.success, JSON.stringify(start.success ? null : start.error)).toBe(true)
+    const observation = {
+      confirmationAttempted: true,
+      requestObserved: true,
+      observationEnded: true,
+      requestMatch: 'matched' as const,
+      responseStatus: 200,
+      platformCode: -101,
+      transportFailed: true,
+    }
+    const ended = await created.service.recordBilibiliSubmissionObservation(
+      { ...input, observation },
+      WORKSPACE_ID,
+    )
+    expect(ended.success).toBe(true)
+    if (ended.success) {
+      expect(ended.data.articlePublishing?.publication).toEqual({ status: 'result-unknown' })
+      expect(ended.data.articlePublishing?.execution.status).toBe('result-unknown')
+      expect(ended.data.articlePublishing?.sideEffects[0].status).toBe('result-unknown')
+      expect(
+        ended.data.articlePublishing?.checkpoints
+          .flatMap((c) => c.details ?? [])
+          .find((d) => d.id === 'bilibili.submission.observation')?.evidence,
+      ).toContain('已观察到')
+      expect(
+        ended.data.articlePublishing?.checkpoints
+          .flatMap((c) => c.details ?? [])
+          .find((d) => d.id === 'bilibili.submission.receipt')?.status,
+      ).toBe('failed')
+    }
+    for (const patch of [
+      { uid: '1234567890', observation },
+      { executionGeneration: input.executionGeneration + 1, observation },
+      { sideEffectKey: 'other', observation },
+      { observation: { ...observation, confirmationAttempted: false } },
+      { observation: { ...observation, requestObserved: false } },
+      { observation: { ...observation, observationEnded: false } },
+      { observation: { ...observation, requestMatch: 'text-mismatch' as const } },
+      { observation: { ...observation, responseStatus: 500 } },
+      { observation: { ...observation, platformCode: 0 } },
+      { observation: { ...observation, transportFailed: false } },
+    ]) {
+      const rejected = await created.service.recordBilibiliSubmissionObservation(
+        { ...input, ...patch },
+        WORKSPACE_ID,
+      )
+      expect(rejected.success).toBe(false)
+    }
+    await created.service.flush()
+    const disk = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+    expect(
+      disk.affairs.find((a: { id: string }) => a.id === affair.id).articlePublishing.sideEffects[0]
+        .bilibiliSubmission,
+    ).toMatchObject(observation)
+  })
 
   it.each(['current', 'stale', 'not-skipped', 'wrong-account'])(
     'completes an unchanged Zhihu title only with current read-only evidence: %s',
